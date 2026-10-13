@@ -177,6 +177,12 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			least += max(columns[j].MinWidth, flexMin)
 		}
 	}
+	checkW := t.Space(8)
+	var checks *tableChecks
+	if s.Checked != nil {
+		least += checkW
+		checks = coreLocal(table, "checks", func() tableChecks { return tableChecks{} })
+	}
 	// fitting are the cells of the column fitting its cells.
 	var fitting []*node
 	// cells builds a row's cells, with fill building the content of each.
@@ -211,6 +217,24 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		// The header, which scrolls sideways with the rows.
 		head := coreRow(c).Height(tableRow).Shrink(0).AlignItems(Stretch).Role(RoleRow).Clip()
 		head.Children(func() {
+			if s.Checked != nil {
+				// Not a column header, a leaf role whose checkbox would not show.
+				checkCell(c, RoleCell, checkW, func() {
+					count, total := checks.counted(s, n)
+					all := total > 0 && count == total
+					box := checkbox(c, &all, "", count > 0).Label("Check all")
+					table.afterInput(func() {
+						if box.Changed() {
+							for i := range n {
+								if s.Header == nil || !s.Header(i) {
+									s.Checked.set(s.keyOf(i), all)
+								}
+							}
+							table.st.markEvent(eventChecked)
+						}
+					})
+				})
+			}
 			heads := cells(RoleColumnHeader, func(j int) {
 				col := &columns[j]
 				coreText(c, col.Title).SingleLine().FontWeight(600).TextColor(t.TextMuted)
@@ -258,6 +282,19 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				})
 			}
 			row.Children(func() {
+				if s.Checked != nil {
+					checkCell(c, RoleCell, checkW, func() {
+						k := s.keyOf(i)
+						on := s.Checked.has(k)
+						box := checkbox(c, &on, "", false).Label("Check")
+						table.afterInput(func() {
+							if box.Changed() {
+								s.Checked.set(k, on)
+								table.st.markEvent(eventChecked)
+							}
+						})
+					})
+				}
 				cells(RoleCell, func(j int) { cell(i, j) })
 			})
 		}, kind)
@@ -456,6 +493,45 @@ func (tf *tableFit) apply() {
 	// next one as animations do.
 	tf.drag.fitted = true
 	tf.rt.animating = true
+}
+
+// checkedID keys the checkbox cells of a table's rows, apart from the
+// app's columns, whose IDs it cannot be.
+const checkedID = "\x00checked"
+
+// tableChecks is how many of a table's rows shown are checked, and how many
+// it shows, counted from what they were counted from, which the header's
+// checkbox reads in every frame without counting them again.
+type tableChecks struct {
+	sel             Selector
+	gen, version    uint64
+	n, count, total int
+	ok              bool
+}
+
+// counted returns how many of the n rows shown are checked, and how many
+// can be: those that are not headers.
+func (tc *tableChecks) counted(s *ListState, n int) (count, total int) {
+	sel := s.Checked
+	if tc.ok && tc.sel == sel && tc.gen == sel.generation() && tc.n == n && tc.version == s.Version {
+		return tc.count, tc.total
+	}
+	for i := range n {
+		if s.Header != nil && s.Header(i) {
+			continue
+		}
+		total++
+		if sel.size() > 0 && sel.has(s.keyOf(i)) {
+			count++
+		}
+	}
+	*tc = tableChecks{sel: sel, gen: sel.generation(), version: s.Version, n: n, count: count, total: total, ok: true}
+	return count, total
+}
+
+// checkCell builds the checkbox cell of a row or of the header.
+func checkCell(c *context, role Role, w float32, fill func()) {
+	coreRow(c).Key(checkedID).Width(w).Shrink(0).AlignItems(Center).Justify(Center).Role(role).Children(fill)
 }
 
 // sortArrow draws the arrow of the column the rows are sorted by.

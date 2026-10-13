@@ -473,3 +473,86 @@ func TestTableKeepsChoiceAcrossFarResort(t *testing.T) {
 		t.Errorf("the table scrolled to row %d", first)
 	}
 }
+
+func TestTableChecked(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80, Align: End}}
+	var checked Selection[string]
+	shown := names
+	sel := -1
+	s := ListState{Checked: &checked, Selected: &sel, Key: func(i int) any { return shown[i] }}
+	events := 0
+	maxCol := -1
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			e := coreTable(c, &s, cols, len(shown), func(row, col int) {
+				maxCol = max(maxCol, col)
+				if col == 0 {
+					coreText(c, shown[row]).SingleLine()
+				}
+			}).Grow(1)
+			if e.CheckedChanged() {
+				events++
+			}
+		})
+	}, 500, 300)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	boxes := func() []platform.AccessNode {
+		var bs []platform.AccessNode
+		for _, n := range tt.h.access.Nodes {
+			if n.Role == platform.RoleCheckBox {
+				bs = append(bs, n)
+			}
+		}
+		return bs
+	}
+	click := func(n platform.AccessNode) {
+		tt.ClickAt(float32(n.Bounds.X+n.Bounds.W/2), float32(n.Bounds.Y+n.Bounds.H/2))
+	}
+	header := func() platform.AccessNode { return accessNode(t, tt.h.access, platform.RoleCheckBox, "Check all") }
+
+	if maxCol != 2 {
+		t.Fatalf("cell got columns up to %d, want the app's 0 to 2", maxCol)
+	}
+	if bs := boxes(); len(bs) != 4 || bs[0].Label != "Check all" {
+		t.Fatalf("checkboxes: %+v", bs)
+	}
+	// The checkbox column comes first, before the app's columns.
+	if h, name := header(), accessNode(t, tt.h.access, platform.RoleColumnHeader, "Name"); h.Bounds.X >= name.Bounds.X {
+		t.Errorf("the checkbox column at %v, Name at %v", h.Bounds.X, name.Bounds.X)
+	}
+	click(boxes()[2]) // b.txt
+	if !checked.Has("b.txt") || checked.Len() != 1 || events != 1 {
+		t.Fatalf("checking b.txt: %v, %d events", checked.keys, events)
+	}
+	if sel != -1 {
+		t.Errorf("checking a row chose row %d", sel)
+	}
+	if h := header(); h.States&platform.AccessMixed == 0 {
+		t.Errorf("the header with one row checked: %+v", h)
+	}
+	click(header())
+	if checked.Len() != 3 || events != 2 || header().States&platform.AccessChecked == 0 {
+		t.Fatalf("checking all: %v, %d events, %+v", checked.keys, events, header())
+	}
+	click(header())
+	if checked.Len() != 0 || events != 3 {
+		t.Fatalf("unchecking all: %v, %d events", checked.keys, events)
+	}
+	// Rows not shown keep their keys: the header checks and unchecks the
+	// rows shown only.
+	checked.Add("c.txt")
+	shown = names[:2]
+	tt.Frame()
+	if h := header(); h.States&(platform.AccessChecked|platform.AccessMixed) != 0 {
+		t.Errorf("the header with none of the rows shown checked: %+v", h)
+	}
+	click(header())
+	if checked.Len() != 3 {
+		t.Fatalf("checking the rows shown: %v", checked.keys)
+	}
+	click(header())
+	if checked.Len() != 1 || !checked.Has("c.txt") {
+		t.Fatalf("unchecking the rows shown: %v", checked.keys)
+	}
+}

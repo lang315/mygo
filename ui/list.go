@@ -89,6 +89,14 @@ type ListState struct {
 	// columns, by ID: restore it from saved settings, and save it as it
 	// changes.
 	Columns TableLayout
+	// Checked, when set, gives a Table a checkbox before its columns in
+	// each row, checking the row by its key (Key), apart from the rows
+	// chosen. The header's checkbox shows whether none, some or all of the
+	// rows shown are checked; a click checks all of them, or unchecks all
+	// of them when all are. Keys of rows not shown stay as they are: an
+	// app that changes which rows show and wants only those checked clears
+	// it then. CheckedChanged reports a change.
+	Checked Selector
 	// RoundRows rounds the corners of a Table's chosen and hovered rows at
 	// the theme's Radius, as a List's are, rather than leaving them square
 	// from edge to edge.
@@ -631,6 +639,14 @@ func (s *ListState) cursor() *int {
 		return &s.lead
 	}
 	return nil
+}
+
+// keyOf returns the key of row i, its index without Key.
+func (s *ListState) keyOf(i int) any {
+	if s.Key != nil {
+		return s.Key(i)
+	}
+	return i
 }
 
 // key returns the key of row i, its index without ListState.Key.

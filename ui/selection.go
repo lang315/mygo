@@ -22,6 +22,8 @@ import (
 //	app.list.Selection = &app.chosen
 type Selection[K comparable] struct {
 	keys map[K]struct{}
+	// gen counts the changes, for those caching what they counted of it.
+	gen uint64
 }
 
 // Has reports whether the row of key k is chosen.
@@ -35,6 +37,7 @@ func (s *Selection[K]) Len() int { return len(s.keys) }
 
 // Add chooses the row of key k.
 func (s *Selection[K]) Add(k K) {
+	s.gen++
 	if s.keys == nil {
 		s.keys = map[K]struct{}{}
 	}
@@ -42,10 +45,16 @@ func (s *Selection[K]) Add(k K) {
 }
 
 // Remove takes the row of key k out of the choice.
-func (s *Selection[K]) Remove(k K) { delete(s.keys, k) }
+func (s *Selection[K]) Remove(k K) {
+	s.gen++
+	delete(s.keys, k)
+}
 
 // Clear chooses no row.
-func (s *Selection[K]) Clear() { clear(s.keys) }
+func (s *Selection[K]) Clear() {
+	s.gen++
+	clear(s.keys)
+}
 
 // All returns the keys of the rows chosen, in no order.
 func (s *Selection[K]) All() iter.Seq[K] {
@@ -67,6 +76,8 @@ type Selector interface {
 	// clear chooses no row, and reports whether one was.
 	clear() bool
 	size() int
+	// generation changes whenever the keys chosen do.
+	generation() uint64
 }
 
 func (s *Selection[K]) has(key any) bool { return s.Has(s.key(key)) }
@@ -91,6 +102,8 @@ func (s *Selection[K]) clear() bool {
 }
 
 func (s *Selection[K]) size() int { return len(s.keys) }
+
+func (s *Selection[K]) generation() uint64 { return s.gen }
 
 // key returns a row's key as the selection holds it.
 func (s *Selection[K]) key(key any) K {
