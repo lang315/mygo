@@ -46,7 +46,8 @@ func (s *stats) applied(n int, took time.Duration) {
 }
 
 // flush returns the line of the second ended at now, and starts the next,
-// or "" before a second passed.
+// or "" before a second passed. Its fields are name=value, the sort
+// quoted, for a column's title has spaces.
 func (s *stats) flush(now time.Time, a *app) string {
 	d := now.Sub(s.since)
 	if d < time.Second {
@@ -60,7 +61,7 @@ func (s *stats) flush(now time.Time, a *app) string {
 		}
 	}
 	heap, cycles, goroutines := readRuntime()
-	line := fmt.Sprintf("stats t=%.0fs rows=%d shown=%d sort=%s updates=%.0f/s batches=%d apply_max=%s frames=%d interval_p50=%s p95=%s max=%s build_p50=%s p95=%s max=%s heap=%dMB gc=%d goroutines=%d",
+	line := fmt.Sprintf("stats t=%.0fs rows=%d shown=%d sort=%q updates=%.0f/s batches=%d apply_max=%s frames=%d interval_p50=%s p95=%s max=%s build_p50=%s p95=%s max=%s heap=%dMB gc=%d goroutines=%d",
 		now.Sub(s.began).Seconds(), len(a.s.accounts), a.view.Len(), order,
 		float64(s.updates)/d.Seconds(), s.batches, ms(s.applyMax), len(s.builds),
 		ms(percentile(s.intervals, 50)), ms(percentile(s.intervals, 95)), ms(percentile(s.intervals, 100)),
