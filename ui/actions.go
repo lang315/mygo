@@ -19,10 +19,8 @@ type action struct {
 	mods    Modifiers
 	key     Key
 	fn      func()
-	// event is what an actionEvent waits for, and row runs in place of fn
-	// with the row activated.
+	// event is what an actionEvent waits for.
 	event tableEvent
-	row   func(int)
 	ready bool
 }
 
@@ -47,32 +45,42 @@ func (e Element) OnChange(fn func()) Element { return e.on(actionChange, 0, 0, f
 // before rebuilding the view.
 func (e Element) OnSubmit(fn func()) Element { return e.on(actionSubmit, 0, 0, fn) }
 
-func (e Element) onEvent(ev tableEvent, fn func(), row func(int)) Element {
-	if n := e.node(); n != nil && (fn != nil || row != nil) {
-		n.c.rt.actions = append(n.c.rt.actions, action{element: e, kind: actionEvent, event: ev, fn: fn, row: row})
+func (e Element) onEvent(ev tableEvent, fn func()) Element {
+	if n := e.node(); n != nil && fn != nil {
+		n.c.rt.actions = append(n.c.rt.actions, action{element: e, kind: actionEvent, event: ev, fn: fn})
 	}
 	return e
 }
 
 // OnSelectionChange runs after input changes the rows chosen in a List or
 // a Table, before rebuilding the view.
-func (e Element) OnSelectionChange(fn func()) Element { return e.onEvent(eventSelection, fn, nil) }
+func (e Element) OnSelectionChange(fn func()) Element { return e.onEvent(eventSelection, fn) }
 
 // OnSortChange runs after a click on a header changes a Table's sort,
 // before rebuilding the view.
-func (e Element) OnSortChange(fn func()) Element { return e.onEvent(eventSort, fn, nil) }
+func (e Element) OnSortChange(fn func()) Element { return e.onEvent(eventSort, fn) }
 
 // OnColumnsChange runs after the user resizes, moves or fits a column of
 // a Table, before rebuilding the view: save ListState.Columns there.
-func (e Element) OnColumnsChange(fn func()) Element { return e.onEvent(eventColumns, fn, nil) }
+func (e Element) OnColumnsChange(fn func()) Element { return e.onEvent(eventColumns, fn) }
 
 // OnCheckedChange runs after a checkbox of a Table's rows or header
 // changes ListState.Checked, before rebuilding the view.
-func (e Element) OnCheckedChange(fn func()) Element { return e.onEvent(eventChecked, fn, nil) }
+func (e Element) OnCheckedChange(fn func()) Element { return e.onEvent(eventChecked, fn) }
 
 // OnActivate runs with the row of a List or a Table double-clicked, or
 // chosen as Enter is pressed, before rebuilding the view.
-func (e Element) OnActivate(fn func(row int)) Element { return e.onEvent(eventActivated, nil, fn) }
+func (e Element) OnActivate(fn func(row int)) Element {
+	if n := e.node(); n != nil && fn != nil {
+		rt := n.c.rt
+		e.onEvent(eventActivated, func() {
+			if n := e.nodeFor(rt); n != nil {
+				fn(n.st.activated)
+			}
+		})
+	}
+	return e
+}
 
 // OnShortcut declares a key handler within the element's focus subtree.
 func (e Element) OnShortcut(mods Modifiers, key Key, fn func()) Element {
@@ -139,11 +147,7 @@ func (rt *engine) runNoticeActions() {
 		}
 		if a.ready {
 			rt.consumed = true
-			if a.row == nil {
-				a.fn()
-			} else if n := rt.actionNode(a); n != nil {
-				a.row(n.st.activated)
-			}
+			a.fn()
 		}
 	}
 }

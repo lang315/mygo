@@ -1014,7 +1014,7 @@ func TestTableCheckedColumnStaysFirst(t *testing.T) {
 		tt.Move(from+(to-from)*f, y)
 	}
 	tt.Release(to, y)
-	if got := s.Columns.Order; len(got) == 0 || got[0] != "Kind" || slices.Contains(got, checkedID) {
+	if got := s.Columns.Order; len(got) == 0 || got[0] != "Kind" {
 		t.Fatalf("the order: %q, want Kind first and no checkbox column", got)
 	}
 	box := checkAllNode(t, tt).Bounds.X

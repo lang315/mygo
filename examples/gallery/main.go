@@ -75,14 +75,12 @@ type gallery struct {
 	advanced, verbose, share, news bool
 	sections                       [3]bool
 	// The files of the table, the view sorting and filtering them, the
-	// ones checked, the filter and the filter the view has, and how the
-	// files are sorted.
-	tableFiles    []tableFile
-	tableView     *ui.TableView[tableFile]
-	tableChecked  ui.Selection[int]
-	tableFilter   string
-	tableFiltered string
-	sort          ui.SortOrder
+	// ones checked, the filter, and how the files are sorted.
+	tableFiles   []tableFile
+	tableView    *ui.TableView[tableFile]
+	tableChecked ui.Selection[int]
+	tableFilter  string
+	sort         ui.SortOrder
 	// Which sections of the sidebar show.
 	sectionsOpen [2]bool
 	// The alert, the notes deleted with an undo, the find bar, the
@@ -978,9 +976,7 @@ func (g *gallery) list(c *ui.Context) {
 			}
 			// The filter is given to the view only when it changes, and
 			// the files checked are only those shown.
-			ui.SearchField(c, &g.tableFilter).Label("Search files")
-			if g.tableFilter != g.tableFiltered {
-				g.tableFiltered = g.tableFilter
+			if ui.SearchField(c, &g.tableFilter).Label("Search files").Changed() {
 				kw := strings.ToLower(g.tableFilter)
 				g.tableView.SetFilter(func(f tableFile) bool { return strings.Contains(strings.ToLower(f.name), kw) })
 				g.tableChecked.Clear()
@@ -1009,7 +1005,7 @@ func (g *gallery) list(c *ui.Context) {
 					c.Toast("Opened " + strings.Join(names(rows), ", "))
 				}
 				if m.Item("Copy name").Chosen() {
-					c.WriteClipboard(strings.Join(names(rows), "\n"))
+					c.WriteClipboard(g.table.Copy(rows))
 				}
 			}
 			g.table.Copy = func(rows []int) string { return strings.Join(names(rows), "\n") }

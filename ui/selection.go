@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"iter"
+	"sync/atomic"
 )
 
 // A Selection is the rows chosen in a List or a Table that lets the user
@@ -22,9 +23,13 @@ import (
 //	app.list.Selection = &app.chosen
 type Selection[K comparable] struct {
 	keys map[K]struct{}
-	// gen counts the changes, for those caching what they counted of it.
+	// gen changes with the keys, for those caching what they counted of
+	// it: drawn from selectionGen, it differs from every other
+	// Selection's, so assigning a new Selection changes it too.
 	gen uint64
 }
+
+var selectionGen atomic.Uint64
 
 // Has reports whether the row of key k is chosen.
 func (s *Selection[K]) Has(k K) bool {
@@ -37,14 +42,14 @@ func (s *Selection[K]) Len() int { return len(s.keys) }
 
 // Add chooses the row of key k.
 func (s *Selection[K]) Add(k K) {
-	if s.Has(k) {
-		return
-	}
-	s.gen++
 	if s.keys == nil {
 		s.keys = map[K]struct{}{}
 	}
+	n := len(s.keys)
 	s.keys[k] = struct{}{}
+	if len(s.keys) != n {
+		s.gen = selectionGen.Add(1)
+	}
 }
 
 // Remove takes the row of key k out of the choice.
@@ -52,7 +57,7 @@ func (s *Selection[K]) Remove(k K) {
 	if !s.Has(k) {
 		return
 	}
-	s.gen++
+	s.gen = selectionGen.Add(1)
 	delete(s.keys, k)
 }
 
@@ -61,7 +66,7 @@ func (s *Selection[K]) Clear() {
 	if len(s.keys) == 0 {
 		return
 	}
-	s.gen++
+	s.gen = selectionGen.Add(1)
 	clear(s.keys)
 }
 

@@ -109,8 +109,7 @@ if ui.Table(c, &app.files, cols, len(files), cell).Grow(1).CheckedChanged() {
 Rows not shown keep their keys, so rows a filter hides stay checked, and the
 header counts and changes only the rows shown. An app that wants only the
 rows shown checked clears the selection when the filter changes, with
-`app.checked.Clear()` rather than by assigning a new `Selection`: the header
-caches its count by the selection's changes.
+`app.checked.Clear()`.
 
 `Checked.All()` includes rows that are hidden, so run an action on the rows
 checked in the order shown by looping over them:
@@ -245,8 +244,7 @@ whenever it is called, as functions cannot be compared, so call it when what
 the filter keeps changes, not in every frame:
 
 ```go
-if app.keyword != app.filtered {
-	app.filtered = app.keyword
+if ui.SearchField(c, &app.keyword).Label("Search accounts").Changed() {
 	kw := app.keyword
 	app.view.SetFilter(func(a Account) bool { return strings.Contains(a.Name, kw) })
 	app.checked.Clear()

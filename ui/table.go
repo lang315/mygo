@@ -219,7 +219,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		head.Children(func() {
 			if s.Checked != nil {
 				// Not a column header, a leaf role whose checkbox would not show.
-				checkCell(c, RoleCell, checkW, func() {
+				checkCell(c, checkW, func() {
 					count, total := checks.counted(s, n)
 					all := total > 0 && count == total
 					box := checkbox(c, &all, "", count > 0).Label("Check all")
@@ -292,7 +292,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			}
 			row.Children(func() {
 				if s.Checked != nil {
-					checkCell(c, RoleCell, checkW, func() {
+					checkCell(c, checkW, func() {
 						k := s.keyOf(i)
 						on := s.Checked.has(k)
 						label := "Check"
@@ -537,10 +537,6 @@ func (tf *tableFit) apply() {
 	tf.rt.animating = true
 }
 
-// checkedID keys the checkbox cells of a table's rows, apart from the
-// app's columns, whose IDs it cannot be.
-const checkedID = "\x00checked"
-
 // tableChecks is how many of a table's rows shown are checked, and how many
 // it shows, counted from what they were counted from, which the header's
 // checkbox reads in every frame without counting them again.
@@ -548,32 +544,36 @@ type tableChecks struct {
 	sel             Selector
 	gen, version    uint64
 	n, count, total int
-	ok              bool
 }
 
 // counted returns how many of the n rows shown are checked, and how many
 // can be: those that are not headers.
 func (tc *tableChecks) counted(s *ListState, n int) (count, total int) {
 	sel := s.Checked
-	if tc.ok && tc.sel == sel && tc.gen == sel.generation() && tc.n == n && tc.version == s.Version {
+	if tc.sel == sel && tc.gen == sel.generation() && tc.n == n && tc.version == s.Version {
 		return tc.count, tc.total
 	}
-	for i := range n {
-		if s.Header != nil && s.Header(i) {
-			continue
-		}
-		total++
-		if sel.size() > 0 && sel.has(s.keyOf(i)) {
-			count++
+	if s.Header == nil && sel.size() == 0 {
+		total = n
+	} else {
+		for i := range n {
+			if s.Header != nil && s.Header(i) {
+				continue
+			}
+			total++
+			if sel.size() > 0 && sel.has(s.keyOf(i)) {
+				count++
+			}
 		}
 	}
-	*tc = tableChecks{sel: sel, gen: sel.generation(), version: s.Version, n: n, count: count, total: total, ok: true}
+	*tc = tableChecks{sel: sel, gen: sel.generation(), version: s.Version, n: n, count: count, total: total}
 	return count, total
 }
 
-// checkCell builds the checkbox cell of a row or of the header.
-func checkCell(c *context, role Role, w float32, fill func()) {
-	coreRow(c).Key(checkedID).Width(w).Shrink(0).AlignItems(Center).Justify(Center).Role(role).Children(fill)
+// checkCell builds the checkbox cell of a row or of the header, which
+// comes first in it, so its ID stays apart from the columns' keyed cells.
+func checkCell(c *context, w float32, fill func()) {
+	coreRow(c).Width(w).Shrink(0).AlignItems(Center).Justify(Center).Role(RoleCell).Children(fill)
 }
 
 // sortArrow draws the arrow of the column the rows are sorted by.

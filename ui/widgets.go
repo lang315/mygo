@@ -248,36 +248,21 @@ func coreCheckbox(c *context, checked *bool, label string) *node {
 func checkbox(c *context, checked *bool, label string, mixed bool) *node {
 	t := c.theme
 	row := coreCheckboxBase(c, checked).Gap(t.Space(2)).FocusRing(false)
-	on := *checked
-	filled := on || mixed
+	state := int8(1)
+	switch {
+	case *checked:
+		state = 2
+	case mixed:
+		state = 3
+	}
 	row.Children(func() {
 		box := coreBox(c).Size(t.Space(4), t.Space(4)).Radius(t.Space(1)).Shrink(0)
-		if filled {
-			box.Background(t.Accent)
-		} else {
-			box.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
-		}
-		box.DrawOver(func(p *Painter, r Rect) {
-			switch {
-			case on:
-				p.StrokePath(checkPath(r), t.Space(0.5), t.AccentText)
-			case mixed:
-				p.Fill(Rect{r.X + r.W*0.25, r.Y + r.H/2 - t.Space(0.25), r.W * 0.5, t.Space(0.5)}, t.AccentText, 0)
-			}
-			if row.FocusVisible() {
-				p.FocusRing(r, box.radius)
-			}
-		})
-		box.styleFn = func(box *node) {
-			if !filled && row.Hovered() {
-				box.borderC = t.Accent
-			}
-		}
+		paintCheckbox(c, row, box, state)
 		if label != "" {
 			coreText(c, label)
 		}
 	})
-	if mixed && !on {
+	if state == 3 {
 		row.Mixed()
 	}
 	return row

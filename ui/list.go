@@ -95,8 +95,7 @@ type ListState struct {
 	// rows shown are checked; a click checks all of them, or unchecks all
 	// of them when all are. Keys of rows not shown stay as they are: an
 	// app that changes which rows show and wants only those checked clears
-	// it then, with Clear rather than by assigning a new Selection.
-	// CheckedChanged reports a change.
+	// it then. CheckedChanged reports a change.
 	Checked Selector
 	// RowMenu, when set, gives a Table's rows a context menu, which it
 	// fills with the items for rows: the rows chosen, in their order. A
@@ -667,7 +666,6 @@ func (s *ListState) keyOf(i int) any {
 	return i
 }
 
-// key returns the key of row i, its index without ListState.Key.
 // rowDrag is rows of a list being dragged to another place in it
 // (ListState.Reorder).
 type rowDrag struct {
@@ -684,13 +682,7 @@ func (f *listFrame) dragged(i int) []int {
 	if s.Selection == nil || !f.chosen(i, f.key(i)) {
 		return []int{i}
 	}
-	var rows []int
-	for j := range f.n {
-		if !f.isHeader(j) && f.chosen(j, f.key(j)) {
-			rows = append(rows, j)
-		}
-	}
-	return rows
+	return f.chosenRows()
 }
 
 // reorder makes the list take its own rows dragged over it: it shows where
@@ -778,12 +770,8 @@ func (f *listFrame) boundary(i int) (float32, bool) {
 	return 0, false
 }
 
-func (f *listFrame) key(i int) any {
-	if f.s.Key != nil {
-		return f.s.Key(i)
-	}
-	return i
-}
+// key returns the key of row i, its index without ListState.Key.
+func (f *listFrame) key(i int) any { return f.s.keyOf(i) }
 
 // chosen reports whether row i, of key k, is chosen.
 func (f *listFrame) chosen(i int, k any) bool {
