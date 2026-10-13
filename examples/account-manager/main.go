@@ -52,7 +52,8 @@ type app struct {
 }
 
 func newApp(rows int) *app {
-	a := &app{s: newStore(rows, 1), view: ui.NewTableView(compare()), cursor: -1, folder: "Mặc định", column: "UID", threads: 10}
+	a := &app{s: newStore(rows, 1), view: ui.NewTableView(compare()), cursor: -1, column: "UID", threads: 10}
+	a.folder = a.s.folders[0].Name
 	a.filtered.folder = -1 // no folder: the first filter is given
 	a.filter()
 	return a
@@ -143,14 +144,13 @@ func (a *app) filter() {
 		return
 	}
 	a.filtered = s
-	a.view.SetFilter(a.keep())
+	a.view.SetFilter(keep(s))
 }
 
-// keep tells whether the folder shown has an account the search finds.
-func (a *app) keep() func(account) bool {
-	f, _ := a.s.folderByName(a.folder)
-	match := matcher(columnIndex(a.column), a.keyword)
-	return func(x account) bool { return x.Folder == f.ID && match(x) }
+// keep tells whether an account is in the folder of s and s finds it.
+func keep(s search) func(account) bool {
+	match := matcher(columnIndex(s.column), s.keyword)
+	return func(x account) bool { return x.Folder == s.folder && match(x) }
 }
 
 func (a *app) table(c *ui.Context) {
@@ -266,13 +266,18 @@ func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []int) {
 	}
 }
 
-// gone shows the accounts ids left the folder shown.
+// gone shows the accounts ids left the folder shown: the view places again
+// only the rows moved, and all of them after rows were removed.
 func (a *app) gone(c *ui.Context, ids []int) {
 	for _, id := range ids {
 		a.checked.Remove(id)
 		a.chosen.Remove(id)
+		if i, ok := a.s.index[id]; ok {
+			a.view.Changed(i)
+		} else {
+			a.view.Reset()
+		}
 	}
-	a.view.Reset()
 	c.Invalidate()
 }
 
@@ -282,10 +287,6 @@ func (a *app) footer(c *ui.Context) {
 		ui.Textf(c, "Số dòng đang bôi đen: %d", a.chosen.Len())
 		ui.Textf(c, "Đã chọn: %d", a.checked.Len())
 		ui.Spacer(c)
-		titles := make([]string, len(columns))
-		for i, col := range columns {
-			titles[i] = col.Title
-		}
 		column := ui.Select(c, &a.column, titles).Label("Cột tìm kiếm").Width(170).Changed()
 		const hint = "Nhập từ khoá (UID1|UID2|…)"
 		// A text input, as fhtool's entry: a search field shows "Search".

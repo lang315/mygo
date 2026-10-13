@@ -36,7 +36,7 @@ func TestRunRunsEachAccountLoopsTimes(t *testing.T) {
 			t.Errorf("account %d left %d", id, s)
 		}
 	}
-	if r.take() != nil {
+	if len(r.take()) != 0 {
 		t.Error("results taken twice")
 	}
 }

@@ -13,6 +13,7 @@ import (
 func stress(accounts, rate int, seed uint64) *runner {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &runner{cancel: cancel, done: make(chan struct{})}
+	accounts = max(1, accounts)
 	go func() {
 		defer close(r.done)
 		rnd := rand.New(rand.NewPCG(seed, 0))
@@ -27,13 +28,22 @@ func stress(accounts, rate int, seed uint64) *runner {
 				// As many as are due since the start, for a slow tick not
 				// to lower the rate.
 				for due := int(now.Sub(start).Seconds() * float64(rate)); sent < due; sent++ {
-					r.push(change(rnd, max(1, accounts), now))
+					r.push(change(rnd, accounts, now))
 				}
 			}
 		}
 	}()
 	return r
 }
+
+// steps are the statuses of a job on its way, made once: change makes
+// thousands a second.
+var steps = func() (s [7]string) {
+	for i := range s {
+		s[i] = fmt.Sprintf("Đang chạy: bước %d/7", i+1)
+	}
+	return s
+}()
 
 // change is what a busy run does to a random one of accounts in a step:
 // a job on it moves a step on or ends, its friends and groups change, and
@@ -42,7 +52,7 @@ func change(r *rand.Rand, accounts int, now time.Time) result {
 	c := result{id: r.IntN(accounts), friends: r.IntN(11) - 5, groups: r.IntN(3) - 1, note: "Cập nhật " + now.Format("15:04:05")}
 	switch step := r.IntN(8); {
 	case step < 7:
-		c.state, c.status = running, fmt.Sprintf("Đang chạy: bước %d/7", step+1)
+		c.state, c.status = running, steps[step]
 	case r.IntN(10) == 0:
 		c.state, c.status, c.at = failed, "Lỗi: checkpoint", now.Unix()
 	default:

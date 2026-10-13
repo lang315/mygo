@@ -100,7 +100,7 @@ func (r *runner) take() []result {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	b := r.batch
-	r.batch = nil
+	r.batch = make([]result, 0, cap(b)) // the next batch is likely as big
 	return b
 }
 

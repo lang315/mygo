@@ -47,31 +47,12 @@ func (tt *tester) do(err error) {
 	}
 }
 
-// wait runs the workers' updates until the run ends.
-func (tt *tester) wait() {
+// wait runs the updates of the run *r until it ends.
+func (tt *tester) wait(r **runner) {
 	tt.t.Helper()
-	for end := time.Now().Add(10 * time.Second); tt.a.run != nil; {
+	for end := time.Now().Add(10 * time.Second); *r != nil; {
 		if time.Now().After(end) {
 			tt.t.Fatal("the run did not end")
-		}
-		tt.mu.Lock()
-		fns := tt.pending
-		tt.pending = nil
-		tt.mu.Unlock()
-		for _, fn := range fns {
-			fn()
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	tt.Frame()
-}
-
-// waitStress runs the stress run's updates until it ends.
-func (tt *tester) waitStress() {
-	tt.t.Helper()
-	for end := time.Now().Add(10 * time.Second); tt.a.stress != nil; {
-		if time.Now().After(end) {
-			tt.t.Fatal("the stress run did not end")
 		}
 		tt.mu.Lock()
 		fns := tt.pending
@@ -131,7 +112,7 @@ func TestAppWith100kAccounts(t *testing.T) {
 		t.Fatal("Start did not run")
 	}
 	tt.want("Stop")
-	tt.wait()
+	tt.wait(&a.run)
 	tt.want("Start")
 	if !tt.HasText("Backup: Thành công") && !tt.HasText("Lỗi: checkpoint") {
 		t.Fatalf("no result shown in %q", tt.Texts())
@@ -191,7 +172,7 @@ func TestDeletingTheFolderShownFallsBack(t *testing.T) {
 func TestFilterDoesNotAllocatePerRow(t *testing.T) {
 	a := newApp(10)
 	a.column, a.keyword = "UID", a.s.accounts[3].UID+"|x"
-	keep := a.keep()
+	keep := keep(search{0, a.column, a.keyword})
 	x := a.s.accounts[3]
 	if !keep(x) {
 		t.Fatal("the account searched for is not kept")
@@ -267,7 +248,7 @@ func TestFoldersChangeWhileRunning(t *testing.T) {
 		t.Fatalf("folders %q, showing %q", a.s.names(), a.folder)
 	}
 	a.run.cancel()
-	tt.wait()
+	tt.wait(&a.run)
 }
 
 func TestApplyAddsTheChanges(t *testing.T) {
@@ -293,8 +274,8 @@ func TestStressShowsInTheTable(t *testing.T) {
 	a.startStress(2000)
 	time.Sleep(300 * time.Millisecond)
 	a.stress.cancel()
-	tt.waitStress()
-	if a.stats.updates+a.stats.total == 0 {
+	tt.wait(&a.stress)
+	if a.stats.total == 0 {
 		t.Fatal("no change applied")
 	}
 	if !tt.HasText("Đang chạy: bước") && !tt.HasText("Thành công") && !tt.HasText("Lỗi: checkpoint") {
@@ -362,5 +343,31 @@ func TestNewAppShowsOnlyItsFolder(t *testing.T) {
 	a.view.Sync(a.s.accounts, a.sort)
 	if a.view.Len() != 2 {
 		t.Fatalf("%d rows shown in Mặc định, want 2", a.view.Len())
+	}
+}
+
+func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
+	a := newApp(10_000)
+	calls := 0
+	counted := map[string]func(x, y account) int{}
+	for title, f := range compare() {
+		counted[title] = func(x, y account) int { calls++; return f(x, y) }
+	}
+	a.view = ui.NewTableView(counted)
+	a.sort = ui.SortOrder{Column: "Bạn bè"}
+	a.filtered.folder = -1 // the new view has no filter yet
+	a.filter()
+	f := a.s.addFolder()
+	tt := newTester(t, a)
+	tt.Frame()
+	u := a.s.accounts[a.view.Row(0)].UID
+	calls = 0
+	tt.do(tt.RightClick(u))
+	tt.do(tt.ChooseMenuItem("Chuyển thư mục", f.Name))
+	tt.Frame()
+	tt.want("Tổng số dòng: 9999")
+	// A sort of 10,000 rows compares them about 120,000 times.
+	if calls > 1000 {
+		t.Fatalf("moving one account compared rows %d times", calls)
 	}
 }

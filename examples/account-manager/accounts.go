@@ -79,6 +79,15 @@ var columns = []ui.TableColumn{
 	{Title: "Ghi Chú", Width: 160, Sortable: true},
 }
 
+// titles are the columns' titles, for the column searched.
+var titles = func() []string {
+	t := make([]string, len(columns))
+	for i, col := range columns {
+		t[i] = col.Title
+	}
+	return t
+}()
+
 // columnIndex is the column titled title, -1 for none.
 func columnIndex(title string) int {
 	for i, col := range columns {
