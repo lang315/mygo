@@ -18,4 +18,3 @@ tool and your exact model.
 
 - Tool and model: <!-- exact name and version, such as Claude Code with Claude Opus 5.5 (claude-opus-5-5) -->
 - Used for: <!-- such as the code, the tests, the review, this description -->
-- [ ] A human read every line of this change and can explain it.
