@@ -97,6 +97,12 @@ type ListState struct {
 	// app that changes which rows show and wants only those checked clears
 	// it then. CheckedChanged reports a change.
 	Checked Selector
+	// RowMenu, when set, gives a Table's rows a context menu, which it
+	// fills with the items for rows: the rows chosen, in their order. A
+	// right click on a row not chosen chooses it first; in a table that
+	// does not choose, rows is the row clicked. The menu key and Shift+F10
+	// open it on the rows chosen.
+	RowMenu func(m *Menu, rows []int)
 	// RoundRows rounds the corners of a Table's chosen and hovered rows at
 	// the theme's Radius, as a List's are, rather than leaving them square
 	// from edge to edge.
@@ -773,6 +779,40 @@ func (f *listFrame) chosen(i int, k any) bool {
 		return sel.has(k)
 	}
 	return *f.s.Selected == i
+}
+
+// chosenRows returns the rows chosen, in their order.
+func (f *listFrame) chosenRows() []int {
+	s := f.s
+	switch {
+	case s.Selection != nil:
+		if s.Selection.size() == 0 {
+			return nil
+		}
+		var rows []int
+		for j := range f.n {
+			if !f.isHeader(j) && s.Selection.has(f.key(j)) {
+				rows = append(rows, j)
+			}
+		}
+		return rows
+	case s.Selected != nil && *s.Selected >= 0 && *s.Selected < f.n:
+		return []int{*s.Selected}
+	}
+	return nil
+}
+
+// menuRows returns the rows a context menu on row i acts on: the rows
+// chosen, choosing row i first when it is not, or row i in a list that
+// does not choose.
+func (f *listFrame) menuRows(i int) []int {
+	if f.s.cursor() == nil {
+		return []int{i}
+	}
+	if !f.chosen(i, f.key(i)) {
+		f.choose(i)
+	}
+	return f.chosenRows()
 }
 
 // changed reports a new choice.

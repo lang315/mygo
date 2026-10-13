@@ -281,6 +281,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					}
 				})
 			}
+			if s.RowMenu != nil {
+				row.ContextMenu(func(m *Menu) { s.RowMenu(m, s.frame.menuRows(i)) })
+			}
 			row.Children(func() {
 				if s.Checked != nil {
 					checkCell(c, RoleCell, checkW, func() {
@@ -299,6 +302,15 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			})
 		}, kind)
 	})
+	if s.RowMenu != nil {
+		// The menu key, Shift+F10 and a click outside the rows act on the
+		// rows chosen.
+		table.ContextMenu(func(m *Menu) {
+			if rows := s.frame.chosenRows(); len(rows) > 0 {
+				s.RowMenu(m, rows)
+			}
+		})
+	}
 	if id := drag.fit; id != "" {
 		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag, rt: c.rt}
 	}

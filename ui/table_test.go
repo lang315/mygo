@@ -556,3 +556,56 @@ func TestTableChecked(t *testing.T) {
 		t.Fatalf("unchecking the rows shown: %v", checked.keys)
 	}
 }
+
+func TestTableRowMenu(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80, Align: End}}
+	var got [][]int
+	menu := func(m *Menu, rows []int) {
+		if m.Item("Open").Chosen() {
+			got = append(got, slices.Clone(rows))
+		}
+	}
+	open := func(tt *Tester) {
+		t.Helper()
+		if m := tt.Menu(); !slices.Equal(m, []string{"Open"}) {
+			t.Fatalf("the menu: %q", m)
+		}
+		if err := tt.ChooseMenuItem("Open"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One row at a time: a right click moves the choice.
+	sel := 0
+	s := ListState{Selected: &sel, RowMenu: menu}
+	tt := coreNewTester(tableView(&s, cols, names), 500, 300)
+	tt.RightClick("c.txt")
+	if sel != 2 {
+		t.Errorf("a right click on c.txt chose %d", sel)
+	}
+	open(tt)
+	// Several rows: a right click on one not chosen chooses it alone, on
+	// one chosen keeps them all.
+	var chosen Selection[int]
+	sel = -1
+	s = ListState{Selected: &sel, Selection: &chosen, RowMenu: menu}
+	tt = coreNewTester(tableView(&s, cols, names), 500, 300)
+	tt.RightClick("b.txt")
+	open(tt)
+	tt.ClickWith(Cmd, "a.txt")
+	tt.ClickWith(Cmd, "c.txt")
+	tt.RightClick("c.txt")
+	open(tt)
+	// Shift+F10 opens it on the rows chosen.
+	tt.Key(Shift, KeyF10)
+	open(tt)
+	// A table that does not choose: the row clicked.
+	s = ListState{RowMenu: menu}
+	tt = coreNewTester(tableView(&s, cols, names), 500, 300)
+	tt.RightClick("b.txt")
+	open(tt)
+	want := [][]int{{2}, {1}, {0, 1, 2}, {0, 1, 2}, {1}}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("the rows: %v, want %v", got, want)
+	}
+}
