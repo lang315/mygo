@@ -211,8 +211,9 @@ func generate(n, first int, seed uint64) []account {
 // matcher keeps the accounts whose column col matches keyword: a keyword
 // with | lists the values to match exactly, as fhtool's UID1|UID2 search,
 // another matches the values containing it, case aside. A keyword
-// listing nothing keeps all.
-func matcher(col int, keyword string) func(a *account) bool {
+// listing nothing keeps all. It takes an account by value: through a
+// function value, a pointer to one would move it to the heap, at every row.
+func matcher(col int, keyword string) func(a account) bool {
 	keyword = strings.TrimSpace(keyword)
 	if strings.Contains(keyword, "|") {
 		set := map[string]bool{}
@@ -222,13 +223,13 @@ func matcher(col int, keyword string) func(a *account) bool {
 			}
 		}
 		if len(set) > 0 {
-			return func(a *account) bool { return set[cellText(a, col)] }
+			return func(a account) bool { return set[cellText(&a, col)] }
 		}
 		keyword = ""
 	}
 	if keyword == "" {
-		return func(*account) bool { return true }
+		return func(account) bool { return true }
 	}
 	kw := strings.ToLower(keyword)
-	return func(a *account) bool { return strings.Contains(strings.ToLower(cellText(a, col)), kw) }
+	return func(a account) bool { return strings.Contains(strings.ToLower(cellText(&a, col)), kw) }
 }

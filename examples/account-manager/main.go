@@ -107,10 +107,13 @@ func (a *app) showFolder() {
 }
 
 // filter shows the accounts of the folder shown that the search finds.
-func (a *app) filter() {
+func (a *app) filter() { a.view.SetFilter(a.keep()) }
+
+// keep tells whether the folder shown has an account the search finds.
+func (a *app) keep() func(account) bool {
 	f, _ := a.s.folderByName(a.folder)
 	match := matcher(columnIndex(a.column), a.keyword)
-	a.view.SetFilter(func(x account) bool { return x.Folder == f.ID && match(&x) })
+	return func(x account) bool { return x.Folder == f.ID && match(x) }
 }
 
 func (a *app) table(c *ui.Context) {

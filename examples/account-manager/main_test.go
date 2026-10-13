@@ -163,3 +163,18 @@ func TestDeletingTheFolderShownFallsBack(t *testing.T) {
 		t.Fatal("the folder select does not show the trash")
 	}
 }
+
+// The filter goes through every row whenever it changes: a row it copies
+// to the heap costs a million allocations at a million rows.
+func TestFilterDoesNotAllocatePerRow(t *testing.T) {
+	a := newApp(10)
+	a.column, a.keyword = "UID", a.s.accounts[3].UID+"|x"
+	keep := a.keep()
+	x := a.s.accounts[3]
+	if !keep(x) {
+		t.Fatal("the account searched for is not kept")
+	}
+	if n := testing.AllocsPerRun(100, func() { keep(x) }); n != 0 {
+		t.Fatalf("%v allocations a row", n)
+	}
+}

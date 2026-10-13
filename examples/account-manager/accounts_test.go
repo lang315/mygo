@@ -40,7 +40,7 @@ func TestMatcher(t *testing.T) {
 		{colUID, " 100000000000123 | |999 ", true},
 		{colUID, "|", true}, // nothing listed: all
 	} {
-		if got := matcher(tc.col, tc.kw)(x); got != tc.want {
+		if got := matcher(tc.col, tc.kw)(*x); got != tc.want {
 			t.Errorf("matcher(%d, %q) = %v, want %v", tc.col, tc.kw, got, tc.want)
 		}
 	}
