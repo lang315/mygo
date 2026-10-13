@@ -5,6 +5,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { llmsDocs } from "./llms.ts"
+import { isPublished } from "./src/lib/markdown-source.ts"
 
 const repo = (file: string) => new URL(`../${file}`, import.meta.url)
 
@@ -14,7 +15,7 @@ const repo = (file: string) => new URL(`../${file}`, import.meta.url)
 // listed.
 const docs = fs
   .readdirSync(repo("docs"), { recursive: true, encoding: "utf8" })
-  .filter((file) => file.endsWith(".md") && file !== "README.md")
+  .filter((file) => file.endsWith(".md") && file !== "README.md" && isPublished(file))
   .map((file) => `/docs/${file.slice(0, -3).split(path.sep).join("/").replace(/\/README$/, "")}`)
 
 const version = /const Version = "([^"]+)"/.exec(fs.readFileSync(repo("mygo.go"), "utf8"))?.[1]

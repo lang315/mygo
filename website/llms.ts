@@ -10,7 +10,7 @@ import { unified } from "unified"
 import { visit } from "unist-util-visit"
 import type { Plugin } from "vite"
 
-import { omitRepositoryOnly, rewriteHref, slugOf, type LinkOptions } from "./src/lib/markdown-source.ts"
+import { isPublished, omitRepositoryOnly, rewriteHref, slugOf, type LinkOptions } from "./src/lib/markdown-source.ts"
 import { site } from "./src/lib/site.ts"
 
 /** All downloads, keyed by their site path, for the build and dev server. */
@@ -18,7 +18,7 @@ export async function docsAssets(repoDir: string): Promise<Map<string, string>> 
   const docsDir = path.join(repoDir, "docs")
   const links: LinkOptions = { docsDir, repoDir, repoUrl: site.repo }
   const files = (await fs.readdir(docsDir, { recursive: true }))
-    .filter((file) => file.endsWith(".md"))
+    .filter((file) => file.endsWith(".md") && isPublished(file))
     .sort((a, b) => {
       // Each book's introduction comes before its pages.
       const key = (file: string) => file.replace(/(^|[\\/])README\.md$/, "$1")
