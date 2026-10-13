@@ -44,6 +44,7 @@ For 100,000 rows, the `TableView` itself takes:
 | `Changed` for 1 row, then `Sync` | 97 µs | 0 |
 | `Changed` for 10 rows, then `Sync` | 89 µs | 0 |
 | `Changed` for 100 rows, then `Sync` | 106 µs | 0 |
+| `SetFilter`, then `Sync` (a search typed or cleared, rows sorted) | 118 µs | 0 |
 | Sorting all rows again (a click on a header) | 11.7 ms | 0 |
 
 Each is the median of six 300 ms samples. A change of a few rows costs a

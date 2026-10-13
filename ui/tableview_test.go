@@ -425,3 +425,24 @@ func BenchmarkTableViewResort(b *testing.B) {
 		v.Sync(rows, sort)
 	}
 }
+
+// BenchmarkTableViewFilter turns a filter on and off on 100,000 sorted
+// rows, as a search typed and cleared does.
+func BenchmarkTableViewFilter(b *testing.B) {
+	rows := tvBenchRows(100_000)
+	v := NewTableView(tvCompare)
+	sort := SortOrder{Column: "a"}
+	v.Sync(rows, sort)
+	keep := func(x tvRow) bool { return x.b < 3 }
+	on := false
+	b.ReportAllocs()
+	for b.Loop() {
+		on = !on
+		if on {
+			v.SetFilter(keep)
+		} else {
+			v.SetFilter(nil)
+		}
+		v.Sync(rows, sort)
+	}
+}
