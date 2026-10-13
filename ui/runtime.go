@@ -845,7 +845,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		rt.samplePose(e)
 	}
 	e.world = e.transformAt(e.x, e.y)
-	if e.parent != nil && e != e.c.overlay {
+	if e.parent != nil && e != e.c.overlay && e.parent.world.Set {
 		e.world = e.parent.world.Mul(e.world)
 	}
 	s.world = e.world

@@ -34,7 +34,7 @@ an Apple M1 Pro, macOS arm64, Go 1.27.2, with the same settings
 
 | Fixture (Apple M1 Pro) | Time per frame | Allocations per frame | Allocated bytes per frame |
 |---|---:|---:|---:|
-| Table of 100,000 rows with checkboxes, sorted by a `TableView` | 137 µs | 203 | 5,765 |
+| Table of 100,000 rows with checkboxes, sorted by a `TableView` | 116 µs | 203 | 5,765 |
 
 For 100,000 rows, the `TableView` itself takes:
 

@@ -191,8 +191,10 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		for _, j := range order {
 			col := &columns[j]
 			// Keyed by its column, a cell keeps its state as the columns
-			// move: a header being dragged keeps the press.
-			box := coreRow(c).Key(col.id()).Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Shrink(0).Clip().Role(role)
+			// move: a header being dragged keeps the press. Keyed as it
+			// is made, as a list's rows are.
+			c.nextKey, c.keySet = col.id(), true
+			box := coreRow(c).Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Shrink(0).Clip().Role(role)
 			if w, ok := layout.width(col); ok {
 				box.Width(w)
 			} else {

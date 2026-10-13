@@ -231,6 +231,10 @@ func finiteTransform(v ...float32) {
 }
 
 func (e *node) transformAt(x, y float32) scene.Affine {
+	// Most elements have neither: skip the matrices of every commit.
+	if !e.poseM.Set && !e.transform.set() {
+		return scene.Affine{}
+	}
 	// Its pose (AnimatePose) acts after its own transform.
 	m := e.poseM.Mul(e.transform.flat())
 	if !m.Set {
@@ -246,6 +250,9 @@ func (e *node) transformAt(x, y float32) scene.Affine {
 
 func (e *node) visualRect(r Rect) Rect { return transformRect(e.world, r) }
 func transformRect(m scene.Affine, r Rect) Rect {
+	if !m.Set {
+		return r
+	}
 	b := m.Bounds(scene.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H})
 	return Rect{b.X, b.Y, b.W, b.H}
 }
@@ -365,7 +372,9 @@ func laidOutVisualBox(e *node) Rect {
 }
 
 func (p *Painter) add(op scene.Op) {
-	op.Transform = p.transform.Pixels(p.scale).Mul(op.Transform)
+	if p.transform.Set {
+		op.Transform = p.transform.Pixels(p.scale).Mul(op.Transform)
+	}
 	p.s.Ops = append(p.s.Ops, op)
 }
 

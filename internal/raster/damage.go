@@ -306,7 +306,11 @@ func (r *Renderer) opBounds(s *scene.Scene, out []image.Rectangle) []image.Recta
 			}
 		case scene.OpGlyphs:
 			for _, g := range s.Glyphs[op.Start:op.End] {
-				b = b.Union(outset(op.Transform.Mul(g.Transform).Bounds(scene.Rect{X: g.X, Y: g.Y, W: g.W, H: g.H}), 1))
+				rc := scene.Rect{X: g.X, Y: g.Y, W: g.W, H: g.H}
+				if op.Transform.Set || g.Transform.Set {
+					rc = op.Transform.Mul(g.Transform).Bounds(rc)
+				}
+				b = b.Union(outset(rc, 1))
 			}
 		case scene.OpPushClip:
 			// A clip that changes changes everything it cuts.
