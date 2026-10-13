@@ -93,6 +93,12 @@ type ListState struct {
 	// the theme's Radius, as a List's are, rather than leaving them square
 	// from edge to edge.
 	RoundRows bool
+	// Version tells the list that its rows changed order or membership,
+	// as when they are sorted again: change it when they do (a
+	// TableView's Version does). The choice, and the row holding the
+	// focus, then follow their keys wherever their rows went, rather than
+	// near where they were; the list keeps its place.
+	Version uint64
 
 	// The place: the first row in view, and how far the list is scrolled
 	// past its top: the row's top is that far above where the content
@@ -140,6 +146,9 @@ type ListState struct {
 	editables, editablesNow bool
 	editKey                 any
 	editAsked               bool
+	// version is the Version seen, and versionFrame the frame it changed
+	// in.
+	version, versionFrame uint64
 }
 
 // listRequest is where the app or the user asked the list to go: to row
@@ -378,10 +387,14 @@ func (s *ListState) sync(e *node, n int) {
 		s.selRow, s.lead, s.pivot = -1, -1, -1
 		s.header.row = -1
 	}
+	if s.Version != s.version {
+		s.version, s.versionFrame = s.Version, rt.frame
+	}
+	reach := s.reach(rt.frame, n)
 	s.heights.def = float64(e.c.theme.Space(8))
 	if s.Key != nil && n > 0 {
-		if k := s.anchorKey; k != nil {
-			if j, ok := s.find(k, s.anchor, n); ok && j != s.anchor {
+		if k := s.anchorKey; k != nil && s.versionFrame != rt.frame {
+			if j, ok := s.find(k, s.anchor, n, listSearch); ok && j != s.anchor {
 				// Rows came or went above it: the heights known move with
 				// the rows around it.
 				s.heights.resize(max(n, s.heights.n))
@@ -392,14 +405,14 @@ func (s *ListState) sync(e *node, n int) {
 		}
 		if sel := s.cursor(); sel != nil && *sel == s.selRow && s.selKey != nil {
 			// The choice follows its item, and is gone with it.
-			j, ok := s.find(s.selKey, *sel, n)
+			j, ok := s.find(s.selKey, *sel, n, reach)
 			if !ok {
 				j = -1
 			}
 			*sel, s.selRow = j, j
 		}
 		if s.pivotKey != nil {
-			j, ok := s.find(s.pivotKey, s.pivot, n)
+			j, ok := s.find(s.pivotKey, s.pivot, n, reach)
 			if !ok {
 				j = -1
 			}
@@ -447,9 +460,10 @@ func (s *ListState) anchorAt(y float64) (int, float64) {
 	return a, s.padTop + s.heights.top(a, s.gap) - y
 }
 
-// find returns the row whose key is k, looking around row near.
-func (s *ListState) find(k any, near, n int) (int, bool) {
-	for d := 0; d <= listSearch; d++ {
+// find returns the row whose key is k, looking around row near, at most
+// limit rows away.
+func (s *ListState) find(k any, near, n, limit int) (int, bool) {
+	for d := 0; d <= limit; d++ {
 		lo, hi := near-d, near+d
 		if lo < 0 && hi >= n {
 			break
@@ -462,6 +476,16 @@ func (s *ListState) find(k any, near, n int) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// reach returns how far from where they were the list looks for its rows'
+// keys: all of them in the frame Version changed in, as rows sorted again
+// may be anywhere.
+func (s *ListState) reach(frame uint64, n int) int {
+	if s.versionFrame == frame {
+		return n
+	}
+	return listSearch
 }
 
 // plan returns the row the place starts from and the rows to build, as far
@@ -1012,7 +1036,7 @@ func (s *ListState) focusedRow(e *node, n int) (int, bool) {
 		}
 		i := r.row
 		if s.Key != nil && (i >= n || s.Key(i) != r.key) {
-			if i, ok = s.find(r.key, i, n); !ok {
+			if i, ok = s.find(r.key, i, n, s.reach(rt.frame, n)); !ok {
 				return 0, false
 			}
 		}

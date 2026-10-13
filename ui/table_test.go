@@ -447,3 +447,29 @@ func TestTableEvents(t *testing.T) {
 		t.Errorf("a double click on a table that does not choose: %v", activated)
 	}
 }
+
+func TestTableKeepsChoiceAcrossFarResort(t *testing.T) {
+	const n = 100_000
+	ids := make([]int, n)
+	for i := range ids {
+		ids[i] = i
+	}
+	sel := 0
+	s := ListState{Selected: &sel, Key: func(i int) any { return ids[i] }}
+	cols := []TableColumn{{Title: "ID"}}
+	tt := coreNewTester(func(c *context) {
+		coreTable(c, &s, cols, n, func(row, col int) { coreTextf(c, "Item %d", ids[row]) }).Grow(1)
+	}, 400, 300)
+	// Reversed: item 0 goes to the end, further than the list looks
+	// without a new Version.
+	slices.Reverse(ids)
+	s.Version++
+	tt.Frame()
+	if sel != n-1 {
+		t.Fatalf("the choice did not follow its item: row %d", sel)
+	}
+	// The place stays where it was, rather than following the top row.
+	if first, _ := s.Visible(); first != 0 {
+		t.Errorf("the table scrolled to row %d", first)
+	}
+}
