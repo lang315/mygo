@@ -45,6 +45,7 @@ type app struct {
 	stopping        bool
 	stress          *runner // the stress run going on, nil when none
 	stats           *stats  // what -stats logs, nil without it
+	filtered        search  // the search the view shows the rows of
 	// update runs fn on the main thread, then builds a frame:
 	// Window.Update, or a test's.
 	update func(fn func())
@@ -52,6 +53,7 @@ type app struct {
 
 func newApp(rows int) *app {
 	a := &app{s: newStore(rows, 1), view: ui.NewTableView(compare()), cursor: -1, folder: "Mặc định", column: "UID", threads: 10}
+	a.filtered.folder = -1 // no folder: the first filter is given
 	a.filter()
 	return a
 }
@@ -121,8 +123,28 @@ func (a *app) showFolder() {
 	a.filter()
 }
 
+// search is what decides the rows shown: a folder, and the keyword sought
+// in a column.
+type search struct {
+	folder          int
+	column, keyword string
+}
+
 // filter shows the accounts of the folder shown that the search finds.
-func (a *app) filter() { a.view.SetFilter(a.keep()) }
+// It does nothing when they are the rows shown already: a filter given to
+// the view sorts all rows again, a second at a million.
+func (a *app) filter() {
+	f, _ := a.s.folderByName(a.folder)
+	s := search{f.ID, a.column, strings.TrimSpace(a.keyword)}
+	if s.keyword == "" {
+		s.column = "" // the column searched keeps all rows alike
+	}
+	if s == a.filtered {
+		return
+	}
+	a.filtered = s
+	a.view.SetFilter(a.keep())
+}
 
 // keep tells whether the folder shown has an account the search finds.
 func (a *app) keep() func(account) bool {

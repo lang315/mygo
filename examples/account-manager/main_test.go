@@ -325,3 +325,42 @@ func BenchmarkLiveUpdates(b *testing.B) {
 		}
 	}
 }
+
+// A search that changes nothing must not place the rows again: a new
+// filter sorts all of them, a second at a million (seen in the e2e run,
+// where Tìm kiếm was pressed with the keyword typed lost).
+func TestSearchUnchangedSortsNothing(t *testing.T) {
+	a := newApp(1000)
+	calls := 0
+	counted := map[string]func(x, y account) int{}
+	for title, f := range compare() {
+		counted[title] = func(x, y account) int { calls++; return f(x, y) }
+	}
+	a.view = ui.NewTableView(counted)
+	a.sort = ui.SortOrder{Column: "Bạn bè"}
+	a.filter()
+	tt := newTester(t, a)
+	tt.Frame()
+	for _, keyword := range []string{"", "77"} {
+		a.keyword = keyword
+		tt.do(tt.Click("Tìm kiếm"))
+		calls = 0
+		tt.do(tt.Click("Tìm kiếm"))
+		tt.do(tt.Click("Tìm kiếm"))
+		if calls != 0 {
+			t.Fatalf("Tìm kiếm with %q unchanged compared rows %d times", keyword, calls)
+		}
+	}
+}
+
+// The view filters by folder from the start.
+func TestNewAppShowsOnlyItsFolder(t *testing.T) {
+	a := newApp(3)
+	a.view.Sync(a.s.accounts, a.sort)
+	a.s.accounts[0].Folder = 1
+	a.view.Changed(0)
+	a.view.Sync(a.s.accounts, a.sort)
+	if a.view.Len() != 2 {
+		t.Fatalf("%d rows shown in Mặc định, want 2", a.view.Len())
+	}
+}
