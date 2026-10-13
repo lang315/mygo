@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // last is the state each account was left in by results.
@@ -55,23 +57,35 @@ func TestStopLeavesNoAccountRunning(t *testing.T) {
 }
 
 func TestRunStartsNoMoreWorkersThanAccounts(t *testing.T) {
-	var at, most atomic.Int32
-	block := make(chan struct{})
-	r := run([]int{1, 2, 3}, 0, 1_000_000, func(ctx context.Context, id int) result {
-		n := at.Add(1)
-		for {
-			m := most.Load()
-			if n <= m || most.CompareAndSwap(m, n) {
-				break
-			}
+	for _, tc := range []struct{ threads, accounts, want int }{
+		{1_000_000, 3, 3},
+		{10, 100, 10},
+		{1, 0, 1},
+	} {
+		if got := workers(tc.threads, tc.accounts); got != tc.want {
+			t.Errorf("workers(%d, %d) = %d, want %d", tc.threads, tc.accounts, got, tc.want)
 		}
-		<-block
-		at.Add(-1)
+	}
+}
+
+// A loop starts once the one before it ended, as fhtool's do: one account
+// in two jobs at once would be two browsers on it.
+func TestRunNeverRunsAnAccountTwiceAtOnce(t *testing.T) {
+	var mu sync.Mutex
+	at, most := map[int]int{}, 0
+	r := run([]int{1, 2, 3}, 3, 10, func(ctx context.Context, id int) result {
+		mu.Lock()
+		at[id]++
+		most = max(most, at[id])
+		mu.Unlock()
+		time.Sleep(2 * time.Millisecond)
+		mu.Lock()
+		at[id]--
+		mu.Unlock()
 		return result{id: id, state: succeeded}
 	})
-	close(block)
 	<-r.done
-	if most.Load() > 3 {
-		t.Fatalf("%d jobs at once for 3 accounts", most.Load())
+	if most > 1 {
+		t.Fatalf("an account ran in %d jobs at once", most)
 	}
 }

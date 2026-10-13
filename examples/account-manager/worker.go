@@ -28,25 +28,39 @@ type runner struct {
 }
 
 // run runs work on the accounts ids, loops+1 times over, in threads
-// goroutines, or one for each account when there are fewer.
+// goroutines, or one for each account when there are fewer. A loop starts
+// once the one before it ended, for no account to be in two jobs at once.
 func run(ids []int, loops, threads int, work func(ctx context.Context, id int) result) *runner {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &runner{cancel: cancel, done: make(chan struct{})}
+	go func() {
+		defer close(r.done)
+		defer cancel()
+		for range loops + 1 {
+			if ctx.Err() != nil {
+				return
+			}
+			r.loop(ctx, ids, threads, work)
+		}
+	}()
+	return r
+}
+
+// loop runs work once on each of ids, and returns when the workers did.
+func (r *runner) loop(ctx context.Context, ids []int, threads int, work func(ctx context.Context, id int) result) {
 	jobs := make(chan int)
 	go func() {
 		defer close(jobs)
-		for range loops + 1 {
-			for _, id := range ids {
-				select {
-				case jobs <- id:
-				case <-ctx.Done():
-					return
-				}
+		for _, id := range ids {
+			select {
+			case jobs <- id:
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
 	var wg sync.WaitGroup
-	for range max(1, min(threads, len(ids))) {
+	for range workers(threads, len(ids)) {
 		wg.Go(func() {
 			for id := range jobs {
 				r.push(result{id: id, state: running, status: "Đang chạy..."})
@@ -59,13 +73,13 @@ func run(ids []int, loops, threads int, work func(ctx context.Context, id int) r
 			}
 		})
 	}
-	go func() {
-		wg.Wait()
-		cancel()
-		close(r.done)
-	}()
-	return r
+	wg.Wait()
 }
+
+// workers is how many goroutines run the jobs on accounts: threads, but
+// no more than there are accounts, for "Số luồng" at 1,000,000 not to
+// start as many goroutines.
+func workers(threads, accounts int) int { return max(1, min(threads, accounts)) }
 
 func (r *runner) push(res result) {
 	r.mu.Lock()
