@@ -251,7 +251,7 @@ half the rows or fewer when the rows were sorted under it (at the first
 `Sync`, or after a change of the sort, `Reset` or a reallocated slice):
 the view sorted only the rows it kept, so the next filter sorts again.
 Keeping the order of all rows makes a `Sync` placing changed rows cost
-about twice as much while a filter hides rows.
+about half again as much while a filter hides rows.
 
 ```go
 if ui.SearchField(c, &app.keyword).Label("Search accounts").Changed() {

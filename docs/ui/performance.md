@@ -50,8 +50,8 @@ For 100,000 rows, the `TableView` itself takes:
 | Sorting all rows again (a click on a header) | 11.7 ms | 0 |
 
 Each is the median of six 300 ms samples. A change of a few rows costs a
-pass over the order, so about 0.1 ms whether the rows are 1 or 100 (about
-twice that under a filter, as the view keeps the order of all rows too);
+pass over the order, so about 0.1 ms whether the rows are 1 or 100 (half
+again as much under a filter, as the view keeps the order of all rows too);
 sorting all of them again takes a dozen milliseconds, below one frame at
 60 Hz.
 
