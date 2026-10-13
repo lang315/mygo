@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"fmt"
 	"runtime"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -350,5 +353,732 @@ func TestTableRoundRows(t *testing.T) {
 	coreNewTester(tableView(&s, cols, names), 500, 300)
 	if got := radius(&s, 0, true); got != round {
 		t.Errorf("a row of a table that does not choose, with RoundRows: %v", got)
+	}
+}
+
+func TestTableEvents(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name", Sortable: true}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80, Align: End}}
+	sort := SortOrder{Column: "Size"}
+	sel := -1
+	s := ListState{Sort: &sort, Selected: &sel}
+	var seen, calls []string
+	second := 0
+	view := func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			e := coreTable(c, &s, cols, len(names), func(row, col int) {
+				if col == 0 {
+					coreText(c, names[row]).SingleLine()
+				}
+			}).Grow(1)
+			for _, q := range []struct {
+				name string
+				on   bool
+			}{{"changed", e.Changed()}, {"selection", e.SelectionChanged()}, {"sort", e.SortChanged()}, {"columns", e.ColumnsChanged()}, {"checked", e.CheckedChanged()}} {
+				if q.on {
+					seen = append(seen, q.name)
+				}
+			}
+			if row, ok := e.Activated(); ok {
+				seen = append(seen, fmt.Sprintf("activated %d", row))
+			}
+			wrapElement(e).
+				OnSelectionChange(func() { calls = append(calls, "selection") }).
+				OnSortChange(func() { calls = append(calls, "sort") }).
+				OnColumnsChange(func() { calls = append(calls, "columns") }).
+				OnActivate(func(row int) { calls = append(calls, fmt.Sprintf("activate %d", row)) })
+			// Callbacks add up: another one runs along with the first.
+			wrapElement(e).OnSelectionChange(func() { second++ })
+		})
+	}
+	tt := coreNewTester(view, 500, 300)
+	check := func(what string, wantSeen, wantCalls []string) {
+		t.Helper()
+		if !slices.Equal(seen, wantSeen) || !slices.Equal(calls, wantCalls) {
+			t.Errorf("%s: saw %q, called %q; want %q, %q", what, seen, calls, wantSeen, wantCalls)
+		}
+		seen, calls = nil, nil
+	}
+	check("the first frame", nil, nil)
+	tt.Click("b.txt")
+	check("a click on a row", []string{"changed", "selection"}, []string{"selection"})
+	if second != 1 {
+		t.Errorf("the second OnSelectionChange ran %d times for one click, want 1", second)
+	}
+	tt.Click("Name")
+	check("a click on a header", []string{"changed", "sort"}, []string{"sort"})
+	tt.Frame()
+	check("a frame after the sort", nil, nil)
+	tt.Click("c.txt")
+	seen, calls = nil, nil
+	tt.Click("c.txt")
+	check("a double click", []string{"activated 2"}, []string{"activate 2"})
+	tt.Key(0, KeyEnter)
+	check("Enter", []string{"activated 2"}, []string{"activate 2"})
+	// Resizing a column: drag the right edge of Kind's header, as
+	// TestTableResize does.
+	kind := header(t, tt, "Kind")
+	edge, y := float32(kind.X+kind.W)-2, float32(kind.Y+kind.H/2)
+	tt.Press(edge, y)
+	tt.Move(edge+30, y)
+	tt.Release(edge+30, y)
+	if !slices.Contains(seen, "columns") || !slices.Contains(calls, "columns") || slices.Contains(seen, "changed") {
+		t.Errorf("resizing a column: saw %q, called %q", seen, calls)
+	}
+	seen, calls = nil, nil
+	// Fitting it with a double click on the edge: reported in the frame
+	// after, once the widths are known.
+	kind = header(t, tt, "Kind")
+	edge = float32(kind.X+kind.W) - 2
+	tt.ClickAt(edge, y)
+	tt.ClickAt(edge, y)
+	if !slices.Contains(seen, "columns") || !slices.Equal(calls, []string{"columns"}) {
+		t.Errorf("fitting a column: saw %q, called %q", seen, calls)
+	}
+	seen, calls = nil, nil
+	// Moving a column: Kind dragged past Size reports the columns, not a
+	// change of the choice nor of the sort.
+	kind, size := header(t, tt, "Kind"), header(t, tt, "Size")
+	from, to := float32(kind.X+20), float32(size.X+size.W/2+10)
+	tt.Press(from, y)
+	for _, f := range []float32{0.1, 0.4, 0.8, 1} {
+		tt.Move(from+(to-from)*f, y)
+	}
+	tt.Release(to, y)
+	if !slices.Contains(seen, "columns") || slices.Contains(seen, "changed") || !slices.Equal(calls, []string{"columns"}) {
+		t.Errorf("moving a column: saw %q, called %q", seen, calls)
+	}
+	if k, z := header(t, tt, "Kind"), header(t, tt, "Size"); z.X >= k.X {
+		t.Errorf("Size at %v, Kind at %v: the column did not move", z.X, k.X)
+	}
+	seen, calls = nil, nil
+
+	// A table that does not choose still reports a double click.
+	s2 := ListState{}
+	var activated []int
+	tt = coreNewTester(func(c *context) {
+		e := coreTable(c, &s2, cols, len(names), func(row, col int) {
+			if col == 0 {
+				coreText(c, names[row]).SingleLine()
+			}
+		}).Grow(1)
+		if row, ok := e.Activated(); ok {
+			activated = append(activated, row)
+		}
+	}, 500, 300)
+	tt.Click("b.txt")
+	tt.Click("b.txt")
+	if !slices.Equal(activated, []int{1}) {
+		t.Errorf("a double click on a table that does not choose: %v", activated)
+	}
+}
+
+func TestTableKeepsChoiceAcrossFarResort(t *testing.T) {
+	const n = 100_000
+	ids := make([]int, n)
+	for i := range ids {
+		ids[i] = i
+	}
+	sel := 0
+	s := ListState{Selected: &sel, Key: func(i int) any { return ids[i] }}
+	cols := []TableColumn{{Title: "ID"}}
+	tt := coreNewTester(func(c *context) {
+		coreTable(c, &s, cols, n, func(row, col int) { coreTextf(c, "Item %d", ids[row]) }).Grow(1)
+	}, 400, 300)
+	// Reversed: item 0 goes to the end, further than the list looks
+	// without a new Version.
+	slices.Reverse(ids)
+	s.Version++
+	tt.Frame()
+	if sel != n-1 {
+		t.Fatalf("the choice did not follow its item: row %d", sel)
+	}
+	// The place stays where it was, rather than following the top row.
+	if first, _ := s.Visible(); first != 0 {
+		t.Errorf("the table scrolled to row %d", first)
+	}
+}
+
+func TestTableChecked(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80, Align: End}}
+	var checked Selection[string]
+	shown := names
+	sel := -1
+	s := ListState{Checked: &checked, Selected: &sel, Key: func(i int) any { return shown[i] }}
+	events := 0
+	maxCol := -1
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			e := coreTable(c, &s, cols, len(shown), func(row, col int) {
+				maxCol = max(maxCol, col)
+				if col == 0 {
+					coreText(c, shown[row]).SingleLine()
+				}
+			}).Grow(1)
+			if e.CheckedChanged() {
+				events++
+			}
+		})
+	}, 500, 300)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	boxes := func() []platform.AccessNode {
+		var bs []platform.AccessNode
+		for _, n := range tt.h.access.Nodes {
+			if n.Role == platform.RoleCheckBox {
+				bs = append(bs, n)
+			}
+		}
+		return bs
+	}
+	click := func(n platform.AccessNode) {
+		tt.ClickAt(float32(n.Bounds.X+n.Bounds.W/2), float32(n.Bounds.Y+n.Bounds.H/2))
+	}
+	header := func() platform.AccessNode { return accessNode(t, tt.h.access, platform.RoleCheckBox, "Check all") }
+
+	if maxCol != 2 {
+		t.Fatalf("cell got columns up to %d, want the app's 0 to 2", maxCol)
+	}
+	if bs := boxes(); len(bs) != 4 || bs[0].Label != "Check all" {
+		t.Fatalf("checkboxes: %+v", bs)
+	}
+	// The checkbox column comes first, before the app's columns.
+	if h, name := header(), accessNode(t, tt.h.access, platform.RoleColumnHeader, "Name"); h.Bounds.X >= name.Bounds.X {
+		t.Errorf("the checkbox column at %v, Name at %v", h.Bounds.X, name.Bounds.X)
+	}
+	click(boxes()[2]) // b.txt
+	if !checked.Has("b.txt") || checked.Len() != 1 || events != 1 {
+		t.Fatalf("checking b.txt: %v, %d events", checked.keys, events)
+	}
+	if sel != -1 {
+		t.Errorf("checking a row chose row %d", sel)
+	}
+	if h := header(); h.States&platform.AccessMixed == 0 {
+		t.Errorf("the header with one row checked: %+v", h)
+	}
+	click(header())
+	if checked.Len() != 3 || events != 2 || header().States&platform.AccessChecked == 0 {
+		t.Fatalf("checking all: %v, %d events, %+v", checked.keys, events, header())
+	}
+	click(header())
+	if checked.Len() != 0 || events != 3 {
+		t.Fatalf("unchecking all: %v, %d events", checked.keys, events)
+	}
+	// Rows not shown keep their keys: the header checks and unchecks the
+	// rows shown only.
+	checked.Add("c.txt")
+	shown = names[:2]
+	tt.Frame()
+	if h := header(); h.States&(platform.AccessChecked|platform.AccessMixed) != 0 {
+		t.Errorf("the header with none of the rows shown checked: %+v", h)
+	}
+	click(header())
+	if checked.Len() != 3 {
+		t.Fatalf("checking the rows shown: %v", checked.keys)
+	}
+	click(header())
+	if checked.Len() != 1 || !checked.Has("c.txt") {
+		t.Fatalf("unchecking the rows shown: %v", checked.keys)
+	}
+}
+
+func TestTableRowMenu(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80, Align: End}}
+	var got [][]int
+	menu := func(m *Menu, rows []int) {
+		if m.Item("Open").Chosen() {
+			got = append(got, slices.Clone(rows))
+		}
+	}
+	open := func(tt *Tester) {
+		t.Helper()
+		if m := tt.Menu(); !slices.Equal(m, []string{"Open"}) {
+			t.Fatalf("the menu: %q", m)
+		}
+		if err := tt.ChooseMenuItem("Open"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One row at a time: a right click moves the choice.
+	sel := 0
+	s := ListState{Selected: &sel, RowMenu: menu}
+	tt := coreNewTester(tableView(&s, cols, names), 500, 300)
+	tt.RightClick("c.txt")
+	if sel != 2 {
+		t.Errorf("a right click on c.txt chose %d", sel)
+	}
+	open(tt)
+	// Several rows: a right click on one not chosen chooses it alone, on
+	// one chosen keeps them all.
+	var chosen Selection[int]
+	sel = -1
+	s = ListState{Selected: &sel, Selection: &chosen, RowMenu: menu}
+	tt = coreNewTester(tableView(&s, cols, names), 500, 300)
+	tt.RightClick("b.txt")
+	open(tt)
+	tt.ClickWith(Cmd, "a.txt")
+	tt.ClickWith(Cmd, "c.txt")
+	tt.RightClick("c.txt")
+	open(tt)
+	// Shift+F10 opens it on the rows chosen.
+	tt.Key(Shift, KeyF10)
+	open(tt)
+	// A table that does not choose: the row clicked.
+	s = ListState{RowMenu: menu}
+	tt = coreNewTester(tableView(&s, cols, names), 500, 300)
+	tt.RightClick("b.txt")
+	open(tt)
+	want := [][]int{{2}, {1}, {0, 1, 2}, {0, 1, 2}, {1}}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("the rows: %v, want %v", got, want)
+	}
+}
+
+func TestTableCopy(t *testing.T) {
+	names := []string{"photo.jpeg", "notes.md", "song.mp3"}
+	cols := []TableColumn{{Title: "Name"}}
+	var chosen Selection[int]
+	sel := -1
+	s := ListState{Selected: &sel, Selection: &chosen}
+	s.Copy = func(rows []int) string {
+		var b strings.Builder
+		for _, r := range rows {
+			b.WriteString(names[r] + "\n")
+		}
+		return b.String()
+	}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			coreTable(c, &s, cols, len(names), func(row, col int) { coreEditableText(c, &names[row]) }).Grow(1)
+			coreButton(c, "Elsewhere")
+		})
+	}, 400, 300)
+	tt.SetClipboard("before")
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "before" {
+		t.Fatalf("Cmd+C without the focus nor a choice: %q", got)
+	}
+	// Rows chosen, the focus elsewhere: nothing is copied.
+	tt.Click("photo.jpeg")
+	tt.ClickWith(Shift, "song.mp3")
+	tt.Click("Elsewhere")
+	if tt.Focused("photo.jpeg") {
+		t.Fatal("the table still has the focus")
+	}
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "before" {
+		t.Fatalf("Cmd+C with rows chosen but the focus elsewhere: %q", got)
+	}
+	tt.Command("copy")
+	if got := tt.Clipboard(); got != "before" {
+		t.Fatalf("Copy with rows chosen but the focus elsewhere: %q", got)
+	}
+	tt.Click("photo.jpeg")
+	tt.ClickWith(Shift, "song.mp3")
+	tt.Key(Cmd, KeyC)
+	if got, want := tt.Clipboard(), "photo.jpeg\nnotes.md\nsong.mp3\n"; got != want {
+		t.Fatalf("Cmd+C: %q, want %q", got, want)
+	}
+	tt.SetClipboard("")
+	tt.Command("copy") // the Edit menu's Copy
+	if got := tt.Clipboard(); got != "photo.jpeg\nnotes.md\nsong.mp3\n" {
+		t.Fatalf("Copy: %q", got)
+	}
+	// A name being edited copies its text, not the rows.
+	tt.Key(0, KeyHome)
+	if runtime.GOOS == "darwin" {
+		tt.Key(0, KeyEnter)
+	} else {
+		tt.Key(0, KeyF2)
+	}
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "photo" {
+		t.Fatalf("Cmd+C while renaming: %q", got)
+	}
+}
+
+// checkedTable builds a table with a checkbox column, rows chosen and Copy,
+// followed by a button, as the tests of the focus on it need.
+func checkedTable(checked *Selection[int], events *int) (*ListState, *Tester) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name"}}
+	var chosen Selection[int]
+	sel := -1
+	s := &ListState{Checked: checked, Selected: &sel, Selection: &chosen}
+	s.Copy = func(rows []int) string {
+		var b strings.Builder
+		for _, r := range rows {
+			b.WriteString(names[r] + "\n")
+		}
+		return b.String()
+	}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			e := coreTable(c, s, cols, len(names), func(row, col int) { coreText(c, names[row]).SingleLine() }).Grow(1)
+			if e.CheckedChanged() {
+				*events++
+			}
+			coreButton(c, "After")
+		})
+	}, 500, 300)
+	return s, tt
+}
+
+func TestTableCheckboxesKeepFocus(t *testing.T) {
+	var checked Selection[int]
+	events := 0
+	s, tt := checkedTable(&checked, &events)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	tt.Click("a.txt")
+	tt.ClickWith(Shift, "b.txt")
+	var rowBox platform.AccessNode
+	for _, n := range tt.h.access.Nodes {
+		if n.Role == platform.RoleCheckBox && n.Label != "Check all" {
+			rowBox = n // the last one, row c.txt
+		}
+	}
+	tt.ClickAt(float32(rowBox.Bounds.X+rowBox.Bounds.W/2), float32(rowBox.Bounds.Y+rowBox.Bounds.H/2))
+	if !checked.Has(2) || events != 1 {
+		t.Fatalf("clicking the checkbox of c.txt: %v, %d events", checked.keys, events)
+	}
+	// The table kept the focus: Copy copies the rows chosen.
+	tt.SetClipboard("")
+	tt.Key(Cmd, KeyC)
+	if got, want := tt.Clipboard(), "a.txt\nb.txt\n"; got != want {
+		t.Fatalf("Cmd+C after clicking a checkbox: %q, want %q", got, want)
+	}
+	tt.SetClipboard("")
+	tt.Command("copy")
+	if got, want := tt.Clipboard(), "a.txt\nb.txt\n"; got != want {
+		t.Fatalf("Copy after clicking a checkbox: %q, want %q", got, want)
+	}
+	// And Down moves the choice.
+	tt.Key(0, KeyDown)
+	if rows := s.frame.chosenRows(); !slices.Equal(rows, []int{2}) {
+		t.Errorf("Down after clicking a checkbox chose rows %v, want [2]", rows)
+	}
+	// The header's checkbox keeps it too.
+	tt.Key(0, KeyUp)
+	head := accessNode(t, tt.h.access, platform.RoleCheckBox, "Check all")
+	tt.ClickAt(float32(head.Bounds.X+head.Bounds.W/2), float32(head.Bounds.Y+head.Bounds.H/2))
+	tt.Key(0, KeyUp)
+	if rows := s.frame.chosenRows(); !slices.Equal(rows, []int{0}) {
+		t.Errorf("Up after clicking Check all chose rows %v, want [0]", rows)
+	}
+}
+
+func TestTableTabLeavesInOneStep(t *testing.T) {
+	var checked Selection[int]
+	events := 0
+	_, tt := checkedTable(&checked, &events)
+	tt.Click("a.txt")
+	tt.Key(0, KeyTab)
+	if !tt.Focused("After") {
+		t.Fatal("Tab from the table did not reach the button after it")
+	}
+}
+
+func TestTableSpaceChecksRowsChosen(t *testing.T) {
+	var checked Selection[int]
+	events := 0
+	s, tt := checkedTable(&checked, &events)
+	tt.Click("a.txt")
+	tt.ClickWith(Cmd, "c.txt") // adds c.txt to the rows chosen
+	want := s.frame.chosenRows()
+	if !slices.Equal(want, []int{0, 2}) {
+		t.Fatalf("rows chosen: %v", want)
+	}
+	tt.Key(0, KeySpace)
+	if checked.Len() != 2 || !checked.Has(0) || !checked.Has(2) || events != 1 {
+		t.Fatalf("Space: checked %v, %d events", checked.keys, events)
+	}
+	tt.Key(0, KeySpace)
+	if checked.Len() != 0 || events != 2 {
+		t.Fatalf("Space again: checked %v, %d events", checked.keys, events)
+	}
+	// Some of them checked already: Space checks the rest.
+	checked.Add(0)
+	tt.Frame()
+	events = 0
+	tt.Key(0, KeySpace)
+	if checked.Len() != 2 || events != 1 {
+		t.Fatalf("Space with one of two checked: %v, %d events", checked.keys, events)
+	}
+}
+
+func TestTableCheckboxLabels(t *testing.T) {
+	names := []string{"a.txt", "b.txt"}
+	var checked Selection[int]
+	sel := -1
+	s := ListState{Checked: &checked, Selected: &sel}
+	tt := coreNewTester(func(c *context) {
+		coreTable(c, &s, []TableColumn{{Title: "Name"}}, len(names), func(row, col int) { coreText(c, names[row]) }).Grow(1)
+	}, 400, 300)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	accessNode(t, tt.h.access, platform.RoleCheckBox, "Check")
+	// With Label, the checkboxes tell the rows apart.
+	s.Label = func(i int) string { return names[i] }
+	tt.Frame()
+	accessNode(t, tt.h.access, platform.RoleCheckBox, "Check b.txt")
+	// Space checks with Label set too, where typing selects rows.
+	tt.Click("a.txt")
+	tt.Key(0, KeySpace)
+	if !checked.Has(0) || checked.Len() != 1 {
+		t.Errorf("Space with Label: checked %v", checked.keys)
+	}
+}
+
+func TestTableHeaderCheckboxWithoutRowsToCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		n     int
+		isHdr func(int) bool
+	}{
+		{"no rows", 0, nil},
+		{"only section headers", 3, func(int) bool { return true }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var checked Selection[int]
+			sel := -1
+			s := ListState{Checked: &checked, Selected: &sel, Header: tc.isHdr}
+			events := 0
+			tt := coreNewTester(func(c *context) {
+				e := coreTable(c, &s, []TableColumn{{Title: "Name"}}, tc.n, func(row, col int) { coreText(c, "Row") }).Grow(1)
+				if e.CheckedChanged() {
+					events++
+				}
+			}, 400, 300)
+			tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+			head := accessNode(t, tt.h.access, platform.RoleCheckBox, "Check all")
+			tt.ClickAt(float32(head.Bounds.X+head.Bounds.W/2), float32(head.Bounds.Y+head.Bounds.H/2))
+			if events != 0 || checked.Len() != 0 {
+				t.Errorf("%d CheckedChanged events, checked %v", events, checked.keys)
+			}
+		})
+	}
+}
+
+func TestTableSpaceInTypedPrefix(t *testing.T) {
+	names := []string{"my doc", "my docs", "other"}
+	var checked Selection[int]
+	sel := -1
+	s := ListState{Checked: &checked, Selected: &sel, Label: func(i int) string { return names[i] }}
+	tt := coreNewTester(func(c *context) {
+		coreTable(c, &s, []TableColumn{{Title: "Name"}}, len(names), func(row, col int) { coreText(c, names[row]).SingleLine() }).Grow(1)
+	}, 400, 300)
+	tt.Click("other")
+	tt.Key(0, KeyM)
+	tt.Key(0, KeyY)
+	tt.Key(0, KeySpace)
+	tt.Key(0, KeyD)
+	if sel != 0 || checked.Len() != 0 {
+		t.Fatalf("my d: the choice is %d, checked %v; want 0, none", sel, checked.keys)
+	}
+	for _, k := range []Key{KeyO, KeyC, KeyS} {
+		tt.Key(0, k)
+	}
+	if sel != 1 || checked.Len() != 0 {
+		t.Fatalf("my docs: the choice is %d, checked %v; want 1, none", sel, checked.keys)
+	}
+	// Once the pause is over, Space checks again.
+	tt.rt.states[s.frame.owner.id].typedAt = time.Time{}
+	tt.Key(0, KeySpace)
+	if !checked.Has(1) || checked.Len() != 1 {
+		t.Errorf("Space with no prefix pending checked %v, want row 1", checked.keys)
+	}
+}
+
+func TestTableCopyEdges(t *testing.T) {
+	names := []string{"a.txt", "b.txt"}
+	var chosen Selection[int]
+	sel := -1
+	text, calls := "", 0
+	s := ListState{Selected: &sel, Selection: &chosen, Copy: func(rows []int) string { calls++; return text }}
+	tt := coreNewTester(tableView(&s, []TableColumn{{Title: "Name"}}, names), 400, 300)
+	tt.Click("a.txt")
+	tt.SetClipboard("before")
+	tt.Key(Cmd, KeyC)
+	if calls != 1 || tt.Clipboard() != "before" {
+		t.Errorf("Copy returning nothing: %d calls, clipboard %q; want 1, \"before\"", calls, tt.Clipboard())
+	}
+	tt.Command("copy")
+	if tt.Clipboard() != "before" {
+		t.Errorf("the Edit menu's Copy returning nothing: clipboard %q", tt.Clipboard())
+	}
+	// A key held down repeats: one copy.
+	text, calls = "a.txt\n", 0
+	for _, repeat := range []bool{false, true, true} {
+		tt.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.Key(KeyC), Mods: platform.Modifiers(Cmd), Repeat: repeat})
+	}
+	if calls != 1 || tt.Clipboard() != "a.txt\n" {
+		t.Errorf("a repeated Cmd+C: %d calls, clipboard %q; want 1, \"a.txt\\n\"", calls, tt.Clipboard())
+	}
+}
+
+func TestTableVersionNearReSort(t *testing.T) {
+	const n = 100
+	ids := make([]int, n)
+	for i := range ids {
+		ids[i] = i
+	}
+	sel := 50
+	s := ListState{Selected: &sel, Key: func(i int) any { return ids[i] }}
+	tt := coreNewTester(func(c *context) {
+		coreTable(c, &s, []TableColumn{{Title: "ID"}}, n, func(row, col int) { coreTextf(c, "Item %d", ids[row]) }).Grow(1)
+	}, 400, 300)
+	s.ScrollTo(50, Start)
+	tt.Frame()
+	if first, _ := s.Visible(); first != 50 {
+		t.Fatalf("scrolled to row %d, want 50", first)
+	}
+	// The item at the top moves 40 rows, within reach of a search.
+	ids[50], ids[10] = ids[10], ids[50]
+	s.Version++
+	tt.Frame()
+	if first, _ := s.Visible(); first != 50 {
+		t.Errorf("the first row shown is %d, want 50: the place stays by index", first)
+	}
+	if sel != 10 {
+		t.Errorf("the choice is row %d, want 10: it follows its key", sel)
+	}
+}
+
+// checkAllNode returns a table's header checkbox.
+func checkAllNode(t *testing.T, tt *Tester) platform.AccessNode {
+	t.Helper()
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	return accessNode(t, tt.h.access, platform.RoleCheckBox, "Check all")
+}
+
+func TestTableCheckedHeaderCount(t *testing.T) {
+	// (a) Section headers are not counted.
+	rows := []string{"Section", "a", "b", "Section", "c"}
+	var checked Selection[int]
+	sel := -1
+	s := ListState{Checked: &checked, Selected: &sel, Header: func(i int) bool { return rows[i] == "Section" }}
+	tt := coreNewTester(func(c *context) {
+		coreTable(c, &s, []TableColumn{{Title: "Name"}}, len(rows), func(row, col int) { coreText(c, rows[row]).SingleLine() }).Grow(1)
+	}, 400, 300)
+	checked.Add(1)
+	checked.Add(2)
+	tt.Frame()
+	if st := checkAllNode(t, tt).States; st&platform.AccessMixed == 0 || st&platform.AccessChecked != 0 {
+		t.Errorf("two of three rows checked: states %b, want mixed", st)
+	}
+	checked.Add(4)
+	tt.Frame()
+	if st := checkAllNode(t, tt).States; st&platform.AccessChecked == 0 {
+		t.Errorf("all rows but the section headers checked: states %b, want checked", st)
+	}
+
+	// (b) Other rows shown, as many, with a new Version.
+	sets := [][]string{{"a", "b", "c"}, {"x", "y", "z"}}
+	shown := 0
+	var ck Selection[string]
+	s2 := ListState{Checked: &ck, Selected: &sel, Key: func(i int) any { return sets[shown][i] }}
+	tt = coreNewTester(func(c *context) {
+		coreTable(c, &s2, []TableColumn{{Title: "Name"}}, 3, func(row, col int) { coreText(c, sets[shown][row]).SingleLine() }).Grow(1)
+	}, 400, 300)
+	for _, k := range sets[0] {
+		ck.Add(k)
+	}
+	tt.Frame()
+	if st := checkAllNode(t, tt).States; st&platform.AccessChecked == 0 {
+		t.Fatalf("the first set, all checked: states %b", st)
+	}
+	shown = 1
+	s2.Version++
+	tt.Frame()
+	if st := checkAllNode(t, tt).States; st&(platform.AccessChecked|platform.AccessMixed) != 0 {
+		t.Errorf("the second set, none checked: states %b", st)
+	}
+	shown = 0
+	s2.Version++
+	tt.Frame()
+	if st := checkAllNode(t, tt).States; st&platform.AccessChecked == 0 {
+		t.Errorf("the first set again: states %b", st)
+	}
+}
+
+func TestTableCheckedColumnStaysFirst(t *testing.T) {
+	var checked Selection[int]
+	s := ListState{Checked: &checked}
+	cols := []TableColumn{{Title: "Name", Width: 120}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80}}
+	tt := coreNewTester(tableView(&s, cols, []string{"a.txt"}), 500, 300)
+	name, kind := header(t, tt, "Name"), header(t, tt, "Kind")
+	y := float32(kind.Y + kind.H/2)
+	from, to := float32(kind.X+20), float32(name.X+10)
+	tt.Press(from, y)
+	for _, f := range []float32{0.1, 0.4, 0.8, 1} {
+		tt.Move(from+(to-from)*f, y)
+	}
+	tt.Release(to, y)
+	if got := s.Columns.Order; len(got) == 0 || got[0] != "Kind" {
+		t.Fatalf("the order: %q, want Kind first and no checkbox column", got)
+	}
+	box := checkAllNode(t, tt).Bounds.X
+	for _, title := range []string{"Name", "Kind", "Size"} {
+		if h := header(t, tt, title); box >= h.X {
+			t.Errorf("the checkbox column at %v, %s at %v", box, title, h.X)
+		}
+	}
+}
+
+func TestTableRowMenuEdges(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name"}}
+	var got [][]int
+	menu := func(m *Menu, rows []int) {
+		if m.Item("Open").Chosen() {
+			got = append(got, slices.Clone(rows))
+		}
+	}
+	sel := -1
+	s := ListState{Selected: &sel, RowMenu: menu}
+	var seen []string
+	tt := coreNewTester(func(c *context) {
+		e := coreTable(c, &s, cols, len(names), func(row, col int) { coreText(c, names[row]).SingleLine() }).Grow(1)
+		if e.SelectionChanged() {
+			seen = append(seen, "selection")
+		}
+		if e.Changed() {
+			seen = append(seen, "changed")
+		}
+	}, 500, 300)
+	// (a) A right click on a row not chosen chooses it, and says so.
+	tt.RightClick("b.txt")
+	if sel != 1 || !slices.Equal(seen, []string{"selection", "changed"}) {
+		t.Errorf("a right click on a row not chosen: the choice %d, events %q", sel, seen)
+	}
+	if err := tt.ChooseMenuItem("Open"); err != nil {
+		t.Fatal(err)
+	}
+	// (b) Below the last row, inside the table: the menu acts on the rows chosen.
+	b, _ := tt.Find("b.txt")
+	tt.RightClickAt(b.X+b.W/2, 280)
+	if m := tt.Menu(); !slices.Equal(m, []string{"Open"}) {
+		t.Fatalf("a right click below the rows: the menu %q", m)
+	}
+	if err := tt.ChooseMenuItem("Open"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.EqualFunc(got, [][]int{{1}, {1}}, slices.Equal) {
+		t.Errorf("right clicks on b.txt and below the rows acted on %v, want [[1] [1]]", got)
+	}
+	// (c) Shift+F10 with nothing chosen opens none.
+	tt.Click("b.txt") // for the focus
+	tt.Key(Shift, KeyF10)
+	if tt.Menu() == nil {
+		t.Fatal("Shift+F10 with a row chosen opened no menu")
+	}
+	if err := tt.ChooseMenuItem("Open"); err != nil {
+		t.Fatal(err)
+	}
+	sel = -1
+	tt.Frame()
+	tt.Key(Shift, KeyF10)
+	if m := tt.Menu(); m != nil {
+		t.Errorf("Shift+F10 with nothing chosen opened %q", m)
 	}
 }

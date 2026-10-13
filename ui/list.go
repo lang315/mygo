@@ -89,10 +89,37 @@ type ListState struct {
 	// columns, by ID: restore it from saved settings, and save it as it
 	// changes.
 	Columns TableLayout
+	// Checked, when set, gives a Table a checkbox before its columns in
+	// each row, checking the row by its key (Key), apart from the rows
+	// chosen. The header's checkbox shows whether none, some or all of the
+	// rows shown are checked; a click checks all of them, or unchecks all
+	// of them when all are. Keys of rows not shown stay as they are: an
+	// app that changes which rows show and wants only those checked clears
+	// it then. CheckedChanged reports a change.
+	Checked Selector
+	// RowMenu, when set, gives a Table's rows a context menu, which it
+	// fills with the items for rows: the rows chosen, in their order. A
+	// right click on a row not chosen chooses it first; in a table that
+	// does not choose, rows is the row clicked. The menu key, Shift+F10 and
+	// a right click outside the rows (on a section header, the column
+	// header or the empty room) open it on the rows chosen, and nothing
+	// opens when none is.
+	RowMenu func(m *Menu, rows []int)
+	// Copy, when set, puts the text it returns for rows, the rows chosen
+	// in their order, on the clipboard on Cmd+C (Ctrl+C on Linux and
+	// Windows) or the Edit menu's Copy while the Table has the keyboard
+	// focus. A text being edited in a row copies its own instead.
+	Copy func(rows []int) string
 	// RoundRows rounds the corners of a Table's chosen and hovered rows at
 	// the theme's Radius, as a List's are, rather than leaving them square
 	// from edge to edge.
 	RoundRows bool
+	// Version tells the list that its rows changed order or membership,
+	// as when they are sorted again: change it when they do (a
+	// TableView's Version does). The choice, and the row holding the
+	// focus, then follow their keys wherever their rows went, rather than
+	// near where they were; the list keeps its place.
+	Version uint64
 
 	// The place: the first row in view, and how far the list is scrolled
 	// past its top: the row's top is that far above where the content
@@ -125,8 +152,10 @@ type ListState struct {
 	selKey any
 	// lead is the row last chosen in a list choosing several without
 	// Selected. Shift chooses the rows from pivot, whose key is pivotKey,
-	// and chose those from it to pivot+span last.
+	// and chose those from it to pivot+span last. pivotRow is the pivot
+	// in the last frame, to tell the keys moving it from rows moving.
 	lead, pivot, span int
+	pivotRow          int
 	pivotKey          any
 
 	header listHeader
@@ -140,6 +169,9 @@ type ListState struct {
 	editables, editablesNow bool
 	editKey                 any
 	editAsked               bool
+	// version is the Version seen, and versionFrame the frame it changed
+	// in.
+	version, versionFrame uint64
 }
 
 // listRequest is where the app or the user asked the list to go: to row
@@ -375,13 +407,19 @@ func (s *ListState) sync(e *node, n int) {
 	if !s.started {
 		s.started = true
 		s.following = s.FollowEnd
-		s.selRow, s.lead, s.pivot = -1, -1, -1
+		s.selRow, s.lead, s.pivot, s.pivotRow = -1, -1, -1, -1
 		s.header.row = -1
 	}
+	if s.Version != s.version {
+		s.version, s.versionFrame = s.Version, rt.frame
+	}
+	reach := s.reach(rt.frame, n)
 	s.heights.def = float64(e.c.theme.Space(8))
 	if s.Key != nil && n > 0 {
-		if k := s.anchorKey; k != nil {
-			if j, ok := s.find(k, s.anchor, n); ok && j != s.anchor {
+		// Not in the frame Version changed: following the top row after a
+		// re-sort would scroll to wherever it went; the place stays by index.
+		if k := s.anchorKey; k != nil && s.versionFrame != rt.frame {
+			if j, ok := s.find(k, s.anchor, n, listSearch); ok && j != s.anchor {
 				// Rows came or went above it: the heights known move with
 				// the rows around it.
 				s.heights.resize(max(n, s.heights.n))
@@ -392,18 +430,18 @@ func (s *ListState) sync(e *node, n int) {
 		}
 		if sel := s.cursor(); sel != nil && *sel == s.selRow && s.selKey != nil {
 			// The choice follows its item, and is gone with it.
-			j, ok := s.find(s.selKey, *sel, n)
+			j, ok := s.find(s.selKey, *sel, n, reach)
 			if !ok {
 				j = -1
 			}
 			*sel, s.selRow = j, j
 		}
-		if s.pivotKey != nil {
-			j, ok := s.find(s.pivotKey, s.pivot, n)
+		if s.pivotKey != nil && s.pivot == s.pivotRow {
+			j, ok := s.find(s.pivotKey, s.pivot, n, reach)
 			if !ok {
 				j = -1
 			}
-			s.pivot = j
+			s.pivot, s.pivotRow = j, j
 		}
 	}
 	if n != s.heights.n {
@@ -447,9 +485,10 @@ func (s *ListState) anchorAt(y float64) (int, float64) {
 	return a, s.padTop + s.heights.top(a, s.gap) - y
 }
 
-// find returns the row whose key is k, looking around row near.
-func (s *ListState) find(k any, near, n int) (int, bool) {
-	for d := 0; d <= listSearch; d++ {
+// find returns the row whose key is k, looking around row near, at most
+// limit rows away.
+func (s *ListState) find(k any, near, n, limit int) (int, bool) {
+	for d := 0; d <= limit; d++ {
 		lo, hi := near-d, near+d
 		if lo < 0 && hi >= n {
 			break
@@ -462,6 +501,16 @@ func (s *ListState) find(k any, near, n int) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// reach returns how far from where they were the list looks for its rows'
+// keys: all of them in the frame Version changed in, as rows sorted again
+// may be anywhere.
+func (s *ListState) reach(frame uint64, n int) int {
+	if s.versionFrame == frame {
+		return n
+	}
+	return listSearch
 }
 
 // plan returns the row the place starts from and the rows to build, as far
@@ -609,7 +658,14 @@ func (s *ListState) cursor() *int {
 	return nil
 }
 
-// key returns the key of row i, its index without ListState.Key.
+// keyOf returns the key of row i, its index without Key.
+func (s *ListState) keyOf(i int) any {
+	if s.Key != nil {
+		return s.Key(i)
+	}
+	return i
+}
+
 // rowDrag is rows of a list being dragged to another place in it
 // (ListState.Reorder).
 type rowDrag struct {
@@ -626,13 +682,7 @@ func (f *listFrame) dragged(i int) []int {
 	if s.Selection == nil || !f.chosen(i, f.key(i)) {
 		return []int{i}
 	}
-	var rows []int
-	for j := range f.n {
-		if !f.isHeader(j) && f.chosen(j, f.key(j)) {
-			rows = append(rows, j)
-		}
-	}
-	return rows
+	return f.chosenRows()
 }
 
 // reorder makes the list take its own rows dragged over it: it shows where
@@ -726,12 +776,8 @@ func (f *listFrame) boundary(i int) (float32, bool) {
 	return 0, false
 }
 
-func (f *listFrame) key(i int) any {
-	if f.s.Key != nil {
-		return f.s.Key(i)
-	}
-	return i
-}
+// key returns the key of row i, its index without ListState.Key.
+func (f *listFrame) key(i int) any { return f.s.keyOf(i) }
 
 // chosen reports whether row i, of key k, is chosen.
 func (f *listFrame) chosen(i int, k any) bool {
@@ -741,9 +787,44 @@ func (f *listFrame) chosen(i int, k any) bool {
 	return *f.s.Selected == i
 }
 
+// chosenRows returns the rows chosen, in their order.
+func (f *listFrame) chosenRows() []int {
+	s := f.s
+	switch {
+	case s.Selection != nil:
+		if s.Selection.size() == 0 {
+			return nil
+		}
+		var rows []int
+		for j := range f.n {
+			if !f.isHeader(j) && s.Selection.has(f.key(j)) {
+				rows = append(rows, j)
+			}
+		}
+		return rows
+	case s.Selected != nil && *s.Selected >= 0 && *s.Selected < f.n:
+		return []int{*s.Selected}
+	}
+	return nil
+}
+
+// menuRows returns the rows a context menu on row i acts on: the rows
+// chosen, choosing row i first when it is not, or row i in a list that
+// does not choose.
+func (f *listFrame) menuRows(i int) []int {
+	if f.s.cursor() == nil {
+		return []int{i}
+	}
+	if !f.chosen(i, f.key(i)) {
+		f.choose(i)
+	}
+	return f.chosenRows()
+}
+
 // changed reports a new choice.
 func (f *listFrame) changed() {
 	f.owner.st.markChanged()
+	f.owner.st.markEvent(eventSelection)
 	f.c.rt.consumed = true
 }
 
@@ -912,6 +993,7 @@ func (f *listFrame) navigate() {
 	}
 	all := multi && o.Shortcut(Cmd, KeyA)
 	flip := multi && !mac && o.Shortcut(Ctrl, KeySpace)
+	check := s.Checked != nil && o.Shortcut(0, KeySpace)
 	in := *sel >= 0 && *sel < n
 	// Enter on macOS, as in Finder, and F2 elsewhere edit the text of the
 	// row chosen in place (EditableText), where it has one.
@@ -923,6 +1005,7 @@ func (f *listFrame) navigate() {
 		s.ScrollIntoView(*sel)
 	case enter && in:
 		o.st.markSubmitted()
+		o.st.activate(*sel)
 	}
 	to := -1
 	switch key {
@@ -968,10 +1051,30 @@ func (f *listFrame) navigate() {
 	if flip && *sel >= 0 && *sel < n && !f.isHeader(*sel) {
 		f.toggle(*sel)
 	}
+	if check {
+		f.checkChosen()
+	}
 	if o.st.typing && s.Label != nil {
 		if j := f.typed(o.st.typed); j >= 0 {
 			f.choose(j)
 		}
+	}
+}
+
+// checkChosen checks the rows chosen, or unchecks them when all are checked,
+// as Space does in a table with a checkbox column.
+func (f *listFrame) checkChosen() {
+	rows, checked := f.chosenRows(), f.s.Checked
+	if len(rows) == 0 {
+		return
+	}
+	all := !slices.ContainsFunc(rows, func(i int) bool { return !checked.has(f.key(i)) })
+	changed := false
+	for _, i := range rows {
+		changed = checked.set(f.key(i), !all) || changed
+	}
+	if changed {
+		f.owner.st.markEvent(eventChecked)
 	}
 }
 
@@ -1016,7 +1119,7 @@ func (s *ListState) focusedRow(e *node, n int) (int, bool) {
 		}
 		i := r.row
 		if s.Key != nil && (i >= n || s.Key(i) != r.key) {
-			if i, ok = s.find(r.key, i, n); !ok {
+			if i, ok = s.find(r.key, i, n, s.reach(rt.frame, n)); !ok {
 				return 0, false
 			}
 		}
@@ -1316,6 +1419,7 @@ func (s *ListState) remember(e *node, first, last int, atEnd bool, scroll float6
 			s.selKey = s.Key(*sel)
 		}
 	}
+	s.pivotRow = s.pivot
 	if s.Key != nil && s.Selection != nil && s.pivot >= 0 && s.pivot < n {
 		s.pivotKey = s.Key(s.pivot)
 	}

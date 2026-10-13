@@ -212,33 +212,31 @@ func checkPath(r Rect) *Path {
 
 // Checkbox creates a check box toggling *checked, with a label.
 func coreCheckbox(c *context, checked *bool, label string) *node {
+	return checkbox(c, checked, label, false)
+}
+
+// checkbox creates a Checkbox, showing a dash while mixed and not checked,
+// as a box checking a group whose boxes differ.
+func checkbox(c *context, checked *bool, label string, mixed bool) *node {
 	t := c.theme
 	row := coreCheckboxBase(c, checked).Gap(t.Space(2)).FocusRing(false)
-	on := *checked
+	state := int8(1)
+	switch {
+	case *checked:
+		state = 2
+	case mixed:
+		state = 3
+	}
 	row.Children(func() {
 		box := coreBox(c).Size(t.Space(4), t.Space(4)).Radius(t.Space(1)).Shrink(0)
-		if on {
-			box.Background(t.Accent)
-		} else {
-			box.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
-		}
-		box.DrawOver(func(p *Painter, r Rect) {
-			if on {
-				p.StrokePath(checkPath(r), t.Space(0.5), t.AccentText)
-			}
-			if row.FocusVisible() {
-				p.FocusRing(r, box.radius)
-			}
-		})
-		box.styleFn = func(box *node) {
-			if !on && row.Hovered() {
-				box.borderC = t.Accent
-			}
-		}
+		paintCheckbox(c, row, box, state)
 		if label != "" {
 			coreText(c, label)
 		}
 	})
+	if state == 3 {
+		row.Mixed()
+	}
 	return row
 }
 

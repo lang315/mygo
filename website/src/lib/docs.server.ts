@@ -9,6 +9,7 @@ import remarkParse from "remark-parse"
 import { unified } from "unified"
 
 import { bookOf, type Book, type Doc, type Navs, type NavItem, type NavSection, type SearchEntry } from "@/lib/docs"
+import { isPublished } from "@/lib/markdown-source"
 import { renderMarkdown, slugOf, type RenderedMarkdown } from "@/lib/markdown.server"
 import { site } from "@/lib/site"
 
@@ -25,7 +26,7 @@ function filesOf(slug: string) {
 
 /** The file of a page, relative to the docs, or undefined for none. */
 async function fileOf(slug: string) {
-  for (const file of filesOf(slug)) {
+  for (const file of filesOf(slug).filter(isPublished)) {
     if (await fs.stat(path.join(docsDir, file)).then((s) => s.isFile(), () => false)) return file
   }
   return undefined
@@ -76,7 +77,7 @@ async function bookNav(readmeFile: string, overview: { title: string; item: NavI
 
   const book = bookOf(overview.item.slug!)
   const listed = new Set(sections.flatMap((s) => s.items.map((i) => i.slug)))
-  const files = (await fs.readdir(docsDir, { recursive: true })).filter((f) => f.endsWith(".md")).sort()
+  const files = (await fs.readdir(docsDir, { recursive: true })).filter((f) => f.endsWith(".md") && isPublished(f)).sort()
   const rest: NavItem[] = []
   for (const file of files) {
     const slug = slugOf(file)

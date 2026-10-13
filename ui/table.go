@@ -106,6 +106,8 @@ type tableDrag struct {
 	moving bool
 	// fit is the column to fit to its cells in this frame, by ID.
 	fit string
+	// fitted reports a column fitted to its cells in the last frame.
+	fitted bool
 }
 
 // Table creates a table of n rows under a header of columns, whose rows
@@ -158,6 +160,10 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		s = coreLocal(table, "rows", func() ListState { return ListState{} })
 	}
 	drag := coreLocal(table, "drag", func() tableDrag { return tableDrag{} })
+	if drag.fitted {
+		drag.fitted = false
+		table.st.markEvent(eventColumns)
+	}
 	layout := &s.Columns
 	order := layout.arrange(columns)
 	// The least width of the rows: the columns', those sharing the room
@@ -170,6 +176,12 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		} else {
 			least += max(columns[j].MinWidth, flexMin)
 		}
+	}
+	checkW := t.Space(8)
+	var checks *tableChecks
+	if s.Checked != nil {
+		least += checkW
+		checks = coreLocal(table, "checks", func() tableChecks { return tableChecks{} })
 	}
 	// fitting are the cells of the column fitting its cells.
 	var fitting []*node
@@ -205,6 +217,30 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		// The header, which scrolls sideways with the rows.
 		head := coreRow(c).Height(tableRow).Shrink(0).AlignItems(Stretch).Role(RoleRow).Clip()
 		head.Children(func() {
+			if s.Checked != nil {
+				// Not a column header, a leaf role whose checkbox would not show.
+				checkCell(c, checkW, func() {
+					count, total := checks.counted(s, n)
+					all := total > 0 && count == total
+					box := checkbox(c, &all, "", count > 0).Label("Check all")
+					// Not focusable, as the rows' are: a click leaves the focus on the table
+					// (Copy, the keys), and Tab leaves it in one step; Space checks.
+					box.flags &^= flagFocusable
+					table.afterInput(func() {
+						if box.Changed() {
+							changed := false
+							for i := range n {
+								if s.Header == nil || !s.Header(i) {
+									changed = s.Checked.set(s.keyOf(i), all) || changed
+								}
+							}
+							if changed {
+								table.st.markEvent(eventChecked)
+							}
+						}
+					})
+				})
+			}
 			heads := cells(RoleColumnHeader, func(j int) {
 				col := &columns[j]
 				coreText(c, col.Title).SingleLine().FontWeight(600).TextColor(t.TextMuted)
@@ -244,14 +280,69 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 						row.bg = t.SurfaceHover
 					}
 				}
+				row.flags |= flagClickable
+				row.afterInput(func() {
+					if row.DoubleClicked() {
+						table.st.activate(i)
+					}
+				})
+			}
+			if s.RowMenu != nil {
+				row.ContextMenu(func(m *Menu) { s.RowMenu(m, s.frame.menuRows(i)) })
 			}
 			row.Children(func() {
+				if s.Checked != nil {
+					checkCell(c, checkW, func() {
+						k := s.keyOf(i)
+						on := s.Checked.has(k)
+						label := "Check"
+						if s.Label != nil {
+							label += " " + s.Label(i)
+						}
+						box := checkbox(c, &on, "", false).Label(label)
+						box.flags &^= flagFocusable
+						table.afterInput(func() {
+							if box.Changed() && s.Checked.set(k, on) {
+								table.st.markEvent(eventChecked)
+							}
+						})
+					})
+				}
 				cells(RoleCell, func(j int) { cell(i, j) })
 			})
 		}, kind)
 	})
+	if s.RowMenu != nil {
+		// The menu key, Shift+F10 and a click outside the rows act on the
+		// rows chosen.
+		table.ContextMenu(func(m *Menu) {
+			if rows := s.frame.chosenRows(); len(rows) > 0 {
+				s.RowMenu(m, rows)
+			}
+		})
+	}
+	if s.Copy != nil {
+		rt := c.rt
+		table.HandleInput(func(ev InputEvent) bool {
+			isCopy := ev.Kind == InputCommand && ev.Text == "copy" || ev.Kind == InputKeyDown && ev.Key == KeyC && ev.Mods == Cmd
+			if !isCopy {
+				return false
+			}
+			rows := s.frame.chosenRows()
+			if len(rows) == 0 {
+				return false
+			}
+			if ev.Repeat {
+				return true
+			}
+			if text := s.Copy(rows); text != "" {
+				rt.host.writeClipboard(text)
+			}
+			return true
+		})
+	}
 	if id := drag.fit; id != "" {
-		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag}
+		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag, rt: c.rt}
 	}
 	table.DrawOver(func(p *Painter, r Rect) {
 		if table.FocusVisible() {
@@ -291,7 +382,9 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 			drag.moving = true
 		}
 		if drag.moving {
-			moveColumn(c, s, drag, heads, order, columns)
+			if moveColumn(c, s, drag, heads, order, columns) {
+				table.st.markEvent(eventColumns)
+			}
 			h.Left(drag.dx).Background(t.SurfacePressed).Opacity(0.9)
 		}
 	} else if drag.id == id && !held {
@@ -310,6 +403,7 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 				*s.Sort = SortOrder{Column: id}
 			}
 			table.st.markChanged()
+			table.st.markEvent(eventSort)
 		}
 	})
 	if col.Fixed {
@@ -343,6 +437,7 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 				w = h.Bounds().W // sharing the room left, as wide as it was
 			}
 			s.setWidth(col, w+dx)
+			table.st.markEvent(eventColumns)
 		}
 		edge.Draw(func(p *Painter, r Rect) {
 			x := r.X + r.W - 0.5
@@ -368,10 +463,10 @@ func (s *ListState) setWidth(col *TableColumn, w float32) {
 
 // moveColumn moves the column being dragged past a neighbor whose middle
 // it passed, keeping it under the pointer.
-func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order []int, columns []TableColumn) {
+func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order []int, columns []TableColumn) bool {
 	at := slices.IndexFunc(order, func(j int) bool { return columns[j].id() == drag.id })
 	if at < 0 {
-		return
+		return false
 	}
 	to := at
 	switch {
@@ -385,7 +480,7 @@ func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order 
 		}
 	}
 	if to == at || columns[order[to]].Fixed {
-		return
+		return false
 	}
 	// Under the pointer still: the column's place moved by the other's
 	// width.
@@ -401,6 +496,7 @@ func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order 
 	ids[at], ids[to] = ids[to], ids[at]
 	s.Columns.Order = ids
 	c.rt.consumed = true
+	return true
 }
 
 // tableFit fits a column of a table to its cells as the table lays out,
@@ -410,6 +506,7 @@ type tableFit struct {
 	cells  []*node
 	layout *TableLayout
 	drag   *tableDrag
+	rt     *engine
 	done   bool
 }
 
@@ -434,6 +531,49 @@ func (tf *tableFit) apply() {
 		tf.layout.Widths = maps.Clone(tf.layout.Widths)
 	}
 	tf.layout.Widths[tf.id] = w
+	tf.drag.fitted = true
+	// Layout runs inside a frame, where requestFrame does nothing: ask for the
+	// next one as animations do.
+	tf.rt.animating = true
+}
+
+// tableChecks is how many of a table's rows shown are checked, and how many
+// it shows, counted from what they were counted from, which the header's
+// checkbox reads in every frame without counting them again.
+type tableChecks struct {
+	sel             Selector
+	gen, version    uint64
+	n, count, total int
+}
+
+// counted returns how many of the n rows shown are checked, and how many
+// can be: those that are not headers.
+func (tc *tableChecks) counted(s *ListState, n int) (count, total int) {
+	sel := s.Checked
+	if tc.sel == sel && tc.gen == sel.generation() && tc.n == n && tc.version == s.Version {
+		return tc.count, tc.total
+	}
+	if s.Header == nil && sel.size() == 0 {
+		total = n
+	} else {
+		for i := range n {
+			if s.Header != nil && s.Header(i) {
+				continue
+			}
+			total++
+			if sel.size() > 0 && sel.has(s.keyOf(i)) {
+				count++
+			}
+		}
+	}
+	*tc = tableChecks{sel: sel, gen: sel.generation(), version: s.Version, n: n, count: count, total: total}
+	return count, total
+}
+
+// checkCell builds the checkbox cell of a row or of the header, which
+// comes first in it, so its ID stays apart from the columns' keyed cells.
+func checkCell(c *context, w float32, fill func()) {
+	coreRow(c).Width(w).Shrink(0).AlignItems(Center).Justify(Center).Role(RoleCell).Children(fill)
 }
 
 // sortArrow draws the arrow of the column the rows are sorted by.
@@ -455,6 +595,31 @@ func abs(v float32) float32 {
 		return -v
 	}
 	return v
+}
+
+// tableEvent is something that happened to a table (or a list) in a build
+// pass, which its queries and callbacks report apart.
+type tableEvent uint8
+
+const (
+	eventSelection tableEvent = 1 << iota
+	eventSort
+	eventColumns
+	eventChecked
+	eventActivated
+)
+
+// markEvent reports ev in this build pass.
+func (s *state) markEvent(ev tableEvent) {
+	s.events |= ev
+	s.eventsDelivered &^= ev
+	s.notice()
+}
+
+// activate reports row double-clicked, or Entered.
+func (s *state) activate(row int) {
+	s.activated = row
+	s.markEvent(eventActivated)
 }
 
 // Selected shows the element as chosen among its siblings, in the accent

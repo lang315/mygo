@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"iter"
+	"sync/atomic"
 )
 
 // A Selection is the rows chosen in a List or a Table that lets the user
@@ -22,7 +23,13 @@ import (
 //	app.list.Selection = &app.chosen
 type Selection[K comparable] struct {
 	keys map[K]struct{}
+	// gen changes with the keys, for those caching what they counted of
+	// it: drawn from selectionGen, it differs from every other
+	// Selection's, so assigning a new Selection changes it too.
+	gen uint64
 }
+
+var selectionGen atomic.Uint64
 
 // Has reports whether the row of key k is chosen.
 func (s *Selection[K]) Has(k K) bool {
@@ -38,14 +45,30 @@ func (s *Selection[K]) Add(k K) {
 	if s.keys == nil {
 		s.keys = map[K]struct{}{}
 	}
+	n := len(s.keys)
 	s.keys[k] = struct{}{}
+	if len(s.keys) != n {
+		s.gen = selectionGen.Add(1)
+	}
 }
 
 // Remove takes the row of key k out of the choice.
-func (s *Selection[K]) Remove(k K) { delete(s.keys, k) }
+func (s *Selection[K]) Remove(k K) {
+	if !s.Has(k) {
+		return
+	}
+	s.gen = selectionGen.Add(1)
+	delete(s.keys, k)
+}
 
 // Clear chooses no row.
-func (s *Selection[K]) Clear() { clear(s.keys) }
+func (s *Selection[K]) Clear() {
+	if len(s.keys) == 0 {
+		return
+	}
+	s.gen = selectionGen.Add(1)
+	clear(s.keys)
+}
 
 // All returns the keys of the rows chosen, in no order.
 func (s *Selection[K]) All() iter.Seq[K] {
@@ -67,6 +90,8 @@ type Selector interface {
 	// clear chooses no row, and reports whether one was.
 	clear() bool
 	size() int
+	// generation changes whenever the keys chosen do.
+	generation() uint64
 }
 
 func (s *Selection[K]) has(key any) bool { return s.Has(s.key(key)) }
@@ -91,6 +116,8 @@ func (s *Selection[K]) clear() bool {
 }
 
 func (s *Selection[K]) size() int { return len(s.keys) }
+
+func (s *Selection[K]) generation() uint64 { return s.gen }
 
 // key returns a row's key as the selection holds it.
 func (s *Selection[K]) key(key any) K {

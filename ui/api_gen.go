@@ -2176,6 +2176,18 @@ func (_handle Element) Access(fn func(n *platform.AccessNode)) Element {
 	return wrapElement(_node.Access(fn))
 }
 
+// Activated applies pending input and reports the row of this List or
+// Table double-clicked, or chosen as Enter was pressed, in this build pass.
+func (_handle Element) Activated() (int, bool) {
+	_node := _handle.node()
+	if _node == nil {
+		return 0, false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.Activated()
+}
+
 // ActiveDescendant tells assistive technology that d has the keyboard
 // focus while the element does: the option the arrows are on in a list or
 // a menu that keeps the focus itself, as a combobox's input does. Call it
@@ -2569,6 +2581,19 @@ func (_handle Element) Checked(on bool) Element {
 	return wrapElement(_node.Checked(on))
 }
 
+// CheckedChanged applies pending input and reports whether the checkbox of
+// a row of this Table, or of its header, changed ListState.Checked in this
+// build pass.
+func (_handle Element) CheckedChanged() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.CheckedChanged()
+}
+
 // ClickModifiers returns the modifier keys held as the element was last
 // clicked, none for a click by the keyboard: with Clicked, a click with
 // Shift or Cmd does something else, as extending a choice.
@@ -2698,6 +2723,19 @@ func (_handle Element) Columns(n int) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Columns(n))
+}
+
+// ColumnsChanged applies pending input and reports whether the user
+// resized, moved or fitted a column of this Table in this build pass,
+// changing ListState.Columns: save it then.
+func (_handle Element) ColumnsChanged() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.ColumnsChanged()
 }
 
 // Composing reports whether an input method composes text in a text
@@ -4464,6 +4502,19 @@ func (_handle Element) Selected(on bool) Element {
 	return wrapElement(_node.Selected(on))
 }
 
+// SelectionChanged applies pending input to the controls built so far and
+// reports whether the rows chosen in this List or Table changed in this
+// build pass.
+func (_handle Element) SelectionChanged() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.SelectionChanged()
+}
+
 // SelectionColor sets the highlight of selected text in the element and
 // the text inside it, as text on a colored bubble needs one that shows
 // on it; the theme's Selection is the highlight elsewhere.
@@ -4575,6 +4626,19 @@ func (_handle Element) Skew(x float32, y float32) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Skew(x, y))
+}
+
+// SortChanged applies pending input and reports whether a click on the
+// header of a Sortable column changed this Table's ListState.Sort in this
+// build pass.
+func (_handle Element) SortChanged() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.SortChanged()
 }
 
 // Spring returns a value following target with a spring, as AnimateTo

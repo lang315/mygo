@@ -359,3 +359,44 @@ func TestListTypeRightAfterAClick(t *testing.T) {
 		t.Errorf("a click on Apple, then c, chose %d", sel)
 	}
 }
+
+func TestSelectionGenerationChangesWithTheSet(t *testing.T) {
+	var sel Selection[int]
+	gen := sel.generation()
+	step := func(name string, changes bool, do func()) {
+		t.Helper()
+		before := sel.generation()
+		do()
+		if changed := sel.generation() != before; changed != changes {
+			t.Errorf("%s: generation changed is %v, want %v", name, changed, changes)
+		}
+	}
+	step("Clear of an empty set", false, sel.Clear)
+	step("Remove of an absent key", false, func() { sel.Remove(1) })
+	step("Add of a new key", true, func() { sel.Add(1) })
+	step("Add of a present key", false, func() { sel.Add(1) })
+	step("Remove of a present key", true, func() { sel.Remove(1) })
+	sel.Add(2)
+	step("Clear of a set", true, sel.Clear)
+	if sel.generation() <= gen {
+		t.Error("the generation did not increase")
+	}
+}
+
+func TestListShiftExtendsFromTheRowTheKeysMovedTo(t *testing.T) {
+	names := []string{"r0", "r1", "r2", "r3", "r4", "r5"}
+	cols := []TableColumn{{Title: "Name"}}
+	var chosen Selection[int]
+	sel := -1
+	// With keys, the pivot must move with the keys, not go back to the
+	// row it had in the last frame.
+	s := ListState{Selected: &sel, Selection: &chosen, Key: func(i int) any { return i + 100 }}
+	tt := coreNewTester(tableView(&s, cols, names), 500, 400)
+	tt.Click("r2")
+	tt.Key(0, KeyDown)
+	tt.Key(0, KeyDown)
+	tt.ClickWith(Shift, "r1")
+	if got := slices.Sorted(chosen.All()); !slices.Equal(got, []int{101, 102, 103, 104}) {
+		t.Errorf("Shift-click on r1 after Down from r2 to r4 chose %v, want [101 102 103 104]", got)
+	}
+}

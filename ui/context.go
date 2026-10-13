@@ -527,6 +527,11 @@ type state struct {
 	changed, submitted bool
 	// Queries and callbacks observe input in the pass that applied it.
 	changeDelivered, submitDelivered bool
+	// events are the table's events in this build pass, eventsDelivered
+	// those their callbacks ran for, and activated the row of
+	// eventActivated.
+	events, eventsDelivered tableEvent
+	activated               int
 	// submitMods are the modifiers held with the Enter submitting a text
 	// input, as Shift going back in a find bar.
 	submitMods Modifiers

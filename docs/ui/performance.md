@@ -17,8 +17,38 @@ persistent identity bindings reuse storage once warmed. Composite controls
 can allocate callback closures; these fixtures do not cover every widget
 or interaction.
 
-The label and list fixtures use the public API. The diff fixture uses the
+The label, list and table fixtures use the public API. The diff fixture uses the
 private renderer API and measures its steady-frame allocation floor.
+
+## Tables of many rows
+
+`BenchmarkTableFrame100k` builds an idle frame of a table with a checkbox
+column and two columns of text, sorted by a `TableView`, and does no work
+that grows with the rows. It allocates more than the list, as each row in
+view builds a checkbox (about three allocations: its state and two
+closures) and a cell per column.
+
+The numbers below were measured on another machine than the first table:
+an Apple M1 Pro, macOS arm64, Go 1.27.2, with the same settings
+(`CGO_ENABLED=0 GOMAXPROCS=1`, medians of six 300 ms samples).
+
+| Fixture (Apple M1 Pro) | Time per frame | Allocations per frame | Allocated bytes per frame |
+|---|---:|---:|---:|
+| Table of 100,000 rows with checkboxes, sorted by a `TableView` | 137 µs | 203 | 5,765 |
+
+For 100,000 rows, the `TableView` itself takes:
+
+| Operation | Time | Allocations |
+|---|---:|---:|
+| `Sync` with nothing changed | 3.6 ns | 0 |
+| `Changed` for 1 row, then `Sync` | 97 µs | 0 |
+| `Changed` for 10 rows, then `Sync` | 89 µs | 0 |
+| `Changed` for 100 rows, then `Sync` | 106 µs | 0 |
+| Sorting all rows again (a click on a header) | 11.7 ms | 0 |
+
+Each is the median of six 300 ms samples. A change of a few rows costs a
+pass over the order, so about 0.1 ms whether the rows are 1 or 100; sorting
+all of them again takes a dozen milliseconds, below one frame at 60 Hz.
 
 ## Retained memory
 
@@ -45,7 +75,7 @@ From the MyGo repository root:
 
 ```sh
 CGO_ENABLED=0 GOMAXPROCS=1 go test ./ui -run '^$' \
-  -bench '^(BenchmarkValueFrame|BenchmarkValueList|BenchmarkDiffSteady)$' \
+  -bench '^(BenchmarkValueFrame|BenchmarkValueList|BenchmarkDiffSteady|BenchmarkTableFrame100k|BenchmarkTableView.*)$' \
   -benchmem -count=6 -benchtime=300ms
 CGO_ENABLED=0 GOMAXPROCS=1 go test ./ui \
   -run '^TestValueFrameRetainedHeap$' -count=3 -v

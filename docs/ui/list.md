@@ -118,6 +118,19 @@ The keys of items gone from the list stay in the selection until you take
 them out. `Element.ClickModifiers` gives the modifier keys of any click, for
 widgets of your own that do the same.
 
+`SelectionChanged()` reports that the rows chosen changed, and
+`OnSelectionChange(func())` runs a function then, as on a
+[table](table.md#events); `Changed` still reports a new choice. `Activated()`
+returns the row double-clicked, or chosen as Enter was pressed, and
+`OnActivate(func(row int))` runs a function with it.
+
+`ListState.Version` tells a list that its rows were sorted again, or
+filtered, while their number stayed the same: change it when they do, not in
+every frame. The choice, the Shift pivot and the focused row then follow
+their keys across all the rows, however far they went, while the list keeps
+its place by index. A [table](table.md#many-rows)'s `TableView` gives a
+number to set.
+
 ## Scrolling
 
 `ScrollTo(row, align)` shows a row at the `ui.Start`, `ui.Center` or

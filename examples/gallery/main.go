@@ -88,9 +88,13 @@ type gallery struct {
 	// The disclosure, the sections of the accordion, and their choices.
 	advanced, verbose, share, news bool
 	sections                       [3]bool
-	// The files of the table, and how they are sorted.
-	tableFiles []tableFile
-	sort       ui.SortOrder
+	// The files of the table, the view sorting and filtering them, the
+	// ones checked, the filter, and how the files are sorted.
+	tableFiles   []tableFile
+	tableView    *ui.TableView[tableFile]
+	tableChecked ui.Selection[int]
+	tableFilter  string
+	sort         ui.SortOrder
 	// Which sections of the sidebar show.
 	sectionsOpen [2]bool
 	// The alert, the notes deleted with an undo, the find bar, the
@@ -191,34 +195,28 @@ type tableFile struct {
 	size       int
 }
 
-// sortedFiles returns the table's files in the order it is sorted by.
-func (g *gallery) sortedFiles() []*tableFile {
-	if g.tableFiles == nil {
-		for i, name := range []string{"report.pdf", "photo.jpg", "notes.md", "budget.xlsx", "slides.key", "song.mp3", "archive.zip", "logo.svg"} {
-			kind := map[string]string{"pdf": "PDF document", "jpg": "JPEG image", "md": "Markdown", "xlsx": "Spreadsheet", "key": "Presentation", "mp3": "MP3 audio", "zip": "ZIP archive", "svg": "SVG image"}[name[strings.LastIndexByte(name, '.')+1:]]
-			g.tableFiles = append(g.tableFiles, tableFile{id: i, name: name, kind: kind, size: (i*37%11 + 1) * 173})
-		}
-	}
-	rows := make([]*tableFile, len(g.tableFiles))
+// tableKinds are the extensions of the table's files, which they cycle
+// through, and the kinds of file they are.
+var tableKinds = [...]struct{ ext, kind string }{
+	{"pdf", "PDF document"}, {"jpg", "JPEG image"}, {"md", "Markdown"}, {"xlsx", "Spreadsheet"},
+	{"key", "Presentation"}, {"mp3", "MP3 audio"}, {"zip", "ZIP archive"}, {"svg", "SVG image"},
+}
+
+// initTable makes the 100,000 files of the table and the view that sorts
+// them by its columns.
+func (g *gallery) initTable() {
+	g.tableFiles = make([]tableFile, 100_000)
 	for i := range g.tableFiles {
-		rows[i] = &g.tableFiles[i]
+		k := tableKinds[i%len(tableKinds)]
+		g.tableFiles[i] = tableFile{id: i, name: fmt.Sprintf("file-%06d.%s", i, k.ext), kind: k.kind, size: (i*37%11 + 1) * 173}
 	}
-	slices.SortStableFunc(rows, func(a, b *tableFile) int {
-		var d int
-		switch g.sort.Column {
-		case "Name":
-			d = strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
-		case "Kind":
-			d = strings.Compare(a.kind, b.kind)
-		case "Size":
-			d = a.size - b.size
-		}
-		if g.sort.Descending {
-			d = -d
-		}
-		return d
+	g.tableView = ui.NewTableView(map[string]func(a, b tableFile) int{
+		"Name": func(a, b tableFile) int {
+			return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
+		},
+		"Kind": func(a, b tableFile) int { return strings.Compare(a.kind, b.kind) },
+		"Size": func(a, b tableFile) int { return a.size - b.size },
 	})
-	return rows
 }
 
 // message is a message of the chat on the List page; ids grow with time,
@@ -963,7 +961,7 @@ func (g *gallery) list(c *ui.Context) {
 		open(rows[at])
 	}
 	g.chatCard(c)
-	ui.Row(c).Gap(18).AlignItems(ui.Stretch).Height(260).Children(func() {
+	ui.Row(c).Gap(18).AlignItems(ui.Stretch).Height(420).Children(func() {
 		card(c, "Tree", func() {
 			item := func(path, label string, children func()) {
 				var open *bool
@@ -992,33 +990,65 @@ func (g *gallery) list(c *ui.Context) {
 		}).Width(220)
 		card(c, "Table", func() {
 			cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Kind", Width: 120, Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
+			if g.tableFiles == nil {
+				g.initTable()
+			}
+			// The filter is given to the view only when it changes, and
+			// the files checked are only those shown.
+			if ui.SearchField(c, &g.tableFilter).Label("Search files").Changed() {
+				kw := strings.ToLower(g.tableFilter)
+				g.tableView.SetFilter(func(f tableFile) bool { return strings.Contains(strings.ToLower(f.name), kw) })
+				g.tableChecked.Clear()
+			}
+			files, view := g.tableFiles, g.tableView
+			view.Sync(files, g.sort)
 			// Several files chosen by their IDs, the one last chosen
 			// opening; typing a name goes to it. The names are renamed in
 			// place.
-			rows := g.sortedFiles()
-			g.table.Key = func(i int) any { return rows[i].id }
-			g.table.Label = func(i int) string { return rows[i].name }
+			g.table.Key = func(i int) any { return files[view.Row(i)].id }
+			g.table.Label = func(i int) string { return files[view.Row(i)].name }
 			g.table.Selected = &g.file
 			g.table.Selection = &g.chosen
 			g.table.Sort = &g.sort
-			if ui.Table(c, &g.table, cols, len(rows), func(row, col int) {
-				f := rows[row]
+			g.table.Checked = &g.tableChecked
+			g.table.Version = view.Version()
+			names := func(rows []int) []string {
+				names := make([]string, len(rows))
+				for i, row := range rows {
+					names[i] = files[view.Row(row)].name
+				}
+				return names
+			}
+			g.table.RowMenu = func(m *ui.Menu, rows []int) {
+				if m.Item("Open").Chosen() {
+					c.Toast("Opened " + strings.Join(names(rows), ", "))
+				}
+				if m.Item("Copy name").Chosen() {
+					c.WriteClipboard(g.table.Copy(rows))
+				}
+			}
+			g.table.Copy = func(rows []int) string { return strings.Join(names(rows), "\n") }
+			table := ui.Table(c, &g.table, cols, view.Len(), func(row, col int) {
+				f := &files[view.Row(row)]
 				switch col {
 				case 0:
-					ui.EditableText(c, &f.name)
+					if ui.EditableText(c, &f.name).Changed() {
+						view.Changed(view.Row(row))
+					}
 				case 1:
 					ui.Text(c, f.kind).SingleLine()
 				case 2:
 					ui.Textf(c, "%d KB", f.size)
 				}
-			}).Grow(1).Submitted() {
-				c.Toast("Opened " + rows[g.file].name)
+			}).Grow(1)
+			if row, ok := table.Activated(); ok {
+				c.Toast("Opened " + files[view.Row(row)].name)
 			}
 			cmd, rename := "Ctrl", "F2"
 			if runtime.GOOS == "darwin" {
 				cmd, rename = "Cmd", "Return"
 			}
-			ui.Textf(c, "%d chosen. Shift-click or %s-click to choose several; type a name to go to it; %s renames. Click a header to sort, drag it to move the column, and drag its edge to resize it.", g.chosen.Len(), cmd, rename).FontSize(12).TextColor(t.TextMuted)
+			ui.Textf(c, "%d of %d shown, %d checked. Shift-click or %s-click to choose several; type a name to go to it; %s renames. Click a header to sort, drag it to move the column, and drag its edge to resize it. Right-click a row for a menu, and %s+C copies the names.", view.Len(), len(files), g.tableChecked.Len(), cmd, rename, cmd).FontSize(12).TextColor(t.TextMuted)
 		}).Grow(1)
 	})
 	card(c, "Outline", func() {
