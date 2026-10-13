@@ -224,6 +224,9 @@ func (c *context) newElement(k kind) *node {
 		e.id = keyedID(p.id, c.nextKey)
 		e.key = c.nextKey
 		c.keySet, c.nextKey = false, nil
+		if c.rt.insp.open {
+			c.rt.insp.noteKey(e.id, e.key)
+		}
 	}
 	p.add(e)
 	var built bool

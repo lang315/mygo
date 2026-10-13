@@ -251,6 +251,21 @@ func TestInspectorTree(t *testing.T) {
 	}
 }
 
+// An element keyed before it is made, as Context.Key and a list's rows
+// key them, shows its key as one keyed after does.
+func TestInspectorShowsKeysGivenBefore(t *testing.T) {
+	tt, _ := inspected(func(c *context) {
+		coreColumn(c).Padding(20).Children(func() {
+			c.nextKey, c.keySet = "sidebar", true
+			coreRow(c).Children(func() { coreText(c, "Inside") })
+		})
+	})
+	openInspector(tt)
+	if !tt.HasText(`<Row key="sidebar">`) {
+		t.Fatalf("the tree shows %q", tt.Texts())
+	}
+}
+
 func TestInspectorTabs(t *testing.T) {
 	log.SetOutput(io.Discard)
 	defer log.SetOutput(os.Stderr)
