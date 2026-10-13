@@ -1,0 +1,100 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"math/rand/v2"
+	"sync"
+	"time"
+)
+
+// result is what a worker did to an account, for the main thread to show.
+type result struct {
+	id     int
+	state  state
+	status string
+	at     int64 // when the job ended, 0 while it runs
+	ip     string
+}
+
+// runner runs jobs on accounts in goroutines, as fhtool's Start does. The
+// workers never touch the rows: they add their results to a batch the
+// main thread takes a few times a second.
+type runner struct {
+	cancel context.CancelFunc
+	done   chan struct{} // closed once every worker returned
+	mu     sync.Mutex
+	batch  []result
+}
+
+// run runs work on the accounts ids, loops+1 times over, in threads
+// goroutines, or one for each account when there are fewer.
+func run(ids []int, loops, threads int, work func(ctx context.Context, id int) result) *runner {
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &runner{cancel: cancel, done: make(chan struct{})}
+	jobs := make(chan int)
+	go func() {
+		defer close(jobs)
+		for range loops + 1 {
+			for _, id := range ids {
+				select {
+				case jobs <- id:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	var wg sync.WaitGroup
+	for range max(1, min(threads, len(ids))) {
+		wg.Go(func() {
+			for id := range jobs {
+				r.push(result{id: id, state: running, status: "Đang chạy..."})
+				// A job stopped still reports, for its row not to stay
+				// running.
+				r.push(work(ctx, id))
+				if ctx.Err() != nil {
+					return
+				}
+			}
+		})
+	}
+	go func() {
+		wg.Wait()
+		cancel()
+		close(r.done)
+	}()
+	return r
+}
+
+func (r *runner) push(res result) {
+	r.mu.Lock()
+	r.batch = append(r.batch, res)
+	r.mu.Unlock()
+}
+
+// take returns the results since it was last called.
+func (r *runner) take() []result {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	b := r.batch
+	r.batch = nil
+	return b
+}
+
+// fakeWork stands for one of fhtool's actions: 50 to 300 ms, one in ten
+// failing.
+func fakeWork(action string) func(ctx context.Context, id int) result {
+	return func(ctx context.Context, id int) result {
+		select {
+		case <-time.After(time.Duration(50+rand.IntN(250)) * time.Millisecond):
+		case <-ctx.Done():
+			return result{id: id, state: idle, status: "Đã dừng"}
+		}
+		ip := fmt.Sprintf("113.%d.%d.%d", rand.IntN(256), rand.IntN(256), rand.IntN(256))
+		if rand.IntN(10) == 0 {
+			return result{id: id, state: failed, status: "Lỗi: checkpoint", at: time.Now().Unix(), ip: ip}
+		}
+		return result{id: id, state: succeeded, status: action + ": Thành công", at: time.Now().Unix(), ip: ip}
+	}
+}
