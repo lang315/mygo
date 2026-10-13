@@ -36,11 +36,12 @@ type TableView[T any] struct {
 	perm, out, spare, ins []int
 	full                  bool
 	// While a filter hides rows, all is the order of every row when
-	// hasAll, so that a new filter goes through it instead of sorting the
-	// rows again; kept marks the rows a new filter keeps.
-	all    []int
-	hasAll bool
-	kept   []bool
+	// hasAll, kept up to date as perm is, so that a new filter goes
+	// through it instead of sorting the rows again; allOut and allSpare
+	// are its buffers, kept marks the rows a new filter keeps.
+	all, allOut, allSpare []int
+	hasAll                bool
+	kept                  []bool
 	// dirty are the rows of the slice the app changed (or appended) since
 	// the last Sync; mark is the scratch set merge uses to drop them from
 	// the order and count each once.
@@ -209,14 +210,29 @@ func (v *TableView[T]) refilter(rows []T) {
 
 // merge places again the rows changed: it takes them out of the order,
 // sorts those the filter keeps, and puts each where a binary search finds
-// its place, copying the rows between.
+// its place, copying the rows between. While a filter hides rows, it does
+// the same to the order of all of them, for the next filter.
 func (v *TableView[T]) merge(rows []T) {
-	v.hasAll = false // Task 2 keeps it up to date instead
+	dirty := v.unique(rows)
 	by := v.order(rows)
+	if !v.full && v.hasAll {
+		all, spare, ins := v.place(rows, v.all, v.allOut, v.allSpare, v.ins, dirty, nil, by)
+		v.all, v.allOut, v.allSpare, v.ins = all, v.all, spare, ins
+	}
+	// out cannot be perm, which it is compared with: the three buffers
+	// rotate, perm's array becoming the next out.
+	out, rest, ins := v.place(rows, v.perm, v.out, v.spare, v.ins, dirty, v.keep, by)
+	if !slices.Equal(out, v.perm) {
+		v.version++
+	}
+	v.perm, v.out, v.spare, v.ins, v.dirty = out, v.perm, rest, ins, dirty[:0]
+}
+
+// unique returns the rows changed, once each, and those of the slice only.
+func (v *TableView[T]) unique(rows []T) []int {
 	if len(v.mark) < len(rows) {
 		v.mark = make([]bool, len(rows))
 	}
-	// The rows changed, once each, and those of the slice only.
 	dirty := v.dirty[:0]
 	for _, i := range v.dirty {
 		if i >= 0 && i < len(rows) && !v.mark[i] {
@@ -224,23 +240,36 @@ func (v *TableView[T]) merge(rows []T) {
 			dirty = append(dirty, i)
 		}
 	}
-	rest := v.spare[:0]
-	for _, i := range v.perm {
-		if !v.mark[i] {
+	for _, i := range dirty {
+		v.mark[i] = false
+	}
+	return dirty
+}
+
+// place returns order with the rows dirty taken out and those keep keeps
+// (all of them for nil) put back where by sorts them, built in out; rest
+// and ins are the buffers it uses, returned to be used again.
+func (v *TableView[T]) place(rows []T, order, out, rest, ins, dirty []int, keep func(T) bool, by func(i, j int) int) ([]int, []int, []int) {
+	// In a local, as v.mark would be loaded again at every row.
+	mark := v.mark
+	for _, i := range dirty {
+		mark[i] = true
+	}
+	rest = rest[:0]
+	for _, i := range order {
+		if !mark[i] {
 			rest = append(rest, i)
 		}
 	}
-	ins := v.ins[:0]
+	ins = ins[:0]
 	for _, i := range dirty {
-		v.mark[i] = false
-		if v.keep == nil || v.keep(rows[i]) {
+		mark[i] = false
+		if keep == nil || keep(rows[i]) {
 			ins = append(ins, i)
 		}
 	}
 	slices.SortFunc(ins, by)
-	// out cannot be perm, which it is compared with: the three buffers
-	// rotate, perm's array becoming the next out.
-	out := v.out[:0]
+	out = out[:0]
 	from := 0
 	for _, i := range ins {
 		at, _ := slices.BinarySearchFunc(rest[from:], i, by)
@@ -248,9 +277,5 @@ func (v *TableView[T]) merge(rows []T) {
 		out = append(out, i)
 		from += at
 	}
-	out = append(out, rest[from:]...)
-	if !slices.Equal(out, v.perm) {
-		v.version++
-	}
-	v.perm, v.out, v.spare, v.ins, v.dirty = out, v.perm, rest, ins, dirty[:0]
+	return append(out, rest[from:]...), rest, ins
 }
