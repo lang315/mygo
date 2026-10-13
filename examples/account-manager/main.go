@@ -69,8 +69,8 @@ func (a *app) toolbar(c *ui.Context) {
 			a.view.Reset()
 		}
 		ui.Select(c, &a.action, actions).Label("Hành động").Width(190)
-		ui.NumberInput(c, &a.loops, 0, 1_000_000, 1).Label("Số lần lặp").Tooltip("Số lần lặp").Width(110)
-		ui.NumberInput(c, &a.threads, 1, 1_000_000, 1).Label("Số luồng").Tooltip("Số luồng").Width(110)
+		ui.NumberInput(c, &a.loops, 0, 1_000_000, 1).Label("Số lần lặp").Tooltip("Số lần lặp")
+		ui.NumberInput(c, &a.threads, 1, 1_000_000, 1).Label("Số luồng").Tooltip("Số luồng")
 		if !busy {
 			if ui.PrimaryButton(c, "Start").Clicked() {
 				a.start(c)
@@ -246,7 +246,8 @@ func (a *app) footer(c *ui.Context) {
 		}
 		column := ui.Select(c, &a.column, titles).Label("Cột tìm kiếm").Width(170).Changed()
 		const hint = "Nhập từ khoá (UID1|UID2|…)"
-		search := ui.SearchField(c, &a.keyword).Label(hint).Placeholder(hint).Width(400)
+		// A text input, as fhtool's entry: a search field shows "Search".
+		search := ui.TextInput(c, &a.keyword).Label(hint).Placeholder(hint).Width(400)
 		// The search runs on Tìm kiếm or Enter, as fhtool's, or once
 		// cleared: on every key it would go through all the rows.
 		cleared := search.Changed() && a.keyword == ""
