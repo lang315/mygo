@@ -103,6 +103,11 @@ type ListState struct {
 	// does not choose, rows is the row clicked. The menu key and Shift+F10
 	// open it on the rows chosen.
 	RowMenu func(m *Menu, rows []int)
+	// Copy, when set, puts the text it returns for rows, the rows chosen
+	// in their order, on the clipboard on Cmd+C (Ctrl+C on Linux and
+	// Windows) or the Edit menu's Copy while the Table has the keyboard
+	// focus. A text being edited in a row copies its own instead.
+	Copy func(rows []int) string
 	// RoundRows rounds the corners of a Table's chosen and hovered rows at
 	// the theme's Radius, as a List's are, rather than leaving them square
 	// from edge to edge.

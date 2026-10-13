@@ -311,6 +311,21 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			}
 		})
 	}
+	if s.Copy != nil {
+		rt := c.rt
+		table.HandleInput(func(ev InputEvent) bool {
+			isCopy := ev.Kind == InputCommand && ev.Text == "copy" || ev.Kind == InputKeyDown && ev.Key == KeyC && ev.Mods == Cmd
+			if !isCopy {
+				return false
+			}
+			rows := s.frame.chosenRows()
+			if len(rows) == 0 {
+				return false
+			}
+			rt.host.writeClipboard(s.Copy(rows))
+			return true
+		})
+	}
 	if id := drag.fit; id != "" {
 		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag, rt: c.rt}
 	}

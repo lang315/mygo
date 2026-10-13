@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -607,5 +608,52 @@ func TestTableRowMenu(t *testing.T) {
 	want := [][]int{{2}, {1}, {0, 1, 2}, {0, 1, 2}, {1}}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Errorf("the rows: %v, want %v", got, want)
+	}
+}
+
+func TestTableCopy(t *testing.T) {
+	names := []string{"photo.jpeg", "notes.md", "song.mp3"}
+	cols := []TableColumn{{Title: "Name"}}
+	var chosen Selection[int]
+	sel := -1
+	s := ListState{Selected: &sel, Selection: &chosen}
+	s.Copy = func(rows []int) string {
+		var b strings.Builder
+		for _, r := range rows {
+			b.WriteString(names[r] + "\n")
+		}
+		return b.String()
+	}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			coreTable(c, &s, cols, len(names), func(row, col int) { coreEditableText(c, &names[row]) }).Grow(1)
+		})
+	}, 400, 300)
+	tt.SetClipboard("before")
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "before" {
+		t.Fatalf("Cmd+C without the focus nor a choice: %q", got)
+	}
+	tt.Click("photo.jpeg")
+	tt.ClickWith(Shift, "song.mp3")
+	tt.Key(Cmd, KeyC)
+	if got, want := tt.Clipboard(), "photo.jpeg\nnotes.md\nsong.mp3\n"; got != want {
+		t.Fatalf("Cmd+C: %q, want %q", got, want)
+	}
+	tt.SetClipboard("")
+	tt.Command("copy") // the Edit menu's Copy
+	if got := tt.Clipboard(); got != "photo.jpeg\nnotes.md\nsong.mp3\n" {
+		t.Fatalf("Copy: %q", got)
+	}
+	// A name being edited copies its text, not the rows.
+	tt.Key(0, KeyHome)
+	if runtime.GOOS == "darwin" {
+		tt.Key(0, KeyEnter)
+	} else {
+		tt.Key(0, KeyF2)
+	}
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "photo" {
+		t.Fatalf("Cmd+C while renaming: %q", got)
 	}
 }
