@@ -106,6 +106,8 @@ type tableDrag struct {
 	moving bool
 	// fit is the column to fit to its cells in this frame, by ID.
 	fit string
+	// fitted reports a column fitted to its cells in the last frame.
+	fitted bool
 }
 
 // Table creates a table of n rows under a header of columns, whose rows
@@ -158,6 +160,10 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		s = coreLocal(table, "rows", func() ListState { return ListState{} })
 	}
 	drag := coreLocal(table, "drag", func() tableDrag { return tableDrag{} })
+	if drag.fitted {
+		drag.fitted = false
+		table.st.markEvent(eventColumns)
+	}
 	layout := &s.Columns
 	order := layout.arrange(columns)
 	// The least width of the rows: the columns', those sharing the room
@@ -244,6 +250,12 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 						row.bg = t.SurfaceHover
 					}
 				}
+				row.flags |= flagClickable
+				row.afterInput(func() {
+					if row.DoubleClicked() {
+						table.st.activate(i)
+					}
+				})
 			}
 			row.Children(func() {
 				cells(RoleCell, func(j int) { cell(i, j) })
@@ -251,7 +263,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		}, kind)
 	})
 	if id := drag.fit; id != "" {
-		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag}
+		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag, rt: c.rt}
 	}
 	table.DrawOver(func(p *Painter, r Rect) {
 		if table.FocusVisible() {
@@ -291,13 +303,15 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 			drag.moving = true
 		}
 		if drag.moving {
-			moveColumn(c, s, drag, heads, order, columns)
+			if moveColumn(c, s, drag, heads, order, columns) {
+				table.st.markEvent(eventColumns)
+			}
 			h.Left(drag.dx).Background(t.SurfacePressed).Opacity(0.9)
 		}
 	} else if drag.id == id && !held {
 		// Released: a click, unless it moved the column.
 		moved := drag.moving
-		*drag = tableDrag{fit: drag.fit}
+		*drag = tableDrag{fit: drag.fit, fitted: drag.fitted}
 		if moved {
 			h.st.clicks = 0
 		}
@@ -310,6 +324,7 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 				*s.Sort = SortOrder{Column: id}
 			}
 			table.st.markChanged()
+			table.st.markEvent(eventSort)
 		}
 	})
 	if col.Fixed {
@@ -343,6 +358,7 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 				w = h.Bounds().W // sharing the room left, as wide as it was
 			}
 			s.setWidth(col, w+dx)
+			table.st.markEvent(eventColumns)
 		}
 		edge.Draw(func(p *Painter, r Rect) {
 			x := r.X + r.W - 0.5
@@ -368,10 +384,10 @@ func (s *ListState) setWidth(col *TableColumn, w float32) {
 
 // moveColumn moves the column being dragged past a neighbor whose middle
 // it passed, keeping it under the pointer.
-func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order []int, columns []TableColumn) {
+func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order []int, columns []TableColumn) bool {
 	at := slices.IndexFunc(order, func(j int) bool { return columns[j].id() == drag.id })
 	if at < 0 {
-		return
+		return false
 	}
 	to := at
 	switch {
@@ -385,7 +401,7 @@ func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order 
 		}
 	}
 	if to == at || columns[order[to]].Fixed {
-		return
+		return false
 	}
 	// Under the pointer still: the column's place moved by the other's
 	// width.
@@ -401,6 +417,7 @@ func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order 
 	ids[at], ids[to] = ids[to], ids[at]
 	s.Columns.Order = ids
 	c.rt.consumed = true
+	return true
 }
 
 // tableFit fits a column of a table to its cells as the table lays out,
@@ -410,6 +427,7 @@ type tableFit struct {
 	cells  []*node
 	layout *TableLayout
 	drag   *tableDrag
+	rt     *engine
 	done   bool
 }
 
@@ -434,6 +452,8 @@ func (tf *tableFit) apply() {
 		tf.layout.Widths = maps.Clone(tf.layout.Widths)
 	}
 	tf.layout.Widths[tf.id] = w
+	tf.drag.fitted = true
+	tf.rt.requestFrame()
 }
 
 // sortArrow draws the arrow of the column the rows are sorted by.
@@ -455,6 +475,31 @@ func abs(v float32) float32 {
 		return -v
 	}
 	return v
+}
+
+// tableEvent is something that happened to a table (or a list) in a build
+// pass, which its queries and callbacks report apart.
+type tableEvent uint8
+
+const (
+	eventSelection tableEvent = 1 << iota
+	eventSort
+	eventColumns
+	eventChecked
+	eventActivated
+)
+
+// markEvent reports ev in this build pass.
+func (s *state) markEvent(ev tableEvent) {
+	s.events |= ev
+	s.eventsDelivered &^= ev
+	s.notice()
+}
+
+// activate reports row double-clicked, or Entered.
+func (s *state) activate(row int) {
+	s.activated = row
+	s.markEvent(eventActivated)
 }
 
 // Selected shows the element as chosen among its siblings, in the accent

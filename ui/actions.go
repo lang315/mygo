@@ -8,6 +8,7 @@ const (
 	actionSubmit
 	actionShortcut
 	actionWindowShortcut
+	actionEvent
 )
 
 type action struct {
@@ -18,7 +19,11 @@ type action struct {
 	mods    Modifiers
 	key     Key
 	fn      func()
-	ready   bool
+	// event is what an actionEvent waits for, and row runs in place of fn
+	// with the row activated.
+	event tableEvent
+	row   func(int)
+	ready bool
 }
 
 func (e Element) on(kind actionKind, mods Modifiers, key Key, fn func()) Element {
@@ -41,6 +46,33 @@ func (e Element) OnChange(fn func()) Element { return e.on(actionChange, 0, 0, f
 // OnSubmit runs after bound-value input handles a submission gesture,
 // before rebuilding the view.
 func (e Element) OnSubmit(fn func()) Element { return e.on(actionSubmit, 0, 0, fn) }
+
+func (e Element) onEvent(ev tableEvent, fn func(), row func(int)) Element {
+	if n := e.node(); n != nil && (fn != nil || row != nil) {
+		n.c.rt.actions = append(n.c.rt.actions, action{element: e, kind: actionEvent, event: ev, fn: fn, row: row})
+	}
+	return e
+}
+
+// OnSelectionChange runs after input changes the rows chosen in a List or
+// a Table, before rebuilding the view.
+func (e Element) OnSelectionChange(fn func()) Element { return e.onEvent(eventSelection, fn, nil) }
+
+// OnSortChange runs after a click on a header changes a Table's sort,
+// before rebuilding the view.
+func (e Element) OnSortChange(fn func()) Element { return e.onEvent(eventSort, fn, nil) }
+
+// OnColumnsChange runs after the user resizes, moves or fits a column of
+// a Table, before rebuilding the view: save ListState.Columns there.
+func (e Element) OnColumnsChange(fn func()) Element { return e.onEvent(eventColumns, fn, nil) }
+
+// OnCheckedChange runs after a checkbox of a Table's rows or header
+// changes ListState.Checked, before rebuilding the view.
+func (e Element) OnCheckedChange(fn func()) Element { return e.onEvent(eventChecked, fn, nil) }
+
+// OnActivate runs with the row of a List or a Table double-clicked, or
+// chosen as Enter is pressed, before rebuilding the view.
+func (e Element) OnActivate(fn func(row int)) Element { return e.onEvent(eventActivated, nil, fn) }
 
 // OnShortcut declares a key handler within the element's focus subtree.
 func (e Element) OnShortcut(mods Modifiers, key Key, fn func()) Element {
@@ -76,7 +108,7 @@ func (rt *engine) runNoticeActions() {
 		if rt.closing {
 			return
 		}
-		if a.kind != actionChange && a.kind != actionSubmit {
+		if a.kind != actionChange && a.kind != actionSubmit && a.kind != actionEvent {
 			continue
 		}
 		n := rt.actionNode(*a)
@@ -84,17 +116,21 @@ func (rt *engine) runNoticeActions() {
 			continue
 		}
 		a.ready = a.kind == actionChange && n.st.changed && !n.st.changeDelivered ||
-			a.kind == actionSubmit && n.st.submitted && !n.st.submitDelivered
+			a.kind == actionSubmit && n.st.submitted && !n.st.submitDelivered ||
+			a.kind == actionEvent && n.st.events&a.event != 0 && n.st.eventsDelivered&a.event == 0
 	}
 	for _, a := range rt.actions {
 		if !a.ready {
 			continue
 		}
 		n := rt.actionNode(a)
-		if a.kind == actionChange {
+		switch a.kind {
+		case actionChange:
 			n.st.changeDelivered = true
-		} else {
+		case actionSubmit:
 			n.st.submitDelivered = true
+		default:
+			n.st.eventsDelivered |= a.event
 		}
 	}
 	for _, a := range rt.actions {
@@ -103,7 +139,11 @@ func (rt *engine) runNoticeActions() {
 		}
 		if a.ready {
 			rt.consumed = true
-			a.fn()
+			if a.row == nil {
+				a.fn()
+			} else if n := rt.actionNode(a); n != nil {
+				a.row(n.st.activated)
+			}
 		}
 	}
 }
@@ -112,7 +152,7 @@ func (rt *engine) runActions() {
 		if rt.closing {
 			return
 		}
-		if a.kind == actionChange || a.kind == actionSubmit {
+		if a.kind == actionChange || a.kind == actionSubmit || a.kind == actionEvent {
 			continue
 		}
 		handled := false

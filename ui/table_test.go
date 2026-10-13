@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"fmt"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -350,5 +352,99 @@ func TestTableRoundRows(t *testing.T) {
 	coreNewTester(tableView(&s, cols, names), 500, 300)
 	if got := radius(&s, 0, true); got != round {
 		t.Errorf("a row of a table that does not choose, with RoundRows: %v", got)
+	}
+}
+
+func TestTableEvents(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	cols := []TableColumn{{Title: "Name", Sortable: true}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80, Align: End}}
+	sort := SortOrder{Column: "Size"}
+	sel := -1
+	s := ListState{Sort: &sort, Selected: &sel}
+	var seen, calls []string
+	view := func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			e := coreTable(c, &s, cols, len(names), func(row, col int) {
+				if col == 0 {
+					coreText(c, names[row]).SingleLine()
+				}
+			}).Grow(1)
+			for _, q := range []struct {
+				name string
+				on   bool
+			}{{"changed", e.Changed()}, {"selection", e.SelectionChanged()}, {"sort", e.SortChanged()}, {"columns", e.ColumnsChanged()}, {"checked", e.CheckedChanged()}} {
+				if q.on {
+					seen = append(seen, q.name)
+				}
+			}
+			if row, ok := e.Activated(); ok {
+				seen = append(seen, fmt.Sprintf("activated %d", row))
+			}
+			wrapElement(e).
+				OnSelectionChange(func() { calls = append(calls, "selection") }).
+				OnSortChange(func() { calls = append(calls, "sort") }).
+				OnColumnsChange(func() { calls = append(calls, "columns") }).
+				OnActivate(func(row int) { calls = append(calls, fmt.Sprintf("activate %d", row)) })
+		})
+	}
+	tt := coreNewTester(view, 500, 300)
+	check := func(what string, wantSeen, wantCalls []string) {
+		t.Helper()
+		if !slices.Equal(seen, wantSeen) || !slices.Equal(calls, wantCalls) {
+			t.Errorf("%s: saw %q, called %q; want %q, %q", what, seen, calls, wantSeen, wantCalls)
+		}
+		seen, calls = nil, nil
+	}
+	check("the first frame", nil, nil)
+	tt.Click("b.txt")
+	check("a click on a row", []string{"changed", "selection"}, []string{"selection"})
+	tt.Click("Name")
+	check("a click on a header", []string{"changed", "sort"}, []string{"sort"})
+	tt.Click("c.txt")
+	seen, calls = nil, nil
+	tt.Click("c.txt")
+	check("a double click", []string{"activated 2"}, []string{"activate 2"})
+	tt.Key(0, KeyEnter)
+	check("Enter", []string{"activated 2"}, []string{"activate 2"})
+	// Resizing a column: drag the right edge of Kind's header, as
+	// TestTableResize does.
+	kind := header(t, tt, "Kind")
+	edge, y := float32(kind.X+kind.W)-2, float32(kind.Y+kind.H/2)
+	tt.Press(edge, y)
+	tt.Move(edge+30, y)
+	tt.Release(edge+30, y)
+	if !slices.Contains(seen, "columns") || !slices.Contains(calls, "columns") || slices.Contains(seen, "changed") {
+		t.Errorf("resizing a column: saw %q, called %q", seen, calls)
+	}
+	seen, calls = nil, nil
+	// Fitting it with a double click on the edge: reported in the frame
+	// after, once the widths are known.
+	kind = header(t, tt, "Kind")
+	edge = float32(kind.X+kind.W) - 2
+	tt.ClickAt(edge, y)
+	tt.ClickAt(edge, y)
+	tt.Frame()
+	if !slices.Contains(seen, "columns") {
+		t.Errorf("fitting a column: saw %q", seen)
+	}
+	seen, calls = nil, nil
+
+	// A table that does not choose still reports a double click.
+	s2 := ListState{}
+	var activated []int
+	tt = coreNewTester(func(c *context) {
+		e := coreTable(c, &s2, cols, len(names), func(row, col int) {
+			if col == 0 {
+				coreText(c, names[row]).SingleLine()
+			}
+		}).Grow(1)
+		if row, ok := e.Activated(); ok {
+			activated = append(activated, row)
+		}
+	}, 500, 300)
+	tt.Click("b.txt")
+	tt.Click("b.txt")
+	if !slices.Equal(activated, []int{1}) {
+		t.Errorf("a double click on a table that does not choose: %v", activated)
 	}
 }

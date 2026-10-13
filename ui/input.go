@@ -1084,6 +1084,47 @@ func (e *node) Submitted() bool {
 	return e.st.submitted
 }
 
+// SelectionChanged applies pending input to the controls built so far and
+// reports whether the rows chosen in this List or Table changed in this
+// build pass.
+func (e *node) SelectionChanged() bool { return e.event(eventSelection) }
+
+// SortChanged applies pending input and reports whether a click on the
+// header of a Sortable column changed this Table's ListState.Sort in this
+// build pass.
+func (e *node) SortChanged() bool { return e.event(eventSort) }
+
+// ColumnsChanged applies pending input and reports whether the user
+// resized, moved or fitted a column of this Table in this build pass,
+// changing ListState.Columns: save it then.
+func (e *node) ColumnsChanged() bool { return e.event(eventColumns) }
+
+// CheckedChanged applies pending input and reports whether the checkbox of
+// a row of this Table, or of its header, changed ListState.Checked in this
+// build pass.
+func (e *node) CheckedChanged() bool { return e.event(eventChecked) }
+
+// Activated applies pending input and reports the row of this List or
+// Table double-clicked, or chosen as Enter was pressed, in this build pass.
+func (e *node) Activated() (row int, ok bool) {
+	if !e.event(eventActivated) {
+		return 0, false
+	}
+	return e.st.activated, true
+}
+
+func (e *node) event(ev tableEvent) bool {
+	if !e.hasState() {
+		return false
+	}
+	e.c.rt.applyInputs()
+	if e.st.events&ev != 0 {
+		e.c.rt.consumed = true
+		return true
+	}
+	return false
+}
+
 // Dismissed reports whether pressing Escape or clicking outside closed the
 // dialog or popover (Modal, DialogBase, Popover, PopoverBase) returning the
 // element, in the frame it did, setting its *open to false: one that must

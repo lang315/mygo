@@ -29,6 +29,7 @@ func (rt *engine) beginInputs() {
 		}
 		s.changed, s.submitted, s.noticeQueued = false, false, false
 		s.changeDelivered, s.submitDelivered = false, false
+		s.events, s.eventsDelivered = 0, 0
 	}
 	clear(rt.notices)
 	rt.notices = rt.notices[:0]
@@ -233,6 +234,7 @@ func listRowValueInput(n *node) {
 	}
 	if n.DoubleClicked() {
 		f.owner.st.markSubmitted()
+		f.owner.st.activate(b.i)
 	}
 }
 func listInput(n *node) {

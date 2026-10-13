@@ -738,6 +738,7 @@ func (f *listFrame) chosen(i int, k any) bool {
 // changed reports a new choice.
 func (f *listFrame) changed() {
 	f.owner.st.markChanged()
+	f.owner.st.markEvent(eventSelection)
 	f.c.rt.consumed = true
 }
 
@@ -917,6 +918,7 @@ func (f *listFrame) navigate() {
 		s.ScrollIntoView(*sel)
 	case enter && in:
 		o.st.markSubmitted()
+		o.st.activate(*sel)
 	}
 	to := -1
 	switch key {
