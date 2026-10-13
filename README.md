@@ -1,0 +1,1 @@
+Screenshots for PR #2: the same scene (transforms, perspective, inline-transformed text, text in a turned container, plain text, a keyed table) built from main (d0ba0ed) and from the PR (c3faa3c), captured by window through cmux Computer Use. A pixel comparison finds 0 of 998,400 pixels different. verify-scene.go.txt is the program.

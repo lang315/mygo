@@ -1,0 +1,60 @@
+// Command zzverify shows every path the frame-time fix touches, to compare
+// two builds pixel by pixel. Not part of the repository.
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+)
+
+func main() {
+	var list ui.ListState
+	chosen := 2
+	names := make([]string, 50)
+	for i := range names {
+		names[i] = fmt.Sprintf("row-%02d.txt", i)
+	}
+	view := func(c *ui.Context) {
+		ui.Box(c).Fill().Background(ui.RGB(250, 250, 250)).Children(func() {
+			// The e2e scenes: nested affine, and 3D in perspective.
+			ui.Box(c).Absolute().Left(20).Top(20).Size(150, 100).TransformOrigin(0, 0).Scale(1.2, 1.1).Children(func() {
+				ui.Box(c).Absolute().Left(15).Top(20).Size(80, 40).Rotate(30).Background(ui.RGB(220, 30, 40))
+			})
+			ui.Box(c).Absolute().Left(220).Top(20).Size(200, 120).Background(ui.RGB(30, 90, 220)).
+				RotateY(45).Perspective(500).BackfaceHidden()
+			// Inline glyphs with their own transform, and a paragraph without.
+			ui.Text(c, "Before ").Absolute().Left(20).Top(170).FontSize(22).Children(func() {
+				ui.Text(c, "LINK").TextColor(ui.RGB(230, 0, 0)).TextBackground(ui.RGB(255, 240, 0)).Underline().Translate(50, 30).Rotate(8)
+			})
+			// Text in a rotated container: one transform for all its glyphs.
+			ui.Box(c).Absolute().Left(260).Top(170).Size(180, 60).Rotate(-12).Background(ui.RGB(230, 240, 255)).Children(func() {
+				ui.Text(c, "Turned text, underlined").Underline().FontSize(16)
+			})
+			ui.Text(c, "Plain text, nothing transformed.").Absolute().Left(20).Top(260).FontSize(15)
+			// A keyed table: rows and cells keyed as they are made.
+			ui.Box(c).Absolute().Left(20).Top(300).Size(440, 200).Children(func() {
+				list.Key = func(i int) any { return names[i] }
+				list.Selected = &chosen
+				cols := []ui.TableColumn{{Title: "Name"}, {Title: "Index", Width: 80}}
+				ui.Table(c, &list, cols, len(names), func(row, col int) {
+					if col == 0 {
+						ui.Text(c, names[row])
+					} else {
+						ui.Textf(c, "%d", row)
+					}
+				}).Grow(1)
+			})
+		})
+	}
+	title := "zzverify " + os.Getenv("ZZ_LABEL")
+	mygo.App.WhenReady(func() {
+		mygo.NewWindow(mygo.WindowOptions{Title: title, Width: 480, Height: 520, Content: ui.View(view)})
+	})
+	if err := mygo.App.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
