@@ -174,10 +174,10 @@ func TestFilterDoesNotAllocatePerRow(t *testing.T) {
 	a.column, a.keyword = "UID", a.s.accounts[3].UID+"|x"
 	keep := keep(search{0, a.column, a.keyword})
 	x := a.s.accounts[3]
-	if !keep(x) {
+	if !keep(&x) {
 		t.Fatal("the account searched for is not kept")
 	}
-	if n := testing.AllocsPerRun(100, func() { keep(x) }); n != 0 {
+	if n := testing.AllocsPerRun(100, func() { keep(&x) }); n != 0 {
 		t.Fatalf("%v allocations a row", n)
 	}
 }
@@ -337,9 +337,9 @@ func BenchmarkSearch(b *testing.B) {
 func TestSearchUnchangedSortsNothing(t *testing.T) {
 	a := newApp(1000)
 	calls := 0
-	counted := map[string]func(x, y account) int{}
+	counted := map[string]func(x, y *account) int{}
 	for title, f := range compare() {
-		counted[title] = func(x, y account) int { calls++; return f(x, y) }
+		counted[title] = func(x, y *account) int { calls++; return f(x, y) }
 	}
 	a.view = ui.NewTableView(counted)
 	a.sort = ui.SortOrder{Column: "Bạn bè"}
@@ -373,9 +373,9 @@ func TestNewAppShowsOnlyItsFolder(t *testing.T) {
 func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
 	a := newApp(10_000)
 	calls := 0
-	counted := map[string]func(x, y account) int{}
+	counted := map[string]func(x, y *account) int{}
 	for title, f := range compare() {
-		counted[title] = func(x, y account) int { calls++; return f(x, y) }
+		counted[title] = func(x, y *account) int { calls++; return f(x, y) }
 	}
 	a.view = ui.NewTableView(counted)
 	a.sort = ui.SortOrder{Column: "Bạn bè"}

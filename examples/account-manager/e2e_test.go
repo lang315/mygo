@@ -93,7 +93,7 @@ type live struct {
 	t       *testing.T
 	tt      *tester
 	a       *app
-	compare map[string]func(a, b account) int
+	compare map[string]func(a, b *account) int
 	rnd     *rand.Rand
 	r       *runner
 	every   int // the ticks between two checks of the order: each sorts all rows
@@ -167,16 +167,16 @@ func (e *live) want() []int {
 	keep := keep(a.filtered)
 	var rows []int
 	for i := range a.s.accounts {
-		if keep(a.s.accounts[i]) {
+		if keep(&a.s.accounts[i]) {
 			rows = append(rows, i)
 		}
 	}
 	if f := e.compare[a.sort.Column]; f != nil {
 		slices.SortStableFunc(rows, func(i, j int) int {
 			if a.sort.Descending {
-				return f(a.s.accounts[j], a.s.accounts[i])
+				return f(&a.s.accounts[j], &a.s.accounts[i])
 			}
-			return f(a.s.accounts[i], a.s.accounts[j])
+			return f(&a.s.accounts[i], &a.s.accounts[j])
 		})
 	}
 	return rows

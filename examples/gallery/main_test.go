@@ -131,3 +131,22 @@ func TestOverviewCounter(t *testing.T) {
 		}
 	}
 }
+
+// The Table card's search keeps the files whose names contain it.
+func TestTableSearch(t *testing.T) {
+	g := &gallery{router: ui.NewRouter("/list"), picked: -1, tree: map[string]bool{}, starred: map[int]bool{}}
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Scroll(c).Fill().Children(func() { g.list(c) })
+	}, 980, 4000)
+	if err := tt.Click("Search files"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("file-000042.")
+	tt.Frame()
+	if n := g.tableView.Len(); n != 1 {
+		t.Fatalf("%d files shown, want 1", n)
+	}
+	if id := g.tableFiles[g.tableView.Row(0)].id; id != 42 {
+		t.Fatalf("file %d shown, want 42", id)
+	}
+}

@@ -148,9 +148,9 @@ func (a *app) filter() {
 }
 
 // keep tells whether an account is in the folder of s and s finds it.
-func keep(s search) func(account) bool {
+func keep(s search) func(*account) bool {
 	match := matcher(columnIndex(s.column), s.keyword)
-	return func(x account) bool { return x.Folder == s.folder && match(x) }
+	return func(x *account) bool { return x.Folder == s.folder && match(x) }
 }
 
 func (a *app) table(c *ui.Context) {

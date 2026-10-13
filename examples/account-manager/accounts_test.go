@@ -42,7 +42,7 @@ func TestMatcher(t *testing.T) {
 		{colUID, " 100000000000123 | |999 ", true},
 		{colUID, "|", true}, // nothing listed: all
 	} {
-		if got := matcher(tc.col, tc.kw)(*x); got != tc.want {
+		if got := matcher(tc.col, tc.kw)(x); got != tc.want {
 			t.Errorf("matcher(%d, %q) = %v, want %v", tc.col, tc.kw, got, tc.want)
 		}
 	}
@@ -53,13 +53,13 @@ func TestCompareSortsNumbersAndTimesByValue(t *testing.T) {
 	if len(m) != len(columns) {
 		t.Fatalf("%d comparators for %d columns", len(m), len(columns))
 	}
-	if m["Bạn bè"](account{Friends: 9}, account{Friends: 10}) >= 0 {
+	if m["Bạn bè"](&account{Friends: 9}, &account{Friends: 10}) >= 0 {
 		t.Error("9 friends sort after 10, as text does")
 	}
-	if m["Lần chạy cuối"](account{LastRunAt: 99}, account{LastRunAt: 100}) >= 0 {
+	if m["Lần chạy cuối"](&account{LastRunAt: 99}, &account{LastRunAt: 100}) >= 0 {
 		t.Error("an earlier run sorts after a later one")
 	}
-	if m["UID"](account{UID: "1"}, account{UID: "2"}) >= 0 {
+	if m["UID"](&account{UID: "1"}, &account{UID: "2"}) >= 0 {
 		t.Error("UIDs out of order")
 	}
 }

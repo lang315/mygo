@@ -152,16 +152,16 @@ func day(t int64, layout string) string {
 
 // compare orders the rows by each column, for the table's view: by the
 // text shown, but numbers and times by value.
-func compare() map[string]func(a, b account) int {
-	m := make(map[string]func(a, b account) int, len(columns))
+func compare() map[string]func(a, b *account) int {
+	m := make(map[string]func(a, b *account) int, len(columns))
 	for col, c := range columns {
-		m[c.Title] = func(a, b account) int { return strings.Compare(cellText(&a, col), cellText(&b, col)) }
+		m[c.Title] = func(a, b *account) int { return strings.Compare(cellText(a, col), cellText(b, col)) }
 	}
-	m[columns[colLastRun].Title] = func(a, b account) int { return cmp.Compare(a.LastRunAt, b.LastRunAt) }
-	m[columns[colFriends].Title] = func(a, b account) int { return cmp.Compare(a.Friends, b.Friends) }
-	m[columns[colGroups].Title] = func(a, b account) int { return cmp.Compare(a.Groups, b.Groups) }
-	m[columns[colCreated].Title] = func(a, b account) int { return cmp.Compare(a.CreatedAt, b.CreatedAt) }
-	m[columns[colBackup].Title] = func(a, b account) int { return cmp.Compare(a.BackupAt, b.BackupAt) }
+	m[columns[colLastRun].Title] = func(a, b *account) int { return cmp.Compare(a.LastRunAt, b.LastRunAt) }
+	m[columns[colFriends].Title] = func(a, b *account) int { return cmp.Compare(a.Friends, b.Friends) }
+	m[columns[colGroups].Title] = func(a, b *account) int { return cmp.Compare(a.Groups, b.Groups) }
+	m[columns[colCreated].Title] = func(a, b *account) int { return cmp.Compare(a.CreatedAt, b.CreatedAt) }
+	m[columns[colBackup].Title] = func(a, b *account) int { return cmp.Compare(a.BackupAt, b.BackupAt) }
 	return m
 }
 
@@ -228,7 +228,7 @@ func generate(n, first int, seed uint64) []account {
 // another matches the values containing it, case aside. A keyword
 // listing nothing keeps all. It takes an account by value: through a
 // function value, a pointer to one would move it to the heap, at every row.
-func matcher(col int, keyword string) func(a account) bool {
+func matcher(col int, keyword string) func(a *account) bool {
 	keyword = strings.TrimSpace(keyword)
 	if strings.Contains(keyword, "|") {
 		set := map[string]bool{}
@@ -238,13 +238,13 @@ func matcher(col int, keyword string) func(a account) bool {
 			}
 		}
 		if len(set) > 0 {
-			return func(a account) bool { return set[cellText(&a, col)] }
+			return func(a *account) bool { return set[cellText(a, col)] }
 		}
 		keyword = ""
 	}
 	if keyword == "" {
-		return func(account) bool { return true }
+		return func(*account) bool { return true }
 	}
 	kw := strings.ToLower(keyword)
-	return func(a account) bool { return strings.Contains(strings.ToLower(cellText(&a, col)), kw) }
+	return func(a *account) bool { return strings.Contains(strings.ToLower(cellText(a, col)), kw) }
 }

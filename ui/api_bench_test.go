@@ -89,8 +89,8 @@ func BenchmarkTableFrame100k(b *testing.B) {
 	for i := range rows {
 		rows[i] = account{id: i, status: i % 7, name: fmt.Sprintf("acc%06d", i)}
 	}
-	view := ui.NewTableView(map[string]func(a, b account) int{
-		"Status": func(a, b account) int { return cmp.Compare(a.status, b.status) },
+	view := ui.NewTableView(map[string]func(a, b *account) int{
+		"Status": func(a, b *account) int { return cmp.Compare(a.status, b.status) },
 	})
 	var list ui.ListState
 	var checked ui.Selection[int]

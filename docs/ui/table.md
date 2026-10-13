@@ -214,8 +214,10 @@ in every frame would not do. A `ui.TableView[T]` keeps the order of your rows
 between frames and updates it for the rows that changed. You keep the rows;
 the view only says which row to show at each place. `NewTableView` takes a
 comparator for each sortable column, by its `ID` (its title by default); a
-column without one shows the rows in the slice's order. Use the view on the
-main thread only.
+column without one shows the rows in the slice's order. Comparators and the
+filter get pointers to rows of your slice, which spares copying a large row
+at each comparison; they must not change the rows nor keep the pointers.
+Use the view on the main thread only.
 
 Call `Sync` in every frame: it costs nothing when nothing changed, places
 again only the rows changed or appended, and sorts all of them when the sort,
@@ -223,9 +225,9 @@ the filter or the slice changed. Give the table the view's `Len`, and read
 rows through `Row`:
 
 ```go
-app.view = ui.NewTableView(map[string]func(a, b Account) int{
-	"Name":   func(a, b Account) int { return strings.Compare(a.Name, b.Name) },
-	"Status": func(a, b Account) int { return cmp.Compare(a.Status, b.Status) },
+app.view = ui.NewTableView(map[string]func(a, b *Account) int{
+	"Name":   func(a, b *Account) int { return strings.Compare(a.Name, b.Name) },
+	"Status": func(a, b *Account) int { return cmp.Compare(a.Status, b.Status) },
 })
 
 app.view.Sync(app.accounts, app.sort)
@@ -256,7 +258,7 @@ about half again as much while a filter hides rows.
 ```go
 if ui.SearchField(c, &app.keyword).Label("Search accounts").Changed() {
 	kw := app.keyword
-	app.view.SetFilter(func(a Account) bool { return strings.Contains(a.Name, kw) })
+	app.view.SetFilter(func(a *Account) bool { return strings.Contains(a.Name, kw) })
 	app.checked.Clear()
 }
 ```
