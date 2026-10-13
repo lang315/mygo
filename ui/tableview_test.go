@@ -2,6 +2,7 @@ package ui
 
 import (
 	"cmp"
+	"math"
 	"math/rand/v2"
 	"slices"
 	"strconv"
@@ -147,6 +148,84 @@ func TestTableViewVersion(t *testing.T) {
 	v.Sync(rows, sort)
 	if v.Version() == ver {
 		t.Error("a change of order kept the version")
+	}
+}
+
+func TestTableViewDescendingWithExtremeComparator(t *testing.T) {
+	// -math.MinInt is math.MinInt: negating this comparator's result fails.
+	extreme := map[string]func(x, y tvRow) int{"a": func(x, y tvRow) int {
+		if x.a < y.a {
+			return math.MinInt
+		}
+		if x.a > y.a {
+			return math.MaxInt
+		}
+		return 0
+	}}
+	rows := []tvRow{{a: 2}, {a: 5}, {a: 1}, {a: 5}, {a: 3}}
+	v := NewTableView(extreme)
+	v.Sync(rows, SortOrder{Column: "a", Descending: true})
+	// Rows equal keep the slice's order.
+	if got, want := tvGot(v), []int{1, 3, 4, 0, 2}; !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	rows[2].a = 9
+	v.Changed(2)
+	v.Sync(rows, SortOrder{Column: "a", Descending: true})
+	if got, want := tvGot(v), []int{2, 1, 3, 4, 0}; !slices.Equal(got, want) {
+		t.Fatalf("after a change: got %v, want %v", got, want)
+	}
+}
+
+func TestTableViewChangedPlacesIncrementally(t *testing.T) {
+	var calls int
+	counting := map[string]func(x, y tvRow) int{"a": func(x, y tvRow) int {
+		calls++
+		return cmp.Compare(x.a, y.a)
+	}}
+	rows := tvBenchRows(10_000)
+	v := NewTableView(counting)
+	sort := SortOrder{Column: "a"}
+	v.Sync(rows, sort)
+	if calls < 100_000 {
+		t.Fatalf("a full sort made %d comparisons, expected over 100,000", calls)
+	}
+	calls = 0
+	rows[1].a = 5000
+	v.Changed(1)
+	v.Sync(rows, sort)
+	if calls >= 200 {
+		t.Errorf("placing one changed row made %d comparisons, want fewer than 200", calls)
+	}
+	if got, want := tvGot(v), tvWant(rows, sort, nil); !slices.Equal(got, want) {
+		t.Error("the incremental placement is not the sorted order")
+	}
+}
+
+func TestTableViewVersionOfFilters(t *testing.T) {
+	rows := []tvRow{{a: 1, b: 1}, {a: 2, b: 2}, {a: 3, b: 3}}
+	v := NewTableView(tvCompare)
+	sort := SortOrder{Column: "a"}
+	v.Sync(rows, sort)
+	ver := v.Version()
+	v.SetFilter(func(x tvRow) bool { return x.b < 3 })
+	v.Sync(rows, sort)
+	if v.Version() == ver {
+		t.Error("a filter hiding a row kept the version")
+	}
+	ver = v.Version()
+	rows[2].b = 1 // enters the filter
+	v.Changed(2)
+	v.Sync(rows, sort)
+	if v.Version() == ver || v.Len() != 3 {
+		t.Errorf("a row entering the filter: version kept or Len %d, want 3", v.Len())
+	}
+	ver = v.Version()
+	rows[0].b = 9 // leaves it
+	v.Changed(0)
+	v.Sync(rows, sort)
+	if v.Version() == ver || v.Len() != 2 {
+		t.Errorf("a row leaving the filter: version kept or Len %d, want 2", v.Len())
 	}
 }
 

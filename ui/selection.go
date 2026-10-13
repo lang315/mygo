@@ -37,6 +37,9 @@ func (s *Selection[K]) Len() int { return len(s.keys) }
 
 // Add chooses the row of key k.
 func (s *Selection[K]) Add(k K) {
+	if s.Has(k) {
+		return
+	}
 	s.gen++
 	if s.keys == nil {
 		s.keys = map[K]struct{}{}
@@ -46,12 +49,18 @@ func (s *Selection[K]) Add(k K) {
 
 // Remove takes the row of key k out of the choice.
 func (s *Selection[K]) Remove(k K) {
+	if !s.Has(k) {
+		return
+	}
 	s.gen++
 	delete(s.keys, k)
 }
 
 // Clear chooses no row.
 func (s *Selection[K]) Clear() {
+	if len(s.keys) == 0 {
+		return
+	}
 	s.gen++
 	clear(s.keys)
 }

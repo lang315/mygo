@@ -359,3 +359,26 @@ func TestListTypeRightAfterAClick(t *testing.T) {
 		t.Errorf("a click on Apple, then c, chose %d", sel)
 	}
 }
+
+func TestSelectionGenerationChangesWithTheSet(t *testing.T) {
+	var sel Selection[int]
+	gen := sel.generation()
+	step := func(name string, changes bool, do func()) {
+		t.Helper()
+		before := sel.generation()
+		do()
+		if changed := sel.generation() != before; changed != changes {
+			t.Errorf("%s: generation changed is %v, want %v", name, changed, changes)
+		}
+	}
+	step("Clear of an empty set", false, sel.Clear)
+	step("Remove of an absent key", false, func() { sel.Remove(1) })
+	step("Add of a new key", true, func() { sel.Add(1) })
+	step("Add of a present key", false, func() { sel.Add(1) })
+	step("Remove of a present key", true, func() { sel.Remove(1) })
+	sel.Add(2)
+	step("Clear of a set", true, sel.Clear)
+	if sel.generation() <= gen {
+		t.Error("the generation did not increase")
+	}
+}

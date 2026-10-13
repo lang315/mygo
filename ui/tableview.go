@@ -30,7 +30,9 @@ type TableView[T any] struct {
 	// perm holds the rows shown, by index into the slice; out, spare and
 	// ins are buffers merges reuse.
 	perm, out, spare, ins []int
-	// dirty are the rows the app changed since, mark those among them.
+	// dirty are the rows of the slice the app changed (or appended) since
+	// the last Sync; mark is the scratch set merge uses to drop them from
+	// the order and count each once.
 	dirty   []int
 	mark    []bool
 	reset   bool
@@ -103,9 +105,13 @@ func (v *TableView[T]) order(rows []T) func(i, j int) int {
 	}
 	desc := v.sort.Descending
 	return func(i, j int) int {
-		d := f(rows[i], rows[j])
+		// Descending swaps the arguments: negating a result of
+		// math.MinInt would overflow.
+		var d int
 		if desc {
-			d = -d
+			d = f(rows[j], rows[i])
+		} else {
+			d = f(rows[i], rows[j])
 		}
 		if d != 0 {
 			return d
