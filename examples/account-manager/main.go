@@ -6,7 +6,11 @@
 //	go run ./examples/account-manager
 //	go run ./examples/account-manager -rows 1000000
 //
-// MYGO_FRAME_STATS=8 logs the frames slower than 8 ms.
+// MYGO_FRAME_STATS=8 logs the frames slower than 8 ms. -stress changes
+// that many rows a second, as a busy run would, and logs how the app
+// keeps up once a second, as -stats does without it:
+//
+//	go run ./examples/account-manager -stress 10000
 package main
 
 import (
@@ -39,6 +43,8 @@ type app struct {
 	loops, threads  float64
 	run             *runner // the run going on, nil when none
 	stopping        bool
+	stress          *runner // the stress run going on, nil when none
+	stats           *stats  // what -stats logs, nil without it
 	// update runs fn on the main thread, then builds a frame:
 	// Window.Update, or a test's.
 	update func(fn func())
@@ -51,6 +57,13 @@ func newApp(rows int) *app {
 }
 
 func (a *app) build(c *ui.Context) {
+	if a.stats != nil {
+		start := time.Now()
+		defer func() {
+			a.stats.frame(start, time.Now())
+			a.logStats()
+		}()
+	}
 	ui.Column(c).Fill().Padding(10).Gap(10).Children(func() {
 		a.toolbar(c)
 		a.table(c)
@@ -286,6 +299,19 @@ func (a *app) start(c *ui.Context) {
 	}
 	r := run(ids, int(a.loops), int(a.threads), fakeWork(a.action))
 	a.run, a.stopping = r, false
+	a.follow(r, func() { a.run, a.stopping = nil, false })
+}
+
+// startStress changes rate rows a second until a.stress is cancelled.
+func (a *app) startStress(rate int) {
+	r := stress(a.s.nextID, rate, 2)
+	a.stress = r
+	a.follow(r, func() { a.stress = nil })
+}
+
+// follow applies r's results to the rows ten times a second, then, once r
+// is done, runs end on the main thread.
+func (a *app) follow(r *runner, end func()) {
 	go func() {
 		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
@@ -296,7 +322,7 @@ func (a *app) start(c *ui.Context) {
 			case <-r.done:
 				a.update(func() {
 					a.apply(r)
-					a.run, a.stopping = nil, false
+					end()
 				})
 				return
 			}
@@ -306,7 +332,9 @@ func (a *app) start(c *ui.Context) {
 
 // apply shows the results r's workers gave since the last batch.
 func (a *app) apply(r *runner) {
-	for _, res := range r.take() {
+	start := time.Now()
+	batch := r.take()
+	for _, res := range batch {
 		i, ok := a.s.index[res.id]
 		if !ok {
 			continue // deleted meanwhile
@@ -316,17 +344,40 @@ func (a *app) apply(r *runner) {
 		if res.at != 0 {
 			x.LastRunAt, x.IP = res.at, res.ip
 		}
+		x.Friends, x.Groups = max(0, x.Friends+res.friends), max(0, x.Groups+res.groups)
+		if res.note != "" {
+			x.Note = res.note
+		}
 		a.view.Changed(i)
+	}
+	if a.stats != nil {
+		a.stats.applied(len(batch), time.Since(start))
+		a.logStats()
+	}
+}
+
+// logStats logs the line of the second just ended, if one did.
+func (a *app) logStats() {
+	if line := a.stats.flush(time.Now(), a); line != "" {
+		log.Print(line)
 	}
 }
 
 func main() {
 	rows := flag.Int("rows", 100_000, "how many accounts to make")
+	rate := flag.Int("stress", 0, "how many rows to change a second, as a busy run would")
+	logStats := flag.Bool("stats", false, "log how the app keeps up once a second")
 	flag.Parse()
 	a := newApp(*rows)
+	if *logStats || *rate > 0 {
+		a.stats = newStats(time.Now())
+	}
 	mygo.App.WhenReady(func() {
 		w := mygo.NewWindow(mygo.WindowOptions{Title: "Quản lý tài khoản", Width: 1280, Height: 800, Content: ui.View(a.build)})
 		a.update = w.Update
+		if *rate > 0 {
+			a.startStress(*rate)
+		}
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

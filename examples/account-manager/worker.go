@@ -15,6 +15,10 @@ type result struct {
 	status string
 	at     int64 // when the job ended, 0 while it runs or once stopped
 	ip     string
+	// What a stress run changes besides: friends and groups added, and
+	// the note, when not "".
+	friends, groups int
+	note            string
 }
 
 // runner runs jobs on accounts in goroutines, as fhtool's Start does. The

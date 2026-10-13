@@ -1,6 +1,9 @@
 package main
 
 import (
+	"cmp"
+	"fmt"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"testing"
@@ -50,6 +53,25 @@ func (tt *tester) wait() {
 	for end := time.Now().Add(10 * time.Second); tt.a.run != nil; {
 		if time.Now().After(end) {
 			tt.t.Fatal("the run did not end")
+		}
+		tt.mu.Lock()
+		fns := tt.pending
+		tt.pending = nil
+		tt.mu.Unlock()
+		for _, fn := range fns {
+			fn()
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	tt.Frame()
+}
+
+// waitStress runs the stress run's updates until it ends.
+func (tt *tester) waitStress() {
+	tt.t.Helper()
+	for end := time.Now().Add(10 * time.Second); tt.a.stress != nil; {
+		if time.Now().After(end) {
+			tt.t.Fatal("the stress run did not end")
 		}
 		tt.mu.Lock()
 		fns := tt.pending
@@ -246,4 +268,60 @@ func TestFoldersChangeWhileRunning(t *testing.T) {
 	}
 	a.run.cancel()
 	tt.wait()
+}
+
+func TestApplyAddsTheChanges(t *testing.T) {
+	a := newApp(3)
+	x0 := a.s.accounts[1]
+	r := &runner{done: make(chan struct{})}
+	r.push(result{id: 1, state: running, status: "Đang chạy: bước 2/7", friends: 3, groups: -1, note: "Cập nhật"})
+	r.push(result{id: 2, state: running, status: "Đang chạy: bước 1/7", friends: -1_000_000, groups: -1_000_000})
+	a.apply(r)
+	x := a.s.accounts[1]
+	if x.Friends != x0.Friends+3 || x.Groups != max(0, x0.Groups-1) || x.Note != "Cập nhật" || x.Status != "Đang chạy: bước 2/7" {
+		t.Fatalf("account 1: %+v, was %+v", x, x0)
+	}
+	if y := a.s.accounts[2]; y.Friends != 0 || y.Groups != 0 || y.Note != "" {
+		t.Fatalf("account 2: %+v", y)
+	}
+}
+
+func TestStressShowsInTheTable(t *testing.T) {
+	a := newApp(100)
+	a.stats = newStats(time.Now())
+	tt := newTester(t, a)
+	a.startStress(2000)
+	time.Sleep(300 * time.Millisecond)
+	a.stress.cancel()
+	tt.waitStress()
+	if a.stats.updates+a.stats.total == 0 {
+		t.Fatal("no change applied")
+	}
+	if !tt.HasText("Đang chạy: bước") && !tt.HasText("Thành công") && !tt.HasText("Lỗi: checkpoint") {
+		t.Fatalf("no status shown in %q", tt.Texts())
+	}
+}
+
+// BenchmarkLiveUpdates applies a batch of k changes to 100,000 rows and
+// builds a frame, as a stress run does ten times a second.
+func BenchmarkLiveUpdates(b *testing.B) {
+	for _, sorted := range []string{"", "Bạn bè", "Trạng thái"} {
+		for _, k := range []int{10, 100, 1000} {
+			b.Run(fmt.Sprintf("sort=%s/k=%d", cmp.Or(sorted, "none"), k), func(b *testing.B) {
+				a := newApp(100_000)
+				a.sort = ui.SortOrder{Column: sorted}
+				tt := ui.NewTester(a.build, 1280, 800)
+				rnd := rand.New(rand.NewPCG(1, 2))
+				now := time.Now()
+				r := &runner{done: make(chan struct{})}
+				for b.Loop() {
+					for range k {
+						r.push(change(rnd, 100_000, now))
+					}
+					a.apply(r)
+					tt.Frame()
+				}
+			})
+		}
+	}
 }
