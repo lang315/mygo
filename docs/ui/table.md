@@ -71,8 +71,8 @@ app.files.Key = func(i int) any { return sorted[i].ID }
 ## Renaming in place
 
 An [editable text](editable-text.md) in a cell is renamed in place, as
-Finder's file names: Return on macOS and F2 elsewhere edit the chosen row's
-text, as does a click on it once the row is chosen.
+Finder's file names: Return on macOS and F2 on every platform edit the chosen
+row's text, as does a click on it once the row is chosen.
 
 ```go
 ui.Table(c, &app.files, cols, len(files), func(row, col int) {
@@ -92,8 +92,11 @@ The header's checkbox shows whether none, some or all of the rows shown are
 checked, and a click checks all of them, or unchecks all of them when all are.
 Assistive technology reads it as "Check all".
 The checkboxes do not take the keyboard focus: a click leaves it on the table,
-and Space, while the table has it, checks the rows chosen, or unchecks them
-when all are checked. A row's checkbox reads as "Check", followed by the
+so its keys and Copy keep working, and Space, while the table has it, checks
+the rows chosen, or unchecks them when all are checked. While you type to
+choose a row by its `Label`, Space extends what you type instead: a plain
+Space within a second of the last letter or digit typed adds a space to the
+prefix and checks nothing. A row's checkbox reads as "Check", followed by the
 row's `Label` when the table has one.
 
 ```go
@@ -144,7 +147,9 @@ app.files.RowMenu = func(m *ui.Menu, rows []int) {
 `ListState.Copy` returns the text for the same `rows`: it goes to the
 clipboard on Cmd+C (Ctrl+C on Linux and Windows), or Copy in the Edit menu,
 while the table has the keyboard focus. Nothing is copied when no row is
-chosen, and a text being edited in a cell copies its own. Separate columns
+chosen, and a text being edited in a cell copies its own. When `Copy` returns
+"", the clipboard stays as it was, and holding Cmd+C copies once, not at every
+key repeat. Separate columns
 with tabs, for a spreadsheet to take them in cells:
 
 ```go
@@ -186,6 +191,16 @@ if row, ok := t.Activated(); ok {
 	app.open(row)
 }
 ```
+
+Enter activates the chosen row, with one exception: on macOS, Return renames
+the chosen row's `EditableText` in place (see
+[Renaming in place](#renaming-in-place)), so there it activates the row only
+in a table without one. F2 renames on every platform.
+
+A table that does not choose rows (no `Selected`, no `Selection`) makes its
+rows take clicks, so a double click on a row reports `Activated`, though not
+`Submitted`. A click on a row then no longer reaches the table's own `Clicked`
+or `OnClick`.
 
 A column fitted by a double click on its header's edge reports
 `ColumnsChanged` in the frame after the fit. `Changed` still reports a new

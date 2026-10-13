@@ -10,7 +10,6 @@ They were taken on October 8, 2026 on Apple M5, macOS arm64, Go 1.27.1, with
 | 1,000 static labels | 397 µs | 0 | 0 |
 | Visible rows of a million-row list | 14.5 µs | 20 | 176 |
 | Diff view with no changes | 389 µs | 2 | 72 |
-| Table of 100,000 rows with checkboxes, sorted by a `TableView` (Apple M1 Pro) | 110 µs | 204 | 5,781 |
 
 Element handles validate their owner, arena slot and build generation.
 Static label handles do not allocate. Input bindings, action queues and
@@ -29,9 +28,15 @@ that grows with the rows. It allocates more than the list, as each row in
 view builds a checkbox (about three allocations: its state and two
 closures) and a cell per column.
 
-The table fixture's row above and these `TableView` numbers for 100,000
-rows were measured on another machine than the rows before them: an Apple
-M1 Pro, macOS arm64, Go 1.27.2, with the settings above.
+The numbers below were measured on another machine than the first table:
+an Apple M1 Pro, macOS arm64, Go 1.27.2, with the same settings
+(`CGO_ENABLED=0 GOMAXPROCS=1`, medians of six 300 ms samples).
+
+| Fixture (Apple M1 Pro) | Time per frame | Allocations per frame | Allocated bytes per frame |
+|---|---:|---:|---:|
+| Table of 100,000 rows with checkboxes, sorted by a `TableView` | 110 µs | 204 | 5,781 |
+
+For 100,000 rows, the `TableView` itself takes:
 
 | Operation | Time | Allocations |
 |---|---:|---:|
