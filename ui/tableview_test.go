@@ -318,6 +318,34 @@ func TestTableViewFilterDoesNotSortAgain(t *testing.T) {
 	}
 }
 
+// TestTableViewFilterAfterFilterSortsNothing is an app that filters from
+// its first Sync, by a filter keeping most rows (its folder's).
+func TestTableViewFilterAfterFilterSortsNothing(t *testing.T) {
+	var calls int
+	rows := tvBenchRows(10_000)
+	v := NewTableView(countingCompare(&calls))
+	sort := SortOrder{Column: "a"}
+	v.SetFilter(func(x tvRow) bool { return x.b < 6 })
+	v.Sync(rows, sort)
+	for _, step := range []struct {
+		name string
+		keep func(tvRow) bool
+	}{
+		{"a narrower filter", func(x tvRow) bool { return x.b < 3 }},
+		{"no filter", nil},
+	} {
+		calls = 0
+		v.SetFilter(step.keep)
+		v.Sync(rows, sort)
+		if calls != 0 {
+			t.Errorf("%s: %d comparisons, want none", step.name, calls)
+		}
+		if got, want := tvGot(v), tvWant(rows, sort, step.keep); !slices.Equal(got, want) {
+			t.Fatalf("%s: got %v, want %v", step.name, got, want)
+		}
+	}
+}
+
 func TestTableViewClearFilterAfterChanges(t *testing.T) {
 	var calls int
 	rows := slices.Grow(tvBenchRows(10_000), 16) // appends keep the array

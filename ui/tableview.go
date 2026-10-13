@@ -139,9 +139,11 @@ func (v *TableView[T]) order(rows []T) func(i, j int) int {
 	}
 }
 
-// rebuild places all rows, by the filter given last. It sorts only the
-// rows shown: the order of all of them, while a filter hides some, comes
-// back with the next rebuild without one.
+// rebuild places all rows, by the filter given last. It sorts the rows
+// shown, or all of them when a filter keeps more than half: sorting those
+// costs at most about twice as much, and their order lets the next filter
+// sort none again. After a narrower filter, the order of all rows comes
+// back with the next rebuild.
 func (v *TableView[T]) rebuild(rows []T, sort SortOrder) {
 	if v.newFilter {
 		v.keep, v.next, v.newFilter = v.next, nil, false
@@ -154,10 +156,34 @@ func (v *TableView[T]) rebuild(rows []T, sort SortOrder) {
 			out = append(out, i)
 		}
 	}
-	if v.compare[sort.Column] != nil {
+	sorted := v.compare[sort.Column] != nil
+	v.full, v.hasAll = v.keep == nil, false
+	switch {
+	case !v.full && len(out) > len(rows)/2:
+		v.all = v.all[:0]
+		for i := range rows {
+			v.all = append(v.all, i)
+		}
+		if sorted {
+			slices.SortFunc(v.all, v.order(rows))
+		}
+		if len(v.kept) < len(rows) {
+			v.kept = make([]bool, len(rows))
+		}
+		clear(v.kept)
+		for _, i := range out {
+			v.kept[i] = true
+		}
+		out = out[:0]
+		for _, i := range v.all {
+			if v.kept[i] {
+				out = append(out, i)
+			}
+		}
+		v.hasAll = true
+	case sorted:
 		slices.SortFunc(out, v.order(rows))
 	}
-	v.full, v.hasAll = v.keep == nil, false
 	// A rebuild can yield the order it had: the version then stays.
 	if !slices.Equal(out, v.perm) {
 		v.version++
