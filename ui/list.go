@@ -415,6 +415,8 @@ func (s *ListState) sync(e *node, n int) {
 	reach := s.reach(rt.frame, n)
 	s.heights.def = float64(e.c.theme.Space(8))
 	if s.Key != nil && n > 0 {
+		// Not in the frame Version changed: following the top row after a
+		// re-sort would scroll to wherever it went; the place stays by index.
 		if k := s.anchorKey; k != nil && s.versionFrame != rt.frame {
 			if j, ok := s.find(k, s.anchor, n, listSearch); ok && j != s.anchor {
 				// Rows came or went above it: the heights known move with
@@ -1071,10 +1073,13 @@ func (f *listFrame) checkChosen() {
 		return
 	}
 	all := !slices.ContainsFunc(rows, func(i int) bool { return !checked.has(f.key(i)) })
+	changed := false
 	for _, i := range rows {
-		checked.set(f.key(i), !all)
+		changed = checked.set(f.key(i), !all) || changed
 	}
-	f.owner.st.markEvent(eventChecked)
+	if changed {
+		f.owner.st.markEvent(eventChecked)
+	}
 }
 
 // typed returns the row whose text starts with what was typed, from the

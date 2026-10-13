@@ -228,12 +228,15 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					box.flags &^= flagFocusable
 					table.afterInput(func() {
 						if box.Changed() {
+							changed := false
 							for i := range n {
 								if s.Header == nil || !s.Header(i) {
-									s.Checked.set(s.keyOf(i), all)
+									changed = s.Checked.set(s.keyOf(i), all) || changed
 								}
 							}
-							table.st.markEvent(eventChecked)
+							if changed {
+								table.st.markEvent(eventChecked)
+							}
 						}
 					})
 				})
@@ -299,8 +302,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 						box := checkbox(c, &on, "", false).Label(label)
 						box.flags &^= flagFocusable
 						table.afterInput(func() {
-							if box.Changed() {
-								s.Checked.set(k, on)
+							if box.Changed() && s.Checked.set(k, on) {
 								table.st.markEvent(eventChecked)
 							}
 						})
@@ -330,7 +332,12 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			if len(rows) == 0 {
 				return false
 			}
-			rt.host.writeClipboard(s.Copy(rows))
+			if ev.Repeat {
+				return true
+			}
+			if text := s.Copy(rows); text != "" {
+				rt.host.writeClipboard(text)
+			}
 			return true
 		})
 	}
@@ -383,7 +390,7 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 	} else if drag.id == id && !held {
 		// Released: a click, unless it moved the column.
 		moved := drag.moving
-		*drag = tableDrag{fit: drag.fit, fitted: drag.fitted}
+		*drag = tableDrag{fit: drag.fit}
 		if moved {
 			h.st.clicks = 0
 		}
@@ -524,9 +531,9 @@ func (tf *tableFit) apply() {
 		tf.layout.Widths = maps.Clone(tf.layout.Widths)
 	}
 	tf.layout.Widths[tf.id] = w
+	tf.drag.fitted = true
 	// Layout runs inside a frame, where requestFrame does nothing: ask for the
 	// next one as animations do.
-	tf.drag.fitted = true
 	tf.rt.animating = true
 }
 

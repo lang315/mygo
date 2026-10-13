@@ -545,7 +545,10 @@ func (rt *engine) keyDown(mods Modifiers, key Key, repeat bool) bool {
 		rt.requestFrame()
 		return false
 	}
-	if s := rt.states[rt.focused]; s != nil && s.flags&flagTypeSelect != 0 && !rt.claimed(k) {
+	// A space inside a prefix being typed extends it, even where plain Space
+	// is a shortcut (a table's checking rows).
+	if s := rt.states[rt.focused]; s != nil && s.flags&flagTypeSelect != 0 &&
+		(key == KeySpace && mods == 0 && s.typed != "" && time.Since(s.typedAt) < typePause || !rt.claimed(k)) {
 		// The first letters of a row of a list: they add up while typed
 		// quickly enough, with spaces once the first came.
 		now := time.Now()

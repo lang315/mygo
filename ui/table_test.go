@@ -804,3 +804,90 @@ func TestTableCheckboxLabels(t *testing.T) {
 		t.Errorf("Space with Label: checked %v", checked.keys)
 	}
 }
+
+func TestTableHeaderCheckboxWithoutRowsToCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		n     int
+		isHdr func(int) bool
+	}{
+		{"no rows", 0, nil},
+		{"only section headers", 3, func(int) bool { return true }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var checked Selection[int]
+			sel := -1
+			s := ListState{Checked: &checked, Selected: &sel, Header: tc.isHdr}
+			events := 0
+			tt := coreNewTester(func(c *context) {
+				e := coreTable(c, &s, []TableColumn{{Title: "Name"}}, tc.n, func(row, col int) { coreText(c, "Row") }).Grow(1)
+				if e.CheckedChanged() {
+					events++
+				}
+			}, 400, 300)
+			tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+			head := accessNode(t, tt.h.access, platform.RoleCheckBox, "Check all")
+			tt.ClickAt(float32(head.Bounds.X+head.Bounds.W/2), float32(head.Bounds.Y+head.Bounds.H/2))
+			if events != 0 || checked.Len() != 0 {
+				t.Errorf("%d CheckedChanged events, checked %v", events, checked.keys)
+			}
+		})
+	}
+}
+
+func TestTableSpaceInTypedPrefix(t *testing.T) {
+	names := []string{"my doc", "my docs", "other"}
+	var checked Selection[int]
+	sel := -1
+	s := ListState{Checked: &checked, Selected: &sel, Label: func(i int) string { return names[i] }}
+	tt := coreNewTester(func(c *context) {
+		coreTable(c, &s, []TableColumn{{Title: "Name"}}, len(names), func(row, col int) { coreText(c, names[row]).SingleLine() }).Grow(1)
+	}, 400, 300)
+	tt.Click("other")
+	tt.Key(0, KeyM)
+	tt.Key(0, KeyY)
+	tt.Key(0, KeySpace)
+	tt.Key(0, KeyD)
+	if sel != 0 || checked.Len() != 0 {
+		t.Fatalf("my d: the choice is %d, checked %v; want 0, none", sel, checked.keys)
+	}
+	for _, k := range []Key{KeyO, KeyC, KeyS} {
+		tt.Key(0, k)
+	}
+	if sel != 1 || checked.Len() != 0 {
+		t.Fatalf("my docs: the choice is %d, checked %v; want 1, none", sel, checked.keys)
+	}
+	// Once the pause is over, Space checks again.
+	tt.rt.states[s.frame.owner.id].typedAt = time.Time{}
+	tt.Key(0, KeySpace)
+	if !checked.Has(1) || checked.Len() != 1 {
+		t.Errorf("Space with no prefix pending checked %v, want row 1", checked.keys)
+	}
+}
+
+func TestTableCopyEdges(t *testing.T) {
+	names := []string{"a.txt", "b.txt"}
+	var chosen Selection[int]
+	sel := -1
+	text, calls := "", 0
+	s := ListState{Selected: &sel, Selection: &chosen, Copy: func(rows []int) string { calls++; return text }}
+	tt := coreNewTester(tableView(&s, []TableColumn{{Title: "Name"}}, names), 400, 300)
+	tt.Click("a.txt")
+	tt.SetClipboard("before")
+	tt.Key(Cmd, KeyC)
+	if calls != 1 || tt.Clipboard() != "before" {
+		t.Errorf("Copy returning nothing: %d calls, clipboard %q; want 1, \"before\"", calls, tt.Clipboard())
+	}
+	tt.Command("copy")
+	if tt.Clipboard() != "before" {
+		t.Errorf("the Edit menu's Copy returning nothing: clipboard %q", tt.Clipboard())
+	}
+	// A key held down repeats: one copy.
+	text, calls = "a.txt\n", 0
+	for _, repeat := range []bool{false, true, true} {
+		tt.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.Key(KeyC), Mods: platform.Modifiers(Cmd), Repeat: repeat})
+	}
+	if calls != 1 || tt.Clipboard() != "a.txt\n" {
+		t.Errorf("a repeated Cmd+C: %d calls, clipboard %q; want 1, \"a.txt\\n\"", calls, tt.Clipboard())
+	}
+}
