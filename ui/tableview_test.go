@@ -454,6 +454,32 @@ func BenchmarkTableViewResort(b *testing.B) {
 	}
 }
 
+// BenchmarkTableViewChangedFiltered is BenchmarkTableViewChanged under a
+// filter keeping most rows, set before the first Sync: the view then keeps
+// the order of all rows up to date as well as the order shown.
+func BenchmarkTableViewChangedFiltered(b *testing.B) {
+	for _, k := range []int{1, 10, 100} {
+		b.Run("k="+strconv.Itoa(k), func(b *testing.B) {
+			rows := tvBenchRows(100_000)
+			v := NewTableView(tvCompare)
+			sort := SortOrder{Column: "a"}
+			v.SetFilter(func(x tvRow) bool { return x.b < 5 })
+			v.Sync(rows, sort)
+			seq := 0
+			b.ReportAllocs()
+			for b.Loop() {
+				for j := range k {
+					i := (seq*31 + j*977) % len(rows)
+					rows[i].a = (rows[i].a*13 + 7) % len(rows)
+					v.Changed(i)
+				}
+				seq++
+				v.Sync(rows, sort)
+			}
+		})
+	}
+}
+
 // BenchmarkTableViewFilter turns a filter on and off on 100,000 sorted
 // rows, as a search typed and cleared does.
 func BenchmarkTableViewFilter(b *testing.B) {

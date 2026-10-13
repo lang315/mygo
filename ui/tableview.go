@@ -62,10 +62,14 @@ func NewTableView[T any](compare map[string]func(a, b T) int) *TableView[T] {
 
 // SetFilter shows only the rows keep keeps, or all of them for nil, from
 // the next Sync. As functions cannot be compared, that Sync goes through
-// all rows, but it sorts none again: the filter does not change their
-// order, which the view keeps (unless the sort changed or Reset was called
-// meanwhile). Call it when what the filter keeps changes, not in every
-// frame.
+// all rows, so call it when what the filter keeps changes, not in every
+// frame. It sorts none of them again, as a filter does not change their
+// order, which the view keeps; except after a sort under a filter keeping
+// half the rows or fewer (at the first Sync, or after a change of the
+// sort, Reset or another slice): the view then sorted only the rows kept,
+// and the next filter sorts again. While a filter hides rows, the view
+// keeps the order of all of them up to date too, so placing rows changed
+// costs about twice as much.
 func (v *TableView[T]) SetFilter(keep func(T) bool) { v.next, v.newFilter = keep, true }
 
 // Changed tells the view that the rows of the slice at those indices
