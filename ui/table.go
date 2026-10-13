@@ -223,6 +223,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					count, total := checks.counted(s, n)
 					all := total > 0 && count == total
 					box := checkbox(c, &all, "", count > 0).Label("Check all")
+					// Not focusable, as the rows' are: a click leaves the focus on the table
+					// (Copy, the keys), and Tab leaves it in one step; Space checks.
+					box.flags &^= flagFocusable
 					table.afterInput(func() {
 						if box.Changed() {
 							for i := range n {
@@ -289,7 +292,12 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					checkCell(c, RoleCell, checkW, func() {
 						k := s.keyOf(i)
 						on := s.Checked.has(k)
-						box := checkbox(c, &on, "", false).Label("Check")
+						label := "Check"
+						if s.Label != nil {
+							label += " " + s.Label(i)
+						}
+						box := checkbox(c, &on, "", false).Label(label)
+						box.flags &^= flagFocusable
 						table.afterInput(func() {
 							if box.Changed() {
 								s.Checked.set(k, on)

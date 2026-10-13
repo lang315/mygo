@@ -91,6 +91,10 @@ still gets your columns as 0, 1, ... and the user cannot move or resize it.
 The header's checkbox shows whether none, some or all of the rows shown are
 checked, and a click checks all of them, or unchecks all of them when all are.
 Assistive technology reads it as "Check all".
+The checkboxes do not take the keyboard focus: a click leaves it on the table,
+and Space, while the table has it, checks the rows chosen, or unchecks them
+when all are checked. A row's checkbox reads as "Check", followed by the
+row's `Label` when the table has one.
 
 ```go
 app.files.Checked = &app.checked
@@ -153,6 +157,9 @@ app.files.Copy = func(rows []int) string {
 	return strings.Join(lines, "\n")
 }
 ```
+
+`rows` are positions shown, so with a `TableView` (see [Many rows](#many-rows)) read
+`files[view.Row(row)]` instead.
 
 ## Events
 

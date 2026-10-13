@@ -995,6 +995,7 @@ func (f *listFrame) navigate() {
 	}
 	all := multi && o.Shortcut(Cmd, KeyA)
 	flip := multi && !mac && o.Shortcut(Ctrl, KeySpace)
+	check := s.Checked != nil && o.Shortcut(0, KeySpace)
 	in := *sel >= 0 && *sel < n
 	// Enter on macOS, as in Finder, and F2 elsewhere edit the text of the
 	// row chosen in place (EditableText), where it has one.
@@ -1052,11 +1053,28 @@ func (f *listFrame) navigate() {
 	if flip && *sel >= 0 && *sel < n && !f.isHeader(*sel) {
 		f.toggle(*sel)
 	}
+	if check {
+		f.checkChosen()
+	}
 	if o.st.typing && s.Label != nil {
 		if j := f.typed(o.st.typed); j >= 0 {
 			f.choose(j)
 		}
 	}
+}
+
+// checkChosen checks the rows chosen, or unchecks them when all are checked,
+// as Space does in a table with a checkbox column.
+func (f *listFrame) checkChosen() {
+	rows, checked := f.chosenRows(), f.s.Checked
+	if len(rows) == 0 {
+		return
+	}
+	all := !slices.ContainsFunc(rows, func(i int) bool { return !checked.has(f.key(i)) })
+	for _, i := range rows {
+		checked.set(f.key(i), !all)
+	}
+	f.owner.st.markEvent(eventChecked)
 }
 
 // typed returns the row whose text starts with what was typed, from the
