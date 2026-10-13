@@ -57,7 +57,8 @@ func (v *TableView[T]) SetFilter(keep func(T) bool) { v.keep, v.reset = keep, tr
 func (v *TableView[T]) Changed(rows ...int) { v.dirty = append(v.dirty, rows...) }
 
 // Reset has the next Sync place all rows again, as after rows were
-// removed or moved within the slice.
+// removed or moved within the slice: Sync cannot tell when rows removed
+// and others appended bring the slice back to its length.
 func (v *TableView[T]) Reset() { v.reset = true }
 
 // Len returns how many rows the view shows.

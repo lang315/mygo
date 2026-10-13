@@ -95,13 +95,16 @@ type ListState struct {
 	// rows shown are checked; a click checks all of them, or unchecks all
 	// of them when all are. Keys of rows not shown stay as they are: an
 	// app that changes which rows show and wants only those checked clears
-	// it then. CheckedChanged reports a change.
+	// it then, with Clear rather than by assigning a new Selection.
+	// CheckedChanged reports a change.
 	Checked Selector
 	// RowMenu, when set, gives a Table's rows a context menu, which it
 	// fills with the items for rows: the rows chosen, in their order. A
 	// right click on a row not chosen chooses it first; in a table that
-	// does not choose, rows is the row clicked. The menu key and Shift+F10
-	// open it on the rows chosen.
+	// does not choose, rows is the row clicked. The menu key, Shift+F10 and
+	// a right click outside the rows (on a section header, the column
+	// header or the empty room) open it on the rows chosen, and nothing
+	// opens when none is.
 	RowMenu func(m *Menu, rows []int)
 	// Copy, when set, puts the text it returns for rows, the rows chosen
 	// in their order, on the clipboard on Cmd+C (Ctrl+C on Linux and
