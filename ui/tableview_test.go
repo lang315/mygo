@@ -470,8 +470,9 @@ func TestTableViewChangedAndNarrowFilterInOneSync(t *testing.T) {
 }
 
 // The comparator and the filter get pointers into the slice, not to
-// copies: a large row is not copied to compare or keep it. Sync sorts,
-// places changed rows and goes through a new filter, each calling them.
+// copies: a large row is not copied to compare or keep it. Sync sorts both
+// ways, places changed rows and goes through a new filter, each calling
+// them.
 func TestTableViewCallbacksGetRowsInPlace(t *testing.T) {
 	rows := tvBenchRows(100)
 	inRows := func(p *tvRow) bool {
@@ -506,6 +507,8 @@ func TestTableViewCallbacksGetRowsInPlace(t *testing.T) {
 	v.Sync(rows, sort) // places rows 3 and 4
 	v.SetFilter(keep(2))
 	v.Sync(rows, sort) // goes through the new filter
+	sort.Descending = true
+	v.Sync(rows, sort) // sorts the other way
 	if calls == 0 {
 		t.Fatal("no callback was called")
 	}
