@@ -114,6 +114,14 @@ type Options struct {
 	// nothing, as when an app uploads the clipboard's files for a remote
 	// program and pastes their paths instead.
 	OnPaste func(text string) bool
+	// ClipboardWrite lets programs write the clipboard with OSC 52. It is
+	// off by default: a remote host should not fill the clipboard the
+	// user pastes from.
+	ClipboardWrite bool
+	// OnInput sees text typed without a key (an input method's commit,
+	// or every key typing text on Linux) on the main thread, before the
+	// terminal sends it. OnKey does not see that text.
+	OnInput func(text string)
 	// OnKey sees a key press before the terminal encodes it, on the main
 	// thread, and reports whether it took the key; a key taken sends
 	// nothing, neither the text it types nor its release. Unlike a
@@ -215,11 +223,12 @@ func New(opts Options) (*Terminal, error) {
 		TitleChanged: func() { t.events.title = true },
 		RenderHold:   t.renderHold,
 		Clipboard: func(text string, primary bool) bool {
-			if !primary {
-				t.clipOut = append(t.clipOut, text)
-				t.redraw()
+			if primary || !opts.ClipboardWrite {
+				return false
 			}
-			return !primary
+			t.clipOut = append(t.clipOut, text)
+			t.redraw()
+			return true
 		},
 		Size: func() (int, int, int, int) { return t.size.cols, t.size.rows, t.size.cellW, t.size.cellH },
 		Dark: func() bool { return t.curTheme == nil || t.curTheme.dark() },

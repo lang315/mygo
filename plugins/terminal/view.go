@@ -385,6 +385,9 @@ func (v *view) typed(text string) {
 	if p != nil && p.taken {
 		return // the text of a key OnKey took
 	}
+	if on := v.t.opts.OnInput; on != nil && p == nil {
+		on(text)
+	}
 	if p == nil {
 		// Text without a key: of an input method, or every key typing
 		// text on Linux.

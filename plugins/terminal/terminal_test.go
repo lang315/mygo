@@ -922,3 +922,51 @@ func TestOnScrollTakesTheWheel(t *testing.T) {
 		t.Errorf("OnScroll saw %v without alternate scroll", seen)
 	}
 }
+
+// TestOSC52OffByDefault: a program's OSC 52 write reaches the clipboard
+// only with Options.ClipboardWrite.
+func TestOSC52OffByDefault(t *testing.T) {
+	loadLib(t)
+	for _, allow := range []bool{false, true} {
+		term, err := New(Options{Conn: newPipe(), ClipboardWrite: allow})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill() }, 400, 200)
+		term.Feed([]byte("\x1b]52;c;aGVsbG8=\x07")) // "hello"
+		tt.Frame()
+		tt.Frame()
+		want := ""
+		if allow {
+			want = "hello"
+		}
+		if got := tt.Clipboard(); got != want {
+			t.Errorf("ClipboardWrite=%v: clipboard %q, want %q", allow, got, want)
+		}
+		term.Close()
+	}
+}
+
+// TestOnInputSeesCommittedText: Options.OnInput sees text an input method
+// commits, before it is sent.
+func TestOnInputSeesCommittedText(t *testing.T) {
+	loadLib(t)
+	conn := newPipe()
+	var seen []string
+	term, err := New(Options{Conn: conn, OnInput: func(text string) { seen = append(seen, text) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill().AutoFocus() }, 400, 200)
+	tt.Frame()
+	tt.Compose("tiê", 3)
+	tt.Type("tiếng")
+	tt.Frame()
+	if got := conn.take(len("tiếng")); got != "tiếng" {
+		t.Errorf("sent %q", got)
+	}
+	if !slices.Equal(seen, []string{"tiếng"}) {
+		t.Errorf("OnInput saw %q", seen)
+	}
+}
