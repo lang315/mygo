@@ -944,7 +944,7 @@ func (g *gallery) list(c *ui.Context) {
 		open(rows[at])
 	}
 	g.chatCard(c)
-	ui.Row(c).Gap(18).AlignItems(ui.Stretch).Height(260).Children(func() {
+	ui.Row(c).Gap(18).AlignItems(ui.Stretch).Height(420).Children(func() {
 		card(c, "Tree", func() {
 			item := func(path, label string, children func()) {
 				var open *bool
