@@ -382,3 +382,21 @@ func TestSelectionGenerationChangesWithTheSet(t *testing.T) {
 		t.Error("the generation did not increase")
 	}
 }
+
+func TestListShiftExtendsFromTheRowTheKeysMovedTo(t *testing.T) {
+	names := []string{"r0", "r1", "r2", "r3", "r4", "r5"}
+	cols := []TableColumn{{Title: "Name"}}
+	var chosen Selection[int]
+	sel := -1
+	// With keys, the pivot must move with the keys, not go back to the
+	// row it had in the last frame.
+	s := ListState{Selected: &sel, Selection: &chosen, Key: func(i int) any { return i + 100 }}
+	tt := coreNewTester(tableView(&s, cols, names), 500, 400)
+	tt.Click("r2")
+	tt.Key(0, KeyDown)
+	tt.Key(0, KeyDown)
+	tt.ClickWith(Shift, "r1")
+	if got := slices.Sorted(chosen.All()); !slices.Equal(got, []int{101, 102, 103, 104}) {
+		t.Errorf("Shift-click on r1 after Down from r2 to r4 chose %v, want [101 102 103 104]", got)
+	}
+}

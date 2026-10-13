@@ -153,8 +153,10 @@ type ListState struct {
 	selKey any
 	// lead is the row last chosen in a list choosing several without
 	// Selected. Shift chooses the rows from pivot, whose key is pivotKey,
-	// and chose those from it to pivot+span last.
+	// and chose those from it to pivot+span last. pivotRow is the pivot
+	// in the last frame, to tell the keys moving it from rows moving.
 	lead, pivot, span int
+	pivotRow          int
 	pivotKey          any
 
 	header listHeader
@@ -406,7 +408,7 @@ func (s *ListState) sync(e *node, n int) {
 	if !s.started {
 		s.started = true
 		s.following = s.FollowEnd
-		s.selRow, s.lead, s.pivot = -1, -1, -1
+		s.selRow, s.lead, s.pivot, s.pivotRow = -1, -1, -1, -1
 		s.header.row = -1
 	}
 	if s.Version != s.version {
@@ -435,12 +437,12 @@ func (s *ListState) sync(e *node, n int) {
 			}
 			*sel, s.selRow = j, j
 		}
-		if s.pivotKey != nil {
+		if s.pivotKey != nil && s.pivot == s.pivotRow {
 			j, ok := s.find(s.pivotKey, s.pivot, n, reach)
 			if !ok {
 				j = -1
 			}
-			s.pivot = j
+			s.pivot, s.pivotRow = j, j
 		}
 	}
 	if n != s.heights.n {
@@ -1423,6 +1425,7 @@ func (s *ListState) remember(e *node, first, last int, atEnd bool, scroll float6
 			s.selKey = s.Key(*sel)
 		}
 	}
+	s.pivotRow = s.pivot
 	if s.Key != nil && s.Selection != nil && s.pivot >= 0 && s.pivot < n {
 		s.pivotKey = s.Key(s.pivot)
 	}
