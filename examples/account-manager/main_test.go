@@ -283,27 +283,51 @@ func TestStressShowsInTheTable(t *testing.T) {
 	}
 }
 
-// BenchmarkLiveUpdates applies a batch of k changes to 100,000 rows and
-// builds a frame, as a stress run does ten times a second.
+// BenchmarkLiveUpdates applies a batch of k changes to n rows and builds a
+// frame, as a stress run does ten times a second. At a million rows only
+// the batch of a run of 10,000 changes a second is measured.
 func BenchmarkLiveUpdates(b *testing.B) {
-	for _, sorted := range []string{"", "Bạn bè", "Trạng thái"} {
-		for _, k := range []int{10, 100, 1000} {
-			b.Run(fmt.Sprintf("sort=%s/k=%d", cmp.Or(sorted, "none"), k), func(b *testing.B) {
-				a := newApp(100_000)
-				a.sort = ui.SortOrder{Column: sorted}
-				tt := ui.NewTester(a.build, 1280, 800)
-				rnd := rand.New(rand.NewPCG(1, 2))
-				now := time.Now()
-				r := &runner{done: make(chan struct{})}
-				for b.Loop() {
-					for range k {
-						r.push(change(rnd, 100_000, now))
-					}
-					a.apply(r)
-					tt.Frame()
+	for _, n := range []int{100_000, 1_000_000} {
+		for _, sorted := range []string{"", "Bạn bè", "Trạng thái"} {
+			for _, k := range []int{10, 100, 1000} {
+				if n > 100_000 && k != 1000 {
+					continue
 				}
-			})
+				b.Run(fmt.Sprintf("rows=%d/sort=%s/k=%d", n, cmp.Or(sorted, "none"), k), func(b *testing.B) {
+					a := newApp(n)
+					a.sort = ui.SortOrder{Column: sorted}
+					tt := ui.NewTester(a.build, 1280, 800)
+					rnd := rand.New(rand.NewPCG(1, 2))
+					now := time.Now()
+					r := &runner{done: make(chan struct{})}
+					for b.Loop() {
+						for range k {
+							r.push(change(rnd, n, now))
+						}
+						a.apply(r)
+						tt.Frame()
+					}
+				})
+			}
 		}
+	}
+}
+
+// BenchmarkSearch searches a million rows sorted by Bạn bè for "77" in
+// their UIDs, then clears the search: each goes through all rows once.
+func BenchmarkSearch(b *testing.B) {
+	a := newApp(1_000_000)
+	a.sort = ui.SortOrder{Column: "Bạn bè"}
+	a.view.Sync(a.s.accounts, a.sort)
+	on := false
+	for b.Loop() {
+		if on = !on; on {
+			a.keyword = "77"
+		} else {
+			a.keyword = ""
+		}
+		a.filter()
+		a.view.Sync(a.s.accounts, a.sort)
 	}
 }
 
