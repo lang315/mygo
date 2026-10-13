@@ -15,8 +15,10 @@ func TestGenerateIsTheSameForASeed(t *testing.T) {
 		if x.ID != i || x.Folder != 0 {
 			t.Fatalf("account %d has ID %d, folder %d", i, x.ID, x.Folder)
 		}
-		if uids[x.UID] {
-			t.Fatalf("UID %s twice", x.UID)
+		// One in a thousand repeats the UID before it, for Lọc trùng UID
+		// to find; the others differ.
+		if dup := i%1000 == 500; dup != uids[x.UID] {
+			t.Fatalf("account %d: UID %s seen before: %v", i, x.UID, uids[x.UID])
 		}
 		uids[x.UID] = true
 	}

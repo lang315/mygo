@@ -168,7 +168,8 @@ const (
 )
 
 // generate makes n accounts in folder 0, their IDs counting from first:
-// the same ones for the same seed and first, all their UIDs different.
+// the same ones for the same seed and first, their UIDs different but for
+// one in a thousand.
 func generate(n, first int, seed uint64) []account {
 	r := rand.New(rand.NewPCG(seed, uint64(first)))
 	pick := func(chars string, n int) string {
@@ -181,8 +182,13 @@ func generate(n, first int, seed uint64) []account {
 	out := make([]account, n)
 	for i := range out {
 		id := first + i
-		// IDs apart by 7919 keep the UIDs apart.
+		// IDs apart by 7919 keep the UIDs apart, but for one in a thousand
+		// that repeats the UID before it, as an account imported twice, for
+		// Lọc trùng UID to find.
 		uid := strconv.Itoa(100000000000000 + id*7919 + r.IntN(7919))
+		if id%1000 == 500 && i > 0 {
+			uid = out[i-1].UID
+		}
 		a := account{
 			ID:        id,
 			UID:       uid,

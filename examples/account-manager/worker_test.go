@@ -59,6 +59,7 @@ func TestStopLeavesNoAccountRunning(t *testing.T) {
 func TestRunStartsNoMoreWorkersThanAccounts(t *testing.T) {
 	for _, tc := range []struct{ threads, accounts, want int }{
 		{1_000_000, 3, 3},
+		{1_000_000, 1_000_000, 1000},
 		{10, 100, 10},
 		{1, 0, 1},
 	} {

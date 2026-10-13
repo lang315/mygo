@@ -178,3 +178,72 @@ func TestFilterDoesNotAllocatePerRow(t *testing.T) {
 		t.Fatalf("%v allocations a row", n)
 	}
 }
+
+func TestStartSaysTheRowsCheckedAreHidden(t *testing.T) {
+	a := newApp(100)
+	tt := newTester(t, a)
+	tt.do(tt.Click("Check " + a.s.accounts[0].UID))
+	a.keyword = a.s.accounts[1].UID
+	a.filter()
+	tt.Frame()
+	a.action = "Backup"
+	tt.do(tt.Click("Start"))
+	if a.run != nil {
+		t.Fatal("a run started on rows the search hides")
+	}
+	tt.want("Các dòng đã chọn đang bị ẩn bởi tìm kiếm!")
+}
+
+func TestAddedAccountShowsInTheOrderSorted(t *testing.T) {
+	a := newApp(100)
+	tt := newTester(t, a)
+	a.sort = ui.SortOrder{Column: "Bạn bè"} // its header is out of view
+	tt.Frame()
+	tt.do(tt.Click("Thêm tài khoản"))
+	tt.want("Tổng số dòng: 101")
+	x := a.s.accounts[100]
+	for i := range a.view.Len() {
+		if a.view.Row(i) == 100 {
+			if i > 0 && a.s.accounts[a.view.Row(i-1)].Friends > x.Friends {
+				t.Fatalf("the account added is out of order at %d", i)
+			}
+			return
+		}
+	}
+	t.Fatal("the account added is not shown")
+}
+
+func TestDedupeRemovesTheRepeatedUID(t *testing.T) {
+	a := newApp(1000)
+	tt := newTester(t, a)
+	uid := a.s.accounts[500].UID
+	a.keyword = uid
+	a.filter()
+	tt.Frame()
+	tt.want("Tổng số dòng: 2")
+	tt.do(tt.Click(uid))
+	tt.Key(ui.Shift, ui.KeyDown)
+	tt.want("Số dòng đang bôi đen: 2")
+	tt.do(tt.RightClick(uid))
+	tt.do(tt.ChooseMenuItem("Lọc trùng UID 2 tài khoản"))
+	tt.want("Tổng số dòng: 1")
+	tt.want("Đã lọc 1 tài khoản trùng")
+}
+
+func TestFoldersChangeWhileRunning(t *testing.T) {
+	a := newApp(50)
+	tt := newTester(t, a)
+	tt.do(tt.Click("Check all"))
+	a.action = "Backup"
+	tt.do(tt.Click("Start"))
+	if a.run == nil {
+		t.Fatal("Start did not run")
+	}
+	tt.do(tt.Click("Thêm thư mục"))
+	tt.do(tt.Click("Đổi tên"))
+	if len(a.s.folders) != 4 || a.folder != "Thư mục 3 (đổi tên)" {
+		t.Fatalf("folders %q, showing %q", a.s.names(), a.folder)
+	}
+	a.run.cancel()
+	tt.wait()
+}

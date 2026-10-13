@@ -13,7 +13,7 @@ type result struct {
 	id     int
 	state  state
 	status string
-	at     int64 // when the job ended, 0 while it runs
+	at     int64 // when the job ended, 0 while it runs or once stopped
 	ip     string
 }
 
@@ -76,10 +76,14 @@ func (r *runner) loop(ctx context.Context, ids []int, threads int, work func(ctx
 	wg.Wait()
 }
 
+// maxWorkers caps the goroutines of a run: past it, a batch of results
+// changes so many rows that the view sorts them all again at every tick.
+const maxWorkers = 1000
+
 // workers is how many goroutines run the jobs on accounts: threads, but
-// no more than there are accounts, for "Số luồng" at 1,000,000 not to
-// start as many goroutines.
-func workers(threads, accounts int) int { return max(1, min(threads, accounts)) }
+// no more than there are accounts, nor maxWorkers, for "Số luồng" at
+// 1,000,000 not to start as many goroutines.
+func workers(threads, accounts int) int { return max(1, min(threads, accounts, maxWorkers)) }
 
 func (r *runner) push(res result) {
 	r.mu.Lock()

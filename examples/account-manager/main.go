@@ -65,8 +65,8 @@ func (a *app) toolbar(c *ui.Context) {
 	cur, _ := a.s.folderByName(a.folder)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.Button(c, "Thêm tài khoản").Clicked() {
+			// Sync places a row appended, no need to place them all again.
 			a.s.add(cur.ID)
-			a.view.Reset()
 		}
 		ui.Select(c, &a.action, actions).Label("Hành động").Width(190)
 		ui.NumberInput(c, &a.loops, 0, 1_000_000, 1).Label("Số lần lặp").Tooltip("Số lần lặp")
@@ -83,11 +83,13 @@ func (a *app) toolbar(c *ui.Context) {
 		if ui.Select(c, &a.folder, a.s.names()).Label("Thư mục").Width(220).Changed() {
 			a.showFolder()
 		}
-		if ui.Button(c, "Thêm thư mục").Disabled(busy).Clicked() {
+		// Results reach the rows by ID, so only deleting a folder, which
+		// moves its rows, waits for the run to end.
+		if ui.Button(c, "Thêm thư mục").Clicked() {
 			a.folder = a.s.addFolder().Name
 			a.showFolder()
 		}
-		if ui.Button(c, "Đổi tên").Disabled(busy || cur.ID == trash).Clicked() {
+		if ui.Button(c, "Đổi tên").Disabled(cur.ID == trash).Clicked() {
 			a.folder = a.s.renameFolder(cur.ID)
 		}
 		if ui.Button(c, "Xóa thư mục").Disabled(busy || cur.ID == trash).Clicked() {
@@ -214,7 +216,9 @@ func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []int) {
 	m.Separator()
 	if len(ids) > 1 && m.Item(fmt.Sprintf("Lọc trùng UID %d tài khoản", len(ids))).Chosen() {
 		dups := a.s.dedupe(ids)
-		a.gone(c, dups)
+		if len(dups) > 0 {
+			a.gone(c, dups)
+		}
 		c.Toast(fmt.Sprintf("Đã lọc %d tài khoản trùng", len(dups)))
 	}
 	if m.Item(fmt.Sprintf("Xóa %d tài khoản", len(ids))).Chosen() {
@@ -270,6 +274,9 @@ func (a *app) start(c *ui.Context) {
 		}
 	}
 	switch {
+	case len(ids) == 0 && a.checked.Len() > 0:
+		c.Toast("Các dòng đã chọn đang bị ẩn bởi tìm kiếm!")
+		return
 	case len(ids) == 0:
 		c.Toast("Bạn chưa chọn tài khoản nào để chạy!")
 		return
