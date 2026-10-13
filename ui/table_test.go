@@ -423,9 +423,8 @@ func TestTableEvents(t *testing.T) {
 	edge = float32(kind.X+kind.W) - 2
 	tt.ClickAt(edge, y)
 	tt.ClickAt(edge, y)
-	tt.Frame()
-	if !slices.Contains(seen, "columns") {
-		t.Errorf("fitting a column: saw %q", seen)
+	if !slices.Contains(seen, "columns") || !slices.Equal(calls, []string{"columns"}) {
+		t.Errorf("fitting a column: saw %q, called %q", seen, calls)
 	}
 	seen, calls = nil, nil
 

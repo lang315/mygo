@@ -452,8 +452,10 @@ func (tf *tableFit) apply() {
 		tf.layout.Widths = maps.Clone(tf.layout.Widths)
 	}
 	tf.layout.Widths[tf.id] = w
+	// Layout runs inside a frame, where requestFrame does nothing: ask for the
+	// next one as animations do.
 	tf.drag.fitted = true
-	tf.rt.requestFrame()
+	tf.rt.animating = true
 }
 
 // sortArrow draws the arrow of the column the rows are sorted by.
