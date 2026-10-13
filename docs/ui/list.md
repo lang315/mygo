@@ -1,5 +1,7 @@
 # List
 
+<!-- preview list 290 -->
+
 `ui.List` shows rows of a collection of any length: it builds only the rows
 in view, and a few beyond, so a list of millions of rows is as fast as one
 of ten. Rows take the height of their content, which may differ from row to
@@ -167,6 +169,10 @@ app.list.Reorder = func(rows []int, to int) {
 	app.items = move(app.items, rows, to)
 }
 ```
+
+Rows that are buttons, which open what they show as they are clicked,
+reorder too: a press on a row's button drags the row once the pointer
+moves, and clicks the button if it does not.
 
 See [drag and drop](drag-and-drop.md).
 

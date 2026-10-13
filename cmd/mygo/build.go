@@ -48,8 +48,12 @@ outside the Mac App Store, and macos.notarize to notarize the disk image.
 With updates in mygo.json and the key of mygo keygen in
 MYGO_UPDATER_PRIVATE_KEY, each platform also gets a signed update archive,
 delta updates from the last versions published (updates.deltas), and
-update-<platform>.json: publish them where updates point to.`)
-	platforms := flags.String("platform", runtime.GOOS+"/"+runtime.GOARCH, "comma separated GOOS/GOARCH targets, e.g. darwin/universal,linux/amd64,windows/amd64")
+update-<platform>.json: publish them where updates point to.
+
+The platform web (or js/wasm) builds an app of native UI for browsers into
+<out>/web: index.html, which loads the app, Go's wasm_exec.js and the app's
+WebAssembly, named by its content: a static site, to serve from anywhere.`)
+	platforms := flags.String("platform", runtime.GOOS+"/"+runtime.GOARCH, "comma separated GOOS/GOARCH targets, e.g. darwin/universal,linux/amd64,windows/amd64, or web for browsers")
 	debug := flags.Bool("debug", false, "keep development features such as the web inspector")
 	skipBuildCommand := flags.Bool("skip-build-command", false, "do not run buildCommand")
 	skipDMG := flags.Bool("skip-dmg", false, "do not create a disk image for macOS")
@@ -114,6 +118,14 @@ update-<platform>.json: publish them where updates point to.`)
 
 	var built []string
 	for _, p := range splitList(*platforms) {
+		if isWebPlatform(p) {
+			paths, err := buildWeb(c, opts)
+			built = append(built, paths...)
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		goos, goarch, ok := strings.Cut(p, "/")
 		if !ok {
 			return fmt.Errorf("invalid platform %q, want GOOS/GOARCH", p)
@@ -233,11 +245,17 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 		} else if err := compile(goarch, bin); err != nil {
 			return nil, err
 		}
-		icns, err := appIcon(c)
+		car, err := appCatalog(c)
 		if err != nil {
 			return nil, err
 		}
-		app, err := writeBundle(c, stage, bin, icns, res)
+		var icns []byte
+		if car != nil && car.icns != nil {
+			icns = car.icns // the .icon's own rendering for older macOS
+		} else if icns, err = appIcon(c); err != nil {
+			return nil, err
+		}
+		app, err := writeBundle(c, stage, bin, icns, car, res)
 		if err != nil {
 			return nil, err
 		}

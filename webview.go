@@ -1,7 +1,6 @@
 package mygo
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -79,7 +78,7 @@ func (w *Window) newWebView(opts WebViewOptions, bg *background) (*WebView, erro
 
 	// The web view's page lives in a Window of its own, which no list
 	// holds: everything a page does works through it as for a window.
-	pw := &Window{id: id, host: w, trustedOrigins: opts.Page.TrustedOrigins, secret: rand.Text(), background: bg}
+	pw := &Window{id: id, host: w, trustedOrigins: opts.Page.TrustedOrigins, secret: randomText(), background: bg}
 	pw.pg = &Page{pw}
 	pw.resetPage()
 	popts := pw.platformOptions(&WindowOptions{Page: opts.Page, Transparent: opts.Transparent})
@@ -122,6 +121,12 @@ func (v *WebView) Focus() {
 		}
 	})
 }
+
+// SetBackgroundColor sets the color filling the web view until its page
+// paints, in the syntax of WebViewOptions.BackgroundColor, as when the
+// app's own theme changes; one given with light-dark follows the
+// appearance by itself.
+func (v *WebView) SetBackgroundColor(color string) error { return v.w.SetBackgroundColor(color) }
 
 // CapturePage returns a PNG screenshot of the web view's page.
 func (v *WebView) CapturePage() ([]byte, error) { return v.w.CapturePage() }
