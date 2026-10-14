@@ -39,14 +39,16 @@ type Column[T any] struct {
 // its own copy of the rows. A table shows in one window at a time.
 type TableWidget[T any, K comparable] struct {
 	common[TableWidget[T, K]]
-	key      func(*T) K
-	cols     []Column[T]
-	columns  []ui.TableColumn // cols, after the index column if any
-	rows     []T
-	index    map[K]int // a key's row in rows
-	view     *ui.TableView[T]
-	sort     mirror[ui.SortOrder]
-	numbered bool // the index column shows
+	key             func(*T) K
+	cols            []Column[T]
+	columns         []ui.TableColumn // cols, after the index column if any
+	rows            []T
+	index           map[K]int // a key's row in rows
+	view            *ui.TableView[T]
+	sort            mirror[ui.SortOrder]
+	chosen, checked keys[K]
+	checks          bool // the check box column shows
+	numbered        bool // the index column shows
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
@@ -100,6 +102,8 @@ func (t *TableWidget[T, K]) SetRows(rows []T) *TableWidget[T, K] {
 		t.rows, t.index = make([]T, 0, len(rows)), make(map[K]int, len(rows))
 		t.add(rows)
 		t.view.Reset()
+		t.chosen.keep(t.index)
+		t.checked.keep(t.index)
 	})
 	return t
 }
@@ -156,6 +160,8 @@ func (t *TableWidget[T, K]) DeleteRows(ks ...K) *TableWidget[T, K] {
 			t.index[t.key(&t.rows[i])] = i
 		}
 		t.view.Reset()
+		t.chosen.keep(t.index)
+		t.checked.keep(t.index)
 	})
 	return t
 }
@@ -166,6 +172,8 @@ func (t *TableWidget[T, K]) Clear() *TableWidget[T, K] {
 		t.rows = nil
 		clear(t.index)
 		t.view.Reset()
+		t.chosen.keep(t.index)
+		t.checked.keep(t.index)
 	})
 	return t
 }
@@ -240,10 +248,16 @@ func (t *TableWidget[T, K]) build(c *ui.Context) ui.Element {
 func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 	s := &t.list
 	s.Sort, _ = t.sort.bind()
+	s.Selection, s.Checked = t.chosen.bind(), nil
+	if t.checks {
+		s.Checked = t.checked.bind()
+	}
 	t.sync()
 	s.Version = t.view.Version()
 	return ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
-		OnSortChange(onChange(&t.sort, nil))
+		OnSortChange(onChange(&t.sort, nil)).
+		OnSelectionChange(t.chosen.commit).
+		OnCheckedChange(t.checked.commit)
 }
 
 // cell builds the cell of the row shown at row in column col, an index

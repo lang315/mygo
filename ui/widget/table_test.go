@@ -3,6 +3,7 @@ package widget
 import (
 	"cmp"
 	"image/color"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -137,5 +138,90 @@ func TestTableStaleRowHasZeroKey(t *testing.T) {
 	}
 	if s := tb.labelAt(2); s != "" {
 		t.Fatalf("labelAt(2) of a deleted row = %q", s)
+	}
+}
+
+func TestTableChecksRows(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).CheckboxColumn()
+	tt := tester(t, tb)
+	click(t, tt, "Check bob")
+	if got := tb.Checked(); !slices.Equal(got, []int{2}) || !tb.IsChecked(2) {
+		t.Fatalf("Checked %v after a click on bob's box", got)
+	}
+	click(t, tt, "Check all")
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 2, 3}) {
+		t.Fatalf("Checked %v after Check all", got)
+	}
+	tb.SetChecked([]int{1, 3}, false)
+	tt.Frame()
+	if got := tb.Checked(); !slices.Equal(got, []int{2}) {
+		t.Fatalf("Checked %v after SetChecked(1, 3, false)", got)
+	}
+	click(t, tt, "Check all") // some checked: Check all checks the rest
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 2, 3}) {
+		t.Fatalf("ui did not show SetChecked: Checked %v", got)
+	}
+}
+
+func TestTableCheckedFollowsTheShownOrder(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).CheckboxColumn()
+	tb.SetChecked([]int{1, 3}, true)
+	tt := tester(t, tb)
+	click(t, tt, "Name")
+	click(t, tt, "Name") // descending
+	if got := tb.Checked(); !slices.Equal(got, []int{3, 1}) {
+		t.Fatalf("Checked %v, sorted by Name descending", got)
+	}
+}
+
+func TestTableSelectsRows(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3})
+	tt := tester(t, tb)
+	click(t, tt, "cat")
+	if err := tt.ClickWith(ui.Cmd, "ann"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := tb.Selected(); !slices.Equal(got, []int{1, 3}) || tb.CountSelected() != 2 {
+		t.Fatalf("Selected %v (%d)", got, tb.CountSelected())
+	}
+}
+
+func TestTableAutoCheckTogglesSelectedByMajority(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).CheckboxColumn()
+	tb.SetChecked([]int{1}, true)
+	tt := tester(t, tb)
+	click(t, tt, "ann")
+	if err := tt.ClickWith(ui.Cmd, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tb.AutoCheck() // one of two checked: half, so it unchecks both
+	if got := tb.Checked(); len(got) != 0 {
+		t.Fatalf("Checked %v after AutoCheck with half checked", got)
+	}
+	tb.AutoCheck() // none checked: it checks both
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 2}) {
+		t.Fatalf("Checked %v after AutoCheck with none checked", got)
+	}
+}
+
+func TestTableDeleteRowsUnchecksAndUnselects(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).CheckboxColumn()
+	tb.SetChecked([]int{1, 2}, true)
+	tt := tester(t, tb)
+	click(t, tt, "ann")
+	tb.DeleteRows(1)
+	tt.Frame()
+	if tb.IsChecked(1) || tb.CountSelected() != 0 {
+		t.Fatalf("deleted row: checked %v, selected %d", tb.IsChecked(1), tb.CountSelected())
+	}
+	tb.AddRow(acct{1, "ann", 1}) // gota's H3: it came back checked
+	if tb.IsChecked(1) || !tb.IsChecked(2) {
+		t.Fatalf("checked 1: %v, 2: %v", tb.IsChecked(1), tb.IsChecked(2))
+	}
+	tb.SetRows([]acct{{2, "bob", 2}, {3, "cat", 3}}) // keeps the check of 2
+	if !slices.Equal(tb.Checked(), []int{2}) {
+		t.Fatalf("Checked %v after SetRows", tb.Checked())
 	}
 }
