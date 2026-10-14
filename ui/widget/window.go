@@ -20,6 +20,9 @@ type Window struct {
 	root          Widget
 	header        *HeaderBarWidget
 	onClose       func() bool
+	parent        *Window       // a dialog's; nil for a top-level window
+	modal         bool          // blocks parent while shown
+	deletable     bool          // the user may close it
 	win           *mygo.Window  // nil until shown, and again once closed
 	showing       bool          // shown, or being made, and not closed yet
 	closing       bool          // Close is closing it: OnClose is not asked
@@ -47,7 +50,7 @@ func onBeforeQuit(e *mygo.QuitEvent) {
 
 // NewWindow makes a window, not shown yet.
 func NewWindow(title string, width, height int) *Window {
-	return &Window{id: newID(), title: title, width: width, height: height, resizable: true}
+	return &Window{id: newID(), title: title, width: width, height: height, resizable: true, deletable: true}
 }
 
 // Run runs an app with one window titled name: fn sets the window up on
@@ -153,6 +156,9 @@ func (w *Window) Show() {
 	if w.header != nil {
 		opts.TitleBarStyle = mygo.TitleBarHidden
 	}
+	if p := w.parent; p != nil && p.win != nil {
+		opts.Parent, opts.Modal = p.win, w.modal
+	}
 	icon, resizable := w.icon, w.resizable
 	mu.Unlock()
 	watchQuit.Do(func() { mygo.App.OnBeforeQuit(onBeforeQuit) })
@@ -184,12 +190,19 @@ func (w *Window) Show() {
 // closeAsked answers a request to close the window, on the main thread.
 func (w *Window) closeAsked(e *mygo.CloseEvent) {
 	mu.Lock()
-	h, closing, asking := w.onClose, w.closing, w.asking
-	if h != nil && !closing {
+	h, closing, asking, deletable := w.onClose, w.closing, w.asking, w.deletable
+	if h != nil && !closing && deletable {
 		w.asking = true
 	}
 	mu.Unlock()
-	if h == nil || closing {
+	if closing {
+		return
+	}
+	if !deletable {
+		e.PreventDefault()
+		return
+	}
+	if h == nil {
 		return
 	}
 	// The user's answer comes from the event goroutine: keep the window,
@@ -299,4 +312,12 @@ func (h *HeaderBarWidget) add(side, ws []Widget) []Widget {
 		}
 	}
 	return side
+}
+
+// native is the mygo window of w, nil for a nil or unshown w.
+func (w *Window) native() *mygo.Window {
+	if w == nil {
+		return nil
+	}
+	return w.Native()
 }
