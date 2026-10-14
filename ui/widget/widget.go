@@ -113,3 +113,7 @@ func content(w Widget) func(c *ui.Context) {
 		ui.Column(c).Fill().Children(func() { render(c, w) })
 	}
 }
+
+// View returns a ui view showing w alone, for a ui.Tester or a window of
+// your own: mygo.WindowOptions{Content: ui.View(widget.View(w))}.
+func View(w Widget) func(c *ui.Context) { return content(w) }
