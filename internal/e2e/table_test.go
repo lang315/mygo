@@ -33,7 +33,7 @@ func TestWidgetTable(t *testing.T) {
 			Text:    func(r *row) string { return strconv.Itoa(r.n) },
 			Compare: func(a, b *row) int { return cmp.Compare(a.n, b.n) }},
 	).SetRows(rows).CheckboxColumn().BottomPanel()
-	w := widget.NewWindow("Table", 500, 400).SetContent(tb)
+	w := widget.NewWindow("Table", 500, 240).SetContent(tb)
 	w.Show()
 	t.Cleanup(func() {
 		// Close asks; wait until the window is gone, as Destroy would, so
@@ -60,8 +60,10 @@ func TestWidgetTable(t *testing.T) {
 			tb.AddRow(row{k, i})
 		}
 	}()
+	// Heights inside Xvfb's 640x480 screen: past it, a click leaves the
+	// next test's window without ui's focus on Linux.
 	for i := range 30 {
-		w.SetSize(500, 400+i%2*500)
+		w.SetSize(500, 240+i%2*180)
 		time.Sleep(30 * time.Millisecond)
 	}
 	before := built.Load()
@@ -74,7 +76,7 @@ func TestWidgetTable(t *testing.T) {
 
 	// Row 0 stays first: the rows deleted come back last. Under the
 	// header, 32 DIPs tall, at the left of the Name column.
-	w.SetSize(500, 400)
+	w.SetSize(500, 240)
 	time.Sleep(200 * time.Millisecond)
 	if !click(w.Native(), 120, 48) {
 		t.Skip("click automation not available on this platform")
