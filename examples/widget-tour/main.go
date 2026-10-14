@@ -2,7 +2,11 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"log"
 	"time"
 
@@ -13,20 +17,148 @@ import (
 func main() {
 	err := widget.Run("Widget Tour", func(w *widget.Window) {
 		w.UseHeaderBar("ui/widget").PackEnd(widget.Link("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
-		w.SetContent(tour())
+		w.SetMenuBar(widget.MenuItem{Text: "File", Children: []widget.MenuItem{
+			{Text: "Close", OnClick: func() { w.Close() }},
+		}})
+		w.SetContent(tour(w))
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func tour() widget.Widget {
+func tour(w *widget.Window) widget.Widget {
 	return widget.Notebook().
 		AddPage("Layout", layout()).
 		AddPage("Inputs", inputs()).
 		AddPage("Choices", choices()).
 		AddPage("Containers", containers()).
+		AddPage("Dialogs", dialogs(w)).
+		AddPage("Extras", extras()).
 		Padding(4)
+}
+
+func dialogs(w *widget.Window) widget.Widget {
+	result := widget.Label("Results show here").Muted()
+	show := func(format string, a ...any) { result.SetText(fmt.Sprintf(format, a...)) }
+	return widget.VBox(8).Add(
+		widget.Label("Dialogs").TextSize(widget.XL).Bold(),
+		widget.Flow(8).Add(
+			widget.Button("Alert").OnClick(func() {
+				widget.Alert(w, widget.Info, "Saved", "The file was saved.")
+				show("Alert closed")
+			}),
+			widget.Button("Confirm").OnClick(func() {
+				show("Confirm: %v", widget.Confirm(w, widget.Question, "Delete the file?", "It goes for good."))
+			}),
+			widget.Button("Input text").OnClick(func() {
+				s, ok := widget.InputString(w, widget.Question, "Name", "Your name", "")
+				show("InputString: %q %v", s, ok)
+			}),
+			widget.Button("Input number").OnClick(func() {
+				n, ok := widget.InputInt(w, widget.Question, "Threads", "How many?", 1, 64, 1, 8)
+				show("InputInt: %d %v", n, ok)
+			}),
+			widget.Button("Input choice").OnClick(func() {
+				v, ok := widget.InputSelect(w, widget.Question, "Proxy", "Choose one",
+					widget.Option{Value: "http", Text: "HTTP"}, widget.Option{Value: "socks", Text: "SOCKS5"})
+				show("InputSelect: %q %v", v, ok)
+			}),
+			widget.Button("Custom dialog").OnClick(func() {
+				customDialog(w)
+				show("Custom dialog closed")
+			}),
+			widget.Button("Open file").OnClick(func() { show("OpenFile: %q", widget.OpenFile(w, "Open a file")) }),
+			widget.Button("Save file").OnClick(func() { show("SaveFile: %q", widget.SaveFile(w, "Save", "notes.txt")) }),
+			widget.Button("Select folder").OnClick(func() { show("SelectFolder: %q", widget.SelectFolder(w, "Choose a folder", "")) }),
+		),
+		result,
+		widget.Separator(),
+		widget.Label("Menus").TextSize(widget.XL).Bold(),
+		widget.HBox(8).Add(
+			widget.MenuButton("Sort by").SetMenu(
+				widget.MenuItem{Text: "Name", OnClick: func() { show("Sort by name") }},
+				widget.MenuItem{Text: "Date", Checked: true, OnClick: func() { show("Sort by date") }},
+				widget.MenuItem{},
+				widget.MenuItem{Text: "More", Children: []widget.MenuItem{{Text: "Size", OnClick: func() { show("Sort by size") }}}},
+			),
+			widget.Label("Right-click me").Padding(2).Border(1, ui.RGB(160, 160, 160)).Radius(1).ContextMenu(
+				widget.MenuItem{Text: "Copy", OnClick: func() { widget.Clipboard.SetText("Right-click me"); show("Copied") }},
+				widget.MenuItem{Text: "Delete…", OnClick: func() { show("Delete: %v", widget.Confirm(w, widget.Warning, "Delete?", "")) }},
+			),
+		),
+	)
+}
+
+// customDialog runs a dialog of its own, with a dialog over it.
+func customDialog(w *widget.Window) {
+	var d *widget.Dialog
+	d = widget.NewDialog(w, "New account", "A dialog of your own", 420, 260, widget.VBox(8).Add(
+		widget.Entry().SetPlaceholder("Name"),
+		widget.Button("Nested dialog").OnClick(func() {
+			widget.Alert(d.Window, widget.Info, "Nested", "A dialog over a dialog.")
+		}),
+		widget.ButtonBox().Add(widget.Button("Close").Suggested().OnClick(func() { d.Close() })),
+	))
+	d.Run()
+}
+
+func extras() widget.Widget {
+	theme := widget.Combo(
+		widget.Option{Value: "system", Text: "System"},
+		widget.Option{Value: "light", Text: "Light"},
+		widget.Option{Value: "dark", Text: "Dark"},
+	).SetValue("system")
+	themes := map[string]widget.Theme{"system": widget.ThemeSystem, "light": widget.ThemeLight, "dark": widget.ThemeDark}
+	theme.OnChange(func() { widget.SetTheme(themes[theme.Value()]) })
+	screen := widget.Label("")
+	icons := widget.HBox(12)
+	for _, shapes := range lucideIcons {
+		icons.Add(widget.Icon(lucide(shapes), 24))
+	}
+	return widget.VBox(8).Add(
+		widget.HBox(8).Add(widget.Label("Theme").VAlign(widget.Center), theme),
+		widget.HBox(8).Add(widget.Button("Screen size").OnClick(func() {
+			w, h := widget.ScreenSize()
+			screen.SetText(fmt.Sprintf("%v x %v", w, h))
+		}), screen.VAlign(widget.Center)),
+		icons,
+		widget.Button("With an icon").SetIcon(lucide(lucideIcons[0])),
+		widget.HBox(8).Add(widget.Image(swatch(color.RGBA{230, 80, 60, 255}), 48, 48), widget.Image(swatch(color.RGBA{60, 120, 230, 255}), 96, 48)),
+		widget.Label("").Rich(ui.Span{Text: "Rich text: "}, ui.Span{Text: "bold", Weight: 700}, ui.Span{Text: ", "}, ui.Span{Text: "italic", Italic: true}),
+		widget.HBox(8).Add(widget.Label("Sectioned combo").VAlign(widget.Center), widget.Combo().
+			AddSection("Fruits", swatch(color.RGBA{230, 160, 40, 255}), widget.Option{Value: "apple", Text: "Apple"}, widget.Option{Value: "pear", Text: "Pear"}).
+			AddSection("Vegetables", swatch(color.RGBA{60, 160, 80, 255}), widget.Option{Value: "kale", Text: "Kale"})),
+	)
+}
+
+// lucideIcons are the shapes of some Lucide icons (ISC license): plus,
+// minus, x, search, play, square.
+var lucideIcons = []string{
+	`<path d="M5 12h14"/><path d="M12 5v14"/>`,
+	`<path d="M5 12h14"/>`,
+	`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`,
+	`<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>`,
+	`<polygon points="6 3 20 12 6 21 6 3"/>`,
+	`<rect width="18" height="18" x="3" y="3" rx="2"/>`,
+}
+
+func lucide(shapes string) *ui.SVG {
+	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` + shapes + `</svg>`))
+}
+
+// swatch returns a 16x16 PNG of one color, made at run time so the
+// example ships no image files.
+func swatch(c color.Color) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	for y := range 16 {
+		for x := range 16 {
+			img.Set(x, y, c)
+		}
+	}
+	var b bytes.Buffer
+	png.Encode(&b, img)
+	return b.Bytes()
 }
 
 func layout() widget.Widget {
