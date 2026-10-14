@@ -241,9 +241,17 @@ ui.Table(c, &app.list, cols, app.view.Len(), func(r, col int) {
 A click on a header changes the sort, and `Sync` sorts again in the same
 frame. Rows of equal value keep the slice's order.
 
-`SetFilter` shows only the rows its function keeps. It places all rows again
-whenever it is called, as functions cannot be compared, so call it when what
-the filter keeps changes, not in every frame:
+`SetFilter` shows only the rows its function keeps. As functions cannot be
+compared, the next `Sync` goes through all rows, so call it when what the
+filter keeps changes, not in every frame. It sorts none of them again: a
+filter changes which rows show, not their order, which the view keeps
+while a filter hides rows, so a search on rows already sorted, or clearing
+it, costs a pass over them, not a sort. The exception is a filter keeping
+half the rows or fewer when the rows were sorted under it (at the first
+`Sync`, or after a change of the sort, `Reset` or a reallocated slice):
+the view sorted only the rows it kept, so the next filter sorts again.
+Keeping the order of all rows makes a `Sync` placing changed rows cost
+about half again as much while a filter hides rows.
 
 ```go
 if ui.SearchField(c, &app.keyword).Label("Search accounts").Changed() {

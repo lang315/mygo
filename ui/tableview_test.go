@@ -56,17 +56,29 @@ func TestTableViewMatchesSortAndFilter(t *testing.T) {
 		v := NewTableView(tvCompare)
 		var sort SortOrder
 		var keep func(tvRow) bool
-		for step := range 30 {
-			switch r.IntN(7) {
-			case 0, 1: // rows changed in place
-				for range r.IntN(4) + 1 {
-					if len(rows) == 0 {
-						break
-					}
-					i := r.IntN(len(rows))
-					rows[i] = row()
-					v.Changed(i)
+		change := func() {
+			for range r.IntN(4) + 1 {
+				if len(rows) == 0 {
+					break
 				}
+				i := r.IntN(len(rows))
+				rows[i] = row()
+				v.Changed(i)
+			}
+		}
+		filter := func() {
+			if r.IntN(3) == 0 {
+				keep = nil
+			} else {
+				lim := r.IntN(10)
+				keep = func(x tvRow) bool { return x.b < lim }
+			}
+			v.SetFilter(keep)
+		}
+		for step := range 60 {
+			switch r.IntN(8) {
+			case 0, 1: // rows changed in place
+				change()
 			case 2: // rows appended, the slice reallocated or not
 				for range r.IntN(3) + 1 {
 					rows = append(rows, row())
@@ -74,13 +86,7 @@ func TestTableViewMatchesSortAndFilter(t *testing.T) {
 			case 3:
 				sort = SortOrder{Column: []string{"a", "b", "none"}[r.IntN(3)], Descending: r.IntN(2) == 1}
 			case 4:
-				if r.IntN(3) == 0 {
-					keep = nil
-				} else {
-					lim := r.IntN(10)
-					keep = func(x tvRow) bool { return x.b < lim }
-				}
-				v.SetFilter(keep)
+				filter()
 			case 5: // rows removed from the end
 				rows = rows[:r.IntN(len(rows)+1)]
 			case 6: // another slice of the same rows, one changed without Changed
@@ -88,6 +94,9 @@ func TestTableViewMatchesSortAndFilter(t *testing.T) {
 				if len(rows) > 0 {
 					rows[r.IntN(len(rows))] = row()
 				}
+			case 7: // rows changed and a new filter, before one Sync
+				change()
+				filter()
 			}
 			v.Sync(rows, sort)
 			if got, want := tvGot(v), tvWant(rows, sort, keep); !slices.Equal(got, want) {
@@ -179,12 +188,8 @@ func TestTableViewDescendingWithExtremeComparator(t *testing.T) {
 
 func TestTableViewChangedPlacesIncrementally(t *testing.T) {
 	var calls int
-	counting := map[string]func(x, y tvRow) int{"a": func(x, y tvRow) int {
-		calls++
-		return cmp.Compare(x.a, y.a)
-	}}
 	rows := tvBenchRows(10_000)
-	v := NewTableView(counting)
+	v := NewTableView(countingCompare(&calls))
 	sort := SortOrder{Column: "a"}
 	v.Sync(rows, sort)
 	if calls < 100_000 {
@@ -227,6 +232,126 @@ func TestTableViewVersionOfFilters(t *testing.T) {
 	if v.Version() == ver || v.Len() != 2 {
 		t.Errorf("a row leaving the filter: version kept or Len %d, want 2", v.Len())
 	}
+	ver = v.Version()
+	v.SetFilter(func(x tvRow) bool { return x.b < 3 }) // the same rows
+	v.Sync(rows, sort)
+	if v.Version() != ver {
+		t.Error("a filter keeping the same rows changed the version")
+	}
+}
+
+// countingCompare is tvCompare's "a" counting its calls in *calls.
+func countingCompare(calls *int) map[string]func(x, y tvRow) int {
+	return map[string]func(x, y tvRow) int{"a": func(x, y tvRow) int {
+		*calls++
+		return tvCompare["a"](x, y)
+	}}
+}
+
+func TestTableViewFilterThenSortInOneSync(t *testing.T) {
+	rows := tvBenchRows(500)
+	v := NewTableView(tvCompare)
+	v.Sync(rows, SortOrder{Column: "a"})
+	keep := func(x tvRow) bool { return x.b == 2 }
+	v.SetFilter(keep)
+	sort := SortOrder{Column: "b", Descending: true}
+	v.Sync(rows, sort)
+	if got, want := tvGot(v), tvWant(rows, sort, keep); !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// TestTableViewFilterDoesNotSortAgain changes the filter of sorted rows,
+// from none at the first Sync, and from one keeping most rows (an app's
+// folder) set before it.
+func TestTableViewFilterDoesNotSortAgain(t *testing.T) {
+	small := func(x tvRow) bool { return x.b < 3 }
+	type step struct {
+		name string
+		keep func(tvRow) bool
+	}
+	for _, c := range []struct {
+		name  string
+		first func(tvRow) bool
+		steps []step
+	}{
+		{"from none", nil, []step{
+			{"a filter", small},
+			{"another filter", func(x tvRow) bool { return x.b > 4 }},
+			{"no filter", nil},
+			{"the filter again", small},
+		}},
+		{"from a filter keeping most", func(x tvRow) bool { return x.b < 6 }, []step{
+			{"a narrower filter", small},
+			{"no filter", nil},
+		}},
+	} {
+		var calls int
+		rows := tvBenchRows(10_000)
+		v := NewTableView(countingCompare(&calls))
+		sort := SortOrder{Column: "a"}
+		if c.first != nil {
+			v.SetFilter(c.first)
+		}
+		v.Sync(rows, sort)
+		for _, st := range c.steps {
+			calls = 0
+			v.SetFilter(st.keep)
+			v.Sync(rows, sort)
+			if calls != 0 {
+				t.Errorf("%s, %s: %d comparisons, want none", c.name, st.name, calls)
+			}
+			if got, want := tvGot(v), tvWant(rows, sort, st.keep); !slices.Equal(got, want) {
+				t.Fatalf("%s, %s: got %v, want %v", c.name, st.name, got, want)
+			}
+		}
+	}
+}
+
+func TestTableViewClearFilterAfterChanges(t *testing.T) {
+	var calls int
+	rows := slices.Grow(tvBenchRows(10_000), 16) // appends keep the array
+	v := NewTableView(countingCompare(&calls))
+	sort := SortOrder{Column: "a"}
+	v.Sync(rows, sort)
+	keep := func(x tvRow) bool { return x.b < 3 }
+	v.SetFilter(keep)
+	v.Sync(rows, sort)
+	for _, i := range []int{1, 2, 3, 500, 9999} { // rows shown and hidden
+		rows[i].a = (rows[i].a + 4999) % len(rows)
+		v.Changed(i)
+	}
+	rows = append(rows, tvRow{a: 7, b: 6}, tvRow{a: 8, b: 1})
+	v.Sync(rows, sort)
+	if got, want := tvGot(v), tvWant(rows, sort, keep); !slices.Equal(got, want) {
+		t.Fatalf("filtered: got %v, want %v", got, want)
+	}
+	calls = 0
+	v.SetFilter(nil)
+	v.Sync(rows, sort)
+	if calls != 0 {
+		t.Errorf("clearing the filter made %d comparisons, want none", calls)
+	}
+	if got, want := tvGot(v), tvWant(rows, sort, nil); !slices.Equal(got, want) {
+		t.Fatalf("cleared: got %v, want %v", got, want)
+	}
+}
+
+func TestTableViewClearFilterAfterRealloc(t *testing.T) {
+	rows := tvBenchRows(1000) // len == cap: the append below reallocates
+	v := NewTableView(tvCompare)
+	sort := SortOrder{Column: "a"}
+	v.Sync(rows, sort)
+	keep := func(x tvRow) bool { return x.b < 3 }
+	v.SetFilter(keep)
+	v.Sync(rows, sort)
+	rows = append(rows, tvRow{a: 3, b: 0})
+	v.Sync(rows, sort)
+	v.SetFilter(nil)
+	v.Sync(rows, sort)
+	if got, want := tvGot(v), tvWant(rows, sort, nil); !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
 }
 
 func TestTableViewColumnWithoutComparator(t *testing.T) {
@@ -257,12 +382,17 @@ func BenchmarkTableViewSyncIdle(b *testing.B) {
 	}
 }
 
-func BenchmarkTableViewChanged(b *testing.B) {
+func BenchmarkTableViewChanged(b *testing.B) { benchChanged(b, nil) }
+
+// benchChanged changes k rows of 100,000 sorted ones the filter keep
+// filters, set before the first Sync, then syncs.
+func benchChanged(b *testing.B, keep func(tvRow) bool) {
 	for _, k := range []int{1, 10, 100} {
 		b.Run("k="+strconv.Itoa(k), func(b *testing.B) {
 			rows := tvBenchRows(100_000)
 			v := NewTableView(tvCompare)
 			sort := SortOrder{Column: "a"}
+			v.SetFilter(keep)
 			v.Sync(rows, sort)
 			seq := 0
 			b.ReportAllocs()
@@ -288,5 +418,53 @@ func BenchmarkTableViewResort(b *testing.B) {
 	for b.Loop() {
 		v.Reset()
 		v.Sync(rows, sort)
+	}
+}
+
+// BenchmarkTableViewChangedFiltered is BenchmarkTableViewChanged under a
+// filter keeping most rows, set before the first Sync: the view then keeps
+// the order of all rows up to date as well as the order shown.
+func BenchmarkTableViewChangedFiltered(b *testing.B) {
+	benchChanged(b, func(x tvRow) bool { return x.b < 5 })
+}
+
+// BenchmarkTableViewFilter turns a filter on and off on 100,000 sorted
+// rows, as a search typed and cleared does.
+func BenchmarkTableViewFilter(b *testing.B) {
+	rows := tvBenchRows(100_000)
+	v := NewTableView(tvCompare)
+	sort := SortOrder{Column: "a"}
+	v.Sync(rows, sort)
+	keep := func(x tvRow) bool { return x.b < 3 }
+	on := false
+	b.ReportAllocs()
+	for b.Loop() {
+		on = !on
+		if on {
+			v.SetFilter(keep)
+		} else {
+			v.SetFilter(nil)
+		}
+		v.Sync(rows, sort)
+	}
+}
+
+func TestTableViewChangedAndNarrowFilterInOneSync(t *testing.T) {
+	rows := tvBenchRows(500)
+	v := NewTableView(tvCompare)
+	v.SetFilter(func(x tvRow) bool { return x.b == 2 })
+	v.Sync(rows, SortOrder{Column: "a"})
+	ver := v.Version()
+	i := v.Row(0)
+	rows[i].a = 1 << 30
+	v.Changed(i)
+	keep := func(x tvRow) bool { return x.b < 4 }
+	v.SetFilter(keep)
+	v.Sync(rows, SortOrder{Column: "a"})
+	if got, want := tvGot(v), tvWant(rows, SortOrder{Column: "a"}, keep); !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if v.Version() != ver+1 {
+		t.Errorf("version moved by %d, want 1: the rows changed were placed, then all sorted again", v.Version()-ver)
 	}
 }

@@ -22,14 +22,25 @@ import (
 //	})
 type TableView[T any] struct {
 	compare map[string]func(a, b T) int
-	keep    func(T) bool
+	// keep is the filter the order shown applies; next is the one
+	// SetFilter gave since the last Sync, when newFilter.
+	keep, next func(T) bool
+	newFilter  bool
 	// base, n and sort are the slice and the order the view last showed.
 	base *T
 	n    int
 	sort SortOrder
 	// perm holds the rows shown, by index into the slice; out, spare and
-	// ins are buffers merges reuse.
+	// ins are buffers merges reuse. With no filter, perm is the order of
+	// all rows.
 	perm, out, spare, ins []int
+	// While a filter hides rows, all is the order of every row when
+	// hasAll, kept up to date as perm is, so that a new filter goes
+	// through it instead of sorting the rows again; kept marks the rows a
+	// filter keeps.
+	all    []int
+	hasAll bool
+	kept   []bool
 	// dirty are the rows of the slice the app changed (or appended) since
 	// the last Sync; mark is the scratch set merge uses to drop them from
 	// the order and count each once.
@@ -48,10 +59,17 @@ func NewTableView[T any](compare map[string]func(a, b T) int) *TableView[T] {
 	return &TableView[T]{compare: compare, reset: true}
 }
 
-// SetFilter shows only the rows keep keeps, or all of them for nil. It
-// places all rows again, as functions cannot be compared: call it when
-// what the filter keeps changes, not in every frame.
-func (v *TableView[T]) SetFilter(keep func(T) bool) { v.keep, v.reset = keep, true }
+// SetFilter shows only the rows keep keeps, or all of them for nil, from
+// the next Sync. As functions cannot be compared, that Sync goes through
+// all rows, so call it when what the filter keeps changes, not in every
+// frame. It sorts none of them again, as a filter does not change their
+// order, which the view keeps; except after a sort under a filter keeping
+// half the rows or fewer (at the first Sync, or after a change of the
+// sort, Reset or another slice): the view then sorted only the rows kept,
+// and the next filter sorts again. While a filter hides rows, the view
+// keeps the order of all of them up to date too, so placing rows changed
+// costs about half again as much.
+func (v *TableView[T]) SetFilter(keep func(T) bool) { v.next, v.newFilter = keep, true }
 
 // Changed tells the view that the rows of the slice at those indices
 // changed in place, for the next Sync to place them again. Rows appended
@@ -75,11 +93,15 @@ func (v *TableView[T]) Version() uint64 { return v.version }
 
 // Sync brings the view up to date with rows sorted by sort: call it in
 // every frame, before building the table. It costs nothing when nothing
-// changed; it places again only the rows changed and appended since; and
-// it places all of them when the sort, the filter or the slice changed
-// (rows removed, or another slice), or after Reset.
+// changed; it places again only the rows changed and appended since; a new
+// filter goes through the rows once; and it sorts all of them when the
+// sort or the slice changed (rows removed, or another slice), or after
+// Reset.
 func (v *TableView[T]) Sync(rows []T, sort SortOrder) {
-	if v.reset || sort != v.sort || unsafe.SliceData(rows) != v.base || len(rows) < v.n {
+	// A new filter without the order of all rows to go through sorts them
+	// again: placing the rows changed first would be lost.
+	if v.reset || sort != v.sort || unsafe.SliceData(rows) != v.base || len(rows) < v.n ||
+		v.newFilter && v.keep != nil && !v.hasAll {
 		v.rebuild(rows, sort)
 		return
 	}
@@ -93,6 +115,9 @@ func (v *TableView[T]) Sync(rows []T, sort SortOrder) {
 		v.rebuild(rows, sort)
 	default:
 		v.merge(rows)
+	}
+	if v.newFilter {
+		v.refilter(rows)
 	}
 }
 
@@ -120,20 +145,99 @@ func (v *TableView[T]) order(rows []T) func(i, j int) int {
 	}
 }
 
-// rebuild places all rows.
+// rebuild places all rows, by the filter given last. It sorts the rows
+// shown, or all of them when a filter keeps more than half: sorting those
+// costs at most about twice as much, and their order lets the next filter
+// sort none again. After a narrower filter, the order of all rows comes
+// back with the next rebuild.
 func (v *TableView[T]) rebuild(rows []T, sort SortOrder) {
+	if v.newFilter {
+		v.keep, v.next, v.newFilter = v.next, nil, false
+	}
 	v.reset, v.sort, v.base, v.n = false, sort, unsafe.SliceData(rows), len(rows)
 	v.dirty = v.dirty[:0]
 	out := v.out[:0]
-	for i := range rows {
-		if v.keep == nil || v.keep(rows[i]) {
+	if v.keep == nil {
+		for i := range rows {
 			out = append(out, i)
 		}
+	} else {
+		v.filter(rows, v.keep)
+		for i, k := range v.kept[:len(rows)] {
+			if k {
+				out = append(out, i)
+			}
+		}
 	}
-	if v.compare[sort.Column] != nil {
+	// Rows in a column without a comparator show in the slice's order, which
+	// a new filter finds again without all.
+	sorted := v.compare[sort.Column] != nil
+	v.hasAll = false
+	switch {
+	case sorted && v.keep != nil && len(out) > len(rows)/2:
+		v.all = v.all[:0]
+		for i := range rows {
+			v.all = append(v.all, i)
+		}
+		slices.SortFunc(v.all, v.order(rows))
+		out = v.keptIn(out[:0], v.all)
+		v.hasAll = true
+	case sorted:
 		slices.SortFunc(out, v.order(rows))
 	}
 	// A rebuild can yield the order it had: the version then stays.
+	v.show(out)
+}
+
+// refilter shows the rows the filter SetFilter gave keeps. A filter
+// changes which rows show, not their order, so it goes through the order
+// of all rows once, comparing none: perm when no filter hid rows, all
+// otherwise, which Sync makes sure the view has.
+func (v *TableView[T]) refilter(rows []T) {
+	keep := v.next
+	switch {
+	case v.keep == nil && keep == nil: // no filter before, none after
+		v.next, v.newFilter = nil, false
+		return
+	case v.keep == nil:
+		v.all, v.hasAll = append(v.all[:0], v.perm...), true
+	}
+	v.keep, v.next, v.newFilter = keep, nil, false
+	var out []int
+	if keep == nil {
+		out = append(v.out[:0], v.all...)
+	} else {
+		v.filter(rows, keep)
+		out = v.keptIn(v.out[:0], v.all)
+	}
+	v.hasAll = keep != nil
+	v.show(out)
+}
+
+// filter sets kept to what keep says of each row. The filter reads the rows
+// in the slice's order, kinder to the cache than the order shown.
+func (v *TableView[T]) filter(rows []T, keep func(T) bool) {
+	if len(v.kept) < len(rows) {
+		v.kept = make([]bool, len(rows))
+	}
+	for i := range rows {
+		v.kept[i] = keep(rows[i])
+	}
+}
+
+// keptIn appends to out the rows of order that kept marks, in that order.
+func (v *TableView[T]) keptIn(out, order []int) []int {
+	for _, i := range order {
+		if v.kept[i] {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// show makes out, built in the buffer out, the order shown: the version
+// changes only when the rows shown or their order do.
+func (v *TableView[T]) show(out []int) {
 	if !slices.Equal(out, v.perm) {
 		v.version++
 	}
@@ -142,13 +246,28 @@ func (v *TableView[T]) rebuild(rows []T, sort SortOrder) {
 
 // merge places again the rows changed: it takes them out of the order,
 // sorts those the filter keeps, and puts each where a binary search finds
-// its place, copying the rows between.
+// its place, copying the rows between. While a filter hides rows, it does
+// the same to the order of all of them, for the next filter.
 func (v *TableView[T]) merge(rows []T) {
+	dirty := v.unique(rows)
 	by := v.order(rows)
+	// out cannot be the order placed again, which show compares it with:
+	// the buffers rotate, the old order's array becoming the next out.
+	if v.hasAll {
+		all, rest, ins := v.place(rows, v.all, v.out, v.spare, v.ins, dirty, nil, by)
+		v.all, v.out, v.spare, v.ins = all, v.all, rest, ins
+	}
+	out, rest, ins := v.place(rows, v.perm, v.out, v.spare, v.ins, dirty, v.keep, by)
+	v.spare, v.ins = rest, ins
+	v.show(out)
+	v.dirty = dirty[:0]
+}
+
+// unique returns the rows changed, once each, and those of the slice only.
+func (v *TableView[T]) unique(rows []T) []int {
 	if len(v.mark) < len(rows) {
 		v.mark = make([]bool, len(rows))
 	}
-	// The rows changed, once each, and those of the slice only.
 	dirty := v.dirty[:0]
 	for _, i := range v.dirty {
 		if i >= 0 && i < len(rows) && !v.mark[i] {
@@ -156,23 +275,36 @@ func (v *TableView[T]) merge(rows []T) {
 			dirty = append(dirty, i)
 		}
 	}
-	rest := v.spare[:0]
-	for _, i := range v.perm {
-		if !v.mark[i] {
+	for _, i := range dirty {
+		v.mark[i] = false
+	}
+	return dirty
+}
+
+// place returns order with the rows dirty taken out and those keep keeps
+// (all of them for nil) put back where by sorts them, built in out; rest
+// and ins are the buffers it uses, returned to be used again.
+func (v *TableView[T]) place(rows []T, order, out, rest, ins, dirty []int, keep func(T) bool, by func(i, j int) int) ([]int, []int, []int) {
+	// In a local, as v.mark would be loaded again at every row.
+	mark := v.mark
+	for _, i := range dirty {
+		mark[i] = true
+	}
+	rest = rest[:0]
+	for _, i := range order {
+		if !mark[i] {
 			rest = append(rest, i)
 		}
 	}
-	ins := v.ins[:0]
+	ins = ins[:0]
 	for _, i := range dirty {
-		v.mark[i] = false
-		if v.keep == nil || v.keep(rows[i]) {
+		mark[i] = false
+		if keep == nil || keep(rows[i]) {
 			ins = append(ins, i)
 		}
 	}
 	slices.SortFunc(ins, by)
-	// out cannot be perm, which it is compared with: the three buffers
-	// rotate, perm's array becoming the next out.
-	out := v.out[:0]
+	out = out[:0]
 	from := 0
 	for _, i := range ins {
 		at, _ := slices.BinarySearchFunc(rest[from:], i, by)
@@ -180,9 +312,5 @@ func (v *TableView[T]) merge(rows []T) {
 		out = append(out, i)
 		from += at
 	}
-	out = append(out, rest[from:]...)
-	if !slices.Equal(out, v.perm) {
-		v.version++
-	}
-	v.perm, v.out, v.spare, v.ins, v.dirty = out, v.perm, rest, ins, dirty[:0]
+	return append(out, rest[from:]...), rest, ins
 }
