@@ -19,14 +19,6 @@ func (s *keys[K]) bind() *ui.Selection[K] {
 	return &s.shown
 }
 
-// commit takes what the user changed. On the main thread, without mu.
-func (s *keys[K]) commit() {
-	mu.Lock()
-	defer mu.Unlock()
-	copyKeys(&s.value, &s.shown)
-	s.dirty = false
-}
-
 // set adds or removes k. Under mu.
 func (s *keys[K]) set(k K, on bool) {
 	if on {
@@ -125,20 +117,32 @@ func (t *TableWidget[T, K]) SetChecked(ks []K, on bool) *TableWidget[T, K] {
 	return t
 }
 
-// AutoCheck unchecks the rows selected when at least half of them are
-// checked, and checks them all otherwise.
+// AutoCheck unchecks the rows selected that show when at least half of
+// them are checked, and checks them all otherwise.
 func (t *TableWidget[T, K]) AutoCheck() *TableWidget[T, K] {
 	change(func() {
-		n, on := t.chosen.value.Len(), 0
-		for k := range t.chosen.value.All() {
+		ks, on := t.shown(&t.chosen.value), 0
+		for _, k := range ks {
 			if t.checked.value.Has(k) {
 				on++
 			}
 		}
-		check := on*2 < n
-		for k := range t.chosen.value.All() {
+		check := on*2 < len(ks)
+		for _, k := range ks {
 			t.checked.set(k, check)
 		}
 	})
 	return t
+}
+
+// commit takes what the user changed in s, but no key of a row gone: a
+// goroutine may delete rows between a frame and ui applying input to it,
+// and a click on a row no longer there gives the zero key. On the main
+// thread, without mu.
+func (t *TableWidget[T, K]) commit(s *keys[K]) {
+	mu.Lock()
+	defer mu.Unlock()
+	copyKeys(&s.value, &s.shown)
+	s.dirty = false
+	s.keep(t.index)
 }

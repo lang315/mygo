@@ -57,10 +57,10 @@ func (t *TableWidget[T, K]) copyRows(rows []int) string {
 	defer mu.Unlock()
 	var lines []string
 	for _, row := range rows {
-		if row >= t.view.Len() || t.view.Row(row) >= len(t.rows) {
+		r := t.rowAt(row)
+		if r == nil {
 			continue
 		}
-		r := &t.rows[t.view.Row(row)]
 		cells := make([]string, len(t.cols))
 		for j := range t.cols {
 			cells[j] = t.cols[j].Text(r)

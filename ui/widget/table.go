@@ -39,12 +39,16 @@ type Column[T any] struct {
 // its own copy of the rows. A table shows in one window at a time.
 type TableWidget[T any, K comparable] struct {
 	common[TableWidget[T, K]]
-	key                                     func(*T) K
-	cols                                    []Column[T]
-	columns                                 []ui.TableColumn // cols, after the index column if any
-	rows                                    []T
-	index                                   map[K]int // a key's row in rows
-	view                                    *ui.TableView[T]
+	key     func(*T) K
+	cols    []Column[T]
+	columns []ui.TableColumn // cols, after the index column if any
+	rows    []T
+	index   map[K]int // a key's row in rows
+	view    *ui.TableView[T]
+	// built is the view's version the last build showed; shifted, that rows
+	// moved in rows since.
+	built                                   uint64
+	shifted                                 bool
 	sort                                    mirror[ui.SortOrder]
 	chosen, checked                         keys[K]
 	checks                                  bool // the check box column shows
@@ -116,6 +120,7 @@ func (t *TableWidget[T, K]) SetRows(rows []T) *TableWidget[T, K] {
 		t.rows, t.index = make([]T, 0, len(rows)), make(map[K]int, len(rows))
 		t.add(rows)
 		t.view.Reset()
+		t.shifted = true
 		t.chosen.keep(t.index)
 		t.checked.keep(t.index)
 	})
@@ -174,6 +179,7 @@ func (t *TableWidget[T, K]) DeleteRows(ks ...K) *TableWidget[T, K] {
 			t.index[t.key(&t.rows[i])] = i
 		}
 		t.view.Reset()
+		t.shifted = true
 		t.chosen.keep(t.index)
 		t.checked.keep(t.index)
 	})
@@ -186,6 +192,7 @@ func (t *TableWidget[T, K]) Clear() *TableWidget[T, K] {
 		t.rows = nil
 		clear(t.index)
 		t.view.Reset()
+		t.shifted = true
 		t.chosen.keep(t.index)
 		t.checked.keep(t.index)
 	})
@@ -215,14 +222,21 @@ func (t *TableWidget[T, K]) ClearSort() *TableWidget[T, K] {
 // sync brings the view up to date with the rows. Under mu.
 func (t *TableWidget[T, K]) sync() { t.view.Sync(t.rows, t.sort.value) }
 
-// keyOf returns the key of the row shown at row, the zero K for a row no
-// longer there: a goroutine may change the rows between a frame and ui
+// rowAt returns the row shown at row in the frame ui shows, nil when the
+// rows changed since: a goroutine may change them between a frame and ui
 // applying input to it. Under mu.
+func (t *TableWidget[T, K]) rowAt(row int) *T {
+	if !viewing.Load() && (t.shifted || t.view.Version() != t.built) || row >= t.view.Len() {
+		return nil
+	}
+	return &t.rows[t.view.Row(row)]
+}
+
+// keyOf returns the key of the row shown at row, the zero K for none.
+// Under mu.
 func (t *TableWidget[T, K]) keyOf(row int) K {
-	if row < t.view.Len() {
-		if i := t.view.Row(row); i < len(t.rows) {
-			return t.key(&t.rows[i])
-		}
+	if r := t.rowAt(row); r != nil {
+		return t.key(r)
 	}
 	var zero K
 	return zero
@@ -245,11 +259,8 @@ func (t *TableWidget[T, K]) labelAt(row int) string {
 		mu.Lock()
 		defer mu.Unlock()
 	}
-	if len(t.cols) == 0 || row >= t.view.Len() {
-		return ""
-	}
-	if i := t.view.Row(row); i < len(t.rows) {
-		return t.cols[0].Text(&t.rows[i])
+	if r := t.rowAt(row); r != nil && len(t.cols) > 0 {
+		return t.cols[0].Text(r)
 	}
 	return ""
 }
@@ -273,12 +284,13 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Checked = t.checked.bind()
 	}
 	t.sync()
-	s.Version = t.view.Version()
+	t.built, t.shifted = t.view.Version(), false
+	s.Version = t.built
 	t.handOver()
 	e := ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
 		OnSortChange(onChange(&t.sort, nil)).
-		OnSelectionChange(t.chosen.commit).
-		OnCheckedChange(t.checked.commit)
+		OnSelectionChange(func() { t.commit(&t.chosen) }).
+		OnCheckedChange(func() { t.commit(&t.checked) })
 	t.events(e)
 	return e
 }

@@ -537,3 +537,54 @@ func BenchmarkTableLiveUpdates(b *testing.B) {
 		})
 	}
 }
+
+func TestTableStaleRowAfterAShiftHasZeroKey(t *testing.T) {
+	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}, acct{3, "c", 0})
+	tt := tester(t, tb)
+	tb.DeleteRows(1) // rows shift: the frame shown still has a at 0
+	if k := tb.keyAt(0); k != 0 {
+		t.Fatalf("keyAt(0) after a shift = %v, want the zero key", k)
+	}
+	tb.Selected() // syncs the view, as the frame shown is not
+	if k, s := tb.keyAt(0), tb.labelAt(0); k != 0 || s != "" {
+		t.Fatalf("keyAt(0) = %v, labelAt(0) = %q after a getter synced", k, s)
+	}
+	if s := tb.copyRows([]int{0}); s != "" {
+		t.Fatalf("copyRows of a stale frame = %q", s)
+	}
+	tt.Frame()
+	if k := tb.keyAt(0); k != 2 {
+		t.Fatalf("keyAt(0) after a frame = %v", k)
+	}
+}
+
+func TestTableCommitDropsKeysOfRowsGone(t *testing.T) {
+	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}).CheckboxColumn()
+	tb.SetChecked([]int{1, 2}, true)
+	tester(t, tb)
+	tb.DeleteRows(1) // before ui applies input to the frame shown
+	tb.commit(&tb.checked)
+	if tb.IsChecked(1) || !tb.IsChecked(2) {
+		t.Fatalf("checked 1: %v, 2: %v after ui's commit", tb.IsChecked(1), tb.IsChecked(2))
+	}
+	tb.chosen.shown.Add(0) // a stale click's zero key
+	tb.commit(&tb.chosen)
+	if n := tb.CountSelected(); n != 0 {
+		t.Fatalf("CountSelected %d with no row of key 0", n)
+	}
+}
+
+func TestTableAutoCheckActsOnShownRows(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).CheckboxColumn()
+	tt := tester(t, tb)
+	click(t, tt, "ann")
+	if err := tt.ClickWith(ui.Cmd, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tb.Search("Name", "ann")
+	tb.AutoCheck()
+	if !tb.IsChecked(1) || tb.IsChecked(2) {
+		t.Fatalf("checked ann: %v, hidden bob: %v", tb.IsChecked(1), tb.IsChecked(2))
+	}
+}
