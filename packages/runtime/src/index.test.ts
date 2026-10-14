@@ -3,14 +3,22 @@ import {
   Channel,
   call,
   currentWindow,
+  direction,
   event,
   isCallError,
   isMyGo,
+  locale,
   on,
+  onDocumentReload,
+  onDocumentState,
   onFileDrop,
+  onLocaleChange,
+  onPreferences,
   runtime,
+  type DocumentState,
   type FileDrop,
   type Runtime,
+  type ThemePreferences,
 } from "./index";
 
 const calls: [string, unknown[]][] = [];
@@ -40,6 +48,8 @@ const fake: Runtime = {
   platform: "darwin",
   windowId: 1,
   version: "0.1.0",
+  locale: "en",
+  dir: "ltr",
   window: {
     minimize: () => fake.call("mygo:window.Minimize"),
     maximize: () => fake.call("mygo:window.Maximize"),
@@ -105,4 +115,44 @@ test("onFileDrop", () => {
   expect(got).toEqual([{ paths: ["/tmp/a.txt"], x: 10, y: 20 }]);
   off();
   expect(listeners.has("mygo:file-drop")).toBe(false);
+});
+
+test("onDocumentState and onDocumentReload", () => {
+  (globalThis as { mygo?: Runtime }).mygo = fake;
+  const states: DocumentState[] = [];
+  let reloads = 0;
+  const off = onDocumentState((s) => states.push(s));
+  const offReload = onDocumentReload(() => reloads++);
+  const state = { name: "a.md", path: "/tmp/a.md", edited: true, readOnly: false, conflict: false, deleted: false };
+  listeners.get("mygo:document-state")?.(state);
+  listeners.get("mygo:document-reload")?.({});
+  expect(states).toEqual([state]);
+  expect(reloads).toBe(1);
+  off();
+  offReload();
+  expect(listeners.has("mygo:document-state")).toBe(false);
+  expect(listeners.has("mygo:document-reload")).toBe(false);
+});
+
+test("onPreferences", () => {
+  (globalThis as { mygo?: Runtime }).mygo = fake;
+  const got: ThemePreferences[] = [];
+  const off = onPreferences((p) => got.push(p));
+  const preferences = { accent: "#ff8000", reduceMotion: true, highContrast: false, textScale: 1.25 };
+  listeners.get("mygo:preferences")?.(preferences);
+  expect(got).toEqual([preferences]);
+  off();
+  expect(listeners.has("mygo:preferences")).toBe(false);
+});
+
+test("locale, direction and onLocaleChange", () => {
+  (globalThis as { mygo?: Runtime }).mygo = fake;
+  expect(locale()).toBe("en");
+  expect(direction()).toBe("ltr");
+  const got: [string, string][] = [];
+  const off = onLocaleChange((tag, dir) => got.push([tag, dir]));
+  listeners.get("mygo:locale")?.({ locale: "ar", dir: "rtl" });
+  expect(got).toEqual([["ar", "rtl"]]);
+  off();
+  expect(listeners.has("mygo:locale")).toBe(false);
 });

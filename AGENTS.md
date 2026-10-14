@@ -54,10 +54,13 @@ go run ./cmd/mygo build examples/todo      # .app + .dmg in examples/todo/build
 go run ./cmd/mygo build -platform web examples/counter-native   # a static site in examples/counter-native/dist/web
 go run ./examples/gallery                  # the native UI toolkit's tour
 go run ./examples/code-editor              # the code editor and the diff viewer (ui/editor)
+go run ./examples/markdown-chat            # Markdown replies streaming in (ui/markdown)
+go run ./examples/notes                    # the rich text editor (ui/richtext), in a notes app
 go run ./examples/terminal                 # a terminal (downloads libghostty-vt once)
 go generate ./plugins/terminal             # build libghostty-vt for every platform (with Zig), write Ghostty's themes
 go generate ./internal/gpu/d3d11           # recompile the Direct3D shader (on Windows)
 go generate ./internal/gpu/metal           # recompile the Metal shader (on macOS, with Xcode)
+go generate ./internal/l10n                # MyGo's own strings: their functions, and the packages of translations in locales/
 go generate ./plugins/glass                # recompile the glass plugin's shaders (on macOS, and on Windows)
 bun run --cwd website dev                  # the website, with docs/ at /docs (see website/README.md)
 bun scripts/bench.ts run [--e2e]           # benchmarks and app sizes, medians of 6 runs (CI: bench.yml, /benchmarks)

@@ -37,10 +37,11 @@ func newEngine() engine {
 
 // Core Foundation, Core Text and Core Graphics structs passed by value.
 type (
-	cfRange struct{ location, length int }
-	cgPoint struct{ x, y float64 }
-	cgSize  struct{ w, h float64 }
-	cgRect  struct{ x, y, w, h float64 }
+	cfRange           struct{ location, length int }
+	cgPoint           struct{ x, y float64 }
+	cgSize            struct{ w, h float64 }
+	cgRect            struct{ x, y, w, h float64 }
+	cgAffineTransform struct{ a, b, c, d, tx, ty float64 }
 
 	ctParagraphStyleSetting struct {
 		spec  uint32
@@ -57,6 +58,7 @@ const (
 
 	ctFontUIFontSystem         = 2
 	ctFontItalicTrait          = 1 << 0
+	ctFontMonoSpaceTrait       = 1 << 10
 	ctFontColorGlyphsTrait     = 1 << 13
 	ctFontOrientationDefault   = 0
 	ctRunStatusRightToLeft     = 1 << 0
@@ -108,10 +110,12 @@ var ct struct {
 	descriptorMatching    func(desc, mandatory uintptr) uintptr
 	descriptorAttribute   func(desc, name uintptr) uintptr
 	descriptorsFromData   func(data uintptr) uintptr
+	availableFamilyNames  func() uintptr
 	fontGetAscent         func(font uintptr) float64
 	fontGetDescent        func(font uintptr) float64
 	fontGetLeading        func(font uintptr) float64
 	fontGetSize           func(font uintptr) float64
+	fontGetMatrix         func(font uintptr) cgAffineTransform
 	fontGetSymbolicTraits func(font uintptr) uint32
 	fontGetUnderlinePos   func(font uintptr) float64
 	fontGetUnderlineThick func(font uintptr) float64
@@ -143,6 +147,7 @@ var ct struct {
 	trackingName    uintptr
 	kernName        uintptr
 	cascadeList     uintptr
+	languageName    uintptr // kCTLanguageAttributeName, macOS 10.8
 	featureSettings uintptr
 	featureTag      uintptr
 	featureValue    uintptr
@@ -237,6 +242,7 @@ func loadCoreText() error {
 	ct.weightTrait = value(text, "kCTFontWeightTrait")
 	ct.symbolicTrait = value(text, "kCTFontSymbolicTrait")
 	bind(text, &ct.fontWithDescriptor, "CTFontCreateWithFontDescriptor")
+	bind(text, &ct.availableFamilyNames, "CTFontManagerCopyAvailableFontFamilyNames")
 	bind(text, &ct.uiFontForLanguage, "CTFontCreateUIFontForLanguage")
 	bind(text, &ct.fontWithTraits, "CTFontCreateCopyWithSymbolicTraits")
 	bind(text, &ct.fontWithAttrs, "CTFontCreateCopyWithAttributes")
@@ -247,6 +253,7 @@ func loadCoreText() error {
 	bind(text, &ct.fontGetDescent, "CTFontGetDescent")
 	bind(text, &ct.fontGetLeading, "CTFontGetLeading")
 	bind(text, &ct.fontGetSize, "CTFontGetSize")
+	bind(text, &ct.fontGetMatrix, "CTFontGetMatrix")
 	bind(text, &ct.fontGetSymbolicTraits, "CTFontGetSymbolicTraits")
 	bind(text, &ct.fontGetBoundingRects, "CTFontGetBoundingRectsForGlyphs")
 	bind(text, &ct.fontDrawGlyphs, "CTFontDrawGlyphs")
@@ -277,9 +284,11 @@ func loadCoreText() error {
 	ct.trackingName = optional(text, "kCTTrackingAttributeName")
 	ct.kernName = optional(text, "kCTKernAttributeName")
 	ct.cascadeList = optional(text, "kCTFontCascadeListAttribute")
+	ct.languageName = optional(text, "kCTLanguageAttributeName")
 	ct.featureSettings = optional(text, "kCTFontFeatureSettingsAttribute")
 	ct.featureTag = optional(text, "kCTFontOpenTypeFeatureTag")
 	ct.featureValue = optional(text, "kCTFontOpenTypeFeatureValue")
+	initDelegates(text, optional)
 	// Optional: adding fonts from memory (macOS 10.13), sRGB by name.
 	if sym, err := purego.Dlsym(text, "CTFontManagerCreateFontDescriptorsFromData"); err == nil && sym != 0 {
 		purego.RegisterFunc(&ct.descriptorsFromData, sym)
@@ -390,6 +399,15 @@ type coreText struct {
 	fonts   map[uint][]*Font  // by CFHash of their CTFont
 	// native finds Fonts by their CTFont, which they retain.
 	native map[uintptr]*Font
+	// oblique maps an upright Font to its synthetic italic variant. Both
+	// are retained by fonts, and have distinct glyph/outline cache keys.
+	oblique map[*Font]*Font
+	// italic names an attribute that marks the runes of italic spans in a
+	// text that is not italic, owned, so that Core Text ends a run where
+	// italics start or stop even when both sides are in one font, as a
+	// CJK font without an italic face. Any value marks them; it is its
+	// own.
+	italic uintptr
 	// attrs are the attributes of strings in a font of primary, in each
 	// direction, without tracking or kerning, owned.
 	attrs map[attrsKey]uintptr
@@ -410,17 +428,21 @@ type coreText struct {
 	runIndices   []int
 
 	registered map[string][]registeredFace // by lowercased family
+	// names are the families of registered, as the app gave them.
+	names []string
 }
 
 type attrsKey struct {
 	font uintptr
 	rtl  bool
+	lang string
 }
 
 type registeredFace struct {
 	desc   uintptr
 	weight float64 // -1 to 1
 	italic bool
+	mono   bool
 }
 
 func newCoreText() (*coreText, error) {
@@ -431,10 +453,12 @@ func newCoreText() (*coreText, error) {
 		primary:    map[Style]uintptr{},
 		fonts:      map[uint][]*Font{},
 		native:     map[uintptr]*Font{},
+		oblique:    map[*Font]*Font{},
 		attrs:      map[attrsKey]uintptr{},
 		color:      map[uintptr]bool{},
 		registered: map[string][]registeredFace{},
 		bands:      map[bandKey][2]float32{},
+		italic:     cfString("MyGoItalic"),
 	}
 	for i, dir := range [2]int8{0, 1} { // kCTWritingDirectionLeftToRight, RightToLeft
 		d := dir
@@ -674,6 +698,47 @@ func (e *coreText) ctFont(style Style) uintptr {
 	return font
 }
 
+// obliqueSkew slants synthetic italics by 14°, as WebKit does.
+var obliqueSkew = math.Tan(14 * math.Pi / 180)
+
+// syntheticItalic returns a slanted copy of a font without an italic face,
+// owned, or 0 when it has one. Core Text's y axis points up, so a positive
+// c moves the glyph's top right. A font already transformed is left as it
+// is, and color glyphs stay upright, as Core Text draws their bitmaps.
+func syntheticItalic(font uintptr) uintptr {
+	if font == 0 || ct.fontGetSymbolicTraits(font)&(ctFontItalicTrait|ctFontColorGlyphsTrait) != 0 {
+		return 0
+	}
+	matrix := ct.fontGetMatrix(font)
+	if matrix.c != 0 {
+		return 0
+	}
+	matrix.c = obliqueSkew
+	with := ct.fontWithAttrs(font, 0, uintptr(unsafe.Pointer(&matrix)), 0)
+	runtime.KeepAlive(&matrix)
+	return with
+}
+
+// runFont returns the Font of a run's CTFont, slanted when the run is
+// italic and the font has no italic face: the font of an italic style, or
+// one Core Text fell back to for glyphs it lacks, as CJK fonts.
+func (e *coreText) runFont(font uintptr, italic bool) *Font {
+	base := e.fontOf(font)
+	if !italic {
+		return base
+	}
+	if f, ok := e.oblique[base]; ok {
+		return f
+	}
+	f := base
+	if with := syntheticItalic(font); with != 0 {
+		f = e.fontOf(with)
+		ct.release(with)
+	}
+	e.oblique[base] = f
+	return f
+}
+
 // styleSpans returns a copy of the attributed string of text, of style,
 // with the font and tracking of each span over its runes, owned.
 func (e *coreText) styleSpans(attributed uintptr, style Style, spans []Span, text []rune) uintptr {
@@ -688,17 +753,44 @@ func (e *coreText) styleSpans(attributed uintptr, style Style, spans []Span, tex
 			at[i+1]++
 		}
 	}
+	objects := 0
+	for i, sp := range spans {
+		if sp.ObjectWidth > 0 {
+			start := 0
+			if i > 0 {
+				start = spans[i-1].End
+			}
+			objects += max(min(sp.End, len(text))-start, 0)
+		}
+	}
+	runDelegates.reset(objects)
+	objects = 0
 	from := 0
 	for _, sp := range spans {
 		to := max(from, min(sp.End, len(text)))
 		r := cfRange{at[from], at[to] - at[from]}
+		start := from
 		from = to
 		if r.length == 0 {
 			continue
 		}
+		if sp.ObjectWidth > 0 {
+			// Each rune is an object of its own: a run Core Text sizes by
+			// its delegate.
+			for k := start; k < to; k++ {
+				if d := runDelegates.delegate(objects, sp.ObjectWidth, sp.ObjectHeight); d != 0 {
+					ct.attributedSet(styled, cfRange{at[k], at[k+1] - at[k]}, runDelegates.attribute, d)
+					ct.release(d)
+				}
+				objects++
+			}
+		}
 		s := sp.style(style)
 		if font := e.ctFont(s); font != 0 {
 			ct.attributedSet(styled, r, ct.fontAttributeName, font)
+		}
+		if s.Italic && !style.Italic {
+			ct.attributedSet(styled, r, e.italic, e.italic)
 		}
 		if s.LetterSpacing != style.LetterSpacing && ct.trackingName != 0 {
 			tracking := cfFloat(float64(s.LetterSpacing))
@@ -709,6 +801,11 @@ func (e *coreText) styleSpans(attributed uintptr, style Style, spans []Span, tex
 			zero := cfFloat(0)
 			ct.attributedSet(styled, r, ct.kernName, zero)
 			ct.release(zero)
+		}
+		if s.Lang != style.Lang && s.Lang != "" && ct.languageName != 0 {
+			tag := cfString(s.Lang)
+			ct.attributedSet(styled, r, ct.languageName, tag)
+			ct.release(tag)
 		}
 	}
 	return styled
@@ -827,8 +924,23 @@ func (e *coreText) shape(text []rune, style Style, spans []Span, width float32, 
 	if rtl {
 		paragraph = e.styles[1]
 	}
-	attrs, cached := e.attrs[attrsKey{font, rtl}]
+	lang := style.Lang
+	if ct.languageName == 0 {
+		lang = ""
+	}
+	key := attrsKey{font, rtl, lang}
+	attrs, cached := e.attrs[key]
 	keys, values := append(e.keys[:0], ct.fontAttributeName, ct.paragraphStyleName), append(e.values[:0], font, paragraph)
+	base := 2
+	if lang != "" {
+		// The language picks the glyphs of a font that has several, as
+		// Han characters in Chinese and Japanese, and the fonts Core Text
+		// falls back to.
+		tag := cfString(lang)
+		defer ct.release(tag)
+		keys, values = append(keys, ct.languageName), append(values, tag)
+		base++
+	}
 	if style.LetterSpacing != 0 && ct.trackingName != 0 {
 		// Tracking, in points as DIPs, keeps the font's kerning.
 		tracking := cfFloat(float64(style.LetterSpacing))
@@ -842,13 +954,13 @@ func (e *coreText) shape(text []rune, style Style, spans []Span, width float32, 
 	}
 	e.keys, e.values = keys, values
 	switch {
-	case len(keys) > 2:
+	case len(keys) > base:
 		attrs = cfDictionary(keys, values)
 		defer ct.release(attrs)
 	case !cached:
 		// The font of a style lives in primary, with its attributes.
 		attrs = cfDictionary(keys, values)
-		e.attrs[attrsKey{font, rtl}] = attrs
+		e.attrs[key] = attrs
 	}
 	attributed := ct.attributedString(0, str, attrs)
 	defer ct.release(attributed)
@@ -887,14 +999,16 @@ func (e *coreText) shape(text []rune, style Style, spans []Span, width float32, 
 		if line == 0 {
 			break
 		}
-		lines = e.addLine(mark, e.line(line, index, n))
+		lines = e.addLine(mark, e.line(line, index, n, style.Italic))
 		ct.release(line)
 		start += count
 	}
 	return lines
 }
 
-func (e *coreText) line(line uintptr, index []int, n int) shapedLine {
+// line reads the runs of a line of a text that italic says is italic, or
+// whose runs styleSpans marked as such.
+func (e *coreText) line(line uintptr, index []int, n int, italic bool) shapedLine {
 	at := func(i int) int { return index[max(0, min(i, n))] }
 	r := ct.lineGetStringRange(line)
 	sl := shapedLine{start: at(r.location), end: at(r.location + r.length)}
@@ -903,7 +1017,8 @@ func (e *coreText) line(line uintptr, index []int, n int) shapedLine {
 	for i := range ct.arrayGetCount(runs) {
 		run := ct.arrayGetValueAtIndex(runs, i)
 		rr := ct.runGetStringRange(run)
-		f := e.fontOf(ct.dictionaryGetValue(ct.runGetAttributes(run), ct.fontAttributeName))
+		attrs := ct.runGetAttributes(run)
+		f := e.runFont(ct.dictionaryGetValue(attrs, ct.fontAttributeName), italic || ct.dictionaryGetValue(attrs, e.italic) != 0)
 		sr := shapedRun{font: f, start: at(rr.location), end: at(rr.location + rr.length)}
 		if count := ct.runGetGlyphCount(run); count > 0 {
 			e.runIDs = slices.Grow(e.runIDs[:0], count)[:count]
@@ -929,7 +1044,34 @@ func (e *coreText) line(line uintptr, index []int, n int) shapedLine {
 		}
 		sl.runs = e.addRun(mark, sr)
 	}
+	penAdvances(sl.runs)
 	return sl
+}
+
+// penAdvances gives the room Core Text leaves between letters by their
+// positions alone, as between Han and Latin letters in Chinese or
+// Japanese text, to the advance of the letter before it, so that the
+// widths of lines and the carets follow the pen. Only room ahead of the
+// pen counts: a mark placed back over its letter leaves the advances as
+// they are. Right-to-left runs keep theirs.
+func penAdvances(runs []shapedRun) {
+	var prev *Glyph
+	var pen float32
+	for i := range runs {
+		for j := range runs[i].glyphs {
+			g := &runs[i].glyphs[j]
+			if prev != nil && !prev.RTL && !g.RTL {
+				if gap := g.X - pen; gap > 1e-3 {
+					prev.Advance += gap
+					pen += gap
+				}
+			} else {
+				pen = g.X
+			}
+			pen += g.Advance
+			prev = g
+		}
+	}
 }
 
 func (e *coreText) isColor(font uintptr) bool {
@@ -1269,6 +1411,53 @@ func shadeGray(shade Shade) float64 {
 	return 1.055*math.Pow(y, 1/2.4) - 0.055
 }
 
+// families lists the app's families and the system's, the monospaced
+// ones when mono: those whose regular font's symbolic traits say so.
+func (e *coreText) families(mono bool) (app, system []string) {
+	for _, name := range e.names {
+		if !mono || slices.ContainsFunc(e.registered[strings.ToLower(name)], func(f registeredFace) bool { return f.mono }) {
+			app = append(app, name)
+		}
+	}
+	arr := ct.availableFamilyNames()
+	if arr == 0 {
+		return app, nil
+	}
+	defer ct.release(arr)
+	for i := range ct.arrayGetCount(arr) {
+		name := goString(ct.arrayGetValueAtIndex(arr, i))
+		if name == "" || strings.HasPrefix(name, ".") {
+			continue // the system's hidden families
+		}
+		if mono && !e.monospaced(name) {
+			continue
+		}
+		system = append(system, name)
+	}
+	return app, system
+}
+
+// monospaced reports whether a family's regular font is monospaced.
+func (e *coreText) monospaced(family string) bool {
+	desc := e.namedDesc(family, 400, false)
+	if desc == 0 {
+		return false
+	}
+	defer ct.release(desc)
+	traits := ct.descriptorAttribute(desc, ct.traitsAttribute)
+	if traits == 0 {
+		return false
+	}
+	defer ct.release(traits)
+	s := ct.dictionaryGetValue(traits, ct.symbolicTrait)
+	if s == 0 {
+		return false
+	}
+	var v int64
+	ct.numberGetValue(s, cfNumberSInt64Type, unsafe.Pointer(&v))
+	return v&ctFontMonoSpaceTrait != 0
+}
+
 func (e *coreText) register(data []byte, family string) error {
 	if ct.descriptorsFromData == nil {
 		return errors.New("mygo: adding fonts needs macOS 10.13 or later")
@@ -1306,10 +1495,15 @@ func (e *coreText) register(data []byte, family string) error {
 			}
 			ct.release(traits)
 		}
+		if font := ct.fontWithDescriptor(desc, 12, 0); font != 0 {
+			face.mono = ct.fontGetSymbolicTraits(font)&ctFontMonoSpaceTrait != 0
+			ct.release(font)
+		}
 		for _, f := range []string{name, family} {
 			if f != "" {
 				key := strings.ToLower(f)
 				e.registered[key] = append(e.registered[key], face)
+				e.names = append(e.names, f)
 			}
 		}
 	}
@@ -1347,5 +1541,6 @@ func (e *coreText) forgetFonts() {
 	}
 	clear(e.fonts)
 	clear(e.native)
+	clear(e.oblique)
 	clear(e.color)
 }

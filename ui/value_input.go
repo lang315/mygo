@@ -129,16 +129,27 @@ func sliderInput(n *node) {
 		if settings.vertical && st.ch > 0 {
 			set(b.lo + float64(max(0, min(1, 1-(y-st.cy)/st.ch)))*(b.hi-b.lo))
 		} else if !settings.vertical && st.cw > 0 {
-			set(b.lo + float64(max(0, min(1, (x-st.cx)/st.cw)))*(b.hi-b.lo))
+			f := (x - st.cx) / st.cw
+			if n.rtl() {
+				// Right to left, lo is at the right, as AppKit's sliders
+				// and browsers' ranges go.
+				f = 1 - f
+			}
+			set(b.lo + float64(max(0, min(1, f)))*(b.hi-b.lo))
 		}
 	}
 	if step <= 0 {
 		step = (b.hi - b.lo) / 100
 	}
+	// The arrows move the knob the way they point.
+	back, forth := KeyLeft, KeyRight
+	if n.rtl() && !settings.vertical {
+		back, forth = forth, back
+	}
 	switch {
-	case n.Shortcut(0, KeyLeft), n.Shortcut(0, KeyDown):
+	case n.Shortcut(0, back), n.Shortcut(0, KeyDown):
 		set(*b.value - step)
-	case n.Shortcut(0, KeyRight), n.Shortcut(0, KeyUp):
+	case n.Shortcut(0, forth), n.Shortcut(0, KeyUp):
 		set(*b.value + step)
 	case n.Shortcut(0, KeyPageDown):
 		set(*b.value - max(step, (b.hi-b.lo)/10))
@@ -280,4 +291,14 @@ type inputAction struct {
 
 func (n *node) afterInput(fn func()) {
 	n.c.rt.afterInputs = append(n.c.rt.afterInputs, inputAction{node: n, fn: fn})
+}
+
+// SetChanged reports the element's value as changed in this build pass,
+// as a widget of your own whose input changed what it edits: Changed
+// returns true for it, as for the widgets' own.
+func (e *node) SetChanged() *node {
+	if e.hasState() {
+		e.st.markChanged()
+	}
+	return e
 }

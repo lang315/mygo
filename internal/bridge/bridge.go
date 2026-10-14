@@ -21,6 +21,11 @@ type Config struct {
 	Version  string `json:"version"`
 	// Secret prefixes every message the bridge posts.
 	Secret string `json:"secret"`
+	// Locale is the language the app shows, e.g. "zh-Hans", and Dir the
+	// direction it is written in, "ltr" or "rtl", which pages read as
+	// mygo.locale and mygo.dir from document start.
+	Locale string `json:"locale"`
+	Dir    string `json:"dir"`
 }
 
 // Script returns the bridge source configured for one window.
@@ -33,6 +38,19 @@ func Script(cfg Config) string {
 // the window controls take. The bridge keeps it in the --mygo-titlebar-*
 // CSS variables.
 const TitleBarEvent = "mygo:title-bar"
+
+// LocaleEvent tells the pages of a window that the language the app shows
+// changed, with a Locale. The bridge configuration tells pages the
+// language at document start; the event is sent as a page loads too, for
+// one that started loading as the language changed, and the bridge tells
+// its listeners only of a language the page did not have.
+const LocaleEvent = "mygo:locale"
+
+// Locale is the payload of LocaleEvent.
+type Locale struct {
+	Locale string `json:"locale"`
+	Dir    string `json:"dir"`
+}
 
 // TitleBar is the payload of TitleBarEvent, in CSS pixels.
 type TitleBar struct {
@@ -56,4 +74,29 @@ func NewTitleBar(tb platform.TitleBar, zoom float64) TitleBar {
 func TitleBarScript(tb platform.TitleBar, zoom float64) string {
 	p, _ := json.Marshal(NewTitleBar(tb, zoom))
 	return `window.__mygo&&window.__mygo.receive({"t":"event","n":"` + TitleBarEvent + `","p":` + string(p) + `});`
+}
+
+// PreferencesEvent tells a page the accent color and the accessibility
+// settings of the desktop. The bridge keeps the accent in the --mygo-accent
+// CSS variable and the text scale in --mygo-text-scale.
+const PreferencesEvent = "mygo:preferences"
+
+// Preferences is a page's view of the desktop's settings.
+type Preferences struct {
+	// Accent is the color of the desktop's controls as "#rrggbb", or empty
+	// where the desktop has none.
+	Accent string `json:"accent"`
+	// ReduceMotion reports that the desktop asks for less animation.
+	ReduceMotion bool `json:"reduceMotion"`
+	// HighContrast reports that the desktop uses a contrast theme.
+	HighContrast bool `json:"highContrast"`
+	// TextScale is the factor the desktop asks text to grow by; 1 is usual.
+	TextScale float64 `json:"textScale"`
+}
+
+// PreferencesScript delivers PreferencesEvent at document start, after the
+// bridge has registered the handler that turns it into CSS variables.
+func PreferencesScript(p Preferences) string {
+	b, _ := json.Marshal(p)
+	return `window.__mygo&&window.__mygo.receive({"t":"event","n":"` + PreferencesEvent + `","p":` + string(b) + `});`
 }

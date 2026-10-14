@@ -101,6 +101,21 @@ app.diff.RenderAnnotation = func(c *ui.Context, a editor.DiffAnnotation) {
 }
 ```
 
+The active side is the one that has the keyboard, or had it last: the
+new side until the old one of a split view has it. `Cursor` returns it
+and its newest caret, and `CurrentHunk` the change the caret is in, or
+the last before it, as "2 of 5" counts them; `GoToHunk` moves that
+caret, so Next Change can step from it. `Run` runs a command in its
+editor as its key would, and `Find` opens its find bar on a query, as an
+app's menu items do where the menu takes the keys first:
+
+```go
+if ui.Button(c, "Find").Clicked() {
+	app.diff.Run(editor.Find)
+}
+ui.Text(c, fmt.Sprintf("%d of %d", app.diff.CurrentHunk()+1, len(app.diff.Hunks())))
+```
+
 ## Styling
 
 `Theme` colors the diff as it does the [code editor](code-editor.md#themes),
@@ -176,4 +191,6 @@ Assistive technology sees each side as a text field, "Old text" and "New
 text", the old one read only, with its text and selection. A separator is
 a group named by the lines it collapses, with buttons expanding them up,
 down or all; Revert and Keep are buttons, "Revert change" and "Keep
-change".
+change". These names, and what the viewer writes ("4 unmodified lines"),
+are in the window's language
+([MyGo's own strings](../i18n.md#mygos-own-strings)).
