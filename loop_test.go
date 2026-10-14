@@ -36,3 +36,14 @@ func TestLoopInsideQueuedFunction(t *testing.T) {
 		t.Fatal("the function queued behind one running a loop did not run")
 	}
 }
+
+func TestIsMainThread(t *testing.T) {
+	if IsMainThread() {
+		t.Fatal("the test goroutine reports the main thread")
+	}
+	var main bool
+	RunOnMain(func() { main = IsMainThread() })
+	if !main {
+		t.Fatal("RunOnMain's function does not report the main thread")
+	}
+}
