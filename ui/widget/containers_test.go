@@ -116,3 +116,29 @@ func TestGridHiddenCellKeepsTheOthersInPlace(t *testing.T) {
 		t.Fatalf("B %v→%v, C %v→%v: cells moved", b0, b, c0, c)
 	}
 }
+func TestFrameIgnoresItsTitleAsItsChild(t *testing.T) {
+	l := Label("both")
+	tt := tester(t, Frame("").SetTitleWidget(l).Add(l)) // a duplicate key panics
+	if n := count(tt, "both"); n != 1 {
+		t.Fatalf("shown %d times", n)
+	}
+}
+
+func TestCardIgnoresItsTitleAsItsBody(t *testing.T) {
+	l := Label("both")
+	tt := tester(t, Card().SetTitle(l).SetBody(l))
+	if n := count(tt, "both"); n != 1 {
+		t.Fatalf("shown %d times", n)
+	}
+}
+
+func TestGridAttachOnATakenCellReplacesIt(t *testing.T) {
+	g := Grid(0, 0).Attach(Label("old"), 0, 0, 1, 1).Attach(Label("new"), 0, 0, 1, 1)
+	tt := tester(t, g)
+	mu.Lock()
+	n := len(g.cells)
+	mu.Unlock()
+	if n != 1 || tt.HasText("old") || !tt.HasText("new") {
+		t.Fatalf("%d cells, texts %q", n, tt.Texts())
+	}
+}

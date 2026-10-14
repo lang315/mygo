@@ -83,3 +83,42 @@ func TestButtonBoxPutsButtonsAtTheEnd(t *testing.T) {
 		t.Fatalf("OK at %v, want at the end", r)
 	}
 }
+
+// count returns how many texts of the last frame are s.
+func count(tt *ui.Tester, s string) int {
+	n := 0
+	for _, have := range tt.Texts() {
+		if have == s {
+			n++
+		}
+	}
+	return n
+}
+
+func TestHiddenPackedWidgetLeavesNoRoom(t *testing.T) {
+	tt := tester(t, HBox(0).Pack(Label("gone").SetVisible(false), true, false).Add(Label("B")))
+	if b := find(t, tt, "B"); b.X > 1 {
+		t.Fatalf("B at %v: the hidden widget's room still grows", b)
+	}
+}
+
+func TestButtonBoxButtonsShareAWidth(t *testing.T) {
+	tt := tester(t, ButtonBox().Add(Button("OK"), Button("Cancel the whole thing")))
+	// Find gives the texts' rects; each is centered in its button. Equal
+	// buttons ending at 800, 8 apart: Cancel's button is w = 2*(800-c2)
+	// wide, so OK's center is c2 - w - 8.
+	ok, cancel := find(t, tt, "OK"), find(t, tt, "Cancel the whole thing")
+	c1, c2 := ok.X+ok.W/2, cancel.X+cancel.W/2
+	w := 2 * (800 - c2)
+	if want := c2 - w - 8; c1 < want-1 || c1 > want+1 {
+		t.Fatalf("OK centered at %v, want %v for buttons of one width %v (Cancel %v)", c1, want, w, cancel)
+	}
+}
+
+func TestWidgetInTwoBoxesShowsInBoth(t *testing.T) {
+	l := Label("twice")
+	tt := tester(t, VBox(0).Add(VBox(0).Add(l), VBox(0).Add(l)))
+	if n := count(tt, "twice"); n != 2 {
+		t.Fatalf("shown %d times: %q", n, tt.Texts())
+	}
+}
