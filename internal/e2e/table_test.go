@@ -35,7 +35,12 @@ func TestWidgetTable(t *testing.T) {
 	).SetRows(rows).CheckboxColumn().BottomPanel()
 	w := widget.NewWindow("Table", 500, 400).SetContent(tb)
 	w.Show()
-	t.Cleanup(w.Close)
+	t.Cleanup(func() {
+		// Close asks; wait until the window is gone, as Destroy would, so
+		// that it takes no input from the tests after this one.
+		w.Close()
+		eventually(t, "the table's window to close", func() bool { return w.Native() == nil })
+	})
 	eventually(t, "the table's first frame", func() bool { return built.Load() > 0 })
 
 	stop := make(chan struct{})
