@@ -14,6 +14,12 @@ import (
 // per window if a profile shows waits.
 var mu sync.Mutex
 
+// viewing is set while a view builds, holding mu: ui asks a table for the
+// keys of its rows both then and while it applies input, without mu.
+// Every ui frame runs on the main thread (a Tester's on its goroutine),
+// so a view building is the only one.
+var viewing atomic.Bool
+
 var lastID atomic.Int64
 
 // newID returns a widget id, unique in the process, for the key of its
