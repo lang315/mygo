@@ -210,12 +210,12 @@ func (g *gallery) initTable() {
 		k := tableKinds[i%len(tableKinds)]
 		g.tableFiles[i] = tableFile{id: i, name: fmt.Sprintf("file-%06d.%s", i, k.ext), kind: k.kind, size: (i*37%11 + 1) * 173}
 	}
-	g.tableView = ui.NewTableView(map[string]func(a, b tableFile) int{
-		"Name": func(a, b tableFile) int {
+	g.tableView = ui.NewTableView(map[string]func(a, b *tableFile) int{
+		"Name": func(a, b *tableFile) int {
 			return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name))
 		},
-		"Kind": func(a, b tableFile) int { return strings.Compare(a.kind, b.kind) },
-		"Size": func(a, b tableFile) int { return a.size - b.size },
+		"Kind": func(a, b *tableFile) int { return strings.Compare(a.kind, b.kind) },
+		"Size": func(a, b *tableFile) int { return a.size - b.size },
 	})
 }
 
@@ -997,7 +997,7 @@ func (g *gallery) list(c *ui.Context) {
 			// the files checked are only those shown.
 			if ui.SearchField(c, &g.tableFilter).Label("Search files").Changed() {
 				kw := strings.ToLower(g.tableFilter)
-				g.tableView.SetFilter(func(f tableFile) bool { return strings.Contains(strings.ToLower(f.name), kw) })
+				g.tableView.SetFilter(func(f *tableFile) bool { return strings.Contains(strings.ToLower(f.name), kw) })
 				g.tableChecked.Clear()
 			}
 			files, view := g.tableFiles, g.tableView
