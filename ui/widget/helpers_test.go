@@ -1,6 +1,10 @@
 package widget
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
 	"testing"
 	"time"
 
@@ -75,4 +79,20 @@ func runAsync[T any](fn func() T) <-chan T {
 	ch := make(chan T, 1)
 	go func() { ch <- fn() }()
 	return ch
+}
+
+// testPNG returns a 4x4 PNG of one color.
+func testPNG(t *testing.T, c color.Color) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := range 4 {
+		for x := range 4 {
+			img.Set(x, y, c)
+		}
+	}
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
 }
