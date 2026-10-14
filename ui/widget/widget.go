@@ -36,6 +36,7 @@ type core struct {
 	st         style
 	onFocusOut func()
 	click      func()
+	menu       []MenuItem
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
@@ -66,6 +67,13 @@ func (c *common[W]) SetVisible(v bool) *W {
 // OnClick runs fn when the widget is clicked: gota's EventBox, on any
 // widget. Buttons have their own OnClick.
 func (c *common[W]) OnClick(fn func()) *W { change(func() { c.click = fn }); return c.self }
+
+// ContextMenu shows items in a menu when the widget is right-clicked; no
+// items remove it. Set it again when the items change.
+func (c *common[W]) ContextMenu(items ...MenuItem) *W {
+	change(func() { c.menu = items })
+	return c.self
+}
 
 // Focus moves the keyboard focus to the widget when it next draws.
 func (c *common[W]) Focus() *W { change(func() { c.wantFocus = true }); return c.self }
@@ -124,6 +132,9 @@ func render(c *ui.Context, w Widget) ui.Element {
 	}
 	if h := b.click; h != nil {
 		e.OnClick(func() { Post(h) })
+	}
+	if menu := b.menu; len(menu) > 0 {
+		e.ContextMenu(func(m *ui.Menu) { buildMenu(m, menu) })
 	}
 	if b.wantFocus {
 		e.Focus()

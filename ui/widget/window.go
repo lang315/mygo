@@ -20,6 +20,7 @@ type Window struct {
 	root          Widget
 	header        *HeaderBarWidget
 	onClose       func() bool
+	menu          []MenuItem
 	parent        *Window       // a dialog's; nil for a top-level window
 	modal         bool          // blocks parent while shown
 	deletable     bool          // the user may close it
@@ -114,6 +115,15 @@ func (w *Window) Unmaximize() *Window {
 	return w
 }
 
+// SetMenuBar sets the window's menu bar, on Linux and Windows. On macOS
+// the menu bar is the app's, set with mygo.App.SetMenu; there it does
+// nothing.
+func (w *Window) SetMenuBar(items ...MenuItem) *Window {
+	change(func() { w.menu = items })
+	w.do(func(n *mygo.Window) { n.SetMenu(mygo.NewMenu(nativeMenu(items))) })
+	return w
+}
+
 // SetContent shows root in the window, replacing what it showed.
 func (w *Window) SetContent(root Widget) *Window { change(func() { w.root = root }); return w }
 
@@ -159,7 +169,7 @@ func (w *Window) Show() {
 	if p := w.parent; p != nil && p.win != nil {
 		opts.Parent, opts.Modal = p.win, w.modal
 	}
-	icon, resizable := w.icon, w.resizable
+	icon, resizable, menu := w.icon, w.resizable, w.menu
 	mu.Unlock()
 	watchQuit.Do(func() { mygo.App.OnBeforeQuit(onBeforeQuit) })
 	n := mygo.NewWindow(opts)
@@ -168,6 +178,9 @@ func (w *Window) Show() {
 	}
 	if !resizable {
 		n.SetResizable(false)
+	}
+	if menu != nil {
+		n.SetMenu(mygo.NewMenu(nativeMenu(menu)))
 	}
 	n.OnClose(w.closeAsked)
 	n.OnClosed(func() {
