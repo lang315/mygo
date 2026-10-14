@@ -89,7 +89,8 @@ innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
 Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,
-`Question`, `Error`), 420 DIPs wide:
+`Question`, `Error`), 420 DIPs wide, their OK and Cancel in the app's
+language:
 
 - `Alert(parent, kind, title, text)` waits for OK.
 - `Confirm(parent, kind, title, text) bool`: OK is true; Cancel and closing
@@ -188,8 +189,8 @@ Input and display:
 - `Icon(svg, size)`: an SVG icon in the color of the text (`TextColor`
   changes it). There are no named icons: embed the SVGs you need.
 - `Image(data, w, h)`: a PNG, JPEG, GIF, WebP or BMP, `SetImage` to change
-  it. The same bytes decode once (the last 256 are kept); bytes that are no
-  image leave an empty room.
+  it. The same bytes of an image up to 64 KB, as an icon, decode once (the
+  last 256 are kept); bytes that are no image leave an empty room.
 - `Entry()`, `TextView()`: one line or several of text; `Text`, `SetText`,
   `SetPlaceholder`, `SetEditable`, `OnChange`; `Entry` also has
   `Password` and `OnEnter`.

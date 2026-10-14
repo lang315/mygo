@@ -24,11 +24,7 @@ func waitFor[T any](name string, fn func() T) T {
 // OpenFile asks for a file to open, over parent (nil for none), and
 // returns its path, "" if the user cancels.
 func OpenFile(parent *Window, title string, filters ...Filter) string {
-	paths := openPaths("OpenFile", mygo.OpenDialogOptions{Parent: parent.native(), Title: title, Filters: filters})
-	if len(paths) == 0 {
-		return ""
-	}
-	return paths[0]
+	return openPath("OpenFile", mygo.OpenDialogOptions{Parent: parent.native(), Title: title, Filters: filters})
 }
 
 // OpenFiles asks for files to open and returns their paths, nil if the
@@ -40,11 +36,7 @@ func OpenFiles(parent *Window, title string, filters ...Filter) []string {
 // SelectFolder asks for a folder, starting in dir, and returns its path,
 // "" if the user cancels.
 func SelectFolder(parent *Window, title, dir string) string {
-	paths := openPaths("SelectFolder", mygo.OpenDialogOptions{Parent: parent.native(), Title: title, DefaultPath: dir, Directory: true})
-	if len(paths) == 0 {
-		return ""
-	}
-	return paths[0]
+	return openPath("SelectFolder", mygo.OpenDialogOptions{Parent: parent.native(), Title: title, DefaultPath: dir, Directory: true})
 }
 
 // SaveFile asks where to save a file, suggesting name, and returns the
@@ -68,4 +60,12 @@ func openPaths(name string, opts mygo.OpenDialogOptions) []string {
 		}
 		return paths
 	})
+}
+
+// openPath runs an open dialog for one path, "" for a cancel.
+func openPath(name string, opts mygo.OpenDialogOptions) string {
+	if paths := openPaths(name, opts); len(paths) > 0 {
+		return paths[0]
+	}
+	return ""
 }

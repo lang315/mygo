@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// testPNG is in helpers_test.go (Task 8).
+// testPNG is in helpers_test.go.
 
 func TestImageTakesItsSize(t *testing.T) {
 	for name, data := range map[string][]byte{
@@ -42,5 +42,16 @@ func TestImageCacheIsBounded(t *testing.T) {
 	imageCache.Unlock()
 	if n != imageCacheSize || kept {
 		t.Fatalf("%d entries, oldest kept %v: want %d, evicted", n, kept, imageCacheSize)
+	}
+}
+
+func TestImageCacheSkipsLargeInputs(t *testing.T) {
+	big := make([]byte, imageCacheMax+1) // no image: decodes to nil
+	decodeImage(big)
+	imageCache.Lock()
+	_, kept := imageCache.m[sha256.Sum256(big)]
+	imageCache.Unlock()
+	if kept {
+		t.Fatal("a large input was cached")
 	}
 }

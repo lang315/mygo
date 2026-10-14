@@ -17,7 +17,7 @@ func shownParent(t *testing.T, title string) *Window {
 	return p
 }
 
-// Review Focus 1: Run on a worker goroutine waits; the buttons work.
+// Run on a worker goroutine waits; the buttons work.
 func TestDialogRunOnAWorkerGoroutine(t *testing.T) {
 	p := shownParent(t, "P1")
 	var d *Dialog
@@ -79,7 +79,7 @@ func TestOnBeforeRunRunsFirst(t *testing.T) {
 	}
 }
 
-// Review Focus 2: closing the parent ends every nested Run, inner first.
+// Closing the parent ends every nested Run, inner first.
 func TestClosingTheParentEndsNestedRuns(t *testing.T) {
 	p := shownParent(t, "P3")
 	var order []string

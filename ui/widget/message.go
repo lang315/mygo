@@ -1,6 +1,9 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/internal/l10n"
+	"github.com/egoist/mygo/ui"
+)
 
 // Kind is what a message dialog is about, shown by its icon.
 type Kind uint8
@@ -120,20 +123,20 @@ func message(parent *Window, kind Kind, title, text string, input Widget, wire f
 // Alert shows text in a dialog over parent (nil for none) and returns when
 // the user dismisses it. It blocks as Dialog.Run does.
 func Alert(parent *Window, kind Kind, title, text string) {
-	message(parent, kind, title, text, nil, nil, "OK")
+	message(parent, kind, title, text, nil, nil, l10n.Ok())
 }
 
 // Confirm asks a question in a dialog over parent and reports whether the
 // user chose OK; Cancel and closing the dialog say no.
 func Confirm(parent *Window, kind Kind, title, text string) bool {
-	return message(parent, kind, title, text, nil, nil, "Cancel", "OK") == 1
+	return message(parent, kind, title, text, nil, nil, l10n.Cancel(), l10n.Ok()) == 1
 }
 
 // InputString asks for a line of text, label above an entry holding value,
 // and returns it with ok true for OK or Enter.
 func InputString(parent *Window, kind Kind, title, label, value string) (s string, ok bool) {
 	e := Entry().SetText(value).Focus()
-	n := message(parent, kind, title, label, e, func(_ *ButtonWidget, choose func()) { e.OnEnter(choose) }, "Cancel", "OK")
+	n := message(parent, kind, title, label, e, func(_ *ButtonWidget, choose func()) { e.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return e.Text(), n == 1
 }
 
@@ -141,7 +144,7 @@ func InputString(parent *Window, kind Kind, title, label, value string) (s strin
 // starting at value.
 func InputInt(parent *Window, kind Kind, title, label string, min, max, step, value int) (n int, ok bool) {
 	s := Spin(float64(min), float64(max), float64(step)).SetValue(float64(value)).Focus()
-	i := message(parent, kind, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, "Cancel", "OK")
+	i := message(parent, kind, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return s.Int(), i == 1
 }
 
@@ -152,6 +155,6 @@ func InputSelect(parent *Window, kind Kind, title, label string, opts ...Option)
 	n := message(parent, kind, title, label, c, func(okButton *ButtonWidget, _ func()) {
 		okButton.SetDisabled(true)
 		c.OnChange(func() { okButton.SetDisabled(c.Value() == "") })
-	}, "Cancel", "OK")
+	}, l10n.Cancel(), l10n.Ok())
 	return c.Value(), n == 1
 }

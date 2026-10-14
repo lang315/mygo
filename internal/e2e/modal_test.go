@@ -32,7 +32,7 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	eventually(t, "a click on the parent", func() bool { return clicks.Load() == 1 })
 
 	var closed atomic.Bool
-	child := mygo.NewWindow(mygo.WindowOptions{Title: "Modal child", Width: 200, Height: 100,
+	child := newWindow(t, mygo.WindowOptions{Title: "Modal child", Width: 200, Height: 100,
 		Parent: parent, Modal: true,
 		Content: ui.View(func(c *ui.Context) { ui.Text(c, "modal") })})
 	child.OnClosed(func() { closed.Store(true) })

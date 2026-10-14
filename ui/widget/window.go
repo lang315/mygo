@@ -11,7 +11,7 @@ import (
 // Window is a top-level window showing a widget. Make it with NewWindow,
 // set it up, then Show it.
 type Window struct {
-	id            int // its views' id, for focus tracking (Task 3)
+	id            int // its views' id, for focus tracking
 	title         string
 	width, height int
 	resizable     bool

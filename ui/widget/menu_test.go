@@ -49,7 +49,7 @@ func TestContextMenuOnALabelWithASubmenu(t *testing.T) {
 	wait(t, chosen)
 }
 
-// Review Focus 5: a menu item's handler opens a Confirm.
+// A menu item's handler opens a Confirm.
 func TestMenuItemOpensAConfirm(t *testing.T) {
 	answer := make(chan bool, 1)
 	l := Label("Row").ContextMenu(MenuItem{Text: "Delete", OnClick: func() {

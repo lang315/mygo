@@ -138,10 +138,11 @@ func (c *ComboWidget) find(v string) (Option, bool) {
 	return Option{}, false
 }
 
-// edit applies fn to a copy of the sections, which a view may still be
-// reading, then unchooses a choice whose option is gone. Under mu.
+// edit applies fn to the sections, then unchooses a choice whose option is
+// gone. fn must not change an option slice in place: the caller's slice
+// passed to Combo, SetOptions or AddSection may back it. Under mu.
 func (c *ComboWidget) edit(fn func(s []comboSection) []comboSection) {
-	c.sections = fn(slices.Clone(c.sections))
+	c.sections = fn(c.sections)
 	if _, ok := c.find(c.value.value); !ok && c.value.value != "" {
 		c.value.set("")
 	}

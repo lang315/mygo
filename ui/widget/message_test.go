@@ -16,7 +16,7 @@ func TestConfirmOK(t *testing.T) {
 	}
 }
 
-// Review Focus 3: Cancel and the close button both say no, once.
+// Cancel and the close button both say no, once.
 func TestConfirmCancelAndCloseSayNo(t *testing.T) {
 	got := runAsync(func() bool { return Confirm(nil, Warning, "Cancel?", "") })
 	press(t, waitFake(t, "Cancel?"), "Cancel")
@@ -39,45 +39,33 @@ func TestAlertReturnsOnOK(t *testing.T) {
 }
 
 func TestInputStringTypedThenEnter(t *testing.T) {
-	type answer struct {
-		s  string
-		ok bool
-	}
-	got := runAsync(func() answer {
+	got := runAsync(func() answer[string] {
 		s, ok := InputString(nil, Question, "Name?", "Your name", "")
-		return answer{s, ok}
+		return answer[string]{s, ok}
 	})
 	fw := waitFake(t, "Name?")
 	typeText(fw, "Ann") // the entry has the focus
 	key(fw, platform.KeyEnter)
-	if a := wait(t, got); a.s != "Ann" || !a.ok {
-		t.Fatalf("got %q %v, want Ann true", a.s, a.ok)
+	if a := wait(t, got); a.v != "Ann" || !a.ok {
+		t.Fatalf("got %q %v, want Ann true", a.v, a.ok)
 	}
 }
 
 func TestInputIntDefault(t *testing.T) {
-	type answer struct {
-		n  int
-		ok bool
-	}
-	got := runAsync(func() answer {
+	got := runAsync(func() answer[int] {
 		n, ok := InputInt(nil, Question, "Count?", "Threads", 1, 64, 1, 8)
-		return answer{n, ok}
+		return answer[int]{n, ok}
 	})
 	press(t, waitFake(t, "Count?"), "OK")
-	if a := wait(t, got); a.n != 8 || !a.ok {
-		t.Fatalf("got %d %v, want 8 true", a.n, a.ok)
+	if a := wait(t, got); a.v != 8 || !a.ok {
+		t.Fatalf("got %d %v, want 8 true", a.v, a.ok)
 	}
 }
 
 func TestInputSelectOKDisabledUntilAChoice(t *testing.T) {
-	type answer struct {
-		s  string
-		ok bool
-	}
-	got := runAsync(func() answer {
+	got := runAsync(func() answer[string] {
 		s, ok := InputSelect(nil, Question, "Pick?", "Proxy", Option{"a", "A"}, Option{"b", "B"})
-		return answer{s, ok}
+		return answer[string]{s, ok}
 	})
 	fw := waitFake(t, "Pick?")
 	press(t, fw, "OK") // disabled: nothing happens
@@ -101,19 +89,15 @@ func TestIconTakesItsSize(t *testing.T) {
 }
 
 func TestInputIntEnter(t *testing.T) {
-	type answer struct {
-		n  int
-		ok bool
-	}
-	got := runAsync(func() answer {
+	got := runAsync(func() answer[int] {
 		n, ok := InputInt(nil, Question, "Enter?", "Threads", 1, 64, 1, 8)
-		return answer{n, ok}
+		return answer[int]{n, ok}
 	})
 	fw := waitFake(t, "Enter?")
-	typeText(fw, "") // a first frame focuses the number
+	frame(fw) // focuses the number
 	key(fw, platform.KeyEnter)
-	if a := wait(t, got); a.n != 8 || !a.ok {
-		t.Fatalf("got %d %v, want 8 true", a.n, a.ok)
+	if a := wait(t, got); a.v != 8 || !a.ok {
+		t.Fatalf("got %d %v, want 8 true", a.v, a.ok)
 	}
 }
 

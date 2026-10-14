@@ -8,7 +8,7 @@ import (
 // MenuItem is an item of a menu: Text, or a separator when Text is "".
 // OnClick runs on the event goroutine when the user chooses it; an item
 // with Children opens them as a submenu. Checked shows a check mark;
-// Disabled greys the item out. Items have no icons (spec R4).
+// Disabled greys the item out. Items have no icons: native menus have none.
 type MenuItem struct {
 	Text     string
 	OnClick  func()
@@ -25,8 +25,7 @@ func buildMenu(m *ui.Menu, items []MenuItem) {
 		case it.Text == "":
 			m.Separator()
 		case len(it.Children) > 0:
-			children := it.Children
-			m.Submenu(it.Text, func(m *ui.Menu) { buildMenu(m, children) }).Disabled(it.Disabled)
+			m.Submenu(it.Text, func(m *ui.Menu) { buildMenu(m, it.Children) }).Disabled(it.Disabled)
 		default:
 			if m.Item(it.Text).Checked(it.Checked).Disabled(it.Disabled).Chosen() && it.OnClick != nil {
 				Post(it.OnClick)
@@ -84,6 +83,5 @@ func (b *MenuButtonWidget) SetMenu(items ...MenuItem) *MenuButtonWidget {
 }
 
 func (b *MenuButtonWidget) build(c *ui.Context) ui.Element {
-	items := b.items // a copy of the header: SetMenu replaces, never edits
-	return ui.MenuButton(c, b.text, func(m *ui.Menu) { buildMenu(m, items) })
+	return ui.MenuButton(c, b.text, func(m *ui.Menu) { buildMenu(m, b.items) })
 }

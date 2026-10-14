@@ -178,11 +178,7 @@ func waitClosed(t *testing.T, w *Window) {
 	mu.Lock()
 	done := w.done
 	mu.Unlock()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("window did not close")
-	}
+	wait(t, done)
 }
 
 func TestShowAfterCloseShowsAgain(t *testing.T) {

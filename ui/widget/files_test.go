@@ -14,6 +14,12 @@ func onOpen(t *testing.T, fn func(o *platform.OpenDialogOptions) []string) {
 	t.Cleanup(func() { mygo.RunOnMain(func() { fb.OnOpenDialog = nil }) })
 }
 
+// onSave answers the fake's save dialogs with fn until the test ends.
+func onSave(t *testing.T, fn func(o *platform.SaveDialogOptions) string) {
+	mygo.RunOnMain(func() { fb.OnSaveDialog = fn })
+	t.Cleanup(func() { mygo.RunOnMain(func() { fb.OnSaveDialog = nil }) })
+}
+
 func TestOpenFileAndFiles(t *testing.T) {
 	var seen platform.OpenDialogOptions
 	onOpen(t, func(o *platform.OpenDialogOptions) []string { seen = *o; return []string{"/a.png", "/b.png"} })
@@ -45,10 +51,7 @@ func TestSelectFolder(t *testing.T) {
 
 func TestSaveFile(t *testing.T) {
 	var seen platform.SaveDialogOptions
-	mygo.RunOnMain(func() {
-		fb.OnSaveDialog = func(o *platform.SaveDialogOptions) string { seen = *o; return "/out.csv" }
-	})
-	t.Cleanup(func() { mygo.RunOnMain(func() { fb.OnSaveDialog = nil }) })
+	onSave(t, func(o *platform.SaveDialogOptions) string { seen = *o; return "/out.csv" })
 	if got := SaveFile(nil, "Export", "accounts.csv"); got != "/out.csv" {
 		t.Fatalf("SaveFile %q", got)
 	}
@@ -57,7 +60,7 @@ func TestSaveFile(t *testing.T) {
 	}
 }
 
-// Review Focus 4: a file dialog in a handler runs the queued handlers.
+// A file dialog in a handler runs the queued handlers.
 func TestFileDialogInAHandlerPumps(t *testing.T) {
 	pumped := make(chan struct{})
 	onOpen(t, func(*platform.OpenDialogOptions) []string {

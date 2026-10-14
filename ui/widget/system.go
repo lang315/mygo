@@ -17,18 +17,16 @@ func (clipboard) SetImage(png []byte) error { return mygo.Clipboard.WriteImage(p
 func (clipboard) Text() string { return mygo.Clipboard.ReadText() }
 
 // Theme is the app's appearance.
-type Theme uint8
+type Theme = mygo.ThemeSource
 
 const (
-	ThemeSystem Theme = iota // follow the desktop
-	ThemeLight
-	ThemeDark
+	ThemeSystem = mygo.ThemeSystem // follow the desktop
+	ThemeLight  = mygo.ThemeLight
+	ThemeDark   = mygo.ThemeDark
 )
 
 // SetTheme sets the app's appearance; every window follows.
-func SetTheme(t Theme) {
-	mygo.Theme.SetSource([...]mygo.ThemeSource{ThemeSystem: mygo.ThemeSystem, ThemeLight: mygo.ThemeLight, ThemeDark: mygo.ThemeDark}[t])
-}
+func SetTheme(t Theme) { mygo.Theme.SetSource(t) }
 
 // IsDark reports whether the app draws dark.
 func IsDark() bool { return mygo.Theme.IsDark() }

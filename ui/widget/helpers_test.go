@@ -56,10 +56,13 @@ func press(t *testing.T, fw *fake.Window, label string) {
 	}
 }
 
+// frame draws a frame of fw's view: a first one applies Focus.
+func frame(fw *fake.Window) { mygo.RunOnMain(func() { fw.FakeSurface().Frame() }) }
+
 // typeText types s into the element with the focus in fw's view.
 func typeText(fw *fake.Window, s string) {
+	frame(fw)
 	mygo.RunOnMain(func() {
-		fw.FakeSurface().Frame() // a first frame applies Focus
 		fw.FakeSurface().Send(platform.SurfaceEvent{Kind: platform.TextInput, Text: s})
 		fw.FakeSurface().Frame()
 	})
@@ -72,6 +75,12 @@ func key(fw *fake.Window, k platform.Key) {
 		fw.FakeSurface().Send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: k})
 		fw.FakeSurface().Frame()
 	})
+}
+
+// answer is what an input dialog returned.
+type answer[T any] struct {
+	v  T
+	ok bool
 }
 
 // runAsync runs fn on a goroutine of its own, as a worker does.

@@ -8,9 +8,14 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-const imageCacheSize = 256
+const (
+	imageCacheSize = 256
+	// imageCacheMax is the largest input cached: icons repeat across rows,
+	// photos rarely do, and 256 decoded photos would take gigabytes.
+	imageCacheMax = 64 << 10
+)
 
-// imageCache keeps the bitmaps decoded last, by the SHA-256 of their
+// imageCache keeps the small bitmaps decoded last, by the SHA-256 of their
 // bytes, as gota's pixbuf cache does: the same icon in many rows decodes
 // once. Bad bytes are kept too (as nil), so they fail once.
 var imageCache = struct {
@@ -30,16 +35,28 @@ func decodeImage(data []byte) *ui.Bitmap {
 	if len(data) == 0 {
 		return nil
 	}
+	if len(data) > imageCacheMax {
+		bmp, _ := ui.DecodeBitmap(data)
+		return bmp
+	}
 	key := sha256.Sum256(data)
 	imageCache.Lock()
-	defer imageCache.Unlock()
 	if e, ok := imageCache.m[key]; ok {
 		imageCache.order.MoveToFront(e)
+		imageCache.Unlock()
 		return e.Value.(cachedImage).bmp
 	}
+	imageCache.Unlock()
+	// Decode outside the lock, so a slow decode holds up no other image;
+	// two goroutines decoding the same bytes at once just both do it.
 	bmp, err := ui.DecodeBitmap(data)
 	if err != nil {
 		bmp = nil
+	}
+	imageCache.Lock()
+	defer imageCache.Unlock()
+	if e, ok := imageCache.m[key]; ok {
+		return e.Value.(cachedImage).bmp
 	}
 	imageCache.m[key] = imageCache.order.PushFront(cachedImage{key, bmp})
 	if imageCache.order.Len() > imageCacheSize {

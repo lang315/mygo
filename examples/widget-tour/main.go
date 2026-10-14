@@ -109,8 +109,7 @@ func extras() widget.Widget {
 		widget.Option{Value: "light", Text: "Light"},
 		widget.Option{Value: "dark", Text: "Dark"},
 	).SetValue("system")
-	themes := map[string]widget.Theme{"system": widget.ThemeSystem, "light": widget.ThemeLight, "dark": widget.ThemeDark}
-	theme.OnChange(func() { widget.SetTheme(themes[theme.Value()]) })
+	theme.OnChange(func() { widget.SetTheme(widget.Theme(theme.Value())) }) // values are mygo.ThemeSource's
 	screen := widget.Label("")
 	icons := widget.HBox(12)
 	for _, shapes := range lucideIcons {
