@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"image/color"
 	"slices"
 	"testing"
 
@@ -74,4 +75,56 @@ func TestProgressAndSpinner(t *testing.T) {
 	tt.Frame()
 	s.Stop()
 	tt.Frame()
+}
+
+func TestComboChoosesByValueWithEqualTexts(t *testing.T) {
+	c := Combo(Option{"a", "Same"}, Option{"b", "Same"}).SetValue("b")
+	tester(t, c)
+	if c.Value() != "b" {
+		t.Fatalf("Value %q, want b", c.Value())
+	}
+}
+
+func TestComboSections(t *testing.T) {
+	changed := make(chan string, 4)
+	var c *ComboWidget
+	Combo().AssignTo(&c).
+		AddSection("Fruits", nil, Option{"apple", "Apple"}, Option{"pear", "Pear"}).
+		AddSection("Vegetables", testPNG(t, color.RGBA{0, 128, 0, 255}), Option{"kale", "Kale"}).
+		SetValue("apple").
+		OnChange(func() { changed <- c.Value() })
+	tt := tester(t, c)
+	click(t, tt, "Apple") // the trigger shows the choice
+	if !tt.HasText("Fruits") || !tt.HasText("Vegetables") {
+		t.Fatalf("no section headers in %q", tt.Texts())
+	}
+	click(t, tt, "Fruits") // a header chooses nothing
+	if c.Value() != "apple" {
+		t.Fatalf("a click on a header chose %q", c.Value())
+	}
+	click(t, tt, "Kale")
+	if v := wait(t, changed); v != "kale" {
+		t.Fatalf("OnChange saw %q", v)
+	}
+	if n := c.SectionLen("Fruits"); n != 2 {
+		t.Fatalf("SectionLen(Fruits) %d", n)
+	}
+}
+
+func TestComboRemoveAndRename(t *testing.T) {
+	c := Combo(Option{"x", "X"}).AddSection("S", nil, Option{"y", "Y"}).SetValue("y")
+	tt := tester(t, c)
+	c.SetOptionText("y", "Why")
+	tt.Frame()
+	if !tt.HasText("Why") {
+		t.Fatalf("renamed option not shown: %q", tt.Texts())
+	}
+	c.RemoveSection("S")
+	if c.Value() != "" || c.SectionLen("S") != 0 {
+		t.Fatalf("after RemoveSection: value %q", c.Value())
+	}
+	c.SetValue("x").RemoveOption("x")
+	if _, ok := c.Selected(); ok {
+		t.Fatal("removed option still selected")
+	}
 }

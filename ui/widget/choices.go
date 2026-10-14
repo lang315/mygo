@@ -83,72 +83,202 @@ func (r *RangeSpinWidget) build(c *ui.Context) ui.Element {
 	})
 }
 
-// ComboWidget is a drop-down choice of one option.
-//
-// shortcut: built on ui.Select, which chooses by text, so option texts
-// must be unique; PR 2 moves it to ui.SelectBase for sections and icons.
+// ComboWidget is a drop-down choice of one option, optionally grouped in
+// titled sections with icons, as gota's ComboBox. Values must be unique;
+// texts need not be.
 type ComboWidget struct {
 	common[ComboWidget]
-	opts     []Option
-	text     mirror[string] // the chosen option's text, "" for none
+	sections []comboSection // [0]: the options outside any section
+	value    mirror[string] // the chosen option's Value, "" for none
 	onChange func()
 }
 
+// comboSection is a titled group of options.
+type comboSection struct {
+	title string
+	icon  *ui.Bitmap
+	opts  []Option
+}
+
+// sectionKey keys a section's header row in the popup.
+type sectionKey int
+
+// chevronDown is Lucide's chevron-down (ISC license).
+var chevronDown = lucide(`<path d="m6 9 6 6 6-6"/>`)
+
+// Combo makes a drop-down of opts, none chosen.
 func Combo(opts ...Option) *ComboWidget {
-	c := &ComboWidget{opts: opts}
+	c := &ComboWidget{sections: []comboSection{{opts: opts}}}
 	c.init(c)
 	return c
 }
 
-// Value returns the chosen option's value, "" for none.
-func (c *ComboWidget) Value() string { o, _ := c.Selected(); return o.Value }
-
-// Selected returns the chosen option.
-func (c *ComboWidget) Selected() (Option, bool) {
-	mu.Lock()
-	defer mu.Unlock()
-	for _, o := range c.opts {
-		if o.Text == c.text.value && o.Text != "" {
-			return o, true
+// find returns the option of value v. Under mu.
+func (c *ComboWidget) find(v string) (Option, bool) {
+	if v == "" {
+		return Option{}, false
+	}
+	for _, s := range c.sections {
+		for _, o := range s.opts {
+			if o.Value == v {
+				return o, true
+			}
 		}
 	}
 	return Option{}, false
 }
 
+// edit applies fn to a copy of the sections, which a view may still be
+// reading, then unchooses a choice whose option is gone. Under mu.
+func (c *ComboWidget) edit(fn func(s []comboSection) []comboSection) {
+	c.sections = fn(slices.Clone(c.sections))
+	if _, ok := c.find(c.value.value); !ok && c.value.value != "" {
+		c.value.set("")
+	}
+}
+
+// Value returns the chosen option's value, "" for none.
+func (c *ComboWidget) Value() string { mu.Lock(); defer mu.Unlock(); return c.value.value }
+
+// Selected returns the chosen option.
+func (c *ComboWidget) Selected() (Option, bool) {
+	mu.Lock()
+	defer mu.Unlock()
+	return c.find(c.value.value)
+}
+
 // SetValue chooses the option of value v; an unknown v chooses none.
 func (c *ComboWidget) SetValue(v string) *ComboWidget {
 	change(func() {
-		t := ""
-		for _, o := range c.opts {
-			if o.Value == v {
-				t = o.Text
-			}
+		if _, ok := c.find(v); !ok {
+			v = ""
 		}
-		c.text.set(t)
+		c.value.set(v)
 	})
 	return c
 }
 
-func (c *ComboWidget) Unselect() *ComboWidget { change(func() { c.text.set("") }); return c }
+func (c *ComboWidget) Unselect() *ComboWidget { change(func() { c.value.set("") }); return c }
 
-// SetOptions replaces the options; the choice stays if its text remains.
+// SetOptions replaces the options outside any section.
 func (c *ComboWidget) SetOptions(opts ...Option) *ComboWidget {
-	change(func() { c.opts = opts })
+	change(func() {
+		c.edit(func(s []comboSection) []comboSection { s[0].opts = opts; return s })
+	})
 	return c
+}
+
+// AddSection adds a section titled title, with the icon in the bytes of
+// a PNG (nil for none), holding opts.
+func (c *ComboWidget) AddSection(title string, icon []byte, opts ...Option) *ComboWidget {
+	bmp := decodeImage(icon) // outside mu
+	change(func() {
+		c.edit(func(s []comboSection) []comboSection { return append(s, comboSection{title, bmp, opts}) })
+	})
+	return c
+}
+
+// RemoveSection removes the section titled title and its options.
+func (c *ComboWidget) RemoveSection(title string) *ComboWidget {
+	change(func() {
+		c.edit(func(s []comboSection) []comboSection {
+			return slices.DeleteFunc(s, func(x comboSection) bool { return x.title != "" && x.title == title })
+		})
+	})
+	return c
+}
+
+// RemoveOption removes the option of value v.
+func (c *ComboWidget) RemoveOption(v string) *ComboWidget {
+	change(func() {
+		c.edit(func(s []comboSection) []comboSection {
+			for i := range s {
+				s[i].opts = slices.DeleteFunc(slices.Clone(s[i].opts), func(o Option) bool { return o.Value == v })
+			}
+			return s
+		})
+	})
+	return c
+}
+
+// SetOptionText changes the text of the option of value v.
+func (c *ComboWidget) SetOptionText(v, text string) *ComboWidget {
+	change(func() {
+		c.edit(func(s []comboSection) []comboSection {
+			for i := range s {
+				opts := slices.Clone(s[i].opts)
+				for j := range opts {
+					if opts[j].Value == v {
+						opts[j].Text = text
+					}
+				}
+				s[i].opts = opts
+			}
+			return s
+		})
+	})
+	return c
+}
+
+// SectionLen returns how many options the section titled title holds.
+func (c *ComboWidget) SectionLen(title string) int {
+	mu.Lock()
+	defer mu.Unlock()
+	for _, s := range c.sections {
+		if s.title == title {
+			return len(s.opts)
+		}
+	}
+	return 0
 }
 
 func (c *ComboWidget) OnChange(fn func()) *ComboWidget { change(func() { c.onChange = fn }); return c }
 
 func (c *ComboWidget) build(ctx *ui.Context) ui.Element {
-	p, changed := c.text.bind()
+	p, changed := c.value.bind()
 	if changed && c.onChange != nil {
 		Post(c.onChange)
 	}
-	texts := make([]string, len(c.opts))
-	for i, o := range c.opts {
-		texts[i] = o.Text
+	t, sections := ctx.Theme(), c.sections
+	text := ""
+	if o, ok := c.find(*p); ok {
+		text = o.Text
 	}
-	return ui.Select(ctx, p, texts).OnChange(onChange(&c.text, c.onChange))
+	sel := ui.SelectBase(ctx, p)
+	// The look of ui.Select (ui/widgets.go coreSelect), from public API.
+	sel.Trigger.Padding(t.Space(1.5), t.Space(3)).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).
+		Justify(ui.SpaceBetween).AlignItems(ui.Center).Gap(t.Space(2)).MinWidth(t.Space(35)).
+		OnChange(onChange(&c.value, c.onChange)).
+		Children(func() {
+			ui.Text(ctx, text).SingleLine()
+			ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted)
+		})
+	sel.Popup(func(panel ui.Element) {
+		panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).
+			Background(t.Background).Border(1, t.Border).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
+		for i, s := range sections {
+			if s.title != "" {
+				ui.Row(ctx.Key(sectionKey(i))).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
+					AlignItems(ui.Center).Children(func() {
+					if s.icon != nil {
+						ui.Image(ctx, s.icon).Width(16).Height(16)
+					}
+					ui.Text(ctx, s.title).Bold().TextColor(t.TextMuted)
+				})
+			}
+			for _, o := range s.opts {
+				item := sel.Item(o.Value).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
+				switch {
+				case item.Highlighted():
+					item.Background(t.Accent).TextColor(t.AccentText)
+				case o.Value == *p:
+					item.Background(t.Surface)
+				}
+				item.Children(func() { ui.Text(ctx, o.Text).SingleLine() })
+			}
+		}
+	})
+	return sel.Trigger
 }
 
 // TagSelectWidget is a choice of several options shown as chips.
