@@ -345,3 +345,96 @@ func TestTableCheckAllChecksOnlyShownRows(t *testing.T) {
 		t.Fatalf("hidden bob lost its check: %v", got)
 	}
 }
+
+func TestTableActivateGivesTheKey(t *testing.T) {
+	got := make(chan int, 1)
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).OnActivate(func(k int) { got <- k })
+	tt := tester(t, tb)
+	click(t, tt, "bob")
+	tt.Key(0, ui.KeyEnter)
+	if k := wait(t, got); k != 2 {
+		t.Fatalf("activated %d", k)
+	}
+}
+
+func TestTableOnKeyRunsOnTheEventGoroutine(t *testing.T) {
+	got := make(chan []int, 1)
+	var tb *TableWidget[acct, int]
+	tb = testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).
+		OnKey(ui.KeyDelete, 0, func() {
+			if onEvents() {
+				got <- tb.Selected()
+			}
+		})
+	tt := tester(t, tb)
+	click(t, tt, "bob")
+	tt.Key(0, ui.KeyDelete)
+	if ks := wait(t, got); !slices.Equal(ks, []int{2}) {
+		t.Fatalf("Delete with %v", ks)
+	}
+}
+
+func TestTableRowMenuActsOnSelected(t *testing.T) {
+	done := make(chan bool, 1)
+	var tb *TableWidget[acct, int]
+	tb = testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).
+		ContextMenu(MenuItem{Text: "Delete", OnClick: func() { tb.DeleteRows(tb.Selected()...); done <- true }})
+	tt := tester(t, tb)
+	if err := tt.RightClick("bob"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Delete"); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, done)
+	tt.Frame()
+	if tt.HasText("bob") || !tt.HasText("ann") {
+		t.Fatalf("after Delete: %q", tt.Texts())
+	}
+}
+
+func TestTableCopiesSelectedRowsInShownOrder(t *testing.T) {
+	tb := testTable(acct{1, "cat", 10}, acct{2, "ann", 9}, acct{3, "bob", 100})
+	tt := tester(t, tb)
+	click(t, tt, "Name")
+	click(t, tt, "cat")
+	if err := tt.ClickWith(ui.Cmd, "ann"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Command("copy")
+	if got := tt.Clipboard(); got != "ann\t9\ncat\t10" {
+		t.Fatalf("copied %q", got)
+	}
+}
+
+func TestTableSetColumnsLayoutOrdersColumns(t *testing.T) {
+	tt := tester(t, testTable(acct{1, "ann", 1}).
+		SetColumnsLayout(ui.TableLayout{Order: []string{"Score", "Name"}}))
+	if score, name := find(t, tt, "Score"), find(t, tt, "Name"); score.X >= name.X {
+		t.Fatalf("Score at %v, Name at %v: the layout's order not shown", score, name)
+	}
+}
+
+func TestTableColumnsChangeGivesTheLayout(t *testing.T) {
+	got := make(chan ui.TableLayout, 64)
+	tb := Table(func(a *acct) int { return a.id },
+		Column[acct]{Title: "A", Text: func(a *acct) string { return a.name }, Width: 100},
+		Column[acct]{Title: "B", Text: func(a *acct) string { return a.name }, Width: 100},
+	).SetRows([]acct{{1, "ann", 0}}).OnColumnsChange(func(l ui.TableLayout) { got <- l }).Expand()
+	tt := tester(t, tb)
+	// Both headers start their text at the same inset, so B's starts 100
+	// DIPs after A's; the table starts at the left of the tester, so A's
+	// right edge is at 100.
+	a, b := find(t, tt, "A"), find(t, tt, "B")
+	if b.X-a.X != 100 || a.X > 16 {
+		t.Fatalf("headers A %v, B %v: not 100 apart from the left", a, b)
+	}
+	y := a.Y + a.H/2
+	tt.Press(98, y)
+	tt.Move(128, y)
+	tt.Release(128, y)
+	var l ui.TableLayout
+	for l.Widths["A"] != 130 {
+		l = wait(t, got) // fails after 2 s without a layout of A at 130
+	}
+}

@@ -55,6 +55,12 @@ type TableWidget[T any, K comparable] struct {
 	searchButton                            *ButtonWidget
 	text                                    PanelText
 	beforeSearch                            func(column, keyword string)
+	onActivate                              func(K)
+	onColumns                               func(ui.TableLayout)
+	shortcuts                               []shortcut
+	menu                                    []MenuItem
+	layout                                  ui.TableLayout
+	layoutSet                               bool // SetColumnsLayout's layout is not handed to ui yet
 	numbered                                bool // the index column shows
 	// ui's, on the main thread:
 	list   ui.ListState
@@ -78,6 +84,7 @@ func Table[T any, K comparable](key func(*T) K, cols ...Column[T]) *TableWidget[
 	t := &TableWidget[T, K]{key: key, cols: cols, index: map[K]int{}, view: ui.NewTableView(compare), cursor: -1, text: englishPanel}
 	t.columns = t.uiColumns()
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
+	t.list.Copy = t.copyRows
 	t.init(t)
 	return t
 }
@@ -267,10 +274,13 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.sync()
 	s.Version = t.view.Version()
-	return ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
+	t.handOver()
+	e := ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
 		OnSortChange(onChange(&t.sort, nil)).
 		OnSelectionChange(t.chosen.commit).
 		OnCheckedChange(t.checked.commit)
+	t.events(e)
+	return e
 }
 
 // cell builds the cell of the row shown at row in column col, an index
