@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 )
 
 func TestBackendInstalled(t *testing.T) {
@@ -74,5 +75,18 @@ func TestOnClickOnALabel(t *testing.T) {
 	tt.Frame()
 	if !wait(t, clicked) {
 		t.Fatal("OnClick ran off the event goroutine")
+	}
+}
+
+func TestRichLabel(t *testing.T) {
+	l := Label("plain").Rich(ui.Span{Text: "Hello "}, ui.Span{Text: "world", Weight: 700})
+	tt := tester(t, l)
+	if l.Text() != "Hello world" || !tt.HasText("world") {
+		t.Fatalf("Text() %q, texts %q", l.Text(), tt.Texts())
+	}
+	l.SetText("plain again")
+	tt.Frame()
+	if !tt.HasText("plain again") {
+		t.Fatalf("SetText after Rich: %q", tt.Texts())
 	}
 }

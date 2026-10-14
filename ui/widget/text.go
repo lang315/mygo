@@ -1,11 +1,16 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"strings"
+
+	"github.com/egoist/mygo/ui"
+)
 
 // LabelWidget shows a line of text.
 type LabelWidget struct {
 	common[LabelWidget]
-	text string
+	text  string
+	spans []ui.Span
 }
 
 // Label makes a label showing s.
@@ -16,12 +21,32 @@ func Label(s string) *LabelWidget {
 }
 
 // SetText changes the text.
-func (l *LabelWidget) SetText(s string) *LabelWidget { change(func() { l.text = s }); return l }
+func (l *LabelWidget) SetText(s string) *LabelWidget {
+	change(func() { l.text, l.spans = s, nil })
+	return l
+}
+
+// Rich shows spans of styled text instead of plain text, where gota used
+// Pango markup: bold is Weight 700, color is Color. Text returns their
+// text; SetText makes the label plain again.
+func (l *LabelWidget) Rich(spans ...ui.Span) *LabelWidget {
+	var b strings.Builder
+	for _, s := range spans {
+		b.WriteString(s.Text)
+	}
+	change(func() { l.spans, l.text = spans, b.String() })
+	return l
+}
 
 // Text returns the text.
 func (l *LabelWidget) Text() string { mu.Lock(); defer mu.Unlock(); return l.text }
 
-func (l *LabelWidget) build(c *ui.Context) ui.Element { return ui.Text(c, l.text) }
+func (l *LabelWidget) build(c *ui.Context) ui.Element {
+	if len(l.spans) > 0 {
+		return ui.RichText(c, l.spans...)
+	}
+	return ui.Text(c, l.text)
+}
 
 // EntryWidget is a one-line text input.
 type EntryWidget struct {
