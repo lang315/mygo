@@ -270,6 +270,8 @@ func (w *Window) closeAnyway() {
 func (w *Window) view(c *ui.Context) {
 	mu.Lock()
 	defer mu.Unlock()
+	viewing.Store(true)
+	defer viewing.Store(false)
 	axis, building = vertical, w.id
 	ui.Column(c).Fill().Children(func() {
 		if w.header != nil {

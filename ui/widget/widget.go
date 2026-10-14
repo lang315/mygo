@@ -158,6 +158,8 @@ func content(w Widget) func(c *ui.Context) {
 	return func(c *ui.Context) {
 		mu.Lock()
 		defer mu.Unlock()
+		viewing.Store(true)
+		defer viewing.Store(false)
 		axis, building = vertical, id
 		ui.Column(c).Fill().Children(func() { render(c, w) })
 	}

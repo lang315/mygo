@@ -3,11 +3,13 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -35,7 +37,8 @@ func tour(w *widget.Window) widget.Widget {
 		AddPage("Containers", containers()).
 		AddPage("Dialogs", dialogs(w)).
 		AddPage("Extras", extras()).
-		Padding(4)
+		AddPage("Table", table()).
+		Padding(4).Expand()
 }
 
 func dialogs(w *widget.Window) widget.Widget {
@@ -239,4 +242,77 @@ func longList() widget.Widget {
 		b.Add(widget.Label(fmt.Sprintf("Row %d", i)))
 	}
 	return b
+}
+
+type account struct {
+	id     int
+	name   string
+	status string
+	score  int
+}
+
+// table shows 100,000 accounts; Live changes a hundred of them every
+// 100 ms from a goroutine of its own.
+func table() widget.Widget {
+	rows := make([]account, 100_000)
+	for i := range rows {
+		rows[i] = account{i, fmt.Sprintf("acct%06d", i), "ok", i % 997}
+	}
+	status := func(a *account) ui.Color {
+		if a.status == "failed" {
+			return ui.RGB(220, 38, 38)
+		}
+		return ui.RGB(22, 163, 74)
+	}
+	var t *widget.TableWidget[account, int]
+	t = widget.Table(func(a *account) int { return a.id },
+		widget.Column[account]{Title: "ID", Text: func(a *account) string { return strconv.Itoa(a.id) },
+			Compare: func(a, b *account) int { return cmp.Compare(a.id, b.id) }, Width: 90, Align: widget.End, Sortable: true},
+		widget.Column[account]{Title: "Name", Text: func(a *account) string { return a.name },
+			Width: 180, Sortable: true, Filterable: true},
+		widget.Column[account]{Title: "Status", Text: func(a *account) string { return a.status },
+			Color: status, Width: 100, Sortable: true, Filterable: true},
+		widget.Column[account]{Title: "Score", Text: func(a *account) string { return strconv.Itoa(a.score) },
+			Compare: func(a, b *account) int { return cmp.Compare(a.score, b.score) }, Align: widget.End, Sortable: true},
+	).SetRows(rows).CheckboxColumn().IndexColumn().BottomPanel().
+		ContextMenu(widget.MenuItem{Text: "Delete", OnClick: func() { t.DeleteRows(t.Selected()...) }}).
+		OnKey(ui.KeySpace, ui.Shift, func() { t.AutoCheck() }).
+		Expand()
+	activated := widget.Label("Double-click a row").Muted()
+	t.OnActivate(func(id int) { activated.SetText(fmt.Sprintf("Activated %d", id)) })
+	var stop chan struct{}
+	live := widget.Toggle("Live").OnChange(func() {
+		if stop != nil {
+			close(stop)
+			stop = nil
+			return
+		}
+		stop = make(chan struct{})
+		go liveUpdates(t, stop)
+	})
+	return widget.VBox(8).Add(widget.HBox(8).Add(live, activated)).Pack(t, true, true).Expand()
+}
+
+// liveUpdates fails or fixes a hundred accounts every 100 ms until stop
+// closes.
+func liveUpdates(t *widget.TableWidget[account, int], stop <-chan struct{}) {
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+	for n := 0; ; n++ {
+		select {
+		case <-stop:
+			return
+		case <-tick.C:
+		}
+		for i := range 100 {
+			t.UpdateRow((n*7919+i*104729)%100_000, func(a *account) {
+				a.score = (a.score + 7) % 997
+				if a.status == "ok" {
+					a.status = "failed"
+				} else {
+					a.status = "ok"
+				}
+			})
+		}
+	}
 }
