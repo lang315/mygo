@@ -21,12 +21,25 @@ func Frame(title string) *FrameWidget {
 	return f
 }
 
-// Add sets the widget inside the frame.
-func (f *FrameWidget) Add(w Widget) *FrameWidget { change(func() { f.child = w }); return f }
+// Add sets the widget inside the frame; the frame's title widget is
+// ignored.
+func (f *FrameWidget) Add(w Widget) *FrameWidget {
+	change(func() {
+		if w != f.titleW {
+			f.child = w
+		}
+	})
+	return f
+}
 
-// SetTitleWidget shows w as the title instead of the text.
+// SetTitleWidget shows w as the title instead of the text; the frame's
+// child is ignored.
 func (f *FrameWidget) SetTitleWidget(w Widget) *FrameWidget {
-	change(func() { f.titleW = w })
+	change(func() {
+		if w != f.child {
+			f.titleW = w
+		}
+	})
 	return f
 }
 
@@ -64,7 +77,9 @@ type gridCell struct {
 type holeKey struct{ col, row int }
 
 // Grid makes a grid whose columns are colSpacing DIPs apart and rows
-// rowSpacing.
+// rowSpacing. Cells must not overlap: a widget whose cell another's span
+// covers is not shown. A cell's Align and VAlign follow the box around
+// the grid.
 func Grid(colSpacing, rowSpacing int) *GridWidget {
 	g := &GridWidget{colSp: float32(colSpacing), rowSp: float32(rowSpacing)}
 	g.init(g)
@@ -72,15 +87,13 @@ func Grid(colSpacing, rowSpacing int) *GridWidget {
 }
 
 // Attach puts w in the cell at col, row, spanning width columns and height
-// rows. A widget attached again moves.
+// rows. A widget attached again moves; one attached to a taken cell
+// replaces the widget there.
 func (g *GridWidget) Attach(w Widget, col, row, width, height int) *GridWidget {
 	change(func() {
-		for i, have := range g.cells {
-			if have.w == w {
-				g.cells = append(g.cells[:i], g.cells[i+1:]...)
-				break
-			}
-		}
+		g.cells = slices.DeleteFunc(g.cells, func(have gridCell) bool {
+			return have.w == w || have.col == col && have.row == row
+		})
 		g.cells = append(g.cells, gridCell{w, col, row, max(width, 1), max(height, 1)})
 	})
 	return g
@@ -310,8 +323,25 @@ func Card() *CardWidget {
 	return k
 }
 
-func (k *CardWidget) SetTitle(w Widget) *CardWidget { change(func() { k.title = w }); return k }
-func (k *CardWidget) SetBody(w Widget) *CardWidget  { change(func() { k.body = w }); return k }
+// SetTitle shows w as the card's title; the card's body is ignored.
+func (k *CardWidget) SetTitle(w Widget) *CardWidget {
+	change(func() {
+		if w != k.body {
+			k.title = w
+		}
+	})
+	return k
+}
+
+// SetBody shows w as the card's body; the card's title is ignored.
+func (k *CardWidget) SetBody(w Widget) *CardWidget {
+	change(func() {
+		if w != k.title {
+			k.body = w
+		}
+	})
+	return k
+}
 
 // ShowBody shows the body, or hides it leaving the title.
 func (k *CardWidget) ShowBody(on bool) *CardWidget { change(func() { k.hideBody = !on }); return k }

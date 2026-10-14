@@ -101,14 +101,20 @@ func (b *BoxWidget) build(c *ui.Context) ui.Element {
 		outer := axis
 		axis = b.dir
 		defer func() { axis = outer }()
-		grows := b.buttons
+		if b.buttons {
+			ui.Spacer(c)
+			ui.Grid(c).Columns(max(len(b.items), 1)).GapX(b.spacing).Children(func() {
+				for _, it := range b.items {
+					render(c, it.w)
+				}
+			})
+			return
+		}
+		grows := false
 		for _, it := range b.items {
 			if !it.end && it.expand {
 				grows = true
 			}
-		}
-		if b.buttons {
-			ui.Spacer(c)
 		}
 		for _, it := range b.items {
 			if !it.end {
@@ -132,7 +138,7 @@ func (b *BoxWidget) build(c *ui.Context) ui.Element {
 
 func (b *BoxWidget) item(c *ui.Context, it boxItem) {
 	switch {
-	case !it.expand:
+	case !it.expand || it.w.base().hidden: // a hidden widget takes no room
 		render(c, it.w)
 	case it.fill:
 		render(c, it.w).Grow(1)

@@ -76,7 +76,9 @@ func block(name string, done <-chan struct{}) {
 }
 
 func notMain(name string) {
-	if mygo.IsMainThread() {
+	// Before the app is ready no thread runs it yet, and asking would
+	// start the platform backend.
+	if mygo.App.IsReady() && mygo.IsMainThread() {
 		panic("widget: " + name + " called on the main thread; call it from a handler or another goroutine")
 	}
 }

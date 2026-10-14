@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -92,9 +93,10 @@ func TestSettersAfterCloseDoNothingToTheWindow(t *testing.T) {
 	w := NewWindow("Gone", 300, 200)
 	w.SetContent(l)
 	w.Show()
-	w.Close()
-	l.SetText("b") // must not panic or redraw a dead window
 	n := w.Native()
+	w.Close()
+	waitClosed(t, w)
+	l.SetText("b") // must not panic or redraw a dead window
 	mu.Lock()
 	_, still := shown[n]
 	mu.Unlock()
@@ -131,7 +133,7 @@ func TestOnCloseDuringQuitQuitsAgainOnYes(t *testing.T) {
 	w.Show()
 	mygo.App.Quit()
 	wait(t, requitted)
-	if w.Native() == nil || !lastFakeClosed(w) {
+	if !lastFakeClosed(w) {
 		t.Fatal("window not closed after OnClose said yes")
 	}
 }
@@ -168,4 +170,102 @@ func lastFakeClosed(w *Window) bool {
 		}
 	}
 	return false
+}
+
+// waitClosed waits until w's native window has closed.
+func waitClosed(t *testing.T, w *Window) {
+	t.Helper()
+	mu.Lock()
+	done := w.done
+	mu.Unlock()
+	wait(t, done)
+}
+
+func TestShowAfterCloseShowsAgain(t *testing.T) {
+	w := NewWindow("Again", 300, 200)
+	w.Show()
+	first := w.Native()
+	w.Close()
+	waitClosed(t, w)
+	if w.Native() != nil {
+		t.Fatal("Native() not nil after the window closed")
+	}
+	w.Show()
+	defer w.Close()
+	if n := w.Native(); n == nil || n == first {
+		t.Fatalf("Native() %p after a second Show, first %p", n, first)
+	}
+}
+
+func TestConcurrentShowMakesOneWindow(t *testing.T) {
+	n := len(fb.Windows())
+	w := NewWindow("Once", 300, 200)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(w.Show)
+	}
+	wg.Wait()
+	defer w.Close()
+	if got := len(fb.Windows()); got != n+1 {
+		t.Fatalf("%d windows made, want 1", got-n)
+	}
+}
+
+func TestCloseRequestsWhileAskingAskOnce(t *testing.T) {
+	asked := make(chan struct{}, 4)
+	answer := make(chan bool)
+	w := NewWindow("AskOnce", 300, 200)
+	w.OnClose(func() bool { asked <- struct{}{}; return <-answer })
+	w.Show()
+	defer w.Close()
+	fw := lastFake(t)
+	mygo.RunOnMain(func() { fw.H.ShouldClose() })
+	wait(t, asked)
+	mygo.RunOnMain(func() { fw.H.ShouldClose() }) // while the first asks
+	answer <- false
+	Update(func() {})
+	select {
+	case <-asked:
+		t.Fatal("a second request asked again while the first was asking")
+	default:
+	}
+	mygo.RunOnMain(func() { fw.H.ShouldClose() }) // after the answer: asks
+	wait(t, asked)
+	answer <- false
+}
+
+func TestMaximizeBeforeShow(t *testing.T) {
+	w := NewWindow("Max", 300, 200).Maximize()
+	w.Show()
+	defer w.Close()
+	if !lastFake(t).Opts.Maximized {
+		t.Fatal("not maximized when shown")
+	}
+}
+
+func TestOnCloseSurvivesClose(t *testing.T) {
+	asked := make(chan struct{}, 1)
+	w := NewWindow("Keeps", 300, 200)
+	w.OnClose(func() bool { asked <- struct{}{}; return true })
+	w.Show()
+	w.Close()
+	waitClosed(t, w)
+	w.Show()
+	fw := lastFake(t)
+	mygo.RunOnMain(func() { fw.H.ShouldClose() })
+	wait(t, asked)
+	waitClosed(t, w)
+}
+
+// Close while Show is still making the window: the window closes.
+func TestCloseWhileShowMakesTheWindow(t *testing.T) {
+	w := NewWindow("Racing", 300, 200)
+	off := mygo.App.OnWindowCreated(func(n *mygo.Window) {
+		if n.Title() == "Racing" {
+			w.Close() // Show has made n but not stored it yet
+		}
+	})
+	defer off()
+	w.Show()
+	waitClosed(t, w)
 }

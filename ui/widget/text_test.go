@@ -135,3 +135,43 @@ func TestReadOnlyEntryIgnoresTyping(t *testing.T) {
 		t.Fatalf("Text() %q", e.Text())
 	}
 }
+
+// A widget shown in two views: focus in one is not lost in the other.
+func TestOnFocusOutIgnoresAnotherView(t *testing.T) {
+	left := make(chan struct{}, 4)
+	e := Entry().SetText("x")
+	e.OnFocusOut(func() { left <- struct{}{} })
+	tt1, tt2 := tester(t, e), tester(t, e)
+	focus(tt1, 1)
+	tt2.Frame()
+	tt1.Frame()
+	Update(func() {})
+	select {
+	case <-left:
+		t.Fatal("OnFocusOut ran while the entry kept the focus in its view")
+	default:
+	}
+}
+
+func TestHidingAFocusedWidgetRunsOnFocusOut(t *testing.T) {
+	left := make(chan struct{}, 1)
+	e := Entry()
+	e.OnFocusOut(func() { left <- struct{}{} })
+	tt := tester(t, e)
+	focus(tt, 1)
+	e.SetVisible(false)
+	tt.Frame()
+	wait(t, left)
+}
+
+func TestFocusMovesTheFocus(t *testing.T) {
+	a, b := Entry(), Entry()
+	tt := tester(t, VBox(0).Add(a, b))
+	b.Focus()
+	tt.Frame()
+	tt.Type("x")
+	tt.Frame()
+	if a.Text() != "" || b.Text() != "x" {
+		t.Fatalf("a %q, b %q: typing did not go to b", a.Text(), b.Text())
+	}
+}

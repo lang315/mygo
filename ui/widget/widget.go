@@ -30,11 +30,53 @@ type core struct {
 	id         int
 	hidden     bool
 	disabled   bool
-	focused    bool // had the focus at the last build, for OnFocusOut
+	wantFocus  bool // Focus asked for the keyboard focus
+	focusIn    int  // the view that last built it focused, noView for none
 	tooltip    string
 	st         style
 	onFocusOut func()
+	click      func()
+	menu       []MenuItem
 }
+
+// noView is core.focusIn for a widget no view has seen focused.
+const noView = -1
+
+// building is the id of the view building: a window's, or content's.
+// Only views touch it, under mu.
+var building int
+
+func (c *common[W]) init(self *W) { c.self, c.id, c.focusIn = self, newID(), noView }
+
+// SetVisible shows or hides the widget. A hidden widget keeps its values,
+// but not its caret, selection, scroll position or open popup; hiding it
+// takes its keyboard focus.
+func (c *common[W]) SetVisible(v bool) *W {
+	change(func() {
+		c.hidden = !v
+		if !v && c.focusIn != noView {
+			c.focusIn = noView
+			if c.onFocusOut != nil {
+				Post(c.onFocusOut)
+			}
+		}
+	})
+	return c.self
+}
+
+// OnClick runs fn when the widget is clicked: gota's EventBox, on any
+// widget. Buttons have their own OnClick.
+func (c *common[W]) OnClick(fn func()) *W { change(func() { c.click = fn }); return c.self }
+
+// ContextMenu shows items in a menu when the widget is right-clicked; no
+// items remove it. Set it again when the items change.
+func (c *common[W]) ContextMenu(items ...MenuItem) *W {
+	change(func() { c.menu = items })
+	return c.self
+}
+
+// Focus moves the keyboard focus to the widget when it next draws.
+func (c *common[W]) Focus() *W { change(func() { c.wantFocus = true }); return c.self }
 
 func (b *core) base() *core { return b }
 
@@ -45,14 +87,8 @@ type common[W any] struct {
 	self *W
 }
 
-func (c *common[W]) init(self *W) { c.self, c.id = self, newID() }
-
 // AssignTo stores the widget in *p, to keep a widget made inside a chain.
 func (c *common[W]) AssignTo(p **W) *W { *p = c.self; return c.self }
-
-// SetVisible shows or hides the widget. A hidden widget keeps its values,
-// but not its caret, selection, scroll position or open popup.
-func (c *common[W]) SetVisible(v bool) *W { change(func() { c.hidden = !v }); return c.self }
 
 // Visible reports whether the widget is shown.
 func (c *common[W]) Visible() bool { mu.Lock(); defer mu.Unlock(); return !c.hidden }
@@ -94,22 +130,35 @@ func render(c *ui.Context, w Widget) ui.Element {
 	if b.tooltip != "" {
 		e.Tooltip(b.tooltip)
 	}
+	if h := b.click; h != nil {
+		e.OnClick(func() { Post(h) })
+	}
+	if menu := b.menu; len(menu) > 0 {
+		e.ContextMenu(func(m *ui.Menu) { buildMenu(m, menu) })
+	}
+	if b.wantFocus {
+		e.Focus()
+		b.wantFocus = false
+	}
 	if b.onFocusOut != nil {
-		f := e.Focused()
-		if b.focused && !f {
+		switch f := e.Focused(); {
+		case f:
+			b.focusIn = building
+		case b.focusIn == building:
+			b.focusIn = noView
 			Post(b.onFocusOut)
 		}
-		b.focused = f
 	}
 	return e
 }
 
 // content is a view showing w alone, filling the window.
 func content(w Widget) func(c *ui.Context) {
+	id := newID()
 	return func(c *ui.Context) {
 		mu.Lock()
 		defer mu.Unlock()
-		axis = vertical
+		axis, building = vertical, id
 		ui.Column(c).Fill().Children(func() { render(c, w) })
 	}
 }

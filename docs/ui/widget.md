@@ -57,9 +57,78 @@ window of your own, `widget.View(w)` is a `ui` view showing `w`:
 - **`Update(fn)`** runs `fn` on the event goroutine and waits for it, for a
   worker that must change widgets in step with the handlers. In a handler it
   runs `fn` at once.
-- **Blocking calls** (`Update`, and the dialogs to come) panic on the main
-  thread, which must never wait. In a handler, they keep running the other
-  queued handlers while they wait, as GTK runs its main loop under a dialog.
+- **Blocking calls** (`Update`, `Dialog.Run`, `Alert`, `Confirm`, the
+  `Input` functions and the file dialogs) panic on the main thread, which
+  must never wait. In a handler, they keep running the other queued
+  handlers while they wait, as GTK runs its main loop under a dialog; on
+  another goroutine they just wait.
+
+## Dialogs
+
+A dialog is a window over another, its parent, which it blocks while it is
+open: a sheet on the parent on macOS, a modal window on Linux (where it
+blocks every window of the app) and Windows.
+
+```go
+var d *widget.Dialog
+d = widget.NewDialog(w, "New account", "", 420, 260, widget.VBox(8).Add(
+	name,
+	widget.ButtonBox().Add(widget.Button("Done").Suggested().OnClick(func() { d.Close() })),
+))
+d.Run() // returns once the dialog closes
+```
+
+`NewDialog(parent, title, subtitle, width, height, content)` takes a nil
+parent for a dialog of its own; the title and subtitle are drawn in the
+dialog, as a macOS sheet shows none. `Run` shows it and returns when it
+closes: by `Close`, by the user, or because its parent closed. For a dialog
+that returns a value, embed `*widget.Dialog` in a type of your own whose
+`Run` returns it. A dialog opened from a dialog takes the outer one's
+`Window` as its parent; closing a window closes the dialogs over it, the
+innermost first. `SetDeletable(false)` keeps the user from closing it (its
+`Close` and its parent still can), and `OnBeforeRun` runs before it shows.
+
+Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,
+`Question`, `Error`), 420 DIPs wide, their OK and Cancel in the app's
+language:
+
+- `Alert(parent, kind, title, text)` waits for OK.
+- `Confirm(parent, kind, title, text) bool`: OK is true; Cancel and closing
+  the dialog are false.
+- `InputString(parent, kind, title, label, value) (string, bool)`,
+  `InputInt(parent, kind, title, label, min, max, step, value) (int, bool)`
+  and `InputSelect(parent, kind, title, label, options...) (string, bool)`
+  ask for a value. Enter is OK in `InputString` and `InputInt`; in
+  `InputSelect`, whose combo takes Enter to open its list, OK stays
+  disabled until a choice.
+
+The file dialogs are the system's: `OpenFile(parent, title, filters...)`,
+`OpenFiles`, `SaveFile(parent, title, name, filters...)` and
+`SelectFolder(parent, title, dir)` return the path, or `""` (`nil`) when the
+user cancels. A `Filter` has a `Name` and `Extensions` without the dot.
+
+## Menus
+
+A `MenuItem` has `Text` (a separator when empty), `OnClick`, which runs on
+the event goroutine and so may open a dialog, `Children` for a submenu, and
+`Checked` and `Disabled`. Menus have no icons.
+
+- `MenuButton(text).SetMenu(items...)`: a button opening a menu.
+- `ContextMenu(items...)` on any widget: the menu of a right click.
+- `Window.SetMenuBar(items...)`: the window's menu bar, on Linux and
+  Windows. On macOS the menu bar is the app's: set it with
+  `mygo.App.SetMenu`.
+
+Menus take their items, not a function building them, because `ui` builds
+menus while it draws, under the package's lock: set the items again when
+they change.
+
+## Clipboard, theme and screen
+
+`Clipboard.SetText(s)`, `Clipboard.SetImage(png)` and `Clipboard.Text()`
+use the system clipboard. `SetTheme(ThemeSystem/ThemeLight/ThemeDark)` sets
+the app's appearance, which every window follows, and `IsDark` reports it.
+`ScreenSize()` returns the main display's size in DIPs, once the app runs.
 
 ## Styling
 
@@ -80,7 +149,9 @@ the theme (`Muted`) or `ui.RGB`.
 | `Suggested()`, `Destructive()` on buttons | `suggested-action`, `destructive-action` |
 
 Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
-`OnFocusOut`, and `AssignTo(&v)`, which keeps a widget made inside a chain.
+`OnFocusOut`, `OnClick` (gota's `EventBox`), `ContextMenu`, `Focus`, which
+moves the keyboard focus to it, and `AssignTo(&v)`, which keeps a widget
+made inside a chain.
 
 ## What a widget keeps
 
@@ -97,8 +168,11 @@ Layout:
 - `VBox(spacing)`, `HBox(spacing)`: a column or a row. `Add` at the
   natural size, `Pack(w, expand, fill)`, `PackEnd`, `Remove`, `Clear`. A
   widget already in the box is not added twice.
-- `ButtonBox()`: a row whose widgets sit at its end, as a dialog's buttons.
-- `Grid(colSpacing, rowSpacing)`: `Attach(w, col, row, width, height)`.
+- `ButtonBox()`: a row whose widgets sit at its end, one width each, as a
+  dialog's buttons.
+- `Grid(colSpacing, rowSpacing)`: `Attach(w, col, row, width, height)`; a
+  widget attached to a taken cell replaces the one there, and cells must
+  not overlap.
 - `Frame(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `Flow(spacing)`: a row that wraps.
@@ -110,7 +184,13 @@ Layout:
 
 Input and display:
 
-- `Label(text)`: a line of text.
+- `Label(text)`: a line of text; `Rich(spans...)` shows styled `ui.Span`s
+  instead, where gota used Pango markup.
+- `Icon(svg, size)`: an SVG icon in the color of the text (`TextColor`
+  changes it). There are no named icons: embed the SVGs you need.
+- `Image(data, w, h)`: a PNG, JPEG, GIF, WebP or BMP, `SetImage` to change
+  it. The same bytes of an image up to 64 KB, as an icon, decode once (the
+  last 256 are kept); bytes that are no image leave an empty room.
 - `Entry()`, `TextView()`: one line or several of text; `Text`, `SetText`,
   `SetPlaceholder`, `SetEditable`, `OnChange`; `Entry` also has
   `Password` and `OnEnter`.
@@ -120,14 +200,21 @@ Input and display:
   the options; `Values`, `SetValues`.
 - `RadioGroup(row, options...)`, `Combo(options...)`: one option; `Value`,
   `SetValue`. An `Option` has the `Value` the program reads and the `Text`
-  the user sees; a combo's texts must differ.
+  the user sees. A combo's values must differ (its texts may repeat), and
+  it groups options in titled sections with icons: `AddSection(title, png,
+  options...)`, `RemoveSection`, `RemoveOption`, `SetOptionText`,
+  `SectionLen`, `Selected`, `Unselect`.
+- `MenuButton(text)`: see [Menus](#menus).
 - `Spin(min, max, step)`: a number; `Value`, `Int`, `SetValue`.
   `RangeSpin` is two, with text between and after.
 - `Progress()`: `SetFraction` (negative for unknown length), `SetText`.
   `Spinner()`: `Start`, `Stop`.
 
-Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`,
-`Unmaximize`, `SetContent`, `OnClose(func() bool)` (false keeps the
-window open; quitting the app asks it too, and a yes quits again), `Close`.
+Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`
+(before `Show` too), `Unmaximize`, `SetContent`, `SetMenuBar`,
+`OnClose(func() bool)` (false keeps the window open; quitting the app asks
+it too, and a yes quits again; it asks once at a time), `Close`. A window
+that closed shows again with `Show`, and `Native()` is nil while it is not
+shown.
 `UseHeaderBar(subtitle)`, before `Show`, draws the title bar with `ui` and
 returns a `*HeaderBarWidget` with `PackStart` and `PackEnd`.
