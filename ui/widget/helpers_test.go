@@ -55,6 +55,7 @@ func press(t *testing.T, fw *fake.Window, label string) {
 // typeText types s into the element with the focus in fw's view.
 func typeText(fw *fake.Window, s string) {
 	mygo.RunOnMain(func() {
+		fw.FakeSurface().Frame() // a first frame applies Focus
 		fw.FakeSurface().Send(platform.SurfaceEvent{Kind: platform.TextInput, Text: s})
 		fw.FakeSurface().Frame()
 	})
