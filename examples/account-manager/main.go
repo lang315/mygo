@@ -133,7 +133,7 @@ type search struct {
 
 // filter shows the accounts of the folder shown that the search finds.
 // It does nothing when they are the rows shown already: a filter given to
-// the view sorts all rows again, a second at a million.
+// the view goes through all rows.
 func (a *app) filter() {
 	f, _ := a.s.folderByName(a.folder)
 	s := search{f.ID, a.column, strings.TrimSpace(a.keyword)}

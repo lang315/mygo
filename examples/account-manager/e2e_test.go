@@ -36,11 +36,10 @@ func TestLiveColumns(t *testing.T) {
 	}
 	a.s.move(ids, other.ID)
 	e := &live{t: t, tt: newTester(t, a), a: a, compare: compare(),
-		rnd: rand.New(rand.NewPCG(1, 2)), r: &runner{done: make(chan struct{})},
-		every: max(1, n/100_000)}
+		rnd: rand.New(rand.NewPCG(1, 2)), r: &runner{done: make(chan struct{})}}
 	e.tt.SetSize(3200, 800) // every column shown, for its header to click and its cells to read
 	e.tt.Frame()
-	e.check(true)
+	e.check()
 
 	e.ticks(10) // not sorted
 	for _, col := range append(slices.Clone(liveColumns), colName) {
@@ -50,7 +49,7 @@ func TestLiveColumns(t *testing.T) {
 			if want := (ui.SortOrder{Column: title, Descending: desc}); a.sort != want {
 				t.Fatalf("a click on %s sorted by %+v, want %+v", title, a.sort, want)
 			}
-			e.check(true)
+			e.check()
 			e.ticks(10)
 		}
 	}
@@ -65,18 +64,18 @@ func TestLiveColumns(t *testing.T) {
 	if a.filtered.keyword != "thành công" {
 		t.Fatalf("the search typed is not shown: %+v", a.filtered)
 	}
-	e.check(true)
+	e.check()
 	e.ticks(10)
 	a.keyword = ""
 	e.tt.do(e.tt.Click("Tìm kiếm"))
-	e.check(true)
+	e.check()
 	e.ticks(10)
 
 	for _, f := range []string{other.Name, a.s.folders[0].Name} {
 		a.folder = f
 		a.showFolder()
 		e.tt.Frame()
-		e.check(true)
+		e.check()
 		e.ticks(10)
 	}
 
@@ -96,7 +95,6 @@ type live struct {
 	compare map[string]func(a, b *account) int
 	rnd     *rand.Rand
 	r       *runner
-	every   int // the ticks between two checks of the order: each sorts all rows
 	order   []int
 	version uint64
 	took    []time.Duration // applying each batch and building its frame
@@ -106,7 +104,7 @@ type live struct {
 // of 10,000 a second does ten times a second.
 func (e *live) ticks(n int) {
 	e.t.Helper()
-	for i := range n {
+	for range n {
 		now := time.Now()
 		for range 1000 {
 			e.r.push(change(e.rnd, e.a.s.nextID, now))
@@ -115,29 +113,27 @@ func (e *live) ticks(n int) {
 		e.a.apply(e.r)
 		e.tt.Frame()
 		e.took = append(e.took, time.Since(start))
-		e.check(i%e.every == e.every-1 || i == n-1)
+		e.check()
 	}
 }
 
-// check fails unless the version changed if and only if the order shown
-// did, and the first rows show in that order with their values; and,
-// when full, unless the order is the rows the search keeps, sorted from
-// scratch.
-func (e *live) check(full bool) {
+// check fails unless the order shown is the rows the search keeps, sorted
+// from scratch; the version changed if and only if the order did; and the
+// first rows show in that order with their values.
+func (e *live) check() {
 	e.t.Helper()
 	a := e.a
 	got := make([]int, a.view.Len())
 	for i := range got {
 		got[i] = a.view.Row(i)
 	}
-	if full {
-		if want := e.want(); !slices.Equal(got, want) {
-			i := 0
-			for i < min(len(got), len(want)) && got[i] == want[i] {
-				i++
-			}
-			e.t.Fatalf("sort %+v, search %+v: %d rows, want %d; they differ from row %d", a.sort, a.filtered, len(got), len(want), i)
+	if !e.sorted(got) {
+		want := e.want()
+		i := 0
+		for i < min(len(got), len(want)) && got[i] == want[i] {
+			i++
 		}
+		e.t.Fatalf("sort %+v, search %+v: %d rows, want %d; they differ from row %d", a.sort, a.filtered, len(got), len(want), i)
 	}
 	if changed := !slices.Equal(got, e.order); changed != (a.view.Version() != e.version) {
 		e.t.Fatalf("sort %+v: the order changed %v, the version changed %v", a.sort, changed, !changed)
@@ -158,6 +154,45 @@ func (e *live) check(full bool) {
 		}
 		at = i
 	}
+}
+
+// sorted reports whether got is the order want returns, in a pass rather
+// than a sort: as many rows as the search keeps, each kept, and each
+// strictly before the next, by the column then by index, which allows that
+// one order only.
+func (e *live) sorted(got []int) bool {
+	a := e.a
+	rows, keep := a.s.accounts, keep(a.filtered)
+	n := 0
+	for i := range rows {
+		if keep(&rows[i]) {
+			n++
+		}
+	}
+	if len(got) != n {
+		return false
+	}
+	f := e.compare[a.sort.Column]
+	for k, i := range got {
+		if !keep(&rows[i]) {
+			return false
+		}
+		if k == 0 {
+			continue
+		}
+		h, d := got[k-1], 0
+		switch {
+		case f == nil:
+		case a.sort.Descending:
+			d = f(&rows[i], &rows[h])
+		default:
+			d = f(&rows[h], &rows[i])
+		}
+		if d > 0 || d == 0 && h >= i {
+			return false
+		}
+	}
+	return true
 }
 
 // want is the order of the rows the search keeps, sorted from scratch:

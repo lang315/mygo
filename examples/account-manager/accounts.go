@@ -226,8 +226,7 @@ func generate(n, first int, seed uint64) []account {
 // matcher keeps the accounts whose column col matches keyword: a keyword
 // with | lists the values to match exactly, as fhtool's UID1|UID2 search,
 // another matches the values containing it, case aside. A keyword
-// listing nothing keeps all. It takes a pointer to a row of the slice, as
-// the view's filter does, so no row is copied to test it.
+// listing nothing keeps all.
 func matcher(col int, keyword string) func(a *account) bool {
 	keyword = strings.TrimSpace(keyword)
 	if strings.Contains(keyword, "|") {
