@@ -38,7 +38,7 @@ func tour(w *widget.Window) widget.Widget {
 		AddPage("Dialogs", dialogs(w)).
 		AddPage("Extras", extras()).
 		AddPage("Table", table()).
-		Padding(4)
+		Padding(4).Expand()
 }
 
 func dialogs(w *widget.Window) widget.Widget {
@@ -290,7 +290,7 @@ func table() widget.Widget {
 		stop = make(chan struct{})
 		go liveUpdates(t, stop)
 	})
-	return widget.VBox(8).Add(widget.HBox(8).Add(live, activated)).Pack(t, true, true)
+	return widget.VBox(8).Add(widget.HBox(8).Add(live, activated)).Pack(t, true, true).Expand()
 }
 
 // liveUpdates fails or fixes a hundred accounts every 100 ms until stop

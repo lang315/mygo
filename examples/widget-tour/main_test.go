@@ -26,8 +26,9 @@ func TestTourTableTab(t *testing.T) {
 	}
 	tt.Frame()
 	for _, s := range []string{"Rows: 100000", "acct000000", "Search"} {
-		if !tt.HasText(s) {
-			t.Errorf("no %q in %q", s, tt.Texts())
+		// The tester lists texts off the window too: the panel must fit.
+		if r, ok := tt.Find(s); !ok || r.Y+r.H > 700 {
+			t.Errorf("%q at %v (found %v), not in the window; texts %q", s, r, ok, tt.Texts())
 		}
 	}
 }

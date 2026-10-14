@@ -165,7 +165,9 @@ lock: they read the row and call no widget method.
   `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it.
   Cmd/Ctrl+C copies the selected rows, a line each, cells apart by tabs.
 
-A table shows in one window at a time.
+A table shows in one window at a time. Its height is that of all its rows
+unless something bounds it: `Expand` the table and the boxes and
+notebook holding it, so that it scrolls and its bottom panel shows.
 
 ## Clipboard, theme and screen
 
