@@ -260,3 +260,16 @@ func TestOnCloseSurvivesClose(t *testing.T) {
 	wait(t, asked)
 	waitClosed(t, w)
 }
+
+// Close while Show is still making the window: the window closes.
+func TestCloseWhileShowMakesTheWindow(t *testing.T) {
+	w := NewWindow("Racing", 300, 200)
+	off := mygo.App.OnWindowCreated(func(n *mygo.Window) {
+		if n.Title() == "Racing" {
+			w.Close() // Show has made n but not stored it yet
+		}
+	})
+	defer off()
+	w.Show()
+	waitClosed(t, w)
+}

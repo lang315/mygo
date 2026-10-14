@@ -190,14 +190,19 @@ func (w *Window) Show() {
 		mu.Unlock()
 		close(done)
 	})
+	closeNow := false
 	change(func() {
 		select {
 		case <-done: // it closed already
 		default:
 			w.win = n
 			shown[n] = struct{}{}
+			closeNow = w.closing // Close ran while the window was being made
 		}
 	})
+	if closeNow {
+		n.Close()
+	}
 }
 
 // closeAsked answers a request to close the window, on the main thread.
