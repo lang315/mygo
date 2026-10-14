@@ -128,6 +128,6 @@ Input and display:
 
 Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`,
 `Unmaximize`, `SetContent`, `OnClose(func() bool)` (false keeps the
-window open), `Close`.
+window open; quitting the app asks it too, and a yes quits again), `Close`.
 `UseHeaderBar(subtitle)`, before `Show`, draws the title bar with `ui` and
 returns a `*HeaderBarWidget` with `PackStart` and `PackEnd`.

@@ -102,3 +102,70 @@ func TestSettersAfterCloseDoNothingToTheWindow(t *testing.T) {
 		t.Fatal("closed window still redrawn by changes")
 	}
 }
+
+// Review Focus 2 for the header bar: a widget packed twice shows once.
+func TestHeaderBarPackingAWidgetTwiceKeepsOne(t *testing.T) {
+	b := Button("Twice")
+	h := NewWindow("Dup", 300, 200).UseHeaderBar("")
+	h.PackStart(b).PackStart(b).PackEnd(b)
+	tt := tester(t, h)
+	n := 0
+	for _, s := range tt.Texts() {
+		if s == "Twice" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("Twice shown %d times: %q", n, tt.Texts())
+	}
+}
+
+// Quitting asks OnClose; a yes closes the window and quits again.
+func TestOnCloseDuringQuitQuitsAgainOnYes(t *testing.T) {
+	requitted := make(chan struct{}, 1)
+	old := quit
+	quit = func() { requitted <- struct{}{} }
+	defer func() { quit = old }()
+	w := NewWindow("Quit", 300, 200)
+	w.OnClose(func() bool { return true })
+	w.Show()
+	mygo.App.Quit()
+	wait(t, requitted)
+	if w.Native() == nil || !lastFakeClosed(w) {
+		t.Fatal("window not closed after OnClose said yes")
+	}
+}
+
+// A plain close after a quit attempt does not quit.
+func TestOnCloseAfterQuitAttemptDoesNotQuit(t *testing.T) {
+	quits := make(chan struct{}, 4)
+	old := quit
+	quit = func() { quits <- struct{}{} }
+	defer func() { quit = old }()
+	asked := make(chan struct{}, 4)
+	w := NewWindow("NoQuit", 300, 200)
+	w.OnClose(func() bool { asked <- struct{}{}; return false })
+	w.Show()
+	mygo.App.Quit() // asked, says no
+	wait(t, asked)
+	w.OnClose(func() bool { asked <- struct{}{}; return true })
+	fw := lastFake(t)
+	mygo.RunOnMain(func() { fw.H.ShouldClose() })
+	wait(t, asked)
+	Update(func() {})
+	select {
+	case <-quits:
+		t.Fatal("closing one window quit the app")
+	default:
+	}
+	w.Close()
+}
+
+func lastFakeClosed(w *Window) bool {
+	for _, fw := range fb.Windows() {
+		if fw.Title() == "Quit" {
+			return fw.IsClosed()
+		}
+	}
+	return false
+}

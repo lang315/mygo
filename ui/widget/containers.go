@@ -121,6 +121,10 @@ func (g *GridWidget) build(c *ui.Context) ui.Element {
 						}
 					}
 				}
+				if cl.w.base().hidden { // keep its cells, or ui flows the next ones in
+					ui.Box(c.Key(holeKey{col, r})).ColumnSpan(cl.width).RowSpan(cl.height)
+					continue
+				}
 				render(c, cl.w).ColumnSpan(cl.width).RowSpan(cl.height)
 			}
 		}

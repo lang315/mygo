@@ -103,3 +103,16 @@ func TestScrolledSeparatorFlow(t *testing.T) {
 		t.Fatalf("flow did not wrap: one %v six %v", one, six)
 	}
 }
+
+// A hidden cell leaves a hole; the cells after it stay put.
+func TestGridHiddenCellKeepsTheOthersInPlace(t *testing.T) {
+	a := Label("A")
+	g := Grid(0, 0).Attach(a, 0, 0, 1, 1).Attach(Label("B"), 1, 0, 1, 1).Attach(Label("C"), 0, 1, 1, 1)
+	tt := tester(t, g)
+	b0, c0 := find(t, tt, "B"), find(t, tt, "C")
+	a.SetVisible(false)
+	tt.Frame()
+	if b, c := find(t, tt, "B"), find(t, tt, "C"); b.X != b0.X || c.Y != c0.Y || c.X != c0.X {
+		t.Fatalf("B %v→%v, C %v→%v: cells moved", b0, b, c0, c)
+	}
+}

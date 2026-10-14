@@ -1,6 +1,9 @@
 package widget
 
 import (
+	"slices"
+	"sync"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
@@ -16,6 +19,24 @@ type Window struct {
 	header        *HeaderBarWidget
 	onClose       func() bool
 	win           *mygo.Window // nil until Show
+}
+
+// quit quits the app; tests replace it.
+var quit = mygo.App.Quit
+
+var (
+	watchQuit sync.Once
+	// quitAsked is set while the app runs its quit sequence, which asks
+	// every window to close. Only the main thread touches it.
+	quitAsked bool
+)
+
+func onBeforeQuit(e *mygo.QuitEvent) {
+	quitAsked = true
+	// The quit sequence runs on the main thread, and WhenReady queues
+	// there once ready: the flag clears right after the sequence, whether
+	// it quit or a window kept it from quitting.
+	mygo.App.WhenReady(func() { quitAsked = false })
 }
 
 // NewWindow makes a window, not shown yet.
@@ -112,6 +133,7 @@ func (w *Window) Show() {
 	}
 	icon, resizable := w.icon, w.resizable
 	mu.Unlock()
+	watchQuit.Do(func() { mygo.App.OnBeforeQuit(onBeforeQuit) })
 	n := mygo.NewWindow(opts)
 	if icon != nil {
 		n.SetIcon(icon)
@@ -127,11 +149,16 @@ func (w *Window) Show() {
 			return
 		}
 		// The user's answer comes from the event goroutine: keep the
-		// window, ask, and close it if the answer is yes.
+		// window, ask, and close it if the answer is yes. Keeping it
+		// stops a quit too, so a yes then quits again.
 		e.PreventDefault()
+		quitting := quitAsked
 		Post(func() {
 			if h() {
 				w.closeAnyway()
+				if quitting {
+					quit()
+				}
 			}
 		})
 	})
@@ -188,11 +215,11 @@ func (h *HeaderBarWidget) SetSubtitle(s string) *HeaderBarWidget {
 	return h
 }
 func (h *HeaderBarWidget) PackStart(ws ...Widget) *HeaderBarWidget {
-	change(func() { h.start = append(h.start, ws...) })
+	change(func() { h.start = h.add(h.start, ws) })
 	return h
 }
 func (h *HeaderBarWidget) PackEnd(ws ...Widget) *HeaderBarWidget {
-	change(func() { h.end = append(h.end, ws...) })
+	change(func() { h.end = h.add(h.end, ws) })
 	return h
 }
 
@@ -218,4 +245,14 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 			render(c, h.end[i])
 		}
 	})
+}
+
+// add appends the widgets not yet in the bar to side. Under mu.
+func (h *HeaderBarWidget) add(side, ws []Widget) []Widget {
+	for _, w := range ws {
+		if !slices.Contains(h.start, w) && !slices.Contains(h.end, w) && !slices.Contains(side, w) {
+			side = append(side, w)
+		}
+	}
+	return side
 }
