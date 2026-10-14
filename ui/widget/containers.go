@@ -1,0 +1,366 @@
+package widget
+
+import (
+	"slices"
+
+	"github.com/egoist/mygo/ui"
+)
+
+// FrameWidget draws a border with a title around one widget.
+type FrameWidget struct {
+	common[FrameWidget]
+	title  string
+	titleW Widget
+	child  Widget
+}
+
+// Frame makes a frame titled title.
+func Frame(title string) *FrameWidget {
+	f := &FrameWidget{title: title}
+	f.init(f)
+	return f
+}
+
+// Add sets the widget inside the frame.
+func (f *FrameWidget) Add(w Widget) *FrameWidget { change(func() { f.child = w }); return f }
+
+// SetTitleWidget shows w as the title instead of the text.
+func (f *FrameWidget) SetTitleWidget(w Widget) *FrameWidget {
+	change(func() { f.titleW = w })
+	return f
+}
+
+func (f *FrameWidget) build(c *ui.Context) ui.Element {
+	t := c.Theme()
+	return ui.Column(c).Gap(t.Space(2)).Padding(t.Space(3)).Border(1, t.Border).Radius(t.Radius).Children(func() {
+		outer := axis
+		axis = vertical
+		defer func() { axis = outer }()
+		switch {
+		case f.titleW != nil:
+			render(c, f.titleW)
+		case f.title != "":
+			ui.Text(c, f.title).Bold()
+		}
+		if f.child != nil {
+			render(c, f.child)
+		}
+	})
+}
+
+// GridWidget places widgets in cells of rows and columns.
+type GridWidget struct {
+	common[GridWidget]
+	colSp, rowSp float32
+	cells        []gridCell
+}
+
+type gridCell struct {
+	w                       Widget
+	col, row, width, height int
+}
+
+// holeKey keys the empty cells a grid fills its holes with.
+type holeKey struct{ col, row int }
+
+// Grid makes a grid whose columns are colSpacing DIPs apart and rows
+// rowSpacing.
+func Grid(colSpacing, rowSpacing int) *GridWidget {
+	g := &GridWidget{colSp: float32(colSpacing), rowSp: float32(rowSpacing)}
+	g.init(g)
+	return g
+}
+
+// Attach puts w in the cell at col, row, spanning width columns and height
+// rows. A widget attached again moves.
+func (g *GridWidget) Attach(w Widget, col, row, width, height int) *GridWidget {
+	change(func() {
+		for i, have := range g.cells {
+			if have.w == w {
+				g.cells = append(g.cells[:i], g.cells[i+1:]...)
+				break
+			}
+		}
+		g.cells = append(g.cells, gridCell{w, col, row, max(width, 1), max(height, 1)})
+	})
+	return g
+}
+
+// build places the cells in row order: ui's grid flows children into the
+// next free cell, so the holes before each cell get empty boxes.
+func (g *GridWidget) build(c *ui.Context) ui.Element {
+	cols, rows := 0, 0
+	for _, cl := range g.cells {
+		cols, rows = max(cols, cl.col+cl.width), max(rows, cl.row+cl.height)
+	}
+	at := make(map[[2]int]*gridCell, len(g.cells))
+	taken := make([]bool, cols*rows)
+	for i := range g.cells {
+		cl := &g.cells[i]
+		at[[2]int{cl.col, cl.row}] = cl
+	}
+	e := ui.Grid(c).GapX(g.colSp).GapY(g.rowSp)
+	if cols > 0 {
+		e.Columns(cols)
+	}
+	return e.Children(func() {
+		for r := range rows {
+			for col := range cols {
+				if taken[r*cols+col] {
+					continue
+				}
+				cl, ok := at[[2]int{col, r}]
+				if !ok {
+					ui.Box(c.Key(holeKey{col, r}))
+					continue
+				}
+				for dr := range cl.height {
+					for dc := range cl.width {
+						if r+dr < rows && col+dc < cols {
+							taken[(r+dr)*cols+col+dc] = true
+						}
+					}
+				}
+				render(c, cl.w).ColumnSpan(cl.width).RowSpan(cl.height)
+			}
+		}
+	})
+}
+
+// ScrolledWidget scrolls a widget larger than its room.
+type ScrolledWidget struct {
+	common[ScrolledWidget]
+	child Widget
+}
+
+func Scrolled(w Widget) *ScrolledWidget {
+	s := &ScrolledWidget{child: w}
+	s.init(s)
+	return s
+}
+
+func (s *ScrolledWidget) build(c *ui.Context) ui.Element {
+	return ui.ScrollBoth(c).Grow(1).Children(func() {
+		outer := axis
+		axis = vertical
+		defer func() { axis = outer }()
+		render(c, s.child)
+	})
+}
+
+// SeparatorWidget is a line between widgets.
+type SeparatorWidget struct{ common[SeparatorWidget] }
+
+func Separator() *SeparatorWidget {
+	s := &SeparatorWidget{}
+	s.init(s)
+	return s
+}
+
+func (s *SeparatorWidget) build(c *ui.Context) ui.Element { return ui.Divider(c) }
+
+// NotebookWidget shows one of its pages, chosen by tabs.
+type NotebookWidget struct {
+	common[NotebookWidget]
+	labels   []string
+	pages    []Widget
+	page     mirror[int]
+	onSwitch func()
+}
+
+func Notebook() *NotebookWidget {
+	n := &NotebookWidget{}
+	n.init(n)
+	return n
+}
+
+// AddPage adds a page showing w under a tab labeled label.
+func (n *NotebookWidget) AddPage(label string, w Widget) *NotebookWidget {
+	change(func() { n.labels, n.pages = append(n.labels, label), append(n.pages, w) })
+	return n
+}
+
+// Page returns the index of the page shown.
+func (n *NotebookWidget) Page() int { mu.Lock(); defer mu.Unlock(); return n.page.value }
+
+func (n *NotebookWidget) SetPage(i int) *NotebookWidget { change(func() { n.page.set(i) }); return n }
+
+// OnSwitch runs fn after the page shown changes.
+func (n *NotebookWidget) OnSwitch(fn func()) *NotebookWidget {
+	change(func() { n.onSwitch = fn })
+	return n
+}
+
+func (n *NotebookWidget) build(c *ui.Context) ui.Element {
+	return ui.Column(c).Gap(c.Theme().Space(2)).Children(func() {
+		p, _ := n.page.bind()
+		ui.Tabs(c, p, n.labels...).OnChange(onChange(&n.page, n.onSwitch))
+		// Tabs clamps *p while it builds, without OnChange: see it here.
+		if changed := *p != n.page.value; changed {
+			n.page.value = *p
+			if n.onSwitch != nil {
+				Post(n.onSwitch)
+			}
+		}
+		if i := *p; i >= 0 && i < len(n.pages) {
+			outer := axis
+			axis = vertical
+			render(c, n.pages[i])
+			axis = outer
+		}
+	})
+}
+
+// SidebarWidget shows one of its pages, chosen in a list at its side.
+type SidebarWidget struct {
+	common[SidebarWidget]
+	names, titles []string
+	pages         []Widget
+	selected      mirror[string]
+	width         mirror[float32]
+}
+
+func Sidebar() *SidebarWidget {
+	s := &SidebarWidget{}
+	s.width.set(200)
+	s.init(s)
+	return s
+}
+
+// Add adds a page named name, listed as title, showing w. A name already
+// there is ignored.
+func (s *SidebarWidget) Add(name, title string, w Widget) *SidebarWidget {
+	change(func() {
+		if slices.Contains(s.names, name) {
+			return
+		}
+		s.names, s.titles, s.pages = append(s.names, name), append(s.titles, title), append(s.pages, w)
+	})
+	return s
+}
+
+// Remove removes the page named name.
+func (s *SidebarWidget) Remove(name string) *SidebarWidget {
+	change(func() {
+		for i, n := range s.names {
+			if n == name {
+				s.names = append(s.names[:i], s.names[i+1:]...)
+				s.titles = append(s.titles[:i], s.titles[i+1:]...)
+				s.pages = append(s.pages[:i], s.pages[i+1:]...)
+				return
+			}
+		}
+	})
+	return s
+}
+
+// Selected returns the name of the page shown.
+func (s *SidebarWidget) Selected() string { mu.Lock(); defer mu.Unlock(); return s.selected.value }
+
+func (s *SidebarWidget) Select(name string) *SidebarWidget {
+	change(func() { s.selected.set(name) })
+	return s
+}
+
+// SetMenuWidth sets the width of the list, in DIPs.
+func (s *SidebarWidget) SetMenuWidth(w float32) *SidebarWidget {
+	change(func() { s.width.set(w) })
+	return s
+}
+
+func (s *SidebarWidget) build(c *ui.Context) ui.Element {
+	sel, _ := s.selected.bind()
+	if !slices.Contains(s.names, *sel) && len(s.names) > 0 {
+		*sel = s.names[0]
+		s.selected.value = *sel
+	}
+	width, _ := s.width.bind()
+	return ui.Split(c, width, func() {
+		ui.Sidebar(c, sel, func() {
+			for i, name := range s.names {
+				ui.SidebarItem(c, name, nil, s.titles[i])
+			}
+		}).OnChange(onChange(&s.selected, nil)).Fill()
+	}, func() {
+		for i, name := range s.names {
+			if name == *sel {
+				outer := axis
+				axis = vertical
+				render(c, s.pages[i])
+				axis = outer
+			}
+		}
+	}).Fill()
+}
+
+// CardWidget is a titled box whose body can be hidden.
+type CardWidget struct {
+	common[CardWidget]
+	title, body Widget
+	hideBody    bool
+}
+
+func Card() *CardWidget {
+	k := &CardWidget{}
+	k.init(k)
+	return k
+}
+
+func (k *CardWidget) SetTitle(w Widget) *CardWidget { change(func() { k.title = w }); return k }
+func (k *CardWidget) SetBody(w Widget) *CardWidget  { change(func() { k.body = w }); return k }
+
+// ShowBody shows the body, or hides it leaving the title.
+func (k *CardWidget) ShowBody(on bool) *CardWidget { change(func() { k.hideBody = !on }); return k }
+
+func (k *CardWidget) build(c *ui.Context) ui.Element {
+	t := c.Theme()
+	return ui.Column(c).Gap(t.Space(2)).Padding(t.Space(3)).Border(1, t.Border).Radius(t.Radius).
+		Background(t.Surface).Children(func() {
+		outer := axis
+		axis = vertical
+		defer func() { axis = outer }()
+		if k.title != nil {
+			render(c, k.title)
+		}
+		if k.body != nil && !k.hideBody {
+			render(c, k.body)
+		}
+	})
+}
+
+// FlowWidget lays out widgets in a row that wraps onto new lines.
+type FlowWidget struct {
+	common[FlowWidget]
+	spacing float32
+	items   []Widget
+}
+
+func Flow(spacing int) *FlowWidget {
+	f := &FlowWidget{spacing: float32(spacing)}
+	f.init(f)
+	return f
+}
+
+func (f *FlowWidget) Add(ws ...Widget) *FlowWidget {
+	change(func() {
+		for _, w := range ws {
+			if !slices.Contains(f.items, w) {
+				f.items = append(f.items, w)
+			}
+		}
+	})
+	return f
+}
+
+func (f *FlowWidget) Clear() *FlowWidget { change(func() { f.items = nil }); return f }
+
+func (f *FlowWidget) build(c *ui.Context) ui.Element {
+	return ui.Row(c).Wrap().Gap(f.spacing).Children(func() {
+		outer := axis
+		axis = horizontal
+		defer func() { axis = outer }()
+		for _, w := range f.items {
+			render(c, w)
+		}
+	})
+}
