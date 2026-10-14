@@ -11,14 +11,20 @@ import (
 // Window is a top-level window showing a widget. Make it with NewWindow,
 // set it up, then Show it.
 type Window struct {
+	id            int // its views' id, for focus tracking (Task 3)
 	title         string
 	width, height int
 	resizable     bool
+	maximized     bool
 	icon          []byte
 	root          Widget
 	header        *HeaderBarWidget
 	onClose       func() bool
-	win           *mygo.Window // nil until Show
+	win           *mygo.Window  // nil until shown, and again once closed
+	showing       bool          // shown, or being made, and not closed yet
+	closing       bool          // Close is closing it: OnClose is not asked
+	asking        bool          // OnClose is asking the user
+	done          chan struct{} // closed when the shown window closes
 }
 
 // quit quits the app; tests replace it.
@@ -41,7 +47,7 @@ func onBeforeQuit(e *mygo.QuitEvent) {
 
 // NewWindow makes a window, not shown yet.
 func NewWindow(title string, width, height int) *Window {
-	return &Window{title: title, width: width, height: height, resizable: true}
+	return &Window{id: newID(), title: title, width: width, height: height, resizable: true}
 }
 
 // Run runs an app with one window titled name: fn sets the window up on
@@ -92,8 +98,18 @@ func (w *Window) SetResizable(on bool) *Window {
 	return w
 }
 
-func (w *Window) Maximize() *Window   { w.do((*mygo.Window).Maximize); return w }
-func (w *Window) Unmaximize() *Window { w.do((*mygo.Window).Unmaximize); return w }
+// Maximize maximizes the window, or makes it maximized when shown.
+func (w *Window) Maximize() *Window {
+	change(func() { w.maximized = true })
+	w.do((*mygo.Window).Maximize)
+	return w
+}
+
+func (w *Window) Unmaximize() *Window {
+	change(func() { w.maximized = false })
+	w.do((*mygo.Window).Unmaximize)
+	return w
+}
 
 // SetContent shows root in the window, replacing what it showed.
 func (w *Window) SetContent(root Widget) *Window { change(func() { w.root = root }); return w }
@@ -114,19 +130,25 @@ func (w *Window) HeaderBar() *HeaderBarWidget { mu.Lock(); defer mu.Unlock(); re
 // goroutine; fn returning false keeps the window open. nil removes it.
 func (w *Window) OnClose(fn func() bool) *Window { change(func() { w.onClose = fn }); return w }
 
-// Native returns the mygo window, nil before Show.
+// Native returns the mygo window, nil before Show and after the window
+// closed.
 func (w *Window) Native() *mygo.Window { mu.Lock(); defer mu.Unlock(); return w.win }
 
-// Show makes the window and shows it. Once shown, Show does nothing.
+// Show makes the window and shows it. It does nothing while the window is
+// shown; a window that closed shows again.
 func (w *Window) Show() {
 	mu.Lock()
-	if w.win != nil {
+	if w.showing {
 		mu.Unlock()
 		return
 	}
+	w.showing, w.closing = true, false
+	done := make(chan struct{})
+	w.done = done
 	opts := mygo.WindowOptions{
 		Title: w.title, Width: w.width, Height: w.height,
-		Content: ui.View(w.view),
+		Maximized: w.maximized,
+		Content:   ui.View(w.view),
 	}
 	if w.header != nil {
 		opts.TitleBarStyle = mygo.TitleBarHidden
@@ -141,33 +163,55 @@ func (w *Window) Show() {
 	if !resizable {
 		n.SetResizable(false)
 	}
-	n.OnClose(func(e *mygo.CloseEvent) {
-		mu.Lock()
-		h := w.onClose
-		mu.Unlock()
-		if h == nil {
-			return
-		}
-		// The user's answer comes from the event goroutine: keep the
-		// window, ask, and close it if the answer is yes. Keeping it
-		// stops a quit too, so a yes then quits again.
-		e.PreventDefault()
-		quitting := quitAsked
-		Post(func() {
-			if h() {
-				w.closeAnyway()
-				if quitting {
-					quit()
-				}
-			}
-		})
-	})
+	n.OnClose(w.closeAsked)
 	n.OnClosed(func() {
 		mu.Lock()
 		delete(shown, n)
+		w.win, w.showing, w.asking = nil, false, false
 		mu.Unlock()
+		close(done)
 	})
-	change(func() { w.win = n; shown[n] = struct{}{} })
+	change(func() {
+		select {
+		case <-done: // it closed already
+		default:
+			w.win = n
+			shown[n] = struct{}{}
+		}
+	})
+}
+
+// closeAsked answers a request to close the window, on the main thread.
+func (w *Window) closeAsked(e *mygo.CloseEvent) {
+	mu.Lock()
+	h, closing, asking := w.onClose, w.closing, w.asking
+	if h != nil && !closing {
+		w.asking = true
+	}
+	mu.Unlock()
+	if h == nil || closing {
+		return
+	}
+	// The user's answer comes from the event goroutine: keep the window,
+	// ask, and close it if the answer is yes. Keeping it stops a quit too,
+	// so a yes then quits again. A request while asking is dropped.
+	e.PreventDefault()
+	if asking {
+		return
+	}
+	quitting := quitAsked
+	Post(func() {
+		yes := h()
+		mu.Lock()
+		w.asking = false
+		mu.Unlock()
+		if yes {
+			w.closeAnyway()
+			if quitting {
+				quit()
+			}
+		}
+	})
 }
 
 // Close closes the window without asking OnClose.
@@ -176,7 +220,7 @@ func (w *Window) Close() { w.closeAnyway() }
 func (w *Window) closeAnyway() {
 	mu.Lock()
 	n := w.win
-	w.onClose = nil
+	w.closing = true
 	mu.Unlock()
 	if n != nil {
 		n.Close()
