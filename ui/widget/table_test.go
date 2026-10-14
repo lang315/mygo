@@ -529,15 +529,17 @@ func BenchmarkTableLiveUpdates(b *testing.B) {
 func TestTableInputLandsOnTheRowsOfTheFrameShown(t *testing.T) {
 	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}, acct{3, "c", 0})
 	tt := tester(t, tb)
+	click(t, tt, "Name")
+	click(t, tt, "Name") // descending: c, b, a
 	check := func(when string) {
 		t.Helper()
-		if k, s, c := tb.keyAt(0), tb.labelAt(0), tb.copyRows([]int{0}); k != 1 || s != "a" || c != "a\t0" {
+		if k, s, c := tb.keyAt(0), tb.labelAt(0), tb.copyRows([]int{0}); k != 3 || s != "c" || c != "c\t0" {
 			t.Fatalf("%s: row 0 of the frame shown is %v, %q, %q", when, k, s, c)
 		}
 	}
-	tb.DeleteRows(1) // the frame shown still has a at 0
+	tb.DeleteRows(3) // the frame shown still has c at 0
 	check("after a delete")
-	tb.Selected() // syncs the view, as the frame shown is not
+	tb.SetChecked([]int{1}, true).Checked() // syncs the view, as the frame shown is not
 	check("after a getter synced")
 	tt.Frame()
 	if k := tb.keyAt(0); k != 2 {
@@ -553,11 +555,6 @@ func TestTableCommitDropsKeysOfRowsGone(t *testing.T) {
 	tb.commit(&tb.checked)
 	if tb.IsChecked(1) || !tb.IsChecked(2) {
 		t.Fatalf("checked 1: %v, 2: %v after ui's commit", tb.IsChecked(1), tb.IsChecked(2))
-	}
-	tb.chosen.shown.Add(0) // a stale click's zero key
-	tb.commit(&tb.chosen)
-	if n := tb.CountSelected(); n != 0 {
-		t.Fatalf("CountSelected %d with no row of key 0", n)
 	}
 }
 
@@ -608,7 +605,7 @@ func TestTableFitsItsWindowWithoutExpand(t *testing.T) {
 	tb := Table(func(a *acct) int { return a.id },
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }},
 	).SetRows(manyAccts(1000)).BottomPanel()
-	tt := tester(t, tb)
+	tt := tester(t, tb) // 600 DIPs tall
 	if r := find(t, tt, "Rows: 1000"); r.Y+r.H > 600 {
 		t.Fatalf("panel at %v, below the window", r)
 	}

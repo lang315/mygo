@@ -59,12 +59,11 @@ func (t *TableWidget[T, K]) CheckboxColumn() *TableWidget[T, K] {
 // shown returns the keys in that the rows shown hold, in the order shown.
 // Under mu.
 func (t *TableWidget[T, K]) shown(in *ui.Selection[K]) []K {
-	t.keepFrame()
-	t.sync()
 	n := in.Len()
 	if n == 0 {
 		return nil
 	}
+	t.sync()
 	var ks []K
 	for i := range t.view.Len() {
 		if k := t.key(&t.rows[t.view.Row(i)]); in.Has(k) {

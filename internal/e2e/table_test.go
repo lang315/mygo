@@ -35,35 +35,30 @@ func TestWidgetTable(t *testing.T) {
 	).SetRows(rows).CheckboxColumn().BottomPanel()
 	w := widget.NewWindow("Table", 500, 240).SetContent(tb)
 	w.Show()
-	t.Cleanup(func() {
-		// Close asks; wait until the window is gone, as Destroy would, so
-		// that it takes no input from the tests after this one.
-		w.Close()
-		eventually(t, "the table's window to close", func() bool { return w.Native() == nil })
-	})
 	eventually(t, "the table's first frame", func() bool { return built.Load() > 0 })
+	t.Cleanup(w.Native().Destroy)
 
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := 0; ; i++ {
 			select {
 			case <-stop:
 				return
 			default:
 			}
-			k := 1 + i%9_999 // never row 0, which the click below selects
-			tb.UpdateRow(k, func(r *row) { r.n = -r.n })
+			k := 1 + i%9_999                             // never row 0, which the click below selects
+			tb.UpdateRow(k, func(r *row) { r.n = -r.n }) // a write in place, as well
 			tb.DeleteRows(k)
 			tb.AddRow(row{k, i})
+			time.Sleep(time.Millisecond)
 		}
-	}()
-	// Heights inside Xvfb's 640x480 screen: past it, a click leaves the
-	// next test's window without ui's focus on Linux.
+	})
+	// Heights inside Xvfb's 640x480 screen: past it, then clicked, a window
+	// broke the input method of the next test's window under Xvfb, which
+	// has no window manager. It ends 240 tall.
 	for i := range 30 {
-		w.SetSize(500, 240+i%2*180)
+		w.SetSize(500, 240+(i+1)%2*180)
 		time.Sleep(30 * time.Millisecond)
 	}
 	before := built.Load()
@@ -75,9 +70,7 @@ func TestWidgetTable(t *testing.T) {
 	}
 
 	// Row 0 stays first: the rows deleted come back last. Under the
-	// header, 32 DIPs tall, at the left of the Name column.
-	w.SetSize(500, 240)
-	time.Sleep(200 * time.Millisecond)
+	// header, 32 DIPs tall, in the Name column, past the check boxes.
 	if !click(w.Native(), 120, 48) {
 		t.Skip("click automation not available on this platform")
 	}

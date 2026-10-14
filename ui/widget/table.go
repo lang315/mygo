@@ -45,11 +45,13 @@ type TableWidget[T any, K comparable] struct {
 	index   map[K]int // a key's row in rows
 	view    *ui.TableView[T]
 	// frame holds the rows of the frame ui shows, and order their order
-	// once a getter has synced the view since: ui may still lay that frame
-	// out, or apply input to it. Setters never move or remove a frame's
-	// rows: they make new slices. gone is set when rows went since.
+	// once kept, when a sync outside a build changed the view: ui may
+	// still lay that frame out, or apply input to it. Setters never move
+	// or remove a frame's rows: they make new slices. gone is set when
+	// rows went since, so that commits look for their keys only then.
 	frame                                   []T
 	order                                   []int
+	kept                                    bool
 	gone                                    bool
 	sort                                    mirror[ui.SortOrder]
 	chosen, checked                         keys[K]
@@ -175,7 +177,7 @@ func (t *TableWidget[T, K]) DeleteRows(ks ...K) *TableWidget[T, K] {
 		if first == len(t.rows) {
 			return
 		}
-		rows := append(make([]T, 0, len(t.index)), t.rows[:first]...)
+		rows := append(make([]T, 0, len(t.rows)), t.rows[:first]...)
 		for i := first; i < len(t.rows); i++ {
 			k := t.key(&t.rows[i])
 			if _, ok := t.index[k]; ok {
@@ -221,46 +223,46 @@ func (t *TableWidget[T, K]) ClearSort() *TableWidget[T, K] {
 	return t
 }
 
-// sync brings the view up to date with the rows. Under mu.
-func (t *TableWidget[T, K]) sync() { t.view.Sync(t.rows, t.sort.value) }
+// sync brings the view up to date with the rows, keeping first, outside
+// a build, the order of the frame ui shows, once a frame. Under mu.
+func (t *TableWidget[T, K]) sync() {
+	if !viewing.Load() && !t.kept {
+		t.order = t.order[:0]
+		for i := range t.view.Len() {
+			t.order = append(t.order, t.view.Row(i))
+		}
+		t.kept = true
+	}
+	t.view.Sync(t.rows, t.sort.value)
+}
 
 // rowAt returns the row at row in the frame ui shows, whatever goroutines
-// changed since. Under mu.
+// deleted or reordered since. Under mu.
 func (t *TableWidget[T, K]) rowAt(row int) *T {
 	switch {
-	case t.order != nil && row < len(t.order):
+	case t.kept && row < len(t.order):
 		return &t.frame[t.order[row]]
-	case t.order == nil && row < t.view.Len():
+	case !t.kept && row < t.view.Len():
 		return &t.frame[t.view.Row(row)]
 	}
 	return nil
 }
 
-// keepFrame copies the order of the frame ui shows before a getter syncs
-// the view, once a frame. Under mu.
-func (t *TableWidget[T, K]) keepFrame() {
-	if t.order == nil {
-		t.order = make([]int, t.view.Len())
-		for i := range t.order {
-			t.order[i] = t.view.Row(i)
-		}
-	}
-}
-
 // lockOutsideView takes mu unless a view is building, which holds it, and
-// returns what releases it: ui calls a table back while a view builds, and
-// while it applies input or lays the frame out, on the same thread.
-func lockOutsideView() (unlock func()) {
+// reports whether it did; see viewing.
+func lockOutsideView() bool {
 	if viewing.Load() {
-		return func() {}
+		return false
 	}
 	mu.Lock()
-	return mu.Unlock
+	return true
 }
 
 // keyAt is ui's ListState.Key.
 func (t *TableWidget[T, K]) keyAt(row int) any {
-	defer lockOutsideView()()
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
 	if r := t.rowAt(row); r != nil {
 		return t.key(r)
 	}
@@ -271,7 +273,9 @@ func (t *TableWidget[T, K]) keyAt(row int) any {
 // labelAt is ui's ListState.Label, the first column's text: it names a
 // row's check box, and typing finds rows by it.
 func (t *TableWidget[T, K]) labelAt(row int) string {
-	defer lockOutsideView()()
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
 	if r := t.rowAt(row); r != nil && len(t.cols) > 0 {
 		return t.cols[0].Text(r)
 	}
@@ -279,7 +283,8 @@ func (t *TableWidget[T, K]) labelAt(row int) string {
 }
 
 func (t *TableWidget[T, K]) build(c *ui.Context) ui.Element {
-	// It grows, as Scrolled does: as tall as its rows, it would not fit.
+	// It fills the room it is given, as Scrolled does: as tall as its
+	// rows, it would not fit where nothing grows it, as in View.
 	return ui.Column(c).Gap(8).Grow(1).Children(func() {
 		t.table(c).Grow(1)
 		if t.panel != nil {
@@ -298,7 +303,7 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Checked = t.checked.bind()
 	}
 	t.sync()
-	t.frame, t.order, t.gone = t.rows, nil, false
+	t.frame, t.kept, t.gone = t.rows, false, false
 	s.Version = t.view.Version()
 	t.handOver()
 	e := ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
@@ -313,7 +318,9 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 // into t.columns: while the table builds, or when ui lays out rows it did
 // not build then.
 func (t *TableWidget[T, K]) cell(c *ui.Context, row, col int) {
-	defer lockOutsideView()()
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
 	if t.numbered {
 		if col == 0 {
 			ui.Text(c, strconv.Itoa(row+1)).SingleLine()
