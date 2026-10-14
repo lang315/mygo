@@ -225,3 +225,123 @@ func TestTableDeleteRowsUnchecksAndUnselects(t *testing.T) {
 		t.Fatalf("Checked %v after SetRows", tb.Checked())
 	}
 }
+
+func TestTableSearchKeepsMatchesWhateverTheCase(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "Hannah", 3})
+	tt := tester(t, tb)
+	tb.Search("Name", "AN")
+	tt.Frame()
+	if !tt.HasText("ann") || !tt.HasText("Hannah") || tt.HasText("bob") {
+		t.Fatalf("search AN: %q", tt.Texts())
+	}
+}
+
+func TestTableSearchShowsAllForBlankOrUnknown(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2})
+	tt := tester(t, tb)
+	for _, s := range [][2]string{{"Name", "   "}, {"Score", "1"}, {"Nope", "ann"}} {
+		tb.Search("Name", "ann")
+		tt.Frame()
+		tb.Search(s[0], s[1])
+		tt.Frame()
+		if !tt.HasText("ann") || !tt.HasText("bob") {
+			t.Errorf("Search(%q, %q): %q", s[0], s[1], tt.Texts())
+		}
+	}
+}
+
+func TestTableSearchUsesTheColumnFilter(t *testing.T) {
+	tb := Table(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Filterable: true,
+			Filter: func(a *acct, kw string) bool { return a.name == kw }},
+	).SetRows([]acct{{1, "ann", 0}, {2, "anna", 0}}).Expand()
+	tt := tester(t, tb)
+	tb.Search("Name", "ann")
+	tt.Frame()
+	if !tt.HasText("ann") || tt.HasText("anna") {
+		t.Fatalf("exact filter: %q", tt.Texts())
+	}
+}
+
+func TestTablePanelSearches(t *testing.T) {
+	asked := make(chan [2]string, 2)
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).BottomPanel().
+		OnBeforeSearch(func(col, kw string) { asked <- [2]string{col, kw} }).
+		SetSearchPlaceholder("Find")
+	tt := tester(t, tb)
+	// A placeholder is no label: click the keyword, 240 wide, left of the
+	// button with the panel's gap of 12 between.
+	b := find(t, tt, "Search")
+	clickKeyword := func() { tt.ClickAt(b.X-12-120, b.Y+b.H/2); tt.Frame() }
+	clickKeyword()
+	tt.Type(" bob ")
+	click(t, tt, "Search")
+	if got := wait(t, asked); got != [2]string{"Name", "bob"} {
+		t.Fatalf("OnBeforeSearch got %q", got)
+	}
+	Update(func() {})
+	tt.Frame()
+	if tt.HasText("ann") || !tt.HasText("bob") {
+		t.Fatalf("after the search button: %q", tt.Texts())
+	}
+	tb.Search("Name", "") // empties the keyword: its placeholder shows again
+	tt.Frame()
+	clickKeyword()
+	tt.Type("ann")
+	tt.Key(0, ui.KeyEnter)
+	if got := wait(t, asked); got != [2]string{"Name", "ann"} {
+		t.Fatalf("Enter: OnBeforeSearch got %q", got)
+	}
+	Update(func() {})
+	tt.Frame()
+	if !tt.HasText("ann") || tt.HasText("bob") {
+		t.Fatalf("after Enter: %q", tt.Texts())
+	}
+}
+
+func TestTablePanelCounts(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).CheckboxColumn().BottomPanel()
+	tt := tester(t, tb)
+	click(t, tt, "Check bob")
+	click(t, tt, "cat")
+	tt.Frame()
+	for _, s := range []string{"Rows: 3", "Selected: 1", "Checked: 1"} {
+		if !tt.HasText(s) {
+			t.Errorf("no %q in %q", s, tt.Texts())
+		}
+	}
+	tb.PanelText(PanelText{Rows: "Tổng số dòng: %d", Selected: "Đang chọn: %d", Checked: "Đã đánh dấu: %d", Search: "Tìm kiếm"})
+	tt.Frame()
+	for _, s := range []string{"Tổng số dòng: 3", "Đang chọn: 1", "Đã đánh dấu: 1", "Tìm kiếm"} {
+		if !tt.HasText(s) {
+			t.Errorf("no %q in %q", s, tt.Texts())
+		}
+	}
+}
+
+func TestTablePanelWithoutFilterableColumns(t *testing.T) {
+	tb := Table(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }},
+	).SetRows([]acct{{1, "ann", 0}}).BottomPanel().SetSearchPlaceholder("Find").Expand()
+	tt := tester(t, tb)
+	if !tt.HasText("Rows: 1") || tt.HasText("Search") || tt.HasText("Find") || tt.HasText("Checked") {
+		t.Fatalf("panel: %q", tt.Texts())
+	}
+}
+
+func TestTableCheckAllChecksOnlyShownRows(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "Hannah", 3}).CheckboxColumn()
+	tb.SetChecked([]int{2}, true)
+	tt := tester(t, tb)
+	tb.Search("Name", "an")
+	tt.Frame()
+	click(t, tt, "Check all")
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 3}) {
+		t.Fatalf("Checked %v under the search", got)
+	}
+	tb.Search("Name", "")
+	tt.Frame()
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 2, 3}) {
+		t.Fatalf("hidden bob lost its check: %v", got)
+	}
+}

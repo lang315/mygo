@@ -39,16 +39,23 @@ type Column[T any] struct {
 // its own copy of the rows. A table shows in one window at a time.
 type TableWidget[T any, K comparable] struct {
 	common[TableWidget[T, K]]
-	key             func(*T) K
-	cols            []Column[T]
-	columns         []ui.TableColumn // cols, after the index column if any
-	rows            []T
-	index           map[K]int // a key's row in rows
-	view            *ui.TableView[T]
-	sort            mirror[ui.SortOrder]
-	chosen, checked keys[K]
-	checks          bool // the check box column shows
-	numbered        bool // the index column shows
+	key                                     func(*T) K
+	cols                                    []Column[T]
+	columns                                 []ui.TableColumn // cols, after the index column if any
+	rows                                    []T
+	index                                   map[K]int // a key's row in rows
+	view                                    *ui.TableView[T]
+	sort                                    mirror[ui.SortOrder]
+	chosen, checked                         keys[K]
+	checks                                  bool // the check box column shows
+	panel                                   *BoxWidget
+	totalLabel, selectedLabel, checkedLabel *LabelWidget
+	column                                  *ComboWidget
+	keyword                                 *EntryWidget
+	searchButton                            *ButtonWidget
+	text                                    PanelText
+	beforeSearch                            func(column, keyword string)
+	numbered                                bool // the index column shows
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
@@ -68,7 +75,7 @@ func Table[T any, K comparable](key func(*T) K, cols ...Column[T]) *TableWidget[
 			compare[cl.Title] = func(a, b *T) int { return strings.Compare(text(a), text(b)) }
 		}
 	}
-	t := &TableWidget[T, K]{key: key, cols: cols, index: map[K]int{}, view: ui.NewTableView(compare), cursor: -1}
+	t := &TableWidget[T, K]{key: key, cols: cols, index: map[K]int{}, view: ui.NewTableView(compare), cursor: -1, text: englishPanel}
 	t.columns = t.uiColumns()
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.init(t)
@@ -241,7 +248,13 @@ func (t *TableWidget[T, K]) labelAt(row int) string {
 }
 
 func (t *TableWidget[T, K]) build(c *ui.Context) ui.Element {
-	return ui.Column(c).Children(func() { t.table(c).Grow(1) })
+	return ui.Column(c).Gap(8).Children(func() {
+		t.table(c).Grow(1)
+		if t.panel != nil {
+			t.counts()
+			render(c, t.panel)
+		}
+	})
 }
 
 // table builds the ui table. Under mu.
