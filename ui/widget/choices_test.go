@@ -128,3 +128,15 @@ func TestComboRemoveAndRename(t *testing.T) {
 		t.Fatal("removed option still selected")
 	}
 }
+
+func TestComboEditsLeaveTheCallersOptions(t *testing.T) {
+	opts := []Option{{"x", "X"}, {"y", "Y"}}
+	sec := []Option{{"z", "Z"}, {"w", "W"}}
+	more := []Option{{"v", "V"}, {"u", "U"}}
+	c := Combo(opts...).AddSection("S", nil, sec...).SetOptions(more...)
+	c.SetOptionText("v", "Vee").SetOptionText("z", "Zed").RemoveOption("u").RemoveOption("z")
+	if opts[0].Text != "X" || sec[0] != (Option{"z", "Z"}) || sec[1] != (Option{"w", "W"}) ||
+		more[0].Text != "V" || more[1] != (Option{"u", "U"}) {
+		t.Fatalf("caller's options changed: %v %v %v", opts, sec, more)
+	}
+}

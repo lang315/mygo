@@ -22,7 +22,6 @@ type Window struct {
 	onClose       func() bool
 	menu          []MenuItem
 	parent        *Window       // a dialog's; nil for a top-level window
-	modal         bool          // blocks parent while shown
 	deletable     bool          // the user may close it
 	win           *mygo.Window  // nil until shown, and again once closed
 	showing       bool          // shown, or being made, and not closed yet
@@ -145,7 +144,14 @@ func (w *Window) OnClose(fn func() bool) *Window { change(func() { w.onClose = f
 
 // Native returns the mygo window, nil before Show and after the window
 // closed.
-func (w *Window) Native() *mygo.Window { mu.Lock(); defer mu.Unlock(); return w.win }
+func (w *Window) Native() *mygo.Window {
+	if w == nil {
+		return nil
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	return w.win
+}
 
 // Show makes the window and shows it. It does nothing while the window is
 // shown; a window that closed shows again.
@@ -167,7 +173,7 @@ func (w *Window) Show() {
 		opts.TitleBarStyle = mygo.TitleBarHidden
 	}
 	if p := w.parent; p != nil && p.win != nil {
-		opts.Parent, opts.Modal = p.win, w.modal
+		opts.Parent, opts.Modal = p.win, true
 	}
 	icon, resizable, menu := w.icon, w.resizable, w.menu
 	mu.Unlock()
@@ -330,12 +336,4 @@ func (h *HeaderBarWidget) add(side, ws []Widget) []Widget {
 		}
 	}
 	return side
-}
-
-// native is the mygo window of w, nil for a nil or unshown w.
-func (w *Window) native() *mygo.Window {
-	if w == nil {
-		return nil
-	}
-	return w.Native()
 }

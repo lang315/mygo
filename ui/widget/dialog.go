@@ -21,7 +21,7 @@ func NewDialog(parent *Window, title, subtitle string, width, height int, conten
 		title:    Label(title).Bold().TextSize(LG),
 		subtitle: Label(subtitle).Muted().SetVisible(subtitle != ""),
 	}
-	d.parent, d.modal = parent, parent != nil
+	d.parent = parent
 	d.SetContent(VBox(8).Add(d.title, d.subtitle).Pack(content, true, true).Padding(4))
 	return d
 }

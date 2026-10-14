@@ -118,7 +118,7 @@ var chevronDown = lucide(`<path d="m6 9 6 6 6-6"/>`)
 
 // Combo makes a drop-down of opts, none chosen.
 func Combo(opts ...Option) *ComboWidget {
-	c := &ComboWidget{sections: []comboSection{{opts: opts}}}
+	c := &ComboWidget{sections: []comboSection{{opts: slices.Clone(opts)}}}
 	c.init(c)
 	return c
 }
@@ -139,8 +139,7 @@ func (c *ComboWidget) find(v string) (Option, bool) {
 }
 
 // edit applies fn to the sections, then unchooses a choice whose option is
-// gone. fn must not change an option slice in place: the caller's slice
-// passed to Combo, SetOptions or AddSection may back it. Under mu.
+// gone. Under mu.
 func (c *ComboWidget) edit(fn func(s []comboSection) []comboSection) {
 	c.sections = fn(c.sections)
 	if _, ok := c.find(c.value.value); !ok && c.value.value != "" {
@@ -173,6 +172,7 @@ func (c *ComboWidget) Unselect() *ComboWidget { change(func() { c.value.set("") 
 
 // SetOptions replaces the options outside any section.
 func (c *ComboWidget) SetOptions(opts ...Option) *ComboWidget {
+	opts = slices.Clone(opts) // the caller's slice may back opts
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection { s[0].opts = opts; return s })
 	})
@@ -182,7 +182,7 @@ func (c *ComboWidget) SetOptions(opts ...Option) *ComboWidget {
 // AddSection adds a section titled title, with the icon in the bytes of
 // a PNG (nil for none), holding opts.
 func (c *ComboWidget) AddSection(title string, icon []byte, opts ...Option) *ComboWidget {
-	bmp := decodeImage(icon) // outside mu
+	bmp, opts := decodeImage(icon), slices.Clone(opts) // outside mu
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection { return append(s, comboSection{title, bmp, opts}) })
 	})
@@ -204,7 +204,7 @@ func (c *ComboWidget) RemoveOption(v string) *ComboWidget {
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection {
 			for i := range s {
-				s[i].opts = slices.DeleteFunc(slices.Clone(s[i].opts), func(o Option) bool { return o.Value == v })
+				s[i].opts = slices.DeleteFunc(s[i].opts, func(o Option) bool { return o.Value == v })
 			}
 			return s
 		})
@@ -217,13 +217,11 @@ func (c *ComboWidget) SetOptionText(v, text string) *ComboWidget {
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection {
 			for i := range s {
-				opts := slices.Clone(s[i].opts)
-				for j := range opts {
-					if opts[j].Value == v {
-						opts[j].Text = text
+				for j := range s[i].opts {
+					if s[i].opts[j].Value == v {
+						s[i].opts[j].Text = text
 					}
 				}
-				s[i].opts = opts
 			}
 			return s
 		})

@@ -49,10 +49,7 @@ func decodeImage(data []byte) *ui.Bitmap {
 	imageCache.Unlock()
 	// Decode outside the lock, so a slow decode holds up no other image;
 	// two goroutines decoding the same bytes at once just both do it.
-	bmp, err := ui.DecodeBitmap(data)
-	if err != nil {
-		bmp = nil
-	}
+	bmp, _ := ui.DecodeBitmap(data)
 	imageCache.Lock()
 	defer imageCache.Unlock()
 	if e, ok := imageCache.m[key]; ok {
