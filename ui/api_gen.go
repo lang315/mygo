@@ -3,6 +3,7 @@
 package ui
 
 import (
+	i18n "github.com/egoist/mygo/i18n"
 	platform "github.com/egoist/mygo/internal/platform"
 	transfer "github.com/egoist/mygo/transfer"
 	image "image"
@@ -278,6 +279,22 @@ func (_handle *Context) CloseToast(id string) {
 	_ctx.CloseToast(id)
 }
 
+// Direction returns the direction of the elements built now: that of the
+// element they go in. Widgets of an app's own read it to draw what points
+// along the line, as an arrow forward:
+//
+//	forward := "M5 2 11 8 5 14"
+//	if c.Direction() == ui.RightToLeft {
+//		forward = "M11 2 5 8 11 14"
+//	}
+func (_handle *Context) Direction() Direction {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return *new(Direction)
+	}
+	return _ctx.Direction()
+}
+
 // DisableAnimations makes the values that animate in this frame
 // (AnimateTo, Animate, Spring), the element transitions and the pages of
 // routers go to their targets at once, as SwiftUI's disablesAnimations:
@@ -290,6 +307,18 @@ func (_handle *Context) DisableAnimations() {
 		return
 	}
 	_ctx.DisableAnimations()
+}
+
+// Locale returns the language the app shows (mygo.App.Locale), a BCP 47
+// tag such as "en" or "zh-Hans", for what the view says in it. Text is in
+// it unless an element says otherwise (Element.Lang). A frame follows its
+// changes, as App.SetLocale makes them.
+func (_handle *Context) Locale() string {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return ""
+	}
+	return _ctx.Locale()
 }
 
 // MeasureText returns the size spans of text take as Painter.RichText draws
@@ -372,6 +401,17 @@ func (_handle *Context) ReadClipboard() string {
 	return _ctx.ReadClipboard()
 }
 
+// Region returns the user's regional formats (mygo.App.Region): the
+// locale of the formats, the first day of the week and the hour cycle,
+// which dates and times follow. A frame follows their changes.
+func (_handle *Context) Region() i18n.Region {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return *new(i18n.Region)
+	}
+	return _ctx.Region()
+}
+
 // Root returns the element holding the window's content: a column the
 // size of the window.
 func (_handle *Context) Root() Element {
@@ -380,6 +420,18 @@ func (_handle *Context) Root() Element {
 		return Element{}
 	}
 	return wrapElement(_ctx.Root())
+}
+
+// isPath reports whether a link's target is a path within the app, as
+// "/notes/42", "edit" or "?tab=info", rather than a URL with a scheme.
+// Router returns the router whose page is being built, which a Link to a
+// path without a scheme goes through, or nil outside one.
+func (_handle *Context) Router() *Router {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return nil
+	}
+	return _ctx.Router()
 }
 
 // SetTheme makes the frame use t, for the window's root and the widgets
@@ -670,7 +722,8 @@ func ButtonBase(c *Context) Element {
 }
 
 // Calendar creates a month's calendar choosing *date, as SwiftUI's
-// graphical date picker: a click chooses a day, as the arrows do while the
+// graphical date picker, in the window's language, its weeks starting on
+// the first day of the user's regional formats (Context.Region): a click chooses a day, as the arrows do while the
 // calendar has the focus, Page Up and Page Down or its buttons move by
 // months, and Home and End go to the first and the last day of the month.
 // Changed reports a new date, which keeps the time of day and location of
@@ -851,8 +904,8 @@ func DataDragOver(e Element, options transfer.DropOptions) (transfer.Offer, bool
 	return coreDataDragOver(e.nodeFor(_ctx.rt), options)
 }
 
-// DateInput creates a field showing *date as 2006-01-02, which a calendar
-// below it changes. A click, Enter or Space opens the calendar, where a
+// DateInput creates a field showing *date in the user's regional formats,
+// as 1/5/2026 in the United States, which a calendar below it changes. A click, Enter or Space opens the calendar, where a
 // click chooses a day, as do the arrows and Enter; Page Up and Page Down,
 // or its buttons, move by months, and Escape closes it. Changed reports a
 // new date, which keeps the time of day and location of *date.
@@ -1274,12 +1327,13 @@ func Popover(c *Context, anchor Element, open *bool, fn func()) Element {
 // true: fn styles the panel and builds its content. Pressing outside the
 // panel and the anchor, or Escape, sets *open to false, which Dismissed
 // reports; the press goes on to what is under the pointer, as with the
-// web's popovers. Where there is
+// web's popovers. It starts at the anchor's start: its left, or its right
+// right to left (Direction). Where there is
 // no room below the anchor, the panel shows above it; a top margin keeps
 // it apart from the anchor on either side. fn may place it elsewhere with
-// AttachTo, as to the right of the anchor:
+// AttachTo, as after the anchor:
 //
-//	panel.AttachTo(anchor, ui.AnchorRight, ui.AnchorLeft).Margin(0, 0, 0, 6)
+//	panel.AttachTo(anchor, ui.AnchorEnd, ui.AnchorStart).MarginStart(6)
 //
 // It returns the panel, or nil while closed; Popover is PopoverBase with
 // the theme's look.
@@ -1301,8 +1355,9 @@ func PrimaryButton(c *Context, label string) Element {
 }
 
 // Progress creates a progress bar filled to value between 0 and 1; a
-// negative value shows activity of unknown length. Reverse fills it from
-// the right, for interfaces laid out from right to left.
+// negative value shows activity of unknown length. It fills from its
+// start: the right right to left (Direction). Reverse fills it from the
+// other side.
 func Progress(c *Context, value float64) Element {
 	_ctx := c.build()
 	if _ctx == nil {
@@ -1607,7 +1662,9 @@ func Slider(c *Context, value *float64, lo float64, hi float64) Element {
 // range unless Step says otherwise; Changed reports a new value, and
 // assistive technology sees a slider of that range. Draw its track and
 // thumb where (*value-lo)/(hi-lo) puts them, and pad it by half the
-// thumb's width to keep the thumb inside it:
+// thumb's width to keep the thumb inside it. Right to left
+// (Context.Direction), lo is at the right of the content box, as the
+// arrows go: draw it mirrored.
 //
 //	s := ui.SliderBase(c, &app.volume, 0, 100).Height(24).PaddingX(12)
 //	s.Draw(func(p *ui.Painter, r ui.Rect) {
@@ -1652,7 +1709,8 @@ func Spinner(c *Context) Element {
 // Split lays out first and second side by side, with a divider between
 // them that the user drags to resize them, or moves with the arrows once
 // it has the keyboard focus: *size is the width of first, which the
-// divider keeps 40 DIPs from either edge. Changed reports a move.
+// divider keeps 40 DIPs from either edge. Changed reports a move. Right to
+// left (Direction), first is on the right.
 //
 //	ui.Split(c, &app.sidebar, app.files, app.editor).Fill()
 func Split(c *Context, size *float32, first func(), second func()) Element {
@@ -1732,7 +1790,9 @@ func SwitchBase(c *Context, on *bool) Element {
 // The user resizes columns by dragging the edges of their headers, and
 // moves them by dragging the headers, which s.Columns keeps; columns wider
 // than the table scroll sideways, the header with them. With s.Sort, a
-// click on the header of a Sortable column sorts the rows by it.
+// click on the header of a Sortable column sorts the rows by it; with
+// s.SortBy, a Cmd-click sorts by it after the others; with s.HeaderMenu,
+// the headers have a context menu.
 //
 //	cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
 //	app.files.Selected, app.files.Sort = &app.file, &app.sort
@@ -1896,13 +1956,19 @@ func Textf(c *Context, format string, args ...any) Element {
 	return wrapElement(coreTextf(_ctx, format, args...))
 }
 
-// TimeInput creates a field of the time of day of *tm, as 15:04, whose
-// hours and minutes each take the focus, as the segments of AppKit's date
-// picker: Up and Down step the one with the focus round the clock, digits
-// typed set it, going on to the minutes once the hours are typed, and Left
-// and Right move between them. Changed reports a new time, which keeps the
-// date and the location of *tm. Assistive technology sees two spin
-// buttons, named after the field's Label and "hours" and "minutes".
+// TimeInput creates a field of the time of day of *tm, in the hour cycle
+// of the user's regional formats (Context.Region): 15:04, or 3:04 PM with
+// the window's language's names of the halves of the day, before the
+// hours where the language writes them so (下午3:04). Its hours, minutes
+// and half of the day each take the focus, as the segments of AppKit's
+// date picker: Up and Down step the one with the focus round the clock,
+// digits typed set it, going on to the minutes once the hours are typed,
+// the first letter of a half of the day chooses it, and Left and Right
+// move between them. Changed reports a new time, which keeps the date and
+// the location of *tm. Assistive technology sees spin buttons, named
+// after the field's Label and "hours", "minutes" and "AM/PM". It reads
+// left to right in an interface laid out right to left too, as times are
+// written there.
 //
 //	ui.TimeInput(c, &app.alarm).Label("Alarm")
 func TimeInput(c *Context, tm *time.Time) Element {
@@ -2052,10 +2118,10 @@ func Toolbar(c *Context, fn func()) Element {
 // shows; one shows at a time.
 //
 // The tip goes above anchor, centered, or below it where there is no room
-// above; fn may place it elsewhere with AttachTo, as to the right:
+// above; fn may place it elsewhere with AttachTo, as after it:
 //
 //	ui.TooltipBase(c, b, func(tip ui.Element) {
-//		tip.AttachTo(b, ui.AnchorRight, ui.AnchorLeft).Margin(0, 0, 0, 6)
+//		tip.AttachTo(b, ui.AnchorEnd, ui.AnchorStart).MarginStart(6)
 //		tip.Padding(4, 8).Radius(6).Background(dark).TextColor(light)
 //		tip.Children(func() { ui.Text(c, "Share") })
 //	})
@@ -2485,6 +2551,29 @@ func (_handle Element) BorderColor(c Color) Element {
 	return wrapElement(_node.BorderColor(c))
 }
 
+func (_handle Element) BorderEndWidth(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.BorderEndWidth(v))
+}
+
+// BorderStartWidth and BorderEndWidth set the width of the border on the
+// side lines start and on the other, as PaddingStart does: a line
+// between a sidebar and the content is BorderEndWidth(1) on the sidebar.
+func (_handle Element) BorderStartWidth(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.BorderStartWidth(v))
+}
+
 // BorderStyle sets whether the border is solid, as by default, or dashed.
 func (_handle Element) BorderStyle(s BorderStyle) Element {
 	_node := _handle.node()
@@ -2809,6 +2898,21 @@ func (_handle Element) ContextMenu(build func(m *Menu)) Element {
 	return wrapElement(_node.ContextMenu(build))
 }
 
+// CopyData sets what Copy, its shortcut and the context menu's put on
+// the clipboard for the selection of a Selectable container: fn gets its
+// parts, as SelectedTexts returns them, and returns the data, as a
+// document copies its paragraphs with blank lines between them as text
+// (transfer.TextData), and as HTML too to keep their formatting.
+func (_handle Element) CopyData(fn func(parts []SelectedText) transfer.Data) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.CopyData(fn))
+}
+
 // Cursor sets the pointer's shape over the element.
 func (_handle Element) Cursor(c Cursor) Element {
 	_node := _handle.node()
@@ -2867,6 +2971,27 @@ func (_handle Element) Description(s string) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Description(s))
+}
+
+// Direction lays the element and what is inside it out in d, whatever the
+// direction around it: Direction(ui.LeftToRight) keeps a code sample, a
+// phone number or a media player's controls left to right in a
+// right-to-left window, as Flutter's Directionality and SwiftUI's
+// layoutDirection environment do. The elements built inside it inherit it,
+// as do the popups attached to it.
+//
+// Give it right after creating the element, before its children, logical
+// edges and the parts that read it, as widgets do as they are built:
+// elements already inside take it, and logical edges move to the other
+// side, but what read the old direction keeps it.
+func (_handle Element) Direction(d Direction) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Direction(d))
 }
 
 // Disabled disables the element and those inside it when d is true: they
@@ -3126,6 +3251,26 @@ func (_handle Element) Ellipsis(s string) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Ellipsis(s))
+}
+
+func (_handle Element) End(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.End(v))
+}
+
+func (_handle Element) EndPercent(p float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.EndPercent(p))
 }
 
 // Error marks the element's value as not valid, for msg, which assistive
@@ -3703,6 +3848,27 @@ func (_handle Element) Label(s string) Element {
 	return wrapElement(_node.Label(s))
 }
 
+// Lang sets the language of the element's text, and of the text of the
+// elements inside it, as a BCP 47 tag, as HTML's lang attribute does: the
+// system's text stack draws the glyphs of that language, as the Han
+// characters Chinese and Japanese draw apart, and falls back to its
+// fonts. Text is in the language the app shows (mygo.App.Locale) unless
+// told otherwise: a Japanese quote in a Chinese app,
+//
+//	ui.Text(c, "直").Lang("ja")
+//
+// "" takes the language of the elements around it. Browsers draw text in
+// the page's language whatever the element's.
+func (_handle Element) Lang(tag string) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Lang(tag))
+}
+
 // LayoutBounds returns the previous frame's border box before transforms,
 // in the layout's window coordinates. Draw callbacks use these coordinates.
 func (_handle Element) LayoutBounds() Rect {
@@ -3834,6 +4000,29 @@ func (_handle Element) Margin(v ...float32) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Margin(v...))
+}
+
+func (_handle Element) MarginEnd(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.MarginEnd(v))
+}
+
+// MarginStart and MarginEnd set the margin on the side lines start and
+// on the other, as PaddingStart does: Auto takes the free space there, so
+// that a Row's child with MarginStart(ui.Auto) goes to its end.
+func (_handle Element) MarginStart(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.MarginStart(v))
 }
 
 // MarginX sets the left and right margins.
@@ -4016,6 +4205,35 @@ func (_handle Element) NoWrap() Element {
 	return wrapElement(_node.NoWrap())
 }
 
+// OnEnter has fn see an Enter in the text input before the editor takes
+// it, on the main thread as the key comes. fn reports whether it took the
+// Enter; one taken changes nothing: a text area inserts no newline, and a
+// single-line input does not submit. Like ReadOnly, it holds for the input
+// that comes until the next frame.
+//
+// fn may run between frames, where an Element kept from the view is no
+// longer valid: it reads and replaces the text through e instead, as a
+// chat composer sends with Enter, clears what it sent, and breaks the line
+// with Shift+Enter:
+//
+//	ui.TextArea(c, &app.draft).OnEnter(func(e ui.Enter) bool {
+//		if e.Mods&ui.Shift != 0 {
+//			return false
+//		}
+//		app.send(e.Text())
+//		e.SetText("")
+//		return true
+//	})
+func (_handle Element) OnEnter(fn func(e Enter) bool) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.OnEnter(fn))
+}
+
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with
@@ -4075,6 +4293,29 @@ func (_handle Element) Padding(v ...float32) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Padding(v...))
+}
+
+func (_handle Element) PaddingEnd(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.PaddingEnd(v))
+}
+
+// PaddingStart sets the padding on the side lines start: the left, or
+// the right of an element laid out right to left, as CSS's
+// padding-inline-start does. PaddingEnd sets the other side's.
+func (_handle Element) PaddingStart(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.PaddingStart(v))
 }
 
 // PaddingX sets the left and right padding.
@@ -4502,6 +4743,20 @@ func (_handle Element) Selected(on bool) Element {
 	return wrapElement(_node.Selected(on))
 }
 
+// SelectedTexts returns the parts of the paragraphs that the selection of
+// a Selectable container holds, in the order they were built, or none,
+// as of the last frame: to copy them otherwise, as a context menu's item
+// does.
+func (_handle Element) SelectedTexts() []SelectedText {
+	_node := _handle.node()
+	if _node == nil {
+		return nil
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.SelectedTexts()
+}
+
 // SelectionChanged applies pending input to the controls built so far and
 // reports whether the rows chosen in this List or Table changed in this
 // build pass.
@@ -4526,6 +4781,19 @@ func (_handle Element) SelectionColor(c Color) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.SelectionColor(c))
+}
+
+// SetChanged reports the element's value as changed in this build pass,
+// as a widget of your own whose input changed what it edits: Changed
+// returns true for it, as for the widgets' own.
+func (_handle Element) SetChanged() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.SetChanged())
 }
 
 // SetTextSelection selects the runes of a text input from start to end, or
@@ -4653,6 +4921,33 @@ func (_handle Element) Spring(key any, target float32, options ...SpringOptions)
 	return _node.Spring(key, target, options...)
 }
 
+// Start and End place an Absolute element from the side lines start and
+// from the other, as Left and Right do, as CSS's inset-inline-start and
+// inset-inline-end: from the left and the right, or the right and the
+// left right to left. On an element in its parent's layout, they move it
+// as relative positioning does.
+func (_handle Element) Start(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Start(v))
+}
+
+// StartPercent and EndPercent place the element as Start and End do, by
+// a percentage of the parent's width.
+func (_handle Element) StartPercent(p float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.StartPercent(p))
+}
+
 // Step makes the values of a slider lo and the multiples of step from it,
 // which the arrows move between, as a StepSlider's. Of a range of your own
 // (Range), it tells assistive technology how far the keys move the value.
@@ -4753,10 +5048,10 @@ func (_handle Element) TextColor(c Color) Element {
 }
 
 // TextRanges styles runs of a text input's text, in the frames that call
-// it, with ranges that do not overlap. They follow the text as it is: an
-// app that finds them in the text finds them again as it changes. A
-// password shows none; an input method's composition shows unstyled
-// between them.
+// it. Where ranges overlap, the one starting first shows, or given first
+// when they start together. They follow the text as it is: an app that
+// finds them in the text finds them again as it changes. A password shows
+// none; an input method's composition shows unstyled between them.
 func (_handle Element) TextRanges(ranges ...TextRange) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -4778,6 +5073,27 @@ func (_handle Element) TextSelection() (int, int) {
 	_ctx := _node.c
 	_ = _ctx
 	return _node.TextSelection()
+}
+
+// Timeline returns the timeline the element keeps under key, playing it
+// as o says. Every tween added to it shares one playhead, and returns the
+// value it shows in this frame.
+//
+//	card := ui.Column(c)
+//	tl := card.Timeline("intro", ui.TimelineOptions{Run: app.opened})
+//	x := tl.To(ui.Tween{From: -200, To: 0, Duration: 400 * time.Millisecond, Ease: ui.EaseOut})
+//	card.Translate(x, 0)
+//
+// Key tells apart the timelines of the element, as it does its Keyframes.
+// Play the timeline again, or a changed one, by changing o.Run.
+func (_handle Element) Timeline(key any, o TimelineOptions) *Timeline {
+	_node := _handle.node()
+	if _node == nil {
+		return nil
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.Timeline(key, o)
 }
 
 // Tooltip shows s by the element when the pointer rests on it, or the

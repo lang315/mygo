@@ -26,7 +26,92 @@ func (w *Window) bridgeScript() string {
 		WindowID: w.top().id, // the window a web view is in
 		Version:  Version,
 		Secret:   w.secret,
+		Locale:   App.Locale(),
+		Dir:      appDir(),
 	})
+}
+
+// pageScripts are the scripts a page of the window gets at document start:
+// the bridge, the preferences of the page and the preload script.
+func (w *Window) pageScripts() []platform.UserScript {
+	scripts := []platform.UserScript{{Source: w.bridgeScript()}, {Source: preferencesScript()}}
+	if w.preload != "" {
+		scripts = append(scripts, platform.UserScript{Source: w.preload})
+	}
+	return scripts
+}
+
+// localeEvent returns the message of LocaleEvent for locale.
+func localeEvent(locale string) (message, error) {
+	return encodeEvent(bridge.LocaleEvent, bridge.Locale{Locale: locale, Dir: appDir()})
+}
+
+// sendLocale tells the page of a window the language the app shows, which
+// the bridge configuration told it at document start: a page that started
+// loading as the language changed may have had the one before. The bridge
+// tells its listeners only of a language it did not have. Main thread
+// only.
+func (w *Window) sendLocale() {
+	if w.content != nil || w.native == nil {
+		return
+	}
+	if msg, err := localeEvent(App.Locale()); err == nil {
+		w.enqueue(msg, true)
+	}
+}
+
+// pagesLocaleChanged tells the pages of every window the language the app
+// shows, and makes it the one of the pages they load later. Main thread
+// only.
+func pagesLocaleChanged(locale string) {
+	msg, err := localeEvent(locale)
+	if err != nil {
+		return
+	}
+	for _, w := range pageWindows() {
+		if w.content != nil || w.native == nil {
+			continue
+		}
+		w.native.SetUserScripts(w.pageScripts())
+		w.enqueue(msg, true)
+	}
+}
+
+// pagePreferences is the page's view of the desktop's settings: the accent
+// as a CSS color, and no accent at all where the desktop has none.
+func pagePreferences(p ThemePreferences) bridge.Preferences {
+	accent := ""
+	if p.Accent.A != 0 {
+		accent = p.Accent.String()
+	}
+	return bridge.Preferences{
+		Accent:       accent,
+		ReduceMotion: p.ReduceMotion,
+		HighContrast: p.HighContrast,
+		TextScale:    p.TextScale,
+	}
+}
+
+// preferencesScript installs the desktop preferences after the bridge.
+func preferencesScript() string {
+	return bridge.PreferencesScript(pagePreferences(Theme.preferences()))
+}
+
+// sendPreferences keeps existing pages up to date. Main thread only.
+func (w *Window) sendPreferences(prefs ThemePreferences) {
+	if w.content != nil || w.native == nil {
+		return
+	}
+	if msg, err := encodeEvent(bridge.PreferencesEvent, pagePreferences(prefs)); err == nil {
+		w.enqueue(msg, true)
+	}
+}
+
+func sendPreferences() {
+	prefs := Theme.preferences()
+	for _, w := range pageWindows() {
+		w.sendPreferences(prefs)
+	}
 }
 
 // decodeResult decodes the JSON result of eval into v.
@@ -151,6 +236,8 @@ func (w *Window) handleMessage(msg string) {
 		// The script at document start may tell a later page the room of
 		// the controls before a change.
 		w.sendTitleBar()
+		w.sendPreferences(Theme.preferences())
+		w.sendLocale()
 		w.flush()
 		fire(&w.onDOMReady)
 		w.readyToShow()

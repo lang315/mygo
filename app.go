@@ -107,6 +107,7 @@ func (a *Application) Run() error {
 	a.initialized = true
 	// Settings made before Run, which the backend could not take yet.
 	Theme.apply()
+	a.startLocale()
 	if m := a.Dock.Menu(); m != nil {
 		b.App().SetDockMenu(m.snapshot())
 	}
@@ -200,12 +201,15 @@ func (a *Application) prepareQuit() bool {
 	// closed. Persist them before the native loop ends; callers needing
 	// error handling may Flush explicitly from a quit listener.
 	_ = Clipboard.Flush()
+	stopCookieCalls()
 	return true
 }
 
 // finish runs once after the event loop has stopped.
 func (a *Application) finish() {
 	a.finished.Do(func() {
+		stopCookieCalls()
+		stopFileWatches()
 		clipboardStopped = true
 		backend().Clipboard().Close()
 		saveWindowStates()
@@ -392,11 +396,6 @@ func (a *Application) SetBadgeCount(n int) {
 		label = strconv.Itoa(n)
 	}
 	a.Dock.SetBadge(label)
-}
-
-// Locale returns the user's preferred locale, e.g. "en-US".
-func (a *Application) Locale() string {
-	return onMainValue(func() string { return backend().App().Locale() })
 }
 
 // AboutPanelOptions customizes the standard about panel.
@@ -590,9 +589,19 @@ func (appHandler) OpenFiles(paths []string) {
 		fire1(&App.onOpenFile, p)
 	}
 }
-func (appHandler) MenuItemClicked(id int)        { menuItemClicked(id, FocusedWindow()) }
-func (appHandler) ThemeChanged()                 { updateBackgrounds(); contentThemeChanged(); Theme.changed() }
+func (appHandler) MenuItemClicked(id int) { menuItemClicked(id, FocusedWindow()) }
+func (appHandler) ThemeChanged() {
+	updateBackgrounds()
+	contentThemeChanged()
+	Theme.changed()
+	// Pages hear the accent and the settings of accessibility, which the
+	// media queries do not tell them.
+	sendPreferences()
+}
 func (appHandler) DisplaysChanged()              { Screen.changed() }
+func (appHandler) LocaleChanged()                { App.localeChangedFromSystem() }
 func (appHandler) PowerEvent(event string)       { Power.event(event) }
 func (appHandler) HotkeyPressed(id int)          { GlobalShortcut.pressed(id) }
 func (appHandler) NotificationClicked(id string) { notificationClicked(id) }
+
+func (appHandler) NetworkChanged(s platform.NetworkStatus) { Network.changed(networkStatus(s)) }

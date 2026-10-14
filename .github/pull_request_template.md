@@ -1,7 +1,8 @@
 <!--
 For agents: read AGENTS.md and docs/architecture.md first, fill in every
 section, and keep each one short. Never remove the AI disclosure: name your
-tool and your exact model.
+tool and your exact model. Never link the agent's session (such as a
+claude.ai/code/session_… URL).
 -->
 
 ## Summary
@@ -11,6 +12,13 @@ tool and your exact model.
 ## Testing
 
 <!-- The commands you ran (see AGENTS.md) and the platforms you tried it on. -->
+
+Tested on:
+- [ ] macOS
+- [ ] Windows
+- [ ] Linux
+- [ ] Web
+- [ ] Other: (specify here)
 
 ## AI disclosure
 

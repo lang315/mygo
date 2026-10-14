@@ -180,15 +180,22 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 	switch k.key {
 	case KeyLeft, KeyRight:
 		left := k.key == KeyLeft
+		// Words and line ends go the way the arrow points, as AppKit's
+		// moveWordLeft: and moveToLeftEndOfLine: do: back in the text of
+		// a left-to-right paragraph, forward in a right-to-left one.
+		forward := !left
+		if (word || mac && m == Super) && ed.caretParagraphRTL() {
+			forward = left
+		}
 		switch {
 		case mac && m == Super:
 			s, e := ed.lineEdges(ed.caret)
-			if left {
+			if !forward {
 				ed.move(s, shift)
 			} else {
 				ed.move(e, shift)
 			}
-		case word && left:
+		case word && !forward:
 			ed.move(b.prevWord(ed.caret), shift)
 		case word:
 			ed.move(b.nextWord(ed.caret), shift)
@@ -267,6 +274,11 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 		}
 		return
 	case KeyEnter:
+		// OnEnter sees the Enter before the editor takes it, as OnPaste
+		// does a paste: taken, it changes nothing but what fn sets.
+		if ed.onEnter != nil && ed.enter(k.mods) {
+			return
+		}
 		if ed.multiline {
 			ed.insert("\n")
 		} else {
@@ -339,7 +351,7 @@ func (ed *editor) command(c *context, name string) {
 			h.writeClipboard(ed.selectedText())
 			ed.insert("")
 		}
-	case "paste":
+	case "paste", "pasteAndMatchStyle":
 		s := h.readClipboard()
 		if ed.onPaste != nil {
 			// The frame builds again, showing what fn changed in the
@@ -441,4 +453,11 @@ func (ed *editor) drag(x, y float32) {
 	if ed.area != nil {
 		ed.area.reveal = true
 	}
+}
+
+// enter asks onEnter whether it takes an Enter with mods held.
+func (ed *editor) enter(mods Modifiers) bool {
+	ed.entering = true
+	defer func() { ed.entering = false }()
+	return ed.onEnter(Enter{Mods: mods, ed: ed})
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"math/rand/v2"
+	"os"
 	"slices"
 	"testing"
 	"time"
@@ -14,6 +15,12 @@ var e2eRows = flag.Int("e2e.rows", 100_000, "how many accounts TestLiveColumns s
 
 // raceBuild is set under -race, whose frames are too slow to time.
 var raceBuild bool
+
+// onCI is set on CI runners, shared machines whose slowest frames say more
+// about their neighbors than about the app: there TestLiveColumns bounds
+// the median frame, which a frame doing too much still pushes far past
+// its bound, rather than the 95th percentile.
+var onCI = os.Getenv("CI") != ""
 
 // liveColumns are the columns a stress run changes.
 var liveColumns = []int{colStatus, colFriends, colGroups, colNote, colIP, colLastRun}
@@ -81,7 +88,11 @@ func TestLiveColumns(t *testing.T) {
 
 	p50, p95, worst := percentile(e.took, 50), percentile(e.took, 95), percentile(e.took, 100)
 	t.Logf("%d rows, %d frames of 1000 changes: apply and frame p50=%s p95=%s max=%s", n, len(e.took), ms(p50), ms(p95), ms(worst))
-	if !raceBuild && p95 > 50*time.Millisecond {
+	switch {
+	case raceBuild:
+	case onCI && p50 > 25*time.Millisecond:
+		t.Errorf("p50 of a frame of 1000 changes is %s, want under 25ms", ms(p50))
+	case !onCI && p95 > 50*time.Millisecond:
 		t.Errorf("p95 of a frame of 1000 changes is %s, want under 50ms", ms(p95))
 	}
 }

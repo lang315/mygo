@@ -7,10 +7,11 @@ import (
 )
 
 // A TableView is the order a Table shows an app's rows in: the rows of a
-// slice its filter keeps, sorted by the table's SortOrder. It keeps that
-// order from frame to frame, and only places again the rows the app says
-// changed, so a table of 100,000 rows updating many times a second sorts
-// and filters them cheaply. Use it on the main thread, as the view:
+// slice its filter keeps, sorted by the table's SortOrder, or by the
+// several of its SortBy. It keeps that order from frame to frame, and only
+// places again the rows the app says changed, so a table of 100,000 rows
+// updating many times a second sorts and filters them cheaply. Use it on
+// the main thread, as the view:
 //
 //	app.view.Sync(app.accounts, app.sort)
 //	app.list.Sort = &app.sort
@@ -20,16 +21,24 @@ import (
 //		a := &app.accounts[app.view.Row(row)]
 //		// …
 //	})
+//
+// With ListState.SortBy, Sync sorts by its columns, the first first:
+//
+//	app.view.Sync(app.accounts, app.sortBy...)
+//	app.list.SortBy = &app.sortBy
 type TableView[T any] struct {
 	compare map[string]func(a, b *T) int
 	// keep is the filter the order shown applies; next is the one
 	// SetFilter gave since the last Sync, when newFilter.
 	keep, next func(*T) bool
 	newFilter  bool
-	// base, n and sort are the slice and the order the view last showed.
+	// base, n and sort are the slice and the order the view last showed,
+	// sort a copy of the columns sorted by; keys are those of them with a
+	// comparator.
 	base *T
 	n    int
-	sort SortOrder
+	sort []SortOrder
+	keys []tvKey[T]
 	// perm holds the rows shown, by index into the slice; out, spare and
 	// ins are buffers merges reuse. With no filter, perm is the order of
 	// all rows.
@@ -95,18 +104,19 @@ func (v *TableView[T]) Row(i int) int { return v.perm[i] }
 // order, change: give it to ListState.Version.
 func (v *TableView[T]) Version() uint64 { return v.version }
 
-// Sync brings the view up to date with rows sorted by sort: call it in
+// Sync brings the view up to date with rows sorted by the columns of by,
+// the first first, as ListState.SortBy holds them, or by none: call it in
 // every frame, before building the table. It costs nothing when nothing
 // changed; it places again only the rows changed and appended since; a new
 // filter goes through the rows once; and it sorts all of them when the
 // sort or the slice changed (rows removed, or another slice), or after
 // Reset.
-func (v *TableView[T]) Sync(rows []T, sort SortOrder) {
+func (v *TableView[T]) Sync(rows []T, by ...SortOrder) {
 	// A new filter without the order of all rows to go through sorts them
 	// again: placing the rows changed first would be lost.
-	if v.reset || sort != v.sort || unsafe.SliceData(rows) != v.base || len(rows) < v.n ||
+	if v.reset || !slices.Equal(by, v.sort) || unsafe.SliceData(rows) != v.base || len(rows) < v.n ||
 		v.newFilter && v.keep != nil && !v.hasAll {
-		v.rebuild(rows, sort)
+		v.rebuild(rows, by)
 		return
 	}
 	for i := v.n; i < len(rows); i++ {
@@ -116,7 +126,7 @@ func (v *TableView[T]) Sync(rows []T, sort SortOrder) {
 	switch {
 	case len(v.dirty) == 0:
 	case len(v.dirty) > len(rows)/8:
-		v.rebuild(rows, sort)
+		v.rebuild(rows, by)
 	default:
 		v.merge(rows)
 	}
@@ -125,25 +135,49 @@ func (v *TableView[T]) Sync(rows []T, sort SortOrder) {
 	}
 }
 
-// order returns how rows sort: by the column sorted by, then by their
-// index, so that no two rows are equal.
+// A tvKey is a column a TableView sorts by: its comparator, and whether
+// descending.
+type tvKey[T any] struct {
+	f    func(a, b *T) int
+	desc bool
+}
+
+// order returns how rows sort: by the columns sorted by that have a
+// comparator, in turn, then by their index, so that no two rows are equal.
 func (v *TableView[T]) order(rows []T) func(i, j int) int {
-	f := v.compare[v.sort.Column]
-	if f == nil {
+	keys := v.keys
+	switch len(keys) {
+	case 0:
 		return cmp.Compare[int]
-	}
-	desc := v.sort.Descending
-	return func(i, j int) int {
-		// Descending swaps the arguments: negating a result of
-		// math.MinInt would overflow.
-		var d int
-		if desc {
-			d = f(&rows[j], &rows[i])
-		} else {
-			d = f(&rows[i], &rows[j])
+	case 1:
+		// One column, the common case, spares the loop.
+		f, desc := keys[0].f, keys[0].desc
+		return func(i, j int) int {
+			// Descending swaps the arguments: negating a result of
+			// math.MinInt would overflow.
+			var d int
+			if desc {
+				d = f(&rows[j], &rows[i])
+			} else {
+				d = f(&rows[i], &rows[j])
+			}
+			if d != 0 {
+				return d
+			}
+			return cmp.Compare(i, j)
 		}
-		if d != 0 {
-			return d
+	}
+	return func(i, j int) int {
+		for _, k := range keys {
+			var d int
+			if k.desc {
+				d = k.f(&rows[j], &rows[i])
+			} else {
+				d = k.f(&rows[i], &rows[j])
+			}
+			if d != 0 {
+				return d
+			}
 		}
 		return cmp.Compare(i, j)
 	}
@@ -154,11 +188,17 @@ func (v *TableView[T]) order(rows []T) func(i, j int) int {
 // costs at most about twice as much, and their order lets the next filter
 // sort none again. After a narrower filter, the order of all rows comes
 // back with the next rebuild.
-func (v *TableView[T]) rebuild(rows []T, sort SortOrder) {
+func (v *TableView[T]) rebuild(rows []T, by []SortOrder) {
 	if v.newFilter {
 		v.keep, v.next, v.newFilter = v.next, nil, false
 	}
-	v.reset, v.sort, v.base, v.n = false, sort, unsafe.SliceData(rows), len(rows)
+	v.reset, v.sort, v.base, v.n = false, append(v.sort[:0], by...), unsafe.SliceData(rows), len(rows)
+	v.keys = v.keys[:0]
+	for _, o := range by {
+		if f := v.compare[o.Column]; f != nil {
+			v.keys = append(v.keys, tvKey[T]{f, o.Descending})
+		}
+	}
 	v.dirty = v.dirty[:0]
 	out := v.out[:0]
 	if v.keep == nil {
@@ -175,7 +215,7 @@ func (v *TableView[T]) rebuild(rows []T, sort SortOrder) {
 	}
 	// Rows in a column without a comparator show in the slice's order, which
 	// a new filter finds again without all.
-	sorted := v.compare[sort.Column] != nil
+	sorted := len(v.keys) > 0
 	v.hasAll = false
 	switch {
 	case sorted && v.keep != nil && len(out) > len(rows)/2:

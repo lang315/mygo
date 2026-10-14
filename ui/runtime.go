@@ -6,6 +6,7 @@ import (
 	"time"
 	"weak"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/scene"
 	"github.com/egoist/mygo/internal/text"
@@ -28,7 +29,14 @@ type host interface {
 	setTextInput(t platform.TextInputState)
 	updateAccessibility(tree *platform.AccessTree)
 	readClipboard() string
+	// readClipboardImage reads the clipboard's image as PNG, nil without
+	// one.
+	readClipboardImage() []byte
 	writeClipboard(string)
+	// readClipboardData reads the representations of formats on the
+	// clipboard, all for nil; writeClipboardData puts data there.
+	readClipboardData(formats []transfer.Format) transfer.Data
+	writeClipboardData(transfer.Data)
 	startDrag()
 	startDataDrag(transfer.Data, any, transfer.DragOptions, float32, float32) error
 	cancelDataDrag()
@@ -38,6 +46,13 @@ type host interface {
 	escape()
 	isDark() bool
 	preferences() platform.Preferences
+	// locale returns the language the app shows, and region the user's
+	// regional formats; they cost nothing.
+	locale() string
+	region() i18n.Region
+	// rightToLeft reports whether the window is laid out right to left,
+	// as its language reads.
+	rightToLeft() bool
 	titleBar() TitleBar
 	// vibrancy reports whether the window shows a material where the
 	// frames are transparent.
@@ -64,6 +79,8 @@ type host interface {
 // the view function, lays them out, paints them and routes input to the
 // elements of the last frame. Main thread only, except where noted.
 type engine struct {
+	// inlineRects is placeInline's scratch, kept from frame to frame.
+	inlineRects []text.Rect
 	// byPosition holds the keys whose press stood for its physical key
 	// (keyDownPhysical), until their release does the same.
 	byPosition      map[Key]bool
@@ -167,9 +184,13 @@ type engine struct {
 	byID         map[uint64]*node
 	// insp is the inspector (inspector.go); dupKeys are the duplicate keys
 	// reported, and warnings what the inspector lists.
-	insp     inspector
-	dupKeys  map[uint64]bool
-	warnings []string
+	insp inspector
+	// dirOverride lays the window out left to right (1) or right to left
+	// (2) whatever its language, as the inspector's toggle asks; 0 follows
+	// it.
+	dirOverride uint8
+	dupKeys     map[uint64]bool
+	warnings    []string
 	// strict makes mistakes found while building panic, as duplicate keys
 	// do in a Tester.
 	strict bool
@@ -274,6 +295,17 @@ type engine struct {
 	// prefs are the desktop's preferences, read once until they change.
 	prefs      Preferences
 	prefsKnown bool
+	// lang is the language the app shows, read as each frame starts.
+	lang string
+	// fmtRegion and fmtLocale are the formats the controls write dates
+	// in, worked out of the language and the system's formats, fmtSys
+	// (context.formats); fmtCache keeps what they wrote.
+	fmtKnown  bool
+	fmtLang   string
+	fmtSys    i18n.Region
+	fmtRegion i18n.Region
+	fmtLocale string
+	fmtCache  map[fmtKey]string
 	// theme is the default theme, which follows the appearance and the
 	// preferences, made once until they change (themeOK); each pass
 	// starts from a copy, passTheme, which the view may change.
@@ -860,6 +892,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		s.parent = 0
 	}
 	s.flags = e.flags
+	s.rtl = e.rtl()
 	s.anchor = 0
 	if e.popover != nil {
 		s.anchor = e.popover.id
@@ -873,6 +906,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	s.webView = e.webView
 	s.role = e.role
 	s.input, s.caret, s.takesText = e.inputFn, e.caret, e.takesText
+	s.copyData = e.copyData
 	if s.textClient != e.textClient {
 		if s.textAdapter != nil {
 			s.textAdapter.release()

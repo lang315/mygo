@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/raster"
 	"github.com/egoist/mygo/internal/scene"
@@ -37,6 +38,13 @@ func RegisterFont(data []byte, family string) error {
 	return text.Shared().RegisterFont(data, family)
 }
 
+// FontFamilies lists the font families text can use: the app's registered
+// ones first, then the system's, sorted. With mono, only the monospaced
+// ones, as a terminal or an editor offers.
+func FontFamilies(mono bool) []string {
+	return text.Shared().FontFamilies(mono)
+}
+
 // AttachContent connects the content to a window; package mygo calls it.
 func (v *Content) AttachContent(conn *surface.Conn) {
 	h := &windowHost{conn: conn}
@@ -50,6 +58,10 @@ func (v *Content) AttachContent(conn *surface.Conn) {
 	}
 	conn.TitleBarChanged = rt.requestFrame
 	conn.Changed = rt.changed
+	conn.LocaleChanged = func() {
+		h.textLanguage()
+		rt.changed()
+	}
 	conn.Capture = h.capture
 	conn.Detach = h.detach
 	rt.insp.enabled = conn.DevTools
@@ -59,6 +71,7 @@ func (v *Content) AttachContent(conn *surface.Conn) {
 		}
 	}
 	h.uiFont()
+	h.textLanguage()
 	// Load the fonts while the window shows up.
 	go text.Shared().Preload()
 	conn.Surface.RequestFrame()
@@ -108,6 +121,8 @@ type windowHost struct {
 }
 
 func (h *windowHost) framePath() string { return h.path }
+
+func (h *windowHost) rightToLeft() bool { return h.conn.RightToLeft != nil && h.conn.RightToLeft() }
 
 // newGPU makes the GPU renderer of a surface; tests replace it.
 var newGPU = newGPURenderer
@@ -461,9 +476,33 @@ func (h *windowHost) readClipboard() string {
 	return h.conn.Clipboard.ReadText()
 }
 
+func (h *windowHost) readClipboardImage() []byte {
+	if h.conn.Clipboard == nil {
+		return nil
+	}
+	return h.conn.Clipboard.ReadImage()
+}
+
 func (h *windowHost) writeClipboard(s string) {
 	if h.conn.Clipboard != nil {
 		h.conn.Clipboard.WriteText(s)
+	}
+}
+
+func (h *windowHost) readClipboardData(formats []transfer.Format) transfer.Data {
+	if h.conn.Clipboard == nil {
+		return transfer.Data{}
+	}
+	d, err := h.conn.Clipboard.ReadData(formats)
+	if err != nil && len(d.Items()) == 0 {
+		return transfer.Data{}
+	}
+	return d
+}
+
+func (h *windowHost) writeClipboardData(d transfer.Data) {
+	if h.conn.Clipboard != nil {
+		h.conn.Clipboard.WriteData(d, nil)
 	}
 }
 
@@ -492,6 +531,26 @@ func (h *windowHost) preferences() platform.Preferences {
 		return platform.Preferences{}
 	}
 	return h.conn.Preferences()
+}
+
+func (h *windowHost) locale() string {
+	if h.conn.Locale == nil {
+		return ""
+	}
+	return h.conn.Locale()
+}
+
+func (h *windowHost) region() i18n.Region {
+	if h.conn.Region == nil {
+		return i18n.Region{}
+	}
+	return h.conn.Region()
+}
+
+// textLanguage makes the language the app shows that of the text the
+// text engine lays out without one, as Painter.Shape does.
+func (h *windowHost) textLanguage() {
+	text.Shared().SetLanguage(h.locale())
 }
 
 func (h *windowHost) titleBar() TitleBar {
