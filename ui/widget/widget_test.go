@@ -64,3 +64,15 @@ func TestWidgetsWorkWithoutAWindow(t *testing.T) {
 		t.Fatalf("Text() %q, want b", l.Text())
 	}
 }
+
+func TestOnClickOnALabel(t *testing.T) {
+	clicked := make(chan bool, 1)
+	tt := tester(t, Label("tap").OnClick(func() { clicked <- onEvents() }))
+	if err := tt.Click("tap"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !wait(t, clicked) {
+		t.Fatal("OnClick ran off the event goroutine")
+	}
+}

@@ -233,7 +233,7 @@ func (w *Window) closeAnyway() {
 func (w *Window) view(c *ui.Context) {
 	mu.Lock()
 	defer mu.Unlock()
-	axis = vertical
+	axis, building = vertical, w.id
 	ui.Column(c).Fill().Children(func() {
 		if w.header != nil {
 			render(c, w.header)
