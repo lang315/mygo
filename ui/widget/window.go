@@ -211,7 +211,7 @@ func (w *Window) closeAsked(e *mygo.CloseEvent) {
 	if closing {
 		return
 	}
-	if !deletable {
+	if !deletable && !quitAsked { // the app quitting closes it anyway
 		e.PreventDefault()
 		return
 	}

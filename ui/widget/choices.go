@@ -13,6 +13,7 @@ type SpinWidget struct {
 	min, max, step float64
 	value          mirror[float64]
 	onChange       func()
+	onEnter        func()
 }
 
 // Spin makes a number input from min to max, stepping by step.
@@ -29,6 +30,10 @@ func (s *SpinWidget) SetValue(v float64) *SpinWidget {
 	change(func() { s.value.set(v) })
 	return s
 }
+
+// OnEnter runs fn when the user presses Enter in the number.
+func (s *SpinWidget) OnEnter(fn func()) *SpinWidget { change(func() { s.onEnter = fn }); return s }
+
 func (s *SpinWidget) OnChange(fn func()) *SpinWidget { change(func() { s.onChange = fn }); return s }
 
 func (s *SpinWidget) build(c *ui.Context) ui.Element {
@@ -36,7 +41,12 @@ func (s *SpinWidget) build(c *ui.Context) ui.Element {
 	if changed && s.onChange != nil {
 		Post(s.onChange)
 	}
-	return ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(onChange(&s.value, s.onChange))
+	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(onChange(&s.value, s.onChange))
+	// Enter in the number's text field: it is inside e, which reports it.
+	if h := s.onEnter; h != nil && e.Shortcut(0, ui.KeyEnter) {
+		Post(h)
+	}
+	return e
 }
 
 // RangeSpinWidget edits a range: two numbers, with text between and after.

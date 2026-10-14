@@ -99,3 +99,35 @@ func TestIconTakesItsSize(t *testing.T) {
 		t.Fatalf("after at %v: the icon is not 40 wide", a)
 	}
 }
+
+func TestInputIntEnter(t *testing.T) {
+	type answer struct {
+		n  int
+		ok bool
+	}
+	got := runAsync(func() answer {
+		n, ok := InputInt(nil, Question, "Enter?", "Threads", 1, 64, 1, 8)
+		return answer{n, ok}
+	})
+	fw := waitFake(t, "Enter?")
+	typeText(fw, "") // a first frame focuses the number
+	key(fw, platform.KeyEnter)
+	if a := wait(t, got); a.n != 8 || !a.ok {
+		t.Fatalf("got %d %v, want 8 true", a.n, a.ok)
+	}
+}
+
+// Two answers queued while the event goroutine is busy: the first wins.
+func TestConfirmFirstAnswerWins(t *testing.T) {
+	got := runAsync(func() bool { return Confirm(nil, Question, "Twice?", "") })
+	fw := waitFake(t, "Twice?")
+	busy, release := make(chan struct{}), make(chan struct{})
+	Post(func() { close(busy); <-release })
+	<-busy
+	press(t, fw, "Cancel")
+	press(t, fw, "OK")
+	close(release)
+	if wait(t, got) {
+		t.Fatal("OK after Cancel won")
+	}
+}

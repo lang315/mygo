@@ -79,11 +79,18 @@ func (i *kindIconWidget) build(c *ui.Context) ui.Element {
 // gets the default button and a function choosing it.
 func message(parent *Window, kind Kind, title, text string, input Widget, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
 	chosen := -1
+	// The first answer wins: a second, queued while the first ran, must
+	// not change what Run's caller reads.
+	answer := func(i int) {
+		if chosen < 0 {
+			chosen = i
+		}
+	}
 	var d *Dialog
 	bar := ButtonBox()
 	var ok *ButtonWidget
 	for i, s := range buttons {
-		ok = Button(s).OnClick(func() { chosen = i; d.Close() })
+		ok = Button(s).OnClick(func() { answer(i); d.Close() })
 		bar.Add(ok)
 	}
 	ok.Suggested()
@@ -104,7 +111,7 @@ func message(parent *Window, kind Kind, title, text string, input Widget, wire f
 	d = NewDialog(parent, title, "", 420, height, content)
 	if wire != nil {
 		last := len(buttons) - 1
-		wire(ok, func() { chosen = last; d.Close() })
+		wire(ok, func() { answer(last); d.Close() })
 	}
 	d.Run()
 	return chosen
@@ -134,7 +141,7 @@ func InputString(parent *Window, kind Kind, title, label, value string) (s strin
 // starting at value.
 func InputInt(parent *Window, kind Kind, title, label string, min, max, step, value int) (n int, ok bool) {
 	s := Spin(float64(min), float64(max), float64(step)).SetValue(float64(value)).Focus()
-	i := message(parent, kind, title, label, s, nil, "Cancel", "OK")
+	i := message(parent, kind, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, "Cancel", "OK")
 	return s.Int(), i == 1
 }
 

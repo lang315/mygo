@@ -97,8 +97,9 @@ Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,
 - `InputString(parent, kind, title, label, value) (string, bool)`,
   `InputInt(parent, kind, title, label, min, max, step, value) (int, bool)`
   and `InputSelect(parent, kind, title, label, options...) (string, bool)`
-  ask for a value; Enter is OK, and `InputSelect` keeps OK disabled until a
-  choice.
+  ask for a value. Enter is OK in `InputString` and `InputInt`; in
+  `InputSelect`, whose combo takes Enter to open its list, OK stays
+  disabled until a choice.
 
 The file dialogs are the system's: `OpenFile(parent, title, filters...)`,
 `OpenFiles`, `SaveFile(parent, title, name, filters...)` and

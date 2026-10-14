@@ -115,3 +115,21 @@ func TestDialogRunOnTheMainThreadPanics(t *testing.T) {
 		t.Fatal("the dialog showed before panicking")
 	}
 }
+
+// An undeletable dialog does not stop the app's quit.
+func TestUndeletableDialogLetsTheAppQuit(t *testing.T) {
+	d := NewDialog(nil, "Busy", "", 300, 200, Label("working"))
+	d.SetDeletable(false)
+	d.Show()
+	defer d.Close()
+	fw := waitFake(t, "Busy")
+	var closes bool
+	mygo.RunOnMain(func() {
+		quitAsked = true // as onBeforeQuit sets it
+		closes = fw.H.ShouldClose()
+		quitAsked = false
+	})
+	if !closes {
+		t.Fatal("an undeletable dialog vetoed the app's quit")
+	}
+}
