@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
 	"testing"
 
@@ -420,5 +421,31 @@ func TestEnterWithWindowShortcut(t *testing.T) {
 	tt.Key(0, KeySpace)
 	if window != 2 || !checked {
 		t.Fatalf("Space on a focused check box: window %d, checked %v", window, checked)
+	}
+}
+
+// A select's popup of more options than fit stays inside the window and
+// scrolls: End brings the last option into view and Enter chooses it.
+func TestSelectLongPopupScrolls(t *testing.T) {
+	var opts []string
+	for i := range 100 {
+		opts = append(opts, fmt.Sprintf("opt%03d", i))
+	}
+	sel := "opt000"
+	tt := NewTester(func(c *Context) { Select(c, &sel, opts) }, 800, 600)
+	defer tt.rt.close()
+	if err := tt.Click("opt000"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Key(0, KeyEnd)
+	tt.Frame()
+	if r, _ := tt.Find("opt099"); r.H <= 0 || r.Y+r.H > 600 {
+		t.Fatalf("End: the last option shows at %+v, not inside the 600-tall window", r)
+	}
+	tt.Key(0, KeyEnter)
+	tt.Frame()
+	if sel != "opt099" {
+		t.Fatalf("End, Enter chose %q", sel)
 	}
 }

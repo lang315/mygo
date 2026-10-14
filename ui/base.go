@@ -356,12 +356,14 @@ func (s *selectParts[T]) Highlight(value T) {
 
 // Popup shows the popup below the trigger, at least as wide, while it is
 // open: fn styles the panel and builds the options in it with Item.
-// Clicking outside it or pressing Escape closes it. It returns the panel,
-// or nil when the popup is closed.
+// Clicking outside it or pressing Escape closes it. Of many options, it
+// shows as many as fit a combobox's popup and scrolls; fn may set another
+// MaxHeight. It returns the panel, or nil when the popup is closed.
 func (s *selectParts[T]) Popup(fn func(panel *node)) *node {
 	b := s.Trigger
 	return popover(s.c, b, s.open, true, func(panel *node) {
-		panel.MinWidth(b.Bounds().W)
+		panel.MinWidth(b.Bounds().W).MaxHeight(s.c.theme.Space(70))
+		panel.flags |= flagScrollY | flagHover
 		s.next = s.next[:0]
 		fn(panel)
 		*s.values = append((*s.values)[:0], s.next...)
