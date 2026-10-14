@@ -19,9 +19,6 @@ var englishPanel = PanelText{Rows: "Rows: %d", Selected: "Selected: %d", Checked
 // and are checked, and, with Filterable columns, a search: a column
 // chosen in a combo, a keyword, and a button (or Enter) running it.
 func (t *TableWidget[T, K]) BottomPanel() *TableWidget[T, K] {
-	mu.Lock()
-	text := t.text
-	mu.Unlock()
 	total, selected, checked := Label(""), Label(""), Label("")
 	panel := HBox(12).Add(total, selected, checked)
 	var opts []Option
@@ -36,7 +33,7 @@ func (t *TableWidget[T, K]) BottomPanel() *TableWidget[T, K] {
 	if len(opts) > 0 {
 		column = Combo(opts...).SetValue(opts[0].Value)
 		keyword = Entry().SetPlaceholder("Keyword").OnEnter(t.searchPanel).SetSize(240, 0)
-		button = Button(text.Search).OnClick(t.searchPanel)
+		button = Button("").OnClick(t.searchPanel) // counts sets its text
 		panel.PackEnd(button, false, false).PackEnd(keyword, false, false).PackEnd(column, false, false)
 	}
 	change(func() {
@@ -48,14 +45,7 @@ func (t *TableWidget[T, K]) BottomPanel() *TableWidget[T, K] {
 
 // PanelText sets the words of the bottom panel, in English by default.
 func (t *TableWidget[T, K]) PanelText(pt PanelText) *TableWidget[T, K] {
-	mu.Lock()
-	t.text = pt
-	b := t.searchButton
-	mu.Unlock()
-	if b != nil {
-		b.SetText(pt.Search)
-	}
-	change(func() {})
+	change(func() { t.text = pt })
 	return t
 }
 
@@ -119,8 +109,12 @@ func (t *TableWidget[T, K]) keep(column, keyword string) func(*T) bool {
 	return func(r *T) bool { return strings.Contains(strings.ToLower(text(r)), kw) }
 }
 
-// counts sets the panel's counts. Under mu, while building.
+// counts sets the panel's counts, and its words. Under mu, while
+// building.
 func (t *TableWidget[T, K]) counts() {
+	if t.searchButton != nil {
+		t.searchButton.text = t.text.Search
+	}
 	t.totalLabel.text = fmt.Sprintf(t.text.Rows, len(t.rows))
 	t.selectedLabel.text = fmt.Sprintf(t.text.Selected, t.chosen.value.Len())
 	t.checkedLabel.text = fmt.Sprintf(t.text.Checked, t.checked.value.Len())

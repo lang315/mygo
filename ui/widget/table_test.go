@@ -131,18 +131,6 @@ func TestTableCellsShowColorAndImage(t *testing.T) {
 	}
 }
 
-func TestTableStaleRowHasZeroKey(t *testing.T) {
-	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}, acct{3, "c", 0})
-	tester(t, tb)
-	tb.DeleteRows(1, 2, 3) // the view still shows three rows until it syncs
-	if k := tb.keyAt(2); k != 0 {
-		t.Fatalf("keyAt(2) of a deleted row = %v", k)
-	}
-	if s := tb.labelAt(2); s != "" {
-		t.Fatalf("labelAt(2) of a deleted row = %q", s)
-	}
-}
-
 func TestTableChecksRows(t *testing.T) {
 	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).CheckboxColumn()
 	tt := tester(t, tb)
@@ -538,20 +526,19 @@ func BenchmarkTableLiveUpdates(b *testing.B) {
 	}
 }
 
-func TestTableStaleRowAfterAShiftHasZeroKey(t *testing.T) {
+func TestTableInputLandsOnTheRowsOfTheFrameShown(t *testing.T) {
 	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}, acct{3, "c", 0})
 	tt := tester(t, tb)
-	tb.DeleteRows(1) // rows shift: the frame shown still has a at 0
-	if k := tb.keyAt(0); k != 0 {
-		t.Fatalf("keyAt(0) after a shift = %v, want the zero key", k)
+	check := func(when string) {
+		t.Helper()
+		if k, s, c := tb.keyAt(0), tb.labelAt(0), tb.copyRows([]int{0}); k != 1 || s != "a" || c != "a\t0" {
+			t.Fatalf("%s: row 0 of the frame shown is %v, %q, %q", when, k, s, c)
+		}
 	}
+	tb.DeleteRows(1) // the frame shown still has a at 0
+	check("after a delete")
 	tb.Selected() // syncs the view, as the frame shown is not
-	if k, s := tb.keyAt(0), tb.labelAt(0); k != 0 || s != "" {
-		t.Fatalf("keyAt(0) = %v, labelAt(0) = %q after a getter synced", k, s)
-	}
-	if s := tb.copyRows([]int{0}); s != "" {
-		t.Fatalf("copyRows of a stale frame = %q", s)
-	}
+	check("after a getter synced")
 	tt.Frame()
 	if k := tb.keyAt(0); k != 2 {
 		t.Fatalf("keyAt(0) after a frame = %v", k)
@@ -586,5 +573,43 @@ func TestTableAutoCheckActsOnShownRows(t *testing.T) {
 	tb.AutoCheck()
 	if !tb.IsChecked(1) || tb.IsChecked(2) {
 		t.Fatalf("checked ann: %v, hidden bob: %v", tb.IsChecked(1), tb.IsChecked(2))
+	}
+}
+
+// ui builds the rows a taller window shows late, while it lays the frame
+// out, without the package's lock: a goroutine changing the rows meanwhile
+// must not race them.
+func TestTableRowsBuiltWhileLayingOutAreSafe(t *testing.T) {
+	tb := testTable(manyAccts(2000)...)
+	tt := tester(t, tb)
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			tb.DeleteRows(i % 2000)
+			tb.AddRow(acct{i % 2000, "back", i})
+		}
+	}()
+	for i := range 40 {
+		tt.SetSize(800, 300+i%2*2000)
+		tt.Frame()
+	}
+	close(stop)
+	<-done
+}
+
+func TestTableFitsItsWindowWithoutExpand(t *testing.T) {
+	tb := Table(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }},
+	).SetRows(manyAccts(1000)).BottomPanel()
+	tt := tester(t, tb)
+	if r := find(t, tt, "Rows: 1000"); r.Y+r.H > 600 {
+		t.Fatalf("panel at %v, below the window", r)
 	}
 }

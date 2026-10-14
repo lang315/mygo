@@ -46,7 +46,7 @@ func (t *TableWidget[T, K]) OnColumnsChange(fn func(ui.TableLayout)) *TableWidge
 // SetColumnsLayout arranges the columns as l, which OnColumnsChange gave:
 // their order and widths by title ("#" for the index column).
 func (t *TableWidget[T, K]) SetColumnsLayout(l ui.TableLayout) *TableWidget[T, K] {
-	change(func() { t.layout, t.layoutSet = l, true })
+	change(func() { t.layout = &l })
 	return t
 }
 
@@ -74,8 +74,8 @@ func (t *TableWidget[T, K]) copyRows(rows []int) string {
 // builds. Under mu.
 func (t *TableWidget[T, K]) handOver() {
 	s := &t.list
-	if t.layoutSet {
-		s.Columns, t.layoutSet = t.layout, false
+	if t.layout != nil {
+		s.Columns, t.layout = *t.layout, nil
 	}
 	s.RowMenu = nil
 	if menu := t.menu; len(menu) > 0 {

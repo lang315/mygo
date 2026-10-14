@@ -1,7 +1,6 @@
 package widget
 
 import (
-	"slices"
 	"strconv"
 	"strings"
 
@@ -45,10 +44,13 @@ type TableWidget[T any, K comparable] struct {
 	rows    []T
 	index   map[K]int // a key's row in rows
 	view    *ui.TableView[T]
-	// built is the view's version the last build showed; shifted, that rows
-	// moved in rows since.
-	built                                   uint64
-	shifted                                 bool
+	// frame holds the rows of the frame ui shows, and order their order
+	// once a getter has synced the view since: ui may still lay that frame
+	// out, or apply input to it. Setters never move or remove a frame's
+	// rows: they make new slices. gone is set when rows went since.
+	frame                                   []T
+	order                                   []int
+	gone                                    bool
 	sort                                    mirror[ui.SortOrder]
 	chosen, checked                         keys[K]
 	checks                                  bool // the check box column shows
@@ -63,9 +65,8 @@ type TableWidget[T any, K comparable] struct {
 	onColumns                               func(ui.TableLayout)
 	shortcuts                               []shortcut
 	menu                                    []MenuItem
-	layout                                  ui.TableLayout
-	layoutSet                               bool // SetColumnsLayout's layout is not handed to ui yet
-	numbered                                bool // the index column shows
+	layout                                  *ui.TableLayout // SetColumnsLayout's, not handed to ui yet
+	numbered                                bool            // the index column shows
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
@@ -119,10 +120,7 @@ func (t *TableWidget[T, K]) SetRows(rows []T) *TableWidget[T, K] {
 	change(func() {
 		t.rows, t.index = make([]T, 0, len(rows)), make(map[K]int, len(rows))
 		t.add(rows)
-		t.view.Reset()
-		t.shifted = true
-		t.chosen.keep(t.index)
-		t.checked.keep(t.index)
+		t.removed()
 	})
 	return t
 }
@@ -167,36 +165,40 @@ func (t *TableWidget[T, K]) UpdateRow(k K, fn func(*T)) *TableWidget[T, K] {
 // DeleteRows removes the rows of keys ks.
 func (t *TableWidget[T, K]) DeleteRows(ks ...K) *TableWidget[T, K] {
 	change(func() {
-		n := len(t.index)
+		first := len(t.rows) // the first row removed
 		for _, k := range ks {
-			delete(t.index, k)
+			if i, ok := t.index[k]; ok {
+				first = min(first, i)
+				delete(t.index, k)
+			}
 		}
-		if len(t.index) == n {
+		if first == len(t.rows) {
 			return
 		}
-		t.rows = slices.DeleteFunc(t.rows, func(r T) bool { _, ok := t.index[t.key(&r)]; return !ok })
-		for i := range t.rows {
-			t.index[t.key(&t.rows[i])] = i
+		rows := append(make([]T, 0, len(t.index)), t.rows[:first]...)
+		for i := first; i < len(t.rows); i++ {
+			k := t.key(&t.rows[i])
+			if _, ok := t.index[k]; ok {
+				t.index[k] = len(rows)
+				rows = append(rows, t.rows[i])
+			}
 		}
-		t.view.Reset()
-		t.shifted = true
-		t.chosen.keep(t.index)
-		t.checked.keep(t.index)
+		t.rows = rows
+		t.removed()
 	})
 	return t
 }
 
 // Clear removes every row.
-func (t *TableWidget[T, K]) Clear() *TableWidget[T, K] {
-	change(func() {
-		t.rows = nil
-		clear(t.index)
-		t.view.Reset()
-		t.shifted = true
-		t.chosen.keep(t.index)
-		t.checked.keep(t.index)
-	})
-	return t
+func (t *TableWidget[T, K]) Clear() *TableWidget[T, K] { return t.SetRows(nil) }
+
+// removed has the view sort the rows again, after rows went, and drops
+// their keys from the selection and the checks. Under mu.
+func (t *TableWidget[T, K]) removed() {
+	t.view.Reset()
+	t.gone = true
+	t.chosen.keep(t.index)
+	t.checked.keep(t.index)
 }
 
 // Row returns the row of key k.
@@ -222,19 +224,43 @@ func (t *TableWidget[T, K]) ClearSort() *TableWidget[T, K] {
 // sync brings the view up to date with the rows. Under mu.
 func (t *TableWidget[T, K]) sync() { t.view.Sync(t.rows, t.sort.value) }
 
-// rowAt returns the row shown at row in the frame ui shows, nil when the
-// rows changed since: a goroutine may change them between a frame and ui
-// applying input to it. Under mu.
+// rowAt returns the row at row in the frame ui shows, whatever goroutines
+// changed since. Under mu.
 func (t *TableWidget[T, K]) rowAt(row int) *T {
-	if !viewing.Load() && (t.shifted || t.view.Version() != t.built) || row >= t.view.Len() {
-		return nil
+	switch {
+	case t.order != nil && row < len(t.order):
+		return &t.frame[t.order[row]]
+	case t.order == nil && row < t.view.Len():
+		return &t.frame[t.view.Row(row)]
 	}
-	return &t.rows[t.view.Row(row)]
+	return nil
 }
 
-// keyOf returns the key of the row shown at row, the zero K for none.
-// Under mu.
-func (t *TableWidget[T, K]) keyOf(row int) K {
+// keepFrame copies the order of the frame ui shows before a getter syncs
+// the view, once a frame. Under mu.
+func (t *TableWidget[T, K]) keepFrame() {
+	if t.order == nil {
+		t.order = make([]int, t.view.Len())
+		for i := range t.order {
+			t.order[i] = t.view.Row(i)
+		}
+	}
+}
+
+// lockOutsideView takes mu unless a view is building, which holds it, and
+// returns what releases it: ui calls a table back while a view builds, and
+// while it applies input or lays the frame out, on the same thread.
+func lockOutsideView() (unlock func()) {
+	if viewing.Load() {
+		return func() {}
+	}
+	mu.Lock()
+	return mu.Unlock
+}
+
+// keyAt is ui's ListState.Key.
+func (t *TableWidget[T, K]) keyAt(row int) any {
+	defer lockOutsideView()()
 	if r := t.rowAt(row); r != nil {
 		return t.key(r)
 	}
@@ -242,23 +268,10 @@ func (t *TableWidget[T, K]) keyOf(row int) K {
 	return zero
 }
 
-// keyAt is ui's ListState.Key: ui asks while the table builds, holding
-// mu, and while it applies input, not.
-func (t *TableWidget[T, K]) keyAt(row int) any {
-	if !viewing.Load() {
-		mu.Lock()
-		defer mu.Unlock()
-	}
-	return t.keyOf(row)
-}
-
 // labelAt is ui's ListState.Label, the first column's text: it names a
 // row's check box, and typing finds rows by it.
 func (t *TableWidget[T, K]) labelAt(row int) string {
-	if !viewing.Load() {
-		mu.Lock()
-		defer mu.Unlock()
-	}
+	defer lockOutsideView()()
 	if r := t.rowAt(row); r != nil && len(t.cols) > 0 {
 		return t.cols[0].Text(r)
 	}
@@ -266,7 +279,8 @@ func (t *TableWidget[T, K]) labelAt(row int) string {
 }
 
 func (t *TableWidget[T, K]) build(c *ui.Context) ui.Element {
-	return ui.Column(c).Gap(8).Children(func() {
+	// It grows, as Scrolled does: as tall as its rows, it would not fit.
+	return ui.Column(c).Gap(8).Grow(1).Children(func() {
 		t.table(c).Grow(1)
 		if t.panel != nil {
 			t.counts()
@@ -284,8 +298,8 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Checked = t.checked.bind()
 	}
 	t.sync()
-	t.built, t.shifted = t.view.Version(), false
-	s.Version = t.built
+	t.frame, t.order, t.gone = t.rows, nil, false
+	s.Version = t.view.Version()
 	t.handOver()
 	e := ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
 		OnSortChange(onChange(&t.sort, nil)).
@@ -296,8 +310,10 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 }
 
 // cell builds the cell of the row shown at row in column col, an index
-// into t.columns. Under mu.
+// into t.columns: while the table builds, or when ui lays out rows it did
+// not build then.
 func (t *TableWidget[T, K]) cell(c *ui.Context, row, col int) {
+	defer lockOutsideView()()
 	if t.numbered {
 		if col == 0 {
 			ui.Text(c, strconv.Itoa(row+1)).SingleLine()
@@ -305,7 +321,7 @@ func (t *TableWidget[T, K]) cell(c *ui.Context, row, col int) {
 		}
 		col--
 	}
-	cl, r := &t.cols[col], &t.rows[t.view.Row(row)]
+	cl, r := &t.cols[col], t.rowAt(row)
 	if cl.Image == nil {
 		cellText(c, cl, r)
 		return

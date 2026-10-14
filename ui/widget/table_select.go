@@ -59,6 +59,7 @@ func (t *TableWidget[T, K]) CheckboxColumn() *TableWidget[T, K] {
 // shown returns the keys in that the rows shown hold, in the order shown.
 // Under mu.
 func (t *TableWidget[T, K]) shown(in *ui.Selection[K]) []K {
+	t.keepFrame()
 	t.sync()
 	n := in.Len()
 	if n == 0 {
@@ -136,13 +137,14 @@ func (t *TableWidget[T, K]) AutoCheck() *TableWidget[T, K] {
 }
 
 // commit takes what the user changed in s, but no key of a row gone: a
-// goroutine may delete rows between a frame and ui applying input to it,
-// and a click on a row no longer there gives the zero key. On the main
-// thread, without mu.
+// goroutine may delete rows between a frame and ui applying input to it.
+// On the main thread, without mu.
 func (t *TableWidget[T, K]) commit(s *keys[K]) {
 	mu.Lock()
 	defer mu.Unlock()
 	copyKeys(&s.value, &s.shown)
 	s.dirty = false
-	s.keep(t.index)
+	if t.gone {
+		s.keep(t.index)
+	}
 }
