@@ -2,9 +2,11 @@ package widget
 
 import (
 	"cmp"
+	"fmt"
 	"image/color"
 	"slices"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -436,5 +438,102 @@ func TestTableColumnsChangeGivesTheLayout(t *testing.T) {
 	var l ui.TableLayout
 	for l.Widths["A"] != 130 {
 		l = wait(t, got) // fails after 2 s without a layout of A at 130
+	}
+}
+
+// manyAccts returns n accounts: acct000000, acct000001, ..., scores
+// counting down.
+func manyAccts(n int) []acct {
+	rows := make([]acct, n)
+	for i := range rows {
+		rows[i] = acct{i, fmt.Sprintf("acct%06d", i), n - i}
+	}
+	return rows
+}
+
+func TestTable100kRows(t *testing.T) {
+	tb := testTable(manyAccts(100_000)...).CheckboxColumn().BottomPanel()
+	tt := tester(t, tb)
+	if !tt.HasText("Rows: 100000") {
+		t.Fatalf("no row count in %q", tt.Texts())
+	}
+	click(t, tt, "Score") // ascending: the last account first
+	if !tt.HasText("acct099999") {
+		t.Fatalf("sorted by Score: %q", tt.Texts())
+	}
+	tb.Search("Name", "acct00001") // acct000010..acct000019
+	tt.Frame()
+	click(t, tt, "Check all")
+	got := tb.Checked()
+	want := []int{19, 18, 17, 16, 15, 14, 13, 12, 11, 10}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Checked %v, want %v", got, want)
+	}
+	tb.DeleteRows(got...)
+	tt.Frame()
+	if tb.Len() != 100_000-10 || len(tb.Checked()) != 0 || tb.IsChecked(15) {
+		t.Fatalf("after DeleteRows: Len %d, Checked %v", tb.Len(), tb.Checked())
+	}
+}
+
+func TestTableIsSafeFromManyGoroutines(t *testing.T) {
+	tb := testTable(manyAccts(1000)...).CheckboxColumn().BottomPanel()
+	tt := tester(t, tb)
+	var wg sync.WaitGroup
+	for g := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range 200 {
+				k := 1000 + g*1000 + i
+				tb.AddRow(acct{k, "new", i})
+				tb.UpdateRow(i, func(a *acct) { a.score++ })
+				tb.SetChecked([]int{k, i}, i%2 == 0)
+				_ = tb.Checked()
+				_ = tb.Selected()
+				if i%50 == 0 {
+					tb.DeleteRows(k)
+					tb.Search("Name", "new")
+					tb.Search("Name", "")
+				}
+			}
+		}()
+	}
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	for {
+		select {
+		case <-done:
+			tt.Frame()
+			if n := tb.Len(); n != 1000+8*200-8*4 {
+				t.Fatalf("Len %d", n)
+			}
+			return
+		default:
+			tt.Frame()
+		}
+	}
+}
+
+// BenchmarkTableLiveUpdates changes 1000 rows of a table sorted by Score,
+// then draws a frame, as account-manager's BenchmarkLiveUpdates.
+func BenchmarkTableLiveUpdates(b *testing.B) {
+	for _, n := range []int{100_000, 1_000_000} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			tb := testTable(manyAccts(n)...).CheckboxColumn().IndexColumn()
+			tt := ui.NewTester(content(tb), 1280, 800)
+			tt.Frame()
+			if err := tt.Click("Score"); err != nil {
+				b.Fatal(err)
+			}
+			tt.Frame()
+			b.ResetTimer()
+			for i := range b.N {
+				for j := range 1000 {
+					tb.UpdateRow((i*7919+j*104729)%n, func(a *acct) { a.score += 3 })
+				}
+				tt.Frame()
+			}
+		})
 	}
 }
