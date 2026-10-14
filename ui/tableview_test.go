@@ -16,24 +16,36 @@ var tvCompare = map[string]func(x, y *tvRow) int{
 	"b": func(x, y *tvRow) int { return cmp.Compare(x.b, y.b) },
 }
 
-// tvWant returns the rows a view shows, by brute force: those keep keeps,
-// stably sorted by the column's comparator.
+// tvWant returns the rows a view sorted by one column shows.
 func tvWant(rows []tvRow, sort SortOrder, keep func(*tvRow) bool) []int {
+	return tvWantBy(rows, []SortOrder{sort}, keep)
+}
+
+// tvWantBy returns the rows a view shows, by brute force: those keep keeps,
+// stably sorted by the comparators of the columns in turn.
+func tvWantBy(rows []tvRow, by []SortOrder, keep func(*tvRow) bool) []int {
 	var idx []int
 	for i := range rows {
 		if keep == nil || keep(&rows[i]) {
 			idx = append(idx, i)
 		}
 	}
-	if f := tvCompare[sort.Column]; f != nil {
-		slices.SortStableFunc(idx, func(i, j int) int {
+	slices.SortStableFunc(idx, func(i, j int) int {
+		for _, o := range by {
+			f := tvCompare[o.Column]
+			if f == nil {
+				continue
+			}
 			d := f(&rows[i], &rows[j])
-			if sort.Descending {
+			if o.Descending {
 				d = -d
 			}
-			return d
-		})
-	}
+			if d != 0 {
+				return d
+			}
+		}
+		return 0
+	})
 	return idx
 }
 
@@ -54,7 +66,7 @@ func TestTableViewMatchesSortAndFilter(t *testing.T) {
 			rows[i] = row()
 		}
 		v := NewTableView(tvCompare)
-		var sort SortOrder
+		var by []SortOrder
 		var keep func(*tvRow) bool
 		change := func() {
 			for range r.IntN(4) + 1 {
@@ -83,8 +95,11 @@ func TestTableViewMatchesSortAndFilter(t *testing.T) {
 				for range r.IntN(3) + 1 {
 					rows = append(rows, row())
 				}
-			case 3:
-				sort = SortOrder{Column: []string{"a", "b", "none"}[r.IntN(3)], Descending: r.IntN(2) == 1}
+			case 3: // by one column or two, as SortBy holds them
+				by = nil
+				for range r.IntN(2) + 1 {
+					by = append(by, SortOrder{Column: []string{"a", "b", "none"}[r.IntN(3)], Descending: r.IntN(2) == 1})
+				}
 			case 4:
 				filter()
 			case 5: // rows removed from the end
@@ -98,8 +113,8 @@ func TestTableViewMatchesSortAndFilter(t *testing.T) {
 				change()
 				filter()
 			}
-			v.Sync(rows, sort)
-			if got, want := tvGot(v), tvWant(rows, sort, keep); !slices.Equal(got, want) {
+			v.Sync(rows, by...)
+			if got, want := tvGot(v), tvWantBy(rows, by, keep); !slices.Equal(got, want) {
 				t.Fatalf("seed %d, step %d: got %v, want %v", seed, step, got, want)
 			}
 		}
@@ -351,6 +366,23 @@ func TestTableViewClearFilterAfterRealloc(t *testing.T) {
 	v.Sync(rows, sort)
 	if got, want := tvGot(v), tvWant(rows, sort, nil); !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// The view keeps a copy of the columns it sorted by: an app changing its
+// SortBy slice in place still has it sort again.
+func TestTableViewSortByChangedInPlace(t *testing.T) {
+	rows := []tvRow{{1, 2}, {1, 1}, {0, 3}}
+	v := NewTableView(tvCompare)
+	by := []SortOrder{{Column: "a"}, {Column: "b"}}
+	v.Sync(rows, by...)
+	if got := tvGot(v); !slices.Equal(got, []int{2, 1, 0}) {
+		t.Fatalf("by a then b: got %v, want [2 1 0]", got)
+	}
+	by[1].Descending = true
+	v.Sync(rows, by...)
+	if got := tvGot(v); !slices.Equal(got, []int{2, 0, 1}) {
+		t.Fatalf("by a then b descending: got %v, want [2 0 1]", got)
 	}
 }
 

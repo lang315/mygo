@@ -269,7 +269,13 @@ ui.Table(c, &app.list, cols, app.view.Len(), func(r, col int) {
 ```
 
 A click on a header changes the sort, and `Sync` sorts again in the same
-frame. Rows of equal value keep the slice's order.
+frame. Rows of equal value keep the slice's order. With `SortBy`, give
+`Sync` its columns, the first first; it sorts by those with a comparator:
+
+```go
+app.view.Sync(app.accounts, app.sortBy...)
+app.list.SortBy = &app.sortBy
+```
 
 `SetFilter` shows only the rows its function keeps. As functions cannot be
 compared, the next `Sync` goes through all rows, so call it when what the
