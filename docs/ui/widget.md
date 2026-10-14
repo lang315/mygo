@@ -123,6 +123,50 @@ Menus take their items, not a function building them, because `ui` builds
 menus while it draws, under the package's lock: set the items again when
 they change.
 
+## Table
+
+```go
+t := widget.Table(func(a *Account) uint { return a.ID },
+	widget.Column[Account]{Title: "UID", Text: func(a *Account) string { return a.UID },
+		Width: 150, Sortable: true, Filterable: true},
+	widget.Column[Account]{Title: "Friends", Text: friends,
+		Compare: func(a, b *Account) int { return cmp.Compare(a.Friends, b.Friends) },
+		Align: widget.End, Sortable: true},
+).CheckboxColumn().IndexColumn().BottomPanel()
+```
+
+`Table(key, columns...)` shows rows of any type, each told apart by its
+key, for as many as a million rows on `ui.TableView`. The table keeps a
+copy of the rows; to share rows between tables, make them pointers.
+A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
+(by `Text` otherwise), `Width`, `MinWidth`, `Align`, `Sortable`,
+`Filterable`, `Filter` (case-insensitive containment otherwise), `Color`
+and `Image`. The column functions and the key run under the package's
+lock: they read the row and call no widget method.
+
+- Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
+  of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
+  place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.
+- `CheckboxColumn()`: `Checked`, `SetChecked(ks, on)`, `IsChecked`,
+  `AutoCheck` (unchecks the selected rows when half or more are checked,
+  checks them otherwise). The header's box checks the rows a search
+  shows. `Selected` and `CountSelected` read the selection. `Checked` and
+  `Selected` list the rows shown, in the order shown; deleted rows are
+  neither.
+- `IndexColumn()`: each row's position as shown, from 1. A header click
+  sorts by its column; `ClearSort` shows the rows in the order added.
+- `BottomPanel()`: the counts of rows, selected and checked, and a search
+  over the `Filterable` columns. `PanelText` sets its words (English by
+  default), `SetSearchPlaceholder` its keyword's placeholder, and
+  `OnBeforeSearch(fn)` runs before a search from it. `Search(column,
+  keyword)` searches from code. The filter runs once per search.
+- `OnActivate(fn)` (double click, Enter), `OnKey(key, mods, fn)`,
+  `ContextMenu(items...)` (on rows only; read them with `Selected`),
+  `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it.
+  Cmd/Ctrl+C copies the selected rows, a line each, cells apart by tabs.
+
+A table shows in one window at a time.
+
 ## Clipboard, theme and screen
 
 `Clipboard.SetText(s)`, `Clipboard.SetImage(png)` and `Clipboard.Text()`
@@ -208,6 +252,7 @@ Input and display:
 - `Spin(min, max, step)`: a number; `Value`, `Int`, `SetValue`.
   `RangeSpin` is two, with text between and after.
 - `Progress()`: `SetFraction` (negative for unknown length), `SetText`.
+- `Table(key, columns...)`: rows in columns; see [Table](#table).
   `Spinner()`: `Start`, `Stop`.
 
 Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`
