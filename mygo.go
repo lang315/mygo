@@ -82,6 +82,12 @@ var (
 
 // backend returns the platform backend, creating it on first use.
 func backend() platform.Backend {
-	backendOnce.Do(func() { theBackend = newBackend() })
+	backendOnce.Do(func() {
+		if platform.TestBackend != nil {
+			theBackend = platform.TestBackend
+			return
+		}
+		theBackend = newBackend()
+	})
 	return theBackend
 }

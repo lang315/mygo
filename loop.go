@@ -85,6 +85,10 @@ func isMainThread() bool { return backend().IsMainThread() }
 // the application has quit.
 func RunOnMain(fn func()) { onMain(fn) }
 
+// IsMainThread reports whether the caller runs on the main (UI) thread,
+// for code that must not block it.
+func IsMainThread() bool { return isMainThread() }
+
 // postMain runs fn asynchronously on the main thread.
 func postMain(fn func()) bool { return loop.post(fn) }
 

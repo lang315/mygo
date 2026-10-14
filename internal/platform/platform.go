@@ -41,6 +41,10 @@ type TitleBar struct{ Height, Left, Right int }
 // Color is an 8-bit RGBA color.
 type Color struct{ R, G, B, A uint8 }
 
+// TestBackend, set before the first call into mygo, replaces the platform
+// backend. For tests only: ui/widget's tests install internal/fake with it.
+var TestBackend Backend
+
 // Backend is implemented by every native backend.
 type Backend interface {
 	// Name identifies the backend, for example "darwin/wkwebview".
