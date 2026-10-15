@@ -161,6 +161,33 @@ func TestNumberInput(t *testing.T) {
 	}
 }
 
+// Focus on a number input gives its text field the keyboard, which
+// Focused then reports, and Enter there is the input's Submitted.
+func TestNumberInputFocus(t *testing.T) {
+	v := 5.0
+	var focused bool
+	submitted := 0
+	tt := coreNewTester(func(c *context) {
+		in := coreNumberInput(c, &v, 0, 99, 1).AutoFocus()
+		focused = in.Focused()
+		if in.Submitted() {
+			submitted++
+		}
+	}, 400, 100)
+	if !focused {
+		t.Error("an autofocused number input is not focused")
+	}
+	tt.Key(Cmd, KeyA)
+	tt.Type("42")
+	if v != 42 {
+		t.Errorf("typed 42 into the autofocused number input: %v", v)
+	}
+	tt.Key(0, KeyEnter)
+	if submitted != 1 {
+		t.Errorf("Enter in the number input: submitted %d times, want 1", submitted)
+	}
+}
+
 func TestToast(t *testing.T) {
 	tt := coreNewTester(func(c *context) {
 		if coreButton(c, "Save").Clicked() {

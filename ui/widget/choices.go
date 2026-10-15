@@ -42,8 +42,7 @@ func (s *SpinWidget) build(c *ui.Context) ui.Element {
 		Post(s.onChange)
 	}
 	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(onChange(&s.value, s.onChange))
-	// Enter in the number's text field: it is inside e, which reports it.
-	if h := s.onEnter; h != nil && e.Shortcut(0, ui.KeyEnter) {
+	if h := s.onEnter; h != nil && e.Submitted() {
 		Post(h)
 	}
 	return e
