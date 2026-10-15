@@ -38,6 +38,7 @@ func (k *keeper) key(c *ui.Context, b *core) {
 		return
 	}
 	k.built[b.id] = true
+	b.builtIn = building
 	if _, ok := k.widgets[b.id]; !ok {
 		// Weak, so the app dropping the widget frees it and its state.
 		k.widgets[b.id] = weak.Make(b)
@@ -46,14 +47,16 @@ func (k *keeper) key(c *ui.Context, b *core) {
 }
 
 // end keeps alive the state of the widgets not built that the app still
-// holds, and forgets the others, whose state ui then frees.
+// holds, and forgets the others, whose state ui then frees: those dropped,
+// and those another view built since.
 func (k *keeper) end(c *ui.Context) {
 	for id, p := range k.widgets {
-		switch {
-		case k.built[id]:
-		case p.Value() == nil:
+		if k.built[id] {
+			continue
+		}
+		if b := p.Value(); b == nil || b.builtIn != building {
 			delete(k.widgets, id)
-		default:
+		} else {
 			c.KeepAlive(id)
 		}
 	}

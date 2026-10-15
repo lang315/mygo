@@ -32,6 +32,7 @@ type core struct {
 	disabled   bool
 	wantFocus  bool // Focus asked for the keyboard focus
 	focusIn    int  // the view that last built it focused, noView for none
+	builtIn    int  // the view that last built it
 	tooltip    string
 	st         style
 	onFocusOut func()

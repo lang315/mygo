@@ -742,10 +742,16 @@ func (rt *engine) keptAlive(s *state) bool {
 // (a select's, combobox's, date or color picker's) is open.
 type popupOpen struct{}
 
-// hideKept closes the popup of a state kept out of sight.
+// hideKept closes the popup of a state kept out of sight, and lets go of
+// the app's values it is bound to, which the next build binds again: they
+// could hold what keeps the state, as a widget whose fields they are.
 func (rt *engine) hideKept(s *state) {
 	if open, ok := s.locals[popupOpen{}].(*bool); ok {
 		*open = false
+	}
+	s.valueBinding = nil
+	if s.editor != nil {
+		s.editor.value = nil
 	}
 }
 

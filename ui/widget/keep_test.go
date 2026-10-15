@@ -169,3 +169,57 @@ func TestSetContentBackKeepsState(t *testing.T) {
 		t.Fatalf("row 25 at %v after swapping the content back, was %v", after, before)
 	}
 }
+
+// Inputs bind ui to values inside the widget: a dropped input still leaves
+// the keeper, so a kept state does not hold its widget.
+func TestDroppedInputsAreFreed(t *testing.T) {
+	box := VBox(0)
+	tt := tester(t, box)
+	ws := []Widget{Entry(), TextView(), Checkbox("c"), Toggle("t"), Switch(),
+		RadioGroup(false, Option{"a", "A"}, Option{"b", "B"})}
+	ids := make([]int, len(ws))
+	for i, w := range ws {
+		ids[i] = w.base().id
+		box.Add(w)
+	}
+	tt.Frame()
+	box.Clear()
+	ws = nil
+	for range 2 {
+		tt.Frame()
+		runtime.GC()
+	}
+	tt.Frame()
+	mu.Lock()
+	defer mu.Unlock()
+	for i, id := range ids {
+		if _, ok := lastKeeper.widgets[id]; ok {
+			t.Errorf("widget %d (id %d) still held after it was dropped", i, id)
+		}
+	}
+}
+
+// A widget moved to another window leaves the keeper of the first, which
+// would otherwise keep its old state there for as long as the app holds it.
+func TestWidgetMovedToAnotherWindowLeavesTheFirst(t *testing.T) {
+	e := Entry()
+	a := NewWindow("Move A", 300, 200).SetContent(e)
+	b := NewWindow("Move B", 300, 200).SetContent(Label("b"))
+	a.Show()
+	defer a.Close()
+	b.Show()
+	defer b.Close()
+	fa, fb := waitFake(t, "Move A"), waitFake(t, "Move B")
+	frame(fa)
+	frame(fb)
+	a.SetContent(Label("a"))
+	b.SetContent(e)
+	frame(fb)
+	frame(fa)
+	mu.Lock()
+	_, held := a.keep.widgets[e.id]
+	mu.Unlock()
+	if held {
+		t.Fatal("the first window still keeps the entry moved to another")
+	}
+}
