@@ -400,3 +400,27 @@ func TestListShiftExtendsFromTheRowTheKeysMovedTo(t *testing.T) {
 		t.Errorf("Shift-click on r1 after Down from r2 to r4 chose %v, want [101 102 103 104]", got)
 	}
 }
+
+func TestSelectionCopyFrom(t *testing.T) {
+	var a, b Selection[int]
+	a.Add(1)
+	a.Add(2)
+	b.Add(9)
+	gen := b.generation()
+	b.CopyFrom(&a)
+	if b.Len() != 2 || !b.Has(1) || !b.Has(2) || b.Has(9) {
+		t.Fatalf("copy holds %v", slices.Collect(b.All()))
+	}
+	if b.generation() == gen {
+		t.Error("the copy kept its generation")
+	}
+	a.Add(3) // the copy has its own keys
+	if b.Has(3) {
+		t.Error("the copy shares the keys of its source")
+	}
+	var empty Selection[int]
+	b.CopyFrom(&empty)
+	if b.Len() != 0 {
+		t.Errorf("copy of an empty selection holds %d keys", b.Len())
+	}
+}

@@ -61,6 +61,24 @@ again as much under a filter, as the view keeps the order of all rows too);
 sorting all of them again takes a dozen milliseconds, below one frame at
 60 Hz.
 
+### Checking rows of a million
+
+`BenchmarkTableCheckedLarge` (in `ui/widget`) checks or unchecks one row of
+a widget `Table` of 1,000,000 rows, all checked: by a click on its checkbox,
+and by `SetChecked`, then a frame. A click copies the checks ui changed
+back to the table in one step (`Selection.CopyFrom`); `SetChecked` hands ui
+only the keys it changed; and the header's checkbox takes the count the
+table keeps (`ListState.CheckedCount`) rather than counting a million rows.
+Medians of six 300 ms samples, `CGO_ENABLED=0 GOMAXPROCS=1`, Apple M1 Pro,
+Go 1.27.2:
+
+| Operation, 1,000,000 rows checked | Before | After | Allocations before, after |
+|---|---:|---:|---:|
+| A click on a row's checkbox | 143.5 ms | 5.3 ms | 1,000,800, 5,150 |
+| `SetChecked` of one row, then a frame | 137.3 ms | 0.16 ms | 1,000,120, 332 |
+
+A click still copies the million keys once (about 38 MB, a map clone).
+
 ## Retained memory
 
 A warmed view containing 1,000 labels retained approximately **2.50 MB of

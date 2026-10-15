@@ -113,6 +113,11 @@ type ListState struct {
 	// app that changes which rows show and wants only those checked clears
 	// it then. CheckedChanged reports a change.
 	Checked Selector
+	// CheckedCount, when set, returns how many of the rows shown are
+	// checked, and how many can be, for the header's checkbox, which asks
+	// it when the checks, the row count or Version change: a table of many
+	// rows that knows them saves counting them row by row.
+	CheckedCount func() (checked, total int)
 	// RowMenu, when set, gives a Table's rows a context menu, which it
 	// fills with the items for rows: the rows chosen, in their order. A
 	// right click on a row not chosen chooses it first; in a table that

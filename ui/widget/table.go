@@ -44,6 +44,7 @@ type TableWidget[T any, K comparable] struct {
 	rows    []T
 	index   map[K]int // a key's row in rows
 	view    *ui.TableView[T]
+	filter  func(*T) bool // the view's, nil for none
 	// frame holds the rows of the frame ui shows, and order their order
 	// once kept, when a sync outside a build changed the view: ui may
 	// still lay that frame out, or apply input to it. Setters never move
@@ -300,7 +301,7 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 	s.Sort, _ = t.sort.bind()
 	s.Selection, s.Checked = t.chosen.bind(), nil
 	if t.checks {
-		s.Checked = t.checked.bind()
+		s.Checked, s.CheckedCount = t.checked.bind(), t.checkedCount
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.rows, false, false

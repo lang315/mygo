@@ -7,15 +7,28 @@ import "github.com/egoist/mygo/ui"
 // commit copies when ui reports a change.
 type keys[K comparable] struct {
 	value, shown ui.Selection[K]
-	dirty        bool // a setter changed value since the last build
+	// changed holds the keys setters changed in value since the last
+	// build, which shown then takes alone; nil with dirty, shown takes
+	// all of value.
+	changed []K
+	dirty   bool
 }
 
 // bind returns the set to hand ui. Under mu, while building.
 func (s *keys[K]) bind() *ui.Selection[K] {
-	if s.dirty {
-		copyKeys(&s.shown, &s.value)
-		s.dirty = false
+	switch {
+	case s.dirty:
+		s.shown.CopyFrom(&s.value)
+	default:
+		for _, k := range s.changed {
+			if s.value.Has(k) {
+				s.shown.Add(k)
+			} else {
+				s.shown.Remove(k)
+			}
+		}
 	}
+	s.changed, s.dirty = s.changed[:0], false
 	return &s.shown
 }
 
@@ -26,7 +39,13 @@ func (s *keys[K]) set(k K, on bool) {
 	} else {
 		s.value.Remove(k)
 	}
-	s.dirty = true
+	if !s.dirty {
+		// Past an eighth of value, copying all of it costs less: a key
+		// added costs about what cloning eight does.
+		if s.changed = append(s.changed, k); len(s.changed)*8 > s.value.Len() {
+			s.dirty = true
+		}
+	}
 }
 
 // keep drops the keys of rows gone from index. Under mu.
@@ -39,13 +58,6 @@ func (s *keys[K]) keep(index map[K]int) {
 	}
 	for _, k := range gone {
 		s.set(k, false)
-	}
-}
-
-func copyKeys[K comparable](dst, src *ui.Selection[K]) {
-	dst.Clear()
-	for k := range src.All() {
-		dst.Add(k)
 	}
 }
 
@@ -135,14 +147,30 @@ func (t *TableWidget[T, K]) AutoCheck() *TableWidget[T, K] {
 	return t
 }
 
+// checkedCount is ui's ListState.CheckedCount: how many of the rows shown
+// are checked, of how many. Under mu, while building, after bind: the
+// checks hold keys of rows only, so without a search, all of them show.
+func (t *TableWidget[T, K]) checkedCount() (count, total int) {
+	ks := &t.checked.shown
+	if t.filter == nil {
+		return ks.Len(), t.view.Len()
+	}
+	for k := range ks.All() {
+		if i, ok := t.index[k]; ok && t.filter(&t.rows[i]) {
+			count++
+		}
+	}
+	return count, t.view.Len()
+}
+
 // commit takes what the user changed in s, but no key of a row gone: a
 // goroutine may delete rows between a frame and ui applying input to it.
 // On the main thread, without mu.
 func (t *TableWidget[T, K]) commit(s *keys[K]) {
 	mu.Lock()
 	defer mu.Unlock()
-	copyKeys(&s.value, &s.shown)
-	s.dirty = false
+	s.value.CopyFrom(&s.shown)
+	s.changed, s.dirty = s.changed[:0], false
 	if t.gone {
 		s.keep(t.index)
 	}
