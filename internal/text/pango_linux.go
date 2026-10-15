@@ -369,10 +369,13 @@ type pangoEngine struct {
 }
 
 // setFontRendering takes the desktop's settings (platform.FontRendering)
-// for the fonts made from now on.
+// for the fonts made from now on. Those it does not know ("") keep the
+// defaults newPango starts with, not fontconfig's: a glyph drawn for
+// grayscale where fontconfig asks for subpixel antialiasing comes out
+// colored, and its text loses its color.
 func (e *pangoEngine) setFontRendering(antialias, hinting, subpixels string) {
-	e.antialias = map[string]int32{"none": cairoAntialiasNone, "gray": cairoAntialiasGray, "subpixel": cairoAntialiasSubpixel}[antialias]
-	e.hintStyle = map[string]int32{"none": cairoHintStyleNone, "slight": cairoHintStyleSlight, "medium": cairoHintStyleMedium, "full": cairoHintStyleFull}[hinting]
+	e.antialias = map[string]int32{"": cairoAntialiasGray, "none": cairoAntialiasNone, "gray": cairoAntialiasGray, "subpixel": cairoAntialiasSubpixel}[antialias]
+	e.hintStyle = map[string]int32{"": cairoHintStyleMedium, "none": cairoHintStyleNone, "slight": cairoHintStyleSlight, "medium": cairoHintStyleMedium, "full": cairoHintStyleFull}[hinting]
 	e.subpixels = map[string]int32{"rgb": 1, "bgr": 2, "vrgb": 3, "vbgr": 4}[subpixels]
 	e.applyOptions()
 	for _, sf := range e.scaled {

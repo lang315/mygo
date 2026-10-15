@@ -51,3 +51,22 @@ func TestPangoLayoutAtMeasuredWidthWithLetterSpacing(t *testing.T) {
 		}
 	}
 }
+
+// Settings the desktop leaves unknown ("") keep the engine's defaults,
+// grayscale antialiasing and medium hinting, rather than fontconfig's:
+// where fontconfig asks for subpixel antialiasing, a glyph drawn for
+// grayscale comes out colored, and text loses its color.
+func TestPangoUnknownRenderingKeepsDefaults(t *testing.T) {
+	e, err := newPango()
+	if err != nil {
+		t.Skip(err)
+	}
+	e.setFontRendering("subpixel", "full", "rgb")
+	if e.antialias != cairoAntialiasSubpixel || e.hintStyle != cairoHintStyleFull || e.subpixels != 1 {
+		t.Fatalf("subpixel, full, rgb: antialias %d, hint style %d, subpixels %d", e.antialias, e.hintStyle, e.subpixels)
+	}
+	e.setFontRendering("", "", "")
+	if e.antialias != cairoAntialiasGray || e.hintStyle != cairoHintStyleMedium {
+		t.Fatalf("unknown: antialias %d, hint style %d", e.antialias, e.hintStyle)
+	}
+}
