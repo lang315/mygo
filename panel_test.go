@@ -2,7 +2,11 @@
 
 package mygo
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/internal/fake"
+)
 
 // TestPanelOptions gives a panel's backend a window above others, out of
 // the taskbar, that cannot minimize, maximize or go full screen.
@@ -44,5 +48,36 @@ func TestPanelEscape(t *testing.T) {
 	escape()
 	if !w.IsDestroyed() {
 		t.Error("Escape did not close the panel")
+	}
+}
+
+// TestCloseOnEscape closes a window made with CloseOnEscape on an Escape
+// its page leaves, as the user closing it, and no other window.
+func TestCloseOnEscape(t *testing.T) {
+	w, fw := testWindow(t, WindowOptions{CloseOnEscape: true})
+	other, ow := testWindow(t, WindowOptions{})
+	keep, closes := true, 0
+	w.OnClose(func(e *CloseEvent) {
+		closes++
+		if keep {
+			e.PreventDefault()
+		}
+	})
+	escape := func(fw *fake.Window) {
+		page(fw, `{"t":"escape"}`)
+		onMain(func() {}) // the close posted after the message
+	}
+	escape(fw)
+	if closes != 1 || w.IsDestroyed() {
+		t.Fatalf("OnClose heard %d closes, destroyed %v", closes, w.IsDestroyed())
+	}
+	keep = false
+	escape(fw)
+	if !w.IsDestroyed() {
+		t.Error("Escape did not close the window")
+	}
+	escape(ow)
+	if other.IsDestroyed() {
+		t.Error("Escape closed a window without CloseOnEscape")
 	}
 }

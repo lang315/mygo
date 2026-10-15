@@ -317,6 +317,11 @@ func (c *context) SetTheme(t *Theme) {
 	c.root.ts.color, c.root.ts.size, c.root.ts.family = t.Text, t.FontSize, t.Font
 }
 
+// RowSelected reports whether the row of a List or a Table being built is
+// chosen. A cell giving its text a color of its own can leave it out
+// there, where the selection's color reads on the accent.
+func (c *context) RowSelected() bool { return c.row != nil && c.row.chosen }
+
 // Size returns the size of the window's content in DIPs.
 func (c *context) Size() (width, height float32) { return c.w, c.h }
 

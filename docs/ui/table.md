@@ -37,6 +37,17 @@ Chosen and hovered rows are square from edge to edge, as in Finder's list
 view; `RoundRows` rounds their corners at the theme's `Radius`, as a list's
 rows are, for an app whose other lists are rounded.
 
+A chosen row's text takes the theme's `AccentText`, which reads on the
+accent; a cell coloring its own text leaves the color out where
+`c.RowSelected()` reports its row chosen:
+
+```go
+e := ui.Text(c, f.Status)
+if !c.RowSelected() {
+	e.TextColor(statusColor(f))
+}
+```
+
 ## Arranging columns
 
 The user arranges the columns, as in Finder:
