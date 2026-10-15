@@ -1027,6 +1027,16 @@ func attachTo(c, e *node, pw, ph float32) {
 	at, self = at.physical(c.rtl()), self.physical(c.rtl())
 	ax, ay := at.fractions()
 	sx, sy := self.fractions()
+	if c.flags&flagScrollY != 0 && (ay == 1 && sy == 0 || ay == 0 && sy == 1) {
+		// What scrolls shrinks to the room on the roomier side of target.
+		off := c.m(0) - c.m(2)
+		if ay == 0 {
+			off = -off
+		}
+		below := c.c.h - windowMargin - (t.Y + t.H) - off
+		above := t.Y - windowMargin - off
+		h = max(0, min(h, max(below, above)))
+	}
 	x := alongTarget(t.X, t.W, ax, sx, w, c.m(3)-c.m(1), c.c.w)
 	y := alongTarget(t.Y, t.H, ay, sy, h, c.m(0)-c.m(2), c.c.h)
 	dx, dy := c.relative(pw, ph)

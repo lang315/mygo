@@ -363,6 +363,9 @@ func (s *selectParts[T]) Popup(fn func(panel *node)) *node {
 	b := s.Trigger
 	return popover(s.c, b, s.open, true, func(panel *node) {
 		scrollOptions(s.c, panel.MinWidth(b.Bounds().W))
+		// Pressing what is not an option, a header, keeps the keyboard on
+		// the trigger.
+		panel.flags |= flagKeepFocus
 		s.next = s.next[:0]
 		fn(panel)
 		*s.values = append((*s.values)[:0], s.next...)

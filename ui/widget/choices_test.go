@@ -209,3 +209,23 @@ func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
 	default:
 	}
 }
+
+// A click on a section header chooses nothing and keeps the keyboard on the
+// combo: the arrows still move among its options.
+func TestComboHeaderClickKeepsArrows(t *testing.T) {
+	c := Combo().AddSection("Fruit", nil, Option{"a", "Apple"}, Option{"b", "Banana"}, Option{"c", "Cherry"}).
+		SetValue("a")
+	tt := tester(t, c)
+	click(t, tt, "Apple")
+	click(t, tt, "Fruit")
+	if !tt.HasText("Banana") {
+		t.Fatalf("the header click closed the popup: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyDown) // from Apple, the highlight
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if v := c.Value(); v != "c" {
+		t.Fatalf("Down, Down, Enter after a header click chose %q, want c", v)
+	}
+}

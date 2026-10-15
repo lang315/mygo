@@ -449,3 +449,40 @@ func TestSelectLongPopupScrolls(t *testing.T) {
 		t.Fatalf("End, Enter chose %q", sel)
 	}
 }
+
+// In a window too short for it, a long select's popup shrinks to the room
+// on the roomier side of its trigger, whole inside the window, and scrolls.
+func TestSelectPopupFitsBesideItsTrigger(t *testing.T) {
+	var opts []string
+	for i := range 100 {
+		opts = append(opts, fmt.Sprintf("opt%03d", i))
+	}
+	sel := "opt050"
+	for _, top := range []float32{20, 85, 140} {
+		tt := NewTester(func(c *Context) {
+			Column(c).Padding(top, 0, 0, 20).Children(func() { Select(c, &sel, opts) })
+		}, 400, 200)
+		trig := at(t, tt, "opt050")
+		if err := tt.Click("opt050"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		var panel *state
+		for _, s := range tt.rt.states {
+			if s.flags&flagScrollY != 0 {
+				panel = s
+			}
+		}
+		if panel == nil {
+			t.Fatalf("top %v: no popup", top)
+		}
+		y0, y1 := panel.cy, panel.cy+panel.ch
+		if y0 < 0 || y1 > 200 {
+			t.Errorf("top %v: the popup's content spans y %v..%v, out of the 200-tall window", top, y0, y1)
+		}
+		if y0 < trig.Y+trig.H && y1 > trig.Y {
+			t.Errorf("top %v: the popup (y %v..%v) covers its trigger %+v", top, y0, y1, trig)
+		}
+		tt.rt.close()
+	}
+}
