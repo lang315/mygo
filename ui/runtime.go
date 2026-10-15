@@ -366,7 +366,7 @@ type keyEvent struct {
 }
 
 func newRuntime(view func(*context), h host) *engine {
-	rt := &engine{view: view, host: h, text: textSystem(), states: map[uint64]*state{}, windowFocused: true}
+	rt := &engine{view: view, host: h, text: textSystem(), states: map[uint64]*state{}, kept: map[uint64]bool{}, windowFocused: true}
 	rt.c.rt = rt
 	rt.owner = weak.Make(rt)
 	rt.arena = &elementOwner{rt: rt}
@@ -681,14 +681,14 @@ func (rt *engine) prune() {
 			if rt.pressed == s {
 				rt.pressed, unpressed = nil, true
 			}
+			if rt.scrollDrag.st == s {
+				rt.scrollDrag.st = nil
+			}
 			if !rt.keptAlive(s) {
 				if s.textAdapter != nil {
 					s.textAdapter.release()
 				}
 				delete(rt.states, id)
-				if rt.scrollDrag.st == s {
-					rt.scrollDrag.st = nil
-				}
 				// Recycle the state itself, without keeping the editor,
 				// local resources or callbacks of the element that went.
 				*s = state{}
@@ -742,14 +742,10 @@ func (rt *engine) keptAlive(s *state) bool {
 // (a select's, combobox's, date or color picker's) is open.
 type popupOpen struct{}
 
-// hideKept closes what a state kept out of sight showed: its popup and a
-// drag of its scroll bar.
+// hideKept closes the popup of a state kept out of sight.
 func (rt *engine) hideKept(s *state) {
 	if open, ok := s.locals[popupOpen{}].(*bool); ok {
 		*open = false
-	}
-	if rt.scrollDrag.st == s {
-		rt.scrollDrag.st = nil
 	}
 }
 

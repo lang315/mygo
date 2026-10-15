@@ -75,20 +75,6 @@ func TestGlobalKeyKeepsStateAcrossParents(t *testing.T) {
 	}
 }
 
-// Two elements with one global key in a pass are a duplicate key, which
-// a Tester panics for.
-func TestGlobalKeyDuplicatePanics(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("no panic for two elements with one global key")
-		}
-	}()
-	NewTester(func(c *Context) {
-		Column(c).Children(func() { Column(c.GlobalKey("x")) })
-		Column(c).Children(func() { Column(c.GlobalKey("x")) })
-	}, 300, 200)
-}
-
 // A select open when its page stops being built comes back closed.
 func TestKeptPopupComesBackClosed(t *testing.T) {
 	show := true

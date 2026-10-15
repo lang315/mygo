@@ -48,7 +48,7 @@ func (c *Context) Invalidate() {
 // A compound widget consumes the key for its outermost element.
 func (c *Context) Key(key any) *Context {
 	if raw := c.build(); raw != nil {
-		raw.nextKey, raw.keySet, raw.keyGlobal = key, true, false
+		raw.nextKey, raw.keySet = key, true
 	}
 	return c
 }
@@ -59,7 +59,7 @@ func (c *Context) Key(key any) *Context {
 // duplicate key, as with Key. See KeepAlive.
 func (c *Context) GlobalKey(key any) *Context {
 	if raw := c.build(); raw != nil {
-		raw.nextKey, raw.keySet, raw.keyGlobal = key, true, true
+		raw.nextKey, raw.keySet = globalKey{key}, true
 	}
 	return c
 }
@@ -70,15 +70,9 @@ func (c *Context) GlobalKey(key any) *Context {
 // popup of a select, combobox, date or color picker inside comes back
 // closed.
 func (c *Context) KeepAlive(key any) {
-	raw := c.build()
-	if raw == nil {
-		return
+	if raw := c.build(); raw != nil {
+		raw.rt.kept[globalID(key)] = true
 	}
-	rt := raw.rt
-	if rt.kept == nil {
-		rt.kept = map[uint64]bool{}
-	}
-	rt.kept[globalID(key)] = true
 }
 
 // elementOwner is detached on close, so saved handles retain only this small
