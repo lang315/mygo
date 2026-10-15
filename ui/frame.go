@@ -53,6 +53,33 @@ func (c *Context) Key(key any) *Context {
 	return c
 }
 
+// GlobalKey is Key with an identity independent of the parent: the next
+// element keeps its state, and its children theirs, wherever it is built
+// in the window. Two elements with one global key in a frame are a
+// duplicate key, as with Key. See KeepAlive.
+func (c *Context) GlobalKey(key any) *Context {
+	if raw := c.build(); raw != nil {
+		raw.nextKey, raw.keySet, raw.keyGlobal = key, true, true
+	}
+	return c
+}
+
+// KeepAlive keeps the state of the element keyed GlobalKey(key), and of
+// the elements inside it, through a frame that does not build it, as a
+// Router keeps the pages of its history. Call it in each such frame. A
+// popup the element showed comes back closed.
+func (c *Context) KeepAlive(key any) {
+	raw := c.build()
+	if raw == nil {
+		return
+	}
+	rt := raw.rt
+	if rt.kept == nil {
+		rt.kept = map[uint64]bool{}
+	}
+	rt.kept[globalID(key)] = true
+}
+
 // elementOwner is detached on close, so saved handles retain only this small
 // record. Retire it before a 32-bit generation wraps to prevent old aliases.
 type elementOwner struct {

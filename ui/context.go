@@ -31,6 +31,8 @@ type context struct {
 	overlay  *node
 	nextKey  any
 	keySet   bool
+	// keyGlobal makes the key of the next element global (GlobalKey).
+	keyGlobal bool
 	// tree is the Tree being built, for its items.
 	tree *treeBuild
 	// buttons is how the buttons being built look, in a toolbar or a
@@ -102,7 +104,7 @@ func (c *context) reset(now time.Time, w, h float32) {
 		c.rt.arena = &elementOwner{rt: c.rt}
 	}
 	c.rt.arena.generation = uint32(c.rt.epoch)
-	c.keySet, c.nextKey = false, nil
+	c.keySet, c.nextKey, c.keyGlobal = false, nil, false
 	clear(c.rt.parts)
 	c.rt.parts = c.rt.parts[:0]
 	clear(c.rt.afterInputs)
@@ -231,9 +233,15 @@ func (c *context) newElement(k kind) *node {
 	e.dir = p.dir &^ dirSet
 	keyed := c.keySet
 	if c.keySet {
-		e.id = keyedID(p.id, c.nextKey)
+		parent := p.id
+		if c.keyGlobal {
+			// The same id under any parent, a page its children follow.
+			parent = globalRoot
+			e.flags |= flagPage
+		}
+		e.id = keyedID(parent, c.nextKey)
 		e.key = c.nextKey
-		c.keySet, c.nextKey = false, nil
+		c.keySet, c.nextKey, c.keyGlobal = false, nil, false
 		if c.rt.insp.open {
 			c.rt.insp.noteKey(e.id, e.key)
 		}
@@ -293,6 +301,12 @@ func keyedID(parent uint64, k any) uint64 {
 	}
 	return mix(parent, h^0xA5A5A5A5A5A5A5A5)
 }
+
+// globalRoot stands for the parent of elements keyed globally (GlobalKey).
+const globalRoot uint64 = 0x676c6f62616c6b79
+
+// globalID returns the ID of the element keyed globally by k.
+func globalID(k any) uint64 { return keyedID(globalRoot, k) }
 
 // mix combines two hashes (the finalizer of splitmix64).
 func mix(a, b uint64) uint64 {
