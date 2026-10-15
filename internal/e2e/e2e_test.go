@@ -2497,8 +2497,9 @@ func TestContentWindowTextSelection(t *testing.T) {
 		}
 		eventually(t, "a frame after the drag", func() bool { return frames.Load() > before })
 		mygo.Clipboard.WriteText("before copy")
-		// The frame may show the press alone: XTEST's motion and release
-		// reach a Linux window later, so copy until the drag is all in.
+		// The frame shows the press, which cleared the last selection, but
+		// on Linux maybe not yet the motion and release: copy until the
+		// drag is all in.
 		eventually(t, "both paragraphs copied", func() bool {
 			if err := activateMenu(w, "Edit", "Copy"); err != nil {
 				t.Fatal(err)
