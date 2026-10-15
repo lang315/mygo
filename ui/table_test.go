@@ -1158,3 +1158,25 @@ func TestTableHeaderMenu(t *testing.T) {
 		t.Errorf("chose the item for column %d", chosen)
 	}
 }
+
+// TestTableRowSelected tells a cell whether its row is chosen, so it can
+// leave the selection's text color alone, and nothing outside a row.
+func TestTableRowSelected(t *testing.T) {
+	names := []string{"a.txt", "b.txt", "c.txt"}
+	sel := -1
+	s := ListState{Selected: &sel}
+	seen := map[int]bool{}
+	outside := true
+	tt := coreNewTester(func(c *context) {
+		outside = c.RowSelected()
+		coreTable(c, &s, []TableColumn{{Title: "Name"}}, len(names), func(row, col int) {
+			seen[row] = c.RowSelected()
+			coreText(c, names[row])
+		}).Grow(1)
+	}, 400, 300)
+	tt.Click("b.txt")
+	tt.Frame()
+	if outside || seen[0] || !seen[1] || seen[2] {
+		t.Fatalf("RowSelected: outside %v, rows %v", outside, seen)
+	}
+}

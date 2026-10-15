@@ -193,8 +193,9 @@ func (_handle ComboboxParts) Open() bool {
 }
 
 // Popup shows the popup below the input, at least as wide, while it is
-// open: fn styles the panel and builds the options with Item. It returns
-// the panel, or nil while closed or without options.
+// open: fn styles the panel and builds the options with Item. Of many
+// options, it shows the first that fit and scrolls (scrollOptions). It
+// returns the panel, or nil while closed or without options.
 func (_handle ComboboxParts) Popup(fn func(panel Element)) Element {
 	_parts := _handle.resolve()
 	if _parts == nil {
@@ -432,6 +433,17 @@ func (_handle *Context) Router() *Router {
 		return nil
 	}
 	return _ctx.Router()
+}
+
+// RowSelected reports whether the row of a List or a Table being built is
+// chosen. A cell giving its text a color of its own can leave it out
+// there, where the selection's color reads on the accent.
+func (_handle *Context) RowSelected() bool {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return false
+	}
+	return _ctx.RowSelected()
 }
 
 // SetTheme makes the frame use t, for the window's root and the widgets
@@ -5428,8 +5440,9 @@ func (_handle SelectParts[T]) Open() bool {
 
 // Popup shows the popup below the trigger, at least as wide, while it is
 // open: fn styles the panel and builds the options in it with Item.
-// Clicking outside it or pressing Escape closes it. It returns the panel,
-// or nil when the popup is closed.
+// Clicking outside it or pressing Escape closes it. Of many options, it
+// shows the first that fit and scrolls (scrollOptions). It returns the
+// panel, or nil when the popup is closed.
 func (_handle SelectParts[T]) Popup(fn func(panel Element)) Element {
 	_parts := _handle.resolve()
 	if _parts == nil {

@@ -169,6 +169,8 @@ func (w *Window) Show() {
 		Title: w.title, Width: w.width, Height: w.height,
 		Maximized: w.maximized,
 		Content:   ui.View(w.view),
+		// A dialog asks to close on Escape, as its close button does.
+		CloseOnEscape: w.dialog,
 	}
 	if w.header != nil {
 		opts.TitleBarStyle = mygo.TitleBarHidden
@@ -282,11 +284,6 @@ func (w *Window) view(c *ui.Context) {
 			render(c, w.root).Grow(1)
 		}
 	})
-	// After the content, so an open drop-down takes Escape first: on a
-	// dialog it asks to close, as the close button does.
-	if w.dialog && c.Shortcut(0, ui.KeyEscape) {
-		Post(func() { w.do((*mygo.Window).Close) })
-	}
 }
 
 // HeaderBarWidget is a title bar drawn with ui, holding widgets at its

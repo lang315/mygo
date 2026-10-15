@@ -331,7 +331,7 @@ func (t *TableWidget[T, K]) cell(c *ui.Context, row, col int) {
 	cl, r := &t.cols[col], t.rowAt(row)
 	// A selected row's text keeps the selection's color, which reads on
 	// the accent; a column's own may not.
-	colored := cl.Color != nil && !t.chosen.shown.Has(t.key(r))
+	colored := cl.Color != nil && !c.RowSelected()
 	if cl.Image == nil {
 		cellText(c, cl, r, colored)
 		return

@@ -59,6 +59,7 @@ on the screen. Sizes and positions are in device-independent pixels.
 | `SkipTaskbar` | leaves the window out of the taskbar (Linux, Windows) |
 | `AutoHideMenuBar` | shows the menu bar only while the keyboard is in it, from Alt or F10 (Linux, Windows), see [the menu bar](menus.md#the-menu-bar) |
 | `Parent`, `Modal` | a child window, modal to its parent; for one placed next to a part of it, see [flyouts](#flyouts) |
+| `CloseOnEscape` | closes the window on an Escape its content leaves, as a dialog, see [child and modal windows](#child-and-modal-windows) |
 | `Panel` | the window of a launcher or a quick entry, floating above all apps, see [panels](#panels) |
 | `Page` | the options of the window's [page](#pages): its preload script, trusted origins, web inspector, zoom and user agent |
 
@@ -197,6 +198,9 @@ prefs := mygo.NewWindow(mygo.WindowOptions{
 	Height: 400,
 })
 ```
+
+`CloseOnEscape` closes it on an Escape its content does not handle, as the
+user closing it: `OnClose` listeners may prevent it.
 
 ## Flyouts
 

@@ -1455,7 +1455,7 @@ as in Tauri:
 - Panels (`WindowOptions.Panel`), the windows of launchers: the core makes
   them always on top, out of the taskbar, unable to minimize, maximize or
   go full screen, and closes them on an Escape the content leaves, as
-  flyouts. macOS makes a `MyGoPanel`, an `NSPanel` with the nonactivating
+  flyouts, and as windows made with `WindowOptions.CloseOnEscape`. macOS makes a `MyGoPanel`, an `NSPanel` with the nonactivating
   style from `initWithContentRect:` on (the window server learns that a
   window never activates its app from the style it is created with; a
   style set later needs the private `_setPreventsActivation:`, as Electron

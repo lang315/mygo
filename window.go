@@ -142,6 +142,10 @@ type WindowOptions struct {
 	Parent *Window
 	// Modal makes a child window modal to its Parent.
 	Modal bool
+	// CloseOnEscape closes the window on an Escape its content does not
+	// handle, as the user closing it: OnClose listeners may prevent it.
+	// Dialogs close so.
+	CloseOnEscape bool
 
 	// Panel makes the window a panel, as the windows of launchers and
 	// quick entry (Spotlight, Raycast) are: it floats above the windows of
@@ -221,6 +225,8 @@ type Window struct {
 	flyoutSize platform.Size
 	// panel is WindowOptions.Panel.
 	panel bool
+	// closeOnEscape is WindowOptions.CloseOnEscape.
+	closeOnEscape bool
 	// host is the window a web view is in, for the page of a web view
 	// (webView); webViews are the pages of a window's web views, guarded
 	// by the lock of windows.
@@ -419,7 +425,7 @@ func newWindow(opts WindowOptions, bg *background, native uintptr, flyout *flyou
 	id := windows.nextID
 	windows.Unlock()
 
-	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, secret: randomText(), stateKey: opts.StateKey, background: bg, content: opts.Content, panel: opts.Panel && flyout == nil}
+	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, secret: randomText(), stateKey: opts.StateKey, background: bg, content: opts.Content, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape}
 	w.pg = &Page{w}
 	w.hiddenTitleBar = !opts.Frameless && (opts.TitleBarStyle == TitleBarHidden || opts.TitleBarStyle == TitleBarHiddenInset)
 	w.resetPage()
