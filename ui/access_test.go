@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -317,5 +318,60 @@ func TestInputMethodContext(t *testing.T) {
 	tt.send(platform.SurfaceEvent{Kind: platform.TextInput, Text: "B", Replace: true, From: len(d.name) - 1, To: len(d.name)})
 	if !strings.HasSuffix(d.name, "xaB") {
 		t.Errorf("replacing in a long text: ...%q", d.name[len(d.name)-5:])
+	}
+}
+
+// Edits that come from assistive technology or straight from the
+// platform's text input client, not as key or text events, still write
+// the bound value and report the change, once per edit.
+func TestAccessAndNativeEditsReportChange(t *testing.T) {
+	var (
+		name           = "Ada"
+		volume, amount = 30.0, 2.0
+		agree, on      bool
+		changes        = map[string]int{}
+	)
+	tt := NewTester(func(c *Context) {
+		Column(c).Children(func() {
+			TextInput(c, &name).AutoFocus().OnChange(func() { changes["name"]++ })
+			Slider(c, &volume, 0, 100).OnChange(func() { changes["volume"]++ })
+			NumberInput(c, &amount, 0, 10, 1).OnChange(func() { changes["amount"]++ })
+			Checkbox(c, &agree, "I agree").OnChange(func() { changes["agree"]++ })
+			Switch(c, &on).Label("Power").OnChange(func() { changes["on"]++ })
+		})
+	}, 400, 400)
+	defer tt.rt.close()
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	tree := tt.h.access
+	act := func(role platform.AccessRole, label string, action platform.AccessActionKind, text string) {
+		t.Helper()
+		tt.send(platform.SurfaceEvent{Kind: platform.AccessAction, ID: accessNode(t, tree, role, label).ID, Action: action, Text: text})
+	}
+
+	// The platform's client, as AppKit's insertText or a GTK commit.
+	tt.h.ime.Client.ReplaceText(nil, "!")
+	tt.Frame()
+	if name != "Ada!" || changes["name"] != 1 {
+		t.Fatalf("native insert: %q, %d changes", name, changes["name"])
+	}
+	act(platform.RoleTextField, "", platform.AccessSetValue, "Grace")
+	act(platform.RoleSlider, "", platform.AccessIncrement, "")
+	act(platform.RoleButton, "Increase", platform.AccessPress, "")
+	act(platform.RoleCheckBox, "I agree", platform.AccessPress, "")
+	act(platform.RoleSwitch, "Power", platform.AccessPress, "")
+	var fields []uint64 // the name's, then the amount's
+	for _, n := range tree.Nodes {
+		if n.Role == platform.RoleTextField {
+			fields = append(fields, n.ID)
+		}
+	}
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessAction, ID: fields[1], Action: platform.AccessSetValue, Text: "7"})
+	tt.Frame()
+	if name != "Grace" || volume <= 30 || amount != 7 || !agree || !on {
+		t.Errorf("values after the actions: %q %v %v %v %v", name, volume, amount, agree, on)
+	}
+	want := map[string]int{"name": 2, "volume": 1, "amount": 2, "agree": 1, "on": 1}
+	if !maps.Equal(changes, want) {
+		t.Errorf("changes %v, want %v", changes, want)
 	}
 }

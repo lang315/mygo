@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -47,4 +48,71 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	eventually(t, "the child to close", closed.Load)
 	appClick(parent, x, y)
 	eventually(t, "a click on the parent after the child closed", func() bool { return clicks.Load() == 2 })
+}
+
+// TestModalChildAndOtherWindows settles V7 of ui/widget's spec, the
+// platform behaviors it quoted from general knowledge: GTK3 modality
+// blocks every window of the app, while a macOS sheet and a Windows modal
+// window block their parent only; and a second sheet on the same parent
+// waits on macOS for the first to close.
+func TestModalChildAndOtherWindows(t *testing.T) {
+	var parentClicks, otherClicks, frames atomic.Int32
+	view := func(clicks *atomic.Int32) *ui.Content {
+		return ui.View(func(c *ui.Context) {
+			frames.Add(1)
+			ui.Column(c).Fill().OnClick(func() { clicks.Add(1) })
+		})
+	}
+	// Side by side, inside Xvfb's 640x480 screen.
+	parent := newWindow(t, mygo.WindowOptions{Title: "Modal parent", X: 10, Y: 40, Width: 300, Height: 260, Content: view(&parentClicks)})
+	other := newWindow(t, mygo.WindowOptions{Title: "Other window", X: 330, Y: 40, Width: 300, Height: 260, Content: view(&otherClicks)})
+	eventually(t, "both windows' first frames", func() bool { return frames.Load() >= 2 })
+	const x, y = 60, 200
+	if !appClick(other, x, y) {
+		t.Skip("no system clicks on this platform")
+	}
+	eventually(t, "a click on the other window", func() bool { return otherClicks.Load() == 1 })
+
+	modal := func(title string) (w *mygo.Window, drawn, closed *atomic.Bool) {
+		drawn, closed = new(atomic.Bool), new(atomic.Bool)
+		w = newWindow(t, mygo.WindowOptions{Title: title, Width: 200, Height: 100, Parent: parent, Modal: true,
+			Content: ui.View(func(c *ui.Context) { drawn.Store(true); ui.Text(c, title) })})
+		w.OnClosed(func() { closed.Store(true) })
+		return w, drawn, closed
+	}
+	first, _, firstClosed := modal("First modal")
+	time.Sleep(time.Second) // a sheet slides down
+	appClick(other, x, y)
+	blocked := !happens(500*time.Millisecond, func() bool { return otherClicks.Load() == 2 })
+	t.Logf("%s: the other window blocked while a modal child is open: %v", runtime.GOOS, blocked)
+	if want := runtime.GOOS == "linux"; blocked != want {
+		t.Errorf("other window blocked %v, want %v on %s", blocked, want, runtime.GOOS)
+	}
+
+	second, secondDrawn, secondClosed := modal("Second modal")
+	queued := !happens(time.Second, second.IsVisible)
+	t.Logf("%s: a second modal child of the same parent waits for the first: %v", runtime.GOOS, queued)
+	if want := runtime.GOOS == "darwin"; queued != want {
+		t.Errorf("second modal child queued %v, want %v on %s", queued, want, runtime.GOOS)
+	}
+	if !queued {
+		// Closing the first before the second drew broke the input
+		// method of a later test's window under Xvfb.
+		eventually(t, "the second child's first frame", secondDrawn.Load)
+	}
+	first.Close()
+	eventually(t, "the first child to close", firstClosed.Load)
+	eventually(t, "the second child to show", second.IsVisible)
+	second.Close()
+	eventually(t, "the second child to close", secondClosed.Load)
+}
+
+// happens reports whether cond holds within d, as soon as it does.
+func happens(d time.Duration, cond func() bool) bool {
+	for deadline := time.Now().Add(d); !cond(); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			return false
+		}
+	}
+	return true
 }

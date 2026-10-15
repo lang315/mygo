@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"fmt"
 	"image/color"
 	"slices"
 	"testing"
@@ -138,5 +139,73 @@ func TestComboEditsLeaveTheCallersOptions(t *testing.T) {
 	if opts[0].Text != "X" || sec[0] != (Option{"z", "Z"}) || sec[1] != (Option{"w", "W"}) ||
 		more[0].Text != "V" || more[1] != (Option{"u", "U"}) {
 		t.Fatalf("caller's options changed: %v %v %v", opts, sec, more)
+	}
+}
+
+// V6: a popup of 5 sections of 20 options stays inside the window and
+// scrolls: End brings the last option of the last section into view, and
+// the wheel scrolls back to the first section's header. (Choosing it is
+// ui's TestSelectLongPopupScrolls.)
+func TestComboLongSectionedPopupScrolls(t *testing.T) {
+	c := Combo()
+	for s := range 5 {
+		var opts []Option
+		for i := range 20 {
+			v := fmt.Sprintf("s%di%02d", s, i)
+			opts = append(opts, Option{v, v})
+		}
+		c.AddSection(fmt.Sprintf("Section %d", s), nil, opts...)
+	}
+	c.SetValue("s0i00")
+	tt := tester(t, c)
+	click(t, tt, "s0i00")
+	if !tt.HasText("Section 0") {
+		t.Fatalf("popup not open: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnd)
+	tt.Frame()
+	r := find(t, tt, "s4i19") // its part in view
+	if r.H <= 0 || r.Y+r.H > 600 {
+		t.Fatalf("End: the last option shows at %+v, not inside the 600-tall window", r)
+	}
+	tt.Scroll(r.X, r.Y, 0, -8000) // up, past the top
+	tt.Frame()
+	if h := find(t, tt, "Section 0"); h.H <= 0 {
+		t.Fatalf("the wheel did not scroll back to the first header: %+v", h)
+	}
+}
+
+// V4: popups close on Escape or an outside click without OnChange; no
+// widget binds such an open flag (a Combo's is inside ui.SelectBase), so
+// closing one leaves the value alone and reports nothing.
+func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
+	changed := make(chan string, 4)
+	var c *ComboWidget
+	Combo(Option{"a", "Alpha"}, Option{"b", "Beta"}).AssignTo(&c).SetValue("a").
+		OnChange(func() { changed <- c.Value() })
+	tt := tester(t, c)
+	for i, dismiss := range []func(){
+		func() { tt.Key(0, ui.KeyEscape) },
+		func() { tt.ClickAt(700, 500) }, // off the popup
+	} {
+		click(t, tt, "Alpha")
+		tt.Key(0, ui.KeyDown) // the highlight on Beta, not chosen
+		tt.Frame()
+		if !tt.HasText("Beta") {
+			t.Fatalf("popup not open: %q", tt.Texts())
+		}
+		dismiss()
+		tt.Frame()
+		if tt.HasText("Beta") || c.Value() != "a" {
+			t.Fatalf("after closing %d: texts %q, value %q", i, tt.Texts(), c.Value())
+		}
+	}
+	done := make(chan struct{})
+	Post(func() { close(done) }) // after any handler posted before it
+	wait(t, done)
+	select {
+	case v := <-changed:
+		t.Fatalf("OnChange ran with %q", v)
+	default:
 	}
 }

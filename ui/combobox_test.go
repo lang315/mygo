@@ -349,3 +349,32 @@ func TestSelectBaseScrollsToHighlight(t *testing.T) {
 		t.Errorf("End highlights Size 39 out of view, at %v; Size 01 showed at %v", r, top)
 	}
 }
+
+// A combobox base's popup of more options than fit stays inside the
+// window and scrolls, as a select's does, with no look of its own.
+func TestComboboxBaseLongPopupScrolls(t *testing.T) {
+	text := ""
+	tt := NewTester(func(c *Context) {
+		p := ComboboxBase(c.Key("combo"), &text)
+		p.Input.Label("Combo").Width(180)
+		p.Popup(func(panel Element) {
+			panel.Children(func() {
+				for i := range 100 {
+					value := fmt.Sprintf("opt%03d", i)
+					p.Item(value).Children(func() { Text(c, value) })
+				}
+			})
+		})
+	}, 300, 600)
+	if err := tt.Click("Combo"); err != nil {
+		t.Fatal(err)
+	}
+	first := at(t, tt, "opt000")
+	for range 30 { // down, past the end
+		tt.Scroll(first.X+2, first.Y+2, 0, 120)
+	}
+	tt.Frame()
+	if r := at(t, tt, "opt099"); r.H <= 0 || r.Y+r.H > 600 {
+		t.Fatalf("scrolled to the end, the last option shows at %+v, not inside the 600-tall window", r)
+	}
+}

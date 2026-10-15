@@ -1,6 +1,10 @@
 package widget
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/ui"
+)
 
 func TestFrameShowsTitleAndChild(t *testing.T) {
 	tt := tester(t, Frame("Settings").Add(Label("inside")))
@@ -141,4 +145,47 @@ func TestGridAttachOnATakenCellReplacesIt(t *testing.T) {
 	if n != 1 || tt.HasText("old") || !tt.HasText("new") {
 		t.Fatalf("%d cells, texts %q", n, tt.Texts())
 	}
+}
+
+// V3: the focus on a notebook's tabs and on a menu button follows each
+// widget when its box reorders and gains a sibling before it.
+func TestTabsAndMenuButtonFocusFollowTheWidget(t *testing.T) {
+	nb := Notebook().AddPage("One", Label("page one")).AddPage("Two", Label("page two"))
+	mb := MenuButton("Actions").SetMenu(MenuItem{Text: "Rename"})
+	box := VBox(0).Add(nb, mb)
+	tt := tester(t, box)
+	// Each moves both widgets to a place they have not been.
+	reorder := func(ws ...Widget) {
+		box.Clear().Add(ws...)
+		tt.Frame()
+	}
+
+	focus(tt, 1) // the tabs
+	if !tt.Focused("One") {
+		t.Fatal("Tab did not focus the tabs")
+	}
+	reorder(Label("new"), nb, mb)
+	if !tt.Focused("One") {
+		t.Fatal("the tabs lost the focus")
+	}
+	tt.Key(0, ui.KeyRight)
+	tt.Frame()
+	if nb.Page() != 1 {
+		t.Fatalf("Right on the tabs after the reorder: page %d", nb.Page())
+	}
+
+	focus(tt, 1) // the menu button
+	if !tt.Focused("Actions") {
+		t.Fatal("Tab did not focus the menu button")
+	}
+	reorder(mb, Label("new"), Label("newer"), nb)
+	if !tt.Focused("Actions") {
+		t.Fatal("the menu button lost the focus")
+	}
+	tt.Key(0, ui.KeySpace)
+	tt.Frame()
+	if got := tt.Menu(); len(got) != 1 || got[0] != "Rename" {
+		t.Fatalf("Space on the menu button after the reorder: menu %q", got)
+	}
+	tt.CloseMenu()
 }
