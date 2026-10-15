@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/update"
 )
 
 // nativeLibraries is the format of mygo-plugin.json.
@@ -152,7 +153,7 @@ func download(f nativeFile, path string) error {
 	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
+	if err := update.Rename(tmp.Name(), path); err != nil {
 		// Another process downloaded it meanwhile, and may have it loaded,
 		// which Windows won't replace.
 		if sum, serr := fileSHA256(path); serr == nil && sum == f.SHA256 {

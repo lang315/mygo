@@ -7,6 +7,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/egoist/mygo/internal/update"
 )
 
 var procReplaceFileW = kernel32.NewProc("ReplaceFileW")
@@ -28,7 +30,7 @@ const (
 // cloud client) gets a moment to let go.
 func (*Backend) ReplaceFile(target, replacement string) error {
 	if _, err := os.Lstat(target); os.IsNotExist(err) {
-		return os.Rename(replacement, target)
+		return update.Rename(replacement, target)
 	}
 	t, err := syscall.UTF16PtrFromString(target)
 	if err != nil {
