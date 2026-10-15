@@ -14,8 +14,10 @@ import (
 func TestContentWindowTextBufferInputMethod(t *testing.T) {
 	var frames atomic.Int32
 	doc := ui.NewTextBuffer("first\ncafe")
+	// No AutoFocus: the caret then waits for the click, which on Linux may
+	// arrive late, and would end the composition if it came during it.
 	w := newWindow(t, mygo.WindowOptions{Title: "Indexed input", Width: 400, Height: 200, Content: ui.View(func(c *ui.Context) {
-		ui.Column(c).Fill().Padding(20).Children(func() { ui.TextAreaBuffer(c, doc).Height(120).AutoFocus() })
+		ui.Column(c).Fill().Padding(20).Children(func() { ui.TextAreaBuffer(c, doc).Height(120) })
 		frames.Add(1)
 	})})
 	eventually(t, "a buffer frame", func() bool { return frames.Load() > 0 })
