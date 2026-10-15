@@ -73,14 +73,14 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 	}
 	eventually(t, "a click on the other window", func() bool { return otherClicks.Load() == 1 })
 
-	modal := func(title string) (*mygo.Window, *atomic.Bool) {
-		var closed atomic.Bool
-		w := newWindow(t, mygo.WindowOptions{Title: title, Width: 200, Height: 100, Parent: parent, Modal: true,
-			Content: ui.View(func(c *ui.Context) { ui.Text(c, title) })})
+	modal := func(title string) (w *mygo.Window, drawn, closed *atomic.Bool) {
+		drawn, closed = new(atomic.Bool), new(atomic.Bool)
+		w = newWindow(t, mygo.WindowOptions{Title: title, Width: 200, Height: 100, Parent: parent, Modal: true,
+			Content: ui.View(func(c *ui.Context) { drawn.Store(true); ui.Text(c, title) })})
 		w.OnClosed(func() { closed.Store(true) })
-		return w, &closed
+		return w, drawn, closed
 	}
-	first, firstClosed := modal("First modal")
+	first, _, firstClosed := modal("First modal")
 	time.Sleep(time.Second) // a sheet slides down
 	appClick(other, x, y)
 	blocked := !happens(500*time.Millisecond, func() bool { return otherClicks.Load() == 2 })
@@ -89,11 +89,16 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 		t.Errorf("other window blocked %v, want %v on %s", blocked, want, runtime.GOOS)
 	}
 
-	second, secondClosed := modal("Second modal")
+	second, secondDrawn, secondClosed := modal("Second modal")
 	queued := !happens(time.Second, second.IsVisible)
 	t.Logf("%s: a second modal child of the same parent waits for the first: %v", runtime.GOOS, queued)
 	if want := runtime.GOOS == "darwin"; queued != want {
 		t.Errorf("second modal child queued %v, want %v on %s", queued, want, runtime.GOOS)
+	}
+	if !queued {
+		// Closing the first before the second drew broke the input
+		// method of a later test's window under Xvfb.
+		eventually(t, "the second child's first frame", secondDrawn.Load)
 	}
 	first.Close()
 	eventually(t, "the first child to close", firstClosed.Load)
