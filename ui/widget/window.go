@@ -22,6 +22,7 @@ type Window struct {
 	onClose       func() bool
 	menu          []MenuItem
 	parent        *Window       // a dialog's; nil for a top-level window
+	dialog        bool          // made by NewDialog: Escape asks to close it
 	deletable     bool          // the user may close it
 	win           *mygo.Window  // nil until shown, and again once closed
 	showing       bool          // shown, or being made, and not closed yet
@@ -281,6 +282,11 @@ func (w *Window) view(c *ui.Context) {
 			render(c, w.root).Grow(1)
 		}
 	})
+	// After the content, so an open drop-down takes Escape first: on a
+	// dialog it asks to close, as the close button does.
+	if w.dialog && c.Shortcut(0, ui.KeyEscape) {
+		Post(func() { w.do((*mygo.Window).Close) })
+	}
 }
 
 // HeaderBarWidget is a title bar drawn with ui, holding widgets at its

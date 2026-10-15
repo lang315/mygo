@@ -79,13 +79,15 @@ d.Run() // returns once the dialog closes
 ```
 
 `NewDialog(parent, title, subtitle, width, height, content)` takes a nil
-parent for a dialog of its own; the title and subtitle are drawn in the
-dialog, as a macOS sheet shows none. `Run` shows it and returns when it
-closes: by `Close`, by the user, or because its parent closed. For a dialog
-that returns a value, embed `*widget.Dialog` in a type of your own whose
-`Run` returns it. A dialog opened from a dialog takes the outer one's
-`Window` as its parent; closing a window closes the dialogs over it, the
-innermost first. `SetDeletable(false)` keeps the user from closing it (its
+parent for a dialog of its own. Width and height are the window's, title
+bar included, so a macOS sheet, which has none, shows that much shorter;
+the title and subtitle are drawn in the dialog for the same reason.
+`Run` shows it and returns when it closes: by `Close`, by the user (its
+close button, or Escape once no drop-down in it is open), or because its
+parent closed. For a dialog that returns a value, embed `*widget.Dialog`
+in a type of your own whose `Run` returns it. A dialog opened from a
+dialog takes the outer one's `Window` as its parent; closing a window
+closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
 Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,
@@ -141,7 +143,8 @@ copy of the rows; to share rows between tables, make them pointers.
 A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
 (by `Text` otherwise), `Width`, `MinWidth`, `Align`, `Sortable`,
 `Filterable`, `Filter` (case-insensitive containment otherwise), `Color`
-and `Image`. The column functions and the key run under the package's
+(not on a selected row, whose text takes the selection's color) and
+`Image`. The column functions and the key run under the package's
 lock: they read the row and call no widget method.
 
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place

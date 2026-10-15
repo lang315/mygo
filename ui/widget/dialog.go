@@ -4,7 +4,8 @@ package widget
 // is open: a sheet on the parent on macOS, a modal window on Linux (which
 // blocks every window of the app) and Windows. Make it with NewDialog and
 // show it with Run; embed *Dialog in a type of your own for a dialog that
-// returns a value, as gota's dialogs do.
+// returns a value, as gota's dialogs do. Escape closes it as its close
+// button does.
 type Dialog struct {
 	*Window
 	title, subtitle *LabelWidget
@@ -12,16 +13,17 @@ type Dialog struct {
 }
 
 // NewDialog makes a dialog over parent (nil for none) titled title, with
-// subtitle under it ("" for none), showing content width by height DIPs.
-// The title is drawn in the dialog too, as a macOS sheet shows none. To
-// open a dialog from a dialog, pass the outer one's Window as parent.
+// subtitle under it ("" for none), showing content in a window width by
+// height DIPs, title bar included. A macOS sheet has none: it shows that
+// much shorter, and the title is drawn in the dialog. To open a dialog
+// from a dialog, pass the outer one's Window as parent.
 func NewDialog(parent *Window, title, subtitle string, width, height int, content Widget) *Dialog {
 	d := &Dialog{
 		Window:   NewWindow(title, width, height),
 		title:    Label(title).Bold().TextSize(LG),
 		subtitle: Label(subtitle).Muted().SetVisible(subtitle != ""),
 	}
-	d.parent = parent
+	d.parent, d.dialog = parent, true
 	d.SetContent(VBox(8).Add(d.title, d.subtitle).Pack(content, true, true).Padding(4))
 	return d
 }

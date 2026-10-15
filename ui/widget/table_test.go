@@ -610,3 +610,32 @@ func TestTableFitsItsWindowWithoutExpand(t *testing.T) {
 		t.Fatalf("panel at %v, below the window", r)
 	}
 }
+
+// A selected row's text takes the selection's color, not its column's,
+// as GTK and AppKit draw it: red text on the accent would not read.
+func TestTableSelectedRowDropsTheColumnColor(t *testing.T) {
+	tb := Table(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name },
+			Color: func(a *acct) ui.Color { return ui.RGB(220, 0, 0) }},
+	).SetRows([]acct{{1, "annnnnnn", 0}}).Expand()
+	tt := tester(t, tb)
+	red := func() int {
+		r, n := find(t, tt, "annnnnnn"), 0
+		img := tt.Image()
+		for y := int(r.Y); y < int(r.Y+r.H); y++ {
+			for x := int(r.X); x < int(r.X+r.W); x++ {
+				if c := img.RGBAAt(x, y); c.R > 150 && c.G < 80 && c.B < 80 {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	if red() == 0 {
+		t.Skip("no text drawn before the row is selected: no font to draw it with")
+	}
+	click(t, tt, "annnnnnn")
+	if n := red(); n > 0 {
+		t.Fatalf("%d red pixels in the selected row's text", n)
+	}
+}
