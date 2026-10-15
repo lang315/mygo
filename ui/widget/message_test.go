@@ -1,9 +1,11 @@
 package widget
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/ui"
 )
@@ -114,4 +116,71 @@ func TestConfirmFirstAnswerWins(t *testing.T) {
 	if wait(t, got) {
 		t.Fatal("OK after Cancel won")
 	}
+}
+
+// Escape closes a dialog as its close button does: a question says no.
+func TestEscapeClosesADialog(t *testing.T) {
+	got := runAsync(func() bool { return Confirm(nil, Question, "Escape?", "") })
+	fw := waitFake(t, "Escape?")
+	frame(fw)
+	key(fw, platform.KeyEscape)
+	if wait(t, got) {
+		t.Fatal("Escape returned true")
+	}
+}
+
+// Escape closes an open drop-down of a dialog first, then the dialog.
+func TestEscapeClosesADialogsDropDownFirst(t *testing.T) {
+	got := runAsync(func() answer[string] {
+		s, ok := InputSelect(nil, Question, "Drop?", "Proxy", Option{"a", "Alpha"}, Option{"b", "Beta"})
+		return answer[string]{s, ok}
+	})
+	fw := waitFake(t, "Drop?")
+	frame(fw)
+	press(t, fw, "") // the combo, nothing chosen
+	if !slices.Contains(labels(fw), "Beta") {
+		t.Fatalf("pressing the combo did not open it: %q", labels(fw))
+	}
+	key(fw, platform.KeyEscape)
+	Update(func() {})
+	if fw.IsClosed() || slices.Contains(labels(fw), "Beta") {
+		t.Fatalf("the first Escape did not close only the drop-down: closed %v, %q", fw.IsClosed(), labels(fw))
+	}
+	key(fw, platform.KeyEscape)
+	if a := wait(t, got); a.ok {
+		t.Fatalf("Escape returned %v", a)
+	}
+}
+
+// An undeletable dialog stays open on Escape.
+func TestEscapeKeepsAnUndeletableDialog(t *testing.T) {
+	var d *Dialog
+	d = NewDialog(nil, "Kept", "", 300, 200, Button("Done").OnClick(func() { d.Close() }))
+	d.SetDeletable(false)
+	ran := runAsync(func() bool { d.Run(); return true })
+	fw := waitFake(t, "Kept")
+	frame(fw)
+	key(fw, platform.KeyEscape)
+	Update(func() {})
+	if fw.IsClosed() {
+		t.Fatal("Escape closed an undeletable dialog")
+	}
+	press(t, fw, "Done")
+	wait(t, ran)
+}
+
+// labels returns the labels of fw's accessibility tree.
+func labels(fw *fake.Window) []string {
+	var out []string
+	mygo.RunOnMain(func() {
+		s := fw.FakeSurface()
+		s.Send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+		s.Frame()
+		if tree, _ := s.Accessibility(); tree != nil {
+			for _, n := range tree.Nodes {
+				out = append(out, n.Label)
+			}
+		}
+	})
+	return out
 }

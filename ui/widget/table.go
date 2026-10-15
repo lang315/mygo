@@ -27,7 +27,7 @@ type Column[T any] struct {
 	// Text holds the keyword, whatever its case.
 	Filter func(row *T, keyword string) bool
 	// Color is the color of the text; nil, or a zero Color, keeps the
-	// theme's.
+	// theme's, as does a selected row.
 	Color func(*T) ui.Color
 	// Image shows before the text, 16 DIPs square; nil for none.
 	Image func(*T) *ui.Bitmap
@@ -329,19 +329,22 @@ func (t *TableWidget[T, K]) cell(c *ui.Context, row, col int) {
 		col--
 	}
 	cl, r := &t.cols[col], t.rowAt(row)
+	// A selected row's text keeps the selection's color, which reads on
+	// the accent; a column's own may not.
+	colored := cl.Color != nil && !t.chosen.shown.Has(t.key(r))
 	if cl.Image == nil {
-		cellText(c, cl, r)
+		cellText(c, cl, r, colored)
 		return
 	}
 	ui.Row(c).Gap(4).Children(func() {
 		ui.Image(c, cl.Image(r)).Size(16, 16)
-		cellText(c, cl, r)
+		cellText(c, cl, r, colored)
 	})
 }
 
-func cellText[T any](c *ui.Context, cl *Column[T], r *T) {
+func cellText[T any](c *ui.Context, cl *Column[T], r *T, colored bool) {
 	e := ui.Text(c, cl.Text(r)).SingleLine()
-	if cl.Color != nil {
+	if colored {
 		if col := cl.Color(r); col != (ui.Color{}) {
 			e.TextColor(col)
 		}
