@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/update"
 )
 
 // FileWatch records the targets the core enrolls; tests report changes
@@ -90,12 +91,13 @@ func (w *FileWatch) Notify(n platform.FileWatchNotice) {
 }
 
 // ReplaceFile renames replacement over target, with the target's
-// permissions.
+// permissions, waiting as the Windows backend does for a program that
+// holds the new file open.
 func (b *Backend) ReplaceFile(target, replacement string) error {
 	if info, err := os.Stat(target); err == nil {
 		if err := os.Chmod(replacement, info.Mode().Perm()); err != nil {
 			return err
 		}
 	}
-	return os.Rename(replacement, target)
+	return update.Rename(replacement, target)
 }

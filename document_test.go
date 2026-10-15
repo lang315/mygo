@@ -374,19 +374,22 @@ func TestDocumentRecovery(t *testing.T) {
 	d.Set("unsaved")
 	root, _ := ds.kind.recovery.root()
 	var copyPath string
+	var index []byte
+	// Read until readable: Windows refuses to open a file being replaced.
 	waitFor(t, "the recovery copy", func() bool {
 		m, _ := filepath.Glob(filepath.Join(root, "*", d.id))
 		if len(m) == 1 {
 			copyPath = m[0]
 		}
-		if copyPath == "" || readString(t, copyPath) != "unsaved" {
+		if copyPath == "" || !fileIs(copyPath, "unsaved") {
 			return false
 		}
-		_, err := os.Stat(filepath.Join(filepath.Dir(copyPath), "index.json"))
+		var err error
+		index, err = os.ReadFile(filepath.Join(filepath.Dir(copyPath), "index.json"))
 		return err == nil
 	})
 	var entries []recoveryEntry
-	if err := json.Unmarshal([]byte(readString(t, filepath.Join(filepath.Dir(copyPath), "index.json"))), &entries); err != nil || len(entries) != 1 || entries[0].Name != "Untitled" {
+	if err := json.Unmarshal(index, &entries); err != nil || len(entries) != 1 || entries[0].Name != "Untitled" {
 		t.Fatalf("index %v: %v", entries, err)
 	}
 	// Discarded: gone.
@@ -401,7 +404,7 @@ func TestDocumentRecovery(t *testing.T) {
 	os.MkdirAll(orphan, 0o700)
 	stamp, _, _ := statStamp(path)
 	stamp.ModTime--
-	index, _ := json.Marshal([]recoveryEntry{{ID: "a", Name: "Untitled 3"}, {ID: "b", Path: path, Stamp: stamp}})
+	index, _ = json.Marshal([]recoveryEntry{{ID: "a", Name: "Untitled 3"}, {ID: "b", Path: path, Stamp: stamp}})
 	os.WriteFile(filepath.Join(orphan, "index.json"), index, 0o600)
 	os.WriteFile(filepath.Join(orphan, "a"), []byte("draft"), 0o600)
 	os.WriteFile(filepath.Join(orphan, "b"), []byte("changes"), 0o600)
