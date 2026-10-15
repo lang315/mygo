@@ -32,6 +32,7 @@ type core struct {
 	disabled   bool
 	wantFocus  bool // Focus asked for the keyboard focus
 	focusIn    int  // the view that last built it focused, noView for none
+	builtIn    int  // the view that last built it
 	tooltip    string
 	st         style
 	onFocusOut func()
@@ -49,8 +50,8 @@ var building int
 func (c *common[W]) init(self *W) { c.self, c.id, c.focusIn = self, newID(), noView }
 
 // SetVisible shows or hides the widget. A hidden widget keeps its values,
-// but not its caret, selection, scroll position or open popup; hiding it
-// takes its keyboard focus.
+// caret, selection and scroll position; an open popup closes, and hiding
+// it takes its keyboard focus.
 func (c *common[W]) SetVisible(v bool) *W {
 	change(func() {
 		c.hidden = !v
@@ -114,14 +115,15 @@ const (
 // expansion of its children follow. Only views touch it, under mu.
 var axis direction
 
-// render builds w keyed by its id, so its ui state follows it wherever it
-// moves, and styles it. It builds nothing for a hidden widget. Under mu.
+// render builds w keyed globally by its id, so its ui state follows it
+// wherever it moves in the window (keeper.key), and styles it. It builds
+// nothing for a hidden widget. Under mu.
 func render(c *ui.Context, w Widget) ui.Element {
 	b := w.base()
 	if b.hidden {
 		return ui.Element{}
 	}
-	c.Key(b.id)
+	keeping.key(c, b)
 	e := w.build(c)
 	b.st.apply(c, e)
 	if b.disabled {
@@ -155,13 +157,16 @@ func render(c *ui.Context, w Widget) ui.Element {
 // content is a view showing w alone, filling the window.
 func content(w Widget) func(c *ui.Context) {
 	id := newID()
+	var k keeper
 	return func(c *ui.Context) {
 		mu.Lock()
 		defer mu.Unlock()
 		viewing.Store(true)
 		defer viewing.Store(false)
 		axis, building = vertical, id
+		k.begin()
 		ui.Column(c).Fill().Children(func() { render(c, w) })
+		k.end(c)
 	}
 }
 
