@@ -120,7 +120,6 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 			ui.Column(c).Fill().OnClick(func() { clicks.Add(1) })
 		})})
 	eventually(t, "the outer child's first frame", func() bool { return frames.Load() > 0 })
-	time.Sleep(time.Second) // a sheet slides down
 	// Low on the left, away from the small inner child, which centers or
 	// hangs from the top.
 	const x, y = 30, 260
@@ -133,7 +132,7 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 	inner := newWindow(t, mygo.WindowOptions{Title: "Inner child", Width: 160, Height: 80, Parent: outer, Modal: true,
 		Content: ui.View(func(c *ui.Context) { ui.Text(c, "inner") })})
 	inner.OnClosed(func() { closed.Store(true) })
-	time.Sleep(time.Second)
+	eventually(t, "the inner child to show", inner.IsVisible)
 	appClick(outer, x, y)
 	time.Sleep(500 * time.Millisecond)
 	if n := clicks.Load(); n != 1 {

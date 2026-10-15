@@ -32,31 +32,43 @@ func waitFake(t *testing.T, title string) *fake.Window {
 func press(t *testing.T, fw *fake.Window, label string) {
 	t.Helper()
 	var labels []string
-	found := false
+	for _, n := range accessNodes(fw) {
+		if n.Label == label {
+			mygo.RunOnMain(func() {
+				s := fw.FakeSurface()
+				s.Send(platform.SurfaceEvent{Kind: platform.AccessAction, ID: n.ID, Action: platform.AccessPress})
+				s.Frame()
+			})
+			return
+		}
+		labels = append(labels, n.Label)
+	}
+	t.Fatalf("no %q among %q", label, labels)
+}
+
+// labels returns the labels of fw's accessibility tree, in tree order.
+func labels(fw *fake.Window) []string {
+	var out []string
+	for _, n := range accessNodes(fw) {
+		out = append(out, n.Label)
+	}
+	return out
+}
+
+// accessNodes turns accessibility on in fw's view, draws a frame and
+// returns its accessibility tree's nodes.
+func accessNodes(fw *fake.Window) (nodes []platform.AccessNode) {
 	mygo.RunOnMain(func() {
 		s := fw.FakeSurface()
 		s.Send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
 		s.Frame()
-		tree, _ := s.Accessibility()
-		if tree == nil {
-			return
-		}
-		for _, n := range tree.Nodes {
-			if n.Label == label {
-				s.Send(platform.SurfaceEvent{Kind: platform.AccessAction, ID: n.ID, Action: platform.AccessPress})
-				s.Frame()
-				found = true
-				return
-			}
-			labels = append(labels, n.Label)
+		if tree, _ := s.Accessibility(); tree != nil {
+			nodes = tree.Nodes
 		}
 	})
-	if !found {
-		t.Fatalf("no %q among %q", label, labels)
-	}
+	return nodes
 }
 
-// frame draws a frame of fw's view: a first one applies Focus.
 func frame(fw *fake.Window) { mygo.RunOnMain(func() { fw.FakeSurface().Frame() }) }
 
 // typeText types s into the element with the focus in fw's view.

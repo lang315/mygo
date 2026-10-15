@@ -14,10 +14,9 @@ type Dialog struct {
 
 // NewDialog makes a dialog over parent (nil for none) titled title, with
 // subtitle under it ("" for none), showing content in a window width by
-// height DIPs, its title bar included: a macOS sheet, which has none,
-// shows that much shorter.
-// The title is drawn in the dialog too, as a macOS sheet shows none. To
-// open a dialog from a dialog, pass the outer one's Window as parent.
+// height DIPs, title bar included. A macOS sheet has none: it shows that
+// much shorter, and the title is drawn in the dialog. To open a dialog
+// from a dialog, pass the outer one's Window as parent.
 func NewDialog(parent *Window, title, subtitle string, width, height int, content Widget) *Dialog {
 	d := &Dialog{
 		Window:   NewWindow(title, width, height),

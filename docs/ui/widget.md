@@ -85,9 +85,9 @@ the title and subtitle are drawn in the dialog for the same reason.
 `Run` shows it and returns when it closes: by `Close`, by the user (its
 close button, or Escape once no drop-down in it is open), or because its
 parent closed. For a dialog that returns a value, embed `*widget.Dialog`
-in a type of your own whose `Run` returns it. A dialog opened from a dialog takes the outer one's
-`Window` as its parent; closing a window closes the dialogs over it, the
-innermost first. `SetDeletable(false)` keeps the user from closing it (its
+in a type of your own whose `Run` returns it. A dialog opened from a
+dialog takes the outer one's `Window` as its parent; closing a window
+closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
 Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,

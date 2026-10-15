@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/ui"
 )
@@ -167,20 +166,4 @@ func TestEscapeKeepsAnUndeletableDialog(t *testing.T) {
 	}
 	press(t, fw, "Done")
 	wait(t, ran)
-}
-
-// labels returns the labels of fw's accessibility tree.
-func labels(fw *fake.Window) []string {
-	var out []string
-	mygo.RunOnMain(func() {
-		s := fw.FakeSurface()
-		s.Send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
-		s.Frame()
-		if tree, _ := s.Accessibility(); tree != nil {
-			for _, n := range tree.Nodes {
-				out = append(out, n.Label)
-			}
-		}
-	})
-	return out
 }
