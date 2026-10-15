@@ -21,6 +21,32 @@ func TestSpinTypedValue(t *testing.T) {
 	}
 }
 
+// Focus gives a spin's text field the keyboard, as InputInt does: typing
+// goes in, and OnFocusOut waits for the focus to leave the field.
+func TestSpinFocus(t *testing.T) {
+	left := make(chan struct{}, 1)
+	s := Spin(0, 100, 1).SetValue(5)
+	s.OnFocusOut(func() { left <- struct{}{} })
+	tt := tester(t, VBox(0).Add(s, Entry()))
+	s.Focus()
+	tt.Frame()
+	tt.Key(0, ui.KeyEnd)
+	tt.Type("0")
+	tt.Frame()
+	if s.Int() != 50 {
+		t.Fatalf("typed 0 after 5 in the focused spin: %v", s.Value())
+	}
+	select {
+	case <-left:
+		t.Fatal("OnFocusOut ran while the spin's field had the focus")
+	default:
+	}
+	focus(tt, 1) // past the minus, to the plus button
+	focus(tt, 1)
+	focus(tt, 1) // the entry
+	wait(t, left)
+}
+
 func TestRangeSpinValues(t *testing.T) {
 	r := RangeSpin(0, 10, 0, 100, 1, "to", "seconds").SetValues(2, 30)
 	tt := tester(t, r)

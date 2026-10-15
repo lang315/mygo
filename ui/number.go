@@ -10,7 +10,8 @@ import (
 // and hi, which the arrows Up and Down, and the buttons beside it, step
 // by step. What is typed applies as soon as it is a number in range, and
 // shows rounded to the decimals of step once the input loses the focus.
-// Changed reports a new value.
+// Changed reports a new value, Submitted an Enter in it, and Focus gives
+// its text field the keyboard.
 //
 //	ui.NumberInput(c, &app.copies, 1, 99, 1)
 func coreNumberInput(c *context, value *float64, lo, hi, step float64) *node {
@@ -38,6 +39,7 @@ func coreNumberInput(c *context, value *float64, lo, hi, step float64) *node {
 	row.Children(func() {
 		in := coreTextInput(c, text).Width(t.Space(20))
 		in.widget = "NumberInput"
+		row.focusInto = in
 		in.afterInput(func() {
 			if in.Changed() {
 				if v, err := strconv.ParseFloat(strings.TrimSpace(*text), 64); err == nil && v >= lo && v <= hi {
@@ -51,6 +53,9 @@ func coreNumberInput(c *context, value *float64, lo, hi, step float64) *node {
 			if in.Shortcut(0, KeyDown) {
 				set(*value - step)
 				*text = format(*value)
+			}
+			if in.Submitted() {
+				row.st.markSubmitted()
 			}
 			if !in.Focused() {
 				// What the app set, or what was typed, shown in full.
