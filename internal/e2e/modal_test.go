@@ -107,6 +107,44 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 	eventually(t, "the second child to close", secondClosed.Load)
 }
 
+// TestNestedModalBlocksTheOuterChild settles the nested case of
+// ui/widget's dialogs: a modal child of a modal child blocks the outer
+// child, which takes input again once the inner one closes.
+func TestNestedModalBlocksTheOuterChild(t *testing.T) {
+	var clicks, frames atomic.Int32
+	parent := newWindow(t, mygo.WindowOptions{Title: "Nested parent", X: 10, Y: 40, Width: 600, Height: 420,
+		Content: ui.View(func(c *ui.Context) { ui.Text(c, "parent") })})
+	outer := newWindow(t, mygo.WindowOptions{Title: "Outer child", Width: 400, Height: 300, Parent: parent, Modal: true,
+		Content: ui.View(func(c *ui.Context) {
+			frames.Add(1)
+			ui.Column(c).Fill().OnClick(func() { clicks.Add(1) })
+		})})
+	eventually(t, "the outer child's first frame", func() bool { return frames.Load() > 0 })
+	time.Sleep(time.Second) // a sheet slides down
+	// Low on the left, away from the small inner child, which centers or
+	// hangs from the top.
+	const x, y = 30, 260
+	if !appClick(outer, x, y) {
+		t.Skip("no system clicks on this platform")
+	}
+	eventually(t, "a click on the outer child", func() bool { return clicks.Load() == 1 })
+
+	var closed atomic.Bool
+	inner := newWindow(t, mygo.WindowOptions{Title: "Inner child", Width: 160, Height: 80, Parent: outer, Modal: true,
+		Content: ui.View(func(c *ui.Context) { ui.Text(c, "inner") })})
+	inner.OnClosed(func() { closed.Store(true) })
+	time.Sleep(time.Second)
+	appClick(outer, x, y)
+	time.Sleep(500 * time.Millisecond)
+	if n := clicks.Load(); n != 1 {
+		t.Fatalf("the outer child took %d clicks while its own modal child was open", n-1)
+	}
+	inner.Close()
+	eventually(t, "the inner child to close", closed.Load)
+	appClick(outer, x, y)
+	eventually(t, "a click on the outer child after the inner closed", func() bool { return clicks.Load() == 2 })
+}
+
 // happens reports whether cond holds within d, as soon as it does.
 func happens(d time.Duration, cond func() bool) bool {
 	for deadline := time.Now().Add(d); !cond(); time.Sleep(20 * time.Millisecond) {
