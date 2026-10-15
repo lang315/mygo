@@ -12,6 +12,7 @@ import (
 // set it up, then Show it.
 type Window struct {
 	id            int // its views' id, for focus tracking
+	keep          keeper
 	title         string
 	width, height int
 	resizable     bool
@@ -276,6 +277,8 @@ func (w *Window) view(c *ui.Context) {
 	viewing.Store(true)
 	defer viewing.Store(false)
 	axis, building = vertical, w.id
+	w.keep.begin()
+	defer w.keep.end()
 	ui.Column(c).Fill().Children(func() {
 		if w.header != nil {
 			render(c, w.header)

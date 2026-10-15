@@ -114,14 +114,15 @@ const (
 // expansion of its children follow. Only views touch it, under mu.
 var axis direction
 
-// render builds w keyed by its id, so its ui state follows it wherever it
-// moves, and styles it. It builds nothing for a hidden widget. Under mu.
+// render builds w keyed globally by its id, so its ui state follows it
+// wherever it moves in the window (keeper.key), and styles it. It builds
+// nothing for a hidden widget. Under mu.
 func render(c *ui.Context, w Widget) ui.Element {
 	b := w.base()
 	if b.hidden {
 		return ui.Element{}
 	}
-	c.Key(b.id)
+	keeping.key(c, b)
 	e := w.build(c)
 	b.st.apply(c, e)
 	if b.disabled {
@@ -155,12 +156,15 @@ func render(c *ui.Context, w Widget) ui.Element {
 // content is a view showing w alone, filling the window.
 func content(w Widget) func(c *ui.Context) {
 	id := newID()
+	var k keeper
 	return func(c *ui.Context) {
 		mu.Lock()
 		defer mu.Unlock()
 		viewing.Store(true)
 		defer viewing.Store(false)
 		axis, building = vertical, id
+		k.begin()
+		defer k.end()
 		ui.Column(c).Fill().Children(func() { render(c, w) })
 	}
 }
