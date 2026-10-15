@@ -632,7 +632,7 @@ func TestTableSelectedRowDropsTheColumnColor(t *testing.T) {
 		return n
 	}
 	if red() == 0 {
-		t.Skip("no text drawn before the row is selected: no font to draw it with")
+		t.Fatal("no red text before the row is selected")
 	}
 	click(t, tt, "annnnnnn")
 	if n := red(); n > 0 {
