@@ -48,7 +48,7 @@ func (c *Context) Invalidate() {
 // A compound widget consumes the key for its outermost element.
 func (c *Context) Key(key any) *Context {
 	if raw := c.build(); raw != nil {
-		raw.nextKey, raw.keySet = key, true
+		raw.nextKey, raw.keySet, raw.keyGlobal = key, true, false
 	}
 	return c
 }
@@ -66,8 +66,9 @@ func (c *Context) GlobalKey(key any) *Context {
 
 // KeepAlive keeps the state of the element keyed GlobalKey(key), and of
 // the elements inside it, through a frame that does not build it, as a
-// Router keeps the pages of its history. Call it in each such frame. A
-// popup the element showed comes back closed.
+// Router keeps the pages of its history. Call it in each such frame. The
+// popup of a select, combobox, date or color picker inside comes back
+// closed.
 func (c *Context) KeepAlive(key any) {
 	raw := c.build()
 	if raw == nil {

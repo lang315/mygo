@@ -231,7 +231,7 @@ func (c *context) newElement(k kind) *node {
 	p := c.parent
 	e.id = mix(p.id, uint64(p.nchild)+uint64(k)<<56)
 	e.dir = p.dir &^ dirSet
-	keyed := c.keySet
+	keyed, keyedGlobal := c.keySet, c.keyGlobal
 	if c.keySet {
 		parent := p.id
 		if c.keyGlobal {
@@ -250,7 +250,7 @@ func (c *context) newElement(k kind) *node {
 	var built bool
 	e.st, built = c.rt.lookState(e.id)
 	if keyed && built {
-		c.rt.duplicateKey(e.id, e.key)
+		c.rt.duplicateKey(e.id, e.key, keyedGlobal)
 	}
 	if c.rt.insp.open && e.id == c.rt.insp.selected {
 		c.rt.insp.noteSource()
@@ -273,7 +273,7 @@ func (c *context) rekey(e *node, k any) {
 	st, built := rt.lookState(id)
 	if built && id != e.id {
 		// Another element of the pass has the key under the same parent.
-		rt.duplicateKey(id, k)
+		rt.duplicateKey(id, k, false)
 	}
 	e.id, e.st = id, st
 	if rt.insp.open {

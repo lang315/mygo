@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -170,4 +171,29 @@ func TestAccessActionSkipsKeptUnbuilt(t *testing.T) {
 	if clicks != 0 {
 		t.Fatalf("a press on the hidden button clicked it %d times", clicks)
 	}
+}
+
+// A global key no element took does not make the next Key global.
+func TestUnusedGlobalKeyStaysOut(t *testing.T) {
+	NewTester(func(c *Context) {
+		for range 2 {
+			Column(c).Children(func() {
+				c.GlobalKey("unused")
+				Column(c.Key("a"))
+			})
+		}
+	}, 300, 200)
+}
+
+// The duplicate of a global key is reported as such, not as siblings'.
+func TestGlobalKeyDuplicateMessage(t *testing.T) {
+	defer func() {
+		if msg, _ := recover().(string); !strings.Contains(msg, "global key") {
+			t.Fatalf("panic %q, want it to name the global key", msg)
+		}
+	}()
+	NewTester(func(c *Context) {
+		Column(c).Children(func() { Column(c.GlobalKey("x")) })
+		Column(c).Children(func() { Column(c.GlobalKey("x")) })
+	}, 300, 200)
 }
