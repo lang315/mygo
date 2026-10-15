@@ -278,7 +278,6 @@ func (w *Window) view(c *ui.Context) {
 	defer viewing.Store(false)
 	axis, building = vertical, w.id
 	w.keep.begin()
-	defer w.keep.end()
 	ui.Column(c).Fill().Children(func() {
 		if w.header != nil {
 			render(c, w.header)
@@ -287,6 +286,7 @@ func (w *Window) view(c *ui.Context) {
 			render(c, w.root).Grow(1)
 		}
 	})
+	w.keep.end(c)
 }
 
 // HeaderBarWidget is a title bar drawn with ui, holding widgets at its

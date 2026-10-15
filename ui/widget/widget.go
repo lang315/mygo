@@ -164,8 +164,8 @@ func content(w Widget) func(c *ui.Context) {
 		defer viewing.Store(false)
 		axis, building = vertical, id
 		k.begin()
-		defer k.end()
 		ui.Column(c).Fill().Children(func() { render(c, w) })
+		k.end(c)
 	}
 }
 

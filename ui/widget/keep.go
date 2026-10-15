@@ -1,23 +1,33 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"weak"
 
-// keeper tracks the widgets a view builds. Under mu.
+	"github.com/egoist/mygo/ui"
+)
+
+// keeper keeps the ui state of the widgets a view built while the app
+// holds them, through frames that do not build them: hidden, on a page not
+// shown, or out of the view for a while. Under mu.
 type keeper struct {
-	built map[int]bool
+	widgets map[int]weak.Pointer[core]
+	built   map[int]bool
 }
 
 // keeping is the keeper of the view being built. Only views touch it,
 // under mu.
 var keeping *keeper
 
+// lastKeeper is the keeper of the view built last, for tests.
+var lastKeeper *keeper
+
 // begin starts a build of the view.
 func (k *keeper) begin() {
-	if k.built == nil {
-		k.built = map[int]bool{}
+	if k.widgets == nil {
+		k.widgets, k.built = map[int]weak.Pointer[core]{}, map[int]bool{}
 	}
 	clear(k.built)
-	keeping = k
+	keeping, lastKeeper = k, k
 }
 
 // key keys the next element for b: globally the first time the frame
@@ -28,8 +38,24 @@ func (k *keeper) key(c *ui.Context, b *core) {
 		return
 	}
 	k.built[b.id] = true
+	if _, ok := k.widgets[b.id]; !ok {
+		// Weak, so the app dropping the widget frees it and its state.
+		k.widgets[b.id] = weak.Make(b)
+	}
 	c.GlobalKey(b.id)
 }
 
-// end ends the build of the view.
-func (k *keeper) end() { keeping = nil }
+// end keeps alive the state of the widgets not built that the app still
+// holds, and forgets the others, whose state ui then frees.
+func (k *keeper) end(c *ui.Context) {
+	for id, p := range k.widgets {
+		switch {
+		case k.built[id]:
+		case p.Value() == nil:
+			delete(k.widgets, id)
+		default:
+			c.KeepAlive(id)
+		}
+	}
+	keeping = nil
+}
