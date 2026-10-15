@@ -144,7 +144,8 @@ func TestComboEditsLeaveTheCallersOptions(t *testing.T) {
 
 // V6: a popup of 5 sections of 20 options stays inside the window and
 // scrolls: End brings the last option of the last section into view, and
-// the wheel scrolls back to the first section's header.
+// the wheel scrolls back to the first section's header. (Choosing it is
+// ui's TestSelectLongPopupScrolls.)
 func TestComboLongSectionedPopupScrolls(t *testing.T) {
 	c := Combo()
 	for s := range 5 {
@@ -163,22 +164,14 @@ func TestComboLongSectionedPopupScrolls(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnd)
 	tt.Frame()
-	r, _ := tt.Find("s4i19") // its part in view
+	r := find(t, tt, "s4i19") // its part in view
 	if r.H <= 0 || r.Y+r.H > 600 {
 		t.Fatalf("End: the last option shows at %+v, not inside the 600-tall window", r)
 	}
-	for range 40 {
-		tt.Scroll(r.X, r.Y, 0, -200) // up
-	}
+	tt.Scroll(r.X, r.Y, 0, -8000) // up, past the top
 	tt.Frame()
-	if h, _ := tt.Find("Section 0"); h.H <= 0 {
+	if h := find(t, tt, "Section 0"); h.H <= 0 {
 		t.Fatalf("the wheel did not scroll back to the first header: %+v", h)
-	}
-	tt.Key(0, ui.KeyEnd)
-	tt.Key(0, ui.KeyEnter)
-	tt.Frame()
-	if c.Value() != "s4i19" {
-		t.Fatalf("End, Enter chose %q", c.Value())
 	}
 }
 
@@ -191,7 +184,7 @@ func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
 	Combo(Option{"a", "Alpha"}, Option{"b", "Beta"}).AssignTo(&c).SetValue("a").
 		OnChange(func() { changed <- c.Value() })
 	tt := tester(t, c)
-	for i, close := range []func(){
+	for i, dismiss := range []func(){
 		func() { tt.Key(0, ui.KeyEscape) },
 		func() { tt.ClickAt(700, 500) }, // off the popup
 	} {
@@ -201,7 +194,7 @@ func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
 		if !tt.HasText("Beta") {
 			t.Fatalf("popup not open: %q", tt.Texts())
 		}
-		close()
+		dismiss()
 		tt.Frame()
 		if tt.HasText("Beta") || c.Value() != "a" {
 			t.Fatalf("after closing %d: texts %q, value %q", i, tt.Texts(), c.Value())

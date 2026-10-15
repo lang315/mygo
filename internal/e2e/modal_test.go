@@ -83,16 +83,14 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 	first, firstClosed := modal("First modal")
 	time.Sleep(time.Second) // a sheet slides down
 	appClick(other, x, y)
-	time.Sleep(500 * time.Millisecond) // a click let through has counted by now
-	blocked := otherClicks.Load() == 1
+	blocked := !happens(500*time.Millisecond, func() bool { return otherClicks.Load() == 2 })
 	t.Logf("%s: the other window blocked while a modal child is open: %v", runtime.GOOS, blocked)
 	if want := runtime.GOOS == "linux"; blocked != want {
 		t.Errorf("other window blocked %v, want %v on %s", blocked, want, runtime.GOOS)
 	}
 
 	second, secondClosed := modal("Second modal")
-	time.Sleep(time.Second)
-	queued := !second.IsVisible()
+	queued := !happens(time.Second, second.IsVisible)
 	t.Logf("%s: a second modal child of the same parent waits for the first: %v", runtime.GOOS, queued)
 	if want := runtime.GOOS == "darwin"; queued != want {
 		t.Errorf("second modal child queued %v, want %v on %s", queued, want, runtime.GOOS)
@@ -102,4 +100,14 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 	eventually(t, "the second child to show", second.IsVisible)
 	second.Close()
 	eventually(t, "the second child to close", secondClosed.Load)
+}
+
+// happens reports whether cond holds within d, as soon as it does.
+func happens(d time.Duration, cond func() bool) bool {
+	for deadline := time.Now().Add(d); !cond(); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			return false
+		}
+	}
+	return true
 }

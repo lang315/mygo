@@ -14,10 +14,10 @@ ui.Select(c, &app.plan, []string{"Free", "Pro", "Team"}).Label("Plan")
 ```
 
 The popup shows above the select where there is no room below it, and gives
-the focus back to the select as it closes. Of many options, it shows as
-many as fit a combobox's popup and scrolls, keeping the highlighted one in
-view; a `SelectBase` popup does too, unless its panel sets another
-`MaxHeight`.
+the focus back to the select as it closes. Of many options, it shows the
+first that fit in 70 of the theme's spaces and scrolls the rest, keeping
+the highlighted one in view; the popups of `SelectBase` and `ComboboxBase`
+do too, unless their panel sets another `MaxHeight`.
 
 For a long list that typing filters, use a [combobox](combobox.md); for a
 few options shown at once, [radio buttons](radio.md).

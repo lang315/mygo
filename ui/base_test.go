@@ -440,7 +440,7 @@ func TestSelectLongPopupScrolls(t *testing.T) {
 	tt.Frame()
 	tt.Key(0, KeyEnd)
 	tt.Frame()
-	if r, _ := tt.Find("opt099"); r.H <= 0 || r.Y+r.H > 600 {
+	if r := at(t, tt, "opt099"); r.H <= 0 || r.Y+r.H > 600 {
 		t.Fatalf("End: the last option shows at %+v, not inside the 600-tall window", r)
 	}
 	tt.Key(0, KeyEnter)

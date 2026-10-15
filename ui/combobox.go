@@ -166,8 +166,9 @@ func (p *comboboxParts) SetOpen(o bool) {
 func (p *comboboxParts) Filtering() bool { return *p.typed }
 
 // Popup shows the popup below the input, at least as wide, while it is
-// open: fn styles the panel and builds the options with Item. It returns
-// the panel, or nil while closed or without options.
+// open: fn styles the panel and builds the options with Item. Of many
+// options, it shows the first that fit and scrolls (scrollOptions). It
+// returns the panel, or nil while closed or without options.
 func (p *comboboxParts) Popup(fn func(panel *node)) *node {
 	c := p.c
 	p.next, p.items = p.next[:0], p.items[:0]
@@ -182,6 +183,7 @@ func (p *comboboxParts) Popup(fn func(panel *node)) *node {
 		// Pressing an option keeps the focus in the input.
 		panel.flags |= flagClickable | flagKeepFocus
 		panel.choosesItems = true
+		scrollOptions(c, panel)
 		panel.Children(func() { fn(panel) })
 	})
 	*p.values = append((*p.values)[:0], p.next...)
@@ -265,8 +267,6 @@ func styleOptions(c *context, p *comboboxParts, options []string) *node {
 	t := c.theme
 	return p.Popup(func(panel *node) {
 		stylePanel(c, panel)
-		panel.MaxHeight(t.Space(70))
-		panel.flags |= flagScrollY | flagHover
 		for _, opt := range options {
 			item := p.Item(opt).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
 			if item.Highlighted() {
