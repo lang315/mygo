@@ -49,8 +49,8 @@ var building int
 func (c *common[W]) init(self *W) { c.self, c.id, c.focusIn = self, newID(), noView }
 
 // SetVisible shows or hides the widget. A hidden widget keeps its values,
-// but not its caret, selection, scroll position or open popup; hiding it
-// takes its keyboard focus.
+// caret, selection and scroll position; an open popup closes, and hiding
+// it takes its keyboard focus.
 func (c *common[W]) SetVisible(v bool) *W {
 	change(func() {
 		c.hidden = !v

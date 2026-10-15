@@ -205,10 +205,13 @@ made inside a chain.
 ## What a widget keeps
 
 Each widget builds under a key of its own, so the caret, selection, scroll
-position and open popup of its `ui` elements follow it when its box
-reorders. A widget that is not built (hidden, on a tab not shown, or taken
-out of its box) keeps its values but loses that state: it shows again with
-the caret at the start and scrolled to the top.
+position and open popups of its `ui` elements follow it when its box
+reorders or it moves to another box. A widget that is not built (hidden, on
+a tab not shown, or out of the window's content for a while) keeps all of
+it while your program holds the widget; it shows again as it was, with the
+popup of a select, combobox, date or color picker closed and without the
+keyboard focus. Moving a widget to another window starts its state anew,
+and so does the second place of a widget shown in two.
 
 ## Widgets
 

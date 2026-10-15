@@ -5,6 +5,9 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/fake"
+	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -128,5 +131,41 @@ func TestDroppedWidgetStateIsFreed(t *testing.T) {
 	mu.Unlock()
 	if n < 100 || left >= n {
 		t.Fatalf("keeper holds %d widgets after the list was dropped, had %d", left, n)
+	}
+}
+
+// labelY is where the label of the fake window fw reads s, or -1.
+func labelY(fw *fake.Window, s string) float64 {
+	for _, n := range accessNodes(fw) {
+		if n.Label == s {
+			return n.Bounds.Y
+		}
+	}
+	return -1
+}
+
+// A window's content swapped out and back keeps its state.
+func TestSetContentBackKeepsState(t *testing.T) {
+	s := list100()
+	w := NewWindow("Swap", 400, 300).SetContent(s)
+	w.Show()
+	defer w.Close()
+	fw := waitFake(t, "Swap")
+	frame(fw)
+	top := labelY(fw, "row 25")
+	mygo.RunOnMain(func() {
+		fw.FakeSurface().Send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: 100, Y: 100, DY: 100})
+		fw.FakeSurface().Frame()
+	})
+	before := labelY(fw, "row 25")
+	if before < 0 || before >= top {
+		t.Fatalf("row 25 at %v after scrolling down, was %v: the list did not scroll", before, top)
+	}
+	w.SetContent(Label("other"))
+	frame(fw)
+	w.SetContent(s)
+	frame(fw)
+	if after := labelY(fw, "row 25"); after != before {
+		t.Fatalf("row 25 at %v after swapping the content back, was %v", after, before)
 	}
 }
