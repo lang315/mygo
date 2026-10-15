@@ -17,7 +17,10 @@ The popup shows above the select where there is no room below it, and gives
 the focus back to the select as it closes. Of many options, it shows the
 first that fit in 70 of the theme's spaces and scrolls the rest, keeping
 the highlighted one in view; the popups of `SelectBase` and `ComboboxBase`
-do too, unless their panel sets another `MaxHeight`.
+do too, unless their panel sets another `MaxHeight`. In a window too short
+for that, the popup shrinks to the room on the roomier side of the select.
+A press in the popup that is not on an option, such as on a header row of
+a `SelectBase`, leaves the keyboard on the select.
 
 For a long list that typing filters, use a [combobox](combobox.md); for a
 few options shown at once, [radio buttons](radio.md).
