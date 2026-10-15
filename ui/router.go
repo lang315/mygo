@@ -699,9 +699,6 @@ func (r *Router) page(c *context, parent *Route, e *routeEntry, fn func(*Route),
 // layout, which keeps them when it goes out of sight.
 func (r *Router) keep(c *context, box *node, v *routeView, level int, cur *routeEntry) {
 	rt := c.rt
-	if rt.kept == nil {
-		rt.kept = map[uint64]bool{}
-	}
 	n := 0
 	for d := 1; n < keptPages && (r.at-d >= 0 || r.at+d < len(r.entries)); d++ {
 		for _, i := range [2]int{r.at - d, r.at + d} {

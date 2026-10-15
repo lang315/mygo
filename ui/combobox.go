@@ -71,7 +71,7 @@ func comboboxBase(c *context, text *string, first bool) *comboboxParts {
 	in.flags |= flagClickable
 	p := &comboboxParts{
 		Input: in, anchor: in, c: c, text: text,
-		open:      coreLocal(in, "open", func() bool { return false }),
+		open:      coreLocal(in, popupOpen{}, func() bool { return false }),
 		highlight: coreLocal(in, "highlight", func() int { return -1 }),
 		values:    coreLocal(in, "values", func() []string { return nil }),
 		pointer:   coreLocal(in, "pointer", func() [2]float32 { return [2]float32{} }),

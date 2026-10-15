@@ -231,8 +231,13 @@ func (c *context) newElement(k kind) *node {
 	e.dir = p.dir &^ dirSet
 	keyed := c.keySet
 	if c.keySet {
-		e.id = keyedID(p.id, c.nextKey)
-		e.key = c.nextKey
+		if g, ok := c.nextKey.(globalKey); ok {
+			// The same id under any parent, a page its children follow.
+			e.id, e.key = globalID(g.key), g.key
+			e.flags |= flagPage
+		} else {
+			e.id, e.key = keyedID(p.id, c.nextKey), c.nextKey
+		}
 		c.keySet, c.nextKey = false, nil
 		if c.rt.insp.open {
 			c.rt.insp.noteKey(e.id, e.key)
@@ -242,7 +247,7 @@ func (c *context) newElement(k kind) *node {
 	var built bool
 	e.st, built = c.rt.lookState(e.id)
 	if keyed && built {
-		c.rt.duplicateKey(e.id, e.key)
+		c.rt.duplicateKey(e.id, e.key, e.flags&flagPage != 0)
 	}
 	if c.rt.insp.open && e.id == c.rt.insp.selected {
 		c.rt.insp.noteSource()
@@ -265,7 +270,7 @@ func (c *context) rekey(e *node, k any) {
 	st, built := rt.lookState(id)
 	if built && id != e.id {
 		// Another element of the pass has the key under the same parent.
-		rt.duplicateKey(id, k)
+		rt.duplicateKey(id, k, false)
 	}
 	e.id, e.st = id, st
 	if rt.insp.open {
@@ -293,6 +298,15 @@ func keyedID(parent uint64, k any) uint64 {
 	}
 	return mix(parent, h^0xA5A5A5A5A5A5A5A5)
 }
+
+// globalKey is the key GlobalKey gives the next element.
+type globalKey struct{ key any }
+
+// globalRoot stands for the parent of elements keyed globally (GlobalKey).
+const globalRoot uint64 = 0x676c6f62616c6b79
+
+// globalID returns the ID of the element keyed globally by k.
+func globalID(k any) uint64 { return keyedID(globalRoot, k) }
 
 // mix combines two hashes (the finalizer of splitmix64).
 func mix(a, b uint64) uint64 {

@@ -16,8 +16,14 @@ const maxWarnings = 50
 // state, so that the pointer, the focus and scrolling meant for one go to
 // the other. A Tester panics (engine.strict), so that tests fail where the
 // key was given; apps log it once, and the inspector lists it.
-func (rt *engine) duplicateKey(id uint64, k any) {
-	msg := fmt.Sprintf("ui: two elements under one parent have the key %#v, and share one state: give each a key of its own", k)
+// global tells that the key is global (GlobalKey), so the two may be under
+// different parents.
+func (rt *engine) duplicateKey(id uint64, k any, global bool) {
+	where := "under one parent have the key"
+	if global {
+		where = "in the window have the global key"
+	}
+	msg := fmt.Sprintf("ui: two elements %s %#v, and share one state: give each a key of its own", where, k)
 	if at := callSite(); at != "" {
 		msg += " (" + at + ")"
 	}

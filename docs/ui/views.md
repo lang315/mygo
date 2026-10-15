@@ -145,6 +145,24 @@ Keys are unique among siblings. `Element.Key` can key a container before
 its children or local state are built. Use `Context.Key` for stateful
 controls and custom base widgets.
 
+`Context.GlobalKey` gives the next element an identity independent of its
+parent, so its state, and its children's, follow it when it moves to
+another place in the window. An element keyed globally that a frame does
+not build loses its state, as any other, unless the frame calls
+`Context.KeepAlive` with its key, as a Router keeps the pages of its
+history:
+
+```go
+if app.tab == "settings" {
+	ui.Column(c.GlobalKey("settings")).Children(settings)
+} else {
+	c.KeepAlive("settings")
+}
+```
+
+The popup of a select, combobox, date or color picker inside comes back
+closed, and the keyboard focus does not come back.
+
 ## Change the state from other goroutines
 
 The view reads your state on the main thread. Change it from other

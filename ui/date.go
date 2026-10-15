@@ -20,7 +20,7 @@ func coreDateInput(c *context, date *time.Time) *node {
 	b := coreButton(c, "")
 	b.widget, b.role, b.accValue = "DateInput", RolePopUpButton, text
 	b.MinWidth(t.Space(32.5)).Justify(SpaceBetween)
-	open := coreLocal(b, "open", func() bool { return false })
+	open := coreLocal(b, popupOpen{}, func() bool { return false })
 	// cursor is the day the keys move in the calendar.
 	cursor := coreLocal(b, "cursor", func() time.Time { return *date })
 	b.afterInput(func() {

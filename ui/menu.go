@@ -464,7 +464,7 @@ func (rt *engine) menuChosen(p *shownMenu, id int) {
 		if target == 0 {
 			target = p.id
 		}
-		if s := rt.states[target]; s != nil && s.editor != nil {
+		if s := rt.states[target]; s != nil && s.seen == rt.frame && s.editor != nil {
 			if !rt.textSelectionCommand(s, p.commands[id-1]) {
 				s.editor.queue = append(s.editor.queue, editEvent{kind: editCommand, text: p.commands[id-1]})
 			}

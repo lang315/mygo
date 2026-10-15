@@ -281,7 +281,7 @@ func coreSelectBase[T comparable](c *context, selected *T) *selectParts[T] {
 	b.widget, b.role, b.accValue = "Select", RolePopUpButton, fmt.Sprint(*selected)
 	s := &selectParts[T]{
 		Trigger: b, c: c, selected: selected,
-		open:      coreLocal(b, "open", func() bool { return false }),
+		open:      coreLocal(b, popupOpen{}, func() bool { return false }),
 		highlight: coreLocal(b, "highlight", func() int { return -1 }),
 		values:    coreLocal(b, "values", func() []T { return nil }),
 		pointer:   coreLocal(b, "pointer", func() [2]float32 { return [2]float32{} }),
