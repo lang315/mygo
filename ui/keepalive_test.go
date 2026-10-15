@@ -1,6 +1,10 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/internal/platform"
+)
 
 // panel builds a column keyed globally by "panel" holding a local n and a
 // row inside with a local m, and returns pointers to both.
@@ -82,4 +86,88 @@ func TestGlobalKeyDuplicatePanics(t *testing.T) {
 		Column(c).Children(func() { Column(c.GlobalKey("x")) })
 		Column(c).Children(func() { Column(c.GlobalKey("x")) })
 	}, 300, 200)
+}
+
+// A select open when its page stops being built comes back closed.
+func TestKeptPopupComesBackClosed(t *testing.T) {
+	show := true
+	size := "S"
+	tt := NewTester(func(c *Context) {
+		Column(c).Padding(10).Children(func() {
+			if show {
+				Column(c.GlobalKey("page")).Children(func() {
+					Select(c, &size, []string{"S", "M", "L"}).Label("Size")
+				})
+			} else {
+				c.KeepAlive("page")
+			}
+		})
+	}, 300, 300)
+	if err := tt.Click("Size"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("M") {
+		t.Fatalf("no option M after a click on the select: %q", tt.Texts())
+	}
+	show = false
+	tt.Frame()
+	show = true
+	tt.Frame()
+	if tt.HasText("M") {
+		t.Fatal("the select's popup came back open")
+	}
+}
+
+// An app's own local named "open" is not a popup: it stays as it was
+// while the element is kept out of sight.
+func TestKeptAppLocalOpenStays(t *testing.T) {
+	show := true
+	var open *bool
+	tt := NewTester(func(c *Context) {
+		Column(c).Children(func() {
+			if show {
+				open = Local(Column(c.GlobalKey("page")), "open", func() bool { return false })
+			} else {
+				c.KeepAlive("page")
+			}
+		})
+	}, 300, 200)
+	*open = true
+	show = false
+	tt.Frame()
+	show = true
+	tt.Frame()
+	if !*open {
+		t.Fatal("the app's local \"open\" was reset while kept")
+	}
+}
+
+// Assistive technology pressing a node of the last frame shown does
+// nothing once its element is kept but no longer built.
+func TestAccessActionSkipsKeptUnbuilt(t *testing.T) {
+	show, clicks := true, 0
+	tt := NewTester(func(c *Context) {
+		Column(c).Children(func() {
+			if show {
+				Column(c.GlobalKey("page")).Children(func() {
+					if Button(c, "Go").Clicked() {
+						clicks++
+					}
+				})
+			} else {
+				c.KeepAlive("page")
+			}
+		})
+	}, 300, 200)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	tt.Frame()
+	id := accessNode(t, tt.h.access, platform.RoleButton, "Go").ID
+	show = false
+	tt.Frame()
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessAction, ID: id, Action: platform.AccessPress})
+	show = true
+	tt.Frame()
+	if clicks != 0 {
+		t.Fatalf("a press on the hidden button clicked it %d times", clicks)
+	}
 }

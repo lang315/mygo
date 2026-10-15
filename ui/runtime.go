@@ -695,6 +695,8 @@ func (rt *engine) prune() {
 				if len(rt.free) < maxFree {
 					rt.free = append(rt.free, s)
 				}
+			} else {
+				rt.hideKept(s)
 			}
 		}
 	}
@@ -734,6 +736,21 @@ func (rt *engine) keptAlive(s *state) bool {
 		s = rt.states[s.page]
 	}
 	return false
+}
+
+// popupOpen is the key of the local telling whether an element's popup
+// (a select's, combobox's, date or color picker's) is open.
+type popupOpen struct{}
+
+// hideKept closes what a state kept out of sight showed: its popup and a
+// drag of its scroll bar.
+func (rt *engine) hideKept(s *state) {
+	if open, ok := s.locals[popupOpen{}].(*bool); ok {
+		*open = false
+	}
+	if rt.scrollDrag.st == s {
+		rt.scrollDrag.st = nil
+	}
 }
 
 // requestFrame asks the host for a frame built anew, unless one is being

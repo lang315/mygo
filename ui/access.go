@@ -480,7 +480,8 @@ func (rt *engine) accessibilityOn() {
 // of the last frame, as the keyboard or the pointer would.
 func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 	s := rt.states[ev.ID]
-	if s == nil || s.flags&flagDisabled != 0 {
+	// A node of an element kept out of sight is stale.
+	if s == nil || s.flags&flagDisabled != 0 || s.seen != rt.frame || s.pass != rt.pass {
 		return
 	}
 	switch ev.Action {
