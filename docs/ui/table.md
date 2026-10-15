@@ -152,6 +152,11 @@ header counts and changes only the rows shown. An app that wants only the
 rows shown checked clears the selection when the filter changes, with
 `app.checked.Clear()`.
 
+The header counts the rows shown that are checked whenever the checks or
+the rows shown change, row by row. A table of very many rows that knows
+that count sets `ListState.CheckedCount` to return it instead, and
+`Selection.CopyFrom` copies a large selection in one step.
+
 `Checked.All()` includes rows that are hidden, so run an action on the rows
 checked in the order shown by looping over them:
 

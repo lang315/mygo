@@ -92,7 +92,10 @@ func (t *TableWidget[T, K]) Search(column, keyword string) *TableWidget[T, K] {
 		combo.SetValue(column)
 		entry.SetText(keyword)
 	}
-	change(func() { t.view.SetFilter(t.keep(column, keyword)) })
+	change(func() {
+		t.filter = t.keep(column, keyword)
+		t.view.SetFilter(t.filter)
+	})
 	return t
 }
 

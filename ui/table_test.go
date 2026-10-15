@@ -1180,3 +1180,26 @@ func TestTableRowSelected(t *testing.T) {
 		t.Fatalf("RowSelected: outside %v, rows %v", outside, seen)
 	}
 }
+
+// CheckedCount, when set, is what the header's checkbox shows, and the
+// table counts no rows itself.
+func TestTableCheckedCount(t *testing.T) {
+	names := []string{"a", "b", "c"}
+	var checked Selection[string]
+	counted := 0
+	s := ListState{Checked: &checked, Key: func(i int) any { return names[i] },
+		CheckedCount: func() (int, int) { counted++; return 3, 3 }}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			coreTable(c, &s, []TableColumn{{Title: "Name"}}, len(names), func(row, col int) { coreText(c, names[row]) }).Grow(1)
+		})
+	}, 400, 300)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	tt.Frame()
+	if counted == 0 {
+		t.Fatal("the table never asked CheckedCount")
+	}
+	if st := accessNode(t, tt.h.access, platform.RoleCheckBox, "Check all").States; st&platform.AccessChecked == 0 {
+		t.Fatalf("header checkbox states %b with CheckedCount all of 3, want checked", st)
+	}
+}

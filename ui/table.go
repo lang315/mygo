@@ -582,7 +582,9 @@ func (tc *tableChecks) counted(s *ListState, n int) (count, total int) {
 	if tc.sel == sel && tc.gen == sel.generation() && tc.n == n && tc.version == s.Version {
 		return tc.count, tc.total
 	}
-	if s.Header == nil && sel.size() == 0 {
+	if s.CheckedCount != nil {
+		count, total = s.CheckedCount()
+	} else if s.Header == nil && sel.size() == 0 {
 		total = n
 	} else {
 		for i := range n {

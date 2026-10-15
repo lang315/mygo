@@ -336,6 +336,44 @@ func TestTableCheckAllChecksOnlyShownRows(t *testing.T) {
 	}
 }
 
+// Check all counts the checks of the rows shown only: with ann checked
+// and bob, checked, hidden by a search, ann and Hannah are not all
+// checked, so a click checks Hannah rather than unchecking ann.
+func TestTableCheckAllCountsTheRowsShown(t *testing.T) {
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "Hannah", 3}).CheckboxColumn()
+	tb.SetChecked([]int{1, 2}, true)
+	tt := tester(t, tb)
+	tb.Search("Name", "an")
+	tt.Frame()
+	click(t, tt, "Check all")
+	tb.Search("Name", "")
+	tt.Frame()
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 2, 3}) {
+		t.Fatalf("Checked %v after Check all under the search", got)
+	}
+}
+
+// A few checks changed among many reach ui one by one, rather than by a
+// copy of all of them: ui must see the row unchecked, so that Check all
+// checks it again rather than unchecking every row.
+func TestTableFewCheckChangesReachUI(t *testing.T) {
+	rows := manyAccts(100)
+	all := make([]int, len(rows))
+	for i, r := range rows {
+		all[i] = r.id
+	}
+	tb := testTable(rows...).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked(all, true)
+	tt.Frame()
+	tb.SetChecked(all[5:6], false)
+	tt.Frame()
+	click(t, tt, "Check all")
+	if n := len(tb.Checked()); n != 100 {
+		t.Fatalf("%d rows checked after Check all with one of 100 unchecked, want 100", n)
+	}
+}
+
 func TestTableActivateGivesTheKey(t *testing.T) {
 	got := make(chan int, 1)
 	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).OnActivate(func(k int) { got <- k })
@@ -524,6 +562,43 @@ func BenchmarkTableLiveUpdates(b *testing.B) {
 			}
 		})
 	}
+}
+
+// BenchmarkTableCheckedLarge checks one row more or less of a million,
+// all checked: by a click, as the user does, and by SetChecked, then
+// draws a frame.
+func BenchmarkTableCheckedLarge(b *testing.B) {
+	const n = 1_000_000
+	rows := manyAccts(n)
+	all := make([]int, n)
+	for i, r := range rows {
+		all[i] = r.id
+	}
+	setup := func(b *testing.B) (*TableWidget[acct, int], *ui.Tester) {
+		tb := testTable(rows...).CheckboxColumn()
+		tt := ui.NewTester(content(tb), 1280, 800)
+		tb.SetChecked(all, true)
+		tt.Frame()
+		return tb, tt
+	}
+	b.Run("click", func(b *testing.B) {
+		_, tt := setup(b)
+		label := "Check " + rows[0].name
+		b.ResetTimer()
+		for range b.N {
+			if err := tt.Click(label); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("SetChecked", func(b *testing.B) {
+		tb, tt := setup(b)
+		b.ResetTimer()
+		for i := range b.N {
+			tb.SetChecked(all[i%n:i%n+1], i%2 == 1)
+			tt.Frame()
+		}
+	})
 }
 
 func TestTableInputLandsOnTheRowsOfTheFrameShown(t *testing.T) {

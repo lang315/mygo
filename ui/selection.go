@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"iter"
+	"maps"
 	"sync/atomic"
 )
 
@@ -68,6 +69,16 @@ func (s *Selection[K]) Clear() {
 	}
 	s.gen = selectionGen.Add(1)
 	clear(s.keys)
+}
+
+// CopyFrom makes s choose the rows src does, in one step: faster than
+// adding src's keys one by one when they are many.
+func (s *Selection[K]) CopyFrom(src *Selection[K]) {
+	if len(s.keys) == 0 && len(src.keys) == 0 {
+		return
+	}
+	s.keys = maps.Clone(src.keys)
+	s.gen = selectionGen.Add(1)
 }
 
 // All returns the keys of the rows chosen, in no order.
