@@ -308,3 +308,8 @@ func endSheetButton(w *mygo.Window, i int) (ok bool) {
 
 // Panels' window styles are Windows'.
 func panelStyles(*mygo.Window) (bool, bool, bool, bool) { return false, false, false, false }
+
+func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
+	mygo.RunOnMain(func() { has, template, err = darwin.TestMenuItemImage(path...) })
+	return has, template, true, err
+}

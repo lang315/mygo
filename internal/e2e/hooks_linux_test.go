@@ -325,3 +325,7 @@ func endSheetButton(*mygo.Window, int) bool               { return false }
 
 // Panels' window styles are Windows'.
 func panelStyles(*mygo.Window) (bool, bool, bool, bool) { return false, false, false, false }
+
+func menuIcon(*mygo.Window, ...string) (has, template, supported bool, err error) {
+	return false, false, false, nil
+}

@@ -350,3 +350,7 @@ func panelStyles(w *mygo.Window) (tool, topmost, owned, supported bool) {
 	mygo.RunOnMain(func() { tool, topmost, owned = win.TestPanelStyles(w.NativeHandle()) })
 	return tool, topmost, owned, true
 }
+
+func menuIcon(*mygo.Window, ...string) (has, template, supported bool, err error) {
+	return false, false, false, nil
+}

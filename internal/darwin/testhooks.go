@@ -44,6 +44,33 @@ func TestPerformMenuItem(path ...string) error {
 	return err
 }
 
+// TestMenuItemImage reports whether an item of the application menu,
+// found by the titles along its path, shows an image, and whether it is a
+// template.
+func TestMenuItemImage(path ...string) (has, template bool, err error) {
+	withPool(func() {
+		menu := send(theBackend.app, "mainMenu")
+		var item id
+		for i, title := range path {
+			if menu == 0 {
+				err = fmt.Errorf("mygo: menu %q has no submenu", path[i-1])
+				return
+			}
+			index := sendInt(menu, "indexOfItemWithTitle:", uintptr(nsString(title)))
+			if index < 0 {
+				err = fmt.Errorf("mygo: no menu item %q", title)
+				return
+			}
+			item = send(menu, "itemAtIndex:", uintptr(index))
+			menu = send(item, "submenu")
+		}
+		if img := send(item, "image"); img != 0 {
+			has, template = true, sendBool(img, "isTemplate")
+		}
+	})
+	return has, template, err
+}
+
 // TestPerformKeyEquivalent sends a key press with the Command key (and
 // shift when requested) to the application menu and reports whether an item
 // handled it.
