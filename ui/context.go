@@ -229,9 +229,10 @@ func (c *context) newElement(k kind) *node {
 	p := c.parent
 	e.id = mix(p.id, uint64(p.nchild)+uint64(k)<<56)
 	e.dir = p.dir &^ dirSet
-	keyed := c.keySet
+	keyed, global := c.keySet, false
 	if c.keySet {
 		if g, ok := c.nextKey.(globalKey); ok {
+			global = true
 			// The same id under any parent, a page its children follow.
 			e.id, e.key = globalID(g.key), g.key
 			e.flags |= flagPage
@@ -245,7 +246,14 @@ func (c *context) newElement(k kind) *node {
 	}
 	p.add(e)
 	var built bool
+	if global && c.rt.states[e.id] == nil {
+		// Another window may have shown it: take over its state there.
+		c.rt.adopt(e.id)
+	}
 	e.st, built = c.rt.lookState(e.id)
+	if global {
+		noteGlobalOwner(e.id, c.rt)
+	}
 	if keyed && built {
 		c.rt.duplicateKey(e.id, e.key, e.flags&flagPage != 0)
 	}
