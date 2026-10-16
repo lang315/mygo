@@ -60,29 +60,28 @@ type DataTableState[T any, K comparable] struct {
 	// Checked are the rows checked, Chosen the rows highlighted.
 	Checked, Chosen Selection[K]
 
-	rows    []T
-	view    *TableView[T]
-	list    ListState
-	cursor  int
-	ncols   int
-	started bool
+	rows   []T
+	view   *TableView[T]
+	list   ListState
+	cursor int
+	ncols  int
 
 	// titles are the columns the search offers; column and keyword are what
 	// the select and the box show, applied what the rows are filtered by,
-	// and filtered what the view was last given.
+	// and match keeps the rows it finds, nil for none.
 	titles          []string
 	searchable      []int // the index in Columns of each of titles
 	column, keyword string
 	applied         dataSearch
-	filtered        dataFilterKey
-	hasFiltered     bool
+	match           func(x *T) bool
+	keep            func(x *T) bool
 	tcols           []TableColumn
 	menu            func(m *Menu, rows []int)
 }
 
 // start builds what the state keeps, once, from Key and Columns.
 func (s *DataTableState[T, K]) start() {
-	if s.started {
+	if s.view != nil {
 		return
 	}
 	if s.Key == nil {
@@ -100,16 +99,14 @@ func (s *DataTableState[T, K]) start() {
 		if col.Compare != nil {
 			compare[col.id()] = col.Compare
 		}
-	}
-	for i := range s.Columns {
-		if !s.Columns[i].NoSearch {
-			s.titles, s.searchable = append(s.titles, s.Columns[i].Title), append(s.searchable, i)
+		if !col.NoSearch {
+			s.titles, s.searchable = append(s.titles, col.Title), append(s.searchable, i)
 		}
 	}
 	if len(s.titles) > 0 {
 		s.column = s.titles[0]
 	}
-	s.started, s.ncols, s.cursor = true, len(s.Columns), -1
+	s.ncols, s.cursor = len(s.Columns), -1
 	s.view = NewTableView(compare)
 	s.list.Selected, s.list.Selection, s.list.Checked = &s.cursor, &s.Chosen, &s.Checked
 	s.list.Sort = &s.Sort
@@ -117,6 +114,9 @@ func (s *DataTableState[T, K]) start() {
 	s.list.Label = func(row int) string { return s.Columns[0].Text(s.At(row)) }
 	s.list.Copy = func(rows []int) string { return s.copyRows(s.pick(rows)) }
 	s.menu = func(m *Menu, rows []int) { s.RowMenu(m, s.pick(rows)) }
+	s.keep = func(x *T) bool {
+		return (s.Filter == nil || s.Filter(x)) && (s.match == nil || s.match(x))
+	}
 }
 
 // Len returns how many rows are shown.
@@ -174,7 +174,7 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 	s.rows = rows
 	return Column(c).Gap(8).Children(func() {
 		s.searchBar(c)
-		s.refilter()
+		s.view.SetFilterKey(dataFilterKey{s.FilterKey, s.applied}, s.keep)
 		s.view.Sync(rows, s.Sort)
 		s.list.Version = s.view.Version()
 		if s.RowMenu != nil {
@@ -259,28 +259,18 @@ func (s *DataTableState[T, K]) SetSearch(column, keyword string) {
 // keyword leaves the column out, so choosing another column with nothing to
 // find filters nothing again.
 func (s *DataTableState[T, K]) apply() {
-	s.applied = dataSearch{s.column, strings.TrimSpace(s.keyword)}
-	if s.applied.keyword == "" {
-		s.applied.column = ""
+	applied := dataSearch{s.column, strings.TrimSpace(s.keyword)}
+	if applied.keyword == "" {
+		applied.column = ""
 	}
-}
-
-// refilter gives the view the filter of Filter and the search, when either
-// changed since the last frame.
-func (s *DataTableState[T, K]) refilter() {
-	key := dataFilterKey{s.FilterKey, s.applied}
-	if s.hasFiltered && key == s.filtered {
+	if applied == s.applied {
 		return
 	}
-	s.filtered, s.hasFiltered = key, true
-	var match func(*T) bool
-	if key.search.column != "" {
-		i := s.searchable[slices.Index(s.titles, key.search.column)]
-		match = dataMatcher(s.Columns[i].Text, key.search.keyword)
+	s.applied, s.match = applied, nil
+	if applied.column != "" {
+		i := s.searchable[slices.Index(s.titles, applied.column)]
+		s.match = dataMatcher(s.Columns[i].Text, applied.keyword)
 	}
-	s.view.SetFilterKey(key, func(x *T) bool {
-		return (s.Filter == nil || s.Filter(x)) && (match == nil || match(x))
-	})
 }
 
 // searchBar is the row of the search: the column, the keyword, and a button.
