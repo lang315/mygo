@@ -191,7 +191,8 @@ func clickAndType(w *mygo.Window, x, y float64, text string) (ok bool) {
 }
 
 // pressKey presses the key of a virtual key code in a window of native UI,
-// through the input method.
+// through interpretKeyEvents. A real input method does not see the key:
+// darwin.TestPostKey's keys it does.
 func pressKey(w *mygo.Window, code uint16, chars string) (ok bool) {
 	mygo.RunOnMain(func() { ok = darwin.TestKey(w.NativeHandle(), code, chars) })
 	return ok
