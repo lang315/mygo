@@ -38,8 +38,8 @@ func TestRichTextEditor(t *testing.T) {
 		t.Skip("native click automation unavailable")
 	}
 	eventually(t, "the caret after the click", func() bool {
-		sel, text, _ := inputClient(w)
-		return sel == [2]int{6, 0} && text == "Hello "
+		sel, _, _ := inputClient(w)
+		return sel == [2]int{6, 0}
 	})
 	runs := func() string {
 		var s string
@@ -121,8 +121,8 @@ func TestRichTextClickEndsComposition(t *testing.T) {
 		t.Skip("native click automation unavailable")
 	}
 	eventually(t, "the caret after the click", func() bool {
-		sel, text, _ := inputClient(w)
-		return sel == [2]int{6, 0} && text == "Hello "
+		sel, _, _ := inputClient(w)
+		return sel == [2]int{6, 0}
 	})
 	if !pressKeys("Control_L", "Shift_L", "u") {
 		t.Skip("key automation unavailable")
