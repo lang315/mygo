@@ -68,7 +68,8 @@ func (c *Context) GlobalKey(key any) *Context {
 // the elements inside it, through a frame that does not build it, as a
 // Router keeps the pages of its history. Call it in each such frame. The
 // popup of a select, combobox, date or color picker inside comes back
-// closed.
+// closed; an element that had the keyboard focus gets it back, unless
+// another took it meanwhile.
 func (c *Context) KeepAlive(key any) {
 	if raw := c.build(); raw != nil {
 		raw.rt.kept[globalID(key)] = true

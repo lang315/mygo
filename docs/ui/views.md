@@ -161,7 +161,8 @@ if app.tab == "settings" {
 ```
 
 The popup of a select, combobox, date or color picker inside comes back
-closed, and the keyboard focus does not come back.
+closed. An element that had the keyboard focus as it went out of sight
+gets it back as it comes back, unless another element took it meanwhile.
 
 ## Change the state from other goroutines
 

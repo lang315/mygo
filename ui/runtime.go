@@ -208,6 +208,9 @@ type engine struct {
 	// value, which takes the press as it moves (dragMove), or 0.
 	pressDragger uint64
 	focused      uint64
+	// lostFocus is the element that had the focus as it was kept out of
+	// sight, to give it back as it comes back (prune), or 0.
+	lostFocus uint64
 	// texts are selectable paragraphs in build order; selection spans those
 	// of one Selectable container (textselection.go).
 	texts        []*state
@@ -711,8 +714,21 @@ func (rt *engine) prune() {
 		rt.setHover(chain)
 	}
 	rt.restoreFocus()
+	// An element kept with the focus gets it back as it is built again,
+	// unless another has it.
+	if s := rt.states[rt.lostFocus]; s == nil {
+		rt.lostFocus = 0
+	} else if s.seen == rt.frame && s.pass == rt.pass {
+		if rt.focused == 0 {
+			rt.focused = rt.lostFocus
+			rt.blinkStart = time.Now()
+			rt.requestFrame()
+		}
+		rt.lostFocus = 0
+	}
 	// The focus does not stay in a page kept out of sight.
 	if s := rt.states[rt.focused]; s != nil && (s.seen != rt.frame || s.pass != rt.pass) {
+		rt.lostFocus = rt.focused
 		rt.focused = 0
 	}
 }

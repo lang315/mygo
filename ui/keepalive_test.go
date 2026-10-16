@@ -183,3 +183,45 @@ func TestGlobalKeyDuplicateMessage(t *testing.T) {
 		Column(c).Children(func() { Column(c.GlobalKey("x")) })
 	}, 300, 200)
 }
+
+// An element kept with the focus gets it back when built again, unless
+// another took the focus meanwhile.
+func TestKeptElementGetsItsFocusBack(t *testing.T) {
+	for _, other := range []bool{false, true} {
+		show := true
+		var a, b string
+		tt := NewTester(func(c *Context) {
+			Column(c).Children(func() {
+				TextInput(c, &b).Label("other")
+				if show {
+					Column(c.GlobalKey("panel")).Children(func() {
+						TextInput(c, &a).Label("name")
+					})
+				} else {
+					c.KeepAlive("panel")
+				}
+			})
+		}, 300, 200)
+		if err := tt.Click("name"); err != nil {
+			t.Fatal(err)
+		}
+		show = false
+		tt.Frame()
+		if tt.Focused("name") {
+			t.Fatal("the focus stays in an element not built")
+		}
+		if other {
+			if err := tt.Click("other"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		show = true
+		tt.Frame()
+		if got := tt.Focused("name"); got == other {
+			t.Errorf("another focused %v: name focused %v as it came back", other, got)
+		}
+		if other && !tt.Focused("other") {
+			t.Error("the element coming back took the focus from another")
+		}
+	}
+}
