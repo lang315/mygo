@@ -81,7 +81,7 @@ func (e *node) buildMenu(button bool, build func(m *Menu)) {
 		if e.disabled() {
 			break
 		}
-		run := &menuRun{collect: true}
+		run := &menuRun{collect: true, iconColor: e.c.Theme().Text}
 		pm := &platform.Menu{}
 		build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[mr.text]})
 		var commands []string
@@ -124,6 +124,8 @@ type menuRun struct {
 	choice   int
 	label    string
 	chosen   bool // an item reported the choice
+	// iconColor is the color of icons drawn from SVGs: the theme's text.
+	iconColor Color
 }
 
 // MenuItem is an item of a Menu. Its methods set it up and return it, for
@@ -134,6 +136,7 @@ type MenuItem struct {
 	label    string
 	disabled bool
 	sub      bool
+	png      []byte             // the icon IconPNG gave, which wins over Icon's
 	p        *platform.MenuItem // when the menu opens
 }
 
@@ -215,6 +218,26 @@ func (it *MenuItem) Checked(on bool) *MenuItem {
 func (it *MenuItem) Shortcut(mods Modifiers, key Key) *MenuItem {
 	if it.p != nil {
 		it.p.Accelerator = accelerator(mods, key)
+	}
+	return it
+}
+
+// Icon shows s before the label, in the color of the text when it paints
+// with currentColor only; on macOS such an icon follows the menu's
+// colors. IconPNG wins over it.
+func (it *MenuItem) Icon(s *SVG) *MenuItem {
+	if it.p != nil && s != nil && it.png == nil {
+		it.p.Icon, it.p.Template = MenuIconPNG(s, it.run.iconColor)
+	}
+	return it
+}
+
+// IconPNG shows a PNG before the label, at 16×16 points: give it 32×32
+// pixels. It wins over Icon. A PNG that does not decode shows no icon.
+func (it *MenuItem) IconPNG(png []byte) *MenuItem {
+	it.png = png
+	if it.p != nil {
+		it.p.Icon, it.p.Template = png, false
 	}
 	return it
 }
