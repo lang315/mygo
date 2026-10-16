@@ -223,3 +223,22 @@ func TestWidgetMovedToAnotherWindowLeavesTheFirst(t *testing.T) {
 		t.Fatal("the first window still keeps the entry moved to another")
 	}
 }
+
+// An entry with the focus on a notebook page gets it back as the page
+// comes back: typing goes into it.
+func TestNotebookPageGetsItsFocusBack(t *testing.T) {
+	e := Entry().SetText("ab")
+	nb := Notebook().AddPage("One", e).AddPage("Two", Label("two"))
+	tt := tester(t, nb)
+	e.Focus()
+	tt.Frame()
+	nb.SetPage(1)
+	tt.Frame()
+	nb.SetPage(0)
+	tt.Frame()
+	tt.Type("X")
+	tt.Frame()
+	if got := e.Text(); got != "abX" {
+		t.Fatalf("text %q after coming back to the page and typing X, want abX", got)
+	}
+}

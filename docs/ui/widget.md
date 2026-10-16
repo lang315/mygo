@@ -209,8 +209,8 @@ position and open popups of its `ui` elements follow it when its box
 reorders or it moves to another box. A widget that is not built (hidden, on
 a tab not shown, or out of the window's content for a while) keeps all of
 it while your program holds the widget; it shows again as it was, with the
-popup of a select, combobox, date or color picker closed and without the
-keyboard focus. Moving a widget to another window starts its state anew,
+popup of a select, combobox, date or color picker closed. A widget that
+had the keyboard focus gets it back, unless another took it meanwhile. Moving a widget to another window starts its state anew,
 and so does the second place of a widget shown in two.
 
 ## Widgets
