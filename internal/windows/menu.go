@@ -68,18 +68,19 @@ func (t *menuTable) drop(owner int) {
 	delete(t.bitmaps, owner)
 }
 
-// buildMenu creates a native menu bar or popup menu. The top-level items
-// of a bar get no bitmap: a dark bar draws them as text (darkmenu.go).
-func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[accelKey]uint16) uintptr {
+// buildMenu creates a native menu bar or popup menu, with item bitmaps for
+// dpi. The top-level items of a bar get no bitmap: a dark bar draws them as
+// text (darkmenu.go), and nothing frees those of owner 0.
+func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[accelKey]uint16, dpi int) uintptr {
 	var h uintptr
 	if bar {
 		h, _, _ = procCreateMenu.Call()
 	} else {
 		h, _, _ = procCreatePopupMenu.Call()
 	}
-	size := 16 * dpiOf(0) / 96
+	size := 16 * dpi / 96
 	bitmap := func(it *platform.MenuItem) uintptr {
-		if bar || len(it.Icon) == 0 {
+		if bar || owner == 0 || len(it.Icon) == 0 {
 			return 0
 		}
 		bmp := menuBitmap(it.Icon, size)
@@ -101,7 +102,7 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 			flags |= mfGrayed
 		}
 		if it.Submenu != nil {
-			sub := b.buildMenu(it.Submenu, false, owner, accels)
+			sub := b.buildMenu(it.Submenu, false, owner, accels, dpi)
 			procAppendMenuW.Call(h, flags|mfPopup, sub, uintptr(unsafe.Pointer(u16(it.Label))))
 			if bmp := bitmap(it); bmp != 0 {
 				n, _, _ := procGetMenuItemCount.Call(h)
@@ -181,7 +182,8 @@ func (w *window) installMenu(m *platform.Menu) {
 	w.menu, w.hmenu, w.owner, w.accels = m, 0, 0, map[accelKey]uint16{}
 	if m != nil && len(m.Items) > 0 {
 		w.owner = w.b.menus.newOwner()
-		w.hmenu = w.b.buildMenu(m, true, w.owner, w.accels)
+		// shortcut: the bitmaps keep the DPI of the window when built, rebuild on WM_DPICHANGED if icons look wrong after a move.
+		w.hmenu = w.b.buildMenu(m, true, w.owner, w.accels, dpiOf(w.hwnd))
 	}
 	w.attachMenu()
 	if old != 0 {
@@ -397,7 +399,7 @@ func (b *Backend) PopupMenu(m *platform.Menu, pw platform.Window, pos *platform.
 	}
 	id := b.menus.newOwner()
 	defer b.menus.drop(id)
-	menu := b.buildMenu(m, false, id, nil)
+	menu := b.buildMenu(m, false, id, nil, dpiOf(owner))
 	defer procDestroyMenu.Call(menu)
 
 	var pt point

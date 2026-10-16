@@ -39,7 +39,7 @@ func TestPopupMenuFreesBitmaps(t *testing.T) {
 	b := &Backend{menus: newMenuTable()}
 	m := &platform.Menu{Items: []*platform.MenuItem{{ID: 1, Label: "Icon", Enabled: true, Visible: true, Icon: testPNG(t)}}}
 	owner := b.menus.newOwner()
-	h := b.buildMenu(m, false, owner, nil)
+	h := b.buildMenu(m, false, owner, nil, 96)
 	if len(b.menus.bitmaps[owner]) != 1 {
 		t.Fatalf("bitmaps %v", b.menus.bitmaps[owner])
 	}
