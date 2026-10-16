@@ -47,4 +47,5 @@ panics where the second key was given, as apps only log it.
   `tt.FailOpenURL` makes the links it opens fail, as those no app opens.
 - **Frames.** `tt.Frame` draws a frame, for what changed outside the view,
   and `tt.Image()` is the last frame, for snapshots; `ui.Render` draws a
-  view once at a given scale.
+  view once at a given scale. `tt.Update(fn)` stands for `Window.Update`:
+  goroutines queue `fn`, which the next frame runs before building.

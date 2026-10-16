@@ -5,6 +5,7 @@ import (
 	"image"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/egoist/mygo/i18n"
@@ -198,6 +199,9 @@ func coreRender(view func(c *context), width, height int, scale float32) *image.
 type Tester struct {
 	rt *engine
 	h  *headless
+
+	mu      sync.Mutex
+	updates []func()
 }
 
 // NewTester starts testing view in a window of width×height DIPs. Two
@@ -214,8 +218,24 @@ func coreNewTester(view func(c *context), width, height int) *Tester {
 	return t
 }
 
+// Update queues fn for the next frame the tester draws, which runs it
+// before building: what Window.Update does for a window. Goroutines may
+// call it, as workers call Window.Update.
+func (t *Tester) Update(fn func()) {
+	t.mu.Lock()
+	t.updates = append(t.updates, fn)
+	t.mu.Unlock()
+}
+
 // settle runs frames until the view asks for no more, or 20 of them.
 func (t *Tester) settle() {
+	t.mu.Lock()
+	updates := t.updates
+	t.updates = nil
+	t.mu.Unlock()
+	for _, fn := range updates {
+		fn()
+	}
 	for i := 0; i < 20; i++ {
 		t.h.requested.Store(false)
 		for len(t.h.later) > 0 {

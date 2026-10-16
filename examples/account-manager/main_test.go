@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,23 +12,16 @@ import (
 )
 
 // tester shows a in a headless window, with updates from workers queued
-// for wait to run.
+// for its frames to run.
 type tester struct {
 	*ui.Tester
-	t       *testing.T
-	a       *app
-	mu      sync.Mutex
-	pending []func()
+	t *testing.T
+	a *app
 }
 
 func newTester(t *testing.T, a *app) *tester {
-	tt := &tester{t: t, a: a}
-	a.update = func(fn func()) {
-		tt.mu.Lock()
-		tt.pending = append(tt.pending, fn)
-		tt.mu.Unlock()
-	}
-	tt.Tester = ui.NewTester(a.build, 1280, 800)
+	tt := &tester{t: t, a: a, Tester: ui.NewTester(a.build, 1280, 800)}
+	a.update = tt.Update
 	return tt
 }
 
@@ -54,13 +46,7 @@ func (tt *tester) wait(r **runner) {
 		if time.Now().After(end) {
 			tt.t.Fatal("the run did not end")
 		}
-		tt.mu.Lock()
-		fns := tt.pending
-		tt.pending = nil
-		tt.mu.Unlock()
-		for _, fn := range fns {
-			fn()
-		}
+		tt.Frame()
 		time.Sleep(10 * time.Millisecond)
 	}
 	tt.Frame()
