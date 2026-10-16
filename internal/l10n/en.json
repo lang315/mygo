@@ -40,6 +40,10 @@
   "@search": {
     "description": "What an empty search field shows."
   },
+  "column": "Column",
+  "@column": {
+    "description": "Labels the choice of the column a data table searches."
+  },
   "clear": "Clear",
   "@clear": {
     "description": "Labels the button that clears a search field."
