@@ -37,13 +37,6 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   (or unchecks them when all are checked), and `CheckedChanged` reports a
   change by the user. Assistive technology reads it as "Check" and the
   item's `Label`. There is no "check all": Cmd+A, then Space.
-
-```go
-app.photos.Checked = &app.checked
-if ui.GridView(c, &app.photos, len(photos), 140, 120, item).Grow(1).CheckedChanged() {
-	app.updateToolbar()
-}
-```
 - `ItemMenu` gives the items a [context menu](context-menu.md), filled for
   `items`, the items chosen in order. A right click on an item not chosen
   chooses it first, and a grid that does not choose gets the item clicked.
@@ -55,6 +48,11 @@ if ui.GridView(c, &app.photos, len(photos), 140, 120, item).Grow(1).CheckedChang
   and `""` leaves the clipboard as it was.
 
 ```go
+app.photos.Checked = &app.checked
+if ui.GridView(c, &app.photos, len(photos), 140, 120, item).Grow(1).CheckedChanged() {
+	app.updateToolbar()
+}
+
 app.photos.ItemMenu = func(m *ui.Menu, items []int) {
 	if m.Item("Delete").Chosen() {
 		app.delete(items)

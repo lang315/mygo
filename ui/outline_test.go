@@ -277,9 +277,6 @@ func TestOutlineTableChecked(t *testing.T) {
 	box := func(label string) platform.AccessNode {
 		return accessNode(t, tt.h.access, platform.RoleCheckBox, label)
 	}
-	click := func(n platform.AccessNode) {
-		tt.ClickAt(float32(n.Bounds.X+n.Bounds.W/2), float32(n.Bounds.Y+n.Bounds.H/2))
-	}
 	// Rows shown: src, ui, list.go, tree.go, main.go, docs, README.md. Each
 	// has a checkbox node, as in a Table, besides the header's.
 	boxes := 0
@@ -295,7 +292,7 @@ func TestOutlineTableChecked(t *testing.T) {
 		box("Check " + name)
 	}
 	// Checking a child row does not choose it.
-	click(box("Check list.go"))
+	clickAccess(tt, box("Check list.go"))
 	if !checked.Has("src/ui/list.go") || checked.Len() != 1 || events != 1 || sel != -1 {
 		t.Fatalf("checking list.go: %v, %d events, chose %d", checked.keys, events, sel)
 	}
@@ -311,11 +308,11 @@ func TestOutlineTableChecked(t *testing.T) {
 		t.Errorf("list.go after src/ui opened again: %+v", n)
 	}
 	// The header checks and unchecks the rows shown.
-	click(box("Check all"))
+	clickAccess(tt, box("Check all"))
 	if checked.Len() != 7 || events != 2 {
 		t.Fatalf("checking all: %d checked, %d events", checked.Len(), events)
 	}
-	click(box("Check all"))
+	clickAccess(tt, box("Check all"))
 	if checked.Len() != 0 || events != 3 {
 		t.Fatalf("unchecking all: %d checked, %d events", checked.Len(), events)
 	}

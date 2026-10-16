@@ -167,10 +167,7 @@ func TestGridViewChecked(t *testing.T) {
 		n := nodeByID(tt.rt.c.root, box(name).ID)
 		return n != nil && !(n.opacitySet && n.opacity == 0)
 	}
-	clickBox := func(name string) {
-		b := box(name)
-		tt.ClickAt(float32(b.Bounds.X+b.Bounds.W/2), float32(b.Bounds.Y+b.Bounds.H/2))
-	}
+	clickBox := func(name string) { clickAccess(tt, box(name)) }
 	// Nothing checked, the pointer away: no checkbox shows, but each item
 	// has its node for assistive technology.
 	for _, name := range names {
@@ -253,15 +250,13 @@ func TestGridViewCheckedWithoutSelected(t *testing.T) {
 	tt.Move(r.X, r.Y)
 	tt.Frame()
 	// A grid that does not choose still checks by click on the box.
-	cell := accessNode(t, tt.h.access, platform.RoleListItem, "Item 2")
+	var boxes []platform.AccessNode
 	for _, n := range tt.h.access.Nodes {
-		inCell := n.Bounds.X >= cell.Bounds.X && n.Bounds.Y >= cell.Bounds.Y &&
-			n.Bounds.X+n.Bounds.W <= cell.Bounds.X+cell.Bounds.W && n.Bounds.Y+n.Bounds.H <= cell.Bounds.Y+cell.Bounds.H
-		if n.Role == platform.RoleCheckBox && inCell {
-			tt.ClickAt(float32(n.Bounds.X+n.Bounds.W/2), float32(n.Bounds.Y+n.Bounds.H/2))
-			break
+		if n.Role == platform.RoleCheckBox {
+			boxes = append(boxes, n)
 		}
 	}
+	clickAccess(tt, boxes[2]) // the boxes come in the order of the items
 	if checked.Len() != 1 || events != 1 {
 		t.Fatalf("checked %v, %d events", checked.keys, events)
 	}
@@ -456,8 +451,7 @@ func TestGridViewHiddenCheckboxPassesClick(t *testing.T) {
 		coreGridView(c, &s, len(names), 100, 60, func(i int) { coreText(c, names[i]) }).Grow(1)
 	}, 448, 300)
 	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
-	b := accessNode(t, tt.h.access, platform.RoleCheckBox, "Check c")
-	tt.ClickAt(float32(b.Bounds.X+b.Bounds.W/2), float32(b.Bounds.Y+b.Bounds.H/2))
+	clickAccess(tt, accessNode(t, tt.h.access, platform.RoleCheckBox, "Check c"))
 	if sel != 2 || !chosen.Has("c") || checked.Len() != 0 {
 		t.Fatalf("a click on the hidden checkbox of c: chose %d (%v), checked %v", sel, chosen.keys, checked.keys)
 	}

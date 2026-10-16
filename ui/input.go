@@ -1299,7 +1299,7 @@ func (e *node) ColumnsChanged() bool { return e.event(eventColumns) }
 
 // CheckedChanged applies pending input and reports whether the checkbox of
 // a row of this Table, or of its header, or of an item of this GridView,
-// changed ListState.Checked (GridState.Checked) in this build pass.
+// changed the checks in this build pass.
 func (e *node) CheckedChanged() bool { return e.event(eventChecked) }
 
 // Activated applies pending input and reports the row of this List or

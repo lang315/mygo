@@ -302,19 +302,11 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			row.Children(func() {
 				if s.Checked != nil {
 					checkCell(c, checkW, func() {
-						k := s.keyOf(i)
-						on := s.Checked.has(k)
 						label := "Check"
 						if s.Label != nil {
 							label += " " + s.Label(i)
 						}
-						box := checkbox(c, &on, "", false).Label(label)
-						box.flags &^= flagFocusable
-						table.afterInput(func() {
-							if box.Changed() && s.Checked.set(k, on) {
-								table.st.markEvent(eventChecked)
-							}
-						})
+						itemCheckbox(c, table, s.Checked, s.keyOf(i), label)
 					})
 				}
 				cells(RoleCell, func(j int) { cell(i, j) })
@@ -606,6 +598,23 @@ func copyInput(rt *engine, chosen func() []int, copy func([]int) string) func(In
 		}
 		return true
 	}
+}
+
+// itemCheckbox builds the checkbox named label of the row or item whose key
+// is k, which checks it in checked and tells owner, the table or grid. It
+// returns the checkbox and whether k is checked. It takes no keyboard focus: a
+// click leaves it on owner, whose keys and Copy keep working, and Space checks.
+func itemCheckbox(c *context, owner *node, checked Selector, k any, label string) (box *node, on bool) {
+	on = checked.has(k)
+	box = checkbox(c, &on, "", false).Label(label)
+	box.flags &^= flagFocusable
+	owner.afterInput(func() {
+		// on is what the checkbox set through its pointer.
+		if box.Changed() && checked.set(k, on) {
+			owner.st.markEvent(eventChecked)
+		}
+	})
+	return box, on
 }
 
 // checkCell builds the checkbox cell of a row or of the header, which

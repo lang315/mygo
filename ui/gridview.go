@@ -282,10 +282,13 @@ func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
 func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item func(i int)) *node {
 	t := c.theme
 	// A border, clear unless chosen, keeps the content in place as it is.
-	cell := coreColumn(c).Key(s.key(i)).Grow(1).Basis(0).MinWidth(0).Height(height).Radius(t.Radius).Border(2, Color{}).Role(RoleListItem)
+	k := s.key(i)
+	cell := coreColumn(c).Key(k).Grow(1).Basis(0).MinWidth(0).Height(height).Radius(t.Radius).Border(2, Color{}).Role(RoleListItem)
 	cell.setPos, cell.setSize = i+1, n
+	name := ""
 	if s.Label != nil {
-		cell.Label(s.Label(i))
+		name = s.Label(i)
+		cell.Label(name)
 	}
 	if s.built == nil {
 		s.built = map[uint64]int{}
@@ -338,7 +341,7 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item 
 	cell.Children(func() {
 		item(i)
 		if s.Checked != nil {
-			s.checkBox(c, grid, cell, i)
+			s.checkBox(c, grid, cell, k, name)
 		}
 	})
 	return cell
@@ -348,31 +351,28 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item 
 // It is built for every cell, so that assistive technology can act on it,
 // and shows when the item is checked, when the pointer is over the cell, or
 // when any item is: a hidden one lets the pointer through to the cell.
-func (s *GridState) checkBox(c *context, grid, cell *node, i int) {
+func (s *GridState) checkBox(c *context, grid, cell *node, k any, name string) {
 	t := c.theme
-	k := s.key(i)
-	on := s.Checked.has(k)
 	label := "Check"
-	if s.Label != nil {
-		label += " " + s.Label(i)
+	if name != "" {
+		label += " " + name
 	}
-	box := checkbox(c, &on, "", false).Label(label).Absolute().Top(t.Space(1)).Start(t.Space(1))
+	box, on := itemCheckbox(c, grid, s.Checked, k, label)
+	box.Absolute().Top(t.Space(1)).Start(t.Space(1))
 	// A background keeps it visible over a light or a dark image.
 	box.Padding(t.Space(1)).Radius(t.Radius).Background(t.Surface.Alpha(0.85))
-	// Not focusable, as a table's: a click leaves the focus on the grid.
-	box.flags &^= flagFocusable
 	if !on && !cell.Hovered() && s.Checked.size() == 0 {
-		// Its children too: the square inside would take the click.
-		box.Opacity(0).PassThrough()
-		for ch := box.first; ch != nil; ch = ch.next {
-			ch.PassThrough()
-		}
+		passThroughAll(box.Opacity(0))
 	}
-	grid.afterInput(func() {
-		if box.Changed() && s.Checked.set(k, on) {
-			grid.st.markEvent(eventChecked)
-		}
-	})
+}
+
+// passThroughAll lets the pointer through e and everything inside it, which
+// PassThrough alone does not: the square of a checkbox would take the click.
+func passThroughAll(e *node) {
+	e.PassThrough()
+	for ch := e.first; ch != nil; ch = ch.next {
+		passThroughAll(ch)
+	}
 }
 
 // chosenItems returns the items chosen, in order, or nil when none is.
@@ -386,6 +386,9 @@ func (s *GridState) chosenItems(n int) []int {
 		for j := range n {
 			if s.Selection.has(s.key(j)) {
 				items = append(items, j)
+				if len(items) == s.Selection.size() {
+					break // the rest of a large grid has none
+				}
 			}
 		}
 		return items
