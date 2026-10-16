@@ -36,24 +36,33 @@ closures) and a cell per column.
 
 The numbers below were measured on another machine than the first table:
 an Apple M1 Pro, macOS arm64, Go 1.27.2, with the same settings
-(`CGO_ENABLED=0 GOMAXPROCS=1`, medians of six 300 ms samples).
+(`CGO_ENABLED=0 GOMAXPROCS=1`, medians of six 300 ms samples), last on
+October 16, 2026.
 
 | Fixture (Apple M1 Pro) | Time per frame | Allocations per frame | Allocated bytes per frame |
 |---|---:|---:|---:|
-| Table of 100,000 rows with checkboxes, sorted by a `TableView` | 116 µs | 203 | 5,765 |
+| Table of 100,000 rows with checkboxes, sorted by a `TableView` | 119 µs | 203 | 5,781 |
+
+The frame costs about the same at 1,000 rows (121 µs) and at 1,000,000 (122 µs): it
+pays for the rows in view of a 600-pixel window, not for the rows behind
+them. It misses the design's target of tens of microseconds. A CPU profile
+spends the frame on layout (about 37%), building the rows (23%), painting
+(16%) and committing (5%), spread over the engine rather than in the table:
+each row is measured, then laid out, as rows may be of any height. A faster
+frame needs a faster engine, not a different table.
 
 For 100,000 rows, the `TableView` itself takes:
 
 | Operation | Time | Allocations |
 |---|---:|---:|
-| `Sync` with nothing changed | 3.6 ns | 0 |
-| `Changed` for 1 row, then `Sync` | 97 µs | 0 |
-| `Changed` for 10 rows, then `Sync` | 89 µs | 0 |
-| `Changed` for 100 rows, then `Sync` | 106 µs | 0 |
-| `SetFilter`, then `Sync` (a search typed or cleared, rows sorted) | 118 µs | 0 |
-| `Changed` for 1 row, then `Sync`, a filter keeping 5 rows in 7 | 151 µs | 0 |
-| `Changed` for 100 rows, then `Sync`, a filter keeping 5 rows in 7 | 176 µs | 0 |
-| Sorting all rows again (a click on a header) | 11.7 ms | 0 |
+| `Sync` with nothing changed | 5.1 ns | 0 |
+| `Changed` for 1 row, then `Sync` | 95 µs | 0 |
+| `Changed` for 10 rows, then `Sync` | 88 µs | 0 |
+| `Changed` for 100 rows, then `Sync` | 107 µs | 0 |
+| `SetFilter`, then `Sync` (a search typed or cleared, rows sorted) | 109 µs | 0 |
+| `Changed` for 1 row, then `Sync`, a filter keeping 5 rows in 7 | 155 µs | 0 |
+| `Changed` for 100 rows, then `Sync`, a filter keeping 5 rows in 7 | 186 µs | 0 |
+| Sorting all rows again (a click on a header) | 11.4 ms | 0 |
 
 Each is the median of six 300 ms samples. A change of a few rows costs a
 pass over the order, so about 0.1 ms whether the rows are 1 or 100 (half
