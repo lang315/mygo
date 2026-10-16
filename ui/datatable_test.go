@@ -209,6 +209,7 @@ func TestDataTableSearchMatches(t *testing.T) {
 		{"empty keeps all", "Name", "", []int{1, 2, 3, 4}},
 		{"spaces only keep all", "Name", "   ", []int{1, 2, 3, 4}},
 		{"list of values is exact", "Name", "alpha|bravo", []int{2, 3}},
+		{"list values are trimmed", "Name", " alpha | |bravo ", []int{2, 3}},
 		{"list is not a substring", "Name", "alp|zzz", nil},
 		{"list of nothing keeps all", "Name", "|", []int{1, 2, 3, 4}},
 		{"nothing found", "Name", "zzz", nil},
@@ -614,5 +615,120 @@ func TestDataTableSearchBarSpeaksTheLanguageOfTheApp(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("搜索") || tt.HasText("Column") || !slices.Contains(tt.Texts(), "列") {
 		t.Errorf("the search bar in Chinese: %q", tt.Texts())
+	}
+}
+
+func TestDataTableNoSearchBarHidesOnlyTheBar(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	s.NoSearchBar = true
+	tt := dtTester(s, &rows)
+	if tt.HasText("Search") || tt.HasText("Column") {
+		t.Errorf("the bar is shown with NoSearchBar: %q", tt.Texts())
+	}
+	// The app's own bar drives the table through SetSearch and Search.
+	s.SetSearch("Name", "alp")
+	tt.Frame()
+	if got := dtShown(s); !slices.Equal(got, []int{2}) {
+		t.Fatalf("SetSearch with NoSearchBar: rows %v, want 2", got)
+	}
+	if column, keyword := s.Search(); column != "Name" || keyword != "alp" {
+		t.Errorf("Search: %q %q", column, keyword)
+	}
+}
+
+func TestDataTableWithoutSearchableColumnsHasNoBar(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	for i := range s.Columns {
+		s.Columns[i].NoSearch = true
+	}
+	tt := dtTester(s, &rows)
+	if tt.HasText("Search") || tt.HasText("Column") {
+		t.Errorf("a bar with nothing to search: %q", tt.Texts())
+	}
+	if got := dtShown(s); len(got) != 3 {
+		t.Errorf("rows %v, want all", got)
+	}
+	if got := dtPanic(func() { s.SetSearch("Name", "x") }); !strings.Contains(got, `no searchable column "Name"`) {
+		t.Errorf("SetSearch with no searchable column: panic %q", got)
+	}
+}
+
+func TestDataTableVersionChangesWithTheRowsShown(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	tt := dtTester(s, &rows)
+	v := s.Version()
+	tt.Frame()
+	if s.Version() != v {
+		t.Errorf("a frame with nothing changed moved the version: %d, was %d", s.Version(), v)
+	}
+	dtClickLast(t, tt, "Name")
+	if s.Version() == v {
+		t.Error("a sort did not move the version")
+	}
+	v = s.Version()
+	s.SetSearch("Name", "alpha")
+	tt.Frame()
+	if s.Version() == v {
+		t.Error("a search did not move the version")
+	}
+}
+
+func TestDataTableAColumnTitledHashWorksWithIndex(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	s.Index = true
+	s.Columns[1].Title = "#"
+	var tt *Tester
+	if got := dtPanic(func() { tt = dtTester(s, &rows) }); got != "" {
+		t.Fatalf("a column titled # with Index panics: %s", got)
+	}
+	for _, text := range []string{"1", "2", "3", "c@x.io"} {
+		if !tt.HasText(text) {
+			t.Errorf("%q is not shown: %q", text, tt.Texts())
+		}
+	}
+}
+
+func TestDataTableAnUncomparableFilterKeyPanicsAtOnce(t *testing.T) {
+	// A struct holding a slice in an interface compares at run time only.
+	for _, key := range []any{[]int{1}, map[string]int{}, func() {}, struct{ v any }{[]int{1}}} {
+		s, rows := dtState(), dtRows()
+		s.FilterKey = key
+		got := dtPanic(func() { dtTester(s, &rows) })
+		want := fmt.Sprintf("ui: DataTable FilterKey %T is not comparable", key)
+		if got != want {
+			t.Errorf("FilterKey %T: panic %q, want %q", key, got, want)
+		}
+	}
+}
+
+// The search finds what strings.ToLower finds, on the texts lowered as on
+// the keyword, whatever the letters: Vietnamese, İ, invalid UTF-8.
+func TestDataMatcherFoldsAsToLower(t *testing.T) {
+	cells := []string{"Thành công", "THÀNH CÔNG", "Đang chạy", "ĐANG", "İstanbul", "i̇stanbul", "a\xffb", "A\xffB", "abc", "ABC", "", "Ǆ"}
+	kws := []string{"thành", "THÀNH công", "đang", "İ", "i̇", "\xff", "a\xffb", "b", "ǆ", "Ǆ", "ǅ"}
+	text := func(x *dtRow) string { return x.Name }
+	for _, cell := range cells {
+		for _, kw := range kws {
+			want := strings.Contains(strings.ToLower(cell), strings.ToLower(kw))
+			if got := dataMatcher(text, kw)(&dtRow{Name: cell}); got != want {
+				t.Errorf("dataMatcher(%q) on %q = %v, want %v", kw, cell, got, want)
+			}
+		}
+	}
+}
+
+// The search goes through every row: an allocation a row is a million at a
+// million rows.
+func TestDataMatcherDoesNotAllocatePerRow(t *testing.T) {
+	x := &dtRow{Name: "Thành công"}
+	text := func(x *dtRow) string { return x.Name }
+	for _, kw := range []string{"thành", "Thành công|Lỗi"} {
+		keep := dataMatcher(text, kw)
+		if !keep(x) {
+			t.Fatalf("%q does not keep the row searched for", kw)
+		}
+		if n := testing.AllocsPerRun(100, func() { keep(x) }); n != 0 {
+			t.Errorf("%q: %v allocations a row", kw, n)
+		}
 	}
 }

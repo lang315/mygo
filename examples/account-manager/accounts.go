@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"fmt"
 	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -60,26 +57,26 @@ const (
 	colNote
 )
 
-// columns are the table's, titled as fhtool's; all of them sort.
+// columns are the table's, titled as fhtool's; compare() has a sort for each.
 var columns = []ui.TableColumn{
-	{Title: "UID", Width: 150, Sortable: true},
-	{Title: "Mật khẩu", Width: 110, Sortable: true},
-	{Title: "2FA", Width: 150, Sortable: true},
-	{Title: "Email", Width: 210, Sortable: true},
-	{Title: "Email khôi phục", Width: 210, Sortable: true},
-	{Title: "Proxy", Width: 170, Sortable: true},
-	{Title: "IP", Width: 120, Sortable: true},
-	{Title: "Lần chạy cuối", Width: 150, Sortable: true},
-	{Title: "Trạng thái", Width: 170, Sortable: true},
-	{Title: "Cookie", Width: 240, Sortable: true},
-	{Title: "Tên", Width: 150, Sortable: true},
-	{Title: "Bạn bè", Width: 70, Align: ui.End, Sortable: true},
-	{Title: "Nhóm", Width: 60, Align: ui.End, Sortable: true},
-	{Title: "Quốc Gia", Width: 80, Sortable: true},
-	{Title: "Tài Nguyên", Width: 100, Sortable: true},
-	{Title: "Năm tạo", Width: 70, Align: ui.End, Sortable: true},
-	{Title: "Ngày backup", Width: 100, Sortable: true},
-	{Title: "Ghi Chú", Width: 160, Sortable: true},
+	{Title: "UID", Width: 150},
+	{Title: "Mật khẩu", Width: 110},
+	{Title: "2FA", Width: 150},
+	{Title: "Email", Width: 210},
+	{Title: "Email khôi phục", Width: 210},
+	{Title: "Proxy", Width: 170},
+	{Title: "IP", Width: 120},
+	{Title: "Lần chạy cuối", Width: 150},
+	{Title: "Trạng thái", Width: 170},
+	{Title: "Cookie", Width: 240},
+	{Title: "Tên", Width: 150},
+	{Title: "Bạn bè", Width: 70, Align: ui.End},
+	{Title: "Nhóm", Width: 60, Align: ui.End},
+	{Title: "Quốc Gia", Width: 80},
+	{Title: "Tài Nguyên", Width: 100},
+	{Title: "Năm tạo", Width: 70, Align: ui.End},
+	{Title: "Ngày backup", Width: 100},
+	{Title: "Ghi Chú", Width: 160},
 }
 
 // titles are the columns' titles, for the column searched.
@@ -90,16 +87,6 @@ var titles = func() []string {
 	}
 	return t
 }()
-
-// columnIndex is the column titled title, -1 for none.
-func columnIndex(title string) int {
-	for i, col := range columns {
-		if col.Title == title {
-			return i
-		}
-	}
-	return -1
-}
 
 // cellText is what column col shows of a: the cells, the search and the
 // copies read it.
@@ -168,6 +155,35 @@ func compare() map[string]func(a, b *account) int {
 	return m
 }
 
+// dataColumns are the columns of the DataTable: the cells, the sorts and
+// the search read cellText.
+func dataColumns() []ui.DataColumn[account] {
+	sorts := compare()
+	out := make([]ui.DataColumn[account], len(columns))
+	for col, c := range columns {
+		out[col] = ui.DataColumn[account]{
+			TableColumn: c,
+			Text:        func(a *account) string { return cellText(a, col) },
+			Compare:     sorts[c.Title],
+		}
+	}
+	out[colStatus].Cell = statusCell
+	return out
+}
+
+// statusCell shows the status colored by where the account's run is.
+func statusCell(c *ui.Context, x *account) {
+	cell := ui.Text(c, x.Status).SingleLine()
+	switch x.state {
+	case running:
+		cell.TextColor(ui.RGB(250, 204, 21)).TextBackground(ui.RGB(0, 0, 0)).Bold()
+	case failed:
+		cell.TextColor(c.Theme().Danger)
+	case succeeded:
+		cell.TextColor(c.Theme().Success)
+	}
+}
+
 var (
 	lastNames  = []string{"Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Phan", "Vũ", "Đặng", "Bùi", "Đỗ"}
 	firstNames = []string{"Anh", "Bình", "Châu", "Dũng", "Giang", "Hà", "Hùng", "Khánh", "Linh", "Minh", "Nam", "Phương", "Quân", "Thảo", "Trang", "Tuấn", "Vy"}
@@ -224,54 +240,4 @@ func generate(n, first int, seed uint64) []account {
 		out[i] = a
 	}
 	return out
-}
-
-// matcher keeps the accounts whose column col matches keyword: a keyword
-// with | lists the values to match exactly, as fhtool's UID1|UID2 search,
-// another matches the values containing it, case aside. A keyword
-// listing nothing keeps all.
-func matcher(col int, keyword string) func(a *account) bool {
-	keyword = strings.TrimSpace(keyword)
-	if strings.Contains(keyword, "|") {
-		set := map[string]bool{}
-		for v := range strings.SplitSeq(keyword, "|") {
-			if v = strings.TrimSpace(v); v != "" {
-				set[v] = true
-			}
-		}
-		if len(set) > 0 {
-			return func(a *account) bool { return set[cellText(a, col)] }
-		}
-		keyword = ""
-	}
-	if keyword == "" {
-		return func(*account) bool { return true }
-	}
-	kw := []byte(strings.ToLower(keyword))
-	// The filter runs on one goroutine, so one buffer holds each cell
-	// lowered in turn.
-	var buf []byte
-	return func(a *account) bool {
-		buf = appendLower(buf[:0], cellText(a, col))
-		return bytes.Contains(buf, kw)
-	}
-}
-
-// appendLower appends s as strings.ToLower lowers it, without allocating
-// for a buffer large enough.
-func appendLower(buf []byte, s string) []byte {
-	for i := 0; i < len(s); {
-		if c := s[i]; c < utf8.RuneSelf {
-			if 'A' <= c && c <= 'Z' {
-				c += 'a' - 'A'
-			}
-			buf = append(buf, c)
-			i++
-			continue
-		}
-		r, n := utf8.DecodeRuneInString(s[i:])
-		buf = utf8.AppendRune(buf, unicode.ToLower(r))
-		i += n
-	}
-	return buf
 }

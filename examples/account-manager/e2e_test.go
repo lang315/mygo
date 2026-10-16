@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,8 +54,8 @@ func TestLiveColumns(t *testing.T) {
 		title := columns[col].Title
 		for _, desc := range []bool{false, true} {
 			e.tt.do(e.tt.Click(title))
-			if want := (ui.SortOrder{Column: title, Descending: desc}); a.sort != want {
-				t.Fatalf("a click on %s sorted by %+v, want %+v", title, a.sort, want)
+			if want := (ui.SortOrder{Column: title, Descending: desc}); a.table.Sort != want {
+				t.Fatalf("a click on %s sorted by %+v, want %+v", title, a.table.Sort, want)
 			}
 			e.check()
 			e.ticks(10)
@@ -68,8 +69,8 @@ func TestLiveColumns(t *testing.T) {
 	e.tt.do(e.tt.Click("Nhập từ khoá (UID1|UID2|…)"))
 	e.tt.Type("thành công")
 	e.tt.do(e.tt.Click("Tìm kiếm"))
-	if a.filtered.keyword != "thành công" {
-		t.Fatalf("the search typed is not shown: %+v", a.filtered)
+	if _, kw := a.table.Search(); kw != "thành công" {
+		t.Fatalf("the search typed is not shown: %q", kw)
 	}
 	e.check()
 	e.ticks(10)
@@ -134,9 +135,9 @@ func (e *live) ticks(n int) {
 func (e *live) check() {
 	e.t.Helper()
 	a := e.a
-	got := make([]int, a.view.Len())
+	got := make([]int, a.table.Len())
 	for i := range got {
-		got[i] = a.view.Row(i)
+		got[i] = a.s.index[a.table.At(i).ID] // the index in the slice
 	}
 	if !e.sorted(got) {
 		want := e.want()
@@ -144,26 +145,57 @@ func (e *live) check() {
 		for i < min(len(got), len(want)) && got[i] == want[i] {
 			i++
 		}
-		e.t.Fatalf("sort %+v, search %+v: %d rows, want %d; they differ from row %d", a.sort, a.filtered, len(got), len(want), i)
+		column, keyword := a.table.Search()
+		e.t.Fatalf("sort %+v, search %q in %q: %d rows, want %d; they differ from row %d", a.table.Sort, keyword, column, len(got), len(want), i)
 	}
-	if changed := !slices.Equal(got, e.order); changed != (a.view.Version() != e.version) {
-		e.t.Fatalf("sort %+v: the order changed %v, the version changed %v", a.sort, changed, !changed)
+	if changed := !slices.Equal(got, e.order); changed != (a.table.Version() != e.version) {
+		e.t.Fatalf("sort %+v: the order changed %v, the version changed %v", a.table.Sort, changed, !changed)
 	}
-	e.order, e.version = got, a.view.Version()
+	e.order, e.version = got, a.table.Version()
 	// A row shows its check box, labeled by the UID, then its cells.
 	texts, at := e.tt.Texts(), -1
 	for row := range min(5, len(got)) {
 		x := &a.s.accounts[got[row]]
 		i := slices.Index(texts, "Check "+x.UID)
 		if i <= at || i+len(columns) >= len(texts) {
-			e.t.Fatalf("sort %+v: row %d, %s, not shown after row %d", a.sort, row, x.UID, row-1)
+			e.t.Fatalf("sort %+v: row %d, %s, not shown after row %d", a.table.Sort, row, x.UID, row-1)
 		}
 		for col := range columns {
 			if s := cellText(x, col); texts[i+1+col] != s {
-				e.t.Fatalf("sort %+v: row %d's %s shows %q, want %q", a.sort, row, columns[col].Title, texts[i+1+col], s)
+				e.t.Fatalf("sort %+v: row %d's %s shows %q, want %q", a.table.Sort, row, columns[col].Title, texts[i+1+col], s)
 			}
 		}
 		at = i
+	}
+}
+
+// keep tells whether the folder shown and the search keep an account: written
+// again here from the app's texts, not from the code under test.
+func (e *live) keep() func(*account) bool {
+	a := e.a
+	f, _ := a.s.folderByName(a.folder)
+	column, keyword := a.table.Search()
+	col := slices.Index(titles, column)
+	list := strings.Contains(keyword, "|")
+	exact := map[string]bool{}
+	for v := range strings.SplitSeq(keyword, "|") {
+		if v = strings.TrimSpace(v); v != "" && list {
+			exact[v] = true
+		}
+	}
+	lower := strings.ToLower(keyword)
+	return func(x *account) bool {
+		switch {
+		case x.Folder != f.ID:
+			return false
+		case column == "":
+			return true
+		case len(exact) > 0:
+			return exact[cellText(x, col)]
+		case list: // nothing listed: all
+			return true
+		}
+		return strings.Contains(strings.ToLower(cellText(x, col)), lower)
 	}
 }
 
@@ -173,19 +205,19 @@ func (e *live) check() {
 // one order only.
 func (e *live) sorted(got []int) bool {
 	a := e.a
-	rows, keep := a.s.accounts, keep(a.filtered)
-	n := 0
+	rows, keep := a.s.accounts, e.keep()
+	kept, n := make([]bool, len(rows)), 0
 	for i := range rows {
-		if keep(&rows[i]) {
+		if kept[i] = keep(&rows[i]); kept[i] {
 			n++
 		}
 	}
 	if len(got) != n {
 		return false
 	}
-	f := e.compare[a.sort.Column]
+	f := e.compare[a.table.Sort.Column]
 	for k, i := range got {
-		if !keep(&rows[i]) {
+		if !kept[i] {
 			return false
 		}
 		if k == 0 {
@@ -194,7 +226,7 @@ func (e *live) sorted(got []int) bool {
 		h, d := got[k-1], 0
 		switch {
 		case f == nil:
-		case a.sort.Descending:
+		case a.table.Sort.Descending:
 			d = f(&rows[i], &rows[h])
 		default:
 			d = f(&rows[h], &rows[i])
@@ -210,16 +242,16 @@ func (e *live) sorted(got []int) bool {
 // rows equal keep the slice's order, as the view's do.
 func (e *live) want() []int {
 	a := e.a
-	keep := keep(a.filtered)
+	keep := e.keep()
 	var rows []int
 	for i := range a.s.accounts {
 		if keep(&a.s.accounts[i]) {
 			rows = append(rows, i)
 		}
 	}
-	if f := e.compare[a.sort.Column]; f != nil {
+	if f := e.compare[a.table.Sort.Column]; f != nil {
 		slices.SortStableFunc(rows, func(i, j int) int {
-			if a.sort.Descending {
+			if a.table.Sort.Descending {
 				return f(&a.s.accounts[j], &a.s.accounts[i])
 			}
 			return f(&a.s.accounts[i], &a.s.accounts[j])

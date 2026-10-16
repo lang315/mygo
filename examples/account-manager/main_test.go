@@ -126,7 +126,7 @@ func TestApplyDropsResultsOfAccountsGone(t *testing.T) {
 	r.push(result{id: 1, state: succeeded, status: "ok", at: 1})
 	r.push(result{id: 2, state: failed, status: "Lỗi: checkpoint", at: 1})
 	a.s.remove([]int{1})
-	a.view.Reset()
+	a.table.Reset()
 	a.apply(r)
 	if x := a.s.accounts[a.s.index[2]]; x.Status != "Lỗi: checkpoint" || x.state != failed {
 		t.Fatalf("account 2: %+v", x)
@@ -153,21 +153,6 @@ func TestDeletingTheFolderShownFallsBack(t *testing.T) {
 	}
 }
 
-// The filter goes through every row whenever it changes: an allocation a
-// row is a million at a million rows.
-func TestFilterDoesNotAllocatePerRow(t *testing.T) {
-	a := newApp(10)
-	a.column, a.keyword = "UID", a.s.accounts[3].UID+"|x"
-	keep := keep(search{0, a.column, a.keyword})
-	x := &a.s.accounts[3]
-	if !keep(x) {
-		t.Fatal("the account searched for is not kept")
-	}
-	if n := testing.AllocsPerRun(100, func() { keep(x) }); n != 0 {
-		t.Fatalf("%v allocations a row", n)
-	}
-}
-
 func TestStartSaysTheRowsCheckedAreHidden(t *testing.T) {
 	a := newApp(100)
 	tt := newTester(t, a)
@@ -186,14 +171,14 @@ func TestStartSaysTheRowsCheckedAreHidden(t *testing.T) {
 func TestAddedAccountShowsInTheOrderSorted(t *testing.T) {
 	a := newApp(100)
 	tt := newTester(t, a)
-	a.sort = ui.SortOrder{Column: "Bạn bè"} // its header is out of view
+	a.table.Sort = ui.SortOrder{Column: "Bạn bè"} // its header is out of view
 	tt.Frame()
 	tt.do(tt.Click("Thêm tài khoản"))
 	tt.want("Tổng số dòng: 101")
 	x := a.s.accounts[100]
-	for i := range a.view.Len() {
-		if a.view.Row(i) == 100 {
-			if i > 0 && a.s.accounts[a.view.Row(i-1)].Friends > x.Friends {
+	for i := range a.table.Len() {
+		if a.table.At(i).ID == x.ID {
+			if i > 0 && a.table.At(i-1).Friends > x.Friends {
 				t.Fatalf("the account added is out of order at %d", i)
 			}
 			return
@@ -282,7 +267,7 @@ func BenchmarkLiveUpdates(b *testing.B) {
 			for _, k := range ks {
 				b.Run(fmt.Sprintf("rows=%d/sort=%s/k=%d", n, cmp.Or(sorted, "none"), k), func(b *testing.B) {
 					a := newApp(n)
-					a.sort = ui.SortOrder{Column: sorted}
+					a.table.Sort = ui.SortOrder{Column: sorted}
 					tt := ui.NewTester(a.build, 1280, 800)
 					rnd := rand.New(rand.NewPCG(1, 2))
 					now := time.Now()
@@ -301,11 +286,12 @@ func BenchmarkLiveUpdates(b *testing.B) {
 }
 
 // BenchmarkSearch searches a million rows sorted by Bạn bè for "77" in
-// their UIDs, then clears the search: each goes through all rows once.
+// their UIDs, then clears the search: each goes through all rows once, and
+// builds the frame.
 func BenchmarkSearch(b *testing.B) {
 	a := newApp(1_000_000)
-	a.sort = ui.SortOrder{Column: "Bạn bè"}
-	a.view.Sync(a.s.accounts, a.sort)
+	a.table.Sort = ui.SortOrder{Column: "Bạn bè"}
+	tt := ui.NewTester(a.build, 1280, 800)
 	on := false
 	for b.Loop() {
 		if on = !on; on {
@@ -314,36 +300,34 @@ func BenchmarkSearch(b *testing.B) {
 			a.keyword = ""
 		}
 		a.filter()
-		a.view.Sync(a.s.accounts, a.sort)
+		tt.Frame()
 	}
 }
 
-// The view filters by folder from the start.
+// The table filters by folder from the start.
 func TestNewAppShowsOnlyItsFolder(t *testing.T) {
 	a := newApp(3)
-	a.view.Sync(a.s.accounts, a.sort)
+	tt := newTester(t, a)
 	a.s.accounts[0].Folder = 1
-	a.view.Changed(0)
-	a.view.Sync(a.s.accounts, a.sort)
-	if a.view.Len() != 2 {
-		t.Fatalf("%d rows shown in Mặc định, want 2", a.view.Len())
+	a.table.Changed(0)
+	tt.Frame()
+	if a.table.Len() != 2 {
+		t.Fatalf("%d rows shown in Mặc định, want 2", a.table.Len())
 	}
 }
 
 func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
 	a := newApp(10_000)
 	calls := 0
-	counted := map[string]func(x, y *account) int{}
-	for title, f := range compare() {
-		counted[title] = func(x, y *account) int { calls++; return f(x, y) }
+	for i := range a.table.Columns {
+		f := a.table.Columns[i].Compare
+		a.table.Columns[i].Compare = func(x, y *account) int { calls++; return f(x, y) }
 	}
-	a.view = ui.NewTableView(counted)
-	a.sort = ui.SortOrder{Column: "Bạn bè"}
-	a.filter()
+	a.table.Sort = ui.SortOrder{Column: "Bạn bè"}
 	f := a.s.addFolder()
 	tt := newTester(t, a)
 	tt.Frame()
-	u := a.s.accounts[a.view.Row(0)].UID
+	u := a.table.At(0).UID
 	calls = 0
 	tt.do(tt.RightClick(u))
 	tt.do(tt.ChooseMenuItem("Chuyển thư mục", f.Name))
@@ -356,16 +340,17 @@ func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
 }
 
 // BenchmarkSearchStatus searches the statuses a run leaves, Vietnamese
-// text, which a lowercase copy of each cell would allocate for.
+// text, which a lowercase copy of each cell would allocate for, and builds
+// the frame.
 func BenchmarkSearchStatus(b *testing.B) {
 	a := newApp(1_000_000)
 	statuses := []string{"Kiểm tra: Thành công", "Lỗi: checkpoint", "Đã dừng", "Đang chạy..."}
 	for i := range a.s.accounts {
 		a.s.accounts[i].Status = statuses[i%len(statuses)]
 	}
-	a.sort = ui.SortOrder{Column: "Bạn bè"}
+	a.table.Sort = ui.SortOrder{Column: "Bạn bè"}
 	a.column = "Trạng thái"
-	a.view.Sync(a.s.accounts, a.sort)
+	tt := ui.NewTester(a.build, 1280, 800)
 	on := false
 	for b.Loop() {
 		if on = !on; on {
@@ -374,6 +359,39 @@ func BenchmarkSearchStatus(b *testing.B) {
 			a.keyword = ""
 		}
 		a.filter()
-		a.view.Sync(a.s.accounts, a.sort)
+		tt.Frame()
 	}
+}
+
+func TestAppShowsOneSearchBar(t *testing.T) {
+	a := newApp(10)
+	tt := newTester(t, a)
+	if tt.HasText("Search") || tt.HasText("Column") {
+		t.Fatalf("the table's own search bar is shown: %q", tt.Texts())
+	}
+	tt.want("Tìm kiếm")
+}
+
+// A folder switch keeps the search applied, filters by both, and clears the
+// accounts checked and highlighted, hidden by the search or not.
+func TestFolderSwitchKeepsTheSearchAndClearsTheChecks(t *testing.T) {
+	a := newApp(100)
+	tt := newTester(t, a)
+	other := a.s.addFolder()
+	a.s.move([]int{a.s.accounts[0].ID, a.s.accounts[1].ID, a.s.accounts[2].ID}, other.ID)
+	a.table.Changed(0, 1, 2)
+	tt.Frame()
+	tt.do(tt.Click("Check " + a.s.accounts[5].UID))
+	tt.do(tt.Click(a.s.accounts[6].UID))
+	tt.want("Đã chọn: 1")
+	tt.want("Số dòng đang bôi đen: 1")
+	a.keyword = a.s.accounts[1].UID
+	a.filter() // hides the rows checked and highlighted, and all of folder 0
+	tt.Frame()
+	a.folder = other.Name
+	a.showFolder()
+	tt.Frame()
+	tt.want("Tổng số dòng: 1") // the search is kept: not the three accounts of the folder
+	tt.want("Đã chọn: 0")
+	tt.want("Số dòng đang bôi đen: 0")
 }

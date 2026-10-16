@@ -33,7 +33,7 @@ func TestPercentile(t *testing.T) {
 
 func TestStatsLine(t *testing.T) {
 	a := newApp(10)
-	a.view.Sync(a.s.accounts, a.sort) // as a frame does
+	newTester(t, a) // a frame, as the window builds
 	t0 := time.Unix(1_800_000_000, 0)
 	s := newStats(t0)
 	ms := time.Millisecond
@@ -50,7 +50,7 @@ func TestStatsLine(t *testing.T) {
 		t.Fatalf("line\n%q\nwant it to start\n%q", line, want)
 	}
 	// The next second starts afresh.
-	a.sort = ui.SortOrder{Column: "Bạn bè", Descending: true}
+	a.table.Sort = ui.SortOrder{Column: "Bạn bè", Descending: true}
 	line = s.flush(t0.Add(2*time.Second), a)
 	if !strings.Contains(line, `t=2s rows=10 shown=10 sort="Bạn bè↓" updates=0/s batches=0 apply_max=0.0ms frames=0 `) {
 		t.Fatalf("second line %q", line)
