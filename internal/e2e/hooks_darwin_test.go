@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -14,19 +15,15 @@ import (
 	"github.com/egoist/mygo/internal/darwin"
 )
 
-// recentDocumentsNeedBundle reports whether macOS keeps no recent documents
-// for this test binary: macOS 15 refuses a process without a bundle
-// identifier ("Invalid bundle identifier: <nil>"), macOS 26 does not.
-func recentDocumentsNeedBundle() bool {
-	out, _ := exec.Command("sw_vers", "-productVersion").Output()
-	major, _, _ := strings.Cut(strings.TrimSpace(string(out)), ".")
-	n, err := strconv.Atoi(major)
-	return err == nil && n < 26
-}
-
 // recentDocumentRecorded reports whether path is among the app's recent
-// documents.
+// documents. macOS 15 keeps none for a process without a bundle identifier,
+// as this test binary ("Invalid bundle identifier: <nil>"); macOS 26 does.
 func recentDocumentRecorded(path string) (recorded, supported bool) {
+	version, _ := syscall.Sysctl("kern.osproductversion")
+	major, _, _ := strings.Cut(version, ".")
+	if n, err := strconv.Atoi(major); err == nil && n < 26 {
+		return false, false
+	}
 	var paths []string
 	mygo.RunOnMain(func() { paths = darwin.TestRecentDocuments() })
 	return slices.Contains(paths, path), true

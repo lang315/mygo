@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 )
@@ -42,15 +41,7 @@ func TestRecentDocuments(t *testing.T) {
 	if err := mygo.App.AddRecentDocument(path); err != nil {
 		t.Fatalf("AddRecentDocument: %v", err)
 	}
-	for deadline := time.Now().Add(5 * time.Second); !recorded(); time.Sleep(20 * time.Millisecond) {
-		if time.Now().Before(deadline) {
-			continue
-		}
-		if recentDocumentsNeedBundle() {
-			t.Skip("this macOS records the recent documents of an app bundle only")
-		}
-		t.Fatal("timed out waiting for the document to be recorded")
-	}
+	eventually(t, "the document to be recorded", recorded)
 	if err := mygo.App.ClearRecentDocuments(); err != nil {
 		t.Fatalf("ClearRecentDocuments: %v", err)
 	}

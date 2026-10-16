@@ -18,7 +18,8 @@ import (
 //
 // A relative path is resolved against the working directory. Choosing an
 // entry of the Dock menu or the jump list opens the file with the app,
-// which gets it through OnOpenFile.
+// which gets it through OnOpenFile. macOS 15 records nothing for an app
+// outside an app bundle, as one started with go run.
 func (a *Application) AddRecentDocument(path string) error {
 	needsApp("App.AddRecentDocument")
 	if path == "" {
