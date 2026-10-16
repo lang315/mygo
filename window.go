@@ -107,8 +107,9 @@ type WindowOptions struct {
 	// bar decorate itself under a Wayland compositor that decorates
 	// windows (Sway, KWin): the compositor draws no title bar above the
 	// page's, and the window shows the desktop's window buttons over its
-	// content as on other Linux desktops. Ignored elsewhere: on other
-	// platforms, on X11, for other title bar styles and frameless windows.
+	// content as on other Linux desktops. Sway honors it for floating
+	// windows only. Ignored elsewhere: on other platforms, on X11, for
+	// other title bar styles and frameless windows.
 	ClientDecorations bool
 
 	DisableResize     bool
