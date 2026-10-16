@@ -102,10 +102,10 @@ type MenuItem struct {
 	// before Click is called.
 	Checked bool
 	ToolTip string
-	// Icon is a PNG shown before the label at 16×16 points, in context
-	// menus and menu bars; give it 32×32 pixels for sharp HiDPI screens.
-	// An icon that is not a PNG shows none. Tray and Dock menus show
-	// none.
+	// Icon is a PNG shown before the label at 16×16 points; give it
+	// 32×32 pixels for sharp HiDPI screens. An icon that is not a PNG
+	// shows none. Linux tray menus and the items of a Windows menu bar
+	// itself show none, and the web ignores it.
 	Icon []byte
 	// IconTemplate makes Icon a template image on macOS: the system
 	// colors its shape as the menu's text. Elsewhere it does nothing.
