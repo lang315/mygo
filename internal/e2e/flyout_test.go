@@ -322,6 +322,10 @@ func TestTrayFlyout(t *testing.T) {
 			last, still = b, 0
 		}
 	}
+	if !onScreen() {
+		// A full menu bar, as one beside a notch, keeps the icon off the screen.
+		t.Skip("the menu bar has no room for the tray icon, at", tray.Bounds())
+	}
 	for _, popover := range []bool{false, true} {
 		fl := mygo.NewFlyout(mygo.FlyoutOptions{Tray: tray, Placement: mygo.PlacementBottom, Gap: 4, Width: 200, Height: 120, Focusable: true, Popover: popover,
 			Content: ui.View(func(c *ui.Context) {})})

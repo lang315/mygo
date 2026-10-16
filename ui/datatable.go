@@ -146,7 +146,9 @@ func (s *DataTableState[T, K]) Current() *T {
 }
 
 // Version changes whenever the rows shown, or their order, change: a sort, a
-// search, a filter, rows placed again. It is the version of the TableView.
+// search, a filter, rows placed again. It is the version of the TableView:
+// 0 before the first frame, and it moves at the frame that applies a change,
+// not at the call that asks for it, as SetSearch.
 func (s *DataTableState[T, K]) Version() uint64 {
 	s.start()
 	return s.view.Version()

@@ -827,6 +827,13 @@ func TestTableCheckboxLabels(t *testing.T) {
 	if !checked.Has(0) || checked.Len() != 1 {
 		t.Errorf("Space with Label: checked %v", checked.keys)
 	}
+	// The row and its checkbox share one call of Label.
+	calls := 0
+	s.Label = func(i int) string { calls++; return names[i] }
+	tt.Frame()
+	if calls != len(names) {
+		t.Errorf("Label called %d times for %d rows", calls, len(names))
+	}
 }
 
 func TestTableHeaderCheckboxWithoutRowsToCheck(t *testing.T) {

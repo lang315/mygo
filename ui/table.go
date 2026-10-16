@@ -304,7 +304,8 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					checkCell(c, checkW, func() {
 						label := "Check"
 						if s.Label != nil {
-							label += " " + s.Label(i)
+							// The list's element holding the row has it already.
+							label += " " + row.parent.label
 						}
 						itemCheckbox(c, table, s.Checked, s.keyOf(i), label)
 					})

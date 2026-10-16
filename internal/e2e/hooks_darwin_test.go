@@ -5,6 +5,9 @@ package e2e
 import (
 	"os/exec"
 	"slices"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -13,8 +16,14 @@ import (
 )
 
 // recentDocumentRecorded reports whether path is among the app's recent
-// documents.
+// documents. macOS 15 keeps none for a process without a bundle identifier,
+// as this test binary ("Invalid bundle identifier: <nil>"); macOS 26 does.
 func recentDocumentRecorded(path string) (recorded, supported bool) {
+	version, _ := syscall.Sysctl("kern.osproductversion")
+	major, _, _ := strings.Cut(version, ".")
+	if n, err := strconv.Atoi(major); err == nil && n < 26 {
+		return false, false
+	}
 	var paths []string
 	mygo.RunOnMain(func() { paths = darwin.TestRecentDocuments() })
 	return slices.Contains(paths, path), true
