@@ -85,6 +85,7 @@ type engine struct {
 	// (keyDownPhysical), until their release does the same.
 	byPosition      map[Key]bool
 	owner           weak.Pointer[engine]
+	owners          *owners // of global IDs among the app's engines (adopt)
 	epoch           uint64
 	parts           []any
 	public          *Context
@@ -691,6 +692,9 @@ func (rt *engine) prune() {
 				if s.textAdapter != nil {
 					s.textAdapter.release()
 				}
+				if s.flags&flagPage != 0 && rt.owners != nil {
+					rt.owners.drop(id, rt)
+				}
 				delete(rt.states, id)
 				// Recycle the state itself, without keeping the editor,
 				// local resources or callbacks of the element that went.
@@ -767,6 +771,9 @@ func (rt *engine) hideKept(s *state) {
 	}
 	s.valueBinding = nil
 	if s.editor != nil {
+		// A composition goes into the text while the value is bound, so
+		// that the next build publishes it.
+		s.editor.commitCompose()
 		s.editor.value = nil
 	}
 }
