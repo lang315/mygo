@@ -144,6 +144,7 @@ var (
 	procSetMenu                       = user32.NewProc("SetMenu")
 	procDrawMenuBar                   = user32.NewProc("DrawMenuBar")
 	procSetMenuItemInfoW              = user32.NewProc("SetMenuItemInfoW")
+	procGetMenuItemInfoW              = user32.NewProc("GetMenuItemInfoW")
 	procTrackPopupMenuEx              = user32.NewProc("TrackPopupMenuEx")
 	procGetKeyState                   = user32.NewProc("GetKeyState")
 	procRegisterHotKey                = user32.NewProc("RegisterHotKey")
@@ -370,6 +371,7 @@ const (
 	miimState     = 0x0001
 	miimFType     = 0x0100
 	miimString    = 0x0040
+	miimBitmap    = 0x0080
 	mftRadioCheck = 0x0200
 	mfsChecked    = 0x0008
 	mfsDisabled   = 0x0003

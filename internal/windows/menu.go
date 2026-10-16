@@ -26,9 +26,12 @@ type menuTable struct {
 	entries   map[uint16]*menuEntry
 	next      uint16
 	nextOwner int
+	bitmaps   map[int][]uintptr // per owner, deleted with it
 }
 
-func newMenuTable() menuTable { return menuTable{entries: map[uint16]*menuEntry{}} }
+func newMenuTable() menuTable {
+	return menuTable{entries: map[uint16]*menuEntry{}, bitmaps: map[int][]uintptr{}}
+}
 
 func (t *menuTable) newOwner() int {
 	t.nextOwner++
@@ -58,15 +61,32 @@ func (t *menuTable) drop(owner int) {
 			delete(t.entries, id)
 		}
 	}
+	// DestroyMenu leaves the items' bitmaps.
+	for _, bmp := range t.bitmaps[owner] {
+		procDeleteObject.Call(bmp)
+	}
+	delete(t.bitmaps, owner)
 }
 
-// buildMenu creates a native menu bar or popup menu.
+// buildMenu creates a native menu bar or popup menu. The top-level items
+// of a bar get no bitmap: a dark bar draws them as text (darkmenu.go).
 func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[accelKey]uint16) uintptr {
 	var h uintptr
 	if bar {
 		h, _, _ = procCreateMenu.Call()
 	} else {
 		h, _, _ = procCreatePopupMenu.Call()
+	}
+	size := 16 * dpiOf(0) / 96
+	bitmap := func(it *platform.MenuItem) uintptr {
+		if bar || len(it.Icon) == 0 {
+			return 0
+		}
+		bmp := menuBitmap(it.Icon, size)
+		if bmp != 0 {
+			b.menus.bitmaps[owner] = append(b.menus.bitmaps[owner], bmp)
+		}
+		return bmp
 	}
 	for _, it := range m.Items {
 		if !it.Visible {
@@ -83,6 +103,10 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 		if it.Submenu != nil {
 			sub := b.buildMenu(it.Submenu, false, owner, accels)
 			procAppendMenuW.Call(h, flags|mfPopup, sub, uintptr(unsafe.Pointer(u16(it.Label))))
+			if bmp := bitmap(it); bmp != 0 {
+				n, _, _ := procGetMenuItemCount.Call(h)
+				setItemBitmap(h, int(int32(n))-1, bmp)
+			}
 			continue
 		}
 		if it.Checked {
@@ -99,30 +123,38 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 			}
 		}
 		procAppendMenuW.Call(h, flags, uintptr(cmd), uintptr(unsafe.Pointer(u16(label))))
-		if e.radio {
-			setItemInfo(h, cmd, label, it.Enabled, it.Checked, true)
+		if bmp := bitmap(it); e.radio || bmp != 0 {
+			setItemInfo(h, cmd, label, it.Enabled, it.Checked, e.radio, bmp)
 		}
 	}
 	return h
 }
 
-func setItemInfo(menu uintptr, cmd uint16, label string, enabled, checked, radio bool) {
-	type menuItemInfo struct {
-		Size         uint32
-		Mask         uint32
-		Type         uint32
-		State        uint32
-		ID           uint32
-		SubMenu      uintptr
-		BmpChecked   uintptr
-		BmpUnchecked uintptr
-		ItemData     uintptr
-		TypeData     *uint16
-		Cch          uint32
-		BmpItem      uintptr
-	}
+// menuItemInfo is MENUITEMINFOW.
+type menuItemInfo struct {
+	Size         uint32
+	Mask         uint32
+	Type         uint32
+	State        uint32
+	ID           uint32
+	SubMenu      uintptr
+	BmpChecked   uintptr
+	BmpUnchecked uintptr
+	ItemData     uintptr
+	TypeData     *uint16
+	Cch          uint32
+	BmpItem      uintptr
+}
+
+// setItemInfo sets an item's label and state, and its bitmap unless bmp
+// is 0: an item keeps its bitmap when MIIM_BITMAP is not in the mask.
+func setItemInfo(menu uintptr, cmd uint16, label string, enabled, checked, radio bool, bmp uintptr) {
 	mi := menuItemInfo{Mask: miimState | miimFType | miimString, TypeData: u16(label)}
 	mi.Size = uint32(unsafe.Sizeof(mi))
+	if bmp != 0 {
+		mi.Mask |= miimBitmap
+		mi.BmpItem = bmp
+	}
 	if radio {
 		mi.Type = mftRadioCheck
 	}
@@ -133,6 +165,13 @@ func setItemInfo(menu uintptr, cmd uint16, label string, enabled, checked, radio
 		mi.State |= mfsDisabled
 	}
 	procSetMenuItemInfoW.Call(menu, uintptr(cmd), 0, uintptr(unsafe.Pointer(&mi)))
+}
+
+// setItemBitmap shows bmp on the item at pos of menu.
+func setItemBitmap(menu uintptr, pos int, bmp uintptr) {
+	mi := menuItemInfo{Mask: miimBitmap, BmpItem: bmp}
+	mi.Size = uint32(unsafe.Sizeof(mi))
+	procSetMenuItemInfoW.Call(menu, uintptr(pos), 1, uintptr(unsafe.Pointer(&mi)))
 }
 
 // installMenu shows m as the window's menu bar (nil removes it).
@@ -191,7 +230,8 @@ func (w *window) revealMenu(wp, lp uintptr) uintptr {
 // when Alt or F10 would take the keyboard to the bar; Alt and a letter
 // (key) open the menu of the letter in it, as in the bar. The popup holds
 // the bar's own submenus, so their items keep their states and commands,
-// and gives them back before it is destroyed.
+// and gives them back before it is destroyed. Top-level items have no
+// bitmap (buildMenu), so there is none to copy.
 func (w *window) popupMenuBar(key uintptr) {
 	n, _, _ := procGetMenuItemCount.Call(w.hmenu)
 	count := int(int32(n))
@@ -263,7 +303,7 @@ func (b *Backend) UpdateMenuItem(it *platform.MenuItem) {
 		if e.accel != "" {
 			label += "\t" + e.accel
 		}
-		setItemInfo(e.menu, cmd, label, it.Enabled, it.Checked, e.radio)
+		setItemInfo(e.menu, cmd, label, it.Enabled, it.Checked, e.radio, 0)
 	}
 	for _, w := range b.windows {
 		if w.menuShown() {

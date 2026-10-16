@@ -351,8 +351,9 @@ func panelStyles(w *mygo.Window) (tool, topmost, owned, supported bool) {
 	return tool, topmost, owned, true
 }
 
-func menuIcon(*mygo.Window, ...string) (has, template, supported bool, err error) {
-	return false, false, false, nil
+func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
+	mygo.RunOnMain(func() { has, err = win.TestMenuItemImage(w.NativeHandle(), path...) })
+	return has, false, true, err
 }
 
 func accelWidth(*mygo.Window, ...string) (uint32, bool) { return 0, false }

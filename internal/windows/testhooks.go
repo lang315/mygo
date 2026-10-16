@@ -52,6 +52,46 @@ func TestActivateMenuItem(hwnd uintptr, path ...string) error {
 	return nil
 }
 
+// TestMenuItemImage reports whether an item of a window's menu bar, found
+// by the labels along its path, shows a bitmap. It walks the native menu,
+// which UpdateMenuItem relabels, not the menu the bar was built from.
+func TestMenuItemImage(hwnd uintptr, path ...string) (bool, error) {
+	w := theBackend.windows[hwnd]
+	if w == nil || w.hmenu == 0 {
+		return false, fmt.Errorf("mygo: the window has no menu bar")
+	}
+	menu := w.hmenu
+	for i, label := range path {
+		n, _, _ := procGetMenuItemCount.Call(menu)
+		pos := -1
+		for j := range int(int32(n)) {
+			buf := make([]uint16, 256)
+			procGetMenuStringW.Call(menu, uintptr(j), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), mfByPosition)
+			if text, _, _ := strings.Cut(syscall.UTF16ToString(buf), "\t"); text == label {
+				pos = j
+				break
+			}
+		}
+		if pos < 0 {
+			return false, fmt.Errorf("mygo: no menu item %q", label)
+		}
+		if i == len(path)-1 {
+			mi := menuItemInfo{Mask: miimBitmap}
+			mi.Size = uint32(unsafe.Sizeof(mi))
+			if ok, _, err := procGetMenuItemInfoW.Call(menu, uintptr(pos), 1, uintptr(unsafe.Pointer(&mi))); ok == 0 {
+				return false, err
+			}
+			return mi.BmpItem != 0, nil
+		}
+		sub, _, _ := procGetSubMenu.Call(menu, uintptr(pos))
+		if sub == 0 {
+			return false, fmt.Errorf("mygo: menu %q has no submenu", label)
+		}
+		menu = sub
+	}
+	return false, fmt.Errorf("mygo: no menu item path")
+}
+
 // TestMenuBarShown reports whether a window shows its menu bar.
 func TestMenuBarShown(hwnd uintptr) bool {
 	bar, _, _ := user32.NewProc("GetMenu").Call(hwnd)
