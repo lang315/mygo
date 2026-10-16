@@ -395,6 +395,15 @@ func mods() platform.Modifiers {
 
 func (s *surface) pointer(kind platform.SurfaceEventKind, lp uintptr, button int) {
 	x, y := int16(loword(lp)), int16(hiword(lp))
+	// A click completes the input method's composition first, as in an
+	// edit control: its result then takes the marked text, which the click
+	// would otherwise commit while the input method composes on.
+	if kind == platform.PointerDown && s.ime {
+		if himc, _, _ := procImmGetContext.Call(s.hwnd); himc != 0 {
+			procImmNotifyIME.Call(himc, niCompositionStr, cpsComplete, 0)
+			procImmReleaseContext.Call(s.hwnd, himc)
+		}
+	}
 	s.send(platform.SurfaceEvent{Kind: kind, X: s.toDIP(int32(x)), Y: s.toDIP(int32(y)), Button: button, Mods: mods()})
 }
 

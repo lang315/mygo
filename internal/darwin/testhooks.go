@@ -847,3 +847,73 @@ func TestEndSheetButton(handle uintptr, i int) bool {
 	send(id(handle), "endSheet:returnCode:", uintptr(sheet), uintptr(nsAlertFirstButtonReturn+i))
 	return true
 }
+
+// TestSelectInputSource makes the input source of identifier source,
+// which must be enabled, the keyboard's, and returns how to select the one
+// before it again. It reports false when no such source is enabled.
+func TestSelectInputSource(source string) (restore func(), ok bool) {
+	loadTestInput()
+	var create, choose, key uintptr
+	create, _ = purego.Dlsym(libCarbon, "TISCreateInputSourceList")
+	choose, _ = purego.Dlsym(libCarbon, "TISSelectInputSource")
+	if p, err := purego.Dlsym(libCarbon, "kTISPropertyInputSourceID"); err == nil {
+		key = **(**uintptr)(unsafe.Pointer(&p))
+	}
+	if create == 0 || choose == 0 || key == 0 || tisCopyCurrentSource == 0 {
+		return nil, false
+	}
+	prev, _, _ := purego.SyscallN(tisCopyCurrentSource)
+	withPool(func() {
+		props := send(class("NSDictionary"), "dictionaryWithObject:forKey:", uintptr(nsString(source)), key)
+		list, _, _ := purego.SyscallN(create, uintptr(props), 0)
+		if list == 0 {
+			return
+		}
+		defer cfRelease(list)
+		if send(id(list), "count") > 0 {
+			r, _, _ := purego.SyscallN(choose, uintptr(send(id(list), "objectAtIndex:", 0)))
+			ok = r == 0
+		}
+	})
+	if !ok {
+		cfRelease(prev)
+		return nil, false
+	}
+	return func() {
+		purego.SyscallN(choose, prev)
+		cfRelease(prev)
+	}, true
+}
+
+// TestMarkedText returns the text marked as composed in the input client
+// of a window showing native UI.
+func TestMarkedText(handle uintptr) (string, bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil || w.surface.input.Client == nil {
+		return "", false
+	}
+	c := w.surface.input.Client
+	r, ok := c.MarkedRange()
+	if !ok {
+		return "", true
+	}
+	text, _ := c.TextForRange(r)
+	return text, true
+}
+
+// TestPostKey posts a key down and up of a virtual key code to this process
+// through the window server, as the keyboard does, so the input method
+// sees it too, which the events of TestKey skip.
+func TestPostKey(code uint16) {
+	cg, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_GLOBAL)
+	if err != nil {
+		return
+	}
+	create, _ := purego.Dlsym(cg, "CGEventCreateKeyboardEvent")
+	post, _ := purego.Dlsym(cg, "CGEventPostToPid")
+	for _, down := range []uintptr{1, 0} {
+		ev, _, _ := purego.SyscallN(create, 0, uintptr(code), down)
+		purego.SyscallN(post, uintptr(os.Getpid()), ev)
+		cfRelease(ev)
+	}
+}

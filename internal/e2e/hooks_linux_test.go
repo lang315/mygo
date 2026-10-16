@@ -212,6 +212,13 @@ func inputClient(w *mygo.Window) (selected [2]int, document string, ok bool) {
 	return selected, document, ok
 }
 
+// markedText returns the text an input method composes in the window's
+// input client.
+func markedText(w *mygo.Window) (marked string, ok bool) {
+	mygo.RunOnMain(func() { marked, ok = linux.TestMarkedText(w.NativeHandle()) })
+	return marked, ok
+}
+
 func dropFiles(w *mygo.Window, x, y float64, paths []string) (over, dropped, ok bool) {
 	mygo.RunOnMain(func() { over, dropped = linux.TestDropFiles(w.NativeHandle(), x, y, paths) })
 	return over, dropped, true

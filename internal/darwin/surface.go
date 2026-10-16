@@ -665,6 +665,13 @@ func registerSurfaceClass() {
 					s.w.lastMouseDown = retain(ev)
 				}
 				send(s.w.win, "makeFirstResponder:", uintptr(self))
+				// A click ends the input method's composition first: the
+				// content commits the marked text, which the input method
+				// would otherwise go on composing.
+				if s.input.Active && s.markedRange().Location != nsNotFound {
+					s.marked = ""
+					send(send(s.view, "inputContext"), "discardMarkedText")
+				}
 			}
 			s.mouse(kind, ev, btn)
 			if kind == platform.PointerUp && button == 0 {
