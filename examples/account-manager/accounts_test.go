@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -74,5 +75,21 @@ func TestCellText(t *testing.T) {
 	}
 	if columnIndex("Email") != colEmail || columnIndex("nope") != -1 {
 		t.Error("columnIndex")
+	}
+}
+
+// The search finds what strings.ToLower finds, on the cells lowered as on
+// the keyword, whatever the letters: Vietnamese, İ, invalid UTF-8.
+func TestMatcherFoldsAsToLower(t *testing.T) {
+	cells := []string{"Thành công", "THÀNH CÔNG", "Đang chạy", "ĐANG", "İstanbul", "i̇stanbul", "a\xffb", "A\xffB", "abc", "ABC", "", "Ǆ"}
+	kws := []string{"thành", "THÀNH công", "đang", "İ", "i̇", "\xff", "a\xffb", "b", "ǆ", "Ǆ", "ǅ"}
+	for _, cell := range cells {
+		for _, kw := range kws {
+			x := &account{Status: cell}
+			want := strings.Contains(strings.ToLower(cell), strings.ToLower(kw))
+			if got := matcher(colStatus, kw)(x); got != want {
+				t.Errorf("matcher(%q) on %q = %v, want %v", kw, cell, got, want)
+			}
+		}
 	}
 }

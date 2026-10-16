@@ -354,3 +354,26 @@ func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
 		t.Fatalf("moving one account compared rows %d times", calls)
 	}
 }
+
+// BenchmarkSearchStatus searches the statuses a run leaves, Vietnamese
+// text, which a lowercase copy of each cell would allocate for.
+func BenchmarkSearchStatus(b *testing.B) {
+	a := newApp(1_000_000)
+	statuses := []string{"Kiểm tra: Thành công", "Lỗi: checkpoint", "Đã dừng", "Đang chạy..."}
+	for i := range a.s.accounts {
+		a.s.accounts[i].Status = statuses[i%len(statuses)]
+	}
+	a.sort = ui.SortOrder{Column: "Bạn bè"}
+	a.column = "Trạng thái"
+	a.view.Sync(a.s.accounts, a.sort)
+	on := false
+	for b.Loop() {
+		if on = !on; on {
+			a.keyword = "Thành công"
+		} else {
+			a.keyword = ""
+		}
+		a.filter()
+		a.view.Sync(a.s.accounts, a.sort)
+	}
+}

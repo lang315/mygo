@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"fmt"
 	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -244,6 +247,31 @@ func matcher(col int, keyword string) func(a *account) bool {
 	if keyword == "" {
 		return func(*account) bool { return true }
 	}
-	kw := strings.ToLower(keyword)
-	return func(a *account) bool { return strings.Contains(strings.ToLower(cellText(a, col)), kw) }
+	kw := []byte(strings.ToLower(keyword))
+	// The filter runs on one goroutine, so one buffer holds each cell
+	// lowered in turn.
+	var buf []byte
+	return func(a *account) bool {
+		buf = appendLower(buf[:0], cellText(a, col))
+		return bytes.Contains(buf, kw)
+	}
+}
+
+// appendLower appends s as strings.ToLower lowers it, without allocating
+// for a buffer large enough.
+func appendLower(buf []byte, s string) []byte {
+	for i := 0; i < len(s); {
+		if c := s[i]; c < utf8.RuneSelf {
+			if 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			buf = append(buf, c)
+			i++
+			continue
+		}
+		r, n := utf8.DecodeRuneInString(s[i:])
+		buf = utf8.AppendRune(buf, unicode.ToLower(r))
+		i += n
+	}
+	return buf
 }
