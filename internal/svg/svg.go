@@ -26,6 +26,8 @@ type Doc struct {
 	w, h float64
 	// current is true when something is painted with currentColor.
 	current bool
+	// other is true when something is painted with another color or a gradient.
+	other bool
 }
 
 // Parse parses an SVG document.
@@ -44,6 +46,10 @@ func (d *Doc) Size() (w, h float64) { return d.w, d.h }
 // UsesCurrentColor reports whether the color Draw takes for currentColor
 // changes what it draws.
 func (d *Doc) UsesCurrentColor() bool { return d.current }
+
+// OnlyCurrentColor reports whether the SVG paints with currentColor and
+// nothing else, as an icon drawn in the color of the text does.
+func (d *Doc) OnlyCurrentColor() bool { return d.current && !d.other }
 
 // Draw draws the document over the pixels of dst, fitting its viewBox in
 // them as its preserveAspectRatio says, or stretched to them with

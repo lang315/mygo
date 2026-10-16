@@ -532,3 +532,25 @@ func TestUsesCurrentColor(t *testing.T) {
 		}
 	}
 }
+
+func TestOnlyCurrentColor(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		want      bool
+	}{
+		{"stroke currentColor", `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5"/></svg>`, true},
+		{"fill currentColor", `<svg viewBox="0 0 10 10"><rect width="10" height="10" fill="currentColor"/></svg>`, true},
+		{"red and currentColor", `<svg viewBox="0 0 30 10"><rect width="10" height="10" fill="#f00"/><rect x="20" width="10" height="10" fill="currentColor"/></svg>`, false},
+		{"black default fill", `<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>`, false},
+		{"color property", `<svg viewBox="0 0 10 10" color="#00f"><rect width="10" height="10" fill="currentColor"/></svg>`, false},
+		{"gradient", `<svg viewBox="0 0 10 10"><defs><linearGradient id="g"><stop offset="0" stop-color="currentColor"/></linearGradient></defs><rect width="10" height="10" fill="url(#g)"/></svg>`, false},
+	} {
+		d, err := Parse([]byte(tc.src))
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got := d.OnlyCurrentColor(); got != tc.want {
+			t.Errorf("%s: OnlyCurrentColor %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
