@@ -33,6 +33,25 @@ type GridState struct {
 	// dragged is one, else that item, in order, and the item they go
 	// before, the number of items for the end.
 	Reorder func(items []int, to int)
+	// Checked, when set, shows a checkbox on each item, holding the keys of
+	// the items checked apart from those chosen, as ListState.Checked does for
+	// a table's rows. A checkbox shows on the item checked, on the item the
+	// pointer is over, and on all of them while any is checked. A click on it
+	// checks or unchecks its item and leaves the choice; Space, while the grid
+	// has the focus, checks the items chosen, or unchecks them when all are
+	// checked. CheckedChanged reports a change by the user.
+	Checked Selector
+	// ItemMenu, when set, is the context menu of the items: it fills the menu
+	// for items, the items chosen in order. A right click on an item not
+	// chosen chooses it alone first; in a grid that does not choose, items is
+	// the item clicked. The menu key and Shift+F10 open it on the items
+	// chosen, and nothing opens when none is.
+	ItemMenu func(m *Menu, items []int)
+	// Copy, when set, puts the text it returns for items, the items chosen in
+	// order, on the clipboard on Cmd+C (Ctrl+C on Linux and Windows) or the
+	// Edit menu's Copy while the grid has the keyboard focus. Nothing is
+	// copied when no item is chosen, and "" leaves the clipboard as it was.
+	Copy func(items []int) string
 
 	rows ListState
 	// cells are the items of the cells the last frame built, by their
@@ -142,6 +161,17 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 	e.afterInput(func() { s.keys(e, n) })
 	e.activeDescendant = cursor
 	s.reorder(e, n, gap)
+	if s.ItemMenu != nil {
+		// The menu key and Shift+F10 act on the items chosen.
+		e.ContextMenu(func(m *Menu) {
+			if items := s.chosenItems(n); len(items) > 0 {
+				s.ItemMenu(m, items)
+			}
+		})
+	}
+	if s.Copy != nil {
+		e.HandleInput(copyInput(c.rt, func() []int { return s.chosenItems(n) }, s.Copy))
+	}
 	s.cells, s.built = s.built, s.cells
 	clear(s.built)
 	return e
@@ -162,13 +192,7 @@ func (s *GridState) dragged(i, n int) []int {
 	if s.Selection == nil || !s.chosen(i) {
 		return []int{i}
 	}
-	var items []int
-	for j := range n {
-		if s.chosen(j) {
-			items = append(items, j)
-		}
-	}
-	return items
+	return s.chosenItems(n)
 }
 
 // reorder makes the grid take its own items dragged over it: it shows where
@@ -308,8 +332,80 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item 
 			})
 		}
 	}
-	cell.Children(func() { item(i) })
+	if s.ItemMenu != nil {
+		cell.ContextMenu(func(m *Menu) { s.ItemMenu(m, s.menuItems(grid, i, n)) })
+	}
+	cell.Children(func() {
+		item(i)
+		if s.Checked != nil {
+			s.checkBox(c, grid, cell, i)
+		}
+	})
 	return cell
+}
+
+// checkBox builds the checkbox of item i at the start corner of its cell.
+// It is built for every cell, so that assistive technology can act on it,
+// and shows when the item is checked, when the pointer is over the cell, or
+// when any item is: a hidden one lets the pointer through to the cell.
+func (s *GridState) checkBox(c *context, grid, cell *node, i int) {
+	t := c.theme
+	k := s.key(i)
+	on := s.Checked.has(k)
+	label := "Check"
+	if s.Label != nil {
+		label += " " + s.Label(i)
+	}
+	box := checkbox(c, &on, "", false).Label(label).Absolute().Top(t.Space(1)).Start(t.Space(1))
+	// A background keeps it visible over a light or a dark image.
+	box.Padding(t.Space(1)).Radius(t.Radius).Background(t.Surface.Alpha(0.85))
+	// Not focusable, as a table's: a click leaves the focus on the grid.
+	box.flags &^= flagFocusable
+	if !on && !cell.Hovered() && s.Checked.size() == 0 {
+		// Its children too: the square inside would take the click.
+		box.Opacity(0).PassThrough()
+		for ch := box.first; ch != nil; ch = ch.next {
+			ch.PassThrough()
+		}
+	}
+	grid.afterInput(func() {
+		if box.Changed() && s.Checked.set(k, on) {
+			grid.st.markEvent(eventChecked)
+		}
+	})
+}
+
+// chosenItems returns the items chosen, in order, or nil when none is.
+func (s *GridState) chosenItems(n int) []int {
+	switch {
+	case s.Selection != nil:
+		if s.Selection.size() == 0 {
+			return nil
+		}
+		var items []int
+		for j := range n {
+			if s.Selection.has(s.key(j)) {
+				items = append(items, j)
+			}
+		}
+		return items
+	case s.Selected != nil && *s.Selected >= 0 && *s.Selected < n:
+		return []int{*s.Selected}
+	}
+	return nil
+}
+
+// menuItems returns the items a context menu on item i acts on: the items
+// chosen, choosing item i first when it is not, or item i in a grid that
+// does not choose.
+func (s *GridState) menuItems(grid *node, i, n int) []int {
+	if s.Selected == nil {
+		return []int{i}
+	}
+	if !s.chosen(i) {
+		s.choose(grid, i)
+	}
+	return s.chosenItems(n)
 }
 
 // chosen reports whether item i is chosen.
@@ -409,6 +505,9 @@ func (s *GridState) keys(grid *node, n int) {
 			s.Selection.set(s.key(j), true)
 		}
 		grid.st.markChanged()
+	}
+	if s.Checked != nil && grid.Shortcut(0, KeySpace) && toggleChecked(s.Checked, s.chosenItems(n), s.key) {
+		grid.st.markEvent(eventChecked)
 	}
 	if grid.Shortcut(0, KeyEnter) && in {
 		grid.st.markSubmitted()
