@@ -401,7 +401,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 	flat, tree := kind == tableList || kind == treeTableList, kind == treeList || kind == treeTableList
 	rt := c.rt
 	f := &s.frame
-	if f.e != nil && f.frame == rt.frame && f.pass == rt.pass {
+	if f.e != nil && f.c.rt == rt && f.frame == rt.frame && f.pass == rt.pass {
 		panic("ui: a ListState shown by two Lists")
 	}
 	n = max(n, 0)

@@ -58,9 +58,6 @@ func (o *owners) owner(id uint64) *engine {
 // element keeps its state: rt starts afresh, and each shows its own. It
 // reports whether there was such a state.
 func (rt *engine) adopt(id uint64) bool {
-	if rt.owners == nil {
-		return false
-	}
 	from := rt.owners.owner(id)
 	if from == nil || from == rt {
 		return false
@@ -69,8 +66,9 @@ func (rt *engine) adopt(id uint64) bool {
 	if top == nil || top.seen == from.frame && top.pass == from.pass {
 		return false
 	}
+	inside := func(s *state) bool { return s.page == id }
 	for sid, s := range from.states {
-		if sid != id && !from.inPage(s, id) {
+		if sid != id && !from.upPages(s, inside) {
 			continue
 		}
 		d := rt.states[sid]
@@ -79,67 +77,29 @@ func (rt *engine) adopt(id uint64) bool {
 			rt.states[sid] = d
 		}
 		moveState(d, s)
-		if s.textAdapter != nil {
-			s.textAdapter.release()
-		}
-		delete(from.states, sid)
-		*s = state{}
+		from.dropState(sid, s)
 	}
 	// The focus follows: it goes to the element as it is built (prune),
 	// unless another took it.
-	for _, f := range []*uint64{&from.focused, &from.lostFocus} {
-		if *f != 0 && from.states[*f] == nil && rt.states[*f] != nil {
-			rt.lostFocus, *f = *f, 0
-		}
+	if f := from.lostFocus; f != 0 && rt.states[f] != nil {
+		rt.lostFocus, from.lostFocus = f, 0
 	}
 	return true
 }
 
-// inPage reports whether s is inside the page id: id is on the chain of
-// its pages (at most 64 up, as keptAlive walks).
-func (rt *engine) inPage(s *state, id uint64) bool {
-	for n := 0; s != nil && n < 64; n++ {
-		if s.page == id {
-			return true
-		}
-		if s.page == 0 {
-			return false
-		}
-		s = rt.states[s.page]
-	}
-	return false
-}
-
 // moveState moves into d what of s does not depend on the window: scroll
 // offsets, an editor with its text, selection and undo history, and the
-// element's locals, with its popup closed. The rest is laid out, cached
+// element's locals. s is kept out of sight, so its composition is
+// committed and its popup closed (hideKept). The rest is laid out, cached
 // and bound again by d's first frame; s is dropped after.
 func moveState(d, s *state) {
 	d.scrollX, d.scrollY = s.scrollX, s.scrollY
 	if e := s.editor; e != nil {
-		// A composition goes into the text, which the first frame that
-		// binds the value publishes, as native input.
-		if e.compose != "" && !e.nativeDirty {
-			e.nativeDirty, e.nativeValue = true, e.buf.string()
-		}
-		e.commitCompose()
-		e.client, e.value = nil, nil
-		e.layout, e.area = nil, nil
+		e.client, e.layout, e.area = nil, nil, nil
 		for i := range e.buf.paras { // laid out at the other window's width and scale
 			e.buf.paras[i].layout, e.buf.paras[i].h = nil, 0
 		}
 		d.editor = e
 	}
 	d.locals = s.locals
-	for _, v := range d.locals {
-		switch v := v.(type) {
-		case *ListState:
-			v.frame = listFrame{}
-		case *GridState:
-			v.rows.frame, v.rt = listFrame{}, nil
-		}
-	}
-	if open, ok := d.locals[popupOpen{}].(*bool); ok {
-		*open = false
-	}
 }

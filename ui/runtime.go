@@ -373,6 +373,7 @@ func newRuntime(view func(*context), h host) *engine {
 	rt := &engine{view: view, host: h, text: textSystem(), states: map[uint64]*state{}, kept: map[uint64]bool{}, windowFocused: true}
 	rt.c.rt = rt
 	rt.owner = weak.Make(rt)
+	rt.owners = &owners{}
 	rt.arena = &elementOwner{rt: rt}
 	rt.public = &Context{rt: rt, services: Services{owner: rt.owner}}
 	rt.handleChecks = developmentHandles
@@ -689,19 +690,7 @@ func (rt *engine) prune() {
 				rt.scrollDrag.st = nil
 			}
 			if !rt.keptAlive(s) {
-				if s.textAdapter != nil {
-					s.textAdapter.release()
-				}
-				if s.flags&flagPage != 0 && rt.owners != nil {
-					rt.owners.drop(id, rt)
-				}
-				delete(rt.states, id)
-				// Recycle the state itself, without keeping the editor,
-				// local resources or callbacks of the element that went.
-				*s = state{}
-				if len(rt.free) < maxFree {
-					rt.free = append(rt.free, s)
-				}
+				rt.dropState(id, s)
 			} else {
 				rt.hideKept(s)
 			}
@@ -740,14 +729,34 @@ func (rt *engine) prune() {
 // maxFree is how many pruned states the engine keeps for new elements.
 const maxFree = 256
 
+// dropState forgets the state of the element id, which went.
+func (rt *engine) dropState(id uint64, s *state) {
+	if s.textAdapter != nil {
+		s.textAdapter.release()
+	}
+	if s.flags&flagPage != 0 {
+		rt.owners.drop(id, rt)
+	}
+	delete(rt.states, id)
+	// Recycle the state itself, without keeping the editor, local
+	// resources or callbacks of the element that went.
+	*s = state{}
+	if len(rt.free) < maxFree {
+		rt.free = append(rt.free, s)
+	}
+}
+
 // keptAlive reports whether a state the frame did not build is in a page
 // that a Router keeps: one of its history, or inside one.
 func (rt *engine) keptAlive(s *state) bool {
-	if len(rt.kept) == 0 {
-		return false
-	}
+	return len(rt.kept) > 0 && rt.upPages(s, func(s *state) bool { return rt.kept[s.id] })
+}
+
+// upPages reports whether found holds for s or one of the pages it is in,
+// up the chain of its pages (64 at most).
+func (rt *engine) upPages(s *state, found func(*state) bool) bool {
 	for n := 0; s != nil && n < 64; n++ {
-		if rt.kept[s.id] {
+		if found(s) {
 			return true
 		}
 		if s.page == 0 {
