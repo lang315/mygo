@@ -251,7 +251,8 @@ func (c *context) newElement(k kind) *node {
 		c.rt.adopt(e.id)
 	}
 	e.st, built = c.rt.lookState(e.id)
-	if global && c.rt.owners != nil {
+	if global && (e.st.lookedSeen == 0 || e.st.lookedSeen+1 < c.rt.frame) {
+		// It comes into sight: this engine shows it now.
 		c.rt.owners.note(e.id, c.rt)
 	}
 	if keyed && built {

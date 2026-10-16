@@ -169,9 +169,7 @@ func TestMoveFromPrunedOwnerStartsFresh(t *testing.T) {
 	*n = 4
 	inA = false
 	a.Frame()
-	a.rt.owners.Lock()
-	_, owned := a.rt.owners.m[globalID("pruned panel")]
-	a.rt.owners.Unlock()
+	owned := a.rt.owners.owner(globalID("pruned panel")) != nil
 	if owned {
 		t.Error("the first window is still the owner of a panel it pruned")
 	}
@@ -184,7 +182,11 @@ func TestMoveFromPrunedOwnerStartsFresh(t *testing.T) {
 // linked starts a tester of view as another window of a's app: elements
 // keyed globally move between them.
 func linked(a *Tester, view func(c *Context)) *Tester {
-	return newLinkedTester(a, view, 300, 300)
+	b := NewTester(func(*Context) {}, 300, 300)
+	b.rt.owners = a.rt.owners
+	b.rt.view = func(c *context) { view(makeContext(c)) }
+	b.Frame()
+	return b
 }
 
 // Testers of separate tests are separate apps: one does not take over
@@ -261,9 +263,4 @@ func TestPanelMovedAwayAndBack(t *testing.T) {
 	if !a.HasText("row") {
 		t.Fatal("the list did not build back in the first window")
 	}
-}
-
-// newLinkedTester is NewTester for another window of a's app.
-func newLinkedTester(a *Tester, view func(c *Context), width, height int) *Tester {
-	return newTesterOf(a.rt.owners, func(c *context) { view(makeContext(c)) }, width, height)
 }
