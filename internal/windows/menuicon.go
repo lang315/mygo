@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"image"
 	"image/png"
-	"unsafe"
 
 	"golang.org/x/image/draw"
 )
@@ -21,14 +20,10 @@ func menuBitmap(b []byte, size int) uintptr {
 	}
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	draw.CatmullRom.Scale(img, img.Bounds(), src, src.Bounds(), draw.Src, nil)
-	hdr := bitmapInfoHeader{Width: int32(size), Height: -int32(size), Planes: 1, BitCount: 32}
-	hdr.Size = uint32(unsafe.Sizeof(hdr))
-	var bits unsafe.Pointer
-	bmp, _, _ := procCreateDIBSection.Call(0, uintptr(unsafe.Pointer(&hdr)), 0, uintptr(unsafe.Pointer(&bits)), 0, 0)
-	if bmp == 0 || bits == nil {
+	bmp, px := newDIBSection(0, int32(size), int32(size))
+	if bmp == 0 {
 		return 0
 	}
-	px := unsafe.Slice((*uint32)(bits), size*size)
 	for i := range px {
 		p := img.Pix[i*4 : i*4+4] // RGBA, premultiplied
 		px[i] = uint32(p[3])<<24 | uint32(p[0])<<16 | uint32(p[1])<<8 | uint32(p[2])

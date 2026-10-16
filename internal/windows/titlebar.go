@@ -529,16 +529,26 @@ type bitmapInfoHeader struct {
 }
 
 func newBitmap(screen uintptr, width, height int32) *bitmap {
+	bmp, px := newDIBSection(screen, width, height)
+	if bmp == 0 {
+		return nil
+	}
+	dc, _, _ := procCreateCompatibleDC.Call(screen)
+	old, _, _ := procSelectObject.Call(dc, bmp)
+	return &bitmap{dc: dc, bmp: bmp, old: old, px: px}
+}
+
+// newDIBSection returns a 32-bit top-down bitmap of width×height pixels
+// and its pixels, or 0 and nil.
+func newDIBSection(screen uintptr, width, height int32) (uintptr, []uint32) {
 	hdr := bitmapInfoHeader{Width: width, Height: -height, Planes: 1, BitCount: 32}
 	hdr.Size = uint32(unsafe.Sizeof(hdr))
 	var bits unsafe.Pointer
 	bmp, _, _ := procCreateDIBSection.Call(screen, uintptr(unsafe.Pointer(&hdr)), 0, uintptr(unsafe.Pointer(&bits)), 0, 0)
 	if bmp == 0 || bits == nil {
-		return nil
+		return 0, nil
 	}
-	dc, _, _ := procCreateCompatibleDC.Call(screen)
-	old, _, _ := procSelectObject.Call(dc, bmp)
-	return &bitmap{dc: dc, bmp: bmp, old: old, px: unsafe.Slice((*uint32)(bits), int(width)*int(height))}
+	return bmp, unsafe.Slice((*uint32)(bits), int(width)*int(height))
 }
 
 func (b *bitmap) free() {

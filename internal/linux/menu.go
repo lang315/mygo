@@ -23,7 +23,6 @@ type nativeItem struct {
 	check    bool
 	windowID int // menu bar or popup's window; 0 for a tray
 	label    ptr // the label of an item with an icon, which holds it in a box
-	image    ptr // the item's GtkImage, or 0
 }
 
 var (
@@ -218,7 +217,7 @@ func buildItem(it *platform.MenuItem, accel ptr, owner, windowID int) ptr {
 		}
 	}
 	applyState(item, it, check)
-	itemsByID[it.ID] = append(itemsByID[it.ID], nativeItem{owner: owner, item: item, check: check, windowID: windowID, label: label, image: image})
+	itemsByID[it.ID] = append(itemsByID[it.ID], nativeItem{owner: owner, item: item, check: check, windowID: windowID, label: label})
 	return item
 }
 

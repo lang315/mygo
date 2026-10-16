@@ -23,25 +23,36 @@ import (
 func TestPerformMenuItem(path ...string) error {
 	var err error
 	withPool(func() {
-		menu := send(theBackend.app, "mainMenu")
-		for i, title := range path {
-			if menu == 0 {
-				err = fmt.Errorf("mygo: menu %q has no submenu", path[i-1])
-				return
-			}
-			index := sendInt(menu, "indexOfItemWithTitle:", uintptr(nsString(title)))
-			if index < 0 {
-				err = fmt.Errorf("mygo: no menu item %q", title)
-				return
-			}
-			if i == len(path)-1 {
-				send(menu, "performActionForItemAtIndex:", uintptr(index))
-				return
-			}
-			menu = send(send(menu, "itemAtIndex:", uintptr(index)), "submenu")
+		var menu id
+		var index int
+		if menu, index, err = menuItemAt(path); err == nil {
+			send(menu, "performActionForItemAtIndex:", uintptr(index))
 		}
 	})
 	return err
+}
+
+// menuItemAt finds an item of the application menu by the titles along
+// its path: the menu holding it, and its index there. It must run in
+// withPool.
+func menuItemAt(path []string) (menu id, index int, err error) {
+	if len(path) == 0 {
+		return 0, 0, fmt.Errorf("mygo: no menu path")
+	}
+	menu = send(theBackend.app, "mainMenu")
+	for i, title := range path {
+		if menu == 0 {
+			return 0, 0, fmt.Errorf("mygo: menu %q has no submenu", path[i-1])
+		}
+		index = sendInt(menu, "indexOfItemWithTitle:", uintptr(nsString(title)))
+		if index < 0 {
+			return 0, 0, fmt.Errorf("mygo: no menu item %q", title)
+		}
+		if i < len(path)-1 {
+			menu = send(send(menu, "itemAtIndex:", uintptr(index)), "submenu")
+		}
+	}
+	return menu, index, nil
 }
 
 // TestMenuItemImage reports whether an item of the application menu,
@@ -49,22 +60,12 @@ func TestPerformMenuItem(path ...string) error {
 // template.
 func TestMenuItemImage(path ...string) (has, template bool, err error) {
 	withPool(func() {
-		menu := send(theBackend.app, "mainMenu")
-		var item id
-		for i, title := range path {
-			if menu == 0 {
-				err = fmt.Errorf("mygo: menu %q has no submenu", path[i-1])
-				return
-			}
-			index := sendInt(menu, "indexOfItemWithTitle:", uintptr(nsString(title)))
-			if index < 0 {
-				err = fmt.Errorf("mygo: no menu item %q", title)
-				return
-			}
-			item = send(menu, "itemAtIndex:", uintptr(index))
-			menu = send(item, "submenu")
+		var menu id
+		var index int
+		if menu, index, err = menuItemAt(path); err != nil {
+			return
 		}
-		if img := send(item, "image"); img != 0 {
+		if img := send(send(menu, "itemAtIndex:", uintptr(index)), "image"); img != 0 {
 			has, template = true, sendBool(img, "isTemplate")
 		}
 	})

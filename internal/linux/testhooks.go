@@ -31,14 +31,8 @@ func TestMenuItemImage(handle uintptr, path ...string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	for _, n := range itemsByID {
-		for _, x := range n {
-			if x.item == item {
-				return x.image != 0, nil
-			}
-		}
-	}
-	return false, nil
+	// Only an item with an icon holds its label in a box.
+	return labelOf(item) != 0, nil
 }
 
 // Drawing an item of an open menu.
@@ -77,7 +71,10 @@ func TestMenuItemShortcutDrawn(handle uintptr, path ...string) (drawn bool, menu
 	if l == 0 {
 		return false, nil, fmt.Errorf("mygo: menu item has no icon label")
 	}
-	parent, _ := menuBarItem(handle, path[:len(path)-1])
+	parent, err := menuBarItem(handle, path[:len(path)-1])
+	if err != nil {
+		return false, nil, err
+	}
 	menu := gtkMenuItemGetSubmenu(parent)
 	gtkMenuPopupAtRect(menu, gtkWidgetGetWindow(windowByHandle(handle).win), &gdkRectangle{Width: 1, Height: 1}, 1, 1, 0) // GDK_GRAVITY_NORTH_WEST
 	defer gtkMenuPopdown(menu)
