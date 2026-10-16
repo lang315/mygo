@@ -49,13 +49,14 @@ func TestMenuItemIcons(t *testing.T) {
 			m.Item("Png").IconPNG([]byte("png"))
 			m.Item("Both").Icon(check).IconPNG([]byte("png"))
 			m.Item("None")
+			m.Item("NilPNG").Icon(check).IconPNG(nil)
 		})
 	}, 300, 200)
 	if err := tt.RightClick("here"); err != nil {
 		t.Fatal(err)
 	}
 	items := tt.h.menu.Items
-	if len(items) != 4 {
+	if len(items) != 5 {
 		t.Fatalf("menu %q", tt.Menu())
 	}
 	if items[0].Icon == nil || !items[0].Template {
@@ -69,5 +70,8 @@ func TestMenuItemIcons(t *testing.T) {
 	}
 	if items[3].Icon != nil {
 		t.Errorf("None has an icon")
+	}
+	if items[4].Icon == nil || !items[4].Template {
+		t.Errorf("NilPNG: IconPNG(nil) cleared the SVG icon, icon %d bytes, template %v", len(items[4].Icon), items[4].Template)
 	}
 }

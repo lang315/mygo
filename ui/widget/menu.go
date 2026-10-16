@@ -8,13 +8,17 @@ import (
 // MenuItem is an item of a menu: Text, or a separator when Text is "".
 // OnClick runs on the event goroutine when the user chooses it; an item
 // with Children opens them as a submenu. Checked shows a check mark;
-// Disabled greys the item out. Items have no icons: native menus have none.
+// Disabled greys the item out. Icon shows an SVG before the text, in the
+// color of the text when it paints with currentColor only; IconPNG shows a
+// PNG instead (32×32 pixels, shown at 16×16 points).
 type MenuItem struct {
 	Text     string
 	OnClick  func()
 	Children []MenuItem
 	Checked  bool
 	Disabled bool
+	Icon     *ui.SVG
+	IconPNG  []byte
 }
 
 // buildMenu adds items to a ui menu, posting the OnClick of the item
@@ -25,9 +29,9 @@ func buildMenu(m *ui.Menu, items []MenuItem) {
 		case it.Text == "":
 			m.Separator()
 		case len(it.Children) > 0:
-			m.Submenu(it.Text, func(m *ui.Menu) { buildMenu(m, it.Children) }).Disabled(it.Disabled)
+			m.Submenu(it.Text, func(m *ui.Menu) { buildMenu(m, it.Children) }).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG)
 		default:
-			if m.Item(it.Text).Checked(it.Checked).Disabled(it.Disabled).Chosen() && it.OnClick != nil {
+			if m.Item(it.Text).Checked(it.Checked).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Chosen() && it.OnClick != nil {
 				Post(it.OnClick)
 			}
 		}
@@ -48,6 +52,16 @@ func nativeMenu(items []MenuItem) []*mygo.MenuItem {
 			mi.Type, mi.Submenu = mygo.MenuItemSubmenu, nativeMenu(it.Children)
 		case it.Checked:
 			mi.Type, mi.Checked = mygo.MenuItemCheckbox, true
+		}
+		switch {
+		case it.IconPNG != nil:
+			mi.Icon = it.IconPNG
+		case it.Icon != nil:
+			text := ui.LightTheme().Text
+			if IsDark() {
+				text = ui.DarkTheme().Text
+			}
+			mi.Icon, mi.IconTemplate = ui.MenuIconPNG(it.Icon, text)
 		}
 		if h := it.OnClick; h != nil {
 			mi.Click = func(*mygo.MenuItem, *mygo.Window) { Post(h) }

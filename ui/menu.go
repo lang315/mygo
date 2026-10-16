@@ -233,8 +233,12 @@ func (it *MenuItem) Icon(s *SVG) *MenuItem {
 }
 
 // IconPNG shows a PNG before the label, at 16×16 points: give it 32×32
-// pixels. It wins over Icon. A PNG that does not decode shows no icon.
+// pixels. It wins over Icon; nil changes nothing. A PNG that does not
+// decode shows no icon.
 func (it *MenuItem) IconPNG(png []byte) *MenuItem {
+	if png == nil {
+		return it
+	}
 	it.png = png
 	if it.p != nil {
 		it.p.Icon, it.p.Template = png, false
