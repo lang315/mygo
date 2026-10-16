@@ -96,7 +96,7 @@ func (v *TableView[T]) SetFilter(keep func(*T) bool) {
 //	app.view.SetFilterKey(app.search, matches(app.search))
 //
 // and the rows are filtered again only when the search changes. SetFilter
-// forgets the key.
+// forgets the key. A key that cannot be compared, as a slice, panics.
 func (v *TableView[T]) SetFilterKey(key any, keep func(*T) bool) {
 	if v.keyed && v.filterKey == key {
 		return

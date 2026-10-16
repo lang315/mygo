@@ -27,3 +27,19 @@ func TestTesterUpdateRunsOnTheNextFrame(t *testing.T) {
 		t.Fatalf("after a frame, texts %q, want done", tt.Texts())
 	}
 }
+
+// An update queued while the tester settles, as by another update, runs
+// before it returns, as Window.Update asks a window for a frame.
+func TestTesterUpdateQueuedWhileSettlingRuns(t *testing.T) {
+	status := "idle"
+	var tt *ui.Tester
+	tt = ui.NewTester(func(c *ui.Context) { ui.Text(c, status) }, 200, 100)
+	tt.Update(func() {
+		status = "first"
+		tt.Update(func() { status = "second" })
+	})
+	tt.Frame()
+	if !tt.HasText("second") {
+		t.Fatalf("texts %q, want second", tt.Texts())
+	}
+}

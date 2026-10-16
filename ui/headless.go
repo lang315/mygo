@@ -229,24 +229,32 @@ func (t *Tester) Update(fn func()) {
 
 // settle runs frames until the view asks for no more, or 20 of them.
 func (t *Tester) settle() {
-	t.mu.Lock()
-	updates := t.updates
-	t.updates = nil
-	t.mu.Unlock()
-	for _, fn := range updates {
-		fn()
-	}
 	for i := 0; i < 20; i++ {
 		t.h.requested.Store(false)
+		t.runUpdates()
 		for len(t.h.later) > 0 {
 			fn := t.h.later[0]
 			t.h.later = t.h.later[1:]
 			fn()
 		}
 		t.rt.runFrame()
-		if !t.h.requested.Load() && len(t.h.later) == 0 {
+		t.mu.Lock()
+		more := len(t.updates) > 0
+		t.mu.Unlock()
+		if !more && !t.h.requested.Load() && len(t.h.later) == 0 {
 			return
 		}
+	}
+}
+
+// runUpdates runs the updates queued, in turn.
+func (t *Tester) runUpdates() {
+	t.mu.Lock()
+	updates := t.updates
+	t.updates = nil
+	t.mu.Unlock()
+	for _, fn := range updates {
+		fn()
 	}
 }
 
