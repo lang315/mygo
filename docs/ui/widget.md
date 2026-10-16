@@ -113,7 +113,11 @@ user cancels. A `Filter` has a `Name` and `Extensions` without the dot.
 
 A `MenuItem` has `Text` (a separator when empty), `OnClick`, which runs on
 the event goroutine and so may open a dialog, `Children` for a submenu, and
-`Checked` and `Disabled`. Menus have no icons.
+`Checked` and `Disabled`, and `Icon` (an `*ui.SVG`) or `IconPNG` (a PNG,
+32×32 pixels) before the text: `MenuItem{Text: "Copy", Icon: copyIcon,
+OnClick: …}`. A menu bar keeps the colors of its SVG icons from when it was
+set: on Linux and Windows they do not follow a later change of the theme;
+on macOS they do.
 
 - `MenuButton(text).SetMenu(items...)`: a button opening a menu.
 - `ContextMenu(items...)` on any widget: the menu of a right click.
