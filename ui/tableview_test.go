@@ -551,3 +551,37 @@ func TestTableViewCallbacksGetRowsInPlace(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
+
+func TestTableViewSetFilterKeyKeepsTheSameFilter(t *testing.T) {
+	rows := []tvRow{{a: 3}, {a: 1}, {a: 2}, {a: 4}}
+	v := NewTableView(tvCompare)
+	sort := SortOrder{Column: "a"}
+	calls := 0
+	even := func(key string) func(*tvRow) bool {
+		return func(r *tvRow) bool { calls++; return r.a%2 == 0 }
+	}
+	v.SetFilterKey("even", even("even"))
+	v.Sync(rows, sort)
+	if got, want := tvGot(v), []int{2, 3}; !slices.Equal(got, want) {
+		t.Fatalf("rows %v, want %v", got, want)
+	}
+	version, before := v.Version(), calls
+	v.SetFilterKey("even", even("even"))
+	v.Sync(rows, sort)
+	if calls != before || v.Version() != version {
+		t.Fatalf("the same key filtered again: %d calls, version %d to %d", calls-before, version, v.Version())
+	}
+	v.SetFilterKey("all", func(*tvRow) bool { return true })
+	v.Sync(rows, sort)
+	if got, want := tvGot(v), []int{1, 2, 0, 3}; !slices.Equal(got, want) {
+		t.Fatalf("after another key, rows %v, want %v", got, want)
+	}
+	// SetFilter forgets the key: the same key filters again after it.
+	v.SetFilter(nil)
+	v.Sync(rows, sort)
+	v.SetFilterKey("all", even("all"))
+	v.Sync(rows, sort)
+	if got, want := tvGot(v), []int{2, 3}; !slices.Equal(got, want) {
+		t.Fatalf("after SetFilter, the key filtered nothing: rows %v, want %v", got, want)
+	}
+}

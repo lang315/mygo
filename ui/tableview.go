@@ -32,6 +32,9 @@ type TableView[T any] struct {
 	// SetFilter gave since the last Sync, when newFilter.
 	keep, next func(*T) bool
 	newFilter  bool
+	// filterKey is the key SetFilterKey last gave, when keyed.
+	filterKey any
+	keyed     bool
 	// base, n and sort are the slice and the order the view last showed,
 	// sort a copy of the columns sorted by; keys are those of them with a
 	// comparator.
@@ -82,7 +85,25 @@ func NewTableView[T any](compare map[string]func(a, b *T) int) *TableView[T] {
 // then sorted only the rows kept, and the next filter sorts again. While a
 // filter hides rows, the view keeps the order of all of them up to date
 // too, so placing rows changed costs about half again as much.
-func (v *TableView[T]) SetFilter(keep func(*T) bool) { v.next, v.newFilter = keep, true }
+func (v *TableView[T]) SetFilter(keep func(*T) bool) {
+	v.next, v.newFilter, v.keyed = keep, true, false
+}
+
+// SetFilterKey is SetFilter for a filter named by key, a comparable value
+// such as the search typed: it does nothing when key is the one it was
+// last given, so that a view may call it in every frame,
+//
+//	app.view.SetFilterKey(app.search, matches(app.search))
+//
+// and the rows are filtered again only when the search changes. SetFilter
+// forgets the key.
+func (v *TableView[T]) SetFilterKey(key any, keep func(*T) bool) {
+	if v.keyed && v.filterKey == key {
+		return
+	}
+	v.SetFilter(keep)
+	v.filterKey, v.keyed = key, true
+}
 
 // Changed tells the view that the rows of the slice at those indices
 // changed in place, for the next Sync to place them again. Rows appended

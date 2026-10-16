@@ -339,7 +339,6 @@ func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
 	}
 	a.view = ui.NewTableView(counted)
 	a.sort = ui.SortOrder{Column: "Bạn bè"}
-	a.filtered.folder = -1 // the new view has no filter yet
 	a.filter()
 	f := a.s.addFolder()
 	tt := newTester(t, a)

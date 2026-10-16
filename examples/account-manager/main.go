@@ -54,7 +54,6 @@ type app struct {
 func newApp(rows int) *app {
 	a := &app{s: newStore(rows, 1), view: ui.NewTableView(compare()), cursor: -1, column: "UID", threads: 10}
 	a.folder = a.s.folders[0].Name
-	a.filtered.folder = -1 // no folder: the first filter is given
 	a.filter()
 	return a
 }
@@ -132,19 +131,16 @@ type search struct {
 }
 
 // filter shows the accounts of the folder shown that the search finds.
-// It does nothing when they are the rows shown already: a filter given to
-// the view goes through all rows.
+// The view does nothing when they are the rows shown already: a filter
+// goes through all rows.
 func (a *app) filter() {
 	f, _ := a.s.folderByName(a.folder)
 	s := search{f.ID, a.column, strings.TrimSpace(a.keyword)}
 	if s.keyword == "" {
 		s.column = "" // the column searched keeps all rows alike
 	}
-	if s == a.filtered {
-		return
-	}
 	a.filtered = s
-	a.view.SetFilter(keep(s))
+	a.view.SetFilterKey(s, keep(s))
 }
 
 // keep tells whether an account is in the folder of s and s finds it.

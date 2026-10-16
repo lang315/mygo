@@ -305,6 +305,14 @@ the view sorted only the rows it kept, so the next filter sorts again.
 Keeping the order of all rows makes a `Sync` placing changed rows cost
 about half again as much while a filter hides rows.
 
+`SetFilterKey` names the filter by a comparable key, such as the search,
+and does nothing when given the key it was last given: a view can call it
+in every frame, and the rows are filtered again only when the key changes.
+
+```go
+app.view.SetFilterKey(app.search, matches(app.search))
+```
+
 ```go
 if ui.SearchField(c, &app.keyword).Label("Search accounts").Changed() {
 	kw := app.keyword
