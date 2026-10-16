@@ -45,7 +45,10 @@ func endSheet(w *mygo.Window) (ok bool, supported bool) {
 }
 
 func click(w *mygo.Window, x, y float64) bool {
+	waitKey(w)
 	waitOnScreen(w)
+	waitKey(w) // the wait for the screen took long enough for another app to take the front again
+	noteInput("click", w)
 	mygo.RunOnMain(func() { darwin.TestClick(w.NativeHandle(), x, y) })
 	return true
 }
@@ -82,12 +85,28 @@ func waitOnScreen(w *mygo.Window) {
 	}
 }
 
+// waitKey brings a window back to the front, for up to 5 seconds, if another
+// app took it: AppKit drops a click or drag for a window that is not key
+// while its app is not active, as when a user switches to another app during
+// a test, or a notification does. A window of an active app that is not key
+// stays so, as a flyout that takes no keyboard.
+func waitKey(w *mygo.Window) {
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if active, _ := appActive(); active || w.IsFocused() {
+			return
+		}
+		w.Focus()
+	}
+}
+
 func sideButton(w *mygo.Window, back bool) (ok bool) {
 	mygo.RunOnMain(func() { ok = darwin.TestSideButton(w.NativeHandle(), back) })
 	return ok
 }
 
 func drag(w *mygo.Window, points [][2]float64) bool {
+	waitKey(w)
+	noteInput("drag", w)
 	mygo.RunOnMain(func() { darwin.TestDrag(w.NativeHandle(), points) })
 	return true
 }
@@ -229,6 +248,7 @@ func controlClick(w *mygo.Window, x, y float64) bool {
 }
 
 func composeOver(w *mygo.Window, text string, caret int, commit bool, from, length int) (ok bool) {
+	waitKey(w)
 	mygo.RunOnMain(func() { ok = darwin.TestComposeOver(w.NativeHandle(), text, caret, commit, from, length) })
 	return ok
 }
