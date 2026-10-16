@@ -59,6 +59,9 @@ func TestMenuItemIcons(t *testing.T) {
 			t.Errorf("%s: icon %v template %v, want %v %v", tc.label, has, template, tc.has, tc.template)
 		}
 	}
+	if width, ok := accelWidth(w, "Icons", "Icon"); ok && width == 0 {
+		t.Error("the item with an icon lost its shortcut")
+	}
 	// A relabeled item keeps its icon and shows its new label.
 	menu.ItemByID("icon").SetLabel("Renamed")
 	time.Sleep(100 * time.Millisecond)

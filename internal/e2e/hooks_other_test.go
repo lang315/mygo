@@ -16,6 +16,8 @@ func menuIcon(*mygo.Window, ...string) (has, template, supported bool, err error
 	return false, false, false, nil
 }
 
+func accelWidth(*mygo.Window, ...string) (uint32, bool) { return 0, false }
+
 func pressShortcut(string, bool) (bool, bool) { return false, false }
 
 func endSheet(*mygo.Window) (bool, bool) { return false, false }

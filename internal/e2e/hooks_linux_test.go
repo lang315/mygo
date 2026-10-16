@@ -326,6 +326,13 @@ func endSheetButton(*mygo.Window, int) bool               { return false }
 // Panels' window styles are Windows'.
 func panelStyles(*mygo.Window) (bool, bool, bool, bool) { return false, false, false, false }
 
-func menuIcon(*mygo.Window, ...string) (has, template, supported bool, err error) {
-	return false, false, false, nil
+func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
+	mygo.RunOnMain(func() { has, err = linux.TestMenuItemImage(w.NativeHandle(), path...) })
+	return has, false, true, err
+}
+
+func accelWidth(w *mygo.Window, path ...string) (width uint32, ok bool) {
+	var err error
+	mygo.RunOnMain(func() { width, err = linux.TestMenuItemAccelWidth(w.NativeHandle(), path...) })
+	return width, err == nil
 }

@@ -214,6 +214,7 @@ var (
 	gdkPixbufLoaderClose        func(l ptr, err *ptr) bool
 	gdkPixbufLoaderGetPixbuf    func(l ptr) ptr
 	gdkPixbufSaveToBufferv      func(p ptr, buf *ptr, size *uintptr, typ *byte, keys, values ptr, err *ptr) bool
+	gdkPixbufScaleSimple        func(p ptr, w, h int32, interp int32) ptr
 )
 
 type gdkRectangle struct{ X, Y, Width, Height int32 }
@@ -300,6 +301,7 @@ var (
 	gtkContainerCheckResize             func(c ptr)
 	gtkMenuBarNew                       func() ptr
 	gtkMenuNew                          func() ptr
+	gtkMenuItemNew                      func() ptr
 	gtkMenuItemNewWithLabel             func(label *byte) ptr
 	gtkMenuItemSetLabel                 func(item ptr, label *byte)
 	gtkMenuItemSetSubmenu               func(item, menu ptr)
@@ -307,7 +309,15 @@ var (
 	gtkMenuItemGetLabel                 func(item ptr) ptr
 	gtkMenuItemActivate                 func(item ptr)
 	gtkContainerGetChildren             func(c ptr) ptr
+	gtkCheckMenuItemNew                 func() ptr
 	gtkCheckMenuItemNewWithLabel        func(label *byte) ptr
+	gtkAccelLabelNew                    func(text *byte) ptr
+	gtkAccelLabelSetAccelWidget         func(label, widget ptr)
+	gtkAccelLabelGetAccelWidth          func(label ptr) uint32
+	gtkLabelSetText                     func(label ptr, text *byte)
+	gtkLabelGetText                     func(label ptr) ptr
+	gtkImageNewFromSurface              func(surface ptr) ptr
+	gdkCairoSurfaceCreateFromPixbuf     func(pixbuf ptr, scale int32, window ptr) ptr
 	gtkCheckMenuItemSetActive           func(item ptr, v bool)
 	gtkCheckMenuItemSetDrawAsRadio      func(item ptr, v bool)
 	gtkSeparatorMenuItemNew             func() ptr
@@ -648,6 +658,7 @@ func load() error {
 	mustBind(p, &gdkPixbufLoaderClose, "gdk_pixbuf_loader_close")
 	mustBind(p, &gdkPixbufLoaderGetPixbuf, "gdk_pixbuf_loader_get_pixbuf")
 	mustBind(p, &gdkPixbufSaveToBufferv, "gdk_pixbuf_save_to_bufferv")
+	mustBind(p, &gdkPixbufScaleSimple, "gdk_pixbuf_scale_simple")
 
 	t := libGTK
 	mustBind(t, &gtkInitCheck, "gtk_init_check")
@@ -720,6 +731,7 @@ func load() error {
 	mustBind(t, &gtkContainerCheckResize, "gtk_container_check_resize")
 	mustBind(t, &gtkMenuBarNew, "gtk_menu_bar_new")
 	mustBind(t, &gtkMenuNew, "gtk_menu_new")
+	mustBind(t, &gtkMenuItemNew, "gtk_menu_item_new")
 	mustBind(t, &gtkMenuItemNewWithLabel, "gtk_menu_item_new_with_label")
 	mustBind(t, &gtkMenuItemSetLabel, "gtk_menu_item_set_label")
 	mustBind(t, &gtkMenuItemSetSubmenu, "gtk_menu_item_set_submenu")
@@ -727,7 +739,16 @@ func load() error {
 	mustBind(t, &gtkMenuItemGetLabel, "gtk_menu_item_get_label")
 	mustBind(t, &gtkMenuItemActivate, "gtk_menu_item_activate")
 	mustBind(t, &gtkContainerGetChildren, "gtk_container_get_children")
+	mustBind(t, &gtkCheckMenuItemNew, "gtk_check_menu_item_new")
 	mustBind(t, &gtkCheckMenuItemNewWithLabel, "gtk_check_menu_item_new_with_label")
+	mustBind(t, &gtkAccelLabelNew, "gtk_accel_label_new")
+	mustBind(t, &gtkAccelLabelSetAccelWidget, "gtk_accel_label_set_accel_widget")
+	mustBind(t, &gtkAccelLabelGetAccelWidth, "gtk_accel_label_get_accel_width")
+	mustBind(t, &gtkLabelSetText, "gtk_label_set_text")
+	mustBind(t, &gtkLabelGetText, "gtk_label_get_text")
+	mustBind(t, &gtkImageNewFromSurface, "gtk_image_new_from_surface")
+	mustBind(libGDK, &gdkCairoSurfaceCreateFromPixbuf, "gdk_cairo_surface_create_from_pixbuf")
+	mustBind(t, &gtkWidgetGetScaleFactor, "gtk_widget_get_scale_factor")
 	mustBind(t, &gtkCheckMenuItemSetActive, "gtk_check_menu_item_set_active")
 	mustBind(t, &gtkCheckMenuItemSetDrawAsRadio, "gtk_check_menu_item_set_draw_as_radio")
 	mustBind(t, &gtkSeparatorMenuItemNew, "gtk_separator_menu_item_new")

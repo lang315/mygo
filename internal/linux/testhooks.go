@@ -15,31 +15,71 @@ import (
 // TestActivateMenuItem activates an item of a window's menu bar, found by
 // the labels along its path.
 func TestActivateMenuItem(handle uintptr, path ...string) error {
-	var w *window
-	for _, x := range theBackend.windows {
-		if x.win == handle {
-			w = x
+	item, err := menuBarItem(handle, path)
+	if err != nil {
+		return err
+	}
+	gtkMenuItemActivate(item)
+	return nil
+}
+
+// TestMenuItemImage reports whether an item of a window's menu bar, found
+// by the labels along its path, shows an image.
+func TestMenuItemImage(handle uintptr, path ...string) (bool, error) {
+	item, err := menuBarItem(handle, path)
+	if err != nil {
+		return false, err
+	}
+	for _, n := range itemsByID {
+		for _, x := range n {
+			if x.item == item {
+				return x.image != 0, nil
+			}
 		}
 	}
+	return false, nil
+}
+
+// TestMenuItemAccelWidth returns the width of the shortcut the label of
+// an item with an icon shows, 0 for none.
+func TestMenuItemAccelWidth(handle uintptr, path ...string) (uint32, error) {
+	item, err := menuBarItem(handle, path)
+	if err != nil {
+		return 0, err
+	}
+	l := labelOf(item)
+	if l == 0 {
+		return 0, fmt.Errorf("mygo: menu item has no icon label")
+	}
+	// The label measures its shortcut when asked for its size, which a
+	// menu that never opened has not been.
+	var minimum, natural int32
+	gtkWidgetGetPreferredWidth(l, &minimum, &natural)
+	return gtkAccelLabelGetAccelWidth(l), nil
+}
+
+// menuBarItem returns the item of a window's menu bar found by the labels
+// along its path.
+func menuBarItem(handle uintptr, path []string) (ptr, error) {
+	w := windowByHandle(handle)
 	if w == nil || w.menubar == 0 {
-		return fmt.Errorf("mygo: window has no menu bar")
+		return 0, fmt.Errorf("mygo: window has no menu bar")
 	}
 	shell := w.menubar
 	for i, label := range path {
 		item := findMenuItem(shell, label)
 		if item == 0 {
-			return fmt.Errorf("mygo: no menu item %q", label)
+			return 0, fmt.Errorf("mygo: no menu item %q", label)
 		}
 		if i == len(path)-1 {
-			gtkMenuItemActivate(item)
-			return nil
+			return item, nil
 		}
 		shell = gtkMenuItemGetSubmenu(item)
 		if shell == 0 {
-			return fmt.Errorf("mygo: menu %q has no submenu", label)
+			return 0, fmt.Errorf("mygo: menu %q has no submenu", label)
 		}
 	}
-	return nil
+	return 0, fmt.Errorf("mygo: empty menu path")
 }
 
 func findMenuItem(shell ptr, label string) ptr {
@@ -47,8 +87,29 @@ func findMenuItem(shell ptr, label string) ptr {
 	defer gListFree(list)
 	for node := list; node != 0; node = field[ptr](node, 8) {
 		item := field[ptr](node, 0)
-		if goStr(gtkMenuItemGetLabel(item)) == label {
+		if itemLabel(item) == label {
 			return item
+		}
+	}
+	return 0
+}
+
+// itemLabel returns the label of a menu item, in its box when it has an
+// icon.
+func itemLabel(item ptr) string {
+	if l := labelOf(item); l != 0 {
+		return goStr(gtkLabelGetText(l))
+	}
+	return goStr(gtkMenuItemGetLabel(item))
+}
+
+// labelOf returns the label of an item with an icon, 0 for others.
+func labelOf(item ptr) ptr {
+	for _, n := range itemsByID {
+		for _, x := range n {
+			if x.item == item {
+				return x.label
+			}
 		}
 	}
 	return 0

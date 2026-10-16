@@ -313,3 +313,5 @@ func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, er
 	mygo.RunOnMain(func() { has, template, err = darwin.TestMenuItemImage(path...) })
 	return has, template, true, err
 }
+
+func accelWidth(*mygo.Window, ...string) (uint32, bool) { return 0, false }
