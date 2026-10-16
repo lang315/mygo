@@ -464,7 +464,7 @@ func waitForPage(t testing.TB, p *mygo.Page, expr string) {
 			if err != nil {
 				msg += "; the last check failed: " + err.Error()
 			}
-			t.Fatalf("%s; %s", msg, pageState(p))
+			t.Fatalf("%s; %s%s", msg, pageState(p), inputDiag())
 		case <-time.After(20 * time.Millisecond):
 		}
 		v, err = p.EvalContext(ctx, check)
@@ -1274,7 +1274,7 @@ func eventually(t *testing.T, what string, cond func() bool) {
 	deadline := time.Now().Add(5 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
+			t.Fatalf("timed out waiting for %s%s", what, inputDiag())
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -2436,13 +2436,17 @@ func TestWindowOpenAllowed(t *testing.T) {
 
 // TestClick is a regression test: clicking the page used to crash on macOS.
 func TestClick(t *testing.T) {
+	step := logSteps(t)
 	w := newWindow(t, mygo.WindowOptions{Width: 400, Height: 300})
+	step.done("window created")
 	w.Page().LoadHTML(`<body style="margin:0"><button id="b" style="width:200px;height:100px" onclick="window.clicked=(window.clicked||0)+1">x</button></body>`, "")
 	waitFor(t, w, "document.getElementById('b')")
+	step.done("button found")
 	if !click(w, 50, 50) {
 		t.Skip("click automation not available on this platform")
 	}
 	click(w, 60, 40)
+	step.done("clicks sent")
 	waitFor(t, w, "window.clicked === 2")
 
 	// Clicking a drag region of a frameless window starts a native drag.
@@ -2527,14 +2531,18 @@ func TestContentWindowInputMethod(t *testing.T) {
 		mygo.RunOnMain(func() { s = name })
 		return s
 	}
+	step := logSteps(t)
 	w := newWindow(t, mygo.WindowOptions{Title: "Input method", Width: 400, Height: 200, Content: ui.View(view)})
+	step.done("window created")
 	eventually(t, "a frame", func() bool { return frames.Load() > 0 })
+	step.done("first frame")
 	if _, _, ok := inputClient(w); !ok {
 		t.Skip("input method automation not available on this platform")
 	}
 	if !click(w, 300, 36) { // after the text
 		t.Skip("click automation not available on this platform")
 	}
+	step.done("click sent")
 	eventually(t, "the caret after the text", func() bool {
 		sel, doc, _ := inputClient(w)
 		return sel == [2]int{4, 0} && doc == "cafe"

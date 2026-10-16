@@ -89,6 +89,26 @@ func TestPerformKeyEquivalent(key string, shift bool) bool {
 	return handled
 }
 
+// TestWindowState describes a window for a failing test's log: whether it is
+// key, main and shown on screen, whether the app is active, which window is
+// key, which app is frontmost, and which mouse buttons are held down.
+func TestWindowState(handle uintptr) string {
+	var s string
+	withPool(func() {
+		win := id(handle)
+		front := send(send(class("NSWorkspace"), "sharedWorkspace"), "frontmostApplication")
+		name := "none"
+		if front != 0 {
+			name = fmt.Sprintf("%s (pid %d)", goString(send(front, "localizedName")), sendInt(front, "processIdentifier"))
+		}
+		s = fmt.Sprintf("window %d key=%v main=%v visible=%v occlusion=%#x; app active=%v, key window %d, frontmost app %s, mouse buttons held %#x",
+			sendInt(win, "windowNumber"), sendBool(win, "isKeyWindow"), sendBool(win, "isMainWindow"), sendBool(win, "isVisible"),
+			sendInt(win, "occlusionState"), sendBool(theBackend.app, "isActive"), sendInt(send(theBackend.app, "keyWindow"), "windowNumber"),
+			name, sendInt(class("NSEvent"), "pressedMouseButtons"))
+	})
+	return s
+}
+
 // TestOnScreen reports whether some of a window shows on screen, as the
 // window server reports once it put the window there.
 func TestOnScreen(handle uintptr) bool {

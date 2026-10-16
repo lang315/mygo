@@ -46,6 +46,7 @@ func endSheet(w *mygo.Window) (ok bool, supported bool) {
 
 func click(w *mygo.Window, x, y float64) bool {
 	waitOnScreen(w)
+	noteInput("click", w)
 	mygo.RunOnMain(func() { darwin.TestClick(w.NativeHandle(), x, y) })
 	return true
 }
@@ -88,6 +89,7 @@ func sideButton(w *mygo.Window, back bool) (ok bool) {
 }
 
 func drag(w *mygo.Window, points [][2]float64) bool {
+	noteInput("drag", w)
 	mygo.RunOnMain(func() { darwin.TestDrag(w.NativeHandle(), points) })
 	return true
 }
