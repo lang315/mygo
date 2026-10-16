@@ -72,6 +72,23 @@ func TestHeaderBarHidesTheTitleBar(t *testing.T) {
 	}
 }
 
+func TestHeaderBarClientDecorations(t *testing.T) {
+	plain := NewWindow("Bar", 400, 300)
+	plain.UseHeaderBar("")
+	plain.Show()
+	defer plain.Close()
+	if lastFake(t).Opts.ClientDecorations {
+		t.Fatal("ClientDecorations set by default")
+	}
+	w := NewWindow("Own", 400, 300)
+	w.UseHeaderBar("").ClientDecorations(true)
+	w.Show()
+	defer w.Close()
+	if !lastFake(t).Opts.ClientDecorations {
+		t.Fatal("ClientDecorations(true) did not reach the window")
+	}
+}
+
 func TestOnCloseCanKeepTheWindow(t *testing.T) {
 	w := NewWindow("Keep", 300, 200)
 	asked := make(chan struct{}, 1)

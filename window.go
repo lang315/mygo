@@ -103,6 +103,14 @@ type WindowOptions struct {
 	// 32 on Windows, as Windows 11's own title bars, and the height of the
 	// desktop's header bars on Linux.
 	TitleBarHeight int
+	// ClientDecorations makes a window whose TitleBarStyle hides the title
+	// bar decorate itself under a Wayland compositor that decorates
+	// windows (Sway, KWin): the compositor draws no title bar above the
+	// page's, and the window shows the desktop's window buttons over its
+	// content as on other Linux desktops. Sway honors it for floating
+	// windows only. Ignored elsewhere: on other platforms, on X11, for
+	// other title bar styles and frameless windows.
+	ClientDecorations bool
 
 	DisableResize     bool
 	DisableMove       bool
@@ -537,6 +545,7 @@ func (w *Window) platformOptions(o *WindowOptions) *platform.WindowOptions {
 	case DevToolsAuto:
 		p.DevTools = IsDev()
 	}
+	p.ClientDecorations = o.ClientDecorations
 	if o.TrafficLightPosition != nil {
 		p.TrafficLightPosition = &platform.Point{X: o.TrafficLightPosition.X, Y: o.TrafficLightPosition.Y}
 	}

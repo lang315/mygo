@@ -26,6 +26,9 @@ import (
 // buttons, and a tiling compositor, which draws none, wants none, whatever
 // the button layout says: GTK reads it from GNOME's settings on Wayland, and
 // their default shows close.
+//
+// With ClientDecorations, a window says it decorates itself, so the
+// compositor draws no title bar, and it keeps the buttons of the layout.
 
 // controlsCSS clears the bars around the buttons. With TitleBarHeight, the
 // bars take that height instead of the theme's.
@@ -65,7 +68,7 @@ func (w *window) newControls() {
 func (w *window) layoutControls() {
 	c := w.controls
 	start, end := buttonLayout()
-	if w.b.compositorDecorates {
+	if w.b.compositorDecorates && !w.opts.ClientDecorations {
 		start, end = "", ""
 	}
 	for side, buttons := range [2]string{start, end} {

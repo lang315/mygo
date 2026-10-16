@@ -175,6 +175,7 @@ func (w *Window) Show() {
 	}
 	if w.header != nil {
 		opts.TitleBarStyle = mygo.TitleBarHidden
+		opts.ClientDecorations = w.header.clientDecorations
 	}
 	if p := w.parent; p != nil && p.win != nil {
 		opts.Parent, opts.Modal = p.win, true
@@ -296,6 +297,8 @@ type HeaderBarWidget struct {
 	win        *Window
 	subtitle   string
 	start, end []Widget
+	// clientDecorations: the header bar is the only title bar on Wayland.
+	clientDecorations bool
 }
 
 func (h *HeaderBarWidget) SetTitle(s string) *HeaderBarWidget { h.win.SetTitle(s); return h }
@@ -309,6 +312,15 @@ func (h *HeaderBarWidget) PackStart(ws ...Widget) *HeaderBarWidget {
 }
 func (h *HeaderBarWidget) PackEnd(ws ...Widget) *HeaderBarWidget {
 	change(func() { h.end = h.add(h.end, ws) })
+	return h
+}
+
+// ClientDecorations makes the window draw the only title bar under a
+// Wayland compositor that decorates windows, with the desktop's window
+// buttons (see mygo.WindowOptions.ClientDecorations). It applies at the
+// next Show.
+func (h *HeaderBarWidget) ClientDecorations(on bool) *HeaderBarWidget {
+	change(func() { h.clientDecorations = on })
 	return h
 }
 
