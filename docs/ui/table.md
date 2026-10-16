@@ -172,6 +172,23 @@ for i := range app.view.Len() {
 Keys must be unique. The keys of rows removed stay in the selection until
 you take them out.
 
+An [`OutlineTable`](outline.md) takes the same `Checked`, `CheckedCount`,
+`RowMenu` and `Copy`, on `OutlineState.List`. A row's key is its item, so a
+row stays checked while its parent is closed and when it opens again, and
+`rows` in `RowMenu` and `Copy` are positions shown, deep rows included:
+read an item with `state.Item(row)`.
+
+```go
+app.files.List.Checked = &app.checked // a Selection of the items' type
+app.files.List.Copy = func(rows []int) string {
+	var b strings.Builder
+	for _, row := range rows {
+		b.WriteString(app.files.Item(row) + "\n")
+	}
+	return b.String()
+}
+```
+
 ## Row menus and copying
 
 `ListState.RowMenu` gives the rows a [context menu](context-menu.md). It
