@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -56,6 +57,10 @@ type DataTableState[T any, K comparable] struct {
 	// default it is the Text of each column but #, tab-separated, a line a
 	// row.
 	Copy func(rows []*T) string
+	// NoSearchBar hides the search bar, for an app that puts its own where
+	// it wants, with its own texts, and searches with SetSearch. No bar is
+	// shown either when no column is searchable.
+	NoSearchBar bool
 
 	// Checked are the rows checked, Chosen the rows highlighted.
 	Checked, Chosen Selection[K]
@@ -140,6 +145,13 @@ func (s *DataTableState[T, K]) Current() *T {
 	return s.At(s.cursor)
 }
 
+// Version changes whenever the rows shown, or their order, change: a sort, a
+// search, a filter, rows placed again. It is the version of the TableView.
+func (s *DataTableState[T, K]) Version() uint64 {
+	s.start()
+	return s.view.Version()
+}
+
 // Changed says that the app changed the rows of its slice at these indexes,
 // so the next frame places them again, as TableView.Changed does. Rows
 // appended need no call.
@@ -173,7 +185,12 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 	}
 	s.rows = rows
 	return Column(c).Gap(8).Children(func() {
-		s.searchBar(c)
+		if !s.NoSearchBar && len(s.titles) > 0 {
+			s.searchBar(c)
+		}
+		if k := s.FilterKey; k != nil && !reflect.ValueOf(k).Comparable() {
+			panic(fmt.Sprintf("ui: DataTable FilterKey %T is not comparable", k))
+		}
 		s.view.SetFilterKey(dataFilterKey{s.FilterKey, s.applied}, s.keep)
 		s.view.Sync(rows, s.Sort)
 		s.list.Version = s.view.Version()
@@ -188,6 +205,9 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 	})
 }
 
+// dataIndexID is the ID of the # column, one no column of an app has.
+const dataIndexID = "ui.DataTable.index"
+
 // tableColumns are the columns of the Table: a # column when s.Index, wide
 // enough for the number of the last row (and for two digits), then those of
 // s, sortable when they have a Compare. The slice is reused from frame to
@@ -198,7 +218,7 @@ func (s *DataTableState[T, K]) tableColumns(c *Context) []TableColumn {
 		digits := max(2, len(strconv.Itoa(s.view.Len())))
 		w, _ := c.MeasureText(0, Span{Text: strings.Repeat("9", digits)})
 		t := c.Theme()
-		s.tcols = append(s.tcols, TableColumn{Title: "#", Fixed: true, Align: End, Width: w + 2*t.Space(2.5)})
+		s.tcols = append(s.tcols, TableColumn{ID: dataIndexID, Title: "#", Fixed: true, Align: End, Width: w + 2*t.Space(2.5)})
 	}
 	for i := range s.Columns {
 		col := s.Columns[i].TableColumn

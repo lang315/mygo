@@ -48,10 +48,15 @@ frame, and use it on the main thread.
   it to start sorted.
 - `Checked` and `Chosen` are `Selection`s of keys: the rows checked with the
   checkboxes or Space, and the rows highlighted. `Current()` is the row
-  chosen last, `Len()` and `At(i)` the rows shown.
+  chosen last, `Len()` and `At(i)` the rows shown. `Version()` changes
+  whenever the rows shown, or their order, do.
+- `NoSearchBar` hides the search bar, for an app that puts its own where it
+  wants, with its own texts, and calls `SetSearch`. No bar is shown either when
+  no column is searchable.
 - `Index` shows a `#` column after the checkbox column: the position of each
   row shown, so it follows the sort and the search. It does not sort, move or
-  resize, and Copy leaves it out.
+  resize, and Copy leaves it out. Its ID is `ui.DataTable.index`, so a column
+  titled `#` of yours does not collide with it.
 
 ## Changing the rows
 
@@ -70,11 +75,12 @@ lists the values to match exactly (`UID1|UID2`). Of columns with the same
 `Title`, the first is searched.
 
 `SetSearch(column, keyword)` searches from code, and `Search()` returns the
-search applied.
+search applied; with `NoSearchBar` they are all an app's own bar needs.
 
 For rows to show apart from the search, such as the folder of a file manager,
 set `Filter` and a `FilterKey` that changes when the filter does; the rows are
-filtered again only then.
+filtered again only then. A `FilterKey` that cannot be compared (a slice, a
+map, a func) panics at the first frame.
 
 ## Menu and Copy
 
