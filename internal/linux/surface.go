@@ -476,6 +476,12 @@ func (s *surface) SetTextInput(t platform.TextInputState) {
 }
 
 func (s *surface) send(ev platform.SurfaceEvent) bool {
+	// A click ends the input method's composition first, as in GTK's own
+	// widgets: what it commits or drops then takes the marked text, which
+	// the click would otherwise commit while the input method composes on.
+	if ev.Kind == platform.PointerDown && s.textInput {
+		gtkIMContextReset(s.im)
+	}
 	if ev.Kind == platform.PointerDown || ev.Kind == platform.SurfaceBlur {
 		s.clientComposition.Reset()
 	}

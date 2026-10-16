@@ -68,6 +68,21 @@ func TestSurrounding(handle uintptr) (text string, caret int, ok bool) {
 	return text, utf8.RuneCountInString(text[:max(0, min(int(cursor), len(text)))]), true
 }
 
+// TestMarkedText returns the text marked as composed in the input client of
+// a window showing native UI.
+func TestMarkedText(handle uintptr) (string, bool) {
+	s := surfaceByHandle(handle)
+	if s == nil || s.input.Client == nil {
+		return "", false
+	}
+	r, ok := s.input.Client.MarkedRange()
+	if !ok {
+		return "", true
+	}
+	text, _ := s.input.Client.TextForRange(r)
+	return text, true
+}
+
 // TestComposeOver does what an input method that edits typed text does:
 // it deletes length runes from offset from of the text around the caret
 // unless from is -1, then composes text with the caret at caret, or

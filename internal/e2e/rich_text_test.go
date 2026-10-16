@@ -103,3 +103,46 @@ func TestRichTextEditor(t *testing.T) {
 	}
 	eventually(t, "the RTF pasted", func() bool { return runs() == "Hello |*世界rtf*|" })
 }
+
+// TestRichTextClickEndsComposition clicks in a rich text editor while an
+// input method composes in it, as GTK's own composes a code point after
+// Ctrl+Shift+U: the click ends the input method's composition too, so the
+// keys typed next type text, not more of it.
+func TestRichTextClickEndsComposition(t *testing.T) {
+	doc := richtext.NewDocument(richtext.NewText("Hello "))
+	var frames atomic.Int32
+	view := func(c *ui.Context) {
+		richtext.Editor(c, doc, richtext.EditorOptions{Label: "Note"}).Fill()
+		frames.Add(1)
+	}
+	w := newWindow(t, mygo.WindowOptions{Title: "Composition", Width: 420, Height: 220, Content: ui.View(view)})
+	eventually(t, "a frame", func() bool { return frames.Load() > 0 })
+	if !click(w, 300, 160) {
+		t.Skip("native click automation unavailable")
+	}
+	eventually(t, "the caret after the click", func() bool {
+		sel, text, _ := inputClient(w)
+		return sel == [2]int{6, 0} && text == "Hello "
+	})
+	if !pressKeys("Control_L", "Shift_L", "u") {
+		t.Skip("key automation unavailable")
+	}
+	for _, k := range []string{"4", "e", "1", "6"} {
+		pressKeys(k)
+	}
+	eventually(t, "the composition", func() bool {
+		marked, _ := markedText(w)
+		return marked == "u4e16"
+	})
+	click(w, 300, 160)
+	text := func() (s string) {
+		mygo.RunOnMain(func() { s = doc.Text().String() })
+		return s
+	}
+	eventually(t, "the composition ended", func() bool {
+		marked, _ := markedText(w)
+		return marked == "" && text() == "Hello "
+	})
+	pressKeys("x")
+	eventually(t, "a letter typed after it", func() bool { return text() == "Hello x" })
+}

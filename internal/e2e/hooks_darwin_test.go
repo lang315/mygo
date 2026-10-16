@@ -139,7 +139,8 @@ func pressCtrlShiftK() bool { return false }
 // Only Linux binds global shortcuts through a desktop portal.
 func usePortalShortcuts() (func(), bool) { return nil, false }
 
-func pressKeys(...string) bool { return false }
+func pressKeys(...string) bool               { return false }
+func markedText(*mygo.Window) (string, bool) { return "", false }
 
 func fullScreenHidesToolbar(w *mygo.Window) (hides bool, supported bool) {
 	mygo.RunOnMain(func() { hides = darwin.TestFullScreenHidesToolbar(w.NativeHandle()) })
