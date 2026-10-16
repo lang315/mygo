@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"fmt"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -328,8 +330,13 @@ func TestTableChoosesSeveral(t *testing.T) {
 func TestSelectionOfAnotherKeyPanics(t *testing.T) {
 	var sel Selection[string]
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("no panic")
+		r := recover()
+		if r == nil {
+			t.Fatal("no panic")
+		}
+		// Rows of a List or Table and items of a GridView have keys.
+		if msg := fmt.Sprint(r); !strings.Contains(msg, "item") || !strings.Contains(msg, "row") {
+			t.Errorf("panic %q names a row only", msg)
 		}
 	}()
 	sel.has(3)

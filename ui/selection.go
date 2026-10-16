@@ -134,7 +134,7 @@ func (s *Selection[K]) generation() uint64 { return s.gen }
 func (s *Selection[K]) key(key any) K {
 	k, ok := key.(K)
 	if !ok {
-		panic(fmt.Sprintf("ui: a row's key is a %T, not the %T of its Selection", key, *new(K)))
+		panic(fmt.Sprintf("ui: the key of a row or an item is a %T, not the %T of its Selection", key, *new(K)))
 	}
 	return k
 }
