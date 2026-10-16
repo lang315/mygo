@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,23 +12,16 @@ import (
 )
 
 // tester shows a in a headless window, with updates from workers queued
-// for wait to run.
+// for its frames to run.
 type tester struct {
 	*ui.Tester
-	t       *testing.T
-	a       *app
-	mu      sync.Mutex
-	pending []func()
+	t *testing.T
+	a *app
 }
 
 func newTester(t *testing.T, a *app) *tester {
-	tt := &tester{t: t, a: a}
-	a.update = func(fn func()) {
-		tt.mu.Lock()
-		tt.pending = append(tt.pending, fn)
-		tt.mu.Unlock()
-	}
-	tt.Tester = ui.NewTester(a.build, 1280, 800)
+	tt := &tester{t: t, a: a, Tester: ui.NewTester(a.build, 1280, 800)}
+	a.update = tt.Update
 	return tt
 }
 
@@ -54,13 +46,7 @@ func (tt *tester) wait(r **runner) {
 		if time.Now().After(end) {
 			tt.t.Fatal("the run did not end")
 		}
-		tt.mu.Lock()
-		fns := tt.pending
-		tt.pending = nil
-		tt.mu.Unlock()
-		for _, fn := range fns {
-			fn()
-		}
+		tt.Frame()
 		time.Sleep(10 * time.Millisecond)
 	}
 	tt.Frame()
@@ -353,7 +339,6 @@ func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
 	}
 	a.view = ui.NewTableView(counted)
 	a.sort = ui.SortOrder{Column: "Bạn bè"}
-	a.filtered.folder = -1 // the new view has no filter yet
 	a.filter()
 	f := a.s.addFolder()
 	tt := newTester(t, a)
@@ -367,5 +352,28 @@ func TestMoveSortsOnlyTheRowMoved(t *testing.T) {
 	// A sort of 10,000 rows compares them about 120,000 times.
 	if calls > 1000 {
 		t.Fatalf("moving one account compared rows %d times", calls)
+	}
+}
+
+// BenchmarkSearchStatus searches the statuses a run leaves, Vietnamese
+// text, which a lowercase copy of each cell would allocate for.
+func BenchmarkSearchStatus(b *testing.B) {
+	a := newApp(1_000_000)
+	statuses := []string{"Kiểm tra: Thành công", "Lỗi: checkpoint", "Đã dừng", "Đang chạy..."}
+	for i := range a.s.accounts {
+		a.s.accounts[i].Status = statuses[i%len(statuses)]
+	}
+	a.sort = ui.SortOrder{Column: "Bạn bè"}
+	a.column = "Trạng thái"
+	a.view.Sync(a.s.accounts, a.sort)
+	on := false
+	for b.Loop() {
+		if on = !on; on {
+			a.keyword = "Thành công"
+		} else {
+			a.keyword = ""
+		}
+		a.filter()
+		a.view.Sync(a.s.accounts, a.sort)
 	}
 }
