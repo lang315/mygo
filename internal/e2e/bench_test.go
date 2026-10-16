@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -104,33 +103,26 @@ if (n !== N) throw new Error("got " + n + " values")`)
 // BenchmarkPageEvent emits events to a page, until the page has them all.
 func BenchmarkPageEvent(b *testing.B) {
 	w := benchWindow(b)
-	if _, err := w.Page().Eval(`window.benchEvents = (N) => new Promise((resolve) => {
+	// The page listens once this returns: events emitted before would be
+	// lost, and the wait for them never end.
+	if _, err := w.Page().Eval(`window.benchEvents = new Promise((resolve) => {
   let n = 0;
-  const off = mygo.on("bench:tick", () => { if (++n === N) { off(); resolve(n) } });
-})`); err != nil {
+  const off = mygo.on("bench:tick", () => { if (++n === ` + strconv.Itoa(b.N) + `) { off(); resolve(n) } });
+}); return 0`); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
-	done := make(chan error, 1)
-	go func() {
-		n, err := mygo.EvalAs[int](w.Page(), "benchEvents("+strconv.Itoa(b.N)+")")
-		if err == nil && n != b.N {
-			err = fmt.Errorf("the page got %d of %d events", n, b.N)
-		}
-		done <- err
-	}()
-	// The page listens once the script above has run, which a script
-	// evaluated after it tells.
-	if _, err := w.Page().Eval("0"); err != nil {
-		b.Fatal(err)
-	}
 	for i := range b.N {
 		if err := benchTick.Emit(w, Tick{N: i}); err != nil {
 			b.Fatal(err)
 		}
 	}
-	if err := <-done; err != nil {
+	n, err := mygo.EvalAs[int](w.Page(), "benchEvents")
+	if err != nil {
 		b.Fatal(err)
+	}
+	if n != b.N {
+		b.Fatalf("the page got %d of %d events", n, b.N)
 	}
 }
 
