@@ -702,7 +702,11 @@ type MenuItem struct {
 	Visible     bool
 	Checked     bool
 	ToolTip     string
-	Submenu     *Menu
+	// Icon is a PNG shown before the label, nil for none; Template makes
+	// it a template image on macOS.
+	Icon     []byte
+	Template bool
+	Submenu  *Menu
 }
 
 // FileFilter restricts the files shown in file dialogs.

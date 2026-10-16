@@ -1463,6 +1463,26 @@ func TestDefaultMenu(t *testing.T) {
 	}
 }
 
+func TestMenuItemIconReachesThePlatform(t *testing.T) {
+	png := []byte("\x89PNG fake") // core passes bytes through; backends decode
+	m := NewMenu([]*MenuItem{{Label: "Copy", Icon: png, IconTemplate: true}, {Label: "Plain"}})
+	snap := m.snapshot()
+	if got := snap.Items[0]; !slices.Equal(got.Icon, png) || !got.Template {
+		t.Fatalf("item 0: icon %q template %v", got.Icon, got.Template)
+	}
+	if got := snap.Items[1]; got.Icon != nil || got.Template {
+		t.Fatalf("item 1 has an icon: %q %v", got.Icon, got.Template)
+	}
+}
+
+func TestContentMenuKeepsIcons(t *testing.T) {
+	pm := &platform.Menu{Items: []*platform.MenuItem{{ID: 1, Label: "Copy", Enabled: true, Visible: true, Icon: []byte("png"), Template: true}}}
+	items := contentMenu(pm, func(int) {})
+	if string(items[0].Icon) != "png" || !items[0].IconTemplate {
+		t.Fatalf("icon %q template %v", items[0].Icon, items[0].IconTemplate)
+	}
+}
+
 func TestMenuRolesOnWindow(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	w.Focus()
