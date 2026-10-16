@@ -342,3 +342,5 @@ func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, 
 	mygo.RunOnMain(func() { drawn, menuPNG, err = linux.TestMenuItemShortcutDrawn(w.NativeHandle(), path...) })
 	return drawn, menuPNG, true, err
 }
+
+func recentDocumentsNeedBundle() bool { return false }

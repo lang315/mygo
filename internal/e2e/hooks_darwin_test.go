@@ -5,12 +5,24 @@ package e2e
 import (
 	"os/exec"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/darwin"
 )
+
+// recentDocumentsNeedBundle reports whether macOS keeps no recent documents
+// for this test binary: macOS 15 refuses a process without a bundle
+// identifier ("Invalid bundle identifier: <nil>"), macOS 26 does not.
+func recentDocumentsNeedBundle() bool {
+	out, _ := exec.Command("sw_vers", "-productVersion").Output()
+	major, _, _ := strings.Cut(strings.TrimSpace(string(out)), ".")
+	n, err := strconv.Atoi(major)
+	return err == nil && n < 26
+}
 
 // recentDocumentRecorded reports whether path is among the app's recent
 // documents.

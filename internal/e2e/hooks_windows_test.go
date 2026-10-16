@@ -360,3 +360,5 @@ func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, er
 func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
 	return false, nil, false, nil
 }
+
+func recentDocumentsNeedBundle() bool { return false }
