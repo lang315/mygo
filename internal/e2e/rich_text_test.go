@@ -26,8 +26,10 @@ func TestRichTextEditor(t *testing.T) {
 	}))
 	doc := richtext.NewDocument(richtext.NewText("Hello "))
 	var frames atomic.Int32
+	// No AutoFocus: the editor gets the caret from the click, which on Linux
+	// may arrive late, and would end the composition if it came during it.
 	view := func(c *ui.Context) {
-		richtext.Editor(c, doc, richtext.EditorOptions{Label: "Note"}).Fill().AutoFocus()
+		richtext.Editor(c, doc, richtext.EditorOptions{Label: "Note"}).Fill()
 		frames.Add(1)
 	}
 	w := newWindow(t, mygo.WindowOptions{Title: "Rich text", Width: 420, Height: 220, Content: ui.View(view)})
@@ -35,6 +37,10 @@ func TestRichTextEditor(t *testing.T) {
 	if !click(w, 300, 160) {
 		t.Skip("native click automation unavailable")
 	}
+	eventually(t, "the caret after the click", func() bool {
+		sel, text, _ := inputClient(w)
+		return sel == [2]int{6, 0} && text == "Hello "
+	})
 	runs := func() string {
 		var s string
 		mygo.RunOnMain(func() {
