@@ -280,6 +280,9 @@ filter get pointers to rows of your slice, which spares copying a large row
 at each comparison; they must not change the rows nor keep the pointers.
 Use the view on the main thread only.
 
+For a table that also keeps the checks, the sort and a search bar for you, see
+[Data table](data-table.md).
+
 Call `Sync` in every frame: it costs nothing when nothing changed, places
 again only the rows changed or appended, and sorts all of them when the sort,
 the filter or the slice changed. Give the table the view's `Len`, and read

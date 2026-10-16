@@ -10,6 +10,7 @@
   "selectAll": "全选",
   "find": "查找",
   "search": "搜索",
+  "column": "列",
   "clear": "清除",
   "removeToken": "移除{token}",
   "saturation": "饱和度与亮度",

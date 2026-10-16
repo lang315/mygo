@@ -171,6 +171,20 @@ func (msgs Messages) Search() string {
 	return Catalog.Format(msgs.locale, "search", nil)
 }
 
+// Column says "Column"
+// in the language the app shows.
+//
+// Labels the choice of the column a data table searches.
+func Column() string { return In(i18n.Locale()).Column() }
+
+// Column says "Column"
+// in the language of msgs.
+//
+// Labels the choice of the column a data table searches.
+func (msgs Messages) Column() string {
+	return Catalog.Format(msgs.locale, "column", nil)
+}
+
 // Clear says "Clear"
 // in the language the app shows.
 //

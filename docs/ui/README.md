@@ -195,6 +195,8 @@ UI as they read other apps (see [Accessibility](accessibility.md)).
 - [Outline](outline.md): a tree of any size, as a list or a table.
 - [Grid view](grid-view.md): items in a grid of any size, as a photo
   library.
+- [Data table](data-table.md): an app's rows in a table that keeps their
+  order, checks, sort and search for it.
 
 ## Containers
 
