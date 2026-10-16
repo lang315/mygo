@@ -900,3 +900,20 @@ func TestMarkedText(handle uintptr) (string, bool) {
 	text, _ := c.TextForRange(r)
 	return text, true
 }
+
+// TestPostKey posts a key down and up of a virtual key code to this process
+// through the window server, as the keyboard does, so the input method
+// sees it too, which the events of TestKey skip.
+func TestPostKey(code uint16) {
+	cg, err := purego.Dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", purego.RTLD_GLOBAL)
+	if err != nil {
+		return
+	}
+	create, _ := purego.Dlsym(cg, "CGEventCreateKeyboardEvent")
+	post, _ := purego.Dlsym(cg, "CGEventPostToPid")
+	for _, down := range []uintptr{1, 0} {
+		ev, _, _ := purego.SyscallN(create, 0, uintptr(code), down)
+		purego.SyscallN(post, uintptr(os.Getpid()), ev)
+		cfRelease(ev)
+	}
+}
