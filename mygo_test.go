@@ -942,6 +942,17 @@ func TestHiddenTitleBar(t *testing.T) {
 	}
 }
 
+func TestClientDecorationsReachTheBackend(t *testing.T) {
+	_, fw := testWindow(t, WindowOptions{TitleBarStyle: TitleBarHidden, ClientDecorations: true})
+	if !fw.Opts.ClientDecorations {
+		t.Error("ClientDecorations did not reach the backend")
+	}
+	_, fw = testWindow(t, WindowOptions{TitleBarStyle: TitleBarHidden})
+	if fw.Opts.ClientDecorations {
+		t.Error("ClientDecorations set without the option")
+	}
+}
+
 func TestEval(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	var bodies []string
