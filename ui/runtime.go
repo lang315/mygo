@@ -691,6 +691,9 @@ func (rt *engine) prune() {
 				if s.textAdapter != nil {
 					s.textAdapter.release()
 				}
+				if s.flags&flagPage != 0 {
+					dropGlobalOwner(id, rt)
+				}
 				delete(rt.states, id)
 				// Recycle the state itself, without keeping the editor,
 				// local resources or callbacks of the element that went.

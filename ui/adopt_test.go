@@ -149,3 +149,31 @@ func TestMoveCommitsComposition(t *testing.T) {
 		t.Fatalf("text %q after the move, want ab世", text)
 	}
 }
+
+// A panel the first window let go of, unkept, comes fresh to the other,
+// and the first window is no longer recorded as its owner.
+func TestMoveFromPrunedOwnerStartsFresh(t *testing.T) {
+	inA := true
+	var n *int
+	view := func(show bool) func(c *Context) {
+		return func(c *Context) {
+			if inA == show {
+				n = Local(Column(c.GlobalKey("pruned panel")), "n", func() int { return 0 })
+			}
+		}
+	}
+	a := NewTester(view(true), 300, 200)
+	*n = 4
+	inA = false
+	a.Frame()
+	globalOwners.Lock()
+	_, owned := globalOwners.m[globalID("pruned panel")]
+	globalOwners.Unlock()
+	if owned {
+		t.Error("the first window is still the owner of a panel it pruned")
+	}
+	NewTester(view(false), 300, 200)
+	if *n != 0 {
+		t.Fatalf("n %d from a pruned state, want 0", *n)
+	}
+}

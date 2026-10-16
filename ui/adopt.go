@@ -26,6 +26,16 @@ func noteGlobalOwner(id uint64, rt *engine) {
 	globalOwners.Unlock()
 }
 
+// dropGlobalOwner forgets rt as the owner of the ID, as rt forgets its
+// state.
+func dropGlobalOwner(id uint64, rt *engine) {
+	globalOwners.Lock()
+	if p, ok := globalOwners.m[id]; ok && p == rt.owner {
+		delete(globalOwners.m, id)
+	}
+	globalOwners.Unlock()
+}
+
 // adopt copies into rt the state that the engine owning the global ID has
 // of it and of the elements inside it, as that engine's window showed them
 // last. It reports whether there was such an engine and state.

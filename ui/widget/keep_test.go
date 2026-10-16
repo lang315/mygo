@@ -224,6 +224,36 @@ func TestWidgetMovedToAnotherWindowLeavesTheFirst(t *testing.T) {
 	}
 }
 
+// An entry moved to another window keeps the focus and where its caret
+// was.
+func TestWidgetMovedToAnotherWindowKeepsItsCaret(t *testing.T) {
+	e := Entry().SetText("abc").Focus()
+	a := NewWindow("Caret A", 300, 200).SetContent(e)
+	b := NewWindow("Caret B", 300, 200).SetContent(Label("b"))
+	a.Show()
+	defer a.Close()
+	b.Show()
+	defer b.Close()
+	fa, fb := waitFake(t, "Caret A"), waitFake(t, "Caret B")
+	frame(fa)
+	mygo.RunOnMain(func() {
+		s := fa.FakeSurface()
+		s.Send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.Key(ui.KeyHome)})
+		s.Frame()
+	})
+	if st := fa.FakeSurface().TextInputState(); !st.Active || st.Start != 0 {
+		t.Fatalf("first window: text input %+v, want active with the caret at 0", st)
+	}
+	a.SetContent(Label("a"))
+	b.SetContent(e)
+	frame(fa)
+	frame(fb)
+	frame(fb)
+	if st := fb.FakeSurface().TextInputState(); !st.Active || st.Start != 0 || st.End != 0 {
+		t.Fatalf("other window: text input %+v, want active with the caret at 0", st)
+	}
+}
+
 // An entry with the focus on a notebook page gets it back as the page
 // comes back: typing goes into it.
 func TestNotebookPageGetsItsFocusBack(t *testing.T) {
