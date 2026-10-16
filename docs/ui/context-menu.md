@@ -44,6 +44,16 @@ notes it, for the change once the loop is done (see
 - `Shortcut(mods, key)` shows a key by it, as the shortcut that does the
   same. It only shows the key: handle it with `Shortcut` on the context or
   an element.
+- `Icon(svg)` and `IconPNG(png)` show an image before the label:
+
+  ```go
+  m.Item("Copy").Icon(copyIcon)          // an *ui.SVG
+  m.Item("Export").IconPNG(exportPNG)    // a PNG, 32×32 pixels
+  ```
+
+  An SVG icon is drawn in the color of the text; one that paints only with
+  `currentColor`, as icon sets do, follows the menu's colors on macOS, white
+  on a highlighted item. `IconPNG` wins over `Icon`.
 - `Separator()` adds a line between groups of items, and
   `Submenu(label, build)` an item opening a submenu, which `build` fills.
 

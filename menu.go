@@ -102,7 +102,15 @@ type MenuItem struct {
 	// before Click is called.
 	Checked bool
 	ToolTip string
-	Submenu []*MenuItem
+	// Icon is a PNG shown before the label at 16×16 points; give it
+	// 32×32 pixels for sharp HiDPI screens. An icon that is not a PNG
+	// shows none. Linux tray menus and the items of a Windows menu bar
+	// itself show none, and the web ignores it.
+	Icon []byte
+	// IconTemplate makes Icon a template image on macOS: the system
+	// colors its shape as the menu's text. Elsewhere it does nothing.
+	IconTemplate bool
+	Submenu      []*MenuItem
 	// Click is called on the main thread when the item is chosen. On Linux
 	// and Windows, win is the window whose menu bar or context menu was
 	// chosen. Other menus use the focused window, which may be nil.
@@ -423,6 +431,8 @@ func (it *MenuItem) snapshotLocked() *platform.MenuItem {
 		Visible:     !it.Hidden,
 		Checked:     it.Checked,
 		ToolTip:     it.ToolTip,
+		Icon:        it.Icon,
+		Template:    it.IconTemplate,
 	}
 	switch it.Type {
 	case MenuItemSeparator:

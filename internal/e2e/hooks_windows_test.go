@@ -350,3 +350,12 @@ func panelStyles(w *mygo.Window) (tool, topmost, owned, supported bool) {
 	mygo.RunOnMain(func() { tool, topmost, owned = win.TestPanelStyles(w.NativeHandle()) })
 	return tool, topmost, owned, true
 }
+
+func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
+	mygo.RunOnMain(func() { has, err = win.TestMenuItemImage(w.NativeHandle(), path...) })
+	return has, false, true, err
+}
+
+func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
+	return false, nil, false, nil
+}

@@ -44,7 +44,15 @@ A `MenuItem` has:
   items toggle `Checked` before `Click` runs;
 - `Disabled`, `Hidden` and `ToolTip`;
 - `ID`, to find the item with `Menu.ItemByID`;
+- `Icon` and `IconTemplate`, an image before the label;
 - `Role`, a built-in behavior with its label and accelerator.
+
+`Icon` shows a PNG before the label at 16×16 points: give it 32×32 pixels
+for HiDPI screens. `IconTemplate` makes it a template image on macOS, which
+the system colors as the menu's text. Context menus and menu bars show
+icons on macOS, Linux and Windows; Linux tray menus do not, and the web
+ignores them. On Windows, the items of a menu bar itself show none, the
+items of its menus do.
 
 ### Roles
 

@@ -5,6 +5,7 @@ package linux
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ebitengine/purego"
 )
@@ -15,31 +16,125 @@ import (
 // TestActivateMenuItem activates an item of a window's menu bar, found by
 // the labels along its path.
 func TestActivateMenuItem(handle uintptr, path ...string) error {
-	var w *window
-	for _, x := range theBackend.windows {
-		if x.win == handle {
-			w = x
+	item, err := menuBarItem(handle, path)
+	if err != nil {
+		return err
+	}
+	gtkMenuItemActivate(item)
+	return nil
+}
+
+// TestMenuItemImage reports whether an item of a window's menu bar, found
+// by the labels along its path, shows an image.
+func TestMenuItemImage(handle uintptr, path ...string) (bool, error) {
+	item, err := menuBarItem(handle, path)
+	if err != nil {
+		return false, err
+	}
+	// Only an item with an icon holds its label in a box.
+	return labelOf(item) != 0, nil
+}
+
+// Drawing an item of an open menu.
+var (
+	drawOnce                   sync.Once
+	gtkWidgetDraw              func(w, cr ptr)
+	gtkMenuPopdown             func(m ptr)
+	cairoImageSurfaceCreate    func(format, width, height int32) ptr
+	cairoImageSurfaceGetData   func(s ptr) ptr
+	cairoImageSurfaceGetStride func(s ptr) int32
+	cairoSurfaceFlush          func(s ptr)
+	cairoCreate                func(s ptr) ptr
+	cairoDestroy               func(cr ptr)
+)
+
+// TestMenuItemShortcutDrawn opens the menu holding an item of a window's
+// menu bar, found by the labels along its path, and reports whether the
+// label of the item, which has an icon, paints anything right of its text,
+// where its shortcut goes. It returns the open menu as a PNG too.
+func TestMenuItemShortcutDrawn(handle uintptr, path ...string) (drawn bool, menuPNG []byte, err error) {
+	drawOnce.Do(func() {
+		mustBind(libGTK, &gtkWidgetDraw, "gtk_widget_draw")
+		mustBind(libGTK, &gtkMenuPopdown, "gtk_menu_popdown")
+		mustBind(libCairo, &cairoImageSurfaceCreate, "cairo_image_surface_create")
+		mustBind(libCairo, &cairoImageSurfaceGetData, "cairo_image_surface_get_data")
+		mustBind(libCairo, &cairoImageSurfaceGetStride, "cairo_image_surface_get_stride")
+		mustBind(libCairo, &cairoSurfaceFlush, "cairo_surface_flush")
+		mustBind(libCairo, &cairoCreate, "cairo_create")
+		mustBind(libCairo, &cairoDestroy, "cairo_destroy")
+	})
+	item, err := menuBarItem(handle, path)
+	if err != nil {
+		return false, nil, err
+	}
+	l := labelOf(item)
+	if l == 0 {
+		return false, nil, fmt.Errorf("mygo: menu item has no icon label")
+	}
+	parent, err := menuBarItem(handle, path[:len(path)-1])
+	if err != nil {
+		return false, nil, err
+	}
+	menu := gtkMenuItemGetSubmenu(parent)
+	gtkMenuPopupAtRect(menu, gtkWidgetGetWindow(windowByHandle(handle).win), &gdkRectangle{Width: 1, Height: 1}, 1, 1, 0) // GDK_GRAVITY_NORTH_WEST
+	defer gtkMenuPopdown(menu)
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		gMainContextIteration(0, false)
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !gtkWidgetGetMapped(l) {
+		return false, nil, fmt.Errorf("mygo: menu did not open")
+	}
+	var minimum, text int32
+	gtkWidgetGetPreferredWidth(l, &minimum, &text)
+	s, width, height := drawWidget(l)
+	defer cairoSurfaceDestroy(s)
+	data, stride := cairoImageSurfaceGetData(s), cairoImageSurfaceGetStride(s)
+	for y := range height {
+		for x := text; x < width; x++ {
+			drawn = drawn || field[byte](data, uintptr(y*stride+x*4+3)) != 0 // ARGB32's alpha, little-endian
 		}
 	}
+	m, _, _ := drawWidget(menu)
+	defer cairoSurfaceDestroy(m)
+	menuPNG, err = surfaceToPNG(m)
+	return drawn, menuPNG, err
+}
+
+// drawWidget draws a widget onto a new image surface of its size.
+func drawWidget(w ptr) (surface ptr, width, height int32) {
+	var a gdkRectangle
+	gtkWidgetGetAllocation(w, &a)
+	surface = cairoImageSurfaceCreate(0, a.Width, a.Height) // CAIRO_FORMAT_ARGB32
+	cr := cairoCreate(surface)
+	gtkWidgetDraw(w, cr)
+	cairoDestroy(cr)
+	cairoSurfaceFlush(surface)
+	return surface, a.Width, a.Height
+}
+
+// menuBarItem returns the item of a window's menu bar found by the labels
+// along its path.
+func menuBarItem(handle uintptr, path []string) (ptr, error) {
+	w := windowByHandle(handle)
 	if w == nil || w.menubar == 0 {
-		return fmt.Errorf("mygo: window has no menu bar")
+		return 0, fmt.Errorf("mygo: window has no menu bar")
 	}
 	shell := w.menubar
 	for i, label := range path {
 		item := findMenuItem(shell, label)
 		if item == 0 {
-			return fmt.Errorf("mygo: no menu item %q", label)
+			return 0, fmt.Errorf("mygo: no menu item %q", label)
 		}
 		if i == len(path)-1 {
-			gtkMenuItemActivate(item)
-			return nil
+			return item, nil
 		}
 		shell = gtkMenuItemGetSubmenu(item)
 		if shell == 0 {
-			return fmt.Errorf("mygo: menu %q has no submenu", label)
+			return 0, fmt.Errorf("mygo: menu %q has no submenu", label)
 		}
 	}
-	return nil
+	return 0, fmt.Errorf("mygo: empty menu path")
 }
 
 func findMenuItem(shell ptr, label string) ptr {
@@ -47,8 +142,29 @@ func findMenuItem(shell ptr, label string) ptr {
 	defer gListFree(list)
 	for node := list; node != 0; node = field[ptr](node, 8) {
 		item := field[ptr](node, 0)
-		if goStr(gtkMenuItemGetLabel(item)) == label {
+		if itemLabel(item) == label {
 			return item
+		}
+	}
+	return 0
+}
+
+// itemLabel returns the label of a menu item, in its box when it has an
+// icon.
+func itemLabel(item ptr) string {
+	if l := labelOf(item); l != 0 {
+		return goStr(gtkLabelGetText(l))
+	}
+	return goStr(gtkMenuItemGetLabel(item))
+}
+
+// labelOf returns the label of an item with an icon, 0 for others.
+func labelOf(item ptr) ptr {
+	for _, n := range itemsByID {
+		for _, x := range n {
+			if x.item == item {
+				return x.label
+			}
 		}
 	}
 	return 0

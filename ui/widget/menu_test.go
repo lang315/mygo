@@ -5,7 +5,30 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/ui"
 )
+
+func TestNativeMenuIcons(t *testing.T) {
+	check := ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5"/></svg>`))
+	items := nativeMenu([]MenuItem{
+		{Text: "Svg", Icon: check},
+		{Text: "Png", IconPNG: []byte("png")},
+		{Text: "Both", Icon: check, IconPNG: []byte("png")},
+		{Text: "Sub", Icon: check, Children: []MenuItem{{Text: "In"}}},
+	})
+	if items[0].Icon == nil || !items[0].IconTemplate {
+		t.Errorf("Svg: %d bytes, template %v", len(items[0].Icon), items[0].IconTemplate)
+	}
+	if string(items[1].Icon) != "png" || items[1].IconTemplate {
+		t.Errorf("Png: %q %v", items[1].Icon, items[1].IconTemplate)
+	}
+	if string(items[2].Icon) != "png" {
+		t.Errorf("Both: the PNG must win, got %d bytes", len(items[2].Icon))
+	}
+	if items[3].Icon == nil {
+		t.Error("Sub: a submenu item lost its icon")
+	}
+}
 
 func TestMenuButtonChoosesAnItem(t *testing.T) {
 	chosen := make(chan string, 1)

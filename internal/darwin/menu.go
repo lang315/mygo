@@ -163,6 +163,22 @@ func applyItemState(item id, it *platform.MenuItem) {
 	if it.ToolTip != "" {
 		send(item, "setToolTip:", uintptr(nsString(it.ToolTip)))
 	}
+	send(item, "setImage:", uintptr(menuImage(it)))
+}
+
+// menuImage returns the image of an item's icon, 16 points square, or 0
+// for none or a PNG that does not decode.
+func menuImage(it *platform.MenuItem) id {
+	if len(it.Icon) == 0 {
+		return 0
+	}
+	img := autorelease(send(send(class("NSImage"), "alloc"), "initWithData:", uintptr(nsData(it.Icon))))
+	if img == 0 {
+		return 0
+	}
+	msgSetSize(img, sel("setSize:"), NSSize{16, 16})
+	send(img, "setTemplate:", boolArg(it.Template))
+	return img
 }
 
 func (b *Backend) UpdateMenuItem(it *platform.MenuItem) {

@@ -12,6 +12,14 @@ import (
 // Platforms without a backend run no GUI tests.
 func activateMenu(*mygo.Window, ...string) error { return errors.New("unsupported") }
 
+func menuIcon(*mygo.Window, ...string) (has, template, supported bool, err error) {
+	return false, false, false, nil
+}
+
+func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
+	return false, nil, false, nil
+}
+
 func pressShortcut(string, bool) (bool, bool) { return false, false }
 
 func endSheet(*mygo.Window) (bool, bool) { return false, false }

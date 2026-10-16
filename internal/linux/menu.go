@@ -22,6 +22,7 @@ type nativeItem struct {
 	item     ptr
 	check    bool
 	windowID int // menu bar or popup's window; 0 for a tray
+	label    ptr // the label of an item with an icon, which holds it in a box
 }
 
 var (
@@ -176,17 +177,31 @@ func buildMenu(shell ptr, m *platform.Menu, accel ptr, owner, windowID int) {
 }
 
 func buildItem(it *platform.MenuItem, accel ptr, owner, windowID int) ptr {
-	var item ptr
+	var item, label, image ptr
 	check := false
+	if it.Type != platform.MenuItemSeparator && len(it.Icon) > 0 {
+		image = menuIcon(it.Icon, menuScale(windowID))
+	}
 	switch it.Type {
 	case platform.MenuItemSeparator:
 		item = gtkSeparatorMenuItemNew()
 	case platform.MenuItemCheckbox, platform.MenuItemRadio:
-		item = gtkCheckMenuItemNewWithLabel(cs(it.Label))
+		if image != 0 {
+			item = gtkCheckMenuItemNew()
+		} else {
+			item = gtkCheckMenuItemNewWithLabel(cs(it.Label))
+		}
 		gtkCheckMenuItemSetDrawAsRadio(item, it.Type == platform.MenuItemRadio)
 		check = true
 	default:
-		item = gtkMenuItemNewWithLabel(cs(it.Label))
+		if image != 0 {
+			item = gtkMenuItemNew()
+		} else {
+			item = gtkMenuItemNewWithLabel(cs(it.Label))
+		}
+	}
+	if image != 0 {
+		label = iconBox(item, image, it.Label)
 	}
 	if it.Submenu != nil {
 		sub := gtkMenuNew()
@@ -202,8 +217,49 @@ func buildItem(it *platform.MenuItem, accel ptr, owner, windowID int) ptr {
 		}
 	}
 	applyState(item, it, check)
-	itemsByID[it.ID] = append(itemsByID[it.ID], nativeItem{owner: owner, item: item, check: check, windowID: windowID})
+	itemsByID[it.ID] = append(itemsByID[it.ID], nativeItem{owner: owner, item: item, check: check, windowID: windowID, label: label})
 	return item
+}
+
+// menuIcon returns a GtkImage of a PNG, 16 pixels square at scale device
+// pixels per pixel, or 0 for one that does not decode.
+func menuIcon(png []byte, scale int32) ptr {
+	pix, err := pixbufFromPNG(png)
+	if err != nil {
+		return 0
+	}
+	defer gObjectUnref(pix)
+	small := gdkPixbufScaleSimple(pix, 16*scale, 16*scale, 2) // GDK_INTERP_BILINEAR
+	defer gObjectUnref(small)
+	surface := gdkCairoSurfaceCreateFromPixbuf(small, scale, 0)
+	defer cairoSurfaceDestroy(surface)
+	return gtkImageNewFromSurface(surface)
+}
+
+// menuScale returns the scale factor of the window a menu belongs to, 1
+// for none (a tray's).
+func menuScale(windowID int) int32 {
+	if w := theBackend.window(ptr(windowID)); w != nil {
+		return max(gtkWidgetGetScaleFactor(w.win), 1)
+	}
+	return 1
+}
+
+// iconBox puts image and a label of text in item, the label showing the
+// item's shortcut as the label of a plain item does, and returns the
+// label.
+func iconBox(item, image ptr, text string) ptr {
+	box := gtkBoxNew(0, 6) // GTK_ORIENTATION_HORIZONTAL
+	label := gtkAccelLabelNew(cs(text))
+	// The label fills the item, its text to the left: it draws its shortcut
+	// only when given room for both.
+	gtkLabelSetXalign(label, 0)
+	gtkAccelLabelSetAccelWidget(label, item)
+	gtkBoxPackStart(box, image, false, false, 0)
+	gtkBoxPackStart(box, label, true, true, 0)
+	gtkContainerAdd(item, box)
+	gtkWidgetShowAll(box)
+	return label
 }
 
 // settingState is true while a check item is changed programmatically:
@@ -359,9 +415,15 @@ func firstMenu(bar ptr) ptr {
 }
 
 func (b *Backend) UpdateMenuItem(it *platform.MenuItem) {
+	// An icon added or removed here shows once the menu is set again, which
+	// rebuilds its items.
 	for _, n := range itemsByID[it.ID] {
 		if it.Type != platform.MenuItemSeparator {
-			gtkMenuItemSetLabel(n.item, cs(it.Label))
+			if n.label != 0 {
+				gtkLabelSetText(n.label, cs(it.Label))
+			} else {
+				gtkMenuItemSetLabel(n.item, cs(it.Label))
+			}
 		}
 		applyState(n.item, it, n.check)
 	}

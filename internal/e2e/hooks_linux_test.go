@@ -325,3 +325,13 @@ func endSheetButton(*mygo.Window, int) bool               { return false }
 
 // Panels' window styles are Windows'.
 func panelStyles(*mygo.Window) (bool, bool, bool, bool) { return false, false, false, false }
+
+func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
+	mygo.RunOnMain(func() { has, err = linux.TestMenuItemImage(w.NativeHandle(), path...) })
+	return has, false, true, err
+}
+
+func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, supported bool, err error) {
+	mygo.RunOnMain(func() { drawn, menuPNG, err = linux.TestMenuItemShortcutDrawn(w.NativeHandle(), path...) })
+	return drawn, menuPNG, true, err
+}

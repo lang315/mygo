@@ -86,8 +86,8 @@ func dialogs(w *widget.Window) widget.Widget {
 				widget.MenuItem{Text: "More", Children: []widget.MenuItem{{Text: "Size", OnClick: func() { show("Sort by size") }}}},
 			),
 			widget.Label("Right-click me").Padding(2).Border(1, ui.RGB(160, 160, 160)).Radius(1).ContextMenu(
-				widget.MenuItem{Text: "Copy", OnClick: func() { widget.Clipboard.SetText("Right-click me"); show("Copied") }},
-				widget.MenuItem{Text: "Delete…", OnClick: func() { show("Delete: %v", widget.Confirm(w, widget.Warning, "Delete?", "")) }},
+				widget.MenuItem{Text: "Copy", Icon: lucide(lucideIcons[0]), OnClick: func() { widget.Clipboard.SetText("Right-click me"); show("Copied") }},
+				widget.MenuItem{Text: "Delete…", Icon: lucide(lucideIcons[2]), OnClick: func() { show("Delete: %v", widget.Confirm(w, widget.Warning, "Delete?", "")) }},
 			),
 		),
 	)

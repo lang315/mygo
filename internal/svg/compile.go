@@ -112,6 +112,8 @@ type compiler struct {
 	base   style
 	// current is set once a paint is currentColor.
 	current bool
+	// other is set once a paint is another color or a gradient.
+	other bool
 }
 
 func newCompiler(root *elem) *compiler {
@@ -195,7 +197,7 @@ func (c *compiler) doc() *Doc {
 	n := &node{m: identity}
 	c.group(n, root, &st)
 	c.finish(n, &st)
-	d.root, d.current = n, c.current
+	d.root, d.current, d.other = n, c.current, c.other
 	return d
 }
 
@@ -449,9 +451,11 @@ func (c *compiler) radii(e *elem, vw, vh float64) (float64, float64) {
 func (c *compiler) paint(ps paintSpec, st *style) paint {
 	switch ps.kind {
 	case specColor:
+		c.other = true
 		return paint{kind: paintColor, color: ps.color}
 	case specCurrent:
 		if st.colorSet {
+			c.other = true
 			return paint{kind: paintColor, color: st.color}
 		}
 		c.current = true
@@ -462,6 +466,7 @@ func (c *compiler) paint(ps paintSpec, st *style) paint {
 			if g == nil || len(g.stops) == 0 {
 				return paint{}
 			}
+			c.other = true
 			return paint{kind: paintGradient, grad: g}
 		}
 		// What the reference falls back to, or nothing.
