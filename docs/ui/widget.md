@@ -278,5 +278,7 @@ returns a `*HeaderBarWidget` with `PackStart` and `PackEnd`. Under a Wayland
 compositor that decorates windows (Sway, KWin), the compositor's title bar
 shows above the header bar; `ClientDecorations(true)` on the header bar,
 before `Show`, makes the header bar the only one, with the desktop's window
-buttons over its end (Sway: floating windows only; a tiled one keeps
-Sway's title bar).
+buttons at its ends (Sway: floating windows only; a tiled one keeps
+Sway's title bar unless its config says `default_border pixel` or `none`).
+Hyprland draws no title bar: there the option only adds the window
+buttons.
