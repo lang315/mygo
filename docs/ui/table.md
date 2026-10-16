@@ -135,10 +135,10 @@ Assistive technology reads it as "Check all".
 The checkboxes do not take the keyboard focus: a click leaves it on the table,
 so its keys and Copy keep working, and Space, while the table has it, checks
 the rows chosen, or unchecks them when all are checked, instead of scrolling
-a page. While you type to choose a row by its `Label`, Space extends what you type instead: a plain
-Space within a second of the last letter or digit typed adds a space to the
-prefix and checks nothing. A row's checkbox reads as "Check", followed by the
-row's `Label` when the table has one.
+a page. While you type to choose a row by its `Label`, Space extends what you
+type instead: a plain Space within a second of the last letter or digit typed
+adds a space to the prefix and checks nothing. A row's checkbox reads as
+"Check", followed by the row's `Label` when the table has one.
 
 ```go
 app.files.Checked = &app.checked
