@@ -32,6 +32,22 @@ func noteInput(what string, w *mygo.Window) {
 	lastInput.what, lastInput.at, lastInput.win, lastInput.state = what, time.Now(), w, state
 }
 
+// keepFront brings the window of the last input back to the front if another
+// app took it: what the input did needs the window key, so a test waiting
+// for it fails when a user, or a notification, switches apps. A window of an
+// active app that is not key stays so, as a flyout that takes no keyboard.
+func keepFront() {
+	lastInput.Lock()
+	w := lastInput.win
+	lastInput.Unlock()
+	if w == nil || w.IsDestroyed() {
+		return
+	}
+	if active, _ := appActive(); !active && !w.IsFocused() {
+		w.Focus()
+	}
+}
+
 // frontmostBundleID is the bundle identifier of the frontmost app.
 func frontmostBundleID() (id string) {
 	mygo.RunOnMain(func() { id = darwin.TestFrontmostBundleID() })

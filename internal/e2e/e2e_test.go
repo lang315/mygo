@@ -472,6 +472,7 @@ func waitForPage(t testing.TB, p *mygo.Page, expr string) {
 			t.Fatalf("%s; %s%s", msg, pageState(p), inputDiag())
 		case <-time.After(20 * time.Millisecond):
 		}
+		keepFront()
 		v, err = p.EvalContext(ctx, check)
 	}
 }
@@ -1281,6 +1282,7 @@ func eventually(t *testing.T, what string, cond func() bool) {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s%s", what, inputDiag())
 		}
+		keepFront()
 		time.Sleep(20 * time.Millisecond)
 	}
 }

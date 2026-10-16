@@ -3392,6 +3392,14 @@ evaluated scripts, so tests can assert on exactly what the page would
 receive. The unit tests run `App.Run` on the main goroutine from `TestMain`,
 like a real program.
 
+macOS GUI tests need an unlocked desktop session whose front app they keep:
+the suite stops at once, with a message, when the screen is locked or the
+screen saver runs, and a click or drag brings its window back if another
+app took the front, as when a user switches apps during a run (AppKit drops
+an input for a window that is not key). An app that takes the front while a
+test waits for an effect still fails that test, and the failure names the
+frontmost app, the window's key state and the last input.
+
 Linux GUI tests run in a container, since no cgo means the test binary
 cross-compiles:
 

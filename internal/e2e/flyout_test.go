@@ -102,21 +102,23 @@ func TestFocusableFlyout(t *testing.T) {
 	defer fl.Destroy()
 	eventually(t, "the flyout focused", fl.IsFocused)
 
-	keep := true
-	closes := 0
+	// OnClose runs on the main thread, the test on another.
+	var keep atomic.Bool
+	var closes atomic.Int32
+	keep.Store(true)
 	fl.OnClose(func(e *mygo.CloseEvent) {
-		closes++
-		if keep {
+		closes.Add(1)
+		if keep.Load() {
 			e.PreventDefault()
 		}
 	})
 	parent.Focus()
-	eventually(t, "the flyout asked to close", func() bool { return closes == 1 })
+	eventually(t, "the flyout asked to close", func() bool { return closes.Load() == 1 })
 	if fl.IsDestroyed() {
 		t.Fatal("the flyout closed though OnClose prevented it")
 	}
 
-	keep = false
+	keep.Store(false)
 	fl.Focus()
 	eventually(t, "the flyout focused again", fl.IsFocused)
 	parent.Focus()
