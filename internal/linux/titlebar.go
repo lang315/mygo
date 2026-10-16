@@ -68,7 +68,8 @@ func (w *window) newControls() {
 func (w *window) layoutControls() {
 	c := w.controls
 	start, end := buttonLayout()
-	if w.b.compositorDecorates && !w.opts.ClientDecorations {
+	// A panel, a layer surface, has no title buttons: nothing maximizes it.
+	if w.layer || w.b.compositorDecorates && !w.opts.ClientDecorations {
 		start, end = "", ""
 	}
 	for side, buttons := range [2]string{start, end} {

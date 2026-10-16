@@ -365,7 +365,9 @@ purego gives three primitives, used everywhere:
   Sway) gets no bars: such a window keeps GTK's announcement of server-side
   decorations, unlike a frameless one, so the compositor's title bar, or a
   tiling compositor's lack of one, stands for the buttons, whatever the
-  layout says.
+  layout says. `ClientDecorations` turns that around: the window announces
+  client-side decorations and keeps the bars. A panel, a layer surface,
+  gets no bars at all.
 - `WEBKIT_DISABLE_DMABUF_RENDERER=1` is set unless the user set it, which
   avoids blank webviews on NVIDIA drivers, VMs and containers.
 - XDG desktop portal calls go through `portalCall` (`portal.go`), which
@@ -3588,7 +3590,7 @@ which npm allows only for packages that exist: the first release uses an
 | skip taskbar | ignored | skip-taskbar hint | `ITaskbarList::DeleteTab` (the window style is untouched) |
 | FlashFrame | informational Dock bounce | urgency hint | `FlashWindowEx` until focused |
 | visible on all workspaces | `NSWindowCollectionBehaviorCanJoinAllSpaces` | `gtk_window_stick` | ignored |
-| window icon | ignored | `gtk_window_set_icon` | `WM_SETICON` at the window's DPI |
+| window icon | ignored | `gtk_window_set_icon` (X11; Wayland takes it from the app's `.desktop` file) | `WM_SETICON` at the window's DPI |
 | URL schemes | Info.plist (`urlSchemes`); `RegisterURLScheme` makes the app the default handler | desktop entry + `mimeapps.list` | `HKCU\Software\Classes` |
 | downloads | `shouldPerformDownload`, non-displayable or attachment responses → `WKDownload` delegate | `download-started` / `decide-destination` on the web context; response policy for attachments | `DownloadStarting` (`ICoreWebView2_4`), replacing WebView2's download UI |
 | Cookies | the default `WKWebsiteDataStore`'s `WKHTTPCookieStore` | the default web context's `WebKitCookieManager` (2.42+, kept in memory); libsoup 3 or 2.4 to match WebKitGTK 4.1 or 4.0 | `ICoreWebView2CookieManager` (`ICoreWebView2_2`) of a window's web view; `put_Expires` called with `comCallFloat` |
