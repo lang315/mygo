@@ -39,7 +39,9 @@ func TestStepsNameEachStepWithItsDuration(t *testing.T) {
 	s.done("first")
 	s.done("second")
 	got := s.String()
-	if !strings.HasPrefix(got, "first 2") || !strings.Contains(got, ", second 0s") {
-		t.Errorf("steps = %q, want the first with about 20ms and the second with none", got)
+	// A sleep lasts at least its time, and a timer tick on Windows is 15.6ms:
+	// assert only that the first step took some time and the second none.
+	if !strings.HasPrefix(got, "first ") || strings.HasPrefix(got, "first 0s") || !strings.HasSuffix(got, ", second 0s") {
+		t.Errorf("steps = %q, want the first with some time and the second with none", got)
 	}
 }

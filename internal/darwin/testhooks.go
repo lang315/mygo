@@ -109,6 +109,21 @@ func TestWindowState(handle uintptr) string {
 	return s
 }
 
+// TestFrontmostBundleID is the bundle identifier of the frontmost app, empty
+// if there is none: the login window while the screen is locked.
+func TestFrontmostBundleID() string {
+	var bundle string
+	withPool(func() {
+		front := send(send(class("NSWorkspace"), "sharedWorkspace"), "frontmostApplication")
+		if front != 0 {
+			if b := send(front, "bundleIdentifier"); b != 0 {
+				bundle = goString(b)
+			}
+		}
+	})
+	return bundle
+}
+
 // TestOnScreen reports whether some of a window shows on screen, as the
 // window server reports once it put the window there.
 func TestOnScreen(handle uintptr) bool {

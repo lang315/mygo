@@ -159,6 +159,11 @@ func TestMain(m *testing.M) {
 	code := 1
 	mygo.App.WhenReady(func() {
 		go func() {
+			if why := desktopUnavailable(frontmostBundleID()); why != "" {
+				fmt.Fprintln(os.Stderr, "e2e: "+why)
+				mygo.App.Quit()
+				return
+			}
 			warmUp()
 			code = m.Run()
 			mygo.App.Quit()
