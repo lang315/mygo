@@ -34,14 +34,15 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   chosen, as a table's `Checked` does: it shows on an item checked, on the
   one under the pointer, and on all of them while any is checked. A click on
   it checks the item and leaves the choice, Space checks the items chosen
-  (or unchecks them when all are checked), and `CheckedChanged` reports a
-  change by the user. Assistive technology reads it as "Check" and the
-  item's `Label`. There is no "check all": Cmd+A, then Space.
+  (or unchecks them when all are checked) instead of scrolling a page, and
+  `CheckedChanged` reports a change by the user. Assistive technology reads
+  it as "Check" and the item's `Label`. There is no "check all": Cmd+A, then
+  Space.
 - `ItemMenu` gives the items a [context menu](context-menu.md), filled for
   `items`, the items chosen in order. A right click on an item not chosen
   chooses it first, and a grid that does not choose gets the item clicked.
-  The Menu key and Shift+F10 open it on the items chosen, and nothing opens
-  when none is.
+  The Menu key, Shift+F10 and a right click between the items open it on the
+  items chosen, and nothing opens when none is.
 - `Copy` returns the text for the same `items`: it goes to the clipboard on
   Cmd+C (Ctrl+C on Linux and Windows), or Copy in the Edit menu, while the
   grid has the keyboard focus. Nothing is copied when no item is chosen,
