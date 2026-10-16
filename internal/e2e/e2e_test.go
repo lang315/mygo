@@ -2466,12 +2466,14 @@ func deviceScale(w *mygo.Window) float64 {
 // paragraphs and copies their selection through the native Edit menu.
 func TestContentWindowTextSelection(t *testing.T) {
 	var frames atomic.Int32
+	var selected atomic.Value // as of the last frame, for a failure's log
 	view := func(c *ui.Context) {
 		frames.Add(1)
-		ui.Column(c).Fill().Padding(20).Gap(20).Selectable().Children(func() {
+		col := ui.Column(c).Fill().Padding(20).Gap(20).Selectable().Children(func() {
 			ui.Text(c, "First paragraph.").Height(30)
 			ui.Text(c, "Second paragraph.").Height(30)
 		})
+		selected.Store(fmt.Sprint(col.SelectedTexts()))
 	}
 	w := newWindow(t, mygo.WindowOptions{Title: "Text selection", Width: 400, Height: 200, Content: ui.View(view)})
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleEditMenu}}))
@@ -2481,12 +2483,13 @@ func TestContentWindowTextSelection(t *testing.T) {
 	w.Focus()
 	eventually(t, "a frame", func() bool { return frames.Load() > 0 })
 	var copied string
+	var reverse bool
 	t.Cleanup(func() {
 		if t.Failed() {
-			t.Logf("last copied text: %q", copied)
+			t.Logf("last copied text: %q, dragging back %v, selection %v, window %+v", copied, reverse, selected.Load(), w.Bounds())
 		}
 	})
-	for _, reverse := range []bool{false, true} {
+	for _, reverse = range []bool{false, true} {
 		points := [][2]float64{{20, 28}, {380, 78}}
 		if reverse {
 			slices.Reverse(points)
