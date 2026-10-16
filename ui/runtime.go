@@ -767,6 +767,9 @@ func (rt *engine) hideKept(s *state) {
 	}
 	s.valueBinding = nil
 	if s.editor != nil {
+		// A composition goes into the text while the value is bound, so
+		// that the next build publishes it.
+		s.editor.commitCompose()
 		s.editor.value = nil
 	}
 }

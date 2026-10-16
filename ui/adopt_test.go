@@ -71,3 +71,81 @@ func editorOf(tt *Tester) *editor {
 	}
 	return nil
 }
+
+// movePanel returns the views of two windows showing panel under
+// GlobalKey("panel"): the first while *inA, then the other, the first
+// keeping it alive meanwhile.
+func movePanel(inA *bool, panel func(c *Context)) (a, b func(c *Context)) {
+	view := func(show bool) func(c *Context) {
+		return func(c *Context) {
+			if *inA != show {
+				c.KeepAlive("panel")
+				return
+			}
+			Column(c.GlobalKey("panel")).Padding(10).Children(func() { panel(c) })
+		}
+	}
+	return view(true), view(false)
+}
+
+// A select open in the first window comes to the other closed.
+func TestMovedPopupComesBackClosed(t *testing.T) {
+	inA, size := true, "S"
+	va, vb := movePanel(&inA, func(c *Context) {
+		Select(c, &size, []string{"S", "M", "L"}).Label("Size")
+	})
+	a, b := NewTester(va, 300, 300), NewTester(vb, 300, 300)
+	if err := a.Click("Size"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.HasText("M") {
+		t.Fatalf("no option M after a click on the select: %q", a.Texts())
+	}
+	inA = false
+	a.Frame()
+	b.Frame()
+	if b.HasText("M") {
+		t.Fatal("the select's popup came to the other window open")
+	}
+}
+
+// The focused input of a panel has the focus in the window it moves to;
+// the first window's focus leaves it.
+func TestMovedFocusFollowsThePanel(t *testing.T) {
+	inA, text := true, "ab"
+	va, vb := movePanel(&inA, func(c *Context) { TextInput(c, &text).Label("Name") })
+	a, b := NewTester(va, 300, 200), NewTester(vb, 300, 200)
+	if err := a.Click("Name"); err != nil {
+		t.Fatal(err)
+	}
+	inA = false
+	a.Frame()
+	b.Frame()
+	b.Type("X")
+	b.Frame()
+	if text != "abX" {
+		t.Fatalf("typed into the other window: %q, want abX", text)
+	}
+	if a.rt.focused != 0 || a.rt.lostFocus != 0 {
+		t.Error("the first window kept the focus of the panel that left")
+	}
+}
+
+// A composition in the first window is committed as the panel moves.
+func TestMoveCommitsComposition(t *testing.T) {
+	inA, text := true, "ab"
+	va, vb := movePanel(&inA, func(c *Context) { TextInput(c, &text).Label("Name") })
+	a, b := NewTester(va, 300, 200), NewTester(vb, 300, 200)
+	if err := a.Click("Name"); err != nil {
+		t.Fatal(err)
+	}
+	a.Compose("世", 1)
+	a.Frame()
+	inA = false
+	a.Frame()
+	b.Frame()
+	b.Frame()
+	if text != "ab世" {
+		t.Fatalf("text %q after the move, want ab世", text)
+	}
+}

@@ -47,6 +47,13 @@ func (rt *engine) adopt(id uint64) bool {
 		}
 		copyMovable(d, s)
 	}
+	// The focus follows: it goes to the element as it is built (prune),
+	// unless another took it.
+	for _, f := range []*uint64{&from.focused, &from.lostFocus} {
+		if *f != 0 && (*f == id || from.inPage(from.states[*f], id)) {
+			rt.lostFocus, *f = *f, 0
+		}
+	}
 	return true
 }
 
@@ -72,10 +79,18 @@ func (rt *engine) inPage(s *state, id uint64) bool {
 func copyMovable(d, s *state) {
 	d.scrollX, d.scrollY = s.scrollX, s.scrollY
 	if e := s.editor; e != nil {
+		// A composition is committed, and the input not yet published to
+		// the app's value is published by the first frame that binds it,
+		// as native input is.
+		dirty, before := e.nativeDirty, e.nativeValue
+		if e.compose != "" && !dirty {
+			dirty, before = true, e.buf.string()
+		}
 		e.commitCompose()
 		if d.editor == nil {
 			d.editor = newEditor()
 		}
+		d.editor.nativeDirty, d.editor.nativeValue = dirty, before
 		d.editor.buf = e.buf
 		d.editor.editorSelection = e.editorSelection.clone()
 		d.editor.undo, d.editor.redo = slices.Clone(e.undo), slices.Clone(e.redo)

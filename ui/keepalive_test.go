@@ -225,3 +225,29 @@ func TestKeptElementGetsItsFocusBack(t *testing.T) {
 		}
 	}
 }
+
+// A composition in a page kept out of sight is committed to the app's
+// value, not dropped as the page comes back.
+func TestKeptPageCommitsItsComposition(t *testing.T) {
+	show, text := true, "ab"
+	tt := NewTester(func(c *Context) {
+		if show {
+			Column(c.GlobalKey("page")).Children(func() { TextInput(c, &text).Label("Name") })
+		} else {
+			c.KeepAlive("page")
+		}
+	}, 300, 200)
+	if err := tt.Click("Name"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Compose("世", 1)
+	tt.Frame()
+	show = false
+	tt.Frame()
+	show = true
+	tt.Frame()
+	tt.Frame()
+	if text != "ab世" {
+		t.Fatalf("text %q after the page came back, want ab世", text)
+	}
+}
