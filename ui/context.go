@@ -251,8 +251,8 @@ func (c *context) newElement(k kind) *node {
 		c.rt.adopt(e.id)
 	}
 	e.st, built = c.rt.lookState(e.id)
-	if global {
-		noteGlobalOwner(e.id, c.rt)
+	if global && c.rt.owners != nil {
+		c.rt.owners.note(e.id, c.rt)
 	}
 	if keyed && built {
 		c.rt.duplicateKey(e.id, e.key, e.flags&flagPage != 0)

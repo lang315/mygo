@@ -208,8 +208,15 @@ type Tester struct {
 // elements given one key under one parent make it panic where the second
 // was given, as apps only log it.
 func coreNewTester(view func(c *context), width, height int) *Tester {
+	return newTesterOf(&owners{}, view, width, height)
+}
+
+// newTesterOf is coreNewTester for a window of the app whose engines o
+// lists: its elements keyed globally move between them.
+func newTesterOf(o *owners, view func(c *context), width, height int) *Tester {
 	h := &headless{w: float32(width), h: float32(height), scale: 1}
 	t := &Tester{rt: newRuntime(view, h), h: h}
+	t.rt.owners = o
 	t.rt.collect = true
 	// Duplicate keys panic, so that the test fails where the key was given.
 	t.rt.strict = true

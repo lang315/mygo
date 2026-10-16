@@ -33,7 +33,7 @@ func TestGlobalKeyStateMovesToAnotherWindow(t *testing.T) {
 			}
 		}
 		a := NewTester(view(true), 300, 200)
-		b := NewTester(view(false), 300, 200)
+		b := linked(a, view(false))
 		*n, *m = 5, 7
 		if err := a.Click("Name"); err != nil {
 			t.Fatal(err)
@@ -94,7 +94,8 @@ func TestMovedPopupComesBackClosed(t *testing.T) {
 	va, vb := movePanel(&inA, func(c *Context) {
 		Select(c, &size, []string{"S", "M", "L"}).Label("Size")
 	})
-	a, b := NewTester(va, 300, 300), NewTester(vb, 300, 300)
+	a := NewTester(va, 300, 300)
+	b := linked(a, vb)
 	if err := a.Click("Size"); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +115,8 @@ func TestMovedPopupComesBackClosed(t *testing.T) {
 func TestMovedFocusFollowsThePanel(t *testing.T) {
 	inA, text := true, "ab"
 	va, vb := movePanel(&inA, func(c *Context) { TextInput(c, &text).Label("Name") })
-	a, b := NewTester(va, 300, 200), NewTester(vb, 300, 200)
+	a := NewTester(va, 300, 200)
+	b := linked(a, vb)
 	if err := a.Click("Name"); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +137,8 @@ func TestMovedFocusFollowsThePanel(t *testing.T) {
 func TestMoveCommitsComposition(t *testing.T) {
 	inA, text := true, "ab"
 	va, vb := movePanel(&inA, func(c *Context) { TextInput(c, &text).Label("Name") })
-	a, b := NewTester(va, 300, 200), NewTester(vb, 300, 200)
+	a := NewTester(va, 300, 200)
+	b := linked(a, vb)
 	if err := a.Click("Name"); err != nil {
 		t.Fatal(err)
 	}
@@ -166,14 +169,101 @@ func TestMoveFromPrunedOwnerStartsFresh(t *testing.T) {
 	*n = 4
 	inA = false
 	a.Frame()
-	globalOwners.Lock()
-	_, owned := globalOwners.m[globalID("pruned panel")]
-	globalOwners.Unlock()
+	a.rt.owners.Lock()
+	_, owned := a.rt.owners.m[globalID("pruned panel")]
+	a.rt.owners.Unlock()
 	if owned {
 		t.Error("the first window is still the owner of a panel it pruned")
 	}
-	NewTester(view(false), 300, 200)
+	linked(a, view(false))
 	if *n != 0 {
 		t.Fatalf("n %d from a pruned state, want 0", *n)
 	}
+}
+
+// linked starts a tester of view as another window of a's app: elements
+// keyed globally move between them.
+func linked(a *Tester, view func(c *Context)) *Tester {
+	return newLinkedTester(a, view, 300, 300)
+}
+
+// Testers of separate tests are separate apps: one does not take over
+// another's state of a global key.
+func TestTestersDoNotShareGlobalState(t *testing.T) {
+	var n *int
+	show := true
+	view := func(c *Context) {
+		if show {
+			n = Local(Column(c.GlobalKey("shared")), "n", func() int { return 0 })
+		} else {
+			c.KeepAlive("shared")
+		}
+	}
+	a := NewTester(view, 300, 200)
+	*n = 9
+	show = false
+	a.Frame()
+	show = true
+	NewTester(view, 300, 200)
+	if *n != 0 {
+		t.Fatalf("an unrelated tester took over n %d, want 0", *n)
+	}
+}
+
+// A panel shown in both windows: the second starts fresh and leaves the
+// first's focus and composition alone.
+func TestPanelInTwoWindowsLeavesTheFirstAlone(t *testing.T) {
+	text, other := "ab", "ab"
+	a := NewTester(func(c *Context) {
+		Column(c.GlobalKey("both")).Children(func() { TextInput(c, &text).Label("Name") })
+	}, 300, 200)
+	if err := a.Click("Name"); err != nil {
+		t.Fatal(err)
+	}
+	a.Compose("世", 1)
+	a.Frame()
+	b := linked(a, func(c *Context) {
+		Column(c.GlobalKey("both")).Children(func() { TextInput(c, &other).Label("Name") })
+	})
+	b.Frame()
+	a.Frame()
+	if a.rt.focused == 0 {
+		t.Error("the first window lost its focus to a second showing the panel")
+	}
+	if ed := editorOf(a); ed == nil || ed.compose != "世" {
+		t.Error("the first window's composition was committed by the second")
+	}
+	if eb, ea := editorOf(b), editorOf(a); eb != nil && ea != nil && len(eb.buf.paras) > 0 && &eb.buf.paras[0] == &ea.buf.paras[0] {
+		t.Error("the windows share one table of paragraphs")
+	}
+}
+
+// A panel moved away and back: each window's state is its own, the first
+// keeps none of the moved one, and a list inside builds in both.
+func TestPanelMovedAwayAndBack(t *testing.T) {
+	inA, text := true, "abc"
+	va, vb := movePanel(&inA, func(c *Context) {
+		TextInput(c, &text).Label("Name")
+		List(c, nil, 3, func(i int) { Text(c, "row") })
+	})
+	a := NewTester(va, 300, 300)
+	b := linked(a, vb)
+	inA = false
+	a.Frame()
+	b.Frame()
+	if a.rt.states[globalID("panel")] != nil {
+		t.Fatal("the first window kept its state of the panel the other took over")
+	}
+	inA = true
+	b.Frame()
+	a.Frame()
+	a.Frame()
+	if !a.HasText("row") {
+		t.Fatal("the list did not build back in the first window")
+	}
+}
+
+// newLinkedTester is NewTester for another window of a's app.
+func newLinkedTester(a *Tester, view func(c *Context), width, height int) *Tester {
+	return newTesterOf(a.rt.owners, func(c *context) { view(makeContext(c)) }, width, height)
 }

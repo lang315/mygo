@@ -164,15 +164,15 @@ The popup of a select, combobox, date or color picker inside comes back
 closed. An element that had the keyboard focus as it went out of sight
 gets it back as it comes back, unless another element took it meanwhile.
 
-An element keyed globally can move to another window too: the first time
-another window's view builds it, it takes over the state the first window
-had of it and of the elements inside it, while the first window still
-builds it or keeps it alive. The scroll offsets come along, the text,
-selection and undo history of text inputs, an input method's composition
-(committed), and locals; a popup comes back closed, and the keyboard focus
-follows the element. From then on each window keeps its own state: an
-element shown in two windows at once is not kept in step. Widgets of
-`ui/widget` do this as they move between windows.
+An element keyed globally can move to another window of the app too:
+when another window's view builds it while the first window keeps it
+alive out of sight, the state of it and of the elements inside it moves
+there. The scroll offsets come along, the text, selection and undo history
+of text inputs, an input method's composition (committed), and locals; a
+popup comes back closed, and the keyboard focus follows the element. A
+window that still shows the element keeps its state, and the other starts
+afresh: an element shown in two windows at once has a state in each, not
+kept in step. Widgets of `ui/widget` do this as they move between windows.
 
 ## Change the state from other goroutines
 
