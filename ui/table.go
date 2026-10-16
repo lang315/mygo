@@ -302,19 +302,11 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			row.Children(func() {
 				if s.Checked != nil {
 					checkCell(c, checkW, func() {
-						k := s.keyOf(i)
-						on := s.Checked.has(k)
 						label := "Check"
 						if s.Label != nil {
 							label += " " + s.Label(i)
 						}
-						box := checkbox(c, &on, "", false).Label(label)
-						box.flags &^= flagFocusable
-						table.afterInput(func() {
-							if box.Changed() && s.Checked.set(k, on) {
-								table.st.markEvent(eventChecked)
-							}
-						})
+						itemCheckbox(c, table, s.Checked, s.keyOf(i), label)
 					})
 				}
 				cells(RoleCell, func(j int) { cell(i, j) })
@@ -331,24 +323,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		})
 	}
 	if s.Copy != nil {
-		rt := c.rt
-		table.HandleInput(func(ev InputEvent) bool {
-			isCopy := ev.Kind == InputCommand && ev.Text == "copy" || ev.Kind == InputKeyDown && ev.Key == KeyC && ev.Mods == Cmd
-			if !isCopy {
-				return false
-			}
-			rows := s.frame.chosenRows()
-			if len(rows) == 0 {
-				return false
-			}
-			if ev.Repeat {
-				return true
-			}
-			if text := s.Copy(rows); text != "" {
-				rt.host.writeClipboard(text)
-			}
-			return true
-		})
+		table.HandleInput(copyInput(c.rt, func() []int { return s.frame.chosenRows() }, s.Copy))
 	}
 	if id := drag.fit; id != "" {
 		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag, rt: c.rt}
@@ -599,6 +574,47 @@ func (tc *tableChecks) counted(s *ListState, n int) (count, total int) {
 	}
 	*tc = tableChecks{sel: sel, gen: sel.generation(), version: s.Version, n: n, count: count, total: total}
 	return count, total
+}
+
+// copyInput returns the input handler of a table or a grid with a Copy: on
+// Cmd+C (Ctrl+C) and the Edit menu's Copy it puts the text copy returns for
+// the rows or items chosen on the clipboard. Nothing chosen leaves the key to
+// others, "" leaves the clipboard, and a repeat of the key copies nothing more.
+func copyInput(rt *engine, chosen func() []int, copy func([]int) string) func(InputEvent) bool {
+	return func(ev InputEvent) bool {
+		isCopy := ev.Kind == InputCommand && ev.Text == "copy" || ev.Kind == InputKeyDown && ev.Key == KeyC && ev.Mods == Cmd
+		if !isCopy {
+			return false
+		}
+		rows := chosen()
+		if len(rows) == 0 {
+			return false
+		}
+		if ev.Repeat {
+			return true
+		}
+		if text := copy(rows); text != "" {
+			rt.host.writeClipboard(text)
+		}
+		return true
+	}
+}
+
+// itemCheckbox builds the checkbox named label of the row or item whose key
+// is k, which checks it in checked and tells owner, the table or grid. It
+// returns the checkbox and whether k is checked. It takes no keyboard focus: a
+// click leaves it on owner, whose keys and Copy keep working, and Space checks.
+func itemCheckbox(c *context, owner *node, checked Selector, k any, label string) (box *node, on bool) {
+	on = checked.has(k)
+	box = checkbox(c, &on, "", false).Label(label)
+	box.flags &^= flagFocusable
+	owner.afterInput(func() {
+		// on is what the checkbox set through its pointer.
+		if box.Changed() && checked.set(k, on) {
+			owner.st.markEvent(eventChecked)
+		}
+	})
+	return box, on
 }
 
 // checkCell builds the checkbox cell of a row or of the header, which

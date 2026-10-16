@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -250,5 +251,162 @@ func TestOutlineExpandsForAssistiveTechnology(t *testing.T) {
 	act("lib", platform.AccessExpand)
 	if !open || !tt.HasText("util.go") {
 		t.Fatal("expanding a tree's item")
+	}
+}
+
+func TestOutlineTableChecked(t *testing.T) {
+	var s OutlineState[string]
+	var checked Selection[string]
+	sel := -1
+	s.List.Selected, s.List.Checked = &sel, &checked
+	s.List.Label = func(i int) string { return baseName(s.Item(i)) }
+	s.Open.Add("src")
+	s.Open.Add("src/ui")
+	roots := []string{"src", "docs", "README.md"}
+	cols := []TableColumn{{Title: "Name"}}
+	events := 0
+	tt := coreNewTester(func(c *context) {
+		e := coreOutlineTable(c, &s, cols, roots, children, func(path string, col int) {
+			coreText(c, baseName(path)).SingleLine()
+		}).Grow(1)
+		if e.CheckedChanged() {
+			events++
+		}
+	}, 500, 400)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	box := func(label string) platform.AccessNode {
+		return accessNode(t, tt.h.access, platform.RoleCheckBox, label)
+	}
+	// Rows shown: src, ui, list.go, tree.go, main.go, docs, README.md. Each
+	// has a checkbox node, as in a Table, besides the header's.
+	boxes := 0
+	for _, n := range tt.h.access.Nodes {
+		if n.Role == platform.RoleCheckBox {
+			boxes++
+		}
+	}
+	if boxes != 8 {
+		t.Fatalf("%d checkboxes, want 7 rows and the header's", boxes)
+	}
+	for _, name := range []string{"src", "ui", "list.go", "tree.go", "main.go", "docs", "README.md"} {
+		box("Check " + name)
+	}
+	// Checking a child row does not choose it.
+	clickAccess(tt, box("Check list.go"))
+	if !checked.Has("src/ui/list.go") || checked.Len() != 1 || events != 1 || sel != -1 {
+		t.Fatalf("checking list.go: %v, %d events, chose %d", checked.keys, events, sel)
+	}
+	// The key is the item, so closing and opening its parent keeps the check.
+	s.Open.Remove("src/ui")
+	tt.Frame()
+	if checked.Len() != 1 {
+		t.Fatalf("closing src/ui changed the checks: %v", checked.keys)
+	}
+	s.Open.Add("src/ui")
+	tt.Frame()
+	if n := box("Check list.go"); n.States&platform.AccessChecked == 0 {
+		t.Errorf("list.go after src/ui opened again: %+v", n)
+	}
+	// The header checks and unchecks the rows shown.
+	clickAccess(tt, box("Check all"))
+	if checked.Len() != 7 || events != 2 {
+		t.Fatalf("checking all: %d checked, %d events", checked.Len(), events)
+	}
+	clickAccess(tt, box("Check all"))
+	if checked.Len() != 0 || events != 3 {
+		t.Fatalf("unchecking all: %d checked, %d events", checked.Len(), events)
+	}
+	// Space checks the row chosen, and unchecks it.
+	tt.Click("README.md")
+	if s.Item(sel) != "README.md" {
+		t.Fatalf("chose %q", s.Item(sel))
+	}
+	tt.Key(0, KeySpace)
+	if !checked.Has("README.md") || checked.Len() != 1 || events != 4 {
+		t.Fatalf("Space: %v, %d events", checked.keys, events)
+	}
+	tt.Key(0, KeySpace)
+	if checked.Len() != 0 || events != 5 {
+		t.Fatalf("Space again: %v, %d events", checked.keys, events)
+	}
+}
+
+func TestOutlineTableRowMenu(t *testing.T) {
+	var s OutlineState[string]
+	var chosen Selection[string]
+	sel := -1
+	s.List.Selected, s.List.Selection = &sel, &chosen
+	s.Open.Add("src")
+	s.Open.Add("src/ui")
+	var got [][]string
+	s.List.RowMenu = func(m *Menu, rows []int) {
+		if m.Item("Open").Chosen() {
+			items := make([]string, len(rows))
+			for i, r := range rows {
+				items[i] = s.Item(r)
+			}
+			got = append(got, items)
+		}
+	}
+	roots := []string{"src", "docs", "README.md"}
+	cols := []TableColumn{{Title: "Name"}}
+	tt := coreNewTester(func(c *context) {
+		coreOutlineTable(c, &s, cols, roots, children, func(path string, col int) {
+			coreText(c, baseName(path)).SingleLine()
+		}).Grow(1)
+	}, 500, 400)
+	open := func() {
+		t.Helper()
+		if m := tt.Menu(); !slices.Equal(m, []string{"Open"}) {
+			t.Fatalf("the menu: %q", m)
+		}
+		if err := tt.ChooseMenuItem("Open"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A child row not chosen is chosen alone first.
+	tt.RightClick("list.go")
+	open()
+	// Several rows, across depths: a right click on one chosen keeps them.
+	tt.ClickWith(Cmd, "tree.go")
+	tt.ClickWith(Cmd, "main.go")
+	tt.RightClick("main.go")
+	open()
+	tt.Key(Shift, KeyF10)
+	open()
+	want := [][]string{{"src/ui/list.go"}, {"src/ui/list.go", "src/ui/tree.go", "src/main.go"}, {"src/ui/list.go", "src/ui/tree.go", "src/main.go"}}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("the rows: %v, want %v", got, want)
+	}
+}
+
+func TestOutlineTableCopy(t *testing.T) {
+	var s OutlineState[string]
+	var chosen Selection[string]
+	sel := -1
+	s.List.Selected, s.List.Selection = &sel, &chosen
+	s.Open.Add("src")
+	s.Open.Add("src/ui")
+	s.List.Copy = func(rows []int) string {
+		var b strings.Builder
+		for _, r := range rows {
+			b.WriteString(s.Item(r) + ";")
+		}
+		return b.String()
+	}
+	roots := []string{"src", "docs", "README.md"}
+	cols := []TableColumn{{Title: "Name"}}
+	tt := coreNewTester(func(c *context) {
+		coreOutlineTable(c, &s, cols, roots, children, func(path string, col int) {
+			coreText(c, baseName(path)).SingleLine()
+		}).Grow(1)
+	}, 500, 400)
+	tt.SetClipboard("before")
+	// Rows of different depths, in the order shown.
+	tt.ClickWith(Cmd, "list.go")
+	tt.ClickWith(Cmd, "src")
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "src;src/ui/list.go;" {
+		t.Errorf("Cmd+C copied %q", got)
 	}
 }

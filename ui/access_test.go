@@ -10,6 +10,11 @@ import (
 
 // node returns the node of the tree with role and a label containing
 // label.
+// clickAccess clicks the middle of the access node n.
+func clickAccess(tt *Tester, n platform.AccessNode) {
+	tt.ClickAt(float32(n.Bounds.X+n.Bounds.W/2), float32(n.Bounds.Y+n.Bounds.H/2))
+}
+
 func accessNode(t *testing.T, tree *platform.AccessTree, role platform.AccessRole, label string) platform.AccessNode {
 	t.Helper()
 	for _, n := range tree.Nodes {

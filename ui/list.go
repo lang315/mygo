@@ -1105,18 +1105,23 @@ func (f *listFrame) navigate() {
 // checkChosen checks the rows chosen, or unchecks them when all are checked,
 // as Space does in a table with a checkbox column.
 func (f *listFrame) checkChosen() {
-	rows, checked := f.chosenRows(), f.s.Checked
-	if len(rows) == 0 {
-		return
-	}
-	all := !slices.ContainsFunc(rows, func(i int) bool { return !checked.has(f.key(i)) })
-	changed := false
-	for _, i := range rows {
-		changed = checked.set(f.key(i), !all) || changed
-	}
-	if changed {
+	if toggleChecked(f.s.Checked, f.chosenRows(), f.key) {
 		f.owner.st.markEvent(eventChecked)
 	}
+}
+
+// toggleChecked checks the rows, or unchecks them when all are checked, and
+// reports whether the checks changed. key returns a row's key.
+func toggleChecked(checked Selector, rows []int, key func(int) any) bool {
+	if len(rows) == 0 {
+		return false
+	}
+	all := !slices.ContainsFunc(rows, func(i int) bool { return !checked.has(key(i)) })
+	changed := false
+	for _, i := range rows {
+		changed = checked.set(key(i), !all) || changed
+	}
+	return changed
 }
 
 // typed returns the row whose text starts with what was typed, from the

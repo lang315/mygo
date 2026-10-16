@@ -30,6 +30,42 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   assistive technology reads it as the item's name.
 - `Reorder` lets the user drag items to another place, as a list's rows:
   see [drag and drop](drag-and-drop.md).
+- `Checked` shows a checkbox on each item, by `Key`, apart from the items
+  chosen, as a table's `Checked` does: it shows on an item checked, on the
+  one under the pointer, and on all of them while any is checked. A click on
+  it checks the item and leaves the choice, Space checks the items chosen
+  (or unchecks them when all are checked), and `CheckedChanged` reports a
+  change by the user. Assistive technology reads it as "Check" and the
+  item's `Label`. There is no "check all": Cmd+A, then Space.
+- `ItemMenu` gives the items a [context menu](context-menu.md), filled for
+  `items`, the items chosen in order. A right click on an item not chosen
+  chooses it first, and a grid that does not choose gets the item clicked.
+  The Menu key and Shift+F10 open it on the items chosen, and nothing opens
+  when none is.
+- `Copy` returns the text for the same `items`: it goes to the clipboard on
+  Cmd+C (Ctrl+C on Linux and Windows), or Copy in the Edit menu, while the
+  grid has the keyboard focus. Nothing is copied when no item is chosen,
+  and `""` leaves the clipboard as it was.
+
+```go
+app.photos.Checked = &app.checked
+if ui.GridView(c, &app.photos, len(photos), 140, 120, item).Grow(1).CheckedChanged() {
+	app.updateToolbar()
+}
+
+app.photos.ItemMenu = func(m *ui.Menu, items []int) {
+	if m.Item("Delete").Chosen() {
+		app.delete(items)
+	}
+}
+app.photos.Copy = func(items []int) string {
+	names := make([]string, len(items))
+	for i, item := range items {
+		names[i] = photos[item].Name
+	}
+	return strings.Join(names, "\n")
+}
+```
 
 ## Accessibility
 
