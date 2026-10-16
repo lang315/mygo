@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"os"
 	"runtime"
 	"testing"
 	"time"
@@ -61,8 +62,19 @@ func TestMenuItemIcons(t *testing.T) {
 			t.Errorf("%s: icon %v template %v, want %v %v", tc.label, has, template, tc.has, tc.template)
 		}
 	}
-	if width, ok := accelWidth(w, "Icons", "Icon"); ok && width == 0 {
-		t.Error("the item with an icon lost its shortcut")
+	if drawn, menuPNG, supported, err := shortcutDrawn(w, "Icons", "Icon"); supported {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !drawn {
+			t.Error("the item with an icon does not draw its shortcut")
+		}
+		// MYGO_E2E_MENU_PNG names a file to keep the open menu in, to look at.
+		if p := os.Getenv("MYGO_E2E_MENU_PNG"); p != "" {
+			if err := os.WriteFile(p, menuPNG, 0o644); err != nil {
+				t.Error(err)
+			}
+		}
 	}
 	// A relabeled item keeps its icon and shows its new label.
 	menu.ItemByID("icon").SetLabel("Renamed")

@@ -331,8 +331,7 @@ func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, er
 	return has, false, true, err
 }
 
-func accelWidth(w *mygo.Window, path ...string) (width uint32, ok bool) {
-	var err error
-	mygo.RunOnMain(func() { width, err = linux.TestMenuItemAccelWidth(w.NativeHandle(), path...) })
-	return width, err == nil
+func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, supported bool, err error) {
+	mygo.RunOnMain(func() { drawn, menuPNG, err = linux.TestMenuItemShortcutDrawn(w.NativeHandle(), path...) })
+	return drawn, menuPNG, true, err
 }

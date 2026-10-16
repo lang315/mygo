@@ -313,8 +313,8 @@ var (
 	gtkCheckMenuItemNewWithLabel        func(label *byte) ptr
 	gtkAccelLabelNew                    func(text *byte) ptr
 	gtkAccelLabelSetAccelWidget         func(label, widget ptr)
-	gtkAccelLabelGetAccelWidth          func(label ptr) uint32
 	gtkLabelSetText                     func(label ptr, text *byte)
+	gtkLabelSetXalign                   func(label ptr, x float32)
 	gtkLabelGetText                     func(label ptr) ptr
 	gtkImageNewFromSurface              func(surface ptr) ptr
 	gdkCairoSurfaceCreateFromPixbuf     func(pixbuf ptr, scale int32, window ptr) ptr
@@ -743,8 +743,8 @@ func load() error {
 	mustBind(t, &gtkCheckMenuItemNewWithLabel, "gtk_check_menu_item_new_with_label")
 	mustBind(t, &gtkAccelLabelNew, "gtk_accel_label_new")
 	mustBind(t, &gtkAccelLabelSetAccelWidget, "gtk_accel_label_set_accel_widget")
-	mustBind(t, &gtkAccelLabelGetAccelWidth, "gtk_accel_label_get_accel_width")
 	mustBind(t, &gtkLabelSetText, "gtk_label_set_text")
+	mustBind(t, &gtkLabelSetXalign, "gtk_label_set_xalign")
 	mustBind(t, &gtkLabelGetText, "gtk_label_get_text")
 	mustBind(t, &gtkImageNewFromSurface, "gtk_image_new_from_surface")
 	mustBind(libGDK, &gdkCairoSurfaceCreateFromPixbuf, "gdk_cairo_surface_create_from_pixbuf")

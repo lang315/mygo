@@ -252,7 +252,9 @@ func menuScale(windowID int) int32 {
 func iconBox(item, image ptr, text string) ptr {
 	box := gtkBoxNew(0, 6) // GTK_ORIENTATION_HORIZONTAL
 	label := gtkAccelLabelNew(cs(text))
-	gtkWidgetSetHalign(label, 1) // GTK_ALIGN_START
+	// The label fills the item, its text to the left: it draws its shortcut
+	// only when given room for both.
+	gtkLabelSetXalign(label, 0)
 	gtkAccelLabelSetAccelWidget(label, item)
 	gtkBoxPackStart(box, image, false, false, 0)
 	gtkBoxPackStart(box, label, true, true, 0)
