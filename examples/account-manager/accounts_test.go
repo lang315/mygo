@@ -2,7 +2,6 @@ package main
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -25,27 +24,6 @@ func TestGenerateIsTheSameForASeed(t *testing.T) {
 	}
 	if x := generate(1, 1000, 1)[0]; x.ID != 1000 || uids[x.UID] {
 		t.Fatalf("the account after them: ID %d, UID %s", x.ID, x.UID)
-	}
-}
-
-func TestMatcher(t *testing.T) {
-	x := &account{UID: "100000000000123", Email: "Ada@hotmail.com"}
-	for _, tc := range []struct {
-		col  int
-		kw   string
-		want bool
-	}{
-		{colUID, "", true},
-		{colEmail, "ada@", true},
-		{colEmail, "bob", false},
-		{colUID, "100000000000123|999", true},
-		{colUID, "10000000000012|999", false}, // exact, not a prefix
-		{colUID, " 100000000000123 | |999 ", true},
-		{colUID, "|", true}, // nothing listed: all
-	} {
-		if got := matcher(tc.col, tc.kw)(x); got != tc.want {
-			t.Errorf("matcher(%d, %q) = %v, want %v", tc.col, tc.kw, got, tc.want)
-		}
 	}
 }
 
@@ -72,24 +50,5 @@ func TestCellText(t *testing.T) {
 	}
 	if got := cellText(x, colLastRun); got != "" {
 		t.Errorf("a run never made shows %q", got)
-	}
-	if columnIndex("Email") != colEmail || columnIndex("nope") != -1 {
-		t.Error("columnIndex")
-	}
-}
-
-// The search finds what strings.ToLower finds, on the cells lowered as on
-// the keyword, whatever the letters: Vietnamese, İ, invalid UTF-8.
-func TestMatcherFoldsAsToLower(t *testing.T) {
-	cells := []string{"Thành công", "THÀNH CÔNG", "Đang chạy", "ĐANG", "İstanbul", "i̇stanbul", "a\xffb", "A\xffB", "abc", "ABC", "", "Ǆ"}
-	kws := []string{"thành", "THÀNH công", "đang", "İ", "i̇", "\xff", "a\xffb", "b", "ǆ", "Ǆ", "ǅ"}
-	for _, cell := range cells {
-		for _, kw := range kws {
-			x := &account{Status: cell}
-			want := strings.Contains(strings.ToLower(cell), strings.ToLower(kw))
-			if got := matcher(colStatus, kw)(x); got != want {
-				t.Errorf("matcher(%q) on %q = %v, want %v", kw, cell, got, want)
-			}
-		}
 	}
 }

@@ -29,15 +29,12 @@ var actions = []string{"Đăng nhập", "Backup", "Bật 2FA", "Kiểm tra tài 
 
 // app is the state the window shows.
 type app struct {
-	s       *store
-	view    *ui.TableView[account]
-	list    ui.ListState
-	sort    ui.SortOrder
-	cursor  int               // the row chosen last, -1 for none
-	chosen  ui.Selection[int] // the accounts highlighted, by ID
-	checked ui.Selection[int] // the accounts checked, by ID
-	folder  string            // the folder shown
-	// The search: the title of the column searched, and what to find.
+	s      *store
+	table  ui.DataTableState[account, int] // the accounts of the folder shown that the search finds
+	folder string                          // the folder shown
+	// folderID is the ID of folder, which the table filters by.
+	folderID int
+	// The search typed: the title of the column searched, and what to find.
 	column, keyword string
 	action          string
 	loops, threads  float64
@@ -45,16 +42,23 @@ type app struct {
 	stopping        bool
 	stress          *runner // the stress run going on, nil when none
 	stats           *stats  // what -stats logs, nil without it
-	filtered        search  // the search the view shows the rows of
 	// update runs fn on the main thread, then builds a frame:
 	// Window.Update, or a test's.
 	update func(fn func())
 }
 
+// newApp does not search or read the table, so the table is not started
+// before the first frame: a test can still change its columns.
 func newApp(rows int) *app {
-	a := &app{s: newStore(rows, 1), view: ui.NewTableView(compare()), cursor: -1, column: "UID", threads: 10}
+	a := &app{s: newStore(rows, 1), column: "UID", threads: 10}
 	a.folder = a.s.folders[0].Name
-	a.filter()
+	a.filterFolder()
+	a.table.Key = func(x *account) int { return x.ID }
+	a.table.Columns = dataColumns()
+	// The search bar is the footer's, with fhtool's texts.
+	a.table.NoSearchBar = true
+	a.table.Filter = func(x *account) bool { return x.Folder == a.folderID }
+	a.table.Copy = func(rows []*account) string { return copyText(rows, colUID, colPassword, colTwoFA) }
 	return a
 }
 
@@ -68,7 +72,7 @@ func (a *app) build(c *ui.Context) {
 	}
 	ui.Column(c).Fill().Padding(10).Gap(10).Children(func() {
 		a.toolbar(c)
-		a.table(c)
+		a.showTable(c)
 		a.footer(c)
 	})
 }
@@ -118,73 +122,36 @@ func (a *app) toolbar(c *ui.Context) {
 // showFolder shows the folder a.folder names afresh, none of its
 // accounts checked or highlighted, as fhtool loads a folder.
 func (a *app) showFolder() {
-	a.checked.Clear()
-	a.chosen.Clear()
-	a.filter()
+	a.table.Checked.Clear()
+	a.table.Chosen.Clear()
+	a.filterFolder()
 }
 
-// search is what decides the rows shown: a folder, and the keyword sought
-// in a column.
-type search struct {
-	folder          int
-	column, keyword string
-}
-
-// filter shows the accounts of the folder shown that the search finds.
-// The view does nothing when they are the rows shown already: a filter
-// goes through all rows.
-func (a *app) filter() {
+// filterFolder has the table show the accounts of the folder a.folder names.
+// The table does nothing when its key is the one it has: the rows are
+// filtered again only when the folder changes.
+func (a *app) filterFolder() {
 	f, _ := a.s.folderByName(a.folder)
-	s := search{f.ID, a.column, strings.TrimSpace(a.keyword)}
-	if s.keyword == "" {
-		s.column = "" // the column searched keeps all rows alike
-	}
-	a.filtered = s
-	a.view.SetFilterKey(s, keep(s))
+	a.folderID, a.table.FilterKey = f.ID, f.ID
 }
 
-// keep tells whether an account is in the folder of s and s finds it.
-func keep(s search) func(*account) bool {
-	match := matcher(columnIndex(s.column), s.keyword)
-	return func(x *account) bool { return x.Folder == s.folder && match(x) }
+// filter shows the accounts of the folder shown that the search finds. The
+// table does nothing when they are the rows shown already: a search goes
+// through all rows.
+func (a *app) filter() { a.table.SetSearch(a.column, a.keyword) }
+
+func (a *app) showTable(c *ui.Context) {
+	a.table.RowMenu = func(m *ui.Menu, rows []*account) { a.rowMenu(c, m, rows) }
+	ui.DataTable(c, &a.table, a.s.accounts).Grow(1)
 }
 
-func (a *app) table(c *ui.Context) {
-	accounts, view := a.s.accounts, a.view
-	view.Sync(accounts, a.sort)
-	a.list.Key = func(row int) any { return accounts[view.Row(row)].ID }
-	a.list.Label = func(row int) string { return accounts[view.Row(row)].UID }
-	a.list.Selected, a.list.Selection, a.list.Checked = &a.cursor, &a.chosen, &a.checked
-	a.list.Sort = &a.sort
-	a.list.Version = view.Version()
-	a.list.Copy = func(rows []int) string { return a.copy(rows, colUID, colPassword, colTwoFA) }
-	a.list.RowMenu = func(m *ui.Menu, rows []int) { a.rowMenu(c, m, rows) }
-	t := c.Theme()
-	ui.Table(c, &a.list, columns, view.Len(), func(row, col int) {
-		x := &accounts[view.Row(row)]
-		cell := ui.Text(c, cellText(x, col)).SingleLine()
-		if col != colStatus {
-			return
-		}
-		switch x.state {
-		case running:
-			cell.TextColor(ui.RGB(250, 204, 21)).TextBackground(ui.RGB(0, 0, 0)).Bold()
-		case failed:
-			cell.TextColor(t.Danger)
-		case succeeded:
-			cell.TextColor(t.Success)
-		}
-	}).Grow(1)
-}
-
-// copy is columns cols of rows, | between them, a line each.
-func (a *app) copy(rows []int, cols ...int) string {
+// copyText is columns cols of rows, | between them, a line each.
+func copyText(rows []*account, cols ...int) string {
 	var b strings.Builder
-	for i, row := range rows {
+	for i, x := range rows {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		x := &a.s.accounts[a.view.Row(row)]
 		for j, col := range cols {
 			if j > 0 {
 				b.WriteByte('|')
@@ -210,27 +177,27 @@ var copies = []struct {
 
 // rowMenu is fhtool's menu of the rows chosen, but for its items opening
 // Chrome, proxies and tokens.
-func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []int) {
+func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []*account) {
 	ids := make([]int, len(rows))
-	for i, row := range rows {
-		ids[i] = a.s.accounts[a.view.Row(row)].ID
+	for i, x := range rows {
+		ids[i] = x.ID
 	}
 	m.Submenu("Chọn/Bỏ chọn", func(m *ui.Menu) {
 		if m.Item("Chọn").Chosen() {
 			for _, id := range ids {
-				a.checked.Add(id)
+				a.table.Checked.Add(id)
 			}
 		}
 		if m.Item("Bỏ chọn").Chosen() {
 			for _, id := range ids {
-				a.checked.Remove(id)
+				a.table.Checked.Remove(id)
 			}
 		}
 	})
 	m.Submenu("Copy", func(m *ui.Menu) {
 		for _, it := range copies {
 			if m.Item(it.label).Chosen() {
-				c.WriteClipboard(a.copy(rows, it.cols...))
+				c.WriteClipboard(copyText(rows, it.cols...))
 				c.Toast(fmt.Sprintf("Đã copy %d dòng", len(rows)))
 			}
 		}
@@ -262,16 +229,16 @@ func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []int) {
 	}
 }
 
-// gone shows the accounts ids left the folder shown: the view places again
+// gone shows the accounts ids left the folder shown: the table places again
 // only the rows moved, and all of them after rows were removed.
 func (a *app) gone(c *ui.Context, ids []int) {
 	for _, id := range ids {
-		a.checked.Remove(id)
-		a.chosen.Remove(id)
+		a.table.Checked.Remove(id)
+		a.table.Chosen.Remove(id)
 		if i, ok := a.s.index[id]; ok {
-			a.view.Changed(i)
+			a.table.Changed(i)
 		} else {
-			a.view.Reset()
+			a.table.Reset()
 		}
 	}
 	c.Invalidate()
@@ -279,9 +246,9 @@ func (a *app) gone(c *ui.Context, ids []int) {
 
 func (a *app) footer(c *ui.Context) {
 	ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
-		ui.Textf(c, "Tổng số dòng: %d", a.view.Len())
-		ui.Textf(c, "Số dòng đang bôi đen: %d", a.chosen.Len())
-		ui.Textf(c, "Đã chọn: %d", a.checked.Len())
+		ui.Textf(c, "Tổng số dòng: %d", a.table.Len())
+		ui.Textf(c, "Số dòng đang bôi đen: %d", a.table.Chosen.Len())
+		ui.Textf(c, "Đã chọn: %d", a.table.Checked.Len())
 		ui.Spacer(c)
 		column := ui.Select(c, &a.column, titles).Label("Cột tìm kiếm").Width(170).Changed()
 		const hint = "Nhập từ khoá (UID1|UID2|…)"
@@ -300,13 +267,13 @@ func (a *app) footer(c *ui.Context) {
 // start runs the action on the accounts checked, in the order shown.
 func (a *app) start(c *ui.Context) {
 	var ids []int
-	for i := range a.view.Len() {
-		if id := a.s.accounts[a.view.Row(i)].ID; a.checked.Has(id) {
+	for i := range a.table.Len() {
+		if id := a.table.At(i).ID; a.table.Checked.Has(id) {
 			ids = append(ids, id)
 		}
 	}
 	switch {
-	case len(ids) == 0 && a.checked.Len() > 0:
+	case len(ids) == 0 && a.table.Checked.Len() > 0:
 		c.Toast("Các dòng đã chọn đang bị ẩn bởi tìm kiếm!")
 		return
 	case len(ids) == 0:
@@ -367,7 +334,7 @@ func (a *app) apply(r *runner) {
 		if res.note != "" {
 			x.Note = res.note
 		}
-		a.view.Changed(i)
+		a.table.Changed(i)
 	}
 	if a.stats != nil {
 		a.stats.applied(len(batch), time.Since(start))
