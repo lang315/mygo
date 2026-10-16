@@ -176,9 +176,10 @@ func (e *live) keep() func(*account) bool {
 	f, _ := a.s.folderByName(a.folder)
 	column, keyword := a.table.Search()
 	col := slices.Index(titles, column)
+	list := strings.Contains(keyword, "|")
 	exact := map[string]bool{}
 	for v := range strings.SplitSeq(keyword, "|") {
-		if v = strings.TrimSpace(v); v != "" && strings.Contains(keyword, "|") {
+		if v = strings.TrimSpace(v); v != "" && list {
 			exact[v] = true
 		}
 	}
@@ -191,7 +192,7 @@ func (e *live) keep() func(*account) bool {
 			return true
 		case len(exact) > 0:
 			return exact[cellText(x, col)]
-		case strings.Contains(keyword, "|"): // nothing listed: all
+		case list: // nothing listed: all
 			return true
 		}
 		return strings.Contains(strings.ToLower(cellText(x, col)), lower)
@@ -205,9 +206,9 @@ func (e *live) keep() func(*account) bool {
 func (e *live) sorted(got []int) bool {
 	a := e.a
 	rows, keep := a.s.accounts, e.keep()
-	n := 0
+	kept, n := make([]bool, len(rows)), 0
 	for i := range rows {
-		if keep(&rows[i]) {
+		if kept[i] = keep(&rows[i]); kept[i] {
 			n++
 		}
 	}
@@ -216,7 +217,7 @@ func (e *live) sorted(got []int) bool {
 	}
 	f := e.compare[a.table.Sort.Column]
 	for k, i := range got {
-		if !keep(&rows[i]) {
+		if !kept[i] {
 			return false
 		}
 		if k == 0 {

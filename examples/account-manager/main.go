@@ -32,8 +32,6 @@ type app struct {
 	s      *store
 	table  ui.DataTableState[account, int] // the accounts of the folder shown that the search finds
 	folder string                          // the folder shown
-	// folderID is the ID of folder, which the table filters by.
-	folderID int
 	// The search typed: the title of the column searched, and what to find.
 	column, keyword string
 	action          string
@@ -57,7 +55,7 @@ func newApp(rows int) *app {
 	a.table.Columns = dataColumns()
 	// The search bar is the footer's, with fhtool's texts.
 	a.table.NoSearchBar = true
-	a.table.Filter = func(x *account) bool { return x.Folder == a.folderID }
+	a.table.Filter = func(x *account) bool { return x.Folder == a.table.FilterKey }
 	a.table.Copy = func(rows []*account) string { return copyText(rows, colUID, colPassword, colTwoFA) }
 	return a
 }
@@ -132,7 +130,7 @@ func (a *app) showFolder() {
 // filtered again only when the folder changes.
 func (a *app) filterFolder() {
 	f, _ := a.s.folderByName(a.folder)
-	a.folderID, a.table.FilterKey = f.ID, f.ID
+	a.table.FilterKey = f.ID
 }
 
 // filter shows the accounts of the folder shown that the search finds. The
