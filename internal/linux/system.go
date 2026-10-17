@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -353,6 +354,17 @@ func portalColorScheme() (uint32, bool) {
 	return gVariantGetUint32(inner), true
 }
 
+// doubleClick reads the double click as GTK's settings have it from the
+// desktop.
+func doubleClick() platform.DoubleClick {
+	ms, distance := int32(400), int32(5) // GTK's defaults
+	if settings := gtkSettingsGetDefault(); settings != 0 {
+		gObjectGetPtr(settings, cs("gtk-double-click-time"), unsafe.Pointer(&ms), 0)
+		gObjectGetPtr(settings, cs("gtk-double-click-distance"), unsafe.Pointer(&distance), 0)
+	}
+	return platform.DoubleClick{Time: time.Duration(ms) * time.Millisecond, DX: float64(distance), DY: float64(distance)}
+}
+
 // Preferences reads GTK's animations setting, and the accent, contrast
 // and text size the desktop portal gives, as GNOME's and KDE's do.
 func (t theme) Preferences() platform.Preferences {
@@ -517,12 +529,12 @@ func (b *Backend) NotificationsSupported() bool {
 	return err == nil
 }
 
-// WebViewSupported reports whether a window showing a web page can have
+// WebViewAvailable reports whether a window showing a web page can have
 // one: WebKitGTK, JavaScriptCore and libsoup, which it needs. Windows
 // showing native UI need GTK alone, so an app whose windows all do runs
 // without them. Loading the libraries is as much as can be known before a
 // page loads.
-func (b *Backend) WebViewSupported() bool { return webKit() == nil }
+func (b *Backend) WebViewAvailable() bool { return webKit() == nil }
 
 func (b *Backend) ShowNotification(n *platform.Notification, done func(error)) {
 	done(b.showNotification(n))

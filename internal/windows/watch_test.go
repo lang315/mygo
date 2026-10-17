@@ -5,6 +5,7 @@ package windows
 import (
 	"encoding/binary"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -129,11 +130,17 @@ func TestDirectoryWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	next(platform.FileWatchNotice{Target: 1, Kind: platform.FileWatchCreate, Name: "h"})
-	// Closing doesn't wait for I/O that already completed.
-	start := time.Now()
+	// Closing doesn't wait for I/O that already completed: waiting for it,
+	// it would give up on the session after 5 s and leak it.
+	leaked := func() int {
+		leakedSessions.Lock()
+		defer leakedSessions.Unlock()
+		return len(leakedSessions.sessions)
+	}
+	before := leaked()
 	w.Close()
-	if d := time.Since(start); d > time.Second {
-		t.Fatalf("closing took %v", d)
+	if n := leaked() - before; n > 0 {
+		t.Fatalf("closing gave up waiting for the I/O of %d sessions", n)
 	}
 }
 
@@ -158,4 +165,29 @@ func TestDirectoryWatchClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Rename(dir+"-renamed", dir)
+}
+
+// A junction is not watched in place of the directory it points to.
+func TestDirectoryWatchJunction(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.Mkdir(target, 0700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err != nil {
+		t.Skipf("mklink: %v: %s", err, out)
+	}
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := (&Backend{}).NewFileWatch(func(platform.FileWatchNotice) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	if err := w.Add(platform.FileWatchTarget{ID: 1, Path: link, Directory: true, Info: info}); err == nil {
+		t.Fatal("watched a junction")
+	}
 }

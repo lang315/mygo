@@ -315,20 +315,20 @@ func swapFiles(dir, target string) error {
 	undo := func() {
 		for i := len(moved) - 1; i >= 0; i-- {
 			_ = os.RemoveAll(moved[i][0])
-			_ = update.Rename(moved[i][1], moved[i][0])
+			_ = rename(moved[i][1], moved[i][0])
 		}
 	}
 	for _, e := range entries {
 		dst := filepath.Join(target, e.Name())
 		if _, err := os.Lstat(dst); err == nil {
 			aside := filepath.Join(target, "."+e.Name()+suffix)
-			if err := update.Rename(dst, aside); err != nil {
+			if err := rename(dst, aside); err != nil {
 				undo()
 				return err
 			}
 			moved = append(moved, [2]string{dst, aside})
 		}
-		if err := update.Rename(filepath.Join(dir, e.Name()), dst); err != nil {
+		if err := rename(filepath.Join(dir, e.Name()), dst); err != nil {
 			undo()
 			return err
 		}

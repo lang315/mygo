@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"hash/maphash"
+	"reflect"
 	"time"
 
 	"github.com/egoist/mygo/internal/scene"
@@ -109,6 +110,7 @@ func (c *context) reset(now time.Time, w, h float32) {
 	c.rt.afterInputs = c.rt.afterInputs[:0]
 	clear(c.rt.inputs)
 	c.rt.inputs = c.rt.inputs[:0]
+	c.rt.building = 0
 	clear(c.rt.actions)
 	c.rt.actions = c.rt.actions[:0]
 	c.dirty = max(c.dirty, c.used)
@@ -296,14 +298,15 @@ func keyedID(parent uint64, k any) uint64 {
 	switch k := k.(type) {
 	case string:
 		h = maphash.String(keySeed, k)
+	// Integers of different types are different keys, as in a map.
 	case int:
 		h = uint64(k)*0x9E3779B97F4A7C15 + 1
 	case int64:
-		h = uint64(k)*0x9E3779B97F4A7C15 + 1
+		h = uint64(k)*0x9E3779B97F4A7C15 + 2
 	case uint64:
-		h = k*0x9E3779B97F4A7C15 + 1
+		h = k*0x9E3779B97F4A7C15 + 3
 	default:
-		h = maphash.String(keySeed, fmt.Sprintf("%T:%v", k, k))
+		h = keyHash(k)
 	}
 	return mix(parent, h^0xA5A5A5A5A5A5A5A5)
 }
@@ -316,6 +319,27 @@ const globalRoot uint64 = 0x676c6f62616c6b79
 
 // globalID returns the ID of the element keyed globally by k.
 func globalID(k any) uint64 { return keyedID(globalRoot, k) }
+
+// keyHash hashes a key as Go compares it, as a map's key: a pointer by the
+// object it points to, whatever the object holds, a struct or an array by
+// its fields or elements, and keys of different types apart. A key Go
+// cannot compare, such as a slice, is hashed by its value printed, and so
+// is a key not equal to itself, as a NaN, which a map would hash anew
+// each time.
+func keyHash(k any) (h uint64) {
+	printed := func() uint64 { return maphash.String(keySeed, fmt.Sprintf("%T:%v", k, k)) }
+	defer func() {
+		if recover() != nil {
+			h = printed()
+		}
+	}()
+	if k != k { // panics for a key Go cannot compare
+		return printed()
+	}
+	// One instance of Comparable for both: another, for reflect.Type,
+	// would grow every native app by 16 KB.
+	return maphash.Comparable[any](keySeed, k) ^ maphash.Comparable[any](keySeed, reflect.TypeOf(k))*0x9E3779B97F4A7C15
+}
 
 // mix combines two hashes (the finalizer of splitmix64).
 func mix(a, b uint64) uint64 {
@@ -406,7 +430,8 @@ func (c *context) AnimationFrame() { c.rt.animating = true }
 // routers go to their targets at once, as SwiftUI's disablesAnimations:
 // for a change that should not show as motion, as restoring a window's
 // state or jumping to a search result. Call it before building what
-// changes.
+// changes. Keyframes and timelines, which play on their own rather than
+// towards a target, go on as they were: Seek a Timeline to jump it.
 func (c *context) DisableAnimations() { c.rt.instantFrame = c.rt.frame }
 
 // instant reports whether this frame shows changes at once
@@ -495,7 +520,15 @@ func coreLocal[T any](e *node, key any, init func() T) *T {
 type state struct {
 	rt            *engine
 	pendingSubmit bool
+	pendingChange bool
 	noticeQueued  bool
+	// pendingEvents are the events reported between frames (markEvent).
+	pendingEvents tableEvent
+
+	// rowPressed marks a row of a list the pointer pressed, until the
+	// release; pressChose, that the press chose it, so that its click does
+	// not choose again.
+	rowPressed, pressChose bool
 
 	world scene.Affine
 	clips bool
@@ -521,6 +554,9 @@ type state struct {
 	cursor         Cursor
 	// tip marks an element with a tooltip (TooltipBase).
 	tip bool
+	// effectLayer is what the element and its children render into for
+	// its Effect, kept from frame to frame.
+	effectLayer *Canvas
 	// webView is the web view the element shows (WebView).
 	webView NativeWebView
 
@@ -628,6 +664,7 @@ type state struct {
 	textAdapter *textInputAdapter
 	caret       Rect
 	takesText   bool
+	noIME       bool
 	// copyData is what a Selectable container's selection copies as
 	// (CopyData).
 	copyData func(parts []SelectedText) transfer.Data

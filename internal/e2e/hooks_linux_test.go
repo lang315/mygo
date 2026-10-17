@@ -6,10 +6,10 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/linux"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 func activateMenu(w *mygo.Window, path ...string) (err error) {
@@ -22,10 +22,32 @@ func pressShortcut(string, bool) (bool, bool) { return false, false }
 
 func endSheet(*mygo.Window) (bool, bool) { return false, false }
 
+// fake runs a hook that fakes input through XTEST, and returns once the
+// app handled that input, as the hooks of macOS and Windows do: the X
+// server makes the events and the app gets them later, on the main
+// thread, after other work queued there. A test that went on at once
+// would race them: Edit > Copy while the press of a drag was handled but
+// not its release, a composition the click's press then ended.
+func fake(hook func() bool) (ok bool) {
+	mygo.RunOnMain(func() { ok = hook() })
+	if !ok {
+		return false
+	}
+	// The hook synced with the X server: the events wait in the app's
+	// queue, and it has handled them once it has no events left. All but
+	// a last motion, which GDK holds until its next frame to merge it with
+	// the ones that follow: a test moving the pointer alone waits for
+	// what the move does.
+	wait.Poll(func() (pending bool) {
+		mygo.RunOnMain(func() { pending = linux.TestInputPending() })
+		return !pending
+	})
+	return true
+}
+
 // Clicks reach windows showing native UI only, through XTEST.
-func click(w *mygo.Window, x, y float64) (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestClickSurface(w.NativeHandle(), x, y) })
-	return ok
+func click(w *mygo.Window, x, y float64) bool {
+	return fake(func() bool { return linux.TestClickSurface(w.NativeHandle(), x, y) })
 }
 
 // appClick is click, already through XTEST.
@@ -35,14 +57,12 @@ func appClick(w *mygo.Window, x, y float64) bool { return click(w, x, y) }
 // that closes it, however long it is held.
 func heldAppClick(w *mygo.Window, x, y float64) bool { return appClick(w, x, y) }
 
-func sideButton(w *mygo.Window, back bool) (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestSideButton(w.NativeHandle(), back) })
-	return ok
+func sideButton(w *mygo.Window, back bool) bool {
+	return fake(func() bool { return linux.TestSideButton(w.NativeHandle(), back) })
 }
 
-func drag(w *mygo.Window, points [][2]float64) (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestDragSurface(w.NativeHandle(), points) })
-	return ok
+func drag(w *mygo.Window, points [][2]float64) bool {
+	return fake(func() bool { return linux.TestDragSurface(w.NativeHandle(), points) })
 }
 
 func webViewAttached(*mygo.Window) (bool, bool) { return false, false }
@@ -85,9 +105,8 @@ func recentDocumentRecorded(path string) (recorded, supported bool) {
 }
 
 // pressCtrlShiftK presses Ctrl+Shift+K like a keyboard.
-func pressCtrlShiftK() (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestPressKeys("Control_L", "Shift_L", "k") })
-	return ok
+func pressCtrlShiftK() bool {
+	return fake(func() bool { return linux.TestPressKeys("Control_L", "Shift_L", "k") })
 }
 
 // usePortalShortcuts makes global shortcuts bind through the XDG desktop
@@ -98,9 +117,8 @@ func usePortalShortcuts() (restore func(), ok bool) {
 }
 
 // pressKeys presses keys, X keysym names such as "Control_L", together.
-func pressKeys(keys ...string) (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestPressKeys(keys...) })
-	return ok
+func pressKeys(keys ...string) bool {
+	return fake(func() bool { return linux.TestPressKeys(keys...) })
 }
 
 // Only macOS windows have a toolbar.
@@ -112,14 +130,12 @@ func setWindowAppearance(*mygo.Window, bool)              {}
 
 // movePointer moves the pointer to a point of the screen, and pressButton
 // presses or releases the first mouse button, like a mouse.
-func movePointer(x, y int) (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestMovePointer(x, y) })
-	return ok
+func movePointer(x, y int) bool {
+	return fake(func() bool { return linux.TestMovePointer(x, y) })
 }
 
-func pressButton(press bool) (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestPressButton(press) })
-	return ok
+func pressButton(press bool) bool {
+	return fake(func() bool { return linux.TestPressButton(press) })
 }
 
 func resizeCursor(w *mygo.Window) (name string, supported bool) {
@@ -147,18 +163,9 @@ func enterMenuBar(w *mygo.Window, key string) (during, after, supported bool) {
 		mygo.RunOnMain(func() { shown, open = linux.TestMenuBarState(w.NativeHandle()) })
 		return shown, open
 	}
-	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		if shown, open := state(); shown && open {
-			during = true
-			break
-		}
-	}
+	during = wait.Poll(func() bool { shown, open := state(); return shown && open })
 	mygo.RunOnMain(func() { linux.TestCloseMenuBar(w.NativeHandle()) })
-	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		if after, _ = state(); !after {
-			break
-		}
-	}
+	wait.Poll(func() bool { after, _ = state(); return !after })
 	return during, after, true
 }
 
@@ -279,9 +286,8 @@ func surfaceOnScreen(w *mygo.Window) (png []byte, supported bool) {
 
 // rightClick clicks (x, y) in a window showing native UI with the
 // secondary button, through XTEST.
-func rightClick(w *mygo.Window, x, y float64) (ok bool) {
-	mygo.RunOnMain(func() { ok = linux.TestRightClickSurface(w.NativeHandle(), x, y) })
-	return ok
+func rightClick(w *mygo.Window, x, y float64) bool {
+	return fake(func() bool { return linux.TestRightClickSurface(w.NativeHandle(), x, y) })
 }
 
 // popupMenus returns the labels of the items of the context menus shown.
@@ -348,7 +354,7 @@ func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, 
 // trayMenuIcons reads the menu of the tray made last as a tray host does,
 // from D-Bus, and returns its items by label, true for those with an icon
 // a host shows: PNG icon-data. AppIndicator exports the menu once it has
-// the bus, so a read is retried for a while.
+// the bus, so a read is retried until it answers (wait.Guard).
 func trayMenuIcons() (icons map[string]bool, supported bool, err error) {
 	var name, path string
 	mygo.RunOnMain(func() { name, path = linux.TestTrayMenuAddress() })
@@ -356,12 +362,7 @@ func trayMenuIcons() (icons map[string]bool, supported bool, err error) {
 		return nil, false, nil
 	}
 	var layout string
-	for deadline := time.Now().Add(2 * time.Second); ; time.Sleep(50 * time.Millisecond) {
-		if layout, err = linux.TestReadTrayMenu(name, path); err == nil || time.Now().After(deadline) {
-			break
-		}
-	}
-	if err != nil {
+	if !wait.Poll(func() bool { layout, err = linux.TestReadTrayMenu(name, path); return err == nil }) {
 		return nil, true, err
 	}
 	icons = map[string]bool{}

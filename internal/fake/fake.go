@@ -34,6 +34,7 @@ type Backend struct {
 
 	mu               sync.Mutex
 	windows          []*Window
+	trayIDs          []string
 	appMenu          *platform.Menu
 	popups           []Popup
 	updates          []*platform.MenuItem
@@ -64,16 +65,19 @@ type Backend struct {
 	// KeepAwake calls not released yet.
 	Watching bool
 	Awake    int
-	// Online and Constrained are what Network.Status answers with, and
+	// Online and Metered are what Network.Status answers with, and
 	// WatchingNetwork whether Network.Watch was called.
-	Online, Constrained bool
-	WatchingNetwork     bool
+	Online, Metered bool
+	WatchingNetwork bool
 	// FileWatches are the file watches made, FileWatchError what making
-	// one fails with, and FileWatchSubtree whether they take Subtree
-	// targets.
+	// one fails with, FileWatchSubtree whether they take Subtree targets
+	// and FileWatchNoFiles whether they refuse files.
 	FileWatches      []*FileWatch
 	FileWatchError   error
 	FileWatchSubtree bool
+	FileWatchNoFiles bool
+	// FileWatchAddHook is the AddHook of the file watches made.
+	FileWatchAddHook func(platform.FileWatchTarget) error
 	// URLSchemes are the registered URL schemes, by scheme: "id name".
 	URLSchemes map[string]string
 	// LoginItem is the command that starts the app at login: "id name arg".
@@ -84,13 +88,17 @@ type Backend struct {
 	Cleared int
 	// cookies holds the cookies of the pages, by name, domain and path.
 	cookies map[platform.CookieKey]platform.Cookie
+	// CookiesCleared counts ClearCookies calls.
+	CookiesCleared int
 	// RecentDocuments are the paths AddRecentDocument recorded, in order,
 	// without the ones ClearRecentDocuments removed.
 	RecentDocuments []string
 	// RecentCleared counts ClearRecentDocuments calls.
 	RecentCleared int
-	// JumpListTasks are the tasks of the last SetJumpListTasks call.
-	JumpListTasks []platform.JumpListTask
+	// JumpList is the list of the last SetJumpList call, JumpListCommits
+	// the number of calls.
+	JumpList        platform.JumpList
+	JumpListCommits int
 	// Dialog results returned by the next dialog.
 	OpenResult    []string
 	SaveResult    string
@@ -103,7 +111,7 @@ type Backend struct {
 	// NotificationError, when set, is what showing a notification fails
 	// with.
 	NotificationError error
-	// NoWebView makes WebViewSupported report no system webview, as a
+	// NoWebView makes WebViewAvailable report no system webview, as a
 	// machine without one does.
 	NoWebView bool
 	// notifications are the notifications shown and not yet removed, by
@@ -318,7 +326,14 @@ func (b *Backend) Applications() ([]platform.Application, error) {
 	return append([]platform.Application(nil), Apps...), nil
 }
 
-func (b *Backend) NewTray(platform.TrayHandler) (platform.Tray, error) { return &tray{}, nil }
+func (b *Backend) NewTray(platform.TrayHandler) (platform.Tray, error) { return &tray{b: b}, nil }
+
+// TrayIDs returns the IDs the tray icons were given, in order.
+func (b *Backend) TrayIDs() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string(nil), b.trayIDs...)
+}
 
 func (b *Backend) RegisterHotkey(id int, acc string) error {
 	b.mu.Lock()
@@ -352,9 +367,9 @@ func (b *Backend) PressHotkey(acc string) {
 // what the app asked for and report a click as a platform does.
 func (b *Backend) NotificationsSupported() bool { return true }
 
-// WebViewSupported reports whether the fake system webview is there:
+// WebViewAvailable reports whether the fake system webview is there:
 // windows showing web pages work, unless NoWebView says otherwise.
-func (b *Backend) WebViewSupported() bool { return !b.NoWebView }
+func (b *Backend) WebViewAvailable() bool { return !b.NoWebView }
 
 func (b *Backend) ShowNotification(n *platform.Notification, done func(error)) {
 	b.mu.Lock()
@@ -421,28 +436,28 @@ type Window struct {
 	// Flyout is how a flyout was placed last.
 	Flyout platform.Flyout
 
-	mu      sync.Mutex
-	scripts []string
-	// userScripts are what SetUserScripts set, or nil.
-	userScripts []platform.UserScript
-	menu        *platform.Menu
-	title       string
-	url         string
-	bounds      platform.Rect
-	visible     bool
-	focused     bool
-	minimized   bool
-	maximized   bool
-	full        bool
-	zoom        float64
-	closed      bool
-	devtools    bool
+	mu        sync.Mutex
+	scripts   []string
+	menu      *platform.Menu
+	title     string
+	url       string
+	bounds    platform.Rect
+	visible   bool
+	focused   bool
+	minimized bool
+	maximized bool
+	full      bool
+	zoom      float64
+	closed    bool
+	devtools  bool
 	// Dropped is what DroppedFiles returns, once.
 	Dropped []string
 	// PDF holds the options of the last PrintToPDF.
 	PDF platform.PDFOptions
 	// HTML holds the documents LoadHTML loaded, in order.
 	HTML []string
+	// UserScriptUpdates counts the calls of SetUserScripts.
+	UserScriptUpdates int
 	// What the window extras were last set to.
 	Background      platform.Color
 	Progress        string
@@ -653,22 +668,11 @@ func (w *Window) addHTML(html string) {
 	w.url = "about:blank"
 }
 
-// SetUserScripts replaces the scripts of the pages loaded later, which
-// UserScripts returns.
-func (w *Window) SetUserScripts(scripts []platform.UserScript) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.userScripts = append([]platform.UserScript{}, scripts...)
-}
-
 // UserScripts returns the scripts a page loaded now gets: those of the
 // options, or the ones SetUserScripts set since.
 func (w *Window) UserScripts() []platform.UserScript {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.userScripts != nil {
-		return append([]platform.UserScript(nil), w.userScripts...)
-	}
 	return append([]platform.UserScript(nil), w.Opts.UserScripts...)
 }
 
@@ -680,6 +684,15 @@ func (w *Window) Eval(js string) {
 	w.mu.Lock()
 	w.scripts = append(w.scripts, js)
 	w.mu.Unlock()
+}
+
+// SetUserScripts replaces Opts.UserScripts, which tests read and
+// UserScripts returns.
+func (w *Window) SetUserScripts(scripts []platform.UserScript) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Opts.UserScripts = scripts
+	w.UserScriptUpdates++
 }
 
 func (w *Window) CallAsyncFunction(body string, cb func(string, error)) {
@@ -841,10 +854,11 @@ func (a app) ClearRecentDocuments() error {
 	return nil
 }
 
-func (a app) SetJumpListTasks(tasks []platform.JumpListTask) error {
+func (a app) SetJumpList(list platform.JumpList) error {
 	a.b.mu.Lock()
 	defer a.b.mu.Unlock()
-	a.b.JumpListTasks = append([]platform.JumpListTask(nil), tasks...)
+	a.b.JumpList = list
+	a.b.JumpListCommits++
 	return nil
 }
 
@@ -991,7 +1005,7 @@ type network struct{ b *Backend }
 func (n network) Status() platform.NetworkStatus {
 	n.b.mu.Lock()
 	defer n.b.mu.Unlock()
-	return platform.NetworkStatus{Online: n.b.Online, Constrained: n.b.Constrained}
+	return platform.NetworkStatus{Online: n.b.Online, Metered: n.b.Metered}
 }
 
 func (n network) Watch() {
@@ -1087,8 +1101,13 @@ func (b *Backend) PreferenceReads() int {
 	return b.prefsReads
 }
 
-type tray struct{}
+type tray struct{ b *Backend }
 
+func (t *tray) SetID(id string) {
+	t.b.mu.Lock()
+	t.b.trayIDs = append(t.b.trayIDs, id)
+	t.b.mu.Unlock()
+}
 func (*tray) SetImage([]byte, bool) error { return nil }
 func (*tray) SetTitle(string)             {}
 func (*tray) SetToolTip(string)           {}

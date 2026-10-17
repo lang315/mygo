@@ -37,9 +37,9 @@ type Config struct {
 	Out string `json:"out"`
 	// Bindings is the path of the generated TypeScript client (default:
 	// frontend/src/mygo.ts when there is a frontend directory,
-	// src/mygo.ts when the frontend is the project itself (package.json),
-	// else mygo.ts when the configuration has a frontend, and no client
-	// for an app without one, such as an app of native UI).
+	// src/mygo.ts when package.json is at the root, else mygo.ts when the
+	// configuration has a frontend, and no client for an app without one,
+	// such as an app of native UI).
 	Bindings string `json:"bindings"`
 
 	// DevURL is what the app loads during `mygo dev` in place of its built
@@ -88,6 +88,12 @@ type Config struct {
 
 	root string
 	file string // the configuration file, "" without one
+	// frontend is whether the app has a frontend of its own, for the
+	// TypeScript module of the catalogs. The defaults make one of a frontend
+	// directory, an explicit bindings path or the frontend options; a
+	// package.json at the root declares one unless it is a workspace root,
+	// which holds packages beside the app, such as its website.
+	frontend bool
 	// langs are the languages the app ships, which languages reads once.
 	langs     []appLanguage
 	langsErr  error
@@ -156,6 +162,10 @@ type MacOS struct {
 	SigningIdentity string `json:"signingIdentity"`
 	// Entitlements is a plist of entitlements to sign the app with.
 	Entitlements string `json:"entitlements"`
+	// ProvisioningProfile is embedded as Contents/embedded.provisionprofile
+	// before signing. It must authorize the app's identifier and entitlements
+	// and match its signing identity; ad-hoc signing cannot use a profile.
+	ProvisioningProfile string `json:"provisioningProfile"`
 	// HelperEntitlements gives code among the resources entitlements of its
 	// own, by its path there: executables, libraries and bundles, e.g.
 	//   "bin/server": "server.entitlements.plist"
@@ -341,16 +351,35 @@ func (c *Config) applyDefaults() {
 			c.I18n.Source = "en"
 		}
 	}
-	if c.Bindings == "" {
-		switch {
-		case isDir(filepath.Join(c.root, "frontend")):
-			c.Bindings = filepath.Join("frontend", "src", "mygo.ts")
-		case fileExists(filepath.Join(c.root, "package.json")):
-			c.Bindings = filepath.Join("src", "mygo.ts")
-		case c.DevURL != "" || c.DevCommand != "" || c.BuildCommand != "" || c.FrontendDist != "":
-			c.Bindings = "mygo.ts"
-		}
+	frontendOptions := c.DevURL != "" || c.DevCommand != "" || c.BuildCommand != "" || c.FrontendDist != ""
+	switch {
+	case c.Bindings != "":
+		c.frontend = true
+	case isDir(filepath.Join(c.root, "frontend")):
+		c.Bindings = filepath.Join("frontend", "src", "mygo.ts")
+		c.frontend = true
+	case fileExists(filepath.Join(c.root, "package.json")):
+		c.Bindings = filepath.Join("src", "mygo.ts")
+		c.frontend = !workspaceRoot(c.root) || frontendOptions
+	case frontendOptions:
+		c.Bindings = "mygo.ts"
+		c.frontend = true
 	}
+}
+
+// workspaceRoot reports whether the package.json of root declares
+// workspaces, as npm's and Bun's array and Yarn's object do: it holds
+// packages, such as the app's website, rather than being a frontend
+// itself.
+func workspaceRoot(root string) bool {
+	data, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		Workspaces json.RawMessage `json:"workspaces"`
+	}
+	return json.Unmarshal(data, &pkg) == nil && len(pkg.Workspaces) > 0 && string(pkg.Workspaces) != "null"
 }
 
 // packageAuthor returns the author in the package.json of root, which npm

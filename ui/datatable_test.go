@@ -825,8 +825,7 @@ func TestDataTableSearchDelay(t *testing.T) {
 	if ids := dtShown(s); len(ids) != 3 {
 		t.Fatalf("at once: rows %v, want all", ids)
 	}
-	time.Sleep(300 * time.Millisecond)
-	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
 	if ids := dtShown(s); !slices.Equal(ids, []int{2}) {
 		t.Fatalf("after the delay: rows %v, want 2", ids)
 	}
@@ -838,8 +837,10 @@ func TestDataTableSearchDelay(t *testing.T) {
 		t.Fatalf("Enter: rows %v, want 3", ids)
 	}
 	// Nothing pending after it: a later frame changes nothing.
-	time.Sleep(300 * time.Millisecond)
-	tt.Frame()
+	if tt.FramePending() {
+		t.Fatal("after Enter, the search still asks for a frame")
+	}
+	tt.Advance(300 * time.Millisecond)
 	if ids := dtShown(s); !slices.Equal(ids, []int{3}) {
 		t.Fatalf("after Enter and the delay: rows %v, want 3", ids)
 	}

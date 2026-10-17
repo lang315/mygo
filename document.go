@@ -401,7 +401,7 @@ type docBase struct {
 	window                      *Window
 	closed                      bool
 	// discarded tells that the user chose not to save the changes of the
-	// closing document; watched is the directory watched for it.
+	// closing document; watched is the file watched for it.
 	discarded bool
 	watched   string
 	// dirtySince is when the oldest change not autosaved was made.
@@ -855,7 +855,7 @@ func (k *docKind) open(path string) (*docBase, error) {
 func (k *docKind) readFile(path string) (v any, stamp fileStamp, err error) {
 	read := func() {
 		var f *os.File
-		if f, err = os.Open(path); err != nil {
+		if f, err = openShared(path); err != nil {
 			return
 		}
 		defer f.Close()

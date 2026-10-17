@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -149,7 +150,7 @@ func BenchmarkWindowOpen(b *testing.B) {
 		}
 		select {
 		case <-ready:
-		case <-time.After(10 * time.Second):
+		case <-time.After(wait.Guard):
 			b.Fatal("the page did not load")
 		}
 		w.Destroy()
@@ -176,7 +177,7 @@ func BenchmarkContentWindowOpen(b *testing.B) {
 		w := mygo.NewWindow(mygo.WindowOptions{Title: "Bench", Width: 400, Height: 300, Content: ui.View(view)})
 		select {
 		case <-built:
-		case <-time.After(10 * time.Second):
+		case <-time.After(wait.Guard):
 			b.Fatal("no frame")
 		}
 		w.Destroy()
