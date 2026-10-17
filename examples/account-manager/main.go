@@ -91,18 +91,23 @@ func (a *app) selectTab(i int) {
 	a.searches[a.tab].column, a.searches[a.tab].keyword = a.column, a.keyword
 	a.tab = i
 	a.column, a.keyword = a.searches[i].column, a.searches[i].keyword
-	// Rows changed while it was hidden were not told to it.
-	a.shown().Reset()
 }
 
-// changed says that the account at index i of the store changed. Only the
-// tab shown is told: a table that is not built never syncs, so the rows
-// named to it would pile up. A tab places all rows again once shown
-// (selectTab).
-func (a *app) changed(i int) { a.shown().Changed(i) }
+// changed says that the account at index i of the store changed, to every
+// tab: a hidden one places the rows changed once shown. It holds no more
+// than an eighth of its rows named before it places them all instead.
+func (a *app) changed(i int) {
+	for _, tb := range a.tables() {
+		tb.Changed(i)
+	}
+}
 
-// reset says that accounts were removed.
-func (a *app) reset() { a.shown().Reset() }
+// reset says that accounts were removed, to every tab.
+func (a *app) reset() {
+	for _, tb := range a.tables() {
+		tb.Reset()
+	}
+}
 
 func (a *app) build(c *ui.Context) {
 	if a.stats != nil {
