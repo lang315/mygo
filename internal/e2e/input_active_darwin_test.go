@@ -31,6 +31,32 @@ func deactivated(t *testing.T) {
 	deactivation.Unlock()
 }
 
+// activated brings w's app to the front and waits until it is the frontmost and
+// the active app with w key, as it is when a user has clicked its window. A
+// window is key a moment before that, so a wait for the window alone starts
+// what comes next too soon: on a runner the app was not frontmost when the
+// test deactivated it ("deactivated in 1ms"), and a panel shown after it never
+// became key. The time it took is in windowDiag. A desktop that never gives
+// the activation, as macOS 14 may when it is cooperative, skips the test.
+func activated(t *testing.T, w *mygo.Window) {
+	t.Helper()
+	start := time.Now()
+	if !wait.Poll(func() bool {
+		// appActive is whether the app is the frontmost one; nsAppActive is what
+		// NSApp says, which comes a moment after.
+		if front, _ := appActive(); front && nsAppActive() && w.IsFocused() {
+			return true
+		}
+		w.Focus()
+		return false
+	}) {
+		t.Skipf("the app could not become active: the system refused the activation (waited %v); %s", wait.Guard, windowDiag(t, w, 0))
+	}
+	activation.Lock()
+	activation.test, activation.took = t.Name(), time.Since(start)
+	activation.Unlock()
+}
+
 // TestClickWhenAnotherAppTookTheFront: an input sent to a window of an app
 // that is no longer active is lost, as AppKit drops a click for a window that
 // is not key. A user sees the window and clicks it, which brings it back; so
@@ -216,8 +242,9 @@ func TestClickAndTypeSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
 func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 	focused, _ := keepFrontFocused()
 	other := newWindow(t, mygo.WindowOptions{Title: "Other", Width: 300, Height: 200})
-	other.Focus()
-	eventually(t, "the other window focused", other.IsFocused)
+	// The app is active and in front before another app takes the front, as
+	// when a user switches away: its window being key is not enough.
+	activated(t, other)
 	panel := newWindow(t, mygo.WindowOptions{Title: "Panel", Width: 400, Height: 200, Panel: true, Hidden: true})
 	panel.Page().LoadHTML(`<body style="margin:0"><button id="b" style="width:200px;height:100px" onclick="window.clicked=(window.clicked||0)+1">x</button></body>`, "")
 	waitFor(t, panel, "document.getElementById('b')")

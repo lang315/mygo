@@ -71,7 +71,7 @@ func keepFrontFocused() (int, string) {
 // input was sent to it: the window's state (key, whether it can be, shown),
 // which window is key instead, whether the app is active, what keepFront did
 // since the wait began (focusedBefore is keepFrontFocused's count then) and
-// how long the test's deactivation of the app took.
+// how long the test's activation and deactivation of the app took.
 func windowDiag(t *testing.T, w *mygo.Window, focusedBefore int) string {
 	var state string
 	mygo.RunOnMain(func() { state = darwin.TestWindowState(w.NativeHandle()) })
@@ -80,21 +80,29 @@ func windowDiag(t *testing.T, w *mygo.Window, focusedBefore int) string {
 	if n == 0 {
 		title = ""
 	}
-	deactivation.Lock()
-	test, took := deactivation.test, deactivation.took
-	deactivation.Unlock()
-	deactivated := "the app was not deactivated"
-	if test == t.Name() {
-		deactivated = fmt.Sprintf("deactivated in %v", took.Round(time.Millisecond))
-	}
-	return fmt.Sprintf("%s; keepFront focused %d times (last %q); %s", state, n, title, deactivated)
+	return fmt.Sprintf("%s; keepFront focused %d times (last %q); %s; %s", state, n, title,
+		activation.describe(t, "activated", "the app was not activated"),
+		deactivation.describe(t, "deactivated", "the app was not deactivated"))
 }
 
-// deactivation is the time the last deactivated took, and the test it was for.
-var deactivation struct {
+// A stopwatch is the time the last activated or deactivated took, and the
+// test it was for.
+type stopwatch struct {
 	sync.Mutex
 	test string
 	took time.Duration
+}
+
+var activation, deactivation stopwatch
+
+// describe says how long the step took in test t, or none if t did not do it.
+func (s *stopwatch) describe(t *testing.T, did, none string) string {
+	s.Lock()
+	defer s.Unlock()
+	if s.test != t.Name() {
+		return none
+	}
+	return fmt.Sprintf("%s in %v", did, s.took.Round(time.Millisecond))
 }
 
 // frontmostBundleID is the bundle identifier of the frontmost app.
@@ -129,12 +137,11 @@ func inputDiag() string {
 // and whether the app is active.
 func TestWindowDiagSaysWhatKeepsAPanelFromBeingKey(t *testing.T) {
 	other := newWindow(t, mygo.WindowOptions{Title: "Alpha", Width: 200, Height: 100})
-	other.Focus()
-	eventually(t, "the other window key", other.IsFocused)
+	activated(t, other)
 	panel := newWindow(t, mygo.WindowOptions{Title: "Beta", Width: 200, Height: 100, Panel: true, Hidden: true})
 	before, _ := keepFrontFocused()
 	d := windowDiag(t, panel, before)
-	for _, want := range []string{`"Beta"`, "canKey=true", "visible=false", `key window`, `"Alpha"`, "app active=", "keepFront focused 0 times", "the app was not deactivated"} {
+	for _, want := range []string{`"Beta"`, "canKey=true", "visible=false", `key window`, `"Alpha"`, "app active=", "keepFront focused 0 times", "activated in ", "the app was not deactivated"} {
 		if !strings.Contains(d, want) {
 			t.Errorf("windowDiag(t, panel, before) = %q, missing %q", d, want)
 		}
@@ -142,6 +149,30 @@ func TestWindowDiagSaysWhatKeepsAPanelFromBeingKey(t *testing.T) {
 	deactivated(t)
 	if d := windowDiag(t, panel, before); !strings.Contains(d, "deactivated in ") {
 		t.Errorf("after the app was deactivated, windowDiag(t, panel, before) = %q, missing the time it took", d)
+	}
+}
+
+// TestActivatedLeavesTheAppActiveAndInFront: a window is key a moment before
+// its app is active and frontmost, and what a test does next (deactivate the
+// app, show a panel while another app is in front) needs the app to have been:
+// a runner showed the app not active, nor frontmost, just before it was
+// deactivated ("deactivated in 1ms"), and a panel shown after it never became
+// key.
+func TestActivatedLeavesTheAppActiveAndInFront(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Title: "Epsilon", Width: 200, Height: 100})
+	deactivated(t) // another app in front: activated brings the app back
+	activated(t, w)
+	if front, _ := appActive(); !front {
+		t.Error("the app is not the frontmost one")
+	}
+	if !nsAppActive() {
+		t.Error("the app is not active")
+	}
+	if !w.IsFocused() {
+		t.Error("the window is not key")
+	}
+	if d := windowDiag(t, w, 0); !strings.Contains(d, "activated in ") {
+		t.Errorf("windowDiag = %q, missing the time the activation took", d)
 	}
 }
 
