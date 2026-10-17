@@ -334,7 +334,7 @@ func TestClickSurface(hwnd uintptr, x, y float64) bool {
 // reaches a window of the app, so that the app handled the click when it
 // returns. It reports false for a window showing a web page, and when no
 // release came in 10 seconds, missed describes the window under the
-// point, which took the click.
+// point, which took the click, and the window in front.
 func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
 	w := theBackend.windows[hwnd]
 	if w == nil || w.surface == nil {
@@ -343,6 +343,17 @@ func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
 	scale := float64(w.surface.dpi()) / 96
 	pt := point{int32(x * scale), int32(y * scale)}
 	procClientToScreen.Call(w.surface.hwnd, uintptr(unsafe.Pointer(&pt)))
+	// A window shown while another app is in front can stay behind it,
+	// whose window over the point then takes the click: bring w to the
+	// front first, as a user does. A window of the app there, such as a
+	// parent its modal child disables, is left as it is.
+	var raised string
+	if under := rootAt(pt); under != 0 && windowProcess(under) != uint32(syscall.Getpid()) {
+		procSetForegroundWindow.Call(w.hwnd)
+		fg, _, _ := procGetForegroundWindow.Call()
+		raised = fmt.Sprintf("; before the click %s was there, and after bringing the window to the front %s, with %s in front",
+			describeWindow(under), describeWindow(rootAt(pt)), describeWindow(fg))
+	}
 	user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
 	mouse := user32.NewProc("mouse_event")
 	const leftDown, leftUp = 0x0002, 0x0004
@@ -366,27 +377,40 @@ func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
 			}
 		}
 	}
-	return true, windowAt(pt)
+	fg, _, _ := procGetForegroundWindow.Call()
+	return true, fmt.Sprintf("%s, with %s in front%s", describeWindow(rootAt(pt)), describeWindow(fg), raised)
 }
 
-// windowAt describes the top-level window at a point of the screen, in
-// physical pixels: its class, title and process.
-func windowAt(pt point) string {
+// rootAt returns the top-level window at a point of the screen, in
+// physical pixels, or 0.
+func rootAt(pt point) uintptr {
 	h, _, _ := user32.NewProc("WindowFromPoint").Call(uintptr(uint32(pt.X)) | uintptr(uint32(pt.Y))<<32)
 	if h == 0 {
-		return "no window"
+		return 0
 	}
 	const gaRoot = 2
 	if root, _, _ := user32.NewProc("GetAncestor").Call(h, gaRoot); root != 0 {
 		h = root
 	}
+	return h
+}
+
+func windowProcess(h uintptr) (pid uint32) {
+	user32.NewProc("GetWindowThreadProcessId").Call(h, uintptr(unsafe.Pointer(&pid)))
+	return pid
+}
+
+// describeWindow describes a top-level window: its class, title and
+// process.
+func describeWindow(h uintptr) string {
+	if h == 0 {
+		return "no window"
+	}
 	class := make([]uint16, 256)
 	user32.NewProc("GetClassNameW").Call(h, uintptr(unsafe.Pointer(&class[0])), uintptr(len(class)))
 	title := make([]uint16, 256)
 	procGetWindowTextW.Call(h, uintptr(unsafe.Pointer(&title[0])), uintptr(len(title)))
-	var pid uint32
-	user32.NewProc("GetWindowThreadProcessId").Call(h, uintptr(unsafe.Pointer(&pid)))
-	return fmt.Sprintf("%#x, class %q, title %q, process %d (this one %d)", h, syscall.UTF16ToString(class), syscall.UTF16ToString(title), pid, syscall.Getpid())
+	return fmt.Sprintf("%#x, class %q, title %q, process %d (this one %d)", h, syscall.UTF16ToString(class), syscall.UTF16ToString(title), windowProcess(h), syscall.Getpid())
 }
 
 // TestSideButton clicks a mouse's back or forward button (XBUTTON1 and
