@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -21,8 +22,12 @@ func deactivated(t *testing.T) {
 		t.Skip("another app cannot be activated")
 	}
 	// Not eventually: the waits of the tests bring their window back.
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+	start := time.Now()
+	for deadline := start.Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		if active, _ := appActive(); !active {
+			deactivation.Lock()
+			deactivation.test, deactivation.took = t.Name(), time.Since(start)
+			deactivation.Unlock()
 			return
 		}
 		if time.Now().After(deadline) {
@@ -222,7 +227,10 @@ func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 	waitFor(t, panel, "document.getElementById('b')")
 	deactivated(t)
 	panel.Show()
-	eventually(t, "the panel key", panel.IsFocused)
+	focused, _ := keepFrontFocused()
+	if !wait.Poll(func() bool { keepFront(); return panel.IsFocused() }) {
+		t.Fatalf("the panel key never happened (waited %v); %s", wait.Guard, windowDiag(t, panel, focused))
+	}
 	if active, _ := appActive(); active {
 		t.Skip("showing the panel activated the app")
 	}

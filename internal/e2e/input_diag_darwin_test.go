@@ -44,8 +44,57 @@ func keepFront() {
 		return
 	}
 	if active, _ := appActive(); !active && !w.IsFocused() {
+		keepFronted.Lock()
+		keepFronted.n, keepFronted.title = keepFronted.n+1, w.Title()
+		keepFronted.Unlock()
 		w.Focus()
 	}
+}
+
+// keepFronted is what keepFront brought to the front, for a wait that times
+// out: each window it focuses takes the key from the one the wait is for.
+var keepFronted struct {
+	sync.Mutex
+	n     int
+	title string
+}
+
+// keepFrontFocused returns how many times keepFront focused a window, and the
+// title of the last.
+func keepFrontFocused() (int, string) {
+	keepFronted.Lock()
+	defer keepFronted.Unlock()
+	return keepFronted.n, keepFronted.title
+}
+
+// windowDiag describes w and the app for a wait for w that timed out, when no
+// input was sent to it: the window's state (key, whether it can be, shown),
+// which window is key instead, whether the app is active, what keepFront did
+// since the wait began (focusedBefore is keepFrontFocused's count then) and
+// how long the test's deactivation of the app took.
+func windowDiag(t *testing.T, w *mygo.Window, focusedBefore int) string {
+	var state string
+	mygo.RunOnMain(func() { state = darwin.TestWindowState(w.NativeHandle()) })
+	n, title := keepFrontFocused()
+	n -= focusedBefore
+	if n == 0 {
+		title = ""
+	}
+	deactivation.Lock()
+	test, took := deactivation.test, deactivation.took
+	deactivation.Unlock()
+	deactivated := "the app was not deactivated"
+	if test == t.Name() {
+		deactivated = fmt.Sprintf("deactivated in %v", took.Round(time.Millisecond))
+	}
+	return fmt.Sprintf("%s; keepFront focused %d times (last %q); %s", state, n, title, deactivated)
+}
+
+// deactivation is the time the last deactivated took, and the test it was for.
+var deactivation struct {
+	sync.Mutex
+	test string
+	took time.Duration
 }
 
 // frontmostBundleID is the bundle identifier of the frontmost app.
@@ -72,6 +121,48 @@ func inputDiag() string {
 	var now string
 	mygo.RunOnMain(func() { now = darwin.TestWindowState(w.NativeHandle()) })
 	return hint + fmt.Sprintf("; the last input was a %s %v ago to %s; now %s", what, time.Since(at).Round(time.Millisecond), state, now)
+}
+
+// TestWindowDiagSaysWhatKeepsAPanelFromBeingKey checks what a wait for a
+// window to be key says when it times out, for a panel nothing had sent input
+// to: whether the panel can be key and is shown, which window is key instead,
+// and whether the app is active.
+func TestWindowDiagSaysWhatKeepsAPanelFromBeingKey(t *testing.T) {
+	other := newWindow(t, mygo.WindowOptions{Title: "Alpha", Width: 200, Height: 100})
+	other.Focus()
+	eventually(t, "the other window key", other.IsFocused)
+	panel := newWindow(t, mygo.WindowOptions{Title: "Beta", Width: 200, Height: 100, Panel: true, Hidden: true})
+	before, _ := keepFrontFocused()
+	d := windowDiag(t, panel, before)
+	for _, want := range []string{`"Beta"`, "canKey=true", "visible=false", `key window`, `"Alpha"`, "app active=", "keepFront focused 0 times", "the app was not deactivated"} {
+		if !strings.Contains(d, want) {
+			t.Errorf("windowDiag(t, panel, before) = %q, missing %q", d, want)
+		}
+	}
+	deactivated(t)
+	if d := windowDiag(t, panel, before); !strings.Contains(d, "deactivated in ") {
+		t.Errorf("after the app was deactivated, windowDiag(t, panel, before) = %q, missing the time it took", d)
+	}
+}
+
+// TestKeepFrontCountsWhatItFocuses: a wait that timed out says how many times
+// keepFront brought a window to the front, and which, because every one takes
+// the key from the window the wait is for. Only a window still there is
+// brought: that of an earlier test is gone.
+func TestKeepFrontCountsWhatItFocuses(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Title: "Gamma", Width: 200, Height: 100, Hidden: true})
+	noteInput("click", w)
+	deactivated(t)
+	before, _ := keepFrontFocused()
+	keepFront()
+	if n, title := keepFrontFocused(); n != before+1 || title != "Gamma" {
+		t.Errorf("after keepFront on a window not key in an inactive app: %d focuses of %q, want %d of %q", n, title, before+1, "Gamma")
+	}
+	w.Destroy()
+	keepFront()
+	if n, _ := keepFrontFocused(); n != before+1 {
+		t.Errorf("keepFront focused a destroyed window: %d focuses, want %d", n, before+1)
+	}
 }
 
 // TestInputDiagDescribesTheLastInput checks what a failing wait for the

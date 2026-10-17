@@ -100,8 +100,9 @@ func TestIsKeyWindow(handle uintptr) bool {
 }
 
 // TestWindowState describes a window for a failing test's log: whether it is
-// key, main and shown on screen, whether the app is active, which window is
-// key, which app is frontmost, and which mouse buttons are held down.
+// key, whether it can be, main and shown on screen, whether the app is
+// active, which window is key (number and title), which app is frontmost, and
+// which mouse buttons are held down.
 func TestWindowState(handle uintptr) string {
 	var s string
 	withPool(func() {
@@ -111,9 +112,11 @@ func TestWindowState(handle uintptr) string {
 		if front != 0 {
 			name = fmt.Sprintf("%s (pid %d)", goString(send(front, "localizedName")), sendInt(front, "processIdentifier"))
 		}
-		s = fmt.Sprintf("window %d key=%v main=%v visible=%v occlusion=%#x; app active=%v, key window %d, frontmost app %s, mouse buttons held %#x",
-			sendInt(win, "windowNumber"), sendBool(win, "isKeyWindow"), sendBool(win, "isMainWindow"), sendBool(win, "isVisible"),
-			sendInt(win, "occlusionState"), sendBool(theBackend.app, "isActive"), sendInt(send(theBackend.app, "keyWindow"), "windowNumber"),
+		keyWin := send(theBackend.app, "keyWindow")
+		s = fmt.Sprintf("window %d %q key=%v canKey=%v main=%v visible=%v occlusion=%#x; app active=%v, key window %d %q, frontmost app %s, mouse buttons held %#x",
+			sendInt(win, "windowNumber"), goString(send(win, "title")), sendBool(win, "isKeyWindow"), sendBool(win, "canBecomeKeyWindow"),
+			sendBool(win, "isMainWindow"), sendBool(win, "isVisible"),
+			sendInt(win, "occlusionState"), sendBool(theBackend.app, "isActive"), sendInt(keyWin, "windowNumber"), goString(send(keyWin, "title")),
 			name, sendInt(class("NSEvent"), "pressedMouseButtons"))
 	})
 	return s
