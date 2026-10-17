@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -75,4 +76,44 @@ func TestWaitBringsTheWindowBack(t *testing.T) {
 	click(w, 20, 20)
 	deactivated(t)
 	eventually(t, "the window key again", w.IsFocused)
+}
+
+// TestHooksBringTheWindowBack: every hook that sends the window a key, a menu
+// item or a click leaves it key in an active app, as click and drag do, when
+// another app took the front. A menu item chosen with another app in front
+// finds no focused window: File > Revert to Saved did nothing, and the test
+// waited five seconds for its sheet.
+func TestHooksBringTheWindowBack(t *testing.T) {
+	for name, hook := range map[string]func(*mygo.Window){
+		"activateMenu": func(w *mygo.Window) { activateMenu(w, "No such menu", "No such item") },
+		"pressKey":     func(w *mygo.Window) { pressKey(w, 0, "a") },
+		"pressTab":     func(w *mygo.Window) { pressTab(w, false) },
+		"compose":      func(w *mygo.Window) { compose(w, "x", 1, false) },
+		"clickAndType": func(w *mygo.Window) { clickAndType(w, 20, 20, "x") },
+		"sideButton":   func(w *mygo.Window) { sideButton(w, true) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newWindow(t, mygo.WindowOptions{Width: 200, Height: 100})
+			eventually(t, "the window key", w.IsFocused)
+			deactivated(t)
+			hook(w)
+			if active, _ := appActive(); !active || !w.IsFocused() {
+				t.Errorf("after %s: app active %v, window key %v", name, active, w.IsFocused())
+			}
+		})
+	}
+}
+
+// TestClickSurvivesTheFrontChangingJustBeforeIt: the front may change after
+// click waited for it, before the event is posted; AppKit drops a click to a
+// window of an app that is not active, and the test waited for what it did.
+func TestClickSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Width: 400, Height: 300})
+	w.Page().LoadHTML(`<body style="margin:0"><button id="b" style="width:200px;height:100px" onclick="window.clicked=(window.clicked||0)+1">x</button></body>`, "")
+	waitFor(t, w, "document.getElementById('b')")
+	var once sync.Once
+	beforeSend = func() { once.Do(func() { deactivated(t) }) }
+	defer func() { beforeSend = nil }()
+	click(w, 50, 50)
+	waitFor(t, w, "window.clicked === 1")
 }
