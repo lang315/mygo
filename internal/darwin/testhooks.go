@@ -89,6 +89,15 @@ func TestPerformKeyEquivalent(key string, shift bool) bool {
 	return handled
 }
 
+// TestIsKeyWindow reports whether the window is its application's key
+// window: a panel that takes no activation is key while another app is in
+// front, and a window resigns key when its app is deactivated.
+func TestIsKeyWindow(handle uintptr) bool {
+	var key bool
+	withPool(func() { key = sendBool(id(handle), "isKeyWindow") })
+	return key
+}
+
 // TestWindowState describes a window for a failing test's log: whether it is
 // key, main and shown on screen, whether the app is active, which window is
 // key, which app is frontmost, and which mouse buttons are held down.

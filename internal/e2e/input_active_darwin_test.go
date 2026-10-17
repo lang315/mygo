@@ -1,11 +1,16 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 )
 
 // deactivated makes another app the active one, as a user does by switching
@@ -97,8 +102,16 @@ func TestHooksBringTheWindowBack(t *testing.T) {
 			eventually(t, "the window key", w.IsFocused)
 			deactivated(t)
 			hook(w)
-			if active, _ := appActive(); !active || !w.IsFocused() {
-				t.Errorf("after %s: app active %v, window key %v", name, active, w.IsFocused())
+			// The app is in front when the hook returns; the window is key a
+			// moment later, which a poll without keepFront sees.
+			if active, _ := appActive(); !active {
+				t.Errorf("after %s: app not active", name)
+			}
+			for end := time.Now().Add(time.Second); !w.IsFocused(); time.Sleep(20 * time.Millisecond) {
+				if time.Now().After(end) {
+					t.Errorf("after %s: window not key a second later", name)
+					break
+				}
 			}
 		})
 	}
@@ -116,4 +129,93 @@ func TestClickSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
 	defer func() { beforeSend = nil }()
 	click(w, 50, 50)
 	waitFor(t, w, "window.clicked === 1")
+}
+
+// TestActivateMenuSurvivesTheFrontChangingJustBeforeIt: File > Revert to Saved
+// of an app that is not in front does nothing, and the front may change after
+// activateMenu waited for it.
+func TestActivateMenuSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
+	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
+	defer mygo.App.SetPath(mygo.PathUserData, "")
+	docs := notes()
+	old := mygo.App.Menu()
+	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleAppMenu}, {Role: mygo.RoleFileMenu}}))
+	defer mygo.App.SetMenu(old)
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	path := filepath.Join(dir, "front.e2enote")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := docs.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := doc.Window()
+	t.Cleanup(func() {
+		doc.SetEdited(false)
+		if !w.IsDestroyed() {
+			w.Destroy()
+		}
+	})
+	eventually(t, "the window key", w.IsFocused)
+	doc.Set("unwanted")
+	eventually(t, "the edited mark", func() bool { _, _, _, edited, _ := documentChrome(w); return edited })
+	var once sync.Once
+	beforeSend = func() { once.Do(func() { deactivated(t) }) }
+	defer func() { beforeSend = nil }()
+	if err := activateMenu(w, "File", "Revert to Saved"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the sheet asking to revert", func() bool {
+		_, buttons, ok, _ := sheet(w)
+		return ok && len(buttons) == 2
+	})
+	endSheetButton(w, 1)
+}
+
+// TestClickAndTypeSurvivesTheFrontChangingJustBeforeIt is the same for a click
+// and the text typed after it.
+func TestClickAndTypeSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
+	var frames atomic.Int32
+	st := &editor.State{Buffer: editor.NewBuffer("first\ncafe")}
+	w := newWindow(t, mygo.WindowOptions{Title: "Code editor", Width: 500, Height: 240, Content: ui.View(func(c *ui.Context) {
+		editor.View(c, st).Fill().AutoFocus()
+		frames.Add(1)
+	})})
+	eventually(t, "an editor frame", func() bool { return frames.Load() > 0 })
+	var once sync.Once
+	beforeSend = func() { once.Do(func() { deactivated(t) }) }
+	defer func() { beforeSend = nil }()
+	if !clickAndType(w, 400, 30, "!") {
+		t.Skip("typing automation unavailable")
+	}
+	eventually(t, "the text typed", func() bool {
+		var text string
+		mygo.RunOnMain(func() { text = st.Buffer.String() })
+		return text == "first\ncafe!"
+	})
+}
+
+// TestClickOnAKeyPanelDoesNotWaitForTheFront: a panel that takes no activation
+// is key while another app is in front; a click on it is sent at once, not
+// after five seconds of waiting for an app that stays in the background.
+func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
+	other := newWindow(t, mygo.WindowOptions{Title: "Other", Width: 300, Height: 200})
+	other.Focus()
+	eventually(t, "the other window focused", other.IsFocused)
+	panel := newWindow(t, mygo.WindowOptions{Title: "Panel", Width: 400, Height: 200, Panel: true, Hidden: true})
+	panel.Page().LoadHTML(`<body style="margin:0"><button id="b" style="width:200px;height:100px" onclick="window.clicked=(window.clicked||0)+1">x</button></body>`, "")
+	waitFor(t, panel, "document.getElementById('b')")
+	deactivated(t)
+	panel.Show()
+	eventually(t, "the panel key", panel.IsFocused)
+	if active, _ := appActive(); active {
+		t.Skip("showing the panel activated the app")
+	}
+	start := time.Now()
+	click(panel, 50, 50)
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("a click on a key panel took %v: it waited for the app to come to the front", d)
+	}
+	waitFor(t, panel, "window.clicked === 1")
 }
