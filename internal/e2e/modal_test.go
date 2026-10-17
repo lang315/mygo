@@ -88,13 +88,8 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		shown, shownClosed, other, otherClosed = first, firstClosed, second, secondClosed
 	}
-	front := func(step string) {
-		t.Logf("DEBUG %s: focused parent %v first %v second %v", step, parent.IsFocused(), first.IsFocused(), second.IsFocused())
-	}
-	front("both open")
 	shown.Close()
 	eventually(t, "the child in front to close", shownClosed.Load)
-	front("one closed")
 	eventually(t, "the other child to show", other.IsVisible)
 	appClick(parent, x, y)
 	// OnClick runs once a frame, however many clicks came: a frame drawn
@@ -106,10 +101,8 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its other modal child was open", n-1)
 	}
-	front("after the blocked click")
 	other.Close()
 	eventually(t, "the other child to close", otherClosed.Load)
-	front("both closed")
 	// Not another app: the parent takes the front back, as from one child.
 	// Xvfb has no window manager to give it back.
 	if runtime.GOOS != "linux" {
