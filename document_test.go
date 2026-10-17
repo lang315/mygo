@@ -6,7 +6,6 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"github.com/egoist/mygo/internal/l10n"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,6 +16,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/l10n"
+	"github.com/egoist/mygo/internal/wait"
 
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
@@ -58,16 +60,10 @@ func fakeWindow(w *Window) *fake.Window {
 	return onMainValue(func() *fake.Window { return w.native.(*fake.Window) })
 }
 
-// waitFor polls cond for up to three seconds.
+// waitFor waits until cond holds.
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	wait.Until(t, what, cond)
 }
 
 // asked records the messages of the message boxes shown.
@@ -108,17 +104,16 @@ func writeTemp(t *testing.T, name, content string) string {
 
 func readString(t *testing.T, path string) string {
 	t.Helper()
-	b, err := os.ReadFile(path)
+	b, err := readAppFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return string(b)
 }
 
-// fileIs reports whether the file at path holds want, false while it
-// cannot be read: Windows refuses to open a file being replaced.
+// fileIs reports whether the file at path holds want.
 func fileIs(path, want string) bool {
-	b, err := os.ReadFile(path)
+	b, err := readAppFile(path)
 	return err == nil && string(b) == want
 }
 
@@ -398,23 +393,15 @@ func TestDocumentRecovery(t *testing.T) {
 	d := ds.New()
 	d.Set("unsaved")
 	root, _ := ds.kind.recovery.root()
-	var copyPath string
-	var index []byte
-	// Read until readable: Windows refuses to open a file being replaced.
-	waitFor(t, "the recovery copy", func() bool {
-		m, _ := filepath.Glob(filepath.Join(root, "*", d.id))
-		if len(m) == 1 {
-			copyPath = m[0]
-		}
-		if copyPath == "" || !fileIs(copyPath, "unsaved") {
-			return false
-		}
-		var err error
-		index, err = os.ReadFile(filepath.Join(filepath.Dir(copyPath), "index.json"))
-		return err == nil
-	})
+	// Backed up once the copy and the index are written.
+	waitFor(t, "the recovery copy", func() bool { return d.backedUpAt() != 0 })
+	m, _ := filepath.Glob(filepath.Join(root, "*", d.id))
+	if len(m) != 1 || readString(t, m[0]) != "unsaved" {
+		t.Fatalf("recovery copies %q", m)
+	}
+	copyPath := m[0]
 	var entries []recoveryEntry
-	if err := json.Unmarshal(index, &entries); err != nil || len(entries) != 1 || entries[0].Name != "Untitled" {
+	if err := json.Unmarshal([]byte(readString(t, filepath.Join(filepath.Dir(copyPath), "index.json"))), &entries); err != nil || len(entries) != 1 || entries[0].Name != "Untitled" {
 		t.Fatalf("index %v: %v", entries, err)
 	}
 	// Discarded: gone.
@@ -429,7 +416,7 @@ func TestDocumentRecovery(t *testing.T) {
 	os.MkdirAll(orphan, 0o700)
 	stamp, _, _ := statStamp(path)
 	stamp.ModTime--
-	index, _ = json.Marshal([]recoveryEntry{{ID: "a", Name: "Untitled 3"}, {ID: "b", Path: path, Stamp: stamp}})
+	index, _ := json.Marshal([]recoveryEntry{{ID: "a", Name: "Untitled 3"}, {ID: "b", Path: path, Stamp: stamp}})
 	os.WriteFile(filepath.Join(orphan, "index.json"), index, 0o600)
 	os.WriteFile(filepath.Join(orphan, "a"), []byte("draft"), 0o600)
 	os.WriteFile(filepath.Join(orphan, "b"), []byte("changes"), 0o600)

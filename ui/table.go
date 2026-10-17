@@ -25,7 +25,17 @@ type TableColumn struct {
 	// Fixed keeps the column where it is and as wide as it is: the user
 	// neither moves nor resizes it.
 	Fixed bool
+	// RowHeader marks a column of row headers, as a spreadsheet's row
+	// numbers: in a table choosing cells (ListState.CellSelect), a click or
+	// a drag on its cells chooses whole rows, with every column, and a
+	// click on its header chooses every row. It does not sort, and is
+	// never Cells.Cursor.
+	RowHeader bool
 }
+
+// sortable reports whether a click on the column's header sorts by it: a
+// RowHeader column does not.
+func (col *TableColumn) sortable() bool { return col.Sortable && !col.RowHeader }
 
 func (col *TableColumn) id() string {
 	if col.ID != "" {
@@ -128,8 +138,8 @@ type tableDrag struct {
 // moves them by dragging the headers, which s.Columns keeps; columns wider
 // than the table scroll sideways, the header with them. With s.Sort, a
 // click on the header of a Sortable column sorts the rows by it; with
-// s.SortBy, a Cmd-click sorts by it after the others; with s.HeaderMenu,
-// the headers have a context menu.
+// s.SortBy, a Cmd-click or a Shift-click sorts by it after the others;
+// with s.HeaderMenu, the header has a context menu.
 //
 //	cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
 //	app.files.Selected, app.files.Sort = &app.file, &app.sort
@@ -167,8 +177,25 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		drag.fitted = false
 		table.st.markEvent(eventColumns)
 	}
+	s.syncSort()
 	layout := &s.Columns
 	order := layout.arrange(columns)
+	// The block of cells chosen (CellSelect): its columns' places, from lo
+	// to hi, and the Cursor's.
+	cellSel := s.choosesCells()
+	lo, hi, cur := 0, -1, -1
+	s.tableCols = s.tableCols[:0]
+	if cellSel {
+		if c.rt.cellClick == nil {
+			c.rt.cellClick, c.rt.cellInBlock = (*listFrame).clickCell, (*listFrame).cellInBlockAt
+		}
+		for _, j := range order {
+			s.tableCols = append(s.tableCols, tableCol{id: columns[j].id(), col: j, rowHeader: columns[j].RowHeader})
+		}
+		s.fixCells()
+		lo, hi = s.block()
+		cur = s.colIndex(s.Cells.Cursor)
+	}
 	// The least width of the rows: the columns', those sharing the room
 	// left at their least.
 	flexMin := t.Space(15)
@@ -191,7 +218,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	// cells builds a row's cells, with fill building the content of each.
 	cells := func(role Role, fill func(col int)) []*node {
 		boxes := make([]*node, 0, len(order))
-		for _, j := range order {
+		for k, j := range order {
 			col := &columns[j]
 			// Keyed by its column, a cell keeps its state as the columns
 			// move: a header being dragged keeps the press. Keyed as it
@@ -210,6 +237,29 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				box.Justify(End)
 			}
 			box.Children(func() { fill(j) })
+			if menu := s.CellMenu; menu != nil && role == RoleCell && c.row != nil {
+				row := c.row.i
+				box.ContextMenu(func(m *Menu) { menu(m, row, j) })
+			}
+			if cellSel && role == RoleCell && c.row != nil {
+				// A cell of the block shows as a chosen row does, and a row
+				// header with its whole row; the Cursor's, in the row the
+				// keys move from, has a border while the table has the
+				// focus. A cell holding the focus, as an editor in it, shows
+				// what it holds.
+				on := c.row.chosen && k >= lo && k <= hi && (!col.RowHeader || s.Cells.All)
+				at := k == cur && *s.cursor() == c.row.i
+				box.checked = 1 + int8(b2f(on))
+				switch {
+				case !on && !at, box.FocusWithin():
+				case on && at:
+					box.Background(t.Accent).TextColor(t.AccentText).DrawOver(cursorBorder(table, t.AccentText))
+				case on:
+					box.Background(t.Accent).TextColor(t.AccentText)
+				case at:
+					box.DrawOver(cursorBorder(table, t.Accent))
+				}
+			}
 			if drag.fit != "" && drag.fit == col.id() {
 				fitting = append(fitting, box)
 			}
@@ -221,6 +271,11 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	table.Children(func() {
 		// The header, which scrolls sideways with the rows.
 		head := coreRow(c).Height(tableRow).Shrink(0).AlignItems(Stretch).Role(RoleRow).Clip()
+		if menu := s.HeaderMenu; menu != nil {
+			// The part of the header past the columns, as AppKit's
+			// clickedColumn -1.
+			head.ContextMenu(func(m *Menu) { menu(m, -1) })
+		}
 		head.Children(func() {
 			if s.Checked != nil {
 				// Not a column header, a leaf role whose checkbox would not show.
@@ -258,6 +313,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				}
 			})
 			for k, j := range order {
+				if cellSel {
+					s.tableCols[k].head = heads[k].id
+				}
 				tableHeader(c, table, heads[k], j, s, drag, heads, order, columns)
 			}
 		})
@@ -347,7 +405,25 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 	if menu := s.HeaderMenu; menu != nil {
 		h.ContextMenu(func(m *Menu) { menu(m, j) })
 	}
-	if s.sorts() && col.Sortable {
+	sorts, choosesAll := s.sorts() && col.sortable(), col.RowHeader && s.choosesCells()
+	if sorts || choosesAll {
+		h.flags |= flagClickable | flagHover
+		h.styleFn = func(h *node) {
+			if h.Hovered() {
+				h.bg = t.SurfaceHover
+			}
+		}
+	}
+	if choosesAll {
+		h.afterInput(func() {
+			if f := &s.frame; h.Clicked() {
+				f.chooseAll()
+				f.chooseAllColumns()
+				table.Focus()
+			}
+		})
+	}
+	if sorts {
 		h.sort = 0
 		if at, descending := s.sortPlace(col); at >= 0 {
 			h.sort = 1
@@ -356,12 +432,6 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 			}
 		}
 		h.Label(col.Title) // the title alone, not the place number beside it
-		h.flags |= flagClickable | flagHover
-		h.styleFn = func(h *node) {
-			if h.Hovered() {
-				h.bg = t.SurfaceHover
-			}
-		}
 	}
 	// Moving the column, once the pointer went a few DIPs.
 	if dx, _, held := h.Dragged(); held && !col.Fixed {
@@ -387,9 +457,12 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 		}
 	}
 	h.afterInput(func() {
-		if s.sorts() && col.Sortable && h.Clicked() {
+		if sorts && h.Clicked() {
 			if s.SortBy != nil {
-				*s.SortBy = sortClicked(*s.SortBy, id, h.ClickModifiers()&Cmd != 0)
+				// Cmd-click as Finder, Shift-click as web grids (TanStack
+				// Table, AG Grid, MUI).
+				*s.SortBy = sortClicked(*s.SortBy, id, h.ClickModifiers()&(Cmd|Shift) != 0)
+				s.syncSort()
 			} else {
 				*s.Sort = sortClicked([]SortOrder{*s.Sort}, id, false)[0]
 			}
@@ -624,13 +697,26 @@ func checkCell(c *context, w float32, fill func()) {
 	coreRow(c).Width(w).Shrink(0).AlignItems(Center).Justify(Center).Role(RoleCell).Children(fill)
 }
 
+// syncSort keeps Sort, when set with SortBy, the first column SortBy sorts
+// by, or the zero SortOrder when it sorts by none.
+func (s *ListState) syncSort() {
+	if s.Sort == nil || s.SortBy == nil {
+		return
+	}
+	var first SortOrder
+	if by := *s.SortBy; len(by) > 0 {
+		first = by[0]
+	}
+	*s.Sort = first
+}
+
 // sorts reports whether a Table's headers sort its rows.
 func (s *ListState) sorts() bool { return s.Sort != nil || s.SortBy != nil }
 
 // sortPlace returns the place of col among the columns the rows are sorted
 // by, from 0, and whether it sorts them descending, or -1.
 func (s *ListState) sortPlace(col *TableColumn) (int, bool) {
-	if !col.Sortable {
+	if !col.sortable() {
 		return -1, false
 	}
 	id := col.id()

@@ -1,5 +1,7 @@
 package ui
 
+import time "time"
+
 // InputKind is the kind of an InputEvent.
 type InputKind uint8
 
@@ -9,7 +11,7 @@ const (
 	// Repeat marks the auto-repeat of a key held down. A key that types
 	// text comes before the text, an InputText event, on macOS and
 	// Windows; on Linux, only the text comes while the element takes text
-	// (TextCaret).
+	// (TextCaret) with input methods on (InputMethod).
 	InputKeyDown InputKind = iota + 1
 	InputKeyUp
 	// InputText is text typed, or committed by an input method.
@@ -69,6 +71,9 @@ type InputEvent struct {
 	Precise bool
 	// Start and End are the runes InputSelect selects.
 	Start, End int
+	// Time is when the event came, by the clock of the window's frames
+	// (Context.Now), which a Tester's clock is in tests.
+	Time time.Time
 }
 
 // HandleInput has fn take the element's input as it comes, on the main
@@ -97,6 +102,19 @@ func (e *node) TextCaret(r Rect) *node {
 	return e
 }
 
+// InputMethod sets whether the system's input methods compose text for the
+// element while it has the keyboard focus, as they do by default for one
+// that takes text (HandleTextInput, TextCaret). Turned off, keys type the
+// characters of the keyboard's layout, which come as InputText, and
+// nothing is composed: a mode that reads letters as commands, as Vim's
+// normal mode, gets j as j with a Chinese input method on, as Neovide and
+// winit's set_ime_allowed(false) have it. Browsers cannot turn input
+// methods off, and compose still.
+func (e *node) InputMethod(on bool) *node {
+	e.noIME = !on
+	return e
+}
+
 // handler returns the state of the innermost element of chain that
 // handles its input.
 func (rt *engine) handler(chain []uint64) *state {
@@ -115,6 +133,7 @@ func (rt *engine) deliver(s *state, ev InputEvent) bool {
 		return false
 	}
 	ev.X, ev.Y = s.local(rt.pointerX, rt.pointerY)
+	ev.Time = rt.now()
 	if ev.Kind == InputScroll {
 		ev.DX, ev.DY = s.vector(rt.pointerX, rt.pointerY, ev.DX, ev.DY)
 	}

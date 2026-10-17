@@ -17,7 +17,13 @@ import (
 )
 
 // ErrUnsupported is returned by features the current backend cannot provide.
-var ErrUnsupported = errors.New("not supported on this platform")
+// It is errors.ErrUnsupported too (errors.Is), which apps check.
+var ErrUnsupported error = unsupportedError{}
+
+type unsupportedError struct{}
+
+func (unsupportedError) Error() string        { return "not supported on this platform" }
+func (unsupportedError) Is(target error) bool { return target == errors.ErrUnsupported }
 
 // ErrNotificationsDenied is what ShowNotification fails with when the user
 // does not allow the app to show notifications.
@@ -121,11 +127,12 @@ type Backend interface {
 	// those of earlier runs too.
 	RemoveAllNotifications()
 
-	// WebViewSupported reports whether the system webview is there, and so
+	// WebViewAvailable reports whether the system webview is there, and so
 	// whether windows showing web pages can work: WKWebView on macOS,
 	// WebKitGTK on Linux, the WebView2 Runtime on Windows. A window showing
 	// native UI needs none, so an app whose windows all do runs without one.
-	WebViewSupported() bool
+	// It may be called before Init, from any goroutine.
+	WebViewAvailable() bool
 }
 
 // AppOptions configures Backend.Init.
@@ -189,10 +196,13 @@ type AppController interface {
 	// main thread.
 	ClearBrowsingData(done func(error))
 	// Cookie operations address the default page store. Calls and exactly-once
-	// completions run on main; ListCookies returns independent Go values.
-	ListCookies(done func([]Cookie, error))
+	// completions run on main; ListCookies returns independent Go values:
+	// every cookie, or with an http or https url the cookies a request to
+	// it sends (CookieMatchesURL where the engine cannot tell).
+	ListCookies(url string, done func([]Cookie, error))
 	SetCookie(cookie Cookie, done func(error))
 	DeleteCookie(key CookieKey, done func(error))
+	ClearCookies(done func(error))
 	ShowAboutPanel(opts AboutPanelOptions)
 	// PreferredLanguages returns the languages the user reads, most
 	// preferred first, as the system's settings list them, in the forms
@@ -236,9 +246,9 @@ type AppController interface {
 	// removes the ones the app recorded.
 	AddRecentDocument(path string) error
 	ClearRecentDocuments() error
-	// SetJumpListTasks sets the Tasks category of the app's jump list
-	// (Windows); elsewhere it does nothing.
-	SetJumpListTasks(tasks []JumpListTask) error
+	// SetJumpList commits the app's whole jump list (Windows); elsewhere
+	// it does nothing.
+	SetJumpList(list JumpList) error
 }
 
 // Region is the user's regional formats, as the system's settings have
@@ -270,14 +280,22 @@ type AboutPanelOptions struct {
 	Credits            string
 }
 
-// JumpListTask is a task of a jump list: a program to run, its label and
-// its icon.
+// JumpList is the whole jump list of the app: Windows replaces all of it
+// at each commit.
+type JumpList struct {
+	Tasks []JumpListTask
+}
+
+// JumpListTask is a task of a jump list: a program to run with its
+// arguments, unquoted, its label, tooltip and icon.
 type JumpListTask struct {
-	Title     string
-	Path      string
-	Args      string
-	IconPath  string
-	IconIndex int
+	Title       string
+	Description string
+	Path        string
+	Args        []string
+	WorkingDir  string
+	IconPath    string
+	IconIndex   int
 }
 
 // WindowOptions configures a native window and its webview. The public
@@ -479,8 +497,10 @@ type Page interface {
 	IsLoading() bool
 	// Eval runs JavaScript in the main frame and ignores the result.
 	Eval(js string)
-	// SetUserScripts replaces the scripts WindowOptions.UserScripts gave
-	// the pages loaded later; the page loaded now keeps those it ran.
+	// SetUserScripts replaces the scripts of WindowOptions.UserScripts:
+	// the documents the page loads from then on run the new ones, while
+	// the current document keeps what it ran. Scripts a backend injects
+	// itself, as the title bar's, stay.
 	SetUserScripts(scripts []UserScript)
 	// CallAsyncFunction runs body as the body of an async function in the
 	// main frame, awaits it and reports the returned value, which the
@@ -862,6 +882,11 @@ type Preferences struct {
 	// ReduceMotion asks for less motion: macOS's Reduce Motion, Windows's
 	// animation effects and GNOME's animations turned off.
 	ReduceMotion bool
+	// ReduceTransparency asks for opaque surfaces in place of translucent
+	// ones: macOS's Reduce Transparency, Windows's transparency effects
+	// turned off, prefers-reduced-transparency in browsers. Linux desktops
+	// have no such setting.
+	ReduceTransparency bool
 	// HighContrast asks for more contrast: macOS's Increase Contrast,
 	// Windows's contrast themes, the desktop portal's higher contrast.
 	HighContrast bool
@@ -903,8 +928,8 @@ type Power interface {
 
 // NetworkStatus is the state of the computer's network connection.
 type NetworkStatus struct {
-	Online      bool
-	Constrained bool // expensive, metered or in a low data mode
+	Online  bool
+	Metered bool // expensive, metered or in a low data mode
 }
 
 // Network reports the state of the computer's network connection.
@@ -944,6 +969,8 @@ type TrayHandler interface {
 
 // Tray is a status bar / notification area icon.
 type Tray interface {
+	// SetID names the icon across launches (macOS's autosave name).
+	SetID(id string)
 	SetImage(png []byte, template bool) error
 	SetTitle(title string)
 	SetToolTip(tip string)
@@ -962,5 +989,12 @@ type Notification struct {
 	Silent   bool
 	// Group gathers the notifications that share it (threadIdentifier on
 	// macOS).
-	Group string
+	Group  string
+	Sender *NotificationSender
+}
+
+// NotificationSender describes an incoming direct message's sender.
+type NotificationSender struct {
+	ID, Name string
+	Avatar   []byte
 }

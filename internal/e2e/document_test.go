@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,7 +11,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo"
 )
@@ -147,5 +150,65 @@ func TestDocumentWindow(t *testing.T) {
 	}
 	if !slices.ContainsFunc(mygo.App.RecentDocuments(), func(p string) bool { return strings.HasSuffix(p, "chrome.e2enote") }) {
 		t.Errorf("recent documents %q", mygo.App.RecentDocuments())
+	}
+}
+
+// TestDocumentOtherApps checks that a document follows what other apps do
+// to its file, through the watch of the file: a save as editors do it, a
+// rename and a removal.
+func TestDocumentOtherApps(t *testing.T) {
+	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
+	defer mygo.App.SetPath(mygo.PathUserData, "")
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	path := filepath.Join(dir, "other.e2enote")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := notes().Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if w := doc.Window(); w != nil && !w.IsDestroyed() {
+			w.Destroy()
+		}
+	})
+	if err := os.WriteFile(path+".tmp", []byte("two, longer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := renameAsApps(path+".tmp", path); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the document to read the new file", func() bool { return doc.Content() == "two, longer" })
+	renamed := filepath.Join(dir, "renamed.e2enote")
+	if err := renameAsApps(path, renamed); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the document to follow the rename", func() bool { return doc.Path() == renamed })
+	if err := os.WriteFile(renamed, []byte("three"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the document to read the renamed file", func() bool { return doc.Content() == "three" })
+	if err := os.Remove(renamed); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the document to be deleted", func() bool { return doc.State().Deleted })
+}
+
+// renameAsApps renames as the apps saving a document do on Windows: they
+// try again while the system refuses, which it does as long as any
+// program holds either file open without sharing its deletion, as a
+// virus scanner reading a file just written, or the shell a recent
+// document. The guard only stops a rename that never succeeds.
+func renameAsApps(from, to string) error {
+	deadline := time.Now().Add(time.Minute)
+	for {
+		err := os.Rename(from, to)
+		if err == nil || runtime.GOOS != "windows" || time.Now().After(deadline) ||
+			// ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION
+			!errors.Is(err, syscall.Errno(5)) && !errors.Is(err, syscall.Errno(32)) {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

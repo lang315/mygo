@@ -288,6 +288,9 @@ const (
 	// wmAppNetwork tells the application window that the connectivity
 	// hint changed (network.go). wmApp + 6 is a flyout's wmAppDismiss.
 	wmAppNetwork = wmApp + 7
+	// wmAppCookieView tells the application window to close the hidden web
+	// view of the cookies, outside the callbacks of that web view (cookies.go).
+	wmAppCookieView = wmApp + 8
 
 	wsOverlapped       = 0x00000000
 	wsPopup            = 0x80000000
@@ -389,6 +392,8 @@ const (
 
 	smCxFrame        = 32
 	smCyFrame        = 33
+	smCxDoubleClk    = 36
+	smCyDoubleClk    = 37
 	smCxPaddedBorder = 92
 
 	vkShift   = 0x10
@@ -435,6 +440,11 @@ const (
 	qsAllInput         = 0x04FF
 	mwmoInputAvailable = 0x0004
 	pmRemove           = 0x0001
+	qsSendMessage      = 0x0040
+	pmNoRemove         = 0x0000
+	pmQSSendMessage    = qsSendMessage << 16
+
+	clipbrdECantOpen = 0x800401D0
 
 	sOK          = 0
 	eNoInterface = 0x80004002
