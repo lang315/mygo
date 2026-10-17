@@ -44,6 +44,20 @@ func TestClickWhenAnotherAppTookTheFront(t *testing.T) {
 	waitFor(t, w, "window.clicked === 1")
 }
 
+// keyWithin reports whether w is key within d, polling without keepFront: the
+// window is key a moment after its app is active, so a check of both at once
+// fails by a few milliseconds on a slow machine.
+func keyWithin(w *mygo.Window, d time.Duration) bool {
+	for end := time.Now().Add(d); ; time.Sleep(20 * time.Millisecond) {
+		if w.IsFocused() {
+			return true
+		}
+		if time.Now().After(end) {
+			return false
+		}
+	}
+}
+
 // TestInputBringsTheWindowBack: click and drag leave the window key and its
 // app active when another app had taken the front.
 func TestInputBringsTheWindowBack(t *testing.T) {
@@ -56,8 +70,11 @@ func TestInputBringsTheWindowBack(t *testing.T) {
 			eventually(t, "the window key", w.IsFocused)
 			deactivated(t)
 			input(w)
-			if active, _ := appActive(); !active || !w.IsFocused() {
-				t.Errorf("after the %s: app active %v, window key %v", name, active, w.IsFocused())
+			if active, _ := appActive(); !active {
+				t.Errorf("after the %s: app not active", name)
+			}
+			if !keyWithin(w, time.Second) {
+				t.Errorf("after the %s: window not key a second later", name)
 			}
 		})
 	}
@@ -101,26 +118,14 @@ func TestHooksBringTheWindowBack(t *testing.T) {
 			w := newWindow(t, mygo.WindowOptions{Width: 200, Height: 100})
 			eventually(t, "the window key", w.IsFocused)
 			deactivated(t)
-			// A window resigns key as its app is deactivated, a moment after
-			// the app stops being active (on a CI runner it may not at all);
-			// a window that is still key has its input delivered, and the
-			// hook nothing to bring back.
-			for end := time.Now().Add(time.Second); w.IsFocused(); time.Sleep(20 * time.Millisecond) {
-				if time.Now().After(end) {
-					t.Skip("the window stays key while the app is not active")
-				}
-			}
 			hook(w)
 			// The app is in front when the hook returns; the window is key a
 			// moment later, which a poll without keepFront sees.
 			if active, _ := appActive(); !active {
 				t.Errorf("after %s: app not active", name)
 			}
-			for end := time.Now().Add(time.Second); !w.IsFocused(); time.Sleep(20 * time.Millisecond) {
-				if time.Now().After(end) {
-					t.Errorf("after %s: window not key a second later", name)
-					break
-				}
+			if !keyWithin(w, time.Second) {
+				t.Errorf("after %s: window not key a second later", name)
 			}
 		})
 	}
@@ -227,4 +232,25 @@ func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 		t.Fatalf("a click on a key panel took %v: it waited for the app to come to the front", d)
 	}
 	waitFor(t, panel, "window.clicked === 1")
+}
+
+// TestInFront: input reaches a window as a user's does when its app is in
+// front, or when it is a panel that takes no activation, which is key while
+// another app is in front. A window that is key in an app that was just
+// deactivated is not: a CI runner showed it resigning key a moment later.
+func TestInFront(t *testing.T) {
+	for _, tt := range []struct {
+		frontmost, key, panel, want bool
+	}{
+		{true, true, false, true},
+		{true, false, false, true},
+		{false, true, true, true},
+		{false, false, true, false},
+		{false, true, false, false}, // the stale key window of an app just deactivated
+		{false, false, false, false},
+	} {
+		if got := inFront(tt.frontmost, tt.key, tt.panel); got != tt.want {
+			t.Errorf("inFront(frontmost %v, key %v, panel %v) = %v, want %v", tt.frontmost, tt.key, tt.panel, got, tt.want)
+		}
+	}
 }

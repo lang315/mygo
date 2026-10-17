@@ -49,15 +49,20 @@ func endSheet(w *mygo.Window) (ok bool, supported bool) {
 // user's switch may at any instant.
 var beforeSend func()
 
+// inFront says whether input reaches a window as a user's does: its app is in
+// front, or it is a panel that takes no activation, which is key while another
+// app is in front. A window that is key in an app that was just deactivated
+// does not count: it resigns key a moment later.
+func inFront(frontmost, key, panel bool) bool { return frontmost || key && panel }
+
 // sendFront gives w its input: send runs on the main thread. The front may
 // change between the wait for it and the input, and AppKit drops a click to
 // an app that is not active, a menu of one has no focused window: so the
 // check and send are one step on the main thread, and an input that found
-// another app in front waits for the front again. A window that is key counts
-// as in front: a panel that takes no activation is key while another app is,
-// and a window of an app that is deactivated resigns key. After five seconds
-// the input is sent anyway.
+// the window not in front (inFront) waits for the front again. After five
+// seconds the input is sent anyway.
 func sendFront(w *mygo.Window, what string, send func()) {
+	panel := w.IsPanel()
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		waitKey(w)
 		noteInput(what, w)
@@ -66,7 +71,7 @@ func sendFront(w *mygo.Window, what string, send func()) {
 		}
 		var sent bool
 		mygo.RunOnMain(func() {
-			if sent = darwin.TestIsFrontmost() || darwin.TestIsKeyWindow(w.NativeHandle()) || time.Now().After(deadline); sent {
+			if sent = inFront(darwin.TestIsFrontmost(), darwin.TestIsKeyWindow(w.NativeHandle()), panel) || time.Now().After(deadline); sent {
 				send()
 			}
 		})
