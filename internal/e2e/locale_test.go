@@ -76,17 +76,19 @@ func TestTextLanguage(t *testing.T) {
 	var override atomic.Value
 	override.Store("")
 	view := func(c *ui.Context) {
-		seen.Store(c.Locale())
-		ui.Text(c, "直骨").FontSize(48).Lang(override.Load().(string))
+		lang := override.Load().(string)
+		seen.Store(c.Locale() + "/" + lang)
+		ui.Text(c, "直骨").FontSize(48).Lang(lang)
 	}
 	w := newWindow(t, mygo.WindowOptions{Title: "Text language", Width: 200, Height: 100, Content: ui.View(view)})
 	capture := func(locale, lang string) []byte {
 		t.Helper()
 		override.Store(lang)
 		mygo.App.SetLocale(locale)
-		eventually(t, "the view in "+locale, func() bool { return seen.Load() == locale })
+		// A frame for the new Lang: the locale may be the one shown already,
+		// and the view must have drawn with both before the capture.
 		w.Update(func() {})
-		time.Sleep(100 * time.Millisecond)
+		eventually(t, "the view in "+locale+" with Lang "+lang, func() bool { return seen.Load() == locale+"/"+lang })
 		data, err := w.CapturePage()
 		if err != nil {
 			t.Fatal(err)
