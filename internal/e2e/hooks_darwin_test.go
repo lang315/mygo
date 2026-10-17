@@ -52,10 +52,11 @@ func endSheet(w *mygo.Window) (ok bool, supported bool) {
 var beforeSend func()
 
 // inFront says whether input reaches a window as a user's does: its app is in
-// front, or it is a panel that takes no activation, which is key while another
-// app is in front. A window that is key in an app that was just deactivated
-// does not count: it resigns key a moment later.
-func inFront(frontmost, key, panel bool) bool { return frontmost || key && panel }
+// front and active, or it is a panel that takes no activation, which is key
+// while another app is in front. A window that is key in an app that was just
+// deactivated does not count: it resigns key a moment later. Nor does one of
+// an app that is frontmost and not active yet: AppKit drops a click to it.
+func inFront(frontmost, active, key, panel bool) bool { return frontmost && active || key && panel }
 
 // sendFront gives w its input: send runs on the main thread. The front may
 // change between the wait for it and the input, and AppKit drops a click to
@@ -75,7 +76,7 @@ func sendFront(w *mygo.Window, what string, send func()) {
 		}
 		var sent bool
 		mygo.RunOnMain(func() {
-			if sent = inFront(darwin.TestIsFrontmost(), darwin.TestIsKeyWindow(w.NativeHandle()), panel) || time.Now().After(deadline); sent {
+			if sent = inFront(darwin.TestIsFrontmost(), darwin.TestIsActive(), darwin.TestIsKeyWindow(w.NativeHandle()), panel) || time.Now().After(deadline); sent {
 				send()
 			}
 		})

@@ -241,22 +241,27 @@ func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 }
 
 // TestInFront: input reaches a window as a user's does when its app is in
-// front, or when it is a panel that takes no activation, which is key while
-// another app is in front. A window that is key in an app that was just
-// deactivated is not: a CI runner showed it resigning key a moment later.
+// front and active, or when it is a panel that takes no activation, which is
+// key while another app is in front. A window that is key in an app that was
+// just deactivated is not: a CI runner showed it resigning key a moment later.
+// Nor is one of an app that is frontmost and not yet active, which a runner
+// showed too: AppKit drops a click then, and the window is key a moment later.
 func TestInFront(t *testing.T) {
 	for _, tt := range []struct {
-		frontmost, key, panel, want bool
+		frontmost, active, key, panel, want bool
 	}{
-		{true, true, false, true},
-		{true, false, false, true},
-		{false, true, true, true},
-		{false, false, true, false},
-		{false, true, false, false}, // the stale key window of an app just deactivated
-		{false, false, false, false},
+		{true, true, true, false, true},
+		{true, true, false, false, true}, // a flyout that takes no keyboard
+		{false, true, true, true, true},  // a key panel, another app in front
+		{true, false, true, true, true},
+		{false, true, false, true, false},
+		{true, false, false, false, false}, // frontmost, not active yet: the click is dropped
+		{true, false, true, false, false},
+		{false, true, true, false, false}, // the stale key window of an app just deactivated
+		{false, false, false, false, false},
 	} {
-		if got := inFront(tt.frontmost, tt.key, tt.panel); got != tt.want {
-			t.Errorf("inFront(frontmost %v, key %v, panel %v) = %v, want %v", tt.frontmost, tt.key, tt.panel, got, tt.want)
+		if got := inFront(tt.frontmost, tt.active, tt.key, tt.panel); got != tt.want {
+			t.Errorf("inFront(frontmost %v, active %v, key %v, panel %v) = %v, want %v", tt.frontmost, tt.active, tt.key, tt.panel, got, tt.want)
 		}
 	}
 }

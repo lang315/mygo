@@ -364,6 +364,16 @@ func TestIsFrontmost() bool {
 	return front
 }
 
+// TestIsActive reports whether NSApp says the application is active. The
+// workspace names an app frontmost a moment before it: AppKit drops a click to
+// a window of an app that is not active yet. A nonactivating panel that is key
+// makes it report active while another app is frontmost (TestIsFrontmost).
+func TestIsActive() bool {
+	var active bool
+	withPool(func() { active = sendBool(theBackend.app, "isActive") })
+	return active
+}
+
 // TestCollectionBehavior returns a window's NSWindowCollectionBehavior.
 func TestCollectionBehavior(handle uintptr) uint {
 	return uint(sendInt(id(handle), "collectionBehavior"))
