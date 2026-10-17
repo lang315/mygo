@@ -193,6 +193,13 @@ func appActive() (active bool, supported bool) {
 	return active, true
 }
 
+// appIsActive reports whether NSApp says the app is active, which the
+// workspace names it a moment after the app is frontmost (see inFront).
+func appIsActive() (active bool) {
+	mygo.RunOnMain(func() { active = darwin.TestIsActive() })
+	return active
+}
+
 func collectionBehavior(w *mygo.Window) (behavior uint, supported bool) {
 	mygo.RunOnMain(func() { behavior = darwin.TestCollectionBehavior(w.NativeHandle()) })
 	return behavior, true
