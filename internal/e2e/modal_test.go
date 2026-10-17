@@ -84,20 +84,20 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	first.Close()
 	eventually(t, "the first child to close", firstClosed.Load)
 	eventually(t, "the second child to show", second.IsVisible) // a second sheet waits for the first
-	parentBounds, secondBounds := parent.Bounds(), second.Bounds()
 	appClick(parent, x, y)
-	afterBlocked := clicks.Load()
+	// OnClick runs once a frame, however many clicks came: a frame drawn
+	// after the click, which handles the input before it, says whether the
+	// click counted, with no waiting a while.
+	drawn := frames.Load()
+	parent.Invalidate()
+	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > drawn })
+	if n := clicks.Load(); n != 1 {
+		t.Fatalf("the parent took %d clicks while its second modal child was open", n-1)
+	}
 	second.Close()
 	eventually(t, "the second child to close", secondClosed.Load)
 	appClick(parent, x, y)
-	// The clicks come in order: one let through counted before this one.
-	eventually(t, "a click on the parent after both children closed", func() bool { return clicks.Load() >= 2 })
-	if n := clicks.Load(); n != 2 {
-		t.Fatalf("the parent took %d clicks while its second modal child was open", n-2)
-	}
-	if runtime.GOOS == "windows" {
-		t.Fatalf("DEBUG: the test ran to its end; clicks %d, after the blocked click %d; parent %+v, second %+v", clicks.Load(), afterBlocked, parentBounds, secondBounds)
-	}
+	eventually(t, "a click on the parent after both children closed", func() bool { return clicks.Load() == 2 })
 }
 
 // TestModalChildAndOtherWindows settles V7 of ui/widget's spec, the
