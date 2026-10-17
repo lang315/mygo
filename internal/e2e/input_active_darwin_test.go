@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 )
@@ -21,14 +22,13 @@ func deactivated(t *testing.T) {
 		t.Skip("another app cannot be activated")
 	}
 	// Not eventually: the waits of the tests bring their window back.
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-		if active, _ := appActive(); !active {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("timed out waiting for the app deactivated")
-		}
+	start := time.Now()
+	if !wait.Poll(func() bool { active, _ := appActive(); return !active }) {
+		t.Fatalf("the app deactivated never happened (waited %v)", wait.Guard)
 	}
+	deactivation.Lock()
+	deactivation.test, deactivation.took = t.Name(), time.Since(start)
+	deactivation.Unlock()
 }
 
 // TestClickWhenAnotherAppTookTheFront: an input sent to a window of an app
@@ -212,8 +212,9 @@ func TestClickAndTypeSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
 
 // TestClickOnAKeyPanelDoesNotWaitForTheFront: a panel that takes no activation
 // is key while another app is in front; a click on it is sent at once, not
-// after five seconds of waiting for an app that stays in the background.
+// after waiting for an app that stays in the background.
 func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
+	focused, _ := keepFrontFocused()
 	other := newWindow(t, mygo.WindowOptions{Title: "Other", Width: 300, Height: 200})
 	other.Focus()
 	eventually(t, "the other window focused", other.IsFocused)
@@ -222,35 +223,49 @@ func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 	waitFor(t, panel, "document.getElementById('b')")
 	deactivated(t)
 	panel.Show()
-	eventually(t, "the panel key", panel.IsFocused)
+	// Without keepFront: the test wants the app in the background, and
+	// keepFront would focus a window of it, which takes the key from the
+	// panel and may activate the app. windowDiag counts what it did in the
+	// waits before.
+	if !wait.Poll(panel.IsFocused) {
+		t.Fatalf("the panel key never happened (waited %v); %s", wait.Guard, windowDiag(t, panel, focused))
+	}
 	if active, _ := appActive(); active {
 		t.Skip("showing the panel activated the app")
 	}
-	start := time.Now()
+	// Counted, not timed: sendFront tries once for each wait for the front.
+	tries := 0
+	beforeSend = func() { tries++ }
+	defer func() { beforeSend = nil }()
 	click(panel, 50, 50)
-	if d := time.Since(start); d > 2*time.Second {
-		t.Fatalf("a click on a key panel took %v: it waited for the app to come to the front", d)
+	if tries != 1 {
+		t.Fatalf("a click on a key panel was tried %d times: it waited for the app to come to the front", tries)
 	}
 	waitFor(t, panel, "window.clicked === 1")
 }
 
 // TestInFront: input reaches a window as a user's does when its app is in
-// front, or when it is a panel that takes no activation, which is key while
-// another app is in front. A window that is key in an app that was just
-// deactivated is not: a CI runner showed it resigning key a moment later.
+// front and active, or when it is a panel that takes no activation, which is
+// key while another app is in front. A window that is key in an app that was
+// just deactivated is not: a CI runner showed it resigning key a moment later.
+// Nor is one of an app that is frontmost and not yet active, which a runner
+// showed too: AppKit drops a click then, and the window is key a moment later.
 func TestInFront(t *testing.T) {
 	for _, tt := range []struct {
-		frontmost, key, panel, want bool
+		frontmost, active, key, panel, want bool
 	}{
-		{true, true, false, true},
-		{true, false, false, true},
-		{false, true, true, true},
-		{false, false, true, false},
-		{false, true, false, false}, // the stale key window of an app just deactivated
-		{false, false, false, false},
+		{true, true, true, false, true},
+		{true, true, false, false, true}, // a flyout that takes no keyboard
+		{false, true, true, true, true},  // a key panel, another app in front
+		{true, false, true, true, true},
+		{false, true, false, true, false},
+		{true, false, false, false, false}, // frontmost, not active yet: the click is dropped
+		{true, false, true, false, false},
+		{false, true, true, false, false}, // the stale key window of an app just deactivated
+		{false, false, false, false, false},
 	} {
-		if got := inFront(tt.frontmost, tt.key, tt.panel); got != tt.want {
-			t.Errorf("inFront(frontmost %v, key %v, panel %v) = %v, want %v", tt.frontmost, tt.key, tt.panel, got, tt.want)
+		if got := inFront(tt.frontmost, tt.active, tt.key, tt.panel); got != tt.want {
+			t.Errorf("inFront(frontmost %v, active %v, key %v, panel %v) = %v, want %v", tt.frontmost, tt.active, tt.key, tt.panel, got, tt.want)
 		}
 	}
 }
