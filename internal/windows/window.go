@@ -532,10 +532,24 @@ func (w *window) destroy() {
 	}
 	w.destroying = true
 	// Re-enable the owner first, or Windows activates another app.
-	if w.opts.Modal && w.parent != nil && !w.parent.closed {
+	if w.releasesParent() {
 		procEnableWindow.Call(w.parent.hwnd, 1)
 	}
 	procDestroyWindow.Call(w.hwnd)
+}
+
+// releasesParent reports whether closing w enables its parent again: w is
+// modal to it, and no other modal child of it stays open.
+func (w *window) releasesParent() bool {
+	if !w.opts.Modal || w.parent == nil || w.parent.closed {
+		return false
+	}
+	for _, c := range w.b.windows {
+		if c != w && c.parent == w.parent && c.opts.Modal && !c.closed && !c.destroying {
+			return false
+		}
+	}
+	return true
 }
 
 func (w *window) cleanup() {
@@ -544,7 +558,7 @@ func (w *window) cleanup() {
 	}
 	w.closeWebViews()
 	w.closed = true
-	if w.opts.Modal && w.parent != nil && !w.parent.closed {
+	if w.releasesParent() {
 		procEnableWindow.Call(w.parent.hwnd, 1)
 	}
 	for id, cb := range w.calls {
