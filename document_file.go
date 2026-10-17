@@ -89,6 +89,7 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 		b.readOnly = false
 	}
 	b.dirtySince = time.Time{}
+	b.backupFails = 0 // saved: the recovery copy's failures no longer delay
 	if b.edited {
 		b.dirtySince = time.Now() // edited while it was written
 	}

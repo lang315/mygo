@@ -202,8 +202,8 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 	}
 }
 
-// backupRetry is how long a recovery copy that could not be written waits
-// to be tried again.
+// backupRetry is how long to wait after the first failed write of a
+// recovery copy; each further failure doubles the wait, up to 32 times this.
 var backupRetry = time.Second
 
 // backup writes the recovery copy of b, if it changed since the last.
@@ -221,26 +221,18 @@ func (b *docBase) backup() {
 		e.Name = b.name
 	}
 	b.mu.Unlock()
-	if err := b.kind.recovery.save(e, snap.write); err != nil {
-		b.mu.Lock()
-		if !b.backupFailing {
+	err := b.kind.recovery.save(e, snap.write)
+	b.mu.Lock()
+	if err != nil {
+		b.backupFails++
+		first := b.backupFails == 1
+		b.mu.Unlock()
+		if first {
 			log.Printf("mygo: documents: cannot write the recovery copy of %s: %v", e.Name+e.Path, err)
 		}
-		b.backupFailing = true
-		// The error may pass (a file in use on Windows, a full disk): try
-		// again, as long as the document is edited and open.
-		if b.edited && !b.closed {
-			if b.timer == nil {
-				b.timer = time.AfterFunc(backupRetry, func() { docWork.Go(b.persist) })
-			} else {
-				b.timer.Reset(backupRetry)
-			}
-		}
-		b.mu.Unlock()
 		return
 	}
-	b.mu.Lock()
-	b.backupFailing = false
+	b.backupFails = 0
 	b.backedUp = snap.at
 	b.dirtySince = time.Time{}
 	if b.changes != snap.at {

@@ -373,6 +373,9 @@ func TestDocumentOutsideChanges(t *testing.T) {
 // copy that could not be written (a file in use on Windows, a full disk)
 // was not tried again until the next edit.
 func TestDocumentRecoveryRetriesAFailedWrite(t *testing.T) {
+	retry := backupRetry
+	backupRetry = 10 * time.Millisecond
+	t.Cleanup(func() { backupRetry = retry })
 	var calls atomic.Int32
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Write: func(w io.Writer, s string) error {
 		if calls.Add(1) == 1 {
