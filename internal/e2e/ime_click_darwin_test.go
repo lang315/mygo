@@ -54,7 +54,8 @@ func TestRichTextClickEndsCompositionMac(t *testing.T) {
 	darwin.TestPostKey(0)
 	const word = "か"
 	eventually(t, "a composition", func() bool { return marked() == word })
-	click(w, 300, 160)
+	// Away from the first click, so that it is not a double click.
+	click(w, 340, 180)
 	eventually(t, "the composition ended by the click", func() bool { return marked() == "" && text() == "Hello "+word })
 	darwin.TestPostKey(45) // n
 	eventually(t, "a new composition", func() bool { return marked() != "" })

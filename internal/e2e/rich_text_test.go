@@ -134,7 +134,9 @@ func TestRichTextClickEndsComposition(t *testing.T) {
 		marked, _ := markedText(w)
 		return marked == "u4e16"
 	})
-	click(w, 300, 160)
+	// Away from the first click, so that it is not a double click, which
+	// would choose the space.
+	click(w, 340, 180)
 	text := func() (s string) {
 		mygo.RunOnMain(func() { s = doc.Text().String() })
 		return s
