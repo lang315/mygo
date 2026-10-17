@@ -46,6 +46,10 @@ frame, and use it on the main thread.
   in one line; `NoSearch` leaves the column out of the search.
 - `Sort` is the order shown; a click on a header changes it, and you can set
   it to start sorted.
+- `MultiSort` sorts by several columns, which `SortBy` holds, the first first:
+  a click on a header sorts by it alone, a Cmd-click (Ctrl-click on Linux and
+  Windows) adds it, makes it descending, then takes it out. `Sort` is left
+  alone. Set it before the first frame.
 - `Checked` and `Chosen` are `Selection`s of keys: the rows checked with the
   checkboxes or Space, and the rows highlighted. `Current()` is the row
   chosen last, `Len()` and `At(i)` the rows shown. `Version()` changes

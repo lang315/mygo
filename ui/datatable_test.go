@@ -768,3 +768,49 @@ func TestDataTableColumnMatch(t *testing.T) {
 		t.Fatalf("Name alp: rows %v, want 2", ids)
 	}
 }
+
+func dtSortState() *DataTableState[dtRow, int] {
+	s := dtState()
+	s.Columns[1].Compare = func(a, b *dtRow) int { return strings.Compare(a.Mail, b.Mail) }
+	s.MultiSort = true
+	return s
+}
+
+func TestDataTableMultiSort(t *testing.T) {
+	rows := []dtRow{{1, "bravo", "b@x.io"}, {2, "alpha", "z@x.io"}, {3, "bravo", "a@x.io"}}
+	s := dtSortState()
+	tt := dtTester(s, &rows)
+	dtClickLast(t, tt, "Name")
+	tt.ClickWith(Cmd, "Mail") // the header: the select shows Name
+	if want := []SortOrder{{Column: "Name"}, {Column: "Mail"}}; !slices.Equal(s.SortBy, want) {
+		t.Fatalf("SortBy %+v, want %+v", s.SortBy, want)
+	}
+	if ids := dtShown(s); !slices.Equal(ids, []int{2, 3, 1}) {
+		t.Fatalf("by Name then Mail: rows %v, want 2 3 1", ids)
+	}
+	if s.Sort != (SortOrder{}) {
+		t.Errorf("Sort changed with MultiSort: %+v", s.Sort)
+	}
+	dtClickLast(t, tt, "Mail")
+	if want := []SortOrder{{Column: "Mail"}}; !slices.Equal(s.SortBy, want) {
+		t.Fatalf("a click: SortBy %+v, want %+v", s.SortBy, want)
+	}
+}
+
+func TestDataTableMultiSortByAColumnWithoutCompare(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	s.MultiSort, s.SortBy = true, []SortOrder{{Column: "Mail"}}
+	dtTester(s, &rows)
+	if ids := dtShown(s); !slices.Equal(ids, []int{1, 2, 3}) {
+		t.Fatalf("by Mail, which has no Compare: rows %v, want 1 2 3", ids)
+	}
+}
+
+func TestDataTableMultiSortCannotChangeAfterTheFirstFrame(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	tt := dtTester(s, &rows)
+	s.MultiSort = true
+	if msg := dtPanic(tt.Frame); !strings.Contains(msg, "MultiSort") {
+		t.Fatalf("panic %q, want one naming MultiSort", msg)
+	}
+}

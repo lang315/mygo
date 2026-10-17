@@ -48,6 +48,12 @@ type DataTableState[T any, K comparable] struct {
 	// Sort is the order shown. A click on a header of a column with a
 	// Compare changes it; set it to start sorted.
 	Sort SortOrder
+	// MultiSort sorts by several columns, SortBy holding them, the first
+	// first: a click on a header sorts by it alone, a Cmd-click (Ctrl-click
+	// on Linux and Windows) adds it, as ListState.SortBy does. Sort is left
+	// alone while it is set. Set it before the first frame.
+	MultiSort bool
+	SortBy    []SortOrder
 	// Filter keeps the rows it returns true for, apart from the search.
 	// FilterKey tells when Filter changed: the rows are filtered again when
 	// it differs from the last frame's. It must be comparable.
@@ -74,6 +80,7 @@ type DataTableState[T any, K comparable] struct {
 	list   ListState
 	cursor int
 	ncols  int
+	multi  bool // MultiSort at the first frame
 
 	// titles are the columns the search offers; column and keyword are what
 	// the select and the box show, applied what the rows are filtered by,
@@ -118,7 +125,12 @@ func (s *DataTableState[T, K]) start() {
 	s.ncols, s.cursor = len(s.Columns), -1
 	s.view = NewTableView(compare)
 	s.list.Selected, s.list.Selection, s.list.Checked = &s.cursor, &s.Chosen, &s.Checked
-	s.list.Sort = &s.Sort
+	s.multi = s.MultiSort
+	if s.multi {
+		s.list.SortBy = &s.SortBy
+	} else {
+		s.list.Sort = &s.Sort
+	}
 	s.list.Key = func(row int) any { return s.Key(s.At(row)) }
 	s.list.Label = func(row int) string { return s.Columns[0].Text(s.At(row)) }
 	s.list.Copy = func(rows []int) string { return s.copyRows(s.pick(rows)) }
@@ -189,6 +201,9 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 	if len(s.Columns) != s.ncols {
 		panic("ui: DataTable columns changed after the first frame")
 	}
+	if s.MultiSort != s.multi {
+		panic("ui: DataTable MultiSort changed after the first frame")
+	}
 	s.rows = rows
 	return Column(c).Gap(8).Children(func() {
 		if !s.NoSearchBar && len(s.titles) > 0 {
@@ -198,7 +213,11 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 			panic(fmt.Sprintf("ui: DataTable FilterKey %T is not comparable", k))
 		}
 		s.view.SetFilterKey(dataFilterKey{s.FilterKey, s.applied}, s.keep)
-		s.view.Sync(rows, s.Sort)
+		if s.multi {
+			s.view.Sync(rows, s.SortBy...)
+		} else {
+			s.view.Sync(rows, s.Sort)
+		}
 		s.list.Version = s.view.Version()
 		if s.RowMenu != nil {
 			s.list.RowMenu = s.menu
