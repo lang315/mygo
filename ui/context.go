@@ -522,6 +522,8 @@ type state struct {
 	pendingSubmit bool
 	pendingChange bool
 	noticeQueued  bool
+	// pendingEvents are the events reported between frames (markEvent).
+	pendingEvents tableEvent
 
 	// rowPressed marks a row of a list the pointer pressed, until the
 	// release; pressChose, that the press chose it, so that its click does

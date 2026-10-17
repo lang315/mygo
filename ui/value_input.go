@@ -106,6 +106,10 @@ func (rt *engine) finalizeInputs(all bool) {
 			n.st.pendingChange = false
 			n.st.markChanged()
 		}
+		if ev := n.st.pendingEvents; ev != 0 {
+			n.st.pendingEvents = 0
+			n.st.markEvent(ev)
+		}
 		n.valueInput(n)
 	}
 	// Those waiting were queued before the cursor's, so they go first:

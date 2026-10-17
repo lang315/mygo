@@ -795,6 +795,12 @@ const (
 
 // markEvent reports ev in this build pass.
 func (s *state) markEvent(ev tableEvent) {
+	if s.rt != nil && !s.rt.inFrame {
+		// As a right-click choosing a row, between frames: the next
+		// frame's build reports it.
+		s.pendingEvents |= ev
+		return
+	}
 	s.events |= ev
 	s.eventsDelivered &^= ev
 	s.notice()

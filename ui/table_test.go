@@ -1164,6 +1164,27 @@ func TestTableHeaderMenu(t *testing.T) {
 	}
 }
 
+// A right-click choosing a row before its menu opens, between frames,
+// reports the new choice in the next frame, as a click does.
+func TestTableRightClickReportsSelection(t *testing.T) {
+	names := []string{"a.txt", "b.txt"}
+	var chosen Selection[string]
+	s := ListState{Selection: &chosen, Key: func(i int) any { return names[i] },
+		RowMenu: func(m *Menu, rows []int) { m.Item("Open") }}
+	seen, calls := 0, 0
+	tt := coreNewTester(func(c *context) {
+		e := coreTable(c, &s, []TableColumn{{Title: "Name"}}, len(names), func(row, col int) { coreText(c, names[row]) }).Grow(1)
+		if e.SelectionChanged() {
+			seen++
+		}
+		wrapElement(e).OnSelectionChange(func() { calls++ })
+	}, 400, 300)
+	tt.RightClick("b.txt")
+	if !chosen.Has("b.txt") || seen != 1 || calls != 1 {
+		t.Fatalf("right-click on b.txt: chosen %v, SelectionChanged %d, OnSelectionChange %d; want b.txt, 1, 1", slices.Collect(chosen.All()), seen, calls)
+	}
+}
+
 // TestTableRowSelected tells a cell whether its row is chosen, so it can
 // leave the selection's text color alone, and nothing outside a row.
 func TestTableRowSelected(t *testing.T) {
