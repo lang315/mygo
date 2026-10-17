@@ -747,3 +747,30 @@ func TestDocumentCheckDoesNotFollowAFileThatReusedTheInode(t *testing.T) {
 		t.Error("the document whose file is gone is not taken for deleted")
 	}
 }
+
+// TestDocumentFoundAgainIsNotDeleted: a look found the file gone, and took
+// the document for deleted; the file is back in the directory under another
+// name, which the next look finds, and the document is not deleted then.
+func TestDocumentFoundAgainIsNotDeleted(t *testing.T) {
+	d, renamed := documentRenamedUnwatched(t)
+	path := d.Path()
+	away := filepath.Join(t.TempDir(), "away.txt")
+	if err := os.Rename(renamed, away); err != nil {
+		t.Fatal(err)
+	}
+	d.checkDisk()
+	if !d.State().Deleted {
+		t.Fatal("the document whose file went to another directory is not taken for deleted")
+	}
+	back := filepath.Join(filepath.Dir(path), "back.txt")
+	if err := os.Rename(away, back); err != nil {
+		t.Fatal(err)
+	}
+	d.checkDisk()
+	if got := d.Path(); got != back {
+		t.Fatalf("the document is at %q, want %q", got, back)
+	}
+	if d.State().Deleted {
+		t.Error("the document is at the file it found again and still deleted")
+	}
+}

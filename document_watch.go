@@ -244,6 +244,9 @@ func (b *docBase) checkDisk() {
 func (b *docBase) moved(path string) {
 	b.mu.Lock()
 	b.path = path
+	// A look that found the file gone may have taken it for deleted before
+	// one found it where it went.
+	b.deleted = false
 	b.mu.Unlock()
 	addRecent(path)
 	b.watch()
