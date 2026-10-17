@@ -175,7 +175,7 @@ func (e *live) keep() func(*account) bool {
 	a := e.a
 	f, _ := a.s.folderByName(a.folder)
 	column, keyword := a.table.Search()
-	col := slices.Index(titles, column)
+	col := slices.Index(tabTitles[tabAccounts], column)
 	list := strings.Contains(keyword, "|")
 	exact := map[string]bool{}
 	for v := range strings.SplitSeq(keyword, "|") {

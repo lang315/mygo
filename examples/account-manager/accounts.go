@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ type account struct {
 	Country, Resource                                     string
 	CreatedAt, BackupAt                                   int64
 	Note                                                  string
+	BM, TKQC, EmailPassword, RefreshID, ClientID          string // the Ads and Email tabs' columns
 }
 
 // The columns, in the order the table shows them at first.
@@ -55,6 +57,11 @@ const (
 	colCreated
 	colBackup
 	colNote
+	colBM
+	colTKQC
+	colEmailPassword
+	colRefreshID
+	colClientID
 )
 
 // columns are the table's, titled as fhtool's; compare() has a sort for each.
@@ -79,11 +86,43 @@ var columns = []ui.TableColumn{
 	{Title: "Ghi Chú", Width: 160},
 }
 
-// titles are the columns' titles, for the column searched.
-var titles = func() []string {
-	t := make([]string, len(columns))
-	for i, col := range columns {
-		t[i] = col.Title
+// extraColumns are the columns only the Ads and Email tabs show, in the order
+// of colBM on.
+var extraColumns = []ui.TableColumn{
+	{Title: "BM", Width: 120},
+	{Title: "TKQC", Width: 140},
+	{Title: "Mật khẩu email", Width: 150},
+	{Title: "RefreshID", Width: 300},
+	{Title: "ClientID", Width: 280},
+}
+
+// allColumns are the columns of every tab, indexed by the col constants.
+var allColumns = append(slices.Clone(columns), extraColumns...)
+
+// The tabs, in the order the strip shows them.
+const (
+	tabAccounts = iota
+	tabAds
+	tabEmail
+)
+
+// tabLabels are the tabs' labels.
+var tabLabels = []string{"Tài khoản", "Ads", "Email"}
+
+// tabColumns are the columns each tab shows, as indexes of allColumns:
+// fhtool's.
+var tabColumns = [...][]int{
+	tabAccounts: {colUID, colPassword, colTwoFA, colEmail, colRecovery, colProxy, colIP, colLastRun, colStatus, colCookie, colName, colFriends, colGroups, colCountry, colResource, colCreated, colBackup, colNote},
+	tabAds:      {colUID, colPassword, colTwoFA, colCookie, colStatus, colBM, colTKQC},
+	tabEmail:    {colUID, colEmail, colEmailPassword, colStatus, colRecovery, colRefreshID, colClientID},
+}
+
+// tabTitles are the columns' titles of each tab, for the column searched.
+var tabTitles = func() (t [len(tabColumns)][]string) {
+	for i, cols := range tabColumns {
+		for _, col := range cols {
+			t[i] = append(t[i], allColumns[col].Title)
+		}
 	}
 	return t
 }()
@@ -128,6 +167,16 @@ func cellText(a *account, col int) string {
 		return day(a.BackupAt, "02/01/2006")
 	case colNote:
 		return a.Note
+	case colBM:
+		return a.BM
+	case colTKQC:
+		return a.TKQC
+	case colEmailPassword:
+		return a.EmailPassword
+	case colRefreshID:
+		return a.RefreshID
+	case colClientID:
+		return a.ClientID
 	}
 	return ""
 }
@@ -140,11 +189,11 @@ func day(t int64, layout string) string {
 	return time.Unix(t, 0).Format(layout)
 }
 
-// compare orders the rows by each column, for the table's view: by the
-// text shown, but numbers and times by value.
+// compare orders the rows by each column of every tab, for the tables'
+// views: by the text shown, but numbers and times by value.
 func compare() map[string]func(a, b *account) int {
-	m := make(map[string]func(a, b *account) int, len(columns))
-	for col, c := range columns {
+	m := make(map[string]func(a, b *account) int, len(allColumns))
+	for col, c := range allColumns {
 		m[c.Title] = func(a, b *account) int { return strings.Compare(cellText(a, col), cellText(b, col)) }
 	}
 	m[columns[colLastRun].Title] = func(a, b *account) int { return cmp.Compare(a.LastRunAt, b.LastRunAt) }
@@ -155,19 +204,22 @@ func compare() map[string]func(a, b *account) int {
 	return m
 }
 
-// dataColumns are the columns of the DataTable: the cells, the sorts and
-// the search read cellText.
-func dataColumns() []ui.DataColumn[account] {
+// dataColumns are the columns of a DataTable showing cols, as indexes of
+// allColumns: the cells, the sorts and the search read cellText.
+func dataColumns(cols []int) []ui.DataColumn[account] {
 	sorts := compare()
-	out := make([]ui.DataColumn[account], len(columns))
-	for col, c := range columns {
-		out[col] = ui.DataColumn[account]{
+	out := make([]ui.DataColumn[account], len(cols))
+	for i, col := range cols {
+		c := allColumns[col]
+		out[i] = ui.DataColumn[account]{
 			TableColumn: c,
 			Text:        func(a *account) string { return cellText(a, col) },
 			Compare:     sorts[c.Title],
 		}
+		if col == colStatus {
+			out[i].Cell = statusCell
+		}
 	}
-	out[colStatus].Cell = statusCell
 	return out
 }
 
@@ -190,6 +242,9 @@ var (
 	countries  = []string{"VN", "US", "TH", "ID", "PH", "IN", "BR"}
 )
 
+// clientIDs are the few client IDs the made-up email accounts share.
+var clientIDs = []string{"9e5f94bc-e8a4-4e73-b8be-63364c29d753", "d3590ed6-52b3-4102-aeff-aad2292ab01c", "1fec8e78-bce4-4aaf-ab81-d7a78c1d1f08"}
+
 const (
 	alnum  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	base32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
@@ -200,7 +255,10 @@ const (
 // one in a thousand.
 func generate(n, first int, seed uint64) []account {
 	r := rand.New(rand.NewPCG(seed, uint64(first)))
-	pick := func(chars string, n int) string {
+	// The Ads and Email columns come from a source of their own, so the
+	// other columns keep the values they had.
+	ex := rand.New(rand.NewPCG(seed^0x9e3779b97f4a7c15, uint64(first)))
+	pick := func(r *rand.Rand, chars string, n int) string {
 		b := make([]byte, n)
 		for i := range b {
 			b[i] = chars[r.IntN(len(chars))]
@@ -220,11 +278,11 @@ func generate(n, first int, seed uint64) []account {
 		a := account{
 			ID:        id,
 			UID:       uid,
-			Password:  pick(alnum, 10),
-			TwoFA:     pick(base32, 32),
-			Email:     fmt.Sprintf("%s%d@hotmail.com", pick(alnum[:26], 8), r.IntN(10000)),
+			Password:  pick(r, alnum, 10),
+			TwoFA:     pick(r, base32, 32),
+			Email:     fmt.Sprintf("%s%d@hotmail.com", pick(r, alnum[:26], 8), r.IntN(10000)),
 			Proxy:     fmt.Sprintf("%d.%d.%d.%d:%d", 1+r.IntN(223), r.IntN(256), r.IntN(256), r.IntN(256), 1024+r.IntN(60000)),
-			Cookie:    "c_user=" + uid + "; xs=" + pick(alnum, 24),
+			Cookie:    "c_user=" + uid + "; xs=" + pick(r, alnum, 24),
 			Name:      lastNames[r.IntN(len(lastNames))] + " " + firstNames[r.IntN(len(firstNames))],
 			Friends:   r.IntN(5000),
 			Groups:    r.IntN(300),
@@ -232,11 +290,18 @@ func generate(n, first int, seed uint64) []account {
 			CreatedAt: time.Date(2009+r.IntN(16), time.Month(1+r.IntN(12)), 1+r.IntN(28), 0, 0, 0, 0, time.UTC).Unix(),
 		}
 		if r.IntN(2) == 0 {
-			a.RecoveryEmail = pick(alnum[:26], 8) + "@gmail.com"
+			a.RecoveryEmail = pick(r, alnum[:26], 8) + "@gmail.com"
 		}
 		if r.IntN(3) > 0 {
 			a.BackupAt = time.Date(2026, time.Month(1+r.IntN(9)), 1+r.IntN(28), 0, 0, 0, 0, time.UTC).Unix()
 		}
+		if ex.IntN(3) == 0 {
+			a.BM = strconv.Itoa(100000000000000 + ex.IntN(900000000000000))
+			a.TKQC = "act_" + strconv.Itoa(100000000000000+ex.IntN(900000000000000))
+		}
+		a.EmailPassword = pick(ex, alnum, 10)
+		a.RefreshID = pick(ex, alnum, 40)
+		a.ClientID = clientIDs[ex.IntN(len(clientIDs))]
 		out[i] = a
 	}
 	return out

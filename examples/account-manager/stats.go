@@ -54,15 +54,15 @@ func (s *stats) flush(now time.Time, a *app) string {
 		return ""
 	}
 	order := "-"
-	if a.table.Sort.Column != "" {
-		order = a.table.Sort.Column + "↑"
-		if a.table.Sort.Descending {
-			order = a.table.Sort.Column + "↓"
+	if a.shown().Sort.Column != "" {
+		order = a.shown().Sort.Column + "↑"
+		if a.shown().Sort.Descending {
+			order = a.shown().Sort.Column + "↓"
 		}
 	}
 	heap, cycles, goroutines := readRuntime()
 	line := fmt.Sprintf("stats t=%.0fs rows=%d shown=%d sort=%q updates=%.0f/s batches=%d apply_max=%s frames=%d interval_p50=%s p95=%s max=%s build_p50=%s p95=%s max=%s heap=%dMB gc=%d goroutines=%d",
-		now.Sub(s.began).Seconds(), len(a.s.accounts), a.table.Len(), order,
+		now.Sub(s.began).Seconds(), len(a.s.accounts), a.shown().Len(), order,
 		float64(s.updates)/d.Seconds(), s.batches, ms(s.applyMax), len(s.builds),
 		ms(percentile(s.intervals, 50)), ms(percentile(s.intervals, 95)), ms(percentile(s.intervals, 100)),
 		ms(percentile(s.builds, 50)), ms(percentile(s.builds, 95)), ms(percentile(s.builds, 100)),
