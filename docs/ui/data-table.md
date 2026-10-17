@@ -55,7 +55,8 @@ frame, and use it on the main thread.
   chosen last, `Len()` and `At(i)` the rows shown. `Version()` changes
   whenever the rows shown, or their order, do.
 - `Footer` shows under the table how many rows are shown and how many are
-  checked, hidden by the search or not.
+  checked: every key in `Checked`, hidden by the search or the filter or not,
+  so remove the keys of the rows you remove.
 - `NoSearchBar` hides the search bar, for an app that puts its own where it
   wants, with its own texts, and calls `SetSearch`. No bar is shown either when
   no column is searchable.

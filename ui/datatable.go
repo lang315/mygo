@@ -77,7 +77,8 @@ type DataTableState[T any, K comparable] struct {
 	// and choosing another column.
 	SearchDelay time.Duration
 	// Footer shows a line under the table: how many rows are shown and,
-	// when any are, how many are checked, hidden by the search or not.
+	// when any are, how many are checked: every key in Checked, hidden by
+	// the search or the filter or not, so remove the keys of rows removed.
 	Footer bool
 
 	// Checked are the rows checked, Chosen the rows highlighted.
