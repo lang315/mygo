@@ -1667,9 +1667,12 @@ func TestTrayMenuIcons(t *testing.T) {
 		t.Skip("no tray: ", err)
 	}
 	defer tray.Destroy()
-	layout, ok := trayMenuLayout()
+	layout, ok, err := trayMenuLayout()
 	if !ok {
 		t.Skip("the tray menu can't be read on this platform")
+	}
+	if err != nil {
+		t.Fatal("reading the tray menu:", err)
 	}
 	items := map[string]string{}
 	for _, item := range strings.Split(layout, "<(")[1:] {

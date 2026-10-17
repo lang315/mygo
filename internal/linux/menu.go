@@ -203,10 +203,11 @@ func buildItem(it *platform.MenuItem, accel ptr, owner, windowID int) ptr {
 		case trayIcon:
 			item = gtkImageMenuItemNewWithLabel(cs(it.Label))
 			if pix, err := pixbufFromPNG(it.Icon); err == nil {
-				small := gdkPixbufScaleSimple(pix, 32, 32, 2) // GDK_INTERP_BILINEAR
-				gtkImageMenuItemSetImage(item, gtkImageNewFromPixbuf(small))
-				gtkImageMenuItemSetAlwaysShowImage(item, true)
-				gObjectUnref(small)
+				if small := gdkPixbufScaleSimple(pix, 32, 32, 2); small != 0 { // GDK_INTERP_BILINEAR
+					gtkImageMenuItemSetImage(item, gtkImageNewFromPixbuf(small))
+					gtkImageMenuItemSetAlwaysShowImage(item, true)
+					gObjectUnref(small)
+				}
 				gObjectUnref(pix)
 			}
 		case image != 0:

@@ -361,4 +361,4 @@ func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
 	return false, nil, false, nil
 }
 
-func trayMenuLayout() (string, bool) { return "", false }
+func trayMenuLayout() (string, bool, error) { return "", false, nil }

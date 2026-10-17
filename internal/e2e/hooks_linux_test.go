@@ -344,10 +344,17 @@ func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, 
 }
 
 // trayMenuLayout returns the menu of the tray made last as a tray host reads
-// it from D-Bus, as GVariant text.
-func trayMenuLayout() (string, bool) {
+// it from D-Bus, as GVariant text. AppIndicator exports the menu once it
+// has the bus, so a read is retried for a while.
+func trayMenuLayout() (layout string, supported bool, err error) {
 	var name, path string
 	mygo.RunOnMain(func() { name, path = linux.TestTrayMenuAddress() })
-	layout, err := linux.TestReadTrayMenu(name, path)
-	return layout, err == nil
+	if name == "" {
+		return "", false, nil
+	}
+	for deadline := time.Now().Add(2 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		if layout, err = linux.TestReadTrayMenu(name, path); err == nil || time.Now().After(deadline) {
+			return layout, true, err
+		}
+	}
 }
