@@ -4,6 +4,7 @@ package windows
 
 import (
 	"errors"
+	"log"
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -535,7 +536,16 @@ func (w *window) destroy() {
 	if w.releasesParent() {
 		procEnableWindow.Call(w.parent.hwnd, 1)
 	}
+	if w.opts.Modal && w.parent != nil {
+		en, _, _ := user32.NewProc("IsWindowEnabled").Call(w.parent.hwnd)
+		fg, _, _ := procGetForegroundWindow.Call()
+		log.Printf("DEBUG destroy %q: releases %v, parent enabled %v, foreground %#x (self %#x parent %#x)", w.opts.Title, w.releasesParent(), en, fg, w.hwnd, w.parent.hwnd)
+	}
 	procDestroyWindow.Call(w.hwnd)
+	if w.opts.Modal && w.parent != nil {
+		fg, _, _ := procGetForegroundWindow.Call()
+		log.Printf("DEBUG destroyed %q: foreground %#x", w.opts.Title, fg)
+	}
 }
 
 // releasesParent reports whether closing w enables its parent again: w is
