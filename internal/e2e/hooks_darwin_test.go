@@ -65,7 +65,11 @@ func inFront(frontmost, active, key, panel bool) bool { return frontmost && acti
 // the window not in front (inFront) waits for the front again. Each try
 // brings the window back (waitKey), so the front comes; wait.Guard only keeps
 // a desktop that never gives it from hanging the test: the input is sent then
-// anyway.
+// anyway, which is why this is a loop and not wait.Poll. The guard bounds
+// each wait: the deadline here runs from the start of the loop, so waitKey
+// waiting its guard out sends the input at once, but a desktop that never
+// gives the front still holds an input about a minute here, and click's own
+// waits (waitKey, waitOnScreen) add theirs. TestMain stops at a locked screen.
 func sendFront(w *mygo.Window, what string, send func()) {
 	panel := w.IsPanel()
 	for deadline := time.Now().Add(wait.Guard); ; time.Sleep(20 * time.Millisecond) {

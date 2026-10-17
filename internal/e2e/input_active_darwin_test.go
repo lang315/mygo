@@ -214,6 +214,7 @@ func TestClickAndTypeSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
 // is key while another app is in front; a click on it is sent at once, not
 // after waiting for an app that stays in the background.
 func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
+	focused, _ := keepFrontFocused()
 	other := newWindow(t, mygo.WindowOptions{Title: "Other", Width: 300, Height: 200})
 	other.Focus()
 	eventually(t, "the other window focused", other.IsFocused)
@@ -222,8 +223,11 @@ func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 	waitFor(t, panel, "document.getElementById('b')")
 	deactivated(t)
 	panel.Show()
-	focused, _ := keepFrontFocused()
-	if !wait.Poll(func() bool { keepFront(); return panel.IsFocused() }) {
+	// Without keepFront: the test wants the app in the background, and
+	// keepFront would focus a window of it, which takes the key from the
+	// panel and may activate the app. windowDiag counts what it did in the
+	// waits before.
+	if !wait.Poll(panel.IsFocused) {
 		t.Fatalf("the panel key never happened (waited %v); %s", wait.Guard, windowDiag(t, panel, focused))
 	}
 	if active, _ := appActive(); active {
