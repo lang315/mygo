@@ -29,9 +29,16 @@ var actions = []string{"Đăng nhập", "Backup", "Bật 2FA", "Kiểm tra tài 
 
 // app is the state the window shows.
 type app struct {
-	s      *store
-	table  ui.DataTableState[account, int] // the accounts of the folder shown that the search finds
-	folder string                          // the folder shown
+	s     *store
+	table ui.DataTableState[account, int] // the accounts of the folder shown that the search finds
+	// The other tabs' tables: the same accounts, other columns, and their
+	// own checks, highlights, sort and search.
+	ads, email ui.DataTableState[account, int]
+	tab        int    // the tab shown
+	folder     string // the folder shown
+	// searches are the column and keyword typed in each tab; those of the
+	// tab shown are column and keyword below.
+	searches [len(tabColumns)]struct{ column, keyword string }
 	// The search typed: the title of the column searched, and what to find.
 	column, keyword string
 	action          string
@@ -51,13 +58,56 @@ func newApp(rows int) *app {
 	a := &app{s: newStore(rows, 1), column: "UID", threads: 10}
 	a.folder = a.s.folders[0].Name
 	a.filterFolder()
-	a.table.Key = func(x *account) int { return x.ID }
-	a.table.Columns = dataColumns(tabColumns[tabAccounts])
-	// The search bar is the footer's, with fhtool's texts.
-	a.table.NoSearchBar = true
-	a.table.Filter = func(x *account) bool { return x.Folder == a.table.FilterKey }
-	a.table.Copy = func(rows []*account) string { return copyText(rows, colUID, colPassword, colTwoFA) }
+	for i := range a.searches {
+		a.searches[i].column = "UID"
+	}
+	for i, t := range a.tables() {
+		t.Key = func(x *account) int { return x.ID }
+		t.Columns = dataColumns(tabColumns[i])
+		// The search bar is the footer's, with fhtool's texts.
+		t.NoSearchBar = true
+		t.Filter = func(x *account) bool { return x.Folder == t.FilterKey }
+		t.Copy = func(rows []*account) string { return copyText(rows, colUID, colPassword, colTwoFA) }
+	}
 	return a
+}
+
+// tables are the tabs' tables, in the order of the strip.
+func (a *app) tables() [len(tabColumns)]*ui.DataTableState[account, int] {
+	return [...]*ui.DataTableState[account, int]{&a.table, &a.ads, &a.email}
+}
+
+// shown is the table of the tab shown.
+func (a *app) shown() *ui.DataTableState[account, int] { return a.tables()[a.tab] }
+
+// selectTab shows tab i: the search typed goes with the tab left, and that
+// of tab i comes back.
+func (a *app) selectTab(i int) {
+	a.searches[a.tab].column, a.searches[a.tab].keyword = a.column, a.keyword
+	a.tab = i
+	a.column, a.keyword = a.searches[i].column, a.searches[i].keyword
+	// Rows changed while it was hidden were not told to it.
+	a.shown().Reset()
+}
+
+// changed says that the account at index i of the store changed. Only the
+// tab shown is told: a table that is not built never syncs, so the rows
+// named to it would pile up. The others place all rows again once shown.
+func (a *app) changed(i int) {
+	for t, tb := range a.tables() {
+		if t == a.tab {
+			tb.Changed(i)
+		} else {
+			tb.Reset()
+		}
+	}
+}
+
+// reset says that accounts were removed.
+func (a *app) reset() {
+	for _, tb := range a.tables() {
+		tb.Reset()
+	}
 }
 
 func (a *app) build(c *ui.Context) {
@@ -70,6 +120,7 @@ func (a *app) build(c *ui.Context) {
 	}
 	ui.Column(c).Fill().Padding(10).Gap(10).Children(func() {
 		a.toolbar(c)
+		a.tabStrip(c)
 		a.showTable(c)
 		a.footer(c)
 	})
@@ -117,11 +168,21 @@ func (a *app) toolbar(c *ui.Context) {
 	})
 }
 
+// tabStrip shows the tabs and switches to the one clicked.
+func (a *app) tabStrip(c *ui.Context) {
+	tab := a.tab
+	if ui.Tabs(c, &tab, tabLabels...).Changed() {
+		a.selectTab(tab)
+	}
+}
+
 // showFolder shows the folder a.folder names afresh, none of its
 // accounts checked or highlighted, as fhtool loads a folder.
 func (a *app) showFolder() {
-	a.table.Checked.Clear()
-	a.table.Chosen.Clear()
+	for _, tb := range a.tables() {
+		tb.Checked.Clear()
+		tb.Chosen.Clear()
+	}
 	a.filterFolder()
 }
 
@@ -130,17 +191,20 @@ func (a *app) showFolder() {
 // filtered again only when the folder changes.
 func (a *app) filterFolder() {
 	f, _ := a.s.folderByName(a.folder)
-	a.table.FilterKey = f.ID
+	for _, tb := range a.tables() {
+		tb.FilterKey = f.ID
+	}
 }
 
 // filter shows the accounts of the folder shown that the search finds. The
 // table does nothing when they are the rows shown already: a search goes
 // through all rows.
-func (a *app) filter() { a.table.SetSearch(a.column, a.keyword) }
+func (a *app) filter() { a.shown().SetSearch(a.column, a.keyword) }
 
 func (a *app) showTable(c *ui.Context) {
-	a.table.RowMenu = func(m *ui.Menu, rows []*account) { a.rowMenu(c, m, rows) }
-	ui.DataTable(c, &a.table, a.s.accounts).Grow(1)
+	t := a.shown()
+	t.RowMenu = func(m *ui.Menu, rows []*account) { a.rowMenu(c, m, rows) }
+	ui.DataTable(c, t, a.s.accounts).Grow(1).Key(a.tab)
 }
 
 // copyText is columns cols of rows, | between them, a line each.
@@ -183,12 +247,12 @@ func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []*account) {
 	m.Submenu("Chọn/Bỏ chọn", func(m *ui.Menu) {
 		if m.Item("Chọn").Chosen() {
 			for _, id := range ids {
-				a.table.Checked.Add(id)
+				a.shown().Checked.Add(id)
 			}
 		}
 		if m.Item("Bỏ chọn").Chosen() {
 			for _, id := range ids {
-				a.table.Checked.Remove(id)
+				a.shown().Checked.Remove(id)
 			}
 		}
 	})
@@ -227,28 +291,37 @@ func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []*account) {
 	}
 }
 
-// gone shows the accounts ids left the folder shown: the table places again
-// only the rows moved, and all of them after rows were removed.
-func (a *app) gone(c *ui.Context, ids []int) {
+// forget drops the accounts ids from every tab's checks and highlights, and
+// has the tables place again only the rows moved, and all of them after rows
+// were removed.
+func (a *app) forget(ids []int) {
 	for _, id := range ids {
-		a.table.Checked.Remove(id)
-		a.table.Chosen.Remove(id)
+		for _, tb := range a.tables() {
+			tb.Checked.Remove(id)
+			tb.Chosen.Remove(id)
+		}
 		if i, ok := a.s.index[id]; ok {
-			a.table.Changed(i)
+			a.changed(i)
 		} else {
-			a.table.Reset()
+			a.reset()
 		}
 	}
+}
+
+// gone shows the accounts ids left the folder shown.
+func (a *app) gone(c *ui.Context, ids []int) {
+	a.forget(ids)
 	c.Invalidate()
 }
 
 func (a *app) footer(c *ui.Context) {
 	ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
-		ui.Textf(c, "Tổng số dòng: %d", a.table.Len())
-		ui.Textf(c, "Số dòng đang bôi đen: %d", a.table.Chosen.Len())
-		ui.Textf(c, "Đã chọn: %d", a.table.Checked.Len())
+		t := a.shown()
+		ui.Textf(c, "Tổng số dòng: %d", t.Len())
+		ui.Textf(c, "Số dòng đang bôi đen: %d", t.Chosen.Len())
+		ui.Textf(c, "Đã chọn: %d", t.Checked.Len())
 		ui.Spacer(c)
-		column := ui.Select(c, &a.column, titles).Label("Cột tìm kiếm").Width(170).Changed()
+		column := ui.Select(c, &a.column, tabTitles[a.tab]).Label("Cột tìm kiếm").Width(170).Changed()
 		const hint = "Nhập từ khoá (UID1|UID2|…)"
 		// A text input, as fhtool's entry: a search field shows "Search".
 		search := ui.TextInput(c, &a.keyword).Label(hint).Placeholder(hint).Width(400)
@@ -264,14 +337,15 @@ func (a *app) footer(c *ui.Context) {
 
 // start runs the action on the accounts checked, in the order shown.
 func (a *app) start(c *ui.Context) {
+	t := a.shown()
 	var ids []int
-	for i := range a.table.Len() {
-		if id := a.table.At(i).ID; a.table.Checked.Has(id) {
+	for i := range t.Len() {
+		if id := t.At(i).ID; t.Checked.Has(id) {
 			ids = append(ids, id)
 		}
 	}
 	switch {
-	case len(ids) == 0 && a.table.Checked.Len() > 0:
+	case len(ids) == 0 && t.Checked.Len() > 0:
 		c.Toast("Các dòng đã chọn đang bị ẩn bởi tìm kiếm!")
 		return
 	case len(ids) == 0:
@@ -332,7 +406,7 @@ func (a *app) apply(r *runner) {
 		if res.note != "" {
 			x.Note = res.note
 		}
-		a.table.Changed(i)
+		a.changed(i)
 	}
 	if a.stats != nil {
 		a.stats.applied(len(batch), time.Since(start))
