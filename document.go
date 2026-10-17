@@ -406,10 +406,10 @@ type docBase struct {
 	watched   string
 	// dirtySince is when the oldest change not autosaved was made.
 	dirtySince time.Time
-	// backupFailing is set while the recovery copy cannot be written, so
-	// that the error is logged once.
-	backupFailing bool
-	timer         *time.Timer
+	// backupFails counts the recovery copies that could not be written in
+	// a row: the first error is logged, and the retries wait longer.
+	backupFails int
+	timer       *time.Timer
 
 	// io serializes the reads and writes of the document's file and
 	// recovery copy.
@@ -632,10 +632,15 @@ func (b *docBase) scheduleLocked() {
 	if left := most - time.Since(b.dirtySince); left < delay {
 		delay = max(left, 0)
 	}
+	b.armLocked(delay)
+}
+
+// armLocked has the timer persist the document after d. b.mu is held.
+func (b *docBase) armLocked(d time.Duration) {
 	if b.timer == nil {
-		b.timer = time.AfterFunc(delay, func() { docWork.Go(b.persist) })
+		b.timer = time.AfterFunc(d, func() { docWork.Go(b.persist) })
 	} else {
-		b.timer.Reset(delay)
+		b.timer.Reset(d)
 	}
 }
 
@@ -654,7 +659,15 @@ func (b *docBase) persist() {
 			return
 		}
 	}
-	b.backup()
+	if b.backup() != nil {
+		// The error may pass (a file in use on Windows, a full disk): try
+		// again while the document is edited and open.
+		b.mu.Lock()
+		if b.edited && !b.closed {
+			b.armLocked(backupRetry << min(b.backupFails-1, 5))
+		}
+		b.mu.Unlock()
+	}
 }
 
 // docWork tracks the writes of recovery copies that nothing waits for,

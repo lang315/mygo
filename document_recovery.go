@@ -203,50 +203,41 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 }
 
 // backupRetry is how long a recovery copy that could not be written waits
-// to be tried again.
+// to be tried again the first time; each failure after doubles it, up to 32
+// times.
 var backupRetry = time.Second
 
 // backup writes the recovery copy of b, if it changed since the last.
-func (b *docBase) backup() {
+func (b *docBase) backup() error {
 	snap := b.ops.capture()
 	b.io.Lock()
 	defer b.io.Unlock()
 	b.mu.Lock()
 	if !b.edited || snap.at == b.backedUp {
 		b.mu.Unlock()
-		return
+		return nil
 	}
 	e := recoveryEntry{ID: b.id, Path: b.path, Stamp: b.stamp}
 	if b.path == "" {
 		e.Name = b.name
 	}
 	b.mu.Unlock()
-	if err := b.kind.recovery.save(e, snap.write); err != nil {
-		b.mu.Lock()
-		if !b.backupFailing {
+	err := b.kind.recovery.save(e, snap.write)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err != nil {
+		if b.backupFails++; b.backupFails == 1 {
 			log.Printf("mygo: documents: cannot write the recovery copy of %s: %v", e.Name+e.Path, err)
 		}
-		b.backupFailing = true
-		// The error may pass (a file in use on Windows, a full disk): try
-		// again, as long as the document is edited and open.
-		if b.edited && !b.closed {
-			if b.timer == nil {
-				b.timer = time.AfterFunc(backupRetry, func() { docWork.Go(b.persist) })
-			} else {
-				b.timer.Reset(backupRetry)
-			}
-		}
-		b.mu.Unlock()
-		return
+		return err
 	}
-	b.mu.Lock()
-	b.backupFailing = false
+	b.backupFails = 0
 	b.backedUp = snap.at
 	b.dirtySince = time.Time{}
 	if b.changes != snap.at {
 		b.dirtySince = time.Now() // edited while it was written
 	}
-	b.mu.Unlock()
+	return nil
 }
 
 // restore opens the documents of the sessions no instance holds, edited,
