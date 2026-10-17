@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 type dtRow struct {
@@ -812,5 +813,34 @@ func TestDataTableMultiSortCannotChangeAfterTheFirstFrame(t *testing.T) {
 	s.MultiSort = true
 	if msg := dtPanic(tt.Frame); !strings.Contains(msg, "MultiSort") {
 		t.Fatalf("panic %q, want one naming MultiSort", msg)
+	}
+}
+
+func TestDataTableSearchDelay(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	s.SearchDelay = 50 * time.Millisecond
+	tt := dtTester(s, &rows)
+	tt.Click("Search") // the box
+	tt.Type("alp")
+	if ids := dtShown(s); len(ids) != 3 {
+		t.Fatalf("at once: rows %v, want all", ids)
+	}
+	time.Sleep(80 * time.Millisecond)
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{2}) {
+		t.Fatalf("after the delay: rows %v, want 2", ids)
+	}
+	// Enter still applies at once.
+	tt.Key(Cmd, KeyA)
+	tt.Type("bra")
+	tt.Key(0, KeyEnter)
+	if ids := dtShown(s); !slices.Equal(ids, []int{3}) {
+		t.Fatalf("Enter: rows %v, want 3", ids)
+	}
+	// Nothing pending after it: a later frame changes nothing.
+	time.Sleep(80 * time.Millisecond)
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{3}) {
+		t.Fatalf("after Enter and the delay: rows %v, want 3", ids)
 	}
 }

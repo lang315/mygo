@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -71,6 +72,10 @@ type DataTableState[T any, K comparable] struct {
 	// it wants, with its own texts, and searches with SetSearch. No bar is
 	// shown either when no column is searchable.
 	NoSearchBar bool
+	// SearchDelay, when above zero, runs the search of the bar also as
+	// typing pauses that long, besides Enter, the button, clearing the box
+	// and choosing another column.
+	SearchDelay time.Duration
 
 	// Checked are the rows checked, Chosen the rows highlighted.
 	Checked, Chosen Selection[K]
@@ -91,8 +96,12 @@ type DataTableState[T any, K comparable] struct {
 	applied         dataSearch
 	match           func(x *T) bool
 	keep            func(x *T) bool
-	tcols           []TableColumn
-	menu            func(m *Menu, rows []int)
+	// typedAt is when the box last changed, a search pending since then
+	// while pending, with SearchDelay.
+	typedAt time.Time
+	pending bool
+	tcols   []TableColumn
+	menu    func(m *Menu, rows []int)
 }
 
 // start builds what the state keeps, once, from Key and Columns.
@@ -324,7 +333,8 @@ func (s *DataTableState[T, K]) apply() {
 
 // searchBar is the row of the search: the column, the keyword, and a button.
 // The search runs on Enter, a click on the button, clearing the box or
-// choosing another column; at each key it would go through all the rows.
+// choosing another column; at each key it would go through all the rows,
+// unless SearchDelay asks for it as typing pauses.
 func (s *DataTableState[T, K]) searchBar(c *Context) {
 	raw := c.build()
 	Row(c).Gap(8).AlignItems(Center).Children(func() {
@@ -334,7 +344,19 @@ func (s *DataTableState[T, K]) searchBar(c *Context) {
 		submitted := input.Submitted()
 		// Built before the others are tested: a click is read as the button is.
 		clicked := Button(c, raw.texts().Search()).Clicked()
-		if clicked || submitted || column || cleared {
+		if input.Changed() && s.SearchDelay > 0 {
+			s.typedAt, s.pending = c.Now(), true
+		}
+		due := false
+		if s.pending {
+			if wait := s.SearchDelay - c.Now().Sub(s.typedAt); wait > 0 {
+				c.After(wait)
+			} else {
+				due = true
+			}
+		}
+		if clicked || submitted || column || cleared || due {
+			s.pending = false
 			s.apply()
 			c.Invalidate()
 		}
