@@ -101,6 +101,12 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its other modal child was open", n-1)
 	}
+	// The child in front as it closes, as for a user who closes it: else
+	// the check below would not see where its front goes.
+	if runtime.GOOS != "linux" {
+		other.Focus()
+		eventually(t, "the other child to be in front", other.IsFocused)
+	}
 	other.Close()
 	eventually(t, "the other child to close", otherClosed.Load)
 	// Not another app: the parent takes the front back, as from one child.
