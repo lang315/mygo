@@ -288,6 +288,9 @@ func (t *Tester) runLater() {
 	for _, fn := range updates {
 		fn()
 	}
+	if len(updates) > 0 {
+		t.rt.redraw = false // built anew, as Window.Update asks
+	}
 	for len(t.h.later) > 0 {
 		fn := t.h.later[0]
 		t.h.later = t.h.later[1:]
