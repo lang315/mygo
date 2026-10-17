@@ -572,3 +572,29 @@ func TestRecentDocuments() []string {
 
 // TestWindowTitle returns the text of a window's title bar.
 func TestWindowTitle(hwnd uintptr) string { return (&window{hwnd: hwnd}).Title() }
+
+// TestTrayMenuImages builds the menu of a tray as PopUpMenu does and
+// returns its items by text, true for those showing a bitmap.
+func TestTrayMenuImages() map[string]bool {
+	items := map[string]bool{}
+	for _, t := range theBackend.trays {
+		if t.menu == nil {
+			continue
+		}
+		id := t.b.menus.newOwner()
+		menu := t.b.buildMenu(t.menu, false, id, nil, dpiOf(0))
+		n, _, _ := procGetMenuItemCount.Call(menu)
+		for j := range int(int32(n)) {
+			buf := make([]uint16, 256)
+			procGetMenuStringW.Call(menu, uintptr(j), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), mfByPosition)
+			mi := menuItemInfo{Mask: miimBitmap}
+			mi.Size = uint32(unsafe.Sizeof(mi))
+			procGetMenuItemInfoW.Call(menu, uintptr(j), 1, uintptr(unsafe.Pointer(&mi)))
+			text, _, _ := strings.Cut(syscall.UTF16ToString(buf), "\t")
+			items[text] = mi.BmpItem != 0
+		}
+		procDestroyMenu.Call(menu)
+		t.b.menus.drop(id)
+	}
+	return items
+}

@@ -952,3 +952,18 @@ func TestPostKey(code uint16) {
 		cfRelease(ev)
 	}
 }
+
+// TestTrayMenuImages returns the items of the menu a tray's status item
+// holds, by title, true for those showing a 16×16 image.
+func TestTrayMenuImages() map[string]bool {
+	items := map[string]bool{}
+	withPool(func() {
+		for _, t := range theBackend.trays {
+			for _, it := range arrayItems(send(send(t.item, "menu"), "itemArray")) {
+				img := send(it, "image")
+				items[goString(send(it, "title"))] = img != 0 && msgSize(img, sel("size")) == NSSize{16, 16}
+			}
+		}
+	})
+	return items
+}

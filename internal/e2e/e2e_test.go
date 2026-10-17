@@ -17,6 +17,7 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
+	"maps"
 	"math"
 	"net/http"
 	"os"
@@ -1667,27 +1668,16 @@ func TestTrayMenuIcons(t *testing.T) {
 		t.Skip("no tray: ", err)
 	}
 	defer tray.Destroy()
-	layout, ok, err := trayMenuLayout()
+	icons, ok, err := trayMenuIcons()
 	if !ok {
 		t.Skip("the tray menu can't be read on this platform")
 	}
 	if err != nil {
 		t.Fatal("reading the tray menu:", err)
 	}
-	items := map[string]string{}
-	for _, item := range strings.Split(layout, "<(")[1:] {
-		if m := regexp.MustCompile(`'label': <'([^']*)'>`).FindStringSubmatch(item); m != nil {
-			items[m[1]] = item
-		}
-	}
-	// icon-data holds a PNG, which starts with 0x89 "PNG".
-	if !strings.Contains(items["Open"], "'icon-data': <[byte 0x89, 0x50, 0x4e, 0x47") {
-		t.Errorf("the item with an icon has no PNG icon-data: %.300s", items["Open"])
-	}
-	for _, label := range []string{"Bad", "Quit"} {
-		if items[label] == "" || strings.Contains(items[label], "'icon-data'") {
-			t.Errorf("item %s, without an icon shown: %.300s", label, items[label])
-		}
+	want := map[string]bool{"Open": true, "Bad": false, "Quit": false}
+	if !maps.Equal(icons, want) {
+		t.Errorf("items with an icon shown = %v, want %v", icons, want)
 	}
 }
 
