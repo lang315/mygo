@@ -93,6 +93,9 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	if n := clicks.Load(); n != 2 {
 		t.Fatalf("the parent took %d clicks while its second modal child was open", n-2)
 	}
+	if runtime.GOOS == "windows" {
+		t.Fatalf("DEBUG: the test ran to its end; clicks %d", clicks.Load())
+	}
 }
 
 // TestModalChildAndOtherWindows settles V7 of ui/widget's spec, the
