@@ -185,6 +185,34 @@ func (msgs Messages) Column() string {
 	return Catalog.Format(msgs.locale, "column", nil)
 }
 
+// DataTableRows says "{n, plural, one {# row} other {# rows}}"
+// in the language the app shows.
+//
+// How many rows a data table shows, in its footer.
+func DataTableRows(n int) string { return In(i18n.Locale()).DataTableRows(n) }
+
+// DataTableRows says "{n, plural, one {# row} other {# rows}}"
+// in the language of msgs.
+//
+// How many rows a data table shows, in its footer.
+func (msgs Messages) DataTableRows(n int) string {
+	return Catalog.Format(msgs.locale, "dataTableRows", map[string]any{"n": n})
+}
+
+// DataTableChecked says "{n} checked"
+// in the language the app shows.
+//
+// How many rows of a data table are checked, in its footer after the rows.
+func DataTableChecked(n int) string { return In(i18n.Locale()).DataTableChecked(n) }
+
+// DataTableChecked says "{n} checked"
+// in the language of msgs.
+//
+// How many rows of a data table are checked, in its footer after the rows.
+func (msgs Messages) DataTableChecked(n int) string {
+	return Catalog.Format(msgs.locale, "dataTableChecked", map[string]any{"n": n})
+}
+
 // Clear says "Clear"
 // in the language the app shows.
 //

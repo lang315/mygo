@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 type dtRow struct {
@@ -730,5 +731,141 @@ func TestDataMatcherDoesNotAllocatePerRow(t *testing.T) {
 		if n := testing.AllocsPerRun(100, func() { keep(x) }); n != 0 {
 			t.Errorf("%q: %v allocations a row", kw, n)
 		}
+	}
+}
+
+func TestDataTableColumnMatch(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	var got []string
+	s.Columns = append(s.Columns, DataColumn[dtRow]{
+		TableColumn: TableColumn{Title: "ID", Width: 60},
+		Text:        func(x *dtRow) string { return strconv.Itoa(x.ID) },
+		Match: func(x *dtRow, keyword string) bool {
+			got = append(got, keyword)
+			n, err := strconv.Atoi(strings.TrimPrefix(keyword, ">="))
+			return err == nil && x.ID >= n
+		},
+	})
+	tt := dtTester(s, &rows)
+	s.SetSearch("ID", " >=2 ")
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{2, 3}) {
+		t.Fatalf("Match >=2: rows %v, want 2 3", ids)
+	}
+	if got[0] != ">=2" {
+		t.Errorf("Match got %q, want the keyword trimmed", got[0])
+	}
+	// Match replaces the | list too.
+	got = nil
+	s.SetSearch("ID", "1|2")
+	tt.Frame()
+	if len(got) == 0 || got[0] != "1|2" {
+		t.Errorf("Match got %q for 1|2, want the raw keyword", got)
+	}
+	// Columns without Match search as before.
+	s.SetSearch("Name", "alp")
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{2}) {
+		t.Fatalf("Name alp: rows %v, want 2", ids)
+	}
+}
+
+func dtSortState() *DataTableState[dtRow, int] {
+	s := dtState()
+	s.Columns[1].Compare = func(a, b *dtRow) int { return strings.Compare(a.Mail, b.Mail) }
+	s.MultiSort = true
+	return s
+}
+
+func TestDataTableMultiSort(t *testing.T) {
+	rows := []dtRow{{1, "bravo", "b@x.io"}, {2, "alpha", "z@x.io"}, {3, "bravo", "a@x.io"}}
+	s := dtSortState()
+	tt := dtTester(s, &rows)
+	dtClickLast(t, tt, "Name")
+	tt.ClickWith(Cmd, "Mail") // the header: the select shows Name
+	if want := []SortOrder{{Column: "Name"}, {Column: "Mail"}}; !slices.Equal(s.SortBy, want) {
+		t.Fatalf("SortBy %+v, want %+v", s.SortBy, want)
+	}
+	if ids := dtShown(s); !slices.Equal(ids, []int{2, 3, 1}) {
+		t.Fatalf("by Name then Mail: rows %v, want 2 3 1", ids)
+	}
+	if s.Sort != (SortOrder{}) {
+		t.Errorf("Sort changed with MultiSort: %+v", s.Sort)
+	}
+	dtClickLast(t, tt, "Mail")
+	if want := []SortOrder{{Column: "Mail"}}; !slices.Equal(s.SortBy, want) {
+		t.Fatalf("a click: SortBy %+v, want %+v", s.SortBy, want)
+	}
+}
+
+func TestDataTableMultiSortByAColumnWithoutCompare(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	s.MultiSort, s.SortBy = true, []SortOrder{{Column: "Mail"}}
+	dtTester(s, &rows)
+	if ids := dtShown(s); !slices.Equal(ids, []int{1, 2, 3}) {
+		t.Fatalf("by Mail, which has no Compare: rows %v, want 1 2 3", ids)
+	}
+}
+
+func TestDataTableMultiSortCannotChangeAfterTheFirstFrame(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	tt := dtTester(s, &rows)
+	s.MultiSort = true
+	if msg := dtPanic(tt.Frame); !strings.Contains(msg, "MultiSort") {
+		t.Fatalf("panic %q, want one naming MultiSort", msg)
+	}
+}
+
+func TestDataTableSearchDelay(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	s.SearchDelay = 200 * time.Millisecond
+	tt := dtTester(s, &rows)
+	tt.Click("Search") // the box
+	tt.Type("alp")
+	if ids := dtShown(s); len(ids) != 3 {
+		t.Fatalf("at once: rows %v, want all", ids)
+	}
+	time.Sleep(300 * time.Millisecond)
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{2}) {
+		t.Fatalf("after the delay: rows %v, want 2", ids)
+	}
+	// Enter still applies at once.
+	tt.Key(Cmd, KeyA)
+	tt.Type("bra")
+	tt.Key(0, KeyEnter)
+	if ids := dtShown(s); !slices.Equal(ids, []int{3}) {
+		t.Fatalf("Enter: rows %v, want 3", ids)
+	}
+	// Nothing pending after it: a later frame changes nothing.
+	time.Sleep(300 * time.Millisecond)
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{3}) {
+		t.Fatalf("after Enter and the delay: rows %v, want 3", ids)
+	}
+}
+
+func TestDataTableFooter(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	tt := dtTester(s, &rows)
+	if tt.HasText("3 rows") {
+		t.Fatal("a footer without Footer")
+	}
+	s.Footer = true
+	tt.Frame()
+	if !tt.HasText("3 rows") {
+		t.Fatalf("footer: %q", tt.Texts())
+	}
+	s.Checked.Add(1)
+	s.Checked.Add(2)
+	tt.Frame()
+	if !tt.HasText("3 rows · 2 checked") {
+		t.Fatalf("2 checked: %q", tt.Texts())
+	}
+	// A search hiding a checked row: checked counts every checked key.
+	s.SetSearch("Name", "alp")
+	tt.Frame()
+	if !tt.HasText("1 row · 2 checked") {
+		t.Fatalf("1 row shown: %q", tt.Texts())
 	}
 }

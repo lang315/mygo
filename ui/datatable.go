@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -26,6 +27,10 @@ type DataColumn[T any] struct {
 	Cell func(c *Context, x *T)
 	// NoSearch leaves the column out of the search's columns.
 	NoSearch bool
+	// Match, when set, decides which rows a search of the column keeps,
+	// given the keyword trimmed, in place of the cells containing it (and
+	// of the | list of values).
+	Match func(x *T, keyword string) bool
 }
 
 // A DataTableState is what a DataTable keeps for an app's rows: their order
@@ -44,6 +49,12 @@ type DataTableState[T any, K comparable] struct {
 	// Sort is the order shown. A click on a header of a column with a
 	// Compare changes it; set it to start sorted.
 	Sort SortOrder
+	// MultiSort sorts by several columns, SortBy holding them, the first
+	// first: a click on a header sorts by it alone, a Cmd-click (Ctrl-click
+	// on Linux and Windows) adds it, as ListState.SortBy does. Sort is left
+	// alone while it is set. Set it before the first frame.
+	MultiSort bool
+	SortBy    []SortOrder
 	// Filter keeps the rows it returns true for, apart from the search.
 	// FilterKey tells when Filter changed: the rows are filtered again when
 	// it differs from the last frame's. It must be comparable.
@@ -61,6 +72,14 @@ type DataTableState[T any, K comparable] struct {
 	// it wants, with its own texts, and searches with SetSearch. No bar is
 	// shown either when no column is searchable.
 	NoSearchBar bool
+	// SearchDelay, when above zero, runs the search of the bar also as
+	// typing pauses that long, besides Enter, the button, clearing the box
+	// and choosing another column.
+	SearchDelay time.Duration
+	// Footer shows a line under the table: how many rows are shown and,
+	// when any are, how many are checked: every key in Checked, hidden by
+	// the search or the filter or not, so remove the keys of rows removed.
+	Footer bool
 
 	// Checked are the rows checked, Chosen the rows highlighted.
 	Checked, Chosen Selection[K]
@@ -70,6 +89,7 @@ type DataTableState[T any, K comparable] struct {
 	list   ListState
 	cursor int
 	ncols  int
+	multi  bool // MultiSort at the first frame
 
 	// titles are the columns the search offers; column and keyword are what
 	// the select and the box show, applied what the rows are filtered by,
@@ -80,8 +100,12 @@ type DataTableState[T any, K comparable] struct {
 	applied         dataSearch
 	match           func(x *T) bool
 	keep            func(x *T) bool
-	tcols           []TableColumn
-	menu            func(m *Menu, rows []int)
+	// typedAt is when the box last changed, a search pending since then
+	// while pending, with SearchDelay.
+	typedAt time.Time
+	pending bool
+	tcols   []TableColumn
+	menu    func(m *Menu, rows []int)
 }
 
 // start builds what the state keeps, once, from Key and Columns.
@@ -114,7 +138,12 @@ func (s *DataTableState[T, K]) start() {
 	s.ncols, s.cursor = len(s.Columns), -1
 	s.view = NewTableView(compare)
 	s.list.Selected, s.list.Selection, s.list.Checked = &s.cursor, &s.Chosen, &s.Checked
-	s.list.Sort = &s.Sort
+	s.multi = s.MultiSort
+	if s.multi {
+		s.list.SortBy = &s.SortBy
+	} else {
+		s.list.Sort = &s.Sort
+	}
 	s.list.Key = func(row int) any { return s.Key(s.At(row)) }
 	s.list.Label = func(row int) string { return s.Columns[0].Text(s.At(row)) }
 	s.list.Copy = func(rows []int) string { return s.copyRows(s.pick(rows)) }
@@ -178,12 +207,16 @@ func (s *DataTableState[T, K]) Reset() {
 //	app.table.Columns = columns
 //	ui.DataTable(c, &app.table, app.accounts).Grow(1)
 func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []T) Element {
-	if c.build() == nil {
+	raw := c.build()
+	if raw == nil {
 		return Element{}
 	}
 	s.start()
 	if len(s.Columns) != s.ncols {
 		panic("ui: DataTable columns changed after the first frame")
+	}
+	if s.MultiSort != s.multi {
+		panic("ui: DataTable MultiSort changed after the first frame")
 	}
 	s.rows = rows
 	return Column(c).Gap(8).Children(func() {
@@ -194,7 +227,11 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 			panic(fmt.Sprintf("ui: DataTable FilterKey %T is not comparable", k))
 		}
 		s.view.SetFilterKey(dataFilterKey{s.FilterKey, s.applied}, s.keep)
-		s.view.Sync(rows, s.Sort)
+		if s.multi {
+			s.view.Sync(rows, s.SortBy...)
+		} else {
+			s.view.Sync(rows, s.Sort)
+		}
 		s.list.Version = s.view.Version()
 		if s.RowMenu != nil {
 			s.list.RowMenu = s.menu
@@ -204,6 +241,13 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 		Table(c, &s.list, s.tableColumns(c), s.view.Len(), func(row, col int) {
 			s.cell(c, row, col)
 		}).Grow(1)
+		if s.Footer {
+			text := raw.texts().DataTableRows(s.view.Len())
+			if n := s.Checked.Len(); n > 0 {
+				text += " · " + raw.texts().DataTableChecked(n)
+			}
+			Text(c, text).SingleLine().TextColor(c.Theme().TextMuted)
+		}
 	})
 }
 
@@ -290,14 +334,19 @@ func (s *DataTableState[T, K]) apply() {
 	}
 	s.applied, s.match = applied, nil
 	if applied.column != "" {
-		i := s.searchable[slices.Index(s.titles, applied.column)]
-		s.match = dataMatcher(s.Columns[i].Text, applied.keyword)
+		col := &s.Columns[s.searchable[slices.Index(s.titles, applied.column)]]
+		if match, kw := col.Match, applied.keyword; match != nil {
+			s.match = func(x *T) bool { return match(x, kw) }
+		} else {
+			s.match = dataMatcher(col.Text, applied.keyword)
+		}
 	}
 }
 
 // searchBar is the row of the search: the column, the keyword, and a button.
 // The search runs on Enter, a click on the button, clearing the box or
-// choosing another column; at each key it would go through all the rows.
+// choosing another column; at each key it would go through all the rows,
+// unless SearchDelay asks for it as typing pauses.
 func (s *DataTableState[T, K]) searchBar(c *Context) {
 	raw := c.build()
 	Row(c).Gap(8).AlignItems(Center).Children(func() {
@@ -307,7 +356,19 @@ func (s *DataTableState[T, K]) searchBar(c *Context) {
 		submitted := input.Submitted()
 		// Built before the others are tested: a click is read as the button is.
 		clicked := Button(c, raw.texts().Search()).Clicked()
-		if clicked || submitted || column || cleared {
+		if input.Changed() && s.SearchDelay > 0 {
+			s.typedAt, s.pending = c.Now(), true
+		}
+		due := false
+		if s.pending {
+			if wait := s.SearchDelay - c.Now().Sub(s.typedAt); wait > 0 {
+				c.After(wait)
+			} else {
+				due = true
+			}
+		}
+		if clicked || submitted || column || cleared || due {
+			s.pending = false
 			s.apply()
 			c.Invalidate()
 		}

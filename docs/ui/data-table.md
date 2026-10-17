@@ -46,10 +46,17 @@ frame, and use it on the main thread.
   in one line; `NoSearch` leaves the column out of the search.
 - `Sort` is the order shown; a click on a header changes it, and you can set
   it to start sorted.
+- `MultiSort` sorts by several columns, which `SortBy` holds, the first first:
+  a click on a header sorts by it alone, a Cmd-click (Ctrl-click on Linux and
+  Windows) adds it, makes it descending, then takes it out. `Sort` is left
+  alone. Set it before the first frame.
 - `Checked` and `Chosen` are `Selection`s of keys: the rows checked with the
   checkboxes or Space, and the rows highlighted. `Current()` is the row
   chosen last, `Len()` and `At(i)` the rows shown. `Version()` changes
   whenever the rows shown, or their order, do.
+- `Footer` shows under the table how many rows are shown and how many are
+  checked: every key in `Checked`, hidden by the search or the filter or not,
+  so remove the keys of the rows you remove.
 - `NoSearchBar` hides the search bar, for an app that puts its own where it
   wants, with its own texts, and calls `SetSearch`. No bar is shown either when
   no column is searchable.
@@ -70,9 +77,11 @@ cost.
 The bar over the table has a column to search (the first of those without
 `NoSearch`), a box and a button. The search runs on Enter, the button, clearing
 the box or choosing another column, not at each key: it goes through all the
-rows. Text matches the cells containing it, case aside; a keyword with `|`
-lists the values to match exactly (`UID1|UID2`). Of columns with the same
-`Title`, the first is searched.
+rows. With `SearchDelay` above zero, it also runs as typing pauses that
+long. Text matches the cells containing it, case aside; a keyword with `|`
+lists the values to match exactly (`UID1|UID2`). A column's `Match`, when set,
+decides instead: it gets each row and the keyword trimmed. Of columns with the
+same `Title`, the first is searched.
 
 `SetSearch(column, keyword)` searches from code, and `Search()` returns the
 search applied; with `NoSearchBar` they are all an app's own bar needs.
