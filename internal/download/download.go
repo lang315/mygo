@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/egoist/mygo/internal/update"
 )
 
 // File is a file to download.
@@ -206,10 +208,12 @@ func Cached(ctx context.Context, f File, path string) error {
 	return nil
 }
 
-// rename is os.Rename, and waiting is called when Cached waits for
-// another process to download the file, both for tests to replace.
+// rename is update.Rename, which retries while Windows reports the file
+// in use, as antivirus software does as it scans a download, and waiting
+// is called when Cached waits for another process to download the file,
+// both for tests to replace.
 var (
-	rename  = os.Rename
+	rename  = update.Rename
 	waiting = func(path string) {}
 )
 
