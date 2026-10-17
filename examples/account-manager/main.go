@@ -52,7 +52,7 @@ func newApp(rows int) *app {
 	a.folder = a.s.folders[0].Name
 	a.filterFolder()
 	a.table.Key = func(x *account) int { return x.ID }
-	a.table.Columns = dataColumns()
+	a.table.Columns = dataColumns(tabColumns[tabAccounts])
 	// The search bar is the footer's, with fhtool's texts.
 	a.table.NoSearchBar = true
 	a.table.Filter = func(x *account) bool { return x.Folder == a.table.FilterKey }
