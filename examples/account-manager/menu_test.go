@@ -71,6 +71,7 @@ func TestMenuActionNeedsCheckedAccounts(t *testing.T) {
 func TestMenuActionRunsOnTheTabShown(t *testing.T) {
 	a := newApp(10)
 	tt := newTester(t, a)
+	a.loops = 1000 // a run that cannot end before the test stops it
 	tt.do(tt.Click("Ads"))
 	tt.do(tt.Click("Check all"))
 	choose(t, tt, "Backup")

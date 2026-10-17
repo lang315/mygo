@@ -97,23 +97,12 @@ func (a *app) selectTab(i int) {
 
 // changed says that the account at index i of the store changed. Only the
 // tab shown is told: a table that is not built never syncs, so the rows
-// named to it would pile up. The others place all rows again once shown.
-func (a *app) changed(i int) {
-	for t, tb := range a.tables() {
-		if t == a.tab {
-			tb.Changed(i)
-		} else {
-			tb.Reset()
-		}
-	}
-}
+// named to it would pile up. A tab places all rows again once shown
+// (selectTab).
+func (a *app) changed(i int) { a.shown().Changed(i) }
 
 // reset says that accounts were removed.
-func (a *app) reset() {
-	for _, tb := range a.tables() {
-		tb.Reset()
-	}
-}
+func (a *app) reset() { a.shown().Reset() }
 
 func (a *app) build(c *ui.Context) {
 	if a.stats != nil {
