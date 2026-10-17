@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -366,6 +367,27 @@ func TestDocumentOutsideChanges(t *testing.T) {
 	if err := d.Save(); err != nil || readString(t, path) != "x" {
 		t.Errorf("saving a deleted document: %v", err)
 	}
+}
+
+// TestDocumentRecoveryRetriesAFailedWrite is a regression test: a recovery
+// copy that could not be written (a file in use on Windows, a full disk)
+// was not tried again until the next edit.
+func TestDocumentRecoveryRetriesAFailedWrite(t *testing.T) {
+	var calls atomic.Int32
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Write: func(w io.Writer, s string) error {
+		if calls.Add(1) == 1 {
+			return errors.New("the file is in use")
+		}
+		_, err := io.WriteString(w, s)
+		return err
+	}})
+	d := ds.New()
+	d.Set("unsaved")
+	root, _ := ds.kind.recovery.root()
+	waitFor(t, "the recovery copy after a failed write", func() bool {
+		m, _ := filepath.Glob(filepath.Join(root, "*", d.id))
+		return len(m) == 1 && fileIs(m[0], "unsaved")
+	})
 }
 
 func TestDocumentRecovery(t *testing.T) {

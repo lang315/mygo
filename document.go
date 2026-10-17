@@ -406,7 +406,10 @@ type docBase struct {
 	watched   string
 	// dirtySince is when the oldest change not autosaved was made.
 	dirtySince time.Time
-	timer      *time.Timer
+	// backupFailing is set while the recovery copy cannot be written, so
+	// that the error is logged once.
+	backupFailing bool
+	timer         *time.Timer
 
 	// io serializes the reads and writes of the document's file and
 	// recovery copy.
