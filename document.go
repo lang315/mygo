@@ -395,12 +395,10 @@ type docBase struct {
 	// the file has, backedUp the one the recovery copy has (0: none).
 	changes, savedAt, backedUp uint64
 	edited                     bool
-	// stamp is the file as the document last read or wrote it.
-	stamp fileStamp
-	// fileID is the identity of the file as the document last read or wrote
-	// it, when the system tells one (hasFileID).
-	fileID                      fileWatchID
-	hasFileID                   bool
+	// stamp is the file as the document last read or wrote it, and file its
+	// identity.
+	stamp                       fileStamp
+	file                        fileIdentity
 	readOnly, conflict, deleted bool
 	window                      *Window
 	closed                      bool
@@ -849,7 +847,7 @@ func (k *docKind) open(path string) (*docBase, error) {
 		return nil, err
 	}
 	b.path, b.stamp, b.id = abs, read.stamp, randomText()
-	b.fileID, b.hasFileID = read.id, read.hasID
+	b.file = read.file
 	b.readOnly = !fileWritable(abs)
 	k.show(b)
 	addRecent(abs)
@@ -857,8 +855,8 @@ func (k *docKind) open(path string) (*docBase, error) {
 }
 
 // readFile reads the content of the file at path, off the main thread.
-func (k *docKind) readFile(path string) (v any, read fileRead, err error) {
-	readIt := func() {
+func (k *docKind) readFile(path string) (v any, fr fileRead, err error) {
+	read := func() {
 		var f *os.File
 		if f, err = openShared(path); err != nil {
 			return
@@ -872,12 +870,11 @@ func (k *docKind) readFile(path string) (v any, read fileRead, err error) {
 			err = fmt.Errorf("mygo: %s is a directory", path)
 			return
 		}
-		read.stamp = stampOf(info)
-		read.id, read.hasID = identityOf(info)
+		fr = readOf(info)
 		v, err = k.read(f)
 	}
-	offMain(func() struct{} { readIt(); return struct{}{} })
-	return v, read, err
+	offMain(func() struct{} { read(); return struct{}{} })
+	return v, fr, err
 }
 
 // show registers b and opens its window.

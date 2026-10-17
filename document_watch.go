@@ -89,37 +89,25 @@ func watchDocumentFile(ctx context.Context, path string) {
 // followDocumentFile tells the documents of the file at path what w reports
 // of it, until ctx is done or the file is renamed.
 func followDocumentFile(ctx context.Context, w *FileWatcher, path string) {
-	dir := filepath.Dir(w.Root())
 	for {
 		r := w.next(ctx)
 		if r.err != nil {
 			return
 		}
-		removed := r.events[len(r.events)-1].Op == FileRemove
 		// The file the watch saw go away, by what it was when the watch
 		// last saw it: a look now may come after the next rename.
 		moved := ""
-		if removed && r.gone.ok {
-			moved = findRenamed(dir, r.gone.id)
+		if r.events[len(r.events)-1].Op == FileRemove && r.gone.ok {
+			moved = findRenamed(filepath.Dir(w.Root()), r.gone.id)
 		}
-		follows := false
 		for _, b := range documentsAt(path) {
-			to := moved
-			if to == "" && removed {
-				// The watch looks once for the changes of a debounce, and
-				// last saw the file before one that replaced it and was
-				// renamed since, as an app saving and renaming at once
-				// does: the file the document read is that one.
-				to = b.findMoved(dir)
-			}
-			if to != "" {
-				b.moved(to)
-				follows = true
+			if moved != "" {
+				b.moved(moved)
 			} else {
 				go b.checkDisk()
 			}
 		}
-		if follows {
+		if moved != "" {
 			return // moved watches the new path
 		}
 	}
@@ -131,13 +119,13 @@ func followDocumentFile(ctx context.Context, w *FileWatcher, path string) {
 // identity of a file deleted may be given to one made later.
 func (b *docBase) findMoved(dir string) string {
 	b.mu.Lock()
-	id, ok, stamp := b.fileID, b.hasFileID, b.stamp
+	file, stamp := b.file, b.stamp
 	b.mu.Unlock()
-	if !ok {
+	if !file.ok {
 		return ""
 	}
-	return findFile(dir, func(info os.FileInfo, other fileWatchID) bool {
-		return other == id && stampOf(info) == stamp
+	return findFile(dir, func(info os.FileInfo, id fileWatchID) bool {
+		return id == file.id && stampOf(info) == stamp
 	})
 }
 
@@ -147,19 +135,22 @@ func findRenamed(dir string, id fileWatchID) string {
 	return findFile(dir, func(_ os.FileInfo, other fileWatchID) bool { return other == id })
 }
 
-// findFile returns the path of the first file in dir that match accepts, with
-// its identity, or "".
+// findFile returns the path of the first regular file in dir that match
+// accepts, given its info and identity, or "".
 func findFile(dir string, match func(info os.FileInfo, id fileWatchID) bool) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return ""
 	}
 	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			continue
+		}
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
-		if other, ok := fileWatchIdentity(StatIdentity(info)); ok && match(info, other) {
+		if other := identityOf(info); other.ok && match(info, other.id) {
 			return filepath.Join(dir, entry.Name())
 		}
 	}
