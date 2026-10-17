@@ -596,3 +596,76 @@ func TestUntitledNumber(t *testing.T) {
 		t.Errorf("untitledName(3) = %q", got)
 	}
 }
+
+// documentRenamedAfter opens a document, has change replace its file (as
+// another app saving as editors do, or the document itself) and the
+// document know it, then renames the file at once, within one debounce of the
+// watch. The watch looks once, and last saw the file before the one that
+// replaced it, which is gone by then, so it names no file for the document
+// to follow. The document knows the file it read or wrote, though, and finds
+// that one where it was renamed.
+func documentRenamedAfter(t *testing.T, change func(d *Document[string], path string)) {
+	t.Helper()
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	path := filepath.Join(dir, "other.txt")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d, err := ds.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The watch the document starts is not fed here: this one is, by notices
+	// the test sends once both changes are made.
+	ctx := wait.Context(t)
+	w, err := WatchFiles(ctx, path, FileWatchOptions{Debounce: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	go followDocumentFile(ctx, w, path)
+	change(d, path)
+	renamed := filepath.Join(dir, "renamed.txt")
+	if err := os.Rename(path, renamed); err != nil {
+		t.Fatal(err)
+	}
+	fileWatchTestNotice(t, w, "..", platform.FileWatchNotice{Name: "other.txt", Kind: platform.FileWatchCreate})
+	fileWatchTestNotice(t, w, "..", platform.FileWatchNotice{Name: "other.txt", Kind: platform.FileWatchRemove})
+	wait.Until(t, "the document to follow the rename", func() bool { return d.Path() == renamed })
+	// The move records the file as a recent document after it set the path;
+	// the test's directories go when the test ends.
+	wait.Until(t, "the moved document to be recorded", func() bool { return slices.Contains(App.RecentDocuments(), renamed) })
+}
+
+// TestDocumentFollowsAFileReplacedThenRenamedInOneLook: another app saved
+// the file, and the document read it, as the first look of a watch that
+// started late does.
+func TestDocumentFollowsAFileReplacedThenRenamedInOneLook(t *testing.T) {
+	documentRenamedAfter(t, func(d *Document[string], path string) {
+		if err := os.WriteFile(path+".tmp", []byte("two, longer"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(path+".tmp", path); err != nil {
+			t.Fatal(err)
+		}
+		d.checkDisk()
+		if got := d.Content(); got != "two, longer" {
+			t.Fatalf("the document reads %q", got)
+		}
+	})
+}
+
+// TestDocumentFollowsAFileItSavedThenRenamedInOneLook: the document saved
+// the file, which writes a new file and renames it over the old.
+func TestDocumentFollowsAFileItSavedThenRenamedInOneLook(t *testing.T) {
+	documentRenamedAfter(t, func(d *Document[string], path string) {
+		d.Set("saved, longer")
+		if err := d.Save(); err != nil {
+			t.Fatal(err)
+		}
+		if got := readString(t, path); got != "saved, longer" {
+			t.Fatalf("the file has %q", got)
+		}
+	})
+}

@@ -17,6 +17,30 @@ type fileStamp struct {
 	Size    int64 `json:"size"`
 }
 
+// fileRead is what a read of a file saw of it: its stamp and its identity,
+// the file itself whatever name it has later, which lets a document find
+// its file where another app renamed it (see followDocumentFile).
+type fileRead struct {
+	stamp fileStamp
+	id    fileWatchID
+	hasID bool
+}
+
+// identityOf returns the identity of the file info is of, if the system
+// tells one.
+func identityOf(info os.FileInfo) (fileWatchID, bool) {
+	return fileWatchIdentity(StatIdentity(info))
+}
+
+// pathIdentity returns the identity of the file at path now.
+func pathIdentity(path string) (fileWatchID, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileWatchID{}, false
+	}
+	return identityOf(info)
+}
+
 func stampOf(info os.FileInfo) fileStamp {
 	return fileStamp{ModTime: info.ModTime().UnixNano(), Size: info.Size()}
 }
@@ -78,10 +102,11 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	id, hasID := pathIdentity(target)
 	b.mu.Lock()
 	b.ops.markSaved(snap)
 	b.savedAt = snap.at
-	b.stamp = stamp
+	b.stamp, b.fileID, b.hasFileID = stamp, id, hasID
 	b.conflict, b.deleted = false, false
 	moved := target != b.path
 	if moved {
@@ -110,14 +135,14 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 // reload reads path again and makes it the content.
 func (b *docBase) reload(path string) error {
 	b.io.Lock()
-	v, stamp, err := b.kind.readFile(path)
+	v, read, err := b.kind.readFile(path)
 	if err != nil {
 		b.io.Unlock()
 		return err
 	}
 	b.mu.Lock()
 	b.ops.replace(v)
-	b.stamp = stamp
+	b.stamp, b.fileID, b.hasFileID = read.stamp, read.id, read.hasID
 	b.conflict, b.deleted = false, false
 	b.readOnly = !fileWritable(path)
 	b.dirtySince = time.Time{}

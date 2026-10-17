@@ -78,28 +78,55 @@ func watchDocumentFile(ctx context.Context, path string) {
 	for _, b := range documentsAt(path) {
 		go b.checkDisk()
 	}
+	followDocumentFile(ctx, w, path)
+}
+
+// followDocumentFile tells the documents of the file at path what w reports
+// of it, until ctx is done or the file is renamed.
+func followDocumentFile(ctx context.Context, w *FileWatcher, path string) {
+	dir := filepath.Dir(w.Root())
 	for {
 		r := w.next(ctx)
 		if r.err != nil {
 			return
 		}
+		removed := r.events[len(r.events)-1].Op == FileRemove
 		// The file the watch saw go away, by what it was when the watch
 		// last saw it: a look now may come after the next rename.
 		moved := ""
-		if r.events[len(r.events)-1].Op == FileRemove && r.gone.ok {
-			moved = findRenamed(filepath.Dir(w.Root()), r.gone.id)
+		if removed && r.gone.ok {
+			moved = findRenamed(dir, r.gone.id)
 		}
+		follows := false
 		for _, b := range documentsAt(path) {
-			if moved != "" {
-				b.moved(moved)
+			to := moved
+			if to == "" && removed {
+				// The watch looks once for the changes of a debounce, and
+				// last saw the file before one that replaced it and was
+				// renamed since, as an app saving and renaming at once
+				// does: the file the document read is that one.
+				if id, ok := b.fileIdentity(); ok && (!r.gone.ok || id != r.gone.id) {
+					to = findRenamed(dir, id)
+				}
+			}
+			if to != "" {
+				b.moved(to)
+				follows = true
 			} else {
 				go b.checkDisk()
 			}
 		}
-		if moved != "" {
+		if follows {
 			return // moved watches the new path
 		}
 	}
+}
+
+// fileIdentity returns the identity of the file as b last read or wrote it.
+func (b *docBase) fileIdentity() (fileWatchID, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.fileID, b.hasFileID
 }
 
 // findRenamed returns the path of the file in dir that is the file id
