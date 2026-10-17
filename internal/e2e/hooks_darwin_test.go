@@ -30,7 +30,7 @@ func recentDocumentRecorded(path string) (recorded, supported bool) {
 }
 
 func activateMenu(w *mygo.Window, path ...string) (err error) {
-	mygo.RunOnMain(func() { err = darwin.TestPerformMenuItem(path...) })
+	sendFront(w, "activateMenu", func() { err = darwin.TestPerformMenuItem(path...) })
 	return err
 }
 
@@ -44,12 +44,49 @@ func endSheet(w *mygo.Window) (ok bool, supported bool) {
 	return ok, true
 }
 
+// beforeSend, when set, runs in sendFront between the wait for the front and
+// the input's posting: a test makes another app take the front then, as a
+// user's switch may at any instant.
+var beforeSend func()
+
+// inFront says whether input reaches a window as a user's does: its app is in
+// front, or it is a panel that takes no activation, which is key while another
+// app is in front. A window that is key in an app that was just deactivated
+// does not count: it resigns key a moment later.
+func inFront(frontmost, key, panel bool) bool { return frontmost || key && panel }
+
+// sendFront gives w its input: send runs on the main thread. The front may
+// change between the wait for it and the input, and AppKit drops a click to
+// an app that is not active, a menu of one has no focused window: so the
+// check and send are one step on the main thread, and an input that found
+// the window not in front (inFront) waits for the front again. After five
+// seconds the input is sent anyway.
+func sendFront(w *mygo.Window, what string, send func()) {
+	panel := w.IsPanel()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		waitKey(w)
+		noteInput(what, w)
+		if f := beforeSend; f != nil {
+			f()
+		}
+		var sent bool
+		mygo.RunOnMain(func() {
+			if sent = inFront(darwin.TestIsFrontmost(), darwin.TestIsKeyWindow(w.NativeHandle()), panel) || time.Now().After(deadline); sent {
+				send()
+			}
+		})
+		if sent {
+			return
+		}
+	}
+}
+
 func click(w *mygo.Window, x, y float64) bool {
 	waitKey(w)
 	waitOnScreen(w)
-	waitKey(w) // the wait for the screen took long enough for another app to take the front again
-	noteInput("click", w)
-	mygo.RunOnMain(func() { darwin.TestClick(w.NativeHandle(), x, y) })
+	// The wait for the screen took long enough for another app to take the
+	// front again: sendFront waits for it once more.
+	sendFront(w, "click", func() { darwin.TestClick(w.NativeHandle(), x, y) })
 	return true
 }
 
@@ -100,14 +137,12 @@ func waitKey(w *mygo.Window) {
 }
 
 func sideButton(w *mygo.Window, back bool) (ok bool) {
-	mygo.RunOnMain(func() { ok = darwin.TestSideButton(w.NativeHandle(), back) })
+	sendFront(w, "sideButton", func() { ok = darwin.TestSideButton(w.NativeHandle(), back) })
 	return ok
 }
 
 func drag(w *mygo.Window, points [][2]float64) bool {
-	waitKey(w)
-	noteInput("drag", w)
-	mygo.RunOnMain(func() { darwin.TestDrag(w.NativeHandle(), points) })
+	sendFront(w, "drag", func() { darwin.TestDrag(w.NativeHandle(), points) })
 	return true
 }
 
@@ -214,7 +249,7 @@ func loseComposition(bool) bool                   { return false }
 func failWebViews(int) bool { return false }
 
 func clickAndType(w *mygo.Window, x, y float64, text string) (ok bool) {
-	mygo.RunOnMain(func() { ok = darwin.TestClickAndType(w.NativeHandle(), x, y, text) })
+	sendFront(w, "clickAndType", func() { ok = darwin.TestClickAndType(w.NativeHandle(), x, y, text) })
 	return ok
 }
 
@@ -222,7 +257,7 @@ func clickAndType(w *mygo.Window, x, y float64, text string) (ok bool) {
 // through interpretKeyEvents. A real input method does not see the key:
 // darwin.TestPostKey's keys it does.
 func pressKey(w *mygo.Window, code uint16, chars string) (ok bool) {
-	mygo.RunOnMain(func() { ok = darwin.TestKey(w.NativeHandle(), code, chars) })
+	sendFront(w, "pressKey", func() { ok = darwin.TestKey(w.NativeHandle(), code, chars) })
 	return ok
 }
 
@@ -233,12 +268,12 @@ func dragFiles(*mygo.Window, float64, float64, []string) (bool, bool) { return f
 // pressTab presses Tab in a window of native UI, with Shift when back, as
 // the keyboard does: in the content or in the page of a web view.
 func pressTab(w *mygo.Window, back bool) (ok bool) {
-	mygo.RunOnMain(func() { ok = darwin.TestKeyShift(w.NativeHandle(), 48, "\t", back) })
+	sendFront(w, "pressTab", func() { ok = darwin.TestKeyShift(w.NativeHandle(), 48, "\t", back) })
 	return ok
 }
 
 func compose(w *mygo.Window, text string, caret int, commit bool) (ok bool) {
-	mygo.RunOnMain(func() { ok = darwin.TestCompose(w.NativeHandle(), text, caret, commit) })
+	sendFront(w, "compose", func() { ok = darwin.TestCompose(w.NativeHandle(), text, caret, commit) })
 	return ok
 }
 
@@ -248,8 +283,7 @@ func controlClick(w *mygo.Window, x, y float64) bool {
 }
 
 func composeOver(w *mygo.Window, text string, caret int, commit bool, from, length int) (ok bool) {
-	waitKey(w)
-	mygo.RunOnMain(func() { ok = darwin.TestComposeOver(w.NativeHandle(), text, caret, commit, from, length) })
+	sendFront(w, "composeOver", func() { ok = darwin.TestComposeOver(w.NativeHandle(), text, caret, commit, from, length) })
 	return ok
 }
 
