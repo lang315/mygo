@@ -108,7 +108,18 @@ func (v *TableView[T]) SetFilterKey(key any, keep func(*T) bool) {
 // Changed tells the view that the rows of the slice at those indices
 // changed in place, for the next Sync to place them again. Rows appended
 // to the slice need not be named.
-func (v *TableView[T]) Changed(rows ...int) { v.dirty = append(v.dirty, rows...) }
+func (v *TableView[T]) Changed(rows ...int) {
+	if v.reset {
+		return
+	}
+	v.dirty = append(v.dirty, rows...)
+	// Past an eighth of the rows, Sync places them all again anyway: a view
+	// told of changes but not synced, as a table not shown, then holds no
+	// list growing with them.
+	if len(v.dirty) > v.n/8 {
+		v.reset, v.dirty = true, v.dirty[:0]
+	}
+}
 
 // Reset has the next Sync place all rows again, as after rows were
 // removed or moved within the slice: Sync cannot tell when rows removed
