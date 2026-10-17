@@ -127,15 +127,6 @@ var tabTitles = func() (t [len(tabColumns)][]string) {
 	return t
 }()
 
-// titles are the columns' titles, for the column searched.
-var titles = func() []string {
-	t := make([]string, len(columns))
-	for i, col := range columns {
-		t[i] = col.Title
-	}
-	return t
-}()
-
 // cellText is what column col shows of a: the cells, the search and the
 // copies read it.
 func cellText(a *account, col int) string {

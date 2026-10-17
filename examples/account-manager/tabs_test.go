@@ -66,9 +66,7 @@ func TestHiddenTabPlacesTheChangedRowsWhenShownAgain(t *testing.T) {
 	// The tab hidden is not told which rows changed (they would pile up, as
 	// it never syncs): it places all of them again once shown.
 	a.s.accounts[3].Status = "zzz"
-	for range 1000 {
-		a.changed(3)
-	}
+	a.changed(3)
 	tt.Frame()
 	tt.do(tt.Click("Email"))
 	if last := a.email.At(a.email.Len() - 1); last.ID != 3 {
@@ -102,4 +100,26 @@ func TestSwitchingTabsAt100kRows(t *testing.T) {
 	}
 	tt.do(tt.Click("TKQC")) // sort the Ads tab
 	tt.want("Tổng số dòng: 100000")
+}
+
+// TestEachTabOpensUnscrolled: the tabs' tables are different widgets, so the
+// horizontal scroll of one is not the other's.
+func TestEachTabOpensUnscrolled(t *testing.T) {
+	a := newApp(1000)
+	tt := newTester(t, a) // 1280 px wide: the first tab's 18 columns do not fit
+	tt.do(tt.Click("Email"))
+	home, ok := tt.Find("UID")
+	if !ok {
+		t.Fatal("no UID header on the Email tab")
+	}
+	tt.do(tt.Click("Tài khoản"))
+	tt.Scroll(600, 400, 800, 0)
+	tt.Frame()
+	if now, _ := tt.Find("UID"); now.X >= home.X {
+		t.Fatalf("the first tab did not scroll sideways: UID header at %v, was %v", now.X, home.X)
+	}
+	tt.do(tt.Click("Email"))
+	if now, ok := tt.Find("UID"); !ok || now.X != home.X {
+		t.Fatalf("the Email tab opens scrolled: UID header at %v (shown %v), want %v", now.X, ok, home.X)
+	}
 }

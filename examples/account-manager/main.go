@@ -32,7 +32,7 @@ var actions = []string{"Đăng nhập", "Backup", "Bật 2FA", "Kiểm tra tài 
 // app is the state the window shows.
 type app struct {
 	s     *store
-	table ui.DataTableState[account, int] // the accounts of the folder shown that the search finds
+	table ui.DataTableState[account, int] // the first tab's accounts of the folder shown that the search finds
 	// The other tabs' tables: the same accounts, other columns, and their
 	// own checks, highlights, sort and search.
 	ads, email ui.DataTableState[account, int]
@@ -268,7 +268,7 @@ func (a *app) showFolder() {
 	a.filterFolder()
 }
 
-// filterFolder has the table show the accounts of the folder a.folder names.
+// filterFolder has the tables show the accounts of the folder a.folder names.
 // The table does nothing when its key is the one it has: the rows are
 // filtered again only when the folder changes.
 func (a *app) filterFolder() {
@@ -286,7 +286,8 @@ func (a *app) filter() { a.shown().SetSearch(a.column, a.keyword) }
 func (a *app) showTable(c *ui.Context) {
 	t := a.shown()
 	t.RowMenu = func(m *ui.Menu, rows []*account) { a.rowMenu(c, m, rows) }
-	ui.DataTable(c, t, a.s.accounts).Grow(1).Key(a.tab)
+	// A table of its own for each tab: its scroll, widths and focus are not the others'.
+	ui.DataTable(c.Key(a.tab), t, a.s.accounts).Grow(1)
 }
 
 // copyText is columns cols of rows, | between them, a line each.
@@ -374,8 +375,8 @@ func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []*account) {
 }
 
 // forget drops the accounts ids from every tab's checks and highlights, and
-// has the tables place again only the rows moved, and all of them after rows
-// were removed.
+// has the tab shown place again only the rows moved, and all of them after
+// rows were removed. The other tabs place all rows again when shown.
 func (a *app) forget(ids []int) {
 	for _, id := range ids {
 		for _, tb := range a.tables() {

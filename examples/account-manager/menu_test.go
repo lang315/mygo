@@ -28,7 +28,15 @@ func choose(t *testing.T, tt *tester, label string) {
 	if it == nil {
 		t.Fatalf("no menu item %q", label)
 	}
+	// A click must ask for a frame, as Window.Update does: with no input in
+	// the window, nothing else would.
+	update, asked := tt.a.update, 0
+	tt.a.update = func(fn func()) { asked++; update(fn) }
+	defer func() { tt.a.update = update }()
 	it.Click(it, nil)
+	if asked == 0 {
+		t.Fatalf("the click on %q asked for no frame", label)
+	}
 	tt.Frame()
 }
 
@@ -109,4 +117,23 @@ func TestMenuFolders(t *testing.T) {
 		t.Fatal("the trash was deleted")
 	}
 	tt.want("Không xóa được thùng rác!")
+}
+
+func TestMenuDoesNotDeleteAFolderWhileRunning(t *testing.T) {
+	a := newApp(10)
+	tt := newTester(t, a)
+	a.loops = 1000
+	tt.do(tt.Click("Check all"))
+	choose(t, tt, "Backup")
+	if a.run == nil {
+		t.Fatal("no run started")
+	}
+	choose(t, tt, "Thêm thư mục") // the results reach the rows by ID: adding is fine
+	choose(t, tt, "Xóa thư mục")
+	if len(a.s.folders) != 4 {
+		t.Fatalf("a folder was deleted while a run goes on: %d folders", len(a.s.folders))
+	}
+	tt.want("Đang chạy, chưa xóa được thư mục!")
+	choose(t, tt, "Dừng")
+	tt.wait(&a.run)
 }
