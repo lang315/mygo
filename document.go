@@ -632,15 +632,15 @@ func (b *docBase) scheduleLocked() {
 	if left := most - time.Since(b.dirtySince); left < delay {
 		delay = max(left, 0)
 	}
-	b.armLocked(delay)
-}
-
-// armLocked has the timer persist the document after d. b.mu is held.
-func (b *docBase) armLocked(d time.Duration) {
+	if b.backupFails > 0 {
+		// The recovery copy failed (a file in use on Windows, a full disk):
+		// wait longer after each failure, edits or not.
+		delay = max(delay, backupRetry<<min(b.backupFails-1, 5))
+	}
 	if b.timer == nil {
-		b.timer = time.AfterFunc(d, func() { docWork.Go(b.persist) })
+		b.timer = time.AfterFunc(delay, func() { docWork.Go(b.persist) })
 	} else {
-		b.timer.Reset(d)
+		b.timer.Reset(delay)
 	}
 }
 
@@ -659,15 +659,12 @@ func (b *docBase) persist() {
 			return
 		}
 	}
-	if b.backup() != nil {
-		// The error may pass (a file in use on Windows, a full disk): try
-		// again while the document is edited and open.
-		b.mu.Lock()
-		if b.edited && !b.closed {
-			b.armLocked(backupRetry << min(b.backupFails-1, 5))
-		}
-		b.mu.Unlock()
+	b.backup()
+	b.mu.Lock()
+	if b.backupFails > 0 {
+		b.scheduleLocked() // try again
 	}
+	b.mu.Unlock()
 }
 
 // docWork tracks the writes of recovery copies that nothing waits for,
