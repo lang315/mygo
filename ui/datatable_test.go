@@ -732,3 +732,39 @@ func TestDataMatcherDoesNotAllocatePerRow(t *testing.T) {
 		}
 	}
 }
+
+func TestDataTableColumnMatch(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	var got []string
+	s.Columns = append(s.Columns, DataColumn[dtRow]{
+		TableColumn: TableColumn{Title: "ID", Width: 60},
+		Text:        func(x *dtRow) string { return strconv.Itoa(x.ID) },
+		Match: func(x *dtRow, keyword string) bool {
+			got = append(got, keyword)
+			n, err := strconv.Atoi(strings.TrimPrefix(keyword, ">="))
+			return err == nil && x.ID >= n
+		},
+	})
+	tt := dtTester(s, &rows)
+	s.SetSearch("ID", " >=2 ")
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{2, 3}) {
+		t.Fatalf("Match >=2: rows %v, want 2 3", ids)
+	}
+	if got[0] != ">=2" {
+		t.Errorf("Match got %q, want the keyword trimmed", got[0])
+	}
+	// Match replaces the | list too.
+	got = nil
+	s.SetSearch("ID", "1|2")
+	tt.Frame()
+	if len(got) == 0 || got[0] != "1|2" {
+		t.Errorf("Match got %q for 1|2, want the raw keyword", got)
+	}
+	// Columns without Match search as before.
+	s.SetSearch("Name", "alp")
+	tt.Frame()
+	if ids := dtShown(s); !slices.Equal(ids, []int{2}) {
+		t.Fatalf("Name alp: rows %v, want 2", ids)
+	}
+}

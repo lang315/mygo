@@ -71,8 +71,9 @@ The bar over the table has a column to search (the first of those without
 `NoSearch`), a box and a button. The search runs on Enter, the button, clearing
 the box or choosing another column, not at each key: it goes through all the
 rows. Text matches the cells containing it, case aside; a keyword with `|`
-lists the values to match exactly (`UID1|UID2`). Of columns with the same
-`Title`, the first is searched.
+lists the values to match exactly (`UID1|UID2`). A column's `Match`, when set,
+decides instead: it gets each row and the keyword trimmed. Of columns with the
+same `Title`, the first is searched.
 
 `SetSearch(column, keyword)` searches from code, and `Search()` returns the
 search applied; with `NoSearchBar` they are all an app's own bar needs.

@@ -26,6 +26,10 @@ type DataColumn[T any] struct {
 	Cell func(c *Context, x *T)
 	// NoSearch leaves the column out of the search's columns.
 	NoSearch bool
+	// Match, when set, decides which rows a search of the column keeps,
+	// given the keyword trimmed, in place of the cells containing it (and
+	// of the | list of values).
+	Match func(x *T, keyword string) bool
 }
 
 // A DataTableState is what a DataTable keeps for an app's rows: their order
@@ -290,8 +294,12 @@ func (s *DataTableState[T, K]) apply() {
 	}
 	s.applied, s.match = applied, nil
 	if applied.column != "" {
-		i := s.searchable[slices.Index(s.titles, applied.column)]
-		s.match = dataMatcher(s.Columns[i].Text, applied.keyword)
+		col := &s.Columns[s.searchable[slices.Index(s.titles, applied.column)]]
+		if match, kw := col.Match, applied.keyword; match != nil {
+			s.match = func(x *T) bool { return match(x, kw) }
+		} else {
+			s.match = dataMatcher(col.Text, applied.keyword)
+		}
 	}
 }
 
