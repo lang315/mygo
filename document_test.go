@@ -669,3 +669,81 @@ func TestDocumentFollowsAFileItSavedThenRenamedInOneLook(t *testing.T) {
 		}
 	})
 }
+
+// documentRenamedUnwatched opens a document and has another app save its
+// file (a new file renamed over it), which the document reads, then rename
+// it away, all before any watch of the file started or looked, as on a
+// machine so busy that the watch starts after.
+func documentRenamedUnwatched(t *testing.T) (d *Document[string], renamed string) {
+	t.Helper()
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	path := filepath.Join(dir, "other.txt")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d, err := ds.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+".tmp", []byte("two, longer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+".tmp", path); err != nil {
+		t.Fatal(err)
+	}
+	d.checkDisk()
+	if got := d.Content(); got != "two, longer" {
+		t.Fatalf("the document reads %q", got)
+	}
+	renamed = filepath.Join(dir, "renamed.txt")
+	if err := os.Rename(path, renamed); err != nil {
+		t.Fatal(err)
+	}
+	return d, renamed
+}
+
+// TestDocumentCheckFollowsARenamedFile: a look at a document whose file is
+// not at its path finds the file in the directory by its identity, as a
+// look at a window focused may after the watch missed the rename, or
+// started after it.
+func TestDocumentCheckFollowsARenamedFile(t *testing.T) {
+	d, renamed := documentRenamedUnwatched(t)
+	d.checkDisk()
+	if got := d.Path(); got != renamed {
+		t.Fatalf("the document is at %q, want %q", got, renamed)
+	}
+	if d.State().Deleted {
+		t.Error("the document is taken for deleted")
+	}
+}
+
+// TestDocumentWatchStartedAfterTheRename: a watch that starts when the file
+// is gone, which fails, looks at the document, which finds its file.
+func TestDocumentWatchStartedAfterTheRename(t *testing.T) {
+	d, renamed := documentRenamedUnwatched(t)
+	path := d.Path()
+	go watchDocumentFile(wait.Context(t), path)
+	wait.Until(t, "the document to follow the rename", func() bool { return d.Path() == renamed })
+	wait.Until(t, "the moved document to be recorded", func() bool { return slices.Contains(App.RecentDocuments(), renamed) })
+}
+
+// TestDocumentCheckDoesNotFollowAFileThatReusedTheInode: the identity of a
+// file deleted may be given to a file made later, which is not the
+// document's file: its size and modification time say.
+func TestDocumentCheckDoesNotFollowAFileThatReusedTheInode(t *testing.T) {
+	d, renamed := documentRenamedUnwatched(t)
+	path := d.Path()
+	// The same file, as it was, with another content: what the identity
+	// of a deleted file would find when a new file took its number.
+	if err := os.WriteFile(renamed, []byte("changed since, and longer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d.checkDisk()
+	if got := d.Path(); got != path {
+		t.Fatalf("the document followed %q", got)
+	}
+	if !d.State().Deleted {
+		t.Error("the document whose file is gone is not taken for deleted")
+	}
+}
