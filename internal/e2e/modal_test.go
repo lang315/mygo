@@ -51,7 +51,8 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 }
 
 // TestParentStaysBlockedWhileAModalChildIsOpen: with two modal children of
-// one parent, closing the first leaves the parent blocked by the second.
+// one parent, closing one leaves the parent blocked by the other, and
+// closing that one gives the parent the front again.
 func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	var clicks, frames atomic.Int32
 	parent := newWindow(t, mygo.WindowOptions{Title: "Modal parent", Width: 400, Height: 300,
@@ -81,12 +82,20 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 		// second drew broke a later test's input method under Xvfb.
 		eventually(t, "the second child's first frame", secondDrawn.Load)
 	}
-	front := func(step string) { t.Logf("DEBUG %s: focused parent %v first %v second %v", step, parent.IsFocused(), first.IsFocused(), second.IsFocused()) }
+	// A user closes the child in front, which leaves the other: the second,
+	// or on macOS the first, as a second sheet waits for it.
+	shown, shownClosed, other, otherClosed := second, secondClosed, first, firstClosed
+	if runtime.GOOS == "darwin" {
+		shown, shownClosed, other, otherClosed = first, firstClosed, second, secondClosed
+	}
+	front := func(step string) {
+		t.Logf("DEBUG %s: focused parent %v first %v second %v", step, parent.IsFocused(), first.IsFocused(), second.IsFocused())
+	}
 	front("both open")
-	first.Close()
-	eventually(t, "the first child to close", firstClosed.Load)
-	front("first closed")
-	eventually(t, "the second child to show", second.IsVisible) // a second sheet waits for the first
+	shown.Close()
+	eventually(t, "the child in front to close", shownClosed.Load)
+	front("one closed")
+	eventually(t, "the other child to show", other.IsVisible)
 	appClick(parent, x, y)
 	// OnClick runs once a frame, however many clicks came: a frame drawn
 	// after the click, which handles the input before it, says whether the
@@ -95,12 +104,17 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	parent.Invalidate()
 	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > drawn })
 	if n := clicks.Load(); n != 1 {
-		t.Fatalf("the parent took %d clicks while its second modal child was open", n-1)
+		t.Fatalf("the parent took %d clicks while its other modal child was open", n-1)
 	}
 	front("after the blocked click")
-	second.Close()
-	eventually(t, "the second child to close", secondClosed.Load)
-	front("second closed")
+	other.Close()
+	eventually(t, "the other child to close", otherClosed.Load)
+	front("both closed")
+	// Not another app: the parent takes the front back, as from one child.
+	// Xvfb has no window manager to give it back.
+	if runtime.GOOS != "linux" {
+		eventually(t, "the parent to be in front again", parent.IsFocused)
+	}
 	appClick(parent, x, y)
 	eventually(t, "a click on the parent after both children closed", func() bool { return clicks.Load() == 2 })
 }

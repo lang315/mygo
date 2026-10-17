@@ -532,14 +532,24 @@ func (w *window) destroy() {
 		return
 	}
 	w.destroying = true
-	// Re-enable the owner first, or Windows activates another app.
-	if w.releasesParent() {
-		procEnableWindow.Call(w.parent.hwnd, 1)
+	if w.opts.Modal && w.parent != nil && !w.parent.closed {
+		next := w.modalSibling()
+		if next == nil {
+			// Re-enable the owner first, or Windows activates another app.
+			procEnableWindow.Call(w.parent.hwnd, 1)
+			next = w.parent
+		}
+		// Windows gives the front of a window it destroys to the next one
+		// down, which can be another app's, rather than to its owner: hand
+		// it over first, to the parent or the modal child still blocking it.
+		if fg, _, _ := procGetForegroundWindow.Call(); fg == w.hwnd {
+			procSetForegroundWindow.Call(next.hwnd)
+		}
 	}
 	if w.opts.Modal && w.parent != nil {
 		en, _, _ := user32.NewProc("IsWindowEnabled").Call(w.parent.hwnd)
 		fg, _, _ := procGetForegroundWindow.Call()
-		log.Printf("DEBUG destroy %q: releases %v, parent enabled %v, foreground %#x (self %#x parent %#x)", w.opts.Title, w.releasesParent(), en, fg, w.hwnd, w.parent.hwnd)
+		log.Printf("DEBUG destroy %q: parent enabled %v, foreground %#x (self %#x parent %#x)", w.opts.Title, en, fg, w.hwnd, w.parent.hwnd)
 	}
 	procDestroyWindow.Call(w.hwnd)
 	if w.opts.Modal && w.parent != nil {
@@ -548,18 +558,15 @@ func (w *window) destroy() {
 	}
 }
 
-// releasesParent reports whether closing w enables its parent again: w is
-// modal to it, and no other modal child of it stays open.
-func (w *window) releasesParent() bool {
-	if !w.opts.Modal || w.parent == nil || w.parent.closed {
-		return false
-	}
+// modalSibling returns another modal child of w's parent that stays open,
+// which keeps the parent blocked, or nil.
+func (w *window) modalSibling() *window {
 	for _, c := range w.b.windows {
 		if c != w && c.parent == w.parent && c.opts.Modal && !c.closed && !c.destroying {
-			return false
+			return c
 		}
 	}
-	return true
+	return nil
 }
 
 func (w *window) cleanup() {
@@ -568,7 +575,7 @@ func (w *window) cleanup() {
 	}
 	w.closeWebViews()
 	w.closed = true
-	if w.releasesParent() {
+	if w.opts.Modal && w.parent != nil && !w.parent.closed && w.modalSibling() == nil {
 		procEnableWindow.Call(w.parent.hwnd, 1)
 	}
 	for id, cb := range w.calls {
