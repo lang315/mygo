@@ -32,14 +32,18 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	}
 	eventually(t, "a click on the parent", func() bool { return clicks.Load() == 1 })
 
-	var closed atomic.Bool
+	var drawn, closed atomic.Bool
 	child := newWindow(t, mygo.WindowOptions{Title: "Modal child", Width: 200, Height: 100,
 		Parent: parent, Modal: true,
-		Content: ui.View(func(c *ui.Context) { ui.Text(c, "modal") })})
+		Content: ui.View(func(c *ui.Context) { drawn.Store(true); ui.Text(c, "modal") })})
 	child.OnClosed(func() { closed.Store(true) })
-	time.Sleep(time.Second) // the child shows; a sheet slides down
+	eventually(t, "the child's first frame", drawn.Load)
 	appClick(parent, x, y)
-	time.Sleep(500 * time.Millisecond) // a click let through has counted by now
+	// A frame drawn after the click says whether it counted, as in
+	// TestParentStaysBlockedWhileAModalChildIsOpen.
+	n := frames.Load()
+	parent.Invalidate()
+	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > n })
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its modal child was open", n-1)
 	}
@@ -202,7 +206,9 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 	inner.OnClosed(func() { closed.Store(true) })
 	eventually(t, "the inner child to show", inner.IsVisible)
 	appClick(outer, x, y)
-	time.Sleep(500 * time.Millisecond)
+	n := frames.Load() // as in TestModalChildBlocksItsParent
+	outer.Invalidate()
+	eventually(t, "a frame of the outer child after the click", func() bool { return frames.Load() > n })
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the outer child took %d clicks while its own modal child was open", n-1)
 	}
