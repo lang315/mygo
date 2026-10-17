@@ -342,3 +342,12 @@ func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, 
 	mygo.RunOnMain(func() { drawn, menuPNG, err = linux.TestMenuItemShortcutDrawn(w.NativeHandle(), path...) })
 	return drawn, menuPNG, true, err
 }
+
+// trayMenuLayout returns the menu of the tray made last as a tray host reads
+// it from D-Bus, as GVariant text.
+func trayMenuLayout() (string, bool) {
+	var name, path string
+	mygo.RunOnMain(func() { name, path = linux.TestTrayMenuAddress() })
+	layout, err := linux.TestReadTrayMenu(name, path)
+	return layout, err == nil
+}

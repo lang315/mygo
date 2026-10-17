@@ -1655,6 +1655,39 @@ func TestDockMenu(t *testing.T) {
 	}
 }
 
+// TestTrayMenuIcons checks that the icon of a tray menu item reaches the
+// tray host, which on Linux reads the menu from D-Bus.
+func TestTrayMenuIcons(t *testing.T) {
+	tray, err := mygo.NewTray(mygo.TrayOptions{Icon: squarePNG(), Menu: mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "Open", Icon: squarePNG()},
+		{Label: "Bad", Icon: []byte("not a PNG")},
+		{Label: "Quit"},
+	})})
+	if err != nil {
+		t.Skip("no tray: ", err)
+	}
+	defer tray.Destroy()
+	layout, ok := trayMenuLayout()
+	if !ok {
+		t.Skip("the tray menu can't be read on this platform")
+	}
+	items := map[string]string{}
+	for _, item := range strings.Split(layout, "<(")[1:] {
+		if m := regexp.MustCompile(`'label': <'([^']*)'>`).FindStringSubmatch(item); m != nil {
+			items[m[1]] = item
+		}
+	}
+	// icon-data holds a PNG, which starts with 0x89 "PNG".
+	if !strings.Contains(items["Open"], "'icon-data': <[byte 0x89, 0x50, 0x4e, 0x47") {
+		t.Errorf("the item with an icon has no PNG icon-data: %.300s", items["Open"])
+	}
+	for _, label := range []string{"Bad", "Quit"} {
+		if items[label] == "" || strings.Contains(items[label], "'icon-data'") {
+			t.Errorf("item %s, without an icon shown: %.300s", label, items[label])
+		}
+	}
+}
+
 func TestPrintToPDF(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Title: "PDF", Width: 400, Height: 300})
 	w.Page().LoadHTML(`<style>p + p { page-break-before: always }</style><p>one</p><p>two</p><p>three</p>`, "")
