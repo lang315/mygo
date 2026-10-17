@@ -122,16 +122,18 @@ func TestLinearTime(t *testing.T) {
 		"escapes":            `\*`,
 	} {
 		// A quadratic input is slow at every try; a busy machine (CI runs
-		// packages in parallel) is not.
+		// packages in parallel) is not. Below 20,000 units an input that fits
+		// the caches is faster per unit, so a linear one already took 7 times
+		// longer for 4 times as much, too near the bound.
 		var small, large time.Duration
-		for range 3 {
-			small, large = timeOf(strings.Repeat(unit, 5000)), timeOf(strings.Repeat(unit, 20000))
+		for range 5 {
+			small, large = timeOf(strings.Repeat(unit, 20000)), timeOf(strings.Repeat(unit, 80000))
 			if large <= 10*small || large <= 20*time.Millisecond {
 				break
 			}
 		}
 		if large > 10*small && large > 20*time.Millisecond {
-			t.Errorf("%s: %v for 5000, %v for 20000", name, small, large)
+			t.Errorf("%s: %v for 20000, %v for 80000", name, small, large)
 		}
 	}
 }
