@@ -1,7 +1,9 @@
 // Account-manager rebuilds the account manager of fhtool, a GTK tool that
 // runs jobs on many accounts, in native UI: 100,000 made-up accounts in
 // folders, in a table that sorts, searches and checks them, with a menu
-// on its rows, and workers whose results the rows show as they come.
+// on its rows, and workers whose results the rows show as they come. Tabs
+// show the Ads and Email columns of the same accounts, and a menu bar has
+// the actions on accounts and on folders.
 //
 //	go run ./examples/account-manager
 //	go run ./examples/account-manager -rows 1000000
@@ -47,6 +49,9 @@ type app struct {
 	stopping        bool
 	stress          *runner // the stress run going on, nil when none
 	stats           *stats  // what -stats logs, nil without it
+	// pending is the work the menu bar's clicks queued, for the next frame to
+	// run with a Context.
+	pending []func(c *ui.Context)
 	// update runs fn on the main thread, then builds a frame:
 	// Window.Update, or a test's.
 	update func(fn func())
@@ -118,6 +123,13 @@ func (a *app) build(c *ui.Context) {
 			a.logStats()
 		}()
 	}
+	if pending := a.pending; len(pending) > 0 {
+		a.pending = nil
+		for _, fn := range pending {
+			fn(c)
+		}
+		c.Invalidate()
+	}
 	ui.Column(c).Fill().Padding(10).Gap(10).Children(func() {
 		a.toolbar(c)
 		a.tabStrip(c)
@@ -133,8 +145,7 @@ func (a *app) toolbar(c *ui.Context) {
 	cur, _ := a.s.folderByName(a.folder)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.Button(c, "Thêm tài khoản").Clicked() {
-			// Sync places a row appended, no need to place them all again.
-			a.s.add(cur.ID)
+			a.addAccount()
 		}
 		ui.Select(c, &a.action, actions).Label("Hành động").Width(190)
 		ui.NumberInput(c, &a.loops, 0, 1_000_000, 1).Label("Số lần lặp").Tooltip("Số lần lặp")
@@ -144,8 +155,7 @@ func (a *app) toolbar(c *ui.Context) {
 				a.start(c)
 			}
 		} else if ui.Button(c, "Stop").Disabled(a.stopping).Clicked() {
-			a.stopping = true
-			a.run.cancel()
+			a.stop()
 		}
 		ui.Spacer(c)
 		if ui.Select(c, &a.folder, a.s.names()).Label("Thư mục").Width(220).Changed() {
@@ -154,18 +164,101 @@ func (a *app) toolbar(c *ui.Context) {
 		// Results reach the rows by ID, so only deleting a folder, which
 		// moves its rows, waits for the run to end.
 		if ui.Button(c, "Thêm thư mục").Clicked() {
-			a.folder = a.s.addFolder().Name
-			a.showFolder()
+			a.addFolder()
 		}
 		if ui.Button(c, "Đổi tên").Disabled(cur.ID == trash).Clicked() {
-			a.folder = a.s.renameFolder(cur.ID)
+			a.renameFolder()
 		}
 		if ui.Button(c, "Xóa thư mục").Disabled(busy || cur.ID == trash).Clicked() {
-			a.s.deleteFolder(cur.ID)
-			a.folder = a.s.folders[0].Name
-			a.showFolder()
+			a.deleteFolder(c)
 		}
 	})
+}
+
+// addAccount appends one generated account to the folder shown. Sync places
+// a row appended, no need to place them all again.
+func (a *app) addAccount() {
+	cur, _ := a.s.folderByName(a.folder)
+	a.s.add(cur.ID)
+}
+
+func (a *app) addFolder() {
+	a.folder = a.s.addFolder().Name
+	a.showFolder()
+}
+
+// renameFolder renames the folder shown, but the trash.
+func (a *app) renameFolder() {
+	if cur, _ := a.s.folderByName(a.folder); cur.ID != trash {
+		a.folder = a.s.renameFolder(cur.ID)
+	}
+}
+
+// deleteFolder deletes the folder shown, but the trash, and none while a run
+// goes on: its results reach the rows by ID.
+func (a *app) deleteFolder(c *ui.Context) {
+	cur, _ := a.s.folderByName(a.folder)
+	switch {
+	case cur.ID == trash:
+		c.Toast("Không xóa được thùng rác!")
+	case a.run != nil:
+		c.Toast("Đang chạy, chưa xóa được thư mục!")
+	default:
+		a.s.deleteFolder(cur.ID)
+		a.folder = a.s.folders[0].Name
+		a.showFolder()
+	}
+}
+
+// stop asks the run going on to end.
+func (a *app) stop() {
+	if a.run != nil && !a.stopping {
+		a.stopping = true
+		a.run.cancel()
+	}
+}
+
+// begin runs action on the accounts checked in the tab shown, as Start does
+// once an action is chosen.
+func (a *app) begin(c *ui.Context, action string) {
+	if a.run != nil {
+		c.Toast("Đang chạy!")
+		return
+	}
+	a.action = action
+	a.start(c)
+}
+
+// later runs fn in the next frame, with a Context: the toasts and the redraw
+// need one, and a menu's Click has none. Window.Update builds that frame, so
+// a click with no input in the window runs it too.
+func (a *app) later(fn func(c *ui.Context)) {
+	a.update(func() { a.pending = append(a.pending, fn) })
+}
+
+// menu is the menu bar: fhtool's menus for the actions on accounts and for
+// folders, between the usual ones.
+func (a *app) menu() []*mygo.MenuItem {
+	item := func(label string, fn func(c *ui.Context)) *mygo.MenuItem {
+		return &mygo.MenuItem{Label: label, Click: func(*mygo.MenuItem, *mygo.Window) { a.later(fn) }}
+	}
+	accounts := []*mygo.MenuItem{item("Thêm tài khoản", func(*ui.Context) { a.addAccount() }), mygo.Separator()}
+	for _, act := range actions {
+		accounts = append(accounts, item(act, func(c *ui.Context) { a.begin(c, act) }))
+	}
+	accounts = append(accounts, mygo.Separator(), item("Dừng", func(*ui.Context) { a.stop() }))
+	return []*mygo.MenuItem{
+		{Role: mygo.RoleAppMenu},
+		{Label: "Tài khoản", Submenu: accounts},
+		{Label: "Thư mục", Submenu: []*mygo.MenuItem{
+			item("Thêm thư mục", func(*ui.Context) { a.addFolder() }),
+			item("Đổi tên", func(*ui.Context) { a.renameFolder() }),
+			item("Xóa thư mục", a.deleteFolder),
+		}},
+		{Role: mygo.RoleEditMenu},
+		{Role: mygo.RoleViewMenu},
+		{Role: mygo.RoleWindowMenu},
+	}
 }
 
 // tabStrip shows the tabs and switches to the one clicked.
@@ -431,6 +524,7 @@ func main() {
 		a.stats = newStats(time.Now())
 	}
 	mygo.App.WhenReady(func() {
+		mygo.App.SetMenu(mygo.NewMenu(a.menu()))
 		w := mygo.NewWindow(mygo.WindowOptions{Title: "Quản lý tài khoản", Width: 1280, Height: 800, Content: ui.View(a.build)})
 		a.update = w.Update
 		if *rate > 0 {
