@@ -61,11 +61,13 @@ func inFront(frontmost, key, panel bool) bool { return frontmost || key && panel
 // change between the wait for it and the input, and AppKit drops a click to
 // an app that is not active, a menu of one has no focused window: so the
 // check and send are one step on the main thread, and an input that found
-// the window not in front (inFront) waits for the front again. After five
-// seconds the input is sent anyway.
+// the window not in front (inFront) waits for the front again. Each try
+// brings the window back (waitKey), so the front comes; wait.Guard only keeps
+// a desktop that never gives it from hanging the test: the input is sent then
+// anyway.
 func sendFront(w *mygo.Window, what string, send func()) {
 	panel := w.IsPanel()
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+	for deadline := time.Now().Add(wait.Guard); ; time.Sleep(20 * time.Millisecond) {
 		waitKey(w)
 		noteInput(what, w)
 		if f := beforeSend; f != nil {
@@ -125,18 +127,20 @@ func waitOnScreen(w *mygo.Window) {
 	}
 }
 
-// waitKey brings a window back to the front, for up to 5 seconds, if another
-// app took it: AppKit drops a click or drag for a window that is not key
-// while its app is not active, as when a user switches to another app during
-// a test, or a notification does. A window of an active app that is not key
+// waitKey brings a window back to the front, until it is (wait.Guard only
+// keeps a desktop that never gives it from hanging the test), if another app
+// took it: AppKit drops a click or drag for a window that is not key while
+// its app is not active, as when a user switches to another app during a
+// test, or a notification does. A window of an active app that is not key
 // stays so, as a flyout that takes no keyboard.
 func waitKey(w *mygo.Window) {
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+	wait.Poll(func() bool {
 		if active, _ := appActive(); active || w.IsFocused() {
-			return
+			return true
 		}
 		w.Focus()
-	}
+		return false
+	})
 }
 
 func sideButton(w *mygo.Window, back bool) (ok bool) {

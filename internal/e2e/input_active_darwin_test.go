@@ -23,17 +23,12 @@ func deactivated(t *testing.T) {
 	}
 	// Not eventually: the waits of the tests bring their window back.
 	start := time.Now()
-	for deadline := start.Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-		if active, _ := appActive(); !active {
-			deactivation.Lock()
-			deactivation.test, deactivation.took = t.Name(), time.Since(start)
-			deactivation.Unlock()
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("timed out waiting for the app deactivated")
-		}
+	if !wait.Poll(func() bool { active, _ := appActive(); return !active }) {
+		t.Fatalf("the app deactivated never happened (waited %v)", wait.Guard)
 	}
+	deactivation.Lock()
+	deactivation.test, deactivation.took = t.Name(), time.Since(start)
+	deactivation.Unlock()
 }
 
 // TestClickWhenAnotherAppTookTheFront: an input sent to a window of an app
@@ -217,7 +212,7 @@ func TestClickAndTypeSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
 
 // TestClickOnAKeyPanelDoesNotWaitForTheFront: a panel that takes no activation
 // is key while another app is in front; a click on it is sent at once, not
-// after five seconds of waiting for an app that stays in the background.
+// after waiting for an app that stays in the background.
 func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 	other := newWindow(t, mygo.WindowOptions{Title: "Other", Width: 300, Height: 200})
 	other.Focus()
@@ -234,10 +229,13 @@ func TestClickOnAKeyPanelDoesNotWaitForTheFront(t *testing.T) {
 	if active, _ := appActive(); active {
 		t.Skip("showing the panel activated the app")
 	}
-	start := time.Now()
+	// Counted, not timed: sendFront tries once for each wait for the front.
+	tries := 0
+	beforeSend = func() { tries++ }
+	defer func() { beforeSend = nil }()
 	click(panel, 50, 50)
-	if d := time.Since(start); d > 2*time.Second {
-		t.Fatalf("a click on a key panel took %v: it waited for the app to come to the front", d)
+	if tries != 1 {
+		t.Fatalf("a click on a key panel was tried %d times: it waited for the app to come to the front", tries)
 	}
 	waitFor(t, panel, "window.clicked === 1")
 }
