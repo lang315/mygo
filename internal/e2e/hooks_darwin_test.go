@@ -348,3 +348,10 @@ func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, er
 func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
 	return false, nil, false, nil
 }
+
+// trayMenuIcons returns the items of the menu the tray's status item holds
+// by title, true for those with an image.
+func trayMenuIcons() (icons map[string]bool, supported bool, err error) {
+	mygo.RunOnMain(func() { icons = darwin.TestTrayMenuImages() })
+	return icons, true, nil
+}

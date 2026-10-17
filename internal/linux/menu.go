@@ -179,7 +179,12 @@ func buildMenu(shell ptr, m *platform.Menu, accel ptr, owner, windowID int) {
 func buildItem(it *platform.MenuItem, accel ptr, owner, windowID int) ptr {
 	var item, label, image ptr
 	check := false
-	if it.Type != platform.MenuItemSeparator && len(it.Icon) > 0 {
+	// A tray host reads the menu from D-Bus, where dbusmenu takes an icon
+	// only from a GtkImageMenuItem showing a pixbuf, and only when the
+	// gtk-menu-images setting or the item asks for it shown; check items
+	// show none.
+	trayIcon := windowID == 0 && it.Type == platform.MenuItemNormal && len(it.Icon) > 0
+	if windowID != 0 && it.Type != platform.MenuItemSeparator && len(it.Icon) > 0 {
 		image = menuIcon(it.Icon, menuScale(windowID))
 	}
 	switch it.Type {
@@ -194,9 +199,20 @@ func buildItem(it *platform.MenuItem, accel ptr, owner, windowID int) ptr {
 		gtkCheckMenuItemSetDrawAsRadio(item, it.Type == platform.MenuItemRadio)
 		check = true
 	default:
-		if image != 0 {
+		switch {
+		case trayIcon:
+			item = gtkImageMenuItemNewWithLabel(cs(it.Label))
+			if pix, err := pixbufFromPNG(it.Icon); err == nil {
+				if small := gdkPixbufScaleSimple(pix, 32, 32, 2); small != 0 { // GDK_INTERP_BILINEAR
+					gtkImageMenuItemSetImage(item, gtkImageNewFromPixbuf(small))
+					gtkImageMenuItemSetAlwaysShowImage(item, true)
+					gObjectUnref(small)
+				}
+				gObjectUnref(pix)
+			}
+		case image != 0:
 			item = gtkMenuItemNew()
-		} else {
+		default:
 			item = gtkMenuItemNewWithLabel(cs(it.Label))
 		}
 	}

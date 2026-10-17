@@ -49,10 +49,12 @@ A `MenuItem` has:
 
 `Icon` shows a PNG before the label at 16×16 points: give it 32×32 pixels
 for HiDPI screens. `IconTemplate` makes it a template image on macOS, which
-the system colors as the menu's text. Context menus and menu bars show
-icons on macOS, Linux and Windows; Linux tray menus do not, and the web
-ignores them. On Windows, the items of a menu bar itself show none, the
-items of its menus do.
+the system colors as the menu's text. Context menus, menu bars and tray
+menus show icons on macOS, Linux and Windows; the Dock menu does not (the
+Dock draws it without images), and the web ignores them. On Windows, the
+items of a menu bar itself show none, the items of its menus do. On Linux,
+check and radio items of a tray menu show none: the tray host reads the
+menu over D-Bus, which carries an icon only for a plain item.
 
 ### Roles
 

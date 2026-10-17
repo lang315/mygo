@@ -3,6 +3,8 @@
 package e2e
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -341,4 +343,34 @@ func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, er
 func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, supported bool, err error) {
 	mygo.RunOnMain(func() { drawn, menuPNG, err = linux.TestMenuItemShortcutDrawn(w.NativeHandle(), path...) })
 	return drawn, menuPNG, true, err
+}
+
+// trayMenuIcons reads the menu of the tray made last as a tray host does,
+// from D-Bus, and returns its items by label, true for those with an icon
+// a host shows: PNG icon-data. AppIndicator exports the menu once it has
+// the bus, so a read is retried for a while.
+func trayMenuIcons() (icons map[string]bool, supported bool, err error) {
+	var name, path string
+	mygo.RunOnMain(func() { name, path = linux.TestTrayMenuAddress() })
+	if name == "" {
+		return nil, false, nil
+	}
+	var layout string
+	for deadline := time.Now().Add(2 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		if layout, err = linux.TestReadTrayMenu(name, path); err == nil || time.Now().After(deadline) {
+			break
+		}
+	}
+	if err != nil {
+		return nil, true, err
+	}
+	icons = map[string]bool{}
+	label := regexp.MustCompile(`'label': <'([^']*)'>`)
+	for _, item := range strings.Split(layout, "<(")[1:] {
+		if m := label.FindStringSubmatch(item); m != nil {
+			// A PNG starts with 0x89 "PNG".
+			icons[m[1]] = strings.Contains(item, "'icon-data': <[byte 0x89, 0x50, 0x4e, 0x47")
+		}
+	}
+	return icons, true, nil
 }

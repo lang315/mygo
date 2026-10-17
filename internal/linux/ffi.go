@@ -303,6 +303,10 @@ var (
 	gtkMenuNew                          func() ptr
 	gtkMenuItemNew                      func() ptr
 	gtkMenuItemNewWithLabel             func(label *byte) ptr
+	gtkImageMenuItemNewWithLabel        func(label *byte) ptr
+	gtkImageMenuItemSetImage            func(item, image ptr)
+	gtkImageMenuItemSetAlwaysShowImage  func(item ptr, on bool)
+	gtkImageNewFromPixbuf               func(pix ptr) ptr
 	gtkMenuItemSetLabel                 func(item ptr, label *byte)
 	gtkMenuItemSetSubmenu               func(item, menu ptr)
 	gtkMenuItemGetSubmenu               func(item ptr) ptr
@@ -733,6 +737,10 @@ func load() error {
 	mustBind(t, &gtkMenuNew, "gtk_menu_new")
 	mustBind(t, &gtkMenuItemNew, "gtk_menu_item_new")
 	mustBind(t, &gtkMenuItemNewWithLabel, "gtk_menu_item_new_with_label")
+	mustBind(t, &gtkImageMenuItemNewWithLabel, "gtk_image_menu_item_new_with_label")
+	mustBind(t, &gtkImageMenuItemSetImage, "gtk_image_menu_item_set_image")
+	mustBind(t, &gtkImageMenuItemSetAlwaysShowImage, "gtk_image_menu_item_set_always_show_image")
+	mustBind(t, &gtkImageNewFromPixbuf, "gtk_image_new_from_pixbuf")
 	mustBind(t, &gtkMenuItemSetLabel, "gtk_menu_item_set_label")
 	mustBind(t, &gtkMenuItemSetSubmenu, "gtk_menu_item_set_submenu")
 	mustBind(t, &gtkMenuItemGetSubmenu, "gtk_menu_item_get_submenu")

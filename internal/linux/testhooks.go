@@ -4,6 +4,7 @@ package linux
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -509,3 +510,56 @@ func TestHasRecentItem(path string) bool {
 
 // TestWindowTitle returns the title GTK gives a window.
 func TestWindowTitle(handle uintptr) string { return goStr(gtkWindowGetTitle(handle)) }
+
+// Reading a tray's exported menu.
+var (
+	trayOnce                      sync.Once
+	gDBusAddressGetForBusSync     func(busType int32, cancellable ptr, err *ptr) ptr
+	gDBusConnectionNewForAddrSync func(addr ptr, flags int32, observer, cancellable ptr, err *ptr) ptr
+	gVariantNewParsed             func(format *byte) ptr
+	gVariantPrint                 func(v ptr, typeAnnotate bool) ptr
+)
+
+// TestTrayMenuAddress returns the D-Bus name and object path of the menu
+// that AppIndicator exports for the tray made last.
+func TestTrayMenuAddress() (name, path string) {
+	conn, err := bus()
+	if err != nil || theBackend.nextTray == 0 {
+		return "", ""
+	}
+	// AppIndicator exports the item at its id with "-" turned to "_".
+	return goStr(gDBusConnectionGetUniqueName(conn)), fmt.Sprintf("/org/ayatana/NotificationItem/mygo_%d_%d/Menu", os.Getpid(), theBackend.nextTray)
+}
+
+// TestReadTrayMenu reads the menu at a TestTrayMenuAddress as a tray host
+// does (com.canonical.dbusmenu GetLayout) and returns it as GVariant text.
+// It must not run on the main thread, which answers the call.
+func TestReadTrayMenu(name, path string) (string, error) {
+	trayOnce.Do(func() {
+		mustBind(libGIO, &gDBusAddressGetForBusSync, "g_dbus_address_get_for_bus_sync")
+		mustBind(libGIO, &gDBusConnectionNewForAddrSync, "g_dbus_connection_new_for_address_sync")
+		mustBind(libGLib, &gVariantNewParsed, "g_variant_new_parsed")
+		mustBind(libGLib, &gVariantPrint, "g_variant_print")
+	})
+	// A connection of its own: the app's answers on the main thread.
+	var gerr ptr
+	addr := gDBusAddressGetForBusSync(2, 0, &gerr) // G_BUS_TYPE_SESSION
+	if addr == 0 {
+		return "", gErr(gerr)
+	}
+	defer gFree(addr)
+	conn := gDBusConnectionNewForAddrSync(addr, 1|8, 0, 0, &gerr) // AUTHENTICATION_CLIENT | MESSAGE_BUS_CONNECTION
+	if conn == 0 {
+		return "", gErr(gerr)
+	}
+	defer gObjectUnref(conn)
+	res := gDBusConnectionCallSync(conn, cs(name), cs(path), cs("com.canonical.dbusmenu"), cs("GetLayout"),
+		gVariantNewParsed(cs("(0, -1, @as [])")), 0, 0, 3000, 0, &gerr)
+	if res == 0 {
+		return "", gErr(gerr)
+	}
+	defer gVariantUnref(res)
+	text := gVariantPrint(res, false)
+	defer gFree(text)
+	return goStr(text), nil
+}

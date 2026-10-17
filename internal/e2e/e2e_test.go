@@ -17,6 +17,7 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
+	"maps"
 	"math"
 	"net/http"
 	"os"
@@ -1652,6 +1653,31 @@ func TestDockMenu(t *testing.T) {
 	mygo.App.Dock.SetMenu(nil)
 	if titles, _ := dockMenu(-1); titles != nil {
 		t.Errorf("Dock menu after SetMenu(nil) = %q", titles)
+	}
+}
+
+// TestTrayMenuIcons checks that the icon of a tray menu item reaches the
+// tray host, which on Linux reads the menu from D-Bus.
+func TestTrayMenuIcons(t *testing.T) {
+	tray, err := mygo.NewTray(mygo.TrayOptions{Icon: squarePNG(), Menu: mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "Open", Icon: squarePNG()},
+		{Label: "Bad", Icon: []byte("not a PNG")},
+		{Label: "Quit"},
+	})})
+	if err != nil {
+		t.Skip("no tray: ", err)
+	}
+	defer tray.Destroy()
+	icons, ok, err := trayMenuIcons()
+	if !ok {
+		t.Skip("the tray menu can't be read on this platform")
+	}
+	if err != nil {
+		t.Fatal("reading the tray menu:", err)
+	}
+	want := map[string]bool{"Open": true, "Bad": false, "Quit": false}
+	if !maps.Equal(icons, want) {
+		t.Errorf("items with an icon shown = %v, want %v", icons, want)
 	}
 }
 

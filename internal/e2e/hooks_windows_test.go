@@ -360,3 +360,10 @@ func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, er
 func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
 	return false, nil, false, nil
 }
+
+// trayMenuIcons returns the items of the tray's menu, built as when it
+// opens, by text, true for those with a bitmap.
+func trayMenuIcons() (icons map[string]bool, supported bool, err error) {
+	mygo.RunOnMain(func() { icons = win.TestTrayMenuImages() })
+	return icons, true, nil
+}
