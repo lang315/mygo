@@ -81,8 +81,11 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 		// second drew broke a later test's input method under Xvfb.
 		eventually(t, "the second child's first frame", secondDrawn.Load)
 	}
+	front := func(step string) { t.Logf("DEBUG %s: focused parent %v first %v second %v", step, parent.IsFocused(), first.IsFocused(), second.IsFocused()) }
+	front("both open")
 	first.Close()
 	eventually(t, "the first child to close", firstClosed.Load)
+	front("first closed")
 	eventually(t, "the second child to show", second.IsVisible) // a second sheet waits for the first
 	appClick(parent, x, y)
 	// OnClick runs once a frame, however many clicks came: a frame drawn
@@ -94,8 +97,10 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its second modal child was open", n-1)
 	}
+	front("after the blocked click")
 	second.Close()
 	eventually(t, "the second child to close", secondClosed.Load)
+	front("second closed")
 	appClick(parent, x, y)
 	eventually(t, "a click on the parent after both children closed", func() bool { return clicks.Load() == 2 })
 }
