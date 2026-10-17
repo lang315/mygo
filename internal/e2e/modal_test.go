@@ -50,6 +50,51 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	eventually(t, "a click on the parent after the child closed", func() bool { return clicks.Load() == 2 })
 }
 
+// TestParentStaysBlockedWhileAModalChildIsOpen: with two modal children of
+// one parent, closing the first leaves the parent blocked by the second.
+func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
+	var clicks, frames atomic.Int32
+	parent := newWindow(t, mygo.WindowOptions{Title: "Modal parent", Width: 400, Height: 300,
+		Content: ui.View(func(c *ui.Context) {
+			frames.Add(1)
+			ui.Column(c).Fill().OnClick(func() { clicks.Add(1) })
+		})})
+	eventually(t, "the parent's first frame", func() bool { return frames.Load() > 0 })
+	const x, y = 60, 230 // as in TestModalChildBlocksItsParent
+	if !appClick(parent, x, y) {
+		t.Skip("no system clicks on this platform")
+	}
+	eventually(t, "a click on the parent", func() bool { return clicks.Load() == 1 })
+
+	modal := func(title string) (w *mygo.Window, drawn, closed *atomic.Bool) {
+		drawn, closed = new(atomic.Bool), new(atomic.Bool)
+		w = newWindow(t, mygo.WindowOptions{Title: title, Width: 200, Height: 100, Parent: parent, Modal: true,
+			Content: ui.View(func(c *ui.Context) { drawn.Store(true); ui.Text(c, title) })})
+		w.OnClosed(func() { closed.Store(true) })
+		return w, drawn, closed
+	}
+	first, firstDrawn, firstClosed := modal("First modal")
+	eventually(t, "the first child's first frame", firstDrawn.Load)
+	second, secondDrawn, secondClosed := modal("Second modal")
+	if runtime.GOOS != "darwin" { // a second sheet waits for the first
+		// As in TestModalChildAndOtherWindows: closing the first before the
+		// second drew broke a later test's input method under Xvfb.
+		eventually(t, "the second child's first frame", secondDrawn.Load)
+	}
+	first.Close()
+	eventually(t, "the first child to close", firstClosed.Load)
+	eventually(t, "the second child to show", second.IsVisible) // a second sheet waits for the first
+	appClick(parent, x, y)
+	second.Close()
+	eventually(t, "the second child to close", secondClosed.Load)
+	appClick(parent, x, y)
+	// The clicks come in order: one let through counted before this one.
+	eventually(t, "a click on the parent after both children closed", func() bool { return clicks.Load() >= 2 })
+	if n := clicks.Load(); n != 2 {
+		t.Fatalf("the parent took %d clicks while its second modal child was open", n-2)
+	}
+}
+
 // TestModalChildAndOtherWindows settles V7 of ui/widget's spec, the
 // platform behaviors it quoted from general knowledge: GTK3 modality
 // blocks every window of the app, while a macOS sheet and a Windows modal
