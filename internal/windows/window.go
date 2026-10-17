@@ -532,20 +532,43 @@ func (w *window) destroy() {
 	}
 	w.destroying = true
 	if w.opts.Modal && w.parent != nil && !w.parent.closed {
-		next := w.modalSibling()
-		if next == nil {
+		if w.modalSibling() == nil {
 			// Re-enable the owner first, or Windows activates another app.
 			procEnableWindow.Call(w.parent.hwnd, 1)
-			next = w.parent
 		}
 		// Windows gives the front of a window it destroys to the next one
 		// down, which can be another app's, rather than to its owner: hand
 		// it over first, to the parent or the modal child still blocking it.
-		if fg, _, _ := procGetForegroundWindow.Call(); fg == w.hwnd {
-			procSetForegroundWindow.Call(next.hwnd)
+		if w.holdsFront() {
+			procSetForegroundWindow.Call(w.nextFront().hwnd)
 		}
 	}
 	procDestroyWindow.Call(w.hwnd)
+}
+
+// holdsFront reports whether w, or a window it owns, which Windows
+// destroys with it, is in front.
+func (w *window) holdsFront() bool {
+	const gwOwner = 4
+	for h, _, _ := procGetForegroundWindow.Call(); h != 0; h, _, _ = procGetNextWindow.Call(h, gwOwner) {
+		if h == w.hwnd {
+			return true
+		}
+	}
+	return false
+}
+
+// nextFront returns where the front of w, a modal child, goes as it closes:
+// the shown modal child of its parent highest under it, or the parent.
+func (w *window) nextFront() *window {
+	const gwHwndNext = 2
+	// The parent's owned windows are all above it.
+	for h, _, _ := procGetNextWindow.Call(w.hwnd, gwHwndNext); h != 0 && h != w.parent.hwnd; h, _, _ = procGetNextWindow.Call(h, gwHwndNext) {
+		if c := w.b.windows[h]; c != nil && c.parent == w.parent && c.opts.Modal && !c.closed && !c.destroying && c.IsVisible() {
+			return c
+		}
+	}
+	return w.parent
 }
 
 // modalSibling returns another modal child of w's parent that stays open,
