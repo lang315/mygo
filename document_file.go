@@ -17,6 +17,42 @@ type fileStamp struct {
 	Size    int64 `json:"size"`
 }
 
+// fileIdentity is the identity of a file, when the system tells one: the
+// file itself whatever name it has later, which lets a document find its
+// file where another app renamed it (see findMoved).
+type fileIdentity struct {
+	id fileWatchID
+	ok bool
+}
+
+// fileRead is what a look at a file saw of it.
+type fileRead struct {
+	stamp fileStamp
+	file  fileIdentity
+}
+
+func identityOf(info os.FileInfo) fileIdentity {
+	id, ok := fileWatchIdentity(StatIdentity(info))
+	return fileIdentity{id, ok}
+}
+
+func readOf(info os.FileInfo) fileRead {
+	return fileRead{stampOf(info), identityOf(info)}
+}
+
+// statRead looks at the file at path as statStamp does, and sees its identity
+// from the same stat.
+func statRead(path string) (fileRead, error) {
+	info, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return fileRead{}, nil
+	}
+	if err != nil {
+		return fileRead{}, err
+	}
+	return readOf(info), nil
+}
+
 func stampOf(info os.FileInfo) fileStamp {
 	return fileStamp{ModTime: info.ModTime().UnixNano(), Size: info.Size()}
 }
@@ -74,14 +110,14 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 			return false, ErrDocumentChanged
 		}
 	}
-	stamp, err := writeFileSafely(target, snap.write)
+	written, err := writeFileSafely(target, snap.write)
 	if err != nil {
 		return false, err
 	}
 	b.mu.Lock()
 	b.ops.markSaved(snap)
 	b.savedAt = snap.at
-	b.stamp = stamp
+	b.stamp, b.file = written.stamp, written.file
 	b.conflict, b.deleted = false, false
 	moved := target != b.path
 	if moved {
@@ -110,14 +146,14 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 // reload reads path again and makes it the content.
 func (b *docBase) reload(path string) error {
 	b.io.Lock()
-	v, stamp, err := b.kind.readFile(path)
+	v, read, err := b.kind.readFile(path)
 	if err != nil {
 		b.io.Unlock()
 		return err
 	}
 	b.mu.Lock()
 	b.ops.replace(v)
-	b.stamp = stamp
+	b.stamp, b.file = read.stamp, read.file
 	b.conflict, b.deleted = false, false
 	b.readOnly = !fileWritable(path)
 	b.dirtySince = time.Time{}
@@ -144,7 +180,7 @@ func (b *docBase) reload(path string) error {
 // leaves half a file. A symlink's target is replaced, and a file with
 // other hard links, or in a directory the user can't create files in, is
 // written in place, as GIO does.
-func writeFileSafely(path string, write func(io.Writer) error) (fileStamp, error) {
+func writeFileSafely(path string, write func(io.Writer) error) (fileRead, error) {
 	if real, err := filepath.EvalSymlinks(path); err == nil {
 		path = real
 	}
@@ -158,7 +194,7 @@ func writeFileSafely(path string, write func(io.Writer) error) (fileStamp, error
 		if exists && errors.Is(err, fs.ErrPermission) {
 			return writeFileInPlace(path, write)
 		}
-		return fileStamp{}, err
+		return fileRead{}, err
 	}
 	name := tmp.Name()
 	err = writeAndSync(tmp, write)
@@ -170,10 +206,9 @@ func writeFileSafely(path string, write func(io.Writer) error) (fileStamp, error
 	}
 	if err != nil {
 		os.Remove(name)
-		return fileStamp{}, err
+		return fileRead{}, err
 	}
-	s, _, err := statStamp(path)
-	return s, err
+	return statRead(path)
 }
 
 // createSibling creates a hidden file next to path, with the permissions
@@ -189,20 +224,19 @@ func createSibling(path string) (*os.File, error) {
 	return nil, errors.New("mygo: cannot create a temporary file next to " + path)
 }
 
-func writeFileInPlace(path string, write func(io.Writer) error) (fileStamp, error) {
+func writeFileInPlace(path string, write func(io.Writer) error) (fileRead, error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
 	if err != nil {
-		return fileStamp{}, err
+		return fileRead{}, err
 	}
 	err = writeAndSync(f, write)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
-		return fileStamp{}, err
+		return fileRead{}, err
 	}
-	s, _, err := statStamp(path)
-	return s, err
+	return statRead(path)
 }
 
 func writeAndSync(f *os.File, write func(io.Writer) error) error {

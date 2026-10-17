@@ -395,8 +395,10 @@ type docBase struct {
 	// the file has, backedUp the one the recovery copy has (0: none).
 	changes, savedAt, backedUp uint64
 	edited                     bool
-	// stamp is the file as the document last read or wrote it.
+	// stamp is the file as the document last read or wrote it, and file its
+	// identity.
 	stamp                       fileStamp
+	file                        fileIdentity
 	readOnly, conflict, deleted bool
 	window                      *Window
 	closed                      bool
@@ -832,7 +834,7 @@ func (k *docKind) open(path string) (*docBase, error) {
 		b.focus()
 		return b, nil
 	}
-	v, stamp, err := k.readFile(abs)
+	v, read, err := k.readFile(abs)
 	if err != nil {
 		return nil, err
 	}
@@ -844,7 +846,8 @@ func (k *docKind) open(path string) (*docBase, error) {
 	if err != nil {
 		return nil, err
 	}
-	b.path, b.stamp, b.id = abs, stamp, randomText()
+	b.path, b.stamp, b.id = abs, read.stamp, randomText()
+	b.file = read.file
 	b.readOnly = !fileWritable(abs)
 	k.show(b)
 	addRecent(abs)
@@ -852,7 +855,7 @@ func (k *docKind) open(path string) (*docBase, error) {
 }
 
 // readFile reads the content of the file at path, off the main thread.
-func (k *docKind) readFile(path string) (v any, stamp fileStamp, err error) {
+func (k *docKind) readFile(path string) (v any, fr fileRead, err error) {
 	read := func() {
 		var f *os.File
 		if f, err = openShared(path); err != nil {
@@ -867,11 +870,11 @@ func (k *docKind) readFile(path string) (v any, stamp fileStamp, err error) {
 			err = fmt.Errorf("mygo: %s is a directory", path)
 			return
 		}
-		stamp = stampOf(info)
+		fr = readOf(info)
 		v, err = k.read(f)
 	}
 	offMain(func() struct{} { read(); return struct{}{} })
-	return v, stamp, err
+	return v, fr, err
 }
 
 // show registers b and opens its window.
