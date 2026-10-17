@@ -101,6 +101,15 @@ func TestHooksBringTheWindowBack(t *testing.T) {
 			w := newWindow(t, mygo.WindowOptions{Width: 200, Height: 100})
 			eventually(t, "the window key", w.IsFocused)
 			deactivated(t)
+			// A window resigns key as its app is deactivated, a moment after
+			// the app stops being active (on a CI runner it may not at all);
+			// a window that is still key has its input delivered, and the
+			// hook nothing to bring back.
+			for end := time.Now().Add(time.Second); w.IsFocused(); time.Sleep(20 * time.Millisecond) {
+				if time.Now().After(end) {
+					t.Skip("the window stays key while the app is not active")
+				}
+			}
 			hook(w)
 			// The app is in front when the hook returns; the window is key a
 			// moment later, which a poll without keepFront sees.
