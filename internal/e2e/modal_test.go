@@ -41,9 +41,9 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	appClick(parent, x, y)
 	// A frame drawn after the click says whether it counted, as in
 	// TestParentStaysBlockedWhileAModalChildIsOpen.
-	n := frames.Load()
+	before := frames.Load()
 	parent.Invalidate()
-	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > n })
+	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > before })
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its modal child was open", n-1)
 	}
@@ -206,9 +206,9 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 	inner.OnClosed(func() { closed.Store(true) })
 	eventually(t, "the inner child to show", inner.IsVisible)
 	appClick(outer, x, y)
-	n := frames.Load() // as in TestModalChildBlocksItsParent
+	before := frames.Load() // as in TestModalChildBlocksItsParent
 	outer.Invalidate()
-	eventually(t, "a frame of the outer child after the click", func() bool { return frames.Load() > n })
+	eventually(t, "a frame of the outer child after the click", func() bool { return frames.Load() > before })
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the outer child took %d clicks while its own modal child was open", n-1)
 	}
