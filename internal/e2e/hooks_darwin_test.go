@@ -193,9 +193,10 @@ func appActive() (active bool, supported bool) {
 	return active, true
 }
 
-// appIsActive reports whether NSApp says the app is active, which the
-// workspace names it a moment after the app is frontmost (see inFront).
-func appIsActive() (active bool) {
+// nsAppActive reports whether NSApp says the app is active. appActive says
+// whether it is the frontmost one, which the workspace names a moment before
+// NSApp says it is active (see inFront).
+func nsAppActive() (active bool) {
 	mygo.RunOnMain(func() { active = darwin.TestIsActive() })
 	return active
 }

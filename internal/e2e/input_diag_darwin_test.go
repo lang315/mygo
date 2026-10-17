@@ -165,7 +165,7 @@ func TestActivatedLeavesTheAppActiveAndInFront(t *testing.T) {
 	if front, _ := appActive(); !front {
 		t.Error("the app is not the frontmost one")
 	}
-	if !appIsActive() {
+	if !nsAppActive() {
 		t.Error("the app is not active")
 	}
 	if !w.IsFocused() {

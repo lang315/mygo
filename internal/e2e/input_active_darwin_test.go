@@ -42,7 +42,9 @@ func activated(t *testing.T, w *mygo.Window) {
 	t.Helper()
 	start := time.Now()
 	if !wait.Poll(func() bool {
-		if front, _ := appActive(); front && appIsActive() && w.IsFocused() {
+		// appActive is whether the app is the frontmost one; nsAppActive is what
+		// NSApp says, which comes a moment after.
+		if front, _ := appActive(); front && nsAppActive() && w.IsFocused() {
 			return true
 		}
 		w.Focus()
