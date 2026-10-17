@@ -208,10 +208,8 @@ func Cached(ctx context.Context, f File, path string) error {
 	return nil
 }
 
-// rename is update.Rename, which retries while Windows reports the file
-// in use, as antivirus software does as it scans a download, and waiting
-// is called when Cached waits for another process to download the file,
-// both for tests to replace.
+// rename is update.Rename, and waiting is called when Cached waits for
+// another process to download the file, both for tests to replace.
 var (
 	rename  = update.Rename
 	waiting = func(path string) {}
