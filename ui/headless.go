@@ -253,6 +253,7 @@ func (t *Tester) Update(fn func()) {
 	t.mu.Lock()
 	t.updates = append(t.updates, fn)
 	t.mu.Unlock()
+	t.h.invalidate()
 }
 
 // settle runs frames until the view asks for no more, or 20 of them.
@@ -269,14 +270,8 @@ func (t *Tester) settle() {
 	}
 }
 
-// asked reports whether the view asked for a frame, or Update queued
-// something for one.
-func (t *Tester) asked() bool {
-	t.mu.Lock()
-	queued := len(t.updates) > 0
-	t.mu.Unlock()
-	return queued || t.h.requested.Load() || len(t.h.later) > 0
-}
+// asked reports whether the view asked for a frame.
+func (t *Tester) asked() bool { return t.h.requested.Load() || len(t.h.later) > 0 }
 
 // runLater runs the updates queued, in turn, then what the view asked to
 // run after the frame.
@@ -287,9 +282,6 @@ func (t *Tester) runLater() {
 	t.mu.Unlock()
 	for _, fn := range updates {
 		fn()
-	}
-	if len(updates) > 0 {
-		t.rt.redraw = false // built anew, as Window.Update asks
 	}
 	for len(t.h.later) > 0 {
 		fn := t.h.later[0]
