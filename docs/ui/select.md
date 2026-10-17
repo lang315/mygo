@@ -42,14 +42,20 @@ sel.Trigger.Gap(6).Padding(6, 10).Radius(8).Border(1, t.Border).Children(func() 
 sel.Popup(func(panel ui.Element) {
 	panel.Margin(4, 0, 0, 0).Padding(4).Radius(10).Background(t.Background).Border(1, t.Border)
 	for _, size := range sizes {
-		item := sel.Item(size).Padding(6, 10).Radius(6)
+		item := sel.Item(size).Gap(8).Padding(6, 10).Radius(6)
 		if item.Highlighted() {
 			item.Background(t.Accent).TextColor(t.AccentText)
 		}
-		item.Children(func() { ui.Text(c, size) })
+		item.Children(func() {
+			ui.Icon(c, sizeIcons[size])
+			ui.Text(c, size)
+		})
 	}
 })
 ```
+
+An option holds whatever its children build: here an icon before the
+label, which `ui.Select`'s options, strings, do not show.
 
 See [custom widgets](custom-widgets.md).
 
