@@ -137,3 +137,33 @@ func TestMenuDoesNotDeleteAFolderWhileRunning(t *testing.T) {
 	choose(t, tt, "Dừng")
 	tt.wait(&a.run)
 }
+
+func TestMenuRenameOfTheTrashSaysSo(t *testing.T) {
+	a := newApp(10)
+	tt := newTester(t, a)
+	a.folder = "Thùng rác"
+	a.showFolder()
+	choose(t, tt, "Đổi tên")
+	if a.folder != "Thùng rác" {
+		t.Fatalf("the trash was renamed: %q", a.folder)
+	}
+	tt.want("Không đổi tên được thùng rác!")
+}
+
+func TestMenuStopWithNothingRunningSaysSo(t *testing.T) {
+	a := newApp(10)
+	tt := newTester(t, a)
+	choose(t, tt, "Dừng")
+	tt.want("Không có lượt chạy nào để dừng!")
+}
+
+func TestMenuActionRefusedLeavesTheActionSelectAlone(t *testing.T) {
+	a := newApp(10)
+	tt := newTester(t, a)
+	a.action = "Backup" // chosen in the toolbar's select
+	choose(t, tt, "Bật 2FA")
+	tt.want("Bạn chưa chọn tài khoản nào để chạy!")
+	if a.action != "Backup" {
+		t.Fatalf("a refused action changed the select to %q", a.action)
+	}
+}

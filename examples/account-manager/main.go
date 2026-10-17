@@ -144,7 +144,7 @@ func (a *app) toolbar(c *ui.Context) {
 				a.start(c)
 			}
 		} else if ui.Button(c, "Stop").Disabled(a.stopping).Clicked() {
-			a.stop()
+			a.stop(c)
 		}
 		ui.Spacer(c)
 		if ui.Select(c, &a.folder, a.s.names()).Label("Thư mục").Width(220).Changed() {
@@ -156,7 +156,7 @@ func (a *app) toolbar(c *ui.Context) {
 			a.addFolder()
 		}
 		if ui.Button(c, "Đổi tên").Disabled(cur.ID == trash).Clicked() {
-			a.renameFolder()
+			a.renameFolder(c)
 		}
 		if ui.Button(c, "Xóa thư mục").Disabled(busy || cur.ID == trash).Clicked() {
 			a.deleteFolder(c)
@@ -177,10 +177,13 @@ func (a *app) addFolder() {
 }
 
 // renameFolder renames the folder shown, but the trash.
-func (a *app) renameFolder() {
-	if cur, _ := a.s.folderByName(a.folder); cur.ID != trash {
-		a.folder = a.s.renameFolder(cur.ID)
+func (a *app) renameFolder(c *ui.Context) {
+	cur, _ := a.s.folderByName(a.folder)
+	if cur.ID == trash {
+		c.Toast("Không đổi tên được thùng rác!")
+		return
 	}
+	a.folder = a.s.renameFolder(cur.ID)
 }
 
 // deleteFolder deletes the folder shown, but the trash, and none while a run
@@ -200,8 +203,12 @@ func (a *app) deleteFolder(c *ui.Context) {
 }
 
 // stop asks the run going on to end.
-func (a *app) stop() {
-	if a.run != nil && !a.stopping {
+func (a *app) stop(c *ui.Context) {
+	if a.run == nil {
+		c.Toast("Không có lượt chạy nào để dừng!")
+		return
+	}
+	if !a.stopping {
 		a.stopping = true
 		a.run.cancel()
 	}
@@ -214,8 +221,12 @@ func (a *app) begin(c *ui.Context, action string) {
 		c.Toast("Đang chạy!")
 		return
 	}
+	// The select shows the action of a run: a refused one leaves it as it was.
+	before := a.action
 	a.action = action
-	a.start(c)
+	if a.start(c); a.run == nil {
+		a.action = before
+	}
 }
 
 // later runs fn in the next frame, with a Context: the toasts and the redraw
@@ -235,13 +246,13 @@ func (a *app) menu() []*mygo.MenuItem {
 	for _, act := range actions {
 		accounts = append(accounts, item(act, func(c *ui.Context) { a.begin(c, act) }))
 	}
-	accounts = append(accounts, mygo.Separator(), item("Dừng", func(*ui.Context) { a.stop() }))
+	accounts = append(accounts, mygo.Separator(), item("Dừng", a.stop))
 	return []*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu},
 		{Label: "Tài khoản", Submenu: accounts},
 		{Label: "Thư mục", Submenu: []*mygo.MenuItem{
 			item("Thêm thư mục", func(*ui.Context) { a.addFolder() }),
-			item("Đổi tên", func(*ui.Context) { a.renameFolder() }),
+			item("Đổi tên", a.renameFolder),
 			item("Xóa thư mục", a.deleteFolder),
 		}},
 		{Role: mygo.RoleEditMenu},
