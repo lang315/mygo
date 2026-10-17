@@ -1283,7 +1283,13 @@ func TestResizeBelowMinimum(t *testing.T) {
 // eventually waits for cond, which polls the window system.
 func eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	if !wait.Poll(func() bool { keepFront(); return cond() }) {
+	if !wait.Poll(func() bool {
+		if cond() {
+			return true
+		}
+		keepFront()
+		return false
+	}) {
 		t.Fatalf("%s never happened (waited %v)%s", what, wait.Guard, inputDiag())
 	}
 }
