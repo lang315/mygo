@@ -84,7 +84,9 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	first.Close()
 	eventually(t, "the first child to close", firstClosed.Load)
 	eventually(t, "the second child to show", second.IsVisible) // a second sheet waits for the first
+	parentBounds, secondBounds := parent.Bounds(), second.Bounds()
 	appClick(parent, x, y)
+	afterBlocked := clicks.Load()
 	second.Close()
 	eventually(t, "the second child to close", secondClosed.Load)
 	appClick(parent, x, y)
@@ -94,7 +96,7 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 		t.Fatalf("the parent took %d clicks while its second modal child was open", n-2)
 	}
 	if runtime.GOOS == "windows" {
-		t.Fatalf("DEBUG: the test ran to its end; clicks %d", clicks.Load())
+		t.Fatalf("DEBUG: the test ran to its end; clicks %d, after the blocked click %d; parent %+v, second %+v", clicks.Load(), afterBlocked, parentBounds, secondBounds)
 	}
 }
 
