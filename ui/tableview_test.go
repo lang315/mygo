@@ -585,3 +585,27 @@ func TestTableViewSetFilterKeyKeepsTheSameFilter(t *testing.T) {
 		t.Fatalf("after SetFilter, the key filtered nothing: rows %v, want %v", got, want)
 	}
 }
+
+// TestTableViewChangedWithoutSyncStaysSmall is a regression test: a view
+// told of changes but not synced, as the table of a tab not shown, kept a
+// list growing with every change.
+func TestTableViewChangedWithoutSyncStaysSmall(t *testing.T) {
+	rows := make([]tvRow, 1000)
+	for i := range rows {
+		rows[i] = tvRow{a: i}
+	}
+	v := NewTableView(tvCompare)
+	sort := SortOrder{Column: "a"}
+	v.Sync(rows, sort)
+	for i := range 1_000_000 {
+		rows[i%len(rows)].a = len(rows) - i%len(rows)
+		v.Changed(i % len(rows))
+	}
+	if c := cap(v.dirty); c > len(rows) {
+		t.Errorf("after a million changes, the view holds room for %d of them", c)
+	}
+	v.Sync(rows, sort)
+	if got, want := tvGot(v), tvWant(rows, sort, nil); !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got[:10], want[:10])
+	}
+}
