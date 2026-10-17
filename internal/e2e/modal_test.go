@@ -50,6 +50,74 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	eventually(t, "a click on the parent after the child closed", func() bool { return clicks.Load() == 2 })
 }
 
+// TestParentStaysBlockedWhileAModalChildIsOpen: with two modal children of
+// one parent, closing one leaves the parent blocked by the other, and
+// closing that one gives the parent the front again.
+func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
+	var clicks, frames atomic.Int32
+	parent := newWindow(t, mygo.WindowOptions{Title: "Modal parent", Width: 400, Height: 300,
+		Content: ui.View(func(c *ui.Context) {
+			frames.Add(1)
+			ui.Column(c).Fill().OnClick(func() { clicks.Add(1) })
+		})})
+	eventually(t, "the parent's first frame", func() bool { return frames.Load() > 0 })
+	const x, y = 60, 230 // as in TestModalChildBlocksItsParent
+	if !appClick(parent, x, y) {
+		t.Skip("no system clicks on this platform")
+	}
+	eventually(t, "a click on the parent", func() bool { return clicks.Load() == 1 })
+
+	modal := func(title string) (w *mygo.Window, drawn, closed *atomic.Bool) {
+		drawn, closed = new(atomic.Bool), new(atomic.Bool)
+		w = newWindow(t, mygo.WindowOptions{Title: title, Width: 200, Height: 100, Parent: parent, Modal: true,
+			Content: ui.View(func(c *ui.Context) { drawn.Store(true); ui.Text(c, title) })})
+		w.OnClosed(func() { closed.Store(true) })
+		return w, drawn, closed
+	}
+	first, firstDrawn, firstClosed := modal("First modal")
+	eventually(t, "the first child's first frame", firstDrawn.Load)
+	second, secondDrawn, secondClosed := modal("Second modal")
+	if runtime.GOOS != "darwin" { // a second sheet waits for the first
+		// As in TestModalChildAndOtherWindows: closing the first before the
+		// second drew broke a later test's input method under Xvfb.
+		eventually(t, "the second child's first frame", secondDrawn.Load)
+	}
+	// A user closes the child in front, which leaves the other: the second,
+	// or on macOS the first, as a second sheet waits for it.
+	shown, shownClosed, other, otherClosed := second, secondClosed, first, firstClosed
+	if runtime.GOOS == "darwin" {
+		shown, shownClosed, other, otherClosed = first, firstClosed, second, secondClosed
+	}
+	shown.Close()
+	eventually(t, "the child in front to close", shownClosed.Load)
+	eventually(t, "the other child to show", other.IsVisible)
+	appClick(parent, x, y)
+	// OnClick runs once a frame, however many clicks came: a frame drawn
+	// after the click, which handles the input before it, says whether the
+	// click counted, with no waiting a while.
+	drawn := frames.Load()
+	parent.Invalidate()
+	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > drawn })
+	if n := clicks.Load(); n != 1 {
+		t.Fatalf("the parent took %d clicks while its other modal child was open", n-1)
+	}
+	// The child in front as it closes, as for a user who closes it: else
+	// the check below would not see where its front goes.
+	if runtime.GOOS != "linux" {
+		other.Focus()
+		eventually(t, "the other child to be in front", other.IsFocused)
+	}
+	other.Close()
+	eventually(t, "the other child to close", otherClosed.Load)
+	// Not another app: the parent takes the front back, as from one child.
+	// Xvfb has no window manager to give it back.
+	if runtime.GOOS != "linux" {
+		eventually(t, "the parent to be in front again", parent.IsFocused)
+	}
+	appClick(parent, x, y)
+	eventually(t, "a click on the parent after both children closed", func() bool { return clicks.Load() == 2 })
+}
+
 // TestModalChildAndOtherWindows settles V7 of ui/widget's spec, the
 // platform behaviors it quoted from general knowledge: GTK3 modality
 // blocks every window of the app, while a macOS sheet and a Windows modal
