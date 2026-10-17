@@ -63,14 +63,55 @@ func TestHiddenTabPlacesTheChangedRowsWhenShownAgain(t *testing.T) {
 	tt.do(tt.Click("Email"))
 	tt.do(tt.Click("Trạng thái")) // sorted by status, all of them empty
 	tt.do(tt.Click("Ads"))
-	// The tab hidden is not told which rows changed (they would pile up, as
-	// it never syncs): it places all of them again once shown.
+	// The tab hidden is told which rows changed, and places them once shown.
 	a.s.accounts[3].Status = "zzz"
 	a.changed(3)
 	tt.Frame()
 	tt.do(tt.Click("Email"))
 	if last := a.email.At(a.email.Len() - 1); last.ID != 3 {
 		t.Fatalf("the last row of the Email tab sorted by status is account %d, want 3 (status %q)", last.ID, "zzz")
+	}
+}
+
+// TestShowingATabAgainPlacesNoRows: a tab whose rows did not change while
+// it was hidden shows them as it left them, without placing them again (at
+// 1,000,000 rows, placing them all took 37 to 78 ms a switch).
+func TestShowingATabAgainPlacesNoRows(t *testing.T) {
+	a := newApp(1000)
+	tt := newTester(t, a)
+	tt.do(tt.Click("Email"))
+	var kept int
+	filter := a.email.Filter
+	a.email.Filter = func(x *account) bool { kept++; return filter(x) }
+	tt.do(tt.Click("Ads"))
+	tt.do(tt.Click("Email"))
+	if kept != 0 {
+		t.Errorf("showing the Email tab again went through %d rows, want none", kept)
+	}
+	// A row changed while hidden is placed again, not all of them.
+	tt.do(tt.Click("Ads"))
+	a.s.accounts[3].Status = "zzz"
+	a.changed(3)
+	tt.do(tt.Click("Email"))
+	if kept > 10 {
+		t.Errorf("showing the Email tab after one row changed went through %d rows", kept)
+	}
+}
+
+// TestHiddenTabPlacesTheRowsLeftWhenShownAgain: accounts removed while a
+// tab is hidden are gone from it once shown.
+func TestHiddenTabPlacesTheRowsLeftWhenShownAgain(t *testing.T) {
+	a := newApp(100)
+	tt := newTester(t, a)
+	tt.do(tt.Click("Email"))
+	tt.do(tt.Click("Ads"))
+	a.s.remove([]int{0, 1, 2})
+	a.forget([]int{0, 1, 2})
+	a.reset()
+	tt.Frame()
+	tt.do(tt.Click("Email"))
+	if n := a.email.Len(); n != 97 {
+		t.Fatalf("the Email tab shows %d rows after 3 of 100 were removed, want 97", n)
 	}
 }
 
