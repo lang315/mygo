@@ -11,6 +11,8 @@
   "find": "查找",
   "search": "搜索",
   "column": "列",
+  "dataTableRows": "{n, plural, other {# 行}}",
+  "dataTableChecked": "已勾选 {n} 项",
   "clear": "清除",
   "removeToken": "移除{token}",
   "saturation": "饱和度与亮度",

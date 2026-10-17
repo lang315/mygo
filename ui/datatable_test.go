@@ -844,3 +844,28 @@ func TestDataTableSearchDelay(t *testing.T) {
 		t.Fatalf("after Enter and the delay: rows %v, want 3", ids)
 	}
 }
+
+func TestDataTableFooter(t *testing.T) {
+	s, rows := dtState(), dtRows()
+	tt := dtTester(s, &rows)
+	if tt.HasText("3 rows") {
+		t.Fatal("a footer without Footer")
+	}
+	s.Footer = true
+	tt.Frame()
+	if !tt.HasText("3 rows") {
+		t.Fatalf("footer: %q", tt.Texts())
+	}
+	s.Checked.Add(1)
+	s.Checked.Add(2)
+	tt.Frame()
+	if !tt.HasText("3 rows · 2 checked") {
+		t.Fatalf("2 checked: %q", tt.Texts())
+	}
+	// A search hiding a checked row: checked counts every checked key.
+	s.SetSearch("Name", "alp")
+	tt.Frame()
+	if !tt.HasText("1 row · 2 checked") {
+		t.Fatalf("1 row shown: %q", tt.Texts())
+	}
+}

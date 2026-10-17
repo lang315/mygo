@@ -44,6 +44,24 @@
   "@column": {
     "description": "Labels the choice of the column a data table searches."
   },
+  "dataTableRows": "{n, plural, one {# row} other {# rows}}",
+  "@dataTableRows": {
+    "description": "How many rows a data table shows, in its footer.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "dataTableChecked": "{n} checked",
+  "@dataTableChecked": {
+    "description": "How many rows of a data table are checked, in its footer after the rows.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "clear": "Clear",
   "@clear": {
     "description": "Labels the button that clears a search field."

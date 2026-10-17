@@ -76,6 +76,9 @@ type DataTableState[T any, K comparable] struct {
 	// typing pauses that long, besides Enter, the button, clearing the box
 	// and choosing another column.
 	SearchDelay time.Duration
+	// Footer shows a line under the table: how many rows are shown and,
+	// when any are, how many are checked, hidden by the search or not.
+	Footer bool
 
 	// Checked are the rows checked, Chosen the rows highlighted.
 	Checked, Chosen Selection[K]
@@ -203,7 +206,8 @@ func (s *DataTableState[T, K]) Reset() {
 //	app.table.Columns = columns
 //	ui.DataTable(c, &app.table, app.accounts).Grow(1)
 func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []T) Element {
-	if c.build() == nil {
+	raw := c.build()
+	if raw == nil {
 		return Element{}
 	}
 	s.start()
@@ -236,6 +240,13 @@ func DataTable[T any, K comparable](c *Context, s *DataTableState[T, K], rows []
 		Table(c, &s.list, s.tableColumns(c), s.view.Len(), func(row, col int) {
 			s.cell(c, row, col)
 		}).Grow(1)
+		if s.Footer {
+			text := raw.texts().DataTableRows(s.view.Len())
+			if n := s.Checked.Len(); n > 0 {
+				text += " · " + raw.texts().DataTableChecked(n)
+			}
+			Text(c, text).SingleLine().TextColor(c.Theme().TextMuted)
+		}
 	})
 }
 
