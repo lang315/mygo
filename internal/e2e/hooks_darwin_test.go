@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"log"
 	"os/exec"
 	"slices"
@@ -78,12 +79,17 @@ func sendFront(w *mygo.Window, what string, send func()) {
 		if f := beforeSend; f != nil {
 			f()
 		}
-		var sent bool
+		var sent, late bool
 		mygo.RunOnMain(func() {
-			if sent = inFront(darwin.TestIsFrontmost(), darwin.TestIsActive(), darwin.TestIsKeyWindow(w.NativeHandle()), panel) || time.Now().After(deadline); sent {
+			front := inFront(darwin.TestIsFrontmost(), darwin.TestIsActive(), darwin.TestIsKeyWindow(w.NativeHandle()), panel)
+			late = !front && time.Now().After(deadline)
+			if sent = front || late; sent {
 				send()
 			}
 		})
+		if late {
+			guardReached("sendFront", w)
+		}
 		if sent {
 			return
 		}
@@ -139,13 +145,27 @@ func waitOnScreen(w *mygo.Window) {
 // test, or a notification does. A window of an active app that is not key
 // stays so, as a flyout that takes no keyboard.
 func waitKey(w *mygo.Window) {
-	wait.Poll(func() bool {
+	if !wait.Poll(func() bool {
 		if active, _ := appActive(); active || w.IsFocused() {
 			return true
 		}
 		w.Focus()
 		return false
-	})
+	}) {
+		guardReached("waitKey", w)
+	}
+}
+
+// guardReached logs a wait that ran out wait.Guard without failing the test:
+// the window did not come to the front for a minute, and the input goes on.
+// The line tells which wait, and what the window and the app were.
+func guardReached(what string, w *mygo.Window) { log.Print(guardLine(what, w)) }
+
+// guardLine is the line guardReached logs.
+func guardLine(what string, w *mygo.Window) string {
+	var state string
+	mygo.RunOnMain(func() { state = darwin.TestWindowState(w.NativeHandle()) })
+	return fmt.Sprintf("e2e: %s ran out wait.Guard (%v) without the front: %s; frontmost bundle %q", what, wait.Guard, state, frontmostBundleID())
 }
 
 func sideButton(w *mygo.Window, back bool) (ok bool) {

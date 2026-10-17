@@ -165,6 +165,22 @@ func TestKeepFrontCountsWhatItFocuses(t *testing.T) {
 	}
 }
 
+// TestGuardLineSaysWhichWaitRanOut: a wait that runs out wait.Guard without
+// failing the test (waitKey, and sendFront, which sends the input then) leaves
+// a minute in the run and no trace; its line names the wait and says what the
+// window and the app were.
+func TestGuardLineSaysWhichWaitRanOut(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Title: "Delta", Width: 200, Height: 100})
+	w.Focus()
+	eventually(t, "the window key", w.IsFocused)
+	d := guardLine("waitKey", w)
+	for _, want := range []string{"waitKey", "wait.Guard", `"Delta"`, "key=", "app active=", "frontmost app", "frontmost bundle "} {
+		if !strings.Contains(d, want) {
+			t.Errorf("guardLine(waitKey, w) = %q, missing %q", d, want)
+		}
+	}
+}
+
 // TestInputDiagDescribesTheLastInput checks what a failing wait for the
 // effect of a click or drag says about the window the input went to.
 func TestInputDiagDescribesTheLastInput(t *testing.T) {
