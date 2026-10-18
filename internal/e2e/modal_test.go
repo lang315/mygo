@@ -32,18 +32,14 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	}
 	eventually(t, "a click on the parent", func() bool { return clicks.Load() == 1 })
 
-	var drawn, closed atomic.Bool
+	var closed atomic.Bool
 	child := newWindow(t, mygo.WindowOptions{Title: "Modal child", Width: 200, Height: 100,
 		Parent: parent, Modal: true,
-		Content: ui.View(func(c *ui.Context) { drawn.Store(true); ui.Text(c, "modal") })})
+		Content: ui.View(func(c *ui.Context) { ui.Text(c, "modal") })})
 	child.OnClosed(func() { closed.Store(true) })
-	eventually(t, "the child's first frame", drawn.Load)
+	eventually(t, "the child to show", child.IsVisible)
 	appClick(parent, x, y)
-	// A frame drawn after the click says whether it counted, as in
-	// TestParentStaysBlockedWhileAModalChildIsOpen.
-	before := frames.Load()
-	parent.Invalidate()
-	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > before })
+	frameAfter(t, parent, &frames)
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its modal child was open", n-1)
 	}
@@ -96,12 +92,7 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	eventually(t, "the child in front to close", shownClosed.Load)
 	eventually(t, "the other child to show", other.IsVisible)
 	appClick(parent, x, y)
-	// OnClick runs once a frame, however many clicks came: a frame drawn
-	// after the click, which handles the input before it, says whether the
-	// click counted, with no waiting a while.
-	drawn := frames.Load()
-	parent.Invalidate()
-	eventually(t, "a frame of the parent after the click", func() bool { return frames.Load() > drawn })
+	frameAfter(t, parent, &frames)
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its other modal child was open", n-1)
 	}
@@ -206,9 +197,7 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 	inner.OnClosed(func() { closed.Store(true) })
 	eventually(t, "the inner child to show", inner.IsVisible)
 	appClick(outer, x, y)
-	before := frames.Load() // as in TestModalChildBlocksItsParent
-	outer.Invalidate()
-	eventually(t, "a frame of the outer child after the click", func() bool { return frames.Load() > before })
+	frameAfter(t, outer, &frames)
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the outer child took %d clicks while its own modal child was open", n-1)
 	}
@@ -216,6 +205,17 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 	eventually(t, "the inner child to close", closed.Load)
 	appClick(outer, x, y)
 	eventually(t, "a click on the outer child after the inner closed", func() bool { return clicks.Load() == 2 })
+}
+
+// frameAfter waits for a frame of w, whose view counts its frames in
+// frames, drawn after the click before it. OnClick runs once a frame,
+// however many clicks came: that frame, which handles the click first,
+// says whether it counted, with no waiting a while.
+func frameAfter(t *testing.T, w *mygo.Window, frames *atomic.Int32) {
+	t.Helper()
+	before := frames.Load()
+	w.Invalidate()
+	eventually(t, "a frame after the click", func() bool { return frames.Load() > before })
 }
 
 // happens reports whether cond holds within d, as soon as it does.

@@ -28,10 +28,7 @@ func TestClosingAModalChildFrontsTheOneUnderIt(t *testing.T) {
 		children[i].Focus()
 		eventually(t, title+" in front", children[i].IsFocused)
 	}
-	var closed atomic.Bool
-	children[2].OnClosed(func() { closed.Store(true) })
-	children[2].Close()
-	eventually(t, "the child in front to close", closed.Load)
+	closeAndWait(t, children[2], "the child in front to close")
 	eventually(t, "the child under it to be in front", children[1].IsFocused)
 }
 
@@ -47,10 +44,7 @@ func TestClosingAModalChildPassesOverAHiddenOne(t *testing.T) {
 		Content: ui.View(func(c *ui.Context) { ui.Text(c, "shown") })})
 	shown.Focus()
 	eventually(t, "the shown child in front", shown.IsFocused)
-	var closed atomic.Bool
-	shown.OnClosed(func() { closed.Store(true) })
-	shown.Close()
-	eventually(t, "the shown child to close", closed.Load)
+	closeAndWait(t, shown, "the shown child to close")
 	eventually(t, "the parent to be in front", parent.IsFocused)
 }
 
@@ -66,9 +60,15 @@ func TestClosingAModalChildWithItsOwnFrontsTheParent(t *testing.T) {
 		Content: ui.View(func(c *ui.Context) { ui.Text(c, "inner") })})
 	inner.Focus()
 	eventually(t, "the inner child in front", inner.IsFocused)
-	var closed atomic.Bool
-	outer.OnClosed(func() { closed.Store(true) })
-	outer.Close()
-	eventually(t, "the outer child to close", closed.Load)
+	closeAndWait(t, outer, "the outer child to close")
 	eventually(t, "the parent to be in front", parent.IsFocused)
+}
+
+// closeAndWait closes w and waits for it to close.
+func closeAndWait(t *testing.T, w *mygo.Window, what string) {
+	t.Helper()
+	var closed atomic.Bool
+	w.OnClosed(func() { closed.Store(true) })
+	w.Close()
+	eventually(t, what, closed.Load)
 }
