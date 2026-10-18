@@ -458,7 +458,6 @@ func (a appController) Activate() {
 	if fg, _, _ := procGetForegroundWindow.Call(); a.b.windows[fg] != nil {
 		return
 	}
-	const gwHwndNext = 2
 	h, _, _ := procGetTopWindow.Call(0)
 	for ; h != 0; h, _, _ = procGetNextWindow.Call(h, gwHwndNext) {
 		w := a.b.windows[h]
