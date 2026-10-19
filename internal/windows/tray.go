@@ -439,6 +439,9 @@ func (b *Backend) UnregisterHotkey(id int) { procUnregisterHotKey.Call(b.appHwnd
 // traysAppearance tells the icons whose taskbar turned dark or light.
 func (b *Backend) traysAppearance() {
 	for _, t := range b.trays {
+		if t.temporary {
+			continue // a notification's icon, with no handler to tell
+		}
 		if dark := t.Dark(); dark != t.dark {
 			t.dark = dark
 			if t.template {
