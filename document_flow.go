@@ -534,11 +534,14 @@ func (b *docBase) moveTo(dir string) error {
 	return b.relocate(target)
 }
 
+// renameFile is os.Rename, which tests replace to fail across devices.
+var renameFile = os.Rename
+
 // relocate moves b's file to target, which the document then is.
 func (b *docBase) relocate(target string) error {
 	b.io.Lock()
 	path := b.Path()
-	err := os.Rename(path, target)
+	err := renameFile(path, target)
 	if errors.Is(err, syscall.EXDEV) {
 		err = copyFile(path, target)
 		if err == nil {

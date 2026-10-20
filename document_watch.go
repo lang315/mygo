@@ -131,13 +131,13 @@ func followDocumentFile(ctx context.Context, w *FileWatcher, path string) {
 // identity of a file deleted may be given to one made later.
 func (b *docBase) findMoved(dir string) string {
 	b.mu.Lock()
-	file, stamp := b.file, b.stamp
+	stamp := b.stamp
 	b.mu.Unlock()
-	if !file.ok {
+	if !stamp.file.ok {
 		return ""
 	}
 	return findFile(dir, func(info os.FileInfo, id fileWatchID) bool {
-		return id == file.id && stamp.same(stampOf(info))
+		return id == stamp.file.id && stamp.same(stampOf(info))
 	})
 }
 
