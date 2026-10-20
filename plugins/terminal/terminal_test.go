@@ -418,6 +418,34 @@ func TestComposition(t *testing.T) {
 	}
 }
 
+// TestOnInputSeesTextWithoutAKey: Options.OnInput sees the text an input
+// method commits, which OnKey does not, and the terminal still sends it; it
+// does not see the text of a key.
+func TestOnInputSeesTextWithoutAKey(t *testing.T) {
+	loadLib(t)
+	conn := newPipe()
+	var seen []string
+	term, err := New(Options{Conn: conn, OnInput: func(text string) { seen = append(seen, text) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill().AutoFocus() }, 400, 200)
+	tt.Frame()
+	tt.Compose("tiê", 3)
+	tt.Type("tiếng")
+	if got := conn.take(term); got != "tiếng" {
+		t.Errorf("committing sent %q", got)
+	}
+	tt.TypeKey(0, ui.KeyA, "a")
+	if got := conn.take(term); got != "a" {
+		t.Errorf("the key sent %q", got)
+	}
+	if !slices.Equal(seen, []string{"tiếng"}) {
+		t.Errorf("OnInput saw %q, want only the committed text", seen)
+	}
+}
+
 func TestMouse(t *testing.T) {
 	loadLib(t)
 	conn := newPipe()

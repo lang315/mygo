@@ -754,6 +754,9 @@ func (v *view) typed(text string) {
 	if p == nil {
 		// Text without a key: of an input method, or every key typing
 		// text on Linux.
+		if on := v.t.opts.OnInput; on != nil {
+			on(text)
+		}
 		r, size := utf8.DecodeRuneInString(text)
 		if size != len(text) || r == utf8.RuneError {
 			v.sendText(text)
