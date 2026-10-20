@@ -32,7 +32,7 @@ func TestRichTextEditor(t *testing.T) {
 		richtext.Editor(c, doc, richtext.EditorOptions{Label: "Note"}).Fill()
 		frames.Add(1)
 	}
-	w := newWindow(t, mygo.WindowOptions{Title: "Rich text", Width: 420, Height: 220, Content: ui.View(view)})
+	w := newWindow(t, mygo.WindowOptions{Title: "Rich text", Width: 420, Height: 220, UseContentSize: true, Content: ui.View(view)})
 	eventually(t, "a frame", func() bool { return frames.Load() > 0 })
 	if !click(w, 300, 160) {
 		t.Skip("native click automation unavailable")

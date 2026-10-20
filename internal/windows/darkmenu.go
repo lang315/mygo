@@ -176,6 +176,18 @@ func (w *window) measureMenuBarItem(lp uintptr) {
 	mis.ItemHeight = max(mis.ItemHeight, uint32(toPx(menuBarHeight, dpi)))
 }
 
+// menuBarGrowth is how much taller the bar measureMenuBarItem makes is than
+// the one AdjustWindowRectExForDpi counts, SM_CYMENU: Windows measures its
+// items a pixel shorter than that.
+func menuBarGrowth(dpi int) int32 {
+	if !fluentMenus() || highContrastOn() {
+		return 0
+	}
+	const smCyMenu = 15
+	cy, _, _ := procGetSystemMetricsForDpi.Call(smCyMenu, uintptr(dpi))
+	return max(0, toPx(menuBarHeight, dpi)-(int32(cy)-1))
+}
+
 // drawMenuBarItem paints an item of the bar: its backplate and its label.
 // On Windows 11 the backplate is inset, with rounded corners.
 func (w *window) drawMenuBarItem(lp uintptr) {

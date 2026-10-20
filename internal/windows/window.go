@@ -284,6 +284,9 @@ func (w *window) outerSize(width, height int32, dpi int) (int32, int32) {
 	if has(procAdjustWindowRectExForDpi) {
 		procAdjustWindowRectExForDpi.Call(uintptr(unsafe.Pointer(&r)), style, menu, ex, uintptr(dpi))
 	}
+	if menu != 0 {
+		r.Bottom += menuBarGrowth(dpi)
+	}
 	return r.Right - r.Left, r.Bottom - r.Top
 }
 
@@ -686,6 +689,9 @@ func (w *window) SetContentBounds(r platform.Rect) {
 			menu = 1
 		}
 		procAdjustWindowRectExForDpi.Call(uintptr(unsafe.Pointer(&outer)), windowLong(w.hwnd, gwlStyle), menu, windowLong(w.hwnd, gwlExStyle), uintptr(dpi))
+		if menu != 0 {
+			outer.Top -= menuBarGrowth(dpi) // the bar is above the content
+		}
 	}
 	procSetWindowPos.Call(w.hwnd, 0, uintptr(outer.Left), uintptr(outer.Top), uintptr(outer.Right-outer.Left), uintptr(outer.Bottom-outer.Top), swpNoZOrder|swpNoActivate)
 }
