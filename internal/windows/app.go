@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -622,6 +623,18 @@ func (a appController) Package() (platform.PackageInfo, bool) {
 // the web view cookie calls use: a window's, or a hidden one before a
 // window shows a page (cookies.go).
 func (a appController) ClearBrowsingData(done func(error)) {
+	if runtime.GOARCH == "arm64" {
+		// WebView2's ARM64 browser takes every clearing to end at a null
+		// time: it clears nothing, and never finishes what its quota
+		// database keeps, the page hanging. Only the cookie manager clears.
+		a.ClearCookies(func(err error) {
+			if err == nil {
+				err = errors.New("mygo: WebView2 on Windows ARM64 clears no browsing data but cookies")
+			}
+			done(err)
+		})
+		return
+	}
 	a.withCookieManager(func(_ []platform.Cookie, err error) { done(err) }, func(r *cookieRequest) {
 		wv13 := queryInterface(r.webview, &iidICoreWebView2_13)
 		if wv13 == 0 {

@@ -175,9 +175,7 @@ func TestCookies(t *testing.T) {
 	if err != nil || storage != "keep" {
 		t.Fatalf("cookie Clear changed localStorage: %q %v", storage, err)
 	}
-	if err := mygo.App.ClearBrowsingData(); err != nil {
-		t.Fatal(err)
-	}
+	clearBrowsingData(t)
 	sibling.Page().Reload()
 	waitFor(t, sibling, "document.title === 'cookies' && localStorage.getItem('cookies-test') === null")
 }

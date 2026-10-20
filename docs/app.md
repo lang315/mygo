@@ -328,7 +328,11 @@ together. Its methods do nothing on macOS and Linux.
 `App.ClearBrowsingData()` deletes what the app's pages stored: cookies,
 local and session storage, IndexedDB, service workers and caches, for
 example when the user signs out. Open pages keep what they hold in memory
-until they reload.
+until they reload. On Windows ARM64, WebView2 clears none of it: its browser
+takes every clearing to end at a null time, so it clears nothing, and it
+never finishes clearing IndexedDB, Cache Storage, file systems and service
+workers, which hangs the page. There `ClearBrowsingData` clears the cookies,
+as `Cookies.Clear` does, and returns an error.
 
 ### Cookies
 
