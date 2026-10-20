@@ -167,6 +167,12 @@ type Options struct {
 	// (PaddingExtend, PaddingExtendAlways), so that a full-screen
 	// program's colors reach the edges of the view.
 	PaddingColor PaddingColor
+	// MinimumContrast is the least contrast text has with its background,
+	// as Ghostty's minimum-contrast: a WCAG ratio from 1 (none, as when
+	// zero) to 21 (black on white). Text with less, as a program's light
+	// gray on a light theme, darkens or lightens as little as reaches it,
+	// keeping its hue. SetMinimumContrast changes it.
+	MinimumContrast float32
 
 	// OnTitle, OnExit, OnBell and OnNotify run on a goroutine of the
 	// terminal when a program sets the title, when the program (or Conn)
@@ -200,6 +206,11 @@ type Options struct {
 	// program's (OSC 52), as by tells. An app may say so, as Ghostty's
 	// app-notifications = clipboard-copy does with a toast.
 	OnCopy func(text string, by CopySource)
+	// OnSearch runs on the main thread as the status of the search
+	// changes (Terminal.Search): as matches are found and selected, and
+	// once the search ends, with a zero status. A find bar shows its
+	// "1 of 3" this way.
+	OnSearch func(s SearchStatus)
 
 	// OpenLink takes what a Command+click (Control+click elsewhere)
 	// opens: a hyperlink (OSC 8), a URL printed as text, or, only with
@@ -489,6 +500,9 @@ type Terminal struct {
 	done     chan struct{}
 	doneOnce sync.Once
 	code     atomic.Int64
+
+	// find is the search, while one goes (Search).
+	find search
 
 	// curTheme is the view's theme, for the program's questions; t.mu
 	// guards it. v is the view's state, on the main thread.
@@ -864,6 +878,15 @@ func (t *Terminal) SetCopyOnSelect(c CopyOnSelect) {
 	t.mu.Unlock()
 }
 
+// SetMinimumContrast changes the least contrast of text with its
+// background, as Options.MinimumContrast.
+func (t *Terminal) SetMinimumContrast(ratio float32) {
+	t.mu.Lock()
+	t.opts.MinimumContrast = ratio
+	t.mu.Unlock()
+	t.redraw()
+}
+
 // SetTheme changes the colors, as Options.Theme and DarkTheme.
 func (t *Terminal) SetTheme(theme, dark *Theme) {
 	t.mu.Lock()
@@ -998,6 +1021,7 @@ func (t *Terminal) Close() error {
 	// free it under the locks.
 	t.mu.Lock()
 	t.rmu.Lock()
+	t.endSearch()
 	t.term.Free()
 	t.term = nil
 	t.rs.Free()

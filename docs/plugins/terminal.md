@@ -155,6 +155,11 @@ term, err := terminal.New(terminal.Options{
 - `Cursor` and `NoBlink` set the cursor, which programs may change.
 - `Scrollback` is about how many bytes of output to keep above the
   screen: 10 MB by default, none when negative.
+- `MinimumContrast` is the least contrast text has with its background,
+  as Ghostty's `minimum-contrast`: a WCAG ratio from 1 (none, the
+  default) to 21. Text with less, as a program's light gray on a light
+  theme, darkens or lightens as little as reaches it, keeping its hue.
+  `SetMinimumContrast` changes it in a running terminal.
 - `Transparent` leaves the background undrawn, as Ghostty's
   `background-opacity`, so that what is under the view shows through: the
   window's material, or an element's translucent background. Cells with a
@@ -457,6 +462,37 @@ selection-foreground = #1e1e2e
 
 `SetTheme(theme, dark)` changes the themes of a running terminal.
 
+## Search
+
+`Search` searches the screen and the scrollback for text, as Ghostty's find
+does, with libghostty-vt's search: the matches are highlighted as they are
+found, a frame's share of the scrollback at a time, and follow the output
+that comes; the newest is selected, and shown. Matching is exact but for the
+case of ASCII letters. `SearchNext` selects the next match toward older
+output, up into the scrollback, and `SearchPrevious` toward newer output,
+both wrapping around and, unless the match shows, scrolling it to the
+middle of the view, clear of a find bar over an edge; `EndSearch`
+(or `Search("")`) ends the search. The terminal draws no find bar: the app
+draws one, and binds Ghostty's keys to these methods, Cmd+F, Cmd+G,
+Cmd+Shift+G and Escape on macOS. `OnSearch` tells it, on the main thread,
+how the search goes, for its "1 of 3":
+
+```go
+term, err := terminal.New(terminal.Options{
+	OnSearch: func(s terminal.SearchStatus) {
+		// s.Selected of s.Total matches of s.Text; s.Searching while more
+		// of the scrollback is to go through.
+		bar.status = fmt.Sprintf("%d of %d", s.Selected, s.Total)
+	},
+})
+```
+
+The theme's `Search` and `SearchText` color the matches and their text, and
+`SearchSelected` and `SearchSelectedText` the selected one, as Ghostty's
+`search-background`, `search-foreground`, `search-selected-background` and
+`search-selected-foreground`, which a theme file sets too: Ghostty's light
+amber and light orange under black text when zero.
+
 ## Methods
 
 The terminal's methods are safe from any goroutine:
@@ -523,7 +559,9 @@ stay soft. Each cell is drawn in its own style, so an empty cell stays empty
 after a colored one. A frame reads the terminal as a view does, taking its
 record of what changed: mirror a terminal no view shows, as a server's, with
 as many Mirrors as it has windows. A frame does not come while a program holds a synchronized update
-(mode 2026), up to a second: `Frame` then reports that one is due.
+(mode 2026), up to a second: `Frame` then reports that one is due. The
+window's cursor takes its own `Cursor` and `NoBlink` while the program
+leaves the cursor's shape alone, and the program's when it sets one.
 
 The window's terminal sets `ResizeByConn`: its view only asks `Conn` for the
 size it fits, and the screen keeps its size until the window calls `Resize`,

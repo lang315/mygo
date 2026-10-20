@@ -135,14 +135,17 @@ func (v *view) paint(p *ui.Painter, r ui.Rect) {
 	}
 	v.scrollbar = t.term.Scrollbar()
 	v.alt = t.term.AltScreen()
+	contrast := t.opts.MinimumContrast
+	tc, tr := t.term.Size()
+	v.matches, v.matchBuf = t.viewportMatches(v.matches, v.matchBuf, tc, tr)
 	t.mu.Unlock()
 	rs := t.rs
 	if !held {
 		rs.EndUpdate()
 	}
 	colors := rs.Colors()
-	full := rs.Dirty() == vt.Full || colors != v.colors
-	v.colors, v.cursor = colors, rs.Cursor()
+	full := rs.Dirty() == vt.Full || colors != v.colors || contrast != v.contrast
+	v.colors, v.contrast, v.cursor = colors, contrast, rs.Cursor()
 	cols, rows := rs.Size()
 	if len(v.lines) != rows {
 		v.lines = append(v.lines[:0], make([]rowCache, rows)...)
@@ -188,6 +191,9 @@ func (v *view) resolve(s vt.Style) resolved {
 	if s.Inverse {
 		r.fg, r.bg, r.hasBg, r.inverse = r.bg, r.fg, true, true
 	}
+	if v.contrast > 1 {
+		r.fg = contrasted(r.fg, r.bg, v.contrast)
+	}
 	if s.Faint {
 		r.fg = r.fg.Alpha(0.5)
 	}
@@ -199,6 +205,51 @@ func (v *view) resolve(s vt.Style) resolved {
 	}
 	r.invisible, r.underline, r.strike, r.overline = s.Invisible, s.Underline, s.Strikethrough, s.Overline
 	return r
+}
+
+// contrasted returns fg with at least the given contrast ratio with bg, as
+// WCAG reckons it: fg itself when it has it, else fg mixed toward black
+// or white, whichever contrasts more with bg, as little as reaches it.
+func contrasted(fg, bg ui.Color, ratio float32) ui.Color {
+	lb := luminance(bg)
+	if contrast(luminance(fg), lb) >= ratio {
+		return fg
+	}
+	to := ui.RGB(0, 0, 0)
+	if contrast(1, lb) > contrast(0, lb) {
+		to = ui.RGB(255, 255, 255)
+	}
+	lo, hi := float32(0), float32(1)
+	for range 8 {
+		mid := (lo + hi) / 2
+		if contrast(luminance(fg.Mix(to, mid)), lb) >= ratio {
+			hi = mid
+		} else {
+			lo = mid
+		}
+	}
+	return fg.Mix(to, hi)
+}
+
+// luminance returns the relative luminance of an sRGB color, from 0 for
+// black to 1 for white.
+func luminance(c ui.Color) float32 {
+	lin := func(v uint8) float64 {
+		f := float64(v) / 255
+		if f <= 0.04045 {
+			return f / 12.92
+		}
+		return math.Pow((f+0.055)/1.055, 2.4)
+	}
+	return float32(0.2126*lin(c.R) + 0.7152*lin(c.G) + 0.0722*lin(c.B))
+}
+
+// contrast returns the contrast ratio of two luminances, from 1 to 21.
+func contrast(a, b float32) float32 {
+	if a < b {
+		a, b = b, a
+	}
+	return (a + 0.05) / (b + 0.05)
 }
 
 // buildRow makes the cache of the render state's current row.
@@ -438,14 +489,49 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 			p.Fill(ui.Rect{X: ox + float32(line.selA)*cw, Y: ry, W: float32(line.selB-line.selA+1) * cw, H: ch}, selection, 0)
 		}
 	}
+	match, matchText, selMatch, selMatchText := v.searchColors()
+	for _, m := range v.matches {
+		if m.y < len(v.lines) {
+			c := match
+			if m.selected {
+				c = selMatch
+			}
+			p.Fill(ui.Rect{X: ox + float32(m.x0)*cw, Y: oy + float32(m.y)*ch, W: float32(m.x1-m.x0+1) * cw, H: ch}, c, 0)
+		}
+	}
 	cur, curColor, curText, block := v.cursorRect(ox, oy, cw, ch)
 	if block {
 		p.Fill(cur, curColor, 0)
 	}
+	var spans []matchSpan
 	for y := range v.lines {
 		line := &v.lines[y]
 		ry := oy + float32(y)*ch
 		text := func(over ui.Color) { v.drawText(p, line, ox, ry, cw, ch, base, over) }
+		spans = spans[:0]
+		for _, m := range v.matches {
+			if m.y == y {
+				spans = append(spans, m)
+			}
+		}
+		if len(spans) > 0 {
+			// The text of matches takes their text's color in their cells,
+			// the rest its own.
+			slices.SortFunc(spans, func(a, b matchSpan) int { return a.x0 - b.x0 })
+			left := r.X
+			for _, m := range spans {
+				a, b := ox+float32(m.x0)*cw, ox+float32(m.x1+1)*cw
+				c := matchText
+				if m.selected {
+					c = selMatchText
+				}
+				p.Clip(ui.Rect{X: left, Y: r.Y, W: a - left, H: r.H}, 0, func() { text(ui.Color{}) })
+				p.Clip(ui.Rect{X: a, Y: r.Y, W: b - a, H: r.H}, 0, func() { text(c) })
+				left = b
+			}
+			p.Clip(ui.Rect{X: left, Y: r.Y, W: r.X + r.W - left, H: r.H}, 0, func() { text(ui.Color{}) })
+			continue
+		}
 		if !line.sel || v.theme.SelectionText.A == 0 {
 			text(ui.Color{})
 			continue
@@ -456,6 +542,9 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 		p.Clip(ui.Rect{X: r.X, Y: r.Y, W: a - r.X, H: r.H}, 0, func() { text(ui.Color{}) })
 		p.Clip(ui.Rect{X: a, Y: r.Y, W: b - a, H: r.H}, 0, func() { text(v.theme.SelectionText) })
 		p.Clip(ui.Rect{X: b, Y: r.Y, W: r.X + r.W - b, H: r.H}, 0, func() { text(ui.Color{}) })
+	}
+	if h := v.hover; h.on() && h.row < len(v.lines) {
+		v.drawDeco(p, deco{h.x0, h.x1, vt.UnderlineSingle, v.linkColor(&v.lines[h.row], h)}, ox, oy+float32(h.row)*ch, cw, ch, base)
 	}
 	if cur.W > 0 && !block {
 		if v.focused || v.cursor.Style != vt.CursorBlock {
@@ -487,6 +576,19 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 		v.drawPreedit(p, ox, oy, cw, ch, base)
 	}
 	v.drawScrollbar(p, r)
+}
+
+// searchColors returns the colors of the search's matches and their text,
+// then the selected match's: the theme's, else Ghostty's.
+func (v *view) searchColors() (match, matchText, sel, selText ui.Color) {
+	th := v.theme
+	or := func(c ui.Color, def string) ui.Color {
+		if c.A == 0 {
+			return ui.Hex(def)
+		}
+		return c
+	}
+	return or(th.Search, "#ffe082"), or(th.SearchText, "#000000"), or(th.SearchSelected, "#f2a57e"), or(th.SearchSelectedText, "#000000")
 }
 
 // extendPadding paints the padding around the grid with the backgrounds
@@ -562,6 +664,19 @@ func (v *view) drawText(p *ui.Painter, line *rowCache, ox, ry, cw, ch, base floa
 		d.c = pick(d.c)
 		v.drawDeco(p, d, ox, ry, cw, ch, base)
 	}
+}
+
+// linkColor is the color of the hovered link's underline: its text's, or
+// the foreground's.
+func (v *view) linkColor(line *rowCache, h linkSpan) ui.Color {
+	for _, run := range line.runs {
+		for _, col := range run.cols {
+			if int(col) >= h.x0 && int(col) < h.x1 {
+				return run.c
+			}
+		}
+	}
+	return color(v.colors.Foreground)
 }
 
 // cursorRect returns the cursor's rectangle and colors, and whether it is
