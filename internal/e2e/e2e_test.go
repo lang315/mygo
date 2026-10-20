@@ -1879,6 +1879,23 @@ func TestDownloads(t *testing.T) {
 	check("attachment", "report.bin", "binary report")
 }
 
+// clearBrowsingData clears the app's browsing data. WebView2's ARM64
+// browser clears none but the cookies, so there the call must say so, and
+// the test ends: what pages stored stays.
+func clearBrowsingData(t *testing.T) {
+	t.Helper()
+	err := mygo.App.ClearBrowsingData()
+	if runtime.GOOS == "windows" && runtime.GOARCH == "arm64" {
+		if err == nil {
+			t.Fatal("ClearBrowsingData on Windows ARM64 reported no error, want that it cleared only the cookies")
+		}
+		t.Skip(err)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestClearBrowsingData(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Title: "Data", Width: 300, Height: 200})
 	if err := w.Page().LoadURL("app://localhost/"); err != nil {
@@ -1886,9 +1903,7 @@ func TestClearBrowsingData(t *testing.T) {
 	}
 	waitFor(t, w, `window.run`)
 	mustEval(t, w, `(localStorage.setItem("token", "secret"), window.oldPage = true)`)
-	if err := mygo.App.ClearBrowsingData(); err != nil {
-		t.Fatal(err)
-	}
+	clearBrowsingData(t)
 	w.Page().Reload()
 	waitFor(t, w, `window.run && !window.oldPage`)
 	if got := mustEval(t, w, `localStorage.getItem("token")`); got != nil {

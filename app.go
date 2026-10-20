@@ -495,7 +495,8 @@ func (a *Application) OnWindowCreated(fn func(w *Window)) (off func()) {
 // ClearBrowsingData deletes what the app's pages stored: cookies, local
 // and session storage, IndexedDB, service workers and caches, e.g. when the
 // user signs out. Open pages keep what they hold in memory until they are
-// reloaded.
+// reloaded. On Windows ARM64, WebView2 clears none of it: there
+// ClearBrowsingData clears the cookies and returns an error.
 func (a *Application) ClearBrowsingData() error {
 	needsApp("App.ClearBrowsingData")
 	ch := make(chan error, 1)
