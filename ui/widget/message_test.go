@@ -33,16 +33,19 @@ func TestConfirmCancelAndCloseSayNo(t *testing.T) {
 	}
 }
 
-// A dialog closed as soon as it shows still returns: the close may come
-// on the main thread before Run's goroutine has the window watched.
-func TestConfirmClosedAsSoonAsShown(t *testing.T) {
-	for range 50 {
-		got := runAsync(func() bool { return Confirm(nil, Warning, "At once?", "") })
-		fw := waitFake(t, "At once?")
-		mygo.RunOnMain(func() { fw.UserClose() })
-		if received(t, got) {
-			t.Fatal("closing returned true")
+// A dialog whose window closes before Show watches it still returns:
+// here it closes as it is made, on the main thread, as NewWindow fires
+// OnWindowCreated.
+func TestConfirmClosedAsItOpens(t *testing.T) {
+	off := mygo.App.OnWindowCreated(func(w *mygo.Window) {
+		if w.Title() == "At once?" {
+			w.Close()
 		}
+	})
+	defer off()
+	got := runAsync(func() bool { return Confirm(nil, Warning, "At once?", "") })
+	if received(t, got) {
+		t.Fatal("closing returned true")
 	}
 }
 
