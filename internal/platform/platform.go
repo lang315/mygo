@@ -340,7 +340,10 @@ type WindowOptions struct {
 	TitleBarHeight int
 	// ClientDecorations: a window with a hidden title bar decorates itself
 	// under a Wayland compositor that decorates windows (Linux).
-	ClientDecorations    bool
+	ClientDecorations bool
+	// HideWindowButtons hides the window controls of a hidden title bar,
+	// which the page draws itself: TitleBar is then zero.
+	HideWindowButtons    bool
 	TrafficLightPosition *Point
 	Vibrancy             string
 	Opacity              float64
@@ -479,6 +482,11 @@ type Window interface {
 	// TitleBarDoubleClicked performs the platform action for a double click
 	// on a custom title bar (zoom/minimize on macOS).
 	TitleBarDoubleClicked()
+	// SetMaximizeButton tells where the content shows the window's maximize
+	// button, in DIPs from the top-left corner of the content, which the
+	// backend makes the system's maximize button for the pointer: Windows
+	// shows the snap layouts over it. The zero RectF is nowhere.
+	SetMaximizeButton(r RectF)
 	// PlaceFlyout places a flyout (WindowOptions.Flyout) of the given
 	// size next to its anchor again, as Flyout.Place resolves it in the
 	// work area of a display, after the anchor, the size or the parent
