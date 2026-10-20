@@ -42,7 +42,7 @@ func TestNotebookSwitchesPages(t *testing.T) {
 		t.Fatalf("texts %q", tt.Texts())
 	}
 	click(t, tt, "Two")
-	if p := wait(t, switched); p != 1 || !tt.HasText("page two") {
+	if p := received(t, switched); p != 1 || !tt.HasText("page two") {
 		t.Fatalf("page %d, texts %q", p, tt.Texts())
 	}
 	nb.SetPage(0)
@@ -62,7 +62,7 @@ func TestNotebookClampedPageIsReported(t *testing.T) {
 	nb.SetPage(5)
 	tt.Frame()
 	tt.Frame()
-	if p := wait(t, switched); p != 1 {
+	if p := received(t, switched); p != 1 {
 		t.Fatalf("clamped page %d, want 1", p)
 	}
 }

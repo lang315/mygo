@@ -44,7 +44,7 @@ func TestSpinFocus(t *testing.T) {
 	focus(tt, 1) // past the minus, to the plus button
 	focus(tt, 1)
 	focus(tt, 1) // the entry
-	wait(t, left)
+	received(t, left)
 }
 
 func TestRangeSpinValues(t *testing.T) {
@@ -130,7 +130,7 @@ func TestComboSections(t *testing.T) {
 		t.Fatalf("a click on a header chose %q", c.Value())
 	}
 	click(t, tt, "Kale")
-	if v := wait(t, changed); v != "kale" {
+	if v := received(t, changed); v != "kale" {
 		t.Fatalf("OnChange saw %q", v)
 	}
 	if n := c.SectionLen("Fruits"); n != 2 {
@@ -228,7 +228,7 @@ func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
 	}
 	done := make(chan struct{})
 	Post(func() { close(done) }) // after any handler posted before it
-	wait(t, done)
+	received(t, done)
 	select {
 	case v := <-changed:
 		t.Fatalf("OnChange ran with %q", v)

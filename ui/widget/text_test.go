@@ -2,22 +2,15 @@ package widget
 
 import (
 	"testing"
-	"time"
 
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
-// wait returns what the handler sent, failing after 2s.
-func wait[T any](t *testing.T, ch <-chan T) T {
+// received returns what the handler sent.
+func received[T any](t *testing.T, ch <-chan T) T {
 	t.Helper()
-	select {
-	case v := <-ch:
-		return v
-	case <-time.After(2 * time.Second):
-		t.Fatal("handler did not run")
-	}
-	var zero T
-	return zero
+	return wait.For(t, "the handler to run", ch)
 }
 
 // focus moves the focus to the nth input (from 1) with Tab, as inputs
@@ -44,7 +37,7 @@ func TestEntryTypingReachesTextAndOnChange(t *testing.T) {
 	Entry().SetText("ab").AssignTo(&e).OnChange(func() { got <- e.Text() })
 	tt := tester(t, e)
 	typeInto(t, tt, 1, "c")
-	if s := wait(t, got); s != "abc" {
+	if s := received(t, got); s != "abc" {
 		t.Fatalf("OnChange saw %q, want abc", s)
 	}
 	if e.Text() != "abc" {
@@ -72,7 +65,7 @@ func TestEntryOnEnter(t *testing.T) {
 	typeInto(t, tt, 1, "!")
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if s := wait(t, entered); s != "go!" {
+	if s := received(t, entered); s != "go!" {
 		t.Fatalf("OnEnter saw %q", s)
 	}
 }
@@ -85,7 +78,7 @@ func TestEntryOnFocusOut(t *testing.T) {
 	tt := tester(t, VBox(0).Add(a, b))
 	focus(tt, 1) // first
 	focus(tt, 1) // second
-	wait(t, left)
+	received(t, left)
 }
 
 // U1: the caret follows the widget when the box reorders.
@@ -161,7 +154,7 @@ func TestHidingAFocusedWidgetRunsOnFocusOut(t *testing.T) {
 	focus(tt, 1)
 	e.SetVisible(false)
 	tt.Frame()
-	wait(t, left)
+	received(t, left)
 }
 
 func TestFocusMovesTheFocus(t *testing.T) {

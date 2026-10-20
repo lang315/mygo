@@ -6,25 +6,27 @@ import (
 	"image/color"
 	"image/png"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // waitFake waits for the open fake window titled title.
 func waitFake(t *testing.T, title string) *fake.Window {
 	t.Helper()
-	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+	var open *fake.Window
+	wait.Until(t, "an open window titled "+title, func() bool {
 		for _, fw := range fb.Windows() {
 			if fw.Title() == title && !fw.IsClosed() {
-				return fw
+				open = fw
+				return true
 			}
 		}
-	}
-	t.Fatalf("no open window titled %q", title)
-	return nil
+		return false
+	})
+	return open
 }
 
 // press presses the element labeled label in fw's view, as a screen

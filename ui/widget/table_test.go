@@ -266,7 +266,7 @@ func TestTablePanelSearches(t *testing.T) {
 	clickKeyword()
 	tt.Type(" bob ")
 	click(t, tt, "Search")
-	if got := wait(t, asked); got != [2]string{"Name", "bob"} {
+	if got := received(t, asked); got != [2]string{"Name", "bob"} {
 		t.Fatalf("OnBeforeSearch got %q", got)
 	}
 	Update(func() {})
@@ -279,7 +279,7 @@ func TestTablePanelSearches(t *testing.T) {
 	clickKeyword()
 	tt.Type("ann")
 	tt.Key(0, ui.KeyEnter)
-	if got := wait(t, asked); got != [2]string{"Name", "ann"} {
+	if got := received(t, asked); got != [2]string{"Name", "ann"} {
 		t.Fatalf("Enter: OnBeforeSearch got %q", got)
 	}
 	Update(func() {})
@@ -380,7 +380,7 @@ func TestTableActivateGivesTheKey(t *testing.T) {
 	tt := tester(t, tb)
 	click(t, tt, "bob")
 	tt.Key(0, ui.KeyEnter)
-	if k := wait(t, got); k != 2 {
+	if k := received(t, got); k != 2 {
 		t.Fatalf("activated %d", k)
 	}
 }
@@ -397,7 +397,7 @@ func TestTableOnKeyRunsOnTheEventGoroutine(t *testing.T) {
 	tt := tester(t, tb)
 	click(t, tt, "bob")
 	tt.Key(0, ui.KeyDelete)
-	if ks := wait(t, got); !slices.Equal(ks, []int{2}) {
+	if ks := received(t, got); !slices.Equal(ks, []int{2}) {
 		t.Fatalf("Delete with %v", ks)
 	}
 }
@@ -414,7 +414,7 @@ func TestTableRowMenuActsOnSelected(t *testing.T) {
 	if err := tt.ChooseMenuItem("Delete"); err != nil {
 		t.Fatal(err)
 	}
-	wait(t, done)
+	received(t, done)
 	tt.Frame()
 	if tt.HasText("bob") || !tt.HasText("ann") {
 		t.Fatalf("after Delete: %q", tt.Texts())
@@ -463,7 +463,7 @@ func TestTableColumnsChangeGivesTheLayout(t *testing.T) {
 	tt.Release(128, y)
 	var l ui.TableLayout
 	for l.Widths["A"] != 130 {
-		l = wait(t, got) // fails after 2 s without a layout of A at 130
+		l = received(t, got) // fails without a layout of A at 130
 	}
 }
 

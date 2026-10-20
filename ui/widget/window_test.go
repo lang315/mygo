@@ -3,10 +3,10 @@ package widget
 import (
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/fake"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // lastFake returns the fake of the window shown last.
@@ -49,17 +49,10 @@ func TestSetterRedrawsAShownWindow(t *testing.T) {
 	mygo.RunOnMain(func() { fw.FakeSurface().Frame() })
 	before := frames(fw)
 	l.SetText("b")
-	deadline := time.Now().Add(2 * time.Second)
-	for {
+	wait.Until(t, "SetText to redraw the window", func() bool {
 		mygo.RunOnMain(func() { fw.FakeSurface().Frame() })
-		if frames(fw) > before {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("SetText did not redraw the window")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+		return frames(fw) > before
+	})
 }
 
 func TestHeaderBarHidesTheTitleBar(t *testing.T) {
@@ -96,7 +89,7 @@ func TestOnCloseCanKeepTheWindow(t *testing.T) {
 	w.Show()
 	fw := lastFake(t)
 	mygo.RunOnMain(func() { fw.H.ShouldClose() })
-	wait(t, asked)
+	received(t, asked)
 	if fw.IsClosed() {
 		t.Fatal("window closed though OnClose said no")
 	}
@@ -149,7 +142,7 @@ func TestOnCloseDuringQuitQuitsAgainOnYes(t *testing.T) {
 	w.OnClose(func() bool { return true })
 	w.Show()
 	mygo.App.Quit()
-	wait(t, requitted)
+	received(t, requitted)
 	if !lastFakeClosed(w) {
 		t.Fatal("window not closed after OnClose said yes")
 	}
@@ -166,11 +159,11 @@ func TestOnCloseAfterQuitAttemptDoesNotQuit(t *testing.T) {
 	w.OnClose(func() bool { asked <- struct{}{}; return false })
 	w.Show()
 	mygo.App.Quit() // asked, says no
-	wait(t, asked)
+	received(t, asked)
 	w.OnClose(func() bool { asked <- struct{}{}; return true })
 	fw := lastFake(t)
 	mygo.RunOnMain(func() { fw.H.ShouldClose() })
-	wait(t, asked)
+	received(t, asked)
 	Update(func() {})
 	select {
 	case <-quits:
@@ -195,7 +188,7 @@ func waitClosed(t *testing.T, w *Window) {
 	mu.Lock()
 	done := w.done
 	mu.Unlock()
-	wait(t, done)
+	received(t, done)
 }
 
 func TestShowAfterCloseShowsAgain(t *testing.T) {
@@ -237,7 +230,7 @@ func TestCloseRequestsWhileAskingAskOnce(t *testing.T) {
 	defer w.Close()
 	fw := lastFake(t)
 	mygo.RunOnMain(func() { fw.H.ShouldClose() })
-	wait(t, asked)
+	received(t, asked)
 	mygo.RunOnMain(func() { fw.H.ShouldClose() }) // while the first asks
 	answer <- false
 	Update(func() {})
@@ -247,7 +240,7 @@ func TestCloseRequestsWhileAskingAskOnce(t *testing.T) {
 	default:
 	}
 	mygo.RunOnMain(func() { fw.H.ShouldClose() }) // after the answer: asks
-	wait(t, asked)
+	received(t, asked)
 	answer <- false
 }
 
@@ -270,7 +263,7 @@ func TestOnCloseSurvivesClose(t *testing.T) {
 	w.Show()
 	fw := lastFake(t)
 	mygo.RunOnMain(func() { fw.H.ShouldClose() })
-	wait(t, asked)
+	received(t, asked)
 	waitClosed(t, w)
 }
 
