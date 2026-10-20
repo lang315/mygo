@@ -193,13 +193,21 @@ func (w *Window) Show() {
 	if menu != nil {
 		n.SetMenu(mygo.NewMenu(nativeMenu(menu)))
 	}
-	n.OnClose(w.closeAsked)
-	n.OnClosed(func() {
+	closed := func() {
 		mu.Lock()
 		delete(shown, n)
 		w.win, w.showing, w.asking = nil, false, false
 		mu.Unlock()
 		close(done)
+	}
+	// The window closes on the main thread: watched there, a close that
+	// came since NewWindow returned is seen too, which Run would wait out.
+	mygo.RunOnMain(func() {
+		n.OnClose(w.closeAsked)
+		n.OnClosed(closed)
+		if n.IsDestroyed() {
+			closed()
+		}
 	})
 	closeNow := false
 	change(func() {
