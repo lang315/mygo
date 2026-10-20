@@ -224,6 +224,10 @@ type Options struct {
 	// it, as does what it sends with Send. A key that only types text may
 	// come as its text alone, as on Linux, which OnKey does not see.
 	OnKey func(mods ui.Modifiers, key ui.Key) bool
+	// OnInput sees text typed without a key, which OnKey does not see (an
+	// input method's commit, or every key typing text on Linux), on the
+	// main thread, before the terminal sends it.
+	OnInput func(text string)
 	// OnScroll sees the wheel scroll the view by whole rows, negative up,
 	// before the terminal scrolls its scrollback, on the main thread, and
 	// reports whether it took the scroll; a scroll taken moves nothing. It

@@ -299,6 +299,10 @@ term, err := terminal.New(terminal.Options{
   runs with the next frame, it keeps its place among the keys typed after
   it, as does what it sends with `Send`. Keys that only type text may come
   as their text alone, as on Linux, and `OnKey` does not see those.
+- `OnInput` sees text typed without a key, the text `OnKey` does not see (an
+  input method's commit, or every key typing text on Linux), on the main
+  thread before the terminal sends it. It cannot take the text: the
+  program gets it all the same.
 - `OnScroll` sees the wheel scroll the view by whole rows (negative up)
   on the main thread before the terminal scrolls its scrollback, and
   takes it by returning true: the scrollback stays. It is not asked while
