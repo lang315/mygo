@@ -33,6 +33,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,6 +43,29 @@ import (
 	"github.com/egoist/mygo/plugins/terminal/internal/vt"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
+)
+
+// Padding is the room around a terminal's grid, in DIPs (Options.Padding).
+type Padding struct{ X, Y float32 }
+
+// PaddingColor is what the padding around a terminal's grid shows
+// (Options.PaddingColor), as Ghostty's window-padding-color.
+type PaddingColor int
+
+const (
+	// PaddingBackground shows the terminal's background, or nothing when
+	// it is Transparent.
+	PaddingBackground PaddingColor = iota
+	// PaddingExtend extends the backgrounds of the cells nearest to the
+	// padding into it: a row's beside it, the top and the bottom rows'
+	// above and below the grid, as Ghostty's extend. While a full-screen
+	// program shows (the alternate screen) it extends every row's; on the
+	// main screen only those of rows whose every cell has a background of
+	// its own, so that a shell's highlights stay in their cells.
+	PaddingExtend
+	// PaddingExtendAlways extends the backgrounds of every row's cells
+	// nearest to the padding, as Ghostty's extend-always.
+	PaddingExtendAlways
 )
 
 // Options configure a terminal.
@@ -63,6 +87,19 @@ type Options struct {
 	// is typed is written to it. Command, Dir and Env are then ignored. A
 	// Conn with a method Resize(cols, rows int) error is told the size.
 	Conn io.ReadWriteCloser
+	// ResizeByConn leaves the size of the screen to whoever reads Conn:
+	// the view tells Conn the size it fits, with its Resize, and the
+	// screen takes a size only as Terminal.Resize sets it. A client of a
+	// server that keeps the session's terminal, as a multiplexer's, calls
+	// Resize where the server's output says the server resized, so that
+	// its screen lays out each byte at the size the server's did. Resized
+	// at once, as the view resizes it otherwise, the screen would lay out
+	// at the new size the output the program wrote for the one before,
+	// which the server laid out at that one: a line would wrap here and
+	// not there, and the program's next redraw, which moves the cursor
+	// from where it thinks it is, would land elsewhere, as the server's
+	// screen would show to the next client attaching.
+	ResizeByConn bool
 
 	// Font is the font of the text: the system's monospaced font at 13
 	// DIPs when zero.
@@ -117,6 +154,16 @@ type Options struct {
 	// Give the theme the background the view shows on, which the text
 	// under a block cursor takes.
 	Transparent bool
+	// Padding is the room around the grid, in DIPs, across (X) and down
+	// (Y), as Ghostty's window-padding-x and window-padding-y: 6 across
+	// and 4 down when zero; a negative value leaves none.
+	Padding Padding
+	// PaddingColor is what the padding shows, as Ghostty's
+	// window-padding-color: the background (PaddingBackground, the zero
+	// value), or the backgrounds of the cells nearest to it
+	// (PaddingExtend, PaddingExtendAlways), so that a full-screen
+	// program's colors reach the edges of the view.
+	PaddingColor PaddingColor
 
 	// OnTitle, OnExit, OnBell and OnNotify run on a goroutine of the
 	// terminal when a program sets the title, when the program (or Conn)
@@ -144,6 +191,12 @@ type Options struct {
 	// of them wins. A request the hook leaves unanswered stays pending,
 	// as does a read of a terminal no view shows.
 	OnClipboardRequest func(req ClipboardRequest)
+	// OnCopy runs on the main thread after the terminal writes text to the
+	// clipboard: the user's copy (ActionCopy's keys, the context menu, a
+	// secondary click), a selection Options.CopyOnSelect copied, or a
+	// program's (OSC 52), as by tells. An app may say so, as Ghostty's
+	// app-notifications = clipboard-copy does with a toast.
+	OnCopy func(text string, by CopySource)
 
 	// OpenLink takes what a Command+click (Control+click elsewhere)
 	// opens: a hyperlink (OSC 8), a URL printed as text, or, only with
@@ -189,7 +242,45 @@ type Options struct {
 	// to Font's size on a reset. Returning true from every zoom turns
 	// zooming off.
 	OnZoom func(z Zoom) bool
+	// OnClear sees the user's clear on the main thread, before the
+	// terminal clears: ClearScreen for ActionClearScreen's keys,
+	// ClearScrollback for the context menu's Clear Scrollback. It reports
+	// whether it took the clear; a clear taken clears nothing here. A
+	// terminal that shows a server's (see Mirror) takes it, for the
+	// server's terminal to clear (Terminal.ClearScreen,
+	// Terminal.ClearScrollback), which the next frame shows: cleared here
+	// alone, the server's frames, drawn from a screen still full, would
+	// bring rows back wrong. It is not asked on a full-screen program's
+	// screen, which ActionClearScreen leaves alone.
+	OnClear func(c Clear) bool
 }
+
+// Clear is what the user clears (Options.OnClear).
+type Clear int
+
+const (
+	// ClearScreen clears the scrollback and the screen above the cursor's
+	// line (ActionClearScreen, Terminal.ClearScreen).
+	ClearScreen Clear = iota
+	// ClearScrollback clears the scrollback (the context menu's Clear
+	// Scrollback, Terminal.ClearScrollback).
+	ClearScrollback
+)
+
+// CopySource is what copied text to the clipboard (Options.OnCopy).
+type CopySource int
+
+const (
+	// CopyUser is the user's copy: ActionCopy's keys, the context menu's
+	// Copy, or a secondary click that copies (RightClickCopy,
+	// RightClickCopyOrPaste).
+	CopyUser CopySource = iota
+	// CopySelect is a selection Options.CopyOnSelect copied as it ended,
+	// or as Select All made it.
+	CopySelect
+	// CopyProgram is a program's write to the clipboard (OSC 52).
+	CopyProgram
+)
 
 // ClipboardAccess is what programs get when they read the clipboard
 // (Options.ClipboardRead).
@@ -205,6 +296,11 @@ const (
 	// ClipboardAsk asks the app first: Options.OnClipboardRequest when
 	// set, else the terminal's own prompt in the view.
 	ClipboardAsk
+	// ClipboardForward leaves OSC 52 reads to the terminals that show
+	// this one's Mirror frames, which pass them on: the terminal answering
+	// is theirs, with their clipboard and their policy. This one answers
+	// nothing, and refuses the Kitty protocol's reads (OSC 5522).
+	ClipboardForward
 )
 
 // CursorStyle is the shape of the cursor.
@@ -339,9 +435,13 @@ type Terminal struct {
 	mu      sync.Mutex
 	term    *vt.Terminal
 	size    gridSize
+	asked   gridSize // what the view last asked Conn for, with ResizeByConn
 	events  events
 	closed  bool
 	clipOut []string // what programs copied, for the view to write
+	// clipForward are reads of the clipboard for a Mirror to pass on, with
+	// ClipboardForward: whether each is of the primary selection.
+	clipForward []bool
 	// clipReads are reads of the clipboard waiting for the main thread to
 	// answer them: a frame takes them, reads the clipboard and writes the
 	// reply (see view.answerReads).
@@ -815,6 +915,40 @@ func (t *Terminal) Send(data []byte) {
 // Feed shows data as if the program wrote it: text and escape sequences.
 func (t *Terminal) Feed(data []byte) { t.write(data) }
 
+// ClearScreen clears the scrollback and the screen above the cursor's line,
+// which moves to the top, as ActionClearScreen does and Kitty's
+// clear_terminal to_cursor: the prompt the shell shows stays, and the
+// shell, which moves its cursor from where it is, goes on drawing there. A
+// full-screen program's screen, which this would break, is left alone, as
+// in Ghostty; it reports whether it cleared. A server calls it for a
+// window that shows its terminal (Options.OnClear).
+func (t *Terminal) ClearScreen() bool {
+	t.mu.Lock()
+	if t.term == nil || t.term.AltScreen() {
+		t.mu.Unlock()
+		return false
+	}
+	t.term.SetSelection(nil)
+	t.term.ScrollToBottom()
+	x, y := t.term.Cursor()
+	seq := "\x1b[3J"
+	if y > 0 {
+		// Delete the rows above the cursor's from the top, then put the
+		// cursor back on its line, now the first.
+		seq += "\x1b[H\x1b[" + strconv.Itoa(y) + "M\x1b[1;" + strconv.Itoa(x+1) + "H"
+	}
+	// Under the lock, so that no output comes between the cursor read and
+	// the rows deleted.
+	t.term.Write([]byte(seq))
+	t.mu.Unlock()
+	t.redraw()
+	return true
+}
+
+// ClearScrollback clears the scrollback, as the context menu's Clear
+// Scrollback does.
+func (t *Terminal) ClearScrollback() { t.write([]byte("\x1b[3J")) }
+
 // Close closes the terminal: the program is hung up (SIGHUP), or Conn
 // closed, and the terminal frees its memory. A view of it then shows
 // nothing.
@@ -919,7 +1053,31 @@ func (t *Terminal) resize(s gridSize) {
 	case *pty.PTY:
 		src.Resize(s.cols, s.rows, s.cols*s.cellW, s.rows*s.cellH)
 	case interface{ Resize(cols, rows int) error }:
-		t.resizeConn(src, s)
+		if !t.opts.ResizeByConn { // the size came from the Conn's reader
+			t.resizeConn(src, s)
+		}
+	}
+}
+
+// viewResize gives the screen the size the view fits, s, or with
+// Options.ResizeByConn asks Conn for it, the screen keeping its size and
+// taking the cells' new metrics only; t.mu is held.
+func (t *Terminal) viewResize(s gridSize) {
+	c, ok := t.src.(interface{ Resize(cols, rows int) error })
+	if !t.opts.ResizeByConn || !ok {
+		t.resize(s)
+		return
+	}
+	if t.term == nil {
+		return
+	}
+	if s.cellW != t.size.cellW || s.cellH != t.size.cellH {
+		t.size.cellW, t.size.cellH = s.cellW, s.cellH
+		t.term.Resize(t.size.cols, t.size.rows, s.cellW, s.cellH)
+	}
+	if s.cols != t.asked.cols || s.rows != t.asked.rows {
+		t.asked = s
+		t.resizeConn(c, s)
 	}
 }
 

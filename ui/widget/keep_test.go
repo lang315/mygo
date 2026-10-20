@@ -154,7 +154,7 @@ func TestSetContentBackKeepsState(t *testing.T) {
 	frame(fw)
 	top := labelY(fw, "row 25")
 	mygo.RunOnMain(func() {
-		fw.FakeSurface().Send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: 100, Y: 100, DY: 100})
+		fw.FakeSurface().Send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: 100, Y: 100, DY: 100, Precise: true})
 		fw.FakeSurface().Frame()
 	})
 	before := labelY(fw, "row 25")
