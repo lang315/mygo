@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 )
@@ -94,13 +95,24 @@ func followDocumentFile(ctx context.Context, w *FileWatcher, path string) {
 		if r.err != nil {
 			return
 		}
-		// The file the watch saw go away, by what it was when the watch
-		// last saw it: a look now may come after the next rename.
+		// The file that went away, by what it was when the watch last saw
+		// it, as a look now may come after the next rename, or else as the
+		// document last read or wrote it: the watch looks once changes
+		// settle, so a file that replaced the one it saw, which the
+		// document read (when the watch started, or its window was
+		// focused), can be renamed before the watch ever saw it.
+		docs := documentsAt(path)
 		moved := ""
-		if r.events[len(r.events)-1].Op == FileRemove && r.gone.ok {
-			moved = findRenamed(filepath.Dir(w.Root()), r.gone.id)
+		if r.events[len(r.events)-1].Op == FileRemove {
+			ids := []fileWatchGone{r.gone}
+			for _, b := range docs {
+				b.mu.Lock()
+				ids = append(ids, b.stamp.file)
+				b.mu.Unlock()
+			}
+			moved = findRenamed(filepath.Dir(w.Root()), ids)
 		}
-		for _, b := range documentsAt(path) {
+		for _, b := range docs {
 			if moved != "" {
 				b.moved(moved)
 			} else {
@@ -125,14 +137,8 @@ func (b *docBase) findMoved(dir string) string {
 		return ""
 	}
 	return findFile(dir, func(info os.FileInfo, id fileWatchID) bool {
-		return id == file.id && stampOf(info) == stamp
+		return id == file.id && stamp.same(stampOf(info))
 	})
-}
-
-// findRenamed returns the path of the file in dir that is the file id
-// identifies, or "".
-func findRenamed(dir string, id fileWatchID) string {
-	return findFile(dir, func(_ os.FileInfo, other fileWatchID) bool { return other == id })
 }
 
 // findFile returns the path of the first regular file in dir that match
@@ -155,6 +161,36 @@ func findFile(dir string, match func(info os.FileInfo, id fileWatchID) bool) str
 		}
 	}
 	return ""
+}
+
+// findRenamed returns the path of the file in dir that one of ids
+// identifies, the first of ids that one does, or "".
+func findRenamed(dir string, ids []fileWatchGone) string {
+	if !slices.ContainsFunc(ids, func(id fileWatchGone) bool { return id.ok }) {
+		return ""
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	found, at := "", len(ids)
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		id := fileWatchEntryOf(info).id
+		for i, want := range ids[:at] {
+			if want.ok && want.id == id {
+				found, at = filepath.Join(dir, entry.Name()), i
+				break
+			}
+		}
+	}
+	return found
 }
 
 // documentsAt returns the open documents of the file at path.
@@ -206,7 +242,7 @@ func (b *docBase) checkDisk() {
 		if changed {
 			b.notify()
 		}
-	case now == known && !wasDeleted:
+	case now.same(known) && !wasDeleted:
 		readOnly := !fileWritable(path)
 		b.mu.Lock()
 		changed := b.readOnly != readOnly
