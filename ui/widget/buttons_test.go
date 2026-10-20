@@ -20,7 +20,7 @@ func TestButtonClickRunsOnClickOnTheEventGoroutine(t *testing.T) {
 	ran := make(chan bool, 1)
 	tt := tester(t, Button("Go").OnClick(func() { ran <- onEvents() }))
 	click(t, tt, "Go")
-	if !wait(t, ran) {
+	if !received(t, ran) {
 		t.Fatal("OnClick ran off the event goroutine")
 	}
 }
@@ -52,7 +52,7 @@ func TestCheckboxClickAndSet(t *testing.T) {
 	Checkbox("Remember").AssignTo(&cb).OnChange(func() { changed <- cb.Checked() })
 	tt := tester(t, cb)
 	click(t, tt, "Remember")
-	if !wait(t, changed) || !cb.Checked() {
+	if !received(t, changed) || !cb.Checked() {
 		t.Fatal("click did not check")
 	}
 	cb.SetChecked(false)
@@ -100,7 +100,7 @@ func TestRadioGroup(t *testing.T) {
 	}
 	tt := tester(t, g)
 	click(t, tt, "Large")
-	if v := wait(t, changed); v != "l" {
+	if v := received(t, changed); v != "l" {
 		t.Fatalf("OnChange saw %q", v)
 	}
 }

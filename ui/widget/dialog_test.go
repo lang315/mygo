@@ -28,7 +28,7 @@ func TestDialogRunOnAWorkerGoroutine(t *testing.T) {
 		t.Fatalf("dialog not a modal child: Modal %v, Parent %v", fw.Opts.Modal, fw.Opts.Parent)
 	}
 	press(t, fw, "Done")
-	wait(t, ran)
+	received(t, ran)
 }
 
 func TestDialogRunInAHandlerPumpsHandlers(t *testing.T) {
@@ -38,7 +38,7 @@ func TestDialogRunInAHandlerPumpsHandlers(t *testing.T) {
 	ran := runAsync(func() bool { Update(d.Run); return true })
 	fw := waitFake(t, "Pump")
 	press(t, fw, "Done") // its OnClick runs while Run blocks the event goroutine
-	wait(t, ran)
+	received(t, ran)
 }
 
 func TestDialogShowsItsTitleInside(t *testing.T) {
@@ -62,7 +62,7 @@ func TestUndeletableDialogStaysOpen(t *testing.T) {
 		t.Fatal("an undeletable dialog closed on the user's request")
 	}
 	press(t, fw, "Done")
-	wait(t, ran)
+	received(t, ran)
 }
 
 func TestOnBeforeRunRunsFirst(t *testing.T) {
@@ -94,7 +94,7 @@ func TestClosingTheParentEndsNestedRuns(t *testing.T) {
 	})
 	waitFake(t, "Inner")
 	p.Close()
-	wait(t, ran)
+	received(t, ran)
 	Update(func() {})
 	if !slices.Equal(order, []string{"inner", "outer"}) {
 		t.Fatalf("order %v", order)

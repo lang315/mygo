@@ -12,7 +12,7 @@ import (
 func TestConfirmOK(t *testing.T) {
 	got := runAsync(func() bool { return Confirm(nil, Question, "Delete?", "It goes for good.") })
 	press(t, waitFake(t, "Delete?"), "OK")
-	if !wait(t, got) {
+	if !received(t, got) {
 		t.Fatal("OK returned false")
 	}
 }
@@ -21,14 +21,30 @@ func TestConfirmOK(t *testing.T) {
 func TestConfirmCancelAndCloseSayNo(t *testing.T) {
 	got := runAsync(func() bool { return Confirm(nil, Warning, "Cancel?", "") })
 	press(t, waitFake(t, "Cancel?"), "Cancel")
-	if wait(t, got) {
+	if received(t, got) {
 		t.Fatal("Cancel returned true")
 	}
 	got = runAsync(func() bool { return Confirm(nil, Warning, "Closed?", "") })
 	fw := waitFake(t, "Closed?")
 	mygo.RunOnMain(func() { fw.UserClose() }) // the close button
 	mygo.RunOnMain(func() { fw.UserClose() })
-	if wait(t, got) {
+	if received(t, got) {
+		t.Fatal("closing returned true")
+	}
+}
+
+// A dialog whose window closes before Show watches it still returns:
+// here it closes as it is made, on the main thread, as NewWindow fires
+// OnWindowCreated.
+func TestConfirmClosedAsItOpens(t *testing.T) {
+	off := mygo.App.OnWindowCreated(func(w *mygo.Window) {
+		if w.Title() == "At once?" {
+			w.Close()
+		}
+	})
+	defer off()
+	got := runAsync(func() bool { return Confirm(nil, Warning, "At once?", "") })
+	if received(t, got) {
 		t.Fatal("closing returned true")
 	}
 }
@@ -36,7 +52,7 @@ func TestConfirmCancelAndCloseSayNo(t *testing.T) {
 func TestAlertReturnsOnOK(t *testing.T) {
 	done := runAsync(func() bool { Alert(nil, Error, "Failed", "Disk full"); return true })
 	press(t, waitFake(t, "Failed"), "OK")
-	wait(t, done)
+	received(t, done)
 }
 
 func TestInputStringTypedThenEnter(t *testing.T) {
@@ -47,7 +63,7 @@ func TestInputStringTypedThenEnter(t *testing.T) {
 	fw := waitFake(t, "Name?")
 	typeText(fw, "Ann") // the entry has the focus
 	key(fw, platform.KeyEnter)
-	if a := wait(t, got); a.v != "Ann" || !a.ok {
+	if a := received(t, got); a.v != "Ann" || !a.ok {
 		t.Fatalf("got %q %v, want Ann true", a.v, a.ok)
 	}
 }
@@ -58,7 +74,7 @@ func TestInputIntDefault(t *testing.T) {
 		return answer[int]{n, ok}
 	})
 	press(t, waitFake(t, "Count?"), "OK")
-	if a := wait(t, got); a.v != 8 || !a.ok {
+	if a := received(t, got); a.v != 8 || !a.ok {
 		t.Fatalf("got %d %v, want 8 true", a.v, a.ok)
 	}
 }
@@ -76,7 +92,7 @@ func TestInputSelectOKDisabledUntilAChoice(t *testing.T) {
 	default:
 	}
 	press(t, fw, "Cancel")
-	if a := wait(t, got); a.ok {
+	if a := received(t, got); a.ok {
 		t.Fatalf("Cancel returned %v", a)
 	}
 }
@@ -97,7 +113,7 @@ func TestInputIntEnter(t *testing.T) {
 	fw := waitFake(t, "Enter?")
 	frame(fw) // focuses the number
 	key(fw, platform.KeyEnter)
-	if a := wait(t, got); a.v != 8 || !a.ok {
+	if a := received(t, got); a.v != 8 || !a.ok {
 		t.Fatalf("got %d %v, want 8 true", a.v, a.ok)
 	}
 }
@@ -112,7 +128,7 @@ func TestConfirmFirstAnswerWins(t *testing.T) {
 	press(t, fw, "Cancel")
 	press(t, fw, "OK")
 	close(release)
-	if wait(t, got) {
+	if received(t, got) {
 		t.Fatal("OK after Cancel won")
 	}
 }
@@ -123,7 +139,7 @@ func TestEscapeClosesADialog(t *testing.T) {
 	fw := waitFake(t, "Escape?")
 	frame(fw)
 	key(fw, platform.KeyEscape)
-	if wait(t, got) {
+	if received(t, got) {
 		t.Fatal("Escape returned true")
 	}
 }
@@ -146,7 +162,7 @@ func TestEscapeClosesADialogsDropDownFirst(t *testing.T) {
 		t.Fatalf("the first Escape did not close only the drop-down: closed %v, %q", fw.IsClosed(), labels(fw))
 	}
 	key(fw, platform.KeyEscape)
-	if a := wait(t, got); a.ok {
+	if a := received(t, got); a.ok {
 		t.Fatalf("Escape returned %v", a)
 	}
 }
@@ -165,5 +181,5 @@ func TestEscapeKeepsAnUndeletableDialog(t *testing.T) {
 		t.Fatal("Escape closed an undeletable dialog")
 	}
 	press(t, fw, "Done")
-	wait(t, ran)
+	received(t, ran)
 }

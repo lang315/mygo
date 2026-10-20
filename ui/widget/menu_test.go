@@ -49,7 +49,7 @@ func TestMenuButtonChoosesAnItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if s := wait(t, chosen); s != "Date" {
+	if s := received(t, chosen); s != "Date" {
 		t.Fatalf("chose %q", s)
 	}
 }
@@ -69,7 +69,7 @@ func TestContextMenuOnALabelWithASubmenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	wait(t, chosen)
+	received(t, chosen)
 }
 
 // A menu item's handler opens a Confirm.
@@ -88,7 +88,7 @@ func TestMenuItemOpensAConfirm(t *testing.T) {
 	}
 	tt.Frame()
 	press(t, waitFake(t, "Really delete?"), "OK")
-	if !wait(t, answer) {
+	if !received(t, answer) {
 		t.Fatal("Confirm in a menu handler returned false")
 	}
 }
@@ -123,5 +123,5 @@ func TestSetMenuBarClicks(t *testing.T) {
 	if id == 0 {
 		t.Fatal("no Open item in the window's menu bar")
 	}
-	wait(t, opened)
+	received(t, opened)
 }

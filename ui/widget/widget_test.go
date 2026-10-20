@@ -73,7 +73,7 @@ func TestOnClickOnALabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !wait(t, clicked) {
+	if !received(t, clicked) {
 		t.Fatal("OnClick ran off the event goroutine")
 	}
 }
