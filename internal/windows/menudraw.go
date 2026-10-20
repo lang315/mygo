@@ -40,6 +40,7 @@ var (
 	procBitBlt                     = gdi32.NewProc("BitBlt")
 	procExcludeClipRect            = gdi32.NewProc("ExcludeClipRect")
 	procCreateFontIndirectW        = gdi32.NewProc("CreateFontIndirectW")
+	procAlphaBlend                 = systemDLL("msimg32.dll").NewProc("AlphaBlend")
 	procSetMenuInfo                = user32.NewProc("SetMenuInfo")
 	procGetSysColor                = user32.NewProc("GetSysColor")
 	procSystemParametersInfoForDpi = user32.NewProc("SystemParametersInfoForDpi")
@@ -56,6 +57,7 @@ const (
 	menuPadding         = 12 // the text from the highlight's sides
 	menuRadius          = 4
 	menuMarkColumn      = 16 + 12 // a check, and the gap after it
+	menuIconColumn      = 16 + 12 // an icon, and the gap after it
 	menuAccelGap        = 32      // the least between a label and its shortcut
 	menuChevron         = 12
 	menuGlyphSize       = 12
@@ -83,6 +85,12 @@ type menuLook struct {
 	// column is whether the menu has a column for the marks of checkable
 	// items, which all its items leave room for.
 	column bool
+	// icon is the item's bitmap (menuBitmap), 0 for none, iconSize its side
+	// in pixels, and icons whether the menu has a column for the icons of
+	// its items, which all its items leave room for.
+	icon     uintptr
+	iconSize int32
+	icons    bool
 	// first and last are whether the item is the menu's first or last,
 	// which has the menu's padding above or below it.
 	first, last bool
@@ -360,6 +368,9 @@ func (b *Backend) measureItem(hwnd uintptr, l *menuLook, mis *measureItemStruct)
 	if l.column {
 		w += toPx(menuMarkColumn, dpi)
 	}
+	if l.icons {
+		w += toPx(menuIconColumn, dpi)
+	}
 	if l.accel != "" {
 		w += toPx(menuAccelGap, dpi) + textWidth(dc, f.text, l.accel)
 	}
@@ -423,6 +434,13 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 			}
 			x += toPx(menuMarkColumn, dpi)
 		}
+		if l.icons {
+			if l.icon != 0 {
+				size := toPx(16, dpi)
+				drawIcon(dc, l.icon, l.iconSize, x, r.Top+(r.Bottom-r.Top-size)/2, size, state&(odsGrayed|odsDisabled) != 0)
+			}
+			x += toPx(menuIconColumn, dpi)
+		}
 		if l.submenu {
 			glyph(glyphChevron, rect{right - toPx(menuChevron, dpi), r.Top, right, r.Bottom}, fore)
 		}
@@ -445,6 +463,24 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 	// Windows draws the arrow of a submenu after the item, in its colors:
 	// the chevron is drawn already.
 	procExcludeClipRect.Call(d.DC, uintptr(r.Left), uintptr(r.Top), uintptr(r.Right), uintptr(r.Bottom))
+}
+
+// drawIcon blends an item's icon, a bitmap of srcSize pixels with premultiplied
+// alpha, over the DC as a size square at (x, y), fainter when the item is
+// disabled.
+func drawIcon(dc, bmp uintptr, srcSize, x, y, size int32, disabled bool) {
+	const acSrcAlpha = 1
+	alpha := uintptr(255)
+	if disabled {
+		alpha = 115
+	}
+	src, _, _ := procCreateCompatibleDC.Call(dc)
+	defer procDeleteDC.Call(src)
+	old, _, _ := procSelectObject.Call(src, bmp)
+	defer procSelectObject.Call(src, old)
+	// BLENDFUNCTION by value: AC_SRC_OVER, no flags, the alpha, the format.
+	blendFunc := alpha<<16 | acSrcAlpha<<24
+	procAlphaBlend.Call(dc, uintptr(x), uintptr(y), uintptr(size), uintptr(size), src, 0, 0, uintptr(srcSize), uintptr(srcSize), blendFunc)
 }
 
 // paintItem draws an item in a bitmap its size, then copies it to the

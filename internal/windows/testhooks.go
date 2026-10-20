@@ -53,8 +53,20 @@ func TestActivateMenuItem(hwnd uintptr, path ...string) error {
 	return nil
 }
 
+// menuItemHasIcon reports whether the item at pos of menu shows an icon: a
+// bitmap, or the icon of an item MyGo draws (menudraw.go).
+func menuItemHasIcon(menu uintptr, pos int) (bool, error) {
+	mi := menuItemInfo{Mask: miimBitmap | miimData}
+	mi.Size = uint32(unsafe.Sizeof(mi))
+	if ok, _, err := procGetMenuItemInfoW.Call(menu, uintptr(pos), 1, uintptr(unsafe.Pointer(&mi))); ok == 0 {
+		return false, err
+	}
+	l := theBackend.menus.looks[mi.ItemData]
+	return mi.BmpItem != 0 || l != nil && l.icon != 0, nil
+}
+
 // TestMenuItemImage reports whether an item of a window's menu bar, found
-// by the labels along its path, shows a bitmap. It walks the native menu,
+// by the labels along its path, shows an icon. It walks the native menu,
 // which UpdateMenuItem relabels, not the menu the bar was built from.
 func TestMenuItemImage(hwnd uintptr, path ...string) (bool, error) {
 	w := theBackend.windows[hwnd]
@@ -77,12 +89,7 @@ func TestMenuItemImage(hwnd uintptr, path ...string) (bool, error) {
 			return false, fmt.Errorf("mygo: no menu item %q", label)
 		}
 		if i == len(path)-1 {
-			mi := menuItemInfo{Mask: miimBitmap}
-			mi.Size = uint32(unsafe.Sizeof(mi))
-			if ok, _, err := procGetMenuItemInfoW.Call(menu, uintptr(pos), 1, uintptr(unsafe.Pointer(&mi))); ok == 0 {
-				return false, err
-			}
-			return mi.BmpItem != 0, nil
+			return menuItemHasIcon(menu, pos)
 		}
 		sub, _, _ := procGetSubMenu.Call(menu, uintptr(pos))
 		if sub == 0 {
@@ -641,7 +648,8 @@ func TestRecentDocuments() []string {
 func TestWindowTitle(hwnd uintptr) string { return (&window{hwnd: hwnd}).Title() }
 
 // TestTrayMenuImages builds the menu of a tray as PopUpMenu does and
-// returns its items by text, true for those showing a bitmap.
+// returns its items by text, true for those showing an icon: a bitmap, or
+// the icon an item MyGo draws has.
 func TestTrayMenuImages() map[string]bool {
 	items := map[string]bool{}
 	for _, t := range theBackend.trays {
@@ -654,11 +662,8 @@ func TestTrayMenuImages() map[string]bool {
 		for j := range int(int32(n)) {
 			buf := make([]uint16, 256)
 			procGetMenuStringW.Call(menu, uintptr(j), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), mfByPosition)
-			mi := menuItemInfo{Mask: miimBitmap}
-			mi.Size = uint32(unsafe.Sizeof(mi))
-			procGetMenuItemInfoW.Call(menu, uintptr(j), 1, uintptr(unsafe.Pointer(&mi)))
 			text, _, _ := strings.Cut(syscall.UTF16ToString(buf), "\t")
-			items[text] = mi.BmpItem != 0
+			items[text], _ = menuItemHasIcon(menu, j)
 		}
 		procDestroyMenu.Call(menu)
 		t.b.menus.drop(id)
