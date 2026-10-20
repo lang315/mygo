@@ -16,7 +16,7 @@ type fileStamp struct {
 	ModTime int64 `json:"modTime"` // Unix nanoseconds
 	Size    int64 `json:"size"`
 	// file is the file's identity, by which a document finds the file
-	// where another app renamed it (findRenamed). It says nothing of the
+	// where another app renamed it (findMoved, findRenamed). It says nothing of the
 	// content, so same ignores it, and recovery doesn't keep it.
 	file fileWatchGone
 }
@@ -32,7 +32,6 @@ type fileIdentity struct {
 // fileRead is what a look at a file saw of it.
 type fileRead struct {
 	stamp fileStamp
-	file  fileIdentity
 }
 
 func identityOf(info os.FileInfo) fileIdentity {
@@ -41,11 +40,10 @@ func identityOf(info os.FileInfo) fileIdentity {
 }
 
 func readOf(info os.FileInfo) fileRead {
-	return fileRead{stampOf(info), identityOf(info)}
+	return fileRead{stampOf(info)}
 }
 
-// statRead looks at the file at path as statStamp does, and sees its identity
-// from the same stat.
+// statRead looks at the file at path as statStamp does.
 func statRead(path string) (fileRead, error) {
 	info, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -126,7 +124,7 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 	b.mu.Lock()
 	b.ops.markSaved(snap)
 	b.savedAt = snap.at
-	b.stamp, b.file = written.stamp, written.file
+	b.stamp = written.stamp
 	b.conflict, b.deleted = false, false
 	moved := target != b.path
 	if moved {
@@ -162,7 +160,7 @@ func (b *docBase) reload(path string) error {
 	}
 	b.mu.Lock()
 	b.ops.replace(v)
-	b.stamp, b.file = read.stamp, read.file
+	b.stamp = read.stamp
 	b.conflict, b.deleted = false, false
 	b.readOnly = !fileWritable(path)
 	b.dirtySince = time.Time{}

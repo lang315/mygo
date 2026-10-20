@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -751,6 +752,32 @@ func documentRenamedUnwatched(t *testing.T) (d *Document[string], renamed string
 // started after it.
 func TestDocumentCheckFollowsARenamedFile(t *testing.T) {
 	d, renamed := documentRenamedUnwatched(t)
+	d.checkDisk()
+	if got := d.Path(); got != renamed {
+		t.Fatalf("the document is at %q, want %q", got, renamed)
+	}
+	if d.State().Deleted {
+		t.Error("the document is taken for deleted")
+	}
+}
+
+// TestDocumentCheckFollowsAFileRelocatedByCopy: a document moved across
+// devices is a copy of its file, with an identity of its own, which a look
+// finds where another app renamed it.
+func TestDocumentCheckFollowsAFileRelocatedByCopy(t *testing.T) {
+	d, dir, _ := openDocumentInTempDir(t)
+	rename := renameFile
+	renameFile = func(from, to string) error {
+		return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EXDEV}
+	}
+	t.Cleanup(func() { renameFile = rename })
+	if err := d.Rename("copied.txt"); err != nil {
+		t.Fatal(err)
+	}
+	renamed := filepath.Join(dir, "renamed.txt")
+	if err := os.Rename(d.Path(), renamed); err != nil {
+		t.Fatal(err)
+	}
 	d.checkDisk()
 	if got := d.Path(); got != renamed {
 		t.Fatalf("the document is at %q, want %q", got, renamed)
