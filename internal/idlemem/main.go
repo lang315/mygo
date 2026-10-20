@@ -20,6 +20,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -62,6 +63,11 @@ func measure(bin string, idle time.Duration) (app, total uint64, err error) {
 	s := before()
 	cmd := exec.Command(bin)
 	cmd.Env = append(os.Environ(), "MYGO_ENV=production")
+	// What an app that exits says, a panic's stack, ends the error.
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	// The webview's processes may hold the app's stderr after it exits.
+	cmd.WaitDelay = time.Second
 	if err := cmd.Start(); err != nil {
 		return 0, 0, err
 	}
@@ -69,7 +75,7 @@ func measure(bin string, idle time.Duration) (app, total uint64, err error) {
 	go func() { exited <- cmd.Wait() }()
 	select {
 	case err := <-exited:
-		return 0, 0, fmt.Errorf("exited after starting: %v", err)
+		return 0, 0, fmt.Errorf("exited after starting: %v\n%s", err, stderr.Bytes())
 	case <-time.After(idle):
 	}
 	app, total, procs, err := usage(cmd.Process.Pid, s)
