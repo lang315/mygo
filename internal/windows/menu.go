@@ -100,8 +100,10 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 		return bmp
 	}
 	// MyGo draws the items of popup menus (menudraw.go), which leave room
-	// for checks when any item has one.
-	// shortcut: drawn items leave out the icons' bitmaps, so Windows 11 popups show no icons; draw them in drawItem.
+	// for checks when any item has one, and for icons, which they draw from
+	// the bitmaps. The items don't show the bitmaps (MIIM_BITMAP): Windows
+	// ignores them on items the app draws, and measures an item that has
+	// one itself, to the bitmap's height, without asking the app.
 	drawn := !bar && fluentMenus()
 	column := false
 	for _, it := range m.Items {
@@ -109,12 +111,16 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 	}
 	pos := 0
 	var looks []*menuLook
+	icons := false
 	look := func(l *menuLook) *menuLook {
 		defer func() { pos++ }()
 		if !drawn {
 			return nil
 		}
 		l.owner, l.column = owner, column
+		if l.icon != 0 {
+			l.iconSize, icons = int32(size), true
+		}
 		looks = append(looks, l)
 		var ftype uint32
 		switch {
@@ -142,11 +148,12 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 		if it.Submenu != nil {
 			sub := b.buildMenu(it.Submenu, false, owner, accels, dpi)
 			procAppendMenuW.Call(h, flags|mfPopup, sub, uintptr(unsafe.Pointer(u16(it.Label))))
-			if bmp := bitmap(it); bmp != 0 {
+			bmp := bitmap(it)
+			if bmp != 0 && !drawn {
 				n, _, _ := procGetMenuItemCount.Call(h)
 				setItemBitmap(h, int(int32(n))-1, bmp)
 			}
-			look(&menuLook{label: it.Label, submenu: true})
+			look(&menuLook{label: it.Label, submenu: true, icon: bmp})
 			continue
 		}
 		if it.Checked {
@@ -163,13 +170,17 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 			}
 		}
 		procAppendMenuW.Call(h, flags, uintptr(cmd), uintptr(unsafe.Pointer(u16(label))))
-		e.look = look(&menuLook{label: it.Label, accel: e.accel, radio: e.radio})
-		if bmp := bitmap(it); e.radio && e.look == nil || bmp != 0 {
+		bmp := bitmap(it)
+		e.look = look(&menuLook{label: it.Label, accel: e.accel, radio: e.radio, icon: bmp})
+		if e.radio && e.look == nil || bmp != 0 && !drawn {
 			setItemInfo(h, cmd, label, it.Enabled, it.Checked, e.radio, bmp, e.look != nil)
 		}
 	}
 	if len(looks) > 0 {
 		looks[0].first, looks[len(looks)-1].last = true, true
+	}
+	for _, l := range looks {
+		l.icons = icons
 	}
 	return h
 }

@@ -570,6 +570,11 @@ features GTK 4 lacks become X11-only code beside it.
   keeps Windows from drawing the submenus' arrows over the chevrons;
   `WM_INITMENUPOPUP` gives the menu the background of the items. The items
   keep their strings, which mnemonics, screen readers and the tests read.
+  Their icons are drawn by `AlphaBlend` from the bitmaps of `menuicon.go`, in
+  a column the menu's other items leave room for, and are not set as the
+  items' bitmaps (`MIIM_BITMAP`): Windows ignores those on owner-drawn items
+  and, with one set, measures the item itself, to the bitmap's height,
+  without sending `WM_MEASUREITEM`.
   A menu with owner-drawn items loses Windows 11's frame, its window square
   under its class's drop shadow (`CS_DROPSHADOW`) along two sides: while
   menus show (`WM_ENTERMENULOOP` to `WM_EXITMENULOOP`, and around
