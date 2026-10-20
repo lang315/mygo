@@ -175,6 +175,26 @@ func TestClickSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
 // of an app that is not in front does nothing, and the front may change after
 // activateMenu waited for it.
 func TestActivateMenuSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
+	revertJustAfter(t, func() { deactivated(t) })
+}
+
+// TestActivateMenuSurvivesAnotherWindowTakingTheKeyJustBeforeIt: a menu item
+// acts on the focused window, which another window of the app may become after
+// activateMenu waited for the front. An app just activated has none for a
+// moment too: a runner showed Revert to Saved doing nothing then.
+func TestActivateMenuSurvivesAnotherWindowTakingTheKeyJustBeforeIt(t *testing.T) {
+	other := newWindow(t, mygo.WindowOptions{Width: 200, Height: 100})
+	revertJustAfter(t, func() {
+		other.Focus()
+		eventually(t, "the other window key", func() bool { return mygo.FocusedWindow() == other })
+	})
+}
+
+// revertJustAfter chooses File > Revert to Saved for an edited document's
+// window, and before runs once between activateMenu's wait for the front and
+// the menu's activation (beforeSend); the sheet asking to revert must show.
+func revertJustAfter(t *testing.T, before func()) {
+	t.Helper()
 	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
 	defer mygo.App.SetPath(mygo.PathUserData, "")
 	docs := notes()
@@ -201,7 +221,7 @@ func TestActivateMenuSurvivesTheFrontChangingJustBeforeIt(t *testing.T) {
 	doc.Set("unwanted")
 	eventually(t, "the edited mark", func() bool { _, _, _, edited, _ := documentChrome(w); return edited })
 	var once sync.Once
-	beforeSend = func() { once.Do(func() { deactivated(t) }) }
+	beforeSend = func() { once.Do(before) }
 	defer func() { beforeSend = nil }()
 	if err := activateMenu(w, "File", "Revert to Saved"); err != nil {
 		t.Fatal(err)

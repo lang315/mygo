@@ -33,7 +33,7 @@ func recentDocumentRecorded(path string) (recorded, supported bool) {
 }
 
 func activateMenu(w *mygo.Window, path ...string) (err error) {
-	sendFront(w, "activateMenu", func() { err = darwin.TestPerformMenuItem(path...) })
+	sendFocused(w, "activateMenu", true, func() { err = darwin.TestPerformMenuItem(path...) })
 	return err
 }
 
@@ -71,7 +71,13 @@ func inFront(frontmost, active, key, panel bool) bool { return frontmost && acti
 // waiting its guard out sends the input at once, but a desktop that never
 // gives the front still holds an input about a minute here, and click's own
 // waits (waitKey, waitOnScreen) add theirs. TestMain stops at a locked screen.
-func sendFront(w *mygo.Window, what string, send func()) {
+func sendFront(w *mygo.Window, what string, send func()) { sendFocused(w, what, false, send) }
+
+// sendFocused is sendFront, and with focused it also waits for w to be the
+// app's focused window (FocusedWindow), which a menu item acts on: an app just
+// activated is active a moment before it has one, as a runner showed, and
+// another of its windows may be it. Each try that found another focuses w.
+func sendFocused(w *mygo.Window, what string, focused bool, send func()) {
 	panel := w.IsPanel()
 	for deadline := time.Now().Add(wait.Guard); ; time.Sleep(20 * time.Millisecond) {
 		waitKey(w)
@@ -79,9 +85,10 @@ func sendFront(w *mygo.Window, what string, send func()) {
 		if f := beforeSend; f != nil {
 			f()
 		}
-		var sent, late bool
+		var sent, late, other bool
 		mygo.RunOnMain(func() {
-			front := inFront(darwin.TestIsFrontmost(), darwin.TestIsActive(), darwin.TestIsKeyWindow(w.NativeHandle()), panel)
+			other = focused && mygo.FocusedWindow() != w
+			front := !other && inFront(darwin.TestIsFrontmost(), darwin.TestIsActive(), darwin.TestIsKeyWindow(w.NativeHandle()), panel)
 			late = !front && time.Now().After(deadline)
 			if sent = front || late; sent {
 				send()
@@ -92,6 +99,9 @@ func sendFront(w *mygo.Window, what string, send func()) {
 		}
 		if sent {
 			return
+		}
+		if other {
+			w.Focus()
 		}
 	}
 }
