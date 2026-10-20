@@ -137,7 +137,7 @@ func (b *docBase) findMoved(dir string) string {
 		return ""
 	}
 	return findFile(dir, func(info os.FileInfo, id fileWatchID) bool {
-		return id == file.id && stampOf(info) == stamp
+		return id == file.id && stamp.same(stampOf(info))
 	})
 }
 
