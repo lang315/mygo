@@ -73,3 +73,14 @@ func TestWhiten(t *testing.T) {
 		}
 	}
 }
+
+// TestTraysAppearanceSkipsANotificationIcon: the icon showNotification adds
+// when the app has none shown has no handler to tell that the taskbar
+// turned dark or light.
+func TestTraysAppearanceSkipsANotificationIcon(t *testing.T) {
+	b := &Backend{trays: map[uint32]*tray{}}
+	icon := &tray{b: b, id: 1, temporary: true}
+	icon.dark = !icon.Dark() // as the taskbar just turned
+	b.trays[icon.id] = icon
+	b.traysAppearance()
+}

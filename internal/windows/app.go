@@ -51,6 +51,9 @@ type Backend struct {
 	trays          map[uint32]*tray
 	nextTray       uint32
 	taskbarCreated uint32
+	// traysTheme is traysAppearance once NewTray ran: through it, the
+	// window procedure of an app without trays links none of their code.
+	traysTheme func()
 
 	// ITaskbarList3 (taskbar.go) and the message telling a window its
 	// taskbar button exists.
@@ -356,7 +359,9 @@ func (b *Backend) appMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 		case lp != 0 && wstr(lp) == settingImmersiveColorSet:
 			b.applyTheme()
 			b.h.ThemeChanged()
-			b.traysAppearance()
+			if b.traysTheme != nil {
+				b.traysTheme()
+			}
 		case lp != 0 && wstr(lp) == settingIntl:
 			// The display languages or the regional formats.
 			b.h.LocaleChanged()

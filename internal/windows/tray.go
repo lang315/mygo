@@ -85,6 +85,7 @@ func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
 	t := &tray{b: b, h: h, id: b.nextTray}
 	t.dark = t.Dark()
 	b.trays[t.id] = t
+	b.traysTheme = b.traysAppearance
 	// Added once the call that made it gave it its number, image and
 	// tooltip, or as soon as asked where it is: the notification area keeps
 	// the choices of the user for an icon by its number and names it by
@@ -439,6 +440,9 @@ func (b *Backend) UnregisterHotkey(id int) { procUnregisterHotKey.Call(b.appHwnd
 // traysAppearance tells the icons whose taskbar turned dark or light.
 func (b *Backend) traysAppearance() {
 	for _, t := range b.trays {
+		if t.temporary {
+			continue // a notification's icon, with no handler to tell
+		}
 		if dark := t.Dark(); dark != t.dark {
 			t.dark = dark
 			if t.template {
