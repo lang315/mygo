@@ -189,8 +189,9 @@ func TestKeysUp(keys ...byte) {
 	}
 }
 
-// TestKeyToggled returns the toggle bit of a virtual key's state on the
-// main thread, which flips each time the thread reads the key pressed.
+// TestKeyToggled reports the toggle bit of a virtual key's state on the
+// calling thread, the main one, which flips each time the thread reads
+// the key pressed.
 func TestKeyToggled(vk byte) bool {
 	r, _, _ := procGetKeyState.Call(uintptr(vk))
 	return r&1 != 0

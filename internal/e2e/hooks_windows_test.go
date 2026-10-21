@@ -331,13 +331,15 @@ func pressTab(w *mygo.Window, back bool) (ok bool) {
 	}
 	// The keyboard hook of an input method, as EVKey's, lets Shift through
 	// but sends Tab again after it, by when Shift would be up: Shift stays
-	// down until the app has read Tab.
+	// down until the app has read Tab. The callers wait for what the Tab
+	// before did, so no Tab is left to read that would flip the bit.
 	var toggled bool
 	mygo.RunOnMain(func() {
 		toggled = win.TestKeyToggled(0x09)
 		win.TestKeysDown(0x10) // VK_SHIFT
 		win.TestPressKeys(0x09)
 	})
+	// A Tab never read fails the caller's wait for what it does.
 	wait.Poll(func() (read bool) {
 		mygo.RunOnMain(func() { read = win.TestKeyToggled(0x09) != toggled })
 		return read
