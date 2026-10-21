@@ -26,6 +26,13 @@ func endSheet(*mygo.Window) (bool, bool) { return false, false }
 
 // recentDocumentRecorded reports whether path is in the Recent category of
 // the app's jump list.
+// holdClipboardData keeps the data the app put on the clipboard, as an app
+// that reads the clipboard may, until the returned function is called.
+func holdClipboardData() (release func()) {
+	mygo.RunOnMain(func() { release = win.TestHoldClipboardData() })
+	return func() { mygo.RunOnMain(release) }
+}
+
 func recentDocumentRecorded(path string) (recorded, supported bool) {
 	var paths []string
 	mygo.RunOnMain(func() { paths = win.TestRecentDocuments() })

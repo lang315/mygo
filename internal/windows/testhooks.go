@@ -758,3 +758,16 @@ func TestBrowserAcceleratorKeys(hwnd uintptr) (on, ok bool) {
 	comCall(s3, set3GetAreBrowserAcceleratorKeysEnabled, uintptr(unsafe.Pointer(&v)))
 	return v != 0, true
 }
+
+// TestHoldClipboardData takes a reference to the data object the app put on
+// the clipboard, as an app that reads the clipboard may keep one, and returns
+// the function that releases it.
+func TestHoldClipboardData() func() {
+	s := winClipboard
+	if s == nil {
+		return func() {}
+	}
+	object := s.object
+	addRef(object)
+	return func() { release(object) }
+}
