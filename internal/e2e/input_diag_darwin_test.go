@@ -176,6 +176,22 @@ func TestActivatedLeavesTheAppActiveAndInFront(t *testing.T) {
 	}
 }
 
+// TestDeactivatedLeavesTheAppInactiveAndBehind: the app is not frontmost, and
+// NSApp does not say it is active either, when deactivated returns, which a
+// window shown right after needs: it would be key for a moment, and the
+// deactivation on its way would take the key from it.
+func TestDeactivatedLeavesTheAppInactiveAndBehind(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Title: "Zeta", Width: 200, Height: 100})
+	activated(t, w)
+	deactivated(t)
+	if front, _ := appActive(); front {
+		t.Error("the app is the frontmost one")
+	}
+	if nsAppActive() {
+		t.Error("the app is active")
+	}
+}
+
 // TestKeepFrontCountsWhatItFocuses: a wait that timed out says how many times
 // keepFront brought a window to the front, and which, because every one takes
 // the key from the window the wait is for. Only a window still there is

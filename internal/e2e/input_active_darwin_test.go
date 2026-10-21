@@ -15,7 +15,11 @@ import (
 )
 
 // deactivated makes another app the active one, as a user does by switching
-// to it while a test runs, and waits for it.
+// to it while a test runs, and waits for it: for the workspace to name the
+// other app frontmost, and for NSApp to say it is not active, which comes a
+// moment after. A window shown in between becomes key, and the deactivation
+// still on its way takes the key from it: on a runner a panel shown right
+// after never became key, with NSApp active when it was shown.
 func deactivated(t *testing.T) {
 	t.Helper()
 	if !deactivateApp() {
@@ -23,7 +27,7 @@ func deactivated(t *testing.T) {
 	}
 	// Not eventually: the waits of the tests bring their window back.
 	start := time.Now()
-	if !wait.Poll(func() bool { active, _ := appActive(); return !active }) {
+	if !wait.Poll(func() bool { front, _ := appActive(); return !front && !nsAppActive() }) {
 		t.Fatalf("the app deactivated never happened (waited %v)", wait.Guard)
 	}
 	deactivation.Lock()
