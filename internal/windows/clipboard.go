@@ -26,7 +26,14 @@ var (
 	procOleFlushClipboard     = ole32.NewProc("OleFlushClipboard")
 	procOleIsCurrentClipboard = ole32.NewProc("OleIsCurrentClipboard")
 	winClipboard              *winClipboardSource
+
+	procAddClipboardFormatListener = user32.NewProc("AddClipboardFormatListener")
+	clipboardListening             bool
 )
+
+// wmClipboardUpdate is sent to a window added with AddClipboardFormatListener
+// when the clipboard's contents change.
+const wmClipboardUpdate = 0x031D
 
 type winClipboardSource struct {
 	object   uintptr
@@ -49,9 +56,6 @@ func (s *winClipboardSource) release() {
 // that read the clipboard may keep the data object (UltraViewer does), so
 // its last Release may never come: drop its providers so that app cannot
 // call them after OnRelease.
-// shortcut: another app's replacement is found on the app's next clipboard
-// access (or at Close), not when it happens; a clipboard format listener
-// would end it at once, if an app needs OnRelease without touching it again.
 func (s *winClipboardSource) end() {
 	if d := dragObjects[s.object]; d != nil {
 		d.providers, d.onRelease = nil, nil
@@ -71,7 +75,20 @@ func currentWinClipboard() *winClipboardSource {
 	return s
 }
 
-func (clipboard) WriteData(data transfer.Data, released func()) error {
+// listenForReplacement has the app's hidden window told when the clipboard
+// changes (wmClipboardUpdate), so that a source another app replaced ends at
+// once, not at the app's next clipboard access. Only an app that writes
+// data asks for it. If the system refuses, the source ends on that access, as
+// it did before.
+func (c clipboard) listenForReplacement() {
+	if clipboardListening {
+		return
+	}
+	clipboardListening = true
+	procAddClipboardFormatListener.Call(c.b.appHwnd)
+}
+
+func (c clipboard) WriteData(data transfer.Data, released func()) error {
 	// One OLE initialization/vtable per process, shared with native drags.
 	dropOnce.Do(initDropTarget)
 	if len(data.Formats()) == 0 {
@@ -107,6 +124,7 @@ func (clipboard) WriteData(data transfer.Data, released func()) error {
 	s := &winClipboardSource{object: object, data: data, released: released}
 	winClipboard = s
 	dragObjects[object].onRelease = s.release
+	c.listenForReplacement()
 	return nil
 }
 
