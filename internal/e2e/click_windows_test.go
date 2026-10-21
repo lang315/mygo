@@ -4,7 +4,6 @@ package e2e
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -46,9 +45,7 @@ func TestAppClickUnderAnotherAppFailsAtTheClick(t *testing.T) {
 
 	// Another app's window over the whole window, topmost: bringing w to the
 	// front does not put it above.
-	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+	cmd := exec.CommandContext(wait.Context(t), os.Args[0], "-test.run=^$")
 	cmd.Env = append(os.Environ(), "MYGO_E2E_COVER_PEER=1", "MYGO_COVER_BOUNDS=250,250,500,400")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -61,11 +58,13 @@ func TestAppClickUnderAnotherAppFailsAtTheClick(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
+	// The peer quits by its stdin, as the test function returns: the context
+	// of the test ends after that, and would kill it.
+	defer func() {
 		_, _ = stdin.Write([]byte("\n"))
 		_ = stdin.Close()
 		_ = cmd.Wait()
-	})
+	}()
 	if ready, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || ready != "ready\n" {
 		t.Fatalf("cover peer startup %q: %v", ready, err)
 	}

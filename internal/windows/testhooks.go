@@ -385,9 +385,11 @@ func TestOwnWindowAt(hwnd uintptr, x, y float64) bool {
 	if w == nil || w.surface == nil {
 		return false
 	}
-	under := rootAt(screenPoint(w, x, y))
-	return under != 0 && windowProcess(under) == uint32(syscall.Getpid())
+	return ownWindow(rootAt(screenPoint(w, x, y)))
 }
+
+// ownWindow reports whether a top-level window belongs to this process.
+func ownWindow(h uintptr) bool { return h != 0 && windowProcess(h) == uint32(syscall.Getpid()) }
 
 // TestInputClick clicks a point of a window showing native UI with the
 // system's input, as a mouse does: the window it lands on activates as
@@ -413,20 +415,21 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 	// whose window over the point then takes the click: bring w to the
 	// front first, as a user does. A window of the app there, such as a
 	// parent its modal child disables, is left as it is.
-	own := func(h uintptr) bool { return h != 0 && windowProcess(h) == uint32(syscall.Getpid()) }
 	var raised string
-	if under := rootAt(pt); !own(under) {
+	if under := rootAt(pt); !ownWindow(under) {
 		procSetForegroundWindow.Call(w.hwnd)
 		fg, _, _ := procGetForegroundWindow.Call()
 		raised = fmt.Sprintf("; before the click %s was there, and after bringing the window to the front %s, with %s in front",
 			describeWindow(under), describeWindow(rootAt(pt)), describeWindow(fg))
 	}
-	under := rootAt(pt)
+	// The window under the point is read where it is reported: one that
+	// appeared after the click shows.
 	describe := func() string {
 		fg, _, _ := procGetForegroundWindow.Call()
-		return fmt.Sprintf("%s, with %s in front%s", describeWindow(under), describeWindow(fg), raised)
+		return fmt.Sprintf("%s, with %s in front%s", describeWindow(rootAt(pt)), describeWindow(fg), raised)
 	}
-	if !own(under) {
+	under := rootAt(pt)
+	if !ownWindow(under) {
 		return true, describe()
 	}
 	enabled, _, _ := procIsWindowEnabled.Call(under)
