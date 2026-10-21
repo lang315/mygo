@@ -368,6 +368,27 @@ func TestClickSurface(hwnd uintptr, x, y float64) bool {
 	return true
 }
 
+// screenPoint is a point of a window showing native UI, in DIPs from its
+// top-left corner, on the screen in physical pixels.
+func screenPoint(w *window, x, y float64) point {
+	scale := float64(w.surface.dpi()) / 96
+	pt := point{int32(x * scale), int32(y * scale)}
+	procClientToScreen.Call(w.surface.hwnd, uintptr(unsafe.Pointer(&pt)))
+	return pt
+}
+
+// TestOwnWindowAt reports whether the top-level window at a point of a window
+// showing native UI belongs to this process: the window itself, or another
+// of the app's, rather than another app's over it.
+func TestOwnWindowAt(hwnd uintptr, x, y float64) bool {
+	w := theBackend.windows[hwnd]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	under := rootAt(screenPoint(w, x, y))
+	return under != 0 && windowProcess(under) == uint32(syscall.Getpid())
+}
+
 // TestInputClick clicks a point of a window showing native UI with the
 // system's input, as a mouse does: the window it lands on activates as
 // for the user. The system delivers the click later, through the thread's
@@ -381,9 +402,7 @@ func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
 	if w == nil || w.surface == nil {
 		return false, ""
 	}
-	scale := float64(w.surface.dpi()) / 96
-	pt := point{int32(x * scale), int32(y * scale)}
-	procClientToScreen.Call(w.surface.hwnd, uintptr(unsafe.Pointer(&pt)))
+	pt := screenPoint(w, x, y)
 	// A window shown while another app is in front can stay behind it,
 	// whose window over the point then takes the click: bring w to the
 	// front first, as a user does. A window of the app there, such as a

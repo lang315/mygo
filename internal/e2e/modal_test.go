@@ -27,7 +27,7 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 	// a macOS sheet hangs from the top, and a modal window centers over
 	// the parent.
 	const x, y = 60, 230
-	if !appClick(parent, x, y) {
+	if !appClick(t, parent, x, y) {
 		t.Skip("no system clicks on this platform")
 	}
 	eventually(t, "a click on the parent", func() bool { return clicks.Load() == 1 })
@@ -38,7 +38,7 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 		Content: ui.View(func(c *ui.Context) { ui.Text(c, "modal") })})
 	child.OnClosed(func() { closed.Store(true) })
 	eventually(t, "the child to show", child.IsVisible)
-	appClick(parent, x, y)
+	appClick(t, parent, x, y)
 	frameAfter(t, parent, &frames)
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its modal child was open", n-1)
@@ -46,7 +46,7 @@ func TestModalChildBlocksItsParent(t *testing.T) {
 
 	child.Close()
 	eventually(t, "the child to close", closed.Load)
-	appClick(parent, x, y)
+	appClick(t, parent, x, y)
 	eventually(t, "a click on the parent after the child closed", func() bool { return clicks.Load() == 2 })
 }
 
@@ -62,7 +62,7 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 		})})
 	eventually(t, "the parent's first frame", func() bool { return frames.Load() > 0 })
 	const x, y = 60, 230 // as in TestModalChildBlocksItsParent
-	if !appClick(parent, x, y) {
+	if !appClick(t, parent, x, y) {
 		t.Skip("no system clicks on this platform")
 	}
 	eventually(t, "a click on the parent", func() bool { return clicks.Load() == 1 })
@@ -91,7 +91,7 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	shown.Close()
 	eventually(t, "the child in front to close", shownClosed.Load)
 	eventually(t, "the other child to show", other.IsVisible)
-	appClick(parent, x, y)
+	appClick(t, parent, x, y)
 	frameAfter(t, parent, &frames)
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the parent took %d clicks while its other modal child was open", n-1)
@@ -109,7 +109,7 @@ func TestParentStaysBlockedWhileAModalChildIsOpen(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		eventually(t, "the parent to be in front again", parent.IsFocused)
 	}
-	appClick(parent, x, y)
+	appClick(t, parent, x, y)
 	eventually(t, "a click on the parent after both children closed", func() bool { return clicks.Load() == 2 })
 }
 
@@ -131,7 +131,7 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 	other := newWindow(t, mygo.WindowOptions{Title: "Other window", X: 330, Y: 40, Width: 300, Height: 260, Content: view(&otherClicks)})
 	eventually(t, "both windows' first frames", func() bool { return frames.Load() >= 2 })
 	const x, y = 60, 200
-	if !appClick(other, x, y) {
+	if !appClick(t, other, x, y) {
 		t.Skip("no system clicks on this platform")
 	}
 	eventually(t, "a click on the other window", func() bool { return otherClicks.Load() == 1 })
@@ -145,7 +145,7 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 	}
 	first, _, firstClosed := modal("First modal")
 	time.Sleep(time.Second) // a sheet slides down
-	appClick(other, x, y)
+	appClick(t, other, x, y)
 	blocked := !happens(500*time.Millisecond, func() bool { return otherClicks.Load() == 2 })
 	t.Logf("%s: the other window blocked while a modal child is open: %v", runtime.GOOS, blocked)
 	if want := runtime.GOOS == "linux"; blocked != want {
@@ -186,7 +186,7 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 	// Low on the left, away from the small inner child, which centers or
 	// hangs from the top.
 	const x, y = 30, 260
-	if !appClick(outer, x, y) {
+	if !appClick(t, outer, x, y) {
 		t.Skip("no system clicks on this platform")
 	}
 	eventually(t, "a click on the outer child", func() bool { return clicks.Load() == 1 })
@@ -196,14 +196,14 @@ func TestNestedModalBlocksTheOuterChild(t *testing.T) {
 		Content: ui.View(func(c *ui.Context) { ui.Text(c, "inner") })})
 	inner.OnClosed(func() { closed.Store(true) })
 	eventually(t, "the inner child to show", inner.IsVisible)
-	appClick(outer, x, y)
+	appClick(t, outer, x, y)
 	frameAfter(t, outer, &frames)
 	if n := clicks.Load(); n != 1 {
 		t.Fatalf("the outer child took %d clicks while its own modal child was open", n-1)
 	}
 	inner.Close()
 	eventually(t, "the inner child to close", closed.Load)
-	appClick(outer, x, y)
+	appClick(t, outer, x, y)
 	eventually(t, "a click on the outer child after the inner closed", func() bool { return clicks.Load() == 2 })
 }
 

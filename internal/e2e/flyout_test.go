@@ -152,7 +152,7 @@ func TestPopoverFlyout(t *testing.T) {
 	if fl.IsDestroyed() {
 		t.Fatal("hiding the popover closed it")
 	}
-	if appClick(fl, 50, 50) {
+	if appClick(t, fl, 50, 50) {
 		waitFor(t, fl, "window.clicked === 1")
 	}
 	if fl.IsDestroyed() {
@@ -164,7 +164,7 @@ func TestPopoverFlyout(t *testing.T) {
 	eventually(t, "the focusable popover focused", focusable.IsFocused)
 	closes := 0
 	focusable.OnClose(func(*mygo.CloseEvent) { closes++ })
-	if appClick(parent, 280, 10) {
+	if appClick(t, parent, 280, 10) {
 		eventually(t, "the focusable popover closed", focusable.IsDestroyed)
 		if closes != 1 {
 			t.Errorf("OnClose heard %d closes", closes)
@@ -221,8 +221,8 @@ func TestFlyoutToggle(t *testing.T) {
 	parent.Focus()
 	eventually(t, "the parent focused", parent.IsFocused)
 	// The button lays out at the top-left of the window.
-	for i, closing := range []func(*mygo.Window, float64, float64) bool{heldAppClick, appClick} {
-		if !appClick(parent, 60, 15) {
+	for i, closing := range []func(testing.TB, *mygo.Window, float64, float64) bool{heldAppClick, appClick} {
+		if !appClick(t, parent, 60, 15) {
 			t.Skip("clicks not available on this platform")
 		}
 		wait.For(t, "the flyout opened", opened)
@@ -234,7 +234,7 @@ func TestFlyoutToggle(t *testing.T) {
 			t.Fatal("the flyout closed before the click that closes it: was the app deactivated?")
 		default:
 		}
-		closing(parent, 60, 15)
+		closing(t, parent, 60, 15)
 		wait.For(t, "the flyout closed", closed)
 		built()
 		select {
