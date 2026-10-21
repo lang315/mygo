@@ -24,8 +24,10 @@ func coverPeer() {
 	mygo.App.SetName("MyGoCoverPeer")
 	mygo.App.WhenReady(func() {
 		go func() {
-			mygo.NewWindow(mygo.WindowOptions{Title: "Cover", X: x, Y: y, Width: w, Height: h, AlwaysOnTop: true,
-				Content: ui.View(func(c *ui.Context) { ui.Text(c, "cover") })})
+			// Shown without activating: the foreground stays where it was, and
+			// is not left to another app when this process exits.
+			mygo.NewWindow(mygo.WindowOptions{Title: "Cover", X: x, Y: y, Width: w, Height: h, AlwaysOnTop: true, Hidden: true,
+				Content: ui.View(func(c *ui.Context) { ui.Text(c, "cover") })}).ShowInactive()
 			fmt.Println("ready")
 			_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 			mygo.App.Quit()

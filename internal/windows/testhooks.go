@@ -394,10 +394,16 @@ func TestOwnWindowAt(hwnd uintptr, x, y float64) bool {
 // for the user. The system delivers the click later, through the thread's
 // queue: TestInputClick handles the messages that come until the release
 // reaches a window of the app, so that the app handled the click when it
-// returns. It reports false for a window showing a web page, and when no
-// release came in 10 seconds, missed describes the window under the
-// point, which took the click, and the window in front.
-func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
+// returns. It reports false for a window showing a web page.
+//
+// missed says why the click did not reach the app, and is empty when it
+// did. Another app's window over the point (after bringing the window to the
+// front) would take the click, so none is sent: missed describes that window
+// and the one in front. A window of the app that takes no click, a parent its
+// modal child disables, is clicked all the same and returns at once, as no
+// release will come. If no release came within the given time, missed
+// describes the window under the point and the one in front.
+func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string) {
 	w := theBackend.windows[hwnd]
 	if w == nil || w.surface == nil {
 		return false, ""
@@ -407,19 +413,32 @@ func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
 	// whose window over the point then takes the click: bring w to the
 	// front first, as a user does. A window of the app there, such as a
 	// parent its modal child disables, is left as it is.
+	own := func(h uintptr) bool { return h != 0 && windowProcess(h) == uint32(syscall.Getpid()) }
 	var raised string
-	if under := rootAt(pt); under != 0 && windowProcess(under) != uint32(syscall.Getpid()) {
+	if under := rootAt(pt); !own(under) {
 		procSetForegroundWindow.Call(w.hwnd)
 		fg, _, _ := procGetForegroundWindow.Call()
 		raised = fmt.Sprintf("; before the click %s was there, and after bringing the window to the front %s, with %s in front",
 			describeWindow(under), describeWindow(rootAt(pt)), describeWindow(fg))
 	}
+	under := rootAt(pt)
+	describe := func() string {
+		fg, _, _ := procGetForegroundWindow.Call()
+		return fmt.Sprintf("%s, with %s in front%s", describeWindow(under), describeWindow(fg), raised)
+	}
+	if !own(under) {
+		return true, describe()
+	}
+	enabled, _, _ := procIsWindowEnabled.Call(under)
 	user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
 	mouse := user32.NewProc("mouse_event")
 	const leftDown, leftUp = 0x0002, 0x0004
 	mouse.Call(leftDown, 0, 0, 0, 0)
 	mouse.Call(leftUp, 0, 0, 0, 0)
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+	if enabled == 0 {
+		return true, ""
+	}
+	for deadline := time.Now().Add(within); time.Now().Before(deadline); {
 		procMsgWaitForMultipleObjectsEx.Call(0, 0, 100, qsAllInput, mwmoInputAvailable)
 		var m msg
 		for {
@@ -428,7 +447,7 @@ func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
 			}
 			if m.Message == wmQuit {
 				procPostQuitMessage.Call(m.WParam) // for the loop running outside
-				return true, "the app quit"
+				return true, ""
 			}
 			procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
@@ -437,8 +456,7 @@ func TestInputClick(hwnd uintptr, x, y float64) (ok bool, missed string) {
 			}
 		}
 	}
-	fg, _, _ := procGetForegroundWindow.Call()
-	return true, fmt.Sprintf("%s, with %s in front%s", describeWindow(rootAt(pt)), describeWindow(fg), raised)
+	return true, describe()
 }
 
 // rootAt returns the top-level window at a point of the screen, in

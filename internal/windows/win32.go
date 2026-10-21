@@ -107,6 +107,7 @@ var (
 	procShowWindow                    = user32.NewProc("ShowWindow")
 	procIsWindowVisible               = user32.NewProc("IsWindowVisible")
 	procIsIconic                      = user32.NewProc("IsIconic")
+	procIsWindowEnabled               = user32.NewProc("IsWindowEnabled")
 	procIsZoomed                      = user32.NewProc("IsZoomed")
 	procSetWindowPos                  = user32.NewProc("SetWindowPos")
 	procGetWindowRect                 = user32.NewProc("GetWindowRect")
