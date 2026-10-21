@@ -544,6 +544,27 @@ func TestUntitledPageKeepsTitle(t *testing.T) {
 	}
 }
 
+// TestQuickTitleChanges checks that titles set one after the other are
+// reported once each, the last one last.
+func TestQuickTitleChanges(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Title: "Quick", Width: 300, Height: 200})
+	w.Page().LoadHTML(`<p>quick</p>`, "")
+	waitFor(t, w, `document.body && document.body.textContent === "quick"`)
+	titles := make(chan string, 16)
+	w.Page().OnPageTitleUpdated(func(e *mygo.TitleEvent) { titles <- e.Title })
+	mustEval(t, w, `document.title = "A"; document.title = "B"`)
+	eventually(t, "the last title", func() bool { return w.Title() == "B" })
+	mustEval(t, w, `document.title = "Now"`)
+	eventually(t, "the title set after", func() bool { return w.Title() == "Now" })
+	var got []string
+	for len(titles) > 0 {
+		got = append(got, <-titles)
+	}
+	if len(got) < 2 || got[len(got)-2] != "B" || got[len(got)-1] != "Now" || len(slices.Compact(slices.Clone(got))) != len(got) {
+		t.Errorf("page titles %q, want each once, ending in B, Now", got)
+	}
+}
+
 func TestIPCAndProtocol(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Title: "IPC", Width: 400, Height: 300})
 	var dom atomic.Bool
@@ -1077,6 +1098,7 @@ func TestStrictCSP(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Width: 300, Height: 200})
 	w.Page().LoadHTML(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-e2e'">
 <script nonce="e2e">
+document.title = "csp";
 window.results = [];
 (async () => {
   results.push(await mygo.call("Greeter.Greet", "csp"));
@@ -1090,6 +1112,8 @@ window.results = [];
 	if err != nil || fmt.Sprint(got) != "[Hello, csp! 0,1,2]" {
 		t.Errorf("results = %q, %v", got, err)
 	}
+	// The policy does not keep the window from following the page's title.
+	eventually(t, "the page's title", func() bool { return w.Title() == "csp" })
 }
 
 // A window with an empty menu of its own has no menu bar, where windows

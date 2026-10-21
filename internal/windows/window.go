@@ -101,6 +101,7 @@ type window struct {
 	devTools     bool
 	htmlFor      map[string]string // LoadHTML documents by the URL they load at
 	htmlNext     bool              // LoadHTML started the next navigation
+	pageTitle    string            // the page's title last read, to report each once
 	calls        map[int]func(string, error)
 	nextCall     int
 }

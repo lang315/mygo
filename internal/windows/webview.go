@@ -234,12 +234,15 @@ func (w *window) setUp(controller uintptr) {
 	add(wvAddDocumentTitleChanged, func(_, _ uintptr) {
 		// DocumentTitle makes one up from the URL for a page with no
 		// <title>; the page's own title is empty then, as in the other
-		// backends.
+		// backends. It is read later than the change, so two changes in a
+		// row read the second title twice.
 		withHandler(func(hr, result uintptr) {
 			var title string
-			if !failed(hr) && json.Unmarshal([]byte(wstr(result)), &title) == nil {
-				w.h.TitleChanged(title)
+			if failed(hr) || w.closed || json.Unmarshal([]byte(wstr(result)), &title) != nil || title == w.pageTitle {
+				return
 			}
+			w.pageTitle = title
+			w.h.TitleChanged(title)
 		}, func(h uintptr) uintptr {
 			return comCall(w.webview, wvExecuteScript, uintptr(unsafe.Pointer(u16("document.title"))), h)
 		})
