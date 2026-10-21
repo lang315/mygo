@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	win "github.com/egoist/mygo/internal/windows"
 )
 
@@ -320,17 +321,29 @@ func dragFiles(w *mygo.Window, x, y float64, paths []string) (dropped, ok bool) 
 // pressTab presses Tab, with Shift when back, on the keyboard, in the
 // window brought to the front.
 func pressTab(w *mygo.Window, back bool) (ok bool) {
+	mygo.RunOnMain(func() { ok = win.TestForeground(w.NativeHandle()) })
+	if !ok {
+		return false
+	}
+	if !back {
+		mygo.RunOnMain(func() { win.TestPressKeys(0x09) }) // VK_TAB
+		return true
+	}
+	// The keyboard hook of an input method, as EVKey's, lets Shift through
+	// but sends Tab again after it, by when Shift would be up: Shift stays
+	// down until the app has read Tab.
+	var toggled bool
 	mygo.RunOnMain(func() {
-		if ok = win.TestForeground(w.NativeHandle()); !ok {
-			return
-		}
-		if back {
-			win.TestPressKeys(0x10, 0x09) // VK_SHIFT, VK_TAB
-		} else {
-			win.TestPressKeys(0x09)
-		}
+		toggled = win.TestKeyToggled(0x09)
+		win.TestKeysDown(0x10) // VK_SHIFT
+		win.TestPressKeys(0x09)
 	})
-	return ok
+	wait.Poll(func() (read bool) {
+		mygo.RunOnMain(func() { read = win.TestKeyToggled(0x09) != toggled })
+		return read
+	})
+	mygo.RunOnMain(func() { win.TestKeysUp(0x10) })
+	return true
 }
 
 // AppKit's older accessibility API is macOS's.
