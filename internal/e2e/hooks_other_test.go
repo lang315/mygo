@@ -25,7 +25,7 @@ func pressShortcut(string, bool) (bool, bool) { return false, false }
 func endSheet(*mygo.Window) (bool, bool) { return false, false }
 
 // Only Windows hands the clipboard data to the apps that read it.
-func holdClipboardData() (release func()) { return func() {} }
+func holdClipboardData() func() { return func() {} }
 
 func recentDocumentRecorded(string) (recorded, supported bool) { return false, false }
 

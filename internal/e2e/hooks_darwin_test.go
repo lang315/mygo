@@ -18,12 +18,12 @@ import (
 	"github.com/egoist/mygo/internal/wait"
 )
 
+// Only Windows hands the clipboard data to the apps that read it.
+func holdClipboardData() func() { return func() {} }
+
 // recentDocumentRecorded reports whether path is among the app's recent
 // documents. macOS 15 keeps none for a process without a bundle identifier,
 // as this test binary ("Invalid bundle identifier: <nil>"); macOS 26 does.
-// Only Windows hands the clipboard data to the apps that read it.
-func holdClipboardData() (release func()) { return func() {} }
-
 func recentDocumentRecorded(path string) (recorded, supported bool) {
 	version, _ := syscall.Sysctl("kern.osproductversion")
 	major, _, _ := strings.Cut(version, ".")

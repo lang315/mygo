@@ -97,11 +97,11 @@ func defaultURLHandler(scheme string) (id string, supported bool) {
 
 func dockMenu(int) ([]string, bool) { return nil, false }
 
+// Only Windows hands the clipboard data to the apps that read it.
+func holdClipboardData() func() { return func() {} }
+
 // recentDocumentRecorded reports whether path is among the user's recently
 // used files.
-// Only Windows hands the clipboard data to the apps that read it.
-func holdClipboardData() (release func()) { return func() {} }
-
 func recentDocumentRecorded(path string) (recorded, supported bool) {
 	mygo.RunOnMain(func() { recorded = linux.TestHasRecentItem(path) })
 	return recorded, true

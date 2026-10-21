@@ -47,7 +47,8 @@ func (s *winClipboardSource) release() {
 
 // end releases a source whose data is no longer the clipboard's. An app
 // that read the clipboard may keep the data object (UltraViewer does), so
-// its last Release may never come; no receiver may request its providers.
+// its last Release may never come: drop its providers so that app cannot
+// call them after OnRelease.
 // shortcut: another app's replacement is found on the app's next clipboard
 // access (or at Close), not when it happens; a clipboard format listener
 // would end it at once, if an app needs OnRelease without touching it again.
@@ -328,10 +329,6 @@ func (c clipboard) Close() {
 	for _, d := range dragObjects {
 		if d.clipboard {
 			d.providers = nil
-			if fn := d.onRelease; fn != nil {
-				d.onRelease = nil
-				fn()
-			}
 		}
 	}
 }
