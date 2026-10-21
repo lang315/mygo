@@ -362,6 +362,9 @@ func (b *Backend) appMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 	case wmHotkey:
 		b.h.HotkeyPressed(int(wp))
 		return 0, true
+	case wmClipboardUpdate:
+		currentWinClipboard() // ends the source if another app replaced it; the app's own write finds it current
+		return 0, true
 	case wmPowerBroadcast, wmWTSSessionChange:
 		b.powerMessage(m, wp)
 		return 1, false // TRUE for power broadcasts, and default handling
