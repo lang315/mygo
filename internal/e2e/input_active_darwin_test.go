@@ -27,7 +27,7 @@ func deactivated(t *testing.T) {
 	}
 	// Not eventually: the waits of the tests bring their window back.
 	start := time.Now()
-	if !wait.Poll(func() bool { front, _ := appActive(); return !front && !nsAppActive() }) {
+	if !wait.Poll(appDeactivated) {
 		t.Fatalf("the app deactivated never happened (waited %v)", wait.Guard)
 	}
 	deactivation.Lock()

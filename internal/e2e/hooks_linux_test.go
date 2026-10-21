@@ -71,6 +71,7 @@ func webViewAttached(*mygo.Window) (bool, bool) { return false, false }
 func collectionBehavior(*mygo.Window) (uint, bool) { return 0, false }
 func deactivateApp() bool                          { return false }
 func appActive() (bool, bool)                      { return false, false }
+func appDeactivated() bool                         { return false }
 
 // WebKitGTK docks the inspector inside the web view.
 func dockDevTools(*mygo.Window) bool { return false }

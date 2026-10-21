@@ -206,6 +206,15 @@ func appActive() (active bool, supported bool) {
 	return active, true
 }
 
+// appDeactivated reports whether another app is the frontmost one and NSApp
+// says this one is not active, which comes a moment after (see nsAppActive).
+// A window shown in between becomes key, and the deactivation on its way takes
+// the key from it.
+func appDeactivated() bool {
+	front, _ := appActive()
+	return !front && !nsAppActive()
+}
+
 // nsAppActive reports whether NSApp says the app is active. appActive says
 // whether it is the frontmost one, which the workspace names a moment before
 // NSApp says it is active (see inFront).

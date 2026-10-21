@@ -42,7 +42,7 @@ func TestPanel(t *testing.T) {
 	// that app active (macOS).
 	deactivated := deactivateApp()
 	if deactivated {
-		eventually(t, "the app deactivated", func() bool { active, _ := appActive(); return !active })
+		eventually(t, "the app deactivated", appDeactivated)
 	}
 	panel.Show()
 	eventually(t, "the panel focused", panel.IsFocused)
