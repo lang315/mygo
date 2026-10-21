@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -22,7 +23,10 @@ func TestAppFocusKeepsFront(t *testing.T) {
 	}
 	for _, w := range ws {
 		w.Focus()
-		eventually(t, w.Title()+" focused", w.IsFocused)
+		// Not eventually: its message has no word on why the window is not in front.
+		if !wait.Poll(w.IsFocused) {
+			t.Fatalf("%s focused never happened (waited %v); %s", w.Title(), wait.Guard, foregroundDiag(w))
+		}
 		mygo.App.Focus()
 		for _, other := range ws {
 			if other != w && other.IsFocused() {

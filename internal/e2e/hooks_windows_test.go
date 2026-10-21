@@ -121,6 +121,13 @@ func movePointer(int, int) bool                { return false }
 func pressButton(bool) bool                    { return false }
 func resizeCursor(*mygo.Window) (string, bool) { return "", false }
 
+// foregroundDiag says what keeps w from coming to the front, for a wait for it
+// that ran out.
+func foregroundDiag(w *mygo.Window) (diag string) {
+	mygo.RunOnMain(func() { diag = win.TestForegroundDiag(w.NativeHandle()) })
+	return diag
+}
+
 func menuBarShown(w *mygo.Window) (shown, supported bool) {
 	mygo.RunOnMain(func() { shown = win.TestMenuBarShown(w.NativeHandle()) })
 	return shown, true
