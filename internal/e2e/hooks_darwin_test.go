@@ -119,7 +119,7 @@ func click(w *mygo.Window, x, y float64) bool {
 }
 
 // appClick clicks through the application, whose event monitors see it.
-func appClick(w *mygo.Window, x, y float64) bool {
+func appClick(_ testing.TB, w *mygo.Window, x, y float64) bool {
 	waitOnScreen(w)
 	mygo.RunOnMain(func() { darwin.TestAppClick(w.NativeHandle(), x, y) })
 	return true
@@ -128,7 +128,7 @@ func appClick(w *mygo.Window, x, y float64) bool {
 // heldAppClick is appClick with the button held down, as a user clicks:
 // what the press did runs before the release, the work it left for the
 // main thread too.
-func heldAppClick(w *mygo.Window, x, y float64) bool {
+func heldAppClick(_ testing.TB, w *mygo.Window, x, y float64) bool {
 	waitOnScreen(w)
 	mygo.RunOnMain(func() { darwin.TestAppPress(w.NativeHandle(), x, y, true) })
 	mygo.RunOnMain(func() {}) // after what the press posted
