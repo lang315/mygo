@@ -17,13 +17,20 @@ import (
 // again. On Linux the entry goes into the user's recently-used.xbel (GLib
 // reads XDG_DATA_HOME once, so a temporary one would not be seen): the test
 // removes its own entries, the only ones of its executable. Windows lists
-// only files of the types the app opens, so the test registers one.
+// only files of the types the app opens, so the test registers one. Windows
+// 10 and 11 record no document in the user's temporary folder (the CI
+// runners do), so the test's temporary folder is in the cache folder there.
 func TestRecentDocuments(t *testing.T) {
 	if _, ok := recentDocumentRecorded(""); !ok {
 		t.Skip("recent documents cannot be read back on " + runtime.GOOS)
 	}
 	if runtime.GOOS == "windows" {
 		registerFileType(t, ".mygorecent")
+		cache, err := os.UserCacheDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("TMP", cache)
 	}
 	// The systems keep paths with symbolic links (macOS: /var is
 	// /private/var) and short names (Windows: RUNNER~1) resolved.
