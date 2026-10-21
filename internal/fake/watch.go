@@ -95,8 +95,9 @@ func (w *FileWatch) Notify(n platform.FileWatchNotice) {
 
 // ReplaceFile renames replacement over target, with the target's
 // permissions. On Windows it gives a reader holding the target open
-// without sharing deletes a moment to let go, as the Windows backend does:
-// a test reading the file while the app saves it is such a reader.
+// without sharing deletes a moment to let go, as update.Rename does for a
+// file in use: a test reading the file while the app saves it is such a
+// reader.
 func (b *Backend) ReplaceFile(target, replacement string) error {
 	if b.ReplaceFileHook != nil {
 		return b.ReplaceFileHook(target, replacement)
