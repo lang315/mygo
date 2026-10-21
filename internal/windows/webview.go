@@ -232,9 +232,17 @@ func (w *window) setUp(controller uintptr) {
 	add(wvAddContentLoading, func(_, _ uintptr) { w.h.NavigationCommitted(w.URL()) })
 	add(wvAddNavigationCompleted, w.navigationCompleted)
 	add(wvAddDocumentTitleChanged, func(_, _ uintptr) {
-		var p uintptr
-		comCall(w.webview, wvGetDocumentTitle, uintptr(unsafe.Pointer(&p)))
-		w.h.TitleChanged(takeWstr(p))
+		// DocumentTitle makes one up from the URL for a page with no
+		// <title>; the page's own title is empty then, as in the other
+		// backends.
+		withHandler(func(hr, result uintptr) {
+			var title string
+			if !failed(hr) && json.Unmarshal([]byte(wstr(result)), &title) == nil {
+				w.h.TitleChanged(title)
+			}
+		}, func(h uintptr) uintptr {
+			return comCall(w.webview, wvExecuteScript, uintptr(unsafe.Pointer(u16("document.title"))), h)
+		})
 	})
 	add(wvAddWebMessageReceived, func(_, args uintptr) {
 		var p uintptr

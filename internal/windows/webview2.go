@@ -57,7 +57,6 @@ const (
 	wvStop                                   = 43
 	wvAddNewWindowRequested                  = 44
 	wvAddDocumentTitleChanged                = 46
-	wvGetDocumentTitle                       = 48
 	wvOpenDevToolsWindow                     = 51
 	wvAddWebResourceRequested                = 55
 	wvAddWebResourceRequestedFilter          = 57

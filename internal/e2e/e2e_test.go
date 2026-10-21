@@ -507,6 +507,43 @@ func newWindow(t *testing.T, opts mygo.WindowOptions) *mygo.Window {
 	return w
 }
 
+// TestUntitledPageKeepsTitle checks that a page with no <title> leaves the
+// window's title as it is: WebView2 makes one up from the URL for it.
+func TestUntitledPageKeepsTitle(t *testing.T) {
+	for _, tc := range []struct {
+		name, base string
+		titled     bool // a page titled "Had" comes first
+		want       []string
+	}{
+		{name: "string", want: []string{"Now"}},
+		{name: "base URL", base: "app://localhost/untitled", want: []string{"Now"}},
+		{name: "after a titled page", base: "app://localhost/untitled", titled: true, want: []string{"Had", "Now"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWindow(t, mygo.WindowOptions{Title: "Untitled", Width: 300, Height: 200})
+			titles := make(chan string, 16)
+			w.Page().OnPageTitleUpdated(func(e *mygo.TitleEvent) { titles <- e.Title })
+			if tc.titled {
+				w.Page().LoadHTML(`<title>Had</title><p>titled</p>`, "app://localhost/titled")
+				eventually(t, "the first page's title", func() bool { return w.Title() == "Had" })
+			}
+			w.Page().LoadHTML(`<p>untitled</p>`, tc.base)
+			waitFor(t, w, `document.body && document.body.textContent === "untitled"`)
+			// Title events arrive in order: once "Now" is the title, any the
+			// untitled page caused have arrived too.
+			mustEval(t, w, `document.title = "Now"`)
+			eventually(t, "the title set by the page", func() bool { return w.Title() == "Now" })
+			var got []string
+			for len(titles) > 0 {
+				got = append(got, <-titles)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("page titles %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIPCAndProtocol(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Title: "IPC", Width: 400, Height: 300})
 	var dom atomic.Bool
