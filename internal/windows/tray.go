@@ -81,6 +81,7 @@ type tray struct {
 }
 
 func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
+	whitenTemplate = whiten
 	b.nextTray++
 	t := &tray{b: b, h: h, id: b.nextTray}
 	t.dark = t.Dark()
@@ -133,9 +134,9 @@ func (t *tray) update() {
 
 func (t *tray) SetImage(data []byte, template bool) error {
 	img := data
-	if template && t.dark {
+	if template && t.dark && whitenTemplate != nil {
 		var err error
-		if img, err = whiten(data); err != nil {
+		if img, err = whitenTemplate(data); err != nil {
 			return err
 		}
 	}
@@ -150,6 +151,11 @@ func (t *tray) SetImage(data []byte, template bool) error {
 	t.update()
 	return nil
 }
+
+// whitenTemplate is whiten once NewTray links it: the taskbar's
+// appearance changes reach SetImage from the window procedure of every
+// app, and whiten's PNG encoder would cost those without a tray 140 KB.
+var whitenTemplate func([]byte) ([]byte, error)
 
 // whiten draws a template image white, keeping its alpha.
 func whiten(data []byte) ([]byte, error) {
@@ -437,11 +443,12 @@ func (b *Backend) RegisterHotkey(id int, acc string) error {
 
 func (b *Backend) UnregisterHotkey(id int) { procUnregisterHotKey.Call(b.appHwnd, uintptr(id)) }
 
-// traysAppearance tells the icons whose taskbar turned dark or light.
+// traysAppearance tells the icons whose taskbar turned dark or light. A
+// temporary icon, shown only for a notification, has no handler to tell.
 func (b *Backend) traysAppearance() {
 	for _, t := range b.trays {
-		if t.temporary {
-			continue // a notification's icon, with no handler to tell
+		if t.temporary || t.h == nil {
+			continue // a notification's icon, or one with no handler to tell
 		}
 		if dark := t.Dark(); dark != t.dark {
 			t.dark = dark

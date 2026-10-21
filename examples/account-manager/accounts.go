@@ -271,7 +271,7 @@ func generate(n, first int, seed uint64) []account {
 		// IDs apart by 7919 keep the UIDs apart, but for one in a thousand
 		// that repeats the UID before it, as an account imported twice, for
 		// Lọc trùng UID to find.
-		uid := strconv.Itoa(100000000000000 + id*7919 + r.IntN(7919))
+		uid := strconv.FormatInt(100000000000000+int64(id)*7919+r.Int64N(7919), 10)
 		if id%1000 == 500 && i > 0 {
 			uid = out[i-1].UID
 		}
@@ -296,8 +296,8 @@ func generate(n, first int, seed uint64) []account {
 			a.BackupAt = time.Date(2026, time.Month(1+r.IntN(9)), 1+r.IntN(28), 0, 0, 0, 0, time.UTC).Unix()
 		}
 		if ex.IntN(3) == 0 {
-			a.BM = strconv.Itoa(100000000000000 + ex.IntN(900000000000000))
-			a.TKQC = "act_" + strconv.Itoa(100000000000000+ex.IntN(900000000000000))
+			a.BM = strconv.FormatInt(100000000000000+ex.Int64N(900000000000000), 10)
+			a.TKQC = "act_" + strconv.FormatInt(100000000000000+ex.Int64N(900000000000000), 10)
 		}
 		a.EmailPassword = pick(ex, alnum, 10)
 		a.RefreshID = pick(ex, alnum, 40)
