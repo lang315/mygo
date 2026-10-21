@@ -243,6 +243,9 @@ func TestUnifiedClipboardForeignOwnershipAndShutdown(t *testing.T) {
 	if err := mygo.Clipboard.Write(transfer.TextData("old"), mygo.ClipboardOptions{OnRelease: func() { releases.Add(1) }}); err != nil {
 		t.Fatal(err)
 	}
+	// An app that read the clipboard may keep the data after another app
+	// replaced it, as UltraViewer does: its providers are released all the same.
+	defer holdClipboardData()()
 	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
