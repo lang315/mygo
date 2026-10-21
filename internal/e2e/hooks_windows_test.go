@@ -28,7 +28,8 @@ func endSheet(*mygo.Window) (bool, bool) { return false, false }
 // the app's jump list.
 // holdClipboardData keeps the data the app put on the clipboard, as an app
 // that reads the clipboard may, until the returned function is called.
-func holdClipboardData() (release func()) {
+func holdClipboardData() func() {
+	var release func()
 	mygo.RunOnMain(func() { release = win.TestHoldClipboardData() })
 	return func() { mygo.RunOnMain(release) }
 }

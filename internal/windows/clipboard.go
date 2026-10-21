@@ -45,12 +45,25 @@ func (s *winClipboardSource) release() {
 	}
 }
 
+// end releases a source whose data is no longer the clipboard's. An app
+// that read the clipboard may keep the data object (UltraViewer does), so
+// its last Release may never come; no receiver may request its providers.
+// shortcut: another app's replacement is found on the app's next clipboard
+// access (or at Close), not when it happens; a clipboard format listener
+// would end it at once, if an app needs OnRelease without touching it again.
+func (s *winClipboardSource) end() {
+	if d := dragObjects[s.object]; d != nil {
+		d.providers, d.onRelease = nil, nil
+	}
+	s.release()
+}
+
 func currentWinClipboard() *winClipboardSource {
 	s := winClipboard
 	if s != nil {
 		hr, _, _ := procOleIsCurrentClipboard.Call(s.object)
 		if hr != sOK {
-			winClipboard = nil
+			s.end()
 			return nil
 		}
 	}
@@ -64,6 +77,9 @@ func (clipboard) WriteData(data transfer.Data, released func()) error {
 		hr := oleClipboard(func() uintptr { hr, _, _ := procOleSetClipboard.Call(0); return hr })
 		if failed(hr) {
 			return hresultError("OleSetClipboard", hr)
+		}
+		if old := winClipboard; old != nil {
+			old.end()
 		}
 		if released != nil {
 			released()
@@ -83,6 +99,9 @@ func (clipboard) WriteData(data transfer.Data, released func()) error {
 	hr := oleClipboard(func() uintptr { hr, _, _ := procOleSetClipboard.Call(object); return hr })
 	if failed(hr) {
 		return hresultError("OleSetClipboard", hr)
+	}
+	if old := winClipboard; old != nil {
+		old.end()
 	}
 	s := &winClipboardSource{object: object, data: data, released: released}
 	winClipboard = s
