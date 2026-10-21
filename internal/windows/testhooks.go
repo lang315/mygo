@@ -125,6 +125,22 @@ func TestForeground(hwnd uintptr) bool {
 	return fg == hwnd
 }
 
+// TestForegroundDiag describes what a window that does not come to the front
+// is up against: the window in front (its class, title and process), whether
+// the window is visible or minimized, and what SetForegroundWindow returns for
+// it asked again now, and who is in front after. The first ask is Focus's,
+// which discards the result.
+func TestForegroundDiag(hwnd uintptr) string {
+	fg, _, _ := procGetForegroundWindow.Call()
+	before := describeWindow(fg)
+	visible, _, _ := procIsWindowVisible.Call(hwnd)
+	iconic, _, _ := procIsIconic.Call(hwnd)
+	ok, _, errno := procSetForegroundWindow.Call(hwnd)
+	fg, _, _ = procGetForegroundWindow.Call()
+	return fmt.Sprintf("in front: %s; the window %#x is visible %v, minimized %v; SetForegroundWindow asked again returned %v (%v), then in front: %s",
+		before, hwnd, visible != 0, iconic != 0, ok != 0, errno, describeWindow(fg))
+}
+
 // TestEndMenu leaves the menus, as Escape does.
 func TestEndMenu() { procEndMenu.Call() }
 
