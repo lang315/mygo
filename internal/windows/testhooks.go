@@ -168,14 +168,33 @@ func TestSetDroppedFiles(hwnd uintptr, paths []string) {
 // TestPressKeys presses virtual keys together and releases them, like a
 // keyboard would.
 func TestPressKeys(keys ...byte) {
+	TestKeysDown(keys...)
+	TestKeysUp(keys...)
+}
+
+// TestKeysDown presses virtual keys, in order, and holds them.
+func TestKeysDown(keys ...byte) {
 	proc := user32.NewProc("keybd_event")
-	const keyUp = 0x2
 	for _, k := range keys {
 		proc.Call(uintptr(k), 0, 0, 0)
 	}
+}
+
+// TestKeysUp releases virtual keys, the last first.
+func TestKeysUp(keys ...byte) {
+	proc := user32.NewProc("keybd_event")
+	const keyUp = 0x2
 	for i := len(keys) - 1; i >= 0; i-- {
 		proc.Call(uintptr(keys[i]), 0, keyUp, 0)
 	}
+}
+
+// TestKeyToggled reports the toggle bit of a virtual key's state on the
+// calling thread, the main one, which flips each time the thread reads
+// the key pressed.
+func TestKeyToggled(vk byte) bool {
+	r, _, _ := procGetKeyState.Call(uintptr(vk))
+	return r&1 != 0
 }
 
 // TestCaptionButtons returns the window controls of a window with a hidden
