@@ -237,17 +237,13 @@ func TestUnifiedClipboardNativeFilesAndFailures(t *testing.T) {
 	}
 }
 
-func TestUnifiedClipboardForeignOwnershipAndShutdown(t *testing.T) {
-	preserveClipboard(t)
-	var releases atomic.Int32
-	if err := mygo.Clipboard.Write(transfer.TextData("old"), mygo.ClipboardOptions{OnRelease: func() { releases.Add(1) }}); err != nil {
-		t.Fatal(err)
-	}
-	// An app that read the clipboard may keep the data after another app
-	// replaced it, as UltraViewer does: its providers are released all the same.
-	defer holdClipboardData()()
+// foreignClipboardOwner starts a process that owns the clipboard (the "own"
+// peer) and returns once it does, with its stderr and a function that stops
+// it. The test cleanup stops it too.
+func foreignClipboardOwner(t *testing.T) (stderr *bytes.Buffer, stop func() error) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
+	t.Cleanup(cancel)
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
 	cmd.Env = append(os.Environ(), "MYGO_E2E_CLIPBOARD_PEER=own")
 	stdin, err := cmd.StdinPipe()
@@ -258,22 +254,40 @@ func TestUnifiedClipboardForeignOwnershipAndShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr = new(bytes.Buffer)
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	stopped := false
+	stop = func() error {
+		stopped = true
+		_, _ = stdin.Write([]byte("\n"))
+		_ = stdin.Close()
+		return cmd.Wait()
+	}
 	t.Cleanup(func() {
 		if !stopped {
-			_ = stdin.Close()
-			_ = cmd.Wait()
+			_ = stop()
 		}
 	})
 	ready, err := bufio.NewReader(stdout).ReadString('\n')
 	if err != nil || ready != "ready\n" {
 		t.Fatalf("foreign owner startup %q: %v, %s", ready, err, stderr.String())
 	}
+	return stderr, stop
+}
+
+func TestUnifiedClipboardForeignOwnershipAndShutdown(t *testing.T) {
+	preserveClipboard(t)
+	var releases atomic.Int32
+	if err := mygo.Clipboard.Write(transfer.TextData("old"), mygo.ClipboardOptions{OnRelease: func() { releases.Add(1) }}); err != nil {
+		t.Fatal(err)
+	}
+	// An app that read the clipboard may keep the data after another app
+	// replaced it, as UltraViewer does: its providers are released all the same.
+	defer holdClipboardData()()
+	stderr, stop := foreignClipboardOwner(t)
 	eventually(t, "foreign clipboard ownership", func() bool { return slices.Contains(mygo.Clipboard.Formats(), clipboardCustom) })
 	eventually(t, "old provider release", func() bool { return releases.Load() == 1 })
 	d, err := mygo.Clipboard.Read(clipboardCustom)
@@ -290,11 +304,7 @@ func TestUnifiedClipboardForeignOwnershipAndShutdown(t *testing.T) {
 	if _, err := mygo.Clipboard.ReadFormat(clipboardCustom); err != nil {
 		t.Fatal("non-owner flush changed the clipboard")
 	}
-	_, _ = stdin.Write([]byte("\n"))
-	_ = stdin.Close()
-	err = cmd.Wait()
-	stopped = true
-	if err != nil {
+	if err := stop(); err != nil {
 		t.Fatalf("foreign owner shutdown: %v; %s", err, stderr.String())
 	}
 	if runtime.GOOS != "linux" {
@@ -303,6 +313,22 @@ func TestUnifiedClipboardForeignOwnershipAndShutdown(t *testing.T) {
 			t.Fatalf("data after source app exits: %v, %v", b, err)
 		}
 	}
+}
+
+// TestUnifiedClipboardReplacementReleasesAtOnce: another app takes the
+// clipboard and the app never touches it again, so nothing makes it look:
+// OnRelease runs all the same. The clipboard APIs are not called while
+// waiting, as they would find the replacement themselves.
+func TestUnifiedClipboardReplacementReleasesAtOnce(t *testing.T) {
+	preserveClipboard(t)
+	var releases atomic.Int32
+	if err := mygo.Clipboard.Write(transfer.TextData("old"), mygo.ClipboardOptions{OnRelease: func() { releases.Add(1) }}); err != nil {
+		t.Fatal(err)
+	}
+	// An app that read the clipboard may keep the data, as UltraViewer does.
+	defer holdClipboardData()()
+	foreignClipboardOwner(t)
+	eventually(t, "old provider release", func() bool { return releases.Load() == 1 })
 }
 
 func TestUnifiedClipboardNativePersistence(t *testing.T) {
