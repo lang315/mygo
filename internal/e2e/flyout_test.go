@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -208,14 +209,6 @@ func TestFlyoutToggle(t *testing.T) {
 		parent.Show()
 	})
 	defer parent.Destroy()
-	wait := func(ch chan struct{}, what string) {
-		t.Helper()
-		select {
-		case <-ch:
-		case <-time.After(5 * time.Second):
-			t.Fatalf("timed out waiting for %s", what)
-		}
-	}
 	// built waits for the parent to build a frame after the clicks the
 	// hooks handled, which reports a click of the button.
 	built := func() {
@@ -224,7 +217,7 @@ func TestFlyoutToggle(t *testing.T) {
 		parent.Invalidate()
 		eventually(t, "a frame of the parent built", func() bool { return builds.Load() > n })
 	}
-	wait(drawn, "the parent drawn")
+	wait.For(t, "the parent drawn", drawn)
 	parent.Focus()
 	eventually(t, "the parent focused", parent.IsFocused)
 	// The button lays out at the top-left of the window.
@@ -232,7 +225,7 @@ func TestFlyoutToggle(t *testing.T) {
 		if !appClick(parent, 60, 15) {
 			t.Skip("clicks not available on this platform")
 		}
-		wait(opened, "the flyout opened")
+		wait.For(t, "the flyout opened", opened)
 		// A user clicks again once the flyout shows, with the keyboard.
 		eventually(t, "the flyout focused", func() bool { return shown.Load().IsFocused() || len(closed) > 0 })
 		select {
@@ -242,7 +235,7 @@ func TestFlyoutToggle(t *testing.T) {
 		default:
 		}
 		closing(parent, 60, 15)
-		wait(closed, "the flyout closed")
+		wait.For(t, "the flyout closed", closed)
 		built()
 		select {
 		case <-opened:
