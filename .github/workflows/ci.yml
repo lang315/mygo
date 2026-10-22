@@ -150,6 +150,26 @@ jobs:
       - name: Test without the inspector, as production builds
         if: runner.os == 'Linux'
         run: go test -tags mygo_noinspector ./ui .
+      # The runner's provisioning daemon (provjobd, under hosted-compute-agent)
+      # runs wsl.exe every 30 seconds. This image has no WSL, and some of those
+      # runs start `wsl.exe --update --confirm --prompt-before-exit`, whose new
+      # Windows Terminal window takes the front from a test's window and stays
+      # open. With WSL installed they start none. The ones already open go.
+      - name: Install WSL, so the runner's wsl.exe opens no window
+        run: |
+          $msi = "$env:RUNNER_TEMP\wsl.msi"
+          Invoke-WebRequest https://github.com/microsoft/WSL/releases/download/3.0.3/wsl.3.0.3.0.arm64.msi -OutFile $msi
+          $sig = Get-AuthenticodeSignature $msi
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw "wsl.msi is not signed by Microsoft: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          }
+          $p = Start-Process msiexec.exe -ArgumentList '/i', $msi, '/qn', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec exited with $($p.ExitCode)" }
+          wsl.exe --version
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'wsl\.exe --update' } | ForEach-Object {
+            "stopping $($_.Name) $($_.ProcessId): $($_.CommandLine)"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
       # The runner's image leaves the "Microsoft account" screen of Windows'
       # first run in front, a full-screen window of WwaHost (a CoreWindow of
       # the shell), and the Start and Search flyouts of the shell come up
