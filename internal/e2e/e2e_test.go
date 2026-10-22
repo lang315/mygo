@@ -1281,7 +1281,7 @@ func TestMenuLetters(t *testing.T) {
 			menus, _ = popupMenus()
 		}
 		if !wait.Poll(func() bool { menus, _ = popupMenus(); return fmt.Sprint(menus) == fmt.Sprint(want) }) {
-			t.Errorf("Alt+%c opened %q, want %q", letter, menus, want)
+			t.Errorf("Alt+%c opened %q, want %q; %s", letter, menus, want, foregroundState(w))
 		}
 	}
 

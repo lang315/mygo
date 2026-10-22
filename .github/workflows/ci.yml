@@ -150,7 +150,84 @@ jobs:
       - name: Test without the inspector, as production builds
         if: runner.os == 'Linux'
         run: go test -tags mygo_noinspector ./ui .
+      # The runner's provisioning daemon (provjobd, under hosted-compute-agent)
+      # runs wsl.exe every 30 seconds. This image has no WSL, and some of those
+      # runs start `wsl.exe --update --confirm --prompt-before-exit`, whose new
+      # Windows Terminal window takes the front from a test's window and stays
+      # open. With WSL installed they start none. The ones already open go.
+      - name: Install WSL, so the runner's wsl.exe opens no window
+        run: |
+          $msi = "$env:RUNNER_TEMP\wsl.msi"
+          Invoke-WebRequest https://github.com/microsoft/WSL/releases/download/3.0.3/wsl.3.0.3.0.arm64.msi -OutFile $msi
+          $sig = Get-AuthenticodeSignature $msi
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw "wsl.msi is not signed by Microsoft: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          }
+          $p = Start-Process msiexec.exe -ArgumentList '/i', $msi, '/qn', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec exited with $($p.ExitCode)" }
+          wsl.exe --version
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'wsl\.exe --update' } | ForEach-Object {
+            "stopping $($_.Name) $($_.ProcessId): $($_.CommandLine)"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
+      # The runner's image leaves the "Microsoft account" screen of Windows'
+      # first run in front, a full-screen window of WwaHost (a CoreWindow of
+      # the shell), and the Start and Search flyouts of the shell come up
+      # when it goes. Windows gives the front to no other app while a window
+      # like these is in it, so every GUI test that needs its window in front
+      # waited for it in vain. Closing the screen, and the flyouts as Escape
+      # does, leaves the desktop in front, as it is on the Windows runner.
+      # What else is in front, or none of this, is left as it is.
+      - name: Clear the first run screen from the front
+        run: |
+          Add-Type @"
+          using System;
+          using System.Text;
+          using System.Runtime.InteropServices;
+          public static class Front {
+            public delegate bool EnumProc(IntPtr h, IntPtr l);
+            [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+            [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+            [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+            [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr e);
+            static string Of(IntPtr h) {
+              var c = new StringBuilder(256); var t = new StringBuilder(256);
+              GetClassName(h, c, 256); GetWindowText(h, t, 256);
+              return c + " '" + t + "'";
+            }
+            public static string Now() { return Of(GetForegroundWindow()); }
+            public static string All() {
+              var sb = new StringBuilder();
+              EnumWindows((h, l) => { if (IsWindowVisible(h)) sb.AppendLine("  " + Of(h)); return true; }, IntPtr.Zero);
+              return sb.ToString();
+            }
+            public static bool CloseFirstRun() {
+              if (Now() != "Windows.UI.Core.CoreWindow 'Microsoft account'") return false;
+              return PostMessage(GetForegroundWindow(), 0x10, IntPtr.Zero, IntPtr.Zero);
+            }
+            public static bool Flyout() {
+              var w = Now();
+              return w == "Windows.UI.Core.CoreWindow 'Start'" || w == "Windows.UI.Core.CoreWindow 'Search'";
+            }
+            public static void Escape() { keybd_event(0x1B, 0, 0, UIntPtr.Zero); keybd_event(0x1B, 0, 2, UIntPtr.Zero); }
+          }
+          "@
+          "in front: " + [Front]::Now()
+          "windows:"
+          [Front]::All()
+          if ([Front]::CloseFirstRun()) {
+            Start-Sleep -Seconds 2
+            "closed the first run screen; in front: " + [Front]::Now()
+          }
+          for ($i = 0; $i -lt 3 -and [Front]::Flyout(); $i++) {
+            [Front]::Escape()
+            Start-Sleep -Seconds 2
+            "Escape; in front: " + [Front]::Now()
+          }
       - name: GUI tests of native UI
         env:
           MYGO_E2E: 1
-        run: go test -run 'TestContentWindow|^TestClearBrowsingData$|^TestCookies$' ./internal/e2e
+        run: go test ./internal/e2e

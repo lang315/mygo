@@ -296,6 +296,9 @@ func resizeCursor(*mygo.Window) (string, bool) { return "", false }
 // grantForeground is for Windows, whose foreground rules need it.
 func grantForeground() {}
 
+// foregroundState is for Windows.
+func foregroundState(*mygo.Window) string { return "" }
+
 // The menu bar belongs to the application on macOS.
 func menuBarShown(*mygo.Window) (bool, bool)                { return false, false }
 func activateAccelerator(*mygo.Window, string) (bool, bool) { return false, false }

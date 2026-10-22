@@ -389,3 +389,6 @@ func trayMenuIcons() (icons map[string]bool, supported bool, err error) {
 
 // grantForeground is for Windows, whose foreground rules need it.
 func grantForeground() {}
+
+// foregroundState is for Windows.
+func foregroundState(*mygo.Window) string { return "" }
