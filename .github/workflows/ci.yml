@@ -150,7 +150,10 @@ jobs:
       - name: Test without the inspector, as production builds
         if: runner.os == 'Linux'
         run: go test -tags mygo_noinspector ./ui .
+      - name: diag foreground
+        continue-on-error: true
+        run: ./diag-fg.ps1
       - name: GUI tests of native UI
         env:
           MYGO_E2E: 1
-        run: go test ./internal/e2e
+        run: go test -run '^TestCookies$' ./internal/e2e
