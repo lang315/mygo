@@ -175,6 +175,7 @@ func TestMain(m *testing.M) {
 				return
 			}
 			warmUp()
+			grantForeground()
 			code = m.Run()
 			mygo.App.Quit()
 		}()

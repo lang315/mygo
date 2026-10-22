@@ -127,8 +127,9 @@ func TestForeground(hwnd uintptr) bool {
 
 // TestForegroundDiag describes what a window that does not come to the front
 // is up against: the window in front (its class, title and process), whether
-// the window is visible or minimized, and what SetForegroundWindow returns for
-// it asked again now, and who is in front after. The first ask is Focus's,
+// the window is visible or minimized, how long ago the last input came (the
+// right to take the front depends on it), and what SetForegroundWindow returns
+// for it asked again now, and who is in front after. The first ask is Focus's,
 // which discards the result.
 func TestForegroundDiag(hwnd uintptr) string {
 	fg, _, _ := procGetForegroundWindow.Call()
@@ -137,8 +138,22 @@ func TestForegroundDiag(hwnd uintptr) string {
 	iconic, _, _ := procIsIconic.Call(hwnd)
 	ok, _, errno := procSetForegroundWindow.Call(hwnd)
 	fg, _, _ = procGetForegroundWindow.Call()
-	return fmt.Sprintf("in front: %s; the window %#x is visible %v, minimized %v; SetForegroundWindow asked again returned %v (%v), then in front: %s",
-		before, hwnd, visible != 0, iconic != 0, ok != 0, errno, describeWindow(fg))
+	return fmt.Sprintf("in front: %s; last input %v ago; the window %#x is visible %v, minimized %v; SetForegroundWindow asked again returned %v (%v), then in front: %s",
+		before, power{}.IdleTime(), hwnd, visible != 0, iconic != 0, ok != 0, errno, describeWindow(fg))
+}
+
+// TestGrantForeground makes this process the one that received the last
+// input, by sending F24 down and up, a key nothing uses. Windows lets that
+// process take the front from the app in front (SetForegroundWindow), as it
+// does the app a user is working in. A process nobody has used does not have
+// it: a window of one started a while ago, as the tests' is once the webview
+// warmed up, stays behind the app in front, and the right stays until
+// another process gets input.
+func TestGrantForeground() {
+	const vkF24, keyUp = 0x87, 0x0002
+	key := user32.NewProc("keybd_event")
+	key.Call(vkF24, 0, 0, 0)
+	key.Call(vkF24, 0, keyUp, 0)
 }
 
 // TestEndMenu leaves the menus, as Escape does.
