@@ -12,9 +12,9 @@ import (
 type ClipboardOptions struct {
 	// OnRelease runs once on the main thread after native providers are no
 	// longer needed: replacement, Clear, Flush, or application shutdown.
-	// Another app's replacement ends it as it happens on Windows and Linux;
-	// on macOS when AppKit reports it (macOS 26 did not in CI), else on the
-	// app's next clipboard access.
+	// Another app's replacement ends it as it happens on Windows and Linux,
+	// and within a quarter of a second on macOS, which looks at the pasteboard
+	// that often while the app owns data on it.
 	// The system may also finish providers after fetching all their data.
 	// It is scheduled after the native callback returns and may safely write
 	// a new clipboard. It does not run when Write fails. Closing a window

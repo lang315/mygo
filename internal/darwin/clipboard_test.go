@@ -78,3 +78,30 @@ func TestClipboardFileReferenceURL(t *testing.T) {
 		}
 	})
 }
+
+// AppKit's callback and the poll can both come for a source that another app
+// replaced: the first ends it, the second finds nothing, and the timer stops.
+func TestClipboardSourceReleasesOnceAndStopsItsTimer(t *testing.T) {
+	load()
+	withPool(func() {
+		registerClipboardClass()
+		var releases int
+		s := &macClipboardSource{released: func() { releases++ }}
+		s.obj = send(send(class("MyGoClipboardProvider"), "alloc"), "init")
+		macClipboardProviders[s.obj] = s
+		s.watch()
+		timer := retain(s.timer)
+		defer release(timer)
+		if !sendBool(timer, "isValid") {
+			t.Fatal("no timer running after watch")
+		}
+		s.release()
+		s.release()
+		if releases != 1 {
+			t.Fatalf("OnRelease ran %d times", releases)
+		}
+		if sendBool(timer, "isValid") || s.timer != 0 {
+			t.Fatal("the timer is still running after release")
+		}
+	})
+}

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ebitengine/purego"
 	"github.com/ebitengine/purego/objc"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/transfer"
@@ -19,8 +20,13 @@ var (
 	macClipboardProviders = map[id]*macClipboardSource{}
 )
 
+// clipboardPollInterval is how often, in seconds, the app looks for another
+// app having taken the pasteboard while it owns data on it.
+const clipboardPollInterval = 0.25
+
 type macClipboardSource struct {
 	obj      id
+	timer    id
 	change   int
 	data     transfer.Data
 	items    map[id]transfer.Item
@@ -51,13 +57,33 @@ func registerClipboardClass() {
 					s.release()
 				}
 			}),
+			// NSPasteboard has no notification for another app taking it, and
+			// AppKit does not always send pasteboardFinishedWithDataProvider:
+			// (macOS 26 does not), so the source looks at the change count.
+			method("mygoPoll:", func(self id, _ objc.SEL, timer id) {
+				currentMacClipboard()
+			}),
 		})
 	})
+}
+
+// watch starts the timer that ends the source when another app takes the
+// pasteboard, and release stops it: nothing runs while no source lives.
+func (s *macClipboardSource) watch() {
+	if msgTimer == nil {
+		purego.RegisterFunc(&msgTimer, msgSendAddr)
+	}
+	s.timer = msgTimer(class("NSTimer"), sel("timerWithTimeInterval:target:selector:userInfo:repeats:"), clipboardPollInterval, s.obj, sel("mygoPoll:"), 0, true)
+	send(send(class("NSRunLoop"), "mainRunLoop"), "addTimer:forMode:", uintptr(s.timer), kCFRunLoopCommonModes)
 }
 
 func (s *macClipboardSource) release() {
 	if s.obj == 0 {
 		return
+	}
+	if s.timer != 0 {
+		send(s.timer, "invalidate")
+		s.timer = 0
 	}
 	delete(macClipboardProviders, s.obj)
 	if macClipboard == s {
@@ -146,6 +172,7 @@ func (clipboard) WriteData(data transfer.Data, released func()) error {
 		s.change = sendInt(board, "changeCount")
 		if s.obj != 0 {
 			macClipboard = s
+			s.watch()
 		}
 	})
 	return err
