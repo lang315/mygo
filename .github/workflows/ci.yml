@@ -153,4 +153,4 @@ jobs:
       - name: GUI tests of native UI
         env:
           MYGO_E2E: 1
-        run: go test -run 'TestContentWindow|^TestClearBrowsingData$|^TestCookies$' ./internal/e2e
+        run: go test ./internal/e2e
