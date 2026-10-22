@@ -30,11 +30,11 @@ func TestAppFocusKeepsFront(t *testing.T) {
 		mygo.App.Focus()
 		for _, other := range ws {
 			if other != w && other.IsFocused() {
-				t.Errorf("with %s in front, App.Focus brought %s forward", w.Title(), other.Title())
+				t.Errorf("with %s in front, App.Focus brought %s forward; %s", w.Title(), other.Title(), foregroundState(other))
 			}
 		}
 		if !w.IsFocused() {
-			t.Errorf("App.Focus took the focus from %s", w.Title())
+			t.Errorf("App.Focus took the focus from %s; %s", w.Title(), foregroundState(w))
 		}
 	}
 }

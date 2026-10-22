@@ -137,6 +137,12 @@ func resizeCursor(*mygo.Window) (string, bool) { return "", false }
 // another app. See TestMain.
 func grantForeground() { win.TestGrantForeground() }
 
+// foregroundState says who is in front, leaving the front as it is.
+func foregroundState(w *mygo.Window) (state string) {
+	mygo.RunOnMain(func() { state = win.TestForegroundState(w.NativeHandle()) })
+	return state
+}
+
 // foregroundDiag says what keeps w from coming to the front, for a wait for it
 // that ran out.
 func foregroundDiag(w *mygo.Window) (diag string) {
