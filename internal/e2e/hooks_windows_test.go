@@ -132,6 +132,11 @@ func movePointer(int, int) bool                { return false }
 func pressButton(bool) bool                    { return false }
 func resizeCursor(*mygo.Window) (string, bool) { return "", false }
 
+// grantForeground makes the process the one that received the last input, as
+// a user's using the app does: Windows lets that process take the front from
+// another app. See TestMain.
+func grantForeground() { win.TestGrantForeground() }
+
 // foregroundDiag says what keeps w from coming to the front, for a wait for it
 // that ran out.
 func foregroundDiag(w *mygo.Window) (diag string) {
