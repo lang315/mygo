@@ -152,13 +152,62 @@ jobs:
         run: go test -tags mygo_noinspector ./ui .
       # The runner's image leaves the "Microsoft account" screen of Windows'
       # first run in front, a full-screen window of WwaHost (a CoreWindow of
-      # the shell, class Shell_OOBEProxy). Windows gives the front to no
-      # other app while one like it is there, so every GUI test that needs
-      # its window in front waited for it in vain. Closing it, as its Close
-      # does, leaves the desktop to the tests.
-      - name: Close the first run screen in front
-        run: ./arm-front.ps1
+      # the shell), and the Start and Search flyouts of the shell come up
+      # when it goes. Windows gives the front to no other app while a window
+      # like these is in it, so every GUI test that needs its window in front
+      # waited for it in vain. Closing the screen, and the flyouts as Escape
+      # does, leaves the desktop in front, as it is on the Windows runner.
+      # What else is in front, or none of this, is left as it is.
+      - name: Clear the first run screen from the front
+        run: |
+          Add-Type @"
+          using System;
+          using System.Text;
+          using System.Runtime.InteropServices;
+          public static class Front {
+            public delegate bool EnumProc(IntPtr h, IntPtr l);
+            [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+            [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+            [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+            [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+            [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr e);
+            static string Of(IntPtr h) {
+              var c = new StringBuilder(256); var t = new StringBuilder(256);
+              GetClassName(h, c, 256); GetWindowText(h, t, 256);
+              return c + " '" + t + "'";
+            }
+            public static string Now() { return Of(GetForegroundWindow()); }
+            public static string All() {
+              var sb = new StringBuilder();
+              EnumWindows((h, l) => { if (IsWindowVisible(h)) sb.AppendLine("  " + Of(h)); return true; }, IntPtr.Zero);
+              return sb.ToString();
+            }
+            public static bool CloseFirstRun() {
+              if (Now() != "Windows.UI.Core.CoreWindow 'Microsoft account'") return false;
+              return PostMessage(GetForegroundWindow(), 0x10, IntPtr.Zero, IntPtr.Zero);
+            }
+            public static bool Flyout() {
+              var w = Now();
+              return w == "Windows.UI.Core.CoreWindow 'Start'" || w == "Windows.UI.Core.CoreWindow 'Search'";
+            }
+            public static void Escape() { keybd_event(0x1B, 0, 0, UIntPtr.Zero); keybd_event(0x1B, 0, 2, UIntPtr.Zero); }
+          }
+          "@
+          "in front: " + [Front]::Now()
+          "windows:"
+          [Front]::All()
+          if ([Front]::CloseFirstRun()) {
+            Start-Sleep -Seconds 2
+            "closed the first run screen; in front: " + [Front]::Now()
+          }
+          for ($i = 0; $i -lt 3 -and [Front]::Flyout(); $i++) {
+            [Front]::Escape()
+            Start-Sleep -Seconds 2
+            "Escape; in front: " + [Front]::Now()
+          }
       - name: GUI tests of native UI
         env:
           MYGO_E2E: 1
-        run: go test -run '^(TestAppFocusKeepsFront|TestClick|TestFlyout|TestPageEditKeys|TestModalChildBlocksItsParent|TestClosingAModalChildFrontsTheOneUnderIt)$' ./internal/e2e
+        run: go test ./internal/e2e
