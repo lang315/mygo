@@ -27,7 +27,8 @@ func TestWidgetDialogEscape(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
+		state := foregroundState(d.Native())
 		d.Close()
-		t.Fatal("Escape did not close the dialog")
+		t.Fatalf("Escape did not close the dialog; %s", state)
 	}
 }
