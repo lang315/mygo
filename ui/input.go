@@ -30,7 +30,7 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		return true
 	}
 	switch ev.Kind {
-	case platform.PointerMove, platform.PointerDown, platform.PointerUp, platform.PointerScroll:
+	case platform.PointerMove, platform.PointerDown, platform.PointerUp, platform.PointerScroll, platform.PointerZoom:
 		rt.mods = Modifiers(ev.Mods)
 	}
 	switch ev.Kind {
@@ -65,6 +65,9 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 	case platform.PointerScroll:
 		rt.pointerMove(x, y)
 		rt.scroll(float32(ev.DX), float32(ev.DY), Modifiers(ev.Mods), ev.Precise)
+	case platform.PointerZoom:
+		rt.pointerMove(x, y)
+		rt.zoom(float32(ev.Scale), Modifiers(ev.Mods))
 	case platform.KeyPressed:
 		rt.modsChanged(Modifiers(ev.Mods))
 		taken = rt.keyDownPhysical(Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey), ev.Repeat)
@@ -264,6 +267,8 @@ func (rt *engine) pointerMove(x, y float32) {
 			rt.chain = old[:0]
 		} else {
 			rt.chain = chain[:0]
+			// The pointer may have gone onto a scroll bar, or off it.
+			rt.updateCursor()
 		}
 	}
 	if moved {
@@ -405,6 +410,9 @@ func (rt *engine) pointerUp(button, clicks int) {
 	}
 	if rt.scrollDrag.st != nil {
 		rt.scrollDrag.st = nil
+		// The pointer may have left the bar, over what the hover missed.
+		rt.setHover(rt.hitChain(rt.pointerX, rt.pointerY))
+		rt.updateCursor()
 		rt.requestFrame()
 		return
 	}
@@ -492,6 +500,17 @@ func (rt *engine) scroll(dx, dy float32, mods Modifiers, precise bool) {
 			return
 		}
 	}
+}
+
+// zoom gives a pinch to the element under the pointer that handles its
+// input; no element zooms of its own.
+func (rt *engine) zoom(scale float32, mods Modifiers) {
+	if scale <= 0 || scale == 1 {
+		return
+	}
+	chain := rt.appendHitChain(rt.chain[:0], rt.pointerX, rt.pointerY)
+	rt.chain = chain[:0]
+	rt.deliver(rt.handler(chain), InputEvent{Kind: InputZoom, Scale: scale, Mods: mods})
 }
 
 // dragTo returns the offset of content whose thumb moved by moved DIPs
@@ -1444,11 +1463,15 @@ func (e *node) Dismissed() bool { return e.dismissed }
 
 // scrollbarPress starts dragging the thumb of the scroll container under
 // the pointer when the press is on its scroll bar, or pages toward the
-// press on the bar's track.
+// press on the bar's track. Hidden bars take no press, as AppKit's
+// overlay scrollers: it goes through to the content under them, as a
+// click on a table's last row under its horizontal bar. The hover this
+// press set does not show them yet, so they are those the last frame
+// painted (barsShown).
 func (rt *engine) scrollbarPress(chain []uint64, x, y float32) bool {
 	for _, id := range chain {
 		s := rt.states[id]
-		if s == nil || s.flags&(flagScrollX|flagScrollY) == 0 {
+		if s == nil || s.flags&(flagScrollX|flagScrollY) == 0 || !s.barsShown {
 			continue
 		}
 		lx, ly := s.local(x, y)
