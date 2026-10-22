@@ -157,6 +157,57 @@ jobs:
       # its window in front waited for it in vain. Closing it, as its Close
       # does, leaves the desktop to the tests.
       - name: Close the first run screen in front
+        run: ./arm-front.ps1
+      - name: GUI tests of native UI drawn with OpenGL
+        if: runner.os == 'Linux'
+        env:
+          MYGO_E2E: 1
+          MYGO_GPU: 1
+        run: xvfb-run -a dbus-run-session -- go test -run 'TestContentWindow' ./internal/e2e
+
+  # Windows on ARM64, which no machine of the maintainers runs: DirectWrite's
+  # methods taking floats go through purego, which sets the floating point
+  # registers syscall leaves alone there, and Direct3D 11 draws native UI.
+  # The JavaScript packages are the same everywhere, so Bun is left out.
+  windows-arm64:
+    name: Windows ARM64
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # As in the job above.
+      - name: Restore the downloads of the tests
+        id: downloads
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/natives
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/nsis-*
+          key: downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('plugins/*/mygo-plugin.json', 'internal/nsis/nsis.go') }}
+      - name: Download what the tests need
+        run: go run ./internal/prefetch
+      - name: Save the downloads of the tests
+        if: steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/natives
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/nsis-*
+          key: ${{ steps.downloads.outputs.cache-primary-key }}
+      - run: go test ./...
+      - name: Test without the inspector, as production builds
+        if: runner.os == 'Linux'
+        run: go test -tags mygo_noinspector ./ui .
+      # The runner's image leaves the "Microsoft account" screen of Windows'
+      # first run in front, a full-screen window of WwaHost (a CoreWindow of
+      # the shell, class Shell_OOBEProxy). Windows gives the front to no
+      # other app while one like it is there, so every GUI test that needs
+      # its window in front waited for it in vain. Closing it, as its Close
+      # does, leaves the desktop to the tests.
+      - name: Close the first run screen in front
         run: |
           Add-Type @"
           using System;
