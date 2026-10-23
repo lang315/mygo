@@ -10,7 +10,7 @@ import (
 func TestTourShowsEveryTab(t *testing.T) {
 	tt := ui.NewTester(widget.View(tour(nil)), 1000, 700)
 	tt.Frame()
-	for _, tab := range []string{"Layout", "Inputs", "Choices", "Containers", "Dialogs", "Extras", "Table"} {
+	for _, tab := range []string{"Layout", "Inputs", "Choices", "Containers", "Dialogs", "Extras", "DataGridView"} {
 		if err := tt.Click(tab); err != nil {
 			t.Fatalf("tab %s: %v (texts %q)", tab, err, tt.Texts())
 		}
@@ -21,7 +21,7 @@ func TestTourShowsEveryTab(t *testing.T) {
 func TestTourTableTab(t *testing.T) {
 	tt := ui.NewTester(widget.View(tour(nil)), 1000, 700)
 	tt.Frame()
-	if err := tt.Click("Table"); err != nil {
+	if err := tt.Click("DataGridView"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

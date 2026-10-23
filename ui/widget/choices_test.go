@@ -202,7 +202,7 @@ func TestComboLongSectionedPopupScrolls(t *testing.T) {
 }
 
 // V4: popups close on Escape or an outside click without OnChange; no
-// widget binds such an open flag (a Combo's is inside ui.SelectBase), so
+// widget binds such an open flag (a ComboBox's is inside ui.SelectBase), so
 // closing one leaves the value alone and reports nothing.
 func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
 	changed := make(chan string, 4)

@@ -75,8 +75,9 @@ gota's names are listed for code ported from it.
 
 ## Threads
 
-- **Setters and getters** are safe from any goroutine. A setter returns at
-  once; the windows redraw on the main thread.
+- **Setters and getters** are safe from any goroutine, but not from a
+  `Custom` build (see [Controls of your own](#controls-of-your-own)). A
+  setter returns at once; the windows redraw on the main thread.
 - **Handlers** (`OnClick`, `OnChange`, `OnClose`, ...) run one at a time on
   a goroutine of the package, the event goroutine, never on the main
   thread. A handler may block: the window keeps drawing.
@@ -194,9 +195,14 @@ func (g *Gauge) SetValue(v float64) *Gauge {
 }
 ```
 
-A build runs while the package holds its lock: it must not call a setter
-or `Change`, which would wait forever. A control made of other controls
-needs no `Custom`: return a `VBox` of them from a function of your own.
+The methods every control has (`SetVisible`, `AssignTo`, ...) return the
+`*widget.CustomWidget`, not your type: chain your own setters apart from
+them.
+
+A build runs while the package holds its lock: it must call no method of
+any control (getters lock too) and no `Change`, which would wait forever.
+A control made of other controls needs no `Custom`: return a `VBox` of
+them from a function of your own.
 
 ## DataGridView
 
@@ -242,8 +248,8 @@ lock: they read the row and call no widget method.
   Cmd/Ctrl+C copies the selected rows, a line each, cells apart by tabs.
 
 A table shows in one window at a time. It fills the room its parent
-gives it and scrolls; in a box or a notebook page, `Expand` the boxes and
-the notebook holding it, or it gets no room.
+gives it and scrolls; in a box or a `TabControl` page, `Expand` the boxes and
+the `TabControl` holding it, or it gets no room.
 
 ## Clipboard, theme and screen
 

@@ -21,8 +21,8 @@ func TestCustomNilOrZeroShowsNothing(t *testing.T) {
 		Label("after"),
 	)
 	tt := tester(t, box)
-	if !tt.HasText("after") {
-		t.Fatalf("the label after empty customs is missing: %q", tt.Texts())
+	if got := tt.Texts(); len(got) != 1 || got[0] != "after" {
+		t.Fatalf("texts %q, want only the label after the empty customs", got)
 	}
 }
 
@@ -53,15 +53,30 @@ func newGauge() *gauge {
 
 func (g *gauge) SetValue(v int) *gauge { Change(func() { g.value = v }); return g }
 
+// Frames build while another goroutine calls the setter: Change keeps the
+// write and the build's read apart (go test -race sees if it does not),
+// and the frame after the last call shows the last value.
 func TestUserControlSetterFromAnotherGoroutine(t *testing.T) {
 	g := newGauge()
 	tt := tester(t, g)
 	done := make(chan struct{})
-	go func() { g.SetValue(7); close(done) }()
-	<-done
+	go func() {
+		defer close(done)
+		for i := 1; i <= 200; i++ {
+			g.SetValue(i)
+		}
+	}()
+	for running := true; running; {
+		tt.Frame()
+		select {
+		case <-done:
+			running = false
+		default:
+		}
+	}
 	tt.Frame()
-	if !tt.HasText("value 7") {
-		t.Fatalf("texts %q, want value 7", tt.Texts())
+	if !tt.HasText("value 200") {
+		t.Fatalf("texts %q, want value 200", tt.Texts())
 	}
 }
 

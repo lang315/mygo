@@ -37,7 +37,7 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("Containers", containers()).
 		AddPage("Dialogs", dialogs(w)).
 		AddPage("Extras", extras()).
-		AddPage("Table", table()).
+		AddPage("DataGridView", table()).
 		Padding(4).Expand()
 }
 
@@ -230,10 +230,10 @@ func containers() widget.Control {
 		flow.Add(widget.Button(fmt.Sprintf("chip %d", i)))
 	}
 	return widget.Sidebar().
-		Add("frame", "Frame and grid", widget.VBox(8).Add(widget.GroupBox("Frame").Add(grid))).
+		Add("frame", "GroupBox and grid", widget.VBox(8).Add(widget.GroupBox("Frame").Add(grid))).
 		Add("card", "Card", widget.Card().SetTitle(widget.Label("Card title").Bold()).SetBody(widget.Label("Card body"))).
-		Add("flow", "Flow", flow).
-		Add("scroll", "Scrolled", widget.ScrollPanel(longList()))
+		Add("flow", "FlowPanel", flow).
+		Add("scroll", "ScrollPanel", widget.ScrollPanel(longList()))
 }
 
 func longList() widget.Control {

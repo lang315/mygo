@@ -12,10 +12,11 @@ type CustomWidget struct {
 }
 
 // Custom makes a control that build draws with ui every frame it is
-// shown. build runs on the main thread while the package holds its lock:
-// read the control's state there, but call no setter and no Change from
-// it, which would wait for the lock forever. A nil build, or one that
-// returns a zero Element, shows nothing.
+// shown. build runs on the thread that draws frames while the package
+// holds its lock: read the control's own state there, but call no method
+// of any control (getters lock too) and no Change from it, which would
+// wait for the lock forever. A nil build, or one that returns a zero
+// Element, shows nothing.
 func Custom(build func(c *ui.Context) ui.Element) *CustomWidget {
 	w := &CustomWidget{fn: build}
 	w.init(w)

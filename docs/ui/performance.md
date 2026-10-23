@@ -73,7 +73,7 @@ sorting all of them again takes a dozen milliseconds, below one frame at
 ### Checking rows of a million
 
 `BenchmarkTableCheckedLarge` (in `ui/widget`) checks or unchecks one row of
-a widget `Table` of 1,000,000 rows, all checked: by a click on its checkbox,
+a widget `DataGridView` of 1,000,000 rows, all checked: by a click on its checkbox,
 and by `SetChecked`, then a frame. A click copies the checks ui changed
 back to the table in one step (`Selection.CopyFrom`); `SetChecked` hands ui
 only the keys it changed; and the header's checkbox takes the count the
