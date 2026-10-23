@@ -162,8 +162,8 @@ func newPattern(source string, sensitive bool) (pattern, error) {
 }
 
 // webKitRegexp reports what of source WebKit's content blockers do not
-// take: alternatives, counted repetitions, classes as \d, "^" but at the
-// start, and other than ASCII.
+// take: alternatives, counted repetitions, classes as \d, groups as (?:,
+// Go's \p, \z and [[:alpha:]], "^" but at the start, and other than ASCII.
 func webKitRegexp(source string) error {
 	class := false
 	for i := 0; i < len(source); i++ {
@@ -173,10 +173,13 @@ func webKitRegexp(source string) error {
 			return errors.New("not ASCII")
 		case c == '\\':
 			i++
-			if i < len(source) && strings.IndexByte("dDwWsSbB", source[i]) >= 0 {
+			if i < len(source) && strings.IndexByte("dDwWsSbBpPzAQEC", source[i]) >= 0 {
 				return fmt.Errorf("\\%c", source[i])
 			}
 		case class:
+			if c == '[' && strings.HasPrefix(source[i+1:], ":") {
+				return errors.New(`"[:"`)
+			}
 			class = c != ']'
 		case c == '[':
 			class = true
@@ -185,6 +188,8 @@ func webKitRegexp(source string) error {
 			}
 		case c == '|', c == '{':
 			return fmt.Errorf("%q", c)
+		case c == '(' && strings.HasPrefix(source[i+1:], "?"):
+			return errors.New(`"(?"`)
 		case c == '^' && i > 0:
 			return errors.New(`"^" but at the start`)
 		}
