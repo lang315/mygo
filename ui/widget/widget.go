@@ -54,7 +54,7 @@ func (c *common[W]) init(self *W) { c.self, c.id, c.focusIn = self, newID(), noV
 // caret, selection and scroll position; an open popup closes, and hiding
 // it takes its keyboard focus.
 func (c *common[W]) SetVisible(v bool) *W {
-	change(func() {
+	c.change(func() {
 		c.hidden = !v
 		if !v && c.focusIn != noView {
 			c.focusIn = noView
@@ -68,17 +68,17 @@ func (c *common[W]) SetVisible(v bool) *W {
 
 // OnClick runs fn when the widget is clicked: gota's EventBox, on any
 // widget. Buttons have their own OnClick.
-func (c *common[W]) OnClick(fn func()) *W { change(func() { c.click = fn }); return c.self }
+func (c *common[W]) OnClick(fn func()) *W { c.change(func() { c.click = fn }); return c.self }
 
 // ContextMenu shows items in a menu when the widget is right-clicked; no
 // items remove it. Set it again when the items change.
 func (c *common[W]) ContextMenu(items ...MenuItem) *W {
-	change(func() { c.menu = items })
+	c.change(func() { c.menu = items })
 	return c.self
 }
 
 // Focus moves the keyboard focus to the widget when it next draws.
-func (c *common[W]) Focus() *W { change(func() { c.wantFocus = true }); return c.self }
+func (c *common[W]) Focus() *W { c.change(func() { c.wantFocus = true }); return c.self }
 
 func (b *core) base() *core { return b }
 
@@ -96,13 +96,13 @@ func (c *common[W]) AssignTo(p **W) *W { *p = c.self; return c.self }
 func (c *common[W]) Visible() bool { mu.Lock(); defer mu.Unlock(); return !c.hidden }
 
 // SetDisabled disables the widget, or enables it again.
-func (c *common[W]) SetDisabled(d bool) *W { change(func() { c.disabled = d }); return c.self }
+func (c *common[W]) SetDisabled(d bool) *W { c.change(func() { c.disabled = d }); return c.self }
 
 // SetTooltip sets the text shown while the pointer rests on the widget.
-func (c *common[W]) SetTooltip(s string) *W { change(func() { c.tooltip = s }); return c.self }
+func (c *common[W]) SetTooltip(s string) *W { c.change(func() { c.tooltip = s }); return c.self }
 
 // OnFocusOut runs fn when the widget loses the keyboard focus.
-func (c *common[W]) OnFocusOut(fn func()) *W { change(func() { c.onFocusOut = fn }); return c.self }
+func (c *common[W]) OnFocusOut(fn func()) *W { c.change(func() { c.onFocusOut = fn }); return c.self }
 
 // direction is how a box lays out its children.
 type direction uint8

@@ -24,7 +24,7 @@ func GroupBox(title string) *GroupBoxWidget {
 // Add sets the widget inside the frame; the frame's title widget is
 // ignored.
 func (f *GroupBoxWidget) Add(w Control) *GroupBoxWidget {
-	change(func() {
+	f.change(func() {
 		if w != f.titleW {
 			f.child = w
 		}
@@ -35,7 +35,7 @@ func (f *GroupBoxWidget) Add(w Control) *GroupBoxWidget {
 // SetTitleWidget shows w as the title instead of the text; the frame's
 // child is ignored.
 func (f *GroupBoxWidget) SetTitleWidget(w Control) *GroupBoxWidget {
-	change(func() {
+	f.change(func() {
 		if w != f.child {
 			f.titleW = w
 		}
@@ -90,7 +90,7 @@ func Grid(colSpacing, rowSpacing int) *GridWidget {
 // rows. A widget attached again moves; one attached to a taken cell
 // replaces the widget there.
 func (g *GridWidget) Attach(w Control, col, row, width, height int) *GridWidget {
-	change(func() {
+	g.change(func() {
 		g.cells = slices.DeleteFunc(g.cells, func(have gridCell) bool {
 			return have.w == w || have.col == col && have.row == row
 		})
@@ -193,7 +193,7 @@ func TabControl() *TabControlWidget {
 
 // AddPage adds a page showing w under a tab labeled label.
 func (n *TabControlWidget) AddPage(label string, w Control) *TabControlWidget {
-	change(func() { n.labels, n.pages = append(n.labels, label), append(n.pages, w) })
+	n.change(func() { n.labels, n.pages = append(n.labels, label), append(n.pages, w) })
 	return n
 }
 
@@ -201,13 +201,13 @@ func (n *TabControlWidget) AddPage(label string, w Control) *TabControlWidget {
 func (n *TabControlWidget) Page() int { mu.Lock(); defer mu.Unlock(); return n.page.value }
 
 func (n *TabControlWidget) SetPage(i int) *TabControlWidget {
-	change(func() { n.page.set(i) })
+	n.change(func() { n.page.set(i) })
 	return n
 }
 
 // OnSwitch runs fn after the page shown changes.
 func (n *TabControlWidget) OnSwitch(fn func()) *TabControlWidget {
-	change(func() { n.onSwitch = fn })
+	n.change(func() { n.onSwitch = fn })
 	return n
 }
 
@@ -250,7 +250,7 @@ func Sidebar() *SidebarWidget {
 // Add adds a page named name, listed as title, showing w. A name already
 // there is ignored.
 func (s *SidebarWidget) Add(name, title string, w Control) *SidebarWidget {
-	change(func() {
+	s.change(func() {
 		if slices.Contains(s.names, name) {
 			return
 		}
@@ -261,7 +261,7 @@ func (s *SidebarWidget) Add(name, title string, w Control) *SidebarWidget {
 
 // Remove removes the page named name.
 func (s *SidebarWidget) Remove(name string) *SidebarWidget {
-	change(func() {
+	s.change(func() {
 		for i, n := range s.names {
 			if n == name {
 				s.names = append(s.names[:i], s.names[i+1:]...)
@@ -278,13 +278,13 @@ func (s *SidebarWidget) Remove(name string) *SidebarWidget {
 func (s *SidebarWidget) Selected() string { mu.Lock(); defer mu.Unlock(); return s.selected.value }
 
 func (s *SidebarWidget) Select(name string) *SidebarWidget {
-	change(func() { s.selected.set(name) })
+	s.change(func() { s.selected.set(name) })
 	return s
 }
 
 // SetMenuWidth sets the width of the list, in DIPs.
 func (s *SidebarWidget) SetMenuWidth(w float32) *SidebarWidget {
-	change(func() { s.width.set(w) })
+	s.change(func() { s.width.set(w) })
 	return s
 }
 
@@ -328,7 +328,7 @@ func Card() *CardWidget {
 
 // SetTitle shows w as the card's title; the card's body is ignored.
 func (k *CardWidget) SetTitle(w Control) *CardWidget {
-	change(func() {
+	k.change(func() {
 		if w != k.body {
 			k.title = w
 		}
@@ -338,7 +338,7 @@ func (k *CardWidget) SetTitle(w Control) *CardWidget {
 
 // SetBody shows w as the card's body; the card's title is ignored.
 func (k *CardWidget) SetBody(w Control) *CardWidget {
-	change(func() {
+	k.change(func() {
 		if w != k.title {
 			k.body = w
 		}
@@ -347,7 +347,7 @@ func (k *CardWidget) SetBody(w Control) *CardWidget {
 }
 
 // ShowBody shows the body, or hides it leaving the title.
-func (k *CardWidget) ShowBody(on bool) *CardWidget { change(func() { k.hideBody = !on }); return k }
+func (k *CardWidget) ShowBody(on bool) *CardWidget { k.change(func() { k.hideBody = !on }); return k }
 
 func (k *CardWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
@@ -379,7 +379,7 @@ func FlowPanel(spacing int) *FlowPanelWidget {
 }
 
 func (f *FlowPanelWidget) Add(ws ...Control) *FlowPanelWidget {
-	change(func() {
+	f.change(func() {
 		for _, w := range ws {
 			if !slices.Contains(f.items, w) {
 				f.items = append(f.items, w)
@@ -389,7 +389,7 @@ func (f *FlowPanelWidget) Add(ws ...Control) *FlowPanelWidget {
 	return f
 }
 
-func (f *FlowPanelWidget) Clear() *FlowPanelWidget { change(func() { f.items = nil }); return f }
+func (f *FlowPanelWidget) Clear() *FlowPanelWidget { f.change(func() { f.items = nil }); return f }
 
 func (f *FlowPanelWidget) build(c *ui.Context) ui.Element {
 	return ui.Row(c).Wrap().Gap(f.spacing).Children(func() {

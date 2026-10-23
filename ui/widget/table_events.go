@@ -15,14 +15,14 @@ type shortcut struct {
 // OnActivate runs fn with the key of a row double-clicked, or chosen when
 // Enter is pressed.
 func (t *DataGridViewWidget[T, K]) OnActivate(fn func(k K)) *DataGridViewWidget[T, K] {
-	change(func() { t.onActivate = fn })
+	t.change(func() { t.onActivate = fn })
 	return t
 }
 
 // OnKey runs fn when key is pressed with mods while the table has the
 // keyboard focus. Each call adds a key.
 func (t *DataGridViewWidget[T, K]) OnKey(key ui.Key, mods ui.Modifiers, fn func()) *DataGridViewWidget[T, K] {
-	change(func() { t.shortcuts = append(t.shortcuts, shortcut{key, mods, fn}) })
+	t.change(func() { t.shortcuts = append(t.shortcuts, shortcut{key, mods, fn}) })
 	return t
 }
 
@@ -31,7 +31,7 @@ func (t *DataGridViewWidget[T, K]) OnKey(key ui.Key, mods ui.Modifiers, fn func(
 // Selected: ui builds menus as it draws, under the package's lock, so the
 // items cannot be made from the rows then.
 func (t *DataGridViewWidget[T, K]) ContextMenu(items ...MenuItem) *DataGridViewWidget[T, K] {
-	change(func() { t.menu = items })
+	t.change(func() { t.menu = items })
 	return t
 }
 
@@ -39,14 +39,14 @@ func (t *DataGridViewWidget[T, K]) ContextMenu(items ...MenuItem) *DataGridViewW
 // resizes, moves or fits a column: once a frame while a column is dragged.
 // Keep it to give SetColumnsLayout.
 func (t *DataGridViewWidget[T, K]) OnColumnsChange(fn func(ui.TableLayout)) *DataGridViewWidget[T, K] {
-	change(func() { t.onColumns = fn })
+	t.change(func() { t.onColumns = fn })
 	return t
 }
 
 // SetColumnsLayout arranges the columns as l, which OnColumnsChange gave:
 // their order and widths by title ("#" for the index column).
 func (t *DataGridViewWidget[T, K]) SetColumnsLayout(l ui.TableLayout) *DataGridViewWidget[T, K] {
-	change(func() { t.layout = &l })
+	t.change(func() { t.layout = &l })
 	return t
 }
 

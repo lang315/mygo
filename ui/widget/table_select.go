@@ -64,7 +64,7 @@ func (s *keys[K]) keep(index map[K]int) {
 // CheckboxColumn shows a check box first in each row, and one in the
 // header that checks the rows shown.
 func (t *DataGridViewWidget[T, K]) CheckboxColumn() *DataGridViewWidget[T, K] {
-	change(func() { t.checks = true })
+	t.change(func() { t.checks = true })
 	return t
 }
 
@@ -119,7 +119,7 @@ func (t *DataGridViewWidget[T, K]) IsChecked(k K) bool {
 
 // SetChecked checks, or unchecks, the rows of keys ks.
 func (t *DataGridViewWidget[T, K]) SetChecked(ks []K, on bool) *DataGridViewWidget[T, K] {
-	change(func() {
+	t.change(func() {
 		for _, k := range ks {
 			if _, ok := t.index[k]; ok || !on {
 				t.checked.set(k, on)
@@ -132,7 +132,7 @@ func (t *DataGridViewWidget[T, K]) SetChecked(ks []K, on bool) *DataGridViewWidg
 // AutoCheck unchecks the rows selected that show when at least half of
 // them are checked, and checks them all otherwise.
 func (t *DataGridViewWidget[T, K]) AutoCheck() *DataGridViewWidget[T, K] {
-	change(func() {
+	t.change(func() {
 		ks, on := t.shown(&t.chosen.value), 0
 		for _, k := range ks {
 			if t.checked.value.Has(k) {

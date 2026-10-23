@@ -42,11 +42,11 @@ func (d *Dialog) SetSubtitle(s string) *Dialog {
 }
 
 // OnBeforeRun runs fn in Run, before the dialog shows.
-func (d *Dialog) OnBeforeRun(fn func()) *Dialog { change(func() { d.onBeforeRun = fn }); return d }
+func (d *Dialog) OnBeforeRun(fn func()) *Dialog { d.change(func() { d.onBeforeRun = fn }); return d }
 
 // SetDeletable lets the user close the dialog with the window's close
 // button or keys, or not. Close and the parent closing close it anyway.
-func (d *Dialog) SetDeletable(on bool) *Dialog { change(func() { d.deletable = on }); return d }
+func (d *Dialog) SetDeletable(on bool) *Dialog { d.change(func() { d.deletable = on }); return d }
 
 // SetResizable lets the user resize the dialog, or not.
 func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return d }

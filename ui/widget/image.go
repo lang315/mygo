@@ -83,7 +83,7 @@ func PictureBox(data []byte, w, h float32) *PictureBoxWidget {
 // SetImage shows another image.
 func (i *PictureBoxWidget) SetImage(data []byte) *PictureBoxWidget {
 	bmp := decodeImage(data) // outside mu: decoding takes a while
-	change(func() { i.bmp = bmp })
+	i.change(func() { i.bmp = bmp })
 	return i
 }
 

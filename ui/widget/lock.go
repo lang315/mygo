@@ -27,10 +27,16 @@ var lastID atomic.Int64
 // element.
 func newID() int { return int(lastID.Add(1)) }
 
-// shown are the windows on screen, which a change redraws. Guarded by mu.
-var shown = map[*mygo.Window]struct{}{}
+// shown are the windows on screen, with the Form each shows, which a
+// change redraws if it holds the widget. Guarded by mu.
+var shown = map[*mygo.Window]*Form{}
 
-// change runs fn under mu, then redraws the windows on screen.
+// invalidate redraws a window; tests replace it to see which ones change
+// redraws.
+var invalidate = func(w *mygo.Window) { w.Invalidate() }
+
+// change runs fn under mu, then redraws the windows on screen: for a change
+// that is no widget's, as the state a Custom control's build reads.
 func change(fn func()) {
 	mu.Lock()
 	fn()
@@ -40,6 +46,35 @@ func change(fn func()) {
 	}
 	mu.Unlock()
 	for _, w := range wins {
-		w.Invalidate()
+		invalidate(w)
+	}
+}
+
+// change runs fn under mu, then redraws the windows that hold the widget:
+// those whose view built it, or keeps its state while it is hidden or out
+// of the view for a while.
+func (b *core) change(fn func()) {
+	mu.Lock()
+	fn()
+	var wins []*mygo.Window
+	for w, f := range shown {
+		if _, ok := f.keep.widgets[b.id]; ok {
+			wins = append(wins, w)
+		}
+	}
+	mu.Unlock()
+	for _, w := range wins {
+		invalidate(w)
+	}
+}
+
+// change runs fn under mu, then redraws the window, if shown.
+func (w *Form) change(fn func()) {
+	mu.Lock()
+	fn()
+	n := w.win
+	mu.Unlock()
+	if n != nil {
+		invalidate(n)
 	}
 }
