@@ -102,8 +102,9 @@ UI as they read other apps (see [Accessibility](accessibility.md)).
   any element, which the pointer, text input and accessibility follow.
 - [Custom widgets](custom-widgets.md): the widgets without a look that every
   widget is built on, and widgets of your own.
-- [Widgets that live on](widget.md): package `ui/widget`, widgets made
-  once and changed from any goroutine, as in GTK.
+- [Widgets that live on](widget.md): package `ui/widget`, the layer for an
+  app's forms, dialogs and tables: controls you make once, keep, and change
+  from any goroutine, as in WinForms.
 - [Windows with native UI](windows.md): window options, title bars drawn by
   the view, and vibrancy.
 - [Testing](testing.md): running a view without a window, as fast as a unit
