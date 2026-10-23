@@ -3,6 +3,7 @@ package widget
 import (
 	"image/color"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -224,6 +225,49 @@ func TestUnsetPropertiesKeepTheButtonsHover(t *testing.T) {
 	after := pixelLeft(t, tt, "native")
 	if before == after {
 		t.Fatalf("ui.Button's own hover color is gone: %v both", before)
+	}
+}
+
+func TestStyleTransitionFades(t *testing.T) {
+	const d = 200 * time.Millisecond
+	l := Label("fade").Apply(card().Background(Fixed(ui.RGB(0, 0, 0))).
+		Hover(NewStyle().Background(Fixed(ui.RGB(240, 240, 240)))).Transition(d))
+	tt := tester(t, VBox(0).Add(l, Label("away")))
+	tt.Move(centerOf(t, tt, "fade"))
+	tt.Advance(d / 2)
+	mid := pixel(t, tt, "fade", 4)
+	if mid.R < 20 || mid.R > 220 {
+		t.Fatalf("halfway %v, want between black and white", mid)
+	}
+	tt.Advance(d)
+	if end := pixel(t, tt, "fade", 4); !near(end, ui.RGB(240, 240, 240)) {
+		t.Fatalf("after the transition %v, want the hover color", end)
+	}
+}
+
+func TestStyleTextColorFades(t *testing.T) {
+	const d = 200 * time.Millisecond
+	l := Label("TTTTTTTT").Apply(NewStyle().TextColor(Fixed(ui.RGB(0, 0, 0))).
+		Hover(NewStyle().TextColor(Fixed(ui.RGB(230, 0, 0)))).Transition(d)).TextSize(XXXL)
+	tt := tester(t, VBox(0).Add(l, Label("away")))
+	reddest := func() uint8 {
+		b, img, m := find(t, tt, "TTTTTTTT"), tt.Image(), uint8(0)
+		for y := int(b.Y); y < int(b.Y+b.H); y++ {
+			for x := int(b.X); x < int(b.X+b.W); x++ {
+				if c := img.RGBAAt(x, y); c.G < 60 && c.R > m {
+					m = c.R
+				}
+			}
+		}
+		return m
+	}
+	tt.Move(centerOf(t, tt, "TTTTTTTT"))
+	tt.Advance(d / 2)
+	mid := reddest()
+	tt.Advance(d)
+	end := reddest()
+	if !(mid > 30 && mid < end) {
+		t.Fatalf("text red halfway %d, at the end %d: want strictly between 30 and the end", mid, end)
 	}
 }
 
