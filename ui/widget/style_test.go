@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"image/color"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -48,5 +49,41 @@ func TestEveryStyleMethodBuilds(t *testing.T) {
 	tt := tester(t, l)
 	if !tt.HasText("s") {
 		t.Fatalf("styled label not shown: %q", tt.Texts())
+	}
+}
+
+// restyleLocked merges the control's styles under the package's lock, to
+// read the merge without a frame.
+func (b *core) restyleLocked() { mu.Lock(); defer mu.Unlock(); b.restyle() }
+
+// pixel returns the color drawn in the control showing s, clear of its
+// text and of corners up to r DIPs round: at its vertical middle, r+2 DIPs
+// in from its left edge. The tester draws at scale 1.
+func pixel(t *testing.T, tt *ui.Tester, s string, r float32) color.RGBA {
+	t.Helper()
+	b := find(t, tt, s)
+	return tt.Image().RGBAAt(int(b.X+r+2), int(b.Y+b.H/2))
+}
+
+// near reports whether c is within 8 of want on each channel.
+func near(c color.RGBA, want ui.Color) bool {
+	d := func(a, b uint8) bool { return a-b < 9 || b-a < 9 }
+	return d(c.R, want.R) && d(c.G, want.G) && d(c.B, want.B)
+}
+
+func TestApplyStylesAControl(t *testing.T) {
+	l := Label("styled").Apply(NewStyle().Padding(3).Background(Fixed(red)))
+	tt := tester(t, l)
+	if c := pixel(t, tt, "styled", 0); !near(c, red) {
+		t.Fatalf("background %v, want red", c)
+	}
+}
+
+func TestMutedThenTextColorKeepsTheColor(t *testing.T) {
+	// Today's order still works: a later TextColor wins over Muted.
+	l := Label("m").Muted().TextColor(red)
+	l.base().restyleLocked()
+	if l.style.text.fixed != red {
+		t.Fatalf("text %v, want red", l.style.text)
 	}
 }
