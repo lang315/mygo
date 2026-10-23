@@ -710,9 +710,11 @@ func (p *Painter) textBackgrounds(l *text.Layout, x, y float32, ts textStyle, sp
 	if l == nil || ts.background.A == 0 && sp == nil {
 		return
 	}
+	// Inline transforms do not change while the text paints; look for them once.
+	clips := !p.transform.Set && !p.inlineTransforms()
 	for li := range l.Lines {
 		line := &l.Lines[li]
-		if !p.transform.Set && !p.inlineTransforms() && (y+line.Y > p.clip.Y+p.clip.H || y+line.Y+line.Height < p.clip.Y) {
+		if clips && (y+line.Y > p.clip.Y+p.clip.H || y+line.Y+line.Height < p.clip.Y) {
 			continue
 		}
 		if ts.background.A > 0 && line.Width > 0 {

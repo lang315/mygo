@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -27,6 +28,9 @@ type Backend struct {
 	running bool
 
 	signaled atomic.Bool
+	// posted are the functions post runs on the main thread.
+	postedMu sync.Mutex
+	posted   []func()
 
 	windows map[uintptr]*window // by HWND
 	// languages are those SetLanguages told: the first is the language
@@ -228,6 +232,24 @@ func (b *Backend) Signal() {
 	postMessage(b.appHwnd, wmAppDispatch, 0, 0)
 }
 
+// post runs fn on the main thread, for the backend's own goroutines.
+func (b *Backend) post(fn func()) {
+	b.postedMu.Lock()
+	b.posted = append(b.posted, fn)
+	b.postedMu.Unlock()
+	postMessage(b.appHwnd, wmAppRun, 0, 0)
+}
+
+func (b *Backend) runPosted() {
+	b.postedMu.Lock()
+	posted := b.posted
+	b.posted = nil
+	b.postedMu.Unlock()
+	for _, fn := range posted {
+		fn()
+	}
+}
+
 func (b *Backend) Step() {
 	procMsgWaitForMultipleObjectsEx.Call(0, 0, 500, qsAllInput, mwmoInputAvailable)
 	var m msg
@@ -349,6 +371,9 @@ func (b *Backend) appMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 		b.h.Dispatch()
 		return 0, true
 	case wmAppWake:
+		return 0, true
+	case wmAppRun:
+		b.runPosted()
 		return 0, true
 	case wmAppCookieView:
 		b.closeCookieViewNow()

@@ -233,10 +233,12 @@ func (w *window) setUp(controller uintptr) {
 
 	w.addUserScripts()
 
-	var token int64
-	tok := uintptr(unsafe.Pointer(&token))
+	// The add methods write a registration token. Its address is taken in
+	// each call (go:uintptrescapes), as a uintptr saved earlier goes stale
+	// when the goroutine stack moves.
+	var tok int64
 	add := func(index int, fn func(sender, args uintptr)) {
-		withHandler(fn, func(h uintptr) uintptr { return comCall(w.webview, index, h, tok) })
+		withHandler(fn, func(h uintptr) uintptr { return comCall(w.webview, index, h, uintptr(unsafe.Pointer(&tok))) })
 	}
 	add(wvAddNavigationStarting, w.navigationStarting)
 	add(wvAddContentLoading, func(_, _ uintptr) { w.h.NavigationCommitted(w.URL()) })
@@ -270,7 +272,7 @@ func (w *window) setUp(controller uintptr) {
 	add(wvAddNewWindowRequested, w.newWindowRequested)
 	add(wvAddPermissionRequested, w.permissionRequested)
 	if wv4 := queryInterface(w.webview, &iidICoreWebView2_4); wv4 != 0 {
-		withHandler(w.downloadStarting, func(h uintptr) uintptr { return comCall(wv4, wv4AddDownloadStarting, h, tok) })
+		withHandler(w.downloadStarting, func(h uintptr) uintptr { return comCall(wv4, wv4AddDownloadStarting, h, uintptr(unsafe.Pointer(&tok))) })
 		release(wv4)
 	}
 	add(wvAddWindowCloseRequested, func(_, _ uintptr) { w.h.ClosedByPage() })
@@ -290,8 +292,9 @@ func (w *window) setUp(controller uintptr) {
 	for _, scheme := range o.Schemes {
 		w.addFilter("http://" + scheme + ".localhost/*")
 	}
+	w.filterAllRequests()
 	withHandler(w.acceleratorKeyPressed, func(h uintptr) uintptr {
-		return comCall(controller, ctlAddAcceleratorKeyPressed, h, tok)
+		return comCall(controller, ctlAddAcceleratorKeyPressed, h, uintptr(unsafe.Pointer(&tok)))
 	})
 
 	if w.host != nil {
@@ -383,6 +386,7 @@ func (w *window) navigationStarting(_, args uintptr) {
 		clear(w.htmlFor)
 	}
 	w.loading = true
+	w.navigating = uri
 	w.h.NavigationStarted(uri)
 }
 
@@ -695,6 +699,9 @@ func (w *window) addUserScripts() {
 		// After the bridge, which it tells.
 		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.titleBarScript()})
 	}
+	if w.hidingScript != "" {
+		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.hidingScript, AllFrames: true})
+	}
 	gen := w.scriptGen
 	for _, us := range scripts {
 		src := us.Source
@@ -1003,6 +1010,9 @@ func (w *window) resourceRequested(_, args uintptr) {
 	var resource int32
 	comCall(args, resReqGetResourceContext, uintptr(unsafe.Pointer(&resource)))
 	const document = 1 // COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
+	if w.contentFilter != nil && w.contentFilter(args, req, uri, resource) {
+		return
+	}
 
 	if html, ok := w.htmlFor[uri]; ok && resource == document {
 		w.respond(args, 0, http.StatusOK, http.Header{"Content-Type": {"text/html; charset=utf-8"}}, []byte(html))
