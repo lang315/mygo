@@ -264,13 +264,19 @@ func TestStyleTextColorFadesWhenTheBaseSetsOneToo(t *testing.T) {
 		}
 		return m
 	}
+	// The thresholds are relative to what this test measures at rest and at
+	// the end: how much red a glyph pixel reaches depends on the platform's
+	// text coverage, and the ease-out curve is most of the way at d/2, so the
+	// middle is sampled at d/4.
+	rest := int(reddest())
 	tt.Move(centerOf(t, tt, "TTTTTTTT"))
-	tt.Advance(d / 2)
-	mid := reddest()
+	tt.Advance(d / 4)
+	mid := int(reddest())
 	tt.Advance(d)
-	end := reddest()
-	if !(end >= 200 && mid > 30 && mid+20 < end) {
-		t.Fatalf("text red halfway %d, at the end %d: want the end near 230 and halfway at least 20 below it, above 30", mid, end)
+	end := int(reddest())
+	span := end - rest
+	if span <= 100 || mid <= rest+span/10 || mid >= end-span/10 {
+		t.Fatalf("text red at rest %d, a quarter into the fade %d, at the end %d: want the end more than 100 above rest and the middle at least a tenth of that from both", rest, mid, end)
 	}
 }
 
