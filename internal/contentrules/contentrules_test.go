@@ -133,7 +133,7 @@ func TestParseErrors(t *testing.T) {
 func TestParseTakes(t *testing.T) {
 	for _, filter := range []string{`[^a-z]x`, `(ab)?c`, `(ab)+c`, `.*?x`, `x$`, `^x`, `\\/x`, `[a\\-z]`, `a\\.b\\?c`,
 		`[.]x`, `a\\|b`, `[|{^]`, `\\(?x`, `[(?]`, `[[]`,
-		`\\^*`, `^a*`, `[^*]`, `$`, `^$`, `a$`, `[$]*`, `\\$*`, `^(a)*`,
+		`\\^*`, `^a*`, `[^*]`, `$`, `^$`, `a$`, `[$]*`, `\\$*`, `^(a)*`, `[a$*]`,
 		`(?:a)b`, `(?<n>x)`, `a\\pL`, `a\\z`, `[[:alpha:]]`, `^[^:]+://+([^:/]+\\.)?ex\\.com[/:]`} {
 		rules := `[{"trigger":{"url-filter":"` + filter + `","unknown":1},"action":{"type":"block"}}]`
 		if _, err := Parse(rules); err != nil {

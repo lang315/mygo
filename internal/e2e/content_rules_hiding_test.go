@@ -14,7 +14,7 @@ import (
 )
 
 // TestContentRulesHiding applies lists with what the script that hides
-// elements on Windows must live with: a pattern JavaScript rejects (^*, which
+// elements on Windows must live with: a pattern JavaScript rejects ((?<n>a)(?<n>b), which
 // Go takes), a selector that is not a rule, and a list of 200,000 selectors.
 // Each leaves the banner hidden and the rest of the page be.
 func TestContentRulesHiding(t *testing.T) {
@@ -34,7 +34,7 @@ func TestContentRulesHiding(t *testing.T) {
 		many = append(many, hide(".*", fmt.Sprintf(".n%d", i)))
 	}
 	for _, c := range []struct{ name, rules string }{
-		{"pattern", "[" + hide("^*", ".bad") + "," + hide(".*", ".banner") + "]"},
+		{"pattern", "[" + hide("(?<n>a)(?<n>b)", ".bad") + "," + hide(".*", ".banner") + "]"},
 		{"selector", "[" + hide(".*", ".bad{") + "," + hide(".*", ".banner") + "]"},
 		{"many", "[" + strings.Join(append(many, hide(".*", ".banner")), ",") + "]"},
 	} {
