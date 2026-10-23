@@ -68,7 +68,7 @@ func pixel(t *testing.T, tt *ui.Tester, s string, r float32) color.RGBA {
 
 // near reports whether c is within 8 of want on each channel.
 func near(c color.RGBA, want ui.Color) bool {
-	d := func(a, b uint8) bool { return a-b < 9 || b-a < 9 }
+	d := func(a, b uint8) bool { x := int(a) - int(b); return x > -9 && x < 9 }
 	return d(c.R, want.R) && d(c.G, want.G) && d(c.B, want.B)
 }
 
@@ -245,7 +245,10 @@ func TestStyleTransitionFades(t *testing.T) {
 	}
 }
 
-func TestStyleTextColorFades(t *testing.T) {
+// The documented case: the base style sets a TextColor too, so the text has
+// a color to fade from. (With a variant's alone it jumps: the style cannot
+// know the color the control's text rests in.)
+func TestStyleTextColorFadesWhenTheBaseSetsOneToo(t *testing.T) {
 	const d = 200 * time.Millisecond
 	l := Label("TTTTTTTT").Apply(NewStyle().TextColor(Fixed(ui.RGB(0, 0, 0))).
 		Hover(NewStyle().TextColor(Fixed(ui.RGB(230, 0, 0)))).Transition(d)).TextSize(XXXL)
@@ -266,8 +269,8 @@ func TestStyleTextColorFades(t *testing.T) {
 	mid := reddest()
 	tt.Advance(d)
 	end := reddest()
-	if !(mid > 30 && mid < end) {
-		t.Fatalf("text red halfway %d, at the end %d: want strictly between 30 and the end", mid, end)
+	if !(end >= 200 && mid > 30 && mid+20 < end) {
+		t.Fatalf("text red halfway %d, at the end %d: want the end near 230 and halfway at least 20 below it, above 30", mid, end)
 	}
 }
 

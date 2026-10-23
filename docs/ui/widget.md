@@ -239,7 +239,10 @@ widget.VBox(8).Add(
   colors included. A style that sets a background turns that hover off:
   give it a `Hover` too.
 - **Transition** fades the background, border and text colors as states
-  change.
+  change. The text color fades only if the style sets a `TextColor` of its
+  own besides the variant's, as a style cannot know the color the control's
+  text rests in (a button's is the theme's `RoleAccentText`); otherwise the
+  text jumps.
 - **A Style is a value.** Every method returns a new one and none changes
   an earlier one, so one Style can be shared by controls and goroutines.
   To change a control's look, `Apply` another.

@@ -363,7 +363,10 @@ func (s Style) Italic() Style { s.set |= pItalic; return s }
 func (s Style) Mono() Style   { s.set |= pMono; return s }
 
 // Transition fades the background, border and text colors over d as they
-// change, as a hover does; 0 turns it off.
+// change, as a hover does; 0 turns it off. The text color fades only if
+// the style sets a TextColor of its own, besides the one a variant sets:
+// a Style cannot know the color a control's text rests in (a Button's is
+// the theme's AccentText), so without it the text jumps.
 func (s Style) Transition(d time.Duration) Style {
 	s.transition, s.set = max(d, 0), s.set|pTransition
 	return s

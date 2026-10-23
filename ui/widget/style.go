@@ -282,8 +282,9 @@ func (c *common[W]) Border(width float32, col ui.Color) *W {
 // Radius rounds the widget's corners by n theme units.
 func (c *common[W]) Radius(n float32) *W { return c.own(func(s Style) Style { return s.Radius(n) }) }
 
-// SetSize sets the widget's width and height in DIPs; 0 keeps the natural
-// size.
+// SetSize sets the widget's width and height in DIPs. A 0 leaves that
+// dimension as it was: the natural size if it was never set, and there is
+// no way back to it once it is.
 func (c *common[W]) SetSize(w, h float32) *W {
 	return c.own(func(s Style) Style {
 		if w > 0 {
