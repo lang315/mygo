@@ -30,6 +30,16 @@ func (k *keeper) begin() {
 	keeping, lastKeeper = k, k
 }
 
+// hold registers b in the view being built without building it, so a
+// change to a widget hidden in this frame still finds the window, and end
+// keeps its state.
+func (k *keeper) hold(b *core) {
+	b.builtIn = building
+	if _, ok := k.widgets[b.id]; !ok {
+		k.widgets[b.id] = weak.Make(b)
+	}
+}
+
 // key keys the next element for b: globally the first time the frame
 // builds b, and under its parent for a widget shown in two places.
 func (k *keeper) key(c *ui.Context, b *core) {

@@ -122,6 +122,7 @@ var axis direction
 func render(c *ui.Context, w Control) ui.Element {
 	b := w.base()
 	if b.hidden {
+		keeping.hold(b)
 		return ui.Element{}
 	}
 	keeping.key(c, b)
@@ -172,5 +173,7 @@ func content(w Control) func(c *ui.Context) {
 }
 
 // View returns a ui view showing w alone, for a ui.Tester or a window of
-// your own: mygo.WindowOptions{Content: ui.View(widget.View(w))}.
+// your own: mygo.WindowOptions{Content: ui.View(widget.View(w))}. A setter
+// does not redraw a window that shows a View, as only a Form's windows are
+// tracked: Invalidate it yourself.
 func View(w Control) func(c *ui.Context) { return content(w) }

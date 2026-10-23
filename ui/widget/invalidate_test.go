@@ -14,7 +14,18 @@ func recordInvalidations(t *testing.T) (redrawn func() map[*mygo.Window]int) {
 	var rec sync.Mutex
 	got := map[*mygo.Window]int{}
 	prev := invalidate
-	invalidate = func(w *mygo.Window) { rec.Lock(); got[w]++; rec.Unlock() }
+	invalidate = func(w *mygo.Window) {
+		// Redrawing a window waits for the main thread, which may be
+		// building a view under mu: change redraws once mu is released.
+		if !mu.TryLock() {
+			t.Error("invalidated under mu")
+		} else {
+			mu.Unlock()
+		}
+		rec.Lock()
+		got[w]++
+		rec.Unlock()
+	}
 	t.Cleanup(func() { invalidate = prev })
 	return func() map[*mygo.Window]int {
 		rec.Lock()
@@ -34,11 +45,16 @@ func showFrame(t *testing.T, content Control) (*Form, *mygo.Window) {
 	t.Helper()
 	f := NewForm("Invalidate", 300, 200)
 	f.SetContent(content)
+	return f, showFormFrame(t, f)
+}
+
+func showFormFrame(t *testing.T, f *Form) *mygo.Window {
+	t.Helper()
 	f.Show()
 	t.Cleanup(f.Close)
 	fw := lastFake(t)
 	mygo.RunOnMain(func() { fw.FakeSurface().Frame() })
-	return f, f.Native()
+	return f.Native()
 }
 
 func wantRedrawn(t *testing.T, got map[*mygo.Window]int, want ...*mygo.Window) {
@@ -91,11 +107,10 @@ func TestChangeOfAWidgetNoWindowBuiltRedrawsNothing(t *testing.T) {
 
 func TestChangeOfAHiddenWidgetRedrawsItsWindow(t *testing.T) {
 	l := Label("hidden soon")
-	f, w := showFrame(t, VBox(0).Add(l))
+	_, w := showFrame(t, VBox(0).Add(l))
 	l.SetVisible(false)
 	fw := lastFake(t)
 	mygo.RunOnMain(func() { fw.FakeSurface().Frame() })
-	_ = f
 	redrawn := recordInvalidations(t)
 	l.SetText("while hidden")
 	wantRedrawn(t, redrawn(), w)
@@ -129,4 +144,36 @@ func TestOneChangeAmongTwentyWindowsRedrawsOne(t *testing.T) {
 	redrawn := recordInvalidations(t)
 	labels[7].SetText("changed")
 	wantRedrawn(t, redrawn(), wins[7])
+}
+
+// A widget hidden when its window first draws, as an error label is until
+// there is an error, still tells the window when it shows.
+func TestShowingAWidgetHiddenFromTheStartRedrawsItsWindow(t *testing.T) {
+	l := Label("error").SetVisible(false)
+	_, w := showFrame(t, VBox(0).Add(l))
+	redrawn := recordInvalidations(t)
+	l.SetVisible(true)
+	wantRedrawn(t, redrawn(), w)
+}
+
+func TestDialogSubtitleShownAfterBeingEmptyRedrawsTheDialog(t *testing.T) {
+	d := NewDialog(nil, "Title", "", 300, 200, Label("content"))
+	w := showFormFrame(t, d.Form)
+	redrawn := recordInvalidations(t)
+	d.SetSubtitle("later")
+	wantRedrawn(t, redrawn(), w)
+}
+
+// A widget in two windows, hidden in both, is held by both.
+func TestShowingAWidgetHiddenInTwoWindowsRedrawsBoth(t *testing.T) {
+	l := Label("both")
+	_, wa := showFrame(t, VBox(0).Add(l))
+	_, wb := showFrame(t, VBox(0).Add(l))
+	l.SetVisible(false)
+	for _, fw := range fb.Windows()[len(fb.Windows())-2:] {
+		mygo.RunOnMain(func() { fw.FakeSurface().Frame() })
+	}
+	redrawn := recordInvalidations(t)
+	l.SetVisible(true)
+	wantRedrawn(t, redrawn(), wa, wb)
 }
