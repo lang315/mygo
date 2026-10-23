@@ -271,6 +271,51 @@ func TestStyleTextColorFades(t *testing.T) {
 	}
 }
 
+// Apply while frames build: the merge is made under the package's lock
+// (go test -race sees if it is not), and the frame after the last call
+// shows its style.
+func TestApplyFromAnotherGoroutineWhileFramesBuild(t *testing.T) {
+	a := card().Background(Fixed(red))
+	b := card().Background(Fixed(blue))
+	l := Label("race")
+	tt := tester(t, l)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 200 {
+			if i%2 == 0 {
+				l.Apply(a)
+			} else {
+				l.Apply(b)
+			}
+		}
+	}()
+	for running := true; running; {
+		tt.Frame()
+		select {
+		case <-done:
+			running = false
+		default:
+		}
+	}
+	tt.Frame()
+	if c := pixel(t, tt, "race", 4); !near(c, blue) { // the 200th call, i = 199, applies b
+		t.Fatalf("last Apply not shown: %v", c)
+	}
+}
+
+// The docs say so: a style that sets a background gives a static one, unless
+// it has a Hover variant too.
+func TestStyleStaticBackgroundTurnsTheButtonsHoverOff(t *testing.T) {
+	b := Button("stat").Apply(card().Background(Fixed(red)))
+	tt := tester(t, VBox(0).Add(b, Label("away")))
+	before := pixelLeft(t, tt, "stat")
+	tt.Move(centerOf(t, tt, "stat"))
+	if after := pixelLeft(t, tt, "stat"); after != before {
+		t.Fatalf("hover changed a static background: %v then %v", before, after)
+	}
+}
+
 func TestStyleBadValuesDoNotPanic(t *testing.T) {
 	l := Label("bad").Apply(NewStyle().Opacity(2).Padding(-3).Radius(1, 2, 3).Blur(-1))
 	tt := tester(t, l)

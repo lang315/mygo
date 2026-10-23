@@ -204,6 +204,46 @@ any control (getters lock too) and no `Change`, which would wait forever.
 A control made of other controls needs no `Custom`: return a `VBox` of
 them from a function of your own.
 
+## Styles
+
+A `widget.Style` is a set of properties, made once and shared by as many
+controls as you like, the way a CSS class is. `Apply` gives a control its
+styles; a later one wins, and the control's own methods (`Padding`,
+`Bold`, …) win over them all:
+
+```go
+card := widget.NewStyle().Padding(4).Radius(3).
+	Background(widget.RoleSurface).Shadow(0, 4, 12, 0, widget.Fixed(ui.RGBA(0, 0, 0, 0.12))).
+	Hover(widget.NewStyle().Background(widget.RoleSurfaceHover)).
+	Pressed(widget.NewStyle().Background(widget.RoleSurfacePressed)).
+	Dark(widget.NewStyle().Shadow(0, 4, 12, 0, widget.Fixed(ui.RGBA(0, 0, 0, 0.4)))).
+	Transition(150 * time.Millisecond)
+
+widget.VBox(8).Add(
+	widget.Label("Inbox").Apply(card),
+	widget.Label("Drafts").Apply(card),
+	widget.Label("Sent").Apply(card).Bold(),
+)
+```
+
+- **Units.** Padding, margin and radius are in theme units, the theme's
+  `Spacing` (4 DIPs): Tailwind's scale, where `p-4` is `Padding(4)`.
+  Border widths, sizes, shadows and blur are in DIPs.
+- **Colors** are `widget.Fixed(c)`, `widget.Hex("#2563eb")`, or a role of
+  the theme, `widget.RoleSurface`, `RoleText`, `RoleAccent`…, which
+  follows it, dark included.
+- **Variants** apply on top while their state holds, in this order, a later
+  one winning: `Dark`, `Hover`, `Focused`, `Pressed`, `Disabled`. A
+  state's variant can have a `Dark` of its own, as Tailwind's `dark:hover:`.
+- **What a style does not set keeps the control's own look**, its own hover
+  colors included. A style that sets a background turns that hover off:
+  give it a `Hover` too.
+- **Transition** fades the background, border and text colors as states
+  change.
+- **A Style is a value.** Every method returns a new one and none changes
+  an earlier one, so one Style can be shared by controls and goroutines.
+  To change a control's look, `Apply` another.
+
 ## DataGridView
 
 ```go
@@ -262,7 +302,9 @@ the app's appearance, which every window follows, and `IsDark` reports it.
 
 Style methods take theme units of 4 DIPs, with half steps: `Padding(2)` is
 8 DIPs. Box spacing (`VBox(8)`) and `SetSize` are in DIPs. Colors come from
-the theme (`Muted`) or `ui.RGB`.
+the theme (`Muted`) or `ui.RGB`. To share a look between controls, or to
+style hover, focus, pressed, disabled and dark states, see
+[Styles](#styles).
 
 | Method | gota's classes |
 |---|---|
