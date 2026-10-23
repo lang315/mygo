@@ -6,24 +6,24 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// FrameWidget draws a border with a title around one widget.
-type FrameWidget struct {
-	common[FrameWidget]
+// GroupBoxWidget draws a border with a title around one widget.
+type GroupBoxWidget struct {
+	common[GroupBoxWidget]
 	title  string
 	titleW Control
 	child  Control
 }
 
-// Frame makes a frame titled title.
-func Frame(title string) *FrameWidget {
-	f := &FrameWidget{title: title}
+// GroupBox makes a frame titled title.
+func GroupBox(title string) *GroupBoxWidget {
+	f := &GroupBoxWidget{title: title}
 	f.init(f)
 	return f
 }
 
 // Add sets the widget inside the frame; the frame's title widget is
 // ignored.
-func (f *FrameWidget) Add(w Control) *FrameWidget {
+func (f *GroupBoxWidget) Add(w Control) *GroupBoxWidget {
 	change(func() {
 		if w != f.titleW {
 			f.child = w
@@ -34,7 +34,7 @@ func (f *FrameWidget) Add(w Control) *FrameWidget {
 
 // SetTitleWidget shows w as the title instead of the text; the frame's
 // child is ignored.
-func (f *FrameWidget) SetTitleWidget(w Control) *FrameWidget {
+func (f *GroupBoxWidget) SetTitleWidget(w Control) *GroupBoxWidget {
 	change(func() {
 		if w != f.child {
 			f.titleW = w
@@ -43,7 +43,7 @@ func (f *FrameWidget) SetTitleWidget(w Control) *FrameWidget {
 	return f
 }
 
-func (f *FrameWidget) build(c *ui.Context) ui.Element {
+func (f *GroupBoxWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
 	return ui.Column(c).Gap(t.Space(2)).Padding(t.Space(3)).Border(1, t.Border).Radius(t.Radius).Children(func() {
 		outer := axis
@@ -144,19 +144,19 @@ func (g *GridWidget) build(c *ui.Context) ui.Element {
 	})
 }
 
-// ScrolledWidget scrolls a widget larger than its room.
-type ScrolledWidget struct {
-	common[ScrolledWidget]
+// ScrollPanelWidget scrolls a widget larger than its room.
+type ScrollPanelWidget struct {
+	common[ScrollPanelWidget]
 	child Control
 }
 
-func Scrolled(w Control) *ScrolledWidget {
-	s := &ScrolledWidget{child: w}
+func ScrollPanel(w Control) *ScrollPanelWidget {
+	s := &ScrollPanelWidget{child: w}
 	s.init(s)
 	return s
 }
 
-func (s *ScrolledWidget) build(c *ui.Context) ui.Element {
+func (s *ScrollPanelWidget) build(c *ui.Context) ui.Element {
 	return ui.ScrollBoth(c).Grow(1).Children(func() {
 		outer := axis
 		axis = vertical
@@ -176,39 +176,42 @@ func Separator() *SeparatorWidget {
 
 func (s *SeparatorWidget) build(c *ui.Context) ui.Element { return ui.Divider(c) }
 
-// NotebookWidget shows one of its pages, chosen by tabs.
-type NotebookWidget struct {
-	common[NotebookWidget]
+// TabControlWidget shows one of its pages, chosen by tabs.
+type TabControlWidget struct {
+	common[TabControlWidget]
 	labels   []string
 	pages    []Control
 	page     mirror[int]
 	onSwitch func()
 }
 
-func Notebook() *NotebookWidget {
-	n := &NotebookWidget{}
+func TabControl() *TabControlWidget {
+	n := &TabControlWidget{}
 	n.init(n)
 	return n
 }
 
 // AddPage adds a page showing w under a tab labeled label.
-func (n *NotebookWidget) AddPage(label string, w Control) *NotebookWidget {
+func (n *TabControlWidget) AddPage(label string, w Control) *TabControlWidget {
 	change(func() { n.labels, n.pages = append(n.labels, label), append(n.pages, w) })
 	return n
 }
 
 // Page returns the index of the page shown.
-func (n *NotebookWidget) Page() int { mu.Lock(); defer mu.Unlock(); return n.page.value }
+func (n *TabControlWidget) Page() int { mu.Lock(); defer mu.Unlock(); return n.page.value }
 
-func (n *NotebookWidget) SetPage(i int) *NotebookWidget { change(func() { n.page.set(i) }); return n }
+func (n *TabControlWidget) SetPage(i int) *TabControlWidget {
+	change(func() { n.page.set(i) })
+	return n
+}
 
 // OnSwitch runs fn after the page shown changes.
-func (n *NotebookWidget) OnSwitch(fn func()) *NotebookWidget {
+func (n *TabControlWidget) OnSwitch(fn func()) *TabControlWidget {
 	change(func() { n.onSwitch = fn })
 	return n
 }
 
-func (n *NotebookWidget) build(c *ui.Context) ui.Element {
+func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 	return ui.Column(c).Gap(c.Theme().Space(2)).Children(func() {
 		p, _ := n.page.bind()
 		ui.Tabs(c, p, n.labels...).OnChange(onChange(&n.page, n.onSwitch))
@@ -362,20 +365,20 @@ func (k *CardWidget) build(c *ui.Context) ui.Element {
 	})
 }
 
-// FlowWidget lays out widgets in a row that wraps onto new lines.
-type FlowWidget struct {
-	common[FlowWidget]
+// FlowPanelWidget lays out widgets in a row that wraps onto new lines.
+type FlowPanelWidget struct {
+	common[FlowPanelWidget]
 	spacing float32
 	items   []Control
 }
 
-func Flow(spacing int) *FlowWidget {
-	f := &FlowWidget{spacing: float32(spacing)}
+func FlowPanel(spacing int) *FlowPanelWidget {
+	f := &FlowPanelWidget{spacing: float32(spacing)}
 	f.init(f)
 	return f
 }
 
-func (f *FlowWidget) Add(ws ...Control) *FlowWidget {
+func (f *FlowPanelWidget) Add(ws ...Control) *FlowPanelWidget {
 	change(func() {
 		for _, w := range ws {
 			if !slices.Contains(f.items, w) {
@@ -386,9 +389,9 @@ func (f *FlowWidget) Add(ws ...Control) *FlowWidget {
 	return f
 }
 
-func (f *FlowWidget) Clear() *FlowWidget { change(func() { f.items = nil }); return f }
+func (f *FlowPanelWidget) Clear() *FlowPanelWidget { change(func() { f.items = nil }); return f }
 
-func (f *FlowWidget) build(c *ui.Context) ui.Element {
+func (f *FlowPanelWidget) build(c *ui.Context) ui.Element {
 	return ui.Row(c).Wrap().Gap(f.spacing).Children(func() {
 		outer := axis
 		axis = horizontal

@@ -14,14 +14,14 @@ type shortcut struct {
 
 // OnActivate runs fn with the key of a row double-clicked, or chosen when
 // Enter is pressed.
-func (t *TableWidget[T, K]) OnActivate(fn func(k K)) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) OnActivate(fn func(k K)) *DataGridViewWidget[T, K] {
 	change(func() { t.onActivate = fn })
 	return t
 }
 
 // OnKey runs fn when key is pressed with mods while the table has the
 // keyboard focus. Each call adds a key.
-func (t *TableWidget[T, K]) OnKey(key ui.Key, mods ui.Modifiers, fn func()) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) OnKey(key ui.Key, mods ui.Modifiers, fn func()) *DataGridViewWidget[T, K] {
 	change(func() { t.shortcuts = append(t.shortcuts, shortcut{key, mods, fn}) })
 	return t
 }
@@ -30,7 +30,7 @@ func (t *TableWidget[T, K]) OnKey(key ui.Key, mods ui.Modifiers, fn func()) *Tab
 // pressed on them, and only then. An item's OnClick reads the rows from
 // Selected: ui builds menus as it draws, under the package's lock, so the
 // items cannot be made from the rows then.
-func (t *TableWidget[T, K]) ContextMenu(items ...MenuItem) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) ContextMenu(items ...MenuItem) *DataGridViewWidget[T, K] {
 	change(func() { t.menu = items })
 	return t
 }
@@ -38,21 +38,21 @@ func (t *TableWidget[T, K]) ContextMenu(items ...MenuItem) *TableWidget[T, K] {
 // OnColumnsChange runs fn with the columns' layout after the user
 // resizes, moves or fits a column: once a frame while a column is dragged.
 // Keep it to give SetColumnsLayout.
-func (t *TableWidget[T, K]) OnColumnsChange(fn func(ui.TableLayout)) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) OnColumnsChange(fn func(ui.TableLayout)) *DataGridViewWidget[T, K] {
 	change(func() { t.onColumns = fn })
 	return t
 }
 
 // SetColumnsLayout arranges the columns as l, which OnColumnsChange gave:
 // their order and widths by title ("#" for the index column).
-func (t *TableWidget[T, K]) SetColumnsLayout(l ui.TableLayout) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) SetColumnsLayout(l ui.TableLayout) *DataGridViewWidget[T, K] {
 	change(func() { t.layout = &l })
 	return t
 }
 
 // copyRows is ui's ListState.Copy: the rows shown at rows, a line each,
 // their cells apart by tabs. On the main thread, without mu.
-func (t *TableWidget[T, K]) copyRows(rows []int) string {
+func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
 	mu.Lock()
 	defer mu.Unlock()
 	var lines []string
@@ -72,7 +72,7 @@ func (t *TableWidget[T, K]) copyRows(rows []int) string {
 
 // handOver gives ui the layout set and the row menu, before the table
 // builds. Under mu.
-func (t *TableWidget[T, K]) handOver() {
+func (t *DataGridViewWidget[T, K]) handOver() {
 	s := &t.list
 	if t.layout != nil {
 		s.Columns, t.layout = *t.layout, nil
@@ -84,7 +84,7 @@ func (t *TableWidget[T, K]) handOver() {
 }
 
 // events adds the table's handlers to e, the ui table. Under mu.
-func (t *TableWidget[T, K]) events(e ui.Element) {
+func (t *DataGridViewWidget[T, K]) events(e ui.Element) {
 	s := &t.list
 	if fn := t.onActivate; fn != nil {
 		e.OnActivate(func(row int) {

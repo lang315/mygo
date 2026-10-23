@@ -26,25 +26,25 @@ func waitFor[T any](name string, fn func() (T, error)) T {
 
 // OpenFile asks for a file to open, over parent (nil for none), and
 // returns its path, "" if the user cancels.
-func OpenFile(parent *Window, title string, filters ...Filter) string {
+func OpenFile(parent *Form, title string, filters ...Filter) string {
 	return openPath("OpenFile", mygo.OpenDialogOptions{Parent: parent.Native(), Title: title, Filters: filters})
 }
 
 // OpenFiles asks for files to open and returns their paths, nil if the
 // user cancels.
-func OpenFiles(parent *Window, title string, filters ...Filter) []string {
+func OpenFiles(parent *Form, title string, filters ...Filter) []string {
 	return openPaths("OpenFiles", mygo.OpenDialogOptions{Parent: parent.Native(), Title: title, Filters: filters, Multiple: true})
 }
 
 // SelectFolder asks for a folder, starting in dir, and returns its path,
 // "" if the user cancels.
-func SelectFolder(parent *Window, title, dir string) string {
+func SelectFolder(parent *Form, title, dir string) string {
 	return openPath("SelectFolder", mygo.OpenDialogOptions{Parent: parent.Native(), Title: title, DefaultPath: dir, Directory: true})
 }
 
 // SaveFile asks where to save a file, suggesting name, and returns the
 // path, "" if the user cancels.
-func SaveFile(parent *Window, title, name string, filters ...Filter) string {
+func SaveFile(parent *Form, title, name string, filters ...Filter) string {
 	return waitFor("SaveFile", func() (string, error) {
 		return mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent.Native(), Title: title, DefaultPath: name, Filters: filters})
 	})

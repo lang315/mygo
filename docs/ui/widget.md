@@ -20,11 +20,11 @@ import (
 )
 
 func main() {
-	err := widget.Run("Greeter", func(w *widget.Window) {
-		var name *widget.EntryWidget
+	err := widget.Run("Greeter", func(w *widget.Form) {
+		var name *widget.TextBoxWidget
 		greeting := widget.Label("Type a name")
 		w.SetContent(widget.VBox(8).Add(
-			widget.Entry().SetPlaceholder("Name").AssignTo(&name),
+			widget.TextBox().SetPlaceholder("Name").AssignTo(&name),
 			widget.Button("Greet").Suggested().OnClick(func() {
 				greeting.SetText("Hello, " + name.Text())
 			}),
@@ -39,11 +39,38 @@ func main() {
 
 `Run` starts the app with one window, 1000 by 700, titled with the app's
 name; the function sets the window up before it shows. Other windows come
-from `NewWindow(title, width, height)`, set up the same way, then `Show()`.
+from `NewForm(title, width, height)`, set up the same way, then `Show()`.
 `Native()` returns the `*mygo.Window` once shown. To put widgets in a
 window of your own, `widget.View(w)` is a `ui` view showing `w`:
 `mygo.WindowOptions{Content: ui.View(widget.View(w))}`. The
 [widget tour](../../examples/widget-tour) shows every widget.
+
+## Names
+
+The controls take the names WinForms gives them, where WinForms has one;
+gota's names are listed for code ported from it.
+
+| ui/widget | WinForms | gota |
+|---|---|---|
+| `Form` (`NewForm`) | Form | `Window` |
+| `TextBox` | TextBox | `Entry` |
+| `MultilineTextBox` | TextBox with Multiline | `TextView` |
+| `ComboBox` | ComboBox | `ComboBox`, `ComboBoxText` |
+| `TabControl` | TabControl | `Notebook` |
+| `NumericUpDown` | NumericUpDown | `SpinButton` |
+| `GroupBox` | GroupBox | `Frame` |
+| `DataGridView` | DataGridView | `Table` |
+| `LinkLabel` | LinkLabel | `LinkButton` |
+| `CheckBox`, `CheckBoxGroup` | CheckBox, CheckedListBox | `Checkbox`, `H/VCheckboxGroup` |
+| `ProgressBar` | ProgressBar | `ProgressBar` |
+| `PictureBox` | PictureBox | `Image` |
+| `ScrollPanel` | Panel with AutoScroll | `ScrolledArea` |
+| `FlowPanel` | FlowLayoutPanel | `FlowBox` |
+| `Grid` | TableLayoutPanel | `Grid` |
+| `VBox`, `HBox` | — | `VBox`, `HBox` |
+| `Label`, `Button`, `RadioGroup` | Label, Button, RadioButton | same |
+| `Alert`, `Confirm` | MessageBox | `Alert`, `Confirm` |
+| `Custom` | UserControl | — |
 
 ## Threads
 
@@ -86,7 +113,7 @@ the title and subtitle are drawn in the dialog for the same reason.
 close button, or Escape once no drop-down in it is open), or because its
 parent closed. For a dialog that returns a value, embed `*widget.Dialog`
 in a type of your own whose `Run` returns it. A dialog opened from a
-dialog takes the outer one's `Window` as its parent; closing a window
+dialog takes the outer one's `Form` as its parent; closing a window
 closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
@@ -121,7 +148,7 @@ on macOS they do.
 
 - `MenuButton(text).SetMenu(items...)`: a button opening a menu.
 - `ContextMenu(items...)` on any widget: the menu of a right click.
-- `Window.SetMenuBar(items...)`: the window's menu bar, on Linux and
+- `Form.SetMenuBar(items...)`: the window's menu bar, on Linux and
   Windows. On macOS the menu bar is the app's: set it with
   `mygo.App.SetMenu`.
 
@@ -170,10 +197,10 @@ A build runs while the package holds its lock: it must not call a setter
 or `Change`, which would wait forever. A control made of other controls
 needs no `Custom`: return a `VBox` of them from a function of your own.
 
-## Table
+## DataGridView
 
 ```go
-t := widget.Table(func(a *Account) uint { return a.ID },
+t := widget.DataGridView(func(a *Account) uint { return a.ID },
 	widget.Column[Account]{Title: "UID", Text: func(a *Account) string { return a.UID },
 		Width: 150, Sortable: true, Filterable: true},
 	widget.Column[Account]{Title: "Friends", Text: friends,
@@ -182,7 +209,7 @@ t := widget.Table(func(a *Account) uint { return a.ID },
 ).CheckboxColumn().IndexColumn().BottomPanel()
 ```
 
-`Table(key, columns...)` shows rows of any type, each told apart by its
+`DataGridView(key, columns...)` shows rows of any type, each told apart by its
 key, for as many as a million rows on `ui.TableView`. The table keeps a
 copy of the rows; to share rows between tables, make them pointers.
 A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
@@ -270,12 +297,12 @@ Layout:
 - `Grid(colSpacing, rowSpacing)`: `Attach(w, col, row, width, height)`; a
   widget attached to a taken cell replaces the one there, and cells must
   not overlap.
-- `Frame(title)`: a border and a title around one widget.
+- `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
-- `Flow(spacing)`: a row that wraps.
-- `Scrolled(w)`: scrolls a widget larger than its room.
+- `FlowPanel(spacing)`: a row that wraps.
+- `ScrollPanel(w)`: scrolls a widget larger than its room.
 - `Separator()`: a line.
-- `Notebook()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
+- `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
   `Remove`, `Selected`, `Select`, `SetMenuWidth`.
 
@@ -285,27 +312,27 @@ Input and display:
   instead, where gota used Pango markup.
 - `Icon(svg, size)`: an SVG icon in the color of the text (`TextColor`
   changes it). There are no named icons: embed the SVGs you need.
-- `Image(data, w, h)`: a PNG, JPEG, GIF, WebP or BMP, `SetImage` to change
+- `PictureBox(data, w, h)`: a PNG, JPEG, GIF, WebP or BMP, `SetImage` to change
   it. The same bytes of an image up to 64 KB, as an icon, decode once (the
   last 256 are kept); bytes that are no image leave an empty room.
-- `Entry()`, `TextView()`: one line or several of text; `Text`, `SetText`,
-  `SetPlaceholder`, `SetEditable`, `OnChange`; `Entry` also has
+- `TextBox()`, `MultilineTextBox()`: one line or several of text; `Text`,
+  `SetText`, `SetPlaceholder`, `SetEditable`, `OnChange`; `TextBox` also has
   `Password` and `OnEnter`.
-- `Button(text)`: `OnClick`, `SetText`, `SetIcon`. `Link(text, url)`.
-- `Checkbox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
-- `CheckboxGroup(row, options...)`, `TagSelect(options...)`: several of
+- `Button(text)`: `OnClick`, `SetText`, `SetIcon`. `LinkLabel(text, url)`.
+- `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
+- `CheckBoxGroup(row, options...)`, `TagSelect(options...)`: several of
   the options; `Values`, `SetValues`.
-- `RadioGroup(row, options...)`, `Combo(options...)`: one option; `Value`,
+- `RadioGroup(row, options...)`, `ComboBox(options...)`: one option; `Value`,
   `SetValue`. An `Option` has the `Value` the program reads and the `Text`
   the user sees. A combo's values must differ (its texts may repeat), and
   it groups options in titled sections with icons: `AddSection(title, png,
   options...)`, `RemoveSection`, `RemoveOption`, `SetOptionText`,
   `SectionLen`, `Selected`, `Unselect`.
 - `MenuButton(text)`: see [Menus](#menus).
-- `Spin(min, max, step)`: a number; `Value`, `Int`, `SetValue`.
+- `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`.
   `RangeSpin` is two, with text between and after.
-- `Progress()`: `SetFraction` (negative for unknown length), `SetText`.
-- `Table(key, columns...)`: rows in columns; see [Table](#table).
+- `ProgressBar()`: `SetFraction` (negative for unknown length), `SetText`.
+- `DataGridView(key, columns...)`: rows in columns; see [DataGridView](#datagridview).
   `Spinner()`: `Start`, `Stop`.
 
 Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`

@@ -3,10 +3,10 @@
 // showing it redraw. It is ui, the immediate-mode toolkit, wrapped in the
 // style of GTK wrappers such as gota:
 //
-//	var name *widget.EntryWidget
+//	var name *widget.TextBoxWidget
 //	box := widget.VBox(8).Add(
 //		widget.Label("Name").Bold(),
-//		widget.Entry().SetPlaceholder("Ann").AssignTo(&name),
+//		widget.TextBox().SetPlaceholder("Ann").AssignTo(&name),
 //		widget.Button("Greet").OnClick(func() {
 //			greeting.SetText("Hello, " + name.Text())
 //		}),

@@ -33,11 +33,11 @@ type Column[T any] struct {
 	Image func(*T) *ui.Bitmap
 }
 
-// TableWidget shows rows of type T, each told apart by a key of type K,
+// DataGridViewWidget shows rows of type T, each told apart by a key of type K,
 // in columns that sort, for as many as a million rows. The table keeps
 // its own copy of the rows. A table shows in one window at a time.
-type TableWidget[T any, K comparable] struct {
-	common[TableWidget[T, K]]
+type DataGridViewWidget[T any, K comparable] struct {
+	common[DataGridViewWidget[T, K]]
 	key     func(*T) K
 	cols    []Column[T]
 	columns []ui.TableColumn // cols, after the index column if any
@@ -59,8 +59,8 @@ type TableWidget[T any, K comparable] struct {
 	checks                                  bool // the check box column shows
 	panel                                   *BoxWidget
 	totalLabel, selectedLabel, checkedLabel *LabelWidget
-	column                                  *ComboWidget
-	keyword                                 *EntryWidget
+	column                                  *ComboBoxWidget
+	keyword                                 *TextBoxWidget
 	searchButton                            *ButtonWidget
 	text                                    PanelText
 	beforeSearch                            func(column, keyword string)
@@ -75,9 +75,9 @@ type TableWidget[T any, K comparable] struct {
 	cursor int
 }
 
-// Table makes a table of cols whose rows key tells apart. key runs under
+// DataGridView makes a table of cols whose rows key tells apart. key runs under
 // the package's lock, as the columns' functions do.
-func Table[T any, K comparable](key func(*T) K, cols ...Column[T]) *TableWidget[T, K] {
+func DataGridView[T any, K comparable](key func(*T) K, cols ...Column[T]) *DataGridViewWidget[T, K] {
 	compare := map[string]func(a, b *T) int{}
 	for _, cl := range cols {
 		switch {
@@ -89,7 +89,7 @@ func Table[T any, K comparable](key func(*T) K, cols ...Column[T]) *TableWidget[
 			compare[cl.Title] = func(a, b *T) int { return strings.Compare(text(a), text(b)) }
 		}
 	}
-	t := &TableWidget[T, K]{key: key, cols: cols, index: map[K]int{}, view: ui.NewTableView(compare), cursor: -1, text: englishPanel}
+	t := &DataGridViewWidget[T, K]{key: key, cols: cols, index: map[K]int{}, view: ui.NewTableView(compare), cursor: -1, text: englishPanel}
 	t.columns = t.uiColumns()
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.Copy = t.copyRows
@@ -99,7 +99,7 @@ func Table[T any, K comparable](key func(*T) K, cols ...Column[T]) *TableWidget[
 
 // uiColumns returns the columns ui shows. Under mu, or before the table
 // is shared.
-func (t *TableWidget[T, K]) uiColumns() []ui.TableColumn {
+func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 	var cs []ui.TableColumn
 	if t.numbered {
 		cs = append(cs, ui.TableColumn{Title: "#", Width: 56, Align: ui.End, Fixed: true})
@@ -112,14 +112,14 @@ func (t *TableWidget[T, K]) uiColumns() []ui.TableColumn {
 }
 
 // IndexColumn shows first the position of each row as shown, from 1.
-func (t *TableWidget[T, K]) IndexColumn() *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
 	change(func() { t.numbered = true; t.columns = t.uiColumns() })
 	return t
 }
 
 // SetRows shows a copy of rows instead of the rows shown. Of rows with
 // the same key, the last stays, where the first was.
-func (t *TableWidget[T, K]) SetRows(rows []T) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) SetRows(rows []T) *DataGridViewWidget[T, K] {
 	change(func() {
 		t.rows, t.index = make([]T, 0, len(rows)), make(map[K]int, len(rows))
 		t.add(rows)
@@ -129,17 +129,19 @@ func (t *TableWidget[T, K]) SetRows(rows []T) *TableWidget[T, K] {
 }
 
 // AddRow shows row after the others, or instead of the row of its key.
-func (t *TableWidget[T, K]) AddRow(row T) *TableWidget[T, K] { return t.AddRows([]T{row}) }
+func (t *DataGridViewWidget[T, K]) AddRow(row T) *DataGridViewWidget[T, K] {
+	return t.AddRows([]T{row})
+}
 
 // AddRows shows rows after the others, each instead of the row of its
 // key if one shows.
-func (t *TableWidget[T, K]) AddRows(rows []T) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) AddRows(rows []T) *DataGridViewWidget[T, K] {
 	change(func() { t.add(rows) })
 	return t
 }
 
 // add appends rows, replacing those of keys shown. Under mu.
-func (t *TableWidget[T, K]) add(rows []T) {
+func (t *DataGridViewWidget[T, K]) add(rows []T) {
 	for i := range rows {
 		k := t.key(&rows[i])
 		if j, ok := t.index[k]; ok {
@@ -155,7 +157,7 @@ func (t *TableWidget[T, K]) add(rows []T) {
 // UpdateRow runs fn on the row of key k, if one shows, to change it in
 // place. fn runs under the package's lock: it changes the row but not its
 // key, and calls no widget method.
-func (t *TableWidget[T, K]) UpdateRow(k K, fn func(*T)) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) UpdateRow(k K, fn func(*T)) *DataGridViewWidget[T, K] {
 	change(func() {
 		if i, ok := t.index[k]; ok {
 			fn(&t.rows[i])
@@ -166,7 +168,7 @@ func (t *TableWidget[T, K]) UpdateRow(k K, fn func(*T)) *TableWidget[T, K] {
 }
 
 // DeleteRows removes the rows of keys ks.
-func (t *TableWidget[T, K]) DeleteRows(ks ...K) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) DeleteRows(ks ...K) *DataGridViewWidget[T, K] {
 	change(func() {
 		first := len(t.rows) // the first row removed
 		for _, k := range ks {
@@ -193,11 +195,11 @@ func (t *TableWidget[T, K]) DeleteRows(ks ...K) *TableWidget[T, K] {
 }
 
 // Clear removes every row.
-func (t *TableWidget[T, K]) Clear() *TableWidget[T, K] { return t.SetRows(nil) }
+func (t *DataGridViewWidget[T, K]) Clear() *DataGridViewWidget[T, K] { return t.SetRows(nil) }
 
 // removed has the view sort the rows again, after rows went, and drops
 // their keys from the selection and the checks. Under mu.
-func (t *TableWidget[T, K]) removed() {
+func (t *DataGridViewWidget[T, K]) removed() {
 	t.view.Reset()
 	t.gone = true
 	t.chosen.keep(t.index)
@@ -205,7 +207,7 @@ func (t *TableWidget[T, K]) removed() {
 }
 
 // Row returns the row of key k.
-func (t *TableWidget[T, K]) Row(k K) (T, bool) {
+func (t *DataGridViewWidget[T, K]) Row(k K) (T, bool) {
 	mu.Lock()
 	defer mu.Unlock()
 	if i, ok := t.index[k]; ok {
@@ -216,17 +218,17 @@ func (t *TableWidget[T, K]) Row(k K) (T, bool) {
 }
 
 // Len returns how many rows the table has, the hidden by a search too.
-func (t *TableWidget[T, K]) Len() int { mu.Lock(); defer mu.Unlock(); return len(t.rows) }
+func (t *DataGridViewWidget[T, K]) Len() int { mu.Lock(); defer mu.Unlock(); return len(t.rows) }
 
 // ClearSort shows the rows in the order added, as before a header click.
-func (t *TableWidget[T, K]) ClearSort() *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) ClearSort() *DataGridViewWidget[T, K] {
 	change(func() { t.sort.set(ui.SortOrder{}) })
 	return t
 }
 
 // sync brings the view up to date with the rows, keeping first, outside
 // a build, the order of the frame ui shows, once a frame. Under mu.
-func (t *TableWidget[T, K]) sync() {
+func (t *DataGridViewWidget[T, K]) sync() {
 	if !viewing.Load() && !t.kept {
 		t.order = t.order[:0]
 		for i := range t.view.Len() {
@@ -239,7 +241,7 @@ func (t *TableWidget[T, K]) sync() {
 
 // rowAt returns the row at row in the frame ui shows, whatever goroutines
 // deleted or reordered since. Under mu.
-func (t *TableWidget[T, K]) rowAt(row int) *T {
+func (t *DataGridViewWidget[T, K]) rowAt(row int) *T {
 	switch {
 	case t.kept && row < len(t.order):
 		return &t.frame[t.order[row]]
@@ -260,7 +262,7 @@ func lockOutsideView() bool {
 }
 
 // keyAt is ui's ListState.Key.
-func (t *TableWidget[T, K]) keyAt(row int) any {
+func (t *DataGridViewWidget[T, K]) keyAt(row int) any {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
@@ -273,7 +275,7 @@ func (t *TableWidget[T, K]) keyAt(row int) any {
 
 // labelAt is ui's ListState.Label, the first column's text: it names a
 // row's check box, and typing finds rows by it.
-func (t *TableWidget[T, K]) labelAt(row int) string {
+func (t *DataGridViewWidget[T, K]) labelAt(row int) string {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
@@ -283,8 +285,8 @@ func (t *TableWidget[T, K]) labelAt(row int) string {
 	return ""
 }
 
-func (t *TableWidget[T, K]) build(c *ui.Context) ui.Element {
-	// It fills the room it is given, as Scrolled does: as tall as its
+func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
+	// It fills the room it is given, as ScrollPanel does: as tall as its
 	// rows, it would not fit where nothing grows it, as in View.
 	return ui.Column(c).Gap(8).Grow(1).Children(func() {
 		t.table(c).Grow(1)
@@ -296,7 +298,7 @@ func (t *TableWidget[T, K]) build(c *ui.Context) ui.Element {
 }
 
 // table builds the ui table. Under mu.
-func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
+func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	s := &t.list
 	s.Sort, _ = t.sort.bind()
 	s.Selection, s.Checked = t.chosen.bind(), nil
@@ -318,7 +320,7 @@ func (t *TableWidget[T, K]) table(c *ui.Context) ui.Element {
 // cell builds the cell of the row shown at row in column col, an index
 // into t.columns: while the table builds, or when ui lays out rows it did
 // not build then.
-func (t *TableWidget[T, K]) cell(c *ui.Context, row, col int) {
+func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, row, col int) {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}

@@ -80,7 +80,7 @@ func (i *kindIconWidget) build(c *ui.Context) ui.Element {
 // and buttons at the bottom, the last the default. It returns the index of
 // the button chosen, -1 when the dialog closed otherwise. wire, if any,
 // gets the default button and a function choosing it.
-func message(parent *Window, kind Kind, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
+func message(parent *Form, kind Kind, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
 	chosen := -1
 	// The first answer wins: a second, queued while the first ran, must
 	// not change what Run's caller reads.
@@ -122,36 +122,36 @@ func message(parent *Window, kind Kind, title, text string, input Control, wire 
 
 // Alert shows text in a dialog over parent (nil for none) and returns when
 // the user dismisses it. It blocks as Dialog.Run does.
-func Alert(parent *Window, kind Kind, title, text string) {
+func Alert(parent *Form, kind Kind, title, text string) {
 	message(parent, kind, title, text, nil, nil, l10n.Ok())
 }
 
 // Confirm asks a question in a dialog over parent and reports whether the
 // user chose OK; Cancel and closing the dialog say no.
-func Confirm(parent *Window, kind Kind, title, text string) bool {
+func Confirm(parent *Form, kind Kind, title, text string) bool {
 	return message(parent, kind, title, text, nil, nil, l10n.Cancel(), l10n.Ok()) == 1
 }
 
 // InputString asks for a line of text, label above an entry holding value,
 // and returns it with ok true for OK or Enter.
-func InputString(parent *Window, kind Kind, title, label, value string) (s string, ok bool) {
-	e := Entry().SetText(value).Focus()
+func InputString(parent *Form, kind Kind, title, label, value string) (s string, ok bool) {
+	e := TextBox().SetText(value).Focus()
 	n := message(parent, kind, title, label, e, func(_ *ButtonWidget, choose func()) { e.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return e.Text(), n == 1
 }
 
 // InputInt asks for a whole number from min to max, stepping by step,
 // starting at value.
-func InputInt(parent *Window, kind Kind, title, label string, min, max, step, value int) (n int, ok bool) {
-	s := Spin(float64(min), float64(max), float64(step)).SetValue(float64(value)).Focus()
+func InputInt(parent *Form, kind Kind, title, label string, min, max, step, value int) (n int, ok bool) {
+	s := NumericUpDown(float64(min), float64(max), float64(step)).SetValue(float64(value)).Focus()
 	i := message(parent, kind, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return s.Int(), i == 1
 }
 
 // InputSelect asks to choose one of opts and returns its Value. OK stays
 // disabled until a choice is made.
-func InputSelect(parent *Window, kind Kind, title, label string, opts ...Option) (value string, ok bool) {
-	c := Combo(opts...)
+func InputSelect(parent *Form, kind Kind, title, label string, opts ...Option) (value string, ok bool) {
+	c := ComboBox(opts...)
 	n := message(parent, kind, title, label, c, func(okButton *ButtonWidget, _ func()) {
 		okButton.SetDisabled(true)
 		c.OnChange(func() { okButton.SetDisabled(c.Value() == "") })

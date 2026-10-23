@@ -8,9 +8,9 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// Window is a top-level window showing a widget. Make it with NewWindow,
+// Form is a top-level window showing a widget. Make it with NewForm,
 // set it up, then Show it.
-type Window struct {
+type Form struct {
 	id            int // its views' id, for focus tracking
 	keep          keeper
 	title         string
@@ -22,7 +22,7 @@ type Window struct {
 	header        *HeaderBarWidget
 	onClose       func() bool
 	menu          []MenuItem
-	parent        *Window       // a dialog's; nil for a top-level window
+	parent        *Form         // a dialog's; nil for a top-level window
 	dialog        bool          // made by NewDialog: Escape asks to close it
 	deletable     bool          // the user may close it
 	win           *mygo.Window  // nil until shown, and again once closed
@@ -50,25 +50,25 @@ func onBeforeQuit(e *mygo.QuitEvent) {
 	mygo.App.WhenReady(func() { quitAsked = false })
 }
 
-// NewWindow makes a window, not shown yet.
-func NewWindow(title string, width, height int) *Window {
-	return &Window{id: newID(), title: title, width: width, height: height, resizable: true, deletable: true}
+// NewForm makes a window, not shown yet.
+func NewForm(title string, width, height int) *Form {
+	return &Form{id: newID(), title: title, width: width, height: height, resizable: true, deletable: true}
 }
 
 // Run runs an app with one window titled name: fn sets the window up on
 // the event goroutine, then the window shows. Run returns when the app
 // quits; call it from main.
-func Run(name string, fn func(w *Window)) error {
+func Run(name string, fn func(w *Form)) error {
 	mygo.App.SetName(name)
 	mygo.App.WhenReady(func() {
-		w := NewWindow(name, 1000, 700)
+		w := NewForm(name, 1000, 700)
 		Post(func() { fn(w); w.Show() })
 	})
 	return mygo.App.Run()
 }
 
 // do runs fn with the native window, if shown.
-func (w *Window) do(fn func(n *mygo.Window)) {
+func (w *Form) do(fn func(n *mygo.Window)) {
 	mu.Lock()
 	n := w.win
 	mu.Unlock()
@@ -77,13 +77,13 @@ func (w *Window) do(fn func(n *mygo.Window)) {
 	}
 }
 
-func (w *Window) SetTitle(s string) *Window {
+func (w *Form) SetTitle(s string) *Form {
 	change(func() { w.title = s })
 	w.do(func(n *mygo.Window) { n.SetTitle(s) })
 	return w
 }
 
-func (w *Window) SetSize(width, height int) *Window {
+func (w *Form) SetSize(width, height int) *Form {
 	change(func() { w.width, w.height = width, height })
 	w.do(func(n *mygo.Window) { n.SetSize(width, height) })
 	return w
@@ -91,26 +91,26 @@ func (w *Window) SetSize(width, height int) *Window {
 
 // SetIcon sets the window's icon from a PNG. macOS shows no window icons:
 // there it does nothing (set the Dock's with mygo.App.Dock.SetIcon).
-func (w *Window) SetIcon(png []byte) *Window {
+func (w *Form) SetIcon(png []byte) *Form {
 	change(func() { w.icon = png })
 	w.do(func(n *mygo.Window) { n.SetIcon(png) })
 	return w
 }
 
-func (w *Window) SetResizable(on bool) *Window {
+func (w *Form) SetResizable(on bool) *Form {
 	change(func() { w.resizable = on })
 	w.do(func(n *mygo.Window) { n.SetResizable(on) })
 	return w
 }
 
 // Maximize maximizes the window, or makes it maximized when shown.
-func (w *Window) Maximize() *Window {
+func (w *Form) Maximize() *Form {
 	change(func() { w.maximized = true })
 	w.do((*mygo.Window).Maximize)
 	return w
 }
 
-func (w *Window) Unmaximize() *Window {
+func (w *Form) Unmaximize() *Form {
 	change(func() { w.maximized = false })
 	w.do((*mygo.Window).Unmaximize)
 	return w
@@ -119,18 +119,18 @@ func (w *Window) Unmaximize() *Window {
 // SetMenuBar sets the window's menu bar, on Linux and Windows. On macOS
 // the menu bar is the app's, set with mygo.App.SetMenu; there it does
 // nothing.
-func (w *Window) SetMenuBar(items ...MenuItem) *Window {
+func (w *Form) SetMenuBar(items ...MenuItem) *Form {
 	change(func() { w.menu = items })
 	w.do(func(n *mygo.Window) { n.SetMenu(mygo.NewMenu(nativeMenu(items))) })
 	return w
 }
 
 // SetContent shows root in the window, replacing what it showed.
-func (w *Window) SetContent(root Control) *Window { change(func() { w.root = root }); return w }
+func (w *Form) SetContent(root Control) *Form { change(func() { w.root = root }); return w }
 
 // UseHeaderBar draws the title bar with ui: the title, subtitle and
 // widgets packed at its ends. Call it before Show.
-func (w *Window) UseHeaderBar(subtitle string) *HeaderBarWidget {
+func (w *Form) UseHeaderBar(subtitle string) *HeaderBarWidget {
 	h := &HeaderBarWidget{subtitle: subtitle, win: w}
 	h.init(h)
 	change(func() { w.header = h })
@@ -138,15 +138,15 @@ func (w *Window) UseHeaderBar(subtitle string) *HeaderBarWidget {
 }
 
 // HeaderBar returns the header bar, nil without UseHeaderBar.
-func (w *Window) HeaderBar() *HeaderBarWidget { mu.Lock(); defer mu.Unlock(); return w.header }
+func (w *Form) HeaderBar() *HeaderBarWidget { mu.Lock(); defer mu.Unlock(); return w.header }
 
 // OnClose runs fn when the user asks to close the window, on the event
 // goroutine; fn returning false keeps the window open. nil removes it.
-func (w *Window) OnClose(fn func() bool) *Window { change(func() { w.onClose = fn }); return w }
+func (w *Form) OnClose(fn func() bool) *Form { change(func() { w.onClose = fn }); return w }
 
 // Native returns the mygo window, nil before Show and after the window
 // closed.
-func (w *Window) Native() *mygo.Window {
+func (w *Form) Native() *mygo.Window {
 	if w == nil {
 		return nil
 	}
@@ -157,7 +157,7 @@ func (w *Window) Native() *mygo.Window {
 
 // Show makes the window and shows it. It does nothing while the window is
 // shown; a window that closed shows again.
-func (w *Window) Show() {
+func (w *Form) Show() {
 	mu.Lock()
 	if w.showing {
 		mu.Unlock()
@@ -225,7 +225,7 @@ func (w *Window) Show() {
 }
 
 // closeAsked answers a request to close the window, on the main thread.
-func (w *Window) closeAsked(e *mygo.CloseEvent) {
+func (w *Form) closeAsked(e *mygo.CloseEvent) {
 	mu.Lock()
 	h, closing, asking, deletable := w.onClose, w.closing, w.asking, w.deletable
 	if h != nil && !closing && deletable {
@@ -265,9 +265,9 @@ func (w *Window) closeAsked(e *mygo.CloseEvent) {
 }
 
 // Close closes the window without asking OnClose.
-func (w *Window) Close() { w.closeAnyway() }
+func (w *Form) Close() { w.closeAnyway() }
 
-func (w *Window) closeAnyway() {
+func (w *Form) closeAnyway() {
 	mu.Lock()
 	n := w.win
 	w.closing = true
@@ -280,7 +280,7 @@ func (w *Window) closeAnyway() {
 	}
 }
 
-func (w *Window) view(c *ui.Context) {
+func (w *Form) view(c *ui.Context) {
 	mu.Lock()
 	defer mu.Unlock()
 	viewing.Store(true)
@@ -302,7 +302,7 @@ func (w *Window) view(c *ui.Context) {
 // ends. The platform keeps its window buttons.
 type HeaderBarWidget struct {
 	common[HeaderBarWidget]
-	win        *Window
+	win        *Form
 	subtitle   string
 	start, end []Control
 	// clientDecorations: the header bar is the only title bar on Wayland.

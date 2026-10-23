@@ -33,8 +33,8 @@ func typeInto(t *testing.T, tt *ui.Tester, nth int, s string) {
 
 func TestEntryTypingReachesTextAndOnChange(t *testing.T) {
 	got := make(chan string, 8)
-	var e *EntryWidget
-	Entry().SetText("ab").AssignTo(&e).OnChange(func() { got <- e.Text() })
+	var e *TextBoxWidget
+	TextBox().SetText("ab").AssignTo(&e).OnChange(func() { got <- e.Text() })
 	tt := tester(t, e)
 	typeInto(t, tt, 1, "c")
 	if s := received(t, got); s != "abc" {
@@ -46,7 +46,7 @@ func TestEntryTypingReachesTextAndOnChange(t *testing.T) {
 }
 
 func TestEntrySetTextShows(t *testing.T) {
-	e := Entry().SetText("one")
+	e := TextBox().SetText("one")
 	tt := tester(t, e)
 	done := make(chan struct{})
 	go func() { e.SetText("two"); close(done) }()
@@ -59,8 +59,8 @@ func TestEntrySetTextShows(t *testing.T) {
 
 func TestEntryOnEnter(t *testing.T) {
 	entered := make(chan string, 1)
-	var e *EntryWidget
-	Entry().SetText("go").AssignTo(&e).OnEnter(func() { entered <- e.Text() })
+	var e *TextBoxWidget
+	TextBox().SetText("go").AssignTo(&e).OnEnter(func() { entered <- e.Text() })
 	tt := tester(t, e)
 	typeInto(t, tt, 1, "!")
 	tt.Key(0, ui.KeyEnter)
@@ -72,9 +72,9 @@ func TestEntryOnEnter(t *testing.T) {
 
 func TestEntryOnFocusOut(t *testing.T) {
 	left := make(chan struct{}, 1)
-	a := Entry().SetText("first")
+	a := TextBox().SetText("first")
 	a.OnFocusOut(func() { left <- struct{}{} })
-	b := Entry().SetText("second")
+	b := TextBox().SetText("second")
 	tt := tester(t, VBox(0).Add(a, b))
 	focus(tt, 1) // first
 	focus(tt, 1) // second
@@ -83,7 +83,7 @@ func TestEntryOnFocusOut(t *testing.T) {
 
 // U1: the caret follows the widget when the box reorders.
 func TestEntryStateFollowsTheWidget(t *testing.T) {
-	a, b := Entry().SetText("aaa"), Entry().SetText("bbb")
+	a, b := TextBox().SetText("aaa"), TextBox().SetText("bbb")
 	box := VBox(0).Add(a, b)
 	tt := tester(t, box)
 	focus(tt, 1) // aaa
@@ -100,7 +100,7 @@ func TestEntryStateFollowsTheWidget(t *testing.T) {
 
 // Review Focus 4: hiding keeps the value.
 func TestHiddenEntryKeepsItsText(t *testing.T) {
-	e := Entry().SetText("kept")
+	e := TextBox().SetText("kept")
 	tt := tester(t, e)
 	e.SetVisible(false)
 	tt.Frame()
@@ -112,7 +112,7 @@ func TestHiddenEntryKeepsItsText(t *testing.T) {
 }
 
 func TestTextViewTyping(t *testing.T) {
-	v := TextView().SetText("line")
+	v := MultilineTextBox().SetText("line")
 	tt := tester(t, v)
 	typeInto(t, tt, 1, "s")
 	if v.Text() != "lines" {
@@ -121,7 +121,7 @@ func TestTextViewTyping(t *testing.T) {
 }
 
 func TestReadOnlyEntryIgnoresTyping(t *testing.T) {
-	e := Entry().SetText("fixed").SetEditable(false)
+	e := TextBox().SetText("fixed").SetEditable(false)
 	tt := tester(t, e)
 	typeInto(t, tt, 1, "x")
 	if e.Text() != "fixed" {
@@ -132,7 +132,7 @@ func TestReadOnlyEntryIgnoresTyping(t *testing.T) {
 // A widget shown in two views: focus in one is not lost in the other.
 func TestOnFocusOutIgnoresAnotherView(t *testing.T) {
 	left := make(chan struct{}, 4)
-	e := Entry().SetText("x")
+	e := TextBox().SetText("x")
 	e.OnFocusOut(func() { left <- struct{}{} })
 	tt1, tt2 := tester(t, e), tester(t, e)
 	focus(tt1, 1)
@@ -148,7 +148,7 @@ func TestOnFocusOutIgnoresAnotherView(t *testing.T) {
 
 func TestHidingAFocusedWidgetRunsOnFocusOut(t *testing.T) {
 	left := make(chan struct{}, 1)
-	e := Entry()
+	e := TextBox()
 	e.OnFocusOut(func() { left <- struct{}{} })
 	tt := tester(t, e)
 	focus(tt, 1)
@@ -158,7 +158,7 @@ func TestHidingAFocusedWidgetRunsOnFocusOut(t *testing.T) {
 }
 
 func TestFocusMovesTheFocus(t *testing.T) {
-	a, b := Entry(), Entry()
+	a, b := TextBox(), TextBox()
 	tt := tester(t, VBox(0).Add(a, b))
 	b.Focus()
 	tt.Frame()

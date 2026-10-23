@@ -17,8 +17,8 @@ import (
 )
 
 func main() {
-	err := widget.Run("Widget Tour", func(w *widget.Window) {
-		w.UseHeaderBar("ui/widget").PackEnd(widget.Link("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
+	err := widget.Run("Widget Tour", func(w *widget.Form) {
+		w.UseHeaderBar("ui/widget").PackEnd(widget.LinkLabel("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
 		w.SetMenuBar(widget.MenuItem{Text: "File", Children: []widget.MenuItem{
 			{Text: "Close", OnClick: func() { w.Close() }},
 		}})
@@ -29,8 +29,8 @@ func main() {
 	}
 }
 
-func tour(w *widget.Window) widget.Control {
-	return widget.Notebook().
+func tour(w *widget.Form) widget.Control {
+	return widget.TabControl().
 		AddPage("Layout", layout()).
 		AddPage("Inputs", inputs()).
 		AddPage("Choices", choices()).
@@ -41,12 +41,12 @@ func tour(w *widget.Window) widget.Control {
 		Padding(4).Expand()
 }
 
-func dialogs(w *widget.Window) widget.Control {
+func dialogs(w *widget.Form) widget.Control {
 	result := widget.Label("Results show here").Muted()
 	show := func(format string, a ...any) { result.SetText(fmt.Sprintf(format, a...)) }
 	return widget.VBox(8).Add(
 		widget.Label("Dialogs").TextSize(widget.XL).Bold(),
-		widget.Flow(8).Add(
+		widget.FlowPanel(8).Add(
 			widget.Button("Alert").OnClick(func() {
 				widget.Alert(w, widget.Info, "Saved", "The file was saved.")
 				show("Alert closed")
@@ -94,12 +94,12 @@ func dialogs(w *widget.Window) widget.Control {
 }
 
 // customDialog runs a dialog of its own, with a dialog over it.
-func customDialog(w *widget.Window) {
+func customDialog(w *widget.Form) {
 	var d *widget.Dialog
 	d = widget.NewDialog(w, "New account", "A dialog of your own", 420, 260, widget.VBox(8).Add(
-		widget.Entry().SetPlaceholder("Name"),
+		widget.TextBox().SetPlaceholder("Name"),
 		widget.Button("Nested dialog").OnClick(func() {
-			widget.Alert(d.Window, widget.Info, "Nested", "A dialog over a dialog.")
+			widget.Alert(d.Form, widget.Info, "Nested", "A dialog over a dialog.")
 		}),
 		widget.ButtonBox().Add(widget.Button("Close").Suggested().OnClick(func() { d.Close() })),
 	))
@@ -107,7 +107,7 @@ func customDialog(w *widget.Window) {
 }
 
 func extras() widget.Control {
-	theme := widget.Combo(
+	theme := widget.ComboBox(
 		widget.Option{Value: "system", Text: "System"},
 		widget.Option{Value: "light", Text: "Light"},
 		widget.Option{Value: "dark", Text: "Dark"},
@@ -126,9 +126,9 @@ func extras() widget.Control {
 		}), screen.VAlign(widget.Center)),
 		icons,
 		widget.Button("With an icon").SetIcon(lucide(lucideIcons[0])),
-		widget.HBox(8).Add(widget.Image(swatch(color.RGBA{230, 80, 60, 255}), 48, 48), widget.Image(swatch(color.RGBA{60, 120, 230, 255}), 96, 48)),
+		widget.HBox(8).Add(widget.PictureBox(swatch(color.RGBA{230, 80, 60, 255}), 48, 48), widget.PictureBox(swatch(color.RGBA{60, 120, 230, 255}), 96, 48)),
 		widget.Label("").Rich(ui.Span{Text: "Rich text: "}, ui.Span{Text: "bold", Weight: 700}, ui.Span{Text: ", "}, ui.Span{Text: "italic", Italic: true}),
-		widget.HBox(8).Add(widget.Label("Sectioned combo").VAlign(widget.Center), widget.Combo().
+		widget.HBox(8).Add(widget.Label("Sectioned combo").VAlign(widget.Center), widget.ComboBox().
 			AddSection("Fruits", swatch(color.RGBA{230, 160, 40, 255}), widget.Option{Value: "apple", Text: "Apple"}, widget.Option{Value: "pear", Text: "Pear"}).
 			AddSection("Vegetables", swatch(color.RGBA{60, 160, 80, 255}), widget.Option{Value: "kale", Text: "Kale"})),
 	)
@@ -180,16 +180,16 @@ func layout() widget.Control {
 }
 
 func inputs() widget.Control {
-	var name *widget.EntryWidget
+	var name *widget.TextBoxWidget
 	greeting := widget.Label("Type a name")
 	return widget.VBox(8).Add(
-		widget.Entry().SetPlaceholder("Name").AssignTo(&name).OnChange(func() {
+		widget.TextBox().SetPlaceholder("Name").AssignTo(&name).OnChange(func() {
 			greeting.SetText("Hello, " + name.Text())
 		}),
 		greeting,
-		widget.Entry().SetPlaceholder("Password").Password(),
-		widget.TextView().SetPlaceholder("Notes").SetSize(0, 100),
-		widget.Checkbox("Remember me"),
+		widget.TextBox().SetPlaceholder("Password").Password(),
+		widget.MultilineTextBox().SetPlaceholder("Notes").SetSize(0, 100),
+		widget.CheckBox("Remember me"),
 		widget.HBox(8).Add(widget.Switch(), widget.Label("Notifications")),
 		widget.Toggle("Bold"),
 		widget.Button("Count in the background").OnClick(func() {
@@ -204,16 +204,16 @@ func inputs() widget.Control {
 }
 
 func choices() widget.Control {
-	progress := widget.Progress().SetFraction(0.3).SetText("30%")
-	spin := widget.Spin(0, 100, 1).SetValue(30)
+	progress := widget.ProgressBar().SetFraction(0.3).SetText("30%")
+	spin := widget.NumericUpDown(0, 100, 1).SetValue(30)
 	spin.OnChange(func() {
 		progress.SetFraction(spin.Value() / 100).SetText(fmt.Sprintf("%d%%", spin.Int()))
 	})
 	return widget.VBox(8).Add(
 		spin, progress,
 		widget.RangeSpin(0, 60, 0, 600, 1, "to", "seconds").SetValues(5, 30),
-		widget.Combo(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).SetValue("vn"),
-		widget.CheckboxGroup(true, widget.Option{Value: "a", Text: "Apple"}, widget.Option{Value: "b", Text: "Banana"}),
+		widget.ComboBox(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).SetValue("vn"),
+		widget.CheckBoxGroup(true, widget.Option{Value: "a", Text: "Apple"}, widget.Option{Value: "b", Text: "Banana"}),
 		widget.RadioGroup(true, widget.Option{Value: "s", Text: "Small"}, widget.Option{Value: "l", Text: "Large"}),
 		widget.TagSelect(widget.Option{Value: "go", Text: "Go"}, widget.Option{Value: "ui", Text: "UI"}, widget.Option{Value: "gtk", Text: "GTK"}),
 		widget.Spinner().Start(),
@@ -225,15 +225,15 @@ func containers() widget.Control {
 		Attach(widget.Label("A"), 0, 0, 1, 1).
 		Attach(widget.Label("B"), 1, 0, 1, 1).
 		Attach(widget.Label("C spans two"), 0, 1, 2, 1)
-	flow := widget.Flow(6)
+	flow := widget.FlowPanel(6)
 	for i := range 12 {
 		flow.Add(widget.Button(fmt.Sprintf("chip %d", i)))
 	}
 	return widget.Sidebar().
-		Add("frame", "Frame and grid", widget.VBox(8).Add(widget.Frame("Frame").Add(grid))).
+		Add("frame", "Frame and grid", widget.VBox(8).Add(widget.GroupBox("Frame").Add(grid))).
 		Add("card", "Card", widget.Card().SetTitle(widget.Label("Card title").Bold()).SetBody(widget.Label("Card body"))).
 		Add("flow", "Flow", flow).
-		Add("scroll", "Scrolled", widget.Scrolled(longList()))
+		Add("scroll", "Scrolled", widget.ScrollPanel(longList()))
 }
 
 func longList() widget.Control {
@@ -264,8 +264,8 @@ func table() widget.Control {
 		}
 		return ui.RGB(22, 163, 74)
 	}
-	var t *widget.TableWidget[account, int]
-	t = widget.Table(func(a *account) int { return a.id },
+	var t *widget.DataGridViewWidget[account, int]
+	t = widget.DataGridView(func(a *account) int { return a.id },
 		widget.Column[account]{Title: "ID", Text: func(a *account) string { return strconv.Itoa(a.id) },
 			Compare: func(a, b *account) int { return cmp.Compare(a.id, b.id) }, Width: 90, Align: widget.End, Sortable: true},
 		widget.Column[account]{Title: "Name", Text: func(a *account) string { return a.name },
@@ -295,7 +295,7 @@ func table() widget.Control {
 
 // liveUpdates fails or fixes a hundred accounts every 100 ms until stop
 // closes.
-func liveUpdates(t *widget.TableWidget[account, int], stop <-chan struct{}) {
+func liveUpdates(t *widget.DataGridViewWidget[account, int], stop <-chan struct{}) {
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for n := 0; ; n++ {

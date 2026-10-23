@@ -7,7 +7,7 @@ import (
 )
 
 func TestFrameShowsTitleAndChild(t *testing.T) {
-	tt := tester(t, Frame("Settings").Add(Label("inside")))
+	tt := tester(t, GroupBox("Settings").Add(Label("inside")))
 	s, i := find(t, tt, "Settings"), find(t, tt, "inside")
 	if i.Y <= s.Y {
 		t.Fatalf("child %v not under title %v", i, s)
@@ -34,8 +34,8 @@ func TestGridLeavesHolesEmpty(t *testing.T) {
 
 func TestNotebookSwitchesPages(t *testing.T) {
 	switched := make(chan int, 4)
-	var nb *NotebookWidget
-	Notebook().AssignTo(&nb).AddPage("One", Label("page one")).AddPage("Two", Label("page two")).
+	var nb *TabControlWidget
+	TabControl().AssignTo(&nb).AddPage("One", Label("page one")).AddPage("Two", Label("page two")).
 		OnSwitch(func() { switched <- nb.Page() })
 	tt := tester(t, nb)
 	if !tt.HasText("page one") || tt.HasText("page two") {
@@ -55,8 +55,8 @@ func TestNotebookSwitchesPages(t *testing.T) {
 // U12: Tabs clamps its choice without OnChange; the widget notices.
 func TestNotebookClampedPageIsReported(t *testing.T) {
 	switched := make(chan int, 4)
-	var nb *NotebookWidget
-	Notebook().AssignTo(&nb).AddPage("A", Label("a")).AddPage("B", Label("b")).
+	var nb *TabControlWidget
+	TabControl().AssignTo(&nb).AddPage("A", Label("a")).AddPage("B", Label("b")).
 		OnSwitch(func() { switched <- nb.Page() })
 	tt := tester(t, nb)
 	nb.SetPage(5)
@@ -95,11 +95,11 @@ func TestCardHidesItsBody(t *testing.T) {
 }
 
 func TestScrolledSeparatorFlow(t *testing.T) {
-	f := Flow(4)
+	f := FlowPanel(4)
 	for _, s := range []string{"one", "two", "three", "four", "five", "six"} {
 		f.Add(Label(s))
 	}
-	tt := tester(t, VBox(0).Add(Scrolled(Label("scrolled")).SetSize(300, 100), Separator(), f.SetSize(120, 0)))
+	tt := tester(t, VBox(0).Add(ScrollPanel(Label("scrolled")).SetSize(300, 100), Separator(), f.SetSize(120, 0)))
 	if !tt.HasText("scrolled") {
 		t.Fatalf("texts %q", tt.Texts())
 	}
@@ -122,7 +122,7 @@ func TestGridHiddenCellKeepsTheOthersInPlace(t *testing.T) {
 }
 func TestFrameIgnoresItsTitleAsItsChild(t *testing.T) {
 	l := Label("both")
-	tt := tester(t, Frame("").SetTitleWidget(l).Add(l)) // a duplicate key panics
+	tt := tester(t, GroupBox("").SetTitleWidget(l).Add(l)) // a duplicate key panics
 	if n := count(tt, "both"); n != 1 {
 		t.Fatalf("shown %d times", n)
 	}
@@ -150,7 +150,7 @@ func TestGridAttachOnATakenCellReplacesIt(t *testing.T) {
 // V3: the focus on a notebook's tabs and on a menu button follows each
 // widget when its box reorders and gains a sibling before it.
 func TestTabsAndMenuButtonFocusFollowTheWidget(t *testing.T) {
-	nb := Notebook().AddPage("One", Label("page one")).AddPage("Two", Label("page two"))
+	nb := TabControl().AddPage("One", Label("page one")).AddPage("Two", Label("page two"))
 	mb := MenuButton("Actions").SetMenu(MenuItem{Text: "Rename"})
 	box := VBox(0).Add(nb, mb)
 	tt := tester(t, box)

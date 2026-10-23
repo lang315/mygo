@@ -22,10 +22,10 @@ func BenchmarkWidgetFrame(b *testing.B) {
 				case 1:
 					box.Add(Button(fmt.Sprintf("Button %d", i)))
 				default:
-					box.Add(Entry().SetText(fmt.Sprintf("Text %d", i)))
+					box.Add(TextBox().SetText(fmt.Sprintf("Text %d", i)))
 				}
 			}
-			tt := ui.NewTester(content(Scrolled(box)), 1280, 800)
+			tt := ui.NewTester(content(ScrollPanel(box)), 1280, 800)
 			for range 10 {
 				tt.Frame()
 			}
