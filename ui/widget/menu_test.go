@@ -95,7 +95,7 @@ func TestMenuItemOpensAConfirm(t *testing.T) {
 
 func TestSetMenuBarClicks(t *testing.T) {
 	opened := make(chan struct{}, 1)
-	w := NewWindow("Menus", 300, 200).SetMenuBar(
+	w := NewForm("Menus", 300, 200).SetMenuBar(
 		MenuItem{Text: "File", Children: []MenuItem{{Text: "Open", OnClick: func() { opened <- struct{}{} }}}},
 	)
 	w.Show()

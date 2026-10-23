@@ -73,20 +73,20 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 	return e
 }
 
-// LinkWidget opens a web address when clicked.
-type LinkWidget struct {
-	common[LinkWidget]
+// LinkLabelWidget opens a web address when clicked.
+type LinkLabelWidget struct {
+	common[LinkLabelWidget]
 	text, url string
 }
 
-// Link makes a link showing text that opens url.
-func Link(text, url string) *LinkWidget {
-	l := &LinkWidget{text: text, url: url}
+// LinkLabel makes a link showing text that opens url.
+func LinkLabel(text, url string) *LinkLabelWidget {
+	l := &LinkLabelWidget{text: text, url: url}
 	l.init(l)
 	return l
 }
 
-func (l *LinkWidget) build(c *ui.Context) ui.Element { return ui.Link(c, l.text, l.url) }
+func (l *LinkLabelWidget) build(c *ui.Context) ui.Element { return ui.Link(c, l.text, l.url) }
 
 // ToggleWidget is a button that stays pressed.
 type ToggleWidget struct {
@@ -118,31 +118,31 @@ func (t *ToggleWidget) build(c *ui.Context) ui.Element {
 	return e
 }
 
-// CheckboxWidget is a check box with a label.
-type CheckboxWidget struct {
-	common[CheckboxWidget]
+// CheckBoxWidget is a check box with a label.
+type CheckBoxWidget struct {
+	common[CheckBoxWidget]
 	text     string
 	on       mirror[bool]
 	onChange func()
 }
 
-func Checkbox(text string) *CheckboxWidget {
-	b := &CheckboxWidget{text: text}
+func CheckBox(text string) *CheckBoxWidget {
+	b := &CheckBoxWidget{text: text}
 	b.init(b)
 	return b
 }
 
-func (b *CheckboxWidget) Checked() bool { mu.Lock(); defer mu.Unlock(); return b.on.value }
-func (b *CheckboxWidget) SetChecked(v bool) *CheckboxWidget {
+func (b *CheckBoxWidget) Checked() bool { mu.Lock(); defer mu.Unlock(); return b.on.value }
+func (b *CheckBoxWidget) SetChecked(v bool) *CheckBoxWidget {
 	change(func() { b.on.set(v) })
 	return b
 }
-func (b *CheckboxWidget) OnChange(fn func()) *CheckboxWidget {
+func (b *CheckBoxWidget) OnChange(fn func()) *CheckBoxWidget {
 	change(func() { b.onChange = fn })
 	return b
 }
 
-func (b *CheckboxWidget) build(c *ui.Context) ui.Element {
+func (b *CheckBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := b.on.bind()
 	e := ui.Checkbox(c, p, b.text).OnChange(onChange(&b.on, b.onChange))
 	if changed && b.onChange != nil {
@@ -180,18 +180,18 @@ func (s *SwitchWidget) build(c *ui.Context) ui.Element {
 	return e
 }
 
-// CheckboxGroupWidget is a check box per option.
-type CheckboxGroupWidget struct {
-	common[CheckboxGroupWidget]
+// CheckBoxGroupWidget is a check box per option.
+type CheckBoxGroupWidget struct {
+	common[CheckBoxGroupWidget]
 	dir      direction
 	opts     []Option
 	on       []mirror[bool]
 	onChange func()
 }
 
-// CheckboxGroup makes a check box per option, in a row or a column.
-func CheckboxGroup(row bool, opts ...Option) *CheckboxGroupWidget {
-	g := &CheckboxGroupWidget{opts: opts, on: make([]mirror[bool], len(opts))}
+// CheckBoxGroup makes a check box per option, in a row or a column.
+func CheckBoxGroup(row bool, opts ...Option) *CheckBoxGroupWidget {
+	g := &CheckBoxGroupWidget{opts: opts, on: make([]mirror[bool], len(opts))}
 	if row {
 		g.dir = horizontal
 	}
@@ -200,7 +200,7 @@ func CheckboxGroup(row bool, opts ...Option) *CheckboxGroupWidget {
 }
 
 // Values returns the values of the checked options, in option order.
-func (g *CheckboxGroupWidget) Values() []string {
+func (g *CheckBoxGroupWidget) Values() []string {
 	mu.Lock()
 	defer mu.Unlock()
 	var vs []string
@@ -213,7 +213,7 @@ func (g *CheckboxGroupWidget) Values() []string {
 }
 
 // SetValues checks the options of vs and unchecks the others.
-func (g *CheckboxGroupWidget) SetValues(vs ...string) *CheckboxGroupWidget {
+func (g *CheckBoxGroupWidget) SetValues(vs ...string) *CheckBoxGroupWidget {
 	change(func() {
 		for i, o := range g.opts {
 			g.on[i].set(slices.Contains(vs, o.Value))
@@ -222,12 +222,12 @@ func (g *CheckboxGroupWidget) SetValues(vs ...string) *CheckboxGroupWidget {
 	return g
 }
 
-func (g *CheckboxGroupWidget) OnChange(fn func()) *CheckboxGroupWidget {
+func (g *CheckBoxGroupWidget) OnChange(fn func()) *CheckBoxGroupWidget {
 	change(func() { g.onChange = fn })
 	return g
 }
 
-func (g *CheckboxGroupWidget) build(c *ui.Context) ui.Element {
+func (g *CheckBoxGroupWidget) build(c *ui.Context) ui.Element {
 	e := ui.Column(c)
 	if g.dir == horizontal {
 		e = ui.Row(c)

@@ -7,36 +7,42 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// SpinWidget edits a number between min and max.
-type SpinWidget struct {
-	common[SpinWidget]
+// NumericUpDownWidget edits a number between min and max.
+type NumericUpDownWidget struct {
+	common[NumericUpDownWidget]
 	min, max, step float64
 	value          mirror[float64]
 	onChange       func()
 	onEnter        func()
 }
 
-// Spin makes a number input from min to max, stepping by step.
-func Spin(min, max, step float64) *SpinWidget {
-	s := &SpinWidget{min: min, max: max, step: step}
+// NumericUpDown makes a number input from min to max, stepping by step.
+func NumericUpDown(min, max, step float64) *NumericUpDownWidget {
+	s := &NumericUpDownWidget{min: min, max: max, step: step}
 	s.value.set(min)
 	s.init(s)
 	return s
 }
 
-func (s *SpinWidget) Value() float64 { mu.Lock(); defer mu.Unlock(); return s.value.value }
-func (s *SpinWidget) Int() int       { return int(math.Round(s.Value())) }
-func (s *SpinWidget) SetValue(v float64) *SpinWidget {
+func (s *NumericUpDownWidget) Value() float64 { mu.Lock(); defer mu.Unlock(); return s.value.value }
+func (s *NumericUpDownWidget) Int() int       { return int(math.Round(s.Value())) }
+func (s *NumericUpDownWidget) SetValue(v float64) *NumericUpDownWidget {
 	change(func() { s.value.set(v) })
 	return s
 }
 
 // OnEnter runs fn when the user presses Enter in the number.
-func (s *SpinWidget) OnEnter(fn func()) *SpinWidget { change(func() { s.onEnter = fn }); return s }
+func (s *NumericUpDownWidget) OnEnter(fn func()) *NumericUpDownWidget {
+	change(func() { s.onEnter = fn })
+	return s
+}
 
-func (s *SpinWidget) OnChange(fn func()) *SpinWidget { change(func() { s.onChange = fn }); return s }
+func (s *NumericUpDownWidget) OnChange(fn func()) *NumericUpDownWidget {
+	change(func() { s.onChange = fn })
+	return s
+}
 
-func (s *SpinWidget) build(c *ui.Context) ui.Element {
+func (s *NumericUpDownWidget) build(c *ui.Context) ui.Element {
 	p, changed := s.value.bind()
 	if changed && s.onChange != nil {
 		Post(s.onChange)
@@ -51,14 +57,14 @@ func (s *SpinWidget) build(c *ui.Context) ui.Element {
 // RangeSpinWidget edits a range: two numbers, with text between and after.
 type RangeSpinWidget struct {
 	common[RangeSpinWidget]
-	lo, hi          *SpinWidget
+	lo, hi          *NumericUpDownWidget
 	between, suffix string
 }
 
 // RangeSpin makes two number inputs, the low one from min1 to max1 and the
 // high one from min2 to max2, with between and suffix shown around them.
 func RangeSpin(min1, max1, min2, max2, step float64, between, suffix string) *RangeSpinWidget {
-	r := &RangeSpinWidget{lo: Spin(min1, max1, step), hi: Spin(min2, max2, step), between: between, suffix: suffix}
+	r := &RangeSpinWidget{lo: NumericUpDown(min1, max1, step), hi: NumericUpDown(min2, max2, step), between: between, suffix: suffix}
 	r.init(r)
 	return r
 }
@@ -92,11 +98,11 @@ func (r *RangeSpinWidget) build(c *ui.Context) ui.Element {
 	})
 }
 
-// ComboWidget is a drop-down choice of one option, optionally grouped in
+// ComboBoxWidget is a drop-down choice of one option, optionally grouped in
 // titled sections with icons, as gota's ComboBox. Values must be unique;
 // texts need not be.
-type ComboWidget struct {
-	common[ComboWidget]
+type ComboBoxWidget struct {
+	common[ComboBoxWidget]
 	sections []comboSection // [0]: the options outside any section
 	value    mirror[string] // the chosen option's Value, "" for none
 	onChange func()
@@ -115,15 +121,15 @@ type sectionKey int
 // chevronDown is Lucide's chevron-down (ISC license).
 var chevronDown = lucide(`<path d="m6 9 6 6 6-6"/>`)
 
-// Combo makes a drop-down of opts, none chosen.
-func Combo(opts ...Option) *ComboWidget {
-	c := &ComboWidget{sections: []comboSection{{opts: slices.Clone(opts)}}}
+// ComboBox makes a drop-down of opts, none chosen.
+func ComboBox(opts ...Option) *ComboBoxWidget {
+	c := &ComboBoxWidget{sections: []comboSection{{opts: slices.Clone(opts)}}}
 	c.init(c)
 	return c
 }
 
 // find returns the option of value v. Under mu.
-func (c *ComboWidget) find(v string) (Option, bool) {
+func (c *ComboBoxWidget) find(v string) (Option, bool) {
 	if v == "" {
 		return Option{}, false
 	}
@@ -139,7 +145,7 @@ func (c *ComboWidget) find(v string) (Option, bool) {
 
 // edit applies fn to the sections, then unchooses a choice whose option is
 // gone. Under mu.
-func (c *ComboWidget) edit(fn func(s []comboSection) []comboSection) {
+func (c *ComboBoxWidget) edit(fn func(s []comboSection) []comboSection) {
 	c.sections = fn(c.sections)
 	if _, ok := c.find(c.value.value); !ok && c.value.value != "" {
 		c.value.set("")
@@ -147,17 +153,17 @@ func (c *ComboWidget) edit(fn func(s []comboSection) []comboSection) {
 }
 
 // Value returns the chosen option's value, "" for none.
-func (c *ComboWidget) Value() string { mu.Lock(); defer mu.Unlock(); return c.value.value }
+func (c *ComboBoxWidget) Value() string { mu.Lock(); defer mu.Unlock(); return c.value.value }
 
 // Selected returns the chosen option.
-func (c *ComboWidget) Selected() (Option, bool) {
+func (c *ComboBoxWidget) Selected() (Option, bool) {
 	mu.Lock()
 	defer mu.Unlock()
 	return c.find(c.value.value)
 }
 
 // SetValue chooses the option of value v; an unknown v chooses none.
-func (c *ComboWidget) SetValue(v string) *ComboWidget {
+func (c *ComboBoxWidget) SetValue(v string) *ComboBoxWidget {
 	change(func() {
 		if _, ok := c.find(v); !ok {
 			v = ""
@@ -167,10 +173,10 @@ func (c *ComboWidget) SetValue(v string) *ComboWidget {
 	return c
 }
 
-func (c *ComboWidget) Unselect() *ComboWidget { change(func() { c.value.set("") }); return c }
+func (c *ComboBoxWidget) Unselect() *ComboBoxWidget { change(func() { c.value.set("") }); return c }
 
 // SetOptions replaces the options outside any section.
-func (c *ComboWidget) SetOptions(opts ...Option) *ComboWidget {
+func (c *ComboBoxWidget) SetOptions(opts ...Option) *ComboBoxWidget {
 	opts = slices.Clone(opts) // the caller's slice may back opts
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection { s[0].opts = opts; return s })
@@ -180,7 +186,7 @@ func (c *ComboWidget) SetOptions(opts ...Option) *ComboWidget {
 
 // AddSection adds a section titled title, with the icon in the bytes of
 // a PNG (nil for none), holding opts.
-func (c *ComboWidget) AddSection(title string, icon []byte, opts ...Option) *ComboWidget {
+func (c *ComboBoxWidget) AddSection(title string, icon []byte, opts ...Option) *ComboBoxWidget {
 	bmp, opts := decodeImage(icon), slices.Clone(opts) // outside mu
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection { return append(s, comboSection{title, bmp, opts}) })
@@ -189,7 +195,7 @@ func (c *ComboWidget) AddSection(title string, icon []byte, opts ...Option) *Com
 }
 
 // RemoveSection removes the section titled title and its options.
-func (c *ComboWidget) RemoveSection(title string) *ComboWidget {
+func (c *ComboBoxWidget) RemoveSection(title string) *ComboBoxWidget {
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection {
 			return slices.DeleteFunc(s, func(x comboSection) bool { return x.title != "" && x.title == title })
@@ -199,7 +205,7 @@ func (c *ComboWidget) RemoveSection(title string) *ComboWidget {
 }
 
 // RemoveOption removes the option of value v.
-func (c *ComboWidget) RemoveOption(v string) *ComboWidget {
+func (c *ComboBoxWidget) RemoveOption(v string) *ComboBoxWidget {
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection {
 			for i := range s {
@@ -212,7 +218,7 @@ func (c *ComboWidget) RemoveOption(v string) *ComboWidget {
 }
 
 // SetOptionText changes the text of the option of value v.
-func (c *ComboWidget) SetOptionText(v, text string) *ComboWidget {
+func (c *ComboBoxWidget) SetOptionText(v, text string) *ComboBoxWidget {
 	change(func() {
 		c.edit(func(s []comboSection) []comboSection {
 			for i := range s {
@@ -229,7 +235,7 @@ func (c *ComboWidget) SetOptionText(v, text string) *ComboWidget {
 }
 
 // SectionLen returns how many options the section titled title holds.
-func (c *ComboWidget) SectionLen(title string) int {
+func (c *ComboBoxWidget) SectionLen(title string) int {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, s := range c.sections {
@@ -240,9 +246,12 @@ func (c *ComboWidget) SectionLen(title string) int {
 	return 0
 }
 
-func (c *ComboWidget) OnChange(fn func()) *ComboWidget { change(func() { c.onChange = fn }); return c }
+func (c *ComboBoxWidget) OnChange(fn func()) *ComboBoxWidget {
+	change(func() { c.onChange = fn })
+	return c
+}
 
-func (c *ComboWidget) build(ctx *ui.Context) ui.Element {
+func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 	p, changed := c.value.bind()
 	if changed && c.onChange != nil {
 		Post(c.onChange)
@@ -342,30 +351,33 @@ func (g *TagSelectWidget) build(c *ui.Context) ui.Element {
 	})
 }
 
-// ProgressWidget shows how far a task is.
-type ProgressWidget struct {
-	common[ProgressWidget]
+// ProgressBarWidget shows how far a task is.
+type ProgressBarWidget struct {
+	common[ProgressBarWidget]
 	fraction float64
 	text     string
 }
 
-func Progress() *ProgressWidget {
-	p := &ProgressWidget{}
+func ProgressBar() *ProgressBarWidget {
+	p := &ProgressBarWidget{}
 	p.init(p)
 	return p
 }
 
 // SetFraction sets how far the task is, 0 to 1; a negative fraction shows
 // a task of unknown length.
-func (p *ProgressWidget) SetFraction(f float64) *ProgressWidget {
+func (p *ProgressBarWidget) SetFraction(f float64) *ProgressBarWidget {
 	change(func() { p.fraction = f })
 	return p
 }
 
 // SetText sets the text shown under the bar.
-func (p *ProgressWidget) SetText(s string) *ProgressWidget { change(func() { p.text = s }); return p }
+func (p *ProgressBarWidget) SetText(s string) *ProgressBarWidget {
+	change(func() { p.text = s })
+	return p
+}
 
-func (p *ProgressWidget) build(c *ui.Context) ui.Element {
+func (p *ProgressBarWidget) build(c *ui.Context) ui.Element {
 	return ui.Column(c).Gap(c.Theme().Space(1)).Children(func() {
 		ui.Progress(c, p.fraction)
 		if p.text != "" {

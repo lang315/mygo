@@ -63,14 +63,14 @@ func (s *keys[K]) keep(index map[K]int) {
 
 // CheckboxColumn shows a check box first in each row, and one in the
 // header that checks the rows shown.
-func (t *TableWidget[T, K]) CheckboxColumn() *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) CheckboxColumn() *DataGridViewWidget[T, K] {
 	change(func() { t.checks = true })
 	return t
 }
 
 // shown returns the keys in that the rows shown hold, in the order shown.
 // Under mu.
-func (t *TableWidget[T, K]) shown(in *ui.Selection[K]) []K {
+func (t *DataGridViewWidget[T, K]) shown(in *ui.Selection[K]) []K {
 	n := in.Len()
 	if n == 0 {
 		return nil
@@ -89,14 +89,14 @@ func (t *TableWidget[T, K]) shown(in *ui.Selection[K]) []K {
 
 // Selected returns the keys of the rows selected that show, in the order
 // shown.
-func (t *TableWidget[T, K]) Selected() []K {
+func (t *DataGridViewWidget[T, K]) Selected() []K {
 	mu.Lock()
 	defer mu.Unlock()
 	return t.shown(&t.chosen.value)
 }
 
 // CountSelected returns how many rows are selected.
-func (t *TableWidget[T, K]) CountSelected() int {
+func (t *DataGridViewWidget[T, K]) CountSelected() int {
 	mu.Lock()
 	defer mu.Unlock()
 	return t.chosen.value.Len()
@@ -104,21 +104,21 @@ func (t *TableWidget[T, K]) CountSelected() int {
 
 // Checked returns the keys of the rows checked that show, in the order
 // shown.
-func (t *TableWidget[T, K]) Checked() []K {
+func (t *DataGridViewWidget[T, K]) Checked() []K {
 	mu.Lock()
 	defer mu.Unlock()
 	return t.shown(&t.checked.value)
 }
 
 // IsChecked reports whether the row of key k is checked.
-func (t *TableWidget[T, K]) IsChecked(k K) bool {
+func (t *DataGridViewWidget[T, K]) IsChecked(k K) bool {
 	mu.Lock()
 	defer mu.Unlock()
 	return t.checked.value.Has(k)
 }
 
 // SetChecked checks, or unchecks, the rows of keys ks.
-func (t *TableWidget[T, K]) SetChecked(ks []K, on bool) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) SetChecked(ks []K, on bool) *DataGridViewWidget[T, K] {
 	change(func() {
 		for _, k := range ks {
 			if _, ok := t.index[k]; ok || !on {
@@ -131,7 +131,7 @@ func (t *TableWidget[T, K]) SetChecked(ks []K, on bool) *TableWidget[T, K] {
 
 // AutoCheck unchecks the rows selected that show when at least half of
 // them are checked, and checks them all otherwise.
-func (t *TableWidget[T, K]) AutoCheck() *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) AutoCheck() *DataGridViewWidget[T, K] {
 	change(func() {
 		ks, on := t.shown(&t.chosen.value), 0
 		for _, k := range ks {
@@ -150,7 +150,7 @@ func (t *TableWidget[T, K]) AutoCheck() *TableWidget[T, K] {
 // checkedCount is ui's ListState.CheckedCount: how many of the rows shown
 // are checked, of how many. Under mu, while building, after bind: the
 // checks hold keys of rows only, so without a search, all of them show.
-func (t *TableWidget[T, K]) checkedCount() (count, total int) {
+func (t *DataGridViewWidget[T, K]) checkedCount() (count, total int) {
 	ks := &t.checked.shown
 	if t.filter == nil {
 		return ks.Len(), t.view.Len()
@@ -166,7 +166,7 @@ func (t *TableWidget[T, K]) checkedCount() (count, total int) {
 // commit takes what the user changed in s, but no key of a row gone: a
 // goroutine may delete rows between a frame and ui applying input to it.
 // On the main thread, without mu.
-func (t *TableWidget[T, K]) commit(s *keys[K]) {
+func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 	mu.Lock()
 	defer mu.Unlock()
 	s.value.CopyFrom(&s.shown)

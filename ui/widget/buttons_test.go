@@ -38,7 +38,7 @@ func TestDisabledButtonDoesNotClick(t *testing.T) {
 }
 
 func TestButtonVariantsBuild(t *testing.T) {
-	tt := tester(t, HBox(4).Add(Button("A").Suggested(), Button("B").Destructive(), Button("C").SetText("C2"), Link("Docs", "https://example.com")))
+	tt := tester(t, HBox(4).Add(Button("A").Suggested(), Button("B").Destructive(), Button("C").SetText("C2"), LinkLabel("Docs", "https://example.com")))
 	for _, s := range []string{"A", "B", "C2", "Docs"} {
 		if !tt.HasText(s) {
 			t.Errorf("no %q in %q", s, tt.Texts())
@@ -48,8 +48,8 @@ func TestButtonVariantsBuild(t *testing.T) {
 
 func TestCheckboxClickAndSet(t *testing.T) {
 	changed := make(chan bool, 4)
-	var cb *CheckboxWidget
-	Checkbox("Remember").AssignTo(&cb).OnChange(func() { changed <- cb.Checked() })
+	var cb *CheckBoxWidget
+	CheckBox("Remember").AssignTo(&cb).OnChange(func() { changed <- cb.Checked() })
 	tt := tester(t, cb)
 	click(t, tt, "Remember")
 	if !received(t, changed) || !cb.Checked() {
@@ -77,7 +77,7 @@ func TestToggleAndSwitch(t *testing.T) {
 }
 
 func TestCheckboxGroupValuesInOptionOrder(t *testing.T) {
-	g := CheckboxGroup(false, Option{"a", "Apple"}, Option{"b", "Banana"}, Option{"c", "Cherry"})
+	g := CheckBoxGroup(false, Option{"a", "Apple"}, Option{"b", "Banana"}, Option{"c", "Cherry"})
 	tt := tester(t, g)
 	click(t, tt, "Cherry")
 	click(t, tt, "Apple")

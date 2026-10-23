@@ -12,7 +12,7 @@ import (
 // TestWidgetDialogEscape presses a real Escape on a ui/widget dialog: it
 // closes as its close button closes it, and Run returns.
 func TestWidgetDialogEscape(t *testing.T) {
-	w := widget.NewWindow("Escape parent", 400, 300).SetContent(widget.Label("parent"))
+	w := widget.NewForm("Escape parent", 400, 300).SetContent(widget.Label("parent"))
 	w.Show()
 	t.Cleanup(w.Close)
 	eventually(t, "the parent window", func() bool { return w.Native() != nil })

@@ -26,7 +26,7 @@ func frames(fw *fake.Window) int {
 }
 
 func TestShowMakesTheWindow(t *testing.T) {
-	w := NewWindow("Hello", 640, 480)
+	w := NewForm("Hello", 640, 480)
 	w.SetContent(Label("content"))
 	w.Show()
 	defer w.Close()
@@ -41,7 +41,7 @@ func TestShowMakesTheWindow(t *testing.T) {
 
 func TestSetterRedrawsAShownWindow(t *testing.T) {
 	l := Label("a")
-	w := NewWindow("Redraw", 300, 200)
+	w := NewForm("Redraw", 300, 200)
 	w.SetContent(l)
 	w.Show()
 	defer w.Close()
@@ -56,7 +56,7 @@ func TestSetterRedrawsAShownWindow(t *testing.T) {
 }
 
 func TestHeaderBarHidesTheTitleBar(t *testing.T) {
-	w := NewWindow("Bar", 400, 300)
+	w := NewForm("Bar", 400, 300)
 	w.UseHeaderBar("subtitle").PackEnd(Button("Act"))
 	w.Show()
 	defer w.Close()
@@ -66,14 +66,14 @@ func TestHeaderBarHidesTheTitleBar(t *testing.T) {
 }
 
 func TestHeaderBarClientDecorations(t *testing.T) {
-	plain := NewWindow("Bar", 400, 300)
+	plain := NewForm("Bar", 400, 300)
 	plain.UseHeaderBar("")
 	plain.Show()
 	defer plain.Close()
 	if lastFake(t).Opts.ClientDecorations {
 		t.Fatal("ClientDecorations set by default")
 	}
-	w := NewWindow("Own", 400, 300)
+	w := NewForm("Own", 400, 300)
 	w.UseHeaderBar("").ClientDecorations(true)
 	w.Show()
 	defer w.Close()
@@ -83,7 +83,7 @@ func TestHeaderBarClientDecorations(t *testing.T) {
 }
 
 func TestOnCloseCanKeepTheWindow(t *testing.T) {
-	w := NewWindow("Keep", 300, 200)
+	w := NewForm("Keep", 300, 200)
 	asked := make(chan struct{}, 1)
 	w.OnClose(func() bool { asked <- struct{}{}; return false })
 	w.Show()
@@ -100,7 +100,7 @@ func TestOnCloseCanKeepTheWindow(t *testing.T) {
 // Review Focus 5: setters after the window closed do not touch it.
 func TestSettersAfterCloseDoNothingToTheWindow(t *testing.T) {
 	l := Label("a")
-	w := NewWindow("Gone", 300, 200)
+	w := NewForm("Gone", 300, 200)
 	w.SetContent(l)
 	w.Show()
 	n := w.Native()
@@ -118,7 +118,7 @@ func TestSettersAfterCloseDoNothingToTheWindow(t *testing.T) {
 // Review Focus 2 for the header bar: a widget packed twice shows once.
 func TestHeaderBarPackingAWidgetTwiceKeepsOne(t *testing.T) {
 	b := Button("Twice")
-	h := NewWindow("Dup", 300, 200).UseHeaderBar("")
+	h := NewForm("Dup", 300, 200).UseHeaderBar("")
 	h.PackStart(b).PackStart(b).PackEnd(b)
 	tt := tester(t, h)
 	n := 0
@@ -138,7 +138,7 @@ func TestOnCloseDuringQuitQuitsAgainOnYes(t *testing.T) {
 	old := quit
 	quit = func() { requitted <- struct{}{} }
 	defer func() { quit = old }()
-	w := NewWindow("Quit", 300, 200)
+	w := NewForm("Quit", 300, 200)
 	w.OnClose(func() bool { return true })
 	w.Show()
 	mygo.App.Quit()
@@ -155,7 +155,7 @@ func TestOnCloseAfterQuitAttemptDoesNotQuit(t *testing.T) {
 	quit = func() { quits <- struct{}{} }
 	defer func() { quit = old }()
 	asked := make(chan struct{}, 4)
-	w := NewWindow("NoQuit", 300, 200)
+	w := NewForm("NoQuit", 300, 200)
 	w.OnClose(func() bool { asked <- struct{}{}; return false })
 	w.Show()
 	mygo.App.Quit() // asked, says no
@@ -173,7 +173,7 @@ func TestOnCloseAfterQuitAttemptDoesNotQuit(t *testing.T) {
 	w.Close()
 }
 
-func lastFakeClosed(w *Window) bool {
+func lastFakeClosed(w *Form) bool {
 	for _, fw := range fb.Windows() {
 		if fw.Title() == "Quit" {
 			return fw.IsClosed()
@@ -183,7 +183,7 @@ func lastFakeClosed(w *Window) bool {
 }
 
 // waitClosed waits until w's native window has closed.
-func waitClosed(t *testing.T, w *Window) {
+func waitClosed(t *testing.T, w *Form) {
 	t.Helper()
 	mu.Lock()
 	done := w.done
@@ -192,7 +192,7 @@ func waitClosed(t *testing.T, w *Window) {
 }
 
 func TestShowAfterCloseShowsAgain(t *testing.T) {
-	w := NewWindow("Again", 300, 200)
+	w := NewForm("Again", 300, 200)
 	w.Show()
 	first := w.Native()
 	w.Close()
@@ -209,7 +209,7 @@ func TestShowAfterCloseShowsAgain(t *testing.T) {
 
 func TestConcurrentShowMakesOneWindow(t *testing.T) {
 	n := len(fb.Windows())
-	w := NewWindow("Once", 300, 200)
+	w := NewForm("Once", 300, 200)
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(w.Show)
@@ -224,7 +224,7 @@ func TestConcurrentShowMakesOneWindow(t *testing.T) {
 func TestCloseRequestsWhileAskingAskOnce(t *testing.T) {
 	asked := make(chan struct{}, 4)
 	answer := make(chan bool)
-	w := NewWindow("AskOnce", 300, 200)
+	w := NewForm("AskOnce", 300, 200)
 	w.OnClose(func() bool { asked <- struct{}{}; return <-answer })
 	w.Show()
 	defer w.Close()
@@ -245,7 +245,7 @@ func TestCloseRequestsWhileAskingAskOnce(t *testing.T) {
 }
 
 func TestMaximizeBeforeShow(t *testing.T) {
-	w := NewWindow("Max", 300, 200).Maximize()
+	w := NewForm("Max", 300, 200).Maximize()
 	w.Show()
 	defer w.Close()
 	if !lastFake(t).Opts.Maximized {
@@ -255,7 +255,7 @@ func TestMaximizeBeforeShow(t *testing.T) {
 
 func TestOnCloseSurvivesClose(t *testing.T) {
 	asked := make(chan struct{}, 1)
-	w := NewWindow("Keeps", 300, 200)
+	w := NewForm("Keeps", 300, 200)
 	w.OnClose(func() bool { asked <- struct{}{}; return true })
 	w.Show()
 	w.Close()
@@ -269,7 +269,7 @@ func TestOnCloseSurvivesClose(t *testing.T) {
 
 // Close while Show is still making the window: the window closes.
 func TestCloseWhileShowMakesTheWindow(t *testing.T) {
-	w := NewWindow("Racing", 300, 200)
+	w := NewForm("Racing", 300, 200)
 	off := mygo.App.OnWindowCreated(func(n *mygo.Window) {
 		if n.Title() == "Racing" {
 			w.Close() // Show has made n but not stored it yet

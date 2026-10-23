@@ -20,8 +20,8 @@ type acct struct {
 
 // testTable is a table of accounts by id: Name sorts and searches as
 // text, Score sorts as a number.
-func testTable(rows ...acct) *TableWidget[acct, int] {
-	return Table(func(a *acct) int { return a.id },
+func testTable(rows ...acct) *DataGridViewWidget[acct, int] {
+	return DataGridView(func(a *acct) int { return a.id },
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name },
 			Width: 200, Sortable: true, Filterable: true},
 		Column[acct]{Title: "Score", Text: func(a *acct) string { return strconv.Itoa(a.score) },
@@ -120,7 +120,7 @@ func TestTableIndexColumnShowsShownPositions(t *testing.T) {
 func TestTableCellsShowColorAndImage(t *testing.T) {
 	png := testPNG(t, color.White)
 	bmp := decodeImage(png)
-	tb := Table(func(a *acct) int { return a.id },
+	tb := DataGridView(func(a *acct) int { return a.id },
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name },
 			Color: func(a *acct) ui.Color { return ui.RGB(200, 0, 0) },
 			Image: func(a *acct) *ui.Bitmap { return bmp }},
@@ -241,7 +241,7 @@ func TestTableSearchShowsAllForBlankOrUnknown(t *testing.T) {
 }
 
 func TestTableSearchUsesTheColumnFilter(t *testing.T) {
-	tb := Table(func(a *acct) int { return a.id },
+	tb := DataGridView(func(a *acct) int { return a.id },
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Filterable: true,
 			Filter: func(a *acct, kw string) bool { return a.name == kw }},
 	).SetRows([]acct{{1, "ann", 0}, {2, "anna", 0}}).Expand()
@@ -310,7 +310,7 @@ func TestTablePanelCounts(t *testing.T) {
 }
 
 func TestTablePanelWithoutFilterableColumns(t *testing.T) {
-	tb := Table(func(a *acct) int { return a.id },
+	tb := DataGridView(func(a *acct) int { return a.id },
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }},
 	).SetRows([]acct{{1, "ann", 0}}).BottomPanel().SetSearchPlaceholder("Find").Expand()
 	tt := tester(t, tb)
@@ -387,7 +387,7 @@ func TestTableActivateGivesTheKey(t *testing.T) {
 
 func TestTableOnKeyRunsOnTheEventGoroutine(t *testing.T) {
 	got := make(chan []int, 1)
-	var tb *TableWidget[acct, int]
+	var tb *DataGridViewWidget[acct, int]
 	tb = testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).
 		OnKey(ui.KeyDelete, 0, func() {
 			if onEvents() {
@@ -404,7 +404,7 @@ func TestTableOnKeyRunsOnTheEventGoroutine(t *testing.T) {
 
 func TestTableRowMenuActsOnSelected(t *testing.T) {
 	done := make(chan bool, 1)
-	var tb *TableWidget[acct, int]
+	var tb *DataGridViewWidget[acct, int]
 	tb = testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).
 		ContextMenu(MenuItem{Text: "Delete", OnClick: func() { tb.DeleteRows(tb.Selected()...); done <- true }})
 	tt := tester(t, tb)
@@ -445,7 +445,7 @@ func TestTableSetColumnsLayoutOrdersColumns(t *testing.T) {
 
 func TestTableColumnsChangeGivesTheLayout(t *testing.T) {
 	got := make(chan ui.TableLayout, 64)
-	tb := Table(func(a *acct) int { return a.id },
+	tb := DataGridView(func(a *acct) int { return a.id },
 		Column[acct]{Title: "A", Text: func(a *acct) string { return a.name }, Width: 100},
 		Column[acct]{Title: "B", Text: func(a *acct) string { return a.name }, Width: 100},
 	).SetRows([]acct{{1, "ann", 0}}).OnColumnsChange(func(l ui.TableLayout) { got <- l }).Expand()
@@ -574,7 +574,7 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 	for i, r := range rows {
 		all[i] = r.id
 	}
-	setup := func(b *testing.B) (*TableWidget[acct, int], *ui.Tester) {
+	setup := func(b *testing.B) (*DataGridViewWidget[acct, int], *ui.Tester) {
 		tb := testTable(rows...).CheckboxColumn()
 		tt := ui.NewTester(content(tb), 1280, 800)
 		tb.SetChecked(all, true)
@@ -677,7 +677,7 @@ func TestTableRowsBuiltWhileLayingOutAreSafe(t *testing.T) {
 }
 
 func TestTableFitsItsWindowWithoutExpand(t *testing.T) {
-	tb := Table(func(a *acct) int { return a.id },
+	tb := DataGridView(func(a *acct) int { return a.id },
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }},
 	).SetRows(manyAccts(1000)).BottomPanel()
 	tt := tester(t, tb) // 600 DIPs tall
@@ -689,7 +689,7 @@ func TestTableFitsItsWindowWithoutExpand(t *testing.T) {
 // A selected row's text takes the selection's color, not its column's,
 // as GTK and AppKit draw it: red text on the accent would not read.
 func TestTableSelectedRowDropsTheColumnColor(t *testing.T) {
-	tb := Table(func(a *acct) int { return a.id },
+	tb := DataGridView(func(a *acct) int { return a.id },
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name },
 			Color: func(a *acct) ui.Color { return ui.RGB(220, 0, 0) }},
 	).SetRows([]acct{{1, "annnnnnn", 0}}).Expand()

@@ -7,7 +7,7 @@ package widget
 // returns a value, as gota's dialogs do. Escape closes it as its close
 // button does.
 type Dialog struct {
-	*Window
+	*Form
 	title, subtitle *LabelWidget
 	onBeforeRun     func()
 }
@@ -16,10 +16,10 @@ type Dialog struct {
 // subtitle under it ("" for none), showing content in a window width by
 // height DIPs, title bar included. A macOS sheet has none: it shows that
 // much shorter, and the title is drawn in the dialog. To open a dialog
-// from a dialog, pass the outer one's Window as parent.
-func NewDialog(parent *Window, title, subtitle string, width, height int, content Widget) *Dialog {
+// from a dialog, pass the outer one's Form as parent.
+func NewDialog(parent *Form, title, subtitle string, width, height int, content Control) *Dialog {
 	d := &Dialog{
-		Window:   NewWindow(title, width, height),
+		Form:     NewForm(title, width, height),
 		title:    Label(title).Bold().TextSize(LG),
 		subtitle: Label(subtitle).Muted().SetVisible(subtitle != ""),
 	}
@@ -31,7 +31,7 @@ func NewDialog(parent *Window, title, subtitle string, width, height int, conten
 // SetTitle changes the title, in the window's title bar and in the dialog.
 func (d *Dialog) SetTitle(s string) *Dialog {
 	d.title.SetText(s)
-	d.Window.SetTitle(s)
+	d.Form.SetTitle(s)
 	return d
 }
 
@@ -49,7 +49,7 @@ func (d *Dialog) OnBeforeRun(fn func()) *Dialog { change(func() { d.onBeforeRun 
 func (d *Dialog) SetDeletable(on bool) *Dialog { change(func() { d.deletable = on }); return d }
 
 // SetResizable lets the user resize the dialog, or not.
-func (d *Dialog) SetResizable(on bool) *Dialog { d.Window.SetResizable(on); return d }
+func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return d }
 
 // Run shows the dialog and returns when it closes: by Close, by the user,
 // or with its parent. In a handler it runs the other handlers meanwhile,

@@ -10,7 +10,7 @@ import (
 )
 
 func TestSpinTypedValue(t *testing.T) {
-	s := Spin(0, 100, 1).SetValue(5)
+	s := NumericUpDown(0, 100, 1).SetValue(5)
 	tt := tester(t, s)
 	focus(tt, 1)
 	tt.Key(0, ui.KeyEnd)
@@ -25,9 +25,9 @@ func TestSpinTypedValue(t *testing.T) {
 // goes in, and OnFocusOut waits for the focus to leave the field.
 func TestSpinFocus(t *testing.T) {
 	left := make(chan struct{}, 1)
-	s := Spin(0, 100, 1).SetValue(5)
+	s := NumericUpDown(0, 100, 1).SetValue(5)
 	s.OnFocusOut(func() { left <- struct{}{} })
-	tt := tester(t, VBox(0).Add(s, Entry()))
+	tt := tester(t, VBox(0).Add(s, TextBox()))
 	s.Focus()
 	tt.Frame()
 	tt.Key(0, ui.KeyEnd)
@@ -61,7 +61,7 @@ func TestRangeSpinValues(t *testing.T) {
 }
 
 func TestComboValueAndText(t *testing.T) {
-	c := Combo(Option{"vn", "Vietnam"}, Option{"us", "United States"})
+	c := ComboBox(Option{"vn", "Vietnam"}, Option{"us", "United States"})
 	c.SetValue("us")
 	tt := tester(t, c)
 	if !tt.HasText("United States") {
@@ -92,7 +92,7 @@ func TestTagSelect(t *testing.T) {
 }
 
 func TestProgressAndSpinner(t *testing.T) {
-	p := Progress().SetFraction(0.5).SetText("Half")
+	p := ProgressBar().SetFraction(0.5).SetText("Half")
 	s := Spinner()
 	tt := tester(t, VBox(0).Add(p, s))
 	if !tt.HasText("Half") {
@@ -105,7 +105,7 @@ func TestProgressAndSpinner(t *testing.T) {
 }
 
 func TestComboChoosesByValueWithEqualTexts(t *testing.T) {
-	c := Combo(Option{"a", "Same"}, Option{"b", "Same"}).SetValue("b")
+	c := ComboBox(Option{"a", "Same"}, Option{"b", "Same"}).SetValue("b")
 	tester(t, c)
 	if c.Value() != "b" {
 		t.Fatalf("Value %q, want b", c.Value())
@@ -114,8 +114,8 @@ func TestComboChoosesByValueWithEqualTexts(t *testing.T) {
 
 func TestComboSections(t *testing.T) {
 	changed := make(chan string, 4)
-	var c *ComboWidget
-	Combo().AssignTo(&c).
+	var c *ComboBoxWidget
+	ComboBox().AssignTo(&c).
 		AddSection("Fruits", nil, Option{"apple", "Apple"}, Option{"pear", "Pear"}).
 		AddSection("Vegetables", testPNG(t, color.RGBA{0, 128, 0, 255}), Option{"kale", "Kale"}).
 		SetValue("apple").
@@ -139,7 +139,7 @@ func TestComboSections(t *testing.T) {
 }
 
 func TestComboRemoveAndRename(t *testing.T) {
-	c := Combo(Option{"x", "X"}).AddSection("S", nil, Option{"y", "Y"}).SetValue("y")
+	c := ComboBox(Option{"x", "X"}).AddSection("S", nil, Option{"y", "Y"}).SetValue("y")
 	tt := tester(t, c)
 	c.SetOptionText("y", "Why")
 	tt.Frame()
@@ -160,7 +160,7 @@ func TestComboEditsLeaveTheCallersOptions(t *testing.T) {
 	opts := []Option{{"x", "X"}, {"y", "Y"}}
 	sec := []Option{{"z", "Z"}, {"w", "W"}}
 	more := []Option{{"v", "V"}, {"u", "U"}}
-	c := Combo(opts...).AddSection("S", nil, sec...).SetOptions(more...)
+	c := ComboBox(opts...).AddSection("S", nil, sec...).SetOptions(more...)
 	c.SetOptionText("v", "Vee").SetOptionText("z", "Zed").RemoveOption("u").RemoveOption("z")
 	if opts[0].Text != "X" || sec[0] != (Option{"z", "Z"}) || sec[1] != (Option{"w", "W"}) ||
 		more[0].Text != "V" || more[1] != (Option{"u", "U"}) {
@@ -173,7 +173,7 @@ func TestComboEditsLeaveTheCallersOptions(t *testing.T) {
 // the wheel scrolls back to the first section's header. (Choosing it is
 // ui's TestSelectLongPopupScrolls.)
 func TestComboLongSectionedPopupScrolls(t *testing.T) {
-	c := Combo()
+	c := ComboBox()
 	for s := range 5 {
 		var opts []Option
 		for i := range 20 {
@@ -202,12 +202,12 @@ func TestComboLongSectionedPopupScrolls(t *testing.T) {
 }
 
 // V4: popups close on Escape or an outside click without OnChange; no
-// widget binds such an open flag (a Combo's is inside ui.SelectBase), so
+// widget binds such an open flag (a ComboBox's is inside ui.SelectBase), so
 // closing one leaves the value alone and reports nothing.
 func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
 	changed := make(chan string, 4)
-	var c *ComboWidget
-	Combo(Option{"a", "Alpha"}, Option{"b", "Beta"}).AssignTo(&c).SetValue("a").
+	var c *ComboBoxWidget
+	ComboBox(Option{"a", "Alpha"}, Option{"b", "Beta"}).AssignTo(&c).SetValue("a").
 		OnChange(func() { changed <- c.Value() })
 	tt := tester(t, c)
 	for i, dismiss := range []func(){
@@ -239,7 +239,7 @@ func TestComboClosedWithoutChoosingKeepsItsValue(t *testing.T) {
 // A click on a section header chooses nothing and keeps the keyboard on the
 // combo: the arrows still move among its options.
 func TestComboHeaderClickKeepsArrows(t *testing.T) {
-	c := Combo().AddSection("Fruit", nil, Option{"a", "Apple"}, Option{"b", "Banana"}, Option{"c", "Cherry"}).
+	c := ComboBox().AddSection("Fruit", nil, Option{"a", "Apple"}, Option{"b", "Banana"}, Option{"c", "Cherry"}).
 		SetValue("a")
 	tt := tester(t, c)
 	click(t, tt, "Apple")

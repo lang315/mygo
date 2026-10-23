@@ -14,7 +14,7 @@ import (
 // An entry moved to another box keeps its caret: typing goes where the
 // caret was, not to the end.
 func TestReparentedWidgetKeepsItsState(t *testing.T) {
-	e := Entry().SetText("abcdef")
+	e := TextBox().SetText("abcdef")
 	left, right := VBox(0).Add(e), VBox(0)
 	tt := tester(t, HBox(0).Add(left, right))
 	e.Focus()
@@ -35,12 +35,12 @@ func TestReparentedWidgetKeepsItsState(t *testing.T) {
 	}
 }
 
-func list100() *ScrolledWidget {
+func list100() *ScrollPanelWidget {
 	box := VBox(0)
 	for i := range 100 {
 		box.Add(Label(fmt.Sprintf("row %d", i)))
 	}
-	return Scrolled(box).SetSize(300, 200)
+	return ScrollPanel(box).SetSize(300, 200)
 }
 
 // rowY is where the label "row 30" is.
@@ -68,7 +68,7 @@ func scrollDown(t *testing.T, tt *ui.Tester) float32 {
 }
 
 func TestNotebookPageKeepsItsState(t *testing.T) {
-	nb := Notebook().AddPage("One", list100()).AddPage("Two", Label("two"))
+	nb := TabControl().AddPage("One", list100()).AddPage("Two", Label("two"))
 	tt := tester(t, nb)
 	before := scrollDown(t, tt)
 	nb.SetPage(1)
@@ -147,7 +147,7 @@ func labelY(fw *fake.Window, s string) float64 {
 // A window's content swapped out and back keeps its state.
 func TestSetContentBackKeepsState(t *testing.T) {
 	s := list100()
-	w := NewWindow("Swap", 400, 300).SetContent(s)
+	w := NewForm("Swap", 400, 300).SetContent(s)
 	w.Show()
 	defer w.Close()
 	fw := waitFake(t, "Swap")
@@ -175,7 +175,7 @@ func TestSetContentBackKeepsState(t *testing.T) {
 func TestDroppedInputsAreFreed(t *testing.T) {
 	box := VBox(0)
 	tt := tester(t, box)
-	ws := []Widget{Entry(), TextView(), Checkbox("c"), Toggle("t"), Switch(),
+	ws := []Control{TextBox(), MultilineTextBox(), CheckBox("c"), Toggle("t"), Switch(),
 		RadioGroup(false, Option{"a", "A"}, Option{"b", "B"})}
 	ids := make([]int, len(ws))
 	for i, w := range ws {
@@ -202,9 +202,9 @@ func TestDroppedInputsAreFreed(t *testing.T) {
 // A widget moved to another window leaves the keeper of the first, which
 // would otherwise keep its old state there for as long as the app holds it.
 func TestWidgetMovedToAnotherWindowLeavesTheFirst(t *testing.T) {
-	e := Entry()
-	a := NewWindow("Move A", 300, 200).SetContent(e)
-	b := NewWindow("Move B", 300, 200).SetContent(Label("b"))
+	e := TextBox()
+	a := NewForm("Move A", 300, 200).SetContent(e)
+	b := NewForm("Move B", 300, 200).SetContent(Label("b"))
 	a.Show()
 	defer a.Close()
 	b.Show()
@@ -227,9 +227,9 @@ func TestWidgetMovedToAnotherWindowLeavesTheFirst(t *testing.T) {
 // An entry moved to another window keeps the focus and where its caret
 // was.
 func TestWidgetMovedToAnotherWindowKeepsItsCaret(t *testing.T) {
-	e := Entry().SetText("abc").Focus()
-	a := NewWindow("Caret A", 300, 200).SetContent(e)
-	b := NewWindow("Caret B", 300, 200).SetContent(Label("b"))
+	e := TextBox().SetText("abc").Focus()
+	a := NewForm("Caret A", 300, 200).SetContent(e)
+	b := NewForm("Caret B", 300, 200).SetContent(Label("b"))
 	a.Show()
 	defer a.Close()
 	b.Show()
@@ -257,8 +257,8 @@ func TestWidgetMovedToAnotherWindowKeepsItsCaret(t *testing.T) {
 // An entry with the focus on a notebook page gets it back as the page
 // comes back: typing goes into it.
 func TestNotebookPageGetsItsFocusBack(t *testing.T) {
-	e := Entry().SetText("ab")
-	nb := Notebook().AddPage("One", e).AddPage("Two", Label("two"))
+	e := TextBox().SetText("ab")
+	nb := TabControl().AddPage("One", e).AddPage("Two", Label("two"))
 	tt := tester(t, nb)
 	e.Focus()
 	tt.Frame()

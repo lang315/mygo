@@ -9,9 +9,9 @@ import (
 )
 
 // shownParent shows a window to be a dialog's parent.
-func shownParent(t *testing.T, title string) *Window {
+func shownParent(t *testing.T, title string) *Form {
 	t.Helper()
-	p := NewWindow(title, 600, 400)
+	p := NewForm(title, 600, 400)
 	p.Show()
 	t.Cleanup(p.Close)
 	return p
@@ -47,7 +47,7 @@ func TestDialogShowsItsTitleInside(t *testing.T) {
 	fw := waitFake(t, "Titled")
 	press(t, fw, "Subtitled") // drawn in the content; pressing a label is harmless
 	d.Close()
-	waitClosed(t, d.Window)
+	waitClosed(t, d.Form)
 }
 
 func TestUndeletableDialogStaysOpen(t *testing.T) {
@@ -84,7 +84,7 @@ func TestClosingTheParentEndsNestedRuns(t *testing.T) {
 	p := shownParent(t, "P3")
 	var order []string
 	outer := NewDialog(p, "Outer", "", 400, 300, Label("outer"))
-	inner := NewDialog(outer.Window, "Inner", "", 300, 200, Label("inner"))
+	inner := NewDialog(outer.Form, "Inner", "", 300, 200, Label("inner"))
 	outer.OnBeforeRun(func() {
 		Post(func() { inner.Run(); order = append(order, "inner") })
 	})

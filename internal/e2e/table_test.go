@@ -26,14 +26,14 @@ func TestWidgetTable(t *testing.T) {
 		rows[i] = row{i, i}
 	}
 	var built atomic.Int64 // cells built, which frames do
-	tb := widget.Table(func(r *row) int { return r.id },
+	tb := widget.DataGridView(func(r *row) int { return r.id },
 		widget.Column[row]{Title: "Name", Width: 200, Sortable: true, Filterable: true,
 			Text: func(r *row) string { built.Add(1); return fmt.Sprintf("row%05d", r.id) }},
 		widget.Column[row]{Title: "N", Align: widget.End, Sortable: true,
 			Text:    func(r *row) string { return strconv.Itoa(r.n) },
 			Compare: func(a, b *row) int { return cmp.Compare(a.n, b.n) }},
 	).SetRows(rows).CheckboxColumn().BottomPanel()
-	w := widget.NewWindow("Table", 500, 240).SetContent(tb)
+	w := widget.NewForm("Table", 500, 240).SetContent(tb)
 	w.Show()
 	eventually(t, "the table's first frame", func() bool { return built.Load() > 0 })
 	t.Cleanup(w.Native().Destroy)

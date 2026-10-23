@@ -15,7 +15,7 @@ func TestImageTakesItsSize(t *testing.T) {
 		"png": testPNG(t, color.RGBA{255, 0, 0, 255}),
 		"bad": []byte("not an image"),
 	} {
-		tt := ui.NewTester(View(HBox(0).Add(Image(data, 40, 20), Label("after"))), 800, 600)
+		tt := ui.NewTester(View(HBox(0).Add(PictureBox(data, 40, 20), Label("after"))), 800, 600)
 		tt.Frame()
 		if a := find(t, tt, "after"); a.X < 39.5 || a.X > 40.5 {
 			t.Errorf("%s: after at %v, want x 40", name, a)

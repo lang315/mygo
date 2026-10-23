@@ -64,30 +64,30 @@ func decodeImage(data []byte) *ui.Bitmap {
 	return bmp
 }
 
-// ImageWidget shows an image.
-type ImageWidget struct {
-	common[ImageWidget]
+// PictureBoxWidget shows an image.
+type PictureBoxWidget struct {
+	common[PictureBoxWidget]
 	bmp  *ui.Bitmap
 	w, h float32
 }
 
-// Image shows the image in data (PNG, JPEG, GIF, WebP or BMP) w by h DIPs;
+// PictureBox shows the image in data (PNG, JPEG, GIF, WebP or BMP) w by h DIPs;
 // 0 keeps the image's own size. Bytes that are no image leave the room
 // empty.
-func Image(data []byte, w, h float32) *ImageWidget {
-	i := &ImageWidget{bmp: decodeImage(data), w: w, h: h}
+func PictureBox(data []byte, w, h float32) *PictureBoxWidget {
+	i := &PictureBoxWidget{bmp: decodeImage(data), w: w, h: h}
 	i.init(i)
 	return i
 }
 
 // SetImage shows another image.
-func (i *ImageWidget) SetImage(data []byte) *ImageWidget {
+func (i *PictureBoxWidget) SetImage(data []byte) *PictureBoxWidget {
 	bmp := decodeImage(data) // outside mu: decoding takes a while
 	change(func() { i.bmp = bmp })
 	return i
 }
 
-func (i *ImageWidget) build(c *ui.Context) ui.Element {
+func (i *PictureBoxWidget) build(c *ui.Context) ui.Element {
 	var e ui.Element
 	if i.bmp == nil {
 		e = ui.Box(c)

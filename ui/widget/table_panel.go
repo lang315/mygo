@@ -18,7 +18,7 @@ var englishPanel = PanelText{Rows: "Rows: %d", Selected: "Selected: %d", Checked
 // BottomPanel shows under the table how many rows it has, are selected
 // and are checked, and, with Filterable columns, a search: a column
 // chosen in a combo, a keyword, and a button (or Enter) running it.
-func (t *TableWidget[T, K]) BottomPanel() *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 	total, selected, checked := Label(""), Label(""), Label("")
 	panel := HBox(12).Add(total, selected, checked)
 	var opts []Option
@@ -27,12 +27,12 @@ func (t *TableWidget[T, K]) BottomPanel() *TableWidget[T, K] {
 			opts = append(opts, Option{Value: cl.Title, Text: cl.Title})
 		}
 	}
-	var column *ComboWidget
-	var keyword *EntryWidget
+	var column *ComboBoxWidget
+	var keyword *TextBoxWidget
 	var button *ButtonWidget
 	if len(opts) > 0 {
-		column = Combo(opts...).SetValue(opts[0].Value)
-		keyword = Entry().SetPlaceholder("Keyword").OnEnter(t.searchPanel).SetSize(240, 0)
+		column = ComboBox(opts...).SetValue(opts[0].Value)
+		keyword = TextBox().SetPlaceholder("Keyword").OnEnter(t.searchPanel).SetSize(240, 0)
 		button = Button("").OnClick(t.searchPanel) // counts sets its text
 		panel.PackEnd(button, false, false).PackEnd(keyword, false, false).PackEnd(column, false, false)
 	}
@@ -44,21 +44,21 @@ func (t *TableWidget[T, K]) BottomPanel() *TableWidget[T, K] {
 }
 
 // PanelText sets the words of the bottom panel, in English by default.
-func (t *TableWidget[T, K]) PanelText(pt PanelText) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) PanelText(pt PanelText) *DataGridViewWidget[T, K] {
 	change(func() { t.text = pt })
 	return t
 }
 
 // OnBeforeSearch runs fn with the column and the keyword, trimmed, of a
 // search from the bottom panel, before it runs.
-func (t *TableWidget[T, K]) OnBeforeSearch(fn func(column, keyword string)) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) OnBeforeSearch(fn func(column, keyword string)) *DataGridViewWidget[T, K] {
 	change(func() { t.beforeSearch = fn })
 	return t
 }
 
 // SetSearchPlaceholder sets what the panel's empty keyword shows; call it
 // after BottomPanel.
-func (t *TableWidget[T, K]) SetSearchPlaceholder(s string) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) SetSearchPlaceholder(s string) *DataGridViewWidget[T, K] {
 	mu.Lock()
 	e := t.keyword
 	mu.Unlock()
@@ -69,7 +69,7 @@ func (t *TableWidget[T, K]) SetSearchPlaceholder(s string) *TableWidget[T, K] {
 }
 
 // searchPanel runs the panel's search, on the event goroutine.
-func (t *TableWidget[T, K]) searchPanel() {
+func (t *DataGridViewWidget[T, K]) searchPanel() {
 	mu.Lock()
 	column, keyword, before := t.column, t.keyword, t.beforeSearch
 	mu.Unlock()
@@ -83,7 +83,7 @@ func (t *TableWidget[T, K]) searchPanel() {
 // Search shows only the rows whose column titled column holds keyword,
 // as the column's Filter decides; a keyword of spaces, or a column not
 // Filterable, shows them all. The bottom panel shows the search too.
-func (t *TableWidget[T, K]) Search(column, keyword string) *TableWidget[T, K] {
+func (t *DataGridViewWidget[T, K]) Search(column, keyword string) *DataGridViewWidget[T, K] {
 	keyword = strings.TrimSpace(keyword)
 	mu.Lock()
 	combo, entry := t.column, t.keyword
@@ -100,7 +100,7 @@ func (t *TableWidget[T, K]) Search(column, keyword string) *TableWidget[T, K] {
 }
 
 // keep returns the filter of a search, nil for none. Under mu.
-func (t *TableWidget[T, K]) keep(column, keyword string) func(*T) bool {
+func (t *DataGridViewWidget[T, K]) keep(column, keyword string) func(*T) bool {
 	i := slices.IndexFunc(t.cols, func(cl Column[T]) bool { return cl.Filterable && cl.Title == column })
 	if keyword == "" || i < 0 {
 		return nil
@@ -114,7 +114,7 @@ func (t *TableWidget[T, K]) keep(column, keyword string) func(*T) bool {
 
 // counts sets the panel's counts, and its words. Under mu, while
 // building.
-func (t *TableWidget[T, K]) counts() {
+func (t *DataGridViewWidget[T, K]) counts() {
 	if t.searchButton != nil {
 		t.searchButton.text = t.text.Search
 	}

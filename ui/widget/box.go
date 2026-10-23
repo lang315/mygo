@@ -12,7 +12,7 @@ type BoxWidget struct {
 }
 
 type boxItem struct {
-	w                 Widget
+	w                 Control
 	expand, fill, end bool
 }
 
@@ -41,7 +41,7 @@ func newBox(d direction, spacing int) *BoxWidget {
 
 // Add adds widgets after the others at the start, at their natural size.
 // A widget already in the box stays where it is.
-func (b *BoxWidget) Add(ws ...Widget) *BoxWidget {
+func (b *BoxWidget) Add(ws ...Control) *BoxWidget {
 	change(func() {
 		for _, w := range ws {
 			b.add(boxItem{w: w})
@@ -53,13 +53,13 @@ func (b *BoxWidget) Add(ws ...Widget) *BoxWidget {
 // Pack adds w after the others at the start. With expand it takes a share
 // of the free room; with fill it grows to fill that share, else it sits in
 // the middle of it.
-func (b *BoxWidget) Pack(w Widget, expand, fill bool) *BoxWidget {
+func (b *BoxWidget) Pack(w Control, expand, fill bool) *BoxWidget {
 	change(func() { b.add(boxItem{w: w, expand: expand, fill: fill}) })
 	return b
 }
 
 // PackEnd adds w at the end, before the widgets packed at the end earlier.
-func (b *BoxWidget) PackEnd(w Widget, expand, fill bool) *BoxWidget {
+func (b *BoxWidget) PackEnd(w Control, expand, fill bool) *BoxWidget {
 	change(func() { b.add(boxItem{w: w, expand: expand, fill: fill, end: true}) })
 	return b
 }
@@ -74,7 +74,7 @@ func (b *BoxWidget) add(it boxItem) {
 }
 
 // Remove takes w out of the box.
-func (b *BoxWidget) Remove(w Widget) *BoxWidget {
+func (b *BoxWidget) Remove(w Control) *BoxWidget {
 	change(func() {
 		for i, it := range b.items {
 			if it.w == w {
