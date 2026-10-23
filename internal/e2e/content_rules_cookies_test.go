@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ import (
 // that the cookie its response sets is not kept, while the same requests
 // to /open/ (no rule) send and keep cookies.
 func TestContentRulesBlockCookies(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("WebView2 adds cookies after WebResourceRequested and shows no response, so block-cookies keeps none off (docs/windows.md)")
+	}
 	prefix := fmt.Sprintf("mygo%d", time.Now().UnixNano())
 	open, track := prefix+"open", prefix+"track"
 	var mu sync.Mutex
