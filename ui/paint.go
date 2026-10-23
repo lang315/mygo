@@ -158,12 +158,12 @@ func (e *node) shadowMargin() float32 {
 // whose words paint over its paragraph (paintInline); effects and blurs,
 // which draw their content on a layer reaching beyond it; dividers, laid
 // across a container; the debug overlay, over margins; exit transitions'
-// copies; and color transitions, which note the frames they paint in.
+// copies; and transitions that move elements.
 func (e *node) setInk(vis Rect) {
 	m := e.shadowMargin() + 4
 	ink := [4]float32{vis.X - m, vis.Y - m, vis.X + vis.W + m, vis.Y + vis.H + m}
 	no := e.isInline() || e.kind == kindText && e.first != nil || e.effect != nil || e.blur > 0 ||
-		e.flags&(flagDividers|flagDebug) != 0 || e.ghosts || e.leaving != 0 || e.st.trec != nil
+		e.flags&(flagDividers|flagDebug) != 0 || e.ghosts || e.leaving != 0 || e.st.trec != nil && !e.st.trec.colorsOnly()
 	for ch := e.first; ch != nil; ch = ch.next {
 		ink = [4]float32{min(ink[0], ch.ink[0]), min(ink[1], ch.ink[1]), max(ink[2], ch.ink[2]), max(ink[3], ch.ink[3])}
 		no = no || ch.noCull
