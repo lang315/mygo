@@ -646,8 +646,8 @@ Triggers take `url-filter`, `url-filter-is-case-sensitive`, one of
 Actions are `block`, `block-cookies`, `make-https`, `css-display-none` with
 a `selector`, and `ignore-previous-rules`, which undoes what the rules
 before it did to a load. Regular expressions are WebKit's: no alternatives
-(`|`), counted repetitions, groups such as `(?:` or classes such as `\d`,
-and ASCII only.
+(`|`), counted repetitions, flags or lookarounds such as `(?i)` or `(?=`,
+or classes such as `\d`, and ASCII only.
 Domains are lowercase, in punycode. A rule whose selector the engine cannot
 parse is skipped; any other mistake fails the whole list.
 
