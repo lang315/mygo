@@ -670,8 +670,9 @@ adopts. There:
 
 - WebSockets are not blocked: WebView2 does not show MyGo their requests.
 - Popups (`resource-type` `popup`) are not matched.
-- `block-cookies` removes the cookies of the request, not those of the
-  response.
+- `block-cookies` does nothing: WebView2 adds the cookies to a request
+  after it shows MyGo the request, and shows no response, so neither the
+  request's cookies nor the response's are kept off.
 - An element whose own `style` says `display: ... !important` stays: the
   style sheet is the page's, where WebKit's is the user's, which wins.
 

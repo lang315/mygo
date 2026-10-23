@@ -75,7 +75,9 @@ var applyContentRules func(n platform.Page, rules []*ContentRules)
 // WebKit's content blockers; on Windows MyGo matches every load of a page
 // applying rules against them, and hides elements with a style sheet each
 // document adopts. There WebSockets go unblocked, as WebView2 does not
-// show their requests, and an element's inline style with !important
+// show their requests, block-cookies keeps no cookies off a request or a
+// response, as WebView2 adds the cookies after it shows the request and
+// shows no response, and an element's inline style with !important
 // wins over the style sheet. In browsers it returns an error matching
 // errors.ErrUnsupported.
 func CompileContentRules(id, rules string) (*ContentRules, error) {
