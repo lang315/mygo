@@ -699,7 +699,9 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 		s.editor.queue = append(s.editor.queue, editEvent{kind: editKey, mods: mods, key: key})
 		rt.blinkStart = rt.now()
 		rt.requestFrame()
-		return false
+		// Taken: the menu item of the key, as Edit › Paste's Ctrl+V on
+		// Windows, leaves it rather than pasting a second time.
+		return true
 	}
 	// A space inside a prefix being typed extends it, even where plain Space
 	// is a shortcut (a table's checking rows).
