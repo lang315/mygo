@@ -163,7 +163,8 @@ func newPattern(source string, sensitive bool) (pattern, error) {
 
 // webKitRegexp reports what of source WebKit's content blockers do not
 // take: alternatives, counted repetitions, classes as \d, flags and
-// lookarounds as (?i) and (?=, "^" but at the start, and other than ASCII.
+// lookarounds as (?i) and (?=, "^" but at the start, "^" and "$" repeated
+// as in ^*, and other than ASCII.
 func webKitRegexp(source string) error {
 	class := false
 	for i := 0; i < len(source); i++ {
@@ -190,6 +191,8 @@ func webKitRegexp(source string) error {
 			if rest := source[i+2:]; !strings.HasPrefix(rest, ":") && !(len(rest) > 1 && rest[0] == '<' && rest[1] != '=' && rest[1] != '!') {
 				return errors.New(`"(?" but (?: and (?<name>`)
 			}
+		case (c == '^' || c == '$') && i+1 < len(source) && strings.IndexByte("*+?", source[i+1]) >= 0:
+			return fmt.Errorf("%q repeated", c)
 		case c == '^' && i > 0:
 			return errors.New(`"^" but at the start`)
 		}
