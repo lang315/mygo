@@ -30,7 +30,8 @@ func (w *CustomWidget) build(c *ui.Context) ui.Element {
 	return w.fn(c)
 }
 
-// Change runs fn while no window builds, then redraws the windows on
-// screen. Change the state a Custom control's build reads within it, from
-// any goroutine but never from a build.
+// Change runs fn while no window builds, then redraws every window on
+// screen, as it does not know which control changed. Change the state a
+// Custom control's build reads within it, from any goroutine but never
+// from a build.
 func Change(fn func()) { change(fn) }

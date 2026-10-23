@@ -115,7 +115,7 @@ func (s *style) apply(c *ui.Context, e ui.Element) {
 	}
 }
 
-func (c *common[W]) style(fn func(s *style)) *W { change(func() { fn(&c.st) }); return c.self }
+func (c *common[W]) style(fn func(s *style)) *W { c.change(func() { fn(&c.st) }); return c.self }
 
 // Padding sets the room inside the widget's edges on every side, in theme
 // units (4 DIPs): gota's p-2 is Padding(2).

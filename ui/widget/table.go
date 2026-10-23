@@ -113,14 +113,14 @@ func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 
 // IndexColumn shows first the position of each row as shown, from 1.
 func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
-	change(func() { t.numbered = true; t.columns = t.uiColumns() })
+	t.change(func() { t.numbered = true; t.columns = t.uiColumns() })
 	return t
 }
 
 // SetRows shows a copy of rows instead of the rows shown. Of rows with
 // the same key, the last stays, where the first was.
 func (t *DataGridViewWidget[T, K]) SetRows(rows []T) *DataGridViewWidget[T, K] {
-	change(func() {
+	t.change(func() {
 		t.rows, t.index = make([]T, 0, len(rows)), make(map[K]int, len(rows))
 		t.add(rows)
 		t.removed()
@@ -136,7 +136,7 @@ func (t *DataGridViewWidget[T, K]) AddRow(row T) *DataGridViewWidget[T, K] {
 // AddRows shows rows after the others, each instead of the row of its
 // key if one shows.
 func (t *DataGridViewWidget[T, K]) AddRows(rows []T) *DataGridViewWidget[T, K] {
-	change(func() { t.add(rows) })
+	t.change(func() { t.add(rows) })
 	return t
 }
 
@@ -158,7 +158,7 @@ func (t *DataGridViewWidget[T, K]) add(rows []T) {
 // place. fn runs under the package's lock: it changes the row but not its
 // key, and calls no widget method.
 func (t *DataGridViewWidget[T, K]) UpdateRow(k K, fn func(*T)) *DataGridViewWidget[T, K] {
-	change(func() {
+	t.change(func() {
 		if i, ok := t.index[k]; ok {
 			fn(&t.rows[i])
 			t.view.Changed(i)
@@ -169,7 +169,7 @@ func (t *DataGridViewWidget[T, K]) UpdateRow(k K, fn func(*T)) *DataGridViewWidg
 
 // DeleteRows removes the rows of keys ks.
 func (t *DataGridViewWidget[T, K]) DeleteRows(ks ...K) *DataGridViewWidget[T, K] {
-	change(func() {
+	t.change(func() {
 		first := len(t.rows) // the first row removed
 		for _, k := range ks {
 			if i, ok := t.index[k]; ok {
@@ -222,7 +222,7 @@ func (t *DataGridViewWidget[T, K]) Len() int { mu.Lock(); defer mu.Unlock(); ret
 
 // ClearSort shows the rows in the order added, as before a header click.
 func (t *DataGridViewWidget[T, K]) ClearSort() *DataGridViewWidget[T, K] {
-	change(func() { t.sort.set(ui.SortOrder{}) })
+	t.change(func() { t.sort.set(ui.SortOrder{}) })
 	return t
 }
 

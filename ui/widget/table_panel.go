@@ -36,7 +36,7 @@ func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 		button = Button("").OnClick(t.searchPanel) // counts sets its text
 		panel.PackEnd(button, false, false).PackEnd(keyword, false, false).PackEnd(column, false, false)
 	}
-	change(func() {
+	t.change(func() {
 		t.panel, t.totalLabel, t.selectedLabel, t.checkedLabel = panel, total, selected, checked
 		t.column, t.keyword, t.searchButton = column, keyword, button
 	})
@@ -45,14 +45,14 @@ func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 
 // PanelText sets the words of the bottom panel, in English by default.
 func (t *DataGridViewWidget[T, K]) PanelText(pt PanelText) *DataGridViewWidget[T, K] {
-	change(func() { t.text = pt })
+	t.change(func() { t.text = pt })
 	return t
 }
 
 // OnBeforeSearch runs fn with the column and the keyword, trimmed, of a
 // search from the bottom panel, before it runs.
 func (t *DataGridViewWidget[T, K]) OnBeforeSearch(fn func(column, keyword string)) *DataGridViewWidget[T, K] {
-	change(func() { t.beforeSearch = fn })
+	t.change(func() { t.beforeSearch = fn })
 	return t
 }
 
@@ -92,7 +92,7 @@ func (t *DataGridViewWidget[T, K]) Search(column, keyword string) *DataGridViewW
 		combo.SetValue(column)
 		entry.SetText(keyword)
 	}
-	change(func() {
+	t.change(func() {
 		t.filter = t.keep(column, keyword)
 		t.view.SetFilter(t.filter)
 	})

@@ -86,13 +86,13 @@ func MenuButton(text string) *MenuButtonWidget {
 }
 
 func (b *MenuButtonWidget) SetText(s string) *MenuButtonWidget {
-	change(func() { b.text = s })
+	b.change(func() { b.text = s })
 	return b
 }
 
 // SetMenu sets the items of the menu; set it again when they change.
 func (b *MenuButtonWidget) SetMenu(items ...MenuItem) *MenuButtonWidget {
-	change(func() { b.items = items })
+	b.change(func() { b.items = items })
 	return b
 }
 

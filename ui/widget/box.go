@@ -42,7 +42,7 @@ func newBox(d direction, spacing int) *BoxWidget {
 // Add adds widgets after the others at the start, at their natural size.
 // A widget already in the box stays where it is.
 func (b *BoxWidget) Add(ws ...Control) *BoxWidget {
-	change(func() {
+	b.change(func() {
 		for _, w := range ws {
 			b.add(boxItem{w: w})
 		}
@@ -54,13 +54,13 @@ func (b *BoxWidget) Add(ws ...Control) *BoxWidget {
 // of the free room; with fill it grows to fill that share, else it sits in
 // the middle of it.
 func (b *BoxWidget) Pack(w Control, expand, fill bool) *BoxWidget {
-	change(func() { b.add(boxItem{w: w, expand: expand, fill: fill}) })
+	b.change(func() { b.add(boxItem{w: w, expand: expand, fill: fill}) })
 	return b
 }
 
 // PackEnd adds w at the end, before the widgets packed at the end earlier.
 func (b *BoxWidget) PackEnd(w Control, expand, fill bool) *BoxWidget {
-	change(func() { b.add(boxItem{w: w, expand: expand, fill: fill, end: true}) })
+	b.change(func() { b.add(boxItem{w: w, expand: expand, fill: fill, end: true}) })
 	return b
 }
 
@@ -75,7 +75,7 @@ func (b *BoxWidget) add(it boxItem) {
 
 // Remove takes w out of the box.
 func (b *BoxWidget) Remove(w Control) *BoxWidget {
-	change(func() {
+	b.change(func() {
 		for i, it := range b.items {
 			if it.w == w {
 				b.items = append(b.items[:i], b.items[i+1:]...)
@@ -87,7 +87,7 @@ func (b *BoxWidget) Remove(w Control) *BoxWidget {
 }
 
 // Clear takes every widget out of the box.
-func (b *BoxWidget) Clear() *BoxWidget { change(func() { b.items = nil }); return b }
+func (b *BoxWidget) Clear() *BoxWidget { b.change(func() { b.items = nil }); return b }
 
 func (b *BoxWidget) build(c *ui.Context) ui.Element {
 	var e ui.Element

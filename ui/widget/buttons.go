@@ -26,18 +26,21 @@ func Button(text string) *ButtonWidget {
 	return b
 }
 
-func (b *ButtonWidget) OnClick(fn func()) *ButtonWidget { change(func() { b.onClick = fn }); return b }
-func (b *ButtonWidget) SetText(s string) *ButtonWidget  { change(func() { b.text = s }); return b }
+func (b *ButtonWidget) OnClick(fn func()) *ButtonWidget {
+	b.change(func() { b.onClick = fn })
+	return b
+}
+func (b *ButtonWidget) SetText(s string) *ButtonWidget { b.change(func() { b.text = s }); return b }
 
 // SetIcon shows an icon before the text; nil removes it.
-func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget { change(func() { b.icon = s }); return b }
+func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget { b.change(func() { b.icon = s }); return b }
 
 // Suggested draws the button as the main action, gota's suggested-action.
-func (b *ButtonWidget) Suggested() *ButtonWidget { change(func() { b.suggested = true }); return b }
+func (b *ButtonWidget) Suggested() *ButtonWidget { b.change(func() { b.suggested = true }); return b }
 
 // Destructive draws the button as an action that destroys, as Delete.
 func (b *ButtonWidget) Destructive() *ButtonWidget {
-	change(func() { b.destructive = true })
+	b.change(func() { b.destructive = true })
 	return b
 }
 
@@ -103,9 +106,9 @@ func Toggle(text string) *ToggleWidget {
 }
 
 func (t *ToggleWidget) Active() bool                   { mu.Lock(); defer mu.Unlock(); return t.on.value }
-func (t *ToggleWidget) SetActive(v bool) *ToggleWidget { change(func() { t.on.set(v) }); return t }
+func (t *ToggleWidget) SetActive(v bool) *ToggleWidget { t.change(func() { t.on.set(v) }); return t }
 func (t *ToggleWidget) OnChange(fn func()) *ToggleWidget {
-	change(func() { t.onChange = fn })
+	t.change(func() { t.onChange = fn })
 	return t
 }
 
@@ -134,11 +137,11 @@ func CheckBox(text string) *CheckBoxWidget {
 
 func (b *CheckBoxWidget) Checked() bool { mu.Lock(); defer mu.Unlock(); return b.on.value }
 func (b *CheckBoxWidget) SetChecked(v bool) *CheckBoxWidget {
-	change(func() { b.on.set(v) })
+	b.change(func() { b.on.set(v) })
 	return b
 }
 func (b *CheckBoxWidget) OnChange(fn func()) *CheckBoxWidget {
-	change(func() { b.onChange = fn })
+	b.change(func() { b.onChange = fn })
 	return b
 }
 
@@ -165,9 +168,9 @@ func Switch() *SwitchWidget {
 }
 
 func (s *SwitchWidget) On() bool                   { mu.Lock(); defer mu.Unlock(); return s.on.value }
-func (s *SwitchWidget) SetOn(v bool) *SwitchWidget { change(func() { s.on.set(v) }); return s }
+func (s *SwitchWidget) SetOn(v bool) *SwitchWidget { s.change(func() { s.on.set(v) }); return s }
 func (s *SwitchWidget) OnChange(fn func()) *SwitchWidget {
-	change(func() { s.onChange = fn })
+	s.change(func() { s.onChange = fn })
 	return s
 }
 
@@ -214,7 +217,7 @@ func (g *CheckBoxGroupWidget) Values() []string {
 
 // SetValues checks the options of vs and unchecks the others.
 func (g *CheckBoxGroupWidget) SetValues(vs ...string) *CheckBoxGroupWidget {
-	change(func() {
+	g.change(func() {
 		for i, o := range g.opts {
 			g.on[i].set(slices.Contains(vs, o.Value))
 		}
@@ -223,7 +226,7 @@ func (g *CheckBoxGroupWidget) SetValues(vs ...string) *CheckBoxGroupWidget {
 }
 
 func (g *CheckBoxGroupWidget) OnChange(fn func()) *CheckBoxGroupWidget {
-	change(func() { g.onChange = fn })
+	g.change(func() { g.onChange = fn })
 	return g
 }
 
@@ -268,11 +271,11 @@ func RadioGroup(row bool, opts ...Option) *RadioGroupWidget {
 
 func (g *RadioGroupWidget) Value() string { mu.Lock(); defer mu.Unlock(); return g.value.value }
 func (g *RadioGroupWidget) SetValue(v string) *RadioGroupWidget {
-	change(func() { g.value.set(v) })
+	g.change(func() { g.value.set(v) })
 	return g
 }
 func (g *RadioGroupWidget) OnChange(fn func()) *RadioGroupWidget {
-	change(func() { g.onChange = fn })
+	g.change(func() { g.onChange = fn })
 	return g
 }
 

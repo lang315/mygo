@@ -22,7 +22,7 @@ func Label(s string) *LabelWidget {
 
 // SetText changes the text.
 func (l *LabelWidget) SetText(s string) *LabelWidget {
-	change(func() { l.text, l.spans = s, nil })
+	l.change(func() { l.text, l.spans = s, nil })
 	return l
 }
 
@@ -34,7 +34,7 @@ func (l *LabelWidget) Rich(spans ...ui.Span) *LabelWidget {
 	for _, s := range spans {
 		b.WriteString(s.Text)
 	}
-	change(func() { l.spans, l.text = spans, b.String() })
+	l.change(func() { l.spans, l.text = spans, b.String() })
 	return l
 }
 
@@ -68,34 +68,34 @@ func TextBox() *TextBoxWidget {
 
 func (e *TextBoxWidget) Text() string { mu.Lock(); defer mu.Unlock(); return e.text.value }
 func (e *TextBoxWidget) SetText(s string) *TextBoxWidget {
-	change(func() { e.text.set(s) })
+	e.change(func() { e.text.set(s) })
 	return e
 }
 
 // SetPlaceholder sets the text shown while the input is empty.
 func (e *TextBoxWidget) SetPlaceholder(s string) *TextBoxWidget {
-	change(func() { e.placeholder = s })
+	e.change(func() { e.placeholder = s })
 	return e
 }
 
 // Password hides what is typed.
-func (e *TextBoxWidget) Password() *TextBoxWidget { change(func() { e.password = true }); return e }
+func (e *TextBoxWidget) Password() *TextBoxWidget { e.change(func() { e.password = true }); return e }
 
 // SetEditable lets the user edit the text, or not.
 func (e *TextBoxWidget) SetEditable(on bool) *TextBoxWidget {
-	change(func() { e.readOnly = !on })
+	e.change(func() { e.readOnly = !on })
 	return e
 }
 
 // OnChange runs fn after each edit of the user.
 func (e *TextBoxWidget) OnChange(fn func()) *TextBoxWidget {
-	change(func() { e.onChange = fn })
+	e.change(func() { e.onChange = fn })
 	return e
 }
 
 // OnEnter runs fn when the user presses Enter.
 func (e *TextBoxWidget) OnEnter(fn func()) *TextBoxWidget {
-	change(func() { e.onEnter = fn })
+	e.change(func() { e.onEnter = fn })
 	return e
 }
 
@@ -137,19 +137,19 @@ func MultilineTextBox() *MultilineTextBoxWidget {
 
 func (v *MultilineTextBoxWidget) Text() string { mu.Lock(); defer mu.Unlock(); return v.text.value }
 func (v *MultilineTextBoxWidget) SetText(s string) *MultilineTextBoxWidget {
-	change(func() { v.text.set(s) })
+	v.change(func() { v.text.set(s) })
 	return v
 }
 func (v *MultilineTextBoxWidget) SetPlaceholder(s string) *MultilineTextBoxWidget {
-	change(func() { v.placeholder = s })
+	v.change(func() { v.placeholder = s })
 	return v
 }
 func (v *MultilineTextBoxWidget) SetEditable(on bool) *MultilineTextBoxWidget {
-	change(func() { v.readOnly = !on })
+	v.change(func() { v.readOnly = !on })
 	return v
 }
 func (v *MultilineTextBoxWidget) OnChange(fn func()) *MultilineTextBoxWidget {
-	change(func() { v.onChange = fn })
+	v.change(func() { v.onChange = fn })
 	return v
 }
 

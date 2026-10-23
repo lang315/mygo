@@ -78,13 +78,13 @@ func (w *Form) do(fn func(n *mygo.Window)) {
 }
 
 func (w *Form) SetTitle(s string) *Form {
-	change(func() { w.title = s })
+	w.change(func() { w.title = s })
 	w.do(func(n *mygo.Window) { n.SetTitle(s) })
 	return w
 }
 
 func (w *Form) SetSize(width, height int) *Form {
-	change(func() { w.width, w.height = width, height })
+	w.change(func() { w.width, w.height = width, height })
 	w.do(func(n *mygo.Window) { n.SetSize(width, height) })
 	return w
 }
@@ -92,26 +92,26 @@ func (w *Form) SetSize(width, height int) *Form {
 // SetIcon sets the window's icon from a PNG. macOS shows no window icons:
 // there it does nothing (set the Dock's with mygo.App.Dock.SetIcon).
 func (w *Form) SetIcon(png []byte) *Form {
-	change(func() { w.icon = png })
+	w.change(func() { w.icon = png })
 	w.do(func(n *mygo.Window) { n.SetIcon(png) })
 	return w
 }
 
 func (w *Form) SetResizable(on bool) *Form {
-	change(func() { w.resizable = on })
+	w.change(func() { w.resizable = on })
 	w.do(func(n *mygo.Window) { n.SetResizable(on) })
 	return w
 }
 
 // Maximize maximizes the window, or makes it maximized when shown.
 func (w *Form) Maximize() *Form {
-	change(func() { w.maximized = true })
+	w.change(func() { w.maximized = true })
 	w.do((*mygo.Window).Maximize)
 	return w
 }
 
 func (w *Form) Unmaximize() *Form {
-	change(func() { w.maximized = false })
+	w.change(func() { w.maximized = false })
 	w.do((*mygo.Window).Unmaximize)
 	return w
 }
@@ -120,20 +120,20 @@ func (w *Form) Unmaximize() *Form {
 // the menu bar is the app's, set with mygo.App.SetMenu; there it does
 // nothing.
 func (w *Form) SetMenuBar(items ...MenuItem) *Form {
-	change(func() { w.menu = items })
+	w.change(func() { w.menu = items })
 	w.do(func(n *mygo.Window) { n.SetMenu(mygo.NewMenu(nativeMenu(items))) })
 	return w
 }
 
 // SetContent shows root in the window, replacing what it showed.
-func (w *Form) SetContent(root Control) *Form { change(func() { w.root = root }); return w }
+func (w *Form) SetContent(root Control) *Form { w.change(func() { w.root = root }); return w }
 
 // UseHeaderBar draws the title bar with ui: the title, subtitle and
 // widgets packed at its ends. Call it before Show.
 func (w *Form) UseHeaderBar(subtitle string) *HeaderBarWidget {
 	h := &HeaderBarWidget{subtitle: subtitle, win: w}
 	h.init(h)
-	change(func() { w.header = h })
+	w.change(func() { w.header = h })
 	return h
 }
 
@@ -142,7 +142,7 @@ func (w *Form) HeaderBar() *HeaderBarWidget { mu.Lock(); defer mu.Unlock(); retu
 
 // OnClose runs fn when the user asks to close the window, on the event
 // goroutine; fn returning false keeps the window open. nil removes it.
-func (w *Form) OnClose(fn func() bool) *Form { change(func() { w.onClose = fn }); return w }
+func (w *Form) OnClose(fn func() bool) *Form { w.change(func() { w.onClose = fn }); return w }
 
 // Native returns the mygo window, nil before Show and after the window
 // closed.
@@ -210,12 +210,12 @@ func (w *Form) Show() {
 		}
 	})
 	closeNow := false
-	change(func() {
+	w.change(func() {
 		select {
 		case <-done: // it closed already
 		default:
 			w.win = n
-			shown[n] = struct{}{}
+			shown[n] = w
 			closeNow = w.closing // Close ran while the window was being made
 		}
 	})
@@ -311,15 +311,15 @@ type HeaderBarWidget struct {
 
 func (h *HeaderBarWidget) SetTitle(s string) *HeaderBarWidget { h.win.SetTitle(s); return h }
 func (h *HeaderBarWidget) SetSubtitle(s string) *HeaderBarWidget {
-	change(func() { h.subtitle = s })
+	h.change(func() { h.subtitle = s })
 	return h
 }
 func (h *HeaderBarWidget) PackStart(ws ...Control) *HeaderBarWidget {
-	change(func() { h.start = h.add(h.start, ws) })
+	h.change(func() { h.start = h.add(h.start, ws) })
 	return h
 }
 func (h *HeaderBarWidget) PackEnd(ws ...Control) *HeaderBarWidget {
-	change(func() { h.end = h.add(h.end, ws) })
+	h.change(func() { h.end = h.add(h.end, ws) })
 	return h
 }
 
@@ -328,7 +328,7 @@ func (h *HeaderBarWidget) PackEnd(ws ...Control) *HeaderBarWidget {
 // buttons (see mygo.WindowOptions.ClientDecorations). It applies at the
 // next Show.
 func (h *HeaderBarWidget) ClientDecorations(on bool) *HeaderBarWidget {
-	change(func() { h.clientDecorations = on })
+	h.change(func() { h.clientDecorations = on })
 	return h
 }
 
