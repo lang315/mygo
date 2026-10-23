@@ -1,14 +1,15 @@
 # Widgets that live on
 
-Package `ui/widget` builds an interface from widgets you make once, keep,
-and change from any goroutine, as in GTK: a label is a `*LabelWidget`, and
-`SetText` changes what every window showing it draws. It is `ui` underneath:
-each widget builds `ui` elements every frame, and the windows that show it
-redraw when it changes.
+Package `ui/widget` builds an app's interface from controls you make once,
+keep, and change from any goroutine, as in WinForms: a text box is a
+`*TextBoxWidget`, and `SetText` changes what every window showing it
+draws. It is `ui` underneath: each control builds `ui` elements every
+frame, and the windows that show it redraw when it changes.
 
-Use it to port code written for a retained toolkit (GTK, gota, Qt), or when
-the state lives in long-lived objects that background work updates. For
-new code, a `ui` view over your own state is shorter and does less work.
+It is the layer to build an app's forms, dialogs and tables with. Reach
+for [`ui`](README.md) directly to draw a control of your own (see
+[Controls of your own](#controls-of-your-own)) or a view whose state
+lives in the view itself.
 
 ```go
 package main
