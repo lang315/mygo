@@ -76,16 +76,17 @@ const cosmeticScript = `const url=location.href;
 let top;try{top=window.top.location.href}catch(e){top=document.referrer||url}
 let host;try{host=new URL(top).hostname.toLowerCase().replace(/\.$/,"")}catch(e){host=location.hostname}
 const listed=ds=>ds.some(d=>d[0]==="*"?host===d.slice(1)||host.endsWith("."+d.slice(1)):host===d);
-const test=(src,s,c)=>new RegExp(src,c?"":"i").test(s);
+const test=(src,s,c)=>{try{return new RegExp(src,c?"":"i").test(s)}catch(e){return false}};
 const css=[];
 for(const list of lists){let hidden=[];for(const e of list){
 if(e.u&&!test(e.u,url,e.c))continue;
 if(e.d&&!listed(e.d)||e.n&&listed(e.n))continue;
 if(e.t&&!e.t.some(t=>test(t,top,e.c))||e.nt&&e.nt.some(t=>test(t,top,e.c)))continue;
-if(e.i)hidden=[];else hidden.push(...e.s)}
-for(const s of hidden)css.push(s+"{display:none!important}")}
+if(e.i)hidden=[];else for(const s of e.s)hidden.push(s)}
+for(const s of hidden)css.push(s)}
 if(css.length===0)return;
-const sheet=new CSSStyleSheet();sheet.replaceSync(css.join("\n"));
+const sheet=new CSSStyleSheet();
+for(const s of css){try{sheet.insertRule(s+"{display:none!important}",sheet.cssRules.length)}catch(e){}}
 const adopted=Object.getOwnPropertyDescriptor(Document.prototype,"adoptedStyleSheets");
 adopted.set.call(document,[...adopted.get.call(document),sheet]);
 Object.defineProperty(document,"adoptedStyleSheets",{configurable:true,enumerable:true,

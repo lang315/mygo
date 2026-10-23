@@ -57,9 +57,10 @@ var applyContentRules func(n platform.Page, rules []*ContentRules)
 //     undone.
 //
 // The regular expressions are WebKit's: ASCII, without alternatives
-// ("|"), counted repetitions ("{2}") or classes such as "\d". A rule
-// whose selector the engine cannot parse is skipped; any other mistake
-// fails the whole list, as an empty list does.
+// ("|"), counted repetitions ("{2}"), flags or lookarounds such as
+// "(?i)" or "(?=", or classes such as "\d". A rule whose selector the engine
+// cannot parse is skipped; any other mistake fails the whole list, as an
+// empty list does.
 //
 // Compiling takes seconds for lists as long as EasyList, so call it off
 // the main thread; on the main thread the app
