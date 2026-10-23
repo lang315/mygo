@@ -468,9 +468,14 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 	for i := range uses[:n] {
 		e, r := uses[i].e, uses[i].r
 		next := r.next
+		if r.colorMoving && r.colorFrame+1 < rt.frame {
+			// Not painted since: culled, so its colors show at once.
+			r.colorMoving = false
+		}
 		if r.colorsOnly() {
 			// Where the layout put it is where it shows.
 			r.target, r.laid, r.shown, r.chStale = next, rt.frame, next, true
+			r.apply(e, next)
 			continue
 		}
 		if r.chStale {

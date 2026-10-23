@@ -91,3 +91,55 @@ func TestColorsTransitionMovesNothingThenPositionStartsFromHere(t *testing.T) {
 		t.Errorf("halfway from 50 to 150, it shows at %v", r.X)
 	}
 }
+
+// A Colors-only child of a box that a Transition resizes shows where the
+// layout put it, as one without a Transition does (here, at the end of
+// the box's final width), not where the resized box would put it.
+func TestColorsOnlyChildStaysWhereTheLayoutPutIt(t *testing.T) {
+	w := float32(100)
+	tt, now := clockTester(func(c *context) {
+		keep("parent", coreBox(c).Key("parent")).Width(w).Height(50).Transition(ElementTransition{Size: true, Ease: Linear}).Children(func() {
+			coreText(c, "Right").Key("child").AlignSelf(End).Transition(ElementTransition{Colors: true})
+		})
+	}, 400, 100)
+	w = 300
+	tt.Frame()
+	*now = now.Add(100 * time.Millisecond) // halfway of the default 200 ms
+	tt.Frame()
+	p := keyed(tt, "parent")
+	if p.w < 190 || p.w > 210 {
+		t.Fatalf("halfway, the parent is %v wide, want about 200", p.w)
+	}
+	r := at(t, tt, "Right")
+	if edge := r.X + r.W; edge < p.x+299 || edge > p.x+301 {
+		t.Errorf("the child's right edge is at %v, want %v, the end of the final width", edge, p.x+300)
+	}
+}
+
+// An element culled in the middle of a fade stops being Transitioning once
+// the fade is over: nothing paints it again to end it.
+func TestColorsFadeEndsForAnElementCulledMidFade(t *testing.T) {
+	var dy float32
+	bg := RGB(0, 0, 255)
+	now := time.Unix(1_000_000, 0)
+	tt := coreNewTester(colorRows(&dy, &bg), 400, 300)
+	tt.rt.clock = func() time.Time { return now }
+	tt.Frame()
+	bg = RGB(255, 0, 0)
+	tt.Frame()
+	now = now.Add(50 * time.Millisecond)
+	tt.Frame()
+	dy = -4000 // the rows that were fading are out of view
+	tt.Frame()
+	now = now.Add(5 * time.Second)
+	tt.Frame()
+	moving := 0
+	for _, r := range tt.rt.trans {
+		if r.colorMoving {
+			moving++
+		}
+	}
+	if moving != 0 {
+		t.Errorf("%d elements still fade, long after", moving)
+	}
+}
