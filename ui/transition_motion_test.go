@@ -31,7 +31,7 @@ func TestTransitionSpringKeepsGoing(t *testing.T) {
 	*now = now.Add(100 * time.Millisecond)
 	tt.Frame()
 	r := tt.rt.trans[keyed(tt, "box").id]
-	before, v := keyed(tt, "box").x, r.ch[0].velocity
+	before, v := keyed(tt, "box").x, r.mv.ch[0].velocity
 	if before <= 0 || before >= 200 || v <= 0 {
 		t.Fatalf("on its way, the box is at %v going %v/s", before, v)
 	}

@@ -158,16 +158,19 @@ type transition struct {
 	// where it puts it in the frame being laid out, and shown where it
 	// shows: ch move the components of moving (movePos, …) there.
 	target, next, shown tbox
-	ch                  [7]channel
-	moving              uint8
-	fresh               bool
+	// mv is what moves them, made when something first does.
+	mv     *tmotion
+	moving uint8
+	fresh  bool
+	// chStale is set while the channels are not at rest at target, as a
+	// Colors-only transition leaves them, which moves nothing.
+	chStale bool
 	// collapse is the axis a Motion collapses the element along, while it
 	// does.
 	collapse uint8
 	// The background and border colors, which move as the element
 	// paints, after its styleFn set them, k of the way from colorFrom.
 	colorTarget, colorFrom, colorShown [2]Color
-	colorK                             channel
 	colorMoving, colorSet              bool
 	colorFrame                         uint64
 	// ghost is the copy of the element going, which moves from gone,
@@ -179,11 +182,27 @@ type transition struct {
 	turn    Transform
 	// index is where the element was among its siblings in the frame it
 	// went from, which orders the copies going under one parent.
-	index int
-	// match moves an element appearing where the one it Matches showed:
-	// its box in the window, from the box that one had.
-	match    [4]channel
+	index    int
 	matching bool
+}
+
+// tmotion is the channels of a transition: those of ch move the components
+// of its box, and those of match an element appearing where the one it
+// Matches showed, in the window, from the box that one had. A Colors-only
+// transition has none.
+type tmotion struct {
+	ch    [7]channel
+	match [4]channel
+	// colorK is how far colors have gone from colorFrom, 0 to 1.
+	colorK channel
+}
+
+// mot returns r's channels, making them when it has none.
+func (r *transition) mot() *tmotion {
+	if r.mv == nil {
+		r.mv = new(tmotion)
+	}
+	return r.mv
 }
 
 // animation returns how the transition's changes go.
@@ -225,9 +244,10 @@ func (r *transition) duration() time.Duration {
 func (r *transition) head(target tbox, move uint8, now time.Time) {
 	a := r.animation()
 	to := target.vals()
-	for i := range r.ch {
+	ch := &r.mot().ch
+	for i := range ch {
 		if move&groupOf[i] != 0 {
-			headFor(&r.ch[i], float64(to[i]), a, now)
+			headFor(&ch[i], float64(to[i]), a, now)
 		}
 	}
 	r.moving |= move
@@ -263,7 +283,8 @@ func (r *transition) follow(next tbox, props uint8) {
 		own |= moveSize
 	}
 	was, to := r.target.vals(), next.vals()
-	for i := range r.ch {
+	ch := &r.mot().ch
+	for i := range ch {
 		g := groupOf[i]
 		if g&(movePos|moveSize) == 0 || own&g != 0 || r.moving&g == 0 {
 			continue
@@ -271,17 +292,18 @@ func (r *transition) follow(next tbox, props uint8) {
 		switch d := to[i] - was[i]; {
 		case d == 0:
 		case g == moveSize && was[i] > 0:
-			r.ch[i].scale(float64(was[i]), float64(to[i]))
+			ch[i].scale(float64(was[i]), float64(to[i]))
 		default:
-			r.ch[i].shift(float64(d))
+			ch[i].shift(float64(d))
 		}
 	}
 }
 
 // rest puts every channel at rest at b.
 func (r *transition) rest(b tbox, now time.Time) {
+	ch := &r.mot().ch
 	for i, v := range b.vals() {
-		r.ch[i] = channel{value: float64(v), target: float64(v), at: now}
+		ch[i] = channel{value: float64(v), target: float64(v), at: now}
 	}
 	r.moving, r.collapse = 0, 0
 }
@@ -293,8 +315,9 @@ func (r *transition) sample(target tbox, now time.Time) tbox {
 	to := target.vals()
 	var v [7]float32
 	var still uint8 = moveAll
-	for i := range r.ch {
-		ch := &r.ch[i]
+	chs := &r.mot().ch
+	for i := range chs {
+		ch := &chs[i]
 		if r.moving&groupOf[i] == 0 {
 			*ch = channel{value: float64(to[i]), target: float64(to[i]), at: now}
 		} else {
@@ -336,6 +359,16 @@ func (r *transition) properties() uint8 {
 		p |= propColors
 	}
 	return p
+}
+
+// colorsOnly reports whether the transition moves nothing but colors, which
+// move as the element paints: nothing for the layout to animate, and an
+// element not painted shows its colors at once, so the culling of what is
+// out of view may skip it.
+func (r *transition) colorsOnly() bool {
+	t := &r.t
+	return t.Colors && !t.Position && !t.Size && t.Enter == nil && t.Exit == nil && t.Match == nil &&
+		r.moving == 0 && !r.matching && r.ghost == nil
 }
 
 func lerp(a, b, k float32) float32 { return a + (b-a)*k }
@@ -432,9 +465,18 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 		uses[n] = u
 		n++
 	}
-	for _, u := range uses[:n] {
-		e, r := u.e, u.r
+	for i := range uses[:n] {
+		e, r := uses[i].e, uses[i].r
 		next := r.next
+		if r.colorsOnly() {
+			// Where the layout put it is where it shows.
+			r.target, r.laid, r.shown, r.chStale = next, rt.frame, next, true
+			continue
+		}
+		if r.chStale {
+			r.rest(r.target, now)
+			r.chStale = false
+		}
 		switch {
 		case r.fresh:
 			r.rest(next, now)
@@ -484,7 +526,10 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 		r.shown = shown
 		r.apply(e, shown)
 	}
-	rt.animateExits(root, now, still, resized)
+	if n < len(rt.trans) {
+		// Some were not built: copies go, or their records are forgotten.
+		rt.animateExits(root, now, still, resized)
+	}
 }
 
 // matchRec is where the element of a Match showed in a frame, in the
@@ -519,8 +564,9 @@ func (rt *engine) animateMatches() {
 			r.matching = false
 		case r.fresh && rec != nil && rec.id != e.id && rec.frame+1 == rt.frame:
 			from := [4]float32{rec.box.X, rec.box.Y, rec.box.W, rec.box.H}
-			for i := range r.match {
-				r.match[i] = channel{value: float64(from[i]), target: float64(from[i]), at: now}
+			match := &r.mot().match
+			for i := range match {
+				match[i] = channel{value: float64(from[i]), target: float64(from[i]), at: now}
 			}
 			r.matching = true
 			if rec.colors != ([2]Color{}) {
@@ -534,8 +580,9 @@ func (rt *engine) animateMatches() {
 			to := [4]float32{box.X, box.Y, box.W, box.H}
 			var v [4]float32
 			moving := false
-			for i := range r.match {
-				ch := &r.match[i]
+			match := &r.mot().match
+			for i := range match {
+				ch := &match[i]
 				headFor(ch, float64(to[i]), a, now)
 				ch.advance(now)
 				moving = moving || ch.moving || ch.pending
@@ -813,17 +860,19 @@ func (rt *engine) animateColors(e *node, r *transition) {
 			r.colorMoving = false
 		case target != r.colorTarget:
 			r.colorFrom, r.colorMoving = r.colorShown, true
-			r.colorK = channel{at: now}
-			headFor(&r.colorK, 1, r.animation(), now)
+			k := &r.mot().colorK
+			*k = channel{at: now}
+			headFor(k, 1, r.animation(), now)
 		}
 		r.colorSet, r.colorTarget, r.colorFrame = true, target, rt.frame
 		r.colorShown = target
 		if r.colorMoving {
-			r.colorK.advance(now)
-			if !r.colorK.moving && !r.colorK.pending {
+			colorK := &r.mot().colorK
+			colorK.advance(now)
+			if !colorK.moving && !colorK.pending {
 				r.colorMoving = false
 			} else {
-				k := max(0, min(float32(r.colorK.value), 1))
+				k := max(0, min(float32(colorK.value), 1))
 				r.colorShown = [2]Color{mixPremultiplied(r.colorFrom[0], target[0], k), mixPremultiplied(r.colorFrom[1], target[1], k)}
 				rt.animating = true
 			}
