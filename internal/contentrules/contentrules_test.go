@@ -109,6 +109,12 @@ func TestParseErrors(t *testing.T) {
 		`[{"trigger":{"url-filter":"a\\d"},"action":{"type":"block"}}]`,
 		`[{"trigger":{"url-filter":"a^b"},"action":{"type":"block"}}]`,
 		`[{"trigger":{"url-filter":"é"},"action":{"type":"block"}}]`,
+		`[{"trigger":{"url-filter":"(?i)foo"},"action":{"type":"block"}}]`,
+		`[{"trigger":{"url-filter":"(?:a)"},"action":{"type":"block"}}]`,
+		`[{"trigger":{"url-filter":".*","if-top-url":["(?P<n>x)"]},"action":{"type":"css-display-none","selector":".a"}}]`,
+		`[{"trigger":{"url-filter":"\\pL"},"action":{"type":"block"}}]`,
+		`[{"trigger":{"url-filter":"a\\z"},"action":{"type":"block"}}]`,
+		`[{"trigger":{"url-filter":"[[:alpha:]]"},"action":{"type":"block"}}]`,
 		`[]`,
 	} {
 		if _, err := Parse(rules); err == nil {
@@ -120,7 +126,7 @@ func TestParseErrors(t *testing.T) {
 // What WebKit takes, as tried on macOS.
 func TestParseTakes(t *testing.T) {
 	for _, filter := range []string{`[^a-z]x`, `(ab)?c`, `(ab)+c`, `.*?x`, `x$`, `^x`, `\\/x`, `[a\\-z]`, `a\\.b\\?c`,
-		`[.]x`, `a\\|b`, `[|{^]`, `^[^:]+://+([^:/]+\\.)?ex\\.com[/:]`} {
+		`[.]x`, `a\\|b`, `[|{^]`, `\\(?x`, `[(?]`, `[[]`, `^[^:]+://+([^:/]+\\.)?ex\\.com[/:]`} {
 		rules := `[{"trigger":{"url-filter":"` + filter + `","unknown":1},"action":{"type":"block"}}]`
 		if _, err := Parse(rules); err != nil {
 			t.Errorf("Parse(%s): %v", rules, err)
