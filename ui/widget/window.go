@@ -18,7 +18,7 @@ type Window struct {
 	resizable     bool
 	maximized     bool
 	icon          []byte
-	root          Widget
+	root          Control
 	header        *HeaderBarWidget
 	onClose       func() bool
 	menu          []MenuItem
@@ -126,7 +126,7 @@ func (w *Window) SetMenuBar(items ...MenuItem) *Window {
 }
 
 // SetContent shows root in the window, replacing what it showed.
-func (w *Window) SetContent(root Widget) *Window { change(func() { w.root = root }); return w }
+func (w *Window) SetContent(root Control) *Window { change(func() { w.root = root }); return w }
 
 // UseHeaderBar draws the title bar with ui: the title, subtitle and
 // widgets packed at its ends. Call it before Show.
@@ -304,7 +304,7 @@ type HeaderBarWidget struct {
 	common[HeaderBarWidget]
 	win        *Window
 	subtitle   string
-	start, end []Widget
+	start, end []Control
 	// clientDecorations: the header bar is the only title bar on Wayland.
 	clientDecorations bool
 }
@@ -314,11 +314,11 @@ func (h *HeaderBarWidget) SetSubtitle(s string) *HeaderBarWidget {
 	change(func() { h.subtitle = s })
 	return h
 }
-func (h *HeaderBarWidget) PackStart(ws ...Widget) *HeaderBarWidget {
+func (h *HeaderBarWidget) PackStart(ws ...Control) *HeaderBarWidget {
 	change(func() { h.start = h.add(h.start, ws) })
 	return h
 }
-func (h *HeaderBarWidget) PackEnd(ws ...Widget) *HeaderBarWidget {
+func (h *HeaderBarWidget) PackEnd(ws ...Control) *HeaderBarWidget {
 	change(func() { h.end = h.add(h.end, ws) })
 	return h
 }
@@ -357,7 +357,7 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 }
 
 // add appends the widgets not yet in the bar to side. Under mu.
-func (h *HeaderBarWidget) add(side, ws []Widget) []Widget {
+func (h *HeaderBarWidget) add(side, ws []Control) []Control {
 	for _, w := range ws {
 		if !slices.Contains(h.start, w) && !slices.Contains(h.end, w) && !slices.Contains(side, w) {
 			side = append(side, w)

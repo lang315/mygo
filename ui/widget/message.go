@@ -80,7 +80,7 @@ func (i *kindIconWidget) build(c *ui.Context) ui.Element {
 // and buttons at the bottom, the last the default. It returns the index of
 // the button chosen, -1 when the dialog closed otherwise. wire, if any,
 // gets the default button and a function choosing it.
-func message(parent *Window, kind Kind, title, text string, input Widget, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
+func message(parent *Window, kind Kind, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
 	chosen := -1
 	// The first answer wins: a second, queued while the first ran, must
 	// not change what Run's caller reads.

@@ -175,7 +175,7 @@ func TestSetContentBackKeepsState(t *testing.T) {
 func TestDroppedInputsAreFreed(t *testing.T) {
 	box := VBox(0)
 	tt := tester(t, box)
-	ws := []Widget{Entry(), TextView(), Checkbox("c"), Toggle("t"), Switch(),
+	ws := []Control{Entry(), TextView(), Checkbox("c"), Toggle("t"), Switch(),
 		RadioGroup(false, Option{"a", "A"}, Option{"b", "B"})}
 	ids := make([]int, len(ws))
 	for i, w := range ws {

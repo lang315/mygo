@@ -10,8 +10,8 @@ import (
 type FrameWidget struct {
 	common[FrameWidget]
 	title  string
-	titleW Widget
-	child  Widget
+	titleW Control
+	child  Control
 }
 
 // Frame makes a frame titled title.
@@ -23,7 +23,7 @@ func Frame(title string) *FrameWidget {
 
 // Add sets the widget inside the frame; the frame's title widget is
 // ignored.
-func (f *FrameWidget) Add(w Widget) *FrameWidget {
+func (f *FrameWidget) Add(w Control) *FrameWidget {
 	change(func() {
 		if w != f.titleW {
 			f.child = w
@@ -34,7 +34,7 @@ func (f *FrameWidget) Add(w Widget) *FrameWidget {
 
 // SetTitleWidget shows w as the title instead of the text; the frame's
 // child is ignored.
-func (f *FrameWidget) SetTitleWidget(w Widget) *FrameWidget {
+func (f *FrameWidget) SetTitleWidget(w Control) *FrameWidget {
 	change(func() {
 		if w != f.child {
 			f.titleW = w
@@ -69,7 +69,7 @@ type GridWidget struct {
 }
 
 type gridCell struct {
-	w                       Widget
+	w                       Control
 	col, row, width, height int
 }
 
@@ -89,7 +89,7 @@ func Grid(colSpacing, rowSpacing int) *GridWidget {
 // Attach puts w in the cell at col, row, spanning width columns and height
 // rows. A widget attached again moves; one attached to a taken cell
 // replaces the widget there.
-func (g *GridWidget) Attach(w Widget, col, row, width, height int) *GridWidget {
+func (g *GridWidget) Attach(w Control, col, row, width, height int) *GridWidget {
 	change(func() {
 		g.cells = slices.DeleteFunc(g.cells, func(have gridCell) bool {
 			return have.w == w || have.col == col && have.row == row
@@ -147,10 +147,10 @@ func (g *GridWidget) build(c *ui.Context) ui.Element {
 // ScrolledWidget scrolls a widget larger than its room.
 type ScrolledWidget struct {
 	common[ScrolledWidget]
-	child Widget
+	child Control
 }
 
-func Scrolled(w Widget) *ScrolledWidget {
+func Scrolled(w Control) *ScrolledWidget {
 	s := &ScrolledWidget{child: w}
 	s.init(s)
 	return s
@@ -180,7 +180,7 @@ func (s *SeparatorWidget) build(c *ui.Context) ui.Element { return ui.Divider(c)
 type NotebookWidget struct {
 	common[NotebookWidget]
 	labels   []string
-	pages    []Widget
+	pages    []Control
 	page     mirror[int]
 	onSwitch func()
 }
@@ -192,7 +192,7 @@ func Notebook() *NotebookWidget {
 }
 
 // AddPage adds a page showing w under a tab labeled label.
-func (n *NotebookWidget) AddPage(label string, w Widget) *NotebookWidget {
+func (n *NotebookWidget) AddPage(label string, w Control) *NotebookWidget {
 	change(func() { n.labels, n.pages = append(n.labels, label), append(n.pages, w) })
 	return n
 }
@@ -232,7 +232,7 @@ func (n *NotebookWidget) build(c *ui.Context) ui.Element {
 type SidebarWidget struct {
 	common[SidebarWidget]
 	names, titles []string
-	pages         []Widget
+	pages         []Control
 	selected      mirror[string]
 	width         mirror[float32]
 }
@@ -246,7 +246,7 @@ func Sidebar() *SidebarWidget {
 
 // Add adds a page named name, listed as title, showing w. A name already
 // there is ignored.
-func (s *SidebarWidget) Add(name, title string, w Widget) *SidebarWidget {
+func (s *SidebarWidget) Add(name, title string, w Control) *SidebarWidget {
 	change(func() {
 		if slices.Contains(s.names, name) {
 			return
@@ -313,7 +313,7 @@ func (s *SidebarWidget) build(c *ui.Context) ui.Element {
 // CardWidget is a titled box whose body can be hidden.
 type CardWidget struct {
 	common[CardWidget]
-	title, body Widget
+	title, body Control
 	hideBody    bool
 }
 
@@ -324,7 +324,7 @@ func Card() *CardWidget {
 }
 
 // SetTitle shows w as the card's title; the card's body is ignored.
-func (k *CardWidget) SetTitle(w Widget) *CardWidget {
+func (k *CardWidget) SetTitle(w Control) *CardWidget {
 	change(func() {
 		if w != k.body {
 			k.title = w
@@ -334,7 +334,7 @@ func (k *CardWidget) SetTitle(w Widget) *CardWidget {
 }
 
 // SetBody shows w as the card's body; the card's title is ignored.
-func (k *CardWidget) SetBody(w Widget) *CardWidget {
+func (k *CardWidget) SetBody(w Control) *CardWidget {
 	change(func() {
 		if w != k.title {
 			k.body = w
@@ -366,7 +366,7 @@ func (k *CardWidget) build(c *ui.Context) ui.Element {
 type FlowWidget struct {
 	common[FlowWidget]
 	spacing float32
-	items   []Widget
+	items   []Control
 }
 
 func Flow(spacing int) *FlowWidget {
@@ -375,7 +375,7 @@ func Flow(spacing int) *FlowWidget {
 	return f
 }
 
-func (f *FlowWidget) Add(ws ...Widget) *FlowWidget {
+func (f *FlowWidget) Add(ws ...Control) *FlowWidget {
 	change(func() {
 		for _, w := range ws {
 			if !slices.Contains(f.items, w) {

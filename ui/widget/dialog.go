@@ -17,7 +17,7 @@ type Dialog struct {
 // height DIPs, title bar included. A macOS sheet has none: it shows that
 // much shorter, and the title is drawn in the dialog. To open a dialog
 // from a dialog, pass the outer one's Window as parent.
-func NewDialog(parent *Window, title, subtitle string, width, height int, content Widget) *Dialog {
+func NewDialog(parent *Window, title, subtitle string, width, height int, content Control) *Dialog {
 	d := &Dialog{
 		Window:   NewWindow(title, width, height),
 		title:    Label(title).Bold().TextSize(LG),

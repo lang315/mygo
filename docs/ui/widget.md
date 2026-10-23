@@ -129,6 +129,47 @@ Menus take their items, not a function building them, because `ui` builds
 menus while it draws, under the package's lock: set the items again when
 they change.
 
+## Controls of your own
+
+`Custom` makes a control that draws itself with [`ui`](README.md), every
+frame it is shown. It has the methods every control has (`SetVisible`,
+`OnClick`, `ContextMenu`, the style methods):
+
+```go
+badge := widget.Custom(func(c *ui.Context) ui.Element {
+	return ui.Text(c, "NEW").Bold().Padding(2, 6).Radius(999).
+		Background(c.Theme().Accent).TextColor(c.Theme().AccentText)
+})
+```
+
+To make a control type of your own, as a WinForms UserControl, embed a
+`*widget.CustomWidget` and change the state its build reads within
+`widget.Change`, which is safe from any goroutine:
+
+```go
+type Gauge struct {
+	*widget.CustomWidget
+	value float64
+}
+
+func NewGauge() *Gauge {
+	g := &Gauge{}
+	g.CustomWidget = widget.Custom(func(c *ui.Context) ui.Element {
+		return ui.Text(c, fmt.Sprintf("%.0f%%", g.value*100))
+	})
+	return g
+}
+
+func (g *Gauge) SetValue(v float64) *Gauge {
+	widget.Change(func() { g.value = v })
+	return g
+}
+```
+
+A build runs while the package holds its lock: it must not call a setter
+or `Change`, which would wait forever. A control made of other controls
+needs no `Custom`: return a `VBox` of them from a function of your own.
+
 ## Table
 
 ```go

@@ -29,7 +29,7 @@ func main() {
 	}
 }
 
-func tour(w *widget.Window) widget.Widget {
+func tour(w *widget.Window) widget.Control {
 	return widget.Notebook().
 		AddPage("Layout", layout()).
 		AddPage("Inputs", inputs()).
@@ -41,7 +41,7 @@ func tour(w *widget.Window) widget.Widget {
 		Padding(4).Expand()
 }
 
-func dialogs(w *widget.Window) widget.Widget {
+func dialogs(w *widget.Window) widget.Control {
 	result := widget.Label("Results show here").Muted()
 	show := func(format string, a ...any) { result.SetText(fmt.Sprintf(format, a...)) }
 	return widget.VBox(8).Add(
@@ -106,7 +106,7 @@ func customDialog(w *widget.Window) {
 	d.Run()
 }
 
-func extras() widget.Widget {
+func extras() widget.Control {
 	theme := widget.Combo(
 		widget.Option{Value: "system", Text: "System"},
 		widget.Option{Value: "light", Text: "Light"},
@@ -163,7 +163,7 @@ func swatch(c color.Color) []byte {
 	return b.Bytes()
 }
 
-func layout() widget.Widget {
+func layout() widget.Control {
 	return widget.VBox(8).Add(
 		widget.Label("Boxes").TextSize(widget.XL).Bold(),
 		widget.HBox(8).Add(widget.Label("start")).
@@ -179,7 +179,7 @@ func layout() widget.Widget {
 	)
 }
 
-func inputs() widget.Widget {
+func inputs() widget.Control {
 	var name *widget.EntryWidget
 	greeting := widget.Label("Type a name")
 	return widget.VBox(8).Add(
@@ -203,7 +203,7 @@ func inputs() widget.Widget {
 	)
 }
 
-func choices() widget.Widget {
+func choices() widget.Control {
 	progress := widget.Progress().SetFraction(0.3).SetText("30%")
 	spin := widget.Spin(0, 100, 1).SetValue(30)
 	spin.OnChange(func() {
@@ -220,7 +220,7 @@ func choices() widget.Widget {
 	)
 }
 
-func containers() widget.Widget {
+func containers() widget.Control {
 	grid := widget.Grid(8, 8).
 		Attach(widget.Label("A"), 0, 0, 1, 1).
 		Attach(widget.Label("B"), 1, 0, 1, 1).
@@ -236,7 +236,7 @@ func containers() widget.Widget {
 		Add("scroll", "Scrolled", widget.Scrolled(longList()))
 }
 
-func longList() widget.Widget {
+func longList() widget.Control {
 	b := widget.VBox(4)
 	for i := range 100 {
 		b.Add(widget.Label(fmt.Sprintf("Row %d", i)))
@@ -253,7 +253,7 @@ type account struct {
 
 // table shows 100,000 accounts; Live changes a hundred of them every
 // 100 ms from a goroutine of its own.
-func table() widget.Widget {
+func table() widget.Control {
 	rows := make([]account, 100_000)
 	for i := range rows {
 		rows[i] = account{i, fmt.Sprintf("acct%06d", i), "ok", i % 997}

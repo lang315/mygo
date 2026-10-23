@@ -155,7 +155,7 @@ func TestTabsAndMenuButtonFocusFollowTheWidget(t *testing.T) {
 	box := VBox(0).Add(nb, mb)
 	tt := tester(t, box)
 	// Each moves both widgets to a place they have not been.
-	reorder := func(ws ...Widget) {
+	reorder := func(ws ...Control) {
 		box.Clear().Add(ws...)
 		tt.Frame()
 	}

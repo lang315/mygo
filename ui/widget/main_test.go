@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 }
 
 // tester shows w alone in a headless window.
-func tester(t *testing.T, w Widget) *ui.Tester {
+func tester(t *testing.T, w Control) *ui.Tester {
 	t.Helper()
 	tt := ui.NewTester(content(w), 800, 600)
 	tt.Frame()

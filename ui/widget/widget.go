@@ -18,9 +18,10 @@ package widget
 
 import "github.com/egoist/mygo/ui"
 
-// Widget is a part of a user interface: a label, a box of widgets, a table.
-// The package's constructors make them.
-type Widget interface {
+// Control is a part of a user interface: a label, a box of controls, a
+// table. The package's constructors make them, and Custom makes one of
+// your own.
+type Control interface {
 	base() *core
 	build(c *ui.Context) ui.Element
 }
@@ -118,7 +119,7 @@ var axis direction
 // render builds w keyed globally by its id, so its ui state follows it
 // wherever it moves in the window (keeper.key), and styles it. It builds
 // nothing for a hidden widget. Under mu.
-func render(c *ui.Context, w Widget) ui.Element {
+func render(c *ui.Context, w Control) ui.Element {
 	b := w.base()
 	if b.hidden {
 		return ui.Element{}
@@ -155,7 +156,7 @@ func render(c *ui.Context, w Widget) ui.Element {
 }
 
 // content is a view showing w alone, filling the window.
-func content(w Widget) func(c *ui.Context) {
+func content(w Control) func(c *ui.Context) {
 	id := newID()
 	var k keeper
 	return func(c *ui.Context) {
@@ -172,4 +173,4 @@ func content(w Widget) func(c *ui.Context) {
 
 // View returns a ui view showing w alone, for a ui.Tester or a window of
 // your own: mygo.WindowOptions{Content: ui.View(widget.View(w))}.
-func View(w Widget) func(c *ui.Context) { return content(w) }
+func View(w Control) func(c *ui.Context) { return content(w) }
