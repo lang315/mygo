@@ -154,6 +154,9 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	keeping.key(c, b)
 	e := w.build(c)
+	if _, ok := w.(interface{ fillsAcross() }); ok {
+		e.AlignSelf(ui.Stretch) // before the widget's own alignment, which wins
+	}
 	b.place.apply(e)
 	if b.styled {
 		p := b.style.effective(c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled)

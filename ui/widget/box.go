@@ -151,11 +151,14 @@ func (b *BoxWidget) item(c *ui.Context, it boxItem) {
 	case !it.expand || it.w.base().hidden: // a hidden widget takes no room
 		render(c, it.w)
 	case it.fill:
-		// Fill is across the box too, as GTK's: a row centers what it holds
-		// by default, which gives a list the height of all its rows.
-		render(c, it.w).Grow(1).AlignSelf(ui.Stretch)
+		render(c, it.w).Grow(1)
 	default:
 		ui.Box(c.Key(wrapKey(it.w.base().id))).Grow(1).AlignItems(ui.Center).Justify(ui.Center).
 			Children(func() { render(c, it.w) })
 	}
 }
+
+// fillsAcross marks the controls that scroll or hold ones that do (render):
+// across the box they hold they stretch, as a row would otherwise center them
+// at the height of all their rows. The widget's own Align and VAlign win.
+func (b *BoxWidget) fillsAcross() {}

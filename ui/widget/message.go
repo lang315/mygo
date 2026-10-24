@@ -97,7 +97,7 @@ func message(parent *Form, kind Kind, title, text string, input Control, wire fu
 		bar.Add(ok)
 	}
 	ok.Suggested()
-	body := VBox(8)
+	body := VBox(8).VAlign(Center) // a box stretches across a row: its text stays beside the icon
 	if text != "" {
 		body.Add(Label(text))
 	}

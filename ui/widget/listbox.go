@@ -544,3 +544,5 @@ func (l *ListBoxWidget[T, K]) row(c *ui.Context, i int) {
 		ui.Text(c, text).SingleLine()
 	})
 }
+
+func (l *ListBoxWidget[T, K]) fillsAcross() {}
