@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/egoist/mygo/internal/l10n"
 )
 
 // PanelText holds the words of a table's bottom panel: the formats of its
@@ -12,8 +14,6 @@ type PanelText struct {
 	Rows, Selected, Checked string
 	Search                  string
 }
-
-var englishPanel = PanelText{Rows: "Rows: %d", Selected: "Selected: %d", Checked: "Checked: %d", Search: "Search"}
 
 // BottomPanel shows under the table how many rows it has, are selected
 // and are checked, and, with Filterable columns, a search: a column
@@ -32,7 +32,7 @@ func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 	var button *ButtonWidget
 	if len(opts) > 0 {
 		column = ComboBox(opts...).SetValue(opts[0].Value)
-		keyword = TextBox().SetPlaceholder("Keyword").OnEnter(t.searchPanel).SetSize(240, 0)
+		keyword = TextBox().SetPlaceholder(l10n.TableKeyword()).OnEnter(t.searchPanel).SetSize(240, 0)
 		button = Button("").OnClick(t.searchPanel) // counts sets its text
 		panel.PackEnd(button, false, false).PackEnd(keyword, false, false).PackEnd(column, false, false)
 	}
@@ -43,9 +43,10 @@ func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 	return t
 }
 
-// PanelText sets the words of the bottom panel, in English by default.
+// PanelText sets the words of the bottom panel, in the app's language by
+// default.
 func (t *DataGridViewWidget[T, K]) PanelText(pt PanelText) *DataGridViewWidget[T, K] {
-	t.change(func() { t.text = pt })
+	t.change(func() { t.text, t.textSet = pt, true })
 	return t
 }
 
@@ -115,11 +116,15 @@ func (t *DataGridViewWidget[T, K]) keep(column, keyword string) func(*T) bool {
 // counts sets the panel's counts, and its words. Under mu, while
 // building.
 func (t *DataGridViewWidget[T, K]) counts() {
-	if t.searchButton != nil {
-		t.searchButton.text = t.text.Search
+	rows, selected, checked, search := len(t.src.rows), t.chosen.value.Len(), t.checked.value.Len(), l10n.TableSearch()
+	total, sel, chk := l10n.TableRows(rows), l10n.TableSelected(selected), l10n.TableChecked(checked)
+	if t.textSet {
+		search = t.text.Search
+		total, sel, chk = fmt.Sprintf(t.text.Rows, rows), fmt.Sprintf(t.text.Selected, selected), fmt.Sprintf(t.text.Checked, checked)
 	}
-	t.totalLabel.text = fmt.Sprintf(t.text.Rows, len(t.src.rows))
-	t.selectedLabel.text = fmt.Sprintf(t.text.Selected, t.chosen.value.Len())
-	t.checkedLabel.text = fmt.Sprintf(t.text.Checked, t.checked.value.Len())
+	if t.searchButton != nil {
+		t.searchButton.text = search
+	}
+	t.totalLabel.text, t.selectedLabel.text, t.checkedLabel.text = total, sel, chk
 	t.checkedLabel.hidden = !t.checks
 }

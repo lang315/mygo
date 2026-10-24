@@ -707,6 +707,34 @@
   "@fontBoldItalic": {
     "description": "A font style of the font dialog: bold and italic."
   },
+  "tableRows": "Rows: {n, number, ::group-off}",
+  "@tableRows": {
+    "description": "The count of rows under a table (DataGridView's bottom panel)."
+  },
+  "tableSelected": "Selected: {n, number, ::group-off}",
+  "@tableSelected": {
+    "description": "The count of selected rows under a table."
+  },
+  "tableChecked": "Checked: {n, number, ::group-off}",
+  "@tableChecked": {
+    "description": "The count of checked rows under a table."
+  },
+  "tableSearch": "Search",
+  "@tableSearch": {
+    "description": "The button of a table's search panel."
+  },
+  "tableKeyword": "Keyword",
+  "@tableKeyword": {
+    "description": "The placeholder of a table's search panel."
+  },
+  "loading": "Loading…",
+  "@loading": {
+    "description": "The row of a tree node whose children load."
+  },
+  "colorDialogTitle": "Color",
+  "@colorDialogTitle": {
+    "description": "The title of the color dialog (widget.ColorDialog)."
+  },
   "cancel": "Cancel",
   "@cancel": {
     "description": "A button of a dialog that cancels what it asks about."

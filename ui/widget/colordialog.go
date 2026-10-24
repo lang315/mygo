@@ -18,7 +18,7 @@ type ColorDialogWidget struct {
 
 // ColorDialog makes a color dialog holding black.
 func ColorDialog() *ColorDialogWidget {
-	return &ColorDialogWidget{color: ui.RGB(0, 0, 0), title: "Color"}
+	return &ColorDialogWidget{color: ui.RGB(0, 0, 0), title: l10n.ColorDialogTitle()}
 }
 
 // SetColor sets the color the next ShowDialog starts from. It does not
