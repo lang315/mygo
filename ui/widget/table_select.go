@@ -159,9 +159,12 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
-	before, v := t.checked.value.Len(), &t.checked.value
-	if !on && !t.kept && !t.gone && t.filter == nil && first == 0 && last+1 >= t.view.Len() {
-		v.Clear() // every row of the table shows: none is checked
+	c, before := &t.checked, t.checked.value.Len()
+	// Clear is right exactly when the frame held every row: rows added
+	// since, or a filter or a view that changed since, are not its.
+	if !on && !t.gone && first == 0 && last+1 == len(t.rows) {
+		c.value.Clear()
+		c.dirty = true
 	} else {
 		for i := first; i <= last; i++ {
 			r := t.rowAt(i)
@@ -172,18 +175,12 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 			if _, ok := t.index[k]; !ok && t.gone {
 				continue
 			}
-			if on {
-				v.Add(k)
-			} else {
-				v.Remove(k)
+			if c.value.Has(k) != on {
+				c.set(k, on)
 			}
 		}
 	}
-	changed := v.Len() != before
-	if changed {
-		t.checked.dirty = true
-	}
-	return changed
+	return c.value.Len() != before
 }
 
 // Selected returns the keys of the rows selected that show, in the order
@@ -267,7 +264,10 @@ func (t *DataGridViewWidget[T, K]) checkedCount() (count, total int) {
 // delete rows between a frame and ui applying input to it. Changes setters
 // made since the last build stay pending, if ui changed only some keys, or
 // replace the set; a setter's bulk change (dirty) gives way to a
-// replacement. On the main thread, without mu.
+// replacement. When a setter and the user changed the same key since the
+// last build, the setter wins if ui replaced the set (the pending keys are
+// replayed over it), and the user wins if ui changed keys one by one.
+// On the main thread, without mu.
 func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 	mu.Lock()
 	defer mu.Unlock()

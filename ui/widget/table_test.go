@@ -681,6 +681,50 @@ func TestCommitKeepsASetterPendingWhenUIReplacesTheSet(t *testing.T) {
 	}
 }
 
+// The header's checkbox acts on the frame ui shows; goroutines may change
+// the table between that frame and the click, which these drive by hand.
+func TestCheckRowsUncheckLeavesRowsNotInTheFrame(t *testing.T) {
+	tb := testTable(acct{1, "ann", 0}, acct{2, "bob", 0}, acct{3, "cat", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{1, 2, 3}, true)
+	tb.Search("Name", "ann")
+	tt.Frame() // the frame shows ann alone
+	tb.Search("Name", "")
+	if !tb.checkRows(0, 0, false) { // the user unchecks Check all over 1 row
+		t.Fatal("no change")
+	}
+	if got := tb.Checked(); !slices.Equal(got, []int{2, 3}) {
+		t.Fatalf("Checked %v, want [2 3]: bob and cat were not in the frame", got)
+	}
+}
+
+func TestCheckRowsUncheckKeepsARowAddedSinceTheFrame(t *testing.T) {
+	tb := testTable(acct{1, "ann", 0}, acct{2, "bob", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{1, 2}, true)
+	tt.Frame() // two rows
+	tb.AddRow(acct{3, "cat", 0})
+	tb.SetChecked([]int{3}, true)
+	tb.checkRows(0, 1, false)
+	if got := tb.Checked(); !slices.Equal(got, []int{3}) {
+		t.Fatalf("Checked %v, want [3]: cat was not in the frame", got)
+	}
+}
+
+func TestCheckRowsFewKeysDoNotCopyTheSet(t *testing.T) {
+	tb := testTable(manyAccts(100)...).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39}, true)
+	tt.Frame()
+	tb.checkRows(60, 62, true)
+	if tb.checked.dirty {
+		t.Fatal("checking 3 rows of 43 marked the whole set dirty")
+	}
+	if tb.checked.value.Len() != 43 {
+		t.Fatalf("%d checked", tb.checked.value.Len())
+	}
+}
+
 func TestDoubleToggleEndsWhereUIIs(t *testing.T) {
 	tb := testTable(acct{1, "a", 0}).CheckboxColumn()
 	tt := tester(t, tb)
