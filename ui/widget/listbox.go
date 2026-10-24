@@ -338,44 +338,60 @@ func (l *ListBoxWidget[T, K]) OnActivate(fn func(k K)) *ListBoxWidget[T, K] {
 // and posts the events. Under mu, at the start of a build, while frame is
 // still the frame ui showed.
 func (l *ListBoxWidget[T, K]) takeUser() {
-	if l.fixed {
-		l.fixed = false
-	} else if c := l.cursor; c >= 0 && c < len(l.frame) {
-		l.anchor, l.hasAnchor = l.key(&l.frame[c]), true
-	}
 	valid := func(k K) bool { _, ok := l.index[k]; return ok }
-
-	on, off := foldKeys(&l.chosen, &l.chosen.shown, valid)
-	if len(on)+len(off) > 0 {
-		if !l.multi && l.chosen.value.Len() > 1 && len(on) > 0 {
-			// One item is chosen: the one ui's cursor is on, the one clicked
-			// or moved to, else the newest of those the user added.
-			keep := on[len(on)-1]
-			if c := l.cursor; c >= 0 && c < len(l.frame) {
-				if k := l.key(&l.frame[c]); l.chosen.value.Has(k) {
-					keep = k
-				}
-			}
-			for _, k := range slices.Collect(l.chosen.value.All()) {
-				if k != keep {
-					l.chosen.value.Remove(k)
-					l.chosen.shown.Remove(k)
-				}
-			}
-		}
-		if h := l.onSelect; h != nil {
-			ks := l.inOrder(&l.chosen.value)
-			Post(func() { h(ks) })
-		}
+	if l.multi {
+		l.takeMulti(valid)
+	} else {
+		l.takeSingle(valid)
 	}
 
-	on, off = foldKeys(&l.checked, &l.checked.shown, valid)
+	on, off := foldKeys(&l.checked, &l.checked.shown, valid)
 	if h := l.onCheck; h != nil {
 		for _, k := range on {
 			Post(func() { h(k, true) })
 		}
 		for _, k := range off {
 			Post(func() { h(k, false) })
+		}
+	}
+}
+
+// takeSingle takes the choice of a single list: ui holds one row, the cursor,
+// which the user moved if its item is not the one chosen. A setter's choice
+// stands over a cursor ui had not seen it in. Under mu.
+func (l *ListBoxWidget[T, K]) takeSingle(valid func(K) bool) {
+	if l.fixed {
+		l.fixed = false
+		return
+	}
+	c := l.cursor
+	if c < 0 || c >= len(l.frame) {
+		return
+	}
+	k := l.key(&l.frame[c])
+	if !valid(k) || l.chosen.value.Has(k) {
+		return
+	}
+	l.chosen.value.Clear()
+	l.chosen.value.Add(k)
+	if h := l.onSelect; h != nil {
+		Post(func() { h([]K{k}) })
+	}
+}
+
+// takeMulti takes the choices of a list that chooses several, which ui holds
+// as a set. Under mu.
+func (l *ListBoxWidget[T, K]) takeMulti(valid func(K) bool) {
+	if l.fixed {
+		l.fixed = false
+	} else if c := l.cursor; c >= 0 && c < len(l.frame) {
+		l.anchor, l.hasAnchor = l.key(&l.frame[c]), true
+	}
+	on, off := foldKeys(&l.chosen, &l.chosen.shown, valid)
+	if len(on)+len(off) > 0 {
+		if h := l.onSelect; h != nil {
+			ks := l.inOrder(&l.chosen.value)
+			Post(func() { h(ks) })
 		}
 	}
 }
@@ -410,13 +426,33 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 	s := &l.list
 	s.Key, s.Label, s.Selected = l.keyAt, l.labelAt, &l.cursor
 	l.cursor = -1
-	if i, ok := l.index[l.anchor]; ok && l.hasAnchor {
-		l.cursor = i
+	if l.multi {
+		if i, ok := l.index[l.anchor]; ok && l.hasAnchor {
+			l.cursor = i
+		}
+		s.Selection = l.chosen.bind()
+	} else {
+		// ui chooses one row when it holds no Selection: Cmd+A, Cmd-click and
+		// Shift-extend are for lists of several.
+		s.Selection = nil
+		for k := range l.chosen.value.All() {
+			if i, ok := l.index[k]; ok {
+				l.cursor = i
+			}
+			break
+		}
 	}
-	s.Selection = l.chosen.bind() // a single list trims it to one item in takeUser
+	if l.checks {
+		l.checked.bind()
+	}
 	e := ui.List(c, s, len(l.frame), func(i int) { l.row(c, i) }).Grow(1)
 	if l.checks {
 		e.OnShortcut(0, ui.KeySpace, l.toggleChecks)
+	}
+	if !l.multi {
+		// A single list's choice moves with Shift too, as WinForms'.
+		e.OnShortcut(ui.Shift, ui.KeyDown, func() { l.step(1) })
+		e.OnShortcut(ui.Shift, ui.KeyUp, func() { l.step(-1) })
 	}
 	if fn := l.onActivate; fn != nil {
 		e.OnActivate(func(row int) {
@@ -428,18 +464,45 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 	return e
 }
 
+// step moves a single list's choice d rows, to the first or the last row when
+// there is none, and stays at the ends. On the main thread.
+func (l *ListBoxWidget[T, K]) step(d int) {
+	n := len(l.frame)
+	if n == 0 {
+		return
+	}
+	to := l.cursor + d
+	if l.cursor < 0 {
+		to = 0
+		if d < 0 {
+			to = n - 1
+		}
+	}
+	to = min(max(to, 0), n-1)
+	if to != l.cursor {
+		l.cursor = to
+		l.list.ScrollIntoView(to)
+	}
+}
+
 // toggleChecks checks the items chosen, or unchecks them when all are
-// checked. On the main thread.
+// checked: the item the cursor is on in a single list. On the main thread.
 func (l *ListBoxWidget[T, K]) toggleChecks() {
-	chosen, checked := &l.chosen.shown, &l.checked.shown
-	all := chosen.Len() > 0
-	for k := range chosen.All() {
+	var chosen []K
+	if l.multi {
+		chosen = slices.Collect(l.chosen.shown.All())
+	} else if c := l.cursor; c >= 0 && c < len(l.frame) {
+		chosen = []K{l.key(&l.frame[c])}
+	}
+	checked := &l.checked.shown
+	all := len(chosen) > 0
+	for _, k := range chosen {
 		if !checked.Has(k) {
 			all = false
 			break
 		}
 	}
-	for k := range chosen.All() {
+	for _, k := range chosen {
 		if all {
 			checked.Remove(k)
 		} else {

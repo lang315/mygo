@@ -90,6 +90,86 @@ func TestListBoxChoosesOneItemUnlessMulti(t *testing.T) {
 	}
 }
 
+// ui treats a Selection as several: in a single list Cmd+A, Cmd-click on the
+// chosen item and Shift-extend would run and be trimmed after. A single list
+// binds ui's one choice instead, so they do what they mean in a single list.
+func TestListBoxSingleCmdClickOnTheChosenItemKeepsIt(t *testing.T) {
+	selected := make(chan []string, 8)
+	lb := fruitBox().OnSelect(func(ks []string) { selected <- ks })
+	tt := tester(t, lb)
+	click(t, tt, "Banana")
+	soon(t, selected)
+	if err := tt.ClickWith(ui.Cmd, "Banana"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := lb.Selected(); !slices.Equal(got, []string{"b"}) {
+		t.Fatalf("Cmd-click on the chosen item left Selected %v: want it kept", got)
+	}
+	<-posted()
+	select {
+	case ks := <-selected:
+		t.Fatalf("Cmd-click on the chosen item fired OnSelect(%v)", ks)
+	default:
+	}
+}
+
+func TestListBoxSingleShiftArrowsMoveTheChoice(t *testing.T) {
+	lb := fruitBox()
+	tt := tester(t, lb)
+	click(t, tt, "Banana")
+	tt.Key(ui.Shift, ui.KeyDown)
+	tt.Frame()
+	if got := lb.Selected(); !slices.Equal(got, []string{"c"}) {
+		t.Fatalf("Shift+Down from Banana: Selected %v, want Cherry", got)
+	}
+	tt.Key(ui.Shift, ui.KeyUp)
+	tt.Key(ui.Shift, ui.KeyUp)
+	tt.Frame()
+	if got := lb.Selected(); !slices.Equal(got, []string{"a"}) {
+		t.Fatalf("Shift+Up twice: Selected %v, want Apple", got)
+	}
+	tt.Key(ui.Shift, ui.KeyUp) // at the top: stays
+	tt.Frame()
+	if got := lb.Selected(); !slices.Equal(got, []string{"a"}) {
+		t.Fatalf("Shift+Up at the top: Selected %v", got)
+	}
+}
+
+// Cmd+A in a single list changes nothing, fires nothing, and costs nothing by
+// the size of the list.
+func TestListBoxSingleCmdAChangesNothingAndCostsNothingBySize(t *testing.T) {
+	cost := func(n int) (allocs float64, events int) {
+		items := make([]litem, n)
+		for i := range items {
+			items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+		}
+		selected := make(chan []string, 64)
+		lb := newListBox().SetItems(items).OnSelect(func(ks []string) { selected <- ks })
+		tt := tester(t, lb)
+		click(t, tt, "Item 2")
+		soon(t, selected)
+		allocs = testing.AllocsPerRun(10, func() {
+			tt.Key(ui.Cmd, ui.KeyA)
+			tt.Frame()
+		})
+		<-posted()
+		if got := lb.Selected(); !slices.Equal(got, []string{"k2"}) {
+			t.Fatalf("Cmd+A in a single list of %d items left Selected %v", n, got)
+		}
+		return allocs, len(selected)
+	}
+	small, smallEvents := cost(100)
+	big, bigEvents := cost(100_000)
+	t.Logf("Cmd+A: %.0f allocs on 100 items, %.0f on 100000", small, big)
+	if smallEvents+bigEvents != 0 {
+		t.Errorf("Cmd+A fired OnSelect %d times", smallEvents+bigEvents)
+	}
+	if big > small*1.1+10 {
+		t.Errorf("Cmd+A allocated %.0f objects on 100000 items, %.0f on 100: want the same", big, small)
+	}
+}
+
 func TestListBoxMultiChoosesSeveralAndReportsThemInListOrder(t *testing.T) {
 	selected := make(chan []string, 8)
 	lb := fruitBox().Multi().OnSelect(func(ks []string) { selected <- ks })
@@ -144,29 +224,41 @@ func TestListBoxSelectedAndCheckedAreInTheOrderOfTheList(t *testing.T) {
 
 // A click ui took and a setter that removed its item, on another goroutine,
 // before the list built again: the item is not chosen, and no event runs for
-// it. The test hands ui's set the key by hand, as the click would have.
+// it. The test hands ui what the click would have: its set of a list of
+// several, or its cursor in a single list.
 func TestListBoxItemRemovedBeforeTheUsersChoiceIsTakenIsNotChosen(t *testing.T) {
-	events := make(chan []string, 4)
-	lb := fruitBox().OnSelect(func(ks []string) { events <- ks })
-	tester(t, lb)
-	mu.Lock()
-	lb.chosen.shown.Add("b")
-	mu.Unlock()
-	lb.RemoveItems("b")
-	mu.Lock()
-	lb.takeUser()
-	mu.Unlock()
-	if got := lb.Selected(); len(got) != 0 {
-		t.Errorf("Selected %v: the removed item came back", got)
-	}
-	if lb.chosen.shown.Has("b") {
-		t.Error("ui's set still holds the removed item")
-	}
-	<-posted()
-	select {
-	case e := <-events:
-		t.Errorf("OnSelect fired with %v for a removed item", e)
-	default:
+	for _, multi := range []bool{false, true} {
+		t.Run(fmt.Sprint("multi ", multi), func(t *testing.T) {
+			events := make(chan []string, 4)
+			lb := fruitBox().OnSelect(func(ks []string) { events <- ks })
+			if multi {
+				lb.Multi()
+			}
+			tester(t, lb)
+			mu.Lock()
+			if multi {
+				lb.chosen.shown.Add("b")
+			} else {
+				lb.cursor = 1 // Banana
+			}
+			mu.Unlock()
+			lb.RemoveItems("b")
+			mu.Lock()
+			lb.takeUser()
+			mu.Unlock()
+			if got := lb.Selected(); len(got) != 0 {
+				t.Errorf("Selected %v: the removed item came back", got)
+			}
+			if lb.chosen.shown.Has("b") {
+				t.Error("ui's set still holds the removed item")
+			}
+			<-posted()
+			select {
+			case e := <-events:
+				t.Errorf("OnSelect fired with %v for a removed item", e)
+			default:
+			}
+		})
 	}
 }
 
@@ -351,6 +443,42 @@ func TestCheckedListBoxSpaceChecksTheItemsChosen(t *testing.T) {
 	}
 	if len(lb.Checked()) != 0 {
 		t.Fatalf("Checked %v", lb.Checked())
+	}
+}
+
+// Space checks the item the cursor is on in a single list.
+func TestCheckedListBoxSingleSpaceChecksTheChosenItem(t *testing.T) {
+	checked := make(chan string, 8)
+	lb := newChecked().SetItems(fruit).OnCheck(func(k string, on bool) { checked <- fmt.Sprint(k, on) })
+	tt := tester(t, lb)
+	click(t, tt, "Cherry")
+	tt.Key(0, ui.KeySpace)
+	tt.Frame()
+	if got := soon(t, checked); got != "ctrue" {
+		t.Fatalf("Space: OnCheck got %q", got)
+	}
+	tt.Key(0, ui.KeySpace)
+	tt.Frame()
+	if got := soon(t, checked); got != "cfalse" {
+		t.Fatalf("Space again: OnCheck got %q", got)
+	}
+}
+
+// A check a setter set shows in the box: clicking the box unchecks it, which
+// the user did.
+func TestCheckedListBoxShowsTheChecksASetterSet(t *testing.T) {
+	checked := make(chan string, 8)
+	lb := newChecked().SetItems(fruit).OnCheck(func(k string, on bool) { checked <- fmt.Sprint(k, on) })
+	lb.SetChecked([]string{"b"}, true)
+	tt := tester(t, lb)
+	x, y := checkBoxAt(t, tt, "Banana")
+	tt.ClickAt(x, y)
+	tt.Frame()
+	if got := soon(t, checked); got != "bfalse" {
+		t.Fatalf("clicking the box of an item a setter checked: OnCheck got %q, want bfalse", got)
+	}
+	if lb.IsChecked("b") {
+		t.Fatal("the item is still checked")
 	}
 }
 
