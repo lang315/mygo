@@ -111,7 +111,10 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 		e.BorderStyle(p.borderStyle)
 	}
 	if s&pWidth != 0 {
-		e.Width(p.width)
+		// A width of its own is the control's size where there is room, and
+		// no more than the room: wider than its container it would paint
+		// outside the card it is in.
+		e.Width(p.width).MaxWidthPercent(100)
 	}
 	if s&pHeight != 0 {
 		e.Height(p.height)
@@ -293,7 +296,9 @@ func (c *common[W]) Radius(n float32) *W { return c.own(func(s Style) Style { re
 
 // SetSize sets the widget's width and height in DIPs. A 0 leaves that
 // dimension as it was: the natural size if it was never set, and there is
-// no way back to it once it is.
+// no way back to it once it is. A width is the size where the container has
+// the room, and no more than the room (a combo of 400 in a card of 350 is
+// 350 wide); MaxWidth, set after, overrides that.
 func (c *common[W]) SetSize(w, h float32) *W {
 	return c.own(func(s Style) Style {
 		if w > 0 {
