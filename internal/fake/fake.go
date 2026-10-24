@@ -35,7 +35,7 @@ type Backend struct {
 	mu               sync.Mutex
 	windows          []*Window
 	trayIDs          []string
-	trays            []*tray
+	trays            []*Tray
 	trayDark         bool
 	appMenu          *platform.Menu
 	popups           []Popup
@@ -341,7 +341,7 @@ func (b *Backend) Applications() ([]platform.Application, error) {
 }
 
 func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
-	t := &tray{b: b, h: h}
+	t := &Tray{b: b, h: h}
 	b.mu.Lock()
 	b.trays = append(b.trays, t)
 	b.mu.Unlock()
@@ -354,7 +354,7 @@ func (b *Backend) SetTrayDark(dark bool) {
 	b.mu.Lock()
 	changed := b.trayDark != dark
 	b.trayDark = dark
-	trays := append([]*tray(nil), b.trays...)
+	trays := append([]*Tray(nil), b.trays...)
 	b.mu.Unlock()
 	if changed {
 		for _, t := range trays {
@@ -1157,34 +1157,86 @@ func (b *Backend) PreferenceReads() int {
 	return b.prefsReads
 }
 
-type tray struct {
-	b *Backend
-	h platform.TrayHandler
+// Tray is a fake tray icon: it records what it was given, and tests click
+// it. Trays returns those not destroyed.
+type Tray struct {
+	b        *Backend
+	h        platform.TrayHandler
+	image    []byte
+	template bool
+	title    string
+	tip      string
+	menu     *platform.Menu
 }
 
-func (t *tray) Dark() bool {
+func (t *Tray) Dark() bool {
 	t.b.mu.Lock()
 	defer t.b.mu.Unlock()
 	return t.b.trayDark
 }
 
-func (t *tray) SetID(id string) {
+func (t *Tray) SetID(id string) {
 	t.b.mu.Lock()
 	t.b.trayIDs = append(t.b.trayIDs, id)
 	t.b.mu.Unlock()
 }
-func (*tray) SetImage([]byte, bool) error { return nil }
-func (*tray) SetTitle(string)             {}
-func (*tray) SetToolTip(string)           {}
-func (*tray) SetMenu(*platform.Menu)      {}
-func (*tray) PopUpMenu(*platform.Menu)    {}
+
+// SetImage fails for an image that starts with "corrupt", as a backend does
+// for a PNG it cannot decode.
+func (t *Tray) SetImage(png []byte, template bool) error {
+	if bytes.HasPrefix(png, []byte("corrupt")) {
+		return errors.New("fake: cannot decode the PNG")
+	}
+	t.b.mu.Lock()
+	t.image, t.template = slices.Clone(png), template
+	t.b.mu.Unlock()
+	return nil
+}
+
+func (t *Tray) SetTitle(s string) { t.b.mu.Lock(); t.title = s; t.b.mu.Unlock() }
+func (t *Tray) SetToolTip(s string) {
+	t.b.mu.Lock()
+	t.tip = s
+	t.b.mu.Unlock()
+}
+func (t *Tray) SetMenu(m *platform.Menu) { t.b.mu.Lock(); t.menu = m; t.b.mu.Unlock() }
+func (*Tray) PopUpMenu(*platform.Menu)   {}
+
+// Image returns the PNG the icon was given last, and whether it is a
+// template.
+func (t *Tray) Image() ([]byte, bool) {
+	t.b.mu.Lock()
+	defer t.b.mu.Unlock()
+	return t.image, t.template
+}
+
+// Title returns the text next to the icon.
+func (t *Tray) Title() string { t.b.mu.Lock(); defer t.b.mu.Unlock(); return t.title }
+
+// ToolTip returns the hover text.
+func (t *Tray) ToolTip() string { t.b.mu.Lock(); defer t.b.mu.Unlock(); return t.tip }
+
+// Menu returns the menu the icon was given last.
+func (t *Tray) Menu() *platform.Menu { t.b.mu.Lock(); defer t.b.mu.Unlock(); return t.menu }
+
+// Click simulates a click on the icon, and RightClick a right click. Call
+// them on the main thread, as a backend does.
+func (t *Tray) Click()      { t.h.Clicked() }
+func (t *Tray) RightClick() { t.h.RightClicked() }
 
 // Bounds puts the icon in the menu bar above the fake display's work area.
-func (*tray) Bounds() platform.Rect { return platform.Rect{X: 1300, Width: 30, Height: 25} }
-func (t *tray) Destroy() {
+func (*Tray) Bounds() platform.Rect { return platform.Rect{X: 1300, Width: 30, Height: 25} }
+func (t *Tray) Destroy() {
 	t.b.mu.Lock()
-	t.b.trays = slices.DeleteFunc(t.b.trays, func(x *tray) bool { return x == t })
+	t.b.trays = slices.DeleteFunc(t.b.trays, func(x *Tray) bool { return x == t })
 	t.b.mu.Unlock()
+}
+
+// Trays returns the icons made and not destroyed, in order.
+func (b *Backend) Trays() []*Tray {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.trays)
 }
 
 // Surface is a fake window surface: it records what the content asks of

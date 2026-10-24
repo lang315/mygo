@@ -22,6 +22,9 @@ type Form struct {
 	header        *HeaderBarWidget
 	onClose       func() bool
 	menu          []MenuItem
+	strip         *MenuStrip
+	status        *StatusStripWidget
+	tools         *ToolStripWidget
 	parent        *Form         // a dialog's; nil for a top-level window
 	dialog        bool          // made by NewDialog: Escape asks to close it
 	deletable     bool          // the user may close it
@@ -120,7 +123,12 @@ func (w *Form) Unmaximize() *Form {
 // the menu bar is the app's, set with mygo.App.SetMenu; there it does
 // nothing.
 func (w *Form) SetMenuBar(items ...MenuItem) *Form {
-	w.change(func() { w.menu = items })
+	w.change(func() {
+		w.menu = items
+		if !macMenus {
+			w.strip = nil // the bar is the last of SetMenuBar and MenuStrip
+		}
+	})
 	w.do(func(n *mygo.Window) { n.SetMenu(mygo.NewMenu(nativeMenu(items))) })
 	return w
 }
@@ -180,7 +188,7 @@ func (w *Form) Show() {
 	if p := w.parent; p != nil && p.win != nil {
 		opts.Parent, opts.Modal = p.win, true
 	}
-	icon, resizable, menu := w.icon, w.resizable, w.menu
+	icon, resizable, menu, strip := w.icon, w.resizable, w.menu, w.strip
 	mu.Unlock()
 	watchQuit.Do(func() { mygo.App.OnBeforeQuit(onBeforeQuit) })
 	n := mygo.NewWindow(opts)
@@ -193,12 +201,19 @@ func (w *Form) Show() {
 	if menu != nil {
 		n.SetMenu(mygo.NewMenu(nativeMenu(menu)))
 	}
+	if strip != nil && !macMenus {
+		n.SetMenu(strip.native())
+	}
+	if macMenus { // the app's menu bar is the strip of the form with the focus
+		n.OnFocus(func() { claimAppMenu(w) })
+	}
 	closed := func() {
 		mu.Lock()
 		delete(shown, n)
 		w.win, w.showing, w.asking = nil, false, false
 		mu.Unlock()
 		close(done)
+		releaseAppMenu(w)
 	}
 	// The window closes on the main thread: watched there, a close that
 	// came since NewWindow returned is seen too, which Run would wait out.
@@ -221,6 +236,8 @@ func (w *Form) Show() {
 	})
 	if closeNow {
 		n.Close()
+	} else if macMenus {
+		claimAppMenuIfFree(w)
 	}
 }
 
@@ -291,8 +308,16 @@ func (w *Form) view(c *ui.Context) {
 		if w.header != nil {
 			render(c, w.header)
 		}
+		if w.tools != nil {
+			render(c, w.tools)
+		}
 		if w.root != nil {
 			render(c, w.root).Grow(1)
+		} else if w.status != nil {
+			ui.Spacer(c) // keeps the status strip at the bottom of a form with no content
+		}
+		if w.status != nil {
+			render(c, w.status)
 		}
 	})
 	w.keep.end(c)

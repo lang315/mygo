@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget"
 )
@@ -21,9 +22,35 @@ import (
 func main() {
 	err := widget.Run("Widget Tour", func(w *widget.Form) {
 		w.UseHeaderBar("ui/widget").PackEnd(widget.LinkLabel("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
-		w.SetMenuBar(widget.MenuItem{Text: "File", Children: []widget.MenuItem{
-			{Text: "Close", OnClick: func() { w.Close() }},
-		}})
+		// The app shell: a main menu, a tool strip above the content and a
+		// status strip below it, all changed while the app runs.
+		status := widget.StatusLabel("Ready").SetIcon(lucide(lucideIcons[4]))
+		done := 0.3
+		progress := widget.StatusProgress().SetFraction(done)
+		bar := widget.StatusStrip(status, widget.Spring(), progress, widget.Separator(), widget.StatusLabel("ui/widget"))
+		closeItem := widget.StripItem("Close").SetShortcut("CmdOrCtrl+W").OnClick(func() { w.Close() })
+		showBar := widget.StripCheck("Status bar", true)
+		showBar.OnClick(func() { bar.SetVisible(showBar.Checked()) })
+		w.MenuStrip(widget.NewMenuStrip(
+			widget.StripRole(mygo.RoleAppMenu),
+			widget.StripItem("File", closeItem),
+			widget.StripRole(mygo.RoleEditMenu),
+			widget.StripItem("View", showBar),
+		))
+		bold := widget.ToolButton("Bold").SetToggle(true)
+		bold.OnChange(func() { status.SetText(fmt.Sprintf("Bold: %v", bold.Checked())) })
+		w.ToolStrip(widget.ToolStrip(
+			widget.ToolButton("Plus").SetIcon(lucide(lucideIcons[0])).SetTooltip("Add one").OnClick(func() {
+				done = min(done+0.1, 1) // handlers run one at a time: no lock
+				progress.SetFraction(done)
+			}),
+			bold,
+			widget.Separator(),
+			widget.DropDownButton("Menu",
+				widget.MenuItem{Text: "Disable File > Close", OnClick: func() { closeItem.SetEnabled(!closeItem.Enabled()) }},
+				widget.MenuItem{Text: "Say hello", OnClick: func() { status.SetText("Hello") }}),
+		))
+		w.StatusStrip(bar)
 		w.SetContent(tour(w))
 	})
 	if err != nil {
@@ -39,8 +66,46 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("Containers", containers()).
 		AddPage("Dialogs", dialogs(w)).
 		AddPage("Extras", extras()).
+		AddPage("App shell", shell()).
 		AddPage("DataGridView", table()).
 		Padding(4).Expand()
+}
+
+// shell shows the NotifyIcon; the window's menu, tool strip and status strip
+// are the ones around this page.
+func shell() widget.Control {
+	var icon *widget.NotifyIcon
+	state := widget.Label("No tray icon").Muted()
+	toggle := widget.CheckBox("Tray icon")
+	toggle.OnChange(func() {
+		switch {
+		case toggle.Checked() && icon == nil:
+			n, err := widget.NewNotifyIcon()
+			if err != nil {
+				state.SetText("No tray icon: " + err.Error())
+				return
+			}
+			icon = n
+			n.SetIcon(swatch(color.RGBA{37, 99, 235, 255}), false)
+			n.SetText("Widget Tour")
+			n.SetContextMenu(widget.MenuItem{Text: "Hide the icon", OnClick: func() { toggle.SetChecked(false); n.SetVisible(false); state.SetText("Hidden") }})
+			n.OnClick(func() { state.SetText("The icon was clicked") })
+			state.SetText("The tray icon is shown; it has a menu, so a click opens it")
+		case icon != nil:
+			if err := icon.SetVisible(toggle.Checked()); err != nil {
+				toggle.SetChecked(false)
+				state.SetText("Could not show the icon: " + err.Error())
+				return
+			}
+			state.SetText(map[bool]string{true: "Shown again", false: "Hidden"}[toggle.Checked()])
+		}
+	})
+	return widget.VBox(8).Add(
+		widget.Label("App shell").TextSize(widget.XL).Bold(),
+		widget.Label("The menu bar (a MenuStrip), the tool strip above this page and the status strip below it are set on the Form and change while the app runs: try the Plus and Bold buttons, the Menu drop-down and the View menu's Status bar."),
+		widget.Separator(),
+		toggle, state,
+	)
 }
 
 func dialogs(w *widget.Form) widget.Control {
