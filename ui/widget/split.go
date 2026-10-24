@@ -112,3 +112,5 @@ func (s *SplitContainerWidget) build(c *ui.Context) ui.Element {
 }
 
 func (s *SplitContainerWidget) fillsAcross() bool { return true }
+
+func (s *SplitContainerWidget) children() []Control { return []Control{s.first, s.second} }

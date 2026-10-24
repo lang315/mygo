@@ -174,11 +174,19 @@ func render(c *ui.Context, w Control) ui.Element {
 	if b.disabled {
 		e.Disabled(true)
 	}
-	if b.tooltip != "" {
+	if b.tooltip != "" && b.errMsg == "" {
 		e.Tooltip(b.tooltip)
 	}
 	if b.errMsg != "" {
-		e.Tooltip(b.errMsg) // which assistive technology reads as the description
+		// The value is invalid for assistive technology, and the message is
+		// the tooltip too, ahead of the control's own.
+		tip := b.errMsg
+		if b.tooltip != "" {
+			tip += "\n" + b.tooltip
+			e.Description(b.tooltip) // the error comes first in the description
+		}
+		e.Error(b.errMsg)
+		e.Tooltip(tip)
 		rtl := c.Direction() == ui.RightToLeft
 		danger := c.Theme().Danger
 		b.over = append(b.over, func(p *ui.Painter, r ui.Rect) { paintErrorMark(p, r, rtl, danger) })

@@ -181,3 +181,11 @@ func (b *BoxWidget) fillsAcross() bool {
 	}
 	return false
 }
+
+func (b *BoxWidget) children() []Control {
+	cs := make([]Control, len(b.items))
+	for i, it := range b.items {
+		cs[i] = it.w
+	}
+	return cs
+}

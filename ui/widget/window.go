@@ -40,6 +40,7 @@ type Form struct {
 	cancel        *ButtonWidget // Escape clicks it
 	fit           bool          // a dialog of height 0: Show measures its content
 	fitScroll     bool          // the content is higher than the screen: it scrolls
+	announce      string        // a validation message for the next build to announce
 }
 
 // quit quits the app; tests replace it.
@@ -355,6 +356,10 @@ func (w *Form) view(c *ui.Context) {
 		}
 	})
 	w.formKeys(c)
+	if w.announce != "" {
+		c.Announce(w.announce)
+		w.announce = ""
+	}
 	w.keep.end(c)
 }
 
@@ -460,3 +465,4 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 	mu.Unlock()
 	opts.Width, opts.Height, opts.UseContentSize = width, h, true
 }
+func (h *HeaderBarWidget) children() []Control { return append(slices.Clone(h.start), h.end...) }

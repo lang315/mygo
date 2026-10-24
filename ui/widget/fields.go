@@ -149,3 +149,14 @@ func place(e ui.Element, w Control, def ui.Align) {
 		e.JustifySelf(def)
 	}
 }
+
+func (f *FieldsWidget) children() []Control {
+	var cs []Control
+	for _, r := range f.rows {
+		if r.label != nil {
+			cs = append(cs, r.label)
+		}
+		cs = append(cs, r.w)
+	}
+	return cs
+}

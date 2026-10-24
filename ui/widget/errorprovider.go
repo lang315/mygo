@@ -1,6 +1,11 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"weak"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+)
 
 // ErrorProviderWidget shows why a control's value is not valid, as WinForms'
 // ErrorProvider does: a red mark over the end of the control and the message
@@ -12,12 +17,12 @@ import "github.com/egoist/mygo/ui"
 // Nothing validates by itself: a handler set with OnValidating runs when the
 // app calls Form.ValidateChildren, and sets or clears the errors.
 type ErrorProviderWidget struct {
-	marked map[*core]struct{} // under mu
+	marked map[weak.Pointer[core]]struct{} // under mu; weak, so a control the app dropped goes
 }
 
 // ErrorProvider makes a provider with no errors.
 func ErrorProvider() *ErrorProviderWidget {
-	return &ErrorProviderWidget{marked: map[*core]struct{}{}}
+	return &ErrorProviderWidget{marked: map[weak.Pointer[core]]struct{}{}}
 }
 
 // SetError marks w with the message msg, or takes its mark off for "".
@@ -28,14 +33,14 @@ func (p *ErrorProviderWidget) SetError(w Control, msg string) *ErrorProviderWidg
 			if b.errBy == p {
 				b.errMsg, b.errBy = "", nil
 			}
-			delete(p.marked, b)
+			delete(p.marked, weak.Make(b))
 			return
 		}
 		if old := b.errBy; old != nil && old != p {
-			delete(old.marked, b)
+			delete(old.marked, weak.Make(b))
 		}
 		b.errMsg, b.errBy = msg, p
-		p.marked[b] = struct{}{}
+		p.marked[weak.Make(b)] = struct{}{}
 	})
 	return p
 }
@@ -54,23 +59,31 @@ func (p *ErrorProviderWidget) Error(w Control) string {
 func (p *ErrorProviderWidget) HasErrors() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return len(p.marked) > 0
+	for k := range p.marked {
+		if k.Value() != nil {
+			return true
+		}
+		delete(p.marked, k)
+	}
+	return false
 }
 
 // Clear takes every mark off.
 func (p *ErrorProviderWidget) Clear() *ErrorProviderWidget {
 	mu.Lock()
 	cs := make([]*core, 0, len(p.marked))
-	for b := range p.marked {
-		cs = append(cs, b)
+	for k := range p.marked {
+		if b := k.Value(); b != nil {
+			cs = append(cs, b)
+		}
 	}
+	clear(p.marked)
 	mu.Unlock()
 	for _, b := range cs {
 		b.change(func() {
 			if b.errBy == p {
 				b.errMsg, b.errBy = "", nil
 			}
-			delete(p.marked, b)
 		})
 	}
 	return p
@@ -86,23 +99,73 @@ func (c *common[W]) OnValidating(fn func() bool) *W {
 }
 
 // ValidateChildren runs the OnValidating handler of every control the form
-// shows, in the order they are laid out, and reports whether all returned
-// true: every handler runs, so every error is set. Hidden controls, and ones
-// the form never showed, are not validated. Call it from the event goroutine
+// holds, in the order they are laid out, and reports whether all returned
+// true: every handler runs, so every error is set. That is every control in
+// the form's widget tree, those on pages of a TabControl or Sidebar that are
+// not showing and in a card whose body is hidden too; only a control made
+// invisible (SetVisible(false)), and what is inside it, is skipped. A disabled
+// control is validated, as in WinForms. A handler that panics ends the
+// validation: the panic propagates and the handlers after it do not run.
+//
+// When it returns false, the first failing control's error message is
+// announced to assistive technology, once. Call it from the event goroutine
 // (a button's handler), not from a view.
 func (w *Form) ValidateChildren() bool {
 	mu.Lock()
-	var fns []func() bool
-	for _, p := range w.keep.order {
-		if b := p.Value(); b != nil && b.validating != nil {
-			fns = append(fns, b.validating)
+	var cs []*core
+	seen := map[*core]bool{}
+	var walk func(Control)
+	walk = func(c Control) {
+		if c == nil {
+			return
+		}
+		b := c.base()
+		if b.hidden || seen[b] {
+			return
+		}
+		seen[b] = true
+		if b.validating != nil {
+			cs = append(cs, b)
+		}
+		if h, ok := c.(interface{ children() []Control }); ok {
+			for _, k := range h.children() {
+				walk(k)
+			}
 		}
 	}
+	if h := w.header; h != nil {
+		walk(h)
+	}
+	if w.tools != nil {
+		walk(w.tools)
+	}
+	walk(w.root)
+	if w.status != nil {
+		walk(w.status)
+	}
+	fns := make([]func() bool, len(cs))
+	for i, b := range cs {
+		fns[i] = b.validating
+	}
 	mu.Unlock()
-	ok := true
-	for _, fn := range fns {
+	ok, first := true, -1
+	for i, fn := range fns {
 		if !fn() {
+			if ok {
+				first = i
+			}
 			ok = false
+		}
+	}
+	if !ok && first >= 0 {
+		mu.Lock()
+		msg := cs[first].errMsg
+		if msg != "" {
+			w.announce = msg
+		}
+		mu.Unlock()
+		if msg != "" {
+			w.do(func(n *mygo.Window) { n.Invalidate() })
 		}
 	}
 	return ok

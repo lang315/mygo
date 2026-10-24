@@ -165,6 +165,20 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 			})
 		}
 	}
+	if e.errMsg != "" {
+		// The error mark sits at the end: the text stops before it.
+		prev := e.post
+		e.post = func(c *ui.Context, el ui.Element) {
+			if prev != nil {
+				prev(c, el)
+			}
+			side := 1
+			if c.Direction() == ui.RightToLeft {
+				side = 3
+			}
+			el.PaddingEnd(el.Paddings()[side] + errorMarkSize + errorMarkInset)
+		}
+	}
 	el.OnChange(edited(&e.text, &e.bound, e.onChange))
 	if changed && e.onChange != nil {
 		Post(e.onChange)
