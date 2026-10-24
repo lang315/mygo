@@ -2,7 +2,9 @@ package widget
 
 import (
 	"bytes"
+	"log"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -35,18 +37,103 @@ func Post(fn func()) {
 	}
 }
 
-// Update runs fn on the event goroutine and waits for it, so that a worker
-// goroutine changes widgets in step with the handlers. In a handler it
-// runs fn at once. It panics on the main thread, which must not wait.
-func Update(fn func()) {
+// BeginInvoke is Post under the name WinForms gives it: fn runs on the
+// event goroutine after what was posted before it, and BeginInvoke does not
+// wait.
+func BeginInvoke(fn func()) { Post(fn) }
+
+// appRunning reports whether the app is running, for Invoke; tests replace
+// it. The app runs from when it is ready until Run returns.
+var appRunning = func() bool { return mygo.App.IsReady() && !stopped.Load() }
+
+// stopped is set when Run returns: the app has quit.
+var stopped atomic.Bool
+
+// Invoke runs fn on the event goroutine and waits for it, as WinForms'
+// Control.Invoke does, so that a worker goroutine changes widgets in step
+// with the handlers. On the event goroutine, in a handler, it runs fn at
+// once: it never waits for itself. It panics on the main thread, which must
+// not wait. Before the app runs, or after it quit, it returns without
+// running fn.
+//
+// A panic in fn is recovered on the event goroutine and reported as any
+// handler's is (see OnPanic), and Invoke panics again with the same value
+// in the caller's goroutine, so the caller sees it.
+func Invoke(fn func()) {
 	if onEvents() {
-		fn()
+		fn() // a panic goes up to the handler that called, which recovers it
 		return
 	}
-	notMain("Update")
-	done := make(chan struct{})
-	Post(func() { defer close(done); fn() })
+	notMain("Invoke")
+	if !appRunning() {
+		return
+	}
+	var (
+		done     = make(chan struct{})
+		panicked bool
+		value    any
+	)
+	Post(func() {
+		defer close(done)
+		defer func() {
+			if v := recover(); v != nil {
+				panicked, value = true, v
+				report(v, debug.Stack())
+			}
+		}()
+		fn()
+	})
 	<-done
+	if panicked {
+		panic(value)
+	}
+}
+
+// Update is Invoke, as the package named it before.
+func Update(fn func()) { Invoke(fn) }
+
+var (
+	panicMu      sync.Mutex
+	panicHandler func(v any, stack []byte)
+)
+
+// OnPanic sets fn to be called, on the event goroutine, with the value and
+// the stack of a panic in a handler: one run through Post, BeginInvoke or
+// Invoke, or by a widget's event (OnClick, OnChange, a binding's set, a menu
+// item's click...). The panic is recovered, so the app keeps running; with
+// no fn, or nil, it is logged with its stack. A panic in fn itself is
+// logged too.
+func OnPanic(fn func(v any, stack []byte)) {
+	panicMu.Lock()
+	panicHandler = fn
+	panicMu.Unlock()
+}
+
+// report hands a recovered panic to OnPanic's function, or the log.
+func report(v any, stack []byte) {
+	panicMu.Lock()
+	h := panicHandler
+	panicMu.Unlock()
+	if h != nil {
+		defer func() {
+			if v2 := recover(); v2 != nil {
+				log.Printf("widget: the OnPanic handler panicked: %v\n%s", v2, debug.Stack())
+			}
+		}()
+		h(v, stack)
+		return
+	}
+	log.Printf("widget: panic in a handler: %v\n%s", v, stack)
+}
+
+// run runs a handler, recovering and reporting its panic.
+func run(fn func()) {
+	defer func() {
+		if v := recover(); v != nil {
+			report(v, debug.Stack())
+		}
+	}()
+	fn()
 }
 
 // block waits until done is closed. On the event goroutine it runs the
@@ -102,7 +189,7 @@ func next() bool {
 	queue[0] = nil
 	queue = queue[1:]
 	qmu.Unlock()
-	fn()
+	run(fn)
 	return true
 }
 

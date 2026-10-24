@@ -64,7 +64,9 @@ func Run(name string, fn func(w *Form)) error {
 		w := NewForm(name, 1000, 700)
 		Post(func() { fn(w); w.Show() })
 	})
-	return mygo.App.Run()
+	err := mygo.App.Run()
+	stopped.Store(true) // Invoke no longer runs fn: nothing draws what it changes
+	return err
 }
 
 // do runs fn with the native window, if shown.

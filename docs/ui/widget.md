@@ -73,6 +73,8 @@ gota's names are listed for code ported from it.
 | `Label`, `Button`, `RadioGroup` | Label, Button, RadioButton | same |
 | `Alert`, `Confirm` | MessageBox | `Alert`, `Confirm` |
 | `Custom` | UserControl | — |
+| `Invoke` | Control.Invoke | `IdleAddSync` |
+| `BeginInvoke` (`Post`) | Control.BeginInvoke | `IdleAdd` |
 
 ## Threads
 
@@ -82,12 +84,23 @@ gota's names are listed for code ported from it.
 - **Handlers** (`OnClick`, `OnChange`, `OnClose`, ...) run one at a time on
   a goroutine of the package, the event goroutine, never on the main
   thread. A handler may block: the window keeps drawing.
-- **`Post(fn)`** runs `fn` on the event goroutine after what was posted
-  before it, without waiting. It works from anywhere.
-- **`Update(fn)`** runs `fn` on the event goroutine and waits for it, for a
-  worker that must change widgets in step with the handlers. In a handler it
-  runs `fn` at once.
-- **Blocking calls** (`Update`, `Dialog.Run`, `Alert`, `Confirm`, the
+- **`BeginInvoke(fn)`**, or `Post(fn)`, runs `fn` on the event goroutine
+  after what was posted before it, without waiting. It works from anywhere,
+  the main thread too.
+- **`Invoke(fn)`**, or `Update(fn)`, runs `fn` on the event goroutine and
+  waits for it, as WinForms' `Control.Invoke`, for a worker that must change
+  widgets in step with the handlers. **In a handler it runs `fn` at once**:
+  it never waits for itself, so calling it from anywhere is safe (gota's
+  `IdleAddSync` did deadlock there). Before the app runs, or after it quit,
+  it returns without running `fn`.
+- **A panic in a handler** is recovered on the event goroutine, so the app
+  keeps running: in anything run through `Post`, `BeginInvoke` or `Invoke`,
+  and in a widget's event (`OnClick`, `OnChange`, a binding's `set`, a menu
+  item's click...). It is logged with its stack, or given to
+  `widget.OnPanic(func(v any, stack []byte))`, once. `Invoke` also panics
+  again, with the same value, in the goroutine that called it, as WinForms
+  hands its caller the exception.
+- **Blocking calls** (`Invoke`, `Update`, `Dialog.Run`, `Alert`, `Confirm`, the
   `Input` functions and the file dialogs) panic on the main thread, which
   must never wait. In a handler, they keep running the other queued
   handlers while they wait, as GTK runs its main loop under a dialog; on
