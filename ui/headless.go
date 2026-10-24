@@ -476,6 +476,49 @@ func (t *Tester) Find(s string) (Rect, bool) {
 // ones a window answers by closing a dialog.
 func (t *Tester) Escapes() int { return t.h.escapes }
 
+// TestNode is an element of the last frame as assistive technology sees
+// it (Tester.Nodes).
+type TestNode struct {
+	// ID identifies the element from frame to frame.
+	ID   uint64
+	Role Role
+	// Label names the element, Value is the text of a field or the value
+	// of a control that has one.
+	Label, Value string
+	// Bounds is the visible box, in DIPs.
+	Bounds Rect
+	// Min, Max and Now are the range and value of a slider or progress.
+	Min, Max, Now float64
+	// The states of the element.
+	Disabled, Checked, Mixed, Selected, Expanded, ReadOnly, Focused bool
+}
+
+// Nodes returns the elements of the last frame as assistive technology
+// sees them, in tree order: a copy, which a test may change. The first
+// call turns the tree on, as a screen reader does.
+func (t *Tester) Nodes() []TestNode {
+	if t.h.access == nil {
+		t.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	}
+	tree := t.h.access
+	if tree == nil {
+		return nil
+	}
+	out := make([]TestNode, len(tree.Nodes))
+	for i, n := range tree.Nodes {
+		out[i] = TestNode{
+			ID: n.ID, Role: Role(n.Role) + RoleGroup, Label: n.Label, Value: n.Value,
+			Bounds: Rect{float32(n.Bounds.X), float32(n.Bounds.Y), float32(n.Bounds.W), float32(n.Bounds.H)},
+			Min:    n.Min, Max: n.Max, Now: n.Now,
+			Disabled: n.States&platform.AccessDisabled != 0, Checked: n.States&platform.AccessChecked != 0,
+			Mixed: n.States&platform.AccessMixed != 0, Selected: n.States&platform.AccessSelected != 0,
+			Expanded: n.States&platform.AccessExpanded != 0, ReadOnly: n.States&platform.AccessReadOnly != 0,
+			Focused: tree.Focus != 0 && n.ID == tree.Focus,
+		}
+	}
+	return out
+}
+
 // Texts returns the texts of the last frame, in order.
 func (t *Tester) Texts() []string {
 	var out []string
