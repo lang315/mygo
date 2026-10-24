@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -370,6 +371,10 @@ func TestWebViewNoBindingsRefusesPermissionsDownloadsAndWindowsByDefault(t *test
 		})
 		if !noBindings { // OpenExternal runs on a goroutine
 			wait.Poll(func() bool { return len(fake.OpenedExternal()) > before })
+		} else {
+			for i := 0; i < 20000; i++ { // let a goroutine that would open it run
+				runtime.Gosched()
+			}
 		}
 		opened := len(fake.OpenedExternal()) - before
 		if allowed == noBindings || (path == "") != noBindings || (opened == 0) != noBindings {
