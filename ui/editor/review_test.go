@@ -2,11 +2,14 @@ package editor
 
 import (
 	"math/rand/v2"
+	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -701,5 +704,71 @@ func TestReviewRetryKeepsTheEditWhileOthersKeepEditing(t *testing.T) {
 	})
 	if got := strings.ReplaceAll(b.String(), "z", ""); got != "a" {
 		t.Fatalf("the text has %q after %d tries, want the letter typed", got, tries)
+	}
+}
+
+// A buffer edited all the time, faster than an edit takes, does not hold the
+// editor: retry gives up its try after a while and leaves the edit for the
+// next frame, which makes it, once, and the edits after it behind it.
+func TestReviewRetryUnderAConstantStreamLeavesEditsForTheNextFrame(t *testing.T) {
+	ct := newEditorTest(t, "", "|")
+	ed := &ct.st.ed
+	b := ct.st.Buffer
+	var stop atomic.Bool
+	streamed := make(chan struct{})
+	go func() {
+		defer close(streamed)
+		for !stop.Load() {
+			b.Edit(Edit{Start: 0, End: 0, Text: "z"})
+			runtime.Gosched()
+		}
+	}()
+	slow := func(letter string) func() bool {
+		return func() bool {
+			for end := time.Now().Add(300 * time.Microsecond); time.Now().Before(end); { // longer than the stream's period
+			}
+			ed.insert(letter)
+			return true
+		}
+	}
+	returned := make(chan struct{})
+	go func() {
+		defer close(returned)
+		ed.retry(slow("a"))
+		ed.retry(slow("b")) // behind the first, not before it
+	}()
+	wait.For(t, "retry to return while the buffer is still being edited", returned)
+	stop.Store(true)
+	<-streamed
+	ct.tt.Frame() // makes the edits left
+	ct.tt.Frame()
+	if got := strings.ReplaceAll(b.String(), "z", ""); got != "ab" {
+		t.Fatalf("the text has %q (without the streamed z), want the two edits once each, in order", got)
+	}
+}
+
+// An edit left for the next frame is made before the edits that came after
+// it, even when those could be made at once.
+func TestReviewDeferredEditsKeepTheirOrder(t *testing.T) {
+	ct := newEditorTest(t, "", "|")
+	ed := &ct.st.ed
+	stuck := true // the buffer is edited as fast as ever, for the first edit
+	first := func() bool {
+		if stuck {
+			ed.stale = true
+			return false
+		}
+		ed.insert("a")
+		return true
+	}
+	ed.retry(first)
+	ed.retry(func() bool { ed.insert("b"); return true })
+	if got := ct.st.Buffer.String(); got != "" {
+		t.Fatalf("the text has %q before the frame, want the edits waiting", got)
+	}
+	stuck = false
+	ct.tt.Frame()
+	if got := ct.st.Buffer.String(); got != "ab" {
+		t.Fatalf("the text has %q, want ab", got)
 	}
 }
