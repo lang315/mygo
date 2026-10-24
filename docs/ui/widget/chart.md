@@ -5,13 +5,15 @@ over [`ui/chart`](../chart.md): no chart engine of its own, and no look
 settings. For a chart of your own, use `ui/chart` in a `Custom` control.
 
 ```go
-sales := widget.Chart(widget.BarChart).
+var sales *widget.ChartWidget
+sales = widget.Chart(widget.BarChart).
 	SetTitle("Sales").
 	SetLabels("Jan", "Feb", "Mar").
 	SetSeries(widget.ChartSeries{Name: "2026", Values: []float64{10, 20, 30}}).
 	OnSelect(func() { show(sales.Selected()) })
 
 // Later, from any goroutine:
+latest := []float64{1, 2, 3}
 sales.SetSeries(widget.ChartSeries{Name: "2026", Values: latest})
 ```
 
@@ -19,20 +21,32 @@ sales.SetSeries(widget.ChartSeries{Name: "2026", Values: latest})
 - `SetLabels(labels...)`: the x axis of a line or bar chart, the slices of a
   pie. `SetSeries(series...)`: one series for a pie (its values, in the labels'
   order), any number for lines and bars, each in its own color, with a legend
-  when there are two or more. A value beyond the labels is not drawn; NaN
-  leaves a gap in bars and a hole in nothing else (a line mark is skipped).
+  when there are two or more (twelve entries at most, then "+N more").
+- A value beyond the labels is not drawn. **NaN and infinite values are left
+  out** everywhere: a line breaks there, a bar is missing, a slice is empty.
 - Both setters copy their arguments and take effect at the next frame, from any
-  goroutine.
-- `SetTitle(s)` names the chart for assistive technology.
-- `Selected()` and `OnSelect(fn)`: clicking a bar, a point or a slice selects
-  its label (`-1` for none). `OnSelect` runs on the event goroutine once per
-  click. A setter does not run it, and `SetLabels` clears a selection beyond
-  the new labels.
+  goroutine. A selection beyond the new labels or data is cleared, without
+  running `OnSelect`.
+- `SetTitle(s)` names the plot for assistive technology (`"Chart"` by default).
 
-Each bar, point and slice is a button named by its data (`"2026, Jan: 10"`,
-`"Win: 60 (60%)"`) with the same text as its tooltip. In a test,
-`tt.FindAll(widget.ByRole(ui.RoleButton))` lists them (see
+## Reading and selecting
+
+A line or bar chart is **one** control, not one per point, so a chart of ten
+thousand points costs a frame what one of ten does. The point nearest the
+pointer, or the one the arrows, Home and End come to (the plot takes the
+focus), is the plot's value for assistive technology, and its tooltip-like
+description: `"2026, Jan: 10"`, or all the series at that label
+(`"Search, Q1: 5; Direct, Q1: 7"`). A pie names the slice under the pointer
+(`"Win: 60 (60%)"`, one decimal under 1%).
+
+`Selected()` and `OnSelect(fn)`: a click selects the label of that point or
+slice (`-1` for none). `OnSelect` runs on the event goroutine once per click.
+A setter does not run it.
+
+In a test, move the pointer over the plot and read the node's value:
+`tt.Move(x, y)`, then `tt.Find(widget.ByLabel("Sales")).Value()` (see
 [`widget.Tester`](tester.md)).
 
-Not here: scales other than linear, stacking, zooming, area charts, axis
-titles and chart colors of your own.
+Not here: scales other than linear, stacking, zoom, area charts, axis titles,
+chart colors of your own. A line is always
+drawn reduced to the pixel columns (the lowest and highest sample of each), so that spikes still show.

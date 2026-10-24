@@ -13,6 +13,7 @@ func ExampleChart() {
 		SetSeries(widget.ChartSeries{Name: "2026", Values: []float64{10, 20, 30}}).
 		OnSelect(func() { show(sales.Selected()) })
 
+	// Later, from any goroutine:
 	latest := []float64{1, 2, 3}
 	sales.SetSeries(widget.ChartSeries{Name: "2026", Values: latest})
 }

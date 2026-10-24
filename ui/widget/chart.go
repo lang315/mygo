@@ -28,8 +28,15 @@ type ChartSeries struct {
 
 // ChartWidget draws a line, bar or pie chart of its data, over package
 // ui/chart. Set the data with SetLabels and SetSeries from any goroutine;
-// the chart draws the new data at the next frame. It has no look settings:
-// use ui/chart in a Custom control for a chart of your own.
+// the chart draws the new data at the next frame. NaN and infinite values
+// are not drawn: a line breaks there and a bar is missing. It has no look
+// settings: use ui/chart in a Custom control for a chart of your own.
+//
+// Line and bar charts are one control that takes the pointer and the
+// keyboard: the point nearest the pointer, or the one the arrows, Home and
+// End come to, is named for assistive technology and in the tooltip-like
+// value of the plot; a click selects it. The cost of a frame does not grow
+// with the number of points that are not drawn.
 type ChartWidget struct {
 	common[ChartWidget]
 	kind     ChartKind
@@ -38,12 +45,21 @@ type ChartWidget struct {
 	series   []ChartSeries
 	selected int
 	onSelect func()
-	taken    int // the selection a click made, to report once
+	hover    int // the point under the pointer or the keys, -1 for none
+
+	// xs are the fractions of the labels along the plot, kept while the
+	// labels stay (replaced, never changed, so a paint may hold one).
+	xs       []float32
+	xsLabels int
+	// The drawing's scratch, touched only by paints, outside mu.
+	bx, by    []float32
+	points    [][2]float32
+	ysScratch []float32
 }
 
 // Chart makes an empty chart of a kind.
 func Chart(kind ChartKind) *ChartWidget {
-	c := &ChartWidget{kind: kind, selected: -1, taken: -1}
+	c := &ChartWidget{kind: kind, selected: -1, hover: -1}
 	c.init(c)
 	return c
 }
@@ -59,29 +75,40 @@ func (c *ChartWidget) SetTitle(s string) *ChartWidget {
 func (c *ChartWidget) SetLabels(labels ...string) *ChartWidget {
 	c.change(func() {
 		c.labels = append([]string(nil), labels...)
-		if c.selected >= len(c.labels) {
-			c.selected = -1
-		}
+		c.xs = nil
+		c.clampSelection()
 	})
 	return c
 }
 
 // SetSeries sets the data: one series for a pie, any number for a line or
 // bar chart, whose legend names them. A value beyond the labels is not
-// drawn, a missing one is not either, and NaN breaks a line and leaves a
-// gap in bars.
+// drawn, a missing one is not either, and NaN or infinite values are left
+// out: a line breaks there and a bar is missing. A selection beyond the new
+// data is cleared, without running OnSelect.
 func (c *ChartWidget) SetSeries(series ...ChartSeries) *ChartWidget {
 	c.change(func() {
 		c.series = make([]ChartSeries, len(series))
 		for i, s := range series {
 			c.series[i] = ChartSeries{s.Name, append([]float64(nil), s.Values...)}
 		}
+		c.clampSelection()
 	})
 	return c
 }
 
-// Selected returns the index of the label the user clicked a bar, point or
-// slice of, -1 for none.
+// clampSelection clears a selection beyond the data. Under mu.
+func (c *ChartWidget) clampSelection() {
+	n := 0
+	for _, s := range c.series {
+		n = max(n, len(s.Values))
+	}
+	if c.selected >= min(n, len(c.labels)) {
+		c.selected = -1
+	}
+}
+
+// Selected returns the index of the label the user clicked, -1 for none.
 func (c *ChartWidget) Selected() int { mu.Lock(); defer mu.Unlock(); return c.selected }
 
 // OnSelect runs fn, on the event goroutine, after the user clicked a bar,
@@ -101,21 +128,26 @@ func chartColor(i int) ui.Color { return chartColors[i%len(chartColors)] }
 
 func fmtValue(v float64) string { return fmt.Sprintf("%.4g", v) }
 
+// finite reports whether v is drawn.
+func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+
+// legendMax is how many entries a legend shows.
+const legendMax = 12
+
 func (c *ChartWidget) build(ctx *ui.Context) ui.Element {
 	t := ctx.Theme()
+	// The drawing and the selection read these copies: the setters replace
+	// the slices, never change them.
+	labels, series, selected := c.labels, c.series, c.selected
 	pick := -1
-	root := ui.Column(ctx).Gap(t.Space(2)).Role(ui.RoleGroup)
-	if c.title != "" {
-		root.Label(c.title)
-	}
+	root := ui.Column(ctx).Gap(t.Space(2))
 	root.Children(func() {
-		switch c.kind {
-		case PieChart:
-			pick = c.buildPie(ctx)
-		default:
-			pick = c.buildPlot(ctx)
+		if c.kind == PieChart {
+			pick = c.buildPie(ctx, labels, series, selected)
+		} else {
+			pick = c.buildPlot(ctx, labels, series, selected)
 		}
-		c.buildLegend(ctx)
+		c.buildLegend(ctx, labels, series)
 	})
 	if pick >= 0 {
 		c.selected = pick
@@ -126,36 +158,40 @@ func (c *ChartWidget) build(ctx *ui.Context) ui.Element {
 	return root
 }
 
-func (c *ChartWidget) buildLegend(ctx *ui.Context) {
+func (c *ChartWidget) buildLegend(ctx *ui.Context, labels []string, series []ChartSeries) {
 	t := ctx.Theme()
-	if c.kind != PieChart && len(c.series) < 2 {
+	items := len(series)
+	if c.kind == PieChart {
+		items = len(labels)
+	} else if items < 2 {
 		return
 	}
-	ui.Row(ctx).Gap(t.Space(3)).Children(func() {
-		items := len(c.series)
-		if c.kind == PieChart {
-			items = len(c.labels)
-		}
+	more := max(items-legendMax, 0)
+	items = min(items, legendMax)
+	ui.Row(ctx).Gap(t.Space(3)).Wrap().Children(func() {
 		for i := 0; i < items; i++ {
 			name := ""
 			if c.kind == PieChart {
-				name = c.labels[i]
+				name = labels[i]
 			} else {
-				name = c.series[i].Name
+				name = series[i].Name
 			}
 			ui.Row(ctx.Key(i)).Gap(t.Space(1)).AlignItems(ui.Center).Children(func() {
 				ui.Box(ctx).Size(10, 10).Radius(2).Background(chartColor(i))
 				ui.Text(ctx, name).NoWrap().FontSize(t.FontSize - 1)
 			})
 		}
+		if more > 0 {
+			ui.Text(ctx, fmt.Sprintf("+%d more", more)).NoWrap().FontSize(t.FontSize - 1).TextColor(t.TextMuted)
+		}
 	})
 }
 
 // extent returns the lowest and highest value drawn, with 0 inside.
-func (c *ChartWidget) extent() (lo, hi float64) {
-	for _, s := range c.series {
+func extent(labels []string, series []ChartSeries) (lo, hi float64) {
+	for _, s := range series {
 		for i, v := range s.Values {
-			if i >= len(c.labels) || math.IsNaN(v) || math.IsInf(v, 0) {
+			if i >= len(labels) || !finite(v) {
 				continue
 			}
 			lo, hi = math.Min(lo, v), math.Max(hi, v)
@@ -167,113 +203,200 @@ func (c *ChartWidget) extent() (lo, hi float64) {
 	return lo, hi
 }
 
-func (c *ChartWidget) buildPlot(ctx *ui.Context) (picked int) {
+// axisTicks returns about eight of the x axis's ticks, so that a long axis
+// costs the same as a short one.
+func axisTicks(x chart.Band, labels []string) []chart.Tick {
+	if len(labels) <= 8 {
+		return x.Ticks()
+	}
+	step := (len(labels) + 7) / 8
+	var out []chart.Tick
+	for i := 0; i < len(labels); i += step {
+		out = append(out, chart.Tick{At: x.At(i), Value: float64(i), Label: labels[i]})
+	}
+	return out
+}
+
+func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []ChartSeries, selected int) (picked int) {
 	t := ctx.Theme()
 	picked = -1
-	lo, hi := c.extent()
+	lo, hi := extent(labels, series)
 	y := chart.NewLinear(lo, hi).Nice(4)
-	x := chart.NewBand(c.labels...).Padding(0.25, 0.1)
+	x := chart.NewBand(labels...).Padding(0.25, 0.1)
 	if c.kind == LineChart {
-		x = chart.NewBand(c.labels...)
+		x = chart.NewBand(labels...)
 	}
+	if len(c.xs) != len(labels) || c.xsLabels != len(labels) {
+		c.xs = make([]float32, len(labels))
+		for i := range c.xs {
+			c.xs[i] = x.At(i)
+		}
+		c.xsLabels = len(labels)
+	}
+	xs, kind := c.xs, c.kind
 	ticks := y.Ticks(4)
 	label := func(side chart.Side, tk chart.Tick) {
 		ui.Text(ctx, tk.Label).NoWrap().FontSize(t.FontSize - 2).TextColor(t.TextMuted)
 	}
-	chart.Plot(ctx, chart.Axes{Left: ticks, Bottom: x.Ticks(), Label: label}, func(area ui.Element) {
+	name := c.title
+	if name == "" {
+		name = "Chart"
+	}
+	chart.Plot(ctx, chart.Axes{Left: ticks, Bottom: axisTicks(x, labels), Label: label}, func(area ui.Element) {
+		area.Label(name)
 		area.Draw(func(p *ui.Painter, r ui.Rect) {
 			for _, tk := range ticks {
 				p.Line(r.X, chart.Y(r, tk.At), r.X+r.W, chart.Y(r, tk.At), 1, t.Border)
 			}
-			if c.kind != LineChart {
-				return
+			if kind == LineChart {
+				c.drawLines(p, r, y, xs, labels, series)
+			} else {
+				c.drawBars(p, r, x, y, labels, series)
 			}
-			for si, s := range c.series {
-				xs, ys := make([]float32, 0, len(s.Values)), make([]float32, 0, len(s.Values))
-				for i, v := range s.Values {
-					if i >= len(c.labels) {
-						break
-					}
-					xs = append(xs, x.At(i))
-					if math.IsNaN(v) {
-						ys = append(ys, float32(math.NaN()))
-					} else {
-						ys = append(ys, y.At(v))
-					}
-				}
-				p.StrokePath(chart.Line(r, xs, ys, chart.CurveLinear), 2, chartColor(si))
+			if selected >= 0 && selected < len(xs) {
+				fx := chart.X(r, xs[selected])
+				p.Line(fx, r.Y, fx, r.Y+r.H, 1, t.TextMuted)
 			}
 		})
-		n := max(len(c.series), 1)
-		for si, s := range c.series {
-			for i, v := range s.Values {
-				if i >= len(c.labels) || math.IsNaN(v) {
-					continue
-				}
-				name := fmt.Sprintf("%s: %s", c.labels[i], fmtValue(v))
-				if s.Name != "" {
-					name = s.Name + ", " + name
-				}
-				var mark ui.Element
-				if c.kind == LineChart {
-					mark = chart.Point(ctx, x.At(i), y.At(v), 10, 10).Radius(5).Background(chartColor(si))
-				} else {
-					b := x.Band(i)
-					w := (b.Hi - b.Lo) / float32(n)
-					mark = chart.Rect(ctx, chart.Span{Lo: b.Lo + w*float32(si), Hi: b.Lo + w*float32(si+1)}, y.Span(0, v)).
-						Background(chartColor(si)).Radius(2)
-				}
-				mark = mark.Key(si*100000 + i).Label(name).Tooltip(name).Role(ui.RoleButton)
-				if i == c.selected {
-					mark.Border(2, t.Text)
-				}
-				if mark.Clicked() {
-					picked = i
+		describe := func(i int) string {
+			var parts []string
+			for _, s := range series {
+				if i < len(s.Values) && finite(s.Values[i]) {
+					n := fmt.Sprintf("%s: %s", labels[i], fmtValue(s.Values[i]))
+					if s.Name != "" {
+						n = s.Name + ", " + n
+					}
+					parts = append(parts, n)
 				}
 			}
+			if len(parts) == 0 {
+				return labels[i]
+			}
+			out := parts[0]
+			for _, s := range parts[1:] {
+				out += "; " + s
+			}
+			return out
+		}
+		chart.Select(ctx, area, &c.hover, xs, describe)
+		if area.Clicked() && c.hover >= 0 {
+			picked = c.hover
 		}
 	}).Height(220).Gap(6)
 	return picked
 }
 
-func (c *ChartWidget) buildPie(ctx *ui.Context) (picked int) {
+// drawLines paints the lines. It runs outside mu, on the drawing thread, and
+// touches only its arguments and the scratch below.
+func (c *ChartWidget) drawLines(p *ui.Painter, r ui.Rect, y chart.Linear, xsAll []float32, labels []string, series []ChartSeries) {
+	px := int(math.Ceil(float64(r.W * p.Scale())))
+	for si, s := range series {
+		n := min(len(s.Values), len(labels))
+		xs, ys := c.ensureScratch(n)
+		for i := 0; i < n; i++ {
+			xs[i] = xsAll[i]
+			if finite(s.Values[i]) {
+				ys[i] = y.At(s.Values[i])
+			} else {
+				ys[i] = float32(math.NaN())
+			}
+		}
+		c.bx, c.by = chart.MinMax(c.bx, c.by, xs, ys, px)
+		c.points = c.points[:0]
+		for i, fx := range c.bx {
+			c.points = append(c.points, [2]float32{chart.X(r, fx), chart.Y(r, c.by[i])})
+		}
+		p.StrokePolyline(c.points, 2, chartColor(si))
+	}
+}
+
+// ensureScratch returns two slices of n floats, reused from frame to frame.
+func (c *ChartWidget) ensureScratch(n int) (xs, ys []float32) {
+	if cap(c.ysScratch) < 2*n {
+		c.ysScratch = make([]float32, 2*n)
+	}
+	return c.ysScratch[:n], c.ysScratch[n : 2*n]
+}
+
+func (c *ChartWidget) drawBars(p *ui.Painter, r ui.Rect, x chart.Band, y chart.Linear, labels []string, series []ChartSeries) {
+	n := max(len(series), 1)
+	for si, s := range series {
+		for i, v := range s.Values {
+			if i >= len(labels) || !finite(v) {
+				continue
+			}
+			b := x.Band(i)
+			w := (b.Hi - b.Lo) / float32(n)
+			sp := y.Span(0, v)
+			x0, x1 := chart.X(r, b.Lo+w*float32(si)), chart.X(r, b.Lo+w*float32(si+1))
+			y0, y1 := chart.Y(r, sp.Hi), chart.Y(r, sp.Lo)
+			p.Fill(ui.Rect{X: x0, Y: min(y0, y1), W: x1 - x0, H: abs32(y1 - y0)}, chartColor(si), 2)
+		}
+	}
+}
+
+func abs32(v float32) float32 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartSeries, selected int) (picked int) {
 	picked = -1
 	var values []float64
-	if len(c.series) > 0 {
-		for i, v := range c.series[0].Values {
-			if i < len(c.labels) && v > 0 && !math.IsInf(v, 0) {
+	if len(series) > 0 {
+		for i, v := range series[0].Values {
+			if i < len(labels) {
+				if !finite(v) {
+					v = 0
+				}
 				values = append(values, v)
-			} else if i < len(c.labels) {
-				values = append(values, 0)
 			}
 		}
 	}
 	total := 0.0
 	for _, v := range values {
-		total += v
+		total += math.Max(v, 0)
 	}
 	slices := chart.Pie(values, 0.02)
+	describe := func(i int) string {
+		share := 0.0
+		if total > 0 {
+			share = math.Max(values[i], 0) / total * 100
+		}
+		if share > 0 && share < 1 {
+			return fmt.Sprintf("%s: %s (%.1f%%)", labels[i], fmtValue(values[i]), share)
+		}
+		return fmt.Sprintf("%s: %s (%.0f%%)", labels[i], fmtValue(values[i]), share)
+	}
+	name := c.title
+	if name == "" {
+		name = "Chart"
+	}
 	chart.Plot(ctx, chart.Axes{}, func(area ui.Element) {
+		area.Label(name)
 		area.Draw(func(p *ui.Painter, r ui.Rect) {
 			size := min(r.W, r.H)
 			cx, cy := r.X+r.W/2, r.Y+r.H/2
 			for i, s := range slices {
 				outer := size / 2
-				p.FillPath(chart.Sector(cx, cy, outer*0.55, outer, s), chartColor(i))
+				if i == selected {
+					outer -= 4
+				}
+				p.FillPath(chart.Sector(cx, cy, size/2*0.55, outer, s), chartColor(i))
 			}
 		})
-		for i, s := range slices {
-			if total == 0 || values[i] == 0 {
-				continue
-			}
-			mid := (s.Start + s.End) / 2
-			share := values[i] / total * 100
-			name := fmt.Sprintf("%s: %s (%.0f%%)", c.labels[i], fmtValue(values[i]), share)
-			// The middle of the ring, a fraction of the square plot.
-			fx, fy := float32(0.5+0.39*math.Sin(mid)), float32(0.5+0.39*math.Cos(mid))
-			mark := chart.Point(ctx, fx, fy, 16, 16).Radius(8).Key(i).Label(name).Tooltip(name).Role(ui.RoleButton)
-			if mark.Clicked() {
-				picked = i
+		// The slice under the pointer, named as the value of the plot.
+		if px, py, over := area.PointerPosition(); over && len(slices) > 0 {
+			b := area.Bounds()
+			size := min(b.W, b.H)
+			if i, ok := chart.SliceAt(slices, px-b.W/2, py-b.H/2, size/2*0.55, size/2); ok && total > 0 {
+				d := describe(i)
+				area.Value(d).Tooltip(d)
+				if area.Clicked() {
+					picked = i
+				}
 			}
 		}
 	}).Height(200).Width(200)

@@ -1,10 +1,11 @@
 package widget
 
 import (
+	"fmt"
 	"math"
+	"strings"
+	"sync"
 	"testing"
-
-	"github.com/egoist/mygo/ui"
 )
 
 func barChart() *ChartWidget {
@@ -12,52 +13,75 @@ func barChart() *ChartWidget {
 		SetSeries(ChartSeries{Name: "2026", Values: []float64{10, 20, 30}})
 }
 
-func TestBarChartDrawsOneBarPerValueWithItsAxisLabels(t *testing.T) {
+// plotValues moves the pointer across the plot and returns the value
+// (the description of the point under it) at each of n positions, and the
+// x of each.
+func plotValues(tt *Tester, name string, n int) (vals []string, xs []float32) {
+	for i := 0; i < n; i++ {
+		b := tt.Find(ByLabel(name)).Bounds()
+		x := b.X + b.W*(float32(i)+0.5)/float32(n)
+		tt.Move(x, b.Y+b.H/2)
+		tt.Frame()
+		vals = append(vals, tt.Find(ByLabel(name)).Value())
+		xs = append(xs, x)
+	}
+	return vals, xs
+}
+
+func distinct(vals []string) map[string]bool {
+	m := map[string]bool{}
+	for _, v := range vals {
+		if v != "" {
+			m[v] = true
+		}
+	}
+	return m
+}
+
+func TestBarChartNamesEachBarByItsDataUnderThePointer(t *testing.T) {
 	tt := NewTester(t, barChart(), 500, 300)
 	for _, s := range []string{"Jan", "Feb", "Mar"} {
 		if !tt.Has(ByLabel(s)) {
 			t.Errorf("no axis label %q in %q", s, tt.Texts())
 		}
 	}
-	bars := tt.FindAll(ByRole(ui.RoleButton))
-	if len(bars) != 3 {
-		t.Fatalf("%d bars, want 3", len(bars))
-	}
-	if h0, h2 := bars[0].Bounds().H, bars[2].Bounds().H; !(h2 > h0*2.5 && h2 < h0*3.5) {
-		t.Errorf("heights %v and %v: 30 should be three times 10", h0, h2)
-	}
-	if !tt.Has(ByLabel("Jan: 10")) && !tt.Has(ByLabel("2026, Jan: 10")) {
-		t.Errorf("bars are not named by their data: %+v", tt.Nodes())
+	vals, _ := plotValues(tt, "Sales", 30)
+	got := distinct(vals)
+	for _, want := range []string{"2026, Jan: 10", "2026, Feb: 20", "2026, Mar: 30"} {
+		if !got[want] {
+			t.Errorf("no point named %q among %v", want, got)
+		}
 	}
 }
 
 func TestChartFollowsItsDataThroughSetters(t *testing.T) {
 	c := barChart()
 	tt := NewTester(t, c, 500, 300)
-	before := tt.FindAll(ByRole(ui.RoleButton))[0].Bounds().H
 	c.SetSeries(ChartSeries{Name: "2026", Values: []float64{30, 20, 10}})
 	tt.Settle()
-	after := tt.FindAll(ByRole(ui.RoleButton))[0].Bounds().H
-	if !(after > before*2.5) {
-		t.Fatalf("first bar %v -> %v: the new data is not drawn", before, after)
+	vals, _ := plotValues(tt, "Sales", 30)
+	if got := distinct(vals); !got["2026, Jan: 30"] || got["2026, Jan: 10"] {
+		t.Fatalf("the new data is not what the chart reports: %v", got)
 	}
 	c.SetLabels("A", "B", "C", "D").SetSeries(ChartSeries{Values: []float64{1, 2, 3, 4}})
 	tt.Settle()
-	if n := len(tt.FindAll(ByRole(ui.RoleButton))); n != 4 || !tt.Has(ByLabel("D")) {
-		t.Fatalf("%d bars after growing to four", n)
+	vals, _ = plotValues(tt, "Sales", 40)
+	if got := distinct(vals); !got["D: 4"] || !tt.Has(ByLabel("D")) {
+		t.Fatalf("after growing to four: %v", got)
 	}
 }
 
-func TestChartSeriesGetTheirOwnBarsAndALegend(t *testing.T) {
+func TestChartSeriesGetALegendAndAllReportInThePointsName(t *testing.T) {
 	c := Chart(BarChart).SetLabels("Q1", "Q2").SetSeries(
 		ChartSeries{Name: "Search", Values: []float64{5, 6}},
 		ChartSeries{Name: "Direct", Values: []float64{7, 8}})
 	tt := NewTester(t, c, 500, 300)
-	if n := len(tt.FindAll(ByRole(ui.RoleButton))); n != 4 {
-		t.Fatalf("%d bars, want 2 series x 2 labels", n)
-	}
-	if !tt.Has(ByLabel("Search")) || !tt.Has(ByLabel("Direct")) {
+	if !tt.HasText("Search") || !tt.HasText("Direct") {
 		t.Fatalf("no legend: %q", tt.Texts())
+	}
+	vals, _ := plotValues(tt, "Chart", 20)
+	if got := distinct(vals); !got["Search, Q1: 5; Direct, Q1: 7"] {
+		t.Fatalf("a point reports all its series: %v", got)
 	}
 }
 
@@ -69,14 +93,33 @@ func TestChartClickingABarSelectsItsLabelOnce(t *testing.T) {
 	if c.Selected() != -1 {
 		t.Fatalf("Selected %d before any click", c.Selected())
 	}
-	tt.FindAll(ByRole(ui.RoleButton))[1].Click()
+	vals, xs := plotValues(tt, "Sales", 30)
+	var x float32
+	for i, v := range vals {
+		if v == "2026, Feb: 20" {
+			x = xs[i]
+			break
+		}
+	}
+	b := tt.Find(ByLabel("Sales")).Bounds()
+	tt.ClickAt(x, b.Y+b.H/2)
+	tt.Settle()
 	if i := received(t, got); i != 1 || c.Selected() != 1 {
 		t.Fatalf("OnSelect saw %d, Selected %d, want 1", i, c.Selected())
 	}
+	for range 4 {
+		tt.Frame()
+	}
+	tt.Settle()
+	select {
+	case <-got:
+		t.Fatal("OnSelect ran again without a click")
+	default:
+	}
 }
 
-func TestPieChartHasOneSliceAndLegendEntryPerLabel(t *testing.T) {
-	c := Chart(PieChart).SetLabels("Win", "Mac", "Linux").
+func TestPieChartNamesSlicesWithTheirShareAndHasALegend(t *testing.T) {
+	c := Chart(PieChart).SetTitle("Users").SetLabels("Win", "Mac", "Linux").
 		SetSeries(ChartSeries{Values: []float64{60, 30, 10}})
 	tt := NewTester(t, c, 400, 300)
 	for _, s := range []string{"Win", "Mac", "Linux"} {
@@ -84,20 +127,41 @@ func TestPieChartHasOneSliceAndLegendEntryPerLabel(t *testing.T) {
 			t.Errorf("no legend entry %q in %q", s, tt.Texts())
 		}
 	}
-	if !tt.Has(ByLabel("Win: 60 (60%)")) || !tt.HasText("Win") {
-		t.Errorf("slices are not named with their share: %+v", tt.Nodes())
+	b := tt.Find(ByLabel("Users")).Bounds()
+	seen := map[string]bool{}
+	for a := 0.0; a < 2*math.Pi; a += 0.25 {
+		tt.Move(b.X+b.W/2+float32(math.Sin(a))*0.4*b.W, b.Y+b.H/2-float32(math.Cos(a))*0.4*b.H)
+		tt.Frame()
+		seen[tt.Find(ByLabel("Users")).Value()] = true
+	}
+	if !seen["Win: 60 (60%)"] || !seen["Mac: 30 (30%)"] || !seen["Linux: 10 (10%)"] {
+		t.Fatalf("slices seen: %v", seen)
 	}
 }
 
-func TestLineChartIsDrawnWithItsPointsNamed(t *testing.T) {
+func TestClickingASliceSelectsItsLabel(t *testing.T) {
+	c := Chart(PieChart).SetTitle("Users").SetLabels("Win", "Mac", "Linux").
+		SetSeries(ChartSeries{Values: []float64{60, 30, 10}})
+	tt := NewTester(t, c, 400, 300)
+	b := tt.Find(ByLabel("Users")).Bounds()
+	// Just left of twelve o'clock is the last slice (Linux).
+	tt.ClickAt(b.X+b.W/2-0.05*b.W, b.Y+b.H/2-0.4*b.H)
+	tt.Settle()
+	if c.Selected() != 2 {
+		t.Fatalf("Selected %d after clicking the last slice", c.Selected())
+	}
+}
+
+func TestLineChartReportsPointsAndHasAxis(t *testing.T) {
 	c := Chart(LineChart).SetLabels("Mon", "Tue", "Wed").
 		SetSeries(ChartSeries{Name: "Temp", Values: []float64{12, 18, 15}})
 	tt := NewTester(t, c, 500, 300)
 	if !tt.Has(ByLabel("Tue")) {
 		t.Fatalf("no axis: %q", tt.Texts())
 	}
-	if !tt.Has(ByLabel("Temp, Tue: 18")) && !tt.Has(ByLabel("Tue: 18")) {
-		t.Fatalf("points are not named by their data: %+v", tt.Nodes())
+	vals, _ := plotValues(tt, "Chart", 30)
+	if got := distinct(vals); !got["Temp, Tue: 18"] {
+		t.Fatalf("points: %v", got)
 	}
 }
 
@@ -110,44 +174,45 @@ func TestChartWithNoDataShowsAnEmptyChartAndDoesNotPanic(t *testing.T) {
 	}
 }
 
-func TestChartIgnoresNaNAndMissingValues(t *testing.T) {
-	c := Chart(BarChart).SetLabels("a", "b", "c").SetSeries(ChartSeries{Values: []float64{1, math.NaN(), 3}})
+func TestChartLeavesOutNaNAndInfinity(t *testing.T) {
+	c := Chart(BarChart).SetLabels("a", "b", "c", "d").
+		SetSeries(ChartSeries{Values: []float64{1, math.NaN(), math.Inf(1), 4}})
 	tt := NewTester(t, c, 400, 300)
-	if n := len(tt.FindAll(ByRole(ui.RoleButton))); n != 2 {
-		t.Fatalf("%d bars for one NaN value, want 2", n)
+	vals, _ := plotValues(tt, "Chart", 40)
+	for v := range distinct(vals) {
+		if strings.Contains(v, "Inf") || strings.Contains(v, "NaN") {
+			t.Errorf("a point is named %q", v)
+		}
+	}
+	if got := distinct(vals); !got["a: 1"] || !got["d: 4"] {
+		t.Fatalf("points: %v", got)
+	}
+	for _, k := range []ChartKind{LineChart, PieChart} {
+		c := Chart(k).SetLabels("a", "b", "c").SetSeries(ChartSeries{Values: []float64{1, math.Inf(-1), math.NaN()}})
+		NewTester(t, c, 300, 200).Frame()
 	}
 }
 
-func TestClickingASliceOrAPointSelectsItsLabel(t *testing.T) {
-	for name, c := range map[string]*ChartWidget{
-		"pie":  Chart(PieChart).SetLabels("Win", "Mac", "Linux").SetSeries(ChartSeries{Values: []float64{60, 30, 10}}),
-		"line": Chart(LineChart).SetLabels("Mon", "Tue", "Wed").SetSeries(ChartSeries{Values: []float64{12, 18, 15}}),
-	} {
-		tt := NewTester(t, c, 500, 400)
-		marks := tt.FindAll(ByRole(ui.RoleButton))
-		if len(marks) != 3 {
-			t.Fatalf("%s: %d marks", name, len(marks))
-		}
-		marks[2].Click()
-		if c.Selected() != 2 {
-			t.Errorf("%s: Selected %d after clicking the third mark", name, c.Selected())
-		}
-	}
-}
-
-func TestChartOnSelectRunsOncePerClickNotPerFrame(t *testing.T) {
-	n := make(chan struct{}, 8)
-	c := barChart().OnSelect(func() { n <- struct{}{} })
+func TestChartSetSeriesClearsASelectionBeyondTheData(t *testing.T) {
+	fired := make(chan struct{}, 4)
+	c := barChart().OnSelect(func() { fired <- struct{}{} })
 	tt := NewTester(t, c, 500, 300)
-	tt.FindAll(ByRole(ui.RoleButton))[0].Click()
-	for range 5 {
-		tt.Frame()
+	_, xs := plotValues(tt, "Sales", 30)
+	b := tt.Find(ByLabel("Sales")).Bounds()
+	tt.ClickAt(xs[len(xs)-2], b.Y+b.H/2) // the last bar
+	tt.Settle()
+	received(t, fired)
+	if c.Selected() != 2 {
+		t.Fatalf("Selected %d", c.Selected())
+	}
+	c.SetSeries(ChartSeries{Values: []float64{5}})
+	if c.Selected() != -1 {
+		t.Fatalf("Selected %d with one value left", c.Selected())
 	}
 	tt.Settle()
-	received(t, n)
 	select {
-	case <-n:
-		t.Fatal("OnSelect ran again without a click")
+	case <-fired:
+		t.Fatal("SetSeries ran OnSelect")
 	default:
 	}
 }
@@ -155,9 +220,88 @@ func TestChartOnSelectRunsOncePerClickNotPerFrame(t *testing.T) {
 func TestChartSetLabelsDropsASelectionBeyondThem(t *testing.T) {
 	c := barChart()
 	tt := NewTester(t, c, 500, 300)
-	tt.FindAll(ByRole(ui.RoleButton))[2].Click()
+	_, xs := plotValues(tt, "Sales", 30)
+	b := tt.Find(ByLabel("Sales")).Bounds()
+	tt.ClickAt(xs[len(xs)-2], b.Y+b.H/2)
+	tt.Settle()
 	c.SetLabels("Jan")
 	if c.Selected() != -1 {
 		t.Fatalf("Selected %d with one label left", c.Selected())
+	}
+}
+
+// A worker sets the data while the chart paints: no data race.
+func TestChartPaintAndSettersFromAWorkerDoNotRace(t *testing.T) {
+	c := Chart(LineChart).SetLabels("a", "b", "c").SetSeries(ChartSeries{Values: []float64{1, 2, 3}})
+	tt := NewTester(t, c, 400, 300)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			c.SetLabels("a", "b", "c", "d").SetSeries(ChartSeries{Values: []float64{float64(i), 2, 3, 4}})
+		}
+	}()
+	for i := 0; i < 100; i++ {
+		tt.Frame()
+		tt.Image()
+	}
+	wg.Wait()
+}
+
+func linePoints(n int) *ChartWidget {
+	labels := make([]string, n)
+	vals := make([]float64, n)
+	for i := range labels {
+		labels[i] = fmt.Sprint("p", i)
+		vals[i] = float64(i % 17)
+	}
+	return Chart(LineChart).SetLabels(labels...).SetSeries(ChartSeries{Name: "s", Values: vals})
+}
+
+// An idle frame costs the same whatever the number of points.
+func TestChartFrameAllocationsDoNotGrowWithThePoints(t *testing.T) {
+	cost := func(n int) float64 {
+		tt := NewTester(t, linePoints(n), 600, 300)
+		tt.Frame()
+		return testing.AllocsPerRun(20, func() { tt.Frame(); tt.Image() })
+	}
+	small, big := cost(10), cost(10000)
+	t.Logf("allocs per frame: %v with 10 points, %v with 10,000", small, big)
+	if big > small*2+50 {
+		t.Fatalf("allocations per frame: %v with 10 points, %v with 10,000", small, big)
+	}
+}
+
+func TestPieOfAThousandSlicesKeepsTheLegendShortAndShowsSmallShares(t *testing.T) {
+	labels := make([]string, 1000)
+	vals := make([]float64, 1000)
+	for i := range labels {
+		labels[i], vals[i] = fmt.Sprint("s", i), 1
+	}
+	vals[0] = 1000
+	c := Chart(PieChart).SetTitle("P").SetLabels(labels...).SetSeries(ChartSeries{Values: vals})
+	tt := NewTester(t, c, 400, 400)
+	if !tt.HasText("+988 more") {
+		t.Errorf("legend not capped: %d texts", len(tt.Texts()))
+	}
+	b := tt.Find(ByLabel("P")).Bounds()
+	seen := map[string]bool{}
+	for a := 0.0; a < 2*math.Pi; a += 0.01 {
+		tt.Move(b.X+b.W/2+float32(math.Sin(a))*0.4*b.W, b.Y+b.H/2-float32(math.Cos(a))*0.4*b.H)
+		tt.Frame()
+		seen[tt.Find(ByLabel("P")).Value()] = true
+	}
+	small := false
+	for v := range seen {
+		if strings.HasSuffix(v, "(0.0%)") {
+			t.Errorf("a share rounded to zero: %q", v)
+		}
+		if strings.HasSuffix(v, "(0.1%)") || strings.HasSuffix(v, "(0.2%)") || strings.HasSuffix(v, "(0.3%)") {
+			small = true
+		}
+	}
+	if !small {
+		t.Errorf("no small share with a decimal among %d seen", len(seen))
 	}
 }
