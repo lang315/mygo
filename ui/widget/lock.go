@@ -37,14 +37,20 @@ var invalidate = func(w *mygo.Window) { w.Invalidate() }
 
 // change runs fn under mu, then redraws the windows on screen: for a change
 // that is no widget's, as the state a Custom control's build reads.
+//
+// fn may panic, as a callback of the program's does (UpdateRow's, a key
+// func): the lock is released all the same, and nothing is redrawn.
 func change(fn func()) {
-	mu.Lock()
-	fn()
-	wins := make([]*mygo.Window, 0, len(shown))
-	for w := range shown {
-		wins = append(wins, w)
-	}
-	mu.Unlock()
+	wins := func() []*mygo.Window {
+		mu.Lock()
+		defer mu.Unlock()
+		fn()
+		wins := make([]*mygo.Window, 0, len(shown))
+		for w := range shown {
+			wins = append(wins, w)
+		}
+		return wins
+	}()
 	for _, w := range wins {
 		invalidate(w)
 	}
@@ -54,15 +60,17 @@ func change(fn func()) {
 // those whose view built it, or keeps its state while it is hidden or out
 // of the view for a while.
 func (b *core) change(fn func()) {
-	mu.Lock()
-	fn()
-	var wins []*mygo.Window
-	for w, f := range shown {
-		if _, ok := f.keep.widgets[b.id]; ok {
-			wins = append(wins, w)
+	wins := func() (wins []*mygo.Window) {
+		mu.Lock()
+		defer mu.Unlock()
+		fn()
+		for w, f := range shown {
+			if _, ok := f.keep.widgets[b.id]; ok {
+				wins = append(wins, w)
+			}
 		}
-	}
-	mu.Unlock()
+		return wins
+	}()
 	for _, w := range wins {
 		invalidate(w)
 	}
@@ -70,10 +78,12 @@ func (b *core) change(fn func()) {
 
 // change runs fn under mu, then redraws the window, if shown.
 func (w *Form) change(fn func()) {
-	mu.Lock()
-	fn()
-	n := w.win
-	mu.Unlock()
+	n := func() *mygo.Window {
+		mu.Lock()
+		defer mu.Unlock()
+		fn()
+		return w.win
+	}()
 	if n != nil {
 		invalidate(n)
 	}
