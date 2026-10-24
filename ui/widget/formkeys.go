@@ -58,13 +58,32 @@ func (w *Form) SetCancelButton(b *ButtonWidget) *Form {
 // OnEnter does: click the form's accept button. Under mu.
 var formAccept func()
 
-// acceptClick returns the function posting the accept button's click, nil
-// when it has none or cannot be clicked. Under mu.
+// canClick reports whether b may get the form's Enter or Escape: it is
+// enabled, has a handler, and this form built it in its last frame, which
+// leaves out a hidden one (inside a hidden container too) and one of another
+// form. Under mu.
+func (w *Form) canClick(b *ButtonWidget) bool {
+	return b != nil && !b.hidden && !b.disabled && w.keep.built[b.id]
+}
+
+// acceptClick returns what Enter in a text field without OnEnter does while
+// the form builds: click the accept button if it can be clicked then. Under
+// mu.
 func (w *Form) acceptClick() func() {
-	if b := w.accept; b != nil && !b.hidden && !b.disabled && b.onClick != nil {
-		return func() { Post(b.onClick) }
+	b := w.accept
+	if b == nil {
+		return nil
 	}
-	return nil
+	return func() {
+		Post(func() {
+			mu.Lock()
+			ok, h := w.canClick(b), b.onClick
+			mu.Unlock()
+			if ok && h != nil {
+				h()
+			}
+		})
+	}
 }
 
 // formKeys asks for the form's shortcuts and posts the handlers of those
@@ -79,7 +98,7 @@ func (w *Form) formKeys(c *ui.Context) {
 		key ui.Key
 		b   *ButtonWidget
 	}{{ui.KeyEnter, w.accept}, {ui.KeyEscape, w.cancel}} {
-		if b := k.b; b != nil && !b.hidden && !b.disabled && c.Shortcut(0, k.key) && b.onClick != nil {
+		if b := k.b; w.canClick(b) && c.Shortcut(0, k.key) && b.onClick != nil {
 			Post(b.onClick)
 		}
 	}

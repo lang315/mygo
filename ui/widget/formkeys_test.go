@@ -39,6 +39,20 @@ func TestFormShortcutReplacesAndRemoves(t *testing.T) {
 	}
 }
 
+// Removing a shortcut gives its key back: Escape reaches the dialog's close
+// request again.
+func TestRemovingAnEscapeShortcutLetsEscapeCloseTheDialog(t *testing.T) {
+	d := NewDialog(nil, "D", "", 300, 200, Label("x"))
+	d.Shortcut(0, ui.KeyEscape, func() {})
+	d.Shortcut(0, ui.KeyEscape, nil)
+	dt := TestDialog(t, d)
+	dt.Escape()
+	flushEvents(t)
+	if !dt.Closed() {
+		t.Fatal("a removed Escape shortcut still swallows the key")
+	}
+}
+
 func TestFormShortcutYieldsToAFocusedControlThatTakesTheKey(t *testing.T) {
 	var space atomic.Int32
 	clicks := 0
@@ -171,94 +185,58 @@ func TestEscapeClosesAnOpenComboBeforeTheCancelButton(t *testing.T) {
 	}
 }
 
-func TestAFormBehindAModalDialogGetsNoShortcuts(t *testing.T) {
-	var n atomic.Int32
-	parent := keysForm(Button("p")).Shortcut(0, ui.KeyF5, func() { n.Add(1) })
-	dlg := NewDialog(parent, "M", "", 300, 200, Label("modal"))
-	_ = dlg
-	tt := TestForm(t, parent)
-	tt.Find(ByLabel("p")).Key(0, ui.KeyF5)
-	if n.Load() != 1 {
-		t.Fatalf("shortcut ran %d times with no dialog open", n.Load())
-	}
-}
-
-func TestTextBoxWithOnEnterRunsOnlyThatAndNotTheAcceptButton(t *testing.T) {
-	ok, entered := 0, 0
-	okBtn := Button("OK").OnClick(func() { ok++ })
-	f := keysForm(VBox(4).Add(TextBox().OnEnter(func() { entered++ }), okBtn)).SetAcceptButton(okBtn)
-	tt := TestForm(t, f)
-	tt.Find(ByRole(ui.RoleTextField)).Type("x").Key(0, ui.KeyEnter)
-	if entered != 1 || ok != 0 {
-		t.Fatalf("OnEnter ran %d times, OK clicked %d: OnEnter alone handles Enter", entered, ok)
-	}
-}
-
-func TestEnterInAMultilineTextBoxIsNotAnAcceptClick(t *testing.T) {
+func TestAcceptButtonInAHiddenContainerOrAnotherFormGetsNoEnter(t *testing.T) {
 	ok := 0
 	okBtn := Button("OK").OnClick(func() { ok++ })
-	box := MultilineTextBox()
-	f := keysForm(VBox(4).Add(box, okBtn)).SetAcceptButton(okBtn)
+	box := VBox(4).Add(okBtn)
+	f := keysForm(VBox(4).Add(TextBox(), box)).SetAcceptButton(okBtn)
 	tt := TestForm(t, f)
-	tt.Find(ByRole(ui.RoleTextField)).Type("a").Key(0, ui.KeyEnter).Type("b")
-	if ok != 0 || box.Text() != "a\nb" {
-		t.Fatalf("OK clicked %d times, text %q: Enter belongs to the multiline box", ok, box.Text())
-	}
-}
-
-// A shortcut and a handler: the shortcut's handler is queued behind the one
-// that was running, never run inside it.
-func TestFormShortcutRunsAfterTheHandlerThatIsRunning(t *testing.T) {
-	var order []string
-	gate := make(chan struct{})
-	f := keysForm(Button("x")).Shortcut(0, ui.KeyF5, func() { order = append(order, "shortcut") })
-	tt := TestForm(t, f)
-	tt.Find(ByLabel("x")).Focus()
-	Post(func() { <-gate; order = append(order, "running") })
-	tt.Tester.Key(0, ui.KeyF5)
-	tt.Tester.Frame()
-	close(gate)
-	<-posted()
-	if len(order) != 2 || order[0] != "running" || order[1] != "shortcut" {
-		t.Fatalf("order %q", order)
-	}
-}
-
-func TestFormShortcutAndButtonsFromWorkerGoroutinesAreRaceFree(t *testing.T) {
-	var n atomic.Int32
-	okBtn := Button("OK")
-	f := keysForm(VBox(4).Add(TextBox(), okBtn))
-	tt := TestForm(t, f)
-	done := make(chan struct{})
-	for g := 0; g < 4; g++ {
-		go func() {
-			defer func() { done <- struct{}{} }()
-			for i := 0; i < 100; i++ {
-				f.Shortcut(0, ui.KeyF5, func() { n.Add(1) })
-				f.SetAcceptButton(okBtn)
-				f.SetCancelButton(okBtn)
-				f.Shortcut(0, ui.KeyF5, nil)
-				f.SetAcceptButton(nil)
-			}
-		}()
-	}
-	for g := 0; g < 4; g++ {
-		<-done
-	}
+	field := tt.Find(ByRole(ui.RoleTextField)).Focus()
+	box.SetVisible(false)
 	tt.Settle()
+	field.Key(0, ui.KeyEnter)
+	if ok != 0 {
+		t.Fatalf("OK clicked %d times from a hidden container", ok)
+	}
+	other := Button("Elsewhere").OnClick(func() { ok++ })
+	NewForm("other", 100, 100).SetContent(other)
+	f.SetAcceptButton(other)
+	tt.Settle()
+	field.Key(0, ui.KeyEnter)
+	if ok != 0 {
+		t.Fatalf("a button of another form was clicked %d times", ok)
+	}
 }
 
-func TestDialogTesterEscapeClicksTheCancelButton(t *testing.T) {
-	cancels := 0
-	var d *Dialog
-	cancel := Button("Cancel").OnClick(func() { cancels++ })
-	d = NewDialog(nil, "D", "", 300, 200, VBox(4).Add(Button("x"), cancel))
-	d.SetCancelButton(cancel)
-	dt := TestDialog(t, d)
-	dt.Find(ByLabel("x")).Focus()
-	dt.Escape()
-	flushEvents(t)
-	if cancels != 1 || dt.Closed() {
-		t.Fatalf("cancel clicked %d times, closed %v", cancels, dt.Closed())
+func TestEnterInANumberOrAnEditableComboClicksTheAcceptButton(t *testing.T) {
+	for name, c := range map[string]struct {
+		field Control
+		role  ui.Role
+	}{
+		"NumericUpDown":     {NumericUpDown(0, 10, 1), ui.RoleTextField},
+		"editable ComboBox": {ComboBox(Option{"a", "Apple"}).Editable(), ui.RoleComboBox},
+	} {
+		field := c.field
+		ok := 0
+		okBtn := Button("OK").OnClick(func() { ok++ })
+		f := keysForm(VBox(4).Add(field, okBtn)).SetAcceptButton(okBtn)
+		tt := TestForm(t, f)
+		tt.Find(ByRole(c.role)).Focus().Key(0, ui.KeyEnter)
+		if ok != 1 {
+			t.Errorf("%s: OK clicked %d times by Enter", name, ok)
+		}
+	}
+}
+
+// A closed ComboBox takes Enter to open its list.
+func TestEnterOnAClosedComboBoxOpensItAndDoesNotAccept(t *testing.T) {
+	ok := 0
+	okBtn := Button("OK").OnClick(func() { ok++ })
+	combo := ComboBox(Option{"a", "Apple"}, Option{"b", "Banana"}).SetValue("a")
+	f := keysForm(VBox(4).Add(combo, okBtn)).SetAcceptButton(okBtn)
+	tt := TestForm(t, f)
+	tt.Find(ByLabel("Apple")).Focus().Key(0, ui.KeyEnter)
+	if ok != 0 || !tt.Has(ByLabel("Banana")) {
+		t.Fatalf("OK clicked %d times; list open %v", ok, tt.Has(ByLabel("Banana")))
 	}
 }

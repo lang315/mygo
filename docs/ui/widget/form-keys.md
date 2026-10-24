@@ -15,23 +15,27 @@ dlg.SetCancelButton(cancel)
 
 `fn` runs on the event goroutine when the user presses `key` with exactly
 `mods`, unless the control with the focus takes the key itself: a focused
-button takes Enter and Space, a check box Space, an open drop-down Escape and
-the arrows, and a text field what it types and edits. The same `mods` and `key`
+button takes Enter and Space, a check box Space, a closed combo box Enter (it
+opens its list), an open drop-down Escape and the arrows, and a text field,
+a number box and an editable combo box what they type and edit. The same `mods` and `key`
 again replace the handler; a nil `fn` removes it. Set and removed from any
-goroutine. A form behind a modal dialog gets no shortcuts. The platform menu
+goroutine. A form behind a modal dialog gets no key at all: the operating system's modal
+window takes the keyboard (not tested here). The platform menu
 handles the accelerators of a `MenuStrip` before the window sees the key (not
 tested here: the fake backend has no native menu).
 
 ## SetAcceptButton(b) and SetCancelButton(b)
 
-Both take a `*ButtonWidget`; nil clears. A disabled or hidden button gets no
-key, which then goes on as if none were set.
+Both take a `*ButtonWidget`; nil clears. A disabled button, a hidden one (inside a hidden
+container too), and one this form did not build in its last frame (another
+form's) get no key, which then goes on as if none were set.
 
 - **Enter** clicks the accept button from wherever the focus is, except where
   the control with the focus takes Enter: another button clicks itself, a
   multiline text box adds a line, a text box with `OnEnter` runs `OnEnter`
   **only** (the accept button is not clicked, so a form whose `OnEnter` submits
-  does not submit twice). A text box without `OnEnter` clicks the accept button.
+  does not submit twice). A text box, a number box or an editable combo box without `OnEnter` clicks the
+  accept button.
   The accept button with the focus clicks itself once.
 - **Escape** first closes an open drop-down. Then, with a cancel button, it
   clicks it **instead of** a dialog's request to close: `OnClose` is not asked,
