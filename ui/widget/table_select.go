@@ -1,6 +1,10 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"slices"
+
+	"github.com/egoist/mygo/ui"
+)
 
 // keys mirrors a set of row keys that ui changes, as mirror does a value:
 // value is the table's, under mu; shown is ui's, on the main thread, which
@@ -76,6 +80,9 @@ func (t *DataGridViewWidget[T, K]) shown(in *ui.Selection[K]) []K {
 		return nil
 	}
 	t.sync()
+	if n <= t.view.Len()/8 {
+		return t.shownByPosition(in)
+	}
 	var ks []K
 	for i := range t.view.Len() {
 		if k := t.key(&t.rows[t.view.Row(i)]); in.Has(k) {
@@ -83,6 +90,37 @@ func (t *DataGridViewWidget[T, K]) shown(in *ui.Selection[K]) []K {
 				break
 			}
 		}
+	}
+	return ks
+}
+
+// shownByPosition is shown for few keys: it looks each key's row up and
+// sorts them by their place in the view, instead of walking the view.
+func (t *DataGridViewWidget[T, K]) shownByPosition(in *ui.Selection[K]) []K {
+	if t.posOf == nil || t.posVersion != t.view.Version() || len(t.posOf) != len(t.rows) {
+		t.posOf = slices.Grow(t.posOf[:0], len(t.rows))[:len(t.rows)]
+		for i := range t.posOf {
+			t.posOf[i] = -1
+		}
+		for i := range t.view.Len() {
+			t.posOf[t.view.Row(i)] = int32(i)
+		}
+		t.posVersion = t.view.Version()
+	}
+	type at struct {
+		pos int32
+		key K
+	}
+	found := make([]at, 0, in.Len())
+	for k := range in.All() {
+		if row, ok := t.index[k]; ok && row < len(t.posOf) && t.posOf[row] >= 0 {
+			found = append(found, at{t.posOf[row], k})
+		}
+	}
+	slices.SortFunc(found, func(a, b at) int { return int(a.pos) - int(b.pos) })
+	ks := make([]K, len(found))
+	for i, f := range found {
+		ks[i] = f.key
 	}
 	return ks
 }

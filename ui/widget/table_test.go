@@ -665,6 +665,52 @@ func TestDoubleToggleEndsWhereUIIs(t *testing.T) {
 	}
 }
 
+func TestCheckedFewKeysKeepTheOrderShown(t *testing.T) {
+	tb := testTable(manyAccts(40)...).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{3, 30, 7, 99}, true) // 99 is no row
+	if got := tb.Checked(); !slices.Equal(got, []int{3, 7, 30}) {
+		t.Fatalf("Checked %v, want [3 7 30]", got)
+	}
+	click(t, tt, "Name")
+	click(t, tt, "Name") // descending
+	if got := tb.Checked(); !slices.Equal(got, []int{30, 7, 3}) {
+		t.Fatalf("Checked %v, want [30 7 3]", got)
+	}
+	tb.Search("Name", "acct00000") // shows 0 to 9
+	if got := tb.Checked(); !slices.Equal(got, []int{7, 3}) {
+		t.Fatalf("Checked %v with a search, want [7 3]: 30 is hidden", got)
+	}
+	tb.DeleteRows(7)
+	if got := tb.Checked(); !slices.Equal(got, []int{3}) {
+		t.Fatalf("Checked %v after deleting 7, want [3]", got)
+	}
+}
+
+// BenchmarkTableSelectedLateKey asks for the one key checked of a million
+// rows, the last in the order shown (sorted by name, descending).
+func BenchmarkTableSelectedLateKey(b *testing.B) {
+	tb := testTable(manyAccts(1_000_000)...).CheckboxColumn()
+	tt := ui.NewTester(content(tb), 1280, 800)
+	for range 2 {
+		if err := tt.Click("Name"); err != nil { // ascending, then descending
+			b.Fatal(err)
+		}
+		tt.Frame()
+	}
+	tb.SetChecked([]int{0}, true) // acct000000
+	tt.Frame()
+	if got := tb.Checked(); len(got) != 1 {
+		b.Fatalf("Checked %v", got)
+	}
+	b.ResetTimer()
+	for range b.N {
+		if len(tb.Checked()) != 1 {
+			b.Fatal("lost the key")
+		}
+	}
+}
+
 func TestTableInputLandsOnTheRowsOfTheFrameShown(t *testing.T) {
 	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}, acct{3, "c", 0})
 	tt := tester(t, tb)
