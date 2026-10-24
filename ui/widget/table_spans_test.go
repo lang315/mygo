@@ -141,6 +141,35 @@ func TestSpansSortFilterAndCopyFollowText(t *testing.T) {
 	}
 }
 
+func TestEmptySpansDrawTheText(t *testing.T) {
+	col := Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 300,
+		Spans: func(a *acct) []ui.Span {
+			if a.id == 2 {
+				return []ui.Span{} // no badge for bob
+			}
+			return nil
+		}}
+	tb := DataGridView(func(a *acct) int { return a.id }, col).SetRows([]acct{{1, "ann", 1}, {2, "bob", 2}})
+	tt := spansTester(tb)
+	row := ui.Rect{X: 10, Y: 74, W: 24, H: 15} // bob's cell
+	if c := inkOf(tt.Image(), row, page(tt)); c == page(tt) {
+		t.Fatal("an empty Spans drew a blank cell, not Text")
+	}
+}
+
+func TestSpansOfASelectedRowAreNotWrittenTo(t *testing.T) {
+	kept := []ui.Span{{Text: "Done", Color: badgeWhite, Background: badgeGreen, Radius: 4}, {Text: " ann", Color: red}}
+	col := Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 300,
+		Spans: func(*acct) []ui.Span { return kept }} // spans kept with the row
+	tb := DataGridView(func(a *acct) int { return a.id }, col).SetRows([]acct{{1, "ann", 1}})
+	tt := spansTester(tb)
+	click(t, tt, "Done ann")
+	tt.Frame()
+	if kept[0].Color != badgeWhite || kept[1].Color != red {
+		t.Fatalf("the app's spans were changed by drawing a selected row: %v %v", kept[0].Color, kept[1].Color)
+	}
+}
+
 func TestNilSpansIsTheTextCell(t *testing.T) {
 	_, tt := badgeTable(true)
 	if !slices.Contains(tt.Texts(), "ann") {
@@ -149,28 +178,38 @@ func TestNilSpansIsTheTextCell(t *testing.T) {
 }
 
 // BenchmarkTableSpansFrame builds an idle frame of a table of 100,000 rows
-// whose first column shows the name as a plain text, or as a badge and the
-// name in spans.
+// whose first column shows the name as a plain text, as spans the app kept
+// with its rows, or as spans a closure builds on each call; selectAll has
+// every row selected, which copies the spans of each cell drawn.
 func BenchmarkTableSpansFrame(b *testing.B) {
 	rows := manyAccts(100_000)
-	for _, spans := range []bool{false, true} {
-		name := "text"
-		if spans {
-			name = "spans"
-		}
-		b.Run(name, func(b *testing.B) {
-			col := Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 300, Sortable: true}
-			if spans {
-				// The app's own allocations are the fixture's: spans made
-				// once per row, as an app keeping them with its rows has.
-				made := make([][]ui.Span, len(rows))
-				for i := range rows {
-					made[i] = []ui.Span{{Text: "Done", Color: badgeWhite, Background: badgeGreen, Radius: 4, Weight: 800}, {Text: " " + rows[i].name}}
-				}
-				col.Spans = func(a *acct) []ui.Span { return made[a.id] }
-			}
+	made := make([][]ui.Span, len(rows))
+	for i := range rows {
+		made[i] = []ui.Span{{Text: "Done", Color: badgeWhite, Background: badgeGreen, Radius: 4, Weight: 800}, {Text: " " + rows[i].name}}
+	}
+	for _, c := range []struct {
+		name  string
+		spans func(*acct) []ui.Span
+		all   bool
+	}{
+		{"text", nil, false},
+		{"spans", func(a *acct) []ui.Span { return made[a.id] }, false},
+		{"spansPerCall", func(a *acct) []ui.Span {
+			return []ui.Span{{Text: "Done", Color: badgeWhite, Background: badgeGreen, Radius: 4, Weight: 800}, {Text: " " + a.name}}
+		}, false},
+		{"textSelectAll", nil, true},
+		{"spansSelectAll", func(a *acct) []ui.Span { return made[a.id] }, true},
+	} {
+		b.Run(c.name, func(b *testing.B) {
+			col := Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 300, Sortable: true, Spans: c.spans}
 			tb := DataGridView(func(a *acct) int { return a.id }, col).CheckboxColumn().SetRows(rows)
 			tt := ui.NewTester(content(tb), 400, 600)
+			if c.all {
+				if err := tt.Click(rows[0].name); err != nil {
+					b.Fatal(err)
+				}
+				tt.Key(ui.Cmd, ui.KeyA)
+			}
 			for range 10 {
 				tt.Frame()
 			}
