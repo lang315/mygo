@@ -2,6 +2,7 @@ package editor
 
 import (
 	"math"
+	"runtime"
 	"slices"
 	"time"
 
@@ -39,17 +40,20 @@ func (ed *editor) offer(ev ui.InputEvent) bool {
 
 // retry runs fn, which edits the text as the editor shows it, again on
 // the text as it is when another goroutine edited the buffer meanwhile,
-// rather than leaving the edit out (apply).
+// rather than leaving the edit out (apply). Each try that fails is one
+// that another goroutine got an edit in before, so the tries end once
+// the edits do, or once fn is faster than they are; a limit on them
+// would drop a keystroke typed while another goroutine edits fast.
 func (ed *editor) retry(fn func() bool) bool {
-	for range 4 {
+	for {
 		ed.sync()
 		ed.stale = false
 		ok := fn()
 		if !ed.stale {
 			return ok
 		}
+		runtime.Gosched()
 	}
-	return false
 }
 
 func (ed *editor) dispatch(ev ui.InputEvent) bool {

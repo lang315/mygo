@@ -682,3 +682,24 @@ func (h *checkingHighlighter) Highlight(int, time.Duration) bool { return true }
 func (h *checkingHighlighter) Tokens(_ int, _ string, dst []Token) ([]Token, bool) {
 	return dst, true
 }
+
+// An edit made while another goroutine keeps editing the buffer is made
+// once it can be, not left out after a few tries: each failed try means
+// that the other goroutine got an edit in.
+func TestReviewRetryKeepsTheEditWhileOthersKeepEditing(t *testing.T) {
+	ct := newEditorTest(t, "", "|")
+	ed := &ct.st.ed
+	b := ct.st.Buffer
+	tries := 0
+	ed.retry(func() bool {
+		tries++
+		if tries <= 10 {
+			b.Edit(Edit{Start: 0, End: 0, Text: "z"}) // between the editor's look and its edit
+		}
+		ed.insert("a")
+		return true
+	})
+	if got := strings.ReplaceAll(b.String(), "z", ""); got != "a" {
+		t.Fatalf("the text has %q after %d tries, want the letter typed", got, tries)
+	}
+}
