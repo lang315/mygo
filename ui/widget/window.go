@@ -23,6 +23,7 @@ type Form struct {
 	onClose       func() bool
 	menu          []MenuItem
 	strip         *MenuStrip
+	status        *StatusStripWidget
 	parent        *Form         // a dialog's; nil for a top-level window
 	dialog        bool          // made by NewDialog: Escape asks to close it
 	deletable     bool          // the user may close it
@@ -297,6 +298,11 @@ func (w *Form) view(c *ui.Context) {
 		}
 		if w.root != nil {
 			render(c, w.root).Grow(1)
+		} else if w.status != nil {
+			ui.Spacer(c) // keeps the status strip at the bottom of a form with no content
+		}
+		if w.status != nil {
+			render(c, w.status)
 		}
 	})
 	w.keep.end(c)
