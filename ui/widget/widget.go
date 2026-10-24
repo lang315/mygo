@@ -201,7 +201,7 @@ func content(w Control) func(c *ui.Context) {
 		defer mu.Unlock()
 		viewing.Store(true)
 		defer viewing.Store(false)
-		axis, building = vertical, id
+		axis, building, buildingForm = vertical, id, nil
 		k.begin()
 		ui.Column(c).Fill().Children(func() { render(c, w) })
 		k.end(c)

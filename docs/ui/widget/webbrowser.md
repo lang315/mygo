@@ -12,7 +12,7 @@ browser = widget.WebBrowser().
 back := widget.Button("Back").OnClick(func() { browser.GoBack() })
 ```
 
-- `Navigate(url)`: a URL with a scheme (`https://…`, or one registered with
+- `Navigate(url)`: a `javascript:` URL is refused (logged and ignored). A URL with a scheme (`https://…`, or one registered with
   `Protocol.Handle`) is a page of the web; one without, as `"/docs"`, is a page
   of the app's frontend. A URL that cannot be loaded is logged.
 - `SetDocumentText(html)` loads HTML, with no base URL. `DocumentText()` returns
@@ -31,7 +31,9 @@ back := widget.Button("Back").OnClick(func() { browser.GoBack() })
 ## The view
 
 The web view is made the first frame after the control is built in a form that
-is **shown**, outside the package's lock and on the main thread. Until then the
+is **shown**, outside the package's lock: a Posted function on the event
+goroutine makes it (on the main thread, as the platform needs), so a slow
+handler delays it. Until then the
 control draws an empty box, and `Navigate`, `SetDocumentText` and
 `SetBackgroundColor` are remembered and applied when the view exists; so
 without a window (a `widget.Tester`) nothing loads, `Url()` returns what
@@ -42,6 +44,9 @@ tab not shown, or hidden), and goes with its window. Moved to another form (or
 added to two) it loses it: the new form gets a new view, with the current URL
 or document and without the history.
 
-A page that is not the app's own, as one at `https://example.com`, cannot call
-Go: see [who may call](../../bindings.md#who-may-call). Content rules,
-scripting and bindings need `ui.WebView` and `mygo.Window.NewWebView` directly.
+**No page in a WebBrowser calls Go**, whatever its origin (the view is made with
+`WebViewOptions.NoBindings`): not an `https` page, not a `file:` or `about:`
+page, not HTML given to `SetDocumentText`, not a trusted origin. A WebBrowser
+shows content that is not the app's own, as WinForms' does. For a page of
+your frontend that calls the bound methods, use `ui.WebView` and
+`mygo.Window.NewWebView` directly, with content rules and scripting too.

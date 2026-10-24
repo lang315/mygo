@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"fmt"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -96,9 +98,9 @@ func TestWebBrowserAppliesWhatWasSetBeforeTheViewExisted(t *testing.T) {
 	h := WebBrowser().SetDocumentText("<p>hi</p>")
 	_, s2 := shownBrowser(t, h)
 	v2 := theView(t, s2)
-	wait.Until(t, "the document", func() bool { return len(v2.HTML) == 1 })
-	if v2.HTML[0] != "<p>hi</p>" || h.DocumentText() != "<p>hi</p>" {
-		t.Fatalf("HTML %q, DocumentText %q", v2.HTML, h.DocumentText())
+	wait.Until(t, "the document", func() bool { return len(v2.Documents()) == 1 })
+	if v2.Documents()[0] != "<p>hi</p>" || h.DocumentText() != "<p>hi</p>" {
+		t.Fatalf("HTML %q, DocumentText %q", v2.Documents(), h.DocumentText())
 	}
 }
 
@@ -203,18 +205,139 @@ func TestWebBrowserMovedToAnotherFormGetsAFreshViewWithTheCurrentUrl(t *testing.
 	wait.Until(t, "the old view to go", func() bool { return v1.IsClosed() })
 }
 
-func TestAWebBrowserPageCannotCallGoItWasNotGiven(t *testing.T) {
-	b := WebBrowser().Navigate("https://example.com/")
+type browserService struct{ calls atomic.Int32 }
+
+func (b *browserService) Hello(name string) string { b.calls.Add(1); return "hello " + name }
+
+// A page cannot call Go whatever its origin: not an https page, not about:
+// or file: pages, and not HTML the app gave with SetDocumentText.
+func TestAWebBrowserPageNeverCallsGo(t *testing.T) {
+	svc := &browserService{}
+	mygo.BindAs("BrowserHello", svc)
+	b := WebBrowser().SetDocumentText("<p>app's HTML</p>")
 	_, s := shownBrowser(t, b)
 	v := theView(t, s)
-	// A page that is not the app's own is untrusted: it has no bridge.
-	if len(v.UserScripts()) > 0 {
-		for _, u := range v.UserScripts() {
-			if strings.Contains(u.Source, "Bind") {
-				t.Fatalf("an external page got a binding script: %q", u.Source)
+	secret := regexp.MustCompile(`"secret":"([^"]+)"`).FindStringSubmatch(v.UserScripts()[0].Source)
+	if secret == nil {
+		t.Fatal("no bridge secret")
+	}
+	for i, url := range []string{"about:blank", "file:///tmp/x.html", "https://example.com/", "http://localhost:5173/"} {
+		mygo.RunOnMain(func() { v.H.NavigationCommitted(url) })
+		id := 300 + i
+		msg := fmt.Sprintf(`{"t":"call","id":%d,"k":"tok","m":"BrowserHello.Hello","a":["x"]}`, id)
+		mygo.RunOnMain(func() { v.H.Message(secret[1] + msg) })
+		wait.Until(t, "the reply", func() bool {
+			for _, sc := range v.Scripts() {
+				if strings.Contains(sc, fmt.Sprintf(`"id":%d`, id)) && strings.Contains(sc, `"ok":false`) {
+					return true
+				}
 			}
+			return false
+		})
+	}
+	if n := svc.calls.Load(); n != 0 {
+		t.Fatalf("a page called a Go method %d times", n)
+	}
+}
+
+func TestWebBrowserRefusesJavascriptURLs(t *testing.T) {
+	b := WebBrowser()
+	_, s := shownBrowser(t, b)
+	v := theView(t, s)
+	b.Navigate("JavaScript:alert(1)")
+	b.Navigate(" javascript:void(0)")
+	<-posted()
+	if u := v.URL(); strings.Contains(strings.ToLower(u), "javascript:") {
+		t.Fatalf("the page was sent to %q", u)
+	}
+}
+
+// A browser built in a Tester, or in a plain View, after a Form drew must
+// not make its view in that Form's window.
+func TestWebBrowserOutsideAFormMakesNoViewInAnotherFormsWindow(t *testing.T) {
+	f := NewForm("Plain", 300, 200).SetContent(Label("a form that drew"))
+	f.Show()
+	t.Cleanup(f.Close)
+	s := lastFake(t).FakeSurface()
+	webViews(s)
+	b := WebBrowser().Navigate("https://example.com/")
+	tt := NewTester(t, b, 300, 200)
+	tt.Frame()
+	tt.Settle()
+	if n := len(webViews(s)); n != 0 {
+		t.Fatalf("a browser built by a Tester made %d web view(s) in a form's window", n)
+	}
+}
+
+func TestAPanickingOnNavigatingIsReportedAndTheNavigationGoesOn(t *testing.T) {
+	var reported atomic.Int32
+	OnPanic(func(v any, stack []byte) { reported.Add(1) })
+	t.Cleanup(func() { OnPanic(nil) })
+	b := WebBrowser().OnNavigating(func(string) bool { panic("boom") })
+	_, s := shownBrowser(t, b)
+	v := theView(t, s)
+	allowed := false
+	mygo.RunOnMain(func() { allowed = v.H.WillNavigate(navigationTo("https://example.com/")) })
+	if !allowed || reported.Load() != 1 {
+		t.Fatalf("navigation allowed %v, panics reported %d", allowed, reported.Load())
+	}
+}
+
+// A Navigate that comes while a new view takes the page to load wins.
+func TestWebBrowserNavigateDuringTheFirstLoadWins(t *testing.T) {
+	paused := make(chan struct{}, 1)
+	release := make(chan struct{})
+	old := webViewReplayHook
+	webViewReplayHook = func() {
+		select {
+		case paused <- struct{}{}:
+			<-release
+		default:
 		}
 	}
+	t.Cleanup(func() { webViewReplayHook = old })
+	b := WebBrowser().Navigate("https://example.com/old")
+	_, s := shownBrowser(t, b)
+	wait.Until(t, "the replay to pause", func() bool {
+		webViews(s)
+		select {
+		case <-paused:
+			return true
+		default:
+			return false
+		}
+	})
+	done := make(chan struct{})
+	go func() { b.Navigate("https://example.com/new"); close(done) }()
+	wait.Until(t, "Navigate to record the new URL", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return b.url == "https://example.com/new"
+	})
+	close(release)
+	wait.For(t, "Navigate", done)
+	v := theView(t, s)
+	wait.Until(t, "the newest page", func() bool { return v.URL() == "https://example.com/new" })
+}
+
+func TestWebBrowserViewIsMadeAgainIfTheFormIsShownAgainAfterAClosedCreation(t *testing.T) {
+	// The form closes between the build and the creation.
+	gate := make(chan struct{})
+	old := webViewCreateHook
+	webViewCreateHook = func() { <-gate }
+	b := WebBrowser()
+	f := NewForm("Again", 300, 200).SetContent(b)
+	f.Show()
+	s1 := lastFake(t).FakeSurface()
+	mygo.RunOnMain(func() { s1.Frame() })
+	f.Close()
+	f.Show() // shown again while the first creation is still waiting
+	t.Cleanup(f.Close)
+	s2 := lastFake(t).FakeSurface()
+	mygo.RunOnMain(func() { s2.Frame() }) // its build finds a creation under way
+	close(gate)
+	webViewCreateHook = old
+	theView(t, s2)
 }
 
 func navigationTo(url string) platform.Navigation {

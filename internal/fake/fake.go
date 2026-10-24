@@ -695,6 +695,13 @@ func (w *Window) GoForward()                { w.nav("forward") }
 func (w *Window) CanGoBack() bool           { w.mu.Lock(); defer w.mu.Unlock(); return w.CanBack }
 func (w *Window) CanGoForward() bool        { w.mu.Lock(); defer w.mu.Unlock(); return w.CanForward }
 
+// Documents returns the HTML the page was given with LoadHTML, in order.
+func (w *Window) Documents() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.HTML...)
+}
+
 // nav records a navigation command of the page.
 func (w *Window) nav(what string) { w.mu.Lock(); w.Navs = append(w.Navs, what); w.mu.Unlock() }
 
