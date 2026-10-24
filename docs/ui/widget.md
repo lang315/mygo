@@ -175,6 +175,22 @@ on macOS they do.
   Windows. On macOS the menu bar is the app's: set it with
   `mygo.App.SetMenu`.
 
+**Destructive items.** `MenuItem{Text: "Delete 3 accounts", Destructive: true,
+OnClick: …}` marks an item that destroys. The native menus of the system have
+no role for it (AppKit's, GTK's and Win32's have none, as UIKit's does), so
+only where mygo draws the menu itself does the item look different:
+
+| Platform | What the item shows |
+|---|---|
+| Windows 11 (popup menus, and the menus under a menu bar's items) | The danger color, `#C42B1C` (`#FF99A4` in the dark theme), and semibold (weight 600). It keeps the danger color when highlighted, and is grey, still semibold, when disabled. In high contrast, which has the system's colors only, it is semibold in the text color. |
+| Windows 10, and the menu bar itself on Windows | A normal item: these are Win32's own menus. |
+| macOS | A normal item: `NSMenu` draws it. |
+| Linux | A normal item: GTK draws it. |
+| Web | The danger color (`#c42b1c`, `#ff99a4` in a dark page) and semibold; white on a red highlight; the text color, faded, when disabled. |
+
+`mygo.MenuItem` has the same `Destructive` field, and `SetDestructive` changes
+it while the menu shows.
+
 Menus take their items, not a function building them, because `ui` builds
 menus while it draws, under the package's lock: set the items again when
 they change.

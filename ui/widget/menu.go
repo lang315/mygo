@@ -10,7 +10,10 @@ import (
 // with Children opens them as a submenu. Checked shows a check mark;
 // Disabled greys the item out. Icon shows an SVG before the text, in the
 // color of the text when it paints with currentColor only; IconPNG shows a
-// PNG instead (32×32 pixels, shown at 16×16 points).
+// PNG instead (32×32 pixels, shown at 16×16 points). Destructive marks an
+// item that destroys, as Delete: it shows in the danger color and semibold
+// where mygo draws the menu itself (Windows 11, the web), and as a normal
+// item in native menus (macOS, Linux, Windows 10), which have no role for it.
 type MenuItem struct {
 	Text     string
 	OnClick  func()
@@ -19,6 +22,8 @@ type MenuItem struct {
 	Disabled bool
 	Icon     *ui.SVG
 	IconPNG  []byte
+
+	Destructive bool
 }
 
 // buildMenu adds items to a ui menu, posting the OnClick of the item
@@ -29,9 +34,9 @@ func buildMenu(m *ui.Menu, items []MenuItem) {
 		case it.Text == "":
 			m.Separator()
 		case len(it.Children) > 0:
-			m.Submenu(it.Text, func(m *ui.Menu) { buildMenu(m, it.Children) }).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG)
+			m.Submenu(it.Text, func(m *ui.Menu) { buildMenu(m, it.Children) }).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Destructive(it.Destructive)
 		default:
-			if m.Item(it.Text).Checked(it.Checked).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Chosen() && it.OnClick != nil {
+			if m.Item(it.Text).Checked(it.Checked).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Destructive(it.Destructive).Chosen() && it.OnClick != nil {
 				Post(it.OnClick)
 			}
 		}
@@ -46,7 +51,7 @@ func nativeMenu(items []MenuItem) []*mygo.MenuItem {
 			out = append(out, mygo.Separator())
 			continue
 		}
-		mi := &mygo.MenuItem{Label: it.Text, Disabled: it.Disabled}
+		mi := &mygo.MenuItem{Label: it.Text, Disabled: it.Disabled, Destructive: it.Destructive}
 		switch {
 		case len(it.Children) > 0:
 			mi.Type, mi.Submenu = mygo.MenuItemSubmenu, nativeMenu(it.Children)

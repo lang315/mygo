@@ -464,3 +464,28 @@ func TestMenuLaterDroppedByBlurScrollAndAnotherAsk(t *testing.T) {
 		})
 	}
 }
+
+// Destructive marks an item that destroys, for the host to show in its own
+// way, in the platform's item.
+func TestMenuItemDestructiveReachesThePlatformItem(t *testing.T) {
+	view := func(c *context) {
+		coreColumn(c).Fill().Padding(20).Children(func() {
+			coreBox(c).Padding(8).ContextMenu(func(m *Menu) {
+				m.Item("Rename")
+				m.Item("Delete 3 accounts").Destructive(true)
+				m.Submenu("More", func(m *Menu) { m.Item("Erase").Destructive(true) })
+			}).Children(func() { coreText(c, "row") })
+		})
+	}
+	tt := coreNewTester(view, 400, 300)
+	if err := tt.RightClick("row"); err != nil {
+		t.Fatal(err)
+	}
+	items := tt.h.menu.Items
+	if items[0].Destructive || !items[1].Destructive {
+		t.Fatalf("Rename %v, Delete %v: want false and true", items[0].Destructive, items[1].Destructive)
+	}
+	if !items[2].Submenu.Items[0].Destructive {
+		t.Error("an item of a submenu lost the flag")
+	}
+}

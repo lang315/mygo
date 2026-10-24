@@ -23,10 +23,24 @@ user-select:none;-webkit-user-select:none;cursor:default;outline:none}
 .mygo-menu-item.on{background:#0a64d6;color:#fff}
 .mygo-menu-item.on>.accel{opacity:.8}
 .mygo-menu-item[aria-disabled=true]{opacity:.35}
+.mygo-menu-item.destructive{color:#c42b1c;font-weight:600}
+.mygo-menu-item.destructive.on{background:#c42b1c;color:#fff}
+.mygo-menu-item.destructive[aria-disabled=true]{color:inherit}
 .mygo-menu-separator{height:1px;margin:5px 10px;background:rgba(0,0,0,.12)}
 @media (prefers-color-scheme:dark){.mygo-menu{color:#f5f5f7;background:rgba(40,40,42,.96);box-shadow:0 0 0 .5px rgba(255,255,255,.18),0 8px 24px rgba(0,0,0,.4)}
-.mygo-menu-separator{background:rgba(255,255,255,.14)}}
+.mygo-menu-separator{background:rgba(255,255,255,.14)}
+.mygo-menu-item.destructive{color:#ff99a4}
+.mygo-menu-item.destructive.on{background:#c42b1c;color:#fff}}
 `
+
+// menuItemClass returns the class of an item's row: a destructive item is
+// drawn in the danger color and semibold (menuCSS).
+func menuItemClass(it *platform.MenuItem) string {
+	if it.Destructive {
+		return "mygo-menu-item destructive"
+	}
+	return "mygo-menu-item"
+}
 
 var menuStyled bool
 
@@ -163,7 +177,7 @@ func (p *popup) open(m *platform.Menu, x, y float64, level int, choose func(int)
 			continue
 		}
 		row := doc.Call("createElement", "div")
-		row.Set("className", "mygo-menu-item")
+		row.Set("className", menuItemClass(it))
 		row.Call("setAttribute", "role", "menuitem")
 		row.Call("setAttribute", "aria-disabled", !it.Enabled)
 		if it.Checked && (it.Type == platform.MenuItemCheckbox || it.Type == platform.MenuItemRadio) {

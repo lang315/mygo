@@ -157,3 +157,44 @@ func TestDrawnItemHasNoMenuBitmap(t *testing.T) {
 		}
 	}
 }
+
+// A destructive item's text is the danger color, readable on the highlight
+// and greyed out when disabled; the system's colors win in high contrast,
+// which has no danger color. Its label is the semibold font where there is
+// one.
+func TestDestructiveMenuItemLook(t *testing.T) {
+	light := menuPalette{back: 0xF9F9F9, plate: 0xF0F0F0, text: 0x1A1A1A, plateText: 0x1A1A1A, disabled: 0x787878, danger: 0x1C2BC4}
+	dark := menuPalette{back: 0x2B2B2B, plate: 0x383838, text: 0xFFFFFF, plateText: 0xFFFFFF, disabled: 0x787878, danger: 0xA499FF}
+	highContrast := menuPalette{back: 0, plate: 0xFF0000, text: 0xFFFFFF, plateText: 0x000000, disabled: 0x808080}
+	for _, c := range []struct {
+		name                            string
+		p                               menuPalette
+		selected, disabled, destructive bool
+		want                            uint32
+	}{
+		{"plain", light, false, false, false, 0x1A1A1A},
+		{"plain highlighted", light, true, false, false, 0x1A1A1A},
+		{"danger", light, false, false, true, 0x1C2BC4},
+		{"danger highlighted stays danger", light, true, false, true, 0x1C2BC4},
+		{"danger in the dark", dark, false, false, true, 0xA499FF},
+		{"danger disabled is grey", light, false, true, true, 0x787878},
+		{"danger disabled and highlighted is grey", light, true, true, true, 0x787878},
+		{"plain disabled", light, false, true, false, 0x787878},
+		{"high contrast keeps the system's text", highContrast, false, false, true, 0xFFFFFF},
+		{"high contrast keeps the highlight's text", highContrast, true, false, true, 0x000000},
+	} {
+		if got := c.p.textColor(c.selected, c.disabled, c.destructive); got != c.want {
+			t.Errorf("%s: color %#x, want %#x", c.name, got, c.want)
+		}
+	}
+	f := menuFonts{text: 1, bold: 2}
+	if got := (&menuLook{destructive: true}).labelFont(f); got != 2 {
+		t.Errorf("a destructive label's font is %d, want the semibold one", got)
+	}
+	if got := (&menuLook{}).labelFont(f); got != 1 {
+		t.Errorf("a plain label's font is %d, want the text font", got)
+	}
+	if got := (&menuLook{destructive: true}).labelFont(menuFonts{text: 1}); got != 1 {
+		t.Errorf("without a semibold font a destructive label's font is %d, want the text font", got)
+	}
+}

@@ -759,7 +759,11 @@ type MenuItem struct {
 	// it a template image on macOS.
 	Icon     []byte
 	Template bool
-	Submenu  *Menu
+	// Destructive marks an item that destroys, which a backend that draws
+	// its items itself shows in a danger color and semibold; the others
+	// show a normal item, as AppKit, GTK and Win32 have no role for it.
+	Destructive bool
+	Submenu     *Menu
 }
 
 // FileFilter restricts the files shown in file dialogs.
