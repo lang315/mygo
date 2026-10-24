@@ -151,7 +151,9 @@ func (b *BoxWidget) item(c *ui.Context, it boxItem) {
 	case !it.expand || it.w.base().hidden: // a hidden widget takes no room
 		render(c, it.w)
 	case it.fill:
-		render(c, it.w).Grow(1)
+		// Fill is across the box too, as GTK's: a row centers what it holds
+		// by default, which gives a list the height of all its rows.
+		render(c, it.w).Grow(1).AlignSelf(ui.Stretch)
 	default:
 		ui.Box(c.Key(wrapKey(it.w.base().id))).Grow(1).AlignItems(ui.Center).Justify(ui.Center).
 			Children(func() { render(c, it.w) })
