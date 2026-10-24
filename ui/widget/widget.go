@@ -41,6 +41,7 @@ type core struct {
 	styled     bool    // style sets anything
 	textKey    any     // textKey(id), boxed once
 	place      layout
+	bound      binding // Bind's, for the controls that can be bound
 	onFocusOut func()
 	click      func()
 	menu       []MenuItem
