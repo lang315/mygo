@@ -296,6 +296,7 @@ type Window struct {
 	// trusted reports whether the current page may call bound methods.
 	// Main thread only.
 	trusted        bool
+	noBindings     bool // a web view made with WebViewOptions.NoBindings: never trusted
 	trustedOrigins []string
 	// html is the document LoadHTML loaded, while it is the page's or
 	// about to be. Main thread only.
@@ -1743,7 +1744,7 @@ func (h *windowHandler) NavigationCommitted(url string) {
 			doc.shown = true
 		}
 	}
-	h.w.trusted = h.w.isTrusted(url)
+	h.w.trusted = !h.w.noBindings && h.w.isTrusted(url)
 	h.w.outMu.Lock()
 	h.w.domReady = false
 	h.w.outMu.Unlock()

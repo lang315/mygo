@@ -43,6 +43,11 @@ type WebViewOptions struct {
 	// Transparent shows what the window's view paints under the web view
 	// through the transparent parts of its page.
 	Transparent bool
+	// NoBindings has the view's pages call no Go method, whatever their
+	// origin: not the app's, not about: or file: pages, not
+	// Page.TrustedOrigins. It is for views that show content which is not
+	// the app's own, as a browser does.
+	NoBindings bool
 }
 
 // errNoContent is returned by NewWebView for windows showing a page.
@@ -78,7 +83,7 @@ func (w *Window) newWebView(opts WebViewOptions, bg *background) (*WebView, erro
 
 	// The web view's page lives in a Window of its own, which no list
 	// holds: everything a page does works through it as for a window.
-	pw := &Window{id: id, host: w, trustedOrigins: opts.Page.TrustedOrigins, secret: randomText(), background: bg}
+	pw := &Window{id: id, host: w, trustedOrigins: opts.Page.TrustedOrigins, secret: randomText(), background: bg, noBindings: opts.NoBindings}
 	pw.pg = &Page{pw}
 	pw.resetPage()
 	popts := pw.platformOptions(&WindowOptions{Page: opts.Page, Transparent: opts.Transparent})

@@ -270,3 +270,34 @@ func TestWebViewPress(t *testing.T) {
 		t.Errorf("a press on the page: web view %v, focused %v, popover open %v", pressed, fv.Focused, open)
 	}
 }
+
+// A web view that shows content which is not the app's own can be made
+// without bindings: no page in it calls Go, whatever its origin, where a
+// view without the option trusts about:, file: and the app's origins.
+func TestWebViewNoBindingsNeverLetsAPageCallGo(t *testing.T) {
+	svc := &testService{}
+	bindForTest(t, "NoBind", svc)
+	for _, noBindings := range []bool{false, true} {
+		w, _, _ := contentWindow(t, func(c *ui.Context) {})
+		w.NewWebView(WebViewOptions{NoBindings: noBindings, Page: PageOptions{TrustedOrigins: []string{"https://partner.example"}}})
+		var fv *fake.WebView
+		for _, wn := range fb.Windows() {
+			if s := wn.FakeSurface(); s != nil && !wn.IsClosed() {
+				if vs := s.WebViews(); len(vs) > 0 {
+					fv = vs[len(vs)-1]
+				}
+			}
+		}
+		if fv == nil {
+			t.Fatal("no web view")
+		}
+		for i, url := range []string{"about:blank", "file:///tmp/x.html", "https://partner.example/page", "https://evil.example/"} {
+			onMain(func() { fv.H.NavigationCommitted(url) })
+			m := call(t, fv.Window, 200+i, "NoBind.Hello", "x")
+			wantOK := !noBindings && url != "https://evil.example/"
+			if m["ok"] != wantOK {
+				t.Errorf("NoBindings=%v, page at %s: ok = %v (%v), want %v", noBindings, url, m["ok"], m["e"], wantOK)
+			}
+		}
+	}
+}
