@@ -28,30 +28,32 @@ type Control interface {
 
 // core is the state every widget has.
 type core struct {
-	id         int
-	hidden     bool
-	disabled   bool
-	wantFocus  bool // Focus asked for the keyboard focus
-	focusIn    int  // the view that last built it focused, noView for none
-	builtIn    int  // the view that last built it
-	tooltip    string
-	ownStyle   Style   // what the control's own methods set
-	applied    []Style // Apply's styles
-	style      Style   // applied merged, ownStyle last: what frames resolve
-	styled     bool    // style sets anything
-	textKey    any     // textKey(id), boxed once
-	place      layout
-	bound      binding // Bind's, for the controls that can be bound
-	onFocusOut func()
-	click      func()
-	menu       []MenuItem
-	post       func(c *ui.Context, e ui.Element) // after the styles apply, set by build
-	group      *radioGroup                       // the radio buttons added to the widget, a container
-	dnd        dragDrop                          // drag sources and drop targets
-	errMsg     string                            // ErrorProvider's
-	errBy      *ErrorProviderWidget
-	validating func() bool                      // OnValidating's
-	over       []func(p *ui.Painter, r ui.Rect) // drawn over the element, set by build
+	id          int
+	hidden      bool
+	disabled    bool
+	wantFocus   bool // Focus asked for the keyboard focus
+	focusIn     int  // the view that last built it focused, noView for none
+	builtIn     int  // the view that last built it
+	tooltip     string
+	ownStyle    Style   // what the control's own methods set
+	applied     []Style // Apply's styles
+	style       Style   // applied merged, ownStyle last: what frames resolve
+	styled      bool    // style sets anything
+	textKey     any     // textKey(id), boxed once
+	place       layout
+	bound       binding // Bind's, for the controls that can be bound
+	onFocusOut  func()
+	click       func()
+	menu        []MenuItem
+	post        func(c *ui.Context, e ui.Element) // after the styles apply, set by build
+	group       *radioGroup                       // the radio buttons added to the widget, a container
+	dnd         dragDrop                          // drag sources and drop targets
+	inertParent bool                              // el was disabled by a container, at the end of the last build
+	el          ui.Element                        // the element of the last build, valid until it ends
+	errMsg      string                            // ErrorProvider's
+	errBy       *ErrorProviderWidget
+	validating  func() bool                      // OnValidating's
+	over        []func(p *ui.Painter, r ui.Rect) // drawn over the element, set by build
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
@@ -158,6 +160,7 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	keeping.key(c, b)
 	e := w.build(c)
+	b.el = e
 	if fillsAcross(w) {
 		e.AlignSelf(ui.Stretch) // before the widget's own alignment, which wins
 	}
