@@ -38,24 +38,26 @@ func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget { b.change(func() { b.ic
 // and tw's: the accent for its background, with the accent's text, and the
 // accent's hover and pressed roles. It is the button's own style, which
 // wins over applied ones.
-func (b *ButtonWidget) Suggested() *ButtonWidget {
-	return b.own(func(s Style) Style {
-		s = s.Background(RoleAccent).TextColor(RoleAccentText)
-		s = withMerged(s, vHover, NewStyle().Background(RoleAccentHover))
-		return withMerged(s, vPressed, NewStyle().Background(RoleAccentPressed))
-	})
+func (b *ButtonWidget) Suggested() *ButtonWidget { return b.own(suggestedStyle) }
+
+// suggestedStyle is the look of Suggested, of buttons and tool buttons.
+func suggestedStyle(s Style) Style {
+	s = s.Background(RoleAccent).TextColor(RoleAccentText)
+	s = withMerged(s, vHover, NewStyle().Background(RoleAccentHover))
+	return withMerged(s, vPressed, NewStyle().Background(RoleAccentPressed))
 }
 
 // Destructive draws the button as an action that destroys, as Delete,
 // gota's destructive-action and tw's: the danger color for its background,
 // with the accent's text, fading to 0.9 opacity when hovered and 0.8
 // pressed. It is the button's own style.
-func (b *ButtonWidget) Destructive() *ButtonWidget {
-	return b.own(func(s Style) Style {
-		s = s.Background(RoleDanger).TextColor(RoleAccentText)
-		s = withMerged(s, vHover, NewStyle().Opacity(0.9))
-		return withMerged(s, vPressed, NewStyle().Opacity(0.8))
-	})
+func (b *ButtonWidget) Destructive() *ButtonWidget { return b.own(destructiveStyle) }
+
+// destructiveStyle is the look of Destructive, of buttons and tool buttons.
+func destructiveStyle(s Style) Style {
+	s = s.Background(RoleDanger).TextColor(RoleAccentText)
+	s = withMerged(s, vHover, NewStyle().Opacity(0.9))
+	return withMerged(s, vPressed, NewStyle().Opacity(0.8))
 }
 
 // withMerged sets variant k of s to v over the one s has, so a hover or

@@ -32,7 +32,14 @@ controls, Home and End to the first and the last, and Tab goes on past it.
 
 Controls that do not fit go, from the last, into a menu at the toolbar's
 end, where choosing one clicks it, toggles a toggle, or opens a menu
-button's menu.
+button's menu. A control marked `Destructive(true)` is a destructive item
+there (`MenuItem.Destructive`), which only menus that mygo draws show
+apart; the mark draws nothing on the control itself, so style it as you
+would:
+
+```go
+ui.Button(c, "Delete all").Destructive(true).Background(c.Theme().Danger)
+```
 
 ## Accessibility
 

@@ -3383,6 +3383,20 @@ func (_handle Element) Description(s string) Element {
 	return wrapElement(_node.Description(s))
 }
 
+// Destructive marks the element as a control that destroys something, as
+// Delete, when d is true. It draws nothing itself: style the control as
+// you would; a toolbar whose overflow menu takes the control shows it there
+// as a destructive item (MenuItem.Destructive).
+func (_handle Element) Destructive(d bool) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Destructive(d))
+}
+
 // Direction lays the element and what is inside it out in d, whatever the
 // direction around it: Direction(ui.LeftToRight) keeps a code sample, a
 // phone number or a media player's controls left to right in a

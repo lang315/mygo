@@ -50,6 +50,8 @@ type ToolButtonWidget struct {
 	on       mirror[bool]
 	onClick  func()
 	onChange func()
+	// destructive is Destructive's, for the overflow menu.
+	destructive bool
 }
 
 // ToolButton makes a tool button showing text; "" with SetIcon is an
@@ -71,6 +73,26 @@ func (b *ToolButtonWidget) SetText(s string) *ToolButtonWidget {
 func (b *ToolButtonWidget) SetIcon(icon *ui.SVG) *ToolButtonWidget {
 	b.change(func() { b.icon = icon })
 	return b
+}
+
+// Suggested draws the button as the main action, as Button's Suggested
+// does: the accent for its background, with the accent's text, and the
+// accent's hover and pressed roles. It is the button's own style, which
+// wins over applied ones. In the overflow menu it is a normal item: menus
+// have no suggested role.
+func (b *ToolButtonWidget) Suggested() *ToolButtonWidget {
+	b.change(func() { b.destructive = false })
+	return b.own(suggestedStyle)
+}
+
+// Destructive draws the button as an action that destroys, as Button's
+// Destructive does: the danger color for its background, with the accent's
+// text, fading to 0.9 opacity when hovered and 0.8 pressed. It is the
+// button's own style. In the overflow menu it is a destructive item
+// (MenuItem.Destructive), which only Windows 11 and the web draw apart.
+func (b *ToolButtonWidget) Destructive() *ToolButtonWidget {
+	b.change(func() { b.destructive = true })
+	return b.own(destructiveStyle)
 }
 
 // SetToggle makes the button a toggle: a click checks it or unchecks it,
@@ -122,6 +144,7 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 			e.OnClick(func() { Post(h) })
 		}
 	}
+	e.Destructive(b.destructive)
 	if b.icon != nil {
 		icon, text := b.icon, b.text
 		name := text

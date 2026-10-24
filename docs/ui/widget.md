@@ -316,7 +316,12 @@ status.SetText("Saved") // and the window redraws
   `ComboBox` there under its chosen text, a `DropDownButton` under its own);
   there is no overflow of the package's own. `ToolButton(text)` has `SetIcon`,
   `SetTooltip` (from every control), `OnClick`, and `SetToggle` with
-  `Checked`, `SetChecked` and `OnChange`. `Form.ToolStrip` docks it above the
+  `Checked`, `SetChecked` and `OnChange`, and `Suggested()` and
+  `Destructive()`, which look as a `Button`'s do (the accent, or the danger
+  color, with the same hover and pressed looks, in both themes). In the
+  overflow menu a `Destructive()` button is a destructive item (see
+  *Destructive items* above); a `Suggested()` one is a normal item, since
+  menus have no suggested role. `Form.ToolStrip` docks it above the
   content, below the header bar and the window's menu bar.
 - **`NotifyIcon`** is an icon in the menu bar or the notification area:
   `NewNotifyIcon()` makes one, `SetIcon(png, template)`, `SetText` (the
@@ -633,7 +638,7 @@ style hover, focus, pressed, disabled and dark states, see
 | `Bold()`, `Italic()`, `Mono()` | `font-bold`, `italic`, `font-mono` |
 | `Muted()`, `TextColor(c)` | `text-gray-500`, `text-muted` |
 | `Border(width, color)`, `Radius(n)`, `Background(c)` | `border-*`, `rounded-*`, `bg-*` |
-| `Suggested()`, `Destructive()` on buttons | `suggested-action`, `destructive-action` |
+| `Suggested()`, `Destructive()` on buttons and tool buttons | `suggested-action`, `destructive-action` |
 
 Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
 `OnFocusOut`, `OnClick` (gota's `EventBox`), `ContextMenu`, `Focus`, which
