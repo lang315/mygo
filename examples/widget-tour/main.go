@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"log"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -190,7 +191,15 @@ func layout() widget.Control {
 func inputs() widget.Control {
 	var name *widget.TextBoxWidget
 	greeting := widget.Label("Type a name")
+	// Bound to a value kept elsewhere: an edit calls set, a program setter does not.
+	var stored atomic.Value
+	stored.Store("kept elsewhere")
+	shown := widget.Label("Stored: kept elsewhere")
+	bound := widget.Bind(widget.TextBox(),
+		func() string { return stored.Load().(string) },
+		func(v string) { stored.Store(v); shown.SetText("Stored: " + v) })
 	return widget.VBox(8).Add(
+		bound, shown,
 		widget.TextBox().SetPlaceholder("Name").AssignTo(&name).OnChange(func() {
 			greeting.SetText("Hello, " + name.Text())
 		}),
