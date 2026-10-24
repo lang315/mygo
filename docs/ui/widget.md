@@ -172,6 +172,7 @@ language:
 
 - `Alert(parent, kind, title, text)` waits for OK.
 - `ColorDialog()`: a color picker with OK and Cancel; see [ColorDialog](widget/colordialog.md).
+- `FontDialog()`: families, styles, a size and a sample, with OK and Cancel; see [FontDialog](widget/fontdialog.md).
 - `Confirm(parent, kind, title, text) bool`: OK is true; Cancel and closing
   the dialog are false.
 - `InputString(parent, kind, title, label, value) (string, bool)`,

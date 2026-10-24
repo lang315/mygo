@@ -582,3 +582,92 @@ func TestListBoxClickAllocationsDoNotGrowWithTheList(t *testing.T) {
 		t.Errorf("a click allocated %d bytes: want far less than a clone of the items (MB)", bigBytes)
 	}
 }
+
+func TestListBoxEnsureVisibleScrollsToAnItem(t *testing.T) {
+	items := make([]litem, 300)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	lb := newListBox().SetItems(items)
+	tt := tester(t, lb)
+	if r, ok := tt.Find("Item 250"); ok && r.Y < 600 {
+		t.Fatal("Item 250 is on screen before it is asked for")
+	}
+	lb.EnsureVisible("k250")
+	tt.Frame()
+	tt.Frame()
+	if r, ok := tt.Find("Item 250"); !ok || r.Y < 0 || r.Y+r.H > 600 {
+		t.Errorf("EnsureVisible did not scroll to the item: %v %v", r, ok)
+	}
+	if got := lb.Selected(); len(got) != 0 {
+		t.Errorf("EnsureVisible chose %v", got)
+	}
+}
+
+// A request for an item in view moves nothing, and does not wait to scroll
+// later when the items change.
+func TestListBoxEnsureVisibleOfAnItemInViewMovesNothingAndEnds(t *testing.T) {
+	items := make([]litem, 1000)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	lb := newListBox().SetItems(items)
+	tt := tester(t, lb)
+	before := find(t, tt, "Item 3")
+	lb.EnsureVisible("k3")
+	tt.Frame()
+	tt.Frame()
+	if after := find(t, tt, "Item 3"); after.Y != before.Y {
+		t.Errorf("an item in view moved from %v to %v", before.Y, after.Y)
+	}
+	rev := slices.Clone(items)
+	slices.Reverse(rev)
+	lb.SetItems(rev) // k3 is now row 996
+	tt.Frame()
+	tt.Frame()
+	mu.Lock()
+	pending := lb.hasReveal
+	mu.Unlock()
+	if pending {
+		t.Error("the request is still pending")
+	}
+}
+
+// An item far away, for a list whose rows are not measured yet, shows (the
+// FontDialog test checks it against the list's own bounds).
+func TestListBoxEnsureVisibleShowsAFarItemOfAListNotMeasuredYet(t *testing.T) {
+	items := make([]litem, 300)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	lb := newListBox().SetItems(items).SetSize(0, 200)
+	lb.EnsureVisible("k290") // before the first frame: no row is measured
+	tt := tester(t, lb)
+	if r, ok := tt.Find("Item 290"); !ok || r.Y < 0 || r.Y+r.H > 600 {
+		t.Errorf("Item 290: %v %v, want it in the window", r, ok)
+	}
+}
+
+// A request for an item in view leaves it where it is, even after the list
+// scrolled: it does not center it.
+func TestListBoxEnsureVisibleMovesAnItemInViewByNothing(t *testing.T) {
+	items := make([]litem, 300)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	lb := newListBox().SetItems(items)
+	tt := tester(t, lb)
+	lb.EnsureVisible("k100")
+	tt.Frame()
+	tt.Frame()
+	at := find(t, tt, "Item 100")
+	if at.Y < 500 {
+		t.Errorf("Item 100 is at %v: as little as shows it is at the bottom, not the middle", at.Y)
+	}
+	lb.EnsureVisible("k100")
+	tt.Frame()
+	tt.Frame()
+	if now := find(t, tt, "Item 100"); now.Y != at.Y {
+		t.Errorf("Item 100 moved from %v to %v", at.Y, now.Y)
+	}
+}

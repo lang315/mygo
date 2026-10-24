@@ -2120,6 +2120,118 @@ func (msgs Messages) UntitledNumbered(n int) string {
 	return Catalog.Format(msgs.locale, "untitledNumbered", map[string]any{"n": n})
 }
 
+// FontDialogTitle says "Font"
+// in the language the app shows.
+//
+// The title of the font dialog (widget.FontDialog).
+func FontDialogTitle() string { return In(i18n.Locale()).FontDialogTitle() }
+
+// FontDialogTitle says "Font"
+// in the language of msgs.
+//
+// The title of the font dialog (widget.FontDialog).
+func (msgs Messages) FontDialogTitle() string {
+	return Catalog.Format(msgs.locale, "fontDialogTitle", nil)
+}
+
+// FontFamily says "Font"
+// in the language the app shows.
+//
+// The label of the list of font families in the font dialog.
+func FontFamily() string { return In(i18n.Locale()).FontFamily() }
+
+// FontFamily says "Font"
+// in the language of msgs.
+//
+// The label of the list of font families in the font dialog.
+func (msgs Messages) FontFamily() string {
+	return Catalog.Format(msgs.locale, "fontFamily", nil)
+}
+
+// FontStyle says "Style"
+// in the language the app shows.
+//
+// The label of the list of font styles in the font dialog.
+func FontStyle() string { return In(i18n.Locale()).FontStyle() }
+
+// FontStyle says "Style"
+// in the language of msgs.
+//
+// The label of the list of font styles in the font dialog.
+func (msgs Messages) FontStyle() string {
+	return Catalog.Format(msgs.locale, "fontStyle", nil)
+}
+
+// FontSize says "Size"
+// in the language the app shows.
+//
+// The label of the font size in the font dialog.
+func FontSize() string { return In(i18n.Locale()).FontSize() }
+
+// FontSize says "Size"
+// in the language of msgs.
+//
+// The label of the font size in the font dialog.
+func (msgs Messages) FontSize() string {
+	return Catalog.Format(msgs.locale, "fontSize", nil)
+}
+
+// FontRegular says "Regular"
+// in the language the app shows.
+//
+// A font style of the font dialog: neither bold nor italic.
+func FontRegular() string { return In(i18n.Locale()).FontRegular() }
+
+// FontRegular says "Regular"
+// in the language of msgs.
+//
+// A font style of the font dialog: neither bold nor italic.
+func (msgs Messages) FontRegular() string {
+	return Catalog.Format(msgs.locale, "fontRegular", nil)
+}
+
+// FontBold says "Bold"
+// in the language the app shows.
+//
+// A font style of the font dialog.
+func FontBold() string { return In(i18n.Locale()).FontBold() }
+
+// FontBold says "Bold"
+// in the language of msgs.
+//
+// A font style of the font dialog.
+func (msgs Messages) FontBold() string {
+	return Catalog.Format(msgs.locale, "fontBold", nil)
+}
+
+// FontItalic says "Italic"
+// in the language the app shows.
+//
+// A font style of the font dialog.
+func FontItalic() string { return In(i18n.Locale()).FontItalic() }
+
+// FontItalic says "Italic"
+// in the language of msgs.
+//
+// A font style of the font dialog.
+func (msgs Messages) FontItalic() string {
+	return Catalog.Format(msgs.locale, "fontItalic", nil)
+}
+
+// FontBoldItalic says "Bold Italic"
+// in the language the app shows.
+//
+// A font style of the font dialog: bold and italic.
+func FontBoldItalic() string { return In(i18n.Locale()).FontBoldItalic() }
+
+// FontBoldItalic says "Bold Italic"
+// in the language of msgs.
+//
+// A font style of the font dialog: bold and italic.
+func (msgs Messages) FontBoldItalic() string {
+	return Catalog.Format(msgs.locale, "fontBoldItalic", nil)
+}
+
 // Cancel says "Cancel"
 // in the language the app shows.
 //
