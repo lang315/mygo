@@ -693,6 +693,7 @@ Layout:
 - `richtextbox.New()`: styled text, in package `ui/widget/richtextbox`; see [RichTextBox](widget/richtextbox.md).
 - `Separator()`: a line.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
+- `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
   `Remove`, `Selected`, `Select`, `SetMenuWidth`.
