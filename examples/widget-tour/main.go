@@ -68,6 +68,7 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("Extras", extras()).
 		AddPage("App shell", shell()).
 		AddPage("DataGridView", table()).
+		AddPage("TreeView", treeView()).
 		Padding(4).Expand()
 }
 
