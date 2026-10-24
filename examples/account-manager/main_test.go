@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"math/rand/v2"
 	"strings"
@@ -95,11 +96,25 @@ func TestAppWith100kAccounts(t *testing.T) {
 	tt.Key(0, ui.KeySpace)
 	tt.want("Đã chọn: 1")
 	a.action = "Backup" // the select's popup is the select's own test's
+	// The run ends when the test lets it: a slow machine (the race detector,
+	// 100,000 rows to draw) must not finish it before the checks below.
+	gate := make(chan struct{})
+	a.work = func(action string) func(context.Context, int) result {
+		work := fakeWork(action)
+		return func(ctx context.Context, id int) result {
+			select {
+			case <-gate:
+			case <-ctx.Done():
+			}
+			return work(ctx, id)
+		}
+	}
 	tt.do(tt.Click("Start"))
 	if a.run == nil {
 		t.Fatal("Start did not run")
 	}
 	tt.want("Stop")
+	close(gate)
 	tt.wait(&a.run)
 	tt.want("Start")
 	if !tt.HasText("Backup: Thành công") && !tt.HasText("Lỗi: checkpoint") {
