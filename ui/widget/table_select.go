@@ -142,7 +142,7 @@ func (t *DataGridViewWidget[T, K]) chosenRows() ([]int, bool) {
 		defer mu.Unlock()
 	}
 	in := &t.chosen.shown
-	if t.kept || t.went() || in.Len() > t.view.Len()/8 {
+	if t.kept || t.gone || in.Len() > t.view.Len()/8 {
 		return nil, false
 	}
 	found := t.placed(in)
@@ -163,7 +163,7 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 	c, before := &t.checked, t.checked.value.Len()
 	// Clear is right exactly when the frame held every row: rows added
 	// since, or a filter or a view that changed since, are not its.
-	if !on && !t.went() && first == 0 && last+1 == len(t.src.rows) {
+	if !on && !t.gone && first == 0 && last+1 == len(t.src.rows) {
 		c.value.Clear()
 		c.dirty = true
 	} else {
@@ -173,7 +173,7 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 				continue
 			}
 			k := t.key(r)
-			if _, ok := t.src.index[k]; !ok && t.went() {
+			if _, ok := t.src.index[k]; !ok && t.gone {
 				continue
 			}
 			if c.value.Has(k) != on {
@@ -302,7 +302,7 @@ func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 			}
 		}
 	}
-	if t.went() {
+	if t.gone {
 		s.keep(t.src.index)
 	}
 }

@@ -34,8 +34,9 @@ type Column[T any] struct {
 }
 
 // DataGridViewWidget shows rows of type T, each told apart by a key of type K,
-// in columns that sort, for as many as a million rows. The table keeps
-// its own copy of the rows. A table shows in one window at a time.
+// in columns that sort, for as many as a million rows. The rows are its
+// source's (DataGridViewOf shares one between tables; DataGridView makes
+// one of its own). A table shows in one window at a time.
 type DataGridViewWidget[T any, K comparable] struct {
 	common[DataGridViewWidget[T, K]]
 	src     *RowSource[T, K]
@@ -50,10 +51,11 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// still lay that frame out, or apply input to it. Setters never move
 	// or remove a frame's rows: they make new slices. gone is set when
 	// rows went since, so that commits look for their keys only then.
-	frame []T
-	order []int
-	kept  bool
-	gone  bool
+	frame  []T
+	order  []int
+	kept   bool
+	gone   bool
+	resets int // test hook: how often catchUp had the view start over
 	// posOf is each row's place in the view, -1 if hidden, as of
 	// posVersion: Selected and Checked build it on first use.
 	posOf                                   []int32
@@ -105,7 +107,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.Copy = t.copyRows
 	t.init(t)
-	t.link.id = t.id
+	t.link.id, t.link.prune = t.id, t.prune
 	mu.Lock()
 	src.attach(t.link)
 	mu.Unlock()
@@ -170,19 +172,17 @@ func (t *DataGridViewWidget[T, K]) DeleteRows(ks ...K) *DataGridViewWidget[T, K]
 func (t *DataGridViewWidget[T, K]) Clear() *DataGridViewWidget[T, K] { return t.SetRows(nil) }
 
 // catchUp applies the changes the source made since the table last read
-// them: rows changed in place go to the view; rows removed or replaced
-// make it sort again and drop their keys from the selection and the
-// checks. A table that fell behind the log, or by more than it holds,
-// starts over. Under mu.
+// them: rows changed in place go to the view. A table that fell behind the
+// log, or by more than it holds, has the view sort again. Rows that went
+// were pruned as they did (prune). Under mu.
 func (t *DataGridViewWidget[T, K]) catchUp() {
 	l, s := t.link, t.src
 	if l.seq == s.seq {
 		return
 	}
-	changes, ok := s.since(l.seq)
-	removed := !ok || s.removedSeq > l.seq
-	if !ok || len(changes) > s.bound() {
+	if changes, ok := s.since(l.seq); !ok || len(changes) > s.bound() {
 		t.view.Reset()
+		t.resets++
 	} else {
 		for _, c := range changes {
 			if c.row >= 0 {
@@ -191,17 +191,17 @@ func (t *DataGridViewWidget[T, K]) catchUp() {
 		}
 	}
 	l.seq = s.seq
-	if removed {
-		t.view.Reset()
-		t.gone = true
-		t.chosen.keep(s.index)
-		t.checked.keep(s.index)
-	}
 }
 
-// went reports whether rows went from the table's source since the frame
-// ui shows. Under mu.
-func (t *DataGridViewWidget[T, K]) went() bool { return t.gone || t.src.removedSeq > t.link.seq }
+// prune is the table's link's: rows went from the source. The view sorts
+// again, the selection and the checks drop their keys, and commits look
+// for the keys of rows gone until the table builds again. Under mu.
+func (t *DataGridViewWidget[T, K]) prune() {
+	t.view.Reset()
+	t.gone = true
+	t.chosen.keep(t.src.index)
+	t.checked.keep(t.src.index)
+}
 
 // Row returns the row of key k.
 func (t *DataGridViewWidget[T, K]) Row(k K) (T, bool) { return t.src.Row(k) }

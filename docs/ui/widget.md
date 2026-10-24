@@ -362,7 +362,9 @@ table with `DataGridViewOf(src, columns...)`. Each table has its own sort,
 search, selection and checks; a change to the source (`SetRows`, `AddRows`,
 `UpdateRow`, `DeleteRows`, or the same on any table over it) reaches them
 all and redraws their windows, and a table not on screen reads it when it
-next shows. One slice and one index serve the lot.
+next shows. One slice and one index serve the lot; a table not drawn since
+`SetRows` or `DeleteRows` keeps the old slice alive (its frame and view
+hold it) until it draws again.
 A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
 (by `Text` otherwise), `Width`, `MinWidth`, `Align`, `Sortable`,
 `Filterable`, `Filter` (case-insensitive containment otherwise), `Color`

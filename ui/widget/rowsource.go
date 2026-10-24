@@ -37,6 +37,9 @@ type srcChange struct{ row int }
 type tableLink struct {
 	id  int
 	seq uint64
+	// prune has the table drop what it holds of rows that went: it runs
+	// as the rows go, so a key added again later is not the old one.
+	prune func()
 }
 
 // NewRowSource makes a source of rows told apart by key, which runs under
@@ -59,6 +62,11 @@ func (s *RowSource[T, K]) record(row int) {
 	s.seq++
 	if row < 0 {
 		s.removedSeq = s.seq
+		for _, w := range s.tables {
+			if l := w.Value(); l != nil {
+				l.prune()
+			}
+		}
 	}
 	s.log = append(s.log, srcChange{row})
 	s.trim()
@@ -72,7 +80,9 @@ func (s *RowSource[T, K]) trim() {
 	for _, w := range s.tables {
 		if l := w.Value(); l != nil {
 			live = append(live, w)
-			low = min(low, l.seq)
+			if l.seq >= s.start { // one behind the log starts over anyway
+				low = min(low, l.seq)
+			}
 		}
 	}
 	clear(s.tables[len(live):])
@@ -80,8 +90,10 @@ func (s *RowSource[T, K]) trim() {
 	if drop := int(low - s.start); drop > 0 {
 		s.log, s.start = s.log[drop:], low
 	}
-	if len(s.log) > s.bound() {
-		s.log, s.start = s.log[:0], s.seq
+	if keep := s.bound() / 2; len(s.log) > s.bound() {
+		// Past its bound the log drops its oldest half: tables behind
+		// that start over, the others, up to date, are not touched.
+		s.log, s.start = s.log[len(s.log)-keep:], s.seq-uint64(keep)
 	}
 }
 

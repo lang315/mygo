@@ -44,6 +44,76 @@ func TestRowSourceUpdateShowsInAllTables(t *testing.T) {
 	}
 }
 
+func TestRowSourceUpdateReordersASortedTable(t *testing.T) {
+	src := NewRowSource(acctKey)
+	tb := DataGridViewOf(src,
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Sortable: true},
+		Column[acct]{Title: "Score", Text: func(a *acct) string { return itoa(a.score) }, Sortable: true,
+			Compare: func(a, b *acct) int { return a.score - b.score }})
+	src.SetRows([]acct{{1, "ann", 1}, {2, "bob", 2}, {3, "cat", 3}})
+	tt := tester(t, tb)
+	click(t, tt, "Score")
+	inOrder(t, tt, "ann", "bob", "cat")
+	src.UpdateRow(1, func(a *acct) { a.score = 9 })
+	tt.Frame()
+	inOrder(t, tt, "bob", "cat", "ann")
+}
+
+func TestRowSourceDeleteAndReAddKeepsNoOldCheckOrSelection(t *testing.T) {
+	for name, del := range map[string]func(src *RowSource[acct, int], tb *DataGridViewWidget[acct, int]){
+		"source": func(src *RowSource[acct, int], _ *DataGridViewWidget[acct, int]) { src.DeleteRows(2) },
+		"table":  func(_ *RowSource[acct, int], tb *DataGridViewWidget[acct, int]) { tb.DeleteRows(2) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			src, tbs := threeTables(t)
+			tt := tester(t, tbs[0])
+			click(t, tt, "bob")
+			tbs[0].SetChecked([]int{2}, true)
+			tbs[1].SetChecked([]int{2}, true) // a table never drawn
+			tt.Frame()
+			del(src, tbs[0])
+			src.AddRows([]acct{{2, "bob", 2}})
+			if tbs[0].IsChecked(2) || tbs[1].IsChecked(2) || tbs[0].CountSelected() != 0 {
+				t.Fatalf("the old check or selection of a deleted row came back with its key: %v %v %d",
+					tbs[0].IsChecked(2), tbs[1].IsChecked(2), tbs[0].CountSelected())
+			}
+		})
+	}
+}
+
+func TestRowSourceInputOnAFrameWhoseRowsAnotherTableDeleted(t *testing.T) {
+	_, tbs := threeTables(t)
+	tt := tester(t, tbs[0])
+	tbs[1].DeleteRows(2) // bob goes; tbs[0]'s frame still shows him
+	if k := tbs[0].keyAt(1); k != 2 {
+		t.Fatalf("row 1 of the frame shown is %v, want bob (2)", k)
+	}
+	tbs[0].chosen.shown.Add(2) // the user chooses bob in that frame
+	tbs[0].commit(&tbs[0].chosen)
+	if tbs[0].CountSelected() != 0 {
+		t.Fatalf("selected %d: bob is gone", tbs[0].CountSelected())
+	}
+	tt.Frame()
+}
+
+func TestRowSourceShownTableNeverResetsWhileAHiddenOneLags(t *testing.T) {
+	src := NewRowSource(acctKey)
+	src.SetRows(manyAccts(100))
+	cols := Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }}
+	shown, hidden := DataGridViewOf(src, cols), DataGridViewOf(src, cols)
+	_ = hidden
+	for i := range 1000 {
+		src.UpdateRow(i%100, func(a *acct) { a.score++ })
+		mu.Lock()
+		shown.catchUp()
+		mu.Unlock()
+	}
+	if shown.resets != 0 {
+		t.Fatalf("the shown table started over %d times because a hidden one lags", shown.resets)
+	}
+	runtime.KeepAlive(hidden)
+}
+
 func TestRowSourceTablesKeepTheirOwnOrder(t *testing.T) {
 	_, tbs := threeTables(t)
 	tts := [3]*ui.Tester{tester(t, tbs[0]), tester(t, tbs[1]), tester(t, tbs[2])}
@@ -197,14 +267,21 @@ func BenchmarkRowSourceUpdate(b *testing.B) {
 			src := NewRowSource(acctKey)
 			src.SetRows(rows)
 			var shown *DataGridViewWidget[acct, int]
+			var all []*DataGridViewWidget[acct, int]
 			for range tables {
 				tb := DataGridViewOf(src, Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200, Sortable: true})
+				all = append(all, tb)
 				if shown == nil {
 					shown = tb
 				}
 			}
 			tt := ui.NewTester(content(shown), 1280, 800)
 			tt.Frame()
+			if err := tt.Click("Name"); err != nil { // sorted: updates place the row again
+				b.Fatal(err)
+			}
+			tt.Frame()
+			defer runtime.KeepAlive(all)
 			b.ResetTimer()
 			for i := range b.N {
 				src.UpdateRow(i%50, func(a *acct) { a.score++ })
