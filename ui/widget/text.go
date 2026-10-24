@@ -218,6 +218,9 @@ func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 		el.Placeholder(v.placeholder)
 	}
 	el.ReadOnly(v.readOnly)
+	if c.Measuring() {
+		el.Lines(1, 8) // a window fitted to its content counts a few lines
+	}
 	el.OnChange(onChange(&v.text, v.onChange))
 	if changed && v.onChange != nil {
 		Post(v.onChange)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/fake"
 
 	"github.com/egoist/mygo/internal/platform"
 )
@@ -124,7 +125,7 @@ func TestDialogFitMeasureIsInert(t *testing.T) {
 		Label("title"),
 		WebBrowser(),
 		ComboBox(Option{"a", "A"}, Option{"b", "B"}).SetValue("b").OnChange(handler),
-		TextBox().SetText("x").OnChange(handler),
+		TextBox().SetText("x").OnChange(handler).OnFocusOut(handler).Focus(),
 		NumericUpDown(0, 10, 1).SetValue(3).OnChange(handler),
 		newListBox().SetItems(items).OnSelect(func([]string) { calls.Add(1) }),
 		TabControl().AddPage("one", Label("p1")).AddPage("two", Label("p2")),
@@ -143,5 +144,86 @@ func TestDialogFitMeasureIsInert(t *testing.T) {
 	}
 	if opts.Height == 0 {
 		t.Error("no height")
+	}
+}
+
+// fitShow shows content in a dialog of width x height and returns its window
+// after two frames.
+func fitShow(t *testing.T, title string, width, height int, content Control) *fake.Window {
+	t.Helper()
+	d := NewDialog(nil, title, "", width, height, content)
+	d.Show()
+	t.Cleanup(d.Close)
+	fw := waitFake(t, title)
+	frame(fw)
+	frame(fw)
+	return fw
+}
+
+// A request made before Show is for the real window, not for the headless
+// build that measures: it fires there, once, whatever the dialog's height.
+func TestDialogFitLeavesOneShotRequestsToTheRealWindow(t *testing.T) {
+	for _, h := range []int{300, 0} {
+		// Focus
+		tb := TextBox().SetText("abc").Focus()
+		fw := fitShow(t, fmt.Sprintf("Fit focus %d", h), 400, h, VBox(4).Add(Label("x"), tb))
+		if st := fw.FakeSurface().TextInputState(); !st.Active {
+			t.Errorf("height %d: Focus() lost (%+v)", h, st)
+		}
+		// EnsureVisible
+		items := make([]litem, 300)
+		for i := range items {
+			items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+		}
+		lb := newListBox().SetItems(items).EnsureVisible("k250")
+		fw = fitShow(t, fmt.Sprintf("Fit reveal %d", h), 400, h, lb)
+		n, ok := nodeByLabel(fw, "Item 250")
+		if !ok || n.Bounds.Y < 0 || n.Bounds.Y+n.Bounds.H > float64(fw.Opts.Height) {
+			t.Errorf("height %d: EnsureVisible lost: %v %+v (window %d high)", h, ok, n.Bounds, fw.Opts.Height)
+		}
+	}
+}
+
+// The focus bookkeeping of the measure must not leave a focus-out for the real
+// window to report.
+func TestDialogFitDoesNotReportAFocusOutOnShow(t *testing.T) {
+	for _, h := range []int{300, 0} {
+		var outs atomic.Int32
+		tb := TextBox().Focus()
+		tb.OnFocusOut(func() { outs.Add(1) })
+		fitShow(t, fmt.Sprintf("Fit out %d", h), 400, h, VBox(4).Add(Label("x"), tb))
+		<-posted()
+		if outs.Load() != 0 {
+			t.Errorf("height %d: %d focus-outs on show", h, outs.Load())
+		}
+	}
+}
+
+func nodeByLabel(fw *fake.Window, label string) (platform.AccessNode, bool) {
+	for _, n := range accessNodes(fw) {
+		if n.Label == label {
+			return n, true
+		}
+	}
+	return platform.AccessNode{}, false
+}
+
+// A web view has no height of its own: a dialog of one counts 300 DIPs for it.
+func TestDialogFitCountsAWebBrowserAsThreeHundred(t *testing.T) {
+	fw := fitShow(t, "Fit web", 500, 0, WebBrowser())
+	if h := fw.Opts.Height; h < 300 {
+		t.Errorf("height %d for a dialog of a WebBrowser, want at least 300", h)
+	}
+}
+
+// A long text counts a few lines, as a list a few rows.
+func TestDialogFitCapsAMultilineTextBox(t *testing.T) {
+	text := ""
+	for i := range 500 {
+		text += fmt.Sprintf("line %d\n", i)
+	}
+	fw := fitShow(t, "Fit text", 500, 0, MultilineTextBox().SetText(text))
+	if h := fw.Opts.Height; h > 400 {
+		t.Errorf("height %d for 500 lines: want about 8", h)
 	}
 }

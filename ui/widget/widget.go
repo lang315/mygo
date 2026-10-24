@@ -179,7 +179,7 @@ func render(c *ui.Context, w Control) ui.Element {
 	if menu := b.menu; len(menu) > 0 {
 		e.ContextMenu(func(m *ui.Menu) { buildMenu(m, menu) })
 	}
-	if b.wantFocus {
+	if b.wantFocus && !c.Measuring() { // the request is for the real window
 		e.Focus()
 		b.wantFocus = false
 	}

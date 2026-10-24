@@ -458,7 +458,7 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 		l.checked.bind()
 	}
 	e := ui.List(c, s, len(l.frame), func(i int) { l.row(c, i) }).Grow(1)
-	if l.hasReveal {
+	if l.hasReveal && !c.Measuring() { // the request is for the real window
 		// Made once: ui keeps the request until the row is measured and shows,
 		// however far it is, and a row in view moves nothing.
 		l.hasReveal = false

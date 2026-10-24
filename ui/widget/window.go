@@ -439,9 +439,20 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 	if width == 0 {
 		width = 800
 	}
-	h := int(math.Ceil(float64(ui.View(w.view).MeasureHeight(float32(width)))))
+	// The display of the window the dialog is over, else the primary one.
+	mu.Lock()
+	var over *mygo.Window
+	if p := w.parent; p != nil {
+		over = p.win
+	}
+	mu.Unlock()
+	disp := mygo.Screen.PrimaryDisplay()
+	if over != nil {
+		disp = mygo.Screen.DisplayMatching(over.Bounds())
+	}
+	h := int(math.Ceil(float64(ui.View(w.view).MeasureHeight(float32(width), float32(disp.ScaleFactor)))))
 	scroll := false
-	if limit := mygo.Screen.PrimaryDisplay().WorkArea.Height - fitMargin; limit > 0 && h > limit {
+	if limit := disp.WorkArea.Height - fitMargin; limit > 0 && h > limit {
 		h, scroll = limit, true
 	}
 	mu.Lock()
