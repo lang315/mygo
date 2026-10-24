@@ -13,10 +13,9 @@ type Option struct{ Value, Text string }
 // ButtonWidget is a push button.
 type ButtonWidget struct {
 	common[ButtonWidget]
-	text                   string
-	icon                   *ui.SVG
-	suggested, destructive bool
-	onClick                func()
+	text    string
+	icon    *ui.SVG
+	onClick func()
 }
 
 // Button makes a button showing text.
@@ -35,13 +34,28 @@ func (b *ButtonWidget) SetText(s string) *ButtonWidget { b.change(func() { b.tex
 // SetIcon shows an icon before the text; nil removes it.
 func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget { b.change(func() { b.icon = s }); return b }
 
-// Suggested draws the button as the main action, gota's suggested-action.
-func (b *ButtonWidget) Suggested() *ButtonWidget { b.change(func() { b.suggested = true }); return b }
+// Suggested draws the button as the main action, gota's suggested-action
+// and tw's: the accent for its background, with the accent's text, and the
+// accent's hover and pressed roles. It is the button's own style, which
+// wins over applied ones.
+func (b *ButtonWidget) Suggested() *ButtonWidget {
+	return b.own(func(s Style) Style {
+		return s.Background(RoleAccent).TextColor(RoleAccentText).
+			Hover(NewStyle().Background(RoleAccentHover)).
+			Pressed(NewStyle().Background(RoleAccentPressed))
+	})
+}
 
-// Destructive draws the button as an action that destroys, as Delete.
+// Destructive draws the button as an action that destroys, as Delete,
+// gota's destructive-action and tw's: the danger color for its background,
+// with the accent's text, fading to 0.9 opacity when hovered and 0.8
+// pressed. It is the button's own style.
 func (b *ButtonWidget) Destructive() *ButtonWidget {
-	b.change(func() { b.destructive = true })
-	return b
+	return b.own(func(s Style) Style {
+		return s.Background(RoleDanger).TextColor(RoleAccentText).
+			Hover(NewStyle().Opacity(0.9)).
+			Pressed(NewStyle().Opacity(0.8))
+	})
 }
 
 func (b *ButtonWidget) build(c *ui.Context) ui.Element {
@@ -49,16 +63,7 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 	if b.icon != nil {
 		label = ""
 	}
-	var e ui.Element
-	if b.suggested {
-		e = ui.PrimaryButton(c, label)
-	} else {
-		e = ui.Button(c, label)
-	}
-	if b.destructive {
-		t := c.Theme()
-		e.Background(t.Danger).TextColor(t.AccentText)
-	}
+	e := ui.Button(c, label)
 	if b.icon != nil {
 		icon, text := b.icon, b.text
 		e.Children(func() {
