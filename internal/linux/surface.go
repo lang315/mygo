@@ -136,6 +136,9 @@ type surface struct {
 	// while it drew one, and ticking that it draws one.
 	tick           uint32
 	again, ticking bool
+	// wasOut tells that Occluded said that nothing of the window shows,
+	// and SurfaceShown was not sent since.
+	wasOut bool
 	// staged is the frame the tick callback drew, which the draw signal
 	// paints in the same frame of the frame clock: the host's memory,
 	// valid until it draws or frees another (see Idle).
@@ -319,6 +322,24 @@ func (s *surface) eventWindow() ptr {
 
 func (s *surface) Size() (float64, float64, float64) {
 	return float64(gtkWidgetGetAllocatedWidth(s.area)), float64(gtkWidgetGetAllocatedHeight(s.area)), float64(max(gtkWidgetGetScaleFactor(s.area), 1))
+}
+
+// Occluded reports whether nothing of the window shows (windowOut).
+func (s *surface) Occluded() bool {
+	out := windowOut(s.w.state, s.w.obscured)
+	if out {
+		s.wasOut = true
+	}
+	return out
+}
+
+// checkShown tells the content that some of the window shows again, if
+// Occluded last said none did.
+func (s *surface) checkShown() {
+	if s.wasOut && !windowOut(s.w.state, s.w.obscured) {
+		s.wasOut = false
+		s.send(platform.SurfaceEvent{Kind: platform.SurfaceShown})
+	}
 }
 
 func (s *surface) RequestFrame() {

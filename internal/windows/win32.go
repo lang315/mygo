@@ -244,6 +244,7 @@ var (
 const (
 	wmDestroy           = 0x0002
 	wmMove              = 0x0003
+	wmShowWindow        = 0x0018
 	wmSize              = 0x0005
 	wmActivate          = 0x0006
 	wmSetFocus          = 0x0007

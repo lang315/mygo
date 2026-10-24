@@ -2207,15 +2207,23 @@ either.
   fonts the elements' layouts hold), builds anew all the same. The timers
   the last frame built armed stay; the host arms them (`afterTimer`,
   `repaintTimer`), and `Painter.After`'s posts to the main thread.
-  While nothing of the window shows (`platform.OccludableSurface`: a macOS
-  window hidden, minimized or covered by other windows, whose display link
-  still ticks, at the display's rate for half a minute, then at about 40
-  Hz), what moves asks for no frame, and a frame asked for by a change of
-  the state waits (`holdFrame`; both `held`), as browsers draw nothing for
+  While nothing of the window shows (`platform.OccludableSurface`), what
+  moves asks for no frame. macOS says so of a window hidden, minimized or
+  covered by other windows, whose display link still ticks, at the display's
+  rate for half a minute, then at about 40 Hz. Windows says it of a window
+  minimized, hidden or cloaked (on another virtual desktop): it sends
+  `SurfaceShown` as the window is restored or shown, and asks a cloaked one
+  every 250 ms, as Windows sends no message when it is uncloaked; it does
+  not tell when other windows cover one. Linux says it of a window iconified
+  or withdrawn, or one an X11 server reports fully obscured
+  (`visibility-notify-event`); a Wayland compositor tells nothing and stops
+  asking for frames of a window out of sight itself. In browsers it is a
+  page in a background tab. A frame asked for by a change of the state
+  waits too (`holdFrame`; both `held`), as browsers draw nothing for
   windows out of sight and as Apple asks of Mac apps: the view function,
   `Draw` and the work `After` drives wait until some of the window shows.
-  `SurfaceShown`, sent as some of the window shows again
-  (`windowDidChangeOcclusionState:`), draws what changed, and has a held
+  `SurfaceShown`, sent as some of the window shows again (macOS:
+  `windowDidChangeOcclusionState:`), draws what changed, and has a held
   animation go on from where the time puts it. The window shows its last
   frame until then, about a refresh: captures of it meanwhile, as sharing
   its window in a video call, see that frame. A frame still builds after
