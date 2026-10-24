@@ -136,6 +136,15 @@ func (a *textInputAdapter) SetMarkedText(r *platform.TextRange, s string, select
 		a.changed()
 	}
 }
+
+// KeepMarkedUntilCommit passes on that the input takes an unmark and the
+// commit after it as one edit (platform.InputComposition).
+func (a *textInputAdapter) KeepMarkedUntilCommit() bool {
+	c, _ := a.client()
+	k, ok := c.(interface{ KeepMarkedUntilCommit() bool })
+	return ok && k.KeepMarkedUntilCommit()
+}
+
 func (a *textInputAdapter) UnmarkText() {
 	if c, _ := a.client(); c != nil {
 		c.UnmarkText()

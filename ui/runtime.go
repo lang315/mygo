@@ -942,6 +942,16 @@ func (rt *engine) close() {
 		return
 	}
 	rt.closed, rt.closing = true, false
+	// A composition ends with the window as it does with the focus: its text
+	// goes through the input's OnEdit and into the value.
+	for _, s := range rt.states {
+		if ed := s.editor; ed != nil && ed.base != nil {
+			ed.commitCompose()
+			if ed.value != nil && *ed.value != ed.buf.s {
+				*ed.value = ed.buf.s
+			}
+		}
+	}
 	clear(rt.focusFields)
 	rt.focusFields = nil
 	for _, r := range rt.refs {

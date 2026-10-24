@@ -52,8 +52,12 @@ func textInputBase(c *context, value *string, multiline bool) *node {
 	// The input shares the string of *value: the same string is equal at
 	// once, whatever its length.
 	if !ed.nativeDirty && ed.buf.s != *value {
-		ed.setText(*value)
-		ed.compose = ""
+		// A composition in progress shows a text the value does not hold
+		// yet: only a value that changed is the app's.
+		if b := ed.base; b == nil || *value != b.text {
+			ed.setText(*value)
+			ed.compose = ""
+		}
 	}
 	ed.rebuild()
 	ed.ranges = ed.ranges[:0]
@@ -146,6 +150,40 @@ func (e *node) OnPaste(fn func(text string) bool) *node {
 func (e *node) OnTextKey(fn func(k TextKey) bool) *node {
 	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
 		ed.onTextKey = fn
+	}
+	return e
+}
+
+// A TextEdit is an edit of the user in a text input, as OnEdit's fn sees
+// it: the runes from Start to End of Text, which may be none (an insertion)
+// or all of a selection, are replaced by Insert, which is empty for a
+// deletion. Typing, a paste, an input method's commit, Backspace, Delete and
+// cut are all edits; offsets count runes.
+type TextEdit struct {
+	Text       string
+	Start, End int
+	Insert     string
+	// Caret is where the caret was before the edit, which tells Backspace
+	// (the range ends at it) from Delete (the range starts at it).
+	Caret int
+}
+
+// OnEdit has fn rewrite each edit of the user in a text input before it is
+// made, as a mask or a format does: fn returns the text the input holds after
+// the edit and where the caret goes (in runes), and ok true; with ok false
+// the edit is made as it would be without fn. A text that equals the old one
+// refuses the edit (Changed is not reported). The result is one step of undo,
+// whatever it changed. A text set by the app is not seen. Like ReadOnly, it
+// holds for the input that comes until the next frame. fn runs on the main
+// thread as the edit comes, between frames: it must be quick and touch no
+// element.
+//
+//	ui.TextInput(c, &app.phone).OnEdit(func(e ui.TextEdit) (string, int, bool) {
+//		return app.mask.Apply(e.Text, e.Start, e.End, e.Insert)
+//	})
+func (e *node) OnEdit(fn func(e TextEdit) (text string, caret int, ok bool)) *node {
+	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+		ed.onEdit = fn
 	}
 	return e
 }
