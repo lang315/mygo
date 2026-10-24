@@ -21,6 +21,7 @@ var (
 	queue   []func()
 	wake    = make(chan struct{}, 1)
 	eventID atomic.Uint64
+	posts   uint64 // how many Posts were made, under qmu, for Tester.Settle
 	start   sync.Once
 )
 
@@ -29,6 +30,7 @@ var (
 func Post(fn func()) {
 	start.Do(func() { go events() })
 	qmu.Lock()
+	posts++
 	queue = append(queue, fn)
 	qmu.Unlock()
 	select {
@@ -218,4 +220,11 @@ func goid() uint64 {
 	}
 	id, _ := strconv.ParseUint(string(b), 10, 64)
 	return id
+}
+
+// postCount returns how many Posts were made so far.
+func postCount() uint64 {
+	qmu.Lock()
+	defer qmu.Unlock()
+	return posts
 }

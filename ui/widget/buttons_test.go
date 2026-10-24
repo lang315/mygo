@@ -2,6 +2,7 @@ package widget
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -29,9 +30,13 @@ func TestButtonClickRunsOnClickOnTheEventGoroutine(t *testing.T) {
 
 func TestDisabledButtonDoesNotClick(t *testing.T) {
 	ran := make(chan struct{}, 1)
-	tt := tester(t, Button("No").SetDisabled(true).OnClick(func() { ran <- struct{}{} }))
-	click(t, tt, "No")
-	Update(func() {})
+	tt := NewTester(t, Button("No").SetDisabled(true).OnClick(func() { ran <- struct{}{} }), 0, 0)
+	if !tt.Find(ByLabel("No")).Disabled() {
+		t.Fatal("the button is not disabled")
+	}
+	if msg := failure(func(tb *fakeTB) { tt.tb = tb; tt.Find(ByLabel("No")).Click() }); !strings.Contains(msg, "disabled") {
+		t.Fatalf("clicking it: %q", msg)
+	}
 	select {
 	case <-ran:
 		t.Fatal("a disabled button ran OnClick")
@@ -52,9 +57,8 @@ func TestCheckboxClickAndSet(t *testing.T) {
 	changed := make(chan bool, 4)
 	var cb *CheckBoxWidget
 	CheckBox("Remember").AssignTo(&cb).OnChange(func() { changed <- cb.Checked() })
-	tt := tester(t, cb)
-	click(t, tt, "Remember")
-	if !received(t, changed) || !cb.Checked() {
+	tt := NewTester(t, cb, 0, 0)
+	if !tt.Find(ByLabel("Remember")).Click().Checked() || !received(t, changed) {
 		t.Fatal("click did not check")
 	}
 	cb.SetChecked(false)
@@ -100,8 +104,8 @@ func TestRadioGroup(t *testing.T) {
 	if g.Value() != "s" {
 		t.Fatalf("first value %q, want s", g.Value())
 	}
-	tt := tester(t, g)
-	click(t, tt, "Large")
+	tt := NewTester(t, g, 0, 0)
+	tt.Find(ByLabel("Large")).Click()
 	if v := received(t, changed); v != "l" {
 		t.Fatalf("OnChange saw %q", v)
 	}
