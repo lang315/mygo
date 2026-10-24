@@ -91,6 +91,8 @@ func TestBadClasses(t *testing.T) {
 		{"dark:hexpand", LayoutInVariant},
 		{"hover:transition", TransitionInVariant},
 		{"focus:duration-200", TransitionInVariant},
+		{"hover:not-italic", NotItalicInVariant},
+		{"dark:not-italic", NotItalicInVariant},
 		{"hover:suggested-action", Unknown},
 		{"\xff\xfe", Unknown},
 	} {
