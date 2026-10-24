@@ -338,6 +338,7 @@ func choices() widget.Control {
 		spin, progress, volume, volumeText,
 		widget.TrackBar(0, 100).SetStep(25),
 		widget.RangeSpin(0, 60, 0, 600, 1, "to", "seconds").SetValues(5, 30),
+		widget.DomainUpDown("Mon", "Tue", "Wed", "Thu", "Fri").SetWrap(true),
 		widget.ComboBox(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).SetValue("vn"),
 		widget.CheckBoxGroup(true, widget.Option{Value: "a", Text: "Apple"}, widget.Option{Value: "b", Text: "Banana"}),
 		widget.RadioGroup(true, widget.Option{Value: "s", Text: "Small"}, widget.Option{Value: "l", Text: "Large"}),

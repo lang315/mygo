@@ -2,10 +2,15 @@ package widget
 
 import "math"
 
-// Bindable is a control that edits one value: a TextBox (string), a
-// CheckBox (bool), a ComboBox (the Value of its option, a string) or a
-// NumericUpDown or a TrackBar (float64). Only these are bindable; the interface cannot be
-// implemented outside the package.
+// Bindable is a control that edits one value. Only these are bindable; the
+// interface cannot be implemented outside the package:
+//
+//   - TextBox (string)
+//   - DomainUpDown (the selected item's text, a string)
+//   - CheckBox (bool)
+//   - ComboBox (the Value of its option, a string)
+//   - NumericUpDown (float64)
+//   - TrackBar (float64)
 type Bindable[T comparable] interface {
 	Control
 	bindValue() T  // the control's value, as its getter
