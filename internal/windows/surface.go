@@ -122,6 +122,9 @@ type surface struct {
 	hwnd              uintptr
 
 	paintDC uintptr
+	// wasOut tells that Occluded said that nothing of the window shows, and
+	// SurfaceShown was not sent since.
+	wasOut bool
 	// now tells that a frame draws at once: one a resize draws, or one
 	// FrameNow draws for a frame left to draw (platform.PacedSurface).
 	now      bool
@@ -466,6 +469,10 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 			return 0, true // the web view under the pointer takes it
 		}
 	case wmTimer:
+		if wp == timerCloak {
+			s.checkShown()
+			return 0, true
+		}
 		if wp == timerWebView {
 			procKillTimer.Call(hwnd, timerWebView)
 			for _, v := range s.w.webViews {
@@ -499,6 +506,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 			s.layer.commit()
 		}
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceResize})
+		s.checkShown()
 		// Draw at once, so the content follows the window while it is
 		// resized.
 		s.drawNow()

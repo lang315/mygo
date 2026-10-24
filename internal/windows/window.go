@@ -519,6 +519,7 @@ func (w *window) sized(kind uintptr) {
 	w.resizeWebView()
 	if w.surface != nil {
 		w.surface.fit()
+		w.surface.checkShown()
 	}
 	if w.caption != nil && kind != sizeMinimized {
 		w.caption.layout()
