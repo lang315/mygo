@@ -13,15 +13,16 @@ import (
 //
 //	widget.Label("").Rich(widget.ParseMarkup(`<span foreground='white' background='green' weight='800'>Done</span> saved`)...)
 //
-// Colors are #rgb, #rrggbb or a name of X11's, as Pango reads them
-// (white, black, red, green, blue, yellow, gray, orange, purple, cyan,
-// magenta, pink, brown); weight is 100 to 900 or thin, light, normal, bold,
-// ultrabold or heavy. The entities &amp; &lt; &gt; &apos; &quot; and
-// &#N; &#xN; are text. Nothing else is: markup it does not know, or that is
-// malformed, never fails. An unknown tag, or an unknown or bad attribute,
-// is ignored and its words stay; a closing tag with no opening one is
-// ignored; a tag left open styles the rest; a "<" that starts no tag, and
-// an unknown entity, stay as they are.
+// Colors are #rgb, #rgba, #rrggbb, #rrggbbaa or a name of X11's, as Pango
+// reads them (white, black, red, green, blue, yellow, gray, orange, purple,
+// cyan, magenta, pink, brown). Weight is 100 to 1000, or thin, ultralight,
+// light, semilight, book, normal, medium, semibold, bold, ultrabold, heavy
+// or ultraheavy. The entities &amp; &lt; &gt; &apos; &quot; and &#N; &#xN;
+// are text. Nothing else is, and nothing fails: a bad attribute is ignored,
+// a closing tag with no opening one is ignored, and a tag left open styles
+// the rest. What is not Pango's markup stays as it is, so a message put in
+// a span unescaped shows whole: "<nil>", the "<" of "x<y" (a tag Pango does
+// not know) and an unknown entity.
 func ParseMarkup(s string) []ui.Span {
 	var (
 		spans []ui.Span
@@ -40,17 +41,15 @@ func ParseMarkup(s string) []ui.Span {
 	for i := 0; i < len(s); {
 		switch c := s[i]; {
 		case c == '<':
-			j := strings.IndexByte(s[i:], '>')
-			if j < 0 || !startsTag(s[i+1:]) {
+			name, closing, tag, n := markupTag(s[i:])
+			if n == 0 {
 				text.WriteByte(c)
 				i++
 				continue
 			}
-			tag := s[i+1 : i+j]
-			i += j + 1
+			i += n
 			flush()
-			if name, ok := strings.CutPrefix(tag, "/"); ok {
-				name = strings.ToLower(strings.TrimSpace(name))
+			if closing {
 				for k := len(stack) - 1; k >= 0; k-- {
 					if stack[k].name == name {
 						style = stack[k].before
@@ -61,7 +60,7 @@ func ParseMarkup(s string) []ui.Span {
 				continue
 			}
 			selfClosing := strings.HasSuffix(tag, "/")
-			name, attrs := splitTag(strings.TrimSuffix(tag, "/"))
+			_, attrs := splitTag(strings.TrimSuffix(tag, "/"))
 			frame := markupFrame{name: name, before: style}
 			switch name {
 			case "b":
@@ -100,10 +99,30 @@ type markupFrame struct {
 	before ui.Span // the style outside the tag
 }
 
-// startsTag reports whether s, what follows a "<", begins a tag.
-func startsTag(s string) bool {
-	s = strings.TrimPrefix(s, "/")
-	return s != "" && (s[0] >= 'a' && s[0] <= 'z' || s[0] >= 'A' && s[0] <= 'Z')
+// markupTags are the tags Pango knows; the ones this does not style
+// (big, small, s, sub, sup, tt) are dropped and their words stay.
+var markupTags = map[string]bool{"span": true, "b": true, "i": true, "u": true, "big": true, "small": true, "s": true, "sub": true, "sup": true, "tt": true}
+
+// markupTag reads the tag s starts with, a "<": its lower-case name,
+// whether it closes, its text without the angle brackets, and its length.
+// The length is 0 when s starts no tag of Pango's, so that "<nil>", or the
+// "<" of "x<y", is text.
+func markupTag(s string) (name string, closing bool, tag string, n int) {
+	end := strings.IndexByte(s, '>')
+	if end < 0 || strings.IndexByte(s[1:end], '<') >= 0 {
+		return "", false, "", 0
+	}
+	tag = s[1:end]
+	rest, closing := strings.CutPrefix(tag, "/")
+	k := 0
+	for k < len(rest) && (rest[k] >= 'a' && rest[k] <= 'z' || rest[k] >= 'A' && rest[k] <= 'Z') {
+		k++
+	}
+	name = strings.ToLower(rest[:k])
+	if !markupTags[name] || k < len(rest) && !strings.ContainsRune(" \t\r\n/", rune(rest[k])) {
+		return "", false, "", 0
+	}
+	return name, closing, rest, end + 1
 }
 
 // splitTag returns a tag's lower-case name and its attributes.
@@ -163,14 +182,14 @@ func applySpanAttrs(s *ui.Span, attrs map[string]string) {
 	}
 }
 
-var markupWeights = map[string]int{"thin": 100, "ultralight": 200, "light": 300, "normal": 400, "medium": 500, "semibold": 600, "bold": 700, "ultrabold": 800, "heavy": 900}
+var markupWeights = map[string]int{"thin": 100, "ultralight": 200, "light": 300, "semilight": 350, "book": 380, "normal": 400, "medium": 500, "semibold": 600, "bold": 700, "ultrabold": 800, "heavy": 900, "ultraheavy": 1000}
 
 func markupWeight(v string) (int, bool) {
 	if w, ok := markupWeights[strings.ToLower(v)]; ok {
 		return w, true
 	}
 	n, err := strconv.Atoi(v)
-	return min(max(n, 100), 900), err == nil && n > 0
+	return min(max(n, 100), 1000), err == nil && n > 0
 }
 
 // markupColors are X11's colors, which Pango's names are.
@@ -181,18 +200,16 @@ var markupColors = map[string]ui.Color{
 	"magenta": ui.RGB(255, 0, 255), "pink": ui.RGB(255, 192, 203), "brown": ui.RGB(165, 42, 42),
 }
 
-func markupColor(v string) (ui.Color, bool) {
-	if h, ok := strings.CutPrefix(v, "#"); ok {
-		if len(h) == 3 {
-			h = string([]byte{h[0], h[0], h[1], h[1], h[2], h[2]})
-		}
-		n, err := strconv.ParseUint(h, 16, 32)
-		if len(h) != 6 || err != nil {
-			return ui.Color{}, false
-		}
-		return ui.RGB(uint8(n>>16), uint8(n>>8), uint8(n)), true
+func markupColor(v string) (c ui.Color, ok bool) {
+	if strings.HasPrefix(v, "#") {
+		defer func() { // ui.Hex panics on what it cannot read
+			if recover() != nil {
+				c, ok = ui.Color{}, false
+			}
+		}()
+		return ui.Hex(v), true
 	}
-	c, ok := markupColors[strings.ToLower(v)]
+	c, ok = markupColors[strings.ToLower(v)]
 	return c, ok
 }
 

@@ -79,8 +79,8 @@ func TestParseMarkupBadInputIsKeptAsTextAndNeverPanics(t *testing.T) {
 			t.Errorf("ParseMarkup(%q) lost the text", in)
 		}
 	}
-	// An unknown tag keeps its words; an unclosed one styles the rest.
-	if got := ParseMarkup(`<unknown>x</unknown>`); len(got) != 1 || got[0].Text != "x" {
+	// An unknown tag stays as text; an unclosed known one styles the rest.
+	if got := ParseMarkup(`<unknown>x</unknown>`); len(got) != 1 || got[0].Text != "<unknown>x</unknown>" {
 		t.Errorf("unknown tag: %+v", got)
 	}
 	if got := ParseMarkup(`<b>unclosed`); len(got) != 1 || got[0].Weight != 700 || got[0].Text != "unclosed" {
@@ -106,5 +106,51 @@ func TestLabelRichTakesParsedMarkup(t *testing.T) {
 	tt := tester(t, l)
 	if l.Text() != "Done ok" || !tt.HasText("Done ok") {
 		t.Fatalf("text %q, texts %q", l.Text(), tt.Texts())
+	}
+}
+
+func TestParseMarkupUnknownTagsStayAsText(t *testing.T) {
+	// fhtool's logger puts an unescaped message inside a span.
+	for in, want := range map[string]string{
+		"err: <nil>":                              "err: <nil>",
+		"if x<y then <b>bold</b>":                 "if x<y then bold",
+		"<span foreground='red'>a <nil> b</span>": "a <nil> b",
+		"a </nil> b":                              "a </nil> b",
+	} {
+		var text strings.Builder
+		for _, s := range ParseMarkup(in) {
+			text.WriteString(s.Text)
+		}
+		if text.String() != want {
+			t.Errorf("ParseMarkup(%q) text %q, want %q", in, text.String(), want)
+		}
+	}
+	got := ParseMarkup("if x<y then <b>bold</b>")
+	if len(got) != 2 || got[1].Weight != 700 || got[1].Text != "bold" {
+		t.Errorf("the <b> after a stray < lost its style: %+v", got)
+	}
+}
+
+func TestParseMarkupColorsWithAlpha(t *testing.T) {
+	for in, want := range map[string]ui.Color{
+		"#ff000080": {R: 255, A: 0x80},
+		"#f008":     {R: 255, A: 0x88},
+		"#102030":   {R: 0x10, G: 0x20, B: 0x30, A: 255},
+	} {
+		got := ParseMarkup("<span foreground='" + in + "'>x</span>")
+		if len(got) != 1 || got[0].Color != want {
+			t.Errorf("foreground %s: %+v, want %+v", in, got, want)
+		}
+	}
+}
+
+func TestParseMarkupWeightsAsPangoReadsThem(t *testing.T) {
+	for in, want := range map[string]int{
+		"1000": 1000, "ultraheavy": 1000, "book": 380, "semilight": 350, "100": 100, "heavy": 900,
+	} {
+		got := ParseMarkup("<span weight='" + in + "'>x</span>")
+		if len(got) != 1 || got[0].Weight != want {
+			t.Errorf("weight %s: %+v, want %d", in, got, want)
+		}
 	}
 }
