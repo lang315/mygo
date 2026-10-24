@@ -24,7 +24,10 @@ split := widget.SplitContainer(files, editor).
   `SplitterPercent()` and `SplitterDistance()` return the value of the mode
   the container is in, and 0 for the other.
 - `OnSplitterMoved(fn)` runs `fn` on the event goroutine after the user moved
-  the divider. A setter does not run it.
+  the divider. A setter does not run it, nor does resizing the window. While
+  the user drags it runs for every frame the divider moved in, so save the
+  size in a debounced handler, as the `OnColumnsChange` example of
+  [DataGridView](../widget.md) does, not on every call.
 
 Assistive technology sees the divider as a splitter named "Divider".
 In a test, `tt.Find(widget.ByRole(ui.RoleSplitter))` finds it; see

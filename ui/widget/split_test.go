@@ -2,6 +2,7 @@ package widget
 
 import (
 	"math"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -125,5 +126,43 @@ func TestSplitContainerSettersDoNotReportAMove(t *testing.T) {
 	}
 	if s.SplitterPercent() != 30 || s.SplitterDistance() != 0 {
 		t.Fatalf("percent %v, distance %v", s.SplitterPercent(), s.SplitterDistance())
+	}
+}
+
+func TestSplitContainerResizingTheWindowDoesNotReportAMove(t *testing.T) {
+	for name, mk := range map[string]func() *SplitContainerWidget{
+		"DIPs":    func() *SplitContainerWidget { return SplitContainer(Label("a"), Label("b")).SetSplitterDistance(300) },
+		"percent": func() *SplitContainerWidget { return SplitContainer(Label("a"), Label("b")).SetSplitterPercent(40) },
+	} {
+		moved := make(chan struct{}, 2)
+		s := mk().OnSplitterMoved(func() { moved <- struct{}{} })
+		tt := splitTester(t, s)
+		tt.SetSize(150, 600)
+		tt.Settle()
+		tt.SetSize(800, 600)
+		tt.Settle()
+		select {
+		case <-moved:
+			t.Errorf("%s: resizing the window ran OnSplitterMoved", name)
+		default:
+		}
+	}
+}
+
+func TestSplitContainerReportsEveryFrameOfADrag(t *testing.T) {
+	var n atomic.Int32
+	s := SplitContainer(Label("a"), Label("b")).SetSplitterDistance(300).OnSplitterMoved(func() { n.Add(1) })
+	tt := splitTester(t, s)
+	d := tt.Find(ByRole(ui.RoleSplitter)).Bounds()
+	x, y := d.X+d.W/2, d.Y+d.H/2
+	tt.Press(x, y)
+	for i := 1; i <= 5; i++ {
+		tt.Move(x+float32(i*10), y)
+		tt.Settle()
+	}
+	tt.Release(x+50, y)
+	tt.Settle()
+	if got := n.Load(); got < 3 {
+		t.Fatalf("OnSplitterMoved ran %d times in a drag of 5 frames: the docs say it runs for every frame", got)
 	}
 }
