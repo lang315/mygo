@@ -33,6 +33,7 @@ type Form struct {
 	closing       bool          // Close is closing it: OnClose is not asked
 	asking        bool          // OnClose is asking the user
 	done          chan struct{} // closed when the shown window closes
+	headless      chan struct{} // a DialogTester's: closed by Close, instead of a window
 }
 
 // quit quits the app; tests replace it.
@@ -243,6 +244,15 @@ func (w *Form) Show() {
 
 // closeAsked answers a request to close the window, on the main thread.
 func (w *Form) closeAsked(e *mygo.CloseEvent) {
+	if w.closeRequest() {
+		e.PreventDefault()
+	}
+}
+
+// closeRequest answers a request to close the window, as a click on its
+// close button or Escape in a dialog makes, and reports whether to keep
+// the window open.
+func (w *Form) closeRequest() (keep bool) {
 	mu.Lock()
 	h, closing, asking, deletable := w.onClose, w.closing, w.asking, w.deletable
 	if h != nil && !closing && deletable {
@@ -250,21 +260,19 @@ func (w *Form) closeAsked(e *mygo.CloseEvent) {
 	}
 	mu.Unlock()
 	if closing {
-		return
+		return false
 	}
 	if !deletable && !quitAsked { // the app quitting closes it anyway
-		e.PreventDefault()
-		return
+		return true
 	}
 	if h == nil {
-		return
+		return false
 	}
 	// The user's answer comes from the event goroutine: keep the window,
 	// ask, and close it if the answer is yes. Keeping it stops a quit too,
 	// so a yes then quits again. A request while asking is dropped.
-	e.PreventDefault()
 	if asking {
-		return
+		return true
 	}
 	quitting := quitAsked
 	Post(func() {
@@ -279,6 +287,7 @@ func (w *Form) closeAsked(e *mygo.CloseEvent) {
 			}
 		}
 	})
+	return true
 }
 
 // Close closes the window without asking OnClose.
@@ -288,6 +297,13 @@ func (w *Form) closeAnyway() {
 	mu.Lock()
 	n := w.win
 	w.closing = true
+	if h := w.headless; h != nil {
+		select {
+		case <-h:
+		default:
+			close(h)
+		}
+	}
 	mu.Unlock()
 	if n != nil {
 		n.Close()

@@ -10,6 +10,7 @@ type Dialog struct {
 	*Form
 	title, subtitle *LabelWidget
 	onBeforeRun     func()
+	ran             bool // a headless Run returned
 }
 
 // NewDialog makes a dialog over parent (nil for none) titled title, with
@@ -58,14 +59,28 @@ func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return
 func (d *Dialog) Run() {
 	notMain("Dialog.Run")
 	mu.Lock()
+	if d.headless != nil && d.ran { // a DialogTester's: a Run after a Run is a new show
+		d.headless, d.closing, d.ran = make(chan struct{}), false, false
+	}
 	before := d.onBeforeRun
 	mu.Unlock()
 	if before != nil {
 		before()
 	}
-	d.Show()
 	mu.Lock()
-	done := d.done
+	done := d.headless
+	headless := done != nil
 	mu.Unlock()
+	if done == nil { // a DialogTester has none, and shows no window
+		d.Show()
+		mu.Lock()
+		done = d.done
+		mu.Unlock()
+	}
 	block("Dialog.Run", done)
+	if headless {
+		mu.Lock()
+		d.ran = true
+		mu.Unlock()
+	}
 }

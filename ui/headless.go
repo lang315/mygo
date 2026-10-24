@@ -472,6 +472,10 @@ func (t *Tester) Find(s string) (Rect, bool) {
 	return Rect{}, false
 }
 
+// Escapes returns how many Escapes nothing in the view took so far: the
+// ones a window answers by closing a dialog.
+func (t *Tester) Escapes() int { return t.h.escapes }
+
 // Texts returns the texts of the last frame, in order.
 func (t *Tester) Texts() []string {
 	var out []string
