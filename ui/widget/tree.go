@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"cmp"
 	"fmt"
 	"github.com/egoist/mygo/internal/l10n"
 	"slices"
@@ -42,9 +43,10 @@ type treeNode[T any, K comparable] struct {
 // run under the package's lock: they call no widget method.
 type TreeViewWidget[T any, K comparable] struct {
 	common[TreeViewWidget[T, K]]
-	key   func(*T) K
-	text  func(*T) string
-	image func(*T) *ui.Bitmap
+	key       func(*T) K
+	text      func(*T) string
+	image     func(*T) *ui.Bitmap
+	imageSize float32 // the side the image is drawn at, 16 unless SetImageList
 
 	nodes   map[K]*treeNode[T, K]
 	roots   []treeItem[K]
@@ -78,7 +80,15 @@ func TreeView[T any, K comparable](key func(*T) K, text func(*T) string) *TreeVi
 // SetImage shows an image before the text of each node, 16 DIPs square;
 // nil, or a nil image, for none. fn runs under the package's lock.
 func (t *TreeViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *TreeViewWidget[T, K] {
-	t.change(func() { t.image = fn })
+	t.change(func() { t.image, t.imageSize = fn, 0 })
+	return t
+}
+
+// SetImageList shows before the text of each node the image of the list under
+// key(node), drawn at the list's Size; no image for a key the list lacks. key
+// runs under the package's lock.
+func (t *TreeViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *TreeViewWidget[T, K] {
+	t.change(func() { t.image, t.imageSize = ImagesBy(il, key), float32(il.Size()) })
 	return t
 }
 
@@ -777,7 +787,8 @@ func (t *TreeViewWidget[T, K]) row(c *ui.Context, it treeItem[K]) {
 	}
 	if t.image != nil {
 		if bmp := t.image(&n.data); bmp != nil {
-			ui.Image(c, bmp).Size(16, 16)
+			side := cmp.Or(t.imageSize, 16)
+			ui.Image(c, bmp).Size(side, side)
 		}
 	}
 	ui.Text(c, text).SingleLine()

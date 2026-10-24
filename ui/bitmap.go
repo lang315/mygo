@@ -92,6 +92,17 @@ func (b *Bitmap) Update(img image.Image) {
 	b.fresh = 0
 }
 
+// Image returns a copy of the bitmap's pixels, or nil for a canvas's bitmap,
+// whose picture is drawn rather than kept.
+func (b *Bitmap) Image() image.Image {
+	if b.img.Scene != nil || len(b.img.Pix) == 0 {
+		return nil
+	}
+	img := image.NewRGBA(image.Rect(0, 0, b.w, b.h))
+	copy(img.Pix, b.img.Pix)
+	return img
+}
+
 // Size returns the bitmap's size in pixels, which Image shows as DIPs.
 func (b *Bitmap) Size() (w, h int) { return b.w, b.h }
 

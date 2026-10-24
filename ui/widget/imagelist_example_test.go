@@ -20,8 +20,8 @@ func ExampleImageList() {
 	icons.Add("folder", folder16, folder32)
 	icons.Add("file", file16, file32)
 
-	tree := widget.TreeView(key, text).SetImage(widget.ImagesBy(icons, func(n *node) string { return n.Icon }))
-	list := widget.ListBox(fkey, ftext).SetImage(widget.ImagesBy(icons, func(f *file) string { return f.Kind }))
+	tree := widget.TreeView(key, text).SetImageList(icons, func(n *node) string { return n.Icon })
+	list := widget.ListBox(fkey, ftext).SetImageList(icons, func(f *file) string { return f.Kind })
 	menu := widget.MenuItem{Text: "Open", IconPNG: icons.PNG("folder")}
 	_, _, _ = tree, list, menu
 }

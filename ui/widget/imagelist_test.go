@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -173,4 +175,118 @@ func TestImageListIsSafeFromManyGoroutines(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// The function ImagesBy returns, called from the goroutine of the app while
+// others change the list, and a window building from it, race on nothing.
+func TestImagesByIsSafeWhileTheListChanges(t *testing.T) {
+	il := ImageList(16)
+	d := pngOf(t, 16, color.RGBA{0, 0, 255, 255})
+	items := []pic{{"1", "First", "a"}, {"2", "Second", "b"}}
+	fn := ImagesBy(il, func(p *pic) string { return p.icon })
+	lb := ListBox(func(p *pic) string { return p.id }, func(p *pic) string { return p.name }).
+		SetItems(items).SetImage(fn)
+	tt := tester(t, lb)
+	var stop atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; !stop.Load(); i++ {
+			_ = il.Add("a", d)
+			_ = il.Add("b", d)
+			il.Remove("a")
+			if i%3 == 0 {
+				il.Clear()
+			}
+		}
+	}()
+	for range 100 {
+		fn(&items[0])
+		lb.SetItems(items)
+		tt.Frame()
+	}
+	stop.Store(true)
+	wg.Wait()
+}
+
+func TestImageListRefusesWhatItCannotUse(t *testing.T) {
+	il := ImageList(16)
+	ok := pngOf(t, 16, color.RGBA{A: 255})
+	huge := image.NewRGBA(image.Rect(0, 0, maxImageSide+1, 1))
+	var big bytes.Buffer
+	if err := png.Encode(&big, huge); err != nil {
+		t.Fatal(err)
+	}
+	for name, err := range map[string]error{
+		"nil image":      il.AddImage("a", nil),
+		"no image":       il.AddImage("a"),
+		"empty image":    il.AddImage("a", image.NewRGBA(image.Rect(0, 0, 0, 0))),
+		"too wide":       il.AddImage("a", huge),
+		"too wide data":  il.Add("a", big.Bytes()),
+		"other propor.":  il.AddImage("a", image.NewRGBA(image.Rect(0, 0, 16, 64)), image.NewRGBA(image.Rect(0, 0, 20, 5))),
+		"one bad of two": il.Add("a", ok, []byte("x")),
+	} {
+		if err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if il.Len() != 0 {
+		t.Errorf("a refused image was kept: %v", il.Keys())
+	}
+}
+
+// What was added as PNG is handed back as it was, and the rest is encoded
+// once, from the pixels (so a JPEG with an orientation comes upright).
+func TestImageListPNGKeepsThePNGAndEncodesTheRest(t *testing.T) {
+	il := ImageList(16)
+	var enc bytes.Buffer // not the default compression: a re-encoding would differ
+	if err := (&png.Encoder{CompressionLevel: png.NoCompression}).Encode(&enc, image.NewRGBA(image.Rect(0, 0, 16, 16))); err != nil {
+		t.Fatal(err)
+	}
+	d := enc.Bytes()
+	if err := il.Add("p", d); err != nil {
+		t.Fatal(err)
+	}
+	if got := il.PNG("p"); !bytes.Equal(got, d) {
+		t.Error("PNG data was re-encoded")
+	}
+	var j bytes.Buffer
+	if err := jpeg.Encode(&j, image.NewRGBA(image.Rect(0, 0, 16, 8)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := il.Add("j", j.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	a := il.PNG("j")
+	cfg, err := png.DecodeConfig(bytes.NewReader(a))
+	if err != nil || cfg.Width != 16 || cfg.Height != 8 {
+		t.Fatalf("PNG of a JPEG: %v %v", cfg, err)
+	}
+	if b := il.PNG("j"); &a[0] != &b[0] {
+		t.Error("the PNG was encoded again")
+	}
+}
+
+// The list's Size is the side the controls draw at, not 16.
+func TestImageListSizeSetsTheDrawnSide(t *testing.T) {
+	blue := color.RGBA{0, 0, 255, 255}
+	il := ImageList(24)
+	if err := il.Add("doc", pngOf(t, 48, blue)); err != nil {
+		t.Fatal(err)
+	}
+	items := []pic{{"1", "First", "doc"}}
+	key := func(p *pic) string { return p.icon }
+	lb := ListBox(func(p *pic) string { return p.id }, func(p *pic) string { return p.name }).
+		SetItems(items).SetImageList(il, key)
+	tt := tester(t, lb)
+	if n := bluePixels2(tt, find(t, tt, "First")); n < 24*24 || n > 24*24+4*24 {
+		t.Errorf("list box: %d blue pixels, want about %d", n, 24*24)
+	}
+	tv := TreeView(func(p *pic) string { return p.id }, func(p *pic) string { return p.name }).
+		SetRoots(items).SetImageList(il, key)
+	tt = tester(t, tv)
+	if n := bluePixels2(tt, find(t, tt, "First")); n < 24*24 || n > 24*24+4*24 {
+		t.Errorf("tree view: %d blue pixels, want about %d", n, 24*24)
+	}
 }
