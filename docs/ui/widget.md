@@ -73,6 +73,10 @@ gota's names are listed for code ported from it.
 | `Label`, `Button`, `RadioGroup` | Label, Button, RadioButton | same |
 | `Alert`, `Confirm` | MessageBox | `Alert`, `Confirm` |
 | `Custom` | UserControl | — |
+| `MenuStrip` (`Form.MenuStrip`) | MenuStrip | `MenuBar` |
+| `ToolStrip` | ToolStrip | `Toolbar` |
+| `StatusStrip` | StatusStrip | — |
+| `NotifyIcon` | NotifyIcon | — |
 | `Invoke` | Control.Invoke | `IdleAddSync` |
 | `BeginInvoke` (`Post`) | Control.BeginInvoke | `IdleAdd` |
 
@@ -220,6 +224,66 @@ A build runs while the package holds its lock: it must call no method of
 any control (getters lock too) and no `Change`, which would wait forever.
 A control made of other controls needs no `Custom`: return a `VBox` of
 them from a function of your own.
+
+## App shell
+
+A window's shell is its main menu, a tool bar above the content, a status
+bar below it, and an icon in the notification area. Each is set once and
+changed while the app runs, from any goroutine.
+
+```go
+status := widget.StatusLabel("Ready")
+open := widget.StripItem("Open…").SetShortcut("CmdOrCtrl+O").OnClick(openFile)
+
+w.MenuStrip(widget.NewMenuStrip(
+	widget.StripRole(mygo.RoleAppMenu), // macOS: the app menu
+	widget.StripItem("File", open, widget.StripSeparator(), widget.StripRole(mygo.RoleQuit)),
+	widget.StripRole(mygo.RoleEditMenu),
+))
+w.ToolStrip(widget.ToolStrip(
+	widget.ToolButton("").SetIcon(saveIcon).SetTooltip("Save").OnClick(save),
+	widget.ToolButton("Bold").SetToggle(true).OnChange(bold),
+	widget.Separator(),
+	widget.ComboBox(options...), // any ComboBox, sections and icons included
+	widget.Spring(),
+	widget.DropDownButton("More", widget.MenuItem{Text: "Export", OnClick: export}),
+))
+w.StatusStrip(widget.StatusStrip(status, widget.Spring(), widget.StatusProgress().SetFraction(0.4)))
+
+open.SetEnabled(false)  // the native menu follows
+status.SetText("Saved") // and the window redraws
+```
+
+- **`MenuStrip`** is the window's main menu on mygo's native menus: on macOS
+  the app's menu bar (every window shares it, so the last one set shows;
+  put the `Role` items you want, as the app and Edit menus, in it), on
+  Windows and Linux the window's own, above the content. A `MenuStripItem` is
+  `StripItem(text, children...)`, `StripCheck(text, checked)` (it toggles
+  before its `OnClick` runs), `StripSeparator()` or `StripRole(role)`. Its
+  `SetText`, `SetShortcut`, `SetEnabled`, `SetVisible` and `SetChecked` update
+  the native menu; `OnClick` runs on the event goroutine. `SetMenuBar`, of
+  plain `MenuItem` values you set again to change, stays for a menu that does
+  not change.
+- **`StatusStrip`** holds `StatusLabel(text)` (`SetText`, `SetIcon`),
+  `Spring()` (takes the free width), `StatusProgress()` (a small
+  `ProgressBar`) and `Separator()`. `Form.StatusStrip` docks it below the
+  content.
+- **`ToolStrip`** is a `ui.Toolbar`: its buttons take no face until hovered,
+  it is one stop of Tab with the arrow keys moving among its items, and
+  what does not fit goes from the last item into a menu at its end (a
+  `ComboBox` there under its chosen text, a `DropDownButton` under its own);
+  there is no overflow of the package's own. `ToolButton(text)` has `SetIcon`,
+  `SetTooltip` (from every control), `OnClick`, and `SetToggle` with
+  `Checked`, `SetChecked` and `OnChange`. `Form.ToolStrip` docks it above the
+  content, below the header bar and the window's menu bar.
+- **`NotifyIcon`** is an icon in the menu bar or the notification area:
+  `NewNotifyIcon()` makes one, `SetIcon(png, template)`, `SetText` (the
+  tooltip), `SetContextMenu(items...)`, `OnClick`, `OnRightClick`,
+  `SetVisible` (a hidden icon comes back with all it had) and `Dispose`.
+  Gaps are the platforms': `OnClick` runs only when the icon has no context
+  menu, since a click opens the menu; there is no `OnDoubleClick`, as no
+  platform's tray tells mygo of one; on Linux the panel places the icon.
+  Create it once the app is ready.
 
 ## Fields
 
@@ -527,6 +591,9 @@ Layout:
   widget attached to a taken cell replaces the one there, and cells must
   not overlap.
 - `Fields()`: a form of label and control rows; see [Fields](#fields).
+- `NewMenuStrip(items...)`, `StatusStrip(items...)`, `ToolStrip(items...)`,
+  `NewNotifyIcon()`: the window's main menu, status bar and tool bar, and
+  an icon in the notification area; see [App shell](#app-shell).
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps.
