@@ -52,6 +52,10 @@ type GridState struct {
 	// Edit menu's Copy while the grid has the keyboard focus. Nothing is
 	// copied when no item is chosen, and "" leaves the clipboard as it was.
 	Copy func(items []int) string
+	// AccentChoice shows the items chosen in the accent color with its text,
+	// focused or not, as a Table's rows are, instead of a tint (a photo
+	// library's) or, unfocused, a grey.
+	AccentChoice bool
 
 	rows ListState
 	// cells are the items of the cells the last frame built, by their
@@ -60,9 +64,20 @@ type GridState struct {
 	// cols is how many columns the items took in the last frame, and pivot
 	// the item Shift chooses from.
 	cols, pivot int
+	pivotSet    bool // SetPivot was called before the first frame
 	started     bool
 	rt          *engine
 }
+
+// Pivot returns the item Shift extends the choice from, -1 for none: the item
+// last chosen without Shift. Call it after the grid is built.
+func (s *GridState) Pivot() int { return s.pivot }
+
+// SetPivot makes item the one Shift extends the choice from, without changing
+// the choice: for an app that shows the same items in another view and keeps
+// the pivot by key. Call it after the grid is built once, with an item of the
+// frame about to be built.
+func (s *GridState) SetPivot(item int) { s.pivot, s.pivotSet = item, true }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
 // does a row.
@@ -127,6 +142,9 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 		// Keep the rows in view on the same items.
 		first, _ := s.rows.Visible()
 		s.rows.ScrollTo(first*s.cols/cols, Start)
+	}
+	if !s.started && !s.pivotSet {
+		s.pivot = -1 // no item to extend from
 	}
 	s.cols, s.started = cols, true
 	rows := (n + cols - 1) / cols
@@ -315,6 +333,8 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item 
 		chosen := s.chosen(i)
 		cell.checked = 1 + int8(b2f(chosen))
 		switch {
+		case chosen && s.AccentChoice:
+			cell.Selected(true)
 		case chosen && grid.Focused():
 			cell.Background(t.Accent.Alpha(0.2)).Border(2, t.Accent)
 		case chosen:
