@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/internal/platform"
@@ -82,7 +84,10 @@ func (e *node) buildMenu(button bool, build func(m *Menu)) {
 		}
 		run := &menuRun{collect: true, iconColor: e.c.Theme().Text}
 		pm := &platform.Menu{}
-		build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[mr.text]})
+		reopened := mr.reopened
+		mr.reopened = false
+		build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[mr.text],
+			id: e.id, x: mr.x, y: mr.y, gen: mr.gen.Load(), later: !button && !reopened})
 		var commands []string
 		if slices.ContainsFunc(run.commands, func(c string) bool { return c != "" }) {
 			commands = run.commands
@@ -108,6 +113,30 @@ type Menu struct {
 	// text is the text input or selectable text the menu opened on, whose
 	// editing items EditItems adds.
 	text *state
+	// id, x, y and gen say where and for which element Later may open the
+	// menu again; later is false for a menu opened that way, or built
+	// again for an item chosen.
+	id    uint64
+	x, y  float32
+	gen   uint64
+	later bool
+}
+
+// Later is for a menu whose items are not known when the user asks for
+// it, such as ones read from a database. On the build that opens the menu
+// it returns a function, and the menu shows nothing yet; the function,
+// which any goroutine may call once the items are known, opens the menu
+// again, where the user asked for it, and the same function builds it, now
+// with the items: Later returns nil for that build, and for the one after
+// an item was chosen. Calling the function does nothing if the user has
+// pressed a key or a button, or asked for another menu, since: the menu
+// the user asked for is no longer wanted.
+func (m *Menu) Later() (open func()) {
+	if !m.later {
+		return nil
+	}
+	rt, id, x, y, gen := m.rt, m.id, m.x, m.y, m.gen
+	return func() { rt.reopenMenu(id, x, y, gen) }
 }
 
 // menuRun is a run of a context menu's function: the one collecting what
@@ -273,9 +302,19 @@ type menuState struct {
 	// goes up, as on Windows, on the text releaseText.
 	release, releaseText uint64
 	pending              *shownMenu
-	chosen               uint64
-	choice               int
-	label                string
+	// gen counts the presses and the keys since: a menu asked for before
+	// them is dropped. reopen is the menu Later asked to open again, for
+	// the next frame, and reopened says the frame builds it.
+	gen      atomic.Uint64
+	reopenMu sync.Mutex
+	reopen   struct {
+		id, gen uint64
+		x, y    float32
+	}
+	reopened bool
+	chosen   uint64
+	choice   int
+	label    string
 }
 
 // shownMenu is a context menu built for the element id. commands are the
@@ -327,6 +366,9 @@ func (rt *engine) menuTarget(chain []uint64) *state {
 func (rt *engine) askMenu(s *state, x, y float32, button bool) {
 	mr := &rt.menu
 	mr.asked, mr.x, mr.y, mr.button, mr.text = s.id, x, y, button, 0
+	// A menu asked for now is the one wanted: a Later menu pending is not.
+	mr.reopened = false
+	mr.gen.Add(1)
 	// The menu takes the press: the release goes to it.
 	if rt.pressed != nil {
 		rt.pressed.pressed = false
@@ -650,4 +692,27 @@ func keyName(k Key) string {
 		return "`"
 	}
 	return ""
+}
+
+// reopenMenu has the next frame open the menu of element id again at
+// (x, y), unless a press, a key or another menu came after gen.
+func (rt *engine) reopenMenu(id uint64, x, y float32, gen uint64) {
+	mr := &rt.menu
+	mr.reopenMu.Lock()
+	mr.reopen.id, mr.reopen.gen, mr.reopen.x, mr.reopen.y = id, gen, x, y
+	mr.reopenMu.Unlock()
+	rt.host.invalidate()
+}
+
+// takeReopen asks for the menu reopenMenu left, at the start of a frame,
+// if it is still wanted.
+func (rt *engine) takeReopen() {
+	mr := &rt.menu
+	mr.reopenMu.Lock()
+	r := mr.reopen
+	mr.reopen.id = 0
+	mr.reopenMu.Unlock()
+	if r.id != 0 && r.gen == mr.gen.Load() {
+		mr.asked, mr.x, mr.y, mr.button, mr.text, mr.reopened = r.id, r.x, r.y, false, 0, true
+	}
 }
