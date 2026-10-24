@@ -289,9 +289,13 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					table.afterInput(func() {
 						if box.Changed() {
 							changed := false
-							for i := range n {
-								if s.Header == nil || !s.Header(i) {
-									changed = s.Checked.set(s.keyOf(i), all) || changed
+							if s.CheckRows != nil && s.Header == nil {
+								changed = s.CheckRows(0, n-1, all)
+							} else {
+								for i := range n {
+									if s.Header == nil || !s.Header(i) {
+										changed = s.Checked.set(s.keyOf(i), all) || changed
+									}
 								}
 							}
 							if changed {

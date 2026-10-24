@@ -50,10 +50,14 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// still lay that frame out, or apply input to it. Setters never move
 	// or remove a frame's rows: they make new slices. gone is set when
 	// rows went since, so that commits look for their keys only then.
-	frame                                   []T
-	order                                   []int
-	kept                                    bool
-	gone                                    bool
+	frame []T
+	order []int
+	kept  bool
+	gone  bool
+	// posOf is each row's place in the view, -1 if hidden, as of
+	// posVersion: Selected and Checked build it on first use.
+	posOf                                   []int32
+	posVersion                              uint64
 	sort                                    mirror[ui.SortOrder]
 	chosen, checked                         keys[K]
 	checks                                  bool // the check box column shows
@@ -301,9 +305,9 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	s := &t.list
 	s.Sort, _ = t.sort.bind()
-	s.Selection, s.Checked = t.chosen.bind(), nil
+	s.Selection, s.Checked, s.RowsOf = t.chosen.bind(), nil, t.chosenRows
 	if t.checks {
-		s.Checked, s.CheckedCount = t.checked.bind(), t.checkedCount
+		s.Checked, s.CheckedCount, s.CheckRows = t.checked.bind(), t.checkedCount, t.checkRows
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.rows, false, false

@@ -471,3 +471,51 @@ func TestListKeepOffset(t *testing.T) {
 		t.Errorf("without KeepOffset, sorted again, the first row in view is %d, not %d", f, len(ids)-1-first)
 	}
 }
+
+func TestSelectionTakeChanges(t *testing.T) {
+	var s Selection[int]
+	s.Add(1)
+	s.Add(2)
+	s.Add(2) // no change, not recorded
+	s.Remove(1)
+	ks, all := s.TakeChanges()
+	if all || !slices.Equal(ks, []int{1, 2, 1}) {
+		t.Fatalf("got %v %v", ks, all)
+	}
+	if ks, all := s.TakeChanges(); all || len(ks) != 0 {
+		t.Fatalf("not reset: %v %v", ks, all)
+	}
+	s.Clear()
+	if _, all := s.TakeChanges(); !all {
+		t.Fatal("Clear must report all")
+	}
+	var o Selection[int]
+	o.Add(9)
+	s.CopyFrom(&o)
+	if _, all := s.TakeChanges(); !all {
+		t.Fatal("CopyFrom must report all")
+	}
+}
+
+func TestSelectionJournalIsBounded(t *testing.T) {
+	var s Selection[int]
+	for i := range 10_000 {
+		s.Add(i)
+	}
+	if len(s.log) > max(64, s.Len()/8) {
+		t.Fatalf("journal holds %d keys", len(s.log))
+	}
+	if _, all := s.TakeChanges(); !all {
+		t.Fatal("past the bound, all must be reported")
+	}
+}
+
+func TestSelectorSetIsRecorded(t *testing.T) {
+	var s Selection[string]
+	var sel Selector = &s
+	sel.set("a", true)
+	sel.set("a", false)
+	if ks, all := s.TakeChanges(); all || !slices.Equal(ks, []string{"a", "a"}) {
+		t.Fatalf("got %v %v", ks, all)
+	}
+}

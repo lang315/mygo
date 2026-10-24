@@ -28,6 +28,12 @@ type Selection[K comparable] struct {
 	// it: drawn from selectionGen, it differs from every other
 	// Selection's, so assigning a new Selection changes it too.
 	gen uint64
+	// log holds the keys added or removed since TakeChanges, for those who
+	// mirror the set; over says it gave up (Clear, CopyFrom, or past its
+	// bound): read the whole set instead. Bounded, so a Selection nobody
+	// takes changes from stays small.
+	log  []K
+	over bool
 }
 
 var selectionGen atomic.Uint64
@@ -50,6 +56,7 @@ func (s *Selection[K]) Add(k K) {
 	s.keys[k] = struct{}{}
 	if len(s.keys) != n {
 		s.gen = selectionGen.Add(1)
+		s.note(k)
 	}
 }
 
@@ -60,6 +67,29 @@ func (s *Selection[K]) Remove(k K) {
 	}
 	s.gen = selectionGen.Add(1)
 	delete(s.keys, k)
+	s.note(k)
+}
+
+// note records k as changed.
+func (s *Selection[K]) note(k K) {
+	if s.over {
+		return
+	}
+	if len(s.log) >= max(64, len(s.keys)/8) {
+		s.over, s.log = true, s.log[:0]
+		return
+	}
+	s.log = append(s.log, k)
+}
+
+// TakeChanges returns the keys added or removed since its last call, in
+// order and maybe repeated, and resets the record: all is true when they
+// were too many to list, or the set was cleared or replaced, and then the
+// whole set must be read. The slice is reused: use it before changing s.
+func (s *Selection[K]) TakeChanges() (keys []K, all bool) {
+	keys, all = s.log, s.over
+	s.log, s.over = s.log[:0], false
+	return keys, all
 }
 
 // Clear chooses no row.
@@ -69,6 +99,7 @@ func (s *Selection[K]) Clear() {
 	}
 	s.gen = selectionGen.Add(1)
 	clear(s.keys)
+	s.over, s.log = true, s.log[:0]
 }
 
 // CopyFrom makes s choose the rows src does, in one step: faster than
@@ -79,6 +110,7 @@ func (s *Selection[K]) CopyFrom(src *Selection[K]) {
 	}
 	s.keys = maps.Clone(src.keys)
 	s.gen = selectionGen.Add(1)
+	s.over, s.log = true, s.log[:0]
 }
 
 // All returns the keys of the rows chosen, in no order.

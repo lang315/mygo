@@ -591,6 +591,51 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 			}
 		}
 	})
+	b.Run("selectAllThenCmdClick", func(b *testing.B) {
+		tb, tt := setup(b)
+		if err := tt.Click(rows[0].name); err != nil {
+			b.Fatal(err)
+		}
+		tt.Frame()
+		tt.Key(ui.Cmd, ui.KeyA)
+		tt.Frame()
+		if tb.CountSelected() != n {
+			b.Fatalf("%d selected, want %d", tb.CountSelected(), n)
+		}
+		label := rows[1].name
+		b.ResetTimer()
+		for range b.N {
+			if err := tt.ClickWith(ui.Cmd, label); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("checkAll", func(b *testing.B) {
+		_, tt := setup(b)
+		b.ResetTimer()
+		for range b.N { // unchecks all, then checks all
+			if err := tt.Click("Check all"); err != nil {
+				b.Fatal(err)
+			}
+			tt.Frame()
+		}
+	})
+	b.Run("rightClickOneSelected", func(b *testing.B) {
+		tb, tt := setup(b)
+		tb.ContextMenu(MenuItem{Text: "Open"})
+		label := rows[1].name
+		if err := tt.Click(label); err != nil { // one row selected
+			b.Fatal(err)
+		}
+		tt.Frame()
+		b.ResetTimer()
+		for range b.N {
+			if err := tt.RightClick(label); err != nil {
+				b.Fatal(err)
+			}
+			tt.CloseMenu()
+		}
+	})
 	b.Run("SetChecked", func(b *testing.B) {
 		tb, tt := setup(b)
 		b.ResetTimer()
@@ -599,6 +644,166 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 			tt.Frame()
 		}
 	})
+}
+
+func TestSetterBetweenFramesSurvivesAUserClick(t *testing.T) {
+	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{2}, true) // no frame yet
+	click(t, tt, "Check a")       // the user checks row 1
+	tt.Frame()
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 2}) {
+		t.Fatalf("checked %v, want [1 2]: the setter's change was lost", got)
+	}
+}
+
+// The Tester builds a frame before it applies input, so a setter between a
+// frame and its input is made by hand: ui replaces the set (check all)
+// while a setter's key is not in the frame shown yet.
+func TestCommitKeepsASetterPendingWhenUIReplacesTheSet(t *testing.T) {
+	tb := &DataGridViewWidget[acct, int]{}
+	var s keys[int]
+	for k := 100; k < 200; k++ { // enough that one key is not "dirty"
+		s.set(k, true)
+	}
+	s.bind()
+	s.set(3, true)  // a setter after the frame, before the input
+	s.shown.Clear() // the user's check all: ui replaces the set
+	s.shown.Add(1)
+	s.shown.Add(2)
+	tb.commit(&s)
+	if !s.value.Has(3) || s.value.Len() != 3 {
+		t.Fatalf("value %v, want [1 2 3]: the setter's key was lost", slices.Sorted(s.value.All()))
+	}
+	s.bind()
+	if !s.shown.Has(3) || s.shown.Len() != 3 {
+		t.Fatalf("shown %v, want [1 2 3]", slices.Sorted(s.shown.All()))
+	}
+}
+
+// The header's checkbox acts on the frame ui shows; goroutines may change
+// the table between that frame and the click, which these drive by hand.
+func TestCheckRowsUncheckLeavesRowsNotInTheFrame(t *testing.T) {
+	tb := testTable(acct{1, "ann", 0}, acct{2, "bob", 0}, acct{3, "cat", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{1, 2, 3}, true)
+	tb.Search("Name", "ann")
+	tt.Frame() // the frame shows ann alone
+	tb.Search("Name", "")
+	if !tb.checkRows(0, 0, false) { // the user unchecks Check all over 1 row
+		t.Fatal("no change")
+	}
+	if got := tb.Checked(); !slices.Equal(got, []int{2, 3}) {
+		t.Fatalf("Checked %v, want [2 3]: bob and cat were not in the frame", got)
+	}
+}
+
+func TestCheckRowsUncheckKeepsARowAddedSinceTheFrame(t *testing.T) {
+	tb := testTable(acct{1, "ann", 0}, acct{2, "bob", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{1, 2}, true)
+	tt.Frame() // two rows
+	tb.AddRow(acct{3, "cat", 0})
+	tb.SetChecked([]int{3}, true)
+	tb.checkRows(0, 1, false)
+	if got := tb.Checked(); !slices.Equal(got, []int{3}) {
+		t.Fatalf("Checked %v, want [3]: cat was not in the frame", got)
+	}
+}
+
+func TestCheckRowsFewKeysDoNotCopyTheSet(t *testing.T) {
+	tb := testTable(manyAccts(100)...).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39}, true)
+	tt.Frame()
+	tb.checkRows(60, 62, true)
+	if tb.checked.dirty {
+		t.Fatal("checking 3 rows of 43 marked the whole set dirty")
+	}
+	if tb.checked.value.Len() != 43 {
+		t.Fatalf("%d checked", tb.checked.value.Len())
+	}
+}
+
+func TestDoubleToggleEndsWhereUIIs(t *testing.T) {
+	tb := testTable(acct{1, "a", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	click(t, tt, "Check a")
+	click(t, tt, "Check a")
+	if tb.IsChecked(1) {
+		t.Fatal("checked after two clicks")
+	}
+}
+
+func TestCheckedFewKeysKeepTheOrderShown(t *testing.T) {
+	tb := testTable(manyAccts(40)...).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{3, 30, 7, 99}, true) // 99 is no row
+	if got := tb.Checked(); !slices.Equal(got, []int{3, 7, 30}) {
+		t.Fatalf("Checked %v, want [3 7 30]", got)
+	}
+	click(t, tt, "Name")
+	click(t, tt, "Name") // descending
+	if got := tb.Checked(); !slices.Equal(got, []int{30, 7, 3}) {
+		t.Fatalf("Checked %v, want [30 7 3]", got)
+	}
+	tb.Search("Name", "acct00000") // shows 0 to 9
+	if got := tb.Checked(); !slices.Equal(got, []int{7, 3}) {
+		t.Fatalf("Checked %v with a search, want [7 3]: 30 is hidden", got)
+	}
+	tb.DeleteRows(7)
+	if got := tb.Checked(); !slices.Equal(got, []int{3}) {
+		t.Fatalf("Checked %v after deleting 7, want [3]", got)
+	}
+}
+
+// BenchmarkTableSelectedLateKey asks for the one key checked of a million
+// rows, the last in the order shown (sorted by name, descending).
+func BenchmarkTableSelectedLateKey(b *testing.B) {
+	tb := testTable(manyAccts(1_000_000)...).CheckboxColumn()
+	tt := ui.NewTester(content(tb), 1280, 800)
+	for range 2 {
+		if err := tt.Click("Name"); err != nil { // ascending, then descending
+			b.Fatal(err)
+		}
+		tt.Frame()
+	}
+	tb.SetChecked([]int{0}, true) // acct000000
+	tt.Frame()
+	if got := tb.Checked(); len(got) != 1 {
+		b.Fatalf("Checked %v", got)
+	}
+	b.ResetTimer()
+	for range b.N {
+		if len(tb.Checked()) != 1 {
+			b.Fatal("lost the key")
+		}
+	}
+}
+
+// With few rows chosen of many, the rows come from the selection's keys, not
+// from asking about every row, and are the same.
+func TestTableCopiesFewSelectedRowsOfManyInShownOrder(t *testing.T) {
+	tb := testTable(manyAccts(40)...)
+	tt := tester(t, tb)
+	click(t, tt, "Name")
+	click(t, tt, "Name") // descending
+	click(t, tt, "acct000035")
+	if err := tt.ClickWith(ui.Cmd, "acct000039"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if rows, ok := tb.chosenRows(); !ok || !slices.Equal(rows, []int{0, 4}) {
+		t.Fatalf("chosenRows %v %v, want [0 4] from the keys", rows, ok)
+	}
+	tt.Command("copy")
+	if got := tt.Clipboard(); got != "acct000039\t1\nacct000035\t5" {
+		t.Fatalf("copied %q", got)
+	}
+	tb.DeleteRows(30) // rows went since the frame: ui's rows are the frame's
+	if rows, ok := tb.chosenRows(); ok {
+		t.Fatalf("chosenRows %v from a frame whose rows went", rows)
+	}
 }
 
 func TestTableInputLandsOnTheRowsOfTheFrameShown(t *testing.T) {

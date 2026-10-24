@@ -72,21 +72,35 @@ sorting all of them again takes a dozen milliseconds, below one frame at
 
 ### Checking rows of a million
 
-`BenchmarkTableCheckedLarge` (in `ui/widget`) checks or unchecks one row of
-a widget `DataGridView` of 1,000,000 rows, all checked: by a click on its checkbox,
-and by `SetChecked`, then a frame. A click copies the checks ui changed
-back to the table in one step (`Selection.CopyFrom`); `SetChecked` hands ui
-only the keys it changed; and the header's checkbox takes the count the
-table keeps (`ListState.CheckedCount`) rather than counting a million rows.
-Medians of six 300 ms samples, `CGO_ENABLED=0 GOMAXPROCS=1`, Apple M1 Pro,
-Go 1.27.2:
+`BenchmarkTableCheckedLarge` (in `ui/widget`) works on a widget `DataGridView`
+of 1,000,000 rows, all checked, as the user does: a click on a row's checkbox,
+a Cmd-click on a row with all rows selected, a right-click on the one row
+selected (with a context menu), and the header's "Check all"; and by
+`SetChecked`, then a frame. `BenchmarkTableSelectedLateKey` asks for the one
+key checked, the last in the order shown.
 
-| Operation, 1,000,000 rows checked | Before | After | Allocations before, after |
+A selection records the keys that changed (`Selection.TakeChanges`), so a
+click hands the table only those, not a copy of a million keys: a plain
+click, which replaces the whole set, still copies it. `SetChecked` hands ui
+only the keys it changed; the header's checkbox takes the count the table
+keeps (`ListState.CheckedCount`) and checks the rows in one call
+(`ListState.CheckRows`); the rows chosen for a right-click or Copy come from
+the chosen keys (`ListState.RowsOf`); and `Selected` and `Checked` of few
+keys place them with an inverse of the view's order (4 MB at a million rows,
+built on first use after the order changes) instead of walking the table.
+Medians of ten runs, Apple M1 Pro, Go 1.27.2:
+
+| Operation, 1,000,000 rows | Before | After | Bytes before, after |
 |---|---:|---:|---:|
-| A click on a row's checkbox | 143.5 ms | 5.3 ms | 1,000,800, 5,150 |
-| `SetChecked` of one row, then a frame | 137.3 ms | 0.16 ms | 1,000,120, 332 |
+| A click on a row's checkbox | 4.02 ms | 0.65 ms | 37.9 MB, 34 KB |
+| Cmd-click, all rows selected | 3.93 ms | 0.45 ms | 37.8 MB, 35 KB |
+| Right-click, one row selected | 17.8 ms | 0.35 ms | 8.0 MB, 29 KB |
+| "Check all" | 157 ms | 65 ms | 45.9 MB, 37.9 MB |
+| `Checked()`, one key, the last shown | 4.2 ms | 0.1 µs | 8 B, 24 B |
+| `SetChecked` of one row, then a frame | 174 µs | 172 µs | 10.2 KB, 10.3 KB |
 
-A click still copies the million keys once (about 38 MB, a map clone).
+"Check all" still copies the checks once for the next frame, as it changes a
+million of them.
 
 ## Retained memory
 
