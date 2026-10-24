@@ -719,6 +719,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `MaskedTextBox(mask)`: an input that takes what a mask allows; see [MaskedTextBox](widget/maskedtextbox.md).
 - `ErrorProvider()`, `OnValidating`, `Form.ValidateChildren`: an error mark on a control and an explicit validation; see [ErrorProvider](widget/errorprovider.md).
 - `&` mnemonics in a `Button` and the labels of `Fields` (Alt+key; off on macOS); see [Mnemonics](widget/mnemonics.md).
+- `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
