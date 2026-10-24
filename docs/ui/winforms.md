@@ -29,7 +29,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | Panel | done | `VBox`, `HBox`, `Card`, `ScrollPanel` (AutoScroll) |
 | PictureBox | done | `PictureBox` |
 | ProgressBar | done | `ProgressBar` |
-| PropertyGrid | **pending** | held for the owner's call (likely later or dropped for fhtool) |
+| PropertyGrid | dropped (Phase 2) | fhtool and the target apps edit settings in dialogs built from `Fields` and `Bind`; a reflection-driven grid can come later on request |
 | RadioButton | done | `RadioButton`, `RadioGroup` |
 | RichTextBox | done | [RichTextBox](widget/richtextbox.md) |
 | SplitContainer | done | [SplitContainer](widget/split-container.md) |
@@ -37,7 +37,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | TableLayoutPanel | done | `Grid`, `Fields` |
 | TextBox | done | `TextBox`, `MultilineTextBox` |
 | ToolStrip | done | `ToolStrip` |
-| ToolStripContainer | dropped | docking toolbars to the four edges; a `Form` has one tool strip and a status strip, and docking is a larger piece of its own (below) |
+| ToolStripContainer | dropped (Phase 2) | docking toolbars to the four edges is the docking subsystem (below); a `Form` has one tool strip and a status strip |
 | TrackBar | done | [TrackBar](widget/trackbar.md) |
 | TreeView | done | [TreeView](widget/treeview.md) |
 | WebBrowser | done | [WebBrowser](widget/webbrowser.md) |
@@ -48,7 +48,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | Chart | done | [Chart](widget/chart.md) (a Windows Forms Chart control exists in .NET Framework 4) |
 | ElementHost, WPF interop | dropped | no WPF |
 | UserControl | done | `Custom`: [Controls of your own](widget.md#controls-of-your-own) |
-| MDI parent and children | **pending** | document tabs stand in; a design of its own (Docking, below) |
+| MDI parent and children | dropped | WinForms itself steers away from MDI; `TabControl` and separate `Form`s cover it |
 
 ## Components
 
@@ -65,7 +65,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | MessageBox | done | `Alert`, `Confirm`, `InputString`, `InputSelect` |
 | NotifyIcon | done | `NotifyIcon` |
 | OpenFileDialog, SaveFileDialog | done | `OpenFile`, `OpenFiles`, `SaveFile` |
-| PageSetupDialog, PrintDialog, PrintDocument, PrintPreviewControl, PrintPreviewDialog | **pending** | Printing, a design of its own |
+| PageSetupDialog, PrintDialog, PrintDocument, PrintPreviewControl, PrintPreviewDialog | dropped (Phase 2) | fhtool doesn't print; native print APIs would be engine work (Track 3) if an app needs them |
 | StatusStrip | done | `StatusStrip` |
 | Timer | done | [Timer](widget/timer.md) |
 | ToolTip | done | `SetTooltip` on any control |
@@ -78,11 +78,16 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 
 ## Pieces with a design of their own
 
-- **Docking** (MDI, `ToolStripContainer`, dockable panes): pending, not
-  started.
-- **Printing** (`PrintDocument`, preview, page setup): pending, not started.
+- **Docking** (dockable panes, `ToolStripContainer`): dropped for Phase 2. It is
+  a subsystem of its own; `SplitContainer` and `TabControl` cover fixed
+  layouts. Revisit on request.
+- **Printing** (`PrintDocument`, preview, page setup): dropped for Phase 2.
+  fhtool doesn't print; native print APIs would be engine work (Track 3) if an
+  app needs them.
 
 ## Open rows
 
-ListView (#132), PropertyGrid, ImageList, Label mnemonics, MDI/Docking and
-Printing. Everything else is done or dropped with the reason above.
+The Phase 2 exit rows left are ListView ([#132](https://github.com/lang315/mygo/pull/132),
+in review), ImageList (`widget.ImageList`, in progress) and the `Label`
+mnemonic (a `Label` with `&` that focuses the next control, a small
+follow-up). Everything else is done, or dropped with the reason above.
