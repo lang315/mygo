@@ -231,6 +231,16 @@ func (it *MenuItem) Disabled(d bool) *MenuItem {
 	return it
 }
 
+// Destructive marks the item as one that destroys, as Delete, when d is
+// true. A host that draws its menu items itself (Windows 11, the web) shows
+// it in a danger color and semibold; native menus show a normal item.
+func (it *MenuItem) Destructive(d bool) *MenuItem {
+	if it.p != nil {
+		it.p.Destructive = d
+	}
+	return it
+}
+
 // Checked shows a check mark by the item when on is true, as for a setting
 // that choosing the item toggles.
 func (it *MenuItem) Checked(on bool) *MenuItem {

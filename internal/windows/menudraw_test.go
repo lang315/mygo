@@ -157,3 +157,118 @@ func TestDrawnItemHasNoMenuBitmap(t *testing.T) {
 		}
 	}
 }
+
+// A destructive item's text is the danger color, readable on the highlight
+// and greyed out when disabled; the system's colors win in high contrast,
+// which has no danger color. Its label is the semibold font where there is
+// one.
+func TestDestructiveMenuItemLook(t *testing.T) {
+	light := menuPalette{back: 0xF9F9F9, plate: 0xF0F0F0, text: 0x1A1A1A, plateText: 0x1A1A1A, disabled: 0x787878, danger: 0x1C2BC4}
+	dark := menuPalette{back: 0x2B2B2B, plate: 0x383838, text: 0xFFFFFF, plateText: 0xFFFFFF, disabled: 0x787878, danger: 0xA499FF}
+	highContrast := menuPalette{back: 0, plate: 0xFF0000, text: 0xFFFFFF, plateText: 0x000000, disabled: 0x808080}
+	for _, c := range []struct {
+		name                            string
+		p                               menuPalette
+		selected, disabled, destructive bool
+		want                            uint32
+	}{
+		{"plain", light, false, false, false, 0x1A1A1A},
+		{"plain highlighted", light, true, false, false, 0x1A1A1A},
+		{"danger", light, false, false, true, 0x1C2BC4},
+		{"danger highlighted stays danger", light, true, false, true, 0x1C2BC4},
+		{"danger in the dark", dark, false, false, true, 0xA499FF},
+		{"danger disabled is grey", light, false, true, true, 0x787878},
+		{"danger disabled and highlighted is grey", light, true, true, true, 0x787878},
+		{"plain disabled", light, false, true, false, 0x787878},
+		{"high contrast keeps the system's text", highContrast, false, false, true, 0xFFFFFF},
+		{"high contrast keeps the highlight's text", highContrast, true, false, true, 0x000000},
+	} {
+		if got := c.p.textColor(c.selected, c.disabled, c.destructive); got != c.want {
+			t.Errorf("%s: color %#x, want %#x", c.name, got, c.want)
+		}
+	}
+	f := menuFonts{text: 1, bold: 2}
+	if got := (&menuLook{destructive: true}).labelFont(f); got != 2 {
+		t.Errorf("a destructive label's font is %d, want the semibold one", got)
+	}
+	if got := (&menuLook{}).labelFont(f); got != 1 {
+		t.Errorf("a plain label's font is %d, want the text font", got)
+	}
+	if got := (&menuLook{destructive: true}).labelFont(menuFonts{text: 1}); got != 1 {
+		t.Errorf("without a semibold font a destructive label's font is %d, want the text font", got)
+	}
+}
+
+// accelSpan draws an item and returns how far from its right edge the
+// leftmost pixel of its accelerator is: the accelerator is the cluster of
+// ink at the right, set apart from the label by at least menuAccelGap.
+func accelSpan(b *Backend, l *menuLook, dpi int) int32 {
+	var mis measureItemStruct
+	b.measureItem(0, l, &mis)
+	width, height := int32(mis.ItemWidth), int32(mis.ItemHeight)
+	img := newBitmap(0, width, height)
+	defer img.free()
+	d := drawItemStruct{CtlType: odtMenu, DC: img.dc, Item: rect{0, 0, width, height}}
+	b.drawItem(0, l, &d)
+	back := img.px[0]
+	inked := func(x int32) bool {
+		for y := range height {
+			if img.px[y*width+x] != back {
+				return true
+			}
+		}
+		return false
+	}
+	x := width - 1
+	for x >= 0 && !inked(x) {
+		x--
+	}
+	left, blank := x, int32(0)
+	for ; x >= 0 && blank < toPx(menuAccelGap/2, dpi); x-- {
+		if inked(x) {
+			left, blank = x, 0
+		} else {
+			blank++
+		}
+	}
+	return width - left
+}
+
+// measureItem measures the accelerator in the regular font, so drawItem
+// must draw it in that, not in the semibold font of a destructive label:
+// it then sits where a plain item's does.
+func TestDestructiveItemDrawsItsAcceleratorInTheRegularFont(t *testing.T) {
+	if !fluentMenus() {
+		t.Skip("Windows draws the items before Windows 11")
+	}
+	b := &Backend{menus: newMenuTable()}
+	dpi := dpiOf(0)
+	menu := drawnMenu(t, b, dpi,
+		&platform.MenuItem{ID: 1, Label: "Delete", Accelerator: "Ctrl+Shift+D", Enabled: true, Visible: true},
+		&platform.MenuItem{ID: 2, Label: "Remove", Accelerator: "Ctrl+Shift+D", Enabled: true, Visible: true, Destructive: true})
+	plain, destructive := accelSpan(b, menu["Delete"], dpi), accelSpan(b, menu["Remove"], dpi)
+	if plain == 0 || destructive != plain {
+		t.Errorf("the accelerator of a destructive item spans %d pixels from the right edge, a plain item's %d: want the same regular font", destructive, plain)
+	}
+}
+
+// SetDestructive on an item of an installed menu reaches the look the
+// window draws it by, and back.
+func TestUpdateMenuItemChangesDestructive(t *testing.T) {
+	if !fluentMenus() {
+		t.Skip("Windows draws the items before Windows 11")
+	}
+	b := &Backend{menus: newMenuTable()}
+	look := drawnMenu(t, b, dpiOf(0), &platform.MenuItem{ID: 7, Label: "Delete", Enabled: true, Visible: true})["Delete"]
+	if look.destructive {
+		t.Fatal("a plain item is destructive")
+	}
+	b.UpdateMenuItem(&platform.MenuItem{ID: 7, Label: "Delete", Enabled: true, Visible: true, Destructive: true})
+	if !look.destructive {
+		t.Error("UpdateMenuItem(Destructive: true) left the look plain")
+	}
+	b.UpdateMenuItem(&platform.MenuItem{ID: 7, Label: "Delete", Enabled: true, Visible: true})
+	if look.destructive {
+		t.Error("UpdateMenuItem(Destructive: false) left the look destructive")
+	}
+}

@@ -95,6 +95,14 @@ func (s *MenuStripItem) SetEnabled(on bool) *MenuStripItem { s.it.SetEnabled(on)
 // Enabled reports whether the item is enabled.
 func (s *MenuStripItem) Enabled() bool { return s.it.IsEnabled() }
 
+// SetDestructive marks the item as one that destroys something, as
+// MenuItem.Destructive does; where mygo draws the menu it shows in the
+// danger color.
+func (s *MenuStripItem) SetDestructive(on bool) *MenuStripItem { s.it.SetDestructive(on); return s }
+
+// Destructive reports whether the item is marked destructive.
+func (s *MenuStripItem) Destructive() bool { return s.it.IsDestructive() }
+
 // SetVisible shows or hides the item.
 func (s *MenuStripItem) SetVisible(on bool) *MenuStripItem { s.it.SetVisible(on); return s }
 

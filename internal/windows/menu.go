@@ -153,7 +153,7 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 				n, _, _ := procGetMenuItemCount.Call(h)
 				setItemBitmap(h, int(int32(n))-1, bmp)
 			}
-			look(&menuLook{label: it.Label, submenu: true, icon: bmp})
+			look(&menuLook{label: it.Label, submenu: true, icon: bmp, destructive: it.Destructive})
 			continue
 		}
 		if it.Checked {
@@ -171,7 +171,7 @@ func (b *Backend) buildMenu(m *platform.Menu, bar bool, owner int, accels map[ac
 		}
 		procAppendMenuW.Call(h, flags, uintptr(cmd), uintptr(unsafe.Pointer(u16(label))))
 		bmp := bitmap(it)
-		e.look = look(&menuLook{label: it.Label, accel: e.accel, radio: e.radio, icon: bmp})
+		e.look = look(&menuLook{label: it.Label, accel: e.accel, radio: e.radio, icon: bmp, destructive: it.Destructive})
 		if e.radio && e.look == nil || bmp != 0 && !drawn {
 			setItemInfo(h, cmd, label, it.Enabled, it.Checked, e.radio, bmp, e.look != nil)
 		}
@@ -354,6 +354,7 @@ func (b *Backend) UpdateMenuItem(it *platform.MenuItem) {
 		}
 		if e.look != nil {
 			e.look.label = it.Label
+			e.look.destructive = it.Destructive
 		}
 		setItemInfo(e.menu, cmd, label, it.Enabled, it.Checked, e.radio, 0, e.look != nil)
 	}

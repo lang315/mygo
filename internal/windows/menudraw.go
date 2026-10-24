@@ -96,6 +96,18 @@ type menuLook struct {
 	// first and last are whether the item is the menu's first or last,
 	// which has the menu's padding above or below it.
 	first, last bool
+	// destructive is whether the item destroys: its label is semibold and
+	// in the danger color.
+	destructive bool
+}
+
+// labelFont returns the font of the item's label: the semibold one for a
+// destructive item, when there is one.
+func (l *menuLook) labelFont(f menuFonts) uintptr {
+	if l.destructive && f.bold != 0 {
+		return f.bold
+	}
+	return f.text
 }
 
 // padding returns the room above and below the item: the menu's padding,
@@ -155,6 +167,10 @@ type measureItemStruct struct {
 // contrast theme's are the system's.
 type menuPalette struct {
 	back, plate, text, plateText, secondary, disabled, line uint32
+	// danger is the text of a destructive item, readable on the menu's
+	// background and on its highlight; 0 in high contrast, which has the
+	// system's colors only.
+	danger uint32
 	// border is the menu's outline, which DWM draws around the rounded
 	// window, DWMWA_COLOR_DEFAULT for its own.
 	border uint32
@@ -182,10 +198,27 @@ func (b *Backend) menuPalette() menuPalette {
 			border: dwmColorDefault}
 	case b.isDark():
 		return menuPalette{back: 0x2B2B2B, plate: 0x383838, text: 0xFFFFFF, plateText: 0xFFFFFF,
-			secondary: 0xCFCFCF, disabled: 0x787878, line: 0x3D3D3D, border: 0x3E3E3E}
+			secondary: 0xCFCFCF, disabled: 0x787878, line: 0x3D3D3D, border: 0x3E3E3E,
+			danger: 0xA499FF} // #FF99A4, WinUI's critical in the dark theme
 	}
 	return menuPalette{back: 0xF9F9F9, plate: 0xF0F0F0, text: 0x1A1A1A, plateText: 0x1A1A1A,
-		secondary: 0x5F5F5F, disabled: 0x9F9F9F, line: 0xEAEAEA, border: 0xE5E5E5}
+		secondary: 0x5F5F5F, disabled: 0x9F9F9F, line: 0xEAEAEA, border: 0xE5E5E5,
+		danger: 0x1C2BC4} // #C42B1C, WinUI's critical in the light theme
+}
+
+// textColor returns the color of an item's text: grey when it is disabled,
+// the danger color when it destroys (also on its highlight, where it stays
+// readable), else the menu's text, or the highlight's on the highlight.
+func (p *menuPalette) textColor(selected, disabled, destructive bool) uint32 {
+	switch {
+	case disabled:
+		return p.disabled
+	case destructive && p.danger != 0:
+		return p.danger
+	case selected:
+		return p.plateText
+	}
+	return p.text
 }
 
 // menuBrush returns a brush of a color, made once.
@@ -205,7 +238,8 @@ func (b *Backend) menuBrush(color uint32) uintptr {
 // glyphs of the marks.
 type menuFonts struct {
 	text, glyphs uintptr
-	fluent       bool // the glyphs are Segoe Fluent Icons'
+	bold         uintptr // the text, semibold: for destructive items
+	fluent       bool    // the glyphs are Segoe Fluent Icons'
 }
 
 // logFont is LOGFONTW.
@@ -245,6 +279,7 @@ func (b *Backend) menuFace(dpi int) menuFonts {
 	}
 	lf.Height = int32(math.Round(float64(lf.Height) * 14 / 12))
 	f := menuFonts{}
+	face := lf // the text font's description, for its semibold twin
 	if string(utf16Decode(lf.FaceName[:])) == "Segoe UI" {
 		v := lf
 		v.FaceName = [32]uint16{}
@@ -253,11 +288,15 @@ func (b *Backend) menuFace(dpi int) menuFonts {
 		if !fontFace(f.text, "Segoe UI Variable Text") {
 			procDeleteObject.Call(f.text)
 			f.text = 0
+		} else {
+			face = v
 		}
 	}
 	if f.text == 0 {
 		f.text, _, _ = procCreateFontIndirectW.Call(uintptr(unsafe.Pointer(&lf)))
 	}
+	face.Weight = 600
+	f.bold, _, _ = procCreateFontIndirectW.Call(uintptr(unsafe.Pointer(&face)))
 	size := -toPx(menuGlyphSize, dpi)
 	f.glyphs, f.fluent = createFont(size, "Segoe Fluent Icons"), true
 	if !fontFace(f.glyphs, "Segoe Fluent Icons") {
@@ -277,6 +316,7 @@ func (b *Backend) dropMenuFonts() {
 	for _, f := range b.menuFonts {
 		procDeleteObject.Call(f.text)
 		procDeleteObject.Call(f.glyphs)
+		procDeleteObject.Call(f.bold)
 	}
 	b.menuFonts = nil
 }
@@ -367,7 +407,7 @@ func (b *Backend) measureItem(hwnd uintptr, l *menuLook, mis *measureItemStruct)
 	f := b.menuFace(dpi)
 	dc, _, _ := procGetDC.Call(0)
 	defer procReleaseDC.Call(0, dc)
-	w := toPx(menuInset+menuPadding, dpi)*2 + textWidth(dc, f.text, l.label)
+	w := toPx(menuInset+menuPadding, dpi)*2 + textWidth(dc, l.labelFont(f), l.label)
 	if l.column {
 		w += toPx(menuMarkColumn, dpi)
 	}
@@ -407,15 +447,13 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 			fillColor(dc, &line, p.line)
 			return
 		}
-		fore, secondary := p.text, p.secondary
-		if selected {
-			fore = p.plateText
-			if highContrastOn() {
-				secondary = fore
-			}
+		disabled := state&(odsGrayed|odsDisabled) != 0
+		fore, secondary := p.textColor(selected, disabled, l.destructive), p.secondary
+		if selected && highContrastOn() {
+			secondary = p.plateText
 		}
-		if state&(odsGrayed|odsDisabled) != 0 {
-			fore, secondary = p.disabled, p.disabled
+		if disabled {
+			secondary = p.disabled
 		}
 		f := b.menuFace(dpi)
 		procSetBkMode.Call(dc, 1) // TRANSPARENT
@@ -454,7 +492,7 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 			}
 			glyph(g, rect{right - toPx(menuChevron, dpi), r.Top, right, r.Bottom}, fore)
 		}
-		old, _, _ := procSelectObject.Call(dc, f.text)
+		old, _, _ := procSelectObject.Call(dc, l.labelFont(f))
 		defer procSelectObject.Call(dc, old)
 		flags := uintptr(dtSingleLine | dtVCenter)
 		if state&odsNoAccel != 0 {
@@ -465,6 +503,8 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 		s := u16(l.label)
 		procDrawTextW.Call(dc, uintptr(unsafe.Pointer(s)), ^uintptr(0), uintptr(unsafe.Pointer(&text)), flags)
 		if l.accel != "" {
+			// measureItem measures it regular, not in the label's font.
+			procSelectObject.Call(dc, f.text)
 			procSetTextColor.Call(dc, uintptr(secondary))
 			s := u16(l.accel)
 			procDrawTextW.Call(dc, uintptr(unsafe.Pointer(s)), ^uintptr(0), uintptr(unsafe.Pointer(&text)), dtSingleLine|dtVCenter|dtRight|dtNoPrefix)

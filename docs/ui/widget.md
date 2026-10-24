@@ -175,6 +175,22 @@ on macOS they do.
   Windows. On macOS the menu bar is the app's: set it with
   `mygo.App.SetMenu`.
 
+**Destructive items.** `MenuItem{Text: "Delete 3 accounts", Destructive: true,
+OnClick: …}` marks an item that destroys. The native menus of the system have
+no role for it (AppKit's, GTK's and Win32's have none, as UIKit's does), so
+only where mygo draws the menu itself does the item look different:
+
+| Platform | What the item shows |
+|---|---|
+| Windows 11 (popup menus, and the menus under a menu bar's items) | The danger color, `#C42B1C` (`#FF99A4` in the dark theme), and semibold (weight 600). It keeps the danger color when highlighted, and is grey, still semibold, when disabled. In high contrast, which has the system's colors only, it is semibold in the text color. |
+| Windows 10, and the menu bar itself on Windows | A normal item: these are Win32's own menus. |
+| macOS | A normal item: `NSMenu` draws it. |
+| Linux | A normal item: GTK draws it. |
+| Web | The danger color (`#c42b1c`, `#ff99a4` in a dark page) and semibold; white on a red highlight; the text color, faded, when disabled. |
+
+`mygo.MenuItem` has the same `Destructive` field, and `SetDestructive` changes
+it while the menu shows; so does a `MenuStripItem`'s `SetDestructive`.
+
 Menus take their items, not a function building them, because `ui` builds
 menus while it draws, under the package's lock: set the items again when
 they change.
@@ -453,6 +469,7 @@ name := widget.Bind(widget.TextBox(),
 | `CheckBox` | `bool` | `Bind` |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
+| `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options and makes it a plain choice, not `Editable`; `set` is called for yes and no only |
 
 - The control takes `get()`'s value at once. After each edit of the user,
   `set(v)` runs with the new value on the event goroutine, after the
@@ -537,8 +554,35 @@ lock: they read the row and call no widget method.
   event goroutine without the lock, and may query a database; the menu opens
   when it returns, unless the user pressed a key or a button, or right-clicked
   again, meanwhile; it wins over `ContextMenu`),
-  `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it.
-  Cmd/Ctrl+C copies the selected rows, a line each, cells apart by tabs.
+  `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it (see
+  below).
+  Cmd/Ctrl+C and the Edit menu's Copy copy the selected rows, a line each,
+  cells apart by tabs; `CopyFunc(fn)` replaces that text with what `fn` makes
+  of the keys of the selected rows, in the order shown, for both, so they
+  agree. `fn` runs on the main thread, off the lock: it may call the table's
+  getters, but should be quick.
+
+  ```go
+  table.CopyFunc(func(ids []string) string { return strings.Join(ids, "\n") })
+  ```
+
+**Saving the columns' widths.** `OnColumnsChange` runs once a frame while the
+user drags a column, so it fires dozens of times for one resize: an app that
+writes the layout on each call writes dozens of times. Save when the user
+has stopped, by debouncing. Handlers run one at a time on the event
+goroutine, so the timer needs no lock:
+
+```go
+var saveTimer *time.Timer
+
+table.SetColumnsLayout(loadLayout()). // what the last run saved
+	OnColumnsChange(func(l ui.TableLayout) {
+		if saveTimer != nil {
+			saveTimer.Stop()
+		}
+		saveTimer = time.AfterFunc(500*time.Millisecond, func() { saveLayout(l) })
+	})
+```
 
 A table shows in one window at a time. It fills the room its parent
 gives it and scrolls; in a box or a `TabControl` page, `Expand` the boxes and

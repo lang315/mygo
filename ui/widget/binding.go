@@ -78,6 +78,36 @@ func BindInt(c *NumericUpDownWidget, get func() int, set func(int)) *NumericUpDo
 	return Bind(c, func() float64 { return float64(get()) }, func(v float64) { set(int(math.Round(v))) })
 }
 
+// BindBool binds a ComboBox to a bool the source keeps, as a setting shown
+// as "Yes" and "No": the combo gets the two options, yes first (SetOptions
+// replaces the ones it had outside sections), and is on yes while get
+// returns true. Their values must differ. set gets true after the user
+// chooses yes, and false after no, with Bind's rules: the choice is taken as
+// it is made, a program setter and Reload do not call set, and the last
+// binding wins. The combo is made a plain choice, not Editable, since it
+// holds a bool; if it is made Editable after, or has options in sections,
+// set is called only for yes and no, never for other text or options.
+//
+//	widget.BindBool(combo, widget.Option{Value: "1", Text: "Có"}, widget.Option{Value: "0", Text: "Không"},
+//		func() bool { return config.Bool("sync") }, func(v bool) { config.SetBool("sync", v) })
+func BindBool(c *ComboBoxWidget, yes, no Option, get func() bool, set func(bool)) *ComboBoxWidget {
+	c.change(func() { c.editable, c.bindsText = false, false })
+	c.SetOptions(yes, no)
+	return Bind(c, func() string {
+		if get() {
+			return yes.Value
+		}
+		return no.Value
+	}, func(v string) {
+		switch v {
+		case yes.Value:
+			set(true)
+		case no.Value:
+			set(false)
+		}
+	})
+}
+
 // Reload gives c the value of its binding's source again, as Bind did, for
 // a source that changed elsewhere. It does nothing for a control that is
 // not bound, and does not call set.

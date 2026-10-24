@@ -111,7 +111,13 @@ type MenuItem struct {
 	// IconTemplate makes Icon a template image on macOS: the system
 	// colors its shape as the menu's text. Elsewhere it does nothing.
 	IconTemplate bool
-	Submenu      []*MenuItem
+	// Destructive marks an item that destroys, as Delete. Where mygo draws
+	// the item itself (the popup menus and menu bars of Windows 11, and the
+	// web's menus) it shows in a danger color and semibold; native menus
+	// (AppKit, GTK, and Win32's on Windows 10) show a normal item, since they
+	// have no role for it.
+	Destructive bool
+	Submenu     []*MenuItem
 	// Click is called on the main thread when the item is chosen. On Linux
 	// and Windows, win is the window whose menu bar or context menu was
 	// chosen. Other menus use the focused window, which may be nil.
@@ -267,6 +273,12 @@ func (it *MenuItem) IsChecked() bool { return it.get(func() bool { return it.Che
 
 // SetLabel changes the label of the item.
 func (it *MenuItem) SetLabel(label string) { it.update(func() { it.Label = label }) }
+
+// SetDestructive marks or unmarks the item as one that destroys.
+func (it *MenuItem) SetDestructive(v bool) { it.update(func() { it.Destructive = v }) }
+
+// IsDestructive reports whether the item is marked as destructive.
+func (it *MenuItem) IsDestructive() bool { return it.get(func() bool { return it.Destructive }) }
 
 // SetAccelerator changes the keyboard shortcut of the item.
 func (it *MenuItem) SetAccelerator(acc string) { it.update(func() { it.Accelerator = acc }) }
@@ -434,6 +446,7 @@ func (it *MenuItem) snapshotLocked() *platform.MenuItem {
 		ToolTip:     it.ToolTip,
 		Icon:        it.Icon,
 		Template:    it.IconTemplate,
+		Destructive: it.Destructive,
 	}
 	switch it.Type {
 	case MenuItemSeparator:
