@@ -48,9 +48,9 @@ A `*Node` looks itself up again by identity in the last frame each time, so it
 follows what the app did to it. Identities of the parts of a widget are those
 of their places, so the node must also still have the role and the label it was
 found with; otherwise the test fails with `no longer shown (now button "C")`.
-After an action of its own, a node takes the label the element shows (a
-"Start" button that became "Stop"). An action settles afterwards (see below)
-and returns the node.
+A button that renames itself is found again: `Label()` reads what the element
+shows now, and any other use of the old node fails. An action settles
+afterwards (see below) and returns the node.
 
 - `Click()`, `DoubleClick()`, `RightClick()`, `Focus()`, `Type(s)`,
   `Key(mods, key)`.
@@ -67,12 +67,16 @@ shown, hidden, or outside the window (whose current size counts).
 `Focus()` gives the keyboard focus the way assistive technology does, without
 pressing: a button or a check box is not activated by it. `Type(s)` and
 `Key(...)` focus first, so `Find(ByLabel("OK")).Key(0, ui.KeyEnter)` presses OK
-once. A text field takes the focus with the caret at the end of its text, which
-is where `Type` inserts.
+once. An element that cannot take the keyboard focus (a label) fails the test with
+`cannot take the keyboard focus`, instead of typing into whatever had it. A text
+field takes the focus with the caret at the end of its text, which is where
+`Type` inserts.
 
 `tt.Settle()` runs what was posted to the event goroutine and draws a frame,
 again and again until a round posts nothing of its own, so what a handler
-posts runs too; after 100 rounds it fails the test (`still posting`). Call it
+posts runs too; after 100 rounds it fails the test (`still posting`). It
+counts every `Post` of the process, so a program that posts nonstop should
+`Frame` instead. Call it
 for a change made from the test, never from a handler. The embedded `*ui.Tester` (`tt.Tester`) gives
 `Frame`, `Key`, `Texts`, `Advance` and the rest; its `Nodes()` returns a copy
 of the last frame's elements.

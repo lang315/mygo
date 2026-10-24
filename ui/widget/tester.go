@@ -70,18 +70,21 @@ func (t *Tester) SetSize(w, h int) {
 
 // Settle runs what was posted to the event goroutine and draws a frame,
 // again and again until a round posts no work of its own: what a handler
-// posts, or the frame, runs before it returns. After 100 rounds it fails
-// the test, for work that never ends. Every action of a Node settles. Do
-// not call it from a handler, which runs on that goroutine.
+// posts, or the frame, runs before it returns. It waits for a quiet event
+// queue, counting every Post of the process: a program that posts nonstop
+// (a goroutine posting every few microseconds) fails the test after 100
+// rounds with "still posting", and the test should Frame instead. Every
+// action of a Node settles. Do not call it from a handler, which runs on
+// that goroutine.
 func (t *Tester) Settle() {
 	t.tb.Helper()
 	for round := 0; round < 100; round++ {
-		before := posts.Load()
+		before := postCount()
 		done := make(chan struct{})
 		Post(func() { close(done) })
 		<-done
 		t.Frame()
-		if posts.Load() == before+1 { // the marker alone
+		if postCount() == before+1 { // the marker alone
 			return
 		}
 	}
@@ -199,7 +202,8 @@ func (t *Tester) found(q Query) string {
 
 // Node is an element a Tester found. Its reads and actions look it up
 // again by its identity in the last frame, so they follow what the app
-// did to it; the test fails if it is gone.
+// did to it; the test fails if it is gone, or if its role or label are no
+// longer the ones it was found with (Label still reads what it shows).
 type Node struct {
 	t     *Tester
 	id    uint64
@@ -236,18 +240,17 @@ func (n *Node) live() ui.TestNode {
 	return x
 }
 
-// refresh takes the label the element shows now, after an action of the
-// node's own changed it (Start to Stop).
-func (n *Node) refresh() {
-	if x, ok := n.find(); ok && x.Role == n.role {
-		n.label = x.Label
-	}
-}
-
 // Role returns the element's role; Label its name; Value the text of a
 // field or the value of a control that has one.
-func (n *Node) Role() ui.Role   { return n.role }
-func (n *Node) Label() string   { n.t.tb.Helper(); return n.live().Label }
+func (n *Node) Role() ui.Role { return n.role }
+func (n *Node) Label() string {
+	n.t.tb.Helper()
+	x, ok := n.find()
+	if !ok || x.Role != n.role {
+		n.t.fatalf("%s is no longer shown", n)
+	}
+	return x.Label
+}
 func (n *Node) Value() string   { n.t.tb.Helper(); return n.live().Value }
 func (n *Node) Bounds() ui.Rect { n.t.tb.Helper(); return n.live().Bounds }
 func (n *Node) Checked() bool   { n.t.tb.Helper(); return n.live().Checked }
@@ -288,7 +291,6 @@ func (n *Node) Click() *Node {
 	x, y := n.target("click")
 	n.t.ClickAt(x, y)
 	n.t.Settle()
-	n.refresh()
 	return n
 }
 
@@ -299,7 +301,6 @@ func (n *Node) DoubleClick() *Node {
 	n.t.ClickAt(x, y)
 	n.t.ClickAt(x, y)
 	n.t.Settle()
-	n.refresh()
 	return n
 }
 
@@ -309,7 +310,6 @@ func (n *Node) RightClick() *Node {
 	x, y := n.target("right-click")
 	n.t.RightClickAt(x, y)
 	n.t.Settle()
-	n.refresh()
 	return n
 }
 
@@ -324,6 +324,9 @@ func (n *Node) Focus() *Node {
 	if !l.Focused {
 		n.t.FocusNode(n.id)
 		n.t.Settle()
+		if !n.live().Focused {
+			n.t.fatalf("%s cannot take the keyboard focus", n)
+		}
 	}
 	return n
 }
@@ -335,7 +338,6 @@ func (n *Node) Type(s string) *Node {
 	n.Focus()
 	n.t.Tester.Type(s)
 	n.t.Settle()
-	n.refresh()
 	return n
 }
 
@@ -345,7 +347,6 @@ func (n *Node) Key(mods ui.Modifiers, key ui.Key) *Node {
 	n.Focus()
 	n.t.Tester.Key(mods, key)
 	n.t.Settle()
-	n.refresh()
 	return n
 }
 

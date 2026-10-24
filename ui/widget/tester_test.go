@@ -328,11 +328,55 @@ func TestTesterMessageForAGoneNodeSaysWhatIsThereNow(t *testing.T) {
 	}
 }
 
-func TestTesterNodeAfterItsOwnActionFollowsItsNewLabel(t *testing.T) {
+// A node is bound to the element it was found as. A button that renames
+// itself is found again; Label reads what it shows now.
+func TestTesterNodeAfterItsOwnRelabelingNeedsFindingAgain(t *testing.T) {
 	var b *ButtonWidget
 	b = Button("Start").OnClick(func() { b.SetText("Stop") })
 	tt := NewTester(t, b, 0, 0)
-	if got := tt.Find(ByLabel("Start")).Click().Label(); got != "Stop" {
-		t.Fatalf("label %q after the click", got)
+	n := tt.Find(ByLabel("Start"))
+	if got := n.Click().Label(); got != "Stop" {
+		t.Fatalf("Label reads %q after the click, want what the button shows now", got)
+	}
+	msg := failure(func(tb *fakeTB) { tt.tb = tb; n.Click() })
+	if !strings.Contains(msg, "no longer shown") || !strings.Contains(msg, `"Stop"`) {
+		t.Fatalf("a second click on the node found as Start: %q", msg)
+	}
+	tt.Find(ByLabel("Stop")) // found again, it is a node of the new label
+}
+
+// An element that removes itself on a click can leave its identity to
+// another: the node must not follow it.
+func TestTesterNodeDoesNotMoveToAnotherElementAfterItsOwnAction(t *testing.T) {
+	show := []string{"A", "B"}
+	var clicked []string
+	c := Custom(func(c *ui.Context) ui.Element {
+		return ui.Column(c).Children(func() {
+			for _, s := range show {
+				if ui.Button(c, s).Clicked() {
+					clicked = append(clicked, s)
+					if s == "A" {
+						show = []string{"B"}
+					}
+				}
+			}
+		})
+	})
+	tt := NewTester(t, c, 0, 0)
+	a := tt.Find(ByLabel("A"))
+	a.Click()
+	msg := failure(func(tb *fakeTB) { tt.tb = tb; a.Click() })
+	if strings.Join(clicked, "") != "A" || msg == "" {
+		t.Fatalf("clicked %q, message %q: the node of A must not become B's", clicked, msg)
+	}
+}
+
+func TestTesterFocusFailsOnAnElementThatCannotTakeIt(t *testing.T) {
+	name := TextBox()
+	tt := NewTester(t, VBox(4).Add(Label("Name"), name), 0, 0)
+	tt.Find(ByRole(ui.RoleTextField)).Focus()
+	msg := failure(func(tb *fakeTB) { tt.tb = tb; tt.Find(ByLabel("Name")).Type("Ada") })
+	if !strings.Contains(msg, "cannot take the keyboard focus") || name.Text() != "" {
+		t.Fatalf("message %q, field %q: typing into a label went to the field that had the focus", msg, name.Text())
 	}
 }
