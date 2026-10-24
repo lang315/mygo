@@ -164,3 +164,23 @@ func TestSuggestedButtonIsTheWidgetsOwnStyle(t *testing.T) {
 		t.Fatalf("applied padding: %v, want the accent", c)
 	}
 }
+
+func TestSuggestedKeepsTheOwnHoverTheButtonHad(t *testing.T) {
+	th := ui.LightTheme()
+	for name, order := range map[string]func(b *ButtonWidget) *ButtonWidget{
+		"before": func(b *ButtonWidget) *ButtonWidget {
+			return b.own(func(s Style) Style { return s.Hover(NewStyle().Opacity(0.5)) }).Suggested()
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tt := lightTester(t, order(Button("Save")))
+			x, y := centerOf(t, tt, "Save")
+			pg := page(tt)
+			tt.Move(x, y)
+			// The hover's opacity and Suggested's hover color both show.
+			if c := pixelLeft(t, tt, "Save"); !near(c, mix(th.AccentHover, pg, 0.5)) {
+				t.Fatalf("hovered %v, want the accent hover at 0.5 over the page", c)
+			}
+		})
+	}
+}

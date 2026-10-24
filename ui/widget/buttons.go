@@ -40,9 +40,9 @@ func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget { b.change(func() { b.ic
 // wins over applied ones.
 func (b *ButtonWidget) Suggested() *ButtonWidget {
 	return b.own(func(s Style) Style {
-		return s.Background(RoleAccent).TextColor(RoleAccentText).
-			Hover(NewStyle().Background(RoleAccentHover)).
-			Pressed(NewStyle().Background(RoleAccentPressed))
+		s = s.Background(RoleAccent).TextColor(RoleAccentText)
+		s = withMerged(s, vHover, NewStyle().Background(RoleAccentHover))
+		return withMerged(s, vPressed, NewStyle().Background(RoleAccentPressed))
 	})
 }
 
@@ -52,10 +52,19 @@ func (b *ButtonWidget) Suggested() *ButtonWidget {
 // pressed. It is the button's own style.
 func (b *ButtonWidget) Destructive() *ButtonWidget {
 	return b.own(func(s Style) Style {
-		return s.Background(RoleDanger).TextColor(RoleAccentText).
-			Hover(NewStyle().Opacity(0.9)).
-			Pressed(NewStyle().Opacity(0.8))
+		s = s.Background(RoleDanger).TextColor(RoleAccentText)
+		s = withMerged(s, vHover, NewStyle().Opacity(0.9))
+		return withMerged(s, vPressed, NewStyle().Opacity(0.8))
 	})
+}
+
+// withMerged sets variant k of s to v over the one s has, so a hover or
+// pressed look set before is kept where v sets nothing.
+func withMerged(s Style, k variant, v Style) Style {
+	if old := s.v[k]; old != nil {
+		v = old.Merge(v)
+	}
+	return s.with(k, v)
 }
 
 func (b *ButtonWidget) build(c *ui.Context) ui.Element {
