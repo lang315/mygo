@@ -172,12 +172,9 @@ var (
 	borderSides = [4]func(widget.Style, float32) widget.Style{widget.Style.BorderTop, widget.Style.BorderRight, widget.Style.BorderBottom, widget.Style.BorderLeft}
 )
 
-// four sets v on the sides of mask: all at once through whole when all
-// four are set, so the Style equals the typed one.
-func four(s widget.Style, mask uint8, v float32, whole func(widget.Style, ...float32) widget.Style, side [4]func(widget.Style, float32) widget.Style) widget.Style {
-	if mask == 0b1111 {
-		return whole(s, v)
-	}
+// four sets v on the sides of mask: all four side by side equal the typed
+// Padding(v) and the others.
+func four(s widget.Style, mask uint8, v float32, side [4]func(widget.Style, float32) widget.Style) widget.Style {
 	for i := range 4 {
 		if mask&(1<<i) != 0 {
 			s = side[i](s, v)
@@ -190,13 +187,13 @@ func (d *draft) add(c twclass.Decl) {
 	s := d.s
 	switch c.Kind {
 	case twclass.Padding:
-		s = four(s, c.Sides, c.Value, widget.Style.Padding, padSides)
+		s = four(s, c.Sides, c.Value, padSides)
 	case twclass.Margin:
-		s = four(s, c.Sides, c.Value, widget.Style.Margin, marginSides)
+		s = four(s, c.Sides, c.Value, marginSides)
 	case twclass.Radius:
-		s = four(s, c.Sides, c.Value, widget.Style.Radius, corners)
+		s = four(s, c.Sides, c.Value, corners)
 	case twclass.BorderWidth:
-		s = four(s, c.Sides, c.Value, widget.Style.BorderWidth, borderSides)
+		s = four(s, c.Sides, c.Value, borderSides)
 	case twclass.BorderStyle:
 		b := ui.BorderSolid
 		if c.Value == 1 {

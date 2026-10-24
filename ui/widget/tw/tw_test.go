@@ -119,6 +119,19 @@ func TestParseError(t *testing.T) {
 	}
 }
 
+// A Style cannot clear italic, so not-italic in a variant would do nothing:
+// it is an error, not a silent no-op.
+func TestNotItalicInAVariantIsAnError(t *testing.T) {
+	s, err := Parse("italic dark:not-italic")
+	var e *Error
+	if !errors.As(err, &e) || len(e.Bad) != 1 || e.Bad[0] != (Bad{"dark:not-italic", twclass.NotItalicInVariant}) {
+		t.Fatalf("err %v", err)
+	}
+	if !reflect.DeepEqual(s, widget.NewStyle().Italic()) {
+		t.Fatalf("the italic must still apply: %+v", s)
+	}
+}
+
 func TestSIgnoresBadClasses(t *testing.T) {
 	if got := S("p-2 bogus"); !reflect.DeepEqual(got, widget.NewStyle().Padding(2)) {
 		t.Fatalf("%+v", got)

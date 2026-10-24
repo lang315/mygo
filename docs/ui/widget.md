@@ -286,7 +286,11 @@ logged once and ignored, and `mygo vet` reports it in a literal string.
 Variants: `hover:`, `active:`, `focus:`, `disabled:`, `dark:`. `dark:` stacks on
 one other (`dark:hover:bg-slate-700`). On the same property the later class
 wins; Tailwind decides by its CSS order instead. Palette colors are fixed in
-both themes; theme colors follow light and dark.
+both themes; theme colors follow light and dark. Layout classes (`halign-*`,
+`hexpand`, …), `transition` and `duration-*` are errors in a variant, and so is
+`not-italic`: it clears an `italic` earlier in the same string, but a
+variant cannot clear what the base sets, so `dark:not-italic` would do
+nothing.
 
 Not supported: `m-auto`, `bg-blue-600/50`, `gap`, `grid`, `flex`, gradients,
 blur, arbitrary values (`p-[13px]`), `ring`, `current`.

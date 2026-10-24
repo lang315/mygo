@@ -98,6 +98,7 @@ const (
 	Unknown             = "unknown class"
 	LayoutInVariant     = "layout in a variant"
 	TransitionInVariant = "transition in a variant"
+	NotItalicInVariant  = "not-italic in a variant"
 	Stack               = "unsupported variant stack"
 )
 
@@ -134,6 +135,10 @@ func Parse(classes string) (rules []Rule, bad []Bad) {
 		}
 		if key != (Key{}) && layout(decls) {
 			bad = append(bad, Bad{class, LayoutInVariant})
+			continue
+		}
+		if key != (Key{}) && notItalic(decls) { // a Style cannot clear italic
+			bad = append(bad, Bad{class, NotItalicInVariant})
 			continue
 		}
 		for _, d := range decls {
@@ -190,6 +195,15 @@ func variants(class string) (key Key, utility, reason string) {
 		return key, "", Unknown
 	}
 	return key, utility, ""
+}
+
+func notItalic(decls []Decl) bool {
+	for _, d := range decls {
+		if d.Kind == Italic && d.Value == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func layout(decls []Decl) bool {
