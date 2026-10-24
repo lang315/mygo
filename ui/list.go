@@ -101,6 +101,11 @@ type ListState struct {
 	// its section scroll under it, until the next header pushes it away.
 	// Give headers a background. Headers are not chosen.
 	Header func(row int) bool
+	// Skip, when set, reports whether row i cannot be chosen, as a
+	// placeholder row can't (Loading…): the keys move past it, a click on
+	// it and typing its text choose nothing, and Cmd+A leaves it out. Unlike
+	// a header it does not stay at the top.
+	Skip func(row int) bool
 	// Reorder, when set, lets the user drag rows to another place in the
 	// list: the rows chosen, when the row dragged is one, else that row,
 	// which the list passes in order, and the row they go before, the
@@ -833,7 +838,11 @@ func (f *listFrame) buildLate(i int) *node {
 	return w
 }
 
-func (f *listFrame) isHeader(i int) bool { return f.s.Header != nil && f.s.Header(i) }
+// isHeader reports whether row i cannot be chosen: it heads a section
+// (Header), or the app skips it (Skip).
+func (f *listFrame) isHeader(i int) bool {
+	return f.s.Header != nil && f.s.Header(i) || f.s.Skip != nil && f.s.Skip(i)
+}
 
 // cursor returns where the keys move the choice from, or nil when the list
 // does not choose rows: *Selected, or the row last chosen in a list
