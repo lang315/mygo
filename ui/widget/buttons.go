@@ -345,6 +345,9 @@ func adopt(parent *core, w Control) {
 		}
 		r.group = parent.group
 		r.group.members = append(r.group.members, r)
+		if r.on.value == radioOn {
+			r.uncheckOthers() // the last one added checked wins
+		}
 	}
 }
 

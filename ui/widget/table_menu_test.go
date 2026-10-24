@@ -35,7 +35,7 @@ func TestContextMenuFuncRunsOffTheLockAndOpensItsItems(t *testing.T) {
 	if err := tt.RightClick("bob"); err != nil {
 		t.Fatal(err)
 	}
-	received(t, posted())
+	<-posted()
 	tt.Frame()
 	if m := tt.Menu(); !slices.Equal(m, []string{"Move 1 rows"}) {
 		t.Fatalf("menu %q", m)
@@ -61,7 +61,7 @@ func TestContextMenuFuncGetsTheKeysSelectedAtTheClick(t *testing.T) {
 	tb.chosen.value.Add(3) // the selection changes before fn starts
 	mu.Unlock()
 	close(gate)
-	received(t, posted())
+	<-posted()
 	tt.Frame()
 	if !slices.Equal(keys, []int{2}) {
 		t.Fatalf("fn got %v, want [2]: the selection at the click", keys)
@@ -87,7 +87,7 @@ func TestContextMenuFuncDropsItsItemsAfterEscapeOrAClickElsewhere(t *testing.T) 
 			}
 			undo(tt)
 			close(release)
-			received(t, posted())
+			<-posted()
 			tt.Frame()
 			if m := tt.Menu(); m != nil {
 				t.Fatalf("menu %q opened after the user dismissed it", m)
@@ -116,7 +116,7 @@ func TestContextMenuFuncOnlyTheLatestRightClickOpens(t *testing.T) {
 	}
 	close(first)
 	close(second)
-	received(t, posted())
+	<-posted()
 	tt.Frame()
 	if m := tt.Menu(); !slices.Equal(m, []string{"Second"}) {
 		t.Fatalf("menu %q, want only the latest right-click's", m)
@@ -128,7 +128,7 @@ func TestContextMenuFuncEmptyOpensNothing(t *testing.T) {
 	if err := tt.RightClick("bob"); err != nil {
 		t.Fatal(err)
 	}
-	received(t, posted())
+	<-posted()
 	tt.Frame()
 	if m := tt.Menu(); m != nil {
 		t.Fatalf("menu %q", m)
@@ -144,12 +144,12 @@ func TestContextMenuFuncItemOnClickRuns(t *testing.T) {
 	if err := tt.RightClick("bob"); err != nil {
 		t.Fatal(err)
 	}
-	received(t, posted())
+	<-posted()
 	tt.Frame()
 	if err := tt.ChooseMenuItem("Run"); err != nil {
 		t.Fatal(err)
 	}
-	if k := received(t, ran); k != 2 {
+	if k := soon(t, ran); k != 2 {
 		t.Fatalf("OnClick ran for %d", k)
 	}
 }
@@ -161,7 +161,7 @@ func TestContextMenuFuncWinsOverTheStaticMenu(t *testing.T) {
 	if err := tt.RightClick("bob"); err != nil {
 		t.Fatal(err)
 	}
-	received(t, posted())
+	<-posted()
 	tt.Frame()
 	if m := tt.Menu(); !slices.Equal(m, []string{"Built"}) {
 		t.Fatalf("menu %q", m)
@@ -179,6 +179,6 @@ func TestContextMenuFuncRace(t *testing.T) {
 		}
 		tt.CloseMenu()
 	}
-	received(t, posted())
+	<-posted()
 	tt.Frame()
 }

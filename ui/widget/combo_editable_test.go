@@ -26,7 +26,7 @@ func TestEditableComboTakesTypedTextThatIsNoOption(t *testing.T) {
 	if _, ok := c.Selected(); ok {
 		t.Fatal("Selected an option for text matching none")
 	}
-	if got := received(t, changed); got == "" {
+	if got := soon(t, changed); got == "" {
 		t.Fatal("OnChange did not see the typing")
 	}
 }
@@ -65,10 +65,10 @@ func TestEditableComboChoosingAnOptionSetsTheTextAndRunsOnChange(t *testing.T) {
 	focus(tt, 1)
 	tt.Type("Ka") // opens the popup, filtered
 	tt.Frame()
-	for received(t, changed) != "Ka" { // the typing
+	for soon(t, changed) != "Ka" { // the typing
 	}
 	click(t, tt, "Kale")
-	if got := received(t, changed); got != "Kale" {
+	if got := soon(t, changed); got != "Kale" {
 		t.Fatalf("OnChange after choosing saw %q", got)
 	}
 	if c.Text() != "Kale" || c.Value() != "k" {

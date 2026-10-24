@@ -73,7 +73,7 @@ func TestRadioButtonOnChangeRunsForTheUserNotForSetChecked(t *testing.T) {
 	a.SetChecked(true)
 	tt.Frame()
 	click(t, tt, "B")
-	got := map[string]bool{received(t, ran): true, received(t, ran): true}
+	got := map[string]bool{soon(t, ran): true, soon(t, ran): true}
 	if !got["a"] || !got["b"] {
 		t.Fatalf("OnChange ran for %v, want both: the one checked and the one unchecked by the user", got)
 	}
@@ -100,4 +100,38 @@ func TestRadioButtonRemovedFromItsBoxLeavesTheGroup(t *testing.T) {
 	a.SetChecked(true)
 	b.SetChecked(true)
 	wantChecks(t, checks(a, b), true, true)
+}
+
+func TestRadioButtonsAddedCheckedLeaveOneChecked(t *testing.T) {
+	a, b := RadioButton("A").SetChecked(true), RadioButton("B").SetChecked(true)
+	VBox(2).Add(a, b)
+	wantChecks(t, checks(a, b), false, true) // the last added wins
+	c := RadioButton("C").SetChecked(true)
+	box := VBox(2).Add(a, b)
+	box.Add(c)
+	if n := 0; true {
+		for _, on := range checks(a, b, c) {
+			if on {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Fatalf("checked %v, want one", checks(a, b, c))
+		}
+	}
+}
+
+// soon returns what the event goroutine has sent to ch by now, failing at
+// once when it sent nothing: posted work is drained first, so a missing
+// OnChange is a failure, not a wait for the one-minute guard.
+func soon[T any](t *testing.T, ch <-chan T) T {
+	t.Helper()
+	<-posted()
+	select {
+	case v := <-ch:
+		return v
+	default:
+		t.Fatal("the handler did not run")
+		panic("unreachable")
+	}
 }
