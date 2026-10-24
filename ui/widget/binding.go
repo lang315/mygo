@@ -96,8 +96,26 @@ func (e *TextBoxWidget) bindApply(v string) { e.SetText(v) }
 func (b *CheckBoxWidget) bindValue() bool  { return b.Checked() }
 func (b *CheckBoxWidget) bindApply(v bool) { b.SetChecked(v) }
 
-func (c *ComboBoxWidget) bindValue() string  { return c.Value() }
-func (c *ComboBoxWidget) bindApply(v string) { c.SetValue(v) }
+func (c *ComboBoxWidget) bindValue() string {
+	mu.Lock()
+	defer mu.Unlock()
+	if c.editable && c.bindsText {
+		return c.text.value
+	}
+	o, _ := c.chosen()
+	return o.Value
+}
+
+func (c *ComboBoxWidget) bindApply(v string) {
+	mu.Lock()
+	text := c.editable && c.bindsText
+	mu.Unlock()
+	if text {
+		c.SetText(v)
+		return
+	}
+	c.SetValue(v)
+}
 
 func (s *NumericUpDownWidget) bindValue() float64 { return s.Value() }
 func (s *NumericUpDownWidget) bindApply(v float64) {
