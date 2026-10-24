@@ -89,16 +89,19 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 	}
 	if f.stacked {
 		return ui.Column(c).Gap(rowGap).Children(func() {
+			// The rows are a column, whatever the box around the form.
+			outer := axis
+			axis = vertical
+			defer func() { axis = outer }()
 			for _, r := range f.rows {
 				if r.w.base().hidden { // the row goes, its label with it
+					f.hold(r)
 					continue
 				}
 				ui.Column(c.Key(fieldRowKey(r.label.id))).Gap(colGap).Children(func() {
-					if !r.label.hidden {
-						e := render(c, r.label)
-						if r.label.place.align == 0 {
-							e.AlignSelf(ui.Start)
-						}
+					e := render(c, r.label) // holds a hidden label
+					if !r.label.hidden && r.label.place.align == 0 {
+						e.AlignSelf(ui.Start)
 					}
 					render(c, r.w)
 				})
@@ -113,12 +116,13 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 		defer func() { axis = outer }()
 		for _, r := range f.rows {
 			if r.w.base().hidden {
+				f.hold(r)
 				continue
 			}
-			if r.label.hidden { // keep its cell, or ui flows the control into it
+			e := render(c, r.label) // holds a hidden label
+			if r.label.hidden {     // keep its cell, or ui flows the control into it
 				ui.Box(c.Key(fieldHole(r.label.id)))
 			} else {
-				e := render(c, r.label)
 				place(e, r.label, ui.Start)
 				if r.label.place.valign == 0 {
 					e.AlignSelf(ui.Center)
@@ -127,6 +131,13 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			place(render(c, r.w), r.w, ui.Stretch)
 		}
 	})
+}
+
+// hold keeps the widgets of a row the form does not build, so that showing
+// one tells the windows that show the form. Under mu.
+func (f *FieldsWidget) hold(r fieldRow) {
+	keeping.hold(r.w.base())
+	keeping.hold(r.label.base())
 }
 
 // place puts e, the cell of w, across its column: where w asks, else def.

@@ -227,3 +227,72 @@ func TestFieldsRowsAddedWhileFramesBuild(t *testing.T) {
 		t.Fatalf("not shown: %q", tt.Texts())
 	}
 }
+
+// A row hidden when its window first draws, as an error row is until there
+// is an error, still tells the window when it shows: Fields holds what it
+// does not build, as a box does.
+func TestShowingAFieldsRowHiddenFromTheStartRedrawsItsWindow(t *testing.T) {
+	for _, stacked := range []bool{false, true} {
+		for _, what := range []string{"control", "label"} {
+			ctl := Label("error").SetVisible(what != "control")
+			f := Fields().Row("Name", Label("shown")).Row("Err", ctl)
+			if stacked {
+				f.Stacked()
+			}
+			if what == "label" {
+				f.Label(1).SetVisible(false)
+			}
+			_, w := showFrame(t, VBox(0).Add(f))
+			redrawn := recordInvalidations(t)
+			if what == "control" {
+				ctl.SetVisible(true)
+			} else {
+				f.Label(1).SetVisible(true)
+			}
+			t.Logf("stacked %v, hidden %s", stacked, what)
+			wantRedrawn(t, redrawn(), w)
+		}
+	}
+}
+
+// A stacked form lays its children out down a column, whatever the box
+// around it: a control's Align(End) is at the end of the form's width.
+func TestFieldsStackedInAnHBoxAlignsAcrossItsColumn(t *testing.T) {
+	const long = "A much longer label here"
+	tt := tester(t, HBox(0).Add(Fields().Stacked().Row(long, Label("x").Align(End))))
+	l, x := find(t, tt, long), find(t, tt, "x")
+	if x.X < l.X+l.W/2 {
+		t.Fatalf("the control is at x %v, the label spans %v to %v: Align(End) must put it at the end", x.X, l.X, l.X+l.W)
+	}
+}
+
+// In two columns a control's VAlign and expansion are along its row.
+func TestFieldsGridControlsAlignDownTheirRow(t *testing.T) {
+	f := Fields().Row("Tall", Label("v").VAlign(End))
+	f.Label(0).TextSize(XXXL)
+	tt := tester(t, f)
+	l, v := find(t, tt, "Tall"), find(t, tt, "v")
+	// The ink, not v's box: a control that is not placed is stretched over
+	// the row, and its box reaches the bottom too.
+	if top, _ := ink(t, tt, v); top < l.Y+l.H/2 {
+		t.Fatalf("the control's text starts at y %v in a row from %v to %v: VAlign(End) must put it at the bottom", top, l.Y, l.Y+l.H)
+	}
+}
+
+func TestFieldsStackedLabelIsOneUnitAboveItsControl(t *testing.T) {
+	tt := tester(t, Fields().Stacked().Row("Name", bar("c1", 24)))
+	if gap := find(t, tt, "c1").Y - (find(t, tt, "Name").Y + find(t, tt, "Name").H); !approx(gap, 4) {
+		t.Fatalf("a stacked label is %v above its control, want the theme's unit, 4", gap)
+	}
+}
+
+func TestFieldsRowWithAControlTheFormHasIsNotAdded(t *testing.T) {
+	c := bar("c1", 24)
+	f := Fields().Row("First", c).Row("Second", c)
+	if f.Label(1) != nil {
+		t.Fatal("a control in two rows")
+	}
+	if tt := tester(t, f); tt.HasText("Second") || !tt.HasText("First") {
+		t.Fatalf("texts %q", tt.Texts())
+	}
+}
