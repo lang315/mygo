@@ -198,34 +198,50 @@ func (t *TreeViewWidget[T, K]) SetChildren(parent K, kids []T) *TreeViewWidget[T
 // the Loading row shows until SetChildren. It does nothing for a key that is
 // not a node.
 //
-// It is also how a load that failed is asked again. Called with true on a node
-// that is open and whose children are not loaded, it is a request to load, and
-// the one setter that fires an event: OnExpand runs once with the key, and not
-// again until the load is asked for anew. On a node that is closed it only
-// lets the next opening ask. Called with false on a node whose children are
-// not loaded, it makes the node a leaf, and closes it if it was open, firing
-// nothing.
+// Called with true on a node that is open, whose children are not loaded and
+// whose load is not pending, it is a request to load, and the one setter that
+// fires an event: OnExpand runs once with the key, and the load is pending
+// until SetChildren or LoadFailed. While it is pending, more calls ask nothing,
+// so refreshing the parent and saying the node has children again cannot start
+// a second load. Called with false on a node whose children are not loaded, it
+// makes the node a leaf and closes it if it was open, firing nothing.
 func (t *TreeViewWidget[T, K]) SetHasChildren(k K, has bool) *TreeViewWidget[T, K] {
 	t.change(func() {
 		n := t.nodes[k]
 		if n == nil {
 			return
 		}
-		n.has, n.pending = has, false
+		n.has = has
 		if n.loaded {
 			return
 		}
 		it := treeItem[K]{k: k}
 		switch {
 		case !has:
+			n.pending = false
 			if t.open.value.Has(it) {
 				t.open.set(it, false)
 			}
-		case t.open.value.Has(it):
+		case t.open.value.Has(it) && !n.pending:
 			n.pending = true
 			if h := t.onExpand; h != nil {
 				Post(func() { h(k) })
 			}
+		}
+	})
+	return t
+}
+
+// LoadFailed says the load of the children of the node of key k, asked for by
+// OnExpand, failed: the load is no longer pending. The node stays as it is, open
+// on its Loading row if it was open, and nothing fires. The app can ask again
+// with SetHasChildren(k, true), or the user by closing and opening the node,
+// which asks again now that nothing is pending. It does nothing for a key that
+// is not a node, and for a node whose children are loaded.
+func (t *TreeViewWidget[T, K]) LoadFailed(k K) *TreeViewWidget[T, K] {
+	t.change(func() {
+		if n := t.nodes[k]; n != nil && !n.loaded {
+			n.pending = false
 		}
 	})
 	return t

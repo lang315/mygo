@@ -136,28 +136,6 @@ func TestTreeViewOnExpandFiresOnceWhileTheLoadIsPending(t *testing.T) {
 	}
 }
 
-// A load that failed is retried: SetHasChildren(k, true) lets the next open
-// ask again.
-func TestTreeViewSetHasChildrenLetsAFailedLoadBeAskedAgain(t *testing.T) {
-	expanded := make(chan string, 8)
-	tv := newTree().SetRoots([]tnode{{"A", "Alpha"}}).SetHasChildren("A", true).
-		OnExpand(func(k string) { expanded <- k })
-	tt := tester(t, tv)
-	toggle := func() {
-		x, y := arrow(t, tt, "Alpha")
-		tt.ClickAt(x, y)
-		tt.Frame()
-	}
-	toggle() // open: asks
-	soon(t, expanded)
-	toggle() // close
-	tv.SetHasChildren("A", true)
-	toggle() // open again after the failure
-	if got := soon(t, expanded); got != "A" {
-		t.Fatalf("OnExpand after the retry got %q", got)
-	}
-}
-
 func TestTreeViewLoadingRowIsNeitherSelectableNorCheckable(t *testing.T) {
 	selected := make(chan string, 8)
 	checked := make(chan string, 8)
@@ -281,40 +259,94 @@ func TestTreeViewKeysAndTypingNeverChooseTheLoadingRow(t *testing.T) {
 	})
 }
 
-// The retry the docs give: SetHasChildren(k, true) on an open node that is
-// not loaded asks again, once, as a request to load.
+// quiet fails the test if an event is waiting.
+func quiet(t *testing.T, events chan string, why string) {
+	t.Helper()
+	<-posted()
+	select {
+	case e := <-events:
+		t.Fatalf("%s fired %q", why, e)
+	default:
+	}
+}
+
+// SetHasChildren(k, true) on an open node that is not loaded and not pending
+// is a request to load: OnExpand runs once. While the load is pending, more
+// calls, the user closing and opening the node, and a refresh of the parent
+// ask nothing (the load must not run twice). LoadFailed ends the pending
+// load, and then SetHasChildren(k, true) asks again.
 func TestTreeViewSetHasChildrenOnAnOpenNodeAsksToLoadOnce(t *testing.T) {
 	events := make(chan string, 16)
 	tv := loadingTree(events)
 	tt := tester(t, tv)
-	<-posted()
-	select {
-	case e := <-events:
-		t.Fatalf("a program's Expand fired %q", e)
-	default:
-	}
-	tv.SetHasChildren("A", true) // the first load failed
+	quiet(t, events, "a program's Expand")
+	tv.SetHasChildren("A", true) // nothing pending: asks
 	if got := soon(t, events); got != "expand A" {
-		t.Fatalf("the retry fired %q, want expand A", got)
+		t.Fatalf("the request fired %q, want expand A", got)
 	}
-	// The load is pending now: the user closing and opening the node asks
-	// nothing more.
-	for range 2 {
+	tv.SetHasChildren("A", true) // pending: the load is on its way
+	quiet(t, events, "SetHasChildren while the load was pending")
+	// The docs' pattern: the app refreshes the parent, then says the node has
+	// children.
+	tv.SetRoots([]tnode{{"A", "Alpha"}, {"L", "Lima"}})
+	tv.SetHasChildren("A", true)
+	quiet(t, events, "a refresh of the roots and SetHasChildren while the load was pending")
+	for range 2 { // closes and opens
 		x, y := arrow(t, tt, "Alpha")
 		tt.ClickAt(x, y)
 		tt.Frame()
 	}
-	<-posted()
-	select {
-	case e := <-events:
-		t.Fatalf("closing and opening a node with a load pending fired %q", e)
-	default:
+	quiet(t, events, "closing and opening a node with a load pending")
+	tv.LoadFailed("A")
+	tt.Frame()
+	quiet(t, events, "LoadFailed")
+	if !tv.IsExpanded("A") || !shows(tt, "Loading…") {
+		t.Fatalf("LoadFailed left Expanded %v, shows %q: want the node open on its Loading row", tv.Expanded(), tt.Texts())
 	}
-	// Another retry is another request.
 	tv.SetHasChildren("A", true)
 	if got := soon(t, events); got != "expand A" {
-		t.Fatalf("the second retry fired %q, want expand A", got)
+		t.Fatalf("the retry after LoadFailed fired %q, want expand A", got)
 	}
+}
+
+// After LoadFailed the user can retry by closing and opening the node.
+func TestTreeViewLoadFailedLetsTheUserRetryByReopening(t *testing.T) {
+	expanded := make(chan string, 8)
+	tv := newTree().SetRoots([]tnode{{"A", "Alpha"}}).SetHasChildren("A", true).
+		OnExpand(func(k string) { expanded <- k })
+	tt := tester(t, tv)
+	toggle := func() {
+		x, y := arrow(t, tt, "Alpha")
+		tt.ClickAt(x, y)
+		tt.Frame()
+	}
+	toggle() // open: asks
+	soon(t, expanded)
+	toggle() // close
+	toggle() // open again, the load still pending: asks nothing
+	<-posted()
+	if len(expanded) != 0 {
+		t.Fatal("reopening a node with a load pending asked again")
+	}
+	tv.LoadFailed("A")
+	toggle() // close
+	toggle() // open after the failure
+	if got := soon(t, expanded); got != "A" {
+		t.Fatalf("OnExpand after LoadFailed got %q", got)
+	}
+}
+
+func TestTreeViewLoadFailedOnAnUnknownOrLoadedNodeDoesNothing(t *testing.T) {
+	events := make(chan string, 8)
+	tv := loadingTree(events)
+	tv.LoadFailed("zz")
+	tv.SetChildren("A", []tnode{{"A1", "Alpha one"}})
+	tv.LoadFailed("A")
+	if !tv.IsLoaded("A") {
+		t.Fatal("LoadFailed unloaded a loaded node")
+	}
+	tester(t, tv)
+	quiet(t, events, "LoadFailed")
 }
 
 // SetHasChildren(k, false) on an open node whose children are not loaded
