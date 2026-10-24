@@ -452,7 +452,7 @@ logged once and ignored, and `mygo vet` reports it in a literal string.
 | Group | Classes |
 |---|---|
 | Spacing | `p- px- py- pt- pr- pb- pl- m- mx- …` with `0 px 0.5 1 … 96`; `-mt-2` |
-| Sizes | `w- h- min-w- max-w- min-h- max-h-` (same scale, 4 DIPs a unit) |
+| Sizes | `w- h- min-w- max-w- min-h- max-h-` (same scale, 4 DIPs a unit); `max-w-none` lifts the cap a `w-` has at its container's room |
 | Radius | `rounded`, `rounded-{none,sm,md,lg,xl,2xl,3xl,full}`, sides `t r b l`, corners `tl tr br bl` |
 | Border | `border`, `border-{0,2,4,8}`, `border-{x,y,t,r,b,l}[-N]`, `border-solid`, `border-dashed` |
 | Colors | `bg- text- border-` with the v3 palette (`blue-600`), `black white transparent` |
