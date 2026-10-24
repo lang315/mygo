@@ -39,12 +39,13 @@ var cal *widget.MonthCalendarWidget
 cal = widget.MonthCalendar().SetValue(day).OnChange(func() { show(cal.Value()) })
 ```
 
-A month with the arrows, Home and End, and a click on a day to choose it. The
-arrows, Home, End and a click choose the day they land on. Page Up and Page
-Down and the month buttons only page: they change the month shown, not the day
-chosen, so `OnChange` does not run for them, and paging from the 31st neither
-skips a month nor stays in one. `Value()`, `SetValue(t)` (which shows the
-value's month) and `OnChange(fn)` work as above.
+A month with the arrows, Page Up and Page Down, Home and End, and a click on a
+day to choose it. All of these choose the day they land on; Page Up/Down move
+it a month, clamped to the end of a shorter month. The month buttons only page:
+they change the month shown, not the day chosen, so `OnChange` does not run for
+them, and paging from the 31st neither skips a month nor stays in one. After
+paging, the keys act on the month shown. `Value()`, `SetValue(t)` (which shows
+the value's month) and `OnChange(fn)` work as above.
 
 In tests, days are buttons named by their dates:
 `tt.Find(widget.ByLabel("January 12, 2026")).Click()`

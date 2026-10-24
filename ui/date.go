@@ -125,6 +125,12 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 		*view = *cursor
 	}
 	cur := *cursor
+	// kc is the day the keys act on: the cursor, or where another month is
+	// shown, the same day of the month there, clamped.
+	kc := cur
+	if moveChooses && (view.Year() != cur.Year() || view.Month() != cur.Month()) {
+		kc = addMonths(cur, (view.Year()-cur.Year())*12+int(view.Month())-int(cur.Month()))
+	}
 	month := time.Date(view.Year(), view.Month(), 1, 0, 0, 0, 0, time.UTC)
 	title := c.formatted(fmtKey{locale, fmtMonthYear, int64(month.Year())*12 + int64(month.Month())}, func() string {
 		return i18n.FormatDate(locale, month, i18n.DateOptions{Skeleton: "yMMMM"})
@@ -152,23 +158,23 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 		back, forth := grid.arrows()
 		switch {
 		case grid.Shortcut(0, back):
-			move(cur.AddDate(0, 0, -1))
+			move(kc.AddDate(0, 0, -1))
 		case grid.Shortcut(0, forth):
-			move(cur.AddDate(0, 0, 1))
+			move(kc.AddDate(0, 0, 1))
 		case grid.Shortcut(0, KeyUp):
-			move(cur.AddDate(0, 0, -7))
+			move(kc.AddDate(0, 0, -7))
 		case grid.Shortcut(0, KeyDown):
-			move(cur.AddDate(0, 0, 7))
+			move(kc.AddDate(0, 0, 7))
 		case grid.Shortcut(0, KeyPageUp):
-			page(-1)
+			move(addMonths(kc, -1))
 		case grid.Shortcut(0, KeyPageDown):
-			page(1)
+			move(addMonths(kc, 1))
 		case grid.Shortcut(0, KeyHome):
-			move(time.Date(cur.Year(), cur.Month(), 1, 0, 0, 0, 0, cur.Location()))
+			move(time.Date(kc.Year(), kc.Month(), 1, 0, 0, 0, 0, kc.Location()))
 		case grid.Shortcut(0, KeyEnd):
-			move(time.Date(cur.Year(), cur.Month()+1, 0, 0, 0, 0, 0, cur.Location()))
+			move(time.Date(kc.Year(), kc.Month()+1, 0, 0, 0, 0, 0, kc.Location()))
 		case grid.Shortcut(0, KeyEnter), grid.Shortcut(0, KeySpace):
-			choose(cur)
+			choose(kc)
 		}
 	})
 	grid.Children(func() {
@@ -217,7 +223,7 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 							}
 						}
 					})
-					chosen, atCursor := sameDay(day, *date), sameDay(day, cur)
+					chosen, atCursor := sameDay(day, *date), sameDay(day, kc)
 					fg := t.Text
 					if day.Month() != month.Month() {
 						fg = t.TextMuted
