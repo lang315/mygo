@@ -149,6 +149,7 @@ func render(c *ui.Context, w Control) ui.Element {
 	b := w.base()
 	if b.hidden {
 		keeping.hold(b)
+		b.dnd.endHovers()
 		return ui.Element{}
 	}
 	keeping.key(c, b)

@@ -20,6 +20,7 @@ type dragDrop struct {
 type dropTarget struct {
 	key   any
 	apply func(e ui.Element)
+	end   func() // ends a hover the target shows, nil for the other kinds
 }
 
 // apply declares the control's sources and targets on e, as it builds.
@@ -45,24 +46,36 @@ func (d *dragDrop) apply(c *ui.Context, e ui.Element) {
 	}
 }
 
-func (d *dragDrop) setTarget(key any, apply func(e ui.Element)) {
+func (d *dragDrop) setTarget(key any, apply func(e ui.Element), end func()) {
 	for i, t := range d.targets {
 		if t.key == key {
+			if t.end != nil {
+				t.end() // the old handler sees the hover end
+			}
 			if apply == nil {
 				d.targets = append(d.targets[:i:i], d.targets[i+1:]...)
 			} else {
-				d.targets[i].apply = apply
+				d.targets[i].apply, d.targets[i].end = apply, end
 			}
 			return
 		}
 	}
 	if apply != nil {
-		d.targets = append(d.targets, dropTarget{key, apply})
+		d.targets = append(d.targets, dropTarget{key, apply, end})
+	}
+}
+
+// endHovers ends the hovers the control shows, as when it is hidden.
+func (d *dragDrop) endHovers() {
+	for _, t := range d.targets {
+		if t.end != nil {
+			t.end()
+		}
 	}
 }
 
 // DragSource makes the control the source of value, dragged within the
-// window: once the pointer pressing it moves a few DIPs, a copy of the
+// window (a source hidden mid-drag cancels the drag silently): once the pointer pressing it moves a few DIPs, a copy of the
 // control follows the pointer, and the OnDrop[T] target under it that takes
 // value's type gets it when the pointer is released. A press that does not
 // move still clicks, and a drag does not. nil stops it.
@@ -78,6 +91,9 @@ func (c *common[W]) DragSource(value any) *W {
 // package held, so it may read widgets; it must be quick and must not wait
 // for the event goroutine. nil stops it.
 func (c *common[W]) DragData(fn func() transfer.Data, opts ...transfer.DragOptions) *W {
+	if len(opts) > 1 {
+		panic("widget: DragData takes at most one transfer.DragOptions")
+	}
 	c.change(func() { c.dnd.data, c.dnd.dataOpts = fn, opts })
 	return c.self
 }
@@ -92,44 +108,56 @@ type filesKey struct{}
 
 // OnDrop makes the control take values of type T dragged with DragSource
 // within the window, and runs fn with the one dropped, on the event
-// goroutine. The innermost control under the pointer that takes the type
-// gets it; values of other types do not drop. A nil fn removes the target.
+// goroutine. A control takes several types with several OnDrop calls. The
+// innermost control under the pointer that takes the type gets it; values of
+// other types do not drop. T is matched as a Go type assertion: for an
+// interface T, a value whose pointer type has the methods does not match a
+// value that is not a pointer, and OnDrop[any] takes everything. A nil fn removes the target.
 // There is no WinForms AllowDrop: a control takes drops while it has a
 // handler.
 func OnDrop[T any](c Control, fn func(T)) {
 	c.base().change(func() {
 		if fn == nil {
-			c.base().dnd.setTarget(dropKey[T]{}, nil)
+			c.base().dnd.setTarget(dropKey[T]{}, nil, nil)
 			return
 		}
 		c.base().dnd.setTarget(dropKey[T]{}, func(e ui.Element) {
 			if v, ok := ui.Drop[T](e); ok {
 				Post(func() { fn(v) })
 			}
-		})
+		}, nil)
 	})
 }
 
 // OnDragOver runs fn, on the event goroutine, when a value of type T
-// dragged with DragSource comes over the control (over true, with the
-// value) and when it leaves, is dropped or the drag is cancelled (over
-// false, with the zero value): for showing the control would take it. It
-// does not make the control take drops; OnDrop does. The end of the hover
-// always comes before OnDrop's handler. A nil fn removes it.
+// dragged with DragSource comes over the control or something inside it
+// (over true, with the value) and when it leaves, is dropped, the drag is
+// cancelled, or the control is hidden or its handler replaced (over false,
+// with the zero value): for highlighting while a value is over. It does not
+// make the control take the value, so a drop on it falls to the innermost
+// control around with an OnDrop of the type, as under a drop zone with a
+// highlighted child. The end of the hover always comes before OnDrop's
+// handler. A nil fn removes it.
 func OnDragOver[T any](c Control, fn func(over bool, v T)) {
 	c.base().change(func() {
 		if fn == nil {
-			c.base().dnd.setTarget(overKey[T]{}, nil)
+			c.base().dnd.setTarget(overKey[T]{}, nil, nil)
 			return
 		}
 		was := false
 		c.base().dnd.setTarget(overKey[T]{}, func(e ui.Element) {
-			v, over := ui.DragOver[T](e)
+			v, over := ui.DragHover[T](e)
 			if over == was {
 				return
 			}
 			was = over
 			Post(func() { fn(over, v) })
+		}, func() {
+			if was {
+				was = false
+				var zero T
+				Post(func() { fn(false, zero) })
+			}
 		})
 	})
 }
@@ -141,7 +169,7 @@ func OnDragOver[T any](c Control, fn func(over bool, v T)) {
 func (c *common[W]) OnDropData(formats []transfer.Format, fn func(transfer.Data)) *W {
 	c.change(func() {
 		if fn == nil {
-			c.dnd.setTarget(dataKey{}, nil)
+			c.dnd.setTarget(dataKey{}, nil, nil)
 			return
 		}
 		opts := transfer.DropOptions{Formats: formats}
@@ -149,7 +177,7 @@ func (c *common[W]) OnDropData(formats []transfer.Format, fn func(transfer.Data)
 			if d, ok := ui.DropData(e, opts); ok {
 				Post(func() { fn(d.Data) })
 			}
-		})
+		}, nil)
 	})
 	return c.self
 }
@@ -159,14 +187,14 @@ func (c *common[W]) OnDropData(formats []transfer.Format, fn func(transfer.Data)
 func (c *common[W]) OnDropFiles(fn func(paths []string)) *W {
 	c.change(func() {
 		if fn == nil {
-			c.dnd.setTarget(filesKey{}, nil)
+			c.dnd.setTarget(filesKey{}, nil, nil)
 			return
 		}
 		c.dnd.setTarget(filesKey{}, func(e ui.Element) {
 			if p := e.DroppedFiles(); len(p) > 0 {
 				Post(func() { fn(p) })
 			}
-		})
+		}, nil)
 	})
 	return c.self
 }

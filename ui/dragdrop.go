@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"slices"
+
 	"github.com/egoist/mygo/internal/scene"
 	"github.com/egoist/mygo/transfer"
 )
@@ -25,6 +27,7 @@ type valueDrag struct {
 	offX     float32
 	offY     float32
 	over     uint64
+	x, y     float32 // where the pointer is
 	elem     *node
 	canceled bool
 	native   bool
@@ -80,7 +83,7 @@ func (e *node) Dragging() bool {
 func coreDrop[T any](e *node) (T, bool) {
 	var zero T
 	e.flags |= flagValueDrop
-	e.st.accepts = func(v any) bool { _, ok := v.(T); return ok }
+	e.acceptType(func(v any) bool { _, ok := v.(T); return ok })
 	if v, ok := e.st.droppedValue.(T); ok && e.st.hasDropped {
 		e.c.rt.consumed = true
 		return v, true
@@ -94,7 +97,7 @@ func coreDrop[T any](e *node) (T, bool) {
 func coreDragOver[T any](e *node) (T, bool) {
 	var zero T
 	e.flags |= flagValueDrop
-	e.st.accepts = func(v any) bool { _, ok := v.(T); return ok }
+	e.acceptType(func(v any) bool { _, ok := v.(T); return ok })
 	if in := e.c.rt.incoming; in != nil && e.c.rt.dataOver == e.id {
 		v, ok := in.Local.(T)
 		return v, ok
@@ -105,6 +108,33 @@ func coreDragOver[T any](e *node) (T, bool) {
 	}
 	v, ok := d.value.(T)
 	return v, ok
+}
+
+// acceptType adds a type the element takes to those it asked for in this
+// pass (the lookup clears them), so that one element takes several.
+func (e *node) acceptType(pred func(any) bool) {
+	if prev := e.st.accepts; prev != nil {
+		e.st.accepts = func(v any) bool { return prev(v) || pred(v) }
+		return
+	}
+	e.st.accepts = pred
+}
+
+// DragHover returns the value of type T dragged within the window while
+// the pointer is over e or anything inside it, without making e take it:
+// the drop goes to the innermost element that does (Drop), as under a zone
+// whose child only shows a highlight.
+func coreDragHover[T any](e *node) (T, bool) {
+	var zero T
+	d := e.c.rt.drag
+	if d == nil || d.canceled || d.native {
+		return zero, false
+	}
+	v, ok := d.value.(T)
+	if !ok || !slices.Contains(e.c.rt.hitChain(d.x, d.y), e.id) {
+		return zero, false
+	}
+	return v, true
 }
 
 // valueTarget returns the innermost element at (x, y) taking value.
@@ -178,6 +208,7 @@ func (rt *engine) dragMove(x, y float32) {
 	if d.canceled {
 		return
 	}
+	d.x, d.y = x, y
 	d.over = rt.valueTarget(x, y, d.value)
 	rt.requestFrame()
 }

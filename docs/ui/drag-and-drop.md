@@ -39,6 +39,11 @@ if task, ok := ui.Drop[*Task](done); ok {
 - **Dragging several.** The copy shows how many values a drag holds, beside
   the pointer, as when the rows chosen in a list are dragged together.
 
+`ui.DragHover[T](e)` returns the value of type `T` dragged over `e` or anything
+inside it without making `e` take it, so a drop falls to the element around that
+takes the type. An element taking several types calls `Drop` or `DragOver` once
+for each.
+
 `Dragging` reports that an element is dragging its value, to dim it where
 it was.
 

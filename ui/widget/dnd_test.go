@@ -203,3 +203,86 @@ func TestDropTargetsCanBeRemoved(t *testing.T) {
 		t.Fatalf("a removed target dropped: %q", got)
 	}
 }
+
+func TestOneControlTakesSeveralTypes(t *testing.T) {
+	l := &evlog{}
+	n := Label("n").DragSource(7)
+	s := Label("s").DragSource("x")
+	dst := Label("dst").Padding(8)
+	OnDrop(dst, func(v int) { l.add("int %d", v) })
+	OnDrop(dst, func(v string) { l.add("str %s", v) })
+	OnDragOver(dst, func(over bool, v int) { l.add("over-int %v", over) })
+	tt := NewTester(t, VBox(40).Add(n, s, dst), 300, 400)
+	dragTo(tt, tt.Find(ByLabel("n")), tt.Find(ByLabel("dst")))
+	dragTo(tt, tt.Find(ByLabel("s")), tt.Find(ByLabel("dst")))
+	got := fmt.Sprint(l.get())
+	if got != "[over-int true over-int false int 7 str x]" {
+		t.Fatalf("events %s", got)
+	}
+}
+
+func TestAHoverOnlyChildDoesNotSwallowTheOuterDrop(t *testing.T) {
+	l := &evlog{}
+	src := Label("src").DragSource("p")
+	child := Label("child").Padding(8)
+	OnDragOver(child, func(over bool, v string) { l.add("child over %v", over) })
+	zone := VBox(4).Add(child).Padding(16)
+	OnDrop(zone, func(v string) { l.add("zone drop %s", v) })
+	tt := NewTester(t, VBox(40).Add(src, zone), 300, 400)
+	dragTo(tt, tt.Find(ByLabel("src")), tt.Find(ByLabel("child")))
+	got := fmt.Sprint(l.get())
+	if got != "[child over true child over false zone drop p]" {
+		t.Fatalf("events %s: the drop on the highlighted child belongs to the zone", got)
+	}
+}
+
+func TestHidingAHoveredTargetEndsItsHover(t *testing.T) {
+	l := &evlog{}
+	src := Label("src").DragSource("p")
+	dst := Label("dst").Padding(8)
+	OnDragOver(dst, func(over bool, v string) { l.add("over %v", over) })
+	tt := NewTester(t, VBox(40).Add(src, dst), 300, 300)
+	a, b := tt.Find(ByLabel("src")).Bounds(), tt.Find(ByLabel("dst")).Bounds()
+	tt.Press(a.X+a.W/2, a.Y+a.H/2)
+	for i := 1; i <= 4; i++ {
+		tt.Move(a.X+a.W/2, a.Y+a.H/2+float32(i)*(b.Y+b.H/2-a.Y-a.H/2)/4)
+		tt.Frame()
+	}
+	tt.Settle()
+	dst.SetVisible(false)
+	tt.Settle()
+	got := l.get()
+	if len(got) < 2 || got[len(got)-1] != "over false" {
+		t.Fatalf("events %q: hiding the target must end the hover", got)
+	}
+}
+
+func TestReplacingOrRemovingOnDragOverEndsTheOldHover(t *testing.T) {
+	l := &evlog{}
+	src := Label("src").DragSource("p")
+	dst := Label("dst").Padding(8)
+	OnDragOver(dst, func(over bool, v string) { l.add("old %v", over) })
+	tt := NewTester(t, VBox(40).Add(src, dst), 300, 300)
+	a, b := tt.Find(ByLabel("src")).Bounds(), tt.Find(ByLabel("dst")).Bounds()
+	tt.Press(a.X+a.W/2, a.Y+a.H/2)
+	for i := 1; i <= 4; i++ {
+		tt.Move(a.X+a.W/2, a.Y+a.H/2+float32(i)*(b.Y+b.H/2-a.Y-a.H/2)/4)
+		tt.Frame()
+	}
+	tt.Settle()
+	OnDragOver(dst, func(over bool, v string) { l.add("new %v", over) })
+	tt.Settle()
+	got := l.get()
+	if fmt.Sprint(got) != "[old true old false new true]" {
+		t.Fatalf("events %q: the old handler must see the hover end, then the new one the hover", got)
+	}
+}
+
+func TestDragDataWithTwoOptionsPanicsAtTheCall(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("no panic")
+		}
+	}()
+	Label("x").DragData(func() transfer.Data { return transfer.TextData("x") }, transfer.DragOptions{}, transfer.DragOptions{})
+}

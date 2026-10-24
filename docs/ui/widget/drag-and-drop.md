@@ -20,20 +20,28 @@ zone.OnDropFiles(func(paths []string) { open(paths) })
   of it follows the pointer. A press that does not move still clicks, so a
   `Button` can be a source; a drag does not click it. Escape cancels a drag.
 - `widget.OnDrop[T](c, fn)`: `c` takes values of type `T` and `fn` gets the
-  one dropped, on the event goroutine. A value of another type does not drop
-  on it, and the innermost control under the pointer that takes the type gets
-  it. A nil `fn` removes the target. There is no `AllowDrop`: a control takes
-  drops while it has a handler.
+  one dropped, on the event goroutine. A control takes several types with
+  several `OnDrop` calls. A value of another type does not drop on it, and the
+  innermost control under the pointer that takes the type gets it. A nil `fn`
+  removes the target. There is no `AllowDrop`: a control takes drops while it
+  has a handler. `T` is matched as a Go type assertion: for an interface `T`, a
+  value whose pointer type has the methods does not match a non-pointer value,
+  and `OnDrop[any]` takes everything.
 - `widget.OnDragOver[T](c, fn)`: `fn(true, v)` when a value of type `T` comes
-  over `c`, `fn(false, zero)` when it leaves, is dropped or the drag is
-  cancelled, so the hover feedback never sticks. The end of the hover always
-  comes before `OnDrop`'s handler. It does not make `c` take drops.
+  over `c` or anything inside it, `fn(false, zero)` when it leaves, is
+  dropped, the drag is cancelled, `c` is hidden, or the handler is replaced or
+  removed, so the hover feedback never sticks. The end of the hover always
+  comes before `OnDrop`'s handler. It does **not** make `c` take the value: a
+  drop on a highlighted child falls to the nearest control around it with an
+  `OnDrop` of the type, as in a drop zone with highlighted children.
+- A source hidden in the middle of a drag cancels the drag silently.
 
 ## Between applications and from the OS
 
 - `c.DragData(fn, opts...)`: a system drag of text, files or URLs
   ([package transfer](../drag-and-drop.md#between-windows-and-applications)).
-  `fn` returns the data when the gesture starts. It runs on the main thread
+  `fn` returns the data when the gesture starts. At most one `DragOptions`
+  (more panic at the call). It runs on the main thread
   with no lock of the package held, so it may read widgets, and it is quick:
   it blocks the UI while the pointer waits.
 - `c.OnDropData(formats, fn)`: takes drops in one of `formats` from other apps

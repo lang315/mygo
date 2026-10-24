@@ -244,3 +244,62 @@ func TestGridReorder(t *testing.T) {
 		t.Errorf("moves %v", fmt.Sprint(moves))
 	}
 }
+
+func TestDropTakesSeveralTypesOnOneElement(t *testing.T) {
+	var ints []int
+	var strs []string
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Gap(20).Padding(20).Children(func() {
+			coreBox(c).Size(100, 40).Label("Num").Drag(7)
+			coreBox(c).Size(100, 40).Label("Str").Drag("x")
+			target := coreBox(c).Size(200, 100).Label("Target")
+			if v, ok := coreDrop[int](target); ok {
+				ints = append(ints, v)
+			}
+			if v, ok := coreDrop[string](target); ok {
+				strs = append(strs, v)
+			}
+		})
+	}, 400, 400)
+	num, _ := tt.Find("Num")
+	str, _ := tt.Find("Str")
+	target, _ := tt.Find("Target")
+	drag(tt, num.X+10, num.Y+10, target.X+20, target.Y+20)
+	drag(tt, str.X+10, str.Y+10, target.X+20, target.Y+20)
+	if !slices.Equal(ints, []int{7}) || !slices.Equal(strs, []string{"x"}) {
+		t.Fatalf("ints %v, strs %v: one element takes both types", ints, strs)
+	}
+}
+
+func TestDragHoverSeesTheValueWithoutTakingIt(t *testing.T) {
+	var hover, outer []string
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Gap(20).Padding(20).Children(func() {
+			coreBox(c).Size(100, 40).Label("Src").Drag("p")
+			zone := coreColumn(c).Size(200, 120).Padding(10).Label("Zone")
+			coreColumn(c).Children(func() {})
+			zone.Children(func() {
+				child := coreBox(c).Size(100, 50).Label("Child")
+				if v, ok := coreDragHover[string](child); ok {
+					hover = append(hover, v)
+				}
+			})
+			if v, ok := coreDrop[string](zone); ok {
+				outer = append(outer, v)
+			}
+		})
+	}, 400, 500)
+	src, _ := tt.Find("Src")
+	child, _ := tt.Find("Child")
+	tt.Press(src.X+10, src.Y+10)
+	tt.Move(src.X+30, src.Y+30)
+	tt.Move(child.X+10, child.Y+10)
+	tt.Frame()
+	if len(hover) == 0 {
+		t.Fatal("the hover-only child never saw the value")
+	}
+	tt.Release(child.X+10, child.Y+10)
+	if !slices.Equal(outer, []string{"p"}) {
+		t.Fatalf("the drop on the hovered child fell to %q: a hover-only element must not take the drop", outer)
+	}
+}
