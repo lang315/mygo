@@ -415,3 +415,8 @@ func (f *FlowPanelWidget) build(c *ui.Context) ui.Element {
 		}
 	})
 }
+
+func (n *TabControlWidget) fillsAcross() {}
+
+func (f *GroupBoxWidget) fillsAcross()    {}
+func (s *ScrollPanelWidget) fillsAcross() {}
