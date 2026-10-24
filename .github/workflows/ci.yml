@@ -89,10 +89,11 @@ jobs:
           key: ${{ steps.downloads.outputs.cache-primary-key }}
       # The race detector and a shuffled order of the tests and benchmarks'
       # run on the unit tests; the GUI tests below are not run with them.
-      - run: go test -race -shuffle=on ./...
+      # cmd/mygo takes 9 to 10 minutes on macOS under -race, the default limit.
+      - run: go test -race -shuffle=on -timeout 25m ./...
       - name: Test without the inspector, as production builds
         if: runner.os == 'Linux'
-        run: go test -race -shuffle=on -tags mygo_noinspector ./ui .
+        run: go test -race -shuffle=on -timeout 25m -tags mygo_noinspector ./ui .
       - run: bun run test
       - run: bun run typecheck
       - name: GUI tests
@@ -154,7 +155,7 @@ jobs:
             ~/.cache/mygo/natives
             ~/.cache/mygo/nsis-*
           key: ${{ steps.downloads.outputs.cache-primary-key }}
-      - run: go test -race -shuffle=on ./...
+      - run: go test -race -shuffle=on -timeout 25m ./...
       - name: GUI tests
         env:
           MYGO_E2E: 1
