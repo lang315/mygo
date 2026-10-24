@@ -565,4 +565,4 @@ func (l *ListBoxWidget[T, K]) row(c *ui.Context, i int) {
 	})
 }
 
-func (l *ListBoxWidget[T, K]) fillsAcross() {}
+func (l *ListBoxWidget[T, K]) fillsAcross() bool { return true }

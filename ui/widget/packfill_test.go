@@ -145,3 +145,68 @@ func TestMessageTextStaysBesideItsIcon(t *testing.T) {
 	press(t, fw, "OK")
 	received(t, done)
 }
+
+func tallRow(t *testing.T, inner Control, w, h int, q Query) ui.Rect {
+	t.Helper()
+	return boundsIn(t, VBox(4).Pack(HBox(4).Add(Label("icon")).Pack(inner, true, true), true, true), w, h, q)
+}
+
+// A box of labels in a tall row stays centred, as it was: only a box that
+// holds a control that scrolls fills across.
+func TestBoxOfLabelsInATallRowStaysCentred(t *testing.T) {
+	r := tallRow(t, VBox(4).Add(Label("one")).Add(Label("two")), 420, 300, ByLabel("one"))
+	if r.Y < 100 {
+		t.Errorf("a box of labels at y=%v in a 300 row: want it centred, not at the top", r.Y)
+	}
+	r = tallRow(t, GroupBox("g").Add(Button("btn")), 420, 300, ByLabel("btn"))
+	if r.Y < 100 {
+		t.Errorf("a group box of a button at y=%v in a 300 row: want it centred", r.Y)
+	}
+}
+
+// A container fills across when what it holds does, however deep.
+func TestContainersFillAcrossWhenTheyHoldAListOrAViewport(t *testing.T) {
+	for name, inner := range map[string]func() Control{
+		"GroupBox(list)":   func() Control { return GroupBox("g").Add(p137list(300)) },
+		"VBox(label,list)": func() Control { return VBox(4).Add(Label("x")).Pack(p137list(300), true, true) },
+		"GroupBox(VBox(list))": func() Control {
+			return GroupBox("g").Add(VBox(4).Pack(p137list(300), true, true))
+		},
+	} {
+		f := NewForm("t", 420, 460)
+		f.SetContent(VBox(4).Pack(HBox(4).Pack(inner(), true, true), true, true))
+		tt := TestForm(t, f)
+		tt.Settle()
+		if got := len(tt.FindAll(ByRole(ui.RoleListItem))); got < 10 || got > 80 {
+			t.Errorf("%s: %d rows built", name, got)
+		}
+	}
+}
+
+// Packed to expand without filling, a marked control keeps its width and
+// still virtualizes: the stretch is across the row, not along it.
+func TestPackedWithoutFillInARowKeepsItsWidthAndVirtualizes(t *testing.T) {
+	lb := p137list(300)
+	f := NewForm("t", 800, 460)
+	f.SetContent(VBox(4).Pack(HBox(4).Add(Label("left")).Pack(lb, true, false).Add(Label("right")), true, true))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if got := len(tt.FindAll(ByRole(ui.RoleListItem))); got < 10 || got > 80 {
+		t.Errorf("%d rows built", got)
+	}
+	if w := tt.Find(ByRole(ui.RoleList)).Bounds().W; w > 400 {
+		t.Errorf("the list is %v wide: the stretch went along the row", w)
+	}
+}
+
+func TestMultilineTextBoxInARowIsCappedToTheRow(t *testing.T) {
+	text := ""
+	for i := range 2000 {
+		text += fmt.Sprintf("line %d\n", i)
+	}
+	mt := MultilineTextBox().SetText(text)
+	r := boundsIn(t, VBox(4).Pack(HBox(4).Pack(mt, true, true), true, true), 600, 440, ByRole(ui.RoleTextField))
+	if r.H > 460 {
+		t.Errorf("a text of 2000 lines is %v high in a 440 row", r.H)
+	}
+}

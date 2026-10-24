@@ -60,7 +60,10 @@ func (f *GroupBoxWidget) build(c *ui.Context) ui.Element {
 			ui.Text(c, f.title).Bold()
 		}
 		if f.child != nil {
-			render(c, f.child)
+			e := render(c, f.child)
+			if fillsAcross(f.child) {
+				e.Grow(1) // what scrolls takes the room the frame has
+			}
 		}
 	})
 }
@@ -416,7 +419,7 @@ func (f *FlowPanelWidget) build(c *ui.Context) ui.Element {
 	})
 }
 
-func (n *TabControlWidget) fillsAcross() {}
+func (n *TabControlWidget) fillsAcross() bool { return true }
 
-func (f *GroupBoxWidget) fillsAcross()    {}
-func (s *ScrollPanelWidget) fillsAcross() {}
+func (f *GroupBoxWidget) fillsAcross() bool    { return f.child != nil && fillsAcross(f.child) }
+func (s *ScrollPanelWidget) fillsAcross() bool { return true }

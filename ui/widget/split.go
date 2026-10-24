@@ -111,4 +111,4 @@ func (s *SplitContainerWidget) build(c *ui.Context) ui.Element {
 	return e.Grow(1)
 }
 
-func (s *SplitContainerWidget) fillsAcross() {}
+func (s *SplitContainerWidget) fillsAcross() bool { return true }

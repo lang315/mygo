@@ -154,7 +154,7 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	keeping.key(c, b)
 	e := w.build(c)
-	if _, ok := w.(interface{ fillsAcross() }); ok {
+	if fillsAcross(w) {
 		e.AlignSelf(ui.Stretch) // before the widget's own alignment, which wins
 	}
 	b.place.apply(e)
@@ -216,3 +216,18 @@ func content(w Control) func(c *ui.Context) {
 // does not redraw a window that shows a View, as only a Form's windows are
 // tracked: Invalidate it yourself.
 func View(w Control) func(c *ui.Context) { return content(w) }
+
+// acrossFiller is a control that may stretch across the box that holds it.
+type acrossFiller interface{ fillsAcross() bool }
+
+// fillsAcross reports whether w stretches across the box that holds it: the
+// controls that scroll or virtualize their rows (viewports: a list, table,
+// tree, multi-line text, split, tab control, scroll panel) always do, as a
+// row would otherwise center them at the height of all their content; the
+// boxes and group boxes do when what they hold does, so that a box of labels
+// stays centred and a box with a list passes the height down to it. The
+// widget's own Align and VAlign still win (render). Under mu.
+func fillsAcross(w Control) bool {
+	f, ok := w.(acrossFiller)
+	return ok && f.fillsAcross()
+}
