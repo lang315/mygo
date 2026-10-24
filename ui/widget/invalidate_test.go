@@ -156,6 +156,16 @@ func TestShowingAWidgetHiddenFromTheStartRedrawsItsWindow(t *testing.T) {
 	wantRedrawn(t, redrawn(), w)
 }
 
+// A widget hidden in a Grid's cell when its window first draws still tells
+// the window when it shows, as one in a box does.
+func TestShowingAGridWidgetHiddenFromTheStartRedrawsItsWindow(t *testing.T) {
+	l := Label("error").SetVisible(false)
+	_, w := showFrame(t, Grid(0, 0).Attach(Label("shown"), 0, 0, 1, 1).Attach(l, 1, 0, 1, 1))
+	redrawn := recordInvalidations(t)
+	l.SetVisible(true)
+	wantRedrawn(t, redrawn(), w)
+}
+
 func TestDialogSubtitleShownAfterBeingEmptyRedrawsTheDialog(t *testing.T) {
 	d := NewDialog(nil, "Title", "", 300, 200, Label("content"))
 	w := showFormFrame(t, d.Form)
