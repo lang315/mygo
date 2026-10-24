@@ -137,3 +137,129 @@ func FuzzParse(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, s string) { Parse(s) })
 }
+
+func TestColors(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want Decl
+	}{
+		{"bg-blue-500", Decl{Kind: Background, Color: Color{RGBA: 0x3b82f6ff}}},
+		{"text-gray-500", Decl{Kind: TextColor, Color: Color{RGBA: 0x6b7280ff}}},
+		{"border-red-900", Decl{Kind: BorderColor, Color: Color{RGBA: 0x7f1d1dff}}},
+		{"bg-slate-950", Decl{Kind: Background, Color: Color{RGBA: 0x020617ff}}},
+		{"bg-yellow-100", Decl{Kind: Background, Color: Color{RGBA: 0xfef9c3ff}}},
+		{"text-black", Decl{Kind: TextColor, Color: Color{RGBA: 0x000000ff}}},
+		{"text-white", Decl{Kind: TextColor, Color: Color{RGBA: 0xffffffff}}},
+		{"bg-transparent", Decl{Kind: Background, Color: Color{RGBA: 0}}},
+		{"bg-default", Decl{Kind: Background, Color: Color{Role: "background"}}},
+		{"text-default", Decl{Kind: TextColor, Color: Color{Role: "text"}}},
+		{"border-default", Decl{Kind: BorderColor, Color: Color{Role: "border"}}},
+		{"text-muted", Decl{Kind: TextColor, Color: Color{Role: "text-muted"}}},
+		{"bg-surface-hover", Decl{Kind: Background, Color: Color{Role: "surface-hover"}}},
+		{"text-on-accent", Decl{Kind: TextColor, Color: Color{Role: "accent-text"}}},
+		{"bg-on-inverse", Decl{Kind: Background, Color: Color{Role: "inverse-text"}}},
+		{"bg-danger", Decl{Kind: Background, Color: Color{Role: "danger"}}},
+	} {
+		got, bad := Parse(c.in)
+		if len(bad) != 0 || !reflect.DeepEqual(got, one(Key{}, c.want)) {
+			t.Errorf("Parse(%q) = %+v, bad %v", c.in, got, bad)
+		}
+	}
+	for _, in := range []string{"bg-blue-550", "bg-blue", "text-green", "border-current", "bg-blue-600/50", "border-l-red-500"} {
+		if _, bad := Parse(in); len(bad) != 1 {
+			t.Errorf("Parse(%q) accepted", in)
+		}
+	}
+}
+
+func TestPaletteIsComplete(t *testing.T) {
+	if len(palette) != 22 {
+		t.Fatalf("%d hues, want Tailwind v3's 22", len(palette))
+	}
+	for hue := range palette {
+		for _, shade := range []string{"50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"} {
+			if _, bad := Parse("bg-" + hue + "-" + shade); len(bad) != 0 {
+				t.Errorf("bg-%s-%s: %v", hue, shade, bad)
+			}
+		}
+	}
+}
+
+func TestEveryRoleIsListed(t *testing.T) {
+	listed := map[string]bool{}
+	for _, r := range Roles {
+		listed[r] = true
+	}
+	for tok, role := range roles {
+		if !listed[role] {
+			t.Errorf("token %q gives role %q, not in Roles", tok, role)
+		}
+	}
+	for _, role := range defaults {
+		if !listed[role] {
+			t.Errorf("default role %q not in Roles", role)
+		}
+	}
+}
+
+func TestShadows(t *testing.T) {
+	got, _ := Parse("shadow-md")
+	want := one(Key{}, Decl{Kind: Shadows, Shadows: []Shadow{{0, 4, 6, -1, 0.1, false}, {0, 2, 4, -2, 0.1, false}}})
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("shadow-md = %+v", got)
+	}
+	if got, _ := Parse("shadow-none"); len(got) != 1 || got[0].Kind != Shadows || got[0].Shadows != nil {
+		t.Fatalf("shadow-none = %+v", got)
+	}
+	if got, _ := Parse("shadow-inner"); len(got) != 1 || !got[0].Shadows[0].Inset {
+		t.Fatalf("shadow-inner = %+v", got)
+	}
+}
+
+func TestButtons(t *testing.T) {
+	got, bad := Parse("suggested-action")
+	want, _ := Parse("bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-pressed")
+	if len(bad) != 0 || !reflect.DeepEqual(got, want) {
+		t.Fatalf("suggested-action = %+v %v", got, bad)
+	}
+	got, bad = Parse("destructive-action")
+	want, _ = Parse("bg-danger text-on-accent hover:opacity-90 active:opacity-80")
+	if len(bad) != 0 || !reflect.DeepEqual(got, want) {
+		t.Fatalf("destructive-action = %+v %v", got, bad)
+	}
+}
+
+// fhtool lists the classes fhtool's AddClass calls use (recounted
+// 2026-10-24): those tw takes, and those its port must change.
+var fhtoolGood = []string{
+	"halign-start", "p-2", "mt-3", "mb-3", "p-3", "mt-5", "font-bold", "hexpand", "halign-end",
+	"text-gray-500", "rounded-l-none", "border-l-0", "rounded-r-none", "border-solid", "text-xl",
+	"border-r-0", "border", "px-3", "halign-center", "suggested-action", "text-xs", "rounded-md",
+	"py-2", "p-6", "p-4", "mt-2", "border-2", "text-muted", "text-lg", "text-black", "rounded-none",
+	"pt-3", "pb-1", "ml-2", "mb-2", "italic", "font-mono", "vexpand", "text-white", "text-sm",
+	"text-gray-900", "p-0", "ml-5", "ml-4", "ml-3", "mb-5", "m-2", "m-10", "m-0", "destructive-action",
+	"border-yellow-500", "border-t", "border-red-900", "border-gray-300", "border-b", "bg-yellow-100",
+	"bg-blue-50",
+}
+
+var fhtoolBad = []string{
+	"text-italic", "text-green", "combobox-rounded-r-none", "combobox-rounded-none", "gota-card",
+	"gota-table", "gota-table-bottom-panel", "gota-tag-select", "gota-tag-select-item",
+	"gota-tag-select-item-text",
+}
+
+func TestFhtoolClasses(t *testing.T) {
+	if len(fhtoolGood) != 57 || len(fhtoolBad) != 10 {
+		t.Fatalf("lists hold %d and %d, want 57 and 10", len(fhtoolGood), len(fhtoolBad))
+	}
+	for _, c := range fhtoolGood {
+		if _, bad := Parse(c); len(bad) != 0 {
+			t.Errorf("%s: %v", c, bad)
+		}
+	}
+	for _, c := range fhtoolBad {
+		if _, bad := Parse(c); len(bad) != 1 || bad[0].Reason != Unknown {
+			t.Errorf("%s: %v, want unknown", c, bad)
+		}
+	}
+}

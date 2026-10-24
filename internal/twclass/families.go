@@ -130,5 +130,30 @@ func border(rest string) ([]Decl, bool) {
 	return nil, false
 }
 
-// color is Task 4's; until then it knows no color.
-func color(v, prefix string) (Color, bool) { return Color{}, false }
+// color parses a color utility's value after prefix (bg, text or border):
+// a palette color, black, white, transparent, or a theme token.
+func color(v, prefix string) (Color, bool) {
+	switch v {
+	case "black":
+		return Color{RGBA: 0x000000ff}, true
+	case "white":
+		return Color{RGBA: 0xffffffff}, true
+	case "transparent":
+		return Color{}, true
+	case "default":
+		return Color{Role: defaults[prefix]}, true
+	}
+	if r, ok := roles[v]; ok {
+		return Color{Role: r}, true
+	}
+	hue, shade, ok := strings.Cut(v, "-")
+	if !ok {
+		return Color{}, false
+	}
+	row, ok := palette[hue]
+	i, ok2 := shades[shade]
+	if !ok || !ok2 {
+		return Color{}, false
+	}
+	return Color{RGBA: row[i]<<8 | 0xff}, true
+}
