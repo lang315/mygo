@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -16,11 +17,11 @@ var buildingForm *Form
 
 // webViewCreateHook runs just before a web view is made, for tests to check
 // that no lock is held.
-var webViewCreateHook func()
+var webViewCreateHook atomic.Pointer[func()]
 
 // webViewReplayHook runs after a new view took the page to load, before it
 // loads it.
-var webViewReplayHook func()
+var webViewReplayHook atomic.Pointer[func()]
 
 // WebBrowserWidget shows a web page in a window of native UI: the system's
 // web view (WKWebView, WebView2, WebKitGTK) over ui.WebView. See
@@ -213,8 +214,8 @@ func (b *WebBrowserWidget) build(c *ui.Context) ui.Element {
 
 // create makes the view, on the event goroutine with no lock held.
 func (b *WebBrowserWidget) create(f *Form, win *mygo.Window) {
-	if h := webViewCreateHook; h != nil {
-		h()
+	if h := webViewCreateHook.Load(); h != nil {
+		(*h)()
 	}
 	mu.Lock()
 	bg := b.background
@@ -272,8 +273,8 @@ func (b *WebBrowserWidget) create(f *Form, win *mygo.Window) {
 	b.view, b.form, b.creating = v, f, false
 	url, html, hasHTML := b.url, b.html, b.hasHTML
 	mu.Unlock()
-	if h := webViewReplayHook; h != nil {
-		h()
+	if h := webViewReplayHook.Load(); h != nil {
+		(*h)()
 	}
 	switch {
 	case hasHTML:

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -68,8 +69,8 @@ func TestWebBrowserMakesItsViewOnlyOnceTheFormIsShown(t *testing.T) {
 
 func TestWebBrowserCreatesItsViewOffTheLock(t *testing.T) {
 	var held atomic.Int32
-	old := webViewCreateHook
-	webViewCreateHook = func() {
+	old := webViewCreateHook.Load()
+	hook := func() {
 		// Another goroutine (a frame) may hold mu for a moment; this one
 		// holding it would never let go.
 		for i := 0; i < 100000; i++ {
@@ -81,7 +82,8 @@ func TestWebBrowserCreatesItsViewOffTheLock(t *testing.T) {
 		}
 		held.Add(1)
 	}
-	t.Cleanup(func() { webViewCreateHook = old })
+	webViewCreateHook.Store(&hook)
+	t.Cleanup(func() { webViewCreateHook.Store(old) })
 	_, s := shownBrowser(t, WebBrowser())
 	theView(t, s)
 	if held.Load() != 0 {
@@ -207,13 +209,18 @@ func TestWebBrowserMovedToAnotherFormGetsAFreshViewWithTheCurrentUrl(t *testing.
 
 type browserService struct{ calls atomic.Int32 }
 
+var (
+	browserSvc     = &browserService{}
+	bindBrowserSvc sync.Once
+)
+
 func (b *browserService) Hello(name string) string { b.calls.Add(1); return "hello " + name }
 
 // A page cannot call Go whatever its origin: not an https page, not about:
 // or file: pages, and not HTML the app gave with SetDocumentText.
 func TestAWebBrowserPageNeverCallsGo(t *testing.T) {
-	svc := &browserService{}
-	mygo.BindAs("BrowserHello", svc)
+	svc := browserSvc
+	bindBrowserSvc.Do(func() { mygo.BindAs("BrowserHello", svc) })
 	b := WebBrowser().SetDocumentText("<p>app's HTML</p>")
 	_, s := shownBrowser(t, b)
 	v := theView(t, s)
@@ -287,15 +294,16 @@ func TestAPanickingOnNavigatingIsReportedAndTheNavigationGoesOn(t *testing.T) {
 func TestWebBrowserNavigateDuringTheFirstLoadWins(t *testing.T) {
 	paused := make(chan struct{}, 1)
 	release := make(chan struct{})
-	old := webViewReplayHook
-	webViewReplayHook = func() {
+	old := webViewReplayHook.Load()
+	hook := func() {
 		select {
 		case paused <- struct{}{}:
 			<-release
 		default:
 		}
 	}
-	t.Cleanup(func() { webViewReplayHook = old })
+	webViewReplayHook.Store(&hook)
+	t.Cleanup(func() { webViewReplayHook.Store(old) })
 	b := WebBrowser().Navigate("https://example.com/old")
 	_, s := shownBrowser(t, b)
 	wait.Until(t, "the replay to pause", func() bool {
@@ -323,8 +331,9 @@ func TestWebBrowserNavigateDuringTheFirstLoadWins(t *testing.T) {
 func TestWebBrowserViewIsMadeAgainIfTheFormIsShownAgainAfterAClosedCreation(t *testing.T) {
 	// The form closes between the build and the creation.
 	gate := make(chan struct{})
-	old := webViewCreateHook
-	webViewCreateHook = func() { <-gate }
+	old := webViewCreateHook.Load()
+	hook := func() { <-gate }
+	webViewCreateHook.Store(&hook)
 	b := WebBrowser()
 	f := NewForm("Again", 300, 200).SetContent(b)
 	f.Show()
@@ -336,7 +345,7 @@ func TestWebBrowserViewIsMadeAgainIfTheFormIsShownAgainAfterAClosedCreation(t *t
 	s2 := lastFake(t).FakeSurface()
 	mygo.RunOnMain(func() { s2.Frame() }) // its build finds a creation under way
 	close(gate)
-	webViewCreateHook = old
+	webViewCreateHook.Store(old)
 	theView(t, s2)
 }
 
