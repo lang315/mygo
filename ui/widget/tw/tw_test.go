@@ -249,3 +249,21 @@ func TestDrawsAsTyped(t *testing.T) {
 		t.Fatal("tw and typed draw different pixels")
 	}
 }
+
+func TestMaxWNoneLiftsTheCapOfAFixedWidth(t *testing.T) {
+	for class, want := range map[string]float32{"w-96": 300, "w-96 max-w-none": 384} {
+		b := widget.Button("W")
+		b.Apply(S(class))
+		tt := widget.NewTester(t, widget.VBox(0).Add(b), 300, 100)
+		if w := tt.Find(widget.ByLabel("W")).Bounds().W; w != want {
+			t.Errorf("%q: width %v, want %v", class, w, want)
+		}
+	}
+	// A MaxWidth of the app's, before or after SetSize, overrides the cap.
+	b := widget.Button("W")
+	b.Apply(S("max-w-none"))
+	b.SetSize(800, 0)
+	if w := widget.NewTester(t, widget.VBox(0).Add(b), 300, 100).Find(widget.ByLabel("W")).Bounds().W; w != 800 {
+		t.Errorf("MaxWidth set before SetSize: width %v, want 800", w)
+	}
+}
