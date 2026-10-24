@@ -427,7 +427,7 @@ slow work. Each `On…` method returns a function that removes the listener.
 | `OnMaximize`, `OnUnmaximize`, `OnMinimize`, `OnRestore` | its state changed |
 | `OnEnterFullScreen`, `OnLeaveFullScreen` | it entered or left full screen |
 | `OnReadyToShow` | its first page is ready to be displayed, or its native UI drew its first frame |
-| `OnFileDrop` | files were dropped on its page, see [dropped files](frontend.md#dropped-files), or on native UI that did not take them, see [dropped files](ui/input.md#dropped-files) |
+| `OnFileDrop` | files were dropped on its page (not on an untrusted page, such as a `WebBrowser`'s), see [dropped files](frontend.md#dropped-files), or on native UI that did not take them, see [dropped files](ui/input.md#dropped-files) |
 
 Ask before closing a window with unsaved changes:
 

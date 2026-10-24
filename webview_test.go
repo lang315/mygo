@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -391,6 +393,55 @@ func TestWebViewNoBindingsRefusesPermissionsDownloadsAndWindowsByDefault(t *test
 			if !allowed || path == "" {
 				t.Errorf("with handlers: permission %v, path %q", allowed, path)
 			}
+		}
+	}
+}
+
+// A view without bindings is not the app's own page: it reads no response
+// of a custom scheme across origins, whoever the window trusts.
+func TestAllowCORSRefusesAViewWithoutBindings(t *testing.T) {
+	for _, noBindings := range []bool{false, true} {
+		win := &Window{noBindings: noBindings, trustedOrigins: []string{"https://partner.example"}}
+		h := http.Header{}
+		r := httptest.NewRequest("GET", "app://localhost/data", nil)
+		r.Header.Set("Origin", "https://partner.example")
+		allowCORS(win, h, r)
+		if got := h.Get("Access-Control-Allow-Origin") != ""; got == noBindings {
+			t.Errorf("NoBindings=%v: CORS granted = %v", noBindings, got)
+		}
+	}
+}
+
+// The permissions of a kind WebView2 asks the user about are denied to a
+// view without bindings, and left to the user for the app's own pages.
+func TestUnmappedPermissionsAreDeniedToAViewWithoutBindings(t *testing.T) {
+	for _, noBindings := range []bool{false, true} {
+		w, _, _ := contentWindow(t, func(c *ui.Context) {})
+		v, err := w.NewWebView(WebViewOptions{NoBindings: noBindings})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fv *fake.WebView
+		for _, wn := range fb.Windows() {
+			if s := wn.FakeSurface(); s != nil && !wn.IsClosed() {
+				if vs := s.WebViews(); len(vs) > 0 {
+					fv = vs[len(vs)-1]
+				}
+			}
+		}
+		if fv == nil {
+			t.Fatal("no web view")
+		}
+		var asked []string
+		v.Page().SetPermissionHandler(func(req PermissionRequest) bool {
+			asked = append(asked, string(req.Permissions[0]))
+			return true
+		})
+		got := onMainValue(func() bool {
+			return fv.H.PermissionRequested([]string{platform.UnmappedPermission}, "file:///tmp/x.html")
+		})
+		if got == noBindings || len(asked) != 0 {
+			t.Errorf("NoBindings=%v: allowed %v, the app's handler was asked %v", noBindings, got, asked)
 		}
 	}
 }

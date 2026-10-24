@@ -470,14 +470,12 @@ func (w *window) downloadStarting(_, args uintptr) {
 }
 
 // permissionRequested decides camera, microphone, location and notification
-// requests; WebView2 asks the user about the others.
+// requests; WebView2 asks the user about the others, unless the page is
+// untrusted (a view without bindings): those are denied.
 func (w *window) permissionRequested(_, args uintptr) {
 	var kind int32
 	comCall(args, permGetKind, uintptr(unsafe.Pointer(&kind)))
 	name := map[int32]string{1: "microphone", 2: "camera", 3: "geolocation", 4: "notifications"}[kind]
-	if name == "" {
-		return
-	}
 	var p uintptr
 	comCall(args, permGetURI, uintptr(unsafe.Pointer(&p)))
 	origin := takeWstr(p)
@@ -486,6 +484,14 @@ func (w *window) permissionRequested(_, args uintptr) {
 	}
 	const allow, deny = 1, 2 // COREWEBVIEW2_PERMISSION_STATE
 	state := deny
+	if name == "" {
+		// WebView2 asks the user about the app's own pages; an untrusted
+		// page gets no question.
+		if !w.h.PermissionRequested([]string{platform.UnmappedPermission}, origin) {
+			comCall(args, permPutState, uintptr(deny))
+		}
+		return
+	}
 	if w.h.PermissionRequested([]string{name}, origin) {
 		state = allow
 	}

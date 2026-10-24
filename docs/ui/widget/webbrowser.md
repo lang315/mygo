@@ -59,8 +59,15 @@ The view is made with `WebViewOptions.NoBindings`, which makes it untrusted for
 everything a page can ask of the host, unless the app says otherwise:
 
 - **Call Go:** never, whatever the origin.
-- **Use permissions** (camera, microphone, location...): all denied; there is no
-  hook.
+- **Use permissions:** denied unless the app's `SetPermissionHandler` allows
+  them. Camera and microphone are routed through it on macOS; camera,
+  microphone, location and notifications on Linux and Windows. The other kinds
+  (clipboard read, file system access, local fonts, MIDI sysex, window
+  management...) never reach the handler: macOS and Linux leave them to the
+  engine's own default answer, and Windows denies them to this view
+  instead of asking the user.
+- **Read responses of your custom schemes** from another origin: no CORS
+  headers, even for `TrustedOrigins`.
 - **Move, resize or maximize your window**, or hand it dropped files: only the
   app's own pages can.
 - **Download:** refused, unless `OnDownload` returns a path. `OnDownload` runs

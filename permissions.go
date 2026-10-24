@@ -1,5 +1,7 @@
 package mygo
 
+import "github.com/egoist/mygo/internal/platform"
+
 // Permission is something a page asks the user for.
 type Permission string
 
@@ -39,7 +41,7 @@ func (h *windowHandler) PermissionRequested(kinds []string, origin string) bool 
 	h.w.mu.Lock()
 	fn := h.w.permissionHandler
 	h.w.mu.Unlock()
-	if fn == nil {
+	if fn == nil || (len(kinds) == 1 && kinds[0] == platform.UnmappedPermission) {
 		return !h.w.noBindings && h.w.isTrusted(origin) // a view without bindings is untrusted
 	}
 	req := PermissionRequest{Origin: origin}
