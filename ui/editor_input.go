@@ -192,10 +192,10 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 	} else {
 		wanted := platform.NormalizeTextRange(*r)
 		a, z := w.virtualRune(wanted.Start), w.virtualRune(wanted.End)
-		if b := ed.base; b != nil && b.raw && a == b.a && z == b.rawEnd {
-			ed.commitBase(s) // the commit after an unmark: one edit
+		if b := ed.base; b != nil && a == b.a && z == b.a+utf8.RuneCountInString(ed.compose) {
+			ed.compose = ""
+			ed.commitBase(s) // the marked text replaced: one edit
 		} else {
-			ed.settleBase()
 			ed.base = nil
 			transaction := ed.compositionActive
 			ed.commitCompose()
@@ -223,7 +223,6 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 	if ed.compose == "" || r != nil {
 		a, z := ed.selection()
 		ranges := ed.selectedRanges()
-		ed.settleBase()
 		if r != nil && !ed.password {
 			wanted := platform.NormalizeTextRange(*r)
 			a, z = w.virtualRune(wanted.Start), w.virtualRune(wanted.End)
@@ -272,15 +271,20 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 	w.publish()
 }
 
+// KeepMarkedUntilCommit says the input takes an unmark and the commit after it
+// as one edit (platform.InputComposition): fn must see one, against the text
+// before the composition.
+func (w *widgetTextInput) KeepMarkedUntilCommit() bool {
+	w.prepare()
+	return w.ed.base != nil
+}
+
 func (w *widgetTextInput) UnmarkText() {
 	w.prepare()
 	ed := w.ed
-	transaction := ed.compositionActive
-	if ed.base != nil && !ed.base.raw {
-		ed.unmarkBase()
-		w.publish()
-		return
-	}
+	// With a base, AppKit commits the preedit as it is (one edit) and may
+	// insert text after it: that is not the transaction GTK's order makes.
+	transaction := ed.compositionActive && ed.base == nil
 	ed.commitCompose()
 	// GTK/IMM32 can end preedit before committing their replacement. The
 	// platform remembers the range; both operations share this undo step.

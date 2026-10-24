@@ -38,22 +38,49 @@ type TextInputClient interface {
 	IndexForPoint(x, y float64) (int, bool)
 }
 
+// A TextInputClient that wants the end of a preedit and the commit that
+// follows it as one edit has KeepMarked report true while that holds (an
+// input that rewrites its edits): InputComposition then leaves the preedit
+// marked at End and hands the commit its range in one ReplaceText.
+type markKeeper interface{ KeepMarkedUntilCommit() bool }
+
 // InputComposition preserves the native end-preedit/commit ordering without
 // owning text. Some input methods unmark before delivering their result.
-type InputComposition struct{ pending *TextRange }
+// For a client that keeps the mark (markKeeper), End waits for the commit; a
+// Reset before one (the next preedit, a focus change) ends the preedit as it
+// is.
+type InputComposition struct {
+	pending *TextRange
+	client  TextInputClient
+	kept    bool
+}
 
-func (c *InputComposition) Reset() { c.pending = nil }
+// Reset ends a preedit End kept marked, as it is, and forgets the order.
+func (c *InputComposition) Reset() {
+	client, kept := c.client, c.kept
+	c.pending, c.client, c.kept = nil, nil, false
+	if kept && client != nil {
+		client.UnmarkText()
+	}
+}
+
 func (c *InputComposition) End(client TextInputClient) {
+	c.Reset()
 	if r, ok := client.MarkedRange(); ok {
 		c.pending = &r
+		if k, ok := client.(markKeeper); ok && k.KeepMarkedUntilCommit() {
+			c.client, c.kept = client, true
+			return
+		}
 	}
 	client.UnmarkText()
 }
+
 func (c *InputComposition) Replace(client TextInputClient, r *TextRange, text string) {
 	if r == nil && c.pending != nil {
 		r = c.pending
 	}
-	c.pending = nil
+	c.pending, c.client, c.kept = nil, nil, false
 	client.ReplaceText(r, text)
 }
 

@@ -320,6 +320,9 @@ func TestTextInputOnEditCompositionEventsAreOneEditToo(t *testing.T) {
 	tt.SetFocused(false)
 	tt.Compose("x", 1)
 	tt.Frame()
+	if s != "12345" {
+		t.Errorf("a composition in progress published %q", s)
+	}
 	tt.Type("X")
 	tt.Frame()
 	if len(edits) != 1 || edits[0].Text != "12345" || edits[0].Start != 1 || edits[0].End != 3 || edits[0].Insert != "X" {
@@ -330,5 +333,134 @@ func TestTextInputOnEditCompositionEventsAreOneEditToo(t *testing.T) {
 	tt.Frame()
 	if s != "1X45" {
 		t.Errorf("a cancelled composition changed the text: %q", s)
+	}
+}
+
+// AppKit ends a word with unmarkText and then inserts the space, in one key
+// event, with no frame between.
+func TestTextInputOnEditTelexWordsCommitOnUnmarkAndTheSpaceInsertsAfter(t *testing.T) {
+	for name, fn := range map[string]func(*[]TextEdit) func(TextEdit) (string, int, bool){
+		"applies": recordEdits,
+		"no ok": func(into *[]TextEdit) func(TextEdit) (string, int, bool) {
+			return func(e TextEdit) (string, int, bool) { *into = append(*into, e); return "", 0, false }
+		},
+	} {
+		s := ""
+		var edits []TextEdit
+		tt := onEditTester(&s, fn(&edits))
+		c := tt.h.ime.Client
+		for i, w := range []string{"Nguyễn", "Văn", "Đức"} {
+			c.SetMarkedText(nil, w[:1], TextInputRange{Start: 1, End: 1})
+			c.SetMarkedText(nil, w, TextInputRange{Start: len([]rune(w)), End: len([]rune(w))})
+			c.UnmarkText()
+			if i < 2 {
+				c.ReplaceText(nil, " ")
+			}
+			tt.Frame()
+		}
+		if s != "Nguyễn Văn Đức" {
+			t.Errorf("%s: text %q", name, s)
+		}
+		tt.rt.close()
+	}
+}
+
+// The app's value wins over a composition in progress.
+func TestTextInputOnEditSetTextDuringACompositionDropsIt(t *testing.T) {
+	s := "12345"
+	var edits []TextEdit
+	tt := onEditTester(&s, recordEdits(&edits))
+	defer tt.rt.close()
+	ed := tt.rt.states[tt.rt.focused].editor
+	ed.anchor, ed.caret = 1, 3
+	tt.Frame()
+	c := tt.h.ime.Client
+	c.SetMarkedText(nil, "x", TextInputRange{Start: 1, End: 1})
+	tt.Frame()
+	s = "zzz"
+	tt.Frame()
+	c.ReplaceText(nil, "X")
+	tt.Frame()
+	if s != "zXzz" {
+		t.Errorf("text %q, want zXzz: the app's value, then the commit", s)
+	}
+}
+
+// A composition that ends with the focus has fn see its text before the
+// value gets it.
+func TestTextInputOnEditFocusLostDuringACompositionCommitsThroughFn(t *testing.T) {
+	a, b := "a", ""
+	var edits []TextEdit
+	tt := NewTester(func(c *Context) {
+		TextInput(c, &a).Width(100).Label("a").OnEdit(func(e TextEdit) (string, int, bool) {
+			edits = append(edits, e)
+			return upperFilter(e)
+		})
+		TextInput(c, &b).Width(100).Label("b")
+	}, 300, 100)
+	tt.Click("a")
+	tt.Key(0, KeyEnd)
+	c := tt.h.ime.Client
+	c.SetMarkedText(nil, "yi-", TextInputRange{Start: 3, End: 3})
+	tt.Frame()
+	tt.Click("b")
+	if a != "aYI" || len(edits) != 1 {
+		t.Errorf("a = %q after the focus left it, fn saw %+v", a, edits)
+	}
+}
+
+// Nothing is published while an input method composes, and a composition that
+// leaves the text as it was reports no change.
+func TestTextInputOnEditPublishesNothingUntilTheCommitApplies(t *testing.T) {
+	s := "12345"
+	changes := 0
+	tt := NewTester(func(c *Context) {
+		TextInput(c, &s).Width(100).Label("a").OnChange(func() { changes++ }).OnEdit(func(e TextEdit) (string, int, bool) {
+			if e.Insert == "no" {
+				return e.Text, e.Caret, true
+			}
+			return upperFilter(e)
+		})
+	}, 300, 100)
+	defer tt.rt.close()
+	tt.Click("a")
+	ed := tt.rt.states[tt.rt.focused].editor
+	ed.anchor, ed.caret = 1, 3
+	tt.Frame()
+	c := tt.h.ime.Client
+	c.SetMarkedText(nil, "x", TextInputRange{Start: 1, End: 1})
+	tt.Frame()
+	if s != "12345" || changes != 0 {
+		t.Errorf("during the composition: value %q, %d changes", s, changes)
+	}
+	c.ReplaceText(nil, "no") // refused
+	tt.Frame()
+	if s != "12345" || changes != 0 {
+		t.Errorf("after a refused commit: value %q, %d changes", s, changes)
+	}
+	c.SetMarkedText(nil, "x", TextInputRange{Start: 1, End: 1})
+	c.SetMarkedText(nil, "", TextInputRange{})
+	tt.Frame()
+	if s != "12345" || changes != 0 {
+		t.Errorf("after a cancelled one: value %q, %d changes", s, changes)
+	}
+}
+
+// An input without OnEdit clears what undo took back when a composition
+// starts, even one that is cancelled, as before OnEdit.
+func TestTextInputWithoutOnEditCancelledCompositionClearsRedo(t *testing.T) {
+	s := ""
+	tt := NewTester(func(c *Context) { TextInput(c, &s).Width(100).Label("a") }, 300, 100)
+	defer tt.rt.close()
+	tt.Click("a")
+	tt.Type("a")
+	tt.Key(Cmd, KeyZ)
+	c := tt.h.ime.Client
+	c.SetMarkedText(nil, "x", TextInputRange{Start: 1, End: 1})
+	c.SetMarkedText(nil, "", TextInputRange{})
+	tt.Frame()
+	tt.Key(Cmd|Shift, KeyZ)
+	if s != "" {
+		t.Errorf("redo after a cancelled composition: %q, want nothing to redo", s)
 	}
 }

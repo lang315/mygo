@@ -195,11 +195,7 @@ func (ed *editor) commitCompose() {
 	if ed.base != nil {
 		s := ed.compose
 		ed.compose = ""
-		if ed.base.raw {
-			ed.settleBase()
-		} else {
-			ed.commitBase(s)
-		}
+		ed.commitBase(s)
 		if ed.client != nil {
 			ed.client.publish()
 		}
@@ -222,7 +218,6 @@ func (ed *editor) process(c *context, e *node) {
 	// clipboard read does, which must not apply the same input again.
 	queue := ed.queue
 	ed.queue = nil
-	ed.settleBase()
 	for _, ev := range queue {
 		if ev.replace {
 			ed.anchor, ed.caret = min(ev.from, ed.buf.n), min(ev.to, ed.buf.n)

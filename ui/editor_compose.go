@@ -1,21 +1,15 @@
 package ui
 
-import "unicode/utf8"
-
 // composeBase is the text and the selection before an input method's
 // composition began, kept while the input has an OnEdit: the preedit and the
-// removal of the selection it replaces are only shown, and the commit is one
-// edit of the text as it was, which fn sees once. A cancelled composition
-// restores the text and the selection.
+// removal of the selection it replaces are only shown (the input does not
+// publish its text meanwhile), and the commit is one edit of the text as it
+// was, which fn sees once. A cancelled composition restores the text and the
+// selection.
 type composeBase struct {
 	text          string
 	a, z          int // the selection the composition replaces
 	caret, anchor int
-	// raw is set once UnmarkText put the preedit in the text unfiltered,
-	// from a to rawEnd; the commit that follows (GTK delivers it after the
-	// unmark) replaces it.
-	raw    bool
-	rawEnd int
 }
 
 // beginBase starts a composition over a..z. The selection goes from the
@@ -57,27 +51,11 @@ func (ed *editor) commitBase(s string) {
 	ed.replace(b.a, b.z, s)
 }
 
-// settleBase makes the preedit UnmarkText put in the text, when no commit
-// followed, an edit as it is.
-func (ed *editor) settleBase() {
-	if b := ed.base; b != nil && b.raw {
-		s := ed.buf.slice(b.a, b.rawEnd)
-		ed.commitBase(s)
+// dropBase forgets the composition in progress, as when the app sets the
+// text: the app's value wins.
+func (ed *editor) dropBase() {
+	if ed.base != nil {
+		ed.base, ed.compose = nil, ""
+		ed.composeCaret, ed.composeSelected = 0, TextInputRange{}
 	}
-}
-
-// unmarkBase ends the preedit with the text it shows put in the text, which
-// a commit that follows replaces.
-func (ed *editor) unmarkBase() {
-	b := ed.base
-	s := ed.compose
-	ed.compose = ""
-	if s == "" {
-		ed.restoreBase()
-		return
-	}
-	ed.edit(b.a, b.a, s)
-	ed.caret = b.a + utf8.RuneCountInString(s)
-	ed.anchor = ed.caret
-	b.raw, b.rawEnd = true, ed.caret
 }

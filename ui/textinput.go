@@ -52,8 +52,12 @@ func textInputBase(c *context, value *string, multiline bool) *node {
 	// The input shares the string of *value: the same string is equal at
 	// once, whatever its length.
 	if !ed.nativeDirty && ed.buf.s != *value {
-		ed.setText(*value)
-		ed.compose = ""
+		// A composition in progress shows a text the value does not hold
+		// yet: only a value that changed is the app's.
+		if b := ed.base; b == nil || *value != b.text {
+			ed.setText(*value)
+			ed.compose = ""
+		}
 	}
 	ed.rebuild()
 	ed.ranges = ed.ranges[:0]

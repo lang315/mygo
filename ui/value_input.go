@@ -275,7 +275,8 @@ func applyString(n *node) {
 	if rt.focused == n.id || len(ed.queue) > 0 {
 		version := ed.buf.version
 		ed.process(n.c, n)
-		if ed.buf.version != version && ed.buf.s != *value {
+		// A composition in progress does not publish: its text is not final.
+		if ed.base == nil && ed.buf.version != version && ed.buf.s != *value {
 			*value = ed.buf.s
 			st.markChanged()
 		}

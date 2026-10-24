@@ -47,6 +47,7 @@ func (s *undoStep) before(text string) string {
 // two texts however often the app sets one, as a log does.
 func (ed *editor) setText(s string) {
 	ed.compositionActive = false
+	ed.dropBase()
 	if n := len(ed.undo); n > 0 {
 		step := &ed.undo[n-1]
 		before := step.before(ed.buf.s)
@@ -78,6 +79,10 @@ func (ed *editor) record(typing bool) {
 		ed.undo[0] = undoStep{}
 		ed.undo = ed.undo[1:]
 	}
+	if ed.onEdit == nil {
+		clear(ed.redo)
+		ed.redo = ed.redo[:0]
+	}
 	ed.coalesce = typing
 	ed.lastEdit = now
 }
@@ -85,7 +90,7 @@ func (ed *editor) record(typing bool) {
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
-	if start == end && s == "" {
+	if start == end && s == "" && ed.onEdit != nil {
 		return // as when an input method's composition starts with no selection
 	}
 	if f := ed.onEdit; f != nil && !ed.filtering {
@@ -162,7 +167,7 @@ func (ed *editor) takeBack(redo bool) {
 	if n == 0 {
 		return
 	}
-	for n > 0 && len((*from)[n-1].changes) == 0 {
+	for ed.onEdit != nil && n > 0 && len((*from)[n-1].changes) == 0 {
 		// An edit that changed nothing, as OnEdit's refusal, left an empty step.
 		(*from)[n-1] = undoStep{}
 		n--
