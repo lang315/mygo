@@ -114,3 +114,11 @@ func TestTestDialogRunsOnBeforeRun(t *testing.T) {
 
 // flushEvents waits for what was posted to the event goroutine.
 func flushEvents(t *testing.T) { t.Helper(); <-posted() }
+
+func TestTestDialogOfNaturalHeightIsDrawn(t *testing.T) {
+	d := NewDialog(nil, "Auto", "", 400, 0, Button("Hello"))
+	dt := TestDialog(d)
+	if err := dt.Click("Hello"); err != nil {
+		t.Fatalf("a dialog of height 0 (its natural height) is drawn in no room: %v", err)
+	}
+}

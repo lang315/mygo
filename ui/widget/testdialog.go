@@ -27,6 +27,14 @@ func TestDialog(d *Dialog) *DialogTester {
 	d.headless = make(chan struct{})
 	root, w, h := d.root, d.width, d.height
 	mu.Unlock()
+	// A size of 0 is the dialog's natural one, which a window finds out as
+	// it shows: the tester gives it room.
+	if w <= 0 {
+		w = 600
+	}
+	if h <= 0 {
+		h = 800
+	}
 	tt := ui.NewTester(content(root), w, h)
 	tt.Frame()
 	return &DialogTester{Tester: tt, d: d}
