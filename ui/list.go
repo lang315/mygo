@@ -840,8 +840,11 @@ func (f *listFrame) buildLate(i int) *node {
 
 // isHeader reports whether row i cannot be chosen: it heads a section
 // (Header), or the app skips it (Skip).
-func (f *listFrame) isHeader(i int) bool {
-	return f.s.Header != nil && f.s.Header(i) || f.s.Skip != nil && f.s.Skip(i)
+func (f *listFrame) isHeader(i int) bool { return f.s.notChosen(i) }
+
+// notChosen is isHeader for a list: row i heads a section, or is skipped.
+func (s *ListState) notChosen(i int) bool {
+	return s.Header != nil && s.Header(i) || s.Skip != nil && s.Skip(i)
 }
 
 // cursor returns where the keys move the choice from, or nil when the list
