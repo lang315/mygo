@@ -636,6 +636,21 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 			tt.CloseMenu()
 		}
 	})
+	b.Run("rightClickOneSelectedFunc", func(b *testing.B) {
+		tb, tt := setup(b)
+		tb.ContextMenuFunc(func([]int) []MenuItem { return nil }) // posted; its own time is not measured
+		label := rows[1].name
+		if err := tt.Click(label); err != nil {
+			b.Fatal(err)
+		}
+		tt.Frame()
+		b.ResetTimer()
+		for range b.N {
+			if err := tt.RightClick(label); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 	b.Run("SetChecked", func(b *testing.B) {
 		tb, tt := setup(b)
 		b.ResetTimer()

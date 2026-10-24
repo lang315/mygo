@@ -390,6 +390,10 @@ lock: they read the row and call no widget method.
   keyword)` searches from code. The filter runs once per search.
 - `OnActivate(fn)` (double click, Enter), `OnKey(key, mods, fn)`,
   `ContextMenu(items...)` (on rows only; read them with `Selected`),
+  `ContextMenuFunc(fn)` (fn gets the keys selected at the right-click, on the
+  event goroutine without the lock, and may query a database; the menu opens
+  when it returns, unless the user pressed a key or a button, or right-clicked
+  again, meanwhile; it wins over `ContextMenu`),
   `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it.
   Cmd/Ctrl+C copies the selected rows, a line each, cells apart by tabs.
 

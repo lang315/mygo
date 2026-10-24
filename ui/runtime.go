@@ -504,6 +504,7 @@ func (rt *engine) runFrame() {
 	rt.gen = rt.text.Generation()
 	rt.painted = [3]float32{w, h, scale}
 	rt.animating, rt.repainting, rt.repaintAt = false, false, time.Time{}
+	rt.takeReopen()
 	rt.routeKeys()
 	rt.glideWheels(now)
 	if rt.drag != nil {

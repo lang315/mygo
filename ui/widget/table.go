@@ -74,8 +74,11 @@ type DataGridViewWidget[T any, K comparable] struct {
 	onColumns                               func(ui.TableLayout)
 	shortcuts                               []shortcut
 	menu                                    []MenuItem
-	layout                                  *ui.TableLayout // SetColumnsLayout's, not handed to ui yet
-	numbered                                bool            // the index column shows
+	menuFunc                                func([]K) []MenuItem // ContextMenuFunc's
+	late                                    []MenuItem           // what it built last
+	lateSeq                                 uint64               // its latest right-click
+	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
+	numbered                                bool                 // the index column shows
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int

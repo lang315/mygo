@@ -21,6 +21,11 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		// Input, which the next frame builds even out of sight.
 		rt.input = true
 	}
+	switch ev.Kind {
+	case platform.PointerDown, platform.WebViewPress, platform.KeyPressed:
+		// A menu waiting for its items is no longer wanted (Menu.Later).
+		rt.menu.gen.Add(1)
+	}
 	x, y := float32(ev.X), float32(ev.Y)
 	if ev.Kind == platform.PointerDown || ev.Kind == platform.WebViewPress {
 		// A press is of no element until countPress finds it one.

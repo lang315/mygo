@@ -343,3 +343,51 @@ func TestMenuAndContextMenuOfOneElement(t *testing.T) {
 		t.Errorf("chose %q", chosen)
 	}
 }
+
+func TestMenuLaterOpensWhenTheItemsAreKnown(t *testing.T) {
+	var open func()
+	var items []string
+	var chosen string
+	view := func(c *context) {
+		coreRow(c).Padding(8).Children(func() {
+			coreText(c, "Row")
+		}).ContextMenu(func(m *Menu) {
+			if o := m.Later(); o != nil {
+				open = o
+				return
+			}
+			for _, it := range items {
+				if m.Item(it).Chosen() {
+					chosen = it
+				}
+			}
+		})
+	}
+	tt := coreNewTester(view, 300, 200)
+	if err := tt.RightClick("Row"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.Menu() != nil || open == nil {
+		t.Fatalf("menu %v before the items are known, open %v", tt.Menu(), open != nil)
+	}
+	items = []string{"A", "B"}
+	open()
+	tt.Frame()
+	if m := tt.Menu(); !slices.Equal(m, []string{"A", "B"}) {
+		t.Fatalf("menu %q", m)
+	}
+	if err := tt.ChooseMenuItem("B"); err != nil || chosen != "B" {
+		t.Fatalf("chosen %q, %v", chosen, err)
+	}
+	// A key since the click: the menu is no longer wanted.
+	tt.CloseMenu()
+	if err := tt.RightClick("Row"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Key(0, KeyEscape)
+	open()
+	tt.Frame()
+	if tt.Menu() != nil {
+		t.Fatalf("menu %q opened after a key", tt.Menu())
+	}
+}
