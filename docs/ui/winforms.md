@@ -19,7 +19,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | DomainUpDown | done | [DomainUpDown](widget/domainupdown.md) |
 | FlowLayoutPanel | done | `FlowPanel` |
 | GroupBox | done | `GroupBox`, `Card` |
-| Label | done | `Label` (`&` mnemonics: [Mnemonics](widget/mnemonics.md)) |
+| Label | done | `Label` (`&` mnemonics with `SetUseMnemonic(true)`: [Mnemonics](widget/mnemonics.md)) |
 | LinkLabel | done | `LinkLabel` |
 | ListBox | done | [ListBox](widget/listbox.md) |
 | ListView | **pending** | [#132](https://github.com/lang315/mygo/pull/132), in review |
@@ -74,7 +74,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | Drag and drop | done | [Drag and drop](widget/drag-and-drop.md) |
 | Shortcuts, `AcceptButton`, `CancelButton` | done | [Form keys](widget/form-keys.md) |
 | Validation (`Validating`, `ValidateChildren`) | done | [ErrorProvider](widget/errorprovider.md) |
-| Mnemonics | done | [Mnemonics](widget/mnemonics.md) (a `Label` that focuses the next control: pending, a small follow-up) |
+| Mnemonics | done | [Mnemonics](widget/mnemonics.md) (a `Label` focuses the next control with `SetUseMnemonic(true)`; off by default, unlike WinForms) |
 
 ## Pieces with a design of their own
 
@@ -87,7 +87,11 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 
 ## Open rows
 
-The Phase 2 exit rows left are ListView ([#132](https://github.com/lang315/mygo/pull/132),
-in review) and the `Label` mnemonic (a `Label` with `&` that focuses the next
-control, a small follow-up). Everything else is done, or dropped with the
-reason above.
+The Phase 2 exit row left is ListView ([#132](https://github.com/lang315/mygo/pull/132),
+in review). Everything else is done, or dropped with the reason above.
+
+Every row marked done has a page or a section of [widget.md](widget.md), unit
+tests in `ui/widget`, and an entry in the [widget tour](../../examples/widget-tour)
+(`go run ./examples/widget-tour`) with a test in the tour's package: the
+Components tab holds the ImageList, a control of your own, mnemonics and a
+LinkLabel.

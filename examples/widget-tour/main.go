@@ -23,41 +23,47 @@ import (
 
 func main() {
 	err := widget.Run("Widget Tour", func(w *widget.Form) {
-		w.UseHeaderBar("ui/widget").PackEnd(widget.LinkLabel("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
-		// The app shell: a main menu, a tool strip above the content and a
-		// status strip below it, all changed while the app runs.
-		status := widget.StatusLabel("Ready").SetIcon(lucide(lucideIcons[4]))
-		done := 0.3
-		progress := widget.StatusProgress().SetFraction(done)
-		bar := widget.StatusStrip(status, widget.Spring(), progress, widget.Separator(), widget.StatusLabel("ui/widget"))
-		closeItem := widget.StripItem("Close").SetShortcut("CmdOrCtrl+W").OnClick(func() { w.Close() })
-		showBar := widget.StripCheck("Status bar", true)
-		showBar.OnClick(func() { bar.SetVisible(showBar.Checked()) })
-		w.MenuStrip(widget.NewMenuStrip(
-			widget.StripRole(mygo.RoleAppMenu),
-			widget.StripItem("File", closeItem),
-			widget.StripRole(mygo.RoleEditMenu),
-			widget.StripItem("View", showBar),
-		))
-		bold := widget.ToolButton("Bold").SetToggle(true)
-		bold.OnChange(func() { status.SetText(fmt.Sprintf("Bold: %v", bold.Checked())) })
-		w.ToolStrip(widget.ToolStrip(
-			widget.ToolButton("Plus").SetIcon(lucide(lucideIcons[0])).SetTooltip("Add one").OnClick(func() {
-				done = min(done+0.1, 1) // handlers run one at a time: no lock
-				progress.SetFraction(done)
-			}),
-			bold,
-			widget.Separator(),
-			widget.DropDownButton("Menu",
-				widget.MenuItem{Text: "Disable File > Close", OnClick: func() { closeItem.SetEnabled(!closeItem.Enabled()) }},
-				widget.MenuItem{Text: "Say hello", OnClick: func() { status.SetText("Hello") }}),
-		))
-		w.StatusStrip(bar)
+		appShell(w)
 		w.SetContent(tour(w))
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// appShell gives the window its header bar, main menu, tool strip and status
+// strip.
+func appShell(w *widget.Form) {
+	w.UseHeaderBar("ui/widget").PackEnd(widget.LinkLabel("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
+	// The app shell: a main menu, a tool strip above the content and a
+	// status strip below it, all changed while the app runs.
+	status := widget.StatusLabel("Ready").SetIcon(lucide(lucideIcons[4]))
+	done := 0.3
+	progress := widget.StatusProgress().SetFraction(done)
+	bar := widget.StatusStrip(status, widget.Spring(), progress, widget.Separator(), widget.StatusLabel("ui/widget"))
+	closeItem := widget.StripItem("Close").SetShortcut("CmdOrCtrl+W").OnClick(func() { w.Close() })
+	showBar := widget.StripCheck("Status bar", true)
+	showBar.OnClick(func() { bar.SetVisible(showBar.Checked()) })
+	w.MenuStrip(widget.NewMenuStrip(
+		widget.StripRole(mygo.RoleAppMenu),
+		widget.StripItem("File", closeItem),
+		widget.StripRole(mygo.RoleEditMenu),
+		widget.StripItem("View", showBar),
+	))
+	bold := widget.ToolButton("Bold").SetToggle(true)
+	bold.OnChange(func() { status.SetText(fmt.Sprintf("Bold: %v", bold.Checked())) })
+	w.ToolStrip(widget.ToolStrip(
+		widget.ToolButton("Plus").SetIcon(lucide(lucideIcons[0])).SetTooltip("Add one").OnClick(func() {
+			done = min(done+0.1, 1) // handlers run one at a time: no lock
+			progress.SetFraction(done)
+		}),
+		bold,
+		widget.Separator(),
+		widget.DropDownButton("Menu",
+			widget.MenuItem{Text: "Disable File > Close", OnClick: func() { closeItem.SetEnabled(!closeItem.Enabled()) }},
+			widget.MenuItem{Text: "Say hello", OnClick: func() { status.SetText("Hello") }}),
+	))
+	w.StatusStrip(bar)
 }
 
 func tour(w *widget.Form) widget.Control {
@@ -72,6 +78,7 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("DataGridView", table()).
 		AddPage("TreeView", treeView()).
 		AddPage("ListBox", listBoxes()).
+		AddPage("Components", components()).
 		Padding(4).Expand()
 }
 
