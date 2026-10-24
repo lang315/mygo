@@ -18,7 +18,8 @@ type TimerWidget struct {
 	enabled  bool
 	gen      uint64 // changes at each (re)start, so a late tick of an earlier run is known
 	stop     func() bool
-	pending  bool // a tick is posted and has not run
+	pending  bool   // a tick is posted and has not run
+	pendGen  uint64 // the run (gen) that tick belongs to
 	onTick   func()
 }
 
@@ -81,8 +82,11 @@ func (t *TimerWidget) Start() *TimerWidget {
 	return t
 }
 
-// Stop stops the timer. No tick runs after Stop returns, not even one that
-// was already posted. It is safe from any goroutine, a tick's handler too.
+// Stop stops the timer. Called on the event goroutine, as from a handler, no
+// tick runs after it returns, not even one already posted. Called from
+// another goroutine, no tick that has not begun runs after it returns, but a
+// tick whose handler already started may finish, and one that just passed
+// its check may still start. It is safe from any goroutine.
 func (t *TimerWidget) Stop() *TimerWidget {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -118,11 +122,11 @@ func (t *TimerWidget) fire(gen uint64) {
 		return
 	}
 	t.arm()
-	if t.pending {
+	if t.pending && t.pendGen == gen {
 		t.mu.Unlock()
 		return
 	}
-	t.pending = true
+	t.pending, t.pendGen = true, gen
 	t.mu.Unlock()
 	Post(func() { t.tick(gen) })
 }
@@ -130,8 +134,10 @@ func (t *TimerWidget) fire(gen uint64) {
 // tick runs on the event goroutine.
 func (t *TimerWidget) tick(gen uint64) {
 	t.mu.Lock()
-	t.pending = false
-	h, live := t.onTick, t.enabled && gen == t.gen
+	if t.pendGen == gen {
+		t.pending = false
+	}
+	h, live := t.onTick, t.enabled && gen == t.gen && !stopped.Load()
 	t.mu.Unlock()
 	if live && h != nil {
 		h()

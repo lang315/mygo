@@ -17,8 +17,13 @@ defer tick.Stop()
 - `Start()` starts it, or starts a running one over: the first tick comes an
   interval from then. `Stop()` stops it. Both are safe from any goroutine and
   from the tick's own handler.
-- No tick runs after `Stop` returns, not even one that was already posted and
-  waiting for the event goroutine.
+- On the event goroutine (in a handler), no tick runs after `Stop` returns,
+  not even one already posted. From another goroutine, `Stop` does not wait
+  for the event goroutine: a handler already running may finish, and a tick
+  that was just about to start may still run once. A tick posted by an
+  earlier run never replaces the first tick of a restarted one.
+- A running timer lives until `Stop`, as in WinForms: dropping the reference
+  does not stop it. Ticks stop when the app quits.
 - A handler slower than the interval gets no backlog: ticks that come while
   one waits to run are one tick.
 - `Interval()`, `SetInterval(d)` (a running timer starts over with it) and

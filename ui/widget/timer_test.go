@@ -252,3 +252,44 @@ func TestTimerIgnoresALateCallbackOfAnEarlierRun(t *testing.T) {
 		t.Fatalf("ticked %v, %d timers armed: a callback of the first run drove the second", ran, len(clock.live()))
 	}
 }
+
+// A tick waiting in the queue belongs to the run that posted it: a new run
+// still gets its first tick.
+func TestTimerRestartWhileATickWaitsStillTicksOnce(t *testing.T) {
+	for name, restart := range map[string]func(*TimerWidget){
+		"Stop+Start":  func(tm *TimerWidget) { tm.Stop(); tm.Start() },
+		"SetInterval": func(tm *TimerWidget) { tm.SetInterval(2 * time.Second) },
+	} {
+		clock := withFakeClock(t)
+		n := make(chan struct{}, 4)
+		tm := Timer(time.Second).OnTick(func() { n <- struct{}{} }).Start()
+		gate := make(chan struct{})
+		Post(func() { <-gate })
+		clock.fire(t) // a tick of the first run waits behind the gate
+		restart(tm)
+		clock.fire(t) // the new run's first tick
+		close(gate)
+		received(t, n)
+		<-posted()
+		select {
+		case <-n:
+			t.Errorf("%s: two ticks ran, the stale one must be dropped", name)
+		default:
+		}
+		tm.Stop()
+	}
+}
+
+func TestTimerDoesNotTickAfterTheAppQuit(t *testing.T) {
+	clock := withFakeClock(t)
+	ran := false
+	tm := Timer(time.Second).OnTick(func() { ran = true }).Start()
+	stopped.Store(true)
+	defer stopped.Store(false)
+	clock.fire(t)
+	<-posted()
+	if ran {
+		t.Fatal("ticked after the app quit")
+	}
+	tm.Stop()
+}
