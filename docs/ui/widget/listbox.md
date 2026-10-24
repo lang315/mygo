@@ -66,9 +66,8 @@ chooses all.
   and `CountSelected()` how many.
 - `SetSelected(ks...)` chooses those items instead of the ones chosen, the last
   alone unless the list is `Multi()`. `ClearSelection()` chooses none.
-  `EnsureVisible(k)` scrolls the list to the item of key `k` (to the middle of
-  the list if it was out of view), choosing nothing; it takes a few frames when
-  the rows above are not measured yet.
+  `EnsureVisible(k)` scrolls the list as little as shows the item of key `k`
+  whole (not at all if it is in view), choosing nothing.
 - `OnSelect(fn)` runs `fn` with the keys chosen, in the order of the list, on the
   event goroutine, after the user changes the choice, as WinForms'
   `SelectedIndexChanged`. Setters do not run it, nor do items added or removed.

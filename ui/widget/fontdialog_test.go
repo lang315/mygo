@@ -207,8 +207,7 @@ func TestFontDialogScrollsToTheCurrentFamilyWhenItOpens(t *testing.T) {
 		if !dt.Has(ByRole(ui.RoleListItem).Label(label)) {
 			return false
 		}
-		b := dt.Find(ByRole(ui.RoleListItem).Label(label)).Bounds()
-		return b.Y >= 0 && b.Y+b.H <= 460
+		return withinList(dt, dt.Find(ByRole(ui.RoleListItem).Label(label)).Bounds())
 	}
 	if !shown("Fam290") || shown("Fam000") {
 		t.Errorf("on screen at open: Fam290 %v, Fam000 %v", shown("Fam290"), shown("Fam000"))
@@ -225,7 +224,7 @@ func TestFontDialogTypeAheadJumpsToTheFirstFamilyThatStartsWithWhatIsTyped(t *te
 	box.Focus()
 	dt.Tester.Tester.Command("selectAll")
 	box.Type("fam25")
-	if b := dt.Find(ByRole(ui.RoleListItem).Label("Fam250")).Bounds(); b.Y < 0 || b.Y+b.H > 460 {
+	if b := dt.Find(ByRole(ui.RoleListItem).Label("Fam250")).Bounds(); !withinList(dt, b) {
 		t.Errorf("the list did not scroll to the match: %v", b)
 	}
 	dt.Find(ByLabel("OK")).Click()
@@ -245,5 +244,44 @@ func TestFontDialogTakesATypedSizeWithoutEnter(t *testing.T) {
 	<-done
 	if got := fd.Font().Size; got != 20 {
 		t.Errorf("Size = %v, want 20", got)
+	}
+}
+
+// withinList reports whether b is inside the family list's own bounds, the
+// first list of the dialog.
+func withinList(dt *DialogTester, b ui.Rect) bool {
+	l := dt.Find(ByRole(ui.RoleList).Nth(0)).Bounds()
+	return b.Y >= l.Y && b.Y+b.H <= l.Y+l.H
+}
+
+func TestFontChosenIsWhatTheSampleShowsAndOKReturns(t *testing.T) {
+	cur := ui.Font{Family: "Alpha", Size: 11, Features: "liga", Lang: "vi", Weight: 123}
+	regular, bold := fontStyle{"Regular", false, false}, fontStyle{"Bold Italic", true, true}
+	got := fontChosen(cur, 300, false, regular)
+	if got.Weight != 300 || got.Features != "liga" || got.Lang != "vi" || got.Italic || got.Size != 11 {
+		t.Errorf("unchanged style: %+v", got)
+	}
+	if got := fontChosen(cur, 300, false, bold); got.Weight != 700 || !got.Italic {
+		t.Errorf("to bold italic: %+v", got)
+	}
+	if got := fontChosen(cur, 600, true, regular); got.Weight != 400 {
+		t.Errorf("to regular: %+v", got)
+	}
+}
+
+func TestFontDialogSetMaxSizeBelowMinMovesMin(t *testing.T) {
+	fd := newFontDialog().SetMinSize(40).SetMaxSize(8)
+	if fd.minSize != 8 || fd.maxSize != 8 {
+		t.Errorf("min %v max %v, want 8 8", fd.minSize, fd.maxSize)
+	}
+	fd = newFontDialog().SetMaxSize(8).SetMinSize(40)
+	if fd.minSize != 40 || fd.maxSize != 40 {
+		t.Errorf("min %v max %v, want 40 40", fd.minSize, fd.maxSize)
+	}
+}
+
+func TestFontDialogTypeAheadMatchesWithoutRegardToCaseByRunes(t *testing.T) {
+	if !hasFoldedPrefix("Đức", "đ") || !hasFoldedPrefix("Đức", "ĐỨ") || hasFoldedPrefix("Đức", "du") || !hasFoldedPrefix("Straße", "ſt") || hasFoldedPrefix("a", "ab") {
+		t.Error("hasFoldedPrefix")
 	}
 }

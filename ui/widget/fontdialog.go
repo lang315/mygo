@@ -154,8 +154,8 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	cur := start
 	curStyle := startStyle
 
-	// The lists have a height of their own: a list in a box shorter than its
-	// rows is not clipped to it, and the family list holds hundreds.
+	// shortcut: ListBox packed expand/fill in nested boxes grows to all rows (#137,
+	// own PR); remove the SetSize of both lists when that lands.
 	family := ListBox(func(f *ui.FontFamily) string { return f.Name }, func(f *ui.FontFamily) string { return f.Name }).SetItems(names).SetSize(0, 200)
 	if start.Family != "" {
 		family.SetSelected(start.Family)
@@ -176,13 +176,14 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	famBox.OnChange(func() { // type-ahead: the first family that starts with what is typed
 		typed := famBox.Text()
 		for _, f := range names {
-			if typed != "" && len(f.Name) >= len(typed) && strings.EqualFold(f.Name[:len(typed)], typed) {
+			if typed != "" && hasFoldedPrefix(f.Name, typed) {
 				family.SetSelected(f.Name).EnsureVisible(f.Name)
 				Change(func() { cur.Family = f.Name })
 				return
 			}
 		}
 	})
+	// shortcut: see the family list.
 	style := ListBox(func(s *fontStyle) string { return s.name }, func(s *fontStyle) string { return s.name }).SetItems(styles).SetSize(0, 200)
 	style.SetSelected(startStyle.name)
 	style.OnSelect(func(ks []string) {
@@ -200,18 +201,18 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 		Change(func() { cur.Size = v })
 	})
 	sample := Custom(func(c *ui.Context) ui.Element {
-		weight := chosenWeight(start.Weight, startStyle.bold, curStyle.bold)
-		if weight == 0 {
-			weight = 400 // a font's 0 is the regular weight
+		f := fontChosen(cur, start.Weight, startStyle.bold, curStyle) // what OK returns
+		if f.Weight == 0 {
+			f.Weight = 400 // a font's 0 is the regular weight
 		}
-		e := ui.Text(c, sampleText).Font(cur.Family).FontSize(cur.Size).FontWeight(weight)
-		if cur.Features != "" {
-			e = e.FontFeatures(cur.Features)
+		e := ui.Text(c, sampleText).Font(f.Family).FontSize(f.Size).FontWeight(f.Weight)
+		if f.Features != "" {
+			e = e.FontFeatures(f.Features)
 		}
-		if cur.Lang != "" {
-			e = e.Lang(cur.Lang)
+		if f.Lang != "" {
+			e = e.Lang(f.Lang)
 		}
-		if curStyle.italic {
+		if f.Italic {
 			e = e.Italic()
 		}
 		return e
@@ -223,9 +224,7 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 		Button(l10n.Cancel()).OnClick(func() { dlg.Close() }),
 		Button(l10n.Ok()).Suggested().OnClick(func() {
 			mu.Lock()
-			f := cur
-			f.Weight = chosenWeight(start.Weight, startStyle.bold, curStyle.bold)
-			f.Italic = curStyle.italic
+			f := fontChosen(cur, start.Weight, startStyle.bold, curStyle)
 			picked = &f
 			mu.Unlock()
 			dlg.Close()
@@ -248,6 +247,16 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	}
 }
 
+// hasFoldedPrefix reports whether s starts with prefix, without regard to
+// case, by runes: "đ" and "Đ" match.
+func hasFoldedPrefix(s, prefix string) bool {
+	r, p := []rune(s), []rune(prefix)
+	if len(r) < len(p) {
+		return false
+	}
+	return strings.EqualFold(string(r[:len(p)]), prefix)
+}
+
 // indexFamily returns the place of the family called name in fs, without
 // regard to case as the text system does, or -1.
 func indexFamily(fs []ui.FontFamily, name string) int {
@@ -257,6 +266,15 @@ func indexFamily(fs []ui.FontFamily, name string) int {
 		}
 	}
 	return -1
+}
+
+// fontChosen is the font the dialog holds, cur being the one edited, which
+// the sample shows and OK returns: the weight and the italics are the
+// style's.
+func fontChosen(cur ui.Font, startWeight int, startBold bool, st fontStyle) ui.Font {
+	cur.Weight = chosenWeight(startWeight, startBold, st.bold)
+	cur.Italic = st.italic
+	return cur
 }
 
 // chosenWeight is the weight of a font the user left in the style it started
