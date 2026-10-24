@@ -35,7 +35,12 @@ type core struct {
 	focusIn    int  // the view that last built it focused, noView for none
 	builtIn    int  // the view that last built it
 	tooltip    string
-	st         style
+	ownStyle   Style   // what the control's own methods set
+	applied    []Style // Apply's styles
+	style      Style   // applied merged, ownStyle last: what frames resolve
+	styled     bool    // style sets anything
+	textKey    any     // textKey(id), boxed once
+	place      layout
 	onFocusOut func()
 	click      func()
 	menu       []MenuItem
@@ -48,7 +53,20 @@ const noView = -1
 // Only views touch it, under mu.
 var building int
 
-func (c *common[W]) init(self *W) { c.self, c.id, c.focusIn = self, newID(), noView }
+func (c *common[W]) init(self *W) {
+	c.self, c.id, c.focusIn = self, newID(), noView
+	c.textKey = textKey(c.id)
+}
+
+// restyle merges the control's styles, its own last. Under mu.
+func (b *core) restyle() {
+	var s Style
+	for _, a := range b.applied {
+		s = s.Merge(a)
+	}
+	b.style = s.Merge(b.ownStyle)
+	b.styled = !b.style.empty()
+}
 
 // SetVisible shows or hides the widget. A hidden widget keeps its values,
 // caret, selection and scroll position; an open popup closes, and hiding
@@ -127,7 +145,11 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	keeping.key(c, b)
 	e := w.build(c)
-	b.st.apply(c, e)
+	b.place.apply(e)
+	if b.styled {
+		p := b.style.effective(c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled)
+		p.apply(c, e, b.textKey)
+	}
 	if b.disabled {
 		e.Disabled(true)
 	}

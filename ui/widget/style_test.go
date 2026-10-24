@@ -1,7 +1,9 @@
 package widget
 
 import (
+	"image/color"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -48,5 +50,285 @@ func TestEveryStyleMethodBuilds(t *testing.T) {
 	tt := tester(t, l)
 	if !tt.HasText("s") {
 		t.Fatalf("styled label not shown: %q", tt.Texts())
+	}
+}
+
+// restyleLocked merges the control's styles under the package's lock, to
+// read the merge without a frame.
+func (b *core) restyleLocked() { mu.Lock(); defer mu.Unlock(); b.restyle() }
+
+// pixel returns the color drawn in the control showing s, clear of its
+// text and of corners up to r DIPs round: at its vertical middle, r+2 DIPs
+// in from its left edge. The tester draws at scale 1.
+func pixel(t *testing.T, tt *ui.Tester, s string, r float32) color.RGBA {
+	t.Helper()
+	b := find(t, tt, s)
+	return tt.Image().RGBAAt(int(b.X+r+2), int(b.Y+b.H/2))
+}
+
+// near reports whether c is within 8 of want on each channel.
+func near(c color.RGBA, want ui.Color) bool {
+	d := func(a, b uint8) bool { x := int(a) - int(b); return x > -9 && x < 9 }
+	return d(c.R, want.R) && d(c.G, want.G) && d(c.B, want.B)
+}
+
+// page is the color of the page at the bottom left of the window: well
+// outside the few controls these tests show at its top, which a box
+// stretches across its width.
+func page(tt *ui.Tester) color.RGBA {
+	img := tt.Image()
+	r := img.Bounds()
+	return img.RGBAAt(r.Min.X+2, r.Max.Y-3)
+}
+
+// pixelLeft returns the color drawn left of the text s, in the padding of
+// the control around it: tt.Find gives a button's label text, and the
+// padding beside it shows the button's fill. It fails if that is the page's
+// color, as a padding under 4 DIPs would give.
+func pixelLeft(t *testing.T, tt *ui.Tester, s string) color.RGBA {
+	t.Helper()
+	b := find(t, tt, s)
+	c := tt.Image().RGBAAt(int(b.X-4), int(b.Y+b.H/2))
+	if c == page(tt) {
+		t.Fatalf("the point left of %q shows the page %v, not the control", s, c)
+	}
+	return c
+}
+
+// mix is c over bg at the opacity f.
+func mix(c ui.Color, bg color.RGBA, f float32) ui.Color {
+	m := func(a, b uint8) uint8 { return uint8(float32(a)*f + float32(b)*(1-f) + 0.5) }
+	return ui.RGB(m(c.R, bg.R), m(c.G, bg.G), m(c.B, bg.B))
+}
+
+func TestApplyStylesAControl(t *testing.T) {
+	l := Label("styled").Apply(NewStyle().Padding(3).Background(Fixed(red)))
+	tt := tester(t, l)
+	if c := pixel(t, tt, "styled", 0); !near(c, red) {
+		t.Fatalf("background %v, want red", c)
+	}
+}
+
+func TestMutedThenTextColorKeepsTheColor(t *testing.T) {
+	// Today's order still works: a later TextColor wins over Muted.
+	l := Label("m").Muted().TextColor(red)
+	l.base().restyleLocked()
+	if l.style.text.fixed != red {
+		t.Fatalf("text %v, want red", l.style.text)
+	}
+}
+
+var green = ui.RGB(0, 160, 0)
+
+// card is padded so pixel samples its background.
+func card() Style { return NewStyle().Padding(3).Radius(1) }
+
+func centerOf(t *testing.T, tt *ui.Tester, s string) (float32, float32) {
+	t.Helper()
+	b := find(t, tt, s)
+	return b.X + b.W/2, b.Y + b.H/2
+}
+
+func TestStyleHoverShowsAndGoes(t *testing.T) {
+	l := Label("hov").Apply(card().Background(Fixed(red)).Hover(NewStyle().Background(Fixed(blue))))
+	tt := tester(t, VBox(0).Add(l, Label("elsewhere")))
+	tt.Move(centerOf(t, tt, "hov"))
+	if c := pixel(t, tt, "hov", 4); !near(c, blue) {
+		t.Fatalf("hovered %v, want blue", c)
+	}
+	tt.Move(centerOf(t, tt, "elsewhere"))
+	if c := pixel(t, tt, "hov", 4); !near(c, red) {
+		t.Fatalf("after leaving %v, want red", c)
+	}
+}
+
+func TestStylePressedWinsOverHover(t *testing.T) {
+	b := Button("press").Apply(card().Background(Fixed(red)).
+		Hover(NewStyle().Background(Fixed(blue))).Pressed(NewStyle().Background(Fixed(green))))
+	tt := tester(t, b)
+	x, y := centerOf(t, tt, "press")
+	tt.Move(x, y)
+	tt.Press(x, y)
+	if c := pixelLeft(t, tt, "press"); !near(c, green) {
+		t.Fatalf("pressed %v, want green", c)
+	}
+	tt.Release(x, y)
+	if c := pixelLeft(t, tt, "press"); !near(c, blue) {
+		t.Fatalf("released, still hovered: %v, want blue", c)
+	}
+}
+
+func TestStyleDisabledWinsOverAll(t *testing.T) {
+	l := Label("dis").Apply(card().Background(Fixed(red)).
+		Hover(NewStyle().Background(Fixed(blue))).Disabled(NewStyle().Background(Fixed(green))))
+	tt := tester(t, l)
+	tt.Move(centerOf(t, tt, "dis"))
+	l.SetDisabled(true)
+	tt.Frame()
+	// ui draws a disabled element at 50% opacity, over the page.
+	want := mix(green, page(tt), 0.5)
+	if c := pixel(t, tt, "dis", 4); !near(c, want) {
+		t.Fatalf("disabled and hovered %v, want green at half opacity %v", c, want)
+	}
+}
+
+func TestStyleDarkAndDarkHover(t *testing.T) {
+	l := Label("dk").Apply(card().Background(Fixed(red)).Dark(NewStyle().Background(Fixed(blue))).
+		Hover(NewStyle().Background(Fixed(green)).Dark(NewStyle().Background(Fixed(ui.RGB(200, 200, 0))))))
+	tt := tester(t, VBox(0).Add(l, Label("away")))
+	tt.SetDark(true)
+	if c := pixel(t, tt, "dk", 4); !near(c, blue) {
+		t.Fatalf("dark %v, want blue", c)
+	}
+	tt.Move(centerOf(t, tt, "dk"))
+	if c := pixel(t, tt, "dk", 4); !near(c, ui.RGB(200, 200, 0)) {
+		t.Fatalf("dark hover %v, want yellow", c)
+	}
+}
+
+func TestStyleRoleFollowsTheTheme(t *testing.T) {
+	l := Label("role").Apply(card().Background(RoleAccent))
+	tt := tester(t, l)
+	light := pixel(t, tt, "role", 4)
+	tt.SetDark(true)
+	dark := pixel(t, tt, "role", 4)
+	if !near(light, ui.LightTheme().Accent) {
+		t.Fatalf("light %v, want the light accent %v", light, ui.LightTheme().Accent)
+	}
+	if near(dark, ui.LightTheme().Accent) && ui.LightTheme().Accent != ui.DarkTheme().Accent {
+		t.Fatalf("dark %v still the light accent", dark)
+	}
+}
+
+func TestOwnStyleWinsAndPerSideKeepsTheRest(t *testing.T) {
+	l := Label("own").Apply(card().Background(Fixed(red)), NewStyle().Background(Fixed(blue))).PaddingTop(0)
+	tt := tester(t, VBox(0).Add(l, Label("plain")))
+	if c := pixel(t, tt, "own", 4); !near(c, blue) {
+		t.Fatalf("later Apply style should win: %v", c)
+	}
+	l.Background(green)
+	tt.Frame()
+	if c := pixel(t, tt, "own", 4); !near(c, green) {
+		t.Fatalf("own style should win over Apply: %v", c)
+	}
+	o, p := find(t, tt, "own"), find(t, tt, "plain")
+	if d := o.H - p.H; d < 11.5 || d > 12.5 { // 3 units below only: 12 DIPs
+		t.Fatalf("own height %v vs plain %v: PaddingTop(0) should keep the bottom's 3 units", o.H, p.H)
+	}
+}
+
+func TestUnsetPropertiesKeepTheButtonsHover(t *testing.T) {
+	b := Button("native").Apply(NewStyle().Bold())
+	tt := tester(t, VBox(0).Add(b, Label("away")))
+	before := pixelLeft(t, tt, "native")
+	tt.Move(centerOf(t, tt, "native"))
+	after := pixelLeft(t, tt, "native")
+	if before == after {
+		t.Fatalf("ui.Button's own hover color is gone: %v both", before)
+	}
+}
+
+func TestStyleTransitionFades(t *testing.T) {
+	const d = 200 * time.Millisecond
+	l := Label("fade").Apply(card().Background(Fixed(ui.RGB(0, 0, 0))).
+		Hover(NewStyle().Background(Fixed(ui.RGB(240, 240, 240)))).Transition(d))
+	tt := tester(t, VBox(0).Add(l, Label("away")))
+	tt.Move(centerOf(t, tt, "fade"))
+	tt.Advance(d / 2)
+	mid := pixel(t, tt, "fade", 4)
+	if mid.R < 20 || mid.R > 220 {
+		t.Fatalf("halfway %v, want between black and white", mid)
+	}
+	tt.Advance(d)
+	if end := pixel(t, tt, "fade", 4); !near(end, ui.RGB(240, 240, 240)) {
+		t.Fatalf("after the transition %v, want the hover color", end)
+	}
+}
+
+// The documented case: the base style sets a TextColor too, so the text has
+// a color to fade from. (With a variant's alone it jumps: the style cannot
+// know the color the control's text rests in.)
+func TestStyleTextColorFadesWhenTheBaseSetsOneToo(t *testing.T) {
+	const d = 200 * time.Millisecond
+	l := Label("TTTTTTTT").Apply(NewStyle().TextColor(Fixed(ui.RGB(0, 0, 0))).
+		Hover(NewStyle().TextColor(Fixed(ui.RGB(230, 0, 0)))).Transition(d)).TextSize(XXXL)
+	tt := tester(t, VBox(0).Add(l, Label("away")))
+	// The thresholds are relative to what this test measures at rest and at
+	// the end: how much of a glyph pixel is text depends on the platform's
+	// text coverage, so it samples one pixel the text covers fully (the
+	// darkest at rest) throughout, and the ease-out curve is most of the way
+	// at d/2, so the middle is sampled at d/4.
+	b, img := find(t, tt, "TTTTTTTT"), tt.Image()
+	px, py, dark := 0, 0, 3*256
+	for y := int(b.Y); y < int(b.Y+b.H); y++ {
+		for x := int(b.X); x < int(b.X+b.W); x++ {
+			if c := img.RGBAAt(x, y); int(c.R)+int(c.G)+int(c.B) < dark {
+				px, py, dark = x, y, int(c.R)+int(c.G)+int(c.B)
+			}
+		}
+	}
+	red := func() int { return int(tt.Image().RGBAAt(px, py).R) }
+	rest := red()
+	tt.Move(centerOf(t, tt, "TTTTTTTT"))
+	tt.Advance(d / 4)
+	mid := red()
+	tt.Advance(d)
+	end := red()
+	span := end - rest
+	if span <= 100 || mid <= rest+span/10 || mid >= end-span/10 {
+		t.Fatalf("text red at rest %d, a quarter into the fade %d, at the end %d: want the end more than 100 above rest and the middle at least a tenth of that from both", rest, mid, end)
+	}
+}
+
+// Apply while frames build: the merge is made under the package's lock
+// (go test -race sees if it is not), and the frame after the last call
+// shows its style.
+func TestApplyFromAnotherGoroutineWhileFramesBuild(t *testing.T) {
+	a := card().Background(Fixed(red))
+	b := card().Background(Fixed(blue))
+	l := Label("race")
+	tt := tester(t, l)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 200 {
+			if i%2 == 0 {
+				l.Apply(a)
+			} else {
+				l.Apply(b)
+			}
+		}
+	}()
+	for running := true; running; {
+		tt.Frame()
+		select {
+		case <-done:
+			running = false
+		default:
+		}
+	}
+	tt.Frame()
+	if c := pixel(t, tt, "race", 4); !near(c, blue) { // the 200th call, i = 199, applies b
+		t.Fatalf("last Apply not shown: %v", c)
+	}
+}
+
+// The docs say so: a style that sets a background gives a static one, unless
+// it has a Hover variant too.
+func TestStyleStaticBackgroundTurnsTheButtonsHoverOff(t *testing.T) {
+	b := Button("stat").Apply(card().Background(Fixed(red)))
+	tt := tester(t, VBox(0).Add(b, Label("away")))
+	before := pixelLeft(t, tt, "stat")
+	tt.Move(centerOf(t, tt, "stat"))
+	if after := pixelLeft(t, tt, "stat"); after != before {
+		t.Fatalf("hover changed a static background: %v then %v", before, after)
+	}
+}
+
+func TestStyleBadValuesDoNotPanic(t *testing.T) {
+	l := Label("bad").Apply(NewStyle().Opacity(2).Padding(-3).Radius(1, 2, 3).Blur(-1))
+	tt := tester(t, l)
+	if !tt.HasText("bad") {
+		t.Fatalf("not shown: %q", tt.Texts())
 	}
 }
