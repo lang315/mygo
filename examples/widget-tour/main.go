@@ -219,6 +219,7 @@ func extras() widget.Control {
 		clockRow(),
 		chartRow(),
 		richRow(),
+		webRow(),
 	)
 }
 
@@ -389,6 +390,13 @@ func chartRow() widget.Control {
 	pie := widget.Chart(widget.PieChart).SetTitle("Users").SetLabels("Win", "Mac", "Linux").
 		SetSeries(widget.ChartSeries{Values: []float64{60, 30, 10}})
 	return widget.HBox(24).Add(bars, pie)
+}
+
+// webRow shows a page of HTML the tour makes, with no network.
+func webRow() widget.Control {
+	b := widget.WebBrowser().SetDocumentText("<h3>WebBrowser</h3><p>A page the tour made.</p>")
+	b.SetSize(0, 140)
+	return widget.VBox(4).Add(widget.Button("Reload").OnClick(func() { b.Reload() }), b)
 }
 
 func containers() widget.Control {

@@ -253,17 +253,19 @@ func (w *Window) handleMessage(msg string) {
 		fire(&w.onDOMReady)
 		w.readyToShow()
 	case "drag":
-		if w.native != nil {
+		// The window's own business, which pages of other origins have none
+		// in: they would move it, maximize it or re-send files dropped on it.
+		if w.native != nil && w.trusted {
 			w.native.StartDrag()
 		}
 	case "dblclick":
-		if w.native != nil {
+		if w.native != nil && w.trusted {
 			w.native.TitleBarDoubleClicked()
 		}
 	case "escape":
 		w.escape()
 	case "drop":
-		if w.native != nil {
+		if w.native != nil && w.trusted {
 			w.filesDropped(w.native.DroppedFiles(), int(m.X), int(m.Y))
 		}
 	case "chan-ack":

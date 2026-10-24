@@ -649,7 +649,10 @@ type WindowHandler interface {
 	// cannot turn into a download, by serving it again.
 	SchemeDownload(url string)
 	// PermissionRequested asks whether the page at origin may use kinds:
-	// "camera", "microphone", "geolocation" or "notifications".
+	// "camera", "microphone", "geolocation" or "notifications", or
+	// UnmappedPermission alone: a kind the engine asks the user about, which
+	// the backend denies when this returns false. The app's handler is not
+	// asked about it.
 	PermissionRequested(kinds []string, origin string) bool
 
 	// SurfaceEvent delivers input on the window's Surface, and changes of
@@ -1037,3 +1040,7 @@ type NotificationSender struct {
 	ID, Name string
 	Avatar   []byte
 }
+
+// UnmappedPermission is the kind PermissionRequested gets for a request
+// that is none of the named ones (clipboard, file system, fonts, MIDI...).
+const UnmappedPermission = "unmapped"

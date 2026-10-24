@@ -321,7 +321,8 @@ func (w *Form) view(c *ui.Context) {
 	defer mu.Unlock()
 	viewing.Store(true)
 	defer viewing.Store(false)
-	axis, building = vertical, w.id
+	axis, building, buildingForm = vertical, w.id, w
+	defer func() { buildingForm = nil }()
 	w.keep.begin()
 	formAccept = w.acceptClick()
 	defer func() { formAccept = nil }()

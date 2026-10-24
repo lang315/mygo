@@ -48,7 +48,8 @@ func (h *windowHandler) DownloadStarted(url, suggested string) string {
 		name = "download"
 	}
 	e := &DownloadEvent{URL: url, SuggestedName: name}
-	if dir, err := App.Path(PathDownloads); err == nil && os.MkdirAll(dir, 0o755) == nil {
+	// A view without bindings saves nothing unless a listener sets a Path.
+	if dir, err := App.Path(PathDownloads); !h.w.noBindings && err == nil && os.MkdirAll(dir, 0o755) == nil {
 		e.Path = uniquePath(filepath.Join(dir, name))
 	}
 	fire1(&h.w.onWillDownload, e)

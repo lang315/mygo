@@ -6,11 +6,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -268,5 +273,175 @@ func TestWebViewPress(t *testing.T) {
 	})
 	if pressed != fv || !fv.Focused || open {
 		t.Errorf("a press on the page: web view %v, focused %v, popover open %v", pressed, fv.Focused, open)
+	}
+}
+
+// A web view that shows content which is not the app's own can be made
+// without bindings: no page in it calls Go, whatever its origin, where a
+// view without the option trusts about:, file: and the app's origins.
+func TestWebViewNoBindingsNeverLetsAPageCallGo(t *testing.T) {
+	svc := &testService{}
+	bindForTest(t, "NoBind", svc)
+	for _, noBindings := range []bool{false, true} {
+		w, _, _ := contentWindow(t, func(c *ui.Context) {})
+		w.NewWebView(WebViewOptions{NoBindings: noBindings, Page: PageOptions{TrustedOrigins: []string{"https://partner.example"}}})
+		var fv *fake.WebView
+		for _, wn := range fb.Windows() {
+			if s := wn.FakeSurface(); s != nil && !wn.IsClosed() {
+				if vs := s.WebViews(); len(vs) > 0 {
+					fv = vs[len(vs)-1]
+				}
+			}
+		}
+		if fv == nil {
+			t.Fatal("no web view")
+		}
+		for i, url := range []string{"about:blank", "file:///tmp/x.html", "https://partner.example/page", "https://evil.example/"} {
+			onMain(func() { fv.H.NavigationCommitted(url) })
+			m := call(t, fv.Window, 200+i, "NoBind.Hello", "x")
+			wantOK := !noBindings && url != "https://evil.example/"
+			if m["ok"] != wantOK {
+				t.Errorf("NoBindings=%v, page at %s: ok = %v (%v), want %v", noBindings, url, m["ok"], m["e"], wantOK)
+			}
+		}
+	}
+}
+
+// The page bridge's window messages (drag, double click on the title bar,
+// drop) come from pages of the app; an untrusted origin posting them must
+// not move or maximize the window, nor re-send dropped files.
+func TestUntrustedPagesCannotDragMaximizeOrDrop(t *testing.T) {
+	w, fw := readyWindow(t, WindowOptions{})
+	dropped := make(chan []string, 4)
+	w.OnFileDrop(func(e *FileDropEvent) { dropped <- e.Paths })
+	for _, c := range []struct {
+		url     string
+		trusted bool
+	}{{"https://evil.example/", false}, {"file:///tmp/x.html", true}} {
+		onMain(func() { fw.H.NavigationCommitted(c.url) })
+		fw.Dropped = []string{"/tmp/secret.txt"}
+		drags, dbl := fw.Drags(), fw.DoubleClicks()
+		page(fw, `{"t":"drag"}`)
+		page(fw, `{"t":"dblclick"}`)
+		page(fw, `{"t":"drop","x":1,"y":2}`)
+		onMain(func() {})
+		gotDrag, gotDbl := fw.Drags()-drags, fw.DoubleClicks()-dbl
+		if c.trusted != (gotDrag == 1) || c.trusted != (gotDbl == 1) {
+			t.Errorf("page at %s: %d window drags, %d title bar double clicks, trusted %v", c.url, gotDrag, gotDbl, c.trusted)
+		}
+		select {
+		case p := <-dropped:
+			if !c.trusted {
+				t.Errorf("page at %s re-sent dropped files %q", c.url, p)
+			}
+		default:
+			if c.trusted {
+				t.Errorf("a trusted page's drop was not handled")
+			}
+		}
+	}
+}
+
+// A view made with NoBindings is untrusted for everything a page can ask of
+// the host: permissions, downloads and new windows are refused by default.
+func TestWebViewNoBindingsRefusesPermissionsDownloadsAndWindowsByDefault(t *testing.T) {
+	for _, noBindings := range []bool{false, true} {
+		w, _, _ := contentWindow(t, func(c *ui.Context) {})
+		v, err := w.NewWebView(WebViewOptions{NoBindings: noBindings})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fv *fake.WebView
+		for _, wn := range fb.Windows() {
+			if s := wn.FakeSurface(); s != nil && !wn.IsClosed() {
+				if vs := s.WebViews(); len(vs) > 0 {
+					fv = vs[len(vs)-1]
+				}
+			}
+		}
+		if fv == nil {
+			t.Fatal("no web view")
+		}
+		onMain(func() { fv.H.NavigationCommitted("file:///tmp/x.html") })
+		var allowed bool
+		var path string
+		before := len(fake.OpenedExternal())
+		onMain(func() {
+			allowed = fv.H.PermissionRequested([]string{"camera"}, "file:///tmp/x.html")
+			path = fv.H.DownloadStarted("https://evil.example/a.zip", "a.zip")
+			fv.H.NewWindow(platform.NewWindowRequest{URL: "https://evil.example/popup"})
+		})
+		if !noBindings { // OpenExternal runs on a goroutine
+			wait.Poll(func() bool { return len(fake.OpenedExternal()) > before })
+		} else {
+			for i := 0; i < 20000; i++ { // let a goroutine that would open it run
+				runtime.Gosched()
+			}
+		}
+		opened := len(fake.OpenedExternal()) - before
+		if allowed == noBindings || (path == "") != noBindings || (opened == 0) != noBindings {
+			t.Errorf("NoBindings=%v: permission %v, download path %q, %d windows opened externally", noBindings, allowed, path, opened)
+		}
+		// The app opts in with the hooks of the page.
+		if noBindings {
+			v.Page().OnWillDownload(func(e *DownloadEvent) { e.Path = filepath.Join(t.TempDir(), "ok.zip") })
+			v.Page().SetPermissionHandler(func(req PermissionRequest) bool { return true })
+			onMain(func() {
+				allowed = fv.H.PermissionRequested([]string{"camera"}, "file:///tmp/x.html")
+				path = fv.H.DownloadStarted("https://evil.example/a.zip", "a.zip")
+			})
+			if !allowed || path == "" {
+				t.Errorf("with handlers: permission %v, path %q", allowed, path)
+			}
+		}
+	}
+}
+
+// A view without bindings is not the app's own page: it reads no response
+// of a custom scheme across origins, whoever the window trusts.
+func TestAllowCORSRefusesAViewWithoutBindings(t *testing.T) {
+	for _, noBindings := range []bool{false, true} {
+		win := &Window{noBindings: noBindings, trustedOrigins: []string{"https://partner.example"}}
+		h := http.Header{}
+		r := httptest.NewRequest("GET", "app://localhost/data", nil)
+		r.Header.Set("Origin", "https://partner.example")
+		allowCORS(win, h, r)
+		if got := h.Get("Access-Control-Allow-Origin") != ""; got == noBindings {
+			t.Errorf("NoBindings=%v: CORS granted = %v", noBindings, got)
+		}
+	}
+}
+
+// The permissions of a kind WebView2 asks the user about are denied to a
+// view without bindings, and left to the user for the app's own pages.
+func TestUnmappedPermissionsAreDeniedToAViewWithoutBindings(t *testing.T) {
+	for _, noBindings := range []bool{false, true} {
+		w, _, _ := contentWindow(t, func(c *ui.Context) {})
+		v, err := w.NewWebView(WebViewOptions{NoBindings: noBindings})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fv *fake.WebView
+		for _, wn := range fb.Windows() {
+			if s := wn.FakeSurface(); s != nil && !wn.IsClosed() {
+				if vs := s.WebViews(); len(vs) > 0 {
+					fv = vs[len(vs)-1]
+				}
+			}
+		}
+		if fv == nil {
+			t.Fatal("no web view")
+		}
+		var asked []string
+		v.Page().SetPermissionHandler(func(req PermissionRequest) bool {
+			asked = append(asked, string(req.Permissions[0]))
+			return true
+		})
+		got := onMainValue(func() bool {
+			return fv.H.PermissionRequested([]string{platform.UnmappedPermission}, "file:///tmp/x.html")
+		})
+		if got == noBindings || len(asked) != 0 {
+			t.Errorf("NoBindings=%v: allowed %v, the app's handler was asked %v", noBindings, got, asked)
+		}
 	}
 }
