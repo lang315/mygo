@@ -2,6 +2,7 @@ package widget
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -55,9 +56,14 @@ type TextBoxWidget struct {
 	placeholder string
 	password    bool
 	readOnly    bool
+	maxLen      int // runes, 0 for no limit
+	icon        *ui.Bitmap
 	onChange    func()
 	onEnter     func()
 }
+
+// iconSize is the side of a TextBox's icon, in DIPs.
+const iconSize = 16
 
 // TextBox makes an empty one-line text input.
 func TextBox() *TextBoxWidget {
@@ -68,7 +74,36 @@ func TextBox() *TextBoxWidget {
 
 func (e *TextBoxWidget) Text() string { mu.Lock(); defer mu.Unlock(); return e.text.value }
 func (e *TextBoxWidget) SetText(s string) *TextBoxWidget {
-	e.change(func() { e.text.set(s) })
+	e.change(func() { e.text.set(e.cut(s)) })
+	return e
+}
+
+// cut returns s cut to the runes MaxLength allows. Under mu.
+func (e *TextBoxWidget) cut(s string) string {
+	if e.maxLen > 0 && utf8.RuneCountInString(s) > e.maxLen {
+		return string([]rune(s)[:e.maxLen])
+	}
+	return s
+}
+
+// Icon shows img, 16 DIPs square, before the text inside the box, as gota's
+// entry icon does, at its left; nil removes it.
+func (e *TextBoxWidget) Icon(img *ui.Bitmap) *TextBoxWidget {
+	e.change(func() { e.icon = img })
+	return e
+}
+
+// MaxLength limits the text to n runes, as WinForms' MaxLength does:
+// what the user types or pastes past it is cut at it, and so is a text set
+// by SetText, and the text the box holds when n is lowered. 0 means no
+// limit.
+func (e *TextBoxWidget) MaxLength(n int) *TextBoxWidget {
+	e.change(func() {
+		e.maxLen = max(n, 0)
+		if s := e.cut(e.text.value); s != e.text.value {
+			e.text.set(s)
+		}
+	})
 	return e
 }
 
@@ -109,6 +144,27 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 		el.Password()
 	}
 	el.ReadOnly(e.readOnly)
+	el.MaxLength(e.maxLen)
+	if icon := e.icon; icon != nil {
+		// The icon's room is added to the start padding once the user's
+		// styles have set it, and the icon drawn in the padding.
+		e.post = func(c *ui.Context, el ui.Element) {
+			t := c.Theme()
+			side, rtl := 3, c.Direction() == ui.RightToLeft
+			if rtl {
+				side = 1
+			}
+			pad := el.Paddings()[side]
+			el.PaddingStart(pad + iconSize + t.Space(1.5))
+			el.DrawOver(func(p *ui.Painter, r ui.Rect) {
+				x := r.X + pad
+				if rtl {
+					x = r.X + r.W - pad - iconSize
+				}
+				p.Image(icon, ui.Rect{X: x, Y: r.Y + (r.H-iconSize)/2, W: iconSize, H: iconSize}, ui.Contain)
+			})
+		}
+	}
 	el.OnChange(edited(&e.text, &e.bound, e.onChange))
 	if changed && e.onChange != nil {
 		Post(e.onChange)

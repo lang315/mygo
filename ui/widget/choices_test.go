@@ -255,3 +255,37 @@ func TestComboHeaderClickKeepsArrows(t *testing.T) {
 		t.Fatalf("Down, Down, Enter after a header click chose %q, want c", v)
 	}
 }
+
+func TestComboSectionsAndTextsChangeWhileShown(t *testing.T) {
+	c := ComboBox().AddSection("Fruits", nil, Option{"apple", "Apple"}).SetValue("apple")
+	_, w := showFrame(t, c)
+	redrawn := recordInvalidations(t)
+	c.SetOptionText("apple", "Green apple")
+	wantRedrawn(t, redrawn(), w)
+	c.AddSection("Vegetables", testPNG(t, color.RGBA{0, 128, 0, 255}), Option{"kale", "Kale"})
+	wantRedrawn(t, redrawn(), w)
+	c.RemoveSection("Fruits")
+	wantRedrawn(t, redrawn(), w)
+	c.SetOptions(Option{"x", "X"})
+	wantRedrawn(t, redrawn(), w)
+
+	// And what a frame draws follows: the trigger's text, the popup's sections.
+	d := ComboBox().AddSection("Fruits", nil, Option{"apple", "Apple"}).SetValue("apple")
+	tt := tester(t, d)
+	d.SetOptionText("apple", "Green apple")
+	tt.Frame()
+	if !tt.HasText("Green apple") {
+		t.Fatalf("trigger after SetOptionText: %q", tt.Texts())
+	}
+	click(t, tt, "Green apple") // open
+	d.AddSection("Vegetables", nil, Option{"kale", "Kale"})
+	tt.Frame()
+	if !tt.HasText("Vegetables") || !tt.HasText("Kale") {
+		t.Fatalf("popup after AddSection: %q", tt.Texts())
+	}
+	d.RemoveSection("Fruits")
+	tt.Frame()
+	if tt.HasText("Fruits") {
+		t.Fatalf("popup after RemoveSection: %q", tt.Texts())
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/png"
 	"log"
+	"math"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -205,6 +206,8 @@ func inputs() widget.Control {
 		}),
 		greeting,
 		widget.TextBox().SetPlaceholder("Password").Password(),
+		widget.TextBox().SetPlaceholder("At most 8 characters").MaxLength(8),
+		widget.TextBox().SetPlaceholder("Search").Icon(searchIcon()),
 		widget.MultilineTextBox().SetPlaceholder("Notes").SetSize(0, 100),
 		widget.CheckBox("Remember me"),
 		widget.HBox(8).Add(widget.Switch(), widget.Label("Notifications")),
@@ -232,6 +235,8 @@ func choices() widget.Control {
 		widget.ComboBox(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).SetValue("vn"),
 		widget.CheckBoxGroup(true, widget.Option{Value: "a", Text: "Apple"}, widget.Option{Value: "b", Text: "Banana"}),
 		widget.RadioGroup(true, widget.Option{Value: "s", Text: "Small"}, widget.Option{Value: "l", Text: "Large"}),
+		widget.HBox(8).Add(widget.RadioButton("Red").SetChecked(true), widget.RadioButton("Green"), widget.RadioButton("Blue")),
+		widget.ComboBox(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).Editable().SetText("Any country"),
 		widget.TagSelect(widget.Option{Value: "go", Text: "Go"}, widget.Option{Value: "ui", Text: "UI"}, widget.Option{Value: "gtk", Text: "GTK"}),
 		widget.Spinner().Start(),
 	)
@@ -332,4 +337,22 @@ func liveUpdates(t *widget.DataGridViewWidget[account, int], stop <-chan struct{
 			})
 		}
 	}
+}
+
+// searchIcon is a magnifying glass drawn in code: a ring and a handle.
+func searchIcon() *ui.Bitmap {
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	ink := color.RGBA{120, 120, 120, 255}
+	for y := range 32 {
+		for x := range 32 {
+			dx, dy := float64(x-13), float64(y-13)
+			d := math.Hypot(dx, dy)
+			ring := d > 7.5 && d < 10
+			handle := x > 19 && x-y > -1 && x-y < 3 && x < 29
+			if ring || handle {
+				img.SetRGBA(x, y, ink)
+			}
+		}
+	}
+	return ui.NewBitmap(img)
 }

@@ -26,7 +26,11 @@ func GroupBox(title string) *GroupBoxWidget {
 func (f *GroupBoxWidget) Add(w Control) *GroupBoxWidget {
 	f.change(func() {
 		if w != f.titleW {
+			if f.child != nil {
+				orphan(f.child)
+			}
 			f.child = w
+			adopt(&f.core, w)
 		}
 	})
 	return f
@@ -384,13 +388,22 @@ func (f *FlowPanelWidget) Add(ws ...Control) *FlowPanelWidget {
 		for _, w := range ws {
 			if !slices.Contains(f.items, w) {
 				f.items = append(f.items, w)
+				adopt(&f.core, w)
 			}
 		}
 	})
 	return f
 }
 
-func (f *FlowPanelWidget) Clear() *FlowPanelWidget { f.change(func() { f.items = nil }); return f }
+func (f *FlowPanelWidget) Clear() *FlowPanelWidget {
+	f.change(func() {
+		for _, w := range f.items {
+			orphan(w)
+		}
+		f.items = nil
+	})
+	return f
+}
 
 func (f *FlowPanelWidget) build(c *ui.Context) ui.Element {
 	return ui.Row(c).Wrap().Gap(f.spacing).Children(func() {

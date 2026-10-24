@@ -87,6 +87,10 @@ func (ed *editor) record(typing bool) {
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
+	if ed.maxLen > 0 && s != "" {
+		// What the text may take in the room the replaced runes leave.
+		s = cutToRoom(s, max(ed.maxLen-(ed.buf.n-(end-start)), 0))
+	}
 	if !ed.multiline {
 		s = strings.Map(func(r rune) rune {
 			if r == '\n' || r == '\r' {
@@ -160,4 +164,22 @@ func (ed *editor) takeBack(redo bool) {
 	if ed.area != nil {
 		ed.area.reveal = true
 	}
+}
+
+// cutToRoom returns s cut to at most room runes, back to the end of the
+// last whole grapheme: a letter keeps its accents or goes with them.
+func cutToRoom(s string, room int) string {
+	runes := []rune(s)
+	if len(runes) <= room {
+		return s
+	}
+	var b text.Boundaries
+	b.Reset(runes)
+	cut := 0
+	for _, g := range b.GraphemeOffsets() {
+		if g <= room {
+			cut = g
+		}
+	}
+	return string(runes[:cut])
 }

@@ -1,6 +1,9 @@
 package widget
 
 import (
+	"image"
+	"image/color"
+	"image/draw"
 	"testing"
 
 	"github.com/egoist/mygo/internal/wait"
@@ -166,5 +169,137 @@ func TestFocusMovesTheFocus(t *testing.T) {
 	tt.Frame()
 	if a.Text() != "" || b.Text() != "x" {
 		t.Fatalf("a %q, b %q: typing did not go to b", a.Text(), b.Text())
+	}
+}
+
+func TestTextBoxMaxLengthCutsTypingPastingAndSetText(t *testing.T) {
+	tb := TextBox().MaxLength(4)
+	tt := tester(t, tb)
+	focus(tt, 1)
+	tt.Type("héllo wörld") // runes, not bytes
+	tt.Frame()
+	if got := tb.Text(); got != "héll" {
+		t.Fatalf("typed: %q, want héll", got)
+	}
+	tb.SetText("abcdefgh")
+	tt.Frame()
+	if got := tb.Text(); got != "abcd" {
+		t.Fatalf("SetText past the limit: %q, want abcd", got)
+	}
+	tb.MaxLength(2) // a lower limit cuts what it holds
+	tt.Frame()
+	if got := tb.Text(); got != "ab" {
+		t.Fatalf("MaxLength(2): %q, want ab", got)
+	}
+	tb.MaxLength(0).SetText("abcdefgh")
+	tt.Frame()
+	if got := tb.Text(); got != "abcdefgh" {
+		t.Fatalf("no limit: %q", got)
+	}
+}
+
+// lastInk returns the last column before the box's right edge whose
+// pixels in the band differ from the box's fill: the text's right edge.
+func lastInk(tt *ui.Tester, y0, y1 int) int {
+	img := tt.Image()
+	bg := img.RGBAAt(300, (y0+y1)/2)
+	for x := 290; x > 0; x-- {
+		for y := y0; y < y1; y++ {
+			c := img.RGBAAt(x, y)
+			if absInt(int(c.R)-int(bg.R))+absInt(int(c.G)-int(bg.G))+absInt(int(c.B)-int(bg.B)) > 120 {
+				return x
+			}
+		}
+	}
+	return -1
+}
+
+func solidBitmap(c color.RGBA) *ui.Bitmap {
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	draw.Draw(img, img.Bounds(), &image.Uniform{c}, image.Point{}, draw.Src)
+	return ui.NewBitmap(img)
+}
+
+// firstInk returns the first column from x0 whose pixels in the band
+// y0..y1 differ from the box's fill, which is the text's left edge.
+func firstInk(tt *ui.Tester, x0, y0, y1 int) int {
+	img := tt.Image()
+	bg := img.RGBAAt(300, (y0+y1)/2)
+	for x := x0; x < 300; x++ {
+		for y := y0; y < y1; y++ {
+			c := img.RGBAAt(x, y)
+			if absInt(int(c.R)-int(bg.R))+absInt(int(c.G)-int(bg.G))+absInt(int(c.B)-int(bg.B)) > 120 {
+				return x
+			}
+		}
+	}
+	return -1
+}
+
+func TestTextBoxIconDrawsInsideTheBoxAndPushesTheText(t *testing.T) {
+	red := color.RGBA{220, 0, 0, 255}
+	plain := TextBox().SetText("hello")
+	iconed := TextBox().SetText("hello").Icon(solidBitmap(red))
+	ttPlain, ttIcon := tester(t, plain), tester(t, iconed)
+	const y0, y1 = 10, 22
+	p := firstInk(ttPlain, 6, y0, y1)
+	if p < 0 {
+		t.Fatal("no text in the plain box")
+	}
+	// The icon is red in the box's left padding, which the plain box does not show.
+	img := ttIcon.Image()
+	if c := img.RGBAAt(p+4, 16); c != red {
+		t.Fatalf("pixel at the icon %v, want red", c)
+	}
+	if c := ttPlain.Image().RGBAAt(p+4, 16); c == red {
+		t.Fatal("the plain box shows red")
+	}
+	// The text ends further right by the icon and its gap.
+	if a, b := lastInk(ttPlain, y0, y1), lastInk(ttIcon, y0, y1); b < a+16 {
+		t.Fatalf("the text ends at %d, plain at %d: it must make room for the icon", b, a)
+	}
+	iconed.Icon(nil) // nil removes it
+	ttIcon.Frame()
+	if i := firstInk(ttIcon, 6, y0, y1); i != p {
+		t.Fatalf("Icon(nil): the text starts at %d, want %d", i, p)
+	}
+}
+
+func TestTextBoxIconSurvivesStylesAndFocusesOnClick(t *testing.T) {
+	red := color.RGBA{220, 0, 0, 255}
+	const y0, y1 = 10, 22
+	plain := TextBox().SetText("hello").Padding(2)
+	iconed := TextBox().SetText("hello").Padding(2).Icon(solidBitmap(red))
+	ttP, ttI := tester(t, plain), tester(t, iconed)
+	if a, b := lastInk(ttP, y0, y1), lastInk(ttI, y0, y1); b < a+16 {
+		t.Fatalf("styled box: text ends at %d, plain at %d: the icon's room was replaced by the padding", b, a)
+	}
+	ttI.ClickAt(10, 16) // on the icon
+	ttI.Type("x")
+	ttI.Frame()
+	if got := iconed.Text(); got != "xhello" {
+		t.Fatalf("a click on the icon did not focus the box: %q", got)
+	}
+}
+
+func TestTextBoxIconIsAtTheLeadingEdgeRightToLeft(t *testing.T) {
+	red := color.RGBA{220, 0, 0, 255}
+	tb := TextBox().SetText("hello").Icon(solidBitmap(red))
+	tt := tester(t, tb)
+	tt.SetDirection(ui.RightToLeft)
+	tt.Frame()
+	img := tt.Image()
+	right, left := false, false
+	for x := 0; x < 800; x++ {
+		if img.RGBAAt(x, 16) == red {
+			if x > 400 {
+				right = true
+			} else {
+				left = true
+			}
+		}
+	}
+	if !right || left {
+		t.Fatalf("icon on the right %v, on the left %v: want the leading (right) edge", right, left)
 	}
 }

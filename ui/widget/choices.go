@@ -3,6 +3,7 @@ package widget
 import (
 	"math"
 	"slices"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -106,6 +107,11 @@ type ComboBoxWidget struct {
 	sections []comboSection // [0]: the options outside any section
 	value    mirror[string] // the chosen option's Value, "" for none
 	onChange func()
+	// editable lets the user type any text, held in text; Value is then
+	// the Value of the option with that text. bindsText says Bind takes
+	// the text, not the Value, of an editable combo (Editable, then Bind).
+	editable, bindsText bool
+	text                mirror[string]
 }
 
 // comboSection is a titled group of options.
@@ -147,33 +153,130 @@ func (c *ComboBoxWidget) find(v string) (Option, bool) {
 // gone. Under mu.
 func (c *ComboBoxWidget) edit(fn func(s []comboSection) []comboSection) {
 	c.sections = fn(c.sections)
+	if c.editable {
+		return
+	}
 	if _, ok := c.find(c.value.value); !ok && c.value.value != "" {
 		c.value.set("")
 	}
 }
 
+// Editable lets the user type a text that is not one of the options, in
+// the box itself, as a ComboBox with DropDownStyle DropDown does in
+// WinForms; the options show below it, those that match what is typed.
+// Text and SetText give and set the text; Value is the Value of the first
+// option whose Text is the text, "" when it matches none, and SetValue puts
+// the text of the option in the box. OnChange runs on typing and on
+// choosing. Bind binds the text of a combo made Editable before it is
+// bound, and the Value of one bound before.
+func (c *ComboBoxWidget) Editable() *ComboBoxWidget {
+	c.change(func() {
+		if c.editable {
+			return
+		}
+		c.editable, c.bindsText = true, c.bound.write == nil
+		if o, ok := c.find(c.value.value); ok {
+			c.text.set(o.Text)
+		}
+	})
+	return c
+}
+
+// byText returns the option whose text is s. Under mu.
+func (c *ComboBoxWidget) byText(s string) (Option, bool) {
+	for _, sec := range c.sections {
+		for _, o := range sec.opts {
+			if o.Text == s {
+				return o, true
+			}
+		}
+	}
+	return Option{}, false
+}
+
+// chosen returns the option the combo shows as chosen. Under mu.
+func (c *ComboBoxWidget) chosen() (Option, bool) {
+	if c.editable {
+		if c.text.value == "" {
+			return Option{}, false
+		}
+		return c.byText(c.text.value)
+	}
+	return c.find(c.value.value)
+}
+
 // Value returns the chosen option's value, "" for none.
-func (c *ComboBoxWidget) Value() string { mu.Lock(); defer mu.Unlock(); return c.value.value }
+func (c *ComboBoxWidget) Value() string {
+	mu.Lock()
+	defer mu.Unlock()
+	o, _ := c.chosen()
+	return o.Value
+}
+
+// Text returns the text shown: the chosen option's, or, in an Editable
+// combo, what the user typed or SetText set.
+func (c *ComboBoxWidget) Text() string {
+	mu.Lock()
+	defer mu.Unlock()
+	return c.textOf()
+}
+
+// textOf is Text. Under mu.
+func (c *ComboBoxWidget) textOf() string {
+	if c.editable {
+		return c.text.value
+	}
+	o, _ := c.find(c.value.value)
+	return o.Text
+}
+
+// SetText sets the text of an Editable combo, which need not be an
+// option's; of a plain one it chooses the option with that text, or none.
+func (c *ComboBoxWidget) SetText(s string) *ComboBoxWidget {
+	c.change(func() {
+		if c.editable {
+			c.text.set(s)
+			return
+		}
+		o, _ := c.byText(s)
+		c.value.set(o.Value)
+	})
+	return c
+}
 
 // Selected returns the chosen option.
 func (c *ComboBoxWidget) Selected() (Option, bool) {
 	mu.Lock()
 	defer mu.Unlock()
-	return c.find(c.value.value)
+	return c.chosen()
 }
 
 // SetValue chooses the option of value v; an unknown v chooses none.
 func (c *ComboBoxWidget) SetValue(v string) *ComboBoxWidget {
 	c.change(func() {
-		if _, ok := c.find(v); !ok {
+		o, ok := c.find(v)
+		if !ok {
 			v = ""
+		}
+		if c.editable {
+			c.text.set(o.Text)
+			return
 		}
 		c.value.set(v)
 	})
 	return c
 }
 
-func (c *ComboBoxWidget) Unselect() *ComboBoxWidget { c.change(func() { c.value.set("") }); return c }
+func (c *ComboBoxWidget) Unselect() *ComboBoxWidget {
+	c.change(func() {
+		if c.editable {
+			c.text.set("")
+			return
+		}
+		c.value.set("")
+	})
+	return c
+}
 
 // SetOptions replaces the options outside any section.
 func (c *ComboBoxWidget) SetOptions(opts ...Option) *ComboBoxWidget {
@@ -252,6 +355,9 @@ func (c *ComboBoxWidget) OnChange(fn func()) *ComboBoxWidget {
 }
 
 func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
+	if c.editable {
+		return c.buildEditable(ctx)
+	}
 	p, changed := c.value.bind()
 	if changed && c.onChange != nil {
 		Post(c.onChange)
@@ -296,6 +402,112 @@ func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 		}
 	})
 	return sel.Trigger
+}
+
+// buildEditable builds an Editable combo: a text input with a chevron in
+// the look of the drop-down, whose popup shows the options that match
+// what the user typed. Under mu, while building.
+func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
+	p, _ := c.text.bind()
+	t, sections := ctx.Theme(), c.sections
+	frame := ui.Row(ctx).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).
+		AlignItems(ui.Center).MinWidth(t.Space(35))
+	frame.Children(func() {
+		cb := ui.ComboboxBase(ctx, p)
+		cb.Input.Grow(1).Padding(t.Space(1.5), t.Space(3)).OnChange(c.typed())
+		cb.Popup(func(panel ui.Element) {
+			panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).
+				Background(t.Background).Border(1, t.Border).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
+			typed := strings.ToLower(strings.TrimSpace(*p))
+			for i, s := range sections {
+				shown := s.opts
+				if cb.Filtering() && typed != "" {
+					shown = matchingOptions(s.opts, typed)
+				}
+				if len(shown) == 0 {
+					continue
+				}
+				if s.title != "" {
+					ui.Row(ctx.Key(sectionKey(i))).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
+						AlignItems(ui.Center).Children(func() {
+						if s.icon != nil {
+							ui.Image(ctx, s.icon).Width(16).Height(16)
+						}
+						ui.Text(ctx, s.title).Bold().TextColor(t.TextMuted)
+					})
+				}
+				for _, o := range shown {
+					item := cb.Item(o.Value).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
+					if item.Highlighted() {
+						item.Background(t.Accent).TextColor(t.AccentText)
+					}
+					item.Children(func() { ui.Text(ctx, o.Text).SingleLine() })
+				}
+			}
+		})
+		if v, ok := cb.Chosen(); ok {
+			if o, ok := c.find(v); ok {
+				c.choose(o)
+			}
+		}
+		ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Margin(0, t.Space(3), 0, 0)
+	})
+	return frame
+}
+
+// matchingOptions returns the options whose text holds query (lower case),
+// those that start with it first.
+func matchingOptions(opts []Option, query string) []Option {
+	var starts, holds []Option
+	for _, o := range opts {
+		switch l := strings.ToLower(o.Text); {
+		case strings.HasPrefix(l, query):
+			starts = append(starts, o)
+		case strings.Contains(l, query):
+			holds = append(holds, o)
+		}
+	}
+	return append(starts, holds...)
+}
+
+// typed is ui's OnChange for the text of an Editable combo: the user typed.
+func (c *ComboBoxWidget) typed() func() {
+	return func() {
+		mu.Lock()
+		changed := c.text.value != c.text.shown
+		c.text.value, c.text.dirty = c.text.shown, false
+		c.report(changed)
+		mu.Unlock()
+	}
+}
+
+// choose takes the option the user chose from the popup. Under mu.
+func (c *ComboBoxWidget) choose(o Option) {
+	changed := c.text.value != o.Text
+	c.text.value, c.text.shown, c.text.dirty = o.Text, o.Text, false
+	c.report(changed)
+}
+
+// report runs OnChange and the binding's write after an edit of the user,
+// on the event goroutine. Under mu.
+func (c *ComboBoxWidget) report(changed bool) {
+	if !changed {
+		return
+	}
+	h, write := c.onChange, c.bound.write
+	v := c.text.value
+	if !c.bindsText {
+		o, _ := c.byText(v)
+		v = o.Value
+	}
+	Post(func() {
+		if h != nil {
+			h()
+		}
+		if write != nil {
+			write(v)
+		}
+	})
 }
 
 // TagSelectWidget is a choice of several options shown as chips.

@@ -45,6 +45,8 @@ type core struct {
 	onFocusOut func()
 	click      func()
 	menu       []MenuItem
+	post       func(c *ui.Context, e ui.Element) // after the styles apply, set by build
+	group      *radioGroup                       // the radio buttons added to the widget, a container
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
@@ -154,6 +156,10 @@ func render(c *ui.Context, w Control) ui.Element {
 	if b.styled {
 		p := b.style.effective(c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled)
 		p.apply(c, e, b.textKey)
+	}
+	if b.post != nil {
+		b.post(c, e)
+		b.post = nil
 	}
 	if b.disabled {
 		e.Disabled(true)

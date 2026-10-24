@@ -378,7 +378,7 @@ name := widget.Bind(widget.TextBox(),
 |---|---|---|
 | `TextBox` | `string` | `Bind` |
 | `CheckBox` | `bool` | `Bind` |
-| `ComboBox` | the `Value` of its option, a `string` | `Bind` |
+| `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
 
 - The control takes `get()`'s value at once. After each edit of the user,
@@ -547,20 +547,34 @@ Input and display:
   last 256 are kept); bytes that are no image leave an empty room.
 - `TextBox()`, `MultilineTextBox()`: one line or several of text; `Text`,
   `SetText`, `SetPlaceholder`, `SetEditable`, `OnChange`; `TextBox` also has
-  `Password` and `OnEnter`.
+  `Password`, `OnEnter`, `MaxLength(n)` (runes, as in WinForms: typing or
+  pasting past it is cut at it, and so is `SetText`; 0 for no limit) and
+  `Icon(bitmap)` (16 DIPs, inside the box before the text; nil removes it).
 - `Bind(control, get, set)`, `BindInt`, `Reload(control)`: tie a `TextBox`,
   `CheckBox`, `ComboBox` or `NumericUpDown` to a value kept elsewhere; see
   [Binding](#binding).
-- `Button(text)`: `OnClick`, `SetText`, `SetIcon`. `LinkLabel(text, url)`.
+- `Button(text)`: `OnClick`, `SetText`, `SetIcon`; `Suggested()` and
+  `Destructive()` are the button's own style (tw's `suggested-action` and
+  `destructive-action`). `LinkLabel(text, url)`.
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
 - `CheckBoxGroup(row, options...)`, `TagSelect(options...)`: several of
   the options; `Values`, `SetValues`.
+- `RadioButton(text)`: `Checked`, `SetChecked`, `OnChange`. As in WinForms, the
+  radio buttons added to one container (a box, a group box, fields, a flow
+  panel) are one group: checking one, by the user or `SetChecked`, unchecks
+  the others; `OnChange` runs for the user's click, on both buttons, and not
+  for `SetChecked`. One outside a container stands alone.
 - `RadioGroup(row, options...)`, `ComboBox(options...)`: one option; `Value`,
   `SetValue`. An `Option` has the `Value` the program reads and the `Text`
   the user sees. A combo's values must differ (its texts may repeat), and
   it groups options in titled sections with icons: `AddSection(title, png,
   options...)`, `RemoveSection`, `RemoveOption`, `SetOptionText`,
-  `SectionLen`, `Selected`, `Unselect`.
+  `SectionLen`, `Selected`, `Unselect`; sections, icons and texts change
+  while the combo shows, and it redraws. `Editable()` lets the user type a
+  text that is no option, which `Text` and `SetText` give and set; `Value`
+  is then the `Value` of the option with that text, or ""; `OnChange` runs
+  on typing and on choosing. `Bind` takes the text of a combo made
+  `Editable` before it is bound, and the `Value` of one bound before.
 - `MenuButton(text)`: see [Menus](#menus).
 - `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`.
   `RangeSpin` is two, with text between and after.

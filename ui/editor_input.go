@@ -232,6 +232,9 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 			ed.replace(a, z, "")
 		}
 	}
+	if ed.maxLen > 0 {
+		s = cutToRoom(s, max(ed.maxLen-ed.buf.n, 0)) // what shows is what commits
+	}
 	selected = platform.NormalizeTextRange(selected)
 	n := countUnits(s)
 	selected.Start, selected.End = min(selected.Start, n), min(selected.End, n)
