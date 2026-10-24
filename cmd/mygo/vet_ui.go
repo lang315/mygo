@@ -111,7 +111,7 @@ func runVetUI(args []string) error {
 		}
 	}
 	if failures > 0 {
-		return fmt.Errorf("%d native UI lifetime issue(s)", failures)
+		return fmt.Errorf("%d vet issue(s)", failures)
 	}
 	return nil
 }
