@@ -59,6 +59,22 @@ func absInt(n int) int {
 	return n
 }
 
+// badgeColor is the color most of the badge of the rich cell b is made of:
+// its background, whichever way a platform blends the glyphs' edges.
+func badgeColor(img *image.RGBA, b ui.Rect) color.RGBA {
+	count := map[color.RGBA]int{}
+	best, most := color.RGBA{}, 0
+	for y := int(b.Y); y < int(b.Y+b.H); y++ {
+		for x := int(b.X); x < int(b.X)+30; x++ {
+			c := img.RGBAAt(x, y)
+			if count[c]++; count[c] > most {
+				best, most = c, count[c]
+			}
+		}
+	}
+	return best
+}
+
 // afterBadge is the last letters of the rich cell "Done ann" r, past the badge.
 func afterBadge(t *testing.T, tt *ui.Tester, badge ui.Rect) ui.Rect {
 	t.Helper()
@@ -68,7 +84,7 @@ func afterBadge(t *testing.T, tt *ui.Tester, badge ui.Rect) ui.Rect {
 func TestSpansBadgeBackgroundIsGreen(t *testing.T) {
 	_, tt := badgeTable(false)
 	b := find(t, tt, "Done ann")
-	if c := tt.Image().RGBAAt(int(b.X)+4, int(b.Y+b.H/2)); !near(c, badgeGreen) {
+	if c := badgeColor(tt.Image(), b); !near(c, badgeGreen) {
 		t.Fatalf("badge background %v, want green", c)
 	}
 }
@@ -90,7 +106,7 @@ func TestSpansSelectedRowKeepsTheBadgeAndTakesTheSelectionTextColor(t *testing.T
 	click(t, tt, "ann")
 	click(t, plain, "ann")
 	b := find(t, tt, "Done ann")
-	if c := tt.Image().RGBAAt(int(b.X)+4, int(b.Y+b.H/2)); !near(c, badgeGreen) {
+	if c := badgeColor(tt.Image(), b); !near(c, badgeGreen) {
 		t.Fatalf("selected row's badge %v, want green", c)
 	}
 	bg := plain.Image().RGBAAt(700, int(b.Y+b.H/2)) // the selection's fill
