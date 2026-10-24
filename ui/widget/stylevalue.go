@@ -137,7 +137,6 @@ const (
 	pBorderColor
 	pTextColor
 	pFontSize
-	pBold
 	pItalic
 	pMono
 	pTransition
@@ -386,7 +385,9 @@ func (s Style) FontSize(dips float32) Style {
 	}
 	return s
 }
-func (s Style) Bold() Style   { s.set |= pBold; return s }
+
+// Bold is FontWeight(700), as in ui: the later of the two wins.
+func (s Style) Bold() Style   { return s.FontWeight(700) }
 func (s Style) Italic() Style { s.set |= pItalic; return s }
 func (s Style) Mono() Style   { s.set |= pMono; return s }
 

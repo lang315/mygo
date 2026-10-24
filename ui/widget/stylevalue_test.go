@@ -103,8 +103,8 @@ func TestStyleMergeVariants(t *testing.T) {
 	b := NewStyle().Hover(NewStyle().Background(Fixed(blue)))
 	m := a.Merge(b) // effective takes a pointer: it does not copy a Style each frame
 	p := m.effective(false, true, false, false, false)
-	if p.background.fixed != blue || p.set&pBold == 0 {
-		t.Fatalf("merged hover: background %v bold %v", p.background.fixed, p.set&pBold != 0)
+	if p.background.fixed != blue || p.set&pFontWeight == 0 || p.weight != 700 {
+		t.Fatalf("merged hover: background %v weight %d", p.background.fixed, p.weight)
 	}
 }
 

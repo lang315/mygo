@@ -94,13 +94,15 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 		e.Radius(v[0], v[1], v[2], v[3])
 	}
 	if p.borderSet != 0 {
-		v := over(e.BorderWidths(), p.border, p.borderSet, false)
+		cur := e.BorderWidths()
+		v := over(cur, p.border, p.borderSet, false)
 		e.BorderWidth(v[0], v[1], v[2], v[3])
-		col := t.Border
+		// A border the control had keeps its color unless the style sets one.
 		if p.set&pBorderColor != 0 {
-			col = p.borderColor.resolve(t)
+			e.BorderColor(p.borderColor.resolve(t))
+		} else if cur == [4]float32{} {
+			e.BorderColor(t.Border)
 		}
-		e.BorderColor(col)
 	} else if p.set&pBorderColor != 0 {
 		e.BorderColor(p.borderColor.resolve(t))
 	}
@@ -158,9 +160,6 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 			size = t.FontSize * sizeScale[z]
 		}
 		e.FontSize(size)
-	}
-	if s&pBold != 0 {
-		e.Bold()
 	}
 	if s&pFontWeight != 0 {
 		e.FontWeight(p.weight)

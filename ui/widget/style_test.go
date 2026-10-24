@@ -431,6 +431,56 @@ func TestStyleHExpandMatchesTheMethod(t *testing.T) {
 	}
 }
 
+// Bold is FontWeight(700) in ui: whichever of the two is set last wins, as
+// for any property.
+func TestBoldAndFontWeightShareTheWeight(t *testing.T) {
+	const s = "Wide text here"
+	width := func(w Control) float32 { return find(t, tester(t, VBox(0).Add(w)), s).W }
+	bold := width(Label(s).Align(Start).Bold())
+	thin := width(Label(s).Align(Start).Apply(NewStyle().FontWeight(300)))
+	if bold <= thin {
+		t.Fatalf("bold %v is not wider than weight 300 %v", bold, thin)
+	}
+	if got := width(Label(s).Align(Start).Apply(NewStyle().FontWeight(300)).Bold()); got != bold {
+		t.Errorf("own Bold over an applied FontWeight(300): %v wide, want the bold %v", got, bold)
+	}
+	if got := width(Label(s).Align(Start).Apply(NewStyle().FontWeight(300), NewStyle().Bold())); got != bold {
+		t.Errorf("a later Bold over FontWeight(300): %v wide, want the bold %v", got, bold)
+	}
+	if got := width(Label(s).Align(Start).Apply(NewStyle().Bold(), NewStyle().FontWeight(300))); got != thin {
+		t.Errorf("a later FontWeight(300) over Bold: %v wide, want %v", got, thin)
+	}
+	l := Label(s).Align(Start).Apply(NewStyle().FontWeight(300).Hover(NewStyle().Bold()))
+	tt := tester(t, VBox(0).Add(l))
+	tt.Move(centerOf(t, tt, s))
+	if got := find(t, tt, s).W; got != bold {
+		t.Errorf("hover Bold over FontWeight(300): %v wide, want the bold %v", got, bold)
+	}
+}
+
+// A control that only places itself has no style to resolve each frame.
+func TestLayoutAloneIsNotRestyledEachFrame(t *testing.T) {
+	styled := func(w Control) bool { mu.Lock(); defer mu.Unlock(); return w.base().styled }
+	if styled(Label("x").Align(End).HExpand().Apply(NewStyle().VAlign(Fill))) {
+		t.Fatal("a control with only layout is restyled each frame")
+	}
+	if !styled(Label("x").Align(End).Bold()) {
+		t.Fatal("a control with a font weight is not restyled")
+	}
+}
+
+func TestOneBorderSideKeepsTheBuildersColor(t *testing.T) {
+	red := ui.RGB(230, 0, 0)
+	w := box(func(e ui.Element) ui.Element {
+		return e.Width(60).Height(60).Background(ui.RGB(255, 255, 255)).Border(3, red)
+	}).Apply(NewStyle().BorderTop(5))
+	tt := tester(t, VBox(0).Add(w))
+	in := find(t, tt, "in") // inside the 3 DIP left border
+	if right := tt.Image().RGBAAt(int(in.X)+54, int(in.Y)+20); !near(right, red) {
+		t.Fatalf("the right border is %v after BorderTop(5), want the builder's red", right)
+	}
+}
+
 func TestFontWeightBoldsText(t *testing.T) {
 	heavy := find(t, tester(t, VBox(0).Add(Label("Wide text here").Align(Start).Apply(NewStyle().FontWeight(700)))), "Wide text here")
 	plain := find(t, tester(t, VBox(0).Add(Label("Wide text here").Align(Start))), "Wide text here")
