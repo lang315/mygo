@@ -48,6 +48,31 @@ func TestCopyFuncServesCtrlCAndTheEditMenuAlike(t *testing.T) {
 	}
 }
 
+// The key function runs under the package lock: if it panics and something
+// recovers, the lock must not stay held.
+func TestCopyFuncKeyPanicDoesNotLeaveThePackageLockHeld(t *testing.T) {
+	armed := false
+	tb := DataGridView(func(a *acct) int {
+		if armed {
+			panic("key")
+		}
+		return a.id
+	}, Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200}).
+		SetRows([]acct{{1, "cat", 10}}).Expand().
+		CopyFunc(func([]int) string { return "" })
+	tester(t, tb)
+	armed = true
+	func() {
+		defer func() { recover() }()
+		tb.copyRows([]int{0})
+	}()
+	armed = false
+	if !mu.TryLock() {
+		t.Fatal("copyRows left the package lock held after the key function panicked")
+	}
+	mu.Unlock()
+}
+
 // Without CopyFunc, the table copies its cells, as before.
 func TestWithoutCopyFuncTheTableCopiesItsCells(t *testing.T) {
 	tb := testTable(acct{1, "cat", 10}, acct{2, "ann", 9})

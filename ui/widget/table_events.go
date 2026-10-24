@@ -113,13 +113,18 @@ func (t *DataGridViewWidget[T, K]) CopyFunc(fn func(selected []K) string) *DataG
 func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
 	mu.Lock()
 	if fn := t.copyFn; fn != nil {
-		keys := make([]K, 0, len(rows))
-		for _, row := range rows {
-			if r := t.rowAt(row); r != nil {
-				keys = append(keys, t.key(r))
+		// The keys are read under mu, in a closure so that a panic of key
+		// unlocks it; fn runs off the lock.
+		keys := func() []K {
+			defer mu.Unlock()
+			keys := make([]K, 0, len(rows))
+			for _, row := range rows {
+				if r := t.rowAt(row); r != nil {
+					keys = append(keys, t.key(r))
+				}
 			}
-		}
-		mu.Unlock()
+			return keys
+		}()
 		return fn(keys)
 	}
 	defer mu.Unlock()
