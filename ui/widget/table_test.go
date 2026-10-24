@@ -591,6 +591,25 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 			}
 		}
 	})
+	b.Run("selectAllThenCmdClick", func(b *testing.B) {
+		tb, tt := setup(b)
+		if err := tt.Click(rows[0].name); err != nil {
+			b.Fatal(err)
+		}
+		tt.Frame()
+		tt.Key(ui.Cmd, ui.KeyA)
+		tt.Frame()
+		if tb.CountSelected() != n {
+			b.Fatalf("%d selected, want %d", tb.CountSelected(), n)
+		}
+		label := rows[1].name
+		b.ResetTimer()
+		for range b.N {
+			if err := tt.ClickWith(ui.Cmd, label); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 	b.Run("SetChecked", func(b *testing.B) {
 		tb, tt := setup(b)
 		b.ResetTimer()
@@ -599,6 +618,51 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 			tt.Frame()
 		}
 	})
+}
+
+func TestSetterBetweenFramesSurvivesAUserClick(t *testing.T) {
+	tb := testTable(acct{1, "a", 0}, acct{2, "b", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	tb.SetChecked([]int{2}, true) // no frame yet
+	click(t, tt, "Check a")       // the user checks row 1
+	tt.Frame()
+	if got := tb.Checked(); !slices.Equal(got, []int{1, 2}) {
+		t.Fatalf("checked %v, want [1 2]: the setter's change was lost", got)
+	}
+}
+
+// The Tester builds a frame before it applies input, so a setter between a
+// frame and its input is made by hand: ui replaces the set (check all)
+// while a setter's key is not in the frame shown yet.
+func TestCommitKeepsASetterPendingWhenUIReplacesTheSet(t *testing.T) {
+	tb := &DataGridViewWidget[acct, int]{}
+	var s keys[int]
+	for k := 100; k < 200; k++ { // enough that one key is not "dirty"
+		s.set(k, true)
+	}
+	s.bind()
+	s.set(3, true)  // a setter after the frame, before the input
+	s.shown.Clear() // the user's check all: ui replaces the set
+	s.shown.Add(1)
+	s.shown.Add(2)
+	tb.commit(&s)
+	if !s.value.Has(3) || s.value.Len() != 3 {
+		t.Fatalf("value %v, want [1 2 3]: the setter's key was lost", slices.Sorted(s.value.All()))
+	}
+	s.bind()
+	if !s.shown.Has(3) || s.shown.Len() != 3 {
+		t.Fatalf("shown %v, want [1 2 3]", slices.Sorted(s.shown.All()))
+	}
+}
+
+func TestDoubleToggleEndsWhereUIIs(t *testing.T) {
+	tb := testTable(acct{1, "a", 0}).CheckboxColumn()
+	tt := tester(t, tb)
+	click(t, tt, "Check a")
+	click(t, tt, "Check a")
+	if tb.IsChecked(1) {
+		t.Fatal("checked after two clicks")
+	}
 }
 
 func TestTableInputLandsOnTheRowsOfTheFrameShown(t *testing.T) {

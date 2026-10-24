@@ -16,10 +16,9 @@ type keys[K comparable] struct {
 
 // bind returns the set to hand ui. Under mu, while building.
 func (s *keys[K]) bind() *ui.Selection[K] {
-	switch {
-	case s.dirty:
+	if s.dirty {
 		s.shown.CopyFrom(&s.value)
-	default:
+	} else {
 		for _, k := range s.changed {
 			if s.value.Has(k) {
 				s.shown.Add(k)
@@ -28,6 +27,7 @@ func (s *keys[K]) bind() *ui.Selection[K] {
 			}
 		}
 	}
+	s.shown.TakeChanges() // what bind did is the table's, not the user's
 	s.changed, s.dirty = s.changed[:0], false
 	return &s.shown
 }
@@ -163,14 +163,43 @@ func (t *DataGridViewWidget[T, K]) checkedCount() (count, total int) {
 	return count, t.view.Len()
 }
 
-// commit takes what the user changed in s, but no key of a row gone: a
-// goroutine may delete rows between a frame and ui applying input to it.
-// On the main thread, without mu.
+// commit takes what the user changed in s: only the keys ui changed,
+// unless they were too many, and no key of a row gone: a goroutine may
+// delete rows between a frame and ui applying input to it. Changes setters
+// made since the last build stay pending, if ui changed only some keys, or
+// replace the set; a setter's bulk change (dirty) gives way to a
+// replacement. On the main thread, without mu.
 func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 	mu.Lock()
 	defer mu.Unlock()
-	s.value.CopyFrom(&s.shown)
-	s.changed, s.dirty = s.changed[:0], false
+	ks, all := s.shown.TakeChanges()
+	if all {
+		var on []bool
+		if !s.dirty {
+			for _, k := range s.changed {
+				on = append(on, s.value.Has(k))
+			}
+		}
+		s.value.CopyFrom(&s.shown)
+		for i, k := range s.changed[:len(on)] {
+			if on[i] {
+				s.value.Add(k)
+			} else {
+				s.value.Remove(k)
+			}
+		}
+		if s.dirty {
+			s.changed, s.dirty = s.changed[:0], false
+		}
+	} else {
+		for _, k := range ks {
+			if s.shown.Has(k) {
+				s.value.Add(k)
+			} else {
+				s.value.Remove(k)
+			}
+		}
+	}
 	if t.gone {
 		s.keep(t.index)
 	}
