@@ -438,3 +438,16 @@ func TestCalendarNamesTheDayTheKeysAreOnInAnotherMonth(t *testing.T) {
 		t.Fatalf("the focus is on %d, want the 15th of the month shown (%d)", tt.h.access.Focus, n.ID)
 	}
 }
+
+func TestCalendarKeyBackOntoTheChosenDayBringsTheViewBack(t *testing.T) {
+	day := time.Date(2026, 3, 7, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Click("Previous month")
+	if !tt.HasText("February 2026") {
+		t.Fatal("did not page")
+	}
+	tt.Key(0, KeyPageDown) // lands on March 7, already chosen
+	if !tt.HasText("March 2026") || day.Day() != 7 {
+		t.Fatalf("view stuck on February: %q, day %v", tt.Texts()[:1], day)
+	}
+}

@@ -140,6 +140,7 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 		// Choosing it moves the cursor where it is the date chosen.
 		if moveChooses {
 			choose(d)
+			*view = d
 		} else {
 			*cursor = d
 		}
