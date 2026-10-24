@@ -198,7 +198,30 @@ func extras() widget.Control {
 		widget.HBox(8).Add(widget.Label("Sectioned combo").VAlign(widget.Center), widget.ComboBox().
 			AddSection("Fruits", swatch(color.RGBA{230, 160, 40, 255}), widget.Option{Value: "apple", Text: "Apple"}, widget.Option{Value: "pear", Text: "Pear"}).
 			AddSection("Vegetables", swatch(color.RGBA{60, 160, 80, 255}), widget.Option{Value: "kale", Text: "Kale"})),
+		clockRow(),
 	)
+}
+
+// clockRow counts the ticks of a widget.Timer, which a button starts and
+// stops.
+func clockRow() widget.Control {
+	ticks := widget.Label("Ticks: 0")
+	n := 0
+	timer := widget.Timer(time.Second).OnTick(func() {
+		n++
+		ticks.SetText(fmt.Sprintf("Ticks: %d", n))
+	})
+	var toggle *widget.ButtonWidget
+	toggle = widget.Button("Start timer").OnClick(func() {
+		if timer.Enabled() {
+			timer.Stop()
+			toggle.SetText("Start timer")
+			return
+		}
+		timer.Start()
+		toggle.SetText("Stop timer")
+	})
+	return widget.HBox(8).Add(toggle, ticks.VAlign(widget.Center))
 }
 
 // lucideIcons are the shapes of some Lucide icons (ISC license): plus,

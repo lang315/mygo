@@ -112,6 +112,8 @@ gota's names are listed for code ported from it.
   must never wait. In a handler, they keep running the other queued
   handlers while they wait, as GTK runs its main loop under a dialog; on
   another goroutine they just wait.
+- **`Timer(interval)`** calls a function at an interval on the event
+  goroutine; see [Timer](widget/timer.md).
 
 ## Dialogs
 
