@@ -132,7 +132,9 @@ d.Run() // returns once the dialog closes
 
 `NewDialog(parent, title, subtitle, width, height, content)` takes a nil
 parent for a dialog of its own. Width and height are the window's, title
-bar included, so a macOS sheet, which has none, shows that much shorter;
+bar included, so a macOS sheet, which has none, shows that much shorter. A 0
+is the window default (800 by 600), not "fit the content": a dialog is not
+sized to what it holds;
 the title and subtitle are drawn in the dialog for the same reason.
 `Run` shows it and returns when it closes: by `Close`, by the user (its
 close button, or Escape once no drop-down in it is open), or because its
