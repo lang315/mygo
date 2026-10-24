@@ -346,8 +346,25 @@ func roundedContains(r Rect, radii [4]float32, x, y float32) bool {
 	return raster.Contains(scene.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H}, radii, continuousCorners, x, y)
 }
 
+// accessBounds is the part of e's box the windows shows: what the
+// clipping and scrolling elements around it leave. It is empty (zero size)
+// where e is scrolled out of view.
 func accessBounds(e *node) platform.RectF {
 	r := e.visualRect(Rect{e.x, e.y, e.w, e.h})
+	for a := e.parent; a != nil && r.W > 0 && r.H > 0; a = a.parent {
+		if a.flags&(flagClip|flagScrollX|flagScrollY) == 0 {
+			continue
+		}
+		cr, _ := a.clipRect()
+		cr = a.visualRect(cr)
+		x0, y0 := max(r.X, cr.X), max(r.Y, cr.Y)
+		x1, y1 := min(r.X+r.W, cr.X+cr.W), min(r.Y+r.H, cr.Y+cr.H)
+		if x1 <= x0 || y1 <= y0 {
+			r = Rect{X: x0, Y: y0}
+			break
+		}
+		r = Rect{x0, y0, x1 - x0, y1 - y0}
+	}
 	return platform.RectF{X: float64(r.X), Y: float64(r.Y), W: float64(r.W), H: float64(r.H)}
 }
 

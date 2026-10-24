@@ -1,6 +1,9 @@
 package ui
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestTesterNodesDescribeTheLastFrame(t *testing.T) {
 	d := &demo{name: "Ada", volume: 30}
@@ -46,5 +49,63 @@ func TestTesterNodesAreACopy(t *testing.T) {
 	a[0].Label = "changed"
 	if tt.Nodes()[0].Label == "changed" {
 		t.Fatal("a test changed the access tree through Nodes")
+	}
+}
+
+// scrollList is 20 buttons in a scroll area of 100 DIPs.
+func scrollList(c *Context) {
+	Scroll(c).Height(100).Children(func() {
+		for i := 0; i < 20; i++ {
+			Button(c, fmt.Sprint("row ", i))
+		}
+	})
+}
+
+func TestTesterNodeBoundsAreClippedByTheScrollAreaAround(t *testing.T) {
+	tt := NewTester(scrollList, 400, 600)
+	var row TestNode
+	for _, n := range tt.Nodes() {
+		if n.Label == "row 5" {
+			row = n
+		}
+	}
+	if row.ID == 0 || row.Bounds.W != 0 && row.Bounds.H != 0 {
+		t.Fatalf("row 5 is scrolled out of view, and its visible box is %+v", row.Bounds)
+	}
+	if !row.Scrolls {
+		t.Error("row 5 is in a scroll area, and Scrolls is false")
+	}
+	tt.ScrollIntoView(row.ID)
+	tt.Frame()
+	for _, n := range tt.Nodes() {
+		if n.ID == row.ID && (n.Bounds.H <= 0 || n.Bounds.Y+n.Bounds.H > 100) {
+			t.Fatalf("after ScrollIntoView, row 5 is at %+v", n.Bounds)
+		}
+	}
+}
+
+func TestTesterFocusNodeFocusesWithoutPressing(t *testing.T) {
+	clicks := 0
+	view := func(c *Context) {
+		if Button(c, "OK").Clicked() {
+			clicks++
+		}
+	}
+	tt := NewTester(view, 400, 300)
+	var ok TestNode
+	for _, n := range tt.Nodes() {
+		if n.Label == "OK" {
+			ok = n
+		}
+	}
+	tt.FocusNode(ok.ID)
+	tt.Frame()
+	if clicks != 0 {
+		t.Fatalf("focusing pressed the button %d times", clicks)
+	}
+	for _, n := range tt.Nodes() {
+		if n.Label == "OK" && !n.Focused {
+			t.Fatal("the button is not focused")
+		}
 	}
 }
