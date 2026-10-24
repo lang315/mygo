@@ -54,11 +54,17 @@ type ListViewWidget[T any, K comparable] struct {
 	onSelect func([]K)
 	onCheck  func(K, bool)
 
-	// cursorKey is the row the keys move from in the icon views; fixed says a
-	// setter chose it, not ui's cursor.
-	cursorKey K
-	hasCursor bool
-	fixed     bool
+	// cursorKey is the row the keys move from, and anchorKey the row Shift
+	// extends the choice from, in every view: they cross a switch of the view
+	// by key. fixed says a setter chose them, not ui's cursor and pivot.
+	cursorKey, anchorKey K
+	hasCursor, hasAnchor bool
+	fixed                bool
+	// last is the view built last, and focused whether it held the keyboard
+	// focus, to give it to the view that follows.
+	last    ViewMode
+	built   bool
+	focused bool
 
 	// ui's, on the main thread:
 	grid   ui.GridState
@@ -186,6 +192,7 @@ func (lv *ListViewWidget[T, K]) SetSelected(ks ...K) *ListViewWidget[T, K] {
 			if _, ok := t.src.index[k]; ok {
 				t.chosen.set(k, true)
 				lv.cursorKey, lv.hasCursor, lv.fixed = k, true, true
+				lv.anchorKey, lv.hasAnchor = k, true
 			}
 		}
 	})
@@ -276,19 +283,83 @@ func (lv *ListViewWidget[T, K]) watched(checks bool, on, off []K) {
 
 func (lv *ListViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	t := lv.t
+	switched := lv.built && lv.last != lv.mode
+	lv.takeKeys()
+	wantFocus := switched && lv.focused
+	var e ui.Element
 	if lv.mode == ViewDetails {
-		return render(c, t)
+		if switched || !lv.built {
+			lv.giveDetails()
+		}
+		e = render(c, t)
+		if wantFocus {
+			t.list.Focus(c) // the table, not the column around it and its panel
+		}
+	} else {
+		e = lv.buildIcons(c, wantFocus)
 	}
-	// The table is not built, but its changes redraw this window.
-	keeping.hold(&t.core)
-	// The row the keys move from stays the same row as the order changes.
+	lv.last, lv.built = lv.mode, true
+	lv.focused = e.FocusWithin()
+	return e
+}
+
+// keyOfRow returns the key of the row shown at row in the last frame built,
+// whichever view built it. Under mu.
+func (lv *ListViewWidget[T, K]) keyOfRow(row int) (k K, ok bool) {
+	if row < 0 {
+		return k, false
+	}
+	if r := lv.t.rowAt(row); r != nil {
+		return lv.t.key(r), true
+	}
+	return k, false
+}
+
+// takeKeys reads where the cursor and the pivot are, as keys, from the view
+// built last, which the next build gives to the view it builds. Under mu.
+func (lv *ListViewWidget[T, K]) takeKeys() {
+	if !lv.built {
+		return
+	}
+	cursor, pivot := lv.cursor, lv.grid.Pivot()
+	if lv.last == ViewDetails {
+		cursor, pivot = lv.t.cursor, lv.t.list.Pivot()
+	}
 	if lv.fixed {
 		lv.fixed = false
-	} else if c := lv.cursor; c >= 0 {
-		if r := t.rowAt(c); r != nil {
-			lv.cursorKey, lv.hasCursor = t.key(r), true
-		}
+		return
 	}
+	if k, ok := lv.keyOfRow(cursor); ok {
+		lv.cursorKey, lv.hasCursor = k, true
+	}
+	if k, ok := lv.keyOfRow(pivot); ok {
+		lv.anchorKey, lv.hasAnchor = k, true
+	}
+}
+
+// giveDetails puts the cursor and the pivot of the view built before into the
+// table, which ui keeps by key from there. Under mu.
+func (lv *ListViewWidget[T, K]) giveDetails() {
+	t := lv.t
+	t.catchUp()
+	t.sync()
+	t.cursor = -1
+	if lv.hasCursor {
+		t.cursor = t.positionOf(lv.cursorKey)
+	}
+	pivot := -1
+	if lv.hasAnchor {
+		pivot = t.positionOf(lv.anchorKey)
+	}
+	t.list.SetPivot(pivot)
+}
+
+// buildIcons builds the rows as a grid of items, with the table's bottom panel
+// under it, and the keys of the table's OnKey over it. Under mu.
+func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element {
+	t := lv.t
+	// The table is not built, but its changes redraw this window.
+	keeping.hold(&t.core)
 	t.catchUp()
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
@@ -299,8 +370,14 @@ func (lv *ListViewWidget[T, K]) build(c *ui.Context) ui.Element {
 		lv.cursor = t.positionOf(lv.cursorKey)
 	}
 	g := &lv.grid
+	if lv.hasAnchor {
+		g.SetPivot(t.positionOf(lv.anchorKey))
+	} else {
+		g.SetPivot(-1)
+	}
 	g.Key, g.Label, g.Selected = t.keyAt, t.labelAt, &lv.cursor
 	g.Selection = t.chosen.bind()
+	g.AccentChoice = true
 	g.Checked = nil
 	if t.checks {
 		g.Checked = t.checked.bind()
@@ -326,16 +403,35 @@ func (lv *ListViewWidget[T, K]) build(c *ui.Context) ui.Element {
 		height = lv.iconSize + 44
 		minWidth = lv.iconSize + 56
 	}
-	e := ui.GridView(c, g, n, minWidth, height, func(i int) { lv.item(c, i) }).Grow(1).
-		OnChange(func() { t.commit(&t.chosen) }).
-		OnCheckedChange(func() { t.commit(&t.checked) })
-	if fn := t.onActivate; fn != nil && e.Submitted() && lv.cursor >= 0 {
+	if t.checks && (lv.mode == ViewSmallIcon || lv.mode == ViewList) {
+		// The check box sits at the item's top corner: this height centres it
+		// on the text's line.
+		height = 36
+	}
+	var grid ui.Element
+	col := ui.Column(c).Gap(8).Grow(1).Children(func() {
+		grid = ui.GridView(c, g, n, minWidth, height, func(i int) { lv.item(c, i) }).Grow(1).Padding(0, c.Theme().Space(2)).
+			OnChange(func() { t.commit(&t.chosen) }).
+			OnCheckedChange(func() { t.commit(&t.checked) })
+		if t.panel != nil {
+			t.counts()
+			render(c, t.panel)
+		}
+	})
+	for _, sc := range t.shortcuts {
+		fn := sc.fn
+		grid.OnShortcut(sc.mods, sc.key, func() { Post(fn) })
+	}
+	if focus {
+		grid.Focus()
+	}
+	if fn := t.onActivate; fn != nil && grid.Submitted() && lv.cursor >= 0 {
 		if r := t.rowAt(lv.cursor); r != nil {
 			k := t.key(r)
 			Post(func() { fn(k) })
 		}
 	}
-	return e
+	return col
 }
 
 // item builds the content of the item shown at i: its icon and text. While the

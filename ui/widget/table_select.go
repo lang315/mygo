@@ -182,9 +182,14 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 		defer mu.Unlock()
 	}
 	c, before := &t.checked, t.checked.value.Len()
+	// flipped are the keys this call checked or unchecked, for watch.
+	var flipped []K
 	// Clear is right exactly when the frame held every row: rows added
 	// since, or a filter or a view that changed since, are not its.
 	if !on && !t.gone && first == 0 && last+1 == len(t.src.rows) {
+		if t.watch != nil {
+			flipped = slices.Collect(c.value.All())
+		}
 		c.value.Clear()
 		c.dirty = true
 	} else {
@@ -199,7 +204,18 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 			}
 			if c.value.Has(k) != on {
 				c.set(k, on)
+				if t.watch != nil {
+					flipped = append(flipped, k)
+				}
 			}
+		}
+	}
+	if len(flipped) > 0 {
+		// The header's box is the user's: it reports what it flipped.
+		if on {
+			t.watch(true, flipped, nil)
+		} else {
+			t.watch(true, nil, flipped)
 		}
 	}
 	return c.value.Len() != before
