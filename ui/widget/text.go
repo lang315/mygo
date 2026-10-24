@@ -146,12 +146,24 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	el.ReadOnly(e.readOnly)
 	el.MaxLength(e.maxLen)
 	if icon := e.icon; icon != nil {
-		t := c.Theme()
-		pad := t.Space(2.5)
-		el.Padding(t.Space(1.5), pad, t.Space(1.5), pad+iconSize+t.Space(1.5))
-		el.DrawOver(func(p *ui.Painter, r ui.Rect) {
-			p.Image(icon, ui.Rect{X: r.X + pad, Y: r.Y + (r.H-iconSize)/2, W: iconSize, H: iconSize}, ui.Contain)
-		})
+		// The icon's room is added to the start padding once the user's
+		// styles have set it, and the icon drawn in the padding.
+		e.post = func(c *ui.Context, el ui.Element) {
+			t := c.Theme()
+			side, rtl := 3, c.Direction() == ui.RightToLeft
+			if rtl {
+				side = 1
+			}
+			pad := el.Paddings()[side]
+			el.PaddingStart(pad + iconSize + t.Space(1.5))
+			el.DrawOver(func(p *ui.Painter, r ui.Rect) {
+				x := r.X + pad
+				if rtl {
+					x = r.X + r.W - pad - iconSize
+				}
+				p.Image(icon, ui.Rect{X: x, Y: r.Y + (r.H-iconSize)/2, W: iconSize, H: iconSize}, ui.Contain)
+			})
+		}
 	}
 	el.OnChange(edited(&e.text, &e.bound, e.onChange))
 	if changed && e.onChange != nil {

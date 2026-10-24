@@ -264,3 +264,42 @@ func TestTextBoxIconDrawsInsideTheBoxAndPushesTheText(t *testing.T) {
 		t.Fatalf("Icon(nil): the text starts at %d, want %d", i, p)
 	}
 }
+
+func TestTextBoxIconSurvivesStylesAndFocusesOnClick(t *testing.T) {
+	red := color.RGBA{220, 0, 0, 255}
+	const y0, y1 = 10, 22
+	plain := TextBox().SetText("hello").Padding(2)
+	iconed := TextBox().SetText("hello").Padding(2).Icon(solidBitmap(red))
+	ttP, ttI := tester(t, plain), tester(t, iconed)
+	if a, b := lastInk(ttP, y0, y1), lastInk(ttI, y0, y1); b < a+16 {
+		t.Fatalf("styled box: text ends at %d, plain at %d: the icon's room was replaced by the padding", b, a)
+	}
+	ttI.ClickAt(10, 16) // on the icon
+	ttI.Type("x")
+	ttI.Frame()
+	if got := iconed.Text(); got != "xhello" {
+		t.Fatalf("a click on the icon did not focus the box: %q", got)
+	}
+}
+
+func TestTextBoxIconIsAtTheLeadingEdgeRightToLeft(t *testing.T) {
+	red := color.RGBA{220, 0, 0, 255}
+	tb := TextBox().SetText("hello").Icon(solidBitmap(red))
+	tt := tester(t, tb)
+	tt.SetDirection(ui.RightToLeft)
+	tt.Frame()
+	img := tt.Image()
+	right, left := false, false
+	for x := 0; x < 800; x++ {
+		if img.RGBAAt(x, 16) == red {
+			if x > 400 {
+				right = true
+			} else {
+				left = true
+			}
+		}
+	}
+	if !right || left {
+		t.Fatalf("icon on the right %v, on the left %v: want the leading (right) edge", right, left)
+	}
+}
