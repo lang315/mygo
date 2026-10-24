@@ -579,3 +579,31 @@ func TestTextInputOnEditUnmarkThenAReplaceWithARangeAreTwoSteps(t *testing.T) {
 		t.Errorf("one undo: %q, want only the second edit taken back", s)
 	}
 }
+
+func upperAll(e TextEdit) (string, int, bool) {
+	r := []rune(e.Text)
+	out := string(r[:e.Start]) + e.Insert + string(r[e.End:])
+	return strings.ToUpper(out), e.Start + len([]rune(e.Insert)), true
+}
+
+// Redo gives back the caret fn chose, which is not always the end of what
+// changed.
+func TestTextInputOnEditRedoRestoresTheCaretFnChose(t *testing.T) {
+	s := "abcde"
+	tt := onEditTester(&s, upperAll)
+	defer tt.rt.close()
+	ed := tt.rt.states[tt.rt.focused].editor
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Type("x")
+	if s != "AXDE" || ed.caret != 2 {
+		t.Fatalf("typed: %q caret %d", s, ed.caret)
+	}
+	tt.Key(Cmd, KeyZ)
+	tt.Key(Cmd|Shift, KeyZ)
+	if s != "AXDE" || ed.caret != 2 || ed.anchor != 2 {
+		t.Errorf("after redo: %q caret %d anchor %d, want AXDE and 2", s, ed.caret, ed.anchor)
+	}
+}

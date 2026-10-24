@@ -212,8 +212,7 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 					return b.a
 				}
 				a, z = at(a), at(z)
-				ed.compose = ""
-				ed.restoreBase()
+				ed.compose = "" // commitCompose below restores the base
 			}
 			transaction := ed.compositionActive && !hadBase
 			ed.commitCompose()

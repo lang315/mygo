@@ -401,3 +401,24 @@ func TestMaskedTextBoxKeepsASelectionAnInputMethodCannotReplace(t *testing.T) {
 		t.Errorf("after a cancelled composition Text = %q", got)
 	}
 }
+
+// Redo of a Delete in a mask leaves the caret where the Delete did: typing
+// after it goes to the same place.
+func TestMaskedTextBoxRedoOfADeleteKeepsTheCaret(t *testing.T) {
+	mt := MaskedTextBox("000-000")
+	tt := NewTester(t, mt, 400, 120)
+	box := tt.Find(ByRole(ui.RoleTextField)).Focus()
+	box.Key(ui.Cmd, ui.KeyHome)
+	box.Type("12345")
+	box.Key(ui.Cmd, ui.KeyHome)
+	box.Key(0, ui.KeyDelete)
+	if got := mt.TextWithLiterals(); got != "234-5  " {
+		t.Fatalf("after Delete: %q", got)
+	}
+	box.Key(ui.Cmd, ui.KeyZ)
+	box.Key(ui.Cmd|ui.Shift, ui.KeyZ)
+	box.Type("9")
+	if got := mt.TextWithLiterals(); got != "923-45 " {
+		t.Errorf("typing after redo: %q, want 923-45 (the caret is at the start)", got)
+	}
+}

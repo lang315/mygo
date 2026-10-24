@@ -107,6 +107,8 @@ func (ed *editor) replace(start, end int, s string) {
 			ed.anchor = ed.caret
 			if n := len(ed.undo); n > 0 {
 				ed.undo[n-1].caretAfter, ed.undo[n-1].anchorAfter = ed.caret, ed.anchor
+				// the inner replace left the caret at the end of the changed range
+				ed.undo[n-1].selectionAfter = ed.editorSelection.clone()
 			}
 			return
 		}
