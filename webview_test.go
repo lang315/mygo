@@ -301,3 +301,38 @@ func TestWebViewNoBindingsNeverLetsAPageCallGo(t *testing.T) {
 		}
 	}
 }
+
+// The page bridge's window messages (drag, double click on the title bar,
+// drop) come from pages of the app; an untrusted origin posting them must
+// not move or maximize the window, nor re-send dropped files.
+func TestUntrustedPagesCannotDragMaximizeOrDrop(t *testing.T) {
+	w, fw := readyWindow(t, WindowOptions{})
+	dropped := make(chan []string, 4)
+	w.OnFileDrop(func(e *FileDropEvent) { dropped <- e.Paths })
+	for _, c := range []struct {
+		url     string
+		trusted bool
+	}{{"https://evil.example/", false}, {"file:///tmp/x.html", true}} {
+		onMain(func() { fw.H.NavigationCommitted(c.url) })
+		fw.Dropped = []string{"/tmp/secret.txt"}
+		drags, dbl := fw.Drags(), fw.DoubleClicks()
+		page(fw, `{"t":"drag"}`)
+		page(fw, `{"t":"dblclick"}`)
+		page(fw, `{"t":"drop","x":1,"y":2}`)
+		onMain(func() {})
+		gotDrag, gotDbl := fw.Drags()-drags, fw.DoubleClicks()-dbl
+		if c.trusted != (gotDrag == 1) || c.trusted != (gotDbl == 1) {
+			t.Errorf("page at %s: %d window drags, %d title bar double clicks, trusted %v", c.url, gotDrag, gotDbl, c.trusted)
+		}
+		select {
+		case p := <-dropped:
+			if !c.trusted {
+				t.Errorf("page at %s re-sent dropped files %q", c.url, p)
+			}
+		default:
+			if c.trusted {
+				t.Errorf("a trusted page's drop was not handled")
+			}
+		}
+	}
+}
