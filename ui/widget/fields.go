@@ -14,6 +14,7 @@ type FieldsWidget struct {
 type fieldRow struct {
 	label *LabelWidget
 	w     Control
+	key   rune // the label's mnemonic: Alt+key focuses w
 }
 
 // fieldRowKey keys the box of a stacked row, and fieldHole the cell of a
@@ -40,14 +41,18 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 	if c == nil {
 		return f
 	}
-	l := Label(label)
+	display, key, at := parseMnemonic(label)
+	l := Label(display)
+	if key != 0 && !macMenus {
+		l.Rich(mnemonicSpans(display, at)...)
+	}
 	f.change(func() {
 		for _, r := range f.rows {
 			if r.w == c {
 				return
 			}
 		}
-		f.rows = append(f.rows, fieldRow{l, c})
+		f.rows = append(f.rows, fieldRow{l, c, key})
 		adopt(&f.core, c)
 	})
 	return f
@@ -99,6 +104,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					f.hold(r)
 					continue
 				}
+				registerMnemonic(r.key, func() { focusLater(r.w) })
 				ui.Column(c.Key(fieldRowKey(r.label.id))).Gap(colGap).Children(func() {
 					e := render(c, r.label) // holds a hidden label
 					if !r.label.hidden && r.label.place.align == 0 {
@@ -120,6 +126,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 				f.hold(r)
 				continue
 			}
+			registerMnemonic(r.key, func() { focusLater(r.w) })
 			e := render(c, r.label) // holds a hidden label
 			if r.label.hidden {     // keep its cell, or ui flows the control into it
 				ui.Box(c.Key(fieldHole(r.label.id)))

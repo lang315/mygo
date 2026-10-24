@@ -70,13 +70,22 @@ func withMerged(s Style, k variant, v Style) Style {
 }
 
 func (b *ButtonWidget) build(c *ui.Context) ui.Element {
-	label := b.text
-	if b.icon != nil {
-		label = ""
+	label, key, at := parseMnemonic(b.text)
+	underlined := key != 0 && b.icon == nil && !macMenus
+	shown := label
+	if b.icon != nil || underlined {
+		shown = ""
 	}
-	e := ui.Button(c, label)
+	e := ui.Button(c, shown)
+	if underlined {
+		e.Label(label).Children(func() { ui.RichText(c, mnemonicSpans(label, at)...) })
+		if h := b.onClick; h != nil && !b.disabled {
+			registerMnemonic(key, func() { Post(h) })
+		}
+	}
 	if b.icon != nil {
-		icon, text := b.icon, b.text
+		text, _, _ := parseMnemonic(b.text)
+		icon := b.icon
 		e.Children(func() {
 			ui.Row(c).Gap(c.Theme().Space(1.5)).Children(func() {
 				ui.Icon(c, icon)
