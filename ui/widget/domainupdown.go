@@ -101,11 +101,15 @@ func (d *DomainUpDownWidget) SetSelectedItem(s string) *DomainUpDownWidget {
 // among them, else the first is.
 func (d *DomainUpDownWidget) SetItems(items ...string) *DomainUpDownWidget {
 	d.change(func() {
-		cur := ""
-		if i := d.index(); i >= 0 {
+		i, cur := d.index(), ""
+		if i >= 0 {
 			cur = d.items[i]
 		}
 		d.items = slices.Clone(items)
+		if i >= 0 && i < len(d.items) && d.items[i] == cur {
+			d.setIndex(i) // the item at its index is the same
+			return
+		}
 		d.setIndex(max(slices.Index(d.items, cur), 0))
 	})
 	return d
@@ -141,7 +145,7 @@ func (d *DomainUpDownWidget) build(c *ui.Context) ui.Element {
 		ui.Row(c).Grow(1).MinWidth(t.Space(20)).Padding(t.Space(1.5), t.Space(2)).Border(1, t.Border).Radius(t.Radius).Children(func() {
 			ui.Text(c, text)
 		})
-		ui.Stepper(c, p, lo, hi, 1).Disabled(n == 0).OnChange(d.edited())
+		ui.Stepper(c, p, lo, hi, 1).Disabled(n == 0).Value(text).OnChange(d.edited())
 	})
 }
 
@@ -151,8 +155,13 @@ func (d *DomainUpDownWidget) build(c *ui.Context) ui.Element {
 func (d *DomainUpDownWidget) edited() func() {
 	return func() {
 		mu.Lock()
+		old := d.index()
 		s := d.wrapped(d.pos.shown)
 		d.pos.value, d.pos.shown, d.pos.dirty = s, s, false
+		if d.index() == old {
+			mu.Unlock()
+			return
+		}
 		item := ""
 		if i := d.index(); i >= 0 {
 			item = d.items[i]

@@ -110,3 +110,53 @@ func TestDomainUpDownBindsTheItem(t *testing.T) {
 		t.Fatalf("the source got %q", v)
 	}
 }
+
+func TestDomainUpDownOneItemWithWrapReportsNoChange(t *testing.T) {
+	changed := make(chan struct{}, 2)
+	d := DomainUpDown("Only").SetWrap(true).OnChange(func() { changed <- struct{}{} })
+	_, s := domainTester(t, d)
+	s.Key(0, ui.KeyUp)
+	<-posted()
+	select {
+	case <-changed:
+		t.Fatal("Up on the only item ran OnChange")
+	default:
+	}
+	if d.SelectedItem() != "Only" {
+		t.Fatalf("item %q", d.SelectedItem())
+	}
+}
+
+func TestDomainUpDownSetItemsKeepsTheIndexOfAnUnchangedItem(t *testing.T) {
+	d := DomainUpDown("A", "X", "X").SetSelectedIndex(2)
+	d.SetItems("A", "X", "X")
+	if d.SelectedIndex() != 2 {
+		t.Fatalf("index %d: the item at index 2 did not change", d.SelectedIndex())
+	}
+}
+
+func TestDomainUpDownEmptyListAndIndexClamp(t *testing.T) {
+	d := DomainUpDown()
+	tt, s := domainTester(t, d)
+	if d.SelectedIndex() != -1 || d.SelectedItem() != "" || !s.Disabled() {
+		t.Fatalf("empty: index %d item %q disabled %v", d.SelectedIndex(), d.SelectedItem(), s.Disabled())
+	}
+	d.SetItems("A", "B", "C")
+	tt.Settle()
+	d.SetSelectedIndex(-7)
+	if d.SelectedIndex() != 0 {
+		t.Fatalf("index %d after SetSelectedIndex(-7)", d.SelectedIndex())
+	}
+	d.SetSelectedIndex(99)
+	if d.SelectedIndex() != 2 {
+		t.Fatalf("index %d after SetSelectedIndex(99)", d.SelectedIndex())
+	}
+}
+
+func TestDomainUpDownExposesTheItemAsTheValue(t *testing.T) {
+	d := DomainUpDown(days...).SetSelectedItem("Tue")
+	_, s := domainTester(t, d)
+	if s.Value() != "Tue" {
+		t.Fatalf("the stepper's value is %q, want the item", s.Value())
+	}
+}

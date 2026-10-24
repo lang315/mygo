@@ -495,6 +495,7 @@ name := widget.Bind(widget.TextBox(),
 | Control | Value | |
 |---|---|---|
 | `TextBox` | `string` | `Bind` |
+| `DomainUpDown` | the selected item's text, a `string` | `Bind` |
 | `CheckBox` | `bool` | `Bind` |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |

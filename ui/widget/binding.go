@@ -2,7 +2,8 @@ package widget
 
 import "math"
 
-// Bindable is a control that edits one value: a TextBox (string), a
+// Bindable is a control that edits one value: a TextBox or a DomainUpDown
+// (string), a
 // CheckBox (bool), a ComboBox (the Value of its option, a string) or a
 // NumericUpDown or a TrackBar (float64). Only these are bindable; the interface cannot be
 // implemented outside the package.
