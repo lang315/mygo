@@ -453,6 +453,7 @@ name := widget.Bind(widget.TextBox(),
 | `CheckBox` | `bool` | `Bind` |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
+| `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options |
 
 - The control takes `get()`'s value at once. After each edit of the user,
   `set(v)` runs with the new value on the event goroutine, after the
@@ -537,8 +538,35 @@ lock: they read the row and call no widget method.
   event goroutine without the lock, and may query a database; the menu opens
   when it returns, unless the user pressed a key or a button, or right-clicked
   again, meanwhile; it wins over `ContextMenu`),
-  `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it.
-  Cmd/Ctrl+C copies the selected rows, a line each, cells apart by tabs.
+  `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it (see
+  below).
+  Cmd/Ctrl+C and the Edit menu's Copy copy the selected rows, a line each,
+  cells apart by tabs; `CopyFunc(fn)` replaces that text with what `fn` makes
+  of the keys of the selected rows, in the order shown, for both, so they
+  agree. `fn` runs on the main thread, off the lock: it may call the table's
+  getters, but should be quick.
+
+  ```go
+  table.CopyFunc(func(ids []string) string { return strings.Join(ids, "\n") })
+  ```
+
+**Saving the columns' widths.** `OnColumnsChange` runs once a frame while the
+user drags a column, so it fires dozens of times for one resize: an app that
+writes the layout on each call writes dozens of times. Save when the user
+has stopped, by debouncing. Handlers run one at a time on the event
+goroutine, so the timer needs no lock:
+
+```go
+var saveTimer *time.Timer
+
+table.SetColumnsLayout(loadLayout()). // what the last run saved
+	OnColumnsChange(func(l ui.TableLayout) {
+		if saveTimer != nil {
+			saveTimer.Stop()
+		}
+		saveTimer = time.AfterFunc(500*time.Millisecond, func() { saveLayout(l) })
+	})
+```
 
 A table shows in one window at a time. It fills the room its parent
 gives it and scrolls; in a box or a `TabControl` page, `Expand` the boxes and
