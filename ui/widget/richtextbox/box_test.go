@@ -207,13 +207,13 @@ func TestRichTextBoxOnChangeForUndoRedoToolbarAndPaste(t *testing.T) {
 	box := tt.Find(widget.ByRole(ui.RoleTextField)).Focus()
 	box.Key(ui.Cmd, ui.KeyEnd).Type("d")
 	next("typing")
-	r.Document().Undo()
+	r.Edit(func(d *richtext.Document) { d.Undo() })
 	next("undo")
-	r.Document().Redo()
+	r.Edit(func(d *richtext.Document) { d.Redo() })
 	next("redo")
 	r.SetSelection(0, 2)
 	r.Edit(func(d *richtext.Document) { d.ToggleBold() })
-	next("ToggleBold through Document()")
+	next("ToggleBold through Edit")
 	tt.SetClipboard("pasted")
 	box.Key(ui.Cmd, ui.KeyV)
 	next("paste")
@@ -331,4 +331,18 @@ func TestRichTextBoxSetTextDoesNotReportASelectionChange(t *testing.T) {
 		t.Fatal("SetText ran OnSelectionChange")
 	default:
 	}
+}
+
+func TestRichTextBoxASetterDoesNotSwallowAPendingSelectionReport(t *testing.T) {
+	moved := make(chan struct{}, 8)
+	r := New().SetText("abcdef").OnSelectionChange(func() { moved <- struct{}{} })
+	tt := widget.NewTester(t, r, 500, 300)
+	tt.Settle()
+	for len(moved) > 0 {
+		<-moved
+	}
+	r.SetSelection(0, 2)  // a move nobody reported yet
+	r.SetText("replaced") // a setter comes in before the next frame
+	tt.Settle()
+	wait.For(t, "the pending selection report", moved)
 }

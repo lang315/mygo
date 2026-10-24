@@ -16,8 +16,9 @@ import (
 )
 
 // Box edits styled text: bold, italic, underline, colors,
-// links, headings and lists, over package ui/richtext. Its Document is the
-// handle for a toolbar (Document().ToggleBold(), Formatting()).
+// links, headings and lists, over package ui/richtext. Edit is the way for a
+// toolbar to change it (Edit(func(d) { d.ToggleBold() })), and Document() to
+// read its formats (Formatting()).
 //
 // Offsets of the selection count runes, as richtext's do, newlines
 // included.
@@ -36,6 +37,7 @@ type Box struct {
 	seen    uint64
 	seenSel [2]int
 	owed    bool // a user's edit a setter came in front of: still to report
+	owedSel bool // the same for a selection move
 }
 
 // New makes an empty rich text box.
@@ -69,10 +71,13 @@ func (r *Box) replace(t richtext.Text) *Box {
 		if r.doc.Version() != r.seen {
 			r.owed = true // an edit nobody reported yet is still the user's
 		}
+		if a, c := r.doc.Selection(); [2]int{a, c} != r.seenSel {
+			r.owedSel = true // a move nobody reported yet is still due
+		}
 		r.doc.SetText(t)
 		r.seen = r.doc.Version()
 		a, c := r.doc.Selection()
-		r.seenSel = [2]int{a, c} // a setter moves the caret without a report
+		r.seenSel = [2]int{a, c} // the caret a setter moves is not reported
 	})
 	return r
 }
@@ -141,7 +146,7 @@ func (r *Box) OnLink(fn func(url string)) *Box {
 // text or its formats changed other than by SetText, SetRich, SetMarkdown or
 // SetMarkup: typing, a paste, an input method's commit (Telex and Unikey's
 // backspace and replacement land in one edit), undo and redo, and what a
-// toolbar does through Document(), such as ToggleBold.
+// toolbar does through Edit, such as ToggleBold.
 func (r *Box) OnChange(fn func()) *Box {
 	widget.Change(func() { r.onChange = fn })
 	return r
@@ -218,8 +223,8 @@ func (r *Box) build(c *ui.Context) ui.Element {
 		}
 	}
 	a, caret := r.doc.Selection()
-	if sel := [2]int{a, caret}; sel != r.seenSel {
-		r.seenSel = sel
+	if sel := [2]int{a, caret}; sel != r.seenSel || r.owedSel {
+		r.seenSel, r.owedSel = sel, false
 		if h := r.onSelection; h != nil {
 			widget.Post(h)
 		}
