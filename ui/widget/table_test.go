@@ -661,7 +661,12 @@ func TestSetterBetweenFramesSurvivesAUserClick(t *testing.T) {
 // frame and its input is made by hand: ui replaces the set (check all)
 // while a setter's key is not in the frame shown yet.
 func TestCommitKeepsASetterPendingWhenUIReplacesTheSet(t *testing.T) {
-	tb := &DataGridViewWidget[acct, int]{}
+	rows := []acct{{1, "a", 0}, {2, "b", 0}, {3, "c", 0}}
+	for k := 100; k < 200; k++ {
+		rows = append(rows, acct{k, "x", 0})
+	}
+	tb := testTable(rows...)
+	tester(t, tb) // a frame: the table has read its source
 	var s keys[int]
 	for k := 100; k < 200; k++ { // enough that one key is not "dirty"
 		s.set(k, true)

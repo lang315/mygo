@@ -356,7 +356,15 @@ t := widget.DataGridView(func(a *Account) uint { return a.ID },
 
 `DataGridView(key, columns...)` shows rows of any type, each told apart by its
 key, for as many as a million rows on `ui.TableView`. The table keeps a
-copy of the rows; to share rows between tables, make them pointers.
+copy of the rows, in a `RowSource` of its own; to show the same rows in
+several tables, make one with `NewRowSource(key)` and give it to each
+table with `DataGridViewOf(src, columns...)`. Each table has its own sort,
+search, selection and checks; a change to the source (`SetRows`, `AddRows`,
+`UpdateRow`, `DeleteRows`, or the same on any table over it) reaches them
+all and redraws their windows, and a table not on screen reads it when it
+next shows. One slice and one index serve the lot; a table not drawn since
+`SetRows` or `DeleteRows` keeps the old slice alive (its frame and view
+hold it) until it draws again.
 A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
 (by `Text` otherwise), `Width`, `MinWidth`, `Align`, `Sortable`,
 `Filterable`, `Filter` (case-insensitive containment otherwise), `Color`

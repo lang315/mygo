@@ -75,6 +75,7 @@ func (t *DataGridViewWidget[T, K]) CheckboxColumn() *DataGridViewWidget[T, K] {
 // shown returns the keys in that the rows shown hold, in the order shown.
 // Under mu.
 func (t *DataGridViewWidget[T, K]) shown(in *ui.Selection[K]) []K {
+	t.catchUp()
 	n := in.Len()
 	if n == 0 {
 		return nil
@@ -85,7 +86,7 @@ func (t *DataGridViewWidget[T, K]) shown(in *ui.Selection[K]) []K {
 	}
 	var ks []K
 	for i := range t.view.Len() {
-		if k := t.key(&t.rows[t.view.Row(i)]); in.Has(k) {
+		if k := t.key(&t.src.rows[t.view.Row(i)]); in.Has(k) {
 			if ks = append(ks, k); len(ks) == n {
 				break
 			}
@@ -103,8 +104,8 @@ type at[K comparable] struct {
 // placed returns the keys of in whose rows show in the view as it is, with
 // their places, in order. Under mu.
 func (t *DataGridViewWidget[T, K]) placed(in *ui.Selection[K]) []at[K] {
-	if t.posOf == nil || t.posVersion != t.view.Version() || len(t.posOf) != len(t.rows) {
-		t.posOf = slices.Grow(t.posOf[:0], len(t.rows))[:len(t.rows)]
+	if t.posOf == nil || t.posVersion != t.view.Version() || len(t.posOf) != len(t.src.rows) {
+		t.posOf = slices.Grow(t.posOf[:0], len(t.src.rows))[:len(t.src.rows)]
 		for i := range t.posOf {
 			t.posOf[i] = -1
 		}
@@ -115,7 +116,7 @@ func (t *DataGridViewWidget[T, K]) placed(in *ui.Selection[K]) []at[K] {
 	}
 	found := make([]at[K], 0, in.Len())
 	for k := range in.All() {
-		if row, ok := t.index[k]; ok && row < len(t.posOf) && t.posOf[row] >= 0 {
+		if row, ok := t.src.index[k]; ok && row < len(t.posOf) && t.posOf[row] >= 0 {
 			found = append(found, at[K]{t.posOf[row], k})
 		}
 	}
@@ -162,7 +163,7 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 	c, before := &t.checked, t.checked.value.Len()
 	// Clear is right exactly when the frame held every row: rows added
 	// since, or a filter or a view that changed since, are not its.
-	if !on && !t.gone && first == 0 && last+1 == len(t.rows) {
+	if !on && !t.gone && first == 0 && last+1 == len(t.src.rows) {
 		c.value.Clear()
 		c.dirty = true
 	} else {
@@ -172,7 +173,7 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 				continue
 			}
 			k := t.key(r)
-			if _, ok := t.index[k]; !ok && t.gone {
+			if _, ok := t.src.index[k]; !ok && t.gone {
 				continue
 			}
 			if c.value.Has(k) != on {
@@ -195,6 +196,7 @@ func (t *DataGridViewWidget[T, K]) Selected() []K {
 func (t *DataGridViewWidget[T, K]) CountSelected() int {
 	mu.Lock()
 	defer mu.Unlock()
+	t.catchUp()
 	return t.chosen.value.Len()
 }
 
@@ -210,6 +212,7 @@ func (t *DataGridViewWidget[T, K]) Checked() []K {
 func (t *DataGridViewWidget[T, K]) IsChecked(k K) bool {
 	mu.Lock()
 	defer mu.Unlock()
+	t.catchUp()
 	return t.checked.value.Has(k)
 }
 
@@ -217,7 +220,7 @@ func (t *DataGridViewWidget[T, K]) IsChecked(k K) bool {
 func (t *DataGridViewWidget[T, K]) SetChecked(ks []K, on bool) *DataGridViewWidget[T, K] {
 	t.change(func() {
 		for _, k := range ks {
-			if _, ok := t.index[k]; ok || !on {
+			if _, ok := t.src.index[k]; ok || !on {
 				t.checked.set(k, on)
 			}
 		}
@@ -252,7 +255,7 @@ func (t *DataGridViewWidget[T, K]) checkedCount() (count, total int) {
 		return ks.Len(), t.view.Len()
 	}
 	for k := range ks.All() {
-		if i, ok := t.index[k]; ok && t.filter(&t.rows[i]) {
+		if i, ok := t.src.index[k]; ok && t.filter(&t.src.rows[i]) {
 			count++
 		}
 	}
@@ -300,6 +303,6 @@ func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 		}
 	}
 	if t.gone {
-		s.keep(t.index)
+		s.keep(t.src.index)
 	}
 }

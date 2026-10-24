@@ -118,7 +118,7 @@ func (t *DataGridViewWidget[T, K]) counts() {
 	if t.searchButton != nil {
 		t.searchButton.text = t.text.Search
 	}
-	t.totalLabel.text = fmt.Sprintf(t.text.Rows, len(t.rows))
+	t.totalLabel.text = fmt.Sprintf(t.text.Rows, len(t.src.rows))
 	t.selectedLabel.text = fmt.Sprintf(t.text.Selected, t.chosen.value.Len())
 	t.checkedLabel.text = fmt.Sprintf(t.text.Checked, t.checked.value.Len())
 	t.checkedLabel.hidden = !t.checks
