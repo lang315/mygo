@@ -124,9 +124,8 @@ func (m *MonthCalendarWidget) SetValue(t time.Time) *MonthCalendarWidget {
 	return m
 }
 
-// OnChange runs fn, on the event goroutine, after the user chose a day or
-// paged to another month, which moves the day by a month as ui.Calendar
-// does. A setter does not run it.
+// OnChange runs fn, on the event goroutine, after the user chose a day.
+// Paging to another month is not a choice. A setter does not run it.
 func (m *MonthCalendarWidget) OnChange(fn func()) *MonthCalendarWidget {
 	m.change(func() { m.onChange = fn })
 	return m

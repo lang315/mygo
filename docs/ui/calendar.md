@@ -5,7 +5,8 @@
 `ui.Calendar` creates a month's calendar choosing the day of a
 `*time.Time`, as SwiftUI's graphical date picker: a click chooses a day, as
 the arrows do while the calendar has the keyboard focus; Page Up and Page
-Down, or its buttons, move by months, and Home and End go to the first and
+Down, or its buttons, page by months, which changes the month shown and not the
+day chosen, and Home and End go to the first and
 the last day of the month. `Changed` reports a new date, which keeps the
 time of day and the location of the value.
 

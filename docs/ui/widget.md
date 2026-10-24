@@ -677,7 +677,6 @@ Layout:
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps.
 - `ScrollPanel(w)`: scrolls a widget larger than its room.
-- `DateTimePicker()`, `MonthCalendar()`: a `time.Time` in a date and time field, or a calendar; see [DateTimePicker](widget/date-time-picker.md).
 - `Separator()`: a line.
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
@@ -685,6 +684,7 @@ Layout:
 
 Input and display:
 
+- `DateTimePicker()`, `MonthCalendar()`: a `time.Time` in a date and time field, or a calendar; see [DateTimePicker](widget/date-time-picker.md).
 - `Label(text)`: a line of text; `Rich(spans...)` shows styled `ui.Span`s
   instead, where gota used Pango markup. `ParseMarkup(s)` makes the spans of a
   Pango subset: `<span foreground background weight>`, `<b>`, `<i>`, `<u>` and

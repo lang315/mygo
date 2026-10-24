@@ -96,20 +96,24 @@ func TestMonthCalendarChoosesADay(t *testing.T) {
 	}
 }
 
-// ui.Calendar's month buttons move the chosen date by a month, as Page Up
-// does, so the value follows what the calendar shows.
-func TestMonthCalendarPagingMovesTheValueByAMonth(t *testing.T) {
-	changed := make(chan time.Time, 2)
-	var c *MonthCalendarWidget
-	c = MonthCalendar().SetValue(meeting).OnChange(func() { changed <- c.Value() })
+// Paging shows another month and leaves the chosen day, as WinForms'
+// MonthCalendar does.
+func TestMonthCalendarPagingDoesNotChooseOrReport(t *testing.T) {
+	changed := make(chan struct{}, 2)
+	day := time.Date(2026, 1, 31, 14, 30, 0, 0, time.UTC)
+	c := MonthCalendar().SetValue(day).OnChange(func() { changed <- struct{}{} })
 	tt := NewTester(t, c, 800, 600)
 	tt.Find(ByLabel("Next month")).Click()
 	if !tt.Has(ByLabel("February 10, 2026")) {
-		t.Fatal("the calendar did not page")
+		t.Fatal("the calendar did not page to February")
 	}
-	want := time.Date(2026, 2, 5, 14, 30, 0, 0, time.UTC)
-	if got := received(t, changed); !got.Equal(want) || !c.Value().Equal(want) {
-		t.Fatalf("OnChange saw %v, Value %v, want %v", got, c.Value(), want)
+	if !c.Value().Equal(day) {
+		t.Fatalf("paging changed the value to %v", c.Value())
+	}
+	select {
+	case <-changed:
+		t.Fatal("paging ran OnChange")
+	default:
 	}
 }
 
@@ -120,5 +124,21 @@ func TestMonthCalendarSetValueShowsItsMonth(t *testing.T) {
 	tt.Settle()
 	if !tt.Has(ByLabel("March 9, 2026")) {
 		t.Fatal("the calendar still shows January")
+	}
+}
+
+// A user's edit and a setter in the same frame: the user's wins, as a
+// setter that ran since the last build loses to what was entered.
+func TestDateTimePickerUserEditBeatsASetterOfTheSameFrame(t *testing.T) {
+	p := DateTimePicker().SetValue(meeting)
+	tt := NewTester(t, p, 800, 600)
+	tt.Find(ByRole(ui.RolePopUpButton)).Click()
+	day := tt.Find(ByLabel("January 12, 2026")).Bounds()
+	other := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
+	tt.Tester.Update(func() { p.SetValue(other) })
+	tt.ClickAt(day.X+day.W/2, day.Y+day.H/2)
+	tt.Settle()
+	if got := p.Value(); got.Month() != time.January || got.Day() != 12 {
+		t.Fatalf("Value %v: the click on January 12 must beat a setter of the same frame", got)
 	}
 }
