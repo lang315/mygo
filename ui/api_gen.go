@@ -4521,6 +4521,21 @@ func (_handle Element) MaxHeightPercent(p float32) Element {
 	return wrapElement(_node.MaxHeightPercent(p))
 }
 
+// MaxLength limits a text input to n runes: what the user types, pastes or
+// an input method commits past it is cut at it, so that the rune typed at
+// the limit is refused, and a paste is cut to what fits. A text set by the
+// app is not cut: it holds what it holds. n of 0 or less is no limit. Like
+// ReadOnly, it holds for the input that comes until the next frame.
+func (_handle Element) MaxLength(n int) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.MaxLength(n))
+}
+
 // MaxLines shows at most n lines of the element's text, ending it with an
 // ellipsis.
 func (_handle Element) MaxLines(n int) Element {

@@ -87,6 +87,13 @@ func (ed *editor) record(typing bool) {
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
+	if ed.maxLen > 0 && s != "" {
+		// What the text may take in the room the replaced runes leave.
+		room := max(ed.maxLen-(ed.buf.n-(end-start)), 0)
+		if utf8.RuneCountInString(s) > room {
+			s = string([]rune(s)[:room])
+		}
+	}
 	if !ed.multiline {
 		s = strings.Map(func(r rune) rune {
 			if r == '\n' || r == '\r' {

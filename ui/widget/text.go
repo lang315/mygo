@@ -2,6 +2,7 @@ package widget
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -55,6 +56,7 @@ type TextBoxWidget struct {
 	placeholder string
 	password    bool
 	readOnly    bool
+	maxLen      int // runes, 0 for no limit
 	onChange    func()
 	onEnter     func()
 }
@@ -68,7 +70,29 @@ func TextBox() *TextBoxWidget {
 
 func (e *TextBoxWidget) Text() string { mu.Lock(); defer mu.Unlock(); return e.text.value }
 func (e *TextBoxWidget) SetText(s string) *TextBoxWidget {
-	e.change(func() { e.text.set(s) })
+	e.change(func() { e.text.set(e.cut(s)) })
+	return e
+}
+
+// cut returns s cut to the runes MaxLength allows. Under mu.
+func (e *TextBoxWidget) cut(s string) string {
+	if e.maxLen > 0 && utf8.RuneCountInString(s) > e.maxLen {
+		return string([]rune(s)[:e.maxLen])
+	}
+	return s
+}
+
+// MaxLength limits the text to n runes, as WinForms' MaxLength does:
+// what the user types or pastes past it is cut at it, and so is a text set
+// by SetText, and the text the box holds when n is lowered. 0 means no
+// limit.
+func (e *TextBoxWidget) MaxLength(n int) *TextBoxWidget {
+	e.change(func() {
+		e.maxLen = max(n, 0)
+		if s := e.cut(e.text.value); s != e.text.value {
+			e.text.set(s)
+		}
+	})
 	return e
 }
 
@@ -109,6 +133,7 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 		el.Password()
 	}
 	el.ReadOnly(e.readOnly)
+	el.MaxLength(e.maxLen)
 	el.OnChange(edited(&e.text, &e.bound, e.onChange))
 	if changed && e.onChange != nil {
 		Post(e.onChange)

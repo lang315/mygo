@@ -53,6 +53,7 @@ type editor struct {
 	readOnly           bool   // selectable text: selected and copied, not edited
 	source             string // the text of selectable text
 	password           bool
+	maxLen             int // runes the text may hold, 0 for no limit (MaxLength)
 	// onPaste sees a paste before it is inserted (OnPaste).
 	onPaste func(text string) bool
 	// onTextKey sees a key before the editor takes it (OnTextKey).
@@ -123,6 +124,7 @@ func (ed *editor) edit(a, z int, s string) {
 // set in each build and its edits follow.
 type editorOptions struct {
 	readOnly, password bool
+	maxLen             int
 	onPaste            func(text string) bool
 	onTextKey          func(k TextKey) bool
 }
@@ -131,8 +133,8 @@ type editorOptions struct {
 // the options its pending edits apply by, and this build's start from
 // the defaults.
 func (ed *editor) rebuild() {
-	ed.shown = editorOptions{ed.readOnly, ed.password, ed.onPaste, ed.onTextKey}
-	ed.readOnly, ed.password, ed.lines, ed.onPaste, ed.onTextKey = false, false, [2]int{}, nil, nil
+	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey}
+	ed.readOnly, ed.password, ed.maxLen, ed.lines, ed.onPaste, ed.onTextKey = false, false, 0, [2]int{}, nil, nil
 }
 
 // withShown runs fn, which applies the user's edits, with the options of
@@ -140,11 +142,11 @@ func (ed *editor) rebuild() {
 // returns, before this build's ReadOnly or OnPaste, and follows what the
 // user saw.
 func (ed *editor) withShown(fn func()) {
-	now := editorOptions{ed.readOnly, ed.password, ed.onPaste, ed.onTextKey}
+	now := editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey}
 	o := ed.shown
-	ed.readOnly, ed.password, ed.onPaste, ed.onTextKey = o.readOnly, o.password, o.onPaste, o.onTextKey
+	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey = o.readOnly, o.password, o.maxLen, o.onPaste, o.onTextKey
 	fn()
-	ed.readOnly, ed.password, ed.onPaste, ed.onTextKey = now.readOnly, now.password, now.onPaste, now.onTextKey
+	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey = now.readOnly, now.password, now.maxLen, now.onPaste, now.onTextKey
 }
 
 func (ed *editor) insert(s string) {

@@ -84,6 +84,18 @@ func (e *node) ReadOnly(on bool) *node {
 	return e
 }
 
+// MaxLength limits a text input to n runes: what the user types, pastes or
+// an input method commits past it is cut at it, so that the rune typed at
+// the limit is refused, and a paste is cut to what fits. A text set by the
+// app is not cut: it holds what it holds. n of 0 or less is no limit. Like
+// ReadOnly, it holds for the input that comes until the next frame.
+func (e *node) MaxLength(n int) *node {
+	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+		ed.maxLen = max(n, 0)
+	}
+	return e
+}
+
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with

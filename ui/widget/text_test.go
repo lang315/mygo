@@ -168,3 +168,29 @@ func TestFocusMovesTheFocus(t *testing.T) {
 		t.Fatalf("a %q, b %q: typing did not go to b", a.Text(), b.Text())
 	}
 }
+
+func TestTextBoxMaxLengthCutsTypingPastingAndSetText(t *testing.T) {
+	tb := TextBox().MaxLength(4)
+	tt := tester(t, tb)
+	focus(tt, 1)
+	tt.Type("héllo wörld") // runes, not bytes
+	tt.Frame()
+	if got := tb.Text(); got != "héll" {
+		t.Fatalf("typed: %q, want héll", got)
+	}
+	tb.SetText("abcdefgh")
+	tt.Frame()
+	if got := tb.Text(); got != "abcd" {
+		t.Fatalf("SetText past the limit: %q, want abcd", got)
+	}
+	tb.MaxLength(2) // a lower limit cuts what it holds
+	tt.Frame()
+	if got := tb.Text(); got != "ab" {
+		t.Fatalf("MaxLength(2): %q, want ab", got)
+	}
+	tb.MaxLength(0).SetText("abcdefgh")
+	tt.Frame()
+	if got := tb.Text(); got != "abcdefgh" {
+		t.Fatalf("no limit: %q", got)
+	}
+}
