@@ -246,6 +246,54 @@ widget.VBox(8).Add(
 - **A Style is a value.** Every method returns a new one and none changes
   an earlier one, so one Style can be shared by controls and goroutines.
   To change a control's look, `Apply` another.
+- **One side or corner** (`PaddingTop`, `RadiusTopLeft`, `BorderLeft`, …)
+  leaves the control's other sides as its builder set them.
+- **Placing and weight.** `Align`, `VAlign`, `HExpand` and `VExpand` place
+  the control in its box, and count in the base style only: a variant's are
+  ignored. `FontWeight(100…900)` sets the weight, and `Bold` is
+  `FontWeight(700)`: the later of the two wins.
+
+## Tailwind classes
+
+Package `ui/widget/tw` is an opt-in shorthand for Styles, with Tailwind v3's
+classes and values. An app that does not import it pays nothing.
+
+```go
+import "github.com/egoist/mygo/ui/widget/tw"
+
+save := widget.Button("Save").Apply(tw.S("px-3 py-2 rounded-lg bg-accent text-on-accent hover:bg-accent-hover transition"))
+name := widget.Label("Name").Apply(tw.S("halign-start font-semibold"))
+```
+
+`tw.S` parses a string once and caches it. A class it does not know is
+logged once and ignored, and `mygo vet` reports it in a literal string.
+`tw.Parse` returns the error instead.
+
+| Group | Classes |
+|---|---|
+| Spacing | `p- px- py- pt- pr- pb- pl- m- mx- …` with `0 px 0.5 1 … 96`; `-mt-2` |
+| Sizes | `w- h- min-w- max-w- min-h- max-h-` (same scale, 4 DIPs a unit) |
+| Radius | `rounded`, `rounded-{none,sm,md,lg,xl,2xl,3xl,full}`, sides `t r b l`, corners `tl tr br bl` |
+| Border | `border`, `border-{0,2,4,8}`, `border-{x,y,t,r,b,l}[-N]`, `border-solid`, `border-dashed` |
+| Colors | `bg- text- border-` with the v3 palette (`blue-600`), `black white transparent` |
+| Theme colors | `default muted surface surface-hover surface-pressed accent accent-hover accent-pressed on-accent danger warning success selection focus inverse on-inverse` |
+| Text | `text-xs … text-9xl`, `font-thin … font-black`, `italic`, `not-italic`, `font-mono` |
+| Effects | `shadow-sm shadow shadow-md lg xl 2xl inner none`, `opacity-0 … 100`, `cursor-pointer …` |
+| Layout (gota) | `halign-/valign-{start,center,end,fill}`, `hexpand`, `vexpand` |
+| Buttons (gota) | `suggested-action`, `destructive-action` |
+| Motion | `transition`, `duration-{75,…,1000}` |
+
+Variants: `hover:`, `active:`, `focus:`, `disabled:`, `dark:`. `dark:` stacks on
+one other (`dark:hover:bg-slate-700`). On the same property the later class
+wins; Tailwind decides by its CSS order instead. Palette colors are fixed in
+both themes; theme colors follow light and dark.
+
+Not supported: `m-auto`, `bg-blue-600/50`, `gap`, `grid`, `flex`, gradients,
+blur, arbitrary values (`p-[13px]`), `ring`, `current`.
+
+From gota: `text-italic` is `italic`, `text-green` is `text-green-600`,
+`combobox-rounded-r-none` is `rounded-r-none`, and `gota-card`, `gota-table`
+and `gota-tag-select*` are widget controls, not classes.
 
 ## DataGridView
 
