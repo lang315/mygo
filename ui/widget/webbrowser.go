@@ -246,6 +246,9 @@ func (b *WebBrowserWidget) build(c *ui.Context) ui.Element {
 		win := f.win
 		Post(func() { b.create(f, win) })
 	}
+	if c.Measuring() {
+		return ui.Box(c).Grow(1).Height(300) // a web view has no height of its own
+	}
 	if v := b.view; v != nil {
 		return ui.WebView(c, v).Grow(1)
 	}

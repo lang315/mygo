@@ -16,7 +16,15 @@ type Dialog struct {
 // NewDialog makes a dialog over parent (nil for none) titled title, with
 // subtitle under it ("" for none), showing content in a window width by
 // height DIPs, title bar included. A macOS sheet has none: it shows that
-// much shorter, and the title is drawn in the dialog. To open a dialog
+// much shorter, and the title is drawn in the dialog.
+//
+// A height of 0 fits the dialog to its content, as WinForms' AutoSize
+// (GrowAndShrink) does at show: Run measures the content laid out at width,
+// and the page area has that height (the title bar is more), no higher than
+// the screen's work area less a margin, where the content scrolls. A width
+// of 0 is the window's default, 800. The size is taken when the dialog
+// shows: changes of the content later do not resize it, and SetSize wins.
+// A list in the content counts eight rows. To open a dialog
 // from a dialog, pass the outer one's Form as parent.
 func NewDialog(parent *Form, title, subtitle string, width, height int, content Control) *Dialog {
 	d := &Dialog{
@@ -24,7 +32,7 @@ func NewDialog(parent *Form, title, subtitle string, width, height int, content 
 		title:    Label(title).Bold().TextSize(LG),
 		subtitle: Label(subtitle).Muted().SetVisible(subtitle != ""),
 	}
-	d.parent, d.dialog = parent, true
+	d.parent, d.dialog, d.fit = parent, true, height == 0
 	d.SetContent(VBox(8).Add(d.title, d.subtitle).Pack(content, true, true).Padding(4))
 	return d
 }
