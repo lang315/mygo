@@ -213,6 +213,7 @@ func extras() widget.Control {
 			AddSection("Fruits", swatch(color.RGBA{230, 160, 40, 255}), widget.Option{Value: "apple", Text: "Apple"}, widget.Option{Value: "pear", Text: "Pear"}).
 			AddSection("Vegetables", swatch(color.RGBA{60, 160, 80, 255}), widget.Option{Value: "kale", Text: "Kale"})),
 		clockRow(),
+		chartRow(),
 	)
 }
 
@@ -366,6 +367,15 @@ func dragRow() widget.Control {
 	widget.OnDrop(zone, func(v string) { zone.SetText("Dropped " + v) })
 	zone.OnDropFiles(func(paths []string) { zone.SetText(fmt.Sprintf("%d files dropped", len(paths))) })
 	return widget.HBox(16).Add(chip, zone)
+}
+
+// chartRow shows a bar chart of three months and a pie of shares.
+func chartRow() widget.Control {
+	bars := widget.Chart(widget.BarChart).SetTitle("Sales").SetLabels("Jan", "Feb", "Mar").
+		SetSeries(widget.ChartSeries{Name: "2026", Values: []float64{10, 20, 30}})
+	pie := widget.Chart(widget.PieChart).SetTitle("Users").SetLabels("Win", "Mac", "Linux").
+		SetSeries(widget.ChartSeries{Values: []float64{60, 30, 10}})
+	return widget.HBox(24).Add(bars, pie)
 }
 
 func containers() widget.Control {
