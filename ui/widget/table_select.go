@@ -107,9 +107,8 @@ type at[K comparable] struct {
 	key K
 }
 
-// placed returns the keys of in whose rows show in the view as it is, with
-// their places, in order. Under mu.
-func (t *DataGridViewWidget[T, K]) placed(in *ui.Selection[K]) []at[K] {
+// placeRows brings posOf, each row's place in the view, up to date. Under mu.
+func (t *DataGridViewWidget[T, K]) placeRows() {
 	if t.posOf == nil || t.posVersion != t.view.Version() || len(t.posOf) != len(t.src.rows) {
 		t.posOf = slices.Grow(t.posOf[:0], len(t.src.rows))[:len(t.src.rows)]
 		for i := range t.posOf {
@@ -120,6 +119,22 @@ func (t *DataGridViewWidget[T, K]) placed(in *ui.Selection[K]) []at[K] {
 		}
 		t.posVersion = t.view.Version()
 	}
+}
+
+// positionOf returns where the row of key k shows in the view as it is, -1
+// if it is hidden or gone. Under mu.
+func (t *DataGridViewWidget[T, K]) positionOf(k K) int {
+	t.placeRows()
+	if row, ok := t.src.index[k]; ok && row < len(t.posOf) {
+		return int(t.posOf[row])
+	}
+	return -1
+}
+
+// placed returns the keys of in whose rows show in the view as it is, with
+// their places, in order. Under mu.
+func (t *DataGridViewWidget[T, K]) placed(in *ui.Selection[K]) []at[K] {
+	t.placeRows()
 	found := make([]at[K], 0, in.Len())
 	for k := range in.All() {
 		if row, ok := t.src.index[k]; ok && row < len(t.posOf) && t.posOf[row] >= 0 {
@@ -280,17 +295,37 @@ func (t *DataGridViewWidget[T, K]) checkedCount() (count, total int) {
 func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 	mu.Lock()
 	defer mu.Unlock()
+	t.commitLocked(s)
+}
+
+// commitLocked is commit under mu. If watch is set, it gets the keys the user
+// added to and took out of the set.
+func (t *DataGridViewWidget[T, K]) commitLocked(s *keys[K]) {
+	watching := t.watch != nil
+	var on, off []K
 	ks, all := s.shown.TakeChanges()
 	if all {
-		var on []bool
+		var pending []bool
 		if !s.dirty {
 			for _, k := range s.changed {
-				on = append(on, s.value.Has(k))
+				pending = append(pending, s.value.Has(k))
+			}
+		}
+		if watching {
+			for k := range s.shown.All() {
+				if !s.value.Has(k) {
+					on = append(on, k)
+				}
+			}
+			for k := range s.value.All() {
+				if !s.shown.Has(k) {
+					off = append(off, k)
+				}
 			}
 		}
 		s.value.CopyFrom(&s.shown)
-		for i, k := range s.changed[:len(on)] {
-			if on[i] {
+		for i, k := range s.changed[:len(pending)] {
+			if pending[i] {
 				s.value.Add(k)
 			} else {
 				s.value.Remove(k)
@@ -299,16 +334,28 @@ func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 		if s.dirty {
 			s.changed, s.dirty = s.changed[:0], false
 		}
+		// What a setter changed meanwhile is the setter's, not the user's.
+		on = slices.DeleteFunc(on, func(k K) bool { return !s.value.Has(k) })
+		off = slices.DeleteFunc(off, func(k K) bool { return s.value.Has(k) })
 	} else {
 		for _, k := range ks {
 			if s.shown.Has(k) {
+				if watching && !s.value.Has(k) {
+					on = append(on, k)
+				}
 				s.value.Add(k)
 			} else {
+				if watching && s.value.Has(k) {
+					off = append(off, k)
+				}
 				s.value.Remove(k)
 			}
 		}
 	}
 	if t.gone {
 		s.keep(t.src.index)
+	}
+	if watching && len(on)+len(off) > 0 {
+		t.watch(s == &t.checked, on, off)
 	}
 }

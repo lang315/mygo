@@ -90,6 +90,11 @@ type DataGridViewWidget[T any, K comparable] struct {
 	lateSeq                                 uint64               // its latest right-click
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
 	numbered                                bool                 // the index column shows
+
+	// watch, when set by a ListView, gets the keys the user added to and took
+	// out of the choice, or of the checks (checks).
+	watch func(checks bool, on, off []K)
+
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
