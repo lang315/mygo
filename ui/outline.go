@@ -234,7 +234,7 @@ func (s *OutlineState[K]) keys(owner *node, children func(K) []K) {
 	switch {
 	case (right || allRight) && r.branch && (!open || allRight):
 		s.setOpen(r.item, true, allRight, children)
-	case right && open && i+1 < len(s.rows) && s.rows[i+1].parent == i:
+	case right && open && i+1 < len(s.rows) && s.rows[i+1].parent == i && !f.isHeader(i+1):
 		f.choose(i + 1)
 	case (left || allLeft) && open:
 		s.setOpen(r.item, false, allLeft, children)

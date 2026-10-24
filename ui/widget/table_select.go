@@ -20,20 +20,26 @@ type keys[K comparable] struct {
 
 // bind returns the set to hand ui. Under mu, while building.
 func (s *keys[K]) bind() *ui.Selection[K] {
+	s.bindInto(&s.shown)
+	return &s.shown
+}
+
+// bindInto brings dst, a set ui holds in place of shown, up to date with
+// value. Under mu, while building.
+func (s *keys[K]) bindInto(dst *ui.Selection[K]) {
 	if s.dirty {
-		s.shown.CopyFrom(&s.value)
+		dst.CopyFrom(&s.value)
 	} else {
 		for _, k := range s.changed {
 			if s.value.Has(k) {
-				s.shown.Add(k)
+				dst.Add(k)
 			} else {
-				s.shown.Remove(k)
+				dst.Remove(k)
 			}
 		}
 	}
-	s.shown.TakeChanges() // what bind did is the table's, not the user's
+	dst.TakeChanges() // what bind did is the table's, not the user's
 	s.changed, s.dirty = s.changed[:0], false
-	return &s.shown
 }
 
 // set adds or removes k. Under mu.
