@@ -23,6 +23,24 @@ func TestMenuItemDestructiveReachesTheWindowMenuBar(t *testing.T) {
 	}
 }
 
+// A MenuStrip's item takes the flag before and after the window shows it,
+// as it takes the other properties.
+func TestMenuStripItemDestructiveReachesTheWindowMenu(t *testing.T) {
+	del := StripItem("Delete").SetDestructive(true)
+	later := StripItem("Clear")
+	_, menu := windowStrip(t, StripItem("File", StripItem("Open"), del, later))
+	if !del.Destructive() || later.Destructive() {
+		t.Fatalf("Destructive() is %v for Delete and %v for Clear", del.Destructive(), later.Destructive())
+	}
+	if d, o := findItem(menu(), "Delete"), findItem(menu(), "Open"); d == nil || !d.Destructive || o == nil || o.Destructive {
+		t.Fatalf("Delete %+v, Open %+v: want the flag on Delete only", d, o)
+	}
+	later.SetDestructive(true)
+	if u := lastUpdate(t, "Clear"); u == nil || !u.Destructive {
+		t.Fatalf("SetDestructive(true) reached the backend as %+v", u)
+	}
+}
+
 // A context menu of a control, shown by the window, has it too.
 func TestMenuItemDestructiveReachesAContextMenu(t *testing.T) {
 	l := Label("row").ContextMenu(MenuItem{Text: "Rename"}, MenuItem{Text: "Delete 3", Destructive: true})
