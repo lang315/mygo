@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -26,6 +27,13 @@ type Column[T any] struct {
 	// Filter keeps a row for a search's keyword; nil keeps the rows whose
 	// Text holds the keyword, whatever its case.
 	Filter func(row *T, keyword string) bool
+	// Spans, when set, makes the cell draw the spans it returns, as
+	// Label.Rich does, in place of Text, which still sorts, searches,
+	// copies and names the cell for assistive technology. On a selected
+	// row the spans' text takes the selection's color, but their
+	// backgrounds stay, as badges do. A nil result draws Text. It runs
+	// under the package's lock, once for each cell drawn.
+	Spans func(*T) []ui.Span
 	// Color is the color of the text; nil, or a zero Color, keeps the
 	// theme's, as does a selected row.
 	Color func(*T) ui.Color
@@ -339,10 +347,32 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, row, col int) {
 }
 
 func cellText[T any](c *ui.Context, cl *Column[T], r *T, colored bool) {
-	e := ui.Text(c, cl.Text(r)).SingleLine()
+	var e ui.Element
+	if spans := spansOf(c, cl, r); spans != nil {
+		e = ui.RichText(c, spans...).SingleLine()
+	} else {
+		e = ui.Text(c, cl.Text(r)).SingleLine()
+	}
 	if colored {
 		if col := cl.Color(r); col != (ui.Color{}) {
 			e.TextColor(col)
 		}
 	}
+}
+
+// spansOf returns the spans a cell draws, nil for its Text. A selected
+// row's lose their colors, so the text reads on the selection.
+func spansOf[T any](c *ui.Context, cl *Column[T], r *T) []ui.Span {
+	if cl.Spans == nil {
+		return nil
+	}
+	spans := cl.Spans(r)
+	if len(spans) == 0 || !c.RowSelected() {
+		return spans
+	}
+	spans = slices.Clone(spans)
+	for i := range spans {
+		spans[i].Color = ui.Color{}
+	}
+	return spans
 }
