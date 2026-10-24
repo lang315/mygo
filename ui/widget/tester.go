@@ -62,14 +62,30 @@ func (t *Tester) fatalf(format string, args ...any) {
 	t.tb.Fatalf(format, args...)
 }
 
-// Settle runs what was posted to the event goroutine, then draws a frame.
-// Every action of a Node does. Do not call it from a handler, which runs
-// on that goroutine.
+// SetSize resizes the window, in DIPs, as ui.Tester.SetSize does.
+func (t *Tester) SetSize(w, h int) {
+	t.Tester.SetSize(w, h)
+	t.w, t.h = w, h
+}
+
+// Settle runs what was posted to the event goroutine and draws a frame,
+// again and again until a round posts no work of its own: what a handler
+// posts, or the frame, runs before it returns. After 100 rounds it fails
+// the test, for work that never ends. Every action of a Node settles. Do
+// not call it from a handler, which runs on that goroutine.
 func (t *Tester) Settle() {
-	done := make(chan struct{})
-	Post(func() { close(done) })
-	<-done
-	t.Frame()
+	t.tb.Helper()
+	for round := 0; round < 100; round++ {
+		before := posts.Load()
+		done := make(chan struct{})
+		Post(func() { close(done) })
+		<-done
+		t.Frame()
+		if posts.Load() == before+1 { // the marker alone
+			return
+		}
+	}
+	t.fatalf("Settle: the app is still posting work after 100 rounds")
 }
 
 // Query says which element to find: ByLabel and ByRole make one, and
@@ -137,7 +153,10 @@ func (t *Tester) FindAll(q Query) []*Node {
 }
 
 // Has reports whether an element matches q.
-func (t *Tester) Has(q Query) bool { q.hasNth = false; return len(t.matching(q)) > 0 }
+func (t *Tester) Has(q Query) bool {
+	n := len(t.matching(Query{role: q.role, hasRole: q.hasRole, label: q.label, hasLabel: q.hasLabel}))
+	return n > 0 && (!q.hasNth || q.nth >= 0 && q.nth < n)
+}
 
 // Find returns the one element q matches, and fails the test when none
 // does or several do, listing what it found.
@@ -190,17 +209,39 @@ type Node struct {
 
 func (n *Node) String() string { return fmt.Sprintf("%s %q", roleName(n.role), n.label) }
 
-// live returns the node as the last frame shows it.
-func (n *Node) live() ui.TestNode {
-	n.t.tb.Helper()
+// find returns the element with this node's identity in the last frame.
+func (n *Node) find() (ui.TestNode, bool) {
 	n.t.Frame()
 	for _, x := range n.t.Nodes() {
 		if x.ID == n.id {
-			return x
+			return x, true
 		}
 	}
-	n.t.fatalf("%s is no longer shown", n)
-	return ui.TestNode{}
+	return ui.TestNode{}, false
+}
+
+// live returns the node as the last frame shows it. Identities of the
+// parts of a widget are those of their places, so an element that is gone
+// can leave its identity to another: the node must still be what it was
+// found as, a role and a label, or the test fails.
+func (n *Node) live() ui.TestNode {
+	n.t.tb.Helper()
+	x, ok := n.find()
+	switch {
+	case !ok:
+		n.t.fatalf("%s is no longer shown", n)
+	case x.Role != n.role || x.Label != n.label:
+		n.t.fatalf("%s is no longer shown (now %s %q)", n, roleName(x.Role), x.Label)
+	}
+	return x
+}
+
+// refresh takes the label the element shows now, after an action of the
+// node's own changed it (Start to Stop).
+func (n *Node) refresh() {
+	if x, ok := n.find(); ok && x.Role == n.role {
+		n.label = x.Label
+	}
 }
 
 // Role returns the element's role; Label its name; Value the text of a
@@ -217,16 +258,24 @@ func (n *Node) Min() float64    { n.t.tb.Helper(); return n.live().Min }
 func (n *Node) Max() float64    { n.t.tb.Helper(); return n.live().Max }
 func (n *Node) Now() float64    { n.t.tb.Helper(); return n.live().Now }
 
-// target returns the center of the element, failing the test where a user
-// could not click it: it is disabled, or outside the window.
+// target returns the center of the visible part of the element, failing
+// the test where a user could not click it: it is disabled, hidden, or
+// outside the window. An element scrolled out of view is scrolled to first.
 func (n *Node) target(what string) (x, y float32) {
 	n.t.tb.Helper()
 	l := n.live()
 	if l.Disabled {
 		n.t.fatalf("cannot %s %s: it is disabled", what, n)
 	}
+	if (l.Bounds.W <= 0 || l.Bounds.H <= 0) && l.Scrolls {
+		n.t.ScrollIntoView(l.ID)
+		l = n.live()
+	}
+	if l.Bounds.W <= 0 || l.Bounds.H <= 0 {
+		n.t.fatalf("cannot %s %s: nothing of it is visible", what, n)
+	}
 	x, y = l.Bounds.X+l.Bounds.W/2, l.Bounds.Y+l.Bounds.H/2
-	if l.Bounds.W <= 0 || x < 0 || y < 0 || x >= float32(n.t.w) || y >= float32(n.t.h) {
+	if x < 0 || y < 0 || x >= float32(n.t.w) || y >= float32(n.t.h) {
 		n.t.fatalf("cannot %s %s: it is at (%v, %v), outside the window", what, n, x, y)
 	}
 	return x, y
@@ -239,6 +288,7 @@ func (n *Node) Click() *Node {
 	x, y := n.target("click")
 	n.t.ClickAt(x, y)
 	n.t.Settle()
+	n.refresh()
 	return n
 }
 
@@ -249,6 +299,7 @@ func (n *Node) DoubleClick() *Node {
 	n.t.ClickAt(x, y)
 	n.t.ClickAt(x, y)
 	n.t.Settle()
+	n.refresh()
 	return n
 }
 
@@ -258,26 +309,33 @@ func (n *Node) RightClick() *Node {
 	x, y := n.target("right-click")
 	n.t.RightClickAt(x, y)
 	n.t.Settle()
+	n.refresh()
 	return n
 }
 
-// Focus gives it the keyboard focus, by a click where it has none.
+// Focus gives the element the keyboard focus, as assistive technology
+// does, without pressing it: a button or a check box is not activated.
 func (n *Node) Focus() *Node {
 	n.t.tb.Helper()
-	if !n.live().Focused {
-		x, y := n.target("focus")
-		n.t.ClickAt(x, y)
+	l := n.live()
+	if l.Disabled {
+		n.t.fatalf("cannot focus %s: it is disabled", n)
+	}
+	if !l.Focused {
+		n.t.FocusNode(n.id)
 		n.t.Settle()
 	}
 	return n
 }
 
-// Type focuses the element and types s.
+// Type focuses the element and types s. In a text field, the text goes
+// where the caret is when the field takes the focus (see the docs).
 func (n *Node) Type(s string) *Node {
 	n.t.tb.Helper()
 	n.Focus()
 	n.t.Tester.Type(s)
 	n.t.Settle()
+	n.refresh()
 	return n
 }
 
@@ -287,6 +345,7 @@ func (n *Node) Key(mods ui.Modifiers, key ui.Key) *Node {
 	n.Focus()
 	n.t.Tester.Key(mods, key)
 	n.t.Settle()
+	n.refresh()
 	return n
 }
 

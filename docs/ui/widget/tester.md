@@ -45,20 +45,37 @@ no button labeled "OK" (found: button "Ok", button "Cancel")
 ## Acting and reading
 
 A `*Node` looks itself up again by identity in the last frame each time, so it
-follows what the app did to it; the test fails if it is gone. An action
-settles afterwards (it runs what was posted to the event goroutine, then draws
-a frame) and returns the node.
+follows what the app did to it. Identities of the parts of a widget are those
+of their places, so the node must also still have the role and the label it was
+found with; otherwise the test fails with `no longer shown (now button "C")`.
+After an action of its own, a node takes the label the element shows (a
+"Start" button that became "Stop"). An action settles afterwards (see below)
+and returns the node.
 
 - `Click()`, `DoubleClick()`, `RightClick()`, `Focus()`, `Type(s)`,
   `Key(mods, key)`.
 - `Label()`, `Value()`, `Role()`, `Bounds()`, `Checked()`, `Selected()`,
   `Disabled()`, `Focused()`, `Min()`, `Max()`, `Now()`.
 
-An action fails the test, saying why, where a user could not do it: the
+`Bounds()` is the part of the element the window shows: what the clipping and
+scrolling areas around it leave. A click goes to the middle of that part, and
+an element scrolled out of view is scrolled to first, as assistive technology
+does. An action fails the test, saying why, where a user could not do it: the
 element is disabled (`cannot click button "OK": it is disabled`), no longer
-shown, or outside the window.
+shown, hidden, or outside the window (whose current size counts).
 
-`tt.Settle()` does the same wait by itself, for a change made from the test;
-do not call it from a handler. The embedded `*ui.Tester` (`tt.Tester`) gives
+`Focus()` gives the keyboard focus the way assistive technology does, without
+pressing: a button or a check box is not activated by it. `Type(s)` and
+`Key(...)` focus first, so `Find(ByLabel("OK")).Key(0, ui.KeyEnter)` presses OK
+once. A text field takes the focus with the caret at the end of its text, which
+is where `Type` inserts.
+
+`tt.Settle()` runs what was posted to the event goroutine and draws a frame,
+again and again until a round posts nothing of its own, so what a handler
+posts runs too; after 100 rounds it fails the test (`still posting`). Call it
+for a change made from the test, never from a handler. The embedded `*ui.Tester` (`tt.Tester`) gives
 `Frame`, `Key`, `Texts`, `Advance` and the rest; its `Nodes()` returns a copy
 of the last frame's elements.
+
+`DialogTester` embeds this `Tester`, so its `Find` takes a `Query`; the
+`Find(string)` of `ui.Tester` (`tt.Tester.Tester.Find`) is shadowed.

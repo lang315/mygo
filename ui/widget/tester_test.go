@@ -3,6 +3,7 @@ package widget
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -181,5 +182,157 @@ func TestTesterRightClickAndDoubleClick(t *testing.T) {
 	tt.Find(ByLabel("target")).RightClick()
 	if doubles != 1 || rights != 1 {
 		t.Fatalf("double clicks %d, right clicks %d", doubles, rights)
+	}
+}
+
+func TestTesterClicksANodeScrolledOutOfViewAfterScrollingToIt(t *testing.T) {
+	var clicked []int
+	rows := make([]Control, 20)
+	for i := range rows {
+		rows[i] = Button(fmt.Sprint("row ", i)).OnClick(func() { clicked = append(clicked, i) })
+	}
+	tt := NewTester(t, ScrollPanel(VBox(0).Add(rows...)), 300, 100)
+	tt.Find(ByLabel("row 15")).Click()
+	if len(clicked) != 1 || clicked[0] != 15 {
+		t.Fatalf("clicked %v, want only row 15", clicked)
+	}
+}
+
+func TestTesterNodeFollowsItsElementNotItsPlace(t *testing.T) {
+	show := []string{"A", "B", "C"}
+	got := ""
+	c := Custom(func(c *ui.Context) ui.Element {
+		return ui.Column(c).Children(func() {
+			for _, s := range show {
+				if ui.Button(c, s).Clicked() {
+					got += s
+				}
+			}
+		})
+	})
+	tt := NewTester(t, c, 0, 0)
+	b := tt.Find(ByLabel("B"))
+	Change(func() { show = []string{"B", "C"} })
+	tt.Settle()
+	tt.Find(ByLabel("C")) // still there
+	msg := failure(func(tb *fakeTB) { tt.tb = tb; b.Click() })
+	if got != "" || msg == "" {
+		t.Fatalf("clicked %q, message %q: the node of B must not become C's", got, msg)
+	}
+}
+
+func TestTesterNodesOfEqualLabelsKeepTheirOwnIdentity(t *testing.T) {
+	var a, b int
+	tt := NewTester(t, VBox(4).Add(Button("X").OnClick(func() { a++ }), Button("X").OnClick(func() { b++ })), 0, 0)
+	second := tt.Find(ByLabel("X").Nth(1))
+	second.Click()
+	second.Click()
+	if a != 0 || b != 2 {
+		t.Fatalf("first clicked %d, second %d times", a, b)
+	}
+}
+
+func TestTesterKeysDoNotPressAFocusedButtonTwice(t *testing.T) {
+	clicks := 0
+	tt := NewTester(t, Button("OK").OnClick(func() { clicks++ }), 0, 0)
+	tt.Find(ByLabel("OK")).Key(0, ui.KeyEnter)
+	if clicks != 1 {
+		t.Fatalf("Enter on OK ran OnClick %d times", clicks)
+	}
+}
+
+func TestTesterFocusDoesNotActivateAndFocusedTellsIt(t *testing.T) {
+	box, other := CheckBox("Agree"), TextBox()
+	tt := NewTester(t, VBox(4).Add(box, other), 0, 0)
+	n := tt.Find(ByLabel("Agree"))
+	if n.Focused() {
+		t.Fatal("focused before Focus")
+	}
+	n.Focus()
+	if box.Checked() || !n.Focused() {
+		t.Fatalf("checked %v, focused %v after Focus", box.Checked(), n.Focused())
+	}
+	tt.Find(ByRole(ui.RoleTextField)).Focus()
+	if n.Focused() {
+		t.Fatal("the check box kept the focus")
+	}
+}
+
+func TestTesterTypeAppendsToTheEndOfExistingText(t *testing.T) {
+	box := TextBox().SetText("0123456789012345678901234567890123456789")
+	tt := NewTester(t, box, 0, 0)
+	tt.Find(ByRole(ui.RoleTextField)).Type("X")
+	if got := box.Text(); got != "0123456789012345678901234567890123456789X" {
+		t.Fatalf("text %q", got)
+	}
+}
+
+func TestTesterSettleRunsWhatHandlersPostInTurn(t *testing.T) {
+	done := false
+	tt := NewTester(t, Label("x"), 0, 0)
+	Post(func() { Post(func() { Post(func() { done = true }) }) })
+	tt.Settle()
+	if !done {
+		t.Fatal("Settle returned before the work a handler posted ran")
+	}
+}
+
+func TestTesterSettleGivesUpOnWorkThatNeverEnds(t *testing.T) {
+	var stop atomic.Bool
+	var again func()
+	again = func() {
+		if !stop.Load() {
+			Post(again)
+		}
+	}
+	tt := NewTester(t, Label("x"), 0, 0)
+	Post(again)
+	msg := failure(func(tb *fakeTB) { tt.tb = tb; tt.Settle() })
+	stop.Store(true)
+	<-posted()
+	if !strings.Contains(msg, "still posting") {
+		t.Fatalf("message %q", msg)
+	}
+}
+
+func TestTesterFollowsTheWindowBeingResized(t *testing.T) {
+	rows := make([]Control, 30)
+	for i := range rows {
+		rows[i] = Button(fmt.Sprint("row ", i))
+	}
+	tt := NewTester(t, VBox(0).Add(rows...), 200, 100)
+	tt.SetSize(200, 3000)
+	tt.Settle()
+	tt.Find(ByLabel("row 29")).Click() // outside the first size, inside this one
+}
+
+func TestTesterHasHonoursNthAndEmptyBounds(t *testing.T) {
+	tt := NewTester(t, Button("only"), 0, 0)
+	if tt.Has(ByRole(ui.RoleButton).Nth(5)) {
+		t.Fatal("Has(Nth(5)) is true with one button")
+	}
+	if !tt.Has(ByRole(ui.RoleButton).Nth(0)) {
+		t.Fatal("Has(Nth(0)) is false")
+	}
+}
+
+func TestTesterMessageForAGoneNodeSaysWhatIsThereNow(t *testing.T) {
+	b := Button("Start")
+	tt := NewTester(t, b, 0, 0)
+	n := tt.Find(ByLabel("Start"))
+	b.SetText("Stop")
+	tt.Settle()
+	msg := failure(func(tb *fakeTB) { tt.tb = tb; n.Value() })
+	if !strings.Contains(msg, "no longer shown") || !strings.Contains(msg, `"Stop"`) {
+		t.Fatalf("message %q", msg)
+	}
+}
+
+func TestTesterNodeAfterItsOwnActionFollowsItsNewLabel(t *testing.T) {
+	var b *ButtonWidget
+	b = Button("Start").OnClick(func() { b.SetText("Stop") })
+	tt := NewTester(t, b, 0, 0)
+	if got := tt.Find(ByLabel("Start")).Click().Label(); got != "Stop" {
+		t.Fatalf("label %q after the click", got)
 	}
 }

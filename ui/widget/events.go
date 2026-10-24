@@ -21,6 +21,7 @@ var (
 	queue   []func()
 	wake    = make(chan struct{}, 1)
 	eventID atomic.Uint64
+	posts   atomic.Uint64 // how many Posts ran so far, for Tester.Settle
 	start   sync.Once
 )
 
@@ -28,6 +29,7 @@ var (
 // without waiting. It is safe from any goroutine, the main thread too.
 func Post(fn func()) {
 	start.Do(func() { go events() })
+	posts.Add(1)
 	qmu.Lock()
 	queue = append(queue, fn)
 	qmu.Unlock()
