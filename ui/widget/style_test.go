@@ -253,27 +253,27 @@ func TestStyleTextColorFadesWhenTheBaseSetsOneToo(t *testing.T) {
 	l := Label("TTTTTTTT").Apply(NewStyle().TextColor(Fixed(ui.RGB(0, 0, 0))).
 		Hover(NewStyle().TextColor(Fixed(ui.RGB(230, 0, 0)))).Transition(d)).TextSize(XXXL)
 	tt := tester(t, VBox(0).Add(l, Label("away")))
-	reddest := func() uint8 {
-		b, img, m := find(t, tt, "TTTTTTTT"), tt.Image(), uint8(0)
-		for y := int(b.Y); y < int(b.Y+b.H); y++ {
-			for x := int(b.X); x < int(b.X+b.W); x++ {
-				if c := img.RGBAAt(x, y); c.G < 60 && c.R > m {
-					m = c.R
-				}
+	// The thresholds are relative to what this test measures at rest and at
+	// the end: how much of a glyph pixel is text depends on the platform's
+	// text coverage, so it samples one pixel the text covers fully (the
+	// darkest at rest) throughout, and the ease-out curve is most of the way
+	// at d/2, so the middle is sampled at d/4.
+	b, img := find(t, tt, "TTTTTTTT"), tt.Image()
+	px, py, dark := 0, 0, 3*256
+	for y := int(b.Y); y < int(b.Y+b.H); y++ {
+		for x := int(b.X); x < int(b.X+b.W); x++ {
+			if c := img.RGBAAt(x, y); int(c.R)+int(c.G)+int(c.B) < dark {
+				px, py, dark = x, y, int(c.R)+int(c.G)+int(c.B)
 			}
 		}
-		return m
 	}
-	// The thresholds are relative to what this test measures at rest and at
-	// the end: how much red a glyph pixel reaches depends on the platform's
-	// text coverage, and the ease-out curve is most of the way at d/2, so the
-	// middle is sampled at d/4.
-	rest := int(reddest())
+	red := func() int { return int(tt.Image().RGBAAt(px, py).R) }
+	rest := red()
 	tt.Move(centerOf(t, tt, "TTTTTTTT"))
 	tt.Advance(d / 4)
-	mid := int(reddest())
+	mid := red()
 	tt.Advance(d)
-	end := int(reddest())
+	end := red()
 	span := end - rest
 	if span <= 100 || mid <= rest+span/10 || mid >= end-span/10 {
 		t.Fatalf("text red at rest %d, a quarter into the fade %d, at the end %d: want the end more than 100 above rest and the middle at least a tenth of that from both", rest, mid, end)
