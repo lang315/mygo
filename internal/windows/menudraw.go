@@ -503,6 +503,8 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 		s := u16(l.label)
 		procDrawTextW.Call(dc, uintptr(unsafe.Pointer(s)), ^uintptr(0), uintptr(unsafe.Pointer(&text)), flags)
 		if l.accel != "" {
+			// measureItem measures it regular, not in the label's font.
+			procSelectObject.Call(dc, f.text)
 			procSetTextColor.Call(dc, uintptr(secondary))
 			s := u16(l.accel)
 			procDrawTextW.Call(dc, uintptr(unsafe.Pointer(s)), ^uintptr(0), uintptr(unsafe.Pointer(&text)), dtSingleLine|dtVCenter|dtRight|dtNoPrefix)

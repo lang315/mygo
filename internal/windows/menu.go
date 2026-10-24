@@ -354,6 +354,7 @@ func (b *Backend) UpdateMenuItem(it *platform.MenuItem) {
 		}
 		if e.look != nil {
 			e.look.label = it.Label
+			e.look.destructive = it.Destructive
 		}
 		setItemInfo(e.menu, cmd, label, it.Enabled, it.Checked, e.radio, 0, e.look != nil)
 	}
