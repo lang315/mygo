@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -99,6 +100,9 @@ func TestAppWith100kAccounts(t *testing.T) {
 	// The run ends when the test lets it: a slow machine (the race detector,
 	// 100,000 rows to draw) must not finish it before the checks below.
 	gate := make(chan struct{})
+	var open sync.Once
+	release := func() { open.Do(func() { close(gate) }) }
+	t.Cleanup(release) // a failure before the release leaves no worker waiting
 	a.work = func(action string) func(context.Context, int) result {
 		work := fakeWork(action)
 		return func(ctx context.Context, id int) result {
@@ -114,7 +118,7 @@ func TestAppWith100kAccounts(t *testing.T) {
 		t.Fatal("Start did not run")
 	}
 	tt.want("Stop")
-	close(gate)
+	release()
 	tt.wait(&a.run)
 	tt.want("Start")
 	if !tt.HasText("Backup: Thành công") && !tt.HasText("Lỗi: checkpoint") {
