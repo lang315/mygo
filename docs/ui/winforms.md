@@ -60,7 +60,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | FolderBrowserDialog | done | `SelectFolder` |
 | FontDialog | done | [FontDialog](widget/fontdialog.md) |
 | HelpProvider | dropped | `SetTooltip` and the platform's help are what apps use; no help-file formats |
-| ImageList | **pending** | `widget.ImageList`, next |
+| ImageList | done | [ImageList](widget/imagelist.md) |
 | MenuStrip | done | `Form.MenuStrip`, `SetMenuBar`: [Menus](../menus.md) |
 | MessageBox | done | `Alert`, `Confirm`, `InputString`, `InputSelect` |
 | NotifyIcon | done | `NotifyIcon` |
@@ -88,6 +88,6 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 ## Open rows
 
 The Phase 2 exit rows left are ListView ([#132](https://github.com/lang315/mygo/pull/132),
-in review), ImageList (`widget.ImageList`, in progress) and the `Label`
-mnemonic (a `Label` with `&` that focuses the next control, a small
-follow-up). Everything else is done, or dropped with the reason above.
+in review) and the `Label` mnemonic (a `Label` with `&` that focuses the next
+control, a small follow-up). Everything else is done, or dropped with the
+reason above.
