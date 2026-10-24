@@ -168,6 +168,7 @@ Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,
 language:
 
 - `Alert(parent, kind, title, text)` waits for OK.
+- `ColorDialog()`: a color picker with OK and Cancel; see [ColorDialog](widget/colordialog.md).
 - `Confirm(parent, kind, title, text) bool`: OK is true; Cancel and closing
   the dialog are false.
 - `InputString(parent, kind, title, label, value) (string, bool)`,
