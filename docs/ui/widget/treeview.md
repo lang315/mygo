@@ -67,7 +67,7 @@ or one that is already the key of a node elsewhere, is a programmer's error:
 the call panics with a message naming the key, and changes nothing.
 
 A call for a key that is not a node (`SetChildren`, `SetHasChildren`,
-`UpdateNode`, `Expand`, `Collapse`, `SetChecked`, `SetSelected`,
+`LoadFailed`, `UpdateNode`, `Expand`, `Collapse`, `SetChecked`, `SetSelected`,
 `RemoveNodes`) does nothing.
 
 `RemoveNodes` takes the nodes out of `Expanded`, `Checked` and the selection,
@@ -85,12 +85,16 @@ checked, and no query returns it.
 - `OnExpand` runs for every node the user opens, loaded or not. For a node
   whose children are not loaded it runs once, however often the user closes
   and opens it before `SetChildren`: the load is pending.
-- If the load failed, `SetHasChildren(k, true)` asks again. On a node that is
-  closed it lets the next opening ask. On a node that is open and not loaded it
-  is a request to load, and the one setter that fires an event: `OnExpand`
-  runs once with the key. `SetHasChildren(k, false)` on a node whose children
-  are not loaded makes it a leaf and closes it, firing nothing, so no Loading
-  row stays.
+- `SetHasChildren(k, true)` on a node that is open, not loaded and not pending
+  is a request to load, and the one setter that fires an event: `OnExpand` runs
+  once with the key, and the load is pending. While it is pending nothing asks
+  again, so an app that refreshes the parent with `SetChildren` and then says
+  the node has children again cannot start a second load.
+- If the load failed, `LoadFailed(k)` ends the pending load without an event and
+  leaves the node open on its Loading row. Then `SetHasChildren(k, true)` asks
+  again, or the user closes and opens the node.
+- `SetHasChildren(k, false)` on a node whose children are not loaded makes it a
+  leaf and closes it, firing nothing, so no Loading row stays.
 - `OnCollapse` runs when the user closes a node.
 - `Expand(ks...)`, `Collapse(ks...)`, `ExpandAll()` and `CollapseAll()` are
   the program's, and fire neither event. An `Expand` of a node whose children
