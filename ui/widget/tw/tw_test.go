@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/twclass"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget"
 )
@@ -130,7 +133,68 @@ func TestCachedSDoesNotAllocate(t *testing.T) {
 	}
 }
 
+// isolated gives the test a cache and a logged set of its own: the global
+// ones, left full, would keep every later test's string out of them.
+func isolated(t *testing.T) {
+	cacheMu.Lock()
+	savedCache, savedLogged := cache, logged
+	cache, logged = map[string]widget.Style{}, map[Bad]bool{}
+	cacheMu.Unlock()
+	t.Cleanup(func() {
+		cacheMu.Lock()
+		cache, logged = savedCache, savedLogged
+		cacheMu.Unlock()
+	})
+}
+
+// blockingLog is a log output whose Write waits for release, after saying it
+// is in it.
+type blockingLog struct{ in, release chan struct{} }
+
+func (w blockingLog) Write(p []byte) (int, error) {
+	w.in <- struct{}{}
+	<-w.release
+	return len(p), nil
+}
+
+// A line being logged must not hold up the S calls that hit the cache.
+func TestLoggingDoesNotBlockCachedCalls(t *testing.T) {
+	isolated(t)
+	const c = "p-2 mt-3"
+	S(c)
+	w := blockingLog{in: make(chan struct{}), release: make(chan struct{})}
+	log.SetOutput(w)
+	var once sync.Once
+	release := func() { once.Do(func() { close(w.release) }) }
+	// Registered after isolated's, so it runs first: a failing S holds the
+	// lock while it waits here, and isolated's cleanup needs the lock.
+	t.Cleanup(func() { release(); log.SetOutput(os.Stderr) })
+	logged := make(chan struct{})
+	go func() { S("p-2 not-a-class-for-the-log-test"); close(logged) }()
+	wait.For(t, "S to be writing its line", w.in)
+	hit := make(chan struct{})
+	go func() { S(c); close(hit) }()
+	wait.For(t, "a cached S while another logs", hit)
+	release()
+	wait.For(t, "the logging S to return", logged)
+}
+
+// With the cache full, a string that is not cached and has nothing to log
+// stores and logs nothing, so it must not take the write lock.
+func TestFullCacheMissTakesNoWriteLock(t *testing.T) {
+	isolated(t)
+	for i := range maxEntries {
+		S("p-2" + strings.Repeat(" ", i))
+	}
+	cacheMu.RLock() // a write lock wanted now would wait for this
+	defer cacheMu.RUnlock()
+	done := make(chan struct{})
+	go func() { S("p-3 mt-1"); close(done) }()
+	wait.For(t, "S of an uncached string with a full cache", done)
+}
+
 func TestCacheIsBounded(t *testing.T) {
+	isolated(t)
 	want := widget.NewStyle().Padding(2)
 	for i := range 5000 { // 5000 distinct strings, all p-2
 		if got := S("p-2" + strings.Repeat(" ", i)); !reflect.DeepEqual(got, want) {

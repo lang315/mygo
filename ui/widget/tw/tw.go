@@ -62,8 +62,16 @@ func S(classes string) widget.Style {
 	}
 	rules, bad := twclass.Parse(classes)
 	s = build(rules)
+	// With the cache full and nothing new to log, take no write lock: a miss
+	// would hold up the hits.
+	cacheMu.RLock()
+	store, say := len(cache) < maxEntries, unlogged(bad)
+	cacheMu.RUnlock()
+	if !store && !say {
+		return s
+	}
+	var lines []Bad
 	cacheMu.Lock()
-	defer cacheMu.Unlock()
 	if len(cache) < maxEntries {
 		cache[classes] = s
 	}
@@ -71,10 +79,24 @@ func S(classes string) widget.Style {
 		k := Bad(b)
 		if !logged[k] && len(logged) < maxEntries {
 			logged[k] = true
-			log.Printf("tw: %s %q", k.Reason, k.Class)
+			lines = append(lines, k)
 		}
 	}
+	cacheMu.Unlock()
+	for _, k := range lines { // not under the lock: a slow log must not stall the hits
+		log.Printf("tw: %s %q", k.Reason, k.Class)
+	}
 	return s
+}
+
+// unlogged reports whether bad has a class to log, as S would. Under cacheMu.
+func unlogged(bad []twclass.Bad) bool {
+	for _, b := range bad {
+		if !logged[Bad(b)] && len(logged) < maxEntries {
+			return true
+		}
+	}
+	return false
 }
 
 // Parse is S without the cache, returning an *Error naming every bad
