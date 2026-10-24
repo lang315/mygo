@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func barChart() *ChartWidget {
@@ -303,5 +305,39 @@ func TestPieOfAThousandSlicesKeepsTheLegendShortAndShowsSmallShares(t *testing.T
 	}
 	if !small {
 		t.Errorf("no small share with a decimal among %d seen", len(seen))
+	}
+}
+
+func TestPieTakesTheKeyboard(t *testing.T) {
+	got := make(chan int, 4)
+	var c *ChartWidget
+	c = Chart(PieChart).SetTitle("Users").SetLabels("Win", "Mac", "Linux").
+		SetSeries(ChartSeries{Values: []float64{60, 30, 10}}).
+		OnSelect(func() { got <- c.Selected() })
+	tt := NewTester(t, c, 400, 300)
+	plot := tt.Find(ByLabel("Users")).Focus() // fails if the plot cannot take the focus
+	plot.Key(0, ui.KeyRight)
+	if v := plot.Value(); v != "Win: 60 (60%)" {
+		t.Fatalf("after Right the plot says %q", v)
+	}
+	plot.Key(0, ui.KeyRight)
+	if v := plot.Value(); v != "Mac: 30 (30%)" {
+		t.Fatalf("after a second Right: %q", v)
+	}
+	plot.Key(0, ui.KeyEnd)
+	if v := plot.Value(); v != "Linux: 10 (10%)" {
+		t.Fatalf("after End: %q", v)
+	}
+	plot.Key(0, ui.KeyEnter)
+	if i := received(t, got); i != 2 || c.Selected() != 2 {
+		t.Fatalf("Enter selected %d (Selected %d), want 2", i, c.Selected())
+	}
+	plot.Key(0, ui.KeyHome).Key(0, ui.KeySpace)
+	if i := received(t, got); i != 0 {
+		t.Fatalf("Space selected %d, want 0", i)
+	}
+	plot.Key(0, ui.KeyEscape)
+	if v := plot.Value(); v != "" {
+		t.Fatalf("Escape left %q", v)
 	}
 }

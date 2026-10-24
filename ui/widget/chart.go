@@ -51,7 +51,9 @@ type ChartWidget struct {
 	// labels stay (replaced, never changed, so a paint may hold one).
 	xs       []float32
 	xsLabels int
-	// The drawing's scratch, touched only by paints, outside mu.
+	// The drawing's scratch, touched only by paints, outside mu: it relies on
+	// every paint of a chart being on the main thread (lock.go), as real
+	// windows paint.
 	bx, by    []float32
 	points    [][2]float32
 	ysScratch []float32
@@ -376,28 +378,63 @@ func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartS
 	}
 	chart.Plot(ctx, chart.Axes{}, func(area ui.Element) {
 		area.Label(name)
+		area.Focusable()
+		n := len(slices)
+		// The slice the keys or the pointer are on, as chart.Select does for
+		// lines and bars: the arrows, Home and End move it, Escape clears
+		// it, Enter and Space select it.
+		move := func(i int) {
+			c.hover = max(0, min(n-1, i))
+			ctx.Announce(describe(c.hover))
+		}
+		switch {
+		case n == 0:
+		case area.Shortcut(0, ui.KeyRight), area.Shortcut(0, ui.KeyDown):
+			move(c.hover + 1)
+		case area.Shortcut(0, ui.KeyLeft), area.Shortcut(0, ui.KeyUp):
+			if c.hover < 0 {
+				move(n - 1)
+			} else {
+				move(c.hover - 1)
+			}
+		case area.Shortcut(0, ui.KeyHome):
+			move(0)
+		case area.Shortcut(0, ui.KeyEnd):
+			move(n - 1)
+		case c.hover >= 0 && area.Shortcut(0, ui.KeyEscape):
+			c.hover = -1
+		case c.hover >= 0 && (area.Shortcut(0, ui.KeyEnter) || area.Shortcut(0, ui.KeySpace)):
+			picked = c.hover
+		}
+		if c.hover >= n {
+			c.hover = -1
+		}
+		on := c.hover
 		area.Draw(func(p *ui.Painter, r ui.Rect) {
 			size := min(r.W, r.H)
 			cx, cy := r.X+r.W/2, r.Y+r.H/2
 			for i, s := range slices {
 				outer := size / 2
-				if i == selected {
+				if i == selected || i == on {
 					outer -= 4
 				}
 				p.FillPath(chart.Sector(cx, cy, size/2*0.55, outer, s), chartColor(i))
 			}
 		})
 		// The slice under the pointer, named as the value of the plot.
-		if px, py, over := area.PointerPosition(); over && len(slices) > 0 {
+		if px, py, over := area.PointerPosition(); over && n > 0 {
 			b := area.Bounds()
 			size := min(b.W, b.H)
 			if i, ok := chart.SliceAt(slices, px-b.W/2, py-b.H/2, size/2*0.55, size/2); ok && total > 0 {
-				d := describe(i)
-				area.Value(d).Tooltip(d)
+				c.hover = i
 				if area.Clicked() {
 					picked = i
 				}
 			}
+		}
+		if c.hover >= 0 {
+			d := describe(c.hover)
+			area.Value(d).Tooltip(d)
 		}
 	}).Height(200).Width(200)
 	return picked

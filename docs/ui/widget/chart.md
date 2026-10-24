@@ -36,7 +36,7 @@ thousand points costs a frame what one of ten does. The point nearest the
 pointer, or the one the arrows, Home and End come to (the plot takes the
 focus), is the plot's value for assistive technology, and its tooltip-like
 description: `"2026, Jan: 10"`, or all the series at that label
-(`"Search, Q1: 5; Direct, Q1: 7"`). A pie names the slice under the pointer
+(`"Search, Q1: 5; Direct, Q1: 7"`). A pie is the same: it takes the focus, the arrows, Home and End move between slices, Escape clears, Enter and Space select the one the keys are on, and it names the slice under the pointer or the keys
 (`"Win: 60 (60%)"`, one decimal under 1%).
 
 `Selected()` and `OnSelect(fn)`: a click selects the label of that point or
