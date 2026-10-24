@@ -150,6 +150,37 @@ func (e *node) OnTextKey(fn func(k TextKey) bool) *node {
 	return e
 }
 
+// A TextEdit is an edit of the user in a text input, as OnEdit's fn sees
+// it: the runes from Start to End of Text, which may be none (an insertion)
+// or all of a selection, are replaced by Insert, which is empty for a
+// deletion. Typing, a paste, an input method's commit, Backspace, Delete and
+// cut are all edits; offsets count runes.
+type TextEdit struct {
+	Text       string
+	Start, End int
+	Insert     string
+}
+
+// OnEdit has fn rewrite each edit of the user in a text input before it is
+// made, as a mask or a format does: fn returns the text the input holds after
+// the edit and where the caret goes (in runes), and ok true; with ok false
+// the edit is made as it would be without fn. A text that equals the old one
+// refuses the edit (Changed is not reported). The result is one step of undo,
+// whatever it changed. A text set by the app is not seen. Like ReadOnly, it
+// holds for the input that comes until the next frame. fn runs on the main
+// thread as the edit comes, between frames: it must be quick and touch no
+// element.
+//
+//	ui.TextInput(c, &app.phone).OnEdit(func(e ui.TextEdit) (string, int, bool) {
+//		return app.mask.Apply(e.Text, e.Start, e.End, e.Insert)
+//	})
+func (e *node) OnEdit(fn func(e TextEdit) (text string, caret int, ok bool)) *node {
+	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+		ed.onEdit = fn
+	}
+	return e
+}
+
 // A TextKey is a key pressed in a text input, as OnTextKey's fn sees it.
 // It is valid while fn runs: Text and SetText panic after fn returns.
 type TextKey struct {

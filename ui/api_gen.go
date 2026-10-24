@@ -4719,6 +4719,29 @@ func (_handle Element) NoWrap() Element {
 	return wrapElement(_node.NoWrap())
 }
 
+// OnEdit has fn rewrite each edit of the user in a text input before it is
+// made, as a mask or a format does: fn returns the text the input holds after
+// the edit and where the caret goes (in runes), and ok true; with ok false
+// the edit is made as it would be without fn. A text that equals the old one
+// refuses the edit (Changed is not reported). The result is one step of undo,
+// whatever it changed. A text set by the app is not seen. Like ReadOnly, it
+// holds for the input that comes until the next frame. fn runs on the main
+// thread as the edit comes, between frames: it must be quick and touch no
+// element.
+//
+//	ui.TextInput(c, &app.phone).OnEdit(func(e ui.TextEdit) (string, int, bool) {
+//		return app.mask.Apply(e.Text, e.Start, e.End, e.Insert)
+//	})
+func (_handle Element) OnEdit(fn func(e TextEdit) (string, int, bool)) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.OnEdit(fn))
+}
+
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with

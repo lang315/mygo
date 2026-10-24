@@ -87,6 +87,22 @@ func (ed *editor) record(typing bool) {
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
+	if f := ed.onEdit; f != nil && !ed.filtering {
+		old := ed.buf.slice(0, ed.buf.n)
+		if text, caret, ok := f(TextEdit{Text: old, Start: start, End: end, Insert: s}); ok {
+			ed.filtering = true
+			if text != old {
+				ed.replace(0, ed.buf.n, text)
+			}
+			ed.filtering = false
+			ed.caret = max(0, min(caret, ed.buf.n))
+			ed.anchor = ed.caret
+			if n := len(ed.undo); n > 0 {
+				ed.undo[n-1].caretAfter, ed.undo[n-1].anchorAfter = ed.caret, ed.anchor
+			}
+			return
+		}
+	}
 	if ed.maxLen > 0 && s != "" {
 		// What the text may take in the room the replaced runes leave.
 		s = cutToRoom(s, max(ed.maxLen-(ed.buf.n-(end-start)), 0))
