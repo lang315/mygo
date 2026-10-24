@@ -171,6 +171,8 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	}
 	if h := e.onEnter; h != nil {
 		el.OnSubmit(func() { Post(h) })
+	} else if h := formAccept; h != nil {
+		el.OnSubmit(h) // Enter in the line clicks the form's accept button
 	}
 	return el
 }

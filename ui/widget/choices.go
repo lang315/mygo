@@ -49,8 +49,12 @@ func (s *NumericUpDownWidget) build(c *ui.Context) ui.Element {
 		Post(s.onChange)
 	}
 	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(edited(&s.value, &s.bound, s.onChange))
-	if h := s.onEnter; h != nil && e.Submitted() {
-		Post(h)
+	if e.Submitted() {
+		if h := s.onEnter; h != nil {
+			Post(h)
+		} else if h := formAccept; h != nil {
+			h() // Enter clicks the form's accept button
+		}
 	}
 	return e
 }
@@ -415,6 +419,9 @@ func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 	frame.Children(func() {
 		cb := ui.ComboboxBase(ctx, p)
 		cb.Input.Grow(1).Padding(t.Space(1.5), t.Space(3)).OnChange(c.typed())
+		if h := formAccept; h != nil {
+			cb.Input.OnSubmit(h) // Enter clicks the form's accept button
+		}
 		cb.Popup(func(panel ui.Element) {
 			panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).
 				Background(t.Background).Border(1, t.Border).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
