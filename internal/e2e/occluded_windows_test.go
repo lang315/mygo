@@ -4,51 +4,58 @@ package e2e
 
 import (
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo"
+	win "github.com/egoist/mygo/internal/windows"
 	"github.com/egoist/mygo/ui"
 )
 
-// TestMinimizedWindowDrawsNoFrames checks that a window out of sight asks for
-// no frames of what moves, and draws again once it shows (OccludableSurface).
-func TestMinimizedWindowDrawsNoFrames(t *testing.T) {
-	var frames atomic.Int32
-	w := newWindow(t, mygo.WindowOptions{Title: "Occluded", Width: 300, Height: 200, Content: ui.View(func(c *ui.Context) {
-		c.AnimationFrame()
-		ui.Box(c).Fill().Background(ui.RGB(255, 255, 255)).Draw(func(p *ui.Painter, r ui.Rect) { frames.Add(1) })
-	})})
-	eventually(t, "frames while shown", func() bool { return frames.Load() >= 10 })
-	shownCPU := cpuDuring(300 * time.Millisecond)
-	w.Minimize()
-	eventually(t, "the window minimized", w.IsMinimized)
-	// Frames already asked for end; a negative can only be checked by
-	// waiting, as the chart's idle test does.
-	time.Sleep(300 * time.Millisecond)
-	before := frames.Load()
-	hiddenCPU := cpuDuring(300 * time.Millisecond)
-	t.Logf("the process used %v of CPU in 300 ms while the window animated, %v while it was minimized", shownCPU, hiddenCPU)
-	if n := frames.Load() - before; n > 1 {
-		t.Fatalf("a minimized window drew %d frames", n)
+// TestWindowOutOfSightDrawsNoFrames checks that a window out of sight asks for
+// no frames of what moves, and draws again once it shows
+// (platform.OccludableSurface). Windows does not paint a minimized or a
+// hidden window by itself; a cloaked one (another virtual desktop) it does,
+// so that case is the one the surface must answer for.
+func TestWindowOutOfSightDrawsNoFrames(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		out, back func(w *mygo.Window)
+	}{
+		{"minimized", func(w *mygo.Window) { w.Minimize() }, func(w *mygo.Window) { w.Restore() }},
+		{"hidden", func(w *mygo.Window) { w.Hide() }, func(w *mygo.Window) { w.Show() }},
+		{"cloaked",
+			func(w *mygo.Window) {
+				var err error
+				mygo.RunOnMain(func() { err = win.TestCloak(w.NativeHandle(), true) })
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
+			func(w *mygo.Window) {
+				mygo.RunOnMain(func() { win.TestCloak(w.NativeHandle(), false) })
+			}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var frames atomic.Int32
+			w := newWindow(t, mygo.WindowOptions{Title: "Out of sight " + c.name, Width: 300, Height: 200, Content: ui.View(func(c *ui.Context) {
+				c.AnimationFrame()
+				ui.Box(c).Fill().Background(ui.RGB(255, 255, 255)).Draw(func(p *ui.Painter, r ui.Rect) { frames.Add(1) })
+			})})
+			eventually(t, "frames while shown", func() bool { return frames.Load() >= 10 })
+			c.out(w)
+			// Frames already asked for end; a negative can only be checked
+			// by waiting, as the chart's idle test does.
+			time.Sleep(500 * time.Millisecond)
+			before := frames.Load()
+			time.Sleep(time.Second)
+			n := frames.Load() - before
+			t.Logf("%s: %d frames in a second out of sight", c.name, n)
+			if n > 1 {
+				t.Fatalf("a window out of sight (%s) drew %d frames in a second", c.name, n)
+			}
+			c.back(w)
+			eventually(t, "frames after the window shows again", func() bool { return frames.Load() >= before+10 })
+		})
 	}
-	w.Restore()
-	eventually(t, "frames after the window shows again", func() bool { return frames.Load() >= before+10 })
-}
-
-// cpuDuring returns the CPU time (kernel and user) this process used in d.
-func cpuDuring(d time.Duration) time.Duration {
-	used := func() time.Duration {
-		var c, e, k, u syscall.Filetime
-		h, _ := syscall.GetCurrentProcess()
-		syscall.GetProcessTimes(h, &c, &e, &k, &u)
-		ticks := func(f syscall.Filetime) time.Duration { // 100 ns each
-			return time.Duration(uint64(f.HighDateTime)<<32|uint64(f.LowDateTime)) * 100
-		}
-		return ticks(k) + ticks(u)
-	}
-	before := used()
-	time.Sleep(d)
-	return used() - before
 }
