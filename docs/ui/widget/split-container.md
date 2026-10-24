@@ -9,7 +9,8 @@ widget, another `SplitContainer` too, can be a pane.
 files := widget.VBox(4).Add(widget.Label("files"), widget.Button("Open"))
 editor := widget.SplitContainer(widget.Label("editor"), widget.Label("console")).Stacked()
 
-split := widget.SplitContainer(files, editor).
+var split *widget.SplitContainerWidget
+split = widget.SplitContainer(files, editor).
 	SetSplitterDistance(240).
 	OnSplitterMoved(func() { config.Set("sidebar", split.SplitterDistance()) })
 ```
