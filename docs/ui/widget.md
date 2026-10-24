@@ -746,6 +746,7 @@ Input and display:
   `RangeSpin` is two, with text between and after.
 - `ProgressBar()`: `SetFraction` (negative for unknown length), `SetText`.
 - `DataGridView(key, columns...)`: rows in columns; see [DataGridView](#datagridview).
+- `ListView(key, columns...)`: rows in columns, as icons, or as a list, over the same choice and checks; see [ListView](widget/listview.md).
   `Spinner()`: `Start`, `Stop`.
 
 Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`
