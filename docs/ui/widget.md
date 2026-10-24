@@ -416,7 +416,12 @@ next shows. One slice and one index serve the lot; a table not drawn since
 hold it) until it draws again.
 A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
 (by `Text` otherwise), `Width`, `MinWidth`, `Align`, `Sortable`,
-`Filterable`, `Filter` (case-insensitive containment otherwise), `Color`
+`Filterable`, `Filter` (case-insensitive containment otherwise), `Spans` (draws
+`[]ui.Span` in the cell, as `Label.Rich` does, for a badge or a colored word:
+`Text` still sorts, searches, copies and names the row, while assistive
+technology reads the cell as its spans' text; a selected row's span text takes
+the selection's color and keeps the spans' backgrounds, which copies the spans
+of each cell drawn, so keep them with the rows if you can), `Color`
 (not on a selected row, whose text takes the selection's color) and
 `Image`. The column functions and the key run under the package's
 lock: they read the row and call no widget method.
