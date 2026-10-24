@@ -270,6 +270,23 @@ func (s Style) Radius(r ...float32) Style { sides(&s.radius, &s.radiusSet, r, tr
 // Its color is BorderColor's, or the theme's border color.
 func (s Style) BorderWidth(v ...float32) Style { sides(&s.border, &s.borderSet, v, true); return s }
 
+// RadiusTopLeft and the other corners round one corner, in theme units;
+// the corners not set keep the control's.
+func (s Style) RadiusTopLeft(r float32) Style  { side(&s.radius, &s.radiusSet, 0, r, true); return s }
+func (s Style) RadiusTopRight(r float32) Style { side(&s.radius, &s.radiusSet, 1, r, true); return s }
+func (s Style) RadiusBottomRight(r float32) Style {
+	side(&s.radius, &s.radiusSet, 2, r, true)
+	return s
+}
+func (s Style) RadiusBottomLeft(r float32) Style { side(&s.radius, &s.radiusSet, 3, r, true); return s }
+
+// BorderTop and the other sides set one side's border width in DIPs; the
+// sides not set keep the control's.
+func (s Style) BorderTop(w float32) Style    { side(&s.border, &s.borderSet, 0, w, true); return s }
+func (s Style) BorderRight(w float32) Style  { side(&s.border, &s.borderSet, 1, w, true); return s }
+func (s Style) BorderBottom(w float32) Style { side(&s.border, &s.borderSet, 2, w, true); return s }
+func (s Style) BorderLeft(w float32) Style   { side(&s.border, &s.borderSet, 3, w, true); return s }
+
 func (s Style) BorderStyle(b ui.BorderStyle) Style {
 	s.borderStyle, s.set = b, s.set|pBorderStyle
 	return s

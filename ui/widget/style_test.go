@@ -332,3 +332,63 @@ func TestStyleBadValuesDoNotPanic(t *testing.T) {
 		t.Fatalf("not shown: %q", tt.Texts())
 	}
 }
+
+// box is a Custom control: a column padded and outlined as its builder
+// sets it, with the text "in" at its content's top left.
+func box(build func(e ui.Element) ui.Element) *CustomWidget {
+	return Custom(func(c *ui.Context) ui.Element {
+		return build(ui.Column(c).Children(func() { ui.Text(c, "in") }))
+	})
+}
+
+func TestOneSideKeepsTheOthers(t *testing.T) {
+	styled := box(func(e ui.Element) ui.Element { return e.Padding(8) }).Apply(NewStyle().PaddingTop(1))
+	want := box(func(e ui.Element) ui.Element { return e.Padding(4, 8, 8, 8) })
+	got, ref := find(t, tester(t, VBox(0).Add(styled)), "in"), find(t, tester(t, VBox(0).Add(want)), "in")
+	if got != ref {
+		t.Fatalf("PaddingTop(1) put the text at %v, want %v: the other sides must keep 8", got, ref)
+	}
+}
+
+func TestOneSideKeepsLogicalPadding(t *testing.T) {
+	styled := box(func(e ui.Element) ui.Element { return e.PaddingStart(12) }).Apply(NewStyle().PaddingTop(1))
+	want := box(func(e ui.Element) ui.Element { return e.PaddingStart(12).PaddingY(4) })
+	if got, ref := find(t, tester(t, VBox(0).Add(styled)), "in"), find(t, tester(t, VBox(0).Add(want)), "in"); got.X != ref.X {
+		t.Fatalf("PaddingTop(1) moved the text to x %v from %v", got.X, ref.X)
+	}
+}
+
+func TestOneCornerKeepsTheOthers(t *testing.T) {
+	red := ui.RGB(230, 0, 0)
+	w := box(func(e ui.Element) ui.Element { return e.Width(60).Height(60).Background(red).Radius(16) }).
+		Apply(NewStyle().RadiusTopLeft(0))
+	tt := tester(t, VBox(0).Add(w))
+	in := find(t, tt, "in") // the column's top left: no padding
+	tl := tt.Image().RGBAAt(int(in.X)+1, int(in.Y)+1)
+	tr := tt.Image().RGBAAt(int(in.X)+58, int(in.Y)+1)
+	if !near(tl, red) {
+		t.Fatalf("top-left corner %v, want square and red", tl)
+	}
+	if near(tr, red) {
+		t.Fatalf("top-right corner %v is red: it must keep its 16 DIP radius", tr)
+	}
+}
+
+func TestOneBorderSideKeepsTheOthers(t *testing.T) {
+	black := ui.RGB(0, 0, 0)
+	w := box(func(e ui.Element) ui.Element {
+		return e.Width(60).Height(60).Background(ui.RGB(255, 255, 255)).BorderWidth(3).BorderColor(black)
+	}).Apply(NewStyle().BorderLeft(0).BorderColor(Fixed(black)))
+	tt := tester(t, VBox(0).Add(w))
+	in := find(t, tt, "in")
+	// The box is at the window's left edge, x 0: its border, where it has
+	// one, covers x 0 to 2, and the text sits inside it.
+	left := tt.Image().RGBAAt(1, int(in.Y)+20)
+	right := tt.Image().RGBAAt(int(in.X)+58, int(in.Y)+20)
+	if near(left, black) {
+		t.Fatalf("left edge %v is still black after BorderLeft(0)", left)
+	}
+	if !near(right, black) {
+		t.Fatalf("right edge %v lost its 3 DIP border", right)
+	}
+}

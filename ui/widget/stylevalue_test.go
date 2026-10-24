@@ -117,3 +117,13 @@ func TestRoleResolvesFromTheTheme(t *testing.T) {
 		t.Fatal("a fixed color changed with the theme")
 	}
 }
+
+func TestCornerAndSideSetters(t *testing.T) {
+	s := NewStyle().RadiusTopLeft(2).RadiusBottomRight(-1).BorderLeft(3).BorderTop(-2)
+	if s.radiusSet != 0b0101 || s.radius != [4]float32{2, 0, 0, 0} {
+		t.Fatalf("radius %v mask %04b", s.radius, s.radiusSet)
+	}
+	if s.borderSet != 0b1001 || s.border != [4]float32{0, 0, 0, 3} {
+		t.Fatalf("border %v mask %04b", s.border, s.borderSet)
+	}
+}

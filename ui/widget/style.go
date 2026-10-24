@@ -61,28 +61,40 @@ func (l *layout) apply(e ui.Element) {
 	}
 }
 
-// apply sets on e what p sets: the four-sided properties all four sides
-// at once (ui sets them so), those p does not set 0. key is the control's,
+// apply sets on e what p sets: the four-sided properties ui sets all four
+// sides at once, so it overlays the sides p sets on what e's builder set,
+// and the sides p does not set keep the control's. key is the control's,
 // for its text color's animation. Under mu.
 func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 	t := c.Theme()
-	units := func(v [4]float32) (float32, float32, float32, float32) {
-		return t.Space(v[0]), t.Space(v[1]), t.Space(v[2]), t.Space(v[3])
+	// over returns cur, the element's sides as its builder set them, with
+	// the sides mask sets taken from v: in theme units when units.
+	over := func(cur, v [4]float32, mask uint8, units bool) [4]float32 {
+		for i := range 4 {
+			if mask&(1<<i) != 0 {
+				cur[i] = v[i]
+				if units {
+					cur[i] = t.Space(v[i])
+				}
+			}
+		}
+		return cur
 	}
 	if p.padSet != 0 {
-		a, b, cc, d := units(p.pad)
-		e.Padding(a, b, cc, d)
+		v := over(e.Paddings(), p.pad, p.padSet, true)
+		e.Padding(v[0], v[1], v[2], v[3])
 	}
 	if p.marginSet != 0 {
-		a, b, cc, d := units(p.margin)
-		e.Margin(a, b, cc, d)
+		v := over(e.Margins(), p.margin, p.marginSet, true)
+		e.Margin(v[0], v[1], v[2], v[3])
 	}
 	if p.radiusSet != 0 {
-		a, b, cc, d := units(p.radius)
-		e.Radius(a, b, cc, d)
+		v := over(e.Radii(), p.radius, p.radiusSet, true)
+		e.Radius(v[0], v[1], v[2], v[3])
 	}
 	if p.borderSet != 0 {
-		e.BorderWidth(p.border[0], p.border[1], p.border[2], p.border[3])
+		v := over(e.BorderWidths(), p.border, p.borderSet, false)
+		e.BorderWidth(v[0], v[1], v[2], v[3])
 		col := t.Border
 		if p.set&pBorderColor != 0 {
 			col = p.borderColor.resolve(t)
