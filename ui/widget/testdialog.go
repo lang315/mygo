@@ -2,16 +2,13 @@ package widget
 
 import "github.com/egoist/mygo/ui"
 
-// DialogTester drives a Dialog without a window, for tests: a ui.Tester
+// DialogTester drives a Dialog without a window, for tests: a Tester
 // over the form's view, with the dialog's Run, Close and Escape working
 // on it. Make one with TestDialog.
 type DialogTester struct {
-	*ui.Tester
+	*Tester
 	d *Dialog
 }
-
-// Cleaner is what TestDialog needs of a test: *testing.T and *testing.B.
-type Cleaner interface{ Cleanup(func()) }
 
 // TestDialog returns a tester of d's view, at the dialog's size (the
 // form's header, tool strip, content and status strip), and has d.Run,
@@ -27,23 +24,12 @@ type Cleaner interface{ Cleanup(func()) }
 //	dt.Type("Ada")
 //	dt.Click("OK")
 //	got := <-result
-func TestDialog(t Cleaner, d *Dialog) *DialogTester {
+func TestDialog(t TB, d *Dialog) *DialogTester {
 	mu.Lock()
 	d.headless = make(chan struct{})
-	w, h := d.width, d.height
 	mu.Unlock()
-	// A size of 0 is the dialog's natural one, which a window finds out as
-	// it shows: the tester gives it room.
-	if w <= 0 {
-		w = 600
-	}
-	if h <= 0 {
-		h = 800
-	}
 	t.Cleanup(d.Close)
-	tt := ui.NewTester(d.view, w, h)
-	tt.Frame()
-	return &DialogTester{Tester: tt, d: d}
+	return &DialogTester{Tester: TestForm(t, d.Form), d: d}
 }
 
 // Closed reports whether the dialog was closed, by Close or Escape.

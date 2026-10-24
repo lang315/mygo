@@ -140,7 +140,8 @@ dialog takes the outer one's `Form` as its parent; closing a window
 closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
-To test a dialog without a window, `TestDialog(t, d)` returns a `ui.Tester`
+To test a dialog without a window, `TestDialog(t, d)` returns a
+[`widget.Tester`](widget/tester.md)
 over its form's view (a `DialogTester`: header, tool strip, content and
 status strip), and `d.Run` then runs `OnBeforeRun` and blocks until the
 dialog closes, as it does with a window, without showing one: call `Run` on

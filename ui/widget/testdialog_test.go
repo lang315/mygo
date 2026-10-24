@@ -34,13 +34,8 @@ func TestTestDialogAcceptReturnsTheValue(t *testing.T) {
 	dt := TestDialog(t, d.Dialog)
 	got := make(chan string, 1)
 	go func() { got <- d.run() }()
-	focus(dt.Tester, 1)
-	dt.Type("Ada")
-	dt.Frame()
-	if err := dt.Click("OK"); err != nil {
-		t.Fatal(err)
-	}
-	flushEvents(t)
+	dt.Find(ByRole(ui.RoleTextField)).Type("Ada")
+	dt.Find(ByLabel("OK")).Click()
 	if v := <-got; v != "Ada" {
 		t.Fatalf("Run returned %q", v)
 	}
