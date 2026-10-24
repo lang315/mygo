@@ -30,7 +30,9 @@ is.
 - **Windows:** an Alt+key that a shortcut or a mnemonic answers is taken, so the
   system does not enter its menu mode or beep. Menu items already take `&` as
   the platform's access keys on Windows (`MenuItem` text goes to the native
-  menu); the menu bar is not yet consulted before control mnemonics.
+  menu), and the menu bar's access keys (`SetMenuBar`, `MenuStrip`) come before
+  the controls': a button `&File` does not answer Alt+F when the bar has a
+  `&File` menu.
 - **Not yet:** menu items on Linux, and an access-key property for assistive
   technology.
 - Alt+letter does not reach the form while a text box has the keyboard focus on
