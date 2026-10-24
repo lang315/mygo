@@ -38,11 +38,11 @@ type Column[T any] struct {
 // its own copy of the rows. A table shows in one window at a time.
 type DataGridViewWidget[T any, K comparable] struct {
 	common[DataGridViewWidget[T, K]]
-	key     func(*T) K
+	src     *RowSource[T, K]
+	key     func(*T) K // src's
+	link    *tableLink // what src knows of the table
 	cols    []Column[T]
 	columns []ui.TableColumn // cols, after the index column if any
-	rows    []T
-	index   map[K]int // a key's row in rows
 	view    *ui.TableView[T]
 	filter  func(*T) bool // the view's, nil for none
 	// frame holds the rows of the frame ui shows, and order their order
@@ -82,6 +82,13 @@ type DataGridViewWidget[T any, K comparable] struct {
 // DataGridView makes a table of cols whose rows key tells apart. key runs under
 // the package's lock, as the columns' functions do.
 func DataGridView[T any, K comparable](key func(*T) K, cols ...Column[T]) *DataGridViewWidget[T, K] {
+	return DataGridViewOf(NewRowSource(key), cols...)
+}
+
+// DataGridViewOf makes a table of cols that shows the rows of src, which
+// other tables may show too: the table has its own sort, search, selection
+// and checks. Its SetRows, AddRows, UpdateRow and DeleteRows change src.
+func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]) *DataGridViewWidget[T, K] {
 	compare := map[string]func(a, b *T) int{}
 	for _, cl := range cols {
 		switch {
@@ -93,11 +100,15 @@ func DataGridView[T any, K comparable](key func(*T) K, cols ...Column[T]) *DataG
 			compare[cl.Title] = func(a, b *T) int { return strings.Compare(text(a), text(b)) }
 		}
 	}
-	t := &DataGridViewWidget[T, K]{key: key, cols: cols, index: map[K]int{}, view: ui.NewTableView(compare), cursor: -1, text: englishPanel}
+	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: cols, view: ui.NewTableView(compare), cursor: -1, text: englishPanel}
 	t.columns = t.uiColumns()
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.Copy = t.copyRows
 	t.init(t)
+	t.link.id = t.id
+	mu.Lock()
+	src.attach(t.link)
+	mu.Unlock()
 	return t
 }
 
@@ -122,13 +133,10 @@ func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
 }
 
 // SetRows shows a copy of rows instead of the rows shown. Of rows with
-// the same key, the last stays, where the first was.
+// the same key, the last stays, where the first was. Like AddRows,
+// UpdateRow and DeleteRows, it changes the table's source.
 func (t *DataGridViewWidget[T, K]) SetRows(rows []T) *DataGridViewWidget[T, K] {
-	t.change(func() {
-		t.rows, t.index = make([]T, 0, len(rows)), make(map[K]int, len(rows))
-		t.add(rows)
-		t.removed()
-	})
+	t.src.SetRows(rows)
 	return t
 }
 
@@ -140,89 +148,66 @@ func (t *DataGridViewWidget[T, K]) AddRow(row T) *DataGridViewWidget[T, K] {
 // AddRows shows rows after the others, each instead of the row of its
 // key if one shows.
 func (t *DataGridViewWidget[T, K]) AddRows(rows []T) *DataGridViewWidget[T, K] {
-	t.change(func() { t.add(rows) })
+	t.src.AddRows(rows)
 	return t
-}
-
-// add appends rows, replacing those of keys shown. Under mu.
-func (t *DataGridViewWidget[T, K]) add(rows []T) {
-	for i := range rows {
-		k := t.key(&rows[i])
-		if j, ok := t.index[k]; ok {
-			t.rows[j] = rows[i]
-			t.view.Changed(j)
-			continue
-		}
-		t.index[k] = len(t.rows)
-		t.rows = append(t.rows, rows[i])
-	}
 }
 
 // UpdateRow runs fn on the row of key k, if one shows, to change it in
 // place. fn runs under the package's lock: it changes the row but not its
 // key, and calls no widget method.
 func (t *DataGridViewWidget[T, K]) UpdateRow(k K, fn func(*T)) *DataGridViewWidget[T, K] {
-	t.change(func() {
-		if i, ok := t.index[k]; ok {
-			fn(&t.rows[i])
-			t.view.Changed(i)
-		}
-	})
+	t.src.UpdateRow(k, fn)
 	return t
 }
 
 // DeleteRows removes the rows of keys ks.
 func (t *DataGridViewWidget[T, K]) DeleteRows(ks ...K) *DataGridViewWidget[T, K] {
-	t.change(func() {
-		first := len(t.rows) // the first row removed
-		for _, k := range ks {
-			if i, ok := t.index[k]; ok {
-				first = min(first, i)
-				delete(t.index, k)
-			}
-		}
-		if first == len(t.rows) {
-			return
-		}
-		rows := append(make([]T, 0, len(t.rows)), t.rows[:first]...)
-		for i := first; i < len(t.rows); i++ {
-			k := t.key(&t.rows[i])
-			if _, ok := t.index[k]; ok {
-				t.index[k] = len(rows)
-				rows = append(rows, t.rows[i])
-			}
-		}
-		t.rows = rows
-		t.removed()
-	})
+	t.src.DeleteRows(ks...)
 	return t
 }
 
 // Clear removes every row.
 func (t *DataGridViewWidget[T, K]) Clear() *DataGridViewWidget[T, K] { return t.SetRows(nil) }
 
-// removed has the view sort the rows again, after rows went, and drops
-// their keys from the selection and the checks. Under mu.
-func (t *DataGridViewWidget[T, K]) removed() {
-	t.view.Reset()
-	t.gone = true
-	t.chosen.keep(t.index)
-	t.checked.keep(t.index)
+// catchUp applies the changes the source made since the table last read
+// them: rows changed in place go to the view; rows removed or replaced
+// make it sort again and drop their keys from the selection and the
+// checks. A table that fell behind the log, or by more than it holds,
+// starts over. Under mu.
+func (t *DataGridViewWidget[T, K]) catchUp() {
+	l, s := t.link, t.src
+	if l.seq == s.seq {
+		return
+	}
+	changes, ok := s.since(l.seq)
+	removed := !ok || s.removedSeq > l.seq
+	if !ok || len(changes) > s.bound() {
+		t.view.Reset()
+	} else {
+		for _, c := range changes {
+			if c.row >= 0 {
+				t.view.Changed(c.row)
+			}
+		}
+	}
+	l.seq = s.seq
+	if removed {
+		t.view.Reset()
+		t.gone = true
+		t.chosen.keep(s.index)
+		t.checked.keep(s.index)
+	}
 }
+
+// went reports whether rows went from the table's source since the frame
+// ui shows. Under mu.
+func (t *DataGridViewWidget[T, K]) went() bool { return t.gone || t.src.removedSeq > t.link.seq }
 
 // Row returns the row of key k.
-func (t *DataGridViewWidget[T, K]) Row(k K) (T, bool) {
-	mu.Lock()
-	defer mu.Unlock()
-	if i, ok := t.index[k]; ok {
-		return t.rows[i], true
-	}
-	var zero T
-	return zero, false
-}
+func (t *DataGridViewWidget[T, K]) Row(k K) (T, bool) { return t.src.Row(k) }
 
 // Len returns how many rows the table has, the hidden by a search too.
-func (t *DataGridViewWidget[T, K]) Len() int { mu.Lock(); defer mu.Unlock(); return len(t.rows) }
+func (t *DataGridViewWidget[T, K]) Len() int { return t.src.Len() }
 
 // ClearSort shows the rows in the order added, as before a header click.
 func (t *DataGridViewWidget[T, K]) ClearSort() *DataGridViewWidget[T, K] {
@@ -233,6 +218,7 @@ func (t *DataGridViewWidget[T, K]) ClearSort() *DataGridViewWidget[T, K] {
 // sync brings the view up to date with the rows, keeping first, outside
 // a build, the order of the frame ui shows, once a frame. Under mu.
 func (t *DataGridViewWidget[T, K]) sync() {
+	t.catchUp()
 	if !viewing.Load() && !t.kept {
 		t.order = t.order[:0]
 		for i := range t.view.Len() {
@@ -240,7 +226,7 @@ func (t *DataGridViewWidget[T, K]) sync() {
 		}
 		t.kept = true
 	}
-	t.view.Sync(t.rows, t.sort.value)
+	t.view.Sync(t.src.rows, t.sort.value)
 }
 
 // rowAt returns the row at row in the frame ui shows, whatever goroutines
@@ -310,7 +296,7 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Checked, s.CheckedCount, s.CheckRows = t.checked.bind(), t.checkedCount, t.checkRows
 	}
 	t.sync()
-	t.frame, t.kept, t.gone = t.rows, false, false
+	t.frame, t.kept, t.gone = t.src.rows, false, false
 	s.Version = t.view.Version()
 	t.handOver()
 	e := ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
