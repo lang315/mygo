@@ -320,7 +320,11 @@ func containers() widget.Control {
 		Add("frame", "GroupBox and grid", widget.VBox(8).Add(widget.GroupBox("Frame").Add(grid))).
 		Add("card", "Card", widget.Card().SetTitle(widget.Label("Card title").Bold()).SetBody(widget.Label("Card body"))).
 		Add("flow", "FlowPanel", flow).
-		Add("scroll", "ScrollPanel", widget.ScrollPanel(longList()))
+		Add("scroll", "ScrollPanel", widget.ScrollPanel(longList())).
+		Add("split", "SplitContainer", widget.SplitContainer(
+			widget.VBox(4).Add(widget.Label("Files"), widget.Button("Open")),
+			widget.SplitContainer(widget.Label("Editor"), widget.Label("Console")).Stacked(),
+		).SetSplitterDistance(180))
 }
 
 func longList() widget.Control {

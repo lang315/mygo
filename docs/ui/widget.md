@@ -677,6 +677,7 @@ Layout:
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps.
 - `ScrollPanel(w)`: scrolls a widget larger than its room.
+- `SplitContainer(first, second)`: two panes with a divider; see [SplitContainer](widget/split-container.md).
 - `Separator()`: a line.
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
