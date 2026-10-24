@@ -59,19 +59,24 @@ func (n *NotifyIcon) show() error {
 	if err != nil {
 		return err
 	}
-	t.OnClick(func() { n.fire(func() func() { return n.onClick }) })
-	t.OnRightClick(func() { n.fire(func() func() { return n.onRight }) })
+	t.OnClick(func() { n.fire(t, func() func() { return n.onClick }) })
+	t.OnRightClick(func() { n.fire(t, func() func() { return n.onRight }) })
 	n.smu.Lock()
 	n.tray = t
 	n.smu.Unlock()
 	return nil
 }
 
-// fire posts the handler pick returns, if there is one. mygo calls it on the
-// main thread: it takes only smu, which no one holds while waiting for it.
-func (n *NotifyIcon) fire(pick func() func()) {
+// fire posts the handler pick returns, if there is one, for a click of tray
+// t: not one of a tray that was hidden or disposed since the click was
+// queued. mygo calls it on the main thread: it takes only smu, which no one
+// holds while waiting for it.
+func (n *NotifyIcon) fire(t *mygo.Tray, pick func() func()) {
 	n.smu.Lock()
-	h := pick()
+	var h func()
+	if !n.disposed && n.tray == t {
+		h = pick()
+	}
 	n.smu.Unlock()
 	if h != nil {
 		Post(h)
@@ -159,14 +164,16 @@ func (n *NotifyIcon) Visible() bool {
 
 // SetVisible shows or hides the icon. A hidden icon is removed from the bar,
 // and shown again with its image, tooltip, menu and handlers. A disposed
-// icon stays gone.
-func (n *NotifyIcon) SetVisible(v bool) *NotifyIcon {
+// icon stays gone. Showing it returns the error if the system cannot make
+// the icon, as of an image it cannot decode that was set while it was
+// hidden; the icon is then not visible.
+func (n *NotifyIcon) SetVisible(v bool) error {
 	n.omu.Lock()
 	defer n.omu.Unlock()
 	n.smu.Lock()
 	if n.disposed || n.visible == v {
 		n.smu.Unlock()
-		return n
+		return nil
 	}
 	n.visible = v
 	t := n.tray
@@ -176,12 +183,15 @@ func (n *NotifyIcon) SetVisible(v bool) *NotifyIcon {
 	n.smu.Unlock()
 	if !v {
 		t.Destroy()
-	} else if err := n.show(); err != nil {
+		return nil
+	}
+	if err := n.show(); err != nil {
 		n.smu.Lock()
 		n.visible = false // no icon could be made: say so
 		n.smu.Unlock()
+		return err
 	}
-	return n
+	return nil
 }
 
 // Dispose removes the icon for good; the icon's methods do nothing after.

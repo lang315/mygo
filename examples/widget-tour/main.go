@@ -91,7 +91,11 @@ func shell() widget.Control {
 			n.OnClick(func() { state.SetText("The icon was clicked") })
 			state.SetText("The tray icon is shown; it has a menu, so a click opens it")
 		case icon != nil:
-			icon.SetVisible(toggle.Checked())
+			if err := icon.SetVisible(toggle.Checked()); err != nil {
+				toggle.SetChecked(false)
+				state.SetText("Could not show the icon: " + err.Error())
+				return
+			}
 			state.SetText(map[bool]string{true: "Shown again", false: "Hidden"}[toggle.Checked()])
 		}
 	})

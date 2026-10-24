@@ -1181,7 +1181,12 @@ func (t *Tray) SetID(id string) {
 	t.b.mu.Unlock()
 }
 
+// SetImage fails for an image that starts with "corrupt", as a backend does
+// for a PNG it cannot decode.
 func (t *Tray) SetImage(png []byte, template bool) error {
+	if bytes.HasPrefix(png, []byte("corrupt")) {
+		return errors.New("fake: cannot decode the PNG")
+	}
 	t.b.mu.Lock()
 	t.image, t.template = slices.Clone(png), template
 	t.b.mu.Unlock()

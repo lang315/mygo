@@ -285,7 +285,10 @@ status.SetText("Saved") // and the window redraws
 - **`NotifyIcon`** is an icon in the menu bar or the notification area:
   `NewNotifyIcon()` makes one, `SetIcon(png, template)`, `SetText` (the
   tooltip), `SetContextMenu(items...)`, `OnClick`, `OnRightClick`,
-  `SetVisible` (a hidden icon comes back with all it had) and `Dispose`.
+  `SetVisible` (a hidden icon comes back with all it had; it returns the
+  error if the system cannot make the icon, as of an image it cannot decode
+  that was set meanwhile) and `Dispose`. A click queued before the icon was
+  hidden or disposed runs nothing.
   Gaps are the platforms': `OnClick` runs only when the icon has no context
   menu, since a click opens the menu; there is no `OnDoubleClick`, as no
   platform's tray tells mygo of one; on Linux the panel places the icon.

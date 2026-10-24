@@ -78,21 +78,79 @@ func TestNotifyIconVisibleHidesAndShowsTheTrayWithItsState(t *testing.T) {
 	n, tray := newIcon(t)
 	n.SetIcon([]byte("icon"), false)
 	n.SetText("tip").OnClick(func() { clicked <- struct{}{} })
+	n.SetContextMenu(MenuItem{Text: "Show"})
 	if !n.Visible() {
 		t.Fatal("a new icon is not visible")
 	}
-	n.SetVisible(false)
-	if n.Visible() || len(fb.Trays()) != 0 && slices.Contains(fb.Trays(), tray) {
+	if err := n.SetVisible(false); err != nil {
+		t.Fatal(err)
+	}
+	if n.Visible() || slices.Contains(fb.Trays(), tray) {
 		t.Fatalf("still shown: visible %v", n.Visible())
 	}
-	n.SetVisible(true)
+	if err := n.SetVisible(true); err != nil {
+		t.Fatal(err)
+	}
 	trays := fb.Trays()
 	back := trays[len(trays)-1]
 	if got, _ := back.Image(); string(got) != "icon" || back.ToolTip() != "tip" {
 		t.Fatalf("the icon came back with image %q tooltip %q", got, back.ToolTip())
 	}
+	if findItem(back.Menu(), "Show") == nil {
+		t.Fatalf("the icon came back without its context menu: %+v", back.Menu())
+	}
 	mygo.RunOnMain(back.Click)
 	received(t, clicked)
+}
+
+// A click that reached the icon before it was hidden or disposed, and is
+// handled after, runs nothing.
+func TestNotifyIconIgnoresClicksOfATrayThatIsGone(t *testing.T) {
+	ran := make(chan string, 4)
+	n, tray := newIcon(t)
+	n.OnClick(func() { ran <- "click" }).OnRightClick(func() { ran <- "right" })
+	if err := n.SetVisible(false); err != nil {
+		t.Fatal(err)
+	}
+	mygo.RunOnMain(tray.Click) // the old tray, as a queued click delivers
+	mygo.RunOnMain(tray.RightClick)
+	n.Dispose()
+	Update(func() {})
+	if len(ran) != 0 {
+		t.Fatalf("the handlers ran %d times for a tray that was hidden", len(ran))
+	}
+	n2, tray2 := newIcon(t)
+	n2.OnClick(func() { ran <- "again" })
+	n2.Dispose()
+	mygo.RunOnMain(tray2.Click)
+	Update(func() {})
+	if len(ran) != 0 {
+		t.Fatalf("a disposed icon's click ran its handler (%d)", len(ran))
+	}
+}
+
+// An image the system cannot decode, set while the icon is hidden, is
+// reported when the icon is shown.
+func TestNotifyIconSetVisibleReturnsTheErrorOfAnImageItCannotShow(t *testing.T) {
+	n, _ := newIcon(t)
+	if err := n.SetVisible(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.SetIcon([]byte("corrupt"), false); err != nil {
+		t.Fatalf("a hidden icon has no tray to refuse the image: %v", err)
+	}
+	if err := n.SetVisible(true); err == nil {
+		t.Fatal("SetVisible(true) hid the error of the image")
+	}
+	if n.Visible() {
+		t.Fatal("an icon that could not be shown says it is visible")
+	}
+	if err := n.SetIcon([]byte("icon"), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.SetVisible(true); err != nil || !n.Visible() {
+		t.Fatalf("with a good image it shows: %v, visible %v", err, n.Visible())
+	}
 }
 
 func TestNotifyIconDisposeRemovesTheTrayForGood(t *testing.T) {
