@@ -697,8 +697,9 @@ func (b *docBase) persist() {
 	b.mu.Unlock()
 }
 
-// docWork tracks the writes of recovery copies that nothing waits for,
-// for tests.
+// docWork tracks the writes of recovery copies that nothing waits for, and
+// the watches of documents' files, for tests: one that starts late would
+// watch in the next test.
 var docWork sync.WaitGroup
 
 // untitledName returns the name of untitled document n, in the language
