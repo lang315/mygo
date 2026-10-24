@@ -1459,6 +1459,7 @@ func (r *Renderer) present(sync uintptr) error {
 	} else {
 		hr = call(r.swapChain, scPresent, sync, 0)
 	}
+	device.Report(r.device) // MYGO_D3D_DEBUG=1: what the debug layer said, and why a device was removed
 	if failed(hr) {
 		return fmt.Errorf("d3d11: present failed: %#x", uint32(hr))
 	}

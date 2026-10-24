@@ -3,6 +3,9 @@
 package device
 
 import (
+	"bytes"
+	"log"
+	"strings"
 	"syscall"
 	"testing"
 	"unsafe"
@@ -37,4 +40,35 @@ func TestNew(t *testing.T) {
 	}
 	call(dxgi, 2)
 	t.Logf("software (WARP): %v", software)
+}
+
+// TestNewWithDebug checks that MYGO_D3D_DEBUG=1 still gives a device where the
+// debug layer is not installed (it says so once), and where it is, that
+// Report logs what the layer says of a call that fails.
+func TestNewWithDebug(t *testing.T) {
+	t.Setenv("MYGO_D3D_DEBUG", "1")
+	var out bytes.Buffer
+	log.SetOutput(&out)
+	defer log.SetOutput(log.Writer())
+	device, context, _, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer call(device, 2)
+	defer call(context, 2)
+	// A buffer of no bytes: E_INVALIDARG, and an error message of the layer.
+	var desc [6]uint32
+	var buf uintptr
+	if hr := call(device, 3, uintptr(unsafe.Pointer(&desc[0])), 0, uintptr(unsafe.Pointer(&buf))); int32(uint32(hr)) >= 0 {
+		t.Fatalf("a buffer of no bytes was made: %#x", uint32(hr))
+	}
+	Report(device)
+	got := out.String()
+	t.Logf("log:\n%s", got)
+	if strings.Contains(got, "not installed") {
+		return // no Graphics Tools on this machine
+	}
+	if !strings.Contains(got, "d3d11 debug: error") {
+		t.Errorf("Report said nothing of the failed call: %q", got)
+	}
 }
