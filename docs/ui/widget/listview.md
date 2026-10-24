@@ -41,8 +41,8 @@ called `SetView`. WinForms' default is large icons: call `SetView` for that.
 `ViewList` is one column; WinForms' `List` flows its items into several columns
 top to bottom, which this does not.
 
-The text of a row in the icon views and the list is the text of the first
-column. `SetImage(fn)` gives the icon of a row (nil for none); without it the
+The rows chosen show in the accent in every view, as a table's do. The text of a
+row in the icon views and the list is the text of the first column. `SetImage(fn)` gives the icon of a row (nil for none); without it the
 first column's `Image` is used. `SetView` fires no event.
 
 ## Details
@@ -52,7 +52,11 @@ view, since the other views show its rows: its sort and its `Search` decide the
 order and which rows show, the icons follow them, and a change keeps the choice
 and the checks by key, with the keys moving on from the row chosen. Use it for
 `SetColumnsLayout`, `OnColumnsChange`, `BottomPanel`, `ClearSort`, `Search` and
-the rest. Do not add it to a window yourself: the list view shows it.
+the rest. Its `OnKey` keys work in every view, and so does its bottom panel, under
+the icons, with the counts and the search box: a search that hides rows shows in
+the panel in every view. (`SetColumnsLayout` and `OnColumnsChange` are about the
+columns, which only Details shows.) Do not add it to a window yourself: the list
+view shows it.
 
 ## Rows, choosing and checks
 
@@ -69,11 +73,17 @@ the rest. Do not add it to a window yourself: the list view shows it.
   `OnActivate(fn)` after a double click or Enter.
 - `CheckBoxes()` shows a check box on each row in every view: a column in
   Details, a box on the item in the others. `Checked()`, `IsChecked(k)`,
-  `SetChecked(ks, on)` and `OnCheck(fn)` (WinForms' `ItemCheck`) work as the
-  `DataGridView`'s do. Space checks the rows chosen, or unchecks them when all
-  are checked.
+  `SetChecked(ks, on)` are the `DataGridView`'s. `OnCheck(fn)` is the list
+  view's own (WinForms' `ItemCheck`; the `DataGridView` has none): it runs for each
+  row the user checks or unchecks, with Space, a box, or the header's "Check all" in
+  Details. Space checks the rows chosen, or unchecks them when all are checked.
 - Setters, and switching the view, fire no event. A deleted row leaves the
-  choice and the checks without one, and a row added again starts clean.
+  choice and the checks without one, and a row added again starts clean. That
+  differs from WinForms, whose `SelectedIndexChanged` runs when the row chosen is
+  removed: here `DeleteRows` is the program's change, and `OnSelect` is the user's.
+- The cursor (the row the keys move from), the row Shift extends from, and the
+  keyboard focus cross a switch of the view by key: after switching, the arrows
+  go on from the row that was chosen, and Shift-click extends from it.
 - `ContextMenu`, `ContextMenuFunc` and `CopyFunc` work in every view, as the
   `DataGridView`'s do.
 
