@@ -159,6 +159,9 @@ type TextEdit struct {
 	Text       string
 	Start, End int
 	Insert     string
+	// Caret is where the caret was before the edit, which tells Backspace
+	// (the range ends at it) from Delete (the range starts at it).
+	Caret int
 }
 
 // OnEdit has fn rewrite each edit of the user in a text input before it is

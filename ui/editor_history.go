@@ -89,7 +89,7 @@ func (ed *editor) record(typing bool) {
 func (ed *editor) replace(start, end int, s string) {
 	if f := ed.onEdit; f != nil && !ed.filtering {
 		old := ed.buf.slice(0, ed.buf.n)
-		if text, caret, ok := f(TextEdit{Text: old, Start: start, End: end, Insert: s}); ok {
+		if text, caret, ok := f(TextEdit{Text: old, Start: start, End: end, Insert: s, Caret: ed.caret}); ok {
 			ed.filtering = true
 			if text != old {
 				ed.replace(0, ed.buf.n, text)

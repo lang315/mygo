@@ -322,6 +322,7 @@ func inputs() widget.Control {
 		widget.TextBox().SetPlaceholder("Password").Password(),
 		widget.TextBox().SetPlaceholder("At most 8 characters").MaxLength(8),
 		widget.TextBox().SetPlaceholder("Search").Icon(searchIcon()),
+		maskedRow(),
 		widget.MultilineTextBox().SetPlaceholder("Notes").SetSize(0, 100),
 		widget.CheckBox("Remember me"),
 		widget.HBox(8).Add(widget.Switch(), widget.Label("Notifications")),
