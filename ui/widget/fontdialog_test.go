@@ -285,3 +285,16 @@ func TestFontDialogTypeAheadMatchesWithoutRegardToCaseByRunes(t *testing.T) {
 		t.Error("hasFoldedPrefix")
 	}
 }
+
+// The family list builds only the rows in view, without a height of its own.
+func TestFontDialogFamilyListBuildsOnlyTheRowsInView(t *testing.T) {
+	fd := FontDialog().SetFont(ui.Font{Family: "Fam001", Size: 12})
+	fd.families = manyFamilies
+	dt, done := runFont(t, fd)
+	dt.Settle()
+	if n := len(dt.FindAll(ByRole(ui.RoleListItem))); n > 60 {
+		t.Errorf("%d list items built for 300 families", n)
+	}
+	dt.Find(ByLabel("Cancel")).Click()
+	<-done
+}

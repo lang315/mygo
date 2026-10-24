@@ -154,9 +154,7 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	cur := start
 	curStyle := startStyle
 
-	// shortcut: ListBox packed expand/fill in nested boxes grows to all rows (#137,
-	// own PR); remove the SetSize of both lists when that lands.
-	family := ListBox(func(f *ui.FontFamily) string { return f.Name }, func(f *ui.FontFamily) string { return f.Name }).SetItems(names).SetSize(0, 200)
+	family := ListBox(func(f *ui.FontFamily) string { return f.Name }, func(f *ui.FontFamily) string { return f.Name }).SetItems(names)
 	if start.Family != "" {
 		family.SetSelected(start.Family)
 	}
@@ -183,8 +181,7 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 			}
 		}
 	})
-	// shortcut: see the family list.
-	style := ListBox(func(s *fontStyle) string { return s.name }, func(s *fontStyle) string { return s.name }).SetItems(styles).SetSize(0, 200)
+	style := ListBox(func(s *fontStyle) string { return s.name }, func(s *fontStyle) string { return s.name }).SetItems(styles)
 	style.SetSelected(startStyle.name)
 	style.OnSelect(func(ks []string) {
 		if len(ks) == 1 {
