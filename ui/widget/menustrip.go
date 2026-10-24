@@ -104,18 +104,134 @@ func (s *MenuStripItem) SetChecked(on bool) *MenuStripItem { s.it.SetChecked(on)
 // Checked reports whether a StripCheck item is checked.
 func (s *MenuStripItem) Checked() bool { return s.it.IsChecked() }
 
-// MenuStrip sets the window's main menu: on macOS the app's menu bar, which
-// every window shares, so the last one set is the one shown; on Windows and
-// Linux the window's own menu bar, above its content. nil removes it. Items
-// of the strip change the native menu as the program sets them.
+// MenuStrip sets the window's main menu. On macOS the menu bar is the
+// app's, and it is the strip of the form that has the focus: a form's strip
+// takes it when the form is shown with none taken, and when its window gets
+// the focus; when that form closes, the next form with a strip takes it, or
+// the app's own menu comes back. A form not shown takes nothing, and nil on
+// a form that does not hold the menu bar changes nothing. On Windows and
+// Linux it is the window's own menu bar, above its content, the last set of
+// SetMenuBar and MenuStrip; nil removes a strip and leaves a bar SetMenuBar
+// set. Items of the strip change the native menu as the program sets them.
 func (w *Form) MenuStrip(m *MenuStrip) *Form {
-	w.change(func() { w.strip = m })
 	if macMenus {
-		mygo.App.SetMenu(m.native())
-	} else {
+		w.appMenuStrip(m)
+		return w
+	}
+	var had bool
+	w.change(func() {
+		had = w.strip != nil
+		w.strip = m
+		if m != nil {
+			w.menu = nil // the strip replaces the bar SetMenuBar set
+		}
+	})
+	if m != nil || had {
 		w.do(func(n *mygo.Window) { n.SetMenu(m.native()) })
 	}
 	return w
+}
+
+var (
+	appMenuOwner *Form      // the form whose strip is the app's menu, under mu
+	appMenuBase  *mygo.Menu // the app's own menu, which a strip stands in for
+	appMenuTaken bool       // appMenuBase is the menu before a strip took over
+	appMenuGen   int        // changes with every change of the owner or its strip
+)
+
+// appMenuStrip is MenuStrip on macOS.
+func (w *Form) appMenuStrip(m *MenuStrip) {
+	var owns bool
+	w.change(func() {
+		w.strip = m
+		owns = appMenuOwner == w
+		appMenuGen++
+	})
+	switch {
+	case owns && m == nil:
+		releaseAppMenu(w)
+	case owns:
+		syncAppMenu()
+	case m != nil:
+		if n := w.Native(); n != nil && (n.IsFocused() || !appMenuHeld()) {
+			claimAppMenu(w)
+		}
+	}
+}
+
+// appMenuHeld reports whether a form holds the app's menu.
+func appMenuHeld() bool { mu.Lock(); defer mu.Unlock(); return appMenuOwner != nil }
+
+// claimAppMenu gives the app's menu to w's strip, if it has one.
+func claimAppMenu(w *Form) {
+	mu.Lock()
+	ok := w.strip != nil
+	if ok {
+		appMenuOwner = w
+		appMenuGen++
+	}
+	mu.Unlock()
+	if ok {
+		syncAppMenu()
+	}
+}
+
+// claimAppMenuIfFree is claimAppMenu while no form holds the menu.
+func claimAppMenuIfFree(w *Form) {
+	if !appMenuHeld() {
+		claimAppMenu(w)
+	}
+}
+
+// releaseAppMenu takes the app's menu from w if it holds it: to another form
+// that is shown with a strip, else back to the app's own.
+func releaseAppMenu(w *Form) {
+	mu.Lock()
+	if appMenuOwner != w {
+		mu.Unlock()
+		return
+	}
+	appMenuOwner = nil
+	for _, f := range shown {
+		if f != w && f.strip != nil {
+			appMenuOwner = f
+			break
+		}
+	}
+	appMenuGen++
+	mu.Unlock()
+	syncAppMenu()
+}
+
+// syncAppMenu sets the app's menu to the owner's strip, or gives back the
+// menu the app had. It calls into mygo without the lock, which a view on the
+// main thread takes; if the owner changed meanwhile, it goes round again.
+func syncAppMenu() {
+	for {
+		mu.Lock()
+		gen := appMenuGen
+		var want *mygo.Menu
+		switch {
+		case appMenuOwner != nil && appMenuOwner.strip != nil:
+			if !appMenuTaken {
+				appMenuBase, appMenuTaken = mygo.App.Menu(), true
+			}
+			want = appMenuOwner.strip.menu
+		case appMenuTaken:
+			want, appMenuTaken = appMenuBase, false
+		default:
+			mu.Unlock()
+			return
+		}
+		mu.Unlock()
+		mygo.App.SetMenu(want)
+		mu.Lock()
+		done := gen == appMenuGen
+		mu.Unlock()
+		if done {
+			return
+		}
+	}
 }
 
 // native returns the mygo menu of m, nil for no strip.

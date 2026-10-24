@@ -126,6 +126,145 @@ func TestMenuStripOnMacIsTheAppMenu(t *testing.T) {
 	}
 }
 
+// onMac runs the test as if on macOS, where the app has one menu bar, with
+// a menu of its own that a form's strip stands in for and gives back.
+func onMac(t *testing.T) (base *mygo.Menu) {
+	t.Helper()
+	was, prev := macMenus, mygo.App.Menu()
+	macMenus = true
+	base = mygo.NewMenu([]*mygo.MenuItem{{Label: "Base"}})
+	mygo.App.SetMenu(base)
+	t.Cleanup(func() { macMenus = was; mygo.App.SetMenu(prev) })
+	return base
+}
+
+// appMenu returns the app's menu in the backend, after the main thread ran
+// what was posted to it.
+func appMenu() *platform.Menu {
+	mygo.RunOnMain(func() {})
+	return fb.AppMenu()
+}
+
+func focusWindow(fw interface{ Focus() }) { mygo.RunOnMain(fw.Focus) }
+
+func shownForm(t *testing.T, title, item string) *Form {
+	t.Helper()
+	f := NewForm(title, 300, 200).MenuStrip(NewMenuStrip(StripItem(item)))
+	f.Show()
+	t.Cleanup(f.Close)
+	return f
+}
+
+// A form never shown does not take the menu bar from the one on screen.
+func TestMacAFormNeverShownDoesNotReplaceTheAppMenu(t *testing.T) {
+	onMac(t)
+	shownForm(t, "A", "AItem")
+	settings := NewForm("Settings", 300, 200).MenuStrip(NewMenuStrip(StripItem("SettingsItem")))
+	_ = settings
+	if m := appMenu(); findItem(m, "AItem") == nil || findItem(m, "SettingsItem") != nil {
+		t.Fatalf("the app menu is %+v: A's, not the unshown form's", m)
+	}
+}
+
+// A closed form's menu does not stay: the app's own comes back.
+func TestMacClosingTheFormGivesTheAppMenuBack(t *testing.T) {
+	onMac(t)
+	a := shownForm(t, "A", "AItem")
+	if findItem(appMenu(), "AItem") == nil {
+		t.Fatal("A's menu is not the app's while A is shown")
+	}
+	a.Close()
+	if m := appMenu(); findItem(m, "AItem") != nil || findItem(m, "Base") == nil {
+		t.Fatalf("after A closed the app menu is %+v, want the app's own", m)
+	}
+}
+
+// A form that never had a strip, set to nil, takes nothing from the one that
+// has: on macOS an empty menu bar loses Cmd+Q and Cmd+C, and the default does
+// not come back.
+func TestMacNilStripOfAnotherFormLeavesTheAppMenu(t *testing.T) {
+	onMac(t)
+	shownForm(t, "A", "AItem")
+	NewForm("B", 300, 200).MenuStrip(nil)
+	if findItem(appMenu(), "AItem") == nil {
+		t.Fatal("B's MenuStrip(nil) removed A's menu")
+	}
+}
+
+// The app menu is the focused form's strip, and a closed form hands it on.
+func TestMacTheAppMenuFollowsFocusAndHandsOnWhenTheOwnerCloses(t *testing.T) {
+	onMac(t)
+	a := shownForm(t, "A", "AItem")
+	fa := lastFake(t)
+	b := shownForm(t, "B", "BItem")
+	fb2 := lastFake(t)
+	focusWindow(fb2)
+	if m := appMenu(); findItem(m, "BItem") == nil {
+		t.Fatalf("B has the focus: app menu %+v", m)
+	}
+	focusWindow(fa)
+	if m := appMenu(); findItem(m, "AItem") == nil {
+		t.Fatalf("A has the focus: app menu %+v", m)
+	}
+	a.Close() // the owner closes: B's, the other form with a strip, takes over
+	if m := appMenu(); findItem(m, "BItem") == nil {
+		t.Fatalf("A closed: app menu %+v, want B's", m)
+	}
+	b.Close()
+	if m := appMenu(); findItem(m, "Base") == nil {
+		t.Fatalf("both closed: app menu %+v, want the app's own", m)
+	}
+}
+
+// A strip set on the form that owns the menu changes it at once; nil on the
+// owner gives it back.
+func TestMacTheOwnersStripChangesAndRemovesTheAppMenu(t *testing.T) {
+	onMac(t)
+	a := shownForm(t, "A", "AItem")
+	a.MenuStrip(NewMenuStrip(StripItem("Newer")))
+	if m := appMenu(); findItem(m, "Newer") == nil || findItem(m, "AItem") != nil {
+		t.Fatalf("app menu %+v after a new strip", m)
+	}
+	a.MenuStrip(nil)
+	if m := appMenu(); findItem(m, "Newer") != nil || findItem(m, "Base") == nil {
+		t.Fatalf("app menu %+v after nil, want the app's own", m)
+	}
+}
+
+// On Windows and Linux the window's bar is the last of SetMenuBar and
+// MenuStrip: nil removes a strip, and leaves what SetMenuBar set.
+func TestMenuStripNilLeavesTheMenuBarSetMenuBarSet(t *testing.T) {
+	was := macMenus
+	macMenus = false
+	t.Cleanup(func() { macMenus = was })
+	w := NewForm("Bar", 300, 200).SetMenuBar(MenuItem{Text: "Plain"})
+	w.Show()
+	t.Cleanup(w.Close)
+	fw := lastFake(t)
+	mygo.RunOnMain(func() {})
+	w.MenuStrip(nil)
+	mygo.RunOnMain(func() {})
+	if findItem(fw.Menu(), "Plain") == nil {
+		t.Fatalf("MenuStrip(nil) wiped the SetMenuBar menu: %+v", fw.Menu())
+	}
+	w.MenuStrip(NewMenuStrip(StripItem("Strip")))
+	mygo.RunOnMain(func() {})
+	if findItem(fw.Menu(), "Strip") == nil || findItem(fw.Menu(), "Plain") != nil {
+		t.Fatalf("a strip does not replace the bar: %+v", fw.Menu())
+	}
+	w.MenuStrip(nil)
+	mygo.RunOnMain(func() {})
+	if findItem(fw.Menu(), "Strip") != nil {
+		t.Fatalf("nil did not remove the strip: %+v", fw.Menu())
+	}
+	w.SetMenuBar(MenuItem{Text: "Again"}) // the last one set wins
+	w.MenuStrip(nil)
+	mygo.RunOnMain(func() {})
+	if findItem(fw.Menu(), "Again") == nil {
+		t.Fatalf("the bar set after the strip is gone: %+v", fw.Menu())
+	}
+}
+
 func TestMenuStripChangedFromAnyGoroutineIsRaceFree(t *testing.T) {
 	item := StripItem("Run")
 	windowStrip(t, StripItem("Tools", item))

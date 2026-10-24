@@ -123,7 +123,12 @@ func (w *Form) Unmaximize() *Form {
 // the menu bar is the app's, set with mygo.App.SetMenu; there it does
 // nothing.
 func (w *Form) SetMenuBar(items ...MenuItem) *Form {
-	w.change(func() { w.menu = items })
+	w.change(func() {
+		w.menu = items
+		if !macMenus {
+			w.strip = nil // the bar is the last of SetMenuBar and MenuStrip
+		}
+	})
 	w.do(func(n *mygo.Window) { n.SetMenu(mygo.NewMenu(nativeMenu(items))) })
 	return w
 }
@@ -196,8 +201,11 @@ func (w *Form) Show() {
 	if menu != nil {
 		n.SetMenu(mygo.NewMenu(nativeMenu(menu)))
 	}
-	if strip != nil && !macMenus { // on macOS the app's menu bar, set by MenuStrip
+	if strip != nil && !macMenus {
 		n.SetMenu(strip.native())
+	}
+	if macMenus { // the app's menu bar is the strip of the form with the focus
+		n.OnFocus(func() { claimAppMenu(w) })
 	}
 	closed := func() {
 		mu.Lock()
@@ -205,6 +213,7 @@ func (w *Form) Show() {
 		w.win, w.showing, w.asking = nil, false, false
 		mu.Unlock()
 		close(done)
+		releaseAppMenu(w)
 	}
 	// The window closes on the main thread: watched there, a close that
 	// came since NewWindow returned is seen too, which Run would wait out.
@@ -227,6 +236,8 @@ func (w *Form) Show() {
 	})
 	if closeNow {
 		n.Close()
+	} else if macMenus {
+		claimAppMenuIfFree(w)
 	}
 }
 

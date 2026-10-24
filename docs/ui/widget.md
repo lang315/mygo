@@ -255,9 +255,15 @@ status.SetText("Saved") // and the window redraws
 ```
 
 - **`MenuStrip`** is the window's main menu on mygo's native menus: on macOS
-  the app's menu bar (every window shares it, so the last one set shows;
-  put the `Role` items you want, as the app and Edit menus, in it), on
-  Windows and Linux the window's own, above the content. A `MenuStripItem` is
+  the app's menu bar, which is **the focused form's strip** (a form's strip
+  takes it when its window gets the focus, or when the form is shown and
+  none is taken; a form not shown takes nothing, and `MenuStrip(nil)` on a
+  form that does not hold it changes nothing; when the holder closes the
+  next form with a strip takes it, else the app's own menu comes back; put
+  the `Role` items you want, as the app and Edit menus, in a strip); on
+  Windows and Linux the window's own, above the content, the last of
+  `SetMenuBar` and `MenuStrip` (`MenuStrip(nil)` removes a strip and leaves
+  a bar `SetMenuBar` set). A `MenuStripItem` is
   `StripItem(text, children...)`, `StripCheck(text, checked)` (it toggles
   before its `OnClick` runs), `StripSeparator()` or `StripRole(role)`. Its
   `SetText`, `SetShortcut`, `SetEnabled`, `SetVisible` and `SetChecked` update
