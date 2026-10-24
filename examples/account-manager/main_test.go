@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,13 +16,14 @@ import (
 // for its frames to run.
 type tester struct {
 	*ui.Tester
-	t *testing.T
-	a *app
+	t     *testing.T
+	a     *app
+	asked atomic.Int32 // frames the app asked for with a.update, from any goroutine
 }
 
 func newTester(t *testing.T, a *app) *tester {
 	tt := &tester{t: t, a: a, Tester: ui.NewTester(a.build, 1280, 800)}
-	a.update = tt.Update
+	a.update = func(fn func()) { tt.asked.Add(1); tt.Update(fn) }
 	return tt
 }
 

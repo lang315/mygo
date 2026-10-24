@@ -30,11 +30,10 @@ func choose(t *testing.T, tt *tester, label string) {
 	}
 	// A click must ask for a frame, as Window.Update does: with no input in
 	// the window, nothing else would.
-	update, asked := tt.a.update, 0
-	tt.a.update = func(fn func()) { asked++; update(fn) }
-	defer func() { tt.a.update = update }()
+	// (a.update is not swapped here: the app's goroutines read it.)
+	before := tt.asked.Load()
 	it.Click(it, nil)
-	if asked == 0 {
+	if tt.asked.Load() == before {
 		t.Fatalf("the click on %q asked for no frame", label)
 	}
 	tt.Frame()
