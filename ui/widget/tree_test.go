@@ -183,6 +183,168 @@ func TestTreeViewLoadingRowIsNeitherSelectableNorCheckable(t *testing.T) {
 	}
 }
 
+// loadingTree is Alpha, a lazy node that is open and so shows its Loading row,
+// and Lima, with events collected.
+func loadingTree(events chan string) *TreeViewWidget[tnode, string] {
+	tv := newTree().SetRoots([]tnode{{"A", "Alpha"}, {"L", "Lima"}}).SetHasChildren("A", true).
+		OnSelect(func(k string, ok bool) { events <- fmt.Sprint("select ", k, " ", ok) }).
+		OnExpand(func(k string) { events <- "expand " + k })
+	tv.Expand("A")
+	return tv
+}
+
+// The keys and typing never choose the Loading row, which would clear the
+// choice: they move past it, or stay.
+func TestTreeViewKeysAndTypingNeverChooseTheLoadingRow(t *testing.T) {
+	selected := func(tv *TreeViewWidget[tnode, string]) string { k, _ := tv.Selected(); return k }
+	drain := func(events chan string) (got []string) {
+		<-posted()
+		for {
+			select {
+			case e := <-events:
+				got = append(got, e)
+			default:
+				return
+			}
+		}
+	}
+	setup := func(t *testing.T) (*TreeViewWidget[tnode, string], *ui.Tester, chan string) {
+		events := make(chan string, 16)
+		tv := loadingTree(events)
+		tt := tester(t, tv)
+		click(t, tt, "Alpha")
+		drain(events)
+		return tv, tt, events
+	}
+	t.Run("Down skips it", func(t *testing.T) {
+		tv, tt, events := setup(t)
+		tt.Key(0, ui.KeyDown)
+		tt.Frame()
+		if got := selected(tv); got != "L" {
+			t.Fatalf("Down from Alpha selected %q, want Lima, past the Loading row", got)
+		}
+		if got := drain(events); !slices.Equal(got, []string{"select L true"}) {
+			t.Fatalf("events %v: want one OnSelect for Lima, none with an empty key", got)
+		}
+	})
+	t.Run("Up skips it", func(t *testing.T) {
+		tv, tt, events := setup(t)
+		click(t, tt, "Lima")
+		drain(events)
+		tt.Key(0, ui.KeyUp)
+		tt.Frame()
+		if got := selected(tv); got != "A" {
+			t.Fatalf("Up from Lima selected %q, want Alpha", got)
+		}
+		if got := drain(events); !slices.Equal(got, []string{"select A true"}) {
+			t.Fatalf("events %v", got)
+		}
+	})
+	t.Run("Right stays on the node", func(t *testing.T) {
+		tv, tt, events := setup(t)
+		tt.Key(0, ui.KeyRight)
+		tt.Key(0, ui.KeyRight)
+		tt.Frame()
+		if got := selected(tv); got != "A" {
+			t.Fatalf("Right, Right selected %q, want Alpha", got)
+		}
+		if got := drain(events); len(got) != 0 {
+			t.Fatalf("events %v: Right on an open node whose children load fires none", got)
+		}
+	})
+	t.Run("End goes to the last real row", func(t *testing.T) {
+		tv, tt, _ := setup(t)
+		tt.Key(0, ui.KeyEnd)
+		tt.Frame()
+		if got := selected(tv); got != "L" {
+			t.Fatalf("End selected %q, want Lima", got)
+		}
+	})
+	t.Run("End when the Loading row is last", func(t *testing.T) {
+		tv := newTree().SetRoots([]tnode{{"L", "Lima"}, {"A", "Alpha"}}).SetHasChildren("A", true)
+		tv.Expand("A")
+		tt := tester(t, tv)
+		click(t, tt, "Lima")
+		tt.Key(0, ui.KeyEnd)
+		tt.Frame()
+		if got := selected(tv); got != "A" {
+			t.Fatalf("End selected %q, want Alpha, the last row that can be chosen", got)
+		}
+	})
+	t.Run("typing L finds Lima, not Loading…", func(t *testing.T) {
+		tv, tt, _ := setup(t)
+		tt.Key(0, ui.KeyL)
+		tt.Frame()
+		if got := selected(tv); got != "L" {
+			t.Fatalf("typing L selected %q, want Lima", got)
+		}
+	})
+}
+
+// The retry the docs give: SetHasChildren(k, true) on an open node that is
+// not loaded asks again, once, as a request to load.
+func TestTreeViewSetHasChildrenOnAnOpenNodeAsksToLoadOnce(t *testing.T) {
+	events := make(chan string, 16)
+	tv := loadingTree(events)
+	tt := tester(t, tv)
+	<-posted()
+	select {
+	case e := <-events:
+		t.Fatalf("a program's Expand fired %q", e)
+	default:
+	}
+	tv.SetHasChildren("A", true) // the first load failed
+	if got := soon(t, events); got != "expand A" {
+		t.Fatalf("the retry fired %q, want expand A", got)
+	}
+	// The load is pending now: the user closing and opening the node asks
+	// nothing more.
+	for range 2 {
+		x, y := arrow(t, tt, "Alpha")
+		tt.ClickAt(x, y)
+		tt.Frame()
+	}
+	<-posted()
+	select {
+	case e := <-events:
+		t.Fatalf("closing and opening a node with a load pending fired %q", e)
+	default:
+	}
+	// Another retry is another request.
+	tv.SetHasChildren("A", true)
+	if got := soon(t, events); got != "expand A" {
+		t.Fatalf("the second retry fired %q, want expand A", got)
+	}
+}
+
+// SetHasChildren(k, false) on an open node whose children are not loaded
+// makes it a leaf: it is not open, so a later true shows no Loading row
+// without an event.
+func TestTreeViewSetHasChildrenFalseClosesAnOpenNodeThatIsNotLoaded(t *testing.T) {
+	events := make(chan string, 16)
+	tv := loadingTree(events)
+	tt := tester(t, tv)
+	tv.SetHasChildren("A", false)
+	tt.Frame()
+	if tv.IsExpanded("A") || len(tv.Expanded()) != 0 {
+		t.Fatalf("Expanded %v: a leaf is not open", tv.Expanded())
+	}
+	if shows(tt, "Loading…") {
+		t.Fatalf("shows %q: a leaf shows no Loading row", tt.Texts())
+	}
+	tv.SetHasChildren("A", true)
+	tt.Frame()
+	if shows(tt, "Loading…") {
+		t.Fatalf("shows %q: the node is closed, so no Loading row", tt.Texts())
+	}
+	<-posted()
+	select {
+	case e := <-events:
+		t.Fatalf("closing and making it lazy again fired %q", e)
+	default:
+	}
+}
+
 func TestTreeViewSetLoadingTextReplacesLoading(t *testing.T) {
 	tv := newTree().SetRoots([]tnode{{"A", "Alpha"}}).SetHasChildren("A", true).SetLoadingText("Đang tải…")
 	tv.Expand("A")
@@ -697,10 +859,13 @@ func TestTreeViewClickAllocationsDoNotGrowWithTheTree(t *testing.T) {
 }
 
 func TestTreeViewImageShowsBeforeTheText(t *testing.T) {
-	calls := 0
-	tv := fileTree().SetImage(func(n *tnode) *ui.Bitmap { calls++; return nil })
+	calls, locked := 0, true
+	tv := fileTree().SetImage(func(n *tnode) *ui.Bitmap { calls++; locked = locked && lockHeld(); return nil })
 	tester(t, tv)
 	if calls == 0 {
 		t.Fatal("SetImage's function was not called for the rows shown")
+	}
+	if !locked {
+		t.Fatal("SetImage's function ran without the package lock, which the docs say it holds")
 	}
 }

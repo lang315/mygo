@@ -195,15 +195,36 @@ func (t *TreeViewWidget[T, K]) SetChildren(parent K, kids []T) *TreeViewWidget[T
 
 // SetHasChildren says whether the node of key k has children that are not
 // loaded, so that its arrow shows: opening it by the user calls OnExpand, and
-// the Loading row shows until SetChildren. With true it also lets OnExpand
-// fire again for a load that failed: it fires once while one is pending. It
-// does nothing for a key that is not a node.
+// the Loading row shows until SetChildren. It does nothing for a key that is
+// not a node.
+//
+// It is also how a load that failed is asked again. Called with true on a node
+// that is open and whose children are not loaded, it is a request to load, and
+// the one setter that fires an event: OnExpand runs once with the key, and not
+// again until the load is asked for anew. On a node that is closed it only
+// lets the next opening ask. Called with false on a node whose children are
+// not loaded, it makes the node a leaf, and closes it if it was open, firing
+// nothing.
 func (t *TreeViewWidget[T, K]) SetHasChildren(k K, has bool) *TreeViewWidget[T, K] {
 	t.change(func() {
-		if n := t.nodes[k]; n != nil {
-			n.has = has
-			if has {
-				n.pending = false
+		n := t.nodes[k]
+		if n == nil {
+			return
+		}
+		n.has, n.pending = has, false
+		if n.loaded {
+			return
+		}
+		it := treeItem[K]{k: k}
+		switch {
+		case !has:
+			if t.open.value.Has(it) {
+				t.open.set(it, false)
+			}
+		case t.open.value.Has(it):
+			n.pending = true
+			if h := t.onExpand; h != nil {
+				Post(func() { h(k) })
 			}
 		}
 	})
@@ -654,7 +675,11 @@ func (t *TreeViewWidget[T, K]) kidsOf(it treeItem[K]) []treeItem[K] {
 	return nil
 }
 
-// labelAt is ui's label of the row shown at row: typing finds it.
+// skip is ui's ListState.Skip: the Loading row cannot be chosen.
+func (t *TreeViewWidget[T, K]) skip(row int) bool { return t.state.Item(row).wait }
+
+// labelAt is ui's label of the row shown at row: typing finds it, except the
+// Loading row (skip), and assistive technology reads it as the row's name.
 func (t *TreeViewWidget[T, K]) labelAt(row int) string {
 	if lockOutsideView() {
 		defer mu.Unlock()
@@ -695,7 +720,7 @@ func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	t.open.bindInto(&s.Open)
 	t.cursor = t.cursorRow()
 	s.List.Selected = &t.cursor
-	s.List.Label = t.labelAt
+	s.List.Label, s.List.Skip = t.labelAt, t.skip
 	e := ui.Outline(c, s, t.roots, t.kidsOf, func(it treeItem[K]) { t.row(c, it) }).Grow(1)
 	if fn := t.onActivate; fn != nil {
 		e.OnActivate(func(row int) {
