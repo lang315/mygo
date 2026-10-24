@@ -20,6 +20,8 @@ func (d Diagnostic) String() string { return fmt.Sprintf("%s: %s", d.Position, d
 
 // Analyze flags per-pass values in storage and values passed to or captured by
 // goroutines. Callback signatures and persistent Handle/Services are allowed.
+// It also flags bad Tailwind classes in constant strings given to tw.S or
+// tw.Parse.
 func Analyze(fs *token.FileSet, files []*ast.File, pkg *types.Package, info *types.Info) []Diagnostic {
 	if pkg.Path() == uiPath {
 		return nil
@@ -41,6 +43,8 @@ func Analyze(fs *token.FileSet, files []*ast.File, pkg *types.Package, info *typ
 						report(name.Pos(), "native UI build value stored in a package variable; keep ui.Handle or ui.Services instead")
 					}
 				}
+			case *ast.CallExpr:
+				twClasses(n, info, report)
 			case *ast.GoStmt:
 				seen := map[types.Object]bool{}
 				for _, arg := range n.Call.Args {
@@ -68,7 +72,7 @@ func Analyze(fs *token.FileSet, files []*ast.File, pkg *types.Package, info *typ
 			return true
 		})
 	}
-	sort.Slice(out, func(i, j int) bool {
+	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i].Position, out[j].Position
 		if a.Filename != b.Filename {
 			return a.Filename < b.Filename
