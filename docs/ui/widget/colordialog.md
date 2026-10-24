@@ -12,15 +12,13 @@ if cd.ShowDialog(form) {
 }
 ```
 
-- `SetColor(c)` is the color it starts from; `Color()` is the one the last
-  OK chose.
-- `ShowDialog(parent)` blocks as [`Dialog.Run`](../widget.md#dialogs) does, and
-  returns true for OK. Cancel, Escape and closing the window return false and
+- `SetColor(c)` is the color the next `ShowDialog` starts from (it does not
+  change one that is open); `Color()` is the one the last OK chose. Like
+  WinForms' colors it has no transparency: the picker's opacity slider and an
+  alpha in the hex are ignored, and `Color()` is opaque.
+- `ShowDialog(parent)` blocks as [`Dialog.Run`](../widget.md#dialogs) does (and panics on the main
+  thread), and returns true for OK. Cancel, Escape and closing the window return false and
   leave `Color()` alone.
 - `SetTitle(s)` titles the dialog.
 
 WinForms' `AllowFullOpen`, `CustomColors` and `FullOpen` are not here.
-
-In a test, build the dialog's `Dialog` with `TestDialog` (see
-[`widget.Tester`](tester.md)): the package's own tests do so with the dialog the
-type builds for `ShowDialog`.
