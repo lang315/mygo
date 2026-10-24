@@ -1040,6 +1040,20 @@ func Divider(c *Context) Element {
 	return wrapElement(_e)
 }
 
+// DragHover returns the value of type T dragged within the window while
+// the pointer is over e or anything inside it, without making e take it:
+// the drop goes to the innermost element that does (Drop), as under a zone
+// whose child only shows a highlight.
+func DragHover[T any](e Element) (T, bool) {
+	_node := e.node()
+	if _node == nil {
+		return *new(T), false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return coreDragHover[T](e.nodeFor(_ctx.rt))
+}
+
 // DragOver makes e take values of type T dragged within the window, as
 // Drop does, and returns the value dragged over it, for showing it would
 // take it.

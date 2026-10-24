@@ -12,6 +12,7 @@ import (
 type keeper struct {
 	widgets map[int]weak.Pointer[core]
 	built   map[int]bool
+	held    map[int]bool // hidden controls the frame met, not built
 }
 
 // keeping is the keeper of the view being built. Only views touch it,
@@ -24,9 +25,10 @@ var lastKeeper *keeper
 // begin starts a build of the view.
 func (k *keeper) begin() {
 	if k.widgets == nil {
-		k.widgets, k.built = map[int]weak.Pointer[core]{}, map[int]bool{}
+		k.widgets, k.built, k.held = map[int]weak.Pointer[core]{}, map[int]bool{}, map[int]bool{}
 	}
 	clear(k.built)
+	clear(k.held)
 	keeping, lastKeeper = k, k
 }
 
@@ -35,6 +37,7 @@ func (k *keeper) begin() {
 // keeps its state.
 func (k *keeper) hold(b *core) {
 	b.builtIn = building
+	k.held[b.id] = true
 	if _, ok := k.widgets[b.id]; !ok {
 		k.widgets[b.id] = weak.Make(b)
 	}
@@ -67,6 +70,11 @@ func (k *keeper) end(c *ui.Context) {
 		if b := p.Value(); b == nil || b.builtIn != building {
 			delete(k.widgets, id)
 		} else {
+			if !k.held[id] {
+				// Not built, not even met hidden: it left the tree (removed,
+				// or inside something hidden), so a hover on it ends.
+				b.dnd.endHovers()
+			}
 			c.KeepAlive(id)
 		}
 	}
