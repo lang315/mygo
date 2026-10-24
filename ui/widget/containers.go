@@ -135,6 +135,7 @@ func (g *GridWidget) build(c *ui.Context) ui.Element {
 					}
 				}
 				if cl.w.base().hidden { // keep its cells, or ui flows the next ones in
+					keeping.hold(cl.w.base()) // and the widget, to redraw when it shows
 					ui.Box(c.Key(holeKey{col, r})).ColumnSpan(cl.width).RowSpan(cl.height)
 					continue
 				}

@@ -176,6 +176,14 @@ func layout() widget.Control {
 		widget.Label("Muted, italic, mono").Muted().Italic().Mono(),
 		widget.Label("Padding(2), border, radius").Padding(2).Border(1, ui.RGB(160, 160, 160)).Radius(1).Align(widget.Start),
 		widget.ButtonBox().Add(widget.Button("Cancel"), widget.Button("Delete").Destructive(), widget.Button("Save").Suggested()),
+		widget.Separator(),
+		widget.Label("Fields").TextSize(widget.XL).Bold(),
+		widget.Fields().
+			Row("Name", widget.TextBox().SetPlaceholder("Ada Lovelace")).
+			Row("Email address", widget.TextBox().SetPlaceholder("ada@example.com")).
+			Row("Country", widget.ComboBox(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).SetValue("vn")),
+		widget.Fields().Stacked().
+			Row("Notes", widget.TextBox().SetPlaceholder("Stacked: the label sits above its control")),
 	)
 }
 

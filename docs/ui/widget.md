@@ -68,6 +68,7 @@ gota's names are listed for code ported from it.
 | `ScrollPanel` | Panel with AutoScroll | `ScrolledArea` |
 | `FlowPanel` | FlowLayoutPanel | `FlowBox` |
 | `Grid` | TableLayoutPanel | `Grid` |
+| `Fields` | TableLayoutPanel of labels and controls | `VBox` of a label and a control per row |
 | `VBox`, `HBox` | — | `VBox`, `HBox` |
 | `Label`, `Button`, `RadioGroup` | Label, Button, RadioButton | same |
 | `Alert`, `Confirm` | MessageBox | `Alert`, `Confirm` |
@@ -203,6 +204,48 @@ A build runs while the package holds its lock: it must call no method of
 any control (getters lock too) and no `Change`, which would wait forever.
 A control made of other controls needs no `Custom`: return a `VBox` of
 them from a function of your own.
+
+## Fields
+
+`Fields()` lays out a form: a row is a label and the control it names. By
+default the labels make a column as wide as the widest of them, each at
+the middle of its control's height, and the controls fill a second column,
+as in WinForms or GTK:
+
+```go
+widget.Fields().
+	Row("Name", widget.TextBox().AssignTo(&name)).
+	Row("Email address", widget.TextBox().AssignTo(&email)).
+	Row("Country", widget.ComboBox(options...)).
+	Gap(8, 12)
+```
+
+- `Stacked()` puts each label above its control, over the form's width.
+- `Gap(row, col)` is in DIPs: between rows, and between the two columns (or,
+  stacked, between a label and its control). The theme's default is 2 units
+  between rows and 3 between the columns, 1 between a stacked label and its
+  control.
+- The labels are real `*LabelWidget`s, styled like any: `Label(i)` returns
+  row i's, or nil if there is no row i. A label's own `Align` and `VAlign`
+  place it in its cell, and a style that gives it a background draws it as
+  wide as its text.
+- Hiding a row's control (`SetVisible(false)`) hides its label and the
+  row's gap too, and showing it brings them back. A hidden label alone
+  keeps its cell empty, so the control stays in its column.
+- A row without a control, or with one the form already has, is not added.
+
+`Fields` is a control like the others: `Apply` a style, `Align` it in a
+box, and put it in a `GroupBox`, a `Card` or a dialog.
+
+From gota, a form of `VBox`es and `BoxItem`s, a label with `halign-start`
+and its control in each:
+
+```go
+// before
+widget.VBox(4).Add(widget.Label("Name").Align(widget.Start), nameBox)
+// after: one row, and the form lines every row up
+widget.Fields().Stacked().Row("Name", nameBox)
+```
 
 ## Styles
 
@@ -401,6 +444,7 @@ Layout:
 - `Grid(colSpacing, rowSpacing)`: `Attach(w, col, row, width, height)`; a
   widget attached to a taken cell replaces the one there, and cells must
   not overlap.
+- `Fields()`: a form of label and control rows; see [Fields](#fields).
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps.
