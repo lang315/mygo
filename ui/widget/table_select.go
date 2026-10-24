@@ -94,9 +94,15 @@ func (t *DataGridViewWidget[T, K]) shown(in *ui.Selection[K]) []K {
 	return ks
 }
 
-// shownByPosition is shown for few keys: it looks each key's row up and
-// sorts them by their place in the view, instead of walking the view.
-func (t *DataGridViewWidget[T, K]) shownByPosition(in *ui.Selection[K]) []K {
+// at is a key and the place of its row in the view.
+type at[K comparable] struct {
+	pos int32
+	key K
+}
+
+// placed returns the keys of in whose rows show in the view as it is, with
+// their places, in order. Under mu.
+func (t *DataGridViewWidget[T, K]) placed(in *ui.Selection[K]) []at[K] {
 	if t.posOf == nil || t.posVersion != t.view.Version() || len(t.posOf) != len(t.rows) {
 		t.posOf = slices.Grow(t.posOf[:0], len(t.rows))[:len(t.rows)]
 		for i := range t.posOf {
@@ -107,22 +113,77 @@ func (t *DataGridViewWidget[T, K]) shownByPosition(in *ui.Selection[K]) []K {
 		}
 		t.posVersion = t.view.Version()
 	}
-	type at struct {
-		pos int32
-		key K
-	}
-	found := make([]at, 0, in.Len())
+	found := make([]at[K], 0, in.Len())
 	for k := range in.All() {
 		if row, ok := t.index[k]; ok && row < len(t.posOf) && t.posOf[row] >= 0 {
-			found = append(found, at{t.posOf[row], k})
+			found = append(found, at[K]{t.posOf[row], k})
 		}
 	}
-	slices.SortFunc(found, func(a, b at) int { return int(a.pos) - int(b.pos) })
+	slices.SortFunc(found, func(a, b at[K]) int { return int(a.pos) - int(b.pos) })
+	return found
+}
+
+// shownByPosition is shown for few keys: it looks each key's row up and
+// sorts them by their place in the view, instead of walking the view.
+func (t *DataGridViewWidget[T, K]) shownByPosition(in *ui.Selection[K]) []K {
+	found := t.placed(in)
 	ks := make([]K, len(found))
 	for i, f := range found {
 		ks[i] = f.key
 	}
 	return ks
+}
+
+// chosenRows is ui's ListState.RowsOf: the rows of the frame ui shows that
+// the user chose, when few and the frame is the view as it is; else false.
+func (t *DataGridViewWidget[T, K]) chosenRows() ([]int, bool) {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	in := &t.chosen.shown
+	if t.kept || t.gone || in.Len() > t.view.Len()/8 {
+		return nil, false
+	}
+	found := t.placed(in)
+	rows := make([]int, len(found))
+	for i, f := range found {
+		rows[i] = int(f.pos)
+	}
+	return rows, true
+}
+
+// checkRows is ui's ListState.CheckRows: it checks or unchecks the rows
+// first to last of the frame ui shows in one pass under the lock, and has
+// the next frame take the checks as they are. Rows gone are left out.
+func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	before, v := t.checked.value.Len(), &t.checked.value
+	if !on && !t.kept && !t.gone && t.filter == nil && first == 0 && last+1 >= t.view.Len() {
+		v.Clear() // every row of the table shows: none is checked
+	} else {
+		for i := first; i <= last; i++ {
+			r := t.rowAt(i)
+			if r == nil {
+				continue
+			}
+			k := t.key(r)
+			if _, ok := t.index[k]; !ok && t.gone {
+				continue
+			}
+			if on {
+				v.Add(k)
+			} else {
+				v.Remove(k)
+			}
+		}
+	}
+	changed := v.Len() != before
+	if changed {
+		t.checked.dirty = true
+	}
+	return changed
 }
 
 // Selected returns the keys of the rows selected that show, in the order

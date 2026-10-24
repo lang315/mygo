@@ -305,9 +305,9 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	s := &t.list
 	s.Sort, _ = t.sort.bind()
-	s.Selection, s.Checked = t.chosen.bind(), nil
+	s.Selection, s.Checked, s.RowsOf = t.chosen.bind(), nil, t.chosenRows
 	if t.checks {
-		s.Checked, s.CheckedCount = t.checked.bind(), t.checkedCount
+		s.Checked, s.CheckedCount, s.CheckRows = t.checked.bind(), t.checkedCount, t.checkRows
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.rows, false, false

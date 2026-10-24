@@ -610,6 +610,32 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 			}
 		}
 	})
+	b.Run("checkAll", func(b *testing.B) {
+		_, tt := setup(b)
+		b.ResetTimer()
+		for range b.N { // unchecks all, then checks all
+			if err := tt.Click("Check all"); err != nil {
+				b.Fatal(err)
+			}
+			tt.Frame()
+		}
+	})
+	b.Run("rightClickOneSelected", func(b *testing.B) {
+		tb, tt := setup(b)
+		tb.ContextMenu(MenuItem{Text: "Open"})
+		label := rows[1].name
+		if err := tt.Click(label); err != nil { // one row selected
+			b.Fatal(err)
+		}
+		tt.Frame()
+		b.ResetTimer()
+		for range b.N {
+			if err := tt.RightClick(label); err != nil {
+				b.Fatal(err)
+			}
+			tt.CloseMenu()
+		}
+	})
 	b.Run("SetChecked", func(b *testing.B) {
 		tb, tt := setup(b)
 		b.ResetTimer()
@@ -708,6 +734,31 @@ func BenchmarkTableSelectedLateKey(b *testing.B) {
 		if len(tb.Checked()) != 1 {
 			b.Fatal("lost the key")
 		}
+	}
+}
+
+// With few rows chosen of many, the rows come from the selection's keys, not
+// from asking about every row, and are the same.
+func TestTableCopiesFewSelectedRowsOfManyInShownOrder(t *testing.T) {
+	tb := testTable(manyAccts(40)...)
+	tt := tester(t, tb)
+	click(t, tt, "Name")
+	click(t, tt, "Name") // descending
+	click(t, tt, "acct000035")
+	if err := tt.ClickWith(ui.Cmd, "acct000039"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if rows, ok := tb.chosenRows(); !ok || !slices.Equal(rows, []int{0, 4}) {
+		t.Fatalf("chosenRows %v %v, want [0 4] from the keys", rows, ok)
+	}
+	tt.Command("copy")
+	if got := tt.Clipboard(); got != "acct000039\t1\nacct000035\t5" {
+		t.Fatalf("copied %q", got)
+	}
+	tb.DeleteRows(30) // rows went since the frame: ui's rows are the frame's
+	if rows, ok := tb.chosenRows(); ok {
+		t.Fatalf("chosenRows %v from a frame whose rows went", rows)
 	}
 }
 
