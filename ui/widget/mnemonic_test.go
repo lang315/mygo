@@ -18,7 +18,10 @@ func TestParseMnemonic(t *testing.T) {
 		{"Plain", "Plain", 0, -1},
 		{"A &&B", "A &B", 0, -1},
 		{"Trailing &", "Trailing &", 0, -1},
-		{"&Đức", "Đức", 'đ', 0},
+		{"&Đức", "Đức", 'd', 0},
+		{"&Ẩn", "Ẩn", 'a', 0},
+		{"&Ước", "Ước", 'u', 0},
+		{"&@x", "@x", 0, -1},
 		{"&1st", "1st", '1', 0},
 	} {
 		display, key, at := parseMnemonic(c.in)
@@ -134,5 +137,137 @@ func TestFieldsMnemonicIsOffOnMac(t *testing.T) {
 	tt.Settle()
 	if tt.Find(ByRole(ui.RoleTextField).Nth(1)).Focused() {
 		t.Error("Alt+M focused a control on macOS")
+	}
+}
+
+func TestAccentedMnemonicsAnswerToTheirBaseLetter(t *testing.T) {
+	withMac(t, false)
+	var d, a, u int
+	f := NewForm("m", 400, 300)
+	f.SetContent(VBox(4).Add(Button("&Đóng").OnClick(func() { d++ }), Button("&Ẩn").OnClick(func() { a++ }), Button("&Ước").OnClick(func() { u++ })))
+	tt := TestForm(t, f)
+	tt.Settle()
+	for _, k := range []ui.Key{ui.KeyD, ui.KeyA, ui.KeyU} {
+		tt.Key(ui.Alt, k)
+		tt.Settle()
+	}
+	<-posted()
+	if d != 1 || a != 1 || u != 1 {
+		t.Errorf("Đóng %d Ẩn %d Ước %d, want 1 each", d, a, u)
+	}
+}
+
+func TestMnemonicOfAButtonInADisabledContainerDoesNothing(t *testing.T) {
+	withMac(t, false)
+	n := 0
+	f := NewForm("m", 400, 200)
+	panel := VBox(4).Add(Button("&Save").OnClick(func() { n++ }))
+	f.SetContent(VBox(4).Add(panel))
+	tt := TestForm(t, f)
+	panel.SetDisabled(true)
+	tt.Settle()
+	tt.Key(ui.Alt, ui.KeyS)
+	tt.Settle()
+	<-posted()
+	if n != 0 {
+		t.Errorf("a button in a disabled panel was clicked %d times", n)
+	}
+}
+
+func TestFormShortcutBeatsAMnemonic(t *testing.T) {
+	withMac(t, false)
+	btn, sc := 0, 0
+	f := NewForm("m", 400, 200)
+	f.SetContent(Button("&Save").OnClick(func() { btn++ }))
+	f.Shortcut(ui.Alt, ui.KeyS, func() { sc++ })
+	tt := TestForm(t, f)
+	tt.Settle()
+	tt.Key(ui.Alt, ui.KeyS)
+	tt.Settle()
+	<-posted()
+	if sc != 1 || btn != 0 {
+		t.Errorf("shortcut %d button %d, want the shortcut alone", sc, btn)
+	}
+}
+
+func TestSameMnemonicTwiceMovesTheFocusAndClicksNothing(t *testing.T) {
+	withMac(t, false)
+	a, b := 0, 0
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(Button("&Save").OnClick(func() { a++ }), Button("&Search").OnClick(func() { b++ })))
+	tt := TestForm(t, f)
+	tt.Settle()
+	tt.Key(ui.Alt, ui.KeyS)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+	if !tt.Find(ByLabel("Save")).Focused() {
+		t.Error("the first Alt+S did not focus the first button")
+	}
+	tt.Key(ui.Alt, ui.KeyS)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+	if !tt.Find(ByLabel("Search")).Focused() || a+b != 0 {
+		t.Errorf("second Alt+S: search focused %v, clicks %d %d", tt.Find(ByLabel("Search")).Focused(), a, b)
+	}
+}
+
+func TestAltShiftAnswersLikeAlt(t *testing.T) {
+	withMac(t, false)
+	n := 0
+	f := NewForm("m", 400, 200)
+	f.SetContent(Button("&Save").OnClick(func() { n++ }))
+	tt := TestForm(t, f)
+	tt.Settle()
+	tt.Key(ui.Alt|ui.Shift, ui.KeyS)
+	tt.Settle()
+	<-posted()
+	if n != 1 {
+		t.Errorf("Alt+Shift+S clicked %d times", n)
+	}
+}
+
+func TestCheckBoxAndRadioMnemonics(t *testing.T) {
+	withMac(t, false)
+	changed := make(chan struct{}, 4)
+	cb := CheckBox("&Remember").OnChange(func() { changed <- struct{}{} })
+	r1, r2 := RadioButton("&One"), RadioButton("T&wo")
+	f := NewForm("m", 400, 300)
+	f.SetContent(VBox(4).Add(cb, r1, r2))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if !tt.Has(ByLabel("Remember")) || !tt.Has(ByLabel("Two")) {
+		t.Fatalf("labels %q", tt.Texts())
+	}
+	tt.Key(ui.Alt, ui.KeyR)
+	tt.Settle()
+	received(t, changed)
+	if !cb.Checked() {
+		t.Error("Alt+R did not check the box")
+	}
+	tt.Key(ui.Alt, ui.KeyW)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+	if !r2.Checked() || r1.Checked() {
+		t.Errorf("Alt+W: radio one %v two %v", r1.Checked(), r2.Checked())
+	}
+}
+
+// Without a form building it (widget.View, NewTester) nothing answers, and
+// nothing is underlined.
+func TestMnemonicsAreDeadAndNotUnderlinedWithoutAForm(t *testing.T) {
+	withMac(t, false)
+	n := 0
+	tt := NewTester(t, Button("&Save").OnClick(func() { n++ }), 300, 100)
+	tt.Frame()
+	if !tt.Has(ByLabel("Save")) {
+		t.Fatalf("labels %q", tt.Texts())
+	}
+	tt.Key(ui.Alt, ui.KeyS)
+	tt.Settle()
+	if n != 0 {
+		t.Errorf("clicked %d times", n)
 	}
 }

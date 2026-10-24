@@ -71,7 +71,9 @@ func withMerged(s Style, k variant, v Style) Style {
 
 func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 	label, key, at := parseMnemonic(b.text)
-	underlined := key != 0 && b.icon == nil && !macMenus
+	// The underline shows while Alt is held, as Windows and GTK show access
+	// keys, and only where the key is answered (a form is building it).
+	underlined := key != 0 && b.icon == nil && !macMenus && buildingForm != nil && c.Modifiers()&ui.Alt != 0
 	shown := label
 	if b.icon != nil || underlined {
 		shown = ""
@@ -79,9 +81,9 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 	e := ui.Button(c, shown)
 	if underlined {
 		e.Label(label).Children(func() { ui.RichText(c, mnemonicSpans(label, at)...) })
-		if h := b.onClick; h != nil && !b.disabled {
-			registerMnemonic(key, func() { Post(h) })
-		}
+	}
+	if h := b.onClick; h != nil && b.icon == nil {
+		registerMnemonic(key, e, b, func() { Post(h) })
 	}
 	if b.icon != nil {
 		text, _, _ := parseMnemonic(b.text)
@@ -172,10 +174,21 @@ func (b *CheckBoxWidget) OnChange(fn func()) *CheckBoxWidget {
 
 func (b *CheckBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := b.on.bind()
-	e := ui.Checkbox(c, p, b.text).OnChange(edited(&b.on, &b.bound, b.onChange))
+	label, key, _ := parseMnemonic(b.text)
+	e := ui.Checkbox(c, p, label).OnChange(edited(&b.on, &b.bound, b.onChange))
 	if changed && b.onChange != nil {
 		Post(b.onChange)
 	}
+	registerMnemonic(key, e, b, func() {
+		focusLater(b)
+		toggle := edited(&b.on, &b.bound, b.onChange)
+		Post(func() {
+			mu.Lock()
+			b.on.shown = !b.on.shown
+			mu.Unlock()
+			toggle()
+		})
+	})
 	return e
 }
 
@@ -414,7 +427,18 @@ func (r *RadioButtonWidget) OnChange(fn func()) *RadioButtonWidget {
 
 func (r *RadioButtonWidget) build(c *ui.Context) ui.Element {
 	p, _ := r.on.bind()
-	return ui.Radio(c, p, radioOn, r.text).OnChange(r.edited)
+	label, key, _ := parseMnemonic(r.text)
+	e := ui.Radio(c, p, radioOn, label).OnChange(r.edited)
+	registerMnemonic(key, e, r, func() {
+		focusLater(r)
+		Post(func() {
+			mu.Lock()
+			r.on.shown = radioOn
+			mu.Unlock()
+			r.edited()
+		})
+	})
+	return e
 }
 
 // edited is ui's OnChange: the user checked the radio button, which

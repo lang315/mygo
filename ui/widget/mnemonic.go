@@ -3,18 +3,23 @@ package widget
 import (
 	"unicode"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/egoist/mygo/ui"
 )
 
 // parseMnemonic splits a label with a mnemonic, as WinForms writes them, into
-// the text to show, the key that activates it (lower case) and its index in
-// the text, in runes: "&Save" is "Save", 's', 0; "&&" is a literal "&". A
-// label with no mnemonic gives key 0 and index -1. The first single "&" that
-// is followed by a character marks it; a "&" at the end stays as it is.
+// the text to show, the key that activates it (lower case, without accents:
+// "&Đóng" answers to d) and its index in the text, in runes: "&Save" is
+// "Save", 's', 0; "&&" is a literal "&". A label with no mnemonic, or whose
+// marked character no key types, gives key 0 and index -1. The first single
+// "&" that is followed by a character marks it; a "&" at the end stays as it
+// is.
 func parseMnemonic(s string) (display string, key rune, at int) {
 	in := []rune(s)
 	out := make([]rune, 0, len(in))
 	at = -1
+	marked := false
 	for i := 0; i < len(in); i++ {
 		r := in[i]
 		if r == '&' && i+1 < len(in) {
@@ -23,8 +28,11 @@ func parseMnemonic(s string) (display string, key rune, at int) {
 				i++
 				continue
 			}
-			if key == 0 {
-				key, at = unicode.ToLower(in[i+1]), len(out)
+			if !marked {
+				marked = true
+				if k := foldKey(in[i+1]); k != 0 {
+					key, at = k, len(out)
+				}
 			}
 			continue
 		}
@@ -33,8 +41,25 @@ func parseMnemonic(s string) (display string, key rune, at int) {
 	return string(out), key, at
 }
 
-// mnemonicKey returns the key that types r on a keyboard, for the letters of
-// the Latin alphabet and the digits; false for any other character.
+// foldKey returns the letter or digit of the Latin alphabet that types r on a
+// keyboard, without its accent, lower case; 0 for any other character.
+func foldKey(r rune) rune {
+	r = unicode.ToLower(r)
+	if r == 'đ' {
+		return 'd'
+	}
+	if r >= 0x80 {
+		if d := []rune(norm.NFD.String(string(r))); len(d) > 0 {
+			r = d[0]
+		}
+	}
+	if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+		return r
+	}
+	return 0
+}
+
+// mnemonicKey returns the key that types r (a result of foldKey).
 func mnemonicKey(r rune) (ui.Key, bool) {
 	switch {
 	case r >= 'a' && r <= 'z':
@@ -45,20 +70,81 @@ func mnemonicKey(r rune) (ui.Key, bool) {
 	return 0, false
 }
 
-// mnemonic is a key the form being built answers with Alt: act runs under mu.
+// mnemonic is a key the form being built answers with Alt. Its element is
+// valid until the build ends, where formKeys asks whether it is enabled.
 type mnemonic struct {
-	key rune
-	act func()
+	key  rune
+	el   ui.Element
+	ctrl Control
+	act  func() // under mu
 }
 
-// registerMnemonic makes Alt+key run act while the form being built has the
-// control that asked, unless mnemonics are off (macOS, whose menu bar owns the
-// key). Under mu, from a build.
-func registerMnemonic(key rune, act func()) {
+// registerMnemonic makes Alt+key (also with Shift) run act while the form
+// being built has the control, unless mnemonics are off (macOS, whose menu bar
+// owns the key) or no form is building (widget.View). It reports whether it
+// did, which is when the label is underlined. Under mu, from a build.
+func registerMnemonic(key rune, el ui.Element, ctrl Control, act func()) bool {
 	if key == 0 || macMenus || buildingForm == nil {
-		return
+		return false
 	}
-	buildingForm.mnemonics = append(buildingForm.mnemonics, mnemonic{key, act})
+	buildingForm.mnemonics = append(buildingForm.mnemonics, mnemonic{key, el, ctrl, act})
+	return true
+}
+
+// answerMnemonics runs, for each key pressed, the enabled control that asked
+// for it; with several for one key the focus moves among them, as in
+// WinForms, and none acts. Keys a Form.Shortcut of the form takes are its.
+// Under mu, at the end of a build.
+func (w *Form) answerMnemonics(c *ui.Context) {
+	ms := w.mnemonics
+	w.mnemonics = nil
+	done := map[rune]bool{}
+	for _, m := range ms {
+		if done[m.key] {
+			continue
+		}
+		done[m.key] = true
+		k, ok := mnemonicKey(m.key)
+		if !ok || w.hasShortcut(ui.Alt, k) || w.hasShortcut(ui.Alt|ui.Shift, k) {
+			continue
+		}
+		pressed := c.Shortcut(ui.Alt, k)
+		if c.Shortcut(ui.Alt|ui.Shift, k) {
+			pressed = true
+		}
+		if !pressed {
+			continue
+		}
+		var hit []mnemonic
+		for _, o := range ms {
+			if o.key == m.key && !o.el.IsDisabled() {
+				hit = append(hit, o)
+			}
+		}
+		switch len(hit) {
+		case 0:
+		case 1:
+			hit[0].act()
+		default:
+			next := 0
+			for i, o := range hit {
+				if o.el.Focused() {
+					next = (i + 1) % len(hit)
+				}
+			}
+			focusLater(hit[next].ctrl)
+		}
+	}
+}
+
+// hasShortcut reports whether the form has a Shortcut with mods and key.
+func (w *Form) hasShortcut(mods ui.Modifiers, key ui.Key) bool {
+	for _, s := range w.shortcuts {
+		if s.mods == mods && s.key == key {
+			return true
+		}
+	}
+	return false
 }
 
 // mnemonicSpans shows display with the character at index at underlined.

@@ -15,6 +15,7 @@ type fieldRow struct {
 	label *LabelWidget
 	w     Control
 	key   rune // the label's mnemonic: Alt+key focuses w
+	at    int  // its place in the label, in runes
 }
 
 // fieldRowKey keys the box of a stacked row, and fieldHole the cell of a
@@ -43,16 +44,13 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 	}
 	display, key, at := parseMnemonic(label)
 	l := Label(display)
-	if key != 0 && !macMenus {
-		l.Rich(mnemonicSpans(display, at)...)
-	}
 	f.change(func() {
 		for _, r := range f.rows {
 			if r.w == c {
 				return
 			}
 		}
-		f.rows = append(f.rows, fieldRow{l, c, key})
+		f.rows = append(f.rows, fieldRow{l, c, key, at})
 		adopt(&f.core, c)
 	})
 	return f
@@ -104,9 +102,10 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					f.hold(r)
 					continue
 				}
-				registerMnemonic(r.key, func() { focusLater(r.w) })
 				ui.Column(c.Key(fieldRowKey(r.label.id))).Gap(colGap).Children(func() {
+					r.underline(c)
 					e := render(c, r.label) // holds a hidden label
+					registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
 					if !r.label.hidden && r.label.place.align == 0 {
 						e.AlignSelf(ui.Start)
 					}
@@ -126,9 +125,10 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 				f.hold(r)
 				continue
 			}
-			registerMnemonic(r.key, func() { focusLater(r.w) })
+			r.underline(c)
 			e := render(c, r.label) // holds a hidden label
-			if r.label.hidden {     // keep its cell, or ui flows the control into it
+			registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
+			if r.label.hidden { // keep its cell, or ui flows the control into it
 				ui.Box(c.Key(fieldHole(r.label.id)))
 			} else {
 				place(e, r.label, ui.Start)
@@ -166,4 +166,14 @@ func (f *FieldsWidget) children() []Control {
 		cs = append(cs, r.w)
 	}
 	return cs
+}
+
+// underline shows the label's mnemonic underlined while Alt is held, and only
+// where a form answers it. Under mu, while building.
+func (r fieldRow) underline(c *ui.Context) {
+	if r.key != 0 && !macMenus && buildingForm != nil && c.Modifiers()&ui.Alt != 0 {
+		r.label.spans = mnemonicSpans(r.label.text, r.at)
+	} else {
+		r.label.spans = nil
+	}
 }
