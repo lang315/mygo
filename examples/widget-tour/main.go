@@ -351,6 +351,23 @@ func choices() widget.Control {
 	)
 }
 
+// dragRow is a drag source and a drop zone: drag the chip onto the zone, or
+// drop files on it.
+func dragRow() widget.Control {
+	chip := widget.Label("Drag me").Padding(8).Border(1, ui.RGB(160, 160, 160)).Radius(1).DragSource("a chip")
+	zone := widget.Label("Drop here").Padding(16).Border(1, ui.RGB(160, 160, 160)).Radius(1)
+	widget.OnDragOver(zone, func(over bool, _ string) {
+		if over {
+			zone.SetText("Let go")
+		} else {
+			zone.SetText("Drop here")
+		}
+	})
+	widget.OnDrop(zone, func(v string) { zone.SetText("Dropped " + v) })
+	zone.OnDropFiles(func(paths []string) { zone.SetText(fmt.Sprintf("%d files dropped", len(paths))) })
+	return widget.HBox(16).Add(chip, zone)
+}
+
 func containers() widget.Control {
 	grid := widget.Grid(8, 8).
 		Attach(widget.Label("A"), 0, 0, 1, 1).
@@ -365,6 +382,7 @@ func containers() widget.Control {
 		Add("card", "Card", widget.Card().SetTitle(widget.Label("Card title").Bold()).SetBody(widget.Label("Card body"))).
 		Add("flow", "FlowPanel", flow).
 		Add("scroll", "ScrollPanel", widget.ScrollPanel(longList())).
+		Add("drag", "Drag and drop", dragRow()).
 		Add("split", "SplitContainer", widget.SplitContainer(
 			widget.VBox(4).Add(widget.Label("Files"), widget.Button("Open")),
 			widget.SplitContainer(widget.Label("Editor"), widget.Label("Console")).Stacked(),

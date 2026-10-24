@@ -47,6 +47,7 @@ type core struct {
 	menu       []MenuItem
 	post       func(c *ui.Context, e ui.Element) // after the styles apply, set by build
 	group      *radioGroup                       // the radio buttons added to the widget, a container
+	dnd        dragDrop                          // drag sources and drop targets
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
@@ -161,6 +162,7 @@ func render(c *ui.Context, w Control) ui.Element {
 		b.post(c, e)
 		b.post = nil
 	}
+	b.dnd.apply(c, e)
 	if b.disabled {
 		e.Disabled(true)
 	}
