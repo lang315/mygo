@@ -16,7 +16,7 @@ const twPath = "github.com/egoist/mygo/ui/widget/tw"
 // or tw.Parse. A string built at run time is left to tw's log.
 func twClasses(call *ast.CallExpr, info *types.Info, report func(token.Pos, string)) {
 	var id *ast.Ident
-	switch f := call.Fun.(type) {
+	switch f := ast.Unparen(call.Fun).(type) {
 	case *ast.SelectorExpr:
 		id = f.Sel
 	case *ast.Ident:
@@ -26,7 +26,7 @@ func twClasses(call *ast.CallExpr, info *types.Info, report func(token.Pos, stri
 		return
 	}
 	fn, ok := info.Uses[id].(*types.Func)
-	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != twPath || fn.Name() != "S" && fn.Name() != "Parse" {
+	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != twPath || fn.Name() != "S" && fn.Name() != "Parse" || fn.Type().(*types.Signature).Recv() != nil {
 		return
 	}
 	v := info.Types[call.Args[0]].Value
