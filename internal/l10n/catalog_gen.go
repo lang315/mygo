@@ -2232,6 +2232,104 @@ func (msgs Messages) FontBoldItalic() string {
 	return Catalog.Format(msgs.locale, "fontBoldItalic", nil)
 }
 
+// TableRows says "Rows: {n, number, ::group-off}"
+// in the language the app shows.
+//
+// The count of rows under a table (DataGridView's bottom panel).
+func TableRows(n int) string { return In(i18n.Locale()).TableRows(n) }
+
+// TableRows says "Rows: {n, number, ::group-off}"
+// in the language of msgs.
+//
+// The count of rows under a table (DataGridView's bottom panel).
+func (msgs Messages) TableRows(n int) string {
+	return Catalog.Format(msgs.locale, "tableRows", map[string]any{"n": n})
+}
+
+// TableSelected says "Selected: {n, number, ::group-off}"
+// in the language the app shows.
+//
+// The count of selected rows under a table.
+func TableSelected(n int) string { return In(i18n.Locale()).TableSelected(n) }
+
+// TableSelected says "Selected: {n, number, ::group-off}"
+// in the language of msgs.
+//
+// The count of selected rows under a table.
+func (msgs Messages) TableSelected(n int) string {
+	return Catalog.Format(msgs.locale, "tableSelected", map[string]any{"n": n})
+}
+
+// TableChecked says "Checked: {n, number, ::group-off}"
+// in the language the app shows.
+//
+// The count of checked rows under a table.
+func TableChecked(n int) string { return In(i18n.Locale()).TableChecked(n) }
+
+// TableChecked says "Checked: {n, number, ::group-off}"
+// in the language of msgs.
+//
+// The count of checked rows under a table.
+func (msgs Messages) TableChecked(n int) string {
+	return Catalog.Format(msgs.locale, "tableChecked", map[string]any{"n": n})
+}
+
+// TableSearch says "Search"
+// in the language the app shows.
+//
+// The button of a table's search panel.
+func TableSearch() string { return In(i18n.Locale()).TableSearch() }
+
+// TableSearch says "Search"
+// in the language of msgs.
+//
+// The button of a table's search panel.
+func (msgs Messages) TableSearch() string {
+	return Catalog.Format(msgs.locale, "tableSearch", nil)
+}
+
+// TableKeyword says "Keyword"
+// in the language the app shows.
+//
+// The placeholder of a table's search panel.
+func TableKeyword() string { return In(i18n.Locale()).TableKeyword() }
+
+// TableKeyword says "Keyword"
+// in the language of msgs.
+//
+// The placeholder of a table's search panel.
+func (msgs Messages) TableKeyword() string {
+	return Catalog.Format(msgs.locale, "tableKeyword", nil)
+}
+
+// Loading says "Loading…"
+// in the language the app shows.
+//
+// The row of a tree node whose children load.
+func Loading() string { return In(i18n.Locale()).Loading() }
+
+// Loading says "Loading…"
+// in the language of msgs.
+//
+// The row of a tree node whose children load.
+func (msgs Messages) Loading() string {
+	return Catalog.Format(msgs.locale, "loading", nil)
+}
+
+// ColorDialogTitle says "Color"
+// in the language the app shows.
+//
+// The title of the color dialog (widget.ColorDialog).
+func ColorDialogTitle() string { return In(i18n.Locale()).ColorDialogTitle() }
+
+// ColorDialogTitle says "Color"
+// in the language of msgs.
+//
+// The title of the color dialog (widget.ColorDialog).
+func (msgs Messages) ColorDialogTitle() string {
+	return Catalog.Format(msgs.locale, "colorDialogTitle", nil)
+}
+
 // Cancel says "Cancel"
 // in the language the app shows.
 //

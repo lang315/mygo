@@ -193,5 +193,12 @@
   "clipboardRead": "某程序想要读取剪贴板",
   "clipboardReadAllow": "允许",
   "clipboardReadDeny": "拒绝",
-  "clipboardReadEmpty": "剪贴板中没有文本。"
+  "clipboardReadEmpty": "剪贴板中没有文本。",
+  "tableRows": "行数：{n, number, ::group-off}",
+  "tableSelected": "已选择：{n, number, ::group-off}",
+  "tableChecked": "已勾选：{n, number, ::group-off}",
+  "tableSearch": "搜索",
+  "tableKeyword": "关键字",
+  "loading": "正在加载…",
+  "colorDialogTitle": "颜色"
 }

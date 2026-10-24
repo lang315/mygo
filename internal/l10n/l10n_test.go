@@ -13,6 +13,7 @@ import (
 	. "github.com/egoist/mygo/internal/l10n"
 
 	// The translations, which apps import for the languages they ship.
+	_ "github.com/egoist/mygo/locales/vi"
 	_ "github.com/egoist/mygo/locales/zh-Hans"
 	_ "github.com/egoist/mygo/locales/zh-Hant"
 )
@@ -81,6 +82,10 @@ func TestCatalogs(t *testing.T) {
 func TestMessages(t *testing.T) {
 	for _, c := range []struct{ got, want string }{
 		{Undo(), "Undo"}, // the source language before package mygo tells the app's
+		{In("vi").Undo(), "Hoàn tác"},
+		{In("vi").Cancel(), "Hủy"},
+		{In("vi").MenuQuitApp("Notes"), "Thoát Notes"},
+		{In("vi").TableRows(12), "Số dòng: 12"},
 		{In("zh-Hans").Undo(), "撤销"},
 		{In("zh-TW").Undo(), "復原"},
 		{In("zh-HK").MenuOpenRecent(), "打開最近使用過的檔案"},

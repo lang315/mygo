@@ -193,5 +193,12 @@
   "clipboardRead": "某個程式想要讀取剪貼簿",
   "clipboardReadAllow": "允許",
   "clipboardReadDeny": "拒絕",
-  "clipboardReadEmpty": "剪貼簿中沒有文字。"
+  "clipboardReadEmpty": "剪貼簿中沒有文字。",
+  "tableRows": "列數：{n, number, ::group-off}",
+  "tableSelected": "已選取：{n, number, ::group-off}",
+  "tableChecked": "已勾選：{n, number, ::group-off}",
+  "tableSearch": "搜尋",
+  "tableKeyword": "關鍵字",
+  "loading": "正在載入…",
+  "colorDialogTitle": "顏色"
 }
