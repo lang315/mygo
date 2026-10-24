@@ -128,7 +128,8 @@ Windows 11 ARM64.
 **Exit criteria:**
 
 - Every WinForms control is implemented, or the reason it was dropped is
-  written down.
+  written down, in the [WinForms catalogue](ui/winforms.md), which also
+  lists what is still open.
 - Each control has docs, tests and an entry in the widget tour.
 
 ## Track 3: engine and platform, alongside
