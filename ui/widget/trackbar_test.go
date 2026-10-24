@@ -96,3 +96,27 @@ func TestTrackBarBindsAFloat(t *testing.T) {
 		t.Fatalf("the source got %v", v)
 	}
 }
+
+func TestTrackBarMaxBelowMinIsRaisedToMin(t *testing.T) {
+	tb := TrackBar(10, 0)
+	tb.SetValue(5)
+	if tb.Value() != 10 {
+		t.Fatalf("Value %v: with Max below Min, Max is raised to Min, so the only value is 10", tb.Value())
+	}
+}
+
+func TestTrackBarSetValueIgnoresNaN(t *testing.T) {
+	tb := TrackBar(0, 10).SetValue(4)
+	tb.SetValue(math.NaN())
+	if tb.Value() != 4 {
+		t.Fatalf("Value %v after SetValue(NaN)", tb.Value())
+	}
+}
+
+// Only the user's input snaps to the step; a setter is exact.
+func TestTrackBarSetValueIsExactEvenWithAStep(t *testing.T) {
+	tb := TrackBar(0, 100).SetStep(25).SetValue(30)
+	if tb.Value() != 30 {
+		t.Fatalf("Value %v", tb.Value())
+	}
+}

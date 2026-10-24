@@ -18,10 +18,11 @@ type TrackBarWidget struct {
 	onChange func()
 }
 
-// TrackBar makes a track bar from min to max, at min.
-func TrackBar(min, max float64) *TrackBarWidget {
-	t := &TrackBarWidget{min: min, max: max}
-	t.value.set(min)
+// TrackBar makes a track bar from min to max, at min. A max below min is
+// raised to it, as WinForms does.
+func TrackBar(lo, hi float64) *TrackBarWidget {
+	t := &TrackBarWidget{min: lo, max: math.Max(lo, hi)}
+	t.value.set(lo)
 	t.init(t)
 	return t
 }
@@ -33,6 +34,9 @@ func (t *TrackBarWidget) Int() int       { return int(math.Round(t.Value())) }
 // SetValue moves the knob, to the range's end if v is outside it, without
 // running OnChange.
 func (t *TrackBarWidget) SetValue(v float64) *TrackBarWidget {
+	if math.IsNaN(v) {
+		return t
+	}
 	t.change(func() { t.value.set(min(max(v, t.min), t.max)) })
 	return t
 }

@@ -6,7 +6,8 @@ drags the knob, presses on the track, or uses the arrows, Page Up and Page Down
 [`ui.Slider`](../slider.md) underneath.
 
 ```go
-volume := widget.TrackBar(0, 100).SetValue(60).OnChange(func() { player.SetVolume(volume.Value()) })
+var volume *widget.TrackBarWidget
+volume = widget.TrackBar(0, 100).SetValue(60).OnChange(func() { player.SetVolume(volume.Value()) })
 quality := widget.TrackBar(0, 100).SetStep(25) // 0, 25, 50, 75, 100, with ticks
 ```
 
