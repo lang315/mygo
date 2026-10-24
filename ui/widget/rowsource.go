@@ -109,20 +109,22 @@ func (s *RowSource[T, K]) since(seq uint64) ([]srcChange, bool) {
 // change runs fn under mu, then redraws the windows that show a table over
 // the source.
 func (s *RowSource[T, K]) change(fn func()) {
-	mu.Lock()
-	fn()
-	var wins []*mygo.Window
-	for w, f := range shown {
-		for _, t := range s.tables {
-			if l := t.Value(); l != nil {
-				if _, ok := f.keep.widgets[l.id]; ok {
-					wins = append(wins, w)
-					break
+	wins := func() (wins []*mygo.Window) {
+		mu.Lock()
+		defer mu.Unlock() // fn runs the program's key func and UpdateRow's fn: it may panic
+		fn()
+		for w, f := range shown {
+			for _, t := range s.tables {
+				if l := t.Value(); l != nil {
+					if _, ok := f.keep.widgets[l.id]; ok {
+						wins = append(wins, w)
+						break
+					}
 				}
 			}
 		}
-	}
-	mu.Unlock()
+		return wins
+	}()
 	for _, w := range wins {
 		invalidate(w)
 	}

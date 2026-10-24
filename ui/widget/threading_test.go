@@ -175,6 +175,74 @@ func TestInvokeWhenTheAppIsNotRunningReturnsWithoutRunningFn(t *testing.T) {
 	}
 }
 
+// unlocked fails the test if the package lock is held, and frees it so that
+// the rest of the tests do not hang on it.
+func unlocked(t *testing.T) {
+	t.Helper()
+	if !mu.TryLock() {
+		mu.Unlock()
+		t.Fatal("the package lock is still held after a panic in a callback that runs under it")
+	}
+	mu.Unlock()
+}
+
+type pubRow struct {
+	k int
+	p *int
+}
+
+// A callback that runs under the package lock and panics must not leave it
+// held: the next frame and every setter would wait for it for ever.
+func TestAPanicUnderTheLockLeavesItFree(t *testing.T) {
+	for name, trigger := range map[string]func(){
+		"UpdateRow's fn": func() {
+			src := NewRowSource(func(r *pubRow) int { return r.k }).SetRows([]pubRow{{k: 1}})
+			src.UpdateRow(1, func(r *pubRow) { *r.p = 1 }) // p is nil
+		},
+		"a RowSource's key func": func() {
+			NewRowSource(func(r *pubRow) int {
+				if r.k < 0 {
+					panic("bad key")
+				}
+				return r.k
+			}).AddRows([]pubRow{{k: -1}})
+		},
+		"a control's change":   func() { Label("x").change(func() { panic("in change") }) },
+		"a form's change":      func() { NewForm("t", 10, 10).change(func() { panic("in change") }) },
+		"the package's change": func() { change(func() { panic("in change") }) },
+	} {
+		func() {
+			defer func() { recover() }()
+			trigger()
+		}()
+		t.Run(name, func(t *testing.T) { unlocked(t) })
+	}
+}
+
+// After such a panic, a setter still redraws its window.
+func TestASetterStillRedrawsAfterAPanicUnderTheLock(t *testing.T) {
+	got := reports(t)
+	l := Label("x")
+	_, w := showFrame(t, l)
+	src := NewRowSource(func(r *pubRow) int { return r.k }).SetRows([]pubRow{{k: 1}})
+	Post(func() { src.UpdateRow(1, func(r *pubRow) { *r.p = 1 }) })
+	received(t, got)
+	redrawn := recordInvalidations(t)
+	l.SetText("after") // would hang on the lock
+	wantRedrawn(t, redrawn(), w)
+}
+
+// A quit app is not running: Invoke does not run fn.
+func TestInvokeAfterTheAppQuitReturnsWithoutRunningFn(t *testing.T) {
+	t.Cleanup(func() { stopped.Store(false) })
+	ran := false
+	markStopped() // what mygo's OnQuit calls
+	Invoke(func() { ran = true })
+	if ran {
+		t.Fatal("Invoke ran fn after the app quit")
+	}
+}
+
 // Many goroutines invoke while handlers post and panic (go test -race).
 func TestInvokeFromManyGoroutines(t *testing.T) {
 	got := reports(t)

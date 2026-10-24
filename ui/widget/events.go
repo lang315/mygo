@@ -46,15 +46,22 @@ func BeginInvoke(fn func()) { Post(fn) }
 // it. The app runs from when it is ready until Run returns.
 var appRunning = func() bool { return mygo.App.IsReady() && !stopped.Load() }
 
-// stopped is set when Run returns: the app has quit.
+// stopped is set when the app has quit: mygo calls OnQuit after its event
+// loop stopped, for an app that started through widget.Run or mygo.App.Run.
 var stopped atomic.Bool
+
+var _ = mygo.App.OnQuit(markStopped)
+
+func markStopped() { stopped.Store(true) }
 
 // Invoke runs fn on the event goroutine and waits for it, as WinForms'
 // Control.Invoke does, so that a worker goroutine changes widgets in step
 // with the handlers. On the event goroutine, in a handler, it runs fn at
 // once: it never waits for itself. It panics on the main thread, which must
-// not wait. Before the app runs, or after it quit, it returns without
-// running fn.
+// not wait. Before the app runs, or after it quit (the event loop stopped,
+// whether Run or mygo.App.Run started it), it returns without running fn.
+// Do not call it in a callback that runs under the package's lock
+// (UpdateRow's fn, a RowSource's key func): it would wait for the lock.
 //
 // A panic in fn is recovered on the event goroutine and reported as any
 // handler's is (see OnPanic), and Invoke panics again with the same value

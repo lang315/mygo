@@ -90,9 +90,12 @@ gota's names are listed for code ported from it.
 - **`Invoke(fn)`**, or `Update(fn)`, runs `fn` on the event goroutine and
   waits for it, as WinForms' `Control.Invoke`, for a worker that must change
   widgets in step with the handlers. **In a handler it runs `fn` at once**:
-  it never waits for itself, so calling it from anywhere is safe (gota's
-  `IdleAddSync` did deadlock there). Before the app runs, or after it quit,
-  it returns without running `fn`.
+  it never waits for itself, so calling it from a handler or a goroutine is
+  safe (gota's `IdleAddSync` did deadlock there). Not from a callback that
+  runs under the package's lock, such as `UpdateRow`'s function or a
+  `RowSource`'s key function: they must call no widget method, and `Invoke`
+  would wait for the lock they hold. Before the app runs, or after it quit
+  (mygo's `OnQuit`), it returns without running `fn`.
 - **A panic in a handler** is recovered on the event goroutine, so the app
   keeps running: in anything run through `Post`, `BeginInvoke` or `Invoke`,
   and in a widget's event (`OnClick`, `OnChange`, a binding's `set`, a menu
