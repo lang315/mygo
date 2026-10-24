@@ -294,8 +294,12 @@ func choices() widget.Control {
 	spin.OnChange(func() {
 		progress.SetFraction(spin.Value() / 100).SetText(fmt.Sprintf("%d%%", spin.Int()))
 	})
+	volume := widget.TrackBar(0, 100).SetValue(60)
+	volumeText := widget.Label("Volume 60")
+	volume.OnChange(func() { volumeText.SetText(fmt.Sprintf("Volume %d", volume.Int())) })
 	return widget.VBox(8).Add(
-		spin, progress,
+		spin, progress, volume, volumeText,
+		widget.TrackBar(0, 100).SetStep(25),
 		widget.RangeSpin(0, 60, 0, 600, 1, "to", "seconds").SetValues(5, 30),
 		widget.ComboBox(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).SetValue("vn"),
 		widget.CheckBoxGroup(true, widget.Option{Value: "a", Text: "Apple"}, widget.Option{Value: "b", Text: "Banana"}),

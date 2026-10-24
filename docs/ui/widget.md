@@ -495,6 +495,7 @@ name := widget.Bind(widget.TextBox(),
 | `CheckBox` | `bool` | `Bind` |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
+| `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options and makes it a plain choice, not `Editable`; `set` is called for yes and no only |
 
 - The control takes `get()`'s value at once. After each edit of the user,
@@ -678,6 +679,7 @@ Layout:
 - `FlowPanel(spacing)`: a row that wraps.
 - `ScrollPanel(w)`: scrolls a widget larger than its room.
 - `SplitContainer(first, second)`: two panes with a divider; see [SplitContainer](widget/split-container.md).
+- `TrackBar(min, max)`: a slider; see [TrackBar](widget/trackbar.md).
 - `Separator()`: a line.
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,

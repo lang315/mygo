@@ -4,7 +4,7 @@ import "math"
 
 // Bindable is a control that edits one value: a TextBox (string), a
 // CheckBox (bool), a ComboBox (the Value of its option, a string) or a
-// NumericUpDown (float64). Only these are bindable; the interface cannot be
+// NumericUpDown or a TrackBar (float64). Only these are bindable; the interface cannot be
 // implemented outside the package.
 type Bindable[T comparable] interface {
 	Control
