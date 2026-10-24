@@ -12,7 +12,8 @@ import (
 type keeper struct {
 	widgets map[int]weak.Pointer[core]
 	built   map[int]bool
-	held    map[int]bool // hidden controls the frame met, not built
+	held    map[int]bool         // hidden controls the frame met, not built
+	order   []weak.Pointer[core] // the controls the last build made, in order (ValidateChildren)
 }
 
 // keeping is the keeper of the view being built. Only views touch it,
@@ -29,6 +30,8 @@ func (k *keeper) begin() {
 	}
 	clear(k.built)
 	clear(k.held)
+	clear(k.order)
+	k.order = k.order[:0]
 	keeping, lastKeeper = k, k
 }
 
@@ -51,6 +54,7 @@ func (k *keeper) key(c *ui.Context, b *core) {
 		return
 	}
 	k.built[b.id] = true
+	k.order = append(k.order, weak.Make(b))
 	b.builtIn = building
 	if _, ok := k.widgets[b.id]; !ok {
 		// Weak, so the app dropping the widget frees it and its state.

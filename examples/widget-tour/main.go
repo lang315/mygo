@@ -63,7 +63,7 @@ func main() {
 func tour(w *widget.Form) widget.Control {
 	return widget.TabControl().
 		AddPage("Layout", layout()).
-		AddPage("Inputs", inputs()).
+		AddPage("Inputs", inputs(w)).
 		AddPage("Choices", choices()).
 		AddPage("Containers", containers()).
 		AddPage("Dialogs", dialogs(w)).
@@ -303,7 +303,7 @@ func layout() widget.Control {
 	)
 }
 
-func inputs() widget.Control {
+func inputs(w *widget.Form) widget.Control {
 	var name *widget.TextBoxWidget
 	greeting := widget.Label("Type a name")
 	// Bound to a value kept elsewhere: an edit calls set, a program setter does not.
@@ -323,6 +323,7 @@ func inputs() widget.Control {
 		widget.TextBox().SetPlaceholder("At most 8 characters").MaxLength(8),
 		widget.TextBox().SetPlaceholder("Search").Icon(searchIcon()),
 		maskedRow(),
+		validationRow(w),
 		widget.MultilineTextBox().SetPlaceholder("Notes").SetSize(0, 100),
 		widget.CheckBox("Remember me"),
 		widget.HBox(8).Add(widget.Switch(), widget.Label("Notifications")),

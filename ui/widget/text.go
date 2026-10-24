@@ -156,7 +156,7 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 			}
 			pad := el.Paddings()[side]
 			el.PaddingStart(pad + iconSize + t.Space(1.5))
-			el.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			e.over = append(e.over, func(p *ui.Painter, r ui.Rect) {
 				x := r.X + pad
 				if rtl {
 					x = r.X + r.W - pad - iconSize
