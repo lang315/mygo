@@ -57,9 +57,13 @@ type TextBoxWidget struct {
 	password    bool
 	readOnly    bool
 	maxLen      int // runes, 0 for no limit
+	icon        *ui.Bitmap
 	onChange    func()
 	onEnter     func()
 }
+
+// iconSize is the side of a TextBox's icon, in DIPs.
+const iconSize = 16
 
 // TextBox makes an empty one-line text input.
 func TextBox() *TextBoxWidget {
@@ -80,6 +84,13 @@ func (e *TextBoxWidget) cut(s string) string {
 		return string([]rune(s)[:e.maxLen])
 	}
 	return s
+}
+
+// Icon shows img, 16 DIPs square, before the text inside the box, as gota's
+// entry icon does, at its left; nil removes it.
+func (e *TextBoxWidget) Icon(img *ui.Bitmap) *TextBoxWidget {
+	e.change(func() { e.icon = img })
+	return e
 }
 
 // MaxLength limits the text to n runes, as WinForms' MaxLength does:
@@ -134,6 +145,14 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	}
 	el.ReadOnly(e.readOnly)
 	el.MaxLength(e.maxLen)
+	if icon := e.icon; icon != nil {
+		t := c.Theme()
+		pad := t.Space(2.5)
+		el.Padding(t.Space(1.5), pad, t.Space(1.5), pad+iconSize+t.Space(1.5))
+		el.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			p.Image(icon, ui.Rect{X: r.X + pad, Y: r.Y + (r.H-iconSize)/2, W: iconSize, H: iconSize}, ui.Contain)
+		})
+	}
 	el.OnChange(edited(&e.text, &e.bound, e.onChange))
 	if changed && e.onChange != nil {
 		Post(e.onChange)

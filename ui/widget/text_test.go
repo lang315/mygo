@@ -1,6 +1,9 @@
 package widget
 
 import (
+	"image"
+	"image/color"
+	"image/draw"
 	"testing"
 
 	"github.com/egoist/mygo/internal/wait"
@@ -192,5 +195,72 @@ func TestTextBoxMaxLengthCutsTypingPastingAndSetText(t *testing.T) {
 	tt.Frame()
 	if got := tb.Text(); got != "abcdefgh" {
 		t.Fatalf("no limit: %q", got)
+	}
+}
+
+// lastInk returns the last column before the box's right edge whose
+// pixels in the band differ from the box's fill: the text's right edge.
+func lastInk(tt *ui.Tester, y0, y1 int) int {
+	img := tt.Image()
+	bg := img.RGBAAt(300, (y0+y1)/2)
+	for x := 290; x > 0; x-- {
+		for y := y0; y < y1; y++ {
+			c := img.RGBAAt(x, y)
+			if absInt(int(c.R)-int(bg.R))+absInt(int(c.G)-int(bg.G))+absInt(int(c.B)-int(bg.B)) > 120 {
+				return x
+			}
+		}
+	}
+	return -1
+}
+
+func solidBitmap(c color.RGBA) *ui.Bitmap {
+	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	draw.Draw(img, img.Bounds(), &image.Uniform{c}, image.Point{}, draw.Src)
+	return ui.NewBitmap(img)
+}
+
+// firstInk returns the first column from x0 whose pixels in the band
+// y0..y1 differ from the box's fill, which is the text's left edge.
+func firstInk(tt *ui.Tester, x0, y0, y1 int) int {
+	img := tt.Image()
+	bg := img.RGBAAt(300, (y0+y1)/2)
+	for x := x0; x < 300; x++ {
+		for y := y0; y < y1; y++ {
+			c := img.RGBAAt(x, y)
+			if absInt(int(c.R)-int(bg.R))+absInt(int(c.G)-int(bg.G))+absInt(int(c.B)-int(bg.B)) > 120 {
+				return x
+			}
+		}
+	}
+	return -1
+}
+
+func TestTextBoxIconDrawsInsideTheBoxAndPushesTheText(t *testing.T) {
+	red := color.RGBA{220, 0, 0, 255}
+	plain := TextBox().SetText("hello")
+	iconed := TextBox().SetText("hello").Icon(solidBitmap(red))
+	ttPlain, ttIcon := tester(t, plain), tester(t, iconed)
+	const y0, y1 = 10, 22
+	p := firstInk(ttPlain, 6, y0, y1)
+	if p < 0 {
+		t.Fatal("no text in the plain box")
+	}
+	// The icon is red in the box's left padding, which the plain box does not show.
+	img := ttIcon.Image()
+	if c := img.RGBAAt(p+4, 16); c != red {
+		t.Fatalf("pixel at the icon %v, want red", c)
+	}
+	if c := ttPlain.Image().RGBAAt(p+4, 16); c == red {
+		t.Fatal("the plain box shows red")
+	}
+	// The text ends further right by the icon and its gap.
+	if a, b := lastInk(ttPlain, y0, y1), lastInk(ttIcon, y0, y1); b < a+16 {
+		t.Fatalf("the text ends at %d, plain at %d: it must make room for the icon", b, a)
+	}
+	iconed.Icon(nil) // nil removes it
+	ttIcon.Frame()
+	if i := firstInk(ttIcon, 6, y0, y1); i != p {
+		t.Fatalf("Icon(nil): the text starts at %d, want %d", i, p)
 	}
 }
