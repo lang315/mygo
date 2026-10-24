@@ -47,7 +47,7 @@ func (s *NumericUpDownWidget) build(c *ui.Context) ui.Element {
 	if changed && s.onChange != nil {
 		Post(s.onChange)
 	}
-	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(onChange(&s.value, s.onChange))
+	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(edited(&s.value, &s.bound, s.onChange))
 	if h := s.onEnter; h != nil && e.Submitted() {
 		Post(h)
 	}
@@ -265,7 +265,7 @@ func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 	// The look of ui.Select (ui/widgets.go coreSelect), from public API.
 	sel.Trigger.Padding(t.Space(1.5), t.Space(3)).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).
 		Justify(ui.SpaceBetween).AlignItems(ui.Center).Gap(t.Space(2)).MinWidth(t.Space(35)).
-		OnChange(onChange(&c.value, c.onChange)).
+		OnChange(edited(&c.value, &c.bound, c.onChange)).
 		Children(func() {
 			ui.Text(ctx, text).SingleLine()
 			ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted)

@@ -109,7 +109,7 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 		el.Password()
 	}
 	el.ReadOnly(e.readOnly)
-	el.OnChange(onChange(&e.text, e.onChange))
+	el.OnChange(edited(&e.text, &e.bound, e.onChange))
 	if changed && e.onChange != nil {
 		Post(e.onChange)
 	}

@@ -342,6 +342,55 @@ From gota: `text-italic` is `italic`, `text-green` is `text-green-600`,
 `combobox-rounded-r-none` is `rounded-r-none`, and `gota-card`, `gota-table`
 and `gota-tag-select*` are widget controls, not classes.
 
+## Binding
+
+`widget.Bind` ties a control to a value kept elsewhere, such as a config,
+so a form needs no pair of `SetValue` and `OnChange` for each setting:
+
+```go
+// before
+name := widget.TextBox().SetText(config.Get("name")).
+	OnChange(func() { config.Set("name", name.Text()) })
+
+// after
+name := widget.Bind(widget.TextBox(),
+	func() string { return config.Get("name") },
+	func(v string) { config.Set("name", v) })
+```
+
+| Control | Value | |
+|---|---|---|
+| `TextBox` | `string` | `Bind` |
+| `CheckBox` | `bool` | `Bind` |
+| `ComboBox` | the `Value` of its option, a `string` | `Bind` |
+| `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
+
+- The control takes `get()`'s value at once. After each edit of the user,
+  `set(v)` runs with the new value on the event goroutine, after the
+  control's own `OnChange` (`Bind` does not replace it), and off the
+  package's lock, so `set` may call the control's getters.
+- **A program setter does not call `set`.** `SetText`, `SetChecked` and
+  `SetValue` change what the control shows, not the source: the program
+  already knows the value it gave. This keeps a binding from looping.
+- `widget.Reload(c)` takes the source's value again, for a source that
+  changed elsewhere; it does not call `set`, and does nothing for a control
+  that is not bound. Call it where the source changes, or when the window
+  shows again.
+- A `ComboBox` whose options have no value `get()` returned stays empty, as
+  `SetValue` leaves it; set its options before binding, or `Reload` after.
+  A `NumericUpDown` clamps `get()`'s value to its range. Neither is written
+  back to the source.
+- `set` gets the value the user entered, taken as the edit is committed: an
+  `OnChange` that normalizes the text with `SetText`, or a worker that sets
+  the control before `set` runs, does not change what `set` receives.
+- `get` runs on the goroutine that calls `Bind` or `Reload`, and `set` on the
+  event goroutine, so both must be safe to call at the same time (a mutex
+  around the config, as a config store has).
+- Binding a control again replaces its binding: the last wins, and an edit
+  already committed is written through the binding of that moment.
+- No reflection: `get` and `set` are plain functions, so a binding to a
+  field, a map or a config store is the same few lines.
+
 ## DataGridView
 
 ```go
@@ -474,6 +523,9 @@ Input and display:
 - `TextBox()`, `MultilineTextBox()`: one line or several of text; `Text`,
   `SetText`, `SetPlaceholder`, `SetEditable`, `OnChange`; `TextBox` also has
   `Password` and `OnEnter`.
+- `Bind(control, get, set)`, `BindInt`, `Reload(control)`: tie a `TextBox`,
+  `CheckBox`, `ComboBox` or `NumericUpDown` to a value kept elsewhere; see
+  [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon`. `LinkLabel(text, url)`.
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
 - `CheckBoxGroup(row, options...)`, `TagSelect(options...)`: several of
