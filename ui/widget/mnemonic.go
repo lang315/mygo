@@ -13,8 +13,8 @@ import (
 // "&Đóng" answers to d) and its index in the text, in runes: "&Save" is
 // "Save", 's', 0; "&&" is a literal "&". A label with no mnemonic, or whose
 // marked character no key types, gives key 0 and index -1. The first single
-// "&" that is followed by a character marks it; a "&" at the end stays as it
-// is.
+// "&" that is followed by a character marks it; a "&" at the end, or before
+// a space, stays as it is.
 func parseMnemonic(s string) (display string, key rune, at int) {
 	in := []rune(s)
 	out := make([]rune, 0, len(in))
@@ -26,6 +26,10 @@ func parseMnemonic(s string) (display string, key rune, at int) {
 			if in[i+1] == '&' {
 				out = append(out, '&')
 				i++
+				continue
+			}
+			if in[i+1] == ' ' {
+				out = append(out, '&') // "& " is never a mnemonic
 				continue
 			}
 			if !marked {

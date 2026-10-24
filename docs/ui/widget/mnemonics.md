@@ -5,14 +5,15 @@ the S as its access key, and Alt+S clicks it; `Fields().Row("&Name", nameBox)`
 makes Alt+N give `nameBox` the focus. `&&` is a literal `&`. The first single
 `&` that has a character after it marks the key. The key is the letter or digit
 that types it, accents folded: `&Đóng` answers to Alt+D, `&Ẩn` to Alt+A; a
-character no key types (`&@`) makes no mnemonic. An `&` at the end stays as it
-is.
+character no key types (`&@`) makes no mnemonic. An `&` at the end, or before a space, is never a mnemonic and stays as it is.
 
 - **Where:** the text of a `Button` (without an icon), a `CheckBox` (Alt+key
   toggles it and gives it the focus), a `RadioButton` (selects it), the labels
-  of `Fields` rows (focus the row's control) and a plain `Label` (focuses the
-  next control after it that can take the focus, one that is disabled
-  skipped; `SetUseMnemonic(false)` shows the text as it is, with its `&`),
+  of `Fields` rows (focus the row's control) and a `Label` that asks
+  with `SetUseMnemonic(true)` (it focuses the next control after it that can
+  take the focus, a disabled one skipped; **unlike WinForms it is off by
+  default**, because labels show data such as `a=1&b=2` or `Tom & Jerry` that
+  would lose its ampersands),
   in a form that shows them
   (not in `widget.View` or a `NewTester` of a control alone: there nothing
   answers and nothing is underlined). Alt+Shift+key answers as Alt+key.

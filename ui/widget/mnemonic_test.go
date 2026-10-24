@@ -18,6 +18,8 @@ func TestParseMnemonic(t *testing.T) {
 		{"Plain", "Plain", 0, -1},
 		{"A &&B", "A &B", 0, -1},
 		{"Trailing &", "Trailing &", 0, -1},
+		{"Tom & Jerry", "Tom & Jerry", 0, -1},
+		{"Tom & &Jerry", "Tom & Jerry", 'j', 6},
 		{"&Đức", "Đức", 'd', 0},
 		{"&Ẩn", "Ẩn", 'a', 0},
 		{"&Ước", "Ước", 'u', 0},
@@ -307,7 +309,7 @@ func TestMenuBarAccessKeysBeatControlMnemonics(t *testing.T) {
 func TestLabelMnemonicFocusesTheNextControlThatTakesTheFocus(t *testing.T) {
 	withMac(t, false)
 	f := NewForm("m", 400, 200)
-	f.SetContent(VBox(4).Add(Label("&Name"), Label("a plain label"), TextBox(), TextBox()))
+	f.SetContent(VBox(4).Add(Label("&Name").SetUseMnemonic(true), Label("a plain label"), TextBox(), TextBox()))
 	tt := TestForm(t, f)
 	tt.Settle()
 	if !tt.Has(ByLabel("Name")) || tt.Has(ByLabel("&Name")) {
@@ -327,7 +329,7 @@ func TestLabelMnemonicSkipsADisabledControl(t *testing.T) {
 	f := NewForm("m", 400, 200)
 	off := TextBox()
 	off.SetDisabled(true)
-	f.SetContent(VBox(4).Add(Label("&Name"), off, TextBox()))
+	f.SetContent(VBox(4).Add(Label("&Name").SetUseMnemonic(true), off, TextBox()))
 	tt := TestForm(t, f)
 	tt.Settle()
 	tt.Key(ui.Alt, ui.KeyN)
@@ -339,19 +341,24 @@ func TestLabelMnemonicSkipsADisabledControl(t *testing.T) {
 	}
 }
 
-func TestLabelUseMnemonicFalseShowsTheTextAsItIs(t *testing.T) {
+// A label shows its data: ampersands stay unless the label asks for mnemonics.
+func TestLabelShowsItsAmpersandsUnlessItUsesMnemonics(t *testing.T) {
 	withMac(t, false)
 	f := NewForm("m", 400, 200)
-	f.SetContent(VBox(4).Add(Label("Q&A").SetUseMnemonic(false), TextBox()))
+	f.SetContent(VBox(4).Add(Label("a=1&b=2"), Label("Tom & Jerry").SetUseMnemonic(true), TextBox()))
 	tt := TestForm(t, f)
 	tt.Settle()
-	if !tt.Has(ByLabel("Q&A")) {
-		t.Fatalf("labels %q", tt.Texts())
+	for _, s := range []string{"a=1&b=2", "Tom & Jerry"} {
+		if !tt.Has(ByLabel(s)) {
+			t.Errorf("no %q among %q", s, tt.Texts())
+		}
 	}
-	tt.Key(ui.Alt, ui.KeyA)
+	tt.Key(ui.Alt, ui.KeyB)
+	tt.Settle()
+	tt.Key(ui.Alt, ui.KeyJ)
 	tt.Settle()
 	if tt.Find(ByRole(ui.RoleTextField)).Focused() {
-		t.Error("a label that does not use mnemonics answered one")
+		t.Error("a label answered a mnemonic it was not meant to have")
 	}
 }
 
