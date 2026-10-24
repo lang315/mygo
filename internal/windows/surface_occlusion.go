@@ -21,28 +21,29 @@ var procDwmGetWindowAttribute = dwmapi.NewProc("DwmGetWindowAttribute")
 // hidden, or cloaked (on another virtual desktop, or a UWP app's suspended
 // window). Windows does not tell when other windows cover this one, and
 // DWM keeps composing it all the same. SurfaceShown follows once it shows:
-// a restore or a show is a message to the window, and a cloaked window is
+// a restore is a WM_SIZE, and a hidden or cloaked window is
 // asked about every cloakPollMS, as Windows sends no message when it is
 // uncloaked.
 func (s *surface) Occluded() bool {
-	out, cloaked := s.out()
+	out, poll := s.out()
 	if out {
 		s.wasOut = true
-		if cloaked {
+		if poll {
 			procSetTimer.Call(s.hwnd, timerCloak, cloakPollMS, 0)
 		}
 	}
 	return out
 }
 
-// out reports whether nothing of the window shows, and whether it is
-// cloaked.
-func (s *surface) out() (out, cloaked bool) {
+// out reports whether nothing of the window shows, and whether it is to be
+// asked again (poll): a hidden or a cloaked window is, a minimized one
+// restores with a WM_SIZE.
+func (s *surface) out() (out, poll bool) {
 	if iconic, _, _ := procIsIconic.Call(s.w.hwnd); iconic != 0 {
 		return true, false
 	}
 	if visible, _, _ := procIsWindowVisible.Call(s.w.hwnd); visible == 0 {
-		return true, false
+		return true, true
 	}
 	if has(procDwmGetWindowAttribute) {
 		var c uint32
@@ -59,11 +60,11 @@ func (s *surface) checkShown() {
 	if !s.wasOut {
 		return
 	}
-	if out, cloaked := s.out(); !out {
+	if out, poll := s.out(); !out {
 		s.wasOut = false
 		procKillTimer.Call(s.hwnd, timerCloak)
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceShown})
-	} else if !cloaked {
+	} else if !poll {
 		procKillTimer.Call(s.hwnd, timerCloak)
 	}
 }

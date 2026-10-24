@@ -420,11 +420,6 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 			w.sized(wp)
 		}
 		return 0, true
-	case wmShowWindow:
-		if wp != 0 && w.surface != nil {
-			w.surface.checkShown()
-		}
-		return 0, false
 	case wmMove:
 		if w.controller != 0 {
 			comCall(w.controller, ctlNotifyParentWindowPositionChanged)

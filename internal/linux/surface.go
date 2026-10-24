@@ -326,7 +326,7 @@ func (s *surface) Size() (float64, float64, float64) {
 
 // Occluded reports whether nothing of the window shows (windowOut).
 func (s *surface) Occluded() bool {
-	out := windowOut(s.w.state, s.w.obscured)
+	out := windowOut(s.w.state)
 	if out {
 		s.wasOut = true
 	}
@@ -336,7 +336,7 @@ func (s *surface) Occluded() bool {
 // checkShown tells the content that some of the window shows again, if
 // Occluded last said none did.
 func (s *surface) checkShown() {
-	if s.wasOut && !windowOut(s.w.state, s.w.obscured) {
+	if s.wasOut && !windowOut(s.w.state) {
 		s.wasOut = false
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceShown})
 	}

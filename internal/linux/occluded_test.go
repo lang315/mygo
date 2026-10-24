@@ -6,19 +6,17 @@ import "testing"
 
 func TestWindowOut(t *testing.T) {
 	for _, c := range []struct {
-		state    uint32
-		obscured bool
-		out      bool
+		state uint32
+		out   bool
 	}{
-		{0, false, false},
-		{stateFocused | stateMaximized, false, false},
-		{stateIconified, false, true},
-		{stateWithdrawn, false, true},
-		{stateIconified | stateFocused, false, true},
-		{0, true, true},
+		{0, false},
+		{stateFocused | stateMaximized, false},
+		{stateIconified, true},
+		{stateWithdrawn, true},
+		{stateIconified | stateFocused, true},
 	} {
-		if got := windowOut(c.state, c.obscured); got != c.out {
-			t.Errorf("windowOut(%#x, %v) = %v, want %v", c.state, c.obscured, got, c.out)
+		if got := windowOut(c.state); got != c.out {
+			t.Errorf("windowOut(%#x) = %v, want %v", c.state, got, c.out)
 		}
 	}
 }

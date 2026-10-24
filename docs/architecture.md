@@ -2211,13 +2211,15 @@ either.
   moves asks for no frame. macOS says so of a window hidden, minimized or
   covered by other windows, whose display link still ticks, at the display's
   rate for half a minute, then at about 40 Hz. Windows says it of a window
-  minimized, hidden or cloaked (on another virtual desktop): it sends
-  `SurfaceShown` as the window is restored or shown, and asks a cloaked one
-  every 250 ms, as Windows sends no message when it is uncloaked; it does
-  not tell when other windows cover one. Linux says it of a window iconified
-  or withdrawn, or one an X11 server reports fully obscured
-  (`visibility-notify-event`); a Wayland compositor tells nothing and stops
-  asking for frames of a window out of sight itself. In browsers it is a
+  minimized, hidden or cloaked (on another virtual desktop), though Windows
+  paints a minimized or hidden window by itself, and it does not tell when
+  other windows cover one: it sends `SurfaceShown` as the window is
+  restored, and asks a hidden or cloaked one every 250 ms, as Windows sends
+  no message when it is uncloaked. Linux says it of a window iconified or
+  withdrawn (X11: GDK sets neither state on Wayland, whose compositor stops
+  asking for frames of a window out of sight itself); covering windows are
+  not told, since X11's visibility events are deprecated and a missed
+  "unobscured" would hold the frames for good. In browsers it is a
   page in a background tab. A frame asked for by a change of the state
   waits too (`holdFrame`; both `held`), as browsers draw nothing for
   windows out of sight and as Apple asks of Mac apps: the view function,

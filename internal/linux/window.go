@@ -34,18 +34,16 @@ const (
 	stateLeftResizable   = 1 << 16
 )
 
-// GDK_VISIBILITY_NOTIFY_MASK, and GdkVisibilityState's GDK_VISIBILITY_FULLY_OBSCURED.
-const (
-	visibilityNotifyMask    = 1 << 17
-	visibilityFullyObscured = 2
-)
-
 // windowOut reports whether nothing of a window shows: it is withdrawn or
-// iconified (state, GdkWindowState), or an X11 server says that other
-// windows cover all of it. A Wayland compositor tells nothing of the kind
-// and stops asking for frames of a window out of sight by itself.
-func windowOut(state uint32, obscured bool) bool {
-	return state&(stateWithdrawn|stateIconified) != 0 || obscured
+// iconified (state, GdkWindowState). Other windows covering it are not told
+// (GTK 3 deprecates visibility-notify-event, which only an X11 server
+// without a compositor sends, and a missed "unobscured" would hold the
+// window's frames for good), and a Wayland compositor stops asking for
+// frames of a window out of sight by itself. GDK sets the iconified state
+// only on X11: gdk_wayland_window_iconify only asks the compositor, which
+// never says when the window is restored.
+func windowOut(state uint32) bool {
+	return state&(stateWithdrawn|stateIconified) != 0
 }
 
 type window struct {
@@ -111,7 +109,6 @@ type window struct {
 	framed, seenFrame bool
 	frame             extents
 	state             uint32
-	obscured          bool // X11 says other windows cover all of it (visibility-notify-event)
 	x, y, w, hgt      int32
 	minW, minH        int32
 	maxW, maxH        int32
@@ -264,8 +261,6 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 	connect(w.win, "focus-out-event", cbFocusOut, data)
 	connect(w.win, "configure-event", cbConfigure, data)
 	connect(w.win, "window-state-event", cbWindowState, data)
-	gtkWidgetAddEvents(w.win, visibilityNotifyMask)
-	connect(w.win, "visibility-notify-event", cbVisibility, data)
 	connect(w.win, "key-press-event", cbMenuKey, data)
 	connect(w.win, "key-release-event", cbMenuKey, data)
 
@@ -1300,11 +1295,11 @@ func surfaceToPNG(surface ptr) ([]byte, error) {
 
 // Signal handlers. data carries the window id.
 var (
-	cbDeleteEvent, cbDestroy, cbFocusIn, cbFocusOut, cbConfigure, cbWindowState, cbVisibility ptr
-	cbScriptMessage, cbLoadChanged, cbLoadFailed, cbTitle, cbDecidePolicy                     ptr
-	cbCreate, cbClose, cbCrashed, cbButtonPress, cbAsyncReady, cbPNGWrite                     ptr
-	cbDragData, cbDragDrop, cbPrintFinished, cbPrintFailed, cbPermission                      ptr
-	cbMotion, cbControlsAllocated, cbDecorationLayout, cbActivationResize                     ptr
+	cbDeleteEvent, cbDestroy, cbFocusIn, cbFocusOut, cbConfigure, cbWindowState ptr
+	cbScriptMessage, cbLoadChanged, cbLoadFailed, cbTitle, cbDecidePolicy       ptr
+	cbCreate, cbClose, cbCrashed, cbButtonPress, cbAsyncReady, cbPNGWrite       ptr
+	cbDragData, cbDragDrop, cbPrintFinished, cbPrintFailed, cbPermission        ptr
+	cbMotion, cbControlsAllocated, cbDecorationLayout, cbActivationResize       ptr
 )
 
 func field[T any](p ptr, offset uintptr) T {
@@ -1446,16 +1441,6 @@ func initWindowCallbacks() {
 		}
 		if moved {
 			w.h.Moved()
-		}
-		return false
-	})
-	// GdkEventVisibility: state at 20.
-	cbVisibility = purego.NewCallback(func(widget, event, data ptr) bool {
-		if w := b().window(data); w != nil {
-			w.obscured = field[uint32](event, 20) == visibilityFullyObscured
-			if w.surface != nil {
-				w.surface.checkShown()
-			}
 		}
 		return false
 	})
