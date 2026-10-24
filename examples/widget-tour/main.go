@@ -16,6 +16,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 	"github.com/egoist/mygo/ui/widget"
 	"github.com/egoist/mygo/ui/widget/richtextbox"
 )
@@ -375,7 +376,7 @@ func dragRow() widget.Control {
 func richRow() widget.Control {
 	box := richtextbox.New().SetMarkup("Edit <b>rich</b> text").SetLabel("Notes")
 	box.SetSize(0, 120)
-	bold := widget.Button("Bold").OnClick(func() { box.Document().ToggleBold() })
+	bold := widget.Button("Bold").OnClick(func() { box.Edit(func(d *richtext.Document) { d.ToggleBold() }) })
 	return widget.VBox(4).Add(bold, box)
 }
 

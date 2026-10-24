@@ -35,6 +35,7 @@ type Box struct {
 	// to skip (a setter's), and seenSel the selection it last saw.
 	seen    uint64
 	seenSel [2]int
+	owed    bool // a user's edit a setter came in front of: still to report
 }
 
 // New makes an empty rich text box.
@@ -45,17 +46,33 @@ func New() *Box {
 	return r
 }
 
-// Document returns the document the box edits, to format the selection,
-// undo and read the formats: safe from any goroutine, as richtext says.
-// What it changes counts as the user's for OnChange.
+// Document returns the document the box edits, to read the formats and the
+// history (Formatting, CanUndo). Changing it directly is safe from any
+// goroutine but does not redraw the window until some other frame comes, as
+// richtext says: change it with Edit.
 func (r *Box) Document() *richtext.Document { return r.doc }
+
+// Edit runs fn on the document, such as a toolbar's
+// d.ToggleBold(), and redraws the windows that show the box, so that the
+// change appears and OnChange runs. What it changes counts as the user's for
+// OnChange. fn runs with the package's lock held: it must not call
+// widget getters or setters.
+func (r *Box) Edit(fn func(d *richtext.Document)) *Box {
+	widget.Change(func() { fn(r.doc) })
+	return r
+}
 
 // replace puts text in the document as a program does: OnChange does not
 // run for it.
 func (r *Box) replace(t richtext.Text) *Box {
 	widget.Change(func() {
+		if r.doc.Version() != r.seen {
+			r.owed = true // an edit nobody reported yet is still the user's
+		}
 		r.doc.SetText(t)
 		r.seen = r.doc.Version()
+		a, c := r.doc.Selection()
+		r.seenSel = [2]int{a, c} // a setter moves the caret without a report
 	})
 	return r
 }
@@ -163,9 +180,15 @@ func (r *Box) SetSelection(start, end int) *Box {
 	if start > end {
 		start, end = end, start
 	}
-	start = snapGrapheme(offs, start, false)
-	end = snapGrapheme(offs, end, true)
-	r.doc.SetSelection(start, end)
+	if start == end {
+		// A caret between a letter and its mark goes before the letter.
+		end = snapGrapheme(offs, start, false)
+		start = end
+	} else {
+		start = snapGrapheme(offs, start, false)
+		end = snapGrapheme(offs, end, true)
+	}
+	widget.Change(func() { r.doc.SetSelection(start, end) })
 	return r
 }
 
@@ -188,8 +211,8 @@ func (r *Box) build(c *ui.Context) ui.Element {
 		Label: r.label, Placeholder: r.placeholder, ReadOnly: r.readOnly, OnLink: r.onLink,
 	}
 	e := richtext.Editor(c, r.doc, opts)
-	if v := r.doc.Version(); v != r.seen {
-		r.seen = v
+	if v := r.doc.Version(); v != r.seen || r.owed {
+		r.seen, r.owed = v, false
 		if h := r.onChange; h != nil {
 			widget.Post(h)
 		}
@@ -261,14 +284,22 @@ func runMarkup(run richtext.Run) string {
 		attrs = append(attrs, fmt.Sprintf("weight='%d'", a.Weight))
 	}
 	if a.Color.A != 0 {
-		attrs = append(attrs, fmt.Sprintf("foreground='#%02x%02x%02x'", a.Color.R, a.Color.G, a.Color.B))
+		attrs = append(attrs, "foreground='"+hexColor(a.Color)+"'")
 	}
 	if a.Background.A != 0 {
-		attrs = append(attrs, fmt.Sprintf("background='#%02x%02x%02x'", a.Background.R, a.Background.G, a.Background.B))
+		attrs = append(attrs, "background='"+hexColor(a.Background)+"'")
 	}
 	if len(attrs) > 0 {
 		open, closing = append(open, "<span "+strings.Join(attrs, " ")+">"), append(closing, "</span>")
 	}
 	slices.Reverse(closing)
 	return strings.Join(open, "") + s + strings.Join(closing, "")
+}
+
+// hexColor writes #rrggbb, or #rrggbbaa for a translucent color.
+func hexColor(c ui.Color) string {
+	if c.A == 255 {
+		return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
+	}
+	return fmt.Sprintf("#%02x%02x%02x%02x", c.R, c.G, c.B, c.A)
 }

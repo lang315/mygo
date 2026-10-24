@@ -1,6 +1,7 @@
 package richtextbox
 
 import (
+	"github.com/egoist/mygo"
 	"strings"
 	"testing"
 
@@ -132,7 +133,7 @@ func TestRichTextBoxDocumentFormatsTheSelection(t *testing.T) {
 	r := New().SetText("make bold")
 	tt := widget.NewTester(t, r, 500, 300)
 	r.SetSelection(5, 9)
-	r.Document().ToggleBold()
+	r.Edit(func(d *richtext.Document) { d.ToggleBold() })
 	tt.Settle()
 	if m := r.Markup(); m != "make <b>bold</b>" {
 		t.Fatalf("Markup %q", m)
@@ -211,7 +212,7 @@ func TestRichTextBoxOnChangeForUndoRedoToolbarAndPaste(t *testing.T) {
 	r.Document().Redo()
 	next("redo")
 	r.SetSelection(0, 2)
-	r.Document().ToggleBold()
+	r.Edit(func(d *richtext.Document) { d.ToggleBold() })
 	next("ToggleBold through Document()")
 	tt.SetClipboard("pasted")
 	box.Key(ui.Cmd, ui.KeyV)
@@ -239,5 +240,95 @@ func TestRichTextBoxInputMethodCommitIsOneChange(t *testing.T) {
 	}
 	if !strings.HasSuffix(r.Text(), "ê") {
 		t.Fatalf("Text %q", r.Text())
+	}
+}
+
+// shownBox shows b in a form on the fake backend, drains the frames asked
+// so far, and returns whether a frame has been asked for since.
+func shownBox(t *testing.T, b *Box) (asked func() bool) {
+	t.Helper()
+	f := widget.NewForm("Rich", 400, 300).SetContent(b)
+	f.Show()
+	t.Cleanup(f.Close)
+	ws := fb.Windows()
+	s := ws[len(ws)-1].FakeSurface()
+	mygo.RunOnMain(func() {
+		for s.Frame() {
+		}
+	})
+	return func() bool {
+		var pending bool
+		mygo.RunOnMain(func() { pending = s.Frame() })
+		return pending
+	}
+}
+
+// Changes from a toolbar or a worker must schedule a frame by themselves; a
+// Tester's Settle forces one, which hides the lack.
+func TestRichTextBoxEditAndSetSelectionAskForAFrame(t *testing.T) {
+	b := New().SetText("some text")
+	asked := shownBox(t, b)
+	if asked() {
+		t.Fatal("a frame was still pending")
+	}
+	b.SetSelection(0, 4)
+	if !asked() {
+		t.Error("SetSelection asked for no frame")
+	}
+	b.Edit(func(d *richtext.Document) { d.ToggleBold() })
+	if !asked() {
+		t.Error("Edit asked for no frame")
+	}
+	b.SetText("other")
+	if !asked() {
+		t.Error("SetText asked for no frame")
+	}
+}
+
+func TestRichTextBoxASetterDoesNotSwallowAPendingUserEdit(t *testing.T) {
+	changed := make(chan struct{}, 8)
+	r := New().SetText("abc").OnChange(func() { changed <- struct{}{} })
+	tt := widget.NewTester(t, r, 500, 300)
+	r.SetSelection(0, 2)
+	r.Document().ToggleBold() // an edit of the user's, not yet reported
+	r.SetText("replaced")     // a setter comes in before the next frame
+	tt.Settle()
+	wait.For(t, "the pending edit's report", changed)
+}
+
+func TestRichTextBoxMarkupKeepsTranslucency(t *testing.T) {
+	for _, in := range []string{
+		"<span foreground='#ff000080'>half</span>",
+		"<span background='#00ff0040'>faint</span>",
+	} {
+		if got := New().SetMarkup(in).Markup(); got != in {
+			t.Errorf("Markup() = %q, want %q", got, in)
+		}
+	}
+}
+
+func TestRichTextBoxACaretInAGraphemeGoesBeforeIt(t *testing.T) {
+	flag := "ab\U0001F1FB\U0001F1F3cd" // a, b, a flag of two regional indicators, c, d
+	r := New().SetText(flag)
+	r.SetSelection(3, 3) // between the two halves of the flag
+	if s, e := r.Selection(); s != 2 || e != 2 {
+		t.Fatalf("caret at %d..%d, want a caret at 2", s, e)
+	}
+	r.SetSelection(2, 4) // the whole flag
+	if s, e := r.Selection(); s != 2 || e != 4 {
+		t.Fatalf("selection %d..%d", s, e)
+	}
+}
+
+func TestRichTextBoxSetTextDoesNotReportASelectionChange(t *testing.T) {
+	moved := make(chan struct{}, 8)
+	r := New().OnSelectionChange(func() { moved <- struct{}{} })
+	tt := widget.NewTester(t, r, 500, 300)
+	r.SetText("hello")
+	tt.Settle()
+	select {
+	case <-moved:
+		t.Fatal("SetText ran OnSelectionChange")
+	default:
 	}
 }
