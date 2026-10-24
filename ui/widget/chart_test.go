@@ -341,3 +341,31 @@ func TestPieTakesTheKeyboard(t *testing.T) {
 		t.Fatalf("Escape left %q", v)
 	}
 }
+
+func TestPieHoverEndsWhenThePointerLeavesAndEnterActsOnTheKeys(t *testing.T) {
+	fired := make(chan int, 4)
+	var c *ChartWidget
+	c = Chart(PieChart).SetTitle("Users").SetLabels("Win", "Mac", "Linux").
+		SetSeries(ChartSeries{Values: []float64{60, 30, 10}}).
+		OnSelect(func() { fired <- c.Selected() })
+	tt := NewTester(t, c, 400, 300)
+	b := tt.Find(ByLabel("Users")).Bounds()
+	// Over the Win slice (just right of twelve o'clock).
+	tt.Move(b.X+b.W/2+0.1*b.W, b.Y+b.H/2-0.4*b.H)
+	tt.Frame()
+	if v := tt.Find(ByLabel("Users")).Value(); v != "Win: 60 (60%)" {
+		t.Fatalf("hovering says %q", v)
+	}
+	tt.Move(b.X+b.W+50, b.Y+b.H+50) // out of the plot
+	tt.Frame()
+	if v := tt.Find(ByLabel("Users")).Value(); v != "" {
+		t.Fatalf("after the pointer left the plot says %q", v)
+	}
+	tt.Find(ByLabel("Users")).Focus().Key(0, ui.KeyEnter)
+	tt.Settle()
+	select {
+	case i := <-fired:
+		t.Fatalf("Enter selected %d from a stale hover", i)
+	default:
+	}
+}

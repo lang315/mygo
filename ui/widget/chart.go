@@ -45,7 +45,8 @@ type ChartWidget struct {
 	series   []ChartSeries
 	selected int
 	onSelect func()
-	hover    int // the point under the pointer or the keys, -1 for none
+	hover    int  // the point under the pointer or the keys, -1 for none
+	pointing bool // the pointer was over the pie in the last frame
 
 	// xs are the fractions of the labels along the plot, kept while the
 	// labels stay (replaced, never changed, so a paint may hold one).
@@ -422,15 +423,24 @@ func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartS
 			}
 		})
 		// The slice under the pointer, named as the value of the plot.
+		// The pointer chooses while it is over a slice and lets go of the
+		// choice when it leaves, as chart.Select does for lines and bars.
 		if px, py, over := area.PointerPosition(); over && n > 0 {
 			b := area.Bounds()
 			size := min(b.W, b.H)
-			if i, ok := chart.SliceAt(slices, px-b.W/2, py-b.H/2, size/2*0.55, size/2); ok && total > 0 {
+			i, ok := chart.SliceAt(slices, px-b.W/2, py-b.H/2, size/2*0.55, size/2)
+			if ok && total > 0 {
 				c.hover = i
 				if area.Clicked() {
 					picked = i
 				}
+			} else if c.pointing {
+				c.hover = -1
 			}
+			c.pointing = true
+		} else if c.pointing {
+			c.pointing = false
+			c.hover = -1
 		}
 		if c.hover >= 0 {
 			d := describe(c.hover)
