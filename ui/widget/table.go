@@ -85,6 +85,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	shortcuts                               []shortcut
 	menu                                    []MenuItem
 	menuFunc                                func([]K) []MenuItem // ContextMenuFunc's
+	copyFn                                  func([]K) string     // CopyFunc's
 	late                                    []MenuItem           // what it built last
 	lateSeq                                 uint64               // its latest right-click
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet

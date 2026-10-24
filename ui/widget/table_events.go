@@ -96,10 +96,32 @@ func (t *DataGridViewWidget[T, K]) SetColumnsLayout(l ui.TableLayout) *DataGridV
 	return t
 }
 
+// CopyFunc sets what the table copies: fn gets the keys of the rows
+// selected, in the order shown, and returns the text. Both Ctrl+C (Cmd+C)
+// and the Edit menu's Copy use it, so they agree; without it, or with nil,
+// they copy the cells of the rows, a line each, tab-separated. fn runs on
+// the main thread, off the package's lock: it may call the table's getters,
+// but should be quick.
+func (t *DataGridViewWidget[T, K]) CopyFunc(fn func(selected []K) string) *DataGridViewWidget[T, K] {
+	t.change(func() { t.copyFn = fn })
+	return t
+}
+
 // copyRows is ui's ListState.Copy: the rows shown at rows, a line each,
-// their cells apart by tabs. On the main thread, without mu.
+// their cells apart by tabs, or what CopyFunc makes of their keys. On the
+// main thread, without mu.
 func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
 	mu.Lock()
+	if fn := t.copyFn; fn != nil {
+		keys := make([]K, 0, len(rows))
+		for _, row := range rows {
+			if r := t.rowAt(row); r != nil {
+				keys = append(keys, t.key(r))
+			}
+		}
+		mu.Unlock()
+		return fn(keys)
+	}
 	defer mu.Unlock()
 	var lines []string
 	for _, row := range rows {
