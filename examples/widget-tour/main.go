@@ -138,6 +138,11 @@ func dialogs(w *widget.Form) widget.Control {
 				customDialog(w)
 				show("Custom dialog closed")
 			}),
+			widget.Button("Color dialog").OnClick(func() {
+				cd := widget.ColorDialog().SetColor(ui.Hex("#2563eb"))
+				ok := cd.ShowDialog(w)
+				show("ColorDialog: %v %v", cd.Color(), ok)
+			}),
 			widget.Button("Open file").OnClick(func() { show("OpenFile: %q", widget.OpenFile(w, "Open a file")) }),
 			widget.Button("Save file").OnClick(func() { show("SaveFile: %q", widget.SaveFile(w, "Save", "notes.txt")) }),
 			widget.Button("Select folder").OnClick(func() { show("SelectFolder: %q", widget.SelectFolder(w, "Choose a folder", "")) }),
