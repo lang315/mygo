@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"math"
 	"slices"
 	"sync"
 
@@ -37,6 +38,8 @@ type Form struct {
 	shortcuts     []formShortcut
 	accept        *ButtonWidget // Enter clicks it
 	cancel        *ButtonWidget // Escape clicks it
+	fit           bool          // a dialog of height 0: Show measures its content
+	fitScroll     bool          // the content is higher than the screen: it scrolls
 }
 
 // quit quits the app; tests replace it.
@@ -91,7 +94,7 @@ func (w *Form) SetTitle(s string) *Form {
 }
 
 func (w *Form) SetSize(width, height int) *Form {
-	w.change(func() { w.width, w.height = width, height })
+	w.change(func() { w.width, w.height, w.fit = width, height, false })
 	w.do(func(n *mygo.Window) { n.SetSize(width, height) })
 	return w
 }
@@ -193,7 +196,11 @@ func (w *Form) Show() {
 		opts.Parent, opts.Modal = p.win, true
 	}
 	icon, resizable, menu, strip := w.icon, w.resizable, w.menu, w.strip
+	fit := w.fit
 	mu.Unlock()
+	if fit {
+		w.fitWindow(&opts)
+	}
 	watchQuit.Do(func() { mygo.App.OnBeforeQuit(onBeforeQuit) })
 	n := mygo.NewWindow(opts)
 	if icon != nil {
@@ -333,7 +340,12 @@ func (w *Form) view(c *ui.Context) {
 		if w.tools != nil {
 			render(c, w.tools)
 		}
-		if w.root != nil {
+		if w.root != nil && w.fitScroll {
+			ui.ScrollBoth(c).Grow(1).Children(func() {
+				axis = vertical
+				render(c, w.root)
+			})
+		} else if w.root != nil {
 			render(c, w.root).Grow(1)
 		} else if w.status != nil {
 			ui.Spacer(c) // keeps the status strip at the bottom of a form with no content
@@ -412,4 +424,28 @@ func (h *HeaderBarWidget) add(side, ws []Control) []Control {
 		}
 	}
 	return side
+}
+
+// fitMargin is what a fitted window leaves of the work area for its title bar
+// and the room around it, in DIPs.
+const fitMargin = 80
+
+// fitWindow sizes the window to its content, as WinForms' AutoSize does at
+// show: the height of the content laid out at the window's width (800 when it
+// has none), as the size of its page area, no higher than the work area less
+// fitMargin, where the content scrolls instead.
+func (w *Form) fitWindow(opts *mygo.WindowOptions) {
+	width := opts.Width
+	if width == 0 {
+		width = 800
+	}
+	h := int(math.Ceil(float64(ui.View(w.view).MeasureHeight(float32(width)))))
+	scroll := false
+	if limit := mygo.Screen.PrimaryDisplay().WorkArea.Height - fitMargin; limit > 0 && h > limit {
+		h, scroll = limit, true
+	}
+	mu.Lock()
+	w.fitScroll = scroll
+	mu.Unlock()
+	opts.Width, opts.Height, opts.UseContentSize = width, h, true
 }

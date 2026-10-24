@@ -134,6 +134,14 @@ d.Run() // returns once the dialog closes
 parent for a dialog of its own. Width and height are the window's, title
 bar included, so a macOS sheet, which has none, shows that much shorter;
 the title and subtitle are drawn in the dialog for the same reason.
+A `height` of 0 fits the dialog to its content, as WinForms' `AutoSize`
+(`GrowAndShrink`) does at show: `Run` measures the content laid out at `width`
+(one headless layout) and the window's page area gets that height, no higher
+than the screen's work area less 80 DIPs, where the content scrolls instead.
+A `width` of 0 is the window default, 800. The size is taken when the dialog
+shows: later changes of its content do not resize it, `SetSize` after
+`NewDialog` wins, and a list in the content counts eight rows (give the dialog
+a height to show more). `NewForm` keeps 800 by 600 for 0.
 `Run` shows it and returns when it closes: by `Close`, by the user (its
 close button, or Escape once no drop-down in it is open), or because its
 parent closed. For a dialog that returns a value, embed `*widget.Dialog`
