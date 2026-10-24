@@ -24,6 +24,7 @@ type Form struct {
 	menu          []MenuItem
 	strip         *MenuStrip
 	status        *StatusStripWidget
+	tools         *ToolStripWidget
 	parent        *Form         // a dialog's; nil for a top-level window
 	dialog        bool          // made by NewDialog: Escape asks to close it
 	deletable     bool          // the user may close it
@@ -295,6 +296,9 @@ func (w *Form) view(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
 		if w.header != nil {
 			render(c, w.header)
+		}
+		if w.tools != nil {
+			render(c, w.tools)
 		}
 		if w.root != nil {
 			render(c, w.root).Grow(1)
