@@ -48,6 +48,10 @@ type core struct {
 	post       func(c *ui.Context, e ui.Element) // after the styles apply, set by build
 	group      *radioGroup                       // the radio buttons added to the widget, a container
 	dnd        dragDrop                          // drag sources and drop targets
+	errMsg     string                            // ErrorProvider's
+	errBy      *ErrorProviderWidget
+	validating func() bool                      // OnValidating's
+	over       []func(p *ui.Painter, r ui.Rect) // drawn over the element, set by build
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
@@ -170,8 +174,31 @@ func render(c *ui.Context, w Control) ui.Element {
 	if b.disabled {
 		e.Disabled(true)
 	}
-	if b.tooltip != "" {
+	if b.tooltip != "" && b.errMsg == "" {
 		e.Tooltip(b.tooltip)
+	}
+	if b.errMsg != "" {
+		// The value is invalid for assistive technology, and the message is
+		// the tooltip too, ahead of the control's own.
+		tip := b.errMsg
+		if b.tooltip != "" {
+			tip += "\n" + b.tooltip
+			e.Description(b.tooltip) // the error comes first in the description
+		}
+		e.Error(b.errMsg)
+		e.Tooltip(tip)
+		rtl := c.Direction() == ui.RightToLeft
+		danger := c.Theme().Danger
+		b.over = append(b.over, func(p *ui.Painter, r ui.Rect) { paintErrorMark(p, r, rtl, danger) })
+	}
+	if len(b.over) > 0 {
+		over := b.over
+		e.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			for _, fn := range over {
+				fn(p, r)
+			}
+		})
+		b.over = nil
 	}
 	if h := b.click; h != nil {
 		e.OnClick(func() { Post(h) })

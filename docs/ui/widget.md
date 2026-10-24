@@ -716,6 +716,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `richtextbox.New()`: styled text, in package `ui/widget/richtextbox`; see [RichTextBox](widget/richtextbox.md).
 - `WebBrowser()`: a web page; see [WebBrowser](widget/webbrowser.md).
 - `MaskedTextBox(mask)`: an input that takes what a mask allows; see [MaskedTextBox](widget/maskedtextbox.md).
+- `ErrorProvider()`, `OnValidating`, `Form.ValidateChildren`: an error mark on a control and an explicit validation; see [ErrorProvider](widget/errorprovider.md).
 - `Separator()`: a line.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).

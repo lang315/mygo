@@ -607,3 +607,23 @@ func TestTextInputOnEditRedoRestoresTheCaretFnChose(t *testing.T) {
 		t.Errorf("after redo: %q caret %d anchor %d, want AXDE and 2", s, ed.caret, ed.anchor)
 	}
 }
+
+// TextInsetEnd keeps the text out of the end of the box without changing the
+// box's size.
+func TestTextInputTextInsetEndChangesNoSize(t *testing.T) {
+	size := func(inset float32) Rect {
+		s := "some text"
+		tt := NewTester(func(c *Context) {
+			Row(c).Children(func() {
+				TextInput(c, &s).Label("a").TextInsetEnd(inset)
+				Text(c, "next")
+			})
+		}, 300, 60)
+		defer tt.rt.close()
+		r, _ := tt.Find("a")
+		return r
+	}
+	if a, b := size(0), size(40); a != b {
+		t.Errorf("the box is %v with an inset, %v without", b, a)
+	}
+}

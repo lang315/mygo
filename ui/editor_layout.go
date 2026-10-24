@@ -127,6 +127,7 @@ func (e *node) layoutInput(cw, ch float32) {
 	// Keep the caret in view while the input has the focus. Without it, the
 	// input shows the start of its text, as fields do on macOS and the web:
 	// its right right to left.
+	cw -= e.insetEnd // the text scrolls within what the inset leaves
 	if e.c.rt.focused != e.id {
 		ed.scrollX = 0
 		if rtl {
@@ -160,6 +161,12 @@ func (e *node) paintInput(p *Painter) {
 	}
 	box := e.contentBox()
 	clip := Rect{e.x + e.border[3], e.y + e.border[0], e.w - e.border[1] - e.border[3], e.h - e.border[0] - e.border[2]}
+	if in := e.insetEnd; in > 0 && ed.area == nil {
+		clip.W -= in
+		if e.rtl() {
+			clip.X += in
+		}
+	}
 	saved := p.clip
 	p.pushClip(clip, [4]float32{})
 	ox, oy := e.x+ed.originX-ed.scrollX, e.y+ed.originY

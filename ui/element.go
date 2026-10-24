@@ -222,6 +222,7 @@ type layoutStyle struct {
 	alignContent           Align
 	gapX, gapY             float32
 	pad                    [4]float32 // top, right, bottom, left
+	insetEnd               float32    // room at the end of a single-line input that its text stays out of (TextInsetEnd)
 	border                 [4]float32 // top, right, bottom, left
 	margin                 [4]float32 // Auto for auto margins
 	width, height          length

@@ -5630,6 +5630,21 @@ func (_handle Element) TextColor(c Color) Element {
 	return wrapElement(_node.TextColor(c))
 }
 
+// TextInsetEnd keeps the text of a single-line input v DIPs short of its end
+// (the right, the left right to left): the text is clipped and scrolls before
+// it, as if the box were narrower there, for something drawn over that end
+// (Element.DrawOver). The element's size does not change: the room is not
+// asked of its container.
+func (_handle Element) TextInsetEnd(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.TextInsetEnd(v))
+}
+
 // TextRanges styles runs of a text input's text, in the frames that call
 // it. Ranges may overlap and nest, as the attributes of an attributed
 // string do: where they do, each of Color and Weight is that of the last

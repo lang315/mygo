@@ -156,13 +156,23 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 			}
 			pad := el.Paddings()[side]
 			el.PaddingStart(pad + iconSize + t.Space(1.5))
-			el.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			e.over = append(e.over, func(p *ui.Painter, r ui.Rect) {
 				x := r.X + pad
 				if rtl {
 					x = r.X + r.W - pad - iconSize
 				}
 				p.Image(icon, ui.Rect{X: x, Y: r.Y + (r.H-iconSize)/2, W: iconSize, H: iconSize}, ui.Contain)
 			})
+		}
+	}
+	if e.errMsg != "" {
+		// The error mark sits at the end: the text stops before it.
+		prev := e.post
+		e.post = func(c *ui.Context, el ui.Element) {
+			if prev != nil {
+				prev(c, el)
+			}
+			el.TextInsetEnd(errorMarkSize + errorMarkInset + 2)
 		}
 	}
 	el.OnChange(edited(&e.text, &e.bound, e.onChange))

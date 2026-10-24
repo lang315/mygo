@@ -100,6 +100,18 @@ func (e *node) MaxLength(n int) *node {
 	return e
 }
 
+// TextInsetEnd keeps the text of a single-line input v DIPs short of its end
+// (the right, the left right to left): the text is clipped and scrolls before
+// it, as if the box were narrower there, for something drawn over that end
+// (Element.DrawOver). The element's size does not change: the room is not
+// asked of its container.
+func (e *node) TextInsetEnd(v float32) *node {
+	if e.st.editor != nil && e.flags&flagEditable != 0 {
+		e.insetEnd = max(v, 0)
+	}
+	return e
+}
+
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with
