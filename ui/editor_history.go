@@ -98,7 +98,9 @@ func (ed *editor) replace(start, end int, s string) {
 		if text, caret, ok := f(TextEdit{Text: old, Start: start, End: end, Insert: s, Caret: ed.caret}); ok {
 			ed.filtering = true
 			if text != old {
-				ed.replace(0, ed.buf.n, text)
+				// The step keeps the range that changed, not the whole text.
+				a, z, ins := changedRange(old, text)
+				ed.replace(a, z, ins)
 			}
 			ed.filtering = false
 			ed.caret = max(0, min(caret, ed.buf.n))
@@ -216,4 +218,18 @@ func cutToRoom(s string, room int) string {
 		}
 	}
 	return string(runes[:cut])
+}
+
+// changedRange returns the runes of old from a to z that became ins in text:
+// what the two do not share at their start and their end.
+func changedRange(old, text string) (a, z int, ins string) {
+	o, n := []rune(old), []rune(text)
+	for a < len(o) && a < len(n) && o[a] == n[a] {
+		a++
+	}
+	eo, en := len(o), len(n)
+	for eo > a && en > a && o[eo-1] == n[en-1] {
+		eo, en = eo-1, en-1
+	}
+	return a, eo, string(n[a:en])
 }

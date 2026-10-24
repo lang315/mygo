@@ -424,9 +424,13 @@ func TestTextInputOnEditPublishesNothingUntilTheCommitApplies(t *testing.T) {
 	}, 300, 100)
 	defer tt.rt.close()
 	tt.Click("a")
-	ed := tt.rt.states[tt.rt.focused].editor
-	ed.anchor, ed.caret = 1, 3
-	tt.Frame()
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Key(Shift, KeyRight) // 23 selected, by keys
+	if a, z := tt.rt.states[tt.rt.focused].editor.selection(); a != 1 || z != 3 {
+		t.Fatalf("selection %d..%d", a, z)
+	}
 	c := tt.h.ime.Client
 	c.SetMarkedText(nil, "x", TextInputRange{Start: 1, End: 1})
 	tt.Frame()
@@ -438,11 +442,101 @@ func TestTextInputOnEditPublishesNothingUntilTheCommitApplies(t *testing.T) {
 	if s != "12345" || changes != 0 {
 		t.Errorf("after a refused commit: value %q, %d changes", s, changes)
 	}
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Key(Shift, KeyRight)
 	c.SetMarkedText(nil, "x", TextInputRange{Start: 1, End: 1})
 	c.SetMarkedText(nil, "", TextInputRange{})
 	tt.Frame()
 	if s != "12345" || changes != 0 {
 		t.Errorf("after a cancelled one: value %q, %d changes", s, changes)
+	}
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Key(Shift, KeyRight)
+	c.SetMarkedText(nil, "x", TextInputRange{Start: 1, End: 1})
+	tt.Frame()
+	c.ReplaceText(nil, "x")
+	tt.Frame()
+	if s != "1X45" || changes != 1 {
+		t.Errorf("after the commit: value %q, %d changes, want 1X45 and one", s, changes)
+	}
+}
+
+// Redo gives back the caret the edit left.
+func TestTextInputOnEditRedoRestoresTheCaretOfTheEdit(t *testing.T) {
+	s := "12345"
+	tt := onEditTester(&s, upperFilter)
+	defer tt.rt.close()
+	ed := tt.rt.states[tt.rt.focused].editor
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Type("x")
+	tt.Key(Cmd, KeyZ)
+	tt.Key(Cmd|Shift, KeyZ)
+	if s != "1X45" || ed.caret != 2 || ed.anchor != 2 {
+		t.Errorf("after redo: %q caret %d anchor %d, want 1X45 and 2", s, ed.caret, ed.anchor)
+	}
+}
+
+// A commit with a range of its own, over a selection the composition hid, is
+// one edit of the text before it, and undo gives that text back.
+func TestTextInputOnEditCommitOverAnotherRangeKeepsTheUndo(t *testing.T) {
+	s := "12345"
+	var edits []TextEdit
+	tt := onEditTester(&s, recordEdits(&edits))
+	defer tt.rt.close()
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Key(Shift, KeyRight)
+	c := tt.h.ime.Client
+	c.SetMarkedText(nil, "yi", TextInputRange{Start: 2, End: 2})
+	tt.Frame()
+	c.ReplaceText(&TextInputRange{Start: 0, End: 1}, "Q")
+	tt.Frame()
+	if s != "Q2345" || len(edits) != 1 || edits[0].Text != "12345" || edits[0].Start != 0 || edits[0].End != 1 {
+		t.Errorf("text %q, fn saw %+v", s, edits)
+	}
+	tt.Key(Cmd, KeyZ)
+	if s != "12345" {
+		t.Errorf("after undo %q: the selection was lost", s)
+	}
+}
+
+// A window that closes in the middle of a composition has fn see its text.
+func TestTextInputOnEditWindowClosedDuringACompositionCommitsIt(t *testing.T) {
+	s := "12345"
+	var edits []TextEdit
+	tt := onEditTester(&s, recordEdits(&edits))
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.Key(Shift, KeyRight)
+	tt.h.ime.Client.SetMarkedText(nil, "yi", TextInputRange{Start: 2, End: 2})
+	tt.Frame()
+	tt.rt.close()
+	if s != "1yi45" || len(edits) != 1 || edits[0].Text != "12345" {
+		t.Errorf("value %q, fn saw %+v", s, edits)
+	}
+}
+
+// The step of undo of an edit holds the range that changed, not the text.
+func TestTextInputOnEditStepsHoldTheChangedRangeOnly(t *testing.T) {
+	s := "hello wide world"
+	tt := onEditTester(&s, upperFilter)
+	defer tt.rt.close()
+	ed := tt.rt.states[tt.rt.focused].editor
+	tt.Key(0, KeyHome)
+	tt.Key(0, KeyRight)
+	tt.Type("x")
+	last := ed.undo[len(ed.undo)-1]
+	if len(last.changes) != 1 || last.changes[0].removed != "" || last.changes[0].inserted != "X" || last.changes[0].at != 1 {
+		t.Errorf("the step holds %+v", last.changes)
 	}
 }
 
@@ -462,5 +556,26 @@ func TestTextInputWithoutOnEditCancelledCompositionClearsRedo(t *testing.T) {
 	tt.Key(Cmd|Shift, KeyZ)
 	if s != "" {
 		t.Errorf("redo after a cancelled composition: %q, want nothing to redo", s)
+	}
+}
+
+// An unmark that commits ends the composition: a commit with a range of its
+// own that follows (IMM32's reconversion) is a step of its own.
+func TestTextInputOnEditUnmarkThenAReplaceWithARangeAreTwoSteps(t *testing.T) {
+	s := "ab"
+	tt := onEditTester(&s, upperFilter)
+	defer tt.rt.close()
+	tt.Key(0, KeyEnd)
+	c := tt.h.ime.Client
+	c.SetMarkedText(nil, "yi", TextInputRange{Start: 2, End: 2})
+	c.UnmarkText()
+	c.ReplaceText(&TextInputRange{Start: 0, End: 1}, "z")
+	tt.Frame()
+	if s != "ZbYI" {
+		t.Fatalf("text %q", s)
+	}
+	tt.Key(Cmd, KeyZ)
+	if s != "abYI" {
+		t.Errorf("one undo: %q, want only the second edit taken back", s)
 	}
 }

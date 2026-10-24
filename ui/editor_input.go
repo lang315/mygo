@@ -47,7 +47,7 @@ func (w *widgetTextInput) publish() {
 		w.rt.blinkStart = w.rt.now()
 		return
 	}
-	if ed.value != nil && *ed.value != ed.buf.s {
+	if ed.value != nil && ed.base == nil && *ed.value != ed.buf.s {
 		if !ed.nativeDirty {
 			ed.nativeValue = *ed.value
 		}
@@ -196,8 +196,26 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 			ed.compose = ""
 			ed.commitBase(s) // the marked text replaced: one edit
 		} else {
-			ed.base = nil
-			transaction := ed.compositionActive
+			hadBase := ed.base != nil
+			if b := ed.base; b != nil {
+				// A range of its own: the edit is one of the text before the
+				// composition, whose selection the range counted as gone and
+				// the preedit as there.
+				n := utf8.RuneCountInString(ed.compose)
+				at := func(i int) int {
+					switch {
+					case i <= b.a:
+						return i
+					case i >= b.a+n:
+						return i - n + (b.z - b.a)
+					}
+					return b.a
+				}
+				a, z = at(a), at(z)
+				ed.compose = ""
+				ed.restoreBase()
+			}
+			transaction := ed.compositionActive && !hadBase
 			ed.commitCompose()
 			if !transaction {
 				ed.record(false)
