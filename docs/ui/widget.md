@@ -689,6 +689,7 @@ Layout:
 - `TrackBar(min, max)`: a slider; see [TrackBar](widget/trackbar.md).
 - `DomainUpDown(items...)`: arrows over a list of texts; see [DomainUpDown](widget/domainupdown.md).
 - `DragSource`, `OnDrop[T]`, `OnDragOver[T]`, `DragData`, `OnDropData`, `OnDropFiles`: drag and drop; see [Drag and drop](widget/drag-and-drop.md).
+- `Chart(kind)`: a line, bar or pie chart; see [Chart](widget/chart.md).
 - `Separator()`: a line.
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
