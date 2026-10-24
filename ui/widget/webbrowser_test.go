@@ -455,3 +455,17 @@ func TestWebBrowserNavigateFromTwoThreadsDoesNotDeadlock(t *testing.T) {
 	}
 	wait.For(t, "the navigations", done)
 }
+
+// Building a browser before the app runs (in main, in a test of a package
+// that runs no app) must not wait for a main loop.
+func TestWebBrowserBeforeItsViewNeverWaitsForTheMainThread(t *testing.T) {
+	var calls atomic.Int32
+	old := runOnMain
+	runOnMain = func(fn func()) { calls.Add(1); old(fn) }
+	t.Cleanup(func() { runOnMain = old })
+	b := WebBrowser().Navigate("https://example.com/").SetDocumentText("<p>x</p>")
+	b.Navigate("/docs")
+	if calls.Load() != 0 {
+		t.Fatalf("%d hops to the main thread with no view", calls.Load())
+	}
+}

@@ -18,6 +18,9 @@ var buildingForm *Form
 // that no lock is held.
 var webViewCreateHook atomic.Pointer[func()]
 
+// runOnMain is mygo.RunOnMain; tests count its calls.
+var runOnMain = mygo.RunOnMain
+
 // webViewReplayHook runs after a new view took the page to load, before it
 // loads it.
 var webViewReplayHook atomic.Pointer[func()]
@@ -95,7 +98,13 @@ func loadURL(p *mygo.Page, url string) {
 // goroutine got there first, and nothing waits for a lock across the main
 // thread.
 func (b *WebBrowserWidget) load(seq uint64, fn func(p *mygo.Page)) {
-	mygo.RunOnMain(func() {
+	mu.Lock()
+	has := b.view != nil
+	mu.Unlock()
+	if !has {
+		return // nothing to load into: it is applied when the view is made, and no main loop is needed
+	}
+	runOnMain(func() {
 		mu.Lock()
 		v, cur := b.view, b.seq
 		mu.Unlock()
