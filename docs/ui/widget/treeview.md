@@ -84,8 +84,13 @@ checked, and no query returns it.
 
 - `OnExpand` runs for every node the user opens, loaded or not. For a node
   whose children are not loaded it runs once, however often the user closes
-  and opens it before `SetChildren`: the load is pending. If the load failed,
-  `SetHasChildren(k, true)` again lets the next opening ask again.
+  and opens it before `SetChildren`: the load is pending.
+- If the load failed, `SetHasChildren(k, true)` asks again. On a node that is
+  closed it lets the next opening ask. On a node that is open and not loaded it
+  is a request to load, and the one setter that fires an event: `OnExpand`
+  runs once with the key. `SetHasChildren(k, false)` on a node whose children
+  are not loaded makes it a leaf and closes it, firing nothing, so no Loading
+  row stays.
 - `OnCollapse` runs when the user closes a node.
 - `Expand(ks...)`, `Collapse(ks...)`, `ExpandAll()` and `CollapseAll()` are
   the program's, and fire neither event. An `Expand` of a node whose children
@@ -139,14 +144,21 @@ child, and Left closes it or goes to its parent. With Option on macOS and Shift
 elsewhere, Right and Left open and close all inside. Enter activates the node.
 Typing the first letters of a node's text chooses the node.
 
+The Loading row is skipped by all of them: Down and Up move past it, End goes to
+the last row that can be chosen, Right on an open node whose children are
+loading stays on the node, and typing finds no text in it (it is
+`ListState.Skip` of the list underneath).
+
 ## Size
 
 Opening, closing and choosing keep the sets of open, chosen and checked nodes
 by key, and change only the keys that changed, so a click costs what the rows
 shown cost, not the size of the tree. The test of `TreeView` clicks in a tree
 of a million nodes and checks that a click allocates what it does in one of
-two thousand. Each frame walks the nodes that are open, as `ui.Outline` does,
-without allocating.
+two thousand. Each frame walks the nodes that are open, as `ui.Outline` does.
+It allocates for the rows in view, not for the tree: an idle frame of the
+test's window (800 by 600) over 300 roots allocated 91 times, and 199 times
+with check boxes, which each hold a closure and a value for their row.
 
 Not yet there: a context menu for a node, and `CopyFunc`; the menu of
 `ContextMenu` is the tree's.
