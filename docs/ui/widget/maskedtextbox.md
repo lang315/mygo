@@ -43,9 +43,14 @@ and close the gap; over a literal, Backspace clears the slot before it, and
 Delete the one after. A character typed with the caret on a literal goes to the
 next slot, and the caret waits before the literal after the last slot of a
 group. Each edit is one step of undo, and an edit the mask refuses is none. A
-paste is filtered through the mask. While an input method composes, its
-preedit text shows as it comes, unfiltered; the mask takes the text when it
-commits.
+paste is filtered through the mask, except over a selection: if one of its
+characters is refused there, nothing changes (the selection stays), as in
+WinForms. While an input method composes, its
+preedit text shows as it comes, unfiltered, and a selection it replaces only
+looks gone; the mask gets one edit at the commit, against the text before the
+composition, and if it refuses it the selection stays. After an undo or a redo
+a typed character equal to the prompt reads back as an empty slot (`&&&&`: a, `_`, b, c, undo:
+`Text()` is `abc`).
 
 ## The text
 

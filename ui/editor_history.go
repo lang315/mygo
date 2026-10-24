@@ -78,8 +78,6 @@ func (ed *editor) record(typing bool) {
 		ed.undo[0] = undoStep{}
 		ed.undo = ed.undo[1:]
 	}
-	clear(ed.redo)
-	ed.redo = ed.redo[:0]
 	ed.coalesce = typing
 	ed.lastEdit = now
 }
@@ -139,6 +137,9 @@ func (ed *editor) replace(start, end int, s string) {
 			step.changes = append(step.changes, c)
 		}
 	}
+	// What undo took back is lost once an edit is made, not when one is tried.
+	clear(ed.redo)
+	ed.redo = ed.redo[:0]
 	ed.edit(start, end, s)
 	ed.caret = start + utf8.RuneCountInString(s)
 	ed.anchor = ed.caret

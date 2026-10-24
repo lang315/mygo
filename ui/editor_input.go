@@ -180,7 +180,10 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 		return
 	}
 	if r == nil || ed.password {
-		if ed.compose != "" {
+		if ed.base != nil {
+			ed.compose = ""
+			ed.commitBase(s)
+		} else if ed.compose != "" {
 			ed.compose = ""
 			ed.replace(ed.caret, ed.caret, s)
 		} else {
@@ -189,12 +192,18 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 	} else {
 		wanted := platform.NormalizeTextRange(*r)
 		a, z := w.virtualRune(wanted.Start), w.virtualRune(wanted.End)
-		transaction := ed.compositionActive
-		ed.commitCompose()
-		if !transaction {
-			ed.record(false)
+		if b := ed.base; b != nil && b.raw && a == b.a && z == b.rawEnd {
+			ed.commitBase(s) // the commit after an unmark: one edit
+		} else {
+			ed.settleBase()
+			ed.base = nil
+			transaction := ed.compositionActive
+			ed.commitCompose()
+			if !transaction {
+				ed.record(false)
+			}
+			ed.replace(a, z, s)
 		}
-		ed.replace(a, z, s)
 	}
 	ed.compose, ed.compositionActive = "", false
 	ed.composeCaret, ed.composeSelected = 0, TextInputRange{}
@@ -214,17 +223,28 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 	if ed.compose == "" || r != nil {
 		a, z := ed.selection()
 		ranges := ed.selectedRanges()
+		ed.settleBase()
 		if r != nil && !ed.password {
 			wanted := platform.NormalizeTextRange(*r)
 			a, z = w.virtualRune(wanted.Start), w.virtualRune(wanted.End)
 		}
 		transaction := ed.compositionActive && ed.compose != ""
-		ed.commitCompose()
-		if !transaction {
-			ed.record(false)
+		if ed.onEdit != nil && r == nil && len(ranges) <= 1 && !ed.password {
+			// The preedit and the removal of the selection are only shown.
+			ed.compositionActive = true
+			if ed.base == nil {
+				ed.beginBase(a, z)
+			}
+		} else {
+			ed.commitCompose()
+			if !transaction {
+				ed.record(false)
+			}
+			ed.compositionActive = true
 		}
-		ed.compositionActive = true
-		if r == nil && len(ranges) > 1 {
+		if ed.base != nil {
+			// the selection is only hidden
+		} else if r == nil && len(ranges) > 1 {
 			for i := len(ranges) - 1; i >= 0; i-- {
 				ed.replace(ranges[i].Start, ranges[i].End, "")
 			}
@@ -242,6 +262,10 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 	selected.End = countUnits(s[:UTF16ByteOffset(s, selected.End)])
 	ed.compose, ed.composeSelected = s, selected
 	ed.composeCaret = utf8.RuneCountInString(s[:UTF16ByteOffset(s, selected.End)])
+	if s == "" && ed.base != nil {
+		ed.restoreBase()
+		ed.compositionActive = false
+	}
 	if ed.area != nil {
 		ed.area.reveal = true
 	}
@@ -252,6 +276,11 @@ func (w *widgetTextInput) UnmarkText() {
 	w.prepare()
 	ed := w.ed
 	transaction := ed.compositionActive
+	if ed.base != nil && !ed.base.raw {
+		ed.unmarkBase()
+		w.publish()
+		return
+	}
 	ed.commitCompose()
 	// GTK/IMM32 can end preedit before committing their replacement. The
 	// platform remembers the range; both operations share this undo step.

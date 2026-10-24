@@ -148,11 +148,23 @@ func TestMaskedTextBoxSetTextPasteAndEvents(t *testing.T) {
 	box.Key(ui.Cmd, ui.KeyA)
 	tt.SetClipboard("9-8/7z6")
 	box.Key(ui.Cmd, ui.KeyV)
+	if got := mt.TextWithLiterals(); got != "12/31" {
+		t.Fatalf("a paste over a selection with a character no slot takes changed %q", got)
+	}
+	if r := received(t, rejected); r != '-' && r != 'z' {
+		t.Fatalf("rejected %q", r)
+	}
+	tt.SetClipboard("98/76")
+	box.Key(ui.Cmd, ui.KeyA)
+	box.Key(ui.Cmd, ui.KeyV)
 	if got := mt.TextWithLiterals(); got != "98/76" {
-		t.Fatalf("paste filtered through the mask: %q", got)
+		t.Fatalf("paste with the literal: %q", got)
 	}
 	received(t, changed)
-	if r := received(t, rejected); r != '-' && r != '/' && r != 'z' {
+	box.Key(ui.Cmd, ui.KeyHome)
+	tt.SetClipboard("z")
+	box.Key(ui.Cmd, ui.KeyV) // no selection: the characters no slot takes are dropped
+	if r := received(t, rejected); r != 'z' {
 		t.Fatalf("rejected %q", r)
 	}
 }
@@ -346,5 +358,46 @@ func TestMaskedTextBoxSetTextTakesLiteralsToo(t *testing.T) {
 	}
 	if mt.Text() != "12" {
 		t.Errorf("a refused SetText changed the text: %q", mt.Text())
+	}
+}
+
+// WinForms leaves the text alone when what replaces a selection is refused.
+func TestMaskEngineARejectedCharacterOverASelectionChangesNothing(t *testing.T) {
+	m := newMask("000-0000", '_')
+	got, _, _ := m.edit("123-4567", 1, 2, "x")
+	if got != "123-4567" || string(m.rejected) != "x" {
+		t.Errorf("x over 2: %q rejected %q", got, string(m.rejected))
+	}
+	got, _, _ = m.edit("123-4567", 1, 2, "9")
+	if got != "193-4567" || len(m.rejected) != 0 {
+		t.Errorf("9 over 2: %q rejected %q", got, string(m.rejected))
+	}
+}
+
+// An input method that commits over a selection mask refuses: nothing is lost.
+func TestMaskedTextBoxKeepsASelectionAnInputMethodCannotReplace(t *testing.T) {
+	rejected := make(chan rune, 4)
+	mt := MaskedTextBox(">LLL").OnMaskInputRejected(func(r rune) { rejected <- r })
+	tt := NewTester(t, mt, 400, 120)
+	box := tt.Find(ByRole(ui.RoleTextField)).Focus()
+	box.Key(ui.Cmd, ui.KeyHome)
+	box.Type("abc")
+	box.Key(ui.Cmd, ui.KeyHome)
+	box.Key(0, ui.KeyRight)
+	box.Key(ui.Shift, ui.KeyRight) // B selected
+	tt.Tester.Compose("1", 1)
+	tt.Tester.Type("1")
+	tt.Settle()
+	if got := mt.Text(); got != "ABC" {
+		t.Errorf("Text = %q, want ABC unchanged", got)
+	}
+	if r := received(t, rejected); r != '1' {
+		t.Errorf("rejected %q, want 1", r)
+	}
+	tt.Tester.Compose("1", 1)
+	tt.Tester.Compose("", 0)
+	tt.Settle()
+	if got := mt.Text(); got != "ABC" {
+		t.Errorf("after a cancelled composition Text = %q", got)
 	}
 }

@@ -219,7 +219,8 @@ func (m *mask) edit(text string, start, end int, insert string, caret ...int) (s
 // after the edit and the caret. Characters after the edit move to make room
 // or to close the gap, as WinForms' mask in insert mode does; an insert
 // that would push one out of the mask is refused whole, and m.rejected holds
-// its first character. A character that is the literal at the caret steps
+// its first character; so is one that replaces a selection and holds a
+// character no slot takes (m.rejected holds those). A character that is the literal at the caret steps
 // over it (WinForms' SkipLiterals).
 func (m *mask) editCells(cells []rune, start, end int, insert string, caret ...int) ([]rune, int) {
 	m.rejected = m.rejected[:0]
@@ -229,6 +230,7 @@ func (m *mask) editCells(cells []rune, start, end int, insert string, caret ...i
 		return cells, start // nothing goes, as when an input method starts
 	}
 	orig := cells
+	over := insert != "" && end > start // replaces a selection
 	cells = slices.Clone(cells)
 	if insert == "" && !m.anyEditable(start, end) {
 		// Only literals go: Backspace takes the character before them, Delete
@@ -286,6 +288,9 @@ func (m *mask) editCells(cells []rune, start, end int, insert string, caret ...i
 				m.rejected = append(m.rejected, r)
 			}
 		}
+	}
+	if over && len(m.rejected) > 0 {
+		return orig, end // a character no slot takes: the selection stays as it was
 	}
 	if m.flow(cells, pos, rest) > 0 && insert != "" {
 		m.rejected = append(m.rejected[:0], []rune(insert)[0])

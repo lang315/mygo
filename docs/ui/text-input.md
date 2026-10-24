@@ -61,7 +61,10 @@ ui.TextArea(c, &app.notes).Height(160)
   and a refused edit is no step of undo. An edit that replaces nothing with
   nothing, as an input method's composition starting, is not passed. A text
   the app set is not seen, nor is an input method's preedit text, which shows
-  as it comes. A selection of several ranges (bidirectional text) passes one
+  as it comes: the selection it replaces only looks gone, and fn gets one edit
+  at the commit, against the text before the composition (`Start` and `End`
+  the selection, `Insert` the committed text). If fn refuses it, or the
+  composition is cancelled, the text and the selection are as they were. A selection of several ranges (bidirectional text) passes one
   edit per range, last first, each to the text the previous left, so fn must
   not depend on offsets of a text it reflowed.
 
