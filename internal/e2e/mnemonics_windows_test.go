@@ -3,10 +3,12 @@
 package e2e
 
 import (
+	"slices"
 	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	win "github.com/egoist/mygo/internal/windows"
 	"github.com/egoist/mygo/ui/widget"
 )
@@ -69,21 +71,29 @@ func TestMnemonicClicksOnceAndLeavesTheKeyboardAlone(t *testing.T) {
 	}
 }
 
-// The menu bar's access key beats a control's: Alt+F opens the File menu and
-// the button "&File" is not clicked.
+// The menu bar's access key beats a control's: Alt+F opens the File menu (the
+// window draws its bar as a popup of the top items, with the menu of the
+// letter above it) and the button "&File" is not clicked.
 func TestMenuBarAccessKeyBeatsAButtonMnemonic(t *testing.T) {
 	var clicks atomic.Int32
 	f := widget.NewForm("Mnemonics menu", 400, 200)
-	f.SetMenuBar(widget.MenuItem{Text: "&File", Children: []widget.MenuItem{{Text: "New"}}})
+	f.SetMenuBar(widget.MenuItem{Text: "&File", Children: []widget.MenuItem{{Text: "New"}}}, widget.MenuItem{Text: "&Edit", Children: []widget.MenuItem{{Text: "Undo"}}})
 	f.SetContent(widget.VBox(4).Add(widget.TextBox().Focus(), widget.Button("&File").OnClick(func() { clicks.Add(1) })))
 	f.Show()
 	t.Cleanup(f.Close)
 	eventually(t, "the form's window", func() bool { return f.Native() != nil })
 	mnFront(t, f)
 	mnPress(mnVkAlt, 'F')
-	eventually(t, "Alt+F opening the File menu", mnMenuMode)
-	mnPress(mnVkEscape)
-	eventually(t, "leaving menu mode", func() bool { return !mnMenuMode() })
+	opened := func() bool {
+		menus, _ := popupMenus()
+		return slices.ContainsFunc(menus, func(m []string) bool { return len(m) == 1 && m[0] == "New" })
+	}
+	if !wait.Poll(opened) {
+		menus, _ := popupMenus()
+		t.Errorf("Alt+F did not open the File menu: popups %q, menu mode %v, button clicks %d, front: %s",
+			menus, mnMenuMode(), clicks.Load(), foregroundState(f.Native()))
+	}
+	closeMenus()
 	if n := clicks.Load(); n != 0 {
 		t.Errorf("the button %q was clicked %d times by Alt+F", "&File", n)
 	}
