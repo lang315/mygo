@@ -53,12 +53,14 @@ A call for a key that is not an item (`UpdateItem`, `RemoveItems`, `SetSelected`
 
 ## Choosing
 
-One item is chosen, the one clicked last, unless the list is `Multi()`: then a
-click chooses one, Cmd-click (Ctrl-click on Linux and Windows) adds an item or
-takes it out, and Shift-click chooses the items from the one last chosen to the
-one clicked. The arrow keys and Home and End move the choice (Page Up and Down
-too, on Linux and Windows), and typing the first letters of an item's text
-chooses it.
+One item is chosen, the one clicked last, unless the list is `Multi()`. In a
+single list a click, the arrow keys (also with Shift), Home and End (Page Up and
+Down too, on Linux and Windows) and typing the first letters of an item's text
+move the choice to one item; Cmd-click on the chosen item keeps it, and Cmd+A
+does nothing. In a `Multi()` list a click chooses one, Cmd-click (Ctrl-click on
+Linux and Windows) adds an item or takes it out, Shift-click and Shift with the
+arrows choose the items from the one last chosen to the one clicked, and Cmd+A
+chooses all.
 
 - `Selected()` returns the keys of the items chosen, in the order of the list,
   and `CountSelected()` how many.
@@ -74,7 +76,10 @@ chooses it.
 
 On a `CheckedListBox` (or after `CheckBoxes()` on a `ListBox`), the box checks
 the item it is in front of, apart from the item chosen. Space checks the items
-chosen, or unchecks them when all are checked.
+chosen (the item the cursor is on, in a single list), or unchecks them when all
+are checked. Space typed right after letters that choose an item by its text,
+within a moment of them, belongs to that text, as in any list, and does not
+check.
 
 - `Checked()` returns the keys of the items checked (WinForms' `CheckedItems`),
   in the order of the list, and `IsChecked(k)` asks about one.
