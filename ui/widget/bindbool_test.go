@@ -94,3 +94,54 @@ func TestBindBoolRebindingReplacesTheFirst(t *testing.T) {
 		t.Fatalf("the replaced binding was called: %v", got)
 	}
 }
+
+// An Editable combo bound as text would get "Có", never "true": BindBool
+// makes the combo a plain choice of its two options, so picking yes writes
+// true.
+func TestBindBoolOnAnEditableComboWritesTrueAndFalse(t *testing.T) {
+	src := newSource(false)
+	c := BindBool(ComboBox().Editable(), yes, no, src.get, src.set)
+	if c.Value() != "false" {
+		t.Fatalf("Value %q, want the source's no", c.Value())
+	}
+	tt := tester(t, c)
+	click(t, tt, "Không")
+	click(t, tt, "Có")
+	if got := src.calls(); !slices.Equal(got, []bool{true}) {
+		t.Fatalf("set calls %v, want [true]", got)
+	}
+}
+
+// Editable after BindBool: the typing that is neither option is not a
+// choice, so set is not called with false for each keystroke.
+func TestBindBoolIgnoresTextThatIsNeitherOption(t *testing.T) {
+	src := newSource(true)
+	c := BindBool(ComboBox(), yes, no, src.get, src.set).Editable()
+	tt := tester(t, c)
+	focus(tt, 1)
+	c.SetText("")
+	tt.Frame()
+	tt.Type("C")
+	tt.Frame()
+	if got := src.calls(); len(got) != 0 {
+		t.Fatalf("typing %q called set with %v", "C", got)
+	}
+	tt.Type("ó")
+	tt.Frame()
+	if got := src.calls(); !slices.Equal(got, []bool{true}) {
+		t.Fatalf("set calls %v after typing Có, want [true]", got)
+	}
+}
+
+// An option in a section survives SetOptions: choosing it is not "no".
+func TestBindBoolIgnoresAnOptionOfASection(t *testing.T) {
+	src := newSource(true)
+	c := BindBool(ComboBox(), yes, no, src.get, src.set).
+		AddSection("Other", nil, Option{Value: "maybe", Text: "Có thể"})
+	tt := tester(t, c)
+	click(t, tt, "Có")
+	click(t, tt, "Có thể")
+	if got := src.calls(); len(got) != 0 {
+		t.Fatalf("choosing an option that is neither called set with %v", got)
+	}
+}
