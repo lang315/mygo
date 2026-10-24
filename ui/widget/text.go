@@ -56,11 +56,11 @@ func (l *LabelWidget) build(c *ui.Context) ui.Element {
 	}
 	if c.Modifiers()&ui.Alt != 0 {
 		e := ui.RichText(c, mnemonicSpans(display, at)...)
-		registerMnemonic(key, e, l, func() { buildingForm.focusNextAfter(l) })
+		registerLabelMnemonic(key, e, l)
 		return e
 	}
 	e := ui.Text(c, display)
-	registerMnemonic(key, e, l, func() { buildingForm.focusNextAfter(l) })
+	registerLabelMnemonic(key, e, l)
 	return e
 }
 

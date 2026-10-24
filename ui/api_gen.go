@@ -3042,9 +3042,10 @@ func (_handle Element) Bounds() Rect {
 	return _node.Bounds()
 }
 
-// CanFocus reports whether the element can take the keyboard focus now: it is
-// focusable and not disabled. Like the other queries of an element, it is
-// valid until the build ends.
+// CanFocus reports whether the element, or an element inside it, can take the
+// keyboard focus now, by the rule of Tab: focusable, and neither disabled,
+// invisible nor inert. Like the other queries of an element, it is valid until
+// the build ends.
 func (_handle Element) CanFocus() bool {
 	_node := _handle.node()
 	if _node == nil {

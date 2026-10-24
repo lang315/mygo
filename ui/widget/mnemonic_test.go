@@ -373,3 +373,77 @@ func TestFieldsLabelWithALiteralAmpersandShowsIt(t *testing.T) {
 		t.Errorf("labels %q", tt.Texts())
 	}
 }
+
+// altN presses Alt+N and lets the focus request through.
+func altN(tt *Tester) {
+	tt.Key(ui.Alt, ui.KeyN)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+}
+
+func TestLabelMnemonicFocusesTheFieldInsideAControl(t *testing.T) {
+	withMac(t, false)
+	for name, c := range map[string]Control{
+		"NumericUpDown":  NumericUpDown(0, 10, 1),
+		"DateTimePicker": DateTimePicker(),
+		"ComboBox":       ComboBox(),
+	} {
+		f := NewForm("m", 400, 200)
+		f.SetContent(VBox(4).Add(Label("&Name").SetUseMnemonic(true), c, TextBox()))
+		tt := TestForm(t, f)
+		tt.Settle()
+		altN(tt)
+		if fields := tt.FindAll(ByRole(ui.RoleTextField)); fields[len(fields)-1].Focused() {
+			t.Errorf("%s: Alt+N skipped the control", name)
+		}
+	}
+}
+
+// Check boxes as targets: a focused text box would take Alt+letter itself on macOS.
+func TestSameLabelMnemonicTwiceCyclesTheirControls(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(
+		Label("&Name").SetUseMnemonic(true), CheckBox("c"),
+		Label("&Number").SetUseMnemonic(true), CheckBox("c")))
+	tt := TestForm(t, f)
+	tt.Settle()
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(0)).Focused() {
+		t.Error("first Alt+N did not focus the first target")
+	}
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(1)).Focused() {
+		t.Error("second Alt+N did not move to the second target")
+	}
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(0)).Focused() {
+		t.Error("third Alt+N did not come round")
+	}
+}
+
+func TestLabelAndButtonSharingAMnemonicCycleTargets(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(
+		Label("&Name").SetUseMnemonic(true), CheckBox("c"), Button("&New").OnClick(func() {})))
+	tt := TestForm(t, f)
+	tt.Settle()
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(0)).Focused() {
+		t.Error("first Alt+N did not focus the label's target")
+	}
+	altN(tt)
+	if !tt.Find(ByLabel("New")).Focused() {
+		t.Error("second Alt+N did not focus the button")
+	}
+}
+
+func TestAmpersandBeforeAnyWhitespaceIsLiteral(t *testing.T) {
+	for _, s := range []string{"A&\u00a0B", "A&\tB", "A&\nB"} {
+		if d, k, at := parseMnemonic(s); k != 0 || at != -1 || d != s {
+			t.Errorf("parseMnemonic(%q) = %q %q %d", s, d, k, at)
+		}
+	}
+}

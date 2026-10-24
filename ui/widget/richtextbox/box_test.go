@@ -352,8 +352,23 @@ func TestRichTextBoxASetterDoesNotSwallowAPendingSelectionReport(t *testing.T) {
 func TestRichTextBoxInARowHasAUsableWidth(t *testing.T) {
 	r := New()
 	tt := widget.NewTester(t, widget.HBox(8).Add(widget.Label("Notes"), r), 600, 300)
-	if w := tt.Find(widget.ByRole(ui.RoleTextField)).Bounds().W; w < 150 {
+	if w := tt.Find(widget.ByRole(ui.RoleTextField)).Bounds().W; w < 150 || w > 250 {
 		t.Errorf("a RichTextBox added to an HBox is %v wide", w)
+	}
+}
+
+// It gives way to a container narrower than its natural width, as a text box.
+func TestRichTextBoxShrinksToANarrowContainer(t *testing.T) {
+	tt := widget.NewTester(t, widget.VBox(8).Add(New()), 150, 300)
+	if r := tt.Find(widget.ByRole(ui.RoleTextField)).Bounds(); r.X+r.W > 150 {
+		t.Errorf("a RichTextBox in a VBox of 150 ends at %v", r.X+r.W)
+	}
+	f := widget.NewForm("f", 150, 300)
+	f.SetContent(widget.Fields().Row("Notes", New()))
+	tf := widget.TestForm(t, f)
+	tf.Settle()
+	if r := tf.Find(widget.ByRole(ui.RoleTextField)).Bounds(); r.X+r.W > 150 {
+		t.Errorf("a RichTextBox in Fields of 150 ends at %v", r.X+r.W)
 	}
 }
 
