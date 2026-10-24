@@ -63,9 +63,14 @@ func (d *Dialog) Run() {
 	if before != nil {
 		before()
 	}
-	d.Show()
 	mu.Lock()
-	done := d.done
+	done := d.headless
 	mu.Unlock()
+	if done == nil { // a DialogTester has none, and shows no window
+		d.Show()
+		mu.Lock()
+		done = d.done
+		mu.Unlock()
+	}
 	block("Dialog.Run", done)
 }

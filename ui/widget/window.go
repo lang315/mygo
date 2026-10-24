@@ -33,6 +33,7 @@ type Form struct {
 	closing       bool          // Close is closing it: OnClose is not asked
 	asking        bool          // OnClose is asking the user
 	done          chan struct{} // closed when the shown window closes
+	headless      chan struct{} // a DialogTester's: closed by Close, instead of a window
 }
 
 // quit quits the app; tests replace it.
@@ -288,6 +289,13 @@ func (w *Form) closeAnyway() {
 	mu.Lock()
 	n := w.win
 	w.closing = true
+	if h := w.headless; h != nil {
+		select {
+		case <-h:
+		default:
+			close(h)
+		}
+	}
 	mu.Unlock()
 	if n != nil {
 		n.Close()
