@@ -64,6 +64,7 @@ type GridState struct {
 	// cols is how many columns the items took in the last frame, and pivot
 	// the item Shift chooses from.
 	cols, pivot int
+	pivotSet    bool // SetPivot was called before the first frame
 	started     bool
 	rt          *engine
 }
@@ -76,7 +77,7 @@ func (s *GridState) Pivot() int { return s.pivot }
 // the choice: for an app that shows the same items in another view and keeps
 // the pivot by key. Call it after the grid is built once, with an item of the
 // frame about to be built.
-func (s *GridState) SetPivot(item int) { s.pivot = item }
+func (s *GridState) SetPivot(item int) { s.pivot, s.pivotSet = item, true }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
 // does a row.
@@ -142,7 +143,7 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 		first, _ := s.rows.Visible()
 		s.rows.ScrollTo(first*s.cols/cols, Start)
 	}
-	if !s.started {
+	if !s.started && !s.pivotSet {
 		s.pivot = -1 // no item to extend from
 	}
 	s.cols, s.started = cols, true

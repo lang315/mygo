@@ -271,6 +271,8 @@ type ListState struct {
 	lead, pivot, span int
 	pivotRow          int
 	pivotKey          any
+	// pivotSet says SetPivot was called before the first frame.
+	pivotSet bool
 
 	header listHeader
 	// rows are the last frame's rows by their elements' IDs, to find the
@@ -577,7 +579,10 @@ func (s *ListState) sync(e *node, n int) {
 	if !s.started {
 		s.started = true
 		s.following = s.FollowEnd
-		s.selRow, s.lead, s.pivot, s.pivotRow = -1, -1, -1, -1
+		s.selRow, s.lead, s.pivotRow = -1, -1, -1
+		if !s.pivotSet {
+			s.pivot = -1
+		}
 		s.header.row = -1
 	}
 	if s.Version != s.version {
@@ -1143,7 +1148,7 @@ func (s *ListState) Pivot() int { return s.pivot }
 // the choice: for an app that shows the same rows in another view and keeps
 // the pivot by key. Call it after the list is built once, with a row of the
 // frame about to be built.
-func (s *ListState) SetPivot(row int) { s.pivot, s.span = row, 0 }
+func (s *ListState) SetPivot(row int) { s.pivot, s.span, s.pivotSet = row, 0, true }
 
 // ExtendTo chooses the rows from the one Shift extends from to row, as a
 // Shift-click on it does, and makes row the one the keys move from: for an

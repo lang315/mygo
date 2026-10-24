@@ -86,6 +86,46 @@ func TestListStateSetPivotIsWhereShiftExtendsFrom(t *testing.T) {
 	}
 }
 
+// A pivot set before the first frame, as a view that was never built has when
+// an app switches to it, survives that frame.
+func TestSetPivotBeforeTheFirstFrameSurvivesIt(t *testing.T) {
+	gsel, gcur := Selection[int]{}, 3
+	gsel.Add(3)
+	g := GridState{Selected: &gcur, Selection: &gsel, Key: func(i int) any { return i }}
+	g.SetPivot(1)
+	gt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			coreGridView(c, &g, 6, 100, 40, func(i int) { coreTextf(c, "Item %d", i) }).Grow(1)
+		})
+	}, 448, 300)
+	if g.Pivot() != 1 {
+		t.Fatalf("a grid's pivot set before its first frame is %d, want 1", g.Pivot())
+	}
+	if err := gt.ClickWith(Shift, "Item 5"); err != nil {
+		t.Fatal(err)
+	}
+	if got := chosenKeys(&gsel, 6); !slices.Equal(got, []int{1, 2, 3, 4, 5}) {
+		t.Fatalf("grid: Shift-click chose %v", got)
+	}
+
+	lsel, lcur := Selection[int]{}, 3
+	lsel.Add(3)
+	l := ListState{Selected: &lcur, Selection: &lsel, Key: func(i int) any { return i }}
+	l.SetPivot(1)
+	lt := coreNewTester(func(c *context) {
+		coreList(c, &l, 6, func(i int) { coreText(c, fmt.Sprint("Row ", i)) }).Grow(1)
+	}, 300, 300)
+	if l.Pivot() != 1 {
+		t.Fatalf("a list's pivot set before its first frame is %d, want 1", l.Pivot())
+	}
+	if err := lt.ClickWith(Shift, "Row 5"); err != nil {
+		t.Fatal(err)
+	}
+	if got := chosenKeys(&lsel, 6); !slices.Equal(got, []int{1, 2, 3, 4, 5}) {
+		t.Fatalf("list: Shift-click chose %v", got)
+	}
+}
+
 // With AccentChoice a grid shows the items chosen in the accent color, as a
 // table's rows are, focused or not; without it, as a tint or a grey.
 func TestGridViewAccentChoiceShowsChosenItemsInTheAccent(t *testing.T) {
