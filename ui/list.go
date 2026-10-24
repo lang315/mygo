@@ -1135,6 +1135,16 @@ func (f *listFrame) lead(i int, pivot bool) {
 	s.ScrollIntoView(i)
 }
 
+// Pivot returns the row Shift extends the choice from, -1 for none: the row
+// last chosen without Shift. Call it after the list is built.
+func (s *ListState) Pivot() int { return s.pivot }
+
+// SetPivot makes row the one Shift extends the choice from, without changing
+// the choice: for an app that shows the same rows in another view and keeps
+// the pivot by key. Call it after the list is built once, with a row of the
+// frame about to be built.
+func (s *ListState) SetPivot(row int) { s.pivot, s.span = row, 0 }
+
 // ExtendTo chooses the rows from the one Shift extends from to row, as a
 // Shift-click on it does, and makes row the one the keys move from: for an
 // app's own keys, as a key that extends the choice to the last row. Call it
