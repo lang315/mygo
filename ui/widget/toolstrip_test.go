@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -83,15 +84,14 @@ func TestToolButtonChangesAtRunTimeAndRedraws(t *testing.T) {
 }
 
 func TestToolButtonIconOnlyShowsNoText(t *testing.T) {
-	f := NewForm("Shell", 800, 600).ToolStrip(ToolStrip(ToolButton("").SetIcon(chevronDown).SetTooltip("Next"), ToolButton("Text")))
+	f := NewForm("Shell", 800, 600).ToolStrip(ToolStrip(
+		ToolButton("").SetIcon(chevronDown).SetTooltip("Next"), ToolButton("Other").SetIcon(chevronDown)))
 	tt := formTester(t, f)
-	if !tt.HasText("Text") {
-		t.Fatalf("texts %q", tt.Texts())
-	}
-	for _, s := range tt.Texts() {
-		if s == "Next" {
-			t.Fatal("the tooltip shows without hovering")
-		}
+	// The tooltip names the button but is not drawn on it: with text beside
+	// its icon, a button is wider.
+	only, with := find(t, tt, "Next"), find(t, tt, "Other")
+	if only.W >= with.W-10 {
+		t.Fatalf("the icon-only button is %v wide, one with a text %v: the tooltip is drawn on it", only.W, with.W)
 	}
 }
 
@@ -142,6 +142,25 @@ func TestDropDownButtonOpensItsMenu(t *testing.T) {
 	tt.Frame()
 	if !received(t, ran) {
 		t.Fatal("the item's OnClick did not run on the event goroutine")
+	}
+}
+
+// An icon-only button is named by its tooltip, for assistive technology and
+// for the overflow menu, where it would be an empty line.
+func TestToolStripOverflowNamesAnIconOnlyButtonByItsTooltip(t *testing.T) {
+	f := NewForm("Shell", 800, 600).ToolStrip(ToolStrip(
+		ToolButton("Alpha"), ToolButton("Beta"),
+		ToolButton("").SetIcon(chevronDown).SetTooltip("Next"),
+		ToolButton("Delta").SetIcon(chevronDown)))
+	tt := ui.NewTester(f.view, 120, 300)
+	tt.Frame()
+	if err := tt.Click("More"); err != nil {
+		t.Fatalf("no overflow button (texts %q): %v", tt.Texts(), err)
+	}
+	tt.Frame()
+	menu := tt.Menu()
+	if !slices.Contains(menu, "Next") || slices.Contains(menu, "") {
+		t.Fatalf("overflow menu %q: want the icon-only button as Next, and no empty line", menu)
 	}
 }
 

@@ -124,7 +124,11 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 	}
 	if b.icon != nil {
 		icon, text := b.icon, b.text
-		e.Label(text).Children(func() {
+		name := text
+		if name == "" {
+			name = b.tooltip // an icon-only button is named by its tooltip
+		}
+		e.Label(name).Children(func() {
 			ui.Row(c).Gap(c.Theme().Space(1.5)).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, icon)
 				if text != "" {
