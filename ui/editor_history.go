@@ -87,6 +87,9 @@ func (ed *editor) record(typing bool) {
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
+	if start == end && s == "" {
+		return // as when an input method's composition starts with no selection
+	}
 	if f := ed.onEdit; f != nil && !ed.filtering {
 		old := ed.buf.slice(0, ed.buf.n)
 		if text, caret, ok := f(TextEdit{Text: old, Start: start, End: end, Insert: s, Caret: ed.caret}); ok {
@@ -155,6 +158,15 @@ func (ed *editor) takeBack(redo bool) {
 		from, to = to, from
 	}
 	n := len(*from)
+	if n == 0 {
+		return
+	}
+	for n > 0 && len((*from)[n-1].changes) == 0 {
+		// An edit that changed nothing, as OnEdit's refusal, left an empty step.
+		(*from)[n-1] = undoStep{}
+		n--
+		*from = (*from)[:n]
+	}
 	if n == 0 {
 		return
 	}

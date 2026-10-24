@@ -52,6 +52,25 @@ ui.TextArea(c, &app.notes).Height(160)
   })
   ```
 
+- `OnEdit(fn)` rewrites each edit of the user before it is made, as a mask or
+  a format does: typing, a paste, an input method's commit, Backspace, Delete
+  and cut. fn gets the text, the runes replaced (`Start` to `End`), what
+  replaces them and where the caret was (`TextEdit`), and returns the text the
+  input holds after the edit and the caret; with `ok` false the edit is made
+  as it would be without fn. A result equal to the old text refuses the edit,
+  and a refused edit is no step of undo. An edit that replaces nothing with
+  nothing, as an input method's composition starting, is not passed. A text
+  the app set is not seen, nor is an input method's preedit text, which shows
+  as it comes. A selection of several ranges (bidirectional text) passes one
+  edit per range, last first, each to the text the previous left, so fn must
+  not depend on offsets of a text it reflowed.
+
+  ```go
+  ui.TextInput(c, &app.phone).OnEdit(func(e ui.TextEdit) (string, int, bool) {
+  	return app.mask.Apply(e.Text, e.Start, e.End, e.Insert)
+  })
+  ```
+
 - `OnTextKey(fn)` sees a key that types no text before the input takes
   it: Enter, Tab, Escape, Backspace and Delete, the arrows and the other
   keys that move the caret, and chords with Cmd or Ctrl, as AppKit's

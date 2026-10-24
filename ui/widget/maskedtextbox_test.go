@@ -74,9 +74,9 @@ func TestMaskEngineInsertsShiftingLaterCharactersRight(t *testing.T) {
 	if text != "192-345_" || caret != 2 {
 		t.Fatalf("insert: %q caret %d", text, caret)
 	}
-	// A full mask drops what is pushed off its end.
+	// A full mask refuses what would push a character off its end.
 	text, _, _ = m.edit("123-4567", 0, 0, "0")
-	if text != "012-3456" {
+	if text != "123-4567" {
 		t.Fatalf("full: %q", text)
 	}
 }
@@ -211,5 +211,140 @@ func TestMaskedTextBoxUndoIsOneStepPerEdit(t *testing.T) {
 	box.Key(ui.Cmd, ui.KeyZ)
 	if got := mt.TextWithLiterals(); got != "12-  " {
 		t.Fatalf("after undo: %q", got)
+	}
+}
+
+// An edit that replaces nothing with nothing, as an input method's
+// composition starting, is not a Backspace.
+func TestMaskEngineAnEditThatChangesNothingChangesNothing(t *testing.T) {
+	m := newMask("000-0000", '_')
+	for _, c := range []struct {
+		text  string
+		caret int
+	}{{"12_-____", 2}, {"123-4___", 5}} {
+		if got, caret, _ := m.edit(c.text, c.caret, c.caret, "", c.caret); got != c.text || caret != c.caret {
+			t.Errorf("empty edit at %d of %q -> %q caret %d", c.caret, c.text, got, caret)
+		}
+	}
+}
+
+// An input method composing letters into a mask keeps the letters before.
+func TestMaskedTextBoxKeepsWhatWasTypedWhenAnInputMethodComposes(t *testing.T) {
+	mt := MaskedTextBox(">LLL")
+	tt := NewTester(t, mt, 400, 120)
+	box := tt.Find(ByRole(ui.RoleTextField)).Focus()
+	box.Key(ui.Cmd, ui.KeyHome)
+	for _, w := range []string{"Đ", "ứ", "c"} {
+		tt.Tester.Compose(w, 1)
+		tt.Tester.Type(w)
+	}
+	if got := mt.Text(); got != "ĐỨC" {
+		t.Errorf("Text = %q, want ĐỨC", got)
+	}
+}
+
+// WinForms refuses an insert whose shifted characters no longer fit.
+func TestMaskEngineRefusesAnInsertThatPushesCharactersOut(t *testing.T) {
+	m := newMask("000-0000", '_')
+	got, caret, _ := m.edit("123-4567", 0, 0, "9", 0)
+	if got != "123-4567" || caret != 0 || string(m.rejected) != "9" {
+		t.Errorf("full mask: %q caret %d rejected %q", got, caret, string(m.rejected))
+	}
+	m = newMask("LL00", '_')
+	got, _, _ = m.edit("AB12", 0, 0, "C", 0)
+	if got != "AB12" || string(m.rejected) != "C" {
+		t.Errorf("LL00: %q rejected %q", got, string(m.rejected))
+	}
+	m = newMask("000-0000", '_')
+	got, _, _ = m.edit("123-45__", 0, 0, "9", 0) // room for it: the rest moves
+	if got != "912-345_" || len(m.rejected) != 0 {
+		t.Errorf("room left: %q rejected %q", got, string(m.rejected))
+	}
+	got, _, _ = m.edit("123-4567", 0, 0, "98", 0)
+	if got != "123-4567" || string(m.rejected) != "9" {
+		t.Errorf("a paste is refused whole, and reports once: %q rejected %q", got, string(m.rejected))
+	}
+}
+
+// WinForms' SkipLiterals: a character equal to the literal at the caret steps
+// over it.
+func TestMaskEngineSkipsLiteralsATypedCharacterEquals(t *testing.T) {
+	m := newMask("(000) 000-0000", '_')
+	got, caret, _ := m.edit(m.display(), 0, 14, "(012) 345-6789", 0)
+	if got != "(012) 345-6789" || caret != 14 || len(m.rejected) != 0 {
+		t.Errorf("formatted paste: %q caret %d rejected %q", got, caret, string(m.rejected))
+	}
+	m = newMask("000-0000", '_')
+	got, caret, _ = m.edit("123-____", 3, 3, "-", 3)
+	if got != "123-____" || caret != 4 || len(m.rejected) != 0 {
+		t.Errorf("typing the dash: %q caret %d rejected %q", got, caret, string(m.rejected))
+	}
+	got, _, _ = m.edit("12_-____", 2, 2, "-", 2) // the slot before the dash is empty: '-' is no digit
+	if string(m.rejected) != "-" {
+		t.Errorf("a literal that is not at the caret is rejected: %q rejected %q", got, string(m.rejected))
+	}
+}
+
+// The prompt is a display; a character equal to it still fills its slot.
+func TestMaskedTextBoxKeepsATypedCharacterEqualToThePrompt(t *testing.T) {
+	mt := MaskedTextBox("CCC")
+	tt := NewTester(t, mt, 400, 120)
+	box := tt.Find(ByRole(ui.RoleTextField)).Focus()
+	box.Key(ui.Cmd, ui.KeyHome)
+	box.Type("a_b")
+	if got := mt.Text(); got != "a_b" {
+		t.Errorf("a typed _ in CCC: Text = %q, want a_b", got)
+	}
+	mt.SetPromptChar('-')
+	tt.Settle()
+	if got := mt.Text(); got != "a_b" {
+		t.Errorf("SetPromptChar: Text = %q, want a_b", got)
+	}
+	box.Key(ui.Cmd, ui.KeyHome)
+	box.Key(ui.Cmd, ui.KeyA)
+	box.Type("a-b")
+	if got := mt.Text(); got != "a-b" || !mt.MaskFull() {
+		t.Errorf("typing the prompt: Text = %q full %v, want a-b", got, mt.MaskFull())
+	}
+}
+
+// WinForms keeps the text when the mask changes.
+func TestMaskedTextBoxSetMaskReappliesTheText(t *testing.T) {
+	changed := make(chan struct{}, 4)
+	mt := MaskedTextBox("000-0000").OnChange(func() { changed <- struct{}{} })
+	tt := NewTester(t, mt, 400, 120)
+	mt.SetText("1234567")
+	mt.SetMask("00-00")
+	tt.Settle()
+	if got := mt.TextWithLiterals(); got != "12-34" {
+		t.Errorf("after SetMask: %q, want 12-34 (what does not fit is dropped)", got)
+	}
+	mt.SetMask("LL")
+	tt.Settle()
+	if got := mt.TextWithLiterals(); got != "  " || mt.Text() != "" {
+		t.Errorf("digits in a letter mask: %q", got)
+	}
+	select {
+	case <-changed:
+		t.Error("SetMask ran OnChange")
+	default:
+	}
+}
+
+// WinForms' Text takes the literals too.
+func TestMaskedTextBoxSetTextTakesLiteralsToo(t *testing.T) {
+	mt := MaskedTextBox("000-0000")
+	NewTester(t, mt, 400, 120)
+	if !mt.SetText("123-4567") || mt.Text() != "1234567" {
+		t.Errorf("SetText with the dash: %q", mt.Text())
+	}
+	if !mt.SetText("12 -    ") || mt.Text() != "12" {
+		t.Errorf("SetText with blanks: %q", mt.Text())
+	}
+	if mt.SetText("123+4567") {
+		t.Error("SetText took a wrong literal")
+	}
+	if mt.Text() != "12" {
+		t.Errorf("a refused SetText changed the text: %q", mt.Text())
 	}
 }

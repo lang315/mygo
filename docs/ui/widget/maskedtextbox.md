@@ -32,24 +32,35 @@ culture-aware placeholders of WinForms are not here.
 The box always shows the template. The characters typed, pasted or committed by
 an input method go into the slots, skipping literals, and the characters after
 make room as WinForms' insert mode does (`123-45__`, typing 9 after the 1:
-`192-345_`; what is pushed off the end is dropped). A character no slot takes is
-refused and reported to `OnMaskInputRejected`. Backspace and Delete clear a slot
+`192-345_`). An insert that would push a character off the end of the mask is
+refused whole (typing 9 first in `123-4567`): the text stays, and
+`OnMaskInputRejected` hears its first character once. A character no slot takes
+is refused and reported to `OnMaskInputRejected`. A character equal to the
+literal at the caret steps over it, as WinForms' `SkipLiterals` does, so typing
+`-` before the dash moves the caret past it, and pasting `(012) 345-6789` into
+`(000) 000-0000` is no rejection. Backspace and Delete clear a slot
 and close the gap; over a literal, Backspace clears the slot before it, and
 Delete the one after. A character typed with the caret on a literal goes to the
 next slot, and the caret waits before the literal after the last slot of a
-group. Each edit is one step of undo. A paste is filtered through the mask.
+group. Each edit is one step of undo, and an edit the mask refuses is none. A
+paste is filtered through the mask. While an input method composes, its
+preedit text shows as it comes, unfiltered; the mask takes the text when it
+commits.
 
 ## The text
 
 - `Text()`: the characters typed, with no literals and no prompts (`1234567`).
 - `TextWithLiterals()`: the text with the literals, a space for each empty slot
   (`123-45  `).
-- `SetText(s)`: fills the slots with the characters of `s` from the first, and
-  reports whether each fitted (nothing changes if not). It does not run
-  `OnChange`.
+- `SetText(s)`: fills the slots with the characters of `s` from the first, or
+  with the text as `TextWithLiterals` returns it (`123-4567`, a space for an
+  empty slot), and reports whether each fitted (nothing changes if not). It
+  does not run `OnChange`.
 - `MaskCompleted()`: every required slot is filled; `MaskFull()`: every slot is.
-- `SetMask(m)` empties the box; `SetPromptChar(r)` (default `_`) changes the
-  prompt and keeps the text.
+- `SetMask(m)` puts the text, as `Text()` returns it, in the new mask, what its
+  slots do not take dropped; it does not run `OnChange`. `SetPromptChar(r)`
+  (default `_`) changes the prompt and keeps the text: a slot may hold the
+  prompt character itself, the box keeps which slots are filled.
 
 It is not bindable (`Bind` takes a TextBox, a number, a combo...); use `OnChange`.
 Not here: `TextMaskFormat`, `ResetOnPrompt` and `HidePromptOnLeave`.

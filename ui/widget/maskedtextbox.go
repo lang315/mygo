@@ -14,6 +14,7 @@ type MaskedTextBoxWidget struct {
 	spec       string
 	prompt     rune
 	mk         *mask
+	cells      []rune // what each slot holds, which the text shown cannot tell from a prompt
 	onChange   func()
 	onRejected func(r rune)
 }
@@ -22,17 +23,21 @@ type MaskedTextBoxWidget struct {
 func MaskedTextBox(spec string) *MaskedTextBoxWidget {
 	m := &MaskedTextBoxWidget{spec: spec, prompt: '_'}
 	m.mk = newMask(spec, m.prompt)
+	m.cells = make([]rune, len(m.mk.slots))
 	m.text.set(m.mk.display())
 	m.init(m)
 	return m
 }
 
-// SetMask changes the mask and empties the box.
+// SetMask changes the mask and puts the text in it, as Text returns it, in the
+// new one: what its slots do not take is dropped. It does not run OnChange.
 func (m *MaskedTextBoxWidget) SetMask(spec string) *MaskedTextBoxWidget {
 	m.change(func() {
+		chars := m.mk.valueOf(m.current(m.text.value))
 		m.spec = spec
 		m.mk = newMask(spec, m.prompt)
-		m.text.set(m.mk.display())
+		m.cells = m.mk.refill(chars)
+		m.text.set(m.mk.render(m.cells))
 	})
 	return m
 }
@@ -41,13 +46,27 @@ func (m *MaskedTextBoxWidget) SetMask(spec string) *MaskedTextBoxWidget {
 func (m *MaskedTextBoxWidget) Mask() string { mu.Lock(); defer mu.Unlock(); return m.spec }
 
 // SetPromptChar changes the character that stands for a slot not filled
-// (the default is '_'). It must not be a character the mask takes.
+// (the default is '_'). A slot may still hold that character: the box tells
+// it from an empty one.
 func (m *MaskedTextBoxWidget) SetPromptChar(r rune) *MaskedTextBoxWidget {
 	m.change(func() {
-		m.text.set(m.mk.withPrompt(m.text.value, r))
+		cells := m.current(m.text.value)
 		m.prompt = r
+		m.mk = newMask(m.spec, r)
+		m.cells = cells
+		m.text.set(m.mk.render(cells))
 	})
 	return m
+}
+
+// current returns the cells that go with shown, the text on screen: the ones
+// the last edit left, unless an undo or a redo changed the text since, which
+// are read back from it (the prompt then stands for an empty slot). Under mu.
+func (m *MaskedTextBoxWidget) current(shown string) []rune {
+	if m.mk.render(m.cells) == shown {
+		return m.cells
+	}
+	return m.mk.cells(shown)
 }
 
 // Text returns what the user typed, without the mask's literals and prompts:
@@ -55,7 +74,7 @@ func (m *MaskedTextBoxWidget) SetPromptChar(r rune) *MaskedTextBoxWidget {
 func (m *MaskedTextBoxWidget) Text() string {
 	mu.Lock()
 	defer mu.Unlock()
-	return m.mk.value(m.text.value)
+	return m.mk.valueOf(m.current(m.text.value))
 }
 
 // TextWithLiterals returns the text with the literals, and a space for each
@@ -63,20 +82,21 @@ func (m *MaskedTextBoxWidget) Text() string {
 func (m *MaskedTextBoxWidget) TextWithLiterals() string {
 	mu.Lock()
 	defer mu.Unlock()
-	return m.mk.literals(m.text.value)
+	return m.mk.blanks(m.current(m.text.value))
 }
 
 // SetText fills the mask with the characters of s, one in each slot from the
-// first, as Text returns them. It reports whether each one fitted its slot;
-// if one did not, or there are more than slots, nothing changes. It does
-// not run OnChange.
+// first, as Text returns them, or with the text as TextWithLiterals returns
+// it, literals included. It reports whether each one fitted its slot; if one
+// did not, or there are more than slots, nothing changes. It does not run
+// OnChange.
 func (m *MaskedTextBoxWidget) SetText(s string) bool {
 	ok := false
 	m.change(func() {
-		cp := *m.mk // the edits of the user use their own copy
-		var text string
-		if text, ok = cp.fill(s); ok {
-			m.text.set(text)
+		var cells []rune
+		if cells, ok = m.mk.fill(s); ok {
+			m.cells = cells
+			m.text.set(m.mk.render(cells))
 		}
 	})
 	return ok
@@ -87,13 +107,13 @@ func (m *MaskedTextBoxWidget) SetText(s string) bool {
 func (m *MaskedTextBoxWidget) MaskCompleted() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return m.mk.completed(m.text.value)
+	return m.mk.completedOf(m.current(m.text.value))
 }
 
 func (m *MaskedTextBoxWidget) MaskFull() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return m.mk.full(m.text.value)
+	return m.mk.fullOf(m.current(m.text.value))
 }
 
 // OnChange runs fn, on the event goroutine, after the user changed the text.
@@ -114,17 +134,28 @@ func (m *MaskedTextBoxWidget) build(c *ui.Context) ui.Element {
 	if changed && m.onChange != nil {
 		Post(m.onChange)
 	}
-	cp := *m.mk // the user's edits run off the lock on this copy
 	rejected := m.onRejected
 	el := ui.TextInput(c, p).OnEdit(func(e ui.TextEdit) (string, int, bool) {
-		text, caret, ok := cp.edit(e.Text, e.Start, e.End, e.Insert, e.Caret)
+		// Off the lock when building: the mask is the one of the last frame,
+		// copied so that the rejected runes are this edit's.
+		mu.Lock()
+		cp := *m.mk
+		cells := m.cells
+		if cp.render(cells) != e.Text {
+			cells = cp.cells(e.Text)
+		}
+		mu.Unlock()
+		out, caret := cp.editCells(cells, e.Start, e.End, e.Insert, e.Caret)
+		mu.Lock()
+		m.cells = out
+		mu.Unlock()
 		if rejected != nil {
 			for _, r := range cp.rejected {
 				r := r
 				Post(func() { rejected(r) })
 			}
 		}
-		return text, caret, ok
+		return cp.render(out), caret, true
 	})
 	return el.OnChange(edited(&m.text, &m.bound, m.onChange))
 }
