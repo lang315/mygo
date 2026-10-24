@@ -87,10 +87,12 @@ jobs:
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/natives
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/nsis-*
           key: ${{ steps.downloads.outputs.cache-primary-key }}
-      - run: go test ./...
+      # The race detector and a shuffled order of the tests and benchmarks'
+      # run on the unit tests; the GUI tests below are not run with them.
+      - run: go test -race -shuffle=on ./...
       - name: Test without the inspector, as production builds
         if: runner.os == 'Linux'
-        run: go test -tags mygo_noinspector ./ui .
+        run: go test -race -shuffle=on -tags mygo_noinspector ./ui .
       - run: bun run test
       - run: bun run typecheck
       - name: GUI tests
@@ -113,6 +115,49 @@ jobs:
           MYGO_E2E: 1
           MYGO_GPU: 1
         run: xvfb-run -a dbus-run-session -- go test -run 'TestContentWindow' ./internal/e2e
+
+  # Linux on ARM64, which no machine of the maintainers runs: purego's calls
+  # into WebKitGTK, GTK and Mesa pass floats and structs in registers of the
+  # arm64 calling convention, which the amd64 runners never exercise.
+  linux-arm64:
+    name: Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install WebKitGTK and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
+      # As in the job above.
+      - name: Restore the downloads of the tests
+        id: downloads
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cache/mygo/natives
+            ~/.cache/mygo/nsis-*
+          key: downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('plugins/*/mygo-plugin.json', 'internal/nsis/nsis.go') }}
+      - name: Download what the tests need
+        run: go run ./internal/prefetch
+      - name: Save the downloads of the tests
+        if: steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cache/mygo/natives
+            ~/.cache/mygo/nsis-*
+          key: ${{ steps.downloads.outputs.cache-primary-key }}
+      - run: go test -race -shuffle=on ./...
+      - name: GUI tests
+        env:
+          MYGO_E2E: 1
+          XDG_DATA_HOME: ${{ runner.temp }}/xdg-data
+          XDG_CONFIG_HOME: ${{ runner.temp }}/xdg-config
+        run: xvfb-run -a dbus-run-session -- go test ./internal/e2e
 
   # Windows on ARM64, which no machine of the maintainers runs: DirectWrite's
   # methods taking floats go through purego, which sets the floating point
@@ -146,10 +191,8 @@ jobs:
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/natives
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/nsis-*
           key: ${{ steps.downloads.outputs.cache-primary-key }}
-      - run: go test ./...
-      - name: Test without the inspector, as production builds
-        if: runner.os == 'Linux'
-        run: go test -tags mygo_noinspector ./ui .
+      # The race detector does not run on Windows ARM64.
+      - run: go test -shuffle=on ./...
       # The runner's provisioning daemon (provjobd, under hosted-compute-agent)
       # runs wsl.exe every 30 seconds. This image has no WSL, and some of those
       # runs start `wsl.exe --update --confirm --prompt-before-exit`, whose new
