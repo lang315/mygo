@@ -48,6 +48,7 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 			}
 		}
 		f.rows = append(f.rows, fieldRow{l, c})
+		adopt(&f.core, c)
 	})
 	return f
 }

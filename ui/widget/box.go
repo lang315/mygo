@@ -71,6 +71,7 @@ func (b *BoxWidget) add(it boxItem) {
 		}
 	}
 	b.items = append(b.items, it)
+	adopt(&b.core, it.w)
 }
 
 // Remove takes w out of the box.
@@ -79,6 +80,7 @@ func (b *BoxWidget) Remove(w Control) *BoxWidget {
 		for i, it := range b.items {
 			if it.w == w {
 				b.items = append(b.items[:i], b.items[i+1:]...)
+				orphan(w)
 				return
 			}
 		}
@@ -87,7 +89,15 @@ func (b *BoxWidget) Remove(w Control) *BoxWidget {
 }
 
 // Clear takes every widget out of the box.
-func (b *BoxWidget) Clear() *BoxWidget { b.change(func() { b.items = nil }); return b }
+func (b *BoxWidget) Clear() *BoxWidget {
+	b.change(func() {
+		for _, it := range b.items {
+			orphan(it.w)
+		}
+		b.items = nil
+	})
+	return b
+}
 
 func (b *BoxWidget) build(c *ui.Context) ui.Element {
 	var e ui.Element

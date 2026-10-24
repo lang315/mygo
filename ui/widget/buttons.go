@@ -295,3 +295,121 @@ func (g *RadioGroupWidget) build(c *ui.Context) ui.Element {
 	}
 	return e
 }
+
+// RadioButtonWidget is a radio button of its own. As in WinForms, the radio
+// buttons added to the same container (a box, a group box, fields, a flow
+// panel) are one group: checking one, by the user or by SetChecked,
+// unchecks the others. One outside a container stands alone.
+type RadioButtonWidget struct {
+	common[RadioButtonWidget]
+	text     string
+	on       mirror[string] // radioOn when checked
+	onChange func()
+	group    *radioGroup // of the container it is in
+}
+
+// radioOn is the value of a checked radio button's ui state.
+const radioOn = "on"
+
+// radioGroup is the radio buttons of a container. Under mu.
+type radioGroup struct{ members []*RadioButtonWidget }
+
+// RadioButton makes an unchecked radio button showing text.
+func RadioButton(text string) *RadioButtonWidget {
+	r := &RadioButtonWidget{text: text}
+	r.init(r)
+	return r
+}
+
+// adopt makes w, if it is a radio button, one of parent's group; orphan
+// takes it out. Under mu.
+func adopt(parent *core, w Control) {
+	if r, ok := w.(*RadioButtonWidget); ok {
+		orphan(w)
+		if parent.group == nil {
+			parent.group = &radioGroup{}
+		}
+		r.group = parent.group
+		r.group.members = append(r.group.members, r)
+	}
+}
+
+func orphan(w Control) {
+	if r, ok := w.(*RadioButtonWidget); ok && r.group != nil {
+		r.group.members = slices.DeleteFunc(r.group.members, func(m *RadioButtonWidget) bool { return m == r })
+		r.group = nil
+	}
+}
+
+// Checked reports whether the radio button is checked.
+func (r *RadioButtonWidget) Checked() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return r.on.value == radioOn
+}
+
+// SetChecked checks the radio button, which unchecks the others of its
+// group, or unchecks it. It does not run OnChange.
+func (r *RadioButtonWidget) SetChecked(v bool) *RadioButtonWidget {
+	r.change(func() {
+		if v {
+			r.uncheckOthers()
+			r.on.set(radioOn)
+		} else {
+			r.on.set("")
+		}
+	})
+	return r
+}
+
+// uncheckOthers unchecks the other radio buttons of the group, and returns
+// those that were checked. Under mu.
+func (r *RadioButtonWidget) uncheckOthers() (was []*RadioButtonWidget) {
+	if r.group == nil {
+		return nil
+	}
+	for _, m := range r.group.members {
+		if m != r && m.on.value == radioOn {
+			m.on.set("")
+			was = append(was, m)
+		}
+	}
+	return was
+}
+
+// OnChange runs fn after the user checks the radio button, or another of
+// its group unchecks it.
+func (r *RadioButtonWidget) OnChange(fn func()) *RadioButtonWidget {
+	r.change(func() { r.onChange = fn })
+	return r
+}
+
+func (r *RadioButtonWidget) build(c *ui.Context) ui.Element {
+	p, _ := r.on.bind()
+	return ui.Radio(c, p, radioOn, r.text).OnChange(r.edited)
+}
+
+// edited is ui's OnChange: the user checked the radio button, which
+// unchecks the others, and both sides hear of it.
+func (r *RadioButtonWidget) edited() {
+	mu.Lock()
+	changed := r.on.value != r.on.shown
+	r.on.value, r.on.dirty = r.on.shown, false
+	var hear []func()
+	if changed {
+		if r.onChange != nil {
+			hear = append(hear, r.onChange)
+		}
+		if r.on.value == radioOn {
+			for _, m := range r.uncheckOthers() {
+				if m.onChange != nil {
+					hear = append(hear, m.onChange)
+				}
+			}
+		}
+	}
+	mu.Unlock()
+	for _, h := range hear {
+		Post(h)
+	}
+}

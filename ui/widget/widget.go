@@ -45,6 +45,7 @@ type core struct {
 	onFocusOut func()
 	click      func()
 	menu       []MenuItem
+	group      *radioGroup // the radio buttons added to the widget, a container
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
