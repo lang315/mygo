@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -332,6 +334,57 @@ func TestUntrustedPagesCannotDragMaximizeOrDrop(t *testing.T) {
 		default:
 			if c.trusted {
 				t.Errorf("a trusted page's drop was not handled")
+			}
+		}
+	}
+}
+
+// A view made with NoBindings is untrusted for everything a page can ask of
+// the host: permissions, downloads and new windows are refused by default.
+func TestWebViewNoBindingsRefusesPermissionsDownloadsAndWindowsByDefault(t *testing.T) {
+	for _, noBindings := range []bool{false, true} {
+		w, _, _ := contentWindow(t, func(c *ui.Context) {})
+		v, err := w.NewWebView(WebViewOptions{NoBindings: noBindings})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fv *fake.WebView
+		for _, wn := range fb.Windows() {
+			if s := wn.FakeSurface(); s != nil && !wn.IsClosed() {
+				if vs := s.WebViews(); len(vs) > 0 {
+					fv = vs[len(vs)-1]
+				}
+			}
+		}
+		if fv == nil {
+			t.Fatal("no web view")
+		}
+		onMain(func() { fv.H.NavigationCommitted("file:///tmp/x.html") })
+		var allowed bool
+		var path string
+		before := len(fake.OpenedExternal())
+		onMain(func() {
+			allowed = fv.H.PermissionRequested([]string{"camera"}, "file:///tmp/x.html")
+			path = fv.H.DownloadStarted("https://evil.example/a.zip", "a.zip")
+			fv.H.NewWindow(platform.NewWindowRequest{URL: "https://evil.example/popup"})
+		})
+		if !noBindings { // OpenExternal runs on a goroutine
+			wait.Poll(func() bool { return len(fake.OpenedExternal()) > before })
+		}
+		opened := len(fake.OpenedExternal()) - before
+		if allowed == noBindings || (path == "") != noBindings || (opened == 0) != noBindings {
+			t.Errorf("NoBindings=%v: permission %v, download path %q, %d windows opened externally", noBindings, allowed, path, opened)
+		}
+		// The app opts in with the hooks of the page.
+		if noBindings {
+			v.Page().OnWillDownload(func(e *DownloadEvent) { e.Path = filepath.Join(t.TempDir(), "ok.zip") })
+			v.Page().SetPermissionHandler(func(req PermissionRequest) bool { return true })
+			onMain(func() {
+				allowed = fv.H.PermissionRequested([]string{"camera"}, "file:///tmp/x.html")
+				path = fv.H.DownloadStarted("https://evil.example/a.zip", "a.zip")
+			})
+			if !allowed || path == "" {
+				t.Errorf("with handlers: permission %v, path %q", allowed, path)
 			}
 		}
 	}

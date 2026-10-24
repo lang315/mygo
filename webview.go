@@ -46,7 +46,11 @@ type WebViewOptions struct {
 	// NoBindings has the view's pages call no Go method, whatever their
 	// origin: not the app's, not about: or file: pages, not
 	// Page.TrustedOrigins. It is for views that show content which is not
-	// the app's own, as a browser does.
+	// the app's own, as a browser does, and makes the view untrusted for
+	// everything a page can ask of the host: without a handler set on its
+	// Page, it is denied every permission (SetPermissionHandler), saves no
+	// download (OnWillDownload listeners set the path) and opens no window
+	// (SetWindowOpenHandler).
 	NoBindings bool
 }
 

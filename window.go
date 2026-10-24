@@ -1780,6 +1780,9 @@ func (h *windowHandler) NewWindow(req platform.NewWindowRequest) platform.Window
 	h.w.mu.Unlock()
 	r := WindowOpenRequest{URL: req.URL, FrameName: req.FrameName, Width: req.Width, Height: req.Height}
 	if handler == nil {
+		if h.w.noBindings {
+			return nil // a view without bindings opens no windows by itself
+		}
 		if u, err := url.Parse(req.URL); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
 			go Shell.OpenExternal(req.URL)
 		}

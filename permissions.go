@@ -40,7 +40,7 @@ func (h *windowHandler) PermissionRequested(kinds []string, origin string) bool 
 	fn := h.w.permissionHandler
 	h.w.mu.Unlock()
 	if fn == nil {
-		return h.w.isTrusted(origin)
+		return !h.w.noBindings && h.w.isTrusted(origin) // a view without bindings is untrusted
 	}
 	req := PermissionRequest{Origin: origin}
 	for _, k := range kinds {
