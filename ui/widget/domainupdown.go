@@ -97,8 +97,9 @@ func (d *DomainUpDownWidget) SetSelectedItem(s string) *DomainUpDownWidget {
 	return d
 }
 
-// SetItems replaces the items. The selected item stays selected if it is
-// among them, else the first is.
+// SetItems replaces the items. The selection stays at its index if the item
+// there is the same, else it follows the selected item if that is among
+// them, else the first is selected.
 func (d *DomainUpDownWidget) SetItems(items ...string) *DomainUpDownWidget {
 	d.change(func() {
 		i, cur := d.index(), ""
