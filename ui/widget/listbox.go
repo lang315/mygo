@@ -38,6 +38,11 @@ type ListBoxWidget[T any, K comparable] struct {
 	hasAnchor bool
 	fixed     bool
 
+	// reveal is an item to scroll into view at the next build (EnsureVisible).
+	reveal      K
+	hasReveal   bool
+	revealTries int
+
 	onSelect   func([]K)
 	onCheck    func(K, bool)
 	onActivate func(K)
@@ -267,6 +272,14 @@ func (l *ListBoxWidget[T, K]) SetSelected(ks ...K) *ListBoxWidget[T, K] {
 	return l
 }
 
+// EnsureVisible scrolls the list as little as shows the item of key k whole,
+// as WinForms' TopIndex and EnsureVisible do, at the next frame; it chooses
+// nothing. A key that is not an item is ignored.
+func (l *ListBoxWidget[T, K]) EnsureVisible(k K) *ListBoxWidget[T, K] {
+	l.change(func() { l.reveal, l.hasReveal = k, true })
+	return l
+}
+
 // ClearSelection chooses no item, firing no event.
 func (l *ListBoxWidget[T, K]) ClearSelection() *ListBoxWidget[T, K] {
 	l.change(func() {
@@ -446,6 +459,17 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 		l.checked.bind()
 	}
 	e := ui.List(c, s, len(l.frame), func(i int) { l.row(c, i) }).Grow(1)
+	if l.hasReveal {
+		// Rows not built yet have the height of an estimate, so the scroll
+		// is asked again until the row shows (a few frames at most).
+		i, ok := l.index[l.reveal]
+		if first, last := s.Visible(); !ok || l.revealTries > 8 || (i >= first && i <= last && l.revealTries > 0) {
+			l.hasReveal, l.revealTries = false, 0
+		} else {
+			s.ScrollTo(i, ui.Center)
+			l.revealTries++
+		}
+	}
 	if l.checks {
 		e.OnShortcut(0, ui.KeySpace, l.toggleChecks)
 	}

@@ -582,3 +582,24 @@ func TestListBoxClickAllocationsDoNotGrowWithTheList(t *testing.T) {
 		t.Errorf("a click allocated %d bytes: want far less than a clone of the items (MB)", bigBytes)
 	}
 }
+
+func TestListBoxEnsureVisibleScrollsToAnItem(t *testing.T) {
+	items := make([]litem, 300)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	lb := newListBox().SetItems(items)
+	tt := tester(t, lb)
+	if r, ok := tt.Find("Item 250"); ok && r.Y < 600 {
+		t.Fatal("Item 250 is on screen before it is asked for")
+	}
+	lb.EnsureVisible("k250")
+	tt.Frame()
+	tt.Frame()
+	if r, ok := tt.Find("Item 250"); !ok || r.Y < 0 || r.Y+r.H > 600 {
+		t.Errorf("EnsureVisible did not scroll to the item: %v %v", r, ok)
+	}
+	if got := lb.Selected(); len(got) != 0 {
+		t.Errorf("EnsureVisible chose %v", got)
+	}
+}

@@ -19,8 +19,20 @@ if fd.ShowDialog(form) {
   when the user changed between regular and bold, else to the weight it had.
   `Features`, `Lang` and the rest are what `SetFont` gave.
 - `SetMinSize(v)` and `SetMaxSize(v)` bound the size, in DIPs (1 and 999 by
-  default). A size typed outside them is not taken.
-- `SetFixedPitchOnly(true)` lists only monospaced families.
+  default). A size typed outside them is not taken, and a size `SetFont` gave
+  is brought inside. As in WinForms, setting one past the other moves the
+  other to match. The size is a number field: there is no list of preset
+  sizes.
+- `SetFixedPitchOnly(true)` lists only monospaced families. A font that is not
+  one is not added: the dialog starts on the first fixed-pitch family.
+- `SetSampleText(s)` is the text shown in the chosen font, `AaBbYyZz` as
+  WinForms'; give one in the language of your app (`Nguyễn Văn Đức`). The
+  sample shows what OK returns: the exact weight (a 300 stays 300 unless the
+  user picks another style), the `Features` and `Lang` of `SetFont`.
+- The family list opens scrolled to the current family. Typing in the box
+  above it jumps to the first family that starts with what is typed, without
+  regard to case. A family `SetFont` gave in another case than the system's
+  is listed once, in the system's spelling, which `Font()` returns.
 - `ShowDialog(parent)` blocks as [`Dialog.Run`](../widget.md#dialogs) does (and
   panics on the main thread), and returns true for OK. Cancel, Escape and
   closing the window return false and leave `Font()` alone.

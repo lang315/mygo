@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
 )
@@ -13,13 +15,15 @@ type FontDialogWidget struct {
 	title            string
 	minSize, maxSize float32
 	fixedPitch       bool
+	sample           string
 	families         func() []ui.FontFamily
+	familyList       *ListBoxWidget[ui.FontFamily, string] // the last dialog's, for tests
 }
 
 // FontDialog makes a font dialog holding the interface font at 14 DIPs, as
 // ui.Font{} is.
 func FontDialog() *FontDialogWidget {
-	return &FontDialogWidget{title: l10n.FontDialogTitle(), minSize: 1, maxSize: 999, families: ui.FontFamilies}
+	return &FontDialogWidget{title: l10n.FontDialogTitle(), minSize: 1, maxSize: 999, sample: "AaBbYyZz", families: ui.FontFamilies}
 }
 
 // SetFont sets the font the next ShowDialog starts from. It does not change
@@ -51,10 +55,11 @@ func (d *FontDialogWidget) SetTitle(s string) *FontDialogWidget {
 
 // SetMinSize and SetMaxSize bound the sizes, in DIPs, that the dialog takes,
 // as WinForms' MinSize and MaxSize (there in points); 1 and 999 by default.
-// A size typed outside them is not taken: the size stays what it was.
+// A size typed outside them is not taken: the size stays what it was. As in
+// WinForms, setting one past the other moves the other to match.
 func (d *FontDialogWidget) SetMinSize(v float32) *FontDialogWidget {
 	mu.Lock()
-	d.minSize = v
+	d.minSize, d.maxSize = v, max(d.maxSize, v)
 	mu.Unlock()
 	return d
 }
@@ -62,7 +67,16 @@ func (d *FontDialogWidget) SetMinSize(v float32) *FontDialogWidget {
 // SetMaxSize: see SetMinSize.
 func (d *FontDialogWidget) SetMaxSize(v float32) *FontDialogWidget {
 	mu.Lock()
-	d.maxSize = v
+	d.maxSize, d.minSize = v, min(d.minSize, v)
+	mu.Unlock()
+	return d
+}
+
+// SetSampleText sets the text shown in the font chosen, "AaBbYyZz" by
+// default as WinForms'; an app of another language shows its own.
+func (d *FontDialogWidget) SetSampleText(s string) *FontDialogWidget {
+	mu.Lock()
+	d.sample = s
 	mu.Unlock()
 	return d
 }
@@ -105,7 +119,7 @@ func fontStyles() []fontStyle {
 // answer.
 func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	mu.Lock()
-	start, title, lo, hi, fixed, families := d.font, d.title, d.minSize, d.maxSize, d.fixedPitch, d.families
+	start, title, lo, hi, fixed, families, sampleText := d.font, d.title, d.minSize, d.maxSize, d.fixedPitch, d.families, d.sample
 	mu.Unlock()
 	if start.Size == 0 {
 		start.Size = 14
@@ -118,7 +132,13 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 			names = append(names, f)
 		}
 	}
-	if start.Family != "" && !hasFamily(names, start.Family) {
+	if i := indexFamily(names, start.Family); i >= 0 {
+		start.Family = names[i].Name // the system's spelling
+	} else if fixed {
+		if len(names) > 0 {
+			start.Family = names[0].Name // the font is proportional: start on a fixed-pitch one
+		}
+	} else if start.Family != "" {
 		names = append([]ui.FontFamily{{Name: start.Family}}, names...) // the family SetFont gave shows even if the system lacks it
 	}
 
@@ -134,16 +154,36 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	cur := start
 	curStyle := startStyle
 
-	family := ListBox(func(f *ui.FontFamily) string { return f.Name }, func(f *ui.FontFamily) string { return f.Name }).SetItems(names)
+	// The lists have a height of their own: a list in a box shorter than its
+	// rows is not clipped to it, and the family list holds hundreds.
+	family := ListBox(func(f *ui.FontFamily) string { return f.Name }, func(f *ui.FontFamily) string { return f.Name }).SetItems(names).SetSize(0, 200)
 	if start.Family != "" {
 		family.SetSelected(start.Family)
+	}
+	mu.Lock()
+	d.familyList = family
+	mu.Unlock()
+	famBox := TextBox().SetText(start.Family)
+	if start.Family != "" {
+		family.EnsureVisible(start.Family)
 	}
 	family.OnSelect(func(ks []string) {
 		if len(ks) == 1 {
 			Change(func() { cur.Family = ks[0] })
+			famBox.SetText(ks[0])
 		}
 	})
-	style := ListBox(func(s *fontStyle) string { return s.name }, func(s *fontStyle) string { return s.name }).SetItems(styles)
+	famBox.OnChange(func() { // type-ahead: the first family that starts with what is typed
+		typed := famBox.Text()
+		for _, f := range names {
+			if typed != "" && len(f.Name) >= len(typed) && strings.EqualFold(f.Name[:len(typed)], typed) {
+				family.SetSelected(f.Name).EnsureVisible(f.Name)
+				Change(func() { cur.Family = f.Name })
+				return
+			}
+		}
+	})
+	style := ListBox(func(s *fontStyle) string { return s.name }, func(s *fontStyle) string { return s.name }).SetItems(styles).SetSize(0, 200)
 	style.SetSelected(startStyle.name)
 	style.OnSelect(func(ks []string) {
 		if len(ks) == 1 {
@@ -160,9 +200,16 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 		Change(func() { cur.Size = v })
 	})
 	sample := Custom(func(c *ui.Context) ui.Element {
-		e := ui.Text(c, "AaBbYyZz").Font(cur.Family).FontSize(cur.Size)
-		if curStyle.bold {
-			e = e.FontWeight(700)
+		weight := chosenWeight(start.Weight, startStyle.bold, curStyle.bold)
+		if weight == 0 {
+			weight = 400 // a font's 0 is the regular weight
+		}
+		e := ui.Text(c, sampleText).Font(cur.Family).FontSize(cur.Size).FontWeight(weight)
+		if cur.Features != "" {
+			e = e.FontFeatures(cur.Features)
+		}
+		if cur.Lang != "" {
+			e = e.Lang(cur.Lang)
 		}
 		if curStyle.italic {
 			e = e.Italic()
@@ -175,15 +222,9 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	bar := ButtonBox().Add(
 		Button(l10n.Cancel()).OnClick(func() { dlg.Close() }),
 		Button(l10n.Ok()).Suggested().OnClick(func() {
-			v := float32(size.Value()) // before the lock: a getter locks
 			mu.Lock()
 			f := cur
-			f.Size = v
-			if curStyle.bold != startStyle.bold {
-				f.Weight = map[bool]int{false: 400, true: 700}[curStyle.bold]
-			} else {
-				f.Weight = start.Weight
-			}
+			f.Weight = chosenWeight(start.Weight, startStyle.bold, curStyle.bold)
 			f.Italic = curStyle.italic
 			picked = &f
 			mu.Unlock()
@@ -193,7 +234,7 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	column := func(label string, w Control) *BoxWidget {
 		return VBox(4).Add(Label(label)).Pack(w, true, true)
 	}
-	lists := HBox(12).Pack(column(l10n.FontFamily(), family), true, true).Pack(column(l10n.FontStyle(), style), true, true)
+	lists := HBox(12).Pack(VBox(4).Add(Label(l10n.FontFamily()), famBox).Pack(family, true, true), true, true).Pack(column(l10n.FontStyle(), style), true, true)
 	dlg = NewDialog(parent, title, "", 460, 460, VBox(12).Pack(lists, true, true).Add(Label(l10n.FontSize()), size, sample, bar))
 	return dlg, func() bool {
 		dlg.Run()
@@ -207,11 +248,26 @@ func (d *FontDialogWidget) build(parent *Form) (*Dialog, func() bool) {
 	}
 }
 
-func hasFamily(fs []ui.FontFamily, name string) bool {
-	for _, f := range fs {
-		if f.Name == name {
-			return true
+// indexFamily returns the place of the family called name in fs, without
+// regard to case as the text system does, or -1.
+func indexFamily(fs []ui.FontFamily, name string) int {
+	for i, f := range fs {
+		if strings.EqualFold(f.Name, name) {
+			return i
 		}
 	}
-	return false
+	return -1
+}
+
+// chosenWeight is the weight of a font the user left in the style it started
+// in (the weight it had, whatever it was), or took to regular or bold (400 or
+// 700). The sample shows it and OK returns it.
+func chosenWeight(startWeight int, startBold, nowBold bool) int {
+	if nowBold == startBold {
+		return startWeight
+	}
+	if nowBold {
+		return 700
+	}
+	return 400
 }
