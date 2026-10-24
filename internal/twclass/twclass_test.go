@@ -80,6 +80,11 @@ func TestBadClasses(t *testing.T) {
 		{"sm:p-2", Unknown},
 		{"hover:", Unknown},
 		{"p-[13px]", Unknown},
+		{"rounded-", Unknown},
+		{"rounded-t-", Unknown},
+		{"border-", Unknown},
+		{"border-t-", Unknown},
+		{"border-x-", Unknown},
 		{"hover:focus:p-2", Stack},
 		{"dark:dark:p-2", Stack},
 		{"hover:halign-start", LayoutInVariant},
@@ -261,5 +266,17 @@ func TestFhtoolClasses(t *testing.T) {
 		if _, bad := Parse(c); len(bad) != 1 || bad[0].Reason != Unknown {
 			t.Errorf("%s: %v, want unknown", c, bad)
 		}
+	}
+}
+
+func TestParseResultsDoNotAliasTheTables(t *testing.T) {
+	r, _ := Parse("shadow-md")
+	r[0].Shadows[0].Alpha = 0.9
+	again, _ := Parse("shadow-md")
+	if again[0].Shadows[0].Alpha != 0.1 {
+		t.Fatalf("a caller's write reached the table: alpha %v", again[0].Shadows[0].Alpha)
+	}
+	if n, _ := Parse("shadow-none"); n[0].Shadows != nil {
+		t.Fatalf("shadow-none = %+v, want nil shadows", n[0].Shadows)
 	}
 }

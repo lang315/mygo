@@ -4,7 +4,10 @@
 // CLI does not link them.
 package twclass
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Variant is the state a declaration applies in.
 type Variant uint8
@@ -134,6 +137,7 @@ func Parse(classes string) (rules []Rule, bad []Bad) {
 			continue
 		}
 		for _, d := range decls {
+			d.Shadows = slices.Clone(d.Shadows) // the table's own must not leak
 			rules = append(rules, Rule{key, d})
 		}
 	}

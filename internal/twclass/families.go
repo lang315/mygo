@@ -20,6 +20,9 @@ var boxes = []box{
 
 // parseUtility returns what utility, a class without its variants, sets.
 func parseUtility(u string) ([]Decl, bool) {
+	if strings.HasSuffix(u, "-") { // rounded-, border-t-: a value is missing
+		return nil, false
+	}
 	if d, ok := fixed[u]; ok {
 		return d, true
 	}
