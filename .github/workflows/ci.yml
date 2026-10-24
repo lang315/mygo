@@ -23,7 +23,7 @@ jobs:
   test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45 # -race: Linux took 24 minutes, macOS 18
     strategy:
       fail-fast: false
       matrix:
@@ -123,6 +123,9 @@ jobs:
     name: Linux ARM64
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
+    # The build and vet of every platform, the no-inspector tests and the
+    # JavaScript packages are the same on every architecture, so they are
+    # left to the amd64 job, and Bun with them.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -158,6 +161,12 @@ jobs:
           XDG_DATA_HOME: ${{ runner.temp }}/xdg-data
           XDG_CONFIG_HOME: ${{ runner.temp }}/xdg-config
         run: xvfb-run -a dbus-run-session -- go test ./internal/e2e
+      # As in the job above: OpenGL on Mesa's llvmpipe.
+      - name: GUI tests of native UI drawn with OpenGL
+        env:
+          MYGO_E2E: 1
+          MYGO_GPU: 1
+        run: xvfb-run -a dbus-run-session -- go test -run 'TestContentWindow' ./internal/e2e
 
   # Windows on ARM64, which no machine of the maintainers runs: DirectWrite's
   # methods taking floats go through purego, which sets the floating point
