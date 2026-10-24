@@ -85,7 +85,7 @@ func TestMessages(t *testing.T) {
 		{In("vi").Undo(), "Hoàn tác"},
 		{In("vi").Cancel(), "Hủy"},
 		{In("vi").MenuQuitApp("Notes"), "Thoát Notes"},
-		{In("vi").TableRows(12), "Số hàng: 12"},
+		{In("vi").TableRows(12), "Số dòng: 12"},
 		{In("zh-Hans").Undo(), "撤销"},
 		{In("zh-TW").Undo(), "復原"},
 		{In("zh-HK").MenuOpenRecent(), "打開最近使用過的檔案"},
