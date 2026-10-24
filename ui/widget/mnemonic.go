@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
@@ -13,8 +14,8 @@ import (
 // "&Đóng" answers to d) and its index in the text, in runes: "&Save" is
 // "Save", 's', 0; "&&" is a literal "&". A label with no mnemonic, or whose
 // marked character no key types, gives key 0 and index -1. The first single
-// "&" that is followed by a character marks it; a "&" at the end stays as it
-// is.
+// "&" that is followed by a character marks it; a "&" at the end, or before
+// white space, stays as it is.
 func parseMnemonic(s string) (display string, key rune, at int) {
 	in := []rune(s)
 	out := make([]rune, 0, len(in))
@@ -26,6 +27,10 @@ func parseMnemonic(s string) (display string, key rune, at int) {
 			if in[i+1] == '&' {
 				out = append(out, '&')
 				i++
+				continue
+			}
+			if unicode.IsSpace(in[i+1]) {
+				out = append(out, '&') // "& " is never a mnemonic
 				continue
 			}
 			if !marked {
@@ -76,6 +81,7 @@ type mnemonic struct {
 	key  rune
 	el   ui.Element
 	ctrl Control
+	next bool   // the key goes to the control after ctrl (a label's)
 	act  func() // under mu
 }
 
@@ -87,17 +93,28 @@ func registerMnemonic(key rune, el ui.Element, ctrl Control, act func()) bool {
 	if key == 0 || macMenus || buildingForm == nil {
 		return false
 	}
-	buildingForm.mnemonics = append(buildingForm.mnemonics, mnemonic{key, el, ctrl, act})
+	buildingForm.mnemonics = append(buildingForm.mnemonics, mnemonic{key: key, el: el, ctrl: ctrl, act: act})
+	return true
+}
+
+// registerLabelMnemonic is registerMnemonic for a label, whose key focuses the
+// next control that takes the focus.
+func registerLabelMnemonic(key rune, el ui.Element, l Control) bool {
+	if !registerMnemonic(key, el, l, func() { buildingForm.focusNextAfter(l) }) {
+		return false
+	}
+	buildingForm.mnemonics[len(buildingForm.mnemonics)-1].next = true
 	return true
 }
 
 // answerMnemonics runs, for each key pressed, the enabled control that asked
-// for it; with several for one key the focus moves among them, as in
-// WinForms, and none acts. Keys a Form.Shortcut of the form takes are its.
+// for it; with several for one key the focus moves among their targets (the
+// control a label points to, a button itself), as in WinForms, and none acts. Keys a Form.Shortcut of the form takes are its.
 // Under mu, at the end of a build.
 func (w *Form) answerMnemonics(c *ui.Context) {
 	ms := w.mnemonics
 	w.mnemonics = nil
+	defer func() { w.built = w.built[:0] }()
 	done := map[rune]bool{}
 	menuKeys := w.menuBarKeys() // the menu bar's access keys beat the controls'
 	for _, m := range ms {
@@ -117,9 +134,23 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 			continue
 		}
 		var hit []mnemonic
+		var targets []builtEl
 		for _, o := range ms {
-			if o.key == m.key && !o.el.IsDisabled() {
-				hit = append(hit, o)
+			if o.key != m.key || o.el.IsDisabled() {
+				continue
+			}
+			tc := o.ctrl
+			if o.next {
+				if tc = w.nextAfter(o.ctrl); tc == nil {
+					continue
+				}
+			}
+			tb := w.builtOf(tc)
+			if tb.ctrl == nil {
+				tb = builtEl{tc, o.el}
+			}
+			if !slices.ContainsFunc(targets, func(b builtEl) bool { return b.ctrl == tc }) {
+				hit, targets = append(hit, o), append(targets, tb)
 			}
 		}
 		switch len(hit) {
@@ -128,12 +159,12 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 			hit[0].act()
 		default:
 			next := 0
-			for i, o := range hit {
-				if o.el.Focused() {
-					next = (i + 1) % len(hit)
+			for i, b := range targets {
+				if b.el.Focused() {
+					next = (i + 1) % len(targets)
 				}
 			}
-			focusLater(hit[next].ctrl)
+			focusLater(targets[next].ctrl)
 		}
 	}
 }
@@ -187,4 +218,44 @@ func (w *Form) menuBarKeys() map[rune]bool {
 		}
 	}
 	return keys
+}
+
+// builtEl is a control a form built, and its element, valid until the build
+// ends.
+type builtEl struct {
+	ctrl Control
+	el   ui.Element
+}
+
+// builtOf returns what the form built for c, or the zero builtEl.
+func (w *Form) builtOf(c Control) builtEl {
+	for _, b := range w.built {
+		if b.ctrl == c {
+			return b
+		}
+	}
+	return builtEl{}
+}
+
+// nextAfter returns the first control built after c that can take the focus
+// (or holds one that can), as WinForms' label mnemonic goes to; nil for none.
+// Under mu, at the end of a build.
+func (w *Form) nextAfter(c Control) Control {
+	after := false
+	for _, b := range w.built {
+		if after && b.el.CanFocus() {
+			return b.ctrl
+		}
+		if b.ctrl == c {
+			after = true
+		}
+	}
+	return nil
+}
+
+// focusNextAfter focuses the control nextAfter finds.
+func (w *Form) focusNextAfter(c Control) {
+	if n := w.nextAfter(c); n != nil {
+		focusLater(n)
+	}
 }

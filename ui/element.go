@@ -1343,6 +1343,47 @@ func (e *node) hasState() bool {
 // Focusable lets the element take the keyboard focus, by a click or Tab.
 func (e *node) Focusable() *node { e.flags |= flagFocusable; return e }
 
+// CanFocus reports whether the element, or an element inside it, can take the
+// keyboard focus now, by the rule of Tab: focusable, and neither disabled,
+// invisible nor inert. Like the other queries of an element, it is valid until
+// the build ends.
+func (e *node) CanFocus() bool {
+	hidden := false
+	for p := e.parent; p != nil && !hidden; p = p.parent {
+		hidden = p.hiddenSelf()
+	}
+	return e.canFocus(hidden)
+}
+
+// hiddenSelf reports whether the element is invisible or inert, or turned
+// away, which takes it and what is in it out of Tab and the pointer's reach.
+func (e *node) hiddenSelf() bool {
+	return e.flags&(flagInvisible|flagInert) != 0 || e.backface && e.transform.facesAway()
+}
+
+// takesFocus is the rule of Tab for one element, hidden being whether it or
+// an element around it is hidden.
+func (e *node) takesFocus(hidden bool) bool {
+	return e.flags&flagFocusable != 0 && !e.IsDisabled() && !hidden
+}
+
+// canFocus applies takesFocus to the element and the elements inside it.
+func (e *node) canFocus(hidden bool) bool {
+	hidden = hidden || e.hiddenSelf()
+	if e.takesFocus(hidden) {
+		return true
+	}
+	if hidden {
+		return false
+	}
+	for ch := e.first; ch != nil; ch = ch.next {
+		if ch.canFocus(false) {
+			return true
+		}
+	}
+	return false
+}
+
 // DragWindow makes the element a handle that moves the window, such as the
 // title bar of a frameless window. A double click on it maximizes the
 // window, as on a title bar.

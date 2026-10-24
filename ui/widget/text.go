@@ -10,8 +10,9 @@ import (
 // LabelWidget shows a line of text.
 type LabelWidget struct {
 	common[LabelWidget]
-	text  string
-	spans []ui.Span
+	text        string
+	spans       []ui.Span
+	useMnemonic bool // SetUseMnemonic(true)
 }
 
 // Label makes a label showing s.
@@ -46,7 +47,32 @@ func (l *LabelWidget) build(c *ui.Context) ui.Element {
 	if len(l.spans) > 0 {
 		return ui.RichText(c, l.spans...)
 	}
-	return ui.Text(c, l.text)
+	if !l.useMnemonic || !strings.Contains(l.text, "&") {
+		return ui.Text(c, l.text)
+	}
+	display, key, at := parseMnemonic(l.text)
+	if key == 0 || macMenus || buildingForm == nil {
+		return ui.Text(c, display)
+	}
+	if c.Modifiers()&ui.Alt != 0 {
+		e := ui.RichText(c, mnemonicSpans(display, at)...)
+		registerLabelMnemonic(key, e, l)
+		return e
+	}
+	e := ui.Text(c, display)
+	registerLabelMnemonic(key, e, l)
+	return e
+}
+
+// SetUseMnemonic says whether an "&" in the text marks a key, as WinForms'
+// UseMnemonic: Alt and the key then give the keyboard focus to the next
+// control that takes it, and the "&" is not shown ("&&" is one). Unlike
+// WinForms it is off by default: a label shows data (a URL "a=1&b=2", a name
+// "Tom & Jerry") and would lose its ampersands. The labels of Fields rows
+// have mnemonics without it.
+func (l *LabelWidget) SetUseMnemonic(on bool) *LabelWidget {
+	l.change(func() { l.useMnemonic = on })
+	return l
 }
 
 // TextBoxWidget is a one-line text input.

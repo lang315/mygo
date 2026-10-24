@@ -161,6 +161,9 @@ func render(c *ui.Context, w Control) ui.Element {
 	keeping.key(c, b)
 	e := w.build(c)
 	b.el = e
+	if f := buildingForm; f != nil {
+		f.built = append(f.built, builtEl{w, e})
+	}
 	if fillsAcross(w) {
 		e.AlignSelf(ui.Stretch) // before the widget's own alignment, which wins
 	}

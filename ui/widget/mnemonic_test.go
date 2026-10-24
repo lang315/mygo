@@ -18,6 +18,8 @@ func TestParseMnemonic(t *testing.T) {
 		{"Plain", "Plain", 0, -1},
 		{"A &&B", "A &B", 0, -1},
 		{"Trailing &", "Trailing &", 0, -1},
+		{"Tom & Jerry", "Tom & Jerry", 0, -1},
+		{"Tom & &Jerry", "Tom & Jerry", 'j', 6},
 		{"&Đức", "Đức", 'd', 0},
 		{"&Ẩn", "Ẩn", 'a', 0},
 		{"&Ước", "Ước", 'u', 0},
@@ -300,6 +302,148 @@ func TestMenuBarAccessKeysBeatControlMnemonics(t *testing.T) {
 		mu.Unlock()
 		if !keys['f'] || !keys['e'] || keys['s'] {
 			t.Errorf("%s: menu bar keys %v", name, keys)
+		}
+	}
+}
+
+func TestLabelMnemonicFocusesTheNextControlThatTakesTheFocus(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(Label("&Name").SetUseMnemonic(true), Label("a plain label"), TextBox(), TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if !tt.Has(ByLabel("Name")) || tt.Has(ByLabel("&Name")) {
+		t.Fatalf("labels %q", tt.Texts())
+	}
+	tt.Key(ui.Alt, ui.KeyN)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+	if !tt.Find(ByRole(ui.RoleTextField).Nth(0)).Focused() || tt.Find(ByRole(ui.RoleTextField).Nth(1)).Focused() {
+		t.Error("Alt+N did not focus the text box after the label")
+	}
+}
+
+func TestLabelMnemonicSkipsADisabledControl(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	off := TextBox()
+	off.SetDisabled(true)
+	f.SetContent(VBox(4).Add(Label("&Name").SetUseMnemonic(true), off, TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	tt.Key(ui.Alt, ui.KeyN)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+	if !tt.Find(ByRole(ui.RoleTextField).Nth(1)).Focused() {
+		t.Error("Alt+N did not skip the disabled box")
+	}
+}
+
+// A label shows its data: ampersands stay unless the label asks for mnemonics.
+func TestLabelShowsItsAmpersandsUnlessItUsesMnemonics(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(Label("a=1&b=2"), Label("Tom & Jerry").SetUseMnemonic(true), TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	for _, s := range []string{"a=1&b=2", "Tom & Jerry"} {
+		if !tt.Has(ByLabel(s)) {
+			t.Errorf("no %q among %q", s, tt.Texts())
+		}
+	}
+	tt.Key(ui.Alt, ui.KeyB)
+	tt.Settle()
+	tt.Key(ui.Alt, ui.KeyJ)
+	tt.Settle()
+	if tt.Find(ByRole(ui.RoleTextField)).Focused() {
+		t.Error("a label answered a mnemonic it was not meant to have")
+	}
+}
+
+// A literal ampersand in a Fields label is not read as a mnemonic twice.
+func TestFieldsLabelWithALiteralAmpersandShowsIt(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(Fields().Row("R&&D", TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if !tt.Has(ByLabel("R&D")) {
+		t.Errorf("labels %q", tt.Texts())
+	}
+}
+
+// altN presses Alt+N and lets the focus request through.
+func altN(tt *Tester) {
+	tt.Key(ui.Alt, ui.KeyN)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+}
+
+func TestLabelMnemonicFocusesTheFieldInsideAControl(t *testing.T) {
+	withMac(t, false)
+	for name, c := range map[string]Control{
+		"NumericUpDown":  NumericUpDown(0, 10, 1),
+		"DateTimePicker": DateTimePicker(),
+		"ComboBox":       ComboBox(),
+	} {
+		f := NewForm("m", 400, 200)
+		f.SetContent(VBox(4).Add(Label("&Name").SetUseMnemonic(true), c, TextBox()))
+		tt := TestForm(t, f)
+		tt.Settle()
+		altN(tt)
+		if fields := tt.FindAll(ByRole(ui.RoleTextField)); fields[len(fields)-1].Focused() {
+			t.Errorf("%s: Alt+N skipped the control", name)
+		}
+	}
+}
+
+// Check boxes as targets: a focused text box would take Alt+letter itself on macOS.
+func TestSameLabelMnemonicTwiceCyclesTheirControls(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(
+		Label("&Name").SetUseMnemonic(true), CheckBox("c"),
+		Label("&Number").SetUseMnemonic(true), CheckBox("c")))
+	tt := TestForm(t, f)
+	tt.Settle()
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(0)).Focused() {
+		t.Error("first Alt+N did not focus the first target")
+	}
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(1)).Focused() {
+		t.Error("second Alt+N did not move to the second target")
+	}
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(0)).Focused() {
+		t.Error("third Alt+N did not come round")
+	}
+}
+
+func TestLabelAndButtonSharingAMnemonicCycleTargets(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(
+		Label("&Name").SetUseMnemonic(true), CheckBox("c"), Button("&New").OnClick(func() {})))
+	tt := TestForm(t, f)
+	tt.Settle()
+	altN(tt)
+	if !tt.Find(ByRole(ui.RoleCheckBox).Nth(0)).Focused() {
+		t.Error("first Alt+N did not focus the label's target")
+	}
+	altN(tt)
+	if !tt.Find(ByLabel("New")).Focused() {
+		t.Error("second Alt+N did not focus the button")
+	}
+}
+
+func TestAmpersandBeforeAnyWhitespaceIsLiteral(t *testing.T) {
+	for _, s := range []string{"A&\u00a0B", "A&\tB", "A&\nB"} {
+		if d, k, at := parseMnemonic(s); k != 0 || at != -1 || d != s {
+			t.Errorf("parseMnemonic(%q) = %q %q %d", s, d, k, at)
 		}
 	}
 }

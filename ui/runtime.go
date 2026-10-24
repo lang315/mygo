@@ -1093,7 +1093,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	// What is invisible keeps its box but takes neither the pointer nor
 	// the focus, and has no text to find; so does what is inert, which
 	// shows.
-	invisible := e.flags&(flagInvisible|flagInert) != 0 || hidden || e.backface && e.transform.facesAway()
+	invisible := hidden || e.hiddenSelf()
 	if invisible {
 		s.vw, s.vh = 0, 0
 		if rt.focused == e.id {
@@ -1132,7 +1132,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 			rt.labels = append(rt.labels, labelNode{e.id, label, intersect(e.visualRect(e.frags[0]), clip)})
 		}
 	}
-	if e.flags&flagFocusable != 0 && !e.IsDisabled() && !invisible {
+	if e.takesFocus(invisible) {
 		rt.focusOrder = append(rt.focusOrder, e.id)
 		rt.focusScopes = append(rt.focusScopes, rt.commitScope)
 		// Tab goes to the radio button or tab chosen; not to a toggle
