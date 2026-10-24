@@ -7,6 +7,7 @@ type toolbarItem struct {
 	label                 string
 	toggle, checked, menu bool
 	disabled, startsGroup bool
+	destructive           bool
 }
 
 // Toolbar creates a row of the controls that fn builds, as along the top
@@ -47,7 +48,7 @@ func coreToolbar(c *context, fn func()) *node {
 				if it.startsGroup && i > 0 {
 					m.Separator()
 				}
-				mi := m.Item(it.label).Disabled(it.disabled)
+				mi := m.Item(it.label).Disabled(it.disabled).Destructive(it.destructive)
 				if it.toggle {
 					mi.Checked(it.checked)
 				}
@@ -169,7 +170,7 @@ func appendToolbarItems(list []toolbarItem, e *node) []toolbarItem {
 		}
 		return append(list, toolbarItem{
 			id: e.id, label: label, toggle: e.flags&flagToggle != 0, checked: e.checked == 2,
-			menu: e.flags&flagMenuButton != 0, disabled: e.IsDisabled(),
+			menu: e.flags&flagMenuButton != 0, disabled: e.IsDisabled(), destructive: e.destructive,
 		})
 	}
 	for ch := e.first; ch != nil; ch = ch.next {

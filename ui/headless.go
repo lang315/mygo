@@ -587,6 +587,20 @@ func (t *Tester) Menu() []string {
 	return out
 }
 
+// MenuItemDestructive reports whether the context menu shown has an item
+// labeled label that is destructive (MenuItem.Destructive).
+func (t *Tester) MenuItemDestructive(label string) bool {
+	if t.h.menu == nil {
+		return false
+	}
+	for _, it := range t.h.menu.Items {
+		if it.Label == label && it.Destructive {
+			return true
+		}
+	}
+	return false
+}
+
 // ChooseMenuItem chooses the item of the context menu shown labeled with
 // the last of path, in the submenus the others label, and closes the menu.
 func (t *Tester) ChooseMenuItem(path ...string) error {

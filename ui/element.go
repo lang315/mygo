@@ -241,7 +241,9 @@ type layoutStyle struct {
 	maxLines int
 	single   bool
 	noWrap   bool
-	ellipsis string
+	// destructive marks a control that destroys (Destructive).
+	destructive bool
+	ellipsis    string
 }
 
 // Element is a node of a frame's user interface. The functions that create
@@ -1296,6 +1298,12 @@ func (e *node) Ellipsis(s string) *node { e.ellipsis = s; return e }
 // Label names the element for assistive technology and for finding it in
 // tests, when its text does not.
 func (e *node) Label(s string) *node { e.label = s; return e }
+
+// Destructive marks the element as a control that destroys something, as
+// Delete, when d is true. It draws nothing itself: style the control as
+// you would; a toolbar whose overflow menu takes the control shows it there
+// as a destructive item (MenuItem.Destructive).
+func (e *node) Destructive(d bool) *node { e.destructive = d; return e }
 
 // Disabled disables the element and those inside it when d is true: they
 // report no clicks, take no focus, and widgets look disabled.
