@@ -2,7 +2,10 @@ package widget
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
+
+	"github.com/egoist/mygo"
 
 	"github.com/egoist/mygo/internal/platform"
 )
@@ -101,5 +104,44 @@ func TestDialogFitIsMeasuredAtShowOnly(t *testing.T) {
 	}
 	if fw.Opts.Height != before {
 		t.Errorf("height %d became %d", before, fw.Opts.Height)
+	}
+}
+
+// Measuring builds the content headless: it must start nothing, post nothing
+// and call no handler, so the real build after it is the first as far as the
+// app can tell.
+func TestDialogFitMeasureIsInert(t *testing.T) {
+	var calls atomic.Int32
+	hook := func() { calls.Add(1) }
+	webViewCreateHook.Store(&hook)
+	t.Cleanup(func() { webViewCreateHook.Store(nil) })
+	items := make([]litem, 50)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	handler := func() { calls.Add(1) }
+	content := VBox(4).Add(
+		Label("title"),
+		WebBrowser(),
+		ComboBox(Option{"a", "A"}, Option{"b", "B"}).SetValue("b").OnChange(handler),
+		TextBox().SetText("x").OnChange(handler),
+		NumericUpDown(0, 10, 1).SetValue(3).OnChange(handler),
+		newListBox().SetItems(items).OnSelect(func([]string) { calls.Add(1) }),
+		TabControl().AddPage("one", Label("p1")).AddPage("two", Label("p2")),
+	)
+	d := NewDialog(nil, "Fit inert", "", 500, 0, content)
+	qmu.Lock()
+	before := posts
+	qmu.Unlock()
+	opts := mygo.WindowOptions{Width: 500}
+	d.fitWindow(&opts)
+	qmu.Lock()
+	after := posts
+	qmu.Unlock()
+	if after != before || calls.Load() != 0 {
+		t.Errorf("measuring made %d Posts and %d calls (handlers, web views)", after-before, calls.Load())
+	}
+	if opts.Height == 0 {
+		t.Error("no height")
 	}
 }
