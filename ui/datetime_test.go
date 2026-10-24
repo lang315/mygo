@@ -275,3 +275,179 @@ func TestTimeLayout(t *testing.T) {
 		t.Errorf("fr-CA: %q", tt.Texts())
 	}
 }
+
+// Paging moves what the calendar shows, not the day chosen: from the 31st
+// it must neither skip a month nor stay on the same one.
+func TestCalendarPagingMovesOnlyTheView(t *testing.T) {
+	day := time.Date(2026, 1, 31, 9, 41, 0, 0, time.UTC)
+	changes := 0
+	tt := coreNewTester(func(c *context) {
+		if coreCalendar(c, &day).Changed() {
+			changes++
+		}
+	}, 400, 400)
+	for _, want := range []string{"February 2026", "March 2026", "April 2026"} {
+		tt.Click("Next month")
+		if !tt.HasText(want) {
+			t.Fatalf("Next month from January 31: want %s, texts %q", want, tt.Texts())
+		}
+	}
+	for _, want := range []string{"March 2026", "February 2026", "January 2026"} {
+		tt.Click("Previous month")
+		if !tt.HasText(want) {
+			t.Fatalf("Previous month: want %s, texts %q", want, tt.Texts())
+		}
+	}
+	if !day.Equal(time.Date(2026, 1, 31, 9, 41, 0, 0, time.UTC)) || changes != 0 {
+		t.Fatalf("paging changed the day to %v (%d changes)", day, changes)
+	}
+}
+
+func TestCalendarPagingBackFromThe31stDoesNotStick(t *testing.T) {
+	day := time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Click("Previous month")
+	if !tt.HasText("February 2026") || day.Month() != time.March {
+		t.Fatalf("texts %q, day %v", tt.Texts(), day)
+	}
+	tt.Key(0, KeyPageUp)
+	if !tt.HasText("January 2026") {
+		t.Fatalf("Page Up: %q", tt.Texts())
+	}
+}
+
+func TestCalendarKeysStartFromTheShownMonthAfterPaging(t *testing.T) {
+	day := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Click("Next month")
+	tt.Click("Next month")
+	tt.Key(0, KeyRight) // from March 31, the same day of the month shown
+	if got := day.Format("2006-01-02"); got != "2026-04-01" {
+		t.Fatalf("Right after paging to March chose %s", got)
+	}
+}
+
+func TestCalendarFollowsADateSetByTheProgram(t *testing.T) {
+	day := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Click("Next month")
+	day = time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
+	tt.Frame()
+	if !tt.HasText("June 2026") {
+		t.Fatalf("a date set by the program is not shown: %q", tt.Texts())
+	}
+}
+
+func TestDateInputPagingFrom31stDoesNotSkipAMonth(t *testing.T) {
+	date := time.Date(2026, 1, 31, 9, 30, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Padding(10).AlignItems(Start).Children(func() { coreDateInput(c, &date).Label("Due") })
+	}, 400, 420)
+	tt.Click("Due")
+	tt.Click("Next month")
+	if !tt.HasText("February 2026") {
+		t.Fatalf("Next month from January 31: %q", tt.Texts())
+	}
+	tt.Click("Next month")
+	if !tt.HasText("March 2026") {
+		t.Fatalf("second Next month: %q", tt.Texts())
+	}
+	tt.Click("Previous month")
+	tt.Click("Previous month")
+	if !tt.HasText("January 2026") || date.Day() != 31 {
+		t.Fatalf("back: %q, date %v", tt.Texts(), date)
+	}
+}
+
+func TestDateInputPagingBackFrom31stDoesNotStick(t *testing.T) {
+	date := time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Padding(10).AlignItems(Start).Children(func() { coreDateInput(c, &date).Label("Due") })
+	}, 400, 420)
+	tt.Click("Due")
+	tt.Click("Previous month")
+	if !tt.HasText("February 2026") {
+		t.Fatalf("Previous month from March 31: %q", tt.Texts())
+	}
+}
+
+// Page Up and Page Down choose the day a month on, clamped to its end.
+func TestCalendarPageKeysChooseTheDayAMonthOn(t *testing.T) {
+	day := time.Date(2026, 1, 31, 9, 41, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Click("January 31, 2026")
+	tt.Key(0, KeyPageDown)
+	if got := day.Format("2006-01-02 15:04"); got != "2026-02-28 09:41" {
+		t.Fatalf("Page Down from January 31: %s", got)
+	}
+	tt.Key(0, KeyPageDown)
+	if got := day.Format("2006-01-02"); got != "2026-03-28" {
+		t.Fatalf("Page Down again: %s", got)
+	}
+	tt.Key(0, KeyPageUp)
+	tt.Key(0, KeyPageUp)
+	if got := day.Format("2006-01-02"); got != "2026-01-28" || !tt.HasText("January 2026") {
+		t.Fatalf("Page Up twice: %s", got)
+	}
+}
+
+// After the month buttons paged, the keys act on the month shown, from the
+// same day of the month where it has it.
+func TestCalendarKeysActOnTheMonthShownAfterAButtonPaged(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		from time.Time
+		keys []Key
+		want string
+	}{
+		{"Home", time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), []Key{KeyHome}, "2026-02-01"},
+		{"End", time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), []Key{KeyEnd}, "2026-02-28"},
+		{"Enter", time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), []Key{KeyEnter}, "2026-02-15"},
+		{"Right from a clamped day", time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC), []Key{KeyRight}, "2026-03-01"},
+		{"Page Down", time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), []Key{KeyPageDown}, "2026-03-15"},
+	} {
+		day := tc.from
+		tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+		tt.Click("Next month")
+		for _, k := range tc.keys {
+			tt.Key(0, k)
+		}
+		if got := day.Format("2006-01-02"); got != tc.want {
+			t.Errorf("%s after Next month: chose %s, want %s", tc.name, got, tc.want)
+		}
+	}
+	day := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Click("Next month")
+	tt.Key(0, KeyHome)
+	if !tt.HasText("February 2026") {
+		t.Error("the view jumped back after Home")
+	}
+}
+
+func TestCalendarNamesTheDayTheKeysAreOnInAnotherMonth(t *testing.T) {
+	day := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Key(0, KeyTab) // the grid takes the focus
+	tt.Click("Next month")
+	tt.Key(Shift, KeyTab) // back past the buttons to the grid
+	tt.Key(Shift, KeyTab)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	n := accessNode(t, tt.h.access, platform.RoleButton, "February 15, 2026")
+	if tt.h.access.Focus != n.ID {
+		t.Fatalf("the focus is on %d, want the 15th of the month shown (%d)", tt.h.access.Focus, n.ID)
+	}
+}
+
+func TestCalendarKeyBackOntoTheChosenDayBringsTheViewBack(t *testing.T) {
+	day := time.Date(2026, 3, 7, 0, 0, 0, 0, time.UTC)
+	tt := coreNewTester(func(c *context) { coreCalendar(c, &day) }, 400, 400)
+	tt.Click("Previous month")
+	if !tt.HasText("February 2026") {
+		t.Fatal("did not page")
+	}
+	tt.Key(0, KeyPageDown) // lands on March 7, already chosen
+	if !tt.HasText("March 2026") || day.Day() != 7 {
+		t.Fatalf("view stuck on February: %q, day %v", tt.Texts()[:1], day)
+	}
+}

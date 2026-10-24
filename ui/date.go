@@ -94,25 +94,63 @@ func sameDay(a, b time.Time) bool {
 	return ay == by && am == bm && ad == bd
 }
 
+// addMonths returns t n months on, at the same day of the month or the
+// last one of a month that is shorter, so that paging from the 31st
+// neither skips a month nor stays in one.
+func addMonths(t time.Time, n int) time.Time {
+	y, m, d := t.Date()
+	first := time.Date(y, m+time.Month(n), 1, 0, 0, 0, 0, t.Location())
+	last := time.Date(first.Year(), first.Month()+1, 0, 0, 0, 0, 0, t.Location()).Day()
+	return time.Date(first.Year(), first.Month(), min(d, last), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+}
+
 // calendarGrid creates the month around *cursor, the day the keys move,
 // with *date chosen; choose chooses a day, as a click and Enter do, and
-// every move does with moveChooses.
+// every move does with moveChooses. Where moves choose, paging by months
+// moves what the grid shows alone, and the day chosen stays.
 func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose func(time.Time)) *node {
 	t := c.theme
 	region, locale := c.formats()
+	grid := coreColumn(c).Gap(t.Space(0.5)).Focusable().Shrink(0).Role(RoleTable)
+	grid.flags |= flagOwnRing
+	// view is the month shown. Where moves choose, it is its own: it
+	// follows *date when that changes, and paging moves it.
+	view := coreLocal(grid, "view", func() time.Time { return *cursor })
+	if moveChooses {
+		seen := coreLocal(grid, "seen", func() time.Time { return *date })
+		if !sameDay(*seen, *date) {
+			*seen, *view = *date, *date
+		}
+	} else {
+		*view = *cursor
+	}
 	cur := *cursor
-	month := time.Date(cur.Year(), cur.Month(), 1, 0, 0, 0, 0, time.UTC)
+	// kc is the day the keys act on: the cursor, or where another month is
+	// shown, the same day of the month there, clamped.
+	kc := cur
+	if moveChooses && (view.Year() != cur.Year() || view.Month() != cur.Month()) {
+		kc = addMonths(cur, (view.Year()-cur.Year())*12+int(view.Month())-int(cur.Month()))
+	}
+	month := time.Date(view.Year(), view.Month(), 1, 0, 0, 0, 0, time.UTC)
 	title := c.formatted(fmtKey{locale, fmtMonthYear, int64(month.Year())*12 + int64(month.Month())}, func() string {
 		return i18n.FormatDate(locale, month, i18n.DateOptions{Skeleton: "yMMMM"})
 	})
-	grid := coreColumn(c).Gap(t.Space(0.5)).Focusable().Shrink(0).Role(RoleTable).Label(title)
-	grid.flags |= flagOwnRing
+	grid.Label(title)
 	move := func(d time.Time) {
 		// Choosing it moves the cursor where it is the date chosen.
 		if moveChooses {
 			choose(d)
+			*view = d
 		} else {
 			*cursor = d
+		}
+		c.rt.consumed = true
+	}
+	page := func(n int) {
+		if moveChooses {
+			*view = addMonths(month, n)
+		} else {
+			*cursor = addMonths(cur, n)
 		}
 		c.rt.consumed = true
 	}
@@ -121,23 +159,23 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 		back, forth := grid.arrows()
 		switch {
 		case grid.Shortcut(0, back):
-			move(cur.AddDate(0, 0, -1))
+			move(kc.AddDate(0, 0, -1))
 		case grid.Shortcut(0, forth):
-			move(cur.AddDate(0, 0, 1))
+			move(kc.AddDate(0, 0, 1))
 		case grid.Shortcut(0, KeyUp):
-			move(cur.AddDate(0, 0, -7))
+			move(kc.AddDate(0, 0, -7))
 		case grid.Shortcut(0, KeyDown):
-			move(cur.AddDate(0, 0, 7))
+			move(kc.AddDate(0, 0, 7))
 		case grid.Shortcut(0, KeyPageUp):
-			move(cur.AddDate(0, -1, 0))
+			move(addMonths(kc, -1))
 		case grid.Shortcut(0, KeyPageDown):
-			move(cur.AddDate(0, 1, 0))
+			move(addMonths(kc, 1))
 		case grid.Shortcut(0, KeyHome):
-			move(time.Date(cur.Year(), cur.Month(), 1, 0, 0, 0, 0, cur.Location()))
+			move(time.Date(kc.Year(), kc.Month(), 1, 0, 0, 0, 0, kc.Location()))
 		case grid.Shortcut(0, KeyEnd):
-			move(time.Date(cur.Year(), cur.Month()+1, 0, 0, 0, 0, 0, cur.Location()))
+			move(time.Date(kc.Year(), kc.Month()+1, 0, 0, 0, 0, 0, kc.Location()))
 		case grid.Shortcut(0, KeyEnter), grid.Shortcut(0, KeySpace):
-			choose(cur)
+			choose(kc)
 		}
 	})
 	grid.Children(func() {
@@ -146,7 +184,7 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 			prev.flags |= flagClickable
 			prev.afterInput(func() {
 				if prev.Clicked() {
-					move(cur.AddDate(0, -1, 0))
+					page(-1)
 				}
 			})
 			coreText(c, title).Bold().Grow(1).TextAlign(Center)
@@ -154,7 +192,7 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 			next.flags |= flagClickable
 			next.afterInput(func() {
 				if next.Clicked() {
-					move(cur.AddDate(0, 1, 0))
+					page(1)
 				}
 			})
 		})
@@ -186,7 +224,7 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 							}
 						}
 					})
-					chosen, atCursor := sameDay(day, *date), sameDay(day, cur)
+					chosen, atCursor := sameDay(day, *date), sameDay(day, kc)
 					fg := t.Text
 					if day.Month() != month.Month() {
 						fg = t.TextMuted

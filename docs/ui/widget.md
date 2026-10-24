@@ -685,6 +685,7 @@ Layout:
 
 Input and display:
 
+- `DateTimePicker()`, `MonthCalendar()`: a `time.Time` in a date and time field, or a calendar; see [DateTimePicker](widget/date-time-picker.md).
 - `Label(text)`: a line of text; `Rich(spans...)` shows styled `ui.Span`s
   instead, where gota used Pango markup. `ParseMarkup(s)` makes the spans of a
   Pango subset: `<span foreground background weight>`, `<b>`, `<i>`, `<u>` and
