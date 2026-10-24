@@ -27,7 +27,9 @@ type valueDrag struct {
 	offX     float32
 	offY     float32
 	over     uint64
-	x, y     float32 // where the pointer is
+	x, y     float32  // where the pointer is
+	chain    []uint64 // the hit chain at x, y, for chainAt
+	chainAt  [2]uint64
 	elem     *node
 	canceled bool
 	native   bool
@@ -131,7 +133,12 @@ func coreDragHover[T any](e *node) (T, bool) {
 		return zero, false
 	}
 	v, ok := d.value.(T)
-	if !ok || !slices.Contains(e.c.rt.hitChain(d.x, d.y), e.id) {
+	rt := e.c.rt
+	if at := [2]uint64{rt.frame, uint64(rt.pass)}; d.chainAt != at || d.chain == nil {
+		// One chain for all the hover elements of a frame.
+		d.chain, d.chainAt = rt.appendHitChain(d.chain[:0], d.x, d.y), at
+	}
+	if !ok || !slices.Contains(d.chain, e.id) {
 		return zero, false
 	}
 	return v, true

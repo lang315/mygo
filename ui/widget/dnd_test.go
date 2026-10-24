@@ -286,3 +286,47 @@ func TestDragDataWithTwoOptionsPanicsAtTheCall(t *testing.T) {
 	}()
 	Label("x").DragData(func() transfer.Data { return transfer.TextData("x") }, transfer.DragOptions{}, transfer.DragOptions{})
 }
+
+func hoverThenDo(t *testing.T, box *BoxWidget, tt *Tester, act func()) {
+	t.Helper()
+	a, b := tt.Find(ByLabel("src")).Bounds(), tt.Find(ByLabel("dst")).Bounds()
+	tt.Press(a.X+a.W/2, a.Y+a.H/2)
+	for i := 1; i <= 4; i++ {
+		tt.Move(a.X+a.W/2, a.Y+a.H/2+float32(i)*(b.Y+b.H/2-a.Y-a.H/2)/4)
+		tt.Frame()
+	}
+	tt.Settle()
+	act()
+	tt.Settle()
+}
+
+func TestRemovingAHoveredTargetFromItsBoxEndsItsHover(t *testing.T) {
+	for name, act := range map[string]func(box *BoxWidget, dst Control){
+		"Remove": func(box *BoxWidget, dst Control) { box.Remove(dst) },
+		"Clear":  func(box *BoxWidget, dst Control) { box.Clear() },
+	} {
+		l := &evlog{}
+		dst := Label("dst").Padding(8)
+		OnDragOver(dst, func(over bool, v string) { l.add("over %v", over) })
+		box := VBox(40).Add(Label("src").DragSource("p"), dst)
+		tt := NewTester(t, box, 300, 300)
+		hoverThenDo(t, box, tt, func() { act(box, dst) })
+		got := l.get()
+		if len(got) < 2 || got[len(got)-1] != "over false" {
+			t.Errorf("%s: events %q: leaving the tree must end the hover", name, got)
+		}
+	}
+}
+
+func TestADropGoesToTheFirstMatchingHandlerOnly(t *testing.T) {
+	l := &evlog{}
+	src := Label("src").DragSource("x")
+	dst := Label("dst").Padding(8)
+	OnDrop(dst, func(v any) { l.add("any %v", v) })
+	OnDrop(dst, func(v string) { l.add("str %s", v) })
+	tt := NewTester(t, VBox(40).Add(src, dst), 300, 300)
+	dragTo(tt, tt.Find(ByLabel("src")), tt.Find(ByLabel("dst")))
+	if got := fmt.Sprint(l.get()); got != "[any x]" {
+		t.Fatalf("events %s: only the first registered handler whose type matches gets the drop", got)
+	}
+}

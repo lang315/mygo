@@ -19,7 +19,7 @@ type dragDrop struct {
 // handler.
 type dropTarget struct {
 	key   any
-	apply func(e ui.Element)
+	apply func(e ui.Element) (fire func())
 	end   func() // ends a hover the target shows, nil for the other kinds
 }
 
@@ -37,16 +37,23 @@ func (d *dragDrop) apply(c *ui.Context, e ui.Element) {
 		}, d.dataOpts...)
 	}
 	// Hovers first, so that the end of a hover is posted before the drop.
+	// A drop goes to the first registered handler whose type matches, only:
+	// every target is asked (ui needs each type), the first to fire runs.
+	fired := false
 	for _, over := range []bool{true, false} {
 		for _, t := range d.targets {
-			if _, isOver := t.key.(interface{ hover() }); isOver == over {
-				t.apply(e)
+			if _, isOver := t.key.(interface{ hover() }); isOver != over {
+				continue
+			}
+			if fire := t.apply(e); fire != nil && !fired {
+				fired = true
+				fire()
 			}
 		}
 	}
 }
 
-func (d *dragDrop) setTarget(key any, apply func(e ui.Element), end func()) {
+func (d *dragDrop) setTarget(key any, apply func(e ui.Element) func(), end func()) {
 	for i, t := range d.targets {
 		if t.key == key {
 			if t.end != nil {
@@ -108,7 +115,7 @@ type filesKey struct{}
 
 // OnDrop makes the control take values of type T dragged with DragSource
 // within the window, and runs fn with the one dropped, on the event
-// goroutine. A control takes several types with several OnDrop calls. The
+// goroutine. A control takes several types with several OnDrop calls; a drop goes to the first registered one whose type matches, only. The
 // innermost control under the pointer that takes the type gets it; values of
 // other types do not drop. T is matched as a Go type assertion: for an
 // interface T, a value whose pointer type has the methods does not match a
@@ -121,10 +128,11 @@ func OnDrop[T any](c Control, fn func(T)) {
 			c.base().dnd.setTarget(dropKey[T]{}, nil, nil)
 			return
 		}
-		c.base().dnd.setTarget(dropKey[T]{}, func(e ui.Element) {
+		c.base().dnd.setTarget(dropKey[T]{}, func(e ui.Element) func() {
 			if v, ok := ui.Drop[T](e); ok {
-				Post(func() { fn(v) })
+				return func() { Post(func() { fn(v) }) }
 			}
+			return nil
 		}, nil)
 	})
 }
@@ -145,13 +153,13 @@ func OnDragOver[T any](c Control, fn func(over bool, v T)) {
 			return
 		}
 		was := false
-		c.base().dnd.setTarget(overKey[T]{}, func(e ui.Element) {
+		c.base().dnd.setTarget(overKey[T]{}, func(e ui.Element) func() {
 			v, over := ui.DragHover[T](e)
-			if over == was {
-				return
+			if over != was {
+				was = over
+				Post(func() { fn(over, v) })
 			}
-			was = over
-			Post(func() { fn(over, v) })
+			return nil
 		}, func() {
 			if was {
 				was = false
@@ -173,10 +181,11 @@ func (c *common[W]) OnDropData(formats []transfer.Format, fn func(transfer.Data)
 			return
 		}
 		opts := transfer.DropOptions{Formats: formats}
-		c.dnd.setTarget(dataKey{}, func(e ui.Element) {
+		c.dnd.setTarget(dataKey{}, func(e ui.Element) func() {
 			if d, ok := ui.DropData(e, opts); ok {
 				Post(func() { fn(d.Data) })
 			}
+			return nil
 		}, nil)
 	})
 	return c.self
@@ -190,10 +199,11 @@ func (c *common[W]) OnDropFiles(fn func(paths []string)) *W {
 			c.dnd.setTarget(filesKey{}, nil, nil)
 			return
 		}
-		c.dnd.setTarget(filesKey{}, func(e ui.Element) {
+		c.dnd.setTarget(filesKey{}, func(e ui.Element) func() {
 			if p := e.DroppedFiles(); len(p) > 0 {
 				Post(func() { fn(p) })
 			}
+			return nil
 		}, nil)
 	})
 	return c.self
