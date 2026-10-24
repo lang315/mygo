@@ -16,7 +16,9 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 	"github.com/egoist/mygo/ui/widget"
+	"github.com/egoist/mygo/ui/widget/richtextbox"
 )
 
 func main() {
@@ -215,6 +217,7 @@ func extras() widget.Control {
 			AddSection("Vegetables", swatch(color.RGBA{60, 160, 80, 255}), widget.Option{Value: "kale", Text: "Kale"})),
 		clockRow(),
 		chartRow(),
+		richRow(),
 	)
 }
 
@@ -368,6 +371,14 @@ func dragRow() widget.Control {
 	widget.OnDrop(zone, func(v string) { zone.SetText("Dropped " + v) })
 	zone.OnDropFiles(func(paths []string) { zone.SetText(fmt.Sprintf("%d files dropped", len(paths))) })
 	return widget.HBox(16).Add(chip, zone)
+}
+
+// richRow is a rich text box with a Bold button through its Document.
+func richRow() widget.Control {
+	box := richtextbox.New().SetMarkup("Edit <b>rich</b> text").SetLabel("Notes")
+	box.SetSize(0, 120)
+	bold := widget.Button("Bold").OnClick(func() { box.Edit(func(d *richtext.Document) { d.ToggleBold() }) })
+	return widget.VBox(4).Add(bold, box)
 }
 
 // chartRow shows a bar chart of three months and a pie of shares.
