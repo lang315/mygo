@@ -141,7 +141,16 @@ const (
 	pItalic
 	pMono
 	pTransition
+	pAlign
+	pVAlign
+	pHExpand
+	pVExpand
+	pFontWeight
 )
+
+// pLayout are the properties that place a control in its box. They count
+// in the base style only, and a control with no other is not restyled.
+const pLayout = pAlign | pVAlign | pHExpand | pVExpand
 
 type shadow struct {
 	x, y, blur, spread float32
@@ -171,6 +180,8 @@ type props struct {
 	textSize                                Size    // when fontSize is 0
 	fontSize                                float32 // DIPs
 	transition                              time.Duration
+	align, valign                           Align
+	weight                                  int
 }
 
 type variant uint8
@@ -379,6 +390,32 @@ func (s Style) Bold() Style   { s.set |= pBold; return s }
 func (s Style) Italic() Style { s.set |= pItalic; return s }
 func (s Style) Mono() Style   { s.set |= pMono; return s }
 
+// FontWeight sets the weight of the text, 100 (thin) to 900 (black).
+func (s Style) FontWeight(w int) Style {
+	s.weight, s.set = min(max(w, 100), 900), s.set|pFontWeight
+	return s
+}
+
+// Align, VAlign, HExpand and VExpand place the control in its box, as the
+// control's methods of the same names. They count in the base style only:
+// a variant's are ignored.
+func (s Style) Align(a Align) Style  { s.align, s.set = a, s.set|pAlign; return s }
+func (s Style) VAlign(a Align) Style { s.valign, s.set = a, s.set|pVAlign; return s }
+func (s Style) HExpand() Style       { s.set |= pHExpand; return s }
+func (s Style) VExpand() Style       { s.set |= pVExpand; return s }
+
+// layout returns how p places a control in its box.
+func (p *props) layout() layout {
+	l := layout{hexpand: p.set&pHExpand != 0, vexpand: p.set&pVExpand != 0}
+	if p.set&pAlign != 0 {
+		l.align = p.align
+	}
+	if p.set&pVAlign != 0 {
+		l.valign = p.valign
+	}
+	return l
+}
+
 // Transition fades the background, border and text colors over d as they
 // change, as a hover does; 0 turns it off. The text color fades only if
 // the style sets a TextColor of its own, besides the one a variant sets:
@@ -502,6 +539,15 @@ func (p *props) over(o *props) {
 	}
 	if s&pTransition != 0 {
 		p.transition = o.transition
+	}
+	if s&pAlign != 0 {
+		p.align = o.align
+	}
+	if s&pVAlign != 0 {
+		p.valign = o.valign
+	}
+	if s&pFontWeight != 0 {
+		p.weight = o.weight
 	}
 	p.set |= s
 }

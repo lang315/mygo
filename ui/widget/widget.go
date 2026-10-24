@@ -65,7 +65,11 @@ func (b *core) restyle() {
 		s = s.Merge(a)
 	}
 	b.style = s.Merge(b.ownStyle)
-	b.styled = !b.style.empty()
+	b.place = b.style.layout()
+	// A control that only places itself has nothing to restyle each frame.
+	rest := b.style
+	rest.set &^= pLayout
+	b.styled = !rest.empty()
 }
 
 // SetVisible shows or hides the widget. A hidden widget keeps its values,

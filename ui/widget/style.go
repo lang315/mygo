@@ -41,7 +41,8 @@ const (
 var sizeScale = [...]float32{Base: 1, XS: 0.75, SM: 0.875, LG: 1.125, XL: 1.25, XXL: 1.5, XXXL: 1.875}
 
 // layout places a control in its box: across the box, and growing along
-// it. It depends on the box's axis, so it is not part of a Style.
+// it. A Style sets it (Style.Align…); its base style's counts, as the box's
+// axis decides what applies.
 type layout struct {
 	align, valign    Align
 	hexpand, vexpand bool
@@ -161,6 +162,9 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 	if s&pBold != 0 {
 		e.Bold()
 	}
+	if s&pFontWeight != 0 {
+		e.FontWeight(p.weight)
+	}
 	if s&pItalic != 0 {
 		e.Italic()
 	}
@@ -186,12 +190,6 @@ type textKey int
 // styles, as an inline style over classes.
 func (c *common[W]) own(fn func(s Style) Style) *W {
 	c.change(func() { c.ownStyle = fn(c.ownStyle); c.restyle() })
-	return c.self
-}
-
-// lay changes how the control is placed in its box.
-func (c *common[W]) lay(fn func(l *layout)) *W {
-	c.change(func() { fn(&c.place) })
 	return c.self
 }
 
@@ -250,20 +248,20 @@ func (c *common[W]) MarginLeft(n float32) *W {
 
 // Align places the widget horizontally in a VBox: gota's halign-start is
 // Align(Start).
-func (c *common[W]) Align(a Align) *W { return c.lay(func(l *layout) { l.align = a }) }
+func (c *common[W]) Align(a Align) *W { return c.own(func(s Style) Style { return s.Align(a) }) }
 
 // VAlign places the widget vertically in an HBox.
-func (c *common[W]) VAlign(a Align) *W { return c.lay(func(l *layout) { l.valign = a }) }
+func (c *common[W]) VAlign(a Align) *W { return c.own(func(s Style) Style { return s.VAlign(a) }) }
 
 // HExpand gives the widget the free width of its HBox.
-func (c *common[W]) HExpand() *W { return c.lay(func(l *layout) { l.hexpand = true }) }
+func (c *common[W]) HExpand() *W { return c.own(func(s Style) Style { return s.HExpand() }) }
 
 // VExpand gives the widget the free height of its VBox.
-func (c *common[W]) VExpand() *W { return c.lay(func(l *layout) { l.vexpand = true }) }
+func (c *common[W]) VExpand() *W { return c.own(func(s Style) Style { return s.VExpand() }) }
 
 // Expand is HExpand and VExpand.
 func (c *common[W]) Expand() *W {
-	return c.lay(func(l *layout) { l.hexpand, l.vexpand = true, true })
+	return c.own(func(s Style) Style { return s.HExpand().VExpand() })
 }
 
 // TextSize sets the size of the text: gota's text-xl is TextSize(XL).

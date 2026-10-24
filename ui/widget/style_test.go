@@ -392,3 +392,49 @@ func TestOneBorderSideKeepsTheOthers(t *testing.T) {
 		t.Fatalf("right edge %v lost its 3 DIP border", right)
 	}
 }
+
+func TestStyleAlignMatchesTheMethod(t *testing.T) {
+	styled := find(t, tester(t, VBox(0).Add(Label("x").Apply(NewStyle().Align(End)))), "x")
+	method := find(t, tester(t, VBox(0).Add(Label("x").Align(End))), "x")
+	plain := find(t, tester(t, VBox(0).Add(Label("x"))), "x")
+	if styled != method {
+		t.Fatalf("Style.Align(End) put x at %v, the method at %v", styled, method)
+	}
+	if styled == plain {
+		t.Fatal("Align(End) did not move the label")
+	}
+}
+
+func TestOwnAlignWinsOverApplied(t *testing.T) {
+	got := find(t, tester(t, VBox(0).Add(Label("x").Apply(NewStyle().Align(End)).Align(Start))), "x")
+	want := find(t, tester(t, VBox(0).Add(Label("x").Align(Start))), "x")
+	if got != want {
+		t.Fatalf("x at %v, want %v: the widget's own Align wins", got, want)
+	}
+}
+
+func TestLayoutInAVariantIsIgnored(t *testing.T) {
+	tt := tester(t, VBox(0).Add(Label("x").Apply(NewStyle().Hover(NewStyle().Align(End)))))
+	before := find(t, tt, "x")
+	tt.Move(before.X+1, before.Y+before.H/2)
+	tt.Frame()
+	if after := find(t, tt, "x"); after != before {
+		t.Fatalf("hover moved x from %v to %v", before, after)
+	}
+}
+
+func TestStyleHExpandMatchesTheMethod(t *testing.T) {
+	styled := find(t, tester(t, HBox(0).Add(Button("a").Apply(NewStyle().HExpand()), Button("b"))), "b")
+	method := find(t, tester(t, HBox(0).Add(Button("a").HExpand(), Button("b"))), "b")
+	if styled != method {
+		t.Fatalf("b at %v with Style.HExpand, %v with the method", styled, method)
+	}
+}
+
+func TestFontWeightBoldsText(t *testing.T) {
+	heavy := find(t, tester(t, VBox(0).Add(Label("Wide text here").Align(Start).Apply(NewStyle().FontWeight(700)))), "Wide text here")
+	plain := find(t, tester(t, VBox(0).Add(Label("Wide text here").Align(Start))), "Wide text here")
+	if heavy.W <= plain.W {
+		t.Fatalf("weight 700 is %v wide, plain %v: want wider", heavy.W, plain.W)
+	}
+}
