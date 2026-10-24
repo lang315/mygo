@@ -22,6 +22,7 @@ type Form struct {
 	header        *HeaderBarWidget
 	onClose       func() bool
 	menu          []MenuItem
+	strip         *MenuStrip
 	parent        *Form         // a dialog's; nil for a top-level window
 	dialog        bool          // made by NewDialog: Escape asks to close it
 	deletable     bool          // the user may close it
@@ -180,7 +181,7 @@ func (w *Form) Show() {
 	if p := w.parent; p != nil && p.win != nil {
 		opts.Parent, opts.Modal = p.win, true
 	}
-	icon, resizable, menu := w.icon, w.resizable, w.menu
+	icon, resizable, menu, strip := w.icon, w.resizable, w.menu, w.strip
 	mu.Unlock()
 	watchQuit.Do(func() { mygo.App.OnBeforeQuit(onBeforeQuit) })
 	n := mygo.NewWindow(opts)
@@ -192,6 +193,9 @@ func (w *Form) Show() {
 	}
 	if menu != nil {
 		n.SetMenu(mygo.NewMenu(nativeMenu(menu)))
+	}
+	if strip != nil && !macMenus { // on macOS the app's menu bar, set by MenuStrip
+		n.SetMenu(strip.native())
 	}
 	closed := func() {
 		mu.Lock()
