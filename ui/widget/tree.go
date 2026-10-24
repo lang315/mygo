@@ -781,3 +781,5 @@ func (t *TreeViewWidget[T, K]) row(c *ui.Context, it treeItem[K]) {
 	}
 	ui.Text(c, text).SingleLine()
 }
+
+func (t *TreeViewWidget[T, K]) fillsAcross() bool { return true }

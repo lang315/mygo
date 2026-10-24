@@ -382,3 +382,5 @@ func spansOf[T any](c *ui.Context, cl *Column[T], r *T) []ui.Span {
 	}
 	return spans
 }
+
+func (t *DataGridViewWidget[T, K]) fillsAcross() bool { return true }

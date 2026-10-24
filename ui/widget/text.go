@@ -224,3 +224,5 @@ func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 	}
 	return el
 }
+
+func (v *MultilineTextBoxWidget) fillsAcross() bool { return true }

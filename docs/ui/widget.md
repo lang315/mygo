@@ -672,7 +672,14 @@ Layout:
 
 - `VBox(spacing)`, `HBox(spacing)`: a column or a row. `Add` at the
   natural size, `Pack(w, expand, fill)`, `PackEnd`, `Remove`, `Clear`. A
-  widget already in the box is not added twice.
+  widget already in the box is not added twice. `fill` means what it did. Controls that scroll or virtualize their rows
+(`ListBox`, `DataGridView`, `TreeView`, `MultilineTextBox`, `SplitContainer`,
+`TabControl`, `ScrollPanel`) stretch across the box that holds them whatever
+the flags (an `HBox` would otherwise center them at the height of all their
+rows), so they scroll in the room the row has and build only the rows in view.
+A `VBox`/`HBox` or a `GroupBox` does when something it holds does, however
+deep, and passes the height down; one that holds only labels and buttons is
+placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ButtonBox()`: a row whose widgets sit at its end, one width each, as a
   dialog's buttons.
 - `Grid(colSpacing, rowSpacing)`: `Attach(w, col, row, width, height)`; a

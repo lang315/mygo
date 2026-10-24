@@ -153,7 +153,31 @@ func (b *BoxWidget) item(c *ui.Context, it boxItem) {
 	case it.fill:
 		render(c, it.w).Grow(1)
 	default:
-		ui.Box(c.Key(wrapKey(it.w.base().id))).Grow(1).AlignItems(ui.Center).Justify(ui.Center).
-			Children(func() { render(c, it.w) })
+		// The room is a box of the box's own direction, so that what it holds
+		// stretches across the box, not along it.
+		wrap := ui.Box
+		if b.dir == horizontal {
+			wrap = ui.Row
+		}
+		room := wrap(c.Key(wrapKey(it.w.base().id))).Grow(1).AlignItems(ui.Center).Justify(ui.Center)
+		if fillsAcross(it.w) {
+			room.AlignSelf(ui.Stretch)
+		}
+		room.Children(func() {
+			e := render(c, it.w)
+			if b.dir == horizontal {
+				e.Grow(0) // it keeps its width, centred in the room
+			}
+		})
 	}
+}
+
+// fillsAcross: a box fills across when something it holds does (fillsAcross).
+func (b *BoxWidget) fillsAcross() bool {
+	for _, it := range b.items {
+		if fillsAcross(it.w) {
+			return true
+		}
+	}
+	return false
 }
