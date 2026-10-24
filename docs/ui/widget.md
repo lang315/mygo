@@ -49,7 +49,8 @@ window of your own, `widget.View(w)` is a `ui` view showing `w`:
 ## Names
 
 The controls take the names WinForms gives them, where WinForms has one;
-gota's names are listed for code ported from it.
+gota's names are listed for code ported from it. What of WinForms' toolbox is
+done, pending or dropped is in the [WinForms catalogue](winforms.md).
 
 | ui/widget | WinForms | gota |
 |---|---|---|
