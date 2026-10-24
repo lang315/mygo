@@ -44,6 +44,7 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 	}
 	display, key, at := parseMnemonic(label)
 	l := Label(display)
+	l.noMnemonic = true // Fields answers the row's mnemonic itself
 	f.change(func() {
 		for _, r := range f.rows {
 			if r.w == c {

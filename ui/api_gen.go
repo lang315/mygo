@@ -3042,6 +3042,19 @@ func (_handle Element) Bounds() Rect {
 	return _node.Bounds()
 }
 
+// CanFocus reports whether the element can take the keyboard focus now: it is
+// focusable and not disabled. Like the other queries of an element, it is
+// valid until the build ends.
+func (_handle Element) CanFocus() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.CanFocus()
+}
+
 // Center centers the children along and across the main axis.
 func (_handle Element) Center() Element {
 	_node := _handle.node()

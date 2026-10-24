@@ -346,3 +346,22 @@ func TestRichTextBoxASetterDoesNotSwallowAPendingSelectionReport(t *testing.T) {
 	tt.Settle()
 	wait.For(t, "the pending selection report", moved)
 }
+
+// An empty RichTextBox in a row is as wide as a text box, not as its (empty)
+// text: it was 2 DIPs, the room of its border.
+func TestRichTextBoxInARowHasAUsableWidth(t *testing.T) {
+	r := New()
+	tt := widget.NewTester(t, widget.HBox(8).Add(widget.Label("Notes"), r), 600, 300)
+	if w := tt.Find(widget.ByRole(ui.RoleTextField)).Bounds().W; w < 150 {
+		t.Errorf("a RichTextBox added to an HBox is %v wide", w)
+	}
+}
+
+// Where the container stretches it, it still fills the width.
+func TestRichTextBoxStillFillsAColumn(t *testing.T) {
+	r := New()
+	tt := widget.NewTester(t, widget.VBox(8).Add(r), 600, 300)
+	if w := tt.Find(widget.ByRole(ui.RoleTextField)).Bounds().W; w < 500 {
+		t.Errorf("a RichTextBox in a VBox is %v wide in a 600 window", w)
+	}
+}

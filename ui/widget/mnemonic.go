@@ -98,6 +98,7 @@ func registerMnemonic(key rune, el ui.Element, ctrl Control, act func()) bool {
 func (w *Form) answerMnemonics(c *ui.Context) {
 	ms := w.mnemonics
 	w.mnemonics = nil
+	defer func() { w.built = w.built[:0] }()
 	done := map[rune]bool{}
 	menuKeys := w.menuBarKeys() // the menu bar's access keys beat the controls'
 	for _, m := range ms {
@@ -187,4 +188,26 @@ func (w *Form) menuBarKeys() map[rune]bool {
 		}
 	}
 	return keys
+}
+
+// builtEl is a control a form built, and its element, valid until the build
+// ends.
+type builtEl struct {
+	ctrl Control
+	el   ui.Element
+}
+
+// focusNextAfter focuses the first control built after c that can take the
+// focus, as WinForms' label mnemonic does. Under mu, at the end of a build.
+func (w *Form) focusNextAfter(c Control) {
+	after := false
+	for _, b := range w.built {
+		if after && b.el.CanFocus() {
+			focusLater(b.ctrl)
+			return
+		}
+		if b.ctrl == c {
+			after = true
+		}
+	}
 }

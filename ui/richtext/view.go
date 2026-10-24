@@ -66,7 +66,7 @@ type EditorOptions struct {
 func Editor(c *ui.Context, doc *Document, options ...EditorOptions) ui.Element {
 	t := c.Theme()
 	e := build(c, doc, options, true)
-	e.Radius(t.Radius).Background(t.Surface).Border(1, t.Border).MinHeight(t.Space(30))
+	e.Radius(t.Radius).Background(t.Surface).Border(1, t.Border).MinHeight(t.Space(30)).MinWidth(t.Space(50))
 	if e.Focused() {
 		e.Border(1, t.Accent)
 	}

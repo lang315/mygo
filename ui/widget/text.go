@@ -10,8 +10,9 @@ import (
 // LabelWidget shows a line of text.
 type LabelWidget struct {
 	common[LabelWidget]
-	text  string
-	spans []ui.Span
+	text       string
+	spans      []ui.Span
+	noMnemonic bool // SetUseMnemonic(false)
 }
 
 // Label makes a label showing s.
@@ -46,7 +47,30 @@ func (l *LabelWidget) build(c *ui.Context) ui.Element {
 	if len(l.spans) > 0 {
 		return ui.RichText(c, l.spans...)
 	}
-	return ui.Text(c, l.text)
+	if l.noMnemonic || !strings.Contains(l.text, "&") {
+		return ui.Text(c, l.text)
+	}
+	display, key, at := parseMnemonic(l.text)
+	if key == 0 || macMenus || buildingForm == nil {
+		return ui.Text(c, display)
+	}
+	if c.Modifiers()&ui.Alt != 0 {
+		e := ui.RichText(c, mnemonicSpans(display, at)...)
+		registerMnemonic(key, e, l, func() { buildingForm.focusNextAfter(l) })
+		return e
+	}
+	e := ui.Text(c, display)
+	registerMnemonic(key, e, l, func() { buildingForm.focusNextAfter(l) })
+	return e
+}
+
+// SetUseMnemonic says whether an "&" in the text marks a key, as WinForms'
+// UseMnemonic (true by default): Alt and the key then give the keyboard focus
+// to the next control that takes it, and the "&" is not shown. With false the
+// text is shown as it is.
+func (l *LabelWidget) SetUseMnemonic(on bool) *LabelWidget {
+	l.change(func() { l.noMnemonic = !on })
+	return l
 }
 
 // TextBoxWidget is a one-line text input.

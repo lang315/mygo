@@ -9,8 +9,11 @@ character no key types (`&@`) makes no mnemonic. An `&` at the end stays as it
 is.
 
 - **Where:** the text of a `Button` (without an icon), a `CheckBox` (Alt+key
-  toggles it and gives it the focus), a `RadioButton` (selects it) and the
-  labels of `Fields` rows (focus the row's control), in a form that shows them
+  toggles it and gives it the focus), a `RadioButton` (selects it), the labels
+  of `Fields` rows (focus the row's control) and a plain `Label` (focuses the
+  next control after it that can take the focus, one that is disabled
+  skipped; `SetUseMnemonic(false)` shows the text as it is, with its `&`),
+  in a form that shows them
   (not in `widget.View` or a `NewTester` of a control alone: there nothing
   answers and nothing is underlined). Alt+Shift+key answers as Alt+key.
 - **Who answers:** a `Form.Shortcut` of the same key first; then, when several
@@ -28,8 +31,7 @@ is.
   system does not enter its menu mode or beep. Menu items already take `&` as
   the platform's access keys on Windows (`MenuItem` text goes to the native
   menu); the menu bar is not yet consulted before control mnemonics.
-- **Not yet:** plain labels (a `Label` with a mnemonic that focuses the next
-  control), menu items on Linux, and an access-key property for assistive
+- **Not yet:** menu items on Linux, and an access-key property for assistive
   technology.
 - Alt+letter does not reach the form while a text box has the keyboard focus on
   macOS (Option types there; mnemonics are off anyway); on Windows and Linux it

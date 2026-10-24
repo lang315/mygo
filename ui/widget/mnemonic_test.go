@@ -303,3 +303,66 @@ func TestMenuBarAccessKeysBeatControlMnemonics(t *testing.T) {
 		}
 	}
 }
+
+func TestLabelMnemonicFocusesTheNextControlThatTakesTheFocus(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(Label("&Name"), Label("a plain label"), TextBox(), TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if !tt.Has(ByLabel("Name")) || tt.Has(ByLabel("&Name")) {
+		t.Fatalf("labels %q", tt.Texts())
+	}
+	tt.Key(ui.Alt, ui.KeyN)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+	if !tt.Find(ByRole(ui.RoleTextField).Nth(0)).Focused() || tt.Find(ByRole(ui.RoleTextField).Nth(1)).Focused() {
+		t.Error("Alt+N did not focus the text box after the label")
+	}
+}
+
+func TestLabelMnemonicSkipsADisabledControl(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	off := TextBox()
+	off.SetDisabled(true)
+	f.SetContent(VBox(4).Add(Label("&Name"), off, TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	tt.Key(ui.Alt, ui.KeyN)
+	tt.Settle()
+	<-posted()
+	tt.Settle()
+	if !tt.Find(ByRole(ui.RoleTextField).Nth(1)).Focused() {
+		t.Error("Alt+N did not skip the disabled box")
+	}
+}
+
+func TestLabelUseMnemonicFalseShowsTheTextAsItIs(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(VBox(4).Add(Label("Q&A").SetUseMnemonic(false), TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if !tt.Has(ByLabel("Q&A")) {
+		t.Fatalf("labels %q", tt.Texts())
+	}
+	tt.Key(ui.Alt, ui.KeyA)
+	tt.Settle()
+	if tt.Find(ByRole(ui.RoleTextField)).Focused() {
+		t.Error("a label that does not use mnemonics answered one")
+	}
+}
+
+// A literal ampersand in a Fields label is not read as a mnemonic twice.
+func TestFieldsLabelWithALiteralAmpersandShowsIt(t *testing.T) {
+	withMac(t, false)
+	f := NewForm("m", 400, 200)
+	f.SetContent(Fields().Row("R&&D", TextBox()))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if !tt.Has(ByLabel("R&D")) {
+		t.Errorf("labels %q", tt.Texts())
+	}
+}
