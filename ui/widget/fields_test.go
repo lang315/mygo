@@ -15,15 +15,22 @@ func bar(text string, h float32) *CustomWidget {
 	})
 }
 
-// ink returns the first and last row inside r that has a dark pixel: where
-// a label's glyphs are, as tt.Find gives the whole box of the label, which
-// a cell stretches.
+// ink returns the first and last row in r, grown by 2 DIPs, that has a pixel
+// unlike the page: where a label's glyphs are, as tt.Find gives the whole
+// box of the label, which a cell stretches. A pixel is ink when a channel
+// differs from the page's by more than 24, not when it is dark: how much of
+// a glyph's pixel is covered depends on the platform's text rendering.
 func ink(t *testing.T, tt *ui.Tester, r ui.Rect) (top, bottom float32) {
 	t.Helper()
-	img, top, bottom := tt.Image(), float32(-1), float32(-1)
-	for y := int(r.Y); y < int(r.Y+r.H); y++ {
-		for x := int(r.X); x < int(r.X+r.W); x++ {
-			if c := img.RGBAAt(x, y); c.R < 100 && c.G < 100 && c.B < 100 {
+	img, bg := tt.Image(), page(tt)
+	b := img.Bounds()
+	x0, x1 := max(int(r.X)-2, b.Min.X), min(int(r.X+r.W)+2, b.Max.X)
+	y0, y1 := max(int(r.Y)-2, b.Min.Y), min(int(r.Y+r.H)+2, b.Max.Y)
+	differs := func(a, b uint8) bool { d := int(a) - int(b); return d > 24 || d < -24 }
+	top, bottom = -1, -1
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			if c := img.RGBAAt(x, y); differs(c.R, bg.R) || differs(c.G, bg.G) || differs(c.B, bg.B) {
 				if top < 0 {
 					top = float32(y)
 				}
