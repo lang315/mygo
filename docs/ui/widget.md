@@ -189,7 +189,7 @@ only where mygo draws the menu itself does the item look different:
 | Web | The danger color (`#c42b1c`, `#ff99a4` in a dark page) and semibold; white on a red highlight; the text color, faded, when disabled. |
 
 `mygo.MenuItem` has the same `Destructive` field, and `SetDestructive` changes
-it while the menu shows.
+it while the menu shows; so does a `MenuStripItem`'s `SetDestructive`.
 
 Menus take their items, not a function building them, because `ui` builds
 menus while it draws, under the package's lock: set the items again when
@@ -469,7 +469,7 @@ name := widget.Bind(widget.TextBox(),
 | `CheckBox` | `bool` | `Bind` |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
-| `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options |
+| `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options and makes it a plain choice, not `Editable`; `set` is called for yes and no only |
 
 - The control takes `get()`'s value at once. After each edit of the user,
   `set(v)` runs with the new value on the event goroutine, after the
