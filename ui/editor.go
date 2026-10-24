@@ -156,6 +156,9 @@ func (ed *editor) insert(s string) {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	a, b := ed.selection()
 	ranges := ed.selectedRanges()
+	if ed.maxLen > 0 && a == b && len(ranges) == 0 && ed.compose == "" && ed.buf.n >= ed.maxLen {
+		return // no room: nothing is inserted, nor an undo step for it
+	}
 	ed.record(a == b && utf8.RuneCountInString(s) == 1)
 	if len(ranges) == 0 {
 		ed.replace(ed.caret, ed.caret, s)
