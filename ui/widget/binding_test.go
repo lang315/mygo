@@ -2,6 +2,7 @@ package widget
 
 import (
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -9,15 +10,14 @@ import (
 )
 
 // source is a value a control is bound to, guarded as an app's config is,
-// with the values set recorded in order and announced on called.
+// with the values set recorded in order.
 type source[T comparable] struct {
-	mu     sync.Mutex
-	v      T
-	sets   []T
-	called chan T
+	mu   sync.Mutex
+	v    T
+	sets []T
 }
 
-func newSource[T comparable](v T) *source[T] { return &source[T]{v: v, called: make(chan T, 16)} }
+func newSource[T comparable](v T) *source[T] { return &source[T]{v: v} }
 
 func (s *source[T]) get() T { s.mu.Lock(); defer s.mu.Unlock(); return s.v }
 
@@ -26,17 +26,28 @@ func (s *source[T]) set(v T) {
 	s.v = v
 	s.sets = append(s.sets, v)
 	s.mu.Unlock()
-	s.called <- v
 }
 
 func (s *source[T]) change(v T) { s.mu.Lock(); s.v = v; s.mu.Unlock() }
 
-// calls returns the values set so far, after the handlers Posted so far ran.
+// calls returns the values set so far, after the handlers Posted so far ran:
+// a test that expects no call, or one, sees a wrong count at once instead of
+// waiting out a guard.
 func (s *source[T]) calls() []T {
 	Update(func() {})
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.sets)
+}
+
+// only returns the one value set, and fails if there were none or more.
+func only[T comparable](t *testing.T, s *source[T]) T {
+	t.Helper()
+	got := s.calls()
+	if len(got) != 1 {
+		t.Fatalf("set was called %d times (%v), want once", len(got), got)
+	}
+	return got[0]
 }
 
 func TestBindTextBoxTakesTheSourceAtOnce(t *testing.T) {
@@ -55,11 +66,41 @@ func TestBindTextBoxUserEditSetsOnce(t *testing.T) {
 	tb := Bind(TextBox(), src.get, src.set)
 	tt := tester(t, tb)
 	typeInto(t, tt, 1, "c")
-	if v := received(t, src.called); v != "abc" {
+	if v := only(t, src); v != "abc" {
 		t.Fatalf("set got %q, want abc", v)
 	}
-	if got := src.calls(); !slices.Equal(got, []string{"abc"}) {
-		t.Fatalf("set calls %q, want one", got)
+}
+
+// OnChange that normalizes the text, as one that trims or upcases does, is
+// no program setter's value for set: set gets what the user entered.
+func TestBindSetGetsTheUsersValueWhenOnChangeSetsText(t *testing.T) {
+	src := newSource("")
+	var tb *TextBoxWidget
+	tb = TextBox().OnChange(func() { tb.SetText(strings.ToUpper(tb.Text()) + "!") })
+	Bind(tb, src.get, src.set)
+	tt := tester(t, tb)
+	typeInto(t, tt, 1, "q")
+	if v := only(t, src); v != "q" {
+		t.Fatalf("set got %q, want the user's q, not what OnChange made of it", v)
+	}
+	if tb.Text() != "Q!" {
+		t.Fatalf("Text %q, OnChange's SetText must still show", tb.Text())
+	}
+}
+
+// A program setter that runs between the user's edit and the handler that
+// writes it must not take the user's place.
+func TestBindSetGetsTheUsersValueWhenAWorkerSetsTextFirst(t *testing.T) {
+	src := newSource("")
+	tb := Bind(TextBox(), src.get, src.set)
+	tt := tester(t, tb)
+	release := make(chan struct{})
+	Post(func() { <-release }) // holds the event goroutine: the edit's handler waits behind it
+	typeInto(t, tt, 1, "u")
+	tb.SetText("prog") // another goroutine's setter, before the handler runs
+	close(release)
+	if v := only(t, src); v != "u" {
+		t.Fatalf("set got %q, want the user's u", v)
 	}
 }
 
@@ -87,7 +128,7 @@ func TestBindDoesNotReplaceOnChange(t *testing.T) {
 	Bind(tb, src.get, func(v string) { note("set " + v); src.set(v) })
 	tt := tester(t, tb)
 	typeInto(t, tt, 1, "x")
-	received(t, src.called)
+	only(t, src)
 	mu.Lock()
 	defer mu.Unlock()
 	if !slices.Equal(order, []string{"OnChange", "set x"}) {
@@ -97,13 +138,15 @@ func TestBindDoesNotReplaceOnChange(t *testing.T) {
 
 func TestBindOnChangeSetAfterBindingStillRuns(t *testing.T) {
 	src := newSource("")
-	got := make(chan string, 4)
+	ran := 0
 	tb := Bind(TextBox(), src.get, src.set)
-	tb.OnChange(func() { got <- "OnChange" })
+	tb.OnChange(func() { ran++ })
 	tt := tester(t, tb)
 	typeInto(t, tt, 1, "x")
-	received(t, got)
-	received(t, src.called)
+	only(t, src)
+	if ran != 1 { // the event goroutine ran it before set, and only(t, src) waited for both
+		t.Fatalf("OnChange ran %d times", ran)
+	}
 }
 
 func TestReloadTakesTheChangedSource(t *testing.T) {
@@ -139,7 +182,7 @@ func TestBindingAgainReplacesTheFirst(t *testing.T) {
 	}
 	tt := tester(t, tb)
 	typeInto(t, tt, 1, "!")
-	received(t, second.called)
+	only(t, second)
 	if got := first.calls(); len(got) != 0 {
 		t.Fatalf("the replaced binding was called with %q", got)
 	}
@@ -170,7 +213,7 @@ func TestBindCheckBox(t *testing.T) {
 	}
 	tt := tester(t, cb)
 	click(t, tt, "Remember")
-	if v := received(t, src.called); v {
+	if v := only(t, src); v {
 		t.Fatalf("set got %v, want false after unchecking", v)
 	}
 	cb.SetChecked(true)
@@ -191,7 +234,7 @@ func TestBindComboBox(t *testing.T) {
 	tt := tester(t, cb)
 	click(t, tt, "Apple")
 	click(t, tt, "Kale")
-	if v := received(t, src.called); v != "kale" {
+	if v := only(t, src); v != "kale" {
 		t.Fatalf("set got %q", v)
 	}
 	if got := src.calls(); !slices.Equal(got, []string{"kale"}) {
@@ -230,7 +273,7 @@ func TestBindNumericUpDown(t *testing.T) {
 	tt.Key(0, ui.KeyEnd)
 	tt.Type("0")
 	tt.Frame()
-	if v := received(t, src.called); v != 50 {
+	if v := only(t, src); v != 50 {
 		t.Fatalf("set got %v, want 50", v)
 	}
 }
@@ -261,7 +304,7 @@ func TestBindIntNumericUpDown(t *testing.T) {
 	tt.Key(0, ui.KeyEnd)
 	tt.Type("2")
 	tt.Frame()
-	if v := received(t, src.called); v != 72 {
+	if v := only(t, src); v != 72 {
 		t.Fatalf("set got %d, want 72", v)
 	}
 	src.change(9)

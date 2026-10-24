@@ -14,27 +14,38 @@ type Bindable[T comparable] interface {
 
 // binding is what a control keeps of its binding, under mu.
 type binding struct {
-	write  func() // reads the control's value and gives it to the source
-	reload func() // gives the source's value to the control
+	write  func(v any) // gives the source the value the user entered, a T
+	reload func()      // gives the source's value to the control
 }
 
-// after returns the handler of the user's edit: h, the control's OnChange,
-// then the binding's write, if it has one. Under mu, while building. A
-// control with no binding gets h itself, so it costs nothing.
-func (b *binding) after(h func()) func() {
+// edited returns ui's OnChange callback for m, a control's value: it
+// commits what the user entered, and runs h, the control's OnChange, then
+// the binding's write of that value, on the event goroutine. The value is
+// taken as it is committed, under mu, so a setter that runs after it, in h
+// or on another goroutine, is not what the source gets. Under mu, while
+// building. A control with no binding gets the plain callback, so it costs
+// nothing.
+func edited[T comparable](m *mirror[T], b *binding, h func()) func() {
 	if b.write == nil {
-		return h
+		return onChange(m, h)
 	}
 	return func() {
-		if h != nil {
-			h()
-		}
 		mu.Lock()
-		write := b.write
+		changed := m.value != m.shown
+		m.value, m.dirty = m.shown, false
+		v, write := m.value, b.write // the binding of the moment of the edit
 		mu.Unlock()
-		if write != nil {
-			write()
+		if !changed {
+			return
 		}
+		Post(func() {
+			if h != nil {
+				h()
+			}
+			if write != nil {
+				write(v)
+			}
+		})
 	}
 }
 
@@ -55,7 +66,7 @@ func (b *binding) after(h func()) func() {
 func Bind[C Bindable[T], T comparable](c C, get func() T, set func(T)) C {
 	reload := func() { c.bindApply(get()) }
 	c.base().change(func() {
-		c.base().bound = binding{write: func() { set(c.bindValue()) }, reload: reload}
+		c.base().bound = binding{write: func(v any) { set(v.(T)) }, reload: reload}
 	})
 	reload()
 	return c

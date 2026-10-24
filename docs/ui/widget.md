@@ -380,7 +380,14 @@ name := widget.Bind(widget.TextBox(),
   `SetValue` leaves it; set its options before binding, or `Reload` after.
   A `NumericUpDown` clamps `get()`'s value to its range. Neither is written
   back to the source.
-- Binding a control again replaces its binding.
+- `set` gets the value the user entered, taken as the edit is committed: an
+  `OnChange` that normalizes the text with `SetText`, or a worker that sets
+  the control before `set` runs, does not change what `set` receives.
+- `get` runs on the goroutine that calls `Bind` or `Reload`, and `set` on the
+  event goroutine, so both must be safe to call at the same time (a mutex
+  around the config, as a config store has).
+- Binding a control again replaces its binding: the last wins, and an edit
+  already committed is written through the binding of that moment.
 - No reflection: `get` and `set` are plain functions, so a binding to a
   field, a map or a config store is the same few lines.
 

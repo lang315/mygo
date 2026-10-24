@@ -147,7 +147,7 @@ func (b *CheckBoxWidget) OnChange(fn func()) *CheckBoxWidget {
 
 func (b *CheckBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := b.on.bind()
-	e := ui.Checkbox(c, p, b.text).OnChange(onChange(&b.on, b.bound.after(b.onChange)))
+	e := ui.Checkbox(c, p, b.text).OnChange(edited(&b.on, &b.bound, b.onChange))
 	if changed && b.onChange != nil {
 		Post(b.onChange)
 	}
