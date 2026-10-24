@@ -298,7 +298,10 @@ func (c *common[W]) Radius(n float32) *W { return c.own(func(s Style) Style { re
 // dimension as it was: the natural size if it was never set, and there is
 // no way back to it once it is. A width is the size where the container has
 // the room, and no more than the room (a combo of 400 in a card of 350 is
-// 350 wide); MaxWidth, set after, overrides that.
+// 350 wide); a MaxWidth overrides that cap, set before or after SetSize
+// (tw's max-w-none lifts it). In a Fields or Grid cell it is the cell's room;
+// in an HBox it is the box's width, not what the siblings leave, so a label
+// and a control that must fit side by side go in Fields.
 func (c *common[W]) SetSize(w, h float32) *W {
 	return c.own(func(s Style) Style {
 		if w > 0 {

@@ -435,6 +435,12 @@ func gridColumns(e *node, s *gridScratch, items []gridItem, nc int, avail, cw fl
 		if v, ok := c.width.resolve(base(cw)); ok {
 			w := c.clampW(v, cw) + c.marginX()
 			cs[i].min, cs[i].max = w, w
+			if c.maxW.u == unitPercent {
+				// A percentage max-width is of the cell, which is not known
+				// before the columns are: the column may give up what the
+				// width asks for, down to the padding, and the cell clamps.
+				cs[i].min = c.marginX() + c.padX()
+			}
 		} else if contributes(e.cols, it.col, it.colSpan, avail, minContent) || e.c.rt.noLayoutCache {
 			cs[i].min = intrinsic(c, false) + c.marginX()
 			cs[i].max = intrinsic(c, true) + c.marginX()
@@ -629,10 +635,11 @@ func gridJustify(e, c *node) Align {
 func gridPlaceIn(c *node, area float32, size length, margins float32, ms, me int, a Align, cb float32, natural func(avail float32) float32, clamp func(v, cb float32) float32) (float32, float32) {
 	autoS, autoE := isAuto(c.margin[ms]), isAuto(c.margin[me])
 	var v float32
+	// Percentages of the bounds are of the area, as in CSS.
 	if l, ok := size.resolve(base(cb)); ok {
-		v = clamp(l, cb)
+		v = clamp(l, area)
 	} else if a == Stretch && !autoS && !autoE && c.kind != kindIcon && (c.aspect == 0 || ms%2 == 1) {
-		v = clamp(area-margins, cb)
+		v = clamp(area-margins, area)
 	} else {
 		v = natural(area - margins)
 	}
