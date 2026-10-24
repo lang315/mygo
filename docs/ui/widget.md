@@ -140,16 +140,20 @@ dialog takes the outer one's `Form` as its parent; closing a window
 closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
-To test a dialog without a window, `TestDialog(d)` returns a `ui.Tester` over
-its content (a `DialogTester`), and `d.Run` then runs `OnBeforeRun` and
-blocks until the dialog closes, as it does with a window, without showing
-one: call `Run` on another goroutine, click its buttons through the tester,
-and `Closed` tells whether a button, `Close` or `Escape` closed it. `Escape`
-presses the key as a window does: an open drop-down takes it, else it closes
-the dialog, unless `SetDeletable(false)`.
+To test a dialog without a window, `TestDialog(t, d)` returns a `ui.Tester`
+over its form's view (a `DialogTester`: header, tool strip, content and
+status strip), and `d.Run` then runs `OnBeforeRun` and blocks until the
+dialog closes, as it does with a window, without showing one: call `Run` on
+another goroutine, click its buttons through the tester, and `Closed` tells
+whether a button, `Close` or `Escape` closed it. A `Run` after a close is a
+new show. The test's end closes the dialog, so no `Run` outlives it.
+`Escape` presses the key as a window does: an open drop-down or a shortcut
+takes it, else it is a request to close, which asks `OnClose` (on the event
+goroutine: wait for it before `Closed`) and closes the dialog unless that
+says no or `SetDeletable(false)`.
 
 ```go
-dt := widget.TestDialog(d.Dialog)
+dt := widget.TestDialog(t, d.Dialog)
 go func() { result <- d.Run() }()
 dt.Type("Ada")
 dt.Click("OK")

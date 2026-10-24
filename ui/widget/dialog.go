@@ -58,6 +58,13 @@ func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return
 func (d *Dialog) Run() {
 	notMain("Dialog.Run")
 	mu.Lock()
+	if h := d.headless; h != nil { // a DialogTester's: a Run after a close is a new show
+		select {
+		case <-h:
+			d.headless, d.closing = make(chan struct{}), false
+		default:
+		}
+	}
 	before := d.onBeforeRun
 	mu.Unlock()
 	if before != nil {
