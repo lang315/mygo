@@ -89,6 +89,12 @@ func (w *Form) acceptClick() func() {
 // formKeys asks for the form's shortcuts and posts the handlers of those
 // pressed. Under mu, while building.
 func (w *Form) formKeys(c *ui.Context) {
+	for _, m := range w.mnemonics {
+		if k, ok := mnemonicKey(m.key); ok && c.Shortcut(ui.Alt, k) {
+			m.act()
+		}
+	}
+	w.mnemonics = w.mnemonics[:0]
 	for _, s := range w.shortcuts {
 		if c.Shortcut(s.mods, s.key) {
 			Post(s.fn)

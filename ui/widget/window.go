@@ -40,6 +40,7 @@ type Form struct {
 	cancel        *ButtonWidget // Escape clicks it
 	fit           bool          // a dialog of height 0: Show measures its content
 	fitScroll     bool          // the content is higher than the screen: it scrolls
+	mnemonics     []mnemonic    // the Alt keys the last build asked for
 	announce      string        // a validation message for the next build to announce
 }
 
