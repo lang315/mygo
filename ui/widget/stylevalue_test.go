@@ -103,8 +103,8 @@ func TestStyleMergeVariants(t *testing.T) {
 	b := NewStyle().Hover(NewStyle().Background(Fixed(blue)))
 	m := a.Merge(b) // effective takes a pointer: it does not copy a Style each frame
 	p := m.effective(false, true, false, false, false)
-	if p.background.fixed != blue || p.set&pBold == 0 {
-		t.Fatalf("merged hover: background %v bold %v", p.background.fixed, p.set&pBold != 0)
+	if p.background.fixed != blue || p.set&pFontWeight == 0 || p.weight != 700 {
+		t.Fatalf("merged hover: background %v weight %d", p.background.fixed, p.weight)
 	}
 }
 
@@ -115,5 +115,15 @@ func TestRoleResolvesFromTheTheme(t *testing.T) {
 	}
 	if Fixed(red).resolve(d) != red {
 		t.Fatal("a fixed color changed with the theme")
+	}
+}
+
+func TestCornerAndSideSetters(t *testing.T) {
+	s := NewStyle().RadiusTopLeft(2).RadiusBottomRight(-1).BorderLeft(3).BorderTop(-2)
+	if s.radiusSet != 0b0101 || s.radius != [4]float32{2, 0, 0, 0} {
+		t.Fatalf("radius %v mask %04b", s.radius, s.radiusSet)
+	}
+	if s.borderSet != 0b1001 || s.border != [4]float32{0, 0, 0, 3} {
+		t.Fatalf("border %v mask %04b", s.border, s.borderSet)
 	}
 }

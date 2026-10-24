@@ -41,7 +41,8 @@ const (
 var sizeScale = [...]float32{Base: 1, XS: 0.75, SM: 0.875, LG: 1.125, XL: 1.25, XXL: 1.5, XXXL: 1.875}
 
 // layout places a control in its box: across the box, and growing along
-// it. It depends on the box's axis, so it is not part of a Style.
+// it. A Style sets it (Style.Align…); its base style's counts, as the box's
+// axis decides what applies.
 type layout struct {
 	align, valign    Align
 	hexpand, vexpand bool
@@ -61,33 +62,47 @@ func (l *layout) apply(e ui.Element) {
 	}
 }
 
-// apply sets on e what p sets: the four-sided properties all four sides
-// at once (ui sets them so), those p does not set 0. key is the control's,
+// apply sets on e what p sets: the four-sided properties ui sets all four
+// sides at once, so it overlays the sides p sets on what e's builder set,
+// and the sides p does not set keep the control's. key is the control's,
 // for its text color's animation. Under mu.
 func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 	t := c.Theme()
-	units := func(v [4]float32) (float32, float32, float32, float32) {
-		return t.Space(v[0]), t.Space(v[1]), t.Space(v[2]), t.Space(v[3])
+	// over returns cur, the element's sides as its builder set them, with
+	// the sides mask sets taken from v: in theme units when units.
+	over := func(cur, v [4]float32, mask uint8, units bool) [4]float32 {
+		for i := range 4 {
+			if mask&(1<<i) != 0 {
+				cur[i] = v[i]
+				if units {
+					cur[i] = t.Space(v[i])
+				}
+			}
+		}
+		return cur
 	}
 	if p.padSet != 0 {
-		a, b, cc, d := units(p.pad)
-		e.Padding(a, b, cc, d)
+		v := over(e.Paddings(), p.pad, p.padSet, true)
+		e.Padding(v[0], v[1], v[2], v[3])
 	}
 	if p.marginSet != 0 {
-		a, b, cc, d := units(p.margin)
-		e.Margin(a, b, cc, d)
+		v := over(e.Margins(), p.margin, p.marginSet, true)
+		e.Margin(v[0], v[1], v[2], v[3])
 	}
 	if p.radiusSet != 0 {
-		a, b, cc, d := units(p.radius)
-		e.Radius(a, b, cc, d)
+		v := over(e.Radii(), p.radius, p.radiusSet, true)
+		e.Radius(v[0], v[1], v[2], v[3])
 	}
 	if p.borderSet != 0 {
-		e.BorderWidth(p.border[0], p.border[1], p.border[2], p.border[3])
-		col := t.Border
+		cur := e.BorderWidths()
+		v := over(cur, p.border, p.borderSet, false)
+		e.BorderWidth(v[0], v[1], v[2], v[3])
+		// A border the control had keeps its color unless the style sets one.
 		if p.set&pBorderColor != 0 {
-			col = p.borderColor.resolve(t)
+			e.BorderColor(p.borderColor.resolve(t))
+		} else if cur == [4]float32{} {
+			e.BorderColor(t.Border)
 		}
-		e.BorderColor(col)
 	} else if p.set&pBorderColor != 0 {
 		e.BorderColor(p.borderColor.resolve(t))
 	}
@@ -146,8 +161,8 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 		}
 		e.FontSize(size)
 	}
-	if s&pBold != 0 {
-		e.Bold()
+	if s&pFontWeight != 0 {
+		e.FontWeight(p.weight)
 	}
 	if s&pItalic != 0 {
 		e.Italic()
@@ -174,12 +189,6 @@ type textKey int
 // styles, as an inline style over classes.
 func (c *common[W]) own(fn func(s Style) Style) *W {
 	c.change(func() { c.ownStyle = fn(c.ownStyle); c.restyle() })
-	return c.self
-}
-
-// lay changes how the control is placed in its box.
-func (c *common[W]) lay(fn func(l *layout)) *W {
-	c.change(func() { fn(&c.place) })
 	return c.self
 }
 
@@ -238,20 +247,20 @@ func (c *common[W]) MarginLeft(n float32) *W {
 
 // Align places the widget horizontally in a VBox: gota's halign-start is
 // Align(Start).
-func (c *common[W]) Align(a Align) *W { return c.lay(func(l *layout) { l.align = a }) }
+func (c *common[W]) Align(a Align) *W { return c.own(func(s Style) Style { return s.Align(a) }) }
 
 // VAlign places the widget vertically in an HBox.
-func (c *common[W]) VAlign(a Align) *W { return c.lay(func(l *layout) { l.valign = a }) }
+func (c *common[W]) VAlign(a Align) *W { return c.own(func(s Style) Style { return s.VAlign(a) }) }
 
 // HExpand gives the widget the free width of its HBox.
-func (c *common[W]) HExpand() *W { return c.lay(func(l *layout) { l.hexpand = true }) }
+func (c *common[W]) HExpand() *W { return c.own(func(s Style) Style { return s.HExpand() }) }
 
 // VExpand gives the widget the free height of its VBox.
-func (c *common[W]) VExpand() *W { return c.lay(func(l *layout) { l.vexpand = true }) }
+func (c *common[W]) VExpand() *W { return c.own(func(s Style) Style { return s.VExpand() }) }
 
 // Expand is HExpand and VExpand.
 func (c *common[W]) Expand() *W {
-	return c.lay(func(l *layout) { l.hexpand, l.vexpand = true, true })
+	return c.own(func(s Style) Style { return s.HExpand().VExpand() })
 }
 
 // TextSize sets the size of the text: gota's text-xl is TextSize(XL).

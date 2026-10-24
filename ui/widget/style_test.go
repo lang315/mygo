@@ -332,3 +332,159 @@ func TestStyleBadValuesDoNotPanic(t *testing.T) {
 		t.Fatalf("not shown: %q", tt.Texts())
 	}
 }
+
+// box is a Custom control: a column padded and outlined as its builder
+// sets it, with the text "in" at its content's top left.
+func box(build func(e ui.Element) ui.Element) *CustomWidget {
+	return Custom(func(c *ui.Context) ui.Element {
+		return build(ui.Column(c).Children(func() { ui.Text(c, "in") }))
+	})
+}
+
+func TestOneSideKeepsTheOthers(t *testing.T) {
+	styled := box(func(e ui.Element) ui.Element { return e.Padding(8) }).Apply(NewStyle().PaddingTop(1))
+	want := box(func(e ui.Element) ui.Element { return e.Padding(4, 8, 8, 8) })
+	got, ref := find(t, tester(t, VBox(0).Add(styled)), "in"), find(t, tester(t, VBox(0).Add(want)), "in")
+	if got != ref {
+		t.Fatalf("PaddingTop(1) put the text at %v, want %v: the other sides must keep 8", got, ref)
+	}
+}
+
+func TestOneSideKeepsLogicalPadding(t *testing.T) {
+	styled := box(func(e ui.Element) ui.Element { return e.PaddingStart(12) }).Apply(NewStyle().PaddingTop(1))
+	want := box(func(e ui.Element) ui.Element { return e.PaddingStart(12).PaddingY(4) })
+	if got, ref := find(t, tester(t, VBox(0).Add(styled)), "in"), find(t, tester(t, VBox(0).Add(want)), "in"); got.X != ref.X {
+		t.Fatalf("PaddingTop(1) moved the text to x %v from %v", got.X, ref.X)
+	}
+}
+
+func TestOneCornerKeepsTheOthers(t *testing.T) {
+	red := ui.RGB(230, 0, 0)
+	w := box(func(e ui.Element) ui.Element { return e.Width(60).Height(60).Background(red).Radius(16) }).
+		Apply(NewStyle().RadiusTopLeft(0))
+	tt := tester(t, VBox(0).Add(w))
+	in := find(t, tt, "in") // the column's top left: no padding
+	tl := tt.Image().RGBAAt(int(in.X)+1, int(in.Y)+1)
+	tr := tt.Image().RGBAAt(int(in.X)+58, int(in.Y)+1)
+	if !near(tl, red) {
+		t.Fatalf("top-left corner %v, want square and red", tl)
+	}
+	if near(tr, red) {
+		t.Fatalf("top-right corner %v is red: it must keep its 16 DIP radius", tr)
+	}
+}
+
+func TestOneBorderSideKeepsTheOthers(t *testing.T) {
+	black := ui.RGB(0, 0, 0)
+	w := box(func(e ui.Element) ui.Element {
+		return e.Width(60).Height(60).Background(ui.RGB(255, 255, 255)).BorderWidth(3).BorderColor(black)
+	}).Apply(NewStyle().BorderLeft(0).BorderColor(Fixed(black)))
+	tt := tester(t, VBox(0).Add(w))
+	in := find(t, tt, "in")
+	// The box is at the window's left edge, x 0: its border, where it has
+	// one, covers x 0 to 2, and the text sits inside it.
+	left := tt.Image().RGBAAt(1, int(in.Y)+20)
+	right := tt.Image().RGBAAt(int(in.X)+58, int(in.Y)+20)
+	if near(left, black) {
+		t.Fatalf("left edge %v is still black after BorderLeft(0)", left)
+	}
+	if !near(right, black) {
+		t.Fatalf("right edge %v lost its 3 DIP border", right)
+	}
+}
+
+func TestStyleAlignMatchesTheMethod(t *testing.T) {
+	styled := find(t, tester(t, VBox(0).Add(Label("x").Apply(NewStyle().Align(End)))), "x")
+	method := find(t, tester(t, VBox(0).Add(Label("x").Align(End))), "x")
+	plain := find(t, tester(t, VBox(0).Add(Label("x"))), "x")
+	if styled != method {
+		t.Fatalf("Style.Align(End) put x at %v, the method at %v", styled, method)
+	}
+	if styled == plain {
+		t.Fatal("Align(End) did not move the label")
+	}
+}
+
+func TestOwnAlignWinsOverApplied(t *testing.T) {
+	got := find(t, tester(t, VBox(0).Add(Label("x").Apply(NewStyle().Align(End)).Align(Start))), "x")
+	want := find(t, tester(t, VBox(0).Add(Label("x").Align(Start))), "x")
+	if got != want {
+		t.Fatalf("x at %v, want %v: the widget's own Align wins", got, want)
+	}
+}
+
+func TestLayoutInAVariantIsIgnored(t *testing.T) {
+	tt := tester(t, VBox(0).Add(Label("x").Apply(NewStyle().Hover(NewStyle().Align(End)))))
+	before := find(t, tt, "x")
+	tt.Move(before.X+1, before.Y+before.H/2)
+	tt.Frame()
+	if after := find(t, tt, "x"); after != before {
+		t.Fatalf("hover moved x from %v to %v", before, after)
+	}
+}
+
+func TestStyleHExpandMatchesTheMethod(t *testing.T) {
+	styled := find(t, tester(t, HBox(0).Add(Button("a").Apply(NewStyle().HExpand()), Button("b"))), "b")
+	method := find(t, tester(t, HBox(0).Add(Button("a").HExpand(), Button("b"))), "b")
+	if styled != method {
+		t.Fatalf("b at %v with Style.HExpand, %v with the method", styled, method)
+	}
+}
+
+// Bold is FontWeight(700) in ui: whichever of the two is set last wins, as
+// for any property.
+func TestBoldAndFontWeightShareTheWeight(t *testing.T) {
+	const s = "Wide text here"
+	width := func(w Control) float32 { return find(t, tester(t, VBox(0).Add(w)), s).W }
+	bold := width(Label(s).Align(Start).Bold())
+	thin := width(Label(s).Align(Start).Apply(NewStyle().FontWeight(300)))
+	if bold <= thin {
+		t.Fatalf("bold %v is not wider than weight 300 %v", bold, thin)
+	}
+	if got := width(Label(s).Align(Start).Apply(NewStyle().FontWeight(300)).Bold()); got != bold {
+		t.Errorf("own Bold over an applied FontWeight(300): %v wide, want the bold %v", got, bold)
+	}
+	if got := width(Label(s).Align(Start).Apply(NewStyle().FontWeight(300), NewStyle().Bold())); got != bold {
+		t.Errorf("a later Bold over FontWeight(300): %v wide, want the bold %v", got, bold)
+	}
+	if got := width(Label(s).Align(Start).Apply(NewStyle().Bold(), NewStyle().FontWeight(300))); got != thin {
+		t.Errorf("a later FontWeight(300) over Bold: %v wide, want %v", got, thin)
+	}
+	l := Label(s).Align(Start).Apply(NewStyle().FontWeight(300).Hover(NewStyle().Bold()))
+	tt := tester(t, VBox(0).Add(l))
+	tt.Move(centerOf(t, tt, s))
+	if got := find(t, tt, s).W; got != bold {
+		t.Errorf("hover Bold over FontWeight(300): %v wide, want the bold %v", got, bold)
+	}
+}
+
+// A control that only places itself has no style to resolve each frame.
+func TestLayoutAloneIsNotRestyledEachFrame(t *testing.T) {
+	styled := func(w Control) bool { mu.Lock(); defer mu.Unlock(); return w.base().styled }
+	if styled(Label("x").Align(End).HExpand().Apply(NewStyle().VAlign(Fill))) {
+		t.Fatal("a control with only layout is restyled each frame")
+	}
+	if !styled(Label("x").Align(End).Bold()) {
+		t.Fatal("a control with a font weight is not restyled")
+	}
+}
+
+func TestOneBorderSideKeepsTheBuildersColor(t *testing.T) {
+	red := ui.RGB(230, 0, 0)
+	w := box(func(e ui.Element) ui.Element {
+		return e.Width(60).Height(60).Background(ui.RGB(255, 255, 255)).Border(3, red)
+	}).Apply(NewStyle().BorderTop(5))
+	tt := tester(t, VBox(0).Add(w))
+	in := find(t, tt, "in") // inside the 3 DIP left border
+	if right := tt.Image().RGBAAt(int(in.X)+54, int(in.Y)+20); !near(right, red) {
+		t.Fatalf("the right border is %v after BorderTop(5), want the builder's red", right)
+	}
+}
+
+func TestFontWeightBoldsText(t *testing.T) {
+	heavy := find(t, tester(t, VBox(0).Add(Label("Wide text here").Align(Start).Apply(NewStyle().FontWeight(700)))), "Wide text here")
+	plain := find(t, tester(t, VBox(0).Add(Label("Wide text here").Align(Start))), "Wide text here")
+	if heavy.W <= plain.W {
+		t.Fatalf("weight 700 is %v wide, plain %v: want wider", heavy.W, plain.W)
+	}
+}
