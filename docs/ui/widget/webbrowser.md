@@ -21,6 +21,8 @@ back := widget.Button("Back").OnClick(func() { browser.GoBack() })
 - `GoBack`, `GoForward`, `Reload`, `Stop`, `CanGoBack`, `CanGoForward`,
   `SetBackgroundColor(css)` (the color the view fills with until the page
   paints).
+- `OnDownload(url, name) (path, ok)` allows downloads and `OnNewWindow(url)` hears
+  of the windows a page asked to open (nothing opens by itself); both are below.
 - Events: `OnNavigated(url)`, `OnDocumentCompleted()` and `OnTitleChanged(title)`
   run on the event goroutine. **`OnNavigating(url) (cancel bool)` runs
   synchronously on the main thread, off the package's lock**: it must be quick
@@ -50,3 +52,20 @@ page, not HTML given to `SetDocumentText`, not a trusted origin. A WebBrowser
 shows content that is not the app's own, as WinForms' does. For a page of
 your frontend that calls the bound methods, use `ui.WebView` and
 `mygo.Window.NewWebView` directly, with content rules and scripting too.
+
+## What a page in a WebBrowser cannot do
+
+The view is made with `WebViewOptions.NoBindings`, which makes it untrusted for
+everything a page can ask of the host, unless the app says otherwise:
+
+- **Call Go:** never, whatever the origin.
+- **Use permissions** (camera, microphone, location...): all denied; there is no
+  hook.
+- **Move, resize or maximize your window**, or hand it dropped files: only the
+  app's own pages can.
+- **Download:** refused, unless `OnDownload` returns a path. `OnDownload` runs
+  synchronously on the main thread, off the package's lock, like
+  `OnNavigating`: quick, and nothing that waits for the event goroutine.
+- **Open windows** (`window.open`, `target=_blank`): none opens; `OnNewWindow`
+  is told the URL, and the app may `Navigate` there.
+- **Run `javascript:` URLs** from `Navigate`: refused, and nothing is stored.

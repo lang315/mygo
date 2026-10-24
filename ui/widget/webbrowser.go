@@ -4,7 +4,6 @@ import (
 	"log"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
@@ -42,12 +41,14 @@ type WebBrowserWidget struct {
 	form     *Form         // the form the view belongs to
 	view     *mygo.WebView // nil until made
 	creating bool
-	loadMu   sync.Mutex // orders the first load of a new view and later Navigates
+	seq      uint64 // counts Navigate and SetDocumentText: the latest load wins
 
 	onNavigating func(url string) bool
 	onNavigated  func(url string)
 	onCompleted  func()
 	onTitle      func(title string)
+	onDownload   func(url, suggestedName string) (path string, ok bool)
+	onNewWindow  func(url string)
 }
 
 // WebBrowser makes a browser with no page.
@@ -68,34 +69,47 @@ func (b *WebBrowserWidget) page(fn func(p *mygo.Page)) {
 	}
 }
 
-// Navigate loads url. A javascript: URL is refused (logged and ignored). A
-// URL with a scheme (http, https, or one registered
+// Navigate loads url. A javascript: URL is refused (logged and ignored, and
+// nothing is stored). A URL with a scheme (http, https, or one registered
 // with Protocol.Handle) is a page of the web; one without, such as "/docs",
 // is a page of the app's frontend. A URL that cannot be loaded is logged.
 func (b *WebBrowserWidget) Navigate(url string) *WebBrowserWidget {
-	b.change(func() { b.url, b.html, b.hasHTML = url, "", false })
-	b.loadMu.Lock()
-	defer b.loadMu.Unlock()
-	b.page(func(p *mygo.Page) { loadURL(p, url) })
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(url)), "javascript:") {
+		log.Printf("widget: WebBrowser: Navigate refuses a javascript: URL")
+		return b
+	}
+	var seq uint64
+	b.change(func() { b.seq++; seq = b.seq; b.url, b.html, b.hasHTML = url, "", false })
+	b.load(seq, func(p *mygo.Page) { loadURL(p, url) })
 	return b
 }
 
 func loadURL(p *mygo.Page, url string) {
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(url)), "javascript:") {
-		log.Printf("widget: WebBrowser: Navigate refuses a javascript: URL")
-		return
-	}
 	if err := p.LoadURL(url); err != nil {
 		log.Printf("widget: WebBrowser: %v", err)
 	}
 }
 
+// load runs fn on the page on the main thread, if the view exists and no
+// Navigate or SetDocumentText came since seq: the latest wins, whatever
+// goroutine got there first, and nothing waits for a lock across the main
+// thread.
+func (b *WebBrowserWidget) load(seq uint64, fn func(p *mygo.Page)) {
+	mygo.RunOnMain(func() {
+		mu.Lock()
+		v, cur := b.view, b.seq
+		mu.Unlock()
+		if v != nil && !v.IsDestroyed() && cur == seq {
+			fn(v.Page())
+		}
+	})
+}
+
 // SetDocumentText loads html as the page; relative URLs in it have no base.
 func (b *WebBrowserWidget) SetDocumentText(html string) *WebBrowserWidget {
-	b.change(func() { b.html, b.hasHTML, b.url = html, true, "" })
-	b.loadMu.Lock()
-	defer b.loadMu.Unlock()
-	b.page(func(p *mygo.Page) { p.LoadHTML(html, "") })
+	var seq uint64
+	b.change(func() { b.seq++; seq = b.seq; b.html, b.hasHTML, b.url = html, true, "" })
+	b.load(seq, func(p *mygo.Page) { p.LoadHTML(html, "") })
 	return b
 }
 
@@ -166,6 +180,23 @@ func (b *WebBrowserWidget) SetBackgroundColor(css string) *WebBrowserWidget {
 // call Invoke or anything that waits for the event goroutine; getters work.
 func (b *WebBrowserWidget) OnNavigating(fn func(url string) (cancel bool)) *WebBrowserWidget {
 	b.change(func() { b.onNavigating = fn })
+	return b
+}
+
+// OnDownload allows downloads, which are refused by default: fn runs
+// synchronously on the main thread, off the package's lock, like
+// OnNavigating's (quick, and nothing that waits for the event goroutine), and
+// returns where to save the file, or false to refuse it.
+func (b *WebBrowserWidget) OnDownload(fn func(url, suggestedName string) (path string, ok bool)) *WebBrowserWidget {
+	b.change(func() { b.onDownload = fn })
+	return b
+}
+
+// OnNewWindow runs fn, on the event goroutine, with the URL a page asked to
+// open in a new window (window.open, a link with target=_blank). No window
+// opens by itself: the app decides, say with Navigate.
+func (b *WebBrowserWidget) OnNewWindow(fn func(url string)) *WebBrowserWidget {
+	b.change(func() { b.onNewWindow = fn })
 	return b
 }
 
@@ -258,6 +289,29 @@ func (b *WebBrowserWidget) create(f *Form, win *mygo.Window) {
 			Post(h)
 		}
 	})
+	p.OnWillDownload(func(e *mygo.DownloadEvent) {
+		mu.Lock()
+		h := b.onDownload
+		mu.Unlock()
+		if h == nil {
+			return // a view without bindings saves nothing by default
+		}
+		if path, ok := downloads(h, e.URL, e.SuggestedName); ok {
+			e.Path = path
+		} else {
+			e.PreventDefault()
+		}
+	})
+	p.SetWindowOpenHandler(func(req mygo.WindowOpenRequest) *mygo.WindowOptions {
+		mu.Lock()
+		h := b.onNewWindow
+		mu.Unlock()
+		if h != nil {
+			url := req.URL
+			Post(func() { h(url) })
+		}
+		return nil // a WebBrowser opens no window of its own
+	})
 	p.OnPageTitleUpdated(func(e *mygo.TitleEvent) {
 		mu.Lock()
 		h := b.onTitle
@@ -267,20 +321,18 @@ func (b *WebBrowserWidget) create(f *Form, win *mygo.Window) {
 			Post(func() { h(title) })
 		}
 	})
-	b.loadMu.Lock()
-	defer b.loadMu.Unlock()
 	mu.Lock()
 	b.view, b.form, b.creating = v, f, false
-	url, html, hasHTML := b.url, b.html, b.hasHTML
+	url, html, hasHTML, seq := b.url, b.html, b.hasHTML, b.seq
 	mu.Unlock()
 	if h := webViewReplayHook.Load(); h != nil {
 		(*h)()
 	}
 	switch {
 	case hasHTML:
-		p.LoadHTML(html, "")
+		b.load(seq, func(p *mygo.Page) { p.LoadHTML(html, "") })
 	case url != "":
-		loadURL(p, url)
+		b.load(seq, func(p *mygo.Page) { loadURL(p, url) })
 	}
 	win.Invalidate()
 }
@@ -296,4 +348,16 @@ func cancels(h func(string) bool, url string) (cancel bool) {
 		}
 	}()
 	return h(url)
+}
+
+// downloads runs the handler of OnDownload where a panic would take the app
+// down: it is reported and the download refused.
+func downloads(h func(url, name string) (string, bool), url, name string) (path string, ok bool) {
+	defer func() {
+		if v := recover(); v != nil {
+			report(v, debug.Stack())
+			path, ok = "", false
+		}
+	}()
+	return h(url, name)
 }

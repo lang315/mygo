@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -351,4 +352,106 @@ func TestWebBrowserViewIsMadeAgainIfTheFormIsShownAgainAfterAClosedCreation(t *t
 
 func navigationTo(url string) platform.Navigation {
 	return platform.Navigation{URL: url, IsMainFrame: true, UserInitiated: true}
+}
+
+func TestWebBrowserDownloadsAreRefusedUnlessTheAppAllows(t *testing.T) {
+	var reported atomic.Int32
+	OnPanic(func(v any, stack []byte) { reported.Add(1) })
+	t.Cleanup(func() { OnPanic(nil) })
+	path := filepath.Join(t.TempDir(), "ok.zip")
+	mode := "none"
+	var b *WebBrowserWidget
+	b = WebBrowser()
+	_, s := shownBrowser(t, b)
+	v := theView(t, s)
+	ask := func() string {
+		var got string
+		mygo.RunOnMain(func() { got = v.H.DownloadStarted("https://example.com/a.zip", "a.zip") })
+		return got
+	}
+	if got := ask(); got != "" {
+		t.Fatalf("no handler: saved to %q", got)
+	}
+	b.OnDownload(func(url, name string) (string, bool) {
+		_ = b.Url() // off the lock: getters work
+		switch mode {
+		case "allow":
+			return path, true
+		case "panic":
+			panic("boom")
+		}
+		return "", false
+	})
+	mode = "allow"
+	if got := ask(); got != path {
+		t.Fatalf("allowed: %q", got)
+	}
+	mode = "refuse"
+	if got := ask(); got != "" {
+		t.Fatalf("refused: %q", got)
+	}
+	mode = "panic"
+	if got := ask(); got != "" || reported.Load() != 1 {
+		t.Fatalf("panic: saved to %q, %d reported", got, reported.Load())
+	}
+}
+
+func TestWebBrowserOpensNoWindowByItselfAndTellsTheApp(t *testing.T) {
+	urls := make(chan string, 4)
+	b := WebBrowser()
+	_, s := shownBrowser(t, b)
+	v := theView(t, s)
+	before := len(fake.OpenedExternal())
+	mygo.RunOnMain(func() { v.H.NewWindow(platform.NewWindowRequest{URL: "https://example.com/popup"}) })
+	for i := 0; i < 20000; i++ {
+		runtime.Gosched()
+	}
+	if n := len(fake.OpenedExternal()) - before; n != 0 {
+		t.Fatalf("%d windows opened without a handler", n)
+	}
+	b.OnNewWindow(func(url string) { urls <- url })
+	var win platform.Window
+	mygo.RunOnMain(func() { win = v.H.NewWindow(platform.NewWindowRequest{URL: "https://example.com/two"}) })
+	if win != nil {
+		t.Fatal("a window was made")
+	}
+	if got := received(t, urls); got != "https://example.com/two" {
+		t.Fatalf("OnNewWindow saw %q", got)
+	}
+}
+
+func TestWebBrowserRefusedJavascriptURLIsNotStored(t *testing.T) {
+	b := WebBrowser().Navigate("https://example.com/a")
+	b.Navigate("javascript:alert(1)")
+	if b.Url() != "https://example.com/a" {
+		t.Fatalf("Url %q after a refused URL", b.Url())
+	}
+	h := WebBrowser().SetDocumentText("<p>x</p>")
+	h.Navigate("JavaScript:void(0)")
+	if h.DocumentText() != "<p>x</p>" {
+		t.Fatalf("DocumentText %q was cleared by a refused URL", h.DocumentText())
+	}
+}
+
+// Navigate from a goroutine while OnNavigating, on the main thread, calls
+// Navigate (a redirect): nothing may wait for the other.
+func TestWebBrowserNavigateFromTwoThreadsDoesNotDeadlock(t *testing.T) {
+	var b *WebBrowserWidget
+	b = WebBrowser().OnNavigating(func(url string) bool {
+		b.Navigate("https://example.com/redirected")
+		return true
+	})
+	_, s := shownBrowser(t, b)
+	v := theView(t, s)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			b.Navigate(fmt.Sprintf("https://example.com/%d", i))
+		}
+	}()
+	for i := 0; i < 200; i++ {
+		mygo.RunOnMain(func() { v.H.WillNavigate(navigationTo("https://example.com/link")) })
+	}
+	wait.For(t, "the navigations", done)
 }
