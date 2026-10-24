@@ -99,13 +99,14 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 	ms := w.mnemonics
 	w.mnemonics = nil
 	done := map[rune]bool{}
+	menuKeys := w.menuBarKeys() // the menu bar's access keys beat the controls'
 	for _, m := range ms {
 		if done[m.key] {
 			continue
 		}
 		done[m.key] = true
 		k, ok := mnemonicKey(m.key)
-		if !ok || w.hasShortcut(ui.Alt, k) || w.hasShortcut(ui.Alt|ui.Shift, k) {
+		if !ok || menuKeys[m.key] || w.hasShortcut(ui.Alt, k) || w.hasShortcut(ui.Alt|ui.Shift, k) {
 			continue
 		}
 		pressed := c.Shortcut(ui.Alt, k)
@@ -165,4 +166,25 @@ func mnemonicSpans(display string, at int) []ui.Span {
 func focusLater(c Control) {
 	b := c.base()
 	Post(func() { b.change(func() { b.wantFocus = true }) })
+}
+
+// menuBarKeys returns the access keys of the form's menu bar: the top items
+// whose text marks one with "&". Where the bar is the system's (Windows,
+// Linux) those keys open its menus, and a control that asked for the same key
+// does not answer it. Under mu.
+func (w *Form) menuBarKeys() map[rune]bool {
+	keys := map[rune]bool{}
+	for _, it := range w.menu {
+		if _, k, _ := parseMnemonic(it.Text); k != 0 {
+			keys[k] = true
+		}
+	}
+	if w.strip != nil && w.strip.menu != nil {
+		for _, it := range w.strip.menu.Items() {
+			if _, k, _ := parseMnemonic(it.Label); k != 0 {
+				keys[k] = true
+			}
+		}
+	}
+	return keys
 }

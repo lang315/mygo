@@ -874,3 +874,18 @@ func TestPinchSurface(hwnd uintptr, x, y, scale float64) (float64, bool) {
 	procSendMessageW.Call(w.surface.hwnd, wmMouseWheel, wp, lp)
 	return math.Exp(float64(delta) / 120 * math.Ln2 / 3), true
 }
+
+// TestInMenuMode reports whether the foreground thread is in menu mode (a menu
+// bar item highlighted or a menu open), as after an Alt key the window did not
+// take.
+func TestInMenuMode() bool {
+	type guiThreadInfo struct {
+		size, flags                                        uint32
+		active, focus, capture, menuOwner, moveSize, caret uintptr
+		caretLeft, caretTop, caretRight, caretBottom       int32
+	}
+	info := guiThreadInfo{size: uint32(unsafe.Sizeof(guiThreadInfo{}))}
+	r, _, _ := user32.NewProc("GetGUIThreadInfo").Call(0, uintptr(unsafe.Pointer(&info)))
+	const guiInMenuMode, guiPopupMenuMode = 0x1, 0x10
+	return r != 0 && info.flags&(guiInMenuMode|guiPopupMenuMode) != 0
+}

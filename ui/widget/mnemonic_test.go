@@ -271,3 +271,35 @@ func TestMnemonicsAreDeadAndNotUnderlinedWithoutAForm(t *testing.T) {
 		t.Errorf("clicked %d times", n)
 	}
 }
+
+// The menu bar's access keys come before the controls': Alt+F opens the File
+// menu, the button "&File" is not clicked, and a key the bar does not use is
+// still the control's.
+func TestMenuBarAccessKeysBeatControlMnemonics(t *testing.T) {
+	withMac(t, false)
+	for name, setup := range map[string]func(*Form){
+		"menu bar":   func(f *Form) { f.SetMenuBar(MenuItem{Text: "&File"}, MenuItem{Text: "&Edit"}) },
+		"menu strip": func(f *Form) { f.MenuStrip(NewMenuStrip(StripItem("&File"), StripItem("&Edit"))) },
+	} {
+		file, save := 0, 0
+		f := NewForm("m", 400, 200)
+		f.SetContent(VBox(4).Add(Button("&File").OnClick(func() { file++ }), Button("&Save").OnClick(func() { save++ })))
+		setup(f)
+		tt := TestForm(t, f)
+		tt.Settle()
+		tt.Key(ui.Alt, ui.KeyF)
+		tt.Settle()
+		tt.Key(ui.Alt, ui.KeyS)
+		tt.Settle()
+		<-posted()
+		if file != 0 || save != 1 {
+			t.Errorf("%s: File button %d times, Save button %d times; want 0 and 1", name, file, save)
+		}
+		mu.Lock()
+		keys := f.menuBarKeys()
+		mu.Unlock()
+		if !keys['f'] || !keys['e'] || keys['s'] {
+			t.Errorf("%s: menu bar keys %v", name, keys)
+		}
+	}
+}
