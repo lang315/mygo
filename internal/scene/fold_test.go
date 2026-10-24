@@ -19,6 +19,10 @@ func TestFoldTranslations(t *testing.T) {
 		{Kind: OpFill, Rect: Rect{W: 3, H: 4}, Transform: m.Mul(Rotation(10))},
 		{Kind: OpPopClip},
 	}}
+	// Other tests turn folding on for the process, for good: start from off.
+	was := fold.Load()
+	fold.Store(nil)
+	t.Cleanup(func() { fold.Store(was) })
 	var f TranslationFolder
 	if f.Fold(s) != s {
 		t.Fatal("folded before FoldTranslations")
