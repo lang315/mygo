@@ -34,6 +34,9 @@ type Form struct {
 	asking        bool          // OnClose is asking the user
 	done          chan struct{} // closed when the shown window closes
 	headless      chan struct{} // a DialogTester's: closed by Close, instead of a window
+	shortcuts     []formShortcut
+	accept        *ButtonWidget // Enter clicks it
+	cancel        *ButtonWidget // Escape clicks it
 }
 
 // quit quits the app; tests replace it.
@@ -320,6 +323,8 @@ func (w *Form) view(c *ui.Context) {
 	defer viewing.Store(false)
 	axis, building = vertical, w.id
 	w.keep.begin()
+	formAccept = w.acceptClick()
+	defer func() { formAccept = nil }()
 	ui.Column(c).Fill().Children(func() {
 		if w.header != nil {
 			render(c, w.header)
@@ -336,6 +341,7 @@ func (w *Form) view(c *ui.Context) {
 			render(c, w.status)
 		}
 	})
+	w.formKeys(c)
 	w.keep.end(c)
 }
 

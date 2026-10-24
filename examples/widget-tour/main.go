@@ -161,16 +161,25 @@ func dialogs(w *widget.Form) widget.Control {
 }
 
 // customDialog runs a dialog of its own, with a dialog over it.
-func customDialog(w *widget.Form) {
+func customDialog(w *widget.Form) { newCustomDialog(w).Run() }
+
+// newCustomDialog builds the dialog customDialog runs.
+func newCustomDialog(w *widget.Form) *widget.Dialog {
 	var d *widget.Dialog
+	// Enter in the name clicks Close (the accept button) and Escape clicks
+	// Cancel, as WinForms' AcceptButton and CancelButton.
+	closeBtn := widget.Button("Close").Suggested().OnClick(func() { d.Close() })
+	cancelBtn := widget.Button("Cancel").OnClick(func() { d.Close() })
 	d = widget.NewDialog(w, "New account", "A dialog of your own", 420, 260, widget.VBox(8).Add(
 		widget.TextBox().SetPlaceholder("Name"),
 		widget.Button("Nested dialog").OnClick(func() {
 			widget.Alert(d.Form, widget.Info, "Nested", "A dialog over a dialog.")
 		}),
-		widget.ButtonBox().Add(widget.Button("Close").Suggested().OnClick(func() { d.Close() })),
+		widget.ButtonBox().Add(cancelBtn, closeBtn),
 	))
-	d.Run()
+	d.SetAcceptButton(closeBtn)
+	d.SetCancelButton(cancelBtn)
+	return d
 }
 
 func extras() widget.Control {

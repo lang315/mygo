@@ -142,6 +142,9 @@ dialog takes the outer one's `Form` as its parent; closing a window
 closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
+A form takes shortcuts of its own, and `AcceptButton`/`CancelButton` for Enter
+and Escape; see [Form shortcuts](widget/form-keys.md).
+
 To test a dialog without a window, `TestDialog(t, d)` returns a
 [`widget.Tester`](widget/tester.md)
 over its form's view (a `DialogTester`: header, tool strip, content and
