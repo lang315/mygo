@@ -391,3 +391,76 @@ func TestMenuLaterOpensWhenTheItemsAreKnown(t *testing.T) {
 		t.Fatalf("menu %q opened after a key", tt.Menu())
 	}
 }
+
+// laterView is a row whose menu is made Later; it counts the builds that
+// open the menu, the ones that fill it, and can be disabled.
+type laterView struct {
+	opens, fills int
+	open         func()
+	disabled     bool
+}
+
+func (v *laterView) view(c *context) {
+	coreRow(c).Padding(8).Disabled(v.disabled).Children(func() {
+		coreText(c, "Row")
+	}).ContextMenu(func(m *Menu) {
+		if o := m.Later(); o != nil {
+			v.opens++
+			v.open = o
+			return
+		}
+		v.fills++
+		m.Item("Stale")
+	})
+}
+
+func TestMenuLaterReopenFlagDoesNotLeak(t *testing.T) {
+	v := &laterView{}
+	tt := coreNewTester(v.view, 300, 200)
+	if err := tt.RightClick("Row"); err != nil {
+		t.Fatal(err)
+	}
+	v.disabled = true // the reopen frame does not build the menu
+	v.open()
+	tt.Frame()
+	v.disabled = false
+	tt.Frame()
+	if err := tt.RightClick("Row"); err != nil {
+		t.Fatal(err)
+	}
+	if v.opens != 2 || v.fills != 0 || tt.Menu() != nil {
+		t.Fatalf("Later opened %d times, want 2; fills %d, menu %q: a stale reopen flag skipped it", v.opens, v.fills, tt.Menu())
+	}
+}
+
+func TestMenuLaterDroppedByBlurScrollAndAnotherAsk(t *testing.T) {
+	for name, undo := range map[string]func(tt *Tester, v *laterView){
+		"blur":   func(tt *Tester, _ *laterView) { tt.SetFocused(false) },
+		"scroll": func(tt *Tester, _ *laterView) { tt.Wheel(10, 10, 0, 5) },
+		"asked": func(tt *Tester, _ *laterView) {
+			// A menu asked for without a press, as assistive technology does.
+			for _, s := range tt.rt.states {
+				if s.flags&flagContextMenu != 0 {
+					tt.rt.askMenu(s, 1, 1, false)
+					break
+				}
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			v := &laterView{}
+			tt := coreNewTester(v.view, 300, 200)
+			if err := tt.RightClick("Row"); err != nil {
+				t.Fatal(err)
+			}
+			undo(tt, v)
+			tt.CloseMenu()
+			before := v.fills
+			v.open()
+			tt.Frame()
+			if tt.Menu() != nil || v.fills != before {
+				t.Fatalf("menu %q opened after %s", tt.Menu(), name)
+			}
+		})
+	}
+}

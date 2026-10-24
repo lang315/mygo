@@ -366,6 +366,9 @@ func (rt *engine) menuTarget(chain []uint64) *state {
 func (rt *engine) askMenu(s *state, x, y float32, button bool) {
 	mr := &rt.menu
 	mr.asked, mr.x, mr.y, mr.button, mr.text = s.id, x, y, button, 0
+	// A menu asked for now is the one wanted: a Later menu pending is not.
+	mr.reopened = false
+	mr.gen.Add(1)
 	// The menu takes the press: the release goes to it.
 	if rt.pressed != nil {
 		rt.pressed.pressed = false

@@ -46,11 +46,11 @@ func TestContextMenuFuncRunsOffTheLockAndOpensItsItems(t *testing.T) {
 }
 
 func TestContextMenuFuncGetsTheKeysSelectedAtTheClick(t *testing.T) {
-	release := make(chan struct{})
+	gate := make(chan struct{})
+	Post(func() { <-gate }) // the event goroutine is busy: fn has not started
 	var keys []int
 	tb, tt := menuTable(func(sel []int) []MenuItem {
 		keys = sel
-		<-release
 		return []MenuItem{{Text: "Go"}}
 	})
 	click(t, tt, "bob")
@@ -58,9 +58,9 @@ func TestContextMenuFuncGetsTheKeysSelectedAtTheClick(t *testing.T) {
 		t.Fatal(err)
 	}
 	mu.Lock()
-	tb.chosen.value.Add(3) // the selection changes before fn returns
+	tb.chosen.value.Add(3) // the selection changes before fn starts
 	mu.Unlock()
-	close(release)
+	close(gate)
 	received(t, posted())
 	tt.Frame()
 	if !slices.Equal(keys, []int{2}) {
