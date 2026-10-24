@@ -140,6 +140,22 @@ dialog takes the outer one's `Form` as its parent; closing a window
 closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
 
+To test a dialog without a window, `TestDialog(d)` returns a `ui.Tester` over
+its content (a `DialogTester`), and `d.Run` then runs `OnBeforeRun` and
+blocks until the dialog closes, as it does with a window, without showing
+one: call `Run` on another goroutine, click its buttons through the tester,
+and `Closed` tells whether a button, `Close` or `Escape` closed it. `Escape`
+presses the key as a window does: an open drop-down takes it, else it closes
+the dialog, unless `SetDeletable(false)`.
+
+```go
+dt := widget.TestDialog(d.Dialog)
+go func() { result <- d.Run() }()
+dt.Type("Ada")
+dt.Click("OK")
+got := <-result
+```
+
 Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,
 `Question`, `Error`), 420 DIPs wide, their OK and Cancel in the app's
 language:
@@ -615,7 +631,10 @@ Layout:
 Input and display:
 
 - `Label(text)`: a line of text; `Rich(spans...)` shows styled `ui.Span`s
-  instead, where gota used Pango markup.
+  instead, where gota used Pango markup. `ParseMarkup(s)` makes the spans of a
+  Pango subset: `<span foreground background weight>`, `<b>`, `<i>`, `<u>` and
+  the entities; anything else, malformed markup too, stays as text and never
+  fails: `Label("").Rich(widget.ParseMarkup(status)...)`.
 - `Icon(svg, size)`: an SVG icon in the color of the text (`TextColor`
   changes it). There are no named icons: embed the SVGs you need.
 - `PictureBox(data, w, h)`: a PNG, JPEG, GIF, WebP or BMP, `SetImage` to change
