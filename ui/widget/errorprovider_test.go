@@ -286,7 +286,7 @@ func TestErrorMarkDoesNotCoverTheTextOfATextBox(t *testing.T) {
 	if darkBefore == 0 {
 		t.Fatal("no text at the end of the box before the error")
 	}
-	if darkAfter := darkPixelsInEnd(tt, box); darkAfter > darkBefore/2 {
+	if darkAfter := darkPixelsInEnd(tt, box); darkAfter*4 > darkBefore {
 		t.Errorf("text pixels in the room before the mark: %d before the error, %d after: the text runs under the mark", darkBefore, darkAfter)
 	}
 }
@@ -303,4 +303,21 @@ func darkPixelsInEnd(tt *Tester, r ui.Rect) int {
 		}
 	}
 	return n
+}
+
+// Unfocused, a long text runs on past the box: the mark keeps it clipped short.
+func TestErrorMarkClipsTheTextOfAnUnfocusedTextBox(t *testing.T) {
+	ep := ErrorProvider()
+	tb := TextBox().SetText(strings.Repeat("W", 80))
+	tt := NewTester(t, VBox(8).Add(Label("x"), tb), 300, 100)
+	box := tt.Find(ByRole(ui.RoleTextField)).Bounds()
+	before := darkPixelsInEnd(tt, box)
+	ep.SetError(tb, "bad")
+	tt.Settle()
+	if before == 0 {
+		t.Fatal("no text at the end of the box")
+	}
+	if after := darkPixelsInEnd(tt, box); after >= before {
+		t.Errorf("text pixels before the mark: %d without the error, %d with it: the text is not clipped short of the mark", before, after)
+	}
 }
