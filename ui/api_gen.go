@@ -5879,6 +5879,20 @@ func (_handle Element) Underline() Element {
 	return wrapElement(_node.Underline())
 }
 
+// Unfocusable takes the element out of the keyboard focus: a click on it and Tab
+// pass it by, as they do the check boxes of a table's rows, which leave the
+// keys with the table. For a control that is part of another that holds the
+// focus.
+func (_handle Element) Unfocusable() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Unfocusable())
+}
+
 // Unselectable excludes a paragraph or container subtree from a surrounding
 // Selectable container. A Selectable container nested inside it can provide
 // a selection of its own. For inline elements, set it on their paragraph.

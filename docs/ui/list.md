@@ -161,6 +161,12 @@ chosen waits for the release, so a drag of the choice keeps it.
 work that follows the choice, as a sum of the rows chosen, to wait until it
 ends. A list cannot both `DragSelect` and `Reorder`.
 
+`Pivot()` returns the row Shift extends from, -1 for none, and `SetPivot(row)`
+sets it without changing the choice, for an app that shows the same rows in
+another view and keeps the pivot by key (call it after the list is built once,
+with a row of the frame about to be built; a pivot set before the first frame
+survives it).
+
 `ExtendTo(row)` chooses the rows from the one Shift extends from to `row`,
 as a Shift-click on it does, for keys of your own, as one that extends the
 choice to the last row:
