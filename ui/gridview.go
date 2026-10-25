@@ -32,6 +32,15 @@ type GridState struct {
 	// the grid has the focus chooses it, and assistive technology reads it
 	// as the item's name.
 	Label func(item int) string
+	// Header, when set, reports whether item i heads a group: the header is
+	// an item of the grid that takes a row of its own, built by the same
+	// item function at the width of the grid, and the items after it start
+	// a row. Headers are not chosen, as ListState.Header's are not, and the
+	// keys pass them by. Give headers a background. The grid asks Header for
+	// every item when the number of items changes, and again when a header
+	// it knew is none: call ReloadHeaders when an item that was not a header
+	// becomes one without the number of items changing.
+	Header func(item int) bool
 	// Reorder, when set, lets the user drag items to another place in the
 	// grid, as ListState.Reorder does rows: the items chosen, when the item
 	// dragged is one, else that item, in order, and the item they go
@@ -86,6 +95,13 @@ type GridState struct {
 	except map[any]struct{}
 	endKey any
 	endGen uint64
+
+	// layout says where the rows begin when the grid has headers (Header).
+	layout headerRows
+	// scroll is the last ScrollTo or ScrollIntoView, and n the number of
+	// items of the last build.
+	scroll gridScroll
+	n      int
 }
 
 // Pivot returns the item Shift extends the choice from, -1 for none: the item
@@ -104,14 +120,34 @@ func (s *GridState) SetPivot(item int) {
 }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
-// does a row.
+// does a row. If the items or the columns change before the grid is built
+// again, it scrolls to the item in the rows it has then.
 func (s *GridState) ScrollTo(item int, align Align) {
-	s.rows.ScrollTo(item/max(s.cols, 1), align)
+	s.rows.ScrollTo(s.itemRow(item), align)
+	s.scroll = s.request(item, false, align)
 }
 
 // ScrollIntoView scrolls the grid as little as shows item.
 func (s *GridState) ScrollIntoView(item int) {
-	s.rows.ScrollIntoView(item / max(s.cols, 1))
+	s.rows.ScrollIntoView(s.itemRow(item))
+	s.scroll = s.request(item, true, 0)
+}
+
+// gridScroll is the last ScrollTo or ScrollIntoView, with the grid it was
+// made in: if the number of items, of columns, or the layout of the headers
+// is another at the next build, it was turned into a row of rows that are
+// gone, and the build turns it into the row of the new ones.
+type gridScroll struct {
+	set, into bool
+	item      int
+	align     Align
+	n, cols   int
+	ver       int
+}
+
+// request returns a ScrollTo or ScrollIntoView of item, made now.
+func (s *GridState) request(item int, into bool, align Align) gridScroll {
+	return gridScroll{set: true, into: into, item: item, align: align, n: s.n, cols: s.cols, ver: s.layout.ver}
 }
 
 // gridFit is how many columns a grid's items took, which its layout checks
@@ -162,16 +198,36 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 		width = c.w
 	}
 	cols := max(1, int(math.Floor(float64((width+gap)/(minWidth+gap)))))
+	anchor := -1
 	if s.cols != cols && s.cols > 0 && s.started {
 		// Keep the rows in view on the same items.
 		first, _ := s.rows.Visible()
-		s.rows.ScrollTo(first*s.cols/cols, Start)
+		a, _, _ := s.rowItems(first, n)
+		anchor = max(0, min(a, n-1))
 	}
 	if !s.started && !s.pivotSet {
 		s.pivot = -1 // no item to extend from
 	}
 	s.cols, s.started = cols, true
-	rows := (n + cols - 1) / cols
+	s.prepare(n, cols)
+	if anchor >= 0 {
+		s.rows.ScrollTo(s.itemRow(anchor), Start)
+	}
+	if r := s.scroll; r.set {
+		s.scroll = gridScroll{}
+		if r.n != n || r.cols != cols || r.ver != s.layout.ver {
+			// The rows changed since the call: the row of the item in the
+			// rows just laid out.
+			row := s.itemRow(max(0, min(r.item, n-1)))
+			if r.into {
+				s.rows.ScrollIntoView(row)
+			} else {
+				s.rows.ScrollTo(row, r.align)
+			}
+		}
+	}
+	s.n = n
+	rows := s.rowCount(n, cols)
 	if s.Selected != nil {
 		e.Focusable()
 		e.choosesItems = true
@@ -183,15 +239,21 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 	e.chooseMany = s.Selection != nil
 	var cursor *node
 	buildList(c, e, e, &s.rows, rows, func(r int) {
+		first, end, header := s.rowItems(r, n)
 		row := coreRow(c).Gap(gap).PaddingY(gap / 2).AlignItems(Stretch).Role(RoleNone)
 		row.Children(func() {
-			for i := r * cols; i < min(n, (r+1)*cols); i++ {
+			if header {
+				s.header(c, first, n, item)
+				return
+			}
+			for i := first; i < end; i++ {
 				if cell := s.cell(c, e, i, n, height, item); s.Selected != nil && i == *s.Selected {
 					cursor = cell
 				}
 			}
-			// Empty places keep the last row's items as wide as the others.
-			for k := n; k < (r+1)*cols && r == rows-1; k++ {
+			// Empty places keep the items of a short row, the last of a
+			// group, as wide as the others.
+			for k := end - first; k < cols; k++ {
 				coreBox(c).Grow(1).Basis(0).MinWidth(0)
 			}
 		})
@@ -276,6 +338,15 @@ func (s *GridState) reorder(e *node, n int, gap float32) {
 		if cell == nil {
 			return
 		}
+		if i, ok := s.cells[at]; ok && s.isHeader(i) {
+			// A line across the header's top, or its bottom.
+			y := cell.y
+			if after {
+				y += cell.h
+			}
+			p.Fill(Rect{cell.x + 4, y - 1, cell.w - 8, 2}, t.Accent, 1)
+			return
+		}
 		x := cell.x - gap/2
 		if after != cell.rtl {
 			x = cell.x + cell.w + gap/2
@@ -309,6 +380,14 @@ func (s *GridState) dropAt(x, y float32, n int) (to int, cell uint64, after bool
 		return n, 0, false
 	}
 	st := s.cellState(cell)
+	if s.isHeader(best) {
+		// A header takes the whole row: before it on its upper half, after
+		// it on the lower.
+		if y >= st.y+st.h/2 {
+			return best + 1, cell, true
+		}
+		return best, cell, false
+	}
 	// After a cell is past its middle: to its left right to left.
 	if (x >= st.x+st.w/2) != st.rtl {
 		return best + 1, cell, true
@@ -319,6 +398,24 @@ func (s *GridState) dropAt(x, y float32, n int) (to int, cell uint64, after bool
 // cellState returns the state of the cell of the last frame whose element
 // has id.
 func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
+
+// header builds item i, a header, at the width of the grid: it is not chosen,
+// dragged or checked, and assistive technology sees it as an item, named by
+// Label, as it does a list's.
+func (s *GridState) header(c *context, i, n int, item func(i int)) {
+	h := coreColumn(c).Key(s.key(i)).Grow(1).Basis(0).MinWidth(0).Role(RoleListItem)
+	h.setPos, h.setSize = i+1, n
+	if s.Label != nil {
+		h.Label(s.Label(i))
+	}
+	// Items dropped on it go before it on its upper half, after it on the
+	// lower: a header takes the row.
+	if s.built == nil {
+		s.built = map[uint64]int{}
+	}
+	s.built[h.id], s.rt = i, c.rt
+	h.Children(func() { item(i) })
+}
 
 // cell builds item i of a grid, choosing it when clicked.
 func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item func(i int)) *node {
@@ -506,7 +603,7 @@ func (s *GridState) choose(grid *node, i int) {
 // before it stay).
 func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 	p := s.pivot
-	if p < 0 || p >= grid.setSize || s.Selection == nil {
+	if p < 0 || p >= grid.setSize || s.Selection == nil || s.isHeader(p) {
 		s.choose(grid, i)
 		return
 	}
@@ -524,7 +621,7 @@ func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 		last := max(0, min(p+s.span, grid.setSize-1))
 		oldLo, oldHi = min(p, last), max(p, last)
 		for j := oldLo; j <= oldHi; j++ {
-			if j < min(p, i) || j > max(p, i) {
+			if (j < min(p, i) || j > max(p, i)) && !s.isHeader(j) {
 				k := s.key(j)
 				if _, ok := s.except[k]; !ok {
 					s.Selection.set(k, false)
@@ -539,6 +636,9 @@ func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 	}
 	s.span = i - p
 	for j := min(p, i); j <= max(p, i); j++ {
+		if s.isHeader(j) {
+			continue
+		}
 		k := s.key(j)
 		if !s.Selection.set(k, true) && track && (j < oldLo || j > oldHi) {
 			s.except = exceptAdd(s.except, k)
@@ -553,9 +653,10 @@ func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 // in view going down (the first going up), or a page of rows further from
 // there.
 func (s *GridState) page(at, d, n int) int {
-	cols := max(s.cols, 1)
 	first, last := s.rows.Visible()
-	row, per := at/cols, max(1, last-first)
+	cur := s.itemRow(at)
+	curFirst, _, _ := s.rowItems(cur, n)
+	row, per := cur, max(1, last-first)
 	switch {
 	case d > 0 && row < last:
 		row = last
@@ -566,8 +667,20 @@ func (s *GridState) page(at, d, n int) int {
 	default:
 		row -= per
 	}
-	row = max(0, min(row, (n-1)/cols))
-	return min(row*cols+at%cols, n-1)
+	rows := s.rowCount(n, max(s.cols, 1))
+	row = max(0, min(row, rows-1))
+	// A header's row has no item to land on: the next row on, else the
+	// nearest the other way.
+	for _, step := range [2]int{d, -d} {
+		for ; row >= 0 && row < rows; row += step {
+			f, end, header := s.rowItems(row, n)
+			if !header && end > f {
+				return min(f+at-curFirst, end-1)
+			}
+		}
+		row = max(0, min(row-step, rows-1))
+	}
+	return at
 }
 
 // keys moves the choice with the arrows in two dimensions, Home, End and
@@ -578,15 +691,15 @@ func (s *GridState) keys(grid *node, n int) {
 	if s.Selected == nil || n == 0 {
 		return
 	}
-	cols := max(s.cols, 1)
 	at := *s.Selected
 	in := at >= 0 && at < n
 	// The items of a row go from the right right to left.
 	back, forth := grid.arrows()
 	moves := []struct {
-		key Key
-		d   int
-	}{{forth, 1}, {back, -1}, {KeyDown, cols}, {KeyUp, -cols}}
+		key      Key
+		d        int
+		vertical bool
+	}{{forth, 1, false}, {back, -1, false}, {KeyDown, 1, true}, {KeyUp, -1, true}}
 	// extend chooses from the pivot to the item the key reaches, and keep
 	// does it besides the items chosen before (Cmd+Shift).
 	to, extend, keep := -1, false, false
@@ -597,29 +710,39 @@ func (s *GridState) keys(grid *node, n int) {
 			continue
 		}
 		extend, keep = shift || both, both
+		// The headers are passed by, and a row below that is shorter has
+		// its last item.
+		next := -1
 		switch {
 		case !in:
-			to = 0
-		case at+m.d >= 0 && at+m.d < n:
-			to = at + m.d
-		case m.d == cols && at/cols < (n-1)/cols:
-			to = n - 1 // the last row, shorter
+			next = s.firstItem(n)
+		case m.vertical:
+			next = s.vertical(at, m.d, n)
+		default:
+			next = s.beside(at, m.d, n)
+		}
+		if next >= 0 {
+			to = next
 		}
 	}
 	for _, h := range [...]struct {
-		key Key
-		to  int
-	}{{KeyHome, 0}, {KeyEnd, n - 1}} {
+		key  Key
+		last bool
+	}{{KeyHome, false}, {KeyEnd, true}} {
 		// Every key is asked for in every frame, which keeps it.
 		plain := grid.Shortcut(0, h.key)
 		shift, both := grid.Shortcut(Shift, h.key), grid.Shortcut(Cmd|Shift, h.key)
+		end := s.firstItem(n)
+		if h.last {
+			end = s.lastItem(n)
+		}
 		switch {
-		case plain:
-			to = h.to
-		case (shift || both) && s.Selection != nil:
-			to, extend, keep = h.to, true, both
+		case plain && end >= 0:
+			to = end
+		case (shift || both) && s.Selection != nil && end >= 0:
+			to, extend, keep = end, true, both
 			if !in {
-				to = 0 // as the arrows do
+				to = s.firstItem(n) // as the arrows do
 			}
 		}
 	}
@@ -639,7 +762,9 @@ func (s *GridState) keys(grid *node, n int) {
 	if s.Selection != nil && grid.Shortcut(Cmd, KeyA) {
 		s.span, s.except = 0, exceptReset(s.except)
 		for j := range n {
-			s.Selection.set(s.key(j), true)
+			if !s.isHeader(j) {
+				s.Selection.set(s.key(j), true)
+			}
 		}
 		grid.st.markChanged()
 	}
@@ -652,7 +777,7 @@ func (s *GridState) keys(grid *node, n int) {
 	if st := grid.st; st.typing && st.typed != "" && s.Label != nil {
 		for k := 1; k <= n; k++ {
 			j := (max(at, 0) + k - b2i(len([]rune(st.typed)) > 1) + n) % n
-			if strings.HasPrefix(strings.ToLower(s.Label(j)), strings.ToLower(st.typed)) {
+			if !s.isHeader(j) && strings.HasPrefix(strings.ToLower(s.Label(j)), strings.ToLower(st.typed)) {
 				to = j
 				break
 			}
@@ -670,6 +795,6 @@ func (s *GridState) keys(grid *node, n int) {
 	} else {
 		s.choose(grid, to)
 	}
-	s.ScrollIntoView(to)
+	s.rows.ScrollIntoView(s.itemRow(to))
 	grid.c.rt.consumed = true
 }
