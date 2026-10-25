@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 
@@ -50,6 +51,9 @@ type ListViewWidget[T any, K comparable] struct {
 	mode     ViewMode
 	image    func(*T) *ui.Bitmap
 	iconSize float32
+	// imageSize is the side an image list says its images are drawn at, 0 for
+	// the defaults: iconSize for large icons, 16 for the others.
+	imageSize float32
 
 	onSelect func([]K)
 	onCheck  func(K, bool)
@@ -89,6 +93,10 @@ func ListViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]) *L
 	return lv
 }
 
+// fillsAcross: a list view fills the cross axis of the box that holds it, so
+// it stays virtualized there, as the controls that hold many rows do.
+func (lv *ListViewWidget[T, K]) fillsAcross() bool { return true }
+
 // Details returns the DataGridView underneath, for the options of its
 // columns: sorting, Search, SetColumnsLayout, OnColumnsChange, BottomPanel and
 // the rest. Sort and filter drive every view: the icons show the rows in the
@@ -111,12 +119,33 @@ func (lv *ListViewWidget[T, K]) View() ViewMode {
 }
 
 // SetImage sets the icon of a row, for the icon views (large, 48 DIPs square
-// by default; small, 16) and before the text of the first Details column; nil
-// for none. fn runs under the package's lock and calls no widget method. Without
-// it the first column's Image is used, if it has one.
+// by default; small, 16) and before the text of the first Details column (16);
+// nil for none. fn runs under the package's lock and calls no widget method.
+// Without it the first column's Image is used, if it has one.
 func (lv *ListViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListViewWidget[T, K] {
-	lv.change(func() { lv.image = fn })
+	lv.setImage(fn, 0)
 	return lv
+}
+
+// SetImageList shows the image of the list under key(row) as a row's icon, drawn
+// at the list's Size in the icon views and the list, as WinForms' ImageList.ImageSize
+// says (Details draws 16 DIPs); no image for a key the list lacks. key runs under
+// the package's lock.
+func (lv *ListViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *ListViewWidget[T, K] {
+	lv.setImage(ImagesBy(il, key), float32(il.Size()))
+	return lv
+}
+
+// setImage sets the icon function and the side it is drawn at, and gives the
+// first Details column the function too.
+func (lv *ListViewWidget[T, K]) setImage(fn func(*T) *ui.Bitmap, side float32) {
+	lv.t.change(func() {
+		lv.image, lv.imageSize = fn, side
+		if len(lv.t.cols) > 0 {
+			lv.t.cols[0].Image = fn
+		}
+	})
+	lv.change(func() {})
 }
 
 // SetIconSize sets the side of the large icons in DIPs, 48 by default.
@@ -378,10 +407,6 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 	g.Key, g.Label, g.Selected = t.keyAt, t.labelAt, &lv.cursor
 	g.Selection = t.chosen.bind()
 	g.AccentChoice = true
-	g.Checked = nil
-	if t.checks {
-		g.Checked = t.checked.bind()
-	}
 	g.Copy, g.ItemMenu = nil, nil
 	if t.copyFn != nil {
 		g.Copy = func(items []int) string { return t.copyRows(items) }
@@ -393,21 +418,25 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		g.ItemMenu = func(m *ui.Menu, _ []int) { buildMenu(m, menu) }
 	}
 
-	minWidth, height := float32(104), float32(92)
-	switch lv.mode {
-	case ViewSmallIcon:
-		minWidth, height = 180, 30
-	case ViewList:
-		minWidth, height = 1e6, 30 // one column
-	default:
-		height = lv.iconSize + 44
-		minWidth = lv.iconSize + 56
+	side := cmp.Or(lv.imageSize, lv.iconSize)
+	minWidth, height := side+56, side+44
+	small := lv.mode == ViewSmallIcon || lv.mode == ViewList
+	if small {
+		minWidth, height = 180, max(30, cmp.Or(lv.imageSize, 16)+8)
+		if lv.mode == ViewList {
+			minWidth = 1e6 // one column
+		}
 	}
-	if t.checks && (lv.mode == ViewSmallIcon || lv.mode == ViewList) {
-		// The check box sits at the item's top corner: this height centres it
-		// on the text's line.
-		height = 36
+	// The boxes of the large icons are the grid's, at the corner of the
+	// picture; the small items hold their own, in the row of the text.
+	g.Checked = nil
+	if t.checks {
+		checks := t.checked.bind() // takes what setters checked, for the boxes of every view
+		if !small {
+			g.Checked = checks
+		}
 	}
+	g.PlainChecks = lv.image == nil && (len(t.cols) == 0 || t.cols[0].Image == nil)
 	var grid ui.Element
 	col := ui.Column(c).Gap(8).Grow(1).Children(func() {
 		grid = ui.GridView(c, g, n, minWidth, height, func(i int) { lv.item(c, i) }).Grow(1).Padding(0, c.Theme().Space(2)).
@@ -422,6 +451,9 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		fn := sc.fn
 		grid.OnShortcut(sc.mods, sc.key, func() { Post(fn) })
 	}
+	if t.checks && small {
+		grid.OnShortcut(0, ui.KeySpace, lv.toggleChecks)
+	}
 	if focus {
 		grid.Focus()
 	}
@@ -432,6 +464,30 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		}
 	}
 	return col
+}
+
+// toggleChecks is Space in the small views, whose boxes are the items' own: it
+// checks the rows chosen, or unchecks them when all are checked. On the main
+// thread.
+func (lv *ListViewWidget[T, K]) toggleChecks() {
+	t := lv.t
+	chosen := slices.Collect(t.chosen.shown.All())
+	checked := &t.checked.shown
+	all := len(chosen) > 0
+	for _, k := range chosen {
+		if !checked.Has(k) {
+			all = false
+			break
+		}
+	}
+	for _, k := range chosen {
+		if all {
+			checked.Remove(k)
+		} else {
+			checked.Add(k)
+		}
+	}
+	t.commit(&t.checked)
 }
 
 // item builds the content of the item shown at i: its icon and text. While the
@@ -456,23 +512,35 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 	}
 	th := c.Theme()
 	if lv.mode == ViewLargeIcon {
+		side := cmp.Or(lv.imageSize, lv.iconSize)
 		ui.Column(c).AlignItems(ui.Center).Gap(th.Space(1)).Padding(th.Space(1)).Children(func() {
 			if img != nil {
-				ui.Image(c, img).Size(lv.iconSize, lv.iconSize)
+				ui.Image(c, img).Size(side, side)
 			} else {
-				ui.Box(c).Size(lv.iconSize, lv.iconSize)
+				ui.Box(c).Size(side, side)
 			}
 			ui.Text(c, text).MaxLines(2).TextAlign(ui.Center)
 		})
 		return
 	}
-	start := th.Space(2)
-	if t.checks {
-		start = th.Space(8) // room for the check box at the start corner
-	}
-	ui.Row(c).AlignItems(ui.Center).Gap(th.Space(2)).PaddingStart(start).Children(func() {
+	// One row that fills the item and centres what it holds, the box and the
+	// text on the same line, as a Details cell lays them out.
+	side := cmp.Or(lv.imageSize, 16)
+	ui.Row(c).Grow(1).AlignItems(ui.Center).Gap(th.Space(2)).PaddingStart(th.Space(2)).Children(func() {
+		if t.checks {
+			k := t.key(r)
+			on := t.checked.shown.Has(k)
+			ui.Checkbox(c, &on, "").Label("Check " + text).OnChange(func() {
+				if on {
+					t.checked.shown.Add(k)
+				} else {
+					t.checked.shown.Remove(k)
+				}
+				t.commit(&t.checked)
+			})
+		}
 		if img != nil {
-			ui.Image(c, img).Size(16, 16)
+			ui.Image(c, img).Size(side, side)
 		}
 		ui.Text(c, text).SingleLine()
 	})

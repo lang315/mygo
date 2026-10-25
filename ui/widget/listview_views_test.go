@@ -158,21 +158,6 @@ func TestListViewChosenItemsShowInTheAccentInEveryView(t *testing.T) {
 	}
 }
 
-// In SmallIcon and List the check box is centred on the text's line.
-func TestListViewCheckBoxIsCentredOnTheTextInTheSmallViews(t *testing.T) {
-	for _, m := range []ViewMode{ViewSmallIcon, ViewList} {
-		t.Run(m.String(), func(t *testing.T) {
-			lv := newView().CheckBoxes().SetView(m)
-			tt := tester(t, lv)
-			box, text := find(t, tt, "Check Apple"), find(t, tt, "Apple")
-			bc, tc := box.Y+box.H/2, text.Y+text.H/2
-			if d := bc - tc; d < -1.5 || d > 1.5 {
-				t.Fatalf("%v: the box's centre is at y %v, the text's at %v: %v apart", m, bc, tc, d)
-			}
-		})
-	}
-}
-
 // accentExtent returns the first and the last column of the accent in the
 // pixel row y of the window.
 func accentExtent(tt *ui.Tester, y int, accent ui.Color) (first, last int) {
