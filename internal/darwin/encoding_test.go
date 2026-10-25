@@ -27,6 +27,12 @@ import (
 // ":", a void * "^v" (unsafe.Pointer; uintptr is no pointer to purego), a
 // block "@" (objc.Block), NSInteger "q", NSUInteger "Q", BOOL "B" (arm64's),
 // a pointer to a struct "^{name}", and the structs by name.
+//
+// A void * parameter (KVO's context, a print operation's contextInfo) is
+// nil or a real C pointer, never a number made up as a tag: purego calls the
+// method through reflect, which keeps the argument in a pointer-typed slot
+// of its frame, and a stack copy that finds 0x1 there dies with "invalid
+// pointer found on stack". TestNoIntegerContexts keeps the calls so.
 var methodTypes = map[string]string{
 	"id": "@", "objc.ID": "@", "objc.SEL": ":", "objc.Class": "#", "objc.Block": "@",
 	"unsafe.Pointer": "^v", "bool": "B", "int": "q", "uint": "Q",
@@ -56,14 +62,18 @@ func TestMethodSignatures(t *testing.T) {
 			if id, ok := c.Fun.(*ast.Ident); !ok || id.Name != "method" {
 				return true
 			}
-			sel, ok := c.Args[0].(*ast.BasicLit)
 			fn, isLit := c.Args[1].(*ast.FuncLit)
-			if !ok || !isLit {
+			if !isLit {
 				return true // a function made elsewhere: its own literal is read there
 			}
 			n++
 			where := fset.Position(c.Pos()).String()
-			name := strings.Trim(sel.Value, `"`)
+			// A selector made in code (name+":") has its types checked, not its arity.
+			sel, literal := c.Args[0].(*ast.BasicLit)
+			name := "(a selector made in code)"
+			if literal {
+				name = strings.Trim(sel.Value, `"`)
+			}
 			params := 0
 			for _, p := range fn.Type.Params.List {
 				k := max(len(p.Names), 1)
@@ -79,7 +89,7 @@ func TestMethodSignatures(t *testing.T) {
 					}
 				}
 			}
-			if want := strings.Count(name, ":") + 2; params != want {
+			if want := strings.Count(name, ":") + 2; literal && params != want {
 				t.Errorf("%s: %s has %d parameters, its selector says %d (self and _cmd included)", where, name, params, want)
 			}
 			return true
@@ -114,14 +124,19 @@ func TestMethodEncodings(t *testing.T) {
 	purego.RegisterLibFunc(&getMethod, lib, "class_getInstanceMethod")
 	purego.RegisterLibFunc(&typeEncoding, lib, "method_getTypeEncoding")
 
-	cls, err := objc.RegisterClass("MyGoEncodingProbe", objc.GetClass("NSObject"), nil, nil, []objc.MethodDef{
-		{Cmd: sel("probeVoidPointer:"), Fn: func(self id, _ objc.SEL, p unsafe.Pointer) {}},
-		{Cmd: sel("probeBlock:"), Fn: func(self id, _ objc.SEL, b objc.Block) {}},
-		{Cmd: sel("probeInts:unsigned:flag:"), Fn: func(self id, _ objc.SEL, i int, u uint, b bool) bool { return b }},
-		{Cmd: sel("probeUintptr:"), Fn: func(self id, _ objc.SEL, p uintptr) {}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	// A class is registered once for the process: -count=2 comes by again.
+	cls := objc.GetClass("MyGoEncodingProbe")
+	if cls == 0 {
+		var err error
+		cls, err = objc.RegisterClass("MyGoEncodingProbe", objc.GetClass("NSObject"), nil, nil, []objc.MethodDef{
+			{Cmd: sel("probeVoidPointer:"), Fn: func(self id, _ objc.SEL, p unsafe.Pointer) {}},
+			{Cmd: sel("probeBlock:"), Fn: func(self id, _ objc.SEL, b objc.Block) {}},
+			{Cmd: sel("probeInts:unsigned:flag:"), Fn: func(self id, _ objc.SEL, i int, u uint, b bool) bool { return b }},
+			{Cmd: sel("probeUintptr:"), Fn: func(self id, _ objc.SEL, p uintptr) {}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	enc := func(selector string) string {
 		m := getMethod(cls, sel(selector))
@@ -147,5 +162,50 @@ func TestMethodEncodings(t *testing.T) {
 	// What the signatures were: a pointer to nothing, no type.
 	if got := enc("probeUintptr:"); got != "v@:^" {
 		t.Errorf("a uintptr parameter is encoded %q, not the bare \"^\" TestMethodSignatures keeps out", got)
+	}
+}
+
+// TestNoIntegerContexts reads the sends of this package that name a context
+// or contextInfo: the argument after the last colon is 0, never a number
+// made up (see methodTypes). RED with the print jobs numbered 1, 2, 3…
+func TestNoIntegerContexts(t *testing.T) {
+	fset := token.NewFileSet()
+	files, _ := filepath.Glob("*.go")
+	seen := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		af, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(af, func(node ast.Node) bool {
+			c, ok := node.(*ast.CallExpr)
+			if !ok || len(c.Args) < 3 {
+				return true
+			}
+			if id, ok := c.Fun.(*ast.Ident); !ok || !strings.HasPrefix(id.Name, "send") {
+				return true
+			}
+			for i, a := range c.Args {
+				lit, ok := a.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING || !(strings.HasSuffix(lit.Value, `contextInfo:"`) || strings.HasSuffix(lit.Value, `context:"`)) {
+					continue
+				}
+				if i != 1 { // send(receiver, "selector:…", args…)
+					continue
+				}
+				seen++
+				last := c.Args[len(c.Args)-1]
+				if v, ok := last.(*ast.BasicLit); !ok || v.Value != "0" {
+					t.Errorf("%s: %s is sent a context that is not the literal 0", fset.Position(c.Pos()), lit.Value)
+				}
+			}
+			return true
+		})
+	}
+	if seen == 0 {
+		t.Fatal("read no send of a selector with a context: did the print job change?")
 	}
 }

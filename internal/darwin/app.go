@@ -252,10 +252,13 @@ func registerAppDelegate() {
 	classDef("MyGoAppDelegate", "NSObject", []string{"NSApplicationDelegate"}, []objc.MethodDef{
 		// The end of a PrintToPDF job (printJobs). WebKit's print operations
 		// may finish on a background thread.
-		method("mygoPrintOperationDidRun:success:contextInfo:", func(self id, _ objc.SEL, op id, success bool, job unsafe.Pointer) {
+		// The job is found by its operation: contextInfo is a void * that
+		// is nil, never a number made up, which a stack copy meets as a bad
+		// pointer (purego calls the method through reflect).
+		method("mygoPrintOperationDidRun:success:contextInfo:", func(self id, _ objc.SEL, op id, success bool, _ unsafe.Pointer) {
 			theBackend.runOnMain(func() {
-				if j := printJobs[uintptr(job)]; j != nil {
-					delete(printJobs, uintptr(job))
+				if j := printJobs[op]; j != nil {
+					delete(printJobs, op)
 					j.done(success)
 				}
 			})

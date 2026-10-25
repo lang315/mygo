@@ -1261,7 +1261,7 @@ func securityOrigin(o id) string {
 	return origin
 }
 
-// printJob is a print operation of PrintToPDF, by its context in
+// printJob is a print operation of PrintToPDF, by the operation in
 // printJobs until it ends. One whose window closes may never end: WebKit
 // leaves it waiting for the page, so the window's cleanup gives cb
 // errDestroyed, and done releases what the job holds if it ends after all.
@@ -1271,7 +1271,7 @@ type printJob struct {
 	done func(success bool)
 }
 
-var printJobs = map[uintptr]*printJob{}
+var printJobs = map[id]*printJob{}
 
 var errDestroyed = errors.New("mygo: window has been destroyed")
 
@@ -1322,10 +1322,6 @@ func (w *window) PrintToPDF(o platform.PDFOptions, cb func([]byte, error)) {
 		send(op, "setShowsPrintPanel:", 0)
 		send(op, "setShowsProgressPanel:", 0)
 		msgSetRect(send(op, "view"), sel("setFrame:"), msgRect(w.web, sel("bounds")))
-		job := uintptr(len(printJobs) + 1)
-		for printJobs[job] != nil {
-			job++
-		}
 		j := &printJob{w: w, cb: cb}
 		j.done = func(success bool) {
 			release(op)
@@ -1343,10 +1339,10 @@ func (w *window) PrintToPDF(o platform.PDFOptions, cb func([]byte, error)) {
 			}
 			j.cb(data, err)
 		}
-		printJobs[job] = j
+		printJobs[op] = j
 		// The app's delegate hears of the end, as the window's may be gone.
 		send(op, "runOperationModalForWindow:delegate:didRunSelector:contextInfo:", uintptr(w.win), uintptr(w.b.delegate),
-			uintptr(sel("mygoPrintOperationDidRun:success:contextInfo:")), job)
+			uintptr(sel("mygoPrintOperationDidRun:success:contextInfo:")), 0)
 	})
 }
 
