@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/ebitengine/purego/objc"
 
@@ -1260,7 +1261,7 @@ func securityOrigin(o id) string {
 	return origin
 }
 
-// printJob is a print operation of PrintToPDF, by its context in
+// printJob is a print operation of PrintToPDF, by the operation in
 // printJobs until it ends. One whose window closes may never end: WebKit
 // leaves it waiting for the page, so the window's cleanup gives cb
 // errDestroyed, and done releases what the job holds if it ends after all.
@@ -1270,7 +1271,7 @@ type printJob struct {
 	done func(success bool)
 }
 
-var printJobs = map[uintptr]*printJob{}
+var printJobs = map[id]*printJob{}
 
 var errDestroyed = errors.New("mygo: window has been destroyed")
 
@@ -1321,10 +1322,6 @@ func (w *window) PrintToPDF(o platform.PDFOptions, cb func([]byte, error)) {
 		send(op, "setShowsPrintPanel:", 0)
 		send(op, "setShowsProgressPanel:", 0)
 		msgSetRect(send(op, "view"), sel("setFrame:"), msgRect(w.web, sel("bounds")))
-		job := uintptr(len(printJobs) + 1)
-		for printJobs[job] != nil {
-			job++
-		}
 		j := &printJob{w: w, cb: cb}
 		j.done = func(success bool) {
 			release(op)
@@ -1342,10 +1339,10 @@ func (w *window) PrintToPDF(o platform.PDFOptions, cb func([]byte, error)) {
 			}
 			j.cb(data, err)
 		}
-		printJobs[job] = j
+		printJobs[op] = j
 		// The app's delegate hears of the end, as the window's may be gone.
 		send(op, "runOperationModalForWindow:delegate:didRunSelector:contextInfo:", uintptr(w.win), uintptr(w.b.delegate),
-			uintptr(sel("mygoPrintOperationDidRun:success:contextInfo:")), job)
+			uintptr(sel("mygoPrintOperationDidRun:success:contextInfo:")), 0)
 	})
 }
 
@@ -1503,7 +1500,8 @@ func registerWindowClasses() {
 				return true
 			}),
 			// WKUIDelegate (macOS 12): camera and microphone requests.
-			method("webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:", func(self id, _ objc.SEL, web, origin, frame id, typ int, handler uintptr) {
+			method("webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:", func(self id, _ objc.SEL, web, origin, frame id, typ int, blk objc.Block) {
+				handler := uintptr(blk)
 				const grant, deny = 1, 2 // WKPermissionDecision
 				decision := deny
 				if w := b().windowFor(self); w != nil {
@@ -1623,7 +1621,7 @@ func registerWindowClasses() {
 
 			// Key-value observing of the page title and the window's
 			// appearance.
-			method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx uintptr) {
+			method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx unsafe.Pointer) {
 				w := b().windowFor(self)
 				if w == nil {
 					return
@@ -1638,7 +1636,8 @@ func registerWindowClasses() {
 			}),
 
 			// WKNavigationDelegate
-			method("webView:decidePolicyForNavigationAction:decisionHandler:", func(self id, _ objc.SEL, web, action id, handler uintptr) {
+			method("webView:decidePolicyForNavigationAction:decisionHandler:", func(self id, _ objc.SEL, web, action id, blk objc.Block) {
+				handler := uintptr(blk)
 				// A link with the download attribute (macOS 11.3).
 				if respondsTo(action, "shouldPerformDownload") && sendBool(action, "shouldPerformDownload") {
 					callBlock(handler, 2) // WKNavigationActionPolicyDownload
@@ -1666,7 +1665,8 @@ func registerWindowClasses() {
 			}),
 			// Responses the page cannot show, or sent as attachments, are
 			// downloads (macOS 11.3).
-			method("webView:decidePolicyForNavigationResponse:decisionHandler:", func(self id, _ objc.SEL, web, nav id, handler uintptr) {
+			method("webView:decidePolicyForNavigationResponse:decisionHandler:", func(self id, _ objc.SEL, web, nav id, blk objc.Block) {
+				handler := uintptr(blk)
 				const cancel, allow, download = 0, 1, 2 // WKNavigationResponsePolicy
 				resp := send(nav, "response")
 				url := goString(send(send(resp, "URL"), "absoluteString"))
@@ -1698,7 +1698,8 @@ func registerWindowClasses() {
 				send(download, "setDelegate:", uintptr(self))
 			}),
 			// WKDownloadDelegate.
-			method("download:decideDestinationUsingResponse:suggestedFilename:completionHandler:", func(self id, _ objc.SEL, download, resp, suggested id, handler uintptr) {
+			method("download:decideDestinationUsingResponse:suggestedFilename:completionHandler:", func(self id, _ objc.SEL, download, resp, suggested id, blk objc.Block) {
+				handler := uintptr(blk)
 				w := b().windowFor(self)
 				if w == nil {
 					callBlock(handler, 0)
@@ -1792,19 +1793,23 @@ func registerWindowClasses() {
 					w.h.ClosedByPage()
 				}
 			}),
-			method("webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, message, frame id, handler uintptr) {
+			method("webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, message, frame id, blk objc.Block) {
+				handler := uintptr(blk)
 				w := b().windowFor(self)
 				jsAlert(w, goString(message), handler)
 			}),
-			method("webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, message, frame id, handler uintptr) {
+			method("webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, message, frame id, blk objc.Block) {
+				handler := uintptr(blk)
 				w := b().windowFor(self)
 				jsConfirm(w, goString(message), handler)
 			}),
-			method("webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, prompt, defaultText, frame id, handler uintptr) {
+			method("webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, prompt, defaultText, frame id, blk objc.Block) {
+				handler := uintptr(blk)
 				w := b().windowFor(self)
 				jsPrompt(w, goString(prompt), goString(defaultText), handler)
 			}),
-			method("webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, params, frame id, handler uintptr) {
+			method("webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:", func(self id, _ objc.SEL, web, params, frame id, blk objc.Block) {
+				handler := uintptr(blk)
 				w := b().windowFor(self)
 				jsFileInput(w, params, handler)
 			}),
