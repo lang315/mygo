@@ -278,7 +278,13 @@ type ListState struct {
 	// except are the keys of the rows chosen before the Shift-extension
 	// since the pivot last moved reached them: going back with span takes
 	// out the others between the pivot and pivot+span, and leaves these.
+	// endKey is the key of the row at pivot+span, and endGen the
+	// Selection's generation, as the extension left them: if either has
+	// changed, the app moved the rows or changed the choice, and the
+	// extension is forgotten.
 	except map[any]struct{}
+	endKey any
+	endGen uint64
 
 	header listHeader
 	// rows are the last frame's rows by their elements' IDs, to find the
@@ -1095,6 +1101,11 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 		f.choose(i)
 		return
 	}
+	if s.span != 0 || len(s.except) > 0 {
+		if end := max(0, min(p+s.span, f.n-1)); f.key(end) != s.endKey || sel.generation() != s.endGen {
+			s.span, s.except = 0, exceptReset(s.except)
+		}
+	}
 	lo, hi := min(p, i), max(p, i)
 	changed := false
 	// track says the rows the extension reaches for the first time that were
@@ -1142,6 +1153,7 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 		f.changed()
 	}
 	s.span = i - p
+	s.endKey, s.endGen = f.key(i), sel.generation()
 	f.lead(i, false)
 }
 
@@ -1172,8 +1184,10 @@ func (s *ListState) Pivot() int { return s.pivot }
 // the pivot by key. Call it after the list is built once, with a row of the
 // frame about to be built.
 func (s *ListState) SetPivot(row int) {
-	s.pivot, s.span, s.pivotSet = row, 0, true
-	s.except = exceptReset(s.except)
+	if row != s.pivot {
+		s.span, s.except = 0, exceptReset(s.except)
+	}
+	s.pivot, s.pivotSet = row, true
 }
 
 // exceptAdd adds key k to the set of keys m, which may be nil.

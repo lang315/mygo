@@ -78,8 +78,14 @@ type GridState struct {
 	// span is how far from the pivot the last Shift-extension went, and
 	// except the keys of the items chosen before it reached them: going back
 	// takes out the others between the pivot and pivot+span.
+	// endKey is the key of the item at pivot+span, and endGen the
+	// Selection's generation, as the extension left them: if either has
+	// changed, the app moved the items or changed the choice, and the
+	// extension is forgotten.
 	span   int
 	except map[any]struct{}
+	endKey any
+	endGen uint64
 }
 
 // Pivot returns the item Shift extends the choice from, -1 for none: the item
@@ -91,8 +97,10 @@ func (s *GridState) Pivot() int { return s.pivot }
 // the pivot by key. Call it after the grid is built once, with an item of the
 // frame about to be built.
 func (s *GridState) SetPivot(item int) {
-	s.pivot, s.span, s.pivotSet = item, 0, true
-	s.except = exceptReset(s.except)
+	if item != s.pivot {
+		s.span, s.except = 0, exceptReset(s.except)
+	}
+	s.pivot, s.pivotSet = item, true
 }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
@@ -502,6 +510,11 @@ func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 		s.choose(grid, i)
 		return
 	}
+	if s.span != 0 || len(s.except) > 0 {
+		if end := max(0, min(p+s.span, grid.setSize-1)); s.key(end) != s.endKey || s.Selection.generation() != s.endGen {
+			s.span, s.except = 0, exceptReset(s.except)
+		}
+	}
 	// track says the items the extension reaches for the first time that were
 	// chosen already are kept in except, which going back leaves chosen; the
 	// items from oldLo to oldHi were reached before.
@@ -531,6 +544,7 @@ func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 			s.except = exceptAdd(s.except, k)
 		}
 	}
+	s.endKey, s.endGen = s.key(i), s.Selection.generation()
 	*s.Selected = i
 	grid.st.markChanged()
 }
@@ -650,6 +664,7 @@ func (s *GridState) keys(grid *node, n int) {
 	if extend {
 		if s.pivot < 0 || !in {
 			s.pivot, s.span = max(at, 0), 0
+			s.except = exceptReset(s.except)
 		}
 		s.extend(grid, to, keep, keep)
 	} else {
