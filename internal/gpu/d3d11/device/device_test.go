@@ -5,6 +5,7 @@ package device
 import (
 	"bytes"
 	"log"
+	"os"
 	"strings"
 	"syscall"
 	"testing"
@@ -48,8 +49,9 @@ func TestNew(t *testing.T) {
 func TestNewWithDebug(t *testing.T) {
 	t.Setenv("MYGO_D3D_DEBUG", "1")
 	var out bytes.Buffer
+	was := log.Writer()
 	log.SetOutput(&out)
-	defer log.SetOutput(log.Writer())
+	t.Cleanup(func() { log.SetOutput(was) })
 	device, context, _, err := New()
 	if err != nil {
 		t.Fatal(err)
@@ -66,6 +68,9 @@ func TestNewWithDebug(t *testing.T) {
 	got := out.String()
 	t.Logf("log:\n%s", got)
 	if strings.Contains(got, "not installed") {
+		if os.Getenv("MYGO_D3D_DEBUG_REQUIRED") == "1" {
+			t.Fatal("the debug layer is not installed, and the CI step that installs it asked for it")
+		}
 		return // no Graphics Tools on this machine
 	}
 	if !strings.Contains(got, "d3d11 debug: error") {
