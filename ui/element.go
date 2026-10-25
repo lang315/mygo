@@ -1343,6 +1343,12 @@ func (e *node) hasState() bool {
 // Focusable lets the element take the keyboard focus, by a click or Tab.
 func (e *node) Focusable() *node { e.flags |= flagFocusable; return e }
 
+// Unfocusable takes the element out of the keyboard focus: a click on it and Tab
+// pass it by, as they do the check boxes of a table's rows, which leave the
+// keys with the table. For a control that is part of another that holds the
+// focus.
+func (e *node) Unfocusable() *node { e.flags &^= flagFocusable; return e }
+
 // CanFocus reports whether the element, or an element inside it, can take the
 // keyboard focus now, by the rule of Tab: focusable, and neither disabled,
 // invisible nor inert. Like the other queries of an element, it is valid until

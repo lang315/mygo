@@ -21,6 +21,10 @@ if card.DoubleClicked() {
 }
 ```
 
+`Unfocusable()` takes a control out of the keyboard focus, for one that is part
+of another that holds it, as the check box of an item of a list: Tab passes it
+by, and the keys stay where they were.
+
 ## The pointer
 
 `Hovered`, `Pressed`, `Clicked`, `DoubleClicked`, `RightClicked`, `Dragged`
