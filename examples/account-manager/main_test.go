@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -56,6 +57,27 @@ func (tt *tester) wait(r **runner) {
 	tt.Frame()
 }
 
+// holdRuns makes the runs a starts end when the test says, by calling the
+// function returned or by cancelling them: a slow machine (the race
+// detector, 100,000 rows to draw) must not finish one before the checks.
+func holdRuns(t *testing.T, a *app) (release func()) {
+	gate := make(chan struct{})
+	var open sync.Once
+	release = func() { open.Do(func() { close(gate) }) }
+	t.Cleanup(release) // a failure before the release leaves no worker waiting
+	a.work = func(action string) func(context.Context, int) result {
+		work := fakeWork(action)
+		return func(ctx context.Context, id int) result {
+			select {
+			case <-gate:
+			case <-ctx.Done():
+			}
+			return work(ctx, id)
+		}
+	}
+	return release
+}
+
 func TestAppWith100kAccounts(t *testing.T) {
 	a := newApp(100_000)
 	tt := newTester(t, a)
@@ -97,22 +119,7 @@ func TestAppWith100kAccounts(t *testing.T) {
 	tt.Key(0, ui.KeySpace)
 	tt.want("Đã chọn: 1")
 	a.action = "Backup" // the select's popup is the select's own test's
-	// The run ends when the test lets it: a slow machine (the race detector,
-	// 100,000 rows to draw) must not finish it before the checks below.
-	gate := make(chan struct{})
-	var open sync.Once
-	release := func() { open.Do(func() { close(gate) }) }
-	t.Cleanup(release) // a failure before the release leaves no worker waiting
-	a.work = func(action string) func(context.Context, int) result {
-		work := fakeWork(action)
-		return func(ctx context.Context, id int) result {
-			select {
-			case <-gate:
-			case <-ctx.Done():
-			}
-			return work(ctx, id)
-		}
-	}
+	release := holdRuns(t, a)
 	tt.do(tt.Click("Start"))
 	if a.run == nil {
 		t.Fatal("Start did not run")
@@ -230,6 +237,7 @@ func TestFoldersChangeWhileRunning(t *testing.T) {
 	tt := newTester(t, a)
 	tt.do(tt.Click("Check all"))
 	a.action = "Backup"
+	holdRuns(t, a) // 50 accounts could end the run before the cancel below
 	tt.do(tt.Click("Start"))
 	if a.run == nil {
 		t.Fatal("Start did not run")
@@ -264,7 +272,10 @@ func TestStressShowsInTheTable(t *testing.T) {
 	a.stats = newStats(time.Now())
 	tt := newTester(t, a)
 	a.startStress(2000)
-	time.Sleep(300 * time.Millisecond)
+	wait.Until(t, "the first batch to apply", func() bool {
+		tt.Frame()
+		return a.stats.total > 0
+	})
 	a.stress.cancel()
 	tt.wait(&a.stress)
 	if a.stats.total == 0 {
