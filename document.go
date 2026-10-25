@@ -650,9 +650,7 @@ func (b *docBase) autosavesLocked() bool {
 // recovery copy after the edits stop. b.mu is held.
 func (b *docBase) scheduleLocked() {
 	if !b.edited || b.closed {
-		if b.timer != nil {
-			b.timer.Stop()
-		}
+		b.stopTimerLocked()
 		return
 	}
 	delay, most := time.Second, 5*time.Second
@@ -667,11 +665,34 @@ func (b *docBase) scheduleLocked() {
 		// wait longer after each failure, edits or not.
 		delay = max(delay, backupRetry<<min(b.backupFails-1, 5))
 	}
+	if b.timer != nil && b.timer.Stop() {
+		// Pending: it moves, and keeps the count docWork has of it.
+		b.timer.Reset(delay)
+		return
+	}
+	// Not armed, or fired: this firing is counted in docWork from now, as a
+	// firing that adds while a test waits (docWork.Go in the callback, from
+	// a count of zero) is a race with Wait; fire does the Done.
+	docWork.Add(1)
 	if b.timer == nil {
-		b.timer = time.AfterFunc(delay, func() { docWork.Go(b.persist) })
+		b.timer = time.AfterFunc(delay, b.fire)
 	} else {
 		b.timer.Reset(delay)
 	}
+}
+
+// stopTimerLocked stops the timer if it is pending, and its count in
+// docWork with it. b.mu is held.
+func (b *docBase) stopTimerLocked() {
+	if b.timer != nil && b.timer.Stop() {
+		docWork.Done()
+	}
+}
+
+// fire is the timer's callback, on a goroutine of its own.
+func (b *docBase) fire() {
+	defer docWork.Done()
+	b.persist()
 }
 
 // persist saves the document in place, or else writes its recovery copy.

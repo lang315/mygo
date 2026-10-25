@@ -1020,3 +1020,18 @@ func TestDocumentFoundAgainIsNotDeleted(t *testing.T) {
 		t.Error("the document is at the file it found again and still deleted")
 	}
 }
+
+// TestDocWorkWaitsForAPendingTimer: the timer of an edited document is
+// counted in docWork while it is armed, so that a test that waits for
+// docWork has the write of the recovery copy done, and does not race with
+// the timer firing (docWork.Go in its callback, adding from zero, with Wait:
+// "race detected during execution of test").
+func TestDocWorkWaitsForAPendingTimer(t *testing.T) {
+	ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	d := ds.New()
+	d.Set("unsaved") // arms the timer, a second
+	docWork.Wait()
+	if d.backedUpAt() == 0 {
+		t.Fatal("docWork.Wait returned before the timer fired and wrote the recovery copy")
+	}
+}

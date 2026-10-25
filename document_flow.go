@@ -271,9 +271,7 @@ func (b *docBase) windowClosed() {
 	b.closed = true
 	b.window = nil
 	keep := b.edited && !b.discarded
-	if b.timer != nil {
-		b.timer.Stop()
-	}
+	b.stopTimerLocked()
 	b.mu.Unlock()
 	docRegistry.Lock()
 	delete(docRegistry.byWindow, w)
