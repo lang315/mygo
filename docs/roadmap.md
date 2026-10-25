@@ -168,7 +168,8 @@ Windows 11 ARM64.
 2. **A widget layer in the inspector.** It shows the widget tree, the Style
    in effect, and the Tailwind classes that made it. It can force a hover,
    pressed or focus state.
-3. **Docs to copy from.** The widget tour, a Tailwind cheat sheet, and
+3. **Docs to copy from.** The widget tour, a Tailwind cheat sheet (done:
+   [tw.md](ui/widget/tw.md), checked against the parser by a test), and
    mappings from WinForms and gota.
 4. **Skills for agents.** Add a `skills/` folder and matching AGENTS.md
    rules.
