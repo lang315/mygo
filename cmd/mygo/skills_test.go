@@ -96,8 +96,8 @@ func TestInstallSkillsInstallsEverySkill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) < 2 {
-		t.Fatalf("%d bundled skills, want mygo-maintenance and mygo-widget-app at least", len(entries))
+	if len(entries) < 4 {
+		t.Fatalf("%d bundled skills, want the four skills: mygo-maintenance, mygo-widget-app, mygo-widget-testing and mygo-port-screen", len(entries))
 	}
 	for _, e := range entries {
 		for _, name := range []string{"SKILL.md", "agents/openai.yaml"} {
