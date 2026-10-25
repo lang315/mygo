@@ -62,10 +62,24 @@ func TestMain(m *testing.M) {
 		beforeRun()
 	}
 	App.SetName("MyGoTest")
+	// The single-instance lock is a socket in this directory, held until the
+	// process exits (os.Exit skips OnQuit): a directory of its own keeps the
+	// test processes of the same user, such as two worktrees' go test runs,
+	// from taking each other's lock. The helper processes inherit it.
+	lockDir, err := os.MkdirTemp("", "si")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Setenv("XDG_RUNTIME_DIR", lockDir)
 	// Keep running when tests close their windows.
 	App.OnWindowAllClosed(func() {})
 	App.WhenReady(func() {
-		go func() { os.Exit(m.Run()) }()
+		go func() {
+			code := m.Run()
+			os.RemoveAll(lockDir)
+			os.Exit(code)
+		}()
 	})
 	if err := App.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -2207,10 +2221,42 @@ func TestSingleInstanceIdentifier(t *testing.T) {
 	}
 }
 
+// TestSingleInstanceSocketPerTestProcess checks that two test processes of the
+// same user do not share the socket of the single-instance lock: the one that
+// came second would not get the lock (or, forwarded to, would be handed the
+// other's messages).
+func TestSingleInstanceSocketPerTestProcess(t *testing.T) {
+	if os.Getenv("MYGO_TEST_PRINT_SOCKET") == "1" {
+		// Helper process: say where its lock would be.
+		fmt.Println("socket", singleInstanceSocket(singleInstanceKey(App.Name())))
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestSingleInstanceSocketPerTestProcess$")
+	cmd.Env = append(os.Environ(), "MYGO_TEST_PRINT_SOCKET=1")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := ""
+	for _, line := range strings.Split(string(out), "\n") {
+		if p, ok := strings.CutPrefix(line, "socket "); ok {
+			other = p
+		}
+	}
+	if other == "" {
+		t.Fatalf("the other process printed no socket: %q", out)
+	}
+	if mine := singleInstanceSocket(singleInstanceKey(App.Name())); mine == other {
+		t.Fatalf("two test processes share the lock's socket %s", mine)
+	}
+}
+
 func TestSingleInstance(t *testing.T) {
 	if !App.RequestSingleInstanceLock() {
 		t.Fatal("first instance did not get the lock")
 	}
+	// A message from elsewhere must not block the main thread, which the
+	// test waits for below.
 	got := make(chan []string, 1)
 	off := App.OnSecondInstance(func(args []string, wd string) {
 		if wd == "" {
@@ -2220,7 +2266,10 @@ func TestSingleInstance(t *testing.T) {
 		if fb.ActivationToken != "mygo-test-token" {
 			t.Errorf("activation token = %q", fb.ActivationToken)
 		}
-		got <- args
+		select {
+		case got <- args:
+		default:
+		}
 	})
 	defer off()
 	urls := make(chan string, 1)
