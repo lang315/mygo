@@ -400,22 +400,21 @@ func TestDocumentEditedWhileTheDiskIsChecked(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "typing.txt", "mine")
 	d, _ := ds.Open(path)
-	looked, edited := make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	afterDiskLook = func() {
-		once.Do(func() {
-			close(looked)
-			<-edited
-		})
+	// Every look at the file waits for the edit, those of the watch too.
+	looked, edited := make(chan struct{}, 16), make(chan struct{})
+	hold := func() {
+		looked <- struct{}{}
+		<-edited
 	}
-	t.Cleanup(func() { afterDiskLook = nil })
+	afterDiskLook.Store(&hold)
+	t.Cleanup(func() { afterDiskLook.Store(nil) })
 	future := time.Now().Add(time.Hour)
 	os.WriteFile(path, []byte("theirs"), 0o644)
 	os.Chtimes(path, future, future)
 	done := make(chan struct{})
 	go func() { d.checkDisk(); close(done) }()
 	wait.For(t, "the look at the file", looked)
-	d.Set("mine again") // the document was not edited when the look began
+	d.Set("mine again") // the document was not edited when the looks began
 	close(edited)
 	wait.For(t, "the look to end", done)
 	if d.Content() != "mine again" || !d.IsEdited() {

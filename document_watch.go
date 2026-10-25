@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -210,7 +211,7 @@ func documentsAt(path string) []*docBase {
 
 // afterDiskLook, set by tests, runs in checkDisk once it looked at the file
 // and before it decides what to do: the time in which the document changes.
-var afterDiskLook func()
+var afterDiskLook atomic.Pointer[func()]
 
 // checkDisk compares b's file with what b last read or wrote.
 func (b *docBase) checkDisk() {
@@ -233,8 +234,8 @@ func (b *docBase) checkDisk() {
 		b.io.Unlock()
 		return
 	}
-	if afterDiskLook != nil {
-		afterDiskLook()
+	if f := afterDiskLook.Load(); f != nil {
+		(*f)()
 	}
 	switch {
 	case !exists:
