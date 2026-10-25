@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/internal/diff"
 	"github.com/egoist/mygo/internal/rope"
@@ -524,9 +525,35 @@ func changesBetween(old, new rope.Text) []change {
 		c := change{oldStart: at(old, h.A0), oldEnd: at(old, h.A1), newStart: at(new, h.B0), newEnd: at(new, h.B1)}
 		c.oldLine, c.oldEndLine = old.LineOf(c.oldStart), old.LineOf(c.oldEnd)
 		c.newLine, c.newEndLine = new.LineOf(c.newStart), new.LineOf(c.newEnd)
+		// The lines changed, but offsets move through only what differs in
+		// them: a caret in a line that had text appended stays where it was.
+		c.trim(old.Slice(c.oldStart, c.oldEnd), new.Slice(c.newStart, c.newEnd))
 		out = append(out, c)
 	}
 	return out
+}
+
+// trim narrows c, a change of whole lines whose old and new text are oldText
+// and newText, to what differs between them: the bytes they share at the
+// start and at the end, to a boundary of a rune, go out of its offsets. The
+// lines it spans are the lines'.
+func (c *change) trim(oldText, newText string) {
+	p := 0
+	for p < len(oldText) && p < len(newText) && oldText[p] == newText[p] {
+		p++
+	}
+	for p > 0 && (p < len(oldText) && !utf8.RuneStart(oldText[p]) || p < len(newText) && !utf8.RuneStart(newText[p])) {
+		p--
+	}
+	q := 0
+	for q < len(oldText)-p && q < len(newText)-p && oldText[len(oldText)-1-q] == newText[len(newText)-1-q] {
+		q++
+	}
+	for q > 0 && (q < len(oldText)-p && !utf8.RuneStart(oldText[len(oldText)-q]) || q < len(newText)-p && !utf8.RuneStart(newText[len(newText)-q])) {
+		q--
+	}
+	c.oldStart, c.oldEnd = c.oldStart+p, c.oldEnd-q
+	c.newStart, c.newEnd = c.newStart+p, c.newEnd-q
 }
 
 func (b *Buffer) entriesSince(since uint64) ([]logEntry, uint64, bool) {
