@@ -32,26 +32,36 @@ fi
 
 step() { printf '\n== %s\n' "$*"; }
 
+# Each step runs, whatever the ones before found, so that one run says all
+# that broke; the exit status is that of the worst.
+failed=()
+run() {
+	local name="$1"
+	shift
+	step "$name"
+	"$@" || failed+=("$name")
+}
+
 step "toolchain"
 "$go" version
 
-step "build for every platform (no cgo: purego's fakecgo is what runs)"
 for os in darwin linux windows; do
-	GOOS=$os CGO_ENABLED=0 "$go" build ./...
+	run "build for $os (no cgo: purego's fakecgo is what runs)" env GOOS=$os CGO_ENABLED=0 "$go" build ./...
 done
 
-step "vet"
-"$go" vet ./...
+run "vet" "$go" vet ./...
 
 # A test binary links the package's imports and starts them, which is where a
 # broken linkname shows (a link error, or a crash before main): build and run
 # every one of them without running a test.
-step "link and start every test binary"
-"$go" test -count=1 -run '^$' ./...
+run "link and start every test binary" "$go" test -count=1 -run '^$' ./...
 
-if [ "$quick" = 1 ]; then
-	exit 0
+if [ "$quick" = 0 ]; then
+	run "tests" "$go" test -count=1 ./internal/... ./ui/... .
 fi
 
-step "tests"
-"$go" test -count=1 ./internal/... ./ui/... .
+if [ ${#failed[@]} -gt 0 ]; then
+	printf '\nFAILED: %s\n' "${failed[*]}"
+	exit 1
+fi
+printf '\nall good with %s\n' "$("$go" version)"

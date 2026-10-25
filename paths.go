@@ -164,6 +164,7 @@ func userDir(home string, name PathName) string {
 						return strings.Replace(v, "$HOME", home, 1)
 					}
 				}
+				_ = s.Err() // a file that cannot be read gives the folder's default
 			}
 		}
 	}
