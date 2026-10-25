@@ -42,6 +42,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
+      # The Direct3D debug layer (MYGO_D3D_DEBUG=1) is the "Graphics Tools"
+      # feature of Windows; the runner lacks it.
+      - name: Install the Direct3D debug layer
+        if: runner.os == 'Windows'
+        run: Add-WindowsCapability -Online -Name Tools.Graphics.DirectX~~~~0.0.1.0
+      - name: Test the Direct3D debug layer
+        if: runner.os == 'Windows'
+        env:
+          MYGO_D3D_DEBUG_REQUIRED: 1
+        run: go test -count=1 -v -run TestNewWithDebug ./internal/gpu/d3d11/device
       - run: bun install --frozen-lockfile
       - name: Build the JavaScript packages
         run: bun run build

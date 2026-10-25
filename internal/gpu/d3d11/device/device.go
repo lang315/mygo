@@ -37,11 +37,23 @@ func New() (device, context uintptr, software bool, err error) {
 	const bgraSupport = 0x20
 	const hardware, warp = 1, 5
 	var hr uintptr
+	flags := uintptr(bgraSupport)
+	if Debug() {
+		flags |= createDeviceDebug
+	}
 	for _, driver := range []uintptr{hardware, warp} {
 		var level uint32
-		hr, _, _ = procD3D11CreateDevice.Call(0, driver, 0, bgraSupport,
+		hr, _, _ = procD3D11CreateDevice.Call(0, driver, 0, flags,
 			uintptr(unsafe.Pointer(&levels[0])), uintptr(len(levels)), 7,
 			uintptr(unsafe.Pointer(&device)), uintptr(unsafe.Pointer(&level)), uintptr(unsafe.Pointer(&context)))
+		if uint32(hr) == sdkComponentMiss && flags&createDeviceDebug != 0 {
+			// No Graphics Tools: the same device without the layer.
+			noteMissing()
+			flags &^= createDeviceDebug
+			hr, _, _ = procD3D11CreateDevice.Call(0, driver, 0, flags,
+				uintptr(unsafe.Pointer(&levels[0])), uintptr(len(levels)), 7,
+				uintptr(unsafe.Pointer(&device)), uintptr(unsafe.Pointer(&level)), uintptr(unsafe.Pointer(&context)))
+		}
 		if int32(uint32(hr)) >= 0 {
 			return device, context, driver == warp, nil
 		}

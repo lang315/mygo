@@ -698,3 +698,31 @@ of a page control its inspector, when it has one, see
 `win.NativeHandle()` returns the native window, an `NSWindow*` on macOS, a
 `GtkWindow*` on Linux and an `HWND` on Windows, for APIs MyGo does not
 cover. Call native APIs on the main thread with `mygo.RunOnMain`.
+
+## Debugging Direct3D
+
+Native UI draws with Direct3D 11 on Windows. `MYGO_D3D_DEBUG=1` in the
+environment turns on its debug layer:
+
+```
+set MYGO_D3D_DEBUG=1
+myapp.exe
+```
+
+- Devices are created with `D3D11_CREATE_DEVICE_DEBUG`, and after each frame
+  MyGo logs what the layer stored, as `mygo: d3d11 debug: error 2097: …`
+  (severity, message ID, text), at most 50 messages a frame. The messages go
+  to a debugger's output as well.
+- The layer is part of the **Graphics Tools** optional feature of Windows
+  (Settings, System, Optional features). Without it MyGo logs
+  `the Direct3D debug layer is not installed` once and goes on with a normal
+  device.
+- A device that was removed (a driver reset or crash, the GPU unplugged) logs
+  its removal reason (`DXGI_ERROR_DEVICE_HUNG`, `DEVICE_REMOVED`, …) with the
+  next frame. Direct3D 11 has no DRED (Device Removed Extended Data), which
+  belongs to Direct3D 12; the layer's messages and the reason are what
+  Direct3D 11 offers. MyGo draws with Direct3D 11 only.
+- It slows frames, and is meant for development. The windows that show web
+  views through DirectComposition use a device of the same kind, with the
+  layer on, but log nothing of it: attach a debugger or read its output
+  (DebugView) for them.
