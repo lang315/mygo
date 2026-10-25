@@ -713,14 +713,14 @@ func TestDocumentFollowsReplacedRename(t *testing.T) {
 	if err := os.WriteFile(path+".tmp", []byte("two, longer"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(path+".tmp", path); err != nil {
+	if err := otherAppRename(path+".tmp", path); err != nil {
 		t.Fatal(err)
 	}
 	// Read by the look when the watch started or the window was focused.
 	d.checkDisk()
 	waitFor(t, "the document to read the new file", func() bool { return d.Content() == "two, longer" })
 	renamed := filepath.Join(filepath.Dir(path), "renamed.txt")
-	if err := os.Rename(path, renamed); err != nil {
+	if err := otherAppRename(path, renamed); err != nil {
 		t.Fatal(err)
 	}
 	for _, target := range watch.Targets() {
@@ -835,6 +835,12 @@ func openDocumentInTempDir(t *testing.T) (d *Document[string], dir, path string)
 	return d, dir, path
 }
 
+// otherAppRename renames a file as another app does: on Windows a classic
+// rename is refused while any handle is open on the file, as the one with
+// which the document reads it for an instant, and such an app tries again
+// (the documentation of openShared).
+func otherAppRename(from, to string) error { return rename(from, to) }
+
 // otherAppSaves has another app save d's file as editors do (a new file
 // renamed over it), which d reads, as the first look of a watch that started
 // late does.
@@ -843,7 +849,7 @@ func otherAppSaves(t *testing.T, d *Document[string], path string) {
 	if err := os.WriteFile(path+".tmp", []byte("two, longer"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(path+".tmp", path); err != nil {
+	if err := otherAppRename(path+".tmp", path); err != nil {
 		t.Fatal(err)
 	}
 	d.checkDisk()
@@ -882,7 +888,7 @@ func documentRenamedAfter(t *testing.T, change func(t *testing.T, d *Document[st
 	go followDocumentFile(ctx, w, path)
 	change(t, d, path)
 	renamed := filepath.Join(dir, "renamed.txt")
-	if err := os.Rename(path, renamed); err != nil {
+	if err := otherAppRename(path, renamed); err != nil {
 		t.Fatal(err)
 	}
 	fileWatchTestNotice(t, w, "..", platform.FileWatchNotice{Name: "other.txt", Kind: platform.FileWatchCreate})
@@ -919,7 +925,7 @@ func documentRenamedUnwatched(t *testing.T) (d *Document[string], renamed string
 	d, dir, path := openDocumentInTempDir(t)
 	otherAppSaves(t, d, path)
 	renamed = filepath.Join(dir, "renamed.txt")
-	if err := os.Rename(path, renamed); err != nil {
+	if err := otherAppRename(path, renamed); err != nil {
 		t.Fatal(err)
 	}
 	return d, renamed
@@ -954,7 +960,7 @@ func TestDocumentCheckFollowsAFileRelocatedByCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 	renamed := filepath.Join(dir, "renamed.txt")
-	if err := os.Rename(d.Path(), renamed); err != nil {
+	if err := otherAppRename(d.Path(), renamed); err != nil {
 		t.Fatal(err)
 	}
 	d.checkDisk()
@@ -1001,7 +1007,7 @@ func TestDocumentFoundAgainIsNotDeleted(t *testing.T) {
 	d, renamed := documentRenamedUnwatched(t)
 	path := d.Path()
 	away := filepath.Join(t.TempDir(), "away.txt")
-	if err := os.Rename(renamed, away); err != nil {
+	if err := otherAppRename(renamed, away); err != nil {
 		t.Fatal(err)
 	}
 	d.checkDisk()
@@ -1009,7 +1015,7 @@ func TestDocumentFoundAgainIsNotDeleted(t *testing.T) {
 		t.Fatal("the document whose file went to another directory is not taken for deleted")
 	}
 	back := filepath.Join(filepath.Dir(path), "back.txt")
-	if err := os.Rename(away, back); err != nil {
+	if err := otherAppRename(away, back); err != nil {
 		t.Fatal(err)
 	}
 	d.checkDisk()
