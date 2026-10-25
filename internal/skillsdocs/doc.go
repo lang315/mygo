@@ -1,0 +1,6 @@
+// Package skillsdocs checks the agent skills bundled with the CLI
+// (cmd/mygo/template/shared/.agents/skills, which `mygo install-skills`
+// puts in an app): their metadata, the repository docs they point to, the
+// names of the ui and widget API they mention, and that every Go example in
+// them is a whole file that type-checks against this repository's source.
+package skillsdocs

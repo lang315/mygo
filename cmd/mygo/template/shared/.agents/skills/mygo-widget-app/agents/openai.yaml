@@ -1,0 +1,3 @@
+interface:
+  display_name: "MyGo Widget App"
+  short_description: "Build native forms, tables and dialogs with ui/widget"
