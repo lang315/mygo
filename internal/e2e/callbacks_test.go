@@ -26,7 +26,16 @@ func checkCallbackBudget(code int) int {
 	if exact {
 		kind = "in all"
 	}
-	fmt.Fprintf(os.Stderr, "e2e: %d callbacks made %s (budget %d)\n", n, kind, callbackBudget)
+	line := fmt.Sprintf("e2e: %d callbacks made %s (budget %d)", n, kind, callbackBudget)
+	fmt.Fprintln(os.Stderr, line)
+	// go test hides the stderr of a package that passes, unless it is run with -v:
+	// CI names a file for the number, which a step after the tests prints.
+	if p := os.Getenv("MYGO_E2E_CALLBACKS_FILE"); p != "" {
+		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+			fmt.Fprintln(f, line)
+			f.Close()
+		}
+	}
 	if n > callbackBudget {
 		fmt.Fprintf(os.Stderr, "e2e: FAIL: more callbacks than the budget of %d\n", callbackBudget)
 		return 1

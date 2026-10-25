@@ -24,6 +24,8 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45 # -race: Linux took 24 minutes, macOS 18
+    env:
+      MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
     strategy:
       fail-fast: false
       matrix:
@@ -126,6 +128,10 @@ jobs:
           MYGO_E2E: 1
           MYGO_GPU: 1
         run: xvfb-run -a dbus-run-session -- go test -run 'TestContentWindow' ./internal/e2e
+      - name: Callbacks the GUI tests made
+        if: always()
+        shell: bash
+        run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
 
   # Linux on ARM64, which no machine of the maintainers runs: purego's calls
   # into WebKitGTK, GTK and Mesa pass floats and structs in registers of the
@@ -134,6 +140,8 @@ jobs:
     name: Linux ARM64
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
+    env:
+      MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
     # The build and vet of every platform, the no-inspector tests and the
     # JavaScript packages are the same on every architecture, so they are
     # left to the amd64 job, and Bun with them.
@@ -178,6 +186,10 @@ jobs:
           MYGO_E2E: 1
           MYGO_GPU: 1
         run: xvfb-run -a dbus-run-session -- go test -run 'TestContentWindow' ./internal/e2e
+      - name: Callbacks the GUI tests made
+        if: always()
+        shell: bash
+        run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
 
   # Windows on ARM64, which no machine of the maintainers runs: DirectWrite's
   # methods taking floats go through purego, which sets the floating point
@@ -187,6 +199,8 @@ jobs:
     name: Windows ARM64
     runs-on: windows-11-arm
     timeout-minutes: 30
+    env:
+      MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -294,3 +308,7 @@ jobs:
         env:
           MYGO_E2E: 1
         run: go test ./internal/e2e
+      - name: Callbacks the GUI tests made
+        if: always()
+        shell: bash
+        run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
