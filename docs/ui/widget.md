@@ -466,6 +466,9 @@ name := widget.Label("Name").Apply(tw.S("halign-start font-semibold"))
 logged once and ignored, and `mygo vet` reports it in a literal string.
 `tw.Parse` returns the error instead.
 
+The [cheat sheet](widget/tw.md) lists every class, made from the parser's own
+tables, and what to use for the Tailwind classes it does not have.
+
 | Group | Classes |
 |---|---|
 | Spacing | `p- px- py- pt- pr- pb- pl- m- mx- …` with `0 px 0.5 1 … 96`; `-mt-2` |
