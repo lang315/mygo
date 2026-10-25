@@ -161,7 +161,9 @@ func (b *docBase) reload(path string) error { return b.reloadIf(path, false) }
 
 // reloadIf is reload, but with unedited it keeps the content of a document
 // that was edited since the caller saw it unedited, and puts it in conflict
-// with the file, which changed under the edit.
+// with the file, which changed under the edit. With DocumentsOptions.Equal,
+// an edit undone to what the file had since is still an edit here: the
+// file changing meanwhile is a conflict, not a silent reload.
 func (b *docBase) reloadIf(path string, unedited bool) error {
 	b.io.Lock()
 	v, read, err := b.kind.readFile(path)
@@ -170,7 +172,14 @@ func (b *docBase) reloadIf(path string, unedited bool) error {
 		return err
 	}
 	b.mu.Lock()
-	if unedited && b.edited {
+	if unedited && b.path != path {
+		b.mu.Unlock() // saved as or moved while it was read: the look is of another file
+		b.io.Unlock()
+		return nil
+	}
+	if unedited && (b.edited || b.changes != b.savedAt) {
+		// changes != savedAt covers an edit that Set stored and is still
+		// asking Equal about, which has not set edited yet.
 		changed := !b.conflict || b.deleted
 		b.conflict, b.deleted = true, false
 		b.mu.Unlock()

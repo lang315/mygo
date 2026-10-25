@@ -425,6 +425,50 @@ func TestDocumentEditedWhileTheDiskIsChecked(t *testing.T) {
 	}
 }
 
+// TestDocumentEditedWhileEqualIsAsked: Set stores the content before it asks
+// the app's Equal whether the document is edited, with the lock down; a look
+// that began before, and finishes in between, must not replace that content.
+func TestDocumentEditedWhileEqualIsAsked(t *testing.T) {
+	asking, answer := make(chan struct{}, 4), make(chan struct{})
+	var armed atomic.Bool
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: func(a, b string) bool {
+		if armed.Load() {
+			asking <- struct{}{}
+			<-answer
+		}
+		return a == b
+	}})
+	path := writeTemp(t, "equal.txt", "mine")
+	d, _ := ds.Open(path)
+	looked, release := make(chan struct{}, 16), make(chan struct{})
+	hold := func() {
+		looked <- struct{}{}
+		<-release
+	}
+	afterDiskLook.Store(&hold)
+	t.Cleanup(func() { afterDiskLook.Store(nil) })
+	future := time.Now().Add(time.Hour)
+	os.WriteFile(path, []byte("theirs"), 0o644)
+	os.Chtimes(path, future, future)
+	done := make(chan struct{})
+	go func() { d.checkDisk(); close(done) }()
+	wait.For(t, "the look at the file", looked)
+	armed.Store(true)
+	set := make(chan struct{})
+	go func() { d.Set("mine again"); close(set) }()
+	wait.For(t, "Set to ask Equal", asking)
+	close(release) // the looks go on while Set has stored the content, not set edited
+	wait.For(t, "the look to end", done)
+	close(answer)
+	wait.For(t, "Set to end", set)
+	if d.Content() != "mine again" || !d.IsEdited() {
+		t.Errorf("content %q, edited %v: the user's edit was replaced", d.Content(), d.IsEdited())
+	}
+	if !d.HasConflict() {
+		t.Error("the file changed under the edit and the document is not in conflict")
+	}
+}
+
 func TestDocumentOutsideChanges(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "out.txt", "mine")
