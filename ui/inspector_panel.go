@@ -441,6 +441,15 @@ func (in *inspector) breadcrumbs(c *context) {
 	})
 }
 
+// shownSide is the tab of the sidebar that shows: the one chosen, or Styles
+// where the Widget tab is chosen and the element chosen has no note.
+func (in *inspector) shownSide() int {
+	if in.side == inspWidget && in.sel.widget == nil {
+		return inspStyles
+	}
+	return in.side
+}
+
 // sidebar builds the tabs below the tree: Styles, Computed and
 // Properties of the element chosen.
 func (in *inspector) sidebar(c *context) {
@@ -452,7 +461,7 @@ func (in *inspector) sidebar(c *context) {
 				labels = append(labels, "Widget")
 			}
 			for i, label := range labels {
-				if in.tab0(c, label, in.side == i, 26).Clicked() {
+				if in.tab0(c, label, in.shownSide() == i, 26).Clicked() {
 					in.side = i
 				}
 			}
@@ -462,17 +471,13 @@ func (in *inspector) sidebar(c *context) {
 				coreText(c, "Choose an element in the tree, or pick one in the window.").TextColor(pal.muted).Padding(12)
 				return
 			}
-			switch in.side {
+			switch in.shownSide() {
 			case inspComputed:
 				in.computedPane(c)
 			case inspProperties:
 				in.propertiesPane(c)
 			case inspWidget:
-				if in.sel.widget != nil {
-					in.widgetPane(c)
-					return
-				}
-				in.stylesPane(c)
+				in.widgetPane(c)
 			default:
 				in.stylesPane(c)
 			}

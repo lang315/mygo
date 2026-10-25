@@ -120,20 +120,22 @@ func describe(rt *engine, e *node) inspDetails {
 	d.w, d.h = max(e.w-e.padX(), 0), max(e.h-e.padY(), 0)
 	d.computed = computed(e)
 	d.props = properties(rt, e)
-	d.widget = widgetNote(rt, e)
+	d.widget = widgetNote(rt, e, rt.insp.side == inspWidget)
 	return d
 }
 
 // widgetNote returns the note of the control e belongs to: its own, else
-// that of the nearest element around it that left one.
-func widgetNote(rt *engine, e *node) *inspNoteView {
+// that of the nearest element around it that left one. Its fields are made
+// only when the Widget tab shows them (withFields): they may change from one
+// frame to the next, and would redraw the panel in each.
+func widgetNote(rt *engine, e *node, withFields bool) *inspNoteView {
 	for p, up := e, 0; p != nil; p, up = p.parent, up+1 {
 		n, ok := rt.insp.notes[p.id]
 		if !ok {
 			continue
 		}
 		w := &inspNoteView{owner: p.id, title: n.title}
-		if n.fields != nil {
+		if withFields && n.fields != nil {
 			w.fields = n.fields()
 		}
 		if up > 0 {

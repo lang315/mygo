@@ -233,6 +233,7 @@ func (rt *engine) toggleInspector() {
 	in.forceID, in.forced = 0, 0
 	if !in.open {
 		in.nodes, in.rows, in.sel = nil, nil, inspDetails{}
+		clear(in.notes)
 	} else if in.keys == nil {
 		in.keys = map[uint64]any{}
 	}

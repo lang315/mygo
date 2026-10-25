@@ -24,7 +24,8 @@ func (c *context) Inspecting() bool { return c.rt.insp.inspecting() }
 // when one of them is chosen, and lets the user force the hover, pressed and
 // focus states on the element. fn runs when the note is shown, for the one
 // element chosen, on the thread that draws frames after the view built. Call
-// it only if Inspecting reports true. For developer tools; no effect and no
+// it only if Inspecting reports true, and after Key, which gives the element
+// another ID. For developer tools; no effect and no
 // cost when the inspector is off or built with mygo_noinspector.
 func (e *node) InspectNote(title string, fields func() []InspectorField) *node {
 	if in := &e.c.rt.insp; in.inspecting() {
