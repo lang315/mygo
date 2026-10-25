@@ -5,11 +5,13 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/egoist/mygo/internal/rope"
 )
 
-// afterEditHook, set by tests, runs in apply once the edit is in the buffer,
-// before the editor follows the buffer: the time in which another goroutine
-// edits it.
+// afterEditHook, set by tests, runs in apply and undo once the edit is in the
+// buffer, before the editor follows the buffer: the time in which another
+// goroutine edits it.
 var afterEditHook func()
 
 // apply makes edits to the buffer as one step of undo, and gives the
@@ -63,26 +65,7 @@ func (ed *editor) apply(edits []Edit, kind editKind, after func(move func(int, b
 	if sels != nil {
 		// Placed in the text the edit made, and moved through the edits
 		// made after it before the editor followed.
-		if ed.view.version != made {
-			entries, _, ok := b.entriesSince(made)
-			if !ok {
-				// Too far behind the buffer's log to follow its edits, as
-				// the editor's own sync was: the changes of the lines
-				// between the text made and the text it follows.
-				cs := changesBetween(madeText, ed.view.text)
-				for i := range sels {
-					sels[i] = mapSel(sels[i], cs)
-				}
-			}
-			for _, e := range entries {
-				if e.version > ed.view.version {
-					break
-				}
-				for i := range sels {
-					sels[i] = mapSel(sels[i], e.changes)
-				}
-			}
-		}
+		ed.followEdits(sels, b, made, madeText)
 		ed.sels = mergeSels(sels)
 	}
 	b.setSelectionsAfter(ed, slices.Clone(ed.sels))
@@ -90,6 +73,32 @@ func (ed *editor) apply(edits []Edit, kind editKind, after func(move func(int, b
 	ed.blinkStart = ed.frameNow
 	ed.needsBuild = true
 	return true
+}
+
+// followEdits moves sels, placed in the text of version made (madeText), through
+// the edits made after it, up to the version the editor follows.
+func (ed *editor) followEdits(sels []sel, b *Buffer, made uint64, madeText rope.Text) {
+	if ed.view.version == made {
+		return
+	}
+	entries, _, ok := b.entriesSince(made)
+	if !ok {
+		// Too far behind the buffer's log to follow its edits, as the
+		// editor's own sync was: the changes of the lines between the text
+		// made and the text it follows.
+		cs := changesBetween(madeText, ed.view.text)
+		for i := range sels {
+			sels[i] = mapSel(sels[i], cs)
+		}
+	}
+	for _, e := range entries {
+		if e.version > ed.view.version {
+			break
+		}
+		for i := range sels {
+			sels[i] = mapSel(sels[i], e.changes)
+		}
+	}
 }
 
 // replaceEach replaces each selection with the text of fn and puts the
@@ -349,9 +358,13 @@ func (ed *editor) undo(redo bool) bool {
 	} else {
 		tx, ok = b.undoStep()
 	}
+	made, madeText := b.version, b.text
 	b.mu.Unlock()
 	if !ok {
 		return false
+	}
+	if afterEditHook != nil {
+		afterEditHook()
 	}
 	ed.sync()
 	saved := tx.selBefore
@@ -359,6 +372,10 @@ func (ed *editor) undo(redo bool) bool {
 		saved = tx.selAfter
 	}
 	if s, ok := saved.([]sel); ok && tx.owner == ed && s != nil {
+		// Placed in the text the step made, and moved through the edits made
+		// after it before the editor followed.
+		s = slices.Clone(s)
+		ed.followEdits(s, b, made, madeText)
 		ed.sels = mergeSels(ed.clampSels(s))
 	}
 	ed.reveal = revealFit
