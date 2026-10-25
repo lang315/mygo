@@ -78,8 +78,9 @@ type ListState struct {
 	// Selection, when set, lets the user choose several rows, which it
 	// holds by their keys: a click chooses one, Cmd-click (Ctrl-click on
 	// Linux and Windows) adds a row or takes it out, and Shift-click
-	// chooses those from the row last chosen to it, as Shift with the keys
-	// that move the choice does; Cmd+A chooses all. On Linux and Windows,
+	// chooses those from the row last chosen to it, in place of the others
+	// unless Cmd is held, as Shift with the keys that move the choice does;
+	// Cmd+A chooses all. On Linux and Windows,
 	// Ctrl with those keys moves without choosing, and Ctrl+Space adds the
 	// row there or takes it out. Selected, set as well, is the row last
 	// chosen, where the keys move from. A right-click on a row not chosen
@@ -1075,10 +1076,9 @@ func (f *listFrame) toggle(i int) {
 	f.lead(i, true)
 }
 
-// extend chooses the rows from the pivot to row i, as Shift does: on
-// macOS in place of those it last chose, elsewhere in place of all others
-// unless keep.
-func (f *listFrame) extend(i int, keep bool) { f.extendBy(i, keep, runtime.GOOS == "darwin") }
+// extend chooses the rows from the pivot to row i, as Shift does: in place of
+// all others unless keep.
+func (f *listFrame) extend(i int, keep bool) { f.extendBy(i, keep, false) }
 
 // extendBy is extend, choosing the rows from the pivot to row i in place
 // of those it last chose with span, else in place of all others unless

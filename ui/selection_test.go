@@ -57,41 +57,24 @@ func TestListChoosesSeveral(t *testing.T) {
 	s := ListState{Selection: &sel}
 	changes := 0
 	tt := coreNewTester(severalView(&s, &changes), 300, 400)
-	mac := runtime.GOOS == "darwin"
 	tt.Click("Row 2")
 	tt.ClickWith(Cmd, "Row 5")
 	expectChosen(t, &sel, 2, 5)
 	if changes != 2 {
 		t.Errorf("%d changes", changes)
 	}
-	// Shift chooses from the row last chosen: on macOS with the others,
-	// elsewhere in their place.
+	// Shift chooses from the row last chosen, in place of the others, on
+	// every platform.
 	tt.ClickWith(Shift, "Row 7")
-	if mac {
-		expectChosen(t, &sel, 2, 5, 6, 7)
-	} else {
-		expectChosen(t, &sel, 5, 6, 7)
-	}
+	expectChosen(t, &sel, 5, 6, 7)
 	// Again, from the same row: in place of the rows it chose.
 	tt.ClickWith(Shift, "Row 4")
-	if mac {
-		expectChosen(t, &sel, 2, 4, 5)
-	} else {
-		expectChosen(t, &sel, 4, 5)
-	}
+	expectChosen(t, &sel, 4, 5)
 	tt.ClickWith(Cmd, "Row 5")
-	if mac {
-		expectChosen(t, &sel, 2, 4)
-	} else {
-		expectChosen(t, &sel, 4)
-	}
-	// Cmd+Shift keeps the others everywhere.
+	expectChosen(t, &sel, 4)
+	// Cmd+Shift keeps the others.
 	tt.ClickWith(Cmd|Shift, "Row 7")
-	if mac {
-		expectChosen(t, &sel, 2, 4, 5, 6, 7)
-	} else {
-		expectChosen(t, &sel, 4, 5, 6, 7)
-	}
+	expectChosen(t, &sel, 4, 5, 6, 7)
 	tt.Click("Row 9")
 	expectChosen(t, &sel, 9)
 	changes = 0
