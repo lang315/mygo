@@ -468,6 +468,50 @@ func TestDocumentRecoveryWritesNothingAfterItIsClosed(t *testing.T) {
 	}
 }
 
+// A restore after quit would take for a crashed instance's the copies of this
+// one (close forgot its session), write none (the store is closed) and remove
+// them: the changes of the user, lost.
+func TestDocumentRecoveryRestoreAfterQuitKeepsTheCopies(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	d := ds.New()
+	d.Set("unsaved")
+	waitFor(t, "the recovery copy", func() bool { return d.backedUpAt() != 0 })
+	root, _ := ds.kind.recovery.root()
+	copies := func() []string { m, _ := filepath.Glob(filepath.Join(root, "*", d.id)); return m }
+	if len(copies()) != 1 {
+		t.Fatalf("recovery copies %q", copies())
+	}
+	ds.kind.recovery.close() // quit
+	if n := ds.kind.restore(); n != 0 {
+		t.Fatalf("restored %d documents after quit", n)
+	}
+	if len(copies()) != 1 {
+		t.Fatalf("the restore after quit removed the copy: %q", copies())
+	}
+}
+
+// Quit in the middle of a restore: the documents it opened write no copy of
+// their own, so the session it claimed stays for the next launch.
+func TestDocumentRecoveryQuitDuringARestoreKeepsTheSession(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	root, _ := ds.kind.recovery.root()
+	session := filepath.Join(root, "crashed")
+	if err := os.MkdirAll(session, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(session, "index.json"), []byte(`[{"id":"a","name":"Untitled 3"}]`), 0o600)
+	os.WriteFile(filepath.Join(session, "a"), []byte("draft"), 0o600)
+	orphans, done := ds.kind.recovery.claim()
+	if len(orphans) != 1 {
+		t.Fatalf("claimed %d copies", len(orphans))
+	}
+	ds.kind.recovery.close() // quit
+	done()                   // the restore ends
+	if _, err := os.Stat(filepath.Join(session, "a")); err != nil {
+		t.Fatalf("the session claimed was removed at quit: %v", err)
+	}
+}
+
 func TestDocumentRecovery(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	d := ds.New()

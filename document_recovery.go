@@ -171,8 +171,13 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 		return nil, func() {}
 	}
 	s.mu.Lock()
-	own := s.dir
+	own, closed := s.dir, s.closed
 	s.mu.Unlock()
+	if closed {
+		// Quit: the session of this instance is no one's now, and the
+		// documents restored would write no copy of their own.
+		return nil, func() {}
+	}
 	dirs, _ := os.ReadDir(root)
 	var claimed []string
 	var locks []*os.File
@@ -204,9 +209,14 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 		}
 	}
 	return orphans, func() {
+		s.mu.Lock() // quit (close) comes before or after all of it
+		defer s.mu.Unlock()
+		closed := s.closed
 		for i, dir := range claimed {
 			locks[i].Close()
-			os.RemoveAll(dir)
+			if !closed { // quit came meanwhile: the copies were not written again, they stay
+				os.RemoveAll(dir)
+			}
 		}
 	}
 }
