@@ -53,5 +53,9 @@ func TestAppFileInUse(t *testing.T) {
 		if _, err := readAppFile(path); err != nil {
 			t.Fatalf("read while replaced: %v", err)
 		}
+		// A reader that never pauses has the file open at most of the
+		// instants a replace looks, and no number of tries is sure to find
+		// it closed: the app's readers read now and then.
+		time.Sleep(time.Millisecond)
 	}
 }
