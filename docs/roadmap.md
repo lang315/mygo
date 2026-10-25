@@ -191,6 +191,28 @@ cannot show: those items are not marked):
 
 - Bring `TableFrame100k` down to tens of µs. *Open:* 104 µs on an M1 Pro;
   allocations went from 164 to 22 a frame (#169, #179, #182).
+  Where the 104 µs goes (an M1 Pro, 195 elements, the scene of
+  `BenchmarkTableFrame100k`, the mean of 100,000 frames; 0.55 µs an element):
+
+  | | build | layout | paint | present | other | frame |
+  |---|---|---|---|---|---|---|
+  | text in the cells | 26.8 µs | 44.1 µs | 25.4 µs | 7.9 µs | 3.4 µs | 107.5 µs |
+  | boxes in the cells, same 195 elements | 25.8 µs | 37.9 µs | 9.6 µs | 4.5 µs | 3.2 µs | 80.9 µs |
+
+  The text costs about 5 µs of layout, 16 of paint and 3 of present; the
+  layout of 195 plain elements is still 38 µs. The frame is the work itself:
+  the process CPU (`getrusage`) equals the wall time, 105.5 and 105.4 µs.
+  *How to measure:* time the frame with `time.Now` and read the phases from
+  the engine's own timers, `frameStats.laps` (`ui/framestats.go`; a test sets
+  `rt.stats = newFrameStats(time.Hour)`; `MYGO_FRAME_STATS=all` logs them to a
+  tenth of a millisecond). Do not split a frame with pprof on macOS: it
+  samples about 85% of the time, counts the setup's `madvise` and gave a
+  frame of 37 µs.
+  *Layout cache:* in an idle frame of this table 183 of its 195 elements are
+  laid out again, and a plain tree of 62 elements lays out none
+  (`ui/layoutcache.go`: a List builds its rows while it lays out and a Table
+  fits its columns, so they and what is inside them are never "the same").
+  Reusing the layout of the rows a List builds is the lead for the 44 µs.
 - Stop allocating closures every frame in the widget layer. *In part:*
   #169 and #179 took them from the table's rows; `BenchmarkWidgetFrame`
   still makes 0.67 allocation a widget.
