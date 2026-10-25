@@ -56,6 +56,9 @@ type GridState struct {
 	// focused or not, as a Table's rows are, instead of a tint (a photo
 	// library's) or, unfocused, a grey.
 	AccentChoice bool
+	// PlainChecks draws the check boxes of Checked without the panel that
+	// keeps them readable over a picture: for items that have none.
+	PlainChecks bool
 
 	rows ListState
 	// cells are the items of the cells the last frame built, by their
@@ -379,8 +382,12 @@ func (s *GridState) checkBox(c *context, grid, cell *node, k any, name string) {
 	}
 	box, on := itemCheckbox(c, grid, s.Checked, k, label)
 	box.Absolute().Top(t.Space(1)).Start(t.Space(1))
-	// A background keeps it visible over a light or a dark image.
-	box.Padding(t.Space(1)).Radius(t.Radius).Background(t.Surface.Alpha(0.85))
+	if s.PlainChecks {
+		box.Padding(t.Space(1))
+	} else {
+		// A background keeps it visible over a light or a dark image.
+		box.Padding(t.Space(1)).Radius(t.Radius).Background(t.Surface.Alpha(0.85))
+	}
 	if !on && !cell.Hovered() && s.Checked.size() == 0 {
 		passThroughAll(box.Opacity(0))
 	}
@@ -474,7 +481,7 @@ func (s *GridState) choose(grid *node, i int) {
 // extend chooses the items from the pivot to i.
 func (s *GridState) extend(grid *node, i int) {
 	p := s.pivot
-	if p < 0 || s.Selection == nil {
+	if p < 0 || p >= grid.setSize || s.Selection == nil {
 		s.choose(grid, i)
 		return
 	}

@@ -150,3 +150,70 @@ func TestGridViewAccentChoiceShowsChosenItemsInTheAccent(t *testing.T) {
 		}
 	}
 }
+
+// A pivot out of range, set for items that were then removed or never there,
+// is ignored: Shift-click chooses the item alone, as a list's does.
+func TestGridStateSetPivotOutOfRangeIsIgnoredByShiftClick(t *testing.T) {
+	sel, cur := Selection[int]{}, -1
+	s := GridState{Selected: &cur, Selection: &sel, Key: func(i int) any { return i }}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			coreGridView(c, &s, 5, 100, 40, func(i int) { coreTextf(c, "Item %d", i) }).Grow(1)
+		})
+	}, 448, 300)
+	s.SetPivot(99)
+	if err := tt.ClickWith(Shift, "Item 3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := chosenKeys(&sel, 5); !slices.Equal(got, []int{3}) {
+		t.Fatalf("Shift-click with the pivot out of range chose %v, want only 3", got)
+	}
+	s.SetPivot(-7)
+	if err := tt.ClickWith(Shift, "Item 1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := chosenKeys(&sel, 5); !slices.Equal(got, []int{1}) {
+		t.Fatalf("Shift-click with a negative pivot chose %v, want only 1", got)
+	}
+}
+
+// An idle check box has a panel behind it for readability over a picture,
+// unless the grid says its items have none (PlainChecks): on a red page the
+// panel shows as a patch that is not red.
+func TestGridViewPlainChecksDrawNoPanelBehindTheBox(t *testing.T) {
+	red := RGB(200, 30, 30)
+	redIn := func(plain bool) int {
+		sel, ck, cur := Selection[int]{}, Selection[int]{}, -1
+		ck.Add(1) // any checked: every box shows
+		s := GridState{Selected: &cur, Selection: &sel, Checked: &ck, Key: func(i int) any { return i },
+			Label: func(i int) string { return fmt.Sprint("Item ", i) }, PlainChecks: plain}
+		tt := coreNewTester(func(c *context) {
+			coreColumn(c).Fill().Background(red).Children(func() {
+				coreGridView(c, &s, 3, 100, 60, func(i int) { coreTextf(c, "Item %d", i) }).Grow(1)
+			})
+		}, 448, 300)
+		var box TestNode
+		for _, n := range tt.Nodes() {
+			if n.Role == RoleCheckBox && n.Label == "Check Item 0" {
+				box = n
+			}
+		}
+		if box.Label == "" {
+			t.Fatalf("no check box of Item 0 in %v", tt.Nodes())
+		}
+		n := 0
+		img := tt.Image()
+		for y := int(box.Bounds.Y); y < int(box.Bounds.Y+box.Bounds.H); y++ {
+			for x := int(box.Bounds.X); x < int(box.Bounds.X+box.Bounds.W); x++ {
+				if c := img.RGBAAt(x, y); c.R == 200 && c.G == 30 && c.B == 30 {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	with, without := redIn(false), redIn(true)
+	if without < with+100 {
+		t.Errorf("red pixels in an idle box: %d with the panel, %d without: want the plain box to show the page", with, without)
+	}
+}
