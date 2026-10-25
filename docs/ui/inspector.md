@@ -56,7 +56,8 @@ closes it, and Alt-click opens or closes everything inside.
   element. Escape stops picking.
 - `Cmd+F` (`Ctrl+F`) finds elements by their tag, text, label or key.
 
-Below the tree, the element chosen has three tabs:
+Below the tree, the element chosen has three tabs, and a fourth, Widget, when
+a control it belongs to left a note (see below):
 
 - **Styles**: the styles it sets, as a CSS rule, with where the app built
   it (the file and line of the call that created it, or gave it its
@@ -69,6 +70,37 @@ Below the tree, the element chosen has three tabs:
 - **Properties**: what it is (its type, ID, key, text), its state
   (focused, under the pointer, pressed, disabled, moving), and what
   assistive technology sees of it.
+
+- **Widget**: the note of the control the element belongs to, or of the
+  nearest element around it that left one (it says "from Column, 1 up"),
+  and three buttons that force the control's **hover**, **pressed** and
+  **focus** states, as Chrome's `:hov` panel does, to see how it looks in
+  them without the pointer. The state goes when another element is chosen,
+  when the inspector closes and when the element is gone.
+
+## Notes from controls
+
+A control, or a widget of your own, tells the inspector what it is made of
+with `Element.InspectNote`, when `Context.Inspecting` says the inspector is
+open:
+
+```go
+box := ui.Box(c).Label("Card")
+if c.Inspecting() {
+	box.InspectNote("Card", func() []ui.InspectorField {
+		return []ui.InspectorField{
+			{Name: "Style"}, // a heading: no Value
+			{Name: "padding", Value: "2"},
+		}
+	})
+}
+```
+
+The function runs only for the element chosen, when its note is shown. The
+inspector being closed, or built out with `-tags mygo_noinspector`, the
+note costs nothing: `Inspecting` is then false, a constant, and what follows
+it is left out of the program. The `ui/widget` controls leave notes for their
+Styles (see [widget.md](widget.md)).
 
 ## Performance and issues
 
