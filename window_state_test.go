@@ -33,6 +33,9 @@ func TestWindowState(t *testing.T) {
 	// Runs once the test's windows closed and wrote their states in dir.
 	t.Cleanup(func() {
 		onMain(forget)
+		// The windows closing queued writes, which resolve the file when they
+		// run: they end before the path is reset and the directory removed.
+		flushAppWrites()
 		App.SetPath(PathUserData, "")
 		windowStateDelay = delay
 	})
