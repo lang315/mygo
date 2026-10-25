@@ -21,8 +21,9 @@ type GridState struct {
 	// Selection, when set, lets the user choose several items, held by
 	// their keys, as a List's Selection: Cmd-click (Ctrl-click on Linux
 	// and Windows) adds an item or takes it out, Shift-click and Shift
-	// with the arrows choose those from the item last chosen, and Cmd+A
-	// chooses all. Selected, set as well, is the item last chosen.
+	// with the arrows choose those from the item last chosen, in place of
+	// the others unless Cmd is held, and Cmd+A chooses all. Selected, set
+	// as well, is the item last chosen.
 	Selection Selector
 	// Label returns the text of item i: typing its first letters while
 	// the grid has the focus chooses it, and assistive technology reads it
@@ -452,7 +453,7 @@ func (s *GridState) click(grid *node, i int, mods Modifiers) {
 	case s.Selection == nil:
 		s.choose(grid, i)
 	case mods&Shift != 0:
-		s.extend(grid, i)
+		s.extend(grid, i, mods&Cmd != 0)
 	case mods&Cmd != 0:
 		s.Selection.set(s.key(i), !s.Selection.has(s.key(i)))
 		*s.Selected, s.pivot = i, i
@@ -478,14 +479,17 @@ func (s *GridState) choose(grid *node, i int) {
 	}
 }
 
-// extend chooses the items from the pivot to i.
-func (s *GridState) extend(grid *node, i int) {
+// extend chooses the items from the pivot to i, in place of all others unless
+// keep.
+func (s *GridState) extend(grid *node, i int, keep bool) {
 	p := s.pivot
 	if p < 0 || p >= grid.setSize || s.Selection == nil {
 		s.choose(grid, i)
 		return
 	}
-	s.Selection.clear()
+	if !keep {
+		s.Selection.clear()
+	}
 	for j := min(p, i); j <= max(p, i); j++ {
 		s.Selection.set(s.key(j), true)
 	}
@@ -558,7 +562,7 @@ func (s *GridState) keys(grid *node, n int) {
 		if s.pivot < 0 || !in {
 			s.pivot = max(at, 0)
 		}
-		s.extend(grid, to)
+		s.extend(grid, to, false)
 	} else {
 		s.choose(grid, to)
 	}

@@ -91,7 +91,9 @@ building the list.
   `ui.Selection[K]` by the keys of their items (`Key`), or by their indices
   without one: a click chooses one, Cmd-click (Ctrl-click on Linux and
   Windows) adds a row or takes it out, and Shift-click or Shift with the
-  keys chooses the rows from the one last chosen; Cmd+A chooses all. On
+  keys chooses the rows from the one last chosen, in place of the others
+  (with Cmd, or Ctrl on Linux and Windows, held for the click, besides them);
+  Cmd+A chooses all. On
   Linux and Windows, Ctrl with the keys moves without choosing, and
   Ctrl+Space adds the row there or takes it out. `Selected`, set as well, is
   the row last chosen.

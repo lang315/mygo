@@ -88,6 +88,25 @@ func TestDragSelectAddingShrinksBack(t *testing.T) {
 	}
 }
 
+// A Shift-press on a row already chosen, dragged to another, chooses the rows
+// from the pivot to the one under the pointer in place of all others, on every
+// platform: macOS does not keep the rows chosen before, as it did.
+func TestDragSelectAfterShiftPressReplacesTheOthers(t *testing.T) {
+	tt, _, sel := dragSelectList(t, 20)
+	tt.Click("Row 1")
+	tt.ClickWith(Cmd, "Row 3")
+	tt.ClickWith(Cmd, "Row 5")
+	x, y := rowCenter(t, tt, "Row 3")
+	_, y6 := rowCenter(t, tt, "Row 6")
+	tt.send(platform.SurfaceEvent{Kind: platform.PointerDown, X: float64(x), Y: float64(y), Mods: platform.Modifiers(Shift)})
+	tt.Move(x, y+3)
+	tt.Move(x, y6)
+	tt.Release(x, y6)
+	if got := chosenRows(sel); !slices.Equal(got, []int{5, 6}) {
+		t.Fatalf("Shift-press on Row 3 chosen, dragged to Row 6 with the pivot at Row 5: chose %v, want [5 6]", got)
+	}
+}
+
 // Held below the list, the drag scrolls it and goes on choosing, to the
 // end, though the row pressed scrolls out of view.
 func TestDragSelectScrollsAtEdge(t *testing.T) {

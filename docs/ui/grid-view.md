@@ -25,7 +25,8 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   Enter (`Submitted`).
 - `Selection` lets the user choose several, by `Key`: Cmd-click adds an
   item or takes it out, Shift-click and Shift with the arrows choose those
-  from the item last chosen, and Cmd+A chooses all.
+  from the item last chosen, in place of the others (with Cmd held for the
+  click, besides them), and Cmd+A chooses all.
   `Pivot()` returns the item Shift extends from, -1 for none (as at the start:
   a Shift-click as the first click chooses that item alone), and
   `SetPivot(item)` sets it without changing the choice, for an app that shows

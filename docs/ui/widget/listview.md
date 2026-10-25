@@ -73,6 +73,8 @@ view shows it.
 - Rows are chosen as a table's are: a click, Cmd-click (Ctrl-click on Linux and
   Windows), Shift-click, and the keys, with Cmd+A for all. In the icon views the
   arrows move in two dimensions.
+- Ctrl+Shift-click (Cmd+Shift on macOS) adds the range from the row last chosen
+  to those chosen; a Shift-click alone takes their place.
 - `Selected()` returns the keys of the rows chosen that show, in the order shown;
   `SetSelected(ks...)` chooses rows, and the last is where the keys move from.
 - `OnSelect(fn)` runs `fn` with the keys chosen, on the event goroutine, after
