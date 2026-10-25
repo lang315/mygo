@@ -210,3 +210,92 @@ func TestListViewShowsTheChecksASetterSetInEveryView(t *testing.T) {
 		})
 	}
 }
+
+// focusedBoxes returns the check boxes that hold the keyboard focus.
+func focusedBoxes(tt *ui.Tester) (labels []string) {
+	for _, n := range tt.Nodes() {
+		if n.Role == ui.RoleCheckBox && n.Focused {
+			labels = append(labels, n.Label)
+		}
+	}
+	return labels
+}
+
+// The check boxes of the small items take no focus, as the grid's and the
+// table's do: a click on one leaves the keys with the list, the list is one
+// tab stop, and Space checks the rows chosen, not the box a click reached.
+func TestListViewSmallItemsCheckBoxesTakeNoFocus(t *testing.T) {
+	for _, m := range []ViewMode{ViewSmallIcon, ViewList} {
+		t.Run(m.String()+" a click on a box leaves the keys with the list", func(t *testing.T) {
+			lv := newView().CheckBoxes().SetView(m)
+			tt := tester(t, lv)
+			click(t, tt, "Apple")
+			box := nodeOf(t, tt, ui.RoleCheckBox, "Check Banana")
+			tt.ClickAt(box.Bounds.X+box.Bounds.W/2, box.Bounds.Y+box.Bounds.H/2)
+			tt.Frame()
+			if got := focusedBoxes(tt); len(got) != 0 {
+				t.Fatalf("the focus is on the box %v after a click on it", got)
+			}
+			next := ui.KeyDown
+			if m == ViewSmallIcon {
+				next = ui.KeyRight
+			}
+			tt.Key(0, next)
+			tt.Frame()
+			if got := lv.Selected(); len(got) != 1 || got[0] != "b" {
+				t.Fatalf("%v after the click on a box: Selected %v, want the keys to move on from Apple to Banana", next, got)
+			}
+		})
+		t.Run(m.String()+" Tab leaves the list in one stop", func(t *testing.T) {
+			lv := newView().CheckBoxes().SetView(m)
+			tt := tester(t, lv)
+			click(t, tt, "Apple")
+			tt.Key(0, ui.KeyTab)
+			tt.Frame()
+			if got := focusedBoxes(tt); len(got) != 0 {
+				t.Fatalf("Tab from the list stopped on the box %v: every box is a tab stop", got)
+			}
+		})
+		t.Run(m.String()+" Space checks the row chosen", func(t *testing.T) {
+			lv := newView().CheckBoxes().SetView(m)
+			tt := tester(t, lv)
+			click(t, tt, "Apple")
+			box := nodeOf(t, tt, ui.RoleCheckBox, "Check Banana")
+			tt.ClickAt(box.Bounds.X+box.Bounds.W/2, box.Bounds.Y+box.Bounds.H/2)
+			tt.Frame()
+			tt.Key(0, ui.KeySpace)
+			tt.Frame()
+			if got := lv.Checked(); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+				t.Fatalf("Checked %v: want Apple, which Space checked, and Banana, which the click did", got)
+			}
+		})
+	}
+}
+
+// SetImage(nil) takes the picture function away: the first column's own Image,
+// if the app gave one, is used again.
+func TestListViewSetImageNilGivesTheColumnsOwnImageBack(t *testing.T) {
+	blue := color.RGBA{0, 0, 255, 255}
+	il := ImageList(16)
+	if err := il.Add("doc", pngOf(t, 16, blue)); err != nil {
+		t.Fatal(err)
+	}
+	lv := ListView(func(v *vitem) string { return v.id },
+		Column[vitem]{Title: "Name", Text: func(v *vitem) string { return v.name }, Width: 200,
+			Image: func(*vitem) *ui.Bitmap { return il.Image("doc") }}).SetRows(fruits)
+	tt := tester(t, lv)
+	row := func() int { return bluePixels2(tt, find(t, tt, "Apple")) }
+	if n := row(); n < 16*16 {
+		t.Fatalf("the column's own Image: %d blue pixels, want %d", n, 16*16)
+	}
+	lv.SetImage(func(*vitem) *ui.Bitmap { return nil }) // no picture
+	tt.Frame()
+	if n := row(); n >= 16*16 {
+		t.Fatalf("SetImage(no picture): %d blue pixels left", n)
+	}
+	lv.SetImage(nil)
+	tt.Frame()
+	if n := row(); n < 16*16 {
+		t.Fatalf("after SetImage(nil): %d blue pixels, want the column's own Image back (%d)", n, 16*16)
+	}
+}

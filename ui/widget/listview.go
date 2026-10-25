@@ -51,6 +51,8 @@ type ListViewWidget[T any, K comparable] struct {
 	mode     ViewMode
 	image    func(*T) *ui.Bitmap
 	iconSize float32
+	// colImage is the Image the first column had when the list view was made.
+	colImage func(*T) *ui.Bitmap
 	// imageSize is the side an image list says its images are drawn at, 0 for
 	// the defaults: iconSize for large icons, 16 for the others.
 	imageSize float32
@@ -86,6 +88,9 @@ func ListView[T any, K comparable](key func(*T) K, cols ...Column[T]) *ListViewW
 // show too.
 func ListViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]) *ListViewWidget[T, K] {
 	lv := &ListViewWidget[T, K]{t: DataGridViewOf(src, cols...), iconSize: 48, cursor: -1}
+	if len(cols) > 0 {
+		lv.colImage = cols[0].Image
+	}
 	lv.init(lv)
 	mu.Lock()
 	lv.t.watch = lv.watched
@@ -142,6 +147,9 @@ func (lv *ListViewWidget[T, K]) setImage(fn func(*T) *ui.Bitmap, side float32) {
 	lv.t.change(func() {
 		lv.image, lv.imageSize = fn, side
 		if len(lv.t.cols) > 0 {
+			if fn == nil {
+				fn = lv.colImage // the column's own, if the app gave one
+			}
 			lv.t.cols[0].Image = fn
 		}
 	})
@@ -530,7 +538,7 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 		if t.checks {
 			k := t.key(r)
 			on := t.checked.shown.Has(k)
-			ui.Checkbox(c, &on, "").Label("Check " + text).OnChange(func() {
+			ui.Checkbox(c, &on, "").Label("Check " + text).Unfocusable().OnChange(func() {
 				if on {
 					t.checked.shown.Add(k)
 				} else {
