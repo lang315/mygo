@@ -25,7 +25,11 @@ func TestWindowState(t *testing.T) {
 	onMain(forget)
 	// A new process: the states are written as when the app quits, and read
 	// again.
-	relaunch := func() { onMain(func() { saveWindowStates(); forget() }) }
+	relaunch := func() {
+		onMain(saveWindowStates)
+		flushAppWrites() // the write must end before the test touches the file
+		onMain(forget)
+	}
 	// Runs once the test's windows closed and wrote their states in dir.
 	t.Cleanup(func() {
 		onMain(forget)
@@ -119,7 +123,7 @@ func TestWindowState(t *testing.T) {
 		saveWindowStates()
 	})
 	flushAppWrites() // the write is off the main thread, and tells it of the failure
-	if kept := onMainValue(func() bool { return windowStates.dirty }); !kept {
+	if !windowStates.failed.Load() {
 		t.Error("a failed save drops the states")
 	}
 	if err := os.Remove(file + ".tmp"); err != nil {

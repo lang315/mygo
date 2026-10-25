@@ -85,9 +85,10 @@ func runAppWrites() {
 }
 
 // saveAppFiles writes the window states and waits for every write asked for
-// to be done: what quitting does, before OnQuit, which may end the process.
-// Main thread only.
+// to be done: what quitting does. The first wait lets a write that failed
+// say so, for the save to try again. Main thread only.
 func saveAppFiles() {
+	flushAppWrites()
 	saveWindowStates()
 	flushAppWrites()
 }

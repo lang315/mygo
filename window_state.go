@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -32,6 +33,10 @@ var windowStates struct {
 	loaded bool
 	byKey  map[string]WindowState
 	dirty  bool
+	// failed is set by the background write that failed, and cleared by one
+	// that succeeded; the next save, at the latest the one of quitting,
+	// writes the states again.
+	failed atomic.Bool
 }
 
 func loadWindowStates() {
@@ -49,6 +54,9 @@ func loadWindowStates() {
 // saveWindowStates saves the states if they changed. A save that fails
 // keeps them for the next one, at the latest when the app quits.
 func saveWindowStates() {
+	if windowStates.failed.Swap(false) {
+		windowStates.dirty = true
+	}
 	if !windowStates.dirty {
 		return
 	}
@@ -58,9 +66,7 @@ func saveWindowStates() {
 		// thread. A failure keeps the states for the next save, as below.
 		windowStates.dirty = false
 		writeAppFileLater("window-state", func() {
-			if store.SaveWindowStates(states) != nil {
-				postMain(func() { windowStates.dirty = true })
-			}
+			windowStates.failed.Store(store.SaveWindowStates(states) != nil)
 		})
 		return
 	}

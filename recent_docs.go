@@ -59,7 +59,9 @@ func loadRecentLocked() {
 //	if err := mygo.App.AddRecentDocument(path); err != nil { … }
 //
 // The list is written to its file off the calling thread, soon, and before
-// the app quits; a failure of that write is logged, not returned. A
+// the app quits; a failure of that write is logged, not returned. An app
+// that ends the process itself (os.Exit, log.Fatal) right after may lose
+// the last write: it should use App.Exit or App.Relaunch. A
 // relative path is resolved against the working directory. Choosing an
 // entry of the Dock menu, the jump list or the Open Recent menu opens the
 // file with the app, which gets it through OnOpenFile, or opens it as a
