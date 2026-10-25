@@ -170,7 +170,7 @@ func (a *Application) Exit(code int) {
 		for _, w := range Windows() {
 			w.destroy()
 		}
-		saveWindowStates()
+		saveAppFiles() // the states and the other files are written before the process ends
 	})
 	os.Exit(code)
 }
@@ -214,13 +214,20 @@ func (a *Application) finish() {
 		stopFileWatches()
 		clipboardStopped = true
 		backend().Clipboard().Close()
-		saveWindowStates()
-		fire(&a.onQuit)
+		a.saveAndFireQuit()
 		if a.relaunch {
 			relaunchNow() // after OnQuit, which releases the single instance lock
 		}
 		loop.shutdown()
 	})
+}
+
+// saveAndFireQuit writes the app's files, calls the OnQuit listeners, and
+// waits for the files they asked to write.
+func (a *Application) saveAndFireQuit() {
+	saveAppFiles()
+	fire(&a.onQuit)
+	flushAppWrites()
 }
 
 // lastWindowClosed is called on the main thread when the last window has

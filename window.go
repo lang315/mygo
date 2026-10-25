@@ -206,7 +206,9 @@ type WindowState struct {
 
 // WindowStateStore keeps the states of the windows with a
 // WindowOptions.StateKey, by key, for App.SetWindowStateStore. MyGo calls
-// it on the main thread, so it should return quickly.
+// it on the main thread, so it should return quickly. (The default file is
+// written off the main thread, and the app waits for the last write when it
+// quits.)
 type WindowStateStore interface {
 	// LoadWindowStates returns the saved states. It is called once, when
 	// the first window with a StateKey is created. Without states (nil, or

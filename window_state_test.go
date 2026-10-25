@@ -25,7 +25,11 @@ func TestWindowState(t *testing.T) {
 	onMain(forget)
 	// A new process: the states are written as when the app quits, and read
 	// again.
-	relaunch := func() { onMain(func() { saveWindowStates(); forget() }) }
+	relaunch := func() {
+		onMain(saveWindowStates)
+		flushAppWrites() // the write must end before the test touches the file
+		onMain(forget)
+	}
 	// Runs once the test's windows closed and wrote their states in dir.
 	t.Cleanup(func() {
 		onMain(forget)
@@ -72,6 +76,7 @@ func TestWindowState(t *testing.T) {
 		fw.SetBounds(platform.Rect{Y: 25, Width: 1440, Height: 875})
 	})
 	w.Destroy()
+	flushAppWrites() // the file is written off the main thread
 	if got, want := saved()["main"], (WindowState{X: 200, Y: 150, Width: 800, Height: 600, Maximized: true}); got != want {
 		t.Errorf("saved %+v, want %+v", got, want)
 	}
@@ -112,19 +117,20 @@ func TestWindowState(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := WindowState{X: 1, Y: 2, Width: 300, Height: 200}
-	kept := onMainValue(func() bool {
+	onMain(func() {
 		windowStates.byKey["failed"] = want
 		windowStates.dirty = true
 		saveWindowStates()
-		return windowStates.dirty
 	})
-	if !kept {
+	flushAppWrites() // the write is off the main thread, and tells it of the failure
+	if !windowStates.failed.Load() {
 		t.Error("a failed save drops the states")
 	}
 	if err := os.Remove(file + ".tmp"); err != nil {
 		t.Fatal(err)
 	}
 	onMain(saveWindowStates)
+	flushAppWrites()
 	if got := saved()["failed"]; got != want {
 		t.Errorf("saved %+v after a failed save, want %+v", got, want)
 	}

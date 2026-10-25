@@ -23,7 +23,11 @@ func testRecent(t *testing.T) {
 		recentDocs.Unlock()
 	}
 	reset()
-	t.Cleanup(func() { App.SetPath(PathUserData, ""); reset() })
+	t.Cleanup(func() {
+		flushAppWrites() // a late write would land in the directory being removed
+		App.SetPath(PathUserData, "")
+		reset()
+	})
 	onMain(func() { fb.RecentDocuments = nil; fb.RecentCleared = 0 })
 }
 
@@ -75,6 +79,7 @@ func TestAddRecentDocument(t *testing.T) {
 		t.Errorf("RecentDocuments = %q, want no %s", got, paths[11])
 	}
 	// The list outlives the run.
+	flushAppWrites() // the file is written off the main thread
 	recentDocs.Lock()
 	recentDocs.loaded, recentDocs.paths = false, nil
 	recentDocs.Unlock()

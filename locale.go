@@ -143,7 +143,10 @@ func (a *Application) Locale() string {
 // translations would do. SetLocale panics on a tag that names no language.
 // It is safe from any goroutine; calls made before the main thread gets to
 // them show the last tag only. While MYGO_LOCALE is set, calls made before
-// the app is ready change nothing.
+// the app is ready change nothing. The file is written off the calling
+// thread, and before the app quits; an app that ends the process itself
+// (os.Exit, log.Fatal) right after may lose the write: it should use
+// App.Exit or App.Relaunch.
 func (a *Application) SetLocale(tag string) {
 	normalized := ""
 	if strings.TrimSpace(tag) != "" {
@@ -420,7 +423,7 @@ func savedLocale() string {
 // only.
 func saveLocale(tag string) {
 	if !backend().App().SaveLocale(tag) {
-		writeLocaleFile(tag)
+		writeAppFileLater("locale", func() { writeLocaleFile(tag) })
 	}
 }
 

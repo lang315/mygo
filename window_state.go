@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -32,6 +33,10 @@ var windowStates struct {
 	loaded bool
 	byKey  map[string]WindowState
 	dirty  bool
+	// failed is set by the background write that failed, and cleared by one
+	// that succeeded; the next save, at the latest the one of quitting,
+	// writes the states again.
+	failed atomic.Bool
 }
 
 func loadWindowStates() {
@@ -49,11 +54,31 @@ func loadWindowStates() {
 // saveWindowStates saves the states if they changed. A save that fails
 // keeps them for the next one, at the latest when the app quits.
 func saveWindowStates() {
+	if windowStates.failed.Swap(false) {
+		windowStates.dirty = true
+	}
 	if !windowStates.dirty {
 		return
 	}
-	windowStates.dirty = App.windowStateStore().SaveWindowStates(maps.Clone(windowStates.byKey)) != nil
+	store, states := App.windowStateStore(), maps.Clone(windowStates.byKey)
+	if _, background := store.(backgroundStore); background {
+		// The file, which may be in use for seconds: written off the main
+		// thread. A failure keeps the states for the next save, as below.
+		windowStates.dirty = false
+		writeAppFileLater("window-state", func() {
+			windowStates.failed.Store(store.SaveWindowStates(states) != nil)
+		})
+		return
+	}
+	windowStates.dirty = store.SaveWindowStates(states) != nil
 }
+
+// backgroundStore marks the stores whose writes are done off the main thread:
+// the default file's. A store of the app's (SetWindowStateStore) is called on
+// the main thread, as its documentation says.
+type backgroundStore interface{ background() }
+
+func (stateFile) background() {}
 
 // windowStateStore is the store of App.SetWindowStateStore, or the file.
 func (a *Application) windowStateStore() WindowStateStore {
