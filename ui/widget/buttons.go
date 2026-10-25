@@ -16,6 +16,7 @@ type ButtonWidget struct {
 	text    string
 	icon    *ui.SVG
 	onClick func()
+	clicked func() // onClicked, made once
 }
 
 // Button makes a button showing text.
@@ -83,7 +84,9 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 		e.Label(label).Children(func() { ui.RichText(c, mnemonicSpans(label, at)...) })
 	}
 	if h := b.onClick; h != nil && b.icon == nil {
-		registerMnemonic(key, e, b, func() { Post(h) })
+		if key != 0 { // the closure is made only for a mnemonic: it would be allocated in each build
+			registerMnemonic(key, e, b, func() { Post(h) })
+		}
 	}
 	if b.icon != nil {
 		text, _, _ := parseMnemonic(b.text)
@@ -97,10 +100,23 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 			})
 		})
 	}
-	if h := b.onClick; h != nil {
-		e.OnClick(func() { Post(h) })
+	if b.onClick != nil {
+		if b.clicked == nil {
+			b.clicked = b.onClicked // once: a closure made in each build is an allocation each
+		}
+		e.OnClick(b.clicked)
 	}
 	return e
+}
+
+// onClicked is ui's OnClick callback: it runs the OnClick of the moment.
+func (b *ButtonWidget) onClicked() {
+	mu.Lock()
+	h := b.onClick
+	mu.Unlock()
+	if h != nil {
+		Post(h)
+	}
 }
 
 // LinkLabelWidget opens a web address when clicked.
@@ -124,6 +140,7 @@ type ToggleWidget struct {
 	text     string
 	on       mirror[bool]
 	onChange func()
+	toggled  func() // onToggled, made once
 }
 
 func Toggle(text string) *ToggleWidget {
@@ -139,9 +156,20 @@ func (t *ToggleWidget) OnChange(fn func()) *ToggleWidget {
 	return t
 }
 
+// onToggled is the callback of ui's OnChange, made once (see TextBoxWidget).
+func (t *ToggleWidget) onToggled() {
+	mu.Lock()
+	fn := onChange(&t.on, t.onChange)
+	mu.Unlock()
+	fn()
+}
+
 func (t *ToggleWidget) build(c *ui.Context) ui.Element {
 	p, changed := t.on.bind()
-	e := ui.Toggle(c, p, t.text).OnChange(onChange(&t.on, t.onChange))
+	if t.toggled == nil {
+		t.toggled = t.onToggled
+	}
+	e := ui.Toggle(c, p, t.text).OnChange(t.toggled)
 	if changed && t.onChange != nil {
 		Post(t.onChange)
 	}
@@ -154,6 +182,7 @@ type CheckBoxWidget struct {
 	text     string
 	on       mirror[bool]
 	onChange func()
+	edit     func() // editedOnce's
 }
 
 func CheckBox(text string) *CheckBoxWidget {
@@ -175,20 +204,22 @@ func (b *CheckBoxWidget) OnChange(fn func()) *CheckBoxWidget {
 func (b *CheckBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := b.on.bind()
 	label, key, _ := parseMnemonic(b.text)
-	e := ui.Checkbox(c, p, label).OnChange(edited(&b.on, &b.bound, b.onChange))
+	e := ui.Checkbox(c, p, label).OnChange(editedOnce(&b.edit, &b.on, &b.bound, &b.onChange))
 	if changed && b.onChange != nil {
 		Post(b.onChange)
 	}
-	registerMnemonic(key, e, b, func() {
-		focusLater(b)
-		toggle := edited(&b.on, &b.bound, b.onChange)
-		Post(func() {
-			mu.Lock()
-			b.on.shown = !b.on.shown
-			mu.Unlock()
-			toggle()
+	if key != 0 {
+		registerMnemonic(key, e, b, func() {
+			focusLater(b)
+			toggle := edited(&b.on, &b.bound, b.onChange)
+			Post(func() {
+				mu.Lock()
+				b.on.shown = !b.on.shown
+				mu.Unlock()
+				toggle()
+			})
 		})
-	})
+	}
 	return e
 }
 
@@ -197,6 +228,7 @@ type SwitchWidget struct {
 	common[SwitchWidget]
 	on       mirror[bool]
 	onChange func()
+	toggled  func() // onToggled, made once
 }
 
 func Switch() *SwitchWidget {
@@ -212,9 +244,20 @@ func (s *SwitchWidget) OnChange(fn func()) *SwitchWidget {
 	return s
 }
 
+// onToggled is the callback of ui's OnChange, made once (see TextBoxWidget).
+func (s *SwitchWidget) onToggled() {
+	mu.Lock()
+	fn := onChange(&s.on, s.onChange)
+	mu.Unlock()
+	fn()
+}
+
 func (s *SwitchWidget) build(c *ui.Context) ui.Element {
 	p, changed := s.on.bind()
-	e := ui.Switch(c, p).OnChange(onChange(&s.on, s.onChange))
+	if s.toggled == nil {
+		s.toggled = s.onToggled
+	}
+	e := ui.Switch(c, p).OnChange(s.toggled)
 	if changed && s.onChange != nil {
 		Post(s.onChange)
 	}
@@ -429,15 +472,17 @@ func (r *RadioButtonWidget) build(c *ui.Context) ui.Element {
 	p, _ := r.on.bind()
 	label, key, _ := parseMnemonic(r.text)
 	e := ui.Radio(c, p, radioOn, label).OnChange(r.edited)
-	registerMnemonic(key, e, r, func() {
-		focusLater(r)
-		Post(func() {
-			mu.Lock()
-			r.on.shown = radioOn
-			mu.Unlock()
-			r.edited()
+	if key != 0 {
+		registerMnemonic(key, e, r, func() {
+			focusLater(r)
+			Post(func() {
+				mu.Lock()
+				r.on.shown = radioOn
+				mu.Unlock()
+				r.edited()
+			})
 		})
-	})
+	}
 	return e
 }
 

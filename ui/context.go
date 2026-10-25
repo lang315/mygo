@@ -23,15 +23,16 @@ type context struct {
 	used   int
 	// dirty is how many elements in the arena have held references since
 	// finish last cleared the unused ones, including earlier build passes.
-	dirty    int
-	theme    *Theme
-	now      time.Time
-	w, h     float32
-	titleBar TitleBar
-	vibrancy bool
-	overlay  *node
-	nextKey  any
-	keySet   bool
+	dirty     int
+	theme     *Theme
+	now       time.Time
+	w, h      float32
+	titleBar  TitleBar
+	vibrancy  bool
+	overlay   *node
+	nextKey   any
+	keySet    bool
+	keyGlobal bool // nextKey is GlobalKey's
 	// tree is the Tree being built, for its items.
 	tree *treeBuild
 	// buttons is how the buttons being built look, in a toolbar or a
@@ -103,7 +104,7 @@ func (c *context) reset(now time.Time, w, h float32) {
 		c.rt.arena = &elementOwner{rt: c.rt}
 	}
 	c.rt.arena.generation = uint32(c.rt.epoch)
-	c.keySet, c.nextKey = false, nil
+	c.keySet, c.nextKey, c.keyGlobal = false, nil, false
 	clear(c.rt.parts)
 	c.rt.parts = c.rt.parts[:0]
 	clear(c.rt.afterInputs)
@@ -233,15 +234,15 @@ func (c *context) newElement(k kind) *node {
 	e.dir = p.dir &^ dirSet
 	keyed, global := c.keySet, false
 	if c.keySet {
-		if g, ok := c.nextKey.(globalKey); ok {
+		if c.keyGlobal {
 			global = true
 			// The same id under any parent, a page its children follow.
-			e.id, e.key = globalID(g.key), g.key
+			e.id, e.key = globalID(c.nextKey), c.nextKey
 			e.flags |= flagPage
 		} else {
 			e.id, e.key = keyedID(p.id, c.nextKey), c.nextKey
 		}
-		c.keySet, c.nextKey = false, nil
+		c.keySet, c.nextKey, c.keyGlobal = false, nil, false
 		if c.rt.insp.open {
 			c.rt.insp.noteKey(e.id, e.key)
 		}
@@ -310,9 +311,6 @@ func keyedID(parent uint64, k any) uint64 {
 	}
 	return mix(parent, h^0xA5A5A5A5A5A5A5A5)
 }
-
-// globalKey is the key GlobalKey gives the next element.
-type globalKey struct{ key any }
 
 // globalRoot stands for the parent of elements keyed globally (GlobalKey).
 const globalRoot uint64 = 0x676c6f62616c6b79

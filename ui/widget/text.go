@@ -86,6 +86,7 @@ type TextBoxWidget struct {
 	icon        *ui.Bitmap
 	onChange    func()
 	onEnter     func()
+	edit        func() // onEdited, made once
 }
 
 // iconSize is the side of a TextBox's icon, in DIPs.
@@ -160,6 +161,17 @@ func (e *TextBoxWidget) OnEnter(fn func()) *TextBoxWidget {
 	return e
 }
 
+// onEdited is the callback of ui's OnChange, made once for the life of the
+// widget: building it again every frame allocates a closure for each text
+// box. It takes the control's OnChange and its binding at the moment of the
+// edit.
+func (e *TextBoxWidget) onEdited() {
+	mu.Lock()
+	fn := edited(&e.text, &e.bound, e.onChange)
+	mu.Unlock()
+	fn()
+}
+
 func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := e.text.bind()
 	el := ui.TextInput(c, p)
@@ -201,7 +213,10 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 			el.TextInsetEnd(errorMarkSize + errorMarkInset + 2)
 		}
 	}
-	el.OnChange(edited(&e.text, &e.bound, e.onChange))
+	if e.edit == nil {
+		e.edit = e.onEdited
+	}
+	el.OnChange(e.edit)
 	if changed && e.onChange != nil {
 		Post(e.onChange)
 	}
@@ -220,6 +235,7 @@ type MultilineTextBoxWidget struct {
 	placeholder string
 	readOnly    bool
 	onChange    func()
+	edit        func() // onEdited, made once
 }
 
 // MultilineTextBox makes an empty text input of several lines.
@@ -247,6 +263,14 @@ func (v *MultilineTextBoxWidget) OnChange(fn func()) *MultilineTextBoxWidget {
 	return v
 }
 
+// onEdited is the callback of ui's OnChange, made once (see TextBoxWidget).
+func (v *MultilineTextBoxWidget) onEdited() {
+	mu.Lock()
+	fn := onChange(&v.text, v.onChange)
+	mu.Unlock()
+	fn()
+}
+
 func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := v.text.bind()
 	el := ui.TextArea(c, p)
@@ -257,7 +281,10 @@ func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 	if c.Measuring() {
 		el.Lines(1, 8) // a window fitted to its content counts a few lines
 	}
-	el.OnChange(onChange(&v.text, v.onChange))
+	if v.edit == nil {
+		v.edit = v.onEdited
+	}
+	el.OnChange(v.edit)
 	if changed && v.onChange != nil {
 		Post(v.onChange)
 	}

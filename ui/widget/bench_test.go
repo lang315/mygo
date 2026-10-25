@@ -151,3 +151,54 @@ func BenchmarkUIFrame(b *testing.B) {
 		}
 	}
 }
+
+// widgetKinds make a control of each kind a form is made of. own is what
+// package ui itself allocates for a control of the kind in each frame (a
+// text input, a styled button, a check box's painting): the widget layer adds
+// nothing to it.
+var widgetKinds = []struct {
+	name string
+	own  int
+	make func(i int) Control
+}{
+	{"Label", 0, func(i int) Control { return Label(fmt.Sprintf("Label %d", i)) }},
+	{"Button", 1, func(i int) Control { return Button(fmt.Sprintf("Button %d", i)).OnClick(func() {}) }},
+	{"TextBox", 1, func(i int) Control { return TextBox().SetText(fmt.Sprintf("Text %d", i)) }},
+	{"MultilineTextBox", 1, func(i int) Control { return MultilineTextBox().SetText(fmt.Sprintf("Text %d", i)) }},
+	{"MaskedTextBox", 1, func(i int) Control { return MaskedTextBox("000-0000") }},
+	{"CheckBox", 2, func(i int) Control { return CheckBox(fmt.Sprintf("Check %d", i)) }},
+	{"Toggle", 1, func(i int) Control { return Toggle(fmt.Sprintf("Toggle %d", i)) }},
+	{"Switch", 1, func(i int) Control { return Switch() }},
+	{"NumericUpDown", 8, func(i int) Control { return NumericUpDown(0, 100, 1) }},
+	{"TrackBar", 1, func(i int) Control { return TrackBar(0, 100) }},
+}
+
+// frameAllocs returns the allocations of a frame of n controls of a kind.
+func frameAllocs(make func(i int) Control, n int) float64 {
+	box := VBox(2)
+	for i := range n {
+		box.Add(make(i))
+	}
+	tt := ui.NewTester(content(ScrollPanel(box)), 1280, 800)
+	for range 10 {
+		tt.Frame()
+	}
+	return testing.AllocsPerRun(30, tt.Frame)
+}
+
+// TestWidgetFrameAllocatesNoClosuresPerWidget keeps the widget layer from
+// allocating for each widget in each frame (a key boxed, a label parsed for
+// its mnemonic, a callback made again). It measures the slope, the
+// allocations of 200 controls less those of 100, per control: what is fixed
+// in a frame, which differs between platforms, is not in it. What is left is
+// ui's own, as the table of kinds says.
+func TestWidgetFrameAllocatesNoClosuresPerWidget(t *testing.T) {
+	for _, k := range widgetKinds {
+		t.Run(k.name, func(t *testing.T) {
+			slope := (frameAllocs(k.make, 200) - frameAllocs(k.make, 100)) / 100
+			if slope > float64(k.own)+0.2 {
+				t.Fatalf("%.2f allocations per control in a frame, want %d (ui's own)", slope, k.own)
+			}
+		})
+	}
+}

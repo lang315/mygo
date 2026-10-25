@@ -2,7 +2,9 @@ package widget
 
 import (
 	"slices"
+	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -17,6 +19,9 @@ import (
 // "&" that is followed by a character marks it; a "&" at the end, or before
 // white space, stays as it is.
 func parseMnemonic(s string) (display string, key rune, at int) {
+	if !strings.Contains(s, "&") && utf8.ValidString(s) {
+		return s, 0, -1 // a label with none: nothing to parse, nothing to allocate
+	}
 	in := []rune(s)
 	out := make([]rune, 0, len(in))
 	at = -1
@@ -100,6 +105,9 @@ func registerMnemonic(key rune, el ui.Element, ctrl Control, act func()) bool {
 // registerLabelMnemonic is registerMnemonic for a label, whose key focuses the
 // next control that takes the focus.
 func registerLabelMnemonic(key rune, el ui.Element, l Control) bool {
+	if key == 0 {
+		return false // the closure below would be allocated for nothing
+	}
 	if !registerMnemonic(key, el, l, func() { buildingForm.focusNextAfter(l) }) {
 		return false
 	}

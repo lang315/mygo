@@ -105,7 +105,9 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 				ui.Column(c.Key(fieldRowKey(r.label.id))).Gap(colGap).Children(func() {
 					r.underline(c)
 					e := render(c, r.label) // holds a hidden label
-					registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
+					if r.key != 0 {
+						registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
+					}
 					if !r.label.hidden && r.label.place.align == 0 {
 						e.AlignSelf(ui.Start)
 					}
@@ -127,7 +129,9 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			}
 			r.underline(c)
 			e := render(c, r.label) // holds a hidden label
-			registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
+			if r.key != 0 {
+				registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
+			}
 			if r.label.hidden { // keep its cell, or ui flows the control into it
 				ui.Box(c.Key(fieldHole(r.label.id)))
 			} else {
