@@ -1,0 +1,47 @@
+name: Go next
+
+# Builds and tests MyGo with the next Go (the tip of master by default), to
+# learn before an upgrade that purego's fakecgo, which links against the
+# runtime's internals by go:linkname, still links and starts. It gates
+# nothing: a red run is the news. See "Go upgrades" in docs/architecture.md.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Mondays
+  workflow_dispatch:
+    inputs:
+      toolchain:
+        description: "gotip, or a release or candidate such as go1.28rc1"
+        default: gotip
+
+permissions:
+  contents: read
+
+jobs:
+  go-next:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest }
+          - { name: Linux, os: ubuntu-latest }
+          - { name: Linux ARM64, os: ubuntu-24.04-arm }
+          - { name: Windows, os: windows-latest }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install WebKitGTK and a virtual display
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
+      - name: Download what the tests need
+        run: go run ./internal/prefetch
+      - name: Build and test with the next Go
+        shell: bash
+        run: scripts/go-next.sh "${{ inputs.toolchain || 'gotip' }}"
