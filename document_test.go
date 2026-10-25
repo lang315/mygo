@@ -392,6 +392,40 @@ func TestDocumentCloseAsks(t *testing.T) {
 	}
 }
 
+// TestDocumentEditedWhileTheDiskIsChecked: a look at the file that began
+// before the user edited the document must not replace the edit with the
+// file's content, which is what the watch's look does when the file changes
+// as the user types.
+func TestDocumentEditedWhileTheDiskIsChecked(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	path := writeTemp(t, "typing.txt", "mine")
+	d, _ := ds.Open(path)
+	looked, edited := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	afterDiskLook = func() {
+		once.Do(func() {
+			close(looked)
+			<-edited
+		})
+	}
+	t.Cleanup(func() { afterDiskLook = nil })
+	future := time.Now().Add(time.Hour)
+	os.WriteFile(path, []byte("theirs"), 0o644)
+	os.Chtimes(path, future, future)
+	done := make(chan struct{})
+	go func() { d.checkDisk(); close(done) }()
+	wait.For(t, "the look at the file", looked)
+	d.Set("mine again") // the document was not edited when the look began
+	close(edited)
+	wait.For(t, "the look to end", done)
+	if d.Content() != "mine again" || !d.IsEdited() {
+		t.Errorf("content %q, edited %v: the user's edit was replaced", d.Content(), d.IsEdited())
+	}
+	if !d.HasConflict() {
+		t.Error("the file changed under the edit and the document is not in conflict")
+	}
+}
+
 func TestDocumentOutsideChanges(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "out.txt", "mine")

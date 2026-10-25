@@ -208,6 +208,10 @@ func documentsAt(path string) []*docBase {
 	return at
 }
 
+// afterDiskLook, set by tests, runs in checkDisk once it looked at the file
+// and before it decides what to do: the time in which the document changes.
+var afterDiskLook func()
+
 // checkDisk compares b's file with what b last read or wrote.
 func (b *docBase) checkDisk() {
 	b.io.Lock()
@@ -228,6 +232,9 @@ func (b *docBase) checkDisk() {
 	if err != nil {
 		b.io.Unlock()
 		return
+	}
+	if afterDiskLook != nil {
+		afterDiskLook()
 	}
 	switch {
 	case !exists:
@@ -258,7 +265,7 @@ func (b *docBase) checkDisk() {
 		}
 	case !edited:
 		b.io.Unlock()
-		_ = b.reload(path)
+		_ = b.reloadIf(path, true)
 	default:
 		b.mu.Lock()
 		changed := !b.conflict || b.deleted
