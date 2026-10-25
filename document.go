@@ -251,7 +251,10 @@ func (d *Document[T]) Content() T {
 }
 
 // Set replaces the document's content, which edits it, unless
-// DocumentsOptions.Equal finds it equal to what its file has.
+// DocumentsOptions.Equal finds it equal to what its file has. When Sets
+// run at once from several goroutines, the content is the last one's, and
+// so is whether the document is edited: Equal may answer in another order
+// than the Sets came, and the call that took the lock last decides.
 func (d *Document[T]) Set(content T) {
 	d.mu.Lock()
 	d.content = content
@@ -276,7 +279,7 @@ func (d *Document[T]) Set(content T) {
 		}
 		d.mu.Unlock()
 	}
-	d.changed(edited)
+	d.changed(edited, at)
 }
 
 // Changed tells that the content changed without being replaced, for a
@@ -284,13 +287,15 @@ func (d *Document[T]) Set(content T) {
 func (d *Document[T]) Changed() {
 	d.mu.Lock()
 	d.changes++
+	at := d.changes
 	d.mu.Unlock()
-	d.changed(true)
+	d.changed(true, at)
 }
 
 // SetEdited sets whether the document has unsaved changes, for an app
 // that knows better, as one that keeps the undo history of its content:
-// false makes the content the one its file has, without writing it.
+// false makes the content the one its file has, without writing it. As for
+// Set, among calls at once, the one that took the lock last decides.
 func (d *Document[T]) SetEdited(edited bool) {
 	d.mu.Lock()
 	d.changes++
@@ -298,8 +303,9 @@ func (d *Document[T]) SetEdited(edited bool) {
 		d.savedAt = d.changes
 		d.saved, d.savedKnown = d.content, true
 	}
+	at := d.changes
 	d.mu.Unlock()
-	d.changed(edited)
+	d.changed(edited, at)
 }
 
 // Window returns the window that shows the document.
@@ -519,9 +525,19 @@ func (b *docBase) OnStateChange(fn func(DocumentState)) (off func()) {
 // that keep a copy of the content take it again.
 func (b *docBase) OnReload(fn func()) (off func()) { return b.onReload.add(fn, false) }
 
-// changed follows an edit of the content: edited is the new edited state.
-func (b *docBase) changed(edited bool) {
+// changed follows the change at of the content: edited is the new edited
+// state. Changes decide it as they end, not as they began (Set asks the
+// app's Equal with the lock down): when the content has changed since, that
+// change decides.
+func (b *docBase) changed(edited bool, at uint64) {
 	b.mu.Lock()
+	if b.changes != at {
+		b.mu.Unlock()
+		return
+	}
+	if b.savedAt == at {
+		edited = false // saved meanwhile, with this very content
+	}
 	was := b.edited
 	b.edited = edited
 	switch {
