@@ -681,6 +681,38 @@ func TestDocumentSetsInOrderBackToTheFile(t *testing.T) {
 	}
 }
 
+// TestDocumentSavedWhileSetAsksEqual: a save that wrote the content of a Set
+// still asking Equal leaves the document saved, whatever Equal answers about
+// the file as it was.
+func TestDocumentSavedWhileSetAsksEqual(t *testing.T) {
+	asking, answer := make(chan struct{}), make(chan struct{})
+	var armed atomic.Bool
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: func(a, b string) bool {
+		if armed.Load() && a == "A" {
+			close(asking)
+			<-answer
+		}
+		return a == b
+	}})
+	path := writeTemp(t, "saved-asking.txt", "S0")
+	d, _ := ds.Open(path)
+	armed.Store(true)
+	set := make(chan struct{})
+	go func() { d.Set("A"); close(set) }()
+	wait.For(t, "Set to ask Equal", asking)
+	if err := d.Save(); err != nil { // writes A
+		t.Fatal(err)
+	}
+	close(answer) // A is not S0, which the file had when Set asked
+	wait.For(t, "Set to end", set)
+	if got := readString(t, path); got != "A" {
+		t.Fatalf("the file has %q, want A", got)
+	}
+	if d.Content() != "A" || d.IsEdited() {
+		t.Errorf("content %q edited %v: the document was saved with its content", d.Content(), d.IsEdited())
+	}
+}
+
 func TestDocumentOutsideChanges(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "out.txt", "mine")

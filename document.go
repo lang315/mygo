@@ -251,7 +251,10 @@ func (d *Document[T]) Content() T {
 }
 
 // Set replaces the document's content, which edits it, unless
-// DocumentsOptions.Equal finds it equal to what its file has.
+// DocumentsOptions.Equal finds it equal to what its file has. When Sets
+// run at once from several goroutines, the content is the last one's, and
+// so is whether the document is edited: Equal may answer in another order
+// than the Sets came, and the call that took the lock last decides.
 func (d *Document[T]) Set(content T) {
 	d.mu.Lock()
 	d.content = content
@@ -291,7 +294,8 @@ func (d *Document[T]) Changed() {
 
 // SetEdited sets whether the document has unsaved changes, for an app
 // that knows better, as one that keeps the undo history of its content:
-// false makes the content the one its file has, without writing it.
+// false makes the content the one its file has, without writing it. As for
+// Set, among calls at once, the one that took the lock last decides.
 func (d *Document[T]) SetEdited(edited bool) {
 	d.mu.Lock()
 	d.changes++
@@ -530,6 +534,9 @@ func (b *docBase) changed(edited bool, at uint64) {
 	if b.changes != at {
 		b.mu.Unlock()
 		return
+	}
+	if b.savedAt == at {
+		edited = false // saved meanwhile, with this very content
 	}
 	was := b.edited
 	b.edited = edited
