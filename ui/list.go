@@ -275,6 +275,10 @@ type ListState struct {
 	pivotKey          any
 	// pivotSet says SetPivot was called before the first frame.
 	pivotSet bool
+	// added are the keys of the rows the Shift-extension since the pivot
+	// last moved chose and that were not chosen before, which going back
+	// with span takes out again.
+	added map[any]struct{}
 
 	header listHeader
 	// rows are the last frame's rows by their elements' IDs, to find the
@@ -1082,8 +1086,8 @@ func (f *listFrame) toggle(i int) {
 func (f *listFrame) extend(i int, keep bool) { f.extendBy(i, keep, false) }
 
 // extendBy is extend, choosing the rows from the pivot to row i in place
-// of those it last chose with span, else in place of all others unless
-// keep.
+// of those it last chose with span (rows chosen before it stay), else in
+// place of all others unless keep.
 func (f *listFrame) extendBy(i int, keep, span bool) {
 	s, sel := f.s, f.s.Selection
 	p := s.pivot
@@ -1093,15 +1097,25 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 	}
 	lo, hi := min(p, i), max(p, i)
 	changed := false
+	if s.added == nil {
+		s.added = map[any]struct{}{}
+	}
 	switch {
 	case span:
 		last := max(0, min(p+s.span, f.n-1))
 		for j := min(p, last); j <= max(p, last); j++ {
 			if (j < lo || j > hi) && !f.isHeader(j) {
-				changed = sel.set(f.key(j), false) || changed
+				k := f.key(j)
+				if _, ok := s.added[k]; ok {
+					changed = sel.set(k, false) || changed
+					delete(s.added, k)
+				}
 			}
 		}
-	case !keep:
+	case keep:
+		clear(s.added)
+	default:
+		clear(s.added)
 		in := 0
 		for j := lo; j <= hi; j++ {
 			if !f.isHeader(j) && sel.has(f.key(j)) {
@@ -1114,7 +1128,11 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 	}
 	for j := lo; j <= hi; j++ {
 		if !f.isHeader(j) {
-			changed = sel.set(f.key(j), true) || changed
+			k := f.key(j)
+			if !sel.has(k) || !keep && !span {
+				s.added[k] = struct{}{}
+			}
+			changed = sel.set(k, true) || changed
 		}
 	}
 	if changed {
@@ -1137,6 +1155,7 @@ func (f *listFrame) lead(i int, pivot bool) {
 	}
 	if pivot {
 		s.pivot, s.span = i, 0
+		clear(s.added)
 	}
 	s.ScrollIntoView(i)
 }
@@ -1149,7 +1168,10 @@ func (s *ListState) Pivot() int { return s.pivot }
 // the choice: for an app that shows the same rows in another view and keeps
 // the pivot by key. Call it after the list is built once, with a row of the
 // frame about to be built.
-func (s *ListState) SetPivot(row int) { s.pivot, s.span, s.pivotSet = row, 0, true }
+func (s *ListState) SetPivot(row int) {
+	s.pivot, s.span, s.pivotSet = row, 0, true
+	clear(s.added)
+}
 
 // ExtendTo chooses the rows from the one Shift extends from to row, as a
 // Shift-click on it does, and makes row the one the keys move from: for an

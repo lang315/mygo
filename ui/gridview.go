@@ -2,6 +2,7 @@ package ui
 
 import (
 	"math"
+	"runtime"
 	"strings"
 )
 
@@ -21,9 +22,11 @@ type GridState struct {
 	// Selection, when set, lets the user choose several items, held by
 	// their keys, as a List's Selection: Cmd-click (Ctrl-click on Linux
 	// and Windows) adds an item or takes it out, Shift-click and Shift
-	// with the arrows choose those from the item last chosen, in place of
-	// the others unless Cmd is held, and Cmd+A chooses all. Selected, set
-	// as well, is the item last chosen.
+	// with the arrows, Home, End, Page Up and Page Down (not on macOS,
+	// where those scroll) choose those from the item last chosen, in place
+	// of the others, and besides them with Cmd held for a click or Cmd+Shift
+	// for the keys; Cmd+A chooses all. Selected, set as well, is the item
+	// last chosen.
 	Selection Selector
 	// Label returns the text of item i: typing its first letters while
 	// the grid has the focus chooses it, and assistive technology reads it
@@ -72,9 +75,11 @@ type GridState struct {
 	started     bool
 	rt          *engine
 
-	// span is how far from the pivot the last Shift-extension went, to take
-	// out the items a Cmd+Shift key leaves when it goes back.
-	span int
+	// span is how far from the pivot the last Shift-extension went, and
+	// added the keys of the items it chose that were not chosen before: what
+	// a Cmd+Shift key takes out when it goes back.
+	span  int
+	added map[any]struct{}
 }
 
 // Pivot returns the item Shift extends the choice from, -1 for none: the item
@@ -85,7 +90,10 @@ func (s *GridState) Pivot() int { return s.pivot }
 // the choice: for an app that shows the same items in another view and keeps
 // the pivot by key. Call it after the grid is built once, with an item of the
 // frame about to be built.
-func (s *GridState) SetPivot(item int) { s.pivot, s.span, s.pivotSet = item, 0, true }
+func (s *GridState) SetPivot(item int) {
+	s.pivot, s.span, s.pivotSet = item, 0, true
+	clear(s.added)
+}
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
 // does a row.
@@ -461,6 +469,7 @@ func (s *GridState) click(grid *node, i int, mods Modifiers) {
 	case mods&Cmd != 0:
 		s.Selection.set(s.key(i), !s.Selection.has(s.key(i)))
 		*s.Selected, s.pivot, s.span = i, i, 0
+		clear(s.added)
 		grid.st.markChanged()
 	default:
 		s.choose(grid, i)
@@ -478,33 +487,49 @@ func (s *GridState) choose(grid *node, i int) {
 		}
 	}
 	*s.Selected, s.pivot, s.span = i, i, 0
+	clear(s.added)
 	if changed {
 		grid.st.markChanged()
 	}
 }
 
 // extend chooses the items from the pivot to i, in place of all others unless
-// keep, and with shrink in place of those it last chose only.
+// keep, and with shrink in place of those it last chose only (items chosen
+// before it stay).
 func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 	p := s.pivot
 	if p < 0 || p >= grid.setSize || s.Selection == nil {
 		s.choose(grid, i)
 		return
 	}
+	if s.added == nil {
+		s.added = map[any]struct{}{}
+	}
 	switch {
 	case shrink:
 		last := max(0, min(p+s.span, grid.setSize-1))
 		for j := min(p, last); j <= max(p, last); j++ {
 			if j < min(p, i) || j > max(p, i) {
-				s.Selection.set(s.key(j), false)
+				k := s.key(j)
+				if _, ok := s.added[k]; ok {
+					s.Selection.set(k, false)
+					delete(s.added, k)
+				}
 			}
 		}
-	case !keep:
+	case keep:
+		clear(s.added)
+	default:
+		clear(s.added)
 		s.Selection.clear()
 	}
 	s.span = i - p
 	for j := min(p, i); j <= max(p, i); j++ {
-		s.Selection.set(s.key(j), true)
+		k := s.key(j)
+		if !s.Selection.has(k) || !keep && !shrink {
+			s.added[k] = struct{}{}
+		}
+		s.Selection.set(k, true)
 	}
 	*s.Selected = i
 	grid.st.markChanged()
@@ -532,7 +557,9 @@ func (s *GridState) page(at, d, n int) int {
 }
 
 // keys moves the choice with the arrows in two dimensions, Home, End and
-// the first letters of an item, while the grid has the focus.
+// the first letters of an item, while the grid has the focus; with Shift (and
+// Cmd, besides the items chosen before) they extend it from the pivot, as
+// do Page Up and Page Down by the rows in view, except on macOS.
 func (s *GridState) keys(grid *node, n int) {
 	if s.Selected == nil || n == 0 {
 		return
@@ -569,24 +596,28 @@ func (s *GridState) keys(grid *node, n int) {
 		key Key
 		to  int
 	}{{KeyHome, 0}, {KeyEnd, n - 1}} {
+		// Every key is asked for in every frame, which keeps it.
+		plain := grid.Shortcut(0, h.key)
+		shift, both := grid.Shortcut(Shift, h.key), grid.Shortcut(Cmd|Shift, h.key)
 		switch {
-		case grid.Shortcut(0, h.key):
+		case plain:
 			to = h.to
-		case s.Selection != nil && grid.Shortcut(Shift, h.key):
-			to, extend, keep = h.to, true, false
-		case s.Selection != nil && grid.Shortcut(Cmd|Shift, h.key):
-			to, extend, keep = h.to, true, true
+		case (shift || both) && s.Selection != nil:
+			to, extend, keep = h.to, true, both
+			if !in {
+				to = 0 // as the arrows do
+			}
 		}
 	}
-	// Page Down and Page Up scroll the grid; with Shift they extend the
-	// choice by the rows in view.
-	if s.Selection != nil && in {
+	// Page Down and Page Up scroll the grid, and on macOS always, as in a
+	// list; elsewhere with Shift they extend the choice by the rows in view.
+	if runtime.GOOS != "darwin" {
 		for _, pg := range [...]struct {
 			key Key
 			d   int
 		}{{KeyPageDown, 1}, {KeyPageUp, -1}} {
 			shift, both := grid.Shortcut(Shift, pg.key), grid.Shortcut(Cmd|Shift, pg.key)
-			if shift || both {
+			if (shift || both) && s.Selection != nil && in {
 				to, extend, keep = s.page(at, pg.d, n), true, both
 			}
 		}

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -88,6 +89,14 @@ func TestGridViewShiftPageKeys(t *testing.T) {
 	cols := s.cols
 	if last-first < 2 || cols < 2 {
 		t.Fatalf("test grid shows rows %d to %d in %d columns", first, last, cols)
+	}
+	if runtime.GOOS == "darwin" {
+		// Page Down and Page Up scroll on macOS, as in a list.
+		tt.Key(Shift, KeyPageDown)
+		if got := chosenRows(chosen); !slices.Equal(got, []int{1}) {
+			t.Fatalf("Shift+Page Down chose %v on macOS, want Item 1 alone: it scrolls", got)
+		}
+		return
 	}
 	tt.Key(Shift, KeyPageDown)
 	to := last*cols + 1

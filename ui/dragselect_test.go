@@ -107,6 +107,28 @@ func TestDragSelectAfterShiftPressReplacesTheOthers(t *testing.T) {
 	}
 }
 
+// A Cmd-drag going back takes out only the rows it chose: a row chosen before
+// that it passed over stays.
+func TestDragSelectAddingKeepsRowsChosenBefore(t *testing.T) {
+	tt, _, sel := dragSelectList(t, 20)
+	tt.Click("Row 9")
+	tt.ClickWith(Cmd, "Row 3")
+	x, y := rowCenter(t, tt, "Row 1")
+	_, y5 := rowCenter(t, tt, "Row 5")
+	_, y2 := rowCenter(t, tt, "Row 2")
+	tt.send(platform.SurfaceEvent{Kind: platform.PointerDown, X: float64(x), Y: float64(y), Mods: platform.Modifiers(Cmd)})
+	tt.Move(x, y+3)
+	tt.Move(x, y5)
+	if got := chosenRows(sel); !slices.Equal(got, []int{1, 2, 3, 4, 5, 9}) {
+		t.Fatalf("Cmd-drag Row 1 to Row 5: chose %v", got)
+	}
+	tt.Move(x, y2)
+	tt.Release(x, y2)
+	if got := chosenRows(sel); !slices.Equal(got, []int{1, 2, 3, 9}) {
+		t.Fatalf("Cmd-drag back to Row 2: chose %v, want [1 2 3 9]: Row 3 was chosen before", got)
+	}
+}
+
 // Held below the list, the drag scrolls it and goes on choosing, to the
 // end, though the row pressed scrolls out of view.
 func TestDragSelectScrollsAtEdge(t *testing.T) {
