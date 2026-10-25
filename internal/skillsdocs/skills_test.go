@@ -3,6 +3,7 @@ package skillsdocs
 import (
 	"go/ast"
 	"go/build"
+	"go/format"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -260,7 +261,11 @@ func TestSkillExamplesCompile(t *testing.T) {
 				blocks++
 				line := 1 + strings.Count(text[:m[4]], "\n")
 				where := f + ":" + strconv.Itoa(line)
-				file, err := parser.ParseFile(l.fset, where, text[m[4]:m[5]], parser.AllErrors)
+				src := text[m[4]:m[5]]
+				if formatted, err := format.Source([]byte(src)); err == nil && string(formatted) != src {
+					t.Errorf("%s: the example is not gofmt-ed", where)
+				}
+				file, err := parser.ParseFile(l.fset, where, src, parser.AllErrors)
 				if err != nil {
 					t.Errorf("%s: a Go example must be a whole file (package, imports): %v", where, err)
 					continue

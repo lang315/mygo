@@ -1,0 +1,3 @@
+interface:
+  display_name: "MyGo Port Screen"
+  short_description: "Port a WinForms or gota screen to ui/widget"

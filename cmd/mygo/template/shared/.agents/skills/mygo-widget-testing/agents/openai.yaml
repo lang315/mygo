@@ -1,0 +1,3 @@
+interface:
+  display_name: "MyGo Widget Testing"
+  short_description: "Test ui/widget forms, tables and dialogs without a window"
