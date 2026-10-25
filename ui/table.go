@@ -215,15 +215,26 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	}
 	// fitting are the cells of the column fitting its cells.
 	var fitting []*node
-	// cells builds a row's cells, with fill building the content of each.
+	// The columns' keys, boxed once: a cell is keyed by its column, and a
+	// key boxed in each cell of each row allocates for every one of them.
+	colKeys := make([]any, len(columns))
+	for j := range columns {
+		colKeys[j] = columns[j].id()
+	}
+	// cells builds a row's cells, with fill building the content of each. It
+	// returns the cells of the header, which tableHeader uses, and nothing
+	// for the rows, which would allocate a slice of them for nothing.
 	cells := func(role Role, fill func(col int)) []*node {
-		boxes := make([]*node, 0, len(order))
+		var boxes []*node
+		if role == RoleColumnHeader {
+			boxes = make([]*node, 0, len(order))
+		}
 		for k, j := range order {
 			col := &columns[j]
 			// Keyed by its column, a cell keeps its state as the columns
 			// move: a header being dragged keeps the press. Keyed as it
 			// is made, as a list's rows are.
-			c.nextKey, c.keySet, c.keyGlobal = col.id(), true, false
+			c.nextKey, c.keySet, c.keyGlobal = colKeys[j], true, false
 			box := coreRow(c).Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Shrink(0).Clip().Role(role)
 			if w, ok := layout.width(col); ok {
 				box.Width(w)
@@ -263,7 +274,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			if drag.fit != "" && drag.fit == col.id() {
 				fitting = append(fitting, box)
 			}
-			boxes = append(boxes, box)
+			if boxes != nil {
+				boxes = append(boxes, box)
+			}
 		}
 		return boxes
 	}
