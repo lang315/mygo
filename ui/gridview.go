@@ -37,9 +37,9 @@ type GridState struct {
 	// item function at the width of the grid, and the items after it start
 	// a row. Headers are not chosen, as ListState.Header's are not, and the
 	// keys pass them by. Give headers a background. The grid asks Header for
-	// every item when the number of items or of columns changes, and again
-	// when a header it knew is none: call ReloadHeaders when an item that
-	// was not a header becomes one without the number of items changing.
+	// every item when the number of items changes, and again when a header
+	// it knew is none: call ReloadHeaders when an item that was not a header
+	// becomes one without the number of items changing.
 	Header func(item int) bool
 	// Reorder, when set, lets the user drag items to another place in the
 	// grid, as ListState.Reorder does rows: the items chosen, when the item
@@ -98,6 +98,8 @@ type GridState struct {
 
 	// layout says where the rows begin when the grid has headers (Header).
 	layout headerRows
+	// scroll is the last ScrollTo or ScrollIntoView, not yet built.
+	scroll gridScroll
 }
 
 // Pivot returns the item Shift extends the choice from, -1 for none: the item
@@ -116,14 +118,23 @@ func (s *GridState) SetPivot(item int) {
 }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
-// does a row.
+// does a row. The grid finds the row of the item when it is built next, with
+// the items and the columns it has then.
 func (s *GridState) ScrollTo(item int, align Align) {
-	s.rows.ScrollTo(s.itemRow(item), align)
+	s.scroll = gridScroll{set: true, item: item, align: align}
 }
 
-// ScrollIntoView scrolls the grid as little as shows item.
+// ScrollIntoView scrolls the grid as little as shows item, at the next build.
 func (s *GridState) ScrollIntoView(item int) {
-	s.rows.ScrollIntoView(s.itemRow(item))
+	s.scroll = gridScroll{set: true, item: item, into: true}
+}
+
+// gridScroll is a request to scroll to an item, kept until the grid is built,
+// when the rows of its items are known.
+type gridScroll struct {
+	set, into bool
+	item      int
+	align     Align
 }
 
 // gridFit is how many columns a grid's items took, which its layout checks
@@ -188,6 +199,17 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 	s.prepare(n, cols)
 	if anchor >= 0 {
 		s.rows.ScrollTo(s.itemRow(anchor), Start)
+	}
+	if r := s.scroll; r.set {
+		// The row of the item in the rows just laid out, whatever changed
+		// since the call.
+		s.scroll = gridScroll{}
+		row := s.itemRow(max(0, min(r.item, n-1)))
+		if r.into {
+			s.rows.ScrollIntoView(row)
+		} else {
+			s.rows.ScrollTo(row, r.align)
+		}
 	}
 	rows := s.rowCount(n, cols)
 	if s.Selected != nil {
@@ -300,6 +322,15 @@ func (s *GridState) reorder(e *node, n int, gap float32) {
 		if cell == nil {
 			return
 		}
+		if i, ok := s.cells[at]; ok && s.isHeader(i) {
+			// A line across the header's top, or its bottom.
+			y := cell.y
+			if after {
+				y += cell.h
+			}
+			p.Fill(Rect{cell.x + 4, y - 1, cell.w - 8, 2}, t.Accent, 1)
+			return
+		}
 		x := cell.x - gap/2
 		if after != cell.rtl {
 			x = cell.x + cell.w + gap/2
@@ -333,6 +364,14 @@ func (s *GridState) dropAt(x, y float32, n int) (to int, cell uint64, after bool
 		return n, 0, false
 	}
 	st := s.cellState(cell)
+	if s.isHeader(best) {
+		// A header takes the whole row: before it on its upper half, after
+		// it on the lower.
+		if y >= st.y+st.h/2 {
+			return best + 1, cell, true
+		}
+		return best, cell, false
+	}
 	// After a cell is past its middle: to its left right to left.
 	if (x >= st.x+st.w/2) != st.rtl {
 		return best + 1, cell, true
@@ -353,7 +392,8 @@ func (s *GridState) header(c *context, i, n int, item func(i int)) {
 	if s.Label != nil {
 		h.Label(s.Label(i))
 	}
-	// Items dropped on it go before it, or after it on its end half.
+	// Items dropped on it go before it on its upper half, after it on the
+	// lower: a header takes the row.
 	if s.built == nil {
 		s.built = map[uint64]int{}
 	}
@@ -739,6 +779,6 @@ func (s *GridState) keys(grid *node, n int) {
 	} else {
 		s.choose(grid, to)
 	}
-	s.ScrollIntoView(to)
+	s.rows.ScrollIntoView(s.itemRow(to)) // the rows of this frame
 	grid.c.rt.consumed = true
 }

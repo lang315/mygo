@@ -280,15 +280,22 @@ func TestGridViewHeaderReorder(t *testing.T) {
 	if len(moves) != 1 {
 		t.Errorf("a header was dragged: moves %v", moves)
 	}
-	// Dropped on a header: before it on its start half, after it (first in its
-	// group) on the other, not at the end of the grid.
-	drag(tt, from.X, from.Y, h.X, h.Y)
-	if len(moves) != 2 || !slices.Equal(moves[1], []int{2, 5}) {
-		t.Errorf("Item 2 dropped on the start half of H5: moves %v, want before it", moves)
-	}
-	drag(tt, from.X, from.Y, 400, h.Y)
-	if len(moves) != 3 || !slices.Equal(moves[2], []int{2, 6}) {
-		t.Errorf("Item 2 dropped on the end half of H5: moves %v, want after it", moves)
+	// Dropped on a header, which takes the whole row: before it on its upper
+	// half, after it (first in its group) on the lower, not at the end of the
+	// grid, wherever along the row the pointer is.
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	hn := accessNode(t, tt.h.access, platform.RoleListItem, "H5")
+	upper, lower := float32(hn.Bounds.Y+2), float32(hn.Bounds.Y+hn.Bounds.H-2)
+	for _, x := range []float32{float32(hn.Bounds.X) + 10, 400} {
+		moves = moves[:1]
+		drag(tt, from.X, from.Y, x, upper)
+		if len(moves) != 2 || !slices.Equal(moves[1], []int{2, 5}) {
+			t.Errorf("Item 2 dropped on the upper half of H5 at x %v: moves %v, want before it", x, moves)
+		}
+		drag(tt, from.X, from.Y, x, lower)
+		if len(moves) != 3 || !slices.Equal(moves[2], []int{2, 6}) {
+			t.Errorf("Item 2 dropped on the lower half of H5 at x %v: moves %v, want after it", x, moves)
+		}
 	}
 }
 

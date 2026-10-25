@@ -51,14 +51,16 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   arrows, Home, End, Page Up and Page Down pass them by (Up and Down keep the
   column inside a group and go on to the next, to the last item of a shorter
   row), Shift and Cmd+Shift extend over them, and Cmd+A and typing leave them
-  out. They are not dragged by `Reorder`; items dropped on one go before it.
+  out. They are not dragged by `Reorder`; items dropped on the upper half of one
+  go before it, on the lower half after it (first in its group), the line
+  showing it across the header.
   Assistive technology sees a header as an item of the list, named by `Label`,
   counted in the position and the size of the set. Give headers a background;
   they do not stay at the top while their group scrolls.
 
-  The grid asks `Header` for every item when the number of items or of columns
-  changes, and again when a header it knew is none, so a header that moves is
-  found; it is one call per item (about 2.5 ms for a million). Call
+  The grid asks `Header` for every item when the number of items changes, and
+  again when a header it knew is none, so a header that moves is found; it is
+  one call per item (about 2.5 ms for a million). Resizing does not ask. Call
   `ReloadHeaders()` when an item that was not a header becomes one and the
   number of items stays, as when a group is split without adding a header.
   Each frame asks only for the headers it knew.
