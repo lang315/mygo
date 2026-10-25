@@ -43,6 +43,9 @@ func menuItemAt(path []string) (menu id, index int, err error) {
 	menu = send(theBackend.app, "mainMenu")
 	for i, title := range path {
 		if menu == 0 {
+			if i == 0 {
+				return 0, 0, fmt.Errorf("mygo: no main menu")
+			}
 			return 0, 0, fmt.Errorf("mygo: menu %q has no submenu", path[i-1])
 		}
 		index = sendInt(menu, "indexOfItemWithTitle:", uintptr(nsString(title)))
