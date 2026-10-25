@@ -56,6 +56,21 @@ func testDocs(t *testing.T, opts DocumentsOptions[string]) *Documents[string] {
 	return ds
 }
 
+// testDocsSettled is testDocs, once the restores the app begins with
+// (registerDocKind, startDocuments) are over: a test that makes a session on
+// disk and claims it would have one of them take it first.
+func testDocsSettled(t *testing.T, opts DocumentsOptions[string]) *Documents[string] {
+	t.Helper()
+	ds := testDocs(t, opts)
+	waitFor(t, "the documents to launch", func() bool {
+		docRegistry.Lock()
+		defer docRegistry.Unlock()
+		return docRegistry.launched
+	})
+	docWork.Wait()
+	return ds
+}
+
 // fakeWindow returns the fake native window of w.
 func fakeWindow(w *Window) *fake.Window {
 	return onMainValue(func() *fake.Window { return w.native.(*fake.Window) })
@@ -452,8 +467,109 @@ func TestDocumentRecoveryRetriesAFailedWrite(t *testing.T) {
 	})
 }
 
-func TestDocumentRecovery(t *testing.T) {
+// TestDocumentRecoveryWritesNothingAfterItIsClosed: a recovery copy written
+// after quit (a timer that fired late) made a session in the user data of
+// whatever the app, or the next test, had by then: in a test it was the
+// directory the next test removed, "directory not empty".
+func TestDocumentRecoveryWritesNothingAfterItIsClosed(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	d := ds.New()
+	root, _ := ds.kind.recovery.root()
+	ds.kind.recovery.close() // quit
+	d.Set("too late")
+	d.backup() // what the timer does, a second later
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("the recovery copies are written after quit: %v", err)
+	}
+}
+
+// A restore after quit would take for a crashed instance's the copies of this
+// one (close forgot its session), write none (the store is closed) and remove
+// them: the changes of the user, lost.
+func TestDocumentRecoveryRestoreAfterQuitKeepsTheCopies(t *testing.T) {
+	ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	d := ds.New()
+	d.Set("unsaved")
+	waitFor(t, "the recovery copy", func() bool { return d.backedUpAt() != 0 })
+	root, _ := ds.kind.recovery.root()
+	copies := func() []string { m, _ := filepath.Glob(filepath.Join(root, "*", d.id)); return m }
+	if len(copies()) != 1 {
+		t.Fatalf("recovery copies %q", copies())
+	}
+	ds.kind.recovery.close() // quit
+	if n := ds.kind.restore(); n != 0 {
+		t.Fatalf("restored %d documents after quit", n)
+	}
+	if len(copies()) != 1 {
+		t.Fatalf("the restore after quit removed the copy: %q", copies())
+	}
+}
+
+// Quit in the middle of a restore: the documents it opened write no copy of
+// their own, so the session it claimed stays for the next launch.
+func TestDocumentRecoveryQuitDuringARestoreKeepsTheSession(t *testing.T) {
+	ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	root, _ := ds.kind.recovery.root()
+	session := filepath.Join(root, "crashed")
+	if err := os.MkdirAll(session, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(session, "index.json"), []byte(`[{"id":"a","name":"Untitled 3"}]`), 0o600)
+	os.WriteFile(filepath.Join(session, "a"), []byte("draft"), 0o600)
+	orphans, done := ds.kind.recovery.claim()
+	if len(orphans) != 1 {
+		t.Fatalf("claimed %d copies", len(orphans))
+	}
+	ds.kind.recovery.close() // quit
+	done()                   // the restore ends
+	if _, err := os.Stat(filepath.Join(session, "a")); err != nil {
+		t.Fatalf("the session claimed was removed at quit: %v", err)
+	}
+}
+
+// Quit in the middle of a restore leaves the same copy in two sessions, the
+// one claimed and the one of the instance that restored it: the next launch
+// restores the document once, with the later changes.
+func TestDocumentRecoveryRestoresOneCopyOfADocumentInTwoSessions(t *testing.T) {
+	for _, tie := range []bool{false, true} {
+		ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+		root, _ := ds.kind.recovery.root()
+		base := time.Now().Add(-time.Hour)
+		for i, content := range []string{"older", "newer"} {
+			session := filepath.Join(root, fmt.Sprintf("session%d", i))
+			if err := os.MkdirAll(session, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			index := filepath.Join(session, "index.json")
+			os.WriteFile(index, []byte(`[{"id":"a","name":"Untitled 3"}]`), 0o600)
+			file := filepath.Join(session, "a")
+			os.WriteFile(file, []byte(content), 0o600)
+			at := base.Add(time.Duration(i) * time.Minute) // session1 is the later
+			if tie {
+				at = base // the same time to the file system's resolution: the later index tells
+			}
+			os.Chtimes(file, at, at)
+			os.Chtimes(index, base.Add(time.Duration(i)*time.Minute), base.Add(time.Duration(i)*time.Minute))
+		}
+		if n := ds.kind.restore(); n != 1 {
+			t.Fatalf("tie %v: restored %d documents, want 1", tie, n)
+		}
+		docs := ds.Documents()
+		if len(docs) != 1 || docs[0].Content() != "newer" {
+			for _, d := range docs {
+				t.Logf("doc %q %q", d.Name(), d.Content())
+			}
+			t.Fatalf("tie %v: restored %d documents", tie, len(docs))
+		}
+		for _, d := range docs {
+			d.SetEdited(false)
+			d.Close()
+		}
+	}
+}
+
+func TestDocumentRecovery(t *testing.T) {
+	ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	d := ds.New()
 	d.Set("unsaved")
 	root, _ := ds.kind.recovery.root()

@@ -2,6 +2,7 @@ package mygo
 
 import (
 	"encoding/json/v2"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -37,6 +38,7 @@ type recoveryStore struct {
 
 	mu      sync.Mutex
 	dir     string // the session, "" until the first copy
+	closed  bool   // at quit: no more copies, a timer that fires late writes none
 	lock    *os.File
 	entries map[string]recoveryEntry
 }
@@ -64,6 +66,9 @@ func (s *recoveryStore) root() (string, error) {
 // session returns the directory of this instance's session, which it
 // creates and locks the first time. s.mu is held.
 func (s *recoveryStore) session() (string, error) {
+	if s.closed {
+		return "", errRecoveryClosed
+	}
 	if s.dir != "" {
 		return s.dir, nil
 	}
@@ -86,6 +91,9 @@ func (s *recoveryStore) session() (string, error) {
 	s.dir, s.lock = dir, lock
 	return dir, nil
 }
+
+// errRecoveryClosed is the error of a copy written after quit.
+var errRecoveryClosed = errors.New("the recovery copies are closed")
 
 // save writes the copy of a document and its entry. b.io is held.
 func (s *recoveryStore) save(e recoveryEntry, write func(io.Writer) error) error {
@@ -135,6 +143,7 @@ func (s *recoveryStore) writeIndex() error {
 func (s *recoveryStore) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.closed = true
 	if s.lock == nil {
 		return
 	}
@@ -162,8 +171,13 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 		return nil, func() {}
 	}
 	s.mu.Lock()
-	own := s.dir
+	own, closed := s.dir, s.closed
 	s.mu.Unlock()
+	if closed {
+		// Quit: the session of this instance is no one's now, and the
+		// documents restored would write no copy of their own.
+		return nil, func() {}
+	}
 	dirs, _ := os.ReadDir(root)
 	var claimed []string
 	var locks []*os.File
@@ -195,9 +209,14 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 		}
 	}
 	return orphans, func() {
+		s.mu.Lock() // quit (close) comes before or after all of it
+		defer s.mu.Unlock()
+		closed := s.closed
 		for i, dir := range claimed {
 			locks[i].Close()
-			os.RemoveAll(dir)
+			if !closed { // quit came meanwhile: the copies were not written again, they stay
+				os.RemoveAll(dir)
+			}
 		}
 	}
 }
@@ -222,6 +241,9 @@ func (b *docBase) backup() {
 	}
 	b.mu.Unlock()
 	err := b.kind.recovery.save(e, snap.write)
+	if err == errRecoveryClosed {
+		return // quit: the session is gone, and no other is made
+	}
 	b.mu.Lock()
 	if err != nil {
 		b.backupFails++
@@ -241,10 +263,47 @@ func (b *docBase) backup() {
 	b.mu.Unlock()
 }
 
+// newestCopies keeps one copy of each document: quit in the middle of a
+// restore leaves it in the session claimed and in the one of the instance
+// that began it, and the one written last has the later changes. Where the
+// files' times are the same (a file system of a second or two), the session
+// whose index was written last wins, as the restoring instance's is, written
+// after it read the other; if that ties too, the first stays. A clock set back
+// between the two makes a wrong choice, which is accepted.
+func newestCopies(orphans []orphan) []orphan {
+	at := map[string]int{}
+	var out []orphan
+	later := func(o, than orphan) bool {
+		a, errA := os.Stat(than.file)
+		b, errB := os.Stat(o.file)
+		if errA != nil || errB != nil {
+			return errA != nil && errB == nil
+		}
+		if !b.ModTime().Equal(a.ModTime()) {
+			return b.ModTime().After(a.ModTime())
+		}
+		ia, errA := os.Stat(filepath.Join(filepath.Dir(than.file), "index.json"))
+		ib, errB := os.Stat(filepath.Join(filepath.Dir(o.file), "index.json"))
+		return errA == nil && errB == nil && ib.ModTime().After(ia.ModTime())
+	}
+	for _, o := range orphans {
+		i, seen := at[o.entry.ID]
+		switch {
+		case !seen:
+			at[o.entry.ID] = len(out)
+			out = append(out, o)
+		case later(o, out[i]):
+			out[i] = o
+		}
+	}
+	return out
+}
+
 // restore opens the documents of the sessions no instance holds, edited,
 // and keeps their copies in this session.
 func (k *docKind) restore() int {
 	orphans, done := k.recovery.claim()
+	orphans = newestCopies(orphans)
 	n := 0
 	for _, o := range orphans {
 		e := o.entry
