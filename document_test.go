@@ -56,6 +56,21 @@ func testDocs(t *testing.T, opts DocumentsOptions[string]) *Documents[string] {
 	return ds
 }
 
+// testDocsSettled is testDocs, once the restores the app begins with
+// (registerDocKind, startDocuments) are over: a test that makes a session on
+// disk and claims it would have one of them take it first.
+func testDocsSettled(t *testing.T, opts DocumentsOptions[string]) *Documents[string] {
+	t.Helper()
+	ds := testDocs(t, opts)
+	waitFor(t, "the documents to launch", func() bool {
+		docRegistry.Lock()
+		defer docRegistry.Unlock()
+		return docRegistry.launched
+	})
+	docWork.Wait()
+	return ds
+}
+
 // fakeWindow returns the fake native window of w.
 func fakeWindow(w *Window) *fake.Window {
 	return onMainValue(func() *fake.Window { return w.native.(*fake.Window) })
@@ -472,7 +487,7 @@ func TestDocumentRecoveryWritesNothingAfterItIsClosed(t *testing.T) {
 // one (close forgot its session), write none (the store is closed) and remove
 // them: the changes of the user, lost.
 func TestDocumentRecoveryRestoreAfterQuitKeepsTheCopies(t *testing.T) {
-	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	d := ds.New()
 	d.Set("unsaved")
 	waitFor(t, "the recovery copy", func() bool { return d.backedUpAt() != 0 })
@@ -493,7 +508,7 @@ func TestDocumentRecoveryRestoreAfterQuitKeepsTheCopies(t *testing.T) {
 // Quit in the middle of a restore: the documents it opened write no copy of
 // their own, so the session it claimed stays for the next launch.
 func TestDocumentRecoveryQuitDuringARestoreKeepsTheSession(t *testing.T) {
-	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	root, _ := ds.kind.recovery.root()
 	session := filepath.Join(root, "crashed")
 	if err := os.MkdirAll(session, 0o700); err != nil {
@@ -517,15 +532,7 @@ func TestDocumentRecoveryQuitDuringARestoreKeepsTheSession(t *testing.T) {
 // restores the document once, with the later changes.
 func TestDocumentRecoveryRestoresOneCopyOfADocumentInTwoSessions(t *testing.T) {
 	for _, tie := range []bool{false, true} {
-		ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
-		// The restores the app begins with (registerDocKind, startDocuments)
-		// are over before the sessions are made: each would take one of them.
-		waitFor(t, "the documents to launch", func() bool {
-			docRegistry.Lock()
-			defer docRegistry.Unlock()
-			return docRegistry.launched
-		})
-		docWork.Wait()
+		ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 		root, _ := ds.kind.recovery.root()
 		base := time.Now().Add(-time.Hour)
 		for i, content := range []string{"older", "newer"} {
@@ -562,7 +569,7 @@ func TestDocumentRecoveryRestoresOneCopyOfADocumentInTwoSessions(t *testing.T) {
 }
 
 func TestDocumentRecovery(t *testing.T) {
-	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	ds := testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	d := ds.New()
 	d.Set("unsaved")
 	root, _ := ds.kind.recovery.root()
