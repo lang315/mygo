@@ -88,7 +88,7 @@ func settings(cfg *Config) widget.Control {
 - Handlers (`OnClick`, `OnChange`, `Bind`'s `set`) run one at a time on the event goroutine, never on the main thread. The queue is the app's: a handler that blocks holds back every other handler of every window, though the windows keep drawing.
 - Setters and getters are safe from any goroutine. Run work that must happen in step with handlers through `widget.BeginInvoke(fn)` (does not wait) or `widget.Invoke(fn)` (waits; safe inside a handler, panics on the main thread). Before the app runs and after it quit, `widget.Invoke` returns without running `fn`.
 - Keep slow I/O off handlers that must stay quick: start a goroutine, report with setters or `BeginInvoke`.
-- Call no widget method inside a callback that runs under the package's lock: the key function and every function of a `widget.Column` (`Text`, `Compare`, `Filter`, `Spans`, `Color`, `Image`), the function of `UpdateRow` and of `widget.ListBoxWidget.UpdateItem`, the functions of a `ListBox` or `TreeView`, a `Custom` control's build function. They read their arguments only.
+- Call no widget method inside a callback that runs under the package's lock: the key function and every function of a `widget.Column` (`Text`, `Compare`, `Filter`, `Spans`, `Color`, `Image`), the function of `UpdateRow`, of `widget.ListBoxWidget.UpdateItem` and of `widget.TreeViewWidget.UpdateNode`, the functions of a `ListBox`, `TreeView` or `ListView` (its key and columns, `widget.ListViewWidget.SetGroupBy`, `widget.ListViewWidget.SetImage`), a `Custom` control's build function. They read their arguments only.
 
 ## Tables
 
@@ -124,6 +124,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 ```
 
 - Every row has a key; `widget.DataGridViewWidget.AddRows` replaces the row of an existing key; change a row in place with `widget.DataGridViewWidget.UpdateRow(key, fn)`, never by rebuilding the table. It scales to a million rows.
+- Each getter is a snapshot of its own: between `widget.DataGridViewWidget.Selected` and `widget.DataGridViewWidget.Row` a row may have been deleted, so check the `ok` of `Row`. `Row` returns a shallow copy of the row: if the row type holds a slice, a map or a pointer, reading it races with `UpdateRow`. Keep rows plain values, or copy deeply.
 - `widget.DataGridViewWidget.Selected`, `widget.DataGridViewWidget.Checked` and `widget.DataGridViewWidget.CountSelected` read the user's choice; `widget.DataGridViewWidget.OnActivate(fn)` is a double click or Enter; `widget.DataGridViewWidget.ContextMenuFunc` builds a menu on the click.
 - Save column widths with `widget.DataGridViewWidget.SetColumnsLayout` and `widget.DataGridViewWidget.OnColumnsChange`, debounced: it fires many times during one drag.
 
