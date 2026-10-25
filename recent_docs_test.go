@@ -23,7 +23,11 @@ func testRecent(t *testing.T) {
 		recentDocs.Unlock()
 	}
 	reset()
-	t.Cleanup(func() { App.SetPath(PathUserData, ""); reset() })
+	t.Cleanup(func() {
+		flushAppWrites() // a late write would land in the directory being removed
+		App.SetPath(PathUserData, "")
+		reset()
+	})
 	onMain(func() { fb.RecentDocuments = nil; fb.RecentCleared = 0 })
 }
 
