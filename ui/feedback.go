@@ -344,29 +344,60 @@ func coreFindBar(c *context, open *bool, query *string, matches int, current *in
 	return bar
 }
 
+// themeGhost marks a themeAt that indexes the engine's ghostThemes, for a
+// copy of an element going with its exit transition.
+const themeGhost = 1 << 15
+
 // builtWith notes the theme e is built with, for a static function that
 // paints it: SetTheme applies to what is created after it, not to the
-// elements before it.
+// elements before it. themeAt is 1 more than the index, 0 for none.
 func (e *node) builtWith(t *Theme) {
 	rt := e.c.rt
 	for i := len(rt.themes) - 1; i >= 0; i-- {
 		if rt.themes[i] == t {
-			e.themeAt = uint16(i)
+			e.themeAt = uint16(i + 1)
 			return
 		}
 	}
-	if len(rt.themes) >= 1<<16-1 {
-		e.themeAt = 1<<16 - 1 // a frame of 65535 themes: the theme of painting
-		return
+	if len(rt.themes) >= themeGhost-1 {
+		return // so many themes in a frame: it paints with the theme of painting
 	}
-	e.themeAt = uint16(len(rt.themes))
 	rt.themes = append(rt.themes, t)
+	e.themeAt = uint16(len(rt.themes))
 }
 
 // builtTheme returns the theme e was built with (builtWith).
 func (e *node) builtTheme() *Theme {
-	if rt := e.c.rt; int(e.themeAt) < len(rt.themes) {
-		return rt.themes[e.themeAt]
+	rt, at := e.c.rt, int(e.themeAt)
+	switch {
+	case at == 0:
+	case at&themeGhost != 0:
+		if i := at&^themeGhost - 1; i < len(rt.ghostThemes) {
+			return rt.ghostThemes[i]
+		}
+	case at <= len(rt.themes):
+		return rt.themes[at-1]
 	}
 	return e.c.theme
+}
+
+// pinTheme returns the themeAt that a copy of e, an element of the frame
+// before, keeps for as long as it shows: the frame before's themes are
+// forgotten by the next frame's.
+func (rt *engine) pinTheme(e *node) uint16 {
+	at := int(e.themeAt)
+	if at == 0 || at&themeGhost != 0 || at > len(rt.prevThemes) {
+		return 0
+	}
+	t := rt.prevThemes[at-1]
+	for i, g := range rt.ghostThemes {
+		if g == t {
+			return themeGhost | uint16(i+1)
+		}
+	}
+	if len(rt.ghostThemes) >= themeGhost-1 {
+		return 0
+	}
+	rt.ghostThemes = append(rt.ghostThemes, t)
+	return themeGhost | uint16(len(rt.ghostThemes))
 }

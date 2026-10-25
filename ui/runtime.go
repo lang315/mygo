@@ -104,7 +104,12 @@ type engine struct {
 	itemChecks itemCheckSlab
 	// themes are those that elements built with a static paint function
 	// were built with in the frame (node.builtWith).
-	themes          []*Theme
+	themes []*Theme
+
+	// prevThemes are those of the frame before, which the elements kept for
+	// exit transitions refer to, and ghostThemes those that copies of them keep.
+	prevThemes, ghostThemes []*Theme
+
 	inputs          []valueInput
 	inputAt         int
 	afterInputAt    int
@@ -530,6 +535,8 @@ func (rt *engine) runFrame() {
 		rt.c.chunks, rt.c.spare = rt.c.spare, rt.c.chunks
 		rt.c.dirty, rt.c.spareDirty = rt.c.spareDirty, rt.c.dirty
 		rt.c.used = rt.c.dirty
+		clear(rt.prevThemes)
+		rt.themes, rt.prevThemes = rt.prevThemes[:0], rt.themes
 	}
 
 	// An event handled while building (a click, an edit) may change what
@@ -976,7 +983,7 @@ func (rt *engine) close() {
 	clear(rt.afterInputs)
 	rt.afterInputs = nil
 	rt.itemChecks = itemCheckSlab{}
-	rt.themes = nil
+	rt.themes, rt.prevThemes, rt.ghostThemes = nil, nil, nil
 	rt.themes = nil
 	clear(rt.inputs)
 	rt.inputs = nil

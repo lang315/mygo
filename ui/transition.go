@@ -777,6 +777,16 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 	}
 	clear(going)
 	rt.going = going[:0]
+	if len(rt.ghostThemes) > 0 {
+		for _, r := range rt.trans {
+			if r.ghost != nil {
+				return
+			}
+		}
+		// No copy shows: the themes they kept go.
+		clear(rt.ghostThemes)
+		rt.ghostThemes = rt.ghostThemes[:0]
+	}
 }
 
 // exit is a transition whose element's copy goes under p.
@@ -836,6 +846,7 @@ func ghostOf(e *node) *node {
 	g.activeDescendant, g.nameFrom, g.field, g.form = nil, nil, nil, nil
 	g.followX, g.colFit, g.gridFit = nil, nil, nil
 	g.inputFn, g.ghosts = nil, false
+	g.themeAt = e.c.rt.pinTheme(e)
 	g.poseSet = false // it keeps the pose it had
 	g.tl, g.nmeasure, g.leafOK, g.intrOK, g.lay = nil, 0, false, 0, 0
 	g.flags = g.flags&^(flagModal|flagPage|flagFocusTarget) | flagInert

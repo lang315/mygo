@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 )
@@ -193,5 +194,44 @@ func TestTableRowHoverUsesTheThemeItWasBuiltWith(t *testing.T) {
 	got := tt.Image().RGBAAt(300, int(y))
 	if want := (color.RGBA{255, 0, 0, 255}); got != want {
 		t.Errorf("a hovered row paints %v, want the hover of the theme it was built with %v", got, want)
+	}
+}
+
+// TestCheckboxGoingKeepsTheThemeItWasBuiltWith: the copy of a check box going
+// with its exit transition paints with the theme the box was built with, not
+// the theme of the frame it goes in.
+func TestCheckboxGoingKeepsTheThemeItWasBuiltWith(t *testing.T) {
+	a, b := *LightTheme(), *LightTheme()
+	a.AccentText = Hex("#ff0000")
+	b.AccentText = Hex("#00ff00")
+	on, shown := true, true
+	tt, now := clockTester(func(c *context) {
+		if shown {
+			c.SetTheme(&a)
+		} else {
+			c.SetTheme(&b)
+		}
+		coreColumn(c).AlignItems(Start).Children(func() {
+			if shown {
+				checkbox(c, &on, "", false).Label("Gone").Transition(ElementTransition{Exit: &Motion{Opacity: 0}})
+			}
+		})
+	}, 200, 100)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	tt.Frame()
+	shown = false
+	*now = now.Add(10 * time.Millisecond)
+	tt.Frame()
+	var ghost *node
+	for e := tt.rt.c.root.first.first; e != nil; e = e.next {
+		if e.leaving != 0 {
+			ghost = e
+		}
+	}
+	if ghost == nil || ghost.first == nil {
+		t.Fatal("the check box gone has no copy going")
+	}
+	if got := ghost.first.builtTheme(); got != &a {
+		t.Errorf("the box going paints with a theme with AccentText %v, want its own %v", got.AccentText, a.AccentText)
 	}
 }
