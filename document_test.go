@@ -512,6 +512,46 @@ func TestDocumentRecoveryQuitDuringARestoreKeepsTheSession(t *testing.T) {
 	}
 }
 
+// Quit in the middle of a restore leaves the same copy in two sessions, the
+// one claimed and the one of the instance that restored it: the next launch
+// restores the document once, with the later changes.
+func TestDocumentRecoveryRestoresOneCopyOfADocumentInTwoSessions(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	root, _ := ds.kind.recovery.root()
+	// The sessions are alive (locked) until both are there, for the restore
+	// the app begins with (registerDocKind) to take none of them.
+	var locks []*os.File
+	for i, content := range []string{"older", "newer"} {
+		session := filepath.Join(root, fmt.Sprintf("session%d", i))
+		if err := os.MkdirAll(session, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		lock, err := os.OpenFile(filepath.Join(session, "lock"), os.O_RDWR|os.O_CREATE, 0o600)
+		if err != nil || lockFile(lock) != nil {
+			t.Fatalf("lock: %v", err)
+		}
+		locks = append(locks, lock)
+		os.WriteFile(filepath.Join(session, "index.json"), []byte(`[{"id":"a","name":"Untitled 3"}]`), 0o600)
+		file := filepath.Join(session, "a")
+		os.WriteFile(file, []byte(content), 0o600)
+		at := time.Now().Add(time.Duration(i-5) * time.Minute) // session1 is the later
+		os.Chtimes(file, at, at)
+	}
+	for _, lock := range locks {
+		lock.Close()
+	}
+	if n := ds.kind.restore(); n != 1 {
+		t.Fatalf("restored %d documents, want 1", n)
+	}
+	docs := ds.Documents()
+	if len(docs) != 1 || docs[0].Content() != "newer" {
+		for _, d := range docs {
+			t.Logf("doc %q %q", d.Name(), d.Content())
+		}
+		t.Fatalf("restored %d documents", len(docs))
+	}
+}
+
 func TestDocumentRecovery(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	d := ds.New()

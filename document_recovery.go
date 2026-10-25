@@ -263,10 +263,33 @@ func (b *docBase) backup() {
 	b.mu.Unlock()
 }
 
+// newestCopies keeps one copy of each document: quit in the middle of a
+// restore leaves it in the session claimed and in the one of the instance
+// that began it, and the one written last has the later changes.
+func newestCopies(orphans []orphan) []orphan {
+	at := map[string]int{}
+	var out []orphan
+	for _, o := range orphans {
+		i, seen := at[o.entry.ID]
+		if !seen {
+			at[o.entry.ID] = len(out)
+			out = append(out, o)
+			continue
+		}
+		a, errA := os.Stat(out[i].file)
+		b, errB := os.Stat(o.file)
+		if errA != nil || errB == nil && b.ModTime().After(a.ModTime()) {
+			out[i] = o
+		}
+	}
+	return out
+}
+
 // restore opens the documents of the sessions no instance holds, edited,
 // and keeps their copies in this session.
 func (k *docKind) restore() int {
 	orphans, done := k.recovery.claim()
+	orphans = newestCopies(orphans)
 	n := 0
 	for _, o := range orphans {
 		e := o.entry
