@@ -480,6 +480,9 @@ func readKeys() <-chan string {
 		for sc.Scan() {
 			keys <- strings.ToLower(strings.TrimSpace(sc.Text()))
 		}
+		if err := sc.Err(); err != nil {
+			warnf("The shortcuts stopped: standard input cannot be read: %v", err)
+		}
 	}()
 	return keys
 }

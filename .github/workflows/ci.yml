@@ -103,6 +103,17 @@ jobs:
       # run on the unit tests; the GUI tests below are not run with them.
       # cmd/mygo takes 9 to 10 minutes on macOS under -race, the default limit.
       - run: go test -race -shuffle=on -timeout 25m ./...
+      # Without cgo the apps run on purego's fakecgo, which links against the
+      # runtime's internals: start every test binary that way, and the
+      # packages of the native calls (the tests above use the real cgo where
+      # a C compiler is, so none of them meets fakecgo).
+      - name: Start every test binary through fakecgo
+        if: runner.os != 'Windows'
+        env:
+          CGO_ENABLED: 0
+        run: |
+          go test -count=1 -run '^$' ./...
+          go test -count=1 ${{ runner.os == 'macOS' && './internal/darwin' || './internal/linux' }}
       - name: Test without the inspector, as production builds
         if: runner.os == 'Linux'
         run: go test -race -shuffle=on -timeout 25m -tags mygo_noinspector ./ui .
@@ -174,6 +185,12 @@ jobs:
             ~/.cache/mygo/nsis-*
           key: ${{ steps.downloads.outputs.cache-primary-key }}
       - run: go test -race -shuffle=on -timeout 25m ./...
+      - name: Start every test binary through fakecgo
+        env:
+          CGO_ENABLED: 0
+        run: |
+          go test -count=1 -run '^$' ./...
+          go test -count=1 ./internal/linux
       - name: GUI tests
         env:
           MYGO_E2E: 1

@@ -4242,6 +4242,35 @@ first edge to a symbol back to `main.main` to see why it is there, and
 search for `<ReflectMethod>`, which marks a reflective lookup that keeps
 every method.
 
+### Go upgrades
+
+purego's fakecgo (what lets MyGo call native code with `CGO_ENABLED=0`) links
+against the Go runtime's internals by `go:linkname`: `runtime.iscgo`,
+`runtime.set_crosscall2`, `syscall.cgo_libc_*` and the `_cgo_*` hooks. Go does
+not promise to keep them, so a new Go can fail to link, or to start, with no
+change of ours; the callbacks' tables (`syscall.NewCallback`) are the runtime's
+too. Before moving `go.mod` to a new Go, find out whether it still works:
+
+```sh
+scripts/go-next.sh                 # gotip, the tip of Go's master (built from source)
+scripts/go-next.sh go1.28rc1       # a release or a candidate, downloaded by GOTOOLCHAIN
+scripts/go-next.sh --quick gotip   # build, vet and link the test binaries only
+```
+
+Everything runs with `CGO_ENABLED=0`, since fakecgo is built only without cgo
+(a binary built with cgo, the default where a C compiler is, uses the real
+runtime/cgo and never meets it). It builds for macOS, Linux and Windows, vets,
+links and starts every test binary (`go test -run '^$' ./...`, where a broken
+linkname shows as a link error or a crash before `main`; `--quick` stops
+there), then runs the tests of `internal`, `ui` and the root package. The CI
+of every pull request does the starting too, with `CGO_ENABLED=0`, on macOS
+and Linux (the "Start every test binary through fakecgo" step), so that a
+change of ours cannot break fakecgo unseen either. `.github/workflows/go-next.yml` runs it on Mondays and on
+demand (Actions, "Go next", Run workflow, with the toolchain) on macOS, Linux,
+Linux ARM64 and Windows; it gates no pull request, a red run is the news. A
+failure in `fakecgo` is fixed by upgrading purego, whose releases follow the
+runtime: check its changelog for the Go version before upgrading both.
+
 ## Releasing
 
 The Go module, the CLI and the npm packages share one version:

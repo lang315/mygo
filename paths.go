@@ -164,6 +164,11 @@ func userDir(home string, name PathName) string {
 						return strings.Replace(v, "$HOME", home, 1)
 					}
 				}
+				if s.Err() != nil {
+					// On purpose, though it is what follows anyway: the file is
+					// optional, and a read error keeps the default.
+					return filepath.Join(home, folder)
+				}
 			}
 		}
 	}
