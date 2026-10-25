@@ -1139,6 +1139,9 @@ func (e *node) Hovered() bool {
 		return false
 	}
 	rt := e.c.rt
+	if rt.insp.forces(e.id, forceHover) {
+		return true
+	}
 	if !slices.Contains(rt.hover, e.id) {
 		return false
 	}
@@ -1176,6 +1179,9 @@ func (e *node) Pressed() bool {
 	e.flags |= flagClickable | flagHover
 	s := e.st
 	rt := e.c.rt
+	if rt.insp.forces(e.id, forcePressed) && !e.disabled() {
+		return true
+	}
 	if !s.pressed || e.disabled() || !rt.contains(s, Rect{s.x, s.y, s.w, s.h}, rt.pointerX, rt.pointerY) {
 		return false
 	}
@@ -1190,6 +1196,9 @@ func (e *node) Pressed() bool {
 
 // Focused reports whether the element has the keyboard focus.
 func (e *node) Focused() bool {
+	if e.hasState() && e.c.rt.insp.forces(e.id, forceFocus) {
+		return true
+	}
 	if e.hasState() && e.focusInto != nil {
 		return e.focusInto.Focused()
 	}
@@ -1198,7 +1207,9 @@ func (e *node) Focused() bool {
 
 // FocusVisible reports whether the element has the keyboard focus and
 // should show it, because it came from the keyboard.
-func (e *node) FocusVisible() bool { return e.Focused() && e.c.rt.focusVisible }
+func (e *node) FocusVisible() bool {
+	return e.Focused() && (e.c.rt.focusVisible || e.c.rt.insp.forces(e.id, forceFocus))
+}
 
 // FocusWithin reports whether the element or one of its descendants has
 // the keyboard focus.

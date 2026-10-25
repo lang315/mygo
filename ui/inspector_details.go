@@ -28,6 +28,18 @@ type inspDetails struct {
 	w, h                    float32
 	computed                []inspDecl
 	props                   []inspSection
+	// widget is the note of the control the element belongs to, if one left
+	// it (InspectNote).
+	widget *inspNoteView
+}
+
+// inspNoteView is a note shown in the Widget tab: owner is the element that
+// left it, from says where it is relative to the element chosen when it is
+// not that element.
+type inspNoteView struct {
+	owner       uint64
+	title, from string
+	fields      []InspectorField
 }
 
 // inspRule is a rule of the Styles tab: the element's own, or those of an
@@ -74,6 +86,14 @@ func (d *inspDetails) hash() uint64 {
 			b.WriteString(dc.value)
 		}
 	}
+	if w := d.widget; w != nil {
+		b.WriteString(w.title)
+		b.WriteString(w.from)
+		for _, f := range w.fields {
+			b.WriteString(f.Name)
+			b.WriteString(f.Value)
+		}
+	}
 	return maphash.String(keySeed, b.String())
 }
 
@@ -100,7 +120,28 @@ func describe(rt *engine, e *node) inspDetails {
 	d.w, d.h = max(e.w-e.padX(), 0), max(e.h-e.padY(), 0)
 	d.computed = computed(e)
 	d.props = properties(rt, e)
+	d.widget = widgetNote(rt, e)
 	return d
+}
+
+// widgetNote returns the note of the control e belongs to: its own, else
+// that of the nearest element around it that left one.
+func widgetNote(rt *engine, e *node) *inspNoteView {
+	for p, up := e, 0; p != nil; p, up = p.parent, up+1 {
+		n, ok := rt.insp.notes[p.id]
+		if !ok {
+			continue
+		}
+		w := &inspNoteView{owner: p.id, title: n.title}
+		if n.fields != nil {
+			w.fields = n.fields()
+		}
+		if up > 0 {
+			w.from = fmt.Sprintf("%s, %d up", elementName(p), up)
+		}
+		return w
+	}
+	return nil
 }
 
 // ownStyles returns the styles e sets, as CSS declarations.

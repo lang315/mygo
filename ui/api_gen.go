@@ -326,6 +326,19 @@ func (_handle *Context) DisableAnimations() {
 	_ctx.DisableAnimations()
 }
 
+// Inspecting reports whether the window's inspector is open, so that code
+// which describes its elements for it does the work only then. For developer
+// tools; no effect and no cost when the inspector is off or built with
+// mygo_noinspector (it is then false, a constant, and what follows it is
+// left out of the program).
+func (_handle *Context) Inspecting() bool {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return false
+	}
+	return _ctx.Inspecting()
+}
+
 // Locale returns the language the app shows (mygo.App.Locale), a BCP 47
 // tag such as "en" or "zh-Hans", for what the view says in it. Text is in
 // it unless an element says otherwise (Element.Lang). A frame follows its
@@ -4233,6 +4246,23 @@ func (_handle Element) InsetShadow(x float32, y float32, blur float32, spread fl
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.InsetShadow(x, y, blur, spread, c))
+}
+
+// InspectNote leaves a note for the inspector: its Widget tab shows title
+// and the fields fn returns for this element, or for the elements inside it,
+// when one of them is chosen, and lets the user force the hover, pressed and
+// focus states on the element. fn runs when the note is shown, for the one
+// element chosen, on the thread that draws frames after the view built. Call
+// it only if Inspecting reports true. For developer tools; no effect and no
+// cost when the inspector is off or built with mygo_noinspector.
+func (_handle Element) InspectNote(title string, fields func() []InspectorField) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.InspectNote(title, fields))
 }
 
 // Invisible hides the element and its children, which keep their room in

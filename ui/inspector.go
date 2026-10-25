@@ -49,6 +49,7 @@ const (
 	inspStyles = iota
 	inspComputed
 	inspProperties
+	inspWidget // only for an element of a control that left a note
 )
 
 // inspHistory is how many frames the Performance tab shows.
@@ -67,6 +68,13 @@ type inspector struct {
 	// the element chosen in the tree, opening the nodes around it.
 	selected, hovered uint64
 	reveal            bool
+	// notes are what elements left for the inspector in this frame
+	// (InspectNote), by ID. forceID has the states in forced (forceHover…)
+	// forced on it.
+	notes   map[uint64]inspNote
+	forceID uint64
+	forced  uint8
+	forceOK bool
 	// source is where the app built the element chosen.
 	source string
 	// panel is the ID of the panel, width its width, and appW the width
@@ -123,6 +131,28 @@ type inspector struct {
 	pal   inspPalette
 }
 
+// inspNote is what an element left for the inspector.
+type inspNote struct {
+	title  string
+	fields func() []InspectorField
+}
+
+// inspecting tells that elements should leave notes: the inspector is open.
+func (in *inspector) inspecting() bool { return in.open }
+
+// note keeps a note of the element id until the next frame.
+func (in *inspector) note(id uint64, title string, fields func() []InspectorField) {
+	if in.notes == nil {
+		in.notes = map[uint64]inspNote{}
+	}
+	in.notes[id] = inspNote{title, fields}
+}
+
+// forces tells that a state of mask is forced on the element id.
+func (in *inspector) forces(id uint64, mask uint8) bool {
+	return in.forced&mask != 0 && in.forceID == id
+}
+
 // inspNode is an element of the tree: its tag (name), the attributes it
 // shows (its key and label), and the text of a text. key keys its row:
 // the element's ID, unless another element had it (a duplicate key).
@@ -173,6 +203,7 @@ func (in *inspector) lap(phase int) {
 	now := time.Now()
 	if phase < 0 {
 		clear(in.keys)
+		clear(in.notes)
 	} else {
 		in.times[phase] = now.Sub(in.lapAt)
 	}
@@ -199,6 +230,7 @@ func (rt *engine) toggleInspector() {
 	in := &rt.insp
 	in.open = !in.open
 	in.picking, in.hovered = false, 0
+	in.forceID, in.forced = 0, 0
 	if !in.open {
 		in.nodes, in.rows, in.sel = nil, nil, inspDetails{}
 	} else if in.keys == nil {
@@ -286,6 +318,7 @@ func (in *inspector) pointer(rt *engine, ev platform.SurfaceEvent, x, y float32)
 func (in *inspector) choose(id uint64) {
 	if id != in.selected {
 		in.selected, in.source = id, ""
+		in.forceID, in.forced = 0, 0
 		// The breadcrumbs show the element chosen, at their end.
 		in.crumbs.X = math.MaxFloat32
 		in.sideScroll.Y = 0
@@ -302,7 +335,11 @@ func (in *inspector) snapshot(rt *engine, root *node) {
 	}
 	clear(in.seen)
 	var sum uint64
+	in.forceOK = false
 	in.walk(rt, root, 0, -1, &sum)
+	if in.forced != 0 && !in.forceOK {
+		in.forceID, in.forced = 0, 0 // the element is gone
+	}
 	in.elements = len(in.nodes)
 	in.sel = inspDetails{}
 	if e := in.selElem; e != nil {
@@ -346,6 +383,9 @@ func (in *inspector) walk(rt *engine, e *node, depth, parent int32, sum *uint64)
 	}
 	if e.id == in.selected {
 		in.selElem = e
+	}
+	if e.id == in.forceID {
+		in.forceOK = true
 	}
 	if e.id == in.hovered {
 		in.hoverElem = e

@@ -447,7 +447,11 @@ func (in *inspector) sidebar(c *context) {
 	pal := &in.pal
 	coreColumn(c).Fill().Children(func() {
 		coreRow(c).Height(26).Shrink(0).PaddingX(4).Background(pal.toolbar).BorderWidth(0, 0, 1, 0).BorderColor(pal.border).Children(func() {
-			for i, label := range []string{"Styles", "Computed", "Properties"} {
+			labels := []string{"Styles", "Computed", "Properties"}
+			if in.sel.widget != nil {
+				labels = append(labels, "Widget")
+			}
+			for i, label := range labels {
 				if in.tab0(c, label, in.side == i, 26).Clicked() {
 					in.side = i
 				}
@@ -463,6 +467,12 @@ func (in *inspector) sidebar(c *context) {
 				in.computedPane(c)
 			case inspProperties:
 				in.propertiesPane(c)
+			case inspWidget:
+				if in.sel.widget != nil {
+					in.widgetPane(c)
+					return
+				}
+				in.stylesPane(c)
 			default:
 				in.stylesPane(c)
 			}
@@ -592,6 +602,64 @@ func (in *inspector) propertiesPane(c *context) {
 			}
 		})
 	}
+}
+
+// widgetPane shows the note of the control the element chosen belongs to,
+// and the buttons that force its states.
+func (in *inspector) widgetPane(c *context) {
+	pal := &in.pal
+	w := in.sel.widget
+	coreColumn(c).Padding(6, 10, 8).Gap(4).BorderWidth(0, 0, 1, 0).BorderColor(pal.border).Children(func() {
+		coreText(c, w.title).Bold().FontSize(12)
+		if w.from != "" {
+			coreText(c, "from "+w.from).FontSize(11).TextColor(pal.muted)
+		}
+		coreText(c, "Force state").FontSize(11).TextColor(pal.muted).Margin(4, 0, 0, 0)
+		coreRow(c).Gap(4).Children(func() {
+			for _, f := range []struct {
+				label string
+				bit   uint8
+			}{{"hover", forceHover}, {"pressed", forcePressed}, {"focus", forceFocus}} {
+				on := in.forceID == w.owner && in.forced&f.bit != 0
+				b := coreBox(c).Key(f.label).PaddingX(8).PaddingY(2).Radius(10).Label("Force " + f.label).Role(RoleToggleButton)
+				b.checked = 1
+				color := pal.muted
+				switch {
+				case on:
+					b.checked = 2
+					b.Background(pal.selected).Border(1, pal.accent)
+					color = pal.text
+				case b.Hovered():
+					b.Background(pal.hover).Border(1, pal.border)
+				default:
+					b.Border(1, pal.border)
+				}
+				b.Children(func() { coreText(c, f.label).FontSize(11).TextColor(color).SingleLine() })
+				if b.Clicked() {
+					if in.forceID != w.owner {
+						in.forceID, in.forced = w.owner, 0
+					}
+					in.forced ^= f.bit
+					c.rt.requestFrame()
+				}
+			}
+		})
+	})
+	if len(w.fields) == 0 {
+		return
+	}
+	coreColumn(c).Padding(6, 10, 8).Gap(2).Children(func() {
+		for _, f := range w.fields {
+			if f.Value == "" {
+				coreText(c, f.Name).Bold().FontSize(11).Margin(4, 0, 2, 0)
+				continue
+			}
+			coreRow(c).Padding(0, 0, 0, 8).Children(func() {
+				mono(c, Span{Text: f.Name, Color: pal.tag}, Span{Text: ": ", Color: pal.text}, Span{Text: f.Value, Color: pal.text}).
+					Shrink(1).MinWidth(0).Selectable()
+			})
+		}
+	})
 }
 
 // The colors of the Performance tab: building as Chrome's scripting,
