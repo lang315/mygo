@@ -100,7 +100,7 @@ var kindNames = map[Kind]string{
 }
 
 // blocks makes the tables of the page, by name.
-func blocks() map[string]string {
+func blocks(t *testing.T) map[string]string {
 	out := map[string]string{}
 
 	var b strings.Builder
@@ -118,9 +118,9 @@ func blocks() map[string]string {
 		}
 		if x.sides != 0 {
 			what += " of " + sideNames(x.sides, names)
-			unit = "`n` × 4 DIPs"
+			unit = "`n` theme units (`Theme.Space(n)`, 4 DIPs each by default)"
 		} else {
-			unit = "`n` × 4 DIPs"
+			unit = "`n` × 4 DIPs (fixed, not theme units)"
 		}
 		cls := "`" + x.prefix + "-{n}`"
 		if x.kind == Margin {
@@ -134,17 +134,17 @@ func blocks() map[string]string {
 
 	b.Reset()
 	b.WriteString("`n` is one of " + ranges(keysByValue(spacing), spacing, 1) + ".\n\n")
-	b.WriteString("`px` is 1 DIP; any other `n` is `n` × 4 DIPs (`Theme.Space(n)`).\n")
+	b.WriteString("`px` is a quarter of a unit. In padding and margin a unit is `Theme.Space(1)`, 4 DIPs by default; a width or a height is `n` × 4 DIPs whatever the theme.\n")
 	out["spacing"] = b.String()
 
 	b.Reset()
-	b.WriteString("| Class | Radius |\n|---|---|\n")
+	b.WriteString("| Class | Radius (a theme unit is 4 DIPs by default) |\n|---|---|\n")
 	for _, k := range keysByValue(radii) {
 		cls := "rounded"
 		if k != "" {
 			cls += "-" + k
 		}
-		v := num(radii[k]*4) + " DIPs"
+		v := num(radii[k]) + " theme units"
 		if radii[k] == 9999 {
 			v = "a full pill or circle"
 		}
@@ -178,7 +178,13 @@ func blocks() map[string]string {
 	b.Reset()
 	b.WriteString("| Class | Size |\n|---|---|\n")
 	order := []string{"xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "8xl", "9xl"}
+	if len(order) != len(textSizes) {
+		t.Errorf("%d text sizes in the table, %d in the order of the page: add the new one to order", len(textSizes), len(order))
+	}
 	for _, k := range order {
+		if _, ok := textSizes[k]; !ok {
+			t.Errorf("text-%s is not in the parser's table", k)
+		}
 		z := textSizes[k]
 		v := ""
 		if z.Kind == TextSize {
@@ -216,10 +222,16 @@ func blocks() map[string]string {
 
 	b.Reset()
 	b.WriteString("| Class | Layers (x, y, blur, spread, alpha) |\n|---|---|\n")
-	var shadowNames []string
+	var shadowNames, plain []string
 	for k, d := range fixed {
-		if len(d) == 1 && d[0].Kind == Shadows {
+		switch {
+		case k == "max-w-none":
+		case len(d) == 1 && d[0].Kind == Shadows:
 			shadowNames = append(shadowNames, k)
+		case len(d) == 1:
+			plain = append(plain, k)
+		default:
+			t.Errorf("fixed[%q] sets %d declarations: the page does not know how to show it", k, len(d))
 		}
 	}
 	sort.Strings(shadowNames)
@@ -243,12 +255,6 @@ func blocks() map[string]string {
 
 	b.Reset()
 	b.WriteString("| Class | Sets |\n|---|---|\n")
-	var plain []string
-	for k, d := range fixed {
-		if len(d) == 1 && d[0].Kind != Shadows && k != "max-w-none" {
-			plain = append(plain, k)
-		}
-	}
 	sort.Strings(plain)
 	for _, k := range plain {
 		fmt.Fprintf(&b, "| `%s` | %s |\n", k, describe(fixed[k][0]))
@@ -272,7 +278,7 @@ func blocks() map[string]string {
 
 	b.Reset()
 	b.WriteString("| What a class sets | `widget.Style` method |\n|---|---|\n")
-	for k := Padding; k <= Transition; k++ {
+	for k := Padding; k < kindEnd; k++ {
 		fmt.Fprintf(&b, "| %s | `%s` |\n", kindNames[k], styleOf[k])
 	}
 	out["styles"] = b.String()
@@ -320,20 +326,70 @@ func describe(d Decl) string {
 	case Mono:
 		return "the monospace font"
 	case HExpand:
-		return "grows to take the room along the container (layout: an error in a variant)"
+		return "takes the free width of its `HBox` (layout: an error in a variant)"
 	case VExpand:
-		return "grows to take the room across it (layout: an error in a variant)"
-	case Align, VAlign:
-		axis := "horizontal"
-		if d.Kind == VAlign {
-			axis = "vertical"
-		}
-		return axis + " alignment: " + [...]string{"", "start", "center", "end", "fill"}[int(d.Value)] + " (layout: an error in a variant)"
+		return "takes the free height of its `VBox` (layout: an error in a variant)"
+	case Align:
+		return "places the control horizontally in a `VBox`: " + [...]string{"", "start", "center", "end", "fill"}[int(d.Value)] + " (layout: an error in a variant)"
+	case VAlign:
+		return "places the control vertically in an `HBox`: " + [...]string{"", "start", "center", "end", "fill"}[int(d.Value)] + " (layout: an error in a variant)"
 	}
 	return kindNames[d.Kind]
 }
 
-var markerRE = regexp.MustCompile(`(?s)<!-- twclass:(\w+) -->\n(.*?)<!-- /twclass:\w+ -->`)
+var (
+	openRE  = regexp.MustCompile(`<!-- twclass:(\w+) -->\n`)
+	closeRE = regexp.MustCompile(`<!-- /twclass:(\w+) -->`)
+)
+
+// regions returns the page with the body of each table replaced by want's,
+// and complains of a marker without its pair.
+func regions(t *testing.T, page string, want map[string]string) string {
+	var out strings.Builder
+	seen := map[string]bool{}
+	rest := page
+	for {
+		o := openRE.FindStringSubmatchIndex(rest)
+		if o == nil {
+			break
+		}
+		name := rest[o[2]:o[3]]
+		out.WriteString(rest[:o[1]])
+		after := rest[o[1]:]
+		c := closeRE.FindStringSubmatchIndex(after)
+		if next := openRE.FindStringIndex(after); c == nil || next != nil && next[0] < c[0] {
+			t.Errorf("twclass:%s is opened and not closed", name)
+			rest = after
+			continue
+		}
+		if closed := after[c[2]:c[3]]; closed != name {
+			t.Errorf("twclass:%s is closed as twclass:%s", name, closed)
+			rest = after
+			continue
+		}
+		if seen[name] {
+			t.Errorf("twclass:%s is twice in the page", name)
+		}
+		seen[name] = true
+		body, ok := want[name]
+		if !ok {
+			t.Errorf("the page has a table twclass:%s that the test does not make", name)
+			body = after[:c[0]]
+		}
+		out.WriteString(body + after[c[0]:c[1]])
+		rest = after[c[1]:]
+	}
+	out.WriteString(rest)
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("the page lacks the table twclass:%s", name)
+		}
+	}
+	if strings.Count(page, "<!-- /twclass:") != len(seen) && !t.Failed() {
+		t.Errorf("a closing marker has no opening one")
+	}
+	return out.String()
+}
 
 func TestCheatSheet(t *testing.T) {
 	data, err := os.ReadFile(sheetPath)
@@ -341,22 +397,9 @@ func TestCheatSheet(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := string(data)
-	want := blocks()
-	seen := map[string]bool{}
-	next := markerRE.ReplaceAllStringFunc(page, func(m string) string {
-		name := markerRE.FindStringSubmatch(m)[1]
-		seen[name] = true
-		body, ok := want[name]
-		if !ok {
-			t.Errorf("the page has a table twclass:%s that the test does not make", name)
-			return m
-		}
-		return "<!-- twclass:" + name + " -->\n" + body + "<!-- /twclass:" + name + " -->"
-	})
-	for name := range want {
-		if !seen[name] {
-			t.Errorf("the page lacks the table twclass:%s", name)
-		}
+	next := regions(t, page, blocks(t))
+	if t.Failed() {
+		return // a page with a broken marker is not written over
 	}
 	if next != page {
 		if *update {
@@ -371,13 +414,31 @@ func TestCheatSheet(t *testing.T) {
 
 // Every kind of declaration is described in the page's table of Style methods.
 func TestCheatSheetKnowsEveryKind(t *testing.T) {
-	for k := Padding; k <= Transition; k++ {
+	for k := Padding; k < kindEnd; k++ {
 		if kindNames[k] == "" || styleOf[k] == "" {
 			t.Errorf("kind %d is not described: add it to kindNames and styleOf", k)
 		}
 	}
-	if Transition != Kind(len(kindNames)) {
-		t.Errorf("%d kinds named, the last kind is %d", len(kindNames), Transition)
+	if n := int(kindEnd) - int(Padding); len(kindNames) != n || len(styleOf) != n {
+		t.Errorf("%d kinds, %d named and %d with a Style method", n, len(kindNames), len(styleOf))
+	}
+}
+
+// What the page says in words and the parser keeps in code that the tables
+// do not reach: its probes fail when a name there stops parsing.
+func TestCheatSheetHandWrittenNames(t *testing.T) {
+	for _, c := range []string{"bg-black", "bg-white", "bg-transparent", "text-black", "border-white", "border-solid", "border-dashed",
+		"bg-default", "text-default", "border-default"} {
+		if _, bad := Parse(c); len(bad) > 0 {
+			t.Errorf("%s, which the page names, does not parse: %v", c, bad)
+		}
+	}
+	// The prefixes of the variants the page lists.
+	if got := sortedKeys(states); strings.Join(got, " ") != "active disabled focus hover" {
+		t.Errorf("the variants are %v: the page's Variants section lists active, disabled, focus, hover and dark", got)
+	}
+	if got := sortedKeys(defaults); strings.Join(got, " ") != "bg border text" {
+		t.Errorf("default colors for %v: the page's Colors section lists bg-default, text-default and border-default", got)
 	}
 }
 

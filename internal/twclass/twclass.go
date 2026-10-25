@@ -57,6 +57,8 @@ const (
 	HExpand
 	VExpand
 	Transition // Value in milliseconds
+
+	kindEnd // after the last kind: loops over the kinds stop before it
 )
 
 // Color is a palette color, RGBA as 0xRRGGBBAA, or a theme role by name

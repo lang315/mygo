@@ -26,53 +26,55 @@ a `tw-bad` block must be refused for the reason it gives.
 
 `{n}` is a value of the scale at the end of this section. A class with a value
 that is not in its list (`p-13`, `w-[200px]`) is an unknown class: there are no
-arbitrary values; use the `Style` method in Go (`Padding(13)`, `Width(200)`).
+arbitrary values; use the `Style` method in Go. Padding, margin and radius are in
+theme units, so `p-[13px]` is `Padding(3.25)` with the default 4 DIP unit; a
+width is in DIPs: `Width(200)`.
 
 <!-- twclass:boxes -->
 | Class | Sets | Value |
 |---|---|---|
-| `p-{n}` | padding of all four | `n` × 4 DIPs |
-| `px-{n}` | padding of right + left | `n` × 4 DIPs |
-| `py-{n}` | padding of top + bottom | `n` × 4 DIPs |
-| `pt-{n}` | padding of top | `n` × 4 DIPs |
-| `pr-{n}` | padding of right | `n` × 4 DIPs |
-| `pb-{n}` | padding of bottom | `n` × 4 DIPs |
-| `pl-{n}` | padding of left | `n` × 4 DIPs |
-| `m-{n}` `-m-{n}` | margin of all four | `n` × 4 DIPs; negative with the `-` form |
-| `mx-{n}` `-mx-{n}` | margin of right + left | `n` × 4 DIPs; negative with the `-` form |
-| `my-{n}` `-my-{n}` | margin of top + bottom | `n` × 4 DIPs; negative with the `-` form |
-| `mt-{n}` `-mt-{n}` | margin of top | `n` × 4 DIPs; negative with the `-` form |
-| `mr-{n}` `-mr-{n}` | margin of right | `n` × 4 DIPs; negative with the `-` form |
-| `mb-{n}` `-mb-{n}` | margin of bottom | `n` × 4 DIPs; negative with the `-` form |
-| `ml-{n}` `-ml-{n}` | margin of left | `n` × 4 DIPs; negative with the `-` form |
-| `w-{n}` | width | `n` × 4 DIPs |
-| `h-{n}` | height | `n` × 4 DIPs |
-| `min-w-{n}` | minimum width | `n` × 4 DIPs |
-| `max-w-{n}` | maximum width | `n` × 4 DIPs |
-| `min-h-{n}` | minimum height | `n` × 4 DIPs |
-| `max-h-{n}` | maximum height | `n` × 4 DIPs |
+| `p-{n}` | padding of all four | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default) |
+| `px-{n}` | padding of right + left | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default) |
+| `py-{n}` | padding of top + bottom | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default) |
+| `pt-{n}` | padding of top | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default) |
+| `pr-{n}` | padding of right | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default) |
+| `pb-{n}` | padding of bottom | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default) |
+| `pl-{n}` | padding of left | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default) |
+| `m-{n}` `-m-{n}` | margin of all four | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default); negative with the `-` form |
+| `mx-{n}` `-mx-{n}` | margin of right + left | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default); negative with the `-` form |
+| `my-{n}` `-my-{n}` | margin of top + bottom | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default); negative with the `-` form |
+| `mt-{n}` `-mt-{n}` | margin of top | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default); negative with the `-` form |
+| `mr-{n}` `-mr-{n}` | margin of right | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default); negative with the `-` form |
+| `mb-{n}` `-mb-{n}` | margin of bottom | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default); negative with the `-` form |
+| `ml-{n}` `-ml-{n}` | margin of left | `n` theme units (`Theme.Space(n)`, 4 DIPs each by default); negative with the `-` form |
+| `w-{n}` | width | `n` × 4 DIPs (fixed, not theme units) |
+| `h-{n}` | height | `n` × 4 DIPs (fixed, not theme units) |
+| `min-w-{n}` | minimum width | `n` × 4 DIPs (fixed, not theme units) |
+| `max-w-{n}` | maximum width | `n` × 4 DIPs (fixed, not theme units) |
+| `min-h-{n}` | minimum height | `n` × 4 DIPs (fixed, not theme units) |
+| `max-h-{n}` | maximum height | `n` × 4 DIPs (fixed, not theme units) |
 | `max-w-none` | no maximum width (a `w-` is no longer capped at its container's room) | |
 <!-- /twclass:boxes -->
 
 <!-- twclass:spacing -->
 `n` is one of `0`, `px`, `0.5` … `4` (step 0.5), `5` … `12` (step 1), `14`, `16` … `64` (step 4), `72`, `80`, `96`.
 
-`px` is 1 DIP; any other `n` is `n` × 4 DIPs (`Theme.Space(n)`).
+`px` is a quarter of a unit. In padding and margin a unit is `Theme.Space(1)`, 4 DIPs by default; a width or a height is `n` × 4 DIPs whatever the theme.
 <!-- /twclass:spacing -->
 
 ## Radius
 
 <!-- twclass:radius -->
-| Class | Radius |
+| Class | Radius (a theme unit is 4 DIPs by default) |
 |---|---|
-| `rounded-none` | 0 DIPs |
-| `rounded-sm` | 2 DIPs |
-| `rounded` | 4 DIPs |
-| `rounded-md` | 6 DIPs |
-| `rounded-lg` | 8 DIPs |
-| `rounded-xl` | 12 DIPs |
-| `rounded-2xl` | 16 DIPs |
-| `rounded-3xl` | 24 DIPs |
+| `rounded-none` | 0 theme units |
+| `rounded-sm` | 0.5 theme units |
+| `rounded` | 1 theme units |
+| `rounded-md` | 1.5 theme units |
+| `rounded-lg` | 2 theme units |
+| `rounded-xl` | 3 theme units |
+| `rounded-2xl` | 4 theme units |
+| `rounded-3xl` | 6 theme units |
 | `rounded-full` | a full pill or circle |
 
 Before the size, a side or a corner: `b` (bottom right + bottom left), `bl` (bottom left), `br` (bottom right), `l` (top left + bottom left), `r` (top right + bottom right), `t` (top left + top right), `tl` (top left), `tr` (top right). `rounded-l`, `rounded-tr-2xl` and `rounded-l-none` all parse.
@@ -192,18 +194,18 @@ how a control takes its place in the box that holds it.
 | Class | Sets |
 |---|---|
 | `font-mono` | the monospace font |
-| `halign-center` | horizontal alignment: center (layout: an error in a variant) |
-| `halign-end` | horizontal alignment: end (layout: an error in a variant) |
-| `halign-fill` | horizontal alignment: fill (layout: an error in a variant) |
-| `halign-start` | horizontal alignment: start (layout: an error in a variant) |
-| `hexpand` | grows to take the room along the container (layout: an error in a variant) |
+| `halign-center` | places the control horizontally in a `VBox`: center (layout: an error in a variant) |
+| `halign-end` | places the control horizontally in a `VBox`: end (layout: an error in a variant) |
+| `halign-fill` | places the control horizontally in a `VBox`: fill (layout: an error in a variant) |
+| `halign-start` | places the control horizontally in a `VBox`: start (layout: an error in a variant) |
+| `hexpand` | takes the free width of its `HBox` (layout: an error in a variant) |
 | `italic` | italic text |
 | `not-italic` | not italic (clears an `italic` earlier in the string; an error in a variant) |
-| `valign-center` | vertical alignment: center (layout: an error in a variant) |
-| `valign-end` | vertical alignment: end (layout: an error in a variant) |
-| `valign-fill` | vertical alignment: fill (layout: an error in a variant) |
-| `valign-start` | vertical alignment: start (layout: an error in a variant) |
-| `vexpand` | grows to take the room across it (layout: an error in a variant) |
+| `valign-center` | places the control vertically in an `HBox`: center (layout: an error in a variant) |
+| `valign-end` | places the control vertically in an `HBox`: end (layout: an error in a variant) |
+| `valign-fill` | places the control vertically in an `HBox`: fill (layout: an error in a variant) |
+| `valign-start` | places the control vertically in an `HBox`: start (layout: an error in a variant) |
+| `vexpand` | takes the free height of its `VBox` (layout: an error in a variant) |
 <!-- /twclass:fixed -->
 
 ## gota's button classes
@@ -328,30 +330,42 @@ font-mono text-xs
 
 A web screen is laid out by CSS; a mygo screen by containers and a few
 properties of the control. These classes are refused (`tw.S` logs them, `mygo
-vet` reports them), and this is what to do instead:
+vet` reports them), and this is what to do instead.
+
+Alignment and growth depend on the box that holds the control: in a `VBox`,
+`halign-*` places it across (horizontally) and `vexpand` gives it the free height;
+in an `HBox`, `valign-*` places it across (vertically) and `hexpand` gives it the
+free width. The other axis of each does nothing.
 
 | Tailwind | Why not | In mygo |
 |---|---|---|
 | `flex`, `flex-row`, `flex-col` | there is no `display`; the container decides | `widget.HBox(gap)`, `widget.VBox(gap)` |
 | `gap-N`, `space-x-N`, `space-y-N` | spacing is the container's | the argument of `HBox`, `VBox` and `FlowPanel`, in DIPs; `Grid(colGap, rowGap)`; `Fields().Gap(row, col)` |
 | `grid`, `grid-cols-N`, `col-span-N` | no CSS grid | `widget.Grid(colGap, rowGap)` and `.Attach(w, col, row, width, height)`; `widget.Fields()` for rows of a label and a control |
-| `items-*`, `justify-*`, `place-*`, `self-*` | alignment is set on the child | `halign-{start,center,end,fill}` and `valign-*` on the control |
-| `m-auto`, `mx-auto` | no `auto` margin | `halign-center` |
-| `w-full`, `h-full`, `flex-1`, `grow` | no percentages | `hexpand` and `vexpand` (`Expand()` in Go): take the room left in the box |
+| `items-*`, `self-*` | alignment is set on the child | across the box: `halign-{start,center,end,fill}` in a `VBox`, `valign-*` in an `HBox` |
+| `justify-*`, `place-*` | no class: the box places its items as they are packed | `box.Pack(w, expand, fill)` and `PackEnd`; `hexpand` / `vexpand` take the free room |
+| `m-auto`, `mx-auto` | no `auto` margin | `halign-center` in a `VBox` (`valign-center` in an `HBox`) |
+| `flex-1`, `grow` | | `hexpand` in an `HBox`, `vexpand` in a `VBox` (`Expand()` in Go) |
+| `w-full` | no percentages | `halign-fill` in a `VBox`; `h-full`: `valign-fill` in an `HBox`; along the box, `hexpand` / `vexpand` |
 | `w-1/2`, `w-screen` | no fractions or viewport units | `hexpand` on controls that share a box; `w-{n}` for a fixed width |
 | `overflow-auto`, `overflow-scroll` | scrolling is a control | `widget.ScrollPanel(w)` |
-| `hidden`, `block`, `invisible` | | `SetVisible(false)` / `SetVisible(true)` |
+| `hidden`, `block` | | `SetVisible(false)` / `SetVisible(true)`: a hidden control takes no room |
+| `invisible` | a hidden control gives up its room | `opacity-0` hides it and keeps the room |
 | `truncate` | `Style` has no text overflow | list controls (ListBox, ListView, DataGridView) keep a line each; for a `Label`, `widget.Custom` with `ui.Text(c, s).SingleLine()` (cut with an ellipsis) |
-| `text-left`, `text-center`, `text-right` | `Style` has no text alignment | place the control: `halign-start`, `halign-center`, `halign-end` |
+| `text-left`, `text-center`, `text-right` | `halign-*` moves the control, not the lines of its text; `Style` has no text alignment | `widget.Custom` with `ui.Text(c, s).TextAlign(ui.Center)` |
 | `absolute`, `relative`, `top-N`, `z-N` | no positioning | `widget.Custom` and `ui` for what overlaps |
-| `bg-blue-600/50`, `text-black/70` | no color alpha | `opacity-N` on the whole control; `Style.Background` with a color in Go |
+| `bg-blue-600/50`, `text-black/70` | no color alpha | `opacity-N` on the whole control; `Style.Background` with a color that has alpha in Go |
 | `bg-gradient-to-r`, `from-*`, `to-*` | | `Style.Gradient` in Go |
-| `blur-*`, `backdrop-blur-*` | | `Style.Blur` in Go |
-| `p-[13px]`, `w-[200px]`, `text-[#123456]` | no arbitrary values | the `Style` method in Go: `Padding(13)`, `Width(200)`, `TextColor(...)` |
-| `ring`, `ring-N`, `outline-*` | the focus ring is the control's | the theme's `focus` role colors it |
+| `blur-*` | | `Style.Blur(sigma)` in Go: it blurs the control and its children |
+| `backdrop-blur-*` | `Style.Blur` blurs the control itself; nothing blurs what is behind it | none |
+| `p-[13px]`, `w-[200px]`, `text-[#123456]` | no arbitrary values | the `Style` method in Go: `Padding(3.25)` (theme units), `Width(200)` (DIPs), `TextColor(widget.Fixed(ui.RGB(18, 52, 86)))` |
+| `ring`, `ring-N`, `outline-*` | the focus ring is the control's | drawn by the control in the theme's `focus` color |
 | `sm:`, `md:`, `lg:`, `group-hover:`, `first:` | no breakpoints or relations between elements | `hover:`, `active:`, `focus:`, `disabled:`, `dark:` only |
-| `transition-all`, `ease-*`, `delay-*` | one transition for all properties | `transition` with `duration-N` |
-| `leading-*`, `tracking-*`, `underline`, `uppercase` | | not in `Style`; `ui.RichText` spans for runs of text |
+| `transition-all`, `ease-*`, `delay-*` | one transition, of the background, border and text colors | `transition` with `duration-N` |
+| `underline`, `line-through` | text decoration is not in `Style` | `Label.Rich(ui.Span{Text: s, Underline: true})`, `Strikethrough: true` |
+| `tracking-*` | | `ui.Span{LetterSpacing: …}`, or `Element.LetterSpacing` in `widget.Custom` |
+| `leading-*` | | `Element.LineHeight(multiple)` in `widget.Custom` |
+| `uppercase`, `lowercase`, `capitalize` | no text transform | `strings.ToUpper(s)` and the like |
 
 ```tw-bad
 flex | unknown class
@@ -361,37 +375,61 @@ space-x-2 | unknown class
 grid | unknown class
 grid-cols-3 | unknown class
 items-center | unknown class
+self-end | unknown class
 justify-between | unknown class
+place-items-center | unknown class
 m-auto | unknown class
-w-full | unknown class
+mx-auto | unknown class
 flex-1 | unknown class
+grow | unknown class
+w-full | unknown class
+h-full | unknown class
 w-1/2 | unknown class
+w-screen | unknown class
 overflow-auto | unknown class
 hidden | unknown class
+invisible | unknown class
 truncate | unknown class
 text-center | unknown class
 absolute | unknown class
 bg-blue-600/50 | unknown class
 bg-gradient-to-r | unknown class
 blur-sm | unknown class
+backdrop-blur-sm | unknown class
 p-[13px] | unknown class
 ring | unknown class
 transition-all | unknown class
-leading-tight | unknown class
 underline | unknown class
+line-through | unknown class
+tracking-wide | unknown class
+leading-tight | unknown class
 uppercase | unknown class
 ```
 
-### From gota
+## From gota
+
+gota's classes are Tailwind v2's, whose palette names differ from v3's: v2
+`green`, `yellow` and `purple` are v3 `emerald`, `amber` and `violet` (the same
+colors, renamed). A class that translates by name parses but gives another color.
 
 | gota | In mygo |
 |---|---|
 | `halign-*`, `valign-*`, `hexpand`, `vexpand` | the same classes |
 | `suggested-action`, `destructive-action` | the same classes |
+| `text-green-N`, `bg-green-N`, `border-green-N` | the same with `emerald-N` |
+| `text-yellow-N`, `bg-yellow-N`, `border-yellow-N` | the same with `amber-N` |
+| `text-purple-N`, `bg-purple-N`, `border-purple-N` | the same with `violet-N` |
+| other palette classes (`red`, `blue`, `indigo`, `pink`, `gray`, …) | the same names and shades |
 | `text-italic` | `italic` |
-| `text-green` | `text-green-600` |
 | `combobox-rounded-r-none` | `rounded-r-none` |
+| `text-green`, a color with no shade | has no effect in gota's own stylesheet: leave it out (do not guess a shade) |
 | `gota-card`, `gota-table`, `gota-tag-select*` | not classes: widget controls |
+
+```tw
+text-emerald-600
+bg-amber-500
+border-violet-500
+```
 
 ```tw-bad
 text-italic | unknown class

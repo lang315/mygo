@@ -495,9 +495,11 @@ nothing.
 Not supported: `m-auto`, `bg-blue-600/50`, `gap`, `grid`, `flex`, gradients,
 blur, arbitrary values (`p-[13px]`), `ring`, `current`.
 
-From gota: `text-italic` is `italic`, `text-green` is `text-green-600`,
-`combobox-rounded-r-none` is `rounded-r-none`, and `gota-card`, `gota-table`
-and `gota-tag-select*` are widget controls, not classes.
+From gota: `text-italic` is `italic` and `combobox-rounded-r-none` is
+`rounded-r-none`; gota's palette is Tailwind v2's, so its `green`, `yellow` and
+`purple` are `emerald`, `amber` and `violet` here; `text-green` with no shade
+has no effect in gota; `gota-card`, `gota-table` and `gota-tag-select*` are
+widget controls, not classes ([the cheat sheet](widget/tw.md#from-gota)).
 
 ## Binding
 
