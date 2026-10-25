@@ -628,6 +628,59 @@ func TestDocumentSetDuringSave(t *testing.T) {
 	}
 }
 
+// TestDocumentSetsInOrder: two Sets whose Equal answers come in the order
+// opposite to the Sets: the state is the one of the last, not of the one that
+// ended last.
+func TestDocumentSetsInOrder(t *testing.T) {
+	asking, answer := make(chan struct{}), make(chan struct{})
+	var armed atomic.Bool
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: func(a, b string) bool {
+		if armed.Load() && a == "same" {
+			close(asking)
+			<-answer
+		}
+		return a == b
+	}})
+	path := writeTemp(t, "order.txt", "same")
+	d, _ := ds.Open(path)
+	armed.Store(true)
+	first := make(chan struct{})
+	go func() { d.Set("same"); close(first) }() // the file's content, as Equal will find
+	wait.For(t, "Set to ask Equal", asking)
+	d.Set("other") // the last Set: edited, and it ends before the first
+	close(answer)
+	wait.For(t, "the first Set to end", first)
+	if d.Content() != "other" || !d.IsEdited() {
+		t.Errorf("content %q edited %v: the document is not edited though its content is not the file's", d.Content(), d.IsEdited())
+	}
+}
+
+// TestDocumentSetsInOrderBackToTheFile: the same, the last Set being the one
+// that makes the document the file's.
+func TestDocumentSetsInOrderBackToTheFile(t *testing.T) {
+	asking, answer := make(chan struct{}), make(chan struct{})
+	var armed atomic.Bool
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: func(a, b string) bool {
+		if armed.Load() && a == "other" {
+			close(asking)
+			<-answer
+		}
+		return a == b
+	}})
+	path := writeTemp(t, "order-back.txt", "same")
+	d, _ := ds.Open(path)
+	armed.Store(true)
+	first := make(chan struct{})
+	go func() { d.Set("other"); close(first) }()
+	wait.For(t, "Set to ask Equal", asking)
+	d.Set("same") // the last Set: the file's content, unedited
+	close(answer)
+	wait.For(t, "the first Set to end", first)
+	if d.Content() != "same" || d.IsEdited() {
+		t.Errorf("content %q edited %v: the document is the file's and is edited", d.Content(), d.IsEdited())
+	}
+}
+
 func TestDocumentOutsideChanges(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "out.txt", "mine")
