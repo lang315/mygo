@@ -243,7 +243,7 @@ func TestQuitDuringDialog(t *testing.T) {
 		if strings.Contains(out.String(), "dialog:") && !strings.Contains(out.String(), "dialog: 1 <nil>") {
 			t.Errorf("dialog result: %q", out.String())
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(wait.Guard): // a slow runner starts the process late; only a hang fails
 		cmd.Process.Kill()
 		t.Fatalf("the app did not quit while a dialog was open; output %q", out.String())
 	}
