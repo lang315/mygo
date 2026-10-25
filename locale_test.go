@@ -44,6 +44,7 @@ func localeTest(t *testing.T, langs []string, preferred ...string) string {
 			App.SetLanguages()
 		})
 		onMain(func() {})
+		flushAppWrites() // a late write would land in the next test's files
 		App.SetPath(PathUserData, "")
 	})
 	return dir
@@ -152,6 +153,7 @@ func TestSetLocaleSavesInFile(t *testing.T) {
 	if got := heard.get(); !slices.Equal(got, []string{"de", "fr"}) {
 		t.Errorf("listeners heard %q, want [de fr]", got)
 	}
+	flushAppWrites()
 	if _, err := os.Stat(filepath.Join(dir, localeFile)); !os.IsNotExist(err) {
 		t.Errorf("following the system kept the file: %v", err)
 	}
@@ -168,6 +170,7 @@ func TestSetLocaleSavesWithSystem(t *testing.T) {
 	if got, kept := onMainValue(func() string { tag, _ := backend().App().SavedLocale(); return tag }), true; got != "ja" || !kept {
 		t.Errorf("the system keeps %q", got)
 	}
+	flushAppWrites()
 	if _, err := os.Stat(filepath.Join(dir, localeFile)); !os.IsNotExist(err) {
 		t.Errorf("a file was written where the system keeps the language: %v", err)
 	}
@@ -242,6 +245,7 @@ func TestLocaleSavedAndEnvironment(t *testing.T) {
 	if got := App.Locale(); got != "en" {
 		t.Errorf("SetLocale(en) under MYGO_LOCALE shows %q", got)
 	}
+	flushAppWrites()
 	if data, _ := os.ReadFile(filepath.Join(dir, localeFile)); strings.TrimSpace(string(data)) != "de" {
 		t.Errorf("the file has %q, want de", data)
 	}
@@ -424,6 +428,7 @@ func TestSavedLocaleWhereRunPutsIt(t *testing.T) {
 	App.SetPath(PathUserData, dir)
 	App.SetLocale("de") // saved where the app runs
 	onMain(func() {})
+	flushAppWrites() // the file is written off the main thread
 	onMain(func() {
 		locales.mu.Lock()
 		locales.override, locales.loaded, locales.chosen = "", true, false
