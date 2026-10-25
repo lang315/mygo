@@ -96,7 +96,7 @@ Windows 11 ARM64.
   **Done:** each pair of one runner and one commit, the median of the last ten
   CI runs of `c4cf118` and before: Linux x86 1.06–1.08 (100 and 1000 widgets,
   with and without a transition), Windows 1.07–1.09, macOS 1.01–1.09 on a
-  noisy VM (single runs go to 1.2); an M1 Pro run gives 1.03 (100 widgets) and
+  noisy VM (single runs go to 1.5); an M1 Pro run gives 1.03 (100 widgets) and
   1.06 (1000), with a transition. Styling itself, at `c4cf118` on CI, costs a widget +2–24% (Linux +15% without and +21% with a transition at 100 widgets, +15% and +24% at 1000; Windows +15%, +24%, +13%, +23%; macOS +7%, +2%, +16%, +3%); on an M1 Pro +16–21%, and the same styles on raw `ui` +13–14%.
 - App sizes are unchanged. *Open:* the size job (`scripts/bench.ts`) measures
   `hello` and `counter-native`, which do not import `ui/widget`, so it cannot
@@ -205,7 +205,7 @@ cannot show: those items are not marked):
 **Later:**
 
 - Bring `TableFrame100k` down to tens of µs. *Open:* 104 µs on an M1 Pro;
-  allocations went from 164 to 22 a frame (#169, #179, #182).
+  allocations went from 223 to 22 a frame (#169: 164, #179: 22).
   Where the 104 µs goes (an M1 Pro, 195 elements, the scene of
   `BenchmarkTableFrame100k`, the mean of 100,000 frames; 0.55 µs an element):
 
