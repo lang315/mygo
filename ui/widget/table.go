@@ -63,6 +63,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// rows went since, so that commits look for their keys only then.
 	frame  []T
 	order  []int
+	heads  ui.TableGroups // the view's groups, kept with order
 	kept   bool
 	gone   bool
 	resets int // test hook: how often catchUp had the view start over
@@ -244,21 +245,62 @@ func (t *DataGridViewWidget[T, K]) sync() {
 		for i := range t.view.Len() {
 			t.order = append(t.order, t.view.Row(i))
 		}
+		t.heads = append(t.heads[:0], t.view.Groups()...)
 		t.kept = true
 	}
 	t.view.Sync(t.src.rows, t.sort.value)
 }
 
-// rowAt returns the row at row in the frame ui shows, whatever goroutines
-// deleted or reordered since. Under mu.
-func (t *DataGridViewWidget[T, K]) rowAt(row int) *T {
+// rowAtPos returns the row at position pos of the view in the frame ui shows,
+// whatever goroutines deleted or reordered since. Under mu.
+func (t *DataGridViewWidget[T, K]) rowAtPos(pos int) *T {
 	switch {
-	case t.kept && row < len(t.order):
-		return &t.frame[t.order[row]]
-	case !t.kept && row < t.view.Len():
-		return &t.frame[t.view.Row(row)]
+	case pos < 0:
+		return nil
+	case t.kept && pos < len(t.order):
+		return &t.frame[t.order[pos]]
+	case !t.kept && pos < t.view.Len():
+		return &t.frame[t.view.Row(pos)]
 	}
 	return nil
+}
+
+// groupsOf returns the groups of the frame ui shows: none without groups.
+func (t *DataGridViewWidget[T, K]) groupsOf() ui.TableGroups {
+	if t.kept {
+		return t.heads
+	}
+	return t.view.Groups()
+}
+
+// posAt returns the position in the view of the line ui shows at row, which
+// counts the headers of the groups; -1 for a header. Under mu.
+func (t *DataGridViewWidget[T, K]) posAt(row int) int {
+	pos, _ := t.groupsOf().PosOf(row)
+	return pos
+}
+
+// headAt returns the group a header at row heads in the frame ui shows. Under mu.
+func (t *DataGridViewWidget[T, K]) headAt(row int) (ui.TableGroup, bool) {
+	gs := t.groupsOf()
+	if pos, g := gs.PosOf(row); pos < 0 && g >= 0 && g < len(gs) {
+		return gs[g], true
+	}
+	return ui.TableGroup{}, false
+}
+
+// rowAt returns the row at row, a line ui shows, in the frame it shows;
+// nil for a header. Under mu.
+func (t *DataGridViewWidget[T, K]) rowAt(row int) *T { return t.rowAtPos(t.posAt(row)) }
+
+// headerAt is ui's ListState.Header: a header is the line of a group. When the
+// table is not grouped, ui is not given it.
+func (t *DataGridViewWidget[T, K]) headerAt(row int) bool {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	_, ok := t.headAt(row)
+	return ok
 }
 
 // lockOutsideView takes mu unless a view is building, which holds it, and
@@ -276,7 +318,23 @@ func (t *DataGridViewWidget[T, K]) keyAt(row int) any {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
-	if r := t.rowAt(row); r != nil {
+	if g, ok := t.headAt(row); ok {
+		return groupKey{g.Title}
+	}
+	return t.keyOfPos(t.posAt(row))
+}
+
+// keyAtPos is the key of the row at position pos of the view.
+func (t *DataGridViewWidget[T, K]) keyAtPos(pos int) any {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	return t.keyOfPos(pos)
+}
+
+// keyOfPos is keyAtPos under mu.
+func (t *DataGridViewWidget[T, K]) keyOfPos(pos int) any {
+	if r := t.rowAtPos(pos); r != nil {
 		return t.key(r)
 	}
 	var zero K
@@ -289,7 +347,23 @@ func (t *DataGridViewWidget[T, K]) labelAt(row int) string {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
-	if r := t.rowAt(row); r != nil && len(t.cols) > 0 {
+	if g, ok := t.headAt(row); ok {
+		return groupText(ListViewGroup{g.Title, g.Len})
+	}
+	return t.labelOfPos(t.posAt(row))
+}
+
+// labelAtPos is the label of the row at position pos of the view.
+func (t *DataGridViewWidget[T, K]) labelAtPos(pos int) string {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	return t.labelOfPos(pos)
+}
+
+// labelOfPos is labelAtPos under mu.
+func (t *DataGridViewWidget[T, K]) labelOfPos(pos int) string {
+	if r := t.rowAtPos(pos); r != nil && len(t.cols) > 0 {
 		return t.cols[0].Text(r)
 	}
 	return ""
@@ -318,8 +392,12 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
 	s.Version = t.view.Version()
+	s.Header = nil
+	if t.view.Groups() != nil {
+		s.Header = t.headerAt
+	}
 	t.handOver()
-	e := ui.Table(c, s, t.columns, t.view.Len(), func(row, col int) { t.cell(c, row, col) }).
+	e := ui.Table(c, s, t.columns, t.view.Places(), func(row, col int) { t.cell(c, row, col) }).
 		OnSortChange(onChange(&t.sort, nil)).
 		OnSelectionChange(func() { t.commit(&t.chosen) }).
 		OnCheckedChange(func() { t.commit(&t.checked) })
@@ -334,9 +412,15 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, row, col int) {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
+	if g, ok := t.headAt(row); ok {
+		if col == 0 { // a header spans the columns, built as column 0
+			groupHeader(c, ListViewGroup{g.Title, g.Len})
+		}
+		return
+	}
 	if t.numbered {
 		if col == 0 {
-			ui.Text(c, strconv.Itoa(row+1)).SingleLine()
+			ui.Text(c, strconv.Itoa(t.posAt(row)+1)).SingleLine()
 			return
 		}
 		col--

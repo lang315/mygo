@@ -105,9 +105,11 @@ it does in 2,000.
 
 ## Groups
 
-`SetGroupBy(fn)` groups the rows of the icon views, as a WinForms `ListView`'s
-`ListViewGroup`s: `fn` returns the title of a row's group, and each group shows
-under a header "Title (n)", which is not chosen. The rows of a group keep the
+`SetGroupBy(fn)` groups the rows of every view, Details too, as a WinForms
+`ListView`'s `ListViewGroup`s: `fn` returns the title of a row's group, and each
+group shows under a header "Title (n)", which is not chosen. In Details a header
+spans the columns and stays at the top while the rows of its group scroll under
+it. The rows of a group keep the
 order of the table, so its sort and its `Search` apply inside the groups, and a
 group whose rows are all hidden by a search shows no header. `SetGroupOrder`
 names the groups in the order to show them; a group it does not name comes after
@@ -124,12 +126,13 @@ for _, g := range view.Groups() {
 }
 ```
 
-Making the groups costs one call of `fn` for each row shown and a pass over the
-rows, about 2.5 ms for 100,000 rows, and it is done again whenever a row changes
-in place (`UpdateRow` and the like), not only when the rows or their order change:
-a list view of tens of thousands of rows that is updated many times a second pays
-that for every frame that follows an update. Making it incremental is left to the
-next step.
+In Details the table's view does the grouping (`ui.TableView.SetGroupBy`, see
+[Table](../table.md#groups)): the group is the first key the rows sort by, `fn`
+is asked once for each row when the rows are placed and for each row changed in
+place, and the headers cost no pass over the rows. The icon views make their
+groups themselves, with one call of `fn` for each row shown and a pass over the
+rows, about 2.5 ms for 100,000 rows, again whenever a row changes in place
+(`UpdateRow` and the like), not only when the rows or their order change.
 
 The arrows, Home, End, Shift and Cmd+A pass the headers by, a click on one
 chooses nothing, and the choice, the cursor and the row Shift extends from still
@@ -137,12 +140,9 @@ cross a switch of the view by key. `fn` runs under the package's lock, once for
 each row shown when the rows, their order or the groups change, not in every
 frame, and calls no widget method.
 
-**Details groups: not yet.** `ViewDetails` shows the rows without groups: the
-table's rows are told apart by position in a sorted and filtered view that has no
-place for headers, so groups there need the view to learn them (the next step).
-
 ## Accessibility
 
 Assistive technology sees a table in Details, and a list of items, each named by
-its text, in the other views; a group's header is an item named "Title (n)", counted
-in the position and the size of the list, and not chosen.
+its text, in the other views; a group's header is a row (an item in the icon
+views) named "Title (n)", counted in the position and the size of the set, and
+not chosen.

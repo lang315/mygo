@@ -60,6 +60,8 @@ type TableView[T any] struct {
 	mark    []bool
 	reset   bool
 	version uint64
+	// groups is SetGroupBy's: the first key rows are sorted by.
+	groups tvGroups[T]
 }
 
 // NewTableView returns a view sorting by the columns of compare, by their
@@ -174,9 +176,10 @@ type tvKey[T any] struct {
 	desc bool
 }
 
-// order returns how rows sort: by the columns sorted by that have a
-// comparator, in turn, then by their index, so that no two rows are equal.
-func (v *TableView[T]) order(rows []T) func(i, j int) int {
+// columnsOrder returns how rows sort within a group: by the columns sorted by
+// that have a comparator, in turn, then by their index, so that no two rows
+// are equal.
+func (v *TableView[T]) columnsOrder(rows []T) func(i, j int) int {
 	keys := v.keys
 	switch len(keys) {
 	case 0:
@@ -231,6 +234,7 @@ func (v *TableView[T]) rebuild(rows []T, by []SortOrder) {
 			v.keys = append(v.keys, tvKey[T]{f, o.Descending})
 		}
 	}
+	v.placeAll(rows)
 	v.dirty = v.dirty[:0]
 	out := v.out[:0]
 	if v.keep == nil {
@@ -247,7 +251,7 @@ func (v *TableView[T]) rebuild(rows []T, by []SortOrder) {
 	}
 	// Rows in a column without a comparator show in the slice's order, which
 	// a new filter finds again without all.
-	sorted := len(v.keys) > 0
+	sorted := len(v.keys) > 0 || v.groups.by != nil
 	v.hasAll = false
 	switch {
 	case sorted && v.keep != nil && len(out) > len(rows)/2:
@@ -255,11 +259,11 @@ func (v *TableView[T]) rebuild(rows []T, by []SortOrder) {
 		for i := range rows {
 			v.all = append(v.all, i)
 		}
-		slices.SortFunc(v.all, v.order(rows))
+		v.sortRows(v.all, rows)
 		out = v.keptIn(out[:0], v.all)
 		v.hasAll = true
 	case sorted:
-		slices.SortFunc(out, v.order(rows))
+		v.sortRows(out, rows)
 	}
 	// A rebuild can yield the order it had: the version then stays.
 	v.show(out)
@@ -314,10 +318,12 @@ func (v *TableView[T]) keptIn(out, order []int) []int {
 // show makes out, built in the buffer out, the order shown: the version
 // changes only when the rows shown or their order do.
 func (v *TableView[T]) show(out []int) {
-	if !slices.Equal(out, v.perm) {
+	same := slices.Equal(out, v.perm)
+	v.perm, v.out = out, v.perm
+	// A row that changed group may stay where it was and move a boundary.
+	if v.makeGroups() || !same {
 		v.version++
 	}
-	v.perm, v.out = out, v.perm
 }
 
 // merge places again the rows changed: it takes them out of the order,
@@ -326,6 +332,7 @@ func (v *TableView[T]) show(out []int) {
 // the same to the order of all of them, for the next filter.
 func (v *TableView[T]) merge(rows []T) {
 	dirty := v.unique(rows)
+	v.placeDirty(rows, dirty)
 	by := v.order(rows)
 	// out cannot be the order placed again, which show compares it with:
 	// the buffers rotate, the old order's array becoming the next out.
