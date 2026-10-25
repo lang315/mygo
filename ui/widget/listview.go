@@ -161,6 +161,12 @@ func (lv *ListViewWidget[T, K]) SetGroupOrder(titles ...string) *ListViewWidget[
 func (lv *ListViewWidget[T, K]) Groups() []ListViewGroup {
 	mu.Lock()
 	defer mu.Unlock()
+	if lv.groupBy == nil {
+		// The icon views read lv.groups until they build again (an icon view
+		// that was last shown still lays out items by it), so SetGroupBy does
+		// not clear it; the caller sees none, as Details shows none.
+		return nil
+	}
 	return slices.Clone(lv.groups)
 }
 

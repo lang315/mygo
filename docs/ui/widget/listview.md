@@ -123,6 +123,13 @@ for _, g := range view.Groups() {
 }
 ```
 
+Making the groups costs one call of `fn` for each row shown and a pass over the
+rows, about 2.5 ms for 100,000 rows, and it is done again whenever a row changes
+in place (`UpdateRow` and the like), not only when the rows or their order change:
+a list view of tens of thousands of rows that is updated many times a second pays
+that for every frame that follows an update. Making it incremental is left to the
+next step.
+
 The arrows, Home, End, Shift and Cmd+A pass the headers by, a click on one
 chooses nothing, and the choice, the cursor and the row Shift extends from still
 cross a switch of the view by key. `fn` runs under the package's lock, once for
