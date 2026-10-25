@@ -235,3 +235,45 @@ func TestCheckboxGoingKeepsTheThemeItWasBuiltWith(t *testing.T) {
 		t.Errorf("the box going paints with a theme with AccentText %v, want its own %v", got.AccentText, a.AccentText)
 	}
 }
+
+// TestGhostThemesFollowTheCopiesShowing: an app that makes a theme for each
+// frame (SetTheme of a copy) and has a check box go in each of them does not
+// make the themes the copies keep grow without end: they are those of the
+// copies showing.
+func TestGhostThemesFollowTheCopiesShowing(t *testing.T) {
+	on := true
+	frame := 0
+	tt, now := clockTester(func(c *context) {
+		th := *LightTheme()
+		c.SetTheme(&th) // a new theme in each frame
+		coreColumn(c).AlignItems(Start).Children(func() {
+			coreRow(c).Key(frame).Transition(ElementTransition{Duration: time.Second, Exit: &Motion{Opacity: 0}}).Children(func() {
+				checkbox(c, &on, "", false)
+			})
+		})
+	}, 200, 100)
+	for frame = 1; frame <= 400; frame++ {
+		*now = now.Add(16 * time.Millisecond)
+		tt.Frame()
+	}
+	live := 0
+	for _, r := range tt.rt.trans {
+		if r.ghost != nil {
+			live++
+		}
+	}
+	if live < 10 {
+		t.Fatalf("%d copies showing: the test shows nothing", live)
+	}
+	if got := len(tt.rt.ghostThemes); got > live {
+		t.Errorf("%d themes kept for %d copies showing", got, live)
+	}
+	// The last check box stays; the copies end, and their themes go.
+	for range 5 {
+		*now = now.Add(time.Second)
+		tt.Frame()
+	}
+	if got := len(tt.rt.ghostThemes); got != 0 {
+		t.Errorf("%d themes kept with no copy showing", got)
+	}
+}
