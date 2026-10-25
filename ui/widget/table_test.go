@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -985,4 +986,40 @@ func BenchmarkTableFrames100k(b *testing.B) {
 			tt.Frame()
 		}
 	})
+}
+
+// TestTableRowsAllocateLittleWhenScrolled keeps a row of a table from
+// allocating for what is the same in every row: the columns' keys boxed in
+// each cell, a slice of the cells of each row. A scrolled frame of a table
+// of 100,000 rows allocated 6.5 times for each read of a row's Name (twice a
+// row), and 4.5 without.
+func TestTableRowsAllocateLittleWhenScrolled(t *testing.T) {
+	var built atomic.Int64
+	tb := DataGridView(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Width: 200, Text: func(a *acct) string { built.Add(1); return a.name }},
+		Column[acct]{Title: "Score", Width: 100, Text: func(a *acct) string { return strconv.Itoa(a.score) }},
+	).SetRows(manyAccts(100_000)).Expand().CheckboxColumn().IndexColumn()
+	tt := ui.NewTester(content(tb), 1280, 800)
+	for range 3 {
+		tt.Frame()
+	}
+	i := 0
+	scroll := func() {
+		dy := float32(120)
+		if i++; i%2 == 0 {
+			dy = -120
+		}
+		tt.Wheel(400, 300, 0, dy)
+		tt.Frame()
+	}
+	built.Store(0)
+	const runs = 20
+	allocs := testing.AllocsPerRun(runs, scroll)
+	rows := float64(built.Load()) / (runs + 1) // AllocsPerRun runs once more to warm up; a row's Name is read twice
+	if rows < 100 {
+		t.Fatalf("a scrolled frame read %v names", rows)
+	}
+	if per := allocs / rows; per > 5.5 {
+		t.Fatalf("%.1f allocations for each read of a name (%v for %v), want at most 5.5", per, allocs, rows)
+	}
 }
