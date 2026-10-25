@@ -108,6 +108,37 @@ func waitView(t *testing.T, s *session, title string) view {
 	}
 }
 
+// waitProgress waits for s to show a progress of p. It looks at the view
+// before it waits for the next change: the progress may be made, and the
+// download wait for the test, between the view the test has and the call
+// (waiting for a change that is not coming hung the test for 25 minutes).
+func waitProgress(t *testing.T, s *session, p float64) view {
+	t.Helper()
+	deadline := time.After(wait.Guard)
+	for {
+		v, changed := s.Current()
+		if v.Progress == p {
+			return v
+		}
+		select {
+		case <-changed:
+		case <-deadline:
+			t.Fatalf("progress %v, want %v", v.Progress, p)
+		}
+	}
+}
+
+// TestWaitProgressSeesAProgressMadeBefore: the progress was made after the
+// test read the view and before it waits, and nothing changes after it.
+func TestWaitProgressSeesAProgressMadeBefore(t *testing.T) {
+	s := newSession(nil, nil, true)
+	s.set(view{Title: "Downloading update…"})
+	s.set(view{Title: "Downloading update…", Progress: 0.25})
+	if v := waitProgress(t, s, 0.25); v.Progress != 0.25 {
+		t.Fatalf("view %+v", v)
+	}
+}
+
 func waitDone(t *testing.T, done chan struct{}) {
 	t.Helper()
 	select {
@@ -183,12 +214,8 @@ func TestInstallAndRelaunch(t *testing.T) {
 	}
 	s.Respond(v.Prompt, actionInstall, true)
 
-	v = waitView(t, s, "Downloading update…")
-	for v.Progress != 0.25 {
-		_, changed := s.Current()
-		<-changed
-		v, _ = s.Current()
-	}
+	waitView(t, s, "Downloading update…")
+	v = waitProgress(t, s, 0.25)
 	if v.Message != "5.0 MB of 20.0 MB" || !v.Bar || v.Release {
 		t.Errorf("downloading view: %+v", v)
 	}
