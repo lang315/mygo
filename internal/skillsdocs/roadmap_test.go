@@ -1,7 +1,6 @@
 package skillsdocs
 
 import (
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -11,7 +10,7 @@ import (
 const roadmapPath = "docs/roadmap.md"
 
 var (
-	codeSpanRE = regexp.MustCompile("`([^`\\n]+)`")
+	codeSpanRE = regexp.MustCompile("`([^`]+)`")
 	linkRE     = regexp.MustCompile(`\]\(([^)#\s]+)(?:#[^)]*)?\)`)
 	pathRE     = regexp.MustCompile(`^\.?[a-z][a-z0-9._-]*/[A-Za-z0-9_./-]+$`)
 )
@@ -20,21 +19,16 @@ var (
 // links: each file or directory it names must be in the repository.
 func TestRoadmapPathsExist(t *testing.T) {
 	text := read(t, repoRoot+"/"+roadmapPath)
-	top := map[string]bool{}
-	entries, err := os.ReadDir(repoRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			top[e.Name()] = true
-		}
-	}
 	checked := 0
-	for _, m := range codeSpanRE.FindAllStringSubmatch(text, -1) {
-		span := strings.Fields(m[1])[0]
-		first, _, _ := strings.Cut(span, "/")
-		if !pathRE.MatchString(span) || !top[first] {
+	for _, m := range codeSpanRE.FindAllStringSubmatch(prose(text), -1) {
+		// A span can run over two lines, so the pairs of backticks are
+		// matched across them; its first word is the path, if any.
+		words := strings.Fields(m[1])
+		if len(words) == 0 {
+			continue
+		}
+		span := words[0]
+		if !pathRE.MatchString(span) {
 			continue // a name, a command, a class
 		}
 		checked++

@@ -13,6 +13,13 @@ named in backticks exists. An item without a mark is open, or has no evidence
 here. Numbers are the CI runs on `benchmarks` (commit `c4cf118`, the machines
 of GitHub Actions) and a local run on an Apple M1 Pro; times on a laptop differ
 by ±25% from layout alone, so allocations and bytes are the figures to compare.
+The M1 Pro figures are medians of `go test -run '^$' -bench
+'BenchmarkTableFrame100k$' -benchtime 5000x -count 5` in `ui`, and of
+`-bench 'BenchmarkWidgetFrame|BenchmarkUIFrame' -benchtime 300x -count 3` and
+`-bench 'BenchmarkTableCheckedLarge/click' -benchtime 300x -count 3` in
+`ui/widget`, at commit `93a267b` (macOS 15.7, Go 1.27.3; the CI runs Go 1.27.1). The CI figures are
+the latest entries of `latest.json` on `benchmarks`, which has a column for
+each commit and runner.
 
 The phases run in order. Track 3 runs alongside them. A phase is done when
 its exit criteria hold on three real machines: a Mac, Windows 10 amd64 and
@@ -43,8 +50,8 @@ Windows 11 ARM64.
 
 | Measure | At the start | 2026-10-26 | Target |
 |---|---|---|---|
-| `TableFrame100k` frame | 122–210 µs (CI) | on CI Linux x86 it depends on the runner's CPU: median 113 µs on an EPYC 9V45, 154 on a 9V74, 208 on a 7763 (the common one; 202 in the last run), 199 µs Windows, 115 µs macOS (M1 VM), 104 µs M1 Pro; **22 allocs, 977 B** a frame (was 164 and 5,077) | tens of µs |
-| A click on a widget table of 1M rows | 6.5–10 ms, 38 MB allocated | **1.2 ms** CI Linux x86, 1.5 ms Windows, 1.6 ms macOS, 0.63 ms M1 Pro; **18.6 KB and 514 allocs** (`BenchmarkTableCheckedLarge/click`, #19) | ≤ 1 ms, no MB-scale allocation |
+| `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them) | tens of µs |
+| A click on a widget table of 1M rows | 6.0–10.4 ms in the first CI runs, 38 MB allocated | **1.22 ms** CI Linux x86, 1.49 ms Windows, 1.61 ms macOS, 0.63 ms on an M1 Pro; **18.6 KB and 514 allocs** (`BenchmarkTableCheckedLarge/click`, #19) | ≤ 1 ms on the three machines, no MB-scale allocation |
 | A frame of N plain widgets | not measured | `BenchmarkWidgetFrame` (M1 Pro): 100 widgets 98 µs and 66 allocs, 1000 widgets 0.77 ms and 666 allocs (CI Linux x86: 0.18 and 1.3 ms); the same as raw `ui` (`BenchmarkUIFrame`): 90 µs and 0.72 ms, 133 and 1,933 allocs; a Style on each: +16–21% (`-styled`), the same styles on raw `ui` +13–14%, so the widget layer adds ×1.03–1.06 (the Phase 0 gate, ≤ 1.10) | baseline set in Phase 0 |
 | `counter-native` release size | 9.2–9.7 MB | 9.22 MB macOS, 9.45 MB Linux, 9.77 MB Windows; `hello` 9.37, 9.47 and 9.95 MB | unchanged by widget work |
 
@@ -58,7 +65,8 @@ Windows 11 ARM64.
    `ui/widget/rowsource_test.go` (`BenchmarkRowSourceUpdate`, a change).
 3. **Let apps make their own controls.** Add a `widget.Control` interface,
    `widget.Custom`, and a guide to composite controls. **Done:**
-   `ui/widget/custom.go`, `docs/ui/widget.md`.
+   `ui/widget/widget.go` (`Control`), `ui/widget/custom.go` (`Custom`),
+   `docs/ui/widget.md`.
 4. **Rename once to WinForms-familiar names.**
    - Entry→TextBox, Combo→ComboBox, Notebook→TabControl,
      Spin→NumericUpDown, Frame→GroupBox, NewWindow→Form,
@@ -74,8 +82,10 @@ Windows 11 ARM64.
    **Done:** `ui/widget/tw/tw.go`, `internal/twclass`, `internal/uivet`,
    `docs/ui/widget/tw.md`.
 7. **Invalidate only the windows that show a changed widget,** if step 2
-   shows the cost matters. **Done:** a change redraws the windows that show
-   the widget (`docs/ui/widget.md`, first paragraph).
+   shows the cost matters. **Done:** a change redraws the windows that hold
+   the widget (`core.change` in `ui/widget/lock.go`), checked by
+   `ui/widget/invalidate_test.go` (`TestChangeRedrawsOnlyTheWindowHoldingTheWidget`,
+   `TestOneChangeAmongTwentyWindowsRedrawsOne`).
 
 **Exit criteria:**
 
@@ -87,8 +97,13 @@ Windows 11 ARM64.
   CI runs of `c4cf118` and before: Linux x86 1.06–1.08 (100 and 1000 widgets,
   with and without a transition), Windows 1.07–1.09, macOS 1.01–1.09 on a
   noisy VM (single runs go to 1.2); an M1 Pro run gives 1.03 (100 widgets) and
-  1.06 (1000), with a transition. Styling itself costs +13–24% in both layers.
-- App sizes are unchanged. **Done:** see the Baseline table.
+  1.06 (1000), with a transition. Styling itself, at `c4cf118` on CI, costs a widget +2–24% (Linux +15% without and +21% with a transition at 100 widgets, +15% and +24% at 1000; Windows +15%, +24%, +13%, +23%; macOS +7%, +2%, +16%, +3%); on an M1 Pro +16–21%, and the same styles on raw `ui` +13–14%.
+- App sizes are unchanged. *Open:* the size job (`scripts/bench.ts`) measures
+  `hello` and `counter-native`, which do not import `ui/widget`, so it cannot
+  show what the widget layer adds to an app that uses it (`examples/widget-tour`
+  is one). They grew since 2026-10-23, Linux 9.40 to 9.45 MB, Windows 9.70 to
+  9.77, macOS 9.17 to 9.22, the Windows figure past the 9.2–9.7 MB of the
+  Baseline.
 - fhtool's classes parse. **Done:** `internal/twclass/twclass_test.go`
   (`TestFhtoolClasses`).
 - e2e is green on the three machines.
@@ -114,8 +129,9 @@ Windows 11 ARM64.
    - Progress while rows are added in bulk. *Open:* nothing in
      `ui/widget` shows it.
    - `UpdateRow` by key. **Done:** `ui/widget/rowsource.go`.
-   - A 1M-row click in ≤ 1 ms. **Done** on the CI Linux x86 runners at
-     1.2 ms (0.63 ms on an M1 Pro), 18.6 KB: see the Baseline table.
+   - A 1M-row click in ≤ 1 ms. *Open:* 1.22 ms CI Linux x86, 1.49 ms Windows,
+     1.61 ms macOS (commit `c4cf118`), 0.63 ms on an M1 Pro; 18.6 KB. The
+     phases' rule asks for the three machines.
 5. **App shell.** Add MenuStrip, StatusStrip, ToolStrip and NotifyIcon.
    **Done:** `ui/widget/menustrip.go`, `ui/widget/statusstrip.go`,
    `ui/widget/toolstrip.go`, `ui/widget/notifyicon.go`.
@@ -132,8 +148,7 @@ cannot show: those items are not marked):
 - They run on Windows 10 amd64 and Windows 11 ARM64.
 - Vietnamese Telex typing works in text boxes and table cells, on Windows
   and macOS.
-- A click on a table of 1M rows takes ≤ 1 ms. **Done:** see the Baseline
-  table.
+- A click on a table of 1M rows takes ≤ 1 ms. *Open*, see above.
 - API changes the port forces land before Phase 2.
 
 ## Phase 2: the rest of the WinForms catalogue
