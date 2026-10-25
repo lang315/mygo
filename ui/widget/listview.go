@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -148,8 +149,8 @@ func (lv *ListViewWidget[T, K]) SetGroupBy(fn func(*T) string) *ListViewWidget[T
 }
 
 // SetGroupOrder says the order of the groups by title. A group it does not name
-// comes after those it does, in the order the rows show it first; a title that
-// no row has shows no group.
+// comes after those it does, by title, as a text column sorts, so that sorting
+// the table does not move the groups; a title that no row has shows no group.
 func (lv *ListViewWidget[T, K]) SetGroupOrder(titles ...string) *ListViewWidget[T, K] {
 	lv.change(func() { lv.groupOrder, lv.groupGen = slices.Clone(titles), lv.groupGen+1 })
 	return lv
@@ -669,8 +670,8 @@ func (lv *ListViewWidget[T, K]) regroup() {
 	}
 	lv.made, lv.remade = made, true
 	lv.groupBuilds++
-	// The group of each row shown: those the app ordered first, the others as
-	// they first show.
+	// The group of each row shown: those the app ordered first, the others
+	// by title, so that sorting the table does not move them.
 	index := map[string]int{}
 	var titles []string
 	for _, title := range lv.groupOrder {
@@ -681,6 +682,7 @@ func (lv *ListViewWidget[T, K]) regroup() {
 	}
 	of := slices.Grow(lv.groupOf[:0], n)[:n]
 	lv.groupOf = of
+	named := len(titles)
 	counts := make([]int, len(titles), len(titles)+8)
 	for p := range n {
 		title := lv.groupBy(t.rowAt(p))
@@ -694,21 +696,28 @@ func (lv *ListViewWidget[T, K]) regroup() {
 		of[p] = int32(g)
 		counts[g]++
 	}
+	// The groups in order: the app's, then the others by title (as a text
+	// column of the table sorts).
+	order := make([]int, len(titles))
+	for g := range order {
+		order[g] = g
+	}
+	slices.SortFunc(order[named:], func(a, b int) int { return strings.Compare(titles[a], titles[b]) })
 	// A header, then the rows of its group in the table's order.
 	lv.groups = lv.groups[:0]
 	next := make([]int32, len(titles))
 	shown := 0
-	for g, title := range titles {
+	for _, g := range order {
 		if counts[g] == 0 {
 			continue
 		}
 		next[g] = int32(shown + 1)
 		shown += 1 + counts[g]
-		lv.groups = append(lv.groups, ListViewGroup{Title: title, Count: counts[g]})
+		lv.groups = append(lv.groups, ListViewGroup{Title: titles[g], Count: counts[g]})
 	}
 	lv.ents, lv.disp = slices.Grow(lv.ents[:0], shown)[:shown], slices.Grow(lv.disp[:0], n)[:n]
 	gi := 0
-	for g := range titles {
+	for _, g := range order {
 		if counts[g] == 0 {
 			continue
 		}

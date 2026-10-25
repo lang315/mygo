@@ -23,13 +23,13 @@ func yOf(t *testing.T, tt *ui.Tester, text string) float32 {
 	return find(t, tt, text).Y
 }
 
-// The icon views show a header over the rows of each group, in the order the
-// groups first appear in the table's, each row under its own.
+// The icon views show a header over the rows of each group, by title when the
+// app gives no order, each row under its own.
 func TestListViewGroupsShowAHeaderOverEachGroup(t *testing.T) {
 	for _, m := range iconModes {
 		t.Run(m.name, func(t *testing.T) {
 			tt := tester(t, groupedView(m.mode))
-			order := []string{"pome (1)", "Apple", "berry (1)", "Banana", "drupe (2)", "Cherry"}
+			order := []string{"berry (1)", "Banana", "drupe (2)", "Cherry", "pome (1)", "Apple"}
 			for i := 1; i < len(order); i++ {
 				if yOf(t, tt, order[i-1]) >= yOf(t, tt, order[i]) {
 					t.Errorf("%q is not above %q", order[i-1], order[i])
@@ -43,8 +43,7 @@ func TestListViewGroupsShowAHeaderOverEachGroup(t *testing.T) {
 }
 
 // SetGroupOrder says the order of the groups; a group it does not name comes
-// after those it does, in the order the rows show it; a group without rows is
-// not shown.
+// after those it does, by title; a group without rows is not shown.
 func TestListViewGroupsFollowTheOrderTheAppGives(t *testing.T) {
 	lv := groupedView(ViewList).SetGroupOrder("drupe", "citrus", "pome")
 	tt := tester(t, lv)
@@ -102,29 +101,31 @@ func TestListViewGroupsKeysPassTheHeaders(t *testing.T) {
 		t.Run(m.String(), func(t *testing.T) {
 			lv := groupedView(m)
 			tt := tester(t, lv)
-			click(t, tt, "Apple")
-			if got := lv.Selected(); !slices.Equal(got, []string{"a"}) {
-				t.Fatalf("click on Apple chose %v", got)
+			// The rows show as Banana, Cherry, Date, Apple, under berry, drupe
+			// and pome.
+			click(t, tt, "Banana")
+			if got := lv.Selected(); !slices.Equal(got, []string{"b"}) {
+				t.Fatalf("click on Banana chose %v", got)
 			}
 			tt.Key(0, ui.KeyDown)
 			tt.Frame()
-			if got := lv.Selected(); !slices.Equal(got, []string{"b"}) {
-				t.Fatalf("Down from Apple chose %v, want Banana, passing the header berry", got)
+			if got := lv.Selected(); !slices.Equal(got, []string{"c"}) {
+				t.Fatalf("Down from Banana chose %v, want Cherry, passing the header drupe", got)
 			}
 			tt.Key(0, ui.KeyUp)
 			tt.Frame()
-			if got := lv.Selected(); !slices.Equal(got, []string{"a"}) {
-				t.Fatalf("Up from Banana chose %v, want Apple", got)
+			if got := lv.Selected(); !slices.Equal(got, []string{"b"}) {
+				t.Fatalf("Up from Cherry chose %v, want Banana", got)
 			}
 			tt.Key(0, ui.KeyEnd)
 			tt.Frame()
-			if got := lv.Selected(); !slices.Equal(got, []string{"d"}) {
-				t.Fatalf("End chose %v, want Date", got)
+			if got := lv.Selected(); !slices.Equal(got, []string{"a"}) {
+				t.Fatalf("End chose %v, want Apple", got)
 			}
 			tt.Key(0, ui.KeyHome)
 			tt.Frame()
-			if got := lv.Selected(); !slices.Equal(got, []string{"a"}) {
-				t.Fatalf("Home chose %v, want Apple, not a header", got)
+			if got := lv.Selected(); !slices.Equal(got, []string{"b"}) {
+				t.Fatalf("Home chose %v, want Banana, not a header", got)
 			}
 			tt.Key(ui.Cmd, ui.KeyA)
 			tt.Frame()
@@ -146,12 +147,12 @@ func TestListViewGroupsHeadersAreNotChosen(t *testing.T) {
 		t.Fatalf("a click on a header changed the choice to %v", got)
 	}
 	click(t, tt, "Apple")
-	if err := tt.ClickWith(ui.Shift, "Date"); err != nil {
+	if err := tt.ClickWith(ui.Shift, "Banana"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if got := lv.Selected(); len(got) != 4 {
-		t.Fatalf("Shift-click from Apple to Date chose %v, want the four rows", got)
+		t.Fatalf("Shift-click from Apple to Banana chose %v, want the four rows", got)
 	}
 }
 
@@ -220,8 +221,8 @@ func TestListViewGroupsKeepTheChoiceWhenTheViewSwitches(t *testing.T) {
 	tt.Frame()
 	tt.Key(0, ui.KeyHome)
 	tt.Frame()
-	if got := lv.Selected(); !slices.Equal(got, []string{"a"}) {
-		t.Fatalf("Home in List: %v", got)
+	if got := lv.Selected(); !slices.Equal(got, []string{"b"}) {
+		t.Fatalf("Home in List: %v, want Banana, the first row of the first group", got)
 	}
 }
 

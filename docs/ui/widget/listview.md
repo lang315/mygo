@@ -111,7 +111,8 @@ under a header "Title (n)", which is not chosen. The rows of a group keep the
 order of the table, so its sort and its `Search` apply inside the groups, and a
 group whose rows are all hidden by a search shows no header. `SetGroupOrder`
 names the groups in the order to show them; a group it does not name comes after
-them, in the order its rows first show. `Groups()` returns the groups the last
+them, by title as a text column of the table sorts, so sorting the table does
+not move the groups. `Groups()` returns the groups the last
 frame showed, with their counts. `SetGroupBy(nil)` shows no groups.
 
 ```go
