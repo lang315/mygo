@@ -28,5 +28,7 @@ func (in *inspector) pointer(*engine, platform.SurfaceEvent, float32, float32) b
 func (in *inspector) snapshot(*engine, *node)                                       {}
 func (in *inspector) paintHighlight(*engine, *Painter, float32)                     {}
 func (rt *engine) toggleInspector()                                                 {}
+func (rt *engine) openInspector() bool                                              { return false }
+func (rt *engine) inspectLabel(string) bool                                         { return false }
 func (rt *engine) inspectKey(Modifiers, Key) bool                                   { return false }
 func (rt *engine) buildInspector(*context, float32, float32, float32)               {}

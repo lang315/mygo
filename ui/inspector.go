@@ -240,6 +240,32 @@ func (rt *engine) toggleInspector() {
 	rt.requestFrame()
 }
 
+// openInspector opens the inspector if it is closed, whatever the window's
+// developer tools say (a Tester's window has none), and reports that it is
+// open.
+func (rt *engine) openInspector() bool {
+	in := &rt.insp
+	in.enabled = true
+	if !in.open {
+		rt.toggleInspector()
+	}
+	return true
+}
+
+// inspectLabel chooses the element of the last frame whose label or text is
+// label, and reports whether there is one.
+func (rt *engine) inspectLabel(label string) bool {
+	in := &rt.insp
+	for _, n := range in.nodes {
+		if n.label == label || n.text == label {
+			in.choose(n.id)
+			rt.requestFrame()
+			return true
+		}
+	}
+	return false
+}
+
 // inspectKey toggles the inspector for its keys, picks for Shift+Cmd+C,
 // and stops picking for Escape.
 func (rt *engine) inspectKey(mods Modifiers, key Key) bool {

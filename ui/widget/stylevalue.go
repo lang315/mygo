@@ -145,6 +145,8 @@ const (
 	pHExpand
 	pVExpand
 	pFontWeight
+
+	pEnd // after the last property: loops over the properties stop before it
 )
 
 // pLayout are the properties that place a control in its box. They count

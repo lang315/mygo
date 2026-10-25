@@ -47,6 +47,11 @@ panics where the second key was given, as apps only log it.
   text), `tt.Focused`, `tt.Cursor`, `tt.Clipboard`, `tt.OpenedURLs` and
   `tt.Announcements`, what the view asked screen readers to read out;
   `tt.FailOpenURL` makes the links it opens fail, as those no app opens.
+- **The inspector.** `tt.Inspect("Label")` opens it and chooses the element
+  with that label or text, so that `tt.Texts` shows what its tabs say (the
+  Widget tab, for the notes of `ui/widget` controls and of your own: see
+  [Inspector](inspector.md)); it fails where the label is not there or the
+  program is built with `mygo_noinspector`.
 - **Frames.** `tt.Frame` draws a frame, for what changed outside the view,
   and `tt.Image()` is the last frame, for snapshots; `ui.Render` draws a
   view once at a given scale. `tt.Update(fn)` stands for `Window.Update`:
