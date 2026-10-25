@@ -110,6 +110,10 @@ type engine struct {
 	// exit transitions refer to, and ghostThemes those that copies of them keep.
 	prevThemes, ghostThemes []*Theme
 	ghostKept               int // how many ghostThemes the last compaction kept
+	// ghostSpare and ghostMoved are what compacting them uses, kept to make
+	// nothing for it.
+	ghostSpare []*Theme
+	ghostMoved []uint16
 
 	inputs          []valueInput
 	inputAt         int
@@ -984,7 +988,7 @@ func (rt *engine) close() {
 	clear(rt.afterInputs)
 	rt.afterInputs = nil
 	rt.itemChecks = itemCheckSlab{}
-	rt.themes, rt.prevThemes, rt.ghostThemes = nil, nil, nil
+	rt.themes, rt.prevThemes, rt.ghostThemes, rt.ghostSpare, rt.ghostMoved = nil, nil, nil, nil, nil
 	clear(rt.inputs)
 	rt.inputs = nil
 	rt.arena.rt = nil

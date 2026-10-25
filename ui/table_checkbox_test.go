@@ -277,3 +277,68 @@ func TestGhostThemesFollowTheCopiesShowing(t *testing.T) {
 		t.Errorf("%d themes kept with no copy showing", got)
 	}
 }
+
+// TestCompactGhostThemesMakesNothing: forgetting the themes of the copies
+// that went, as a frame with a copy coming or going does, allocates nothing.
+func TestCompactGhostThemesMakesNothing(t *testing.T) {
+	on := true
+	frame := 0
+	tt, now := clockTester(func(c *context) {
+		th := *LightTheme()
+		c.SetTheme(&th)
+		coreColumn(c).AlignItems(Start).Children(func() {
+			coreRow(c).Key(frame).Transition(ElementTransition{Duration: time.Second, Exit: &Motion{Opacity: 0}}).Children(func() {
+				checkbox(c, &on, "", false)
+			})
+		})
+	}, 200, 100)
+	for frame = 1; frame <= 100; frame++ {
+		*now = now.Add(16 * time.Millisecond)
+		tt.Frame()
+	}
+	kept := len(tt.rt.ghostThemes)
+	if kept < 10 {
+		t.Fatalf("%d themes kept: the test shows nothing", kept)
+	}
+	if n := testing.AllocsPerRun(20, tt.rt.compactGhostThemes); n != 0 {
+		t.Errorf("compacting the themes of %d copies makes %v allocations, want none", kept, n)
+	}
+	if got := len(tt.rt.ghostThemes); got != kept {
+		t.Errorf("%d themes after compacting, %d before, with all the copies still showing", got, kept)
+	}
+}
+
+// TestGhostThemesGoWhenTheCopyComesBack: an element built again while a copy of
+// it was going takes its copy back, and the theme the copy kept goes.
+func TestGhostThemesGoWhenTheCopyComesBack(t *testing.T) {
+	a, b := *LightTheme(), *LightTheme()
+	a.AccentText = Hex("#ff0000")
+	b.AccentText = Hex("#00ff00")
+	on, shown := true, true
+	tt, now := clockTester(func(c *context) {
+		if shown {
+			c.SetTheme(&a)
+		} else {
+			c.SetTheme(&b)
+		}
+		coreColumn(c).AlignItems(Start).Children(func() {
+			if shown {
+				coreRow(c).Key("box").Transition(ElementTransition{Duration: time.Second, Exit: &Motion{Opacity: 0}}).Children(func() {
+					checkbox(c, &on, "", false)
+				})
+			}
+		})
+	}, 200, 100)
+	shown = false
+	*now = now.Add(16 * time.Millisecond)
+	tt.Frame()
+	if got := len(tt.rt.ghostThemes); got != 1 {
+		t.Fatalf("%d themes kept for the copy going, want 1", got)
+	}
+	shown = true
+	*now = now.Add(16 * time.Millisecond)
+	tt.Frame()
+	if got := len(tt.rt.ghostThemes); got != 0 {
+		t.Errorf("%d themes kept with the copy taken back, want none", got)
+	}
+}

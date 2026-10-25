@@ -455,6 +455,7 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 			// Built again as a copy of it was going: it comes back from
 			// where the copy shows, as fast as it went.
 			r.ghost, r.fresh, r.collapse = nil, false, 0
+			rt.ghostKept = -1 // its themes may go
 			r.head(r.next, moveAll, now)
 		}
 		e.st.trec = r
@@ -534,6 +535,9 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 	if n < len(rt.trans) {
 		// Some were not built: copies go, or their records are forgotten.
 		rt.animateExits(root, now, still, resized)
+	} else if len(rt.ghostThemes) > rt.ghostKept {
+		// All were built, some perhaps taking their copies back.
+		rt.compactGhostThemes()
 	}
 }
 
@@ -796,33 +800,36 @@ func (rt *engine) dropTrans(id uint64, r *transition) {
 // no more: an app that makes a theme for each frame (SetTheme(copy)) would
 // make them grow for as long as copies keep coming.
 func (rt *engine) compactGhostThemes() {
+	// The themes kept build in the other buffer, which the engine keeps
+	// between runs, with what became of each of the old ones.
 	old := rt.ghostThemes
-	var kept []*Theme
-	moved := make([]uint16, len(old))
-	var walk func(e *node)
-	walk = func(e *node) {
-		if at := int(e.themeAt); at&themeGhost != 0 {
-			i := at&^themeGhost - 1
-			if i < len(old) {
-				if moved[i] == 0 {
-					kept = append(kept, old[i])
-					moved[i] = themeGhost | uint16(len(kept))
-				}
-				e.themeAt = moved[i]
-			}
-		}
-		for c := e.first; c != nil; c = c.next {
-			walk(c)
-		}
-	}
+	rt.ghostThemes, rt.ghostSpare = rt.ghostSpare[:0], old
+	rt.ghostMoved = slices.Grow(rt.ghostMoved[:0], len(old))[:len(old)]
+	clear(rt.ghostMoved)
 	for _, r := range rt.trans {
 		if r.ghost != nil {
-			walk(r.ghost)
+			rt.keepGhostThemes(r.ghost)
 		}
 	}
-	clear(old)
-	rt.ghostThemes = append(old[:0], kept...)
+	clear(rt.ghostSpare)
 	rt.ghostKept = len(rt.ghostThemes)
+}
+
+// keepGhostThemes keeps the themes of e, a copy going, and of the copies
+// inside it, in ghostThemes, and gives them the places they have in it.
+func (rt *engine) keepGhostThemes(e *node) {
+	if at := int(e.themeAt); at&themeGhost != 0 {
+		if i := at&^themeGhost - 1; i < len(rt.ghostSpare) {
+			if rt.ghostMoved[i] == 0 {
+				rt.ghostThemes = append(rt.ghostThemes, rt.ghostSpare[i])
+				rt.ghostMoved[i] = themeGhost | uint16(len(rt.ghostThemes))
+			}
+			e.themeAt = rt.ghostMoved[i]
+		}
+	}
+	for c := e.first; c != nil; c = c.next {
+		rt.keepGhostThemes(c)
+	}
 }
 
 // exit is a transition whose element's copy goes under p.
