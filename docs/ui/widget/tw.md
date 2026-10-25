@@ -69,7 +69,7 @@ width is in DIPs: `Width(200)`.
 |---|---|
 | `rounded-none` | 0 theme units |
 | `rounded-sm` | 0.5 theme units |
-| `rounded` | 1 theme units |
+| `rounded` | 1 theme unit |
 | `rounded-md` | 1.5 theme units |
 | `rounded-lg` | 2 theme units |
 | `rounded-xl` | 3 theme units |
@@ -350,7 +350,7 @@ free width. The other axis of each does nothing.
 | `w-1/2`, `w-screen` | no fractions or viewport units | `hexpand` on controls that share a box; `w-{n}` for a fixed width |
 | `overflow-auto`, `overflow-scroll` | scrolling is a control | `widget.ScrollPanel(w)` |
 | `hidden`, `block` | | `SetVisible(false)` / `SetVisible(true)`: a hidden control takes no room |
-| `invisible` | a hidden control gives up its room | `opacity-0` hides it and keeps the room |
+| `invisible` | a hidden control gives up its room | `opacity-0` hides it and keeps the room; it still takes clicks and focus |
 | `truncate` | `Style` has no text overflow | list controls (ListBox, ListView, DataGridView) keep a line each; for a `Label`, `widget.Custom` with `ui.Text(c, s).SingleLine()` (cut with an ellipsis) |
 | `text-left`, `text-center`, `text-right` | `halign-*` moves the control, not the lines of its text; `Style` has no text alignment | `widget.Custom` with `ui.Text(c, s).TextAlign(ui.Center)` |
 | `absolute`, `relative`, `top-N`, `z-N` | no positioning | `widget.Custom` and `ui` for what overlaps |
@@ -420,7 +420,7 @@ colors, renamed). A class that translates by name parses but gives another color
 | `text-yellow-N`, `bg-yellow-N`, `border-yellow-N` | the same with `amber-N` |
 | `text-purple-N`, `bg-purple-N`, `border-purple-N` | the same with `violet-N` |
 | other palette classes (`red`, `blue`, `indigo`, `pink`, `gray`, …) | the same names and shades |
-| `text-italic` | `italic` |
+| `text-italic` | has no effect in gota's own stylesheet (it defines `.italic` only): leave it out, and use `italic` only if you want the text slanted |
 | `combobox-rounded-r-none` | `rounded-r-none` |
 | `text-green`, a color with no shade | has no effect in gota's own stylesheet: leave it out (do not guess a shade) |
 | `gota-card`, `gota-table`, `gota-tag-select*` | not classes: widget controls |

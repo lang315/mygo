@@ -145,6 +145,9 @@ func blocks(t *testing.T) map[string]string {
 			cls += "-" + k
 		}
 		v := num(radii[k]) + " theme units"
+		if radii[k] == 1 {
+			v = "1 theme unit"
+		}
 		if radii[k] == 9999 {
 			v = "a full pill or circle"
 		}
@@ -437,8 +440,8 @@ func TestCheatSheetHandWrittenNames(t *testing.T) {
 	if got := sortedKeys(states); strings.Join(got, " ") != "active disabled focus hover" {
 		t.Errorf("the variants are %v: the page's Variants section lists active, disabled, focus, hover and dark", got)
 	}
-	if got := sortedKeys(defaults); strings.Join(got, " ") != "bg border text" {
-		t.Errorf("default colors for %v: the page's Colors section lists bg-default, text-default and border-default", got)
+	if got := fmt.Sprint(defaults); got != "map[bg:background border:border text:text]" {
+		t.Errorf("default colors are %v: the page's Colors section says bg-default is the background, text-default the text and border-default the border", got)
 	}
 }
 
