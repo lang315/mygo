@@ -76,10 +76,10 @@ type GridState struct {
 	rt          *engine
 
 	// span is how far from the pivot the last Shift-extension went, and
-	// added the keys of the items it chose that were not chosen before: what
-	// a Cmd+Shift key takes out when it goes back.
-	span  int
-	added map[any]struct{}
+	// except the keys of the items chosen before it reached them: going back
+	// takes out the others between the pivot and pivot+span.
+	span   int
+	except map[any]struct{}
 }
 
 // Pivot returns the item Shift extends the choice from, -1 for none: the item
@@ -92,7 +92,7 @@ func (s *GridState) Pivot() int { return s.pivot }
 // frame about to be built.
 func (s *GridState) SetPivot(item int) {
 	s.pivot, s.span, s.pivotSet = item, 0, true
-	clear(s.added)
+	s.except = exceptReset(s.except)
 }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
@@ -469,7 +469,7 @@ func (s *GridState) click(grid *node, i int, mods Modifiers) {
 	case mods&Cmd != 0:
 		s.Selection.set(s.key(i), !s.Selection.has(s.key(i)))
 		*s.Selected, s.pivot, s.span = i, i, 0
-		clear(s.added)
+		s.except = exceptReset(s.except)
 		grid.st.markChanged()
 	default:
 		s.choose(grid, i)
@@ -487,7 +487,7 @@ func (s *GridState) choose(grid *node, i int) {
 		}
 	}
 	*s.Selected, s.pivot, s.span = i, i, 0
-	clear(s.added)
+	s.except = exceptReset(s.except)
 	if changed {
 		grid.st.markChanged()
 	}
@@ -502,34 +502,34 @@ func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 		s.choose(grid, i)
 		return
 	}
-	if s.added == nil {
-		s.added = map[any]struct{}{}
-	}
+	// track says the items the extension reaches for the first time that were
+	// chosen already are kept in except, which going back leaves chosen; the
+	// items from oldLo to oldHi were reached before.
+	track, oldLo, oldHi := true, 1, 0
 	switch {
 	case shrink:
 		last := max(0, min(p+s.span, grid.setSize-1))
-		for j := min(p, last); j <= max(p, last); j++ {
+		oldLo, oldHi = min(p, last), max(p, last)
+		for j := oldLo; j <= oldHi; j++ {
 			if j < min(p, i) || j > max(p, i) {
 				k := s.key(j)
-				if _, ok := s.added[k]; ok {
+				if _, ok := s.except[k]; !ok {
 					s.Selection.set(k, false)
-					delete(s.added, k)
 				}
 			}
 		}
 	case keep:
-		clear(s.added)
+		s.except = exceptReset(s.except)
 	default:
-		clear(s.added)
+		s.except, track = exceptReset(s.except), false
 		s.Selection.clear()
 	}
 	s.span = i - p
 	for j := min(p, i); j <= max(p, i); j++ {
 		k := s.key(j)
-		if !s.Selection.has(k) || !keep && !shrink {
-			s.added[k] = struct{}{}
+		if !s.Selection.set(k, true) && track && (j < oldLo || j > oldHi) {
+			s.except = exceptAdd(s.except, k)
 		}
-		s.Selection.set(k, true)
 	}
 	*s.Selected = i
 	grid.st.markChanged()
@@ -623,6 +623,7 @@ func (s *GridState) keys(grid *node, n int) {
 		}
 	}
 	if s.Selection != nil && grid.Shortcut(Cmd, KeyA) {
+		s.span, s.except = 0, exceptReset(s.except)
 		for j := range n {
 			s.Selection.set(s.key(j), true)
 		}

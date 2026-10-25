@@ -275,10 +275,10 @@ type ListState struct {
 	pivotKey          any
 	// pivotSet says SetPivot was called before the first frame.
 	pivotSet bool
-	// added are the keys of the rows the Shift-extension since the pivot
-	// last moved chose and that were not chosen before, which going back
-	// with span takes out again.
-	added map[any]struct{}
+	// except are the keys of the rows chosen before the Shift-extension
+	// since the pivot last moved reached them: going back with span takes
+	// out the others between the pivot and pivot+span, and leaves these.
+	except map[any]struct{}
 
 	header listHeader
 	// rows are the last frame's rows by their elements' IDs, to find the
@@ -1097,25 +1097,26 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 	}
 	lo, hi := min(p, i), max(p, i)
 	changed := false
-	if s.added == nil {
-		s.added = map[any]struct{}{}
-	}
+	// track says the rows the extension reaches for the first time that were
+	// chosen already are kept in except, which going back leaves chosen;
+	// the rows from oldLo to oldHi were reached before.
+	track, oldLo, oldHi := true, 1, 0
 	switch {
 	case span:
 		last := max(0, min(p+s.span, f.n-1))
-		for j := min(p, last); j <= max(p, last); j++ {
+		oldLo, oldHi = min(p, last), max(p, last)
+		for j := oldLo; j <= oldHi; j++ {
 			if (j < lo || j > hi) && !f.isHeader(j) {
 				k := f.key(j)
-				if _, ok := s.added[k]; ok {
+				if _, ok := s.except[k]; !ok {
 					changed = sel.set(k, false) || changed
-					delete(s.added, k)
 				}
 			}
 		}
 	case keep:
-		clear(s.added)
+		s.except = exceptReset(s.except)
 	default:
-		clear(s.added)
+		s.except, track = exceptReset(s.except), false
 		in := 0
 		for j := lo; j <= hi; j++ {
 			if !f.isHeader(j) && sel.has(f.key(j)) {
@@ -1127,12 +1128,14 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 		}
 	}
 	for j := lo; j <= hi; j++ {
-		if !f.isHeader(j) {
-			k := f.key(j)
-			if !sel.has(k) || !keep && !span {
-				s.added[k] = struct{}{}
-			}
-			changed = sel.set(k, true) || changed
+		if f.isHeader(j) {
+			continue
+		}
+		k := f.key(j)
+		if sel.set(k, true) {
+			changed = true
+		} else if track && (j < oldLo || j > oldHi) {
+			s.except = exceptAdd(s.except, k)
 		}
 	}
 	if changed {
@@ -1155,7 +1158,7 @@ func (f *listFrame) lead(i int, pivot bool) {
 	}
 	if pivot {
 		s.pivot, s.span = i, 0
-		clear(s.added)
+		s.except = exceptReset(s.except)
 	}
 	s.ScrollIntoView(i)
 }
@@ -1170,7 +1173,26 @@ func (s *ListState) Pivot() int { return s.pivot }
 // frame about to be built.
 func (s *ListState) SetPivot(row int) {
 	s.pivot, s.span, s.pivotSet = row, 0, true
-	clear(s.added)
+	s.except = exceptReset(s.except)
+}
+
+// exceptAdd adds key k to the set of keys m, which may be nil.
+func exceptAdd(m map[any]struct{}, k any) map[any]struct{} {
+	if m == nil {
+		m = map[any]struct{}{}
+	}
+	m[k] = struct{}{}
+	return m
+}
+
+// exceptReset empties the set of keys m, and drops a large one with the
+// memory its buckets keep.
+func exceptReset(m map[any]struct{}) map[any]struct{} {
+	if len(m) > 1<<10 {
+		return nil
+	}
+	clear(m)
+	return m
 }
 
 // ExtendTo chooses the rows from the one Shift extends from to row, as a
@@ -1258,6 +1280,7 @@ func (f *listFrame) clickAt(i int, x, y float32, mods Modifiers) {
 
 // chooseAll chooses every row, as Cmd+A does.
 func (f *listFrame) chooseAll() {
+	f.s.span, f.s.except = 0, exceptReset(f.s.except)
 	changed := false
 	for j := range f.n {
 		if !f.isHeader(j) {
