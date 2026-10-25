@@ -98,8 +98,10 @@ type GridState struct {
 
 	// layout says where the rows begin when the grid has headers (Header).
 	layout headerRows
-	// scroll is the last ScrollTo or ScrollIntoView, not yet built.
+	// scroll is the last ScrollTo or ScrollIntoView, and n the number of
+	// items of the last build.
 	scroll gridScroll
+	n      int
 }
 
 // Pivot returns the item Shift extends the choice from, -1 for none: the item
@@ -118,23 +120,34 @@ func (s *GridState) SetPivot(item int) {
 }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
-// does a row. The grid finds the row of the item when it is built next, with
-// the items and the columns it has then.
+// does a row. If the items or the columns change before the grid is built
+// again, it scrolls to the item in the rows it has then.
 func (s *GridState) ScrollTo(item int, align Align) {
-	s.scroll = gridScroll{set: true, item: item, align: align}
+	s.rows.ScrollTo(s.itemRow(item), align)
+	s.scroll = s.request(item, false, align)
 }
 
-// ScrollIntoView scrolls the grid as little as shows item, at the next build.
+// ScrollIntoView scrolls the grid as little as shows item.
 func (s *GridState) ScrollIntoView(item int) {
-	s.scroll = gridScroll{set: true, item: item, into: true}
+	s.rows.ScrollIntoView(s.itemRow(item))
+	s.scroll = s.request(item, true, 0)
 }
 
-// gridScroll is a request to scroll to an item, kept until the grid is built,
-// when the rows of its items are known.
+// gridScroll is the last ScrollTo or ScrollIntoView, with the grid it was
+// made in: if the number of items, of columns, or the layout of the headers
+// is another at the next build, it was turned into a row of rows that are
+// gone, and the build turns it into the row of the new ones.
 type gridScroll struct {
 	set, into bool
 	item      int
 	align     Align
+	n, cols   int
+	ver       int
+}
+
+// request returns a ScrollTo or ScrollIntoView of item, made now.
+func (s *GridState) request(item int, into bool, align Align) gridScroll {
+	return gridScroll{set: true, into: into, item: item, align: align, n: s.n, cols: s.cols, ver: s.layout.ver}
 }
 
 // gridFit is how many columns a grid's items took, which its layout checks
@@ -201,16 +214,19 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 		s.rows.ScrollTo(s.itemRow(anchor), Start)
 	}
 	if r := s.scroll; r.set {
-		// The row of the item in the rows just laid out, whatever changed
-		// since the call.
 		s.scroll = gridScroll{}
-		row := s.itemRow(max(0, min(r.item, n-1)))
-		if r.into {
-			s.rows.ScrollIntoView(row)
-		} else {
-			s.rows.ScrollTo(row, r.align)
+		if r.n != n || r.cols != cols || r.ver != s.layout.ver {
+			// The rows changed since the call: the row of the item in the
+			// rows just laid out.
+			row := s.itemRow(max(0, min(r.item, n-1)))
+			if r.into {
+				s.rows.ScrollIntoView(row)
+			} else {
+				s.rows.ScrollTo(row, r.align)
+			}
 		}
 	}
+	s.n = n
 	rows := s.rowCount(n, cols)
 	if s.Selected != nil {
 		e.Focusable()
@@ -779,6 +795,6 @@ func (s *GridState) keys(grid *node, n int) {
 	} else {
 		s.choose(grid, to)
 	}
-	s.rows.ScrollIntoView(s.itemRow(to)) // the rows of this frame
+	s.rows.ScrollIntoView(s.itemRow(to))
 	grid.c.rt.consumed = true
 }

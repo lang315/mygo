@@ -15,6 +15,7 @@ type headerRows struct {
 	heads   []int // the headers, in order
 	start   []int // start[b] is the first row of block b: len(heads)+1 of them
 	rows    int
+	ver     int // changes whenever the rows were made again
 }
 
 // isHeader reports whether item i heads a group.
@@ -70,6 +71,7 @@ func (s *GridState) prepare(n, cols int) {
 		row += (hi - lo + cols - 1) / cols
 	}
 	l.rows, l.ok = row, true
+	l.ver++
 }
 
 // segment returns the items of block b that are not its header: from lo to
