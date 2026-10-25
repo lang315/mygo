@@ -97,6 +97,8 @@ building the list.
   Linux and Windows, Ctrl with the keys moves without choosing, and
   Ctrl+Space adds the row there or takes it out. `Selected`, set as well, is
   the row last chosen.
+  Cmd+Shift with the keys (Ctrl+Shift on Linux and Windows) extends the choice
+  besides the rows chosen before, and going back takes out the rows it left.
 
 Files to choose several of, by their paths:
 

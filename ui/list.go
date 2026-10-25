@@ -80,8 +80,8 @@ type ListState struct {
 	// Linux and Windows) adds a row or takes it out, and Shift-click
 	// chooses those from the row last chosen to it in place of the others,
 	// or besides them with Cmd (Ctrl on Linux and Windows) held; Shift with
-	// the keys that move the choice does so in place of the others;
-	// Cmd+A chooses all. On Linux and Windows,
+	// the keys that move the choice does so in place of the others, and
+	// Cmd+Shift besides them; Cmd+A chooses all. On Linux and Windows,
 	// Ctrl with those keys moves without choosing, and Ctrl+Space adds the
 	// row there or takes it out. Selected, set as well, is the row last
 	// chosen, where the keys move from. A right-click on a row not chosen
@@ -1297,6 +1297,7 @@ func (f *listFrame) navigate() {
 	const (
 		move = iota + 1
 		extend
+		extendKeep
 		cursor
 	)
 	keys := []Key{KeyDown, KeyUp, KeyHome, KeyEnd, KeyPageDown, KeyPageUp}
@@ -1310,6 +1311,9 @@ func (f *listFrame) navigate() {
 		}
 		if multi && o.Shortcut(Shift, k) {
 			how, key = extend, k
+		}
+		if multi && o.Shortcut(Cmd|Shift, k) {
+			how, key = extendKeep, k
 		}
 		if multi && !mac && o.Shortcut(Ctrl, k) {
 			how, key = cursor, k
@@ -1358,6 +1362,9 @@ func (f *listFrame) navigate() {
 		f.choose(to)
 	case how == extend:
 		f.extend(to, false)
+	case how == extendKeep:
+		// Besides the rows chosen before; going back takes out those it left.
+		f.extendBy(to, true, true)
 	case how == cursor:
 		f.lead(to, false)
 	}

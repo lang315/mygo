@@ -71,6 +71,10 @@ type GridState struct {
 	pivotSet    bool // SetPivot was called before the first frame
 	started     bool
 	rt          *engine
+
+	// span is how far from the pivot the last Shift-extension went, to take
+	// out the items a Cmd+Shift key leaves when it goes back.
+	span int
 }
 
 // Pivot returns the item Shift extends the choice from, -1 for none: the item
@@ -81,7 +85,7 @@ func (s *GridState) Pivot() int { return s.pivot }
 // the choice: for an app that shows the same items in another view and keeps
 // the pivot by key. Call it after the grid is built once, with an item of the
 // frame about to be built.
-func (s *GridState) SetPivot(item int) { s.pivot, s.pivotSet = item, true }
+func (s *GridState) SetPivot(item int) { s.pivot, s.span, s.pivotSet = item, 0, true }
 
 // ScrollTo scrolls the grid to show item at align, as ListState.ScrollTo
 // does a row.
@@ -453,10 +457,10 @@ func (s *GridState) click(grid *node, i int, mods Modifiers) {
 	case s.Selection == nil:
 		s.choose(grid, i)
 	case mods&Shift != 0:
-		s.extend(grid, i, mods&Cmd != 0)
+		s.extend(grid, i, mods&Cmd != 0, false)
 	case mods&Cmd != 0:
 		s.Selection.set(s.key(i), !s.Selection.has(s.key(i)))
-		*s.Selected, s.pivot = i, i
+		*s.Selected, s.pivot, s.span = i, i, 0
 		grid.st.markChanged()
 	default:
 		s.choose(grid, i)
@@ -473,28 +477,58 @@ func (s *GridState) choose(grid *node, i int) {
 			changed = true
 		}
 	}
-	*s.Selected, s.pivot = i, i
+	*s.Selected, s.pivot, s.span = i, i, 0
 	if changed {
 		grid.st.markChanged()
 	}
 }
 
 // extend chooses the items from the pivot to i, in place of all others unless
-// keep.
-func (s *GridState) extend(grid *node, i int, keep bool) {
+// keep, and with shrink in place of those it last chose only.
+func (s *GridState) extend(grid *node, i int, keep, shrink bool) {
 	p := s.pivot
 	if p < 0 || p >= grid.setSize || s.Selection == nil {
 		s.choose(grid, i)
 		return
 	}
-	if !keep {
+	switch {
+	case shrink:
+		last := max(0, min(p+s.span, grid.setSize-1))
+		for j := min(p, last); j <= max(p, last); j++ {
+			if j < min(p, i) || j > max(p, i) {
+				s.Selection.set(s.key(j), false)
+			}
+		}
+	case !keep:
 		s.Selection.clear()
 	}
+	s.span = i - p
 	for j := min(p, i); j <= max(p, i); j++ {
 		s.Selection.set(s.key(j), true)
 	}
 	*s.Selected = i
 	grid.st.markChanged()
+}
+
+// page returns the item a page from item at, in the same column: the last row
+// in view going down (the first going up), or a page of rows further from
+// there.
+func (s *GridState) page(at, d, n int) int {
+	cols := max(s.cols, 1)
+	first, last := s.rows.Visible()
+	row, per := at/cols, max(1, last-first)
+	switch {
+	case d > 0 && row < last:
+		row = last
+	case d > 0:
+		row += per
+	case row > first:
+		row = first
+	default:
+		row -= per
+	}
+	row = max(0, min(row, (n-1)/cols))
+	return min(row*cols+at%cols, n-1)
 }
 
 // keys moves the choice with the arrows in two dimensions, Home, End and
@@ -512,13 +546,16 @@ func (s *GridState) keys(grid *node, n int) {
 		key Key
 		d   int
 	}{{forth, 1}, {back, -1}, {KeyDown, cols}, {KeyUp, -cols}}
-	to, extend := -1, false
+	// extend chooses from the pivot to the item the key reaches, and keep
+	// does it besides the items chosen before (Cmd+Shift).
+	to, extend, keep := -1, false, false
 	for _, m := range moves {
 		plain, shift := grid.Shortcut(0, m.key), s.Selection != nil && grid.Shortcut(Shift, m.key)
-		if !plain && !shift {
+		both := s.Selection != nil && grid.Shortcut(Cmd|Shift, m.key)
+		if !plain && !shift && !both {
 			continue
 		}
-		extend = shift
+		extend, keep = shift || both, both
 		switch {
 		case !in:
 			to = 0
@@ -528,11 +565,31 @@ func (s *GridState) keys(grid *node, n int) {
 			to = n - 1 // the last row, shorter
 		}
 	}
-	if grid.Shortcut(0, KeyHome) {
-		to = 0
+	for _, h := range [...]struct {
+		key Key
+		to  int
+	}{{KeyHome, 0}, {KeyEnd, n - 1}} {
+		switch {
+		case grid.Shortcut(0, h.key):
+			to = h.to
+		case s.Selection != nil && grid.Shortcut(Shift, h.key):
+			to, extend, keep = h.to, true, false
+		case s.Selection != nil && grid.Shortcut(Cmd|Shift, h.key):
+			to, extend, keep = h.to, true, true
+		}
 	}
-	if grid.Shortcut(0, KeyEnd) {
-		to = n - 1
+	// Page Down and Page Up scroll the grid; with Shift they extend the
+	// choice by the rows in view.
+	if s.Selection != nil && in {
+		for _, pg := range [...]struct {
+			key Key
+			d   int
+		}{{KeyPageDown, 1}, {KeyPageUp, -1}} {
+			shift, both := grid.Shortcut(Shift, pg.key), grid.Shortcut(Cmd|Shift, pg.key)
+			if shift || both {
+				to, extend, keep = s.page(at, pg.d, n), true, both
+			}
+		}
 	}
 	if s.Selection != nil && grid.Shortcut(Cmd, KeyA) {
 		for j := range n {
@@ -560,9 +617,9 @@ func (s *GridState) keys(grid *node, n int) {
 	}
 	if extend {
 		if s.pivot < 0 || !in {
-			s.pivot = max(at, 0)
+			s.pivot, s.span = max(at, 0), 0
 		}
-		s.extend(grid, to, false)
+		s.extend(grid, to, keep, keep)
 	} else {
 		s.choose(grid, to)
 	}
