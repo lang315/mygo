@@ -45,7 +45,7 @@ Windows 11 ARM64.
 |---|---|---|---|
 | `TableFrame100k` frame | 122–210 µs (CI) | on CI Linux x86 it depends on the runner's CPU: median 113 µs on an EPYC 9V45, 154 on a 9V74, 208 on a 7763 (the common one; 202 in the last run), 199 µs Windows, 115 µs macOS (M1 VM), 104 µs M1 Pro; **22 allocs, 977 B** a frame (was 164 and 5,077) | tens of µs |
 | A click on a widget table of 1M rows | 6.5–10 ms, 38 MB allocated | **1.2 ms** CI Linux x86, 1.5 ms Windows, 1.6 ms macOS, 0.63 ms M1 Pro; **18.6 KB and 514 allocs** (`BenchmarkTableCheckedLarge/click`, #19) | ≤ 1 ms, no MB-scale allocation |
-| A frame of N plain widgets | not measured | `BenchmarkWidgetFrame` (M1 Pro): 100 widgets 98 µs and 66 allocs, 1000 widgets 0.77 ms and 666 allocs (CI Linux x86: 0.18 and 1.3 ms); the same as raw `ui` (`BenchmarkUIFrame`): 90 µs and 0.72 ms, 133 and 1,933 allocs; a Style on each: +16–21% (`-styled`), the same styles on raw `ui` +13–14% | baseline set in Phase 0 |
+| A frame of N plain widgets | not measured | `BenchmarkWidgetFrame` (M1 Pro): 100 widgets 98 µs and 66 allocs, 1000 widgets 0.77 ms and 666 allocs (CI Linux x86: 0.18 and 1.3 ms); the same as raw `ui` (`BenchmarkUIFrame`): 90 µs and 0.72 ms, 133 and 1,933 allocs; a Style on each: +16–21% (`-styled`), the same styles on raw `ui` +13–14%, so the widget layer adds ×1.03–1.06 (the Phase 0 gate, ≤ 1.10) | baseline set in Phase 0 |
 | `counter-native` release size | 9.2–9.7 MB | 9.22 MB macOS, 9.45 MB Linux, 9.77 MB Windows; `hello` 9.37, 9.47 and 9.95 MB | unchanged by widget work |
 
 ## Phase 0: foundations
@@ -79,10 +79,15 @@ Windows 11 ARM64.
 
 **Exit criteria:**
 
-- The widget frame with Style is at most 10% slower than the baseline.
-  *Measured:* a Style on every widget costs +16–21% in `BenchmarkWidgetFrame`
-  (`-styled`, M1 Pro; +13–23% on CI), and the same styles written on raw `ui`
-  cost +13–14%: this benchmark does not show the criterion.
+- The widget frame with Style is at most 10% slower than the baseline. The
+  gate is the cost the widget layer adds to styling, not styling itself:
+  (widget-styled ÷ widget-plain) ÷ (ui-styled ÷ ui-plain) ≤ 1.10, from
+  `BenchmarkWidgetFrame` and `BenchmarkUIFrame` (`ui/widget/bench_test.go`).
+  **Done:** each pair of one runner and one commit, the median of the last ten
+  CI runs of `c4cf118` and before: Linux x86 1.06–1.08 (100 and 1000 widgets,
+  with and without a transition), Windows 1.07–1.09, macOS 1.01–1.09 on a
+  noisy VM (single runs go to 1.2); an M1 Pro run gives 1.03 (100 widgets) and
+  1.06 (1000), with a transition. Styling itself costs +13–24% in both layers.
 - App sizes are unchanged. **Done:** see the Baseline table.
 - fhtool's classes parse. **Done:** `internal/twclass/twclass_test.go`
   (`TestFhtoolClasses`).
