@@ -3056,6 +3056,23 @@ func (_handle Element) CanFocus() bool {
 	return _node.CanFocus()
 }
 
+// CaretLimit has fn tell, from the text, the furthest the caret may go while
+// nothing is selected, as a mask does so that what is typed finds room: a
+// click, the End key or an arrow that would take the caret past it leaves it
+// there instead, in runes. A selection is not limited, nor is the caret of
+// an edit (see OnEdit). Like ReadOnly, it holds for the input that comes
+// until the next frame. fn runs on the main thread, between frames: it must
+// be quick and touch no element.
+func (_handle Element) CaretLimit(fn func(text string) int) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.CaretLimit(fn))
+}
+
 // Center centers the children along and across the main axis.
 func (_handle Element) Center() Element {
 	_node := _handle.node()

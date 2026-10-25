@@ -422,3 +422,72 @@ func TestMaskedTextBoxRedoOfADeleteKeepsTheCaret(t *testing.T) {
 		t.Errorf("typing after redo: %q, want 923-45 (the caret is at the start)", got)
 	}
 }
+
+// A click in the empty part of the box, or End, does not put the caret after
+// the slots that are empty: what is typed there would find no room.
+func TestMaskedTextBoxCaretStaysAtTheEndOfWhatWasTyped(t *testing.T) {
+	t.Run("click on an empty box", func(t *testing.T) {
+		mt := MaskedTextBox(">LLLLLLLLLLLL")
+		tt := NewTester(t, mt, 400, 120)
+		tt.Find(ByRole(ui.RoleTextField)).Click().Type("abc") // the middle is right of the template
+		if got := mt.Text(); got != "ABC" {
+			t.Fatalf("Text %q, want ABC", got)
+		}
+	})
+	t.Run("End after typed text, then the EVKey sequence", func(t *testing.T) {
+		rejected := 0
+		mt := MaskedTextBox(">LLLLLLLLLLLL").OnMaskInputRejected(func(rune) { rejected++ })
+		tt := NewTester(t, mt, 400, 120)
+		box := tt.Find(ByRole(ui.RoleTextField)).Focus()
+		box.Key(ui.Cmd, ui.KeyHome)
+		box.Type("ĐỨC")
+		box.Key(0, ui.KeyEnd)
+		// EVKey sends a letter as it is, and turns the letters before the
+		// caret into the next with a Backspace and the new one.
+		box.Type("v").Type("i").Type("e")
+		box.Key(0, ui.KeyBackspace).Type("ê")
+		box.Key(0, ui.KeyBackspace).Type("ệ")
+		box.Type("t")
+		tt.Settle()
+		if got := mt.Text(); got != "ĐỨCVIỆT" || rejected != 0 {
+			t.Fatalf("Text %q, rejects %d, want ĐỨCVIỆT and none", got, rejected)
+		}
+	})
+	t.Run("click and the right arrow", func(t *testing.T) {
+		mt := MaskedTextBox("000000")
+		tt := NewTester(t, mt, 400, 120)
+		box := tt.Find(ByRole(ui.RoleTextField)).Focus()
+		box.Key(ui.Cmd, ui.KeyHome)
+		box.Type("12")
+		box.Key(0, ui.KeyRight).Key(0, ui.KeyRight).Key(0, ui.KeyRight)
+		box.Type("3")
+		if got := mt.Text(); got != "123" {
+			t.Fatalf("Text %q, want 123", got)
+		}
+		box.Click().Type("4") // the middle of the box is past the template
+		if got := mt.Text(); got != "1234" {
+			t.Fatalf("after a click: Text %q, want 1234", got)
+		}
+	})
+	t.Run("a click inside the typed text stays there", func(t *testing.T) {
+		mt := MaskedTextBox("000000")
+		tt := NewTester(t, mt, 400, 120)
+		box := tt.Find(ByRole(ui.RoleTextField)).Focus()
+		box.Key(ui.Cmd, ui.KeyHome)
+		box.Type("1234")
+		box.Key(0, ui.KeyHome)
+		box.Type("9")
+		if got := mt.Text(); got != "91234" {
+			t.Fatalf("Text %q, want 91234", got)
+		}
+	})
+}
+
+func TestMaskedTextBoxPhoneFillsFromTheParenthesis(t *testing.T) {
+	mt := MaskedTextBox("(000) 000-0000")
+	tt := NewTester(t, mt, 400, 120)
+	tt.Find(ByRole(ui.RoleTextField)).Click().Type("5551234567")
+	if got := mt.TextWithLiterals(); got != "(555) 123-4567" {
+		t.Fatalf("TextWithLiterals %q", got)
+	}
+}

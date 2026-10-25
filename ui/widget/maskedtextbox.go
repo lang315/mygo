@@ -157,5 +157,13 @@ func (m *MaskedTextBoxWidget) build(c *ui.Context) ui.Element {
 		}
 		return cp.render(out), caret, true
 	})
+	// The caret never goes after the first empty slot that follows what was
+	// typed, where what is typed next would find no room (WinForms lets it).
+	el = el.CaretLimit(func(text string) int {
+		mu.Lock()
+		cp := *m.mk
+		mu.Unlock()
+		return cp.limit(cp.cells(text))
+	})
 	return el.OnChange(edited(&m.text, &m.bound, m.onChange))
 }
