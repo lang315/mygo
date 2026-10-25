@@ -67,5 +67,11 @@ a typed character equal to the prompt reads back as an empty slot (`&&&&`: a, `_
   (default `_`) changes the prompt and keeps the text: a slot may hold the
   prompt character itself, the box keeps which slots are filled.
 
+Unlike WinForms, the caret never goes after the first empty slot that follows
+what was typed (the first slot, when the box is empty): a click in the empty
+part of the box, the End key and the right arrow stop there, so that what is
+typed next finds room. A click inside what was typed keeps its place, and so
+does a selection.
+
 It is not bindable (`Bind` takes a TextBox, a number, a combo...); use `OnChange`.
 Not here: `TextMaskFormat`, `ResetOnPrompt` and `HidePromptOnLeave`.

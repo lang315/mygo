@@ -191,6 +191,17 @@ func (m *mask) prev(i int) int {
 	return -1
 }
 
+// limit returns the furthest the caret goes: right after the last slot
+// filled, or, with none, at the first slot.
+func (m *mask) limit(cells []rune) int {
+	for i := len(cells) - 1; i >= 0; i-- {
+		if m.slots[i].editable() && cells[i] != 0 {
+			return i + 1
+		}
+	}
+	return max(m.next(0), 0)
+}
+
 // flow puts the characters in order into the editable slots from slot i on,
 // the ones the slots do not take dropped, and returns how many were.
 func (m *mask) flow(cells []rune, from int, chars []rune) (dropped int) {

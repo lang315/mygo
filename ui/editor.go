@@ -62,6 +62,9 @@ type editor struct {
 	// filtering is set while its result is made.
 	onEdit    func(e TextEdit) (string, int, bool)
 	filtering bool
+	// caretLimit is the furthest the caret goes when nothing is selected
+	// (CaretLimit).
+	caretLimit func(text string) int
 	// base is the text before the composition in progress, while onEdit is set.
 	base *composeBase
 	// keying is set while onTextKey runs, as the TextKey numbered keySeq
@@ -134,14 +137,15 @@ type editorOptions struct {
 	onPaste            func(text string) bool
 	onTextKey          func(k TextKey) bool
 	onEdit             func(e TextEdit) (string, int, bool)
+	caretLimit         func(text string) int
 }
 
 // rebuild starts a build of the input: what the build before set becomes
 // the options its pending edits apply by, and this build's start from
 // the defaults.
 func (ed *editor) rebuild() {
-	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit}
-	ed.readOnly, ed.password, ed.maxLen, ed.lines, ed.onPaste, ed.onTextKey, ed.onEdit = false, false, 0, [2]int{}, nil, nil, nil
+	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit}
+	ed.readOnly, ed.password, ed.maxLen, ed.lines, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit = false, false, 0, [2]int{}, nil, nil, nil, nil
 }
 
 // withShown runs fn, which applies the user's edits, with the options of
@@ -149,11 +153,11 @@ func (ed *editor) rebuild() {
 // returns, before this build's ReadOnly or OnPaste, and follows what the
 // user saw.
 func (ed *editor) withShown(fn func()) {
-	now := editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit}
+	now := editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit}
 	o := ed.shown
-	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit = o.readOnly, o.password, o.maxLen, o.onPaste, o.onTextKey, o.onEdit
+	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit = o.readOnly, o.password, o.maxLen, o.onPaste, o.onTextKey, o.onEdit, o.caretLimit
 	fn()
-	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit = now.readOnly, now.password, now.maxLen, now.onPaste, now.onTextKey, now.onEdit
+	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit = now.readOnly, now.password, now.maxLen, now.onPaste, now.onTextKey, now.onEdit, now.caretLimit
 }
 
 func (ed *editor) insert(s string) {
@@ -257,6 +261,9 @@ func (ed *editor) process(c *context, e *node) {
 		case editCommand:
 			ed.commitCompose()
 			ed.command(c, ev.text)
+		}
+		if ev.kind == editKey || ev.kind == editCommand {
+			ed.limitCaret()
 		}
 	}
 	clear(queue)

@@ -200,6 +200,20 @@ func (e *node) OnEdit(fn func(e TextEdit) (text string, caret int, ok bool)) *no
 	return e
 }
 
+// CaretLimit has fn tell, from the text, the furthest the caret may go while
+// nothing is selected, as a mask does so that what is typed finds room: a
+// click, the End key or an arrow that would take the caret past it leaves it
+// there instead, in runes. A selection is not limited, nor is the caret of
+// an edit (see OnEdit). Like ReadOnly, it holds for the input that comes
+// until the next frame. fn runs on the main thread, between frames: it must
+// be quick and touch no element.
+func (e *node) CaretLimit(fn func(text string) int) *node {
+	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+		ed.caretLimit = fn
+	}
+	return e
+}
+
 // A TextKey is a key pressed in a text input, as OnTextKey's fn sees it.
 // It is valid while fn runs: Text and SetText panic after fn returns.
 type TextKey struct {

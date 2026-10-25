@@ -403,6 +403,7 @@ func (ed *editor) press(x, y float32, clicks, button int) {
 			ed.selectAll()
 		}
 	}
+	ed.limitCaret()
 	ed.dragStart = [2]int{ed.anchor, ed.caret}
 	if ed.area != nil {
 		ed.area.reveal = true
@@ -410,6 +411,17 @@ func (ed *editor) press(x, y float32, clicks, button int) {
 }
 
 func (ed *editor) release() { ed.dragging = false }
+
+// limitCaret brings a caret with nothing selected back to CaretLimit's, where
+// a key or a click took it past.
+func (ed *editor) limitCaret() {
+	if ed.caretLimit == nil || ed.caret != ed.anchor {
+		return
+	}
+	if to := ed.caretLimit(ed.buf.string()); ed.caret > to {
+		ed.move(max(to, 0), false)
+	}
+}
 
 // laidOut reports whether a frame laid the editor's text out.
 func (ed *editor) laidOut() bool { return ed.layout != nil || ed.area != nil && ed.area.version != 0 }
