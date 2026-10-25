@@ -44,6 +44,9 @@ func (b *core) inspect(w Control, th *ui.Theme, inert bool) []ui.InspectorField 
 	layers := 0
 	for i, s := range b.applied {
 		fs = append(fs, ui.InspectorField{Name: fmt.Sprintf("Apply, style %d of %d", i+1, len(b.applied))})
+		if s.src != nil {
+			fs = append(fs, ui.InspectorField{Name: "classes", Value: *s.src})
+		}
 		fs = append(fs, s.describe(th)...)
 		layers++
 	}

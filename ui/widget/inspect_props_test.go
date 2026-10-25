@@ -101,3 +101,40 @@ func TestNoteSaysWhenADisabledAncestorDisablesTheControl(t *testing.T) {
 		}
 	}
 }
+
+// A Style made of two has no source, and one that is given none, or an empty
+// one, has none.
+func TestAMergedStyleHasNoSource(t *testing.T) {
+	a, b := NewStyle().Padding(1).Source("p-1"), NewStyle().Margin(1).Source("m-1")
+	if a.src == nil || *a.src != "p-1" {
+		t.Fatalf("Source did not note the classes: %v", a.src)
+	}
+	if m := a.Merge(b); m.src != nil {
+		t.Errorf("a merged Style has the source %q", *m.src)
+	}
+	if a.Source("").src != nil {
+		t.Error("an empty source did not take the source off")
+	}
+	if NewStyle().Padding(1).src != nil {
+		t.Error("a typed Style has a source")
+	}
+}
+
+// Only a layer given to Apply shows classes, and only if it has them.
+func TestOnlyAnAppliedStyleWithASourceShowsClasses(t *testing.T) {
+	b := Button("x").Apply(NewStyle().Padding(1).Source("p-1"), NewStyle().Padding(2)).Bold()
+	fs := b.inspect(b, ui.LightTheme(), false)
+	n, at := 0, -1
+	for i, f := range fs {
+		if f.Name == "classes" {
+			n++
+			at = i
+			if f.Value != "p-1" {
+				t.Errorf("classes %q, want p-1", f.Value)
+			}
+		}
+	}
+	if n != 1 || fs[at-1].Name != "Apply, style 1 of 2" {
+		t.Errorf("%d lines of classes, the first after %q: %v", n, fs[at-1].Name, fs)
+	}
+}

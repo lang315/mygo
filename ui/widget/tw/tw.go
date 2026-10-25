@@ -61,7 +61,7 @@ func S(classes string) widget.Style {
 		return s
 	}
 	rules, bad := twclass.Parse(classes)
-	s = build(rules)
+	s = build(rules).Source(classes) // once: the cache keeps it, for the inspector
 	// With the cache full and nothing new to log, take no write lock: a miss
 	// would hold up the hits.
 	cacheMu.RLock()
@@ -103,7 +103,7 @@ func unlogged(bad []twclass.Bad) bool {
 // class.
 func Parse(classes string) (widget.Style, error) {
 	rules, bad := twclass.Parse(classes)
-	s := build(rules)
+	s := build(rules).Source(classes)
 	if len(bad) == 0 {
 		return s, nil
 	}

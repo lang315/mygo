@@ -183,6 +183,8 @@ type props struct {
 	transition                              time.Duration
 	align, valign                           Align
 	weight                                  int
+	// src says where the Style came from (Source), for the inspector.
+	src *string
 }
 
 type variant uint8
@@ -440,9 +442,23 @@ func (s Style) Dark(v Style) Style     { return s.with(vDark, v) }
 
 func (s Style) with(k variant, v Style) Style { s.v[k] = &v; return s }
 
+// Source notes where s came from, as the Tailwind classes that made it (tw.S
+// does), for the inspector's Widget tab, which shows it beside the style. It
+// changes nothing else. A Style made by Merge has no source: it is made of
+// several. An empty from takes the source off, as to compare two Styles that
+// differ in nothing else.
+func (s Style) Source(from string) Style {
+	s.src = nil
+	if from != "" {
+		s.src = &from
+	}
+	return s
+}
+
 // Merge returns s with what o sets on top, side by side and variant by
 // variant: later styles win, as the order of Apply's arguments.
 func (s Style) Merge(o Style) Style {
+	s.src = nil // made of two
 	s.props.over(&o.props)
 	for k := range nVariants {
 		switch {

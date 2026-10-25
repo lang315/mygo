@@ -51,7 +51,7 @@ func TestSameAsTyped(t *testing.T) {
 		{"", n()},
 	} {
 		got, err := Parse(c.in)
-		if err != nil || !reflect.DeepEqual(got, c.want) {
+		if err != nil || !reflect.DeepEqual(got.Source(""), c.want) {
 			t.Errorf("Parse(%q) = %+v, %v; want %+v", c.in, got, err, c.want)
 		}
 	}
@@ -111,7 +111,7 @@ func TestParseError(t *testing.T) {
 	if !errors.As(err, &e) || len(e.Bad) != 2 {
 		t.Fatalf("err %v", err)
 	}
-	if !reflect.DeepEqual(s, widget.NewStyle().Padding(2)) {
+	if !reflect.DeepEqual(s.Source(""), widget.NewStyle().Padding(2)) {
 		t.Fatalf("the good class must still apply: %+v", s)
 	}
 	if want := `tw: unknown class "text-green"; layout in a variant "hover:hexpand"`; err.Error() != want {
@@ -127,13 +127,13 @@ func TestNotItalicInAVariantIsAnError(t *testing.T) {
 	if !errors.As(err, &e) || len(e.Bad) != 1 || e.Bad[0] != (Bad{"dark:not-italic", twclass.NotItalicInVariant}) {
 		t.Fatalf("err %v", err)
 	}
-	if !reflect.DeepEqual(s, widget.NewStyle().Italic()) {
+	if !reflect.DeepEqual(s.Source(""), widget.NewStyle().Italic()) {
 		t.Fatalf("the italic must still apply: %+v", s)
 	}
 }
 
 func TestSIgnoresBadClasses(t *testing.T) {
-	if got := S("p-2 bogus"); !reflect.DeepEqual(got, widget.NewStyle().Padding(2)) {
+	if got := S("p-2 bogus"); !reflect.DeepEqual(got.Source(""), widget.NewStyle().Padding(2)) {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -210,7 +210,7 @@ func TestCacheIsBounded(t *testing.T) {
 	isolated(t)
 	want := widget.NewStyle().Padding(2)
 	for i := range 5000 { // 5000 distinct strings, all p-2
-		if got := S("p-2" + strings.Repeat(" ", i)); !reflect.DeepEqual(got, want) {
+		if got := S("p-2" + strings.Repeat(" ", i)); !reflect.DeepEqual(got.Source(""), want) {
 			t.Fatalf("string %d: S = %+v after the cache filled", i, got)
 		}
 	}
