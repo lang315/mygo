@@ -452,6 +452,22 @@ func TestDocumentRecoveryRetriesAFailedWrite(t *testing.T) {
 	})
 }
 
+// TestDocumentRecoveryWritesNothingAfterItIsClosed: a recovery copy written
+// after quit (a timer that fired late) made a session in the user data of
+// whatever the app, or the next test, had by then: in a test it was the
+// directory the next test removed, "directory not empty".
+func TestDocumentRecoveryWritesNothingAfterItIsClosed(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	d := ds.New()
+	root, _ := ds.kind.recovery.root()
+	ds.kind.recovery.close() // quit
+	d.Set("too late")
+	d.backup() // what the timer does, a second later
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("the recovery copies are written after quit: %v", err)
+	}
+}
+
 func TestDocumentRecovery(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	d := ds.New()

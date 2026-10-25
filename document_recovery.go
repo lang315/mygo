@@ -2,6 +2,7 @@ package mygo
 
 import (
 	"encoding/json/v2"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -37,6 +38,7 @@ type recoveryStore struct {
 
 	mu      sync.Mutex
 	dir     string // the session, "" until the first copy
+	closed  bool   // at quit: no more copies, a timer that fires late writes none
 	lock    *os.File
 	entries map[string]recoveryEntry
 }
@@ -64,6 +66,9 @@ func (s *recoveryStore) root() (string, error) {
 // session returns the directory of this instance's session, which it
 // creates and locks the first time. s.mu is held.
 func (s *recoveryStore) session() (string, error) {
+	if s.closed {
+		return "", errRecoveryClosed
+	}
 	if s.dir != "" {
 		return s.dir, nil
 	}
@@ -86,6 +91,9 @@ func (s *recoveryStore) session() (string, error) {
 	s.dir, s.lock = dir, lock
 	return dir, nil
 }
+
+// errRecoveryClosed is the error of a copy written after quit.
+var errRecoveryClosed = errors.New("the recovery copies are closed")
 
 // save writes the copy of a document and its entry. b.io is held.
 func (s *recoveryStore) save(e recoveryEntry, write func(io.Writer) error) error {
@@ -135,6 +143,7 @@ func (s *recoveryStore) writeIndex() error {
 func (s *recoveryStore) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.closed = true
 	if s.lock == nil {
 		return
 	}
@@ -222,6 +231,9 @@ func (b *docBase) backup() {
 	}
 	b.mu.Unlock()
 	err := b.kind.recovery.save(e, snap.write)
+	if err == errRecoveryClosed {
+		return // quit: the session is gone, and no other is made
+	}
 	b.mu.Lock()
 	if err != nil {
 		b.backupFails++
