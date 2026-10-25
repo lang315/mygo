@@ -3,9 +3,9 @@
 package windows
 
 import (
+	"github.com/egoist/mygo/internal/wincb"
 	"math"
 	"sync"
-	"syscall"
 	"unsafe"
 )
 
@@ -613,7 +613,7 @@ var (
 	procSetClassLongPtrW    = user32.NewProc("SetClassLongPtrW")
 
 	// menuHookCallback is made once: callbacks are never freed.
-	menuHookCallback = sync.OnceValue(func() uintptr { return syscall.NewCallback(menuHook) })
+	menuHookCallback = sync.OnceValue(func() uintptr { return wincb.New(menuHook) })
 )
 
 // cwpStruct is CWPSTRUCT.

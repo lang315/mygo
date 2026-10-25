@@ -5,6 +5,7 @@ package windows
 import (
 	"errors"
 	"fmt"
+	"github.com/egoist/mygo/internal/wincb"
 	"log"
 	"os"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -292,7 +292,7 @@ func registerClasses() error {
 	if wndProcCallback != 0 {
 		return nil
 	}
-	wndProcCallback = syscall.NewCallback(wndProc)
+	wndProcCallback = wincb.New(wndProc)
 	cursor, _, _ := procLoadCursorW.Call(0, idcArrow)
 	icon, _, _ := procLoadIconW.Call(instance(), 1) // the icon resource `mygo build` embeds
 	for _, name := range []string{appClass, windowClass, captionClass, flyoutShadowClass} {

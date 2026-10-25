@@ -3,10 +3,10 @@
 package text
 
 import (
+	"github.com/egoist/mygo/internal/wincb"
 	"runtime"
 	"slices"
 	"sync"
-	"syscall"
 	"unsafe"
 )
 
@@ -31,13 +31,13 @@ var (
 func inlineObjectVtbl() *[7]uintptr {
 	objectOnce.Do(func() {
 		objectVtbl = [7]uintptr{
-			syscall.NewCallback(objectQueryInterface),
-			syscall.NewCallback(rendererAddRef), // AddRef
-			syscall.NewCallback(rendererAddRef), // Release
-			syscall.NewCallback(objectDraw),
-			syscall.NewCallback(objectGetMetrics),
-			syscall.NewCallback(objectGetOverhangMetrics),
-			syscall.NewCallback(objectGetBreakConditions),
+			wincb.New(objectQueryInterface),
+			wincb.New(rendererAddRef), // AddRef
+			wincb.New(rendererAddRef), // Release
+			wincb.New(objectDraw),
+			wincb.New(objectGetMetrics),
+			wincb.New(objectGetOverhangMetrics),
+			wincb.New(objectGetBreakConditions),
 		}
 	})
 	return &objectVtbl

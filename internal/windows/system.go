@@ -6,12 +6,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/egoist/mygo/internal/wincb"
 	"image"
 	"image/color"
 	"image/png"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -350,7 +350,7 @@ var monitorSink func(uintptr)
 // enumMonitors calls fn with every monitor. Main thread only.
 func enumMonitors(fn func(uintptr)) {
 	if monitorEnumCallback == 0 {
-		monitorEnumCallback = syscall.NewCallback(func(mon, _, _, _ uintptr) uintptr {
+		monitorEnumCallback = wincb.New(func(mon, _, _, _ uintptr) uintptr {
 			if monitorSink != nil {
 				monitorSink(mon)
 			}

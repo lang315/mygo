@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"github.com/egoist/mygo/internal/wincb"
 	"image"
 	"image/png"
 	"slices"
@@ -79,11 +80,11 @@ func initDataSource() {
 		addRef(this)
 		return sOK
 	}
-	notImpl := syscall.NewCallback(func(this, a, b uintptr) uintptr { return eNotImpl })
+	notImpl := wincb.New(func(this, a, b uintptr) uintptr { return eNotImpl })
 	dragDataVtbl = [12]uintptr{
-		syscall.NewCallback(func(this, riid, out uintptr) uintptr { return query(this, riid, out, iidIDataObject) }),
-		syscall.NewCallback(func(this uintptr) uintptr { d := dragObjects[this]; d.refs++; return uintptr(d.refs) }),
-		syscall.NewCallback(func(this uintptr) uintptr {
+		wincb.New(func(this, riid, out uintptr) uintptr { return query(this, riid, out, iidIDataObject) }),
+		wincb.New(func(this uintptr) uintptr { d := dragObjects[this]; d.refs++; return uintptr(d.refs) }),
+		wincb.New(func(this uintptr) uintptr {
 			d := dragObjects[this]
 			d.refs--
 			if d.refs == 0 {
@@ -99,7 +100,7 @@ func initDataSource() {
 			}
 			return uintptr(d.refs)
 		}),
-		syscall.NewCallback(func(this, format, medium uintptr) uintptr {
+		wincb.New(func(this, format, medium uintptr) uintptr {
 			d := dragObjects[this]
 			f := *(*formatEtc)(native(format))
 			*(*stgMedium)(native(medium)) = stgMedium{}
@@ -149,7 +150,7 @@ func initDataSource() {
 			return sOK
 		}),
 		notImpl,
-		syscall.NewCallback(func(this, format uintptr) uintptr {
+		wincb.New(func(this, format uintptr) uintptr {
 			d := dragObjects[this]
 			f := *(*formatEtc)(native(format))
 			if validDataFormat(f) && (d.providers[f.Format] != nil || (f.Tymed&tymedHGlobal != 0 && d.extra[f.Format].Handle != 0)) {
@@ -157,12 +158,12 @@ func initDataSource() {
 			}
 			return dvFormatEtc
 		}),
-		syscall.NewCallback(func(this, in, out uintptr) uintptr {
+		wincb.New(func(this, in, out uintptr) uintptr {
 			*(*formatEtc)(native(out)) = *(*formatEtc)(native(in))
 			(*formatEtc)(native(out)).Device = 0
 			return 0x40130 // DATA_S_SAMEFORMATETC
 		}),
-		syscall.NewCallback(func(this, format, medium, owned uintptr) uintptr {
+		wincb.New(func(this, format, medium, owned uintptr) uintptr {
 			d := dragObjects[this]
 			f, m := *(*formatEtc)(native(format)), *(*stgMedium)(native(medium))
 			if !validDataFormat(f) || m.Tymed != tymedHGlobal {
@@ -184,7 +185,7 @@ func initDataSource() {
 			}
 			return sOK
 		}),
-		syscall.NewCallback(func(this, direction, out uintptr) uintptr {
+		wincb.New(func(this, direction, out uintptr) uintptr {
 			*(*uintptr)(native(out)) = 0
 			if direction != 1 {
 				return eNotImpl
@@ -200,13 +201,13 @@ func initDataSource() {
 			*(*uintptr)(native(out)) = newFormatEnum(formats, 0)
 			return sOK
 		}),
-		syscall.NewCallback(func(this, format, flags, sink, out uintptr) uintptr { return 0x80040003 }), // OLE_E_ADVISENOTSUPPORTED
+		wincb.New(func(this, format, flags, sink, out uintptr) uintptr { return 0x80040003 }), // OLE_E_ADVISENOTSUPPORTED
 		notImpl, notImpl,
 	}
 	dragSourceVtbl = [5]uintptr{
-		syscall.NewCallback(func(this, riid, out uintptr) uintptr { return query(this, riid, out, iidIDropSource) }),
-		syscall.NewCallback(func(this uintptr) uintptr { s := dragSources[this]; s.refs++; return uintptr(s.refs) }),
-		syscall.NewCallback(func(this uintptr) uintptr {
+		wincb.New(func(this, riid, out uintptr) uintptr { return query(this, riid, out, iidIDropSource) }),
+		wincb.New(func(this uintptr) uintptr { s := dragSources[this]; s.refs++; return uintptr(s.refs) }),
+		wincb.New(func(this uintptr) uintptr {
 			s := dragSources[this]
 			s.refs--
 			if s.refs == 0 {
@@ -214,7 +215,7 @@ func initDataSource() {
 			}
 			return uintptr(s.refs)
 		}),
-		syscall.NewCallback(func(this, escape, keys uintptr) uintptr {
+		wincb.New(func(this, escape, keys uintptr) uintptr {
 			if escape != 0 || dragSources[this].canceled {
 				dragSources[this].escaped = true
 				return dragDropCancel
@@ -224,12 +225,12 @@ func initDataSource() {
 			}
 			return sOK
 		}),
-		syscall.NewCallback(func(this, effect uintptr) uintptr { return dragDefaultCursors }),
+		wincb.New(func(this, effect uintptr) uintptr { return dragDefaultCursors }),
 	}
 	formatEnumVtbl = [7]uintptr{
-		syscall.NewCallback(func(this, riid, out uintptr) uintptr { return query(this, riid, out, iidIEnumFormatEtc) }),
-		syscall.NewCallback(func(this uintptr) uintptr { e := formatEnums[this]; e.refs++; return uintptr(e.refs) }),
-		syscall.NewCallback(func(this uintptr) uintptr {
+		wincb.New(func(this, riid, out uintptr) uintptr { return query(this, riid, out, iidIEnumFormatEtc) }),
+		wincb.New(func(this uintptr) uintptr { e := formatEnums[this]; e.refs++; return uintptr(e.refs) }),
+		wincb.New(func(this uintptr) uintptr {
 			e := formatEnums[this]
 			e.refs--
 			if e.refs == 0 {
@@ -237,7 +238,7 @@ func initDataSource() {
 			}
 			return uintptr(e.refs)
 		}),
-		syscall.NewCallback(func(this, count, out, fetched uintptr) uintptr {
+		wincb.New(func(this, count, out, fetched uintptr) uintptr {
 			e := formatEnums[this]
 			n := min(int(count), len(e.formats)-e.n)
 			copy(unsafe.Slice((*formatEtc)(native(out)), n), e.formats[e.n:e.n+n])
@@ -250,7 +251,7 @@ func initDataSource() {
 			}
 			return sOK
 		}),
-		syscall.NewCallback(func(this, count uintptr) uintptr {
+		wincb.New(func(this, count uintptr) uintptr {
 			e := formatEnums[this]
 			n := min(int(count), len(e.formats)-e.n)
 			e.n += n
@@ -259,8 +260,8 @@ func initDataSource() {
 			}
 			return sOK
 		}),
-		syscall.NewCallback(func(this uintptr) uintptr { formatEnums[this].n = 0; return sOK }),
-		syscall.NewCallback(func(this, out uintptr) uintptr {
+		wincb.New(func(this uintptr) uintptr { formatEnums[this].n = 0; return sOK }),
+		wincb.New(func(this, out uintptr) uintptr {
 			e := formatEnums[this]
 			*(*uintptr)(native(out)) = newFormatEnum(e.formats, e.n)
 			return sOK

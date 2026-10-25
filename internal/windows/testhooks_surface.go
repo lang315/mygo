@@ -3,10 +3,10 @@
 package windows
 
 import (
+	"github.com/egoist/mygo/internal/wincb"
 	"math"
 	"runtime"
 	"strconv"
-	"syscall"
 	"time"
 	"unicode/utf16"
 	"unsafe"
@@ -100,15 +100,15 @@ func newTestDataObject(paths []string) uintptr {
 			fe := (*formatEtc)(native(f))
 			return fe.Format == cfHDrop && fe.Tymed&tymedHGlobal != 0
 		}
-		notImpl := syscall.NewCallback(func(this, a, b, c uintptr) uintptr { return eNotImpl })
+		notImpl := wincb.New(func(this, a, b, c uintptr) uintptr { return eNotImpl })
 		testDataVtbl = [12]uintptr{
-			syscall.NewCallback(func(this, riid, out uintptr) uintptr {
+			wincb.New(func(this, riid, out uintptr) uintptr {
 				*(*uintptr)(native(out)) = this
 				data(this).refs++
 				return sOK
 			}),
-			syscall.NewCallback(func(this uintptr) uintptr { d := data(this); d.refs++; return uintptr(d.refs) }),
-			syscall.NewCallback(func(this uintptr) uintptr {
+			wincb.New(func(this uintptr) uintptr { d := data(this); d.refs++; return uintptr(d.refs) }),
+			wincb.New(func(this uintptr) uintptr {
 				d := data(this)
 				if d.refs--; d.refs == 0 {
 					delete(testDataObjects, this)
@@ -116,7 +116,7 @@ func newTestDataObject(paths []string) uintptr {
 				return uintptr(d.refs)
 			}),
 			// GetData: a DROPFILES followed by the paths, as an HDROP.
-			syscall.NewCallback(func(this, format, medium uintptr) uintptr {
+			wincb.New(func(this, format, medium uintptr) uintptr {
 				if !isHDrop(format) {
 					return dvFormatEtc
 				}
@@ -136,7 +136,7 @@ func newTestDataObject(paths []string) uintptr {
 				return sOK
 			}),
 			notImpl,
-			syscall.NewCallback(func(this, format uintptr) uintptr { // QueryGetData
+			wincb.New(func(this, format uintptr) uintptr { // QueryGetData
 				if isHDrop(format) {
 					return sOK
 				}
@@ -387,4 +387,49 @@ func TestSurfacePixel(hwnd uintptr, x, y float64) (r, g, b uint8, ok bool) {
 		return 0, 0, 0, false
 	}
 	return uint8(px), uint8(px >> 8), uint8(px >> 16), true
+}
+
+// TestUIAClientEdits reads the Edit elements of a window as a client of UI
+// Automation does (CUIAutomation: ElementFromHandle, FindAll of the
+// descendants), through UI Automation's core, which is how a screen reader
+// gets the bounding rectangles: left, top, width and height on the screen,
+// in pixels. It must run off the main thread, which answers the core's calls
+// to the provider.
+func TestUIAClientEdits(hwnd uintptr) (rects [][4]int32, ok bool) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	procCoInitializeEx.Call(0, 0) // a multithreaded apartment
+	clsid := GUID{0xff48dba4, 0x60ef, 0x4201, [8]byte{0xaa, 0x87, 0x54, 0x10, 0x3e, 0xef, 0x59, 0x4e}}
+	iid := GUID{0x30cbe57d, 0xd9d0, 0x452a, [8]byte{0xab, 0x13, 0x7a, 0xc5, 0xac, 0x48, 0x25, 0xee}}
+	var auto uintptr
+	if hr, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsid)), 0, clsctxInprocServer, uintptr(unsafe.Pointer(&iid)), uintptr(unsafe.Pointer(&auto))); failed(hr) {
+		return nil, false
+	}
+	defer release(auto)
+	var root, cond, found uintptr
+	if failed(comCall(auto, 6, hwnd, uintptr(unsafe.Pointer(&root)))) { // ElementFromHandle
+		return nil, false
+	}
+	defer release(root)
+	comCall(auto, 21, uintptr(unsafe.Pointer(&cond))) // CreateTrueCondition
+	defer release(cond)
+	if failed(comCall(root, 6, 4, cond, uintptr(unsafe.Pointer(&found)))) { // FindAll(TreeScope_Descendants)
+		return nil, false
+	}
+	defer release(found)
+	var n int32
+	comCall(found, 3, uintptr(unsafe.Pointer(&n))) // get_Length
+	for i := range n {
+		var el uintptr
+		comCall(found, 4, uintptr(i), uintptr(unsafe.Pointer(&el))) // GetElement
+		var typ int32
+		comCall(el, 21, uintptr(unsafe.Pointer(&typ))) // get_CurrentControlType
+		if typ == 50004 {
+			var r [4]int32                               // RECT: left, top, right, bottom
+			comCall(el, 43, uintptr(unsafe.Pointer(&r))) // get_CurrentBoundingRectangle
+			rects = append(rects, [4]int32{r[0], r[1], r[2] - r[0], r[3] - r[1]})
+		}
+		release(el)
+	}
+	return rects, true
 }

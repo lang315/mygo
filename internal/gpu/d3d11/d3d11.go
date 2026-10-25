@@ -14,6 +14,7 @@ package d3d11
 import (
 	"errors"
 	"fmt"
+	"github.com/egoist/mygo/internal/wincb"
 	"image"
 	"math"
 	"os"
@@ -654,7 +655,7 @@ var (
 // it changes size again before.
 func (r *Renderer) armSettle() {
 	if settleProc == 0 {
-		settleProc = syscall.NewCallback(func(hwnd, msg, id, ms uintptr) uintptr {
+		settleProc = wincb.New(func(hwnd, msg, id, ms uintptr) uintptr {
 			procKillTimer.Call(hwnd, id)
 			if settling[hwnd] {
 				delete(settling, hwnd)

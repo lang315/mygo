@@ -4,6 +4,7 @@ package windows
 
 import (
 	"fmt"
+	"github.com/egoist/mygo/internal/wincb"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -98,7 +99,7 @@ var (
 
 func init() {
 	handlerVtbl = [4]uintptr{
-		syscall.NewCallback(func(this, riid, out uintptr) uintptr {
+		wincb.New(func(this, riid, out uintptr) uintptr {
 			iid := *(*GUID)(native(riid))
 			if iid == iidIMarshal || iid == iidIAgileObject || iid == iidINoMarshal {
 				*(*uintptr)(native(out)) = 0
@@ -108,9 +109,9 @@ func init() {
 			handlerRef(this, 1)
 			return sOK
 		}),
-		syscall.NewCallback(func(this uintptr) uintptr { return uintptr(handlerRef(this, 1)) }),
-		syscall.NewCallback(func(this uintptr) uintptr { return uintptr(handlerRef(this, -1)) }),
-		syscall.NewCallback(func(this, a, b uintptr) uintptr {
+		wincb.New(func(this uintptr) uintptr { return uintptr(handlerRef(this, 1)) }),
+		wincb.New(func(this uintptr) uintptr { return uintptr(handlerRef(this, -1)) }),
+		wincb.New(func(this, a, b uintptr) uintptr {
 			handlersMu.Lock()
 			h := handlers[this]
 			handlersMu.Unlock()
