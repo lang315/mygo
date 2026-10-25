@@ -359,17 +359,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				if s.RoundRows {
 					row.Radius(t.Radius)
 				}
-				row.styleFn = func(row *node) {
-					if row.Hovered() {
-						row.bg = t.SurfaceHover
-					}
-				}
+				row.styleFn = tableRowStyle
 				row.flags |= flagClickable
-				row.afterInput(func() {
-					if row.DoubleClicked() {
-						table.st.activate(i)
-					}
-				})
+				row.afterInputNode(tableRowActivate)
 			}
 			if s.RowMenu != nil {
 				row.ContextMenu(func(m *Menu) { s.RowMenu(m, s.frame.menuRows(i)) })
@@ -697,21 +689,86 @@ func copyInput(rt *engine, chosen func() []int, copy func([]int) string) func(In
 	}
 }
 
+// tableRowStyle shows the pointer over a row.
+func tableRowStyle(row *node) {
+	if row.Hovered() {
+		row.bg = row.c.theme.SurfaceHover
+	}
+}
+
+// tableRowActivate activates a row that is double-clicked. The element
+// holding the row has its index, and the list the table is the owner of.
+func tableRowActivate(row *node) {
+	if !row.DoubleClicked() {
+		return
+	}
+	holder := row.parent
+	for n := holder; n != nil; n = n.parent {
+		if f := n.list; f != nil {
+			f.owner.st.activate(holder.rowIndex)
+			return
+		}
+	}
+}
+
 // itemCheckbox builds the checkbox named label of the row or item whose key
 // is k, which checks it in checked and tells owner, the table or grid. It
 // returns the checkbox and whether k is checked. It takes no keyboard focus: a
 // click leaves it on owner, whose keys and Copy keep working, and Space checks.
 func itemCheckbox(c *context, owner *node, checked Selector, k any, label string) (box *node, on bool) {
-	on = checked.has(k)
-	box = checkbox(c, &on, "", false).Label(label)
+	ic := c.rt.itemChecks.next()
+	ic.on = checked.has(k)
+	box = checkbox(c, &ic.on, "", false).Label(label)
 	box.flags &^= flagFocusable
-	owner.afterInput(func() {
-		// on is what the checkbox set through its pointer.
-		if box.Changed() && checked.set(k, on) {
-			owner.st.markEvent(eventChecked)
-		}
-	})
-	return box, on
+	ic.owner, ic.box, ic.checked, ic.k = owner, box, checked, k
+	owner.afterInputCheck(ic)
+	return box, ic.on
+}
+
+// itemCheck is the check box of a row or item, in the frame it is built in:
+// on is what the checkbox sets through its pointer. They live in a slab
+// that frames reuse, rather than being made, with a closure, for each row.
+type itemCheck struct {
+	owner, box *node
+	checked    Selector
+	k          any
+	on         bool
+}
+
+func (ic *itemCheck) run() {
+	if ic.box.Changed() && ic.checked.set(ic.k, ic.on) {
+		ic.owner.st.markEvent(eventChecked)
+	}
+}
+
+func (n *node) afterInputCheck(ic *itemCheck) {
+	n.c.rt.afterInputs = append(n.c.rt.afterInputs, inputAction{node: n, check: ic, building: n.c.rt.building})
+}
+
+// itemCheckSlab hands out itemChecks whose addresses stay put for the
+// frame (the checkboxes point at them), in chunks that the next frame reuses.
+type itemCheckSlab struct {
+	chunks []*[itemCheckChunk]itemCheck
+	n      int
+}
+
+const itemCheckChunk = 64
+
+func (s *itemCheckSlab) next() *itemCheck {
+	i, j := s.n/itemCheckChunk, s.n%itemCheckChunk
+	if i == len(s.chunks) {
+		s.chunks = append(s.chunks, new([itemCheckChunk]itemCheck))
+	}
+	s.n++
+	return &s.chunks[i][j]
+}
+
+// reset forgets the frame's itemChecks and what they hold.
+func (s *itemCheckSlab) reset() {
+	for i := 0; i*itemCheckChunk < s.n; i++ {
+		clear(s.chunks[i][:min(itemCheckChunk, s.n-i*itemCheckChunk)])
+	}
+	s.n = 0
 }
 
 // checkCell builds the checkbox cell of a row or of the header, which

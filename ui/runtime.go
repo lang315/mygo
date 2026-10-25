@@ -91,15 +91,17 @@ type engine struct {
 	inlineRects []text.Rect
 	// byPosition holds the keys whose press stood for its physical key
 	// (keyDownPhysical), until their release does the same.
-	byPosition      map[Key]bool
-	owner           weak.Pointer[engine]
-	owners          *owners // of global IDs among the app's engines (adopt)
-	epoch           uint64
-	parts           []any
-	public          *Context
-	arena           *elementOwner
-	handleChecks    bool
-	afterInputs     []inputAction
+	byPosition   map[Key]bool
+	owner        weak.Pointer[engine]
+	owners       *owners // of global IDs among the app's engines (adopt)
+	epoch        uint64
+	parts        []any
+	public       *Context
+	arena        *elementOwner
+	handleChecks bool
+	afterInputs  []inputAction
+	// itemChecks holds the check boxes of the rows and items of the frame.
+	itemChecks      itemCheckSlab
 	inputs          []valueInput
 	inputAt         int
 	afterInputAt    int
@@ -970,6 +972,7 @@ func (rt *engine) close() {
 	rt.notices = nil
 	clear(rt.afterInputs)
 	rt.afterInputs = nil
+	rt.itemChecks = itemCheckSlab{}
 	clear(rt.inputs)
 	rt.inputs = nil
 	rt.arena.rt = nil

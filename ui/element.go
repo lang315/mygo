@@ -387,9 +387,12 @@ type node struct {
 	// highlighted is set on the option of a select the pointer or the
 	// arrows are on.
 	highlighted bool
-	accValue    string
-	accRange    [3]float64
-	hasRange    bool
+	// checkmark marks the box of a check box, which paints its check or
+	// dash from the state of the row holding it (paintCheckmark).
+	checkmark bool
+	accValue  string
+	accRange  [3]float64
+	hasRange  bool
 	// accFill describes the element to assistive technology further, as
 	// a code editor its text and selection.
 	accFill func(n *platform.AccessNode)

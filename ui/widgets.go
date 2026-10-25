@@ -229,7 +229,7 @@ func checkbox(c *context, checked *bool, label string, mixed bool) *node {
 	}
 	row.Children(func() {
 		box := coreBox(c).Size(t.Space(4), t.Space(4)).Radius(t.Space(1)).Shrink(0)
-		paintCheckbox(c, row, box, state)
+		paintCheckbox(c, box, state)
 		if label != "" {
 			coreText(c, label)
 		}
