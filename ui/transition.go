@@ -711,7 +711,7 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 		p := byID[r.parent]
 		if p == nil || p.leaving != 0 {
 			// Its parent went too.
-			delete(rt.trans, id)
+			rt.dropTrans(id, r)
 			continue
 		}
 		if r.ghost == nil {
@@ -754,7 +754,7 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 		id, r, p := x.id, x.r, x.p
 		s := r.sample(r.gone.moved(r.t.Exit, r.collapse, still), now)
 		if r.moving == 0 {
-			delete(rt.trans, id)
+			rt.dropTrans(id, r)
 			continue
 		}
 		g := r.ghost
@@ -777,6 +777,52 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 	}
 	clear(going)
 	rt.going = going[:0]
+	if len(rt.ghostThemes) > rt.ghostKept {
+		// A copy came, or went: the themes of those showing are kept.
+		rt.compactGhostThemes()
+	}
+}
+
+// dropTrans forgets the transition of id, and the copy it was showing, whose
+// themes are then forgotten too.
+func (rt *engine) dropTrans(id uint64, r *transition) {
+	delete(rt.trans, id)
+	if r.ghost != nil {
+		rt.ghostKept = -1
+	}
+}
+
+// compactGhostThemes keeps the themes that the copies showing refer to, and
+// no more: an app that makes a theme for each frame (SetTheme(copy)) would
+// make them grow for as long as copies keep coming.
+func (rt *engine) compactGhostThemes() {
+	old := rt.ghostThemes
+	var kept []*Theme
+	moved := make([]uint16, len(old))
+	var walk func(e *node)
+	walk = func(e *node) {
+		if at := int(e.themeAt); at&themeGhost != 0 {
+			i := at&^themeGhost - 1
+			if i < len(old) {
+				if moved[i] == 0 {
+					kept = append(kept, old[i])
+					moved[i] = themeGhost | uint16(len(kept))
+				}
+				e.themeAt = moved[i]
+			}
+		}
+		for c := e.first; c != nil; c = c.next {
+			walk(c)
+		}
+	}
+	for _, r := range rt.trans {
+		if r.ghost != nil {
+			walk(r.ghost)
+		}
+	}
+	clear(old)
+	rt.ghostThemes = append(old[:0], kept...)
+	rt.ghostKept = len(rt.ghostThemes)
 }
 
 // exit is a transition whose element's copy goes under p.
@@ -836,6 +882,7 @@ func ghostOf(e *node) *node {
 	g.activeDescendant, g.nameFrom, g.field, g.form = nil, nil, nil, nil
 	g.followX, g.colFit, g.gridFit = nil, nil, nil
 	g.inputFn, g.ghosts = nil, false
+	g.themeAt = e.c.rt.pinTheme(e)
 	g.poseSet = false // it keeps the pose it had
 	g.tl, g.nmeasure, g.leafOK, g.intrOK, g.lay = nil, 0, false, 0, 0
 	g.flags = g.flags&^(flagModal|flagPage|flagFocusTarget) | flagInert

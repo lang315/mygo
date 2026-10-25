@@ -91,15 +91,26 @@ type engine struct {
 	inlineRects []text.Rect
 	// byPosition holds the keys whose press stood for its physical key
 	// (keyDownPhysical), until their release does the same.
-	byPosition      map[Key]bool
-	owner           weak.Pointer[engine]
-	owners          *owners // of global IDs among the app's engines (adopt)
-	epoch           uint64
-	parts           []any
-	public          *Context
-	arena           *elementOwner
-	handleChecks    bool
-	afterInputs     []inputAction
+	byPosition   map[Key]bool
+	owner        weak.Pointer[engine]
+	owners       *owners // of global IDs among the app's engines (adopt)
+	epoch        uint64
+	parts        []any
+	public       *Context
+	arena        *elementOwner
+	handleChecks bool
+	afterInputs  []inputAction
+	// itemChecks holds the check boxes of the rows and items of the frame.
+	itemChecks itemCheckSlab
+	// themes are those that elements built with a static paint function
+	// were built with in the frame (node.builtWith).
+	themes []*Theme
+
+	// prevThemes are those of the frame before, which the elements kept for
+	// exit transitions refer to, and ghostThemes those that copies of them keep.
+	prevThemes, ghostThemes []*Theme
+	ghostKept               int // how many ghostThemes the last compaction kept
+
 	inputs          []valueInput
 	inputAt         int
 	afterInputAt    int
@@ -525,6 +536,8 @@ func (rt *engine) runFrame() {
 		rt.c.chunks, rt.c.spare = rt.c.spare, rt.c.chunks
 		rt.c.dirty, rt.c.spareDirty = rt.c.spareDirty, rt.c.dirty
 		rt.c.used = rt.c.dirty
+		clear(rt.prevThemes)
+		rt.themes, rt.prevThemes = rt.prevThemes[:0], rt.themes
 	}
 
 	// An event handled while building (a click, an edit) may change what
@@ -970,6 +983,8 @@ func (rt *engine) close() {
 	rt.notices = nil
 	clear(rt.afterInputs)
 	rt.afterInputs = nil
+	rt.itemChecks = itemCheckSlab{}
+	rt.themes, rt.prevThemes, rt.ghostThemes = nil, nil, nil
 	clear(rt.inputs)
 	rt.inputs = nil
 	rt.arena.rt = nil

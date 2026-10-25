@@ -130,7 +130,14 @@ func (rt *engine) finalizeInputs(all bool) {
 	}
 	act := func(i int) {
 		if a := rt.afterInputs[i]; a.node != nil && !a.node.disabled() {
-			a.fn()
+			switch {
+			case a.fn != nil:
+				a.fn()
+			case a.check != nil:
+				a.check.run()
+			default:
+				a.fnNode(a.node)
+			}
 		}
 	}
 	rt.waitingActions = slices.DeleteFunc(rt.waitingActions, func(i int) bool {
@@ -405,14 +412,24 @@ func (s *state) markTyping() { s.typing = true; s.notice() }
 
 // Composite controls schedule small input actions after their children.
 // Queries apply them once, or they run after construction if not queried.
+// inputAction is what runs after the input of a frame: fn, or fnNode on node,
+// or run of an itemCheck. The last two take no closure made for each element.
 type inputAction struct {
 	node     *node
 	fn       func()
+	fnNode   func(*node)
+	check    *itemCheck
 	building int32
 }
 
 func (n *node) afterInput(fn func()) {
 	n.c.rt.afterInputs = append(n.c.rt.afterInputs, inputAction{node: n, fn: fn, building: n.c.rt.building})
+}
+
+// afterInputNode is afterInput for a function that takes the element, so that
+// a static one allocates nothing.
+func (n *node) afterInputNode(fn func(*node)) {
+	n.c.rt.afterInputs = append(n.c.rt.afterInputs, inputAction{node: n, fnNode: fn, building: n.c.rt.building})
 }
 
 // SetChanged reports the element's value as changed in this build pass,

@@ -265,6 +265,7 @@ type node struct {
 	c          *context
 	id         uint64
 	flags      uint32
+	themeAt    uint16 // the theme a static paint function paints with (builtWith)
 	parent     *node
 	first      *node
 	last       *node
@@ -387,9 +388,13 @@ type node struct {
 	// highlighted is set on the option of a select the pointer or the
 	// arrows are on.
 	highlighted bool
-	accValue    string
-	accRange    [3]float64
-	hasRange    bool
+	// checkmark is the state of a check box (1 off, 2 on, 3 mixed) when its
+	// box was built, which the box paints (paintCheckmark), and 0 for any
+	// other element.
+	checkmark int8
+	accValue  string
+	accRange  [3]float64
+	hasRange  bool
 	// accFill describes the element to assistive technology further, as
 	// a code editor its text and selection.
 	accFill func(n *platform.AccessNode)

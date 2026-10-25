@@ -66,35 +66,47 @@ func coreCheckboxGroup(c *context, label string, fn func()) *node {
 			state = 3
 		}
 		head.checked = state
-		paintCheckbox(c, head, box, state)
+		paintCheckbox(c, box, state)
 	})
 	return g
 }
 
 // paintCheckbox styles the box of a check box, off (1), on (2) or mixed
-// (3), as Checkbox does.
-func paintCheckbox(c *context, row, box *node, state int8) {
+// (3), as Checkbox does. The box is a child of the row that is the check
+// box. It keeps the state and the theme it was built with, which
+// paintCheckmark and checkboxStyle paint with, so that no closure is made
+// for each box.
+func paintCheckbox(c *context, box *node, state int8) {
 	t := c.theme
 	if state > 1 {
 		box.Background(t.Accent)
 	} else {
 		box.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
 	}
-	box.DrawOver(func(p *Painter, r Rect) {
-		switch state {
-		case 2:
-			p.StrokePath(checkPath(r), t.Space(0.5), t.AccentText)
-		case 3:
-			p.Fill(Rect{r.X + r.W*0.25, r.Y + r.H/2 - 1, r.W * 0.5, 2}, t.AccentText, 1)
-		}
-		if row.FocusVisible() {
-			p.FocusRing(r, box.radius)
-		}
-	})
-	box.styleFn = func(box *node) {
-		if state == 1 && row.Hovered() {
-			box.borderC = t.Accent
-		}
+	box.checkmark = state
+	box.builtWith(c.theme)
+	box.styleFn = checkboxStyle
+}
+
+// paintCheckmark paints the check or the dash of box, a check box's, and the
+// focus ring of the row holding it.
+func paintCheckmark(p *Painter, box *node, r Rect) {
+	row, t := box.parent, box.builtTheme()
+	switch box.checkmark {
+	case 2:
+		p.StrokePath(checkPath(r), t.Space(0.5), t.AccentText)
+	case 3:
+		p.Fill(Rect{r.X + r.W*0.25, r.Y + r.H/2 - 1, r.W * 0.5, 2}, t.AccentText, 1)
+	}
+	if row.FocusVisible() {
+		p.FocusRing(r, box.radius)
+	}
+}
+
+// checkboxStyle shows the pointer over an unchecked check box on its box.
+func checkboxStyle(box *node) {
+	if row := box.parent; box.checkmark == 1 && row.Hovered() {
+		box.borderC = box.builtTheme().Accent
 	}
 }
 
@@ -330,4 +342,62 @@ func coreFindBar(c *context, open *bool, query *string, matches int, current *in
 		})
 	})
 	return bar
+}
+
+// themeGhost marks a themeAt that indexes the engine's ghostThemes, for a
+// copy of an element going with its exit transition.
+const themeGhost = 1 << 15
+
+// builtWith notes the theme e is built with, for a static function that
+// paints it: SetTheme applies to what is created after it, not to the
+// elements before it. themeAt is 1 more than the index, 0 for none.
+func (e *node) builtWith(t *Theme) {
+	rt := e.c.rt
+	for i := len(rt.themes) - 1; i >= 0; i-- {
+		if rt.themes[i] == t {
+			e.themeAt = uint16(i + 1)
+			return
+		}
+	}
+	if len(rt.themes) >= themeGhost-1 {
+		return // so many themes in a frame: it paints with the theme of painting
+	}
+	rt.themes = append(rt.themes, t)
+	e.themeAt = uint16(len(rt.themes))
+}
+
+// builtTheme returns the theme e was built with (builtWith).
+func (e *node) builtTheme() *Theme {
+	rt, at := e.c.rt, int(e.themeAt)
+	switch {
+	case at == 0:
+	case at&themeGhost != 0:
+		if i := at&^themeGhost - 1; i < len(rt.ghostThemes) {
+			return rt.ghostThemes[i]
+		}
+	case at <= len(rt.themes):
+		return rt.themes[at-1]
+	}
+	return e.c.theme
+}
+
+// pinTheme returns the themeAt that a copy of e, an element of the frame
+// before, keeps for as long as it shows: the frame before's themes are
+// forgotten by the next frame's.
+func (rt *engine) pinTheme(e *node) uint16 {
+	at := int(e.themeAt)
+	if at == 0 || at&themeGhost != 0 || at > len(rt.prevThemes) {
+		return 0
+	}
+	t := rt.prevThemes[at-1]
+	for i, g := range rt.ghostThemes {
+		if g == t {
+			return themeGhost | uint16(i+1)
+		}
+	}
+	if len(rt.ghostThemes) >= themeGhost-1 {
+		return 0
+	}
+	rt.ghostThemes = append(rt.ghostThemes, t)
+	return themeGhost | uint16(len(rt.ghostThemes))
 }
