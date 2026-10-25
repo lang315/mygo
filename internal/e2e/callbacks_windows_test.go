@@ -11,7 +11,11 @@ import (
 // order, each at the address stride bytes after the last; the runtime does
 // not say how many it gave. callbackCount makes one callback to see where
 // the table is, so the count is that of the callbacks made since it first
-// ran, less its own.
+// ran, less its own. The runtime keeps one entry for each function value
+// (compileCallback's cache): a function that captures nothing is one static
+// value, whose callback is the same every time and costs a slot once, so the
+// probes capture a variable of their own, as the functions that the code
+// under test makes for each window would, which is what leaks.
 var winMeter struct {
 	once         sync.Once
 	mu           sync.Mutex
@@ -19,7 +23,10 @@ var winMeter struct {
 	probes       int
 }
 
-func probeCallback() uintptr { return syscall.NewCallback(func(uintptr) uintptr { return 0 }) }
+func probeCallback() uintptr {
+	x := new(int)
+	return syscall.NewCallback(func(uintptr) uintptr { return uintptr(*x) })
+}
 
 func callbackCount() (n int, exact bool) {
 	m := &winMeter
@@ -35,4 +42,4 @@ func callbackCount() (n int, exact bool) {
 }
 
 // makeCallback makes a callback, as the code under test does.
-func makeCallback() { syscall.NewCallback(func(uintptr) uintptr { return 0 }) }
+func makeCallback() { probeCallback() }
