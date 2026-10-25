@@ -213,6 +213,22 @@ cannot show: those items are not marked):
   (`ui/layoutcache.go`: a List builds its rows while it lays out and a Table
   fits its columns, so they and what is inside them are never "the same").
   Reusing the layout of the rows a List builds is the lead for the 44 µs.
+
+  *Proposal, not done:* once `layoutList` has built a row, run `sameLayout`
+  on the row's subtree (its elements keep their state by the row's key, so
+  they can be compared with the frame before) and let `layoutBox` reuse a
+  box laid out at the same size, though the List itself stays volatile.
+  *Measured:* an idle frame of the table lays out again 183 of 195 elements
+  (12 reused); a plain tree of 62 elements, 0 (62 reused), by the counters
+  `engine.laySeq` and `engine.computed`. *Gain, estimated:* the layout of
+  44 µs to about 10 µs, a frame of 105 to about 70 µs, and a scroll by a few
+  rows too, as most rows stay. *Risks:* the correctness of the layout cache
+  (`TestLayoutCacheMatches` has no List or Table case), and a row's height
+  that follows the columns a Table fits; a wrong reuse shows as a row drawn
+  at a stale size, which is hard to see. *Why not now:* a frame of 105 µs is
+  0.6% of a 16 ms budget (about 2.5% on a Windows machine 3–4 times slower).
+  *Do it when* a measurement on a real machine shows the table's frame as the
+  bottleneck.
 - Stop allocating closures every frame in the widget layer. *In part:*
   #169 and #179 took them from the table's rows; `BenchmarkWidgetFrame`
   still makes 0.67 allocation a widget.
