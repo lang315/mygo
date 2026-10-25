@@ -22,7 +22,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | Label | done | `Label` (`&` mnemonics with `SetUseMnemonic(true)`: [Mnemonics](widget/mnemonics.md)) |
 | LinkLabel | done | `LinkLabel` |
 | ListBox | done | [ListBox](widget/listbox.md) |
-| ListView | **pending** | [#132](https://github.com/lang315/mygo/pull/132), in review |
+| ListView | done | [ListView](widget/listview.md) (item groups, `ListViewGroup`, are open: below) |
 | MaskedTextBox | done | [MaskedTextBox](widget/maskedtextbox.md) |
 | MonthCalendar | done | [DateTimePicker](widget/date-time-picker.md) |
 | NumericUpDown | done | `NumericUpDown` |
@@ -87,8 +87,9 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 
 ## Open rows
 
-The Phase 2 exit row left is ListView ([#132](https://github.com/lang315/mygo/pull/132),
-in review). Everything else is done, or dropped with the reason above.
+Every Phase 2 row is done, or dropped with the reason above. What is left of
+ListView is its item groups (`ListViewGroup`): the icon views need
+`GridState.Header` in `ui`, which is there, and the widget takes it next.
 
 Every row marked done has a page or a section of [widget.md](widget.md), unit
 tests in `ui/widget`, and an entry in the [widget tour](../../examples/widget-tour)
