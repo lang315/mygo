@@ -176,7 +176,7 @@ func TestMain(m *testing.M) {
 			}
 			warmUp()
 			grantForeground()
-			code = m.Run()
+			code = checkCallbackBudget(m.Run())
 			mygo.App.Quit()
 		}()
 	})
