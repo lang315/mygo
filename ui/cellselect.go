@@ -218,7 +218,7 @@ func (f *listFrame) cellInBlockAt(x, y float32) bool {
 }
 
 // cellKeys moves Cells.Cursor with Left and Right, extending the columns
-// with Shift, as the screen shows them right to left too; without Shift
+// with Shift or Cmd+Shift, as the screen shows them right to left too; without Shift
 // they leave the cursor's cell alone. collapse leaves one column, as the
 // keys moving the rows without Shift do, and all chooses every column, as
 // Cmd+A does. In an OutlineTable, Left and Right stay the outline's, which
@@ -226,16 +226,23 @@ func (f *listFrame) cellInBlockAt(x, y float32) bool {
 func (f *listFrame) cellKeys(collapse, all bool) {
 	s, o := f.s, f.owner
 	d, extend := 0, false
-	switch {
-	case f.tree:
-	case o.Shortcut(0, KeyLeft):
-		d = -1
-	case o.Shortcut(0, KeyRight):
-		d = 1
-	case o.Shortcut(Shift, KeyLeft):
-		d, extend = -1, true
-	case o.Shortcut(Shift, KeyRight):
-		d, extend = 1, true
+	if !f.tree {
+		// Every key is asked for in every frame, which keeps it. Cmd+Shift
+		// extends as Shift does: the cells are one block of columns, with no
+		// other columns to keep.
+		left, right := o.Shortcut(0, KeyLeft), o.Shortcut(0, KeyRight)
+		shiftLeft, shiftRight := o.Shortcut(Shift, KeyLeft), o.Shortcut(Shift, KeyRight)
+		bothLeft, bothRight := o.Shortcut(Cmd|Shift, KeyLeft), o.Shortcut(Cmd|Shift, KeyRight)
+		switch {
+		case left:
+			d = -1
+		case right:
+			d = 1
+		case shiftLeft || bothLeft:
+			d, extend = -1, true
+		case shiftRight || bothRight:
+			d, extend = 1, true
+		}
 	}
 	if o.rtl() {
 		d = -d
