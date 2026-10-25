@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/egoist/mygo/ui"
@@ -16,9 +17,10 @@ import (
 // UpdateItem's) run under the package's lock: they call no widget method.
 type ListBoxWidget[T any, K comparable] struct {
 	common[ListBoxWidget[T, K]]
-	key   func(*T) K
-	text  func(*T) string
-	image func(*T) *ui.Bitmap
+	key       func(*T) K
+	text      func(*T) string
+	image     func(*T) *ui.Bitmap
+	imageSize float32 // the side the image is drawn at, 16 unless SetImageList
 
 	// items are never moved or removed in place: a setter that does makes
 	// a new slice, so that frame, the items of the frame ui shows, stays
@@ -37,6 +39,10 @@ type ListBoxWidget[T any, K comparable] struct {
 	anchor    K
 	hasAnchor bool
 	fixed     bool
+
+	// reveal is an item to scroll into view at the next build (EnsureVisible).
+	reveal    K
+	hasReveal bool
 
 	onSelect   func([]K)
 	onCheck    func(K, bool)
@@ -79,7 +85,15 @@ func (l *ListBoxWidget[T, K]) Multi() *ListBoxWidget[T, K] {
 // SetImage shows an image before the text of each item, 16 DIPs square; nil,
 // or a nil image, for none. fn runs under the package's lock.
 func (l *ListBoxWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListBoxWidget[T, K] {
-	l.change(func() { l.image = fn })
+	l.change(func() { l.image, l.imageSize = fn, 0 })
+	return l
+}
+
+// SetImageList shows before the text of each item the image of the list under
+// key(item), drawn at the list's Size, as WinForms' ImageList.ImageSize says; no
+// image for a key the list lacks. key runs under the package's lock.
+func (l *ListBoxWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *ListBoxWidget[T, K] {
+	l.change(func() { l.image, l.imageSize = ImagesBy(il, key), float32(il.Size()) })
 	return l
 }
 
@@ -267,6 +281,14 @@ func (l *ListBoxWidget[T, K]) SetSelected(ks ...K) *ListBoxWidget[T, K] {
 	return l
 }
 
+// EnsureVisible scrolls the list as little as shows the item of key k whole,
+// as WinForms' EnsureVisible does, at the next frame: not at all if it is in
+// view. It chooses nothing. A key that is not an item is ignored.
+func (l *ListBoxWidget[T, K]) EnsureVisible(k K) *ListBoxWidget[T, K] {
+	l.change(func() { l.reveal, l.hasReveal = k, true })
+	return l
+}
+
 // ClearSelection chooses no item, firing no event.
 func (l *ListBoxWidget[T, K]) ClearSelection() *ListBoxWidget[T, K] {
 	l.change(func() {
@@ -446,6 +468,14 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 		l.checked.bind()
 	}
 	e := ui.List(c, s, len(l.frame), func(i int) { l.row(c, i) }).Grow(1)
+	if l.hasReveal && !c.Measuring() { // the request is for the real window
+		// Made once: ui keeps the request until the row is measured and shows,
+		// however far it is, and a row in view moves nothing.
+		l.hasReveal = false
+		if i, ok := l.index[l.reveal]; ok {
+			s.ScrollIntoView(i)
+		}
+	}
 	if l.checks {
 		e.OnShortcut(0, ui.KeySpace, l.toggleChecks)
 	}
@@ -538,9 +568,12 @@ func (l *ListBoxWidget[T, K]) row(c *ui.Context, i int) {
 		}
 		if l.image != nil {
 			if bmp := l.image(it); bmp != nil {
-				ui.Image(c, bmp).Size(16, 16)
+				side := cmp.Or(l.imageSize, 16)
+				ui.Image(c, bmp).Size(side, side)
 			}
 		}
 		ui.Text(c, text).SingleLine()
 	})
 }
+
+func (l *ListBoxWidget[T, K]) fillsAcross() bool { return true }

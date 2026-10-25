@@ -67,6 +67,9 @@ func Editor(c *ui.Context, doc *Document, options ...EditorOptions) ui.Element {
 	t := c.Theme()
 	e := build(c, doc, options, true)
 	e.Radius(t.Radius).Background(t.Surface).Border(1, t.Border).MinHeight(t.Space(30))
+	// The editor draws its text itself, so it has no natural width: this is
+	// the width of a text box, which gives way to a container narrower.
+	e.Children(func() { ui.Box(c).Width(t.Space(50)).Height(0) })
 	if e.Focused() {
 		e.Border(1, t.Accent)
 	}

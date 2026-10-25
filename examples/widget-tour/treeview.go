@@ -14,6 +14,10 @@ type entry struct {
 	dir        bool
 }
 
+// folderLoad is the wait for a folder's children: a disk, or a server. A test
+// gives its own, to hold the Loading row for as long as it checks it.
+var folderLoad = func() { time.Sleep(400 * time.Millisecond) }
+
 // treeView shows a TreeView of folders whose children load, a moment late,
 // when the user opens them; its check boxes count in the label below it.
 func treeView() widget.Control {
@@ -30,7 +34,7 @@ func treeView() widget.Control {
 	}
 	tree.OnExpand(func(path string) {
 		go func() {
-			time.Sleep(400 * time.Millisecond) // a disk, or a server
+			folderLoad()
 			kids := []entry{{path + "/archive", "Archive", true}, {path + "/notes.txt", "notes.txt", false}, {path + "/todo.txt", "todo.txt", false}}
 			if strings.Count(path, "/") > 2 {
 				kids = kids[1:] // no deeper folders

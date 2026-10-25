@@ -20,6 +20,7 @@ func TestFamilies(t *testing.T) {
 		{"-mt-2", one(base, Decl{Kind: Margin, Sides: 0b0001, Value: -2})},
 		{"my-96", one(base, Decl{Kind: Margin, Sides: 0b0101, Value: 96})},
 		{"w-4", one(base, Decl{Kind: Width, Value: 16})},
+		{"max-w-none", one(base, Decl{Kind: MaxWidth, Value: noMaxWidth})},
 		{"max-h-px", one(base, Decl{Kind: MaxHeight, Value: 1})},
 		{"rounded", one(base, Decl{Kind: Radius, Sides: 0b1111, Value: 1})},
 		{"rounded-lg", one(base, Decl{Kind: Radius, Sides: 0b1111, Value: 2})},

@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/egoist/mygo/ui"
@@ -60,7 +61,10 @@ func (f *GroupBoxWidget) build(c *ui.Context) ui.Element {
 			ui.Text(c, f.title).Bold()
 		}
 		if f.child != nil {
-			render(c, f.child)
+			e := render(c, f.child)
+			if fillsAcross(f.child) {
+				e.Grow(1) // what scrolls takes the room the frame has
+			}
 		}
 	})
 }
@@ -414,4 +418,27 @@ func (f *FlowPanelWidget) build(c *ui.Context) ui.Element {
 			render(c, w)
 		}
 	})
+}
+
+func (n *TabControlWidget) fillsAcross() bool { return true }
+
+func (f *GroupBoxWidget) fillsAcross() bool    { return f.child != nil && fillsAcross(f.child) }
+func (s *ScrollPanelWidget) fillsAcross() bool { return true }
+
+func (f *GroupBoxWidget) children() []Control    { return []Control{f.titleW, f.child} }
+func (s *ScrollPanelWidget) children() []Control { return []Control{s.child} }
+func (n *TabControlWidget) children() []Control  { return n.pages }
+func (s *SidebarWidget) children() []Control     { return s.pages }
+func (k *CardWidget) children() []Control        { return []Control{k.title, k.body} }
+func (f *FlowPanelWidget) children() []Control   { return f.items }
+
+// children of a grid, row by row.
+func (g *GridWidget) children() []Control {
+	cells := slices.Clone(g.cells)
+	slices.SortStableFunc(cells, func(a, b gridCell) int { return cmp.Or(cmp.Compare(a.row, b.row), cmp.Compare(a.col, b.col)) })
+	cs := make([]Control, len(cells))
+	for i, c := range cells {
+		cs[i] = c.w
+	}
+	return cs
 }

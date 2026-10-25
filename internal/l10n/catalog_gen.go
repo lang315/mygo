@@ -2120,6 +2120,216 @@ func (msgs Messages) UntitledNumbered(n int) string {
 	return Catalog.Format(msgs.locale, "untitledNumbered", map[string]any{"n": n})
 }
 
+// FontDialogTitle says "Font"
+// in the language the app shows.
+//
+// The title of the font dialog (widget.FontDialog).
+func FontDialogTitle() string { return In(i18n.Locale()).FontDialogTitle() }
+
+// FontDialogTitle says "Font"
+// in the language of msgs.
+//
+// The title of the font dialog (widget.FontDialog).
+func (msgs Messages) FontDialogTitle() string {
+	return Catalog.Format(msgs.locale, "fontDialogTitle", nil)
+}
+
+// FontFamily says "Font"
+// in the language the app shows.
+//
+// The label of the list of font families in the font dialog.
+func FontFamily() string { return In(i18n.Locale()).FontFamily() }
+
+// FontFamily says "Font"
+// in the language of msgs.
+//
+// The label of the list of font families in the font dialog.
+func (msgs Messages) FontFamily() string {
+	return Catalog.Format(msgs.locale, "fontFamily", nil)
+}
+
+// FontStyle says "Style"
+// in the language the app shows.
+//
+// The label of the list of font styles in the font dialog.
+func FontStyle() string { return In(i18n.Locale()).FontStyle() }
+
+// FontStyle says "Style"
+// in the language of msgs.
+//
+// The label of the list of font styles in the font dialog.
+func (msgs Messages) FontStyle() string {
+	return Catalog.Format(msgs.locale, "fontStyle", nil)
+}
+
+// FontSize says "Size"
+// in the language the app shows.
+//
+// The label of the font size in the font dialog.
+func FontSize() string { return In(i18n.Locale()).FontSize() }
+
+// FontSize says "Size"
+// in the language of msgs.
+//
+// The label of the font size in the font dialog.
+func (msgs Messages) FontSize() string {
+	return Catalog.Format(msgs.locale, "fontSize", nil)
+}
+
+// FontRegular says "Regular"
+// in the language the app shows.
+//
+// A font style of the font dialog: neither bold nor italic.
+func FontRegular() string { return In(i18n.Locale()).FontRegular() }
+
+// FontRegular says "Regular"
+// in the language of msgs.
+//
+// A font style of the font dialog: neither bold nor italic.
+func (msgs Messages) FontRegular() string {
+	return Catalog.Format(msgs.locale, "fontRegular", nil)
+}
+
+// FontBold says "Bold"
+// in the language the app shows.
+//
+// A font style of the font dialog.
+func FontBold() string { return In(i18n.Locale()).FontBold() }
+
+// FontBold says "Bold"
+// in the language of msgs.
+//
+// A font style of the font dialog.
+func (msgs Messages) FontBold() string {
+	return Catalog.Format(msgs.locale, "fontBold", nil)
+}
+
+// FontItalic says "Italic"
+// in the language the app shows.
+//
+// A font style of the font dialog.
+func FontItalic() string { return In(i18n.Locale()).FontItalic() }
+
+// FontItalic says "Italic"
+// in the language of msgs.
+//
+// A font style of the font dialog.
+func (msgs Messages) FontItalic() string {
+	return Catalog.Format(msgs.locale, "fontItalic", nil)
+}
+
+// FontBoldItalic says "Bold Italic"
+// in the language the app shows.
+//
+// A font style of the font dialog: bold and italic.
+func FontBoldItalic() string { return In(i18n.Locale()).FontBoldItalic() }
+
+// FontBoldItalic says "Bold Italic"
+// in the language of msgs.
+//
+// A font style of the font dialog: bold and italic.
+func (msgs Messages) FontBoldItalic() string {
+	return Catalog.Format(msgs.locale, "fontBoldItalic", nil)
+}
+
+// TableRows says "Rows: {n, number, ::group-off}"
+// in the language the app shows.
+//
+// The count of rows under a table (DataGridView's bottom panel).
+func TableRows(n int) string { return In(i18n.Locale()).TableRows(n) }
+
+// TableRows says "Rows: {n, number, ::group-off}"
+// in the language of msgs.
+//
+// The count of rows under a table (DataGridView's bottom panel).
+func (msgs Messages) TableRows(n int) string {
+	return Catalog.Format(msgs.locale, "tableRows", map[string]any{"n": n})
+}
+
+// TableSelected says "Selected: {n, number, ::group-off}"
+// in the language the app shows.
+//
+// The count of selected rows under a table.
+func TableSelected(n int) string { return In(i18n.Locale()).TableSelected(n) }
+
+// TableSelected says "Selected: {n, number, ::group-off}"
+// in the language of msgs.
+//
+// The count of selected rows under a table.
+func (msgs Messages) TableSelected(n int) string {
+	return Catalog.Format(msgs.locale, "tableSelected", map[string]any{"n": n})
+}
+
+// TableChecked says "Checked: {n, number, ::group-off}"
+// in the language the app shows.
+//
+// The count of checked rows under a table.
+func TableChecked(n int) string { return In(i18n.Locale()).TableChecked(n) }
+
+// TableChecked says "Checked: {n, number, ::group-off}"
+// in the language of msgs.
+//
+// The count of checked rows under a table.
+func (msgs Messages) TableChecked(n int) string {
+	return Catalog.Format(msgs.locale, "tableChecked", map[string]any{"n": n})
+}
+
+// TableSearch says "Search"
+// in the language the app shows.
+//
+// The button of a table's search panel.
+func TableSearch() string { return In(i18n.Locale()).TableSearch() }
+
+// TableSearch says "Search"
+// in the language of msgs.
+//
+// The button of a table's search panel.
+func (msgs Messages) TableSearch() string {
+	return Catalog.Format(msgs.locale, "tableSearch", nil)
+}
+
+// TableKeyword says "Keyword"
+// in the language the app shows.
+//
+// The placeholder of a table's search panel.
+func TableKeyword() string { return In(i18n.Locale()).TableKeyword() }
+
+// TableKeyword says "Keyword"
+// in the language of msgs.
+//
+// The placeholder of a table's search panel.
+func (msgs Messages) TableKeyword() string {
+	return Catalog.Format(msgs.locale, "tableKeyword", nil)
+}
+
+// Loading says "Loading…"
+// in the language the app shows.
+//
+// The row of a tree node whose children load.
+func Loading() string { return In(i18n.Locale()).Loading() }
+
+// Loading says "Loading…"
+// in the language of msgs.
+//
+// The row of a tree node whose children load.
+func (msgs Messages) Loading() string {
+	return Catalog.Format(msgs.locale, "loading", nil)
+}
+
+// ColorDialogTitle says "Color"
+// in the language the app shows.
+//
+// The title of the color dialog (widget.ColorDialog).
+func ColorDialogTitle() string { return In(i18n.Locale()).ColorDialogTitle() }
+
+// ColorDialogTitle says "Color"
+// in the language of msgs.
+//
+// The title of the color dialog (widget.ColorDialog).
+func (msgs Messages) ColorDialogTitle() string {
+	return Catalog.Format(msgs.locale, "colorDialogTitle", nil)
+}
+
 // Cancel says "Cancel"
 // in the language the app shows.
 //

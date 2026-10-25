@@ -20,6 +20,7 @@ import (
 
 // GDK window state flags.
 const (
+	stateWithdrawn  = 1 << 0
 	stateIconified  = 1 << 1
 	stateMaximized  = 1 << 2
 	stateFullscreen = 1 << 4
@@ -32,6 +33,18 @@ const (
 	stateBottomResizable = 1 << 14
 	stateLeftResizable   = 1 << 16
 )
+
+// windowOut reports whether nothing of a window shows: it is withdrawn or
+// iconified (state, GdkWindowState). Other windows covering it are not told
+// (GTK 3 deprecates visibility-notify-event, which only an X11 server
+// without a compositor sends, and a missed "unobscured" would hold the
+// window's frames for good), and a Wayland compositor stops asking for
+// frames of a window out of sight by itself. GDK sets the iconified state
+// only on X11: gdk_wayland_window_iconify only asks the compositor, which
+// never says when the window is restored.
+func windowOut(state uint32) bool {
+	return state&(stateWithdrawn|stateIconified) != 0
+}
 
 type window struct {
 	b    *Backend
@@ -1439,6 +1452,9 @@ func initWindowCallbacks() {
 		// GdkEventWindowState: changed_mask at 20, new_window_state at 24.
 		changed, state := field[uint32](event, 20), field[uint32](event, 24)
 		w.state = state
+		if w.surface != nil {
+			w.surface.checkShown()
+		}
 		if changed&stateFocused != 0 && state&stateFocused != 0 && w.activationResize != nil && w.resizeIdle == 0 {
 			// G_PRIORITY_DEFAULT_IDLE: after GTK took the configure event
 			// of the activation.

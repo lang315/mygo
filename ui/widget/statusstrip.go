@@ -98,3 +98,5 @@ func (w *Form) StatusStrip(s *StatusStripWidget) *Form {
 	w.change(func() { w.status = s })
 	return w
 }
+
+func (s *StatusStripWidget) children() []Control { return s.items }

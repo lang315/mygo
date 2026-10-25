@@ -85,6 +85,8 @@ type host interface {
 // the view function, lays them out, paints them and routes input to the
 // elements of the last frame. Main thread only, except where noted.
 type engine struct {
+	// fitting is set while Content.MeasureHeight lays a view out.
+	fitting bool
 	// inlineRects is placeInline's scratch, kept from frame to frame.
 	inlineRects []text.Rect
 	// byPosition holds the keys whose press stood for its physical key
@@ -942,6 +944,16 @@ func (rt *engine) close() {
 		return
 	}
 	rt.closed, rt.closing = true, false
+	// A composition ends with the window as it does with the focus: its text
+	// goes through the input's OnEdit and into the value.
+	for _, s := range rt.states {
+		if ed := s.editor; ed != nil && ed.base != nil {
+			ed.commitCompose()
+			if ed.value != nil && *ed.value != ed.buf.s {
+				*ed.value = ed.buf.s
+			}
+		}
+	}
 	clear(rt.focusFields)
 	rt.focusFields = nil
 	for _, r := range rt.refs {
@@ -1081,7 +1093,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	// What is invisible keeps its box but takes neither the pointer nor
 	// the focus, and has no text to find; so does what is inert, which
 	// shows.
-	invisible := e.flags&(flagInvisible|flagInert) != 0 || hidden || e.backface && e.transform.facesAway()
+	invisible := hidden || e.hiddenSelf()
 	if invisible {
 		s.vw, s.vh = 0, 0
 		if rt.focused == e.id {
@@ -1120,7 +1132,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 			rt.labels = append(rt.labels, labelNode{e.id, label, intersect(e.visualRect(e.frags[0]), clip)})
 		}
 	}
-	if e.flags&flagFocusable != 0 && !e.IsDisabled() && !invisible {
+	if e.takesFocus(invisible) {
 		rt.focusOrder = append(rt.focusOrder, e.id)
 		rt.focusScopes = append(rt.focusScopes, rt.commitScope)
 		// Tab goes to the radio button or tab chosen; not to a toggle

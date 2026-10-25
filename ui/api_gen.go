@@ -3042,6 +3042,20 @@ func (_handle Element) Bounds() Rect {
 	return _node.Bounds()
 }
 
+// CanFocus reports whether the element, or an element inside it, can take the
+// keyboard focus now, by the rule of Tab: focusable, and neither disabled,
+// invisible nor inert. Like the other queries of an element, it is valid until
+// the build ends.
+func (_handle Element) CanFocus() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.CanFocus()
+}
+
 // Center centers the children along and across the main axis.
 func (_handle Element) Center() Element {
 	_node := _handle.node()
@@ -4719,6 +4733,29 @@ func (_handle Element) NoWrap() Element {
 	return wrapElement(_node.NoWrap())
 }
 
+// OnEdit has fn rewrite each edit of the user in a text input before it is
+// made, as a mask or a format does: fn returns the text the input holds after
+// the edit and where the caret goes (in runes), and ok true; with ok false
+// the edit is made as it would be without fn. A text that equals the old one
+// refuses the edit (Changed is not reported). The result is one step of undo,
+// whatever it changed. A text set by the app is not seen. Like ReadOnly, it
+// holds for the input that comes until the next frame. fn runs on the main
+// thread as the edit comes, between frames: it must be quick and touch no
+// element.
+//
+//	ui.TextInput(c, &app.phone).OnEdit(func(e ui.TextEdit) (string, int, bool) {
+//		return app.mask.Apply(e.Text, e.Start, e.End, e.Insert)
+//	})
+func (_handle Element) OnEdit(fn func(e TextEdit) (string, int, bool)) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.OnEdit(fn))
+}
+
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with
@@ -5605,6 +5642,21 @@ func (_handle Element) TextColor(c Color) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.TextColor(c))
+}
+
+// TextInsetEnd keeps the text of a single-line input v DIPs short of its end
+// (the right, the left right to left): the text is clipped and scrolls before
+// it, as if the box were narrower there, for something drawn over that end
+// (Element.DrawOver). The element's size does not change: the room is not
+// asked of its container.
+func (_handle Element) TextInsetEnd(v float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.TextInsetEnd(v))
 }
 
 // TextRanges styles runs of a text input's text, in the frames that call

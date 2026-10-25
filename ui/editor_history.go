@@ -47,6 +47,7 @@ func (s *undoStep) before(text string) string {
 // two texts however often the app sets one, as a log does.
 func (ed *editor) setText(s string) {
 	ed.compositionActive = false
+	ed.dropBase()
 	if n := len(ed.undo); n > 0 {
 		step := &ed.undo[n-1]
 		before := step.before(ed.buf.s)
@@ -78,8 +79,10 @@ func (ed *editor) record(typing bool) {
 		ed.undo[0] = undoStep{}
 		ed.undo = ed.undo[1:]
 	}
-	clear(ed.redo)
-	ed.redo = ed.redo[:0]
+	if ed.onEdit == nil {
+		clear(ed.redo)
+		ed.redo = ed.redo[:0]
+	}
 	ed.coalesce = typing
 	ed.lastEdit = now
 }
@@ -87,6 +90,29 @@ func (ed *editor) record(typing bool) {
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
+	if start == end && s == "" && ed.onEdit != nil {
+		return // as when an input method's composition starts with no selection
+	}
+	if f := ed.onEdit; f != nil && !ed.filtering {
+		old := ed.buf.slice(0, ed.buf.n)
+		if text, caret, ok := f(TextEdit{Text: old, Start: start, End: end, Insert: s, Caret: ed.caret}); ok {
+			ed.filtering = true
+			if text != old {
+				// The step keeps the range that changed, not the whole text.
+				a, z, ins := changedRange(old, text)
+				ed.replace(a, z, ins)
+			}
+			ed.filtering = false
+			ed.caret = max(0, min(caret, ed.buf.n))
+			ed.anchor = ed.caret
+			if n := len(ed.undo); n > 0 {
+				ed.undo[n-1].caretAfter, ed.undo[n-1].anchorAfter = ed.caret, ed.anchor
+				// the inner replace left the caret at the end of the changed range
+				ed.undo[n-1].selectionAfter = ed.editorSelection.clone()
+			}
+			return
+		}
+	}
 	if ed.maxLen > 0 && s != "" {
 		// What the text may take in the room the replaced runes leave.
 		s = cutToRoom(s, max(ed.maxLen-(ed.buf.n-(end-start)), 0))
@@ -120,6 +146,9 @@ func (ed *editor) replace(start, end int, s string) {
 			step.changes = append(step.changes, c)
 		}
 	}
+	// What undo took back is lost once an edit is made, not when one is tried.
+	clear(ed.redo)
+	ed.redo = ed.redo[:0]
 	ed.edit(start, end, s)
 	ed.caret = start + utf8.RuneCountInString(s)
 	ed.anchor = ed.caret
@@ -139,6 +168,15 @@ func (ed *editor) takeBack(redo bool) {
 		from, to = to, from
 	}
 	n := len(*from)
+	if n == 0 {
+		return
+	}
+	for ed.onEdit != nil && n > 0 && len((*from)[n-1].changes) == 0 {
+		// An edit that changed nothing, as OnEdit's refusal, left an empty step.
+		(*from)[n-1] = undoStep{}
+		n--
+		*from = (*from)[:n]
+	}
 	if n == 0 {
 		return
 	}
@@ -182,4 +220,18 @@ func cutToRoom(s string, room int) string {
 		}
 	}
 	return string(runes[:cut])
+}
+
+// changedRange returns the runes of old from a to z that became ins in text:
+// what the two do not share at their start and their end.
+func changedRange(old, text string) (a, z int, ins string) {
+	o, n := []rune(old), []rune(text)
+	for a < len(o) && a < len(n) && o[a] == n[a] {
+		a++
+	}
+	eo, en := len(o), len(n)
+	for eo > a && en > a && o[eo-1] == n[en-1] {
+		eo, en = eo-1, en-1
+	}
+	return a, eo, string(n[a:en])
 }

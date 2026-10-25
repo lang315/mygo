@@ -491,6 +491,11 @@ type Window struct {
 	PDF platform.PDFOptions
 	// HTML holds the documents LoadHTML loaded, in order.
 	HTML []string
+	// Navs are the navigation commands of the page, CanBack and CanForward
+	// what CanGoBack and CanGoForward answer.
+	Navs                []string
+	drags, doubleClicks int
+	CanBack, CanForward bool
 	// UserScriptUpdates counts the calls of SetUserScripts.
 	UserScriptUpdates int
 	// contentRules are the lists SetContentRules set, whose calls
@@ -656,40 +661,65 @@ func (w *Window) Show() {
 	w.focused = w.focused || w.Opts.Flyout == nil || w.Opts.Flyout.Focusable
 	w.mu.Unlock()
 }
-func (w *Window) ShowInactive()                      { w.mu.Lock(); w.visible = true; w.mu.Unlock() }
-func (w *Window) Hide()                              { w.mu.Lock(); w.visible = false; w.mu.Unlock() }
-func (w *Window) IsVisible() bool                    { w.mu.Lock(); defer w.mu.Unlock(); return w.visible }
-func (w *Window) Focus()                             { w.H.Focused() }
-func (w *Window) Blur()                              { w.H.Blurred() }
-func (w *Window) IsFocused() bool                    { w.mu.Lock(); defer w.mu.Unlock(); return w.focused }
-func (w *Window) Minimize()                          { w.mu.Lock(); w.minimized = true; w.mu.Unlock(); w.H.Minimized() }
-func (w *Window) IsMinimized() bool                  { w.mu.Lock(); defer w.mu.Unlock(); return w.minimized }
-func (w *Window) Maximize()                          { w.mu.Lock(); w.maximized = true; w.mu.Unlock(); w.H.Maximized() }
-func (w *Window) Unmaximize()                        { w.mu.Lock(); w.maximized = false; w.mu.Unlock(); w.H.Unmaximized() }
-func (w *Window) IsMaximized() bool                  { w.mu.Lock(); defer w.mu.Unlock(); return w.maximized }
-func (w *Window) Restore()                           { w.mu.Lock(); w.minimized = false; w.mu.Unlock(); w.H.Restored() }
-func (w *Window) SetFullScreen(v bool)               { w.mu.Lock(); w.full = v; w.mu.Unlock() }
-func (w *Window) IsFullScreen() bool                 { w.mu.Lock(); defer w.mu.Unlock(); return w.full }
-func (w *Window) Center()                            {}
-func (w *Window) SetOpacity(float64)                 {}
-func (w *Window) Opacity() float64                   { return 1 }
-func (w *Window) SetHasShadow(bool)                  {}
-func (w *Window) HasShadow() bool                    { return true }
-func (w *Window) SetIgnoreMouseEvents(bool)          {}
-func (w *Window) SetContentProtection(bool)          {}
-func (w *Window) SetVibrancy(string)                 {}
-func (w *Window) SetMenu(m *platform.Menu)           { w.mu.Lock(); w.menu = m; w.mu.Unlock() }
-func (w *Window) StartDrag()                         {}
-func (w *Window) TitleBarDoubleClicked()             {}
-func (w *Window) LoadURL(url string)                 { w.mu.Lock(); w.url = url; w.mu.Unlock() }
-func (w *Window) LoadHTML(html, _ string)            { w.addHTML(html) }
-func (w *Window) LoadFile(path, _ string)            { w.mu.Lock(); w.url = "file://" + path; w.mu.Unlock() }
-func (w *Window) Reload(bool)                        {}
-func (w *Window) StopLoading()                       {}
-func (w *Window) GoBack()                            {}
-func (w *Window) GoForward()                         {}
-func (w *Window) CanGoBack() bool                    { return false }
-func (w *Window) CanGoForward() bool                 { return false }
+func (w *Window) ShowInactive()             { w.mu.Lock(); w.visible = true; w.mu.Unlock() }
+func (w *Window) Hide()                     { w.mu.Lock(); w.visible = false; w.mu.Unlock() }
+func (w *Window) IsVisible() bool           { w.mu.Lock(); defer w.mu.Unlock(); return w.visible }
+func (w *Window) Focus()                    { w.H.Focused() }
+func (w *Window) Blur()                     { w.H.Blurred() }
+func (w *Window) IsFocused() bool           { w.mu.Lock(); defer w.mu.Unlock(); return w.focused }
+func (w *Window) Minimize()                 { w.mu.Lock(); w.minimized = true; w.mu.Unlock(); w.H.Minimized() }
+func (w *Window) IsMinimized() bool         { w.mu.Lock(); defer w.mu.Unlock(); return w.minimized }
+func (w *Window) Maximize()                 { w.mu.Lock(); w.maximized = true; w.mu.Unlock(); w.H.Maximized() }
+func (w *Window) Unmaximize()               { w.mu.Lock(); w.maximized = false; w.mu.Unlock(); w.H.Unmaximized() }
+func (w *Window) IsMaximized() bool         { w.mu.Lock(); defer w.mu.Unlock(); return w.maximized }
+func (w *Window) Restore()                  { w.mu.Lock(); w.minimized = false; w.mu.Unlock(); w.H.Restored() }
+func (w *Window) SetFullScreen(v bool)      { w.mu.Lock(); w.full = v; w.mu.Unlock() }
+func (w *Window) IsFullScreen() bool        { w.mu.Lock(); defer w.mu.Unlock(); return w.full }
+func (w *Window) Center()                   {}
+func (w *Window) SetOpacity(float64)        {}
+func (w *Window) Opacity() float64          { return 1 }
+func (w *Window) SetHasShadow(bool)         {}
+func (w *Window) HasShadow() bool           { return true }
+func (w *Window) SetIgnoreMouseEvents(bool) {}
+func (w *Window) SetContentProtection(bool) {}
+func (w *Window) SetVibrancy(string)        {}
+func (w *Window) SetMenu(m *platform.Menu)  { w.mu.Lock(); w.menu = m; w.mu.Unlock() }
+func (w *Window) StartDrag()                { w.count(&w.drags) }
+func (w *Window) TitleBarDoubleClicked()    { w.count(&w.doubleClicks) }
+
+func (w *Window) count(n *int) { w.mu.Lock(); *n++; w.mu.Unlock() }
+
+// Drags and DoubleClicks count the window drags and the title bar double
+// clicks the content asked for.
+func (w *Window) Drags() int              { w.mu.Lock(); defer w.mu.Unlock(); return w.drags }
+func (w *Window) DoubleClicks() int       { w.mu.Lock(); defer w.mu.Unlock(); return w.doubleClicks }
+func (w *Window) LoadURL(url string)      { w.mu.Lock(); w.url = url; w.mu.Unlock() }
+func (w *Window) LoadHTML(html, _ string) { w.addHTML(html) }
+func (w *Window) LoadFile(path, _ string) { w.mu.Lock(); w.url = "file://" + path; w.mu.Unlock() }
+func (w *Window) Reload(bool)             { w.nav("reload") }
+func (w *Window) StopLoading()            { w.nav("stop") }
+func (w *Window) GoBack()                 { w.nav("back") }
+func (w *Window) GoForward()              { w.nav("forward") }
+func (w *Window) CanGoBack() bool         { w.mu.Lock(); defer w.mu.Unlock(); return w.CanBack }
+func (w *Window) CanGoForward() bool      { w.mu.Lock(); defer w.mu.Unlock(); return w.CanForward }
+
+// Documents returns the HTML the page was given with LoadHTML, in order.
+func (w *Window) Documents() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.HTML...)
+}
+
+// nav records a navigation command of the page.
+func (w *Window) nav(what string) { w.mu.Lock(); w.Navs = append(w.Navs, what); w.mu.Unlock() }
+
+// Navigations returns the page's navigation commands so far: "reload",
+// "stop", "back" and "forward".
+func (w *Window) Navigations() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.Navs...)
+}
 func (w *Window) URL() string                        { w.mu.Lock(); defer w.mu.Unlock(); return w.url }
 func (w *Window) IsLoading() bool                    { return false }
 func (w *Window) SetZoom(f float64)                  { w.mu.Lock(); w.zoom = f; w.mu.Unlock() }
@@ -1009,10 +1039,27 @@ func (c clipboard) Close() {
 
 type shell struct{}
 
-func (shell) OpenExternal(string) error { return nil }
-func (shell) OpenPath(string) error     { return nil }
-func (shell) ShowItemInFolder(string)   {}
-func (shell) Beep()                     {}
+func (shell) OpenExternal(u string) error {
+	openedMu.Lock()
+	opened = append(opened, u)
+	openedMu.Unlock()
+	return nil
+}
+
+var (
+	openedMu sync.Mutex
+	opened   []string
+)
+
+// OpenedExternal returns the URLs Shell.OpenExternal was given.
+func OpenedExternal() []string {
+	openedMu.Lock()
+	defer openedMu.Unlock()
+	return append([]string(nil), opened...)
+}
+func (shell) OpenPath(string) error   { return nil }
+func (shell) ShowItemInFolder(string) {}
+func (shell) Beep()                   {}
 
 // Trashed are the paths TrashItem was given.
 var Trashed []string

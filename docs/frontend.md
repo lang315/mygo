@@ -176,7 +176,8 @@ pages have no runtime: calls reject and `isMyGo()` is false.
 
 A frameless window has no title bar or borders, and the page draws its own.
 Mark the elements that drag the window with the CSS property
-`--app-region: drag`:
+`--app-region: drag` (a page of another origin than the app's, such as a
+`WebBrowser`'s, cannot move the window this way):
 
 ```go
 mygo.NewWindow(mygo.WindowOptions{URL: "/", Frameless: true})
@@ -298,7 +299,8 @@ onFileDrop(({ paths, x, y }) => {
 });
 ```
 
-and Go, with `win.OnFileDrop`. The page's own drag and drop keeps working:
+and Go, with `win.OnFileDrop`. Files dropped on an untrusted page (a
+`WebBrowser`'s) reach neither. The page's own drag and drop keeps working:
 its drop listeners still get the `File` objects, and dropping files where
 the page does not handle them no longer replaces the page with the file.
 

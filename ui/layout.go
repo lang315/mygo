@@ -498,7 +498,11 @@ func contentHeight(e *node, cw float32) float32 {
 		// A List is as high as all its rows, as far as the heights known
 		// tell, whichever it built.
 		s := f.s
-		return float32(s.heights.top(f.n, float64(max(e.gapY, 0))) - float64(max(e.gapY, 0)))
+		n := f.n
+		if e.c.rt.fitting {
+			n = min(n, fitRows) // a window fitted to its content counts a few rows
+		}
+		return float32(s.heights.top(n, float64(max(e.gapY, 0))) - float64(max(e.gapY, 0)))
 	}
 	if e.first == nil {
 		return 0

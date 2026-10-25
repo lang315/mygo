@@ -240,3 +240,19 @@ func TestEnterOnAClosedComboBoxOpensItAndDoesNotAccept(t *testing.T) {
 		t.Fatalf("OK clicked %d times; list open %v", ok, tt.Has(ByLabel("Banana")))
 	}
 }
+
+// A button in a disabled container is disabled: Enter does not click it.
+func TestAcceptButtonInADisabledContainerIsNotClicked(t *testing.T) {
+	ok := 0
+	okBtn := Button("OK").OnClick(func() { ok++ })
+	panel := VBox(4).Add(okBtn)
+	f := keysForm(VBox(4).Add(TextBox(), panel)).SetAcceptButton(okBtn)
+	tt := TestForm(t, f)
+	panel.SetDisabled(true)
+	tt.Settle()
+	tt.Find(ByRole(ui.RoleTextField)).Type("x").Key(0, ui.KeyEnter)
+	tt.Settle()
+	if ok != 0 {
+		t.Fatalf("a disabled panel's OK was clicked %d times by Enter", ok)
+	}
+}

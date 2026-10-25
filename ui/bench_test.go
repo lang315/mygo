@@ -282,6 +282,9 @@ func TestDiffFrameAllocs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("measures")
 	}
+	if raceEnabled {
+		t.Skip("the race detector allocates in every frame")
+	}
 	tt, _ := diffSceneTester(true)
 	steady := testing.AllocsPerRun(100, tt.Frame)
 	tt, d := diffSceneTester(false)

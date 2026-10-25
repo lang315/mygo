@@ -49,7 +49,8 @@ window of your own, `widget.View(w)` is a `ui` view showing `w`:
 ## Names
 
 The controls take the names WinForms gives them, where WinForms has one;
-gota's names are listed for code ported from it.
+gota's names are listed for code ported from it. What of WinForms' toolbox is
+done, pending or dropped is in the [WinForms catalogue](winforms.md).
 
 | ui/widget | WinForms | gota |
 |---|---|---|
@@ -134,6 +135,21 @@ d.Run() // returns once the dialog closes
 parent for a dialog of its own. Width and height are the window's, title
 bar included, so a macOS sheet, which has none, shows that much shorter;
 the title and subtitle are drawn in the dialog for the same reason.
+A `height` of 0 fits the dialog to its content, as WinForms' `AutoSize`
+(`GrowAndShrink`) does at show: `Run` measures the content laid out at `width`
+(one headless layout) and the window's page area gets that height, no higher
+than the screen's work area less 80 DIPs, where the content scrolls instead.
+A `width` of 0 is the window default, 800. The size is taken when the dialog
+shows: later changes of its content do not resize it, `SetSize` after
+`NewDialog` wins, and a list in the content counts eight rows, a multi-line
+text eight lines and a `WebBrowser` 300 DIPs (give the dialog a height to show
+more or less). The height is measured at the scale of the display the dialog
+opens on (the owner window's, else the primary one); a width narrower than the
+content's least width gives the height at that width. The measure is a headless
+build before the window exists: it leaves a focus, a scroll or a selection you
+asked for before `Run` to the window, and a `Custom` control's build function
+should start nothing and post nothing while `c.Measuring()` is true. `NewForm`
+keeps 800 by 600 for 0.
 `Run` shows it and returns when it closes: by `Close`, by the user (its
 close button, or Escape once no drop-down in it is open), or because its
 parent closed. For a dialog that returns a value, embed `*widget.Dialog`
@@ -172,6 +188,7 @@ language:
 
 - `Alert(parent, kind, title, text)` waits for OK.
 - `ColorDialog()`: a color picker with OK and Cancel; see [ColorDialog](widget/colordialog.md).
+- `FontDialog()`: families, styles, a size and a sample, with OK and Cancel; see [FontDialog](widget/fontdialog.md).
 - `Confirm(parent, kind, title, text) bool`: OK is true; Cancel and closing
   the dialog are false.
 - `InputString(parent, kind, title, label, value) (string, bool)`,
@@ -452,7 +469,7 @@ logged once and ignored, and `mygo vet` reports it in a literal string.
 | Group | Classes |
 |---|---|
 | Spacing | `p- px- py- pt- pr- pb- pl- m- mx- …` with `0 px 0.5 1 … 96`; `-mt-2` |
-| Sizes | `w- h- min-w- max-w- min-h- max-h-` (same scale, 4 DIPs a unit) |
+| Sizes | `w- h- min-w- max-w- min-h- max-h-` (same scale, 4 DIPs a unit); `max-w-none` lifts the cap a `w-` has at its container's room |
 | Radius | `rounded`, `rounded-{none,sm,md,lg,xl,2xl,3xl,full}`, sides `t r b l`, corners `tl tr br bl` |
 | Border | `border`, `border-{0,2,4,8}`, `border-{x,y,t,r,b,l}[-N]`, `border-solid`, `border-dashed` |
 | Colors | `bg- text- border-` with the v3 palette (`blue-600`), `black white transparent` |
@@ -671,7 +688,14 @@ Layout:
 
 - `VBox(spacing)`, `HBox(spacing)`: a column or a row. `Add` at the
   natural size, `Pack(w, expand, fill)`, `PackEnd`, `Remove`, `Clear`. A
-  widget already in the box is not added twice.
+  widget already in the box is not added twice. `fill` means what it did. Controls that scroll or virtualize their rows
+(`ListBox`, `DataGridView`, `TreeView`, `MultilineTextBox`, `SplitContainer`,
+`TabControl`, `ScrollPanel`) stretch across the box that holds them whatever
+the flags (an `HBox` would otherwise center them at the height of all their
+rows), so they scroll in the room the row has and build only the rows in view.
+A `VBox`/`HBox` or a `GroupBox` does when something it holds does, however
+deep, and passes the height down; one that holds only labels and buttons is
+placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ButtonBox()`: a row whose widgets sit at its end, one width each, as a
   dialog's buttons.
 - `Grid(colSpacing, rowSpacing)`: `Attach(w, col, row, width, height)`; a
@@ -691,6 +715,11 @@ Layout:
 - `DragSource`, `OnDrop[T]`, `OnDragOver[T]`, `DragData`, `OnDropData`, `OnDropFiles`: drag and drop; see [Drag and drop](widget/drag-and-drop.md).
 - `Chart(kind)`: a line, bar or pie chart; see [Chart](widget/chart.md).
 - `richtextbox.New()`: styled text, in package `ui/widget/richtextbox`; see [RichTextBox](widget/richtextbox.md).
+- `WebBrowser()`: a web page; see [WebBrowser](widget/webbrowser.md).
+- `MaskedTextBox(mask)`: an input that takes what a mask allows; see [MaskedTextBox](widget/maskedtextbox.md).
+- `ErrorProvider()`, `OnValidating`, `Form.ValidateChildren`: an error mark on a control and an explicit validation; see [ErrorProvider](widget/errorprovider.md).
+- `&` mnemonics in a `Button` and the labels of `Fields` (Alt+key; off on macOS); see [Mnemonics](widget/mnemonics.md).
+- `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).

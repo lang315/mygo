@@ -761,8 +761,18 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	}
 	rt.keys = append(rt.keys, k)
 	rt.requestFrame()
+	if swallowAltShortcuts && mods&Alt != 0 && mods&^(Alt|Shift) == 0 {
+		// Windows opens its menu mode (and beeps) for an Alt+key the window did
+		// not take: one a shortcut of the view answers is taken.
+		_, found := routeKey(rt.regs, rt.focusChain(), k)
+		return found
+	}
 	return false
 }
+
+// swallowAltShortcuts is whether a key with Alt that a shortcut answers is
+// reported as taken, so that Windows does not take it for a menu key.
+var swallowAltShortcuts = runtime.GOOS == "windows"
 
 // typePause is how long after a letter typed to choose a row the next
 // one starts anew.

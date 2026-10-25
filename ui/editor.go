@@ -58,6 +58,12 @@ type editor struct {
 	onPaste func(text string) bool
 	// onTextKey sees a key before the editor takes it (OnTextKey).
 	onTextKey func(k TextKey) bool
+	// onEdit rewrites an edit of the user before it is made (OnEdit);
+	// filtering is set while its result is made.
+	onEdit    func(e TextEdit) (string, int, bool)
+	filtering bool
+	// base is the text before the composition in progress, while onEdit is set.
+	base *composeBase
 	// keying is set while onTextKey runs, as the TextKey numbered keySeq
 	// is valid.
 	keying bool
@@ -127,14 +133,15 @@ type editorOptions struct {
 	maxLen             int
 	onPaste            func(text string) bool
 	onTextKey          func(k TextKey) bool
+	onEdit             func(e TextEdit) (string, int, bool)
 }
 
 // rebuild starts a build of the input: what the build before set becomes
 // the options its pending edits apply by, and this build's start from
 // the defaults.
 func (ed *editor) rebuild() {
-	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey}
-	ed.readOnly, ed.password, ed.maxLen, ed.lines, ed.onPaste, ed.onTextKey = false, false, 0, [2]int{}, nil, nil
+	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit}
+	ed.readOnly, ed.password, ed.maxLen, ed.lines, ed.onPaste, ed.onTextKey, ed.onEdit = false, false, 0, [2]int{}, nil, nil, nil
 }
 
 // withShown runs fn, which applies the user's edits, with the options of
@@ -142,11 +149,11 @@ func (ed *editor) rebuild() {
 // returns, before this build's ReadOnly or OnPaste, and follows what the
 // user saw.
 func (ed *editor) withShown(fn func()) {
-	now := editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey}
+	now := editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit}
 	o := ed.shown
-	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey = o.readOnly, o.password, o.maxLen, o.onPaste, o.onTextKey
+	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit = o.readOnly, o.password, o.maxLen, o.onPaste, o.onTextKey, o.onEdit
 	fn()
-	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey = now.readOnly, now.password, now.maxLen, now.onPaste, now.onTextKey
+	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit = now.readOnly, now.password, now.maxLen, now.onPaste, now.onTextKey, now.onEdit
 }
 
 func (ed *editor) insert(s string) {
@@ -185,7 +192,14 @@ func (ed *editor) deleteRange(a, b int) {
 }
 
 func (ed *editor) commitCompose() {
-	if ed.compose != "" {
+	if ed.base != nil {
+		s := ed.compose
+		ed.compose = ""
+		ed.commitBase(s)
+		if ed.client != nil {
+			ed.client.publish()
+		}
+	} else if ed.compose != "" {
 		s := ed.compose
 		ed.compose = ""
 		ed.replace(ed.caret, ed.caret, s)
@@ -214,7 +228,11 @@ func (ed *editor) process(c *context, e *node) {
 			ed.key(c, st, ev)
 		case editInsert:
 			ed.compose = ""
-			ed.insert(ev.text)
+			if ed.base != nil {
+				ed.commitBase(ev.text)
+			} else {
+				ed.insert(ev.text)
+			}
 		case editCompose:
 			if ed.readOnly {
 				break
@@ -226,9 +244,15 @@ func (ed *editor) process(c *context, e *node) {
 			ed.composeCaret = max(0, min(ev.caret, utf8.RuneCountInString(ev.text)))
 			if ev.text != "" {
 				a, b := ed.selection()
-				if a != b {
+				if ed.onEdit != nil && len(ed.selectedRanges()) <= 1 {
+					if ed.base == nil {
+						ed.beginBase(a, b)
+					}
+				} else if a != b {
 					ed.deleteRange(a, b)
 				}
+			} else {
+				ed.restoreBase()
 			}
 		case editCommand:
 			ed.commitCompose()

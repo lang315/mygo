@@ -145,6 +145,14 @@
   "menuClearRecent": "清除菜单",
   "untitled": "未命名",
   "untitledNumbered": "未命名 {n, number, ::group-off}",
+  "fontDialogTitle": "字体",
+  "fontFamily": "字体",
+  "fontStyle": "样式",
+  "fontSize": "大小",
+  "fontRegular": "常规",
+  "fontBold": "粗体",
+  "fontItalic": "斜体",
+  "fontBoldItalic": "粗斜体",
   "cancel": "取消",
   "save": "保存",
   "saveEllipsis": "保存…",
@@ -185,5 +193,12 @@
   "clipboardRead": "某程序想要读取剪贴板",
   "clipboardReadAllow": "允许",
   "clipboardReadDeny": "拒绝",
-  "clipboardReadEmpty": "剪贴板中没有文本。"
+  "clipboardReadEmpty": "剪贴板中没有文本。",
+  "tableRows": "行数：{n, number, ::group-off}",
+  "tableSelected": "已选择：{n, number, ::group-off}",
+  "tableChecked": "已勾选：{n, number, ::group-off}",
+  "tableSearch": "搜索",
+  "tableKeyword": "关键字",
+  "loading": "正在加载…",
+  "colorDialogTitle": "颜色"
 }

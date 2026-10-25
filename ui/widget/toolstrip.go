@@ -175,3 +175,5 @@ func (w *Form) ToolStrip(t *ToolStripWidget) *Form {
 	w.change(func() { w.tools = t })
 	return w
 }
+
+func (s *ToolStripWidget) children() []Control { return s.items }

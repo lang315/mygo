@@ -10,8 +10,9 @@ import (
 // LabelWidget shows a line of text.
 type LabelWidget struct {
 	common[LabelWidget]
-	text  string
-	spans []ui.Span
+	text        string
+	spans       []ui.Span
+	useMnemonic bool // SetUseMnemonic(true)
 }
 
 // Label makes a label showing s.
@@ -46,7 +47,32 @@ func (l *LabelWidget) build(c *ui.Context) ui.Element {
 	if len(l.spans) > 0 {
 		return ui.RichText(c, l.spans...)
 	}
-	return ui.Text(c, l.text)
+	if !l.useMnemonic || !strings.Contains(l.text, "&") {
+		return ui.Text(c, l.text)
+	}
+	display, key, at := parseMnemonic(l.text)
+	if key == 0 || macMenus || buildingForm == nil {
+		return ui.Text(c, display)
+	}
+	if c.Modifiers()&ui.Alt != 0 {
+		e := ui.RichText(c, mnemonicSpans(display, at)...)
+		registerLabelMnemonic(key, e, l)
+		return e
+	}
+	e := ui.Text(c, display)
+	registerLabelMnemonic(key, e, l)
+	return e
+}
+
+// SetUseMnemonic says whether an "&" in the text marks a key, as WinForms'
+// UseMnemonic: Alt and the key then give the keyboard focus to the next
+// control that takes it, and the "&" is not shown ("&&" is one). Unlike
+// WinForms it is off by default: a label shows data (a URL "a=1&b=2", a name
+// "Tom & Jerry") and would lose its ampersands. The labels of Fields rows
+// have mnemonics without it.
+func (l *LabelWidget) SetUseMnemonic(on bool) *LabelWidget {
+	l.change(func() { l.useMnemonic = on })
+	return l
 }
 
 // TextBoxWidget is a one-line text input.
@@ -156,13 +182,23 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 			}
 			pad := el.Paddings()[side]
 			el.PaddingStart(pad + iconSize + t.Space(1.5))
-			el.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			e.over = append(e.over, func(p *ui.Painter, r ui.Rect) {
 				x := r.X + pad
 				if rtl {
 					x = r.X + r.W - pad - iconSize
 				}
 				p.Image(icon, ui.Rect{X: x, Y: r.Y + (r.H-iconSize)/2, W: iconSize, H: iconSize}, ui.Contain)
 			})
+		}
+	}
+	if e.errMsg != "" {
+		// The error mark sits at the end: the text stops before it.
+		prev := e.post
+		e.post = func(c *ui.Context, el ui.Element) {
+			if prev != nil {
+				prev(c, el)
+			}
+			el.TextInsetEnd(errorMarkSize + errorMarkInset + 2)
 		}
 	}
 	el.OnChange(edited(&e.text, &e.bound, e.onChange))
@@ -218,9 +254,14 @@ func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 		el.Placeholder(v.placeholder)
 	}
 	el.ReadOnly(v.readOnly)
+	if c.Measuring() {
+		el.Lines(1, 8) // a window fitted to its content counts a few lines
+	}
 	el.OnChange(onChange(&v.text, v.onChange))
 	if changed && v.onChange != nil {
 		Post(v.onChange)
 	}
 	return el
 }
+
+func (v *MultilineTextBoxWidget) fillsAcross() bool { return true }

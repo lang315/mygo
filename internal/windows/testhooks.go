@@ -874,3 +874,32 @@ func TestPinchSurface(hwnd uintptr, x, y, scale float64) (float64, bool) {
 	procSendMessageW.Call(w.surface.hwnd, wmMouseWheel, wp, lp)
 	return math.Exp(float64(delta) / 120 * math.Ln2 / 3), true
 }
+
+// TestInMenuMode reports whether the foreground thread is in menu mode (a menu
+// bar item highlighted or a menu open), as after an Alt key the window did not
+// take.
+func TestInMenuMode() bool {
+	type guiThreadInfo struct {
+		size, flags                                        uint32
+		active, focus, capture, menuOwner, moveSize, caret uintptr
+		caretLeft, caretTop, caretRight, caretBottom       int32
+	}
+	info := guiThreadInfo{size: uint32(unsafe.Sizeof(guiThreadInfo{}))}
+	r, _, _ := user32.NewProc("GetGUIThreadInfo").Call(0, uintptr(unsafe.Pointer(&info)))
+	const guiInMenuMode, guiPopupMenuMode = 0x1, 0x10
+	return r != 0 && info.flags&(guiInMenuMode|guiPopupMenuMode) != 0
+}
+
+// TestCloak cloaks a window, or shows it again, as Windows does a window of
+// another virtual desktop: it stays visible to IsWindowVisible and shows
+// nowhere.
+func TestCloak(hwnd uintptr, on bool) error {
+	v := uint32(0)
+	if on {
+		v = 1
+	}
+	if hr, _, _ := procDwmSetWindowAttribute.Call(hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&v)), 4); hr != 0 {
+		return fmt.Errorf("mygo: DwmSetWindowAttribute(DWMWA_CLOAK) failed: %#x", uint32(hr))
+	}
+	return nil
+}

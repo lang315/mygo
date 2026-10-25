@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -55,6 +56,9 @@ type app struct {
 	// update runs fn on the main thread, then builds a frame:
 	// Window.Update, or a test's.
 	update func(fn func())
+	// work makes the function a run applies to each account for an action;
+	// nil is fakeWork. A test gives its own, to end a run when it says.
+	work func(action string) func(ctx context.Context, id int) result
 }
 
 // newApp does not search or read the table, so the table is not started
@@ -454,7 +458,11 @@ func (a *app) start(c *ui.Context) {
 		c.Toast("Bạn chưa chọn hành động để chạy!")
 		return
 	}
-	r := run(ids, int(a.loops), int(a.threads), fakeWork(a.action))
+	work := fakeWork
+	if a.work != nil {
+		work = a.work
+	}
+	r := run(ids, int(a.loops), int(a.threads), work(a.action))
 	a.run, a.stopping = r, false
 	a.follow(r, func() { a.run, a.stopping = nil, false })
 }

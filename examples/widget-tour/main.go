@@ -23,36 +23,7 @@ import (
 
 func main() {
 	err := widget.Run("Widget Tour", func(w *widget.Form) {
-		w.UseHeaderBar("ui/widget").PackEnd(widget.LinkLabel("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
-		// The app shell: a main menu, a tool strip above the content and a
-		// status strip below it, all changed while the app runs.
-		status := widget.StatusLabel("Ready").SetIcon(lucide(lucideIcons[4]))
-		done := 0.3
-		progress := widget.StatusProgress().SetFraction(done)
-		bar := widget.StatusStrip(status, widget.Spring(), progress, widget.Separator(), widget.StatusLabel("ui/widget"))
-		closeItem := widget.StripItem("Close").SetShortcut("CmdOrCtrl+W").OnClick(func() { w.Close() })
-		showBar := widget.StripCheck("Status bar", true)
-		showBar.OnClick(func() { bar.SetVisible(showBar.Checked()) })
-		w.MenuStrip(widget.NewMenuStrip(
-			widget.StripRole(mygo.RoleAppMenu),
-			widget.StripItem("File", closeItem),
-			widget.StripRole(mygo.RoleEditMenu),
-			widget.StripItem("View", showBar),
-		))
-		bold := widget.ToolButton("Bold").SetToggle(true)
-		bold.OnChange(func() { status.SetText(fmt.Sprintf("Bold: %v", bold.Checked())) })
-		w.ToolStrip(widget.ToolStrip(
-			widget.ToolButton("Plus").SetIcon(lucide(lucideIcons[0])).SetTooltip("Add one").OnClick(func() {
-				done = min(done+0.1, 1) // handlers run one at a time: no lock
-				progress.SetFraction(done)
-			}),
-			bold,
-			widget.Separator(),
-			widget.DropDownButton("Menu",
-				widget.MenuItem{Text: "Disable File > Close", OnClick: func() { closeItem.SetEnabled(!closeItem.Enabled()) }},
-				widget.MenuItem{Text: "Say hello", OnClick: func() { status.SetText("Hello") }}),
-		))
-		w.StatusStrip(bar)
+		appShell(w)
 		w.SetContent(tour(w))
 	})
 	if err != nil {
@@ -60,10 +31,45 @@ func main() {
 	}
 }
 
+// appShell gives the window its header bar, main menu, tool strip and status
+// strip.
+func appShell(w *widget.Form) {
+	w.UseHeaderBar("ui/widget").PackEnd(widget.LinkLabel("Docs", "https://github.com/lang315/mygo/blob/main/docs/ui/widget.md"))
+	// The app shell: a main menu, a tool strip above the content and a
+	// status strip below it, all changed while the app runs.
+	status := widget.StatusLabel("Ready").SetIcon(lucide(lucideIcons[4]))
+	done := 0.3
+	progress := widget.StatusProgress().SetFraction(done)
+	bar := widget.StatusStrip(status, widget.Spring(), progress, widget.Separator(), widget.StatusLabel("ui/widget"))
+	closeItem := widget.StripItem("Close").SetShortcut("CmdOrCtrl+W").OnClick(func() { w.Close() })
+	showBar := widget.StripCheck("Status bar", true)
+	showBar.OnClick(func() { bar.SetVisible(showBar.Checked()) })
+	w.MenuStrip(widget.NewMenuStrip(
+		widget.StripRole(mygo.RoleAppMenu),
+		widget.StripItem("File", closeItem),
+		widget.StripRole(mygo.RoleEditMenu),
+		widget.StripItem("View", showBar),
+	))
+	bold := widget.ToolButton("Bold").SetToggle(true)
+	bold.OnChange(func() { status.SetText(fmt.Sprintf("Bold: %v", bold.Checked())) })
+	w.ToolStrip(widget.ToolStrip(
+		widget.ToolButton("Plus").SetIcon(lucide(lucideIcons[0])).SetTooltip("Add one").OnClick(func() {
+			done = min(done+0.1, 1) // handlers run one at a time: no lock
+			progress.SetFraction(done)
+		}),
+		bold,
+		widget.Separator(),
+		widget.DropDownButton("Menu",
+			widget.MenuItem{Text: "Disable File > Close", OnClick: func() { closeItem.SetEnabled(!closeItem.Enabled()) }},
+			widget.MenuItem{Text: "Say hello", OnClick: func() { status.SetText("Hello") }}),
+	))
+	w.StatusStrip(bar)
+}
+
 func tour(w *widget.Form) widget.Control {
 	return widget.TabControl().
 		AddPage("Layout", layout()).
-		AddPage("Inputs", inputs()).
+		AddPage("Inputs", inputs(w)).
 		AddPage("Choices", choices()).
 		AddPage("Containers", containers()).
 		AddPage("Dialogs", dialogs(w)).
@@ -73,6 +79,7 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("ListView", listViewTour()).
 		AddPage("TreeView", treeView()).
 		AddPage("ListBox", listBoxes()).
+		AddPage("Components", components()).
 		Padding(4).Expand()
 }
 
@@ -148,6 +155,11 @@ func dialogs(w *widget.Form) widget.Control {
 				ok := cd.ShowDialog(w)
 				show("ColorDialog: %v %v", cd.Color(), ok)
 			}),
+			widget.Button("Font dialog").OnClick(func() {
+				fd := widget.FontDialog().SetFont(ui.Font{Size: 14})
+				ok := fd.ShowDialog(w)
+				show("FontDialog: %+v %v", fd.Font(), ok)
+			}),
 			widget.Button("Open file").OnClick(func() { show("OpenFile: %q", widget.OpenFile(w, "Open a file")) }),
 			widget.Button("Save file").OnClick(func() { show("SaveFile: %q", widget.SaveFile(w, "Save", "notes.txt")) }),
 			widget.Button("Select folder").OnClick(func() { show("SelectFolder: %q", widget.SelectFolder(w, "Choose a folder", "")) }),
@@ -220,6 +232,7 @@ func extras() widget.Control {
 		clockRow(),
 		chartRow(),
 		richRow(),
+		webRow(),
 	)
 }
 
@@ -298,7 +311,7 @@ func layout() widget.Control {
 	)
 }
 
-func inputs() widget.Control {
+func inputs(w *widget.Form) widget.Control {
 	var name *widget.TextBoxWidget
 	greeting := widget.Label("Type a name")
 	// Bound to a value kept elsewhere: an edit calls set, a program setter does not.
@@ -317,6 +330,8 @@ func inputs() widget.Control {
 		widget.TextBox().SetPlaceholder("Password").Password(),
 		widget.TextBox().SetPlaceholder("At most 8 characters").MaxLength(8),
 		widget.TextBox().SetPlaceholder("Search").Icon(searchIcon()),
+		maskedRow(),
+		validationRow(w),
 		widget.MultilineTextBox().SetPlaceholder("Notes").SetSize(0, 100),
 		widget.CheckBox("Remember me"),
 		widget.HBox(8).Add(widget.Switch(), widget.Label("Notifications")),
@@ -390,6 +405,13 @@ func chartRow() widget.Control {
 	pie := widget.Chart(widget.PieChart).SetTitle("Users").SetLabels("Win", "Mac", "Linux").
 		SetSeries(widget.ChartSeries{Values: []float64{60, 30, 10}})
 	return widget.HBox(24).Add(bars, pie)
+}
+
+// webRow shows a page of HTML the tour makes, with no network.
+func webRow() widget.Control {
+	b := widget.WebBrowser().SetDocumentText("<h3>WebBrowser</h3><p>A page the tour made.</p>")
+	b.SetSize(0, 140)
+	return widget.VBox(4).Add(widget.Button("Reload").OnClick(func() { b.Reload() }), b)
 }
 
 func containers() widget.Control {

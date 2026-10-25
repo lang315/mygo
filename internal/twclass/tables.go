@@ -49,6 +49,7 @@ var fixed = map[string][]Decl{
 	"shadow-2xl":    {{Kind: Shadows, Shadows: []Shadow{{0, 25, 50, -12, 0.25, false}}}},
 	"shadow-inner":  {{Kind: Shadows, Shadows: []Shadow{{0, 2, 4, 0, 0.05, true}}}},
 	"shadow-none":   {{Kind: Shadows}},
+	"max-w-none":    {{Kind: MaxWidth, Value: noMaxWidth}},
 	"italic":        {{Kind: Italic, Value: 1}},
 	"not-italic":    {{Kind: Italic, Value: 0}},
 	"font-mono":     {{Kind: Mono}},
@@ -118,3 +119,7 @@ var palette = map[string][11]uint32{
 	"pink":    {0xfdf2f8, 0xfce7f3, 0xfbcfe8, 0xf9a8d4, 0xf472b6, 0xec4899, 0xdb2777, 0xbe185d, 0x9d174d, 0x831843, 0x500724},
 	"rose":    {0xfff1f2, 0xffe4e6, 0xfecdd3, 0xfda4af, 0xfb7185, 0xf43f5e, 0xe11d48, 0xbe123c, 0x9f1239, 0x881337, 0x4c0519},
 }
+
+// noMaxWidth is the max-width max-w-none sets: more than any window, so a
+// width is no longer capped by its container.
+const noMaxWidth = 1e9

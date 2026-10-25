@@ -79,6 +79,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	keyword                                 *TextBoxWidget
 	searchButton                            *ButtonWidget
 	text                                    PanelText
+	textSet                                 bool // PanelText was called: the words are the app's, not the language's
 	beforeSearch                            func(column, keyword string)
 	onActivate                              func(K)
 	onColumns                               func(ui.TableLayout)
@@ -121,7 +122,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 			compare[cl.Title] = func(a, b *T) int { return strings.Compare(text(a), text(b)) }
 		}
 	}
-	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: cols, view: ui.NewTableView(compare), cursor: -1, text: englishPanel}
+	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: cols, view: ui.NewTableView(compare), cursor: -1}
 	t.columns = t.uiColumns()
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.Copy = t.copyRows
@@ -387,3 +388,5 @@ func spansOf[T any](c *ui.Context, cl *Column[T], r *T) []ui.Span {
 	}
 	return spans
 }
+
+func (t *DataGridViewWidget[T, K]) fillsAcross() bool { return true }

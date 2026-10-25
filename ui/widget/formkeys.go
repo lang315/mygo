@@ -63,7 +63,7 @@ var formAccept func()
 // leaves out a hidden one (inside a hidden container too) and one of another
 // form. Under mu.
 func (w *Form) canClick(b *ButtonWidget) bool {
-	return b != nil && !b.hidden && !b.disabled && w.keep.built[b.id]
+	return b != nil && !b.hidden && !b.disabled && w.keep.built[b.id] && !b.inertParent
 }
 
 // acceptClick returns what Enter in a text field without OnEnter does while
@@ -89,6 +89,14 @@ func (w *Form) acceptClick() func() {
 // formKeys asks for the form's shortcuts and posts the handlers of those
 // pressed. Under mu, while building.
 func (w *Form) formKeys(c *ui.Context) {
+	// Whether a container above the default buttons is disabled is known once
+	// their elements are built; canClick, which runs later, reads it.
+	for _, b := range []*ButtonWidget{w.accept, w.cancel} {
+		if b != nil && w.keep.built[b.id] { // else its element is of an earlier pass
+			b.inertParent = b.el.IsDisabled()
+		}
+	}
+	w.answerMnemonics(c)
 	for _, s := range w.shortcuts {
 		if c.Shortcut(s.mods, s.key) {
 			Post(s.fn)

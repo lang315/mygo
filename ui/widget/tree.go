@@ -1,7 +1,9 @@
 package widget
 
 import (
+	"cmp"
 	"fmt"
+	"github.com/egoist/mygo/internal/l10n"
 	"slices"
 
 	"github.com/egoist/mygo/ui"
@@ -41,9 +43,10 @@ type treeNode[T any, K comparable] struct {
 // run under the package's lock: they call no widget method.
 type TreeViewWidget[T any, K comparable] struct {
 	common[TreeViewWidget[T, K]]
-	key   func(*T) K
-	text  func(*T) string
-	image func(*T) *ui.Bitmap
+	key       func(*T) K
+	text      func(*T) string
+	image     func(*T) *ui.Bitmap
+	imageSize float32 // the side the image is drawn at, 16 unless SetImageList
 
 	nodes   map[K]*treeNode[T, K]
 	roots   []treeItem[K]
@@ -69,7 +72,7 @@ type TreeViewWidget[T any, K comparable] struct {
 // TreeView makes a tree whose nodes, of type T, key tells apart by a key of
 // type K, and text shows. key and text run under the package's lock.
 func TreeView[T any, K comparable](key func(*T) K, text func(*T) string) *TreeViewWidget[T, K] {
-	t := &TreeViewWidget[T, K]{key: key, text: text, nodes: map[K]*treeNode[T, K]{}, loading: "Loading…", cursor: -1}
+	t := &TreeViewWidget[T, K]{key: key, text: text, nodes: map[K]*treeNode[T, K]{}, cursor: -1}
 	t.init(t)
 	return t
 }
@@ -77,12 +80,20 @@ func TreeView[T any, K comparable](key func(*T) K, text func(*T) string) *TreeVi
 // SetImage shows an image before the text of each node, 16 DIPs square;
 // nil, or a nil image, for none. fn runs under the package's lock.
 func (t *TreeViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *TreeViewWidget[T, K] {
-	t.change(func() { t.image = fn })
+	t.change(func() { t.image, t.imageSize = fn, 0 })
+	return t
+}
+
+// SetImageList shows before the text of each node the image of the list under
+// key(node), drawn at the list's Size; no image for a key the list lacks. key
+// runs under the package's lock.
+func (t *TreeViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *TreeViewWidget[T, K] {
+	t.change(func() { t.image, t.imageSize = ImagesBy(il, key), float32(il.Size()) })
 	return t
 }
 
 // SetLoadingText sets the text of the row that shows below a node the user
-// opened while its children load, "Loading…" by default. That row can be
+// opened while its children load, "Loading…" in the app's language by default. That row can be
 // neither chosen nor checked.
 func (t *TreeViewWidget[T, K]) SetLoadingText(s string) *TreeViewWidget[T, K] {
 	t.change(func() { t.loading = s })
@@ -702,7 +713,7 @@ func (t *TreeViewWidget[T, K]) labelAt(row int) string {
 	}
 	it := t.state.Item(row)
 	if it.wait {
-		return t.loading
+		return t.loadingText()
 	}
 	if n := t.nodes[it.k]; n != nil {
 		return t.text(&n.data)
@@ -756,7 +767,7 @@ func (t *TreeViewWidget[T, K]) row(c *ui.Context, it treeItem[K]) {
 		defer mu.Unlock()
 	}
 	if it.wait {
-		ui.Text(c, t.loading).SingleLine().TextColor(c.Theme().TextMuted)
+		ui.Text(c, t.loadingText()).SingleLine().TextColor(c.Theme().TextMuted)
 		return
 	}
 	n := t.nodes[it.k]
@@ -776,8 +787,19 @@ func (t *TreeViewWidget[T, K]) row(c *ui.Context, it treeItem[K]) {
 	}
 	if t.image != nil {
 		if bmp := t.image(&n.data); bmp != nil {
-			ui.Image(c, bmp).Size(16, 16)
+			side := cmp.Or(t.imageSize, 16)
+			ui.Image(c, bmp).Size(side, side)
 		}
 	}
 	ui.Text(c, text).SingleLine()
+}
+
+func (t *TreeViewWidget[T, K]) fillsAcross() bool { return true }
+
+// loadingText is the text of the Loading row: the app's, else the language's.
+func (t *TreeViewWidget[T, K]) loadingText() string {
+	if t.loading != "" {
+		return t.loading
+	}
+	return l10n.Loading()
 }
