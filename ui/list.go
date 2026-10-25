@@ -78,8 +78,9 @@ type ListState struct {
 	// Selection, when set, lets the user choose several rows, which it
 	// holds by their keys: a click chooses one, Cmd-click (Ctrl-click on
 	// Linux and Windows) adds a row or takes it out, and Shift-click
-	// chooses those from the row last chosen to it, in place of the others
-	// unless Cmd is held, as Shift with the keys that move the choice does;
+	// chooses those from the row last chosen to it in place of the others,
+	// or besides them with Cmd (Ctrl on Linux and Windows) held; Shift with
+	// the keys that move the choice does so in place of the others;
 	// Cmd+A chooses all. On Linux and Windows,
 	// Ctrl with those keys moves without choosing, and Ctrl+Space adds the
 	// row there or takes it out. Selected, set as well, is the row last

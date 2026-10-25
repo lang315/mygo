@@ -1,7 +1,5 @@
 package ui
 
-import "runtime"
-
 // dragSelect chooses the rows a press on one of them drags over
 // (ListState.DragSelect), in a Table choosing cells the columns too; the
 // engine scrolls the list as the pointer nears its edges
@@ -49,11 +47,11 @@ func (f *listFrame) dragSelect() {
 		return
 	}
 	if to := f.rowAtPointer(); to >= 0 && !f.isHeader(to) {
-		// Adding to the choice, the rows from the one pressed to the one
-		// under the pointer take the place of those the drag chose before
-		// on every platform, as on macOS: rows it leaves are no longer
-		// chosen.
-		f.extendBy(to, d.add, d.add || runtime.GOOS == "darwin")
+		// The rows from the one pressed to the one under the pointer take the
+		// place of those the drag chose before: rows it leaves are no longer
+		// chosen. Adding to the choice (Cmd) keeps the others; without it
+		// they are replaced, as a Shift-click does.
+		f.extendBy(to, d.add, d.add)
 	}
 	if f.choosesCells() {
 		f.dragCells()

@@ -61,6 +61,7 @@ does nothing. In a `Multi()` list a click chooses one, Cmd-click (Ctrl-click on
 Linux and Windows) adds an item or takes it out, Shift-click and Shift with the
 arrows choose the items from the one last chosen to the one clicked, and Cmd+A
 chooses all.
+Ctrl+Shift-click (Cmd+Shift on macOS) adds the range to the items chosen.
 
 - `Selected()` returns the keys of the items chosen, in the order of the list,
   and `CountSelected()` how many.
