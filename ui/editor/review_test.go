@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/rope"
 	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
@@ -792,5 +793,52 @@ func TestReviewCaretFollowsTheBufferPastItsLog(t *testing.T) {
 	ed.retry(func() bool { ed.insert("b"); return true })
 	if got := strings.ReplaceAll(b.String(), "z", ""); got != "ab" {
 		t.Fatalf("the text has %q (without the streamed z), want the letters in the order typed", got)
+	}
+}
+
+// TestChangesBetweenNarrowsToWhatDiffers: changesBetween diffs by line, and
+// the offsets it gives are those of what differs in the lines, to a rune.
+func TestChangesBetweenNarrowsToWhatDiffers(t *testing.T) {
+	for _, c := range []struct {
+		name, old, new string
+		want           [4]int // oldStart, oldEnd, newStart, newEnd
+	}{
+		{"appended to the line", "ax\nb\n", "axzzz\nb\n", [4]int{2, 2, 2, 5}},
+		{"inserted at its start", "ax\nb\n", "zzzax\nb\n", [4]int{0, 0, 0, 3}},
+		{"in another line", "ax\nb\n", "ax\nbzz\n", [4]int{4, 4, 4, 6}},
+		{"a line replaced", "ax\nb\n", "ax\nc\n", [4]int{3, 4, 3, 4}},
+		{"a two byte letter changed", "é\n", "è\n", [4]int{0, 2, 0, 2}},
+		{"a four byte letter changed", "a😀\n", "a😁\n", [4]int{1, 5, 1, 5}},
+		{"letters sharing their last byte", "à\n", "ࠠ\n", [4]int{0, 2, 0, 3}},
+		{"after a letter of two bytes", "đ\n", "đx\n", [4]int{2, 2, 2, 3}},
+	} {
+		cs := changesBetween(rope.New(c.old), rope.New(c.new))
+		if len(cs) != 1 {
+			t.Errorf("%s: %d changes", c.name, len(cs))
+			continue
+		}
+		if got := [4]int{cs[0].oldStart, cs[0].oldEnd, cs[0].newStart, cs[0].newEnd}; got != c.want {
+			t.Errorf("%s: change %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// A caret in a line that had text appended past the buffer's log stays where it
+// was, not at the end of the line.
+func TestReviewCaretStaysBeforeTextAppendedPastTheLog(t *testing.T) {
+	ct := newEditorTest(t, "", "|x")
+	ed := &ct.st.ed
+	b := ct.st.Buffer
+	afterEditHook = func() {
+		afterEditHook = nil
+		for range logMax + 44 {
+			b.Edit(Edit{Start: b.Len(), End: b.Len(), Text: "z"})
+		}
+	}
+	t.Cleanup(func() { afterEditHook = nil })
+	ed.retry(func() bool { ed.insert("a"); return true })
+	ed.retry(func() bool { ed.insert("b"); return true })
+	if got := strings.ReplaceAll(b.String(), "z", ""); got != "abx" {
+		t.Fatalf("the text has %q (without the streamed z), want abx", got)
 	}
 }
