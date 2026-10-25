@@ -32,7 +32,7 @@ view.Details().Search("Name", "report") // filters every view
 | `ViewMode` | Shows | Built on |
 |---|---|---|
 | `ViewDetails` | the columns, which the user sorts, resizes and moves | the [DataGridView](../widget.md#datagridview) underneath |
-| `ViewLargeIcon` | an icon (48 DIPs by default, `SetIconSize`) over the text, in a grid | [`ui.GridView`](../gridview.md) |
+| `ViewLargeIcon` | an icon (48 DIPs by default, `SetIconSize`) over the text, in a grid | [`ui.GridView`](../grid-view.md) |
 | `ViewSmallIcon` | a 16 DIPs icon before the text, in a grid | `ui.GridView` |
 | `ViewList` | a 16 DIPs icon before the text, in one column | `ui.GridView` of one column |
 
@@ -42,8 +42,15 @@ called `SetView`. WinForms' default is large icons: call `SetView` for that.
 top to bottom, which this does not.
 
 The rows chosen show in the accent in every view, as a table's do. The text of a
-row in the icon views and the list is the text of the first column. `SetImage(fn)` gives the icon of a row (nil for none); without it the
-first column's `Image` is used. `SetView` fires no event.
+row in the icon views and the list is the text of the first column.
+
+`SetImage(fn)` gives the icon of a row (nil for none), in every view; without it
+the first column's `Image` is used. `SetImageList(il, key)` takes the image of an
+[`ImageList`](imagelist.md) under `key(row)`, drawn at the list's size in the
+icon views and the list (Details draws 16 DIPs). The check box of a small item
+is in the row of its text; the large icons' is at the corner of the picture, on a
+panel that keeps it readable when the item has a picture. `SetView` fires no
+event.
 
 ## Details
 

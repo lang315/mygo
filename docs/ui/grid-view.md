@@ -26,6 +26,14 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
 - `Selection` lets the user choose several, by `Key`: Cmd-click adds an
   item or takes it out, Shift-click and Shift with the arrows choose those
   from the item last chosen, and Cmd+A chooses all.
+  `Pivot()` returns the item Shift extends from, -1 for none (as at the start:
+  a Shift-click as the first click chooses that item alone), and
+  `SetPivot(item)` sets it without changing the choice, for an app that shows
+  the same items in another view and keeps the pivot by key; an item out of
+  range is ignored by Shift-click.
+- `AccentChoice` shows the items chosen in the accent with its text, focused
+  or not, as a table's rows are, instead of the tint (a photo library's) or,
+  unfocused, a grey.
 - `Label` returns an item's text: typing its first letters chooses it, and
   assistive technology reads it as the item's name.
 - `Reorder` lets the user drag items to another place, as a list's rows:
@@ -38,6 +46,8 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   `CheckedChanged` reports a change by the user. Assistive technology reads
   it as "Check" and the item's `Label`. There is no "check all": Cmd+A, then
   Space.
+  `PlainChecks` draws the boxes without the panel behind them that keeps them
+  readable over a picture, for items that have none.
 - `ItemMenu` gives the items a [context menu](context-menu.md), filled for
   `items`, the items chosen in order. A right click on an item not chosen
   chooses it first, and a grid that does not choose gets the item clicked.
