@@ -5,7 +5,7 @@ description: Build or change the interface of a Go app with MyGo's ui/widget pac
 
 # MyGo widget apps
 
-`ui/widget` is the layer for an app's forms, dialogs and tables. Controls are made once, kept, and changed from any goroutine, as in WinForms; each builds `ui` elements every frame. Check the app's pinned MyGo version first and read the source it pins: `go list -m -f '{{.Dir}}' github.com/egoist/mygo`, then `docs/ui/widget.md` there. Confirm every API you use against that source.
+`ui/widget` is the layer for an app's forms, dialogs and tables. Controls are made once and kept; unlike WinForms, their setters and getters are safe from any goroutine and need no `Invoke`. Each control builds `ui` elements every frame. Check the app's pinned MyGo version first and read the source it pins: `go list -m -f '{{.Dir}}' github.com/egoist/mygo`, then `docs/ui/widget.md` there. Confirm every API you use against that source.
 
 ## Shape of an app
 
@@ -40,9 +40,9 @@ func main() {
 
 ## Layout
 
-- `VBox(gap)` and `HBox(gap)` stack controls; the gap is in DIPs. `Grid(colGap, rowGap).Attach(w, col, row, width, height)` places by cell. `FlowPanel(gap)` wraps. `ScrollPanel(w)` scrolls what is larger than its room.
-- Use `Fields()` for a form: `Row("Label", control)` per row, the labels in one column. `Stacked()` puts labels above; `Gap(row, col)` is in DIPs.
-- Alignment and growth work in one box only. In a `VBox`: `Align` places a control horizontally and `VExpand` gives it the free height. In an `HBox`: `VAlign` places it vertically and `HExpand` gives it the free width. The other axis does nothing. `box.Pack(w, expand, fill)` is the explicit form.
+- `widget.VBox(gap)` and `widget.HBox(gap)` stack controls; the gap is in DIPs. `widget.Grid(colGap, rowGap)` and `widget.GridWidget.Attach(w, col, row, width, height)` place by cell. `widget.FlowPanel(gap)` wraps. `widget.ScrollPanel(w)` scrolls what is larger than its room.
+- Use `widget.Fields()` for a form: `widget.FieldsWidget.Row("Label", control)` per row, the labels in one column. `widget.FieldsWidget.Stacked` puts labels above; `widget.FieldsWidget.Gap(row, col)` is in DIPs.
+- Alignment and growth work in one box only. In a `VBox`: `Align` places a control horizontally and `VExpand` gives it the free height. In an `HBox`: `VAlign` places it vertically and `HExpand` gives it the free width. The other axis does nothing. `widget.BoxWidget.Pack(w, expand, fill)` is the explicit form.
 - A table, list or text area needs room: `Expand` the boxes and the `TabControl` that hold it, or it gets none.
 - `SetVisible(false)` hides a control and frees its room (and its `Fields` label).
 
@@ -51,38 +51,49 @@ func main() {
 Bind a control to a value kept elsewhere instead of pairing `SetText` with `OnChange`:
 
 ```go
-package main
+package app
 
-import "github.com/egoist/mygo/ui/widget"
+import (
+	"sync"
 
-type Config struct{ name, email string }
+	"github.com/egoist/mygo/ui/widget"
+)
+
+type Config struct {
+	mu          sync.Mutex
+	name, email string
+}
+
+func (c *Config) text(field *string) func() string {
+	return func() string { c.mu.Lock(); defer c.mu.Unlock(); return *field }
+}
+
+func (c *Config) setText(field *string) func(string) {
+	return func(v string) { c.mu.Lock(); defer c.mu.Unlock(); *field = v }
+}
 
 func settings(cfg *Config) widget.Control {
 	return widget.Fields().
-		Row("Name", widget.Bind(widget.TextBox(),
-			func() string { return cfg.name },
-			func(v string) { cfg.name = v })).
-		Row("Email", widget.Bind(widget.TextBox(),
-			func() string { return cfg.email },
-			func(v string) { cfg.email = v })).
+		Row("Name", widget.Bind(widget.TextBox(), cfg.text(&cfg.name), cfg.setText(&cfg.name))).
+		Row("Email", widget.Bind(widget.TextBox(), cfg.text(&cfg.email), cfg.setText(&cfg.email))).
 		Gap(8, 12)
 }
 ```
 
-- `set` runs on the event goroutine after the user's edit. A program setter (`SetText`, `SetChecked`, `SetValue`) does not call it. Call `widget.Reload(control)` when the source changed elsewhere.
-- `get` and `set` can run at the same time: guard shared state with a mutex.
+- `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
+- A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
 ## Threads
 
-- Handlers (`OnClick`, `OnChange`, `Bind`'s `set`) run one at a time on the event goroutine, never on the main thread. A handler may block; the window keeps drawing.
-- Setters and getters are safe from any goroutine. Run work that must happen in step with handlers through `widget.BeginInvoke(fn)` (does not wait) or `widget.Invoke(fn)` (waits; safe inside a handler, panics on the main thread).
+- Handlers (`OnClick`, `OnChange`, `Bind`'s `set`) run one at a time on the event goroutine, never on the main thread. The queue is the app's: a handler that blocks holds back every other handler of every window, though the windows keep drawing.
+- Setters and getters are safe from any goroutine. Run work that must happen in step with handlers through `widget.BeginInvoke(fn)` (does not wait) or `widget.Invoke(fn)` (waits; safe inside a handler, panics on the main thread). Before the app runs and after it quit, `widget.Invoke` returns without running `fn`.
 - Keep slow I/O off handlers that must stay quick: start a goroutine, report with setters or `BeginInvoke`.
-- Call no widget method inside a callback that runs under the package's lock: a `Column`'s `Text`/`Compare` and key functions, `UpdateRow`'s function, a `Custom` control's build function. They read their arguments only.
+- Call no widget method inside a callback that runs under the package's lock: the key function and every function of a `widget.Column` (`Text`, `Compare`, `Filter`, `Spans`, `Color`, `Image`), the function of `UpdateRow` and of `widget.ListBoxWidget.UpdateItem`, the functions of a `ListBox` or `TreeView`, a `Custom` control's build function. They read their arguments only.
 
 ## Tables
 
 ```go
-package main
+package app
 
 import (
 	"time"
@@ -103,24 +114,25 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 	).CheckboxColumn().BottomPanel().Expand()
 	table.AddRows(rows)
 	go func() {
-		for _, a := range rows {
+		for _, row := range rows {
 			time.Sleep(time.Second)
-			table.UpdateRow(a.ID, func(a *Account) { a.Status = "done" })
+			table.UpdateRow(row.ID, func(a *Account) { a.Status = "done" })
 		}
 	}()
 	return table
 }
 ```
 
-- Every row has a key; `AddRow(s)` replaces the row of an existing key; change a row in place with `UpdateRow(key, fn)`, never by rebuilding the table. It scales to a million rows.
-- `Selected()`, `Checked()` and `CountSelected()` read the user's choice; `OnActivate(fn)` is a double click or Enter; `ContextMenuFunc` builds a menu on the click.
-- Save column widths with `SetColumnsLayout` and `OnColumnsChange`, debounced: it fires many times during one drag.
+- Every row has a key; `widget.DataGridViewWidget.AddRows` replaces the row of an existing key; change a row in place with `widget.DataGridViewWidget.UpdateRow(key, fn)`, never by rebuilding the table. It scales to a million rows.
+- `widget.DataGridViewWidget.Selected`, `widget.DataGridViewWidget.Checked` and `widget.DataGridViewWidget.CountSelected` read the user's choice; `widget.DataGridViewWidget.OnActivate(fn)` is a double click or Enter; `widget.DataGridViewWidget.ContextMenuFunc` builds a menu on the click.
+- Save column widths with `widget.DataGridViewWidget.SetColumnsLayout` and `widget.DataGridViewWidget.OnColumnsChange`, debounced: it fires many times during one drag.
 
 ## Dialogs
 
-- `NewDialog(parent, title, subtitle, width, height, content)` makes one; `Run()` blocks until it closes, so call it from a handler or a goroutine, never the main thread. A `height` of 0 fits the content.
-- `Alert`, `Confirm`, `InputString`, `InputInt`, `InputSelect` and the file dialogs `OpenFile`, `SaveFile`, `SelectFolder` are ready made.
-- For Enter and Escape use `AcceptButton` and `CancelButton` on the form.
+- `widget.NewDialog(parent, title, subtitle, width, height, content)` makes one; `widget.Dialog.Run` blocks until it closes. Call it from a handler or a goroutine, never the main thread (it panics there). A `height` of 0 fits the content.
+- In a handler, `Run` keeps running the other handlers while it waits, so state can change between the call and its return: read it again afterwards.
+- `widget.Alert`, `widget.Confirm`, `widget.InputString`, `widget.InputInt`, `widget.InputSelect` and the file dialogs `widget.OpenFile`, `widget.SaveFile`, `widget.SelectFolder` block the same way and panic on the main thread too.
+- Enter and Escape: `widget.Form.SetAcceptButton(b)` and `widget.Form.SetCancelButton(b)`.
 
 ## Style
 
@@ -130,7 +142,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 
 ## Controls of your own
 
-Use `widget.Custom` only for what no widget does; it draws with raw `ui` (see the `mygo-maintenance` skill for the rules of `ui` views). Its build function runs every frame and under the package's lock.
+Use `widget.Custom` only for what no widget does; it draws with raw `ui` (see the `mygo-maintenance` skill for the rules of `ui` views). Its build function runs every frame and under the package's lock. State it reads must change inside `widget.Change(fn)`, from any goroutine but never from a build: otherwise the read races and nothing redraws.
 
 ## Verify
 

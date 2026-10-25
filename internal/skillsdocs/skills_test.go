@@ -12,8 +12,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -52,12 +53,15 @@ func skills(t *testing.T) []skill {
 		}
 		s := skill{name: e.Name(), dir: filepath.Join(skillsDir, e.Name())}
 		s.files = append(s.files, filepath.Join(s.dir, "SKILL.md"))
-		filepath.WalkDir(s.dir, func(p string, d fs.DirEntry, err error) error {
+		err := filepath.WalkDir(s.dir, func(p string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() && strings.HasSuffix(p, ".md") && filepath.Base(p) != "SKILL.md" {
 				s.files = append(s.files, p)
 			}
-			return nil
+			return err
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 		out = append(out, s)
 	}
 	if len(out) == 0 {
@@ -114,7 +118,6 @@ func TestSkillMetadata(t *testing.T) {
 var (
 	fenceRE   = regexp.MustCompile("(?s)```(\\w*)\n(.*?)```")
 	docPathRE = regexp.MustCompile("docs/[A-Za-z0-9_./-]+\\.md")
-	nameRE    = regexp.MustCompile("`(widget|ui|tw|mygo)\\.([A-Za-z_][A-Za-z0-9_]*)")
 )
 
 // prose is the text of a Markdown file outside its code blocks.
@@ -150,6 +153,18 @@ func (r fromRepo) Import(path string) (*types.Package, error) {
 	return r.from.ImportFrom(path, r.dir, 0)
 }
 
+var (
+	sharedOnce   sync.Once
+	sharedLoader *loader
+)
+
+// theLoader is the one loader of the package's tests: loading ui and ui/widget
+// from source takes seconds, once.
+func theLoader() *loader {
+	sharedOnce.Do(func() { sharedLoader = newLoader() })
+	return sharedLoader
+}
+
 func newLoader() *loader {
 	if build.Default.GOROOT == "" { // go test -trimpath leaves it empty
 		out, err := exec.Command("go", "env", "GOROOT").Output()
@@ -179,21 +194,50 @@ func (l *loader) pkg(t *testing.T, path string) *types.Package {
 	return p
 }
 
-// names of the prose that are not exported by their package but are fine to
-// write: none now; add with a reason.
+// allowedNames are names a skill may write that the package does not
+// export; there should be none.
 var allowedNames = map[string]string{}
 
+// mentionRE finds, inside the backtick spans of the prose, pkg.Name and
+// pkg.Type.Member where pkg is one of the packages; the character before pkg
+// is not part of a longer name.
+var (
+	spanRE    = regexp.MustCompile("`[^`\n]+`")
+	mentionRE = regexp.MustCompile(`(^|[^A-Za-z0-9_./-])(widget|ui|tw|mygo)\.([A-Za-z_][A-Za-z0-9_]*)(?:\.([A-Za-z_][A-Za-z0-9_]*))?`)
+)
+
 func TestSkillNamesExist(t *testing.T) {
-	l := newLoader()
+	l := theLoader()
 	for _, s := range skills(t) {
 		for _, f := range s.files {
-			for _, m := range nameRE.FindAllStringSubmatch(prose(read(t, f)), -1) {
-				qual, name := m[1], m[2]
-				if allowedNames[qual+"."+name] != "" {
-					continue
-				}
-				if obj := l.pkg(t, packages[qual]).Scope().Lookup(name); obj == nil || !obj.Exported() {
-					t.Errorf("%s mentions %s.%s, which %s does not export", f, qual, name, packages[qual])
+			for _, span := range spanRE.FindAllString(prose(read(t, f)), -1) {
+				for _, m := range mentionRE.FindAllStringSubmatch(span, -1) {
+					qual, name, member := m[2], m[3], m[4]
+					full := qual + "." + name
+					if member != "" {
+						full += "." + member
+					}
+					if allowedNames[full] != "" {
+						continue
+					}
+					pkg := l.pkg(t, packages[qual])
+					obj := pkg.Scope().Lookup(name)
+					if obj == nil || !obj.Exported() {
+						t.Errorf("%s mentions %s, which %s does not export", f, full, packages[qual])
+						continue
+					}
+					if member == "" {
+						continue
+					}
+					// The member must be a field or a method of that very type,
+					// promoted ones included: two types may share a name.
+					var typ types.Type = obj.Type()
+					if _, ok := obj.(*types.TypeName); ok {
+						typ = types.NewPointer(obj.Type())
+					}
+					if found, _, _ := types.LookupFieldOrMethod(typ, true, pkg, member); found == nil {
+						t.Errorf("%s mentions %s, but %s has no field or method %s", f, full, qual+"."+name, member)
+					}
 				}
 			}
 		}
@@ -204,7 +248,7 @@ func TestSkillNamesExist(t *testing.T) {
 }
 
 func TestSkillExamplesCompile(t *testing.T) {
-	l := newLoader()
+	l := theLoader()
 	blocks := 0
 	for _, s := range skills(t) {
 		for _, f := range s.files {
@@ -215,11 +259,14 @@ func TestSkillExamplesCompile(t *testing.T) {
 				}
 				blocks++
 				line := 1 + strings.Count(text[:m[4]], "\n")
-				where := f + ":" + itoa(line)
+				where := f + ":" + strconv.Itoa(line)
 				file, err := parser.ParseFile(l.fset, where, text[m[4]:m[5]], parser.AllErrors)
 				if err != nil {
 					t.Errorf("%s: a Go example must be a whole file (package, imports): %v", where, err)
 					continue
+				}
+				if file.Name.Name == "main" && !declares(file, "main") {
+					t.Errorf("%s: an example in package main needs a func main", where)
 				}
 				conf := types.Config{
 					Importer: l.imp,
@@ -232,15 +279,12 @@ func TestSkillExamplesCompile(t *testing.T) {
 	t.Logf("%d Go examples checked", blocks)
 }
 
-func itoa(n int) string {
-	s := ""
-	for ; n > 0; n /= 10 {
-		s = string(rune('0'+n%10)) + s
+// declares reports whether file declares a function named name.
+func declares(file *ast.File, name string) bool {
+	for _, d := range file.Decls {
+		if f, ok := d.(*ast.FuncDecl); ok && f.Recv == nil && f.Name.Name == name {
+			return true
+		}
 	}
-	if s == "" {
-		return "0"
-	}
-	return s
+	return false
 }
-
-var _ = sort.Strings
