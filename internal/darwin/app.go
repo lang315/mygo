@@ -252,10 +252,10 @@ func registerAppDelegate() {
 	classDef("MyGoAppDelegate", "NSObject", []string{"NSApplicationDelegate"}, []objc.MethodDef{
 		// The end of a PrintToPDF job (printJobs). WebKit's print operations
 		// may finish on a background thread.
-		method("mygoPrintOperationDidRun:success:contextInfo:", func(self id, _ objc.SEL, op id, success bool, job uintptr) {
+		method("mygoPrintOperationDidRun:success:contextInfo:", func(self id, _ objc.SEL, op id, success bool, job unsafe.Pointer) {
 			theBackend.runOnMain(func() {
-				if j := printJobs[job]; j != nil {
-					delete(printJobs, job)
+				if j := printJobs[uintptr(job)]; j != nil {
+					delete(printJobs, uintptr(job))
 					j.done(success)
 				}
 			})
@@ -341,7 +341,7 @@ func registerAppDelegate() {
 		}),
 		method("applicationSupportsSecureRestorableState:", func(self id, _ objc.SEL, app id) bool { return true }),
 		method("applicationShouldTerminateAfterLastWindowClosed:", func(self id, _ objc.SEL, app id) bool { return false }),
-		method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx uintptr) {
+		method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx unsafe.Pointer) {
 			if goString(keyPath) == "effectiveAppearance" {
 				theBackend.h.ThemeChanged()
 			}

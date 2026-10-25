@@ -4,6 +4,7 @@ package darwin
 
 import (
 	"github.com/ebitengine/purego/objc"
+	"unsafe"
 
 	"github.com/egoist/mygo/internal/accelerator"
 	"github.com/egoist/mygo/internal/platform"
@@ -317,7 +318,7 @@ func registerTrayTarget() {
 		// The menu bar under the button turned dark or light: with the
 		// system's appearance, or the wallpaper under a translucent menu
 		// bar.
-		method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx uintptr) {
+		method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx unsafe.Pointer) {
 			t := theBackend.trays[object]
 			if t == nil {
 				return

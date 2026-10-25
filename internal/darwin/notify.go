@@ -54,11 +54,13 @@ func registerNotificationDelegate() {
 		return
 	}
 	classDef("MyGoNotificationDelegate", "NSObject", []string{"UNUserNotificationCenterDelegate"}, []objc.MethodDef{
-		method("userNotificationCenter:willPresentNotification:withCompletionHandler:", func(self id, _ objc.SEL, center, n id, handler uintptr) {
+		method("userNotificationCenter:willPresentNotification:withCompletionHandler:", func(self id, _ objc.SEL, center, n id, blk objc.Block) {
+			handler := uintptr(blk)
 			// Show banners even while the app is in the foreground.
 			callBlock(handler, 1<<1|1<<3|1<<4) // sound | list | banner
 		}),
-		method("userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:", func(self id, _ objc.SEL, center, resp id, handler uintptr) {
+		method("userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:", func(self id, _ objc.SEL, center, resp id, blk objc.Block) {
+			handler := uintptr(blk)
 			ident := goString(send(send(send(send(resp, "notification"), "request"), "identifier"), "self"))
 			theBackend.runOnMain(func() { theBackend.h.NotificationClicked(ident) })
 			callBlock(handler)
