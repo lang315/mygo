@@ -7,6 +7,11 @@ import (
 	"unicode/utf8"
 )
 
+// afterEditHook, set by tests, runs in apply once the edit is in the buffer,
+// before the editor follows the buffer: the time in which another goroutine
+// edits it.
+var afterEditHook func()
+
 // apply makes edits to the buffer as one step of undo, and gives the
 // selections after them: after maps each selection, given a function
 // moving offsets through the edits; nil moves them as the text around
@@ -28,8 +33,11 @@ func (ed *editor) apply(edits []Edit, kind editKind, after func(move func(int, b
 		return false
 	}
 	changes := b.edit(edits, kind, ed, before)
-	made := b.version
+	made, madeText := b.version, b.text
 	b.mu.Unlock()
+	if afterEditHook != nil {
+		afterEditHook()
+	}
 	if changes == nil {
 		// The edits change nothing, as pasting the text selected over
 		// it: the selections still go where the edits put them, as the
@@ -56,7 +64,16 @@ func (ed *editor) apply(edits []Edit, kind editKind, after func(move func(int, b
 		// Placed in the text the edit made, and moved through the edits
 		// made after it before the editor followed.
 		if ed.view.version != made {
-			entries, _, _ := b.entriesSince(made)
+			entries, _, ok := b.entriesSince(made)
+			if !ok {
+				// Too far behind the buffer's log to follow its edits, as
+				// the editor's own sync was: the changes of the lines
+				// between the text made and the text it follows.
+				cs := changesBetween(madeText, ed.view.text)
+				for i := range sels {
+					sels[i] = mapSel(sels[i], cs)
+				}
+			}
 			for _, e := range entries {
 				if e.version > ed.view.version {
 					break

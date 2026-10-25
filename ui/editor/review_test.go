@@ -772,3 +772,25 @@ func TestReviewDeferredEditsKeepTheirOrder(t *testing.T) {
 		t.Fatalf("the text has %q, want ab", got)
 	}
 }
+
+// The buffer edited by another goroutine more times than its log keeps, between
+// an edit of the editor and the editor following the buffer, does not leave the
+// caret where the text before those edits had it: the next thing typed goes after
+// the first, not in the middle of what was added before it.
+func TestReviewCaretFollowsTheBufferPastItsLog(t *testing.T) {
+	ct := newEditorTest(t, "", "|")
+	ed := &ct.st.ed
+	b := ct.st.Buffer
+	afterEditHook = func() {
+		afterEditHook = nil
+		for range logMax + 44 {
+			b.Edit(Edit{Start: 0, End: 0, Text: "z"})
+		}
+	}
+	t.Cleanup(func() { afterEditHook = nil })
+	ed.retry(func() bool { ed.insert("a"); return true })
+	ed.retry(func() bool { ed.insert("b"); return true })
+	if got := strings.ReplaceAll(b.String(), "z", ""); got != "ab" {
+		t.Fatalf("the text has %q (without the streamed z), want the letters in the order typed", got)
+	}
+}
