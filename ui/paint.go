@@ -325,7 +325,7 @@ func (p *Painter) element(e *node) {
 	if own && borderOver {
 		p.border(e, box)
 	}
-	if own && e.checkmark {
+	if own && e.checkmark != 0 {
 		paintCheckmark(p, e, box)
 	}
 	if own && e.paintAfterFn != nil {

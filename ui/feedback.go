@@ -73,8 +73,9 @@ func coreCheckboxGroup(c *context, label string, fn func()) *node {
 
 // paintCheckbox styles the box of a check box, off (1), on (2) or mixed
 // (3), as Checkbox does. The box is a child of the row that is the check
-// box, whose state paintCheckmark and checkboxStyle read as they paint, so
-// that no closure is made for each box.
+// box. It keeps the state and the theme it was built with, which
+// paintCheckmark and checkboxStyle paint with, so that no closure is made
+// for each box.
 func paintCheckbox(c *context, box *node, state int8) {
 	t := c.theme
 	if state > 1 {
@@ -82,15 +83,16 @@ func paintCheckbox(c *context, box *node, state int8) {
 	} else {
 		box.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
 	}
-	box.checkmark = true
+	box.checkmark = state
+	box.builtWith(c.theme)
 	box.styleFn = checkboxStyle
 }
 
 // paintCheckmark paints the check or the dash of box, a check box's, and the
 // focus ring of the row holding it.
 func paintCheckmark(p *Painter, box *node, r Rect) {
-	row, t := box.parent, box.c.theme
-	switch row.checked {
+	row, t := box.parent, box.builtTheme()
+	switch box.checkmark {
 	case 2:
 		p.StrokePath(checkPath(r), t.Space(0.5), t.AccentText)
 	case 3:
@@ -103,8 +105,8 @@ func paintCheckmark(p *Painter, box *node, r Rect) {
 
 // checkboxStyle shows the pointer over an unchecked check box on its box.
 func checkboxStyle(box *node) {
-	if row := box.parent; row.checked == 1 && row.Hovered() {
-		box.borderC = box.c.theme.Accent
+	if row := box.parent; box.checkmark == 1 && row.Hovered() {
+		box.borderC = box.builtTheme().Accent
 	}
 }
 
@@ -340,4 +342,31 @@ func coreFindBar(c *context, open *bool, query *string, matches int, current *in
 		})
 	})
 	return bar
+}
+
+// builtWith notes the theme e is built with, for a static function that
+// paints it: SetTheme applies to what is created after it, not to the
+// elements before it.
+func (e *node) builtWith(t *Theme) {
+	rt := e.c.rt
+	for i := len(rt.themes) - 1; i >= 0; i-- {
+		if rt.themes[i] == t {
+			e.themeAt = uint16(i)
+			return
+		}
+	}
+	if len(rt.themes) >= 1<<16-1 {
+		e.themeAt = 1<<16 - 1 // a frame of 65535 themes: the theme of painting
+		return
+	}
+	e.themeAt = uint16(len(rt.themes))
+	rt.themes = append(rt.themes, t)
+}
+
+// builtTheme returns the theme e was built with (builtWith).
+func (e *node) builtTheme() *Theme {
+	if rt := e.c.rt; int(e.themeAt) < len(rt.themes) {
+		return rt.themes[e.themeAt]
+	}
+	return e.c.theme
 }

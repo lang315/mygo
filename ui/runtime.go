@@ -101,7 +101,10 @@ type engine struct {
 	handleChecks bool
 	afterInputs  []inputAction
 	// itemChecks holds the check boxes of the rows and items of the frame.
-	itemChecks      itemCheckSlab
+	itemChecks itemCheckSlab
+	// themes are those that elements built with a static paint function
+	// were built with in the frame (node.builtWith).
+	themes          []*Theme
 	inputs          []valueInput
 	inputAt         int
 	afterInputAt    int
@@ -973,6 +976,8 @@ func (rt *engine) close() {
 	clear(rt.afterInputs)
 	rt.afterInputs = nil
 	rt.itemChecks = itemCheckSlab{}
+	rt.themes = nil
+	rt.themes = nil
 	clear(rt.inputs)
 	rt.inputs = nil
 	rt.arena.rt = nil

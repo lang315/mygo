@@ -112,3 +112,86 @@ func TestTableCheckAllPaintsTheStateOfTheFrame(t *testing.T) {
 		t.Errorf("check-all box %v after the rows were unchecked: it painted the frame before", got)
 	}
 }
+
+// boxCenter is the pixel at the center of the check box named label.
+func boxCenter(t *testing.T, tt *Tester, label string) color.RGBA {
+	t.Helper()
+	n := accessNode(t, tt.h.access, platform.RoleCheckBox, label)
+	return tt.Image().RGBAAt(int(n.Bounds.X+n.Bounds.W/2), int(n.Bounds.Y+n.Bounds.H/2))
+}
+
+// TestCheckboxPaintsWithTheThemeItWasBuiltWith: SetTheme applies to the
+// widgets made after it, so a check box made before another SetTheme keeps its
+// dash, ring and look from the first theme, as it does its background.
+func TestCheckboxPaintsWithTheThemeItWasBuiltWith(t *testing.T) {
+	a, b := *LightTheme(), *LightTheme()
+	a.AccentText = Hex("#ff0000")
+	b.AccentText = Hex("#00ff00")
+	var checked Selection[int]
+	s := ListState{Checked: &checked, Key: func(i int) any { return i }}
+	checked.Add(1) // some, not all: the check-all box shows a dash
+	on := false
+	tt := coreNewTester(func(c *context) {
+		c.SetTheme(&a)
+		coreColumn(c).AlignItems(Start).Children(func() {
+			checkbox(c, &on, "", true).Label("Group")
+			coreTable(c, &s, []TableColumn{{Title: "Name"}}, 3, func(row, col int) { coreText(c, "x") })
+		})
+		c.SetTheme(&b) // for what comes after
+	}, 400, 400)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	tt.Frame()
+	red := color.RGBA{255, 0, 0, 255}
+	if got := boxCenter(t, tt, "Group"); got != red {
+		t.Errorf("a mixed check box built with theme A paints %v, want its dash %v", got, red)
+	}
+	if got := boxCenter(t, tt, "Check all"); got != red {
+		t.Errorf("a table's check-all box built with theme A paints %v, want its dash %v", got, red)
+	}
+}
+
+// TestCheckboxSettersDoNotChangeTheLook: Checked, Mixed on a check box tell
+// assistive technology; the box paints the state it was built with.
+func TestCheckboxSettersDoNotChangeTheLook(t *testing.T) {
+	th := *LightTheme()
+	th.AccentText = Hex("#ff0000")
+	off := false
+	tt := coreNewTester(func(c *context) {
+		c.SetTheme(&th)
+		coreColumn(c).Gap(20).AlignItems(Start).Children(func() {
+			checkbox(c, &off, "", false).Label("Mixed").Mixed()
+			checkbox(c, &off, "", false).Label("Checked").Checked(true)
+		})
+	}, 400, 400)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	tt.Frame()
+	red := color.RGBA{255, 0, 0, 255}
+	for _, label := range []string{"Mixed", "Checked"} {
+		if got := boxCenter(t, tt, label); got == red {
+			t.Errorf("an unchecked box told %s paints its dash or check %v", label, got)
+		}
+	}
+}
+
+// TestTableRowHoverUsesTheThemeItWasBuiltWith: the row's hover color is that of
+// the theme the table was built with, though SetTheme came after.
+func TestTableRowHoverUsesTheThemeItWasBuiltWith(t *testing.T) {
+	a, b := *LightTheme(), *LightTheme()
+	a.SurfaceHover = Hex("#ff0000")
+	b.SurfaceHover = Hex("#00ff00")
+	s := ListState{Key: func(i int) any { return i }}
+	tt := coreNewTester(func(c *context) {
+		c.SetTheme(&a)
+		coreTable(c, &s, []TableColumn{{Title: "Name"}}, 3, func(row, col int) { coreText(c, "x") })
+		c.SetTheme(&b)
+	}, 400, 400)
+	tt.Frame()
+	// Row 1 is below the header (the height of 8 spaces) and row 0.
+	y := a.Space(8) + a.Space(8)*1.5
+	tt.Move(300, y)
+	tt.Frame()
+	got := tt.Image().RGBAAt(300, int(y))
+	if want := (color.RGBA{255, 0, 0, 255}); got != want {
+		t.Errorf("a hovered row paints %v, want the hover of the theme it was built with %v", got, want)
+	}
+}

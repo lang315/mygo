@@ -359,6 +359,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				if s.RoundRows {
 					row.Radius(t.Radius)
 				}
+				row.builtWith(t)
 				row.styleFn = tableRowStyle
 				row.flags |= flagClickable
 				row.afterInputNode(tableRowActivate)
@@ -692,7 +693,7 @@ func copyInput(rt *engine, chosen func() []int, copy func([]int) string) func(In
 // tableRowStyle shows the pointer over a row.
 func tableRowStyle(row *node) {
 	if row.Hovered() {
-		row.bg = row.c.theme.SurfaceHover
+		row.bg = row.builtTheme().SurfaceHover
 	}
 }
 

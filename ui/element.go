@@ -265,6 +265,7 @@ type node struct {
 	c          *context
 	id         uint64
 	flags      uint32
+	themeAt    uint16 // the theme a static paint function paints with (builtWith)
 	parent     *node
 	first      *node
 	last       *node
@@ -387,9 +388,10 @@ type node struct {
 	// highlighted is set on the option of a select the pointer or the
 	// arrows are on.
 	highlighted bool
-	// checkmark marks the box of a check box, which paints its check or
-	// dash from the state of the row holding it (paintCheckmark).
-	checkmark bool
+	// checkmark is the state of a check box (1 off, 2 on, 3 mixed) when its
+	// box was built, which the box paints (paintCheckmark), and 0 for any
+	// other element.
+	checkmark int8
 	accValue  string
 	accRange  [3]float64
 	hasRange  bool
