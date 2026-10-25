@@ -56,6 +56,7 @@ go vet ./... && GOOS=linux go vet ./... && GOOS=windows go vet ./...
 go vet -tags mygo_noinspector ./...        # production builds, without the inspector of native UI
 GOOS=js GOARCH=wasm go vet $(GOOS=js GOARCH=wasm go list ./... | grep -v /cmd/mygo)  # browsers, all but the CLI
 go test ./...                              # core (fake backend), tsgen, CLI, accelerator
+go test ./internal/skillsdocs               # the agent skills' metadata, doc paths, API names and Go examples
 go build -trimpath -tags mygo_noinspector -ldflags "-s -w -X github.com/egoist/mygo.production=1" -o /tmp/counter-native ./examples/counter-native  # an app's release size, as the benchmarks build it
 MYGO_E2E=1 go test ./internal/e2e          # real GUI tests (macOS desktop session)
 bun install && bun run test && bun run typecheck   # the workspace, from the root
@@ -128,6 +129,11 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
 - The configuration types of `packages/cli/index.d.ts` (for `mygo.config.ts`)
   mirror `Config` in `cmd/mygo/config.go`; `TestConfigTypes` checks them.
 - Tests: unit tests through `internal/fake`; GUI behavior in `internal/e2e`.
+- Agent skills for apps live in `cmd/mygo/template/shared/.agents/skills`
+  and are installed by `mygo install-skills`. Change a skill when you change
+  the API it teaches. A Go example in one is a whole file that type-checks
+  (`go test ./internal/skillsdocs`); the `ui/widget` layer
+  (`docs/ui/widget.md`) is the one they send app UI to.
 - Tests never pass or fail on wall-clock time ("Waiting in tests" in the
   architecture guide): wait for the condition or event with
   `internal/wait`, whose one-minute guard only turns a hang into a

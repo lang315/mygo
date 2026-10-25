@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"flag"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -37,8 +39,7 @@ func TestInstallSkills(t *testing.T) {
 				if err := runInstallSkills(args); err != nil {
 					t.Fatal(err)
 				}
-				for _, name := range []string{"SKILL.md", "agents/openai.yaml"} {
-					path := ".agents/skills/mygo-maintenance/" + name
+				for _, path := range bundledSkillFiles(t) {
 					want, err := templateFS.ReadFile("template/shared/" + path)
 					if err != nil {
 						t.Fatal(err)
@@ -65,6 +66,46 @@ func TestInstallSkills(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// bundledSkillFiles lists the files of every bundled skill, as paths below
+// template/shared.
+func bundledSkillFiles(t *testing.T) []string {
+	t.Helper()
+	var files []string
+	err := fs.WalkDir(templateFS, "template/shared/.agents/skills", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			files = append(files, strings.TrimPrefix(path, "template/shared/"))
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+// Every bundled skill is installed whole: its SKILL.md and its agent metadata.
+func TestInstallSkillsInstallsEverySkill(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInstallSkills([]string{dir}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := templateFS.ReadDir("template/shared/.agents/skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 2 {
+		t.Fatalf("%d bundled skills, want mygo-maintenance and mygo-widget-app at least", len(entries))
+	}
+	for _, e := range entries {
+		for _, name := range []string{"SKILL.md", "agents/openai.yaml"} {
+			path := filepath.Join(dir, ".agents", "skills", e.Name(), filepath.FromSlash(name))
+			if _, err := os.Stat(path); err != nil {
+				t.Errorf("skill %s: %v", e.Name(), err)
+			}
+		}
 	}
 }
 
