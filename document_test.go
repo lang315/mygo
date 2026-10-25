@@ -402,9 +402,13 @@ func TestDocumentEditedWhileTheDiskIsChecked(t *testing.T) {
 	d, _ := ds.Open(path)
 	// Every look at the file waits for the edit, those of the watch too.
 	looked, edited := make(chan struct{}, 16), make(chan struct{})
-	hold := func() {
+	hold := func(changed bool) func() {
+		if !changed { // the watch's look at the start
+			return nil
+		}
 		looked <- struct{}{}
 		<-edited
+		return nil
 	}
 	afterDiskLook.Store(&hold)
 	t.Cleanup(func() { afterDiskLook.Store(nil) })
@@ -441,9 +445,13 @@ func TestDocumentEditedWhileEqualIsAsked(t *testing.T) {
 	path := writeTemp(t, "equal.txt", "mine")
 	d, _ := ds.Open(path)
 	looked, release := make(chan struct{}, 16), make(chan struct{})
-	hold := func() {
+	hold := func(changed bool) func() {
+		if !changed { // the watch's look at the start
+			return nil
+		}
 		looked <- struct{}{}
 		<-release
+		return nil
 	}
 	afterDiskLook.Store(&hold)
 	t.Cleanup(func() { afterDiskLook.Store(nil) })
@@ -532,28 +540,91 @@ func TestDocumentMovedWhileTheDiskIsChecked(t *testing.T) {
 	b := filepath.Join(filepath.Dir(a), "b.txt")
 	os.WriteFile(b, []byte("mine"), 0o644)
 	d, _ := ds.Open(a)
-	looked, release := make(chan struct{}, 16), make(chan struct{})
-	hold := func() {
-		looked <- struct{}{}
-		<-release
+	// The first look that finds the file changed, whichever it is, finds the
+	// document moved by the time it decides.
+	// The first look that finds the file changed, whichever it is, finds the
+	// document moved by the time it decides; the content is checked when it
+	// ends, before a look at b.txt reads it again. The looks that found the
+	// file changed go one at a time, and are waited for.
+	var once sync.Once
+	var moved atomic.Bool
+	var order sync.Mutex
+	var looks sync.WaitGroup
+	move := func(changed bool) func() {
+		if !changed {
+			return nil
+		}
+		order.Lock()
+		looks.Add(1)
+		first := false
+		once.Do(func() { d.moved(b); moved.Store(true); first = true })
+		return func() {
+			if first && d.Content() != "mine" {
+				t.Errorf("content %q: the look at a.txt replaced the content of the document at b.txt", d.Content())
+			}
+			order.Unlock()
+			looks.Done()
+		}
 	}
-	afterDiskLook.Store(&hold)
+	afterDiskLook.Store(&move)
 	t.Cleanup(func() { afterDiskLook.Store(nil) })
 	outsideChange(a, "theirs a", 1)
-	done := make(chan struct{})
-	go func() { d.checkDisk(); close(done) }()
-	wait.For(t, "the look at the file", looked)
-	d.moved(b)
-	afterDiskLook.Store(nil)
-	close(release)
-	wait.For(t, "the look to end", done)
-	if d.Content() != "mine" {
-		t.Fatalf("content %q: the look at a.txt replaced the content of the document at b.txt", d.Content())
+	d.checkDisk()
+	if !moved.Load() {
+		t.Fatal("no look found a.txt changed")
 	}
+	looks.Wait()
 	outsideChange(b, "theirs b", 2)
 	d.checkDisk()
 	if d.Content() != "theirs b" {
 		t.Errorf("content %q after b.txt changed, want theirs b", d.Content())
+	}
+}
+
+// TestDocumentSetDuringSave: Set asks Equal about the file as it was when Set
+// began; a save that ends meanwhile makes that answer about another file. The
+// document must stay edited, not be taken for the file's.
+func TestDocumentSetDuringSave(t *testing.T) {
+	writing, writeGo := make(chan struct{}), make(chan struct{})
+	asking, askGo := make(chan struct{}), make(chan struct{})
+	var armed atomic.Bool
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff,
+		Equal: func(a, b string) bool {
+			if armed.Load() && a == "S0" && b == "S0" {
+				close(asking)
+				<-askGo
+			}
+			return a == b
+		},
+		Write: func(w io.Writer, s string) error {
+			_, err := io.WriteString(w, s)
+			if s == "W" {
+				close(writing)
+				<-writeGo
+			}
+			return err
+		}})
+	path := writeTemp(t, "during-save.txt", "S0")
+	d, _ := ds.Open(path)
+	d.Set("W")
+	saved := make(chan error, 1)
+	go func() { saved <- d.Save() }()
+	wait.For(t, "the save to write", writing)
+	armed.Store(true)
+	set := make(chan struct{})
+	go func() { d.Set("S0"); close(set) }() // back to the file's content, as it was
+	wait.For(t, "Set to ask Equal", asking)
+	close(writeGo) // the save ends: the file has W
+	if err := wait.For(t, "the save to end", saved); err != nil {
+		t.Fatal(err)
+	}
+	close(askGo)
+	wait.For(t, "Set to end", set)
+	if got := readString(t, path); got != "W" {
+		t.Fatalf("the file has %q, want W", got)
+	}
+	if d.Content() != "S0" || !d.IsEdited() {
+		t.Errorf("content %q edited %v: the content differs from the file's and the document is not edited", d.Content(), d.IsEdited())
 	}
 }
 

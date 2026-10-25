@@ -211,7 +211,9 @@ func documentsAt(path string) []*docBase {
 
 // afterDiskLook, set by tests, runs in checkDisk once it looked at the file
 // and before it decides what to do: the time in which the document changes.
-var afterDiskLook atomic.Pointer[func()]
+// It is told whether the file differs from what the document last read or
+// wrote, and returns a function to call when the look ends, or nil.
+var afterDiskLook atomic.Pointer[func(changed bool) func()]
 
 // checkDisk compares b's file with what b last read or wrote.
 func (b *docBase) checkDisk() {
@@ -235,7 +237,9 @@ func (b *docBase) checkDisk() {
 		return
 	}
 	if f := afterDiskLook.Load(); f != nil {
-		(*f)()
+		if done := (*f)(exists && !now.same(known)); done != nil {
+			defer done()
+		}
 	}
 	switch {
 	case !exists:
