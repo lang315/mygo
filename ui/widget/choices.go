@@ -10,6 +10,7 @@ import (
 
 // NumericUpDownWidget edits a number between min and max.
 type NumericUpDownWidget struct {
+	edit func() // editedOnce's
 	common[NumericUpDownWidget]
 	min, max, step float64
 	value          mirror[float64]
@@ -48,7 +49,7 @@ func (s *NumericUpDownWidget) build(c *ui.Context) ui.Element {
 	if changed && s.onChange != nil {
 		Post(s.onChange)
 	}
-	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(edited(&s.value, &s.bound, s.onChange))
+	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(editedOnce(&s.edit, &s.value, &s.bound, &s.onChange))
 	if e.Submitted() {
 		if h := s.onEnter; h != nil {
 			Post(h)

@@ -48,3 +48,19 @@ func onChange(m committer, h func()) func() {
 		}
 	}
 }
+
+// editedOnce returns ui's OnChange callback for m, a control's value, made
+// once and kept in *slot for the life of the control: a closure made in each
+// build is an allocation for each control in each frame. It takes the
+// control's OnChange (*h) and its binding at the moment of the edit.
+func editedOnce[T comparable](slot *func(), m *mirror[T], b *binding, h *func()) func() {
+	if *slot == nil {
+		*slot = func() {
+			mu.Lock()
+			fn := edited(m, b, *h)
+			mu.Unlock()
+			fn()
+		}
+	}
+	return *slot
+}

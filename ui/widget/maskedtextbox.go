@@ -17,6 +17,9 @@ type MaskedTextBoxWidget struct {
 	cells      []rune // what each slot holds, which the text shown cannot tell from a prompt
 	onChange   func()
 	onRejected func(r rune)
+	edit       func() // editedOnce's
+	onEditFn   func(e ui.TextEdit) (string, int, bool)
+	limitFn    func(text string) int
 }
 
 // MaskedTextBox makes a masked input empty, with the prompt '_'.
@@ -129,41 +132,52 @@ func (m *MaskedTextBoxWidget) OnMaskInputRejected(fn func(r rune)) *MaskedTextBo
 	return m
 }
 
+// editText is ui's OnEdit callback: the edit the mask makes of the user's.
+// Off the lock when building: the mask is the one of the last frame, copied
+// so that the rejected runes are this edit's.
+func (m *MaskedTextBoxWidget) editText(e ui.TextEdit) (string, int, bool) {
+	mu.Lock()
+	cp := *m.mk
+	cells := m.cells
+	rejected := m.onRejected
+	if cp.render(cells) != e.Text {
+		cells = cp.cells(e.Text)
+	}
+	mu.Unlock()
+	out, caret := cp.editCells(cells, e.Start, e.End, e.Insert, e.Caret)
+	mu.Lock()
+	m.cells = out
+	mu.Unlock()
+	if rejected != nil {
+		for _, r := range cp.rejected {
+			r := r
+			Post(func() { rejected(r) })
+		}
+	}
+	return cp.render(out), caret, true
+}
+
+// caretLimit is ui's CaretLimit callback.
+func (m *MaskedTextBoxWidget) caretLimit(text string) int {
+	mu.Lock()
+	cp := *m.mk
+	mu.Unlock()
+	return cp.limit(cp.cells(text))
+}
+
 func (m *MaskedTextBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := m.text.bind()
 	if changed && m.onChange != nil {
 		Post(m.onChange)
 	}
-	rejected := m.onRejected
-	el := ui.TextInput(c, p).OnEdit(func(e ui.TextEdit) (string, int, bool) {
-		// Off the lock when building: the mask is the one of the last frame,
-		// copied so that the rejected runes are this edit's.
-		mu.Lock()
-		cp := *m.mk
-		cells := m.cells
-		if cp.render(cells) != e.Text {
-			cells = cp.cells(e.Text)
-		}
-		mu.Unlock()
-		out, caret := cp.editCells(cells, e.Start, e.End, e.Insert, e.Caret)
-		mu.Lock()
-		m.cells = out
-		mu.Unlock()
-		if rejected != nil {
-			for _, r := range cp.rejected {
-				r := r
-				Post(func() { rejected(r) })
-			}
-		}
-		return cp.render(out), caret, true
-	})
-	// The caret never goes after the first empty slot that follows what was
-	// typed, where what is typed next would find no room (WinForms lets it).
-	el = el.CaretLimit(func(text string) int {
-		mu.Lock()
-		cp := *m.mk
-		mu.Unlock()
-		return cp.limit(cp.cells(text))
-	})
-	return el.OnChange(edited(&m.text, &m.bound, m.onChange))
+	if m.onEditFn == nil {
+		// Made once: closures made in each build are an allocation each.
+		m.onEditFn, m.limitFn = m.editText, m.caretLimit
+	}
+	el := ui.TextInput(c, p).OnEdit(m.onEditFn).
+		// The caret never goes after the first empty slot that follows what
+		// was typed, where what is typed next would find no room (WinForms
+		// lets it).
+		CaretLimit(m.limitFn)
+	return el.OnChange(editedOnce(&m.edit, &m.text, &m.bound, &m.onChange))
 }

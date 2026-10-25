@@ -105,6 +105,9 @@ func registerMnemonic(key rune, el ui.Element, ctrl Control, act func()) bool {
 // registerLabelMnemonic is registerMnemonic for a label, whose key focuses the
 // next control that takes the focus.
 func registerLabelMnemonic(key rune, el ui.Element, l Control) bool {
+	if key == 0 {
+		return false // the closure below would be allocated for nothing
+	}
 	if !registerMnemonic(key, el, l, func() { buildingForm.focusNextAfter(l) }) {
 		return false
 	}

@@ -11,6 +11,7 @@ import (
 // arrows, Page Up and Page Down, Home and End while it has the keyboard
 // focus. It is ui.Slider underneath.
 type TrackBarWidget struct {
+	edit func() // editedOnce's
 	common[TrackBarWidget]
 	min, max float64
 	step     float64
@@ -67,7 +68,7 @@ func (t *TrackBarWidget) build(c *ui.Context) ui.Element {
 	} else {
 		e = ui.Slider(c, p, t.min, t.max)
 	}
-	return e.OnChange(edited(&t.value, &t.bound, t.onChange))
+	return e.OnChange(editedOnce(&t.edit, &t.value, &t.bound, &t.onChange))
 }
 
 func (t *TrackBarWidget) bindValue() float64  { return t.Value() }
