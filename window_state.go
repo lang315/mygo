@@ -52,8 +52,27 @@ func saveWindowStates() {
 	if !windowStates.dirty {
 		return
 	}
-	windowStates.dirty = App.windowStateStore().SaveWindowStates(maps.Clone(windowStates.byKey)) != nil
+	store, states := App.windowStateStore(), maps.Clone(windowStates.byKey)
+	if _, background := store.(backgroundStore); background {
+		// The file, which may be in use for seconds: written off the main
+		// thread. A failure keeps the states for the next save, as below.
+		windowStates.dirty = false
+		writeAppFileLater("window-state", func() {
+			if store.SaveWindowStates(states) != nil {
+				postMain(func() { windowStates.dirty = true })
+			}
+		})
+		return
+	}
+	windowStates.dirty = store.SaveWindowStates(states) != nil
 }
+
+// backgroundStore marks the stores whose writes are done off the main thread:
+// the default file's. A store of the app's (SetWindowStateStore) is called on
+// the main thread, as its documentation says.
+type backgroundStore interface{ background() }
+
+func (stateFile) background() {}
 
 // windowStateStore is the store of App.SetWindowStateStore, or the file.
 func (a *Application) windowStateStore() WindowStateStore {

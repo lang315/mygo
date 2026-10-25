@@ -75,6 +75,7 @@ func TestAddRecentDocument(t *testing.T) {
 		t.Errorf("RecentDocuments = %q, want no %s", got, paths[11])
 	}
 	// The list outlives the run.
+	flushAppWrites() // the file is written off the main thread
 	recentDocs.Lock()
 	recentDocs.loaded, recentDocs.paths = false, nil
 	recentDocs.Unlock()

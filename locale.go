@@ -420,7 +420,7 @@ func savedLocale() string {
 // only.
 func saveLocale(tag string) {
 	if !backend().App().SaveLocale(tag) {
-		writeLocaleFile(tag)
+		writeAppFileLater("locale", func() { writeLocaleFile(tag) })
 	}
 }
 

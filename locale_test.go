@@ -139,6 +139,7 @@ func TestSetLocaleSavesInFile(t *testing.T) {
 	if got := App.Locale(); got != "de" {
 		t.Errorf("after SetLocale(de-AT), Locale() = %q", got)
 	}
+	flushAppWrites() // the file is written off the main thread
 	data, err := os.ReadFile(filepath.Join(dir, localeFile))
 	if err != nil || strings.TrimSpace(string(data)) != "de-AT" {
 		t.Errorf("the file has %q (%v)", data, err)

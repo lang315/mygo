@@ -172,6 +172,7 @@ func (a *Application) Exit(code int) {
 		}
 		saveWindowStates()
 	})
+	flushAppWrites() // the states and the other files are written before the process ends
 	os.Exit(code)
 }
 
@@ -214,7 +215,7 @@ func (a *Application) finish() {
 		stopFileWatches()
 		clipboardStopped = true
 		backend().Clipboard().Close()
-		saveWindowStates()
+		saveAppFiles()
 		fire(&a.onQuit)
 		if a.relaunch {
 			relaunchNow() // after OnQuit, which releases the single instance lock

@@ -58,7 +58,9 @@ func loadRecentLocked() {
 //
 //	if err := mygo.App.AddRecentDocument(path); err != nil { … }
 //
-// A relative path is resolved against the working directory. Choosing an
+// The list is written to its file off the calling thread, soon, and before
+// the app quits; a failure of that write is logged, not returned. A
+// relative path is resolved against the working directory. Choosing an
 // entry of the Dock menu, the jump list or the Open Recent menu opens the
 // file with the app, which gets it through OnOpenFile, or opens it as a
 // document. macOS 15 records nothing for an app outside an app bundle, as
@@ -130,8 +132,16 @@ func saveRecentLocked() error {
 	if err != nil {
 		return err
 	}
-	paths := recentDocs.paths
-	return writeAppFile(f, func(w io.Writer) error { return json.MarshalWrite(w, paths) })
+	// The file is written off the main thread, in the order of the changes
+	// (the latest one replaces a write not begun); a failure is logged, and
+	// the next change writes the whole list again.
+	paths := slices.Clone(recentDocs.paths)
+	writeAppFileLater("recent-documents", func() {
+		if err := writeAppFile(f, func(w io.Writer) error { return json.MarshalWrite(w, paths) }); err != nil {
+			log.Printf("mygo: recent documents: %v", err)
+		}
+	})
+	return nil
 }
 
 // openRecentDocument opens a document of the Open Recent menu: as a
