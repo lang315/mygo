@@ -70,6 +70,9 @@ block: separate ranges of cells, as Excel's Cmd-drag adds, are not chosen.
   Cmd+A chooses every row and every column. Right to left, Left goes to the
   column on the left of the screen. In an `OutlineTable`, Left and Right
   still open and close the rows, and the columns are chosen with the pointer.
+  Cmd+Shift (Ctrl+Shift on Linux and Windows) with Left and Right extends the
+  columns as Shift does, the cells being one block; with the keys that move
+  the rows it extends the rows besides those chosen before.
 - **Right-click.** On a cell outside the block, it chooses that cell before
   the context menu opens; inside, the block stays. `MenuKeepsSelection`
   leaves the block as it is.
