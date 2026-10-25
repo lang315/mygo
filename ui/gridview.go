@@ -529,7 +529,7 @@ func (s *GridState) chosenItems(n int) []int {
 		}
 		var items []int
 		for j := range n {
-			if s.Selection.has(s.key(j)) {
+			if !s.isHeader(j) && s.Selection.has(s.key(j)) {
 				items = append(items, j)
 				if len(items) == s.Selection.size() {
 					break // the rest of a large grid has none
