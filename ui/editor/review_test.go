@@ -842,3 +842,41 @@ func TestReviewCaretStaysBeforeTextAppendedPastTheLog(t *testing.T) {
 		t.Fatalf("the text has %q (without the streamed z), want abx", got)
 	}
 }
+
+// The selections an undo puts back are those of the text the step made: the
+// edits another goroutine made between the step and the editor following the
+// buffer move them, as they do after an edit of the editor's own.
+func TestReviewUndoSelectionsFollowTheBuffer(t *testing.T) {
+	for _, n := range []int{1, logMax + 44} { // within the buffer's log, and past it
+		for _, redo := range []bool{false, true} {
+			ct := newEditorTest(t, "", "x|")
+			ed := &ct.st.ed
+			b := ct.st.Buffer
+			ed.insert("a") // "xa|": the step before is the caret after x, after it the caret after a
+			if redo {
+				if !ed.undo(false) {
+					t.Fatal("nothing to undo")
+				}
+			}
+			afterEditHook = func() {
+				afterEditHook = nil
+				for range n {
+					b.Edit(Edit{Start: 0, End: 0, Text: "z"})
+				}
+			}
+			ok := ed.undo(redo)
+			afterEditHook = nil
+			if !ok {
+				t.Fatalf("n=%d redo=%v: no step", n, redo)
+			}
+			ed.insert("q")
+			want := "xq" // undone: the caret is after x
+			if redo {
+				want = "xaq" // redone: after the a
+			}
+			if got := strings.ReplaceAll(b.String(), "z", ""); got != want {
+				t.Errorf("n=%d redo=%v: the text has %q (without the streamed z), want %q", n, redo, got, want)
+			}
+		}
+	}
+}
