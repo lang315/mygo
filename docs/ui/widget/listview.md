@@ -103,9 +103,38 @@ items in view cost, not the number of rows, in Details and in the icon views ali
 The test of `ListView` clicks in 200,000 rows and checks that a click allocates what
 it does in 2,000.
 
-Not yet there: groups, which need section headers in the icon views.
+## Groups
+
+`SetGroupBy(fn)` groups the rows of the icon views, as a WinForms `ListView`'s
+`ListViewGroup`s: `fn` returns the title of a row's group, and each group shows
+under a header "Title (n)", which is not chosen. The rows of a group keep the
+order of the table, so its sort and its `Search` apply inside the groups, and a
+group whose rows are all hidden by a search shows no header. `SetGroupOrder`
+names the groups in the order to show them; a group it does not name comes after
+them, in the order its rows first show. `Groups()` returns the groups the last
+frame showed, with their counts. `SetGroupBy(nil)` shows no groups.
+
+```go
+view.SetGroupBy(func(f *file) string { return f.kind }).
+	SetGroupOrder("Document", "Image")
+
+for _, g := range view.Groups() {
+	fmt.Println(g.Title, g.Count) // "Document 3", then "Image 3", then the others
+}
+```
+
+The arrows, Home, End, Shift and Cmd+A pass the headers by, a click on one
+chooses nothing, and the choice, the cursor and the row Shift extends from still
+cross a switch of the view by key. `fn` runs under the package's lock, once for
+each row shown when the rows, their order or the groups change, not in every
+frame, and calls no widget method.
+
+**Details groups: not yet.** `ViewDetails` shows the rows without groups: the
+table's rows are told apart by position in a sorted and filtered view that has no
+place for headers, so groups there need the view to learn them (the next step).
 
 ## Accessibility
 
 Assistive technology sees a table in Details, and a list of items, each named by
-its text, in the other views.
+its text, in the other views; a group's header is an item named "Title (n)", counted
+in the position and the size of the list, and not chosen.

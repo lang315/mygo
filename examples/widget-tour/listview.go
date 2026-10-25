@@ -7,7 +7,8 @@ import (
 )
 
 // listViewTour shows one ListView in the four views, which four buttons
-// switch between; what is chosen and checked stays as the view changes.
+// switch between; what is chosen and checked stays as the view changes. Two
+// more buttons group the icon views by kind, or not.
 func listViewTour() widget.Control {
 	type file struct{ path, name, kind string }
 	files := []file{
@@ -30,7 +31,9 @@ func listViewTour() widget.Control {
 	return widget.VBox(8).Add(
 		widget.HBox(8).Add(
 			mode("Details", widget.ViewDetails), mode("Large icons", widget.ViewLargeIcon),
-			mode("Small icons", widget.ViewSmallIcon), mode("List", widget.ViewList)),
+			mode("Small icons", widget.ViewSmallIcon), mode("List", widget.ViewList),
+			widget.Button("Group by kind").OnClick(func() { view.SetGroupBy(func(f *file) string { return f.kind }) }),
+			widget.Button("No groups").OnClick(func() { view.SetGroupBy(nil) })),
 		view, status,
 	)
 }

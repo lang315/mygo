@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -72,6 +73,21 @@ type ListViewWidget[T any, K comparable] struct {
 	built   bool
 	focused bool
 
+	// The groups of the icon views (SetGroupBy): ents is what an icon view
+	// shows, a header and then the rows of its group, each group after the
+	// other: the position in the table of a row, or -1-g for the header of
+	// groups[g]; disp is the place of each position in ents. Both are nil
+	// without groups, and ents' places are the table's positions then.
+	groupBy     func(*T) string
+	groupOrder  []string
+	groupGen    int
+	groups      []ListViewGroup
+	ents, disp  []int32
+	groupOf     []int32 // regroup's, the group of each position: kept for the next
+	made        groupsMade
+	remade      bool // the grid has not been told of the new headers
+	groupBuilds int  // test hook: how often the groups were made again
+
 	// ui's, on the main thread:
 	grid   ui.GridState
 	cursor int
@@ -96,6 +112,56 @@ func ListViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]) *L
 	lv.t.watch = lv.watched
 	mu.Unlock()
 	return lv
+}
+
+// ListViewGroup is a group of rows the icon views show under a header: its
+// title and how many rows of the view are in it.
+type ListViewGroup struct {
+	Title string
+	Count int
+}
+
+// groupKey is the key ui keeps for the header of a group: a type of its own,
+// so that no key of the app is equal to it.
+type groupKey struct{ title string }
+
+// groupsMade is what the groups were made for; they are made again when any of
+// it changes.
+type groupsMade struct {
+	ok      bool
+	version uint64 // the table's view: the rows shown and their order
+	seq     uint64 // the rows' source: any change of a row, in place too
+	gen     int    // SetGroupBy and SetGroupOrder
+	n       int
+}
+
+// SetGroupBy groups the rows the icon views show: fn returns the title of the
+// group of a row, under a header "Title (n)" that is not chosen, as the
+// ListViewGroup of a WinForms ListView. Within a group the rows keep the order
+// of the table, its sort and its search apply to them; the groups come in the
+// order SetGroupOrder gives. Details does not show groups yet. nil shows no
+// groups. fn runs under the package's lock, once for each row shown when the
+// rows, their order or the groups change, and calls no widget method.
+func (lv *ListViewWidget[T, K]) SetGroupBy(fn func(*T) string) *ListViewWidget[T, K] {
+	lv.change(func() { lv.groupBy, lv.groupGen = fn, lv.groupGen+1 })
+	return lv
+}
+
+// SetGroupOrder says the order of the groups by title. A group it does not name
+// comes after those it does, in the order the rows show it first; a title that
+// no row has shows no group.
+func (lv *ListViewWidget[T, K]) SetGroupOrder(titles ...string) *ListViewWidget[T, K] {
+	lv.change(func() { lv.groupOrder, lv.groupGen = slices.Clone(titles), lv.groupGen+1 })
+	return lv
+}
+
+// Groups returns the groups of the icon views as the last frame showed them, in
+// order, each with the number of its rows; none without SetGroupBy, or before
+// the first frame of an icon view.
+func (lv *ListViewWidget[T, K]) Groups() []ListViewGroup {
+	mu.Lock()
+	defer mu.Unlock()
+	return slices.Clone(lv.groups)
 }
 
 // fillsAcross: a list view fills the cross axis of the box that holds it, so
@@ -358,7 +424,7 @@ func (lv *ListViewWidget[T, K]) takeKeys() {
 	if !lv.built {
 		return
 	}
-	cursor, pivot := lv.cursor, lv.grid.Pivot()
+	cursor, pivot := lv.posOf(lv.cursor), lv.posOf(lv.grid.Pivot())
 	if lv.last == ViewDetails {
 		cursor, pivot = lv.t.cursor, lv.t.list.Pivot()
 	}
@@ -400,28 +466,39 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 	t.catchUp()
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
+	lv.regroup()
 	n := t.view.Len()
+	if lv.ents != nil {
+		n = len(lv.ents)
+	}
 
 	lv.cursor = -1
 	if lv.hasCursor {
-		lv.cursor = t.positionOf(lv.cursorKey)
+		lv.cursor = lv.placeOf(t.positionOf(lv.cursorKey))
 	}
 	g := &lv.grid
 	if lv.hasAnchor {
-		g.SetPivot(t.positionOf(lv.anchorKey))
+		g.SetPivot(lv.placeOf(t.positionOf(lv.anchorKey)))
 	} else {
 		g.SetPivot(-1)
 	}
-	g.Key, g.Label, g.Selected = t.keyAt, t.labelAt, &lv.cursor
+	g.Key, g.Label, g.Selected, g.Header = t.keyAt, t.labelAt, &lv.cursor, nil
+	if lv.ents != nil {
+		g.Key, g.Label, g.Header = lv.keyAtPlace, lv.labelAtPlace, lv.headerAt
+		if lv.remade {
+			g.ReloadHeaders()
+			lv.remade = false
+		}
+	}
 	g.Selection = t.chosen.bind()
 	g.AccentChoice = true
 	g.Copy, g.ItemMenu = nil, nil
 	if t.copyFn != nil {
-		g.Copy = func(items []int) string { return t.copyRows(items) }
+		g.Copy = func(items []int) string { return t.copyRows(lv.positions(items)) }
 	}
 	switch menu := t.menu; {
 	case t.menuFunc != nil:
-		g.ItemMenu = func(m *ui.Menu, items []int) { t.lateMenu(m, items) }
+		g.ItemMenu = func(m *ui.Menu, items []int) { t.lateMenu(m, lv.positions(items)) }
 	case len(menu) > 0:
 		g.ItemMenu = func(m *ui.Menu, _ []int) { buildMenu(m, menu) }
 	}
@@ -466,7 +543,7 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		grid.Focus()
 	}
 	if fn := t.onActivate; fn != nil && grid.Submitted() && lv.cursor >= 0 {
-		if r := t.rowAt(lv.cursor); r != nil {
+		if r := t.rowAt(lv.posOf(lv.cursor)); r != nil {
 			k := t.key(r)
 			Post(func() { fn(k) })
 		}
@@ -505,7 +582,11 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 		defer mu.Unlock()
 	}
 	t := lv.t
-	r := t.rowAt(i)
+	if lv.headerAt(i) {
+		lv.header(c, lv.groups[-1-int(lv.ents[i])])
+		return
+	}
+	r := t.rowAt(lv.posOf(i))
 	if r == nil || len(t.cols) == 0 {
 		ui.Text(c, "")
 		return
@@ -552,4 +633,152 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 		}
 		ui.Text(c, text).SingleLine()
 	})
+}
+
+// header builds the header of group gr: its title and its count, over a
+// background that tells it from the rows.
+func (lv *ListViewWidget[T, K]) header(c *ui.Context, gr ListViewGroup) {
+	th := c.Theme()
+	ui.Row(c).Grow(1).AlignItems(ui.Center).PaddingStart(th.Space(2)).Background(th.SurfaceHover).Radius(th.Radius).Children(func() {
+		ui.Text(c, groupText(gr)).Bold().TextColor(th.TextMuted).SingleLine()
+	})
+}
+
+// groupText is the text of a header, and its name for assistive technology.
+func groupText(gr ListViewGroup) string { return gr.Title + " (" + strconv.Itoa(gr.Count) + ")" }
+
+// regroup makes the groups of the rows the table shows, when the rows, their
+// order, the source or the groups changed since it did. Under mu, after the
+// table synced.
+func (lv *ListViewWidget[T, K]) regroup() {
+	if lv.groupBy == nil {
+		lv.ents, lv.disp, lv.groups, lv.made = nil, nil, nil, groupsMade{}
+		return
+	}
+	t := lv.t
+	n := t.view.Len()
+	made := groupsMade{ok: true, version: t.view.Version(), seq: t.src.seq, gen: lv.groupGen, n: n}
+	if lv.made == made {
+		return
+	}
+	lv.made, lv.remade = made, true
+	lv.groupBuilds++
+	// The group of each row shown: those the app ordered first, the others as
+	// they first show.
+	index := map[string]int{}
+	var titles []string
+	for _, title := range lv.groupOrder {
+		if _, ok := index[title]; !ok {
+			index[title] = len(titles)
+			titles = append(titles, title)
+		}
+	}
+	of := slices.Grow(lv.groupOf[:0], n)[:n]
+	lv.groupOf = of
+	counts := make([]int, len(titles), len(titles)+8)
+	for p := range n {
+		title := lv.groupBy(t.rowAt(p))
+		g, ok := index[title]
+		if !ok {
+			g = len(titles)
+			index[title] = g
+			titles = append(titles, title)
+			counts = append(counts, 0)
+		}
+		of[p] = int32(g)
+		counts[g]++
+	}
+	// A header, then the rows of its group in the table's order.
+	lv.groups = lv.groups[:0]
+	next := make([]int32, len(titles))
+	shown := 0
+	for g, title := range titles {
+		if counts[g] == 0 {
+			continue
+		}
+		next[g] = int32(shown + 1)
+		shown += 1 + counts[g]
+		lv.groups = append(lv.groups, ListViewGroup{Title: title, Count: counts[g]})
+	}
+	lv.ents, lv.disp = slices.Grow(lv.ents[:0], shown)[:shown], slices.Grow(lv.disp[:0], n)[:n]
+	gi := 0
+	for g := range titles {
+		if counts[g] == 0 {
+			continue
+		}
+		lv.ents[next[g]-1] = int32(-1 - gi)
+		gi++
+	}
+	for p := range n {
+		g := of[p]
+		lv.ents[next[g]] = int32(p)
+		lv.disp[p] = next[g]
+		next[g]++
+	}
+}
+
+// posOf returns the position in the table of the row shown at place i of an
+// icon view, or -1 for a header or none. Without groups the places are the
+// positions.
+func (lv *ListViewWidget[T, K]) posOf(i int) int {
+	switch {
+	case i < 0:
+		return -1
+	case lv.ents == nil:
+		return i
+	case i >= len(lv.ents) || lv.ents[i] < 0:
+		return -1
+	}
+	return int(lv.ents[i])
+}
+
+// placeOf returns the place in an icon view of the row at position pos of the
+// table, or -1.
+func (lv *ListViewWidget[T, K]) placeOf(pos int) int {
+	switch {
+	case pos < 0:
+		return -1
+	case lv.ents == nil:
+		return pos
+	case pos >= len(lv.disp):
+		return -1
+	}
+	return int(lv.disp[pos])
+}
+
+// positions returns the positions in the table of the places of an icon view,
+// those of headers left out.
+func (lv *ListViewWidget[T, K]) positions(places []int) []int {
+	if lv.ents == nil {
+		return places
+	}
+	out := make([]int, 0, len(places))
+	for _, i := range places {
+		if pos := lv.posOf(i); pos >= 0 {
+			out = append(out, pos)
+		}
+	}
+	return out
+}
+
+// headerAt is the grid's Header: whether place i of the icon view heads a group.
+func (lv *ListViewWidget[T, K]) headerAt(i int) bool {
+	return lv.ents != nil && i >= 0 && i < len(lv.ents) && lv.ents[i] < 0
+}
+
+// keyAtPlace is the grid's Key with groups: the key of the row, or of the group.
+func (lv *ListViewWidget[T, K]) keyAtPlace(i int) any {
+	if lv.headerAt(i) {
+		return groupKey{lv.groups[-1-int(lv.ents[i])].Title}
+	}
+	return lv.t.keyAt(lv.posOf(i))
+}
+
+// labelAtPlace is the grid's Label with groups: the text of the row, or
+// "Title (n)" for a header.
+func (lv *ListViewWidget[T, K]) labelAtPlace(i int) string {
+	if lv.headerAt(i) {
+		return groupText(lv.groups[-1-int(lv.ents[i])])
+	}
+	return lv.t.labelAt(lv.posOf(i))
 }
