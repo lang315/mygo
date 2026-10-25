@@ -143,8 +143,13 @@ type groupsMade struct {
 // ListViewGroup of a WinForms ListView. Within a group the rows keep the order
 // of the table, its sort and its search apply to them; the groups come in the
 // order SetGroupOrder gives. nil shows no groups. fn runs under the package's
-// lock, once for each row when the rows or the groups change, and for each
-// row changed in place, and calls no widget method.
+// lock and calls no widget method. In Details it runs once for each row when
+// the rows or the groups change, and for each row changed in place. The icon
+// views make their groups themselves: fn runs for each row shown whenever the
+// rows, their order or any row changes, in place too, not in every frame.
+//
+// With groups, Selected and Checked return the keys in the order shown, which
+// is grouped in every view.
 func (lv *ListViewWidget[T, K]) SetGroupBy(fn func(*T) string) *ListViewWidget[T, K] {
 	lv.change(func() {
 		lv.groupBy, lv.groupGen = fn, lv.groupGen+1

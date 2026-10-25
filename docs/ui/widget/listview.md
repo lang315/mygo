@@ -134,6 +134,12 @@ groups themselves, with one call of `fn` for each row shown and a pass over the
 rows, about 2.5 ms for 100,000 rows, again whenever a row changes in place
 (`UpdateRow` and the like), not only when the rows or their order change.
 
+**Order of the keys.** With groups, `Selected()` and `Checked()` return the keys
+in the order shown, which is grouped in every view: the rows of the first group,
+then those of the second, and so on. Before `SetGroupBy`, and in a list view
+without it, that is the table's order. Adding `SetGroupBy` to an existing list
+view therefore changes the order of what these return, in Details too.
+
 The arrows, Home, End, Shift and Cmd+A pass the headers by, a click on one
 chooses nothing, and the choice, the cursor and the row Shift extends from still
 cross a switch of the view by key. `fn` runs under the package's lock, once for

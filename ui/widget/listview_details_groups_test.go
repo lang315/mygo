@@ -201,9 +201,14 @@ func TestListViewDetailsIndexColumnSkipsTheHeaders(t *testing.T) {
 	lv := groupedView(ViewDetails)
 	lv.Details().IndexColumn()
 	tt := tester(t, lv)
-	for _, n := range []string{"1", "2", "3", "4"} {
-		if !shows(tt, n) {
-			t.Errorf("no row numbered %s in %q", n, tt.Texts())
+	// Banana is the first row, under the header berry: it is 1, not 2.
+	if !shows(tt, "berry (1)") {
+		t.Fatalf("setup: no header in %q", tt.Texts())
+	}
+	for _, r := range []struct{ name, number string }{{"Banana", "1"}, {"Cherry", "2"}, {"Date", "3"}, {"Apple", "4"}} {
+		row, number := find(t, tt, r.name), find(t, tt, r.number)
+		if number.Y < row.Y || number.Y >= row.Y+row.H {
+			t.Errorf("%s is numbered %s at y=%v, off its row at y=%v..%v", r.name, r.number, number.Y, row.Y, row.Y+row.H)
 		}
 	}
 	if shows(tt, "5") || shows(tt, "6") || shows(tt, "7") {
@@ -288,6 +293,12 @@ func TestListViewDetailsChosenRowsAreLines(t *testing.T) {
 		if k := lv.Details().keyAt(line); k != "k5" && k != "k22" {
 			t.Errorf("line %d is the row %v, not one chosen", line, k)
 		}
+	}
+	// k5 is the second row of the second group of ten: 10 rows + 1 header + 1
+	// header + 1 = line 13; k22 the sixth of the third: 20 rows + 3 headers + 5 =
+	// line 28. Positions, which count no header, would be 5 and 22.
+	if !slices.Equal(got, []int{13, 28}) {
+		t.Errorf("chosenRows() = %v, want the lines [13 28]", got)
 	}
 }
 
