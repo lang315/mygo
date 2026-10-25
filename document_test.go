@@ -469,6 +469,94 @@ func TestDocumentEditedWhileEqualIsAsked(t *testing.T) {
 	}
 }
 
+func sameTrimmed(a, b string) bool { return strings.TrimSpace(a) == strings.TrimSpace(b) }
+
+// outsideChange writes content to path, newer than anything before.
+func outsideChange(path, content string, hours int) {
+	os.WriteFile(path, []byte(content), 0o644)
+	t := time.Now().Add(time.Duration(hours) * time.Hour)
+	os.Chtimes(path, t, t)
+}
+
+// TestDocumentUneditedByEqualReloads: a document that Equal finds equal to
+// its file is unedited, so that a change of the file reloads it, not
+// conflicts with it.
+func TestDocumentUneditedByEqualReloads(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: sameTrimmed})
+	path := writeTemp(t, "equal-set.txt", "mine")
+	d, _ := ds.Open(path)
+	d.Set("x")
+	d.Set("mine ") // typed and undone
+	if d.IsEdited() {
+		t.Fatal("the document equal to its file is edited")
+	}
+	outsideChange(path, "theirs", 1)
+	d.checkDisk()
+	if d.HasConflict() || d.Content() != "theirs" {
+		t.Errorf("conflict %v, content %q: the unedited document was not reloaded", d.HasConflict(), d.Content())
+	}
+}
+
+// TestDocumentUneditedBySavingReloads: the same, for an edit made while the
+// document was being saved, which Equal finds equal to what was written.
+func TestDocumentUneditedBySavingReloads(t *testing.T) {
+	var d *Document[string]
+	first := true
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: sameTrimmed, Write: func(w io.Writer, s string) error {
+		_, err := io.WriteString(w, s)
+		if first {
+			first = false
+			d.Set(s + " ") // typed while the file is written
+		}
+		return err
+	}})
+	path := writeTemp(t, "equal-save.txt", "mine")
+	d, _ = ds.Open(path)
+	d.Set("saved")
+	if err := d.Save(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the document to be unedited", func() bool { return !d.IsEdited() })
+	outsideChange(path, "theirs", 1)
+	d.checkDisk()
+	if d.HasConflict() || d.Content() != "theirs" {
+		t.Errorf("conflict %v, content %q: the unedited document was not reloaded", d.HasConflict(), d.Content())
+	}
+}
+
+// TestDocumentMovedWhileTheDiskIsChecked: a look at the file the document
+// was at must not reload the document that moved to another file meanwhile.
+func TestDocumentMovedWhileTheDiskIsChecked(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	a := writeTemp(t, "a.txt", "mine")
+	b := filepath.Join(filepath.Dir(a), "b.txt")
+	os.WriteFile(b, []byte("mine"), 0o644)
+	d, _ := ds.Open(a)
+	looked, release := make(chan struct{}, 16), make(chan struct{})
+	hold := func() {
+		looked <- struct{}{}
+		<-release
+	}
+	afterDiskLook.Store(&hold)
+	t.Cleanup(func() { afterDiskLook.Store(nil) })
+	outsideChange(a, "theirs a", 1)
+	done := make(chan struct{})
+	go func() { d.checkDisk(); close(done) }()
+	wait.For(t, "the look at the file", looked)
+	d.moved(b)
+	afterDiskLook.Store(nil)
+	close(release)
+	wait.For(t, "the look to end", done)
+	if d.Content() != "mine" {
+		t.Fatalf("content %q: the look at a.txt replaced the content of the document at b.txt", d.Content())
+	}
+	outsideChange(b, "theirs b", 2)
+	d.checkDisk()
+	if d.Content() != "theirs b" {
+		t.Errorf("content %q after b.txt changed, want theirs b", d.Content())
+	}
+}
+
 func TestDocumentOutsideChanges(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "out.txt", "mine")

@@ -256,6 +256,7 @@ func (d *Document[T]) Set(content T) {
 	d.mu.Lock()
 	d.content = content
 	d.changes++
+	at := d.changes
 	edited := true
 	// Equal is the app's and may read the document, so it is called with
 	// the lock down: a document holding it would deadlock on the mutex its
@@ -265,6 +266,14 @@ func (d *Document[T]) Set(content T) {
 	d.mu.Unlock()
 	if eq != nil && known {
 		edited = !eq(content, saved)
+	}
+	if !edited {
+		// The content is the file's: a look at the file may reload it again.
+		d.mu.Lock()
+		if d.changes == at {
+			d.savedAt = at
+		}
+		d.mu.Unlock()
 	}
 	d.changed(edited)
 }
@@ -344,6 +353,7 @@ func (d *Document[T]) markSaved(s docSnapshot) (settle func() bool) {
 			return false
 		}
 		d.edited, d.dirtySince = false, time.Time{}
+		d.savedAt = at
 		d.scheduleLocked()
 		return d.backedUp != 0
 	}
