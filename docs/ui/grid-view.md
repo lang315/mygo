@@ -27,6 +27,13 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   item or takes it out, Shift-click and Shift with the arrows choose those
   from the item last chosen, in place of the others (with Cmd held for the
   click, besides them), and Cmd+A chooses all.
+  Shift with Home, End, Page Up and Page Down extends the choice to the first
+  or last item, or by the rows in view (Page Up and Page Down alone scroll),
+  and Cmd+Shift with the arrows and those keys (Ctrl+Shift on Linux and
+  Windows) extends it besides the items chosen before; going back takes out the
+  items it added and left, and those chosen before stay. With nothing chosen,
+  Shift with Home or End chooses the first item, as the arrows do. Page Up and
+  Page Down only scroll on macOS, as in a list.
   `Pivot()` returns the item Shift extends from, -1 for none (as at the start:
   a Shift-click as the first click chooses that item alone), and
   `SetPivot(item)` sets it without changing the choice, for an app that shows

@@ -34,6 +34,7 @@ names spans every column, which `cell` builds as column 0, and stays at the
 top while its section's rows scroll under it.
 
 Ctrl+Shift-click (Cmd+Shift on macOS) adds the rows from the one last chosen to the one clicked to those chosen; a Shift-click alone takes their place.
+Ctrl+Shift with the arrows, Home and End (and Page Up and Page Down off macOS) extends the choice the same way, and going back takes out only the rows it added.
 
 Chosen and hovered rows are square from edge to edge, as in Finder's list
 view; `RoundRows` rounds their corners at the theme's `Radius`, as a list's
