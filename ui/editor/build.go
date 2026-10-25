@@ -33,6 +33,9 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	ed.services = c.Services()
 	buf.watch(ed.services)
 	ed.sync()
+	if !ed.drainDeferred() {
+		c.AnimationFrame() // the buffer is still edited as fast: another try next frame
+	}
 	ed.syncGitDiff()
 	ed.frameNow = c.Now()
 	// Code reads left to right in a right-to-left interface too, as in

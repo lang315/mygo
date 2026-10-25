@@ -169,6 +169,9 @@ type editor struct {
 	// stale tells that an edit found the buffer edited since the editor
 	// followed it, for its command to run again (retry).
 	stale bool
+	// deferred are the edits retry did not make in its time, which the
+	// next frame makes first.
+	deferred []func() bool
 
 	refocus        bool
 	wholeWord      bool

@@ -64,7 +64,7 @@ func (b *docBase) watch() {
 		docWatches.files = map[string]*docFileWatch{}
 	}
 	docWatches.files[path] = &docFileWatch{refs: 1, cancel: cancel}
-	go watchDocumentFile(ctx, path)
+	docWork.Go(func() { watchDocumentFile(ctx, path) }) // tests wait for it, so that no watch starts in the next test
 }
 
 // watchDocumentFile follows the changes of the file at path until ctx is

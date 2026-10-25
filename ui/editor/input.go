@@ -2,6 +2,7 @@ package editor
 
 import (
 	"math"
+	"runtime"
 	"slices"
 	"time"
 
@@ -37,19 +38,63 @@ func (ed *editor) offer(ev ui.InputEvent) bool {
 	return ed.o.onInput != nil && ed.o.onInput(ev)
 }
 
+// retryBudget is how long retry tries an edit on the UI thread before it
+// leaves the edit for the next frame.
+const retryBudget = 4 * time.Millisecond
+
 // retry runs fn, which edits the text as the editor shows it, again on
 // the text as it is when another goroutine edited the buffer meanwhile,
-// rather than leaving the edit out (apply).
+// rather than leaving the edit out (apply). Each try that fails is one
+// that another goroutine got an edit in before, so the tries end once
+// the edits do, or once fn is faster than they are. A buffer edited all
+// the time (a log tailed, a model streaming) would hold the UI thread for
+// good, and dropping the edit would lose a keystroke: after retryBudget
+// the edit waits in ed.deferred, for the next frame to make, and the edits
+// after it wait behind it, so that they happen in the order made. It
+// reports whether the edit was made or is waiting.
 func (ed *editor) retry(fn func() bool) bool {
-	for range 4 {
+	if !ed.drainDeferred() {
+		ed.deferred = append(ed.deferred, fn)
+		return true
+	}
+	ok, made := ed.tries(fn)
+	if !made {
+		ed.deferred = append(ed.deferred, fn)
+		return true
+	}
+	return ok
+}
+
+// tries runs fn again while it finds the buffer edited, for retryBudget.
+func (ed *editor) tries(fn func() bool) (ok, made bool) {
+	end := time.Now().Add(retryBudget)
+	for {
 		ed.sync()
 		ed.stale = false
 		ok := fn()
 		if !ed.stale {
-			return ok
+			return ok, true
 		}
+		if time.Now().After(end) {
+			return false, false
+		}
+		runtime.Gosched()
 	}
-	return false
+}
+
+// drainDeferred makes the edits retry left for later, in order, and
+// reports whether it made all of them.
+func (ed *editor) drainDeferred() bool {
+	for len(ed.deferred) > 0 {
+		fn := ed.deferred[0]
+		if _, made := ed.tries(fn); !made {
+			return false
+		}
+		ed.deferred[0] = nil
+		ed.deferred = ed.deferred[1:]
+	}
+	ed.deferred = nil
+	return true
 }
 
 func (ed *editor) dispatch(ev ui.InputEvent) bool {
