@@ -165,8 +165,8 @@ func userDir(home string, name PathName) string {
 					}
 				}
 				if s.Err() != nil {
-					// The file is the user's optional setting: one that cannot
-					// be read leaves the folder at its default.
+					// On purpose, though it is what follows anyway: the file is
+					// optional, and a read error keeps the default.
 					return filepath.Join(home, folder)
 				}
 			}

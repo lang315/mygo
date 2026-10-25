@@ -13,6 +13,10 @@ on:
       toolchain:
         description: "gotip, or a release or candidate such as go1.28rc1"
         default: gotip
+      quick:
+        description: "Build, vet and start every test binary only, no tests"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,13 +39,16 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Install WebKitGTK and a virtual display
+      - name: Install WebKitGTK and Mesa
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
       - name: Download what the tests need
         run: go run ./internal/prefetch
       - name: Build and test with the next Go
         shell: bash
-        run: scripts/go-next.sh "${{ inputs.toolchain || 'gotip' }}"
+        env:
+          TOOLCHAIN: ${{ inputs.toolchain || 'gotip' }}
+          QUICK: ${{ inputs.quick && '--quick' || '' }}
+        run: scripts/go-next.sh $QUICK "$TOOLCHAIN"

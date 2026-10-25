@@ -3,11 +3,14 @@
 # learn early that a Go upgrade breaks it. purego's fakecgo links against the
 # runtime's internals (go:linkname: runtime.iscgo, runtime.set_crosscall2,
 # syscall.cgo_libc_*, _cgo_*), which Go does not promise to keep, so an
-# upgrade can fail to link, or to start, with no change of ours.
+# upgrade can fail to link, or to start, with no change of ours. fakecgo is
+# built only with CGO_ENABLED=0 (its build tag is !cgo), so every step below
+# runs with it: a test binary built with cgo, as the default is where a C
+# compiler is, would use the real runtime/cgo and never meet fakecgo.
 #
 #   scripts/go-next.sh                 # gotip: the tip of Go's master
 #   scripts/go-next.sh go1.28rc1       # a release or a candidate (GOTOOLCHAIN downloads it)
-#   scripts/go-next.sh --quick gotip   # build, vet and link the tests only
+#   scripts/go-next.sh --quick gotip   # no tests: build, vet, and start every test binary
 #
 # The same runs weekly and on demand in .github/workflows/go-next.yml.
 set -euo pipefail
@@ -30,6 +33,9 @@ else
 	go=go
 fi
 
+# From here on, whatever the toolchain was built or installed with.
+export CGO_ENABLED=0
+
 step() { printf '\n== %s\n' "$*"; }
 
 # Each step runs, whatever the ones before found, so that one run says all
@@ -46,14 +52,14 @@ step "toolchain"
 "$go" version
 
 for os in darwin linux windows; do
-	run "build for $os (no cgo: purego's fakecgo is what runs)" env GOOS=$os CGO_ENABLED=0 "$go" build ./...
+	run "build for $os (no cgo: purego's fakecgo is what runs)" env GOOS=$os "$go" build ./...
 done
 
 run "vet" "$go" vet ./...
 
-# A test binary links the package's imports and starts them, which is where a
-# broken linkname shows (a link error, or a crash before main): build and run
-# every one of them without running a test.
+# A test binary links the package's imports and starts them through fakecgo,
+# which is where a broken linkname shows (a link error, or a crash before
+# main): build and run every one of them without running a test.
 run "link and start every test binary" "$go" test -count=1 -run '^$' ./...
 
 if [ "$quick" = 0 ]; then

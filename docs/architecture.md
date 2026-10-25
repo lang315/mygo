@@ -4257,10 +4257,15 @@ scripts/go-next.sh go1.28rc1       # a release or a candidate, downloaded by GOT
 scripts/go-next.sh --quick gotip   # build, vet and link the test binaries only
 ```
 
-It builds for macOS, Linux and Windows, vets, links and starts every test
-binary (`go test -run '^$' ./...`, where a broken linkname shows as a link
-error or a crash before `main`), then runs the tests of `internal`, `ui` and
-the root package. `.github/workflows/go-next.yml` runs it on Mondays and on
+Everything runs with `CGO_ENABLED=0`, since fakecgo is built only without cgo
+(a binary built with cgo, the default where a C compiler is, uses the real
+runtime/cgo and never meets it). It builds for macOS, Linux and Windows, vets,
+links and starts every test binary (`go test -run '^$' ./...`, where a broken
+linkname shows as a link error or a crash before `main`; `--quick` stops
+there), then runs the tests of `internal`, `ui` and the root package. The CI
+of every pull request does the starting too, with `CGO_ENABLED=0`, on macOS
+and Linux (the "Start every test binary through fakecgo" step), so that a
+change of ours cannot break fakecgo unseen either. `.github/workflows/go-next.yml` runs it on Mondays and on
 demand (Actions, "Go next", Run workflow, with the toolchain) on macOS, Linux,
 Linux ARM64 and Windows; it gates no pull request, a red run is the news. A
 failure in `fakecgo` is fixed by upgrading purego, whose releases follow the
