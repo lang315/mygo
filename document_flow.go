@@ -46,7 +46,7 @@ func registerDocKind(k *docKind) {
 	launched := docRegistry.launched
 	docRegistry.Unlock()
 	if launched {
-		go k.restore()
+		docWork.Go(func() { k.restore() }) // tests wait for it: a late one would take the sessions of the next test
 		return
 	}
 	if !first {
@@ -76,12 +76,14 @@ func registerDocKind(k *docKind) {
 // it restores the documents left unsaved, opens those it was asked to,
 // or else makes an untitled document.
 func startDocuments() {
+	docWork.Add(1) // before launched is set: a test that sees it waits for the restore
 	docRegistry.Lock()
 	docRegistry.launched = true
 	pending := docRegistry.pending
 	docRegistry.pending = nil
 	docRegistry.Unlock()
 	go func() {
+		defer docWork.Done()
 		for _, k := range docKinds() {
 			k.restore()
 		}

@@ -265,20 +265,34 @@ func (b *docBase) backup() {
 
 // newestCopies keeps one copy of each document: quit in the middle of a
 // restore leaves it in the session claimed and in the one of the instance
-// that began it, and the one written last has the later changes.
+// that began it, and the one written last has the later changes. Where the
+// files' times are the same (a file system of a second or two), the session
+// whose index was written last wins, as the restoring instance's is, written
+// after it read the other; if that ties too, the first stays. A clock set back
+// between the two makes a wrong choice, which is accepted.
 func newestCopies(orphans []orphan) []orphan {
 	at := map[string]int{}
 	var out []orphan
+	later := func(o, than orphan) bool {
+		a, errA := os.Stat(than.file)
+		b, errB := os.Stat(o.file)
+		if errA != nil || errB != nil {
+			return errA != nil && errB == nil
+		}
+		if !b.ModTime().Equal(a.ModTime()) {
+			return b.ModTime().After(a.ModTime())
+		}
+		ia, errA := os.Stat(filepath.Join(filepath.Dir(than.file), "index.json"))
+		ib, errB := os.Stat(filepath.Join(filepath.Dir(o.file), "index.json"))
+		return errA == nil && errB == nil && ib.ModTime().After(ia.ModTime())
+	}
 	for _, o := range orphans {
 		i, seen := at[o.entry.ID]
-		if !seen {
+		switch {
+		case !seen:
 			at[o.entry.ID] = len(out)
 			out = append(out, o)
-			continue
-		}
-		a, errA := os.Stat(out[i].file)
-		b, errB := os.Stat(o.file)
-		if errA != nil || errB == nil && b.ModTime().After(a.ModTime()) {
+		case later(o, out[i]):
 			out[i] = o
 		}
 	}

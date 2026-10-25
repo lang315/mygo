@@ -516,39 +516,48 @@ func TestDocumentRecoveryQuitDuringARestoreKeepsTheSession(t *testing.T) {
 // one claimed and the one of the instance that restored it: the next launch
 // restores the document once, with the later changes.
 func TestDocumentRecoveryRestoresOneCopyOfADocumentInTwoSessions(t *testing.T) {
-	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
-	root, _ := ds.kind.recovery.root()
-	// The sessions are alive (locked) until both are there, for the restore
-	// the app begins with (registerDocKind) to take none of them.
-	var locks []*os.File
-	for i, content := range []string{"older", "newer"} {
-		session := filepath.Join(root, fmt.Sprintf("session%d", i))
-		if err := os.MkdirAll(session, 0o700); err != nil {
-			t.Fatal(err)
+	for _, tie := range []bool{false, true} {
+		ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+		// The restores the app begins with (registerDocKind, startDocuments)
+		// are over before the sessions are made: each would take one of them.
+		waitFor(t, "the documents to launch", func() bool {
+			docRegistry.Lock()
+			defer docRegistry.Unlock()
+			return docRegistry.launched
+		})
+		docWork.Wait()
+		root, _ := ds.kind.recovery.root()
+		base := time.Now().Add(-time.Hour)
+		for i, content := range []string{"older", "newer"} {
+			session := filepath.Join(root, fmt.Sprintf("session%d", i))
+			if err := os.MkdirAll(session, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			index := filepath.Join(session, "index.json")
+			os.WriteFile(index, []byte(`[{"id":"a","name":"Untitled 3"}]`), 0o600)
+			file := filepath.Join(session, "a")
+			os.WriteFile(file, []byte(content), 0o600)
+			at := base.Add(time.Duration(i) * time.Minute) // session1 is the later
+			if tie {
+				at = base // the same time to the file system's resolution: the later index tells
+			}
+			os.Chtimes(file, at, at)
+			os.Chtimes(index, base.Add(time.Duration(i)*time.Minute), base.Add(time.Duration(i)*time.Minute))
 		}
-		lock, err := os.OpenFile(filepath.Join(session, "lock"), os.O_RDWR|os.O_CREATE, 0o600)
-		if err != nil || lockFile(lock) != nil {
-			t.Fatalf("lock: %v", err)
+		if n := ds.kind.restore(); n != 1 {
+			t.Fatalf("tie %v: restored %d documents, want 1", tie, n)
 		}
-		locks = append(locks, lock)
-		os.WriteFile(filepath.Join(session, "index.json"), []byte(`[{"id":"a","name":"Untitled 3"}]`), 0o600)
-		file := filepath.Join(session, "a")
-		os.WriteFile(file, []byte(content), 0o600)
-		at := time.Now().Add(time.Duration(i-5) * time.Minute) // session1 is the later
-		os.Chtimes(file, at, at)
-	}
-	for _, lock := range locks {
-		lock.Close()
-	}
-	if n := ds.kind.restore(); n != 1 {
-		t.Fatalf("restored %d documents, want 1", n)
-	}
-	docs := ds.Documents()
-	if len(docs) != 1 || docs[0].Content() != "newer" {
+		docs := ds.Documents()
+		if len(docs) != 1 || docs[0].Content() != "newer" {
+			for _, d := range docs {
+				t.Logf("doc %q %q", d.Name(), d.Content())
+			}
+			t.Fatalf("tie %v: restored %d documents", tie, len(docs))
+		}
 		for _, d := range docs {
-			t.Logf("doc %q %q", d.Name(), d.Content())
+			d.SetEdited(false)
+			d.Close()
 		}
-		t.Fatalf("restored %d documents", len(docs))
 	}
 }
 
