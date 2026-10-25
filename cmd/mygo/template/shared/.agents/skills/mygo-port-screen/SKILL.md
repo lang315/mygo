@@ -27,13 +27,12 @@ description: Port a screen written for WinForms (or for gota, the GTK Go toolkit
 - WinForms events become `On…` methods that take a function: `widget.ButtonWidget.OnClick`, `widget.TextBoxWidget.OnChange`, `widget.ComboBoxWidget.OnChange`, `widget.CheckBoxWidget.OnChange`, `widget.Form.SetAcceptButton` and `widget.Form.SetCancelButton` for `AcceptButton` and `CancelButton`. Look an event up in the control's page of `docs/ui/widget.md` or `docs/ui/widget/`; do not invent a name.
 - Handlers run one at a time on the event goroutine, never on the main thread.
 - `BindingSource` and `DataBindings`: `widget.Bind(control, get, set)` for a value, `widget.NewRowSource` and `widget.DataGridView` for rows.
-- `ErrorProvider`, `Validating` and `ValidateChildren` exist (`docs/ui/widget/errorprovider.md`).
+- Validation: `widget.ErrorProvider` marks a control, the control's `OnValidating` says whether it is valid, and `widget.Form.ValidateChildren` runs them all (`docs/ui/widget/errorprovider.md`).
 
 ```go
 package app
 
 import (
-	"log"
 	"sync"
 
 	"github.com/egoist/mygo/ui/widget"
@@ -45,21 +44,31 @@ type Profile struct {
 	Newsletter bool
 }
 
-// Run shows the profile form: a Fields form, bound to the profile, with
-// Enter as OK and Escape as Cancel.
-func Run(p *Profile) error {
+// Edit shows the profile form as an OK and Cancel dialog does in WinForms:
+// the controls are bound to a copy, OK commits it, Cancel drops it, and both
+// close the form. Enter is OK and Escape is Cancel.
+func Edit(p *Profile) error {
+	p.mu.Lock()
+	draft := Profile{Name: p.Name, Newsletter: p.Newsletter} // only the form touches it
+	p.mu.Unlock()
+
 	return widget.Run("Profile", func(w *widget.Form) {
-		ok := widget.Button("OK").Suggested().OnClick(func() { log.Println("saved") })
-		cancel := widget.Button("Cancel").OnClick(func() { log.Println("canceled") })
+		ok := widget.Button("OK").Suggested().OnClick(func() {
+			p.mu.Lock()
+			p.Name, p.Newsletter = draft.Name, draft.Newsletter
+			p.mu.Unlock()
+			w.Close()
+		})
+		cancel := widget.Button("Cancel").OnClick(func() { w.Close() })
 		w.SetAcceptButton(ok).SetCancelButton(cancel)
 		w.SetContent(widget.VBox(12).Add(
 			widget.Fields().
 				Row("Name", widget.Bind(widget.TextBox(),
-					func() string { p.mu.Lock(); defer p.mu.Unlock(); return p.Name },
-					func(v string) { p.mu.Lock(); defer p.mu.Unlock(); p.Name = v })).
+					func() string { return draft.Name },
+					func(v string) { draft.Name = v })).
 				Row("", widget.Bind(widget.CheckBox("Send me the newsletter"),
-					func() bool { p.mu.Lock(); defer p.mu.Unlock(); return p.Newsletter },
-					func(v bool) { p.mu.Lock(); defer p.mu.Unlock(); p.Newsletter = v })),
+					func() bool { return draft.Newsletter },
+					func(v bool) { draft.Newsletter = v })),
 			widget.ButtonBox().Add(cancel, ok),
 		).Padding(4))
 	})

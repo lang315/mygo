@@ -48,7 +48,7 @@ func TestSignIn(t *testing.T) {
 - Actions find the element again by identity in the last frame each time: `widget.Node.Click`, `widget.Node.DoubleClick`, `widget.Node.RightClick`, `widget.Node.Focus`, `widget.Node.Type(s)`, `widget.Node.Key(mods, key)`. Each settles afterwards and returns the node.
 - An action fails the test, saying why, where a user could not do it: the element is disabled, hidden, outside the window, or cannot take the keyboard focus. Assert that a button is disabled with `widget.Node.Disabled`, do not click it.
 - `Type` and `Key` focus first. A text field takes the focus with the caret at the end of its text, which is where `Type` inserts.
-- Read with `widget.Node.Label`, `Value`, `Checked`, `Selected`, `Disabled`, `Focused`, `Bounds`, `Min`, `Max` and `Now`. A node that no longer has the role and label it was found with fails the test (`no longer shown`); find it again.
+- Read with `widget.Node.Label`, `Value`, `Checked`, `Selected`, `Disabled`, `Focused`, `Bounds`, `Min`, `Max` and `Now`. Every read but `Label` fails the test (`no longer shown`) when the node no longer has the role and label it was found with; find it again. `Label` checks the role only, so you can read the new text of a control that renamed itself.
 
 ## Settling
 
@@ -101,7 +101,7 @@ func TestRenameDialog(t *testing.T) {
 
 - `widget.DialogTester.Escape` presses Escape as a window does: an open drop-down or a shortcut takes it, else it asks `OnClose` (on the event goroutine: wait for it before `Closed`) and closes unless that says no or the dialog is not deletable.
 - A `DialogTester` embeds the `Tester`, so its `Find` takes a `widget.Query`; `ui.Tester`'s `Find(string)` is shadowed.
-- `widget.Alert`, `widget.Confirm`, `widget.InputString` and the other input and file dialogs block the caller: run them on another goroutine in a test too.
+- Only a dialog you made with `widget.NewDialog` and hold in the test can be driven by `widget.TestDialog`. `widget.Alert`, `widget.Confirm`, `widget.InputString` and the other input and file dialogs make their own dialog and show a real window, so a test cannot reach them and one that calls them hangs or opens a window. Have the app call them through a function variable or an interface that the test replaces.
 
 ## Tables
 
@@ -139,7 +139,8 @@ func TestAccountsTable(t *testing.T) {
 }
 ```
 
-- A row's text names its row and its cell, so `widget.ByLabel("Grace")` matches both: find a row with `widget.ByRole(ui.RoleRow).Label("Grace")`, a cell with `widget.ByRole(ui.RoleCell)` or `ui.RoleText`. The check boxes of a `CheckboxColumn` are named `Check <row text>` and `Check all`. A table shows what is in view: scroll it (`widget.Node.Click` scrolls an element into view first) or size the window to the rows.
+- A row is named by the text of its **first column**, and its text is a `ui.RoleText` node of its own, so `widget.ByLabel("Ada")` matches both. Find the row with `widget.ByRole(ui.RoleRow).Label("Ada")` and a text in a cell with `widget.ByRole(ui.RoleText).Label("ada@x")`: the `ui.RoleCell` nodes have no label. The header is a row too, named by its titles joined (`Name Mail`), so `widget.ByRole(ui.RoleRow).Nth(0)` is the header; its titles are `ui.RoleColumnHeader` nodes.
+- The check boxes of a `CheckboxColumn` are named `Check <first column's text>` and `Check all`. A table shows what is in view: scroll it (`widget.Node.Click` scrolls an element into view first) or size the window to the rows.
 - Read rows from the table, not from the screen: `widget.DataGridViewWidget.Row`, `Selected`, `Checked`, `Len`.
 
 ## A bug is a failing test first
