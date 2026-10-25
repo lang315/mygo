@@ -88,9 +88,17 @@ func TestOpenAtLogin(t *testing.T) {
 	}
 }
 
+// setFileExtensions sets packageFileExtensions on the main thread, where
+// launchArgs reads it as the tests start, and puts it back when t ends.
+func setFileExtensions(t *testing.T, exts string) {
+	t.Helper()
+	var old string
+	onMain(func() { old, packageFileExtensions = packageFileExtensions, exts })
+	t.Cleanup(func() { onMain(func() { packageFileExtensions = old }) })
+}
+
 func TestFileArgs(t *testing.T) {
-	defer func(s string) { packageFileExtensions = s }(packageFileExtensions)
-	packageFileExtensions = "md,txt"
+	setFileExtensions(t, "md,txt")
 	dir := t.TempDir()
 	for _, f := range []string{"a.md", "b.TXT", "c.png"} {
 		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
