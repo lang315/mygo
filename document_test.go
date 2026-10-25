@@ -392,6 +392,242 @@ func TestDocumentCloseAsks(t *testing.T) {
 	}
 }
 
+// TestDocumentEditedWhileTheDiskIsChecked: a look at the file that began
+// before the user edited the document must not replace the edit with the
+// file's content, which is what the watch's look does when the file changes
+// as the user types.
+func TestDocumentEditedWhileTheDiskIsChecked(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	path := writeTemp(t, "typing.txt", "mine")
+	d, _ := ds.Open(path)
+	// Every look at the file waits for the edit, those of the watch too.
+	looked, edited := make(chan struct{}, 16), make(chan struct{})
+	hold := func(changed bool) func() {
+		if !changed { // the watch's look at the start
+			return nil
+		}
+		looked <- struct{}{}
+		<-edited
+		return nil
+	}
+	afterDiskLook.Store(&hold)
+	t.Cleanup(func() { afterDiskLook.Store(nil) })
+	future := time.Now().Add(time.Hour)
+	os.WriteFile(path, []byte("theirs"), 0o644)
+	os.Chtimes(path, future, future)
+	done := make(chan struct{})
+	go func() { d.checkDisk(); close(done) }()
+	wait.For(t, "the look at the file", looked)
+	d.Set("mine again") // the document was not edited when the looks began
+	close(edited)
+	wait.For(t, "the look to end", done)
+	if d.Content() != "mine again" || !d.IsEdited() {
+		t.Errorf("content %q, edited %v: the user's edit was replaced", d.Content(), d.IsEdited())
+	}
+	if !d.HasConflict() {
+		t.Error("the file changed under the edit and the document is not in conflict")
+	}
+}
+
+// TestDocumentEditedWhileEqualIsAsked: Set stores the content before it asks
+// the app's Equal whether the document is edited, with the lock down; a look
+// that began before, and finishes in between, must not replace that content.
+func TestDocumentEditedWhileEqualIsAsked(t *testing.T) {
+	asking, answer := make(chan struct{}, 4), make(chan struct{})
+	var armed atomic.Bool
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: func(a, b string) bool {
+		if armed.Load() {
+			asking <- struct{}{}
+			<-answer
+		}
+		return a == b
+	}})
+	path := writeTemp(t, "equal.txt", "mine")
+	d, _ := ds.Open(path)
+	looked, release := make(chan struct{}, 16), make(chan struct{})
+	hold := func(changed bool) func() {
+		if !changed { // the watch's look at the start
+			return nil
+		}
+		looked <- struct{}{}
+		<-release
+		return nil
+	}
+	afterDiskLook.Store(&hold)
+	t.Cleanup(func() { afterDiskLook.Store(nil) })
+	future := time.Now().Add(time.Hour)
+	os.WriteFile(path, []byte("theirs"), 0o644)
+	os.Chtimes(path, future, future)
+	done := make(chan struct{})
+	go func() { d.checkDisk(); close(done) }()
+	wait.For(t, "the look at the file", looked)
+	armed.Store(true)
+	set := make(chan struct{})
+	go func() { d.Set("mine again"); close(set) }()
+	wait.For(t, "Set to ask Equal", asking)
+	close(release) // the looks go on while Set has stored the content, not set edited
+	wait.For(t, "the look to end", done)
+	close(answer)
+	wait.For(t, "Set to end", set)
+	if d.Content() != "mine again" || !d.IsEdited() {
+		t.Errorf("content %q, edited %v: the user's edit was replaced", d.Content(), d.IsEdited())
+	}
+	if !d.HasConflict() {
+		t.Error("the file changed under the edit and the document is not in conflict")
+	}
+}
+
+func sameTrimmed(a, b string) bool { return strings.TrimSpace(a) == strings.TrimSpace(b) }
+
+// outsideChange writes content to path, newer than anything before.
+func outsideChange(path, content string, hours int) {
+	os.WriteFile(path, []byte(content), 0o644)
+	t := time.Now().Add(time.Duration(hours) * time.Hour)
+	os.Chtimes(path, t, t)
+}
+
+// TestDocumentUneditedByEqualReloads: a document that Equal finds equal to
+// its file is unedited, so that a change of the file reloads it, not
+// conflicts with it.
+func TestDocumentUneditedByEqualReloads(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: sameTrimmed})
+	path := writeTemp(t, "equal-set.txt", "mine")
+	d, _ := ds.Open(path)
+	d.Set("x")
+	d.Set("mine ") // typed and undone
+	if d.IsEdited() {
+		t.Fatal("the document equal to its file is edited")
+	}
+	outsideChange(path, "theirs", 1)
+	d.checkDisk()
+	if d.HasConflict() || d.Content() != "theirs" {
+		t.Errorf("conflict %v, content %q: the unedited document was not reloaded", d.HasConflict(), d.Content())
+	}
+}
+
+// TestDocumentUneditedBySavingReloads: the same, for an edit made while the
+// document was being saved, which Equal finds equal to what was written.
+func TestDocumentUneditedBySavingReloads(t *testing.T) {
+	var d *Document[string]
+	first := true
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, Equal: sameTrimmed, Write: func(w io.Writer, s string) error {
+		_, err := io.WriteString(w, s)
+		if first {
+			first = false
+			d.Set(s + " ") // typed while the file is written
+		}
+		return err
+	}})
+	path := writeTemp(t, "equal-save.txt", "mine")
+	d, _ = ds.Open(path)
+	d.Set("saved")
+	if err := d.Save(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the document to be unedited", func() bool { return !d.IsEdited() })
+	outsideChange(path, "theirs", 1)
+	d.checkDisk()
+	if d.HasConflict() || d.Content() != "theirs" {
+		t.Errorf("conflict %v, content %q: the unedited document was not reloaded", d.HasConflict(), d.Content())
+	}
+}
+
+// TestDocumentMovedWhileTheDiskIsChecked: a look at the file the document
+// was at must not reload the document that moved to another file meanwhile.
+func TestDocumentMovedWhileTheDiskIsChecked(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	a := writeTemp(t, "a.txt", "mine")
+	b := filepath.Join(filepath.Dir(a), "b.txt")
+	os.WriteFile(b, []byte("mine"), 0o644)
+	d, _ := ds.Open(a)
+	// The first look that finds the file changed, whichever it is, finds the
+	// document moved by the time it decides.
+	// The first look that finds the file changed, whichever it is, finds the
+	// document moved by the time it decides; the content is checked when it
+	// ends, before a look at b.txt reads it again. The looks that found the
+	// file changed go one at a time, and are waited for.
+	var once sync.Once
+	var moved atomic.Bool
+	var order sync.Mutex
+	var looks sync.WaitGroup
+	move := func(changed bool) func() {
+		if !changed {
+			return nil
+		}
+		order.Lock()
+		looks.Add(1)
+		first := false
+		once.Do(func() { d.moved(b); moved.Store(true); first = true })
+		return func() {
+			if first && d.Content() != "mine" {
+				t.Errorf("content %q: the look at a.txt replaced the content of the document at b.txt", d.Content())
+			}
+			order.Unlock()
+			looks.Done()
+		}
+	}
+	afterDiskLook.Store(&move)
+	t.Cleanup(func() { afterDiskLook.Store(nil) })
+	outsideChange(a, "theirs a", 1)
+	d.checkDisk()
+	if !moved.Load() {
+		t.Fatal("no look found a.txt changed")
+	}
+	looks.Wait()
+	outsideChange(b, "theirs b", 2)
+	d.checkDisk()
+	if d.Content() != "theirs b" {
+		t.Errorf("content %q after b.txt changed, want theirs b", d.Content())
+	}
+}
+
+// TestDocumentSetDuringSave: Set asks Equal about the file as it was when Set
+// began; a save that ends meanwhile makes that answer about another file. The
+// document must stay edited, not be taken for the file's.
+func TestDocumentSetDuringSave(t *testing.T) {
+	writing, writeGo := make(chan struct{}), make(chan struct{})
+	asking, askGo := make(chan struct{}), make(chan struct{})
+	var armed atomic.Bool
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff,
+		Equal: func(a, b string) bool {
+			if armed.Load() && a == "S0" && b == "S0" {
+				close(asking)
+				<-askGo
+			}
+			return a == b
+		},
+		Write: func(w io.Writer, s string) error {
+			_, err := io.WriteString(w, s)
+			if s == "W" {
+				close(writing)
+				<-writeGo
+			}
+			return err
+		}})
+	path := writeTemp(t, "during-save.txt", "S0")
+	d, _ := ds.Open(path)
+	d.Set("W")
+	saved := make(chan error, 1)
+	go func() { saved <- d.Save() }()
+	wait.For(t, "the save to write", writing)
+	armed.Store(true)
+	set := make(chan struct{})
+	go func() { d.Set("S0"); close(set) }() // back to the file's content, as it was
+	wait.For(t, "Set to ask Equal", asking)
+	close(writeGo) // the save ends: the file has W
+	if err := wait.For(t, "the save to end", saved); err != nil {
+		t.Fatal(err)
+	}
+	close(askGo)
+	wait.For(t, "Set to end", set)
+	if got := readString(t, path); got != "W" {
+		t.Fatalf("the file has %q, want W", got)
+	}
+	if d.Content() != "S0" || !d.IsEdited() {
+		t.Errorf("content %q edited %v: the content differs from the file's and the document is not edited", d.Content(), d.IsEdited())
+	}
+}
+
 func TestDocumentOutsideChanges(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "out.txt", "mine")
