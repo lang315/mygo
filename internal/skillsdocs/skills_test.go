@@ -124,11 +124,17 @@ var (
 // prose is the text of a Markdown file outside its code blocks.
 func prose(text string) string { return fenceRE.ReplaceAllString(text, "") }
 
+// inRepo reports whether the slash-separated path is in the repository.
+func inRepo(path string) bool {
+	_, err := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(path)))
+	return err == nil
+}
+
 func TestSkillDocsExist(t *testing.T) {
 	for _, s := range skills(t) {
 		for _, f := range s.files {
 			for _, p := range docPathRE.FindAllString(read(t, f), -1) {
-				if _, err := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(p))); err != nil {
+				if !inRepo(p) {
 					t.Errorf("%s mentions %s, which is not in the repository", f, p)
 				}
 			}
