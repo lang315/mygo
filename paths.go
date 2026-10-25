@@ -164,7 +164,11 @@ func userDir(home string, name PathName) string {
 						return strings.Replace(v, "$HOME", home, 1)
 					}
 				}
-				_ = s.Err() // a file that cannot be read gives the folder's default
+				if s.Err() != nil {
+					// The file is the user's optional setting: one that cannot
+					// be read leaves the folder at its default.
+					return filepath.Join(home, folder)
+				}
 			}
 		}
 	}
