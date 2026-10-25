@@ -151,3 +151,28 @@ func BenchmarkUIFrame(b *testing.B) {
 		}
 	}
 }
+
+// TestWidgetFrameAllocatesNoClosuresPerWidget keeps the widget layer from
+// allocating for each widget in each frame (a key boxed, a label parsed for
+// its mnemonic, a callback made again): a frame of 100 plain widgets
+// allocated 264 times with them, and 66 without, all of them ui's own.
+func TestWidgetFrameAllocatesNoClosuresPerWidget(t *testing.T) {
+	box := VBox(2)
+	for i := range 100 {
+		switch i % 3 {
+		case 0:
+			box.Add(Label(fmt.Sprintf("Label %d", i)))
+		case 1:
+			box.Add(Button(fmt.Sprintf("Button %d", i)))
+		default:
+			box.Add(TextBox().SetText(fmt.Sprintf("Text %d", i)))
+		}
+	}
+	tt := ui.NewTester(content(ScrollPanel(box)), 1280, 800)
+	for range 10 {
+		tt.Frame()
+	}
+	if n := testing.AllocsPerRun(50, tt.Frame); n > 100 {
+		t.Fatalf("a frame of 100 widgets allocates %v times, want at most 100", n)
+	}
+}

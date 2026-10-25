@@ -939,3 +939,50 @@ func TestTableSelectedRowDropsTheColumnColor(t *testing.T) {
 		t.Fatalf("%d red pixels in the selected row's text", n)
 	}
 }
+
+// BenchmarkTableFrames100k is the frame of fhtool's table, 100,000 rows with
+// the check box and index columns: at rest, scrolled by the wheel, and with
+// 1000 rows changed. allocs/op and B/op are the figures to read.
+func BenchmarkTableFrames100k(b *testing.B) {
+	const n = 100_000
+	setup := func(b *testing.B) (*DataGridViewWidget[acct, int], *ui.Tester) {
+		tb := testTable(manyAccts(n)...).CheckboxColumn().IndexColumn()
+		tt := ui.NewTester(content(tb), 1280, 800)
+		for range 3 {
+			tt.Frame()
+		}
+		return tb, tt
+	}
+	b.Run("rest", func(b *testing.B) {
+		_, tt := setup(b)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			tt.Frame()
+		}
+	})
+	b.Run("scroll", func(b *testing.B) {
+		_, tt := setup(b)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; b.Loop(); i++ {
+			dy := float32(120)
+			if i%2 == 1 {
+				dy = -120
+			}
+			tt.Wheel(400, 300, 0, dy)
+			tt.Frame()
+		}
+	})
+	b.Run("live1000", func(b *testing.B) {
+		tb, tt := setup(b)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; b.Loop(); i++ {
+			for j := range 1000 {
+				tb.UpdateRow((i*7919+j*104729)%n, func(a *acct) { a.score += 3 })
+			}
+			tt.Frame()
+		}
+	})
+}

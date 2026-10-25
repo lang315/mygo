@@ -48,7 +48,7 @@ func (c *Context) Invalidate() {
 // A compound widget consumes the key for its outermost element.
 func (c *Context) Key(key any) *Context {
 	if raw := c.build(); raw != nil {
-		raw.nextKey, raw.keySet = key, true
+		raw.nextKey, raw.keySet, raw.keyGlobal = key, true, false
 	}
 	return c
 }
@@ -59,7 +59,7 @@ func (c *Context) Key(key any) *Context {
 // duplicate key, as with Key. See KeepAlive.
 func (c *Context) GlobalKey(key any) *Context {
 	if raw := c.build(); raw != nil {
-		raw.nextKey, raw.keySet = globalKey{key}, true
+		raw.nextKey, raw.keySet, raw.keyGlobal = key, true, true
 	}
 	return c
 }

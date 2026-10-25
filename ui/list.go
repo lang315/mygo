@@ -756,7 +756,7 @@ func (f *listFrame) build(i int) *node {
 	}
 	// Keyed as it is made, as Context.Key does: Key after would look up
 	// a state by its place first, and drop it, in every frame.
-	c.nextKey, c.keySet = key, true
+	c.nextKey, c.keySet, c.keyGlobal = key, true, false
 	w := coreBox(c).Shrink(0)
 	w.listRow, w.rowIndex = true, i
 	if s.Label != nil {

@@ -124,6 +124,7 @@ type ToggleWidget struct {
 	text     string
 	on       mirror[bool]
 	onChange func()
+	toggled  func() // onToggled, made once
 }
 
 func Toggle(text string) *ToggleWidget {
@@ -139,9 +140,20 @@ func (t *ToggleWidget) OnChange(fn func()) *ToggleWidget {
 	return t
 }
 
+// onToggled is the callback of ui's OnChange, made once (see TextBoxWidget).
+func (t *ToggleWidget) onToggled() {
+	mu.Lock()
+	fn := onChange(&t.on, t.onChange)
+	mu.Unlock()
+	fn()
+}
+
 func (t *ToggleWidget) build(c *ui.Context) ui.Element {
 	p, changed := t.on.bind()
-	e := ui.Toggle(c, p, t.text).OnChange(onChange(&t.on, t.onChange))
+	if t.toggled == nil {
+		t.toggled = t.onToggled
+	}
+	e := ui.Toggle(c, p, t.text).OnChange(t.toggled)
 	if changed && t.onChange != nil {
 		Post(t.onChange)
 	}
@@ -197,6 +209,7 @@ type SwitchWidget struct {
 	common[SwitchWidget]
 	on       mirror[bool]
 	onChange func()
+	toggled  func() // onToggled, made once
 }
 
 func Switch() *SwitchWidget {
@@ -212,9 +225,20 @@ func (s *SwitchWidget) OnChange(fn func()) *SwitchWidget {
 	return s
 }
 
+// onToggled is the callback of ui's OnChange, made once (see TextBoxWidget).
+func (s *SwitchWidget) onToggled() {
+	mu.Lock()
+	fn := onChange(&s.on, s.onChange)
+	mu.Unlock()
+	fn()
+}
+
 func (s *SwitchWidget) build(c *ui.Context) ui.Element {
 	p, changed := s.on.bind()
-	e := ui.Switch(c, p).OnChange(onChange(&s.on, s.onChange))
+	if s.toggled == nil {
+		s.toggled = s.onToggled
+	}
+	e := ui.Switch(c, p).OnChange(s.toggled)
 	if changed && s.onChange != nil {
 		Post(s.onChange)
 	}

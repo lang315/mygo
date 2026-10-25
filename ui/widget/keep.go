@@ -47,7 +47,7 @@ func (k *keeper) hold(b *core) {
 // builds b, and under its parent for a widget shown in two places.
 func (k *keeper) key(c *ui.Context, b *core) {
 	if k.built[b.id] {
-		c.Key(b.id)
+		c.Key(b.idKey)
 		return
 	}
 	k.built[b.id] = true
@@ -56,7 +56,7 @@ func (k *keeper) key(c *ui.Context, b *core) {
 		// Weak, so the app dropping the widget frees it and its state.
 		k.widgets[b.id] = weak.Make(b)
 	}
-	c.GlobalKey(b.id)
+	c.GlobalKey(b.idKey)
 }
 
 // end keeps alive the state of the widgets not built that the app still

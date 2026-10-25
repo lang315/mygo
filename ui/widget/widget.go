@@ -40,6 +40,7 @@ type core struct {
 	style       Style   // applied merged, ownStyle last: what frames resolve
 	styled      bool    // style sets anything
 	textKey     any     // textKey(id), boxed once
+	idKey       any     // id, boxed once, for keeper.key
 	place       layout
 	bound       binding // Bind's, for the controls that can be bound
 	onFocusOut  func()
@@ -66,6 +67,7 @@ var building int
 func (c *common[W]) init(self *W) {
 	c.self, c.id, c.focusIn = self, newID(), noView
 	c.textKey = textKey(c.id)
+	c.idKey = c.id
 }
 
 // restyle merges the control's styles, its own last. Under mu.
