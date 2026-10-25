@@ -3,7 +3,7 @@
 package windows
 
 import (
-	"syscall"
+	"github.com/egoist/mygo/internal/wincb"
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -89,7 +89,7 @@ func (n network) Watch() {
 	// the application window, and the main thread reads the hint again.
 	// Its second parameter is the hint by value, which amd64 passes as a
 	// pointer and arm64 in two registers, so it is not read.
-	cb := syscall.NewCallback(func(ctx, hint uintptr) uintptr {
+	cb := wincb.New(func(ctx, hint uintptr) uintptr {
 		postMessage(n.b.appHwnd, wmAppNetwork, 0, 0)
 		return 0
 	})

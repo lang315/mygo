@@ -5,6 +5,7 @@ package text
 import (
 	"errors"
 	"fmt"
+	"github.com/egoist/mygo/internal/wincb"
 	"log"
 	"math"
 	"reflect"
@@ -673,16 +674,16 @@ var (
 func textRenderer() uintptr {
 	rendererOnce.Do(func() {
 		rendererVtbl = [10]uintptr{
-			syscall.NewCallback(rendererQueryInterface),
-			syscall.NewCallback(rendererAddRef),
-			syscall.NewCallback(rendererAddRef), // Release
-			syscall.NewCallback(rendererIsPixelSnappingDisabled),
-			syscall.NewCallback(rendererGetCurrentTransform),
-			syscall.NewCallback(rendererGetPixelsPerDip),
-			syscall.NewCallback(rendererDrawGlyphRun),
-			syscall.NewCallback(rendererDrawDecoration), // DrawUnderline
-			syscall.NewCallback(rendererDrawDecoration), // DrawStrikethrough
-			syscall.NewCallback(rendererDrawInlineObject),
+			wincb.New(rendererQueryInterface),
+			wincb.New(rendererAddRef),
+			wincb.New(rendererAddRef), // Release
+			wincb.New(rendererIsPixelSnappingDisabled),
+			wincb.New(rendererGetCurrentTransform),
+			wincb.New(rendererGetPixelsPerDip),
+			wincb.New(rendererDrawGlyphRun),
+			wincb.New(rendererDrawDecoration), // DrawUnderline
+			wincb.New(rendererDrawDecoration), // DrawStrikethrough
+			wincb.New(rendererDrawInlineObject),
 		}
 		rendererObj.vtbl = &rendererVtbl
 	})

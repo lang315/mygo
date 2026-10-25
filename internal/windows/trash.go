@@ -4,8 +4,8 @@ package windows
 
 import (
 	"fmt"
+	"github.com/egoist/mygo/internal/wincb"
 	"sync"
-	"syscall"
 	"unsafe"
 )
 
@@ -52,7 +52,7 @@ type trashSink struct {
 }
 
 func initTrashSink() {
-	cb := syscall.NewCallback
+	cb := wincb.New
 	ok := cb(func(this uintptr) uintptr { return sOK })
 	ok3 := cb(func(this, a, b, c uintptr) uintptr { return sOK })
 	ok5 := cb(func(this, a, b, c, d, e uintptr) uintptr { return sOK })

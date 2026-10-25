@@ -3,9 +3,9 @@
 package windows
 
 import (
+	"github.com/egoist/mygo/internal/wincb"
 	"strings"
 	"sync"
-	"syscall"
 	"unsafe"
 )
 
@@ -43,7 +43,7 @@ const ePointer = 0x80004003 // E_POINTER
 func newEnvOptions(language string) uintptr {
 	envOptionsOnce.Do(func() {
 		str := func(get func(o *envOptions) []uint16) uintptr {
-			return syscall.NewCallback(func(this, out uintptr) uintptr {
+			return wincb.New(func(this, out uintptr) uintptr {
 				if out == 0 {
 					return ePointer
 				}
@@ -51,9 +51,9 @@ func newEnvOptions(language string) uintptr {
 				return sOK
 			})
 		}
-		ignore := syscall.NewCallback(func(this, value uintptr) uintptr { return sOK })
+		ignore := wincb.New(func(this, value uintptr) uintptr { return sOK })
 		envOptionsVtbl = [11]uintptr{
-			syscall.NewCallback(func(this, riid, out uintptr) uintptr {
+			wincb.New(func(this, riid, out uintptr) uintptr {
 				if out == 0 {
 					return ePointer
 				}
@@ -66,8 +66,8 @@ func newEnvOptions(language string) uintptr {
 				envOptionsRef(this, 1)
 				return sOK
 			}),
-			syscall.NewCallback(func(this uintptr) uintptr { return uintptr(envOptionsRef(this, 1)) }),
-			syscall.NewCallback(func(this uintptr) uintptr { return uintptr(envOptionsRef(this, -1)) }),
+			wincb.New(func(this uintptr) uintptr { return uintptr(envOptionsRef(this, 1)) }),
+			wincb.New(func(this uintptr) uintptr { return uintptr(envOptionsRef(this, -1)) }),
 			str(func(*envOptions) []uint16 { return nil }), // get_AdditionalBrowserArguments
 			ignore, // put_AdditionalBrowserArguments
 			str(func(o *envOptions) []uint16 { // get_Language
@@ -83,7 +83,7 @@ func newEnvOptions(language string) uintptr {
 			// first release of WebView2.
 			str(func(*envOptions) []uint16 { return targetBrowserVersion }), // get_TargetCompatibleBrowserVersion
 			ignore, // put_TargetCompatibleBrowserVersion
-			syscall.NewCallback(func(this, out uintptr) uintptr { // get_AllowSingleSignOnUsingOSPrimaryAccount
+			wincb.New(func(this, out uintptr) uintptr { // get_AllowSingleSignOnUsingOSPrimaryAccount
 				if out == 0 {
 					return ePointer
 				}

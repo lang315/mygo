@@ -3,11 +3,11 @@
 package windows
 
 import (
+	"github.com/egoist/mygo/internal/wincb"
 	"math"
 	"runtime"
 	"sort"
 	"strings"
-	"syscall"
 	"unicode"
 	"unicode/utf16"
 	"unsafe"
@@ -136,7 +136,7 @@ func rangeArray(ranges ...*textRange) uintptr {
 
 // textProviderMethods are ITextProvider's.
 func textProviderMethods() []uintptr {
-	cb := syscall.NewCallback
+	cb := wincb.New
 	live := func(this uintptr) (*uiaElement, uintptr) {
 		e := uiaOf(this)
 		if e.dead {
@@ -460,7 +460,7 @@ func bstrString(b uintptr) string {
 }
 
 func initTextRanges() {
-	cb := syscall.NewCallback
+	cb := wincb.New
 	live := func(this uintptr) (*textRange, uintptr) {
 		r := rangeOf(this)
 		if r.e.dead {

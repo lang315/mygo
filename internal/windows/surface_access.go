@@ -3,11 +3,11 @@
 package windows
 
 import (
+	"github.com/egoist/mygo/internal/wincb"
 	"math"
 	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -636,7 +636,7 @@ func (t *uiaTree) at(x, y float64) *uiaElement {
 }
 
 func initUIA() {
-	cb := syscall.NewCallback
+	cb := wincb.New
 	unknown := []uintptr{
 		cb(func(this, riid, p uintptr) uintptr {
 			e := uiaOf(this)

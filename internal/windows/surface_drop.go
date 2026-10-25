@@ -3,6 +3,7 @@
 package windows
 
 import (
+	"github.com/egoist/mygo/internal/wincb"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -80,7 +81,7 @@ func initDropTarget() {
 	initDataSource()
 	target := func(this uintptr) *dropTarget { return dropTargets[this] }
 	dropTargetVtbl = [7]uintptr{
-		syscall.NewCallback(func(this, riid, out uintptr) uintptr {
+		wincb.New(func(this, riid, out uintptr) uintptr {
 			if iid := *(*GUID)(native(riid)); iid != iidIUnknown && iid != iidIDropTarget {
 				*(*uintptr)(native(out)) = 0
 				return eNoInterface
@@ -89,12 +90,12 @@ func initDropTarget() {
 			target(this).refs++
 			return sOK
 		}),
-		syscall.NewCallback(func(this uintptr) uintptr {
+		wincb.New(func(this uintptr) uintptr {
 			t := target(this)
 			t.refs++
 			return uintptr(t.refs)
 		}),
-		syscall.NewCallback(func(this uintptr) uintptr {
+		wincb.New(func(this uintptr) uintptr {
 			t := target(this)
 			if t.refs--; t.refs == 0 {
 				t.leave()
@@ -104,7 +105,7 @@ func initDropTarget() {
 			return uintptr(t.refs)
 		}),
 		// DragEnter(data, keys, point, effect)
-		syscall.NewCallback(func(this, data, keys, pt, effect uintptr) uintptr {
+		wincb.New(func(this, data, keys, pt, effect uintptr) uintptr {
 			t := target(this)
 			allowed := *(*uint32)(native(effect))
 			t.enter(data, allowed, keys)
@@ -115,7 +116,7 @@ func initDropTarget() {
 			return sOK
 		}),
 		// DragOver(keys, point, effect)
-		syscall.NewCallback(func(this, keys, pt, effect uintptr) uintptr {
+		wincb.New(func(this, keys, pt, effect uintptr) uintptr {
 			t := target(this)
 			if !t.overPage(keys, pt, effect) {
 				t.over(keys, pt, effect)
@@ -127,7 +128,7 @@ func initDropTarget() {
 			return sOK
 		}),
 		// DragLeave()
-		syscall.NewCallback(func(this uintptr) uintptr {
+		wincb.New(func(this uintptr) uintptr {
 			t := target(this)
 			if t.helper != 0 {
 				comCall(t.helper, 4)
@@ -139,7 +140,7 @@ func initDropTarget() {
 			return sOK
 		}),
 		// Drop(data, keys, point, effect)
-		syscall.NewCallback(func(this, data, keys, pt, effect uintptr) uintptr {
+		wincb.New(func(this, data, keys, pt, effect uintptr) uintptr {
 			t := target(this)
 			if t.data != data {
 				t.enter(data, *(*uint32)(native(effect)), keys)
