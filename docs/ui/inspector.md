@@ -87,6 +87,21 @@ a control it belongs to left a note (see below):
   earlier. A property that places the control (`align`, `hexpand`) counts
   from the base only. The layers follow, each as it is set.
 
+## Widgets
+
+The **Widgets** tab of the toolbar shows the controls as the app wrote them,
+not the elements they are made of: a `VBox` holding a `GroupBox` holding a
+`TextBox` and a `Button` are four rows, nested by the control around each,
+where Elements shows a `<Column>`, a `<Row>`, a `<Text>` and the like. A row
+is a control's type, with its key and label or text. It lists the elements
+that left a note (see below), and nests each under the nearest element around
+it that left one, as the Widget tab finds the note of an element. A window
+built with package `ui` alone has none, and says so. The arrows, Alt-click,
+Left and Right, and `Cmd+F` work as in Elements. Choosing a row chooses the
+control's root element, so Styles, Computed, Properties and Widget follow it;
+an element chosen elsewhere has the row of the control it belongs to. The
+Form window itself is not a row: the tree starts at its content.
+
 ## Notes from controls
 
 A control, or a widget of your own, tells the inspector what it is made of

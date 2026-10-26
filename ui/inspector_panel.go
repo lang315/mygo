@@ -130,9 +130,12 @@ func (in *inspector) toolbar(c *context, rt *engine) {
 		if n := len(rt.warnings); n > 0 {
 			issues = fmt.Sprintf("Issues %d", n)
 		}
-		for i, label := range []string{"Elements", "Performance", issues} {
-			if in.tab0(c, label, in.tab == i, 30).Clicked() {
-				in.tab = i
+		for _, t := range []struct {
+			label string
+			tab   int
+		}{{"Elements", inspElements}, {"Widgets", inspWidgets}, {"Performance", inspPerformance}, {issues, inspIssues}} {
+			if in.tab0(c, t.label, in.tab == t.tab, 30).Clicked() {
+				in.tab = t.tab
 			}
 		}
 		coreSpacer(c)
@@ -216,26 +219,33 @@ func (in *inspector) treeRows() {
 	in.rows = in.rows[:0]
 	var open []int32 // the nodes open around the node, innermost last
 	hide := int32(-1)
+	closing := !in.widgets() // the elements have closing tags, the controls none
 	for i := range in.nodes {
 		n := &in.nodes[i]
-		for len(open) > 0 && in.nodes[open[len(open)-1]].depth >= n.depth {
-			in.rows = append(in.rows, inspRow{node: open[len(open)-1], close: true})
+		if !in.shows(n) {
+			continue
+		}
+		d := in.viewDepth(n)
+		for len(open) > 0 && in.viewDepth(&in.nodes[open[len(open)-1]]) >= d {
+			if closing {
+				in.rows = append(in.rows, inspRow{node: open[len(open)-1], close: true})
+			}
 			open = open[:len(open)-1]
 		}
-		if hide >= 0 && n.depth > hide {
+		if hide >= 0 && d > hide {
 			continue
 		}
 		hide = -1
 		in.rows = append(in.rows, inspRow{node: int32(i)})
-		if n.kids {
+		if in.viewKids(n) {
 			if in.isOpen(n) {
 				open = append(open, int32(i))
 			} else {
-				hide = n.depth
+				hide = d
 			}
 		}
 	}
-	for i := len(open) - 1; i >= 0; i-- {
+	for i := len(open) - 1; i >= 0 && closing; i-- {
 		in.rows = append(in.rows, inspRow{node: open[i], close: true})
 	}
 }
@@ -263,13 +273,21 @@ func (in *inspector) tree(c *context, rt *engine) {
 	}
 	in.list.Label = func(i int) string {
 		n := &in.nodes[in.rows[i].node]
-		return strings.TrimSpace(n.name + " " + clip(n.text, 40))
+		return strings.TrimSpace(in.viewName(n) + " " + clip(n.text, 40))
+	}
+	if in.widgets() && len(in.rows) == 0 {
+		coreText(c, "No controls: this window is built with package ui alone, or its controls left no notes.").
+			TextColor(in.pal.muted).Padding(10)
 	}
 	hovered := uint64(0)
+	title := "Elements"
+	if in.widgets() {
+		title = "Widgets"
+	}
 	list := coreList(c, &in.list, len(in.rows), func(i int) {
 		r := in.rows[i]
 		n := &in.nodes[r.node]
-		row := coreRow(c).Height(20).Padding(0, 6, 0, float32(n.depth)*14+4).AlignItems(Center)
+		row := coreRow(c).Height(20).Padding(0, 6, 0, float32(in.viewDepth(n))*14+4).AlignItems(Center)
 		if row.Hovered() {
 			hovered = n.id
 		}
@@ -277,7 +295,7 @@ func (in *inspector) tree(c *context, rt *engine) {
 			row.Opacity(0.5)
 		}
 		row.Children(func() { in.treeRow(c, r, n) })
-	}).Grow(1).MinHeight(0).PaddingY(2).FocusRing(false).Label("Elements")
+	}).Grow(1).MinHeight(0).PaddingY(2).FocusRing(false).Label(title)
 	in.listID = list.id
 	list.afterInput(func() {
 		if list.Changed() && in.row >= 0 && in.row < len(in.rows) {
@@ -288,17 +306,22 @@ func (in *inspector) tree(c *context, rt *engine) {
 	// opens it, else goes into it.
 	left, right := list.Shortcut(0, KeyLeft), list.Shortcut(0, KeyRight)
 	if i := in.nodeOf(in.selected); i >= 0 && (left || right) {
+		if in.widgets() && in.nodes[i].near >= 0 {
+			i = in.nodes[i].near // the control the element chosen belongs to
+		}
 		n := &in.nodes[i]
 		switch {
-		case left && n.kids && in.isOpen(n):
+		case left && in.viewKids(n) && in.isOpen(n):
 			in.setOpen(i, false, false)
-		case left && n.parent >= 0:
-			in.choose(in.nodes[n.parent].id)
+		case left && in.viewParent(n) >= 0:
+			in.choose(in.nodes[in.viewParent(n)].id)
 			in.reveal = true
-		case right && n.kids && !in.isOpen(n):
+		case right && in.viewKids(n) && !in.isOpen(n):
 			in.setOpen(i, true, false)
-		case right && n.kids:
-			in.choose(in.nodes[i+1].id)
+		case right && in.viewKids(n):
+			if next := in.rowOf(n.id) + 1; next > 0 && next < len(in.rows) {
+				in.choose(in.nodes[in.rows[next].node].id) // the first of the rows inside
+			}
 			in.reveal = true
 		}
 	}
@@ -309,6 +332,14 @@ func (in *inspector) tree(c *context, rt *engine) {
 
 // rowOf returns the row of the opening tag of the node id, -1 for none.
 func (in *inspector) rowOf(id uint64) int {
+	if in.widgets() {
+		// An element inside a control has the control's row.
+		i := in.nodeOf(id)
+		if i < 0 || in.nodes[i].near < 0 {
+			return -1
+		}
+		id = in.nodes[in.nodes[i].near].id
+	}
 	for i, r := range in.rows {
 		if !r.close && in.nodes[r.node].id == id {
 			return i
@@ -320,7 +351,7 @@ func (in *inspector) rowOf(id uint64) int {
 // treeRow builds the markup of row r, of node n.
 func (in *inspector) treeRow(c *context, r inspRow, n *inspNode) {
 	pal := &in.pal
-	if !r.close && n.kids {
+	if !r.close && in.viewKids(n) {
 		open := in.isOpen(n)
 		arrow := coreIcon(c, inspIcons().arrow).FontSize(10).TextColor(pal.muted).Margin(0, 2, 0, 0).Cursor(CursorDefault)
 		if open {
@@ -336,6 +367,20 @@ func (in *inspector) treeRow(c *context, r inspRow, n *inspNode) {
 	tag := func(s string) Span { return Span{Text: s, Color: pal.tag} }
 	var spans []Span
 	switch {
+	case in.widgets():
+		// A control: its type, then what names it, with no tag around.
+		spans = append(spans, tag(n.wname))
+		attr := func(name, value string) {
+			spans = append(spans, Span{Text: " " + name, Color: pal.attr}, tag("="), Span{Text: `"` + clip(value, 40) + `"`, Color: pal.value})
+		}
+		if n.keyText != "" {
+			attr("key", n.keyText)
+		}
+		if n.label != "" {
+			attr("label", n.label)
+		} else if n.text != "" {
+			attr("text", n.text)
+		}
 	case r.close:
 		spans = append(spans, tag("</"+n.name+">"))
 	default:
@@ -361,7 +406,7 @@ func (in *inspector) treeRow(c *context, r inspRow, n *inspNode) {
 		}
 	}
 	coreRichText(c, spans...).Font("monospace").FontSize(11.5).SingleLine().Ellipsis("…").Shrink(1).MinWidth(0)
-	if !r.close && n.hasTrans {
+	if !r.close && n.hasTrans && !in.widgets() {
 		coreText(c, "transition").Font("monospace").FontSize(10).TextColor(pal.muted).Padding(0, 4).Margin(0, 0, 0, 6).
 			Radius(3).Border(1, pal.border).Shrink(0)
 	}
@@ -399,7 +444,10 @@ func (in *inspector) findMatches() {
 	q := strings.ToLower(in.query)
 	for i := range in.nodes {
 		n := &in.nodes[i]
-		if strings.Contains(strings.ToLower(n.name), q) || strings.Contains(strings.ToLower(n.text), q) ||
+		if !in.shows(n) {
+			continue
+		}
+		if strings.Contains(strings.ToLower(in.viewName(n)), q) || strings.Contains(strings.ToLower(n.text), q) ||
 			strings.Contains(strings.ToLower(n.label), q) || strings.Contains(strings.ToLower(n.keyText), q) {
 			in.matches = append(in.matches, int32(i))
 		}

@@ -123,3 +123,52 @@ func TestInspectorShowsTheStyleInEffect(t *testing.T) {
 		t.Errorf("dark: %q", tt.Texts())
 	}
 }
+
+// The Widgets tab shows the controls as the app wrote them: a VBox holding a
+// GroupBox holding a TextBox and a Button, not the Column, Text and Box
+// elements they are built of. Picking a row chooses the control's element,
+// whose Widget tab names its type.
+func TestInspectorWidgetsShowTheControlTree(t *testing.T) {
+	box := TextBox().SetText("hello")
+	form := VBox(4).Add(
+		GroupBox("Account").Add(VBox(2).Add(box, Button("Save"))),
+		Label("Done"),
+	)
+	tt := NewTester(t, form, 1000, 600)
+	if err := tt.Inspect("Save"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Widgets"); err != nil {
+		t.Fatal(err)
+	}
+	var rows []string
+	for _, s := range tt.Texts() {
+		for _, typ := range []string{"Box", "GroupBox", "TextBox", "Button", "Label"} {
+			if s == typ || len(s) > len(typ) && s[:len(typ)+1] == typ+" " {
+				rows = append(rows, typ)
+				break
+			}
+		}
+	}
+	// Every row is two texts, its label for assistive technology and its markup.
+	var got []string
+	for i := 0; i < len(rows); i += 2 {
+		got = append(got, rows[i])
+	}
+	want := []string{"Box", "GroupBox", "Box", "TextBox", "Button", "Label"}
+	if len(got) < len(want) { // the breadcrumbs below the tree name types too
+		t.Fatalf("rows %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("row %d is %q, want %q (rows %q)", i, got[i], want[i], got)
+		}
+	}
+	if err := tt.Click("TextBox"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Click("Widget")
+	if !tt.HasText("*widget.TextBoxWidget") {
+		t.Errorf("the control chosen is not the TextBox: %q", tt.Texts())
+	}
+}
