@@ -106,7 +106,10 @@ func (w *Window) attachContent() {
 func contentMenu(m *platform.Menu, chosen func(int)) []*MenuItem {
 	items := make([]*MenuItem, 0, len(m.Items))
 	for _, p := range m.Items {
-		it := &MenuItem{Label: p.Label, Accelerator: p.Accelerator, Disabled: !p.Enabled, Hidden: !p.Visible, Checked: p.Checked, Icon: p.Icon, IconTemplate: p.Template, Destructive: p.Destructive}
+		it := &MenuItem{Label: p.Label, Accelerator: p.Accelerator, Disabled: !p.Enabled, Hidden: !p.Visible, Checked: p.Checked, Destructive: p.Destructive}
+		if p.Icon != nil {
+			it.Icon = &MenuIcon{p.Icon}
+		}
 		switch p.Type {
 		case platform.MenuItemSeparator:
 			it.Type = MenuItemSeparator

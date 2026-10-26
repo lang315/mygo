@@ -46,6 +46,10 @@ func click(w *mygo.Window, x, y float64) (ok bool) {
 	return ok
 }
 
+// Clicks reach windows showing native UI only: a web view's page is
+// not clicked.
+func clickPage(*mygo.Window, float64, float64) bool { return false }
+
 // appClick clicks with the system's input, which activates windows, and
 // returns once the app handled the click. A click that does not reach the app
 // fails the test there, with the window that took it; for a window of the app
@@ -92,10 +96,12 @@ func drag(w *mygo.Window, points [][2]float64) (ok bool) {
 func webViewAttached(*mygo.Window) (bool, bool) { return false, false }
 
 // Collection behaviors and deactivating the app are macOS's.
-func collectionBehavior(*mygo.Window) (uint, bool) { return 0, false }
-func deactivateApp() bool                          { return false }
-func appActive() (bool, bool)                      { return false, false }
-func appDeactivated() bool                         { return false }
+func collectionBehavior(*mygo.Window) (uint, bool)               { return 0, false }
+func deactivateApp() bool                                        { return false }
+func material(*mygo.Window) (string, int, float64, bool, bool)   { return "", 0, 0, false, false }
+func roundedBacking(*mygo.Window) (bool, float64, float64, bool) { return false, 0, 0, false }
+func appActive() (bool, bool)                                    { return false, false }
+func appDeactivated() bool                                       { return false }
 
 // WebView2 opens DevTools in a window of its own.
 func dockDevTools(*mygo.Window) bool { return false }
@@ -415,15 +421,6 @@ func endSheetButton(*mygo.Window, int) bool               { return false }
 func panelStyles(w *mygo.Window) (tool, topmost, owned, supported bool) {
 	mygo.RunOnMain(func() { tool, topmost, owned = win.TestPanelStyles(w.NativeHandle()) })
 	return tool, topmost, owned, true
-}
-
-func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
-	mygo.RunOnMain(func() { has, err = win.TestMenuItemImage(w.NativeHandle(), path...) })
-	return has, false, true, err
-}
-
-func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
-	return false, nil, false, nil
 }
 
 // trayMenuIcons returns the items of the tray's menu, built as when it

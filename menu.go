@@ -1,6 +1,8 @@
 package mygo
 
 import (
+	"bytes"
+	"image/png"
 	"runtime"
 	"sync"
 	"weak"
@@ -102,15 +104,9 @@ type MenuItem struct {
 	// before Click is called.
 	Checked bool
 	ToolTip string
-	// Icon is a PNG shown before the label at 16×16 points; give it
-	// 32×32 pixels for sharp HiDPI screens. An icon that is not a PNG
-	// shows none. The Dock menu, check and radio items of a Linux tray
-	// menu and the items of a Windows menu bar itself show none, and the
-	// web ignores it.
-	Icon []byte
-	// IconTemplate makes Icon a template image on macOS: the system
-	// colors its shape as the menu's text. Elsewhere it does nothing.
-	IconTemplate bool
+	// Icon is an image shown beside the label (see NewMenuIcon), nil for
+	// none.
+	Icon *MenuIcon
 	// Destructive marks an item that destroys, as Delete. Where mygo draws
 	// the item itself (the popup menus and menu bars of Windows 11, and the
 	// web's menus) it shows in a danger color and semibold; native menus
@@ -283,6 +279,9 @@ func (it *MenuItem) IsDestructive() bool { return it.get(func() bool { return it
 // SetAccelerator changes the keyboard shortcut of the item.
 func (it *MenuItem) SetAccelerator(acc string) { it.update(func() { it.Accelerator = acc }) }
 
+// SetIcon replaces the image beside the label; nil removes it.
+func (it *MenuItem) SetIcon(icon *MenuIcon) { it.update(func() { it.Icon = icon }) }
+
 func (it *MenuItem) get(fn func() bool) bool {
 	menuMu.Lock()
 	defer menuMu.Unlock()
@@ -394,6 +393,71 @@ func prepareItem(it *MenuItem, parent *Menu) *MenuItem {
 	return it
 }
 
+// MenuIcon is an image a menu item shows beside its label, made once and
+// given to any number of items (MenuItem.Icon, SetIcon).
+type MenuIcon struct{ p *platform.MenuIcon }
+
+// NewMenuIcon makes an icon for menu items of a PNG image, which it copies.
+// The image is shown in its own colors, as a flag; with template, it is a
+// black and transparent image shown in the color of the menu's text, white
+// in a dark menu and on the highlight, as macOS tints template images
+// (Linux shows it as it is). It returns an error for data that is not a
+// PNG image.
+//
+// The image fits a box of 16 by 16 points, keeping its aspect: give it at
+// least 32 by 32 pixels, for high-resolution displays. A checkbox or radio
+// item shows its check as well. MyGo decodes each image once, however many
+// items show it and however often their menus open or are made again, and
+// frees what it made of it once neither the app nor a menu holds the icon.
+//
+// macOS shows icons on every menu. The menu bars of Windows and Linux show
+// none on their own items, only in their menus. Windows 10 draws an icon in
+// the column of checks: a checked item shows its icon framed as checked.
+// On Linux, a tray icon's menu shows icons where the panel does, as GNOME
+// Shell's AppIndicator extension and KDE Plasma.
+func NewMenuIcon(data []byte, template bool) (*MenuIcon, error) {
+	if _, err := png.DecodeConfig(bytes.NewReader(data)); err != nil {
+		return nil, err
+	}
+	linkMenuIcons()
+	menuMu.Lock()
+	defer menuMu.Unlock()
+	return &MenuIcon{menuIcon(data, template)}, nil
+}
+
+// menuIcons are the images of menu items by their hash, so that icons of
+// the same image share what the backend makes of it, which it makes once,
+// even as an app makes its icons again. menuMu guards it.
+var menuIcons map[uint64]weak.Pointer[platform.MenuIcon]
+
+// menuIcon returns the icon of an image, shared with the items that show
+// the same. menuMu must be held.
+func menuIcon(data []byte, template bool) *platform.MenuIcon {
+	h := uint64(14695981039346656037) // FNV-1a
+	for _, c := range data {
+		h = (h ^ uint64(c)) * 1099511628211
+	}
+	if template {
+		h = ^h
+	}
+	if ic := menuIcons[h].Value(); ic != nil && ic.Template == template && bytes.Equal(ic.PNG, data) {
+		return ic
+	}
+	if menuIcons == nil {
+		menuIcons = map[uint64]weak.Pointer[platform.MenuIcon]{}
+	}
+	ic := &platform.MenuIcon{PNG: bytes.Clone(data), Template: template}
+	menuIcons[h] = weak.Make(ic)
+	if len(menuIcons) > 64 && len(menuIcons)&63 == 0 {
+		for k, wp := range menuIcons {
+			if wp.Value() == nil {
+				delete(menuIcons, k)
+			}
+		}
+	}
+	return ic
+}
+
 func lookupMenuItem(uid int) *MenuItem {
 	menuMu.Lock()
 	defer menuMu.Unlock()
@@ -444,9 +508,10 @@ func (it *MenuItem) snapshotLocked() *platform.MenuItem {
 		Visible:     !it.Hidden,
 		Checked:     it.Checked,
 		ToolTip:     it.ToolTip,
-		Icon:        it.Icon,
-		Template:    it.IconTemplate,
 		Destructive: it.Destructive,
+	}
+	if it.Icon != nil {
+		p.Icon = it.Icon.p
 	}
 	switch it.Type {
 	case MenuItemSeparator:
@@ -547,10 +612,13 @@ func performRole(role MenuRole, win *Window) {
 		}
 	case RoleResetZoom:
 		n.SetZoom(1)
+		win.zoomChanged()
 	case RoleZoomIn:
 		n.SetZoom(nextZoom(n.Zoom(), 1))
+		win.zoomChanged()
 	case RoleZoomOut:
 		n.SetZoom(nextZoom(n.Zoom(), -1))
+		win.zoomChanged()
 	case RoleToggleFullScreen:
 		n.SetFullScreen(!n.IsFullScreen())
 	case RoleMinimize:

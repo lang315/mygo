@@ -219,7 +219,6 @@ var (
 	gdkPixbufLoaderClose            func(l ptr, err *ptr) bool
 	gdkPixbufLoaderGetPixbuf        func(l ptr) ptr
 	gdkPixbufSaveToBufferv          func(p ptr, buf *ptr, size *uintptr, typ *byte, keys, values ptr, err *ptr) bool
-	gdkPixbufScaleSimple            func(p ptr, w, h int32, interp int32) ptr
 )
 
 type gdkRectangle struct{ X, Y, Width, Height int32 }
@@ -252,6 +251,7 @@ var (
 	gtkWindowSetResizable               func(w ptr, v bool)
 	gtkWindowGetResizable               func(w ptr) bool
 	gtkWindowSetDecorated               func(w ptr, v bool)
+	gtkWindowSetTitlebar                func(w, titlebar ptr)
 	gtkWindowSetDeletable               func(w ptr, v bool)
 	gtkWindowGetDeletable               func(w ptr) bool
 	gtkWindowSetKeepAbove               func(w ptr, v bool)
@@ -307,27 +307,14 @@ var (
 	gtkContainerCheckResize             func(c ptr)
 	gtkMenuBarNew                       func() ptr
 	gtkMenuNew                          func() ptr
-	gtkMenuItemNew                      func() ptr
 	gtkMenuItemNewWithLabel             func(label *byte) ptr
-	gtkImageMenuItemNewWithLabel        func(label *byte) ptr
-	gtkImageMenuItemSetImage            func(item, image ptr)
-	gtkImageMenuItemSetAlwaysShowImage  func(item ptr, on bool)
-	gtkImageNewFromPixbuf               func(pix ptr) ptr
 	gtkMenuItemSetLabel                 func(item ptr, label *byte)
 	gtkMenuItemSetSubmenu               func(item, menu ptr)
 	gtkMenuItemGetSubmenu               func(item ptr) ptr
 	gtkMenuItemGetLabel                 func(item ptr) ptr
 	gtkMenuItemActivate                 func(item ptr)
 	gtkContainerGetChildren             func(c ptr) ptr
-	gtkCheckMenuItemNew                 func() ptr
 	gtkCheckMenuItemNewWithLabel        func(label *byte) ptr
-	gtkAccelLabelNew                    func(text *byte) ptr
-	gtkAccelLabelSetAccelWidget         func(label, widget ptr)
-	gtkLabelSetText                     func(label ptr, text *byte)
-	gtkLabelSetXalign                   func(label ptr, x float32)
-	gtkLabelGetText                     func(label ptr) ptr
-	gtkImageNewFromSurface              func(surface ptr) ptr
-	gdkCairoSurfaceCreateFromPixbuf     func(pixbuf ptr, scale int32, window ptr) ptr
 	gtkCheckMenuItemSetActive           func(item ptr, v bool)
 	gtkCheckMenuItemSetDrawAsRadio      func(item ptr, v bool)
 	gtkSeparatorMenuItemNew             func() ptr
@@ -449,6 +436,9 @@ var (
 	webkitWebViewSetZoomLevel                         func(wv ptr, z float64)
 	webkitWebViewGetZoomLevel                         func(wv ptr) float64
 	webkitWebViewSetBackgroundColor                   func(wv ptr, rgba *gdkRGBA)
+	webkitWebViewIsPlayingAudio                       func(wv ptr) bool
+	webkitWebViewSetIsMuted                           func(wv ptr, muted bool) // 2.30+
+	webkitWebViewGetIsMuted                           func(wv ptr) bool        // 2.30+
 	webkitWebViewEvaluateJavascript                   func(wv ptr, script *byte, length int, world, sourceURI *byte, cancellable, cb, data ptr)
 	webkitWebViewRunJavascript                        func(wv ptr, script *byte, cancellable, cb, data ptr)
 	webkitWebViewCallAsyncJavascriptFunction          func(wv ptr, body *byte, length int, args ptr, world, sourceURI *byte, cancellable, cb, data ptr)
@@ -674,7 +664,6 @@ func load() error {
 	mustBind(p, &gdkPixbufLoaderClose, "gdk_pixbuf_loader_close")
 	mustBind(p, &gdkPixbufLoaderGetPixbuf, "gdk_pixbuf_loader_get_pixbuf")
 	mustBind(p, &gdkPixbufSaveToBufferv, "gdk_pixbuf_save_to_bufferv")
-	mustBind(p, &gdkPixbufScaleSimple, "gdk_pixbuf_scale_simple")
 
 	t := libGTK
 	mustBind(t, &gtkInitCheck, "gtk_init_check")
@@ -693,6 +682,7 @@ func load() error {
 	mustBind(t, &gtkWindowSetResizable, "gtk_window_set_resizable")
 	mustBind(t, &gtkWindowGetResizable, "gtk_window_get_resizable")
 	mustBind(t, &gtkWindowSetDecorated, "gtk_window_set_decorated")
+	mustBind(t, &gtkWindowSetTitlebar, "gtk_window_set_titlebar")
 	mustBind(t, &gtkWindowSetDeletable, "gtk_window_set_deletable")
 	mustBind(t, &gtkWindowGetDeletable, "gtk_window_get_deletable")
 	mustBind(t, &gtkWindowSetKeepAbove, "gtk_window_set_keep_above")
@@ -748,28 +738,14 @@ func load() error {
 	mustBind(t, &gtkContainerCheckResize, "gtk_container_check_resize")
 	mustBind(t, &gtkMenuBarNew, "gtk_menu_bar_new")
 	mustBind(t, &gtkMenuNew, "gtk_menu_new")
-	mustBind(t, &gtkMenuItemNew, "gtk_menu_item_new")
 	mustBind(t, &gtkMenuItemNewWithLabel, "gtk_menu_item_new_with_label")
-	mustBind(t, &gtkImageMenuItemNewWithLabel, "gtk_image_menu_item_new_with_label")
-	mustBind(t, &gtkImageMenuItemSetImage, "gtk_image_menu_item_set_image")
-	mustBind(t, &gtkImageMenuItemSetAlwaysShowImage, "gtk_image_menu_item_set_always_show_image")
-	mustBind(t, &gtkImageNewFromPixbuf, "gtk_image_new_from_pixbuf")
 	mustBind(t, &gtkMenuItemSetLabel, "gtk_menu_item_set_label")
 	mustBind(t, &gtkMenuItemSetSubmenu, "gtk_menu_item_set_submenu")
 	mustBind(t, &gtkMenuItemGetSubmenu, "gtk_menu_item_get_submenu")
 	mustBind(t, &gtkMenuItemGetLabel, "gtk_menu_item_get_label")
 	mustBind(t, &gtkMenuItemActivate, "gtk_menu_item_activate")
 	mustBind(t, &gtkContainerGetChildren, "gtk_container_get_children")
-	mustBind(t, &gtkCheckMenuItemNew, "gtk_check_menu_item_new")
 	mustBind(t, &gtkCheckMenuItemNewWithLabel, "gtk_check_menu_item_new_with_label")
-	mustBind(t, &gtkAccelLabelNew, "gtk_accel_label_new")
-	mustBind(t, &gtkAccelLabelSetAccelWidget, "gtk_accel_label_set_accel_widget")
-	mustBind(t, &gtkLabelSetText, "gtk_label_set_text")
-	mustBind(t, &gtkLabelSetXalign, "gtk_label_set_xalign")
-	mustBind(t, &gtkLabelGetText, "gtk_label_get_text")
-	mustBind(t, &gtkImageNewFromSurface, "gtk_image_new_from_surface")
-	mustBind(libGDK, &gdkCairoSurfaceCreateFromPixbuf, "gdk_cairo_surface_create_from_pixbuf")
-	mustBind(t, &gtkWidgetGetScaleFactor, "gtk_widget_get_scale_factor")
 	mustBind(t, &gtkCheckMenuItemSetActive, "gtk_check_menu_item_set_active")
 	mustBind(t, &gtkCheckMenuItemSetDrawAsRadio, "gtk_check_menu_item_set_draw_as_radio")
 	mustBind(t, &gtkSeparatorMenuItemNew, "gtk_separator_menu_item_new")
@@ -963,6 +939,10 @@ func loadWebKit() error {
 	mustBind(w, &webkitWebViewSetZoomLevel, "webkit_web_view_set_zoom_level")
 	mustBind(w, &webkitWebViewGetZoomLevel, "webkit_web_view_get_zoom_level")
 	mustBind(w, &webkitWebViewSetBackgroundColor, "webkit_web_view_set_background_color")
+	bind(w, &webkitWebViewIsPlayingAudio, "webkit_web_view_is_playing_audio")
+	if bind(w, &webkitWebViewSetIsMuted, "webkit_web_view_set_is_muted") {
+		mustBind(w, &webkitWebViewGetIsMuted, "webkit_web_view_get_is_muted")
+	}
 	bind(w, &webkitWebViewEvaluateJavascript, "webkit_web_view_evaluate_javascript")
 	bind(w, &webkitWebViewRunJavascript, "webkit_web_view_run_javascript")
 	bind(w, &webkitWebViewCallAsyncJavascriptFunction, "webkit_web_view_call_async_javascript_function")

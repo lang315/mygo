@@ -59,19 +59,19 @@ func TestMenuItemIcons(t *testing.T) {
 	if len(items) != 5 {
 		t.Fatalf("menu %q", tt.Menu())
 	}
-	if items[0].Icon == nil || !items[0].Template {
-		t.Errorf("Svg: icon %d bytes, template %v", len(items[0].Icon), items[0].Template)
+	if items[0].Icon == nil || !items[0].Icon.Template {
+		t.Errorf("Svg: icon %v, want a template", items[0].Icon)
 	}
-	if string(items[1].Icon) != "png" || items[1].Template {
-		t.Errorf("Png: icon %q, template %v", items[1].Icon, items[1].Template)
+	if items[1].Icon == nil || string(items[1].Icon.PNG) != "png" || items[1].Icon.Template {
+		t.Errorf("Png: icon %+v", items[1].Icon)
 	}
-	if string(items[2].Icon) != "png" || items[2].Template {
-		t.Errorf("Both: the PNG must win, icon %q, template %v", items[2].Icon, items[2].Template)
+	if items[2].Icon == nil || string(items[2].Icon.PNG) != "png" || items[2].Icon.Template {
+		t.Errorf("Both: the PNG must win, icon %+v", items[2].Icon)
 	}
 	if items[3].Icon != nil {
 		t.Errorf("None has an icon")
 	}
-	if items[4].Icon == nil || !items[4].Template {
-		t.Errorf("NilPNG: IconPNG(nil) cleared the SVG icon, icon %d bytes, template %v", len(items[4].Icon), items[4].Template)
+	if items[4].Icon == nil || !items[4].Icon.Template {
+		t.Errorf("NilPNG: IconPNG(nil) cleared the SVG icon, icon %+v", items[4].Icon)
 	}
 }

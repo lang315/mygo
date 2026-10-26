@@ -1,6 +1,9 @@
 package widget
 
 import (
+	"bytes"
+	"image"
+	pngpkg "image/png"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -10,23 +13,35 @@ import (
 
 func TestNativeMenuIcons(t *testing.T) {
 	check := ui.MustParseSVG([]byte(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5"/></svg>`))
+	var png bytes.Buffer
+	if err := pngpkg.Encode(&png, image.NewRGBA(image.Rect(0, 0, 32, 32))); err != nil {
+		t.Fatal(err)
+	}
 	items := nativeMenu([]MenuItem{
 		{Text: "Svg", Icon: check},
-		{Text: "Png", IconPNG: []byte("png")},
-		{Text: "Both", Icon: check, IconPNG: []byte("png")},
+		{Text: "Png", IconPNG: png.Bytes()},
+		{Text: "Both", Icon: check, IconPNG: png.Bytes()},
 		{Text: "Sub", Icon: check, Children: []MenuItem{{Text: "In"}}},
+		{Text: "Bad", IconPNG: []byte("not a png")},
 	})
-	if items[0].Icon == nil || !items[0].IconTemplate {
-		t.Errorf("Svg: %d bytes, template %v", len(items[0].Icon), items[0].IconTemplate)
+	svg := svgMenuIcon(check, IsDark())
+	if items[0].Icon == nil || items[0].Icon != svg {
+		t.Errorf("Svg: icon %p, want the cached icon of the SVG %p", items[0].Icon, svg)
 	}
-	if string(items[1].Icon) != "png" || items[1].IconTemplate {
-		t.Errorf("Png: %q %v", items[1].Icon, items[1].IconTemplate)
+	if items[1].Icon == nil || items[1].Icon == svg {
+		t.Errorf("Png: icon %p, want one made of the PNG", items[1].Icon)
 	}
-	if string(items[2].Icon) != "png" {
-		t.Errorf("Both: the PNG must win, got %d bytes", len(items[2].Icon))
+	if items[2].Icon == nil || items[2].Icon == svg {
+		t.Errorf("Both: the PNG must win, got %p", items[2].Icon)
 	}
-	if items[3].Icon == nil {
+	if items[3].Icon != svg {
 		t.Error("Sub: a submenu item lost its icon")
+	}
+	if items[4].Icon != nil {
+		t.Error("Bad: bytes that are not a PNG made an icon")
+	}
+	if again := nativeMenu([]MenuItem{{Text: "Svg", Icon: check}}); again[0].Icon != svg {
+		t.Error("the icon of an SVG is made again each time a menu is set, not once")
 	}
 }
 

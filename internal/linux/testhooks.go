@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -18,106 +17,16 @@ import (
 // TestActivateMenuItem activates an item of a window's menu bar, found by
 // the labels along its path.
 func TestActivateMenuItem(handle uintptr, path ...string) error {
-	item, err := menuBarItem(handle, path)
-	if err != nil {
-		return err
+	item, err := menuItemAt(handle, path)
+	if err == nil {
+		gtkMenuItemActivate(item)
 	}
-	gtkMenuItemActivate(item)
-	return nil
+	return err
 }
 
-// TestMenuItemImage reports whether an item of a window's menu bar, found
-// by the labels along its path, shows an image.
-func TestMenuItemImage(handle uintptr, path ...string) (bool, error) {
-	item, err := menuBarItem(handle, path)
-	if err != nil {
-		return false, err
-	}
-	// Only an item with an icon holds its label in a box.
-	return labelOf(item) != 0, nil
-}
-
-// Drawing an item of an open menu.
-var (
-	drawOnce                   sync.Once
-	gtkWidgetDraw              func(w, cr ptr)
-	gtkMenuPopdown             func(m ptr)
-	cairoImageSurfaceCreate    func(format, width, height int32) ptr
-	cairoImageSurfaceGetData   func(s ptr) ptr
-	cairoImageSurfaceGetStride func(s ptr) int32
-	cairoSurfaceFlush          func(s ptr)
-	cairoCreate                func(s ptr) ptr
-	cairoDestroy               func(cr ptr)
-)
-
-// TestMenuItemShortcutDrawn opens the menu holding an item of a window's
-// menu bar, found by the labels along its path, and reports whether the
-// label of the item, which has an icon, paints anything right of its text,
-// where its shortcut goes. It returns the open menu as a PNG too.
-func TestMenuItemShortcutDrawn(handle uintptr, path ...string) (drawn bool, menuPNG []byte, err error) {
-	drawOnce.Do(func() {
-		mustBind(libGTK, &gtkWidgetDraw, "gtk_widget_draw")
-		mustBind(libGTK, &gtkMenuPopdown, "gtk_menu_popdown")
-		mustBind(libCairo, &cairoImageSurfaceCreate, "cairo_image_surface_create")
-		mustBind(libCairo, &cairoImageSurfaceGetData, "cairo_image_surface_get_data")
-		mustBind(libCairo, &cairoImageSurfaceGetStride, "cairo_image_surface_get_stride")
-		mustBind(libCairo, &cairoSurfaceFlush, "cairo_surface_flush")
-		mustBind(libCairo, &cairoCreate, "cairo_create")
-		mustBind(libCairo, &cairoDestroy, "cairo_destroy")
-	})
-	item, err := menuBarItem(handle, path)
-	if err != nil {
-		return false, nil, err
-	}
-	l := labelOf(item)
-	if l == 0 {
-		return false, nil, fmt.Errorf("mygo: menu item has no icon label")
-	}
-	parent, err := menuBarItem(handle, path[:len(path)-1])
-	if err != nil {
-		return false, nil, err
-	}
-	menu := gtkMenuItemGetSubmenu(parent)
-	gtkMenuPopupAtRect(menu, gtkWidgetGetWindow(windowByHandle(handle).win), &gdkRectangle{Width: 1, Height: 1}, 1, 1, 0) // GDK_GRAVITY_NORTH_WEST
-	defer gtkMenuPopdown(menu)
-	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
-		gMainContextIteration(0, false)
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !gtkWidgetGetMapped(l) {
-		return false, nil, fmt.Errorf("mygo: menu did not open")
-	}
-	var minimum, text int32
-	gtkWidgetGetPreferredWidth(l, &minimum, &text)
-	s, width, height := drawWidget(l)
-	defer cairoSurfaceDestroy(s)
-	data, stride := cairoImageSurfaceGetData(s), cairoImageSurfaceGetStride(s)
-	for y := range height {
-		for x := text; x < width; x++ {
-			drawn = drawn || field[byte](data, uintptr(y*stride+x*4+3)) != 0 // ARGB32's alpha, little-endian
-		}
-	}
-	m, _, _ := drawWidget(menu)
-	defer cairoSurfaceDestroy(m)
-	menuPNG, err = surfaceToPNG(m)
-	return drawn, menuPNG, err
-}
-
-// drawWidget draws a widget onto a new image surface of its size.
-func drawWidget(w ptr) (surface ptr, width, height int32) {
-	var a gdkRectangle
-	gtkWidgetGetAllocation(w, &a)
-	surface = cairoImageSurfaceCreate(0, a.Width, a.Height) // CAIRO_FORMAT_ARGB32
-	cr := cairoCreate(surface)
-	gtkWidgetDraw(w, cr)
-	cairoDestroy(cr)
-	cairoSurfaceFlush(surface)
-	return surface, a.Width, a.Height
-}
-
-// menuBarItem returns the item of a window's menu bar found by the labels
-// along its path.
-func menuBarItem(handle uintptr, path []string) (ptr, error) {
+// menuItemAt finds an item of a window's menu bar by the labels along its
+// path.
+func menuItemAt(handle uintptr, path []string) (ptr, error) {
 	w := windowByHandle(handle)
 	if w == nil || w.menubar == 0 {
 		return 0, fmt.Errorf("mygo: window has no menu bar")
@@ -136,7 +45,7 @@ func menuBarItem(handle uintptr, path []string) (ptr, error) {
 			return 0, fmt.Errorf("mygo: menu %q has no submenu", label)
 		}
 	}
-	return 0, fmt.Errorf("mygo: empty menu path")
+	return 0, fmt.Errorf("mygo: no menu item")
 }
 
 func findMenuItem(shell ptr, label string) ptr {
@@ -144,32 +53,67 @@ func findMenuItem(shell ptr, label string) ptr {
 	defer gListFree(list)
 	for node := list; node != 0; node = field[ptr](node, 8) {
 		item := field[ptr](node, 0)
-		if itemLabel(item) == label {
+		if menuItemLabel(item) == label {
 			return item
 		}
 	}
 	return 0
 }
 
-// itemLabel returns the label of a menu item, in its box when it has an
-// icon.
-func itemLabel(item ptr) string {
-	if l := labelOf(item); l != 0 {
-		return goStr(gtkLabelGetText(l))
+// menuItemLabel returns the label of a menu item, which one with an icon
+// holds in a box with the image.
+func menuItemLabel(item ptr) string {
+	loadMenuTests()
+	for _, list := range itemsByID {
+		for _, n := range list {
+			if n.item == item && n.label != 0 {
+				return goStr(gtkLabelGetLabel(n.label))
+			}
+		}
 	}
 	return goStr(gtkMenuItemGetLabel(item))
 }
 
-// labelOf returns the label of an item with an icon, 0 for others.
-func labelOf(item ptr) ptr {
-	for _, n := range itemsByID {
-		for _, x := range n {
-			if x.item == item {
-				return x.label
+var (
+	menuTestOnce              sync.Once
+	gtkLabelGetLabel          func(label ptr) ptr
+	gtkCheckMenuItemGetActive func(item ptr) bool
+)
+
+func loadMenuTests() {
+	menuTestOnce.Do(func() {
+		mustBind(libGTK, &gtkLabelGetLabel, "gtk_label_get_label")
+		mustBind(libGTK, &gtkCheckMenuItemGetActive, "gtk_check_menu_item_get_active")
+	})
+}
+
+// TestMenuItemIcon reports the size, in points, of the icon an item of a
+// window's menu bar shows, 0 by 0 for none, and whether the item is
+// checked.
+func TestMenuItemIcon(handle uintptr, path ...string) (width, height int, checked bool, err error) {
+	loadMenuTests()
+	item, err := menuItemAt(handle, path)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	for _, list := range itemsByID {
+		for _, n := range list {
+			if n.item != item {
+				continue
 			}
+			if n.check {
+				checked = gtkCheckMenuItemGetActive(item)
+			}
+			if n.image != 0 && gtkWidgetGetVisible(n.image) {
+				var minimum, w, h int32
+				gtkWidgetGetPreferredWidth(n.image, &minimum, &w)
+				gtkWidgetGetPreferredHeight(n.image, &minimum, &h)
+				width, height = int(w), int(h)
+			}
+			return width, height, checked, nil
 		}
 	}
-	return 0
+	return 0, 0, false, fmt.Errorf("mygo: the item is not MyGo's")
 }
 
 func windowByHandle(handle uintptr) *window {
@@ -481,6 +425,23 @@ func clickSurface(handle uintptr, x, y float64, button uint32) bool {
 	return pressButton(button, true) && pressButton(button, false)
 }
 
+// TestClickPage clicks (x, y), in DIPs, in the page of a window's web
+// view, through XTEST, as a user clicks it.
+func TestClickPage(handle uintptr, x, y float64) bool {
+	w := windowByHandle(handle)
+	if w == nil || w.surface != nil || w.web == 0 {
+		return false
+	}
+	loadFlyouts() // contentOrigin's
+	loadSurface() // gtk_widget_get_scale_factor
+	ox, oy := w.contentOrigin()
+	scale := float64(max(gtkWidgetGetScaleFactor(w.web), 1))
+	if !TestMovePointer(int((float64(ox)+x)*scale), int((float64(oy)+y)*scale)) {
+		return false
+	}
+	return pressButton(1, true) && pressButton(1, false)
+}
+
 // TestSideButton clicks a mouse's back or forward button (buttons 8 and
 // 9) in a window showing native UI, through XTEST.
 func TestSideButton(handle uintptr, back bool) bool {
@@ -627,4 +588,68 @@ func TestPinchSurface(handle uintptr, x, y, scale float64) bool {
 		gdkEventFree(ev)
 	}
 	return true
+}
+
+// TestTrayActivates tells whether the AppIndicator library can report
+// activation at all; call it after making a tray.
+func TestTrayActivates() bool { return trayActivates() }
+
+// TestActivateTray activates the tray icon made last, as a panel does when
+// its icon is double-clicked. It reports false when the icon answers no
+// activation: no click has anywhere to go.
+func TestActivateTray() bool {
+	var last *tray
+	for _, t := range theBackend.trays {
+		if last == nil || t.id > last.id {
+			last = t
+		}
+	}
+	if last == nil || last.activate == 0 {
+		return false
+	}
+	var lookup func(name *byte, typ uintptr) uint32
+	var typeFromName func(name *byte) uintptr
+	var emit func(instance ptr, signal, detail uint32, x, y int32)
+	if !bind(libGObject, &lookup, "g_signal_lookup") ||
+		!bind(libGObject, &typeFromName, "g_type_from_name") ||
+		!bind(libGObject, &emit, "g_signal_emit") {
+		return false
+	}
+	signal := lookup(cs("activate"), typeFromName(cs("AppIndicator")))
+	if signal == 0 {
+		return false
+	}
+	emit(last.ind, signal, 0, 0, 0)
+	return true
+}
+
+// Decorations are what TestDecorations reports.
+type Decorations struct {
+	// CSD tells that GTK decorates the window itself (useCSD).
+	CSD bool
+	// Room is the room its decorations take around the window's content,
+	// left, top, right and bottom: the shadow and the border, where GTK
+	// resizes the window. Content is the size of the page or the native
+	// UI, below a menu bar.
+	Room    [4]int
+	Content [2]int
+	// OnX11 tells the display.
+	OnX11 bool
+}
+
+// TestDecorations reports how GTK decorates a window.
+func TestDecorations(handle uintptr) Decorations {
+	d := Decorations{OnX11: theBackend.onX11}
+	w := windowByHandle(handle)
+	if w == nil {
+		return d
+	}
+	var win, box, content gdkRectangle
+	gtkWidgetGetAllocation(w.win, &win)
+	gtkWidgetGetAllocation(w.box, &box)
+	gtkWidgetGetAllocation(w.contentWidget(), &content)
+	d.CSD = w.csd
+	d.Room = [4]int{int(box.X), int(box.Y), int(win.Width - box.X - box.Width), int(win.Height - box.Y - box.Height)}
+	d.Content = [2]int{int(content.Width), int(content.Height)}
+	return d
 }

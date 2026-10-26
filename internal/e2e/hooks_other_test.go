@@ -12,14 +12,6 @@ import (
 // Platforms without a backend run no GUI tests.
 func activateMenu(*mygo.Window, ...string) error { return errors.New("unsupported") }
 
-func menuIcon(*mygo.Window, ...string) (has, template, supported bool, err error) {
-	return false, false, false, nil
-}
-
-func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
-	return false, nil, false, nil
-}
-
 func pressShortcut(string, bool) (bool, bool) { return false, false }
 
 func endSheet(*mygo.Window) (bool, bool) { return false, false }
@@ -33,6 +25,8 @@ func click(*mygo.Window, float64, float64) bool { return false }
 
 func appClick(testing.TB, *mygo.Window, float64, float64) bool { return false }
 
+func clickPage(*mygo.Window, float64, float64) bool { return false }
+
 func heldAppClick(testing.TB, *mygo.Window, float64, float64) bool { return false }
 
 func drag(*mygo.Window, [][2]float64) bool { return false }
@@ -44,10 +38,12 @@ func pinch(*mygo.Window, float64, float64, float64) (float64, bool) { return 0, 
 func webViewAttached(*mygo.Window) (bool, bool) { return false, false }
 
 // Collection behaviors and deactivating the app are macOS's.
-func collectionBehavior(*mygo.Window) (uint, bool) { return 0, false }
-func deactivateApp() bool                          { return false }
-func appActive() (bool, bool)                      { return false, false }
-func appDeactivated() bool                         { return false }
+func collectionBehavior(*mygo.Window) (uint, bool)               { return 0, false }
+func deactivateApp() bool                                        { return false }
+func material(*mygo.Window) (string, int, float64, bool, bool)   { return "", 0, 0, false, false }
+func roundedBacking(*mygo.Window) (bool, float64, float64, bool) { return false, 0, 0, false }
+func appActive() (bool, bool)                                    { return false, false }
+func appDeactivated() bool                                       { return false }
 
 func dockDevTools(*mygo.Window) bool { return false }
 

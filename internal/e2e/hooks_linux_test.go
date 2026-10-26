@@ -50,6 +50,11 @@ func click(w *mygo.Window, x, y float64) bool {
 	return fake(func() bool { return linux.TestClickSurface(w.NativeHandle(), x, y) })
 }
 
+// clickPage clicks a window's page, through XTEST.
+func clickPage(w *mygo.Window, x, y float64) bool {
+	return fake(func() bool { return linux.TestClickPage(w.NativeHandle(), x, y) })
+}
+
 // appClick is click, already through XTEST.
 func appClick(_ testing.TB, w *mygo.Window, x, y float64) bool { return click(w, x, y) }
 
@@ -75,10 +80,12 @@ func drag(w *mygo.Window, points [][2]float64) bool {
 func webViewAttached(*mygo.Window) (bool, bool) { return false, false }
 
 // Collection behaviors and deactivating the app are macOS's.
-func collectionBehavior(*mygo.Window) (uint, bool) { return 0, false }
-func deactivateApp() bool                          { return false }
-func appActive() (bool, bool)                      { return false, false }
-func appDeactivated() bool                         { return false }
+func collectionBehavior(*mygo.Window) (uint, bool)               { return 0, false }
+func deactivateApp() bool                                        { return false }
+func material(*mygo.Window) (string, int, float64, bool, bool)   { return "", 0, 0, false, false }
+func roundedBacking(*mygo.Window) (bool, float64, float64, bool) { return false, 0, 0, false }
+func appActive() (bool, bool)                                    { return false, false }
+func appDeactivated() bool                                       { return false }
 
 // WebKitGTK docks the inspector inside the web view.
 func dockDevTools(*mygo.Window) bool { return false }
@@ -351,16 +358,6 @@ func endSheetButton(*mygo.Window, int) bool               { return false }
 
 // Panels' window styles are Windows'.
 func panelStyles(*mygo.Window) (bool, bool, bool, bool) { return false, false, false, false }
-
-func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
-	mygo.RunOnMain(func() { has, err = linux.TestMenuItemImage(w.NativeHandle(), path...) })
-	return has, false, true, err
-}
-
-func shortcutDrawn(w *mygo.Window, path ...string) (drawn bool, menuPNG []byte, supported bool, err error) {
-	mygo.RunOnMain(func() { drawn, menuPNG, err = linux.TestMenuItemShortcutDrawn(w.NativeHandle(), path...) })
-	return drawn, menuPNG, true, err
-}
 
 // trayMenuIcons reads the menu of the tray made last as a tray host does,
 // from D-Bus, and returns its items by label, true for those with an icon

@@ -192,6 +192,27 @@ func TestWindowDefaults(t *testing.T) {
 	}
 }
 
+// TestGlassWindowOptions passes a floating panel's look to the backend: the
+// glass and the corners of a frameless window, a negative radius none; and
+// its active look, which SetActiveAppearance sets.
+func TestGlassWindowOptions(t *testing.T) {
+	w, fw := testWindow(t, WindowOptions{Frameless: true, Transparent: true, Vibrancy: VibrancyGlassClear, CornerRadius: 16})
+	if o := fw.Opts; o.Vibrancy != "glass-clear" || o.CornerRadius != 16 {
+		t.Errorf("vibrancy %q, radius %d", o.Vibrancy, o.CornerRadius)
+	}
+	if fw.ActiveAppearance() {
+		t.Error("drawn as active before SetActiveAppearance")
+	}
+	w.SetActiveAppearance(true)
+	if !fw.ActiveAppearance() {
+		t.Error("SetActiveAppearance(true) did not reach the backend")
+	}
+	_, fw = testWindow(t, WindowOptions{Frameless: true, CornerRadius: -4})
+	if o := fw.Opts; o.CornerRadius != 0 {
+		t.Errorf("radius %d; want none", o.CornerRadius)
+	}
+}
+
 func TestWindowOptions(t *testing.T) {
 	parent, _ := testWindow(t, WindowOptions{})
 	_, fw := testWindow(t, WindowOptions{
@@ -383,6 +404,50 @@ func TestWillNavigate(t *testing.T) {
 	check(platform.Navigation{URL: "https://blocked.example", IsMainFrame: true}, false)
 	check(platform.Navigation{URL: "https://blocked.example", IsMainFrame: false}, true)
 	check(platform.Navigation{URL: "https://blocked.example", IsMainFrame: true, Unasked: true}, true)
+}
+
+// TestUserInitiated checks that whether a user's gesture opened a window
+// or navigated reaches the window open handler and OnWillNavigate, which
+// can refuse what a page's script did on its own.
+func TestUserInitiated(t *testing.T) {
+	w, fw := testWindow(t, WindowOptions{})
+	off := App.OnWindowCreated(func(c *Window) { t.Cleanup(c.Destroy) })
+	defer off()
+	var asked []WindowOpenRequest
+	w.Page().SetWindowOpenHandler(func(req WindowOpenRequest) *WindowOptions {
+		asked = append(asked, req)
+		if !req.UserInitiated {
+			return nil // a pop-up
+		}
+		return &WindowOptions{}
+	})
+	opens := func(req platform.NewWindowRequest) bool {
+		return onMainValue(func() bool { return fw.H.NewWindow(req) != nil })
+	}
+	if !opens(platform.NewWindowRequest{URL: "https://clicked.example/", Width: 300, Height: 200, UserInitiated: true}) {
+		t.Error("the window a user's click opened was refused")
+	}
+	if opens(platform.NewWindowRequest{URL: "https://popup.example/"}) {
+		t.Error("the window a script opened on its own was opened")
+	}
+	want := []WindowOpenRequest{
+		{URL: "https://clicked.example/", Width: 300, Height: 200, UserInitiated: true},
+		{URL: "https://popup.example/"},
+	}
+	if !slices.Equal(asked, want) {
+		t.Errorf("the handler was asked %+v, want %+v", asked, want)
+	}
+
+	var users []bool
+	w.Page().OnWillNavigate(func(e *NavigateEvent) { users = append(users, e.UserInitiated) })
+	for _, user := range []bool{true, false} {
+		onMain(func() {
+			fw.H.WillNavigate(platform.Navigation{URL: "https://next.example/", IsMainFrame: true, UserInitiated: user})
+		})
+	}
+	if !slices.Equal(users, []bool{true, false}) {
+		t.Errorf("OnWillNavigate was told UserInitiated %v, want [true false]", users)
+	}
 }
 
 // TestReloadLoadsHTMLAgain checks that a reload of a document LoadHTML
@@ -1216,10 +1281,11 @@ func TestProtocolCORS(t *testing.T) {
 	}
 
 	for _, origin := range []string{
-		"mygo://localhost",        // the frontend
-		"http://mygo.localhost",   // the frontend, as WebView2 serves it
-		"http://assets.localhost", // a custom scheme, as WebView2 serves it
-		"https://app.example.com", // in PageOptions.TrustedOrigins
+		"mygo://localhost",            // the frontend
+		"http://mygo.localhost",       // the frontend, as WebView2 serves it
+		"http://assets.localhost",     // a custom scheme, as WebView2 serves it
+		"http://abc.assets.localhost", // another host of a custom scheme, as WebView2 serves it
+		"https://app.example.com",     // in PageOptions.TrustedOrigins
 	} {
 		rec := send("GET", "/data", origin, nil)
 		if rec.status != 200 || rec.body.String() != "data" {
@@ -1238,7 +1304,7 @@ func TestProtocolCORS(t *testing.T) {
 			t.Errorf("dev server: Access-Control-Allow-Origin = %q", got)
 		}
 	}
-	for _, origin := range []string{"", "null", "https://example.com", "http://evil.localhost", "http://assets.localhost:8080"} {
+	for _, origin := range []string{"", "null", "https://example.com", "http://evil.localhost", "http://assets.localhost:8080", "http://abc.evil.localhost", "http://a_b.assets.localhost"} {
 		if got := send("GET", "/data", origin, nil).header.Get("Access-Control-Allow-Origin"); got != "" {
 			t.Errorf("%q got Access-Control-Allow-Origin %q", origin, got)
 		}
@@ -1526,23 +1592,12 @@ func TestDefaultMenu(t *testing.T) {
 	}
 }
 
-func TestMenuItemIconReachesThePlatform(t *testing.T) {
-	png := []byte("\x89PNG fake") // core passes bytes through; backends decode
-	m := NewMenu([]*MenuItem{{Label: "Copy", Icon: png, IconTemplate: true}, {Label: "Plain"}})
-	snap := m.snapshot()
-	if got := snap.Items[0]; !slices.Equal(got.Icon, png) || !got.Template {
-		t.Fatalf("item 0: icon %q template %v", got.Icon, got.Template)
-	}
-	if got := snap.Items[1]; got.Icon != nil || got.Template {
-		t.Fatalf("item 1 has an icon: %q %v", got.Icon, got.Template)
-	}
-}
-
 func TestContentMenuKeepsIcons(t *testing.T) {
-	pm := &platform.Menu{Items: []*platform.MenuItem{{ID: 1, Label: "Copy", Enabled: true, Visible: true, Icon: []byte("png"), Template: true}}}
+	ic := &platform.MenuIcon{PNG: []byte("png"), Template: true}
+	pm := &platform.Menu{Items: []*platform.MenuItem{{ID: 1, Label: "Copy", Enabled: true, Visible: true, Icon: ic, Destructive: true}}}
 	items := contentMenu(pm, func(int) {})
-	if string(items[0].Icon) != "png" || !items[0].IconTemplate {
-		t.Fatalf("icon %q template %v", items[0].Icon, items[0].IconTemplate)
+	if items[0].Icon == nil || items[0].Icon.p != ic || !items[0].Destructive {
+		t.Fatalf("icon %+v destructive %v, want the item's icon and Destructive kept", items[0].Icon, items[0].Destructive)
 	}
 }
 

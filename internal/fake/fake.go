@@ -67,6 +67,10 @@ type Backend struct {
 	// KeepAwake calls not released yet.
 	Watching bool
 	Awake    int
+	// Playing is what NowPlaying.Set showed last, nil once removed, and
+	// NowPlayingSets counts the calls.
+	Playing        *platform.NowPlayingInfo
+	NowPlayingSets int
 	// Online and Metered are what Network.Status answers with, and
 	// WatchingNetwork whether Network.Watch was called.
 	Online, Metered bool
@@ -89,6 +93,8 @@ type Backend struct {
 	LoginItem string
 	// DockMenu is the menu of the Dock icon.
 	DockMenu *platform.Menu
+	// Active is what App.IsActive answers; SetActive changes it.
+	Active bool
 	// ForegroundAllowed counts AllowForeground calls.
 	ForegroundAllowed int
 	// ActivationToken is the token of WithActivationToken while its
@@ -326,12 +332,13 @@ func (b *Backend) Dialogs() platform.Dialogs   { return dialogs{b} }
 func (b *Backend) Clipboard() platform.Clipboard {
 	return clipboard{b}
 }
-func (b *Backend) Shell() platform.Shell     { return shell{} }
-func (b *Backend) Screen() platform.Screen   { return screen{} }
-func (b *Backend) Theme() platform.Theme     { return theme{b} }
-func (b *Backend) Power() platform.Power     { return power{b} }
-func (b *Backend) Network() platform.Network { return network{b} }
-func (b *Backend) Secrets() platform.Secrets { return secrets{b} }
+func (b *Backend) Shell() platform.Shell           { return shell{} }
+func (b *Backend) Screen() platform.Screen         { return screen{} }
+func (b *Backend) Theme() platform.Theme           { return theme{b} }
+func (b *Backend) Power() platform.Power           { return power{b} }
+func (b *Backend) Network() platform.Network       { return network{b} }
+func (b *Backend) NowPlaying() platform.NowPlaying { return nowPlaying{b} }
+func (b *Backend) Secrets() platform.Secrets       { return secrets{b} }
 
 // Apps are the applications Applications lists, which tests set.
 var Apps []platform.Application
@@ -472,6 +479,7 @@ type Window struct {
 	Flyout platform.Flyout
 
 	mu        sync.Mutex
+	active    bool // SetActiveAppearance
 	scripts   []string
 	menu      *platform.Menu
 	title     string
@@ -485,6 +493,9 @@ type Window struct {
 	zoom      float64
 	closed    bool
 	devtools  bool
+	pid       int  // SetProcessID
+	audible   bool // SetAudible
+	muted     bool // SetAudioMuted
 	// Dropped is what DroppedFiles returns, once.
 	Dropped []string
 	// PDF holds the options of the last PrintToPDF.
@@ -683,6 +694,11 @@ func (w *Window) HasShadow() bool           { return true }
 func (w *Window) SetIgnoreMouseEvents(bool) {}
 func (w *Window) SetContentProtection(bool) {}
 func (w *Window) SetVibrancy(string)        {}
+func (w *Window) SetActiveAppearance(v bool) { w.mu.Lock(); w.active = v; w.mu.Unlock() }
+func (w *Window) SetWindowButtonsTheme(string) {}
+
+// ActiveAppearance reports what SetActiveAppearance set last.
+func (w *Window) ActiveAppearance() bool { w.mu.Lock(); defer w.mu.Unlock(); return w.active }
 func (w *Window) SetMenu(m *platform.Menu)  { w.mu.Lock(); w.menu = m; w.mu.Unlock() }
 func (w *Window) StartDrag()                { w.count(&w.drags) }
 func (w *Window) TitleBarDoubleClicked()    { w.count(&w.doubleClicks) }
@@ -726,11 +742,30 @@ func (w *Window) SetZoom(f float64)                  { w.mu.Lock(); w.zoom = f; 
 func (w *Window) Zoom() float64                      { w.mu.Lock(); defer w.mu.Unlock(); return w.zoom }
 func (w *Window) SetUserAgent(string)                {}
 func (w *Window) UserAgent() string                  { return "fake" }
+func (w *Window) ProcessID() int                     { w.mu.Lock(); defer w.mu.Unlock(); return w.pid }
+func (w *Window) IsAudible() bool                    { w.mu.Lock(); defer w.mu.Unlock(); return w.audible }
+func (w *Window) SetAudioMuted(v bool)               { w.mu.Lock(); w.muted = v; w.mu.Unlock() }
+func (w *Window) IsAudioMuted() bool                 { w.mu.Lock(); defer w.mu.Unlock(); return w.muted }
 func (w *Window) OpenDevTools()                      { w.mu.Lock(); w.devtools = true; w.mu.Unlock() }
 func (w *Window) CloseDevTools()                     { w.mu.Lock(); w.devtools = false; w.mu.Unlock() }
 func (w *Window) IsDevToolsOpened() bool             { w.mu.Lock(); defer w.mu.Unlock(); return w.devtools }
 func (w *Window) CapturePage(cb func([]byte, error)) { cb([]byte("png"), nil) }
 func (w *Window) Print()                             {}
+
+// SetProcessID sets the process ID the page reports, as a backend whose
+// web view runs in a process of that ID; 0, the default, is none known.
+func (w *Window) SetProcessID(pid int) { w.mu.Lock(); w.pid = pid; w.mu.Unlock() }
+
+// SetAudible sets whether the page plays sound (IsAudible) and reports it
+// to the handler (AudibleChanged), as a backend does whenever the page
+// starts or stops playing; it reports it even when it did not change.
+// Call it on the main thread, where backends report it.
+func (w *Window) SetAudible(v bool) {
+	w.mu.Lock()
+	w.audible = v
+	w.mu.Unlock()
+	w.H.AudibleChanged(v)
+}
 
 // addHTML records a document LoadHTML loads.
 func (w *Window) addHTML(html string) {
@@ -807,7 +842,7 @@ func (w *Window) UserClose() bool {
 type app struct{ b *Backend }
 
 func (app) SetActivationPolicy(string) {}
-func (app) Activate()                  {}
+func (a app) Activate()                { a.b.SetActive(true) }
 func (a app) AllowForeground()         { a.b.ForegroundAllowed++ }
 func (a app) WithActivationToken(token string, fn func()) {
 	prev := a.b.ActivationToken
@@ -818,6 +853,7 @@ func (a app) WithActivationToken(token string, fn func()) {
 func (app) Hide()                                     {}
 func (app) Unhide()                                   {}
 func (app) IsHidden() bool                            { return false }
+func (a app) IsActive() bool                          { return a.b.Active }
 func (app) SetBadge(string)                           {}
 func (app) Badge() string                             { return "" }
 func (app) Bounce(bool) int                           { return 0 }
@@ -1103,6 +1139,25 @@ func (power) IdleTime() time.Duration { return 42 * time.Second }
 // EmitPower simulates a power or session event.
 func (b *Backend) EmitPower(event string) { b.h.PowerEvent(event) }
 
+type nowPlaying struct{ b *Backend }
+
+func (n nowPlaying) Set(info *platform.NowPlayingInfo) {
+	n.b.mu.Lock()
+	defer n.b.mu.Unlock()
+	if info != nil {
+		c := *info
+		info = &c
+	}
+	n.b.Playing = info
+	n.b.NowPlayingSets++
+}
+
+// EmitMediaCommand simulates a media key or a command of the system's
+// media controls.
+func (b *Backend) EmitMediaCommand(cmd platform.MediaCommand, position time.Duration) {
+	b.h.MediaCommand(cmd, position)
+}
+
 type network struct{ b *Backend }
 
 func (n network) Status() platform.NetworkStatus {
@@ -1164,6 +1219,20 @@ func (b *Backend) SetPreferences(p platform.Preferences) {
 	b.prefs = p
 	b.mu.Unlock()
 	b.h.ThemeChanged()
+}
+
+// SetActive makes the app the active one, or not, and reports it as the
+// system does when it changes (main thread).
+func (b *Backend) SetActive(active bool) {
+	if b.Active == active {
+		return
+	}
+	b.Active = active
+	if active {
+		b.h.DidBecomeActive()
+	} else {
+		b.h.DidResignActive()
+	}
 }
 
 // SetSystemLanguages changes the languages the user prefers, as the user
@@ -1270,6 +1339,7 @@ func (t *Tray) Menu() *platform.Menu { t.b.mu.Lock(); defer t.b.mu.Unlock(); ret
 // them on the main thread, as a backend does.
 func (t *Tray) Click()      { t.h.Clicked() }
 func (t *Tray) RightClick() { t.h.RightClicked() }
+func (*Tray) SetActivatable(bool) {}
 
 // Bounds puts the icon in the menu bar above the fake display's work area.
 func (*Tray) Bounds() platform.Rect { return platform.Rect{X: 1300, Width: 30, Height: 25} }
@@ -1304,6 +1374,7 @@ type Surface struct {
 	access      *platform.AccessTree
 	accessN     int
 	rate        float64
+	frameRate   float64
 	dataDrag    *platform.DragRequest
 	dropFormats []transfer.Format
 	// webViews are those made (webview.go), order those shown in the
@@ -1362,6 +1433,21 @@ func (s *Surface) SetRefreshRate(hz float64) {
 	s.mu.Lock()
 	s.rate = hz
 	s.mu.Unlock()
+}
+
+// SetFrameRate records the frames a second the content asks for
+// (platform.FrameRateSurface), which FrameRate returns.
+func (s *Surface) SetFrameRate(fps float64) {
+	s.mu.Lock()
+	s.frameRate = fps
+	s.mu.Unlock()
+}
+
+// FrameRate returns what SetFrameRate last set, 0 for the display's rate.
+func (s *Surface) FrameRate() float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.frameRate
 }
 
 func (s *Surface) RequestFrame() {

@@ -106,10 +106,11 @@ func TestDrawnItemShowsIcon(t *testing.T) {
 	if !fluentMenus() {
 		t.Skip("Windows draws the items' bitmaps before Windows 11")
 	}
+	LinkMenuIcons()
 	b := &Backend{menus: newMenuTable()}
 	dpi := dpiOf(0)
 	withIcon := drawnMenu(t, b, dpi,
-		&platform.MenuItem{ID: 1, Label: "Icon", Enabled: true, Visible: true, Icon: redPNG(t)},
+		&platform.MenuItem{ID: 1, Label: "Icon", Enabled: true, Visible: true, Icon: &platform.MenuIcon{PNG: redPNG(t)}},
 		&platform.MenuItem{ID: 2, Label: "Plain", Enabled: true, Visible: true})
 	without := drawnMenu(t, b, dpi, &platform.MenuItem{ID: 3, Label: "Plain", Enabled: true, Visible: true})
 
@@ -138,11 +139,12 @@ func TestDrawnItemHasNoMenuBitmap(t *testing.T) {
 	if !fluentMenus() {
 		t.Skip("Windows draws the items' bitmaps before Windows 11")
 	}
+	LinkMenuIcons()
 	b := &Backend{menus: newMenuTable()}
 	owner := b.menus.newOwner()
 	items := []*platform.MenuItem{
-		{ID: 1, Label: "Icon", Enabled: true, Visible: true, Icon: redPNG(t)},
-		{ID: 2, Label: "More", Enabled: true, Visible: true, Icon: redPNG(t),
+		{ID: 1, Label: "Icon", Enabled: true, Visible: true, Icon: &platform.MenuIcon{PNG: redPNG(t)}},
+		{ID: 2, Label: "More", Enabled: true, Visible: true, Icon: &platform.MenuIcon{PNG: redPNG(t)},
 			Submenu: &platform.Menu{Items: []*platform.MenuItem{{ID: 3, Label: "Inner", Enabled: true, Visible: true}}}},
 	}
 	h := b.buildMenu(&platform.Menu{Items: items}, false, owner, nil, dpiOf(0))

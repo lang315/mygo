@@ -15,8 +15,6 @@ const (
 	cloakPollMS  = 250
 )
 
-var procDwmGetWindowAttribute = dwmapi.NewProc("DwmGetWindowAttribute")
-
 // Occluded reports whether nothing of the window shows: it is minimized,
 // hidden, or cloaked (on another virtual desktop, or a UWP app's suspended
 // window). Windows does not tell when other windows cover this one, and

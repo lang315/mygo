@@ -7,6 +7,8 @@ import (
 	"math"
 	"sync"
 	"unsafe"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // Windows 11 still draws Win32 menus as Windows 10 did, while its own menus
@@ -59,7 +61,6 @@ const (
 	menuPadding         = 12 // the text from the highlight's sides
 	menuRadius          = 4
 	menuMarkColumn      = 16 + 12 // a check, and the gap after it
-	menuIconColumn      = 16 + 12 // an icon, and the gap after it
 	menuAccelGap        = 32      // the least between a label and its shortcut
 	menuChevron         = 12
 	menuGlyphSize       = 12
@@ -87,15 +88,16 @@ type menuLook struct {
 	// column is whether the menu has a column for the marks of checkable
 	// items, which all its items leave room for.
 	column bool
-	// icon is the item's bitmap (menuBitmap), 0 for none, iconSize its side
-	// in pixels, and icons whether the menu has a column for the icons of
-	// its items, which all its items leave room for.
-	icon     uintptr
-	iconSize int32
-	icons    bool
+	// icon is the item's icon, and icons whether the menu has a column
+	// for icons, after that of the marks (menuicon.go).
+	icon  *platform.MenuIcon
+	icons bool
 	// first and last are whether the item is the menu's first or last,
 	// which has the menu's padding above or below it.
 	first, last bool
+	// menu and pos are the menu holding the item and its position there.
+	menu uintptr
+	pos  int
 	// destructive is whether the item destroys: its label is semibold and
 	// in the danger color.
 	destructive bool
@@ -108,6 +110,17 @@ func (l *menuLook) labelFont(f menuFonts) uintptr {
 		return f.bold
 	}
 	return f.text
+}
+
+// ftype returns the type the item has besides MFT_OWNERDRAW.
+func (l *menuLook) ftype() uint32 {
+	switch {
+	case l.separator:
+		return mftSeparator
+	case l.radio:
+		return mftRadioCheck
+	}
+	return 0
 }
 
 // padding returns the room above and below the item: the menu's padding,
@@ -438,7 +451,8 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 	if selected {
 		plate = &rect{inset, top, r.Right - r.Left - inset, r.Bottom - r.Top - bottom}
 	}
-	paintItem(d.DC, r, p.back, plate, p.plate, float64(toPx(menuRadius, dpi)), func(dc uintptr, r rect) {
+	paintItem(d.DC, r, p.back, plate, p.plate, float64(toPx(menuRadius, dpi)), func(img *bitmap, r rect) {
+		dc := img.dc
 		r.Top, r.Bottom = r.Top+top, r.Bottom-bottom
 		if l.separator {
 			thick := max(toPx(1, dpi), 1)
@@ -476,9 +490,21 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 			x += toPx(menuMarkColumn, dpi)
 		}
 		if l.icons {
-			if l.icon != 0 {
-				size := toPx(16, dpi)
-				drawIcon(dc, l.icon, l.iconSize, x, r.Top+(r.Bottom-r.Top-size)/2, size, state&(odsGrayed|odsDisabled) != 0)
+			box := toPx(platform.MenuIconSize, dpi)
+			if ic := l.icon; ic != nil && drawMenuIcon != nil {
+				// A template icon in the text's color; one in color
+				// faded when the item is disabled.
+				opacity := 1.0
+				if state&(odsGrayed|odsDisabled) != 0 && !ic.Template {
+					opacity = 0.4
+				}
+				// In a mirrored DC, which lays the item out from the
+				// right, x counts from the right edge of the bitmap.
+				at := x
+				if layout, _, _ := procGetLayout.Call(dc); layout&layoutRTL != 0 {
+					at = r.Right - x - box
+				}
+				drawMenuIcon(img.px, r.Right-r.Left, ic, at, r.Top+(r.Bottom-r.Top-box)/2, box, dibColor(fore), opacity)
 			}
 			x += toPx(menuIconColumn, dpi)
 		}
@@ -515,29 +541,11 @@ func (b *Backend) drawItem(hwnd uintptr, l *menuLook, d *drawItemStruct) {
 	procExcludeClipRect.Call(d.DC, uintptr(r.Left), uintptr(r.Top), uintptr(r.Right), uintptr(r.Bottom))
 }
 
-// drawIcon blends an item's icon, a bitmap of srcSize pixels with premultiplied
-// alpha, over the DC as a size square at (x, y), fainter when the item is
-// disabled.
-func drawIcon(dc, bmp uintptr, srcSize, x, y, size int32, disabled bool) {
-	const acSrcAlpha = 1
-	alpha := uintptr(255)
-	if disabled {
-		alpha = 115
-	}
-	src, _, _ := procCreateCompatibleDC.Call(dc)
-	defer procDeleteDC.Call(src)
-	old, _, _ := procSelectObject.Call(src, bmp)
-	defer procSelectObject.Call(src, old)
-	// BLENDFUNCTION by value: AC_SRC_OVER, no flags, the alpha, the format.
-	blendFunc := alpha<<16 | acSrcAlpha<<24
-	procAlphaBlend.Call(dc, uintptr(x), uintptr(y), uintptr(size), uintptr(size), src, 0, 0, uintptr(srcSize), uintptr(srcSize), blendFunc)
-}
-
 // paintItem draws an item in a bitmap its size, then copies it to the
 // menu's DC at r: the background, a highlight with rounded corners
 // (plate, in the item's coordinates, nil for none) antialiased over it,
 // and what draw draws over them, in the bitmap's coordinates.
-func paintItem(dc uintptr, r rect, back uint32, plate *rect, plateColor uint32, radius float64, draw func(dc uintptr, r rect)) {
+func paintItem(dc uintptr, r rect, back uint32, plate *rect, plateColor uint32, radius float64, draw func(img *bitmap, r rect)) {
 	w, h := r.Right-r.Left, r.Bottom-r.Top
 	if w <= 0 || h <= 0 {
 		return
@@ -559,7 +567,7 @@ func paintItem(dc uintptr, r rect, back uint32, plate *rect, plateColor uint32, 
 		}
 	}
 	procGdiFlush.Call()
-	draw(img.dc, rect{0, 0, w, h})
+	draw(img, rect{0, 0, w, h})
 	procGdiFlush.Call()
 	procBitBlt.Call(dc, uintptr(r.Left), uintptr(r.Top), uintptr(w), uintptr(h), img.dc, 0, 0, srcCopy)
 }

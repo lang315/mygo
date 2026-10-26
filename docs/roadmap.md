@@ -324,7 +324,7 @@ cannot show: those items are not marked):
 | A newer purego | a tag carries the fixes we need |
 | TSF input on Windows | IMM32 misbehaves with Telex |
 | D3D12, Vulkan or GPU compute | an app needs image processing |
-| Multi-rect GPU damage (`gpu.Ages` keeps one union rect) | a frame is measured GPU-bound where the union is much larger than the rects. Fill costs 8–35 ns per kilopixel on a 10-core Apple-silicon Mac, so 118k pixels saved are 1–4 µs of a frame whose empty floor is 17 µs; a tile GPU reloads the attachment anyway. Present with damage (DXGI `Present1` dirty rects, `eglSwapBuffersWithDamageKHR`) is the likelier win |
+| Present with damage where it is not yet (`eglSwapBuffersWithDamageKHR`; Direct3D presents dirty rectangles already, `Present1`) | a frame is measured compositor-bound in presenting the whole surface. Redrawing several damage rectangles apart, not their union, is built (`gpu.Ages` in `internal/gpu/damage.go`, from upstream's #754, fed by `scene.Differ`'s damage rectangles); the fill it saves is 1–4 µs of a frame whose empty floor is 17 µs on a 10-core Apple-silicon Mac, so presenting only the damage is the likelier win left |
 
 ## Phase 4: developer tools
 
