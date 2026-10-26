@@ -572,6 +572,12 @@ func TestDocumentMovedWhileTheDiskIsChecked(t *testing.T) {
 		t.Fatal("no look found a.txt changed")
 	}
 	looks.Wait()
+	// Every look that found the file changed has ended: none that read the
+	// stale path replaced the content, which the first look's check alone does
+	// not see in looks that end after it.
+	if d.Content() != "mine" {
+		t.Errorf("content %q: a look at a.txt replaced the content of the document at b.txt", d.Content())
+	}
 	outsideChange(b, "theirs b", 2)
 	d.checkDisk()
 	if d.Content() != "theirs b" {
