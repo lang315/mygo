@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/twsource"
 )
 
 // Every property a Style can set has a line in the note, as does each side
@@ -102,39 +103,73 @@ func TestNoteSaysWhenADisabledAncestorDisablesTheControl(t *testing.T) {
 	}
 }
 
-// A Style made of two has no source, and one that is given none, or an empty
-// one, has none.
+// fromClasses is what tw.S does to a Style it made from classes.
+func fromClasses(s Style, classes string) Style {
+	twsource.Note(&s, classes)
+	return s
+}
+
+// A Style made of two has no source, and one that is given none, or only
+// blanks, has none.
 func TestAMergedStyleHasNoSource(t *testing.T) {
-	a, b := NewStyle().Padding(1).Source("p-1"), NewStyle().Margin(1).Source("m-1")
-	if a.src == nil || *a.src != "p-1" {
-		t.Fatalf("Source did not note the classes: %v", a.src)
+	a, b := fromClasses(NewStyle().Padding(1), "p-1"), fromClasses(NewStyle().Margin(1), "m-1")
+	if a.src == nil || a.src.classes != "p-1" {
+		t.Fatalf("the classes were not noted: %v", a.src)
 	}
 	if m := a.Merge(b); m.src != nil {
-		t.Errorf("a merged Style has the source %q", *m.src)
+		t.Errorf("a merged Style has the source %q", m.src.classes)
 	}
-	if a.Source("").src != nil {
-		t.Error("an empty source did not take the source off")
+	if fromClasses(a, "").src != nil {
+		t.Error("empty classes did not take the source off")
+	}
+	if fromClasses(NewStyle().Padding(1), " \t\n").src != nil {
+		t.Error("classes of only blanks make a source")
 	}
 	if NewStyle().Padding(1).src != nil {
 		t.Error("a typed Style has a source")
 	}
 }
 
-// Only a layer given to Apply shows classes, and only if it has them.
-func TestOnlyAnAppliedStyleWithASourceShowsClasses(t *testing.T) {
-	b := Button("x").Apply(NewStyle().Padding(1).Source("p-1"), NewStyle().Padding(2)).Bold()
-	fs := b.inspect(b, ui.LightTheme(), false)
-	n, at := 0, -1
-	for i, f := range fs {
+func classesLines(fs []ui.InspectorField) (out []string) {
+	for _, f := range fs {
 		if f.Name == "classes" {
-			n++
-			at = i
-			if f.Value != "p-1" {
-				t.Errorf("classes %q, want p-1", f.Value)
-			}
+			out = append(out, f.Value)
 		}
 	}
-	if n != 1 || fs[at-1].Name != "Apply, style 1 of 2" {
-		t.Errorf("%d lines of classes, the first after %q: %v", n, fs[at-1].Name, fs)
+	return out
+}
+
+// Only a layer given to Apply shows classes, and only if it has them.
+func TestOnlyAnAppliedStyleWithASourceShowsClasses(t *testing.T) {
+	b := Button("x").Apply(fromClasses(NewStyle().Padding(1), "p-1"), NewStyle().Padding(2), fromClasses(NewStyle(), "  ")).Bold()
+	fs := b.inspect(b, ui.LightTheme(), false)
+	got := classesLines(fs)
+	if len(got) != 1 || got[0] != "p-1" {
+		t.Fatalf("lines of classes %q, want just p-1: %v", got, fs)
+	}
+	for i, f := range fs {
+		if f.Name == "classes" && fs[i-1].Name != "Apply, style 1 of 3" {
+			t.Errorf("classes follow %q", fs[i-1].Name)
+		}
+	}
+}
+
+// A method called on a Style after tw.S changes it: the tab says so, not that
+// the classes are all there is. Merge-free copies that differ in nothing keep
+// plain classes.
+func TestClassesThenMethodsAreMarked(t *testing.T) {
+	plain := fromClasses(NewStyle().Padding(2), "p-2")
+	for name, c := range map[string]struct {
+		s    Style
+		want string
+	}{
+		"untouched": {plain, "p-2"},
+		"a setter":  {plain.Bold(), "p-2 (then changed by methods)"},
+		"a variant": {plain.Hover(NewStyle().Opacity(0.5)), "p-2 (then changed by methods)"},
+	} {
+		b := Button("x").Apply(c.s)
+		if got := classesLines(b.inspect(b, ui.LightTheme(), false)); len(got) != 1 || got[0] != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
 	}
 }

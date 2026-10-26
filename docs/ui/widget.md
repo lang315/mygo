@@ -127,10 +127,11 @@ theme units, the rest in DIPs). Its buttons force the hover, pressed and focus
 states of the control to see the variants without the pointer. The notes are
 made only when the inspector is open and not at all in a build with
 `-tags mygo_noinspector`. A test reads them with `Tester.Inspect(label)`
-(`docs/ui/testing.md`). A Style made by `tw.S` notes its classes (`Style.Source`),
-which the tab shows under the style they made; `Source("")` takes them off, to
-compare it with a Style of the typed methods (`reflect.DeepEqual` tells them
-apart by it).
+(`docs/ui/testing.md`). A Style made by `tw.S` notes its classes (not
+public API: `tw` tells `widget` through an internal package), which the tab shows
+under the style they made; if a method (`Bold`, `Hover`, …) changed it after, the
+line says "then changed by methods". `reflect.DeepEqual` of a `tw.S` Style with a
+Style of the typed methods differs by the note: `tw`'s own tests compare without it.
 
 ## Dialogs
 
