@@ -381,9 +381,6 @@ type node struct {
 	// widget names the widget that used the element's state as it created
 	// it, which Key would then lose.
 	widget string
-	// focusInto is the element Focus, AutoFocus and Focused act on for
-	// this one, as a number input's text field for its row.
-	focusInto *node
 
 	// What assistive technology sees: the role, whether a check box,
 	// radio or switch is off (1), on (2) or mixed (3), whether a pop-up
@@ -463,7 +460,7 @@ type node struct {
 	nameJoin bool
 	// focusTo is the element taking the focus that Focus and AutoFocus
 	// give this one, and whose focus Focused reports: the input of the box
-	// around it (field).
+	// around it (field), a number input's text field for its row.
 	focusTo         *node
 	setPos, setSize int
 	choosesItems    bool

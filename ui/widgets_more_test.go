@@ -340,6 +340,33 @@ func TestNumberInputFocus(t *testing.T) {
 	}
 }
 
+// A number input that appears in a later frame takes the focus in that
+// frame: AutoFocus acts on the frame its text field is born in, as the
+// first field of a dialog opened later.
+func TestNumberInputAutoFocusInALaterFrame(t *testing.T) {
+	v, show := 5.0, false
+	var focused bool
+	tt := coreNewTester(func(c *context) {
+		coreButton(c, "Other")
+		if show {
+			focused = coreNumberInput(c, &v, 0, 99, 1).AutoFocus().Focused()
+		}
+	}, 400, 100)
+	if focused {
+		t.Fatal("focused before the input exists")
+	}
+	show = true
+	tt.Frame()
+	if !focused {
+		t.Fatal("the number input that appeared is not focused in the frame it appears")
+	}
+	tt.Key(Cmd, KeyA)
+	tt.Type("7")
+	if v != 7 {
+		t.Errorf("typed 7 into it: %v", v)
+	}
+}
+
 func TestToast(t *testing.T) {
 	tt := coreNewTester(func(c *context) {
 		if coreButton(c, "Save").Clicked() {

@@ -1219,9 +1219,6 @@ func (e *node) Focused() bool {
 	if e.hasState() && e.c.rt.insp.forces(e.id, forceFocus) {
 		return true
 	}
-	if e.hasState() && e.focusInto != nil {
-		return e.focusInto.Focused()
-	}
 	if e != nil && e.focusTo != nil {
 		return e.focusTo.Focused()
 	}
@@ -1263,10 +1260,6 @@ func (e *node) Focus() *node {
 	if !e.hasState() {
 		return e
 	}
-	if e.focusInto != nil {
-		e.focusInto.Focus()
-		return e
-	}
 	e.flags |= flagFocusable
 	rt := e.c.rt
 	if rt.focused != e.id {
@@ -1279,10 +1272,6 @@ func (e *node) Focus() *node {
 // AutoFocus gives the element the keyboard focus in the frame it appears,
 // as the first field of a dialog.
 func (e *node) AutoFocus() *node {
-	if e.hasState() && e.focusInto != nil {
-		e.focusInto.AutoFocus()
-		return e
-	}
 	if e.hasState() && e.st.born == e.c.rt.frame {
 		e.Focus()
 	}

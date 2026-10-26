@@ -39,7 +39,7 @@ func coreNumberInput(c *context, value *float64, lo, hi, step float64) *node {
 	row.Children(func() {
 		in := coreTextInput(c, text).Width(t.Space(20))
 		in.widget = "NumberInput"
-		row.focusInto = in
+		row.focusTo = in
 		in.afterInput(func() {
 			if in.Changed() {
 				if v, err := strconv.ParseFloat(strings.TrimSpace(*text), 64); err == nil && v >= lo && v <= hi {
