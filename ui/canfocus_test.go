@@ -2,7 +2,7 @@ package ui
 
 import "testing"
 
-// CanFocus applies Tab's rule: disabled, invisible and inert elements do not
+// CanFocus applies Tab's rule: disabled, invisible, Hidden and inert elements do not
 // take the focus, and an element holding one that does can.
 func TestCanFocusIsTabsRule(t *testing.T) {
 	var s string
@@ -27,6 +27,13 @@ func TestCanFocusIsTabsRule(t *testing.T) {
 				got["invisible"] = in.CanFocus()
 				ids["invisible"] = uint64(in.id)
 			})
+			gone := coreColumn(c).Hidden(true)
+			gone.Children(func() {
+				in := coreTextInput(c, &s)
+				got["hidden"] = in.CanFocus()
+				ids["hidden"] = uint64(in.id)
+			})
+			got["hiddenHolder"] = gone.CanFocus()
 			off := coreTextInput(c, &s).Disabled(true)
 			got["disabled"] = off.CanFocus()
 			ids["disabled"] = uint64(off.id)
@@ -36,7 +43,7 @@ func TestCanFocusIsTabsRule(t *testing.T) {
 		})
 	}, 300, 300)
 	tt.Frame()
-	want := map[string]bool{"plain": true, "inert": false, "inertHolder": false, "invisible": false, "disabled": false, "holder": true}
+	want := map[string]bool{"plain": true, "inert": false, "inertHolder": false, "invisible": false, "hidden": false, "hiddenHolder": false, "disabled": false, "holder": true}
 	for k, w := range want {
 		if got[k] != w {
 			t.Errorf("CanFocus of %s = %v, want %v", k, got[k], w)
@@ -46,7 +53,7 @@ func TestCanFocusIsTabsRule(t *testing.T) {
 	for _, id := range tt.rt.focusOrder {
 		inOrder[uint64(id)] = true
 	}
-	for _, k := range []string{"plain", "inert", "invisible", "disabled"} {
+	for _, k := range []string{"plain", "inert", "invisible", "hidden", "disabled"} {
 		if inOrder[ids[k]] != want[k] {
 			t.Errorf("Tab reaches %s: %v, CanFocus says %v", k, inOrder[ids[k]], want[k])
 		}

@@ -1249,7 +1249,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	// What is invisible keeps its box but takes neither the pointer nor
 	// the focus, and has no text to find; so does what is inert, which
 	// shows, and what is Hidden, which has no box.
-	invisible := hidden || e.hiddenSelf() || e.hidden
+	invisible := hidden || e.hiddenSelf()
 	if invisible {
 		s.vw, s.vh = 0, 0
 		if rt.focused == e.id {

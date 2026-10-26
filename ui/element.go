@@ -1405,10 +1405,11 @@ func (e *node) CanFocus() bool {
 	return e.canFocus(hidden)
 }
 
-// hiddenSelf reports whether the element is invisible or inert, or turned
-// away, which takes it and what is in it out of Tab and the pointer's reach.
+// hiddenSelf reports whether the element is invisible or inert, Hidden, or
+// turned away, which takes it and what is in it out of Tab and the pointer's
+// reach.
 func (e *node) hiddenSelf() bool {
-	return e.flags&(flagInvisible|flagInert) != 0 || e.backface && e.transform.facesAway()
+	return e.flags&(flagInvisible|flagInert) != 0 || e.hidden || e.backface && e.transform.facesAway()
 }
 
 // takesFocus is the rule of Tab for one element, hidden being whether it or

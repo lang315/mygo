@@ -3,12 +3,12 @@
 package windows
 
 import (
-	"github.com/egoist/mygo/internal/wincb"
 	"math"
 	"sync"
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wincb"
 )
 
 // Windows 11 still draws Win32 menus as Windows 10 did, while its own menus
@@ -44,7 +44,6 @@ var (
 	procGetLayout                  = gdi32.NewProc("GetLayout")
 	procExcludeClipRect            = gdi32.NewProc("ExcludeClipRect")
 	procCreateFontIndirectW        = gdi32.NewProc("CreateFontIndirectW")
-	procAlphaBlend                 = systemDLL("msimg32.dll").NewProc("AlphaBlend")
 	procSetMenuInfo                = user32.NewProc("SetMenuInfo")
 	procGetSysColor                = user32.NewProc("GetSysColor")
 	procSystemParametersInfoForDpi = user32.NewProc("SystemParametersInfoForDpi")
