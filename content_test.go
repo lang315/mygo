@@ -352,6 +352,7 @@ func TestContentMenuRightToLeft(t *testing.T) {
 		})
 	}
 	_, _, s := contentWindow(t, view)
+	shown := len(fb.Popups()) // the menus of runs before this one (-count) stay
 	for _, x := range []float64{50, 150} {
 		onMain(func() {
 			s.Send(platform.SurfaceEvent{Kind: platform.PointerDown, X: x, Y: 50, Button: 1})
@@ -361,7 +362,7 @@ func TestContentMenuRightToLeft(t *testing.T) {
 		onMain(func() {}) // the menu, posted
 	}
 	var got []string
-	for _, p := range fb.Popups() {
+	for _, p := range fb.Popups()[shown:] {
 		got = append(got, fmt.Sprintf("%s %v", p.Menu.Items[0].Label, p.Menu.RightToLeft))
 	}
 	if want := []string{"Left to right false", "Right to left true"}; !slices.Equal(got, want) {
