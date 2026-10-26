@@ -170,7 +170,7 @@ Windows 11 ARM64.
      pressed row's background in the middle of the display list and the scrollbar
      at its end, so `scene.Differ` damaged everything between (824,294 of
      1,024,000 pixels on a 1280×800 window, the CPU raster and the GPU's union
-     rectangle alike) and now damages 43,116 (#200: `click` 624 → 424 µs on an M1
+     rectangle alike) and now damages 43,116 (the GPU draws their union, about 161,000) (#200: `click` 624 → 424 µs on an M1
      Pro, `present` of that frame 0.246 → 0.009 ms); and `click` depends on the
      cores (on an M1 Pro, 1.14, 0.86, 0.70 and 0.66 ms at `GOMAXPROCS` 1, 2, 4
      and 10, because the raster is shared among goroutines). Evidence:
