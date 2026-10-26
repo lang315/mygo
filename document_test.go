@@ -750,9 +750,14 @@ func TestDocumentOutsideChanges(t *testing.T) {
 		t.Errorf("file %q, conflict %v, asked %q", readString(t, path), d.HasConflict(), asked.all())
 	}
 
-	// Without asking, Save reports the change.
-	os.Chtimes(path, future.Add(2*time.Hour), future.Add(2*time.Hour))
+	// Without asking, Save reports the change. The document is edited before
+	// the file changes: the file's watch looks once the changes settle, at
+	// any point from here, and an unedited document reads what it finds,
+	// after which there is nothing left to report. The look is made here
+	// to be one before the write.
 	d.Set("x")
+	os.Chtimes(path, future.Add(2*time.Hour), future.Add(2*time.Hour))
+	d.checkDisk()
 	if _, err := d.write(path, writeSave); !errors.Is(err, ErrDocumentChanged) {
 		t.Errorf("write over a changed file: %v", err)
 	}
