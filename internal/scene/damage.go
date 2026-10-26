@@ -466,6 +466,11 @@ func (d *Differ) moved(s *Scene, op *Op) bool {
 			}
 		}
 	}
+	if op.Kind == OpPushClip {
+		// A clip only moved is cut as any other (MovedClip).
+		_, m := MovedClip(op.Rect, op.Transform)
+		return m.Set
+	}
 	return op.Transform.Set && (!folding() || !folds(s, op))
 }
 
