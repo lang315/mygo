@@ -152,31 +152,58 @@ func button(c *context, label string, primary bool) *node {
 func styleButton(c *context, b *node, primary bool) {
 	t := c.theme
 	b.Padding(t.Space(1.5), t.Space(3.5)).Gap(t.Space(1.5)).Radius(t.Radius)
-	base, hover, pressed, fg, border := t.Surface, t.SurfaceHover, t.SurfacePressed, t.Text, t.Border
+	base, fg, border := t.Surface, t.Text, t.Border
+	b.buttonLook = buttonPlain
 	switch {
 	case primary:
-		base, hover, pressed, fg, border = t.Accent, t.AccentHover, t.AccentPressed, t.AccentText, Color{}
+		base, fg, border = t.Accent, t.AccentText, Color{}
+		b.buttonLook = buttonPrimary
 	case c.buttons == toolbarButtons:
 		b.Padding(t.Space(1.5), t.Space(2.5))
 		base, border = Color{}, Color{}
+		b.buttonLook = buttonFlat
 	case c.buttons == segmentButtons:
 		b.Padding(t.Space(1), t.Space(3)).Radius(max(t.Radius-t.Space(0.5), 0))
 		base, border = Color{}, Color{}
 		b.segment = true
+		b.buttonLook = buttonFlat
 	}
 	b.Background(base).TextColor(fg)
 	if border.A > 0 {
 		b.Border(1, border)
 	}
-	b.styleFn = func(b *node) {
-		if b.bg != base || b.IsDisabled() {
-			return
-		}
-		if b.Pressed() {
-			b.bg = pressed
-		} else if b.Hovered() {
-			b.bg = hover
-		}
+	b.builtWith(t)
+	b.styleFn = buttonPaint
+}
+
+// The looks of a button, which buttonPaint paints: with the surface, with
+// the accent, or with no face until hovered.
+const (
+	buttonPlain uint8 = iota
+	buttonPrimary
+	buttonFlat
+)
+
+// buttonPaint is the look of a button as it paints, with the theme it was
+// built with: it shows the hover and pressed colors while its background is
+// still the one styleButton gave it. A function that reads the node, so no
+// closure is made for each button in each frame.
+func buttonPaint(b *node) {
+	t := b.builtTheme()
+	base, hover, pressed := t.Surface, t.SurfaceHover, t.SurfacePressed
+	switch b.buttonLook {
+	case buttonPrimary:
+		base, hover, pressed = t.Accent, t.AccentHover, t.AccentPressed
+	case buttonFlat:
+		base = Color{}
+	}
+	if b.bg != base || b.IsDisabled() {
+		return
+	}
+	if b.Pressed() {
+		b.bg = pressed
+	} else if b.Hovered() {
+		b.bg = hover
 	}
 }
 
