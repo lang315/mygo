@@ -333,24 +333,30 @@ cannot show: those items are not marked):
    `docs/ui/widget/tester.md`.
 2. **A widget layer in the inspector.** It shows the widget tree, the Style
    in effect, and the Tailwind classes that made it. It can force a hover,
-   pressed or focus state. *In part* (#187, #188, #189). **Done:** the notes
-   a control leaves for the inspector (`ui/inspector_api.go`: `InspectorField`,
-   `Element.InspectNote`; `ui/widget/inspect.go`), shown in the Widget tab:
-   the control's type, the Styles that style it by layer (`Apply`'s, then its
-   own methods') and by variant, and the Tailwind classes that made each (a
-   `tw.S` style, `classes: …`, with "then changed by methods" when a method
-   changed it after); and the buttons that force hover, pressed and focus
-   (`TestInspectorShowsWhatAControlIsStyledWith`,
-   `TestInspectorForcesTheStatesOfAWidget` in `ui/widget/inspect_test.go`,
-   `TestInspectorShowsTheClassesOfEachAppliedStyle` in
-   `ui/widget/tw/tw_source_test.go`, `ui/inspector_note_test.go`;
-   `docs/ui/inspector.md`). *Open:* the widget tree itself, since the Elements
-   tab shows the tree of `ui` elements (a `VBox` is a `<Column>`, a `Button` a
-   `<Button>`), and the control's type shows only in the Widget tab of the
-   element chosen; and the Style in effect as the widget layer resolves it
-   (which layer or variant won each property, for the state of the frame),
-   since the tab lists each Style as it is set, and only the Styles and
-   Computed tabs show what the element ended up with.
+   pressed or focus state. **Done** (#187–#189, #204, #205):
+   - the notes a control leaves for the inspector: `InspectorField` (with
+     `Struck`) and `Element.InspectNote` in `ui/inspector_api.go`, and the
+     control's note in `ui/widget/inspect.go`: its type, whether it is
+     disabled, the Styles that style it by layer (`Apply`'s, then its own
+     methods') and by variant, and the Tailwind classes that made each (a
+     `tw.S` style, with "then changed by methods" when a method changed it
+     after);
+   - the buttons that force hover, pressed and focus;
+     `TestInspectorShowsWhatAControlIsStyledWith`,
+     `TestInspectorForcesTheStatesOfAWidget` in `ui/widget/inspect_test.go`,
+     `TestInspectorShowsTheClassesOfEachAppliedStyle` in
+     `ui/widget/tw/tw_source_test.go`, `ui/inspector_note_test.go`;
+   - the widget tree: the Widgets tab, which lists the controls as the app
+     wrote them, nested by their notes, and chooses a control's element
+     (`ui/inspector.go`, `ui/inspector_panel.go`); `ui/inspector_widgets_test.go`,
+     `TestInspectorWidgetsShowTheControlTree` in `ui/widget/inspect_test.go`;
+   - the Style in effect: for the state of the frame, forced states
+     included, each property's winning value with its layer and variant, and
+     the values it lost to struck through (`ui/widget/inspect_effect.go`);
+     `TestInspectorShowsTheStyleInEffect` and, against what `Merge` and
+     `effective` resolve, `TestInEffectIsWhatEffectiveResolves` with its
+     siblings in `ui/widget/inspect_effect_test.go`;
+   - `docs/ui/inspector.md`.
 3. **Docs to copy from.** The widget tour, a Tailwind cheat sheet, and
    mappings from WinForms and gota. **Done:** `examples/widget-tour`,
    `docs/ui/widget/tw.md` (checked against the parser by
