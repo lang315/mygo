@@ -4242,6 +4242,13 @@ first edge to a symbol back to `main.main` to see why it is there, and
 search for `<ReflectMethod>`, which marks a reflective lookup that keeps
 every method.
 
+Code only the inspector runs (notes, the Widget tab, the Style in effect)
+is plain functions, not unexported methods on core types, and makes no
+package-level map or slice: a method's signature keeps its types' descriptors
+in a release build even when no program calls it (`widget-tour` grew 3.7 KB
+of them on Windows and Linux with two such methods, and 0 with functions), and
+a map initializer runs at start-up in every app.
+
 To find which changes grew an app over a stretch of history, build it at
 checkpoints: the merge commits of `main` where the size series on the
 `benchmarks` branch (`latest.json`) steps, each in a detached worktree. Build
