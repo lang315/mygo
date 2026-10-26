@@ -24,6 +24,11 @@ func TestNetwork(t *testing.T) {
 		t.Errorf("Status = %+v, want online and metered", s)
 	}
 
+	// The module keeps the last status the backend reported, from the first
+	// watch of the process: a run that follows another (-count) starts from it,
+	// not from the status set above, so the backend reports it first.
+	onMain(func() { fb.EmitNetwork(platform.NetworkStatus{Online: true, Metered: true}) })
+
 	var got []NetworkStatus
 	mainOK := true
 	off := Network.OnChanged(func(s NetworkStatus) {
