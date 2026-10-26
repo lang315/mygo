@@ -64,7 +64,9 @@ type headless struct {
 	// event loop may draw a frame then.
 	reading func()
 	// last is the scene of the last frame, which tests inspect.
-	last        *scene.Scene
+	last *scene.Scene
+	// skip is SkipRaster's, and stale says last was not drawn.
+	skip, stale bool
 	dragData    transfer.Data
 	dragLocal   any
 	dragOptions transfer.DragOptions
@@ -89,6 +91,11 @@ func (h *headless) refreshRate() float32              { return h.hz }
 func (h *headless) occluded() bool                    { return h.hidden }
 func (h *headless) present(s *scene.Scene) {
 	h.last = s
+	if h.skip {
+		h.stale = true
+		return
+	}
+	h.stale = false
 	h.img.Render(s)
 }
 func (h *headless) afterTimer(at time.Time) {
@@ -200,6 +207,10 @@ func (h *headless) placeWebViews(views []placedWebView) {
 func (h *headless) tabIntoWebView(v NativeWebView, back bool)      { h.tabbedInto, h.tabbedBack = v, back }
 func (h *headless) platformWebView(NativeWebView) platform.WebView { return nil }
 func (h *headless) image() *image.RGBA {
+	if h.stale && h.last != nil {
+		h.img.Render(h.last) // SkipRaster left it undrawn
+		h.stale = false
+	}
 	m := &h.img.Image
 	return &image.RGBA{Pix: m.RGBA(), Stride: 4 * m.W, Rect: image.Rect(0, 0, m.W, m.H)}
 }
@@ -938,3 +949,10 @@ func (t *Tester) Focused(s string) bool {
 	}
 	return false
 }
+
+// SkipRaster, with true, makes the tester's frames build, lay out and paint as
+// always, and draw no pixels: the rasterizer that stands in for the GPU is left
+// out, so a benchmark measures the work an app does itself. Image draws the last
+// frame when asked for it. With false the frames are drawn again. It is for
+// benchmarks; nothing in a window does this.
+func (t *Tester) SkipRaster(skip bool) { t.h.skip = skip }
