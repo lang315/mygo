@@ -23,18 +23,23 @@ var notesLeft atomic.Int64
 func (b *core) leaveNote(c *ui.Context, w Control, e ui.Element) {
 	notesLeft.Add(1)
 	th := c.Theme()
-	e.InspectNote(fmt.Sprintf("%T", w), func() []ui.InspectorField { return b.inspect(w, th) })
+	e.InspectNote(fmt.Sprintf("%T", w), func() []ui.InspectorField { return b.inspect(w, th, e.IsDisabled()) })
 }
 
 // inspect returns the fields of w's note. It runs when the note is shown,
-// with no view building.
-func (b *core) inspect(w Control, th *ui.Theme) []ui.InspectorField {
+// with no view building. inert is whether the element is disabled, by itself
+// or by an ancestor.
+func (b *core) inspect(w Control, th *ui.Theme, inert bool) []ui.InspectorField {
 	mu.Lock()
 	defer mu.Unlock()
+	disabled := strconv.FormatBool(b.disabled)
+	if inert && !b.disabled {
+		disabled += " (inherited: true)"
+	}
 	fs := []ui.InspectorField{
 		{Name: "Control"},
 		{Name: "type", Value: fmt.Sprintf("%T", w)},
-		{Name: "disabled", Value: strconv.FormatBool(b.disabled)},
+		{Name: "disabled", Value: disabled},
 	}
 	layers := 0
 	for i, s := range b.applied {
@@ -85,6 +90,11 @@ func (p *props) describe(th *ui.Theme, prefix string) (out []ui.InspectorField) 
 	}
 	dips := func(v float32) string { return num(v) + " DIPs" }
 	units := func(v float32) string { return num(v) + " units (" + dips(th.Space(v)) + ")" }
+	// The layout properties apply only from the base: a variant's are ignored.
+	inVariant := ""
+	if prefix != "" {
+		inVariant = " (no effect in a variant)"
+	}
 	four := func(name string, mask uint8, v [4]float32, names [4]string, format func(float32) string) {
 		if mask == 0b1111 && v[0] == v[1] && v[1] == v[2] && v[2] == v[3] {
 			add(name, format(v[0]))
@@ -122,7 +132,7 @@ func (p *props) describe(th *ui.Theme, prefix string) (out []ui.InspectorField) 
 		case pOpacity:
 			add("opacity", num(p.opacity))
 		case pCursor:
-			add("cursor", fmt.Sprint(p.cursor))
+			add("cursor", cursorName(p.cursor))
 		case pBlur:
 			add("blur", dips(p.blur))
 		case pShadows:
@@ -134,7 +144,7 @@ func (p *props) describe(th *ui.Theme, prefix string) (out []ui.InspectorField) 
 				if sh.inset {
 					inset = " inset"
 				}
-				add("shadow", fmt.Sprintf("%s %s %s %s %s%s", num(sh.x), num(sh.y), num(sh.blur), num(sh.spread), sh.c.inspectText(), inset))
+				add("shadow", fmt.Sprintf("x %s, y %s, blur %s, spread %s, %s%s", dips(sh.x), dips(sh.y), dips(sh.blur), dips(sh.spread), sh.c.inspectText(), inset))
 			}
 		case pGradient:
 			add("gradient", fmt.Sprintf("%s to %s at %s°", p.gradient.from.inspectText(), p.gradient.to.inspectText(), num(p.gradient.angle)))
@@ -148,7 +158,11 @@ func (p *props) describe(th *ui.Theme, prefix string) (out []ui.InspectorField) 
 			if p.fontSize > 0 {
 				add("font-size", dips(p.fontSize))
 			} else {
-				add("font-size", sizeNames[min(int(p.textSize), len(sizeNames)-1)])
+				z := p.textSize
+				if int(z) >= len(sizeNames) {
+					z = Base // as apply does
+				}
+				add("font-size", sizeNames[z])
 			}
 		case pItalic:
 			add("font-style", "italic")
@@ -157,18 +171,35 @@ func (p *props) describe(th *ui.Theme, prefix string) (out []ui.InspectorField) 
 		case pTransition:
 			add("transition", p.transition.String())
 		case pAlign:
-			add("align", alignName(p.align))
+			add("align", alignName(p.align)+inVariant)
 		case pVAlign:
-			add("valign", alignName(p.valign))
+			add("valign", alignName(p.valign)+inVariant)
 		case pHExpand:
-			add("hexpand", "true")
+			add("hexpand", "true"+inVariant)
 		case pVExpand:
-			add("vexpand", "true")
+			add("vexpand", "true"+inVariant)
 		case pFontWeight:
 			add("font-weight", strconv.Itoa(p.weight))
 		}
 	}
 	return out
+}
+
+var cursorNames = map[ui.Cursor]string{
+	ui.CursorDefault: "default", ui.CursorPointer: "pointer", ui.CursorText: "text", ui.CursorMove: "move",
+	ui.CursorResizeEW: "ew-resize", ui.CursorResizeNS: "ns-resize", ui.CursorResizeNWSE: "nwse-resize",
+	ui.CursorResizeNESW: "nesw-resize", ui.CursorNotAllowed: "not-allowed", ui.CursorCrosshair: "crosshair",
+	ui.CursorGrab: "grab", ui.CursorGrabbing: "grabbing", ui.CursorResizeN: "n-resize", ui.CursorResizeE: "e-resize",
+	ui.CursorResizeS: "s-resize", ui.CursorResizeW: "w-resize", ui.CursorResizeColumn: "col-resize",
+	ui.CursorResizeRow: "row-resize", ui.CursorVerticalText: "vertical-text", ui.CursorCopy: "copy",
+	ui.CursorAlias: "alias", ui.CursorContextMenu: "context-menu", ui.CursorNone: "none",
+}
+
+func cursorName(c ui.Cursor) string {
+	if n, ok := cursorNames[c]; ok {
+		return n
+	}
+	return strconv.Itoa(int(c))
 }
 
 var sizeNames = [...]string{Base: "base", XS: "xs", SM: "sm", LG: "lg", XL: "xl", XXL: "2xl", XXXL: "3xl"}
