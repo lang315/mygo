@@ -179,8 +179,17 @@ cannot show: those items are not marked):
 
 - Every WinForms control is implemented, or the reason it was dropped is
   written down, in the [WinForms catalogue](ui/winforms.md), which also
-  lists what is still open. **Done**, but for the item groups of ListView in
-  Details, in progress (`docs/ui/winforms.md`, "Open rows").
+  lists what is still open. **Done:** `docs/ui/winforms.md` has no open
+  row. The item groups of ListView, the last, work in all four views:
+  `SetGroupBy`, `SetGroupOrder` and `Groups` in `ui/widget/listview.go`, on the
+  groups of `ui.TableView` (`ui/tableview_groups.go`) and `GridState.SetHeaders`
+  (`ui/gridheader.go`); tests in `ui/widget/listview_groups_test.go`,
+  `ui/widget/listview_details_groups_test.go` and
+  `ui/tableview_groups_test.go`; benchmarks in
+  `ui/tableview_groups_bench_test.go` and
+  `ui/widget/listview_details_groups_bench_test.go`. Not built, and not exit
+  criteria: collapsible groups, a header with an icon, and a header text the app
+  chooses (it is "Title (n)").
 - Each control has docs, tests and an entry in the widget tour. **Done:**
   `docs/ui/widget/`, `ui/widget/`, `examples/widget-tour`.
 
