@@ -814,11 +814,8 @@ func (f *listFrame) build(i int) *node {
 		default:
 			w.Radius(r)
 		}
-		w.styleFn = func(w *node) {
-			if w.checked != 2 && w.Hovered() {
-				w.bg = t.SurfaceHover
-			}
-		}
+		w.builtWith(t)
+		w.styleFn = hoverRow
 		if owner := f.owner; s.Selection != nil && *sel == i && !on && !f.choosesCells() {
 			// Where the keys moved without choosing.
 			w.DrawOver(func(p *Painter, r Rect) {

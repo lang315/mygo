@@ -239,10 +239,9 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 					if sameDay(day, today) && !chosen {
 						cell.Border(1, t.Accent)
 					}
-					cell.styleFn = func(cell *node) {
-						if !chosen && cell.Hovered() {
-							cell.bg = t.SurfaceHover
-						}
+					if !chosen {
+						cell.builtWith(t)
+						cell.styleFn = hoverSurface
 					}
 					cell.checked = 1 + int8(b2f(chosen))
 					if atCursor {

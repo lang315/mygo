@@ -83,11 +83,8 @@ func coreCollapsible(c *context, label string, open *bool, fn func()) *node {
 		p := coreCollapsibleBase(c, open)
 		tr := p.Trigger.AlignSelf(Start).AlignItems(Center).Gap(t.Space(1)).
 			Padding(t.Space(1), 0).PaddingStart(t.Space(0.5)).PaddingEnd(t.Space(2)).Radius(t.Radius)
-		tr.styleFn = func(tr *node) {
-			if tr.Hovered() {
-				tr.bg = t.SurfaceHover
-			}
-		}
+		tr.builtWith(t)
+		tr.styleFn = hoverSurface
 		tr.Children(func() {
 			disclosureArrow(c, 90*p.Progress())
 			coreText(c, label).SingleLine()
@@ -192,11 +189,8 @@ func coreAccordionItem(c *context, title string, open *bool, fn func()) *node {
 		tr.flags |= flagOwnRing
 		ab.headers = append(ab.headers, tr.id)
 		accordionKeys(c, tr, ab)
-		tr.styleFn = func(tr *node) {
-			if tr.Hovered() {
-				tr.bg = t.SurfaceHover
-			}
-		}
+		tr.builtWith(t)
+		tr.styleFn = hoverSurface
 		tr.DrawOver(func(p *Painter, r Rect) {
 			// Inside the header, as the accordion clips what is around.
 			if tr.FocusVisible() {
