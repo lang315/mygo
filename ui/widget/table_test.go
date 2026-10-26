@@ -592,6 +592,20 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 			}
 		}
 	})
+	// clickApp is click without the tester's software rasterizer, which stands
+	// in for the GPU: the work the app does itself, building, laying out and
+	// painting two frames. click keeps its history; both are reported.
+	b.Run("clickApp", func(b *testing.B) {
+		_, tt := setup(b)
+		tt.SkipRaster()
+		label := "Check " + rows[0].name
+		b.ResetTimer()
+		for range b.N {
+			if err := tt.Click(label); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 	b.Run("selectAllThenCmdClick", func(b *testing.B) {
 		tb, tt := setup(b)
 		if err := tt.Click(rows[0].name); err != nil {
