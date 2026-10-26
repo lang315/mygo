@@ -205,8 +205,9 @@ func coreLink(c *context, label, url string) *node {
 	return e
 }
 
-func checkPath(r Rect) *Path {
-	var p Path
+// checkPath makes the check mark in r in p, which it empties first.
+func checkPath(p *Path, r Rect) *Path {
+	p.Reset()
 	return p.MoveTo(r.X+r.W*0.22, r.Y+r.H*0.52).LineTo(r.X+r.W*0.42, r.Y+r.H*0.71).LineTo(r.X+r.W*0.78, r.Y+r.H*0.31)
 }
 

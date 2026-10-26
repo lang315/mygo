@@ -257,6 +257,7 @@ var pathSeed = maphash.MakeSeed()
 // the flattened path, the job of drawing its mask, and the rasterizer
 // and pixels that draw it.
 type paths struct {
+	check  Path // the check mark of a check box, made again for each one painted
 	flat   flatPath
 	job    pathJob
 	raster vec.Rasterizer
