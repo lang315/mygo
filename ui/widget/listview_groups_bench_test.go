@@ -7,12 +7,13 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// BenchmarkListViewGroups100k measures the icon view of 100,000 rows without
-// groups and with them (10 and 1000 groups): a frame at rest and a scrolled
-// one, which make no groups, and a frame after a row changed, which makes them
-// again.
-func BenchmarkListViewGroups100k(b *testing.B) {
-	const n = 100_000
+// BenchmarkListViewGroups100k and BenchmarkListViewGroups1M measure the icon
+// view of 100,000 and 1,000,000 rows without groups and with them (10 and 1000
+// groups): a frame at rest, a scrolled one, and a frame after a row changed.
+func BenchmarkListViewGroups100k(b *testing.B) { benchListViewGroups(b, 100_000) }
+func BenchmarkListViewGroups1M(b *testing.B)   { benchListViewGroups(b, 1_000_000) }
+
+func benchListViewGroups(b *testing.B, n int) {
 	rows := make([]vitem, n)
 	for i := range rows {
 		rows[i] = vitem{id: strconv.Itoa(i), name: "Row " + strconv.Itoa(i), kind: "k" + strconv.Itoa(i%1000)}

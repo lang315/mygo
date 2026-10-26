@@ -10,6 +10,7 @@ import "sort"
 // million items with a few headers keeps a few numbers.
 type headerRows struct {
 	known   bool  // heads is the headers of n items
+	given   bool  // SetHeaders gave them: they are not asked of Header again
 	ok      bool  // start was made for cols
 	n, cols int   // the items and columns it was made for
 	heads   []int // the headers, in order
@@ -24,7 +25,21 @@ func (s *GridState) isHeader(i int) bool { return s.Header != nil && s.Header(i)
 // ReloadHeaders makes the grid ask Header for every item again at the next
 // frame. It is needed only when an item that was not a header becomes one
 // and the number of items stays: the grid finds the others itself.
-func (s *GridState) ReloadHeaders() { s.layout.known = false }
+func (s *GridState) ReloadHeaders() { s.layout.known, s.layout.given = false, false }
+
+// SetHeaders tells the grid which of n items are headers, in ascending order,
+// so that it does not ask Header for every item to find them: for an app that
+// knows, a million items with a few headers cost the headers, not a pass over
+// the items. The grid takes a copy and trusts it, asking Header for none of
+// them, until the number of items is not n (it then asks for every item, as
+// without SetHeaders), ReloadHeaders is called, or SetHeaders is called again:
+// call it whenever a header moves. Header is still required, and answers for
+// the items the grid builds.
+func (s *GridState) SetHeaders(items []int, n int) {
+	l := &s.layout
+	l.heads = append(l.heads[:0], items...)
+	l.n, l.known, l.given, l.ok = n, true, true, false
+}
 
 // prepare makes the layout of the grid's rows for n items in cols columns.
 // It asks Header for every item only when the number of items changed, or a
@@ -39,13 +54,16 @@ func (s *GridState) prepare(n, cols int) {
 	}
 	if l.known && l.n == n {
 		for _, h := range l.heads {
+			if l.given {
+				break
+			}
 			if !s.Header(h) {
 				l.known = false
 				break
 			}
 		}
 	} else {
-		l.known = false
+		l.known, l.given = false, false
 	}
 	if !l.known {
 		l.heads = l.heads[:0]

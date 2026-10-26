@@ -126,13 +126,12 @@ for _, g := range view.Groups() {
 }
 ```
 
-In Details the table's view does the grouping (`ui.TableView.SetGroupBy`, see
+In every view the table's view does the grouping (`ui.TableView.SetGroupBy`, see
 [Table](../table.md#groups)): the group is the first key the rows sort by, `fn`
 is asked once for each row when the rows are placed and for each row changed in
-place, and the headers cost no pass over the rows. The icon views make their
-groups themselves, with one call of `fn` for each row shown and a pass over the
-rows, about 2.5 ms for 100,000 rows, again whenever a row changes in place
-(`UpdateRow` and the like), not only when the rows or their order change.
+place, and the headers cost no pass over the rows. A row changed in place costs
+the icon views what it costs without groups (for a million rows, about 2 ms
+against 38 to 96 ms when they made their groups themselves).
 
 **Order of the keys.** With groups, `Selected()` and `Checked()` return the keys
 in the order shown, which is grouped in every view: the rows of the first group,

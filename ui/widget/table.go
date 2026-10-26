@@ -67,6 +67,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	kept   bool
 	gone   bool
 	resets int // test hook: how often catchUp had the view start over
+	asks   int // test hook: how often ui asked whether a line is a header
 	// posOf is each row's place in the view, -1 if hidden, as of
 	// posVersion: Selected and Checked build it on first use.
 	posOf                                   []int32
@@ -299,6 +300,7 @@ func (t *DataGridViewWidget[T, K]) headerAt(row int) bool {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
+	t.asks++
 	_, ok := t.headAt(row)
 	return ok
 }
