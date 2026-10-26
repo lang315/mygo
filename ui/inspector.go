@@ -43,6 +43,9 @@ const (
 	inspElements = iota
 	inspPerformance
 	inspIssues
+	// inspWidgets lists the controls (the elements that left notes) as the
+	// app wrote them, in the pane of the Elements tab.
+	inspWidgets
 )
 
 const (
@@ -168,6 +171,16 @@ type inspNode struct {
 	w, h     float32
 	leaving  bool
 	hasTrans bool
+	// noted tells that a control left a note on the element, wname being
+	// the control's type. The fields below are made for the Widgets tab:
+	// near is the nearest element around n, or n, that is noted (-1 for
+	// none), wparent the noted one around n, wdepth how many noted ones
+	// are around it and wkids whether a noted one is inside it.
+	noted         bool
+	wname         string
+	near, wparent int32
+	wdepth        int32
+	wkids         bool
 }
 
 // inspRow is a row of the tree: a node's opening tag, or the closing tag
@@ -364,6 +377,9 @@ func (in *inspector) snapshot(rt *engine, root *node) {
 	var sum uint64
 	in.forceOK = false
 	in.walk(rt, root, 0, -1, &sum)
+	if in.widgets() {
+		in.widgetTree()
+	}
 	if in.forced != 0 && !in.forceOK {
 		in.forceID, in.forced = 0, 0 // the element is gone
 	}
@@ -401,6 +417,12 @@ func (in *inspector) walk(rt *engine, e *node, depth, parent int32, sum *uint64)
 	if r := e.st.trec; r != nil && r.built == rt.frame && r.elem == e {
 		n.hasTrans = true
 	}
+	if in.widgets() {
+		if nt, ok := in.notes[e.id]; ok {
+			n.noted, n.wname = true, widgetName(nt.title)
+			*sum = mix(*sum, e.id^1<<62) // the panel builds the rows again with the controls noted
+		}
+	}
 	in.nodes = append(in.nodes, n)
 	*sum = mix(*sum, e.id^uint64(depth)<<56)
 	*sum = mix(*sum, uint64(math.Float32bits(e.x))<<32|uint64(math.Float32bits(e.y)))
@@ -429,7 +451,78 @@ func (in *inspector) isOpen(n *inspNode) bool {
 	if v, ok := in.opened[n.id]; ok {
 		return v
 	}
-	return n.depth < 3
+	return in.viewDepth(n) < 3
+}
+
+// widgets reports whether the pane shows the controls, not the elements.
+func (in *inspector) widgets() bool { return in.tab == inspWidgets }
+
+// shows reports whether the pane has a row for node n.
+func (in *inspector) shows(n *inspNode) bool { return !in.widgets() || n.noted }
+
+// viewDepth, viewParent and viewKids are n's depth, parent and whether it
+// holds others in the pane: among the controls in the Widgets tab, else among
+// the elements.
+func (in *inspector) viewDepth(n *inspNode) int32 {
+	if in.widgets() {
+		return n.wdepth
+	}
+	return n.depth
+}
+
+func (in *inspector) viewParent(n *inspNode) int32 {
+	if in.widgets() {
+		return n.wparent
+	}
+	return n.parent
+}
+
+func (in *inspector) viewKids(n *inspNode) bool {
+	if in.widgets() {
+		return n.wkids
+	}
+	return n.kids
+}
+
+// viewName is n's row text: its control's type in the Widgets tab, else its tag.
+func (in *inspector) viewName(n *inspNode) string {
+	if in.widgets() {
+		return n.wname
+	}
+	return n.name
+}
+
+// widgetTree makes the fields of the nodes that the Widgets tab reads: the
+// controls nest by the elements around them, as the Widget tab finds the note
+// of an element. It runs over the nodes in order, parents before children.
+func (in *inspector) widgetTree() {
+	for i := range in.nodes {
+		n := &in.nodes[i]
+		near := int32(-1)
+		if n.parent >= 0 {
+			near = in.nodes[n.parent].near
+		}
+		n.wparent, n.near = near, near
+		if n.noted {
+			n.near = int32(i)
+			if near >= 0 {
+				n.wdepth = in.nodes[near].wdepth + 1
+				in.nodes[near].wkids = true
+			}
+		}
+	}
+}
+
+// widgetName is the type a note's title names, as a row of the Widgets tab
+// shows it: "*widget.ButtonWidget" is Button.
+func widgetName(title string) string {
+	if i := strings.LastIndexByte(title, '.'); i >= 0 {
+		title = title[i+1:]
+	}
+	if n := strings.TrimSuffix(title, "Widget"); n != "" {
+		return n
+	}
+	return title
 }
 
 // expandTo opens the nodes around the node id, and reports whether it
@@ -440,7 +533,7 @@ func (in *inspector) expandTo(id uint64) bool {
 		return false
 	}
 	opened := false
-	for p := in.nodes[i].parent; p >= 0; p = in.nodes[p].parent {
+	for p := in.viewParent(&in.nodes[i]); p >= 0; p = in.viewParent(&in.nodes[p]) {
 		if n := &in.nodes[p]; !in.isOpen(n) {
 			in.opened[n.id] = true
 			opened = true
@@ -467,7 +560,7 @@ func (in *inspector) setOpen(i int32, open, all bool) {
 		return
 	}
 	for j := i + 1; j < int32(len(in.nodes)) && in.nodes[j].depth > n.depth; j++ {
-		if in.nodes[j].kids {
+		if in.shows(&in.nodes[j]) && in.viewKids(&in.nodes[j]) {
 			in.opened[in.nodes[j].id] = open
 		}
 	}
