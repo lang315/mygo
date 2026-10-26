@@ -89,6 +89,7 @@ func loadSurface() {
 		mustBind(c, &cairoClipExtents, "cairo_clip_extents")
 		mustBind(t, &gtkWidgetGetAllocatedWidth, "gtk_widget_get_allocated_width")
 		mustBind(t, &gtkWidgetGetAllocatedHeight, "gtk_widget_get_allocated_height")
+		mustBind(t, &gtkWidgetGetScaleFactor, "gtk_widget_get_scale_factor")
 		mustBind(t, &gtkWidgetGetDisplay, "gtk_widget_get_display")
 		mustBind(t, &gtkWidgetHasFocus, "gtk_widget_has_focus")
 		mustBind(t, &gtkIMMulticontextNew, "gtk_im_multicontext_new")
