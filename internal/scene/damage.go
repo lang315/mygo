@@ -54,6 +54,8 @@ type Differ struct {
 	// pre and suf are how many ops the scenes Diff compared last share at
 	// their starts and ends, n and m how many each has (see Match).
 	pre, suf, n, m int
+	// pairs tells that the ops between pre and suf were compared in pairs.
+	pairs bool
 	// multi tells that align matched the ops of the two scenes in several
 	// ranges, and kept[j] is the op of the last scene that op j of the new
 	// one stands for, or -1 (see Match).
@@ -99,6 +101,7 @@ func (d *Differ) Invalidate() { d.valid = false }
 func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 	d.next = d.opBounds(s, d.next[:0])
 	d.pre, d.suf, d.n, d.m = 0, 0, 0, len(s.Ops)
+	d.pairs, d.multi = false, false
 	if !d.valid || s.Width != d.w || s.Height != d.h || s.Clear != d.clear || s.Text != d.text {
 		return nil, false
 	}
@@ -129,7 +132,14 @@ func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 		return d.damage, true
 	}
 	d.damage = d.damage[:0]
-	if n == m {
+	// Pairs only while the clips are pushed and popped in the same places:
+	// otherwise an op in the same place may sit in another clip.
+	d.pairs = n == m
+	for k := pre; d.pairs && k < n-suf; k++ {
+		a, b := d.ops[k].Kind, s.Ops[k].Kind
+		d.pairs = a == b || a != OpPushClip && a != OpPopClip && b != OpPushClip && b != OpPopClip
+	}
+	if d.pairs {
 		for k := pre; k < n-suf; k++ {
 			if !same(k, k) || d.bounds[k] != d.next[k] {
 				d.damage = addRect(d.damage, d.bounds[k])
@@ -165,7 +175,7 @@ func (d *Differ) Match(j int) (int, bool) {
 		return j, true
 	case j >= d.m-d.suf && j < d.m:
 		return j - d.m + d.n, true
-	case d.n == d.m && j < d.m:
+	case d.pairs && j < d.m:
 		return j, true
 	}
 	return 0, false

@@ -58,3 +58,36 @@ func BenchmarkDiff10k(b *testing.B) {
 		})
 	}
 }
+
+// Worst cases for align: 17 changes spread over 10k ops with as many ops
+// (align walks all the middle, fails on the 17th, the pairwise path walks it
+// again), and many inserted runs that align does resync.
+func BenchmarkDiffAdv10k(b *testing.B) {
+	base := benchScene(10_000)
+	n := len(base.Ops)
+	spread := withInserted(base)
+	for k := 1; k <= 17; k++ {
+		spread.Ops[k*n/18+1].Color = Color{R: 9, A: 255}
+	}
+	var places []int
+	for k := 60; k >= 1; k-- {
+		places = append(places, k*n/61)
+	}
+	for _, tc := range []struct {
+		name string
+		next *Scene
+	}{
+		{"17-changed-spread", spread},
+		{"60-inserted-spread", withInserted(base, places...)},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			d := Differ{Reach: 1}
+			d.Diff(base)
+			d.Remember(base)
+			b.ReportAllocs()
+			for b.Loop() {
+				d.Diff(tc.next)
+			}
+		})
+	}
+}
