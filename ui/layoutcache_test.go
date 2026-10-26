@@ -455,7 +455,7 @@ func TestLayoutInputs(t *testing.T) {
 		"checked expanded vertical tip highlighted checkmark buttonLook accValue accRange hasRange accFill accStep barInset scrollBase " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin focusTo " +
 		"setPos setSize choosesItems search description invalid followX sort level expandable " +
-		"chooseMany serial focusInto"
+		"chooseMany serial"
 	known := map[string]bool{}
 	for _, f := range strings.Fields(read + " " + other) {
 		known[f] = true

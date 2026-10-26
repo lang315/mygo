@@ -5,13 +5,14 @@ import (
 	"unsafe"
 )
 
-// A node's size is kept: its fields go in the padding. It is 1784 since
+// A node's size is kept: its fields go in the padding. It is 1776 since
 // upstream's Element.Cache (cache, a layerKeeper) and DrawObjects
-// (objectFn) took 24 bytes beside Hidden's bool, which fits in padding, and
-// its field boxes' focusTo (#793) 8 more.
+// (objectFn) took 24 bytes beside Hidden's bool, which fits in padding;
+// focusTo (#793, a field box's input, a number input's row's) is the one
+// field that forwards the focus.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 1784 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1784", n)
+	if n := unsafe.Sizeof(node{}); n != 1776 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1776", n)
 	}
 }
 
