@@ -17,8 +17,11 @@ type fileStamp struct {
 	ModTime int64 `json:"modTime"` // Unix nanoseconds
 	Size    int64 `json:"size"`
 	// file is the file's identity, by which a document finds the file
-	// where another app renamed it (findMoved, findRenamed). It says nothing of the
-	// content, so same ignores it, and recovery doesn't keep it.
+	// where another app renamed it (findMoved, findRenamed), and tells it
+	// replaced by one of the same modification time and size, as cp -p
+	// and rsync -t make. It is not ok where the system gives none, or
+	// its volume doesn't keep them (localVolume), and recovery doesn't
+	// keep it: same then compares modification times and sizes alone.
 	file fileWatchGone
 }
 
@@ -40,8 +43,8 @@ func identityOf(info os.FileInfo) fileIdentity {
 	return fileIdentity{id, ok}
 }
 
-func readOf(info os.FileInfo) fileRead {
-	return fileRead{stampOf(info)}
+func readOf(info os.FileInfo, path string) fileRead {
+	return fileRead{stampOf(info, path)}
 }
 
 // statRead looks at the file at path as statStamp does.
@@ -53,17 +56,22 @@ func statRead(path string) (fileRead, error) {
 	if err != nil {
 		return fileRead{}, err
 	}
-	return readOf(info), nil
+	return readOf(info, path), nil
 }
 
-func stampOf(info os.FileInfo) fileStamp {
+// stampOf returns the stamp of the file at path, which info describes.
+func stampOf(info os.FileInfo, path string) fileStamp {
 	id, ok := fileWatchIdentity(StatIdentity(info))
+	ok = ok && id.volume != 0 && id.index != 0 && localVolume(path)
 	id.typ = info.Mode().Type()
 	return fileStamp{ModTime: info.ModTime().UnixNano(), Size: info.Size(), file: fileWatchGone{id, ok}}
 }
 
-// same reports whether s and t stamp the same content.
-func (s fileStamp) same(t fileStamp) bool { return s.ModTime == t.ModTime && s.Size == t.Size }
+// same reports whether s and t stamp the same content: the same file, when
+// both know which, with the same modification time and size.
+func (s fileStamp) same(t fileStamp) bool {
+	return s.ModTime == t.ModTime && s.Size == t.Size && !(s.file.ok && t.file.ok && s.file.id != t.file.id)
+}
 
 // statStamp returns the stamp of the file at path; ok is false when it
 // doesn't exist.
@@ -75,7 +83,7 @@ func statStamp(path string) (s fileStamp, ok bool, err error) {
 	if err != nil {
 		return fileStamp{}, false, err
 	}
-	return stampOf(info), true, nil
+	return stampOf(info, path), true, nil
 }
 
 // writeOp is why a document is written.
