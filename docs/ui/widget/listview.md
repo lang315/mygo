@@ -70,6 +70,8 @@ view shows it.
 - `SetRows`, `AddRow`, `AddRows`, `UpdateRow`, `DeleteRows`, `Clear`, `Row` and
   `Len` are the `DataGridView`'s; `ListViewOf(src, columns...)` shares a
   `RowSource` with other tables.
+  `RowSource.AddRowsInBatches` loads a big slice in batches and reports
+  progress for a `ProgressBar` or `StatusProgress` (see `docs/ui/widget.md`).
 - Rows are chosen as a table's are: a click, Cmd-click (Ctrl-click on Linux and
   Windows), Shift-click, and the keys, with Cmd+A for all. In the icon views the
   arrows move in two dimensions.

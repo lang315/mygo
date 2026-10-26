@@ -126,8 +126,10 @@ Windows 11 ARM64.
    - A context menu built on click. **Done:** `ContextMenuFunc`,
      `ui/widget/table_events.go`.
    - Rich cells. **Done:** `Column.Spans`, `ui/widget/table.go`.
-   - Progress while rows are added in bulk. *Open:* nothing in
-     `ui/widget` shows it.
+   - Progress while rows are added in bulk. **Done:**
+     `RowSource.AddRowsInBatches` in `ui/widget/rowsource_batches.go`: batches
+     in a goroutine, a progress func for a `ProgressBar` or `StatusProgress`, a
+     cancel.
    - `UpdateRow` by key. **Done:** `ui/widget/rowsource.go`.
    - A 1M-row click in ≤ 1 ms. *Open:* 1.22 ms CI Linux x86, 1.49 ms Windows,
      1.61 ms macOS (commit `c4cf118`), 0.63 ms on an M1 Pro; 18.6 KB. The
