@@ -691,6 +691,13 @@ func (h *checkingHighlighter) Tokens(_ int, _ string, dst []Token) ([]Token, boo
 // once it can be, not left out after a few tries: each failed try means
 // that the other goroutine got an edit in.
 func TestReviewRetryKeepsTheEditWhileOthersKeepEditing(t *testing.T) {
+	// The budget is measured on a clock that stands still: on a slow machine
+	// (a CI runner descheduled for 4 ms between two tries) a real one ran out
+	// after 2 tries and left the edit waiting.
+	was := retryClock
+	now := time.Now()
+	retryClock = func() time.Time { return now }
+	t.Cleanup(func() { retryClock = was })
 	ct := newEditorTest(t, "", "|")
 	ed := &ct.st.ed
 	b := ct.st.Buffer
@@ -705,6 +712,39 @@ func TestReviewRetryKeepsTheEditWhileOthersKeepEditing(t *testing.T) {
 	})
 	if got := strings.ReplaceAll(b.String(), "z", ""); got != "a" {
 		t.Fatalf("the text has %q after %d tries, want the letter typed", got, tries)
+	}
+}
+
+// The budget of retry is the time it measures: a try that ends after it, with
+// the buffer edited again, leaves the edit for the next frame (the machine of
+// TestReviewRetryKeepsTheEditWhileOthersKeepEditing that was slow).
+func TestReviewRetryDefersTheEditOnceTheBudgetIsSpent(t *testing.T) {
+	was := retryClock
+	now := time.Now()
+	retryClock = func() time.Time { now = now.Add(retryBudget / 2); return now }
+	t.Cleanup(func() { retryClock = was })
+	ct := newEditorTest(t, "", "|")
+	ed := &ct.st.ed
+	b := ct.st.Buffer
+	tries := 0
+	ed.retry(func() bool {
+		tries++
+		if tries <= 10 {
+			b.Edit(Edit{Start: 0, End: 0, Text: "z"})
+		}
+		ed.insert("a")
+		return true
+	})
+	if tries > 4 {
+		t.Fatalf("%d tries with a budget of %v on a clock that moves half of it a call", tries, retryBudget)
+	}
+	if got := strings.ReplaceAll(b.String(), "z", ""); got != "" {
+		t.Fatalf("the text has %q before the frame, want the edit waiting", got)
+	}
+	ct.tt.Frame()
+	ct.tt.Frame()
+	if got := strings.ReplaceAll(b.String(), "z", ""); got != "a" {
+		t.Fatalf("the text has %q after the frames, want a", got)
 	}
 }
 
