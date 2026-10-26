@@ -116,6 +116,19 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
 - **`Timer(interval)`** calls a function at an interval on the event
   goroutine; see [Timer](widget/timer.md).
 
+## Inspector
+
+Every control leaves a note for the [inspector](inspector.md) while it is open:
+its Widget tab shows the control's type, whether it is disabled, and the
+Styles that style it, layer by layer (those of `Apply`, then those of its own
+methods), with each property set and the variants (`hover:`, `focus:`,
+`pressed:`, `disabled:`, `dark:`) and their units (padding, margin and radius in
+theme units, the rest in DIPs). Its buttons force the hover, pressed and focus
+states of the control to see the variants without the pointer. The notes are
+made only when the inspector is open and not at all in a build with
+`-tags mygo_noinspector`. A test reads them with `Tester.Inspect(label)`
+(`docs/ui/testing.md`).
+
 ## Dialogs
 
 A dialog is a window over another, its parent, which it blocks while it is

@@ -178,6 +178,9 @@ func render(c *ui.Context, w Control) ui.Element {
 		b.post(c, e)
 		b.post = nil
 	}
+	if c.Inspecting() && !c.Measuring() {
+		b.leaveNote(c, w, e)
+	}
 	b.dnd.apply(c, e)
 	if b.disabled {
 		e.Disabled(true)

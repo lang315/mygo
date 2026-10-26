@@ -408,6 +408,23 @@ func (t *Tester) SetVibrancy(shows bool) {
 	t.Frame()
 }
 
+// Inspect opens the inspector, if it is closed, and chooses the element whose
+// label or text is label, as a click in its tree does, so that a test sees what
+// the Widget tab and the other tabs show of it. It reports an error where no
+// element has that label, or the program is built with mygo_noinspector. Texts
+// then lists what the panel shows.
+func (t *Tester) Inspect(label string) error {
+	if !t.rt.openInspector() {
+		return fmt.Errorf("ui: the inspector is built out (mygo_noinspector)")
+	}
+	t.settle()
+	if !t.rt.inspectLabel(label) {
+		return fmt.Errorf("ui: no element with the label or text %q to inspect", label)
+	}
+	t.settle()
+	return nil
+}
+
 // SetDark switches between the light and the dark appearance.
 func (t *Tester) SetDark(dark bool) {
 	t.h.dark = dark
