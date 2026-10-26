@@ -9,8 +9,13 @@ const (
 )
 
 // InspectorField is a line of a note an element leaves for the inspector:
-// a Name and its Value, or, when Value is empty, a heading.
-type InspectorField struct{ Name, Value string }
+// a Name and its Value, or, when Value is empty, a heading. A Struck line is
+// drawn struck through and dim: a value that something else took the place
+// of, as the browsers' Computed view shows the rules that lost.
+type InspectorField struct {
+	Name, Value string
+	Struck      bool
+}
 
 // Inspecting reports whether the window's inspector is open, so that code
 // which describes its elements for it does the work only then. For developer

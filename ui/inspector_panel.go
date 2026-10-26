@@ -708,7 +708,12 @@ func (in *inspector) widgetPane(c *context) {
 				continue
 			}
 			coreRow(c).Padding(0, 0, 0, 8).Children(func() {
-				mono(c, Span{Text: f.Name, Color: pal.tag}, Span{Text: ": ", Color: pal.text}, Span{Text: f.Value, Color: pal.text}).
+				name, text := pal.tag, pal.text
+				if f.Struck {
+					name, text = pal.muted, pal.muted
+				}
+				mono(c, Span{Text: f.Name, Color: name, Strikethrough: f.Struck}, Span{Text: ": ", Color: text},
+					Span{Text: f.Value, Color: text, Strikethrough: f.Struck}).
 					Shrink(1).MinWidth(0).Selectable()
 			})
 		}

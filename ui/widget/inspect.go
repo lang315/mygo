@@ -3,12 +3,17 @@ package widget
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/egoist/mygo/ui"
 )
+
+// noEffect ends the value of a layout property set in a variant: only the
+// base's apply.
+const noEffect = " (no effect in a variant)"
 
 // The note a control leaves for the inspector (ui.Context.Inspecting): its
 // type, whether it is disabled, and the Styles that style it, layer by layer
@@ -24,7 +29,25 @@ var notesLeft atomic.Int64
 func (b *core) leaveNote(c *ui.Context, w Control, e ui.Element) {
 	notesLeft.Add(1)
 	th := c.Theme()
-	e.InspectNote(fmt.Sprintf("%T", w), func() []ui.InspectorField { return b.inspect(w, th, e.IsDisabled()) })
+	var st frameState
+	if b.styled {
+		// The state the frame styled the control in, forced states included.
+		st = frameState{th.Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled}
+	}
+	e.InspectNote(fmt.Sprintf("%T", w), func() []ui.InspectorField {
+		fs := b.inspect(w, th, e.IsDisabled())
+		// After the control's heading, type and disabled: what is in effect.
+		return slices.Insert(fs, 3, effectOf(b, th, st)...)
+	})
+}
+
+// effectOf describes the Style in effect of b for the state st of the frame.
+// A function, not a method: a method that no program calls still keeps the
+// types of its signature in an app.
+func effectOf(b *core, th *ui.Theme, st frameState) []ui.InspectorField {
+	mu.Lock()
+	defer mu.Unlock()
+	return inEffect(th, layersOf(b), st)
 }
 
 // inspect returns the fields of w's note. It runs when the note is shown,
@@ -95,7 +118,14 @@ var (
 
 // describe lists the properties p sets: those of set and the sides of its
 // four-sided ones, whose masks say which, each with its unit.
-func (p *props) describe(th *ui.Theme, prefix string) (out []ui.InspectorField) {
+func (p *props) describe(th *ui.Theme, prefix string) []ui.InspectorField {
+	return p.describeSides(th, prefix, true)
+}
+
+// describeSides is describe; with collapse false, the four sides of a
+// property that are equal still have a line each, for the comparison of what
+// layers set side by side.
+func (p *props) describeSides(th *ui.Theme, prefix string, collapse bool) (out []ui.InspectorField) {
 	add := func(name, value string) {
 		out = append(out, ui.InspectorField{Name: prefix + name, Value: value})
 	}
@@ -104,10 +134,10 @@ func (p *props) describe(th *ui.Theme, prefix string) (out []ui.InspectorField) 
 	// The layout properties apply only from the base: a variant's are ignored.
 	inVariant := ""
 	if prefix != "" {
-		inVariant = " (no effect in a variant)"
+		inVariant = noEffect
 	}
 	four := func(name string, mask uint8, v [4]float32, names [4]string, format func(float32) string) {
-		if mask == 0b1111 && v[0] == v[1] && v[1] == v[2] && v[2] == v[3] {
+		if collapse && mask == 0b1111 && v[0] == v[1] && v[1] == v[2] && v[2] == v[3] {
 			add(name, format(v[0]))
 			return
 		}
