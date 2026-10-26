@@ -541,20 +541,19 @@ func TestDocumentMovedWhileTheDiskIsChecked(t *testing.T) {
 	os.WriteFile(b, []byte("mine"), 0o644)
 	d, _ := ds.Open(a)
 	// The first look that finds the file changed, whichever it is, finds the
-	// document moved by the time it decides.
-	// The first look that finds the file changed, whichever it is, finds the
 	// document moved by the time it decides; the content is checked when it
-	// ends, before a look at b.txt reads it again. The looks that found the
-	// file changed go one at a time, and are waited for.
+	// ends, before a look at b.txt reads it again. The other looks go through
+	// the hook at once: holding a lock of the test from the hook to the end of
+	// the look would span checkDisk's unlock and lock of the document's io, and a
+	// look that took io meanwhile would wait for that lock while the first waits
+	// for io. The looks that found the file changed are waited for.
 	var once sync.Once
 	var moved atomic.Bool
-	var order sync.Mutex
 	var looks sync.WaitGroup
 	move := func(changed bool) func() {
 		if !changed {
 			return nil
 		}
-		order.Lock()
 		looks.Add(1)
 		first := false
 		once.Do(func() { d.moved(b); moved.Store(true); first = true })
@@ -562,7 +561,6 @@ func TestDocumentMovedWhileTheDiskIsChecked(t *testing.T) {
 			if first && d.Content() != "mine" {
 				t.Errorf("content %q: the look at a.txt replaced the content of the document at b.txt", d.Content())
 			}
-			order.Unlock()
 			looks.Done()
 		}
 	}
