@@ -2227,6 +2227,30 @@ func TestWebViewFails(t *testing.T) {
 	}
 }
 
+// TestWebViewFailureIsOfOneWindow: the failures a test arms are those of the
+// first window that asks for its webview, and no other's: a window made while
+// they are armed (or one of an earlier test, asking again on its timer) creates
+// its webview as WebView2 does. TestPlugins once failed with the injected
+// failures of TestWebViewFails, which three of its own window's attempts used up.
+func TestWebViewFailureIsOfOneWindow(t *testing.T) {
+	if !failWebViews(1 << 10) {
+		t.Skip("only WebView2 creates webviews after their windows")
+	}
+	t.Cleanup(func() { failWebViews(0) })
+	const reason = "creating the WebView2 controller"
+	failing := newWindow(t, mygo.WindowOptions{Hidden: true})
+	other := newWindow(t, mygo.WindowOptions{Hidden: true}) // made with the failures armed
+	got := waitCalls(t, pageCalls(other), "on the second window")
+	if got["Eval"] != nil {
+		t.Errorf("Eval on a window made while the failures were armed for another: %v", got["Eval"])
+	}
+	for name, err := range waitCalls(t, pageCalls(failing), "on the failing window") {
+		if err == nil || !strings.Contains(err.Error(), reason) {
+			t.Errorf("failing window, %s: %v", name, err)
+		}
+	}
+}
+
 func TestMenuAndClipboard(t *testing.T) {
 	clicked := make(chan string, 1)
 	menu := mygo.NewMenu([]*mygo.MenuItem{
