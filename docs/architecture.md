@@ -4242,6 +4242,22 @@ first edge to a symbol back to `main.main` to see why it is there, and
 search for `<ReflectMethod>`, which marks a reflective lookup that keeps
 every method.
 
+To find which changes grew an app over a stretch of history, build it at
+checkpoints: the merge commits of `main` where the size series on the
+`benchmarks` branch (`latest.json`) steps, each in a detached worktree. Build
+every checkpoint twice for each of `linux/amd64`, `windows/amd64` and
+`darwin/arm64` (`CGO_ENABLED=0`, `-trimpath -tags mygo_noinspector`): with
+`-s -w`, for the file size the benchmarks report, and without it, for
+`go tool nm -size -sort size`, whose symbols sum by package (the part of the
+name before the first `.` after the import path). Compare consecutive
+checkpoints, not only the ends. Read the Windows sizes as the content: its
+sections align to 512 bytes, Linux's to 4 KB and macOS's to 16 KB, so a few
+hundred bytes of growth can step the other two by a whole page. The runtime's
+tables (`runtime`, `type`, `go:func` symbols) follow the code, about one byte
+for each. A PR that grows `hello` or `counter-native` by more than 4 KB
+stripped says why in its body, which AGENTS.md ("Apps pay only for what they
+use") asks of any growth of an app that doesn't use the feature.
+
 ### Go upgrades
 
 purego's fakecgo (what lets MyGo call native code with `CGO_ENABLED=0`) links
