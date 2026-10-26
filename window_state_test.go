@@ -16,7 +16,7 @@ import (
 )
 
 func TestWindowState(t *testing.T) {
-	dir := t.TempDir()
+	dir := explainedTempDir(t)
 	file := filepath.Join(dir, windowStateFile)
 	App.SetPath(PathUserData, dir)
 	delay := windowStateDelay

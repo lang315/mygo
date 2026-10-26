@@ -16,7 +16,7 @@ func TestAppFileInUse(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("only Windows keeps open files from being replaced")
 	}
-	path := filepath.Join(t.TempDir(), "index.json")
+	path := filepath.Join(explainedTempDir(t), "index.json")
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
