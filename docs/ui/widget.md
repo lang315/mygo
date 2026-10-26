@@ -607,6 +607,19 @@ lock: they read the row and call no widget method.
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
   place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.
+- `RowSource.AddRowsInBatches(rows, batch, progress)` adds a large slice in
+  a goroutine, `batch` rows at a time, so the tables fill as it goes, and
+  calls `progress(done, total)` on the event goroutine after each batch: bind
+  it to a `ProgressBar` or the `StatusProgress` of a `StatusStrip` with
+  `SetFraction(float64(done) / float64(max(total, 1)))`. The returned cancel
+  stops after the batch in hand and waits for the goroutine to end, so call it
+  before `SetRows` or `DeleteRows` if the load must not bring rows back (not
+  from a key func, `UpdateRow`'s fn or a view's build, which hold the lock the
+  loader needs). A panic in the key func ends the load and goes to `OnPanic`.
+  Two loads at once interleave their batches. The source grows once, for all the
+  rows, so a table merges each frame's new rows into its view instead of
+  sorting them all; it sorts anew when more than an eighth of its rows arrive
+  between two frames, so keep batches in the thousands for a big source.
 - `CheckboxColumn()`: `Checked`, `SetChecked(ks, on)`, `IsChecked`,
   `AutoCheck` (unchecks the selected rows when half or more are checked,
   checks them otherwise). The header's box checks the rows a search
