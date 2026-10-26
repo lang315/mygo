@@ -143,10 +143,7 @@ func (w *window) createWebView() {
 		w.webViewFailed(w.b.envErr)
 		return
 	}
-	fail := testFailWebViews > 0
-	if fail {
-		testFailWebViews--
-	}
+	fail := w.failsWebView()
 	hr := withHandler(func(hr, controller uintptr) {
 		// A web view in a window of native UI gets a composition
 		// controller, whose controller closes it.
