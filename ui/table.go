@@ -418,11 +418,8 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 	sorts, choosesAll := s.sorts() && col.sortable(), col.RowHeader && s.choosesCells()
 	if sorts || choosesAll {
 		h.flags |= flagClickable | flagHover
-		h.styleFn = func(h *node) {
-			if h.Hovered() {
-				h.bg = t.SurfaceHover
-			}
-		}
+		h.builtWith(t)
+		h.styleFn = hoverSurface
 	}
 	if choosesAll {
 		h.afterInput(func() {

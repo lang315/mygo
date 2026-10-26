@@ -156,11 +156,8 @@ func coreBreadcrumbs(c *context, items []string, chosen *int) *node {
 					e.st.markChanged()
 				}
 			})
-			b.styleFn = func(b *node) {
-				if b.Hovered() {
-					b.bg = t.SurfaceHover
-				}
-			}
+			b.builtWith(t)
+			b.styleFn = hoverSurface
 		}
 	})
 	return e

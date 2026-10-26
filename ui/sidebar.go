@@ -193,11 +193,8 @@ func coreSidebarItem(c *context, id string, icon *SVG, label string) *node {
 		item.Background(t.SurfacePressed)
 	default:
 		item.checked = 1
-		item.styleFn = func(item *node) {
-			if item.Hovered() {
-				item.bg = t.SurfaceHover
-			}
-		}
+		item.builtWith(t)
+		item.styleFn = hoverSurface
 	}
 	if sb != nil && chosen {
 		e := sb.e

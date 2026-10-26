@@ -381,7 +381,8 @@ func coreAutocomplete(c *context, value *string, suggestions []string) *node {
 	in := p.Input
 	t := c.theme
 	in.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Border)
-	in.styleFn = func(e *node) { inputBorder(t, e, e) }
+	in.builtWith(t)
+	in.styleFn = inputStyle
 	var shown []string
 	if q := strings.TrimSpace(*value); q != "" && p.Filtering() {
 		for _, s := range matching(suggestions, q) {
@@ -498,11 +499,8 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 				x.flags &^= flagFocusable
 				x.flags |= flagKeepFocus
 				x.role = RoleButton
-				x.styleFn = func(x *node) {
-					if x.Hovered() {
-						x.bg = t.SurfaceHover
-					}
-				}
+				x.builtWith(t)
+				x.styleFn = hoverSurface
 				x.Draw(func(pt *Painter, r Rect) {
 					k := r.W * 0.3
 					var path Path
