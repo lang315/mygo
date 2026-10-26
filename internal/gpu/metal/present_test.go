@@ -78,15 +78,17 @@ func TestPrefetchedFrames(t *testing.T) {
 		t.Skip("no Core Animation")
 	}
 	defer pool(func() { release(&layer) })
+	// Put the hook back only after r.Release has stopped the presenter, whose
+	// goroutine reads it: deferred first, it runs last.
+	next := nextDrawable
+	defer func() { nextDrawable = next }()
 	r, err := New(uintptr(layer))
 	if err != nil {
 		unavailable(t, err)
 	}
 	defer r.Release()
 	var fetched int
-	next := nextDrawable
 	nextDrawable = func(l id) id { fetched++; return next(l) }
-	defer func() { nextDrawable = next }()
 	frame := func(w, i int) {
 		t.Helper()
 		s := &scene.Scene{}
@@ -141,6 +143,10 @@ func TestPendingFrames(t *testing.T) {
 		t.Skip("no Core Animation")
 	}
 	defer pool(func() { release(&layer) })
+	// Put the hook back only after r.Release has stopped the presenter, whose
+	// goroutine reads it: deferred first, it runs last.
+	next := nextDrawable
+	defer func() { nextDrawable = next }()
 	r, err := New(uintptr(layer))
 	if err != nil {
 		unavailable(t, err)
@@ -149,9 +155,7 @@ func TestPendingFrames(t *testing.T) {
 	posted := make(chan func(), 4)
 	r.SetPost(func(fn func()) { posted <- fn })
 	gate := make(chan struct{})
-	next := nextDrawable
 	nextDrawable = func(l id) id { <-gate; return next(l) }
-	defer func() { nextDrawable = next }()
 	frame := func(w, i int) {
 		t.Helper()
 		s := &scene.Scene{}
@@ -225,6 +229,10 @@ func TestDroppedPendingFrame(t *testing.T) {
 		t.Skip("no Core Animation")
 	}
 	defer pool(func() { release(&layer) })
+	// Put the hook back only after r.Release has stopped the presenter, whose
+	// goroutine reads it: deferred first, it runs last.
+	next := nextDrawable
+	defer func() { nextDrawable = next }()
 	r, err := New(uintptr(layer))
 	if err != nil {
 		unavailable(t, err)
@@ -232,9 +240,7 @@ func TestDroppedPendingFrame(t *testing.T) {
 	defer r.Release()
 	r.SetPost(func(func()) {})
 	gate := make(chan struct{})
-	next := nextDrawable
 	nextDrawable = func(l id) id { <-gate; return next(l) }
-	defer func() { nextDrawable = next }()
 	frame := func(i int) {
 		t.Helper()
 		s := &scene.Scene{}
@@ -276,6 +282,10 @@ func TestStalePost(t *testing.T) {
 		t.Skip("no Core Animation")
 	}
 	defer pool(func() { release(&layer) })
+	// Put the hook back only after r.Release has stopped the presenter, whose
+	// goroutine reads it: deferred first, it runs last.
+	next := nextDrawable
+	defer func() { nextDrawable = next }()
 	r, err := New(uintptr(layer))
 	if err != nil {
 		unavailable(t, err)
@@ -284,9 +294,7 @@ func TestStalePost(t *testing.T) {
 	posted := make(chan func(), 4)
 	r.SetPost(func(fn func()) { posted <- fn })
 	gate := make(chan struct{})
-	next := nextDrawable
 	nextDrawable = func(l id) id { <-gate; return next(l) }
-	defer func() { nextDrawable = next }()
 	defer close(gate)
 	frame := func(i int) {
 		t.Helper()
