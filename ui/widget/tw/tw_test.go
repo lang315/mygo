@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget"
+	"github.com/egoist/mygo/ui/widget/internal/twsource"
 )
 
 func TestSameAsTyped(t *testing.T) {
@@ -51,7 +52,7 @@ func TestSameAsTyped(t *testing.T) {
 		{"", n()},
 	} {
 		got, err := Parse(c.in)
-		if err != nil || !reflect.DeepEqual(got, c.want) {
+		if err != nil || !reflect.DeepEqual(bare(got), c.want) {
 			t.Errorf("Parse(%q) = %+v, %v; want %+v", c.in, got, err, c.want)
 		}
 	}
@@ -111,7 +112,7 @@ func TestParseError(t *testing.T) {
 	if !errors.As(err, &e) || len(e.Bad) != 2 {
 		t.Fatalf("err %v", err)
 	}
-	if !reflect.DeepEqual(s, widget.NewStyle().Padding(2)) {
+	if !reflect.DeepEqual(bare(s), widget.NewStyle().Padding(2)) {
 		t.Fatalf("the good class must still apply: %+v", s)
 	}
 	if want := `tw: unknown class "text-green"; layout in a variant "hover:hexpand"`; err.Error() != want {
@@ -127,13 +128,13 @@ func TestNotItalicInAVariantIsAnError(t *testing.T) {
 	if !errors.As(err, &e) || len(e.Bad) != 1 || e.Bad[0] != (Bad{"dark:not-italic", twclass.NotItalicInVariant}) {
 		t.Fatalf("err %v", err)
 	}
-	if !reflect.DeepEqual(s, widget.NewStyle().Italic()) {
+	if !reflect.DeepEqual(bare(s), widget.NewStyle().Italic()) {
 		t.Fatalf("the italic must still apply: %+v", s)
 	}
 }
 
 func TestSIgnoresBadClasses(t *testing.T) {
-	if got := S("p-2 bogus"); !reflect.DeepEqual(got, widget.NewStyle().Padding(2)) {
+	if got := S("p-2 bogus"); !reflect.DeepEqual(bare(got), widget.NewStyle().Padding(2)) {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -210,7 +211,7 @@ func TestCacheIsBounded(t *testing.T) {
 	isolated(t)
 	want := widget.NewStyle().Padding(2)
 	for i := range 5000 { // 5000 distinct strings, all p-2
-		if got := S("p-2" + strings.Repeat(" ", i)); !reflect.DeepEqual(got, want) {
+		if got := S("p-2" + strings.Repeat(" ", i)); !reflect.DeepEqual(bare(got), want) {
 			t.Fatalf("string %d: S = %+v after the cache filled", i, got)
 		}
 	}
@@ -266,4 +267,11 @@ func TestMaxWNoneLiftsTheCapOfAFixedWidth(t *testing.T) {
 	if w := widget.NewTester(t, widget.VBox(0).Add(b), 300, 100).Find(widget.ByLabel("W")).Bounds().W; w != 800 {
 		t.Errorf("MaxWidth set before SetSize: width %v, want 800", w)
 	}
+}
+
+// bare takes off the classes S notes, to compare a Style with one of the typed
+// methods.
+func bare(s widget.Style) widget.Style {
+	twsource.Note(&s, "")
+	return s
 }

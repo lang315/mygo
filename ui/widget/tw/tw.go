@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/mygo/internal/twclass"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget"
+	"github.com/egoist/mygo/ui/widget/internal/twsource"
 )
 
 // Bad is a class Parse could not use, and why.
@@ -61,7 +62,7 @@ func S(classes string) widget.Style {
 		return s
 	}
 	rules, bad := twclass.Parse(classes)
-	s = build(rules)
+	s = withClasses(build(rules), classes) // once: the cache keeps it, for the inspector
 	// With the cache full and nothing new to log, take no write lock: a miss
 	// would hold up the hits.
 	cacheMu.RLock()
@@ -99,11 +100,17 @@ func unlogged(bad []twclass.Bad) bool {
 	return false
 }
 
+// withClasses notes on s the classes that made it, for the inspector.
+func withClasses(s widget.Style, classes string) widget.Style {
+	twsource.Note(&s, classes)
+	return s
+}
+
 // Parse is S without the cache, returning an *Error naming every bad
 // class.
 func Parse(classes string) (widget.Style, error) {
 	rules, bad := twclass.Parse(classes)
-	s := build(rules)
+	s := withClasses(build(rules), classes)
 	if len(bad) == 0 {
 		return s, nil
 	}

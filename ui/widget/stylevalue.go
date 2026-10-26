@@ -1,9 +1,11 @@
 package widget
 
 import (
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/twsource"
 )
 
 // Color is a fixed color, or a role of the theme read as each frame
@@ -183,6 +185,8 @@ type props struct {
 	transition                              time.Duration
 	align, valign                           Align
 	weight                                  int
+	// src says where the Style came from (tw.S), for the inspector.
+	src *styleSource
 }
 
 type variant uint8
@@ -440,9 +444,29 @@ func (s Style) Dark(v Style) Style     { return s.with(vDark, v) }
 
 func (s Style) with(k variant, v Style) Style { s.v[k] = &v; return s }
 
+// styleSource is the Tailwind classes a Style was made from, with the Style
+// as they made it: a method called on it after shows by differing from base.
+type styleSource struct {
+	classes string
+	base    Style
+}
+
+func init() {
+	// tw.S notes its classes, for the inspector's Widget tab. A Style made by
+	// Merge has no source: it is made of several.
+	twsource.Note = func(style any, classes string) {
+		s := style.(*Style)
+		s.src = nil
+		if strings.TrimSpace(classes) != "" {
+			s.src = &styleSource{classes, *s}
+		}
+	}
+}
+
 // Merge returns s with what o sets on top, side by side and variant by
 // variant: later styles win, as the order of Apply's arguments.
 func (s Style) Merge(o Style) Style {
+	s.src = nil // made of two
 	s.props.over(&o.props)
 	for k := range nVariants {
 		switch {

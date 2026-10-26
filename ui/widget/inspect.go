@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -44,6 +45,13 @@ func (b *core) inspect(w Control, th *ui.Theme, inert bool) []ui.InspectorField 
 	layers := 0
 	for i, s := range b.applied {
 		fs = append(fs, ui.InspectorField{Name: fmt.Sprintf("Apply, style %d of %d", i+1, len(b.applied))})
+		if s.src != nil {
+			classes := s.src.classes
+			if !reflect.DeepEqual(s.withoutSource(), s.src.base) {
+				classes += " (then changed by methods)" // Padding, Hover, … after tw.S
+			}
+			fs = append(fs, ui.InspectorField{Name: "classes", Value: classes})
+		}
 		fs = append(fs, s.describe(th)...)
 		layers++
 	}
@@ -57,6 +65,9 @@ func (b *core) inspect(w Control, th *ui.Theme, inert bool) []ui.InspectorField 
 	}
 	return fs
 }
+
+// withoutSource returns s with no source, to compare it with its base.
+func (s Style) withoutSource() Style { s.src = nil; return s }
 
 var variantNames = [nVariants]string{vDark: "dark", vHover: "hover", vFocused: "focus", vPressed: "pressed", vDisabled: "disabled"}
 
