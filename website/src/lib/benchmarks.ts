@@ -121,6 +121,7 @@ export const groups: Group[] = [
 export const appDocs: Record<string, string> = {
   "size/hello": "examples/hello: a window with a web page calling a Go method.",
   "size/counter-native": "examples/counter-native: a window of native UI.",
+  "size/widget-tour": "examples/widget-tour: the widget layer's tour, which imports ui/widget; the difference from counter-native is what that layer adds.",
   "memory/hello": "examples/hello, with its webview's processes.",
   "memory/hello/app": "examples/hello's own process.",
   "memory/counter-native": "examples/counter-native: native UI, no other process.",
