@@ -87,14 +87,6 @@ func TestListViewSetGroupByNilIsTheViewWithoutGroups(t *testing.T) {
 	}
 }
 
-// Details does not show groups yet.
-func TestListViewDetailsShowsNoGroups(t *testing.T) {
-	tt := tester(t, groupedView(ViewDetails))
-	if shows(tt, "pome (1)") || !shows(tt, "Apple") {
-		t.Errorf("Details shows %q", tt.Texts())
-	}
-}
-
 // The keys pass the headers by, and Shift and Cmd+A leave them out.
 func TestListViewGroupsKeysPassTheHeaders(t *testing.T) {
 	for _, m := range []ViewMode{ViewList, ViewSmallIcon, ViewLargeIcon} {
@@ -205,13 +197,14 @@ func TestListViewGroupsKeepTheChoiceWhenTheViewSwitches(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if got := lv.Selected(); !slices.Equal(got, []string{"a", "c", "d"}) {
+	// Selected is in the order shown, grouped in every view: berry, drupe, pome.
+	if got := lv.Selected(); !slices.Equal(got, []string{"c", "d", "a"}) {
 		t.Fatalf("after a Cmd-click on Apple: %v", got)
 	}
 	lv.SetView(ViewDetails)
 	tt.Frame()
 	tt.Frame()
-	if got := lv.Selected(); !slices.Equal(got, []string{"a", "c", "d"}) {
+	if got := lv.Selected(); !slices.Equal(got, []string{"c", "d", "a"}) {
 		t.Fatalf("after LargeIcon back to Details: %v", got)
 	}
 	// The cursor and the pivot cross as well: Down in the icon view goes on

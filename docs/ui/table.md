@@ -422,6 +422,49 @@ if ui.SearchField(c, &app.keyword).Label("Search accounts").Changed() {
 }
 ```
 
+### Groups
+
+`SetGroupBy(key, order...)` puts the rows under groups. The group is the first
+key the rows sort by, before the columns of the sort, so the rows of a group show
+together, in the order the sort gives them, and sorting by a column does not move
+the groups. The groups named in `order` come first, in that order; the others
+follow, by title; a title no row has makes no group. `key` gets a pointer to a
+row, like a comparator, and is asked once for each row when all rows are placed
+and for each row `Changed` names, never while sorting. As functions cannot be
+compared, the next `Sync` places all rows again, so call `SetGroupBy` when the
+groups change, not in every frame; `nil` shows none.
+
+`Groups` lists the groups shown, each with the positions of its rows. The view's
+`Len` and `Row` still count rows only. To show a header before each group, give
+the table `Places`, the lines it shows (the rows and the headers), name the
+headers in `ListState.Header`, and translate with `PosOf`, which says which row,
+or which group's header, is at a line, and `PlaceOf`, its inverse for a row:
+
+```go
+app.view.SetGroupBy(func(a *Account) string { return a.Status }, "Active")
+app.view.Sync(app.accounts, app.sort)
+groups := app.view.Groups()
+app.list.Header = func(line int) bool { pos, _ := groups.PosOf(line); return pos < 0 }
+app.list.Version = app.view.Version()
+ui.Table(c, &app.list, cols, app.view.Places(), func(line, col int) {
+	pos, g := groups.PosOf(line)
+	if pos < 0 { // the header of group g, built as column 0
+		ui.Text(c, groups[g].Title).Bold()
+		return
+	}
+	a := &app.accounts[app.view.Row(pos)]
+	// ...
+}).Grow(1)
+```
+
+The version changes when a group's rows change, also when a row moves from one
+group to the next and the order stays. The headers are not chosen: a `Key` for
+them must be of a type of its own, and each header's key different, as the keys
+of the rows are. For a million rows, placing all of them takes about a tenth
+longer with ten groups than without groups and less with a thousand or more (the
+rows are sorted group by group), placing rows changed takes up to a fifth longer
+with up to 1,000 groups, and the view keeps four bytes more for each row.
+
 After you change a row in place, tell the view with `Changed(index...)` for it
 to place the row again. Rows appended to the slice need not be named. Call
 `Reset` after you remove or move rows: `Sync` sees a shorter slice or another

@@ -54,11 +54,11 @@ func (t *DataGridViewWidget[T, K]) ContextMenuFunc(fn func(selected []K) []MenuI
 // menu posts fn, with the keys of the rows; the build that follows fn's
 // return (Menu.Later) and the one after an item was chosen make the items.
 // Under mu, while building.
-func (t *DataGridViewWidget[T, K]) lateMenu(m *ui.Menu, rows []int) {
+func (t *DataGridViewWidget[T, K]) lateMenu(m *ui.Menu, rows []int, byLine bool) {
 	if open := m.Later(); open != nil {
 		ks := make([]K, 0, len(rows))
 		for _, row := range rows {
-			if r := t.rowAt(row); r != nil {
+			if r := t.rowOf(row, byLine); r != nil {
 				ks = append(ks, t.key(r))
 			}
 		}
@@ -107,10 +107,22 @@ func (t *DataGridViewWidget[T, K]) CopyFunc(fn func(selected []K) string) *DataG
 	return t
 }
 
-// copyRows is ui's ListState.Copy: the rows shown at rows, a line each,
-// their cells apart by tabs, or what CopyFunc makes of their keys. On the
-// main thread, without mu.
-func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
+// rowOf returns the row at row: a line ui shows, which counts the headers of
+// the groups, or a position of the view. Under mu.
+func (t *DataGridViewWidget[T, K]) rowOf(row int, byLine bool) *T {
+	if byLine {
+		return t.rowAt(row)
+	}
+	return t.rowAtPos(row)
+}
+
+// copyRows is ui's ListState.Copy: the rows shown at the lines rows, a text
+// each, their cells apart by tabs, or what CopyFunc makes of their keys. On
+// the main thread, without mu.
+func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string { return t.copy(rows, true) }
+
+// copy is copyRows for lines or, when not lines, positions of the view.
+func (t *DataGridViewWidget[T, K]) copy(rows []int, byLine bool) string {
 	mu.Lock()
 	if fn := t.copyFn; fn != nil {
 		// The keys are read under mu, in a closure so that a panic of key
@@ -119,7 +131,7 @@ func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
 			defer mu.Unlock()
 			keys := make([]K, 0, len(rows))
 			for _, row := range rows {
-				if r := t.rowAt(row); r != nil {
+				if r := t.rowOf(row, byLine); r != nil {
 					keys = append(keys, t.key(r))
 				}
 			}
@@ -130,7 +142,7 @@ func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
 	defer mu.Unlock()
 	var lines []string
 	for _, row := range rows {
-		r := t.rowAt(row)
+		r := t.rowOf(row, byLine)
 		if r == nil {
 			continue
 		}
@@ -152,7 +164,7 @@ func (t *DataGridViewWidget[T, K]) handOver() {
 	}
 	s.RowMenu = nil
 	if t.menuFunc != nil {
-		s.RowMenu = func(m *ui.Menu, rows []int) { t.lateMenu(m, rows) }
+		s.RowMenu = func(m *ui.Menu, rows []int) { t.lateMenu(m, rows, true) }
 	} else if menu := t.menu; len(menu) > 0 {
 		s.RowMenu = func(m *ui.Menu, _ []int) { buildMenu(m, menu) }
 	}
@@ -163,7 +175,10 @@ func (t *DataGridViewWidget[T, K]) events(e ui.Element) {
 	s := &t.list
 	if fn := t.onActivate; fn != nil {
 		e.OnActivate(func(row int) {
-			k := t.keyAt(row).(K)
+			k, ok := t.keyAt(row).(K)
+			if !ok { // a header
+				return
+			}
 			Post(func() { fn(k) })
 		})
 	}

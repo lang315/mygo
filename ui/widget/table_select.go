@@ -131,6 +131,15 @@ func (t *DataGridViewWidget[T, K]) positionOf(k K) int {
 	return -1
 }
 
+// lineOf returns the line ui shows the row of key k at, which counts the
+// headers of the groups: -1 if it is hidden or gone. Under mu.
+func (t *DataGridViewWidget[T, K]) lineOf(k K) int {
+	if pos := t.positionOf(k); pos >= 0 {
+		return t.view.PlaceOf(pos)
+	}
+	return -1
+}
+
 // placed returns the keys of in whose rows show in the view as it is, with
 // their places, in order. Under mu.
 func (t *DataGridViewWidget[T, K]) placed(in *ui.Selection[K]) []at[K] {
@@ -169,7 +178,7 @@ func (t *DataGridViewWidget[T, K]) chosenRows() ([]int, bool) {
 	found := t.placed(in)
 	rows := make([]int, len(found))
 	for i, f := range found {
-		rows[i] = int(f.pos)
+		rows[i] = t.view.PlaceOf(int(f.pos))
 	}
 	return rows, true
 }

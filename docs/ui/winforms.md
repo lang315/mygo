@@ -22,7 +22,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | Label | done | `Label` (`&` mnemonics with `SetUseMnemonic(true)`: [Mnemonics](widget/mnemonics.md)) |
 | LinkLabel | done | `LinkLabel` |
 | ListBox | done | [ListBox](widget/listbox.md) |
-| ListView | done | [ListView](widget/listview.md); item groups (`ListViewGroup`): the icon views have them, **Details groups: next step** |
+| ListView | done | [ListView](widget/listview.md); item groups (`ListViewGroup`, `SetGroupBy`) in every view |
 | MaskedTextBox | done | [MaskedTextBox](widget/maskedtextbox.md) |
 | MonthCalendar | done | [DateTimePicker](widget/date-time-picker.md) |
 | NumericUpDown | done | `NumericUpDown` |
@@ -87,10 +87,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 
 ## Open rows
 
-Every Phase 2 row is done, or dropped with the reason above. What is left of
-ListView is its item groups in Details (`ListViewGroup`): the icon views show
-them (`SetGroupBy`), but the table underneath has no place for header rows in its
-sorted and filtered view, so Details groups need `ui.TableView` to group.
+Every Phase 2 row is done, or dropped with the reason above.
 
 Every row marked done has a page or a section of [widget.md](widget.md), unit
 tests in `ui/widget`, and an entry in the [widget tour](../../examples/widget-tour)
