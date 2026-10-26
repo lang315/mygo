@@ -82,3 +82,44 @@ func TestNotesAreLeftOnlyWhileTheInspectorIsOpen(t *testing.T) {
 		t.Error("no note left with the inspector open")
 	}
 }
+
+// The Widget tab starts with the Style in effect: the winner of each property
+// in the state of the frame, forced states included, and the values it won
+// over, struck through.
+func TestInspectorShowsTheStyleInEffect(t *testing.T) {
+	tt, _ := inspectedButton(t)
+	if err := tt.Inspect("Save"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Click("Widget")
+	for _, s := range []string{"In effect (no state)", "background: role accent   Apply, style 1"} {
+		if !tt.HasText(s) {
+			t.Errorf("the Widget tab lacks %q: %q", s, tt.Texts())
+		}
+	}
+	if tt.HasText("background: #ff0000   hover: Apply, style 1") {
+		t.Errorf("the hover background is in effect before hover: %q", tt.Texts())
+	}
+	if err := tt.Click("Force hover"); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"In effect (hover)", "background: #ff0000   hover: Apply, style 1", "background: role accent   Apply, style 1"} {
+		if !tt.HasText(s) {
+			t.Errorf("forced hover: the Widget tab lacks %q: %q", s, tt.Texts())
+		}
+	}
+	// The same line twice, the winner and, struck through, the value it won over.
+	n := 0
+	for _, s := range tt.Texts() {
+		if s == "background: role accent   Apply, style 1" {
+			n++
+		}
+	}
+	if n == 0 {
+		t.Error("the loser's line is gone")
+	}
+	tt.SetDark(true)
+	if !tt.HasText("In effect (dark, hover)") || !tt.HasText("color: role text   dark: Apply, style 1") {
+		t.Errorf("dark: %q", tt.Texts())
+	}
+}

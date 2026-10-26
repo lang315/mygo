@@ -77,6 +77,15 @@ a control it belongs to left a note (see below):
   **focus** states, as Chrome's `:hov` panel does, to see how it looks in
   them without the pointer. The state goes when another element is chosen,
   when the inspector closes and when the element is gone.
+  Below the buttons, for a control of `ui/widget` with a Style, comes the
+  **Style in effect** for the state of the frame, the forced states
+  included: each property with the value that wins, and the layer and variant
+  it came from (`Apply, style 2`, `Own methods`, `hover:`, `hover:dark:`, the
+  classes of a `tw.S` style), then the values it won over, struck through,
+  the last first. The sides of padding, margin, radius and border width are
+  apart, so a later layer that sets one side leaves the others to the
+  earlier. A property that places the control (`align`, `hexpand`) counts
+  from the base only. The layers follow, each as it is set.
 
 ## Notes from controls
 
@@ -95,6 +104,10 @@ if c.Inspecting() {
 	})
 }
 ```
+
+A field with `Struck` set is drawn struck through and dim, for a value that
+something else took the place of, as the browsers' Computed view shows the
+rules that lost.
 
 The function runs only for the element chosen, when its note is shown. The
 inspector being closed, or built out with `-tags mygo_noinspector`, the

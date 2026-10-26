@@ -256,3 +256,44 @@ func TestInspectorLightsTheTabItShows(t *testing.T) {
 		t.Errorf("tabs lit: %v, want only Styles (the pane shown)", lit)
 	}
 }
+
+// A struck field is drawn struck through and in the muted color, a field not
+// struck is not.
+func TestInspectorStrikesTheFieldsThatLost(t *testing.T) {
+	tt, _ := inspected(func(c *context) {
+		coreColumn(c).Padding(20).Children(func() {
+			box := coreBox(c).Label("Card").Width(160).Height(40)
+			if c.Inspecting() {
+				box.InspectNote("Card", func() []InspectorField {
+					return []InspectorField{{Name: "color", Value: "red"}, {Name: "color", Value: "blue", Struck: true}}
+				})
+			}
+		})
+	})
+	openInspector(tt)
+	tt.rt.insp.choose(tt.rt.insp.nodes[len(tt.rt.insp.nodes)-1].id)
+	for _, n := range tt.rt.insp.nodes {
+		if n.label == "Card" {
+			tt.rt.insp.choose(n.id)
+		}
+	}
+	tt.Frame()
+	tt.Click("Widget")
+	// The value of each field is a span of a rich text; read whether it is struck.
+	strike := map[string]bool{}
+	var walk func(e *node)
+	walk = func(e *node) {
+		for _, sp := range e.spans {
+			if sp.Text == "red" || sp.Text == "blue" {
+				strike[sp.Text] = sp.Strikethrough
+			}
+		}
+		for ch := e.first; ch != nil; ch = ch.next {
+			walk(ch)
+		}
+	}
+	walk(tt.rt.c.root)
+	if len(strike) != 2 || strike["red"] || !strike["blue"] {
+		t.Errorf("struck through: %v, want blue only", strike)
+	}
+}

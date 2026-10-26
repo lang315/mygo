@@ -124,7 +124,10 @@ Styles that style it, layer by layer (those of `Apply`, then those of its own
 methods), with each property set and the variants (`hover:`, `focus:`,
 `pressed:`, `disabled:`, `dark:`) and their units (padding, margin and radius in
 theme units, the rest in DIPs). Its buttons force the hover, pressed and focus
-states of the control to see the variants without the pointer. The notes are
+states of the control to see the variants without the pointer. Above the layers
+it shows the Style in effect in the state of the frame: each property's winning
+value and the layer and variant that set it, and the values it won over, struck
+through. The Widgets tab lists the controls as the tree you wrote. The notes are
 made only when the inspector is open and not at all in a build with
 `-tags mygo_noinspector`. A test reads them with `Tester.Inspect(label)`
 (`docs/ui/testing.md`). A Style made by `tw.S` notes its classes (not
