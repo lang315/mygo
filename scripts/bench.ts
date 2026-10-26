@@ -68,7 +68,10 @@ export interface Latest {
 export const latestCommits = 300;
 
 /** The examples whose release builds are measured. */
-const apps = ["hello", "counter-native"];
+const apps = ["hello", "counter-native", "widget-tour"];
+
+/** The apps whose size is measured but not their memory: the tour shows many tabs, and its idle memory would depend on which opens first. */
+const sizeOnly = new Set(["widget-tour"]);
 
 /** The apps with a webview, whose own process's memory counts apart from its processes' too. */
 const webviewApps = new Set(["hello"]);
@@ -255,7 +258,7 @@ async function measureApps(
       const ldflags = "-s -w -X github.com/egoist/mygo.production=1" + (goos === "windows" ? " -H=windowsgui" : "");
       output(["go", "build", "-trimpath", "-tags", "mygo_noinspector", "-ldflags", ldflags, "-o", bin, "./examples/" + app]);
       size[app] = { bytes: (await stat(bin)).size };
-      bins.push(bin);
+      if (!sizeOnly.has(app)) bins.push(bin);
     }
     if (!e2e || !existsSync(join("internal", "idlemem"))) return { size };
     console.log(`go run ./internal/idlemem -count ${count}`);
