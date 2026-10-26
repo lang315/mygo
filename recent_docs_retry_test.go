@@ -3,11 +3,12 @@
 package mygo
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 	"sync/atomic"
 	"testing"
 )
@@ -49,7 +50,13 @@ func TestRecentDocumentsFailedWriteIsWrittenAtQuit(t *testing.T) {
 		t.Fatal("the first write failed and the file exists")
 	}
 	onMain(saveAppFiles) // quit
-	if b, err := os.ReadFile(file); err != nil || !strings.Contains(string(b), doc) {
+	// JSON escapes a path's backslashes, so the file is decoded, not searched.
+	var got []string
+	b, err := os.ReadFile(file)
+	if err == nil {
+		err = json.Unmarshal(b, &got)
+	}
+	if err != nil || !slices.Equal(got, []string{doc}) {
 		t.Fatalf("after quit the file has %q, %v: the failed write was lost", b, err)
 	}
 	if calls.Load() != 2 {
