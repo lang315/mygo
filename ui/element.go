@@ -395,6 +395,10 @@ type node struct {
 	accValue  string
 	accRange  [3]float64
 	hasRange  bool
+
+	// buttonLook is how a button paints (buttonPlain, buttonPrimary or
+	// buttonFlat), for buttonPaint.
+	buttonLook uint8
 	// accFill describes the element to assistive technology further, as
 	// a code editor its text and selection.
 	accFill func(n *platform.AccessNode)

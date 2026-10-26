@@ -19,9 +19,15 @@ func textInput(c *context, value *string, multiline bool) *node {
 	if multiline {
 		e.MinHeight(t.Space(20))
 	}
-	e.styleFn = func(e *node) { inputBorder(t, e, e) }
+	e.builtWith(t)
+	e.styleFn = inputStyle
 	return e
 }
+
+// inputStyle is the look of a text input as it paints, with the theme it was
+// built with: a function that reads the node, so no closure is made for each
+// input in each frame.
+func inputStyle(e *node) { inputBorder(e.builtTheme(), e, e) }
 
 func textInputBase(c *context, value *string, multiline bool) *node {
 	e := c.newElement(kindInput)

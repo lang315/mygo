@@ -269,9 +269,13 @@ cannot show: those items are not marked):
   0.6% of a 16 ms budget (about 2.5% on a Windows machine 3–4 times slower).
   *Do it when* a measurement on a real machine shows the table's frame as the
   bottleneck.
-- Stop allocating closures every frame in the widget layer. *In part:*
-  #169 and #179 took them from the table's rows; `BenchmarkWidgetFrame`
-  still makes 0.67 allocation a widget.
+- Stop allocating closures every frame in the widget layer. **Done** for the
+  controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
+  table's rows, and a button's and a text input's look are now static functions
+  reading the node (`buttonPaint` in `ui/widgets.go`, `inputStyle` in
+  `ui/textinput.go`), so the benchmark makes no allocation a frame (66 to 0
+  at 100 widgets, 666 to 0 at 1000). Other controls' `styleFn` closures
+  (combobox, tabs, sidebar, list) remain.
 - Merge batches of shader effects.
 - Compile shaders ahead of time.
 
