@@ -37,6 +37,16 @@ export interface ContentSize {
   sh: number;
 }
 
+/** The zoom a host applies to the page as CSS (`html { zoom }`), which it
+ * tells in `__mygoCssZoom` (Windows on ARM64, whose WebView2 call for the
+ * zoom factor cannot be made), 1 for a page the engine zooms itself. A
+ * zoomed root measures in zoomed pixels, where Go multiplies the CSS pixels
+ * it is told by the zoom. */
+export function cssZoom(): number {
+  const z = (globalThis as { __mygoCssZoom?: number }).__mygoCssZoom;
+  return typeof z === "number" && z > 0 ? z : 1;
+}
+
 /** Returns a function that tells Go of a size only when it changed. */
 export function sizeReporter(post: (size: ContentSize) => void) {
   let last: ContentSize | null = null;
@@ -70,17 +80,19 @@ export function fitContent(
     const viewport = document.scrollingElement ?? root;
     const sw = Math.max(innerWidth - viewport.clientWidth, 0);
     const sh = Math.max(innerHeight - viewport.clientHeight, 0);
+    let z = cssZoom();
     let r = root.getBoundingClientRect();
     // A vertical scrollbar shows for a moment whenever the content grows
     // before the window does, and an engine may keep it while it lays out
     // (WebKit does): its room is left out of the width only where the
     // content is taller than the window may be, and Go decides whether it
     // counts in the window's.
-    const room = limits.maxHeight > 0 && r.height > limits.maxHeight ? sw : 0;
+    const room = limits.maxHeight > 0 && r.height / z > limits.maxHeight ? sw : 0;
     if (room !== scrollbar) {
       scrollbar = room;
       if (!fromObserver) {
         apply();
+        z = cssZoom();
         r = root.getBoundingClientRect();
       } else if (!pending) {
         pending = true;
@@ -94,7 +106,7 @@ export function fitContent(
     // width.
     const body = document.body;
     const wider = !!body && body.scrollWidth > body.clientWidth;
-    report({ w: r.width, h: r.height, sw, sh: wider ? sh : 0 });
+    report({ w: r.width / z, h: r.height / z, sw, sh: wider ? sh : 0 });
   };
 
   apply();

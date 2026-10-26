@@ -12,9 +12,13 @@ func putBounds(controller uintptr, r rect) {
 }
 
 // Go's Windows ARM64 calls do not set the floating point registers, which
-// ICoreWebView2Controller::put_ZoomFactor reads: zoom with CSS instead.
+// ICoreWebView2Controller::put_ZoomFactor reads: zoom with CSS instead. The
+// page is told the zoom (__mygoCssZoom), so that the bridge measures the
+// content in the CSS pixels Go multiplies by it: a zoomed root measures in
+// zoomed pixels.
 func putZoom(w *window, f float64) {
-	w.Eval("document.documentElement.style.zoom=" + strconv.FormatFloat(f, 'f', -1, 64))
+	z := strconv.FormatFloat(f, 'f', -1, 64)
+	w.Eval("document.documentElement.style.zoom=" + z + ";window.__mygoCssZoom=" + z)
 }
 
 const zoomByScript = true

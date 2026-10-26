@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type ContentSize, fitRule, sizeReporter } from "./fit-content";
+import { type ContentSize, cssZoom, fitContent, fitRule, sizeReporter } from "./fit-content";
 
 const none = { minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0 };
 
@@ -48,5 +48,40 @@ describe("sizeReporter", () => {
       size(120.5, 90, 15, 15),
       size(0, 0),
     ]);
+  });
+});
+
+describe("a page the host zooms with CSS", () => {
+  const g = globalThis as Record<string, unknown>;
+  const saved = ["document", "innerWidth", "innerHeight", "addEventListener", "__mygoCssZoom"].map((k) => [k, g[k]] as const);
+  const restore = () => {
+    for (const [k, v] of saved) {
+      if (v === undefined) delete g[k];
+      else g[k] = v;
+    }
+  };
+
+  test("cssZoom is 1 unless the host told another", () => {
+    delete g.__mygoCssZoom;
+    expect(cssZoom()).toBe(1);
+    g.__mygoCssZoom = 2;
+    expect(cssZoom()).toBe(2);
+    g.__mygoCssZoom = 0;
+    expect(cssZoom()).toBe(1);
+    restore();
+  });
+
+  test("tells the content's size in unzoomed CSS pixels", () => {
+    // A root of 60 by 60 CSS pixels measures 120 by 120 under html { zoom: 2 }.
+    const root = { getBoundingClientRect: () => ({ width: 120, height: 120 }), clientWidth: 240, clientHeight: 200 };
+    g.document = { documentElement: root, scrollingElement: root, body: { scrollWidth: 120, clientWidth: 120 } };
+    g.innerWidth = 240;
+    g.innerHeight = 200;
+    g.addEventListener = () => {};
+    g.__mygoCssZoom = 2;
+    const told: ContentSize[] = [];
+    fitContent({ ...none, maxHeight: 100 }, () => {}, (size) => told.push(size)).start();
+    restore();
+    expect(told).toEqual([{ w: 60, h: 60, sw: 0, sh: 0 }]);
   });
 });
