@@ -94,7 +94,7 @@ func paintCheckmark(p *Painter, box *node, r Rect) {
 	row, t := box.parent, box.builtTheme()
 	switch box.checkmark {
 	case 2:
-		p.StrokePath(checkPath(r), t.Space(0.5), t.AccentText)
+		p.StrokePath(checkPath(&p.rt.paths.check, r), t.Space(0.5), t.AccentText)
 	case 3:
 		p.Fill(Rect{r.X + r.W*0.25, r.Y + r.H/2 - 1, r.W * 0.5, 2}, t.AccentText, 1)
 	}
