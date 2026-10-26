@@ -3,6 +3,7 @@ package scene
 import (
 	"image"
 	"math"
+	"slices"
 )
 
 // A Differ finds where the successive scenes of a window differ, so that a
@@ -53,6 +54,13 @@ type Differ struct {
 	// pre and suf are how many ops the scenes Diff compared last share at
 	// their starts and ends, n and m how many each has (see Match).
 	pre, suf, n, m int
+	// pairs tells that the ops between pre and suf were compared in pairs.
+	pairs bool
+	// multi tells that align matched the ops of the two scenes in several
+	// ranges, and kept[j] is the op of the last scene that op j of the new
+	// one stands for, or -1 (see Match).
+	multi bool
+	kept  []int32
 }
 
 // atlasMark is the state of an atlas a scene drew from.
@@ -93,6 +101,7 @@ func (d *Differ) Invalidate() { d.valid = false }
 func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 	d.next = d.opBounds(s, d.next[:0])
 	d.pre, d.suf, d.n, d.m = 0, 0, 0, len(s.Ops)
+	d.pairs, d.multi = false, false
 	if !d.valid || s.Width != d.w || s.Height != d.h || s.Clear != d.clear || s.Text != d.text {
 		return nil, false
 	}
@@ -110,15 +119,29 @@ func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 	for pre < n && pre < m && same(pre, pre) {
 		pre++
 	}
+	// An op at the end that is the same draws where it did unless a clip
+	// around it changed: its bounds, within the clips, say.
 	suf := 0
-	for suf < n-pre && suf < m-pre && same(n-1-suf, m-1-suf) {
+	for suf < n-pre && suf < m-pre && same(n-1-suf, m-1-suf) && d.bounds[n-1-suf] == d.next[m-1-suf] {
 		suf++
 	}
 	d.pre, d.suf, d.n, d.m = pre, suf, n, m
 	d.damage = d.damage[:0]
-	if n == m {
+	d.multi = false
+	if pre < n-suf && pre < m-suf && d.align(s, same, pre, n-suf, m-suf) {
+		return d.damage, true
+	}
+	d.damage = d.damage[:0]
+	// Pairs only while the clips are pushed and popped in the same places:
+	// otherwise an op in the same place may sit in another clip.
+	d.pairs = n == m
+	for k := pre; d.pairs && k < n-suf; k++ {
+		a, b := d.ops[k].Kind, s.Ops[k].Kind
+		d.pairs = a == b || a != OpPushClip && a != OpPopClip && b != OpPushClip && b != OpPopClip
+	}
+	if d.pairs {
 		for k := pre; k < n-suf; k++ {
-			if !same(k, k) {
+			if !same(k, k) || d.bounds[k] != d.next[k] {
 				d.damage = addRect(d.damage, d.bounds[k])
 				d.damage = addRect(d.damage, d.next[k])
 			}
@@ -141,12 +164,18 @@ func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 // A renderer drawing an op that Match finds differently from the last
 // frame (with another pipeline, say) damages its bounds.
 func (d *Differ) Match(j int) (int, bool) {
+	if d.multi {
+		if j < 0 || j >= len(d.kept) || d.kept[j] < 0 {
+			return 0, false
+		}
+		return int(d.kept[j]), true
+	}
 	switch {
 	case j < d.pre:
 		return j, true
 	case j >= d.m-d.suf && j < d.m:
 		return j - d.m + d.n, true
-	case d.n == d.m && j < d.m:
+	case d.pairs && j < d.m:
 		return j, true
 	}
 	return 0, false
@@ -495,4 +524,116 @@ func (d *Differ) Remember(s *Scene) {
 func (d *Differ) Release() {
 	reach, wide := d.Reach, d.Wide
 	*d = Differ{Reach: reach, Wide: wide}
+}
+
+// Bounds of align's search: how many ops it looks ahead in either scene for
+// the op that is the same, and how many times it may fail to find one before
+// it gives up.
+const (
+	alignWindow = 8
+	alignFails  = 16
+)
+
+// align matches the ops of the middle of the two scenes, those from pre to
+// oldEnd of the last scene and to newEnd of the new one, which the shared
+// start and end leave, when they differ in several places: a row pressed
+// and a scrollbar shown, in the same frame, give an op inserted in the
+// middle of the list and another at its end, between which the ops are the
+// same. It walks both, matching ops that are the same; where they differ it
+// looks a few ops ahead in each for the one that is, and takes what lies
+// between as deleted from the last scene or inserted in the new one, or else
+// as one op that changed. The damage is the bounds of the ops deleted,
+// inserted and changed, where they drew and draw. A pixel outside them is
+// drawn by ops that both scenes have, in the same order, in the same clip, so
+// it keeps its color. The clip is the only state an op draws under, so what
+// is deleted or inserted must hold its pushes and pops, and an op that changed
+// must not be one of them but for a clip that moved; otherwise, as when
+// it finds no end to the difference in a few tries, align reports false and
+// the caller damages all the middle. It returns true with d.damage, d.kept
+// and d.multi set.
+func (d *Differ) align(s *Scene, same func(i, j int) bool, pre, oldEnd, newEnd int) bool {
+	m := len(s.Ops)
+	d.kept = slices.Grow(d.kept[:0], m)[:m]
+	for j := range d.kept {
+		switch {
+		case j < pre:
+			d.kept[j] = int32(j)
+		case j >= newEnd:
+			d.kept[j] = int32(j - m + len(d.ops))
+		default:
+			d.kept[j] = -1
+		}
+	}
+	oldOps, newOps := d.ops, s.Ops
+	i, j, fails := pre, pre, 0
+	for i < oldEnd && j < newEnd {
+		if same(i, j) && d.bounds[i] == d.next[j] {
+			d.kept[j] = int32(i)
+			i++
+			j++
+			continue
+		}
+		found := false
+		for k := 1; k <= alignWindow && !found; k++ {
+			switch {
+			case i+k < oldEnd && same(i+k, j) && d.bounds[i+k] == d.next[j] && balanced(oldOps[i:i+k]):
+				for x := i; x < i+k; x++ {
+					d.damage = addRect(d.damage, d.bounds[x])
+				}
+				i += k
+				found = true
+			case j+k < newEnd && same(i, j+k) && d.bounds[i] == d.next[j+k] && balanced(newOps[j:j+k]):
+				for y := j; y < j+k; y++ {
+					d.damage = addRect(d.damage, d.next[y])
+				}
+				j += k
+				found = true
+			}
+		}
+		if found {
+			continue
+		}
+		if fails++; fails > alignFails {
+			return false
+		}
+		// One op changed into another: not a clip pushed or popped, unless a
+		// clip moved.
+		a, b := oldOps[i].Kind, newOps[j].Kind
+		if (a == OpPushClip || a == OpPopClip || b == OpPushClip || b == OpPopClip) && a != b {
+			return false
+		}
+		d.damage = addRect(d.damage, d.bounds[i])
+		d.damage = addRect(d.damage, d.next[j])
+		d.kept[j] = int32(i)
+		i++
+		j++
+	}
+	if !balanced(oldOps[i:oldEnd]) || !balanced(newOps[j:newEnd]) {
+		return false
+	}
+	for ; i < oldEnd; i++ {
+		d.damage = addRect(d.damage, d.bounds[i])
+	}
+	for ; j < newEnd; j++ {
+		d.damage = addRect(d.damage, d.next[j])
+	}
+	d.multi = true
+	return true
+}
+
+// balanced reports whether ops push and pop clips in pairs, none popping a
+// clip that was pushed before them.
+func balanced(ops []Op) bool {
+	depth := 0
+	for k := range ops {
+		switch ops[k].Kind {
+		case OpPushClip:
+			depth++
+		case OpPopClip:
+			if depth--; depth < 0 {
+				return false
+			}
+		}
+	}
+	return depth == 0
 }
