@@ -42,6 +42,9 @@ func (ed *editor) offer(ev ui.InputEvent) bool {
 // leaves the edit for the next frame.
 const retryBudget = 4 * time.Millisecond
 
+// retryClock is the time retry measures its budget by; tests replace it.
+var retryClock = time.Now
+
 // retry runs fn, which edits the text as the editor shows it, again on
 // the text as it is when another goroutine edited the buffer meanwhile,
 // rather than leaving the edit out (apply). Each try that fails is one
@@ -67,7 +70,7 @@ func (ed *editor) retry(fn func() bool) bool {
 
 // tries runs fn again while it finds the buffer edited, for retryBudget.
 func (ed *editor) tries(fn func() bool) (ok, made bool) {
-	end := time.Now().Add(retryBudget)
+	end := retryClock().Add(retryBudget)
 	for {
 		ed.sync()
 		ed.stale = false
@@ -75,7 +78,7 @@ func (ed *editor) tries(fn func() bool) (ok, made bool) {
 		if !ed.stale {
 			return ok, true
 		}
-		if time.Now().After(end) {
+		if retryClock().After(end) {
 			return false, false
 		}
 		runtime.Gosched()

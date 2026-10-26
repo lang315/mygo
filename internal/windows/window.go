@@ -13,11 +13,14 @@ import (
 var errDestroyed = errors.New("mygo: window has been destroyed")
 
 type window struct {
-	b      *Backend
-	h      platform.WindowHandler
-	opts   *platform.WindowOptions
-	hwnd   uintptr
-	parent *window
+	// webViewSeq numbers the window by its first creation of a webview
+	// (TestFailWebViews).
+	webViewSeq uint64
+	b          *Backend
+	h          platform.WindowHandler
+	opts       *platform.WindowOptions
+	hwnd       uintptr
+	parent     *window
 	// flyout is how a flyout (WindowOptions.Flyout) was placed last, at
 	// flyoutSize.
 	flyout     platform.Flyout

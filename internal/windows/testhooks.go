@@ -318,13 +318,46 @@ func TestLoseComposition(removed bool) bool {
 	return true
 }
 
-// testFailWebViews is how many creations of webviews still fail
-// (TestFailWebViews).
-var testFailWebViews int
+// testFail is what TestFailWebViews armed: n creations of webviews still fail,
+// of the first window that asks for its webview after the arming (owner), and
+// of no other: a window that asked before, retrying on its timer, or one made
+// meanwhile, creates its webview as WebView2 does. webViewSeq numbers the
+// windows by their first creation. Main thread only.
+var (
+	testFail struct {
+		n       int
+		armedAt uint64
+		owner   *window
+	}
+	webViewSeq uint64
+)
 
-// TestFailWebViews makes the next n creations of webviews fail, as WebView2
-// reports a failure, when it would have created them; 0 lets them be.
-func TestFailWebViews(n int) { testFailWebViews = n }
+// TestFailWebViews makes the next n creations of webviews of the next window
+// that asks for one fail, as WebView2 reports a failure, when it would have
+// created them; 0 lets them be.
+func TestFailWebViews(n int) {
+	testFail.n, testFail.armedAt, testFail.owner = n, webViewSeq, nil
+}
+
+// failsWebView reports whether this creation of w's webview is to fail, and
+// counts it.
+func (w *window) failsWebView() bool {
+	if w.webViewSeq == 0 {
+		webViewSeq++
+		w.webViewSeq = webViewSeq
+	}
+	if testFail.n <= 0 || w.webViewSeq <= testFail.armedAt {
+		return false
+	}
+	if testFail.owner == nil {
+		testFail.owner = w
+	}
+	if testFail.owner != w {
+		return false
+	}
+	testFail.n--
+	return true
+}
 
 // TestTopNonClient returns how many pixels at the top of a window are not
 // its client area, and how many a hidden title bar keeps there on this
