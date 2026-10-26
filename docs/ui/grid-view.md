@@ -69,8 +69,11 @@ A `GridState` keeps the grid's place and says how items are chosen, as a
   and the grid asks `Header` for none of them (not for every item, nor for the
   headers it knew in each frame) until the number of items is not `n`,
   `ReloadHeaders()` is called, or `SetHeaders` is called again: call it whenever
-  a header moves. A list view with groups does, so a million rows with a few
-  groups cost the groups.
+  a header moves. Items must be in ascending order, each less than `n`. This
+  spares the layout's scan only: `Header` is still required and answers for the
+  items the grid builds, and the keys, the choice and drag still ask it per
+  item. A list view with groups does, so a million rows with a few groups cost
+  the groups.
 - `Reorder` lets the user drag items to another place, as a list's rows:
   see [drag and drop](drag-and-drop.md).
 - `Checked` shows a checkbox on each item, by `Key`, apart from the items

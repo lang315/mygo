@@ -39,7 +39,7 @@ func TestGridViewSetHeadersSparesTheScan(t *testing.T) {
 	// starts a row of its own, under it.
 	ref, _, _ := headerGrid(n, heads)
 	for _, text := range []string{"Item 1", "Item 5"} {
-		if got, want := rowY(t, tt, text), rowY(t, ref, fmt.Sprintf("%s", text)); got != want {
+		if got, want := rowY(t, tt, text), rowY(t, ref, text); got != want {
 			t.Errorf("%s is at y=%v, with the scan at y=%v", text, got, want)
 		}
 	}

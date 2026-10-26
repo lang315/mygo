@@ -28,7 +28,7 @@ func (s *GridState) isHeader(i int) bool { return s.Header != nil && s.Header(i)
 func (s *GridState) ReloadHeaders() { s.layout.known, s.layout.given = false, false }
 
 // SetHeaders tells the grid which of n items are headers, in ascending order,
-// so that it does not ask Header for every item to find them: for an app that
+// each less than n (otherwise the layout is wrong, without a panic), so that it does not ask Header for every item to find them: for an app that
 // knows, a million items with a few headers cost the headers, not a pass over
 // the items. The grid takes a copy and trusts it, asking Header for none of
 // them, until the number of items is not n (it then asks for every item, as
@@ -54,13 +54,11 @@ func (s *GridState) prepare(n, cols int) {
 	}
 	if l.known && l.n == n {
 		for _, h := range l.heads {
-			if l.given {
-				break
+			if l.given || s.Header(h) {
+				continue
 			}
-			if !s.Header(h) {
-				l.known = false
-				break
-			}
+			l.known = false
+			break
 		}
 	} else {
 		l.known, l.given = false, false

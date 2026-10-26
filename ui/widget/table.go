@@ -68,6 +68,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	gone   bool
 	resets int // test hook: how often catchUp had the view start over
 	asks   int // test hook: how often ui asked whether a line is a header
+	near   int // the group of the line asked last: see locate
 	// posOf is each row's place in the view, -1 if hidden, as of
 	// posVersion: Selected and Checked build it on first use.
 	posOf                                   []int32
@@ -277,14 +278,29 @@ func (t *DataGridViewWidget[T, K]) groupsOf() ui.TableGroups {
 // posAt returns the position in the view of the line ui shows at row, which
 // counts the headers of the groups; -1 for a header. Under mu.
 func (t *DataGridViewWidget[T, K]) posAt(row int) int {
-	pos, _ := t.groupsOf().PosOf(row)
+	pos, _ := t.locate(row)
 	return pos
+}
+
+// locate is PosOf of the frame ui shows. A frame asks for its lines in order,
+// so it tries the group of the line asked last before it searches. Under mu.
+func (t *DataGridViewWidget[T, K]) locate(row int) (pos, group int) {
+	gs := t.groupsOf()
+	if k := t.near; k < len(gs) && gs[k].Start+k <= row && (k+1 == len(gs) || row < gs[k+1].Start+k+1) {
+		if row == gs[k].Start+k {
+			return -1, k
+		}
+		return row - k - 1, k
+	}
+	pos, group = gs.PosOf(row)
+	t.near = max(group, 0)
+	return pos, group
 }
 
 // headAt returns the group a header at row heads in the frame ui shows. Under mu.
 func (t *DataGridViewWidget[T, K]) headAt(row int) (ui.TableGroup, bool) {
 	gs := t.groupsOf()
-	if pos, g := gs.PosOf(row); pos < 0 && g >= 0 && g < len(gs) {
+	if pos, g := t.locate(row); pos < 0 && g >= 0 && g < len(gs) {
 		return gs[g], true
 	}
 	return ui.TableGroup{}, false
