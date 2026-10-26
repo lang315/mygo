@@ -91,6 +91,7 @@ func saveAppFiles() {
 	flushAppWrites()
 	saveWindowStates()
 	flushAppWrites()
+	retryRecent()
 }
 
 // flushAppWrites waits for the writes asked for to be done.
