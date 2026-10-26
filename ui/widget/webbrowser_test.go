@@ -125,8 +125,11 @@ func TestWebBrowserCanGoBackAsksThePage(t *testing.T) {
 	_, s := shownBrowser(t, b)
 	v := theView(t, s)
 	v.CanBack = true
-	if !b.CanGoBack() || b.CanGoForward() {
-		t.Fatalf("CanGoBack %v CanGoForward %v", b.CanGoBack(), b.CanGoForward())
+	// The surface lists the view as soon as it is made; the control has it a
+	// moment later, once its handlers are set.
+	wait.Until(t, "the control to ask its view", b.CanGoBack)
+	if b.CanGoForward() {
+		t.Fatal("CanGoForward true")
 	}
 }
 
