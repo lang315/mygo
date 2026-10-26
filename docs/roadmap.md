@@ -134,7 +134,7 @@ Windows 11 ARM64.
    - A 1M-row click in ≤ 1 ms. *Open.* `BenchmarkTableCheckedLarge`
      (`ui/widget/table_test.go`) reports two figures, and says what each
      measures. **`clickApp`**, the app's work (build + layout + paint of the two
-     frames of a click, no rasterizing: `Tester.SkipRaster`, `ui/headless.go`),
+     frames of a click, no rasterizing: `Tester.SkipRaster(true)`, `ui/headless.go`),
      is the ≤ 1 ms target: 0.37 ms on an M1 Pro at any `GOMAXPROCS`, being one
      goroutine's work; no CI figure yet (the first run on `main` gives it).
      **`click`**, with the tester's software raster standing in for the GPU, is

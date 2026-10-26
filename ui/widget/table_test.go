@@ -597,7 +597,7 @@ func BenchmarkTableCheckedLarge(b *testing.B) {
 	// painting two frames. click keeps its history; both are reported.
 	b.Run("clickApp", func(b *testing.B) {
 		_, tt := setup(b)
-		tt.SkipRaster()
+		tt.SkipRaster(true)
 		label := "Check " + rows[0].name
 		b.ResetTimer()
 		for range b.N {

@@ -950,11 +950,9 @@ func (t *Tester) Focused(s string) bool {
 	return false
 }
 
-// SkipRaster makes the tester's frames build, lay out and paint as always, and
-// draw no pixels: the rasterizer that stands in for the GPU is left out, so a
-// benchmark measures the work an app does itself. Image draws the last frame
-// when asked for it. It is for benchmarks; nothing in a window does this.
-func (t *Tester) SkipRaster() { t.h.skip = true }
-
-// SkipRasterOff draws the frames again.
-func (t *Tester) SkipRasterOff() { t.h.skip = false }
+// SkipRaster, with true, makes the tester's frames build, lay out and paint as
+// always, and draw no pixels: the rasterizer that stands in for the GPU is left
+// out, so a benchmark measures the work an app does itself. Image draws the last
+// frame when asked for it. With false the frames are drawn again. It is for
+// benchmarks; nothing in a window does this.
+func (t *Tester) SkipRaster(skip bool) { t.h.skip = skip }

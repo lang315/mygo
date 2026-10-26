@@ -23,7 +23,7 @@ func TestTesterSkipRasterDrawsOnlyWhenAsked(t *testing.T) {
 	var n1, n2 int
 	drawn := coreNewTester(skipView(&n1), 300, 200)
 	skipped := coreNewTester(skipView(&n2), 300, 200)
-	skipped.SkipRaster()
+	skipped.SkipRaster(true)
 	for _, tt := range []*Tester{drawn, skipped} {
 		tt.Frame()
 		if err := tt.Click("Go"); err != nil {
@@ -53,11 +53,11 @@ func TestTesterSkipRasterDrawsOnlyWhenAsked(t *testing.T) {
 func TestTesterSkipRasterCanBeTurnedOff(t *testing.T) {
 	var n int
 	tt := coreNewTester(skipView(&n), 300, 200)
-	tt.SkipRaster()
+	tt.SkipRaster(true)
 	tt.Frame()
-	tt.SkipRasterOff()
+	tt.SkipRaster(false)
 	tt.Frame()
 	if tt.h.stale {
-		t.Fatal("a frame after SkipRasterOff was not drawn")
+		t.Fatal("a frame after SkipRaster(false) was not drawn")
 	}
 }
