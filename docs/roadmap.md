@@ -51,7 +51,7 @@ Windows 11 ARM64.
 | Measure | At the start | 2026-10-26 | Target |
 |---|---|---|---|
 | `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them) | tens of µs |
-| A click on a widget table of 1M rows | 6.0–10.4 ms in the first CI runs, 38 MB allocated | two figures, see the Phase 1 item: **`clickApp`, the app's work (build + layout + paint, no rasterizing), 0.37 ms** on an M1 Pro, not yet on CI; **`click`, with the tester's CPU raster standing in for the GPU, 1.22 ms** CI Linux x86, 1.49 ms Windows, 1.61 ms macOS, 0.63 ms on an M1 Pro; 18.6 KB and 514 allocs (`BenchmarkTableCheckedLarge`, #19) | `clickApp` ≤ 1 ms on the three machines, no MB-scale allocation |
+| A click on a widget table of 1M rows | 6.0–10.4 ms in the first CI runs, 38 MB allocated | **`clickApp`, the app's work (build + layout + paint, no rasterizing): 0.67 ms** CI Linux x86, 0.35 ms Windows, 0.37 ms macOS (commit `98bf370`; 0.37 ms on an M1 Pro); **4.96 KB and 238 allocs**. `click`, with the tester's CPU raster standing in for the GPU: 0.74 ms Linux, 0.39 ms Windows, 0.42 ms macOS (1.22, 1.49 and 1.61 ms before #196–#200; 0.42 ms on an M1 Pro, 0.62 before #200) (`BenchmarkTableCheckedLarge`, #19) | `clickApp` ≤ 1 ms on the three machines, no MB-scale allocation. **Met** |
 | A frame of N plain widgets | not measured | `BenchmarkWidgetFrame` (M1 Pro): 100 widgets 98 µs and 66 allocs, 1000 widgets 0.77 ms and 666 allocs (CI Linux x86: 0.18 and 1.3 ms); the same as raw `ui` (`BenchmarkUIFrame`): 90 µs and 0.72 ms, 133 and 1,933 allocs; a Style on each: +16–21% (`-styled`), the same styles on raw `ui` +13–14%, so the widget layer adds ×1.03–1.06 (the Phase 0 gate, ≤ 1.10) | baseline set in Phase 0 |
 | `counter-native` release size | 9.2–9.7 MB | 9.22 MB macOS, 9.45 MB Linux, 9.77 MB Windows; `hello` 9.37, 9.47 and 9.95 MB | unchanged by widget work |
 
@@ -154,20 +154,28 @@ Windows 11 ARM64.
      in a goroutine, a progress func for a `ProgressBar` or `StatusProgress`, a
      cancel.
    - `UpdateRow` by key. **Done:** `ui/widget/rowsource.go`.
-   - A 1M-row click in ≤ 1 ms. *Open.* `BenchmarkTableCheckedLarge`
+   - A 1M-row click in ≤ 1 ms. **Done:** `BenchmarkTableCheckedLarge`
      (`ui/widget/table_test.go`) reports two figures, and says what each
      measures. **`clickApp`**, the app's work (build + layout + paint of the two
-     frames of a click, no rasterizing: `Tester.SkipRaster(true)`, `ui/headless.go`),
-     is the ≤ 1 ms target: 0.37 ms on an M1 Pro at any `GOMAXPROCS`, being one
-     goroutine's work; no CI figure yet (the first run on `main` gives it).
-     **`click`**, with the tester's software raster standing in for the GPU, is
-     kept for its history and reported alongside: 1.22 ms CI Linux x86, 1.49 ms
-     Windows, 1.61 ms macOS (commit `c4cf118`), 0.63 ms on an M1 Pro; 18.6 KB and
-     514 allocs. Its time depends on the cores: on an M1 Pro, 1.14, 0.86, 0.70 and
-     0.66 ms at `GOMAXPROCS` 1, 2, 4 and 10, because the raster is shared among
-     goroutines, which is why CI, with fewer and slower cores, is above the M1.
-     Done when CI shows `clickApp` ≤ 1 ms on the three systems. The phases' rule
-     asks for the three machines.
+     frames of a click, no rasterizing: `Tester.SkipRaster(true)`,
+     `ui/headless.go`), is the ≤ 1 ms target, and CI shows it on the three
+     systems at commit `98bf370` (`latest.json` on `benchmarks`): 0.67 ms Linux
+     x86, 0.35 ms Windows, 0.37 ms macOS, with 4.96 KB and 238 allocs (18.6 KB and
+     514 before #196, which reuses the check mark's path; #201 took the rest).
+     The slowest of the last three CI runs is 0.68 ms (Linux; the runner's CPU
+     decides, so runs differ by up to 1.7×). **`click`**, with the tester's software raster standing in for the
+     GPU, is kept for its history and reported alongside: 0.74 ms Linux, 0.39 ms
+     Windows, 0.42 ms macOS (it was 1.22, 1.49 and 1.61 ms at `c4cf118`).
+     Two causes of the fall, besides the allocations: a press frame inserted the
+     pressed row's background in the middle of the display list and the scrollbar
+     at its end, so `scene.Differ` damaged everything between (824,294 of
+     1,024,000 pixels on a 1280×800 window, the CPU raster and the GPU's union
+     rectangle alike) and now damages 43,116 (#200: `click` 624 → 424 µs on an M1
+     Pro, `present` of that frame 0.246 → 0.009 ms); and `click` depends on the
+     cores (on an M1 Pro, 1.14, 0.86, 0.70 and 0.66 ms at `GOMAXPROCS` 1, 2, 4
+     and 10, because the raster is shared among goroutines). Evidence:
+     `internal/scene/damage.go`, `ui/tester_skipraster_test.go`,
+     `internal/raster/damage_multi_test.go`.
 5. **App shell.** Add MenuStrip, StatusStrip, ToolStrip and NotifyIcon.
    **Done:** `ui/widget/menustrip.go`, `ui/widget/statusstrip.go`,
    `ui/widget/toolstrip.go`, `ui/widget/notifyicon.go`.
@@ -184,7 +192,7 @@ cannot show: those items are not marked):
 - They run on Windows 10 amd64 and Windows 11 ARM64.
 - Vietnamese Telex typing works in text boxes and table cells, on Windows
   and macOS.
-- A click on a table of 1M rows takes ≤ 1 ms of the app's work (`clickApp`). *Open*, see above.
+- A click on a table of 1M rows takes ≤ 1 ms of the app's work (`clickApp`). **Done**, see above: 0.67 ms at worst on CI.
 - API changes the port forces land before Phase 2.
 
 ## Phase 2: the rest of the WinForms catalogue
