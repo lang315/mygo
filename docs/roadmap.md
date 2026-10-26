@@ -98,15 +98,35 @@ Windows 11 ARM64.
   with and without a transition), Windows 1.07–1.09, macOS 1.01–1.09 on a
   noisy VM (single runs go to 1.5); an M1 Pro run gives 1.03 (100 widgets) and
   1.06 (1000), with a transition. Styling itself, at `c4cf118` on CI, costs a widget +2–24% (Linux +15% without and +21% with a transition at 100 widgets, +15% and +24% at 1000; Windows +15%, +24%, +13%, +23%; macOS +7%, +2%, +16%, +3%); on an M1 Pro +16–21%, and the same styles on raw `ui` +13–14%.
-- App sizes are unchanged. *Open:* the item does not hold, though it can now be
-  measured. The size job (`scripts/bench.ts`) also builds `examples/widget-tour`,
-  which imports `ui/widget`, so CI shows what the widget layer adds. At
-  `e8070ecb` the tour is, beside `counter-native`, 12.84 MB against 9.45 on
-  Linux, 13.37 against 9.77 on Windows and 12.51 against 9.22 on macOS: the
-  widget layer adds at most 3.39, 3.60 and 3.29 MB. It is an upper bound, since
-  the tour has demo code for every control. `hello` and `counter-native` grew
-  since 2026-10-23, Linux 9.40 to 9.45 MB, Windows 9.70 to 9.77, macOS 9.17 to
-  9.22, the Windows figure past the 9.2–9.7 MB of the Baseline.
+- App sizes are unchanged by widget work. **Done:** no symbol of `ui/widget`,
+  `tw`, the inspector or the tour is linked into `counter-native` (`go tool nm`,
+  three OSes, at `8840633b`). The widget layer's own cost is the tour minus
+  `counter-native`, at most 3.29 MB on macOS, 3.39 on Linux and 3.60 on Windows
+  (CI, `e8070ecb`; an upper bound, since the tour has demo code for every
+  control). `counter-native` itself grew since 2026-10-23 (Linux 9.40 to 9.45
+  MB, Windows 9.70 to 9.77, past the 9.2–9.7 MB of the Baseline, macOS 9.17 to
+  9.22) by core work every app links, not widget work. The Windows steps, the
+  one measure not rounded to a page (stripped, 512 bytes), from `30f5f81a` to
+  `8840633b` (+59.9 KB):
+
+  | Change | Windows | What grew |
+  |---|---|---|
+  | #101 transitions at rest | +4.6 KB | `animateLayout`, the transitions |
+  | #131 masked text box, and its span | +13.8 KB | `ui` text input: replace a range (`editor.replace`, `ReplaceText`), `accessBounds` |
+  | #149 skip present when occluded | +3.1 KB | `Occluded` on Windows |
+  | #152 D3D debug layer | +5.1 KB | `device.Report` and its helpers, active only with `MYGO_D3D_DEBUG=1`; compiling them out would save 4 KB, not worth a build tag |
+  | #160–#168 list and update fixes | +6.7 KB | `listFrame.extendBy` (Cmd+Shift), `update.RetryInUse` |
+  | #172 app file writes off the main thread | +10.8 KB | `writeAppFileLater`, `runAppWrites`, `saveWindowStates` |
+  | #179 static checkbox paint, ghost themes | +9.7 KB | `checkPath`, `paintCheckmark`, `compactGhostThemes` |
+
+  The other 6.1 KB is small steps (#106 and #109 3.1 KB, #141 0.5 KB, #182 to
+  #201 2.6 KB). macOS moves in 16 KB page steps (two of them here, with 1.5 KB
+  of content), Linux in 4 KB ones. About half of every step
+  is the linker's tables (pclntab, types), one byte for each byte of code. A
+  PR that grows `hello` or `counter-native` by more than 4 KB stripped says
+  why in its body, as AGENTS.md asks of any growth of an app that doesn't use
+  the feature; how to find the cause is "Binary size" in the architecture
+  guide.
 - fhtool's classes parse. **Done:** `internal/twclass/twclass_test.go`
   (`TestFhtoolClasses`).
 - e2e is green on the three machines.
@@ -289,6 +309,7 @@ cannot show: those items are not marked):
 | A newer purego | a tag carries the fixes we need |
 | TSF input on Windows | IMM32 misbehaves with Telex |
 | D3D12, Vulkan or GPU compute | an app needs image processing |
+| Multi-rect GPU damage (`gpu.Ages` keeps one union rect) | a frame is measured GPU-bound where the union is much larger than the rects. Fill costs 8–35 ns per kilopixel on a 10-core Apple-silicon Mac, so 118k pixels saved are 1–4 µs of a frame whose empty floor is 17 µs; a tile GPU reloads the attachment anyway. Present with damage (DXGI `Present1` dirty rects, `eglSwapBuffersWithDamageKHR`) is the likelier win |
 
 ## Phase 4: developer tools
 
