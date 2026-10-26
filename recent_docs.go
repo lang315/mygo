@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 )
 
 // The recent documents: those the app opened lately, newest first, which
@@ -20,7 +21,13 @@ var recentDocs struct {
 	sync.Mutex
 	loaded bool
 	paths  []string
+	// failed tells that the last write of the file failed: the list is
+	// written again at quit.
+	failed atomic.Bool
 }
+
+// recentWrite writes the file of the recent documents; tests replace it.
+var recentWrite = writeAppFile
 
 // maxRecentDocuments is how many documents the list keeps, as
 // NSDocumentController's maximumRecentDocumentCount.
@@ -59,7 +66,8 @@ func loadRecentLocked() {
 //	if err := mygo.App.AddRecentDocument(path); err != nil { … }
 //
 // The list is written to its file off the calling thread, soon, and before
-// the app quits; a failure of that write is logged, not returned. An app
+// the app quits; a failure of that write is logged, not returned, and the
+// list is written again at quit. An app
 // that ends the process itself (os.Exit, log.Fatal) right after may lose
 // the last write: it should use App.Exit or App.Relaunch. A
 // relative path is resolved against the working directory. Choosing an
@@ -134,16 +142,39 @@ func saveRecentLocked() error {
 	if err != nil {
 		return err
 	}
-	// The file is written off the main thread, in the order of the changes
-	// (the latest one replaces a write not begun); a failure is logged, and
-	// the next change writes the whole list again.
+	writeRecentLocked(f)
+	return nil
+}
+
+// writeRecentLocked has the file f written off the main thread, in the order
+// of the changes (the latest one replaces a write not begun); a failure is
+// logged, and the list is written again at quit (retryRecent) or by the next
+// change. recentDocs is locked.
+func writeRecentLocked(f string) {
 	paths := slices.Clone(recentDocs.paths)
 	writeAppFileLater("recent-documents", func() {
-		if err := writeAppFile(f, func(w io.Writer) error { return json.MarshalWrite(w, paths) }); err != nil {
+		err := recentWrite(f, func(w io.Writer) error { return json.MarshalWrite(w, paths) })
+		recentDocs.failed.Store(err != nil)
+		if err != nil {
 			log.Printf("mygo: recent documents: %v", err)
 		}
 	})
-	return nil
+}
+
+// retryRecent writes the recent documents again if the last write failed, and
+// waits for it. Main thread only, at quit.
+func retryRecent() {
+	if !recentDocs.failed.Load() {
+		return
+	}
+	f, err := recentFile()
+	if err != nil {
+		return
+	}
+	recentDocs.Lock()
+	writeRecentLocked(f)
+	recentDocs.Unlock()
+	flushAppWrites()
 }
 
 // openRecentDocument opens a document of the Open Recent menu: as a
