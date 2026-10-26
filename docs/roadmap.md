@@ -289,6 +289,7 @@ cannot show: those items are not marked):
 | A newer purego | a tag carries the fixes we need |
 | TSF input on Windows | IMM32 misbehaves with Telex |
 | D3D12, Vulkan or GPU compute | an app needs image processing |
+| Multi-rect GPU damage (`gpu.Ages` keeps one union rect) | a frame is measured GPU-bound where the union is much larger than the rects. Fill costs 8–35 ns per kilopixel on a 10-core Apple-silicon Mac, so 118k pixels saved are 1–4 µs of a frame whose empty floor is 17 µs; a tile GPU reloads the attachment anyway. Present with damage (DXGI `Present1` dirty rects, `eglSwapBuffersWithDamageKHR`) is the likelier win |
 
 ## Phase 4: developer tools
 
