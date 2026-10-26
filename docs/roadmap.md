@@ -294,8 +294,15 @@ cannot show: those items are not marked):
   table's rows, and a button's and a text input's look are now static functions
   reading the node (`buttonPaint` in `ui/widgets.go`, `inputStyle` in
   `ui/textinput.go`), so the benchmark makes no allocation a frame (66 to 0
-  at 100 widgets, 666 to 0 at 1000). Other controls' `styleFn` closures
-  (combobox, tabs, sidebar, list) remain.
+  at 100 widgets, 666 to 0 at 1000). #201 did the same for the hover looks of
+  rows, items, triggers and cells (`hoverSurface`, `hoverRow`, `pressSurface`
+  in `ui/hoverstyle.go`; `inputStyle` for the combobox's and the buffer input's
+  borders), per instance in a frame: calendar 92 to 50 allocations, tree item
+  6.03 to 5.03, sidebar item 4.03 to 3.02, breadcrumbs 12 to 10, collapsible 8
+  to 7, stepper 15 to 13; list rows (0.23) and grid cells (0.15) made few. The
+  closures that remain are those of tabs, the radio dot, a form's label, the
+  combobox field, the time input and the toast: they read another node or
+  slices, or state the node does not hold.
 - Merge batches of shader effects.
 - Compile shaders ahead of time.
 
@@ -318,7 +325,24 @@ cannot show: those items are not marked):
    `docs/ui/widget/tester.md`.
 2. **A widget layer in the inspector.** It shows the widget tree, the Style
    in effect, and the Tailwind classes that made it. It can force a hover,
-   pressed or focus state.
+   pressed or focus state. *In part* (#187, #188, #189). **Done:** the notes
+   a control leaves for the inspector (`ui/inspector_api.go`: `InspectorField`,
+   `Element.InspectNote`; `ui/widget/inspect.go`), shown in the Widget tab:
+   the control's type, the Styles that style it by layer (`Apply`'s, then its
+   own methods') and by variant, and the Tailwind classes that made each (a
+   `tw.S` style, `classes: …`, with "then changed by methods" when a method
+   changed it after); and the buttons that force hover, pressed and focus
+   (`TestInspectorShowsWhatAControlIsStyledWith`,
+   `TestInspectorForcesTheStatesOfAWidget` in `ui/widget/inspect_test.go`,
+   `TestInspectorShowsTheClassesOfEachAppliedStyle` in
+   `ui/widget/tw/tw_source_test.go`, `ui/inspector_note_test.go`;
+   `docs/ui/inspector.md`). *Open:* the widget tree itself, since the Elements
+   tab shows the tree of `ui` elements (a `VBox` is a `<Column>`, a `Button` a
+   `<Button>`), and the control's type shows only in the Widget tab of the
+   element chosen; and the Style in effect as the widget layer resolves it
+   (which layer or variant won each property, for the state of the frame),
+   since the tab lists each Style as it is set, and only the Styles and
+   Computed tabs show what the element ended up with.
 3. **Docs to copy from.** The widget tour, a Tailwind cheat sheet, and
    mappings from WinForms and gota. **Done:** `examples/widget-tour`,
    `docs/ui/widget/tw.md` (checked against the parser by
