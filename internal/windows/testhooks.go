@@ -63,42 +63,7 @@ func menuItemHasIcon(menu uintptr, pos int) (bool, error) {
 		return false, err
 	}
 	l := theBackend.menus.looks[mi.ItemData]
-	return mi.BmpItem != 0 || l != nil && l.icon != 0, nil
-}
-
-// TestMenuItemImage reports whether an item of a window's menu bar, found
-// by the labels along its path, shows an icon. It walks the native menu,
-// which UpdateMenuItem relabels, not the menu the bar was built from.
-func TestMenuItemImage(hwnd uintptr, path ...string) (bool, error) {
-	w := theBackend.windows[hwnd]
-	if w == nil || w.hmenu == 0 {
-		return false, fmt.Errorf("mygo: the window has no menu bar")
-	}
-	menu := w.hmenu
-	for i, label := range path {
-		n, _, _ := procGetMenuItemCount.Call(menu)
-		pos := -1
-		for j := range int(int32(n)) {
-			buf := make([]uint16, 256)
-			procGetMenuStringW.Call(menu, uintptr(j), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), mfByPosition)
-			if text, _, _ := strings.Cut(syscall.UTF16ToString(buf), "\t"); text == label {
-				pos = j
-				break
-			}
-		}
-		if pos < 0 {
-			return false, fmt.Errorf("mygo: no menu item %q", label)
-		}
-		if i == len(path)-1 {
-			return menuItemHasIcon(menu, pos)
-		}
-		sub, _, _ := procGetSubMenu.Call(menu, uintptr(pos))
-		if sub == 0 {
-			return false, fmt.Errorf("mygo: menu %q has no submenu", label)
-		}
-		menu = sub
-	}
-	return false, fmt.Errorf("mygo: no menu item path")
+	return mi.BmpItem != 0 || l != nil && l.icon != nil, nil
 }
 
 // TestMenuBarShown reports whether a window shows its menu bar.
@@ -935,4 +900,112 @@ func TestCloak(hwnd uintptr, on bool) error {
 		return fmt.Errorf("mygo: DwmSetWindowAttribute(DWMWA_CLOAK) failed: %#x", uint32(hr))
 	}
 	return nil
+}
+
+// TestMaximizedRects returns, in pixels, a window's rectangle, the part of
+// it DWM shows (without its invisible borders), its client area on the
+// screen, and the monitor and work area it is on, and whether it is
+// zoomed.
+func TestMaximizedRects(hwnd uintptr) (window, shown, client, monitor, work [4]int32, zoomed bool) {
+	var r, s, c rect
+	procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&r)))
+	procDwmGetWindowAttribute.Call(hwnd, dwmwaExtendedFrameBounds, uintptr(unsafe.Pointer(&s)), unsafe.Sizeof(s))
+	procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&c)))
+	var origin point
+	procClientToScreen.Call(hwnd, uintptr(unsafe.Pointer(&origin)))
+	mon, _, _ := procMonitorFromWindow.Call(hwnd, monitorDefaultToNearest)
+	mi := monitorInfo(mon)
+	z, _, _ := procIsZoomed.Call(hwnd)
+	four := func(r rect) [4]int32 { return [4]int32{r.Left, r.Top, r.Right, r.Bottom} }
+	return four(r), four(s), [4]int32{origin.X, origin.Y, origin.X + c.Right, origin.Y + c.Bottom}, four(mi.Monitor), four(mi.Work), z != 0
+}
+
+// TestHitTest reports what Windows' hit test answers at a point of a
+// window, in pixels from the top-left of its client area (negative from
+// the right or the bottom): the answer of the topmost visible window
+// there, the top edge above the webview or the surface, or the window
+// itself.
+func TestHitTest(hwnd uintptr, x, y int32) uintptr {
+	w := theBackend.windows[hwnd]
+	if w == nil {
+		return 0
+	}
+	var c rect
+	procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&c)))
+	if x < 0 {
+		x += c.Right
+	}
+	if y < 0 {
+		y += c.Bottom
+	}
+	const cwpSkipInvisible = 1
+	child, _, _ := user32.NewProc("ChildWindowFromPointEx").Call(hwnd, uintptr(uint32(x))|uintptr(uint32(y))<<32, cwpSkipInvisible)
+	if child == 0 {
+		child = hwnd
+	}
+	pt := point{x, y}
+	procClientToScreen.Call(hwnd, uintptr(unsafe.Pointer(&pt)))
+	lp := uintptr(uint16(int16(pt.Y)))<<16 | uintptr(uint16(int16(pt.X)))
+	hit, _, _ := procSendMessageW.Call(child, wmNCHitTest, 0, lp)
+	return hit
+}
+
+// TestMenuItemIcon reports the size, in DIPs, of the icon an item of a
+// window's menu bar shows, 0 by 0 for none, and whether it is checked.
+func TestMenuItemIcon(hwnd uintptr, path ...string) (width, height int, checked bool, err error) {
+	w := theBackend.windows[hwnd]
+	if w == nil || w.menu == nil {
+		return 0, 0, false, fmt.Errorf("mygo: the window has no menu bar")
+	}
+	items := w.menu.Items
+	var uid int
+	for i, label := range path {
+		found := false
+		for _, it := range items {
+			if it.Label != label {
+				continue
+			}
+			found = true
+			if i == len(path)-1 {
+				uid = it.ID
+			} else if it.Submenu != nil {
+				items = it.Submenu.Items
+			}
+			break
+		}
+		if !found {
+			return 0, 0, false, fmt.Errorf("mygo: no menu item %q", label)
+		}
+	}
+	for cmd, e := range theBackend.menus.entries {
+		if e.uid != uid || e.owner != w.owner {
+			continue
+		}
+		mi := menuItemInfo{Mask: miimBitmap | miimState}
+		mi.Size = uint32(unsafe.Sizeof(mi))
+		user32.NewProc("GetMenuItemInfoW").Call(e.menu, uintptr(cmd), 0, uintptr(unsafe.Pointer(&mi)))
+		checked = mi.State&mfsChecked != 0
+		dpi := dpiOf(hwnd)
+		switch {
+		case e.look != nil && e.look.icon != nil && e.look.icons && drawMenuIcon != nil:
+			if img := iconAt(e.look.icon, toPx(16, dpi), 0); img != nil {
+				width, height = toDIP(int32(img.W), dpi), toDIP(int32(img.H), dpi)
+			}
+		case e.look == nil && mi.BmpItem != 0:
+			var ds dibSection
+			procGetObjectW.Call(mi.BmpItem, unsafe.Sizeof(ds), uintptr(unsafe.Pointer(&ds)))
+			width, height = toDIP(ds.bmWidth, dpi), toDIP(ds.bmHeight, dpi)
+		}
+		return width, height, checked, nil
+	}
+	return 0, 0, false, fmt.Errorf("mygo: menu item %q is not a command", path[len(path)-1])
+}
+
+// TestGDIObjects returns how many GDI objects the process holds, which a
+// menu's bitmaps count in.
+func TestGDIObjects() int {
+	const grGDIObjects = 0
+	process, _ := syscall.GetCurrentProcess()
+	n, _, _ := user32.NewProc("GetGuiResources").Call(uintptr(process), grGDIObjects)
+	return int(n)
 }

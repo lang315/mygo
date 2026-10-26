@@ -265,7 +265,8 @@ func (it *MenuItem) Shortcut(mods Modifiers, key Key) *MenuItem {
 // colors. IconPNG wins over it.
 func (it *MenuItem) Icon(s *SVG) *MenuItem {
 	if it.p != nil && s != nil && it.png == nil {
-		it.p.Icon, it.p.Template = MenuIconPNG(s, it.run.iconColor)
+		png, template := MenuIconPNG(s, it.run.iconColor)
+		it.p.Icon = menuIcon(png, template)
 	}
 	return it
 }
@@ -279,9 +280,18 @@ func (it *MenuItem) IconPNG(png []byte) *MenuItem {
 	}
 	it.png = png
 	if it.p != nil {
-		it.p.Icon, it.p.Template = png, false
+		it.p.Icon = menuIcon(png, false)
 	}
 	return it
+}
+
+// menuIcon makes the icon of a menu item of a PNG, nil for none.
+func menuIcon(png []byte, template bool) *platform.MenuIcon {
+	if png == nil {
+		return nil
+	}
+	linkMenuIcons()
+	return &platform.MenuIcon{PNG: png, Template: template}
 }
 
 // Chosen reports whether the item was chosen, in the frame after the user

@@ -118,6 +118,9 @@ func click(w *mygo.Window, x, y float64) bool {
 	return true
 }
 
+// clickPage clicks a window's page: click reaches web views too.
+func clickPage(w *mygo.Window, x, y float64) bool { return click(w, x, y) }
+
 // appClick clicks through the application, whose event monitors see it.
 func appClick(_ testing.TB, w *mygo.Window, x, y float64) bool {
 	waitOnScreen(w)
@@ -233,6 +236,16 @@ func nsAppActive() (active bool) {
 func collectionBehavior(w *mygo.Window) (behavior uint, supported bool) {
 	mygo.RunOnMain(func() { behavior = darwin.TestCollectionBehavior(w.NativeHandle()) })
 	return behavior, true
+}
+
+func material(w *mygo.Window) (class string, style int, radius float64, active bool, supported bool) {
+	mygo.RunOnMain(func() { class, style, radius, active = darwin.TestMaterial(w.NativeHandle()) })
+	return class, style, radius, active, true
+}
+
+func roundedBacking(w *mygo.Window) (opaque bool, alpha, red float64, supported bool) {
+	mygo.RunOnMain(func() { opaque, alpha, red = darwin.TestRoundedBacking(w.NativeHandle()) })
+	return opaque, alpha, red, true
 }
 
 func dockDevTools(w *mygo.Window) (ok bool) {
@@ -448,15 +461,6 @@ func endSheetButton(w *mygo.Window, i int) (ok bool) {
 
 // Panels' window styles are Windows'.
 func panelStyles(*mygo.Window) (bool, bool, bool, bool) { return false, false, false, false }
-
-func menuIcon(w *mygo.Window, path ...string) (has, template, supported bool, err error) {
-	mygo.RunOnMain(func() { has, template, err = darwin.TestMenuItemImage(path...) })
-	return has, template, true, err
-}
-
-func shortcutDrawn(*mygo.Window, ...string) (bool, []byte, bool, error) {
-	return false, nil, false, nil
-}
 
 // trayMenuIcons returns the items of the menu the tray's status item holds
 // by title, true for those with an image.

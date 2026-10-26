@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"sync"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
@@ -60,13 +62,9 @@ func nativeMenu(items []MenuItem) []*mygo.MenuItem {
 		}
 		switch {
 		case it.IconPNG != nil:
-			mi.Icon = it.IconPNG
+			mi.Icon, _ = mygo.NewMenuIcon(it.IconPNG, false)
 		case it.Icon != nil:
-			text := ui.LightTheme().Text
-			if IsDark() {
-				text = ui.DarkTheme().Text
-			}
-			mi.Icon, mi.IconTemplate = ui.MenuIconPNG(it.Icon, text)
+			mi.Icon = svgMenuIcon(it.Icon, IsDark())
 		}
 		if h := it.OnClick; h != nil {
 			mi.Click = func(*mygo.MenuItem, *mygo.Window) { Post(h) }
@@ -74,6 +72,36 @@ func nativeMenu(items []MenuItem) []*mygo.MenuItem {
 		out = append(out, mi)
 	}
 	return out
+}
+
+// svgIcons holds the menu icons made of SVGs, by SVG and theme: an icon is
+// drawn and decoded once, not each time a menu is set.
+var svgIcons sync.Map // svgIcon -> *mygo.MenuIcon
+
+type svgIcon struct {
+	svg  *ui.SVG
+	dark bool
+}
+
+// svgMenuIcon returns the menu icon of s in the color of the text of the
+// light or the dark theme, nil if it cannot be made.
+// shortcut: entries stay as long as the program, one per SVG and theme used in a menu bar; an app that makes SVGs on the fly in menus should drop it.
+func svgMenuIcon(s *ui.SVG, dark bool) *mygo.MenuIcon {
+	key := svgIcon{s, dark}
+	if ic, ok := svgIcons.Load(key); ok {
+		return ic.(*mygo.MenuIcon)
+	}
+	text := ui.LightTheme().Text
+	if dark {
+		text = ui.DarkTheme().Text
+	}
+	png, template := ui.MenuIconPNG(s, text)
+	ic, err := mygo.NewMenuIcon(png, template)
+	if err != nil {
+		return nil
+	}
+	svgIcons.Store(key, ic)
+	return ic
 }
 
 // MenuButtonWidget is a button that opens a menu.
