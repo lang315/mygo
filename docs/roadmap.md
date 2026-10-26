@@ -98,15 +98,15 @@ Windows 11 ARM64.
   with and without a transition), Windows 1.07–1.09, macOS 1.01–1.09 on a
   noisy VM (single runs go to 1.5); an M1 Pro run gives 1.03 (100 widgets) and
   1.06 (1000), with a transition. Styling itself, at `c4cf118` on CI, costs a widget +2–24% (Linux +15% without and +21% with a transition at 100 widgets, +15% and +24% at 1000; Windows +15%, +24%, +13%, +23%; macOS +7%, +2%, +16%, +3%); on an M1 Pro +16–21%, and the same styles on raw `ui` +13–14%.
-- App sizes are unchanged. **Done:** the size job (`scripts/bench.ts`) also
-  builds `examples/widget-tour`, which imports `ui/widget`, so CI shows what the
-  widget layer adds. At `e8070ecb` the tour is, beside `counter-native`, 12.84 MB
-  against 9.45 on Linux, 13.37 against 9.77 on Windows and 12.51 against 9.22 on
-  macOS: the widget layer adds at most 3.39, 3.60 and 3.29 MB. It is an upper
-  bound, since the tour has demo code for every control. `hello` and
-  `counter-native` grew since 2026-10-23, Linux 9.40 to 9.45 MB, Windows 9.70 to
-  9.77, macOS 9.17 to 9.22, the Windows figure past the 9.2–9.7 MB of the
-  Baseline.
+- App sizes are unchanged. *Open:* the item does not hold, though it can now be
+  measured. The size job (`scripts/bench.ts`) also builds `examples/widget-tour`,
+  which imports `ui/widget`, so CI shows what the widget layer adds. At
+  `e8070ecb` the tour is, beside `counter-native`, 12.84 MB against 9.45 on
+  Linux, 13.37 against 9.77 on Windows and 12.51 against 9.22 on macOS: the
+  widget layer adds at most 3.39, 3.60 and 3.29 MB. It is an upper bound, since
+  the tour has demo code for every control. `hello` and `counter-native` grew
+  since 2026-10-23, Linux 9.40 to 9.45 MB, Windows 9.70 to 9.77, macOS 9.17 to
+  9.22, the Windows figure past the 9.2–9.7 MB of the Baseline.
 - fhtool's classes parse. **Done:** `internal/twclass/twclass_test.go`
   (`TestFhtoolClasses`).
 - e2e is green on the three machines.
