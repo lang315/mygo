@@ -237,6 +237,29 @@ func TestListViewDetailsCheckAllSkipsTheHeaders(t *testing.T) {
 	}
 }
 
+// With groups, "Check all" and then "Check all" again report each row flipped,
+// and no header, as they do without groups.
+func TestListViewDetailsCheckAllFiresOnCheckForEachRow(t *testing.T) {
+	lv := groupedView(ViewDetails).CheckBoxes()
+	ev := watched(lv)
+	tt := tester(t, lv)
+	click(t, tt, "Check all")
+	got := ev.drain()
+	slices.Sort(got)
+	if want := []string{"check a true", "check b true", "check c true", "check d true"}; !slices.Equal(got, want) {
+		t.Fatalf("Check all: events %v, want %v", got, want)
+	}
+	click(t, tt, "Check all")
+	got = ev.drain()
+	slices.Sort(got)
+	if want := []string{"check a false", "check b false", "check c false", "check d false"}; !slices.Equal(got, want) {
+		t.Fatalf("Check all again: events %v, want %v", got, want)
+	}
+	if n := len(lv.Checked()); n != 0 {
+		t.Fatalf("Checked() has %d keys after unchecking all", n)
+	}
+}
+
 // Assistive technology reads a header as "Title (n)", which is not chosen,
 // and the rows around it as rows.
 func TestListViewDetailsHeadersAreReadByAssistiveTechnology(t *testing.T) {

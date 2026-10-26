@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -219,10 +220,66 @@ func TestListViewGroupsKeepTheChoiceWhenTheViewSwitches(t *testing.T) {
 	}
 }
 
-// A row that moves to another group, one added, one deleted and a search that
-// hides rows change the headers; nothing else makes the groups again.
-func TestListViewGroupsAreMadeAgainOnlyWhenSomethingChanged(t *testing.T) {
-	lv := groupedView(ViewLargeIcon)
+// The icon views tell the grid where the headers are when they move, and the
+// grid does not ask whether each of the lines is one: a few thousand rows move
+// from group to group, and ui is asked about the lines in view and a few more.
+func TestListViewGroupsTellTheGridWhereTheHeadersAre(t *testing.T) {
+	rows := make([]vitem, 4000)
+	for i := range rows {
+		rows[i] = vitem{fmt.Sprint("k", i), fmt.Sprint("Row ", i), fmt.Sprint("g", i%8)}
+	}
+	lv := groupedView(ViewList).SetRows(rows)
+	tt := tester(t, lv)
+	tt.Frame()
+	lv.t.asks = 0
+	// A row moves to the next group: the headers move, the lines stay.
+	lv.UpdateRow("k0", func(v *vitem) { v.kind = "g1" })
+	tt.Frame()
+	tt.Frame()
+	if lv.t.asks > len(rows)/10 {
+		t.Fatalf("ui asked whether a line is a header %d times for %d rows", lv.t.asks, len(rows))
+	}
+	if !shows(tt, "g0 (499)") || shows(tt, "g0 (500)") {
+		t.Fatalf("after k0 moved to g1: %q", tt.Texts())
+	}
+}
+
+// A header moves when a row changes group and the number of lines stays: the
+// icon views, told where the headers are, lay out the new places.
+func TestListViewGroupsHeaderMovesWhenTheLinesStay(t *testing.T) {
+	for _, m := range iconModes {
+		t.Run(m.name, func(t *testing.T) {
+			lv := groupedView(m.mode)
+			tt := tester(t, lv)
+			// berry, Banana, drupe, Cherry, Date, pome, Apple; Cherry becomes a berry.
+			lv.UpdateRow("c", func(v *vitem) { v.kind = "berry" })
+			tt.Frame()
+			tt.Frame()
+			if m.mode == ViewList {
+				above(t, tt, "berry (2)", "Banana", "Cherry", "drupe (1)", "Date", "pome (1)", "Apple")
+			} else {
+				// Several columns: the header of drupe starts a row under Cherry's.
+				if yOf(t, tt, "drupe (1)") <= yOf(t, tt, "Cherry") || yOf(t, tt, "Date") <= yOf(t, tt, "drupe (1)") {
+					t.Errorf("drupe (1) is at y=%v, Cherry at y=%v, Date at y=%v", yOf(t, tt, "drupe (1)"), yOf(t, tt, "Cherry"), yOf(t, tt, "Date"))
+				}
+			}
+		})
+	}
+}
+
+// The app's function is asked once for each row changed in place, for all of
+// them only when the rows are placed again (rows added or deleted, a new order or
+// grouping); a frame at rest and a search ask it nothing. (A table places the
+// rows again, whatever changed, when more than an eighth of them did: hence
+// forty rows.)
+func TestListViewGroupsAskTheFunctionOnlyForWhatChanged(t *testing.T) {
+	kinds := []string{"pome", "berry", "drupe", "nut"}
+	rows := make([]vitem, 40)
+	for i := range rows {
+		rows[i] = vitem{fmt.Sprint("k", i), fmt.Sprint("Row ", i), kinds[i%4]}
+	}
+	calls := 0
+	lv := newView().SetRows(rows).SetView(ViewLargeIcon).SetGroupBy(func(v *vitem) string { calls++; return v.kind })
 	tt := tester(t, lv)
 	frames := func() {
 		for range 4 {
@@ -230,44 +287,50 @@ func TestListViewGroupsAreMadeAgainOnlyWhenSomethingChanged(t *testing.T) {
 		}
 	}
 	frames()
-	built := lv.groupBuilds
-	if built < 1 {
-		t.Fatal("the groups were not made")
+	if calls != len(rows) {
+		t.Fatalf("the function was asked %d times for %d rows", calls, len(rows))
 	}
-	frames()
-	if lv.groupBuilds != built {
-		t.Fatalf("frames at rest made the groups again: %d, was %d", lv.groupBuilds, built)
-	}
-	step := func(what string, change func()) {
+	step := func(what string, want int, change func()) {
 		t.Helper()
-		before := lv.groupBuilds
+		calls = 0
 		change()
 		frames()
-		if lv.groupBuilds == before {
-			t.Fatalf("%s did not make the groups again", what)
+		if calls != want {
+			t.Fatalf("%s asked the function %d times, want %d", what, calls, want)
 		}
-		before = lv.groupBuilds
+		calls = 0
 		frames()
-		if lv.groupBuilds != before {
-			t.Fatalf("frames after %s made them again", what)
+		if calls != 0 {
+			t.Fatalf("frames after %s asked the function %d times", what, calls)
 		}
 	}
-	step("adding a row", func() { lv.AddRow(vitem{"e", "Elderberry", "berry"}) })
-	if !shows(tt, "berry (2)") {
-		t.Errorf("after adding a berry: %q", tt.Texts())
+	has := func(group string, n int) bool {
+		for _, g := range lv.Groups() {
+			if g.Title == group {
+				return g.Count == n
+			}
+		}
+		return false
 	}
-	step("moving a row to another group", func() { lv.UpdateRow("d", func(v *vitem) { v.kind = "pome" }) })
-	if !shows(tt, "pome (2)") || !shows(tt, "drupe (1)") {
-		t.Errorf("after Date moved to pome: %q", tt.Texts())
+	// A row added gives the table a new slice, so it places all of them.
+	step("adding a row", 41, func() { lv.AddRow(vitem{"new", "Row new", "berry"}) })
+	if !has("berry", 11) {
+		t.Errorf("after adding a berry: %v", lv.Groups())
 	}
-	step("deleting a row", func() { lv.DeleteRows("a") })
-	if !shows(tt, "pome (1)") {
-		t.Errorf("after deleting Apple: %q", tt.Texts())
+	step("moving a row to another group", 1, func() { lv.UpdateRow("k0", func(v *vitem) { v.kind = "nut" }) })
+	if !has("pome", 9) || !has("nut", 11) {
+		t.Errorf("after k0 moved to nut: %v", lv.Groups())
 	}
-	step("changing the order", func() { lv.SetGroupOrder("drupe", "berry") })
-	step("changing the grouping", func() { lv.SetGroupBy(func(v *vitem) string { return v.name[:1] }) })
-	step("a search", func() { lv.Details().Search("Name", "an") })
-	if shows(tt, "C (1)") || !shows(tt, "B (1)") {
-		t.Errorf("after a search for \"an\": %q", tt.Texts())
+	step("deleting a row", 40, func() { lv.DeleteRows("k1") })
+	if !has("berry", 10) {
+		t.Errorf("after deleting k1: %v", lv.Groups())
+	}
+	step("changing the order", 40, func() { lv.SetGroupOrder("drupe", "berry") })
+	step("changing the grouping", 40, func() {
+		lv.SetGroupBy(func(v *vitem) string { calls++; return v.kind[:1] })
+	})
+	step("a search", 0, func() { lv.Details().Search("Name", "Row 3") })
+	if len(lv.Groups()) == 0 {
+		t.Errorf("after a search for \"Row 3\": no group")
 	}
 }

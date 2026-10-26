@@ -194,8 +194,9 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 	// flipped are the keys this call checked or unchecked, for watch.
 	var flipped []K
 	// Clear is right exactly when the frame held every row: rows added
-	// since, or a filter or a view that changed since, are not its.
-	if !on && !t.gone && first == 0 && last+1 == len(t.src.rows) {
+	// since, or a filter or a view that changed since, are not its. The lines
+	// of a grouped frame are its rows and a header for each group.
+	if !on && !t.gone && first == 0 && last+1-len(t.groupsOf()) == len(t.src.rows) {
 		if t.watch != nil {
 			flipped = slices.Collect(c.value.All())
 		}

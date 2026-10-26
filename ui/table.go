@@ -302,7 +302,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					table.afterInput(func() {
 						if box.Changed() {
 							changed := false
-							if s.CheckRows != nil && s.Header == nil && s.Skip == nil {
+							if s.CheckRows != nil && s.Skip == nil {
 								changed = s.CheckRows(0, n-1, all)
 							} else {
 								for i := range n {

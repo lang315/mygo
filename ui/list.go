@@ -178,12 +178,13 @@ type ListState struct {
 	// it when the checks, the row count or Version change: a table of many
 	// rows that knows them saves counting them row by row.
 	CheckedCount func() (checked, total int)
-	// CheckRows, when set (and the list has no Header), checks the rows
+	// CheckRows, when set (and the list has no Skip), checks the rows
 	// first to last, or unchecks them when on is false, in one call, and
 	// reports whether that changed a check: the header's checkbox calls it
 	// instead of setting Checked row by row, which a table of many rows
-	// that holds its checks itself saves. It must leave Checked as it
-	// is: it changes what the app holds, which the next frame hands back.
+	// that holds its checks itself saves. With a Header it is given the
+	// lines of the headers too, and leaves them out. It must leave Checked as
+	// it is: it changes what the app holds, which the next frame hands back.
 	CheckRows func(first, last int, on bool) bool
 	// RowMenu, when set, gives a Table's rows a context menu, which it
 	// fills with the items for rows: the rows chosen, in their order. A
