@@ -1563,6 +1563,7 @@ func (e *node) layoutList(w, h float32) {
 	for k := range f.rows {
 		r := &f.rows[k]
 		f.at[r.i] = k
+		sameRow(e, r.e)
 		hs.set(r.i, heightAt(r.e, cw, inf))
 	}
 	// ensure builds and measures row i if the list lacks it.
@@ -1574,6 +1575,7 @@ func (e *node) layoutList(w, h float32) {
 			return false
 		}
 		r := f.buildLate(i)
+		sameRow(e, r)
 		f.at[i] = len(f.rows) - 1
 		hs.set(i, heightAt(r, cw, inf))
 		return true

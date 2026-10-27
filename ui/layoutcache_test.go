@@ -437,6 +437,47 @@ func TestLayoutCacheReuses(t *testing.T) {
 	frame("a wider window", func(n uint32) bool { return n >= 200 && n < 300 })
 }
 
+// The rows a List builds keep their layout as other elements do: an idle
+// frame lays out the list, not its rows.
+func TestLayoutCacheReusesListRows(t *testing.T) {
+	var s ListState
+	size, label := float32(13), "Row"
+	tt := coreNewTester(func(c *context) {
+		coreBox(c).Fill().FontSize(size).Children(func() {
+			coreList(c, &s, 1000, func(i int) {
+				coreRow(c).Height(28).Gap(8).Children(func() {
+					coreText(c, label+" "+strconv.Itoa(i))
+					coreSpacer(c)
+					coreText(c, strconv.Itoa(i*7%100))
+				})
+			}).Grow(1)
+		})
+	}, 400, 300)
+	tt.Frame()
+	frame := func(what string, want func(n uint32) bool) {
+		t.Helper()
+		before := tt.rt.computed
+		tt.Frame()
+		if n := tt.rt.computed - before; !want(n) {
+			t.Errorf("%s: laid out %d elements anew", what, n)
+		}
+	}
+	// About 11 rows show, 4 elements each: an idle frame lays out the
+	// root, the box and the list, not the ~44 elements of its rows.
+	// The bound is the branch's count plus a margin (Step 4), below 11.
+	few := func(n uint32) bool { return n <= 5 }
+	frame("an unchanged frame", few)
+	label = "Item"
+	frame("the rows' first texts", func(n uint32) bool { return n >= 22 })
+	frame("unchanged after the texts", few)
+	size = 15
+	frame("an inherited font size", func(n uint32) bool { return n >= 40 })
+	frame("unchanged after the size", few)
+	tt.h.w = 500
+	frame("a wider window", func(n uint32) bool { return n >= 11 })
+	frame("unchanged after the width", few)
+}
+
 // What lays an element out is in its layoutStyle, or compared with it
 // (sameLayout); node's other fields do not lay it out, or make it
 // volatile there. A field added to node must be placed in one or the
@@ -554,9 +595,12 @@ func TestLayoutCacheInvalidates(t *testing.T) {
 // text system, and lets it go as the text system's generation changes.
 func TestHeldText(t *testing.T) {
 	var s ListState
+	// The rows are the same each frame and keep their layout (sameRow), so a
+	// style that does not size them is changed to lay them out anew.
+	var grow float32
 	tt := coreNewTester(func(c *context) {
 		coreList(c, &s, 3, func(i int) {
-			keep(i, coreTextf(c, "Row %d", i))
+			keep(i, coreTextf(c, "Row %d", i).Grow(grow))
 		}).Grow(1)
 	}, 200, 200)
 	e := keyed(tt, 1)
@@ -569,11 +613,13 @@ func TestHeldText(t *testing.T) {
 	copied := *e.tl
 	copied.Height += 10
 	held.at[i] = &copied
+	grow = 1
 	tt.Frame()
 	if e := keyed(tt, 1); e.tl != &copied || e.h != copied.Height {
 		t.Fatalf("laid out again, the row's text took %p (%v high), not the layout held, %v high", e.tl, e.h, copied.Height)
 	}
 	held.gen++
+	grow = 2
 	tt.Frame()
 	if e := keyed(tt, 1); e.tl == &copied || e.h == copied.Height {
 		t.Errorf("the text system's generation changed, and the row's text kept the layout held")
