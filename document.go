@@ -946,7 +946,7 @@ func (k *docKind) readFile(path string) (v any, fr fileRead, err error) {
 			err = fmt.Errorf("mygo: %s is a directory", path)
 			return
 		}
-		fr = readOf(info)
+		fr = readOf(info, path)
 		v, err = k.read(f)
 	}
 	offMain(func() struct{} { read(); return struct{}{} })
