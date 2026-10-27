@@ -42,7 +42,11 @@ import (
 // changing elements inside them; an input lays out its text by its
 // editor; an element attached to another is placed by that one's box.
 // Those are never the same (volatile), nor anything around them, nor
-// anything inside those that change what is inside them. Transforms, as
+// anything inside those that change what is inside them. A List stays
+// volatile, but its rows are compared once built (sameRow), as long as its
+// own text styles and those it inherits are the same: rows reach it only
+// through the width it gives them and their own height, which the size
+// they are laid out at carries. Transforms, as
 // Translate, and the scroll offsets of other containers move elements
 // after layout (place, commit) and are not compared.
 //
@@ -56,6 +60,10 @@ const (
 	// layReuse: the element and those inside it are as in the last layout
 	// (sameLayout), whose boxes layoutBox may reuse.
 	layReuse
+	// layRows: a List whose own text styles and those it inherits are as in
+	// the last layout (not its rows, which it builds as it lays out), so
+	// its rows may be compared as they are built (sameRow).
+	layRows
 )
 
 // layoutFlags are the flags that the layout reads.
@@ -182,6 +190,9 @@ func sameLayout(e *node, parent uint64, index int, changed bool) bool {
 		e.gridFit != nil || e.leaving != 0 || e.kind == kindText && e.first != nil
 	if tree {
 		keepNoLayout(e)
+		if e.list != nil && sameText && !changed {
+			e.lay |= layRows
+		}
 	} else {
 		inner := changed || !sameText
 		for c, i := e.first, 0; c != nil; c, i = c.next, i+1 {
@@ -199,6 +210,20 @@ func sameLayout(e *node, parent uint64, index int, changed bool) bool {
 		e.measured = r.measured
 	}
 	return true
+}
+
+// sameRow compares a row the List list built with what its state kept of
+// it, once it exists (the view's pass built it, or layoutList did late),
+// so that layoutBox and heightAt reuse its layout where it is the same.
+// Rows are compared at index 0: their place among the List's children
+// follows the scroll, not what lays them out.
+func sameRow(list, row *node) {
+	// A row with layOwner was compared already: layoutList can run twice in
+	// one layout (relayoutList).
+	if list.c.rt.noLayoutCache || row.lay&layOwner != 0 {
+		return
+	}
+	sameLayout(row, list.id, 0, list.lay&layRows == 0)
 }
 
 // keepNoLayout makes the elements inside e keep and reuse no layout.
