@@ -3,7 +3,10 @@ package ui
 import (
 	"fmt"
 	"image"
+	"io"
+	"log"
 	"math/rand/v2"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -22,6 +25,7 @@ type lcNode struct {
 	children []*lcNode
 	value    string
 	lists    [2]ListState // each Tester's
+	colw     uint8        // a Table's second column is lcColWidths[colw] wide
 }
 
 const (
@@ -39,7 +43,10 @@ const (
 	lcParagraph
 	lcRich
 	lcAttached
+	lcTable
 )
+
+var lcColWidths = []float32{0, 60, 120}
 
 var lcTexts = []string{"", "7", "Hello", "a line of text that wraps in a narrow box", "two\nlines", "مرحبا بالعالم", "1234567890"}
 
@@ -94,6 +101,9 @@ type lcModel struct {
 	bitmaps [2]*Bitmap
 	icon    *SVG
 	w, h    int
+	// dup is the List or Table whose rows share keys for one frame.
+	dup     *lcNode
+	testers [2]*Tester
 	// extra styles an element further, when set.
 	extra func(n *lcNode, e *node)
 }
@@ -145,7 +155,7 @@ func (m *lcModel) boxes() []*lcNode {
 	nodes, _ := m.all()
 	var boxes []*lcNode
 	for _, n := range nodes {
-		if n.kind == lcBox || n.kind >= lcList && n.kind != lcRich {
+		if n.kind == lcBox || n.kind >= lcList && n.kind != lcRich && n.kind != lcTable {
 			boxes = append(boxes, n)
 		}
 	}
@@ -164,7 +174,7 @@ func (m *lcModel) insert() {
 	case v == 5:
 		kind = lcImage
 	case v > 7:
-		kind = lcInput + m.rng.IntN(lcAttached-lcInput+1)
+		kind = lcInput + m.rng.IntN(lcTable-lcInput+1)
 	}
 	if p.kind == lcParagraph {
 		kind = lcText // only text goes inside text
@@ -178,7 +188,7 @@ func (m *lcModel) mutate() string {
 	nodes, parents := m.all()
 	i := m.rng.IntN(len(nodes))
 	n, p := nodes[i], parents[i]
-	switch v := m.rng.IntN(20); {
+	switch v := m.rng.IntN(29); {
 	case v < 9:
 		s := m.rng.IntN(len(lcStyles))
 		n.styles[s] = uint8(m.rng.IntN(len(lcStyles[s])))
@@ -217,8 +227,99 @@ func (m *lcModel) mutate() string {
 	case v < 19:
 		m.w, m.h = 200+m.rng.IntN(400), 150+m.rng.IntN(300)
 		return "window"
+	case v < 29:
+		// What reaches rows: a scroll, the second column's width, rows
+		// sharing a key for one frame, a column fitted to its cells.
+		var ls []*lcNode
+		for _, c := range nodes {
+			if c.kind == lcList || c.kind == lcTable {
+				ls = append(ls, c)
+			}
+		}
+		if len(ls) == 0 {
+			return "nothing"
+		}
+		l := ls[m.rng.IntN(len(ls))]
+		switch v {
+		case 19, 20:
+			row := m.rng.IntN(2 + len(lcTexts))
+			l.lists[0].ScrollTo(row, Start)
+			l.lists[1].ScrollTo(row, Start)
+			return "scroll"
+		case 21:
+			l.colw = uint8(m.rng.IntN(len(lcColWidths)))
+			return "column width"
+		case 22:
+			if m.testers[0] == nil {
+				return "nothing" // only TestLayoutCacheMatches turns strict mode off
+			}
+			m.dup = l
+			// Strict mode refuses keys that two rows share.
+			m.testers[0].rt.strict, m.testers[1].rt.strict = false, false
+			return "duplicate keys"
+		}
+		if m.fit() {
+			return "fit column"
+		}
 	}
 	return "nothing"
+}
+
+// fit double clicks the edge of the first column of the first Table, in
+// both Testers: that column is fitted to its cells in a frame, and the
+// frames after it are normal ones. (The last column has no edge unless it
+// has a width in the state.)
+func (m *lcModel) fit() bool {
+	if m.testers[0] == nil {
+		return false // a model with one Tester
+	}
+	var tables [2]*node
+	for i, tt := range m.testers {
+		var walk func(e *node)
+		walk = func(e *node) {
+			for ; e != nil && tables[i] == nil; e = e.next {
+				if e.widget == "Table" {
+					tables[i] = e
+				}
+				walk(e.first)
+			}
+		}
+		walk(tt.rt.c.root)
+		if tables[i] == nil || tables[i].first == nil || tables[i].first.first == nil {
+			return false
+		}
+	}
+	for i, tt := range m.testers {
+		h := tables[i].first.first // the header of the first column
+		x, y := h.x+h.w-2, h.y+h.h/2
+		tt.ClickAt(x, y)
+		tt.ClickAt(x, y)
+	}
+	return true
+}
+
+// lcRow is the row i of a List: two texts and a box, with a font of its own,
+// so that a row has a subtree to reuse.
+func lcRow(c *context, n *lcNode, i int) {
+	font := lcStyles[16]
+	e := coreRow(c).Gap(4).Children(func() {
+		coreText(c, lcTexts[(i+n.text)%len(lcTexts)])
+		coreBox(c).Size(10, 10)
+		coreText(c, lcTexts[(i+2*n.text+1)%len(lcTexts)])
+	})
+	if f := font[int(n.styles[0])%len(font)]; f != nil {
+		f(e)
+	}
+}
+
+// keyRows gives the rows of a List or a Table one key per two rows for the
+// frame in which m.dup is it, and indexes otherwise.
+func (m *lcModel) keyRows(n *lcNode, tester int) {
+	s := &n.lists[tester]
+	s.Key = nil
+	if m.dup == n {
+		s.Key = func(i int) any { return i / 2 }
+	}
 }
 
 func (m *lcModel) build(c *context, tester int) {
@@ -241,8 +342,15 @@ func (m *lcModel) build(c *context, tester int) {
 			n.value = lcTexts[n.text]
 			e = coreTextInput(c, &n.value)
 		case lcList:
+			m.keyRows(n, tester)
 			e = coreList(c, &n.lists[tester], 2+n.text, func(i int) {
-				coreText(c, lcTexts[(i+n.text)%len(lcTexts)])
+				lcRow(c, n, i)
+			})
+		case lcTable:
+			m.keyRows(n, tester)
+			cols := []TableColumn{{Title: "Name"}, {Title: "Status", Width: lcColWidths[n.colw]}}
+			e = coreTable(c, &n.lists[tester], cols, 2+n.text, func(row, col int) {
+				coreText(c, lcTexts[(row+col+n.text)%len(lcTexts)])
 			})
 		case lcForm:
 			// Its labels as wide as the widest.
@@ -341,6 +449,9 @@ func lcTester(view func(c *context), width, height int, now time.Time) *Tester {
 // change at random frame after frame: their elements' styles, texts,
 // children, keys and images, and the window.
 func TestLayoutCacheMatches(t *testing.T) {
+	// Rows sharing a key are logged, once per Tester.
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
 	seeds, frames := 40, 80
 	if testing.Short() {
 		seeds = 15
@@ -357,8 +468,11 @@ func TestLayoutCacheMatches(t *testing.T) {
 		cached := lcTester(view(0), m.w, m.h, start)
 		fresh := lcTester(view(1), m.w, m.h, start)
 		fresh.rt.noLayoutCache = true
+		m.testers = [2]*Tester{cached, fresh}
 		var log []string
 		for f := range frames {
+			m.dup = nil
+			cached.rt.strict, fresh.rt.strict = true, true
 			if m.rng.IntN(3) > 0 {
 				for range 1 + m.rng.IntN(3) {
 					log = append(log, m.mutate())

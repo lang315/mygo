@@ -68,6 +68,7 @@ func TestPaintCullMatches(t *testing.T) {
 		}, m.w, m.h, time.Unix(1e9, 0))
 		var log []string
 		for f := range frames {
+			m.dup = nil
 			if m.rng.IntN(3) > 0 {
 				for range 1 + m.rng.IntN(3) {
 					log = append(log, m.mutate())
