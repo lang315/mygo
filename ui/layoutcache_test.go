@@ -25,6 +25,9 @@ type lcNode struct {
 	children []*lcNode
 	value    string
 	lists    [2]ListState // each Tester's
+	many     bool         // a List or Table of rows more than a window shows
+	rev      bool         // its rows sorted the other way round
+	sort     [2]SortOrder // each Tester's, a Table's Sort
 	colw     uint8        // a Table's second column is lcColWidths[colw] wide
 }
 
@@ -126,6 +129,7 @@ func newLCModel(seed uint64) *lcModel {
 
 func (m *lcModel) newNode(kind int) *lcNode {
 	n := &lcNode{kind: kind, text: m.rng.IntN(len(lcTexts)), styles: make([]uint8, len(lcStyles))}
+	n.many = m.rng.IntN(2) == 0
 	if m.rng.IntN(3) == 0 {
 		m.keys++
 		n.key = m.keys
@@ -229,7 +233,7 @@ func (m *lcModel) mutate() string {
 		return "window"
 	case v < 29:
 		// What reaches rows: a scroll, the second column's width, rows
-		// sharing a key for one frame, a column fitted to its cells.
+		// sharing a key for one frame, the rows sorted, a column fitted to its cells.
 		var ls []*lcNode
 		for _, c := range nodes {
 			if c.kind == lcList || c.kind == lcTable {
@@ -242,13 +246,17 @@ func (m *lcModel) mutate() string {
 		l := ls[m.rng.IntN(len(ls))]
 		switch v {
 		case 19, 20:
-			row := m.rng.IntN(2 + len(lcTexts))
+			row := m.rng.IntN(l.rows())
 			l.lists[0].ScrollTo(row, Start)
 			l.lists[1].ScrollTo(row, Start)
 			return "scroll"
 		case 21:
 			l.colw = uint8(m.rng.IntN(len(lcColWidths)))
 			return "column width"
+		case 23:
+			l.rev = !l.rev
+			l.sort[0].Descending, l.sort[1].Descending = l.rev, l.rev
+			return "sort"
 		case 22:
 			if m.testers[0] == nil {
 				return "nothing" // only TestLayoutCacheMatches turns strict mode off
@@ -298,9 +306,27 @@ func (m *lcModel) fit() bool {
 	return true
 }
 
+// rows is the number of rows of a List or a Table: many more than a window
+// shows, or a few.
+func (n *lcNode) rows() int {
+	if n.many {
+		return 30 + 10*n.text
+	}
+	return 2 + n.text
+}
+
+// at is the item that row i shows, the rows being sorted.
+func (n *lcNode) at(i int) int {
+	if n.rev {
+		return n.rows() - 1 - i
+	}
+	return i
+}
+
 // lcRow is the row i of a List: two texts and a box, with a font of its own,
 // so that a row has a subtree to reuse.
 func lcRow(c *context, n *lcNode, i int) {
+	i = n.at(i)
 	font := lcStyles[16]
 	e := coreRow(c).Gap(4).Children(func() {
 		coreText(c, lcTexts[(i+n.text)%len(lcTexts)])
@@ -317,6 +343,10 @@ func lcRow(c *context, n *lcNode, i int) {
 func (m *lcModel) keyRows(n *lcNode, tester int) {
 	s := &n.lists[tester]
 	s.Key = nil
+	s.Header = nil
+	if n.many && n.kind == lcList {
+		s.Header = func(i int) bool { return i%7 == 0 }
+	}
 	if m.dup == n {
 		s.Key = func(i int) any { return i / 2 }
 	}
@@ -343,14 +373,16 @@ func (m *lcModel) build(c *context, tester int) {
 			e = coreTextInput(c, &n.value)
 		case lcList:
 			m.keyRows(n, tester)
-			e = coreList(c, &n.lists[tester], 2+n.text, func(i int) {
+			e = coreList(c, &n.lists[tester], n.rows(), func(i int) {
 				lcRow(c, n, i)
 			})
 		case lcTable:
 			m.keyRows(n, tester)
-			cols := []TableColumn{{Title: "Name"}, {Title: "Status", Width: lcColWidths[n.colw]}}
-			e = coreTable(c, &n.lists[tester], cols, 2+n.text, func(row, col int) {
-				coreText(c, lcTexts[(row+col+n.text)%len(lcTexts)])
+			n.lists[tester].Sort = &n.sort[tester]
+			n.sort[tester].Column = "Name"
+			cols := []TableColumn{{Title: "Name", Sortable: true}, {Title: "Status", Width: lcColWidths[n.colw]}}
+			e = coreTable(c, &n.lists[tester], cols, n.rows(), func(row, col int) {
+				coreText(c, lcTexts[(n.at(row)+col+n.text)%len(lcTexts)])
 			})
 		case lcForm:
 			// Its labels as wide as the widest.
