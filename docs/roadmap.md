@@ -257,7 +257,8 @@ cannot show: those items are not marked):
 
 **Later:**
 
-- Bring `TableFrame100k` down to tens of µs. *Open:* 104 µs on an M1 Pro;
+- Bring `TableFrame100k` down to tens of µs. *Open:* 104 µs on an M1 Pro
+  (85 µs once the rows reuse their layout, below);
   allocations went from 223 to 22 a frame (#169: 164, #179: 22).
   Where the 104 µs goes (an M1 Pro, 195 elements, the scene of
   `BenchmarkTableFrame100k`, the mean of 100,000 frames; 0.55 µs an element):
@@ -282,21 +283,23 @@ cannot show: those items are not marked):
   fits its columns, so they and what is inside them are never "the same").
   Reusing the layout of the rows a List builds is the lead for the 44 µs.
 
-  *Proposal, not done:* once `layoutList` has built a row, run `sameLayout`
-  on the row's subtree (its elements keep their state by the row's key, so
-  they can be compared with the frame before) and let `layoutBox` reuse a
-  box laid out at the same size, though the List itself stays volatile.
-  *Measured:* an idle frame of the table lays out again 183 of 195 elements
-  (12 reused); a plain tree of 62 elements, 0 (62 reused), by the counters
-  `engine.laySeq` and `engine.computed`. *Gain, estimated:* the layout of
-  44 µs to about 10 µs, a frame of 105 to about 70 µs, and a scroll by a few
-  rows too, as most rows stay. *Risks:* the correctness of the layout cache
-  (`TestLayoutCacheMatches` has no List or Table case), and a row's height
-  that follows the columns a Table fits; a wrong reuse shows as a row drawn
-  at a stale size, which is hard to see. *Why not now:* a frame of 105 µs is
-  0.6% of a 16 ms budget (about 2.5% on a Windows machine 3–4 times slower).
-  *Do it when* a measurement on a real machine shows the table's frame as the
-  bottleneck.
+  **Done** (the owner asked for it on 2026-10-27, which overrode the "do it
+  when" condition): once `layoutList` has built a row, `sameRow` runs
+  `sameLayout` on the row's subtree (its elements keep their state by the
+  row's key, so they are compared with the frame before) and `layoutBox` and
+  `heightAt` reuse what a row that is the same laid out, though the List
+  itself stays volatile (`layRows` in `ui/layoutcache.go`, the calls in
+  `layoutList`). A Table's cells get their widths when they are built, so
+  the comparison sees a column's width changing; the table's `colFit` is set
+  only while a column is being fitted, and then nothing inside is reused.
+  *Measured:* an idle frame of the bench table lays out again 3 of its 195
+  elements (183 before), by `engine.computed`; `BenchmarkTableFrame100k` on
+  an M1 Pro, medians of 6: 107.7 to 84.5 µs (-21%), 961 B and 21 allocs a
+  frame as before; `BenchmarkWidgetFrame` is unchanged (within 1%).
+  `TestLayoutCacheMatches` now builds Lists and Tables with rows to reuse,
+  and scrolls, sorts, resizes and fits them; with `sameRow` told that
+  nothing around the rows changed, it fails. The 70 µs the estimate hoped
+  for is not reached: what remains is build (27 µs), paint and present.
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
