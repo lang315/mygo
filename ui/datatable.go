@@ -192,7 +192,9 @@ func (s *DataTableState[T, K]) Changed(rows ...int) {
 }
 
 // Reset says that the app removed or reordered rows: the next frame places
-// them all again, as TableView.Reset does.
+// them all again, as TableView.Reset does. Reset keeps Checked and Chosen,
+// so the app removes the keys of the rows it removed from them
+// (Selection.Remove, or Clear).
 func (s *DataTableState[T, K]) Reset() {
 	s.start()
 	s.view.Reset()
