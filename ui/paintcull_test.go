@@ -45,6 +45,10 @@ func TestPaintCullMatches(t *testing.T) {
 	if testing.Short() {
 		seeds = 6
 	}
+	if raceEnabled {
+		// As in TestLayoutCacheMatches: fewer seeds under the race detector.
+		seeds = 4
+	}
 	var culled uint64
 	for seed := range uint64(seeds) {
 		m := newLCModel(seed + 1000)

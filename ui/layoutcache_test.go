@@ -520,6 +520,11 @@ func TestLayoutCacheMatches(t *testing.T) {
 	if testing.Short() {
 		seeds = 15
 	}
+	if raceEnabled {
+		// The race detector slows this model 30 times, and the Tester runs
+		// on one goroutine: the runs without it keep the depth.
+		seeds = 8
+	}
 	var reused, computed uint64
 	for seed := range uint64(seeds) {
 		m := newLCModel(seed)
