@@ -299,6 +299,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					// Not focusable, as the rows' are: a click leaves the focus on the table
 					// (Copy, the keys), and Tab leaves it in one step; Space checks.
 					box.flags &^= flagFocusable
+					box.outOfName = true
 					table.afterInput(func() {
 						if box.Changed() {
 							changed := false
@@ -718,6 +719,7 @@ func itemCheckbox(c *context, owner *node, checked Selector, k any, label string
 	ic.on = checked.has(k)
 	box = checkbox(c, &ic.on, "", false).Label(label)
 	box.flags &^= flagFocusable
+	box.outOfName = true
 	ic.owner, ic.box, ic.checked, ic.k = owner, box, checked, k
 	owner.afterInputCheck(ic)
 	return box, ic.on

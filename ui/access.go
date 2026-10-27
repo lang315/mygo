@@ -227,6 +227,9 @@ func (t *innerTexts) walk(e *node) {
 	if e.flags&flagInvisible != 0 || e.hidden {
 		return
 	}
+	if e.outOfName {
+		return
+	}
 	if e.label != "" {
 		t.add(e.label)
 		return
