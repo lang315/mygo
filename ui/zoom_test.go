@@ -3,6 +3,7 @@ package ui
 import (
 	"image"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -336,5 +337,91 @@ func TestZoomTellsTheWindowsCoordinates(t *testing.T) {
 	if w1.frame.W == 0 || !doubled(w2.frame, w1.frame) || !doubled(w2.clip, w1.clip) ||
 		len(w1.covers) != 1 || len(w2.covers) != 1 || !doubled(w2.covers[0], w1.covers[0]) {
 		t.Errorf("web view placed at %+v zoomed 2 times, %+v unzoomed", w2, w1)
+	}
+}
+
+// TestZoomLaterMenuOpensAtTheWindowsPoint checks the place a menu made
+// Later is shown at: the point the user asked for, in the window's DIPs,
+// as it is for a menu made at once.
+func TestZoomLaterMenuOpensAtTheWindowsPoint(t *testing.T) {
+	var open func()
+	zoom := float32(1)
+	view := func(c *context) {
+		c.SetZoom(zoom)
+		coreRow(c).Padding(8).Children(func() {
+			coreText(c, "Row")
+		}).ContextMenu(func(m *Menu) {
+			if o := m.Later(); o != nil {
+				open = o
+				return
+			}
+			m.Item("A")
+		})
+	}
+	menuAt := func(z float32) [2]float32 {
+		zoom, open = z, nil
+		tt := coreNewTester(view, 400, 300)
+		if err := tt.RightClick("Row"); err != nil {
+			t.Fatal(err)
+		}
+		if open == nil {
+			t.Fatalf("zoom %v: the menu was not made Later", z)
+		}
+		open()
+		tt.Frame()
+		if m := tt.Menu(); !slices.Equal(m, []string{"A"}) {
+			t.Fatalf("zoom %v: menu %q", z, m)
+		}
+		return tt.h.menuAt
+	}
+	m1, m2 := menuAt(1), menuAt(2)
+	if m1 == ([2]float32{}) {
+		t.Fatal("the unzoomed menu opened at the origin")
+	}
+	if m2 != [2]float32{2 * m1[0], 2 * m1[1]} {
+		t.Errorf("a menu made Later opened at %v zoomed 2 times, %v unzoomed: want twice", m2, m1)
+	}
+}
+
+// TestZoomFindAndNodesAreTheWindows checks that the boxes the tester and
+// assistive technology report are the window's: z times the content's.
+func TestZoomFindAndNodesAreTheWindows(t *testing.T) {
+	view := func(c *context) {
+		coreRow(c).Padding(5).Gap(10).Children(func() {
+			coreBox(c).Size(50, 30).Label("A")
+			coreBox(c).Size(60, 20).Label("B")
+		})
+	}
+	boxes := func(z float32) (find, node map[string]Rect) {
+		tt := coreNewTester(view, 400, 200)
+		tt.SetZoom(z)
+		find, node = map[string]Rect{}, map[string]Rect{}
+		for _, l := range []string{"A", "B"} {
+			r, ok := tt.Find(l)
+			if !ok {
+				t.Fatalf("zoom %v: no %s", z, l)
+			}
+			find[l] = r
+		}
+		for _, n := range tt.Nodes() {
+			if n.Label == "A" || n.Label == "B" {
+				node[n.Label] = n.Bounds
+			}
+		}
+		return find, node
+	}
+	f1, n1 := boxes(1)
+	f2, n2 := boxes(2)
+	twice := func(r Rect) Rect { return Rect{2 * r.X, 2 * r.Y, 2 * r.W, 2 * r.H} }
+	for _, l := range []string{"A", "B"} {
+		if f1[l].W == 0 || n1[l].W == 0 {
+			t.Fatalf("%s: unzoomed Find %v, Nodes %v", l, f1[l], n1[l])
+		}
+		if f2[l] != twice(f1[l]) {
+			t.Errorf("Find(%s) = %v zoomed 2 times, %v unzoomed: want twice", l, f2[l], f1[l])
+		}
+		if n2[l] != twice(n1[l]) {
+			t.Errorf("Nodes %s = %v zoomed 2 times, %v unzoomed: want twice", l, n2[l], n1[l])
+		}
 	}
 }
