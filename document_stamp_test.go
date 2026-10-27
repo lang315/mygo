@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/egoist/mygo/internal/update"
 )
 
 // replaceKeepingStamp replaces the file at path by another of the same size
@@ -28,7 +30,11 @@ func replaceKeepingStamp(t *testing.T, path, content string) {
 	if err := os.Chtimes(other, info.ModTime(), info.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(other, path); err != nil {
+	// Windows refuses a rename over a file for an instant while anything
+	// looks at it, even for its attributes: the document's own check of its
+	// file does, and so would an app syncing or indexing it. Apps that replace
+	// files try again, as update.Rename does.
+	if err := update.Rename(other, path); err != nil {
 		t.Fatal(err)
 	}
 }
