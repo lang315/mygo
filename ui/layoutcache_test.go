@@ -662,3 +662,38 @@ func TestGridMeasures(t *testing.T) {
 		t.Errorf("FitContent and Fr columns: measured the first %v, the second %v", measured("first"), measured("second"))
 	}
 }
+
+// The rows of a Table keep their layout while its columns keep their
+// widths, and are laid out anew when a column's width changes.
+func TestLayoutCacheReusesTableRows(t *testing.T) {
+	var s ListState
+	width := float32(80)
+	tt := coreNewTester(func(c *context) {
+		cols := []TableColumn{{Title: "Name"}, {Title: "Status", Width: width}}
+		coreBox(c).Fill().Children(func() {
+			coreTable(c, &s, cols, 1000, func(r, col int) {
+				if col == 0 {
+					coreText(c, "acc"+strconv.Itoa(r))
+				} else {
+					coreText(c, strconv.Itoa(r%7))
+				}
+			}).Grow(1)
+		})
+	}, 400, 600)
+	for range 3 {
+		tt.Frame()
+	}
+	frame := func(what string, want func(n uint32) bool) {
+		t.Helper()
+		before := tt.rt.computed
+		tt.Frame()
+		if n := tt.rt.computed - before; !want(n) {
+			t.Errorf("%s: laid out %d elements anew", what, n)
+		}
+	}
+	// Measured: 4 with the cache, 124 without; a wider column lays out 87.
+	frame("an unchanged frame", func(n uint32) bool { return n <= 8 })
+	width = 120
+	frame("a wider Status column", func(n uint32) bool { return n >= 80 })
+	frame("unchanged after the width", func(n uint32) bool { return n <= 8 })
+}

@@ -58,8 +58,8 @@ const (
 	// layReuse: the element and those inside it are as in the last layout
 	// (sameLayout), whose boxes layoutBox may reuse.
 	layReuse
-	// layRows: a List whose own layout and inherited text styles are as in
-	// the last layout, so its rows may be compared as they are built
+	// layRows: a List whose own inputs and inherited text styles are as in
+	// the last layout (not its rows, which it builds as it lays out), so its rows may be compared as they are built
 	// (sameRow).
 	layRows
 )
@@ -216,6 +216,8 @@ func sameLayout(e *node, parent uint64, index int, changed bool) bool {
 // Rows are compared at index 0: their place among the List's children
 // follows the scroll, not what lays them out.
 func sameRow(list, row *node) {
+	// A row with layOwner was compared already: layoutList can run twice in
+	// one layout (relayoutList).
 	if list.c.rt.noLayoutCache || row.lay&layOwner != 0 {
 		return
 	}
