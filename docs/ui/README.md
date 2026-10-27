@@ -106,7 +106,7 @@ UI as they read other apps (see [Accessibility](accessibility.md)).
   app's forms, dialogs and tables: controls you make once, keep, and change
   from any goroutine, as in WinForms.
 - [Windows with native UI](windows.md): window options, title bars drawn by
-  the view, and vibrancy.
+  the view, zooming the content, and vibrancy.
 - [Testing](testing.md): running a view without a window, as fast as a unit
   test.
 - [Inspector](inspector.md): the elements of a window, their boxes and
