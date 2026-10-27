@@ -629,7 +629,10 @@ features GTK 4 lacks become X11-only code beside it.
   The material shows only in a window created without a redirection
   bitmap (`WS_EX_NOREDIRECTIONBITMAP`, which Windows neither adds nor
   removes later), whose opaque surface would cover it, so `SetVibrancy`
-  shows one only in windows created with `Vibrancy`. Such a window shows
+  shows one only in windows created with `Vibrancy`. A transparent window
+  of native UI (`Transparent` with `Content`) is created without one too,
+  as a flyout is, where DirectComposition is available: what its frames
+  leave transparent shows what is behind the window. Such a window shows
   nothing GDI draws: it has no menu bar, like a window without a caption,
   and the buttons of its hidden title bar, layered without a bitmap too,
   show their pixels through DirectComposition (`compositor.go`), on a
@@ -1641,7 +1644,14 @@ as in Tauri:
   Version 4 in pure Go (`crypto/hmac`), its SHA-256 payload hash checked
   by the service; the bucket goes in the host name on AWS, and in the path
   with a custom `endpoint` or a bucket name with dots, unless `pathStyle`
-  says otherwise.
+  says otherwise. An app with an update service of its own gives
+  `Updater.SetSource` an `UpdateSource` (an `atomic.Pointer` that `Check`
+  reads once): `Check` reads the manifest from its `Manifest` in place of
+  the feed, and the `Update` keeps the source, whose `Open` downloads the
+  archive and deltas in place of `httpGet`. The configured feed is itself
+  a source (`feedSource`), so parsing, sizes, signatures, staging and the
+  swap are the same either way; `Enabled` still needs a build with
+  `updates`, for the public key.
 - File associations (`fileAssociations` in the configuration) are declared by the
   packages (see the table below) and their extensions linked into the
   binary; like deep links, files of those extensions among the launch
@@ -4086,7 +4096,13 @@ renderer's (`gputest.Compare`).
   last: the folder is gone once the uninstall is done. It tries deleting
   each shortcut again for up to 5 s, as Explorer opens a new shortcut a
   few seconds after it appears, not sharing it for deletion, and `Delete`
-  fails meanwhile.
+  fails meanwhile. `windows.installerInclude` names a script of the
+  app's own that the generated one `!include`s after MUI2.nsh and the
+  languages (`nsisHooks`); its `customInit`, `customInstall` and
+  `customUnInstall` macros, each inserted only under `!ifmacrodef`, run
+  in `.onInit`, at the end of the install section and in the uninstall
+  section before `RMDir /r "$INSTDIR"`, as electron-builder's do; without
+  it the script is unchanged.
   `makensis` comes from an installation of NSIS or, on Windows, where NSIS
   is rarely installed, from the official zip of the release that
   `Release` in `internal/nsis` pins, which the CLI downloads once, checks
@@ -4602,7 +4618,7 @@ which npm allows only for packages that exist: the first release uses an
 | menu bar | application menu bar, default menu installed | per-window GTK menu bar, none by default | per-window Win32 menu bar, none by default |
 | menu item icons | `NSMenuItem` image, 16 pt, template images tinted | a `GtkBox` of a `GtkImage` (a cairo surface at the widget's scale) and the label; none on the bar's own items; tray menus' items get `icon-data` over DBusMenu (`dbusmenu_gtk_parse_get_cached_item`) | Windows 11: drawn by MyGo in a column after the checks' (premultiplied BGRA, `internal/menuicon`); Windows 10: `hbmpItem`, a 32-bit premultiplied DIB section freed with its menu; none on the bar's own items |
 | auto-hide menu bar | ignored | the bar widget hides; `can-activate-accel` keeps its shortcuts; Alt alone or F10 show it and open its first menu until it deactivates | the menu is attached only for the `SC_KEYMENU` menu loop that Alt alone or F10 start; shortcuts come from the webview |
-| tray | NSStatusItem, click events | AppIndicator: a menu, and activation (a double click) for an icon with an `OnClick` listener | notification area icon, click events |
+| tray | NSStatusItem, click events (a Control-click a right-click) | AppIndicator: a menu, and activation (a double click) for an icon with an `OnClick` listener | notification area icon, click events |
 | global shortcuts | Carbon hot keys | X11: `XGrabKey` on the root window (with Caps/Num Lock variants), key presses from a GDK filter. Wayland: the XDG `GlobalShortcuts` portal (see [Linux](#linux-internallinux)) | `RegisterHotKey` |
 | notifications | UserNotifications, packaged apps only; `Group` is the `threadIdentifier`; optional `Sender` uses communication notifications with the signed capability; the delegate is attached at launch, for the click that launched the app | org.freedesktop.Notifications over D-Bus; ignores `Group` and `Sender` | notification-area balloons (toasts); ignores `Group` and `Sender` |
 | notification removal | `removeDeliveredNotificationsWithIdentifiers:`; `ClearNotifications` removes all, earlier runs' too | `CloseNotification` on the bus, for those of this run | hides the balloon, which goes away by itself anyway |
