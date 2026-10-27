@@ -458,6 +458,9 @@ type node struct {
 	// nameJoin makes the element's name nameFrom's followed by its Label,
 	// as a range slider's knobs.
 	nameJoin bool
+	// outOfName keeps the element's Label out of the name of the row or the
+	// item around it from content (innerText): a row's check box names itself.
+	outOfName bool
 	// focusTo is the element taking the focus that Focus and AutoFocus
 	// give this one, and whose focus Focused reports: the input of the box
 	// around it (field), a number input's text field for its row.
