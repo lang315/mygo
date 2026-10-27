@@ -36,10 +36,13 @@ func (b *Backend) NewFileWatch(notify func(platform.FileWatchNotice)) (platform.
 	return w, nil
 }
 
-// LastFileWatch returns the FileWatch created last.
+// LastFileWatch returns the FileWatch created last, or nil before any.
 func (b *Backend) LastFileWatch() *FileWatch {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if len(b.FileWatches) == 0 {
+		return nil
+	}
 	return b.FileWatches[len(b.FileWatches)-1]
 }
 
