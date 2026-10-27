@@ -27,6 +27,7 @@ type lcNode struct {
 	lists    [2]ListState // each Tester's
 	many     bool         // a List or Table of rows more than a window shows
 	rev      bool         // its rows sorted the other way round
+	keyed    bool         // its rows keyed by their items, which a sort moves
 	sort     [2]SortOrder // each Tester's, a Table's Sort
 	colw     uint8        // a Table's second column is lcColWidths[colw] wide
 }
@@ -192,7 +193,7 @@ func (m *lcModel) mutate() string {
 	nodes, parents := m.all()
 	i := m.rng.IntN(len(nodes))
 	n, p := nodes[i], parents[i]
-	switch v := m.rng.IntN(29); {
+	switch v := m.rng.IntN(31); {
 	case v < 9:
 		s := m.rng.IntN(len(lcStyles))
 		n.styles[s] = uint8(m.rng.IntN(len(lcStyles[s])))
@@ -231,9 +232,10 @@ func (m *lcModel) mutate() string {
 	case v < 19:
 		m.w, m.h = 200+m.rng.IntN(400), 150+m.rng.IntN(300)
 		return "window"
-	case v < 29:
+	case v < 31:
 		// What reaches rows: a scroll, the second column's width, rows
-		// sharing a key for one frame, the rows sorted, a column fitted to its cells.
+		// sharing a key for one frame, the rows sorted, a column fitted to its
+		// cells, rows keyed by their items, a row revealed.
 		var ls []*lcNode
 		for _, c := range nodes {
 			if c.kind == lcList || c.kind == lcTable {
@@ -265,6 +267,33 @@ func (m *lcModel) mutate() string {
 			// Strict mode refuses keys that two rows share.
 			m.testers[0].rt.strict, m.testers[1].rt.strict = false, false
 			return "duplicate keys"
+		case 29:
+			l.keyed = !l.keyed
+			return "keyed rows"
+		case 30:
+			if m.testers[0] == nil {
+				return "nothing"
+			}
+			// A row shown in part, or built beyond the view, comes into view:
+			// the List lays out again from there (relayoutList).
+			var rows []uint64
+			var walk func(e *node)
+			walk = func(e *node) {
+				for ; e != nil; e = e.next {
+					if e.listRow {
+						rows = append(rows, e.id)
+					}
+					walk(e.first)
+				}
+			}
+			walk(m.testers[0].rt.c.root)
+			if len(rows) == 0 {
+				return "nothing"
+			}
+			id := rows[m.rng.IntN(len(rows))]
+			m.testers[0].rt.reveal(id)
+			m.testers[1].rt.reveal(id)
+			return "reveal"
 		}
 		if m.fit() {
 			return "fit column"
@@ -346,6 +375,9 @@ func (m *lcModel) keyRows(n *lcNode, tester int) {
 	s.Header = nil
 	if n.many && n.kind == lcList {
 		s.Header = func(i int) bool { return i%7 == 0 }
+	}
+	if n.keyed {
+		s.Key = func(i int) any { return n.at(i) }
 	}
 	if m.dup == n {
 		s.Key = func(i int) any { return i / 2 }
@@ -837,9 +869,92 @@ func TestLayoutCacheReusesTableRows(t *testing.T) {
 			t.Errorf("%s: laid out %d elements anew", what, n)
 		}
 	}
-	// Measured: 4 with the cache, 124 without; a wider column lays out 87.
+	// With the cache an idle frame lays out a handful of elements, without
+	// it over a hundred; a wider column lays out the cells of its rows.
 	frame("an unchanged frame", func(n uint32) bool { return n <= 8 })
 	width = 120
 	frame("a wider Status column", func(n uint32) bool { return n >= 80 })
 	frame("unchanged after the width", func(n uint32) bool { return n <= 8 })
+}
+
+// Rows built late (rows far shorter than the List estimates, in a state that
+// knows no heights) lay out as without the cache, frame after frame and
+// scrolled.
+func TestLayoutCacheLateRows(t *testing.T) {
+	var states [2]ListState
+	var late [2]int
+	view := func(k int) func(c *context) {
+		var viewAt uint64
+		return func(c *context) {
+			viewAt = c.rt.layouts
+			coreBox(c).Fill().Children(func() {
+				coreList(c, &states[k], 1000, func(i int) {
+					if c.rt.layouts != viewAt {
+						late[k]++ // the frame's layout began: the List builds it as it lays out
+					}
+					coreRow(c).Height(4).Gap(3).Children(func() {
+						coreText(c, "row "+strconv.Itoa(i))
+						coreText(c, strconv.Itoa(i*7%100))
+					})
+				}).Grow(1)
+			})
+		}
+	}
+	start := time.Unix(1e9, 0)
+	cached := lcTester(view(0), 400, 300, start)
+	fresh := lcTester(view(1), 400, 300, start)
+	fresh.rt.noLayoutCache = true
+	for f, row := range []int{0, 0, 700, 0, 700, 700} {
+		// A state new in each frame knows no heights, so the List builds
+		// the rows it estimated too few of while it lays out.
+		states = [2]ListState{}
+		late = [2]int{}
+		for k := range states {
+			states[k].ScrollTo(row, Start)
+		}
+		cached.Frame()
+		fresh.Frame()
+		if late[0] == 0 || late[0] != late[1] {
+			t.Fatalf("frame %d: %d rows built late with the cache, %d without", f, late[0], late[1])
+		}
+		if d := sameBoxes(cached.rt.c.root, fresh.rt.c.root, "root"); d != "" {
+			t.Fatalf("frame %d (row %d): %s", f, row, d)
+		}
+	}
+}
+
+// unselectable collects the texts under e that are not selectable.
+func unselectable(e *node, bad *[]string) {
+	for ; e != nil; e = e.next {
+		if e.kind == kindText && e.flags&flagSelectable == 0 {
+			*bad = append(*bad, e.ownText)
+		}
+		unselectable(e.first, bad)
+	}
+}
+
+// A row that the List builds late, in two frames running, is selectable in
+// the second as in the first: layoutBox reuses the row without computeBox,
+// which made it so.
+func TestLateRowsAreSelectable(t *testing.T) {
+	var s ListState
+	tt := coreNewTester(func(c *context) {
+		coreBox(c).Fill().Selectable().Children(func() {
+			coreList(c, &s, 1000, func(i int) {
+				coreRow(c).Height(4).Children(func() { coreText(c, "row "+strconv.Itoa(i)) })
+			}).Grow(1)
+		})
+	}, 400, 300)
+	tt.Frame()
+	// A state new in each frame knows no heights: the same rows are built
+	// late again.
+	for f := range 4 {
+		s = ListState{}
+		tt.Frame()
+		var bad []string
+		unselectable(tt.rt.c.root, &bad)
+		if len(bad) > 0 {
+			t.Fatalf("frame %d: %d texts not selectable, as %q", f, len(bad), bad[0])
+		}
+	}
 }

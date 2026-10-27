@@ -850,6 +850,9 @@ func (f *listFrame) buildLate(i int) *node {
 	w := f.build(i)
 	c.parent, c.theme = parent, theme
 	c.rt.late = true
+	// The view's pass made the others selectable (prepareSelectable) before
+	// sameRow took their flags; a row reused skips computeBox, which would.
+	c.rt.prepareSelectable(w)
 	return w
 }
 
@@ -1927,6 +1930,7 @@ func (e *node) pinHeader(first, hi int, top float64) *node {
 		f.buildLate(hh)
 		k = len(f.rows) - 1
 		f.at[hh] = k
+		sameRow(e, f.rows[k].e)
 		s.heights.set(hh, heightAt(f.rows[k].e, s.width, inf))
 		f.rows[k].y = f.rows[f.at[first]].y - (s.heights.top(first, s.gap) - s.heights.top(hh, s.gap))
 	}

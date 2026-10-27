@@ -43,8 +43,10 @@ import (
 // editor; an element attached to another is placed by that one's box.
 // Those are never the same (volatile), nor anything around them, nor
 // anything inside those that change what is inside them. A List stays
-// volatile, but its rows are compared once built (sameRow), as long as the
-// List's own inputs and inherited text styles are the same. Transforms, as
+// volatile, but its rows are compared once built (sameRow), as long as its
+// own text styles and those it inherits are the same: rows reach it only
+// through the width it gives them and their own height, which the size
+// they are laid out at carries. Transforms, as
 // Translate, and the scroll offsets of other containers move elements
 // after layout (place, commit) and are not compared.
 //
@@ -58,9 +60,9 @@ const (
 	// layReuse: the element and those inside it are as in the last layout
 	// (sameLayout), whose boxes layoutBox may reuse.
 	layReuse
-	// layRows: a List whose own inputs and inherited text styles are as in
-	// the last layout (not its rows, which it builds as it lays out), so its rows may be compared as they are built
-	// (sameRow).
+	// layRows: a List whose own text styles and those it inherits are as in
+	// the last layout (not its rows, which it builds as it lays out), so
+	// its rows may be compared as they are built (sameRow).
 	layRows
 )
 
