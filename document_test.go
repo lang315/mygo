@@ -1033,7 +1033,7 @@ func TestDocumentFollowsReplacedRename(t *testing.T) {
 	var watch *fake.FileWatch
 	waitFor(t, "the watch to see the file", func() bool {
 		watch = fb.LastFileWatch()
-		return slices.ContainsFunc(watch.Targets(), func(t platform.FileWatchTarget) bool { return t.Path == path && !t.Directory })
+		return watch != nil && slices.ContainsFunc(watch.Targets(), func(t platform.FileWatchTarget) bool { return t.Path == path && !t.Directory })
 	})
 	if err := os.WriteFile(path+".tmp", []byte("two, longer"), 0o644); err != nil {
 		t.Fatal(err)
