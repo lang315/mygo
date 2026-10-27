@@ -426,7 +426,8 @@ func ownWindow(h uintptr) bool { return h != 0 && windowProcess(h) == uint32(sys
 // and the one in front. A window of the app that takes no click, a parent its
 // modal child disables, is clicked all the same and returns at once, as no
 // release will come. If no release came within the given time, missed
-// describes the window under the point and the one in front.
+// describes the window under the point and the one in front, and what may
+// keep the click from coming back (diagnoseClick).
 func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string) {
 	w := theBackend.windows[hwnd]
 	if w == nil || w.surface == nil {
@@ -455,7 +456,7 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		return true, describe()
 	}
 	enabled, _, _ := procIsWindowEnabled.Call(under)
-	user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
+	placed, _, _ := user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
 	mouse := user32.NewProc("mouse_event")
 	const leftDown, leftUp = 0x0002, 0x0004
 	mouse.Call(leftDown, 0, 0, 0, 0)
@@ -463,6 +464,7 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 	if enabled == 0 {
 		return true, ""
 	}
+	downs := 0 // for the diagnosis of a click that did not come back
 	for deadline := time.Now().Add(within); time.Now().Before(deadline); {
 		procMsgWaitForMultipleObjectsEx.Call(0, 0, 100, qsAllInput, mwmoInputAvailable)
 		var m msg
@@ -474,6 +476,9 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 				procPostQuitMessage.Call(m.WParam) // for the loop running outside
 				return true, ""
 			}
+			if m.Message == wmLButtonDown {
+				downs++
+			}
 			procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 			if m.Message == wmLButtonUp {
@@ -481,7 +486,46 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			}
 		}
 	}
-	return true, describe()
+	return true, describe() + diagnoseClick(pt, placed != 0, downs)
+}
+
+// diagnoseClick describes what may keep a click from coming back, for the
+// message of one that did not: whether the button went down in the loop
+// (and since no release came, it never came up), whether the system took
+// the cursor to the point, whether the desktop that takes input is the
+// one of this thread, and who is in front. It runs only then.
+func diagnoseClick(pt point, placed bool, downs int) string {
+	var at point
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&at)))
+	desktop := func(h uintptr) string {
+		if h == 0 {
+			return "none"
+		}
+		name := make([]uint16, 64)
+		var n uint32
+		const uoiName = 2
+		if r, _, _ := user32.NewProc("GetUserObjectInformationW").Call(h, uoiName, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name)*2), uintptr(unsafe.Pointer(&n))); r == 0 {
+			return fmt.Sprintf("%#x", h)
+		}
+		return fmt.Sprintf("%q", syscall.UTF16ToString(name))
+	}
+	// The desktop of the user's input is opened for switching to it, which
+	// fails where another desktop (the lock screen's) has it.
+	const desktopSwitch = 0x0100
+	input, _, errno := user32.NewProc("OpenInputDesktop").Call(0, 0, desktopSwitch)
+	inputDesktop := fmt.Sprintf("the input desktop %s", desktop(input))
+	if input == 0 {
+		inputDesktop = fmt.Sprintf("the input desktop cannot be opened (%v)", errno)
+	} else {
+		defer user32.NewProc("CloseDesktop").Call(input)
+	}
+	tid, _, _ := procGetCurrentThreadId.Call()
+	own, _, _ := user32.NewProc("GetThreadDesktop").Call(tid)
+	fg, _, _ := procGetForegroundWindow.Call()
+	var pid uint32
+	fgThread, _, _ := user32.NewProc("GetWindowThreadProcessId").Call(fg, uintptr(unsafe.Pointer(&pid)))
+	return fmt.Sprintf("; the button went down %d times in the loop; the cursor was set to (%d, %d): %v, and is at (%d, %d); %s, this thread's is %s; the thread in front is %d (this one %d)",
+		downs, pt.X, pt.Y, placed, at.X, at.Y, inputDesktop, desktop(own), fgThread, tid)
 }
 
 // rootAt returns the top-level window at a point of the screen, in
