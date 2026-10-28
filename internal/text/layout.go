@@ -344,7 +344,9 @@ type Glyph struct {
 // System lays out text and rasterizes glyphs with the system's own text
 // engine. Use Shared.
 type System struct {
-	mu  sync.Mutex
+	mu sync.Mutex
+	// rec, while a painting records (Record), gets the entries it uses.
+	rec *Uses
 	eng engine
 	// uiFamily is the family system-ui stands for where the engine does
 	// not know it (SetUIFamily), and rendering the desktop's settings for
