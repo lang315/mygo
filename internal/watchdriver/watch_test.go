@@ -12,6 +12,7 @@ type testDriver struct {
 	added   []uint64
 	removed []uint64
 	fail    chan error
+	removes chan uint64 // each Remove, as the driver's goroutine runs it
 	closed  bool
 }
 
@@ -22,7 +23,10 @@ func (d *testDriver) Add(t platform.FileWatchTarget) error {
 	}
 	return nil
 }
-func (d *testDriver) Remove(id uint64) { d.removed = append(d.removed, id) }
+func (d *testDriver) Remove(id uint64) {
+	d.removed = append(d.removed, id)
+	d.removes <- id
+}
 func (d *testDriver) Wait() ([]platform.FileWatchNotice, error) {
 	select {
 	case <-d.wake:
@@ -40,7 +44,7 @@ func (d *testDriver) Wake() {
 func (d *testDriver) Close() { d.closed = true }
 
 func TestWatch(t *testing.T) {
-	d := &testDriver{wake: make(chan struct{}, 1), fail: make(chan error)}
+	d := &testDriver{wake: make(chan struct{}, 1), fail: make(chan error), removes: make(chan uint64, 1)}
 	notices := make(chan platform.FileWatchNotice, 16)
 	w := New(d, func(n platform.FileWatchNotice) { notices <- n })
 	if err := w.Add(platform.FileWatchTarget{ID: 1}); err != nil {
@@ -52,6 +56,12 @@ func TestWatch(t *testing.T) {
 	w.Remove(1)
 	if n := <-notices; n.Target != 1 {
 		t.Fatalf("notice %+v", n)
+	}
+	// The notice may come from the wake of an Add, before the driver has
+	// run the Remove: an error from Wait then could end the watch with the
+	// Remove still queued. Wait for the driver to have run it.
+	if id := <-d.removes; id != 1 {
+		t.Fatalf("removed %d", id)
 	}
 	// An error from Wait ends the watch, and is the last notice.
 	failure := errors.New("failure")
