@@ -160,6 +160,9 @@ func TestOnCloseAfterQuitAttemptDoesNotQuit(t *testing.T) {
 	w.Show()
 	mygo.App.Quit() // asked, says no
 	received(t, asked)
+	// The handler has sent, not returned: a request while it asks is dropped.
+	// What the event goroutine runs next comes after it has returned.
+	Update(func() {})
 	w.OnClose(func() bool { asked <- struct{}{}; return true })
 	fw := lastFake(t)
 	mygo.RunOnMain(func() { fw.H.ShouldClose() })
