@@ -1,8 +1,10 @@
 package widget
 
 import (
+	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -96,6 +98,9 @@ func TestAddRowsInBatchesOfNoRowsReportsOnce(t *testing.T) {
 func TestAddRowsInBatchesCancelDropsPostedReportsAndWaitsForTheLoader(t *testing.T) {
 	// Hold the event goroutine, so the reports of the batches done queue.
 	hold, held := make(chan struct{}), make(chan struct{})
+	var unhold sync.Once
+	free := func() { unhold.Do(func() { close(hold) }) }
+	t.Cleanup(free) // a failure must not leave the event goroutine held for the tests after it
 	Post(func() { close(held); <-hold })
 	received(t, held)
 	reached, release := make(chan struct{}), make(chan struct{})
@@ -110,13 +115,18 @@ func TestAddRowsInBatchesCancelDropsPostedReportsAndWaitsForTheLoader(t *testing
 	var log progressLog
 	cancel := src.AddRowsInBatches(accts(10), 2, log.add)
 	received(t, reached)
+	// Release the loader only once cancel has set its stop and waits for it,
+	// so the stop is seen after the batch in hand.
+	cancelled := make(chan struct{})
+	go func() { cancel(); close(cancelled) }()
+	wait.Until(t, "cancel to set the stop and wait for the loader", waitingInCancel)
 	close(release)
-	cancel() // returns once the loader has ended
+	received(t, cancelled) // returns once the loader has ended
 	n := calls.Load()
 	if src.Len() != 4 || n != 4 {
 		t.Fatalf("after cancel: %d rows held, %d key calls, want the 2 batches in hand (4, 4)", src.Len(), n)
 	}
-	close(hold)
+	free()
 	idle()
 	if got := log.get(); len(got) != 0 {
 		t.Fatalf("progress %v ran after cancel returned", got)
@@ -124,6 +134,20 @@ func TestAddRowsInBatchesCancelDropsPostedReportsAndWaitsForTheLoader(t *testing
 	if calls.Load() != n {
 		t.Fatalf("the loader went on after cancel returned")
 	}
+}
+
+// waitingInCancel reports whether a goroutine is blocked in a cancel func of
+// AddRowsInBatches, which sets the stop before it waits: the key func's
+// goroutine, blocked too, has the test's func at the top of its stack.
+func waitingInCancel() bool {
+	buf := make([]byte, 1<<20)
+	for _, g := range strings.Split(string(buf[:runtime.Stack(buf, true)]), "\n\n") {
+		lines := strings.Split(g, "\n")
+		if len(lines) > 1 && strings.Contains(lines[0], "chan receive") && strings.Contains(lines[1], "AddRowsInBatches.func") {
+			return true
+		}
+	}
+	return false
 }
 
 // Cancel from the progress func, on the event goroutine, waits for the loader
