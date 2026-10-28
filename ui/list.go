@@ -340,6 +340,12 @@ type ListState struct {
 	// tableCols are the columns of the Table choosing cells (CellSelect)
 	// in the order shown, in this frame.
 	tableCols []tableCol
+	// rowSig and rowNoKeep are what a Table tells the list it builds of the
+	// table around its rows (rowSignature): the columns' places, widths and
+	// alignment, the block of cells chosen. buildList takes them for the
+	// frame, and clears them.
+	rowSig    uint64
+	rowNoKeep bool
 }
 
 // listRequest is where the app or the user asked the list to go: to row
@@ -494,6 +500,9 @@ type listFrame struct {
 	kept    map[any]*rowKeep
 	spare   []*rowKeep
 	handles []any
+	// sig and noKeep are the table's (ListState.rowSig, rowNoKeep).
+	sig    uint64
+	noKeep bool
 	// rb is the row being built (Context.row), kept here rather than
 	// allocated for each row.
 	rb rowBuild
@@ -572,7 +581,9 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		panic("ui: a list cannot both DragSelect (or CellSelect) and Reorder")
 	}
 	n = max(n, 0)
-	*f = listFrame{c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, spare: f.spare, handles: f.handles[:0]}
+	sig, noKeep := s.rowSig, s.rowNoKeep
+	s.rowSig, s.rowNoKeep = 0, false
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, spare: f.spare, handles: f.handles[:0]}
 	if s.RowVersion != nil {
 		// Linked here, so that an app with no List does not link the code
 		// that keeps rows.

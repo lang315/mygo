@@ -3,6 +3,9 @@ package ui
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"log"
+	"os"
 	"testing"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -23,7 +26,11 @@ type keepScene struct {
 	light   *Theme
 	dark    *Theme
 	theme   *Theme
-	bind    int // the row whose first cell binds handle, -1 for none
+	bind    int     // the row whose first cell binds handle, -1 for none
+	hide    int     // 1: an element above the table is Invisible, 2: Hidden
+	omit    bool    // the table is not built
+	colw    float32 // the width of the first column, 0 for the room that is left
+	rtl     bool    // the table is built right to left
 }
 
 // newKeepScene makes the scene, with the rows kept (keep) or built in every
@@ -38,16 +45,31 @@ func newKeepScene(t *testing.T, n int, keep bool) *keepScene {
 		Selection:  &s.chosen,
 		RowVersion: func(i int) uint64 { return s.vers[i] },
 	}
-	cols := []TableColumn{{Title: "Name"}}
 	s.tt = coreNewTester(func(c *context) {
 		c.SetTheme(s.theme)
-		coreTable(c, &s.list, cols, n, func(row, col int) {
-			s.builds[row]++
-			e := coreText(c, fmt.Sprint("row", row, " v", s.vers[row]))
-			if row == s.bind {
-				wrapElement(e).Bind(&s.handle)
+		top := coreBox(c).Fill()
+		switch s.hide {
+		case 1:
+			top.Invisible()
+		case 2:
+			top.Hidden(true)
+		}
+		if s.rtl {
+			top.Direction(RightToLeft)
+		}
+		top.Children(func() {
+			if s.omit {
+				return
 			}
-		}).Grow(1)
+			cols := []TableColumn{{Title: "Name", Width: s.colw}}
+			coreTable(c, &s.list, cols, n, func(row, col int) {
+				s.builds[row]++
+				e := coreText(c, fmt.Sprint("row", row, " v", s.vers[row]))
+				if row == s.bind {
+					wrapElement(e).Bind(&s.handle)
+				}
+			}).Grow(1)
+		})
 	}, 400, 600)
 	s.tt.rt.noRetain = !keep
 	s.tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
@@ -331,4 +353,154 @@ func TestRetainWithoutARowVersionNothingIsKept(t *testing.T) {
 	if a.tt.rt.rowsKept != kept {
 		t.Errorf("no RowVersion and %d rows were kept", a.tt.rt.rowsKept-kept)
 	}
+}
+
+// An app that gives two rows a key makes them share a state; a row that is
+// kept does not overwrite the copy of the other with its own.
+func TestRetainRowsThatShareAKeyKeepNoWrongCopy(t *testing.T) {
+	log.SetOutput(io.Discard) // the repeated keys are logged
+	defer log.SetOutput(os.Stderr)
+	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	for _, s := range []*keepScene{a, b} {
+		s.tt.rt.strict = false
+		s.list.Key = func(i int) any { return i / 2 }
+	}
+	for range 4 {
+		a.tt.Frame()
+		b.tt.Frame()
+		same(t, "rows that share keys", a, b)
+	}
+	for _, s := range []*keepScene{a, b} {
+		s.list.Key = func(i int) any { return i }
+	}
+	for range 4 {
+		a.tt.Frame()
+		b.tt.Frame()
+		same(t, "keys back", a, b)
+	}
+}
+
+// A row captured, then built without being captured (the pointer is on it, and
+// its check changes meanwhile), has no record when the pointer leaves: it is
+// built, not linked from the capture before.
+func TestRetainARowBuiltWithoutCaptureLeavesNoOlderRecord(t *testing.T) {
+	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	x, y := a.rowAt(5)
+	for _, s := range []*keepScene{a, b} {
+		s.tt.Move(x, y) // B: hovered, so not captured
+		s.checked.Add(5)
+		s.tt.Frame()
+	}
+	if a.list.frame.kept[5] != nil {
+		t.Fatal("row 5 was built hovered, and the record of the frame before is still there")
+	}
+	same(t, "B", a, b)
+	// C: the pointer leaves, to the header.
+	before := slicesClone(a.builds)
+	a.tt.Move(200, 8)
+	b.tt.Move(200, 8)
+	if got := a.diff(before); got[5] == 0 {
+		t.Errorf("the pointer left row 5: rows built %v, want row 5 built", got)
+	}
+	same(t, "C", a, b)
+	if !a.checked.Has(5) {
+		t.Error("row 5 lost its check")
+	}
+	// And a frame later it is kept again.
+	a.frame()
+	onlyRows(t, "D", a.frame())
+}
+
+// An element above the table is Invisible or Hidden while a row's data changes
+// with its version: the row shows the change when the element shows again.
+func TestRetainARowChangedWhileAnAncestorIsHidden(t *testing.T) {
+	for _, hide := range []int{1, 2} {
+		a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+		for _, s := range []*keepScene{a, b} {
+			s.hide = hide
+			s.tt.Frame()
+			s.tt.Frame()
+			s.vers[4]++
+			s.tt.Frame()
+			s.tt.Frame()
+			s.hide = 0
+			s.tt.Frame()
+		}
+		same(t, fmt.Sprint("shown again after hide ", hide), a, b)
+		if !a.tt.HasText("row4 v1") {
+			t.Errorf("hide %d: row 4 does not show its new content: %q", hide, a.tt.Texts())
+		}
+		a.frame()
+		onlyRows(t, "the frame after", a.frame())
+	}
+}
+
+// A request of assistive technology to open a row (state.expand) is read as
+// the row builds: a row it is made of is built, not linked.
+func TestRetainARowAskedToExpandIsBuilt(t *testing.T) {
+	a := newKeepScene(t, 200, true)
+	var holder *state
+	for _, r := range a.list.frame.rows {
+		if r.i == 5 {
+			holder = r.e.st
+		}
+	}
+	if holder == nil {
+		t.Fatal("row 5 is not in view")
+	}
+	holder.expand = 1
+	if got := a.frame(); got[5] == 0 {
+		t.Errorf("row 5 was asked to expand: rows built %v, want row 5 built", got)
+	}
+}
+
+// A table that is not built for a frame (its page is not shown) had its rows'
+// states pruned: when it is built again its rows are built, not linked.
+func TestRetainATableNotBuiltForAFrameBuildsItsRowsAgain(t *testing.T) {
+	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	shown := a.shown()
+	for _, s := range []*keepScene{a, b} {
+		s.omit = true
+		s.tt.Frame()
+		s.omit = false
+	}
+	if got := a.frame(); len(got) < shown {
+		t.Errorf("the table is built again: %d rows built of the %d in view", len(got), shown)
+	}
+	b.tt.Frame()
+	same(t, "built again", a, b)
+	a.frame()
+	onlyRows(t, "the frame after", a.frame())
+}
+
+// What a Table builds its rows with besides their data, the width of a column,
+// is part of what a kept row was built with.
+func TestRetainAColumnWidthChangeBuildsTheRows(t *testing.T) {
+	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	shown := a.shown()
+	for _, s := range []*keepScene{a, b} {
+		s.colw = 120
+	}
+	if got := a.frame(); len(got) < shown {
+		t.Errorf("a column got a width: %d rows built of the %d in view", len(got), shown)
+	}
+	b.tt.Frame()
+	same(t, "width", a, b)
+	a.frame()
+	onlyRows(t, "the frame after", a.frame())
+}
+
+// The direction an element passes on to its children is copied as they are
+// built.
+func TestRetainADirectionChangeBuildsTheRows(t *testing.T) {
+	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	shown := a.shown()
+	for _, s := range []*keepScene{a, b} {
+		s.rtl = true
+	}
+	if got := a.frame(); len(got) < shown {
+		t.Errorf("right to left: %d rows built of the %d in view", len(got), shown)
+	}
+	b.tt.Frame()
+	same(t, "rtl", a, b)
 }

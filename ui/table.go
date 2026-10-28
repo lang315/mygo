@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"hash/maphash"
 	"maps"
+	"math"
 	"slices"
 	"strconv"
 )
@@ -345,6 +347,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		list.flags |= flagScrollX
 		list.rowMinW = least
 		head.followX = list
+		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, lo, hi, cur, checkW, s), drag.fit != ""
 		buildList(c, list, table, s, n, func(i int) {
 			row := coreRow(c).MinHeight(tableRow).AlignItems(Stretch)
 			// The list's element holding the row is the row.
@@ -693,6 +696,41 @@ func tableRowStyle(row *node) {
 	if row.Hovered() {
 		row.bg = row.builtTheme().SurfaceHover
 	}
+}
+
+// rowSignature hashes what a Table's rows are built with besides their own
+// data, which a list that keeps rows compares (ListState.RowVersion versions
+// the data): the columns in the order shown, how wide each is, how its text
+// aligns, the block of cells chosen, whether the rows have check boxes.
+func rowSignature(columns []TableColumn, order []int, layout *TableLayout, lo, hi, cur int, checkW float32, s *ListState) uint64 {
+	h := uint64(14695981039346656037)
+	mix := func(v uint64) { h = (h ^ v) * 1099511628211 }
+	for _, j := range order {
+		col := &columns[j]
+		w, ok := layout.width(col)
+		mix(uint64(j))
+		mix(uint64(math.Float32bits(w)))
+		mix(uint64(math.Float32bits(col.MinWidth)))
+		mix(uint64(col.Align))
+		mix(maphash.String(keySeed, col.id()))
+		if ok {
+			mix(1)
+		}
+		if col.RowHeader {
+			mix(2)
+		}
+	}
+	mix(uint64(lo))
+	mix(uint64(hi))
+	mix(uint64(cur))
+	mix(uint64(math.Float32bits(checkW)))
+	if s.Checked != nil {
+		mix(3)
+	}
+	if s.RoundRows {
+		mix(4)
+	}
+	return h
 }
 
 // tableRowActivate activates a row that is double-clicked. The element

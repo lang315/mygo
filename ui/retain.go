@@ -1,6 +1,10 @@
 package ui
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/egoist/mygo/internal/scene"
+)
 
 // A List or Table whose app sets ListState.RowVersion keeps the rows it built
 // in the last frame, and links them again in the next instead of building
@@ -16,11 +20,21 @@ import "slices"
 
 // rowKeep is the record of a row kept: its copy, and what it was built with.
 type rowKeep struct {
-	i         int
-	version   uint64
-	themeGen  uint64
-	theme     *Theme // the list's, when the row was built
-	lastFrame uint64 // the last frame the row was built or linked in
+	i        int
+	version  uint64
+	themeGen uint64
+	theme    *Theme // the list's, when the row was built
+	parent   uint64 // the id of the element holding the rows: theirs derive from it
+	sig      uint64 // what a Table builds the rows with besides their data (rowSignature)
+	dir      uint8  // the direction the holding element passes on, which an element copies as it is built
+	// lastFrame is the last frame the record was captured or linked in, and
+	// nothing else sets it: a row built in a frame without being captured (it
+	// was hovered, focused, pending) does not renew an older record, which
+	// capture releases instead, and a record that skipped a frame is not
+	// linked (its states were pruned and recycled). Otherwise a record older
+	// than the last frame the row was built in could match again once the
+	// inputs settled, and show a state the row has not had since.
+	lastFrame uint64
 	depth     int
 	chosen    [3]bool // of the rows above, at and below it
 	checked   bool
@@ -104,7 +118,7 @@ func (f *listFrame) chosenAround(i int) (c [3]bool) {
 // of building it, and returns its holder, or nil when the row must be built.
 func (f *listFrame) keep(i int, key any) *node {
 	v := f.s.RowVersion
-	if v == nil {
+	if v == nil || f.noKeep {
 		return nil
 	}
 	rec := f.kept[key]
@@ -112,7 +126,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		return nil
 	}
 	c, rt := f.c, f.c.rt
-	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.lastFrame+1 < rt.frame {
+	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame {
 		// A row out of view for a frame had its states pruned and recycled.
 		return nil
 	}
@@ -132,7 +146,15 @@ func (f *listFrame) keep(i int, key any) *node {
 		st.seen, st.pass = rt.frame, rt.pass
 	}
 	for j := range rec.nodes {
-		rec.nodes[j].lay = 0 // so that sameRow compares it; its measures stay
+		n := &rec.nodes[j]
+		// What layout and commit write is zero, as in an element just built: a
+		// row laid out writes it, and one that is not (below the view) holds
+		// nothing of the frame it was copied in. The measures of text and
+		// heights (nmeasure, leafOK, intrOK) are of one frame, and depend on
+		// the text style the row inherits, which may have changed; sameRow
+		// compares the row by the record in its state (lay), which stays.
+		n.lay, n.tl, n.nmeasure, n.leafOK, n.intrOK = 0, nil, 0, false, 0
+		n.x, n.y, n.w, n.h, n.contentW, n.contentH, n.ink, n.world = 0, 0, 0, 0, 0, 0, [4]float32{}, scene.Affine{}
 	}
 	rec.lastFrame = rt.frame
 	f.rows = append(f.rows, listRow{i: i, key: key, e: root})
@@ -231,7 +253,7 @@ func (rt *engine) captureRows() {
 // capture keeps the rows f built in its last pass.
 func (f *listFrame) capture() {
 	rt, v := f.c.rt, f.s.RowVersion
-	if v == nil {
+	if v == nil || f.noKeep {
 		f.kept = nil
 		return
 	}
@@ -240,8 +262,9 @@ func (f *listFrame) capture() {
 	}
 	for _, r := range f.rows {
 		rec := f.kept[r.key]
-		if rec != nil && rec.root == r.e {
-			rec.lastFrame = rt.frame // linked this frame
+		if rec != nil && rec.lastFrame == rt.frame {
+			// Linked, or kept, in this frame: its storage is a row in the tree.
+			// Another row with the key (an app that repeats a key) leaves it be.
 			continue
 		}
 		if rt.noRetain || slices.Contains(f.handles, r.key) || !retainable(r.e) {
@@ -262,6 +285,7 @@ func (f *listFrame) capture() {
 			continue
 		}
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, v(r.i), rt.themeGen, f.theme, rt.frame, r.e.depth
+		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen = f.chosenAround(r.i)
 		rec.checked = f.s.Checked != nil && f.s.Checked.has(r.key)
 		f.kept[r.key] = rec
