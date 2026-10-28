@@ -44,6 +44,7 @@ func TestAffected(t *testing.T) {
 		{"a Go file in the testdata of a package affects it alone", []string{"a/testdata/app/main.go"}, []string{"m/a"}, false},
 		{"and of the root package", []string{"testdata/x.go"}, []string{"m"}, false},
 		{"docs", []string{"docs/a.md"}, nil, false},
+		{"a page of the UI docs, which the demos' test checks", []string{"docs/ui/widget/button.md"}, []string{"m/website/docs-demo"}, false},
 		{"the website's own package", []string{"website/docs-demo/demo.go"}, []string{"m/website/docs-demo"}, false},
 		{"the website's pages", []string{"website/src/pages/index.astro", "website/package.json"}, nil, false},
 		{"a Go file of a directory without a package here goes to the command", []string{"internal/web/x_js.go"}, []string{"m/cmd/mygo"}, false},

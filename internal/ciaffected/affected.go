@@ -95,6 +95,9 @@ func dependencies(p *Package, byDir, byPath map[string]*Package) []string {
 // that every package is affected. A test file affects its package alone (selfOnly).
 func owner(file string, byDir map[string]*Package, pkgs []Package) (p *Package, selfOnly, ok bool) {
 	switch {
+	case strings.HasPrefix(file, "docs/ui/"):
+		// The demos' test checks the pages against the demos.
+		return byDir["website/docs-demo"], true, true
 	case strings.HasPrefix(file, "docs/"):
 		return nil, false, true // the tests that read it are always run
 	case file == "go.mod", file == "go.sum", strings.HasPrefix(file, ".github/"),
