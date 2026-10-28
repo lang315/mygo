@@ -46,3 +46,16 @@ func (s *System) use(e *atlasEntry) {
 		s.rec.entries = append(s.rec.entries, e)
 	}
 }
+
+// UsedAgo reports whether every entry of u was marked used n frames before the
+// one being painted, for tests.
+func (s *System) UsedAgo(u *Uses, n uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range u.entries {
+		if e.used != s.frame-n {
+			return false
+		}
+	}
+	return true
+}

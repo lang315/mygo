@@ -84,6 +84,7 @@ func TestRowsPaintAgainWhenWhatTheyReadChanges(t *testing.T) {
 		"window focus": func(tt *Tester) { tt.SetFocused(false) },
 		"scale":        func(tt *Tester) { tt.SetScale(2) },
 		"scroll":       func(tt *Tester) { tt.Scroll(100, 200, 0, 1) },
+		"theme":        func(tt *Tester) { tt.rt.themeGen++ },
 		"atlas":        func(tt *Tester) { tt.rt.text.MaskAtlas.Grow() },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -174,5 +175,53 @@ func TestDisabledAncestorRepaintsRows(t *testing.T) {
 	tt.Frame()
 	if tt.rt.freshRows == fresh || tt.rt.replayMismatch != 0 {
 		t.Fatalf("disabled: %d rows painted anew, %d mismatches", tt.rt.freshRows-fresh, tt.rt.replayMismatch)
+	}
+}
+
+// A replayed row marks the atlas entries it draws from used, as painting it
+// would: MakeRoom keeps what the frame being painted used.
+func TestReplayedRowsKeepTheirGlyphsUsed(t *testing.T) {
+	tt, _ := replayTable(t, 100, rowText)
+	rows := 0
+	walkRow(tt.rt.c.root, func(e *node) {
+		if r := e.st.replay; e.listRow && r != nil && r.ok {
+			rows++
+			if !tt.rt.text.UsedAgo(&r.uses, 1) {
+				t.Errorf("row %d: its glyphs are not marked used in the last frame", e.rowIndex)
+			}
+		}
+	})
+	if rows == 0 {
+		t.Fatal("no row replayed")
+	}
+}
+
+// What the painter reads from the elements around the rows: an opaque
+// background behind them (glyphs land on it), and the stack of such boxes.
+func TestBackgroundBehindRowsIsInTheKey(t *testing.T) {
+	opaque := true
+	var list ListState
+	tt := NewTester(func(c *Context) {
+		bg := Transparent
+		if opaque {
+			bg = RGB(240, 240, 240)
+		}
+		Box(c).Grow(1).Background(bg).Children(func() {
+			Table(c, &list, []TableColumn{{Title: "A"}}, 100, func(r, col int) { rowText(c, r) }).Grow(1)
+		})
+	}, 300, 400)
+	for range 3 {
+		tt.Frame()
+	}
+	tt.rt.replayCheck = true
+	tt.Frame()
+	fresh := tt.rt.freshRows
+	if tt.rt.replayed == 0 {
+		t.Fatal("no row replays in an idle frame")
+	}
+	opaque = false
+	tt.Frame()
+	if tt.rt.freshRows == fresh || tt.rt.replayMismatch != 0 {
+		t.Fatalf("background: %d rows painted anew, %d mismatches", tt.rt.freshRows-fresh, tt.rt.replayMismatch)
 	}
 }

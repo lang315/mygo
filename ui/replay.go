@@ -23,6 +23,7 @@ type rowKey struct {
 	opaque         bool
 	atlases        [2]uint64
 	text           scene.TextParams
+	themeGen       uint64
 	focusVisible   bool
 	windowFocus    bool
 }
@@ -57,7 +58,7 @@ func rowKeyOf(p *Painter, c *node) rowKey {
 	rt := p.rt
 	return rowKey{
 		box: Rect{c.x, c.y, c.w, c.h}, clip: p.clip, scale: p.scale, opacity: p.opacity, opaque: p.opaque,
-		atlases: atlasGenerations(p.s), text: p.s.Text, focusVisible: rt.focusVisible, windowFocus: rt.windowFocus(),
+		atlases: atlasGenerations(p.s), text: p.s.Text, themeGen: rt.themeGen, focusVisible: rt.focusVisible, windowFocus: rt.windowFocus(),
 	}
 }
 
