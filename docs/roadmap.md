@@ -445,7 +445,9 @@ cannot show: those items are not marked):
   work starts.
 - Every PR carries evidence: build, vet, tests, benchmarks and app sizes,
   and its e2e runs on the three machines.
-- A PR merges after CI is green.
+- A PR merges after CI is green. CI shards the unit tests and, for a pull
+  request, tests only what the change affects (#235): the longest job takes
+  13.5 minutes, where the critical path took 24.7 before.
 - A test never passes or fails on wall-clock time (AGENTS.md). The flakes
   that broke this on 2026-10-28, each fixed by waiting for the event or
   driving a fake clock, and not by a longer timeout (the last is a
