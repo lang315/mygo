@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 // last is the state each account was left in by results.
@@ -74,12 +74,17 @@ func TestRunStartsNoMoreWorkersThanAccounts(t *testing.T) {
 func TestRunNeverRunsAnAccountTwiceAtOnce(t *testing.T) {
 	var mu sync.Mutex
 	at, most := map[int]int{}, 0
-	r := run([]int{1, 2, 3}, 3, 10, func(ctx context.Context, id int) result {
+	r := run([]int{1, 2, 3}, 20, 10, func(ctx context.Context, id int) result {
 		mu.Lock()
 		at[id]++
 		most = max(most, at[id])
 		mu.Unlock()
-		time.Sleep(2 * time.Millisecond)
+		// A job stays in flight while the others get their turns: a loop
+		// started before this one ended would meet it here. Yielding is a
+		// count of scheduler turns, not a time.
+		for range 200 {
+			runtime.Gosched()
+		}
 		mu.Lock()
 		at[id]--
 		mu.Unlock()
