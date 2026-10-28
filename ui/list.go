@@ -589,6 +589,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		// that keeps rows.
 		if rt.keepRows == nil {
 			rt.keepRows = (*engine).captureRows
+			rt.keepRow = (*listFrame).keep
 		}
 		rt.keepLists = append(rt.keepLists, f)
 	}
@@ -798,10 +799,12 @@ func (f *listFrame) build(i int) *node {
 	if s.Key != nil {
 		key = s.Key(i)
 	}
-	if w := f.keep(i, key); w != nil {
-		return w
-	}
 	rt := c.rt
+	if rt.keepRow != nil {
+		if w := rt.keepRow(f, i, key); w != nil {
+			return w
+		}
+	}
 	rt.rowsBuilt++
 	bound := rt.bound
 	// Keyed as it is made, as Context.Key does: Key after would look up

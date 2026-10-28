@@ -126,6 +126,7 @@ type engine struct {
 	// keepRows is captureRows once a list with RowVersion was built
 	// (retain.go); keepLists the lists to capture rows of after the frame.
 	keepRows  func(*engine)
+	keepRow   func(f *listFrame, i int, key any) *node
 	keepLists []*listFrame
 	// rowsKept and rowsBuilt count the rows lists linked and built, noRetain
 	// stops lists from keeping rows (tests, benchmarks). bound counts the
