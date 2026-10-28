@@ -131,3 +131,28 @@ func TestPopoverMenuDrawsIcons(t *testing.T) {
 		t.Errorf("%d pixels of an icon before Keep, which has none", n)
 	}
 }
+
+// Menu.Later returns nil in a drawn menu, which is built each frame: code
+// that makes its items Later (a table's menu) fills them at once.
+func TestPopoverMenuLaterIsNil(t *testing.T) {
+	var laters, fills int
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(20).Children(func() {
+			coreRow(c).Padding(8).Label("Report").Children(func() {
+				coreText(c, "Report.pdf")
+			}).PopoverMenu(func(m *Menu) {
+				if m.Later() != nil {
+					laters++
+					return
+				}
+				fills++
+				m.Item("Open")
+			})
+		})
+	}, 400, 300)
+	r, _ := tt.Find("Report.pdf")
+	tt.RightClickAt(r.X+10, r.Y+r.H/2)
+	if !tt.HasText("Open") || laters != 0 || fills == 0 {
+		t.Errorf("Later returned a function %d times, items filled %d, shows Open %v", laters, fills, tt.HasText("Open"))
+	}
+}

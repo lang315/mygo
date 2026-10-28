@@ -269,7 +269,7 @@ func sameItems(a, b []*platform.MenuItem) bool {
 	for i, x := range a {
 		y := b[i]
 		if x.Native == 0 || x.Native != y.Native || !x.Visible || x.Label != y.Label || x.Enabled != y.Enabled ||
-			x.Checked != y.Checked || x.Accelerator != y.Accelerator || (x.Submenu == nil) != (y.Submenu == nil) {
+			x.Checked != y.Checked || x.Accelerator != y.Accelerator || x.Destructive != y.Destructive || x.Icon != y.Icon || (x.Submenu == nil) != (y.Submenu == nil) {
 			return false
 		}
 		if x.Submenu != nil && !sameItems(x.Submenu.Items, y.Submenu.Items) {

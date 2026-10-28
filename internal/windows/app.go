@@ -707,6 +707,11 @@ func (a appController) ClearBrowsingData(store platform.DataStore, types platfor
 		// WebView2's ARM64 browser takes every clearing to end at a null
 		// time: it clears nothing, and never finishes what its quota
 		// database keeps, the page hanging. Only the cookie manager clears.
+		if types&platform.SiteDataCookies == 0 {
+			// Clearing caches must not sign people out.
+			done(errors.New("mygo: WebView2 on Windows ARM64 clears no browsing data but cookies"))
+			return
+		}
 		a.ClearCookies(store, func(err error) {
 			if err == nil && types != platform.SiteDataCookies {
 				err = errors.New("mygo: WebView2 on Windows ARM64 clears no browsing data but cookies")

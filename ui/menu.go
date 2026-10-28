@@ -85,14 +85,14 @@ func (e *node) buildMenu(button, drawn bool, build func(m *Menu)) {
 		if e.disabled() {
 			break
 		}
-		if drawn {
-			rt.openDrawnMenu(e)
-			break
-		}
 		run := &menuRun{collect: true, iconColor: e.c.Theme().Text}
 		pm := &platform.Menu{}
 		reopened := mr.reopened
 		mr.reopened = false
+		if drawn {
+			rt.openDrawnMenu(e)
+			break
+		}
 		build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[mr.text],
 			id: e.id, x: mr.x, y: mr.y, gen: mr.gen.Load(), later: !button && !reopened})
 		var commands []string
@@ -605,9 +605,10 @@ func (rt *engine) menuChosen(p *shownMenu, id int) {
 }
 
 // menuCommand does the editing command name, chosen from a menu, on the
-// text input or selectable text id.
+// text input or selectable text id, if the frame built it: the state of one
+// the view stopped building (GlobalKey, KeepAlive) is left alone.
 func (rt *engine) menuCommand(id uint64, name string) {
-	if s := rt.states[id]; s != nil && s.editor != nil {
+	if s := rt.states[id]; s != nil && s.seen == rt.frame && s.editor != nil {
 		if !rt.textSelectionCommand(s, name) {
 			s.editor.queue = append(s.editor.queue, editEvent{kind: editCommand, text: name})
 		}

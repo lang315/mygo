@@ -3,6 +3,7 @@
 package mygo
 
 import (
+	"image/color"
 	"slices"
 	"testing"
 
@@ -331,5 +332,24 @@ func TestTidySeparators(t *testing.T) {
 	want := []string{"Back", "Copy", "-", "Hidden", "Paste", "More", "More/Speak", "Gone"}
 	if !slices.Equal(got, want) {
 		t.Errorf("tidied menu %v, want %v", got, want)
+	}
+}
+
+// A listener that only gives a web view's item the fork's look, a danger
+// color or an icon, changes the menu: the web view must not show its own.
+func TestContextMenuStyleOnlyIsAChange(t *testing.T) {
+	ic := icon(t, flag(t, 16, 16, color.NRGBA{255, 0, 0, 255}), false)
+	for name, change := range map[string]func(*MenuItem){
+		"destructive": func(it *MenuItem) { it.SetDestructive(true) },
+		"icon":        func(it *MenuItem) { it.SetIcon(ic) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			w, fw := testWindow(t, WindowOptions{})
+			w.Page().OnContextMenu(func(e *ContextMenuEvent) { change(e.Menu.ItemByID(ContextMenuCopy)) })
+			r := askContextMenu(fw, &platform.ContextMenu{Items: webViewMenu()})
+			if r.Default || r.Menu == nil {
+				t.Fatalf("answer = %+v, want the changed menu", r)
+			}
+		})
 	}
 }
