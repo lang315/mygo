@@ -513,6 +513,23 @@ type node struct {
 	serial int32
 }
 
+// nodeLook is what an element's styleFn and color transition change as it
+// paints: Painter.element puts it back when the element is painted, so a
+// node painted again (repaintFrame, a retained row) starts from its build.
+type nodeLook struct {
+	bg, borderC, text Color
+	opacity           float32
+	opacitySet        bool
+}
+
+func (e *node) look() nodeLook {
+	return nodeLook{e.bg, e.borderC, e.ts.color, e.opacity, e.opacitySet}
+}
+
+func (e *node) setLook(l nodeLook) {
+	e.bg, e.borderC, e.ts.color, e.opacity, e.opacitySet = l.bg, l.borderC, l.text, l.opacity, l.opacitySet
+}
+
 // measure is the height of an element at a width (naturalHeight).
 type measure struct {
 	availW, h float32

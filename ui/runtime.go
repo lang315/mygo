@@ -110,8 +110,11 @@ type engine struct {
 	// itemChecks holds the check boxes of the rows and items of the frame.
 	itemChecks itemCheckSlab
 	// themes are those that elements built with a static paint function
-	// were built with in the frame (node.builtWith).
-	themes []*Theme
+	// were built with (node.builtWith), kept across frames so that an
+	// element's themeAt stays its theme's: the list only grows, and starts
+	// over past themeKeep, which themeGen counts (for rows kept across frames).
+	themes   []*Theme
+	themeGen uint64
 
 	// prevThemes are those of the frame before, which the elements kept for
 	// exit transitions refer to, and ghostThemes those that copies of them keep.
@@ -599,12 +602,20 @@ func (rt *engine) runFrame() {
 
 	if rt.exitsBuilt {
 		// The last frame's elements stay as they are while this one builds,
-		// for copies of those that go with an exit transition.
+		// for copies of those that go with an exit transition, and refer to
+		// the themes as the last frame had them.
 		rt.c.chunks, rt.c.spare = rt.c.spare, rt.c.chunks
 		rt.c.dirty, rt.c.spareDirty = rt.c.spareDirty, rt.c.dirty
 		rt.c.used = rt.c.dirty
 		clear(rt.prevThemes)
-		rt.themes, rt.prevThemes = rt.prevThemes[:0], rt.themes
+		rt.prevThemes = append(rt.prevThemes[:0], rt.themes...)
+	}
+	if len(rt.themes) >= themeKeep {
+		// An app that makes a theme in each frame: start over, which
+		// elements kept from before can tell by the generation (none does yet).
+		clear(rt.themes)
+		rt.themes = rt.themes[:0]
+		rt.themeGen++
 	}
 
 	// An event handled while building (a click, an edit) may change what
@@ -1157,6 +1168,7 @@ func (rt *engine) close() {
 	rt.afterInputs = nil
 	rt.itemChecks = itemCheckSlab{}
 	rt.themes, rt.prevThemes, rt.ghostThemes, rt.ghostSpare, rt.ghostMoved = nil, nil, nil, nil, nil
+	rt.themeGen++
 	clear(rt.inputs)
 	rt.inputs = nil
 	rt.arena.rt = nil

@@ -110,8 +110,6 @@ func (c *context) reset(now time.Time, w, h float32) {
 	clear(c.rt.afterInputs)
 	c.rt.afterInputs = c.rt.afterInputs[:0]
 	c.rt.itemChecks.reset()
-	clear(c.rt.themes)
-	c.rt.themes = c.rt.themes[:0]
 	clear(c.rt.inputs)
 	c.rt.inputs = c.rt.inputs[:0]
 	c.rt.building = 0
