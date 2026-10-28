@@ -300,6 +300,28 @@ cannot show: those items are not marked):
   and scrolls, sorts, resizes and fits them; with `sameRow` told that
   nothing around the rows changed, it fails. The 70 µs the estimate hoped
   for is not reached: what remains is build (27 µs), paint and present.
+
+  **Done** (text of paint, the owner's go on 2026-10-28): `textForeground`
+  (`ui/paint.go`) asks the text system for the glyphs of a line in one call,
+  `System.Glyphs` (`internal/text/raster.go`): one lock and one placement
+  lookup per font run, where `Glyph` took the lock for each glyph, with the
+  same keys and the same atlas entries, so the pixels do not change. The 190
+  glyph lookups of the idle frame cost 9.4 µs one by one and 5.3 µs under
+  one lock. *Measured:* `BenchmarkTableFrame100k` on an M1 Pro with other
+  sessions' tests running (load average 10), 40 runs of each in turns,
+  `benchstat`: 88.24 to 87.10 µs (-1.3%, p=0.012), 961 B and 21 allocs a frame
+  as before. That is about a fourth of the 4–5 µs the lock was worth: a cell's
+  text is a line of three to nine glyphs, so a call serves few of them, and
+  the placement and map lookups, 5 µs, stay. `BenchmarkWidgetFrame` and
+  `BenchmarkUIFrame` show no difference (3 runs, within the noise). Ruled
+  out in the design (a local spec, not in the repository): replaying the ops of a row whose layout is reused, which needs the glyph
+  LRU stamps, positions that are not translations at a fractional scroll and
+  the paint-time state of hover and focus; and a per-text cache of resolved
+  glyphs, which a fractional scroll misses. *Present:* `scene.Differ.Diff`
+  of the idle frame's scene (144 ops, 191 glyphs) takes about 6.9 µs of the
+  8.0 µs present lap, so telling an identical scene earlier is worth a
+  follow-up (its gate was 3 µs). "Tens of µs" in the sense of 20–30 needs
+  the build skipped, a retained-mode design for the owner to decide.
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
