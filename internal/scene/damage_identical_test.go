@@ -172,7 +172,7 @@ func TestDiffIdenticalScene(t *testing.T) {
 		}, nil},
 		{"wide flag", 0, func(s *Scene, _ *Image) *Scene { return copyOf(s) }, func(d *Differ) { d.Wide = true }},
 		{"folding", 0, func(s *Scene, _ *Image) *Scene {
-			FoldingForTest(true) // undone when the subtest ends
+			FoldingForTest(!folding()) // the other way from the first frame's; undone when the subtest ends
 			return copyOf(s)
 		}, nil},
 		{"color atlas pixels", 0, func(s *Scene, _ *Image) *Scene {
