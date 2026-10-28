@@ -25,24 +25,46 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.os == 'macos-latest' && 'macOS' || matrix.os == 'windows-latest' && 'Windows' || 'Linux' }} (${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45 # -race: Linux took 24 minutes, macOS 18
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
+      CI_DIFF: ${{ github.event_name == 'pull_request' && 'HEAD^1 HEAD' || '' }} # the change of a pull request (its merge commit and the base)
       LINUX_PACKAGES: libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
     strategy:
       fail-fast: false
+      # The unit tests under -race took 10 to 20 minutes in one job: three jobs
+      # an OS take a shard of the packages each (.github/ci-shard.sh), and
+      # check, one more, the formatting and the builds and vets of every
+      # platform. rest has the other steps, which need no -race. A pull
+      # request tests the packages its change affects (internal/ciaffected).
       matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        shard: [cmd, ui, rest]
         include:
-          - { name: macOS, os: macos-latest }
-          - { name: Linux, os: ubuntu-latest }
-          - { name: Windows, os: windows-latest }
+          - { os: ubuntu-latest, shard: check }
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Check the formatting
+        if: matrix.shard == 'check'
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then echo "gofmt -w these files:"; echo "$unformatted"; exit 1; fi
+      - name: Which GUI and Direct3D tests the change affects
+        id: affected
+        if: matrix.shard == 'rest'
+        shell: bash
+        run: |
+          all=$(bash .github/ci-shard.sh all)
+          mod=$(go list -m)
+          if grep -qx "$mod/internal/e2e" <<<"$all"; then echo "e2e=true" >> "$GITHUB_OUTPUT"; fi
+          if grep -qx "$mod/internal/gpu/d3d11/device" <<<"$all"; then echo "d3d=true" >> "$GITHUB_OUTPUT"; fi
       - uses: oven-sh/setup-bun@v2
       # Ubuntu's mirrors are slow now and then (9 minutes for these packages
       # once), so the packages are kept in the Actions cache, under a key of
@@ -81,10 +103,10 @@ jobs:
       # The Direct3D debug layer (MYGO_D3D_DEBUG=1) is the "Graphics Tools"
       # feature of Windows; the runner lacks it.
       - name: Install the Direct3D debug layer
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.affected.outputs.d3d == 'true'
         run: Add-WindowsCapability -Online -Name Tools.Graphics.DirectX~~~~0.0.1.0
       - name: Test the Direct3D debug layer
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.affected.outputs.d3d == 'true'
         env:
           MYGO_D3D_DEBUG_REQUIRED: 1
         run: go test -count=1 -v -run TestNewWithDebug ./internal/gpu/d3d11/device
@@ -92,7 +114,7 @@ jobs:
       - name: Build the JavaScript packages
         run: bun run build
       - name: Build and vet every platform
-        if: runner.os == 'Linux'
+        if: matrix.shard == 'check'
         run: |
           for os in darwin linux windows; do
             GOOS=$os go build ./...
@@ -136,30 +158,41 @@ jobs:
       # The race detector and a shuffled order of the tests and benchmarks'
       # run on the unit tests; the GUI tests below are not run with them.
       # cmd/mygo takes 9 to 10 minutes on macOS under -race, the default limit.
-      - run: go test -race -shuffle=on -timeout 25m ./...
+      - name: Unit tests
+        if: matrix.shard != 'check'
+        shell: bash
+        run: |
+          pkgs=$(bash .github/ci-shard.sh ${{ matrix.shard }})
+          if [ -z "$pkgs" ]; then echo "The change affects no package of this shard."; else go test -race -shuffle=on -timeout 25m $pkgs; fi
       # Without cgo the apps run on purego's fakecgo, which links against the
       # runtime's internals: start every test binary that way, and the
       # packages of the native calls (the tests above use the real cgo where
       # a C compiler is, so none of them meets fakecgo).
       - name: Start every test binary through fakecgo
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.shard == 'rest'
         env:
           CGO_ENABLED: 0
         run: |
           go test -count=1 -run '^$' ./...
           go test -count=1 ${{ runner.os == 'macOS' && './internal/darwin' || './internal/linux' }}
       - name: Test without the inspector, as production builds
-        if: runner.os == 'Linux'
-        run: go test -race -shuffle=on -timeout 25m -tags mygo_noinspector ./ui .
+        if: runner.os == 'Linux' && matrix.shard == 'ui'
+        shell: bash
+        run: |
+          mod=$(go list -m)
+          pkgs=$(bash .github/ci-shard.sh all | grep -x -e "$mod" -e "$mod/ui" || true)
+          if [ -z "$pkgs" ]; then echo "The change affects neither ui nor the root package."; else go test -race -shuffle=on -timeout 25m -tags mygo_noinspector $pkgs; fi
       - run: bun run test
+        if: matrix.shard == 'rest'
       - run: bun run typecheck
+        if: matrix.shard == 'rest'
       - name: GUI tests
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' && steps.affected.outputs.e2e == 'true'
         env:
           MYGO_E2E: 1
         run: go test ./internal/e2e
       - name: GUI tests
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.affected.outputs.e2e == 'true'
         env:
           MYGO_E2E: 1
           XDG_DATA_HOME: ${{ runner.temp }}/xdg-data
@@ -168,7 +201,7 @@ jobs:
       # Runners have no GPU, so native UI draws on the CPU above; MYGO_GPU=1
       # draws it with OpenGL all the same, on Mesa's llvmpipe.
       - name: GUI tests of native UI drawn with OpenGL
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.affected.outputs.e2e == 'true'
         env:
           MYGO_E2E: 1
           MYGO_GPU: 1
@@ -178,6 +211,11 @@ jobs:
         shell: bash
         run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
 
+  # The two ARM64 jobs run every package's tests on every pull request, not
+  # only the packages the change affects (internal/ciaffected, in the job
+  # above): they are the safety net of that selection, and of the systems
+  # the amd64 jobs do not cover. Do not gate them on it without that in mind.
+  #
   # Linux on ARM64, which no machine of the maintainers runs: purego's calls
   # into WebKitGTK, GTK and Mesa pass floats and structs in registers of the
   # arm64 calling convention, which the amd64 runners never exercise.
