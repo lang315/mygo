@@ -743,6 +743,9 @@ func (rt *engine) unlook(s *state) {
 		return
 	}
 	delete(rt.states, s.id)
+	if s.replay != nil && len(rt.rowPool) < maxFree {
+		rt.rowPool = append(rt.rowPool, s.replay)
+	}
 	*s = state{text: s.text.emptied()}
 	if len(rt.free) < maxFree {
 		rt.free = append(rt.free, s)

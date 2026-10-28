@@ -206,6 +206,9 @@ type engine struct {
 	// freshRows counts the list rows painted anew since the engine began,
 	// for tests.
 	freshRows int
+	// rowPool holds the records of rows (replay.go) of the states that went, for
+	// the rows that come into view, which then allocate nothing.
+	rowPool []*rowPaint
 
 	states map[uint64]*state
 	// free are states pruned, which new elements take: rows coming into
@@ -1065,6 +1068,9 @@ func (rt *engine) dropState(id uint64, s *state) {
 	delete(rt.states, id)
 	// Recycle the state itself, without keeping the editor, local
 	// resources or callbacks of the element that went.
+	if s.replay != nil && len(rt.rowPool) < maxFree {
+		rt.rowPool = append(rt.rowPool, s.replay)
+	}
 	*s = state{text: s.text.emptied()}
 	if len(rt.free) < maxFree {
 		rt.free = append(rt.free, s)

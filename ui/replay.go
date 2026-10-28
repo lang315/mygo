@@ -50,6 +50,10 @@ type rowPaint struct {
 	g0   int32
 	uses text.Uses
 	ok   bool
+	// at is the layout the row last painted in, recorded or replayed: a row
+	// that painted anew since, without recording, left a record older than
+	// the frame before, which the row no longer looks like.
+	at uint64
 }
 
 // rowPainter paints a child of a list, replaying it where it can and
@@ -116,9 +120,10 @@ func paintRow(p *Painter, c *node) {
 	r := c.st.replay
 	stable := r != nil && r.last == key
 	if r == nil {
-		r = &rowPaint{}
+		// A row new in view records at its second painting in the same place,
+		// not at its first: scrolling brings rows that never stand still.
+		r = rt.newRowPaint()
 		c.st.replay = r
-		stable = true
 	}
 	r.last = key
 	if !stable {
@@ -162,6 +167,7 @@ func paintRow(p *Painter, c *node) {
 	r.post = r.post[:0]
 	walkRow(c, func(e *node) { r.post = append(r.post, e.flags) })
 	r.ok = true
+	r.at = rt.layouts
 	rt.recorded++
 }
 
@@ -180,7 +186,7 @@ func walkRow(e *node, fn func(e *node)) {
 func replayRow(p *Painter, c *node) bool {
 	rt, s := p.rt, p.s
 	r := c.st.replay
-	if r == nil || !r.ok || c.lay&layPaint == 0 || !recordable(p, c) || r.key != rowKeyOf(p, c) ||
+	if r == nil || !r.ok || r.at+1 < rt.layouts || c.lay&layPaint == 0 || !recordable(p, c) || r.key != rowKeyOf(p, c) ||
 		!slices.Equal(r.under, p.under) || rowInteractive(rt, r.ids) {
 		return false
 	}
@@ -210,6 +216,7 @@ func replayRow(p *Painter, c *node) bool {
 	rt.text.Touch(&r.uses)
 	i = 0
 	walkRow(c, func(e *node) { e.flags = r.post[i]; i++ })
+	r.at = rt.layouts
 	rt.replayed++
 	return true
 }
@@ -250,4 +257,18 @@ func checkReplay(p *Painter, c *node) {
 		i++
 	})
 	s.Ops, s.Glyphs = s.Ops[:ops], s.Glyphs[:glyphs]
+}
+
+// newRowPaint returns an empty record, from those of the states that went.
+func (rt *engine) newRowPaint() *rowPaint {
+	n := len(rt.rowPool)
+	if n == 0 {
+		return &rowPaint{}
+	}
+	r := rt.rowPool[n-1]
+	rt.rowPool = rt.rowPool[:n-1]
+	*r = rowPaint{under: r.under[:0], ids: r.ids[:0], pre: r.pre[:0], post: r.post[:0], boxes: r.boxes[:0],
+		ops: r.ops[:0], glyphs: r.glyphs[:0], uses: r.uses}
+	r.uses.Reset()
+	return r
 }
