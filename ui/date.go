@@ -241,7 +241,7 @@ func calendarGrid(c *context, date, cursor *time.Time, moveChooses bool, choose 
 					}
 					if !chosen {
 						cell.builtWith(t)
-						cell.styleFn = hoverSurface
+						cell.setStyle(staticHoverSurface)
 					}
 					cell.checked = 1 + int8(b2f(chosen))
 					if atCursor {

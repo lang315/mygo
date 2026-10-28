@@ -99,7 +99,7 @@ func coreTreeItem(c *context, label string, open *bool, children func()) *node {
 	expanded := branch && *open
 	item.expanded, item.expandable, item.level = expanded, branch, tb.depth+1
 	item.builtWith(t)
-	item.styleFn = hoverRow
+	item.setStyle(staticHoverRow)
 	item.DrawOver(func(p *Painter, r Rect) {
 		if item.FocusVisible() {
 			p.FocusRing(r, [4]float32{t.Radius, t.Radius, t.Radius, t.Radius})

@@ -85,7 +85,7 @@ func paintCheckbox(c *context, box *node, state int8) {
 	}
 	box.checkmark = state
 	box.builtWith(c.theme)
-	box.styleFn = checkboxStyle
+	box.setStyle(staticCheckbox)
 }
 
 // paintCheckmark paints the check or the dash of box, a check box's, and the
@@ -157,7 +157,7 @@ func coreBreadcrumbs(c *context, items []string, chosen *int) *node {
 				}
 			})
 			b.builtWith(t)
-			b.styleFn = hoverSurface
+			b.setStyle(staticHoverSurface)
 		}
 	})
 	return e

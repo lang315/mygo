@@ -668,15 +668,15 @@ func TestLayoutCacheReusesListRows(t *testing.T) {
 func TestLayoutInputs(t *testing.T) {
 	// Fields of node that the layout reads besides layoutStyle, compared
 	// or made volatile by sameLayout, and those it writes.
-	read := "flags ts cols rows spans image svg placeOn list form colFit overflow gridFit leaving ghosts attach popover " +
-		"first last next nchild parent st c measured tl lay laid x y w h contentW contentH frags runes paragraph " +
-		"ownText merged spansKey collapsed rowMinW field hidden"
+	read := "paintRare flags ts cols rows placeOn form colFit overflow gridFit attach popover " +
+		"first last next nchild parent st c measured tl lay laid x y w h contentW contentH runes frags paragraph ownText merged " +
+		"spansKey collapsed rowMinW field hidden"
 	// Fields the layout never reads.
-	other := "epoch key valueInput id themeAt depth track transform originX originY originSet world content contentSet " +
-		"pose poseAnim poseSet poseM poseFade reposed ink noCull backface bg fill grad stripes borderC borderStyle radius " +
-		"shadows material effect effecting cache grads blur opacity opacitySet cursor paintFn objectFn styleFn paintAfterFn " +
-		"inputFn textClient caret takesText noIME copyData webView maximizeButton fit gray dismissed rotate label widget role " +
-		"checked expanded vertical tip highlighted checkmark buttonLook accValue accRange hasRange accFill accStep barInset scrollBase " +
+	other := "shadows styleFn epoch key valueInput id themeAt depth track originX originY originSet world content " +
+		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +
+		" blur opacity opacitySet cursor " +
+		"inputFn textClient caret takesText noIME copyData maximizeButton fit gray dismissed rotate label widget role " +
+		"paintLook expanded vertical tip accValue accRange hasRange accFill accStep barInset scrollBase " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName focusTo " +
 		"setPos setSize choosesItems search description invalid followX sort level expandable " +
 		"chooseMany serial"

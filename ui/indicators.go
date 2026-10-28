@@ -259,7 +259,7 @@ func coreStepper(c *context, value *float64, lo, hi, step float64) *node {
 
 			})
 			arrow.builtWith(t)
-			arrow.styleFn = pressSurface
+			arrow.setStyle(staticPressSurface)
 			arrow.Draw(func(p *Painter, r Rect) {
 				cx, cy, d := r.X+r.W/2, r.Y+r.H/2, r.H*0.22
 				var path Path

@@ -281,32 +281,30 @@ type node struct {
 	layoutStyle
 	cols, rows []Track
 
+	// paintLook holds the scalar fields that paint, together, for the layout
+	// cache to compare (sameLayout).
+	paintLook
+	// paintRare holds the fields few elements set (closures, effects,
+	// transforms, pictures, text made of parts), together.
+	paintRare
+
 	// Visual geometry, composed after layout.
-	transform        Transform
 	originX, originY float32
 	originSet        bool
 	world            scene.Affine
 	// content is how its content changes (ContentTransition), when set.
-	content    ContentTransition
-	contentSet bool
+	content ContentTransition
 	// pose is where AnimatePose moves it, as poseAnim says, when poseSet;
 	// poseM and poseFade are where it shows now. reposed tells, in a frame
 	// that only paints, that its pose moved.
 	pose     Pose
 	poseAnim Animation
-	poseSet  bool
 	poseM    scene.Affine
-	poseFade float32
-	reposed  bool
 	// ink bounds, in the window, all that the element and those inside it
 	// may paint, as commit found it: x0, y0, x1, y1. Unless noCull, what
 	// it paints is no more than that, so that painting skips it where ink
 	// is clipped out (paintable).
-	ink    [4]float32
-	noCull bool
-	// backface hides it while its 3D transform turns its back to the
-	// viewer (BackfaceHidden).
-	backface bool
+	ink [4]float32
 	// hidden takes it and the elements inside it out of the frame, as
 	// CSS's display: none does (Hidden): the layout gives it no room, and
 	// it paints, takes input and reads to assistive technology as an
@@ -314,35 +312,14 @@ type node struct {
 	hidden bool
 
 	// Painting.
-	bg          Color
-	fill        fillKind
-	grad        LinearGradient
-	stripes     stripes
-	borderC     Color
-	borderStyle BorderStyle
-	radius      [4]float32
-	shadows     []shadow
-	material    Material
-	effect      Effect
-	effecting   bool
-	// cache keeps the element's layer while what it paints is the same
-	// (Cache).
-	cache layerKeeper
-	// grads holds a conic fill and a border's gradient, which few elements
-	// have; blur is the standard deviation of the element's blur, in DIPs.
-	grads      *gradients
-	blur       float32
-	opacity    float32
-	opacitySet bool
-	cursor     Cursor
-	paintFn    func(p *Painter, r Rect)
-	// objectFn draws the inline objects of a text (DrawObjects).
-	objectFn func(p *Painter, at int, r Rect)
-	// styleFn sets the colors and opacity the element paints with, as it
-	// is painted: it changes nothing else, so that an element out of view
-	// can skip it.
-	styleFn      func(e *node)
-	paintAfterFn func(p *Painter, r Rect)
+	grad    LinearGradient
+	stripes stripes
+	shadows []shadow
+	cursor  Cursor
+	// styleFn sets the colors and opacity the element paints with, as it is
+	// painted: it changes nothing else, so that an element out of view can skip
+	// it.
+	styleFn func(e *node)
 
 	// Input the element takes itself (HandleInput), and where the caret of
 	// the text it takes is (TextCaret).
@@ -354,29 +331,23 @@ type node struct {
 	copyData   func(parts []SelectedText) transfer.Data
 
 	// Content.
-	spans    []Span // of a RichText
-	spansKey string // their styles, for the layout
+	spansKey string // the styles of their spans, for the layout
 	// A text holding inline elements (inline.go) keeps its own text, and
 	// merges the styles of theirs into its spans once a frame. An inline
 	// element has the range of its text in its parent's, in runes, and the
-	// boxes of that text in the paragraph's layout.
+	// boxes of that text in the paragraph's layout. Painting leaves out
+	// such a text (paintVolatile), and the elements inside it.
 	ownText   string
 	paragraph bool
 	merged    bool
 	runes     [2]int
 	frags     []Rect
 	ts        textStyle
-	image     *Bitmap
-	svg       *SVG // of an Icon, or an Image in its own colors
-	webView   NativeWebView
 	// maximizeButton marks the window's maximize button (MaximizeButton).
 	maximizeButton bool
-	fit            Fit
-	gray           bool
 	// dismissed: Escape or a click outside closed the dialog or popover
 	// whose panel this is, in this frame (Dismissed).
 	dismissed bool
-	rotate    float32 // of an Icon, in degrees
 	label     string
 	// widget names the widget that used the element's state as it created
 	// it, which Key would then lose.
@@ -386,26 +357,15 @@ type node struct {
 	// radio or switch is off (1), on (2) or mixed (3), whether a pop-up
 	// shows, a value, and a range's minimum, maximum and value.
 	role     Role
-	checked  int8
 	expanded bool
 	// vertical marks a slider going up (Vertical).
 	vertical bool
 	// tip marks an element with a tooltip (TooltipBase).
-	tip bool
-	// highlighted is set on the option of a select the pointer or the
-	// arrows are on.
-	highlighted bool
-	// checkmark is the state of a check box (1 off, 2 on, 3 mixed) when its
-	// box was built, which the box paints (paintCheckmark), and 0 for any
-	// other element.
-	checkmark int8
-	accValue  string
-	accRange  [3]float64
-	hasRange  bool
+	tip      bool
+	accValue string
+	accRange [3]float64
+	hasRange bool
 
-	// buttonLook is how a button paints (buttonPlain, buttonPrimary or
-	// buttonFlat), for buttonPaint.
-	buttonLook uint8
 	// accFill describes the element to assistive technology further, as
 	// a code editor its text and selection.
 	accFill func(n *platform.AccessNode)
@@ -416,9 +376,6 @@ type node struct {
 	x, y, w, h float32
 	// contentW and contentH are the size of a scroll container's content.
 	contentW, contentH float64
-	// barInset moves a scroll container's scroll bars in from its edges
-	// (ScrollbarInsets): top, right, bottom, left.
-	barInset [4]float32
 	// scrollBase is the offset of a List's content that its rows were
 	// placed at: placing moves them by how far the offset moved since.
 	scrollBase float64
@@ -427,11 +384,8 @@ type node struct {
 	// rowsOf is the list whose rows the element holds for assistive
 	// technology, and takes the keys for: the list, or its Table.
 	// popover is the anchor of the panel of a popover.
-	popover  *node
-	list     *listFrame
-	listRow  bool
-	rowIndex int
-	rowsOf   *listFrame
+	popover *node
+	rowsOf  *listFrame
 	// focusGroup makes the element a focus group (FocusGroup), whose
 	// arrows click the element they move to with groupSelects.
 	focusGroup   Orientation
@@ -442,8 +396,7 @@ type node struct {
 	placeOn *node
 	// overflow is set on a toolbar, whose layout notes there the controls
 	// it had no room for, and takes them out of the flow, collapsed.
-	overflow  *[]toolbarItem
-	collapsed bool
+	overflow *[]toolbarItem
 	// segment marks a segment of a segmented control or a group of
 	// toggles.
 	segment bool
@@ -471,7 +424,6 @@ type node struct {
 	// description tells assistive technology more than the name, and
 	// invalid marks a value that is not valid (Description, Error).
 	description string
-	invalid     bool
 	// field is set on a Field, form on a Form, whose layout makes its
 	// labels as wide as the widest.
 	field *fieldParts
@@ -501,13 +453,8 @@ type node struct {
 	// engine.laySeq.
 	lay  uint8
 	laid uint64
-	// leaving marks a copy of an element gone, which its exit transition
-	// animates (1 if it was in its parent's flow, 2 if absolute), and
-	// ghosts an element holding such copies. attach is where Attach puts
-	// the element, 0 for nowhere.
-	leaving uint8
-	ghosts  bool
-	attach  attachment
+	// attach is where Attach puts the element, 0 for nowhere.
+	attach attachment
 	// serial is the order the pass made the element in: of overlays, the
 	// one made last shows on top.
 	serial int32

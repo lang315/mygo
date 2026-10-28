@@ -29,7 +29,7 @@ func styledBufferInput(c *context, value *TextBuffer, multiline bool) *node {
 		e.MinHeight(t.Space(20))
 	}
 	e.builtWith(t)
-	e.styleFn = inputStyle
+	e.setStyle(staticInput)
 	return e
 }
 

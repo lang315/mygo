@@ -815,7 +815,7 @@ func (f *listFrame) build(i int) *node {
 			w.Radius(r)
 		}
 		w.builtWith(t)
-		w.styleFn = hoverRow
+		w.setStyle(staticHoverRow)
 		if owner := f.owner; s.Selection != nil && *sel == i && !on && !f.choosesCells() {
 			// Where the keys moved without choosing.
 			w.DrawOver(func(p *Painter, r Rect) {

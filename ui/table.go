@@ -361,7 +361,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					row.Radius(t.Radius)
 				}
 				row.builtWith(t)
-				row.styleFn = tableRowStyle
+				row.setStyle(staticTableRow)
 				row.flags |= flagClickable
 				row.afterInputNode(tableRowActivate)
 			}
@@ -420,7 +420,7 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 	if sorts || choosesAll {
 		h.flags |= flagClickable | flagHover
 		h.builtWith(t)
-		h.styleFn = hoverSurface
+		h.setStyle(staticHoverSurface)
 	}
 	if choosesAll {
 		h.afterInput(func() {

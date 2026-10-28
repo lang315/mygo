@@ -64,6 +64,14 @@ const (
 	// the last layout (not its rows, which it builds as it lays out), so
 	// its rows may be compared as they are built (sameRow).
 	layRows
+	// layPaint: the element and those inside it are as in the last layout
+	// (layReuse) and paint with the same paintStyle and text paint styles
+	// as then, so a row with it may replay what it painted (retained
+	// rows).
+	layPaint
+	// layInherit: the text paint styles the element inherits and its own
+	// are as in the last layout, which the elements inside it inherit.
+	layInherit
 )
 
 // layoutFlags are the flags that the layout reads.
@@ -104,33 +112,46 @@ type layoutRecord struct {
 	// laid it out in it when boxed.
 	box   Rect
 	boxed bool
+
+	// What painted the element in the last layout, when paintOK
+	// (paintStyle), and its text paint styles (textPaint).
+	paint   paintStyle
+	paintOK bool
+	ptext   *textPaint
+
+	// For a List: the text paint styles it inherits and sets, as the last
+	// layout saw them, and the layout that compared them (sameRow).
+	inherit     textPaint
+	inheritAt   uint64
+	inheritSame bool
 }
 
 // beginLayout finds the elements of the frame that lay out as in the last
 // one (sameLayout).
 func (rt *engine) beginLayout(root *node) {
 	rt.layouts++
+	rt.paintSameRows = 0
 	// The text system let go of the layouts and fonts it had, or the
 	// cache is off: lay everything out anew.
 	changed := rt.noLayoutCache || !rt.layGenOK || rt.layGen != rt.gen
 	rt.layGen, rt.layGenOK = rt.gen, true
-	sameLayout(root, 0, 0, changed)
+	sameLayout(root, 0, 0, changed, true)
 }
 
 // sameLayout reports whether e, the index-th child of the element parent,
 // and the elements inside it lay out as in the last layout, keeping what
 // they are for the next. changed tells that something around it that it
-// inherits changed.
-func sameLayout(e *node, parent uint64, index int, changed bool) bool {
+// inherits changed, and inh that the text paint styles it inherits did not.
+func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 	r := &e.st.lay
 	n := e.c.rt.layouts
 	if r.layout == n {
 		// Another element of this layout has its state, as two with one
 		// key: neither keeps its layout there, nor reuses what is there.
-		r.ok, r.sized, r.boxed, r.measuredOK = false, false, false, false
+		r.ok, r.sized, r.boxed, r.measuredOK, r.paintOK = false, false, false, false, false
 		e.lay = 0
 		for c, i := e.first, 0; c != nil; c, i = c.next, i+1 {
-			sameLayout(c, e.id, i, true)
+			sameLayout(c, e.id, i, true, false)
 		}
 		return false
 	}
@@ -175,6 +196,31 @@ func sameLayout(e *node, parent uint64, index int, changed bool) bool {
 	}
 	r.layout = n
 	same := equal && sameText && !changed
+	// What paints it, against what the last layout saw.
+	// Only rows are replayed (retained rows): paint is compared below a row.
+	paintEqual := false
+	sameP := true
+	if e.c.rt.inRow || e.c.rt.paintAll {
+		if e.paintVolatile() {
+			r.paintOK = false
+		} else if fresh && r.paintOK && r.paint.same(e) {
+			paintEqual = true
+		} else {
+			r.paint.set(e)
+			r.paintOK = true
+		}
+		sameP = fresh && r.samePaintText(&e.ts)
+		if !sameP {
+			r.keepPaintText(&e.ts)
+		}
+	} else {
+		// Not compared in this layout: a later one must not compare with it.
+		r.paintOK, r.ptext = false, nil
+	}
+	inh = inh && sameP
+	if inh {
+		e.lay |= layInherit
+	}
 	if e.hidden {
 		// Not laid out, nor is what is inside it, which keeps no layout
 		// meanwhile: it is laid out anew once it shows.
@@ -188,6 +234,7 @@ func sameLayout(e *node, parent uint64, index int, changed bool) bool {
 	self := e.kind == kindInput || e.attach != 0 || e.ghosts
 	tree := e.list != nil || e.form != nil || e.colFit != nil || e.overflow != nil ||
 		e.gridFit != nil || e.leaving != 0 || e.kind == kindText && e.first != nil
+	paintSame := paintEqual && inh
 	if tree {
 		keepNoLayout(e)
 		if e.list != nil && sameText && !changed {
@@ -196,8 +243,11 @@ func sameLayout(e *node, parent uint64, index int, changed bool) bool {
 	} else {
 		inner := changed || !sameText
 		for c, i := e.first, 0; c != nil; c, i = c.next, i+1 {
-			if !sameLayout(c, e.id, i, inner) {
+			if !sameLayout(c, e.id, i, inner, inh) {
 				same = false
+			}
+			if c.lay&layPaint == 0 {
+				paintSame = false
 			}
 		}
 	}
@@ -206,10 +256,35 @@ func sameLayout(e *node, parent uint64, index int, changed bool) bool {
 		return false
 	}
 	e.lay |= layReuse
+	if paintSame {
+		e.lay |= layPaint
+	}
 	if r.measuredOK {
 		e.measured = r.measured
 	}
 	return true
+}
+
+// samePaintText reports whether t paints text as in the last layout. Few
+// elements set a style that paints text: the record holds one for those only.
+func (r *layoutRecord) samePaintText(t *textStyle) bool {
+	if r.ptext == nil {
+		return t.set&textPaintSet == 0
+	}
+	return r.ptext.same(t)
+}
+
+// keepPaintText keeps what of t paints text.
+func (r *layoutRecord) keepPaintText(t *textStyle) {
+	switch {
+	case t.set&textPaintSet == 0:
+		r.ptext = nil
+	case r.ptext == nil:
+		r.ptext = new(textPaint)
+		fallthrough
+	default:
+		*r.ptext = textPaintOf(t)
+	}
 }
 
 // sameRow compares a row the List list built with what its state kept of
@@ -223,7 +298,27 @@ func sameRow(list, row *node) {
 	if list.c.rt.noLayoutCache || row.lay&layOwner != 0 {
 		return
 	}
-	sameLayout(row, list.id, 0, list.lay&layRows == 0)
+	rt := list.c.rt
+	rt.inRow = true
+	sameLayout(row, list.id, 0, list.lay&layRows == 0, list.inheritsPaintSame())
+	rt.inRow = false
+	if row.lay&layPaint != 0 {
+		list.c.rt.paintSameRows++
+	}
+}
+
+// inheritsPaintSame reports whether the text paint styles the rows of list
+// inherit, from it and the elements around it, are as in the last layout. It
+// compares them once a layout.
+func (list *node) inheritsPaintSame() bool {
+	r, n := &list.st.lay, list.c.rt.layouts
+	if r.inheritAt != n {
+		ts := list.resolvedText()
+		tp := textPaintOf(&ts)
+		r.inheritSame = r.inheritAt == n-1 && r.inherit == tp
+		r.inherit, r.inheritAt = tp, n
+	}
+	return r.inheritSame
 }
 
 // keepNoLayout makes the elements inside e keep and reuse no layout.

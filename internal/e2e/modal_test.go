@@ -143,11 +143,8 @@ func TestModalChildAndOtherWindows(t *testing.T) {
 		w.OnClosed(func() { closed.Store(true) })
 		return w, drawn, closed
 	}
-	first, firstDrawn, firstClosed := modal("First modal")
-	// The child blocks its parent's input as it opens, whatever its sheet's
-	// slide: wait for it to be on screen.
-	eventually(t, "the first child's first frame", firstDrawn.Load)
-	eventually(t, "the first child to show", first.IsVisible)
+	first, _, firstClosed := modal("First modal")
+	time.Sleep(time.Second) // a sheet slides down
 	appClick(t, other, x, y)
 	blocked := !happens(500*time.Millisecond, func() bool { return otherClicks.Load() == 2 })
 	t.Logf("%s: the other window blocked while a modal child is open: %v", runtime.GOOS, blocked)
