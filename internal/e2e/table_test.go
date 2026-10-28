@@ -5,12 +5,12 @@ package e2e
 import (
 	"cmp"
 	"fmt"
+	"runtime"
 	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui/widget"
 )
@@ -51,15 +51,16 @@ func TestWidgetTable(t *testing.T) {
 			tb.UpdateRow(k, func(r *row) { r.n = -r.n }) // a write in place, as well
 			tb.DeleteRows(k)
 			tb.AddRow(row{k, i})
-			time.Sleep(time.Millisecond)
+			runtime.Gosched() // let the frames take the table's lock between rounds
 		}
 	})
 	// Heights inside Xvfb's 640x480 screen: past it, then clicked, a window
 	// broke the input method of the next test's window under Xvfb, which
 	// has no window manager. It ends 240 tall.
 	for i := range 30 {
+		_, was := w.Native().Size()
 		w.SetSize(500, 240+(i+1)%2*180)
-		time.Sleep(30 * time.Millisecond)
+		eventually(t, "the window to resize", func() bool { _, h := w.Native().Size(); return h != was })
 	}
 	before := built.Load()
 	eventually(t, "frames while the rows change", func() bool { return built.Load() > before })
