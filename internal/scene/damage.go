@@ -224,15 +224,21 @@ func (d *Differ) identical(s *Scene) bool {
 // the padding of an op or a glyph the Painter built may differ in bytes
 // (2,300 frames of the tests of ui and raster) without any field doing.
 func sameValues[T comparable](a, b []T) bool {
-	if sameBytes(a, b) {
-		return true
-	}
 	if len(a) != len(b) {
 		return false
 	}
-	for i := range a {
-		if !sameBytes(a[i:i+1], b[i:i+1]) && a[i] != b[i] {
-			return false
+	// In chunks, for a change far in a long slice to cost one pass over the
+	// bytes before it, and the values of a chunk only where its bytes differ.
+	const chunk = 32
+	for i := 0; i < len(a); i += chunk {
+		j := min(i+chunk, len(a))
+		if sameBytes(a[i:j], b[i:j]) {
+			continue
+		}
+		for k := i; k < j; k++ {
+			if !sameBytes(a[k:k+1], b[k:k+1]) && a[k] != b[k] {
+				return false
+			}
 		}
 	}
 	return true
