@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +15,24 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/wait"
 )
+
+// clearSession clears the kinds of data types of s. WebView2's ARM64 browser
+// clears none but the cookies, so there any other kind must report that
+// error, and false is returned: what pages stored stays.
+func clearSession(t *testing.T, s *mygo.Session, types mygo.SiteData) (cleared bool) {
+	t.Helper()
+	err := s.ClearData(types)
+	if runtime.GOOS == "windows" && runtime.GOARCH == "arm64" && types != mygo.SiteDataCookies {
+		if err == nil {
+			t.Fatalf("ClearData(%v) on Windows ARM64 reported no error, want that it cleared only the cookies", types)
+		}
+		return false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return true
+}
 
 // sessionServer serves a page titled "sessions" and, at /echo, the
 // cookies its requests send.
@@ -68,9 +87,7 @@ func TestSessions(t *testing.T) {
 		t.Fatal("NewSession made another session of the same name")
 	}
 	for _, s := range []*mygo.Session{work, home} {
-		if err := s.ClearData(mygo.SiteDataAll); err != nil {
-			t.Fatal(err)
-		}
+		clearSession(t, s, mygo.SiteDataAll)
 	}
 	t.Cleanup(func() {
 		_ = work.ClearData(mygo.SiteDataAll)
@@ -157,8 +174,8 @@ func TestSessions(t *testing.T) {
 	}
 	w3.Page().Reload()
 	waitFor(t, w3, `document.title === 'sessions' && localStorage.getItem("who") === "work"`)
-	if err := work.ClearData(mygo.SiteDataLocalStorage); err != nil {
-		t.Fatal(err)
+	if !clearSession(t, work, mygo.SiteDataLocalStorage) {
+		t.Skip("WebView2 on Windows ARM64 clears no local storage")
 	}
 	w3.Page().Reload()
 	waitFor(t, w3, `document.title === 'sessions' && localStorage.getItem("who") === null`)
@@ -187,14 +204,14 @@ func TestEphemeralSession(t *testing.T) {
 	}
 	w2 := sessionWindow(t, private, url+"/", "Private too")
 	waitFor(t, w2, fmt.Sprintf(`document.cookie.includes("%s=private") && localStorage.getItem("who") === "private"`, name))
-	if err := private.ClearData(mygo.SiteDataAll); err != nil {
-		t.Fatal(err)
-	}
+	cleared := clearSession(t, private, mygo.SiteDataAll)
 	if got := sessionCookie(t, private.Cookies, name); got != "" {
 		t.Fatalf("ClearData(SiteDataAll) kept the cookie %q", got)
 	}
-	w2.Page().Reload()
-	waitFor(t, w2, `document.title === 'sessions' && localStorage.getItem("who") === null`)
+	if cleared { // on Windows ARM64 the page keeps its local storage
+		w2.Page().Reload()
+		waitFor(t, w2, `document.title === 'sessions' && localStorage.getItem("who") === null`)
+	}
 	mustEval(t, w2, fmt.Sprintf(`(document.cookie = "%s=again; path=/", localStorage.setItem("who", "again"), true)`, name))
 	wait.Until(t, "the private page's cookie to reach its session", func() bool { return sessionCookie(t, private.Cookies, name) == "again" })
 
