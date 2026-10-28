@@ -345,9 +345,16 @@ func coreFindBar(c *context, open *bool, query *string, matches int, current *in
 // copy of an element going with its exit transition.
 const themeGhost = 1 << 15
 
+// themeKeep is how many themes the engine keeps noting before it starts
+// over (an app that makes a theme in each frame), so that builtWith's scan
+// stays short.
+const themeKeep = 16
+
 // builtWith notes the theme e is built with, for a static function that
 // paints it: SetTheme applies to what is created after it, not to the
-// elements before it. themeAt is 1 more than the index, 0 for none.
+// elements before it. themeAt is 1 more than the index into the engine's
+// themes, which keep their order across frames until themeGen changes; 0
+// for none.
 func (e *node) builtWith(t *Theme) {
 	rt := e.c.rt
 	for i := len(rt.themes) - 1; i >= 0; i-- {
