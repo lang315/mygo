@@ -194,7 +194,7 @@ func coreSidebarItem(c *context, id string, icon *SVG, label string) *node {
 	default:
 		item.checked = 1
 		item.builtWith(t)
-		item.styleFn = hoverSurface
+		setStyle(item, hoverSurface, staticHoverSurface)
 	}
 	if sb != nil && chosen {
 		e := sb.e

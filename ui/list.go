@@ -535,6 +535,7 @@ const (
 )
 
 func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int), kind listKind) {
+	linkPaintCompare()
 	flat, tree := kind == tableList || kind == treeTableList, kind == treeList || kind == treeTableList
 	rt := c.rt
 	f := &s.frame
@@ -815,7 +816,7 @@ func (f *listFrame) build(i int) *node {
 			w.Radius(r)
 		}
 		w.builtWith(t)
-		w.styleFn = hoverRow
+		setStyle(w, hoverRow, staticHoverRow)
 		if owner := f.owner; s.Selection != nil && *sel == i && !on && !f.choosesCells() {
 			// Where the keys moved without choosing.
 			w.DrawOver(func(p *Painter, r Rect) {

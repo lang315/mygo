@@ -173,7 +173,7 @@ func styleButton(c *context, b *node, primary bool) {
 		b.Border(1, border)
 	}
 	b.builtWith(t)
-	b.styleFn = buttonPaint
+	setStyle(b, buttonPaint, staticButton)
 }
 
 // The looks of a button, which buttonPaint paints: with the surface, with

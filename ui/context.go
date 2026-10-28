@@ -357,6 +357,8 @@ func (c *context) Theme() *Theme { return c.theme }
 
 // SetTheme makes the frame use t, for the window's root and the widgets
 // created after the call.
+// A theme is read as a whole: change a copy and pass it again, not the theme in
+// place, which the rows a list keeps (retained rows) do not see.
 func (c *context) SetTheme(t *Theme) {
 	c.theme = t
 	c.root.bg = t.Background

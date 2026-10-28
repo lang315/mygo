@@ -190,6 +190,14 @@ type engine struct {
 	layGenOK        bool
 	noLayoutCache   bool
 
+	// paintSameRows counts the list rows that lay out and paint as in the last
+	// layout (layPaint), for tests and benchmarks.
+	paintSameRows int
+	// inRow: sameLayout is below a list row, where paint is compared.
+	inRow bool
+	// paintAll compares paint everywhere, for tests of single elements.
+	paintAll bool
+
 	states map[uint64]*state
 	// free are states pruned, which new elements take: rows coming into
 	// a list's view take those of rows that went out of it.
