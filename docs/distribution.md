@@ -89,6 +89,11 @@ compiles with `actool` from Xcode 26 or later, with the `.icns` that
 the compilation fails, skips the `.icon` with a message, and the app keeps
 the PNG's `.icns`. `mygo dev` shows the `.icns`.
 
+`macos.icon` can also be an `.icns` of your own, which the app gets in place
+of the one rendered from the PNG: for an icon drawn per size, such as a
+closer crop for 16 and 32 points, made with `iconutil` from an `.iconset`.
+`mygo dev` still shows the PNG's.
+
 ```ts
 export default defineConfig({
   macos: { icon: "AppIcon.icon" }, // outside resources, which ship as they are
@@ -401,6 +406,26 @@ in the names of the shortcuts only. The installer of a version that sets
 `displayName` replaces the shortcuts that an earlier version made under
 the name.
 
+[`windows.installDirName`](configuration.md#windows) names the install
+folder alone, for an app that keeps its name everywhere else, as an ASCII
+folder for tools that handle only ASCII paths, such as scripts in the
+console's code page. Here the app installs in
+`%LOCALAPPDATA%\Programs\ZhiLian`, and its executable, shortcuts and entry
+in Settings > Apps are named `智链`:
+
+```ts
+export default defineConfig({
+  name: "智链",
+  windows: { installDirName: "ZhiLian" },
+});
+```
+
+An installed app stays in its folder: the installer of a newer version
+installs in the folder of the installed one, which the user may have
+chosen, as [`install.ps1`](#install-scripts-for-macos-and-windows) and
+[updates](updates.md) do. A new `installDirName` applies to new installs
+only, and to the app once it is uninstalled and installed again.
+
 The installer is made with [NSIS](https://nsis.sourceforge.io). On
 Windows, `mygo build` uses NSIS when it is installed, and otherwise
 downloads it the first time it needs it: the official NSIS 3.13 zip, from
@@ -646,9 +671,13 @@ its source language first, which the system falls back to:
 - Linux: `Name[xx]` and `Comment[xx]` in the desktop entry, by POSIX
   locale (`de`, `zh_CN`, `zh_TW`, `sr@latin`).
 - Windows: the installer is in each of the languages, and picks the
-  system's; NSIS 3 has files of some 60 languages, and a language it has
-  none of stops the build, saying which it has. The file properties have a
-  table of strings per language.
+  one of the user's display language, or else the source language; an
+  app written in Chinese alone (`"i18n": { "source": "zh-Hans" }`) has
+  an installer in Chinese only, but for MyGo's own few texts in it, the
+  desktop shortcut's check box and the messages about the running app,
+  which are in English. NSIS 3 has files of some 60 languages,
+  and a language it has none of stops the build, saying which it has.
+  The file properties have a table of strings per language.
 
 The app's name and description in a language are its catalog's
 `mygo.appName` and `mygo.appDescription`; the configuration's `name` and

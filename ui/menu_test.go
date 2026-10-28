@@ -489,3 +489,41 @@ func TestMenuItemDestructiveReachesThePlatformItem(t *testing.T) {
 		t.Error("an item of a submenu lost the flag")
 	}
 }
+
+// An editing command chosen from a menu goes to the input that was built in
+// the frame, not to the state of one the view stopped building and keeps
+// alive (GlobalKey, KeepAlive), which would run it unseen when it returns.
+func TestMenuEditCommandSkipsAnInputNotBuilt(t *testing.T) {
+	text := "hello"
+	shown := true
+	view := func(c *Context) {
+		if !shown {
+			c.KeepAlive("panel")
+			return
+		}
+		Column(c.GlobalKey("panel")).Children(func() {
+			TextInput(c, &text).Label("Name")
+		})
+	}
+	tt := NewTester(view, 300, 200)
+	if err := tt.RightClick("Name"); err != nil {
+		t.Fatal(err)
+	}
+	shown = false
+	tt.Frame()
+	if err := tt.ChooseMenuItem("Select All"); err != nil {
+		t.Fatal(err)
+	}
+	kept := 0
+	for _, s := range tt.rt.states {
+		if s.editor != nil {
+			kept++
+			if n := len(s.editor.queue); n != 0 {
+				t.Errorf("the input not built has %d editing commands queued", n)
+			}
+		}
+	}
+	if kept == 0 {
+		t.Fatal("KeepAlive kept no input: the test checks nothing")
+	}
+}

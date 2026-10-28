@@ -202,7 +202,8 @@ export interface MacOSConfig {
    * app icon named `AppIcon`, unless `infoPlist` sets `CFBundleIconName`), or
    * an Icon Composer `.icon`, which builds compile on a Mac with Xcode 26 or
    * later and skip elsewhere. The `.icns` made from `icon` remains the
-   * fallback.
+   * fallback. Or an `.icns` in place of the one made from `icon`, for an
+   * icon drawn per size.
    */
   icon?: string;
   /** The oldest macOS the app runs on (default: `12.0`). */
@@ -249,6 +250,13 @@ export interface WindowsConfig {
    * the name's, e.g. `天气助手` for an app named `weather`.
    */
   displayName?: string;
+  /**
+   * The name of the folder the installer installs the app in, in
+   * `%LOCALAPPDATA%\Programs` (default: the name), e.g. an ASCII `ZhiLian`
+   * for an app named `智链`, whose shortcuts and entry in Settings > Apps
+   * keep the name. Changing it moves new installs only.
+   */
+  installDirName?: string;
   /** A code signing certificate (.pfx); its password comes from `MYGO_WINDOWS_CERTIFICATE_PASSWORD`. */
   certificate?: string;
   /** Instead of `certificate`, a command that signs a file, with `%1` for its path. */
