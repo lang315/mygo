@@ -50,7 +50,7 @@ Windows 11 ARM64.
 
 | Measure | At the start | 2026-10-26 | Target |
 |---|---|---|---|
-| `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them). **2026-10-28, an M1 Pro: 80 µs, 21 allocs, 961 B** (85 µs after the rows reuse their layout, #225; then -1.3% with #238 and -5.45% with #241, each measured against main in turns, so the sum is about 80 µs), the split in Track 3 | tens of µs |
+| `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them). **2026-10-28, an M1 Pro: 80 µs, 21 allocs, 961 B** (85 µs after the rows reuse their layout, #225; then -1.3% with #238 and -5.45% with #241, each measured against main in turns, so the sum is about 80 µs; then 64.3 µs with the retained rows of #247 and #251, `BenchmarkTableFrame100kFrames/idle`, 21 allocs and 961 B as before), the split in Track 3 | tens of µs |
 | A click on a widget table of 1M rows | 6.0–10.4 ms in the first CI runs, 38 MB allocated | **`clickApp`, the app's work (build + layout + paint, no rasterizing): 0.67 ms** CI Linux x86, 0.35 ms Windows, 0.37 ms macOS (commit `98bf370`; 0.37 ms on an M1 Pro); **4.96 KB and 238 allocs**. `click`, with the tester's CPU raster standing in for the GPU: 0.74 ms Linux, 0.39 ms Windows, 0.42 ms macOS (1.22, 1.49 and 1.61 ms before #196–#200; 0.42 ms on an M1 Pro, 0.62 before #200) (`BenchmarkTableCheckedLarge`, #19) | `clickApp` ≤ 1 ms on the three machines, no MB-scale allocation. **Met** |
 | A frame of N plain widgets | not measured | `BenchmarkWidgetFrame` (M1 Pro): 100 widgets 98 µs and 66 allocs, 1000 widgets 0.77 ms and 666 allocs (CI Linux x86: 0.18 and 1.3 ms); the same as raw `ui` (`BenchmarkUIFrame`): 90 µs and 0.72 ms, 133 and 1,933 allocs; a Style on each: +16–21% (`-styled`), the same styles on raw `ui` +13–14%, so the widget layer adds ×1.03–1.06 (the Phase 0 gate, ≤ 1.10) | baseline set in Phase 0 |
 | `counter-native` release size | 9.2–9.7 MB | 9.22 MB macOS, 9.45 MB Linux, 9.77 MB Windows; `hello` 9.37, 9.47 and 9.95 MB | unchanged by widget work |
@@ -317,9 +317,10 @@ cannot show: those items are not marked):
   text is a line of three to nine glyphs, so a call serves few of them, and
   the placement and map lookups, 5 µs, stay. `BenchmarkWidgetFrame` and
   `BenchmarkUIFrame` show no difference (3 runs, within the noise). Ruled
-  out in the design (a local spec, not in the repository): replaying the ops of a row whose layout is reused, which needs the glyph
+  out in the design of that day (a local spec, not in the repository): replaying the ops of a row whose layout is reused, which needs the glyph
   LRU stamps, positions that are not translations at a fractional scroll and
-  the paint-time state of hover and focus; and a per-text cache of resolved
+  the paint-time state of hover and focus (P1-B, below, does it at a zero
+  offset, with those in the key); and a per-text cache of resolved
   glyphs, which a fractional scroll misses. *Present:* `scene.Differ.Diff`
   of the idle frame's scene (144 ops, 191 glyphs) takes about 6.9 µs of the
   8.0 µs present lap, so telling an identical scene earlier was worth a
@@ -365,10 +366,62 @@ cannot show: those items are not marked):
   a slot it does not clear); #242 compares such slices by values where the
   bytes differ: 118,614 hits became 121,821.
 
-  *Next:* retained rows (the owner approved the design on 2026-10-28), which
-  do not build, commit or paint the rows that did not change: P0 and P1-A are
-  in progress, for a ceiling of 15–20 µs.
-  "Tens of µs" in the sense of 20–30 needs the build skipped.
+  **Done** (retained rows, the owner's go on 2026-10-28; the design is a local
+  spec, not in the repository). The phases, each with a measured gate:
+
+  - *P0 (#246):* painting leaves the nodes as they were built (the hover looks
+    of `ui/hoverstyle.go` no longer write the node), the themes keep their
+    indexes across frames (`themeGen`), and `BenchmarkTableFrame100kFrames`
+    measures the frames users feel: idle, hover, one row updated, scrolled by
+    1 px and by half of one.
+  - *#249:* `BenchmarkTableFrame100kPhases` reports the phases of those frames,
+    and its variants ending in `-app` skip the Tester's rasterizer
+    (`Tester.SkipRaster`) to measure the app's work alone. The `scroll1px`
+    frame is 96% the Tester's CPU rasterizer, not the app
+    (`ui/api_bench_test.go`).
+  - *P1-A (#247):* as the layout cache walks each row (`sameRow`,
+    `ui/layoutcache.go`) it also tells whether the row's elements paint with
+    the same inputs as in the last layout: `layPaint`, from `paintStyle` and
+    `textPaint` (`ui/paintstyle.go`), which hold the node fields that paint
+    and the text styles that paint and do not lay out; static `styleFn`s carry
+    an identity (`ui/staticstyle.go`); `TestPaintInputs` places every field of
+    `node`, so a field added without a decision fails it. It costs the layout
+    lap 3.6 to 4.1 µs and shows nothing alone, so it merged with P1-B.
+  - *P1-B (#251):* a row with `layPaint` that paints twice in the same place
+    records its operations, glyphs and the atlas entries it used
+    (`ui/replay.go`, `internal/text/uses.go`), and replays them while the key
+    holds: its box, the clip, scale, opacity, the opaque backgrounds around it,
+    the atlas generations, the text parameters, `themeGen`, the focus, and each
+    element's id, flags and box, with no element hovered, pressed or focused.
+    Rows are replayed at a zero offset only; a row that moves does not record.
+  - *Gate*, measured on the stack against `3763a968` (main before #246) with
+    #246's benchmarks, 8 interleaved runs on an M1 Pro: the idle frame 79.4 to
+    64.3 µs (-15.1; the gate was -10), the idle paint lap 25.4 to 5.8 µs (at
+    most 8), the hover paint lap 26.5 to 9.0-9.3 µs (at most 10), allocations
+    and bytes a frame unchanged; the half-pixel scroll frame costs 5.6 µs
+    more (+6%), since a moving row records nothing and P1-A's comparison runs.
+    `counter-native` grows about 3 KB (`hello` 0): the rest is behind
+    `linkPaintCompare`, which building a list calls.
+  - *The oracle:* `rt.replayCheck` paints every replayed row fresh as well and
+    compares the operations, glyphs and flags; `TestReplayMatches`
+    (`ui/replay_model_test.go`) runs it over random trees with lists and tables
+    that change, restyle, hide, scroll, hover and take focus, at scales 1 and
+    2, against a painting that replays nothing. It found a row's inner clip
+    changing with a table column while the row looked the same (every element's
+    box is in the key now).
+  - *The bug the second review found:* a row that painted anew without
+    recording (its look changed, or an ancestor was hidden while it changed)
+    kept an older recording, and replayed it once it stood still again: the row
+    chosen with the keys looked unchosen. The row's `at` (the layout it last
+    painted in) now keeps a recording older than the frame before from
+    replaying; three tests and the model's paint-only restyles and idle frames
+    fail without it. The first review and the tests had missed it because the
+    layout cache's styles all change layout.
+
+  *Next:* P2, the build skipped with `ListState.RowVersion` (in review), then
+  P3, the layout and the commit of a retained row skipped (`commitElement` and
+  `layoutTree` in `ui/runtime.go` and `ui/layout.go` are the map).
+  "Tens of µs" in the sense of 20–30 needs the build skipped (P2).
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
