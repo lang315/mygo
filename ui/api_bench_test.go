@@ -78,19 +78,22 @@ func BenchmarkValueList(b *testing.B) {
 	}
 }
 
-// BenchmarkTableFrame100k builds an idle frame of a table of 100,000 rows
-// sorted by a TableView, with checkboxes.
-func BenchmarkTableFrame100k(b *testing.B) {
-	type account struct {
-		id, status int
-		name       string
-	}
-	rows := make([]account, 100_000)
+// tableAccount is a row of the tables of BenchmarkTableFrame100k.
+type tableAccount struct {
+	id, status int
+	name       string
+}
+
+// tableFrame100k builds the table of BenchmarkTableFrame100k, sorted by a
+// TableView, with checkboxes, and warms it with 10 frames.
+func tableFrame100k(b *testing.B) (*ui.Tester, []tableAccount, *ui.TableView[tableAccount]) {
+	b.Helper()
+	rows := make([]tableAccount, 100_000)
 	for i := range rows {
-		rows[i] = account{id: i, status: i % 7, name: fmt.Sprintf("acc%06d", i)}
+		rows[i] = tableAccount{id: i, status: i % 7, name: fmt.Sprintf("acc%06d", i)}
 	}
-	view := ui.NewTableView(map[string]func(a, b *account) int{
-		"Status": func(a, b *account) int { return cmp.Compare(a.status, b.status) },
+	view := ui.NewTableView(map[string]func(a, b *tableAccount) int{
+		"Status": func(a, b *tableAccount) int { return cmp.Compare(a.status, b.status) },
 	})
 	var list ui.ListState
 	var checked ui.Selection[int]
@@ -112,9 +115,78 @@ func BenchmarkTableFrame100k(b *testing.B) {
 	for range 10 {
 		tt.Frame()
 	}
+	return tt, rows, view
+}
+
+// BenchmarkTableFrame100k builds an idle frame of a table of 100,000 rows
+// sorted by a TableView, with checkboxes.
+func BenchmarkTableFrame100k(b *testing.B) {
+	tt, _, _ := tableFrame100k(b)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
 		tt.Frame()
+	}
+}
+
+// BenchmarkTableFrame100kFrames measures, on the table of
+// BenchmarkTableFrame100k, the frames users feel:
+//   - idle: nothing changed;
+//   - hover: the pointer moved from a row to the next;
+//   - update: a visible row's text changed;
+//   - scroll1px and scrollhalf: a scroll by a whole pixel or by half of one,
+//     down and up in turn.
+func BenchmarkTableFrame100kFrames(b *testing.B) {
+	b.Run("idle", func(b *testing.B) {
+		tt, _, _ := tableFrame100k(b)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			tt.Frame()
+		}
+	})
+	b.Run("hover", func(b *testing.B) {
+		tt, _, _ := tableFrame100k(b)
+		ys := [2]float32{120, 160} // two rows below the header
+		b.ReportAllocs()
+		b.ResetTimer()
+		i := 0
+		for b.Loop() {
+			tt.Move(150, ys[i%2])
+			i++
+		}
+	})
+	b.Run("update", func(b *testing.B) {
+		tt, rows, view := tableFrame100k(b)
+		r := view.Row(5) // a row in view
+		names := [2]string{rows[r].name, rows[r].name + "x"}
+		b.ReportAllocs()
+		b.ResetTimer()
+		i := 0
+		for b.Loop() {
+			rows[r].name = names[i%2]
+			tt.Frame()
+			i++
+		}
+	})
+	for _, s := range []struct {
+		name string
+		dy   float32
+	}{{"scroll1px", 1}, {"scrollhalf", 0.5}} {
+		b.Run(s.name, func(b *testing.B) {
+			tt, _, _ := tableFrame100k(b)
+			tt.Scroll(150, 300, 0, 2000) // away from the top, so that both ways scroll
+			b.ReportAllocs()
+			b.ResetTimer()
+			i := 0
+			for b.Loop() {
+				dy := s.dy
+				if i%2 == 1 {
+					dy = -dy
+				}
+				tt.Scroll(150, 300, 0, dy)
+				i++
+			}
+		})
 	}
 }
