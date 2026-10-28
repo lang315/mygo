@@ -11,8 +11,9 @@ import (
 // color.
 func identicalScene() (*Scene, *Image) {
 	img := NewImageRGBA(2, 2, make([]byte, 16))
-	s := &Scene{Width: 400, Height: 300, MaskAtlas: NewAtlas(1, 64, 64)}
+	s := &Scene{Width: 400, Height: 300, MaskAtlas: NewAtlas(1, 64, 64), ColorAtlas: NewAtlas(4, 32, 32)}
 	s.MaskAtlas.Put(0, 0, 8, 8, make([]byte, 64), 8)
+	s.ColorAtlas.Put(0, 0, 4, 4, make([]byte, 64), 16)
 	s.Glyphs = []Glyph{
 		{X: 12, Y: 12, W: 8, H: 8, U: 0, V: 0, UW: 8, VH: 8, Color: Color{A: 255}},
 		{X: 22, Y: 12, W: 8, H: 8, U: 0, V: 0, UW: 8, VH: 8, Color: Color{A: 255}},
@@ -156,6 +157,25 @@ func TestDiffIdenticalScene(t *testing.T) {
 			c.Width++
 			return c
 		}, nil},
+		{"text parameters", 0, func(s *Scene, _ *Image) *Scene {
+			c := copyOf(s)
+			c.Text.Contrast = 0.5
+			return c
+		}, nil},
+		{"wide flag", 0, func(s *Scene, _ *Image) *Scene { return copyOf(s) }, func(d *Differ) { d.Wide = true }},
+		{"folding", 0, func(s *Scene, _ *Image) *Scene {
+			FoldingForTest(true) // undone when the subtest ends
+			return copyOf(s)
+		}, nil},
+		{"color atlas pixels", 0, func(s *Scene, _ *Image) *Scene {
+			s.ColorAtlas.Put(1, 1, 2, 2, make([]byte, 16), 8)
+			return copyOf(s)
+		}, nil},
+		{"effects", 0, func(s *Scene, _ *Image) *Scene {
+			c := copyOf(s)
+			c.Effects = []EffectOp{{}}
+			return c
+		}, nil},
 		{"clear color", 0, func(s *Scene, _ *Image) *Scene {
 			c := copyOf(s)
 			c.Clear = Color{R: 1, A: 255}
@@ -168,6 +188,7 @@ func TestDiffIdenticalScene(t *testing.T) {
 		}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(FoldingForTest(folding())) // as the case leaves it
 			s, img := identicalScene()
 			fast, full := Differ{Reach: 1}, Differ{Reach: 1, noFast: true}
 			for _, d := range []*Differ{&fast, &full} {
