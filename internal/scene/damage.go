@@ -192,10 +192,13 @@ func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 // so they are the last scene's. A scene with effects, which hold slices and
 // images of their own, is not tried.
 //
-// Bytes are a stronger test than same's: an op or a glyph with a 0 and a -0
-// is a change here, which only sends Diff the long way. Padding is part of
-// the bytes, which Remember copied with the rest; if it differs, so does
-// the answer, the long way again, never a wrong one.
+// Bytes are a stronger test than same's, but for two cases: an op or a glyph
+// with a 0 and a -0 is a change here, which only sends Diff the long way,
+// and so is padding that differs (Remember copied it with the rest). The
+// two cases where this says "identical" and the long way finds damage are
+// both harmless, for the damage would redraw the pixels the last frame
+// holds: a NaN in an op or a glyph (equal bytes, but same says changed), and
+// an OpEffect op with no s.Effects, which same calls changed.
 func (d *Differ) identical(s *Scene) bool {
 	if d.noFast || !d.valid || s.Width != d.w || s.Height != d.h || s.Clear != d.clear || s.Text != d.text ||
 		d.Reach != d.reach || d.Wide != d.wideOn || d.nextFold != d.folded ||

@@ -229,6 +229,29 @@ func TestDiffIdenticalScene(t *testing.T) {
 	}
 }
 
+// Renderers that find nothing to draw return before Remember (metal, d3d11
+// and gl on an identical frame): Diff again, with no Remember between, still
+// compares with the scene Remember kept, and answers as the long way does,
+// for the same scene and for one op changed.
+func TestDiffIdenticalSceneWithoutRemember(t *testing.T) {
+	s, _ := identicalScene()
+	fast, full := Differ{Reach: 1}, Differ{Reach: 1, noFast: true}
+	for _, d := range []*Differ{&fast, &full} {
+		d.Diff(s)
+		d.Remember(s)
+	}
+	changed := copyOf(s)
+	changed.Ops[6].Color.R++
+	for i, next := range []*Scene{copyOf(s), copyOf(s), changed, copyOf(s)} {
+		if got, want := answer(&fast, next), answer(&full, next); !got.same(want) {
+			t.Errorf("Diff %d with the fast path: %+v\nwithout it:            %+v", i+1, got, want)
+		}
+	}
+	if fast.fast != 3 {
+		t.Errorf("%d scenes took the fast path, want the 3 identical ones", fast.fast)
+	}
+}
+
 // Diffing an identical scene allocates nothing.
 func TestDiffIdenticalSceneAllocatesNothing(t *testing.T) {
 	s, _ := identicalScene()
