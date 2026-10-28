@@ -211,6 +211,7 @@ func (lv *ListViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) s
 func (lv *ListViewWidget[T, K]) setImage(fn func(*T) *ui.Bitmap, side float32) {
 	lv.t.change(func() {
 		lv.image, lv.imageSize = fn, side
+		lv.t.look++
 		if len(lv.t.cols) > 0 {
 			if fn == nil {
 				fn = lv.colImage // the column's own, if the app gave one

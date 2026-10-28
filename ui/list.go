@@ -209,6 +209,23 @@ type ListState struct {
 	// focus, then follow their keys wherever their rows went, rather than
 	// near where they were; the list keeps its place.
 	Version uint64
+	// RowVersion, when set, lets the list keep a row it built in the last
+	// frame instead of building it again, as long as RowVersion(i) returns
+	// what it did then: the row's build must read nothing but the row's own
+	// data, which RowVersion versions, and the list's state. A closure's
+	// variable, a theme of your own, the time or any other state of the
+	// app that the row shows is not versioned by itself: change what
+	// RowVersion returns when it changes, or leave RowVersion nil.
+	//
+	// The list builds a row again whatever RowVersion says when the row, or
+	// a row beside it, is chosen or checked anew, when the pointer, the
+	// keys or assistive technology act on it, when the theme changes, when
+	// it holds a focus, a shortcut, an animation, a tooltip or an element
+	// you keep a Handle of, and while the inspector is open. RowVersion
+	// must be cheap and allocate nothing: it runs for each row in view in
+	// every frame. With RowVersion nil the list builds every row in view in
+	// every frame, as it always did.
+	RowVersion func(i int) uint64
 	// HeaderMenu, when set, gives a Table's header a context menu, built
 	// as ContextMenu's is: col is the index of the column clicked in the
 	// columns given to Table, not in the order the user moved them into,

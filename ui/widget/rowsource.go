@@ -16,6 +16,9 @@ type RowSource[T any, K comparable] struct {
 	key   func(*T) K
 	rows  []T
 	index map[K]int // a key's row in rows
+	// gens versions the rows by key for the tables' RowVersion: a row
+	// changed in place, replaced or added has a generation of its own.
+	gens rowGens[K]
 
 	// log holds the changes after seq start, oldest first: a table reads
 	// those after its cursor. seq numbers the changes made, removedSeq is
@@ -153,6 +156,7 @@ func (s *RowSource[T, K]) attached() (n int) {
 func (s *RowSource[T, K]) SetRows(rows []T) *RowSource[T, K] {
 	s.change(func() {
 		s.rows, s.index = make([]T, 0, len(rows)), make(map[K]int, len(rows))
+		s.gens.reset()
 		s.add(rows)
 		s.record(-1)
 	})
@@ -170,6 +174,7 @@ func (s *RowSource[T, K]) AddRows(rows []T) *RowSource[T, K] {
 func (s *RowSource[T, K]) add(rows []T) {
 	for i := range rows {
 		k := s.key(&rows[i])
+		s.gens.bump(k)
 		if j, ok := s.index[k]; ok {
 			s.rows[j] = rows[i]
 			s.record(j)
@@ -187,6 +192,7 @@ func (s *RowSource[T, K]) UpdateRow(k K, fn func(*T)) *RowSource[T, K] {
 	s.change(func() {
 		if i, ok := s.index[k]; ok {
 			fn(&s.rows[i])
+			s.gens.bump(k)
 			s.record(i)
 		}
 	})
@@ -201,6 +207,7 @@ func (s *RowSource[T, K]) DeleteRows(ks ...K) *RowSource[T, K] {
 			if i, ok := s.index[k]; ok {
 				first = min(first, i)
 				delete(s.index, k)
+				s.gens.drop(k)
 			}
 		}
 		if first == len(s.rows) {
@@ -218,6 +225,16 @@ func (s *RowSource[T, K]) DeleteRows(ks ...K) *RowSource[T, K] {
 		s.record(-1)
 	})
 	return s
+}
+
+// Version returns the generation of the row of key k: it changes whenever the
+// row changes (UpdateRow, AddRows of its key, SetRows), and is 0 for a key the
+// source holds none of. The tables over the source are told apart by it which
+// of their rows to build again.
+func (s *RowSource[T, K]) Version(k K) uint64 {
+	mu.Lock()
+	defer mu.Unlock()
+	return s.gens.of(k)
 }
 
 // Row returns the row of key k.
