@@ -85,7 +85,6 @@ func TestRowsPaintAgainWhenWhatTheyReadChanges(t *testing.T) {
 		"scale":        func(tt *Tester) { tt.SetScale(2) },
 		"scroll":       func(tt *Tester) { tt.Scroll(100, 200, 0, 1) },
 		"theme":        func(tt *Tester) { tt.rt.themeGen++ },
-		"atlas":        func(tt *Tester) { tt.rt.text.MaskAtlas.Grow() },
 	} {
 		t.Run(name, func(t *testing.T) {
 			tt, _ := replayTable(t, 100, rowText)
@@ -223,5 +222,21 @@ func TestBackgroundBehindRowsIsInTheKey(t *testing.T) {
 	tt.Frame()
 	if tt.rt.freshRows == fresh || tt.rt.replayMismatch != 0 {
 		t.Fatalf("background: %d rows painted anew, %d mismatches", tt.rt.freshRows-fresh, tt.rt.replayMismatch)
+	}
+}
+
+// A moved atlas sends the rows fresh by its generation (the glyphs they
+// recorded point into the old one).
+func TestRowsPaintAgainWhenTheAtlasMoves(t *testing.T) {
+	tt, _ := replayTable(t, 100, rowText)
+	tt.rt.replayCheck = true
+	tt.Frame()
+	fresh := tt.rt.freshRows
+	if !tt.rt.text.MaskAtlas.Grow() {
+		t.Skip("the shared atlas is at its largest after other tests")
+	}
+	tt.Frame()
+	if tt.rt.freshRows == fresh || tt.rt.replayMismatch != 0 {
+		t.Fatalf("after the atlas grew, %d rows painted anew, %d mismatches", tt.rt.freshRows-fresh, tt.rt.replayMismatch)
 	}
 }
