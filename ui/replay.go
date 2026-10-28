@@ -31,6 +31,9 @@ type rowKey struct {
 // rowPaint is what a row painted (see the comment above).
 type rowPaint struct {
 	key rowKey
+	// last is the key of the row's last painting, recorded or not: a row records
+	// when it paints twice in a row in the same place, not while it moves.
+	last rowKey
 	// under is the stack of opaque boxes around the row.
 	under []opaqueBox
 	// ids are the elements of the row, depth first, and pre and post their
@@ -109,9 +112,19 @@ func paintRow(p *Painter, c *node) {
 	ops, glyphs, stops, wide := len(s.Ops), len(s.Glyphs), len(s.Stops), len(s.Wide)
 	effects, canvases, drawn, transient := len(s.Effects), len(s.Canvases), len(rt.drawn), rt.text.TransientUses()
 	r := c.st.replay
+	stable := r != nil && r.last == key
 	if r == nil {
 		r = &rowPaint{}
 		c.st.replay = r
+		stable = true
+	}
+	r.last = key
+	if !stable {
+		// Scrolling, resizing: recording would copy what the next frame cannot
+		// replay.
+		r.ok = false
+		p.element(c)
+		return
 	}
 	r.ok = false
 	r.ids, r.pre, r.boxes = r.ids[:0], r.pre[:0], r.boxes[:0]
