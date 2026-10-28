@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -129,64 +130,108 @@ func BenchmarkTableFrame100k(b *testing.B) {
 	}
 }
 
-// BenchmarkTableFrame100kFrames measures, on the table of
-// BenchmarkTableFrame100k, the frames users feel:
+// tableFrameVariant is a frame users feel on the table of
+// BenchmarkTableFrame100k: setup makes what the frames need, and step does
+// the i-th frame's input and runs it.
+type tableFrameVariant struct {
+	name  string
+	setup func(tt *ui.Tester, rows []tableAccount, view *ui.TableView[tableAccount]) (step func(i int))
+}
+
+// tableFrameVariants are the frames:
 //   - idle: nothing changed;
 //   - hover: the pointer moved from a row to the next;
 //   - update: a visible row's text changed;
-//   - scroll1px and scrollhalf: a scroll by a whole pixel or by half of one,
-//     down and up in turn.
-func BenchmarkTableFrame100kFrames(b *testing.B) {
-	b.Run("idle", func(b *testing.B) {
-		tt, _, _ := tableFrame100k(b)
-		b.ReportAllocs()
-		b.ResetTimer()
-		for b.Loop() {
-			tt.Frame()
-		}
-	})
-	b.Run("hover", func(b *testing.B) {
-		tt, _, _ := tableFrame100k(b)
+//   - scroll1px: a scroll by a whole pixel, down and up in turn;
+//   - scrollhalf: a scroll by half a pixel, down twice and up twice. A
+//     Table's offset snaps to device pixels, so half a pixel moves its
+//     rows on every second frame only.
+var tableFrameVariants = []tableFrameVariant{
+	{"idle", func(tt *ui.Tester, _ []tableAccount, _ *ui.TableView[tableAccount]) func(int) {
+		return func(int) { tt.Frame() }
+	}},
+	{"hover", func(tt *ui.Tester, _ []tableAccount, _ *ui.TableView[tableAccount]) func(int) {
 		ys := [2]float32{120, 160} // two rows below the header
-		b.ReportAllocs()
-		b.ResetTimer()
-		i := 0
-		for b.Loop() {
-			tt.Move(150, ys[i%2])
-			i++
-		}
-	})
-	b.Run("update", func(b *testing.B) {
-		tt, rows, view := tableFrame100k(b)
+		return func(i int) { tt.Move(150, ys[i%2]) }
+	}},
+	{"update", func(tt *ui.Tester, rows []tableAccount, view *ui.TableView[tableAccount]) func(int) {
 		r := view.Row(5) // a row in view
 		names := [2]string{rows[r].name, rows[r].name + "x"}
-		b.ReportAllocs()
-		b.ResetTimer()
-		i := 0
-		for b.Loop() {
+		return func(i int) {
 			rows[r].name = names[i%2]
 			tt.Frame()
-			i++
 		}
-	})
-	for _, s := range []struct {
-		name string
-		dy   float32
-	}{{"scroll1px", 1}, {"scrollhalf", 0.5}} {
-		b.Run(s.name, func(b *testing.B) {
-			tt, _, _ := tableFrame100k(b)
-			tt.Scroll(150, 300, 0, 2000) // away from the top, so that both ways scroll
+	}},
+	{"scroll1px", func(tt *ui.Tester, _ []tableAccount, _ *ui.TableView[tableAccount]) func(int) {
+		tt.Scroll(150, 300, 0, 2000) // away from the top, so that both ways scroll
+		dys := [2]float32{1, -1}
+		return func(i int) { tt.Scroll(150, 300, 0, dys[i%2]) }
+	}},
+	{"scrollhalf", func(tt *ui.Tester, _ []tableAccount, _ *ui.TableView[tableAccount]) func(int) {
+		tt.Scroll(150, 300, 0, 2000)
+		dys := [4]float32{0.5, 0.5, -0.5, -0.5}
+		return func(i int) { tt.Scroll(150, 300, 0, dys[i%4]) }
+	}},
+}
+
+// BenchmarkTableFrame100kFrames measures, on the table of
+// BenchmarkTableFrame100k, the frames users feel (tableFrameVariants).
+// The Tester draws each frame with the CPU rasterizer that stands in for the
+// GPU, which is most of a frame that moves every row:
+// BenchmarkTableFrame100kPhases tells the parts of a frame.
+func BenchmarkTableFrame100kFrames(b *testing.B) {
+	for _, v := range tableFrameVariants {
+		b.Run(v.name, func(b *testing.B) {
+			tt, rows, view := tableFrame100k(b)
+			step := v.setup(tt, rows, view)
 			b.ReportAllocs()
 			b.ResetTimer()
 			i := 0
 			for b.Loop() {
-				dy := s.dy
-				if i%2 == 1 {
-					dy = -dy
-				}
-				tt.Scroll(150, 300, 0, dy)
+				step(i)
 				i++
 			}
 		})
+	}
+}
+
+// BenchmarkTableFrame100kPhases runs the frames of
+// BenchmarkTableFrame100kFrames and reports how long each part of a frame
+// took, averaged over the frames: build-µs/frame, layout-µs/frame,
+// paint-µs/frame and present-µs/frame. The variants ending in -app skip the
+// harness's rasterizer (Tester.SkipRaster), so that they measure the work an
+// app does itself: their present is empty. Reading the parts costs time of
+// its own (about 31 B and a few hundred ns a frame): compare these frames
+// with each other, and not with BenchmarkTableFrame100kFrames.
+func BenchmarkTableFrame100kPhases(b *testing.B) {
+	for _, skip := range []bool{false, true} {
+		for _, v := range tableFrameVariants {
+			name := v.name
+			if skip {
+				name += "-app"
+			}
+			b.Run(name, func(b *testing.B) {
+				tt, rows, view := tableFrame100k(b)
+				step := v.setup(tt, rows, view)
+				tt.SkipRaster(skip)
+				ui.MeasureFrames(tt)
+				var laps [4]time.Duration
+				b.ReportAllocs()
+				b.ResetTimer()
+				i := 0
+				for b.Loop() {
+					step(i)
+					l := ui.FrameLaps(tt)
+					for p := range laps {
+						laps[p] += l[p]
+					}
+					i++
+				}
+				b.StopTimer()
+				for p, part := range [4]string{"build", "layout", "paint", "present"} {
+					b.ReportMetric(float64(laps[p].Nanoseconds())/float64(i)/1000, part+"-µs/frame")
+				}
+			})
+		}
 	}
 }
