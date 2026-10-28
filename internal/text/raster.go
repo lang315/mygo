@@ -248,9 +248,55 @@ func (s *System) Glyph(f *Font, id uint32, scale, x float32, shade Shade, opaque
 	if f == nil {
 		return GlyphImage{}
 	}
-	shade = f.shadeFor(shade)
 	subpixel := opaque && s.subpixel
-	q, n, carry := s.place(f, scale, subpixel, x)
+	return s.glyphAt(f, id, scale, x, shade, subpixel, s.placement(f, scale, subpixel))
+}
+
+// GlyphRequest is a glyph for Glyphs: its font and id, its pen's x in
+// device pixels and the shade of its text.
+type GlyphRequest struct {
+	Font  *Font
+	ID    uint32
+	X     float32
+	Shade Shade
+}
+
+// Glyphs appends to out, for each of reqs, what Glyph returns for it at
+// scale, under one lock and with each font's placement looked up once
+// per run of it: text paints a line's glyphs at once.
+func (s *System) Glyphs(reqs []GlyphRequest, scale float32, opaque bool, out []GlyphImage) []GlyphImage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.glyphsCalls++
+	subpixel := opaque && s.subpixel
+	var f *Font
+	var pl placement
+	for _, r := range reqs {
+		if r.Font == nil {
+			out = append(out, GlyphImage{})
+			continue
+		}
+		if r.Font != f {
+			f, pl = r.Font, s.placement(r.Font, scale, subpixel)
+		}
+		out = append(out, s.glyphAt(r.Font, r.ID, scale, r.X, r.Shade, subpixel, pl))
+	}
+	return out
+}
+
+// GlyphsCalls returns how many times Glyphs was called: text paints a
+// line's glyphs in one call. (GlyphRun looks its glyphs up one by one, with
+// Glyph, where the text stack joins them.)
+func (s *System) GlyphsCalls() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.glyphsCalls
+}
+
+// glyphAt is Glyph with s locked and the placement of f looked up.
+func (s *System) glyphAt(f *Font, id uint32, scale, x float32, shade Shade, subpixel bool, pl placement) GlyphImage {
+	shade = f.shadeFor(shade)
+	q, n, carry := pl.at(x)
 	key := glyphKey{font: f, id: id, scale: uint32(scale*256 + 0.5), subX: uint8(q), shade: shade, subpixel: subpixel}
 	e, ok := s.glyphs[key]
 	if !ok {
@@ -271,6 +317,12 @@ func (s *System) Glyph(f *Font, id uint32, scale, x float32, shade Shade, opaque
 // is at x: at position q of the n within a pixel, carry pixels right of
 // the pixel x is in.
 func (s *System) place(f *Font, scale float32, subpixel bool, x float32) (q, n int, carry float32) {
+	return s.placement(f, scale, subpixel).at(x)
+}
+
+// placement returns how many positions within a pixel the system's text
+// stack draws glyphs of f at, and whether it rounds to them.
+func (s *System) placement(f *Font, scale float32, subpixel bool) placement {
 	pk := placeKey{f, uint32(scale*256 + 0.5), subpixel}
 	pl, ok := s.places[pk]
 	if !ok {
@@ -278,6 +330,12 @@ func (s *System) place(f *Font, scale float32, subpixel bool, x float32) (q, n i
 		pl.n = max(pl.n, 1)
 		s.places[pk] = pl
 	}
+	return pl
+}
+
+// at returns the position, of pl.n, that a pen at x draws at, and the
+// pixels it carries right.
+func (pl placement) at(x float32) (q, n int, carry float32) {
 	frac := float64(x) - math.Floor(float64(x))
 	if pl.round {
 		if q = int(math.Floor(frac*float64(pl.n) + 0.5)); q == pl.n {

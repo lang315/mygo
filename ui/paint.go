@@ -815,6 +815,14 @@ func (p *Painter) textBackgrounds(l *text.Layout, x, y float32, ts textStyle, sp
 	}
 }
 
+// glyphAsk is a glyph of the line being painted that is not culled: its
+// index in the line, its pen in device pixels and its color.
+type glyphAsk struct {
+	g     int
+	pen   float32
+	color Color
+}
+
 // textForeground paints glyphs and decorations over backgrounds and selection.
 func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts textStyle, sp *spanPaint) {
 	if l == nil {
@@ -845,23 +853,33 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 			continue
 		}
 		baseline := sys.Baseline((y + line.Baseline) * s)
-		for _, g := range line.Glyphs {
+		// The glyphs not culled, then their images in one call: the atlas
+		// moves nothing while a frame paints (MakeRoom runs between paints).
+		asks, reqs := p.rt.glyphAsks[:0], p.rt.glyphReqs[:0]
+		for gi := range line.Glyphs {
+			g := &line.Glyphs[gi]
 			pen := (x + g.X) * s
 			if g.Object || !p.transform.Set && !inline && (pen > (p.clip.X+p.clip.W)*s || pen+(g.Advance+g.Size)*s < p.clip.X*s) {
 				continue
 			}
-			ix := float32(math.Floor(float64(pen)))
 			glyphColor, glyphShade := color, shade
 			if sp != nil {
 				if glyphColor = sp.color(sp.at(g.Cluster), color); glyphColor != color {
 					glyphShade = text.ShadeOf(glyphColor.R, glyphColor.G, glyphColor.B)
 				}
 			}
-			gi := sys.Glyph(g.Font, g.ID, s, pen, glyphShade, p.opaque && !inline)
+			asks = append(asks, glyphAsk{g: gi, pen: pen, color: glyphColor})
+			reqs = append(reqs, text.GlyphRequest{Font: g.Font, ID: g.ID, X: pen, Shade: glyphShade})
+		}
+		images := sys.Glyphs(reqs, s, p.opaque && !inline, p.rt.glyphImages[:0])
+		p.rt.glyphAsks, p.rt.glyphReqs, p.rt.glyphImages = asks, reqs, images
+		for i, a := range asks {
+			gi := images[i]
 			if !gi.OK {
 				continue
 			}
-			glyphColor = glyphColor.Alpha(p.opacity)
+			ix := float32(math.Floor(float64(a.pen)))
+			glyphColor := a.color.Alpha(p.opacity)
 			sg := scene.Glyph{
 				X: ix + gi.Left, Y: baseline + gi.Top, W: float32(gi.W), H: float32(gi.H),
 				U: gi.X, V: gi.Y, UW: gi.W, VH: gi.H,
@@ -869,10 +887,10 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 				Color:     glyphColor.scene(), Wide: p.glyphWide(glyphColor), Colored: gi.Colored, Subpixel: gi.Subpixel, Thin: gi.Thin,
 			}
 			if !same {
-				sg.Transform = p.inlineTransform(g.Cluster).Pixels(s)
+				sg.Transform = p.inlineTransform(line.Glyphs[a.g].Cluster).Pixels(s)
 			}
 			if run != nil {
-				run.add(p, g, gi, pen, sg, glyphShade, baseline)
+				run.add(p, line.Glyphs[a.g], gi, a.pen, sg, reqs[i].Shade, baseline)
 				continue
 			}
 			p.s.Glyphs = append(p.s.Glyphs, sg)

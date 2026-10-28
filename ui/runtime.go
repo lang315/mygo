@@ -139,6 +139,11 @@ type engine struct {
 	scene           scene.Scene
 	painter         Painter
 	glyphRun        glyphRun
+	// glyphAsks, glyphReqs and glyphImages are the engine's buffers for
+	// the glyphs of the line being painted (textForeground).
+	glyphAsks   []glyphAsk
+	glyphReqs   []text.GlyphRequest
+	glyphImages []text.GlyphImage
 
 	// contentZoom is the content's zoom (Context.SetZoom), 0 for none;
 	// zoomChanged tells that it changed since the frame's size was read.
