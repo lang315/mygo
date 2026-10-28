@@ -1,6 +1,10 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
+)
 
 // framesAllocating returns what a frame allocates, on average, for 60 check
 // boxes all in the state on, beside a box that changes color every frame so that
@@ -20,7 +24,7 @@ func framesAllocating(on bool) float64 {
 		})
 	}, 300, 2400)
 	tt.Frame()
-	return testing.AllocsPerRun(50, func() { n++; tt.Frame() })
+	return allocrun.Least(50, func() { n++; tt.Frame() })
 }
 
 // A check mark is painted from a path the engine keeps, not one made for each

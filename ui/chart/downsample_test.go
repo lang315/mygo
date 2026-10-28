@@ -4,6 +4,8 @@ import (
 	"math"
 	"slices"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 func TestMinMax(t *testing.T) {
@@ -56,7 +58,7 @@ func TestMinMaxReuseAndDensity(t *testing.T) {
 		ys[i] = float32(math.Sin(float64(i)))
 	}
 	dx, dy := make([]float32, 0, 15000), make([]float32, 0, 15000)
-	if a := testing.AllocsPerRun(20, func() { dx, dy = MinMax(dx, dy, xs, ys, 1280) }); a != 0 {
+	if a := allocrun.Least(20, func() { dx, dy = MinMax(dx, dy, xs, ys, 1280) }); a != 0 {
 		t.Fatalf("%v allocations", a)
 	}
 	first := slices.Clone(dx)

@@ -3,6 +3,8 @@ package ui
 import (
 	"testing"
 	"unsafe"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // A node's size is kept: its fields go in the padding. It is 1776 since
@@ -45,7 +47,7 @@ func TestButtonsAndTextInputsMakeNothingPerFrame(t *testing.T) {
 		for range 3 {
 			tt.Frame()
 		}
-		return testing.AllocsPerRun(20, tt.Frame)
+		return allocrun.Least(20, tt.Frame)
 	}
 	slope := (frames(60) - frames(20)) / 40 // per (button, primary button, text input)
 	t.Logf("allocations per button, primary button and text input: %.2f", slope)

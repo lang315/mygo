@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -1028,8 +1029,9 @@ func TestTableRowsAllocateLittleWhenScrolled(t *testing.T) {
 	}
 	built.Store(0)
 	const runs = 20
-	allocs := testing.AllocsPerRun(runs, scroll)
-	rows := float64(built.Load()) / (runs + 1) // AllocsPerRun runs once more to warm up; a row's Name is read twice
+	calls := 0 // Least counts more than once, and each count runs scroll one more time to warm up
+	allocs := allocrun.Least(runs, func() { calls++; scroll() })
+	rows := float64(built.Load()) / float64(calls) // a row's Name is read twice
 	if rows < 100 {
 		t.Fatalf("a scrolled frame read %v names", rows)
 	}

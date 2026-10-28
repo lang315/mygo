@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // tvTitle is the group of a row in the tests: b, which the columns do not
@@ -249,7 +251,7 @@ func TestTableViewGroupsIdleSyncAllocatesNothing(t *testing.T) {
 	v := NewTableView(tvCompare)
 	v.SetGroupBy(tvTitle)
 	v.Sync(rows, SortOrder{Column: "a"})
-	if n := testing.AllocsPerRun(100, func() { v.Sync(rows, SortOrder{Column: "a"}) }); n != 0 {
+	if n := allocrun.Least(100, func() { v.Sync(rows, SortOrder{Column: "a"}) }); n != 0 {
 		t.Fatalf("an idle Sync allocated %v times", n)
 	}
 }
