@@ -176,7 +176,14 @@ func TestRetainMatchesFresh(t *testing.T) {
 				if a.rt.replayMismatch != 0 {
 					t.Fatalf("seed %d scale %v frame %d (%s): %d replayed rows differ from painting them", seed, scale, f, what, a.rt.replayMismatch)
 				}
-				if d := sameFrames(a, b, true); d != "" {
+				d := sameNodes(a.rt.c.root, b.rt.c.root, "root")
+				if d == "" {
+					d = sameFrames(a, b, true)
+				}
+				if d == "" {
+					d = sameStates(a, b)
+				}
+				if d != "" {
 					if len(steps) > 6 {
 						steps = steps[len(steps)-6:]
 					}
@@ -206,4 +213,47 @@ func pickList(m *lcModel) *lcNode {
 		return nil
 	}
 	return lists[m.rng.IntN(len(lists))]
+}
+
+// sameNodes compares the elements of two trees: what layout and commit left in
+// them.
+func sameNodes(a, b *node, path string) string {
+	if a.id != b.id {
+		return fmt.Sprintf("%s: id %d, want %d", path, a.id, b.id)
+	}
+	if a.x != b.x || a.y != b.y || a.w != b.w || a.h != b.h || a.contentW != b.contentW || a.contentH != b.contentH {
+		return fmt.Sprintf("%s: box %v,%v %v×%v content %v×%v, want %v,%v %v×%v content %v×%v", path, a.x, a.y, a.w, a.h, a.contentW, a.contentH, b.x, b.y, b.w, b.h, b.contentW, b.contentH)
+	}
+	if a.world != b.world || a.ink != b.ink || a.noCull != b.noCull {
+		return fmt.Sprintf("%s: world %v ink %v noCull %v, want world %v ink %v noCull %v", path, a.world, a.ink, a.noCull, b.world, b.ink, b.noCull)
+	}
+	if a.nchild != b.nchild {
+		return fmt.Sprintf("%s: %d children, want %d", path, a.nchild, b.nchild)
+	}
+	for ca, cb, i := a.first, b.first, 0; ca != nil && cb != nil; ca, cb, i = ca.next, cb.next, i+1 {
+		if d := sameNodes(ca, cb, fmt.Sprintf("%s/%d", path, i)); d != "" {
+			return d
+		}
+	}
+	return ""
+}
+
+// sameStates compares every field commit writes of the states two Testers
+// share.
+func sameStates(a, b *Tester) string {
+	for id, s := range a.rt.states {
+		o := b.rt.states[id]
+		if o == nil {
+			continue // sameFrames compares the sets
+		}
+		if s.x != o.x || s.y != o.y || s.w != o.w || s.h != o.h || s.vx != o.vx || s.vy != o.vy || s.vw != o.vw || s.vh != o.vh ||
+			s.cx != o.cx || s.cy != o.cy || s.cw != o.cw || s.ch != o.ch || s.flags != o.flags || s.world != o.world || s.clips != o.clips ||
+			s.clipRect != o.clipRect || s.clipRadii != o.clipRadii || s.rtl != o.rtl || s.page != o.page || s.scope != o.scope ||
+			s.anchor != o.anchor || s.cursor != o.cursor || s.tip != o.tip || s.contentW != o.contentW || s.contentH != o.contentH {
+			return fmt.Sprintf("state %d: box %v,%v %v×%v visible %v,%v %v×%v content %v,%v %v×%v flags %#x, want box %v,%v %v×%v visible %v,%v %v×%v content %v,%v %v×%v flags %#x (other fields may differ)",
+				id, s.x, s.y, s.w, s.h, s.vx, s.vy, s.vw, s.vh, s.cx, s.cy, s.cw, s.ch, uint32(s.flags),
+				o.x, o.y, o.w, o.h, o.vx, o.vy, o.vw, o.vh, o.cx, o.cy, o.cw, o.ch, uint32(o.flags))
+		}
+	}
+	return ""
 }

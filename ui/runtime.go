@@ -135,6 +135,10 @@ type engine struct {
 	rowsKept, rowsBuilt int
 	noRetain            bool
 	bound               int
+	// rowsLaidKept counts the kept rows whose layout a layout kept and place
+	// found where they were; rowsCommitReplayed those commit replayed
+	// (retain_layout.go). Reset by beginLayout.
+	rowsLaidKept, rowsCommitReplayed int
 	// acting are the ids of the elements the engine acts on in this pass
 	// (actingIDs), with a filter over them.
 	acting     []uint64

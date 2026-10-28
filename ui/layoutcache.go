@@ -131,6 +131,7 @@ type layoutRecord struct {
 func (rt *engine) beginLayout(root *node) {
 	rt.layouts++
 	rt.paintSameRows = 0
+	rt.rowsLaidKept, rt.rowsCommitReplayed = 0, 0
 	// The text system let go of the layouts and fonts it had, or the
 	// cache is off: lay everything out anew.
 	changed := rt.noLayoutCache || !rt.layGenOK || rt.layGen != rt.gen
