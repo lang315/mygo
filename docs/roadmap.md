@@ -191,7 +191,10 @@ cannot show: those items are not marked):
   window with its table, a settings dialog and the toolbar.
 - They run on Windows 10 amd64 and Windows 11 ARM64.
 - Vietnamese Telex typing works in text boxes and table cells, on Windows
-  and macOS.
+  and macOS. *Open, the owner's decision:* `DataGridView` has no editing in a
+  cell (no `ui/widget` control edits the text of a cell in place), so Telex in
+  table cells cannot be tested yet; text boxes can. Either the grid gets
+  in-cell editing, or the gate drops the table cells.
 - A click on a table of 1M rows takes ≤ 1 ms of the app's work (`clickApp`). **Done**, see above: 0.67 ms at worst on CI.
 - API changes the port forces land before Phase 2.
 
@@ -400,5 +403,19 @@ cannot show: those items are not marked):
 - Every PR carries evidence: build, vet, tests, benchmarks and app sizes,
   and its e2e runs on the three machines.
 - A PR merges after CI is green.
+- A test never passes or fails on wall-clock time (AGENTS.md). The flakes
+  that broke this on 2026-10-28, each fixed by waiting for the event or
+  driving a fake clock, and not by a longer timeout:
+  - `examples/account-manager/stress.go`: `stress` takes its ticks and start
+    time from the caller, and its test sends them (#231);
+  - `internal/watchdriver/watch_test.go`: `TestWatch` waits for `Remove` to
+    run before it fails `Wait` (#236);
+  - `ui/widget/window_test.go`: `TestOnCloseAfterQuitAttemptDoesNotQuit`
+    waits for the first `OnClose` to return (#237);
+  - `examples/account-manager/main_test.go`,
+    `examples/account-manager/worker_test.go` and
+    `internal/update/rename_test.go`: a wait on the run's end, scheduler
+    turns for the overlap, and the file let go at `Rename`'s first wait
+    (#240).
 - The fork syncs with egoist/mygo on request, and before each phase.
 - This fork sends no pull requests upstream.
