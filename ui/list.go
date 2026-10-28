@@ -488,6 +488,12 @@ type listFrame struct {
 	rows  []listRow
 	// at finds rows by their index while the list lays out.
 	at map[int]int
+	// kept holds the rows kept by key, with the records released for others,
+	// and handles the keys of the rows of this pass that bound an app's
+	// Handle (retain.go).
+	kept    map[any]*rowKeep
+	spare   []*rowKeep
+	handles []any
 	// rb is the row being built (Context.row), kept here rather than
 	// allocated for each row.
 	rb rowBuild
@@ -566,7 +572,15 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		panic("ui: a list cannot both DragSelect (or CellSelect) and Reorder")
 	}
 	n = max(n, 0)
-	*f = listFrame{c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at}
+	*f = listFrame{c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, spare: f.spare, handles: f.handles[:0]}
+	if s.RowVersion != nil {
+		// Linked here, so that an app with no List does not link the code
+		// that keeps rows.
+		if rt.keepRows == nil {
+			rt.keepRows = (*engine).captureRows
+		}
+		rt.keepLists = append(rt.keepLists, f)
+	}
 	if rt.pass == 0 {
 		s.editables, s.editablesNow = s.editablesNow, false
 	}
@@ -773,6 +787,12 @@ func (f *listFrame) build(i int) *node {
 	if s.Key != nil {
 		key = s.Key(i)
 	}
+	if w := f.keep(i, key); w != nil {
+		return w
+	}
+	rt := c.rt
+	rt.rowsBuilt++
+	bound := rt.bound
 	// Keyed as it is made, as Context.Key does: Key after would look up
 	// a state by its place first, and drop it, in every frame.
 	c.nextKey, c.keySet, c.keyGlobal = key, true, false
@@ -855,6 +875,9 @@ func (f *listFrame) build(i int) *node {
 	w.Children(func() { f.row(i) })
 	c.row, f.rb = saved, prev
 	f.rows = append(f.rows, listRow{i: i, key: key, e: w})
+	if rt.bound != bound {
+		f.handles = append(f.handles, key) // an element of it is the app's Handle: not kept
+	}
 	return w
 }
 

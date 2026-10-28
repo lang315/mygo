@@ -123,6 +123,22 @@ type engine struct {
 	// ghostSpare and ghostMoved are what compacting them uses, kept to make
 	// nothing for it.
 	ghostSpare []*Theme
+	// keepRows is captureRows once a list with RowVersion was built
+	// (retain.go); keepLists the lists to capture rows of after the frame.
+	keepRows  func(*engine)
+	keepLists []*listFrame
+	// rowsKept and rowsBuilt count the rows lists linked and built, noRetain
+	// stops lists from keeping rows (tests, benchmarks). bound counts the
+	// elements bound to an app's Handle.
+	rowsKept, rowsBuilt int
+	noRetain            bool
+	bound               int
+	// acting are the ids of the elements the engine acts on in this pass
+	// (actingIDs), with a filter over them.
+	acting     []uint64
+	actBloom   [4]uint64
+	actFrame   uint64
+	actPass    int
 	ghostMoved []uint16
 
 	inputs          []valueInput
@@ -720,6 +736,9 @@ func (rt *engine) runFrame() {
 	rt.texts = rt.texts[:0]
 	rt.collectSelectable(root, false)
 	rt.syncTextSelection()
+	if rt.keepRows != nil {
+		rt.keepRows(rt)
+	}
 	rt.stats.lap(phaseLayout)
 	rt.insp.lap(1)
 	if rt.insp.open {
