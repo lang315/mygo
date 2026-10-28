@@ -424,7 +424,10 @@ func (c *context) Invalidate() { c.rt.host.invalidate() }
 // it, for something moving. Call it in every frame while it moves. A
 // drawing that moves while the layout stays asks with
 // Painter.AnimationFrame instead, whose frames do not build the view.
-func (c *context) AnimationFrame() { c.rt.animating = true }
+func (c *context) AnimationFrame() {
+	c.rt.animating = true
+	c.rt.bound++ // a list does not keep a row that asks for frames
+}
 
 // DisableAnimations makes the values that animate in this frame
 // (AnimateTo, Animate, Spring), the element transitions and the pages of
@@ -441,7 +444,10 @@ func (rt *engine) instant() bool { return rt.instantFrame == rt.frame && rt.fram
 
 // After asks for another frame after d, for something that changes with
 // time, such as a clock.
-func (c *context) After(d time.Duration) { c.rt.scheduleAt(c.now.Add(d)) }
+func (c *context) After(d time.Duration) {
+	c.rt.scheduleAt(c.now.Add(d))
+	c.rt.bound++ // a list does not keep a row that asks for a build later
+}
 
 // ReadClipboard returns the text on the clipboard, and WriteClipboard
 // puts text there, for widgets that copy and paste themselves. Call them

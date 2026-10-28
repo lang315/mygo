@@ -213,14 +213,16 @@ type ListState struct {
 	// frame instead of building it again, as long as RowVersion(i) returns
 	// what it did then: the row's build must read nothing but the row's own
 	// data, which RowVersion versions, and the list's state. A closure's
-	// variable, a theme of your own, the time or any other state of the
-	// app that the row shows is not versioned by itself: change what
-	// RowVersion returns when it changes, or leave RowVersion nil.
+	// variable, a theme of your own, the time, the size of the window, the
+	// language or any other state of the app that the row shows is not
+	// versioned by itself: change what RowVersion returns when it changes,
+	// or leave RowVersion nil.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer, the
 	// keys or assistive technology act on it, when the theme changes, when
-	// it holds a focus, a shortcut, an animation, a tooltip or an element
+	// it holds a focus, a shortcut, an animation (or asks for frames or a
+	// build later), a text it edits, a custom Draw, a tooltip or an element
 	// you keep a Handle of, and while the inspector is open. RowVersion
 	// must be cheap and allocate nothing: it runs for each row in view in
 	// every frame. With RowVersion nil the list builds every row in view in
@@ -498,6 +500,7 @@ type listFrame struct {
 	// and handles the keys of the rows of this pass that bound an app's
 	// Handle (retain.go).
 	kept    map[any]*rowKeep
+	capSeq  uint64 // the captures of f, which mark the records they renew
 	spare   []*rowKeep
 	handles []any
 	// sig and noKeep are the table's (ListState.rowSig, rowNoKeep).
@@ -582,8 +585,13 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 	}
 	n = max(n, 0)
 	sig, noKeep := s.rowSig, s.rowNoKeep
+	if s.RowVersion != nil {
+		sig ^= s.settingsSig()
+	} else if f.kept != nil {
+		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
+	}
 	s.rowSig, s.rowNoKeep = 0, false
-	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, spare: f.spare, handles: f.handles[:0]}
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0]}
 	if s.RowVersion != nil {
 		// Linked here, so that an app with no List does not link the code
 		// that keeps rows.
@@ -807,6 +815,10 @@ func (f *listFrame) build(i int) *node {
 	}
 	rt.rowsBuilt++
 	bound := rt.bound
+	// A row with an EditableText tells the list so as it builds (editablesNow):
+	// a kept one would not, and the keys would open the row instead of editing.
+	wasEditable := s.editablesNow
+	s.editablesNow = false
 	// Keyed as it is made, as Context.Key does: Key after would look up
 	// a state by its place first, and drop it, in every frame.
 	c.nextKey, c.keySet, c.keyGlobal = key, true, false
@@ -889,9 +901,10 @@ func (f *listFrame) build(i int) *node {
 	w.Children(func() { f.row(i) })
 	c.row, f.rb = saved, prev
 	f.rows = append(f.rows, listRow{i: i, key: key, e: w})
-	if rt.bound != bound {
-		f.handles = append(f.handles, key) // an element of it is the app's Handle: not kept
+	if rt.bound != bound || s.editablesNow {
+		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits: not kept
 	}
+	s.editablesNow = s.editablesNow || wasEditable
 	return w
 }
 

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"math"
 	"slices"
 
 	"github.com/egoist/mygo/internal/scene"
@@ -35,6 +36,7 @@ type rowKeep struct {
 	// than the last frame the row was built in could match again once the
 	// inputs settled, and show a state the row has not had since.
 	lastFrame uint64
+	mark      uint64 // the capture of the list that last saw the row built or linked
 	depth     int
 	chosen    [3]bool // of the rows above, at and below it
 	checked   bool
@@ -53,7 +55,7 @@ func (rt *engine) actingIDs() {
 	rt.actFrame, rt.actPass = rt.frame, rt.pass+1
 	b := append(rt.acting[:0], rt.hover...)
 	b = append(b, rt.focused, rt.lostFocus, rt.pressDragger, rt.dropOver,
-		rt.menu.asked, rt.menu.text, rt.menu.chosenText, rt.menu.release, rt.menu.releaseText,
+		rt.menu.asked, rt.menu.chosen, rt.menu.text, rt.menu.chosenText, rt.menu.release, rt.menu.releaseText,
 		rt.tips.shown, rt.tips.hover, rt.tips.focus)
 	if rt.pressed != nil {
 		b = append(b, rt.pressed.id)
@@ -69,7 +71,7 @@ func (rt *engine) actingIDs() {
 	}
 }
 
-// busy reports whether the engine acts on or waits for the element id.
+// isActing reports whether the engine acts on or waits for the element id.
 func (rt *engine) isActing(id uint64) bool {
 	if rt.actBloom[id>>6&3]&(1<<(id&63)) == 0 {
 		return false
@@ -88,6 +90,9 @@ func (f *listFrame) ok(i int, states []*state) bool {
 	}
 	if sel := s.cursor(); sel != nil && s.Selection != nil && *sel == i {
 		return false // the row the keys are on has a focus ring of its own (DrawOver)
+	}
+	if s.editAsked && s.editKey == f.key(i) {
+		return false // the keys asked this row to edit its text: its build starts it
 	}
 	rt.actingIDs()
 	for _, st := range states {
@@ -177,7 +182,7 @@ func retainable(e *node) bool {
 	if e.popover != nil || e.placeOn != nil || e.nameFrom != nil || e.focusTo != nil || e.activeDescendant != nil ||
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||
 		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.objectFn != nil ||
-		e.paintAfterFn != nil || e.textClient != nil || e.accFill != nil || e.copyData != nil || e.tip ||
+		e.paintAfterFn != nil || e.paintFn != nil || e.textClient != nil || e.accFill != nil || e.copyData != nil || e.tip ||
 		e.flags&flagFocusable != 0 || e.effect != nil || e.hidden || e.leaving != 0 || e.ghosts {
 		return false
 	}
@@ -242,8 +247,16 @@ func (k *rowKeep) fill(e *node, at *int, parent *node) *node {
 // was committed, and forgets those that were not in it.
 func (rt *engine) captureRows() {
 	for i, f := range rt.keepLists {
-		if !slices.Contains(rt.keepLists[:i], f) && f.frame == rt.frame {
+		if slices.Contains(rt.keepLists[:i], f) || f.frame != rt.frame {
+			continue
+		}
+		if f.pass == rt.pass {
 			f.capture()
+		} else {
+			// Built in a pass before the last, and not in it: prune recycled
+			// the states of its rows, and the arena slots of them were written
+			// again.
+			f.releaseAll()
 		}
 	}
 	clear(rt.keepLists)
@@ -260,8 +273,12 @@ func (f *listFrame) capture() {
 	if f.kept == nil {
 		f.kept = map[any]*rowKeep{}
 	}
+	f.capSeq++
 	for _, r := range f.rows {
 		rec := f.kept[r.key]
+		if rec != nil {
+			rec.mark = f.capSeq
+		}
 		if rec != nil && rec.lastFrame == rt.frame {
 			// Linked, or kept, in this frame: its storage is a row in the tree.
 			// Another row with the key (an app that repeats a key) leaves it be.
@@ -288,13 +305,36 @@ func (f *listFrame) capture() {
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen = f.chosenAround(r.i)
 		rec.checked = f.s.Checked != nil && f.s.Checked.has(r.key)
+		rec.mark = f.capSeq
 		f.kept[r.key] = rec
 	}
+	// Those the last pass did not link or build: a row linked in an earlier
+	// pass had its states pruned with the pass.
 	for k, rec := range f.kept {
-		if rec.lastFrame < rt.frame {
+		if rec.mark != f.capSeq {
 			f.release(k)
 		}
 	}
+}
+
+// releaseAll forgets every record of f.
+func (f *listFrame) releaseAll() {
+	for k := range f.kept {
+		f.release(k)
+	}
+}
+
+// settingsSig hashes what a list does with its rows besides their data: the
+// choice, the menus, the drags. A row kept was built with the settings the
+// list had.
+func (s *ListState) settingsSig() (h uint64) {
+	for i, on := range [...]bool{s.cursor() != nil, s.Selection != nil, s.DragSelect, s.CellSelect, s.Reorder != nil,
+		s.RowMenu != nil, s.CellMenu != nil, s.Label != nil, s.Checked != nil} {
+		if on {
+			h |= 1 << i
+		}
+	}
+	return h<<48 ^ math.Float64bits(s.gap)>>16
 }
 
 // spareKeep returns a record for a row, from those released.

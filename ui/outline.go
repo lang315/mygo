@@ -42,6 +42,9 @@ type OutlineState[K comparable] struct {
 // useRowVersion points List.RowVersion at the item's, with the outline's own.
 func (s *OutlineState[K]) useRowVersion() {
 	if s.RowVersion == nil {
+		if s.rowv != nil {
+			s.List.RowVersion = nil // the outline's own, from when it had one
+		}
 		return
 	}
 	if s.rowv == nil {

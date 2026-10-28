@@ -130,7 +130,8 @@ type engine struct {
 	keepLists []*listFrame
 	// rowsKept and rowsBuilt count the rows lists linked and built, noRetain
 	// stops lists from keeping rows (tests, benchmarks). bound counts the
-	// elements bound to an app's Handle.
+	// elements bound to an app's Handle, and the asks for frames (AnimationFrame,
+	// After): a row that did either is not kept.
 	rowsKept, rowsBuilt int
 	noRetain            bool
 	bound               int
