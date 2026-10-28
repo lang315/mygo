@@ -462,7 +462,7 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item 
 			cell.Background(t.SurfacePressed).Border(2, t.Border)
 		default:
 			cell.builtWith(t)
-			cell.setStyle(staticHoverSurface)
+			setStyle(cell, hoverSurface, staticHoverSurface)
 		}
 		if i == *s.Selected && s.Selection != nil && !chosen {
 			// Where the keys moved without choosing.

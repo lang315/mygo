@@ -20,7 +20,7 @@ func textInput(c *context, value *string, multiline bool) *node {
 		e.MinHeight(t.Space(20))
 	}
 	e.builtWith(t)
-	e.setStyle(staticInput)
+	setStyle(e, inputStyle, staticInput)
 	return e
 }
 

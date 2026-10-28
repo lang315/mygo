@@ -29,7 +29,7 @@ func textPaintOf(t *textStyle) textPaint {
 }
 
 // same reports whether t paints text as p says: what is not set is not read.
-func (p *textPaint) same(t *textStyle) bool {
+func textPaintSame(p *textPaint, t *textStyle) bool {
 	set := t.set & textPaintSet
 	if set != p.set {
 		return false
@@ -89,7 +89,7 @@ type paintLook struct {
 }
 
 // equal reports whether a and b are the same, byte by byte.
-func (a *paintLook) equal(b *paintLook) bool {
+func paintLookEqual(a, b *paintLook) bool {
 	const n = unsafe.Sizeof(paintLook{})
 	return *(*[n]byte)(unsafe.Pointer(a)) == *(*[n]byte)(unsafe.Pointer(b))
 }
@@ -158,7 +158,7 @@ type paintStyle struct {
 // cannot compare: a closure, an effect, a layer cache, a gradient, a
 // transform, a picture, an input, a scroll container, text made of spans or
 // inline elements, a color transition, or an element leaving.
-func (e *node) paintVolatile() bool {
+func paintVolatile(e *node) bool {
 	const n = unsafe.Sizeof(paintRare{})
 	return *(*[n]byte)(unsafe.Pointer(&e.paintRare)) != zeroRare ||
 		e.styleFn != nil && e.styleID == staticNone ||
@@ -172,20 +172,20 @@ var zeroRare [unsafe.Sizeof(paintRare{})]byte
 
 // paintStyle returns what paints e besides its layout and its text styles,
 // and false when e is volatile (paintVolatile).
-func (e *node) paintStyle() (ps paintStyle, ok bool) {
-	if e.paintVolatile() {
+func paintStyleOf(e *node) (ps paintStyle, ok bool) {
+	if paintVolatile(e) {
 		return paintStyle{}, false
 	}
-	ps.set(e)
+	setPaintStyle(&ps, e)
 	return ps, true
 }
 
 // set makes ps what paints e, which is not volatile, keeping the room of its
 // shadows.
-func (ps *paintStyle) set(e *node) {
+func setPaintStyle(ps *paintStyle, e *node) {
 	ps.flags, ps.look = e.flags&^layoutFlags, e.paintLook
 	ps.theme = nil
-	if e.readsTheme() {
+	if readsTheme(e) {
 		ps.theme = e.builtTheme()
 	}
 	ps.shadows = append(ps.shadows[:0], e.shadows...)
@@ -193,13 +193,13 @@ func (ps *paintStyle) set(e *node) {
 
 // same reports whether e, not volatile, paints as ps says. It compares the
 // node itself, which costs less than making a paintStyle of it to compare.
-func (ps *paintStyle) same(e *node) bool {
-	return ps.look.equal(&e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows, e.shadows) &&
-		(!e.readsTheme() || ps.theme == e.builtTheme())
+func paintStyleSame(ps *paintStyle, e *node) bool {
+	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows, e.shadows) &&
+		(!readsTheme(e) || ps.theme == e.builtTheme())
 }
 
 // readsTheme reports whether painting e reads the theme it was built with
 // (builtWith): the static styles and the check mark do.
-func (e *node) readsTheme() bool {
+func readsTheme(e *node) bool {
 	return e.c != nil && (e.styleID != staticNone || e.checkmark != 0)
 }

@@ -60,7 +60,7 @@ func TestAnotherThemeAtTheSameIndexIsAChange(t *testing.T) {
 	var e *node
 	tt := coreNewTester(func(c *context) {
 		e = coreBox(c)
-		e.setStyle(staticHoverSurface)
+		setStyle(e, hoverSurface, staticHoverSurface)
 		c.rt.themes = append(c.rt.themes[:0], use)
 		e.themeAt = 1
 	}, 100, 100)
@@ -233,3 +233,5 @@ func TestSelectableRowsDoNotPaintAsBefore(t *testing.T) {
 		t.Fatalf("%d rows of selectable text paint as before", got)
 	}
 }
+
+func init() { linkPaintCompare() } // single elements are compared without a list

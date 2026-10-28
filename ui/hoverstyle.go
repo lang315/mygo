@@ -3,7 +3,7 @@ package ui
 // The hover looks of rows, items, triggers and cells: functions that read the
 // node and the theme it was built with (builtWith), so that no closure is made
 // for each element in each frame. Set one with `e.builtWith(t)` and
-// `e.setStyle(staticHoverSurface)`.
+// `setStyle(e, hoverSurface, staticHoverSurface)`.
 
 // hoverSurface gives an element the theme's hover color while the pointer is
 // over it.

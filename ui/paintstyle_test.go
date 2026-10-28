@@ -70,8 +70,8 @@ func TestPaintStyleSeesEachInput(t *testing.T) {
 		return e
 	}
 	refE := base()
-	ref, ok := refE.paintStyle()
-	if !ok || !ref.same(refE) {
+	ref, ok := paintStyleOf(refE)
+	if !ok || !paintStyleSame(&ref, refE) {
 		t.Fatal("a plain element is volatile")
 	}
 	for name, change := range map[string]func(e *node){
@@ -89,22 +89,26 @@ func TestPaintStyleSeesEachInput(t *testing.T) {
 		"listRow":     func(e *node) { e.listRow = true },
 		"rowIndex":    func(e *node) { e.rowIndex = 7 },
 		"collapsed":   func(e *node) { e.collapsed = true },
-		"styleID":     func(e *node) { e.setStyle(staticHoverRow) },
+		"styleID":     func(e *node) { setStyle(e, hoverRow, staticHoverRow) },
 		"buttonLook":  func(e *node) { e.buttonLook = buttonPrimary },
 		"flags":       func(e *node) { e.flags |= flagDisabled },
 		"shadow":      func(e *node) { e.shadows = []shadow{{y: 1, blur: 2}} },
-		"theme":       func(e *node) { e.setStyle(staticHoverRow); e.themeAt = 0; e.c = &context{theme: &Theme{}, rt: e.c.rt} },
+		"theme": func(e *node) {
+			setStyle(e, hoverRow, staticHoverRow)
+			e.themeAt = 0
+			e.c = &context{theme: &Theme{}, rt: e.c.rt}
+		},
 	} {
 		e := base()
 		change(e)
-		if _, ok := e.paintStyle(); !ok || ref.same(e) {
+		if _, ok := paintStyleOf(e); !ok || paintStyleSame(&ref, e) {
 			t.Errorf("%s: paintStyle did not change", name)
 		}
 	}
 	// The layout reads these flags: layout compares them, not paintStyle.
 	e := base()
 	e.flags |= flagAbsolute
-	if _, ok := e.paintStyle(); !ok || !ref.same(e) {
+	if _, ok := paintStyleOf(e); !ok || !paintStyleSame(&ref, e) {
 		t.Error("a flag layout reads changed paintStyle")
 	}
 	for name, set := range map[string]func(e *node){
@@ -119,7 +123,7 @@ func TestPaintStyleSeesEachInput(t *testing.T) {
 	} {
 		e := base()
 		set(e)
-		if _, ok := e.paintStyle(); ok {
+		if _, ok := paintStyleOf(e); ok {
 			t.Errorf("%s: an element with it is not volatile", name)
 		}
 	}
@@ -140,15 +144,15 @@ func TestTextPaintSeesEachInput(t *testing.T) {
 	} {
 		var s textStyle
 		change(&s)
-		if textPaintOf(&s) == ref || ref.same(&s) {
+		if textPaintOf(&s) == ref || textPaintSame(&ref, &s) {
 			t.Errorf("%s: textPaintOf did not change", name)
 		}
-		if p := textPaintOf(&s); !p.same(&s) {
+		if p := textPaintOf(&s); !textPaintSame(&p, &s) {
 			t.Errorf("%s: a text paint is not the same as its style", name)
 		}
 	}
 	// A text style that lays out does not paint.
-	if size := (textStyle{size: 20, set: setSize}); textPaintOf(&size) != ref || !ref.same(&size) {
+	if size := (textStyle{size: 20, set: setSize}); textPaintOf(&size) != ref || !textPaintSame(&ref, &size) {
 		t.Error("a size changed textPaintOf")
 	}
 }

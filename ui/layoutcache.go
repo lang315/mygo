@@ -196,23 +196,12 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 	}
 	r.layout = n
 	same := equal && sameText && !changed
-	// What paints it, against what the last layout saw.
-	// Only rows are replayed (retained rows): paint is compared below a row.
-	paintEqual := false
-	sameP := true
-	if e.c.rt.inRow || e.c.rt.paintAll {
-		if e.paintVolatile() {
-			r.paintOK = false
-		} else if fresh && r.paintOK && r.paint.same(e) {
-			paintEqual = true
-		} else {
-			r.paint.set(e)
-			r.paintOK = true
-		}
-		sameP = fresh && r.samePaintText(&e.ts)
-		if !sameP {
-			r.keepPaintText(&e.ts)
-		}
+	// What paints it, against what the last layout saw: only below a list row,
+	// since only rows are replayed (retained rows), and only in apps that build
+	// a list (linkPaintCompare).
+	paintEqual, sameP := false, true
+	if cmp := comparePaint; cmp != nil && (e.c.rt.inRow || e.c.rt.paintAll) {
+		paintEqual, sameP = cmp(e, r, fresh)
 	} else {
 		// Not compared in this layout: a later one must not compare with it.
 		r.paintOK, r.ptext = false, nil
@@ -265,17 +254,50 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 	return true
 }
 
+// comparePaint and inheritsPaint compare what paints an element and what a
+// list inherits to paint its rows with the last layout's; keepPaint keeps them.
+// They are set by linkPaintCompare, which building a list calls, so that an app
+// without a list links none of it.
+var (
+	comparePaint  func(e *node, r *layoutRecord, fresh bool) (equal, sameText bool)
+	inheritsPaint func(list *node) bool
+)
+
+// linkPaintCompare sets the functions that compare paint.
+func linkPaintCompare() {
+	comparePaint, inheritsPaint = comparePaintOf, inheritsPaintSame
+}
+
+// comparePaintOf compares what paints e with what r kept, and keeps it: whether
+// e paints as then (never when it is volatile), and whether its text paint
+// styles are those of then.
+func comparePaintOf(e *node, r *layoutRecord, fresh bool) (equal, sameText bool) {
+	if paintVolatile(e) {
+		r.paintOK = false
+	} else if fresh && r.paintOK && paintStyleSame(&r.paint, e) {
+		equal = true
+	} else {
+		setPaintStyle(&r.paint, e)
+		r.paintOK = true
+	}
+	sameText = fresh && samePaintText(r, &e.ts)
+	if !sameText {
+		keepPaintText(r, &e.ts)
+	}
+	return equal, sameText
+}
+
 // samePaintText reports whether t paints text as in the last layout. Few
 // elements set a style that paints text: the record holds one for those only.
-func (r *layoutRecord) samePaintText(t *textStyle) bool {
+func samePaintText(r *layoutRecord, t *textStyle) bool {
 	if r.ptext == nil {
 		return t.set&textPaintSet == 0
 	}
-	return r.ptext.same(t)
+	return textPaintSame(r.ptext, t)
 }
 
 // keepPaintText keeps what of t paints text.
-func (r *layoutRecord) keepPaintText(t *textStyle) {
+func keepPaintText(r *layoutRecord, t *textStyle) {
 	switch {
 	case t.set&textPaintSet == 0:
 		r.ptext = nil
@@ -293,6 +315,7 @@ func (r *layoutRecord) keepPaintText(t *textStyle) {
 // Rows are compared at index 0: their place among the List's children
 // follows the scroll, not what lays them out.
 func sameRow(list, row *node) {
+	inherits := inheritsPaint
 	// A row with layOwner was compared already: layoutList can run twice in
 	// one layout (relayoutList).
 	if list.c.rt.noLayoutCache || row.lay&layOwner != 0 {
@@ -300,7 +323,7 @@ func sameRow(list, row *node) {
 	}
 	rt := list.c.rt
 	rt.inRow = true
-	sameLayout(row, list.id, 0, list.lay&layRows == 0, list.inheritsPaintSame())
+	sameLayout(row, list.id, 0, list.lay&layRows == 0, inherits != nil && inherits(list))
 	rt.inRow = false
 	if row.lay&layPaint != 0 {
 		list.c.rt.paintSameRows++
@@ -310,7 +333,7 @@ func sameRow(list, row *node) {
 // inheritsPaintSame reports whether the text paint styles the rows of list
 // inherit, from it and the elements around it, are as in the last layout. It
 // compares them once a layout.
-func (list *node) inheritsPaintSame() bool {
+func inheritsPaintSame(list *node) bool {
 	r, n := &list.st.lay, list.c.rt.layouts
 	if r.inheritAt != n {
 		ts := list.resolvedText()

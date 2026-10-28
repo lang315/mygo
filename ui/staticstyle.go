@@ -16,17 +16,6 @@ const (
 	staticButton
 )
 
-// staticStyles are the static styleFns, by their styleID.
-var staticStyles = [...]func(e *node){
-	staticNone:         nil,
-	staticHoverSurface: hoverSurface,
-	staticHoverRow:     hoverRow,
-	staticPressSurface: pressSurface,
-	staticTableRow:     tableRowStyle,
-	staticCheckbox:     checkboxStyle,
-	staticInput:        inputStyle,
-	staticButton:       buttonPaint,
-}
-
-// setStyle styles e with a static styleFn.
-func (e *node) setStyle(id styleID) { e.styleFn, e.styleID = staticStyles[id], id }
+// setStyle styles e with a static styleFn and its identity. Callers pass the
+// function, so that a program links only the styles it uses.
+func setStyle(e *node, fn func(e *node), id styleID) { e.styleFn, e.styleID = fn, id }
