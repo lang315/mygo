@@ -256,7 +256,7 @@ const maxUntrustedMessage = 4 << 10
 // handleMessage routes a message posted by the page bridge. It runs on the
 // main thread.
 func (w *Window) handleMessage(msg string) {
-	if w.untrusted && len(msg) > maxUntrustedMessage {
+	if w.hostile() && len(msg) > maxUntrustedMessage {
 		return // what the bridge posts is smaller
 	}
 	msg, ok := strings.CutPrefix(msg, w.secret)
@@ -266,7 +266,7 @@ func (w *Window) handleMessage(msg string) {
 	// Calls are decoded and executed off the main thread. The page context
 	// is captured here so a navigation cannot slip in between.
 	if len(msg) > 12 && msg[:12] == `{"t":"call",` {
-		if w.untrusted {
+		if w.hostile() {
 			// Rejected right away, without a goroutine per message.
 			handleCall(w, nil, msg, false)
 			return

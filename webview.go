@@ -51,7 +51,9 @@ type WebViewOptions struct {
 	// everything a page can ask of the host: without a handler set on its
 	// Page, it is denied every permission (SetPermissionHandler), saves no
 	// download (OnWillDownload listeners set the path) and opens no window
-	// (SetWindowOpenHandler).
+	// (SetWindowOpenHandler). It hears only the events sent to its Page
+	// (Event.EmitPage), not Emit or Broadcast, and posts messages of the
+	// bridge's size only.
 	NoBindings bool
 }
 
