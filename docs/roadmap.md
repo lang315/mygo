@@ -421,6 +421,7 @@ cannot show: those items are not marked):
   *Next:* P2, the build skipped with `ListState.RowVersion` (in review), then
   P3, the layout and the commit of a retained row skipped (`commitElement` and
   `layoutTree` in `ui/runtime.go` and `ui/layout.go` are the map).
+  "Tens of µs" in the sense of 20–30 needs the build skipped (P2).
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
