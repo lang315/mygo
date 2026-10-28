@@ -149,10 +149,16 @@ type paintStyle struct {
 	// flags are those layout does not read (layoutFlags).
 	flags uint32
 	// theme is the theme painting read (readsTheme), or nil.
-	theme   *Theme
-	look    paintLook
-	shadows []shadow
+	theme    *Theme
+	look     paintLook
+	nshadows uint8
+	shadows  [paintShadows]shadow
 }
+
+// paintShadows is how many shadows paintStyle holds, in the record itself so
+// that keeping them allocates nothing: an element with more is never
+// paint-same.
+const paintShadows = 2
 
 // paintVolatile reports whether e paints with something a later frame
 // cannot compare: a closure, an effect, a layer cache, a gradient, a
@@ -161,7 +167,7 @@ type paintStyle struct {
 func paintVolatile(e *node) bool {
 	const n = unsafe.Sizeof(paintRare{})
 	return *(*[n]byte)(unsafe.Pointer(&e.paintRare)) != zeroRare ||
-		e.styleFn != nil && e.styleID == staticNone ||
+		e.styleFn != nil && e.styleID == staticNone || len(e.shadows) > paintShadows ||
 		e.kind == kindInput || e.kind == kindImage || e.kind == kindIcon || e.kind == kindText && e.first != nil ||
 		e.flags&(flagScrollX|flagScrollY|flagDividers|flagDebug|flagSelectable) != 0 || e.isInline() ||
 		e.st != nil && e.st.trec != nil
@@ -180,21 +186,20 @@ func paintStyleOf(e *node) (ps paintStyle, ok bool) {
 	return ps, true
 }
 
-// set makes ps what paints e, which is not volatile, keeping the room of its
-// shadows.
+// set makes ps what paints e, which is not volatile.
 func setPaintStyle(ps *paintStyle, e *node) {
 	ps.flags, ps.look = e.flags&^layoutFlags, e.paintLook
 	ps.theme = nil
 	if readsTheme(e) {
 		ps.theme = e.builtTheme()
 	}
-	ps.shadows = append(ps.shadows[:0], e.shadows...)
+	ps.nshadows = uint8(copy(ps.shadows[:], e.shadows))
 }
 
 // same reports whether e, not volatile, paints as ps says. It compares the
 // node itself, which costs less than making a paintStyle of it to compare.
 func paintStyleSame(ps *paintStyle, e *node) bool {
-	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows, e.shadows) &&
+	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows[:ps.nshadows], e.shadows) &&
 		(!readsTheme(e) || ps.theme == e.builtTheme())
 }
 

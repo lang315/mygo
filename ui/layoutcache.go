@@ -117,7 +117,7 @@ type layoutRecord struct {
 	// (paintStyle), and its text paint styles (textPaint).
 	paint   paintStyle
 	paintOK bool
-	ptext   *textPaint
+	ptext   textPaint
 
 	// For a List: the text paint styles it inherits and sets, as the last
 	// layout saw them, and the layout that compared them (sameRow).
@@ -204,7 +204,7 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 		paintEqual, sameP = cmp(e, r, fresh)
 	} else {
 		// Not compared in this layout: a later one must not compare with it.
-		r.paintOK, r.ptext = false, nil
+		r.paintOK, r.ptext = false, textPaint{}
 	}
 	inh = inh && sameP
 	if inh {
@@ -287,27 +287,11 @@ func comparePaintOf(e *node, r *layoutRecord, fresh bool) (equal, sameText bool)
 	return equal, sameText
 }
 
-// samePaintText reports whether t paints text as in the last layout. Few
-// elements set a style that paints text: the record holds one for those only.
-func samePaintText(r *layoutRecord, t *textStyle) bool {
-	if r.ptext == nil {
-		return t.set&textPaintSet == 0
-	}
-	return textPaintSame(r.ptext, t)
-}
+// samePaintText reports whether t paints text as in the last layout.
+func samePaintText(r *layoutRecord, t *textStyle) bool { return textPaintSame(&r.ptext, t) }
 
 // keepPaintText keeps what of t paints text.
-func keepPaintText(r *layoutRecord, t *textStyle) {
-	switch {
-	case t.set&textPaintSet == 0:
-		r.ptext = nil
-	case r.ptext == nil:
-		r.ptext = new(textPaint)
-		fallthrough
-	default:
-		*r.ptext = textPaintOf(t)
-	}
-}
+func keepPaintText(r *layoutRecord, t *textStyle) { r.ptext = textPaintOf(t) }
 
 // sameRow compares a row the List list built with what its state kept of
 // it, once it exists (the view's pass built it, or layoutList did late),
