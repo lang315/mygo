@@ -235,13 +235,24 @@ func (p *Painter) element(e *node) {
 	}
 	savedTransform, savedInline := p.transform, p.inline
 	p.transform, p.inline = e.world, nil
-	built := e.look() // the styleFn and color transition below change the paint, not the node
-	defer func() { p.transform, p.inline = savedTransform, savedInline; e.setLook(built) }()
+	r := e.st.trec
+	animated := r != nil && r.built == p.rt.frame && r.elem == e
+	var built nodeLook
+	restore := e.styleFn != nil || animated
+	if restore {
+		built = e.look() // the styleFn and color transition below change the paint, not the node
+	}
+	defer func() {
+		p.transform, p.inline = savedTransform, savedInline
+		if restore {
+			e.setLook(built)
+		}
+	}()
 
 	if e.styleFn != nil {
 		e.styleFn(e)
 	}
-	if r := e.st.trec; r != nil && r.built == p.rt.frame && r.elem == e {
+	if animated {
 		p.rt.animateColors(e, r)
 	}
 	if e.flags&flagInvisible != 0 || e.backface && e.transform.facesAway() {
