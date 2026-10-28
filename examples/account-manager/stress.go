@@ -11,25 +11,34 @@ import (
 // ones of the first accounts IDs, through the batches the workers' results
 // take: the rows change all the time, for the stats to measure.
 func stress(accounts, rate int, seed uint64) *runner {
+	tick := time.NewTicker(10 * time.Millisecond)
+	r := feed(accounts, rate, seed, time.Now(), tick.C)
+	go func() {
+		<-r.done
+		tick.Stop()
+	}()
+	return r
+}
+
+// feed is stress with the ticks it counts time by, and the start it counts
+// from, given: a test sends its own.
+func feed(accounts, rate int, seed uint64, start time.Time, ticks <-chan time.Time) *runner {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &runner{cancel: cancel, done: make(chan struct{})}
 	accounts = max(1, accounts)
 	go func() {
 		defer close(r.done)
 		rnd := rand.New(rand.NewPCG(seed, 0))
-		tick := time.NewTicker(10 * time.Millisecond)
-		defer tick.Stop()
-		start, sent := time.Now(), 0
+		sent := 0
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case now := <-tick.C:
+			case now := <-ticks:
 				// As many as are due since the start, for a slow tick not
 				// to lower the rate.
 				for due := int(now.Sub(start).Seconds() * float64(rate)); sent < due; sent++ {
-					r.push(change(rnd, accounts, now))
-				}
+					r.push(change(rnd, accounts, now))				}
 			}
 		}
 	}()
