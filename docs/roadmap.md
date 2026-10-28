@@ -365,8 +365,9 @@ cannot show: those items are not marked):
   a slot it does not clear); #242 compares such slices by values where the
   bytes differ: 118,614 hits became 121,821.
 
-  *Next, pending the owner's approval:* retained rows, which do not build,
-  commit or paint the rows that did not change, for a ceiling of 15–20 µs.
+  *Next:* retained rows (the owner approved the design on 2026-10-28), which
+  do not build, commit or paint the rows that did not change: P0 and P1-A are
+  in progress, for a ceiling of 15–20 µs.
   "Tens of µs" in the sense of 20–30 needs the build skipped.
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
