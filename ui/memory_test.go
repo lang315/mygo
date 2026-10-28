@@ -83,7 +83,7 @@ func TestElementArenaFollowsViewSize(t *testing.T) {
 			}
 			rows = 200
 			tt.Frame()
-			if n := testing.AllocsPerRun(20, tt.Frame); n > 2 {
+			if n := allocsPerRun(t, 20, 2, tt.Frame); n > 2 {
 				t.Fatalf("the steady view allocates %.0f times per frame", n)
 			}
 			// Without exit transitions, the spare arena is not built into.
@@ -109,7 +109,7 @@ func TestExitTransitionArenaReusesStorageDuringMotion(t *testing.T) {
 	// allocate a fresh copy of the view just to retain exit transitions.
 	tt.Frame()
 	tt.Frame()
-	if n := testing.AllocsPerRun(20, tt.Frame); n > 2 {
+	if n := allocsPerRun(t, 20, 2, tt.Frame); n > 2 {
 		t.Fatalf("steady exit-enabled view allocated %.0f times per frame", n)
 	}
 	rows = 1
