@@ -728,6 +728,10 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 		if r.ghost == nil {
 			e := r.elem
 			r.ghost = ghostOf(e)
+			if r.colorSet && r.colorFrame+1 == rt.frame {
+				// The colors a transition of them showed, not those it aims at.
+				r.ghost.bg, r.ghost.borderC = r.colorShown[0], r.colorShown[1]
+			}
 			r.elem = nil
 			r.ghost.leaving = 1
 			if e.flags&flagAbsolute != 0 {
@@ -878,6 +882,11 @@ func (rt *engine) elementsByID(root *node) map[uint64]*node {
 func ghostOf(e *node) *node {
 	g := new(node)
 	*g = *e
+	if g.styleFn != nil {
+		// e is as it was built (painting leaves it so), and the copy starts
+		// from the look e showed: its hover color, while e was still hovered.
+		g.styleFn(g)
+	}
 	st := *e.st
 	st.trec = nil
 	// Its spans, and the styles they paint with, are its own: another

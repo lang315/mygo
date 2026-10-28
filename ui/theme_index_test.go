@@ -65,6 +65,8 @@ func TestExitCopyKeepsItsThemeAcrossAStartOver(t *testing.T) {
 				})
 			}
 		})
+		other := *LightTheme()
+		c.SetTheme(&other) // the frame theme is not the checkbox's, so that a copy without its theme shows
 		if crowd {
 			// So many themes noted that the next frame starts the list over.
 			// After the column, so that the column keeps its place.
@@ -83,4 +85,30 @@ func TestExitCopyKeepsItsThemeAcrossAStartOver(t *testing.T) {
 	if n := len(tt.rt.ghostThemes); n != 1 || tt.rt.ghostThemes[0] != &a {
 		t.Fatalf("themes kept for the copy going: %v, want only the theme its checkbox was built with", tt.rt.ghostThemes)
 	}
+	var ghost *node
+	for _, r := range tt.rt.trans {
+		if r.ghost != nil {
+			ghost = r.ghost
+		}
+	}
+	if ghost == nil {
+		t.Fatal("no copy going: the test shows nothing")
+	}
+	if got, ok := builtThemeOfFirst(ghost); !ok || got != &a {
+		t.Errorf("the copy's checkbox paints with the theme %p, want the one it was built with, %p", got, &a)
+	}
+}
+
+// builtThemeOfFirst returns the theme of the first node under e that
+// was built with one, as the copy going paints with.
+func builtThemeOfFirst(e *node) (*Theme, bool) {
+	if e.themeAt != 0 {
+		return e.builtTheme(), true
+	}
+	for c := e.first; c != nil; c = c.next {
+		if t, ok := builtThemeOfFirst(c); ok {
+			return t, true
+		}
+	}
+	return nil, false
 }

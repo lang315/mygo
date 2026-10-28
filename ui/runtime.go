@@ -112,7 +112,7 @@ type engine struct {
 	// themes are those that elements built with a static paint function
 	// were built with (node.builtWith), kept across frames so that an
 	// element's themeAt stays its theme's: the list only grows, and starts
-	// over past themeKeep, which themeGen counts.
+	// over past themeKeep, which themeGen counts (for rows kept across frames).
 	themes   []*Theme
 	themeGen uint64
 
@@ -612,7 +612,7 @@ func (rt *engine) runFrame() {
 	}
 	if len(rt.themes) >= themeKeep {
 		// An app that makes a theme in each frame: start over, which
-		// elements kept from before tell by the generation.
+		// elements kept from before can tell by the generation (none does yet).
 		clear(rt.themes)
 		rt.themes = rt.themes[:0]
 		rt.themeGen++
