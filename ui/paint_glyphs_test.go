@@ -9,10 +9,10 @@ func TestTextPaintsALineInOneCall(t *testing.T) {
 		Text(c, "one line of nine words to paint at once")
 	}, 600, 100)
 	tt.Frame()
-	before := tt.rt.text.GlyphCalls()
+	before := tt.rt.text.GlyphsCalls()
 	tt.Frame()
-	if n := tt.rt.text.GlyphCalls() - before; n != 1 {
-		t.Fatalf("a frame of one line called the text system %d times for its glyphs, want 1", n)
+	if n := tt.rt.text.GlyphsCalls() - before; n != 1 {
+		t.Fatalf("a frame of one line asked the text system for its glyphs %d times, want 1", n)
 	}
 }
 

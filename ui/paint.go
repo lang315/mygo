@@ -815,10 +815,10 @@ func (p *Painter) textBackgrounds(l *text.Layout, x, y float32, ts textStyle, sp
 	}
 }
 
-// glyphAsk is a glyph of the line being painted that is not culled: the
-// glyph, its pen in device pixels and its color.
+// glyphAsk is a glyph of the line being painted that is not culled: its
+// index in the line, its pen in device pixels and its color.
 type glyphAsk struct {
-	g     *text.Glyph
+	g     int
 	pen   float32
 	color Color
 }
@@ -868,7 +868,7 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 					glyphShade = text.ShadeOf(glyphColor.R, glyphColor.G, glyphColor.B)
 				}
 			}
-			asks = append(asks, glyphAsk{g: g, pen: pen, color: glyphColor})
+			asks = append(asks, glyphAsk{g: gi, pen: pen, color: glyphColor})
 			reqs = append(reqs, text.GlyphRequest{Font: g.Font, ID: g.ID, X: pen, Shade: glyphShade})
 		}
 		images := sys.Glyphs(reqs, s, p.opaque && !inline, p.rt.glyphImages[:0])
@@ -887,10 +887,10 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 				Color:     glyphColor.scene(), Wide: p.glyphWide(glyphColor), Colored: gi.Colored, Subpixel: gi.Subpixel, Thin: gi.Thin,
 			}
 			if !same {
-				sg.Transform = p.inlineTransform(a.g.Cluster).Pixels(s)
+				sg.Transform = p.inlineTransform(line.Glyphs[a.g].Cluster).Pixels(s)
 			}
 			if run != nil {
-				run.add(p, *a.g, gi, a.pen, sg, reqs[i].Shade, baseline)
+				run.add(p, line.Glyphs[a.g], gi, a.pen, sg, reqs[i].Shade, baseline)
 				continue
 			}
 			p.s.Glyphs = append(p.s.Glyphs, sg)
