@@ -34,13 +34,21 @@ func webViews(s *fake.Surface) []*fake.WebView {
 	return vs
 }
 
-// theView waits for the one web view to be made.
-func theView(t *testing.T, s *fake.Surface) *fake.WebView {
+// theView waits for the one web view to be made and bound: the surface has it
+// from when the window makes it, and the browser binds its handlers (and sets
+// b.view) after, on the event goroutine, so a handler is called only once
+// b.view is the view.
+func theView(t *testing.T, b *WebBrowserWidget, s *fake.Surface) *fake.WebView {
 	t.Helper()
 	var v *fake.WebView
 	wait.Until(t, "the web view", func() bool {
 		if vs := webViews(s); len(vs) == 1 {
-			v = vs[0]
+			mu.Lock()
+			bound := b.view != nil
+			mu.Unlock()
+			if bound {
+				v = vs[0]
+			}
 		}
 		return v != nil
 	})
@@ -54,9 +62,10 @@ func TestWebBrowserMakesItsViewOnlyOnceTheFormIsShown(t *testing.T) {
 	if b.Url() != "https://example.com/a" {
 		t.Fatalf("Url %q before any view", b.Url())
 	}
-	f, s := shownBrowser(t, WebBrowser())
+	shown := WebBrowser()
+	f, s := shownBrowser(t, shown)
 	_ = f
-	v := theView(t, s)
+	v := theView(t, shown, s)
 	for i := 0; i < 3; i++ {
 		webViews(s)
 	}
@@ -85,8 +94,9 @@ func TestWebBrowserCreatesItsViewOffTheLock(t *testing.T) {
 	}
 	webViewCreateHook.Store(&hook)
 	t.Cleanup(func() { webViewCreateHook.Store(old) })
-	_, s := shownBrowser(t, WebBrowser())
-	theView(t, s)
+	b := WebBrowser()
+	_, s := shownBrowser(t, b)
+	theView(t, b, s)
 	if held.Load() != 0 {
 		t.Fatal("the web view was made with the package lock held")
 	}
@@ -95,12 +105,12 @@ func TestWebBrowserCreatesItsViewOffTheLock(t *testing.T) {
 func TestWebBrowserAppliesWhatWasSetBeforeTheViewExisted(t *testing.T) {
 	b := WebBrowser().Navigate("https://example.com/start")
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	wait.Until(t, "the page to load", func() bool { return v.URL() == "https://example.com/start" })
 
 	h := WebBrowser().SetDocumentText("<p>hi</p>")
 	_, s2 := shownBrowser(t, h)
-	v2 := theView(t, s2)
+	v2 := theView(t, h, s2)
 	wait.Until(t, "the document", func() bool { return len(v2.Documents()) == 1 })
 	if v2.Documents()[0] != "<p>hi</p>" || h.DocumentText() != "<p>hi</p>" {
 		t.Fatalf("HTML %q, DocumentText %q", v2.Documents(), h.DocumentText())
@@ -110,7 +120,7 @@ func TestWebBrowserAppliesWhatWasSetBeforeTheViewExisted(t *testing.T) {
 func TestWebBrowserNavigateAfterTheViewExistsLoadsAtOnce(t *testing.T) {
 	b := WebBrowser()
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	b.Navigate("https://example.com/later")
 	wait.Until(t, "the page", func() bool { return v.URL() == "https://example.com/later" })
 	b.GoBack().GoForward().Reload().Stop()
@@ -123,7 +133,7 @@ func TestWebBrowserCanGoBackAsksThePage(t *testing.T) {
 		t.Fatal("a browser without a view can go back")
 	}
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	v.CanBack = true
 	// The surface lists the view as soon as it is made; the control has it a
 	// moment later, once its handlers are set.
@@ -155,7 +165,7 @@ func TestWebBrowserEventsArePostedAndNavigatingIsSynchronousOffTheLock(t *testin
 		OnDocumentCompleted(func() { finished.Add(1) }).
 		OnTitleChanged(func(s string) { title <- s })
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	mygo.RunOnMain(func() {
 		if !v.H.WillNavigate(navigationTo("https://example.com/x")) {
 			t.Error("a navigation was cancelled that the handler allowed")
@@ -185,7 +195,7 @@ func TestWebBrowserKeepsItsPageInAHiddenTabAndGoesWithTheWindow(t *testing.T) {
 	f := NewForm("Tabs", 400, 300).SetContent(tabs)
 	f.Show()
 	s := lastFake(t).FakeSurface()
-	v := theView(t, s)
+	v := theView(t, b, s)
 	tabs.SetPage(1)
 	webViews(s)
 	tabs.SetPage(0)
@@ -199,13 +209,13 @@ func TestWebBrowserKeepsItsPageInAHiddenTabAndGoesWithTheWindow(t *testing.T) {
 func TestWebBrowserMovedToAnotherFormGetsAFreshViewWithTheCurrentUrl(t *testing.T) {
 	b := WebBrowser().Navigate("https://example.com/one")
 	f1, s1 := shownBrowser(t, b)
-	v1 := theView(t, s1)
+	v1 := theView(t, b, s1)
 	wait.Until(t, "load", func() bool { return v1.URL() == "https://example.com/one" })
 	f2 := NewForm("Second", 400, 300).SetContent(b)
 	f2.Show()
 	t.Cleanup(f2.Close)
 	s2 := lastFake(t).FakeSurface()
-	v2 := theView(t, s2)
+	v2 := theView(t, b, s2)
 	wait.Until(t, "replay", func() bool { return v2.URL() == "https://example.com/one" })
 	_ = f1
 	wait.Until(t, "the old view to go", func() bool { return v1.IsClosed() })
@@ -227,7 +237,7 @@ func TestAWebBrowserPageNeverCallsGo(t *testing.T) {
 	bindBrowserSvc.Do(func() { mygo.BindAs("BrowserHello", svc) })
 	b := WebBrowser().SetDocumentText("<p>app's HTML</p>")
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	secret := regexp.MustCompile(`"secret":"([^"]+)"`).FindStringSubmatch(v.UserScripts()[0].Source)
 	if secret == nil {
 		t.Fatal("no bridge secret")
@@ -254,7 +264,7 @@ func TestAWebBrowserPageNeverCallsGo(t *testing.T) {
 func TestWebBrowserRefusesJavascriptURLs(t *testing.T) {
 	b := WebBrowser()
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	b.Navigate("JavaScript:alert(1)")
 	b.Navigate(" javascript:void(0)")
 	<-posted()
@@ -286,7 +296,7 @@ func TestAPanickingOnNavigatingIsReportedAndTheNavigationGoesOn(t *testing.T) {
 	t.Cleanup(func() { OnPanic(nil) })
 	b := WebBrowser().OnNavigating(func(string) bool { panic("boom") })
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	allowed := false
 	mygo.RunOnMain(func() { allowed = v.H.WillNavigate(navigationTo("https://example.com/")) })
 	if !allowed || reported.Load() != 1 {
@@ -328,7 +338,7 @@ func TestWebBrowserNavigateDuringTheFirstLoadWins(t *testing.T) {
 	})
 	close(release)
 	wait.For(t, "Navigate", done)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	wait.Until(t, "the newest page", func() bool { return v.URL() == "https://example.com/new" })
 }
 
@@ -350,7 +360,7 @@ func TestWebBrowserViewIsMadeAgainIfTheFormIsShownAgainAfterAClosedCreation(t *t
 	mygo.RunOnMain(func() { s2.Frame() }) // its build finds a creation under way
 	close(gate)
 	webViewCreateHook.Store(old)
-	theView(t, s2)
+	theView(t, b, s2)
 }
 
 func navigationTo(url string) platform.Navigation {
@@ -366,7 +376,7 @@ func TestWebBrowserDownloadsAreRefusedUnlessTheAppAllows(t *testing.T) {
 	var b *WebBrowserWidget
 	b = WebBrowser()
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	ask := func() string {
 		var got string
 		mygo.RunOnMain(func() { got = v.H.DownloadStarted("https://example.com/a.zip", "a.zip") })
@@ -403,7 +413,7 @@ func TestWebBrowserOpensNoWindowByItselfAndTellsTheApp(t *testing.T) {
 	urls := make(chan string, 4)
 	b := WebBrowser()
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	before := len(fake.OpenedExternal())
 	mygo.RunOnMain(func() { v.H.NewWindow(platform.NewWindowRequest{URL: "https://example.com/popup"}) })
 	for i := 0; i < 20000; i++ {
@@ -445,7 +455,7 @@ func TestWebBrowserNavigateFromTwoThreadsDoesNotDeadlock(t *testing.T) {
 		return true
 	})
 	_, s := shownBrowser(t, b)
-	v := theView(t, s)
+	v := theView(t, b, s)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
