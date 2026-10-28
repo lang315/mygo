@@ -15,6 +15,10 @@ func (u *Uses) Reset() {
 
 // Record has every atlas entry marked used from now on, by Glyph, Glyphs,
 // GlyphRun and Mask, also put in u, which it empties first, until StopRecord.
+// The system is shared by the windows: one that paints while another records
+// puts its entries in the recording too, which only keeps a row's recording
+// longer than needed (the atlas generation is in the row's key), and a nested
+// Record replaces the first.
 func (s *System) Record(u *Uses) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
