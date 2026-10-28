@@ -37,6 +37,7 @@ type rowKeep struct {
 	// inputs settled, and show a state the row has not had since.
 	lastFrame uint64
 	mark      uint64 // the capture of the list that last saw the row built or linked
+	live      uint64 // the capture of the list in whose last pass the copy was in the tree
 	depth     int
 	chosen    [3]bool // of the rows above, at and below it
 	checked   bool
@@ -162,7 +163,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		n.x, n.y, n.w, n.h, n.contentW, n.contentH, n.ink, n.world = 0, 0, 0, 0, 0, 0, [4]float32{}, scene.Affine{}
 	}
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked})
 	rt.rowsKept++
 	return root
 }
@@ -265,8 +266,8 @@ func (rt *engine) captureRows() {
 
 // capture keeps the rows f built in its last pass.
 func (f *listFrame) capture() {
-	rt, v := f.c.rt, f.s.RowVersion
-	if v == nil || f.noKeep {
+	rt := f.c.rt
+	if f.s.RowVersion == nil || f.noKeep {
 		f.kept = nil
 		return
 	}
@@ -275,14 +276,21 @@ func (f *listFrame) capture() {
 	}
 	f.capSeq++
 	for _, r := range f.rows {
+		if rec := f.kept[r.key]; rec != nil && r.e == rec.root {
+			rec.live = f.capSeq
+		}
+	}
+	for _, r := range f.rows {
 		rec := f.kept[r.key]
 		if rec != nil {
 			rec.mark = f.capSeq
-		}
-		if rec != nil && rec.lastFrame == rt.frame {
-			// Linked, or kept, in this frame: its storage is a row in the tree.
-			// Another row with the key (an app that repeats a key) leaves it be.
-			continue
+			if rec.live == f.capSeq {
+				// Its storage is a row in the tree, linked in this pass (by this
+				// row or by another with the key, an app that repeats a key).
+				// A row linked in an earlier pass and built again in the last
+				// has a copy that is not in the tree, which is written anew.
+				continue
+			}
 		}
 		if rt.noRetain || slices.Contains(f.handles, r.key) || !retainable(r.e) {
 			f.release(r.key)
@@ -301,10 +309,9 @@ func (f *listFrame) capture() {
 			}
 			continue
 		}
-		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, v(r.i), rt.themeGen, f.theme, rt.frame, r.e.depth
+		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
-		rec.chosen = f.chosenAround(r.i)
-		rec.checked = f.s.Checked != nil && f.s.Checked.has(r.key)
+		rec.chosen, rec.checked = r.chosen, r.checked
 		rec.mark = f.capSeq
 		f.kept[r.key] = rec
 	}

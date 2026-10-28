@@ -3,8 +3,11 @@ package widget
 import (
 	"cmp"
 	"fmt"
-	"github.com/egoist/mygo/internal/l10n"
+	"hash/maphash"
 	"slices"
+
+	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/internal/l10n"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -771,6 +774,9 @@ func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	return e
 }
 
+// localeSeed seeds the hash of the app's language in the version of the wait row.
+var localeSeed = maphash.MakeSeed()
+
 // itemVersion is ui's OutlineState.RowVersion: what the build of the row of it
 // reads of the tree: the generation of its node, how nodes look, and whether it
 // is checked (a check box shows it).
@@ -779,7 +785,8 @@ func (t *TreeViewWidget[T, K]) itemVersion(it treeItem[K]) uint64 {
 		defer mu.Unlock()
 	}
 	if it.wait {
-		return versionOf(1<<62, t.look, 0)
+		// The row says Loading in the app's language.
+		return versionOf(1<<62, t.look, 0) ^ maphash.String(localeSeed, i18n.Locale())
 	}
 	place := 0
 	if t.checks && t.checked.shown.Has(it) {

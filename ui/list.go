@@ -226,7 +226,9 @@ type ListState struct {
 	// you keep a Handle of, and while the inspector is open. RowVersion
 	// must be cheap and allocate nothing: it runs for each row in view in
 	// every frame. With RowVersion nil the list builds every row in view in
-	// every frame, as it always did.
+	// every frame, as it always did. An Outline sets it from
+	// OutlineState.RowVersion: set it there, not on the List inside, which
+	// would leave out the depth and whether a branch is open.
 	RowVersion func(i int) uint64
 	// HeaderMenu, when set, gives a Table's header a context menu, built
 	// as ContextMenu's is: col is the index of the column clicked in the
@@ -516,6 +518,13 @@ type listRow struct {
 	key any
 	e   *node
 	y   float64
+	// ver, chosen and checked are what RowVersion, the choice around the row
+	// and the checks said when the row was built or linked, which a kept copy
+	// of it is recorded with: read at the end of the frame they could be of
+	// data newer than the row's (retain.go).
+	ver     uint64
+	chosen  [3]bool
+	checked bool
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -814,6 +823,15 @@ func (f *listFrame) build(i int) *node {
 		}
 	}
 	rt.rowsBuilt++
+	var ver uint64
+	var around [3]bool
+	var checked bool
+	if s.RowVersion != nil && !f.noKeep {
+		// Read before the row is built, as keep read them: the copy of the row
+		// is recorded with what the row was built with.
+		ver, around = s.RowVersion(i), f.chosenAround(i)
+		checked = s.Checked != nil && s.Checked.has(key)
+	}
 	bound := rt.bound
 	// A row with an EditableText tells the list so as it builds (editablesNow):
 	// a kept one would not, and the keys would open the row instead of editing.
@@ -900,7 +918,7 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	c.row, f.rb = saved, prev
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked})
 	if rt.bound != bound || s.editablesNow {
 		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits: not kept
 	}
