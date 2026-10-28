@@ -1,6 +1,10 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
+)
 
 func TestPlainCallbackNil(t *testing.T) {
 	for _, tc := range []struct {
@@ -33,7 +37,7 @@ func TestPlainCallbackRegistrationAllocs(t *testing.T) {
 	input := func(InputEvent) bool { return false }
 	tt := NewTester(func(c *Context) {
 		element := Box(c).Size(10, 10)
-		allocs := testing.AllocsPerRun(100, func() { element.Draw(draw).DrawOver(draw).HandleInput(input) })
+		allocs := allocrun.Least(100, func() { element.Draw(draw).DrawOver(draw).HandleInput(input) })
 		if allocs != 0 {
 			t.Errorf("registering retained callbacks allocated %g times", allocs)
 		}

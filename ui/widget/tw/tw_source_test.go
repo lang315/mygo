@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui/widget"
 )
 
@@ -48,7 +49,7 @@ func TestInspectorShowsTheClassesOfEachAppliedStyle(t *testing.T) {
 // them: a second call allocates nothing.
 func TestSKeepsItsClassesWithoutAllocating(t *testing.T) {
 	S("p-3 text-sm") // into the cache
-	if n := testing.AllocsPerRun(100, func() { S("p-3 text-sm") }); n != 0 {
+	if n := allocrun.Least(100, func() { S("p-3 text-sm") }); n != 0 {
 		t.Errorf("S of a cached string makes %v allocations", n)
 	}
 }

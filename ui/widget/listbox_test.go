@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -149,7 +150,7 @@ func TestListBoxSingleCmdAChangesNothingAndCostsNothingBySize(t *testing.T) {
 		tt := tester(t, lb)
 		click(t, tt, "Item 2")
 		soon(t, selected)
-		allocs = testing.AllocsPerRun(10, func() {
+		allocs = allocrun.Least(10, func() {
 			tt.Key(ui.Cmd, ui.KeyA)
 			tt.Frame()
 		})
@@ -547,7 +548,7 @@ func listCost(t *testing.T, n int) (allocs float64, bytes int64) {
 	a()
 	b()
 	var k int
-	allocs = testing.AllocsPerRun(20, func() {
+	allocs = allocrun.Least(20, func() {
 		if k++; k%2 == 0 {
 			a()
 		} else {

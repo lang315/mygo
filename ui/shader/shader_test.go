@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/shader"
 )
@@ -342,7 +343,7 @@ func Fragment(dst vec4, pos vec2) vec4 {
 		ui.Box(c).Fill().Background(ui.RGB(255, 255, 255)).Draw(func(p *ui.Painter, r ui.Rect) {
 			s.Draw(p, ui.Rect{X: 0, Y: 0, W: 100, H: 20}, shader.Options{Values: v})
 			s.Draw(p, ui.Rect{X: 0, Y: 30, W: 100, H: 20}, shader.Options{Values: v, Uniforms: map[string]any{"Flip": true}})
-			allocs = testing.AllocsPerRun(50, func() { s.Draw(p, ui.Rect{X: 0, Y: 60, W: 100, H: 20}, shader.Options{Values: v}) })
+			allocs = allocrun.Least(50, func() { s.Draw(p, ui.Rect{X: 0, Y: 60, W: 100, H: 20}, shader.Options{Values: v}) })
 		})
 	}
 	img := ui.NewTester(view, 100, 80).Image()

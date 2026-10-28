@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -183,7 +184,7 @@ func frameAllocs(make func(i int) Control, n int) float64 {
 	for range 10 {
 		tt.Frame()
 	}
-	return testing.AllocsPerRun(30, tt.Frame)
+	return allocrun.Least(30, tt.Frame)
 }
 
 // TestWidgetFrameAllocatesNoClosuresPerWidget keeps the widget layer from

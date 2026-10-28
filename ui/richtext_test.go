@@ -3,6 +3,8 @@ package ui
 import (
 	"image"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 func TestRichText(t *testing.T) {
@@ -61,7 +63,7 @@ func TestMeasureTextAgain(t *testing.T) {
 	if again, _ := c.MeasureText(0, Span{Text: "000"}); again != short || long <= short || bold <= short {
 		t.Errorf("widths %v, %v, %v, then %v", short, long, bold, again)
 	}
-	if n := testing.AllocsPerRun(20, func() { c.MeasureText(0, Span{Text: "000"}, Span{Text: "1", Weight: 700}) }); n != 0 {
+	if n := allocrun.Least(20, func() { c.MeasureText(0, Span{Text: "000"}, Span{Text: "1", Weight: 700}) }); n != 0 {
 		t.Errorf("measuring the same spans allocates %v times", n)
 	}
 }

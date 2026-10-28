@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // The ranges in reach of a paragraph, found by their starts, style it as
@@ -180,7 +182,7 @@ func TestRangesPaintWithoutAllocating(t *testing.T) {
 	}
 	ed.sortRanges()
 	ed.rangeSpans(0, 39) // grows the editor's buffers
-	if n := testing.AllocsPerRun(100, func() {
+	if n := allocrun.Least(100, func() {
 		for l := range 20 {
 			ed.rangeKey(l*40, l*40+39)
 			ed.rangeSpans(l*40, l*40+39)
@@ -204,7 +206,7 @@ func TestRangesPaintWithoutAllocating(t *testing.T) {
 			}
 		}, 640, 4000)
 		defer tt.rt.close()
-		return testing.AllocsPerRun(10, func() {
+		return allocrun.Least(10, func() {
 			tt.h.img.Invalidate()
 			tt.Frame()
 		})

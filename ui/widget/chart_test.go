@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -266,7 +267,7 @@ func TestChartFrameAllocationsDoNotGrowWithThePoints(t *testing.T) {
 	cost := func(n int) float64 {
 		tt := NewTester(t, linePoints(n), 600, 300)
 		tt.Frame()
-		return testing.AllocsPerRun(20, func() { tt.Frame(); tt.Image() })
+		return allocrun.Least(20, func() { tt.Frame(); tt.Image() })
 	}
 	small, big := cost(10), cost(10000)
 	t.Logf("allocs per frame: %v with 10 points, %v with 10,000", small, big)

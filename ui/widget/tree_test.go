@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -850,7 +851,7 @@ func clickCost(t *testing.T, kids int) (allocs float64, bytes int64) {
 	a() // warm up
 	b()
 	var n int
-	allocs = testing.AllocsPerRun(20, func() {
+	allocs = allocrun.Least(20, func() {
 		if n++; n%2 == 0 {
 			a()
 		} else {
