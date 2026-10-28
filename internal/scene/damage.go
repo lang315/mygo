@@ -1,9 +1,11 @@
 package scene
 
 import (
+	"bytes"
 	"image"
 	"math"
 	"slices"
+	"unsafe"
 )
 
 // A Differ finds where the successive scenes of a window differ, so that a
@@ -61,6 +63,15 @@ type Differ struct {
 	// one stands for, or -1 (see Match).
 	multi bool
 	kept  []int32
+	// fast counts the scenes Diff found identical to the last one without
+	// comparing them op by op (identical); noFast, for tests, turns that off.
+	fast   int
+	noFast bool
+	// reach, wideOn and folded are what the last scene's bounds were
+	// computed with (Reach, Wide and folding), nextReach and the others
+	// those of the scene Diff was given.
+	reach, nextReach                   float32
+	wideOn, nextWide, folded, nextFold bool
 }
 
 // atlasMark is the state of an atlas a scene drew from.
@@ -99,6 +110,20 @@ func (d *Differ) Invalidate() { d.valid = false }
 // each operation of s draws as it goes (Bounds). The rectangles are valid
 // until the next Diff.
 func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
+	d.nextReach, d.nextWide, d.nextFold = d.Reach, d.Wide, folding()
+	if d.identical(s) {
+		// What the comparison below ends with for a scene whose ops are all
+		// the same, as Match and Bounds read it, at the cost of one pass
+		// over the bytes.
+		d.fast++
+		n := len(d.ops)
+		d.next = append(d.next[:0], d.bounds...)
+		d.encloses2 = append(d.encloses2[:0], d.encloses...)
+		d.pre, d.suf, d.n, d.m = n, 0, n, n
+		d.pairs, d.multi = true, false
+		d.damage = d.damage[:0]
+		return d.damage, true
+	}
 	d.next = d.opBounds(s, d.next[:0])
 	d.pre, d.suf, d.n, d.m = 0, 0, 0, len(s.Ops)
 	d.pairs, d.multi = false, false
@@ -155,6 +180,54 @@ func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 		}
 	}
 	return d.damage, true
+}
+
+// identical reports whether s is the scene Remember kept in everything
+// Diff reads of it, so that Diff would find every op the same, in the same
+// place, and nothing changed: the same size, clear color, text parameters,
+// Reach, Wide and folding; the same ops, glyphs, stops and (when Wide) wide
+// colors, byte by byte; no change in the atlases since the last scene (so
+// none under a glyph); no image with new pixels (its version). The bounds
+// and the clips that enclose a transformed op are computed from these only,
+// so they are the last scene's. A scene with effects, which hold slices and
+// images of their own, is not tried.
+//
+// Bytes are a stronger test than same's: an op or a glyph with a 0 and a -0
+// is a change here, which only sends Diff the long way. Padding is part of
+// the bytes, which Remember copied with the rest; if it differs, so does
+// the answer, the long way again, never a wrong one.
+func (d *Differ) identical(s *Scene) bool {
+	if d.noFast || !d.valid || s.Width != d.w || s.Height != d.h || s.Clear != d.clear || s.Text != d.text ||
+		d.Reach != d.reach || d.Wide != d.wideOn || d.nextFold != d.folded ||
+		len(s.Effects) != 0 || len(d.effects) != 0 || len(s.Ops) != len(d.ops) {
+		return false
+	}
+	if rects, ok := d.mask.changes(s.MaskAtlas); !ok || len(rects) > 0 {
+		return false
+	}
+	if rects, ok := d.color.changes(s.ColorAtlas); !ok || len(rects) > 0 {
+		return false
+	}
+	for i := range s.Ops {
+		if img := s.Ops[i].Image; img != nil && img.Version() != d.versions[i] {
+			return false
+		}
+	}
+	return sameBytes(s.Ops, d.ops) && sameBytes(s.Glyphs, d.glyphs) && sameBytes(s.Stops, d.stops) &&
+		(!d.Wide || sameBytes(s.Wide, d.wide))
+}
+
+// sameBytes reports whether a and b hold the same bytes.
+func sameBytes[T any](a, b []T) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	if len(a) == 0 {
+		return true
+	}
+	var z T
+	n := len(a) * int(unsafe.Sizeof(z))
+	return bytes.Equal(unsafe.Slice((*byte)(unsafe.Pointer(&a[0])), n), unsafe.Slice((*byte)(unsafe.Pointer(&b[0])), n))
 }
 
 // Match returns the op of the last scene that op j of the scene Diff was
@@ -513,6 +586,7 @@ func (d *Differ) Remember(s *Scene) {
 	}
 	d.bounds, d.next = d.next, d.bounds
 	d.encloses, d.encloses2 = d.encloses2, d.encloses
+	d.reach, d.wideOn, d.folded = d.nextReach, d.nextWide, d.nextFold
 	d.versions = d.versions[:0]
 	for i := range s.Ops {
 		v := uint64(0)
