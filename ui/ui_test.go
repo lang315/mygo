@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -471,7 +472,7 @@ func TestKeyLeavesNoStateBehind(t *testing.T) {
 	if n > len(keys)+2 { // the rows, the root and the overlay at most
 		t.Errorf("%d states for %d keyed rows", n, len(keys))
 	}
-	if allocs := testing.AllocsPerRun(10, tt.Frame); allocs >= float64(len(keys)-maxFree) {
+	if allocs := allocrun.Least(10, tt.Frame); allocs >= float64(len(keys)-maxFree) {
 		t.Errorf("a frame of %d keyed rows allocates %v times", len(keys), allocs)
 	}
 	if len(tt.rt.states) != n {

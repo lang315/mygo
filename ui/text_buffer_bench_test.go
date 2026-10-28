@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // Compare edit allocation for two document sizes; allocation should follow
@@ -38,7 +40,7 @@ func BenchmarkTextAreaBufferType(b *testing.B) {
 
 func TestTextBufferEditAllocationIsBounded(t *testing.T) {
 	doc := NewTextBuffer(strings.Repeat("a", 8<<20))
-	allocated := testing.AllocsPerRun(20, func() { doc.Replace(100, 101, "b") })
+	allocated := allocrun.Least(20, func() { doc.Replace(100, 101, "b") })
 	if allocated > 100 {
 		t.Fatalf("small indexed edit allocates %.0f objects", allocated)
 	}

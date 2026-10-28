@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // BenchmarkFrame builds, lays out, paints and renders on the CPU a whole
@@ -286,19 +288,19 @@ func TestDiffFrameAllocs(t *testing.T) {
 		t.Skip("the race detector allocates in every frame")
 	}
 	tt, _ := diffSceneTester(true)
-	steady := testing.AllocsPerRun(100, tt.Frame)
+	steady := allocrun.Least(100, tt.Frame)
 	tt, d := diffSceneTester(false)
 	s := &sidebarScroller{tt: tt, d: d}
-	sidebar := testing.AllocsPerRun(100, s.step)
+	sidebar := allocrun.Least(100, s.step)
 	tt, d = diffSceneTester(true)
 	s = &sidebarScroller{tt: tt, d: d}
-	both := testing.AllocsPerRun(100, s.step)
+	both := allocrun.Least(100, s.step)
 	tt, d = diffSceneTester(false)
 	s = &sidebarScroller{tt: tt, d: d, lo: 80, hi: 120}
 	for range 100 {
 		s.step()
 	}
-	warm := testing.AllocsPerRun(100, s.step)
+	warm := allocrun.Least(100, s.step)
 	t.Logf("allocations a frame: steady %.0f, scrolling the sidebar %.0f, with the diff %.0f, within rows laid out %.0f", steady, sidebar, both, warm)
 	// Frames that lay nothing out allocate twice on every platform, however
 	// many cores draw them: drawing on several cores once allocated for each

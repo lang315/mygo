@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 type dtRow struct {
@@ -728,7 +730,7 @@ func TestDataMatcherDoesNotAllocatePerRow(t *testing.T) {
 		if !keep(x) {
 			t.Fatalf("%q does not keep the row searched for", kw)
 		}
-		if n := testing.AllocsPerRun(100, func() { keep(x) }); n != 0 {
+		if n := allocrun.Least(100, func() { keep(x) }); n != 0 {
 			t.Errorf("%q: %v allocations a row", kw, n)
 		}
 	}

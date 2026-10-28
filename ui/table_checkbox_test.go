@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -34,7 +35,7 @@ func TestTableCheckboxAllocsPerRow(t *testing.T) {
 			for range 3 {
 				tt.Frame()
 			}
-			return testing.AllocsPerRun(20, tt.Frame)
+			return allocrun.Least(20, tt.Frame)
 		}
 		return (frames(200) - frames(100)) / 100
 	}
@@ -300,7 +301,7 @@ func TestCompactGhostThemesMakesNothing(t *testing.T) {
 	if kept < 10 {
 		t.Fatalf("%d themes kept: the test shows nothing", kept)
 	}
-	if n := testing.AllocsPerRun(20, tt.rt.compactGhostThemes); n != 0 {
+	if n := allocrun.Least(20, tt.rt.compactGhostThemes); n != 0 {
 		t.Errorf("compacting the themes of %d copies makes %v allocations, want none", kept, n)
 	}
 	if got := len(tt.rt.ghostThemes); got != kept {

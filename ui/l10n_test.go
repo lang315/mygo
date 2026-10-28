@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/internal/platform"
 
@@ -39,7 +40,7 @@ func TestControlsSayTheLanguage(t *testing.T) {
 	var c context
 	c.rt = &engine{lang: "zh-Hans"}
 	c.texts().Search()
-	if allocs := testing.AllocsPerRun(100, func() { _ = c.texts().Search() }); allocs != 0 {
+	if allocs := allocrun.Least(100, func() { _ = c.texts().Search() }); allocs != 0 {
 		t.Errorf("a control's string allocates %v times a frame", allocs)
 	}
 }

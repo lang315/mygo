@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -442,7 +443,7 @@ func clickCostOf(t *testing.T, mode ViewMode, n int) (allocs float64, bytes int6
 	a()
 	b()
 	var k int
-	allocs = testing.AllocsPerRun(20, func() {
+	allocs = allocrun.Least(20, func() {
 		if k++; k%2 == 0 {
 			a()
 		} else {

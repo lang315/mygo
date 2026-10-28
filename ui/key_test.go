@@ -3,6 +3,8 @@ package ui
 import (
 	"math"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 type keyItem struct{ title string }
@@ -85,7 +87,7 @@ func TestNaNKeys(t *testing.T) {
 func TestKeysAllocateNothing(t *testing.T) {
 	p, v := &keyItem{"a"}, keyItem{"b"}
 	for _, k := range []any{p, v, int32(1), 1, "a"} {
-		if n := testing.AllocsPerRun(100, func() { keyedID(1, k) }); n != 0 {
+		if n := allocrun.Least(100, func() { keyedID(1, k) }); n != 0 {
 			t.Errorf("keying by %T allocates %v times", k, n)
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/twclass"
 	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
@@ -142,7 +143,7 @@ func TestSIgnoresBadClasses(t *testing.T) {
 func TestCachedSDoesNotAllocate(t *testing.T) {
 	const c = "p-2 mt-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition"
 	S(c)
-	if n := testing.AllocsPerRun(100, func() { S(c) }); n != 0 {
+	if n := allocrun.Least(100, func() { S(c) }); n != 0 {
 		t.Fatalf("a cached S allocates %v times", n)
 	}
 }

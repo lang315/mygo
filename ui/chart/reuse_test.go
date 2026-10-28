@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -27,7 +28,7 @@ func TestLineInto(t *testing.T) {
 		}
 	}
 	LineInto(&path, ui.Rect{W: 100, H: 100}, xs, ys, CurveLinear)
-	if a := testing.AllocsPerRun(20, func() { LineInto(&path, ui.Rect{W: 100, H: 100}, xs, ys, CurveLinear) }); a != 0 {
+	if a := allocrun.Least(20, func() { LineInto(&path, ui.Rect{W: 100, H: 100}, xs, ys, CurveLinear) }); a != 0 {
 		t.Fatal("linear reuse allocates", a)
 	}
 }

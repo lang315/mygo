@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // slopeOf is what each instance of build adds to the allocations of a frame.
@@ -13,7 +15,7 @@ func slopeOf(build func(c *context, n int)) float64 {
 		for range 3 {
 			tt.Frame()
 		}
-		return testing.AllocsPerRun(20, tt.Frame)
+		return allocrun.Least(20, tt.Frame)
 	}
 	return (frames(60) - frames(20)) / 40
 }

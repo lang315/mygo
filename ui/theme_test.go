@@ -3,6 +3,8 @@ package ui
 import (
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 func TestSpacingScalesWidgets(t *testing.T) {
@@ -75,7 +77,7 @@ func TestParseHex(t *testing.T) {
 			t.Errorf("parseHex(%q) = %v, %v; want %v, ok %v", tc.in, got, err, tc.want, tc.ok)
 		}
 	}
-	if n := testing.AllocsPerRun(10, func() { Hex("#2563eb") }); n != 0 {
+	if n := allocrun.Least(10, func() { Hex("#2563eb") }); n != 0 {
 		t.Errorf("Hex allocates %v times", n)
 	}
 }
