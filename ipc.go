@@ -491,7 +491,8 @@ func (e *Event[T]) Name() string { return e.name }
 
 // Emit sends the event to the page shown in w, or to the pages of the web
 // views of a window showing native UI (WebView) but untrusted ones
-// (PageOptions.Untrusted). Events sent before the page's DOM is ready are
+// (PageOptions.Untrusted) and ones without bindings
+// (WebViewOptions.NoBindings). Events sent before the page's DOM is ready are
 // delivered once it is.
 func (e *Event[T]) Emit(w *Window, payload T) error {
 	msg, err := encodeEvent(e.name, payload)
@@ -506,7 +507,7 @@ func (e *Event[T]) Emit(w *Window, payload T) error {
 		views := append([]*Window(nil), w.webViews...)
 		windows.Unlock()
 		for _, v := range views {
-			if !v.untrusted {
+			if !v.hostile() {
 				v.enqueue(msg, true)
 			}
 		}
@@ -531,14 +532,15 @@ func (e *Event[T]) EmitPage(p *Page, payload T) error {
 }
 
 // Broadcast sends the event to every window, and the web views in them,
-// but to untrusted pages (PageOptions.Untrusted).
+// but to untrusted pages (PageOptions.Untrusted) and pages without bindings
+// (WebViewOptions.NoBindings).
 func (e *Event[T]) Broadcast(payload T) error {
 	msg, err := encodeEvent(e.name, payload)
 	if err != nil {
 		return err
 	}
 	for _, w := range pageWindows() {
-		if !w.untrusted {
+		if !w.hostile() {
 			w.enqueue(msg, true)
 		}
 	}

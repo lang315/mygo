@@ -1327,6 +1327,12 @@ func resolveFile(path string) (string, error) {
 	return "", fmt.Errorf("mygo: file %q not found", path)
 }
 
+// hostile reports whether the page may be any site's, which the app's events
+// are not sent to, and whose messages are held to the bridge's size: an
+// untrusted page (PageOptions.Untrusted) or one without bindings
+// (WebViewOptions.NoBindings).
+func (w *Window) hostile() bool { return w.untrusted || w.noBindings }
+
 // isTrusted reports whether a page at rawURL may call bound methods.
 func (w *Window) isTrusted(rawURL string) bool {
 	u, err := url.Parse(rawURL)

@@ -59,6 +59,8 @@ The view is made with `WebViewOptions.NoBindings`, which makes it untrusted for
 everything a page can ask of the host, unless the app says otherwise:
 
 - **Call Go:** never, whatever the origin.
+- **Hear the app's events:** only those sent to its page (`Event.EmitPage`);
+  `Emit` and `Broadcast` skip it.
 - **Use permissions:** denied unless the app's `SetPermissionHandler` allows
   them. Camera and microphone are routed through it on macOS; camera,
   microphone, location and notifications on Linux and Windows. The other kinds
