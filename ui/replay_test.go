@@ -1,6 +1,10 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/internal/scene"
+)
 
 // replayTable is a table of n rows in a 300×400 tester, warmed by two frames, for the replay tests.
 func replayTable(t *testing.T, n int, cell func(c *Context, r int)) (*Tester, *ListState) {
@@ -364,5 +368,20 @@ func TestRowsPaintAgainWhenTheAtlasGrows(t *testing.T) {
 	tt.Frame()
 	if tt.rt.freshRows == fresh || tt.rt.replayMismatch != 0 {
 		t.Fatalf("after the atlas grew, %d rows painted anew, %d mismatches", tt.rt.freshRows-fresh, tt.rt.replayMismatch)
+	}
+}
+
+// A record from the pool comes back reset: it replays nothing of the state it
+// belonged to.
+func TestPooledRowPaintComesBackReset(t *testing.T) {
+	rt := &engine{}
+	old := &rowPaint{ok: true, at: 7, ids: []uint64{1, 2}, ops: make([]scene.Op, 3)}
+	rt.rowPool = append(rt.rowPool, old)
+	r := rt.newRowPaint()
+	if r != old || r.ok || r.at != 0 || len(r.ids) != 0 || len(r.ops) != 0 || cap(r.ids) == 0 {
+		t.Fatalf("a pooled record is %+v: want it reset, with its room kept", *r)
+	}
+	if rt.newRowPaint() == old {
+		t.Fatal("a record came out of the pool twice")
 	}
 }
