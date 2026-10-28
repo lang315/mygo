@@ -235,7 +235,8 @@ func (p *Painter) element(e *node) {
 	}
 	savedTransform, savedInline := p.transform, p.inline
 	p.transform, p.inline = e.world, nil
-	defer func() { p.transform, p.inline = savedTransform, savedInline }()
+	built := e.look() // the styleFn and color transition below change the paint, not the node
+	defer func() { p.transform, p.inline = savedTransform, savedInline; e.setLook(built) }()
 
 	if e.styleFn != nil {
 		e.styleFn(e)

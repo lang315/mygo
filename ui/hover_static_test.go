@@ -121,7 +121,7 @@ func TestHoverLooksFollowTheTheme(t *testing.T) {
 			r := e.n.Bounds()
 			tt.Move(r.X+r.W/2, r.Y+r.H/2)
 			tt.Frame()
-			if got := e.n.bg; got != th.SurfaceHover {
+			if got := painted(e.n).bg; got != th.SurfaceHover {
 				t.Errorf("%s hovered: background %v, want %v", e.name, got, th.SurfaceHover)
 			}
 			tt.Move(399, 499)
@@ -167,13 +167,13 @@ func TestHoverLooksKeepAChoiceAndPressAnArrow(t *testing.T) {
 	x, y := at(row(0))
 	tt.Move(x, y)
 	tt.Frame()
-	if got := row(0).bg; got != light.SurfaceHover {
+	if got := painted(row(0)).bg; got != light.SurfaceHover {
 		t.Errorf("a row not chosen, hovered: %v, want %v", got, light.SurfaceHover)
 	}
 	x, y = at(row(1))
 	tt.Move(x, y)
 	tt.Frame()
-	if got := row(1).bg; got == light.SurfaceHover {
+	if got := painted(row(1)).bg; got == light.SurfaceHover {
 		t.Errorf("a row chosen, hovered: %v, want the color of its choice", got)
 	}
 	var arrow *node
@@ -189,12 +189,12 @@ func TestHoverLooksKeepAChoiceAndPressAnArrow(t *testing.T) {
 	x, y = at(arrow)
 	tt.Move(x, y)
 	tt.Frame()
-	if got := arrow.bg; got != light.SurfaceHover {
+	if got := painted(arrow).bg; got != light.SurfaceHover {
 		t.Errorf("an arrow hovered: %v, want %v", got, light.SurfaceHover)
 	}
 	tt.Press(x, y)
 	tt.Frame()
-	if got := arrow.bg; got != light.SurfacePressed {
+	if got := painted(arrow).bg; got != light.SurfacePressed {
 		t.Errorf("an arrow pressed: %v, want %v", got, light.SurfacePressed)
 	}
 }

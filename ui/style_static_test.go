@@ -80,7 +80,7 @@ func TestButtonsAndTextInputsFollowTheThemeAndThePointer(t *testing.T) {
 			r := hover.n().Bounds()
 			tt.Move(r.X+r.W/2, r.Y+r.H/2)
 			tt.Frame()
-			if got := hover.n().bg; got != hover.want {
+			if got := painted(hover.n()).bg; got != hover.want {
 				t.Errorf("%s: hovered background %v, want %v", c.name, got, hover.want)
 			}
 			tt.Press(r.X+r.W/2, r.Y+r.H/2)
@@ -89,7 +89,7 @@ func TestButtonsAndTextInputsFollowTheThemeAndThePointer(t *testing.T) {
 			if hover.n() == primary() {
 				want = c.th.AccentPressed
 			}
-			if got := hover.n().bg; got != want {
+			if got := painted(hover.n()).bg; got != want {
 				t.Errorf("%s: pressed background %v, want %v", c.name, got, want)
 			}
 			tt.Release(r.X+r.W/2, r.Y+r.H/2)
@@ -99,7 +99,7 @@ func TestButtonsAndTextInputsFollowTheThemeAndThePointer(t *testing.T) {
 		r := input().Bounds()
 		tt.Move(r.X+r.W/2, r.Y+r.H/2)
 		tt.Frame()
-		if got, want := input().borderC, c.th.Border.Mix(c.th.Text, 0.25); got != want {
+		if got, want := painted(input()).borderC, c.th.Border.Mix(c.th.Text, 0.25); got != want {
 			t.Errorf("%s: hovered input border %v, want %v", c.name, got, want)
 		}
 		tt.Move(395, 315)
