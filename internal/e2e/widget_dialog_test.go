@@ -4,8 +4,8 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui/widget"
 )
 
@@ -20,13 +20,19 @@ func TestWidgetDialogEscape(t *testing.T) {
 	done := make(chan struct{})
 	go func() { d.Run(); close(done) }()
 	eventually(t, "the dialog to show", func() bool { n := d.Native(); return n != nil && n.IsVisible() })
-	time.Sleep(time.Second) // a sheet slides down and takes the keyboard
+	// A sheet takes the keyboard as it shows: that is what Escape needs.
+	eventually(t, "the dialog to take the keyboard", func() bool { return d.Native().IsFocused() })
 	if !pressEscape(d.Native()) {
 		t.Skip("no system keys on this platform")
 	}
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
+	if !wait.Poll(func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}) {
 		state := foregroundState(d.Native())
 		d.Close()
 		t.Fatalf("Escape did not close the dialog; %s", state)
