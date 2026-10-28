@@ -50,7 +50,7 @@ Windows 11 ARM64.
 
 | Measure | At the start | 2026-10-26 | Target |
 |---|---|---|---|
-| `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them) | tens of µs |
+| `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them). **2026-10-28, an M1 Pro: 80 µs, 21 allocs, 961 B** (85 µs after the rows reuse their layout, #225; then -1.3% with #238 and -5.45% with #241, each measured against main in turns, so the sum is about 80 µs), the split in Track 3 | tens of µs |
 | A click on a widget table of 1M rows | 6.0–10.4 ms in the first CI runs, 38 MB allocated | **`clickApp`, the app's work (build + layout + paint, no rasterizing): 0.67 ms** CI Linux x86, 0.35 ms Windows, 0.37 ms macOS (commit `98bf370`; 0.37 ms on an M1 Pro); **4.96 KB and 238 allocs**. `click`, with the tester's CPU raster standing in for the GPU: 0.74 ms Linux, 0.39 ms Windows, 0.42 ms macOS (1.22, 1.49 and 1.61 ms before #196–#200; 0.42 ms on an M1 Pro, 0.62 before #200) (`BenchmarkTableCheckedLarge`, #19) | `clickApp` ≤ 1 ms on the three machines, no MB-scale allocation. **Met** |
 | A frame of N plain widgets | not measured | `BenchmarkWidgetFrame` (M1 Pro): 100 widgets 98 µs and 66 allocs, 1000 widgets 0.77 ms and 666 allocs (CI Linux x86: 0.18 and 1.3 ms); the same as raw `ui` (`BenchmarkUIFrame`): 90 µs and 0.72 ms, 133 and 1,933 allocs; a Style on each: +16–21% (`-styled`), the same styles on raw `ui` +13–14%, so the widget layer adds ×1.03–1.06 (the Phase 0 gate, ≤ 1.10) | baseline set in Phase 0 |
 | `counter-native` release size | 9.2–9.7 MB | 9.22 MB macOS, 9.45 MB Linux, 9.77 MB Windows; `hello` 9.37, 9.47 and 9.95 MB | unchanged by widget work |
@@ -304,7 +304,7 @@ cannot show: those items are not marked):
   nothing around the rows changed, it fails. The 70 µs the estimate hoped
   for is not reached: what remains is build (27 µs), paint and present.
 
-  **Done** (text of paint, the owner's go on 2026-10-28): `textForeground`
+  **Done** (text of paint, #238, the owner's go on 2026-10-28): `textForeground`
   (`ui/paint.go`) asks the text system for the glyphs of a line in one call,
   `System.Glyphs` (`internal/text/raster.go`): one lock and one placement
   lookup per font run, where `Glyph` took the lock for each glyph, with the
@@ -322,9 +322,52 @@ cannot show: those items are not marked):
   the paint-time state of hover and focus; and a per-text cache of resolved
   glyphs, which a fractional scroll misses. *Present:* `scene.Differ.Diff`
   of the idle frame's scene (144 ops, 191 glyphs) takes about 6.9 µs of the
-  8.0 µs present lap, so telling an identical scene earlier is worth a
-  follow-up (its gate was 3 µs). "Tens of µs" in the sense of 20–30 needs
-  the build skipped, a retained-mode design for the owner to decide.
+  8.0 µs present lap, so telling an identical scene earlier was worth a
+  follow-up (its gate was 3 µs): #241, below.
+
+  **Where the frame goes** (measured 2026-10-28, an M1 Pro with other
+  sessions' tests running, load average 16; medians of 3 runs of 5,000
+  frames; the laps of `frameStats` in `ui/framestats.go`, and timers placed
+  around `layoutTree` and the parts of `commit`, never committed; the total
+  of 87.0 µs is that of a quiet machine, 85–88):
+
+  | scene of `BenchmarkTableFrame100k` | build | layout | paint | present | frame |
+  |---|---|---|---|---|---|
+  | the benchmark | 26.89 | 22.96 | 25.73 | 8.07 | 87.04 |
+  | cells are empty boxes, no text | 25.87 | 23.01 | 10.10 | 4.83 | 67.28 |
+  | the same Table with no rows | 2.08 | 1.96 | 2.32 | 0.98 | 8.29 |
+  | the app's code alone, no Table | 0.29 | 0.38 | 0.16 | 0.14 | 1.61 |
+  | an empty window | 0.24 | 0.37 | 0.16 | 0.13 | 1.54 |
+
+  So the floor of a frame is 1.54 µs (the 17 µs written here before was
+  another measure), the Table's own chrome (header, scrollbar, background)
+  8.3 µs, and the rows about 79: 24 µs of build (the builders of the rows and
+  cells; `ui.Text` and `ui.Textf` are 1.0 of it), 11.7 of `layoutTree`, 8.5
+  of the walk of `commit` (about 47 ns a node), 23.4 of paint (7.8 for the
+  rows' boxes and 15.6 for their text) and 7 of present. The app's code
+  (`view.Sync` 5 ns, the key closure 24 B and 10–14 ns) is nothing.
+
+  **Done** (present, #241 and #242): `Differ.Diff` in
+  `internal/scene/damage.go` takes a scene identical to the last one by its
+  bytes (`identical`: ops, glyphs, stops, wide colors, the atlases, the image
+  versions, `Reach`, `Wide` and folding) and answers as the long comparison
+  does, without computing the bounds, `Match` and `Bounds` included; any
+  difference, and any scene with effects, takes the long way. *Measured:*
+  `BenchmarkTableFrame100k` on an M1 Pro, 40 runs of each in turns,
+  `benchstat`: 85.02 to 80.39 µs (-5.45%, p=0.000), the present lap 8.0 to
+  2.6 µs, 961 B and 21 allocs as before. Evidence:
+  `internal/scene/damage_identical_test.go` compares the answers with and
+  without the path for 25 changes of a scene, and every condition of
+  `identical` fails it when dropped. A probe over the tests of `ui`,
+  `internal/raster`, `internal/scene` and `internal/gpu` found 3,204 frames
+  whose scenes had not changed missing the path because the padding of an
+  op or a glyph differed in bytes (the Painter fills them field by field in
+  a slot it does not clear); #242 compares such slices by values where the
+  bytes differ: 118,614 hits became 121,821.
+
+  *Next, pending the owner's approval:* retained rows, which do not build,
+  commit or paint the rows that did not change, for a ceiling of 15–20 µs.
+  "Tens of µs" in the sense of 20–30 needs the build skipped.
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
@@ -352,7 +395,7 @@ cannot show: those items are not marked):
 | A newer purego | a tag carries the fixes we need |
 | TSF input on Windows | IMM32 misbehaves with Telex |
 | D3D12, Vulkan or GPU compute | an app needs image processing |
-| Present with damage where it is not yet (`eglSwapBuffersWithDamageKHR`; Direct3D presents dirty rectangles already, `Present1`) | a frame is measured compositor-bound in presenting the whole surface. Redrawing several damage rectangles apart, not their union, is built (`gpu.Ages` in `internal/gpu/damage.go`, from upstream's #754, fed by `scene.Differ`'s damage rectangles); the fill it saves is 1–4 µs of a frame whose empty floor is 17 µs on a 10-core Apple-silicon Mac, so presenting only the damage is the likelier win left |
+| Present with damage where it is not yet (`eglSwapBuffersWithDamageKHR`; Direct3D presents dirty rectangles already, `Present1`) | a frame is measured compositor-bound in presenting the whole surface. Redrawing several damage rectangles apart, not their union, is built (`gpu.Ages` in `internal/gpu/damage.go`, from upstream's #754, fed by `scene.Differ`'s damage rectangles); the fill it saves is 1–4 µs of a frame whose empty floor is 1.54 µs on a 10-core Apple-silicon Mac (17 µs was written here before it was measured with the engine's laps, 2026-10-28), so presenting only the damage is the likelier win left |
 
 ## Phase 4: developer tools
 
