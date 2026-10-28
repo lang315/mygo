@@ -89,7 +89,7 @@ func (s *System) GlyphRun(f *Font, ids []uint32, xs []float32, scale float32, sh
 	}
 	rk := runKey{f, key.String()}
 	if e, ok := s.runs[rk]; ok {
-		e.used = s.frame
+		s.use(e)
 		return e.GlyphImage
 	}
 	b := s.addGlyphs(gs, xs, origin)

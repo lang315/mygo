@@ -307,7 +307,7 @@ func (s *System) glyphAt(f *Font, id uint32, scale, x float32, shade Shade, subp
 			s.glyphs[key] = e
 		}
 	}
-	e.used = s.frame
+	s.use(e)
 	g := e.GlyphImage
 	g.Left += carry
 	return g
@@ -427,7 +427,7 @@ func (s *System) Mask(key uint64, draw func() (w, h int, pix []byte)) GlyphImage
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e, ok := s.masks[key]; ok {
-		e.used = s.frame
+		s.use(e)
 		return e.GlyphImage
 	}
 	if g, ok := s.transient[key]; ok {
@@ -455,7 +455,9 @@ func (s *System) Mask(key uint64, draw func() (w, h int, pix []byte)) GlyphImage
 	g := GlyphImage{OK: true, X: uint16(x), Y: uint16(y), W: uint16(w), H: uint16(h)}
 	if lasting {
 		delete(s.recent, key)
-		s.masks[key] = &atlasEntry{g, s.frame}
+		e := &atlasEntry{g, s.frame}
+		s.masks[key] = e
+		s.use(e)
 	} else {
 		s.transient[key] = g
 		s.recent[key] = s.frame
