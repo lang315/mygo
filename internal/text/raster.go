@@ -245,6 +245,7 @@ func (s *System) makeRoom(color bool, want int, size image.Point, grow bool) {
 func (s *System) Glyph(f *Font, id uint32, scale, x float32, shade Shade, opaque bool) GlyphImage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.glyphCalls++
 	if f == nil {
 		return GlyphImage{}
 	}
@@ -267,6 +268,7 @@ type GlyphRequest struct {
 func (s *System) Glyphs(reqs []GlyphRequest, scale float32, opaque bool, out []GlyphImage) []GlyphImage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.glyphCalls++
 	subpixel := opaque && s.subpixel
 	var f *Font
 	var pl placement
@@ -281,6 +283,14 @@ func (s *System) Glyphs(reqs []GlyphRequest, scale float32, opaque bool, out []G
 		out = append(out, s.glyphAt(r.Font, r.ID, scale, r.X, r.Shade, subpixel, pl))
 	}
 	return out
+}
+
+// GlyphCalls returns how many times Glyph and Glyphs were called: text
+// paints a line's glyphs in one call.
+func (s *System) GlyphCalls() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.glyphCalls
 }
 
 // glyphAt is Glyph with s locked and the placement of f looked up.

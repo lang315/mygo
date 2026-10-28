@@ -370,6 +370,8 @@ type System struct {
 	// made counts the layouts made (LayoutsMade), and gen the times the
 	// system forgot its layouts (Generation).
 	made, gen uint64
+	// glyphCalls counts the calls of Glyph and Glyphs (GlyphCalls).
+	glyphCalls uint64
 
 	glyphs map[glyphKey]*atlasEntry
 	places map[placeKey]placement
