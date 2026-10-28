@@ -186,19 +186,18 @@ func (d *Differ) Diff(s *Scene) ([]image.Rectangle, bool) {
 // Diff reads of it, so that Diff would find every op the same, in the same
 // place, and nothing changed: the same size, clear color, text parameters,
 // Reach, Wide and folding; the same ops, glyphs, stops and (when Wide) wide
-// colors, byte by byte; no change in the atlases since the last scene (so
+// colors, byte by byte or, where bytes differ, field by field (sameValues);
+// no change in the atlases since the last scene (so
 // none under a glyph); no image with new pixels (its version). The bounds
 // and the clips that enclose a transformed op are computed from these only,
 // so they are the last scene's. A scene with effects, which hold slices and
 // images of their own, is not tried.
 //
-// Bytes are a stronger test than same's, but for two cases: an op or a glyph
-// with a 0 and a -0 is a change here, which only sends Diff the long way,
-// and so is padding that differs (Remember copied it with the rest). The
-// two cases where this says "identical" and the long way finds damage are
-// both harmless, for the damage would redraw the pixels the last frame
-// holds: a NaN in an op or a glyph (equal bytes, but same says changed), and
-// an OpEffect op with no s.Effects, which same calls changed.
+// The test is as strong as same's, but for two cases where this says
+// "identical" and the long way finds damage, both harmless, for the damage
+// would redraw the pixels the last frame holds: a NaN in an op or a glyph
+// (equal bytes, but same says changed), and an OpEffect op with no
+// s.Effects, which same calls changed. A 0 and a -0 are equal, as in same.
 func (d *Differ) identical(s *Scene) bool {
 	if d.noFast || !d.valid || s.Width != d.w || s.Height != d.h || s.Clear != d.clear || s.Text != d.text ||
 		d.Reach != d.reach || d.Wide != d.wideOn || d.nextFold != d.folded ||
@@ -216,8 +215,27 @@ func (d *Differ) identical(s *Scene) bool {
 			return false
 		}
 	}
-	return sameBytes(s.Ops, d.ops) && sameBytes(s.Glyphs, d.glyphs) && sameBytes(s.Stops, d.stops) &&
-		(!d.Wide || sameBytes(s.Wide, d.wide))
+	return sameValues(s.Ops, d.ops) && sameValues(s.Glyphs, d.glyphs) && sameValues(s.Stops, d.stops) &&
+		(!d.Wide || sameValues(s.Wide, d.wide))
+}
+
+// sameValues reports whether a and b hold equal values: the same bytes, a
+// pass at the speed of memory, or else values equal by ==, one by one, for
+// the padding of an op or a glyph the Painter built may differ in bytes
+// (2,300 frames of the tests of ui and raster) without any field doing.
+func sameValues[T comparable](a, b []T) bool {
+	if sameBytes(a, b) {
+		return true
+	}
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !sameBytes(a[i:i+1], b[i:i+1]) && a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // sameBytes reports whether a and b hold the same bytes.

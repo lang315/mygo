@@ -2,8 +2,11 @@ package scene
 
 import (
 	"image"
+	"math"
+	"reflect"
 	"slices"
 	"testing"
+	"unsafe"
 )
 
 // identicalScene is a scene with every kind of thing Diff compares: fills, a
@@ -85,6 +88,11 @@ func TestDiffIdenticalScene(t *testing.T) {
 		set  func(d *Differ)
 	}{
 		{"identical", 1, func(s *Scene, _ *Image) *Scene { return copyOf(s) }, nil},
+		{"negative zero", 1, func(s *Scene, _ *Image) *Scene {
+			c := copyOf(s)
+			c.Ops[0].Rect.X = float32(math.Copysign(0, -1)) // 0 before: equal, as same has it
+			return c
+		}, nil},
 		{"one op changed", 0, func(s *Scene, _ *Image) *Scene {
 			c := copyOf(s)
 			c.Ops[6].Color.R++
@@ -249,6 +257,57 @@ func TestDiffIdenticalSceneWithoutRemember(t *testing.T) {
 	}
 	if fast.fast != 3 {
 		t.Errorf("%d scenes took the fast path, want the 3 identical ones", fast.fast)
+	}
+}
+
+// garbagePadding sets every byte of *p that is not a field to 0xAA, in
+// place: *p stays equal to what it was by ==, but is what a struct
+// assembled field by field in a slot nobody cleared is in its padding.
+// (A struct assigned whole may be copied field by field, padding left out,
+// so the fields are set one by one through reflect.)
+func garbagePadding[T any](p *T) {
+	v := *p
+	b := unsafe.Slice((*byte)(unsafe.Pointer(p)), unsafe.Sizeof(v))
+	for i := range b {
+		b[i] = 0xAA
+	}
+	for i := range reflect.TypeFor[T]().NumField() {
+		reflect.ValueOf(p).Elem().Field(i).Set(reflect.ValueOf(v).Field(i))
+	}
+}
+
+// Ops and glyphs that are equal but for the bytes of their padding, which
+// the Painter leaves as it finds them (2,300 frames of the tests of ui
+// and raster had unchanged scenes that missed the fast path for it), are
+// the same: the path is taken, and the answers are the long way's.
+func TestDiffIdenticalScenePaddingIsNotAChange(t *testing.T) {
+	s, _ := identicalScene()
+	next := copyOf(s)
+	for i := range next.Ops {
+		garbagePadding(&next.Ops[i])
+	}
+	for i := range next.Glyphs {
+		garbagePadding(&next.Glyphs[i])
+	}
+	if sameBytes(s.Ops, next.Ops) || sameBytes(s.Glyphs, next.Glyphs) {
+		t.Fatalf("setup: the padding is the same (ops %v, glyphs %v)", sameBytes(s.Ops, next.Ops), sameBytes(s.Glyphs, next.Glyphs))
+	}
+	fast, full := Differ{Reach: 1}, Differ{Reach: 1, noFast: true}
+	for _, d := range []*Differ{&fast, &full} {
+		d.Diff(s)
+		d.Remember(s)
+	}
+	if got, want := answer(&fast, next), answer(&full, next); !got.same(want) {
+		t.Errorf("with the fast path: %+v\nwithout it:            %+v", got, want)
+	}
+	if fast.fast != 1 {
+		t.Errorf("%d scenes took the fast path, want the one with other padding", fast.fast)
+	}
+	// A value that differs is still a difference, among padding that does.
+	next.Ops[6].Color.R++
+	fast.fast = 0
+	if got, want := answer(&fast, next), answer(&full, next); !got.same(want) || fast.fast != 0 {
+		t.Errorf("a changed op among other padding: fast paths %d\nwith the fast path: %+v\nwithout it:            %+v", fast.fast, got, want)
 	}
 }
 
