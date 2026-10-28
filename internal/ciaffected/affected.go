@@ -17,6 +17,19 @@ type Package struct {
 	EmbedFiles, TestEmbedFiles, XTestEmbedFiles []string
 }
 
+// alwaysTested are tested whatever changed: they read files (the skills
+// and docs, docs/ui/widget/tw.md) and type-check the exports of packages
+// they do not import, and are fast.
+var alwaysTested = []string{"internal/skillsdocs", "internal/twclass"}
+
+// cmdDir is the command line tool, whose tests build the apps of its
+// templates, and the programs of its other platforms, against the checkout:
+// from the directories of cmdBuilds, with what they depend on, there is no
+// import to follow.
+const cmdDir = "cmd/mygo"
+
+var cmdBuilds = []string{".", "ui", "i18n", "internal/web", "internal/linux"}
+
 // Affected returns the import paths of the packages the changed files
 // (slash-separated, relative to the module's root) affect, in the order of
 // pkgs, or full when they all are.
@@ -42,18 +55,32 @@ func Affected(changed []string, pkgs []Package) (affected []string, full bool) {
 		}
 	}
 	for _, p := range pkgs {
-		if self[p.ImportPath] || changed2[p.ImportPath] ||
-			slices.ContainsFunc(dependencies(&p, byPath), func(d string) bool { return changed2[d] }) {
+		if self[p.ImportPath] || changed2[p.ImportPath] || always(&p) ||
+			slices.ContainsFunc(dependencies(&p, byDir, byPath), func(d string) bool { return changed2[d] }) {
 			affected = append(affected, p.ImportPath)
 		}
 	}
 	return affected, false
 }
 
+// always reports whether p is tested whatever changed.
+func always(p *Package) bool {
+	return slices.ContainsFunc(alwaysTested, func(a string) bool { return strings.HasSuffix(p.ImportPath, "/"+a) })
+}
+
 // dependencies are the packages p's build and its tests need: its imports,
-// transitively, and its tests' imports, with theirs.
-func dependencies(p *Package, byPath map[string]*Package) []string {
+// transitively, and its tests' imports, with theirs, and what cmdBuilds
+// has the command line tool build.
+func dependencies(p *Package, byDir, byPath map[string]*Package) []string {
 	deps := slices.Clone(p.Deps)
+	if p.Dir == cmdDir {
+		for _, d := range cmdBuilds {
+			if q := byDir[d]; q != nil {
+				deps = append(deps, q.ImportPath)
+				deps = append(deps, q.Deps...)
+			}
+		}
+	}
 	for _, t := range slices.Concat(p.TestImports, p.XTestImports) {
 		deps = append(deps, t)
 		if tp := byPath[t]; tp != nil {
@@ -68,18 +95,30 @@ func dependencies(p *Package, byPath map[string]*Package) []string {
 // that every package is affected. A test file affects its package alone (selfOnly).
 func owner(file string, byDir map[string]*Package, pkgs []Package) (p *Package, selfOnly, ok bool) {
 	switch {
-	case strings.HasPrefix(file, "docs/"), strings.HasPrefix(file, "website/"):
-		return nil, false, true
+	case strings.HasPrefix(file, "docs/"):
+		return nil, false, true // the tests that read it are always run
 	case file == "go.mod", file == "go.sum", strings.HasPrefix(file, ".github/"),
 		strings.HasPrefix(file, "packages/"), strings.HasPrefix(file, "scripts/"):
 		return nil, false, false
 	}
 	dir := path.Dir(file)
 	if strings.HasSuffix(file, ".go") {
-		// A directory without a package here, such as another system's, or
-		// deleted, changes nothing for this system: what imported it
-		// changed too.
-		return byDir[dir], strings.HasSuffix(file, "_test.go"), true
+		if p := byDir[dir]; p != nil {
+			return p, strings.HasSuffix(file, "_test.go"), true
+		}
+		if slices.Contains(strings.Split(dir, "/"), "testdata") {
+			// Fixtures of the package above it, compiled by its tests.
+			for d := dir; d != "."; d = path.Dir(d) {
+				if q := byDir[d]; q != nil {
+					return q, true, true
+				}
+			}
+			return byDir["."], true, true
+		}
+		// A directory without a package here, such as another system's:
+		// it imports and is imported by nothing here, but the command line
+		// tool builds for every system.
+		return byDir[cmdDir], true, true
 	}
 	if strings.HasPrefix(file, "plugins/") {
 		return nil, false, false // the pinned natives and manifests are everybody's
@@ -101,6 +140,9 @@ func owner(file string, byDir map[string]*Package, pkgs []Package) (p *Package, 
 		if q := byDir[d]; q != nil {
 			return q, false, true
 		}
+	}
+	if strings.HasPrefix(file, "website/") {
+		return nil, false, true // the site's pages and styles are not tested
 	}
 	return nil, false, false
 }

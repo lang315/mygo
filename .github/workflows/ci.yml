@@ -211,6 +211,11 @@ jobs:
         shell: bash
         run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
 
+  # The two ARM64 jobs run every package's tests on every pull request, not
+  # only the packages the change affects (internal/ciaffected, in the job
+  # above): they are the safety net of that selection, and of the systems
+  # the amd64 jobs do not cover. Do not gate them on it without that in mind.
+  #
   # Linux on ARM64, which no machine of the maintainers runs: purego's calls
   # into WebKitGTK, GTK and Mesa pass floats and structs in registers of the
   # arm64 calling convention, which the amd64 runners never exercise.

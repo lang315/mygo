@@ -19,7 +19,7 @@ all) shard=$all ;;
 esac
 if [ -n "${CI_DIFF:-}" ]; then
   # shellcheck disable=SC2086
-  affected=$(git diff --name-only $CI_DIFF | go run ./internal/ciaffected)
+  affected=$(git diff --name-only --no-renames $CI_DIFF | go run ./internal/ciaffected)
   if [ "$affected" != FULL ]; then
     if [ -n "$affected" ]; then
       shard=$(grep -x -F -f <(printf '%s\n' "$affected") <<<"$shard" || true)
