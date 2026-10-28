@@ -106,6 +106,7 @@ func TestRetainMatchesFresh(t *testing.T) {
 			first := lcTester(view(0), m.w, m.h, start)
 			a, b := lcTester(view(1), m.w, m.h, start), lcTester(view(2), m.w, m.h, start)
 			first.rt.noRetain, b.rt.noRetain = true, true
+			a.rt.replayCheck = true // rows replayed are painted as well, and compared
 			m.testers = [3]*Tester{first, a, b}
 			both := func(f func(tt *Tester)) {
 				f(first)
@@ -172,6 +173,9 @@ func TestRetainMatchesFresh(t *testing.T) {
 					both(func(tt *Tester) { tt.Frame() })
 				}
 				steps = append(steps, what)
+				if a.rt.replayMismatch != 0 {
+					t.Fatalf("seed %d scale %v frame %d (%s): %d replayed rows differ from painting them", seed, scale, f, what, a.rt.replayMismatch)
+				}
 				if d := sameFrames(a, b, true); d != "" {
 					if len(steps) > 6 {
 						steps = steps[len(steps)-6:]
