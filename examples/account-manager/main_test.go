@@ -47,13 +47,10 @@ func (tt *tester) do(err error) {
 // wait runs the updates of the run *r until it ends.
 func (tt *tester) wait(r **runner) {
 	tt.t.Helper()
-	for end := time.Now().Add(10 * time.Second); *r != nil; {
-		if time.Now().After(end) {
-			tt.t.Fatal("the run did not end")
-		}
+	wait.Until(tt.t, "the run to end", func() bool {
 		tt.Frame()
-		time.Sleep(10 * time.Millisecond)
-	}
+		return *r == nil
+	})
 	tt.Frame()
 }
 
