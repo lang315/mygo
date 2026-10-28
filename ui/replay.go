@@ -56,12 +56,14 @@ type rowPaint struct {
 // recording it where it may. Set by linkPaintCompare.
 var rowPainter func(p *Painter, c *node)
 
-// rowKeyOf returns the key of painting c now.
+// rowKeyOf returns the key of painting c now. The window's focus is read
+// without windowFocus, which asks for a frame when it changes: a row with a
+// look that reads it is hovered, pressed or focused, and paints anew.
 func rowKeyOf(p *Painter, c *node) rowKey {
 	rt := p.rt
 	return rowKey{
 		box: Rect{c.x, c.y, c.w, c.h}, clip: p.clip, scale: p.scale, opacity: p.opacity, opaque: p.opaque,
-		atlases: atlasGenerations(p.s), text: p.s.Text, themeGen: rt.themeGen, focusVisible: rt.focusVisible, windowFocus: rt.windowFocus(),
+		atlases: atlasGenerations(p.s), text: p.s.Text, themeGen: rt.themeGen, focusVisible: rt.focusVisible, windowFocus: rt.windowFocused,
 	}
 }
 
@@ -133,6 +135,7 @@ func paintRow(p *Painter, c *node) {
 		r.pre = append(r.pre, e.flags)
 		r.boxes = append(r.boxes, Rect{e.x, e.y, e.w, e.h})
 	})
+	// Recording does not nest: a row holding a list is never paint-same (P1-A).
 	rt.text.Record(&r.uses)
 	p.element(c)
 	rt.text.StopRecord()
