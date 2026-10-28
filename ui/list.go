@@ -826,7 +826,7 @@ func (f *listFrame) build(i int) *node {
 	var ver uint64
 	var around [3]bool
 	var checked bool
-	if s.RowVersion != nil && !f.noKeep {
+	if s.RowVersion != nil && !f.noKeep && !f.isHeader(i) {
 		// Read before the row is built, as keep read them: the copy of the row
 		// is recorded with what the row was built with.
 		ver, around = s.RowVersion(i), f.chosenAround(i)
