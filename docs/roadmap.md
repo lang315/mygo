@@ -405,7 +405,8 @@ cannot show: those items are not marked):
 - A PR merges after CI is green.
 - A test never passes or fails on wall-clock time (AGENTS.md). The flakes
   that broke this on 2026-10-28, each fixed by waiting for the event or
-  driving a fake clock, and not by a longer timeout:
+  driving a fake clock, and not by a longer timeout (the last is a
+  diagnostic, for the alloc-count flakes):
   - `examples/account-manager/stress.go`: `stress` takes its ticks and start
     time from the caller, and its test sends them (#231);
   - `internal/watchdriver/watch_test.go`: `TestWatch` waits for `Remove` to
@@ -416,6 +417,9 @@ cannot show: those items are not marked):
     `examples/account-manager/worker_test.go` and
     `internal/update/rename_test.go`: a wait on the run's end, scheduler
     turns for the overlap, and the file let go at `Rename`'s first wait
-    (#240).
+    (#240);
+  - `ui/allocsites_test.go` and `ui/memory_test.go`: the alloc-count tests
+    report where the mallocs came from when they are over the limit, so a
+    failure on a CI runner names the call and not only the count (#239).
 - The fork syncs with egoist/mygo on request, and before each phase.
 - This fork sends no pull requests upstream.
