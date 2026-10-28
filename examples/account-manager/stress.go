@@ -38,7 +38,8 @@ func feed(accounts, rate int, seed uint64, start time.Time, ticks <-chan time.Ti
 				// As many as are due since the start, for a slow tick not
 				// to lower the rate.
 				for due := int(now.Sub(start).Seconds() * float64(rate)); sent < due; sent++ {
-					r.push(change(rnd, accounts, now))				}
+					r.push(change(rnd, accounts, now))
+				}
 			}
 		}
 	}()
