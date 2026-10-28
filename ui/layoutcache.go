@@ -265,7 +265,7 @@ var (
 
 // linkPaintCompare sets the functions that compare paint.
 func linkPaintCompare() {
-	comparePaint, inheritsPaint = comparePaintOf, inheritsPaintSame
+	comparePaint, inheritsPaint, rowPainter = comparePaintOf, inheritsPaintSame, paintRow
 }
 
 // comparePaintOf compares what paints e with what r kept, and keeps it: whether

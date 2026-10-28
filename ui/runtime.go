@@ -197,6 +197,15 @@ type engine struct {
 	inRow bool
 	// paintAll compares paint everywhere, for tests of single elements.
 	paintAll bool
+	// noReplay paints every row (replay.go); replayCheck paints a row replayed
+	// as well and counts the differences in replayMismatch, for tests.
+	// recorded and replayed count the rows of the last paint.
+	noReplay, replayCheck bool
+	recorded, replayed    int
+	replayMismatch        int
+	// freshRows counts the list rows painted anew since the engine began,
+	// for tests.
+	freshRows int
 
 	states map[uint64]*state
 	// free are states pruned, which new elements take: rows coming into

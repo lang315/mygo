@@ -519,7 +519,10 @@ func coreLocal[T any](e *node, key any, init func() T) *T {
 
 // state is what the runtime keeps about an element from frame to frame.
 type state struct {
-	rt            *engine
+	rt *engine
+	// replay is what the element, a list row, painted the last time it
+	// painted (replay.go).
+	replay        *rowPaint
 	pendingSubmit bool
 	pendingChange bool
 	noticeQueued  bool
