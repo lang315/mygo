@@ -123,7 +123,10 @@ type lcModel struct {
 	inner bool
 	// deco gives the rows of a List gradients, shadows, borders, rich text and
 	// icons, the paint that a replay shifted must reproduce.
-	deco     bool
+	deco bool
+	// menus gives the first text of each row of a List a PopoverMenu, which
+	// the model opens with the secondary button.
+	menus    bool
 	versions bool
 	// noDup stops the model from giving rows the same keys for a frame, whose
 	// pictures differ from Tester to Tester by the order a state is shared in.
@@ -398,7 +401,15 @@ func lcRow(c *context, m *lcModel, n *lcNode, i int) {
 	i = n.at(i)
 	font := lcStyles[16]
 	e := coreRow(c).Gap(4).Children(func() {
-		coreText(c, lcTexts[(i+n.text)%len(lcTexts)])
+		first := coreText(c, lcTexts[(i+n.text)%len(lcTexts)])
+		if m.menus {
+			// A menu drawn in the window, opened by the secondary button on an
+			// element of a row (the model right-clicks).
+			first.PopoverMenu(func(mn *Menu) {
+				mn.Item("Open").Chosen()
+				mn.Item("Close").Chosen()
+			})
+		}
 		coreBox(c).Size(10, 10)
 		coreText(c, lcTexts[(i+2*n.text+1)%len(lcTexts)])
 		if m.deco {

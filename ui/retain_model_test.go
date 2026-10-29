@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
@@ -114,7 +115,7 @@ func TestRetainMatchesFresh(t *testing.T) {
 func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept, built int) {
 	t.Helper()
 	m := newLCModel(seed + 3000)
-	m.versions, m.noDup, m.inner, m.deco = true, true, true, true
+	m.versions, m.noDup, m.inner, m.deco, m.menus = true, true, true, true, true
 	themes := [2]*Theme{LightTheme(), DarkTheme()}
 	theme := 0
 	view := func(tester int) func(c *context) {
@@ -139,6 +140,7 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 	}
 	both(func(tt *Tester) { tt.SetScale(scale) })
 	var steps []string
+	rightClicks := rand.New(rand.NewPCG(seed, 5)) // a stream of its own: the other steps stay as they were
 	for f := range frames {
 		m.dup = nil
 		var what string
@@ -154,13 +156,23 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 			both(func(tt *Tester) { tt.Move(x, y) })
 		case v < 6:
 			x, y := float32(m.rng.IntN(m.w)), float32(m.rng.IntN(m.h))
-			if retainRightClicks && m.rng.IntN(2) == 0 {
-				// The secondary button over a text of a row.
+			// TestRetainSeed11 (retainRightClicks) draws from the model's own
+			// stream, as the run that found the bug did; the other seeds take
+			// theirs from a stream of their own.
+			rc := rightClicks
+			if retainRightClicks {
+				rc = m.rng
+			}
+			if rc.IntN(2) == 0 {
+				// The secondary button over a text of a row, which opens the
+				// menu drawn (PopoverMenu) of the row's first text, if the click
+				// hits it.
 				var at []Point
 				var find func(n *node, inRow bool)
 				find = func(n *node, inRow bool) {
 					inRow = inRow || n.listRow
-					if inRow && n.kind == kindText && n.w > 0 && n.x >= 0 && n.y >= 0 && n.x+n.w <= float32(m.w) && n.y+n.h <= float32(m.h) {
+					first := n.parent != nil && n.parent.listRow && n == n.parent.first
+					if (retainRightClicks && inRow || first) && n.kind == kindText && n.w > 0 && n.x >= 0 && n.y >= 0 && n.x+n.w <= float32(m.w) && n.y+n.h <= float32(m.h) {
 						at = append(at, Point{n.x + n.w/2, n.y + n.h/2})
 					}
 					for c := n.first; c != nil; c = c.next {
@@ -169,11 +181,22 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 				}
 				find(first.rt.c.root, false)
 				if len(at) > 0 {
-					p := at[m.rng.IntN(len(at))]
+					p := at[rc.IntN(len(at))]
 					x, y = p.X, p.Y
 				}
 				what = fmt.Sprintf("right click %v,%v", x, y)
-				both(func(tt *Tester) { tt.RightClickAt(x, y) })
+				if retainRightClicks {
+					both(func(tt *Tester) { tt.RightClickAt(x, y) })
+				} else {
+					both(func(tt *Tester) {
+						tt.Frame() // the rows are kept when the menu is asked for
+						tt.Frame()
+						tt.Frame()
+						tt.RightClickAt(x, y)
+						tt.Frame()
+						tt.Frame()
+					})
+				}
 				break
 			}
 			what = fmt.Sprintf("click %v,%v", x, y)

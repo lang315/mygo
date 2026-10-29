@@ -66,6 +66,12 @@ func (rt *engine) actingIDs() {
 	if rt.pressed != nil {
 		b = append(b, rt.pressed.id)
 	}
+	if d := rt.menu.drawn; d != nil {
+		// A menu drawn in the window (PopoverMenu) is drawn, and kept open,
+		// by the element it belongs to, and the text it opened on: a row
+		// linked is not built, and resolveMenu closes the menu.
+		b = append(b, d.id, d.text)
+	}
 	if d := rt.drag; d != nil {
 		b = append(b, d.src, d.over)
 	}
