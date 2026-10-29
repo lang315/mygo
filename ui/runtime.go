@@ -133,7 +133,11 @@ type engine struct {
 	// only through these, so an app without such a list links neither.
 	placeKept  func(e *node, x, y float32) bool
 	commitKept func(rt *engine, e *node, clip Rect, hidden bool)
-	rowWalk    *node // the row commitRow is walking
+	// forgetMeasures is forgetRowMeasures, set beside them: layout reaches it
+	// only through this, so an app without such a list links neither it nor
+	// heldRow.
+	forgetMeasures func(list *node)
+	rowWalk        *node // the row commitRow is walking
 	// rowsKept and rowsBuilt count the rows lists linked and built, noRetain
 	// stops lists from keeping rows (tests, benchmarks). bound counts the
 	// elements bound to an app's Handle, and the asks for frames (AnimationFrame,

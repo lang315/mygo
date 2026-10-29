@@ -947,6 +947,16 @@ func TestRetainLayoutInnerScrollModelSeed(t *testing.T) {
 // rows held, or the box keeps the width of the old text. (Found by the model:
 // the measures of a held row, kept with the row, were of the last frame.)
 func TestRetainLayoutHuggingBoxFollowsTheTextSize(t *testing.T) {
+	testHuggingBox(t, false)
+}
+
+// The same, with the list itself changing in the frame its ancestor's text
+// size does (its padding).
+func TestRetainLayoutHuggingBoxListAndTextSizeChangeTogether(t *testing.T) {
+	testHuggingBox(t, true)
+}
+
+func testHuggingBox(t *testing.T, listChanges bool) {
 	size := float32(0)
 	p := newPair(t, 400, 300, func() func(c *Context) {
 		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
@@ -957,9 +967,12 @@ func TestRetainLayoutHuggingBoxFollowsTheTextSize(t *testing.T) {
 			}
 			r.Children(func() {
 				Column(c).Padding(3).Children(func() {
-					List(c, s, 5, func(i int) {
+					l := List(c, s, 5, func(i int) {
 						Row(c).Gap(4).Children(func() { Textf(c, "row %d", i); Text(c, "a text of some width") })
 					})
+					if listChanges {
+						l.Padding(size / 4)
+					}
 				})
 			})
 		}
