@@ -626,6 +626,11 @@ cannot show: those items are not marked):
    install-skills`: `cmd/mygo/template/shared/.agents/skills`, checked by
    `internal/skillsdocs`, and the rule in `AGENTS.md`.
 5. **An inspection server** for agents and e2e tests, when one is needed.
+6. **Testers in parallel.** A tester shares the process's text system, so
+   testers on goroutines of their own race on its glyph atlas
+   (`scene.Atlas.Put` against `Version`); the doc of `ui.Tester` says not to
+   run them in parallel. A text system for each tester would lift that, at
+   the cost of every `text.Shared()` call site.
 
 ## How work lands
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -42,6 +43,7 @@ func TestNoListLayoutIsLinkedBeforeAList(t *testing.T) {
 // without the hook.
 func TestBuildingAListLinksItsLayout(t *testing.T) {
 	layoutListFn, relayoutListFn = nil, nil
+	paintCompareOnce = sync.Once{} // linked again by this test
 	var s ListState
 	tt := coreNewTester(func(c *context) {
 		coreList(c, &s, 100, func(i int) { coreText(c, fmt.Sprint("row ", i)) }).Grow(1)
