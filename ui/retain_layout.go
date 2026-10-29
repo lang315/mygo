@@ -385,12 +385,31 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 // the row it replays, and each counts in layoutMismatch what differs.
 
 // nodeBox is what layout writes of a node: its boxes, the text layout it
-// made (the same layout, for a cache returns one for one request), and the
-// bits layout leaves on it but those place and the kept paths set.
+// made, and the bits layout leaves on it but those place and the kept paths
+// set.
 type nodeBox struct {
 	x, y, w, h, contentW, contentH float64
-	tl                             *text.Layout
+	tl                             textKey
 	lay                            uint8
+}
+
+// textKey is a text layout by value: what it was asked for and what came out.
+// Not the pointer: the text cache lets go of layouts (the oldest, over its
+// budget) and does not keep a large paragraph at all, so a layout asked for
+// again is the same and a different *text.Layout.
+type textKey struct {
+	set       bool
+	params    text.Params
+	w, h      float32
+	lines     int
+	truncated bool
+}
+
+func textKeyOf(l *text.Layout) textKey {
+	if l == nil {
+		return textKey{}
+	}
+	return textKey{true, l.Params, l.Width, l.Height, len(l.Lines), l.Truncated}
 }
 
 // placedBits are the lay bits the paths that keep a row set and layout does not.
@@ -400,7 +419,7 @@ func boxesOf(rec *rowKeep) []nodeBox {
 	b := make([]nodeBox, len(rec.nodes))
 	for j := range rec.nodes {
 		n := &rec.nodes[j]
-		b[j] = nodeBox{float64(n.x), float64(n.y), float64(n.w), float64(n.h), float64(n.contentW), float64(n.contentH), n.tl, n.lay &^ placedBits}
+		b[j] = nodeBox{float64(n.x), float64(n.y), float64(n.w), float64(n.h), float64(n.contentW), float64(n.contentH), textKeyOf(n.tl), n.lay &^ placedBits}
 	}
 	return b
 }
