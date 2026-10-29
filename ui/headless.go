@@ -280,6 +280,7 @@ func (t *Tester) Update(fn func()) {
 
 // settle runs frames until the view asks for no more, or 20 of them.
 func (t *Tester) settle() {
+	t.rt.rowsShifted, t.rt.rowsShiftReplayed = 0, 0 // those of all the frames of this call (retain_layout.go)
 	t.frameAt = t.Now()
 	for i := 0; i < 20; i++ {
 		t.h.requested.Store(false)

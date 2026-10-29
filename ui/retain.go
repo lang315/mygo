@@ -46,6 +46,9 @@ type rowKeep struct {
 	// scrollers are the indexes in nodes of the scroll containers of the row,
 	// whose offsets lay.scrolled records (retain_layout.go).
 	scrollers []int32
+	// rel are the boxes of the nodes after the root, relative to their parents,
+	// as the layout the nodes hold left them (retain_layout.go).
+	rel []relXY
 }
 
 // actingIDs gathers, once for a pass, the ids of the elements the engine is
@@ -173,6 +176,12 @@ func setDepth(e *node) {
 // retainable reports whether e, and the elements in it, hold nothing of the
 // pass that a copy would keep wrong: pointers to other elements, closures
 // that capture them, a focus, a tooltip, an effect, an animation.
+//
+// A row with a Transition is never kept either (state.pending: its transition
+// record), and the layout of a moved row depends on it (retain_layout.go): the
+// animation of a transition rewrites boxes after layout, which the relative
+// boxes saved would not hold. TestRetainTransitionRowsAreNeverHeld fails if that
+// changes.
 func retainable(e *node) bool {
 	if e.popover != nil || e.placeOn != nil || e.nameFrom != nil || e.focusTo != nil || e.activeDescendant != nil ||
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||

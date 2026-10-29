@@ -120,7 +120,10 @@ type lcModel struct {
 	// of the model's data, which is all they read.
 	// inner puts a scroll container in each row of a List, for the model of
 	// retained rows: its offset changes with no build of the row.
-	inner    bool
+	inner bool
+	// deco gives the rows of a List gradients, shadows, borders, rich text and
+	// icons, the paint that a replay shifted must reproduce.
+	deco     bool
 	versions bool
 	// noDup stops the model from giving rows the same keys for a frame, whose
 	// pictures differ from Tester to Tester by the order a state is shared in.
@@ -398,6 +401,14 @@ func lcRow(c *context, m *lcModel, n *lcNode, i int) {
 		coreText(c, lcTexts[(i+n.text)%len(lcTexts)])
 		coreBox(c).Size(10, 10)
 		coreText(c, lcTexts[(i+2*n.text+1)%len(lcTexts)])
+		if m.deco {
+			switch i % 3 {
+			case 0:
+				coreRichText(c, Span{Text: "rich ", Weight: 700}, Span{Text: "text", Italic: true, Underline: true})
+			case 1:
+				coreIcon(c, m.icon)
+			}
+		}
 		if m.inner {
 			// A scroll container in the row, whose offset changes with no build
 			// of the row (a wheel over it while the pointer is pressed elsewhere).
@@ -411,6 +422,18 @@ func lcRow(c *context, m *lcModel, n *lcNode, i int) {
 	})
 	if f := font[int(n.styles[0])%len(font)]; f != nil {
 		f(e)
+	}
+	if m.deco {
+		switch (i + n.text) % 6 {
+		case 0:
+			e.Gradient(RGB(250, 240, 200), RGB(200, 220, 250), 90)
+		case 1:
+			e.Shadow(0, 2, 6, 0, RGB(120, 120, 120))
+		case 2:
+			e.Border(1, RGB(90, 90, 200)).BorderStyle(BorderDashed).Radius(4)
+		case 3:
+			e.ConicGradient(ConicGradient{Stops: []GradientStop{{RGB(200, 0, 0), 0}, {RGB(0, 0, 200), 1}}})
+		}
 	}
 	if n.tint != 0 {
 		e.Background(RGB(uint8(40*n.tint), 120, 200))

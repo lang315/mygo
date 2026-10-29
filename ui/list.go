@@ -1857,10 +1857,14 @@ func (e *node) layoutList(w, h float32) {
 			r.e.lay &^= layPlaced
 			continue
 		}
-		if rec := keptRec(r.e); rec != nil {
+		rec := keptRec(r.e)
+		if rec != nil {
 			rec.lay.lw, rec.lay.hm = cw, float32(ht(r.i))
 		}
 		layoutBox(r.e, cw, float32(ht(r.i)))
+		if rec != nil {
+			r.e.lay |= layFresh // place saves the relative boxes of the row
+		}
 	}
 	for _, ch := range extras {
 		link(ch)

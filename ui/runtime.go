@@ -145,6 +145,12 @@ type engine struct {
 	// found where they were; rowsCommitReplayed those commit replayed
 	// (retain_layout.go). Reset by beginLayout.
 	rowsLaidKept, rowsCommitReplayed int
+	// rowsShifted counts the kept rows whose layout a layout kept and place
+	// placed again at a new place (P4a), and rowsShiftReplayed those whose
+	// painting replayed shifted (P4b): the Tester counts those of the frames
+	// of a call (an event is followed by the frames it asks for, and the last
+	// of them moves nothing).
+	rowsShifted, rowsShiftReplayed int
 	// acting are the ids of the elements the engine acts on in this pass
 	// (actingIDs), with a filter over them.
 	acting     []uint64

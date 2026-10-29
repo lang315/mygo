@@ -52,6 +52,34 @@ func (p *pair) compare(what string) {
 	}
 }
 
+// scrolled scrolls the list of the view by dy in both and compares them, and
+// fails when the list did not move: a view whose list does not scroll (a
+// column that hugs its content) tests nothing of the moved rows.
+func (p *pair) scrolled(dy float32, what string) {
+	p.t.Helper()
+	before := listScrollY(p.kept.rt.c.root)
+	p.both(func(tt *Tester) { tt.Scroll(150, 200, 0, dy) })
+	p.compare(what)
+	if listScrollY(p.kept.rt.c.root) == before {
+		p.t.Fatalf("%s: the list did not scroll (%v)", what, before)
+	}
+}
+
+// listScrollY is the offset of the first list in the tree.
+func listScrollY(n *node) float64 {
+	if n.list != nil && n.st != nil {
+		return n.st.scrollY
+	}
+	for c := n.first; c != nil; c = c.next {
+		if n.list == nil {
+			if y := listScrollY(c); y != 0 {
+				return y
+			}
+		}
+	}
+	return 0
+}
+
 // frame draws a frame in both and compares them.
 func (p *pair) frame(what string) {
 	p.t.Helper()
@@ -168,7 +196,7 @@ type keptList struct {
 func (k *keptList) mk() func(c *Context) {
 	s := &ListState{Key: func(i int) any { return i }, RowVersion: func(i int) uint64 { return k.vers[i] }}
 	return func(c *Context) {
-		col := Column(c)
+		col := Column(c).Fill() // the window: the list scrolls in it
 		if k.width > 0 {
 			col.Width(k.width)
 		}
@@ -286,8 +314,7 @@ func TestRetainLayoutMovedRows(t *testing.T) { // keptPlace, moved path
 		if i%2 == 1 {
 			dy = -1
 		}
-		p.both(func(tt *Tester) { tt.Scroll(150, 200, 0, dy) })
-		p.frame(fmt.Sprintf("scroll %v", dy))
+		p.scrolled(dy, fmt.Sprintf("scroll %v", dy))
 	}
 }
 
