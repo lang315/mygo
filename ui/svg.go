@@ -29,9 +29,19 @@ import (
 // selectors. It leaves out text, embedded images, patterns, markers and
 // filters: convert text to paths before.
 type SVG struct {
-	doc  *svg.Doc
+	doc  svgDoc
 	id   uint64
 	w, h float32
+}
+
+// svgDoc is what the engine asks of a parsed SVG (a *svg.Doc). Painting goes
+// through it, so that the code of internal/svg is linked into an app by
+// ParseSVG alone, and an app that shows no SVG does not carry it.
+type svgDoc interface {
+	Draw(dst *image.RGBA, current color.NRGBA, stretch bool)
+	DrawRotated(dst *image.RGBA, current color.NRGBA, w, h, degrees float64)
+	UsesCurrentColor() bool
+	OnlyCurrentColor() bool
 }
 
 var lastSVG atomic.Uint64
