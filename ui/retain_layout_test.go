@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // pair runs one view in two Testers, one keeping rows and one building every
@@ -783,6 +785,7 @@ func TestRetainLayoutInnerScrollOffsetChanges(t *testing.T) {
 	p.idle(3)
 }
 
+// Compares only: the row under the pointer is built again.
 func TestRetainLayoutInnerScrollByTheWheel(t *testing.T) {
 	p := innerScrollPair(t, false)
 	p.both(func(tt *Tester) { tt.Scroll(100, 124, 30, 0) })
@@ -818,8 +821,13 @@ func innerScrolled(root *node) bool {
 	return false
 }
 
-// The bar of a scroller in a row dragged, the pointer then leaves.
-func TestRetainLayoutInnerScrollBarDrag(t *testing.T) {
+// The bar of a scroller in a row dragged, and the pointer leaves the window:
+// PointerLeave clears the hover list (nothing is pressed for the engine during
+// a bar drag) but the drag goes on scrolling, so the row holding the scroller
+// is no longer built and must not show its old offset. (With the pointer
+// still in the window the row stays in the hover list and is built: that case
+// compares only.)
+func TestRetainLayoutInnerScrollBarDragLeavesTheWindow(t *testing.T) {
 	p := innerScrollPair(t, true)
 	var bar *node
 	var find func(n *node, inRow bool)
@@ -842,17 +850,22 @@ func TestRetainLayoutInnerScrollBarDrag(t *testing.T) {
 		tt.Move(x-30, y) // over the scroller, which shows its bar
 		tt.Move(x, y)
 		tt.Press(x, y)
+		tt.send(platform.SurfaceEvent{Kind: platform.PointerLeave})
+		tt.Frame()
+		tt.Frame()
 		tt.Move(x, y+10)
 		tt.Move(x, y+20)
-		tt.Move(250, 300) // away from the row while held
-		tt.Release(250, 300)
-		tt.Frame()
 		tt.Frame()
 	})
-	p.compare("bar dragged")
+	p.compare("bar dragged outside the window")
 	if !innerScrolled(p.built.rt.c.root) {
 		t.Fatal("the drag did not scroll: the test shows nothing")
 	}
+	if p.kept.rt.rowsLaidKept == 0 {
+		t.Fatal("no row held while the bar is dragged: the test shows nothing")
+	}
+	p.both(func(tt *Tester) { tt.Release(250, 300) })
+	p.compare("released")
 	p.idle(3)
 }
 
