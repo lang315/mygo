@@ -545,6 +545,17 @@ cannot show: those items are not marked):
   whole inside the clip. P4a (layout) and P4b (paint) are separate
   changes with their own gates. "Tens of µs" in the sense of 20–30 needed the build skipped (P2,
   47 µs idle on an M1 Pro) and the layout and commit (P3, 26.5 µs).
+  *Open, found measuring P4:* a frame at rest costs more once the app has
+  scrolled or a pointer rests on a row (`BenchmarkTableFrame100kPhases`,
+  `-rv-app`, M1 Pro, 100k rows). `idle-scrolled` (offset 2000, the pointer
+  outside the window) is 31.9 µs against 26.0 for `idle`; a pprof diff puts it
+  in `engine.rehover` (`appendHitChain` tests every hit against the pointer
+  each frame, an `Affine.Inverse` each: a third of the gap) and `forgetInput`
+  (iterating a map); the rest is spread thin. A pointer resting on a row adds
+  3.5 to 4 µs and 26 allocations more: the row under it is hovered, so it is
+  built, laid out and painted in every frame and never replayed
+  (`rowInteractive`), even when it only has a hover look and no hover style;
+  such a row need not be built again.
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions

@@ -155,6 +155,8 @@ type tableFrameVariant struct {
 
 // tableFrameVariants are the frames:
 //   - idle: nothing changed;
+//   - idle-scrolled: nothing changed, at an offset away from the top with the
+//     pointer outside the window (an app idles at any offset);
 //   - hover: the pointer moved from a row to the next;
 //   - update: a visible row's text changed;
 //   - scroll1px: a scroll by a whole pixel, down and up in turn;
@@ -163,6 +165,13 @@ type tableFrameVariant struct {
 //     rows on every second frame only.
 var tableFrameVariants = []tableFrameVariant{
 	{"idle", func(tt *ui.Tester, _ []tableAccount, _ *ui.TableView[tableAccount]) func(int) {
+		return func(int) { tt.Frame() }
+	}},
+	{"idle-scrolled", func(tt *ui.Tester, _ []tableAccount, _ *ui.TableView[tableAccount]) func(int) {
+		tt.Scroll(150, 300, 0, 2000)
+		tt.Move(-50, -50) // no row is hovered
+		tt.Frame()
+		tt.Frame()
 		return func(int) { tt.Frame() }
 	}},
 	{"hover", func(tt *ui.Tester, _ []tableAccount, _ *ui.TableView[tableAccount]) func(int) {
