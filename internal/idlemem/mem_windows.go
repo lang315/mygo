@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"syscall"
 	"unsafe"
@@ -98,55 +99,49 @@ func descendants(pid int) []int {
 	return out
 }
 
-// stop asks the app to quit as closing its windows does, as SIGTERM does
-// elsewhere: the app quits, and WebView2's processes with it. Killing them
-// all, every few seconds, hung Windows CI runners now and then. An app
-// with no window shown is killed, and the processes it ran.
-func stop(p *os.Process, procs []int) {
-	if closeWindows(p.Pid) {
-		return
-	}
-	p.Kill()
-	for _, pid := range procs[1:] {
-		if h, err := syscall.OpenProcess(processTerminate, false, uint32(pid)); err == nil {
-			syscall.TerminateProcess(h, 1)
+// stop ends the app and the processes it ran, as Windows has no signal
+// to ask it to quit, and returns once all have exited, with those they
+// started since usage looked. TerminateProcess only starts ending a
+// process, and the next run's WebView2 could otherwise meet this run's
+// browser still exiting, which holds the user data folder they share.
+func stop(_ *os.Process, procs []int) error {
+	// A handle on a process keeps its ID from going to another process,
+	// which descendants would take for one of the app's.
+	held := map[int]syscall.Handle{}
+	defer func() {
+		for _, h := range held {
 			syscall.CloseHandle(h)
 		}
-	}
-}
-
-var (
-	user32                   = syscall.NewLazyDLL("user32.dll")
-	enumWindows              = user32.NewProc("EnumWindows")
-	getWindowThreadProcessID = user32.NewProc("GetWindowThreadProcessId")
-	isWindowVisible          = user32.NewProc("IsWindowVisible")
-	postMessage              = user32.NewProc("PostMessageW")
-)
-
-const wmClose = 0x0010
-
-// closing is the process whose windows closeEach closes, and how many it
-// did.
-var closing struct{ pid, n int }
-
-// closeEach is the one callback EnumWindows calls, as Windows keeps a
-// callback made for as long as the process runs.
-var closeEach = syscall.NewCallback(func(h, _ uintptr) uintptr {
-	var pid uint32
-	getWindowThreadProcessID.Call(h, uintptr(unsafe.Pointer(&pid)))
-	if int(pid) == closing.pid {
-		if visible, _, _ := isWindowVisible.Call(h); visible != 0 {
-			postMessage.Call(h, wmClose, 0, 0)
-			closing.n++
+	}()
+	app := procs[0]
+	for range 10 {
+		var ending []syscall.Handle
+		for _, pid := range procs {
+			if _, ok := held[pid]; ok {
+				continue
+			}
+			h, err := syscall.OpenProcess(processTerminate|syscall.SYNCHRONIZE, false, uint32(pid))
+			if err != nil {
+				continue // gone already
+			}
+			held[pid] = h
+			ending = append(ending, h)
 		}
+		if len(ending) == 0 {
+			return nil
+		}
+		for _, h := range ending {
+			syscall.TerminateProcess(h, 1)
+		}
+		for _, h := range ending {
+			if ev, _ := syscall.WaitForSingleObject(h, 10_000); ev != syscall.WAIT_OBJECT_0 {
+				return errors.New("a process of the app still runs 10s after it was ended")
+			}
+		}
+		if _, ok := held[app]; !ok {
+			return nil // its ID may be another process's now
+		}
+		procs = descendants(app)
 	}
-	return 1 // go on
-})
-
-// closeWindows closes the windows pid shows, and reports whether it shows
-// one.
-func closeWindows(pid int) bool {
-	closing.pid, closing.n = pid, 0
-	enumWindows.Call(closeEach, 0)
-	return closing.n > 0
+	return errors.New("the app's processes kept starting others as they were ended")
 }
