@@ -632,6 +632,9 @@ func (rt *engine) animateMatches() {
 func (e *node) showAt(r Rect) {
 	if r.W == e.w && r.H == e.h {
 		shift(e, r.X-e.x, r.Y-e.y)
+		if f := e.c.rt.forgetKept; f != nil {
+			f(e) // the kept rows in it moved: a later place of this layout must not find them where they were
+		}
 		return
 	}
 	layoutBox(e, r.W, r.H)

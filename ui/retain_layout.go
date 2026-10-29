@@ -276,6 +276,25 @@ func forgetRowMeasures(list *node) {
 	}
 }
 
+// forgetKeptRows makes the kept rows in the subtree of e lay out again, and
+// commit again, the next time: a transition moved their nodes after place
+// (shift), and the record still says where layout put them, so a later place
+// of the same layout (the element of an outer Match lays the list out and
+// places it again) would find a row where it was and leave its elements where
+// shift put them. shift is shared with drags and effects, which move
+// nodes and move them back, so the record is left to the one that moves them
+// for good.
+func forgetKeptRows(e *node) {
+	if e.listRow {
+		if rec := keptRec(e); rec != nil {
+			rec.lay.at, rec.lay.cok = 0, false
+		}
+	}
+	for c := e.first; c != nil; c = c.next {
+		forgetKeptRows(c)
+	}
+}
+
 // heldRow reports whether c is a kept row whose layout results the nodes
 // still hold (not zeroed).
 func heldRow(c *node) bool {
