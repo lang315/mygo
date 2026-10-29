@@ -190,6 +190,7 @@ type keptList struct {
 	color  Color
 	rtl    bool
 	hidden bool
+	tint   Color  // background of the rows, 0: none
 	button []bool // rows with a Button, which a copy cannot keep
 }
 
@@ -208,7 +209,11 @@ func (k *keptList) mk() func(c *Context) {
 		}
 		col.Hidden(k.hidden).Children(func() {
 			List(c, s, k.n, func(i int) {
-				Row(c).Children(func() {
+				r := Row(c)
+				if k.tint != (Color{}) {
+					r.Background(k.tint)
+				}
+				r.Children(func() {
 					Textf(c, "row %d", i)
 					Text(c, "·")
 					if k.button != nil && k.button[i] {
@@ -982,5 +987,129 @@ func testHuggingBox(t *testing.T, listChanges bool) {
 		size = sz
 		p.frame(fmt.Sprintf("font size %v", sz))
 		p.idle(2)
+	}
+}
+
+// hoverReplays hovers eight rows in turn and counts the rows replayed.
+func hoverReplays(p *pair) int {
+	n := 0
+	for i := range 8 {
+		p.both(func(tt *Tester) { tt.Move(20+float32(i), 30+float32(i)*40) })
+		p.compare(fmt.Sprintf("hover %d", i))
+		n += p.kept.rt.replayed
+	}
+	return n
+}
+
+// A change of theme changes what the held rows paint with, not their layout:
+// they must come back to replay their paint (the first layout after the change
+// compares what they paint, which they were kept without), as they do with no
+// change of theme. Counts, not times.
+func TestRetainLayoutRowsReplayAfterThemeChange(t *testing.T) {
+	base := newPair(t, 300, 400, newKeptList(500).mk)
+	base.idle(4)
+	want := hoverReplays(base)
+	if want < 100 {
+		t.Fatalf("%d rows replayed with no change of theme: the test measures nothing", want)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(tt *Tester)
+	}{
+		{"dark", func(tt *Tester) { tt.SetDark(true) }},
+		{"system preferences", func(tt *Tester) { tt.SetPreferences(Preferences{Accent: Color{R: 200, G: 30, B: 90, A: 255}}) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPair(t, 300, 400, newKeptList(500).mk)
+			p.idle(4)
+			p.both(tc.change)
+			p.idle(3)
+			if got := hoverReplays(p); got < want/2 {
+				t.Errorf("%d rows replayed after the change, %d without it", got, want)
+			}
+		})
+	}
+}
+
+// A version bump that changes only what a row paints with (its tint) leaves
+// the rows without the comparison that gives them layPaint, like a change of
+// theme: they must replay again once they stand still.
+func TestRetainLayoutRowsReplayAfterATintChange(t *testing.T) {
+	base := newPair(t, 300, 400, newKeptList(500).mk)
+	base.idle(4)
+	want := hoverReplays(base)
+	k := newKeptList(500)
+	p := newPair(t, 300, 400, k.mk)
+	p.idle(4)
+	k.tint = RGB(250, 240, 200)
+	for i := range k.vers {
+		k.vers[i]++
+	}
+	p.frame("tint")
+	p.idle(3)
+	if got := hoverReplays(p); got < want/2 {
+		t.Errorf("%d rows replayed after the tint changed, %d without it", got, want)
+	}
+}
+
+// The same changes in a frame that lays the list out twice: a Match transition
+// takes the element over (showAt lays out and places again). The rows must
+// replay again once the transition is over.
+func TestRetainLayoutRowsReplayAfterAChangeInATwoLayoutFrame(t *testing.T) {
+	type matchKey struct{}
+	for _, tc := range []struct {
+		name string
+		do   func(tt *Tester, k *keptList)
+	}{
+		{"dark", func(tt *Tester, k *keptList) { tt.SetDark(true) }},
+		{"tint with versions", func(tt *Tester, k *keptList) {
+			k.tint = RGB(250, 240, 200)
+			for i := range k.vers {
+				k.vers[i]++
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			build := func(k *keptList, key *string) func() func(c *Context) {
+				return func() func(c *Context) {
+					s := &ListState{Key: func(i int) any { return i }, RowVersion: func(i int) uint64 { return k.vers[i] }}
+					return func(c *Context) {
+						tr := ElementTransition{Duration: 200 * time.Millisecond, Ease: Linear, Match: matchKey{}}
+						Column(c).Fill().Children(func() {
+							Column(c).Key(*key).Height(300).Transition(tr).Children(func() {
+								List(c, s, 500, func(i int) {
+									r := Row(c)
+									if k.tint != (Color{}) {
+										r.Background(k.tint)
+									}
+									r.Children(func() { Textf(c, "row %d", i); Text(c, "·") })
+								}).Grow(1)
+							})
+						})
+					}
+				}
+			}
+			kb, key := newKeptList(500), "a"
+			base := newPair(t, 300, 400, build(kb, &key))
+			base.idle(4)
+			want := hoverReplays(base)
+			if want < 50 {
+				t.Fatalf("%d rows replayed with no change: the test measures nothing", want)
+			}
+			k, key2 := newKeptList(500), "a"
+			p := newPair(t, 300, 400, build(k, &key2))
+			p.idle(4)
+			key2 = "b" // the Match takes the element over in this frame
+			p.both(func(tt *Tester) { tc.do(tt, k) })
+			p.frame("change and match")
+			for range 20 {
+				p.both(func(tt *Tester) { tt.Advance(16 * time.Millisecond) })
+				p.compare("transition")
+			}
+			p.idle(3)
+			if got := hoverReplays(p); got < want/2 {
+				t.Errorf("%d rows replayed after the change in a two-layout frame, %d without it", got, want)
+			}
+		})
 	}
 }

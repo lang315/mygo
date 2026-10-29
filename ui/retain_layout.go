@@ -29,7 +29,14 @@ type rowLay struct {
 	hm     float32 // and the height
 	ax, ay float32 // where place put the root
 	rlay   uint8   // the root's lay bits after the layout
-	rdir   uint8   // the root's direction, which an ancestor's Direction sets again after the link
+	// A kept row without layPaint was compared (sameRow) with a layout that
+	// painted differently, and settle keeps it from then on without comparing
+	// it again: it would paint anew for good. It is laid out again, and so
+	// compared, up to paintTries layouts running, until it has layPaint or
+	// is volatile (which never has). retryAt is the last layout that counted.
+	tries   uint8
+	retryAt uint64
+	rdir    uint8 // the root's direction, which an ancestor's Direction sets again after the link
 	// What commit left of the row, which it appends again while commitEnv is
 	// the same (commitRow).
 	// scrolled are the offsets of the row's scroll containers (rowKeep.scrollers)
@@ -45,6 +52,11 @@ type rowLay struct {
 	hits   []hit
 	labels []labelNode
 }
+
+// paintTries is the number of layouts a kept row without layPaint is laid out
+// in before it is kept as it is: the first compares what it paints with the
+// layout before, and finds it different; the second finds it the same.
+const paintTries = 2
 
 // scrollAt is the offset of a scroll container.
 type scrollAt struct{ x, y float64 }
@@ -151,7 +163,14 @@ func (f *listFrame) settle(list *node, r *listRow, cw float32) bool {
 	}
 	k := &rec.lay
 	k.setAt = rt.layouts
-	if k.at != 0 && k.at+1 == rt.layouts && k.lw == cw && list.lay&layRows != 0 && !rt.noLayoutCache &&
+	// A row without layPaint is laid out again (paintTries layouts), so that it
+	// may get it; a second settle in the same layout does not count.
+	painted := k.rlay&layPaint != 0 || k.tries >= paintTries
+	if !painted && k.retryAt != rt.layouts && k.at != 0 {
+		k.tries++
+		k.retryAt = rt.layouts
+	}
+	if painted && k.at != 0 && k.at+1 == rt.layouts && k.lw == cw && list.lay&layRows != 0 && !rt.noLayoutCache &&
 		k.rlay&layReuse != 0 && uint8(r.e.dir) == k.rdir && inheritsPaint != nil && inheritsPaint(list) &&
 		!rt.revealsIn(rec) && r.e.st.krec == rec && rec.scrollsSame() {
 		r.e.lay |= layKept
@@ -344,6 +363,9 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	// is not held today.
 	if placed && !env.hidden && e.lay&layReuse != 0 {
 		k.ax, k.ay, k.rlay, k.rdir, k.at = e.x, e.y, e.lay, uint8(e.dir), rt.layouts
+		if e.lay&layPaint != 0 {
+			k.tries = 0
+		}
 		rec.noteScrolls()
 		if len(rt.focusOrder) == f0 && len(rt.posed) == p0 && len(rt.groups) == g0 && rt.modal == m0 {
 			k.hits = append(k.hits[:0], rt.hits[h0:]...)
