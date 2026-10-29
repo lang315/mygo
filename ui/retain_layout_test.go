@@ -940,3 +940,34 @@ func TestRetainLayoutInnerScrollModelSeed(t *testing.T) {
 	defer log.SetOutput(os.Stderr)
 	retainModelSeed(t, 1, 103, 60)
 }
+
+// The box around a List sized by its content is as wide as the rows (their
+// max-content width), which are measured before the list is laid out: a text
+// style that an ancestor of the list changes must reach the measures of the
+// rows held, or the box keeps the width of the old text. (Found by the model:
+// the measures of a held row, kept with the row, were of the last frame.)
+func TestRetainLayoutHuggingBoxFollowsTheTextSize(t *testing.T) {
+	size := float32(0)
+	p := newPair(t, 400, 300, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			r := Row(c).AlignItems(Start)
+			if size > 0 {
+				r.FontSize(size)
+			}
+			r.Children(func() {
+				Column(c).Padding(3).Children(func() {
+					List(c, s, 5, func(i int) {
+						Row(c).Gap(4).Children(func() { Textf(c, "row %d", i); Text(c, "a text of some width") })
+					})
+				})
+			})
+		}
+	})
+	p.idle(4)
+	for _, sz := range []float32{19, 11, 0, 25} {
+		size = sz
+		p.frame(fmt.Sprintf("font size %v", sz))
+		p.idle(2)
+	}
+}

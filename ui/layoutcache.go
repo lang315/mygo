@@ -236,6 +236,8 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 		keepNoLayout(e)
 		if e.list != nil && sameText && !changed {
 			e.lay |= layRows
+		} else if e.list != nil {
+			forgetRowMeasures(e)
 		}
 	} else {
 		inner := changed || !sameText

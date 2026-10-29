@@ -154,6 +154,28 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 			both(func(tt *Tester) { tt.Move(x, y) })
 		case v < 6:
 			x, y := float32(m.rng.IntN(m.w)), float32(m.rng.IntN(m.h))
+			if retainRightClicks && m.rng.IntN(2) == 0 {
+				// The secondary button over a text of a row.
+				var at []Point
+				var find func(n *node, inRow bool)
+				find = func(n *node, inRow bool) {
+					inRow = inRow || n.listRow
+					if inRow && n.kind == kindText && n.w > 0 && n.x >= 0 && n.y >= 0 && n.x+n.w <= float32(m.w) && n.y+n.h <= float32(m.h) {
+						at = append(at, Point{n.x + n.w/2, n.y + n.h/2})
+					}
+					for c := n.first; c != nil; c = c.next {
+						find(c, inRow)
+					}
+				}
+				find(first.rt.c.root, false)
+				if len(at) > 0 {
+					p := at[m.rng.IntN(len(at))]
+					x, y = p.X, p.Y
+				}
+				what = fmt.Sprintf("right click %v,%v", x, y)
+				both(func(tt *Tester) { tt.RightClickAt(x, y) })
+				break
+			}
 			what = fmt.Sprintf("click %v,%v", x, y)
 			both(func(tt *Tester) { tt.ClickAt(x, y) })
 		case v < 7:
@@ -313,4 +335,18 @@ func sameStates(a, b *Tester) string {
 		}
 	}
 	return ""
+}
+
+// retainRightClicks makes the click step of the model right-click, half the
+// time, a text of a row; the extra numbers it draws give every step after it
+// another value. It found the rows kept differing from the rows built that
+// TestRetainSeed11 pins.
+var retainRightClicks bool
+
+func TestRetainSeed11(t *testing.T) {
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
+	retainRightClicks = true
+	defer func() { retainRightClicks = false }()
+	retainModelSeed(t, 1, 11, 60)
 }
