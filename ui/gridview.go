@@ -305,6 +305,7 @@ func (s *GridState) reorder(e *node, n int, gap float32) {
 	if s.Reorder == nil {
 		return
 	}
+	linkDrag()
 	e.flags |= flagValueDrop
 	e.st.accepts = func(v any) bool { d, ok := v.(*itemDrag); return ok && d.s == s }
 	rt := e.c.rt

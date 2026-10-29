@@ -668,7 +668,7 @@ func (rt *engine) runFrame() {
 		// The source's element is this frame's, if it builds one.
 		rt.drag.elem = nil
 	}
-	rt.dragScroll()
+	rt.dragScrollLinked()
 	rt.scrollTextSelection()
 	if rt.listDrag != nil {
 		rt.listDrag(rt)

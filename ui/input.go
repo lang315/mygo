@@ -128,11 +128,11 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 	case platform.FileDrop:
 		taken = rt.fileDrop(x, y, ev.Files)
 	case platform.DataDragOver:
-		taken = rt.dataDragOver(x, y, ev.Drag)
+		taken = rt.dataDragOverLinked(x, y, ev.Drag)
 	case platform.DataDragLeave:
 		rt.clearDataOver()
 	case platform.DataDrop:
-		taken = rt.dataDrop(x, y, ev.Drag)
+		taken = rt.dataDropLinked(x, y, ev.Drag)
 	case platform.AccessibilityOn:
 		rt.accessibilityOn()
 	case platform.AccessAction:
@@ -266,7 +266,7 @@ func (rt *engine) pointerMove(x, y float32) {
 		} else {
 			rt.pressMove(rt.pointerX, rt.pointerY, x, y)
 		}
-		rt.dragMove(x, y)
+		rt.dragMoveLinked(x, y)
 	}
 	moved := x != rt.pointerX || y != rt.pointerY
 	rt.pointerX, rt.pointerY, rt.pointerIn = x, y, true
@@ -383,7 +383,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		return
 	}
 	rt.pressed, rt.pressButton, rt.pressClicks = target, button, clicks
-	rt.pressDragger = pressDragger(rt, chain, target)
+	rt.pressDragger = rt.pressDraggerLinked(chain, target)
 	target.pressed, target.pressMods = true, mods
 	target.pressPending = true
 	target.pressX, target.pressY = target.local(x, y)
@@ -449,7 +449,7 @@ func (rt *engine) pointerUp(button, clicks int) {
 		rt.requestFrame()
 		return
 	}
-	if s := rt.pressed; s != nil && button == rt.pressButton && rt.dragEnd() {
+	if s := rt.pressed; s != nil && button == rt.pressButton && rt.dragEndLinked() {
 		// A drag ended, dropping its value: no click.
 		rt.pressed = nil
 		s.pressed = false
@@ -715,7 +715,7 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 		return true
 	}
 	k := keyEvent{mods, key}
-	if key == KeyEscape && mods == 0 && rt.dragCancel() {
+	if key == KeyEscape && mods == 0 && rt.dragCancelLinked() {
 		return true
 	}
 	if h := rt.focusHandler(); h != nil && !rt.claimed(k) && rt.deliver(h, InputEvent{Kind: InputKeyDown, Key: key, PhysicalKey: physical, Mods: mods, Repeat: repeat}) {
