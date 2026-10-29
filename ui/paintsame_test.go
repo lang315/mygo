@@ -5,6 +5,7 @@ import "testing"
 // In an idle frame of a table, every row in view paints as before; a row
 // whose look changed does not, and the others still do.
 func TestRowsThatPaintAsBefore(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	var s ListState
 	color := RGB(10, 10, 10)
 	tt := coreNewTester(func(c *context) {
@@ -35,6 +36,7 @@ func TestRowsThatPaintAsBefore(t *testing.T) {
 // Two elements with one key keep nothing (sameLayout): neither paints as
 // before.
 func TestTwoElementsOfOneKeyDoNotPaintAsBefore(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	var a, b *node
 	tt := coreNewTester(func(c *context) {
 		c.rt.strict = false // duplicate keys panic otherwise
@@ -55,6 +57,7 @@ func TestTwoElementsOfOneKeyDoNotPaintAsBefore(t *testing.T) {
 // painting reads the theme: after the themes start over, an index may name
 // another theme.
 func TestAnotherThemeAtTheSameIndexIsAChange(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	t1, t2 := LightTheme(), LightTheme()
 	use := t1
 	var e *node
@@ -80,6 +83,7 @@ func TestAnotherThemeAtTheSameIndexIsAChange(t *testing.T) {
 // A text color is inherited: the child of an element whose color changed
 // paints anew although its own styles are the same.
 func TestInheritedTextColorIsAChange(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	color := RGB(10, 10, 10)
 	var child *node
 	tt := coreNewTester(func(c *context) {
@@ -100,6 +104,7 @@ func TestInheritedTextColorIsAChange(t *testing.T) {
 
 // A text color, underline and background each make a row paint anew.
 func TestTextPaintStylesAreChanges(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	for name, style := range map[string]func(e *node){
 		"color":      func(e *node) { e.TextColor(RGB(1, 2, 3)) },
 		"underline":  func(e *node) { e.Underline() },
@@ -130,6 +135,7 @@ func TestTextPaintStylesAreChanges(t *testing.T) {
 
 // A child replaced by another kind with equal fields is not the same.
 func TestAnotherKindIsNotPaintSame(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	icon := false
 	var parent *node
 	tt := coreNewTester(func(c *context) {
@@ -157,6 +163,7 @@ func TestAnotherKindIsNotPaintSame(t *testing.T) {
 // A change of what paints an element and not of its layout makes it paint
 // anew: its background, border, radius and opacity.
 func TestPaintStylesAreChanges(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	for name, style := range map[string]func(e *node){
 		"background": func(e *node) { e.Background(RGB(1, 2, 3)) },
 		"border":     func(e *node) { e.BorderColor(RGB(1, 2, 3)) },
@@ -189,6 +196,7 @@ func TestPaintStylesAreChanges(t *testing.T) {
 // A text style that paints, set on the List or an element around it, is
 // inherited by the rows: they paint anew when it changes.
 func TestTextPaintAboveTheListIsAChange(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	for name, wrap := range map[string]func(c *context, color Color, body func()){
 		"around":      func(c *context, color Color, body func()) { coreBox(c).TextColor(color).Children(body) },
 		"on the list": func(c *context, color Color, body func()) { body() },
@@ -223,6 +231,7 @@ func TestTextPaintAboveTheListIsAChange(t *testing.T) {
 
 // Selectable text paints its selection, which the node does not hold.
 func TestSelectableRowsDoNotPaintAsBefore(t *testing.T) {
+	linkPaintCompare() // single elements are compared without a list
 	var s ListState
 	tt := coreNewTester(func(c *context) {
 		coreTable(c, &s, []TableColumn{{Title: "A"}}, 20, func(row, col int) { coreText(c, "row").Selectable() }).Grow(1)
@@ -233,5 +242,3 @@ func TestSelectableRowsDoNotPaintAsBefore(t *testing.T) {
 		t.Fatalf("%d rows of selectable text paint as before", got)
 	}
 }
-
-func init() { linkPaintCompare() } // single elements are compared without a list

@@ -575,7 +575,7 @@ func computeBox(e *node, w, h float32) {
 		return
 	}
 	if e.list != nil {
-		e.layoutList(w, h)
+		layoutListFn(e, w, h)
 		return
 	}
 	if e.overflow != nil {

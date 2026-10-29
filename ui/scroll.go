@@ -275,7 +275,7 @@ func reveal(e *node) {
 					// A List places its rows anew from there, building
 					// those it lacked, which moves the row holding the box.
 					was := ch.y
-					p.relayoutList(ch, sy)
+					relayoutListFn(p, ch, sy)
 					cy = float64(y+ch.y-was) + p.scrollBase
 				} else {
 					st.scrollTo(sx, sy)

@@ -266,16 +266,21 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 
 // comparePaint and inheritsPaint compare what paints an element and what a
 // list inherits to paint its rows with the last layout's; keepPaint keeps them.
-// They are set by linkPaintCompare, which building a list calls, so that an app
-// without a list links none of it.
+// layoutListFn lays a list out, and relayoutListFn lays it out anew as
+// revealing a row asks. They are set by linkPaintCompare, which building a
+// list calls, so that an app without a list links none of it: an element with
+// a list (e.list) exists only once one was built.
 var (
-	comparePaint  func(e *node, r *layoutRecord, fresh bool) (equal, sameText bool)
-	inheritsPaint func(list *node) bool
+	comparePaint   func(e *node, r *layoutRecord, fresh bool) (equal, sameText bool)
+	inheritsPaint  func(list *node) bool
+	layoutListFn   func(e *node, w, h float32)
+	relayoutListFn func(e, ch *node, y float64)
 )
 
-// linkPaintCompare sets the functions that compare paint.
+// linkPaintCompare sets the functions that compare paint and lay lists out.
 func linkPaintCompare() {
 	comparePaint, inheritsPaint, rowPainter = comparePaintOf, inheritsPaintSame, paintRow
+	layoutListFn, relayoutListFn = (*node).layoutList, (*node).relayoutList
 }
 
 // comparePaintOf compares what paints e with what r kept, and keeps it: whether
