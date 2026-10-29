@@ -22,7 +22,7 @@ func lkHash(tt *Tester) string {
 	return fmt.Sprintf("%x", h[:6])
 }
 
-func keySel(sel *Selection[int]) []int {
+func lkSel(sel *Selection[int]) []int {
 	var ks []int
 	for k := range 40 {
 		if sel.Has(k) {
@@ -120,7 +120,7 @@ func TestListKeySwitchMidway(t *testing.T) {
 
 				items2 := slices.Clone(items)
 				var sel2 Selection[int]
-				for _, k := range keySel(&sel) {
+				for _, k := range lkSel(&sel) {
 					sel2.set(k, true)
 				}
 				calls2 := 0
@@ -291,5 +291,90 @@ func TestListKeyTwoWindows(t *testing.T) {
 		if want := fmt.Sprint("item", r.key); txt != want {
 			t.Errorf("window b: row %d has key %v and shows %s", r.i, r.key, txt)
 		}
+	}
+}
+
+// The choice around a row reads its neighbours' keys as the pass asked them
+// (peek), which may be from before a row's callback changed the data: the
+// corners of a chosen row can be wrong for the frame of the change, and the
+// frame after must show what a list built from the new data shows, with no row
+// linked with the choice of the old one.
+func TestListKeyPeekHealsInTheNextFrame(t *testing.T) {
+	for _, mode := range []string{"version", "version+selected"} {
+		t.Run(mode, func(t *testing.T) {
+			items := lkItems()
+			var sel Selection[int]
+			var cur *int
+			if mode == "version+selected" {
+				v := -1
+				cur = &v
+			}
+			calls := 0
+			tt, s := lkSetup(mode, &items, &sel, cur, &calls)
+			for range 3 {
+				tt.Frame()
+			}
+			// One chosen row below the row that expires: it moves up by one, and
+			// the neighbours' keys read before the row above built are of the
+			// rows it had.
+			if err := tt.Click("item3"); err != nil {
+				t.Fatal(err)
+			}
+			tt.Move(399, 599)
+			for range 3 {
+				tt.Frame()
+			}
+			f := &s.frame
+			// What the rows record of the choice around them is what the list
+			// reads now (outside a pass, where nothing is kept).
+			recorded := func(when string) {
+				t.Helper()
+				for _, r := range f.rows {
+					if want := f.chosenAround(r.i); r.chosen != want && !f.isHeader(r.i) {
+						t.Errorf("%s: row %d (%v) is recorded with the choice %v around it, the list reads %v", when, r.i, r.key, r.chosen, want)
+					}
+				}
+				for _, st := range tt.rt.states {
+					if rec := st.krec; rec != nil && rec.root != nil {
+						if want := f.chosenAround(rec.root.rowIndex); rec.chosen != want && !f.isHeader(rec.root.rowIndex) {
+							t.Errorf("%s: the kept record of row %d has the choice %v around it, the list reads %v", when, rec.root.rowIndex, rec.chosen, want)
+						}
+					}
+				}
+			}
+			tt.Update(func() { items[2].expired = true })
+			tt.Frame() // the frame of the change: no event, one pass
+			tt.Frame() // the next
+			recorded("the frame after a change made in a build")
+			// And an item added at the top between frames: every key moves, and
+			// the answers kept in the frame before must not be read.
+			tt.Update(func() { items = slices.Insert(items, 0, lkItem{id: 100}) })
+			tt.Frame()
+			recorded("the frame after a change between frames")
+			tt.Advance(time.Second)
+			tt.Frame()
+
+			items2 := slices.Clone(items)
+			var sel2 Selection[int]
+			for _, k := range lkSel(&sel) {
+				sel2.set(k, true)
+			}
+			var cur2 *int
+			if cur != nil {
+				v := *cur
+				cur2 = &v
+			}
+			calls2 := 0
+			tt2, s2 := lkSetup(mode, &items2, &sel2, cur2, &calls2)
+			s2.lead = s.lead
+			tt2.Move(399, 599)
+			tt2.Advance(time.Second)
+			for range 3 {
+				tt2.Frame()
+			}
+			if d := sameFrames(tt, tt2, true); d != "" {
+				t.Errorf("the frame after the changes differs from a list built from the new data: %s", d)
+			}
+		})
 	}
 }
