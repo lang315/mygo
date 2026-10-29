@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/egoist/mygo/internal/text"
 	"io"
 	"log"
 	"os"
@@ -728,6 +729,17 @@ func TestRetainLayoutCheckFindsAStaleRecord(t *testing.T) {
 		{"hit moved", func(r *rowKeep) { r.lay.hits[0].r.X += 3 }},
 		{"label changed", func(r *rowKeep) { r.lay.labels[0].text += "x" }},
 		{"node moved", func(r *rowKeep) { r.nodes[len(r.nodes)-1].x += 3 }},
+		// The box of the text is the same: only the layout of the text is not.
+		{"text layout of another text style", func(r *rowKeep) {
+			for i := range r.nodes {
+				if r.nodes[i].tl != nil {
+					r.nodes[i].tl = &text.Layout{}
+					return
+				}
+			}
+			panic("no text in the row")
+		}},
+		{"reuse bit", func(r *rowKeep) { r.nodes[0].lay ^= layReuse }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			k := newKeptList(50)
@@ -1112,5 +1124,57 @@ func TestRetainLayoutRowsReplayAfterAChangeInATwoLayoutFrame(t *testing.T) {
 				t.Errorf("%d rows replayed after the change in a two-layout frame, %d without it", got, want)
 			}
 		})
+	}
+}
+
+// The text cache lets go of layouts (the oldest, past its count), and a layout
+// asked for again is a different *text.Layout with the same content: the twin
+// compares text layouts by value and must not report it.
+func TestRetainLayoutCheckIgnoresEvictedTextLayouts(t *testing.T) {
+	flood := false
+	k := newKeptList(50)
+	mk := k.mk()
+	tt := NewTester(func(c *Context) {
+		// Laid out before the list in the frame that floods, so the layouts
+		// of the held rows are gone when the twin lays them out again.
+		Column(c).Fill().Children(func() {
+			Column(c).Height(10).Clip().Children(func() {
+				for i := range 4300 {
+					if flood {
+						Textf(c, "flood %d", i)
+					}
+				}
+			})
+			mk(c)
+		})
+	}, 300, 400)
+	tt.rt.layoutCheck = true
+	for range 4 {
+		tt.Frame()
+	}
+	var held *node
+	for _, st := range tt.rt.states {
+		if r := st.krec; r != nil && r.lay.at != 0 {
+			for i := range r.nodes {
+				if r.nodes[i].tl != nil {
+					held = &r.nodes[i]
+				}
+			}
+		}
+	}
+	if held == nil {
+		t.Fatal("no held row with text")
+	}
+	old := held.tl
+	flood = true
+	tt.Frame()
+	if textSystem().Layout(old.Params) == old {
+		t.Fatal("the text cache still holds the layout: the test forced no eviction")
+	}
+	if tt.rt.rowsLaidKept == 0 {
+		t.Fatal("no row kept its layout in the frame that flooded the cache")
+	}
+	if tt.rt.layoutMismatch != 0 {
+		t.Errorf("%d mismatches with text layouts evicted from the cache", tt.rt.layoutMismatch)
 	}
 }
