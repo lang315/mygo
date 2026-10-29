@@ -65,9 +65,21 @@ func (e *node) prepareSelectable() {
 	if scope != 0 {
 		e.flags |= flagSelectable
 	}
-	if e.flags&flagSelectable == 0 {
+	if e.flags&flagSelectable == 0 || prepareEditorTextFn == nil {
 		return
 	}
+	prepareEditorTextFn(e, scope)
+}
+
+// prepareEditorTextFn is prepareEditorText once Selectable was called, which
+// is the only way a text becomes selectable: the editor of selectable text
+// is linked into the apps that make text selectable, and no others.
+var prepareEditorTextFn func(e *node, scope uint64)
+
+// prepareEditorText gives the selectable text e, in selection scope scope,
+// its read-only editor, with the text it shows, and lets it process what
+// was asked of it.
+func prepareEditorText(e *node, scope uint64) {
 	ed := e.st.editor
 	if ed == nil {
 		ed = newEditor(e.c.rt.now)
