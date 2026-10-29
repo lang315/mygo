@@ -117,7 +117,10 @@ type editor struct {
 	contentW  float32
 }
 
-func newEditor(now func() time.Time) *editor { return &editor{now: now} }
+func newEditor(now func() time.Time) *editor {
+	linkEditor()
+	return &editor{now: now}
+}
 
 func (ed *editor) String() string { return ed.buf.string() }
 

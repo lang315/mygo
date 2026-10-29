@@ -347,7 +347,7 @@ func (p *Painter) element(e *node) {
 				p.drawIcon(e.svg, e.contentBox(), c, e.rotate)
 			}
 		case kindInput:
-			e.paintInput(p)
+			paintInputFn(e, p)
 		}
 	}
 	savedClip := p.clip

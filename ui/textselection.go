@@ -315,7 +315,7 @@ func (rt *engine) pressTextSelection(s *state, x, y float32, mods Modifiers, cli
 	}
 	t.caret, t.unit, t.dragging, t.hasDesired = p, min(clicks, 3), true, false
 	if t.unit > 1 {
-		a, b := textUnit(rt.states[p.id], p.at, t.unit)
+		a, b := textUnitFn(rt.states[p.id], p.at, t.unit)
 		t.anchor, t.caret = textPoint{p.id, a}, textPoint{p.id, b}
 	}
 	t.start = [2]textPoint{t.anchor, t.caret}
@@ -337,7 +337,7 @@ func (rt *engine) moveTextSelection(x, y float32) {
 		return
 	}
 	if t.unit > 1 {
-		a, b := textUnit(rt.states[p.id], p.at, t.unit)
+		a, b := textUnitFn(rt.states[p.id], p.at, t.unit)
 		if rt.compareTextPoints(p, t.start[0]) < 0 {
 			t.anchor, t.caret = t.start[1], textPoint{p.id, a}
 		} else {

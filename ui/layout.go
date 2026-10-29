@@ -500,7 +500,7 @@ func contentHeight(e *node, cw float32) float32 {
 		}
 		return 0
 	case kindInput:
-		return e.inputHeight(cw)
+		return inputHeightFn(e, cw)
 	}
 	if f := e.list; f != nil && f.n > 0 {
 		// A List is as high as all its rows, as far as the heights known
@@ -569,7 +569,7 @@ func computeBox(e *node, w, h float32) {
 		}
 		return
 	case kindInput:
-		e.layoutInput(cw, ch)
+		layoutInputFn(e, cw, ch)
 		return
 	case kindImage, kindIcon:
 		return

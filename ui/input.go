@@ -393,7 +393,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 	}
 	if target.editor != nil {
 		target.editor.pressMods = mods
-		target.editor.press(target.pressX, target.pressY, clicks, button)
+		pressFn(target.editor, target.pressX, target.pressY, clicks, button)
 	}
 	if clicks == 2 && button == 0 {
 		target.doubleClicks++
@@ -723,7 +723,7 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 		return true
 	}
 	if s := rt.states[rt.focused]; s != nil && s.editor != nil && s.editor.onTextKey != nil && s.flags&flagEditable != 0 &&
-		!typesText(k) && (s.editor.wants(k) || !rt.claimed(k)) && s.editor.textKey(k) {
+		!typesText(k) && (wantsFn(s.editor, k) || !rt.claimed(k)) && textKeyFn(s.editor, k) {
 		// OnTextKey took it as it came, as HandleInput does, but after the
 		// keys and text before it, which it reads.
 		rt.blinkStart = rt.now()
@@ -733,8 +733,8 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	if (key == KeyContextMenu && mods == 0 || key == KeyF10 && mods == Shift) && !rt.claimed(k) && rt.menuKey() {
 		return false
 	}
-	if s := rt.states[rt.focused]; s != nil && s.editor != nil && s.flags&(flagEditable|flagSelectable) != 0 && s.editor.wants(k) {
-		if rt.textSelectionKey(s, k) {
+	if s := rt.states[rt.focused]; s != nil && s.editor != nil && s.flags&(flagEditable|flagSelectable) != 0 && wantsFn(s.editor, k) {
+		if textSelectionKeyFn(rt, s, k) {
 			rt.requestFrame()
 			return false
 		}
@@ -1068,7 +1068,7 @@ var commandKeys = map[string]keyEvent{
 // key comes first, and the menu only after.
 func (rt *engine) commandKey(ev editEvent, ed *editor) bool {
 	k, ok := commandKeys[ev.text]
-	if runtime.GOOS != "darwin" || ev.kind != editCommand || !ok || ed != nil && ed.wants(k) {
+	if runtime.GOOS != "darwin" || ev.kind != editCommand || !ok || ed != nil && wantsFn(ed, k) {
 		return false
 	}
 	rt.keys = append(rt.keys, k)
