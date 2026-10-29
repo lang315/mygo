@@ -37,6 +37,7 @@ var statePlaced = map[string][]string{
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
 		"replay", // what the row painted (replay.go): painting memory, with its own key
+		"krec",   // the record of the kept row: layout and commit memory, with its own checks
 	},
 	// neither: read only with a field that is pending, or set again by it.
 	"neither": {

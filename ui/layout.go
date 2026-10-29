@@ -123,6 +123,9 @@ func (rt *engine) lateInput() {
 // place turns the boxes, laid out relative to their parents, into window
 // coordinates, moving the content of scroll containers by their offset.
 func place(e *node, x, y float32) {
+	if e.lay&layKept != 0 && e.c.rt.placeKept(e, x, y) {
+		return
+	}
 	e.x += x
 	e.y += y
 	if e.hidden {

@@ -3,8 +3,6 @@ package ui
 import (
 	"math"
 	"slices"
-
-	"github.com/egoist/mygo/internal/scene"
 )
 
 // A List or Table whose app sets ListState.RowVersion keeps the rows it built
@@ -44,6 +42,7 @@ type rowKeep struct {
 	root      *node
 	nodes     []node   // the copy, root first, in the order of a walk
 	states    []*state // those of the nodes, which each pass stamps as seen
+	lay       rowLay   // what layout left of the row (retain_layout.go)
 }
 
 // actingIDs gathers, once for a pass, the ids of the elements the engine is
@@ -151,19 +150,11 @@ func (f *listFrame) keep(i int, key any) *node {
 		// which clears what a build sets again (drags, drops).
 		st.seen, st.pass = rt.frame, rt.pass
 	}
-	for j := range rec.nodes {
-		n := &rec.nodes[j]
-		// What layout and commit write is zero, as in an element just built: a
-		// row laid out writes it, and one that is not (below the view) holds
-		// nothing of the frame it was copied in. The measures of text and
-		// heights (nmeasure, leafOK, intrOK) are of one frame, and depend on
-		// the text style the row inherits, which may have changed; sameRow
-		// compares the row by the record in its state (lay), which stays.
-		n.lay, n.tl, n.nmeasure, n.leafOK, n.intrOK = 0, nil, 0, false, 0
-		n.x, n.y, n.w, n.h, n.contentW, n.contentH, n.ink, n.world = 0, 0, 0, 0, 0, 0, [4]float32{}, scene.Affine{}
-	}
+	if rec.lay.at == 0 {
+		rec.zero()
+	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, kept: rec})
 	rt.rowsKept++
 	return root
 }
@@ -300,6 +291,7 @@ func (f *listFrame) capture() {
 		if fresh {
 			rec = f.spareKeep()
 		}
+		rec.unlink() // the copy may get another root state
 		rec.copyIn(r.e)
 		if !f.ok(r.i, rec.states) {
 			if fresh {
@@ -312,6 +304,10 @@ func (f *listFrame) capture() {
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen, rec.checked = r.chosen, r.checked
+		rec.lay = rowLay{}
+		if len(rec.states) > 0 {
+			rec.states[0].krec = rec
+		}
 		rec.mark = f.capSeq
 		f.kept[r.key] = rec
 	}
@@ -359,6 +355,7 @@ func (f *listFrame) spareKeep() *rowKeep {
 func (f *listFrame) release(key any) {
 	if rec := f.kept[key]; rec != nil {
 		delete(f.kept, key)
+		rec.unlink() // a recycled state must not point at a released record
 		clear(rec.states)
 		rec.root = nil
 		f.spare = append(f.spare, rec)

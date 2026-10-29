@@ -128,6 +128,11 @@ type engine struct {
 	keepRows  func(*engine)
 	keepRow   func(f *listFrame, i int, key any) *node
 	keepLists []*listFrame
+	// placeKept and commitKept are keptPlace and commitRow once a list with
+	// RowVersion was built (retain_layout.go): place and commit reach them
+	// only through these, so an app without such a list links neither.
+	placeKept  func(e *node, x, y float32) bool
+	commitKept func(rt *engine, e *node, clip Rect, hidden bool)
 	// rowsKept and rowsBuilt count the rows lists linked and built, noRetain
 	// stops lists from keeping rows (tests, benchmarks). bound counts the
 	// elements bound to an app's Handle, and the asks for frames (AnimationFrame,
@@ -1271,6 +1276,14 @@ func (rt *engine) commit(root *node, w, h float32) {
 }
 
 func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
+	if e.listRow && rt.commitKept != nil {
+		rt.commitKept(rt, e, clip, hidden)
+		return
+	}
+	rt.commitNode(e, clip, hidden)
+}
+
+func (rt *engine) commitNode(e *node, clip Rect, hidden bool) {
 	inline := e.isInline()
 	if e.kind == kindText && e.first != nil && !inline {
 		placeInline(e, e, 0)

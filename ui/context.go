@@ -529,6 +529,7 @@ type state struct {
 	// replay is what the element, a list row, painted the last time it
 	// painted (replay.go).
 	replay        *rowPaint
+	krec          *rowKeep // the record of the kept row whose root this is (retain_layout.go)
 	pendingSubmit bool
 	pendingChange bool
 	noticeQueued  bool
