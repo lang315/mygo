@@ -515,7 +515,24 @@ type listFrame struct {
 	// rb is the row being built (Context.row), kept here rather than
 	// allocated for each row.
 	rb rowBuild
+	// kc holds the keys asked for in the pass (key): Key is asked for a row
+	// by the build, the choice around it, the checks of a Table, and the
+	// places the list remembers, and an integer of 256 or more, a string or a
+	// struct returned as an any is allocated each time.
+	kc []keyEntry
 }
+
+// keyEntry is the key of row i in a frame and pass.
+type keyEntry struct {
+	i     int
+	frame uint64
+	pass  int
+	k     any
+}
+
+// keyCacheSize is the rows of a pass whose keys are kept (a power of two); a
+// row whose place is taken by another is asked for again.
+const keyCacheSize = 128
 
 type listRow struct {
 	i   int
@@ -604,7 +621,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
 	}
 	s.rowSig, s.rowNoKeep = 0, false
-	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0]}
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
 	if s.RowVersion != nil {
 		// Linked here, so that an app with no List does not link the code
 		// that keeps rows.
@@ -760,10 +777,10 @@ func (s *ListState) find(k any, near, n, limit int) (int, bool) {
 		if lo < 0 && hi >= n {
 			break
 		}
-		if lo >= 0 && lo < n && s.Key(lo) == k {
+		if lo >= 0 && lo < n && s.keyIn(lo) == k {
 			return lo, true
 		}
-		if d > 0 && hi >= 0 && hi < n && s.Key(hi) == k {
+		if d > 0 && hi >= 0 && hi < n && s.keyIn(hi) == k {
 			return hi, true
 		}
 	}
@@ -820,10 +837,7 @@ func (s *ListState) plan(e *node, n int) (a, first, last int) {
 // build builds row i in the list.
 func (f *listFrame) build(i int) *node {
 	c, s := f.c, f.s
-	var key any = i
-	if s.Key != nil {
-		key = s.Key(i)
-	}
+	key := f.key(i)
 	rt := c.rt
 	if rt.keepRow != nil {
 		if w := rt.keepRow(f, i, key); w != nil {
@@ -1097,7 +1111,35 @@ func (f *listFrame) boundary(i int) (float32, bool) {
 }
 
 // key returns the key of row i, its index without ListState.Key.
-func (f *listFrame) key(i int) any { return f.s.keyOf(i) }
+// A pass asks Key once for a row: what the data says does not change within a
+// pass (the next pass is built again for what a handler changed), and the key
+// is kept for the places that ask again. Outside a pass (the handlers of events
+// between frames) the app's data may have moved on: Key is asked.
+func (f *listFrame) key(i int) any {
+	rt := f.c.rt
+	if !rt.inFrame || i < 0 {
+		return f.s.keyOf(i)
+	}
+	if f.kc == nil {
+		f.kc = make([]keyEntry, keyCacheSize)
+	}
+	e := &f.kc[i&(keyCacheSize-1)]
+	if e.i == i && e.frame == rt.frame && e.pass == rt.pass {
+		return e.k
+	}
+	k := f.s.keyOf(i)
+	*e = keyEntry{i, rt.frame, rt.pass, k}
+	return k
+}
+
+// keyIn returns the key of row i as the pass that is building the list asks
+// for it (see listFrame.key).
+func (s *ListState) keyIn(i int) any {
+	if s.frame.s == s {
+		return s.frame.key(i)
+	}
+	return s.keyOf(i)
+}
 
 // chosen reports whether row i, of key k, is chosen.
 func (f *listFrame) chosen(i int, k any) bool {
@@ -1609,7 +1651,7 @@ func (s *ListState) focusedRow(e *node, n int) (int, bool) {
 			return 0, false
 		}
 		i := r.row
-		if s.Key != nil && (i >= n || s.Key(i) != r.key) {
+		if s.Key != nil && (i >= n || s.keyIn(i) != r.key) {
 			if i, ok = s.find(r.key, i, n, s.reach(rt.frame, n)); !ok {
 				return 0, false
 			}
@@ -1951,7 +1993,7 @@ func (s *ListState) glideToEnd(e *node, n, lo, hi int, H, C float64, shift func(
 	}
 	s.follow = followMark{seen: true, row: n - 1, below: below(n - 1), content: C, height: H, width: s.width, hugs: hugs}
 	if s.Key != nil {
-		s.follow.key = s.Key(n - 1)
+		s.follow.key = s.frame.key(n - 1)
 	}
 	if ch.moving || ch.pending {
 		rt.animating = true
@@ -2010,18 +2052,18 @@ func (s *ListState) remember(e *node, first, last int, atEnd bool, scroll float6
 	if n == 0 {
 		s.inset = 0
 	} else if s.Key != nil && !s.KeepOffset {
-		s.anchorKey = s.Key(first)
+		s.anchorKey = f.key(first)
 	}
 	s.selKey, s.pivotKey = nil, nil
 	if sel := s.cursor(); sel != nil {
 		s.selRow = *sel
 		if s.Key != nil && *sel >= 0 && *sel < n {
-			s.selKey = s.Key(*sel)
+			s.selKey = f.key(*sel)
 		}
 	}
 	s.pivotRow = s.pivot
 	if s.Key != nil && s.Selection != nil && s.pivot >= 0 && s.pivot < n {
-		s.pivotKey = s.Key(s.pivot)
+		s.pivotKey = f.key(s.pivot)
 	}
 	if s.rows == nil {
 		s.rows = map[uint64]listRowID{}

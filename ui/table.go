@@ -379,7 +379,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 							// The list's element holding the row has it already.
 							label += " " + row.parent.label
 						}
-						itemCheckbox(c, table, s.Checked, s.keyOf(i), label)
+						itemCheckbox(c, table, s.Checked, s.keyIn(i), label)
 					})
 				}
 				cells(RoleCell, func(j int) { cell(i, j) })
@@ -658,7 +658,7 @@ func (tc *tableChecks) counted(s *ListState, n int) (count, total int) {
 				continue
 			}
 			total++
-			if sel.size() > 0 && sel.has(s.keyOf(i)) {
+			if sel.size() > 0 && sel.has(s.keyIn(i)) {
 				count++
 			}
 		}
