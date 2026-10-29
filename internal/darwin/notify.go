@@ -40,9 +40,32 @@ func (b *Backend) post(fn func()) {
 }
 
 // drainMainQueue runs the functions posted, one at a time, as loop.drain
-// does: one running a loop of its own, as a frame showing a modal dialog
-// does (drawSoon), leaves those behind it to that loop, signaled again.
-func drainMainQueue() {
+// does.
+//
+// A function may run a loop of its own, as a frame showing a modal dialog
+// does (drawSoon), which runs dispatchCallback again, nested in this call.
+// That is safe: the queue is not locked while a function runs, each function
+// is taken off the queue before it runs, so none runs twice, and what waits
+// behind it runs in the order posted, in the nested loop, before the
+// function returns. The source is signaled before each function runs, so
+// that the nested loop fires: dispatchCallback runs the queue of the main
+// loop (loop.drain) after this one, and what was posted there before it
+// began had its signal taken by it, and joined this queue's; the nested loop
+// would never run it, and a goroutine waiting for it (RunOnMain) would wait
+// for the dialog the function shows to end, which waits for the goroutine.
+// Signaling only sets the source's flag, which one callback takes: at most
+// one empty callback more than before follows a callback.
+func drainMainQueue() { drainMainQueueWith(signalMain) }
+
+// signalMain signals the source of the application, which tests without one
+// leave out.
+func signalMain() {
+	if theBackend != nil {
+		theBackend.Signal()
+	}
+}
+
+func drainMainQueueWith(signal func()) {
 	for {
 		mainQueueMu.Lock()
 		if len(mainQueue) == 0 {
@@ -52,11 +75,8 @@ func drainMainQueue() {
 		fn := mainQueue[0]
 		mainQueue[0] = nil
 		mainQueue = mainQueue[1:]
-		more := len(mainQueue) > 0
 		mainQueueMu.Unlock()
-		if more {
-			theBackend.Signal()
-		}
+		signal()
 		fn()
 	}
 }
