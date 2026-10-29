@@ -37,10 +37,13 @@ type rowLay struct {
 	// wheel over it while the pointer is pressed elsewhere, a drag of its
 	// bar), and place applies it, which a kept layout skips.
 	scrolled []scrollAt
-	cok      bool
-	env      commitEnv
-	hits     []hit
-	labels   []labelNode
+	// relOK tells that rowKeep.rel holds the relative boxes of the layout the
+	// nodes hold (P4a).
+	relOK  bool
+	cok    bool
+	env    commitEnv
+	hits   []hit
+	labels []labelNode
 }
 
 // scrollAt is the offset of a scroll container.
@@ -90,7 +93,7 @@ func (k *rowKeep) zero() {
 		n.lay, n.tl, n.nmeasure, n.leafOK, n.intrOK = 0, nil, 0, false, 0
 		n.x, n.y, n.w, n.h, n.contentW, n.contentH, n.ink, n.world = 0, 0, 0, 0, 0, 0, [4]float32{}, scene.Affine{}
 	}
-	k.lay.at, k.lay.cok = 0, false
+	k.lay.at, k.lay.cok, k.lay.relOK = 0, false, false
 }
 
 // unlink clears the pointer of the root's state to the record, when it is
@@ -152,6 +155,7 @@ func (f *listFrame) settle(list *node, r *listRow, cw float32) bool {
 		k.rlay&layReuse != 0 && uint8(r.e.dir) == k.rdir && inheritsPaint != nil && inheritsPaint(list) &&
 		!rt.revealsIn(rec) && r.e.st.krec == rec && rec.scrollsSame() {
 		r.e.lay |= layKept
+		r.e.lay &^= layFresh // laid out by the pass before, kept by this one (relayoutList)
 		return true
 	}
 	rec.rewind(rt.layouts)
@@ -165,10 +169,17 @@ func (f *listFrame) settle(list *node, r *listRow, cw float32) bool {
 func keptPlace(e *node, x, y float32) bool {
 	rec := e.st.krec
 	if rec == nil || rec.root != e {
-		e.lay &^= layKept
+		e.lay &^= layKept | layFresh
 		return false
 	}
 	rt := e.c.rt
+	if e.lay&layFresh != 0 {
+		// Laid out in this layout: the boxes of the elements inside are
+		// relative to their parents, and final. Save them before place.
+		e.lay &^= layFresh
+		rec.saveRel()
+		return false
+	}
 	if e.x+x == rec.lay.ax && e.y+y == rec.lay.ay {
 		if rt.layoutCheck {
 			return checkKeptPlace(e, rec, x, y)
@@ -178,17 +189,60 @@ func keptPlace(e *node, x, y float32) bool {
 		rt.rowsLaidKept++
 		return true
 	}
-	// Moved: laid out now, as if layoutList had.
+	if rec.lay.relOK {
+		// Moved: the layout is kept, and place puts the elements where they
+		// go from their relative boxes, as it did for the layout it kept.
+		if rt.layoutCheck {
+			return checkShift(e, rec, x, y)
+		}
+		rec.restoreRel()
+		e.lay &^= layKept
+		rec.lay.cok = false // the hits and labels are where the row was
+		rt.rowsShifted++
+		return false
+	}
+	// Moved, and the relative boxes are not known: laid out now, as if
+	// layoutList had.
 	e.lay &^= layKept
-	rec.rewind(rt.layouts)
-	rx, ry := e.x, e.y // relative to the parent, which place adds
-	rec.zero()
-	e.x, e.y = rx, ry
-	rec.lay.fullAt = rt.layouts
-	sameRow(e.parent, e)
-	layoutBox(e, rec.lay.lw, rec.lay.hm)
+	rec.layOutAgain(e)
 	return false
 }
+
+// layOutAgain lays the row out as layoutList does a row built, and saves its
+// relative boxes. Rows reach it with relOK false, which no row laid out by
+// layoutList does (the place hook saved them): the save here keeps a row that
+// somehow missed the hook from being laid out at every move.
+func (k *rowKeep) layOutAgain(e *node) {
+	rt := e.c.rt
+	k.rewind(rt.layouts)
+	rx, ry := e.x, e.y // relative to the parent, which place adds
+	k.zero()
+	e.x, e.y = rx, ry
+	k.lay.fullAt = rt.layouts
+	sameRow(e.parent, e)
+	layoutBox(e, k.lay.lw, k.lay.hm)
+	k.saveRel()
+}
+
+// saveRel keeps the boxes of the elements inside the row, which layout left
+// relative to their parents (the root's is set by layoutList each frame).
+func (k *rowKeep) saveRel() {
+	k.rel = k.rel[:0]
+	for j := 1; j < len(k.nodes); j++ {
+		k.rel = append(k.rel, relXY{k.nodes[j].x, k.nodes[j].y})
+	}
+	k.lay.relOK = true
+}
+
+// restoreRel gives the elements inside the row their relative boxes again.
+func (k *rowKeep) restoreRel() {
+	for j := 1; j < len(k.nodes); j++ {
+		k.nodes[j].x, k.nodes[j].y = k.rel[j-1].x, k.rel[j-1].y
+	}
+}
+
+// relXY is the box of an element relative to its parent, before place.
+type relXY struct{ x, y float32 }
 
 // heldRow reports whether c is a kept row whose layout results the nodes
 // still hold (not zeroed).
@@ -339,4 +393,24 @@ func (rt *engine) walkRow(e *node, clip Rect, hidden bool) {
 	rt.rowWalk = e
 	rt.commitElement(e, clip, hidden)
 	rt.rowWalk = saved
+}
+
+// checkShift is the moved path of keptPlace with the layout done anyway: the
+// row is placed again from its relative boxes and laid out as a row built,
+// and the two are compared with ==. The row then has the fresh layout.
+func checkShift(e *node, rec *rowKeep, x, y float32) bool {
+	rt := e.c.rt
+	rx, ry := e.x, e.y
+	rec.restoreRel()
+	e.lay &^= layKept
+	place(e, x, y)
+	shifted := boxesOf(rec)
+	e.x, e.y = rx, ry
+	rec.layOutAgain(e)
+	place(e, x, y)
+	if !slices.Equal(shifted, boxesOf(rec)) {
+		rt.layoutMismatch++
+	}
+	rt.rowsShifted++
+	return true
 }

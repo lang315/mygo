@@ -168,7 +168,7 @@ type keptList struct {
 func (k *keptList) mk() func(c *Context) {
 	s := &ListState{Key: func(i int) any { return i }, RowVersion: func(i int) uint64 { return k.vers[i] }}
 	return func(c *Context) {
-		col := Column(c)
+		col := Column(c).Fill() // the window: the list scrolls in it
 		if k.width > 0 {
 			col.Width(k.width)
 		}

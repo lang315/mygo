@@ -76,6 +76,9 @@ const (
 	// (retain_layout.go); layPlaced: place found it where it was.
 	layKept
 	layPlaced
+	// layFresh: layoutList laid a kept row out; place saves its relative boxes
+	// (retain_layout.go).
+	layFresh
 )
 
 // layoutFlags are the flags that the layout reads.

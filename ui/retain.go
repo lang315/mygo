@@ -46,6 +46,9 @@ type rowKeep struct {
 	// scrollers are the indexes in nodes of the scroll containers of the row,
 	// whose offsets lay.scrolled records (retain_layout.go).
 	scrollers []int32
+	// rel are the boxes of the nodes after the root, relative to their parents,
+	// as the layout the nodes hold left them (retain_layout.go).
+	rel []relXY
 }
 
 // actingIDs gathers, once for a pass, the ids of the elements the engine is
