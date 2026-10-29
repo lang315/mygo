@@ -500,6 +500,9 @@ func (m *lcModel) build(c *context, tester int) {
 			e = coreList(c, &n.lists[tester], n.rows(), func(i int) {
 				lcRow(c, m, n, i)
 			})
+			if m.inner && n.many {
+				e.Height(180) // a list that scrolls, for the model of retained rows
+			}
 		case lcTable:
 			m.keyRows(n, tester)
 			n.lists[tester].Sort = &n.sort[tester]
@@ -511,6 +514,9 @@ func (m *lcModel) build(c *context, tester int) {
 					e.TextColor(RGB(uint8(40*n.tint), 120, 200))
 				}
 			})
+			if m.inner && n.many {
+				e.Height(180)
+			}
 		case lcForm:
 			// Its labels as wide as the widest.
 			e = coreForm(c, func() {

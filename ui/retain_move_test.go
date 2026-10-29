@@ -9,8 +9,7 @@ import (
 // A Table of rows with a RowVersion that scrolls, by whole and fractional
 // pixels, steps that are not exact in float32, pages and back, at scales 1 and
 // 2: a kept Tester and one that builds every row draw alike after every step
-// (P4a: a row that moved keeps its layout; P4b adds the assertion that it
-// replays its paint shifted, `rowsShiftReplayed`).
+// (P4a: a row that moved keeps its layout; P4b: it replays its paint shifted).
 func TestRetainMoveScenarios(t *testing.T) {
 	for _, scale := range []float32{1, 2} {
 		t.Run(fmt.Sprintf("scale %v", scale), func(t *testing.T) {
@@ -56,6 +55,9 @@ func TestRetainMoveScenarios(t *testing.T) {
 			}
 			if n := p.kept.rt.rowsShifted; n == 0 {
 				t.Errorf("a scroll by a pixel shifted the layout of %d rows, want > 0", n)
+			}
+			if n := p.kept.rt.rowsShiftReplayed; n == 0 {
+				t.Errorf("a scroll by a pixel replayed the paint of %d rows shifted, want > 0", n)
 			}
 			for i, dy := range []float32{0.5, 0.5, -0.5, -0.5, 0.25, 0.25, -0.25, -0.25} {
 				step(fmt.Sprintf("scroll half %d", i), dy)

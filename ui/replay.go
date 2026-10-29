@@ -8,8 +8,9 @@ import (
 )
 
 // Replaying rows. A list row that lays out and paints with the same inputs as
-// in the last frame (layPaint), painted in the same place, the same clip and
-// the same surroundings (rowKey), appends the operations it painted then
+// in the last frame (layPaint), painted in the same clip and the same
+// surroundings (rowKey), in the same place or moved by whole device pixels in Y
+// (retain_translate.go), appends the operations it painted then
 // instead of painting again: the frames of a table that only hovers, ticks a
 // clock elsewhere or does nothing paint most of their rows this way. A row
 // records what it painted when everything it painted is in the scene's
@@ -31,9 +32,6 @@ type rowKey struct {
 // rowPaint is what a row painted (see the comment above).
 type rowPaint struct {
 	key rowKey
-	// last is the key of the row's last painting, recorded or not: a row records
-	// when it paints twice in a row in the same place, not while it moves.
-	last rowKey
 	// under is the stack of opaque boxes around the row.
 	under []opaqueBox
 	// ids are the elements of the row, depth first, and pre and post their
@@ -54,6 +52,19 @@ type rowPaint struct {
 	// that painted anew since, without recording, left a record older than
 	// the frame before, which the row no longer looks like.
 	at uint64
+	// shiftable and inside tell that the record may be replayed shifted
+	// (retain_translate.go): its coordinates are integers, and the row was
+	// whole inside the clip when it recorded. frac is the layout whose shift
+	// from the record was not a whole device pixel (at fracY): the row paints
+	// anew and the record stays where it was, unless the row stands still
+	// there in the next layout, when it records where it stands.
+	shiftable, inside bool
+	frac              uint64
+	fracY             float32
+	// covered: an opaque background around the row held its box (cut by the
+	// clip) when it recorded, which decides how text on it is drawn (subpixel);
+	// a row that moved is replayed only where that is the same.
+	covered bool
 }
 
 // rowPainter paints a child of a list, replaying it where it can and
@@ -114,24 +125,20 @@ func paintRow(p *Painter, c *node) {
 		p.element(c)
 		return
 	}
+	if r := c.st.replay; r != nil && r.ok && r.frac == rt.layouts {
+		// Not a whole pixel from the record: painted anew and not recorded,
+		// so that the next frame, a whole pixel from it, may replay.
+		r.at = rt.layouts
+		p.element(c)
+		return
+	}
 	key := rowKeyOf(p, c)
 	ops, glyphs, stops, wide := len(s.Ops), len(s.Glyphs), len(s.Stops), len(s.Wide)
 	effects, canvases, drawn, transient := len(s.Effects), len(s.Canvases), len(rt.drawn), rt.text.TransientUses()
 	r := c.st.replay
-	stable := r != nil && r.last == key
 	if r == nil {
-		// A row new in view records at its second painting in the same place,
-		// not at its first: scrolling brings rows that never stand still.
 		r = rt.newRowPaint()
 		c.st.replay = r
-	}
-	r.last = key
-	if !stable {
-		// Scrolling, resizing: recording would copy what the next frame cannot
-		// replay.
-		r.ok = false
-		p.element(c)
-		return
 	}
 	r.ok = false
 	r.ids, r.pre, r.boxes = r.ids[:0], r.pre[:0], r.boxes[:0]
@@ -168,6 +175,8 @@ func paintRow(p *Painter, c *node) {
 	walkRow(c, func(e *node) { r.post = append(r.post, e.flags) })
 	r.ok = true
 	r.at = rt.layouts
+	r.shiftable, r.inside = shiftable(r.ops, r.glyphs), insideClip(c, p.clip)
+	r.covered = p.covered(intersect(Rect{c.x, c.y, c.w, c.h}, p.clip))
 	rt.recorded++
 }
 
@@ -186,22 +195,58 @@ func walkRow(e *node, fn func(e *node)) {
 func replayRow(p *Painter, c *node) bool {
 	rt, s := p.rt, p.s
 	r := c.st.replay
-	if r == nil || !r.ok || r.at+1 < rt.layouts || c.lay&layPaint == 0 || !recordable(p, c) || r.key != rowKeyOf(p, c) ||
-		!slices.Equal(r.under, p.under) || rowInteractive(rt, r.ids) {
+	if r == nil || !r.ok || r.at+1 < rt.layouts || c.lay&layPaint == 0 || !recordable(p, c) {
 		return false
 	}
+	// The same key but for the row's y: a row that moved by dy is replayed
+	// shifted, if it may be.
+	key := rowKeyOf(p, c)
+	newY := key.box.Y
+	dy := newY - r.key.box.Y
+	key.box.Y = r.key.box.Y
+	if r.key != key || !slices.Equal(r.under, p.under) || rowInteractive(rt, r.ids) {
+		return false
+	}
+	// float32() rounds the product: without it arm64 may fuse it into the add
+	// that translate does, and leave a coordinate off by an ulp of the product.
+	d := float32(dy * p.scale)
+	if dy != 0 {
+		if d != float32(int32(d)) {
+			// Not a whole device pixel: paint anew and keep the record, which
+			// a scroll on may be a whole pixel from; a row that stands still
+			// here records where it stands.
+			if still := r.frac != 0 && r.frac+1 == rt.layouts && r.fracY == newY; still {
+				r.frac = 0
+			} else {
+				r.frac, r.fracY = rt.layouts, newY
+			}
+			return false
+		}
+		if !r.shiftable || !r.inside || !insideClip(c, p.clip) || r.covered != p.covered(intersect(Rect{c.x, c.y, c.w, c.h}, p.clip)) {
+			return false
+		}
+	}
 	// The same elements, in the same order, with the flags they were built
-	// with, in the same boxes.
+	// with, in the same boxes (shifted by dy exactly, if the row moved).
 	i := 0
 	same := true
 	walkRow(c, func(e *node) {
-		if i >= len(r.ids) || r.ids[i] != e.id || r.pre[i] != e.flags || r.boxes[i] != (Rect{e.x, e.y, e.w, e.h}) {
+		b := r.boxes[min(i, len(r.boxes)-1)]
+		b.Y += dy
+		if i >= len(r.ids) || r.ids[i] != e.id || r.pre[i] != e.flags || b != (Rect{e.x, e.y, e.w, e.h}) {
 			same = false
 		}
 		i++
 	})
 	if !same || i != len(r.ids) {
 		return false
+	}
+	if dy != 0 {
+		translate(r.ops, r.glyphs, d)
+		r.key.box.Y = newY
+		i = 0
+		walkRow(c, func(e *node) { r.boxes[i].Y = e.y; i++ })
+		rt.rowsShiftReplayed++
 	}
 	delta := int32(len(s.Glyphs)) - r.g0
 	base := len(s.Ops)
@@ -226,6 +271,11 @@ func replayRow(p *Painter, c *node) bool {
 func checkReplay(p *Painter, c *node) {
 	rt, s := p.rt, p.s
 	r := c.st.replay
+	// A record that may be shifted still holds whole pixels after a shift:
+	// the next shift is added to it.
+	if r.shiftable && !shiftable(r.ops, r.glyphs) {
+		rt.replayMismatch++
+	}
 	ops, glyphs := len(s.Ops), len(s.Glyphs)
 	from := ops - len(r.ops)
 	gfrom := glyphs - len(r.glyphs)

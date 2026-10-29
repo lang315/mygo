@@ -27,6 +27,7 @@ func newPair(t *testing.T, w, h int, mk func() func(c *Context)) *pair {
 	t.Helper()
 	p := &pair{t: t, kept: NewTester(mk(), w, h), built: NewTester(mk(), w, h)}
 	p.built.rt.noRetain = true
+	p.built.rt.noReplay = true // the twin paints every row, replaying none
 	return p
 }
 
