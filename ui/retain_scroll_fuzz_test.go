@@ -23,9 +23,13 @@ var scrollFuzzSeeds = flag.Int("retain.scrollseeds", 40, "seeds of TestRetainScr
 func TestRetainScrollFuzz(t *testing.T) {
 	log.SetOutput(io.Discard)
 	defer log.SetOutput(os.Stderr)
+	seeds := *scrollFuzzSeeds
+	if raceEnabled && seeds == 40 {
+		seeds = 8
+	}
 	for _, scale := range []float32{1, 2} {
 		var shifted, replayed int
-		for seed := range uint64(*scrollFuzzSeeds) {
+		for seed := range uint64(seeds) {
 			s, r := scrollFuzzSeed(t, scale, seed+uint64(*retainSeed0), 50)
 			shifted += s
 			replayed += r
