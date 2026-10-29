@@ -533,29 +533,67 @@ cannot show: those items are not marked):
     the moved path used a list that did not scroll (a column hugging its
     content); fixed, and the helper now fails when the list does not move.
 
-  *Next:* P4, the rows of a scroll frame. A 1 px scroll frame of
-  `BenchmarkTableFrame100kPhases/scroll1px-rv-app` is 83.0 µs of app work
-  against 26.8 idle (layout 33.4, paint 26.9, build 13.0, other 9.7): the 19
-  rows that moved are laid out again and painted anew. Spikes on the head of
-  #258 (16 interleaved runs): moving the layout of a moved row 83.0 to 68.5 µs,
-  replaying the paint shifted 83.0 to 63.8, both 49.8. Layout is exact only
-  if `place` runs again over the row's relative boxes (a float shift differs
-  in the last bit, and the oracles compare with `==`); paint only if the shift
-  is a whole device pixel of coordinates that are integers and the row is
-  whole inside the clip. P4a (layout) and P4b (paint) are separate
-  changes with their own gates. "Tens of µs" in the sense of 20–30 needed the build skipped (P2,
-  47 µs idle on an M1 Pro) and the layout and commit (P3, 26.5 µs).
-  *Open, found measuring P4:* a frame at rest costs more once the app has
-  scrolled or a pointer rests on a row (`BenchmarkTableFrame100kPhases`,
-  `-rv-app`, M1 Pro, 100k rows). `idle-scrolled` (offset 2000, the pointer
-  outside the window) is 31.9 µs against 26.0 for `idle`; a pprof diff puts it
-  in `engine.rehover` (`appendHitChain` tests every hit against the pointer
-  each frame, an `Affine.Inverse` each: a third of the gap) and `forgetInput`
-  (iterating a map); the rest is spread thin. A pointer resting on a row adds
-  3.5 to 4 µs and 26 allocations more: the row under it is hovered, so it is
-  built, laid out and painted in every frame and never replayed
-  (`rowInteractive`), even when it only has a hover look and no hover style;
-  such a row need not be built again.
+  - *P4a (#262):* a kept row that moved (a scroll) is no longer laid out
+    again: it keeps the relative `x, y` of its elements (`rowKeep.rel`, saved
+    at the `place` hook before `place`) and `place` runs again over them, so the
+    boxes have the bits of a layout (a float shift of the absolute boxes
+    differs in the last bit, and the oracles compare with `==`). `scroll1px-rv-app`
+    81.2 to 68.3 µs on its own. Its review found a row placed twice in one
+    layout (a List inside a Transition's `Match`, placed again by `showAt`) and
+    an oracle that ended by zeroing the record it checked (`rowSnap` now
+    snapshots and restores); #265 added the nested `Match` whose inner subtree
+    shifts after the place (`forgetKeptRows`).
+  - *P4b (#270):* the paint of a moved row is replayed shifted, by whole
+    device pixels, when every coordinate that is shifted is an integer (solid
+    fills, shadows, clips and glyphs; `shiftable`, `translate` in
+    `ui/retain_translate.go`), the row is whole inside the clip in Y when it
+    records and when it replays, and the cover by an opaque background (which
+    decides subpixel text) is the same. A shift by a fraction of a device pixel
+    paints anew and keeps the record; a row that stands still there records
+    where it stands. The shift is `float32(dy * scale)`: arm64 fused the
+    product into the add and left `119.00001` for `119` in the record (a
+    tolerance cannot do it: it takes a real shift of 6e-5 pixel). The twins of
+    the tests (`newPair`, the model) had replayed too (`noRetain` does not turn
+    replay off) and now set `noReplay`.
+  - *Final gate, P3 (b8609dbe) against main with P4 and the fixes below*, M1
+    Pro, 25 interleaved runs, `-benchtime 3000x`, benchstat, 100k-row table
+    with a RowVersion and the raster skipped (`-rv-app`): `scroll1px`
+    **79.3 to 52.1 µs (-34.2%)**, `scrollhalf` **79.3 to 60.3 µs (-23.9%)**,
+    idle 25.9 to 25.4 (-1.8%), hover 38.2 to 38.6 (+0.9%, p=0.006), update
+    31.1 to 30.7 (-1.2%); allocations of a scroll frame 47 to 45. Plain table
+    (no RowVersion): `scroll1px-app` 96.8 to 81.8 µs (-15.5%), allocations 69
+    to 46; idle -0.8%, update -0.9%, **hover +1.4%** (69.0 to 70.0 µs,
+    p=0.000), which was not chased. Linux and Windows numbers were not
+    measured.
+  - *Fixes found by the reviews and the models:* #264 (a row holding the
+    element whose menu is drawn is built, not linked), #268 (the measures of
+    the text of held rows are forgotten when the list's text styles changed:
+    a box hugging a List kept the old width, model seed 11; found when the
+    model gained right-clicks), #272 (a held row that was compared as painting
+    differently, as after a change of theme, was kept without the comparison
+    that gives it `layPaint` and painted anew for good: it is laid out again in
+    up to two layouts, `rowLay.tries`; 21 of 201 rows replayed after
+    `SetDark`), #274 (a pointer outside the window tests no hit, a move is
+    undone by a subtraction, `forgetInput` visits the states the pass built:
+    the idle frame at a scrolled offset 31.7 to 28.6 µs), #275 (`ListState.Key`
+    is asked once or twice a row in a pass, not four times with a Selection; a
+    key is asked again after a row's callback ran, which may change the data:
+    the first version kept a wrong row for good) and #277 (`ListBox`,
+    `DataGridView`, `ListView` and `DataTable` keep their keys boxed: a
+    `ListBox` of 5000 items makes 5 allocations in an idle frame, from 118).
+    `-race` runs the model, the fuzz and `TestRetainShiftPaintMixedScales`
+    with fewer seeds (the package took 1036 s and 488 s now).
+  "Tens of µs" in the sense of 20–30 needed the build skipped (P2, 47 µs idle
+  on an M1 Pro) and the layout and commit (P3, 26.5 µs); a scroll frame is 52 µs.
+  *Open:* the layout twin (`rt.layoutCheck`) compares the text layouts and
+  lay bits of a kept row as well as its boxes (#271, open). A pointer resting
+  on a row adds 3.5 to 4 µs and 26 allocations to an idle frame: the row under
+  it is hovered, so it is built, laid out and painted in every frame and never
+  replayed (`rowInteractive`), even when it only has a hover look and no hover
+  style; such a row need not be built again. `idle-scrolled-rv-app` (offset
+  2000, the pointer outside the window, #273) is 28.8 µs against 25.4 at the
+  top; its 46 allocations a frame against 21 are the benchmark's own `Key`
+  boxing an id of 256 or more (`ListState.Key` says so), not the library.
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
