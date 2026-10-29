@@ -34,7 +34,9 @@ func TestHoverLooksMakeNoClosurePerFrame(t *testing.T) {
 		max   float64
 		build func(c *context, n int)
 	}{
-		{"calendar (42 days)", 50.5, func(c *context, n int) {
+		// 53 since upstream's calendar draws its month chevrons (two Draw
+		// closures a month, #874) and keeps its settings with Browse (#903).
+		{"calendar (42 days)", 53, func(c *context, n int) {
 			d := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 			coreColumn(c).Children(func() {
 				for range n {
