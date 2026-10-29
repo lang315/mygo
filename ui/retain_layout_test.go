@@ -732,3 +732,171 @@ func TestRetainLayoutBuiltLateModelSeed(t *testing.T) {
 	defer log.SetOutput(os.Stderr)
 	retainModelSeed(t, 1, 22, 60)
 }
+
+// A scroll container inside a held row: its offset changes without a build of
+// the row (the wheel with the pointer elsewhere, a drag of its bar), and the
+// row must show the new offset, hit there, and hold the new state.
+func innerScrollPair(t *testing.T, vertical bool) *pair {
+	t.Helper()
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Grow(1).Children(func() {
+				Row(c).Height(40).Children(func() { Button(c, "press here").Grow(1) })
+				List(c, s, 30, func(i int) {
+					Row(c).Children(func() {
+						Textf(c, "row %d", i)
+						if vertical {
+							Scroll(c).Width(150).Height(40).Children(func() {
+								Column(c).Children(func() {
+									for j := range 8 {
+										Textf(c, "line %d of %d", j, i)
+									}
+								})
+							})
+							return
+						}
+						ScrollHorizontal(c).Width(150).Height(24).Children(func() {
+							Row(c).Width(600).Children(func() { Textf(c, "a%d", i); Spacer(c); Textf(c, "b%d", i) })
+						})
+					})
+				}).Grow(1)
+			})
+		}
+	})
+	p.idle(4)
+	return p
+}
+
+func TestRetainLayoutInnerScrollOffsetChanges(t *testing.T) {
+	// The wheel over the scroller of a row while the pointer is pressed
+	// elsewhere (the hover list is frozen then).
+	p := innerScrollPair(t, false)
+	p.both(func(tt *Tester) {
+		tt.Press(20, 20)
+		tt.Scroll(100, 124, 30, 0)
+		tt.Release(20, 20)
+		tt.Frame()
+		tt.Frame()
+	})
+	p.compare("inner scroll, released, 2 frames")
+	p.idle(3)
+}
+
+func TestRetainLayoutInnerScrollByTheWheel(t *testing.T) {
+	p := innerScrollPair(t, false)
+	p.both(func(tt *Tester) { tt.Scroll(100, 124, 30, 0) })
+	p.compare("wheel over the scroller")
+	p.both(func(tt *Tester) { tt.Move(250, 20) })
+	p.compare("pointer away")
+	p.idle(3)
+}
+
+func TestRetainLayoutInnerVerticalScroll(t *testing.T) {
+	p := innerScrollPair(t, true)
+	p.both(func(tt *Tester) {
+		tt.Press(20, 20)
+		tt.Scroll(100, 124, 0, 25)
+		tt.Release(20, 20)
+		tt.Frame()
+		tt.Frame()
+	})
+	p.compare("vertical inner scroll")
+	p.idle(3)
+}
+
+// innerScrolled reports whether a scroll container of the view is off its start.
+func innerScrolled(root *node) bool {
+	if root.scrolls() && root.st != nil && (root.st.scrollX != 0 || root.st.scrollY != 0) {
+		return true
+	}
+	for c := root.first; c != nil; c = c.next {
+		if innerScrolled(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// The bar of a scroller in a row dragged, the pointer then leaves.
+func TestRetainLayoutInnerScrollBarDrag(t *testing.T) {
+	p := innerScrollPair(t, true)
+	var bar *node
+	var find func(n *node, inRow bool)
+	find = func(n *node, inRow bool) {
+		inRow = inRow || n.listRow
+		if bar == nil && inRow && n.scrolls() {
+			bar = n
+			return
+		}
+		for c := n.first; c != nil && bar == nil; c = c.next {
+			find(c, inRow)
+		}
+	}
+	find(p.kept.rt.c.root, false)
+	if bar == nil {
+		t.Fatal("no scroller in a row")
+	}
+	x, y := bar.x+bar.w-4, bar.y+10 // the bar at the right edge of the scroller
+	p.both(func(tt *Tester) {
+		tt.Move(x-30, y) // over the scroller, which shows its bar
+		tt.Move(x, y)
+		tt.Press(x, y)
+		tt.Move(x, y+10)
+		tt.Move(x, y+20)
+		tt.Move(250, 300) // away from the row while held
+		tt.Release(250, 300)
+		tt.Frame()
+		tt.Frame()
+	})
+	p.compare("bar dragged")
+	if !innerScrolled(p.built.rt.c.root) {
+		t.Fatal("the drag did not scroll: the test shows nothing")
+	}
+	p.idle(3)
+}
+
+// A value dragged from outside over the edge of a scroller in a held row
+// scrolls it (dragScroll) while the hover list is frozen by the press.
+func TestRetainLayoutInnerScrollByDragScroll(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Grow(1).Children(func() {
+				Box(c).Height(30).Background(RGB(200, 0, 0)).Drag("x")
+				List(c, s, 30, func(i int) {
+					Row(c).Children(func() {
+						Textf(c, "row %d", i)
+						Scroll(c).Width(150).Height(60).Children(func() {
+							Column(c).Children(func() {
+								for j := range 8 {
+									Textf(c, "line %d of %d", j, i)
+								}
+							})
+						})
+					})
+				}).Grow(1)
+			})
+		}
+	})
+	p.idle(4)
+	p.both(func(tt *Tester) {
+		tt.Press(20, 15)
+		for _, y := range []float32{60, 90, 120, 128, 128} {
+			tt.Move(100, y)
+		}
+		tt.Frame()
+		tt.Release(20, 15)
+		tt.Frame()
+	})
+	p.compare("drag-scrolled")
+	p.idle(3)
+}
+
+// The model run that found a scroll container of a held row shown at its old
+// offset (frame 32: a wheel over it while the pointer is pressed elsewhere).
+func TestRetainLayoutInnerScrollModelSeed(t *testing.T) {
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
+	retainModelSeed(t, 1, 103, 60)
+}

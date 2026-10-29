@@ -32,10 +32,39 @@ type rowLay struct {
 	rdir   uint8   // the root's direction, which an ancestor's Direction sets again after the link
 	// What commit left of the row, which it appends again while commitEnv is
 	// the same (commitRow).
-	cok    bool
-	env    commitEnv
-	hits   []hit
-	labels []labelNode
+	// scrolled are the offsets of the row's scroll containers (rowKeep.scrollers)
+	// in the layout at: the offset of one changes with no build of the row (a
+	// wheel over it while the pointer is pressed elsewhere, a drag of its
+	// bar), and place applies it, which a kept layout skips.
+	scrolled []scrollAt
+	cok      bool
+	env      commitEnv
+	hits     []hit
+	labels   []labelNode
+}
+
+// scrollAt is the offset of a scroll container.
+type scrollAt struct{ x, y float64 }
+
+// noteScrolls records the offsets of the row's scroll containers.
+func (k *rowKeep) noteScrolls() {
+	k.lay.scrolled = k.lay.scrolled[:0]
+	for _, j := range k.scrollers {
+		st := k.nodes[j].st
+		k.lay.scrolled = append(k.lay.scrolled, scrollAt{st.scrollX, st.scrollY})
+	}
+}
+
+// scrollsSame reports whether the scroll containers of the row are at the
+// offsets the layout kept was placed with.
+func (k *rowKeep) scrollsSame() bool {
+	for i, j := range k.scrollers {
+		st := k.nodes[j].st
+		if i >= len(k.lay.scrolled) || k.lay.scrolled[i] != (scrollAt{st.scrollX, st.scrollY}) {
+			return false
+		}
+	}
+	return true
 }
 
 // commitEnv is what the commit of a row reads outside it.
@@ -121,7 +150,7 @@ func (f *listFrame) settle(list *node, r *listRow, cw float32) bool {
 	k.setAt = rt.layouts
 	if k.at != 0 && k.at+1 == rt.layouts && k.lw == cw && list.lay&layRows != 0 && !rt.noLayoutCache &&
 		k.rlay&layReuse != 0 && uint8(r.e.dir) == k.rdir && inheritsPaint != nil && inheritsPaint(list) &&
-		!rt.revealsIn(rec) && r.e.st.krec == rec {
+		!rt.revealsIn(rec) && r.e.st.krec == rec && rec.scrollsSame() {
 		r.e.lay |= layKept
 		return true
 	}
@@ -210,6 +239,7 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	// is not held today.
 	if placed && !env.hidden && e.lay&layReuse != 0 {
 		k.ax, k.ay, k.rlay, k.rdir, k.at = e.x, e.y, e.lay, uint8(e.dir), rt.layouts
+		rec.noteScrolls()
 		if len(rt.focusOrder) == f0 && len(rt.posed) == p0 && len(rt.groups) == g0 && rt.modal == m0 {
 			k.hits = append(k.hits[:0], rt.hits[h0:]...)
 			k.labels = append(k.labels[:0], rt.labels[l0:]...)

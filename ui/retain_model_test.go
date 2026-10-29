@@ -114,7 +114,7 @@ func TestRetainMatchesFresh(t *testing.T) {
 func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept, built int) {
 	t.Helper()
 	m := newLCModel(seed + 3000)
-	m.versions, m.noDup = true, true
+	m.versions, m.noDup, m.inner = true, true, true
 	themes := [2]*Theme{LightTheme(), DarkTheme()}
 	theme := 0
 	view := func(tester int) func(c *context) {
@@ -162,8 +162,45 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 		case v < 9:
 			x, y := float32(m.rng.IntN(m.w)), float32(m.rng.IntN(m.h))
 			dy := []float32{1, -1, 0.5, -0.5, 30, -30, 200}[m.rng.IntN(7)]
-			what = fmt.Sprintf("scroll %v at %v,%v", dy, x, y)
-			both(func(tt *Tester) { tt.Scroll(x, y, 0, dy) })
+			dx := []float32{0, 0, 0, 0, 12, -12, 40}[m.rng.IntN(7)]
+			pressed := m.rng.IntN(4) == 0 // the pointer pressed elsewhere: the hover list is frozen
+			if pressed {
+				dx = []float32{12, -12, 40}[m.rng.IntN(3)]
+			}
+			if dx != 0 {
+				// Over a scroll container of a row, if the view has one in sight.
+				var at []Point
+				var find func(n *node, inRow bool)
+				find = func(n *node, inRow bool) {
+					inRow = inRow || n.listRow
+					if inRow && n.flags&flagScrollX != 0 && n.w > 0 && n.x >= 0 && n.y >= 0 && n.x+n.w <= float32(m.w) && n.y+n.h <= float32(m.h) {
+						at = append(at, Point{n.x + n.w/2, n.y + n.h/2})
+					}
+					for c := n.first; c != nil; c = c.next {
+						find(c, inRow)
+					}
+				}
+				find(first.rt.c.root, false)
+				if len(at) > 0 {
+					p := at[m.rng.IntN(len(at))]
+					x, y = p.X, p.Y
+				}
+			}
+			what = fmt.Sprintf("scroll %v,%v at %v,%v pressed %v", dx, dy, x, y, pressed)
+			both(func(tt *Tester) {
+				if pressed {
+					tt.Frame() // idle frames first: the rows are held when the scroll comes
+					tt.Frame()
+					tt.Frame()
+					tt.Press(1, 1)
+				}
+				tt.Scroll(x, y, dx, dy)
+				if pressed {
+					tt.Release(1, 1)
+					tt.Frame() // the frames after the release show the offset the row kept
+					tt.Frame()
+				}
+			})
 		case v < 10:
 			theme = 1 - theme
 			what = "theme"

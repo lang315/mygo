@@ -118,6 +118,9 @@ type lcModel struct {
 	extra func(n *lcNode, e *node)
 	// versions gives each List and Table a RowVersion: what its rows build
 	// of the model's data, which is all they read.
+	// inner puts a scroll container in each row of a List, for the model of
+	// retained rows: its offset changes with no build of the row.
+	inner    bool
 	versions bool
 	// noDup stops the model from giving rows the same keys for a frame, whose
 	// pictures differ from Tester to Tester by the order a state is shared in.
@@ -388,13 +391,23 @@ func (n *lcNode) rowVersion(i int) uint64 {
 
 // lcRow is the row i of a List: two texts and a box, with a font of its own,
 // so that a row has a subtree to reuse.
-func lcRow(c *context, n *lcNode, i int) {
+func lcRow(c *context, m *lcModel, n *lcNode, i int) {
 	i = n.at(i)
 	font := lcStyles[16]
 	e := coreRow(c).Gap(4).Children(func() {
 		coreText(c, lcTexts[(i+n.text)%len(lcTexts)])
 		coreBox(c).Size(10, 10)
 		coreText(c, lcTexts[(i+2*n.text+1)%len(lcTexts)])
+		if m.inner {
+			// A scroll container in the row, whose offset changes with no build
+			// of the row (a wheel over it while the pointer is pressed elsewhere).
+			coreScrollHorizontal(c).Width(60).Height(18).Children(func() {
+				coreRow(c).Width(200).Gap(20).Children(func() {
+					coreText(c, lcTexts[i%len(lcTexts)])
+					coreText(c, lcTexts[(i+3)%len(lcTexts)])
+				})
+			})
+		}
 	})
 	if f := font[int(n.styles[0])%len(font)]; f != nil {
 		f(e)
@@ -451,7 +464,7 @@ func (m *lcModel) build(c *context, tester int) {
 		case lcList:
 			m.keyRows(n, tester)
 			e = coreList(c, &n.lists[tester], n.rows(), func(i int) {
-				lcRow(c, n, i)
+				lcRow(c, m, n, i)
 			})
 		case lcTable:
 			m.keyRows(n, tester)

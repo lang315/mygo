@@ -43,6 +43,9 @@ type rowKeep struct {
 	nodes     []node   // the copy, root first, in the order of a walk
 	states    []*state // those of the nodes, which each pass stamps as seen
 	lay       rowLay   // what layout left of the row (retain_layout.go)
+	// scrollers are the indexes in nodes of the scroll containers of the row,
+	// whose offsets lay.scrolled records (retain_layout.go).
+	scrollers []int32
 }
 
 // actingIDs gathers, once for a pass, the ids of the elements the engine is
@@ -304,7 +307,13 @@ func (f *listFrame) capture() {
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen, rec.checked = r.chosen, r.checked
-		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0]}
+		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0], scrolled: rec.lay.scrolled[:0]}
+		rec.scrollers = rec.scrollers[:0]
+		for j := range rec.nodes {
+			if rec.nodes[j].scrolls() {
+				rec.scrollers = append(rec.scrollers, int32(j))
+			}
+		}
 		if len(rec.states) > 0 {
 			rec.states[0].krec = rec
 		}
