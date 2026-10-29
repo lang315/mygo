@@ -195,17 +195,27 @@ func keptPlace(e *node, x, y float32) bool {
 		if rt.layoutCheck {
 			return checkShift(e, rec, x, y)
 		}
-		rec.restoreRel()
-		e.lay &^= layKept
-		rec.lay.cok = false // the hits and labels are where the row was
-		rt.rowsShifted++
+		rec.moveRow(e, x, y)
 		return false
 	}
 	// Moved, and the relative boxes are not known: laid out now, as if
 	// layoutList had.
 	e.lay &^= layKept
 	rec.layOutAgain(e)
+	rec.lay.ax, rec.lay.ay = e.x+x, e.y+y
 	return false
+}
+
+// moveRow gives a kept row that moved its relative boxes again, and notes
+// where place is putting it: the next place of the same layout (an element that
+// lays the list out and places it again, as a transition of a Match does) finds
+// the row where this one left it, or moves it again.
+func (k *rowKeep) moveRow(e *node, x, y float32) {
+	k.restoreRel()
+	e.lay &^= layKept
+	k.lay.cok = false // the hits and labels are where the row was
+	k.lay.ax, k.lay.ay = e.x+x, e.y+y
+	e.c.rt.rowsShifted++
 }
 
 // layOutAgain lays the row out as layoutList does a row built, and saves its
@@ -343,30 +353,6 @@ func snapOf(st *state) stateSnap {
 		st.world, st.clips, st.clipRect, st.rtl, st.page, st.scope, st.anchor, st.cursor, st.tip, st.contentW, st.contentH}
 }
 
-// checkKeptPlace is the stay path of keptPlace with the layout done anyway:
-// the row is laid out and placed as a row built, and the nodes are compared
-// with those kept. The row is then kept as it was, so that commitRow replays.
-func checkKeptPlace(e *node, rec *rowKeep, x, y float32) bool {
-	rt := e.c.rt
-	saved, rx, ry := rec.lay, e.x, e.y // the root's box is relative to its parent until place
-	e.x, e.y = saved.ax, saved.ay
-	want := boxesOf(rec)
-	rec.rewind(rt.layouts)
-	rec.zero()
-	e.x, e.y = rx, ry
-	sameRow(e.parent, e)
-	layoutBox(e, saved.lw, saved.hm)
-	e.lay &^= layKept
-	place(e, x, y)
-	if !slices.Equal(want, boxesOf(rec)) {
-		rt.layoutMismatch++
-	}
-	rec.lay = saved
-	e.lay |= layKept | layPlaced
-	rt.rowsLaidKept++
-	return true
-}
-
 // checkReplay appends what the record holds, and compares it with what
 // walking the row appends and writes to its states, which stand.
 func (k *rowKeep) checkReplay(e *node, clip Rect, hidden bool) {
@@ -395,22 +381,75 @@ func (rt *engine) walkRow(e *node, clip Rect, hidden bool) {
 	rt.rowWalk = saved
 }
 
-// checkShift is the moved path of keptPlace with the layout done anyway: the
-// row is placed again from its relative boxes and laid out as a row built,
-// and the two are compared with ==. The row then has the fresh layout.
-func checkShift(e *node, rec *rowKeep, x, y float32) bool {
+// rowSnap is what laying a row out writes besides its boxes: the nodes, the
+// layout records of the states, the record of the row, and the engine's
+// counters. layoutCheck lays a row out for real after the code it checks
+// has done its part, then puts all of it back, so that what happens next is
+// what happens with the check off (a check that left the record zeroed let
+// the next place of the same layout take a path the real code does not).
+type rowSnap struct {
+	nodes  []node
+	lays   []layoutRecord
+	rel    []relXY
+	lay    rowLay
+	laySeq uint64
+	comp   uint32
+	same   int
+}
+
+func snapRow(rt *engine, rec *rowKeep) rowSnap {
+	s := rowSnap{nodes: slices.Clone(rec.nodes), rel: slices.Clone(rec.rel), lay: rec.lay, laySeq: rt.laySeq, comp: rt.computed, same: rt.paintSameRows}
+	s.lay.hits, s.lay.labels, s.lay.scrolled = slices.Clone(rec.lay.hits), slices.Clone(rec.lay.labels), slices.Clone(rec.lay.scrolled)
+	for _, st := range rec.states {
+		s.lays = append(s.lays, st.lay)
+	}
+	return s
+}
+
+func (s rowSnap) restore(rt *engine, rec *rowKeep) {
+	copy(rec.nodes, s.nodes)
+	rec.rel, rec.lay = s.rel, s.lay
+	for i, st := range rec.states {
+		st.lay = s.lays[i]
+	}
+	rt.laySeq, rt.computed, rt.paintSameRows = s.laySeq, s.comp, s.same
+}
+
+// checkKeptPlace is the stay path of keptPlace, and checkShift the moved path,
+// with the layout done anyway after the real work: the row is laid out and
+// placed as a row built, and the boxes are compared with ==. The state the
+// real path leaves is put back, nodes included, which equal the fresh ones
+// when nothing differs.
+func checkKeptPlace(e *node, rec *rowKeep, x, y float32) bool {
 	rt := e.c.rt
+	rx, ry := e.x, e.y // the root's box is relative to its parent until place
+	e.x, e.y = rec.lay.ax, rec.lay.ay
+	e.lay |= layPlaced
+	rt.rowsLaidKept++
+	checkAgainstLayout(e, rec, x, y, rx, ry)
+	return true
+}
+
+func checkShift(e *node, rec *rowKeep, x, y float32) bool {
 	rx, ry := e.x, e.y
-	rec.restoreRel()
-	e.lay &^= layKept
+	rec.moveRow(e, x, y)
 	place(e, x, y)
-	shifted := boxesOf(rec)
+	checkAgainstLayout(e, rec, x, y, rx, ry)
+	return true
+}
+
+// checkAgainstLayout compares the nodes of the row as the real path left them
+// with a layout of the row, and puts the real state back.
+func checkAgainstLayout(e *node, rec *rowKeep, x, y, rx, ry float32) {
+	rt := e.c.rt
+	want := boxesOf(rec)
+	snap := snapRow(rt, rec)
 	e.x, e.y = rx, ry
+	e.lay &^= layKept | layPlaced
 	rec.layOutAgain(e)
 	place(e, x, y)
-	if !slices.Equal(shifted, boxesOf(rec)) {
+	if !slices.Equal(want, boxesOf(rec)) {
 		rt.layoutMismatch++
 	}
-	rt.rowsShifted++
-	return true
+	snap.restore(rt, rec)
 }

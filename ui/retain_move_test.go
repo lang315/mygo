@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 // A Table of rows with a RowVersion that scrolls, by whole and fractional
@@ -319,5 +320,87 @@ func TestRetainMoveConsecutiveMoves(t *testing.T) {
 		if i > 0 && p.kept.rt.rowsShifted == 0 {
 			t.Fatalf("move %d shifted no row", i)
 		}
+	}
+}
+
+// A List inside an element of a Transition's Match that animates its height
+// and place: showAt lays the list out and places it a second time in the same
+// layout. The clock stands still (or a Delay holds the value), so the second
+// place puts a kept row where the last frame had it. (Found by the review of
+// the first version, which updated nothing of the record by the first place.)
+type matchKey struct{}
+
+func matchSecondPlace(t *testing.T, delay, twin bool) {
+	t.Helper()
+	show := false
+	mk := func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			tr := ElementTransition{Duration: 300 * time.Millisecond, Ease: Linear, Match: matchKey{}}
+			if delay {
+				tr = ElementTransition{Animation: &Animation{Duration: 300 * time.Millisecond, Ease: Linear, Delay: 200 * time.Millisecond}, Match: matchKey{}}
+			}
+			Column(c).Fill().Children(func() {
+				if !show {
+					Column(c).Key("a").Height(200).Transition(tr).Children(func() { Text(c, "a") })
+					return
+				}
+				Text(c, "spacer").Height(100)
+				Column(c).Key("b").Height(300).Transition(tr).Children(func() {
+					List(c, s, 100, func(i int) {
+						Row(c).Children(func() { Textf(c, "row %d", i) })
+					}).Grow(1)
+				})
+			})
+		}
+	}
+	shifted := 0
+	if twin {
+		// The twin alone: one Tester that checks its layouts, and no
+		// picture to compare. It must see a second place that left a row
+		// where the first one put it.
+		tt := NewTester(mk(), 300, 500)
+		tt.rt.layoutCheck = true
+		tt.Frame()
+		show = true
+		for i := range 8 {
+			tt.Frame() // the clock stands still: the value holds
+			shifted += tt.rt.rowsShifted + tt.rt.rowsLaidKept
+			if tt.rt.layoutMismatch != 0 {
+				t.Fatalf("step %d: %d rows kept or shifted differ from laying them out", i, tt.rt.layoutMismatch)
+			}
+		}
+	} else {
+		p := newPair(t, 300, 500, mk)
+		p.idle(2)
+		show = true
+		p.frame("show")
+		for i := range 8 {
+			if delay {
+				p.both(func(tt *Tester) { tt.Advance(16 * time.Millisecond) })
+				p.compare(fmt.Sprintf("advance %d", i))
+			} else {
+				p.frame(fmt.Sprintf("frozen %d", i))
+			}
+			shifted += p.kept.rt.rowsShifted + p.kept.rt.rowsLaidKept
+		}
+	}
+	if shifted == 0 {
+		t.Fatal("no row kept its layout: the test shows nothing")
+	}
+}
+
+func TestRetainMoveMatchSecondPlace(t *testing.T) {
+	for _, delay := range []bool{false, true} {
+		t.Run(fmt.Sprint("delay ", delay), func(t *testing.T) { matchSecondPlace(t, delay, false) })
+	}
+}
+
+// With the twin on, the same scenario: the checks leave the record as the code
+// they check does, so a second place is seen as it is (a check that lays the row
+// out for real and zeroes its record saw the first place only).
+func TestRetainMoveMatchSecondPlaceUnderTheTwin(t *testing.T) {
+	for _, delay := range []bool{false, true} {
+		t.Run(fmt.Sprint("delay ", delay), func(t *testing.T) { matchSecondPlace(t, delay, true) })
 	}
 }
