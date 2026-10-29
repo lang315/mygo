@@ -128,25 +128,31 @@ Windows 11 ARM64.
   the feature; how to find the cause is "Binary size" in the architecture
   guide.
   - *Open, past the baseline:* `counter-native` (an app with no List, no text
-    input and no SVG) links code it does not use. Measured on main at
-    `8958c04b` with `go tool nm -size` and `-ldflags=-dumpdep` (the bytes
-    reachable only through the group's symbols, an upper bound; the groups
-    overlap, and a group the app uses cannot be cut):
+    input and no SVG) links code it does not use. The table below is an
+    estimate, **not** a measurement: from `go tool nm -size` and
+    `-ldflags=-dumpdep` on main at `8958c04b`, the bytes that fall when a
+    group's symbols are removed from the graph. `-dumpdep` prints a tree of
+    discovery, one edge per symbol (the one that first marked it), not every
+    edge, so a cut edge can drop a subtree that another path still keeps; the
+    groups overlap, and a group the app uses cannot be cut. Only a build
+    counts: change the code, build stripped for the three OSes, compare. The
+    real results so far: SVG -220 KB on macOS (the table said 131 KB, #256);
+    the i18n formats below.
 
     | Group | macOS | Linux | What keeps it | Next step |
     |---|---|---|---|---|
     | editor and text areas (`ui/editor*.go`, `textarea.go`, `textbuffer*.go`) | 285 KB | 250 KB | the type descriptor of `widgetTextInput` (used in an interface), `System.Shape` of `internal/text`, `engine.keyDownPhysical` | break the interface conversion; touches several files |
     | i18n catalog and messages | 215 KB | 188 KB | `mygo.platformTexts`, the package init | the platform's own strings need it: kept |
-    | i18n formats (`cldr`, `number`, `format`) | 154 KB | 133 KB | `mygo.regionOf` (on the path of every app), `i18n.loadTables`, `Catalog.format` | link only when an app formats; design first |
+    | i18n formats (`cldr`, `number`, `format`) | 154 KB | 133 KB | `mygo.regionOf` (on the path of every app), `i18n.loadTables`, `Catalog.format` | **Tried, not merged, measured:** region filled in only when read (`App.Region`, `OnRegionChanged`, native UI) alone: macOS +16.6 KB (a 16 KB page step), Linux 0, Windows -0.5 KB, since `loadTables` and the language-matching tables of the Go text library stay reachable through `Catalog.format` and `i18n.Normalize`; with the number and plural arms of the message formatter removed as well (the most a hook could take): macOS -18 KB, Linux -64 KB (one step), Windows -19 KB. Under the 30 KB bar, and a hook that is not linked would print numbers and plurals wrongly without telling anyone: dropped. The branch feat/lazy-region stays local as a reference |
     | SVG (`ui/svg.go`, `internal/svg`) | 131 KB | 132 KB | the search icon of the combobox parsed by a package variable, and `*svg.Doc` named by the painting | **Done in #256**: -220 KB macOS, -197 KB Linux, -215 KB Windows, `hello` 0 |
     | drag and drop (`ui/dragdrop.go`, `data_drag.go`) | 128 KB | 107 KB | `engine.event` and `engine.runFrame`, the surface type on macOS | a hook; touches `ui/input.go` and `ui/runtime.go` |
     | accessibility bridge (`internal/darwin/access.go`) | 66 KB | | `registerClasses`, `registerSurfaceClass` | kept: VoiceOver needs it |
     | list (`ui/list.go`) | 41 KB | 41 KB | `computeBox` calls `layoutList` (`ui/layout.go`), which pulls `listFrame.build`, `extendBy`, the sorts of `listRow` | a `listLayout` function variable set by `buildList` (as `rowPainter` is), in its own PR after P3 |
     | raster effects, transitions, text selection and menu, path drawing, grid, toast, rich text | 34, 26, 20, 20, 19, 11, 9.5 KB | the same | calls from `ui/layout.go`, `ui/runtime.go`, `ui/paint.go` | after P3 |
 
-    Table, Outline and TreeView add 1.3 KB: their hooks work. The decisions,
-    in order: SVG (#256), the i18n formats, then the list, the drag and drop
-    and the editor after P3.
+    Table, Outline and TreeView add 1.3 KB: their hooks work. Next, each by a
+    build before a PR: the list (`listLayout`), the drag and drop and the
+    editor, after P3; only what a build shows to be worth it.
 - fhtool's classes parse. **Done:** `internal/twclass/twclass_test.go`
   (`TestFhtoolClasses`).
 - e2e is green on the three machines.
