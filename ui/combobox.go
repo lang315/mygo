@@ -3,6 +3,7 @@ package ui
 import (
 	"slices"
 	"strings"
+	"sync"
 )
 
 // ComboboxParts are the parts of a combobox without a look: ComboboxBase
@@ -461,14 +462,28 @@ func coreSearchField(c *context, query *string) *node {
 
 // searchIcon is a magnifying glass, MingCute's search icon (Apache License
 // 2.0, https://github.com/Richard9394/MingCute/blob/main/LICENSE).
-var searchIcon = MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M14.5 14.5L20 20m-4-10a6 6 0 1 1-12 0a6 6 0 0 1 12 0Z"/></svg>`))
+//
+// It is parsed when a field first shows it: a package variable parsed at the
+// start of the program, or a function stored in one (sync.OnceValue), would
+// link the SVG renderer into every app.
+func searchIcon() *SVG {
+	searchIconOnce.Do(func() {
+		searchIconSVG = MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M14.5 14.5L20 20m-4-10a6 6 0 1 1-12 0a6 6 0 0 1 12 0Z"/></svg>`))
+	})
+	return searchIconSVG
+}
+
+var (
+	searchIconOnce sync.Once
+	searchIconSVG  *SVG
+)
 
 // magnifier shows the magnifying glass of a field for searching, in the
 // muted color of the theme's text, no higher than a line of the field's
 // text, so that the field is as high as a text input.
 func magnifier(c *context) *node {
 	t := c.theme
-	return coreIcon(c, searchIcon).Size(t.Space(3.75), t.Space(3.75)).Shrink(0).TextColor(t.TextMuted)
+	return coreIcon(c, searchIcon()).Size(t.Space(3.75), t.Space(3.75)).Shrink(0).TextColor(t.TextMuted)
 }
 
 // TokenField creates a field of tokens, as of tags or the recipients of a
