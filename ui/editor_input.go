@@ -21,6 +21,26 @@ type widgetTextInput struct {
 
 var _ TextInputClient = (*widgetTextInput)(nil)
 
+// editorClient is what the editor asks of its native-input client. The
+// editor holds it as an interface, so that the type of an editor, and with it
+// the type of every state, does not name widgetTextInput: the linker keeps
+// the methods of a type its descriptors reach (which the platform's
+// text-input interface calls), and with them the whole editor, in an app that
+// has no text input.
+type editorClient interface {
+	TextInputClient
+	prepare()
+	publish()
+	// ask asks for a frame to show what a key changed, before the view
+	// builds again.
+	ask()
+}
+
+func (w *widgetTextInput) ask() {
+	w.rt.consumed = true
+	w.rt.requestFrame()
+}
+
 func (w *widgetTextInput) state() *state {
 	s := w.rt.states[w.id]
 	if s != nil && s.editor == w.ed {

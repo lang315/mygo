@@ -40,7 +40,7 @@ type editor struct {
 	composeCaret       int
 	composeSelected    TextInputRange
 	compositionActive  bool // one undo transaction for preedit and its commit
-	client             *widgetTextInput
+	client             editorClient
 	value              *string
 	nativeDirty        bool
 	nativeValue        string // bound value before the next widget build publishes input

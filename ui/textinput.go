@@ -262,8 +262,7 @@ func (k TextKey) SetText(s string) {
 	}
 	if w := ed.client; w != nil {
 		// What the view built before the key shows the old text.
-		w.rt.consumed = true
-		w.rt.requestFrame()
+		w.ask()
 	}
 }
 
@@ -357,6 +356,9 @@ func (e *node) Selectable() *node {
 	if e.kind == kindText || e.kind == kindBox {
 		e.flags &^= flagUnselectable
 		e.flags |= flagSelectable
+		// Linked here, so that an app without selectable text, or a text
+		// input, does not link the editor.
+		prepareEditorTextFn = prepareEditorText
 	}
 	return e
 }
