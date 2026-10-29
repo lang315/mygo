@@ -118,6 +118,10 @@ func tableFrame100k(b *testing.B) (*ui.Tester, []tableAccount, *ui.TableView[tab
 	tt := ui.NewTester(func(c *ui.Context) {
 		view.Sync(rows, sort)
 		list.Sort, list.Checked, list.Version = &sort, &checked, view.Version()
+		// What an app returns: the id boxed in every call. An integer of 256 or
+		// more allocates, so the frames far from the top make about 25
+		// allocations more than the frames at the top (the ids there are small):
+		// that is the app's Key, not the cost of the library.
 		list.Key = func(i int) any { return rows[view.Row(i)].id }
 		ui.Table(c, &list, cols, view.Len(), func(r, col int) {
 			a := &rows[view.Row(r)]
