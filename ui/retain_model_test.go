@@ -114,7 +114,7 @@ func TestRetainMatchesFresh(t *testing.T) {
 func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept, built int) {
 	t.Helper()
 	m := newLCModel(seed + 3000)
-	m.versions, m.noDup, m.inner = true, true, true
+	m.versions, m.noDup, m.inner, m.deco = true, true, true, true
 	themes := [2]*Theme{LightTheme(), DarkTheme()}
 	theme := 0
 	view := func(tester int) func(c *context) {
@@ -161,7 +161,7 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 			both(func(tt *Tester) { tt.Key(0, KeyTab) })
 		case v < 9:
 			x, y := float32(m.rng.IntN(m.w)), float32(m.rng.IntN(m.h))
-			dy := []float32{1, -1, 0.5, -0.5, 30, -30, 200}[m.rng.IntN(7)]
+			dy := []float32{1, -1, 0.5, -0.5, 30, -30, 200, 0.25, 0.37, -1.13, 500, -500}[m.rng.IntN(12)]
 			dx := []float32{0, 0, 0, 0, 12, -12, 40}[m.rng.IntN(7)]
 			pressed := m.rng.IntN(4) == 0 // the pointer pressed elsewhere: the hover list is frozen
 			if pressed {
