@@ -1209,6 +1209,7 @@ func (e *node) RightClicked() bool {
 // a row stays as it is pressed, and dragging over other elements does not
 // light them up.
 func (e *node) Hovered() bool {
+	e.readsHover()
 	if !e.hasState() {
 		return false
 	}
@@ -1351,6 +1352,7 @@ func (e *node) Shortcut(mods Modifiers, key Key) bool {
 // element's box and whether it is over the element. Elements asking for it
 // get a frame whenever the pointer moves over them.
 func (e *node) PointerPosition() (x, y float32, over bool) {
+	e.readsHover()
 	if !e.hasState() {
 		return 0, 0, false
 	}
@@ -1654,3 +1656,17 @@ func (rt *engine) modsChanged(mods Modifiers) {
 // or modifier event said: a view showing each row's shortcut while Cmd is
 // held reads it, and draws again as it changes.
 func (c *context) Modifiers() Modifiers { return c.rt.mods }
+
+// readsHover notes that the callback of the row being built asks where the
+// pointer is, whatever the answer: the row is built, not kept, while its
+// elements are hovered (listRow.readsHover). Every function that reads the
+// hover chain or the pointer's position to build something calls it
+// (TestHoverReadersAreKnown lists the readers).
+func (e *node) readsHover() {
+	if e == nil || e.c == nil {
+		return // an element that was not built (Hovered says false for it)
+	}
+	if rb := e.c.row; rb != nil {
+		rb.readsHover = true
+	}
+}

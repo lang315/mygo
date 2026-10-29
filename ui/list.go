@@ -553,6 +553,8 @@ type listRow struct {
 	ver     uint64
 	chosen  [3]bool
 	checked bool
+	// readsHover: see rowBuild.
+	readsHover bool
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -563,6 +565,10 @@ type rowBuild struct {
 	i                       int
 	key                     any
 	clicked, chosen, double bool
+	// readsHover: the row's callback asked where the pointer is (Hovered,
+	// PointerPosition), whatever the answer: what it builds depends on the
+	// hover, and the row is built while its elements are hovered.
+	readsHover bool
 }
 
 // List creates a vertical scroll container of n rows, built with row(i),
@@ -947,8 +953,12 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
+	reads := rb.readsHover
 	c.row, f.rb = saved, prev
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked})
+	if saved != nil && reads {
+		saved.readsHover = true // a row built inside the callback of another
+	}
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads})
 	if rt.bound != bound || s.editablesNow {
 		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits: not kept
 	}

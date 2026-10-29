@@ -31,12 +31,25 @@ type keepScene struct {
 	omit    bool    // the table is not built
 	colw    float32 // the width of the first column, 0 for the room that is left
 	rtl     bool    // the table is built right to left
+	// reads: the rows ask Hovered in their build (a row that shows something
+	// only while hovered), and are built while hovered; without it their hover
+	// look is the paint's and they are kept.
+	reads bool
 }
 
 // newKeepScene makes the scene, with the rows kept (keep) or built in every
 // frame, and shows 3 frames, so that rows that can be kept are.
 func newKeepScene(t *testing.T, n int, keep bool) *keepScene {
-	s := &keepScene{t: t, n: n, vers: make([]uint64, n), builds: make([]int, n), bind: -1, light: LightTheme(), dark: DarkTheme()}
+	return newKeepSceneReading(t, n, keep, false)
+}
+
+// newHoverScene is newKeepScene with rows that ask Hovered in their build.
+func newHoverScene(t *testing.T, n int, keep bool) *keepScene {
+	return newKeepSceneReading(t, n, keep, true)
+}
+
+func newKeepSceneReading(t *testing.T, n int, keep, reads bool) *keepScene {
+	s := &keepScene{t: t, n: n, vers: make([]uint64, n), builds: make([]int, n), bind: -1, light: LightTheme(), dark: DarkTheme(), reads: reads}
 	s.theme = s.light
 	s.list = ListState{
 		Key:        func(i int) any { return i },
@@ -65,6 +78,9 @@ func newKeepScene(t *testing.T, n int, keep bool) *keepScene {
 			coreTable(c, &s.list, cols, n, func(row, col int) {
 				s.builds[row]++
 				e := coreText(c, fmt.Sprint("row", row, " v", s.vers[row]))
+				if s.reads {
+					e.Hovered()
+				}
 				if row == s.bind {
 					wrapElement(e).Bind(&s.handle)
 				}
@@ -187,7 +203,7 @@ func TestRetainABumpedVersionBuildsThatRowOnly(t *testing.T) {
 }
 
 func TestRetainHoverBuildsTheRowsHoveredAndLeft(t *testing.T) {
-	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	a, b := newHoverScene(t, 200, true), newHoverScene(t, 200, false)
 	x, y := a.rowAt(5)
 	a.tt.Move(x, y)
 	b.tt.Move(x, y)
@@ -254,7 +270,7 @@ func TestRetainACheckBoxOfAKeptRowChecks(t *testing.T) {
 // A row out of view for one frame had its states pruned: it is built when it
 // comes back, not linked.
 func TestRetainARowOutOfViewForAFrameIsBuiltWhenItComesBack(t *testing.T) {
-	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	a, b := newHoverScene(t, 200, true), newHoverScene(t, 200, false)
 	x, y := a.rowAt(15) // the pointer stays on another row, which is hovered in view
 	a.tt.Scroll(x, y, 0, 3000)
 	b.tt.Scroll(x, y, 0, 3000)
@@ -384,7 +400,7 @@ func TestRetainRowsThatShareAKeyKeepNoWrongCopy(t *testing.T) {
 // its check changes meanwhile), has no record when the pointer leaves: it is
 // built, not linked from the capture before.
 func TestRetainARowBuiltWithoutCaptureLeavesNoOlderRecord(t *testing.T) {
-	a, b := newKeepScene(t, 200, true), newKeepScene(t, 200, false)
+	a, b := newHoverScene(t, 200, true), newHoverScene(t, 200, false)
 	x, y := a.rowAt(5)
 	for _, s := range []*keepScene{a, b} {
 		s.tt.Move(x, y) // B: hovered, so not captured
