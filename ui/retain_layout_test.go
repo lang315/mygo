@@ -680,3 +680,46 @@ func TestRetainCommitRowWithSideEffects(t *testing.T) {
 		})
 	}
 }
+
+// Spoiled records behind the engine's back are found by the twin: a layout
+// that left other boxes, a commit that records other hits. (A spoiled place
+// ax,ay makes the row look moved, which is laid out: safe, nothing to find.)
+func TestRetainLayoutCheckFindsAStaleRecord(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		spoil func(r *rowKeep)
+	}{
+		{"row size", func(r *rowKeep) { r.nodes[0].w += 3 }},
+		{"hit moved", func(r *rowKeep) { r.lay.hits[0].r.X += 3 }},
+		{"label changed", func(r *rowKeep) { r.lay.labels[0].text += "x" }},
+		{"node moved", func(r *rowKeep) { r.nodes[len(r.nodes)-1].x += 3 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k := newKeptList(50)
+			tt := NewTester(k.mk(), 300, 400)
+			tt.rt.layoutCheck = true
+			for range 4 {
+				tt.Frame()
+			}
+			if tt.rt.layoutMismatch != 0 {
+				t.Fatalf("%d mismatches without spoiling", tt.rt.layoutMismatch)
+			}
+			// Spoil one held row's record.
+			done := false
+			for _, st := range tt.rt.states {
+				if r := st.krec; r != nil && r.lay.at != 0 && r.lay.cok && len(r.lay.hits) > 0 && len(r.lay.labels) > 0 {
+					tc.spoil(r)
+					done = true
+					break
+				}
+			}
+			if !done {
+				t.Fatal("no row held")
+			}
+			tt.Frame()
+			if tt.rt.layoutMismatch == 0 {
+				t.Fatal("the stale record was not found")
+			}
+		})
+	}
+}

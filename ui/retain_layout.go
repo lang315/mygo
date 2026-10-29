@@ -133,6 +133,9 @@ func keptPlace(e *node, x, y float32) bool {
 	}
 	rt := e.c.rt
 	if e.x+x == rec.lay.ax && e.y+y == rec.lay.ay {
+		if rt.layoutCheck {
+			return checkKeptPlace(e, rec, x, y)
+		}
 		e.x, e.y = rec.lay.ax, rec.lay.ay
 		e.lay |= layPlaced
 		rt.rowsLaidKept++
@@ -175,8 +178,12 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	}
 	const both = layKept | layPlaced
 	if e.lay&both == both && k.cok && k.at+1 == rt.layouts && k.env == env {
-		rt.hits = append(rt.hits, k.hits...)
-		rt.labels = append(rt.labels, k.labels...)
+		if rt.layoutCheck {
+			rec.checkReplay(e, clip, hidden)
+		} else {
+			rt.hits = append(rt.hits, k.hits...)
+			rt.labels = append(rt.labels, k.labels...)
+		}
 		k.at = rt.layouts
 		e.lay &^= both
 		rt.rowsCommitReplayed++
@@ -197,5 +204,85 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 		}
 	} else {
 		k.at, k.cok = 0, false
+	}
+}
+
+// layoutCheck (tests only) does the work a record replaces, as replayCheck
+// does for painting: keptPlace lays out the row it keeps and commitRow walks
+// the row it replays, and each counts in layoutMismatch what differs.
+
+// nodeBox is what layout writes of a node.
+type nodeBox struct{ x, y, w, h, contentW, contentH float64 }
+
+func boxesOf(rec *rowKeep) []nodeBox {
+	b := make([]nodeBox, len(rec.nodes))
+	for j := range rec.nodes {
+		n := &rec.nodes[j]
+		b[j] = nodeBox{float64(n.x), float64(n.y), float64(n.w), float64(n.h), float64(n.contentW), float64(n.contentH)}
+	}
+	return b
+}
+
+// stateSnap is what commit writes of a state.
+type stateSnap struct {
+	x, y, w, h, vx, vy, vw, vh, cx, cy, cw, ch float32
+	flags                                      uint32
+	world                                      scene.Affine
+	clips                                      bool
+	clipRect                                   Rect
+	rtl                                        bool
+	page                                       uint64
+	scope                                      uint64
+	anchor                                     uint64
+	cursor                                     Cursor
+	tip                                        bool
+	contentW, contentH                         float64
+}
+
+func snapOf(st *state) stateSnap {
+	return stateSnap{st.x, st.y, st.w, st.h, st.vx, st.vy, st.vw, st.vh, st.cx, st.cy, st.cw, st.ch, uint32(st.flags),
+		st.world, st.clips, st.clipRect, st.rtl, st.page, st.scope, st.anchor, st.cursor, st.tip, st.contentW, st.contentH}
+}
+
+// checkKeptPlace is the stay path of keptPlace with the layout done anyway:
+// the row is laid out and placed as a row built, and the nodes are compared
+// with those kept. The row is then kept as it was, so that commitRow replays.
+func checkKeptPlace(e *node, rec *rowKeep, x, y float32) bool {
+	rt := e.c.rt
+	saved, rx, ry := rec.lay, e.x, e.y // the root's box is relative to its parent until place
+	e.x, e.y = saved.ax, saved.ay
+	want := boxesOf(rec)
+	rec.rewind(rt.layouts)
+	rec.zero()
+	e.x, e.y = rx, ry
+	sameRow(e.parent, e)
+	layoutBox(e, saved.lw, saved.hm)
+	e.lay &^= layKept
+	place(e, x, y)
+	if !slices.Equal(want, boxesOf(rec)) {
+		rt.layoutMismatch++
+	}
+	rec.lay = saved
+	e.lay |= layKept | layPlaced
+	rt.rowsLaidKept++
+	return true
+}
+
+// checkReplay appends what the record holds, and compares it with what
+// walking the row appends and writes to its states, which stand.
+func (k *rowKeep) checkReplay(e *node, clip Rect, hidden bool) {
+	rt := e.c.rt
+	before := make([]stateSnap, len(k.states))
+	for i, st := range k.states {
+		before[i] = snapOf(st)
+	}
+	h0, l0 := len(rt.hits), len(rt.labels)
+	rt.commitNode(e, clip, hidden)
+	bad := !slices.Equal(rt.hits[h0:], k.lay.hits) || !slices.Equal(rt.labels[l0:], k.lay.labels)
+	for i, st := range k.states {
+		bad = bad || before[i] != snapOf(st)
+	}
+	if bad {
+		rt.layoutMismatch++
 	}
 }

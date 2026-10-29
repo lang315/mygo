@@ -230,6 +230,12 @@ type engine struct {
 	noReplay, replayCheck bool
 	recorded, replayed    int
 	replayMismatch        int
+
+	// layoutCheck lays out and commits every held row anyway, and counts in
+	// layoutMismatch those whose kept layout or replayed commit differ
+	// (retain_layout.go), as replayCheck does for painting. Tests only.
+	layoutCheck    bool
+	layoutMismatch int
 	// freshRows counts the list rows painted anew since the engine began,
 	// for tests.
 	freshRows int
