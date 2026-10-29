@@ -153,9 +153,12 @@ func (rt *engine) hitChain(x, y float32) []uint64 { return rt.appendHitChain(nil
 
 // appendHitChain appends hitChain(x, y) to chain.
 func (rt *engine) appendHitChain(chain []uint64, x, y float32) []uint64 {
+	if !rt.inWindow(x, y) {
+		return chain // a pointer outside the window hits nothing: no hit is tested
+	}
 	for i := len(rt.hits) - 1; i >= 0; i-- {
 		h := &rt.hits[i]
-		if !rt.contains(h.st, h.r, x, y) {
+		if !rt.containsIn(h.st, h.r, x, y) {
 			continue
 		}
 		for s := h.st; s != nil; s = rt.states[s.parent] {

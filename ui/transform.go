@@ -312,22 +312,26 @@ func (s *state) vector(x, y, dx, dy float32) (float32, float32) {
 // contains tests the actual transformed box and every ancestor's clip,
 // rather than the conservative rectangles used for accessibility and culling.
 func (rt *engine) contains(s *state, r Rect, x, y float32) bool {
-	m, ok := s.world.Inverse()
-	if !ok {
-		return false
-	}
-	lx, ly := m.Point(x, y)
-	if !r.Contains(lx, ly) {
+	return rt.inWindow(x, y) && rt.containsIn(s, r, x, y)
+}
+
+// inWindow reports whether (x, y) is in the window: nothing outside it is hit.
+func (rt *engine) inWindow(x, y float32) bool {
+	w, h, _ := rt.size()
+	return x >= 0 && y >= 0 && x < w && y < h
+}
+
+// containsIn is contains for a point in the window (inWindow).
+func (rt *engine) containsIn(s *state, r Rect, x, y float32) bool {
+	rt.hitWork++
+	lx, ly, ok := inversePoint(s.world, x, y)
+	if !ok || !r.Contains(lx, ly) {
 		return false
 	}
 	for p := rt.states[s.parent]; p != nil; p = rt.states[p.parent] {
 		if p.clips {
-			m, ok := p.world.Inverse()
-			if !ok {
-				return false
-			}
-			px, py := m.Point(x, y)
-			if !roundedContains(p.clipRect, p.clipRadii, px, py) {
+			px, py, ok := inversePoint(p.world, x, y)
+			if !ok || !roundedContains(p.clipRect, p.clipRadii, px, py) {
 				return false
 			}
 		}
@@ -335,8 +339,26 @@ func (rt *engine) contains(s *state, r Rect, x, y float32) bool {
 			break
 		}
 	}
-	w, h, _ := rt.size()
-	return x >= 0 && y >= 0 && x < w && y < h
+	return true
+}
+
+// inversePoint returns where the inverse of m maps (x, y), and false where m
+// has none. A map that only moves (a scroll container's, the most common
+// outside the identity) is undone by a subtraction, which gives the same
+// result for hit testing (Contains compares with >= and <). Not the same bits:
+// a zero may have the other sign (X=0, Y=-0 gives +0 and not -0), and an
+// infinite or NaN X or Y gives true where Inverse gives false (the point is
+// then outside any box, as the comparison fails).
+func inversePoint(m scene.Affine, x, y float32) (float32, float32, bool) {
+	if m.Set && m.A == 1 && m.B == 0 && m.C == 0 && m.D == 1 && m.G == 0 && m.H == 0 {
+		return x - m.X, y - m.Y, true
+	}
+	inv, ok := m.Inverse()
+	if !ok {
+		return 0, 0, false
+	}
+	lx, ly := inv.Point(x, y)
+	return lx, ly, true
 }
 
 func roundedContains(r Rect, radii [4]float32, x, y float32) bool {

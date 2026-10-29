@@ -731,6 +731,9 @@ func (rt *engine) lookState(id uint64) (s *state, built bool) {
 	s.rt = rt
 	s.lookedSeen, s.lookedPass = s.seen, s.pass
 	s.seen, s.pass = rt.frame, rt.pass
+	if !built {
+		rt.noteBuilt(s)
+	}
 	// What the element drags and takes, as this pass asks.
 	s.dragValue, s.dragFn, s.accepts = nil, nil, nil
 	s.dataSource, s.dataTarget = nil, nil

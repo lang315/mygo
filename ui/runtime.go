@@ -145,8 +145,16 @@ type engine struct {
 	// elements bound to an app's Handle, and the asks for frames (AnimationFrame,
 	// After): a row that did either is not kept.
 	rowsKept, rowsBuilt int
-	noRetain            bool
-	bound               int
+	// hitWork counts the hits contains tested past the window, and swept the
+	// states forgetInput visited (tests).
+	hitWork, swept int
+	// built are the states the pass (builtFrame, builtPass) stamped as seen:
+	// forgetInput visits those, not every state there is.
+	built      []*state
+	builtFrame uint64
+	builtPass  int
+	noRetain   bool
+	bound      int
 	// rowsLaidKept counts the kept rows whose layout a layout kept and place
 	// found where they were; rowsCommitReplayed those commit replayed
 	// (retain_layout.go). Reset by beginLayout.
@@ -1050,10 +1058,22 @@ func (rt *engine) endPass() {
 	}
 }
 
+// noteBuilt lists s among the states the pass stamped as seen.
+func (rt *engine) noteBuilt(s *state) {
+	if rt.builtFrame != rt.frame || rt.builtPass != rt.pass {
+		rt.built, rt.builtFrame, rt.builtPass = rt.built[:0], rt.frame, rt.pass
+	}
+	rt.built = append(rt.built, s)
+}
+
 // forgetInput forgets the input of the elements the pass built, which
 // they handled.
 func (rt *engine) forgetInput() {
-	for _, s := range rt.states {
+	if rt.builtFrame != rt.frame || rt.builtPass != rt.pass {
+		return // the pass built nothing
+	}
+	for _, s := range rt.built {
+		rt.swept++
 		if s.seen != rt.frame || s.pass != rt.pass {
 			continue
 		}
