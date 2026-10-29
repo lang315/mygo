@@ -127,6 +127,26 @@ Windows 11 ARM64.
   why in its body, as AGENTS.md asks of any growth of an app that doesn't use
   the feature; how to find the cause is "Binary size" in the architecture
   guide.
+  - *Open, past the baseline:* `counter-native` (an app with no List, no text
+    input and no SVG) links code it does not use. Measured on main at
+    `8958c04b` with `go tool nm -size` and `-ldflags=-dumpdep` (the bytes
+    reachable only through the group's symbols, an upper bound; the groups
+    overlap, and a group the app uses cannot be cut):
+
+    | Group | macOS | Linux | What keeps it | Next step |
+    |---|---|---|---|---|
+    | editor and text areas (`ui/editor*.go`, `textarea.go`, `textbuffer*.go`) | 285 KB | 250 KB | the type descriptor of `widgetTextInput` (used in an interface), `System.Shape` of `internal/text`, `engine.keyDownPhysical` | break the interface conversion; touches several files |
+    | i18n catalog and messages | 215 KB | 188 KB | `mygo.platformTexts`, the package init | the platform's own strings need it: kept |
+    | i18n formats (`cldr`, `number`, `format`) | 154 KB | 133 KB | `mygo.regionOf` (on the path of every app), `i18n.loadTables`, `Catalog.format` | link only when an app formats; design first |
+    | SVG (`ui/svg.go`, `internal/svg`) | 131 KB | 132 KB | the search icon of the combobox parsed by a package variable, and `*svg.Doc` named by the painting | **Done in #256**: -220 KB macOS, -197 KB Linux, -215 KB Windows, `hello` 0 |
+    | drag and drop (`ui/dragdrop.go`, `data_drag.go`) | 128 KB | 107 KB | `engine.event` and `engine.runFrame`, the surface type on macOS | a hook; touches `ui/input.go` and `ui/runtime.go` |
+    | accessibility bridge (`internal/darwin/access.go`) | 66 KB | | `registerClasses`, `registerSurfaceClass` | kept: VoiceOver needs it |
+    | list (`ui/list.go`) | 41 KB | 41 KB | `computeBox` calls `layoutList` (`ui/layout.go`), which pulls `listFrame.build`, `extendBy`, the sorts of `listRow` | a `listLayout` function variable set by `buildList` (as `rowPainter` is), in its own PR after P3 |
+    | raster effects, transitions, text selection and menu, path drawing, grid, toast, rich text | 34, 26, 20, 20, 19, 11, 9.5 KB | the same | calls from `ui/layout.go`, `ui/runtime.go`, `ui/paint.go` | after P3 |
+
+    Table, Outline and TreeView add 1.3 KB: their hooks work. The decisions,
+    in order: SVG (#256), the i18n formats, then the list, the drag and drop
+    and the editor after P3.
 - fhtool's classes parse. **Done:** `internal/twclass/twclass_test.go`
   (`TestFhtoolClasses`).
 - e2e is green on the three machines.
@@ -418,10 +438,56 @@ cannot show: those items are not marked):
     fail without it. The first review and the tests had missed it because the
     layout cache's styles all change layout.
 
-  *Next:* P2, the build skipped with `ListState.RowVersion` (in review), then
-  P3, the layout and the commit of a retained row skipped (`commitElement` and
-  `layoutTree` in `ui/runtime.go` and `ui/layout.go` are the map).
-  "Tens of µs" in the sense of 20–30 needs the build skipped (P2).
+  - *P2 (#254):* `ListState.RowVersion func(i int) uint64`: a List or Table
+    whose app sets it keeps the rows it built and links them again instead of
+    building them while the row's key, version, choice, checks, theme and the
+    pending input of its states hold (`ui/retain.go`, `state.pending` in
+    `ui/state_pending.go` with every field of `state` placed by
+    `TestStatePendingPlacesEveryField`). The widget layer versions its rows
+    (`RowSource`, `ListBox`, `ListView`, `Table`, `TreeView`), so apps on it
+    get kept rows without writing a RowVersion. *Gate*, 15 interleaved runs on
+    an M1 Pro (load 7.2 to 5.4), app-only laps, against main before #254, with
+    a RowVersion on the table: build lap idle 26.38 to 10.77 µs (the gate was
+    at most 10, **missed** by 0.77), hover 26.20 to 12.44 (-52.5%), update
+    26.49 to 11.70 (-55.8%); idle frame 61.84 to 47.48 µs (-14.36; the gate was
+    -15, **missed** by 0.64); allocations unchanged (21), bytes unchanged;
+    **layout lap +1.36 idle, +3.10 hover, +2.39 update** (the gate was +2: hover
+    and update **missed**, since layout still walks kept rows and the build now
+    reads the choice around a row), which moves to P3. Without a RowVersion the
+    benchmark is within 1% and `BenchmarkWidgetFrame` +0.26% (0 allocs).
+    Skipping `state.pending` on "no event since the last frame" was rejected:
+    pending fields are also set by programmatic calls, accessibility actions
+    and posted work. `counter-native` grew 624 bytes on macOS, 0 on Linux and
+    10.7 KB on Windows (`go tool nm`: `listRow` gained `ver`, `chosen` and
+    `checked`, so every sort of it is a new instance, `listFrame.build`
+    +928 bytes, `chosenAround`; Windows rounds to 512 bytes).
+  - *The oracle and the reviews of P2:* `TestRetainMatchesFresh` runs a
+    retaining Tester against one that builds every row over random Lists and
+    Tables (tint changes with a version, choice and check changes without
+    one, theme, hover, clicks, Tab, scroll, scales 1 and 2) with `replayCheck`
+    on; 18 mutations of `ui/retain.go` (each check dropped in turn) each fail a
+    test, except two that are equivalent (keeping `lay` and the per-frame
+    measures on a kept node). An independent review found three critical
+    problems, all fixed with a test that failed first: rows linked in an
+    earlier pass of a frame kept states that prune had recycled when a later
+    handler hid or scrolled the list; a row with an `EditableText` was kept,
+    so Enter opened it instead of renaming; a `Draw` closure reading its
+    Element panicked on a kept row. A second review found that the copy of a
+    row was recorded with the version read at the end of the frame, not the
+    one it was built with. The oracle does not yet generate two-pass hides,
+    keys, context menus, `EditableText`, `After` or `Draw` (direct tests do);
+    the branch rows of an Outline and TreeView are built every frame (their
+    arrow animation leaves `motions` set).
+
+  *Next:* P3, the layout and the commit of a retained row skipped (`commitElement`
+  and `layoutTree` in `ui/runtime.go` and `ui/layout.go` are the map). A kept
+  row is a heap copy of the row's nodes; `keep` clears `lay`, `tl` and the
+  per-frame measures and zeroes `x, y, w, h, contentW, contentH, ink, world`
+  on link, and layout and commit rewrite them, so what P3 skips has to restore
+  them, keyed on the record in the state (`lay`). Keeping `lay` on a kept row
+  whose parent is unchanged is equivalent today, by the mutation above.
+  "Tens of µs" in the sense of 20–30 needs the build skipped (P2, done at
+  47 µs idle on an M1 Pro) and the layout (P3).
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
