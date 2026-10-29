@@ -77,6 +77,7 @@ var (
 	cbSurfaceFocusIn, cbSurfaceFocusOut, cbSurfaceScale, cbIMCommit ptr
 	cbIMPreedit, cbIMPreeditEnd, cbSurfaceRender, cbAreaContext     ptr
 	cbSurfaceUnrealize, cbSurfaceTick, cbSurfaceGesture             ptr
+	cbRenderTick                                                    ptr
 	surfaceCursors                                                  = map[platform.Cursor]ptr{}
 )
 
@@ -147,6 +148,12 @@ type surface struct {
 	// wasOut tells that Occluded said that nothing of the window shows,
 	// and SurfaceShown was not sent since.
 	wasOut bool
+	// renderAgain tells that a frame was asked for during the render
+	// signal.
+	renderAgain bool
+	// renderPending tells that a tick callback asks the area to render.
+	// It is not reset on unrealize: GTK keeps tick callbacks across it.
+	renderPending bool
 	// staged is the frame the tick callback drew, which the draw signal
 	// paints in the same frame of the frame clock: the host's memory,
 	// valid until it draws or frees another (see Idle).
@@ -364,6 +371,11 @@ func (s *surface) checkShown() {
 func (s *surface) RequestFrame() {
 	switch {
 	case s.w.closed:
+	case s.drawsGL() && s.rendering:
+		// gtk_gl_area_draw clears the area's render request after it
+		// emits the render signal (gtk/gtkglarea.c), so one asked for
+		// within it is lost: ask at the next tick instead.
+		s.renderAgain = true
 	case s.drawsGL():
 		s.queueDraw()
 	default:
@@ -371,6 +383,15 @@ func (s *surface) RequestFrame() {
 		if s.tick == 0 {
 			s.tick = gtkWidgetAddTickCallback(s.area, cbSurfaceTick, ptr(s.w.id), 0)
 		}
+	}
+}
+
+// queueRenderLater asks the area to render at the next tick of its frame
+// clock, after the render signal now running has returned.
+func (s *surface) queueRenderLater() {
+	if !s.renderPending && !s.w.closed {
+		s.renderPending = true
+		gtkWidgetAddTickCallback(s.area, cbRenderTick, ptr(s.w.id), 0)
 	}
 }
 
@@ -777,6 +798,13 @@ func initSurfaceCallbacks() {
 		}
 		return ctx
 	})
+	cbRenderTick = purego.NewCallback(func(widget, clock, data ptr) bool {
+		if s := b().surfaceOf(data); s != nil {
+			s.renderPending = false
+			s.queueDraw()
+		}
+		return false
+	})
 	cbSurfaceRender = purego.NewCallback(func(area, context, data ptr) bool {
 		s := b().surfaceOf(data)
 		if s == nil {
@@ -785,6 +813,10 @@ func initSurfaceCallbacks() {
 		s.rendering, s.rendered, s.inMemory = true, true, false
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
 		s.rendering = false
+		if s.renderAgain {
+			s.renderAgain = false
+			s.queueRenderLater()
+		}
 		return true
 	})
 	cbSurfaceSize = purego.NewCallback(func(widget, allocation, data ptr) {
