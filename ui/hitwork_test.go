@@ -41,8 +41,9 @@ func TestContainsTestsNothingForAPointerOutsideTheWindow(t *testing.T) {
 	}
 }
 
-// inversePoint is the inverse's Point for every map, bit for bit, and takes the
-// shortcut for the maps that only move.
+// inversePoint is the inverse's Point for every map, with == on both
+// coordinates (a zero of the other sign is equal), and takes the shortcut for the
+// maps that only move.
 func TestInversePointMatchesTheInverse(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 2))
 	val := func() float32 { return float32(rng.IntN(2001)-1000) / float32(1+rng.IntN(7)) }
