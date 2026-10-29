@@ -1,5 +1,7 @@
 package ui
 
+import "sync"
+
 // The engine reaches the editor's layout, painting and keys through these
 // functions, which newEditor sets: a node holds an editor only after
 // newEditor made it, in the same process, so every call below is made after
@@ -18,19 +20,27 @@ var (
 	placeMenuCaretFn   func(s *state, x, y float32)
 )
 
+// editorOnce makes the first linkEditor the only one to write: the functions
+// are shared by every engine of the process, which may run on goroutines of
+// its own (tests), and each is read only for an editor, or a node of one,
+// which that goroutine made through newEditor, and so waited for the write.
+var editorOnce sync.Once
+
 // linkEditor sets the functions above. It is called by newEditor, the one
 // way an editor is made.
 func linkEditor() {
-	layoutInputFn = (*node).layoutInput
-	inputHeightFn = (*node).inputHeight
-	paintInputFn = (*node).paintInput
-	pressFn = (*editor).press
-	wantsFn = (*editor).wants
-	textKeyFn = (*editor).textKey
-	caretRectFn = (*editor).caretRect
-	textSelectionKeyFn = (*engine).textSelectionKey
-	textUnitFn = textUnit
-	placeMenuCaretFn = placeMenuCaret
+	editorOnce.Do(func() {
+		layoutInputFn = (*node).layoutInput
+		inputHeightFn = (*node).inputHeight
+		paintInputFn = (*node).paintInput
+		pressFn = (*editor).press
+		wantsFn = (*editor).wants
+		textKeyFn = (*editor).textKey
+		caretRectFn = (*editor).caretRect
+		textSelectionKeyFn = (*engine).textSelectionKey
+		textUnitFn = textUnit
+		placeMenuCaretFn = placeMenuCaret
+	})
 }
 
 // placeMenuCaret puts the caret of the editor of s where a context menu was

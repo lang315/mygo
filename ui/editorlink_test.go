@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -22,6 +23,7 @@ func editorFnsSet() bool {
 func clearEditorFns() {
 	layoutInputFn, inputHeightFn, paintInputFn, pressFn, wantsFn, textKeyFn = nil, nil, nil, nil, nil, nil
 	caretRectFn, textSelectionKeyFn, textUnitFn, placeMenuCaretFn = nil, nil, nil, nil
+	editorOnce = sync.Once{} // linked again by the test
 }
 
 // An app with no text input and no selectable text does not link the

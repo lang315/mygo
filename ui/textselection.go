@@ -3,6 +3,7 @@ package ui
 import (
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // textPoint identifies a rune of a paragraph by its stable element ID.
@@ -75,6 +76,14 @@ func (e *node) prepareSelectable() {
 // is the only way a text becomes selectable: the editor of selectable text
 // is linked into the apps that make text selectable, and no others.
 var prepareEditorTextFn func(e *node, scope uint64)
+
+// selectableTextOnce makes the first Selectable the only one to write
+// prepareEditorTextFn, as editorOnce does for the editor's functions.
+var selectableTextOnce sync.Once
+
+func linkSelectableText() {
+	selectableTextOnce.Do(func() { prepareEditorTextFn = prepareEditorText })
+}
 
 // prepareEditorText gives the selectable text e, in selection scope scope,
 // its read-only editor, with the text it shows, and lets it process what
