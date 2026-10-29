@@ -24,7 +24,6 @@ import (
 type rowLay struct {
 	at     uint64  // the layout whose results the nodes hold, 0 for none
 	fullAt uint64  // the last layout that compared the row (sameRow)
-	lAt    uint64  // the layout layoutList laid the row out in
 	setAt  uint64  // the layout that decided about the nodes (settle, late, moved)
 	lw     float32 // the width the row was laid out with
 	hm     float32 // and the height
@@ -176,8 +175,10 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	if p := e.parent; p != nil {
 		env.parentDis, env.world = p.st.flags&flagDisabled != 0, p.world
 	}
+	// zero clears cok whenever layout ran on the row, so a record that is set
+	// is the layout of the last frame, kept (settle) and placed where it was.
 	const both = layKept | layPlaced
-	if e.lay&both == both && k.cok && k.at+1 == rt.layouts && k.env == env {
+	if k.cok && k.env == env {
 		if rt.layoutCheck {
 			rec.checkReplay(e, clip, hidden)
 		} else {
@@ -193,7 +194,12 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	e.lay &^= both
 	h0, l0, f0, p0, g0, m0 := len(rt.hits), len(rt.labels), len(rt.focusOrder), len(rt.posed), len(rt.groups), rt.modal
 	rt.commitNode(e, clip, hidden)
-	if placed && !env.hidden && (k.lAt == rt.layouts || k.at+1 == rt.layouts) && e.lay&layReuse != 0 {
+	// placed: place reached the row (layout.go), the hook there is not ours.
+	// !env.hidden: a hidden row is not placed, and zero covers it only through
+	// setAt. A focusable or an animated pose never reaches here (retainable,
+	// state.pending), so the focusOrder and posed conditions guard a row that
+	// is not held today.
+	if placed && !env.hidden && e.lay&layReuse != 0 {
 		k.ax, k.ay, k.rlay, k.rdir, k.at = e.x, e.y, e.lay, uint8(e.dir), rt.layouts
 		if len(rt.focusOrder) == f0 && len(rt.posed) == p0 && len(rt.groups) == g0 && rt.modal == m0 {
 			k.hits = append(k.hits[:0], rt.hits[h0:]...)

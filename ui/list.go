@@ -1861,7 +1861,7 @@ func (e *node) layoutList(w, h float32) {
 			continue
 		}
 		if rec := r.kept; rec != nil {
-			rec.lay.lw, rec.lay.hm, rec.lay.lAt = cw, float32(ht(r.i)), e.c.rt.layouts
+			rec.lay.lw, rec.lay.hm = cw, float32(ht(r.i))
 		}
 		layoutBox(r.e, cw, float32(ht(r.i)))
 	}

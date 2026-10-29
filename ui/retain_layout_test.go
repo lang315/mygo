@@ -723,3 +723,12 @@ func TestRetainLayoutCheckFindsAStaleRecord(t *testing.T) {
 		})
 	}
 }
+
+// Fitting a column in this model run builds rows late among rows linked held
+// (buildLate): without the zero there the rows are compared with the layout of
+// another width. The long model run found it; this keeps the seed.
+func TestRetainLayoutBuiltLateModelSeed(t *testing.T) {
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
+	retainModelSeed(t, 1, 22, 60)
+}
