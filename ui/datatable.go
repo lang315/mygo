@@ -39,6 +39,7 @@ type DataColumn[T any] struct {
 // as a field, set Key and Columns before the first frame, use it on the main
 // thread, and do not copy it after the first frame.
 type DataTableState[T any, K comparable] struct {
+	keys keyBox[K] // the boxed keys of the rows in view
 	// Key is a row's identity: the checked and chosen rows are kept by it
 	// across a sort, a search and changes of the rows. It is required.
 	Key func(x *T) K
@@ -144,7 +145,7 @@ func (s *DataTableState[T, K]) start() {
 	} else {
 		s.list.Sort = &s.Sort
 	}
-	s.list.Key = func(row int) any { return s.Key(s.At(row)) }
+	s.list.Key = func(row int) any { return s.keys.of(row, s.Key(s.At(row))) }
 	s.list.Label = func(row int) string { return s.Columns[0].Text(s.At(row)) }
 	s.list.Copy = func(rows []int) string { return s.copyRows(s.pick(rows)) }
 	s.menu = func(m *Menu, rows []int) { s.RowMenu(m, s.pick(rows)) }

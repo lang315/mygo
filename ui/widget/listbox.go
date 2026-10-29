@@ -16,6 +16,7 @@ import (
 // The functions the list calls back (key, text, SetImage's, and
 // UpdateItem's) run under the package's lock: they call no widget method.
 type ListBoxWidget[T any, K comparable] struct {
+	keys keyBox[K] // the boxed keys of the rows in view (ui's ListState.Key)
 	common[ListBoxWidget[T, K]]
 	key       func(*T) K
 	text      func(*T) string
@@ -435,7 +436,7 @@ func (l *ListBoxWidget[T, K]) keyAt(row int) any {
 		defer mu.Unlock()
 	}
 	if row < len(l.frame) {
-		return l.key(&l.frame[row])
+		return l.keys.of(row, l.key(&l.frame[row]))
 	}
 	var zero K
 	return zero
