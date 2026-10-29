@@ -122,11 +122,11 @@ func (f *listFrame) chosenAround(i int) (c [3]bool) {
 		return
 	}
 	if i > 0 && !f.isHeader(i-1) {
-		c[0] = f.chosen(i-1, f.key(i-1))
+		c[0] = f.chosen(i-1, f.peek(i-1))
 	}
 	c[1] = f.chosen(i, f.key(i))
 	if i < f.n-1 && !f.isHeader(i+1) {
-		c[2] = f.chosen(i+1, f.key(i+1))
+		c[2] = f.chosen(i+1, f.peek(i+1))
 	}
 	return
 }
