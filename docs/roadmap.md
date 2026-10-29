@@ -50,7 +50,7 @@ Windows 11 ARM64.
 
 | Measure | At the start | 2026-10-26 | Target |
 |---|---|---|---|
-| `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them). **2026-10-28, an M1 Pro: 80 µs, 21 allocs, 961 B** (85 µs after the rows reuse their layout, #225; then -1.3% with #238 and -5.45% with #241, each measured against main in turns, so the sum is about 80 µs; then 64.3 µs with the retained rows of #247 and #251, `BenchmarkTableFrame100kFrames/idle`, 21 allocs and 961 B as before), the split in Track 3 | tens of µs |
+| `TableFrame100k` frame | 122–210 µs (CI) | CI after #179: 199–205 µs (median 202) on an EPYC 7763 runner, 192 and 148 µs on a 9V74 (the runner's CPU decides), 199 µs Windows, 115 µs macOS (M1 VM); 104 µs on an M1 Pro; **22 allocs, 977 B** a frame (223 and 5,989 B on 2026-10-23, 164 and 5,077 B after #169, 22 and 977 B after #179; #182 did not change them). **2026-10-28, an M1 Pro: 80 µs, 21 allocs, 961 B** (85 µs after the rows reuse their layout, #225; then -1.3% with #238 and -5.45% with #241, each measured against main in turns, so the sum is about 80 µs; then 64.3 µs with the retained rows of #247 and #251, `BenchmarkTableFrame100kFrames/idle`, 21 allocs and 961 B as before; then 26.5 µs of app work idle with a RowVersion and the layout and commit of retained rows skipped, #258, `BenchmarkTableFrame100kPhases/idle-rv-app`, 6.9 µs of layout), the split in Track 3 | tens of µs |
 | A click on a widget table of 1M rows | 6.0–10.4 ms in the first CI runs, 38 MB allocated | **`clickApp`, the app's work (build + layout + paint, no rasterizing): 0.67 ms** CI Linux x86, 0.35 ms Windows, 0.37 ms macOS (commit `98bf370`; 0.37 ms on an M1 Pro); **4.96 KB and 238 allocs**. `click`, with the tester's CPU raster standing in for the GPU: 0.74 ms Linux, 0.39 ms Windows, 0.42 ms macOS (1.22, 1.49 and 1.61 ms before #196–#200; 0.42 ms on an M1 Pro, 0.62 before #200) (`BenchmarkTableCheckedLarge`, #19) | `clickApp` ≤ 1 ms on the three machines, no MB-scale allocation. **Met** |
 | A frame of N plain widgets | not measured | `BenchmarkWidgetFrame` (M1 Pro): 100 widgets 98 µs and 66 allocs, 1000 widgets 0.77 ms and 666 allocs (CI Linux x86: 0.18 and 1.3 ms); the same as raw `ui` (`BenchmarkUIFrame`): 90 µs and 0.72 ms, 133 and 1,933 allocs; a Style on each: +16–21% (`-styled`), the same styles on raw `ui` +13–14%, so the widget layer adds ×1.03–1.06 (the Phase 0 gate, ≤ 1.10) | baseline set in Phase 0 |
 | `counter-native` release size | 9.2–9.7 MB | 9.22 MB macOS, 9.45 MB Linux, 9.77 MB Windows; `hello` 9.37, 9.47 and 9.95 MB | unchanged by widget work |
@@ -485,15 +485,66 @@ cannot show: those items are not marked):
     the branch rows of an Outline and TreeView are built every frame (their
     arrow animation leaves `motions` set).
 
-  *Next:* P3, the layout and the commit of a retained row skipped (`commitElement`
-  and `layoutTree` in `ui/runtime.go` and `ui/layout.go` are the map). A kept
-  row is a heap copy of the row's nodes; `keep` clears `lay`, `tl` and the
-  per-frame measures and zeroes `x, y, w, h, contentW, contentH, ink, world`
-  on link, and layout and commit rewrite them, so what P3 skips has to restore
-  them, keyed on the record in the state (`lay`). Keeping `lay` on a kept row
-  whose parent is unchanged is equivalent today, by the mutation above.
-  "Tens of µs" in the sense of 20–30 needs the build skipped (P2, done at
-  47 µs idle on an M1 Pro) and the layout (P3).
+  - *P3 (#258):* a kept row that stays where it was, at the same width and
+    with the same surroundings, keeps the results of its last layout and
+    commit (`ui/retain_layout.go`): `layoutList` neither compares nor lays it
+    out (`settle`), `place` finds it where it was (`keptPlace`), and `commit`
+    appends the hits and labels it recorded (`commitRow`) while what commit
+    reads around it (clip, hidden, parent disabled, focus scope, page, parent
+    world) is the same. A row that moved is laid out and committed as built.
+    `place` and `commitElement` reach the code only through engine function
+    fields set beside `rt.keepRows`. *Gate*, 30 interleaved runs on an M1 Pro
+    (load 5 to 6), against main before #258, with a RowVersion and the raster
+    skipped (`-rv-app`): idle frame 47.79 to **26.47 µs** (the gate was at
+    most 30), idle layout lap 27.57 to **6.88 µs** (at most 8), hover -33.4%
+    and update -38.6% (at least 25%), scroll1px and scrollhalf -0.7% and
+    -1.1% (at most +3%), allocations and bytes unchanged;
+    `BenchmarkWidgetFrame` within noise, 0 allocs. **Missed:** without a
+    RowVersion the Table variants are +1.0 to +2.0% (the gate was 1%) and the
+    build lap, which P3 does not touch there, is +2.2%; a control (one unused
+    `uint64` in `state` on main) moves them by +0.5 to +1.6%, and removing
+    each hook alone moved it by less than one point, so it is read as the
+    binary's layout on the M1; main's `bench.yml` run of `TableFrame100k`
+    without a RowVersion is to be compared with the commit before the merge,
+    and a stable x86 slowdown over 3% is a follow-up. `hello` +0 bytes;
+    `counter-native` +16944 bytes on macOS (text +2112, the rest is the 16 KB
+    rounding of the segments), +6144 on Windows, 0 on Linux (`go tool nm`:
+    `layoutList` links `settle`; `keptPlace`, `commitRow` and `checkReplay`
+    are not in the binary).
+  - *The oracle and the reviews of P3:* `TestRetainMatchesFresh` compares
+    nodes and states as well as pictures and hits, and runs with a twin
+    (`rt.layoutCheck`: every held row is laid out and committed anyway and
+    the differences counted); 450 seeds at scales 1 and 2 pass with no
+    difference. Each guard of `settle`, `keptPlace` and `commitRow` is undone
+    in turn: all but a few are killed by a directed test that flips that
+    input alone, one (`buildLate` zero) by a pinned model seed, and the rest
+    were found equivalent and either dropped or kept with a comment (the
+    table is in #258). The audit of what walks into a list's rows after the
+    build (`ui/retain_audit_test.go`) found no hole. The independent review
+    found one: **a scroll container inside a kept row showed its old offset**
+    when the offset changed with no build of the row (a wheel over it while
+    the pointer is pressed elsewhere, a drag of its bar after the pointer left
+    the window, `dragScroll`), since `keptPlace` returns before `place`, which
+    applies the offsets, and nothing marks the row. `commitRow` now records the
+    offsets of the row's scroll containers and `settle` compares them. The
+    model had missed it too: its rows had no scroll container and its wheel
+    never aimed at one; both were added and the model only counted once the
+    mutant (the comparison dropped) failed at seed 103. The directed tests of
+    the moved path used a list that did not scroll (a column hugging its
+    content); fixed, and the helper now fails when the list does not move.
+
+  *Next:* P4, the rows of a scroll frame. A 1 px scroll frame of
+  `BenchmarkTableFrame100kPhases/scroll1px-rv-app` is 83.0 µs of app work
+  against 26.8 idle (layout 33.4, paint 26.9, build 13.0, other 9.7): the 19
+  rows that moved are laid out again and painted anew. Spikes on the head of
+  #258 (16 interleaved runs): moving the layout of a moved row 83.0 to 68.5 µs,
+  replaying the paint shifted 83.0 to 63.8, both 49.8. Layout is exact only
+  if `place` runs again over the row's relative boxes (a float shift differs
+  in the last bit, and the oracles compare with `==`); paint only if the shift
+  is a whole device pixel of coordinates that are integers and the row is
+  whole inside the clip. P4a (layout) and P4b (paint) are separate
+  changes with their own gates. "Tens of µs" in the sense of 20–30 needed the build skipped (P2,
+  47 µs idle on an M1 Pro) and the layout and commit (P3, 26.5 µs).
 - Stop allocating closures every frame in the widget layer. **Done** for the
   controls `BenchmarkWidgetFrame` builds: #169 and #179 took them from the
   table's rows, and a button's and a text input's look are now static functions
