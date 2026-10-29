@@ -44,6 +44,10 @@ type ListState struct {
 	// index. With it, the state of a row (focus, text being edited, …)
 	// follows its item, and the list keeps its place and its choice when
 	// rows are added or removed above them, as when older messages load.
+	// Key runs for every row in view in every frame: an integer of 256 or
+	// more, or a struct, returned as an any is allocated each time. To
+	// allocate nothing, return a value the app already holds boxed, as a
+	// pointer or a string.
 	Key func(row int) any
 	// KeepOffset keeps a list with a Key where it is scrolled as its rows
 	// move, rather than with the item at its top: for rows sorted again as
