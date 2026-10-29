@@ -304,7 +304,7 @@ func (f *listFrame) capture() {
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen, rec.checked = r.chosen, r.checked
-		rec.lay = rowLay{}
+		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0]}
 		if len(rec.states) > 0 {
 			rec.states[0].krec = rec
 		}

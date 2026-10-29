@@ -5,8 +5,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // pair runs one view in two Testers, one keeping rows and one building every
@@ -502,6 +504,179 @@ func TestRetainLayoutRecordTampered(t *testing.T) {
 				t.Errorf("%s: %d rows kept their layout of %d, want 1 at most", tc.name, n, before)
 			}
 			p.idle(3)
+		})
+	}
+}
+
+// around is the element around a List of 50 rows with a RowVersion, which the
+// commit tests change.
+type around struct {
+	dx        float32
+	pose      float32 // shifts the column by a pose, which commit samples: no layout changes
+	off       bool
+	invisible bool
+	group     bool
+	page      bool
+	listH     float32 // 0: fill
+	listW     float32 // 0: fill
+}
+
+func (a *around) mk() func(c *Context) {
+	s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+	return func(c *Context) {
+		col := Column(c).Translate(a.dx, 0).Disabled(a.off).Grow(1)
+		if a.pose != 0 {
+			col.AnimatePose(Pose{X: a.pose}, Animation{Duration: 100 * time.Millisecond})
+		}
+		if a.invisible {
+			col.Invisible()
+		}
+		if a.group {
+			col.FocusGroup(Vertical)
+		}
+		if a.page {
+			col.node().flags |= flagPage
+		}
+		col.Children(func() {
+			l := List(c, s, 50, func(i int) { Row(c).Children(func() { Textf(c, "row %d", i); Text(c, "·") }) })
+			if a.listW > 0 {
+				l.Width(a.listW)
+			}
+			if a.listH > 0 {
+				l.Height(a.listH)
+			} else {
+				l.Grow(1)
+			}
+		})
+	}
+}
+
+// heldThenCommit idles until the commit of rows is replayed, flips one thing
+// around the list, and wants no replay in that frame.
+func heldThenCommit(t *testing.T, mk func() func(c *Context), w, h int, flip func(p *pair), what string) *pair {
+	t.Helper()
+	p := newPair(t, w, h, mk)
+	p.idle(4)
+	if p.kept.rt.rowsCommitReplayed == 0 {
+		t.Fatalf("no commit replayed before %s", what)
+	}
+	flip(p)
+	p.frame(what)
+	if n := p.kept.rt.rowsCommitReplayed; n != 0 {
+		t.Errorf("%s: %d rows replayed their commit, want 0", what, n)
+	}
+	p.idle(2)
+	return p
+}
+
+// The clip around the last visible rows changes, not their boxes.
+func TestRetainCommitClipChange(t *testing.T) {
+	a := &around{listH: 600}
+	heldThenCommit(t, a.mk, 300, 400, func(p *pair) { p.both(func(tt *Tester) { tt.h.w, tt.h.h = 300, 360 }) }, "shorter window")
+}
+
+func TestRetainCommitParentWorld(t *testing.T) {
+	a := &around{}
+	heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.dx = 10 }, "translated ancestor")
+}
+
+// A pose moves what the rows commit without a layout, under a list that covers
+// the window before and after, so that the clip around the rows is the same:
+// the world of the parent is the only thing that differs.
+func TestRetainCommitParentPose(t *testing.T) {
+	a := &around{listW: 600, listH: 800}
+	p := newPair(t, 300, 400, a.mk)
+	p.idle(4)
+	if p.kept.rt.rowsCommitReplayed == 0 {
+		t.Fatalf("no commit replayed before the pose")
+	}
+	a.pose = -5         // to the left: the list still covers the window, so the clip is the same
+	p.frame("pose set") // the pose heads there from this frame on
+	for i := range 4 {
+		p.both(func(tt *Tester) { tt.Advance(20 * time.Millisecond) })
+		p.compare(fmt.Sprintf("pose %d", i))
+		if n := p.kept.rt.rowsCommitReplayed; n != 0 {
+			t.Errorf("pose %d: %d rows replayed their commit under a moving ancestor", i, n)
+		}
+	}
+	p.both(func(tt *Tester) { tt.Advance(time.Second) })
+	p.compare("pose done")
+	p.idle(3)
+}
+
+func TestRetainCommitParentDisabled(t *testing.T) {
+	a := &around{}
+	heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.off = true }, "disabled ancestor")
+}
+
+func TestRetainCommitHidden(t *testing.T) {
+	a := &around{}
+	p := heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.invisible = true }, "invisible ancestor")
+	a.invisible = false
+	p.frame("visible again")
+	p.idle(2)
+}
+
+func TestRetainCommitScope(t *testing.T) { // a focus group is part of the scope
+	a := &around{}
+	heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.group = true }, "focus group")
+}
+
+func TestRetainCommitPage(t *testing.T) {
+	a := &around{}
+	p := heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.page = true }, "page")
+	a.page = false
+	p.frame("no page")
+	p.idle(2)
+}
+
+// What a row's commit adds beside hits and labels is never replayed: the rows
+// of the scenario table leave the same focus order, poses, groups and modal.
+func TestRetainCommitSideEffects(t *testing.T) {
+	a := &around{}
+	p := newPair(t, 300, 400, a.mk)
+	p.idle(4)
+	k, b := p.kept.rt, p.built.rt
+	if len(k.posed) != len(b.posed) || len(k.groups) != len(b.groups) || k.modal != b.modal || !slices.Equal(k.focusOrder, b.focusOrder) {
+		t.Errorf("posed %d/%d groups %d/%d modal %d/%d focus order %v/%v", len(k.posed), len(b.posed), len(k.groups), len(b.groups), k.modal, b.modal, k.focusOrder, b.focusOrder)
+	}
+	if k.rowsCommitReplayed == 0 {
+		t.Errorf("no commit replayed")
+	}
+}
+
+// A row whose commit also adds to the focus groups, the poses or the modal
+// is walked every frame: those are not in what a row records.
+func TestRetainCommitRowWithSideEffects(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   func(c *Context)
+	}{
+		{"focus group", func(c *Context) { Row(c).FocusGroup(Vertical).Children(func() { Text(c, "g") }) }},
+		{"pose", func(c *Context) { Row(c).AnimatePose(Pose{X: 3}, Animation{}).Children(func() { Text(c, "p") }) }},
+		{"modal", func(c *Context) { Row(c).Modal().Children(func() { Text(c, "m") }) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPair(t, 300, 400, func() func(c *Context) {
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+				return func(c *Context) {
+					List(c, s, 30, func(i int) {
+						Row(c).Children(func() {
+							Textf(c, "row %d", i)
+							if i == 3 {
+								tc.in(c)
+							}
+						})
+					}).Grow(1)
+				}
+			})
+			for i := range 5 {
+				p.frame(fmt.Sprintf("idle %d", i))
+				k, b := p.kept.rt, p.built.rt
+				if len(k.posed) != len(b.posed) || len(k.groups) != len(b.groups) || k.modal != b.modal {
+					t.Fatalf("frame %d: posed %d/%d groups %d/%d modal %d/%d", i, len(k.posed), len(b.posed), len(k.groups), len(b.groups), k.modal, b.modal)
+				}
+			}
 		})
 	}
 }

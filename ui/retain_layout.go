@@ -31,6 +31,22 @@ type rowLay struct {
 	ax, ay float32 // where place put the root
 	rlay   uint8   // the root's lay bits after the layout
 	rdir   uint8   // the root's direction, which an ancestor's Direction sets again after the link
+	// What commit left of the row, which it appends again while commitEnv is
+	// the same (commitRow).
+	cok    bool
+	env    commitEnv
+	hits   []hit
+	labels []labelNode
+}
+
+// commitEnv is what the commit of a row reads outside it.
+type commitEnv struct {
+	clip      Rect
+	hidden    bool
+	parentDis bool
+	scope     focusScope
+	page      uint64
+	world     scene.Affine
 }
 
 // zero makes the nodes what an element just built holds before layout.
@@ -46,7 +62,7 @@ func (k *rowKeep) zero() {
 		n.lay, n.tl, n.nmeasure, n.leafOK, n.intrOK = 0, nil, 0, false, 0
 		n.x, n.y, n.w, n.h, n.contentW, n.contentH, n.ink, n.world = 0, 0, 0, 0, 0, 0, [4]float32{}, scene.Affine{}
 	}
-	k.lay.at = 0
+	k.lay.at, k.lay.cok = 0, false
 }
 
 // unlink clears the pointer of the root's state to the record, when it is
@@ -141,8 +157,8 @@ func heldRow(c *node) bool {
 	return rec != nil && rec.root == c && rec.lay.at != 0
 }
 
-// commitRow commits the root of a kept row, and records where the row was
-// placed when this layout laid it out or kept it.
+// commitRow commits the root of a kept row: by the record when it is where it
+// was and commit reads the same around it, or by walking it, recording it.
 func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	rec := e.st.krec
 	if rec == nil || rec.root != e {
@@ -153,13 +169,33 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	if k.setAt != rt.layouts {
 		rec.zero() // no layout of this frame saw the row: it holds nothing
 	}
+	env := commitEnv{clip: clip, hidden: hidden || rt.commitHidden, scope: rt.commitScope, page: rt.commitPage}
+	if p := e.parent; p != nil {
+		env.parentDis, env.world = p.st.flags&flagDisabled != 0, p.world
+	}
 	const both = layKept | layPlaced
+	if e.lay&both == both && k.cok && k.at+1 == rt.layouts && k.env == env {
+		rt.hits = append(rt.hits, k.hits...)
+		rt.labels = append(rt.labels, k.labels...)
+		k.at = rt.layouts
+		e.lay &^= both
+		rt.rowsCommitReplayed++
+		return
+	}
 	placed := e.lay&both == both || e.lay&layKept == 0
 	e.lay &^= both
+	h0, l0, f0, p0, g0, m0 := len(rt.hits), len(rt.labels), len(rt.focusOrder), len(rt.posed), len(rt.groups), rt.modal
 	rt.commitNode(e, clip, hidden)
-	if placed && !hidden && !rt.commitHidden && (k.lAt == rt.layouts || k.at+1 == rt.layouts) && e.lay&layReuse != 0 {
+	if placed && !env.hidden && (k.lAt == rt.layouts || k.at+1 == rt.layouts) && e.lay&layReuse != 0 {
 		k.ax, k.ay, k.rlay, k.rdir, k.at = e.x, e.y, e.lay, uint8(e.dir), rt.layouts
+		if len(rt.focusOrder) == f0 && len(rt.posed) == p0 && len(rt.groups) == g0 && rt.modal == m0 {
+			k.hits = append(k.hits[:0], rt.hits[h0:]...)
+			k.labels = append(k.labels[:0], rt.labels[l0:]...)
+			k.env, k.cok = env, true
+		} else {
+			k.cok = false
+		}
 	} else {
-		k.at = 0
+		k.at, k.cok = 0, false
 	}
 }
