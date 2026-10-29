@@ -525,8 +525,6 @@ type listRow struct {
 	ver     uint64
 	chosen  [3]bool
 	checked bool
-	kept    *rowKeep // the record of a row linked, with its layout to reuse (retain_layout.go)
-	skip    bool     // settle kept its layout
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -943,7 +941,7 @@ func (f *listFrame) buildLate(i int) *node {
 	// The view's pass made the others selectable (prepareSelectable) before
 	// sameRow took their flags; a row reused skips computeBox, which would.
 	c.rt.prepareSelectable(w)
-	if rec := f.rows[len(f.rows)-1].kept; rec != nil {
+	if rec := keptRec(w); rec != nil {
 		// Linked held: a row laid out late is compared as a row built.
 		rec.rewind(c.rt.layouts)
 		rec.zero()
@@ -1662,9 +1660,8 @@ func (e *node) layoutList(w, h float32) {
 	for k := range f.rows {
 		r := &f.rows[k]
 		f.at[r.i] = k
-		r.skip = false
 		if f.settle(e, r, cw) {
-			hs.set(r.i, r.kept.lay.hm)
+			hs.set(r.i, r.e.st.krec.lay.hm)
 			continue
 		}
 		sameRow(e, r.e)
@@ -1853,14 +1850,14 @@ func (e *node) layoutList(w, h float32) {
 		r := &f.rows[k]
 		link(r.e)
 		r.e.x, r.e.y = e.contentX(), float32(r.y)
-		if r.skip {
+		if r.e.lay&layKept != 0 { // settle kept the layout of the row
 			e.c.rt.laySeq++
 			r.e.laid = e.c.rt.laySeq
 			r.e.lay |= layKept
 			r.e.lay &^= layPlaced
 			continue
 		}
-		if rec := r.kept; rec != nil {
+		if rec := keptRec(r.e); rec != nil {
 			rec.lay.lw, rec.lay.hm = cw, float32(ht(r.i))
 		}
 		layoutBox(r.e, cw, float32(ht(r.i)))

@@ -154,7 +154,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		rec.zero()
 	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, kept: rec})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked})
 	rt.rowsKept++
 	return root
 }

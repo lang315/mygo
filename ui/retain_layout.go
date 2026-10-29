@@ -100,11 +100,20 @@ func (rt *engine) revealsIn(rec *rowKeep) bool {
 	return false
 }
 
+// keptRec returns the record of the kept row whose root is e, nil for a row
+// built.
+func keptRec(e *node) *rowKeep {
+	if rec := e.st.krec; rec != nil && rec.root == e {
+		return rec
+	}
+	return nil
+}
+
 // settle decides, in layoutList, whether the layout of the kept row r is kept
 // as it was (and then its nodes are not compared nor laid out), or the row is
 // laid out as a row built.
 func (f *listFrame) settle(list *node, r *listRow, cw float32) bool {
-	rec, rt := r.kept, list.c.rt
+	rec, rt := keptRec(r.e), list.c.rt
 	if rec == nil {
 		return false
 	}
@@ -113,7 +122,7 @@ func (f *listFrame) settle(list *node, r *listRow, cw float32) bool {
 	if k.at != 0 && k.at+1 == rt.layouts && k.lw == cw && list.lay&layRows != 0 && !rt.noLayoutCache &&
 		k.rlay&layReuse != 0 && uint8(r.e.dir) == k.rdir && inheritsPaint != nil && inheritsPaint(list) &&
 		!rt.revealsIn(rec) && r.e.st.krec == rec {
-		r.skip = true
+		r.e.lay |= layKept
 		return true
 	}
 	rec.rewind(rt.layouts)
@@ -164,7 +173,7 @@ func heldRow(c *node) bool {
 func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	rec := e.st.krec
 	if rec == nil || rec.root != e {
-		rt.commitNode(e, clip, hidden)
+		rt.walkRow(e, clip, hidden)
 		return
 	}
 	k := &rec.lay
@@ -193,7 +202,7 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	placed := e.lay&both == both || e.lay&layKept == 0
 	e.lay &^= both
 	h0, l0, f0, p0, g0, m0 := len(rt.hits), len(rt.labels), len(rt.focusOrder), len(rt.posed), len(rt.groups), rt.modal
-	rt.commitNode(e, clip, hidden)
+	rt.walkRow(e, clip, hidden)
 	// placed: place reached the row (layout.go), the hook there is not ours.
 	// !env.hidden: a hidden row is not placed, and zero covers it only through
 	// setAt. A focusable or an animated pose never reaches here (retainable,
@@ -283,7 +292,7 @@ func (k *rowKeep) checkReplay(e *node, clip Rect, hidden bool) {
 		before[i] = snapOf(st)
 	}
 	h0, l0 := len(rt.hits), len(rt.labels)
-	rt.commitNode(e, clip, hidden)
+	rt.walkRow(e, clip, hidden)
 	bad := !slices.Equal(rt.hits[h0:], k.lay.hits) || !slices.Equal(rt.labels[l0:], k.lay.labels)
 	for i, st := range k.states {
 		bad = bad || before[i] != snapOf(st)
@@ -291,4 +300,13 @@ func (k *rowKeep) checkReplay(e *node, clip Rect, hidden bool) {
 	if bad {
 		rt.layoutMismatch++
 	}
+}
+
+// walkRow commits the root of a kept row and what is in it, as commitElement
+// does a row built.
+func (rt *engine) walkRow(e *node, clip Rect, hidden bool) {
+	saved := rt.rowWalk
+	rt.rowWalk = e
+	rt.commitElement(e, clip, hidden)
+	rt.rowWalk = saved
 }

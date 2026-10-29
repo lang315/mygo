@@ -133,6 +133,7 @@ type engine struct {
 	// only through these, so an app without such a list links neither.
 	placeKept  func(e *node, x, y float32) bool
 	commitKept func(rt *engine, e *node, clip Rect, hidden bool)
+	rowWalk    *node // the row commitRow is walking
 	// rowsKept and rowsBuilt count the rows lists linked and built, noRetain
 	// stops lists from keeping rows (tests, benchmarks). bound counts the
 	// elements bound to an app's Handle, and the asks for frames (AnimationFrame,
@@ -1282,14 +1283,12 @@ func (rt *engine) commit(root *node, w, h float32) {
 }
 
 func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
-	if e.listRow && rt.commitKept != nil {
+	// A row of a list that keeps rows commits through commitRow, which walks
+	// it by commitElement again with rowWalk set (retain_layout.go).
+	if e.listRow && rt.commitKept != nil && rt.rowWalk != e {
 		rt.commitKept(rt, e, clip, hidden)
 		return
 	}
-	rt.commitNode(e, clip, hidden)
-}
-
-func (rt *engine) commitNode(e *node, clip Rect, hidden bool) {
 	inline := e.isInline()
 	if e.kind == kindText && e.first != nil && !inline {
 		placeInline(e, e, 0)
