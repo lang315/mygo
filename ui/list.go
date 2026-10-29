@@ -610,6 +610,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 			rt.placeKept = keptPlace
 			rt.commitKept = (*engine).commitRow
 			rt.forgetMeasures = forgetRowMeasures
+			rt.forgetKept = forgetKeptRows
 		}
 		rt.keepLists = append(rt.keepLists, f)
 	}
