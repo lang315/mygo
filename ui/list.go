@@ -209,6 +209,27 @@ type ListState struct {
 	// focus, then follow their keys wherever their rows went, rather than
 	// near where they were; the list keeps its place.
 	Version uint64
+	// RowVersion, when set, lets the list keep a row it built in the last
+	// frame instead of building it again, as long as RowVersion(i) returns
+	// what it did then: the row's build must read nothing but the row's own
+	// data, which RowVersion versions, and the list's state. A closure's
+	// variable, a theme of your own, the time, the size of the window, the
+	// language or any other state of the app that the row shows is not
+	// versioned by itself: change what RowVersion returns when it changes,
+	// or leave RowVersion nil.
+	//
+	// The list builds a row again whatever RowVersion says when the row, or
+	// a row beside it, is chosen or checked anew, when the pointer, the
+	// keys or assistive technology act on it, when the theme changes, when
+	// it holds a focus, a shortcut, an animation (or asks for frames or a
+	// build later), a text it edits, a custom Draw, a tooltip or an element
+	// you keep a Handle of, and while the inspector is open. RowVersion
+	// must be cheap and allocate nothing: it runs for each row in view in
+	// every frame. With RowVersion nil the list builds every row in view in
+	// every frame, as it always did. An Outline sets it from
+	// OutlineState.RowVersion: set it there, not on the List inside, which
+	// would leave out the depth and whether a branch is open.
+	RowVersion func(i int) uint64
 	// HeaderMenu, when set, gives a Table's header a context menu, built
 	// as ContextMenu's is: col is the index of the column clicked in the
 	// columns given to Table, not in the order the user moved them into,
@@ -323,6 +344,12 @@ type ListState struct {
 	// tableCols are the columns of the Table choosing cells (CellSelect)
 	// in the order shown, in this frame.
 	tableCols []tableCol
+	// rowSig and rowNoKeep are what a Table tells the list it builds of the
+	// table around its rows (rowSignature): the columns' places, widths and
+	// alignment, the block of cells chosen. buildList takes them for the
+	// frame, and clears them.
+	rowSig    uint64
+	rowNoKeep bool
 }
 
 // listRequest is where the app or the user asked the list to go: to row
@@ -471,6 +498,16 @@ type listFrame struct {
 	rows  []listRow
 	// at finds rows by their index while the list lays out.
 	at map[int]int
+	// kept holds the rows kept by key, with the records released for others,
+	// and handles the keys of the rows of this pass that bound an app's
+	// Handle (retain.go).
+	kept    map[any]*rowKeep
+	capSeq  uint64 // the captures of f, which mark the records they renew
+	spare   []*rowKeep
+	handles []any
+	// sig and noKeep are the table's (ListState.rowSig, rowNoKeep).
+	sig    uint64
+	noKeep bool
 	// rb is the row being built (Context.row), kept here rather than
 	// allocated for each row.
 	rb rowBuild
@@ -481,6 +518,13 @@ type listRow struct {
 	key any
 	e   *node
 	y   float64
+	// ver, chosen and checked are what RowVersion, the choice around the row
+	// and the checks said when the row was built or linked, which a kept copy
+	// of it is recorded with: read at the end of the frame they could be of
+	// data newer than the row's (retain.go).
+	ver     uint64
+	chosen  [3]bool
+	checked bool
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -549,7 +593,23 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		panic("ui: a list cannot both DragSelect (or CellSelect) and Reorder")
 	}
 	n = max(n, 0)
-	*f = listFrame{c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at}
+	sig, noKeep := s.rowSig, s.rowNoKeep
+	if s.RowVersion != nil {
+		sig ^= s.settingsSig()
+	} else if f.kept != nil {
+		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
+	}
+	s.rowSig, s.rowNoKeep = 0, false
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0]}
+	if s.RowVersion != nil {
+		// Linked here, so that an app with no List does not link the code
+		// that keeps rows.
+		if rt.keepRows == nil {
+			rt.keepRows = (*engine).captureRows
+			rt.keepRow = (*listFrame).keep
+		}
+		rt.keepLists = append(rt.keepLists, f)
+	}
 	if rt.pass == 0 {
 		s.editables, s.editablesNow = s.editablesNow, false
 	}
@@ -756,6 +816,27 @@ func (f *listFrame) build(i int) *node {
 	if s.Key != nil {
 		key = s.Key(i)
 	}
+	rt := c.rt
+	if rt.keepRow != nil {
+		if w := rt.keepRow(f, i, key); w != nil {
+			return w
+		}
+	}
+	rt.rowsBuilt++
+	var ver uint64
+	var around [3]bool
+	var checked bool
+	if s.RowVersion != nil && !f.noKeep && !f.isHeader(i) {
+		// Read before the row is built, as keep read them: the copy of the row
+		// is recorded with what the row was built with.
+		ver, around = s.RowVersion(i), f.chosenAround(i)
+		checked = s.Checked != nil && s.Checked.has(key)
+	}
+	bound := rt.bound
+	// A row with an EditableText tells the list so as it builds (editablesNow):
+	// a kept one would not, and the keys would open the row instead of editing.
+	wasEditable := s.editablesNow
+	s.editablesNow = false
 	// Keyed as it is made, as Context.Key does: Key after would look up
 	// a state by its place first, and drop it, in every frame.
 	c.nextKey, c.keySet, c.keyGlobal = key, true, false
@@ -837,7 +918,11 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	c.row, f.rb = saved, prev
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked})
+	if rt.bound != bound || s.editablesNow {
+		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits: not kept
+	}
+	s.editablesNow = s.editablesNow || wasEditable
 	return w
 }
 

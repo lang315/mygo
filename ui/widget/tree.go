@@ -3,8 +3,11 @@ package widget
 import (
 	"cmp"
 	"fmt"
-	"github.com/egoist/mygo/internal/l10n"
+	"hash/maphash"
 	"slices"
+
+	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/internal/l10n"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -64,6 +67,13 @@ type TreeViewWidget[T any, K comparable] struct {
 	onCheck              func(K, bool)
 	onActivate           func(K)
 
+	// gens versions the nodes by key for RowVersion: a node put or updated
+	// has a generation of its own. look versions how nodes look (images,
+	// check boxes, the Loading row's text), and builds every row again.
+	// Under mu.
+	gens rowGens[K]
+	look uint64
+
 	// ui's, on the main thread:
 	state  ui.OutlineState[treeItem[K]]
 	cursor int
@@ -73,6 +83,7 @@ type TreeViewWidget[T any, K comparable] struct {
 // type K, and text shows. key and text run under the package's lock.
 func TreeView[T any, K comparable](key func(*T) K, text func(*T) string) *TreeViewWidget[T, K] {
 	t := &TreeViewWidget[T, K]{key: key, text: text, nodes: map[K]*treeNode[T, K]{}, cursor: -1}
+	t.state.RowVersion = t.itemVersion
 	t.init(t)
 	return t
 }
@@ -80,7 +91,7 @@ func TreeView[T any, K comparable](key func(*T) K, text func(*T) string) *TreeVi
 // SetImage shows an image before the text of each node, 16 DIPs square;
 // nil, or a nil image, for none. fn runs under the package's lock.
 func (t *TreeViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *TreeViewWidget[T, K] {
-	t.change(func() { t.image, t.imageSize = fn, 0 })
+	t.change(func() { t.image, t.imageSize = fn, 0; t.look++ })
 	return t
 }
 
@@ -88,7 +99,7 @@ func (t *TreeViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *TreeViewWidget[
 // key(node), drawn at the list's Size; no image for a key the list lacks. key
 // runs under the package's lock.
 func (t *TreeViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *TreeViewWidget[T, K] {
-	t.change(func() { t.image, t.imageSize = ImagesBy(il, key), float32(il.Size()) })
+	t.change(func() { t.image, t.imageSize = ImagesBy(il, key), float32(il.Size()); t.look++ })
 	return t
 }
 
@@ -96,7 +107,7 @@ func (t *TreeViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) st
 // opened while its children load, "Loading…" in the app's language by default. That row can be
 // neither chosen nor checked.
 func (t *TreeViewWidget[T, K]) SetLoadingText(s string) *TreeViewWidget[T, K] {
-	t.change(func() { t.loading = s })
+	t.change(func() { t.loading = s; t.look++ })
 	return t
 }
 
@@ -104,7 +115,7 @@ func (t *TreeViewWidget[T, K]) SetLoadingText(s string) *TreeViewWidget[T, K] {
 // checking a node checks no other (an app that wants that does it in OnCheck
 // with SetChecked).
 func (t *TreeViewWidget[T, K]) CheckBoxes() *TreeViewWidget[T, K] {
-	t.change(func() { t.checks = true })
+	t.change(func() { t.checks = true; t.look++ })
 	return t
 }
 
@@ -132,6 +143,7 @@ func (t *TreeViewWidget[T, K]) claim(keys []K, parent K, root bool) {
 // put makes the node of key k hold data, keeping what it has if it is
 // there. Under mu.
 func (t *TreeViewWidget[T, K]) put(k K, data T, parent K, child bool) {
+	t.gens.bump(k)
 	if n := t.nodes[k]; n != nil {
 		n.data = data
 		return
@@ -265,6 +277,7 @@ func (t *TreeViewWidget[T, K]) UpdateNode(k K, fn func(*T)) *TreeViewWidget[T, K
 	t.change(func() {
 		if n := t.nodes[k]; n != nil {
 			fn(&n.data)
+			t.gens.bump(k)
 		}
 	})
 	return t
@@ -305,6 +318,7 @@ func (t *TreeViewWidget[T, K]) drop(it treeItem[K]) {
 		t.drop(kid)
 	}
 	delete(t.nodes, it.k)
+	t.gens.drop(it.k)
 	for _, s := range []*keys[treeItem[K]]{&t.open, &t.chosen, &t.checked} {
 		if s.value.Has(it) {
 			s.set(it, false)
@@ -758,6 +772,27 @@ func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 		})
 	}
 	return e
+}
+
+// localeSeed seeds the hash of the app's language in the version of the wait row.
+var localeSeed = maphash.MakeSeed()
+
+// itemVersion is ui's OutlineState.RowVersion: what the build of the row of it
+// reads of the tree: the generation of its node, how nodes look, and whether it
+// is checked (a check box shows it).
+func (t *TreeViewWidget[T, K]) itemVersion(it treeItem[K]) uint64 {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	if it.wait {
+		// The row says Loading in the app's language.
+		return versionOf(1<<62, t.look, 0) ^ maphash.String(localeSeed, i18n.Locale())
+	}
+	place := 0
+	if t.checks && t.checked.shown.Has(it) {
+		place = 1
+	}
+	return versionOf(t.gens.of(it.k), t.look, place)
 }
 
 // row builds the content of the row of it, after its arrow: while the tree

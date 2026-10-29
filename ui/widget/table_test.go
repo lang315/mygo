@@ -1014,6 +1014,9 @@ func TestTableRowsAllocateLittleWhenScrolled(t *testing.T) {
 		Column[acct]{Title: "Name", Width: 200, Text: func(a *acct) string { built.Add(1); return a.name }},
 		Column[acct]{Title: "Score", Width: 100, Text: func(a *acct) string { return strconv.Itoa(a.score) }},
 	).SetRows(manyAccts(100_000)).Expand().CheckboxColumn().IndexColumn()
+	// The test is about building rows: a table with a RowVersion keeps the
+	// rows it need not build, and a scrolled frame builds few.
+	tb.list.RowVersion = nil
 	tt := ui.NewTester(content(tb), 1280, 800)
 	for range 3 {
 		tt.Frame()

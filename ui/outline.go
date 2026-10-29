@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"math"
 	"runtime"
 	"time"
 )
@@ -26,7 +27,47 @@ type OutlineState[K comparable] struct {
 	// Indent is the width in DIPs each level adds before a row's arrow,
 	// the theme's Space(4) when zero. It must not be negative.
 	Indent float32
-	rows   []outlineRow[K]
+	// RowVersion, when set, is List's RowVersion for the items of the
+	// outline: it versions what a row builds of the item, as List's does
+	// (read it first), and the outline versions the rest of the row, how
+	// deep it is, whether it has children and shows them, and Indent. With
+	// it nil, or List.RowVersion set instead, nothing changes: List.RowVersion
+	// of an outline is overwritten while this is set.
+	RowVersion func(item K) uint64
+	rows       []outlineRow[K]
+	// rowv is rowVersion as a function, made once.
+	rowv func(i int) uint64
+}
+
+// useRowVersion points List.RowVersion at the item's, with the outline's own.
+func (s *OutlineState[K]) useRowVersion() {
+	if s.RowVersion == nil {
+		if s.rowv != nil {
+			s.List.RowVersion = nil // the outline's own, from when it had one
+		}
+		return
+	}
+	if s.rowv == nil {
+		s.rowv = s.rowVersion
+	}
+	s.List.RowVersion = s.rowv
+}
+
+// rowVersion is List.RowVersion of row i: the item's version, mixed with what
+// the outline builds of the row around it.
+func (s *OutlineState[K]) rowVersion(i int) uint64 {
+	if i < 0 || i >= len(s.rows) {
+		return 0
+	}
+	r := s.rows[i]
+	h := s.RowVersion(r.item)*0x9e3779b97f4a7c15 ^ uint64(r.depth)<<48 ^ uint64(math.Float32bits(s.Indent))<<8
+	if r.branch {
+		h ^= 1
+		if s.Open.Has(r.item) {
+			h ^= 2
+		}
+	}
+	return h
 }
 
 // outlineRow is a row of an outline: its item, how deep it is, the row of
@@ -109,6 +150,7 @@ func coreOutline[K comparable](c *context, s *OutlineState[K], roots []K, childr
 	e.widget, e.role = "Outline", RoleTree
 	s.flatten(roots, children)
 	s.List.Key = func(i int) any { return s.rows[i].item }
+	s.useRowVersion()
 	buildList(c, e, e, &s.List, len(s.rows), func(i int) {
 		r := coreRow(c).AlignItems(Center).Gap(c.theme.Space(1)).Padding(c.theme.Space(1), c.theme.Space(2))
 		r.Role(RoleNone)
@@ -134,6 +176,7 @@ func coreOutline[K comparable](c *context, s *OutlineState[K], roots []K, childr
 func coreOutlineTable[K comparable](c *context, s *OutlineState[K], columns []TableColumn, roots []K, children func(K) []K, cell func(item K, col int)) *node {
 	s.flatten(roots, children)
 	s.List.Key = func(i int) any { return s.rows[i].item }
+	s.useRowVersion()
 	e := table(c, &s.List, columns, len(s.rows), func(i, col int) {
 		if col != 0 {
 			cell(s.rows[i].item, col)

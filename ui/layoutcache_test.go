@@ -23,13 +23,19 @@ type lcNode struct {
 	text     int
 	styles   []uint8
 	children []*lcNode
-	value    string
-	lists    [2]ListState // each Tester's
+	value    [3]string    // each Tester's
+	lists    [3]ListState // each Tester's
 	many     bool         // a List or Table of rows more than a window shows
 	rev      bool         // its rows sorted the other way round
 	keyed    bool         // its rows keyed by their items, which a sort moves
-	sort     [2]SortOrder // each Tester's, a Table's Sort
+	sort     [3]SortOrder // each Tester's, a Table's Sort
 	colw     uint8        // a Table's second column is lcColWidths[colw] wide
+	// tint colors the rows (retain_model_test.go), a change of how they look
+	// that their version tells. chosen and checked are each Tester's choice and
+	// checks, when the model has versions: in the rows' keys, not versioned.
+	tint    int
+	chosen  [3]Selection[any]
+	checked [3]Selection[any]
 }
 
 const (
@@ -107,9 +113,15 @@ type lcModel struct {
 	w, h    int
 	// dup is the List or Table whose rows share keys for one frame.
 	dup     *lcNode
-	testers [2]*Tester
+	testers [3]*Tester // the third is nil unless a test drives one more
 	// extra styles an element further, when set.
 	extra func(n *lcNode, e *node)
+	// versions gives each List and Table a RowVersion: what its rows build
+	// of the model's data, which is all they read.
+	versions bool
+	// noDup stops the model from giving rows the same keys for a frame, whose
+	// pictures differ from Tester to Tester by the order a state is shared in.
+	noDup bool
 }
 
 func newLCModel(seed uint64) *lcModel {
@@ -249,23 +261,30 @@ func (m *lcModel) mutate() string {
 		switch v {
 		case 19, 20:
 			row := m.rng.IntN(l.rows())
-			l.lists[0].ScrollTo(row, Start)
-			l.lists[1].ScrollTo(row, Start)
+			for i := range l.lists {
+				l.lists[i].ScrollTo(row, Start)
+			}
 			return "scroll"
 		case 21:
 			l.colw = uint8(m.rng.IntN(len(lcColWidths)))
 			return "column width"
 		case 23:
 			l.rev = !l.rev
-			l.sort[0].Descending, l.sort[1].Descending = l.rev, l.rev
+			for i := range l.sort {
+				l.sort[i].Descending = l.rev
+			}
 			return "sort"
 		case 22:
-			if m.testers[0] == nil {
+			if m.testers[0] == nil || m.noDup {
 				return "nothing" // only TestLayoutCacheMatches turns strict mode off
 			}
 			m.dup = l
 			// Strict mode refuses keys that two rows share.
-			m.testers[0].rt.strict, m.testers[1].rt.strict = false, false
+			for _, tt := range m.testers {
+				if tt != nil {
+					tt.rt.strict = false
+				}
+			}
 			return "duplicate keys"
 		case 29:
 			l.keyed = !l.keyed
@@ -291,8 +310,11 @@ func (m *lcModel) mutate() string {
 				return "nothing"
 			}
 			id := rows[m.rng.IntN(len(rows))]
-			m.testers[0].rt.reveal(id)
-			m.testers[1].rt.reveal(id)
+			for _, tt := range m.testers {
+				if tt != nil {
+					tt.rt.reveal(id)
+				}
+			}
 			return "reveal"
 		}
 		if m.fit() {
@@ -310,8 +332,11 @@ func (m *lcModel) fit() bool {
 	if m.testers[0] == nil {
 		return false // a model with one Tester
 	}
-	var tables [2]*node
+	var tables [3]*node
 	for i, tt := range m.testers {
+		if tt == nil {
+			continue
+		}
 		var walk func(e *node)
 		walk = func(e *node) {
 			for ; e != nil && tables[i] == nil; e = e.next {
@@ -327,6 +352,9 @@ func (m *lcModel) fit() bool {
 		}
 	}
 	for i, tt := range m.testers {
+		if tt == nil {
+			continue
+		}
 		h := tables[i].first.first // the header of the first column
 		x, y := h.x+h.w-2, h.y+h.h/2
 		tt.ClickAt(x, y)
@@ -352,6 +380,12 @@ func (n *lcNode) at(i int) int {
 	return i
 }
 
+// rowVersion is ListState.RowVersion of a List or a Table: the data the rows
+// of the model build from (lcRow, and the Table's cells), and nothing else.
+func (n *lcNode) rowVersion(i int) uint64 {
+	return uint64(n.at(i))<<32 | uint64(n.tint)<<16 | uint64(n.text)<<8 | uint64(n.styles[0])
+}
+
 // lcRow is the row i of a List: two texts and a box, with a font of its own,
 // so that a row has a subtree to reuse.
 func lcRow(c *context, n *lcNode, i int) {
@@ -365,6 +399,9 @@ func lcRow(c *context, n *lcNode, i int) {
 	if f := font[int(n.styles[0])%len(font)]; f != nil {
 		f(e)
 	}
+	if n.tint != 0 {
+		e.Background(RGB(uint8(40*n.tint), 120, 200))
+	}
 }
 
 // keyRows gives the rows of a List or a Table one key per two rows for the
@@ -373,6 +410,14 @@ func (m *lcModel) keyRows(n *lcNode, tester int) {
 	s := &n.lists[tester]
 	s.Key = nil
 	s.Header = nil
+	s.RowVersion = nil
+	if m.versions {
+		s.RowVersion = n.rowVersion
+		s.Selection = &n.chosen[tester]
+		if n.kind == lcTable {
+			s.Checked = &n.checked[tester]
+		}
+	}
 	if n.many && n.kind == lcList {
 		s.Header = func(i int) bool { return i%7 == 0 }
 	}
@@ -401,8 +446,8 @@ func (m *lcModel) build(c *context, tester int) {
 		case lcImage:
 			e = coreImage(c, m.bitmaps[n.text%2])
 		case lcInput:
-			n.value = lcTexts[n.text]
-			e = coreTextInput(c, &n.value)
+			n.value[tester] = lcTexts[n.text]
+			e = coreTextInput(c, &n.value[tester])
 		case lcList:
 			m.keyRows(n, tester)
 			e = coreList(c, &n.lists[tester], n.rows(), func(i int) {
@@ -414,7 +459,10 @@ func (m *lcModel) build(c *context, tester int) {
 			n.sort[tester].Column = "Name"
 			cols := []TableColumn{{Title: "Name", Sortable: true}, {Title: "Status", Width: lcColWidths[n.colw]}}
 			e = coreTable(c, &n.lists[tester], cols, n.rows(), func(row, col int) {
-				coreText(c, lcTexts[(n.at(row)+col+n.text)%len(lcTexts)])
+				e := coreText(c, lcTexts[(n.at(row)+col+n.text)%len(lcTexts)])
+				if n.tint != 0 {
+					e.TextColor(RGB(uint8(40*n.tint), 120, 200))
+				}
 			})
 		case lcForm:
 			// Its labels as wide as the widest.
@@ -537,7 +585,7 @@ func TestLayoutCacheMatches(t *testing.T) {
 		cached := lcTester(view(0), m.w, m.h, start)
 		fresh := lcTester(view(1), m.w, m.h, start)
 		fresh.rt.noLayoutCache = true
-		m.testers = [2]*Tester{cached, fresh}
+		m.testers = [3]*Tester{cached, fresh}
 		var log []string
 		for f := range frames {
 			m.dup = nil

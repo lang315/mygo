@@ -85,6 +85,17 @@ type tableAccount struct {
 	name       string
 }
 
+// tableRowVersions, when set (api_bench_rowversion_test.go), gives the table
+// of tableFrame100k a RowVersion while tableVersioned is, and returns the
+// function that changes the version of a row; tableBump is that function for
+// the table last built. The sub-benchmarks of BenchmarkTableFrame100kPhases
+// named -rv run so.
+var (
+	tableRowVersions func(list *ui.ListState, rows []tableAccount, view *ui.TableView[tableAccount]) (bump func(r int))
+	tableVersioned   bool
+	tableBump        func(r int)
+)
+
 // tableFrame100k builds the table of BenchmarkTableFrame100k, sorted by a
 // TableView, with checkboxes, and warms it with 10 frames.
 func tableFrame100k(b *testing.B) (*ui.Tester, []tableAccount, *ui.TableView[tableAccount]) {
@@ -100,6 +111,10 @@ func tableFrame100k(b *testing.B) (*ui.Tester, []tableAccount, *ui.TableView[tab
 	var checked ui.Selection[int]
 	sort := ui.SortOrder{Column: "Status"}
 	cols := []ui.TableColumn{{Title: "Name"}, {Title: "Status", Width: 80, Sortable: true}}
+	tableBump = nil
+	if tableVersioned && tableRowVersions != nil {
+		tableBump = tableRowVersions(&list, rows, view)
+	}
 	tt := ui.NewTester(func(c *ui.Context) {
 		view.Sync(rows, sort)
 		list.Sort, list.Checked, list.Version = &sort, &checked, view.Version()
@@ -159,6 +174,9 @@ var tableFrameVariants = []tableFrameVariant{
 		names := [2]string{rows[r].name, rows[r].name + "x"}
 		return func(i int) {
 			rows[r].name = names[i%2]
+			if tableBump != nil {
+				tableBump(r)
+			}
 			tt.Frame()
 		}
 	}},
@@ -202,36 +220,49 @@ func BenchmarkTableFrame100kFrames(b *testing.B) {
 // harness's rasterizer (Tester.SkipRaster), so that they measure the work an
 // app does itself: their present is empty. Reading the parts costs time of
 // its own (about 31 B and a few hundred ns a frame): compare these frames
-// with each other, and not with BenchmarkTableFrame100kFrames.
+// with each other, and not with BenchmarkTableFrame100kFrames. The variants
+// ending in -rv (-rv-app) run with a RowVersion on the table, which keeps the
+// rows that did not change; the "update" frame changes the version of its row.
 func BenchmarkTableFrame100kPhases(b *testing.B) {
-	for _, skip := range []bool{false, true} {
-		for _, v := range tableFrameVariants {
-			name := v.name
-			if skip {
-				name += "-app"
-			}
-			b.Run(name, func(b *testing.B) {
-				tt, rows, view := tableFrame100k(b)
-				step := v.setup(tt, rows, view)
-				tt.SkipRaster(skip)
-				ui.MeasureFrames(tt)
-				var laps [4]time.Duration
-				b.ReportAllocs()
-				b.ResetTimer()
-				i := 0
-				for b.Loop() {
-					step(i)
-					l := ui.FrameLaps(tt)
-					for p := range laps {
-						laps[p] += l[p]
+	versions := []bool{false}
+	if tableRowVersions != nil {
+		versions = append(versions, true)
+	}
+	defer func() { tableVersioned = false }()
+	for _, versioned := range versions {
+		for _, skip := range []bool{false, true} {
+			for _, v := range tableFrameVariants {
+				name := v.name
+				if versioned {
+					name += "-rv"
+				}
+				if skip {
+					name += "-app"
+				}
+				b.Run(name, func(b *testing.B) {
+					tableVersioned = versioned
+					tt, rows, view := tableFrame100k(b)
+					step := v.setup(tt, rows, view)
+					tt.SkipRaster(skip)
+					ui.MeasureFrames(tt)
+					var laps [4]time.Duration
+					b.ReportAllocs()
+					b.ResetTimer()
+					i := 0
+					for b.Loop() {
+						step(i)
+						l := ui.FrameLaps(tt)
+						for p := range laps {
+							laps[p] += l[p]
+						}
+						i++
 					}
-					i++
-				}
-				b.StopTimer()
-				for p, part := range [4]string{"build", "layout", "paint", "present"} {
-					b.ReportMetric(float64(laps[p].Nanoseconds())/float64(i)/1000, part+"-µs/frame")
-				}
-			})
+					b.StopTimer()
+					for p, part := range [4]string{"build", "layout", "paint", "present"} {
+						b.ReportMetric(float64(laps[p].Nanoseconds())/float64(i)/1000, part+"-µs/frame")
+					}
+				})
+			}
 		}
 	}
 }

@@ -125,6 +125,7 @@ func (e Element) Bind(r *Handle) Element {
 		panic("ui: Handle bound to two controls in one build")
 	}
 	b.element = e
+	n.c.rt.bound++ // a list does not keep a row with an element of the app's
 	return e
 }
 

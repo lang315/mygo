@@ -99,6 +99,11 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// out of the choice, or of the checks (checks).
 	watch func(checks bool, on, off []K)
 
+	// look versions how rows look (the columns, a column's image), which the
+	// rows' own generations (RowSource.Version) do not: a change of it
+	// builds every row again. Under mu.
+	look uint64
+
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
@@ -128,6 +133,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: cols, view: ui.NewTableView(compare), cursor: -1}
 	t.columns = t.uiColumns()
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
+	t.list.RowVersion = t.rowVersion
 	t.list.Copy = t.copyRows
 	t.init(t)
 	t.link.id, t.link.prune = t.id, t.prune
@@ -153,7 +159,7 @@ func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 
 // IndexColumn shows first the position of each row as shown, from 1.
 func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
-	t.change(func() { t.numbered = true; t.columns = t.uiColumns() })
+	t.change(func() { t.numbered = true; t.columns = t.uiColumns(); t.look++ })
 	return t
 }
 
@@ -340,6 +346,29 @@ func (t *DataGridViewWidget[T, K]) keyAt(row int) any {
 		return groupKey{g.Title}
 	}
 	return t.keyOfPos(t.posAt(row))
+}
+
+// rowVersion is ui's ListState.RowVersion: what the build of the row shown at
+// row reads of the table, for a list that keeps rows it need not build: the
+// generation of its row in the source, how rows look, and its place among the
+// rows shown (a numbered column prints it). A header has none.
+func (t *DataGridViewWidget[T, K]) rowVersion(row int) uint64 {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	if _, ok := t.headAt(row); ok {
+		return 0
+	}
+	pos := t.posAt(row)
+	r := t.rowAtPos(pos)
+	if r == nil {
+		return 0
+	}
+	place := 0
+	if t.numbered {
+		place = pos + 1
+	}
+	return versionOf(t.src.gens.of(t.key(r)), t.look, place)
 }
 
 // keyAtPos is the key of the row at position pos of the view.

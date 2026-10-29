@@ -48,6 +48,13 @@ type ListBoxWidget[T any, K comparable] struct {
 	onCheck    func(K, bool)
 	onActivate func(K)
 
+	// gens versions the items by key for RowVersion: an item added or
+	// updated has a generation of its own. look versions how items look
+	// (their images, check boxes, a new set of items), and builds every row
+	// again. Under mu.
+	gens rowGens[K]
+	look uint64
+
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
@@ -57,6 +64,7 @@ type ListBoxWidget[T any, K comparable] struct {
 // type K, and text shows. key and text run under the package's lock.
 func ListBox[T any, K comparable](key func(*T) K, text func(*T) string) *ListBoxWidget[T, K] {
 	l := &ListBoxWidget[T, K]{key: key, text: text, index: map[K]int{}, cursor: -1}
+	l.list.RowVersion = l.rowVersion
 	l.init(l)
 	return l
 }
@@ -69,7 +77,7 @@ func CheckedListBox[T any, K comparable](key func(*T) K, text func(*T) string) *
 // CheckBoxes shows a check box before each item: a CheckedListBox is a
 // ListBox that has it.
 func (l *ListBoxWidget[T, K]) CheckBoxes() *ListBoxWidget[T, K] {
-	l.change(func() { l.checks = true })
+	l.change(func() { l.checks = true; l.look++ })
 	return l
 }
 
@@ -78,14 +86,14 @@ func (l *ListBoxWidget[T, K]) CheckBoxes() *ListBoxWidget[T, K] {
 // Shift-click chooses the items from the last one chosen. Without it one
 // item is chosen, the one clicked last.
 func (l *ListBoxWidget[T, K]) Multi() *ListBoxWidget[T, K] {
-	l.change(func() { l.multi = true })
+	l.change(func() { l.multi = true; l.look++ })
 	return l
 }
 
 // SetImage shows an image before the text of each item, 16 DIPs square; nil,
 // or a nil image, for none. fn runs under the package's lock.
 func (l *ListBoxWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListBoxWidget[T, K] {
-	l.change(func() { l.image, l.imageSize = fn, 0 })
+	l.change(func() { l.image, l.imageSize = fn, 0; l.look++ })
 	return l
 }
 
@@ -93,7 +101,7 @@ func (l *ListBoxWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListBoxWidget[T,
 // key(item), drawn at the list's Size, as WinForms' ImageList.ImageSize says; no
 // image for a key the list lacks. key runs under the package's lock.
 func (l *ListBoxWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *ListBoxWidget[T, K] {
-	l.change(func() { l.image, l.imageSize = ImagesBy(il, key), float32(il.Size()) })
+	l.change(func() { l.image, l.imageSize = ImagesBy(il, key), float32(il.Size()); l.look++ })
 	return l
 }
 
@@ -118,6 +126,7 @@ func (l *ListBoxWidget[T, K]) dedupe(items []T) ([]T, map[K]int) {
 // from the choice and the checks. Under mu.
 func (l *ListBoxWidget[T, K]) set(items []T, index map[K]int) {
 	l.items, l.index = items, index
+	l.look++
 	l.chosen.keep(index)
 	l.checked.keep(index)
 	if _, ok := index[l.anchor]; !ok {
@@ -143,6 +152,7 @@ func (l *ListBoxWidget[T, K]) AddItems(items []T) *ListBoxWidget[T, K] {
 	l.change(func() {
 		for i := range items {
 			k := l.key(&items[i])
+			l.gens.bump(k)
 			if j, ok := l.index[k]; ok {
 				l.items[j] = items[i]
 				continue
@@ -161,6 +171,7 @@ func (l *ListBoxWidget[T, K]) UpdateItem(k K, fn func(*T)) *ListBoxWidget[T, K] 
 	l.change(func() {
 		if i, ok := l.index[k]; ok {
 			fn(&l.items[i])
+			l.gens.bump(k)
 		}
 	})
 	return l
@@ -428,6 +439,24 @@ func (l *ListBoxWidget[T, K]) keyAt(row int) any {
 	}
 	var zero K
 	return zero
+}
+
+// rowVersion is ui's ListState.RowVersion: what the build of the row at row
+// reads of the box: the generation of its item, how items look, and whether it
+// is checked (a check box shows it).
+func (l *ListBoxWidget[T, K]) rowVersion(row int) uint64 {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	if row >= len(l.frame) {
+		return 0
+	}
+	k := l.key(&l.frame[row])
+	place := 0
+	if l.checks && l.checked.shown.Has(k) {
+		place = 1
+	}
+	return versionOf(l.gens.of(k), l.look, place)
 }
 
 // labelAt is ui's ListState.Label: typing the first letters of an item's text
