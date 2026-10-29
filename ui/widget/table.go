@@ -48,6 +48,7 @@ type Column[T any] struct {
 // source's (DataGridViewOf shares one between tables; DataGridView makes
 // one of its own). A table shows in one window at a time.
 type DataGridViewWidget[T any, K comparable] struct {
+	keys keyBox[K] // the boxed keys of the rows in view (ui's ListState.Key)
 	common[DataGridViewWidget[T, K]]
 	src     *RowSource[T, K]
 	key     func(*T) K // src's
@@ -382,7 +383,7 @@ func (t *DataGridViewWidget[T, K]) keyAtPos(pos int) any {
 // keyOfPos is keyAtPos under mu.
 func (t *DataGridViewWidget[T, K]) keyOfPos(pos int) any {
 	if r := t.rowAtPos(pos); r != nil {
-		return t.key(r)
+		return t.keys.of(pos, t.key(r))
 	}
 	var zero K
 	return zero
