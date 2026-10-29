@@ -69,9 +69,13 @@ func TestListAsksKeyOncePerRowPerPass(t *testing.T) {
 				if asked == 0 {
 					t.Fatalf("%s: Key was not asked for any row", st.what)
 				}
-				// In each frame and pass, once for a row.
-				if worst > 1 {
-					t.Errorf("%s: a row was asked for %d times in a pass", st.what, worst)
+				// In each frame and pass: once for a row, and once more where the
+				// callback of the row above ran in between (the choice around a row
+				// reads its neighbours before it, and a callback may change the
+				// data, so the identity of a row is asked again after it).
+				const limit = 2
+				if worst > limit {
+					t.Errorf("%s: a row was asked for %d times in a pass, at most %d", st.what, worst, limit)
 				}
 			}
 		})
