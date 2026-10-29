@@ -76,14 +76,14 @@ func watchDocumentFile(ctx context.Context, path string) {
 		// The file is gone, perhaps renamed before this watch started: a
 		// look finds it, or tells it deleted. Focus checks remain.
 		for _, b := range documentsAt(path) {
-			go b.checkDisk()
+			docWork.Go(b.checkDisk)
 		}
 		return
 	}
 	defer w.Close()
 	// What changed before the watch started, as after a rename.
 	for _, b := range documentsAt(path) {
-		go b.checkDisk()
+		docWork.Go(b.checkDisk)
 	}
 	followDocumentFile(ctx, w, path)
 }
@@ -121,7 +121,7 @@ func followDocumentFile(ctx context.Context, w *FileWatcher, path string) {
 			if moved != "" {
 				b.moved(moved)
 			} else {
-				go b.checkDisk()
+				docWork.Go(b.checkDisk)
 			}
 		}
 		if moved != "" {
