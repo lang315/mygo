@@ -248,3 +248,156 @@ func TestRetainLayoutAccessTree(t *testing.T) {
 }
 
 // pose.go: an ancestor with a pose is TestRetainCommitParentPose.
+
+// P4a: what stores, or computes from, the absolute y of a row, with the rows
+// moving. Each test idles until rows are held, scrolls the list in small
+// steps (the first move of a row saves its relative boxes, the next shift),
+// compares after each, and logs how many rows were shifted (0 = the case never
+// reaches P4a).
+func auditMoves(t *testing.T, p *pair) {
+	t.Helper()
+	p.idle(4)
+	shifted := 0
+	for i := range 8 {
+		p.scrolled(float32(1+i%3), fmt.Sprintf("scroll %d", i))
+		shifted += p.kept.rt.rowsShifted
+		p.idle(1)
+	}
+	t.Logf("rows shifted: %d", shifted)
+}
+
+func TestRetainMoveTooltipOnARow(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		return func(c *Context) {
+			List(c, s, 60, func(i int) {
+				Row(c).Children(func() { Textf(c, "row %d", i); Text(c, "·").Tooltip("tip") })
+			}).Grow(1)
+		}
+	})
+	auditMoves(t, p)
+}
+
+func TestRetainMoveCaretInARow(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		vals := make([]string, 60)
+		return func(c *Context) {
+			List(c, s, 60, func(i int) {
+				Row(c).Children(func() { Textf(c, "row %d", i); TextInput(c, &vals[i]).Width(100) })
+			}).Grow(1)
+		}
+	})
+	p.idle(4)
+	p.both(func(tt *Tester) { tt.ClickAt(150, 60) }) // into the input of a row
+	p.both(func(tt *Tester) { tt.Type("ab") })
+	p.compare("typed")
+	for i := range 8 {
+		p.scrolled(float32(1+i%3), fmt.Sprintf("scroll %d", i))
+		p.idle(1)
+	}
+}
+
+func TestRetainMoveInlineTextRows(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		return func(c *Context) {
+			List(c, s, 60, func(i int) {
+				RichText(c, Span{Text: fmt.Sprintf("row %d ", i), Weight: 700}, Span{Text: "inline", Italic: true, Underline: true})
+			}).Grow(1)
+		}
+	})
+	auditMoves(t, p)
+}
+
+func TestRetainMoveSelectableTextAcrossScroll(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		return func(c *Context) {
+			Column(c).Fill().Selectable().Children(func() {
+				List(c, s, 60, func(i int) { Textf(c, "selectable row %d", i) }).Grow(1)
+			})
+		}
+	})
+	p.idle(4)
+	p.both(func(tt *Tester) { tt.Press(20, 30); tt.Move(150, 120) })
+	p.compare("selecting")
+	for i := range 6 {
+		p.scrolled(float32(2+i%2), fmt.Sprintf("scroll %d", i))
+	}
+	p.both(func(tt *Tester) { tt.Release(150, 120) })
+	p.compare("released")
+	p.idle(2)
+}
+
+func TestRetainMoveAccessTree(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		return func(c *Context) { auditRows(c, s, 60).Grow(1) }
+	})
+	auditMoves(t, p)
+	a, b := fmt.Sprintf("%+v", p.kept.rt.accessTree()), fmt.Sprintf("%+v", p.built.rt.accessTree())
+	if a != b {
+		t.Errorf("the access trees differ after scrolling:\nkept  %.300s\nbuilt %.300s", a, b)
+	}
+}
+
+func TestRetainMoveDragOverScrolledList(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		var off Point
+		return func(c *Context) {
+			Column(c).Grow(1).Children(func() {
+				Box(c).Width(40).Height(30).Background(RGB(200, 0, 0)).Draggable(&off, DraggableOptions{})
+				auditRows(c, s, 60).Grow(1)
+			})
+		}
+	})
+	p.idle(4)
+	p.scrolled(2, "scrolled")
+	p.idle(2)
+	p.both(func(tt *Tester) { tt.Press(20, 15) })
+	for i, y := range []float32{60, 120, 200} {
+		p.both(func(tt *Tester) { tt.Move(100, y) })
+		p.compare(fmt.Sprintf("drag %d", i))
+		p.scrolled(float32(1+i), fmt.Sprintf("scroll while dragging %d", i))
+	}
+	p.both(func(tt *Tester) { tt.Release(100, 200) })
+	p.compare("dropped")
+	p.idle(2)
+}
+
+func TestRetainMovePageKeys(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		sel := 0
+		s.Selected = &sel
+		return func(c *Context) { auditRows(c, s, 200).Grow(1) }
+	})
+	p.both(func(tt *Tester) { tt.ClickAt(100, 20) })
+	p.idle(4)
+	p.scrolled(2, "scrolled")
+	p.idle(2)
+	for i, k := range []Key{KeyPageDown, KeyPageUp, KeyEnd, KeyHome} {
+		p.both(func(tt *Tester) { tt.Key(0, k) })
+		p.compare(fmt.Sprintf("key %d", i))
+		p.idle(2)
+	}
+}
+
+// The header of a section pinned on top (built late) while rows move.
+func TestRetainMoveStickyHeader(t *testing.T) {
+	p := newPair(t, 300, 300, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }, Header: func(i int) bool { return i%10 == 0 }}
+		return func(c *Context) {
+			List(c, s, 200, func(i int) {
+				if i%10 == 0 {
+					Textf(c, "section %d", i)
+					return
+				}
+				Row(c).Children(func() { Textf(c, "row %d", i) })
+			}).Grow(1)
+		}
+	})
+	auditMoves(t, p)
+}

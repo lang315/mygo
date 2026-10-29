@@ -82,11 +82,9 @@ func movedThen(t *testing.T, k *keptList, dy float32, what string) *pair {
 	p.idle(4)
 	// The first move of a row that was built lays it out again and saves its
 	// relative boxes (a copy of a row holds absolute ones): move once to prime.
-	p.both(func(tt *Tester) { tt.Scroll(150, 200, 0, 1) })
-	p.compare("first move")
+	p.scrolled(1, "first move")
 	p.idle(2)
-	p.both(func(tt *Tester) { tt.Scroll(150, 200, 0, dy) })
-	p.compare(what)
+	p.scrolled(dy, what)
 	if p.kept.rt.rowsShifted == 0 {
 		t.Fatalf("%s: no row shifted", what)
 	}
