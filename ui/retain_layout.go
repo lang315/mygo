@@ -254,6 +254,28 @@ func (k *rowKeep) restoreRel() {
 // relXY is the box of an element relative to its parent, before place.
 type relXY struct{ x, y float32 }
 
+// forgetRowMeasures forgets the measures of the text in the rows held of the
+// List list, whose text styles (its own and those it inherits) are not as they
+// were when the rows were measured: the box around a List sized by its content
+// is as wide as the rows' max-content width, which is measured before the list
+// is laid out, and a row held keeps the measures of the last frame (the
+// elements of a row linked are not zeroed, settle decides). A row not held was
+// zeroed when it was linked.
+func forgetRowMeasures(list *node) {
+	var clear func(n *node)
+	clear = func(n *node) {
+		n.nmeasure, n.leafOK, n.intrOK = 0, false, 0
+		for c := n.first; c != nil; c = c.next {
+			clear(c)
+		}
+	}
+	for c := list.first; c != nil; c = c.next {
+		if c.listRow && heldRow(c) {
+			clear(c)
+		}
+	}
+}
+
 // heldRow reports whether c is a kept row whose layout results the nodes
 // still hold (not zeroed).
 func heldRow(c *node) bool {
