@@ -607,6 +607,8 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		if rt.keepRows == nil {
 			rt.keepRows = (*engine).captureRows
 			rt.keepRow = (*listFrame).keep
+			rt.placeKept = keptPlace
+			rt.commitKept = (*engine).commitRow
 		}
 		rt.keepLists = append(rt.keepLists, f)
 	}
@@ -939,6 +941,12 @@ func (f *listFrame) buildLate(i int) *node {
 	// The view's pass made the others selectable (prepareSelectable) before
 	// sameRow took their flags; a row reused skips computeBox, which would.
 	c.rt.prepareSelectable(w)
+	if rec := keptRec(w); rec != nil {
+		// Linked held: a row laid out late is compared as a row built.
+		rec.rewind(c.rt.layouts)
+		rec.zero()
+		rec.lay.fullAt, rec.lay.setAt = c.rt.layouts, c.rt.layouts
+	}
 	return w
 }
 
@@ -1652,6 +1660,10 @@ func (e *node) layoutList(w, h float32) {
 	for k := range f.rows {
 		r := &f.rows[k]
 		f.at[r.i] = k
+		if f.settle(e, r, cw) {
+			hs.set(r.i, r.e.st.krec.lay.hm)
+			continue
+		}
 		sameRow(e, r.e)
 		hs.set(r.i, heightAt(r.e, cw, inf))
 	}
@@ -1838,6 +1850,16 @@ func (e *node) layoutList(w, h float32) {
 		r := &f.rows[k]
 		link(r.e)
 		r.e.x, r.e.y = e.contentX(), float32(r.y)
+		if r.e.lay&layKept != 0 { // settle kept the layout of the row
+			e.c.rt.laySeq++
+			r.e.laid = e.c.rt.laySeq
+			r.e.lay |= layKept
+			r.e.lay &^= layPlaced
+			continue
+		}
+		if rec := keptRec(r.e); rec != nil {
+			rec.lay.lw, rec.lay.hm = cw, float32(ht(r.i))
+		}
 		layoutBox(r.e, cw, float32(ht(r.i)))
 	}
 	for _, ch := range extras {

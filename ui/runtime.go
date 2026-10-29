@@ -128,6 +128,12 @@ type engine struct {
 	keepRows  func(*engine)
 	keepRow   func(f *listFrame, i int, key any) *node
 	keepLists []*listFrame
+	// placeKept and commitKept are keptPlace and commitRow once a list with
+	// RowVersion was built (retain_layout.go): place and commit reach them
+	// only through these, so an app without such a list links neither.
+	placeKept  func(e *node, x, y float32) bool
+	commitKept func(rt *engine, e *node, clip Rect, hidden bool)
+	rowWalk    *node // the row commitRow is walking
 	// rowsKept and rowsBuilt count the rows lists linked and built, noRetain
 	// stops lists from keeping rows (tests, benchmarks). bound counts the
 	// elements bound to an app's Handle, and the asks for frames (AnimationFrame,
@@ -135,6 +141,10 @@ type engine struct {
 	rowsKept, rowsBuilt int
 	noRetain            bool
 	bound               int
+	// rowsLaidKept counts the kept rows whose layout a layout kept and place
+	// found where they were; rowsCommitReplayed those commit replayed
+	// (retain_layout.go). Reset by beginLayout.
+	rowsLaidKept, rowsCommitReplayed int
 	// acting are the ids of the elements the engine acts on in this pass
 	// (actingIDs), with a filter over them.
 	acting     []uint64
@@ -221,6 +231,12 @@ type engine struct {
 	noReplay, replayCheck bool
 	recorded, replayed    int
 	replayMismatch        int
+
+	// layoutCheck lays out and commits every held row anyway, and counts in
+	// layoutMismatch those whose kept layout or replayed commit differ
+	// (retain_layout.go), as replayCheck does for painting. Tests only.
+	layoutCheck    bool
+	layoutMismatch int
 	// freshRows counts the list rows painted anew since the engine began,
 	// for tests.
 	freshRows int
@@ -1267,6 +1283,12 @@ func (rt *engine) commit(root *node, w, h float32) {
 }
 
 func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
+	// A row of a list that keeps rows commits through commitRow, which walks
+	// it by commitElement again with rowWalk set (retain_layout.go).
+	if e.listRow && rt.commitKept != nil && rt.rowWalk != e {
+		rt.commitKept(rt, e, clip, hidden)
+		return
+	}
 	inline := e.isInline()
 	if e.kind == kindText && e.first != nil && !inline {
 		placeInline(e, e, 0)

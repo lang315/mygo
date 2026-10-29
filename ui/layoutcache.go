@@ -72,6 +72,10 @@ const (
 	// layInherit: the text paint styles the element inherits and its own
 	// are as in the last layout, which the elements inside it inherit.
 	layInherit
+	// layKept: layoutList kept the layout of a held row as it was
+	// (retain_layout.go); layPlaced: place found it where it was.
+	layKept
+	layPlaced
 )
 
 // layoutFlags are the flags that the layout reads.
@@ -131,6 +135,7 @@ type layoutRecord struct {
 func (rt *engine) beginLayout(root *node) {
 	rt.layouts++
 	rt.paintSameRows = 0
+	rt.rowsLaidKept, rt.rowsCommitReplayed = 0, 0
 	// The text system let go of the layouts and fonts it had, or the
 	// cache is off: lay everything out anew.
 	changed := rt.noLayoutCache || !rt.layGenOK || rt.layGen != rt.gen
@@ -331,6 +336,9 @@ func inheritsPaintSame(list *node) bool {
 // keepNoLayout makes the elements inside e keep and reuse no layout.
 func keepNoLayout(e *node) {
 	for c := e.first; c != nil; c = c.next {
+		if c.listRow && heldRow(c) {
+			continue // settle (layoutList) keeps its layout or zeroes it
+		}
 		c.lay = 0
 		keepNoLayout(c)
 	}
