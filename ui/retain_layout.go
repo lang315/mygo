@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/internal/scene"
+	"github.com/egoist/mygo/internal/text"
 )
 
 // A kept row (retain.go) that stays where it was, at the same width and with
@@ -383,14 +384,23 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 // does for painting: keptPlace lays out the row it keeps and commitRow walks
 // the row it replays, and each counts in layoutMismatch what differs.
 
-// nodeBox is what layout writes of a node.
-type nodeBox struct{ x, y, w, h, contentW, contentH float64 }
+// nodeBox is what layout writes of a node: its boxes, the text layout it
+// made (the same layout, for a cache returns one for one request), and the
+// bits layout leaves on it but those place and the kept paths set.
+type nodeBox struct {
+	x, y, w, h, contentW, contentH float64
+	tl                             *text.Layout
+	lay                            uint8
+}
+
+// placedBits are the lay bits the paths that keep a row set and layout does not.
+const placedBits = layKept | layPlaced | layFresh
 
 func boxesOf(rec *rowKeep) []nodeBox {
 	b := make([]nodeBox, len(rec.nodes))
 	for j := range rec.nodes {
 		n := &rec.nodes[j]
-		b[j] = nodeBox{float64(n.x), float64(n.y), float64(n.w), float64(n.h), float64(n.contentW), float64(n.contentH)}
+		b[j] = nodeBox{float64(n.x), float64(n.y), float64(n.w), float64(n.h), float64(n.contentW), float64(n.contentH), n.tl, n.lay &^ placedBits}
 	}
 	return b
 }

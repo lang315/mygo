@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/egoist/mygo/internal/text"
 	"io"
 	"log"
 	"os"
@@ -728,6 +729,17 @@ func TestRetainLayoutCheckFindsAStaleRecord(t *testing.T) {
 		{"hit moved", func(r *rowKeep) { r.lay.hits[0].r.X += 3 }},
 		{"label changed", func(r *rowKeep) { r.lay.labels[0].text += "x" }},
 		{"node moved", func(r *rowKeep) { r.nodes[len(r.nodes)-1].x += 3 }},
+		// The box of the text is the same: only the layout of the text is not.
+		{"text layout of another text style", func(r *rowKeep) {
+			for i := range r.nodes {
+				if r.nodes[i].tl != nil {
+					r.nodes[i].tl = &text.Layout{}
+					return
+				}
+			}
+			panic("no text in the row")
+		}},
+		{"reuse bit", func(r *rowKeep) { r.nodes[0].lay ^= layReuse }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			k := newKeptList(50)
