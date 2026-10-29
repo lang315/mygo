@@ -27,7 +27,7 @@ func TestRetainScrollFuzz(t *testing.T) {
 	defer log.SetOutput(os.Stderr)
 	seeds := *scrollFuzzSeeds
 	if raceEnabled && seeds == 40 {
-		seeds = 8
+		seeds = 4
 	}
 	for _, scale := range []float32{1, 2} {
 		var shifted, replayed int
@@ -36,7 +36,7 @@ func TestRetainScrollFuzz(t *testing.T) {
 			shifted += s
 			replayed += r
 		}
-		if shifted == 0 {
+		if shifted == 0 || replayed == 0 {
 			t.Errorf("scale %v: %d rows moved with their layout kept and %d replayed their paint shifted: the fuzz no longer scrolls them", scale, shifted, replayed)
 		}
 		t.Logf("scale %v: %d rows moved by layout, %d replayed shifted", scale, shifted, replayed)

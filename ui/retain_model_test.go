@@ -92,19 +92,21 @@ func TestRetainMatchesFresh(t *testing.T) {
 		seeds = 5
 	}
 	if raceEnabled && *retainSeeds == 12 {
-		seeds = 4
+		seeds = 3
 	}
 	for _, scale := range []float32{1, 2} {
-		var kept, built int
+		var kept, built, shifted, replayed int
 		for seed := range uint64(seeds) {
-			k, b := retainModelSeed(t, scale, seed+uint64(*retainSeed0), frames)
+			k, b, sh, rp := retainModelSeed(t, scale, seed+uint64(*retainSeed0), frames)
 			kept += k
 			built += b
+			shifted += sh
+			replayed += rp
 		}
 		if kept == 0 {
 			t.Errorf("scale %v: no row was kept in %d built", scale, built)
 		}
-		t.Logf("scale %v: %d rows kept, %d built", scale, kept, built)
+		t.Logf("scale %v: %d rows kept, %d built, %d moved by layout, %d replayed shifted", scale, kept, built, shifted, replayed)
 	}
 }
 
@@ -112,7 +114,7 @@ func TestRetainMatchesFresh(t *testing.T) {
 // building every row, for frames frames, failing the test at the first
 // difference between them. It returns how many rows the kept one linked and
 // built.
-func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept, built int) {
+func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept, built, shifted, replayed int) {
 	t.Helper()
 	m := newLCModel(seed + 3000)
 	m.versions, m.noDup, m.inner, m.deco, m.menus = true, true, true, true, true
@@ -130,8 +132,9 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 	first := lcTester(view(0), m.w, m.h, start)
 	a, b := lcTester(view(1), m.w, m.h, start), lcTester(view(2), m.w, m.h, start)
 	first.rt.noRetain, b.rt.noRetain = true, true
-	a.rt.replayCheck = true // rows replayed are painted as well, and compared
-	a.rt.layoutCheck = true // rows kept are laid out and committed as well, and compared
+	first.rt.noReplay, b.rt.noReplay = true, true // the twins paint every row, replaying none
+	a.rt.replayCheck = true                       // rows replayed are painted as well, and compared
+	a.rt.layoutCheck = true                       // rows kept are laid out and committed as well, and compared
 	m.testers = [3]*Tester{first, a, b}
 	both := func(f func(tt *Tester)) {
 		f(first)
@@ -231,6 +234,45 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 					x, y = p.X, p.Y
 				}
 			}
+			if !pressed && m.rng.IntN(3) == 0 {
+				// A burst: rows held, then several small scrolls in a row, which
+				// move the rows (their layout kept and placed again, their paint
+				// replayed shifted); the counters of the twins are cumulative.
+				burst := make([]float32, 4)
+				for i := range burst {
+					burst[i] = []float32{1, 2, 0.5, -1, 1.13, 0.25, -2, 3}[m.rng.IntN(8)]
+				}
+				// Over a list that scrolls, if the view has one in sight.
+				var lists []Point
+				var find func(n *node)
+				find = func(n *node) {
+					if n.list != nil && n.h > 0 && n.w > 0 && n.contentH > float64(n.h) {
+						lists = append(lists, Point{n.x + n.w/2, n.y + n.h/2})
+					}
+					for c := n.first; c != nil; c = c.next {
+						find(c)
+					}
+				}
+				find(first.rt.c.root)
+				if len(lists) > 0 {
+					p := lists[m.rng.IntN(len(lists))]
+					x, y = p.X, p.Y
+				}
+				what = fmt.Sprintf("scroll burst %v at %v,%v", burst, x, y)
+				both(func(tt *Tester) {
+					tt.Frame()
+					tt.Frame()
+					tt.Frame()
+					for _, d := range burst {
+						tt.Scroll(x, y, 0, d)
+						if tt == a {
+							shifted += a.rt.rowsShifted
+							replayed += a.rt.rowsShiftReplayed
+						}
+					}
+				})
+				break
+			}
 			what = fmt.Sprintf("scroll %v,%v at %v,%v pressed %v", dx, dy, x, y, pressed)
 			both(func(tt *Tester) {
 				if pressed {
@@ -279,6 +321,8 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 			both(func(tt *Tester) { tt.Frame() })
 		}
 		steps = append(steps, what)
+		shifted += a.rt.rowsShifted
+		replayed += a.rt.rowsShiftReplayed
 		if a.rt.layoutMismatch != 0 {
 			t.Fatalf("seed %d scale %v frame %d (%s): %d rows kept or replayed differ from laying out and committing them", seed, scale, f, what, a.rt.layoutMismatch)
 		}
@@ -299,7 +343,7 @@ func retainModelSeed(t *testing.T, scale float32, seed uint64, frames int) (kept
 			t.Fatalf("scale %v, seed %d, frame %d, after %s: %s", scale, seed, f, strings.Join(steps, ", "), d)
 		}
 	}
-	return a.rt.rowsKept, a.rt.rowsBuilt
+	return a.rt.rowsKept, a.rt.rowsBuilt, shifted, replayed
 }
 
 // pickList returns a List or a Table of the model, nil if it has none.
