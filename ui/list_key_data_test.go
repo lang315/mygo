@@ -43,7 +43,14 @@ func lkSetup(mode string, items *[]lkItem, sel *Selection[int], cur *int, keyCal
 		return (*items)[i].id
 	}}
 	if mode != "noversion" {
-		s.RowVersion = func(i int) uint64 { return 0 }
+		// A Switch's row is kept once its knob rests, so the data a row acts on
+		// is versioned, as RowVersion asks: an item that is to expire changes it.
+		s.RowVersion = func(i int) uint64 {
+			if i < len(*items) && (*items)[i].expired {
+				return 1
+			}
+			return 0
+		}
 	}
 	s.Selection = sel
 	if cur != nil {
