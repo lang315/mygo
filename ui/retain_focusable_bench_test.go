@@ -11,11 +11,12 @@ import (
 // are ns/op and built/frame.
 func BenchmarkListRowsOfControls(b *testing.B) {
 	for _, n := range []int{1000, 100_000} {
-		for _, kind := range []string{"text", "widgets", "button-checkbox-link"} {
+		for _, kind := range []string{"text", "widgets", "button-checkbox-link", "radio"} {
 			for _, phase := range []string{"idle", "hover"} {
 				b.Run(fmt.Sprintf("%d/%s/%s", n, kind, phase), func(b *testing.B) {
 					bs := make([]bool, n)
 					ss := make([]string, n)
+					sel := make([]int, n)
 					s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
 					tt := NewTester(func(c *Context) {
 						Column(c).Fill().Children(func() {
@@ -28,6 +29,9 @@ func BenchmarkListRowsOfControls(b *testing.B) {
 										Checkbox(c, &bs[i], "ok")
 										Button(c, "go")
 										TextInput(c, &ss[i]).Width(120)
+									case "radio":
+										Radio(c, &sel[i], 1, "a")
+										Radio(c, &sel[i], 2, "b")
 									default:
 										Checkbox(c, &bs[i], "ok")
 										Button(c, "go")
