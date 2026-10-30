@@ -46,6 +46,7 @@ func TestRetainScrollFuzz(t *testing.T) {
 func scrollFuzzSeed(t *testing.T, scale float32, seed uint64, steps int) (shifted, replayed int) {
 	t.Helper()
 	rng := rand.New(rand.NewPCG(seed, 77))
+	sys := newSystemTheme(seed)
 	type app struct {
 		vers  []uint64
 		dark  bool
@@ -212,6 +213,7 @@ func scrollFuzzSeed(t *testing.T, scale float32, seed uint64, steps int) (shifte
 			what = fmt.Sprintf("height %v", h)
 			p.both(func(tt *Tester) { tt.h.h = h; tt.Frame() })
 		}
+		what += sys.step(p.both)
 		check(what)
 	}
 	return shifted, replayed

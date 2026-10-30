@@ -402,6 +402,9 @@ func (e *node) Jump(key any, value float32) float32 {
 		}
 	}
 	ch.value, ch.target, ch.moving, ch.pending, ch.jumped, ch.at = v, v, false, false, true, now
+	// A jump is not what the widget versioned: the row is built once more,
+	// and the widget says again that the channel rests (animateRest).
+	ch.rest = false
 	return value
 }
 
