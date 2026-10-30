@@ -196,10 +196,11 @@ func TestRetainActingCompositionInARow(t *testing.T) {
 	p.compare("composing again")
 }
 
-// A popover opened from an element of a row (a Select's list).
+// A popover opened from an element of a row (a Select's list): the rows of a
+// closed Select are kept now, so it opens from a row that was linked.
 func TestRetainActingPopoverFromARow(t *testing.T) {
 	sel := make([]string, 60)
-	p := actingPairKept(t, false, func(c *Context, row int) {
+	p := actingPairKept(t, true, func(c *Context, row int) {
 		Select(c, &sel[row], []string{"one", "two", "three"}).Width(100)
 	})
 	var r Rect
