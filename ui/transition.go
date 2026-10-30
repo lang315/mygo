@@ -96,6 +96,7 @@ func (e *node) Transition(t ElementTransition) *node {
 // or changing its colors, or its pose (AnimatePose) or Draggable was
 // moving it, in the frame before: false once it is where it goes.
 func (e *node) Transitioning() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}

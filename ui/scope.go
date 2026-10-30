@@ -194,6 +194,7 @@ func (e *node) Modal() *node {
 //		app.open = false
 //	}
 func (e *node) OverlayShortcut(mods Modifiers, key Key) bool {
+	e.asksOutside()
 	if !e.hasState() || e.c.inert {
 		return false
 	}
@@ -210,6 +211,7 @@ func (e *node) OverlayShortcut(mods Modifiers, key Key) bool {
 // frame, keeps it open. A press before the element showed, as the one
 // opening it, is not outside it: an Overlay opened by a press stays.
 func (e *node) PressedOutside() bool {
+	e.neverKept() // a press elsewhere, outside the row too, is not among the row's states
 	if !e.hasState() || len(e.c.rt.downs) == 0 || e.st.born == e.c.rt.frame {
 		return false
 	}

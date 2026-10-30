@@ -3136,7 +3136,8 @@ func (_handle Element) BottomPercent(p float32) Element {
 
 // Bounds returns the previous frame's transformed bounding rectangle in
 // window DIPs, the content's when zoomed (Context.SetZoom); it is empty
-// for an element the previous frame lacked.
+// for an element the previous frame lacked. A row of a List with RowVersion
+// that calls it is built in every frame.
 // LayoutBounds returns its box before visual transforms.
 func (_handle Element) Bounds() Rect {
 	_node := _handle.node()
@@ -4397,6 +4398,7 @@ func (_handle Element) ID() uint64 {
 // InView reports whether some of the element showed in the window in the
 // frame before, within the scroll containers and clips around it: to
 // animate it in as it scrolls into view, as Motion's whileInView.
+// A row of a List with RowVersion that calls it is built in every frame.
 func (_handle Element) InView() bool {
 	_node := _handle.node()
 	if _node == nil {
