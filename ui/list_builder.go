@@ -26,7 +26,14 @@ func (r ListRow) ListFocused() bool {
 	}
 	v := n.focusWithin()
 	if rb := n.c.row; rb != nil {
-		rb.noteListFocus(v)
+		if rb.f.e == n {
+			rb.noteListFocus(v)
+		} else {
+			// The row being built belongs to another list (a list inside a row of
+			// this one): it compares its own list's focus, not this one's, so it
+			// is built while it asks, like a question of an outside element.
+			n.asksOutside()
+		}
 	}
 	return v
 }

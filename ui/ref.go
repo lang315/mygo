@@ -177,6 +177,7 @@ func (r *Handle) OnShortcut(c *Context, mods Modifiers, key Key, fn func()) {
 	if rt == nil || !rt.inFrame || r == nil || fn == nil {
 		return
 	}
+	rt.readsHandle() // it declares the action in every build: a row linked would not
 	rt.actions = append(rt.actions, action{handle: r, window: c, kind: actionShortcut, mods: mods, key: key, fn: fn})
 }
 
