@@ -78,6 +78,7 @@ go generate ./internal/gpu/d3d11           # recompile the Direct3D shader (on W
 go generate ./internal/gpu/metal           # recompile the Metal shader (on macOS, with Xcode)
 go generate ./cmd/mygo                     # the Mandarin readings of slugs (cmd/mygo/pinyin.bin), from Unicode's Unihan
 go generate ./internal/l10n                # MyGo's own strings: their functions, and the packages of translations in locales/
+go generate ./internal/psl                 # the public suffix list (internal/psl), from publicsuffix.org
 go generate ./plugins/glass                # recompile the glass plugin's shaders (on macOS, and on Windows)
 bun run --cwd website dev                  # the website, with docs/ at /docs (see website/README.md)
 bun scripts/bench.ts run [--e2e]           # benchmarks and app sizes, medians of 6 runs (CI: bench.yml, /benchmarks)

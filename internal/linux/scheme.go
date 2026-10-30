@@ -7,20 +7,20 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net/http"
 	"strconv"
 	"syscall"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
 
+	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 )
 
 var (
 	cbScheme        ptr
 	cbHeaderForeach ptr
-	headerSinks     = map[ptr]http.Header{}
+	headerSinks     = map[ptr]httplite.Header{}
 )
 
 func init() {
@@ -56,9 +56,9 @@ func (b *Backend) serveScheme(req ptr) {
 	}
 	r := &platform.SchemeRequest{
 		Context:   ctx,
-		Method:    http.MethodGet,
+		Method:    httplite.MethodGet,
 		URL:       goStr(webkitURISchemeRequestGetURI(req)),
-		Header:    http.Header{},
+		Header:    httplite.Header{},
 		Responder: t,
 	}
 	if webkitURISchemeRequestGetHTTPMethod != nil {
@@ -117,7 +117,7 @@ type schemeTask struct {
 var errNoResponse = errors.New("mygo: the response was not started")
 
 func (t *schemeTask) Respond(status int, h map[string][]string) {
-	header := http.Header(h)
+	header := httplite.Header(h)
 	if t.done || t.responded {
 		return
 	}
@@ -184,7 +184,7 @@ func (t *schemeTask) Finish() {
 		return
 	}
 	if !t.responded {
-		t.Respond(http.StatusOK, http.Header{})
+		t.Respond(httplite.StatusOK, httplite.Header{})
 	}
 	t.done = true
 	if t.fd >= 0 {
