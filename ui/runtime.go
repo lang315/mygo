@@ -633,6 +633,9 @@ func (rt *engine) defaultTheme() *Theme {
 // desktop's preferences.
 func (rt *engine) themeChanged() {
 	rt.darkKnown, rt.prefsKnown = false, false
+	// Rows kept across frames have the theme the pass lent them, which is
+	// the same pointer whatever the system's appearance.
+	rt.themeGen++
 	rt.redraw, rt.repaintDue = false, time.Time{}
 	rt.host.requestFrame()
 }

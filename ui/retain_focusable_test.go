@@ -131,6 +131,7 @@ func walkFocusable(t *testing.T, seed int64) {
 	p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
 	p.idle(3)
 	rng := rand.New(rand.NewSource(seed))
+	sys := newSystemTheme(uint64(seed))
 	for step := range 80 {
 		x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
 		var what string
@@ -184,6 +185,7 @@ func walkFocusable(t *testing.T, seed int64) {
 				}
 			}
 		}
+		what += sys.step(p.both)
 		p.compareFocus(fmt.Sprintf("%d %s", step, what))
 		p.compareFocus(fmt.Sprintf("%d %s +1", step, what))
 	}
@@ -670,6 +672,7 @@ func TestRetainSelectProgressRowsRandomWalk(t *testing.T) {
 			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
 			p.idle(3)
 			rng := rand.New(rand.NewSource(seed))
+			sys := newSystemTheme(uint64(seed))
 			for step := range 80 {
 				x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
 				var what string
@@ -730,6 +733,7 @@ func TestRetainSelectProgressRowsRandomWalk(t *testing.T) {
 						r.bump[k][i]++
 					}
 				}
+				what += sys.step(p.both)
 				p.compareFocus(fmt.Sprintf("%d %s", step, what))
 				p.compareFocus(fmt.Sprintf("%d %s +1", step, what))
 			}
@@ -957,6 +961,7 @@ func TestRetainSwitchRowsRandomWalk(t *testing.T) {
 			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
 			p.idle(3)
 			rng := rand.New(rand.NewSource(seed))
+			sys := newSystemTheme(uint64(seed))
 			for step := range 100 {
 				x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
 				var what string
@@ -992,6 +997,7 @@ func TestRetainSwitchRowsRandomWalk(t *testing.T) {
 					p.both(func(tt *Tester) { tt.Scroll(x, y, 0, dy) })
 				}
 				p.both(func(tt *Tester) { tt.Frame() })
+				what += sys.step(p.both)
 				p.compareFocus(fmt.Sprintf("%d %s", step, what))
 				p.frame(fmt.Sprintf("%d %s +1", step, what))
 			}

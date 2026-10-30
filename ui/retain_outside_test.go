@@ -132,6 +132,7 @@ func walkOfReaders(t *testing.T, seed int64) {
 		}
 	})
 	rng := rand.New(rand.NewSource(seed))
+	sys := newSystemTheme(uint64(seed))
 	mods := []Modifiers{0, Cmd, Alt, Shift, Cmd | Alt}
 	p.idle(2)
 	for step := range 120 {
@@ -160,6 +161,7 @@ func walkOfReaders(t *testing.T, seed int64) {
 			what = "blur/focus"
 			p.both(func(tt *Tester) { tt.SetFocused(false); tt.SetFocused(true) })
 		}
+		what += sys.step(p.both)
 		p.frame(fmt.Sprintf("%d %s", step, what))
 		p.frame(fmt.Sprintf("%d %s +1", step, what))
 	}
