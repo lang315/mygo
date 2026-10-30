@@ -29,7 +29,10 @@ const (
 func (c *context) SetZoom(z float32) { c.rt.setZoom(z) }
 
 // Zoom returns the zoom SetZoom set, 1 for none.
-func (c *context) Zoom() float32 { return c.rt.zoomFactor() }
+func (c *context) Zoom() float32 {
+	c.readsCtx(ctxZoom)
+	return c.rt.zoomFactor()
+}
 
 // zoomFactor is the content's zoom, 1 for none.
 func (rt *engine) zoomFactor() float32 {

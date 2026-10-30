@@ -320,7 +320,10 @@ func (r *Router) changed() {
 // "/notes/42", "edit" or "?tab=info", rather than a URL with a scheme.
 // Router returns the router whose page is being built, which a Link to a
 // path without a scheme goes through, or nil outside one.
-func (c *context) Router() *Router { return c.router }
+func (c *context) Router() *Router {
+	c.readsCtx(ctxRouter)
+	return c.router
+}
 
 func isPath(target string) bool {
 	u, err := url.Parse(target)

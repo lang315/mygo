@@ -26,7 +26,10 @@ type Preferences struct {
 
 // Preferences returns the settings of the desktop that controls follow.
 // A frame follows their changes.
-func (c *context) Preferences() Preferences { return c.rt.preferences() }
+func (c *context) Preferences() Preferences {
+	c.readsCtx(ctxPrefs)
+	return c.rt.preferences()
+}
 
 // preferences returns the desktop's settings, read once until they change.
 func (rt *engine) preferences() Preferences {

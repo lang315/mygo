@@ -11,12 +11,18 @@ import (
 // tag such as "en" or "zh-Hans", for what the view says in it. Text is in
 // it unless an element says otherwise (Element.Lang). A frame follows its
 // changes, as App.SetLocale makes them.
-func (c *context) Locale() string { return c.rt.lang }
+func (c *context) Locale() string {
+	c.readsCtx(ctxLocale)
+	return c.rt.lang
+}
 
 // Region returns the user's regional formats (mygo.App.Region): the
 // locale of the formats, the first day of the week and the hour cycle,
 // which dates and times follow. A frame follows their changes.
-func (c *context) Region() i18n.Region { return c.rt.host.region() }
+func (c *context) Region() i18n.Region {
+	c.readsCtx(ctxRegion)
+	return c.rt.host.region()
+}
 
 // texts returns MyGo's own strings (internal/l10n) in the language the
 // window shows, which an app changes with keys "mygo.<key>" of its

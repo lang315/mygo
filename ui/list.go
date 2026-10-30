@@ -225,8 +225,11 @@ type ListState struct {
 	// Dragging... of an element the app saved, a header) is built every frame,
 	// whatever RowVersion says, and so is one that reads the layout of the frame
 	// before (Bounds, LayoutBounds, LocalToWindow, WindowToLocal, InView), of its
-	// own elements too; a value that the code building the list read and
-	// passes into the rows is not versioned: RowVersion must say it changed.
+	// own elements too, and so is one that calls Context.Shortcut, Now or
+	// ReadClipboard; one that reads Size, Zoom, Preferences, Locale, Region,
+	// Vibrancy or TitleBar is built when the value changes; a value that the
+	// code building the list read and passes into the rows is not versioned:
+	// RowVersion must say it changed.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer presses
@@ -511,6 +514,8 @@ type listFrame struct {
 	// theme is the theme the rows are built with, laying out as well.
 	theme *Theme
 	rows  []listRow
+	// reads: the Context reads of the rows, by listRow.reads.
+	reads []rowReads
 	// at finds rows by their index while the list lays out.
 	at map[int]int
 	// kept holds the rows kept by key, with the records released for others,
@@ -564,8 +569,22 @@ type listRow struct {
 	ver     uint64
 	chosen  [3]bool
 	checked bool
-	// readsHover, readsMods and readsDrag: see rowBuild.
-	readsHover, readsMods, readsDrag bool
+	// readsHover and readsDrag: see rowBuild.
+	readsHover, readsDrag bool
+	// reads is the place, plus one, in listFrame.reads of what the callback
+	// read through the Context (rowReads), 0 when it read none: the struct
+	// stays small, as the layout copies it.
+	reads uint16
+}
+
+// rowReads is what the callback of a row read through the Context that a kept
+// row has to be linked against: the modifier keys, and the values of the
+// window (ctxRead) as it read them.
+type rowReads struct {
+	readsMods bool
+	mods      Modifiers
+	ctx       ctxRead
+	view      ctxView
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -580,11 +599,18 @@ type rowBuild struct {
 	// PointerPosition), whatever the answer: what it builds depends on the
 	// hover, and the row is built while its elements are hovered.
 	readsHover bool
-	// readsMods: it asked for the modifier keys held (Context.Modifiers).
+	// readsMods: it asked for the modifier keys held (Context.Modifiers), and
+	// mods are the ones it got.
 	readsMods bool
+	mods      Modifiers
 	// readsDrag: it asked whether a value dragged within the window is over
 	// one of its elements (DragHover): the row is built while a drag lasts.
 	readsDrag bool
+	// ctx: the values of the window that the callback read through the Context
+	// (Size, Zoom, Preferences, Locale, Region, Vibrancy, TitleBar): a row is
+	// linked while they are the ones it was built with, which view holds.
+	ctx  ctxRead
+	view ctxView
 	// root is the element of the row; outside: the callback asked of an element
 	// that is not inside it (Hovered, PointerPosition, Pressed), whose state
 	// the row's own states do not say: the row is never kept.
@@ -656,7 +682,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
 	}
 	s.rowSig, s.rowNoKeep = 0, false
-	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
 	if s.RowVersion != nil {
 		// Linked here, so that an app with no List does not link the code
 		// that keeps rows.
@@ -976,15 +1002,29 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
-	reads, mods, drag, outside := rb.readsHover, rb.readsMods, rb.readsDrag, rb.outside
+	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
+	var readsAt uint16
 	c.row, f.rb = saved, prev
 	if saved != nil {
 		// A row built inside the callback of another.
 		saved.readsHover = saved.readsHover || reads
-		saved.readsMods = saved.readsMods || mods
+		if readMods {
+			if saved.readsMods && saved.mods != mods {
+				saved.outside = true
+			}
+			saved.readsMods, saved.mods = true, mods
+		}
 		saved.readsDrag = saved.readsDrag || drag
+		if ctx != 0 {
+			saved.mergeCtx(ctx, view)
+		}
 	}
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: mods, readsDrag: drag})
+	if readMods || ctx != 0 {
+		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view}); readsAt == 0 {
+			outside = true // too many to number: not kept
+		}
+	}
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsDrag: drag, reads: readsAt})
 	if rt.bound != bound || s.editablesNow || outside {
 		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits, or it asked of an element outside it: not kept
 	}

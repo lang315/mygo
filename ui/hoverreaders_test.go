@@ -33,6 +33,7 @@ var hoverReaders = map[string]string{
 	// The ways to ask in a build: they note it.
 	"input.go node.Hovered":         "notes the read (readsHover)",
 	"input.go node.PointerPosition": "notes the read (readsHover)",
+	"input.go context.readsMods":    "the note itself: it stores the modifier keys as the row reads them",
 	"input.go context.Modifiers":    "notes the read (readsMods)",
 	"input.go engine.modsChanged":   "an event",
 	"dragdrop.go coreDragHover":     "notes the read (readsDrag): a row that asked is built while a drag lasts",
@@ -91,7 +92,6 @@ var hoverReaders = map[string]string{
 	"runtime.go engine.updateCursor":  "the cursor",
 	"paint.go Painter.scrollbars":     "paint",
 	"replay.go rowInteractive":        "paint: a hovered row paints anew",
-	"retain.go listFrame.capture":     "the rule itself (the modifiers a row was built with)",
 	"retain.go listFrame.keep":        "the rule itself (the modifiers a row was built with)",
 	"retain.go engine.isHovered":      "the rule itself",
 	"retain.go engine.actingIDs":      "the rule itself",
@@ -257,8 +257,10 @@ var elementQueriesNotNoted = map[string]string{
 // method value (f := e.m), a note made on another receiver (e.parent.asksOutside()),
 // a method of an embedded field, nor two types that share a method name (the
 // set only widens). It skips the public methods that return *node (builders),
-// 25 of them such as Root. An audit of ui/ found none of these forms that reads
-// state today; a new one would have to be added to the guard.
+// 25 of them such as Focus or Draggable. It finds a read of a node field that
+// input sets only for the fields in stateFields: a new field of that kind has to
+// be added there. An audit of ui/ found none of these forms that reads state
+// today; a new one would have to be added to the guard.
 func TestElementQueriesNoteTheRead(t *testing.T) {
 	api, err := os.ReadFile("api_gen.go")
 	if err != nil {
@@ -376,6 +378,96 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 	for key := range elementQueriesNotNoted {
 		if !found[key] {
 			t.Errorf("%q is listed in elementQueriesNotNoted but is not such a method (any more)", key)
+		}
+	}
+}
+
+// contextNotNoted: the methods of Context that do not begin by noting a read
+// for the row being built (readsCtx, readsMods, neverKept), and why a row that
+// is kept does not need it. A method of Context that is neither noted nor here
+// fails TestContextMethodsNoteTheRead: decide which kind it is.
+var contextNotNoted = map[string]string{
+	"AddToast":          "an action, not a read: a row that raises a toast in every build is a bug the app sees at once",
+	"After":             "asks for a build later: it bumps rt.bound, and a list does not keep such a row",
+	"AnimationFrame":    "asks for frames: it bumps rt.bound, and a list does not keep such a row",
+	"Announce":          "an action",
+	"CloseToast":        "an action",
+	"Direction":         "the direction of the parent, which a row is kept with (rec.dir)",
+	"DisableAnimations": "an action",
+	"Inspecting":        "the inspector open: no row is kept (listFrame.ok)",
+	"MeasureText":       "a function of its arguments, the theme's fonts (themeGen) and the loaded ones",
+	"OpenURL":           "an action",
+	"OpenURLThen":       "an action",
+	"Root":              "the window's root element, built before the rows",
+	"RowSelected":       "the choice of the row, which a row is kept with (rec.chosen)",
+	"SetTheme":          "an action, and the theme is compared when a row is kept (themeGen, rec.theme)",
+	"SetZoom":           "an action",
+	"Theme":             "compared when a row is kept (themeGen, rec.theme)",
+	"Toast":             "an action",
+	"ToastAction":       "an action",
+	"WriteClipboard":    "an action",
+}
+
+func TestContextMethodsNoteTheRead(t *testing.T) {
+	api, err := os.ReadFile("api_gen.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	public := map[string]bool{}
+	for _, m := range regexp.MustCompile(`func \(_handle \*Context\) (\w+)\(`).FindAllStringSubmatch(string(api), -1) {
+		public[m[1]] = true
+	}
+	noted := map[string]bool{"readsCtx": true, "readsMods": true, "neverKept": true}
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	found := map[string]bool{}
+	var missing []string
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "api_gen.go" {
+			continue
+		}
+		af, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range af.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok || fd.Recv == nil || fd.Body == nil || !public[fd.Name.Name] {
+				continue
+			}
+			if st, ok := fd.Recv.List[0].Type.(*ast.StarExpr); !ok || fmt.Sprint(st.X) != "context" {
+				continue
+			}
+			if r := fd.Type.Results; r != nil && len(r.List) == 1 {
+				if st, ok := r.List[0].Type.(*ast.StarExpr); ok && fmt.Sprint(st.X) == "context" {
+					continue // a builder
+				}
+			}
+			found[fd.Name.Name] = true
+			if len(fd.Body.List) > 0 {
+				if es, ok := fd.Body.List[0].(*ast.ExprStmt); ok {
+					if call, ok := es.X.(*ast.CallExpr); ok {
+						if se, ok := call.Fun.(*ast.SelectorExpr); ok && noted[se.Sel.Name] {
+							continue
+						}
+					}
+				}
+			}
+			if _, ok := contextNotNoted[fd.Name.Name]; !ok {
+				missing = append(missing, fd.Name.Name)
+			}
+		}
+	}
+	slices.Sort(missing)
+	if len(missing) > 0 {
+		t.Errorf("methods of Context that do not begin by noting the read (readsCtx, readsMods, neverKept): %v", missing)
+	}
+	for name := range contextNotNoted {
+		if !found[name] {
+			t.Errorf("%q is listed in contextNotNoted but is not such a method (any more)", name)
 		}
 	}
 }
