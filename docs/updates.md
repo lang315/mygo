@@ -331,7 +331,12 @@ feed (`Check` says so when it is missing). `updatefeed.Source(url)` is
 the HTTP source of a feed URL you give it; it does not wrap the feed of
 `updates`, whose URL the build keeps inside MyGo. `mygo build` leaves the
 file that imports `updatefeed` out when the app's go.mod pins a MyGo that
-does not have the package: that MyGo fetches the feed itself.
+does not have the package: that MyGo fetches the feed itself. When the CLI
+cannot tell which MyGo the app builds with (a go.mod that does not parse,
+a vendor directory that does not match it, no network), the build stops
+with go's error instead of leaving the file out, and so does an app with a
+vendor directory that lacks `updatefeed`: run `go get
+github.com/egoist/mygo@latest` and `go mod vendor`.
 
 ## Where apps can update
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -106,16 +105,75 @@ package main
 import _ "github.com/egoist/mygo/updatefeed"
 `
 
-// appHasPackage reports whether the module of MyGo that the app at c.root
-// builds with has the package path. The files the CLI generates import
-// packages of the CLI's version of MyGo; an app whose go.mod pins an older
-// one does not have them, and the build would fail in a file the user did
-// not write, with advice (go get) that cannot fix it. Such an app is built
-// as it was, with what its MyGo gives it.
-func appHasPackage(c *Config, path string) bool {
-	cmd := goCommand(c.root, nil, "list", path)
-	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
-	return cmd.Run() == nil
+// mygoModule is the module of MyGo, which the app requires.
+const mygoModule = "github.com/egoist/mygo"
+
+// appHasPackage reports whether the MyGo that the app at c.root builds with
+// has the package path, a package of MyGo's module. The files the CLI
+// generates import packages of the CLI's version of MyGo; an app whose go.mod
+// pins an older one does not have them, and the build would fail in a file
+// the user did not write, with advice (go get) that cannot fix it: such an app
+// is built as it was, with what its MyGo gives it.
+//
+// It says so only when it is sure the package is not there. When it cannot
+// find the module (a go.mod that does not parse, a module that cannot be
+// loaded, GOFLAGS=-mod=vendor without a consistent vendor directory, no
+// network) it returns go's own error, so that the build fails with its reason
+// and does not leave out a file the release needs. In an app with a vendor
+// directory, a package that is not in it is an error too: it may be one MyGo
+// has and the vendor directory lacks, and nothing here can tell.
+func appHasPackage(c *Config, path string) (bool, error) {
+	out, err := goOutput(c.root, "list", "-m", "-f", "{{.Dir}}", mygoModule)
+	if err != nil {
+		return false, fmt.Errorf("finding the MyGo of the app: %w", err)
+	}
+	rel := filepath.FromSlash(strings.TrimPrefix(path, mygoModule+"/"))
+	if dir := strings.TrimSpace(out); dir != "" {
+		return hasGoFiles(filepath.Join(dir, rel)), nil
+	}
+	// go list -m gives no directory in vendor mode: the vendor directory,
+	// next to go.mod, is the module.
+	gomod, err := goOutput(c.root, "env", "GOMOD")
+	if err != nil {
+		return false, fmt.Errorf("finding the go.mod of the app: %w", err)
+	}
+	vendor := filepath.Join(filepath.Dir(strings.TrimSpace(gomod)), "vendor")
+	if _, err := os.Stat(filepath.Join(vendor, "modules.txt")); err != nil {
+		return false, fmt.Errorf("the directory of the MyGo module of the app is unknown: go list -m gave none, and %s has no modules.txt", vendor)
+	}
+	if hasGoFiles(filepath.Join(vendor, filepath.FromSlash(path))) {
+		return true, nil
+	}
+	return false, fmt.Errorf("the vendor directory of the app, %s, has no %s, which this build needs: run go get %s@latest and go mod vendor, or build without vendoring", vendor, path, mygoModule)
+}
+
+// goOutput runs go in dir and returns what it printed; its error holds what
+// go said on stderr.
+func goOutput(dir string, args ...string) (string, error) {
+	var out, errOut bytes.Buffer
+	cmd := goCommand(dir, nil, args...)
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(errOut.String()); msg != "" {
+			return "", fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), err, msg)
+		}
+		return "", fmt.Errorf("go %s: %w", strings.Join(args, " "), err)
+	}
+	return out.String(), nil
+}
+
+// hasGoFiles reports whether dir holds the source of a package.
+func hasGoFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if n := e.Name(); !e.IsDir() && strings.HasSuffix(n, ".go") && !strings.HasSuffix(n, "_test.go") {
+			return true
+		}
+	}
+	return false
 }
 
 // updateFeedFiles returns the overlay entry that links the HTTP feed of the
@@ -127,7 +185,11 @@ func updateFeedFiles(c *Config, pkg, work string) (map[string]string, error) {
 	if c.Updates == nil {
 		return replace, nil
 	}
-	if !appHasPackage(c, updatefeedPackage) {
+	has, err := appHasPackage(c, updatefeedPackage)
+	if err != nil {
+		return nil, err
+	}
+	if !has {
 		logf("The MyGo of this app has no %s; its updates use the feed it has. Update MyGo (go get github.com/egoist/mygo@latest) to build as this CLI does.", updatefeedPackage)
 		return replace, nil
 	}

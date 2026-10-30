@@ -500,8 +500,8 @@ func TestUpdateFeedFilesOfAnOlderMygo(t *testing.T) {
 	t.Setenv("GOPROXY", "off")
 	t.Setenv("GOWORK", "off")
 	for name, c := range map[string]*Config{"older": app(old), "current": app(checkout)} {
-		if appHasPackage(c, updatefeedPackage) != (name == "current") {
-			t.Errorf("%s MyGo: appHasPackage(updatefeed) = %v", name, !(name == "current"))
+		if has, err := appHasPackage(c, updatefeedPackage); err != nil || has != (name == "current") {
+			t.Errorf("%s MyGo: appHasPackage(updatefeed) = %v, %v", name, has, err)
 		}
 		files, err := updateFeedFiles(c, c.root, work)
 		if err != nil {
@@ -510,6 +510,95 @@ func TestUpdateFeedFilesOfAnOlderMygo(t *testing.T) {
 		if want := map[bool]int{false: 0, true: 1}[name == "current"]; len(files) != want {
 			t.Errorf("%s MyGo: %d overlay entries, want %d", name, len(files), want)
 		}
+	}
+}
+
+// TestAppHasPackageSaysSoOnlyWhenSure: a MyGo without the package is told
+// from a build that cannot find its MyGo, which fails with the reason instead
+// of leaving out a file a release needs: a go.mod that does not parse, a
+// vendor directory that does not match go.mod (or is not there with
+// -mod=vendor), and a vendor directory without the package; and a vendor
+// directory that has it works.
+func TestAppHasPackageSaysSoOnlyWhenSure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("go list")
+	}
+	t.Setenv("GOFLAGS", "")
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOWORK", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+	fakeMygo := func(withFeed bool) string {
+		dir := t.TempDir()
+		files := map[string]string{
+			"go.mod":  "module github.com/egoist/mygo\n\ngo " + goVersion() + "\n",
+			"mygo.go": "package mygo\n",
+		}
+		if withFeed {
+			files["updatefeed/updatefeed.go"] = "package updatefeed\n"
+		}
+		for name, content := range files {
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+	app := func(gomod, imports string) *Config {
+		dir := t.TempDir()
+		for name, content := range map[string]string{"go.mod": gomod, "main.go": "package main\n\n" + imports + "\nfunc main() {}\n"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return &Config{root: dir}
+	}
+	gomodWith := func(mygo string) string {
+		return "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + mygo + "\n"
+	}
+	vendor := func(c *Config) {
+		cmd := goCommand(c.root, []string{"GOFLAGS=-mod=mod"}, "mod", "vendor")
+		var out bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &out, &out
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("go mod vendor: %v\n%s", err, out.String())
+		}
+	}
+
+	// A go.mod that does not parse.
+	c := app("this is not a go.mod\n", "")
+	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has || !strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("a go.mod that does not parse: %v, %v", has, err)
+	}
+	if _, err := updateFeedFiles(&Config{Updates: &Updates{}, root: c.root}, c.root, t.TempDir()); err == nil {
+		t.Error("the build went on, without the update feed, in an app whose go.mod does not parse")
+	}
+	// -mod=vendor without a vendor directory.
+	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo\"\n")
+	t.Setenv("GOFLAGS", "-mod=vendor")
+	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has {
+		t.Errorf("-mod=vendor without a vendor directory: %v, %v", has, err)
+	}
+	t.Setenv("GOFLAGS", "")
+	// A vendor directory with the package.
+	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo/updatefeed\"\n")
+	vendor(c)
+	if has, err := appHasPackage(c, updatefeedPackage); err != nil || !has {
+		t.Errorf("a vendor directory with updatefeed: %v, %v", has, err)
+	}
+	// A vendor directory without it: the build cannot tell an old MyGo from
+	// a vendor directory that lacks what it has.
+	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo\"\n")
+	vendor(c)
+	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has || !strings.Contains(err.Error(), "vendor") {
+		t.Errorf("a vendor directory without updatefeed: %v, %v", has, err)
+	}
+	// An older MyGo, not vendored, is the answer "no" and not an error.
+	c = app(gomodWith(fakeMygo(false)), "import _ \"github.com/egoist/mygo\"\n")
+	if has, err := appHasPackage(c, updatefeedPackage); err != nil || has {
+		t.Errorf("an older MyGo: %v, %v", has, err)
 	}
 }
 
