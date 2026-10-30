@@ -445,14 +445,10 @@ func (e *node) Arrived(key any) bool {
 // InView reports whether some of the element showed in the window in the
 // frame before, within the scroll containers and clips around it: to
 // animate it in as it scrolls into view, as Motion's whileInView.
-// A row of a List with RowVersion that calls it is built in every frame.
+// A row of a List with RowVersion that calls it is built until the answer
+// settles, and again when it changes.
 func (e *node) InView() bool {
-	e.readsLayout()
-	if !e.hasState() {
-		return false
-	}
-	s := e.st
-	return s.seen+1 >= e.c.rt.frame && s.vw > 0 && s.vh > 0
+	return e.readsLayout(lkInView, 0, 0).ok
 }
 
 // colorMotion is a color that AnimateColor moves from from to to, k of

@@ -341,6 +341,9 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 	found := map[string]bool{}
 	var missing []string
 	for name := range reached {
+		if noted[name] {
+			continue // the notes themselves
+		}
 		for _, m := range methods[name] {
 			reads := false
 			ast.Inspect(m.fd.Body, func(n ast.Node) bool {
@@ -357,12 +360,8 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 			if !reads {
 				continue // it reads through the methods it calls, which are checked themselves
 			}
-			if es, ok := m.fd.Body.List[0].(*ast.ExprStmt); ok {
-				if call, ok := es.X.(*ast.CallExpr); ok {
-					if se, ok := call.Fun.(*ast.SelectorExpr); ok && noted[se.Sel.Name] {
-						continue
-					}
-				}
+			if beginsWithCall(m.fd.Body.List[0], noted) {
+				continue
 			}
 			key := m.file + " node." + name
 			found[key] = true
@@ -470,4 +469,31 @@ func TestContextMethodsNoteTheRead(t *testing.T) {
 			t.Errorf("%q is listed in contextNotNoted but is not such a method (any more)", name)
 		}
 	}
+}
+
+// beginsWithCall reports whether the first statement of a body is a call of one
+// of names, or a return or an assignment whose values come from one (a query
+// that notes the read as it answers: v := e.readsLayout(...)).
+func beginsWithCall(st ast.Stmt, names map[string]bool) bool {
+	var exprs []ast.Expr
+	switch st := st.(type) {
+	case *ast.ExprStmt:
+		exprs = []ast.Expr{st.X}
+	case *ast.ReturnStmt:
+		exprs = st.Results
+	case *ast.AssignStmt:
+		exprs = st.Rhs
+	}
+	found := false
+	for _, x := range exprs {
+		ast.Inspect(x, func(n ast.Node) bool {
+			if c, ok := n.(*ast.CallExpr); ok {
+				if se, ok := c.Fun.(*ast.SelectorExpr); ok && names[se.Sel.Name] {
+					found = true
+				}
+			}
+			return !found
+		})
+	}
+	return found
 }
