@@ -1540,8 +1540,19 @@ as in Tauri:
   files given to `SetFrontend`. `mygo build` calls `SetFrontend` from a
   generated file that embeds `frontendDist` (see CLI), so app code has no
   `//go:embed` and development builds need no built frontend. During
-  `mygo dev` without a dev server it serves `MYGO_FRONTEND_DIST` from disk,
-  and with nothing to serve, a page explaining how to get a frontend.
+  `mygo dev` without a dev server it serves the `frontendDist` files from
+  disk: only `mygo dev` uses `MYGO_FRONTEND_DIST`, through a generated file
+  it adds to the dev build (`0mygo_devfrontend_gen.go`) that calls
+  `SetFrontend` with those files, and the app itself reads no variable. The
+  generated files are named to sort before the app's, so that their `init`
+  runs first and a `SetFrontend` of the app's own wins. With nothing to serve,
+  the page
+  explaining how to get a frontend. The code that serves schemes is linked
+  by `SetFrontend` and `Protocol.Handle` (`linkScheme`): an app that calls
+  neither, as one of native UI or one that loads its own HTML, answers its
+  requests with `serveUnlinked` (the "no frontend" page), without net/http's
+  request side. Nothing else may call `Protocol.serve` or `downloadScheme`
+  (`TestSchemeServingIsReachedOnlyThroughTheHook`).
 
 ## Windows, lifecycle and quitting
 
@@ -4191,7 +4202,7 @@ renderer's (`gputest.Compare`).
   out, the inspector of native UI and the TypeScript generator (unless
   `MYGO_INSPECTOR=1`), into a staging directory, so a
   failed build keeps the previous artifacts. `frontendDist` is embedded without touching the project
-  (`embed.go`): `go build -overlay` adds a generated `mygo_frontend_gen.go`
+  (`embed.go`): `go build -overlay` adds a generated `0mygo_frontend_gen.go`
   to the main package, with `//go:embed all:mygo_frontend` and a call to
   `SetFrontend`, and maps every `frontendDist` file into that virtual
   directory, so the frontend may live anywhere. macOS targets become `.app`
@@ -4612,7 +4623,9 @@ rules, which took counter-native back to 8.9 MB after it had grown from
   functions the feature registers when the app first uses it: the File
   menu's document roles and Open Recent call `linkedDocuments`, which the
   first `NewDocuments` fills; `App.Run` writes the TypeScript client
-  through what `Bind` and `NewEvent` register; messages format dates
+  through what `Bind` and `NewEvent` register; windows serve custom
+  schemes and the frontend through what `SetFrontend` and
+  `Protocol.Handle` register; messages format dates
   through what `i18n.NewCatalog` registers. Generic constructors are only
   linked when instantiated, so they are a good place to register.
 - *No reflective method lookups on shared paths.* A reachable call of

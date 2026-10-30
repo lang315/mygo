@@ -1480,17 +1480,6 @@ func TestFrontend(t *testing.T) {
 	if !w.isTrusted("http://192.168.1.2:5173/") || w.isTrusted("http://192.168.1.3:5173/") {
 		t.Error("only the dev server is trusted")
 	}
-	// ... or frontendDist from disk without a dev server.
-	t.Setenv("MYGO_DEV_URL", "")
-	SetFrontend(nil)
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<p>disk</p>"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("MYGO_FRONTEND_DIST", dir)
-	if rec := request(t, fw, "GET", "mygo://localhost/", nil); rec.body.String() != "<p>disk</p>" {
-		t.Errorf("frontendDist on disk: %q", rec.body.String())
-	}
 }
 
 func TestFileServer(t *testing.T) {

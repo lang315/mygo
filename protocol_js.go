@@ -20,6 +20,9 @@ func (p *ProtocolModule) IsHandled(scheme string) bool { return false }
 
 func (p *ProtocolModule) schemes() []string { return nil }
 
+// linkScheme links nothing: browsers have no custom schemes.
+func linkScheme() {}
+
 func (h *windowHandler) SchemeRequest(req *platform.SchemeRequest) {}
 
 func (h *windowHandler) SchemeDownload(rawURL string) {}

@@ -9,6 +9,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehost"
@@ -58,6 +60,7 @@ func (p *ProtocolModule) Handle(scheme string, handler http.Handler) error {
 	if reservedSchemes[scheme] {
 		return fmt.Errorf("mygo: scheme %q is reserved", scheme)
 	}
+	linkScheme()
 	p.mu.Lock()
 	p.handlers[scheme] = handler
 	p.mu.Unlock()
@@ -111,8 +114,76 @@ func validScheme(s string) bool {
 	return true
 }
 
+// schemeServing is what serves the requests of custom schemes, and the
+// downloads of their URLs, once the app has something to serve (linkScheme):
+// net/http's request side, the files of a frontend and what they reach (some
+// 320 KB) stay out of the apps that have none, those of native UI, and of
+// web pages that load their own HTML. It is a pointer read at every request,
+// from any goroutine, as a window may be made while another one asks.
+type schemeServing struct {
+	serve    func(w *Window, req *platform.SchemeRequest)
+	download func(h *windowHandler, rawURL string)
+}
+
+var (
+	schemeLinked  atomic.Pointer[schemeServing]
+	schemeLinking sync.Once
+)
+
+// linkScheme makes windows serve the custom schemes and the frontend. What
+// gives the app something to serve calls it: Protocol.Handle and SetFrontend
+// (which `mygo build` makes the app call, and `mygo dev` when it serves the
+// frontendDist files).
+func linkScheme() {
+	schemeLinking.Do(func() {
+		schemeLinked.Store(&schemeServing{serve: Protocol.serve, download: downloadScheme})
+	})
+}
+
 func (h *windowHandler) SchemeRequest(req *platform.SchemeRequest) {
-	Protocol.serve(h.w, req)
+	if l := schemeLinked.Load(); l != nil {
+		l.serve(h.w, req)
+		return
+	}
+	serveUnlinked(h.w, req)
+}
+
+// serveUnlinked answers a request of an app that registered no handler and
+// has no frontend, as serving it would, without the serving (a test checks
+// that the answers are the same): the only scheme such an app has is mygo,
+// which says it has no frontend, and a request of another gets what a
+// scheme without a handler gets.
+func serveUnlinked(win *Window, req *platform.SchemeRequest) {
+	resp := req.Responder
+	if scheme, _, _ := strings.Cut(req.URL, ":"); !strings.EqualFold(scheme, frontendScheme) {
+		resp.Respond(404, map[string][]string{"Content-Type": {"text/plain; charset=utf-8"}})
+		resp.Finish()
+		return
+	}
+	if !validRequest(req) {
+		resp.Respond(400, map[string][]string{"Content-Type": {"text/plain; charset=utf-8"}})
+		resp.Finish()
+		return
+	}
+	header := map[string][]string{}
+	if allowCORS(win, header, req.Method, req.Header) {
+		resp.Respond(204, header) // a preflight, answered here
+		resp.Finish()
+		return
+	}
+	header["Content-Type"] = []string{"text/html; charset=utf-8"}
+	resp.Respond(404, header)
+	page := []byte(noFrontendPage)
+	if body, ok := resp.(platform.SchemeBodyWriter); ok {
+		// The body goes to the backend off the main thread.
+		go func() {
+			_ = body.WriteBody(page)
+			postMain(resp.Finish)
+		}()
+		return
+	}
+	resp.Write(page)
+	resp.Finish()
 }
 
 // serve runs on the main thread when the webview requests a custom scheme.
@@ -164,7 +235,7 @@ func serveScheme(win *Window, h http.Handler, req *platform.SchemeRequest) {
 	if cl := r.Header.Get("Content-Length"); cl != "" {
 		r.ContentLength, _ = strconv.ParseInt(cl, 10, 64)
 	}
-	if allowCORS(win, rw.header, r) {
+	if allowCORS(win, rw.header, r.Method, r.Header) {
 		rw.WriteHeader(http.StatusNoContent) // a preflight, answered here
 		return
 	}
@@ -178,24 +249,39 @@ func serveScheme(win *Window, h http.Handler, req *platform.SchemeRequest) {
 // reports whether the request is a preflight it answered. Pages of other
 // sites get no CORS headers, unless the window trusts them
 // (PageOptions.TrustedOrigins); a view without bindings gets none.
-func allowCORS(win *Window, header http.Header, r *http.Request) (preflight bool) {
-	origin := r.Header.Get("Origin")
+func allowCORS(win *Window, header map[string][]string, requestMethod string, request map[string][]string) (preflight bool) {
+	origin := headerGet(request, "Origin")
 	if origin == "" || origin == "null" || win.noBindings || !win.isTrusted(appOrigin(origin)) {
 		return false
 	}
-	header.Set("Access-Control-Allow-Origin", origin)
-	header.Set("Access-Control-Expose-Headers", "*")
-	header.Add("Vary", "Origin")
-	method := r.Header.Get("Access-Control-Request-Method")
-	if r.Method != http.MethodOptions || method == "" {
+	headerSet(header, "Access-Control-Allow-Origin", origin)
+	headerSet(header, "Access-Control-Expose-Headers", "*")
+	key := textproto.CanonicalMIMEHeaderKey("Vary")
+	header[key] = append(header[key], "Origin")
+	method := headerGet(request, "Access-Control-Request-Method")
+	if requestMethod != "OPTIONS" || method == "" {
 		return false
 	}
-	header.Set("Access-Control-Allow-Methods", method)
-	if h := r.Header.Get("Access-Control-Request-Headers"); h != "" {
-		header.Set("Access-Control-Allow-Headers", h)
+	headerSet(header, "Access-Control-Allow-Methods", method)
+	if h := headerGet(request, "Access-Control-Request-Headers"); h != "" {
+		headerSet(header, "Access-Control-Allow-Headers", h)
 	}
-	header.Set("Access-Control-Max-Age", "600")
+	headerSet(header, "Access-Control-Max-Age", "600")
 	return true
+}
+
+// headerGet and headerSet are http.Header's Get and Set, on the map type
+// the backends and platform use, so that answering a request does not need
+// net/http (serveUnlinked).
+func headerGet(h map[string][]string, key string) string {
+	if v := h[textproto.CanonicalMIMEHeaderKey(key)]; len(v) > 0 {
+		return v[0]
+	}
+	return ""
+}
+
+func headerSet(h map[string][]string, key, value string) {
+	h[textproto.CanonicalMIMEHeaderKey(key)] = []string{value}
 }
 
 // schemeHosts is set where the webview serves custom schemes at
@@ -367,12 +453,6 @@ func frontendHandler() http.Handler {
 	frontend.Lock()
 	fsys := frontend.fsys
 	frontend.Unlock()
-	if fsys == nil && IsDev() {
-		// `mygo dev` without a dev server: the files on disk.
-		if dir := os.Getenv("MYGO_FRONTEND_DIST"); dir != "" {
-			fsys = os.DirFS(dir)
-		}
-	}
 	if fsys == nil {
 		return http.HandlerFunc(noFrontend)
 	}
@@ -382,17 +462,45 @@ func frontendHandler() http.Handler {
 func noFrontend(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
-	_, _ = w.Write([]byte(`<!doctype html>
+	_, _ = w.Write([]byte(noFrontendPage))
+}
+
+// noFrontendPage is what mygo:// answers when the app has no frontend.
+const noFrontendPage = `<!doctype html>
 <meta charset="utf-8">
 <title>No frontend</title>
 <style>body{font:15px/1.5 system-ui,sans-serif;margin:3em;color:#444}code{font-size:90%}</style>
 <h1>No frontend</h1>
 <p>Run the app with <code>mygo dev</code>, which loads <code>devUrl</code> from mygo.config.ts,
 or build it with <code>mygo build</code>, which embeds <code>frontendDist</code>.</p>
-`))
+`
+
+// validRequest reports whether http.NewRequest would make a request of req:
+// its method is a token and its URL parses. serveScheme answers 400 to the
+// others, and so does serveUnlinked, which has no net/http to ask.
+func validRequest(req *platform.SchemeRequest) bool {
+	for _, r := range req.Method {
+		if r >= 128 || !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("!#$%&'*+-.^_`|~", r)) {
+			return false
+		}
+	}
+	_, err := url.Parse(req.URL)
+	return err == nil
 }
 
-func (h *windowHandler) SchemeDownload(rawURL string) { go downloadScheme(h, rawURL) }
+func (h *windowHandler) SchemeDownload(rawURL string) {
+	if l := schemeLinked.Load(); l != nil {
+		go l.download(h, rawURL)
+		return
+	}
+	// What downloadScheme reports of an app that registered no handler and
+	// has no frontend.
+	err := fmt.Errorf("mygo: cannot download %s", rawURL)
+	if scheme, _, _ := strings.Cut(rawURL, ":"); strings.EqualFold(scheme, frontendScheme) && validRequest(&platform.SchemeRequest{URL: rawURL}) {
+		err = fmt.Errorf("mygo: downloading %s: 404 Not Found", rawURL)
+	}
+	postMain(func() { h.DownloadFinished(rawURL, "", err) })
+}
 
 // downloadScheme serves a URL of a custom scheme into a download.
 func downloadScheme(h *windowHandler, rawURL string) {
