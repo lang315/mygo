@@ -239,6 +239,7 @@ func TestTheWaysToAskForTheInputNoteTheRead(t *testing.T) {
 // of the frame before. A query that is not here and does not note the read
 // fails TestElementQueriesNoteTheRead: decide which kind it is.
 var elementQueriesNotNoted = map[string]string{
+	"input.go node.focusWithin":         "the answer of FocusWithin, which notes the element; ListRow.ListFocused records the value (TestRetainRowsShowingTheFocusOfTheirList)",
 	"element.go node.disabled":          "reads e.st.flags of the frame before, but every query that calls it notes the read first",
 	"element.go node.hasState":          "only whether the element has a state: the engine cannot have given it another",
 	"motion.go node.channel":            "finds the element's own animation for AnimateTo, Spring, Animate...: the row is built again because AnimateTo asks for frames (AnimationFrame bumps rt.bound), not because of the state; animating an outside element is not a read",

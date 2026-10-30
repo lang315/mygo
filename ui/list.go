@@ -591,6 +591,9 @@ type rowReads struct {
 	view      ctxView
 	// layouts: the answers of the layout queries it got (retain_reads.go).
 	layouts []layoutRead
+	// listFocus: whether the list had the focus within it, as ListFocused said:
+	// 1 false, 2 true, 0 when it did not ask (retain_reads.go).
+	listFocus uint8
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -621,10 +624,11 @@ type rowBuild struct {
 	// that is not inside it (Hovered, PointerPosition, Pressed), whose state
 	// the row's own states do not say: the row is never kept.
 	// layouts: the answers of the layout queries the callback got (retain_reads.go).
-	layouts []layoutRead
-	root    *node
-	outer   *rowBuild // the row this one was built inside, if any
-	outside bool
+	layouts   []layoutRead
+	listFocus uint8 // see rowReads
+	root      *node
+	outer     *rowBuild // the row this one was built inside, if any
+	outside   bool
 }
 
 // List creates a vertical scroll container of n rows, built with row(i),
@@ -1012,7 +1016,7 @@ func (f *listFrame) build(i int) *node {
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
-	layouts := rb.layouts
+	layouts, listFocus := rb.layouts, rb.listFocus
 	var readsAt uint16
 	c.row, f.rb = saved, prev
 	if missingNotes.Load() != notes {
@@ -1035,8 +1039,8 @@ func (f *listFrame) build(i int) *node {
 			saved.noteLayout(r)
 		}
 	}
-	if readMods || ctx != 0 || len(layouts) != 0 {
-		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view, layouts}); readsAt == 0 {
+	if readMods || ctx != 0 || len(layouts) != 0 || listFocus != 0 {
+		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view, layouts, listFocus}); readsAt == 0 {
 			outside = true // too many to number: not kept
 		}
 	}

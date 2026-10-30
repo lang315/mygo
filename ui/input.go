@@ -1303,6 +1303,12 @@ func (e *node) FocusVisible() bool {
 // the keyboard focus.
 func (e *node) FocusWithin() bool {
 	e.asksOutside()
+	return e.focusWithin()
+}
+
+// focusWithin is the answer of FocusWithin, without noting the read: for the
+// callers that note the value (ListRow.ListFocused) or the element (FocusWithin).
+func (e *node) focusWithin() bool {
 	if !e.hasState() {
 		return false
 	}

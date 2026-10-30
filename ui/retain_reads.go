@@ -128,3 +128,27 @@ func (e *node) within(root *node) bool {
 	}
 	return false
 }
+
+// listFocusOf is the answer ListRow.ListFocused gets from list e now: 1 false,
+// 2 true.
+func listFocusOf(e *node) uint8 {
+	if e.focusWithin() {
+		return 2
+	}
+	return 1
+}
+
+// noteListFocus records the answer of ListFocused for the row being built; two
+// different answers in one build make the row built in every frame.
+func (rb *rowBuild) noteListFocus(focused bool) {
+	v := uint8(1)
+	if focused {
+		v = 2
+	}
+	if rb.listFocus != 0 && rb.listFocus != v {
+		for r := rb; r != nil; r = r.outer {
+			r.outside = true
+		}
+	}
+	rb.listFocus = v
+}
