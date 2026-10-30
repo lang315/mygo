@@ -1682,6 +1682,7 @@ func (e *node) readsDrag() {
 	}
 	if rb := e.c.row; rb != nil {
 		rb.readsDrag = true
+		e.readsOutside(rb)
 	}
 }
 

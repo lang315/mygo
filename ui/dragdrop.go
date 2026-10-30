@@ -69,6 +69,7 @@ func (e *node) dragFrom(value func() any) *node {
 // Dragging reports whether the element is dragging its value (Drag), or
 // the pointer is dragging the element (Draggable).
 func (e *node) Dragging() bool {
+	e.readsDrag()
 	if !e.hasState() {
 		return false
 	}

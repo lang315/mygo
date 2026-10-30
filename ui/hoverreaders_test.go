@@ -62,7 +62,7 @@ var hoverReaders = map[string]string{
 	// The drag (rt.drag): its source and the element it is over are acting.
 	"dragdrop.go coreDragOver":       "reads only the element it is over, which is acting",
 	"dragdrop.go node.Drag":          "the source, which is acting",
-	"dragdrop.go node.Dragging":      "the source, which is acting",
+	"dragdrop.go node.Dragging":      "notes the read (readsDrag): a source outside the row is not among the row's states",
 	"dragdrop.go node.dragFrom":      "the source, which is acting",
 	"dragdrop.go engine.dragCancel":  "an event",
 	"dragdrop.go engine.dragMove":    "an event",

@@ -34,3 +34,37 @@ func TestRetainDragHoverRow(t *testing.T) {
 	p.frame("drop")
 	p.frame("drop+1")
 }
+
+// A row shows a drop zone while a source outside the list is dragged
+// (Dragging of that source). The source is no state of the row and no
+// DragHover: Dragging notes the read, and as the source is outside the row the
+// row is built.
+func TestRetainRowAsksDraggingOfASourceOutsideIt(t *testing.T) {
+	red := Hex("#ff0000")
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				src := Box(c).Height(40).Width(300).Drag("v")
+				List(c, s, 60, func(i int) {
+					r := Row(c)
+					if src.Dragging() {
+						r.Background(red)
+					}
+					r.Children(func() { Textf(c, "row %d", i) })
+				}).Grow(1)
+			})
+		}
+	})
+	p.idle(3)
+	p.both(func(tt *Tester) { tt.Press(100, 20) })
+	p.frame("press")
+	for _, y := range []float32{30, 60, 120} {
+		p.both(func(tt *Tester) { tt.Move(100, y) })
+		p.frame("drag")
+		p.frame("drag+1")
+	}
+	p.both(func(tt *Tester) { tt.Release(100, 160) })
+	p.frame("drop")
+	p.frame("drop+1")
+}
