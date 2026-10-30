@@ -64,6 +64,7 @@ func (e *node) HandleTextInput(client TextInputClient) *node {
 	}
 	e.textClient = client
 	if client != nil {
+		e.neverKept()
 		e.flags |= flagFocusable | flagHover
 		e.Cursor(CursorText)
 	}

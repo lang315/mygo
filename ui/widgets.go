@@ -238,7 +238,9 @@ func checkPath(p *Path, r Rect) *Path {
 	return p.MoveTo(r.X+r.W*0.22, r.Y+r.H*0.52).LineTo(r.X+r.W*0.42, r.Y+r.H*0.71).LineTo(r.X+r.W*0.78, r.Y+r.H*0.31)
 }
 
-// Checkbox creates a check box toggling *checked, with a label.
+// Checkbox creates a check box toggling *checked, with a label. In a row of a
+// List with RowVersion, *checked is watched by its address: when the data it is
+// in moves (append reallocates a slice), put the value in RowVersion.
 func coreCheckbox(c *context, checked *bool, label string) *node {
 	return checkbox(c, checked, label, false)
 }
@@ -246,8 +248,13 @@ func coreCheckbox(c *context, checked *bool, label string) *node {
 // checkbox creates a Checkbox, showing a dash while mixed and not checked,
 // as a box checking a group whose boxes differ.
 func checkbox(c *context, checked *bool, label string, mixed bool) *node {
+	return checkboxOf(c, checked, label, mixed, true)
+}
+
+// checkboxOf is checkbox; track is CheckboxBase's (checkboxBase).
+func checkboxOf(c *context, checked *bool, label string, mixed, track bool) *node {
 	t := c.theme
-	row := coreCheckboxBase(c, checked).Gap(t.Space(2)).FocusRing(false)
+	row := checkboxBase(c, checked, track).Gap(t.Space(2)).FocusRing(false)
 	state := int8(1)
 	switch {
 	case *checked:
@@ -302,7 +309,8 @@ func coreRadio[T comparable](c *context, selected *T, value T, label string) *no
 	return row
 }
 
-// Switch creates a switch toggling *on.
+// Switch creates a switch toggling *on. It animates, so a row of a List with
+// RowVersion that holds one is built in every frame.
 func coreSwitch(c *context, on *bool) *node {
 	t := c.theme
 	sw := coreSwitchBase(c, on).Size(t.Space(9), t.Space(5)).Radius(t.Space(2.5))

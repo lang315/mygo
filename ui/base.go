@@ -34,16 +34,31 @@ func coreButtonBase(c *context) *node {
 // checked or not. Draw its box from *checked; Checkbox is CheckboxBase
 // with the theme's look.
 func coreCheckboxBase(c *context, checked *bool) *node {
+	return checkboxBase(c, checked, true)
+}
+
+// checkboxBase is CheckboxBase; track notes the *bool for the row being built
+// (retain_bools.go). The boxes a table makes for its rows and its header hold a
+// copy of the table's own checks, which a kept row compares itself, and noting
+// their pointers would make each of them escape.
+func checkboxBase(c *context, checked *bool, track bool) *node {
 	if g := c.checks; g != nil {
 		g.boxes = append(g.boxes, checked)
+		c.neverKept() // the group counts the boxes its rows build: a row linked adds none
 	}
-	return toggle(c, checked, RoleCheckBox, "Checkbox")
+	e := toggle(c, checked, RoleCheckBox, "Checkbox")
+	if track {
+		c.readsBool(checked, *checked)
+	}
+	return e
 }
 
 // SwitchBase creates a switch without a look: CheckboxBase, which
 // assistive technology sees as a switch. Switch is SwitchBase with the
 // theme's look.
-func coreSwitchBase(c *context, on *bool) *node { return toggle(c, on, RoleSwitch, "Switch") }
+func coreSwitchBase(c *context, on *bool) *node {
+	return toggle(c, on, RoleSwitch, "Switch") // animated (pending): its row is never kept
+}
 
 func toggle(c *context, on *bool, role Role, widget string) *node {
 	e := coreRow(c).Focusable().Shrink(0)
@@ -61,6 +76,7 @@ func toggle(c *context, on *bool, role Role, widget string) *node {
 // radio button, on when *selected is value. Radio is RadioBase with the
 // theme's look.
 func coreRadioBase[T comparable](c *context, selected *T, value T) *node {
+	c.neverKept() // it reads *selected == value of any type, which a row cannot compare cheaply
 	e := coreRow(c).Focusable().Shrink(0)
 	e.flags |= flagClickable | flagHover | flagToggle
 	e.widget, e.role = "Radio", RoleRadio

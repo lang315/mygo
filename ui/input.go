@@ -1328,6 +1328,7 @@ func (e *node) focusWithin() bool {
 // keeps it there; AutoFocus gives it once. A field around an input, as
 // SearchField's, gives it to its input, where typing goes.
 func (e *node) Focus() *node {
+	e.neverKept() // an action of the build: a row linked would not run it
 	if e != nil && e.focusTo != nil {
 		e.focusTo.Focus()
 		return e
