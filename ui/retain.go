@@ -55,6 +55,8 @@ type rowKeep struct {
 	layouts []layoutRead
 	// listFocus: the focus-within of the list the row read (listRow rowReads).
 	listFocus uint8
+	// bools: the *bool of its controls and what they held (retain_bools.go).
+	bools []boolRead
 	// readsDrag: the row's callback asked for DragHover (listRow.readsDrag).
 	readsDrag bool
 	root      *node
@@ -177,7 +179,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		return nil
 	}
 	c, rt := f.c, f.c.rt
-	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame || rec.readsMods && rec.mods != rt.mods || rec.ctx != 0 && !c.sameCtx(rec.ctx, &rec.view) || len(rec.layouts) != 0 && !rt.sameLayouts(rec.layouts) || rec.listFocus != 0 && rec.listFocus != listFocusOf(f.e) {
+	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame || rec.readsMods && rec.mods != rt.mods || rec.ctx != 0 && !c.sameCtx(rec.ctx, &rec.view) || len(rec.layouts) != 0 && !rt.sameLayouts(rec.layouts) || rec.listFocus != 0 && rec.listFocus != listFocusOf(f.e) || !sameBools(rec.bools) {
 		// A row out of view for a frame had its states pruned and recycled.
 		return nil
 	}
@@ -366,12 +368,14 @@ func (f *listFrame) capture() {
 		rec.readsMods, rec.mods, rec.ctx, rec.view = false, 0, 0, ctxView{}
 		rec.layouts = rec.layouts[:0]
 		rec.listFocus = 0
+		rec.bools = rec.bools[:0]
 		if r.reads != 0 {
 			rd := &f.reads[r.reads-1]
 			// As the row read them, not as the frame ends.
 			rec.readsMods, rec.mods, rec.ctx, rec.view = rd.readsMods, rd.mods, rd.ctx, rd.view
 			rec.layouts = append(rec.layouts, rd.layouts...)
 			rec.listFocus = rd.listFocus
+			rec.bools = append(rec.bools, rd.bools...)
 		}
 		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0], scrolled: rec.lay.scrolled[:0]}
 		rec.scrollers = rec.scrollers[:0]

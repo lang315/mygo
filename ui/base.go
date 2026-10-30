@@ -36,6 +36,7 @@ func coreButtonBase(c *context) *node {
 func coreCheckboxBase(c *context, checked *bool) *node {
 	if g := c.checks; g != nil {
 		g.boxes = append(g.boxes, checked)
+		c.neverKept() // the group counts the boxes its rows build: a row linked adds none
 	}
 	return toggle(c, checked, RoleCheckBox, "Checkbox")
 }
@@ -52,6 +53,7 @@ func toggle(c *context, on *bool, role Role, widget string) *node {
 	*valueBinding[*bool](e) = on
 	e.onValueInput(toggleInput)
 	e.checked = 1 + int8(b2f(*on))
+	c.readsBool(on, *on)
 	return e
 }
 
@@ -61,6 +63,7 @@ func toggle(c *context, on *bool, role Role, widget string) *node {
 // radio button, on when *selected is value. Radio is RadioBase with the
 // theme's look.
 func coreRadioBase[T comparable](c *context, selected *T, value T) *node {
+	c.neverKept() // it reads *selected == value of any type, which a row cannot compare cheaply
 	e := coreRow(c).Focusable().Shrink(0)
 	e.flags |= flagClickable | flagHover | flagToggle
 	e.widget, e.role = "Radio", RoleRadio

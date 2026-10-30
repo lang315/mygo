@@ -235,9 +235,15 @@ type ListState struct {
 	// code building the list read and passes into the rows is not versioned:
 	// RowVersion must say it changed. That holds for the controls of a row as
 	// for its text: a row with a Button, Link, Toggle or Checkbox is kept too, so
-	// the app says by RowVersion when the data a row shows beside the control's
-	// own value changes (what the control reports, a click or a toggle, builds
-	// the row by itself).
+	// the app says by RowVersion when the data a row shows beside the control
+	// changes: its text, whether it is Disabled, and whether the row asks for the
+	// Focus (a row that did not ask and now does, because of a value of the app,
+	// needs a new version; one that asks is built in every frame). What the
+	// control reports, a click or a toggle, builds the row by itself, and the
+	// *bool of a Checkbox, Toggle or Switch is versioned by the control: the row
+	// is built when it holds another value than the row was built with. A row
+	// with a Radio, a text field, or a Checkbox inside a CheckboxGroup is built in
+	// every frame.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer presses
@@ -598,6 +604,8 @@ type rowReads struct {
 	// listFocus: whether the list had the focus within it, as ListFocused said:
 	// 1 false, 2 true, 0 when it did not ask (retain_reads.go).
 	listFocus uint8
+	// bools: the values of the *bool of the controls it built (retain_bools.go).
+	bools []boolRead
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -630,6 +638,7 @@ type rowBuild struct {
 	// layouts: the answers of the layout queries the callback got (retain_reads.go).
 	layouts   []layoutRead
 	listFocus uint8 // see rowReads
+	bools     []boolRead
 	root      *node
 	outer     *rowBuild // the row this one was built inside, if any
 	outside   bool
@@ -1020,7 +1029,7 @@ func (f *listFrame) build(i int) *node {
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
-	layouts, listFocus := rb.layouts, rb.listFocus
+	layouts, listFocus, bools := rb.layouts, rb.listFocus, rb.bools
 	var readsAt uint16
 	c.row, f.rb = saved, prev
 	if missingNotes.Load() != notes {
@@ -1042,9 +1051,12 @@ func (f *listFrame) build(i int) *node {
 		for _, r := range layouts {
 			saved.noteLayout(r)
 		}
+		for _, b := range bools {
+			saved.noteBool(b.p, b.v)
+		}
 	}
-	if readMods || ctx != 0 || len(layouts) != 0 || listFocus != 0 {
-		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view, layouts, listFocus}); readsAt == 0 {
+	if readMods || ctx != 0 || len(layouts) != 0 || listFocus != 0 || len(bools) != 0 {
+		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view, layouts, listFocus, bools}); readsAt == 0 {
 			outside = true // too many to number: not kept
 		}
 	}

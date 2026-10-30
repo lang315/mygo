@@ -89,6 +89,7 @@ func bufferInputBase(c *context, value *TextBuffer, multiline bool) *node {
 		ed.client = &widgetTextInput{ed: ed, rt: c.rt, id: e.id}
 	}
 	e.textClient = ed.client
+	c.neverKept()
 	ed.rebuild()
 	ed.ranges = ed.ranges[:0]
 	e.onValueInput(bufferInput)
