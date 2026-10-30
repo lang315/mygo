@@ -287,6 +287,7 @@ func (e *node) Lines(min, max int) *node {
 // into its text, the caret where start equals end, as the app reads it to
 // complete the word being typed.
 func (e *node) TextSelection() (start, end int) {
+	e.asksOutside()
 	ed := e.st.editor
 	if ed == nil {
 		return 0, 0
@@ -298,6 +299,7 @@ func (e *node) TextSelection() (start, end int) {
 // into its text, from where it was started to its caret: the anchor is after
 // the caret when the selection was made backwards.
 func (e *node) TextAnchorCaret() (anchor, caret int) {
+	e.asksOutside()
 	ed := e.st.editor
 	if ed == nil {
 		return 0, 0
@@ -329,6 +331,7 @@ func (e *node) SetTextSelection(start, end int) *node {
 // once composed. Keys typed meanwhile are the input method's, as Enter
 // choosing a candidate: they submit nothing and press no shortcut.
 func (e *node) Composing() bool {
+	e.asksOutside()
 	ed := e.st.editor
 	return ed != nil && ed.compose != ""
 }
@@ -385,6 +388,7 @@ type SelectedText struct {
 // as of the last frame: to copy them otherwise, as a context menu's item
 // does.
 func (e *node) SelectedTexts() []SelectedText {
+	e.asksOutside()
 	return e.c.rt.selectedTexts(e.id)
 }
 

@@ -1171,6 +1171,7 @@ func (e *node) Clicks() int {
 // clicked, none for a click by the keyboard: with Clicked, a click with
 // Shift or Cmd does something else, as extending a choice.
 func (e *node) ClickModifiers() Modifiers {
+	e.asksOutside()
 	if !e.hasState() {
 		return 0
 	}
@@ -1294,6 +1295,7 @@ func (e *node) Focused() bool {
 // FocusVisible reports whether the element has the keyboard focus and
 // should show it, because it came from the keyboard.
 func (e *node) FocusVisible() bool {
+	e.asksOutside()
 	return e.Focused() && (e.c.rt.focusVisible || e.c.rt.insp.forces(e.id, forceFocus))
 }
 
@@ -1349,6 +1351,7 @@ func (e *node) AutoFocus() *node {
 // pressed while the element or one of its descendants had the focus. The
 // innermost element handling a key gets it; a disabled one handles none.
 func (e *node) Shortcut(mods Modifiers, key Key) bool {
+	e.asksOutside()
 	if e.disabled() {
 		return false
 	}
@@ -1508,6 +1511,7 @@ func (d *dragTrack) velocities(now time.Time) [4]float32 {
 // Changed reports whether this widget's value changed in this build pass,
 // by the input it took as its constructor returned.
 func (e *node) Changed() bool {
+	e.asksOutside()
 	if e.hasState() {
 		e.c.rt.applyInputs()
 	}
@@ -1521,6 +1525,7 @@ func (e *node) Changed() bool {
 // Submitted reports whether Enter was pressed in a single-line text input
 // in this build pass.
 func (e *node) Submitted() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -1558,6 +1563,7 @@ func (e *node) Activated() (row int, ok bool) {
 }
 
 func (e *node) event(ev tableEvent) bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -1715,6 +1721,20 @@ func (e *node) readsHover() {
 func (e *node) asksOutside() {
 	if e != nil && e.c != nil && e.c.row != nil {
 		e.readsOutside(e.c.row)
+	}
+}
+
+// readsLayout is called first by the functions that report where an element
+// is, or whether it shows (Bounds, LayoutBounds, LocalToWindow, WindowToLocal,
+// InView). They read the layout of the frame before, of the row's own elements
+// as well: a row built once keeps what it read then, while a row built in
+// every frame follows the layout as it settles. A row that reads it is built.
+func (e *node) readsLayout() {
+	if e == nil || e.c == nil {
+		return
+	}
+	for rb := e.c.row; rb != nil; rb = rb.outer {
+		rb.outside = true
 	}
 }
 

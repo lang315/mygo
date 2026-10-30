@@ -223,7 +223,9 @@ type ListState struct {
 	// or leave RowVersion nil. A row whose callback asks about the state of an
 	// element built outside the row (Hovered, Pressed, Clicked, Focused,
 	// Dragging... of an element the app saved, a header) is built every frame,
-	// whatever RowVersion says; a value that the code building the list read and
+	// whatever RowVersion says, and so is one that reads the layout of the frame
+	// before (Bounds, LayoutBounds, LocalToWindow, WindowToLocal, InView), of its
+	// own elements too; a value that the code building the list read and
 	// passes into the rows is not versioned: RowVersion must say it changed.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or

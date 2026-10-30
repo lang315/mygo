@@ -1,10 +1,13 @@
 package ui
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -223,6 +226,103 @@ func TestTheWaysToAskForTheInputNoteTheRead(t *testing.T) {
 		}
 		if !noted {
 			t.Errorf("%s does not begin with a call of %s", w.name, w.notes)
+		}
+	}
+}
+
+// elementQueriesNotNoted: the queries of Element that read the state of an
+// element (e.st, the engine) and do not begin with a call that notes the read
+// for the row being built (asksOutside, readsLayout, readsHover, readsDrag),
+// and why a row that is kept does not need it. An element inside the row is
+// covered by what keeps a row from being kept (state.pending, the acting ids,
+// retainable); the call is for an element outside the row, and for the layout
+// of the frame before. A query that is not here and does not note the read
+// fails TestElementQueriesNoteTheRead: decide which kind it is.
+var elementQueriesNotNoted = map[string]string{
+	"input.go node.Activated":           "through node.event, which notes it",
+	"motion.go node.AnimateTo":          "drives the element's own value: a row with a running animation is not kept (state.pending); animating an outside element from a row is not a read",
+	"motion.go node.AnimateColor":       "as AnimateTo",
+	"motion.go node.Jump":               "as AnimateTo",
+	"motion.go node.Keyframes":          "as AnimateTo",
+	"widgets.go node.Loop":              "as AnimateTo",
+	"timeline.go node.Timeline":         "as AnimateTo: a row with a timeline is not kept",
+	"rowclick.go node.RowDoubleClicked": "asks Hovered of the element, which notes the read",
+}
+
+func TestElementQueriesNoteTheRead(t *testing.T) {
+	api, err := os.ReadFile("api_gen.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	public := map[string]bool{}
+	for _, m := range regexp.MustCompile(`func \(_handle Element\) (\w+)\(`).FindAllStringSubmatch(string(api), -1) {
+		public[m[1]] = true
+	}
+	noted := map[string]bool{"asksOutside": true, "readsLayout": true, "readsHover": true, "readsDrag": true}
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	found := map[string]bool{}
+	var missing []string
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "api_gen.go" {
+			continue
+		}
+		af, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range af.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok || fd.Recv == nil || fd.Body == nil || !public[fd.Name.Name] {
+				continue
+			}
+			if st, ok := fd.Recv.List[0].Type.(*ast.StarExpr); !ok || fmt.Sprint(st.X) != "node" {
+				continue
+			}
+			if r := fd.Type.Results; r != nil && len(r.List) == 1 {
+				if st, ok := r.List[0].Type.(*ast.StarExpr); ok && fmt.Sprint(st.X) == "node" {
+					continue // a builder: it sets what the element is
+				}
+			}
+			reads := false
+			ast.Inspect(fd.Body, func(n ast.Node) bool {
+				switch n := n.(type) {
+				case *ast.SelectorExpr:
+					reads = reads || n.Sel.Name == "st" || n.Sel.Name == "rt"
+				case *ast.CallExpr:
+					if se, ok := n.Fun.(*ast.SelectorExpr); ok && se.Sel.Name == "hasState" {
+						reads = true
+					}
+				}
+				return true
+			})
+			if !reads {
+				continue
+			}
+			if es, ok := fd.Body.List[0].(*ast.ExprStmt); ok {
+				if call, ok := es.X.(*ast.CallExpr); ok {
+					if se, ok := call.Fun.(*ast.SelectorExpr); ok && noted[se.Sel.Name] {
+						continue
+					}
+				}
+			}
+			key := f + " node." + fd.Name.Name
+			found[key] = true
+			if _, ok := elementQueriesNotNoted[key]; !ok {
+				missing = append(missing, key)
+			}
+		}
+	}
+	slices.Sort(missing)
+	if len(missing) > 0 {
+		t.Errorf("queries of Element that read state and do not note the read (asksOutside, readsLayout): %v", missing)
+	}
+	for key := range elementQueriesNotNoted {
+		if !found[key] {
+			t.Errorf("%q is listed in elementQueriesNotNoted but is not such a query (any more)", key)
 		}
 	}
 }

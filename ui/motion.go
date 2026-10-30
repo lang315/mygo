@@ -391,6 +391,7 @@ func (e *node) Jump(key any, value float32) float32 {
 // Velocity returns how fast, in its units per second, the value animated
 // under key goes in this frame: zero for one at rest or unknown.
 func (e *node) Velocity(key any) float32 {
+	e.asksOutside()
 	if !e.hasState() {
 		return 0
 	}
@@ -404,6 +405,7 @@ func (e *node) Velocity(key any) float32 {
 // Animate, Spring or Keyframes, rests at its target in this frame: true
 // for an unknown key.
 func (e *node) Settled(key any) bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return true
 	}
@@ -423,6 +425,7 @@ func (e *node) Settled(key any) bool {
 // its target in this frame, after moving there: true in that frame only,
 // for the view to go on, as by removing what faded out.
 func (e *node) Arrived(key any) bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -442,7 +445,9 @@ func (e *node) Arrived(key any) bool {
 // InView reports whether some of the element showed in the window in the
 // frame before, within the scroll containers and clips around it: to
 // animate it in as it scrolls into view, as Motion's whileInView.
+// A row of a List with RowVersion that calls it is built in every frame.
 func (e *node) InView() bool {
+	e.readsLayout()
 	if !e.hasState() {
 		return false
 	}

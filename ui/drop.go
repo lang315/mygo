@@ -9,6 +9,7 @@ package ui
 // the last frame, nil when none, and makes the element take files dragged
 // over it.
 func (e *node) DroppedFiles() []string {
+	e.asksOutside()
 	e.flags |= flagDropTarget
 	if len(e.st.dropped) > 0 {
 		e.c.rt.consumed = true
@@ -19,6 +20,7 @@ func (e *node) DroppedFiles() []string {
 // FileDragOver reports whether files dragged from another app are over
 // the element, which takes them if they are dropped, for showing it would.
 func (e *node) FileDragOver() bool {
+	e.asksOutside()
 	e.flags |= flagDropTarget
 	return e.c.rt.dropOver == e.id
 }

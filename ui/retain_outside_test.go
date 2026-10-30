@@ -307,3 +307,105 @@ func TestRetainNestedRowAsksOfTheOuterRow(t *testing.T) {
 		})
 	}
 }
+
+// More ways to ask of the header: files dragged over it, a press outside it,
+// the events of a widget, its animations. Some set a flag on the header
+// (flagDropTarget...) that a kept row would never set again.
+func TestRetainRowsAskingOfTheHeaderMore(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ask  func(h Element) bool
+	}{
+		{"FileDragOver", func(h Element) bool { return h.FileDragOver() }},
+		{"DroppedFiles", func(h Element) bool { return len(h.DroppedFiles()) > 0 }},
+		{"PressedOutside", func(h Element) bool { return h.PressedOutside() }},
+		{"Changed", func(h Element) bool { return h.Changed() }},
+		{"Submitted", func(h Element) bool { return h.Submitted() }},
+		{"ClickModifiers", func(h Element) bool { return h.ClickModifiers() != 0 }},
+		{"DragOffset", func(h Element) bool { return h.DragOffset() != Point{} }},
+		{"Settled", func(h Element) bool { return !h.Settled("k") }},
+		{"Arrived", func(h Element) bool { return h.Arrived("k") }},
+		{"Velocity", func(h Element) bool { return h.Velocity("k") != 0 }},
+		{"Transitioning", func(h Element) bool { return h.Transitioning() }},
+		{"SelectionChanged", func(h Element) bool { return h.SelectionChanged() }},
+		{"Shortcut", func(h Element) bool { return h.Shortcut(Cmd, KeyK) }},
+		{"FocusVisible", func(h Element) bool { return h.FocusVisible() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPair(t, 300, 400, rowsScene(func(c *Context) any {
+				return Row(c).Height(40).Children(func() { Textf(c, "header") })
+			}, func(c *Context, i int, h any) {
+				r := Row(c)
+				if tc.ask(h.(Element)) {
+					r.Background(Hex("#ff0000"))
+				}
+				r.Children(func() { Textf(c, "row %d", i) })
+			}))
+			p.idle(3)
+			p.both(func(tt *Tester) { tt.ClickAt(100, 20) })
+			p.frame("click")
+			p.frame("click 2")
+			p.both(func(tt *Tester) { tt.Key(Cmd, KeyK) })
+			p.frame("shortcut")
+			p.frame("shortcut 2")
+		})
+	}
+}
+
+// A row that shows the layout of the frame before: the header's Bounds, which
+// the app changes, and its own element's, which settle as the frames go. A
+// row kept shows what it read when it was built; these rows are built.
+func TestRetainRowsReadingTheLayout(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		show func(c *Context, h, r Element)
+	}{
+		{"header Bounds", func(c *Context, h, r Element) { Textf(c, "h=%v", h.Bounds().H) }},
+		{"own Bounds", func(c *Context, h, r Element) { Textf(c, "w=%v", r.Bounds().W) }},
+		{"header LayoutBounds", func(c *Context, h, r Element) { Textf(c, "h=%v", h.LayoutBounds().H) }},
+		{"own LocalToWindow", func(c *Context, h, r Element) { x, y := r.LocalToWindow(0, 0); Textf(c, "at %v,%v", x, y) }},
+		{"header WindowToLocal", func(c *Context, h, r Element) { x, _, ok := h.WindowToLocal(50, 10); Textf(c, "%v %v", x, ok) }},
+		{"own InView", func(c *Context, h, r Element) { Textf(c, "%v", r.InView()) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hh := float32(40)
+			p := newPair(t, 300, 400, func() func(c *Context) {
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						h := Row(c).Height(hh).Children(func() { Textf(c, "header") })
+						List(c, s, 60, func(i int) {
+							r := Row(c).Padding(float32(i%3) * 4)
+							r.Children(func() { tc.show(c, h, r) })
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(3)
+			hh = 60
+			p.frame("taller")
+			p.frame("taller 2")
+			p.frame("taller 3")
+		})
+	}
+}
+
+// Rows that only ask of themselves stay kept with these queries around: the
+// ones that cannot be wrong for an element inside the row are not marked.
+func TestRetainRowsAskingInsideStayKept(t *testing.T) {
+	p := newPair(t, 300, 400, rowsScene(func(c *Context) any {
+		return Row(c).Height(40).Children(func() { Textf(c, "header") })
+	}, func(c *Context, i int, _ any) {
+		r := Row(c).Padding(4)
+		if r.Clicked() || r.Changed() || r.FileDragOver() || r.Settled("k") && r.Velocity("k") != 0 || r.ClickModifiers() != 0 {
+			r.Background(Hex("#ff0000"))
+		}
+		r.Children(func() { Textf(c, "row %d", i) })
+	}))
+	p.idle(3)
+	built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+	p.frame("idle")
+	if b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept; b != 0 || k == 0 {
+		t.Errorf("idle: %d rows built, %d kept; want none built", b, k)
+	}
+}

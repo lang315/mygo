@@ -1465,9 +1465,11 @@ func (e *node) ID() uint64 { return e.id }
 
 // Bounds returns the previous frame's transformed bounding rectangle in
 // window DIPs, the content's when zoomed (Context.SetZoom); it is empty
-// for an element the previous frame lacked.
+// for an element the previous frame lacked. A row of a List with RowVersion
+// that calls it is built in every frame.
 // LayoutBounds returns its box before visual transforms.
 func (e *node) Bounds() Rect {
+	e.readsLayout()
 	if !e.hasState() {
 		return Rect{}
 	}

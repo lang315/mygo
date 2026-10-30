@@ -188,6 +188,7 @@ func (e *node) Draggable(offset *Point, o DraggableOptions) *node {
 // what follows the element, as a backdrop fading as a sheet goes down.
 // Call it after Draggable.
 func (e *node) DragOffset() Point {
+	e.asksOutside()
 	if !e.hasState() {
 		return Point{}
 	}
