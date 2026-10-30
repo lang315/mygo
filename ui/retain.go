@@ -39,6 +39,14 @@ type rowKeep struct {
 	depth     int
 	chosen    [3]bool // of the rows above, at and below it
 	checked   bool
+	// readsHover: the row's callback asked where the pointer is, and it is
+	// built while its elements are hovered (listRow.readsHover).
+	readsHover bool
+	// readsMods: the row's callback asked which modifier keys are held, and mods
+	// are the ones it was built with: a row is linked only while they are the
+	// same (listRow.readsMods).
+	readsMods bool
+	mods      Modifiers
 	root      *node
 	nodes     []node   // the copy, root first, in the order of a walk
 	states    []*state // those of the nodes, which each pass stamps as seen
@@ -52,15 +60,14 @@ type rowKeep struct {
 }
 
 // actingIDs gathers, once for a pass, the ids of the elements the engine is
-// acting on or waiting for: the pointer's chain, the press, the focus, a
+// acting on or waiting for: the press, the focus, a
 // menu, a drag, a tooltip. A row holding one of them is built.
 func (rt *engine) actingIDs() {
 	if rt.actFrame == rt.frame && rt.actPass == rt.pass+1 {
 		return
 	}
 	rt.actFrame, rt.actPass = rt.frame, rt.pass+1
-	b := append(rt.acting[:0], rt.hover...)
-	b = append(b, rt.focused, rt.lostFocus, rt.pressDragger, rt.dropOver,
+	b := append(rt.acting[:0], rt.focused, rt.lostFocus, rt.pressDragger, rt.dropOver,
 		rt.menu.asked, rt.menu.chosen, rt.menu.text, rt.menu.chosenText, rt.menu.release, rt.menu.releaseText,
 		rt.tips.shown, rt.tips.hover, rt.tips.focus)
 	if rt.pressed != nil {
@@ -77,10 +84,24 @@ func (rt *engine) actingIDs() {
 	}
 	b = append(b, rt.clickLater...)
 	rt.acting = b
-	rt.actBloom = [4]uint64{}
+	rt.actBloom, rt.hoverBloom = [4]uint64{}, [4]uint64{}
 	for _, id := range b {
 		rt.actBloom[id>>6&3] |= 1 << (id & 63)
 	}
+	for _, id := range rt.hover {
+		rt.hoverBloom[id>>6&3] |= 1 << (id & 63)
+	}
+}
+
+// isHovered reports whether the element id is in the hover chain, which is not
+// in acting: a row that built nothing from the hover (it never asked, see
+// listRow.readsHover) is kept while it is hovered, and its hover look is
+// the paint's (style functions read Hovered at paint).
+func (rt *engine) isHovered(id uint64) bool {
+	if rt.hoverBloom[id>>6&3]&(1<<(id&63)) == 0 {
+		return false
+	}
+	return id != 0 && slices.Contains(rt.hover, id)
 }
 
 // isActing reports whether the engine acts on or waits for the element id.
@@ -95,7 +116,7 @@ func (rt *engine) isActing(id uint64) bool {
 // linked again: no input or request is pending in it, the engine acts on none
 // of its elements, and it is an ordinary row. It does not compare what the row
 // was built with (see keep).
-func (f *listFrame) ok(i int, states []*state) bool {
+func (f *listFrame) ok(i int, states []*state, readsHover bool) bool {
 	rt, s := f.c.rt, f.s
 	if rt.noRetain || rt.insp.open || f.isHeader(i) || s.dragSel.on {
 		return false
@@ -108,7 +129,7 @@ func (f *listFrame) ok(i int, states []*state) bool {
 	}
 	rt.actingIDs()
 	for _, st := range states {
-		if st.pending() || rt.isActing(st.id) {
+		if st.pending() || rt.isActing(st.id) || readsHover && rt.isHovered(st.id) {
 			return false
 		}
 	}
@@ -143,11 +164,11 @@ func (f *listFrame) keep(i int, key any) *node {
 		return nil
 	}
 	c, rt := f.c, f.c.rt
-	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame {
+	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame || rec.readsMods && rec.mods != rt.mods {
 		// A row out of view for a frame had its states pruned and recycled.
 		return nil
 	}
-	if rec.chosen != f.chosenAround(i) || (f.s.Checked != nil && rec.checked != f.s.Checked.has(key)) || !f.ok(i, rec.states) {
+	if rec.chosen != f.chosenAround(i) || (f.s.Checked != nil && rec.checked != f.s.Checked.has(key)) || !f.ok(i, rec.states, rec.readsHover) {
 		return nil
 	}
 	root := rec.root
@@ -167,7 +188,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		rec.zero()
 	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods})
 	rt.rowsKept++
 	return root
 }
@@ -312,7 +333,7 @@ func (f *listFrame) capture() {
 		}
 		rec.unlink() // the copy may get another root state
 		rec.copyIn(r.e)
-		if !f.ok(r.i, rec.states) {
+		if !f.ok(r.i, rec.states, r.readsHover) {
 			if fresh {
 				f.spare = append(f.spare, rec)
 			} else {
@@ -322,7 +343,8 @@ func (f *listFrame) capture() {
 		}
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
-		rec.chosen, rec.checked = r.chosen, r.checked
+		rec.chosen, rec.checked, rec.readsHover = r.chosen, r.checked, r.readsHover
+		rec.readsMods, rec.mods = r.readsMods, rt.mods
 		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0], scrolled: rec.lay.scrolled[:0]}
 		rec.scrollers = rec.scrollers[:0]
 		for j := range rec.nodes {

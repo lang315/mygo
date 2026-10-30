@@ -169,6 +169,7 @@ type engine struct {
 	// (actingIDs), with a filter over them.
 	acting     []uint64
 	actBloom   [4]uint64
+	hoverBloom [4]uint64
 	actFrame   uint64
 	actPass    int
 	ghostMoved []uint16
