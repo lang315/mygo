@@ -2,9 +2,11 @@ package ui
 
 // The queries that read where an element is, or whether it shows (Bounds,
 // LayoutBounds, LocalToWindow, WindowToLocal, InView), read the layout of the
-// frame before. A row that asks is kept only while each answer is the one a
-// build would get now: the list records (element, query, answer) while the
-// row is built, and keep asks again of the states.
+// frame before. A row that asks of an element inside it is kept only while each
+// answer is the one a build would get now: the list records (element, query,
+// answer) while the row is built, and keep asks again of the states. An element
+// outside the row is not recorded: it may not be built in this pass, and its
+// state outlives it, so a row asking of it is built (node.readsOutside).
 
 // layoutKind tells the queries apart.
 type layoutKind uint8
@@ -75,7 +77,15 @@ func (e *node) readsLayout(kind layoutKind, x, y float32) layoutVal {
 	}
 	v := layoutOf(e.c.rt, s, kind, x, y)
 	if rb := e.c.row; rb != nil {
-		rb.noteLayout(layoutRead{id: e.id, kind: kind, x: x, y: y, answer: v})
+		if e.within(rb.root) {
+			rb.noteLayout(layoutRead{id: e.id, kind: kind, x: x, y: y, answer: v})
+		} else {
+			// An element outside the row: its state outlives the element (until
+			// the frame prunes it, or for good with KeepAlive), so a comparison
+			// would answer for an element a build no longer finds. The row is built
+			// while it asks (readsOutside).
+			e.readsOutside(rb)
+		}
 	}
 	return v
 }
@@ -89,7 +99,9 @@ func (rb *rowBuild) noteLayout(r layoutRead) {
 		}
 	}
 	if len(rb.layouts) >= maxLayoutReads {
-		rb.outside = true
+		for r := rb; r != nil; r = r.outer {
+			r.outside = true
+		}
 		return
 	}
 	rb.layouts = append(rb.layouts, r)
@@ -105,4 +117,14 @@ func (rt *engine) sameLayouts(reads []layoutRead) bool {
 		}
 	}
 	return true
+}
+
+// within reports whether e is root or inside it.
+func (e *node) within(root *node) bool {
+	for n := e; n != nil; n = n.parent {
+		if n == root {
+			return true
+		}
+	}
+	return false
 }

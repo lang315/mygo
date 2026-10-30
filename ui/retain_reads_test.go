@@ -44,9 +44,10 @@ func TestRetainRowsReadingTheirOwnLayoutSettleAndAreKept(t *testing.T) {
 	}
 }
 
-// The header's layout changes: the rows that read it are built when the answer
-// is not the recorded one, and kept again once it settles.
-func TestRetainRowsReadingAnotherElementsLayoutFollowIt(t *testing.T) {
+// The header's layout changes: rows that read the layout of an element outside
+// them are built (the element may not be built in this pass, and its state
+// outlives it), and show what a build shows.
+func TestRetainRowsReadingAnotherElementsLayoutAreBuilt(t *testing.T) {
 	h := float32(40)
 	p := newPair(t, 300, 400, func() func(c *Context) {
 		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
@@ -60,16 +61,85 @@ func TestRetainRowsReadingAnotherElementsLayoutFollowIt(t *testing.T) {
 		}
 	})
 	p.idle(6)
-	if b, k := builtInNextFrame(p, "settled"); b != 0 || k == 0 {
-		t.Errorf("settled: %d rows built, %d kept; want none built", b, k)
+	if b, _ := builtInNextFrame(p, "settled"); b == 0 {
+		t.Errorf("rows that read an element outside them were kept")
 	}
 	h = 60
 	p.frame("taller")
 	p.frame("taller 2")
-	p.idle(4)
-	if b, _ := builtInNextFrame(p, "settled again"); b != 0 {
-		t.Errorf("settled again: %d rows built", b)
+}
+
+// The element outside the row stops being built while its state lives on: with
+// KeepAlive for good, without it until the frame prunes it. A row kept would show
+// the height it had; a row built finds no element and shows what a fresh one does.
+func TestRetainRowsReadingAnElementThatIsNoLongerBuilt(t *testing.T) {
+	for _, keepAlive := range []bool{false, true} {
+		name := "without KeepAlive"
+		if keepAlive {
+			name = "with KeepAlive"
+		}
+		t.Run(name, func(t *testing.T) {
+			show := true
+			p := newPair(t, 300, 400, func() func(c *Context) {
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						var head Element
+						// A slot of a fixed height: the list does not move as the header goes.
+						Box(c).Height(40).Children(func() {
+							if show {
+								c.GlobalKey("head")
+								head = Row(c).Height(40).Children(func() { Textf(c, "header") })
+							} else if keepAlive {
+								c.KeepAlive("head")
+							}
+						})
+						List(c, s, 30, func(i int) {
+							Row(c).Padding(4).Children(func() { Textf(c, "row %d h=%v", i, head.Bounds().H) })
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(5)
+			show = false
+			for i := range 4 {
+				p.frame("gone " + string(rune('0'+i)))
+			}
+			show = true
+			p.frame("back")
+			p.frame("back 2")
+		})
 	}
+}
+
+// The header is built after the list in one frame and before it in the next,
+// with the same global key: the row reads the state the frame before left.
+func TestRetainRowsReadingAnElementThatMovesAfterTheList(t *testing.T) {
+	after := false
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				var head Element
+				if !after {
+					c.GlobalKey("head")
+					head = Row(c).Height(40).Children(func() { Textf(c, "header") })
+				}
+				List(c, s, 30, func(i int) {
+					Row(c).Padding(4).Children(func() { Textf(c, "row %d h=%v", i, head.Bounds().H) })
+				}).Grow(1)
+				if after {
+					c.GlobalKey("head")
+					Row(c).Height(40).Children(func() { Textf(c, "header") })
+				}
+			})
+		}
+	})
+	p.idle(5)
+	after = true
+	p.frame("moved")
+	p.frame("moved 2")
+	p.idle(3)
 }
 
 // What a record says is compared with the states now: an element whose state is
@@ -108,31 +178,31 @@ func TestSameLayoutsComparesWithTheStatesNow(t *testing.T) {
 	}
 }
 
-// A row that asks the layout of more elements than the list records is built
-// in every frame, as before.
-func TestRetainRowsReadingTooManyLayoutsAreBuilt(t *testing.T) {
-	p := newPair(t, 300, 400, func() func(c *Context) {
+// layoutsOfItsOwn: a list whose rows hold n boxes and add up their widths, read
+// as the layout of the frame before.
+func layoutsOfItsOwn(n int) func() func(c *Context) {
+	return func() func(c *Context) {
 		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
 		return func(c *Context) {
 			Column(c).Fill().Children(func() {
-				heads := make([]Element, maxLayoutReads+1)
-				Row(c).Height(30).Children(func() {
-					for i := range heads {
-						heads[i] = Box(c).Key(i).Size(10, 10)
-					}
-				})
 				List(c, s, 30, func(i int) {
 					Row(c).Padding(4).Children(func() {
 						w := float32(0)
-						for _, h := range heads {
-							w += h.Bounds().W
+						for k := range n {
+							w += Box(c).Key(k).Size(10, 10).Bounds().W
 						}
 						Textf(c, "row %d: %v", i, w)
 					})
 				}).Grow(1)
 			})
 		}
-	})
+	}
+}
+
+// A row that asks the layout of more elements than the list records is built
+// in every frame, as before.
+func TestRetainRowsReadingTooManyLayoutsAreBuilt(t *testing.T) {
+	p := newPair(t, 300, 400, layoutsOfItsOwn(maxLayoutReads+1))
 	p.idle(6)
 	if b, _ := builtInNextFrame(p, "settled"); b == 0 {
 		t.Errorf("a row that asks %d layouts was kept; want built in every frame", maxLayoutReads+1)
@@ -141,28 +211,7 @@ func TestRetainRowsReadingTooManyLayoutsAreBuilt(t *testing.T) {
 
 // A row that asks eight layouts is recorded and kept.
 func TestRetainRowsReadingTheMostLayoutsAreKept(t *testing.T) {
-	p := newPair(t, 300, 400, func() func(c *Context) {
-		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
-		return func(c *Context) {
-			Column(c).Fill().Children(func() {
-				heads := make([]Element, maxLayoutReads)
-				Row(c).Height(30).Children(func() {
-					for i := range heads {
-						heads[i] = Box(c).Key(i).Size(10, 10)
-					}
-				})
-				List(c, s, 30, func(i int) {
-					Row(c).Padding(4).Children(func() {
-						w := float32(0)
-						for _, h := range heads {
-							w += h.Bounds().W
-						}
-						Textf(c, "row %d: %v", i, w)
-					})
-				}).Grow(1)
-			})
-		}
-	})
+	p := newPair(t, 300, 400, layoutsOfItsOwn(maxLayoutReads))
 	p.idle(6)
 	if b, k := builtInNextFrame(p, "settled"); b != 0 || k == 0 {
 		t.Errorf("settled: %d rows built, %d kept; want none built", b, k)
