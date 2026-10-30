@@ -3,6 +3,7 @@ package ui
 import (
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // textPoint identifies a rune of a paragraph by its stable element ID.
@@ -75,6 +76,14 @@ func (e *node) prepareSelectable() {
 // is the only way a text becomes selectable: the editor of selectable text
 // is linked into the apps that make text selectable, and no others.
 var prepareEditorTextFn func(e *node, scope uint64)
+
+// selectableTextOnce makes the first Selectable the only one to write
+// prepareEditorTextFn, as editorOnce does for the editor's functions.
+var selectableTextOnce sync.Once
+
+func linkSelectableText() {
+	selectableTextOnce.Do(func() { prepareEditorTextFn = prepareEditorText })
+}
 
 // prepareEditorText gives the selectable text e, in selection scope scope,
 // its read-only editor, with the text it shows, and lets it process what
@@ -315,7 +324,7 @@ func (rt *engine) pressTextSelection(s *state, x, y float32, mods Modifiers, cli
 	}
 	t.caret, t.unit, t.dragging, t.hasDesired = p, min(clicks, 3), true, false
 	if t.unit > 1 {
-		a, b := textUnit(rt.states[p.id], p.at, t.unit)
+		a, b := textUnitFn(rt.states[p.id], p.at, t.unit)
 		t.anchor, t.caret = textPoint{p.id, a}, textPoint{p.id, b}
 	}
 	t.start = [2]textPoint{t.anchor, t.caret}
@@ -337,7 +346,7 @@ func (rt *engine) moveTextSelection(x, y float32) {
 		return
 	}
 	if t.unit > 1 {
-		a, b := textUnit(rt.states[p.id], p.at, t.unit)
+		a, b := textUnitFn(rt.states[p.id], p.at, t.unit)
 		if rt.compareTextPoints(p, t.start[0]) < 0 {
 			t.anchor, t.caret = t.start[1], textPoint{p.id, a}
 		} else {

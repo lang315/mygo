@@ -364,7 +364,7 @@ func (e *node) Selectable() *node {
 		e.flags |= flagSelectable
 		// Linked here, so that an app without selectable text, or a text
 		// input, does not link the editor.
-		prepareEditorTextFn = prepareEditorText
+		linkSelectableText()
 	}
 	return e
 }

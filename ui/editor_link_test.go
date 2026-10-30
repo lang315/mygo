@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -43,6 +44,7 @@ func TestNoEditorIsLinkedBeforeSelectableText(t *testing.T) {
 func TestSelectableLinksTheEditorOfSelectableText(t *testing.T) {
 	for _, onBox := range []bool{false, true} {
 		prepareEditorTextFn = nil
+		selectableTextOnce = sync.Once{} // linked again by the test
 		tt := coreNewTester(func(c *context) {
 			if onBox {
 				coreColumn(c).Selectable().Children(func() { coreText(c, "selectable") })
