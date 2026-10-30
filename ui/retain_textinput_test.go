@@ -212,6 +212,7 @@ func TestRetainTextInputRowsRandomWalk(t *testing.T) {
 			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
 			p.idle(3)
 			rng := rand.New(rand.NewSource(seed))
+			sys := newSystemTheme(uint64(seed))
 			words := []string{"a", "bc", "Ada", "你好", "x y", ""}
 			keys := []Key{KeyBackspace, KeyDelete, KeyLeft, KeyRight, KeyHome, KeyEnd, KeyEscape, KeyTab}
 			cmds := []string{"selectAll", "copy", "cut", "paste", "undo", "redo"}
@@ -288,6 +289,7 @@ func TestRetainTextInputRowsRandomWalk(t *testing.T) {
 					p.both(func(tt *Tester) { tt.Key(0, KeyTab) })
 				}
 				p.both(func(tt *Tester) { tt.Frame() })
+				what += sys.step(p.both)
 				p.compareFocus(fmt.Sprintf("%d %s", step, what))
 				p.frame(fmt.Sprintf("%d %s +1", step, what))
 			}
