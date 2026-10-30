@@ -19,6 +19,13 @@ import (
 // app, and the widgets built on ui, can ask. A function that reads them and is
 // not here fails TestHoverReadersAreKnown: decide whether it can run in the
 // callback of a row, and if it can, note the read.
+//
+// Limit: the scan finds the functions that select these fields of a variable or
+// field named rt, in the function itself. It does not follow calls (a function
+// that reads through engine.isHovered or rowInteractive is not listed for it)
+// nor an alias (r := rt; r.hover), so a reader that goes round both is not
+// seen: ask for the hover in a build only through Hovered, PointerPosition and
+// Modifiers, which note it.
 var hoverReaders = map[string]string{
 	// The ways to ask in a build: they note it.
 	"input.go node.Hovered":         "notes the read (readsHover)",

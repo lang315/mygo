@@ -579,6 +579,11 @@ type rowBuild struct {
 	// readsDrag: it asked whether a value dragged within the window is over
 	// one of its elements (DragHover): the row is built while a drag lasts.
 	readsDrag bool
+	// root is the element of the row; outside: the callback asked of an element
+	// that is not inside it (Hovered, PointerPosition, Pressed), whose state
+	// the row's own states do not say: the row is never kept.
+	root    *node
+	outside bool
 }
 
 // List creates a vertical scroll container of n rows, built with row(i),
@@ -909,6 +914,7 @@ func (f *listFrame) build(i int) *node {
 	prev := f.rb
 	f.rb = rowBuild{f: f, i: i, key: key, clicked: w.st.clicks > 0 && w.st.clickMods == 0, double: w.st.doubleClicks > 0}
 	rb := &f.rb
+	rb.root = w
 	if sel := s.cursor(); sel != nil && !f.isHeader(i) {
 		t := c.theme
 		w.flags |= flagClickable | flagHover | flagChoosable
@@ -963,17 +969,18 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
-	reads, mods, drag := rb.readsHover, rb.readsMods, rb.readsDrag
+	reads, mods, drag, outside := rb.readsHover, rb.readsMods, rb.readsDrag, rb.outside
 	c.row, f.rb = saved, prev
 	if saved != nil {
 		// A row built inside the callback of another.
 		saved.readsHover = saved.readsHover || reads
 		saved.readsMods = saved.readsMods || mods
 		saved.readsDrag = saved.readsDrag || drag
+		saved.outside = saved.outside || outside // maybe inside the outer row: built to be safe
 	}
 	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: mods, readsDrag: drag})
-	if rt.bound != bound || s.editablesNow {
-		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits: not kept
+	if rt.bound != bound || s.editablesNow || outside {
+		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits, or it asked of an element outside it: not kept
 	}
 	s.editablesNow = s.editablesNow || wasEditable
 	return w

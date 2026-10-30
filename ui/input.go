@@ -1252,6 +1252,9 @@ func (rt *engine) pressMove(x0, y0, x1, y1 float32) {
 // Pressed reports whether the element is being pressed with the pointer,
 // unless it is disabled.
 func (e *node) Pressed() bool {
+	if e != nil && e.c != nil && e.c.row != nil {
+		e.readsOutside(e.c.row)
+	}
 	if !e.hasState() {
 		return false
 	}
@@ -1654,7 +1657,10 @@ func (rt *engine) modsChanged(mods Modifiers) {
 
 // Modifiers returns the modifier keys held now, as the last key, pointer
 // or modifier event said: a view showing each row's shortcut while Cmd is
-// held reads it, and draws again as it changes.
+// held reads it, and draws again as it changes. A row of a List with
+// RowVersion that calls it is built when they change; one that is given the
+// answer, read by the code that builds the list, is not (RowVersion must say
+// it changed, as for any other state of the app a row shows).
 func (c *context) Modifiers() Modifiers {
 	c.readsMods()
 	return c.rt.mods
@@ -1690,5 +1696,19 @@ func (e *node) readsHover() {
 	}
 	if rb := e.c.row; rb != nil {
 		rb.readsHover = true
+		e.readsOutside(rb)
 	}
+}
+
+// readsOutside notes that the row being built asks of e, which is not inside
+// the row: the row's states do not tell when e changes, and a row linked
+// never asks, so the element would lose what asking sets (flagHover). Such a
+// row is built.
+func (e *node) readsOutside(rb *rowBuild) {
+	for n := e; n != nil; n = n.parent {
+		if n == rb.root {
+			return
+		}
+	}
+	rb.outside = true
 }
