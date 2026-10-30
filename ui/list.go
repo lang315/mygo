@@ -514,6 +514,8 @@ type listFrame struct {
 	// theme is the theme the rows are built with, laying out as well.
 	theme *Theme
 	rows  []listRow
+	// reads: the Context reads of the rows, by listRow.reads.
+	reads []rowReads
 	// at finds rows by their index while the list lays out.
 	at map[int]int
 	// kept holds the rows kept by key, with the records released for others,
@@ -567,12 +569,22 @@ type listRow struct {
 	ver     uint64
 	chosen  [3]bool
 	checked bool
-	// readsHover, readsMods and readsDrag: see rowBuild; ctx: the window's
-	// values its callback read (ctxRead).
-	readsHover, readsMods, readsDrag bool
-	mods                             Modifiers
-	ctx                              ctxRead
-	view                             ctxView
+	// readsHover and readsDrag: see rowBuild.
+	readsHover, readsDrag bool
+	// reads is the place, plus one, in listFrame.reads of what the callback
+	// read through the Context (rowReads), 0 when it read none: the struct
+	// stays small, as the layout copies it.
+	reads uint16
+}
+
+// rowReads is what the callback of a row read through the Context that a kept
+// row has to be linked against: the modifier keys, and the values of the
+// window (ctxRead) as it read them.
+type rowReads struct {
+	readsMods bool
+	mods      Modifiers
+	ctx       ctxRead
+	view      ctxView
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -670,7 +682,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
 	}
 	s.rowSig, s.rowNoKeep = 0, false
-	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
 	if s.RowVersion != nil {
 		// Linked here, so that an app with no List does not link the code
 		// that keeps rows.
@@ -991,6 +1003,7 @@ func (f *listFrame) build(i int) *node {
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
+	var readsAt uint16
 	c.row, f.rb = saved, prev
 	if saved != nil {
 		// A row built inside the callback of another.
@@ -1006,7 +1019,12 @@ func (f *listFrame) build(i int) *node {
 			saved.mergeCtx(ctx, view)
 		}
 	}
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: readMods, mods: mods, readsDrag: drag, ctx: ctx, view: view})
+	if readMods || ctx != 0 {
+		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view}); readsAt == 0 {
+			outside = true // too many to number: not kept
+		}
+	}
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsDrag: drag, reads: readsAt})
 	if rt.bound != bound || s.editablesNow || outside {
 		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits, or it asked of an element outside it: not kept
 	}

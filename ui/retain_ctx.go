@@ -138,3 +138,13 @@ func (v *ctxView) take(what ctxRead, o ctxView) {
 func (c *context) sameCtx(what ctxRead, v *ctxView) bool {
 	return c.viewOf(what) == v.pick(what)
 }
+
+// addReads records what a row read through the Context for listRow.reads and
+// returns its place plus one, 0 when there are too many to number.
+func (f *listFrame) addReads(r rowReads) uint16 {
+	if len(f.reads) >= 1<<16-1 {
+		return 0
+	}
+	f.reads = append(f.reads, r)
+	return uint16(len(f.reads))
+}

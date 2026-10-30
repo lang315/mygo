@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/egoist/mygo/i18n"
 )
@@ -162,4 +163,12 @@ func TestRetainRowsReadingAValueThatChangesInTheLastPass(t *testing.T) {
 	p.both(func(tt *Tester) { tt.Frame() })
 	p.compare("after zooming three times in one frame")
 	p.frame("settled")
+}
+
+// The layout walks and copies the rows of a frame: what a row read through the
+// Context goes in a side slice, not in the row.
+func TestListRowStaysSmall(t *testing.T) {
+	if n := unsafe.Sizeof(listRow{}); n > 56 {
+		t.Errorf("listRow is %d bytes, want at most 56: keep what rows read out of it (listFrame.reads)", n)
+	}
 }
