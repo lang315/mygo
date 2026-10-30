@@ -2136,19 +2136,19 @@ func beforeRun() {
 // crashing, hanging or doing nothing depending on it. Generate mode,
 // which never initializes the backend, still writes the client.
 func TestBeforeRun(t *testing.T) {
-	run := func(env ...string) string {
+	run := func(env ...string) (string, error) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
 		cmd.Env = append(append(os.Environ(), "MYGO_TEST_BEFORE_RUN=1"), env...)
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("%v: %s", err, out)
-		}
-		return string(out)
+		return string(out), err
 	}
-	out := run()
+	out, err := run()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
 	wants := []string{"dark: true\n", "dock menu: true\n"}
 	for _, c := range needsAppCalls {
 		wants = append(wants, c.name+": mygo: "+c.name+" called before ")
@@ -2160,7 +2160,17 @@ func TestBeforeRun(t *testing.T) {
 	}
 
 	client := filepath.Join(t.TempDir(), "mygo.ts")
-	run("MYGO_GENERATE=" + client)
+	out, err = run("MYGO_GENERATE=" + client)
+	if clientBuiltOut {
+		// a production build has no generator: it says so and fails
+		if err == nil || !strings.Contains(out, "mygo_noinspector") {
+			t.Errorf("a build without the generator asked for a client: %v: %s", err, out)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
 	if _, err := os.Stat(client); err != nil {
 		t.Error(err)
 	}

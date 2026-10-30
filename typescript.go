@@ -4,6 +4,7 @@ package mygo
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -82,6 +83,13 @@ func WriteTypeScript(path string) error {
 // MYGO_GENERATE, through what Bind, BindAs and NewEvent link: nothing for
 // an app that binds nothing.
 func writeClient(path string) error {
+	if clientBuiltOut && bindsAnything() {
+		// A production build is an app's release: it says so, as the
+		// automation plugin does, rather than leave a client unwritten.
+		const msg = "mygo: MYGO_GENERATE cannot write the TypeScript client: this build leaves the generator out (mygo_noinspector); build without that tag, as mygo generate and mygo dev do"
+		os.Stderr.WriteString(msg + "\n")
+		return errors.New("mygo: the TypeScript client was not written")
+	}
 	ipc.RLock()
 	write := ipc.writeClient
 	ipc.RUnlock()

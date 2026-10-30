@@ -53,7 +53,7 @@ wire protocol, TypeScript generation, and the checklist for adding features.
 ```sh
 go build ./... && GOOS=linux go build ./... && GOOS=windows go build ./...  # all must pass
 go vet ./... && GOOS=linux go vet ./... && GOOS=windows go vet ./...
-go vet -tags mygo_noinspector ./...        # production builds, without the inspector of native UI
+go vet -tags mygo_noinspector ./...        # production builds, without the developer tools: the inspector of native UI and the TypeScript client generator
 GOOS=js GOARCH=wasm go vet $(GOOS=js GOARCH=wasm go list ./... | grep -v /cmd/mygo)  # browsers, all but the CLI
 go test ./...                              # core (fake backend), tsgen, CLI, accelerator
 go test ./internal/skillsdocs               # the agent skills' metadata, doc paths, API names and Go examples

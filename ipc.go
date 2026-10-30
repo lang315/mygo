@@ -111,16 +111,6 @@ func BindAs(name string, service any) {
 	}
 }
 
-// linkClient makes App.Run write the TypeScript client under
-// MYGO_GENERATE, for Bind and BindAs: only apps that bind something link
-// the generator (go/parser and all), which plugins' services, bound by
-// MyGo, and apps of native UI have no use for.
-func linkClient() {
-	ipc.Lock()
-	ipc.writeClient = WriteTypeScript
-	ipc.Unlock()
-}
-
 func bind(name string, svc any, internal bool) error {
 	v := reflect.ValueOf(svc)
 	if !v.IsValid() {

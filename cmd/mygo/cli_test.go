@@ -407,6 +407,28 @@ func TestProductionTags(t *testing.T) {
 	}
 }
 
+// TestGeneratorTags keeps the build that writes the TypeScript client free of
+// the production tag a user's GOFLAGS sets, which leaves the generator out.
+func TestGeneratorTags(t *testing.T) {
+	tags := func() string { return strings.Join(generatorTags(), " ") }
+	t.Setenv("GOFLAGS", "")
+	if got := generatorTags(); got != nil {
+		t.Errorf("no GOFLAGS gives %q", got)
+	}
+	t.Setenv("GOFLAGS", "-mod=mod -tags=sqlite,fts5")
+	if got := generatorTags(); got != nil {
+		t.Errorf("GOFLAGS' other tags alone give %q: the build keeps them", got)
+	}
+	t.Setenv("GOFLAGS", "-tags=mygo_noinspector")
+	if got := generatorTags(); len(got) != 2 || got[0] != "-tags" || got[1] != "" {
+		t.Errorf("the production tag alone gives %q, want an empty -tags, which overrides it", got)
+	}
+	t.Setenv("GOFLAGS", "-mod=mod -tags=sqlite,mygo_noinspector,fts5")
+	if got := tags(); got != "-tags sqlite,fts5" {
+		t.Errorf("the production tag among others gives %q", got)
+	}
+}
+
 func TestWindowsSignCommand(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "My App.exe")

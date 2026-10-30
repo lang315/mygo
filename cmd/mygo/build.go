@@ -427,9 +427,10 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 	return artifacts, nil
 }
 
-// inspectorTag leaves the inspector of native UI out of a build (package
-// ui's inspector_off.go), some 250 KB of a binary: production builds have
-// their developer tools off.
+// inspectorTag leaves the developer tools out of a build: the inspector of
+// native UI (package ui's inspector_off.go), some 250 KB of a binary, and the
+// generator of the TypeScript client (client_off.go), some 400 KB of an app
+// that binds a service. Production builds have their developer tools off.
 const inspectorTag = "mygo_noinspector"
 
 // keepInspector reports whether MYGO_INSPECTOR=1 keeps the inspector in
@@ -450,6 +451,32 @@ func productionTags(debug bool) []string {
 		}
 	}
 	return []string{"-tags", strings.Join(append(tags, inspectorTag), ",")}
+}
+
+// generatorTags returns the -tags of a build that writes the TypeScript
+// client (mygo generate, mygo dev, mygo init), which must have the generator:
+// the tags of GOFLAGS less the inspector's, which a -tags flag overrides
+// (empty when it was the only one), and nothing when GOFLAGS has no such tag.
+func generatorTags() []string {
+	var tags []string
+	found := false
+	for _, f := range strings.Fields(os.Getenv("GOFLAGS")) {
+		v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags=")
+		if !ok {
+			continue
+		}
+		for t := range strings.SplitSeq(v, ",") {
+			if t == inspectorTag {
+				found = true
+			} else if t != "" {
+				tags = append(tags, t)
+			}
+		}
+	}
+	if !found {
+		return nil
+	}
+	return []string{"-tags", strings.Join(tags, ",")}
 }
 
 // extraLDFlags returns the -ldflags of MYGO_LDFLAGS, which a build adds
