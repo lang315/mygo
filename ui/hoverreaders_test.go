@@ -33,6 +33,7 @@ var hoverReaders = map[string]string{
 	// The ways to ask in a build: they note it.
 	"input.go node.Hovered":         "notes the read (readsHover)",
 	"input.go node.PointerPosition": "notes the read (readsHover)",
+	"input.go context.readsMods":    "the note itself: it stores the modifier keys as the row reads them",
 	"input.go context.Modifiers":    "notes the read (readsMods)",
 	"input.go engine.modsChanged":   "an event",
 	"dragdrop.go coreDragHover":     "notes the read (readsDrag): a row that asked is built while a drag lasts",
@@ -91,7 +92,6 @@ var hoverReaders = map[string]string{
 	"runtime.go engine.updateCursor":  "the cursor",
 	"paint.go Painter.scrollbars":     "paint",
 	"replay.go rowInteractive":        "paint: a hovered row paints anew",
-	"retain.go listFrame.capture":     "the rule itself (the modifiers a row was built with)",
 	"retain.go listFrame.keep":        "the rule itself (the modifiers a row was built with)",
 	"retain.go engine.isHovered":      "the rule itself",
 	"retain.go engine.actingIDs":      "the rule itself",
