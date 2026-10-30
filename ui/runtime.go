@@ -710,7 +710,6 @@ func (rt *engine) runFrame() {
 		rt.nextRegs = rt.nextRegs[:0]
 		clear(rt.kept)
 		rt.c.reset(now, appW, h)
-		buildingRow = nil // a callback that panicked and was recovered left it set
 		rt.view(&rt.c)
 		if rt.closing {
 			// The view closed the window, as a close button does: the

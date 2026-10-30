@@ -138,7 +138,23 @@ func (e Element) nodeFor(rt *engine) *node {
 
 // Valid reports whether the element belongs to the active build pass.
 // Checking validity does not trigger expired-handle diagnostics.
-func (e Element) Valid() bool { return e.lookup() != nil }
+//
+// A row of a List with RowVersion that calls it is built in every frame when
+// the element is missing or outside the row, as for any other question.
+func (e Element) Valid() bool { return e.readNode() != nil }
+
+// readNode finds the element as a query does, and notes it for the row being
+// built: an element that is not there (noteMissingElement), or one outside the
+// row (asksOutside).
+func (e Element) readNode() *node {
+	n := e.lookup()
+	if n == nil {
+		noteMissingElement()
+		return nil
+	}
+	n.asksOutside()
+	return n
+}
 
 // Children builds children with the same context, scoped to this element.
 // An absent element skips fn. Expired elements are diagnosed in development.

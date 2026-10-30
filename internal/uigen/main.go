@@ -24,6 +24,12 @@ func main() {
 	if cwd, err := os.Getwd(); err == nil && filepath.Base(cwd) == "ui" {
 		check(os.Chdir(".."))
 	}
+	check(os.WriteFile("ui/api_gen.go", generateAPI(), 0644))
+}
+
+// generateAPI returns the text of ui/api_gen.go, from the files of ui/ under the
+// working directory.
+func generateAPI() []byte {
 	fs := token.NewFileSet()
 	paths, err := filepath.Glob("ui/*.go")
 	check(err)
@@ -126,7 +132,7 @@ func main() {
 	out.Write(body.Bytes())
 	formatted, err := format.Source(out.Bytes())
 	check(err)
-	check(os.WriteFile("ui/api_gen.go", formatted, 0644))
+	return formatted
 }
 
 func mentions(n ast.Node, names ...string) bool {

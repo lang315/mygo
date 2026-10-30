@@ -1002,13 +1002,15 @@ func (f *listFrame) build(i int) *node {
 	}
 	saved := c.row
 	c.row = rb
-	building := buildingRow
-	buildingRow = rb
+	notes := missingNotes.Load()
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
 	var readsAt uint16
-	c.row, f.rb, buildingRow = saved, prev, building
+	c.row, f.rb = saved, prev
+	if missingNotes.Load() != notes {
+		outside = true // it asked of an element that is not there (retain_missing.go)
+	}
 	if saved != nil {
 		// A row built inside the callback of another.
 		saved.readsHover = saved.readsHover || reads

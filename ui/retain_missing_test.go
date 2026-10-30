@@ -1,10 +1,14 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -86,62 +90,83 @@ func TestRetainRowsAskHighlightedOfAnItemThatExistsLater(t *testing.T) {
 	}
 }
 
-// buildingRow is the row whose callback runs, in every way a row is built, and
-// nil outside one: a row inside a row puts the outer one back.
-func TestBuildingRowIsSetAroundEveryRow(t *testing.T) {
-	var outerSeen, innerSeen, afterInner, lateSeen, outside int
-	var outerRB *rowBuild
-	p := newPair(t, 300, 400, func() func(c *Context) {
-		outer := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
-		inner := make([]*ListState, 40)
-		for i := range inner {
-			inner[i] = &ListState{Key: func(j int) any { return j }, RowVersion: func(int) uint64 { return 0 }}
+// Rows built as the list lays out (their heights differ, so it builds them late)
+// are marked like the others when they ask a missing element, and those that do
+// not ask are kept.
+func TestRowsBuiltLateAskingAMissingElementAreBuilt(t *testing.T) {
+	for _, asks := range []bool{true, false} {
+		name := "rows that do not ask"
+		if asks {
+			name = "rows that ask"
 		}
-		late := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
-		return func(c *Context) {
-			if buildingRow != nil {
-				outside++
-			}
-			Row(c).Fill().Children(func() {
-				List(c, outer, 20, func(i int) {
-					rb := buildingRow
-					if rb == nil {
-						return
-					}
-					outerSeen++
-					outerRB = rb
-					Column(c).Height(60).Children(func() {
-						List(c, inner[i], 2, func(j int) {
-							if buildingRow != nil && buildingRow != outerRB && buildingRow.outer == outerRB {
-								innerSeen++
+		t.Run(name, func(t *testing.T) {
+			p := newPair(t, 300, 400, func() func(c *Context) {
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+				return func(c *Context) {
+					var nothing Element
+					Column(c).Fill().Children(func() {
+						List(c, s, 200, func(i int) {
+							if asks && nothing.Dismissed() {
+								Textf(c, "never")
 							}
-						}).Height(40)
+							Row(c).Height(float32(15 + (i%4)*25)).Children(func() { Textf(c, "row %d", i) })
+						}).Grow(1)
 					})
-					if buildingRow == outerRB {
-						afterInner++ // the outer row is the one being built again
-					}
-				}).Width(150)
-				// Rows of different heights, which the list builds as it lays out.
-				List(c, late, 200, func(i int) {
-					if buildingRow != nil {
-						lateSeen++
-					}
-					Row(c).Height(float32(15 + (i%4)*25))
-				}).Width(100)
+				}
 			})
+			p.idle(5)
+			built0, kept0 := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+			p.frame("idle")
+			b, k := p.kept.rt.rowsBuilt-built0, p.kept.rt.rowsKept-kept0
+			if asks && b == 0 || !asks && (b != 0 || k == 0) {
+				t.Errorf("idle: %d rows built, %d kept (asks a missing element: %v)", b, k, asks)
+			}
+		})
+	}
+}
+
+// Windows built at the same time, on goroutines (a test of Testers does), share
+// the count of queries of missing elements: the one whose rows ask must be built,
+// and the other must still draw what it would without it. The count is atomic:
+// run it with -race.
+func TestTestersAskingAMissingElementInParallelAreRight(t *testing.T) {
+	mk := func(asks bool) func() func(c *Context) {
+		return func() func(c *Context) {
+			s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+			return func(c *Context) {
+				var nothing Element
+				Column(c).Fill().Children(func() {
+					List(c, s, 60, func(i int) {
+						if asks && nothing.Dismissed() {
+							Textf(c, "never")
+						}
+						Textf(c, "row %d", i)
+					}).Grow(1)
+				})
+			}
 		}
-	})
-	p.idle(3)
-	if outside != 0 {
-		t.Errorf("buildingRow was set outside the rows %d times", outside)
 	}
-	if outerSeen == 0 || innerSeen == 0 || afterInner != outerSeen || lateSeen == 0 {
-		t.Errorf("buildingRow: outer rows %d, inner rows %d, outer back after inner %d, late rows %d", outerSeen, innerSeen, afterInner, lateSeen)
+	var wg sync.WaitGroup
+	for _, asks := range []bool{true, false} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			kept, built := NewTester(mk(asks)(), 300, 400), NewTester(mk(asks)(), 300, 400)
+			built.rt.noRetain, built.rt.noReplay = true, true
+			for range 40 {
+				kept.Frame()
+				built.Frame()
+				if a, b := kept.Image(), built.Image(); !bytes.Equal(a.Pix, b.Pix) {
+					t.Errorf("asks=%v: the twin that keeps rows draws something else", asks)
+					return
+				}
+			}
+			if asks && kept.rt.rowsKept != 0 {
+				t.Errorf("rows that ask a missing element were kept %d times", kept.rt.rowsKept)
+			}
+		}()
 	}
-	if buildingRow != nil {
-		t.Errorf("buildingRow is still set after the frames")
-	}
-	noteMissingElement() // outside a build: nothing to mark
+	wg.Wait()
 }
 
 // Every query of Element answers an element that is not there by noting it for
@@ -201,4 +226,60 @@ func TestEveryQueryOfAMissingElementNotesIt(t *testing.T) {
 		t.Errorf("found only %d queries in api_gen.go: the test looks at the wrong code", queries)
 	}
 	t.Logf("%d queries, %d note it", queries, noted)
+}
+
+// The queries of Element that are written by hand (not generated, so
+// TestEveryQueryOfAMissingElementNotesIt does not see them) note a missing
+// element too: they find it through readNode, or call noteMissingElement.
+func TestHandWrittenQueriesOfElementNoteAMissingElement(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	found := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "api_gen.go" {
+			continue
+		}
+		af, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range af.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok || fd.Recv == nil || fd.Body == nil || !fd.Name.IsExported() {
+				continue
+			}
+			if id, ok := fd.Recv.List[0].Type.(*ast.Ident); !ok || id.Name != "Element" {
+				continue
+			}
+			r := fd.Type.Results
+			if r == nil || len(r.List) == 0 {
+				continue
+			}
+			if id, ok := r.List[0].Type.(*ast.Ident); ok && id.Name == "Element" {
+				continue // a builder
+			}
+			found++
+			notes := false
+			ast.Inspect(fd.Body, func(n ast.Node) bool {
+				if c, ok := n.(*ast.CallExpr); ok {
+					switch fn := c.Fun.(type) {
+					case *ast.Ident:
+						notes = notes || fn.Name == "noteMissingElement"
+					case *ast.SelectorExpr:
+						notes = notes || fn.Sel.Name == "readNode"
+					}
+				}
+				return true
+			})
+			if !notes {
+				t.Errorf("%s: Element.%s is written by hand and does not note a missing element (readNode)", f, fd.Name.Name)
+			}
+		}
+	}
+	if found < 5 {
+		t.Errorf("found %d hand-written queries: the test looks at the wrong code", found)
+	}
 }
