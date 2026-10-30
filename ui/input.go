@@ -1138,6 +1138,7 @@ func abs32(v float32) float32 {
 // Clicked reports whether the element was clicked, with the primary
 // button or by Enter or Space while focused, since the last frame.
 func (e *node) Clicked() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -1152,6 +1153,7 @@ func (e *node) Clicked() bool {
 // Clicks returns how many times the element was clicked since the last
 // frame.
 func (e *node) Clicks() int {
+	e.asksOutside()
 	if !e.hasState() {
 		return 0
 	}
@@ -1177,6 +1179,7 @@ func (e *node) ClickModifiers() Modifiers {
 
 // DoubleClicked reports a double click on the element.
 func (e *node) DoubleClicked() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -1191,6 +1194,7 @@ func (e *node) DoubleClicked() bool {
 // RightClicked reports a click with the secondary button, as for a
 // context menu.
 func (e *node) RightClicked() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -1252,6 +1256,7 @@ func (rt *engine) pressMove(x0, y0, x1, y1 float32) {
 // Pressed reports whether the element is being pressed with the pointer,
 // unless it is disabled.
 func (e *node) Pressed() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -1276,6 +1281,7 @@ func (e *node) Pressed() bool {
 // Focused reports whether the element has the keyboard focus: for a field
 // around an input, as SearchField's, whether its input has it.
 func (e *node) Focused() bool {
+	e.asksOutside()
 	if e.hasState() && e.c.rt.insp.forces(e.id, forceFocus) {
 		return true
 	}
@@ -1294,6 +1300,7 @@ func (e *node) FocusVisible() bool {
 // FocusWithin reports whether the element or one of its descendants has
 // the keyboard focus.
 func (e *node) FocusWithin() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -1366,6 +1373,7 @@ func (e *node) PointerPosition() (x, y float32, over bool) {
 // Dragged reports how far the pointer moved in the element's local axes
 // since the last frame while pressing it.
 func (e *node) Dragged() (dx, dy float32, ok bool) {
+	e.asksOutside()
 	if !e.hasState() {
 		return 0, 0, false
 	}
@@ -1384,6 +1392,7 @@ func (e *node) Dragged() (dx, dy float32, ok bool) {
 // local axes, the pointer pressing the element moves now: zero once it
 // stops for a moment, or while nothing presses the element.
 func (e *node) DragVelocity() (vx, vy float32) {
+	e.asksOutside()
 	if !e.hasState() {
 		return 0, 0
 	}
@@ -1400,6 +1409,7 @@ func (e *node) DragVelocity() (vx, vy float32) {
 // DragVelocity: a spring taking over (SpringOptions.Velocity) keeps the
 // fling going. A click, which does not move, ends no drag.
 func (e *node) DragEnded() (vx, vy float32, ok bool) {
+	e.asksOutside()
 	if !e.hasState() {
 		return 0, 0, false
 	}
@@ -1654,7 +1664,10 @@ func (rt *engine) modsChanged(mods Modifiers) {
 
 // Modifiers returns the modifier keys held now, as the last key, pointer
 // or modifier event said: a view showing each row's shortcut while Cmd is
-// held reads it, and draws again as it changes.
+// held reads it, and draws again as it changes. A row of a List with
+// RowVersion that calls it is built when they change; one that is given the
+// answer, read by the code that builds the list, is not (RowVersion must say
+// it changed, as for any other state of the app a row shows).
 func (c *context) Modifiers() Modifiers {
 	c.readsMods()
 	return c.rt.mods
@@ -1676,6 +1689,7 @@ func (e *node) readsDrag() {
 	}
 	if rb := e.c.row; rb != nil {
 		rb.readsDrag = true
+		e.readsOutside(rb)
 	}
 }
 
@@ -1690,5 +1704,36 @@ func (e *node) readsHover() {
 	}
 	if rb := e.c.row; rb != nil {
 		rb.readsHover = true
+		e.readsOutside(rb)
+	}
+}
+
+// asksOutside is called first by the functions that report the state of an
+// element to the callback of a row (Pressed, Clicked, Focused, Dragged...): if
+// the element is not inside the row the callback is building, the row is built
+// (readsOutside).
+func (e *node) asksOutside() {
+	if e != nil && e.c != nil && e.c.row != nil {
+		e.readsOutside(e.c.row)
+	}
+}
+
+// readsOutside notes that the row being built, and each row around it that
+// does not hold e, asks of e, which is not inside it: the row's states do not
+// tell when e changes, and a row linked never asks, so the element would lose
+// what asking sets (flagHover, flagClickable...). Such a row is built.
+func (e *node) readsOutside(rb *rowBuild) {
+	for ; rb != nil; rb = rb.outer {
+		held := false
+		for n := e; n != nil; n = n.parent {
+			if n == rb.root {
+				held = true
+				break
+			}
+		}
+		if held {
+			return // the rows around it hold it too
+		}
+		rb.outside = true
 	}
 }

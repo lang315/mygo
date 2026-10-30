@@ -364,7 +364,10 @@ func (_handle *Context) MeasureText(width float32, spans ...Span) (float32, floa
 
 // Modifiers returns the modifier keys held now, as the last key, pointer
 // or modifier event said: a view showing each row's shortcut while Cmd is
-// held reads it, and draws again as it changes.
+// held reads it, and draws again as it changes. A row of a List with
+// RowVersion that calls it is built when they change; one that is given the
+// answer, read by the code that builds the list, is not (RowVersion must say
+// it changed, as for any other state of the app a row shows).
 func (_handle *Context) Modifiers() Modifiers {
 	_ctx := _handle.build()
 	if _ctx == nil {
