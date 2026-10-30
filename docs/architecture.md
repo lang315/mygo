@@ -4640,7 +4640,13 @@ rules, which took counter-native back to 8.9 MB after it had grown from
   the feature's package.
 - *Heavy packages and data stay where they are needed*: in a subpackage
   or a plugin (`ui/editor`, `ui/markdown`, `plugins/watch`) rather than in
-  `mygo` or `ui`, and out of `init`. Importing net/http alone adds 2.3 MB.
+  `mygo` or `ui`, and out of `init`. Importing net/http alone adds 2.3 MB,
+  which is why the backends take its header type, status codes and texts
+  from `internal/httplite` (a test compares them with net/http's), and
+  content rules their public suffixes from `internal/psl`, a copy of
+  `golang.org/x/net/publicsuffix` without its import of
+  `net/http/cookiejar` (`go generate ./internal/psl` updates the data; a test
+  compares it with that package while both hold the same snapshot).
   Data read on first use is linked whole, so split a table that a shared
   path reads in part, as CLDR's numbers and dates are; embed what the
   running app reads, not what tools read (`internal/l10n` embeds its

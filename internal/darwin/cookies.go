@@ -4,12 +4,12 @@ package darwin
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/ebitengine/purego/objc"
+	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -94,7 +94,7 @@ func (a appController) SetCookie(s platform.DataStore, c platform.Cookie, done f
 			header += "; Domain=" + c.Domain
 		}
 		if !c.Expires.IsZero() {
-			header += "; Expires=" + c.Expires.Format(http.TimeFormat)
+			header += "; Expires=" + c.Expires.Format(httplite.TimeFormat)
 		}
 		if c.Secure {
 			header += "; Secure"

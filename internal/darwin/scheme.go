@@ -6,12 +6,12 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"net/http"
 	"strings"
 	"unsafe"
 
 	"github.com/ebitengine/purego/objc"
 
+	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -45,7 +45,7 @@ func registerSchemeHandler() {
 			st := &schemeTask{task: retain(task), cancel: cancel}
 			schemeTasks[task] = st
 			if w == nil || w.closed {
-				st.Respond(http.StatusServiceUnavailable, nil)
+				st.Respond(httplite.StatusServiceUnavailable, nil)
 				st.Finish()
 				return
 			}
@@ -65,14 +65,14 @@ func registerSchemeHandler() {
 }
 
 func readRequest(task id) *platform.SchemeRequest {
-	header := http.Header{}
+	header := httplite.Header{}
 	req := &platform.SchemeRequest{Header: header}
 	withPool(func() {
 		r := send(task, "request")
 		req.URL = goString(send(send(r, "URL"), "absoluteString"))
 		req.Method = goString(send(r, "HTTPMethod"))
 		if req.Method == "" {
-			req.Method = http.MethodGet
+			req.Method = httplite.MethodGet
 		}
 		fields := send(r, "allHTTPHeaderFields")
 		for _, k := range arrayItems(send(fields, "allKeys")) {
@@ -117,7 +117,7 @@ func (st *schemeTask) release() {
 var schemeDispositions = map[string]string{}
 
 func (st *schemeTask) Respond(status int, h map[string][]string) {
-	header := http.Header(h)
+	header := httplite.Header(h)
 	if st.stopped || st.done || st.responded {
 		return
 	}
@@ -144,7 +144,7 @@ func (st *schemeTask) Write(p []byte) {
 		return
 	}
 	if !st.responded {
-		st.Respond(http.StatusOK, nil)
+		st.Respond(httplite.StatusOK, nil)
 	}
 	withPool(func() { send(st.task, "didReceiveData:", uintptr(nsData(p))) })
 }
@@ -154,7 +154,7 @@ func (st *schemeTask) Finish() {
 		return
 	}
 	if !st.responded {
-		st.Respond(http.StatusOK, nil)
+		st.Respond(httplite.StatusOK, nil)
 	}
 	send(st.task, "didFinish")
 	st.release()

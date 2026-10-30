@@ -3,11 +3,11 @@
 package windows
 
 import (
-	"net/http"
 	"strings"
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/contentrules"
+	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -139,17 +139,17 @@ func (w *window) filterContent(rules []*contentrules.List, args, req uintptr, ur
 	r := contentrules.Match(rules, contentrules.Request{URL: target, TopURL: top, Type: resourceTypes(resource)})
 	switch {
 	case r.Block && resource == document:
-		w.respond(args, 0, http.StatusForbidden, nil, nil)
+		w.respond(args, 0, httplite.StatusForbidden, nil, nil)
 		return true
 	case r.Block:
-		w.respond(args, 0, http.StatusTemporaryRedirect, http.Header{"Location": {"data:,"}}, nil)
+		w.respond(args, 0, httplite.StatusTemporaryRedirect, httplite.Header{"Location": {"data:,"}}, nil)
 		return true
 	case r.MakeHTTPS && target == uri:
 		secure := "https:" + strings.TrimPrefix(uri, "http:")
 		if strings.HasPrefix(uri, "ws:") {
 			secure = "wss:" + strings.TrimPrefix(uri, "ws:")
 		}
-		w.respond(args, 0, http.StatusTemporaryRedirect, http.Header{"Location": {secure}}, nil)
+		w.respond(args, 0, httplite.StatusTemporaryRedirect, httplite.Header{"Location": {secure}}, nil)
 		return true
 	case r.BlockCookies:
 		var headers uintptr

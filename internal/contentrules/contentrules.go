@@ -13,7 +13,7 @@ import (
 	"slices"
 	"strings"
 
-	"golang.org/x/net/publicsuffix"
+	"github.com/egoist/mygo/internal/psl"
 )
 
 // Type is a set of the kinds of resources of WebKit's resource-type.
@@ -504,7 +504,7 @@ func urlHost(u string) string {
 // site returns the registrable domain of a host, which tells first-party
 // loads from third-party ones.
 func site(host string) string {
-	if d, err := publicsuffix.EffectiveTLDPlusOne(host); err == nil {
+	if d, err := psl.EffectiveTLDPlusOne(host); err == nil {
 		return d
 	}
 	return host

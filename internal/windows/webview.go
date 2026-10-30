@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/accelerator"
+	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehost"
 )
@@ -1209,7 +1209,7 @@ func (w *window) resourceRequested(_, args uintptr) {
 	}
 
 	if html, ok := w.htmlFor[uri]; ok && resource == document {
-		w.respond(args, 0, http.StatusOK, http.Header{"Content-Type": {"text/html; charset=utf-8"}}, []byte(html))
+		w.respond(args, 0, httplite.StatusOK, httplite.Header{"Content-Type": {"text/html; charset=utf-8"}}, []byte(html))
 		return
 	}
 	target := w.appURL(uri)
@@ -1234,8 +1234,8 @@ func (w *window) resourceRequested(_, args uintptr) {
 	w.h.SchemeRequest(sreq)
 }
 
-func requestHeaders(req uintptr) http.Header {
-	h := http.Header{}
+func requestHeaders(req uintptr) httplite.Header {
+	h := httplite.Header{}
 	var headers, iter uintptr
 	if comCall(req, reqGetHeaders, uintptr(unsafe.Pointer(&headers))) != sOK || headers == 0 {
 		return h
@@ -1264,7 +1264,7 @@ func requestHeaders(req uintptr) http.Header {
 
 // respond answers a WebResourceRequested event; deferral is 0 for a
 // synchronous answer.
-func (w *window) respond(args, deferral uintptr, status int, header http.Header, body []byte) {
+func (w *window) respond(args, deferral uintptr, status int, header httplite.Header, body []byte) {
 	var raw strings.Builder
 	for k, vs := range header {
 		for _, v := range vs {
@@ -1274,7 +1274,7 @@ func (w *window) respond(args, deferral uintptr, status int, header http.Header,
 	stream := memStream(body)
 	var resp uintptr
 	hr := comCall(w.b.env, envCreateWebResourceResponse, stream, uintptr(status),
-		uintptr(unsafe.Pointer(u16(http.StatusText(status)))), uintptr(unsafe.Pointer(u16(raw.String()))), uintptr(unsafe.Pointer(&resp)))
+		uintptr(unsafe.Pointer(u16(httplite.StatusText(status)))), uintptr(unsafe.Pointer(u16(raw.String()))), uintptr(unsafe.Pointer(&resp)))
 	release(stream)
 	if !failed(hr) && resp != 0 {
 		comCall(args, resReqPutResponse, resp)
@@ -1294,7 +1294,7 @@ type schemeResponse struct {
 	url      string
 	document bool // a page loads, rather than a resource of one
 	status   int
-	header   http.Header
+	header   httplite.Header
 	body     bytes.Buffer
 	done     bool
 }
@@ -1307,7 +1307,7 @@ func (r *schemeResponse) Write(p []byte) { r.body.Write(p) }
 
 // isDownload reports whether a page response is a file to save: an
 // attachment, or plain bytes.
-func isDownload(h http.Header) bool {
+func isDownload(h httplite.Header) bool {
 	disposition := strings.ToLower(strings.TrimSpace(h.Get("Content-Disposition")))
 	return strings.HasPrefix(disposition, "attachment") || strings.HasPrefix(h.Get("Content-Type"), "application/octet-stream")
 }
@@ -1318,12 +1318,12 @@ func (r *schemeResponse) Finish() {
 	}
 	r.done = true
 	if r.status == 0 {
-		r.status = http.StatusOK
+		r.status = httplite.StatusOK
 	}
 	if r.document && r.status < 300 && isDownload(r.header) && !r.w.closed {
 		// WebView2 does not download what it gets from here: the page
 		// stays, and the app serves the URL again into a download.
-		r.w.respond(r.args, r.deferral, http.StatusNoContent, nil, nil)
+		r.w.respond(r.args, r.deferral, httplite.StatusNoContent, nil, nil)
 		r.w.h.SchemeDownload(r.url)
 		r.release()
 		return
@@ -1342,7 +1342,7 @@ func (r *schemeResponse) Fail(err error) {
 	}
 	r.done = true
 	if !r.w.closed {
-		r.w.respond(r.args, r.deferral, http.StatusBadGateway, http.Header{"Content-Type": {"text/plain; charset=utf-8"}}, []byte(err.Error()))
+		r.w.respond(r.args, r.deferral, httplite.StatusBadGateway, httplite.Header{"Content-Type": {"text/plain; charset=utf-8"}}, []byte(err.Error()))
 	} else {
 		comCall(r.deferral, deferralComplete)
 	}
