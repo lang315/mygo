@@ -57,9 +57,7 @@ func checkboxBase(c *context, checked *bool, track bool) *node {
 // assistive technology sees as a switch. Switch is SwitchBase with the
 // theme's look.
 func coreSwitchBase(c *context, on *bool) *node {
-	e := toggle(c, on, RoleSwitch, "Switch")
-	c.readsBool(on, *on)
-	return e
+	return toggle(c, on, RoleSwitch, "Switch") // animated (pending): its row is never kept
 }
 
 func toggle(c *context, on *bool, role Role, widget string) *node {

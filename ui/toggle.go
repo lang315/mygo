@@ -20,7 +20,9 @@ func coreToggleBase(c *context, on *bool) *node {
 	return e
 }
 
-// Toggle creates a button that stays pressed while *on, as Bold in an
+// Toggle creates a button that stays pressed while *on (in a row of a List with
+// RowVersion, *on is watched by its address: when the data it is in moves, put
+// the value in RowVersion), as Bold in an
 // editor's toolbar: a click presses it or lets it go, as does Space while
 // it has the focus, and Changed reports a change. Give it other content,
 // such as an icon, with Children and an empty label, and name it with

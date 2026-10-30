@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 )
@@ -488,4 +489,104 @@ func TestRetainRowsThatKeepAskingForTheFocusWinOverEarlierOnes(t *testing.T) {
 	p.both(func(tt *Tester) { tt.Frame() })
 	p.compareFocus("outside asks too")
 	p.frame("outside asks too +1")
+}
+
+// The *bool of a check box is watched by its address (the doc of RowVersion): the
+// data it is in moves when the app appends to a slice, and a change in the new
+// array is not seen. That is the limit, kept here; the app puts the value in
+// RowVersion (the sure way), and then the row shows it.
+func TestRetainRowsOfCheckBoxesInAMovedSliceNeedTheVersion(t *testing.T) {
+	type item struct{ done bool }
+	for _, versioned := range []bool{false, true} {
+		name := "value not in RowVersion"
+		if versioned {
+			name = "value in RowVersion"
+		}
+		t.Run(name, func(t *testing.T) {
+			var items [2][]item
+			for k := range 2 {
+				items[k] = make([]item, 10, 10)
+			}
+			twin := 0
+			p := newPair(t, 400, 600, func() func(c *Context) {
+				me := twin
+				twin++
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(i int) uint64 {
+					if versioned && i < len(items[me]) && items[me][i].done {
+						return 2
+					}
+					return 1
+				}}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						List(c, s, len(items[me]), func(i int) {
+							Row(c).Padding(2).Children(func() {
+								Checkbox(c, &items[me][i].done, fmt.Sprint("item ", i))
+							})
+						}).Grow(1)
+					})
+				}
+			})
+			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+			p.idle(3)
+			for k := range 2 {
+				items[k] = append(items[k], item{}) // the array moves
+			}
+			p.frame("append")
+			p.idle(2)
+			for k := range 2 {
+				items[k][3].done = true // in the new array
+			}
+			p.both(func(tt *Tester) { tt.Frame() })
+			checked := func(tt *Tester) bool {
+				for _, nd := range tt.Nodes() {
+					if nd.Label == "item 3" && nd.Role == RoleCheckBox {
+						return nd.Checked
+					}
+				}
+				t.Fatal("no check box item 3")
+				return false
+			}
+			if versioned {
+				p.all("versioned")
+				if !checked(p.kept) {
+					t.Errorf("the row with its value in RowVersion does not show it")
+				}
+			} else if checked(p.kept) || !checked(p.built) {
+				t.Errorf("the limit moved: kept shows %v, built %v (want false, true: a moved array is the app's to version)", checked(p.kept), checked(p.built))
+			}
+		})
+	}
+}
+
+// The focus is asked for by a later element in the build, and a row that keeps
+// asking is kept: the focus and the caret's blink must be as the twin's.
+func TestRetainRowsThatAskForTheFocusBeforeALaterAsk(t *testing.T) {
+	var txt [2]string
+	twin := 0
+	p := newPair(t, 400, 300, func() func(c *Context) {
+		me := twin
+		twin++
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				List(c, s, 10, func(i int) {
+					Row(c).Padding(4).Children(func() {
+						b := Button(c, fmt.Sprint("button ", i))
+						if i == 3 {
+							b.Focus()
+						}
+					})
+				}).Height(200)
+				TextInput(c, &txt[me]).Focus()
+			})
+		}
+	})
+	p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+	p.idle(3)
+	for k := range 6 {
+		p.both(func(tt *Tester) { tt.Advance(300 * time.Millisecond) })
+		p.frame(fmt.Sprint("advance ", k))
+		p.compareFocus(fmt.Sprint("advance ", k))
+	}
 }

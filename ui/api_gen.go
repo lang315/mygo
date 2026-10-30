@@ -849,7 +849,9 @@ func Calendar(c *Context, date *time.Time) Element {
 	return wrapElement(_e)
 }
 
-// Checkbox creates a check box toggling *checked, with a label.
+// Checkbox creates a check box toggling *checked, with a label. In a row of a
+// List with RowVersion, *checked is watched by its address: when the data it is
+// in moves (append reallocates a slice), put the value in RowVersion.
 func Checkbox(c *Context, checked *bool, label string) Element {
 	_ctx := c.build()
 	if _ctx == nil {
@@ -2115,7 +2117,8 @@ func Stepper(c *Context, value *float64, lo float64, hi float64, step float64) E
 	return wrapElement(_e)
 }
 
-// Switch creates a switch toggling *on.
+// Switch creates a switch toggling *on. It animates, so a row of a List with
+// RowVersion that holds one is built in every frame.
 func Switch(c *Context, on *bool) Element {
 	_ctx := c.build()
 	if _ctx == nil {
@@ -2435,7 +2438,9 @@ func ToastViewportBase(c *Context, fn func(viewport Element, toasts []Toast)) El
 	return wrapElement(_e)
 }
 
-// Toggle creates a button that stays pressed while *on, as Bold in an
+// Toggle creates a button that stays pressed while *on (in a row of a List with
+// RowVersion, *on is watched by its address: when the data it is in moves, put
+// the value in RowVersion), as Bold in an
 // editor's toolbar: a click presses it or lets it go, as does Space while
 // it has the focus, and Changed reports a change. Give it other content,
 // such as an icon, with Children and an empty label, and name it with

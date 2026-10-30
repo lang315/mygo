@@ -239,11 +239,15 @@ type ListState struct {
 	// changes: its text, whether it is Disabled, and whether the row asks for the
 	// Focus (a row that did not ask and now does, because of a value of the app,
 	// needs a new version; one that asks is built in every frame). What the
-	// control reports, a click or a toggle, builds the row by itself, and the
-	// *bool of a Checkbox, Toggle or Switch is versioned by the control: the row
-	// is built when it holds another value than the row was built with. A row
-	// with a Radio, a text field, or a Checkbox inside a CheckboxGroup is built in
-	// every frame.
+	// control reports, a click or a toggle, builds the row by itself. The *bool
+	// of a Checkbox or Toggle is also watched, as a safety for a change in
+	// place (a "select all" outside the list): the row is built when the *bool
+	// holds another value than the row was built with. It is watched by its
+	// address, so data that moves (a slice that append reallocates, a struct or a
+	// map that is replaced) is the app's to version: put the value in RowVersion,
+	// the sure way. A Switch is animated, so its row is never kept. A row with a
+	// Radio, a text field, or a Checkbox inside a CheckboxGroup is built in every
+	// frame.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer presses
