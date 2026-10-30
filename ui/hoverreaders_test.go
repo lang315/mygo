@@ -257,8 +257,10 @@ var elementQueriesNotNoted = map[string]string{
 // method value (f := e.m), a note made on another receiver (e.parent.asksOutside()),
 // a method of an embedded field, nor two types that share a method name (the
 // set only widens). It skips the public methods that return *node (builders),
-// 25 of them such as Root. An audit of ui/ found none of these forms that reads
-// state today; a new one would have to be added to the guard.
+// 25 of them such as Focus or Draggable. It finds a read of a node field that
+// input sets only for the fields in stateFields: a new field of that kind has to
+// be added there. An audit of ui/ found none of these forms that reads state
+// today; a new one would have to be added to the guard.
 func TestElementQueriesNoteTheRead(t *testing.T) {
 	api, err := os.ReadFile("api_gen.go")
 	if err != nil {
