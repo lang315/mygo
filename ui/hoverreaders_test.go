@@ -239,7 +239,6 @@ func TestTheWaysToAskForTheInputNoteTheRead(t *testing.T) {
 // of the frame before. A query that is not here and does not note the read
 // fails TestElementQueriesNoteTheRead: decide which kind it is.
 var elementQueriesNotNoted = map[string]string{
-	"input.go node.Activated":           "through node.event, which notes it",
 	"motion.go node.AnimateTo":          "drives the element's own value: a row with a running animation is not kept (state.pending); animating an outside element from a row is not a read",
 	"motion.go node.AnimateColor":       "as AnimateTo",
 	"motion.go node.Jump":               "as AnimateTo",
@@ -258,7 +257,10 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 	for _, m := range regexp.MustCompile(`func \(_handle Element\) (\w+)\(`).FindAllStringSubmatch(string(api), -1) {
 		public[m[1]] = true
 	}
-	noted := map[string]bool{"asksOutside": true, "readsLayout": true, "readsHover": true, "readsDrag": true}
+	noted := map[string]bool{"asksOutside": true, "readsLayout": true, "readsHover": true, "readsDrag": true, "neverKept": true}
+	// Helpers the queries call to read (and are checked themselves): calling
+	// one is reading through it, and noting the read is the helper's job.
+	helpers := map[string]bool{"event": true}
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +278,7 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 		}
 		for _, d := range af.Decls {
 			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Recv == nil || fd.Body == nil || !public[fd.Name.Name] {
+			if !ok || fd.Recv == nil || fd.Body == nil || !public[fd.Name.Name] && !helpers[fd.Name.Name] {
 				continue
 			}
 			if st, ok := fd.Recv.List[0].Type.(*ast.StarExpr); !ok || fmt.Sprint(st.X) != "node" {
@@ -287,20 +289,21 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 					continue // a builder: it sets what the element is
 				}
 			}
-			reads := false
+			reads, delegates := false, false
 			ast.Inspect(fd.Body, func(n ast.Node) bool {
 				switch n := n.(type) {
 				case *ast.SelectorExpr:
 					reads = reads || n.Sel.Name == "st" || n.Sel.Name == "rt"
 				case *ast.CallExpr:
-					if se, ok := n.Fun.(*ast.SelectorExpr); ok && se.Sel.Name == "hasState" {
+					if se, ok := n.Fun.(*ast.SelectorExpr); ok && (se.Sel.Name == "hasState" || helpers[se.Sel.Name]) {
 						reads = true
+						delegates = delegates || helpers[se.Sel.Name] && se.Sel.Name != fd.Name.Name
 					}
 				}
 				return true
 			})
-			if !reads {
-				continue
+			if !reads || delegates {
+				continue // a query that reads through a helper leaves noting the read to it
 			}
 			if es, ok := fd.Body.List[0].(*ast.ExprStmt); ok {
 				if call, ok := es.X.(*ast.CallExpr); ok {

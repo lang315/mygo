@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"testing"
 )
 
@@ -309,8 +310,9 @@ func TestRetainNestedRowAsksOfTheOuterRow(t *testing.T) {
 }
 
 // More ways to ask of the header: files dragged over it, a press outside it,
-// the events of a widget, its animations. Some set a flag on the header
-// (flagDropTarget...) that a kept row would never set again.
+// its animations. Some set a flag on the header (flagDropTarget...) that a kept
+// row would never set again; the pictures do not show an event of one frame
+// (TestRetainRowsSeeTheEventsOfTheHeader counts them).
 func TestRetainRowsAskingOfTheHeaderMore(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -319,17 +321,12 @@ func TestRetainRowsAskingOfTheHeaderMore(t *testing.T) {
 		{"FileDragOver", func(h Element) bool { return h.FileDragOver() }},
 		{"DroppedFiles", func(h Element) bool { return len(h.DroppedFiles()) > 0 }},
 		{"PressedOutside", func(h Element) bool { return h.PressedOutside() }},
-		{"Changed", func(h Element) bool { return h.Changed() }},
-		{"Submitted", func(h Element) bool { return h.Submitted() }},
 		{"ClickModifiers", func(h Element) bool { return h.ClickModifiers() != 0 }},
 		{"DragOffset", func(h Element) bool { return h.DragOffset() != Point{} }},
 		{"Settled", func(h Element) bool { return !h.Settled("k") }},
 		{"Arrived", func(h Element) bool { return h.Arrived("k") }},
 		{"Velocity", func(h Element) bool { return h.Velocity("k") != 0 }},
 		{"Transitioning", func(h Element) bool { return h.Transitioning() }},
-		{"SelectionChanged", func(h Element) bool { return h.SelectionChanged() }},
-		{"Shortcut", func(h Element) bool { return h.Shortcut(Cmd, KeyK) }},
-		{"FocusVisible", func(h Element) bool { return h.FocusVisible() }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newPair(t, 300, 400, rowsScene(func(c *Context) any {
@@ -345,9 +342,6 @@ func TestRetainRowsAskingOfTheHeaderMore(t *testing.T) {
 			p.both(func(tt *Tester) { tt.ClickAt(100, 20) })
 			p.frame("click")
 			p.frame("click 2")
-			p.both(func(tt *Tester) { tt.Key(Cmd, KeyK) })
-			p.frame("shortcut")
-			p.frame("shortcut 2")
 		})
 	}
 }
@@ -407,5 +401,92 @@ func TestRetainRowsAskingInsideStayKept(t *testing.T) {
 	p.frame("idle")
 	if b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept; b != 0 || k == 0 {
 		t.Errorf("idle: %d rows built, %d kept; want none built", b, k)
+	}
+}
+
+// seen counts the rows whose callback saw an event, by the twin that kept rows
+// and the one that built them all.
+var seenKept, seenBuilt atomic.Int64
+
+func countSeen(c *Context) {
+	if c.rt.noRetain {
+		seenBuilt.Add(1)
+	} else {
+		seenKept.Add(1)
+	}
+}
+
+// The events of one frame reach the rows that ask of the header (a TextInput):
+// a pass can clear them, so the pictures do not tell, but the number of rows
+// that saw them does. The twin that keeps rows must see as many as the other.
+func TestRetainRowsSeeTheEventsOfTheHeader(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ask  func(h Element) bool
+		do   func(tt *Tester)
+	}{
+		{"Changed", func(h Element) bool { return h.Changed() }, func(tt *Tester) { tt.Type("x") }},
+		{"Submitted", func(h Element) bool { return h.Submitted() }, func(tt *Tester) { tt.Key(0, KeyEnter) }},
+		{"Shortcut", func(h Element) bool { return h.Shortcut(Cmd, KeyK) }, func(tt *Tester) { tt.Key(Cmd, KeyK) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPair(t, 300, 400, func() func(c *Context) {
+				var text string
+				sel := -1
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }, Selected: &sel}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						h := TextInput(c, &text)
+						List(c, s, 30, func(i int) {
+							r := Row(c).Padding(4)
+							if tc.ask(h) {
+								r.Background(Hex("#ff0000"))
+								countSeen(c)
+							}
+							r.Children(func() { Textf(c, "row %d", i) })
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(2)
+			p.both(func(tt *Tester) { tt.ClickAt(50, 15) })
+			p.frame("focus")
+			p.idle(2)
+			seenKept.Store(0)
+			seenBuilt.Store(0)
+			p.both(tc.do)
+			p.compare("do")
+			p.frame("after")
+			if seenKept.Load() != seenBuilt.Load() {
+				t.Errorf("rows that saw the event: %d with kept rows, %d with every row built", seenKept.Load(), seenBuilt.Load())
+			}
+			if seenBuilt.Load() == 0 {
+				t.Errorf("no row saw the event: the test does not test")
+			}
+		})
+	}
+}
+
+// A row asks PressedOutside of its own element while the press is on the header:
+// nothing of the row is acting, and the row still has to see it.
+func TestRetainRowAsksPressedOutsideOfItself(t *testing.T) {
+	p := newPair(t, 300, 400, rowsScene(func(c *Context) any {
+		return Row(c).Height(40).Children(func() { Textf(c, "header") })
+	}, func(c *Context, i int, _ any) {
+		r := Row(c).Padding(4)
+		if r.PressedOutside() {
+			r.Background(Hex("#ff0000"))
+			countSeen(c)
+		}
+		r.Children(func() { Textf(c, "row %d", i) })
+	}))
+	p.idle(3)
+	seenKept.Store(0)
+	seenBuilt.Store(0)
+	p.both(func(tt *Tester) { tt.Press(100, 20) })
+	p.compare("press on the header")
+	p.frame("after")
+	if seenKept.Load() != seenBuilt.Load() || seenBuilt.Load() == 0 {
+		t.Errorf("rows that saw the press: %d with kept rows, %d with every row built", seenKept.Load(), seenBuilt.Load())
 	}
 }

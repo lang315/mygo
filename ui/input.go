@@ -1730,6 +1730,13 @@ func (e *node) asksOutside() {
 // as well: a row built once keeps what it read then, while a row built in
 // every frame follows the layout as it settles. A row that reads it is built.
 func (e *node) readsLayout() {
+	e.neverKept()
+}
+
+// neverKept makes the rows being built, around e's context, rows that are
+// built in every frame, whatever e is: for a read that nothing in the row
+// tells has changed (the layout of the frame before, a press somewhere else).
+func (e *node) neverKept() {
 	if e == nil || e.c == nil {
 		return
 	}
