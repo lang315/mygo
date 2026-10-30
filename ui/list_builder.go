@@ -8,7 +8,11 @@ type ListRow struct {
 	selected bool
 }
 
-func (r ListRow) Selected() bool    { return r.owner.Valid() && r.selected }
+// Selected reports whether the row is chosen. It finds the list through lookup,
+// not Valid: the list is outside the row, and Valid notes that for the row being
+// built, which would then be built in every frame (the choice is a key of a kept
+// row already, rowKeep.chosen).
+func (r ListRow) Selected() bool    { return r.owner.lookup() != nil && r.selected }
 func (r ListRow) ListFocused() bool { return r.owner.FocusWithin() }
 
 type listSpec struct {

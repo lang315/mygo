@@ -283,3 +283,79 @@ func TestHandWrittenQueriesOfElementNoteAMissingElement(t *testing.T) {
 		t.Errorf("found %d hand-written queries: the test looks at the wrong code", found)
 	}
 }
+
+// ListRow.Selected asks the list, which is outside the row, whether it is built:
+// the answer must not make every row built in every frame.
+func TestRetainRowsShowingSelectedStayKept(t *testing.T) {
+	p := newPair(t, 400, 400, func() func(c *Context) {
+		sel := 1
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }, Selected: &sel}
+		return func(c *Context) {
+			List(c, s, 20).Rows(func(r ListRow) {
+				Textf(c, "row %d sel=%v", r.Index, r.Selected())
+			}).Grow(1)
+		}
+	})
+	p.idle(3)
+	built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+	p.frame("idle")
+	if b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept; b != 0 || k == 0 {
+		t.Errorf("idle: %d rows built, %d kept; want none built", b, k)
+	}
+}
+
+// Valid of a Modal asked from rows: closed, open, closed again. The rows follow it.
+func TestRetainRowsAskValidOfAModalThatOpensAndCloses(t *testing.T) {
+	var opens []*bool
+	p := newPair(t, 400, 400, func() func(c *Context) {
+		open := new(bool)
+		opens = append(opens, open)
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				m := Modal(c, open, func() { Textf(c, "dialog") })
+				List(c, s, 10, func(i int) {
+					Textf(c, "row %d open=%v", i, m.Valid())
+				}).Grow(1)
+			})
+		}
+	})
+	set := func(v bool) {
+		for _, o := range opens {
+			*o = v
+		}
+	}
+	p.idle(3)
+	set(true)
+	p.idle(3)
+	if !p.kept.HasText("row 0 open=true") {
+		t.Errorf("open: the rows still say closed")
+	}
+	set(false)
+	p.idle(3)
+	if !p.kept.HasText("row 0 open=false") {
+		t.Errorf("closed again: the rows still say open")
+	}
+}
+
+// Valid of an element outside the row that stays there is a question of the
+// element: the row is built while it asks (asksOutside).
+func TestRetainRowsAskValidOfAnElementOutside(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				head := Row(c).Height(40)
+				List(c, s, 10, func(i int) {
+					Textf(c, "row %d valid=%v", i, head.Valid())
+				}).Grow(1)
+			})
+		}
+	})
+	p.idle(4)
+	built := p.kept.rt.rowsBuilt
+	p.frame("idle")
+	if p.kept.rt.rowsBuilt == built {
+		t.Errorf("rows that ask Valid of an outside element were kept")
+	}
+}
