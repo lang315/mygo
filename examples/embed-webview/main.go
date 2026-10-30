@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/protocol"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -141,7 +142,7 @@ func (a *app) view(c *ui.Context) {
 
 func main() {
 	a := &app{tab: "notes", zoom: "100%"}
-	mygo.SetFrontend(frontend)
+	protocol.SetFrontend(frontend)
 	mygo.Bind(&Notes{a})
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{

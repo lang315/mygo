@@ -4,13 +4,9 @@ package mygo
 
 import (
 	"context"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
+	"os/exec"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,30 +17,27 @@ import (
 
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/schemehook"
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/protocol"
 )
 
-// unlinkedScheme puts the app back to where it is before it has anything to
-// serve: no linked serving, no frontend.
-func unlinkedScheme(t *testing.T) {
+// unlinkedScheme puts the app back to where it is before it imports package
+// protocol: no serving linked, no frontend. It returns the serving, which the
+// test binary links by importing protocol, and puts it back when the test ends.
+func unlinkedScheme(t *testing.T) *schemehook.Serving {
 	t.Helper()
-	linked := schemeLinked.Load()
-	frontend.Lock()
-	fsys := frontend.fsys
-	frontend.fsys = nil
-	frontend.Unlock()
-	schemeLinked.Store(nil)
-	schemeLinking = sync.Once{}
+	linked := schemehook.Linked.Load()
+	if linked == nil {
+		t.Fatal("importing package protocol did not link the serving")
+	}
+	protocol.SetFrontend(nil)
+	schemehook.Linked.Store(nil)
 	t.Cleanup(func() {
-		schemeLinked.Store(linked)
-		schemeLinking = sync.Once{}
-		if linked != nil {
-			schemeLinking.Do(func() {})
-		}
-		frontend.Lock()
-		frontend.fsys = fsys
-		frontend.Unlock()
+		schemehook.Linked.Store(linked)
+		protocol.SetFrontend(nil)
 	})
+	return linked
 }
 
 // corsOracle is allowCORS as it was written with net/http's types, kept to
@@ -75,10 +68,10 @@ func corsOracle(win *Window, header http.Header, r *http.Request) (preflight boo
 // method, header spelling and window, the headers allowCORS sets are those
 // of the version on net/http's types, byte for byte.
 func TestAllowCORSGrantsWhatItDidWithNetHTTP(t *testing.T) {
-	if err := Protocol.Handle("corsapp", http.NotFoundHandler()); err != nil {
+	if err := protocol.Handle("corsapp", http.NotFoundHandler()); err != nil {
 		t.Fatal(err)
 	}
-	defer Protocol.Unhandle("corsapp")
+	defer protocol.Unhandle("corsapp")
 	defer func(v bool) { schemeHosts = v }(schemeHosts)
 
 	origins := []string{"", "null", "mygo://localhost", "mygo://localhost/path", "http://mygo.localhost",
@@ -198,12 +191,13 @@ func awaitScheme(t *testing.T, r *schemeRec) {
 	}
 }
 
-// TestUnlinkedSchemeAnswersAsServing: an app that registered no handler and
-// has no frontend gives its pages what the serving gave them, for the
-// requests it can get: the status, headers and body, to a responder that
-// takes the body as Write or as WriteBody.
+// TestUnlinkedSchemeAnswersAsServing: an app that does not import package
+// protocol, so has no handler and no frontend, gives its pages what the
+// serving gives an app with neither, for the requests it can get: the status,
+// headers and body, to a responder that takes the body as Write or as
+// WriteBody. The page of mygo:// is the exception: it says to import protocol.
 func TestUnlinkedSchemeAnswersAsServing(t *testing.T) {
-	unlinkedScheme(t)
+	linked := unlinkedScheme(t)
 	defer func(v bool) { schemeHosts = v }(schemeHosts)
 	win, _ := testWindow(t, WindowOptions{Page: PageOptions{TrustedOrigins: []string{"https://partner.example"}}})
 
@@ -240,7 +234,7 @@ func TestUnlinkedSchemeAnswersAsServing(t *testing.T) {
 	for _, c := range cases {
 		for _, bodyWriter := range []bool{false, true} {
 			schemeHosts = c.hosts
-			answer := func(serve func(*Window, *platform.SchemeRequest)) *schemeRec {
+			answer := func(serve func(*platform.SchemeRequest)) *schemeRec {
 				rec := newSchemeRec()
 				var resp platform.SchemeResponder = rec
 				if bodyWriter {
@@ -250,15 +244,21 @@ func TestUnlinkedSchemeAnswersAsServing(t *testing.T) {
 				if c.body != "" {
 					req.Body = io.NopCloser(strings.NewReader(c.body))
 				}
-				onMain(func() { serve(win, req) })
+				onMain(func() { serve(req) })
 				awaitScheme(t, rec)
 				return rec
 			}
-			want := answer(Protocol.serve)
-			got := answer(serveUnlinked)
+			want := answer(func(req *platform.SchemeRequest) { linked.Serve(req, win.schemeCall(req)) })
+			got := answer(func(req *platform.SchemeRequest) { serveUnlinked(win, req) })
 			// A request of an unregistered scheme never reaches an app: the
 			// backends route the ones in WindowOptions.Schemes only.
-			if got.status != want.status || !reflect.DeepEqual(got.header, want.header) || string(got.body) != string(want.body) || got.failed != want.failed {
+			sameBody := string(got.body) == string(want.body)
+			page := len(want.body) > 0 && strings.Contains(string(want.body), "No frontend")
+			if page {
+				// the page of mygo:// of an app without package protocol says to import it
+				sameBody = strings.Contains(string(got.body), "No frontend") && strings.Contains(string(got.body), "github.com/egoist/mygo/protocol")
+			}
+			if got.status != want.status || !reflect.DeepEqual(got.header, want.header) || !sameBody || got.failed != want.failed {
 				t.Errorf("%s (body as WriteBody: %v):\nserving:  %d %v %q %v\nunlinked: %d %v %q %v",
 					c.name, bodyWriter, want.status, want.header, want.body, want.failed, got.status, got.header, got.body, got.failed)
 			}
@@ -267,10 +267,10 @@ func TestUnlinkedSchemeAnswersAsServing(t *testing.T) {
 }
 
 // TestSchemeRequestOfAWindowOfAnUnlinkedApp: windowHandler takes the
-// requests to the serving once linked, and to the answer of an app with
-// nothing to serve until then.
+// requests to the serving once package protocol is imported, and to the answer
+// of an app that does not import it until then.
 func TestSchemeRequestOfAWindowOfAnUnlinkedApp(t *testing.T) {
-	unlinkedScheme(t)
+	linked := unlinkedScheme(t)
 	_, fw := testWindow(t, WindowOptions{})
 	ask := func() *schemeRec {
 		rec := newSchemeRec()
@@ -279,19 +279,21 @@ func TestSchemeRequestOfAWindowOfAnUnlinkedApp(t *testing.T) {
 		awaitScheme(t, rec)
 		return rec
 	}
-	if r := ask(); r.status != 404 || !strings.Contains(string(r.body), "No frontend") {
-		t.Errorf("an app with no frontend answered %d %q", r.status, r.body)
+	if r := ask(); r.status != 404 || !strings.Contains(string(r.body), "No frontend") || !strings.Contains(string(r.body), "mygo/protocol") {
+		t.Errorf("an app without package protocol answered %d %q", r.status, r.body)
 	}
-	SetFrontend(fstest.MapFS{"index.html": {Data: []byte("<p>app</p>")}})
+	schemehook.Linked.Store(linked)
+	protocol.SetFrontend(fstest.MapFS{"index.html": {Data: []byte("<p>app</p>")}})
 	if r := ask(); r.status != 200 || string(r.body) != "<p>app</p>" {
 		t.Errorf("an app with a frontend answered %d %q", r.status, r.body)
 	}
 }
 
 // TestUnlinkedSchemeDownloadsFailAsServing: the download of a URL of an app
-// with nothing to serve ends with the error the serving gave.
+// that does not import package protocol ends with the error the serving gives
+// an app with nothing to serve.
 func TestUnlinkedSchemeDownloadsFailAsServing(t *testing.T) {
-	unlinkedScheme(t)
+	linked := unlinkedScheme(t)
 	w, fw := testWindow(t, WindowOptions{})
 	done := make(chan *Download, 1)
 	defer w.Page().OnDownloadDone(func(d *Download) { done <- d })()
@@ -308,8 +310,10 @@ func TestUnlinkedSchemeDownloadsFailAsServing(t *testing.T) {
 		}
 	}
 	for _, url := range []string{"mygo://localhost/f.zip", "nohandler://localhost/f.zip", "mygo://localhost/%zz"} {
-		go downloadScheme(&windowHandler{w}, url)
+		schemehook.Linked.Store(linked)
+		onMain(func() { fw.H.SchemeDownload(url) })
 		want := finished()
+		schemehook.Linked.Store(nil)
 		onMain(func() { fw.H.SchemeDownload(url) })
 		if got := finished(); got != want {
 			t.Errorf("%s: unlinked %q, serving %q", url, got, want)
@@ -317,15 +321,15 @@ func TestUnlinkedSchemeDownloadsFailAsServing(t *testing.T) {
 	}
 }
 
-// TestIsTrustedNeedsNoLinking: which pages may call bound methods does not
+// TestIsTrustedNeedsNoServing: which pages may call bound methods does not
 // depend on the serving being linked: the registered schemes are the app's
-// before the first window is made.
-func TestIsTrustedNeedsNoLinking(t *testing.T) {
+// whether or not package protocol serves them.
+func TestIsTrustedNeedsNoServing(t *testing.T) {
 	unlinkedScheme(t)
-	Protocol.mu.Lock()
-	Protocol.handlers["trustapp"] = http.NotFoundHandler() // registered, as Handle does without linking
-	Protocol.mu.Unlock()
-	defer Protocol.Unhandle("trustapp")
+	if err := protocol.Handle("trustapp", http.NotFoundHandler()); err != nil {
+		t.Fatal(err)
+	}
+	defer protocol.Unhandle("trustapp")
 	win := &Window{}
 	for url, want := range map[string]bool{
 		"mygo://localhost/":      true,
@@ -339,127 +343,37 @@ func TestIsTrustedNeedsNoLinking(t *testing.T) {
 			t.Errorf("isTrusted(%q) = %v, want %v", url, got, want)
 		}
 	}
-	if schemeLinked.Load() != nil {
-		t.Error("asking who is trusted linked the serving")
-	}
 }
 
-// TestSchemeLinkPoints: what gives the app something to serve links the
-// serving, and nothing else does: a Handle that fails, or an app that only
-// makes windows.
-func TestSchemeLinkPoints(t *testing.T) {
-	unlinkedScheme(t)
-	linked := func() bool { return schemeLinked.Load() != nil }
-	reset := func() {
-		schemeLinked.Store(nil)
-		schemeLinking = sync.Once{}
-	}
-	if err := Protocol.Handle("Bad Scheme", http.NotFoundHandler()); err == nil || linked() {
-		t.Errorf("a Handle that failed (%v) linked: %v", err, linked())
-	}
-	if err := Protocol.Handle("http", http.NotFoundHandler()); err == nil || linked() {
-		t.Errorf("a Handle of a reserved scheme (%v) linked: %v", err, linked())
-	}
-	w, _ := testWindow(t, WindowOptions{})
-	onMain(func() { _ = w.Page().LoadURL("/x") })
-	if linked() {
-		t.Error("a window loading a page of the frontend linked the serving")
-	}
-	if err := Protocol.Handle("linkapp", http.NotFoundHandler()); err != nil || !linked() {
-		t.Errorf("Handle: %v, linked %v", err, linked())
-	}
-	Protocol.Unhandle("linkapp")
-	reset()
-	if err := Protocol.HandleFunc("linkapp", func(http.ResponseWriter, *http.Request) {}); err != nil || !linked() {
-		t.Errorf("HandleFunc: %v, linked %v", err, linked())
-	}
-	Protocol.Unhandle("linkapp")
-	reset()
-	SetFrontend(fstest.MapFS{})
-	if !linked() {
-		t.Error("SetFrontend did not link the serving")
-	}
-}
-
-// TestSchemeServingIsReachedOnlyThroughTheHook reads the package: the
-// serving of custom schemes (Protocol.serve, downloadScheme and what they
-// reach) is called by linkScheme and by nothing outside the serving itself,
-// or an app of native UI would link net/http's request side again (some
-// 320 KB). It reads the source because the linker, which keeps whatever is
-// called, is what decides, and a test of behavior cannot see a call that
-// works.
-func TestSchemeServingIsReachedOnlyThroughTheHook(t *testing.T) {
-	files, err := filepath.Glob("*.go")
+// TestPackageMygoDoesNotDependOnNetHTTP: the point of package protocol. Package
+// mygo, and so every app of native UI, must not depend on net/http (2.2 MB):
+// a file that imports it, or a package that does, brings it back. It is read
+// with go list for the platforms of the backends.
+func TestPackageMygoDoesNotDependOnNetHTTP(t *testing.T) {
+	goTool, err := exec.LookPath("go")
 	if err != nil {
-		t.Fatal(err)
+		t.Skip("no go tool")
 	}
-	// name -> the functions that may use it.
-	allowed := map[string][]string{
-		"serve":           {"linkScheme"},
-		"downloadScheme":  {"linkScheme"},
-		"serveScheme":     {"serve"},
-		"frontendHandler": {"serve", "downloadScheme"},
-	}
-	fset := token.NewFileSet()
-	used := map[string]int{}
-	for _, name := range files {
-		if strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		src, err := os.ReadFile(name)
+	for _, goos := range []string{"darwin", "linux", "windows"} {
+		cmd := exec.Command(goTool, "list", "-deps", ".")
+		cmd.Env = append(cmd.Environ(), "GOOS="+goos, "CGO_ENABLED=0")
+		out, err := cmd.CombinedOutput()
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("go list -deps (%s): %v\n%s", goos, err, out)
 		}
-		f, err := parser.ParseFile(fset, name, src, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, decl := range f.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
-				continue
+		for _, pkg := range strings.Fields(string(out)) {
+			if pkg == "net/http" || pkg == "github.com/egoist/mygo/protocol" || pkg == "github.com/egoist/mygo/netproxy" {
+				t.Errorf("package mygo depends on %s on %s", pkg, goos)
 			}
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				var id *ast.Ident
-				switch x := n.(type) {
-				case *ast.SelectorExpr:
-					// Protocol.serve, not a method of anything else.
-					if recv, ok := x.X.(*ast.Ident); ok && recv.Name == "Protocol" && x.Sel.Name == "serve" {
-						id = x.Sel
-					}
-				case *ast.Ident:
-					if x.Name != "serve" {
-						id = x
-					}
-				}
-				if id == nil {
-					return true
-				}
-				may, tracked := allowed[id.Name]
-				if !tracked {
-					return true
-				}
-				used[id.Name]++
-				if !slices.Contains(may, fn.Name.Name) {
-					t.Errorf("%s: %s uses %s, which only %v may: it links the serving into every app",
-						fset.Position(id.Pos()), fn.Name.Name, id.Name, may)
-				}
-				return true
-			})
-		}
-	}
-	for name := range allowed {
-		if used[name] == 0 {
-			t.Errorf("nothing uses %s: the test no longer sees the hook (renamed?)", name)
 		}
 	}
 }
 
 // TestSchemeLinkingRaces: windows ask for pages while the serving is linked
-// from another goroutine, as a Tester or a goroutine of the app may; run
-// with -race.
+// and unlinked and the handlers change, from other goroutines, as a Tester or
+// a goroutine of the app may; run with -race.
 func TestSchemeLinkingRaces(t *testing.T) {
-	unlinkedScheme(t)
+	linked := unlinkedScheme(t)
 	var wins []*fake.Window
 	for range 3 {
 		_, fw := testWindow(t, WindowOptions{})
@@ -487,16 +401,19 @@ func TestSchemeLinkingRaces(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if i%2 == 0 {
-				SetFrontend(fstest.MapFS{"index.html": {Data: []byte("x")}})
-			} else {
-				_ = Protocol.Handle("raceapp", http.NotFoundHandler())
-				Protocol.Unhandle("raceapp")
+			switch i % 3 {
+			case 0:
+				protocol.SetFrontend(fstest.MapFS{"index.html": {Data: []byte("x")}})
+			case 1:
+				_ = protocol.Handle("raceapp", http.NotFoundHandler())
+				protocol.Unhandle("raceapp")
+			default:
+				for range 10 {
+					schemehook.Linked.Store(linked)
+					schemehook.Linked.Store(nil)
+				}
 			}
 		}()
 	}
 	wg.Wait()
-	if schemeLinked.Load() == nil {
-		t.Error("nothing linked the serving")
-	}
 }

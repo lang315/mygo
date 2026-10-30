@@ -29,6 +29,7 @@ import (
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/tsgen"
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/protocol"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 )
@@ -604,10 +605,10 @@ func TestCalls(t *testing.T) {
 
 func TestUntrustedOriginsCannotCall(t *testing.T) {
 	bindForTest(t, "Trust", &testService{})
-	if err := Protocol.Handle("trusted", http.NotFoundHandler()); err != nil {
+	if err := protocol.Handle("trusted", http.NotFoundHandler()); err != nil {
 		t.Fatal(err)
 	}
-	defer Protocol.Unhandle("trusted")
+	defer protocol.Unhandle("trusted")
 	_, fw := readyWindow(t, WindowOptions{Page: PageOptions{TrustedOrigins: []string{"https://partner.example"}}})
 	cases := []struct {
 		url string
@@ -1185,10 +1186,10 @@ func request(t *testing.T, fw *fake.Window, method, url string, body io.Reader) 
 }
 
 func TestProtocol(t *testing.T) {
-	if err := Protocol.Handle("http", http.NotFoundHandler()); err == nil {
+	if err := protocol.Handle("http", http.NotFoundHandler()); err == nil {
 		t.Error("registering http should fail")
 	}
-	if err := Protocol.Handle("Bad Scheme", http.NotFoundHandler()); err == nil {
+	if err := protocol.Handle("Bad Scheme", http.NotFoundHandler()); err == nil {
 		t.Error("invalid scheme should fail")
 	}
 	mux := http.NewServeMux()
@@ -1208,11 +1209,11 @@ func TestProtocol(t *testing.T) {
 		}
 	})
 	mux.HandleFunc("/panic", func(w http.ResponseWriter, r *http.Request) { panic("oops") })
-	if err := Protocol.Handle("test", mux); err != nil {
+	if err := protocol.Handle("test", mux); err != nil {
 		t.Fatal(err)
 	}
-	defer Protocol.Unhandle("test")
-	if !Protocol.IsHandled("TEST") {
+	defer protocol.Unhandle("test")
+	if !protocol.IsHandled("TEST") {
 		t.Error("IsHandled should be case-insensitive")
 	}
 
@@ -1257,10 +1258,10 @@ func TestProtocolCORS(t *testing.T) {
 	mux.HandleFunc("/own", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "https://cdn.example.com")
 	})
-	if err := Protocol.Handle("assets", mux); err != nil {
+	if err := protocol.Handle("assets", mux); err != nil {
 		t.Fatal(err)
 	}
-	defer Protocol.Unhandle("assets")
+	defer protocol.Unhandle("assets")
 	defer func(v bool) { schemeHosts = v }(schemeHosts)
 	schemeHosts = true // as on Windows
 	_, fw := testWindow(t, WindowOptions{Page: PageOptions{TrustedOrigins: []string{"https://app.example.com"}}})
@@ -1366,7 +1367,7 @@ func TestProtocolBodyWriter(t *testing.T) {
 	const size = 640 << 10 // two and a half chunks
 	var written int
 	var writeErr error
-	if err := Protocol.HandleFunc("body", func(w http.ResponseWriter, r *http.Request) {
+	if err := protocol.HandleFunc("body", func(w http.ResponseWriter, r *http.Request) {
 		chunk := []byte(strings.Repeat("0123456789abcdef", 2048)) // 32 KiB
 		for written = 0; written < size; written += len(chunk) {
 			if _, writeErr = w.Write(chunk); writeErr != nil {
@@ -1376,7 +1377,7 @@ func TestProtocolBodyWriter(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	defer Protocol.Unhandle("body")
+	defer protocol.Unhandle("body")
 	_, fw := testWindow(t, WindowOptions{})
 	serve := func(rec *bodyRecorder) {
 		t.Helper()
@@ -1451,8 +1452,8 @@ func TestFrontend(t *testing.T) {
 	if rec.status != 404 || !strings.Contains(rec.body.String(), "mygo dev") {
 		t.Errorf("no frontend: %d %q", rec.status, rec.body.String())
 	}
-	SetFrontend(fstest.MapFS{"index.html": {Data: []byte("<p>app</p>")}, "app.js": {Data: []byte("go()")}})
-	defer SetFrontend(nil)
+	protocol.SetFrontend(fstest.MapFS{"index.html": {Data: []byte("<p>app</p>")}, "app.js": {Data: []byte("go()")}})
+	defer protocol.SetFrontend(nil)
 	if rec := request(t, fw, "GET", "mygo://localhost/app.js", nil); rec.status != 200 || rec.body.String() != "go()" {
 		t.Errorf("app.js: %d %q", rec.status, rec.body.String())
 	}
@@ -1464,13 +1465,13 @@ func TestFrontend(t *testing.T) {
 	}
 
 	// The app's own handler wins.
-	if err := Protocol.Handle("mygo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "own") })); err != nil {
+	if err := protocol.Handle("mygo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "own") })); err != nil {
 		t.Fatal(err)
 	}
 	if rec := request(t, fw, "GET", "mygo://localhost/app.js", nil); rec.body.String() != "own" {
 		t.Errorf("app handler: %q", rec.body.String())
 	}
-	Protocol.Unhandle("mygo")
+	protocol.Unhandle("mygo")
 
 	// During mygo dev, the dev server.
 	t.Setenv("MYGO_DEV_URL", "http://192.168.1.2:5173")
@@ -1487,10 +1488,10 @@ func TestFileServer(t *testing.T) {
 		"index.html":    {Data: []byte("<!doctype html>index")},
 		"assets/app.js": {Data: []byte("console.log(1)")},
 	}
-	if err := Protocol.Handle("fs", FileServer(fsys)); err != nil {
+	if err := protocol.Handle("fs", protocol.FileServer(fsys)); err != nil {
 		t.Fatal(err)
 	}
-	defer Protocol.Unhandle("fs")
+	defer protocol.Unhandle("fs")
 	_, fw := testWindow(t, WindowOptions{})
 	for url, want := range map[string]string{
 		"fs://localhost/":              "<!doctype html>index",

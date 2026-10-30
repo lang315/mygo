@@ -423,7 +423,7 @@ func TestDevFrontendFiles(t *testing.T) {
 		t.Fatalf("overlay %v, %v", files, err)
 	}
 	f, err := parser.ParseFile(token.NewFileSet(), gen, src, 0)
-	if err != nil || f.Name.Name != "main" || !strings.Contains(string(src), "mygo.SetFrontend(os.DirFS(dir))") {
+	if err != nil || f.Name.Name != "main" || !strings.Contains(string(src), "protocol.SetFrontend(os.DirFS(dir))") || !strings.Contains(string(src), `"github.com/egoist/mygo/protocol"`) {
 		t.Errorf("the generated file is %v, %v:\n%s", f, err, src)
 	}
 	for name, c := range map[string]*Config{
@@ -614,6 +614,66 @@ func TestAppHasPackageSaysSoOnlyWhenSure(t *testing.T) {
 	c = app(gomodWith(fakeMygo(false)), "import _ \"github.com/egoist/mygo\"\n")
 	if has, err := appHasPackage(c, updatefeedPackage); err != nil || has {
 		t.Errorf("an older MyGo: %v, %v", has, err)
+	}
+	// The files of the frontend use it for package protocol, and say to import that.
+	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo/updatefeed\"\n")
+	vendor(c)
+	if _, err := frontendSource(c, frontendGenSource); err == nil || !strings.Contains(err.Error(), `import _ "github.com/egoist/mygo/protocol"`) {
+		t.Errorf("a vendor directory without protocol: %v", err)
+	}
+}
+
+// TestFrontendSourceOfAnOlderMygo: the generated files that set the frontend
+// call protocol.SetFrontend where the app's MyGo has package protocol, and
+// mygo.SetFrontend, which is all that MyGo had, where it does not.
+func TestFrontendSourceOfAnOlderMygo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("go list")
+	}
+	old := t.TempDir()
+	for name, content := range map[string]string{
+		"go.mod":  "module github.com/egoist/mygo\n\ngo " + goVersion() + "\n",
+		"mygo.go": "package mygo\n",
+	} {
+		if err := os.WriteFile(filepath.Join(old, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
+	sum, _ := os.ReadFile(filepath.Join(checkout, "go.sum"))
+	app := func(mygo string) *Config {
+		dir := t.TempDir()
+		gomod := "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + mygo + "\n"
+		for name, content := range map[string]string{"go.mod": gomod, "go.sum": string(sum), "main.go": "package main\n\nimport _ \"github.com/egoist/mygo\"\n\nfunc main() {}\n"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return &Config{root: dir}
+	}
+	t.Setenv("GOFLAGS", "-mod=mod")
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOWORK", "off")
+	for name, want := range map[string][2]string{
+		"current": {`"github.com/egoist/mygo/protocol"`, "protocol.SetFrontend("},
+		"older":   {`"github.com/egoist/mygo"`, "mygo.SetFrontend("},
+	} {
+		mygo := checkout
+		if name == "older" {
+			mygo = old
+		}
+		for _, source := range []string{frontendGenSource, devFrontendGenSource} {
+			got, err := frontendSource(app(mygo), source)
+			if err != nil {
+				t.Fatalf("%s MyGo: %v", name, err)
+			}
+			if !strings.Contains(got, want[0]) || !strings.Contains(got, want[1]) || strings.Contains(got, "{{") {
+				t.Errorf("%s MyGo: the generated source is\n%s", name, got)
+			}
+			if name == "current" && strings.Contains(got, "mygo.SetFrontend") {
+				t.Errorf("current MyGo still calls mygo.SetFrontend:\n%s", got)
+			}
+		}
 	}
 }
 
