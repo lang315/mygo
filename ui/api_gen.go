@@ -376,7 +376,8 @@ func (_handle *Context) Modifiers() Modifiers {
 	return _ctx.Modifiers()
 }
 
-// Now returns the time the frame started, for animations.
+// Now returns the time the frame started, for animations. A row of a List with
+// RowVersion that calls it is built in every frame.
 func (_handle *Context) Now() time.Time {
 	_ctx := _handle.build()
 	if _ctx == nil {
@@ -516,7 +517,8 @@ func (_handle *Context) SetZoom(z float32) {
 // pressed, wherever the keyboard focus is, unless a focused element
 // handled it first: a focused button or link takes Enter and Space, and a
 // check box, switch or radio button Space, so that Enter can press a
-// dialog's default button.
+// dialog's default button. A row of a List with RowVersion that calls it is
+// built in every frame.
 func (_handle *Context) Shortcut(mods Modifiers, key Key) bool {
 	_ctx := _handle.build()
 	if _ctx == nil {

@@ -371,7 +371,10 @@ func (c *context) SetTheme(t *Theme) {
 func (c *context) RowSelected() bool { return c.row != nil && c.row.chosen }
 
 // Size returns the size of the window's content in DIPs.
-func (c *context) Size() (width, height float32) { return c.w, c.h }
+func (c *context) Size() (width, height float32) {
+	c.readsCtx(ctxSize)
+	return c.w, c.h
+}
 
 // TitleBar is the room the window controls take at the top of a window
 // with a hidden title bar, in DIPs: they sit in a band of Height along the
@@ -387,7 +390,10 @@ type TitleBar struct{ Height, Left, Right float32 }
 //
 //	bar := c.TitleBar()
 //	ui.Row(c).Height(max(bar.Height, 32)).Padding(0, bar.Right, 0, bar.Left).DragWindow()
-func (c *context) TitleBar() TitleBar { return c.titleBar }
+func (c *context) TitleBar() TitleBar {
+	c.readsCtx(ctxTitleBar)
+	return c.titleBar
+}
 
 // Vibrancy reports whether the window shows its material
 // (mygo.WindowOptions.Vibrancy) wherever the view draws no background: on
@@ -407,10 +413,17 @@ func (c *context) TitleBar() TitleBar { return c.titleBar }
 //		sidebar.Children(func() { app.sidebar(c) })
 //		ui.Column(c).Grow(1).Background(c.Theme().Background).Children(func() { app.content(c) })
 //	})
-func (c *context) Vibrancy() bool { return c.vibrancy }
+func (c *context) Vibrancy() bool {
+	c.readsCtx(ctxVibrancy)
+	return c.vibrancy
+}
 
-// Now returns the time the frame started, for animations.
-func (c *context) Now() time.Time { return c.now }
+// Now returns the time the frame started, for animations. A row of a List with
+// RowVersion that calls it is built in every frame.
+func (c *context) Now() time.Time {
+	c.neverKept()
+	return c.now
+}
 
 // Root returns the element holding the window's content: a column the
 // size of the window.
@@ -452,7 +465,10 @@ func (c *context) After(d time.Duration) {
 // ReadClipboard returns the text on the clipboard, and WriteClipboard
 // puts text there, for widgets that copy and paste themselves. Call them
 // on the main thread: in the view, or in an input handler.
-func (c *context) ReadClipboard() string   { return c.rt.host.readClipboard() }
+func (c *context) ReadClipboard() string {
+	c.neverKept()
+	return c.rt.host.readClipboard()
+}
 func (c *context) WriteClipboard(s string) { c.rt.host.writeClipboard(s) }
 
 // Announce asks screen readers to read text out once, after what they
@@ -496,8 +512,10 @@ func (c *context) OpenURLThen(url string, done func(err error)) {
 // pressed, wherever the keyboard focus is, unless a focused element
 // handled it first: a focused button or link takes Enter and Space, and a
 // check box, switch or radio button Space, so that Enter can press a
-// dialog's default button.
+// dialog's default button. A row of a List with RowVersion that calls it is
+// built in every frame.
 func (c *context) Shortcut(mods Modifiers, key Key) bool {
+	c.neverKept() // it registers the shortcut in every build: a row linked would not
 	if !c.insideModal() || c.inert {
 		return false // behind a dialog, or in a page going away
 	}

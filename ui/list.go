@@ -225,8 +225,11 @@ type ListState struct {
 	// Dragging... of an element the app saved, a header) is built every frame,
 	// whatever RowVersion says, and so is one that reads the layout of the frame
 	// before (Bounds, LayoutBounds, LocalToWindow, WindowToLocal, InView), of its
-	// own elements too; a value that the code building the list read and
-	// passes into the rows is not versioned: RowVersion must say it changed.
+	// own elements too, and so is one that calls Context.Shortcut, Now or
+	// ReadClipboard; one that reads Size, Zoom, Preferences, Locale, Region,
+	// Vibrancy or TitleBar is built when the value changes; a value that the
+	// code building the list read and passes into the rows is not versioned:
+	// RowVersion must say it changed.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer presses
@@ -564,8 +567,10 @@ type listRow struct {
 	ver     uint64
 	chosen  [3]bool
 	checked bool
-	// readsHover, readsMods and readsDrag: see rowBuild.
+	// readsHover, readsMods and readsDrag: see rowBuild; ctx: the window's
+	// values its callback read (ctxRead).
 	readsHover, readsMods, readsDrag bool
+	ctx                              ctxRead
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -585,6 +590,10 @@ type rowBuild struct {
 	// readsDrag: it asked whether a value dragged within the window is over
 	// one of its elements (DragHover): the row is built while a drag lasts.
 	readsDrag bool
+	// ctx: the values of the window that the callback read through the Context
+	// (Size, Zoom, Preferences, Locale, Region, Vibrancy, TitleBar): a row is
+	// linked while they are the ones it was built with.
+	ctx ctxRead
 	// root is the element of the row; outside: the callback asked of an element
 	// that is not inside it (Hovered, PointerPosition, Pressed), whose state
 	// the row's own states do not say: the row is never kept.
@@ -976,15 +985,16 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
-	reads, mods, drag, outside := rb.readsHover, rb.readsMods, rb.readsDrag, rb.outside
+	reads, mods, drag, outside, ctx := rb.readsHover, rb.readsMods, rb.readsDrag, rb.outside, rb.ctx
 	c.row, f.rb = saved, prev
 	if saved != nil {
 		// A row built inside the callback of another.
 		saved.readsHover = saved.readsHover || reads
 		saved.readsMods = saved.readsMods || mods
 		saved.readsDrag = saved.readsDrag || drag
+		saved.ctx |= ctx
 	}
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: mods, readsDrag: drag})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: mods, readsDrag: drag, ctx: ctx})
 	if rt.bound != bound || s.editablesNow || outside {
 		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits, or it asked of an element outside it: not kept
 	}

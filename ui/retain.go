@@ -47,6 +47,10 @@ type rowKeep struct {
 	// same (listRow.readsMods).
 	readsMods bool
 	mods      Modifiers
+	// ctx: the values of the window the row's callback read (ctxRead), and
+	// view the values it read them as.
+	ctx  ctxRead
+	view ctxView
 	// readsDrag: the row's callback asked for DragHover (listRow.readsDrag).
 	readsDrag bool
 	root      *node
@@ -169,7 +173,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		return nil
 	}
 	c, rt := f.c, f.c.rt
-	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame || rec.readsMods && rec.mods != rt.mods {
+	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame || rec.readsMods && rec.mods != rt.mods || rec.ctx != 0 && !c.sameCtx(rec.ctx, &rec.view) {
 		// A row out of view for a frame had its states pruned and recycled.
 		return nil
 	}
@@ -193,7 +197,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		rec.zero()
 	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods, readsDrag: rec.readsDrag})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods, readsDrag: rec.readsDrag, ctx: rec.ctx})
 	rt.rowsKept++
 	return root
 }
@@ -350,6 +354,9 @@ func (f *listFrame) capture() {
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen, rec.checked, rec.readsHover = r.chosen, r.checked, r.readsHover
 		rec.readsMods, rec.mods, rec.readsDrag = r.readsMods, rt.mods, r.readsDrag
+		if rec.ctx = r.ctx; rec.ctx != 0 {
+			rec.view = f.c.viewOf(rec.ctx)
+		}
 		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0], scrolled: rec.lay.scrolled[:0]}
 		rec.scrollers = rec.scrollers[:0]
 		for j := range rec.nodes {
