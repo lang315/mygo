@@ -37,7 +37,7 @@ func TestNamesAreNetHTTPs(t *testing.T) {
 // convert to each other.
 func TestHeaderIsNetHTTPsHeader(t *testing.T) {
 	keys := []string{"Content-Type", "content-type", "CONTENT-TYPE", "x-custom-header", "X-A", "", "bad key", "Accept-Ranges"}
-	start := []map[string][]string{nil, {}, {"Content-Type": {"a", "b"}, "x-raw": {"c"}}}
+	start := []map[string][]string{nil, {}, {"Content-Type": {"a", "b"}, "x-raw": {"c"}}, {"Empty": {}, "Nil": nil}}
 	for _, init := range start {
 		for _, key := range keys {
 			mine, theirs := Header(cloneMap(init)), http.Header(cloneMap(init))
@@ -82,7 +82,11 @@ func cloneMap(m map[string][]string) map[string][]string {
 	}
 	out := make(map[string][]string, len(m))
 	for k, v := range m {
-		out[k] = append([]string(nil), v...)
+		if v == nil {
+			out[k] = nil
+			continue
+		}
+		out[k] = append(make([]string, 0, len(v)), v...) // an empty slice stays empty, not nil
 	}
 	return out
 }
