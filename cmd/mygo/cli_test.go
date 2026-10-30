@@ -582,18 +582,33 @@ func TestAppHasPackageSaysSoOnlyWhenSure(t *testing.T) {
 		t.Errorf("-mod=vendor without a vendor directory: %v, %v", has, err)
 	}
 	t.Setenv("GOFLAGS", "")
-	// A vendor directory with the package.
+	// A vendor directory with the package; the app of this case imports it
+	// itself, which is what makes go mod vendor copy it.
 	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo/updatefeed\"\n")
 	vendor(c)
 	if has, err := appHasPackage(c, updatefeedPackage); err != nil || !has {
 		t.Errorf("a vendor directory with updatefeed: %v, %v", has, err)
 	}
 	// A vendor directory without it: the build cannot tell an old MyGo from
-	// a vendor directory that lacks what it has.
+	// a vendor directory that lacks what it has. go mod vendor alone does not
+	// mend it, as the message says; the import it asks for does.
 	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo\"\n")
 	vendor(c)
-	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has || !strings.Contains(err.Error(), "vendor") {
+	has, err := appHasPackage(c, updatefeedPackage)
+	if err == nil || has || !strings.Contains(err.Error(), "vendor") || !strings.Contains(err.Error(), `import _ "github.com/egoist/mygo/updatefeed"`) {
 		t.Errorf("a vendor directory without updatefeed: %v, %v", has, err)
+	}
+	vendor(c) // go mod vendor again, as the message's last step, without the import
+	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has {
+		t.Errorf("go mod vendor alone mended the vendor directory: %v, %v", has, err)
+	}
+	// The steps of the message: the import in a file of the app, then go mod vendor.
+	if err := os.WriteFile(filepath.Join(c.root, "feed.go"), []byte("package main\n\nimport _ \"github.com/egoist/mygo/updatefeed\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vendor(c)
+	if has, err := appHasPackage(c, updatefeedPackage); err != nil || !has {
+		t.Errorf("after the steps of the message: %v, %v", has, err)
 	}
 	// An older MyGo, not vendored, is the answer "no" and not an error.
 	c = app(gomodWith(fakeMygo(false)), "import _ \"github.com/egoist/mygo\"\n")

@@ -121,7 +121,8 @@ const mygoModule = "github.com/egoist/mygo"
 // network) it returns go's own error, so that the build fails with its reason
 // and does not leave out a file the release needs. In an app with a vendor
 // directory, a package that is not in it is an error too: it may be one MyGo
-// has and the vendor directory lacks, and nothing here can tell.
+// has and the vendor directory lacks (go mod vendor copies what the app's code
+// imports, not what this build adds), and nothing here can tell.
 func appHasPackage(c *Config, path string) (bool, error) {
 	out, err := goOutput(c.root, "list", "-m", "-f", "{{.Dir}}", mygoModule)
 	if err != nil {
@@ -144,7 +145,7 @@ func appHasPackage(c *Config, path string) (bool, error) {
 	if hasGoFiles(filepath.Join(vendor, filepath.FromSlash(path))) {
 		return true, nil
 	}
-	return false, fmt.Errorf("the vendor directory of the app, %s, has no %s, which this build needs: run go get %s@latest and go mod vendor, or build without vendoring", vendor, path, mygoModule)
+	return false, fmt.Errorf("the vendor directory of the app, %s, has no %s, which this build needs, and go mod vendor copies only packages the app's code imports (not the ones this build adds): add import _ %q to a file of the app (main.go), run go get %s@latest if its MyGo is older than this CLI, and go mod vendor; or build without vendoring", vendor, path, path, mygoModule)
 }
 
 // goOutput runs go in dir and returns what it printed; its error holds what

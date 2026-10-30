@@ -335,8 +335,11 @@ does not have the package: that MyGo fetches the feed itself. When the CLI
 cannot tell which MyGo the app builds with (a go.mod that does not parse,
 a vendor directory that does not match it, no network), the build stops
 with go's error instead of leaving the file out, and so does an app with a
-vendor directory that lacks `updatefeed`: run `go get
-github.com/egoist/mygo@latest` and `go mod vendor`.
+vendor directory that lacks `updatefeed`. `go mod vendor` copies only
+the packages the app's code imports, so add
+`import _ "github.com/egoist/mygo/updatefeed"` to a file of the app
+(`main.go`), run `go get github.com/egoist/mygo@latest` if its MyGo is
+older than the CLI, and `go mod vendor`.
 
 ## Where apps can update
 
