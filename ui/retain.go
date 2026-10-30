@@ -47,6 +47,8 @@ type rowKeep struct {
 	// same (listRow.readsMods).
 	readsMods bool
 	mods      Modifiers
+	// readsDrag: the row's callback asked for DragHover (listRow.readsDrag).
+	readsDrag bool
 	root      *node
 	nodes     []node   // the copy, root first, in the order of a walk
 	states    []*state // those of the nodes, which each pass stamps as seen
@@ -116,7 +118,7 @@ func (rt *engine) isActing(id uint64) bool {
 // linked again: no input or request is pending in it, the engine acts on none
 // of its elements, and it is an ordinary row. It does not compare what the row
 // was built with (see keep).
-func (f *listFrame) ok(i int, states []*state, readsHover bool) bool {
+func (f *listFrame) ok(i int, states []*state, readsHover, readsDrag bool) bool {
 	rt, s := f.c.rt, f.s
 	if rt.noRetain || rt.insp.open || f.isHeader(i) || s.dragSel.on {
 		return false
@@ -126,6 +128,9 @@ func (f *listFrame) ok(i int, states []*state, readsHover bool) bool {
 	}
 	if s.editAsked && s.editKey == f.key(i) {
 		return false // the keys asked this row to edit its text: its build starts it
+	}
+	if readsDrag && rt.drag != nil {
+		return false // the drag path, which DragHover reads, is not among the acting ids
 	}
 	rt.actingIDs()
 	for _, st := range states {
@@ -168,7 +173,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		// A row out of view for a frame had its states pruned and recycled.
 		return nil
 	}
-	if rec.chosen != f.chosenAround(i) || (f.s.Checked != nil && rec.checked != f.s.Checked.has(key)) || !f.ok(i, rec.states, rec.readsHover) {
+	if rec.chosen != f.chosenAround(i) || (f.s.Checked != nil && rec.checked != f.s.Checked.has(key)) || !f.ok(i, rec.states, rec.readsHover, rec.readsDrag) {
 		return nil
 	}
 	root := rec.root
@@ -188,7 +193,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		rec.zero()
 	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods, readsDrag: rec.readsDrag})
 	rt.rowsKept++
 	return root
 }
@@ -333,7 +338,7 @@ func (f *listFrame) capture() {
 		}
 		rec.unlink() // the copy may get another root state
 		rec.copyIn(r.e)
-		if !f.ok(r.i, rec.states, r.readsHover) {
+		if !f.ok(r.i, rec.states, r.readsHover, r.readsDrag) {
 			if fresh {
 				f.spare = append(f.spare, rec)
 			} else {
@@ -344,7 +349,7 @@ func (f *listFrame) capture() {
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen, rec.checked, rec.readsHover = r.chosen, r.checked, r.readsHover
-		rec.readsMods, rec.mods = r.readsMods, rt.mods
+		rec.readsMods, rec.mods, rec.readsDrag = r.readsMods, rt.mods, r.readsDrag
 		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0], scrolled: rec.lay.scrolled[:0]}
 		rec.scrollers = rec.scrollers[:0]
 		for j := range rec.nodes {

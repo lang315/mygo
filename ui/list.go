@@ -558,8 +558,8 @@ type listRow struct {
 	ver     uint64
 	chosen  [3]bool
 	checked bool
-	// readsHover and readsMods: see rowBuild.
-	readsHover, readsMods bool
+	// readsHover, readsMods and readsDrag: see rowBuild.
+	readsHover, readsMods, readsDrag bool
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -576,6 +576,9 @@ type rowBuild struct {
 	readsHover bool
 	// readsMods: it asked for the modifier keys held (Context.Modifiers).
 	readsMods bool
+	// readsDrag: it asked whether a value dragged within the window is over
+	// one of its elements (DragHover): the row is built while a drag lasts.
+	readsDrag bool
 }
 
 // List creates a vertical scroll container of n rows, built with row(i),
@@ -960,14 +963,15 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
-	reads, mods := rb.readsHover, rb.readsMods
+	reads, mods, drag := rb.readsHover, rb.readsMods, rb.readsDrag
 	c.row, f.rb = saved, prev
 	if saved != nil {
 		// A row built inside the callback of another.
 		saved.readsHover = saved.readsHover || reads
 		saved.readsMods = saved.readsMods || mods
+		saved.readsDrag = saved.readsDrag || drag
 	}
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: mods})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: mods, readsDrag: drag})
 	if rt.bound != bound || s.editablesNow {
 		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits: not kept
 	}
