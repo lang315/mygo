@@ -2,6 +2,7 @@ package ui
 
 import (
 	"slices"
+	"sync"
 
 	"github.com/egoist/mygo/internal/text"
 )
@@ -208,8 +209,8 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 	// since only rows are replayed (retained rows), and only in apps that build
 	// a list (linkPaintCompare).
 	paintEqual, sameP := false, true
-	if cmp := comparePaint; cmp != nil && (e.c.rt.inRow || e.c.rt.paintAll) {
-		paintEqual, sameP = cmp(e, r, fresh)
+	if (e.c.rt.inRow || e.c.rt.paintAll) && comparePaint != nil {
+		paintEqual, sameP = comparePaint(e, r, fresh)
 	} else {
 		// Not compared in this layout: a later one must not compare with it.
 		r.paintOK, r.ptext = false, textPaint{}
@@ -277,10 +278,18 @@ var (
 	relayoutListFn func(e, ch *node, y float64)
 )
 
+// paintCompareOnce makes the first linkPaintCompare the only one to write:
+// the functions are shared by every engine of the process, which may run on
+// goroutines of its own (tests), and each reads them only after a build of a
+// list, which called linkPaintCompare and so waited for the write.
+var paintCompareOnce sync.Once
+
 // linkPaintCompare sets the functions that compare paint and lay lists out.
 func linkPaintCompare() {
-	comparePaint, inheritsPaint, rowPainter = comparePaintOf, inheritsPaintSame, paintRow
-	layoutListFn, relayoutListFn = (*node).layoutList, (*node).relayoutList
+	paintCompareOnce.Do(func() {
+		comparePaint, inheritsPaint, rowPainter = comparePaintOf, inheritsPaintSame, paintRow
+		layoutListFn, relayoutListFn = (*node).layoutList, (*node).relayoutList
+	})
 }
 
 // comparePaintOf compares what paints e with what r kept, and keeps it: whether

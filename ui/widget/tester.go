@@ -24,7 +24,8 @@ type TB interface {
 //
 // A Tester embeds the *ui.Tester under it, so its Frame, Key, Texts and
 // the rest work on the same window. Its methods fail the test (Fatalf)
-// where a user could not do what they ask, and say why.
+// where a user could not do what they ask, and say why. Drive each from one
+// goroutine and do not run them in parallel: see ui.Tester.
 type Tester struct {
 	*ui.Tester
 	tb   TB

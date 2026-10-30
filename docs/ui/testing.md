@@ -25,6 +25,10 @@ Two elements given the same `Key` under one parent share one state, so
 that a click or the focus meant for one goes to the other: a tester
 panics where the second key was given, as apps only log it.
 
+A tester is driven from one goroutine. Testers on different goroutines
+share the process's text system, and its glyph atlas is for one thread only,
+so do not run tests that use one in parallel (`t.Parallel`).
+
 ## What a tester does
 
 - **Pointer.** `tt.Click`, `tt.ClickAt`, `tt.ClickWith(ui.Shift, "Row 3")`,

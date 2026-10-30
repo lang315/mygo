@@ -366,8 +366,8 @@ func (p *Painter) element(e *node) {
 		}
 		for c := e.first; c != nil; c = c.next {
 			if c.flags&flagAbsolute == 0 && p.paintable(c) {
-				if row := rowPainter; row != nil && e.list != nil {
-					row(p, c)
+				if e.list != nil && rowPainter != nil {
+					rowPainter(p, c)
 				} else {
 					p.element(c)
 				}

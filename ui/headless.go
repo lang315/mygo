@@ -239,6 +239,10 @@ func coreRender(view func(c *context), width, height int, scale float32) *image.
 // depends on time (animations, Context.After, the clicks that make a
 // double click, typing that undoes in one step, tooltips) does the same
 // however fast the machine runs the test.
+//
+// A Tester is driven from one goroutine. Testers on different goroutines
+// share the process's text system, whose glyph atlas is for one thread only,
+// so do not run them in parallel (t.Parallel).
 type Tester struct {
 	rt     *engine
 	h      *headless
