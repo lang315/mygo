@@ -223,9 +223,11 @@ type ListState struct {
 	// or leave RowVersion nil. A row whose callback asks about the state of an
 	// element built outside the row (Hovered, Pressed, Clicked, Focused,
 	// Dragging... of an element the app saved, a header) is built every frame,
-	// whatever RowVersion says, and so is one that reads the layout of the frame
-	// before (Bounds, LayoutBounds, LocalToWindow, WindowToLocal, InView), of its
-	// own elements too, and so is one that calls Context.Shortcut, Now or
+	// whatever RowVersion says. One that reads the layout of the frame before
+	// (Bounds, LayoutBounds, LocalToWindow, WindowToLocal, InView), of its own
+	// elements too, is built until the answers it got are the ones a build would
+	// get now (it asks of up to eight different things, or it is built in every
+	// frame). A row that calls Context.Shortcut, Now or
 	// ReadClipboard, and so is one that asks a question of an element that is not
 	// there (the Element{} of a Modal that is closed, or of a select's item before
 	// its popup opens); one that reads Size, Zoom, Preferences, Locale, Region,
@@ -587,6 +589,8 @@ type rowReads struct {
 	mods      Modifiers
 	ctx       ctxRead
 	view      ctxView
+	// layouts: the answers of the layout queries it got (retain_reads.go).
+	layouts []layoutRead
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -616,6 +620,8 @@ type rowBuild struct {
 	// root is the element of the row; outside: the callback asked of an element
 	// that is not inside it (Hovered, PointerPosition, Pressed), whose state
 	// the row's own states do not say: the row is never kept.
+	// layouts: the answers of the layout queries the callback got (retain_reads.go).
+	layouts []layoutRead
 	root    *node
 	outer   *rowBuild // the row this one was built inside, if any
 	outside bool
@@ -1006,6 +1012,7 @@ func (f *listFrame) build(i int) *node {
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
+	layouts := rb.layouts
 	var readsAt uint16
 	c.row, f.rb = saved, prev
 	if missingNotes.Load() != notes {
@@ -1024,9 +1031,12 @@ func (f *listFrame) build(i int) *node {
 		if ctx != 0 {
 			saved.mergeCtx(ctx, view)
 		}
+		for _, r := range layouts {
+			saved.noteLayout(r)
+		}
 	}
-	if readMods || ctx != 0 {
-		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view}); readsAt == 0 {
+	if readMods || ctx != 0 || len(layouts) != 0 {
+		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view, layouts}); readsAt == 0 {
 			outside = true // too many to number: not kept
 		}
 	}
