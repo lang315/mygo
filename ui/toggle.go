@@ -15,7 +15,9 @@ const (
 // reports, and that assistive technology sees as a toggle button, pressed
 // while *on. Toggle is ToggleBase with the theme's look.
 func coreToggleBase(c *context, on *bool) *node {
-	return toggle(c, on, RoleToggleButton, "Toggle").Center()
+	e := toggle(c, on, RoleToggleButton, "Toggle").Center()
+	c.readsBool(on, *on)
+	return e
 }
 
 // Toggle creates a button that stays pressed while *on, as Bold in an

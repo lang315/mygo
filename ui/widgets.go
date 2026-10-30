@@ -246,8 +246,13 @@ func coreCheckbox(c *context, checked *bool, label string) *node {
 // checkbox creates a Checkbox, showing a dash while mixed and not checked,
 // as a box checking a group whose boxes differ.
 func checkbox(c *context, checked *bool, label string, mixed bool) *node {
+	return checkboxOf(c, checked, label, mixed, true)
+}
+
+// checkboxOf is checkbox; track is CheckboxBase's (checkboxBase).
+func checkboxOf(c *context, checked *bool, label string, mixed, track bool) *node {
 	t := c.theme
-	row := coreCheckboxBase(c, checked).Gap(t.Space(2)).FocusRing(false)
+	row := checkboxBase(c, checked, track).Gap(t.Space(2)).FocusRing(false)
 	state := int8(1)
 	switch {
 	case *checked:
