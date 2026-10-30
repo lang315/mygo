@@ -25,7 +25,7 @@ func (s *state) pending() bool {
 		return true
 	}
 	// Builds that run on: animations, transitions, a wheel gliding.
-	return len(s.anims) != 0 || s.motionsBusy() || len(s.colorMotions) != 0 ||
+	return len(s.anims) != 0 || len(s.motions) != 0 && s.motionsBusy() || len(s.colorMotions) != 0 ||
 		len(s.sequences) != 0 || len(s.timelines) != 0 ||
 		s.crec != nil || s.pose != nil || s.trec != nil || s.wheel != nil
 }
