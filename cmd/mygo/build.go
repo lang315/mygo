@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -247,7 +247,7 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 				return err
 			}
 			flags := []string{"-trimpath", "-ldflags", ldflags}
-			flags = append(flags, productionTags(opts.debug)...)
+			flags = append(flags, productionTags(opts.debug, c.root)...)
 			if overlay != "" {
 				flags = append(flags, "-overlay", overlay)
 			}
@@ -438,25 +438,28 @@ const inspectorTag = "mygo_noinspector"
 // production builds, as to look into one with DevToolsEnabled.
 func keepInspector() bool { return os.Getenv("MYGO_INSPECTOR") == "1" }
 
-// goFlags returns the GOFLAGS a go build gets: the environment variable, or
-// else the one set with go env -w, which os.Getenv does not see.
-func goFlags() []string {
-	out, err := exec.Command("go", "env", "GOFLAGS").Output()
-	if err != nil {
+// goFlags returns the GOFLAGS a go build of the app in dir gets: the
+// environment variable, or else the one set with go env -w, which os.Getenv
+// does not see.
+func goFlags(dir string) []string {
+	var out bytes.Buffer
+	cmd := goCommand(dir, nil, "env", "GOFLAGS")
+	cmd.Stdout, cmd.Stderr = &out, nil
+	if err := cmd.Run(); err != nil {
 		return strings.Fields(os.Getenv("GOFLAGS"))
 	}
-	return strings.Fields(string(out))
+	return strings.Fields(out.String())
 }
 
 // productionTags returns the -tags of a build: those GOFLAGS sets, which a
 // -tags flag would override, and the inspector's in a production build
 // unless it keeps it.
-func productionTags(debug bool) []string {
+func productionTags(debug bool, dir string) []string {
 	if debug || keepInspector() {
 		return nil
 	}
 	var tags []string
-	for _, f := range goFlags() {
+	for _, f := range goFlags(dir) {
 		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags="); ok && v != "" {
 			tags = append(tags, v)
 		}
@@ -468,10 +471,10 @@ func productionTags(debug bool) []string {
 // client (mygo generate, mygo dev, mygo init), which must have the generator:
 // the tags of GOFLAGS less the inspector's, which a -tags flag overrides
 // (empty when it was the only one), and nothing when GOFLAGS has no such tag.
-func generatorTags() []string {
+func generatorTags(dir string) []string {
 	var tags []string
 	found := false
-	for _, f := range goFlags() {
+	for _, f := range goFlags(dir) {
 		v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags=")
 		if !ok {
 			continue

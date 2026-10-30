@@ -20,7 +20,7 @@ func linkClient() {
 }
 
 func noClient(string) error {
-	const msg = "mygo: MYGO_GENERATE cannot write the TypeScript client: this build leaves the generator out (mygo_noinspector); build without that tag, as mygo generate and mygo dev do"
+	const msg = "mygo: MYGO_GENERATE cannot write the TypeScript client: this build leaves the generator out (mygo_noinspector); build without that tag"
 	os.Stderr.WriteString(msg + "\n")
 	return errors.New("mygo: the TypeScript client was not written")
 }

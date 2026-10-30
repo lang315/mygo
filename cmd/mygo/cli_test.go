@@ -387,9 +387,10 @@ func TestPackageFlags(t *testing.T) {
 
 // TestWindowsSignCommand signs a file whose path the shell gets quoted.
 func TestProductionTags(t *testing.T) {
+	t.Setenv("GOENV", "off") // not the GOFLAGS go env -w set on this machine
 	t.Setenv("GOFLAGS", "")
 	t.Setenv("MYGO_INSPECTOR", "")
-	tags := func(debug bool) string { return strings.Join(productionTags(debug), " ") }
+	tags := func(debug bool) string { return strings.Join(productionTags(debug, t.TempDir()), " ") }
 	if got := tags(false); got != "-tags mygo_noinspector" {
 		t.Errorf("a production build has %q", got)
 	}
@@ -420,10 +421,10 @@ func TestGoFlagsOfGoEnv(t *testing.T) {
 	t.Setenv("GOENV", file)
 	t.Setenv("GOFLAGS", "")
 	t.Setenv("MYGO_INSPECTOR", "")
-	if got := strings.Join(generatorTags(), " "); got != "-tags sqlite" {
+	if got := strings.Join(generatorTags(t.TempDir()), " "); got != "-tags sqlite" {
 		t.Errorf("generatorTags with go env -w GOFLAGS gives %q", got)
 	}
-	if got := strings.Join(productionTags(false), " "); !strings.HasPrefix(got, "-tags sqlite,") {
+	if got := strings.Join(productionTags(false, t.TempDir()), " "); !strings.HasPrefix(got, "-tags sqlite,") {
 		t.Errorf("productionTags with go env -w GOFLAGS gives %q", got)
 	}
 }
@@ -431,17 +432,18 @@ func TestGoFlagsOfGoEnv(t *testing.T) {
 // TestGeneratorTags keeps the build that writes the TypeScript client free of
 // the production tag a user's GOFLAGS sets, which leaves the generator out.
 func TestGeneratorTags(t *testing.T) {
-	tags := func() string { return strings.Join(generatorTags(), " ") }
+	t.Setenv("GOENV", "off")
+	tags := func() string { return strings.Join(generatorTags(t.TempDir()), " ") }
 	t.Setenv("GOFLAGS", "")
-	if got := generatorTags(); got != nil {
+	if got := generatorTags(t.TempDir()); got != nil {
 		t.Errorf("no GOFLAGS gives %q", got)
 	}
 	t.Setenv("GOFLAGS", "-mod=mod -tags=sqlite,fts5")
-	if got := generatorTags(); got != nil {
+	if got := generatorTags(t.TempDir()); got != nil {
 		t.Errorf("GOFLAGS' other tags alone give %q: the build keeps them", got)
 	}
 	t.Setenv("GOFLAGS", "-tags=mygo_noinspector")
-	if got := generatorTags(); len(got) != 2 || got[0] != "-tags" || got[1] != "" {
+	if got := generatorTags(t.TempDir()); len(got) != 2 || got[0] != "-tags" || got[1] != "" {
 		t.Errorf("the production tag alone gives %q, want an empty -tags, which overrides it", got)
 	}
 	t.Setenv("GOFLAGS", "-mod=mod -tags=sqlite,mygo_noinspector,fts5")

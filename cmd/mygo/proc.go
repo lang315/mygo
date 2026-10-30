@@ -222,7 +222,7 @@ func writeClient(ctx context.Context, c *Config, asked bool) error {
 	bin := tempBinary(c.executableName())
 	defer os.Remove(bin)
 	changed := false
-	err := goBuild(ctx, c, t, bin, nil, generatorTags()...)
+	err := goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
 	if err == nil {
 		t.set("running the app in generate mode")
 		changed, err = generateBindings(c, bin)

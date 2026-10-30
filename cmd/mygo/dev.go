@@ -555,7 +555,7 @@ func (s *devSession) buildAndLaunch(ctx context.Context, t *task, running [32]by
 		cleanup()
 		return nil, sum, err
 	}
-	err = goBuild(ctx, c, t, bin, nil, append(generatorTags(), "-ldflags", strings.TrimSpace(packageFlags(dc)))...)
+	err = goBuild(ctx, c, t, bin, nil, append(generatorTags(c.root), "-ldflags", strings.TrimSpace(packageFlags(dc)))...)
 	cleanup()
 	if err != nil {
 		return nil, sum, err
