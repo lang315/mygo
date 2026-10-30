@@ -296,6 +296,21 @@ func zero(fs *token.FileSet, e ast.Expr) string {
 	}
 	return "*new(" + t + ")"
 }
+
+// isQuery reports whether a method with these results answers something about
+// the element, rather than building it (a builder returns the element).
+func isQuery(r *ast.FieldList) bool {
+	if r == nil || len(r.List) == 0 {
+		return false
+	}
+	for _, f := range r.List {
+		if st, ok := f.Type.(*ast.StarExpr); ok && baseName(st.X) == "node" {
+			return false
+		}
+	}
+	return true
+}
+
 func zeroReturn(fs *token.FileSet, r *ast.FieldList) string {
 	if r == nil || len(r.List) == 0 {
 		return "return"
@@ -449,7 +464,13 @@ func generate(out *bytes.Buffer, fs *token.FileSet, fn *ast.FuncDecl) {
 	fmt.Fprintf(out, "func %s%s%s(%s)%s {\n", recv, name, tp, params(fs, fn.Type.Params, true, true), results(fs, fn.Type.Results, true))
 	c := "_ctx"
 	if r == "node" {
-		fmt.Fprintln(out, "_node := _handle.node(); if _node == nil {", zeroReturn(fs, fn.Type.Results), "}; _ctx := _node.c; _ = _ctx")
+		note := ""
+		if isQuery(fn.Type.Results) {
+			// A query of an element that is not there tells the row being built
+			// nothing it can depend on (retain.go): it has to be built anyway.
+			note = "noteMissingElement();"
+		}
+		fmt.Fprintln(out, "_node := _handle.node(); if _node == nil {", note, zeroReturn(fs, fn.Type.Results), "}; _ctx := _node.c; _ = _ctx")
 		rawRecv = "_node."
 	}
 	if r == "context" {

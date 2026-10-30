@@ -198,9 +198,6 @@ func (f *listFrame) keep(i int, key any) *node {
 	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
 	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsDrag: rec.readsDrag})
-	if rec.readsMods || rec.ctx != 0 {
-		f.rows[len(f.rows)-1].reads = f.addReads(rowReads{rec.readsMods, rec.mods, rec.ctx, rec.view})
-	}
 	rt.rowsKept++
 	return root
 }
