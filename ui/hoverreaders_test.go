@@ -239,10 +239,10 @@ func TestTheWaysToAskForTheInputNoteTheRead(t *testing.T) {
 // of the frame before. A query that is not here and does not note the read
 // fails TestElementQueriesNoteTheRead: decide which kind it is.
 var elementQueriesNotNoted = map[string]string{
-	"element.go node.disabled":          "reads the flags the app set while building (not the engine's state)",
+	"element.go node.disabled":          "reads e.st.flags of the frame before, but every query that calls it notes the read first",
 	"element.go node.hasState":          "only whether the element has a state: the engine cannot have given it another",
-	"motion.go node.channel":            "finds the element's own animation for AnimateTo, Spring, Animate...: a row with an animation is not kept (state.pending); animating an outside element is not a read",
-	"motion.go node.AnimateTo":          "drives the element's own value: a row with a running animation is not kept (state.pending); animating an outside element from a row is not a read",
+	"motion.go node.channel":            "finds the element's own animation for AnimateTo, Spring, Animate...: the row is built again because AnimateTo asks for frames (AnimationFrame bumps rt.bound), not because of the state; animating an outside element is not a read",
+	"motion.go node.AnimateTo":          "drives the element's own value and asks for frames while it moves (AnimationFrame bumps rt.bound, which a list does not keep); animating an outside element from a row is not a read",
 	"motion.go node.AnimateColor":       "as AnimateTo",
 	"motion.go node.Jump":               "as AnimateTo",
 	"motion.go node.Keyframes":          "as AnimateTo",
@@ -251,6 +251,14 @@ var elementQueriesNotNoted = map[string]string{
 	"rowclick.go node.RowDoubleClicked": "asks Hovered of the element, which notes the read",
 }
 
+// Limits of the guard below, by what it follows: calls to methods of *node by
+// name, from the queries of Element. It does not see a function variable or a
+// free function that takes the element, a method of *context that reads e.st, a
+// method value (f := e.m), a note made on another receiver (e.parent.asksOutside()),
+// a method of an embedded field, nor two types that share a method name (the
+// set only widens). It skips the public methods that return *node (builders),
+// 25 of them such as Root. An audit of ui/ found none of these forms that reads
+// state today; a new one would have to be added to the guard.
 func TestElementQueriesNoteTheRead(t *testing.T) {
 	api, err := os.ReadFile("api_gen.go")
 	if err != nil {
@@ -261,6 +269,9 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 		public[m[1]] = true
 	}
 	noted := map[string]bool{"asksOutside": true, "readsLayout": true, "readsHover": true, "readsDrag": true, "neverKept": true}
+	// Fields of node that a widget or the engine sets from input as it builds,
+	// and a query reads (the answer of the frame): reading one is reading state.
+	stateFields := map[string]bool{"dismissed": true, "highlighted": true}
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -333,7 +344,7 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 			ast.Inspect(m.fd.Body, func(n ast.Node) bool {
 				switch n := n.(type) {
 				case *ast.SelectorExpr:
-					reads = reads || n.Sel.Name == "st" || n.Sel.Name == "rt"
+					reads = reads || n.Sel.Name == "st" || n.Sel.Name == "rt" || stateFields[n.Sel.Name]
 				case *ast.CallExpr:
 					if se, ok := n.Fun.(*ast.SelectorExpr); ok && se.Sel.Name == "hasState" {
 						reads = true

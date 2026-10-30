@@ -1584,7 +1584,10 @@ func (e *node) event(ev tableEvent) bool {
 //	if ui.Modal(c, &app.editing, edit).Dismissed() && app.unsaved {
 //		app.editing = true
 //	}
-func (e *node) Dismissed() bool { return e.dismissed }
+func (e *node) Dismissed() bool {
+	e.asksOutside()
+	return e.dismissed
+}
 
 // scrollbarPress starts dragging the thumb of the scroll container under
 // the pointer when the press is on its scroll bar, or pages toward the

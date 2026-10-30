@@ -78,3 +78,32 @@ func TestRetainRowsSeeTheEventsOfATable(t *testing.T) {
 		})
 	}
 }
+
+// The Dismissed of a Modal that sits outside the list: Escape sets it as the
+// modal builds, before the rows, and the rows that ask must see it.
+func TestRetainRowsSeeTheDismissedOfAnOutsideModal(t *testing.T) {
+	p := newPair(t, 400, 400, func() func(c *Context) {
+		open := true
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				m := Modal(c, &open, func() { Textf(c, "dialog") })
+				List(c, s, 30, func(i int) {
+					if m.Dismissed() {
+						countSeen(c)
+					}
+					Textf(c, "row %d", i)
+				}).Grow(1)
+			})
+		}
+	})
+	p.idle(3)
+	seenKept.Store(0)
+	seenBuilt.Store(0)
+	p.both(func(tt *Tester) { tt.Key(0, KeyEscape) })
+	p.compare("escape")
+	p.frame("after")
+	if seenKept.Load() != seenBuilt.Load() || seenBuilt.Load() == 0 {
+		t.Errorf("rows that saw Dismissed: %d with kept rows, %d with every row built", seenKept.Load(), seenBuilt.Load())
+	}
+}
