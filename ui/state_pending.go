@@ -10,7 +10,7 @@ func (s *state) pending() bool {
 	if s.clicks != 0 || s.rightClicks != 0 || s.doubleClicks != 0 ||
 		s.pressed || s.pressPending || s.released || s.rowPressed || s.pressChose ||
 		s.dragX != 0 || s.dragY != 0 || s.typing || s.holding ||
-		len(s.dropped) != 0 || s.hasDropped || s.dataDropped != nil || s.editor != nil {
+		len(s.dropped) != 0 || s.hasDropped || s.dataDropped != nil || s.editor != nil && s.editor.busy() {
 		return true
 	}
 	// What the controls report or are asked, read as they build.

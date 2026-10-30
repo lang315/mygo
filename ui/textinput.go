@@ -51,7 +51,11 @@ func textInputBase(c *context, value *string, multiline bool) *node {
 		ed.client = &widgetTextInput{ed: ed, rt: c.rt, id: e.id}
 	}
 	e.textClient = ed.client
-	c.neverKept() // a row with a text field is never kept (retainable): not walked to find out
+	if multiline {
+		c.neverKept() // a text area scrolls and reveals its caret: its row is built
+	} else {
+		c.readsString(value, *value) // a single-line input shows the text it was built with
+	}
 	ed.multiline = multiline
 	if multiline && ed.area == nil {
 		ed.area = &area{reveal: true}
