@@ -1540,8 +1540,15 @@ as in Tauri:
   files given to `SetFrontend`. `mygo build` calls `SetFrontend` from a
   generated file that embeds `frontendDist` (see CLI), so app code has no
   `//go:embed` and development builds need no built frontend. During
-  `mygo dev` without a dev server it serves `MYGO_FRONTEND_DIST` from disk,
-  and with nothing to serve, a page explaining how to get a frontend.
+  `mygo dev` without a dev server it serves `MYGO_FRONTEND_DIST` from disk
+  (the dev build adds a generated file, `mygo_devfrontend_gen.go`, that
+  calls `SetFrontend` with those files), and with nothing to serve, a page
+  explaining how to get a frontend. The code that serves schemes is linked
+  by `SetFrontend` and `Protocol.Handle` (`linkScheme`): an app that calls
+  neither, as one of native UI or one that loads its own HTML, answers its
+  requests with `serveUnlinked` (the "no frontend" page), without net/http's
+  request side. Nothing else may call `Protocol.serve` or `downloadScheme`
+  (`TestSchemeServingIsReachedOnlyThroughTheHook`).
 
 ## Windows, lifecycle and quitting
 
@@ -4612,7 +4619,9 @@ rules, which took counter-native back to 8.9 MB after it had grown from
   functions the feature registers when the app first uses it: the File
   menu's document roles and Open Recent call `linkedDocuments`, which the
   first `NewDocuments` fills; `App.Run` writes the TypeScript client
-  through what `Bind` and `NewEvent` register; messages format dates
+  through what `Bind` and `NewEvent` register; windows serve custom
+  schemes and the frontend through what `SetFrontend` and
+  `Protocol.Handle` register; messages format dates
   through what `i18n.NewCatalog` registers. Generic constructors are only
   linked when instantiated, so they are a good place to register.
 - *No reflective method lookups on shared paths.* A reachable call of

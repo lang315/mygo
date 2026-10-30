@@ -408,6 +408,40 @@ func TestProductionTags(t *testing.T) {
 	}
 }
 
+// TestDevFrontendFiles: a dev build with no dev server adds the file that
+// makes the app serve the frontendDist files (mygo.SetFrontend, which links
+// the serving of mygo://); with a dev server it adds nothing.
+func TestDevFrontendFiles(t *testing.T) {
+	pkg, work := t.TempDir(), t.TempDir()
+	files, err := devFrontendFiles(&Config{FrontendDist: "dist"}, pkg, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gen := filepath.Join(pkg, devFrontendGenFile)
+	src, err := os.ReadFile(files[gen])
+	if err != nil || len(files) != 1 {
+		t.Fatalf("overlay %v, %v", files, err)
+	}
+	f, err := parser.ParseFile(token.NewFileSet(), gen, src, 0)
+	if err != nil || f.Name.Name != "main" || !strings.Contains(string(src), "mygo.SetFrontend(os.DirFS(dir))") {
+		t.Errorf("the generated file is %v, %v:\n%s", f, err, src)
+	}
+	for name, c := range map[string]*Config{
+		"a dev server":    {DevURL: "http://localhost:5173", FrontendDist: "dist"},
+		"no frontendDist": {},
+	} {
+		if files, err := devFrontendFiles(c, pkg, work); err != nil || len(files) != 0 {
+			t.Errorf("%s: %v, %v", name, files, err)
+		}
+	}
+	if err := os.WriteFile(gen, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := devFrontendFiles(&Config{FrontendDist: "dist"}, pkg, work); err == nil {
+		t.Error("a file of the app in the way was overwritten")
+	}
+}
+
 // TestGoFlagsOfGoEnv: the GOFLAGS that go env -w sets, in the file GOENV
 // names, count as the variable does.
 func TestGoFlagsOfGoEnv(t *testing.T) {

@@ -486,7 +486,7 @@ func TestAllowCORSRefusesAViewWithoutBindings(t *testing.T) {
 		h := http.Header{}
 		r := httptest.NewRequest("GET", "app://localhost/data", nil)
 		r.Header.Set("Origin", "https://partner.example")
-		allowCORS(win, h, r)
+		allowCORS(win, h, r.Method, r.Header)
 		if got := h.Get("Access-Control-Allow-Origin") != ""; got == noBindings {
 			t.Errorf("NoBindings=%v: CORS granted = %v", noBindings, got)
 		}

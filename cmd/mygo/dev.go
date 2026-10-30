@@ -176,7 +176,7 @@ keep it: the app's own setting is left as it is.`)
 			}
 		}()
 	}
-	if c.DevURL == "" && c.FrontendDist != "" {
+	if devServesFrontendDist(c) {
 		s.env = append(s.env, "MYGO_FRONTEND_DIST="+c.path(c.FrontendDist))
 	}
 	return s.run(ctx, c)
@@ -555,7 +555,26 @@ func (s *devSession) buildAndLaunch(ctx context.Context, t *task, running [32]by
 		cleanup()
 		return nil, sum, err
 	}
-	err = goBuild(ctx, c, t, bin, nil, append(generatorTags(c.root), "-ldflags", strings.TrimSpace(packageFlags(dc)))...)
+	flags := generatorTags(c.root)
+	if devServesFrontendDist(c) {
+		pkg, perr := packageDir(c)
+		if perr != nil {
+			cleanup()
+			return nil, sum, perr
+		}
+		files, ferr := devFrontendFiles(c, pkg, stage)
+		if ferr != nil {
+			cleanup()
+			return nil, sum, ferr
+		}
+		overlay, oerr := writeOverlay(filepath.Join(stage, "overlay.json"), files)
+		if oerr != nil {
+			cleanup()
+			return nil, sum, oerr
+		}
+		flags = append(flags, "-overlay", overlay)
+	}
+	err = goBuild(ctx, c, t, bin, nil, append(flags, "-ldflags", strings.TrimSpace(packageFlags(dc)))...)
 	cleanup()
 	if err != nil {
 		return nil, sum, err

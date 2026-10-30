@@ -33,6 +33,7 @@ var frontend struct {
 // so apps rarely need to. Call it to ship a frontend without the mygo CLI,
 // e.g. from an embed.FS.
 func SetFrontend(fsys fs.FS) {
+	linkScheme()
 	frontend.Lock()
 	frontend.fsys = fsys
 	frontend.Unlock()
