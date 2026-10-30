@@ -28,7 +28,6 @@ import (
 // serve: no linked serving, no frontend.
 func unlinkedScheme(t *testing.T) {
 	t.Helper()
-	t.Setenv("MYGO_FRONTEND_DIST", "")
 	linked := schemeLinked.Load()
 	frontend.Lock()
 	fsys := frontend.fsys
@@ -227,6 +226,16 @@ func TestUnlinkedSchemeAnswersAsServing(t *testing.T) {
 			"Origin": {"https://partner.example"}, "Access-Control-Request-Method": {"PUT"}, "Access-Control-Request-Headers": {"x-a"}}},
 		{name: "an options that is no preflight", method: "OPTIONS", url: "mygo://localhost/api", header: map[string][]string{"Origin": {"https://partner.example"}}},
 		{name: "a scheme without handler", method: "GET", url: "nohandler://localhost/x"},
+		{name: "a url that does not parse", method: "GET", url: "mygo://localhost/%zz"},
+		{name: "a url that does not parse, from the app", method: "GET", url: "mygo://localhost/%zz", header: map[string][]string{"Origin": {"mygo://localhost"}}},
+		{name: "a method that is no token", method: "BAD METHOD", url: "mygo://localhost/"},
+		{name: "a method with a character past ASCII", method: "G\u00c9T", url: "mygo://localhost/"},
+		{name: "a preflight with a bad method", method: "OP TIONS", url: "mygo://localhost/", header: map[string][]string{
+			"Origin": {"https://partner.example"}, "Access-Control-Request-Method": {"PUT"}}},
+		{name: "a method of token characters", method: "M-SEARCH", url: "mygo://localhost/"},
+		{name: "no method", method: "", url: "mygo://localhost/"},
+		{name: "a url that does not parse, of a scheme without handler", method: "GET", url: "nohandler://localhost/%zz"},
+		{name: "a bad method, of a scheme without handler", method: "BAD METHOD", url: "nohandler://localhost/"},
 	}
 	for _, c := range cases {
 		for _, bodyWriter := range []bool{false, true} {
@@ -298,7 +307,7 @@ func TestUnlinkedSchemeDownloadsFailAsServing(t *testing.T) {
 			return ""
 		}
 	}
-	for _, url := range []string{"mygo://localhost/f.zip", "nohandler://localhost/f.zip"} {
+	for _, url := range []string{"mygo://localhost/f.zip", "nohandler://localhost/f.zip", "mygo://localhost/%zz"} {
 		go downloadScheme(&windowHandler{w}, url)
 		want := finished()
 		onMain(func() { fw.H.SchemeDownload(url) })

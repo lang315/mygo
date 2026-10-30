@@ -442,6 +442,52 @@ func TestDevFrontendFiles(t *testing.T) {
 	}
 }
 
+// TestGeneratedFilesInitFirst: the init of a generated file that calls
+// mygo.SetFrontend runs before the app's own, so the app's call wins (it
+// does on a build without the generated file). The go tool presents the files
+// in the order of their names, which the generated files' names put first.
+func TestGeneratedFilesInitFirst(t *testing.T) {
+	goTool, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("no go tool")
+	}
+	for _, name := range []string{frontendGenFile, devFrontendGenFile} {
+		dir, work := t.TempDir(), t.TempDir()
+		// The overlay names the directory as the go tool sees it.
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			dir = real
+		}
+		files := map[string]string{"go.mod": "module ordertest\n\ngo 1.21\n"}
+		for _, app := range []string{"main.go", "A.go", "z.go"} {
+			files[app] = "package main\n\nimport \"fmt\"\n\nfunc init() { fmt.Println(\"app " + app + "\") }\n"
+		}
+		files["main.go"] += "\nfunc main() {}\n"
+		for file, src := range files {
+			if err := os.WriteFile(filepath.Join(dir, file), []byte(src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		gen := filepath.Join(work, name)
+		if err := os.WriteFile(gen, []byte("package main\n\nimport \"fmt\"\n\nfunc init() { fmt.Println(\"generated\") }\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		overlay, err := writeOverlay(filepath.Join(work, "overlay.json"), map[string]string{filepath.Join(dir, name): gen})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(goTool, "run", "-overlay", overlay, ".")
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GOFLAGS=", "GOWORK=off")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", name, err, out)
+		}
+		if first, _, _ := strings.Cut(string(out), "\n"); first != "generated" {
+			t.Errorf("%s: init ran in this order:\n%s", name, out)
+		}
+	}
+}
+
 // TestGoFlagsOfGoEnv: the GOFLAGS that go env -w sets, in the file GOENV
 // names, count as the variable does.
 func TestGoFlagsOfGoEnv(t *testing.T) {

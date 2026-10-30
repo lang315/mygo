@@ -160,6 +160,11 @@ func serveUnlinked(win *Window, req *platform.SchemeRequest) {
 		resp.Finish()
 		return
 	}
+	if !validRequest(req) {
+		resp.Respond(400, map[string][]string{"Content-Type": {"text/plain; charset=utf-8"}})
+		resp.Finish()
+		return
+	}
 	header := map[string][]string{}
 	if allowCORS(win, header, req.Method, req.Header) {
 		resp.Respond(204, header) // a preflight, answered here
@@ -448,12 +453,6 @@ func frontendHandler() http.Handler {
 	frontend.Lock()
 	fsys := frontend.fsys
 	frontend.Unlock()
-	if fsys == nil && IsDev() {
-		// `mygo dev` without a dev server: the files on disk.
-		if dir := os.Getenv("MYGO_FRONTEND_DIST"); dir != "" {
-			fsys = os.DirFS(dir)
-		}
-	}
 	if fsys == nil {
 		return http.HandlerFunc(noFrontend)
 	}
@@ -476,6 +475,19 @@ const noFrontendPage = `<!doctype html>
 or build it with <code>mygo build</code>, which embeds <code>frontendDist</code>.</p>
 `
 
+// validRequest reports whether http.NewRequest would make a request of req:
+// its method is a token and its URL parses. serveScheme answers 400 to the
+// others, and so does serveUnlinked, which has no net/http to ask.
+func validRequest(req *platform.SchemeRequest) bool {
+	for _, r := range req.Method {
+		if r >= 128 || !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("!#$%&'*+-.^_`|~", r)) {
+			return false
+		}
+	}
+	_, err := url.Parse(req.URL)
+	return err == nil
+}
+
 func (h *windowHandler) SchemeDownload(rawURL string) {
 	if l := schemeLinked.Load(); l != nil {
 		go l.download(h, rawURL)
@@ -484,7 +496,7 @@ func (h *windowHandler) SchemeDownload(rawURL string) {
 	// What downloadScheme reports of an app that registered no handler and
 	// has no frontend.
 	err := fmt.Errorf("mygo: cannot download %s", rawURL)
-	if scheme, _, _ := strings.Cut(rawURL, ":"); strings.EqualFold(scheme, frontendScheme) {
+	if scheme, _, _ := strings.Cut(rawURL, ":"); strings.EqualFold(scheme, frontendScheme) && validRequest(&platform.SchemeRequest{URL: rawURL}) {
 		err = fmt.Errorf("mygo: downloading %s: 404 Not Found", rawURL)
 	}
 	postMain(func() { h.DownloadFinished(rawURL, "", err) })
