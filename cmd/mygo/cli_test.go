@@ -442,6 +442,231 @@ func TestDevFrontendFiles(t *testing.T) {
 	}
 }
 
+// TestUpdateFeedFiles: a build of an app with updates adds the file that
+// links the HTTP feed of mygo.Updater; one without adds nothing, and the
+// app's own file of the name is never overwritten.
+func TestUpdateFeedFiles(t *testing.T) {
+	pkg, work := t.TempDir(), t.TempDir()
+	files, err := updateFeedFiles(&Config{Updates: &Updates{}}, pkg, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gen := filepath.Join(pkg, updateFeedGenFile)
+	src, err := os.ReadFile(files[gen])
+	if err != nil || len(files) != 1 || !strings.Contains(string(src), `_ "github.com/egoist/mygo/updatefeed"`) {
+		t.Fatalf("overlay %v, %v:\n%s", files, err, src)
+	}
+	if files, err := updateFeedFiles(&Config{}, pkg, work); err != nil || len(files) != 0 {
+		t.Errorf("an app without updates: %v, %v", files, err)
+	}
+	if err := os.WriteFile(gen, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := updateFeedFiles(&Config{Updates: &Updates{}}, pkg, work); err == nil {
+		t.Error("a file of the app in the way was overwritten")
+	}
+}
+
+// TestUpdateFeedFilesOfAnOlderMygo: an app whose go.mod pins a MyGo without
+// package updatefeed is built as it was, which that MyGo supports (it fetches
+// the feed itself): the overlay would make the build fail in a file the user
+// did not write. The same app with the CLI's MyGo gets the file.
+func TestUpdateFeedFilesOfAnOlderMygo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("go list")
+	}
+	old, work := t.TempDir(), t.TempDir()
+	for name, content := range map[string]string{
+		"go.mod":  "module github.com/egoist/mygo\n\ngo " + goVersion() + "\n",
+		"mygo.go": "package mygo\n",
+	} {
+		if err := os.WriteFile(filepath.Join(old, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
+	sum, _ := os.ReadFile(filepath.Join(checkout, "go.sum"))
+	app := func(mygo string) *Config {
+		dir := t.TempDir()
+		gomod := "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + mygo + "\n"
+		for name, content := range map[string]string{"go.mod": gomod, "go.sum": string(sum), "main.go": "package main\n\nimport _ \"github.com/egoist/mygo\"\n\nfunc main() {}\n"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return &Config{Updates: &Updates{}, root: dir}
+	}
+	t.Setenv("GOFLAGS", "-mod=mod")
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOWORK", "off")
+	for name, c := range map[string]*Config{"older": app(old), "current": app(checkout)} {
+		if has, err := appHasPackage(c, updatefeedPackage); err != nil || has != (name == "current") {
+			t.Errorf("%s MyGo: appHasPackage(updatefeed) = %v, %v", name, has, err)
+		}
+		files, err := updateFeedFiles(c, c.root, work)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := map[bool]int{false: 0, true: 1}[name == "current"]; len(files) != want {
+			t.Errorf("%s MyGo: %d overlay entries, want %d", name, len(files), want)
+		}
+	}
+}
+
+// TestAppHasPackageSaysSoOnlyWhenSure: a MyGo without the package is told
+// from a build that cannot find its MyGo, which fails with the reason instead
+// of leaving out a file a release needs: a go.mod that does not parse, a
+// vendor directory that does not match go.mod (or is not there with
+// -mod=vendor), and a vendor directory without the package; and a vendor
+// directory that has it works.
+func TestAppHasPackageSaysSoOnlyWhenSure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("go list")
+	}
+	t.Setenv("GOFLAGS", "")
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOWORK", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+	fakeMygo := func(withFeed bool) string {
+		dir := t.TempDir()
+		files := map[string]string{
+			"go.mod":  "module github.com/egoist/mygo\n\ngo " + goVersion() + "\n",
+			"mygo.go": "package mygo\n",
+		}
+		if withFeed {
+			files["updatefeed/updatefeed.go"] = "package updatefeed\n"
+		}
+		for name, content := range files {
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+	app := func(gomod, imports string) *Config {
+		dir := t.TempDir()
+		for name, content := range map[string]string{"go.mod": gomod, "main.go": "package main\n\n" + imports + "\nfunc main() {}\n"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return &Config{root: dir}
+	}
+	gomodWith := func(mygo string) string {
+		return "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + mygo + "\n"
+	}
+	vendor := func(c *Config) {
+		cmd := goCommand(c.root, []string{"GOFLAGS=-mod=mod"}, "mod", "vendor")
+		var out bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &out, &out
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("go mod vendor: %v\n%s", err, out.String())
+		}
+	}
+
+	// A go.mod that does not parse.
+	c := app("this is not a go.mod\n", "")
+	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has || !strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("a go.mod that does not parse: %v, %v", has, err)
+	}
+	if _, err := updateFeedFiles(&Config{Updates: &Updates{}, root: c.root}, c.root, t.TempDir()); err == nil {
+		t.Error("the build went on, without the update feed, in an app whose go.mod does not parse")
+	}
+	// -mod=vendor without a vendor directory.
+	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo\"\n")
+	t.Setenv("GOFLAGS", "-mod=vendor")
+	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has {
+		t.Errorf("-mod=vendor without a vendor directory: %v, %v", has, err)
+	}
+	t.Setenv("GOFLAGS", "")
+	// A vendor directory with the package; the app of this case imports it
+	// itself, which is what makes go mod vendor copy it.
+	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo/updatefeed\"\n")
+	vendor(c)
+	if has, err := appHasPackage(c, updatefeedPackage); err != nil || !has {
+		t.Errorf("a vendor directory with updatefeed: %v, %v", has, err)
+	}
+	// A vendor directory without it: the build cannot tell an old MyGo from
+	// a vendor directory that lacks what it has. go mod vendor alone does not
+	// mend it, as the message says; the import it asks for does.
+	c = app(gomodWith(fakeMygo(true)), "import _ \"github.com/egoist/mygo\"\n")
+	vendor(c)
+	has, err := appHasPackage(c, updatefeedPackage)
+	if err == nil || has || !strings.Contains(err.Error(), "vendor") || !strings.Contains(err.Error(), `import _ "github.com/egoist/mygo/updatefeed"`) {
+		t.Errorf("a vendor directory without updatefeed: %v, %v", has, err)
+	}
+	vendor(c) // go mod vendor again, as the message's last step, without the import
+	if has, err := appHasPackage(c, updatefeedPackage); err == nil || has {
+		t.Errorf("go mod vendor alone mended the vendor directory: %v, %v", has, err)
+	}
+	// The steps of the message: the import in a file of the app, then go mod vendor.
+	if err := os.WriteFile(filepath.Join(c.root, "feed.go"), []byte("package main\n\nimport _ \"github.com/egoist/mygo/updatefeed\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vendor(c)
+	if has, err := appHasPackage(c, updatefeedPackage); err != nil || !has {
+		t.Errorf("after the steps of the message: %v, %v", has, err)
+	}
+	// An older MyGo, not vendored, is the answer "no" and not an error.
+	c = app(gomodWith(fakeMygo(false)), "import _ \"github.com/egoist/mygo\"\n")
+	if has, err := appHasPackage(c, updatefeedPackage); err != nil || has {
+		t.Errorf("an older MyGo: %v, %v", has, err)
+	}
+}
+
+// TestUpdateFeedIsLinkedByTheOverlay: an app that uses mygo.Updater links no
+// HTTP of its own, and the file the build adds gives it the feed: the
+// packages of the app, with and without the overlay (go list -deps).
+func TestUpdateFeedIsLinkedByTheOverlay(t *testing.T) {
+	goTool, err := exec.LookPath("go")
+	if err != nil || testing.Short() {
+		t.Skip("no go tool, or short")
+	}
+	dir, work := t.TempDir(), t.TempDir()
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
+	sum, _ := os.ReadFile(filepath.Join(checkout, "go.sum"))
+	gomod := "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + checkout + "\n"
+	main := "package main\n\nimport \"github.com/egoist/mygo\"\n\nfunc main() { _, _ = mygo.Updater.Check(nil) }\n"
+	for name, content := range map[string]string{"go.mod": gomod, "go.sum": string(sum), "main.go": main} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := updateFeedFiles(&Config{Updates: &Updates{}}, dir, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay, err := writeOverlay(filepath.Join(work, "overlay.json"), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := func(args ...string) string {
+		cmd := exec.Command(goTool, append([]string{"list", "-deps"}, args...)...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOPROXY=off", "GOWORK=off", "CGO_ENABLED=0")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("go list %v: %v\n%s", args, err, out)
+		}
+		return "\n" + string(out)
+	}
+	const feed, proxy = "\ngithub.com/egoist/mygo/updatefeed\n", "\ngithub.com/egoist/mygo/netproxy\n"
+	without := deps(".")
+	if strings.Contains(without, feed) || strings.Contains(without, proxy) {
+		t.Errorf("an app that only uses mygo.Updater links the HTTP feed:\n%s", without)
+	}
+	with := deps("-overlay", overlay, ".")
+	if !strings.Contains(with, feed) || !strings.Contains(with, proxy) {
+		t.Errorf("the overlay does not link the HTTP feed:\n%s", with)
+	}
+}
+
 // TestGeneratedFilesInitFirst: the init of a generated file that calls
 // mygo.SetFrontend runs before the app's own, so the app's call wins (it
 // does on a build without the generated file). The go tool presents the files

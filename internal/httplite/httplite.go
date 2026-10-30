@@ -34,7 +34,11 @@ func (h Header) Clone() Header {
 	}
 	out := make(Header, len(h))
 	for k, v := range h {
-		out[k] = append([]string(nil), v...)
+		if v == nil {
+			out[k] = nil // as net/http keeps it
+			continue
+		}
+		out[k] = append(make([]string, 0, len(v)), v...)
 	}
 	return out
 }

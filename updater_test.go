@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -24,7 +25,61 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/update"
+	"github.com/egoist/mygo/internal/updatehook"
+	"github.com/egoist/mygo/internal/updatehttp"
 )
+
+// TestDefaultSource: where Check reads from. The feed of mygo.config.ts is
+// fetched by package updatefeed, which package mygo does not import: until it
+// is linked Check says what to import, and a source of SetSource is used
+// whether it is or not.
+func TestDefaultSource(t *testing.T) {
+	saved := updatehook.Feed.Load()
+	defer updatehook.Feed.Store(saved)
+	defer func(f string) { packageUpdateFeed = f }(packageUpdateFeed)
+	defer Updater.SetSource(nil)
+	packageUpdateFeed = "https://updates.example/update.json"
+
+	updatehook.Feed.Store(nil)
+	Updater.SetSource(nil)
+	if _, err := defaultSource(); err == nil || !strings.Contains(err.Error(), `import _ "github.com/egoist/mygo/updatefeed"`) {
+		t.Errorf("without the HTTP feed linked, defaultSource says %v", err)
+	}
+	own := fixedSource{}
+	Updater.SetSource(own)
+	if src, err := defaultSource(); err != nil || src != UpdateSource(own) {
+		t.Errorf("a source of SetSource, without the HTTP feed: %v, %v", src, err)
+	}
+
+	Updater.SetSource(nil)
+	var asked string
+	feed := func(url string) updatehook.Source { asked = url; return fixedSource{} }
+	updatehook.Feed.Store(&feed)
+	if src, err := defaultSource(); err != nil || src == nil || asked != packageUpdateFeed {
+		t.Errorf("with the HTTP feed linked: %v, %v; it was asked for %q", src, err, asked)
+	}
+	Updater.SetSource(own)
+	asked = ""
+	if src, err := defaultSource(); err != nil || src != UpdateSource(own) || asked != "" {
+		t.Errorf("a source of SetSource wins over the feed: %v, %v, asked %q", src, err, asked)
+	}
+}
+
+type fixedSource struct{}
+
+func (fixedSource) Manifest(context.Context, bool) (io.ReadCloser, error) {
+	return nil, errors.New("fixed")
+}
+func (fixedSource) Open(context.Context, string) (io.ReadCloser, error) {
+	return nil, errors.New("fixed")
+}
+
+// An Update that did not come from Check has no source to download from.
+func TestInstallNeedsASource(t *testing.T) {
+	if err := (&Update{}).Install(context.Background(), nil); err == nil || !strings.Contains(err.Error(), "did not come from Check") {
+		t.Errorf("an Update with no source: %v", err)
+	}
+}
 
 // updateServer serves a signed update whose app holds main with content,
 // and with deltaFrom, a delta of it from that version of installedApp.
@@ -140,32 +195,32 @@ func TestUpdater(t *testing.T) {
 	if _, err := Updater.Check(ctx); err != ErrUpdatesDisabled {
 		t.Errorf("Check without updates: %v", err)
 	}
-	up, err := checkUpdate(ctx, feedSource(srv.URL+"/update.json"), key, "1.1.9", false)
+	up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.1.9", false)
 	if err != nil || up == nil || up.Version != "1.2.0" || up.Notes != "- Faster" || up.Date.Year() != 2026 {
 		t.Fatalf("checkUpdate = %+v, %v", up, err)
 	}
 	// An app on a prerelease, whose user turned prereleases off, takes no
 	// older version, and the release of its version once there is one.
 	for _, current := range []string{"1.2.0", "1.10.0", "1.3.0-beta.1"} {
-		if up, err := checkUpdate(ctx, feedSource(srv.URL+"/update.json"), key, current, false); up != nil || err != nil {
+		if up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, current, false); up != nil || err != nil {
 			t.Errorf("checkUpdate from %s = %+v, %v", current, up, err)
 		}
 	}
-	if up, err := checkUpdate(ctx, feedSource(srv.URL+"/update.json"), key, "1.2.0-rc.1", false); err != nil || up == nil || up.Version != "1.2.0" {
+	if up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.2.0-rc.1", false); err != nil || up == nil || up.Version != "1.2.0" {
 		t.Errorf("checkUpdate from 1.2.0-rc.1 = %+v, %v", up, err)
 	}
 	// Feeds of updates.url are the same with prereleases on.
-	if up, err := checkUpdate(ctx, feedSource(srv.URL+"/update.json"), key, "1.1.9", true); err != nil || up == nil || up.Version != "1.2.0" {
+	if up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.1.9", true); err != nil || up == nil || up.Version != "1.2.0" {
 		t.Errorf("checkUpdate with prereleases = %+v, %v", up, err)
 	}
-	if _, err := checkUpdate(ctx, feedSource("http://example.com/update.json"), key, "1.0.0", false); err == nil || !strings.Contains(err.Error(), "HTTPS") {
+	if _, err := checkUpdate(ctx, updatehttp.Feed("http://example.com/update.json"), key, "1.0.0", false); err == nil || !strings.Contains(err.Error(), "HTTPS") {
 		t.Errorf("plain HTTP: %v", err)
 	}
 
 	target, main := installedApp(t)
 	quit := runningApp(t)
 	var progress [2]int64
-	err = installUpdate(ctx, httpGet, up.manifest, key, up.current, target, func(n, total int64) { progress = [2]int64{n, total} })
+	err = installUpdate(ctx, updatehttp.Get, up.manifest, key, up.current, target, func(n, total int64) { progress = [2]int64{n, total} })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,16 +240,16 @@ func TestUpdater(t *testing.T) {
 	target, main = installedApp(t)
 	bad := up.manifest
 	bad.Signature = base64.StdEncoding.EncodeToString(make([]byte, 64))
-	if err := installUpdate(ctx, httpGet, bad, key, up.current, target, nil); err == nil || !strings.Contains(err.Error(), "signed") {
+	if err := installUpdate(ctx, updatehttp.Get, bad, key, up.current, target, nil); err == nil || !strings.Contains(err.Error(), "signed") {
 		t.Errorf("bad signature: %v", err)
 	}
 	otherKey, _, _ := ed25519.GenerateKey(nil)
-	if err := installUpdate(ctx, httpGet, up.manifest, base64.StdEncoding.EncodeToString(otherKey), up.current, target, nil); err == nil {
+	if err := installUpdate(ctx, updatehttp.Get, up.manifest, base64.StdEncoding.EncodeToString(otherKey), up.current, target, nil); err == nil {
 		t.Error("an update signed with another key was installed")
 	}
 	short := up.manifest
 	short.Size++
-	if err := installUpdate(ctx, httpGet, short, key, up.current, target, nil); err == nil || !strings.Contains(err.Error(), "bytes") {
+	if err := installUpdate(ctx, updatehttp.Get, short, key, up.current, target, nil); err == nil || !strings.Contains(err.Error(), "bytes") {
 		t.Errorf("wrong size: %v", err)
 	}
 	if b, _ := os.ReadFile(main); string(b) != "v1" {
@@ -205,7 +260,7 @@ func TestUpdater(t *testing.T) {
 func TestUpdaterDelta(t *testing.T) {
 	ctx := context.Background()
 	srv, key, m, requests := updateServer(t, "1.2.0", "v2, a bigger version", "1.1.9")
-	up, err := checkUpdate(ctx, feedSource(srv.URL+"/update.json"), key, "1.1.9", false)
+	up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.1.9", false)
 	if err != nil || len(up.manifest.Deltas) != 1 {
 		t.Fatalf("checkUpdate = %+v, %v", up, err)
 	}
@@ -216,7 +271,7 @@ func TestUpdaterDelta(t *testing.T) {
 		if corrupt {
 			os.WriteFile(filepath.Join(target, "code"), newCode[:1000], 0o644)
 		}
-		err := installUpdate(ctx, httpGet, m, key, current, target, func(n, total int64) { progress = append(progress, [2]int64{n, total}) })
+		err := installUpdate(ctx, updatehttp.Get, m, key, current, target, func(n, total int64) { progress = append(progress, [2]int64{n, total}) })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -307,13 +362,13 @@ func TestUpdaterWaitsForTheAppToExit(t *testing.T) {
 	}
 	ctx := context.Background()
 	srv, key, _, _ := updateServer(t, "1.2.0", "v2", "")
-	up, err := checkUpdate(ctx, feedSource(srv.URL+"/update.json"), key, "1.1.9", false)
+	up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.1.9", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	target, main := installedApp(t)
 	quit := runningApp(t)
-	if err := installUpdate(ctx, httpGet, up.manifest, key, up.current, target, nil); err != nil {
+	if err := installUpdate(ctx, updatehttp.Get, up.manifest, key, up.current, target, nil); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(300 * time.Millisecond)
@@ -335,7 +390,7 @@ func TestUpdaterWaitsForOpenFiles(t *testing.T) {
 	}
 	ctx := context.Background()
 	srv, key, _, _ := updateServer(t, "1.2.0", "v2", "")
-	up, err := checkUpdate(ctx, feedSource(srv.URL+"/update.json"), key, "1.1.9", false)
+	up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.1.9", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +403,7 @@ func TestUpdaterWaitsForOpenFiles(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 	time.AfterFunc(500*time.Millisecond, func() { f.Close() })
-	if err := installUpdate(ctx, httpGet, up.manifest, key, up.current, target, nil); err != nil {
+	if err := installUpdate(ctx, updatehttp.Get, up.manifest, key, up.current, target, nil); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(main); string(b) != "v2" {
@@ -414,7 +469,7 @@ func (s *testSource) Open(ctx context.Context, url string) (io.ReadCloser, error
 func TestUpdaterSource(t *testing.T) {
 	ctx := context.Background()
 	srv, key, m, requests := updateServer(t, "1.2.0", "v2", "")
-	// httpGet refuses this URL: only the source can download it.
+	// updatehttp.Get refuses this URL: only the source can download it.
 	m.URL = "service:app.tar.gz"
 	src := &testSource{srv: srv, m: m}
 	up, err := checkUpdate(ctx, src, key, "1.1.9", true)

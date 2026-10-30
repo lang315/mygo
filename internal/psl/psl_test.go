@@ -29,12 +29,22 @@ var domains = []string{
 // TestPSLIsPublicsuffix: for every domain, with the prefixes pages have, the
 // public suffix and the registrable domain are those of
 // golang.org/x/net/publicsuffix, which this package was copied from, while
-// both hold the same snapshot of the list (go generate here brings this
-// package ahead of x/net, until x/net is updated).
+// both hold the same snapshot of the list. It fails when the data here is
+// older than x/net's (go get brought a newer one: run go generate
+// ./internal/psl), and compares nothing, only logging, when it is newer
+// (go generate here brings this package ahead of x/net).
 func TestPSLIsPublicsuffix(t *testing.T) {
-	same := publicsuffix.List.String() == version
+	theirs := publicsuffix.List.String()
+	same := theirs == version
 	if !same {
-		t.Logf("x/net holds %q, this package %q: the comparison is skipped", publicsuffix.List.String(), version)
+		ours, theirsDate := snapshotDate(version), snapshotDate(theirs)
+		if ours == "" || theirsDate == "" {
+			t.Fatalf("cannot read the dates of the snapshots: x/net %q, this package %q", theirs, version)
+		}
+		if ours < theirsDate {
+			t.Fatalf("the data here (%s) is older than x/net's (%s): run go generate ./internal/psl", ours, theirsDate)
+		}
+		t.Logf("x/net holds %q, this package %q: the comparison is skipped", theirs, version)
 	}
 	for _, d := range domains {
 		for _, prefix := range []string{"", "www.", "a.b.c."} {
@@ -51,6 +61,28 @@ func TestPSLIsPublicsuffix(t *testing.T) {
 					domain, gotS, gotI, gotE, gotErr, wantS, wantI, wantE, wantErr)
 			}
 		}
+	}
+}
+
+// snapshotDate returns the date in a version such as "publicsuffix.org's
+// public_suffix_list.dat, git revision <sha> (2026-02-06T07:36:33Z)", which
+// orders as text, or "".
+func snapshotDate(version string) string {
+	i := strings.LastIndex(version, "(")
+	j := strings.LastIndex(version, ")")
+	if i < 0 || j < i+1 {
+		return ""
+	}
+	return version[i+1 : j]
+}
+
+// TestSnapshotDate: the dates the test above compares.
+func TestSnapshotDate(t *testing.T) {
+	if got := snapshotDate(version); len(got) != len("2026-02-06T07:36:33Z") {
+		t.Errorf("the date of %q is %q", version, got)
+	}
+	if got := snapshotDate("no date"); got != "" {
+		t.Errorf("snapshotDate of a version without one: %q", got)
 	}
 }
 

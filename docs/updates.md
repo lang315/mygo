@@ -322,6 +322,25 @@ manifest's, so a service that writes its own manifests from those of
 `mygo build` may name the files by ids of its own, as long as the sizes
 and signatures stay. `SetSource(nil)` goes back to the feed.
 
+The feed itself is fetched by package `updatefeed`, which `mygo build`
+links into apps with `updates` and the update window of
+`plugins/updater` imports, so most apps never name it. An app built
+another way, without the CLI, needs
+`import _ "github.com/egoist/mygo/updatefeed"` for `Check` to read the
+feed (`Check` says so when it is missing). `updatefeed.Source(url)` is
+the HTTP source of a feed URL you give it; it does not wrap the feed of
+`updates`, whose URL the build keeps inside MyGo. `mygo build` leaves the
+file that imports `updatefeed` out when the app's go.mod pins a MyGo that
+does not have the package: that MyGo fetches the feed itself. When the CLI
+cannot tell which MyGo the app builds with (a go.mod that does not parse,
+a vendor directory that does not match it, no network), the build stops
+with go's error instead of leaving the file out, and so does an app with a
+vendor directory that lacks `updatefeed`. `go mod vendor` copies only
+the packages the app's code imports, so add
+`import _ "github.com/egoist/mygo/updatefeed"` to a file of the app
+(`main.go`), run `go get github.com/egoist/mygo@latest` if its MyGo is
+older than the CLI, and `go mod vendor`.
+
 ## Where apps can update
 
 An app replaces itself, so it must be able to write where it is installed:

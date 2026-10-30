@@ -9,7 +9,9 @@
 // loads from third-party ones) without its import of net/http/cookiejar,
 // 2.2 MB of every app on Windows. The code and the data are the package's,
 // under its license (LICENSE); go generate updates the data from
-// publicsuffix.org.
+// publicsuffix.org. When golang.org/x/net is updated (go get), run
+// go generate ./internal/psl too: a test fails while the data here is older
+// than that package's.
 package psl
 
 import (

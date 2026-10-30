@@ -242,7 +242,12 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 				}
 				defer cleanup()
 			}
-			overlay, err := writeOverlay(filepath.Join(opts.work, "overlay.json"), opts.overlay)
+			// Native builds only: browsers have no updates.
+			feed, err := updateFeedFiles(c, opts.pkg, opts.work)
+			if err != nil {
+				return err
+			}
+			overlay, err := writeOverlay(filepath.Join(opts.work, "overlay.json"), mergeFiles(opts.overlay, feed))
 			if err != nil {
 				return err
 			}
