@@ -105,7 +105,7 @@ func TestStatePendingReportsEachPendingField(t *testing.T) {
 		"dataTarget":    func(s *state) { s.dataTarget = new(transfer.DropOptions) },
 		"dragRec":       func(s *state) { s.dragRec = new(dragRec) },
 		"anims":         func(s *state) { s.anims = map[any]*anim{1: nil} },
-		"motions":       func(s *state) { s.motions = map[any]*channel{1: nil} },
+		"motions":       func(s *state) { s.motions = map[any]*channel{1: new(channel)} },
 		"colorMotions":  func(s *state) { s.colorMotions = map[any]*colorMotion{1: nil} },
 		"sequences":     func(s *state) { s.sequences = map[any]*sequence{1: nil} },
 		"timelines":     func(s *state) { s.timelines = map[any]*timelineState{1: nil} },
@@ -139,4 +139,24 @@ func sortedKeys[V any](m map[string]V) []string {
 			}
 		}
 	})
+}
+
+// A value that animateRest made, at rest, does not make a state pending; one that
+// moves, or waits out a delay, does; so does one made by any other call.
+func TestStatePendingCountsOnlyMovingRestableMotions(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ch   channel
+		want bool
+	}{
+		{"restable at rest", channel{rest: true}, false},
+		{"restable moving", channel{rest: true, moving: true}, true},
+		{"restable waiting out a delay", channel{rest: true, pending: true}, true},
+		{"not restable at rest", channel{}, true},
+	} {
+		s := state{motions: map[any]*channel{1: &tc.ch}}
+		if got := s.pending(); got != tc.want {
+			t.Errorf("%s: pending = %v, want %v", tc.name, got, tc.want)
+		}
+	}
 }

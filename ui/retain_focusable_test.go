@@ -118,7 +118,7 @@ func (p *pair) compareFocus(what string) {
 // controls that take the focus: the twin that keeps the rows must draw, order the
 // focus and describe to assistive technology what the one that builds them all does.
 func TestRetainFocusableRowsRandomWalk(t *testing.T) {
-	for seed := int64(1); seed <= 30; seed++ {
+	for seed := int64(1); seed <= walkSeeds(); seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) { walkFocusable(t, seed) })
 	}
 }
@@ -662,7 +662,7 @@ func (r *pureRows) scene(n int) func() func(c *Context) {
 // progress (versioned), and elements added and removed before the list so the
 // node pool turns over.
 func TestRetainSelectProgressRowsRandomWalk(t *testing.T) {
-	for seed := int64(1); seed <= 30; seed++ {
+	for seed := int64(1); seed <= walkSeeds(); seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			const n = 60
 			r := newPureRows(n)
@@ -929,7 +929,7 @@ func TestRetainDrawReplacesPureProgress(t *testing.T) {
 // row records the *bool). The clock moves in small steps so that frames fall in
 // the middle of a motion.
 func TestRetainSwitchRowsRandomWalk(t *testing.T) {
-	for seed := int64(1); seed <= 30; seed++ {
+	for seed := int64(1); seed <= walkSeeds(); seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			const n = 40
 			var on [2][]bool
@@ -1030,4 +1030,13 @@ func TestRetainSwitchRowsAreKeptAtRest(t *testing.T) {
 	}
 	p.both(func(tt *Tester) { tt.Advance(40 * time.Millisecond) })
 	p.compareFocus("moving")
+}
+
+// walkSeeds is how many seeds the random walks of rows of controls run: 30, and
+// fewer under -race, which is ten times slower and shares a job with the rest.
+func walkSeeds() int64 {
+	if raceEnabled {
+		return 8
+	}
+	return 30
 }
