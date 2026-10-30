@@ -216,7 +216,12 @@ func setDepth(e *node) {
 
 // retainable reports whether e, and the elements in it, hold nothing of the
 // pass that a copy would keep wrong: pointers to other elements, closures
-// that capture them, a focus, a tooltip, an effect, an animation.
+// that capture them, a tooltip, an effect, an animation. An element that takes
+// the focus (Button, Link, Toggle, Checkbox) is kept: the focus order is
+// collected as the rows are walked, not as they are built, the engine holds the
+// row that has or lost the focus as acting, and a replay refuses it
+// (TestRetainFocusableRowsRandomWalk). A text field still is not (textClient,
+// state.pending: its editor).
 //
 // A row with a Transition is never kept either (state.pending: its transition
 // record), and the layout of a moved row depends on it (retain_layout.go): the
@@ -228,7 +233,7 @@ func retainable(e *node) bool {
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||
 		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.objectFn != nil ||
 		e.paintAfterFn != nil || e.paintFn != nil || e.textClient != nil || e.accFill != nil || e.copyData != nil || e.tip ||
-		e.flags&flagFocusable != 0 || e.effect != nil || e.hidden || e.leaving != 0 || e.ghosts {
+		e.effect != nil || e.hidden || e.leaving != 0 || e.ghosts {
 		return false
 	}
 	for c := e.first; c != nil; c = c.next {

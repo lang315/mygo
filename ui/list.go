@@ -233,7 +233,11 @@ type ListState struct {
 	// its popup opens); one that reads Size, Zoom, Preferences, Locale, Region,
 	// Vibrancy, TitleBar or Router is built when the value changes; a value that the
 	// code building the list read and passes into the rows is not versioned:
-	// RowVersion must say it changed.
+	// RowVersion must say it changed. That holds for the controls of a row as
+	// for its text: a row with a Button, Link, Toggle or Checkbox is kept too, so
+	// the app says by RowVersion when the data a row shows beside the control's
+	// own value changes (what the control reports, a click or a toggle, builds
+	// the row by itself).
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer presses
