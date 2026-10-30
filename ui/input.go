@@ -1668,6 +1668,17 @@ func (c *context) readsMods() {
 	}
 }
 
+// readsDrag notes that the callback of the row being built asks whether a
+// dragged value is over an element, whatever the answer (listRow.readsDrag).
+func (e *node) readsDrag() {
+	if e == nil || e.c == nil {
+		return
+	}
+	if rb := e.c.row; rb != nil {
+		rb.readsDrag = true
+	}
+}
+
 // readsHover notes that the callback of the row being built asks where the
 // pointer is, whatever the answer: the row is built, not kept, while its
 // elements are hovered (listRow.readsHover). Every function that reads the

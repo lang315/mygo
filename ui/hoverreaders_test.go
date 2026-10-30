@@ -12,7 +12,7 @@ import (
 
 // Every function of the package that reads what only the input says and a row
 // built does not hold: the hover chain (rt.hover), the pointer's position
-// (rt.pointerX, pointerY, pointerIn) or the modifier keys held (rt.mods), by the file and the
+// (rt.pointerX, pointerY, pointerIn), the modifier keys held (rt.mods) or the drag (rt.drag), by the file and the
 // function, and why a row that is kept while it is hovered does not depend on
 // it. A row's callback that reads either to build something must note it
 // (node.readsHover): Hovered and PointerPosition do, and they are the ways an
@@ -25,6 +25,7 @@ var hoverReaders = map[string]string{
 	"input.go node.PointerPosition": "notes the read (readsHover)",
 	"input.go context.Modifiers":    "notes the read (readsMods)",
 	"input.go engine.modsChanged":   "an event",
+	"dragdrop.go coreDragHover":     "notes the read (readsDrag): a row that asked is built while a drag lasts",
 	"input.go node.Pressed":         "reads the position only while the element is pressed: a row with a press is built",
 	// Option lists that move a highlight with the pointer: Hovered notes the read.
 	"base.go selectParts.Item":       "asks Hovered, which notes the read",
@@ -51,6 +52,19 @@ var hoverReaders = map[string]string{
 	"popovermenu.go engine.openDrawnMenu":         "a menu asked by an event: acting",
 	"textselection.go engine.scrollTextSelection": "a selection drag: the press is acting",
 	"textselection.go engine.syncTextSelection":   "a selection drag: the press is acting",
+	// The drag (rt.drag): its source and the element it is over are acting.
+	"dragdrop.go coreDragOver":       "reads only the element it is over, which is acting",
+	"dragdrop.go node.Drag":          "the source, which is acting",
+	"dragdrop.go node.Dragging":      "the source, which is acting",
+	"dragdrop.go node.dragFrom":      "the source, which is acting",
+	"dragdrop.go engine.dragCancel":  "an event",
+	"dragdrop.go engine.dragMove":    "an event",
+	"dragdrop.go engine.handPress":   "an event",
+	"repaint.go engine.repaintParts": "no part is repainted while a drag lasts",
+	"replay.go recordable":           "no row is replayed while a drag lasts",
+	"retain.go listFrame.ok":         "the rule itself (a row that asked DragHover is not kept during a drag)",
+	"runtime.go engine.close":        "the end of the window",
+	"runtime.go engine.prune":        "after the frame",
 	// Events, the cursor, the frame's own work and paint.
 	"handler.go engine.deliver":       "an event",
 	"input.go engine.event":           "an event",
@@ -83,7 +97,7 @@ func hoverReadersFound(t *testing.T) map[string][]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fields := map[string]bool{"hover": true, "pointerX": true, "pointerY": true, "pointerIn": true, "mods": true}
+	fields := map[string]bool{"hover": true, "pointerX": true, "pointerY": true, "pointerIn": true, "mods": true, "drag": true}
 	found := map[string][]string{}
 	fset := token.NewFileSet()
 	for _, f := range files {
@@ -153,7 +167,7 @@ func TestHoverReadersAreKnown(t *testing.T) {
 	slices.Sort(unknown)
 	slices.Sort(stale)
 	if len(unknown) > 0 {
-		t.Errorf("functions that read the hover chain, the pointer or the modifier keys and are not in hoverReaders (can they run in the callback of a row? then note the read: readsHover, readsMods): %v", unknown)
+		t.Errorf("functions that read the hover chain, the pointer or the modifier keys and are not in hoverReaders (can they run in the callback of a row? then note the read: readsHover, readsMods, readsDrag): %v", unknown)
 	}
 	if len(stale) > 0 {
 		t.Errorf("hoverReaders lists functions that no longer read them: %v", stale)

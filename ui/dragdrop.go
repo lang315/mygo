@@ -133,6 +133,7 @@ func (e *node) acceptType(pred func(any) bool) {
 func coreDragHover[T any](e *node) (T, bool) {
 	linkDrag()
 	var zero T
+	e.readsDrag()
 	d := e.c.rt.drag
 	if d == nil || d.canceled || d.native {
 		return zero, false
