@@ -10,8 +10,9 @@ import (
 	"testing"
 )
 
-// Every function of the package that reads the hover chain (rt.hover) or the
-// pointer's position (rt.pointerX, pointerY, pointerIn), by the file and the
+// Every function of the package that reads what only the input says and a row
+// built does not hold: the hover chain (rt.hover), the pointer's position
+// (rt.pointerX, pointerY, pointerIn) or the modifier keys held (rt.mods), by the file and the
 // function, and why a row that is kept while it is hovered does not depend on
 // it. A row's callback that reads either to build something must note it
 // (node.readsHover): Hovered and PointerPosition do, and they are the ways an
@@ -22,6 +23,8 @@ var hoverReaders = map[string]string{
 	// The ways to ask in a build: they note it.
 	"input.go node.Hovered":         "notes the read (readsHover)",
 	"input.go node.PointerPosition": "notes the read (readsHover)",
+	"input.go context.Modifiers":    "notes the read (readsMods)",
+	"input.go engine.modsChanged":   "an event",
 	"input.go node.Pressed":         "reads the position only while the element is pressed: a row with a press is built",
 	// Option lists that move a highlight with the pointer: Hovered notes the read.
 	"base.go selectParts.Item":       "asks Hovered, which notes the read",
@@ -64,6 +67,8 @@ var hoverReaders = map[string]string{
 	"runtime.go engine.updateCursor":  "the cursor",
 	"paint.go Painter.scrollbars":     "paint",
 	"replay.go rowInteractive":        "paint: a hovered row paints anew",
+	"retain.go listFrame.capture":     "the rule itself (the modifiers a row was built with)",
+	"retain.go listFrame.keep":        "the rule itself (the modifiers a row was built with)",
 	"retain.go engine.isHovered":      "the rule itself",
 	"retain.go engine.actingIDs":      "the rule itself",
 	"tooltip.go engine.showTooltip":   "tooltips are acting",
@@ -78,7 +83,7 @@ func hoverReadersFound(t *testing.T) map[string][]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fields := map[string]bool{"hover": true, "pointerX": true, "pointerY": true, "pointerIn": true}
+	fields := map[string]bool{"hover": true, "pointerX": true, "pointerY": true, "pointerIn": true, "mods": true}
 	found := map[string][]string{}
 	fset := token.NewFileSet()
 	for _, f := range files {
@@ -148,33 +153,35 @@ func TestHoverReadersAreKnown(t *testing.T) {
 	slices.Sort(unknown)
 	slices.Sort(stale)
 	if len(unknown) > 0 {
-		t.Errorf("functions that read the hover chain or the pointer and are not in hoverReaders (can they run in the callback of a row? then note the read with readsHover): %v", unknown)
+		t.Errorf("functions that read the hover chain, the pointer or the modifier keys and are not in hoverReaders (can they run in the callback of a row? then note the read: readsHover, readsMods): %v", unknown)
 	}
 	if len(stale) > 0 {
 		t.Errorf("hoverReaders lists functions that no longer read them: %v", stale)
 	}
 }
 
-// Hovered and PointerPosition note the read: the call counts, whatever it
-// returns.
-func TestTheWaysToAskForTheHoverNoteTheRead(t *testing.T) {
+// Hovered, PointerPosition and Modifiers note the read: the call counts,
+// whatever it returns.
+func TestTheWaysToAskForTheInputNoteTheRead(t *testing.T) {
 	fset := token.NewFileSet()
 	af, err := parser.ParseFile(fset, "input.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"Hovered", "PointerPosition"} {
+	for _, w := range []struct{ name, notes string }{
+		{"Hovered", "readsHover"}, {"PointerPosition", "readsHover"}, {"Modifiers", "readsMods"},
+	} {
 		noted := false
 		for _, d := range af.Decls {
 			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Name.Name != name || fd.Recv == nil {
+			if !ok || fd.Name.Name != w.name || fd.Recv == nil {
 				continue
 			}
 			// The first statement, before any return.
 			if len(fd.Body.List) > 0 {
 				if es, ok := fd.Body.List[0].(*ast.ExprStmt); ok {
 					if call, ok := es.X.(*ast.CallExpr); ok {
-						if se, ok := call.Fun.(*ast.SelectorExpr); ok && se.Sel.Name == "readsHover" {
+						if se, ok := call.Fun.(*ast.SelectorExpr); ok && se.Sel.Name == w.notes {
 							noted = true
 						}
 					}
@@ -182,7 +189,7 @@ func TestTheWaysToAskForTheHoverNoteTheRead(t *testing.T) {
 			}
 		}
 		if !noted {
-			t.Errorf("node.%s does not begin with e.readsHover()", name)
+			t.Errorf("%s does not begin with a call of %s", w.name, w.notes)
 		}
 	}
 }

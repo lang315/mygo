@@ -42,10 +42,15 @@ type rowKeep struct {
 	// readsHover: the row's callback asked where the pointer is, and it is
 	// built while its elements are hovered (listRow.readsHover).
 	readsHover bool
-	root       *node
-	nodes      []node   // the copy, root first, in the order of a walk
-	states     []*state // those of the nodes, which each pass stamps as seen
-	lay        rowLay   // what layout left of the row (retain_layout.go)
+	// readsMods: the row's callback asked which modifier keys are held, and mods
+	// are the ones it was built with: a row is linked only while they are the
+	// same (listRow.readsMods).
+	readsMods bool
+	mods      Modifiers
+	root      *node
+	nodes     []node   // the copy, root first, in the order of a walk
+	states    []*state // those of the nodes, which each pass stamps as seen
+	lay       rowLay   // what layout left of the row (retain_layout.go)
 	// scrollers are the indexes in nodes of the scroll containers of the row,
 	// whose offsets lay.scrolled records (retain_layout.go).
 	scrollers []int32
@@ -55,7 +60,7 @@ type rowKeep struct {
 }
 
 // actingIDs gathers, once for a pass, the ids of the elements the engine is
-// acting on or waiting for: the pointer's chain, the press, the focus, a
+// acting on or waiting for: the press, the focus, a
 // menu, a drag, a tooltip. A row holding one of them is built.
 func (rt *engine) actingIDs() {
 	if rt.actFrame == rt.frame && rt.actPass == rt.pass+1 {
@@ -159,7 +164,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		return nil
 	}
 	c, rt := f.c, f.c.rt
-	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame {
+	if rec.i != i || rec.version != v(i) || rec.themeGen != rt.themeGen || rec.theme != f.theme || rec.parent != c.parent.id || rec.sig != f.sig || rec.dir != c.parent.dir&^dirSet || rec.lastFrame+1 < rt.frame || rec.readsMods && rec.mods != rt.mods {
 		// A row out of view for a frame had its states pruned and recycled.
 		return nil
 	}
@@ -183,7 +188,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		rec.zero()
 	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods})
 	rt.rowsKept++
 	return root
 }
@@ -339,6 +344,7 @@ func (f *listFrame) capture() {
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen, rec.checked, rec.readsHover = r.chosen, r.checked, r.readsHover
+		rec.readsMods, rec.mods = r.readsMods, rt.mods
 		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0], scrolled: rec.lay.scrolled[:0]}
 		rec.scrollers = rec.scrollers[:0]
 		for j := range rec.nodes {

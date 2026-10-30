@@ -1655,7 +1655,18 @@ func (rt *engine) modsChanged(mods Modifiers) {
 // Modifiers returns the modifier keys held now, as the last key, pointer
 // or modifier event said: a view showing each row's shortcut while Cmd is
 // held reads it, and draws again as it changes.
-func (c *context) Modifiers() Modifiers { return c.rt.mods }
+func (c *context) Modifiers() Modifiers {
+	c.readsMods()
+	return c.rt.mods
+}
+
+// readsMods notes that the callback of the row being built asks which
+// modifier keys are held, whatever the answer (listRow.readsMods).
+func (c *context) readsMods() {
+	if c != nil && c.row != nil {
+		c.row.readsMods = true
+	}
+}
 
 // readsHover notes that the callback of the row being built asks where the
 // pointer is, whatever the answer: the row is built, not kept, while its
