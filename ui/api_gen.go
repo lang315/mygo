@@ -2720,6 +2720,7 @@ func (_handle Element) Access(fn func(n *platform.AccessNode)) Element {
 func (_handle Element) Activated() (int, bool) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, false
 	}
 	_ctx := _node.c
@@ -2787,6 +2788,7 @@ func (_handle Element) AlignSelf(a Align) Element {
 func (_handle Element) Animate(key any, target float32, d time.Duration) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -2803,6 +2805,7 @@ func (_handle Element) Animate(key any, target float32, d time.Duration) float32
 func (_handle Element) AnimateColor(key any, target Color, a Animation) Color {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return *new(Color)
 	}
 	_ctx := _node.c
@@ -2841,6 +2844,7 @@ func (_handle Element) AnimatePose(p Pose, a Animation) Element {
 func (_handle Element) AnimateTo(key any, target float32, a Animation) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -2853,6 +2857,7 @@ func (_handle Element) AnimateTo(key any, target float32, a Animation) float32 {
 func (_handle Element) AnimateWith(key any, target float32, d time.Duration, ease Easing) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -2866,6 +2871,7 @@ func (_handle Element) AnimateWith(key any, target float32, d time.Duration, eas
 func (_handle Element) Arrived(key any) bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3144,6 +3150,7 @@ func (_handle Element) BottomPercent(p float32) Element {
 func (_handle Element) Bounds() Rect {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return *new(Rect)
 	}
 	_ctx := _node.c
@@ -3211,6 +3218,7 @@ func (_handle Element) Cache() Element {
 func (_handle Element) CanFocus() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3251,6 +3259,7 @@ func (_handle Element) Center() Element {
 func (_handle Element) Changed() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3277,6 +3286,7 @@ func (_handle Element) Checked(on bool) Element {
 func (_handle Element) CheckedChanged() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3290,6 +3300,7 @@ func (_handle Element) CheckedChanged() bool {
 func (_handle Element) ClickModifiers() Modifiers {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -3302,6 +3313,7 @@ func (_handle Element) ClickModifiers() Modifiers {
 func (_handle Element) Clicked() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3315,6 +3327,7 @@ func (_handle Element) Clicked() bool {
 func (_handle Element) Clicks() int {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -3421,6 +3434,7 @@ func (_handle Element) Columns(n int) Element {
 func (_handle Element) ColumnsChanged() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3435,6 +3449,7 @@ func (_handle Element) ColumnsChanged() bool {
 func (_handle Element) Composing() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3650,6 +3665,7 @@ func (_handle Element) Disabled(d bool) Element {
 func (_handle Element) Dismissed() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3677,6 +3693,7 @@ func (_handle Element) Dividers(width float32, c Color) Element {
 func (_handle Element) DoubleClicked() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3734,6 +3751,7 @@ func (_handle Element) DragDataFrom(data func() transfer.Data, options ...transf
 func (_handle Element) DragEnded() (float32, float32, bool) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0, false
 	}
 	_ctx := _node.c
@@ -3750,6 +3768,7 @@ func (_handle Element) DragEnded() (float32, float32, bool) {
 func (_handle Element) DragOffset() Point {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return *new(Point)
 	}
 	_ctx := _node.c
@@ -3763,6 +3782,7 @@ func (_handle Element) DragOffset() Point {
 func (_handle Element) DragVelocity() (float32, float32) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0
 	}
 	_ctx := _node.c
@@ -3818,6 +3838,7 @@ func (_handle Element) Draggable(offset *Point, o DraggableOptions) Element {
 func (_handle Element) Dragged() (float32, float32, bool) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0, false
 	}
 	_ctx := _node.c
@@ -3830,6 +3851,7 @@ func (_handle Element) Dragged() (float32, float32, bool) {
 func (_handle Element) Dragging() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -3886,6 +3908,7 @@ func (_handle Element) DrawOver(fn func(p *Painter, r Rect)) Element {
 func (_handle Element) DroppedFiles() []string {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return nil
 	}
 	_ctx := _node.c
@@ -3981,6 +4004,7 @@ func (_handle Element) Expanded(open bool) Element {
 func (_handle Element) FileDragOver() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4095,6 +4119,7 @@ func (_handle Element) FocusRing(show bool) Element {
 func (_handle Element) FocusVisible() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4107,6 +4132,7 @@ func (_handle Element) FocusVisible() bool {
 func (_handle Element) FocusWithin() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4130,6 +4156,7 @@ func (_handle Element) Focusable() Element {
 func (_handle Element) Focused() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4363,6 +4390,7 @@ func (_handle Element) Hidden(hide bool) Element {
 func (_handle Element) Highlighted() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4379,6 +4407,7 @@ func (_handle Element) Highlighted() bool {
 func (_handle Element) Hovered() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4390,6 +4419,7 @@ func (_handle Element) Hovered() bool {
 func (_handle Element) ID() uint64 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -4404,6 +4434,7 @@ func (_handle Element) ID() uint64 {
 func (_handle Element) InView() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4479,6 +4510,7 @@ func (_handle Element) Invisible() Element {
 func (_handle Element) IsDisabled() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -4504,6 +4536,7 @@ func (_handle Element) Italic() Element {
 func (_handle Element) Jump(key any, value float32) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -4569,6 +4602,7 @@ func (_handle Element) KeepFocus() Element {
 func (_handle Element) Keyframes(key any, frames []Keyframe, options ...KeyframeOptions) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -4614,6 +4648,7 @@ func (_handle Element) Lang(tag string) Element {
 func (_handle Element) LayoutBounds() Rect {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return *new(Rect)
 	}
 	_ctx := _node.c
@@ -4707,6 +4742,7 @@ func (_handle Element) Lines(min int, max int) Element {
 func (_handle Element) LocalToWindow(x float32, y float32) (float32, float32) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0
 	}
 	_ctx := _node.c
@@ -4723,6 +4759,7 @@ func (_handle Element) LocalToWindow(x float32, y float32) (float32, float32) {
 func (_handle Element) Loop(key any, period time.Duration, ease Easing) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -5086,6 +5123,7 @@ func (_handle Element) Opacity(o float32) Element {
 func (_handle Element) OverlayShortcut(mods Modifiers, key Key) bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5207,6 +5245,7 @@ func (_handle Element) Placeholder(s string) Element {
 func (_handle Element) PointerPosition() (float32, float32, bool) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0, false
 	}
 	_ctx := _node.c
@@ -5297,6 +5336,7 @@ func (_handle Element) PopoverMenuButton(build func(m *Menu)) Element {
 func (_handle Element) Pressed() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5316,6 +5356,7 @@ func (_handle Element) Pressed() bool {
 func (_handle Element) PressedOutside() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5390,6 +5431,7 @@ func (_handle Element) Right(v float32) Element {
 func (_handle Element) RightClicked() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5493,6 +5535,7 @@ func (_handle Element) Row() Element {
 func (_handle Element) RowDoubleClicked() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5663,6 +5706,7 @@ func (_handle Element) Selected(on bool) Element {
 func (_handle Element) SelectedTexts() []SelectedText {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return nil
 	}
 	_ctx := _node.c
@@ -5676,6 +5720,7 @@ func (_handle Element) SelectedTexts() []SelectedText {
 func (_handle Element) SelectionChanged() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5728,6 +5773,7 @@ func (_handle Element) SetTextSelection(start int, end int) Element {
 func (_handle Element) Settled(key any) bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5754,6 +5800,7 @@ func (_handle Element) Shadow(x float32, y float32, blur float32, spread float32
 func (_handle Element) Shortcut(mods Modifiers, key Key) bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5815,6 +5862,7 @@ func (_handle Element) Skew(x float32, y float32) Element {
 func (_handle Element) SortChanged() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5827,6 +5875,7 @@ func (_handle Element) SortChanged() bool {
 func (_handle Element) Spring(key any, target float32, options ...SpringOptions) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -5904,6 +5953,7 @@ func (_handle Element) Stripes(c Color, width float32, gap float32, angle float3
 func (_handle Element) Submitted() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -5928,6 +5978,7 @@ func (_handle Element) TextAlign(a Align) Element {
 func (_handle Element) TextAnchorCaret() (int, int) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0
 	}
 	_ctx := _node.c
@@ -6010,6 +6061,7 @@ func (_handle Element) TextRanges(ranges ...TextRange) Element {
 func (_handle Element) TextSelection() (int, int) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0
 	}
 	_ctx := _node.c
@@ -6039,6 +6091,7 @@ func (_handle Element) TextSelection() (int, int) {
 func (_handle Element) Timeline(key any, o TimelineOptions) *Timeline {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return nil
 	}
 	_ctx := _node.c
@@ -6178,6 +6231,7 @@ func (_handle Element) Transition(t ElementTransition) Element {
 func (_handle Element) Transitioning() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -6251,6 +6305,7 @@ func (_handle Element) Value(s string) Element {
 func (_handle Element) Velocity(key any) float32 {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0
 	}
 	_ctx := _node.c
@@ -6310,6 +6365,7 @@ func (_handle Element) WidthPercent(p float32) Element {
 func (_handle Element) WindowToLocal(x float32, y float32) (float32, float32, bool) {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return 0, 0, false
 	}
 	_ctx := _node.c

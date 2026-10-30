@@ -226,8 +226,10 @@ type ListState struct {
 	// whatever RowVersion says, and so is one that reads the layout of the frame
 	// before (Bounds, LayoutBounds, LocalToWindow, WindowToLocal, InView), of its
 	// own elements too, and so is one that calls Context.Shortcut, Now or
-	// ReadClipboard; one that reads Size, Zoom, Preferences, Locale, Region,
-	// Vibrancy or TitleBar is built when the value changes; a value that the
+	// ReadClipboard, and so is one that asks a question of an element that is not
+	// there (the Element{} of a Modal that is closed, or of a select's item before
+	// its popup opens); one that reads Size, Zoom, Preferences, Locale, Region,
+	// Vibrancy, TitleBar or Router is built when the value changes; a value that the
 	// code building the list read and passes into the rows is not versioned:
 	// RowVersion must say it changed.
 	//
@@ -1000,11 +1002,15 @@ func (f *listFrame) build(i int) *node {
 	}
 	saved := c.row
 	c.row = rb
+	notes := missingNotes.Load()
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
 	var readsAt uint16
 	c.row, f.rb = saved, prev
+	if missingNotes.Load() != notes {
+		outside = true // it asked of an element that is not there (retain_missing.go)
+	}
 	if saved != nil {
 		// A row built inside the callback of another.
 		saved.readsHover = saved.readsHover || reads
