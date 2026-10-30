@@ -95,7 +95,7 @@ func walkOfReaders(t *testing.T, seed int64) {
 		}
 		return func(c *Context) {
 			Column(c).Fill().Children(func() {
-				Row(c).Height(30).Children(func() { Textf(c, "head") })
+				head := Row(c).Height(30).Children(func() { Textf(c, "head") })
 				List(c, s, len(vers), func(i int) {
 					r := Row(c).Padding(4)
 					switch i % 5 {
@@ -114,6 +114,10 @@ func walkOfReaders(t *testing.T, seed int64) {
 					case 3:
 						if c.Modifiers()&Alt != 0 && r.Hovered() {
 							r.Background(blue)
+						}
+					case 4:
+						if head.Hovered() || head.Pressed() {
+							r.Background(blue) // asks of an element outside the row
 						}
 					}
 					r.Children(func() {
@@ -160,5 +164,146 @@ func walkOfReaders(t *testing.T, seed int64) {
 	}
 	if p.kept.rt.rowsKept == 0 {
 		t.Fatalf("no row kept: the walk tests nothing")
+	}
+}
+
+// Rows that ask of the header (an element outside them) about its focus, its
+// clicks and its drag: built, or the header would lose the flags asking sets
+// (flagClickable, flagDraggable...) and the twin's hits would differ at once.
+func TestRetainRowsAskingOfTheHeaderAnyState(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ask  func(h Element) bool
+	}{
+		{"Focused", func(h Element) bool { return h.Focused() }},
+		{"FocusWithin", func(h Element) bool { return h.FocusWithin() }},
+		{"Clicked", func(h Element) bool { return h.Clicked() }},
+		{"Clicks", func(h Element) bool { return h.Clicks() > 0 }},
+		{"DoubleClicked", func(h Element) bool { return h.DoubleClicked() }},
+		{"RightClicked", func(h Element) bool { return h.RightClicked() }},
+		{"Dragged", func(h Element) bool { _, _, ok := h.Dragged(); return ok }},
+		{"DragVelocity", func(h Element) bool { vx, vy := h.DragVelocity(); return vx != 0 || vy != 0 }},
+		{"DragEnded", func(h Element) bool { _, _, ok := h.DragEnded(); return ok }},
+		{"Dragging", func(h Element) bool { return h.Dragging() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPair(t, 300, 400, func() func(c *Context) {
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						h := Row(c).Height(40).Focusable().Drag("v").Children(func() { Textf(c, "header") })
+						List(c, s, 60, func(i int) {
+							r := Row(c)
+							if tc.ask(h) {
+								r.Background(Hex("#ff0000"))
+							}
+							r.Children(func() { Textf(c, "row %d", i) })
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(3)
+			p.both(func(tt *Tester) { tt.Press(100, 20) })
+			p.frame("press")
+			p.both(func(tt *Tester) { tt.Move(100, 120) })
+			p.frame("drag")
+			p.frame("drag 2")
+			p.both(func(tt *Tester) { tt.Release(100, 120) })
+			p.frame("release")
+			p.both(func(tt *Tester) { tt.ClickAt(100, 20); tt.ClickAt(100, 20) })
+			p.frame("clicks")
+			p.both(func(tt *Tester) { tt.RightClickAt(100, 20) })
+			p.frame("right click")
+			p.frame("right click 2")
+		})
+	}
+}
+
+// Rows that ask only of themselves are kept even with the pointer on the
+// header: asking of the header is the only thing that makes a row outside.
+func TestRetainRowsAskingOnlyOfThemselvesAreKept(t *testing.T) {
+	red := Hex("#ff0000")
+	p := newPair(t, 300, 400, rowsScene(func(c *Context) any {
+		return Row(c).Height(40).Children(func() { Textf(c, "header") })
+	}, func(c *Context, i int, _ any) {
+		r := Row(c).Padding(4)
+		if r.Hovered() || r.Pressed() {
+			r.Background(red)
+		}
+		r.Children(func() {
+			x := Textf(c, "row %d", i)
+			if _, _, over := x.PointerPosition(); over {
+				Textf(c, "over")
+			}
+		})
+	}))
+	p.both(func(tt *Tester) { tt.Move(100, 20) })
+	p.idle(3)
+	built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+	p.frame("idle")
+	if b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept; b != 0 || k == 0 {
+		t.Errorf("idle: %d rows built, %d kept; want none built", b, k)
+	}
+}
+
+// A List inside a row: an inner row that asks of an element of the outer row
+// is outside it and built; one that asks of itself, or an outer row that asks of
+// an inner element, leaves the inner rows kept.
+func TestRetainNestedRowAsksOfTheOuterRow(t *testing.T) {
+	for _, mode := range []string{"inner asks of itself", "inner asks of the outer row", "outer asks of an inner element"} {
+		t.Run(mode, func(t *testing.T) {
+			p := newPair(t, 300, 400, func() func(c *Context) {
+				outer := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+				inner := make([]*ListState, 20)
+				for i := range inner {
+					inner[i] = &ListState{Key: func(j int) any { return j }, RowVersion: func(int) uint64 { return 0 }}
+				}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						List(c, outer, 20, func(i int) {
+							Column(c).Children(func() {
+								o := Textf(c, "outer %d", i)
+								var last Element
+								List(c, inner[i], 2, func(j int) {
+									r := Row(c)
+									last = r
+									switch mode {
+									case "inner asks of itself":
+										if r.Hovered() {
+											r.Background(Hex("#ff0000"))
+										}
+									case "inner asks of the outer row":
+										if o.Hovered() {
+											r.Background(Hex("#ff0000"))
+										}
+									}
+									r.Children(func() { Textf(c, "inner %d.%d", i, j) })
+								}).Height(50)
+								if mode == "outer asks of an inner element" && last.Hovered() {
+									o.Background(Hex("#0000ff"))
+								}
+							})
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(3)
+			built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+			p.frame("idle")
+			b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept
+			t.Logf("idle: %d rows built, %d kept", b, k)
+			p.both(func(tt *Tester) { tt.Move(100, 30) })
+			p.frame("move")
+			p.frame("move 2")
+			p.both(func(tt *Tester) { tt.Move(100, 70) })
+			p.frame("move again")
+			p.frame("move again 2")
+			// A row holding a List is never kept: the rows kept are the inner ones, and
+			// an inner row that asks of an element of the outer row is outside it.
+			if inner := mode != "inner asks of the outer row"; inner && k == 0 || !inner && k != 0 {
+				t.Errorf("idle: %d rows built, %d kept", b, k)
+			}
+
+		})
 	}
 }

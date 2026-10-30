@@ -184,16 +184,28 @@ func TestHoverReadersAreKnown(t *testing.T) {
 // Hovered, PointerPosition and Modifiers note the read: the call counts,
 // whatever it returns.
 func TestTheWaysToAskForTheInputNoteTheRead(t *testing.T) {
-	fset := token.NewFileSet()
-	af, err := parser.ParseFile(fset, "input.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
+	// Each begins with a call that notes the read: of the hover and the
+	// modifier keys (the row is built while hovered, or when they change), or
+	// of an element outside the row (asksOutside, readsDrag).
+	asks := []struct{ file, name, notes string }{
+		{"input.go", "Hovered", "readsHover"}, {"input.go", "PointerPosition", "readsHover"},
+		{"input.go", "Modifiers", "readsMods"}, {"dragdrop.go", "Dragging", "readsDrag"},
 	}
-	for _, w := range []struct{ name, notes string }{
-		{"Hovered", "readsHover"}, {"PointerPosition", "readsHover"}, {"Modifiers", "readsMods"},
-	} {
+	for _, n := range []string{"Pressed", "Clicked", "Clicks", "DoubleClicked", "RightClicked", "Focused", "FocusWithin", "Dragged", "DragVelocity", "DragEnded"} {
+		asks = append(asks, struct{ file, name, notes string }{"input.go", n, "asksOutside"})
+	}
+	fset := token.NewFileSet()
+	files := map[string]*ast.File{}
+	for _, w := range asks {
+		if files[w.file] == nil {
+			af, err := parser.ParseFile(fset, w.file, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[w.file] = af
+		}
 		noted := false
-		for _, d := range af.Decls {
+		for _, d := range files[w.file].Decls {
 			fd, ok := d.(*ast.FuncDecl)
 			if !ok || fd.Name.Name != w.name || fd.Recv == nil {
 				continue
