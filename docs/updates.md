@@ -327,9 +327,11 @@ links into apps with `updates` and the update window of
 `plugins/updater` imports, so most apps never name it. An app built
 another way, without the CLI, needs
 `import _ "github.com/egoist/mygo/updatefeed"` for `Check` to read the
-feed (`Check` says so when it is missing), and `updatefeed.Source(url)`
-is the feed as an `UpdateSource`, for a source of your own that adds to
-it.
+feed (`Check` says so when it is missing). `updatefeed.Source(url)` is
+the HTTP source of a feed URL you give it; it does not wrap the feed of
+`updates`, whose URL the build keeps inside MyGo. `mygo build` leaves the
+file that imports `updatefeed` out when the app's go.mod pins a MyGo that
+does not have the package: that MyGo fetches the feed itself.
 
 ## Where apps can update
 

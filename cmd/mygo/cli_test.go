@@ -467,6 +467,52 @@ func TestUpdateFeedFiles(t *testing.T) {
 	}
 }
 
+// TestUpdateFeedFilesOfAnOlderMygo: an app whose go.mod pins a MyGo without
+// package updatefeed is built as it was, which that MyGo supports (it fetches
+// the feed itself): the overlay would make the build fail in a file the user
+// did not write. The same app with the CLI's MyGo gets the file.
+func TestUpdateFeedFilesOfAnOlderMygo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("go list")
+	}
+	old, work := t.TempDir(), t.TempDir()
+	for name, content := range map[string]string{
+		"go.mod":  "module github.com/egoist/mygo\n\ngo " + goVersion() + "\n",
+		"mygo.go": "package mygo\n",
+	} {
+		if err := os.WriteFile(filepath.Join(old, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
+	sum, _ := os.ReadFile(filepath.Join(checkout, "go.sum"))
+	app := func(mygo string) *Config {
+		dir := t.TempDir()
+		gomod := "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + mygo + "\n"
+		for name, content := range map[string]string{"go.mod": gomod, "go.sum": string(sum), "main.go": "package main\n\nimport _ \"github.com/egoist/mygo\"\n\nfunc main() {}\n"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return &Config{Updates: &Updates{}, root: dir}
+	}
+	t.Setenv("GOFLAGS", "-mod=mod")
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOWORK", "off")
+	for name, c := range map[string]*Config{"older": app(old), "current": app(checkout)} {
+		if appHasPackage(c, updatefeedPackage) != (name == "current") {
+			t.Errorf("%s MyGo: appHasPackage(updatefeed) = %v", name, !(name == "current"))
+		}
+		files, err := updateFeedFiles(c, c.root, work)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := map[bool]int{false: 0, true: 1}[name == "current"]; len(files) != want {
+			t.Errorf("%s MyGo: %d overlay entries, want %d", name, len(files), want)
+		}
+	}
+}
+
 // TestUpdateFeedIsLinkedByTheOverlay: an app that uses mygo.Updater links no
 // HTTP of its own, and the file the build adds gives it the feed: the
 // packages of the app, with and without the overlay (go list -deps).
