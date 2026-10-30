@@ -1441,7 +1441,10 @@ func (e *node) FocusRing(show bool) *node {
 // Draw paints on the element with p after its background, before its
 // children; r is its box. fn only paints: it may run more than once a
 // frame.
-func (e *node) Draw(fn func(p *Painter, r Rect)) *node { e.paintFn = fn; return e }
+func (e *node) Draw(fn func(p *Painter, r Rect)) *node {
+	e.paintFn, e.paintPure = fn, false // an app's callback replaces an audited one (drawPure)
+	return e
+}
 
 // drawPure is Draw for a callback that reaches no node of the build: it uses
 // its arguments, the theme and values it was made with, and asks the painter for

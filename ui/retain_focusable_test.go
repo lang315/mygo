@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/build"
+	"go/importer"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"image"
 	"math/rand"
-	"path/filepath"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -776,141 +779,146 @@ func TestRetainSelectAndProgressRowsAreKept(t *testing.T) {
 // they use that they do not declare are listed, with why each is safe. A new one
 // fails here, to be read: a node captured would be another element once the
 // pool hands it out again.
+// The closures that drawPure holds reach no node of the build: a node a kept
+// row's closure had captured would be another element once the pool hands it out
+// again. The package is type-checked, and every variable such a closure uses that
+// is declared outside it must have a type that cannot reach a node or an Element
+// (the painter says which element, Painter.cur). Types, not names: a shadowed or
+// reassigned name, a map key, a package variable are all seen. Limit: a value of
+// an interface type may hold anything and is not followed.
 func TestPureDrawsReachNoNode(t *testing.T) {
-	type use struct {
-		ids []string
-		why string
+	out, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		t.Skip("no go command to find GOROOT for the type checker: ", err)
 	}
-	safe := map[string]use{
-		"widgets.go chevron":      {[]string{"t"}, "t: the theme (compared by themeGen); the arguments are declared by the callback"},
-		"widgets.go coreProgress": {[]string{"t", "rad", "value"}, "the theme, a size and a number; the element is p.cur, not e"},
-	}
-	fset := token.NewFileSet()
-	files, err := filepath.Glob("*.go")
+	saved := build.Default.GOROOT
+	build.Default.GOROOT = strings.TrimSpace(string(out)) // runtime.GOROOT is empty under -trimpath
+	defer func() { build.Default.GOROOT = saved }()
+	bp, err := build.ImportDir(".", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkg := map[string]bool{} // names declared at the top of the package
-	var parsed []*ast.File
-	var names []string
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
-			continue
-		}
-		af, err := parser.ParseFile(fset, f, nil, 0)
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, name := range bp.GoFiles {
+		f, err := parser.ParseFile(fset, name, nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		parsed, names = append(parsed, af), append(names, f)
-		for _, d := range af.Decls {
-			switch d := d.(type) {
-			case *ast.FuncDecl:
-				if d.Recv == nil {
-					pkg[d.Name.Name] = true
-				}
-			case *ast.GenDecl:
-				for _, sp := range d.Specs {
-					switch sp := sp.(type) {
-					case *ast.TypeSpec:
-						pkg[sp.Name.Name] = true
-					case *ast.ValueSpec:
-						for _, n := range sp.Names {
-							pkg[n.Name] = true
-						}
-					}
-				}
-			}
-		}
+		files = append(files, f)
 	}
-	universe := map[string]bool{"true": true, "false": true, "nil": true, "float32": true, "float64": true, "int": true, "len": true, "min": true, "max": true, "new": true, "append": true}
-	seen := 0
-	for k, af := range parsed {
-		imports := map[string]bool{}
-		for _, im := range af.Imports {
-			path := strings.Trim(im.Path.Value, `"`)
-			imports[path[strings.LastIndex(path, "/")+1:]] = true
+	info := &types.Info{Uses: map[*ast.Ident]types.Object{}}
+	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
+	if _, err := conf.Check("github.com/egoist/mygo/ui", fset, files, info); err != nil {
+		t.Fatal(err)
+	}
+	var reaches func(ty types.Type, seen map[types.Type]bool) bool
+	reaches = func(ty types.Type, seen map[types.Type]bool) bool {
+		if seen[ty] {
+			return false
 		}
-		for _, d := range af.Decls {
-			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Body == nil {
-				continue
+		seen[ty] = true
+		switch ty := ty.(type) {
+		case *types.Pointer:
+			return reaches(ty.Elem(), seen)
+		case *types.Slice:
+			return reaches(ty.Elem(), seen)
+		case *types.Array:
+			return reaches(ty.Elem(), seen)
+		case *types.Chan:
+			return reaches(ty.Elem(), seen)
+		case *types.Map:
+			return reaches(ty.Key(), seen) || reaches(ty.Elem(), seen)
+		case *types.Signature:
+			for _, tup := range []*types.Tuple{ty.Params(), ty.Results()} {
+				for i := range tup.Len() {
+					if reaches(tup.At(i).Type(), seen) {
+						return true
+					}
+				}
 			}
-			ast.Inspect(fd.Body, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
+		case *types.Named:
+			if o := ty.Obj(); o.Pkg() != nil && o.Pkg().Name() == "ui" && (o.Name() == "node" || o.Name() == "Element") {
+				return true
+			}
+			return reaches(ty.Underlying(), seen)
+		case *types.Struct:
+			for i := range ty.NumFields() {
+				if reaches(ty.Field(i).Type(), seen) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	seen := 0
+	for _, f := range files {
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			se, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || se.Sel.Name != "drawPure" || len(call.Args) != 1 {
+				return true
+			}
+			lit, ok := call.Args[0].(*ast.FuncLit)
+			if !ok {
+				t.Errorf("%s: drawPure takes a function literal, to be read here", fset.Position(call.Pos()))
+				return true
+			}
+			seen++
+			ast.Inspect(lit.Body, func(m ast.Node) bool {
+				id, ok := m.(*ast.Ident)
 				if !ok {
 					return true
 				}
-				se, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok || se.Sel.Name != "drawPure" || len(call.Args) != 1 {
+				v, ok := info.Uses[id].(*types.Var)
+				if !ok || v.IsField() {
 					return true
 				}
-				lit, ok := call.Args[0].(*ast.FuncLit)
-				if !ok {
-					t.Errorf("%s: drawPure takes a function literal, to be read here", names[k])
-					return true
+				if v.Pos() >= lit.Pos() && v.Pos() < lit.End() {
+					return true // declared inside the closure
 				}
-				seen++
-				declared := map[string]bool{}
-				ast.Inspect(lit, func(n ast.Node) bool {
-					switch n := n.(type) {
-					case *ast.Field:
-						for _, id := range n.Names {
-							declared[id.Name] = true
-						}
-					case *ast.AssignStmt:
-						if n.Tok == token.DEFINE {
-							for _, l := range n.Lhs {
-								if id, ok := l.(*ast.Ident); ok {
-									declared[id.Name] = true
-								}
-							}
-						}
-					case *ast.ValueSpec:
-						for _, id := range n.Names {
-							declared[id.Name] = true
-						}
-					}
-					return true
-				})
-				free := map[string]bool{}
-				var walk func(n ast.Node) bool
-				walk = func(n ast.Node) bool {
-					switch n := n.(type) {
-					case *ast.SelectorExpr:
-						ast.Inspect(n.X, walk) // not the name after the dot
-						return false
-					case *ast.KeyValueExpr:
-						ast.Inspect(n.Value, walk) // nor the field name of a literal
-						return false
-					case *ast.Ident:
-						if !declared[n.Name] && !pkg[n.Name] && !universe[n.Name] && !imports[n.Name] {
-							free[n.Name] = true
-						}
-					}
-					return true
-				}
-				ast.Inspect(lit.Body, walk)
-				var list []string
-				for id := range free {
-					list = append(list, id)
-				}
-				slices.Sort(list)
-				key := names[k] + " " + fd.Name.Name
-				want, ok := safe[key]
-				if !ok {
-					t.Errorf("%s: drawPure in %s captures %v and is not in the list", names[k], fd.Name.Name, list)
-					return true
-				}
-				for _, id := range list {
-					if !slices.Contains(want.ids, id) {
-						t.Errorf("%s: the closure uses %q, which the list for %s does not name (%s)", names[k], id, fd.Name.Name, want.why)
-					}
+				if reaches(v.Type(), map[types.Type]bool{}) {
+					t.Errorf("%s: the closure of drawPure uses %q (%s), which reaches a node: take the element from p.cur", fset.Position(id.Pos()), v.Name(), v.Type())
 				}
 				return true
 			})
-		}
+			return true
+		})
 	}
 	if seen < 2 {
 		t.Errorf("found %d drawPure calls: the test looks at the wrong code", seen)
+	}
+}
+
+// An app replaces the paint of a determinate Progress with Draw: its closure is not
+// audited, so the row is not kept (Draw clears paintPure), as one that holds a
+// handle of its own would otherwise be linked with a callback that uses an
+// element of another pass.
+func TestRetainDrawReplacesPureProgress(t *testing.T) {
+	p := newPair(t, 500, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				List(c, s, 20, func(i int) {
+					Row(c).Padding(4).Gap(8).Children(func() {
+						el := Progress(c, 0.4).Width(200)
+						el.Draw(func(pa *Painter, r Rect) {
+							b := el.Bounds() // the handle of the pass that built it
+							pa.Fill(Rect{r.X, r.Y, b.W / 2, r.H}, RGBA(255, 0, 0, 1), 0)
+						})
+					})
+				}).Grow(1)
+			})
+		}
+	})
+	p.idle(4)
+	p.both(func(tt *Tester) { tt.Move(50, 50) })
+	p.compare("move")
+	p.idle(2)
+	if p.kept.rt.rowsKept != 0 {
+		t.Errorf("a row whose Progress has an app's Draw was kept %d times", p.kept.rt.rowsKept)
 	}
 }

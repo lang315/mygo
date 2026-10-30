@@ -136,6 +136,7 @@ func coreSidebarSection(c *context, title string, open *bool, fn func()) *node {
 				arrow := disclosureArrow(c, 0)
 				turn := arrow.Animate("open", 90*b2f(shown), 150*time.Millisecond)
 				rtl := arrow.rtl()
+				arrow.paintPure = false
 				arrow.paintFn = func(p *Painter, r Rect) {
 					if head.Hovered() {
 						p.StrokePath(disclosurePath(r, turn, rtl), 1.5, t.TextMuted)
