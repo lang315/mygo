@@ -2117,8 +2117,9 @@ func Stepper(c *Context, value *float64, lo float64, hi float64, step float64) E
 	return wrapElement(_e)
 }
 
-// Switch creates a switch toggling *on. It animates, so a row of a List with
-// RowVersion that holds one is built in every frame.
+// Switch creates a switch toggling *on. In a row of a List with RowVersion it is
+// watched by its address like a check box, and its row is kept once the knob
+// rests.
 func Switch(c *Context, on *bool) Element {
 	_ctx := c.build()
 	if _ctx == nil {

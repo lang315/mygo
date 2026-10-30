@@ -118,7 +118,7 @@ func (p *pair) compareFocus(what string) {
 // controls that take the focus: the twin that keeps the rows must draw, order the
 // focus and describe to assistive technology what the one that builds them all does.
 func TestRetainFocusableRowsRandomWalk(t *testing.T) {
-	for seed := int64(1); seed <= 30; seed++ {
+	for seed := int64(1); seed <= walkSeeds(); seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) { walkFocusable(t, seed) })
 	}
 }
@@ -662,7 +662,7 @@ func (r *pureRows) scene(n int) func() func(c *Context) {
 // progress (versioned), and elements added and removed before the list so the
 // node pool turns over.
 func TestRetainSelectProgressRowsRandomWalk(t *testing.T) {
-	for seed := int64(1); seed <= 30; seed++ {
+	for seed := int64(1); seed <= walkSeeds(); seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			const n = 60
 			r := newPureRows(n)
@@ -888,7 +888,7 @@ func TestPureDrawsReachNoNode(t *testing.T) {
 			return true
 		})
 	}
-	if seen < 2 {
+	if seen < 3 {
 		t.Errorf("found %d drawPure calls: the test looks at the wrong code", seen)
 	}
 }
@@ -921,4 +921,122 @@ func TestRetainDrawReplacesPureProgress(t *testing.T) {
 	if p.kept.rt.rowsKept != 0 {
 		t.Errorf("a row whose Progress has an app's Draw was kept %d times", p.kept.rt.rowsKept)
 	}
+}
+
+// Rows with a Switch: kept once the knob rests, built while it moves, and equal to
+// the twin that builds every row when the knob is turned by the keys or the
+// pointer, turned back on its way, and when the app turns it (not versioned: the
+// row records the *bool). The clock moves in small steps so that frames fall in
+// the middle of a motion.
+func TestRetainSwitchRowsRandomWalk(t *testing.T) {
+	for seed := int64(1); seed <= walkSeeds(); seed++ {
+		t.Run(fmt.Sprint(seed), func(t *testing.T) {
+			const n = 40
+			var on [2][]bool
+			on[0], on[1] = make([]bool, n), make([]bool, n)
+			twin := 0
+			p := newPair(t, 500, 400, func() func(c *Context) {
+				me := twin
+				twin++
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						List(c, s, n, func(i int) {
+							Row(c).Padding(4).Gap(8).Children(func() {
+								Textf(c, "row %d", i)
+								if i%2 == 0 {
+									Switch(c, &on[me][i])
+								} else {
+									Button(c, "press")
+								}
+							})
+						}).Grow(1)
+					})
+				}
+			})
+			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+			p.idle(3)
+			rng := rand.New(rand.NewSource(seed))
+			for step := range 100 {
+				x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
+				var what string
+				switch k := rng.Intn(11); k {
+				case 0, 1, 2:
+					d := time.Duration(5+rng.Intn(60)) * time.Millisecond
+					what = fmt.Sprintf("advance %v", d)
+					p.both(func(tt *Tester) { tt.Advance(d) })
+				case 3:
+					what = "tab"
+					p.both(func(tt *Tester) { tt.Key(0, KeyTab) })
+				case 4, 5:
+					what = "space"
+					p.both(func(tt *Tester) { tt.Key(0, KeySpace) })
+				case 6:
+					what = fmt.Sprintf("click %v,%v", x, y)
+					p.both(func(tt *Tester) { tt.ClickAt(x, y) })
+				case 7:
+					what = fmt.Sprintf("move %v,%v", x, y)
+					p.both(func(tt *Tester) { tt.Move(x, y) })
+				case 8:
+					what = "blur and focus"
+					p.both(func(tt *Tester) { tt.SetFocused(false); tt.SetFocused(true) })
+				case 9:
+					i := rng.Intn(n/2) * 2
+					what = fmt.Sprintf("app turns %d", i)
+					for k := range 2 {
+						on[k][i] = !on[k][i]
+					}
+				default:
+					what = "scroll"
+					dy := float32(rng.Intn(120) - 60)
+					p.both(func(tt *Tester) { tt.Scroll(x, y, 0, dy) })
+				}
+				p.both(func(tt *Tester) { tt.Frame() })
+				p.compareFocus(fmt.Sprintf("%d %s", step, what))
+				p.frame(fmt.Sprintf("%d %s +1", step, what))
+			}
+			if p.kept.rt.rowsKept == 0 {
+				t.Fatalf("no row kept: the walk tests nothing")
+			}
+		})
+	}
+}
+
+// Switch rows: kept at rest, built while the knob moves.
+func TestRetainSwitchRowsAreKeptAtRest(t *testing.T) {
+	on := make([]bool, 30)
+	p := newPair(t, 400, 300, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				List(c, s, 30, func(i int) {
+					Row(c).Padding(4).Children(func() { Switch(c, &on[i]) })
+				}).Grow(1)
+			})
+		}
+	})
+	p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+	p.idle(4)
+	built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+	p.frame("idle")
+	if b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept; b != 0 || k == 0 {
+		t.Errorf("idle: %d rows built, %d kept; want none built", b, k)
+	}
+	on[3] = true // the app turns a switch: the row is built, and the knob moves
+	built = p.kept.rt.rowsBuilt
+	p.both(func(tt *Tester) { tt.Frame() })
+	if p.kept.rt.rowsBuilt == built {
+		t.Errorf("the app turned a switch and no row was built")
+	}
+	p.both(func(tt *Tester) { tt.Advance(40 * time.Millisecond) })
+	p.compareFocus("moving")
+}
+
+// walkSeeds is how many seeds the random walks of rows of controls run: 30, and
+// fewer under -race, which is ten times slower and shares a job with the rest.
+func walkSeeds() int64 {
+	if raceEnabled {
+		return 8
+	}
+	return 30
 }

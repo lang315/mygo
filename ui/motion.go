@@ -142,6 +142,9 @@ type channel struct {
 	rested uint64
 	// jumped tells that Jump set the value at at.
 	jumped bool
+	// rest tells that a row holding this channel may be kept while it rests
+	// (animateRest): the widget that made it versions its target.
+	rest bool
 }
 
 // goal returns where the value is headed: the target it goes to after a
@@ -344,6 +347,20 @@ func (e *node) AnimateTo(key any, target float32, a Animation) float32 {
 		ch.rested = rt.frame
 	}
 	return float32(ch.value)
+}
+
+// animateRest is Animate for a widget whose target is versioned by what the row
+// records (a Switch's *bool): the channel it makes does not keep a row from being
+// kept once the value rests (state.pending counts it only while it moves). Every
+// other animation still does, as it was.
+func (e *node) animateRest(key any, target float32, d time.Duration) float32 {
+	v := e.Animate(key, target, d)
+	if e.hasState() {
+		if ch := e.st.motions[key]; ch != nil {
+			ch.rest = true
+		}
+	}
+	return v
 }
 
 // Spring returns a value following target with a spring, as AnimateTo

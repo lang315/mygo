@@ -11,12 +11,13 @@ import (
 // are ns/op and built/frame.
 func BenchmarkListRowsOfControls(b *testing.B) {
 	for _, n := range []int{1000, 100_000} {
-		for _, kind := range []string{"text", "widgets", "button-checkbox-link", "radio", "select-progress"} {
+		for _, kind := range []string{"text", "widgets", "button-checkbox-link", "radio", "select-progress", "switch", "toggle-button", "slider"} {
 			for _, phase := range []string{"idle", "hover"} {
 				b.Run(fmt.Sprintf("%d/%s/%s", n, kind, phase), func(b *testing.B) {
 					bs := make([]bool, n)
 					ss := make([]string, n)
 					sel := make([]int, n)
+					fs := make([]float64, n)
 					s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
 					tt := NewTester(func(c *Context) {
 						Column(c).Fill().Children(func() {
@@ -29,6 +30,14 @@ func BenchmarkListRowsOfControls(b *testing.B) {
 										Checkbox(c, &bs[i], "ok")
 										Button(c, "go")
 										TextInput(c, &ss[i]).Width(120)
+									case "switch":
+										Switch(c, &bs[i])
+										Textf(c, "row %d", i)
+									case "toggle-button":
+										Toggle(c, &bs[i], "t")
+										Button(c, "go")
+									case "slider":
+										Slider(c, &fs[i], 0, 1)
 									case "select-progress":
 										Select(c, &ss[i], []string{"a", "b"})
 										Progress(c, 0.4)
