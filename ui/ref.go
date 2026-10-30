@@ -144,12 +144,14 @@ func (c *Context) Resolve(ref Handle) Element {
 
 func (r Handle) Focused(c *Context) bool {
 	rt := c.runtime()
+	rt.readsHandle()
 	b := (&r).binding(rt, false)
 	return b != nil && !b.closed && b.id != 0 && rt.focused == b.id && rt.windowFocus()
 }
 
 func (r Handle) FocusWithin(c *Context) bool {
 	rt := c.runtime()
+	rt.readsHandle()
 	b := (&r).binding(rt, false)
 	if b == nil || b.closed || b.id == 0 {
 		return false
@@ -208,6 +210,7 @@ func (rt *engine) applyFocusRequests() {
 // an empty box. Use this instead of retaining an Element in input callbacks.
 func (r Handle) Bounds(c *Context) Rect {
 	rt := c.runtime()
+	rt.readsHandle()
 	b := (&r).binding(rt, false)
 	if b == nil || b.closed || b.id == 0 {
 		return Rect{}
