@@ -309,16 +309,17 @@ func coreRadio[T comparable](c *context, selected *T, value T, label string) *no
 	return row
 }
 
-// Switch creates a switch toggling *on. It animates, so a row of a List with
-// RowVersion that holds one is built in every frame.
+// Switch creates a switch toggling *on. In a row of a List with RowVersion it is
+// watched by its address like a check box, and its row is kept once the knob
+// rests.
 func coreSwitch(c *context, on *bool) *node {
 	t := c.theme
 	sw := coreSwitchBase(c, on).Size(t.Space(9), t.Space(5)).Radius(t.Space(2.5))
-	pos := sw.Animate("knob", b2f(*on), 140*time.Millisecond)
+	pos := sw.animateRest("knob", b2f(*on), 140*time.Millisecond)
 	off := t.Border.Mix(t.Text, 0.15)
 	sw.Background(off.Mix(t.Accent, pos))
 	rtl := sw.rtl()
-	sw.Draw(func(p *Painter, r Rect) {
+	sw.drawPure(func(p *Painter, r Rect) {
 		in := t.Space(0.5)
 		d := r.H - 2*in
 		// On at the end: the left right to left, as UISwitch mirrors.

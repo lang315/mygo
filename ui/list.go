@@ -245,13 +245,15 @@ type ListState struct {
 	// holds another value than the row was built with. It is watched by its
 	// address, so data that moves (a slice that append reallocates, a struct or a
 	// map that is replaced) is the app's to version: put the value in RowVersion,
-	// the sure way. The same holds for the *string of a closed Select (and its
-	// options, which a closed one does not show: a change of them needs a new
-	// version to be seen once it opens), and a determinate Progress shows the
-	// number it was given: a new one needs a new version. An open Select, an
-	// indeterminate Progress and a Slider are animated or asked to be painted
-	// again, so their rows are not kept, and neither is a row with a Draw of the
-	// app's own (it replaces the audited ones). A row with a Radio, a text field,
+	// the sure way. The same holds for the *bool of a Switch (its row is kept once
+	// the knob rests) and the *string of a closed Select (and its options, which a
+	// closed one does not show: a change of them needs a new version to be seen
+	// once it opens), and a determinate Progress shows the number it was given: a
+	// new one needs a new version. An open Select, an indeterminate Progress, a
+	// Slider and anything else that Animate moves in a row (apart from a Switch's
+	// knob) are animated or asked to be painted again, so their rows are not kept,
+	// and neither is a row with a Draw of the app's own (it replaces the audited
+	// ones). A row with a Radio, a text field,
 	// or a Checkbox inside a CheckboxGroup is built in every frame.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
