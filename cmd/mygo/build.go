@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -437,6 +438,16 @@ const inspectorTag = "mygo_noinspector"
 // production builds, as to look into one with DevToolsEnabled.
 func keepInspector() bool { return os.Getenv("MYGO_INSPECTOR") == "1" }
 
+// goFlags returns the GOFLAGS a go build gets: the environment variable, or
+// else the one set with go env -w, which os.Getenv does not see.
+func goFlags() []string {
+	out, err := exec.Command("go", "env", "GOFLAGS").Output()
+	if err != nil {
+		return strings.Fields(os.Getenv("GOFLAGS"))
+	}
+	return strings.Fields(string(out))
+}
+
 // productionTags returns the -tags of a build: those GOFLAGS sets, which a
 // -tags flag would override, and the inspector's in a production build
 // unless it keeps it.
@@ -445,7 +456,7 @@ func productionTags(debug bool) []string {
 		return nil
 	}
 	var tags []string
-	for _, f := range strings.Fields(os.Getenv("GOFLAGS")) {
+	for _, f := range goFlags() {
 		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags="); ok && v != "" {
 			tags = append(tags, v)
 		}
@@ -460,7 +471,7 @@ func productionTags(debug bool) []string {
 func generatorTags() []string {
 	var tags []string
 	found := false
-	for _, f := range strings.Fields(os.Getenv("GOFLAGS")) {
+	for _, f := range goFlags() {
 		v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags=")
 		if !ok {
 			continue

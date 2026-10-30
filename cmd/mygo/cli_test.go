@@ -407,6 +407,27 @@ func TestProductionTags(t *testing.T) {
 	}
 }
 
+// TestGoFlagsOfGoEnv: the GOFLAGS that go env -w sets, in the file GOENV
+// names, count as the variable does.
+func TestGoFlagsOfGoEnv(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go tool")
+	}
+	file := filepath.Join(t.TempDir(), "env")
+	if err := os.WriteFile(file, []byte("GOFLAGS=-tags=sqlite,mygo_noinspector\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOENV", file)
+	t.Setenv("GOFLAGS", "")
+	t.Setenv("MYGO_INSPECTOR", "")
+	if got := strings.Join(generatorTags(), " "); got != "-tags sqlite" {
+		t.Errorf("generatorTags with go env -w GOFLAGS gives %q", got)
+	}
+	if got := strings.Join(productionTags(false), " "); !strings.HasPrefix(got, "-tags sqlite,") {
+		t.Errorf("productionTags with go env -w GOFLAGS gives %q", got)
+	}
+}
+
 // TestGeneratorTags keeps the build that writes the TypeScript client free of
 // the production tag a user's GOFLAGS sets, which leaves the generator out.
 func TestGeneratorTags(t *testing.T) {

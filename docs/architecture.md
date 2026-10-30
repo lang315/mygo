@@ -2602,10 +2602,12 @@ either.
   open), added to the tags of `GOFLAGS`, unless `-debug` or
   `MYGO_INSPECTOR=1`. The tag leaves out the other developer tool too, the
   generator of the TypeScript client (`client_generate.go`, `client_off.go`:
-  `Bind` links it only without the tag), some 400 KB of an app that binds a
-  service. `mygo generate`, `mygo dev` and `mygo init` build the app without
-  the tag (they take it out of the tags of `GOFLAGS`, `generatorTags`), and a
-  production build run with `MYGO_GENERATE` says so on stderr and fails.
+  `Bind`, `BindAs` and `NewEvent` link it only without the tag), some 400 KB
+  of an app that binds a service or declares an event. `mygo generate`,
+  `mygo dev` and `mygo init` build the app without the tag (they take it out
+  of the tags of `GOFLAGS`, the variable or `go env -w`: `generatorTags`),
+  and a production build run with `MYGO_GENERATE` says so on stderr and
+  fails.
 - **Automation.** `plugins/automation` drives the app from another
   process over a Unix domain socket (`MYGO_AUTOMATION`), gated with the
   inspector. Core gives it one hook: the plugin's `init` sets
