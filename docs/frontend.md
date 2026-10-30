@@ -61,23 +61,26 @@ Pages that are not the app's own cannot call Go methods: see
 
 ### Without the CLI
 
-`mygo build` embeds the frontend by calling `mygo.SetFrontend`, and a
+`mygo build` embeds the frontend by calling `protocol.SetFrontend` (package
+`github.com/egoist/mygo/protocol`, from a file it adds to the build), and a
 program built with `go build` can do the same with `embed`:
 
 ```go
+import "github.com/egoist/mygo/protocol"
+
 //go:embed all:dist
 var dist embed.FS
 
 func main() {
 	web, _ := fs.Sub(dist, "dist")
-	mygo.SetFrontend(web)
+	protocol.SetFrontend(web)
 	// ...
 }
 ```
 
 ## Custom protocols
 
-`mygo.Protocol.Handle` serves a URL scheme from an `http.Handler`, for
+`protocol.Handle` (package `github.com/egoist/mygo/protocol`) serves a URL scheme from an `http.Handler`, for
 content your app produces or reads at run time: pages, images, files of
 the user. Handlers run on their own goroutines and stream their responses:
 writes wait while the webview is behind, so a large file is never held in
@@ -87,10 +90,10 @@ ES modules and relative URLs:
 ```go
 // Thumbnails generated into the cache directory.
 cache, _ := mygo.App.Path(mygo.PathCache)
-mygo.Protocol.Handle("thumbs", mygo.FileServer(os.DirFS(cache)))
+protocol.Handle("thumbs", protocol.FileServer(os.DirFS(cache)))
 
 // Anything an http.Handler does.
-mygo.Protocol.HandleFunc("api", func(w http.ResponseWriter, r *http.Request) {
+protocol.HandleFunc("api", func(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path})
 })
@@ -101,10 +104,35 @@ mygo.Protocol.HandleFunc("api", func(w http.ResponseWriter, r *http.Request) {
 ```
 
 Register schemes before creating the windows that use them.
-`mygo.FileServer` serves an `fs.FS` with content types and range requests,
+`protocol.FileServer` serves an `fs.FS` with content types and range requests,
 falling back to `index.html` like the frontend. Handling the `mygo` scheme
 replaces the frontend with your handler. Pages of custom schemes are the
 app's own: they may call Go methods, see [trust](#trust).
+
+Package `protocol` is separate because it imports `net/http`, which costs an
+app 2.2 MB whatever of it the app calls: an app of [native UI](ui/README.md),
+or one whose pages load their own HTML, does not import it and does not
+pay. An app that has a `frontendDist` gets it from `mygo build`, which adds
+a file that imports it. Handlers still tell which page asks with
+`mygo.CallerPage(r.Context())`.
+
+### Moved to package protocol
+
+These were in package `mygo`; the compiler lists what to change.
+
+| before | after |
+|---|---|
+| `mygo.Protocol.Handle(scheme, h)` | `protocol.Handle(scheme, h)` |
+| `mygo.Protocol.HandleFunc(scheme, fn)` | `protocol.HandleFunc(scheme, fn)` |
+| `mygo.Protocol.Unhandle(scheme)` | `protocol.Unhandle(scheme)` |
+| `mygo.Protocol.IsHandled(scheme)` | `protocol.IsHandled(scheme)` |
+| `mygo.FileServer(fsys)` | `protocol.FileServer(fsys)` |
+| `mygo.SetFrontend(fsys)` | `protocol.SetFrontend(fsys)` |
+
+with `import "github.com/egoist/mygo/protocol"`. An app that serves nothing
+and sets no frontend needs no change. An app built with `go build`, without
+the CLI, whose pages load `mygo://` and that does not import the package
+sees the page that says it has no frontend.
 
 Audio and video are the exception: WebKitGTK's media player does not play
 from a custom scheme, so on Linux a `<video>` or `<audio>` of one fails with
@@ -117,7 +145,7 @@ ln, err := net.Listen("tcp", "127.0.0.1:0") // a free port
 if err != nil {
 	log.Fatal(err)
 }
-go http.Serve(ln, mygo.FileServer(os.DirFS(videos)))
+go http.Serve(ln, protocol.FileServer(os.DirFS(videos)))
 mediaURL := "http://" + ln.Addr().String() + "/" // <video src="{mediaURL}clip.mp4">
 ```
 
@@ -189,7 +217,7 @@ That's how a plugin's UI talks to the app, and `EmitPage` how the app
 answers:
 
 ```go
-mygo.Protocol.HandleFunc("plugin", func(w http.ResponseWriter, r *http.Request) {
+protocol.HandleFunc("plugin", func(w http.ResponseWriter, r *http.Request) {
 	p := mygo.CallerPage(r.Context())
 	plugin := pluginOf[p] // the plugin whose web view made the request
 	if plugin == nil || r.URL.Host != plugin.ID {

@@ -13,7 +13,7 @@ back := widget.Button("Back").OnClick(func() { browser.GoBack() })
 ```
 
 - `Navigate(url)`: a `javascript:` URL is refused (logged and ignored). A URL with a scheme (`https://…`, or one registered with
-  `Protocol.Handle`) is a page of the web; one without, as `"/docs"`, is a page
+  `protocol.Handle`) is a page of the web; one without, as `"/docs"`, is a page
   of the app's frontend. A URL that cannot be loaded is logged.
 - `SetDocumentText(html)` loads HTML, with no base URL. `DocumentText()` returns
   what was set (the page's own document is not read back), `Url()` the URL the
