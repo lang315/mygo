@@ -2600,7 +2600,14 @@ either.
   Production builds of `mygo build` leave the inspector out with the build
   tag `mygo_noinspector` (`inspector_off.go` stands in for it, never
   open), added to the tags of `GOFLAGS`, unless `-debug` or
-  `MYGO_INSPECTOR=1`.
+  `MYGO_INSPECTOR=1`. The tag leaves out the other developer tool too, the
+  generator of the TypeScript client (`client_generate.go`, `client_off.go`:
+  `Bind`, `BindAs` and `NewEvent` link it only without the tag), some 400 KB
+  of an app that binds a service or declares an event. `mygo generate`,
+  `mygo dev` and `mygo init` build the app without the tag (they take it out
+  of the tags of `GOFLAGS`, the variable or `go env -w`: `generatorTags`),
+  and a production build run with `MYGO_GENERATE` says so on stderr and
+  fails.
 - **Automation.** `plugins/automation` drives the app from another
   process over a Unix domain socket (`MYGO_AUTOMATION`), gated with the
   inspector. Core gives it one hook: the plugin's `init` sets
@@ -4180,8 +4187,9 @@ renderer's (`gputest.Compare`).
   (redrawn two lines up with the cursor saved, until a line moves it).
 - `build` generates the client, runs `buildCommand`, then compiles each
   target with `-trimpath -ldflags "-s -w -X …production=1"` (`-H=windowsgui`
-  on Windows) and `-tags mygo_noinspector`, which leaves the inspector of
-  native UI out (unless `MYGO_INSPECTOR=1`), into a staging directory, so a
+  on Windows) and `-tags mygo_noinspector`, which leaves the developer tools
+  out, the inspector of native UI and the TypeScript generator (unless
+  `MYGO_INSPECTOR=1`), into a staging directory, so a
   failed build keeps the previous artifacts. `frontendDist` is embedded without touching the project
   (`embed.go`): `go build -overlay` adds a generated `mygo_frontend_gen.go`
   to the main package, with `//go:embed all:mygo_frontend` and a call to

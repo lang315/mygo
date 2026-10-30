@@ -107,7 +107,7 @@ func runInit(args []string) error {
 	} else {
 		bin := tempBinary(c.executableName())
 		defer os.Remove(bin)
-		if err := buildBinary(c, bin, nil); err == nil {
+		if err := buildBinary(c, bin, nil, generatorTags(c.root)...); err == nil {
 			_, _ = generateBindings(c, bin)
 		}
 	}

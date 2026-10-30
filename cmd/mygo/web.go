@@ -136,7 +136,7 @@ func compileWeb(ctx context.Context, c *Config, t *task, out string, debug bool,
 	}
 	ldflags += extraLDFlags()
 	flags := []string{"-trimpath", "-ldflags", ldflags}
-	flags = append(flags, productionTags(debug)...)
+	flags = append(flags, productionTags(debug, c.root)...)
 	if overlay != "" {
 		flags = append(flags, "-overlay", overlay)
 	}

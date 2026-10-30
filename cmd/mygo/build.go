@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -246,7 +247,7 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 				return err
 			}
 			flags := []string{"-trimpath", "-ldflags", ldflags}
-			flags = append(flags, productionTags(opts.debug)...)
+			flags = append(flags, productionTags(opts.debug, c.root)...)
 			if overlay != "" {
 				flags = append(flags, "-overlay", overlay)
 			}
@@ -427,29 +428,69 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 	return artifacts, nil
 }
 
-// inspectorTag leaves the inspector of native UI out of a build (package
-// ui's inspector_off.go), some 250 KB of a binary: production builds have
-// their developer tools off.
+// inspectorTag leaves the developer tools out of a build: the inspector of
+// native UI (package ui's inspector_off.go), some 250 KB of a binary, and the
+// generator of the TypeScript client (client_off.go), some 400 KB of an app
+// that binds a service. Production builds have their developer tools off.
 const inspectorTag = "mygo_noinspector"
 
 // keepInspector reports whether MYGO_INSPECTOR=1 keeps the inspector in
 // production builds, as to look into one with DevToolsEnabled.
 func keepInspector() bool { return os.Getenv("MYGO_INSPECTOR") == "1" }
 
+// goFlags returns the GOFLAGS a go build of the app in dir gets: the
+// environment variable, or else the one set with go env -w, which os.Getenv
+// does not see.
+func goFlags(dir string) []string {
+	var out bytes.Buffer
+	cmd := goCommand(dir, nil, "env", "GOFLAGS")
+	cmd.Stdout, cmd.Stderr = &out, nil
+	if err := cmd.Run(); err != nil {
+		return strings.Fields(os.Getenv("GOFLAGS"))
+	}
+	return strings.Fields(out.String())
+}
+
 // productionTags returns the -tags of a build: those GOFLAGS sets, which a
 // -tags flag would override, and the inspector's in a production build
 // unless it keeps it.
-func productionTags(debug bool) []string {
+func productionTags(debug bool, dir string) []string {
 	if debug || keepInspector() {
 		return nil
 	}
 	var tags []string
-	for _, f := range strings.Fields(os.Getenv("GOFLAGS")) {
+	for _, f := range goFlags(dir) {
 		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags="); ok && v != "" {
 			tags = append(tags, v)
 		}
 	}
 	return []string{"-tags", strings.Join(append(tags, inspectorTag), ",")}
+}
+
+// generatorTags returns the -tags of a build that writes the TypeScript
+// client (mygo generate, mygo dev, mygo init), which must have the generator:
+// the tags of GOFLAGS less the inspector's, which a -tags flag overrides
+// (empty when it was the only one), and nothing when GOFLAGS has no such tag.
+func generatorTags(dir string) []string {
+	var tags []string
+	found := false
+	for _, f := range goFlags(dir) {
+		v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags=")
+		if !ok {
+			continue
+		}
+		for t := range strings.SplitSeq(v, ",") {
+			if t == inspectorTag {
+				found = true
+			} else if t != "" {
+				tags = append(tags, t)
+			}
+		}
+	}
+	if !found {
+		return nil
+	}
+	return []string{"-tags", strings.Join(tags, ",")}
 }
 
 // extraLDFlags returns the -ldflags of MYGO_LDFLAGS, which a build adds
