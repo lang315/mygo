@@ -144,12 +144,14 @@ func (c *Context) Resolve(ref Handle) Element {
 
 func (r Handle) Focused(c *Context) bool {
 	rt := c.runtime()
+	rt.readsHandle()
 	b := (&r).binding(rt, false)
 	return b != nil && !b.closed && b.id != 0 && rt.focused == b.id && rt.windowFocus()
 }
 
 func (r Handle) FocusWithin(c *Context) bool {
 	rt := c.runtime()
+	rt.readsHandle()
 	b := (&r).binding(rt, false)
 	if b == nil || b.closed || b.id == 0 {
 		return false
@@ -175,6 +177,7 @@ func (r *Handle) OnShortcut(c *Context, mods Modifiers, key Key, fn func()) {
 	if rt == nil || !rt.inFrame || r == nil || fn == nil {
 		return
 	}
+	rt.readsHandle() // it declares the action in every build: a row linked would not
 	rt.actions = append(rt.actions, action{handle: r, window: c, kind: actionShortcut, mods: mods, key: key, fn: fn})
 }
 
@@ -208,6 +211,7 @@ func (rt *engine) applyFocusRequests() {
 // an empty box. Use this instead of retaining an Element in input callbacks.
 func (r Handle) Bounds(c *Context) Rect {
 	rt := c.runtime()
+	rt.readsHandle()
 	b := (&r).binding(rt, false)
 	if b == nil || b.closed || b.id == 0 {
 		return Rect{}

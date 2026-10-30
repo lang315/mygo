@@ -12,8 +12,31 @@ type ListRow struct {
 // not Valid: the list is outside the row, and Valid notes that for the row being
 // built, which would then be built in every frame (the choice is a key of a kept
 // row already, rowKeep.chosen).
-func (r ListRow) Selected() bool    { return r.owner.lookup() != nil && r.selected }
-func (r ListRow) ListFocused() bool { return r.owner.FocusWithin() }
+func (r ListRow) Selected() bool { return r.owner.lookup() != nil && r.selected }
+
+// ListFocused reports whether the list has the focus within it. The list is
+// built in the pass of its rows, so the row records the answer it got and is kept
+// only while the list's focus is the same (rowKeep.listFocus), not built in every
+// frame for asking of an element outside it.
+func (r ListRow) ListFocused() bool {
+	n := r.owner.lookup()
+	if n == nil {
+		noteMissingElement()
+		return false
+	}
+	v := n.focusWithin()
+	if rb := n.c.row; rb != nil {
+		if rb.f.e == n {
+			rb.noteListFocus(v)
+		} else {
+			// The row being built belongs to another list (a list inside a row of
+			// this one): it compares its own list's focus, not this one's, so it
+			// is built while it asks, like a question of an outside element.
+			n.asksOutside()
+		}
+	}
+	return v
+}
 
 type listSpec struct {
 	state *ListState
