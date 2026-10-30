@@ -245,9 +245,14 @@ type ListState struct {
 	// holds another value than the row was built with. It is watched by its
 	// address, so data that moves (a slice that append reallocates, a struct or a
 	// map that is replaced) is the app's to version: put the value in RowVersion,
-	// the sure way. A Switch is animated, so its row is never kept. A row with a
-	// Radio, a text field, or a Checkbox inside a CheckboxGroup is built in every
-	// frame.
+	// the sure way. The same holds for the *string of a closed Select (and its
+	// options, which a closed one does not show: a change of them needs a new
+	// version to be seen once it opens), and a determinate Progress shows the
+	// number it was given: a new one needs a new version. An open Select, an
+	// indeterminate Progress and a Slider are animated or asked to be painted
+	// again, so their rows are not kept, and neither is a row with a Draw of the
+	// app's own (it replaces the audited ones). A row with a Radio, a text field,
+	// or a Checkbox inside a CheckboxGroup is built in every frame.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer presses
@@ -534,10 +539,10 @@ type listFrame struct {
 	rows  []listRow
 	// reads: the Context reads of the rows, by listRow.reads.
 	reads []rowReads
-	// boolBuf is where a row being built notes its controls (noteBool), and
-	// boolArena what the rows of the frame keep of it: both reused, so a row built
+	// valueBuf is where a row being built notes its controls (noteBool), and
+	// valueArena what the rows of the frame keep of it: both reused, so a row built
 	// in every frame makes no allocation for them.
-	boolBuf, boolArena []boolRead
+	valueBuf, valueArena []valueRead
 	// at finds rows by their index while the list lays out.
 	at map[int]int
 	// kept holds the rows kept by key, with the records released for others,
@@ -612,8 +617,8 @@ type rowReads struct {
 	// listFocus: whether the list had the focus within it, as ListFocused said:
 	// 1 false, 2 true, 0 when it did not ask (retain_reads.go).
 	listFocus uint8
-	// bools: the values of the *bool of the controls it built (retain_bools.go).
-	bools []boolRead
+	// values: the values of the *bool of the controls it built (retain_values.go).
+	values []valueRead
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -646,7 +651,7 @@ type rowBuild struct {
 	// layouts: the answers of the layout queries the callback got (retain_reads.go).
 	layouts   []layoutRead
 	listFocus uint8 // see rowReads
-	bools     []boolRead
+	values    []valueRead
 	root      *node
 	outer     *rowBuild // the row this one was built inside, if any
 	outside   bool
@@ -715,7 +720,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
 	}
 	s.rowSig, s.rowNoKeep = 0, false
-	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], boolBuf: f.boolBuf[:0], boolArena: f.boolArena[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], valueBuf: f.valueBuf[:0], valueArena: f.valueArena[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
 	if s.RowVersion != nil {
 		// Linked here, so that an app with no List does not link the code
 		// that keeps rows.
@@ -1037,13 +1042,13 @@ func (f *listFrame) build(i int) *node {
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
-	layouts, listFocus, bools := rb.layouts, rb.listFocus, rb.bools
-	if len(bools) != 0 {
+	layouts, listFocus, values := rb.layouts, rb.listFocus, rb.values
+	if len(values) != 0 {
 		// Out of the scratch the next row writes into.
-		start := len(f.boolArena)
-		f.boolArena = append(f.boolArena, bools...)
-		f.boolBuf = bools[:0]
-		bools = f.boolArena[start:len(f.boolArena):len(f.boolArena)]
+		start := len(f.valueArena)
+		f.valueArena = append(f.valueArena, values...)
+		f.valueBuf = values[:0]
+		values = f.valueArena[start:len(f.valueArena):len(f.valueArena)]
 	}
 	var readsAt uint16
 	c.row, f.rb = saved, prev
@@ -1066,12 +1071,16 @@ func (f *listFrame) build(i int) *node {
 		for _, r := range layouts {
 			saved.noteLayout(r)
 		}
-		for _, b := range bools {
-			saved.noteBool(b.p, b.v)
+		for _, b := range values {
+			if b.s != nil {
+				saved.noteString(b.s, b.sv)
+			} else {
+				saved.noteBool(b.p, b.v)
+			}
 		}
 	}
-	if readMods || ctx != 0 || len(layouts) != 0 || listFocus != 0 || len(bools) != 0 {
-		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view, layouts, listFocus, bools}); readsAt == 0 {
+	if readMods || ctx != 0 || len(layouts) != 0 || listFocus != 0 || len(values) != 0 {
+		if readsAt = f.addReads(rowReads{readMods, mods, ctx, view, layouts, listFocus, values}); readsAt == 0 {
 			outside = true // too many to number: not kept
 		}
 	}

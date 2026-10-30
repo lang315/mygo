@@ -27,6 +27,12 @@ type pair struct {
 func newPair(t *testing.T, w, h int, mk func() func(c *Context)) *pair {
 	t.Helper()
 	p := &pair{t: t, kept: NewTester(mk(), w, h), built: NewTester(mk(), w, h)}
+	// A Tester's clock starts at the time it is made and moves only with Advance:
+	// twins made a moment apart would not show the same time (a view that shows
+	// the second, an animation's start), and the test would depend on the clock of
+	// the machine. They start at one fixed time.
+	start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	p.kept.now, p.built.now = start, start
 	p.built.rt.noRetain = true
 	p.built.rt.noReplay = true // the twin paints every row, replaying none
 	return p

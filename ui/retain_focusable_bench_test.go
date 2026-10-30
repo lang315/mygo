@@ -11,7 +11,7 @@ import (
 // are ns/op and built/frame.
 func BenchmarkListRowsOfControls(b *testing.B) {
 	for _, n := range []int{1000, 100_000} {
-		for _, kind := range []string{"text", "widgets", "button-checkbox-link", "radio"} {
+		for _, kind := range []string{"text", "widgets", "button-checkbox-link", "radio", "select-progress"} {
 			for _, phase := range []string{"idle", "hover"} {
 				b.Run(fmt.Sprintf("%d/%s/%s", n, kind, phase), func(b *testing.B) {
 					bs := make([]bool, n)
@@ -29,6 +29,10 @@ func BenchmarkListRowsOfControls(b *testing.B) {
 										Checkbox(c, &bs[i], "ok")
 										Button(c, "go")
 										TextInput(c, &ss[i]).Width(120)
+									case "select-progress":
+										Select(c, &ss[i], []string{"a", "b"})
+										Progress(c, 0.4)
+										Button(c, "go")
 									case "radio":
 										Radio(c, &sel[i], 1, "a")
 										Radio(c, &sel[i], 2, "b")

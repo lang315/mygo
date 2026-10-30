@@ -38,7 +38,7 @@ func coreCheckboxBase(c *context, checked *bool) *node {
 }
 
 // checkboxBase is CheckboxBase; track notes the *bool for the row being built
-// (retain_bools.go). The boxes a table makes for its rows and its header hold a
+// (retain_values.go). The boxes a table makes for its rows and its header hold a
 // copy of the table's own checks, which a kept row compares itself, and noting
 // their pointers would make each of them escape.
 func checkboxBase(c *context, checked *bool, track bool) *node {

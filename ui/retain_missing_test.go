@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // The Modal is closed while the rows are first built (Modal returns no element:
@@ -152,6 +153,8 @@ func TestTestersAskingAMissingElementInParallelAreRight(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			kept, built := NewTester(mk(asks)(), 300, 400), NewTester(mk(asks)(), 300, 400)
+			start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+			kept.now, built.now = start, start
 			built.rt.noRetain, built.rt.noReplay = true, true
 			for range 40 {
 				kept.Frame()

@@ -3,9 +3,17 @@ package ui
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/build"
+	"go/importer"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"image"
 	"math/rand"
+	"os/exec"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -588,5 +596,329 @@ func TestRetainRowsThatAskForTheFocusBeforeALaterAsk(t *testing.T) {
 		p.both(func(tt *Tester) { tt.Advance(300 * time.Millisecond) })
 		p.frame(fmt.Sprint("advance ", k))
 		p.compareFocus(fmt.Sprint("advance ", k))
+	}
+}
+
+// pureRows: rows with a Select (closed), a determinate Progress and a Button, by
+// index, whose state each twin keeps; the progress is versioned (it is built from
+// the app's number), the choice of the Select is not (the control versions it).
+type pureRows struct {
+	choice   [2][]string
+	progress [2][]float64
+	bump     [2][]uint64
+	twin     int
+	// churn adds elements before the list, so the nodes the pool hands out go
+	// round: a node a kept row held would be another element by then.
+	churn int
+}
+
+func newPureRows(n int) *pureRows {
+	r := &pureRows{}
+	for k := range 2 {
+		r.choice[k], r.progress[k], r.bump[k] = make([]string, n), make([]float64, n), make([]uint64, n)
+		for i := range n {
+			r.choice[k][i] = "b"
+		}
+	}
+	return r
+}
+
+func (r *pureRows) scene(n int) func() func(c *Context) {
+	return func() func(c *Context) {
+		me := r.twin
+		r.twin++
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(i int) uint64 {
+			return r.bump[me][i]<<8 + uint64(r.progress[me][i]*100)
+		}}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				for k := range r.churn {
+					Box(c).Key(k).Size(4, 1)
+				}
+				List(c, s, n, func(i int) {
+					Row(c).Padding(4).Gap(8).Children(func() {
+						Textf(c, "row %d", i)
+						switch i % 3 {
+						case 0:
+							Select(c, &r.choice[me][i], []string{"a", "b", "c"})
+						case 1:
+							pr := Progress(c, r.progress[me][i])
+							if i%2 == 1 {
+								pr.Reverse() // filled from the right: read from the element painted
+							}
+						default:
+							Button(c, "press")
+						}
+					})
+				}).Grow(1)
+			})
+		}
+	}
+}
+
+// A random walk over rows of a closed Select, a Progress and a Button: the keys
+// that open, move in and close a drop-down, the pointer, the wheel, the window's
+// focus, the app changing the choice (not versioned, the control notices), the
+// progress (versioned), and elements added and removed before the list so the
+// node pool turns over.
+func TestRetainSelectProgressRowsRandomWalk(t *testing.T) {
+	for seed := int64(1); seed <= 30; seed++ {
+		t.Run(fmt.Sprint(seed), func(t *testing.T) {
+			const n = 60
+			r := newPureRows(n)
+			p := newPair(t, 500, 400, r.scene(n))
+			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+			p.idle(3)
+			rng := rand.New(rand.NewSource(seed))
+			for step := range 80 {
+				x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
+				var what string
+				switch k := rng.Intn(15); k {
+				case 0, 1:
+					what = "tab"
+					p.both(func(tt *Tester) { tt.Key(0, KeyTab) })
+				case 2:
+					what = "shift tab"
+					p.both(func(tt *Tester) { tt.Key(Shift, KeyTab) })
+				case 3:
+					what = "space"
+					p.both(func(tt *Tester) { tt.Key(0, KeySpace) })
+				case 4:
+					what = "enter"
+					p.both(func(tt *Tester) { tt.Key(0, KeyEnter) })
+				case 5:
+					what = "arrow"
+					key := []Key{KeyDown, KeyUp}[rng.Intn(2)]
+					p.both(func(tt *Tester) { tt.Key(0, key) })
+				case 6:
+					what = "escape"
+					p.both(func(tt *Tester) { tt.Key(0, KeyEscape) })
+				case 7:
+					what = fmt.Sprintf("click %v,%v", x, y)
+					p.both(func(tt *Tester) { tt.ClickAt(x, y) })
+				case 8:
+					what = fmt.Sprintf("move %v,%v", x, y)
+					p.both(func(tt *Tester) { tt.Move(x, y) })
+				case 9:
+					dy := float32(rng.Intn(120) - 60)
+					what = fmt.Sprintf("scroll %v", dy)
+					p.both(func(tt *Tester) { tt.Scroll(x, y, 0, dy) })
+				case 10:
+					what = "blur and focus"
+					p.both(func(tt *Tester) { tt.SetFocused(false); tt.SetFocused(true) })
+				case 11:
+					i := rng.Intn(n)
+					what = fmt.Sprintf("app chooses %d", i)
+					c := []string{"a", "b", "c"}[rng.Intn(3)]
+					for k := range 2 {
+						r.choice[k][i] = c
+					}
+				case 12:
+					i := rng.Intn(n)
+					what = fmt.Sprintf("progress %d", i)
+					v := float64(rng.Intn(11)) / 10
+					for k := range 2 {
+						r.progress[k][i] = v
+					}
+				case 13:
+					what = "churn"
+					r.churn = rng.Intn(6)
+				default:
+					i := rng.Intn(n)
+					what = fmt.Sprintf("bump %d", i)
+					for k := range 2 {
+						r.bump[k][i]++
+					}
+				}
+				p.compareFocus(fmt.Sprintf("%d %s", step, what))
+				p.compareFocus(fmt.Sprintf("%d %s +1", step, what))
+			}
+			if p.kept.rt.rowsKept == 0 {
+				t.Fatalf("no row kept: the walk tests nothing")
+			}
+		})
+	}
+}
+
+// Rows with only a closed Select, or only a determinate Progress, are kept; an
+// indeterminate Progress (it asks to be painted again) and an open Select are not.
+func TestRetainSelectAndProgressRowsAreKept(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		row  func(c *Context, i int, choice *string)
+		kept bool
+	}{
+		{"closed Select", func(c *Context, i int, choice *string) { Select(c, choice, []string{"a", "b"}) }, true},
+		{"determinate Progress", func(c *Context, i int, choice *string) { Progress(c, 0.4) }, true},
+		{"indeterminate Progress", func(c *Context, i int, choice *string) { Progress(c, -1) }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			choices := make([]string, 30)
+			p := newPair(t, 400, 300, func() func(c *Context) {
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						List(c, s, 30, func(i int) {
+							Row(c).Padding(4).Children(func() { tc.row(c, i, &choices[i]) })
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(4)
+			built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+			p.frame("idle")
+			b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept
+			if tc.kept && (b != 0 || k == 0) || !tc.kept && b == 0 {
+				t.Errorf("idle: %d rows built, %d kept (kept wanted: %v)", b, k, tc.kept)
+			}
+		})
+	}
+}
+
+// The closures that drawPure holds reach no node of the build: the identifiers
+// they use that they do not declare are listed, with why each is safe. A new one
+// fails here, to be read: a node captured would be another element once the
+// pool hands it out again.
+// The closures that drawPure holds reach no node of the build: a node a kept
+// row's closure had captured would be another element once the pool hands it out
+// again. The package is type-checked, and every variable such a closure uses that
+// is declared outside it must have a type that cannot reach a node or an Element
+// (the painter says which element, Painter.cur). Types, not names: a shadowed or
+// reassigned name, a map key, a package variable are all seen. Limit: a value of
+// an interface type may hold anything and is not followed.
+func TestPureDrawsReachNoNode(t *testing.T) {
+	out, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		t.Skip("no go command to find GOROOT for the type checker: ", err)
+	}
+	saved := build.Default.GOROOT
+	build.Default.GOROOT = strings.TrimSpace(string(out)) // runtime.GOROOT is empty under -trimpath
+	defer func() { build.Default.GOROOT = saved }()
+	bp, err := build.ImportDir(".", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, name := range bp.GoFiles {
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, f)
+	}
+	info := &types.Info{Uses: map[*ast.Ident]types.Object{}}
+	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
+	if _, err := conf.Check("github.com/egoist/mygo/ui", fset, files, info); err != nil {
+		t.Fatal(err)
+	}
+	var reaches func(ty types.Type, seen map[types.Type]bool) bool
+	reaches = func(ty types.Type, seen map[types.Type]bool) bool {
+		if seen[ty] {
+			return false
+		}
+		seen[ty] = true
+		switch ty := ty.(type) {
+		case *types.Pointer:
+			return reaches(ty.Elem(), seen)
+		case *types.Slice:
+			return reaches(ty.Elem(), seen)
+		case *types.Array:
+			return reaches(ty.Elem(), seen)
+		case *types.Chan:
+			return reaches(ty.Elem(), seen)
+		case *types.Map:
+			return reaches(ty.Key(), seen) || reaches(ty.Elem(), seen)
+		case *types.Signature:
+			for _, tup := range []*types.Tuple{ty.Params(), ty.Results()} {
+				for i := range tup.Len() {
+					if reaches(tup.At(i).Type(), seen) {
+						return true
+					}
+				}
+			}
+		case *types.Named:
+			if o := ty.Obj(); o.Pkg() != nil && o.Pkg().Name() == "ui" && (o.Name() == "node" || o.Name() == "Element") {
+				return true
+			}
+			return reaches(ty.Underlying(), seen)
+		case *types.Struct:
+			for i := range ty.NumFields() {
+				if reaches(ty.Field(i).Type(), seen) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	seen := 0
+	for _, f := range files {
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			se, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || se.Sel.Name != "drawPure" || len(call.Args) != 1 {
+				return true
+			}
+			lit, ok := call.Args[0].(*ast.FuncLit)
+			if !ok {
+				t.Errorf("%s: drawPure takes a function literal, to be read here", fset.Position(call.Pos()))
+				return true
+			}
+			seen++
+			ast.Inspect(lit.Body, func(m ast.Node) bool {
+				id, ok := m.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				v, ok := info.Uses[id].(*types.Var)
+				if !ok || v.IsField() {
+					return true
+				}
+				if v.Pos() >= lit.Pos() && v.Pos() < lit.End() {
+					return true // declared inside the closure
+				}
+				if reaches(v.Type(), map[types.Type]bool{}) {
+					t.Errorf("%s: the closure of drawPure uses %q (%s), which reaches a node: take the element from p.cur", fset.Position(id.Pos()), v.Name(), v.Type())
+				}
+				return true
+			})
+			return true
+		})
+	}
+	if seen < 2 {
+		t.Errorf("found %d drawPure calls: the test looks at the wrong code", seen)
+	}
+}
+
+// An app replaces the paint of a determinate Progress with Draw: its closure is not
+// audited, so the row is not kept (Draw clears paintPure), as one that holds a
+// handle of its own would otherwise be linked with a callback that uses an
+// element of another pass.
+func TestRetainDrawReplacesPureProgress(t *testing.T) {
+	p := newPair(t, 500, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				List(c, s, 20, func(i int) {
+					Row(c).Padding(4).Gap(8).Children(func() {
+						el := Progress(c, 0.4).Width(200)
+						el.Draw(func(pa *Painter, r Rect) {
+							b := el.Bounds() // the handle of the pass that built it
+							pa.Fill(Rect{r.X, r.Y, b.W / 2, r.H}, RGBA(255, 0, 0, 1), 0)
+						})
+					})
+				}).Grow(1)
+			})
+		}
+	})
+	p.idle(4)
+	p.both(func(tt *Tester) { tt.Move(50, 50) })
+	p.compare("move")
+	p.idle(2)
+	if p.kept.rt.rowsKept != 0 {
+		t.Errorf("a row whose Progress has an app's Draw was kept %d times", p.kept.rt.rowsKept)
 	}
 }

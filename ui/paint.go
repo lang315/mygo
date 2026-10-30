@@ -21,6 +21,8 @@ type Painter struct {
 	clip      Rect
 	transform scene.Affine
 	inline    *node
+	// cur is the element whose Draw or DrawOver callback runs.
+	cur *node
 	// opaque tells that the glyphs painted now land on an opaque
 	// background, which subpixel glyphs need: the root's, covering the
 	// window, or that of an element around them, as a pane beside a

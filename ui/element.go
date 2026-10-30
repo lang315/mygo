@@ -214,6 +214,7 @@ type layoutStyle struct {
 	row                  bool
 	wrap                 bool
 	reverse, wrapReverse bool
+	paintPure            bool // paintFn reaches no node (drawPure): a kept row may hold it
 	// dir is the element's direction (dirRTL, dirSet), and logical which
 	// of its horizontal edges were set by their start or end
 	// (direction.go).
@@ -1440,7 +1441,21 @@ func (e *node) FocusRing(show bool) *node {
 // Draw paints on the element with p after its background, before its
 // children; r is its box. fn only paints: it may run more than once a
 // frame.
-func (e *node) Draw(fn func(p *Painter, r Rect)) *node { e.paintFn = fn; return e }
+func (e *node) Draw(fn func(p *Painter, r Rect)) *node {
+	e.paintFn, e.paintPure = fn, false // an app's callback replaces an audited one (drawPure)
+	return e
+}
+
+// drawPure is Draw for a callback that reaches no node of the build: it uses
+// its arguments, the theme and values it was made with, and asks the painter for
+// the element it paints (Painter.cur) where it needs one. A row holding it can be
+// kept: a copy of the row keeps the callback, and a node it had captured would be
+// another element by then (retainable). Only widgets whose callback was read for
+// that call it; TestPureDrawsReachNoNode lists what each captures.
+func (e *node) drawPure(fn func(p *Painter, r Rect)) *node {
+	e.paintFn, e.paintPure = fn, true
+	return e
+}
 
 // DrawOver paints on the element with p after its children.
 func (e *node) DrawOver(fn func(p *Painter, r Rect)) *node { e.paintAfterFn = fn; return e }

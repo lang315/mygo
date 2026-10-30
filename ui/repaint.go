@@ -36,6 +36,7 @@ type paintPart struct {
 // draw calls e's Draw callback (DrawOver's when after) with box, noting
 // what it painted when it asks to be painted again (paintPart).
 func (p *Painter) draw(e *node, box Rect, after bool) {
+	p.cur = e
 	fn := e.paintFn
 	if after {
 		fn = e.paintAfterFn
@@ -111,6 +112,7 @@ func (rt *engine) repaintParts() bool {
 		// A part that no longer asks to be painted again stays, as what
 		// it painted last stays in the scene.
 		pt.from = len(s.Ops)
+		p.cur = pt.e
 		p.drawing, p.asked = true, false
 		fn(p, pt.box)
 		p.drawing = false

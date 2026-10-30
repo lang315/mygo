@@ -500,17 +500,22 @@ func coreProgress(c *context, value float64) *node {
 	rad := t.Space(0.75)
 	e := coreBox(c).Height(t.Space(1.5)).Radius(rad).Background(t.Border).Clip()
 	e.role, e.hasRange, e.accRange = RoleProgress, true, [3]float64{0, 1, value}
-	e.Draw(func(p *Painter, r Rect) {
-		fromRight := e.reverse != e.rtl()
-		if value >= 0 {
+	if value >= 0 {
+		// Painted from its arguments and the element the painter says, not from
+		// e: a row holding it may be kept (drawPure).
+		e.drawPure(func(p *Painter, r Rect) {
+			n := p.cur
 			w := r.W * float32(math.Min(value, 1))
 			x := r.X
-			if fromRight {
+			if n.reverse != n.rtl() {
 				x = r.X + r.W - w
 			}
 			p.Fill(Rect{x, r.Y, w, r.H}, t.Accent, rad)
-			return
-		}
+		})
+		return e
+	}
+	e.Draw(func(p *Painter, r Rect) {
+		fromRight := e.reverse != e.rtl()
 		// It moves while it shows, painted again without building the
 		// view.
 		p.AnimationFrame()
@@ -687,6 +692,7 @@ func stylePanel(c *context, panel *node) {
 func coreSelect(c *context, selected *string, options []string) *node {
 	t := c.theme
 	sel := coreSelectBase(c, selected)
+	c.readsString(selected, *selected) // the trigger shows it
 	b := sel.Trigger
 	styleButton(c, b, false)
 	b.Justify(SpaceBetween).MinWidth(t.Space(35))
@@ -715,7 +721,7 @@ func coreSelect(c *context, selected *string, options []string) *node {
 // chevron draws the arrow of a button opening something below it.
 func chevron(c *context) {
 	t := c.theme
-	coreBox(c).Size(t.Space(2.5), t.Space(2.5)).Shrink(0).Draw(func(p *Painter, r Rect) {
+	coreBox(c).Size(t.Space(2.5), t.Space(2.5)).Shrink(0).drawPure(func(p *Painter, r Rect) {
 		var path Path
 		path.MoveTo(r.X+r.W*0.1, r.Y+r.H*0.3).LineTo(r.X+r.W*0.5, r.Y+r.H*0.7).LineTo(r.X+r.W*0.9, r.Y+r.H*0.3)
 		p.StrokePath(&path, 1.5, t.TextMuted)
