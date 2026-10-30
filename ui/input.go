@@ -1556,6 +1556,7 @@ func (e *node) CheckedChanged() bool { return e.event(eventChecked) }
 // Activated applies pending input and reports the row of this List or
 // Table double-clicked, or chosen as Enter was pressed, in this build pass.
 func (e *node) Activated() (row int, ok bool) {
+	e.asksOutside()
 	if !e.event(eventActivated) {
 		return 0, false
 	}
