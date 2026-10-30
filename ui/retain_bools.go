@@ -37,6 +37,9 @@ func (rb *rowBuild) noteBool(p *bool, v bool) {
 		rb.neverKept()
 		return
 	}
+	if rb.bools == nil && rb.f != nil {
+		rb.bools = rb.f.boolBuf[:0]
+	}
 	rb.bools = append(rb.bools, boolRead{p, v})
 }
 

@@ -530,6 +530,10 @@ type listFrame struct {
 	rows  []listRow
 	// reads: the Context reads of the rows, by listRow.reads.
 	reads []rowReads
+	// boolBuf is where a row being built notes its controls (noteBool), and
+	// boolArena what the rows of the frame keep of it: both reused, so a row built
+	// in every frame makes no allocation for them.
+	boolBuf, boolArena []boolRead
 	// at finds rows by their index while the list lays out.
 	at map[int]int
 	// kept holds the rows kept by key, with the records released for others,
@@ -707,7 +711,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
 	}
 	s.rowSig, s.rowNoKeep = 0, false
-	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
+	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], boolBuf: f.boolBuf[:0], boolArena: f.boolArena[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
 	if s.RowVersion != nil {
 		// Linked here, so that an app with no List does not link the code
 		// that keeps rows.
@@ -1030,6 +1034,13 @@ func (f *listFrame) build(i int) *node {
 	f.epoch++ // the row's callback may have changed the data
 	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
 	layouts, listFocus, bools := rb.layouts, rb.listFocus, rb.bools
+	if len(bools) != 0 {
+		// Out of the scratch the next row writes into.
+		start := len(f.boolArena)
+		f.boolArena = append(f.boolArena, bools...)
+		f.boolBuf = bools[:0]
+		bools = f.boolArena[start:len(f.boolArena):len(f.boolArena)]
+	}
 	var readsAt uint16
 	c.row, f.rb = saved, prev
 	if missingNotes.Load() != notes {
