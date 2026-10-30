@@ -41,6 +41,7 @@ type valueDrag struct {
 // gets it when the pointer is released (Drop). A press dragging is no
 // click. Dragging reports the drag.
 func (e *node) Drag(value any) *node {
+	linkDrag()
 	e.flags |= flagDraggable | flagHover
 	e.st.dragValue = value
 	if d := e.c.rt.drag; d != nil && d.src == e.id {
@@ -56,6 +57,7 @@ func (e *node) Drag(value any) *node {
 // dragFrom makes the element the source of a value that value returns as
 // the drag starts, as the rows chosen in a list.
 func (e *node) dragFrom(value func() any) *node {
+	linkDrag()
 	e.flags |= flagDraggable | flagHover
 	e.st.dragFn = value
 	if d := e.c.rt.drag; d != nil && d.src == e.id {
@@ -83,6 +85,7 @@ func (e *node) Dragging() bool {
 //		app.move(f, dir)
 //	}
 func coreDrop[T any](e *node) (T, bool) {
+	linkDrag()
 	var zero T
 	e.flags |= flagValueDrop
 	e.acceptType(func(v any) bool { _, ok := v.(T); return ok })
@@ -97,6 +100,7 @@ func coreDrop[T any](e *node) (T, bool) {
 // Drop does, and returns the value dragged over it, for showing it would
 // take it.
 func coreDragOver[T any](e *node) (T, bool) {
+	linkDrag()
 	var zero T
 	e.flags |= flagValueDrop
 	e.acceptType(func(v any) bool { _, ok := v.(T); return ok })
@@ -127,6 +131,7 @@ func (e *node) acceptType(pred func(any) bool) {
 // the drop goes to the innermost element that does (Drop), as under a zone
 // whose child only shows a highlight.
 func coreDragHover[T any](e *node) (T, bool) {
+	linkDrag()
 	var zero T
 	d := e.c.rt.drag
 	if d == nil || d.canceled || d.native {

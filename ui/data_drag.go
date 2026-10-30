@@ -19,6 +19,7 @@ type dataSource struct {
 // Drag(value) offers that value to typed targets in this process only.
 // The default operation is copy and the default preview is the element.
 func (e *node) DragData(data transfer.Data, options ...transfer.DragOptions) *node {
+	linkDrag()
 	return e.DragDataFrom(func() transfer.Data { return data }, options...)
 }
 
@@ -26,6 +27,7 @@ func (e *node) DragData(data transfer.Data, options ...transfer.DragOptions) *no
 // changing selection. The function and options.Done run on the main thread.
 // See transfer.Lazy for deferring individual serialized representations.
 func (e *node) DragDataFrom(data func() transfer.Data, options ...transfer.DragOptions) *node {
+	linkDrag()
 	if data == nil {
 		panic("ui: nil drag data source")
 	}
@@ -45,6 +47,7 @@ func (e *node) DragDataFrom(data func() transfer.Data, options ...transfer.DragO
 // completed drop once, in the next frame. Decode custom formats explicitly
 // from the returned Data. Empty Formats accepts nothing.
 func coreDropData(e *node, options transfer.DropOptions) (transfer.Drop, bool) {
+	linkDrag()
 	e.st.dataTarget = &options
 	if d := e.st.dataDropped; d != nil {
 		e.c.rt.consumed = true
@@ -57,6 +60,7 @@ func coreDropData(e *node, options transfer.DropOptions) (transfer.Drop, bool) {
 // the advertised formats and operations while a matching drag is over it.
 // Hover never invokes a data provider.
 func coreDataDragOver(e *node, options transfer.DropOptions) (transfer.Offer, bool) {
+	linkDrag()
 	e.st.dataTarget = &options
 	rt := e.c.rt
 	if rt.dataOver == e.id && rt.incoming != nil {
@@ -102,7 +106,7 @@ func (rt *engine) dataDragOver(x, y float32, d *platform.DataDragEvent) bool {
 		return false
 	}
 	over := uint64(0)
-	if s := rt.dataTargetAt(x, y, d); s != nil {
+	if s := rt.dataTargetAtLinked(x, y, d); s != nil {
 		over = s.id
 	}
 	copy := *d
@@ -127,10 +131,15 @@ func (rt *engine) dataDrop(x, y float32, d *platform.DataDragEvent) bool {
 	if d == nil {
 		return false
 	}
-	s := rt.dataTargetAt(x, y, d)
+	s := rt.dataTargetAtLinked(x, y, d)
 	if s == nil {
 		return false
 	}
+	return rt.dropDataLinked(s, x, y, d)
+}
+
+// dropData gives the target s what was dropped on it at (x, y).
+func (rt *engine) dropData(s *state, x, y float32, d *platform.DataDragEvent) bool {
 	if s.accepts != nil && d.Local != nil && s.accepts(d.Local) {
 		s.droppedValue, s.hasDropped = d.Local, true
 		s.dropX, s.dropY = x, y

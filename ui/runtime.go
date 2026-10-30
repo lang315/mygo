@@ -762,7 +762,7 @@ func (rt *engine) runFrame() {
 	// needed so DragOver/DataDragOver show the new target too.
 	if in := rt.incoming; in != nil {
 		over := uint64(0)
-		if s := rt.dataTargetAt(rt.pointerX, rt.pointerY, in); s != nil {
+		if s := rt.dataTargetAtLinked(rt.pointerX, rt.pointerY, in); s != nil {
 			over = s.id
 		}
 		if rt.dataOver != over {

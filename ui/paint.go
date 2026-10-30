@@ -89,7 +89,7 @@ func (rt *engine) paint(root *node, w, h, scale float32) {
 	if rt.insp.open {
 		rt.insp.paintHighlight(rt, p, h)
 	}
-	rt.paintDrag(p, w, h)
+	rt.paintDragLinked(p, w, h)
 	rt.under, rt.holes = p.under[:0], p.holes[:0] // kept for the next frame's
 	rt.partsBase = sceneData(s)
 	rt.atlases = atlasGenerations(s)
