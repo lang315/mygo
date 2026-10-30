@@ -3,9 +3,14 @@ package ui
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"image"
 	"math/rand"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -588,5 +593,324 @@ func TestRetainRowsThatAskForTheFocusBeforeALaterAsk(t *testing.T) {
 		p.both(func(tt *Tester) { tt.Advance(300 * time.Millisecond) })
 		p.frame(fmt.Sprint("advance ", k))
 		p.compareFocus(fmt.Sprint("advance ", k))
+	}
+}
+
+// pureRows: rows with a Select (closed), a determinate Progress and a Button, by
+// index, whose state each twin keeps; the progress is versioned (it is built from
+// the app's number), the choice of the Select is not (the control versions it).
+type pureRows struct {
+	choice   [2][]string
+	progress [2][]float64
+	bump     [2][]uint64
+	twin     int
+	// churn adds elements before the list, so the nodes the pool hands out go
+	// round: a node a kept row held would be another element by then.
+	churn int
+}
+
+func newPureRows(n int) *pureRows {
+	r := &pureRows{}
+	for k := range 2 {
+		r.choice[k], r.progress[k], r.bump[k] = make([]string, n), make([]float64, n), make([]uint64, n)
+		for i := range n {
+			r.choice[k][i] = "b"
+		}
+	}
+	return r
+}
+
+func (r *pureRows) scene(n int) func() func(c *Context) {
+	return func() func(c *Context) {
+		me := r.twin
+		r.twin++
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(i int) uint64 {
+			return r.bump[me][i]<<8 + uint64(r.progress[me][i]*100)
+		}}
+		return func(c *Context) {
+			Column(c).Fill().Children(func() {
+				for k := range r.churn {
+					Box(c).Key(k).Size(4, 1)
+				}
+				List(c, s, n, func(i int) {
+					Row(c).Padding(4).Gap(8).Children(func() {
+						Textf(c, "row %d", i)
+						switch i % 3 {
+						case 0:
+							Select(c, &r.choice[me][i], []string{"a", "b", "c"})
+						case 1:
+							pr := Progress(c, r.progress[me][i])
+							if i%2 == 1 {
+								pr.Reverse() // filled from the right: read from the element painted
+							}
+						default:
+							Button(c, "press")
+						}
+					})
+				}).Grow(1)
+			})
+		}
+	}
+}
+
+// A random walk over rows of a closed Select, a Progress and a Button: the keys
+// that open, move in and close a drop-down, the pointer, the wheel, the window's
+// focus, the app changing the choice (not versioned, the control notices), the
+// progress (versioned), and elements added and removed before the list so the
+// node pool turns over.
+func TestRetainSelectProgressRowsRandomWalk(t *testing.T) {
+	for seed := int64(1); seed <= 30; seed++ {
+		t.Run(fmt.Sprint(seed), func(t *testing.T) {
+			const n = 60
+			r := newPureRows(n)
+			p := newPair(t, 500, 400, r.scene(n))
+			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+			p.idle(3)
+			rng := rand.New(rand.NewSource(seed))
+			for step := range 80 {
+				x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
+				var what string
+				switch k := rng.Intn(15); k {
+				case 0, 1:
+					what = "tab"
+					p.both(func(tt *Tester) { tt.Key(0, KeyTab) })
+				case 2:
+					what = "shift tab"
+					p.both(func(tt *Tester) { tt.Key(Shift, KeyTab) })
+				case 3:
+					what = "space"
+					p.both(func(tt *Tester) { tt.Key(0, KeySpace) })
+				case 4:
+					what = "enter"
+					p.both(func(tt *Tester) { tt.Key(0, KeyEnter) })
+				case 5:
+					what = "arrow"
+					key := []Key{KeyDown, KeyUp}[rng.Intn(2)]
+					p.both(func(tt *Tester) { tt.Key(0, key) })
+				case 6:
+					what = "escape"
+					p.both(func(tt *Tester) { tt.Key(0, KeyEscape) })
+				case 7:
+					what = fmt.Sprintf("click %v,%v", x, y)
+					p.both(func(tt *Tester) { tt.ClickAt(x, y) })
+				case 8:
+					what = fmt.Sprintf("move %v,%v", x, y)
+					p.both(func(tt *Tester) { tt.Move(x, y) })
+				case 9:
+					dy := float32(rng.Intn(120) - 60)
+					what = fmt.Sprintf("scroll %v", dy)
+					p.both(func(tt *Tester) { tt.Scroll(x, y, 0, dy) })
+				case 10:
+					what = "blur and focus"
+					p.both(func(tt *Tester) { tt.SetFocused(false); tt.SetFocused(true) })
+				case 11:
+					i := rng.Intn(n)
+					what = fmt.Sprintf("app chooses %d", i)
+					c := []string{"a", "b", "c"}[rng.Intn(3)]
+					for k := range 2 {
+						r.choice[k][i] = c
+					}
+				case 12:
+					i := rng.Intn(n)
+					what = fmt.Sprintf("progress %d", i)
+					v := float64(rng.Intn(11)) / 10
+					for k := range 2 {
+						r.progress[k][i] = v
+					}
+				case 13:
+					what = "churn"
+					r.churn = rng.Intn(6)
+				default:
+					i := rng.Intn(n)
+					what = fmt.Sprintf("bump %d", i)
+					for k := range 2 {
+						r.bump[k][i]++
+					}
+				}
+				p.compareFocus(fmt.Sprintf("%d %s", step, what))
+				p.compareFocus(fmt.Sprintf("%d %s +1", step, what))
+			}
+			if p.kept.rt.rowsKept == 0 {
+				t.Fatalf("no row kept: the walk tests nothing")
+			}
+		})
+	}
+}
+
+// Rows with only a closed Select, or only a determinate Progress, are kept; an
+// indeterminate Progress (it asks to be painted again) and an open Select are not.
+func TestRetainSelectAndProgressRowsAreKept(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		row  func(c *Context, i int, choice *string)
+		kept bool
+	}{
+		{"closed Select", func(c *Context, i int, choice *string) { Select(c, choice, []string{"a", "b"}) }, true},
+		{"determinate Progress", func(c *Context, i int, choice *string) { Progress(c, 0.4) }, true},
+		{"indeterminate Progress", func(c *Context, i int, choice *string) { Progress(c, -1) }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			choices := make([]string, 30)
+			p := newPair(t, 400, 300, func() func(c *Context) {
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						List(c, s, 30, func(i int) {
+							Row(c).Padding(4).Children(func() { tc.row(c, i, &choices[i]) })
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(4)
+			built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+			p.frame("idle")
+			b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept
+			if tc.kept && (b != 0 || k == 0) || !tc.kept && b == 0 {
+				t.Errorf("idle: %d rows built, %d kept (kept wanted: %v)", b, k, tc.kept)
+			}
+		})
+	}
+}
+
+// The closures that drawPure holds reach no node of the build: the identifiers
+// they use that they do not declare are listed, with why each is safe. A new one
+// fails here, to be read: a node captured would be another element once the
+// pool hands it out again.
+func TestPureDrawsReachNoNode(t *testing.T) {
+	type use struct {
+		ids []string
+		why string
+	}
+	safe := map[string]use{
+		"widgets.go chevron":      {[]string{"t"}, "t: the theme (compared by themeGen); the arguments are declared by the callback"},
+		"widgets.go coreProgress": {[]string{"t", "rad", "value"}, "the theme, a size and a number; the element is p.cur, not e"},
+	}
+	fset := token.NewFileSet()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := map[string]bool{} // names declared at the top of the package
+	var parsed []*ast.File
+	var names []string
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		af, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, names = append(parsed, af), append(names, f)
+		for _, d := range af.Decls {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				if d.Recv == nil {
+					pkg[d.Name.Name] = true
+				}
+			case *ast.GenDecl:
+				for _, sp := range d.Specs {
+					switch sp := sp.(type) {
+					case *ast.TypeSpec:
+						pkg[sp.Name.Name] = true
+					case *ast.ValueSpec:
+						for _, n := range sp.Names {
+							pkg[n.Name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	universe := map[string]bool{"true": true, "false": true, "nil": true, "float32": true, "float64": true, "int": true, "len": true, "min": true, "max": true, "new": true, "append": true}
+	seen := 0
+	for k, af := range parsed {
+		imports := map[string]bool{}
+		for _, im := range af.Imports {
+			path := strings.Trim(im.Path.Value, `"`)
+			imports[path[strings.LastIndex(path, "/")+1:]] = true
+		}
+		for _, d := range af.Decls {
+			fd, ok := d.(*ast.FuncDecl)
+			if !ok || fd.Body == nil {
+				continue
+			}
+			ast.Inspect(fd.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				se, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || se.Sel.Name != "drawPure" || len(call.Args) != 1 {
+					return true
+				}
+				lit, ok := call.Args[0].(*ast.FuncLit)
+				if !ok {
+					t.Errorf("%s: drawPure takes a function literal, to be read here", names[k])
+					return true
+				}
+				seen++
+				declared := map[string]bool{}
+				ast.Inspect(lit, func(n ast.Node) bool {
+					switch n := n.(type) {
+					case *ast.Field:
+						for _, id := range n.Names {
+							declared[id.Name] = true
+						}
+					case *ast.AssignStmt:
+						if n.Tok == token.DEFINE {
+							for _, l := range n.Lhs {
+								if id, ok := l.(*ast.Ident); ok {
+									declared[id.Name] = true
+								}
+							}
+						}
+					case *ast.ValueSpec:
+						for _, id := range n.Names {
+							declared[id.Name] = true
+						}
+					}
+					return true
+				})
+				free := map[string]bool{}
+				var walk func(n ast.Node) bool
+				walk = func(n ast.Node) bool {
+					switch n := n.(type) {
+					case *ast.SelectorExpr:
+						ast.Inspect(n.X, walk) // not the name after the dot
+						return false
+					case *ast.KeyValueExpr:
+						ast.Inspect(n.Value, walk) // nor the field name of a literal
+						return false
+					case *ast.Ident:
+						if !declared[n.Name] && !pkg[n.Name] && !universe[n.Name] && !imports[n.Name] {
+							free[n.Name] = true
+						}
+					}
+					return true
+				}
+				ast.Inspect(lit.Body, walk)
+				var list []string
+				for id := range free {
+					list = append(list, id)
+				}
+				slices.Sort(list)
+				key := names[k] + " " + fd.Name.Name
+				want, ok := safe[key]
+				if !ok {
+					t.Errorf("%s: drawPure in %s captures %v and is not in the list", names[k], fd.Name.Name, list)
+					return true
+				}
+				for _, id := range list {
+					if !slices.Contains(want.ids, id) {
+						t.Errorf("%s: the closure uses %q, which the list for %s does not name (%s)", names[k], id, fd.Name.Name, want.why)
+					}
+				}
+				return true
+			})
+		}
+	}
+	if seen < 2 {
+		t.Errorf("found %d drawPure calls: the test looks at the wrong code", seen)
 	}
 }
