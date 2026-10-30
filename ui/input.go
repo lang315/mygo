@@ -128,11 +128,11 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 	case platform.FileDrop:
 		taken = rt.fileDrop(x, y, ev.Files)
 	case platform.DataDragOver:
-		taken = rt.dataDragOverLinked(x, y, ev.Drag)
+		taken = rt.dataDragOver(x, y, ev.Drag)
 	case platform.DataDragLeave:
 		rt.clearDataOver()
 	case platform.DataDrop:
-		taken = rt.dataDropLinked(x, y, ev.Drag)
+		taken = rt.dataDrop(x, y, ev.Drag)
 	case platform.AccessibilityOn:
 		rt.accessibilityOn()
 	case platform.AccessAction:

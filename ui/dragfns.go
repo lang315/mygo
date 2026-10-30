@@ -5,14 +5,19 @@ import (
 	"sync/atomic"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/transfer"
 )
 
-// The engine reaches the dragging of values and of native transfers through
-// the functions of dragHooks, which the API that makes a source or a target
-// of a drag sets (linkDrag): an app that uses none has no source and no
-// target, so nothing is dragged, and does not link the code that follows a
-// drag. The engine runs for every app, and reads them at every pointer event
-// whether or not the app drags, so they are published as one value, loaded
+// The engine reaches the dragging of values and the targets of native
+// transfers through the functions of dragHooks, which the API that makes a
+// source or a target of a drag sets (linkDrag): an app that uses none has no
+// source and no target, so nothing is dragged and nothing takes what is
+// dropped, and it does not link that code. What the engine keeps for every
+// app stays outside them: it follows a native transfer over its window
+// (dataDragOver: incoming, the pointer, the frame) and scrolls under it
+// (dragScroll), whether or not a target exists, as an app that takes files
+// with DroppedFiles needs. The engine reads the hooks at every pointer event
+// whether or not its app drags, so they are published as one value, loaded
 // atomically, and each is called through a wrapper that does what an engine
 // with no drag does when they are not set.
 type dragFns struct {
@@ -20,10 +25,9 @@ type dragFns struct {
 	pressDragger func(rt *engine, chain []uint64, target *state) uint64
 	end          func(rt *engine) bool
 	cancel       func(rt *engine) bool
-	scroll       func(rt *engine)
 	paint        func(rt *engine, p *Painter, w, h float32)
-	dataDragOver func(rt *engine, x, y float32, d *platform.DataDragEvent) bool
-	dataDrop     func(rt *engine, x, y float32, d *platform.DataDragEvent) bool
+	dataTargetAt func(rt *engine, x, y float32, d *platform.DataDragEvent) *state
+	dropData     func(rt *engine, s *state, x, y float32, d *platform.DataDragEvent) bool
 }
 
 var (
@@ -42,10 +46,9 @@ func linkDrag() {
 			pressDragger: pressDragger,
 			end:          (*engine).dragEnd,
 			cancel:       (*engine).dragCancel,
-			scroll:       (*engine).dragScroll,
 			paint:        (*engine).paintDrag,
-			dataDragOver: (*engine).dataDragOver,
-			dataDrop:     (*engine).dataDrop,
+			dataTargetAt: (*engine).dataTargetAt,
+			dropData:     (*engine).dropData,
 		})
 	})
 }
@@ -73,24 +76,25 @@ func (rt *engine) dragCancelLinked() bool {
 	return f != nil && f.cancel(rt)
 }
 
-func (rt *engine) dragScrollLinked() {
-	if f := dragHooks.Load(); f != nil {
-		f.scroll(rt)
-	}
-}
-
 func (rt *engine) paintDragLinked(p *Painter, w, h float32) {
 	if f := dragHooks.Load(); f != nil {
 		f.paint(rt, p, w, h)
 	}
 }
 
-func (rt *engine) dataDragOverLinked(x, y float32, d *platform.DataDragEvent) bool {
-	f := dragHooks.Load()
-	return f != nil && f.dataDragOver(rt, x, y, d)
+// dataTargetAtLinked returns the target of the transfer d at (x, y), nil
+// when none takes it, which is always so with no target made.
+func (rt *engine) dataTargetAtLinked(x, y float32, d *platform.DataDragEvent) *state {
+	if f := dragHooks.Load(); f != nil {
+		return f.dataTargetAt(rt, x, y, d)
+	}
+	d.Operation, d.Formats = transfer.None, nil
+	return nil
 }
 
-func (rt *engine) dataDropLinked(x, y float32, d *platform.DataDragEvent) bool {
+// dropDataLinked gives the target s what was dropped. A target exists only
+// once a hook is set.
+func (rt *engine) dropDataLinked(s *state, x, y float32, d *platform.DataDragEvent) bool {
 	f := dragHooks.Load()
-	return f != nil && f.dataDrop(rt, x, y, d)
+	return f != nil && f.dropData(rt, s, x, y, d)
 }

@@ -106,7 +106,7 @@ func (rt *engine) dataDragOver(x, y float32, d *platform.DataDragEvent) bool {
 		return false
 	}
 	over := uint64(0)
-	if s := rt.dataTargetAt(x, y, d); s != nil {
+	if s := rt.dataTargetAtLinked(x, y, d); s != nil {
 		over = s.id
 	}
 	copy := *d
@@ -131,10 +131,15 @@ func (rt *engine) dataDrop(x, y float32, d *platform.DataDragEvent) bool {
 	if d == nil {
 		return false
 	}
-	s := rt.dataTargetAt(x, y, d)
+	s := rt.dataTargetAtLinked(x, y, d)
 	if s == nil {
 		return false
 	}
+	return rt.dropDataLinked(s, x, y, d)
+}
+
+// dropData gives the target s what was dropped on it at (x, y).
+func (rt *engine) dropData(s *state, x, y float32, d *platform.DataDragEvent) bool {
 	if s.accepts != nil && d.Local != nil && s.accepts(d.Local) {
 		s.droppedValue, s.hasDropped = d.Local, true
 		s.dropX, s.dropY = x, y

@@ -18,7 +18,7 @@ func dragLinked() bool { return dragHooks.Load() != nil }
 func dragFnsSet() bool {
 	f := dragHooks.Load()
 	return f != nil && f.move != nil && f.pressDragger != nil && f.end != nil && f.cancel != nil &&
-		f.scroll != nil && f.paint != nil && f.dataDragOver != nil && f.dataDrop != nil
+		f.paint != nil && f.dataTargetAt != nil && f.dropData != nil
 }
 
 func clearDragFns() {
@@ -103,14 +103,67 @@ func TestUnlinkedDragWrappersDoNothing(t *testing.T) {
 	tt := coreNewTester(func(c *context) { coreText(c, "plain") }, 300, 200)
 	tt.Frame()
 	rt := tt.rt
-	d := &platform.DataDragEvent{}
+	d := &platform.DataDragEvent{Operation: transfer.Copy, Formats: []transfer.Format{transfer.Text}}
 	rt.dragMoveLinked(1, 1)
-	rt.dragScrollLinked()
 	rt.paintDragLinked(nil, 300, 200)
-	if rt.pressDraggerLinked(nil, nil) != 0 || rt.dragEndLinked() || rt.dragCancelLinked() || rt.dataDragOverLinked(1, 1, d) || rt.dataDropLinked(1, 1, d) {
+	if rt.pressDraggerLinked(nil, nil) != 0 || rt.dragEndLinked() || rt.dragCancelLinked() || rt.dropDataLinked(nil, 1, 1, d) {
 		t.Error("a wrapper with no function set did something")
+	}
+	if rt.dataTargetAtLinked(1, 1, d) != nil || d.Operation != transfer.None || d.Formats != nil {
+		t.Errorf("no target is made, yet one took the transfer or the offer was not refused: operation %v, formats %v", d.Operation, d.Formats)
 	}
 	if dragLinked() {
 		t.Error("calling the wrappers linked the drag")
+	}
+}
+
+// An app with no drag API whose scroll view holds file drop zones
+// (DroppedFiles) scrolls it while files are dragged from another app to its
+// edge, so that a zone out of view can be reached, linked or not: the engine
+// follows a native transfer over its window and scrolls under it whether or
+// not a target exists. Dropping, or leaving, ends it.
+func TestFileDragEdgeScrollsWithAndWithoutDragAPI(t *testing.T) {
+	for _, linked := range []bool{false, true} {
+		name := "unlinked"
+		if linked {
+			name = "linked"
+		}
+		t.Run(name, func(t *testing.T) {
+			clearDragFns()
+			if linked {
+				linkDrag()
+			}
+			var scroll ScrollState
+			tt := coreNewTester(func(c *context) {
+				coreScroll(c).Fill().TrackScroll(&scroll).Children(func() {
+					for range 20 {
+						coreBox(c).Size(200, 40).DroppedFiles()
+					}
+				})
+			}, 200, 200)
+			tt.Frame()
+			d := &platform.DataDragEvent{HasFiles: true, Offer: transfer.Offer{Formats: []transfer.Format{transfer.FileList, transfer.URIList}, Operations: transfer.Copy}}
+			tt.rt.event(platform.SurfaceEvent{Kind: platform.DataDragOver, X: 50, Y: 199, Drag: d})
+			tt.rt.event(platform.SurfaceEvent{Kind: platform.FileDragOver, X: 50, Y: 199})
+			before := scroll.Y
+			for range 5 {
+				tt.rt.runFrame()
+			}
+			if scroll.Y <= before {
+				t.Fatalf("files dragged to the bottom edge did not scroll: %v -> %v", before, scroll.Y)
+			}
+			// The drop ends the transfer: the view stops.
+			tt.rt.event(platform.SurfaceEvent{Kind: platform.DataDrop, X: 50, Y: 199, Drag: d})
+			if tt.rt.incoming != nil {
+				t.Fatal("the transfer is still followed after the drop")
+			}
+			after := scroll.Y
+			for range 5 {
+				tt.rt.runFrame()
+			}
+			if scroll.Y != after {
+				t.Errorf("the view went on scrolling after the drop: %v -> %v", after, scroll.Y)
+			}
+		})
 	}
 }
