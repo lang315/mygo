@@ -570,7 +570,9 @@ type listRow struct {
 	// readsHover, readsMods and readsDrag: see rowBuild; ctx: the window's
 	// values its callback read (ctxRead).
 	readsHover, readsMods, readsDrag bool
+	mods                             Modifiers
 	ctx                              ctxRead
+	view                             ctxView
 }
 
 // rowBuild is the row of a list being built, for what is inside it: its
@@ -585,15 +587,18 @@ type rowBuild struct {
 	// PointerPosition), whatever the answer: what it builds depends on the
 	// hover, and the row is built while its elements are hovered.
 	readsHover bool
-	// readsMods: it asked for the modifier keys held (Context.Modifiers).
+	// readsMods: it asked for the modifier keys held (Context.Modifiers), and
+	// mods are the ones it got.
 	readsMods bool
+	mods      Modifiers
 	// readsDrag: it asked whether a value dragged within the window is over
 	// one of its elements (DragHover): the row is built while a drag lasts.
 	readsDrag bool
 	// ctx: the values of the window that the callback read through the Context
 	// (Size, Zoom, Preferences, Locale, Region, Vibrancy, TitleBar): a row is
-	// linked while they are the ones it was built with.
-	ctx ctxRead
+	// linked while they are the ones it was built with, which view holds.
+	ctx  ctxRead
+	view ctxView
 	// root is the element of the row; outside: the callback asked of an element
 	// that is not inside it (Hovered, PointerPosition, Pressed), whose state
 	// the row's own states do not say: the row is never kept.
@@ -985,16 +990,23 @@ func (f *listFrame) build(i int) *node {
 	c.row = rb
 	w.Children(func() { f.row(i) })
 	f.epoch++ // the row's callback may have changed the data
-	reads, mods, drag, outside, ctx := rb.readsHover, rb.readsMods, rb.readsDrag, rb.outside, rb.ctx
+	reads, readMods, mods, drag, outside, ctx, view := rb.readsHover, rb.readsMods, rb.mods, rb.readsDrag, rb.outside, rb.ctx, rb.view
 	c.row, f.rb = saved, prev
 	if saved != nil {
 		// A row built inside the callback of another.
 		saved.readsHover = saved.readsHover || reads
-		saved.readsMods = saved.readsMods || mods
+		if readMods {
+			if saved.readsMods && saved.mods != mods {
+				saved.outside = true
+			}
+			saved.readsMods, saved.mods = true, mods
+		}
 		saved.readsDrag = saved.readsDrag || drag
-		saved.ctx |= ctx
+		if ctx != 0 {
+			saved.mergeCtx(ctx, view)
+		}
 	}
-	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: mods, readsDrag: drag, ctx: ctx})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: w, ver: ver, chosen: around, checked: checked, readsHover: reads, readsMods: readMods, mods: mods, readsDrag: drag, ctx: ctx, view: view})
 	if rt.bound != bound || s.editablesNow || outside {
 		f.handles = append(f.handles, key) // an element of it is the app's Handle, or edits, or it asked of an element outside it: not kept
 	}

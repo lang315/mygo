@@ -197,7 +197,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		rec.zero()
 	} // else layoutList decides (settle): it keeps the layout, or zeroes
 	rec.lastFrame = rt.frame
-	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods, readsDrag: rec.readsDrag, ctx: rec.ctx})
+	f.rows = append(f.rows, listRow{i: i, key: key, e: root, ver: rec.version, chosen: rec.chosen, checked: rec.checked, readsHover: rec.readsHover, readsMods: rec.readsMods, mods: rec.mods, readsDrag: rec.readsDrag, ctx: rec.ctx, view: rec.view})
 	rt.rowsKept++
 	return root
 }
@@ -353,10 +353,8 @@ func (f *listFrame) capture() {
 		rec.i, rec.version, rec.themeGen, rec.theme, rec.lastFrame, rec.depth = r.i, r.ver, rt.themeGen, f.theme, rt.frame, r.e.depth
 		rec.parent, rec.sig, rec.dir = r.e.parent.id, f.sig, r.e.parent.dir&^dirSet
 		rec.chosen, rec.checked, rec.readsHover = r.chosen, r.checked, r.readsHover
-		rec.readsMods, rec.mods, rec.readsDrag = r.readsMods, rt.mods, r.readsDrag
-		if rec.ctx = r.ctx; rec.ctx != 0 {
-			rec.view = f.c.viewOf(rec.ctx)
-		}
+		rec.readsMods, rec.mods, rec.readsDrag = r.readsMods, r.mods, r.readsDrag
+		rec.ctx, rec.view = r.ctx, r.view // as the row read them, not as the frame ends
 		rec.lay = rowLay{hits: rec.lay.hits[:0], labels: rec.lay.labels[:0], scrolled: rec.lay.scrolled[:0]}
 		rec.scrollers = rec.scrollers[:0]
 		for j := range rec.nodes {

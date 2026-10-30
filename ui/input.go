@@ -1687,7 +1687,11 @@ func (c *context) Modifiers() Modifiers {
 // modifier keys are held, whatever the answer (listRow.readsMods).
 func (c *context) readsMods() {
 	if c != nil && c.row != nil {
-		c.row.readsMods = true
+		rb := c.row
+		if rb.readsMods && rb.mods != c.rt.mods {
+			rb.outside = true // two answers in one build
+		}
+		rb.readsMods, rb.mods = true, c.rt.mods
 	}
 }
 

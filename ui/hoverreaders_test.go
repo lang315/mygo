@@ -397,7 +397,6 @@ var contextNotNoted = map[string]string{
 	"OpenURL":           "an action",
 	"OpenURLThen":       "an action",
 	"Root":              "the window's root element, built before the rows",
-	"Router":            "the app's router: its state is the app's, to version in RowVersion like any other",
 	"RowSelected":       "the choice of the row, which a row is kept with (rec.chosen)",
 	"SetTheme":          "an action, and the theme is compared when a row is kept (themeGen, rec.theme)",
 	"SetZoom":           "an action",

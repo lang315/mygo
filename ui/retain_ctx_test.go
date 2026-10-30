@@ -91,3 +91,75 @@ func TestRetainRowsCallingShortcutAndNowAreBuilt(t *testing.T) {
 		})
 	}
 }
+
+// A sidebar List in a layout route marks the row of the path shown, read in the
+// row through c.Router(); navigation keeps the layout, so the list stays.
+func TestRetainRowsReadingTheRouter(t *testing.T) {
+	var routers []*Router
+	paths := []string{"/s/a", "/s/b", "/s/c"}
+	p := newPair(t, 400, 300, func() func(c *Context) {
+		r := NewRouter("/s/a")
+		routers = append(routers, r)
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		return func(c *Context) {
+			r.View(c, func(rt *Route) {
+				rt.Match("/s/{rest...}")
+				Row(c).Grow(1).Children(func() {
+					Column(c).Width(140).Children(func() {
+						List(c, s, len(paths), func(i int) {
+							if c.Router().Path() == paths[i] {
+								Textf(c, "> %s", paths[i])
+							} else {
+								Textf(c, "  %s", paths[i])
+							}
+						}).Grow(1)
+					})
+					rt.View(c, func(rt *Route) { Textf(c, "page %s", rt.Path()) })
+				})
+			})
+		}
+	})
+	p.idle(3)
+	built, kept := p.kept.rt.rowsBuilt, p.kept.rt.rowsKept
+	p.frame("idle")
+	if b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept; b != 0 || k == 0 {
+		t.Errorf("idle: %d rows built, %d kept; want none built", b, k)
+	}
+	for _, r := range routers {
+		r.Push("/s/b")
+	}
+	p.both(func(tt *Tester) { tt.Frame() })
+	p.compare("pushed")
+	p.frame("pushed 2")
+}
+
+// The window's zoom changes in the last pass of a frame: a row built before it
+// is linked only while the zoom is the one it read, not the one of the end.
+func TestRetainRowsReadingAValueThatChangesInTheLastPass(t *testing.T) {
+	gen := 0
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 0 }}
+		seen, left := 0, 0
+		return func(c *Context) {
+			if seen != gen {
+				seen, left = gen, 3
+			}
+			Column(c).Fill().Children(func() {
+				List(c, s, 10, func(i int) {
+					Textf(c, "row %d at %.2f", i, c.Zoom())
+				}).Grow(1)
+			})
+			if left > 0 {
+				left--
+				c.SetZoom(c.Zoom() + 0.25)
+			}
+		}
+	})
+	p.idle(2)
+	gen = 1
+	p.both(func(tt *Tester) { tt.Frame() })
+	p.both(func(tt *Tester) { tt.Frame() })
+	p.both(func(tt *Tester) { tt.Frame() })
+	p.compare("after zooming three times in one frame")
+	p.frame("settled")
+}
