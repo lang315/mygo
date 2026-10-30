@@ -239,7 +239,10 @@ func TestTheWaysToAskForTheInputNoteTheRead(t *testing.T) {
 // of the frame before. A query that is not here and does not note the read
 // fails TestElementQueriesNoteTheRead: decide which kind it is.
 var elementQueriesNotNoted = map[string]string{
-	"motion.go node.AnimateTo":          "drives the element's own value: a row with a running animation is not kept (state.pending); animating an outside element from a row is not a read",
+	"element.go node.disabled":          "reads e.st.flags of the frame before, but every query that calls it notes the read first",
+	"element.go node.hasState":          "only whether the element has a state: the engine cannot have given it another",
+	"motion.go node.channel":            "finds the element's own animation for AnimateTo, Spring, Animate...: the row is built again because AnimateTo asks for frames (AnimationFrame bumps rt.bound), not because of the state; animating an outside element is not a read",
+	"motion.go node.AnimateTo":          "drives the element's own value and asks for frames while it moves (AnimationFrame bumps rt.bound, which a list does not keep); animating an outside element from a row is not a read",
 	"motion.go node.AnimateColor":       "as AnimateTo",
 	"motion.go node.Jump":               "as AnimateTo",
 	"motion.go node.Keyframes":          "as AnimateTo",
@@ -248,6 +251,14 @@ var elementQueriesNotNoted = map[string]string{
 	"rowclick.go node.RowDoubleClicked": "asks Hovered of the element, which notes the read",
 }
 
+// Limits of the guard below, by what it follows: calls to methods of *node by
+// name, from the queries of Element. It does not see a function variable or a
+// free function that takes the element, a method of *context that reads e.st, a
+// method value (f := e.m), a note made on another receiver (e.parent.asksOutside()),
+// a method of an embedded field, nor two types that share a method name (the
+// set only widens). It skips the public methods that return *node (builders),
+// 25 of them such as Root. An audit of ui/ found none of these forms that reads
+// state today; a new one would have to be added to the guard.
 func TestElementQueriesNoteTheRead(t *testing.T) {
 	api, err := os.ReadFile("api_gen.go")
 	if err != nil {
@@ -258,16 +269,20 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 		public[m[1]] = true
 	}
 	noted := map[string]bool{"asksOutside": true, "readsLayout": true, "readsHover": true, "readsDrag": true, "neverKept": true}
-	// Helpers the queries call to read (and are checked themselves): calling
-	// one is reading through it, and noting the read is the helper's job.
-	helpers := map[string]bool{"event": true}
+	// Fields of node that a widget or the engine sets from input as it builds,
+	// and a query reads (the answer of the frame): reading one is reading state.
+	stateFields := map[string]bool{"dismissed": true, "highlighted": true}
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Every method of *node, by name, with its file.
+	type method struct {
+		file string
+		fd   *ast.FuncDecl
+	}
+	methods := map[string][]method{}
 	fset := token.NewFileSet()
-	found := map[string]bool{}
-	var missing []string
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") || f == "api_gen.go" {
 			continue
@@ -278,41 +293,76 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 		}
 		for _, d := range af.Decls {
 			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Recv == nil || fd.Body == nil || !public[fd.Name.Name] && !helpers[fd.Name.Name] {
+			if !ok || fd.Recv == nil || fd.Body == nil || len(fd.Body.List) == 0 {
 				continue
 			}
-			if st, ok := fd.Recv.List[0].Type.(*ast.StarExpr); !ok || fmt.Sprint(st.X) != "node" {
-				continue
+			if st, ok := fd.Recv.List[0].Type.(*ast.StarExpr); ok && fmt.Sprint(st.X) == "node" {
+				methods[fd.Name.Name] = append(methods[fd.Name.Name], method{f, fd})
 			}
-			if r := fd.Type.Results; r != nil && len(r.List) == 1 {
-				if st, ok := r.List[0].Type.(*ast.StarExpr); ok && fmt.Sprint(st.X) == "node" {
-					continue // a builder: it sets what the element is
-				}
-			}
-			reads, delegates := false, false
-			ast.Inspect(fd.Body, func(n ast.Node) bool {
-				switch n := n.(type) {
-				case *ast.SelectorExpr:
-					reads = reads || n.Sel.Name == "st" || n.Sel.Name == "rt"
-				case *ast.CallExpr:
-					if se, ok := n.Fun.(*ast.SelectorExpr); ok && (se.Sel.Name == "hasState" || helpers[se.Sel.Name]) {
-						reads = true
-						delegates = delegates || helpers[se.Sel.Name] && se.Sel.Name != fd.Name.Name
+		}
+	}
+	builder := func(fd *ast.FuncDecl) bool {
+		r := fd.Type.Results
+		if r == nil || len(r.List) != 1 {
+			return false
+		}
+		st, ok := r.List[0].Type.(*ast.StarExpr)
+		return ok && fmt.Sprint(st.X) == "node"
+	}
+	// The queries of Element and every method of *node they call, to any depth
+	// (by name: a name that another type shares only widens the set).
+	reached := map[string]bool{}
+	var visit func(name string)
+	visit = func(name string) {
+		if reached[name] {
+			return
+		}
+		reached[name] = true
+		for _, m := range methods[name] {
+			ast.Inspect(m.fd.Body, func(n ast.Node) bool {
+				if c, ok := n.(*ast.CallExpr); ok {
+					if se, ok := c.Fun.(*ast.SelectorExpr); ok && methods[se.Sel.Name] != nil {
+						visit(se.Sel.Name)
 					}
 				}
 				return true
 			})
-			if !reads || delegates {
-				continue // a query that reads through a helper leaves noting the read to it
+		}
+	}
+	for name := range public {
+		for _, m := range methods[name] {
+			if !builder(m.fd) {
+				visit(name)
 			}
-			if es, ok := fd.Body.List[0].(*ast.ExprStmt); ok {
+		}
+	}
+	found := map[string]bool{}
+	var missing []string
+	for name := range reached {
+		for _, m := range methods[name] {
+			reads := false
+			ast.Inspect(m.fd.Body, func(n ast.Node) bool {
+				switch n := n.(type) {
+				case *ast.SelectorExpr:
+					reads = reads || n.Sel.Name == "st" || n.Sel.Name == "rt" || stateFields[n.Sel.Name]
+				case *ast.CallExpr:
+					if se, ok := n.Fun.(*ast.SelectorExpr); ok && se.Sel.Name == "hasState" {
+						reads = true
+					}
+				}
+				return true
+			})
+			if !reads {
+				continue // it reads through the methods it calls, which are checked themselves
+			}
+			if es, ok := m.fd.Body.List[0].(*ast.ExprStmt); ok {
 				if call, ok := es.X.(*ast.CallExpr); ok {
 					if se, ok := call.Fun.(*ast.SelectorExpr); ok && noted[se.Sel.Name] {
 						continue
 					}
 				}
 			}
-			key := f + " node." + fd.Name.Name
+			key := m.file + " node." + name
 			found[key] = true
 			if _, ok := elementQueriesNotNoted[key]; !ok {
 				missing = append(missing, key)
@@ -321,11 +371,11 @@ func TestElementQueriesNoteTheRead(t *testing.T) {
 	}
 	slices.Sort(missing)
 	if len(missing) > 0 {
-		t.Errorf("queries of Element that read state and do not note the read (asksOutside, readsLayout): %v", missing)
+		t.Errorf("methods that a query of Element reaches, that read state and do not begin by noting the read (asksOutside, readsLayout, neverKept...): %v", missing)
 	}
 	for key := range elementQueriesNotNoted {
 		if !found[key] {
-			t.Errorf("%q is listed in elementQueriesNotNoted but is not such a query (any more)", key)
+			t.Errorf("%q is listed in elementQueriesNotNoted but is not such a method (any more)", key)
 		}
 	}
 }

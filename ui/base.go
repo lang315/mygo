@@ -424,7 +424,10 @@ func scrollOptions(c *context, panel *node) {
 
 // Highlighted reports whether an option of a select is the one the pointer
 // or the arrows are on.
-func (e *node) Highlighted() bool { return e.highlighted }
+func (e *node) Highlighted() bool {
+	e.asksOutside()
+	return e.highlighted
+}
 
 // PopoverBase shows a panel without a look below anchor while *open is
 // true: fn styles the panel and builds its content. Pressing outside the

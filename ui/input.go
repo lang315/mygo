@@ -1556,6 +1556,7 @@ func (e *node) CheckedChanged() bool { return e.event(eventChecked) }
 // Activated applies pending input and reports the row of this List or
 // Table double-clicked, or chosen as Enter was pressed, in this build pass.
 func (e *node) Activated() (row int, ok bool) {
+	e.asksOutside()
 	if !e.event(eventActivated) {
 		return 0, false
 	}
@@ -1583,7 +1584,10 @@ func (e *node) event(ev tableEvent) bool {
 //	if ui.Modal(c, &app.editing, edit).Dismissed() && app.unsaved {
 //		app.editing = true
 //	}
-func (e *node) Dismissed() bool { return e.dismissed }
+func (e *node) Dismissed() bool {
+	e.asksOutside()
+	return e.dismissed
+}
 
 // scrollbarPress starts dragging the thumb of the scroll container under
 // the pointer when the press is on its scroll bar, or pages toward the
