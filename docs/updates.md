@@ -322,6 +322,15 @@ manifest's, so a service that writes its own manifests from those of
 `mygo build` may name the files by ids of its own, as long as the sizes
 and signatures stay. `SetSource(nil)` goes back to the feed.
 
+The feed itself is fetched by package `updatefeed`, which `mygo build`
+links into apps with `updates` and the update window of
+`plugins/updater` imports, so most apps never name it. An app built
+another way, without the CLI, needs
+`import _ "github.com/egoist/mygo/updatefeed"` for `Check` to read the
+feed (`Check` says so when it is missing), and `updatefeed.Source(url)`
+is the feed as an `UpdateSource`, for a source of your own that adds to
+it.
+
 ## Where apps can update
 
 An app replaces itself, so it must be able to write where it is installed:

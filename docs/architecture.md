@@ -1685,10 +1685,16 @@ as in Tauri:
   `Updater.SetSource` an `UpdateSource` (an `atomic.Pointer` that `Check`
   reads once): `Check` reads the manifest from its `Manifest` in place of
   the feed, and the `Update` keeps the source, whose `Open` downloads the
-  archive and deltas in place of `httpGet`. The configured feed is itself
-  a source (`feedSource`), so parsing, sizes, signatures, staging and the
-  swap are the same either way; `Enabled` still needs a build with
-  `updates`, for the public key.
+  archive and deltas. The configured feed is itself a source, the HTTP
+  one of package `updatefeed` (`internal/updatehttp`), so parsing, sizes,
+  signatures, staging and the swap are the same either way; `Enabled` still
+  needs a build with `updates`, for the public key. Package `mygo` does not
+  import `updatefeed` (it would link net/http, 2.2 MB, into every app): the
+  package gives `mygo.Updater` its feed through `internal/updatehook` when
+  it is imported, which `mygo build` makes the app do for `updates` (a
+  generated `0mygo_updates_gen.go`, in native builds) and `plugins/updater`
+  does itself; `Check` without it, and without a `SetSource`, says what to
+  import.
 - File associations (`fileAssociations` in the configuration) are declared by the
   packages (see the table below) and their extensions linked into the
   binary; like deep links, files of those extensions among the launch
@@ -4205,7 +4211,8 @@ renderer's (`gputest.Compare`).
   (`embed.go`): `go build -overlay` adds a generated `0mygo_frontend_gen.go`
   to the main package, with `//go:embed all:mygo_frontend` and a call to
   `SetFrontend`, and maps every `frontendDist` file into that virtual
-  directory, so the frontend may live anywhere. macOS targets become `.app`
+  directory, so the frontend may live anywhere; with `updates`, it adds
+  `0mygo_updates_gen.go` too, which imports `updatefeed`. macOS targets become `.app`
   bundles (Info.plist, `.icns` rendered in pure Go, and with `macos.icon`
   an `Assets.car`, as it is or compiled from an Icon Composer `.icon` by
   `xcrun actool`), signed with

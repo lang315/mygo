@@ -11,9 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,7 +21,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/update"
-	"github.com/egoist/mygo/netproxy"
+	"github.com/egoist/mygo/internal/updatehook"
 )
 
 // Set by `mygo build` with -ldflags -X when mygo.config.ts configures updates:
@@ -142,11 +139,29 @@ func (u *UpdaterModule) Check(ctx context.Context) (*Update, error) {
 	if !u.Enabled() {
 		return nil, ErrUpdatesDisabled
 	}
-	var src UpdateSource = feedSource(packageUpdateFeed)
-	if s := updateSource.Load(); s != nil {
-		src = *s
+	src, err := defaultSource()
+	if err != nil {
+		return nil, err
 	}
 	return checkUpdate(ctx, src, packageUpdateKey, App.Version(), prereleases.Load())
+}
+
+// errNoUpdateFeed is what Check says when the app has a feed and nothing to
+// fetch it with: the HTTP feed is package updatefeed, which package mygo does
+// not import, so that apps that do not update over HTTP do not link net/http.
+var errNoUpdateFeed = errors.New(`mygo: the update feed of this build has no HTTP source linked: add import _ "github.com/egoist/mygo/updatefeed" to the app (mygo build adds it for apps with updates in mygo.config.ts), or give Updater.SetSource a source`)
+
+// defaultSource returns where Check reads from: the source of SetSource, else
+// the feed of mygo.config.ts, which package updatefeed fetches.
+func defaultSource() (UpdateSource, error) {
+	if s := updateSource.Load(); s != nil {
+		return *s, nil
+	}
+	feed := updatehook.Feed.Load()
+	if feed == nil {
+		return nil, errNoUpdateFeed
+	}
+	return (*feed)(packageUpdateFeed), nil
 }
 
 // SetPrereleases makes Check offer prereleases too, such as 1.3.0-beta.1,
@@ -163,26 +178,6 @@ func (u *UpdaterModule) SetPrereleases(on bool) { prereleases.Store(on) }
 
 // Prereleases reports whether Check offers prereleases (SetPrereleases).
 func (u *UpdaterModule) Prereleases() bool { return prereleases.Load() }
-
-// feedSource is the update feed that mygo.config.ts configures, the URL of
-// a manifest or a feed that update.ResolveFeed resolves.
-type feedSource string
-
-func (f feedSource) Manifest(ctx context.Context, pre bool) (io.ReadCloser, error) {
-	resolve := update.ResolveFeed
-	if pre {
-		resolve = update.ResolvePrereleaseFeed
-	}
-	feed, err := resolve(ctx, string(f), httpGet)
-	if err != nil {
-		return nil, err
-	}
-	return httpGet(ctx, feed)
-}
-
-func (f feedSource) Open(ctx context.Context, url string) (io.ReadCloser, error) {
-	return httpGet(ctx, url)
-}
 
 func checkUpdate(ctx context.Context, src UpdateSource, key, current string, pre bool) (*Update, error) {
 	body, err := src.Manifest(ctx, pre)
@@ -217,15 +212,14 @@ func checkUpdate(ctx context.Context, src UpdateSource, key, current string, pre
 // /Applications of an administrator, or an app directory the user owns on
 // Linux and Windows. Apps installed by a package manager are updated by it.
 func (up *Update) Install(ctx context.Context, progress func(downloaded, total int64)) error {
+	if up.source == nil {
+		return errors.New("mygo: installing the update: the update did not come from Check")
+	}
 	target, err := installTarget()
 	if err != nil {
 		return err
 	}
-	get := httpGet
-	if up.source != nil {
-		get = up.source.Open
-	}
-	if err := installUpdate(ctx, get, up.manifest, up.key, up.current, target, progress); err != nil {
+	if err := installUpdate(ctx, up.source.Open, up.manifest, up.key, up.current, target, progress); err != nil {
 		return fmt.Errorf("mygo: installing the update: %w", err)
 	}
 	if runtime.GOOS == "linux" {
@@ -533,43 +527,6 @@ func cleanUpdateLeftovers() {
 	for _, p := range olds {
 		_ = os.RemoveAll(p)
 	}
-}
-
-// httpGet fetches a URL over HTTPS (or plain HTTP from the loopback
-// interface, for tests), through the system's proxy (package netproxy).
-func httpGet(ctx context.Context, rawURL string) (io.ReadCloser, error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return nil, err
-	}
-	if u.Scheme != "https" && !(u.Scheme == "http" && isLoopback(u.Hostname())) {
-		return nil, fmt.Errorf("refusing to download %s: updates need HTTPS", rawURL)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	// Not the app's name: GitHub's release assets come from a store that
-	// answers 400 to a User-Agent with bytes outside ASCII, as 云音乐, for
-	// every file its CDN has not cached yet.
-	req.Header.Set("User-Agent", "mygo-updater")
-	resp, err := (&http.Client{Transport: netproxy.Transport()}).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("GET %s: %s", rawURL, resp.Status)
-	}
-	return resp.Body, nil
-}
-
-func isLoopback(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
 
 // progressReader reports how much of a download was read.

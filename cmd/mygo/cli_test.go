@@ -442,6 +442,81 @@ func TestDevFrontendFiles(t *testing.T) {
 	}
 }
 
+// TestUpdateFeedFiles: a build of an app with updates adds the file that
+// links the HTTP feed of mygo.Updater; one without adds nothing, and the
+// app's own file of the name is never overwritten.
+func TestUpdateFeedFiles(t *testing.T) {
+	pkg, work := t.TempDir(), t.TempDir()
+	files, err := updateFeedFiles(&Config{Updates: &Updates{}}, pkg, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gen := filepath.Join(pkg, updateFeedGenFile)
+	src, err := os.ReadFile(files[gen])
+	if err != nil || len(files) != 1 || !strings.Contains(string(src), `_ "github.com/egoist/mygo/updatefeed"`) {
+		t.Fatalf("overlay %v, %v:\n%s", files, err, src)
+	}
+	if files, err := updateFeedFiles(&Config{}, pkg, work); err != nil || len(files) != 0 {
+		t.Errorf("an app without updates: %v, %v", files, err)
+	}
+	if err := os.WriteFile(gen, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := updateFeedFiles(&Config{Updates: &Updates{}}, pkg, work); err == nil {
+		t.Error("a file of the app in the way was overwritten")
+	}
+}
+
+// TestUpdateFeedIsLinkedByTheOverlay: an app that uses mygo.Updater links no
+// HTTP of its own, and the file the build adds gives it the feed: the
+// packages of the app, with and without the overlay (go list -deps).
+func TestUpdateFeedIsLinkedByTheOverlay(t *testing.T) {
+	goTool, err := exec.LookPath("go")
+	if err != nil || testing.Short() {
+		t.Skip("no go tool, or short")
+	}
+	dir, work := t.TempDir(), t.TempDir()
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
+	sum, _ := os.ReadFile(filepath.Join(checkout, "go.sum"))
+	gomod := "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + checkout + "\n"
+	main := "package main\n\nimport \"github.com/egoist/mygo\"\n\nfunc main() { _, _ = mygo.Updater.Check(nil) }\n"
+	for name, content := range map[string]string{"go.mod": gomod, "go.sum": string(sum), "main.go": main} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := updateFeedFiles(&Config{Updates: &Updates{}}, dir, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay, err := writeOverlay(filepath.Join(work, "overlay.json"), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := func(args ...string) string {
+		cmd := exec.Command(goTool, append([]string{"list", "-deps"}, args...)...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GOFLAGS=-mod=mod", "GOPROXY=off", "GOWORK=off", "CGO_ENABLED=0")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("go list %v: %v\n%s", args, err, out)
+		}
+		return "\n" + string(out)
+	}
+	const feed, proxy = "\ngithub.com/egoist/mygo/updatefeed\n", "\ngithub.com/egoist/mygo/netproxy\n"
+	without := deps(".")
+	if strings.Contains(without, feed) || strings.Contains(without, proxy) {
+		t.Errorf("an app that only uses mygo.Updater links the HTTP feed:\n%s", without)
+	}
+	with := deps("-overlay", overlay, ".")
+	if !strings.Contains(with, feed) || !strings.Contains(with, proxy) {
+		t.Errorf("the overlay does not link the HTTP feed:\n%s", with)
+	}
+}
+
 // TestGeneratedFilesInitFirst: the init of a generated file that calls
 // mygo.SetFrontend runs before the app's own, so the app's call wins (it
 // does on a build without the generated file). The go tool presents the files
