@@ -75,13 +75,22 @@ func coldCache(t *testing.T) {
 	})
 }
 
+// fileURL is the GOPROXY URL of a directory: file:///C:/dir on Windows.
+func fileURL(dir string) string {
+	dir = filepath.ToSlash(dir)
+	if !strings.HasPrefix(dir, "/") {
+		dir = "/" + dir
+	}
+	return "file://" + dir
+}
+
 func applicationEnv(t *testing.T, flags string) {
 	t.Helper()
 	t.Setenv("GOFLAGS", flags)
 	t.Setenv("GOSUMDB", "off")
 	t.Setenv("GOTOOLCHAIN", "local")
 	t.Setenv("GOWORK", "")
-	t.Setenv("GOPROXY", "file://"+twoVersionProxy(t))
+	t.Setenv("GOPROXY", fileURL(twoVersionProxy(t)))
 }
 
 // requiringApp writes an app that requires MyGo at version (and extra lines of
@@ -146,7 +155,7 @@ func TestAppHasPackageWithAColdModuleCache(t *testing.T) {
 	// A module that cannot be fetched is an error, not a no.
 	applicationEnv(t, "")
 	c = requiringApp(t, t.TempDir(), "v1.0.0", "")
-	t.Setenv("GOPROXY", "file://"+filepath.Join(t.TempDir(), "nothing"))
+	t.Setenv("GOPROXY", fileURL(filepath.Join(t.TempDir(), "nothing")))
 	moduleDirs.m = map[string]moduleDirEntry{}
 	if has, err := appHasPackage(c, protocolPackage); err == nil || has {
 		t.Errorf("a module that cannot be fetched: %v, %v", has, err)
