@@ -3,6 +3,7 @@ package jsonlite
 import (
 	"math"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -61,6 +62,33 @@ func AppendStringStrict(dst []byte, s string) ([]byte, bool) {
 		default:
 			dst = append(dst, c)
 		}
+	}
+	return append(dst, '"'), true
+}
+
+// AppendStringJS is AppendStringStrict with U+2028 and U+2029 escaped, as
+// encoding/json/v2 writes a string with jsontext.EscapeForJS (the IPC's options).
+func AppendStringJS(dst []byte, s string) ([]byte, bool) {
+	if !utf8.ValidString(s) {
+		return dst, false
+	}
+	dst = append(dst, '"')
+	for i := 0; i < len(s); {
+		c := s[i]
+		switch {
+		case c == '"' || c == '\\':
+			dst = append(dst, '\\', c)
+		case c < ' ':
+			dst = appendControl(dst, c)
+		case strings.HasPrefix(s[i:], " ") || strings.HasPrefix(s[i:], " "):
+			dst = append(dst, `\u202`...)
+			dst = append(dst, hexDigits[s[i+2]&0xf])
+			i += 3
+			continue
+		default:
+			dst = append(dst, c)
+		}
+		i++
 	}
 	return append(dst, '"'), true
 }

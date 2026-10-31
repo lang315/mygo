@@ -43,6 +43,20 @@ func FuzzAppendQuote(f *testing.F) {
 	})
 }
 
+// The writer of the IPC's strings is encoding/json/v2's with the options the IPC uses.
+func FuzzAppendStringJS(f *testing.F) {
+	for _, s := range []string{"", "a", "a\"b\\c", "\x00\x1f\x7f", "é😀", "  <>&", "\xff", "a b "} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		want, werr := jsonv2.Marshal(s, jsontext.EscapeForJS(true))
+		got, ok := AppendStringJS(nil, s)
+		if ok != (werr == nil) || ok && string(got) != string(want) {
+			t.Fatalf("%q: jsonlite %q, %v; encoding/json/v2 %q, %v", s, got, ok, want, werr)
+		}
+	})
+}
+
 func TestValueIsTheBytesOfTheValue(t *testing.T) {
 	r := NewReader([]byte(` [ {"a" : 1} , "x\n" , null ] `))
 	r.Strict = true
