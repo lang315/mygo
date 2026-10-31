@@ -151,10 +151,10 @@ const mygoModule = "github.com/egoist/mygo"
 // code imports, not what this build adds), and nothing here can tell.
 //
 // An app builds from its vendor directory when -mod=vendor is in effect
-// (GOFLAGS or go env -w), or when no -mod is and vendor/modules.txt is next to
-// go.mod (go 1.14 and later) or, in a workspace, next to go.work (go work
-// vendor, go 1.22 and later; the vendor directories of the workspace's modules
-// are ignored). A MyGo that the workspace uses as a directory is not vendored.
+// (GOFLAGS or go env -w), or when no -mod is and go itself would use the vendor
+// directory (vendorMode): next to go.mod, made by go mod vendor, or in a
+// workspace next to go.work, made by go work vendor; one made for the other is
+// ignored. A MyGo that the workspace uses as a directory is not vendored.
 // Otherwise the module is where go says it is, as the app's go.mod and go.work require it:
 // go list -m gives its directory, and for a module that is not in the module
 // cache yet go mod download fetches that version, which it never changes, as
@@ -175,8 +175,18 @@ func appHasPackage(c *Config, path string) (bool, error) {
 	if env.GOMOD == "" || env.GOMOD == os.DevNull {
 		return false, fmt.Errorf("%s is not in a Go module", c.root)
 	}
-	if env.vendorMode() && !env.usesMygoDirectory() {
-		return hasInVendor(env, path)
+	vendored, err := env.vendorMode()
+	if err != nil {
+		return false, err
+	}
+	if vendored {
+		uses, err := env.usesMygoDirectory()
+		if err != nil {
+			return false, err
+		}
+		if !uses {
+			return hasInVendor(env, path)
+		}
 	}
 	dir, err := mygoModuleDir(c.root, env)
 	if err != nil {
@@ -222,42 +232,62 @@ func (e buildEnv) vendorRoot() string {
 // usesMygoDirectory reports whether the workspace uses MyGo as a directory:
 // go work vendor copies the dependencies of a workspace, not its modules, so
 // such a MyGo is built from that directory whatever the vendor directory has.
-func (e buildEnv) usesMygoDirectory() bool {
+func (e buildEnv) usesMygoDirectory() (bool, error) {
 	if !e.inWorkspace() {
-		return false
+		return false, nil
 	}
 	out, err := goOutput(filepath.Dir(e.GOWORK), "work", "edit", "-json")
 	if err != nil {
-		return false
+		return false, fmt.Errorf("reading go.work: %w", err)
 	}
 	var work struct{ Use []struct{ DiskPath string } }
-	if json.Unmarshal([]byte(out), &work) != nil {
-		return false
+	if err := json.Unmarshal([]byte(out), &work); err != nil {
+		return false, fmt.Errorf("reading go.work: %w", err)
 	}
 	for _, use := range work.Use {
 		dir := filepath.FromSlash(use.DiskPath)
 		if !filepath.IsAbs(dir) {
 			dir = filepath.Join(filepath.Dir(e.GOWORK), dir)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-		if err != nil {
+		gomod := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(gomod); err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(data), "\n") {
-			if f := strings.Fields(line); len(f) == 2 && f[0] == "module" {
-				if strings.Trim(f[1], `"`) == mygoModule {
-					return true
-				}
-				break
-			}
+		path, _, err := modEdit(dir, gomod)
+		if err != nil {
+			return false, err
+		}
+		if path == mygoModule {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
+}
+
+// modEdit gives the module path and the go version that go.mod says, as go
+// reads them (go mod edit -json): comments and quotes included.
+func modEdit(dir, gomod string) (path, version string, err error) {
+	out, err := goOutput(dir, "mod", "edit", "-json", gomod)
+	if err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", gomod, err)
+	}
+	var mod struct {
+		Module struct{ Path string }
+		Go     string
+	}
+	if err := json.Unmarshal([]byte(out), &mod); err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", gomod, err)
+	}
+	return mod.Module.Path, mod.Go, nil
 }
 
 // vendorMode reports whether the app builds from the vendor directory of
-// vendorRoot.
-func (e buildEnv) vendorMode() bool {
+// vendorRoot, as go decides it (setDefaultBuildMod in cmd/go/internal/modload):
+// -mod says so, or, with no -mod, the directory exists, the go line of go.work
+// (in a workspace) or go.mod is 1.14 or later, and the first line of its
+// modules.txt says "## workspace" if and only if the build is in a workspace
+// (modulesTextIsForWorkspace). Otherwise go ignores the directory.
+func (e buildEnv) vendorMode() (bool, error) {
 	mod := ""
 	for _, f := range strings.Fields(e.GOFLAGS) {
 		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "mod="); ok {
@@ -265,10 +295,52 @@ func (e buildEnv) vendorMode() bool {
 		}
 	}
 	if mod != "" {
-		return mod == "vendor"
+		return mod == "vendor", nil
 	}
-	_, err := os.Stat(filepath.Join(e.vendorRoot(), "vendor", "modules.txt"))
-	return err == nil
+	vendor := filepath.Join(e.vendorRoot(), "vendor")
+	if fi, err := os.Stat(vendor); err != nil || !fi.IsDir() {
+		return false, nil
+	}
+	var version string
+	if e.inWorkspace() {
+		out, err := goOutput(filepath.Dir(e.GOWORK), "work", "edit", "-json")
+		if err != nil {
+			return false, fmt.Errorf("reading go.work: %w", err)
+		}
+		var work struct{ Go string }
+		if err := json.Unmarshal([]byte(out), &work); err != nil {
+			return false, fmt.Errorf("reading go.work: %w", err)
+		}
+		version = work.Go
+	} else {
+		var err error
+		if _, version, err = modEdit(filepath.Dir(e.GOMOD), e.GOMOD); err != nil {
+			return false, err
+		}
+	}
+	if !goAtLeast114(version) {
+		return false, nil // unspecified or older: go does not use the directory
+	}
+	// The first line of modules.txt, as go reads it (it may not exist).
+	head, _ := os.ReadFile(filepath.Join(vendor, "modules.txt"))
+	line, _, _ := strings.Cut(string(head), "\n")
+	forWorkspace := false
+	if notes, ok := strings.CutPrefix(line, "## "); ok {
+		for _, n := range strings.Split(notes, ";") {
+			forWorkspace = forWorkspace || strings.TrimSpace(n) == "workspace"
+		}
+	}
+	return forWorkspace == e.inWorkspace(), nil
+}
+
+// goAtLeast114 reports whether a go line (1.21, 1.22.3, 1.23rc1) names go 1.14
+// or later; an empty one does not.
+func goAtLeast114(v string) bool {
+	var major, minor int
+	if n, _ := fmt.Sscanf(v, "%d.%d", &major, &minor); n < 2 {
+		return false
+	}
+	return major > 1 || major == 1 && minor >= 14
 }
 
 // moduleDirs remembers the directory of MyGo's module for the app at a root,

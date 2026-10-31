@@ -393,7 +393,9 @@ func TestAppHasPackageVendorsOfAWorkspace(t *testing.T) {
 
 // TestAppHasPackageWorkspaceModuleIsNotVendored: go work vendor copies the
 // dependencies of the workspace, not its modules; a MyGo that the workspace
-// uses as a directory is built from there, with a vendor directory or not.
+// uses as a directory is built from there, with a vendor directory or not. It
+// holds on the base too (a workspace was never vendor mode there): it guards the
+// vendor mode of a workspace against reading that directory.
 func TestAppHasPackageWorkspaceModuleIsNotVendored(t *testing.T) {
 	if testing.Short() {
 		t.Skip("go")
@@ -411,5 +413,81 @@ func TestAppHasPackageWorkspaceModuleIsNotVendored(t *testing.T) {
 	}
 	if has, err := appHasPackage(c, protocolPackage); err != nil || !has {
 		t.Errorf("a workspace that uses MyGo as a directory, vendored: %v, %v", has, err)
+	}
+}
+
+// writeTestFile writes a file of a test app, and the directories above it.
+func writeTestFile(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestAppHasPackageIgnoresAVendorDirectoryGoIgnores: go uses a vendor directory
+// by default only when the first line of its modules.txt says "## workspace" if
+// and only if the build is in a workspace (modulesTextIsForWorkspace), so the
+// vendor directory of go mod vendor next to a go.work, and that of go work
+// vendor with GOWORK=off, are ignored: go builds MyGo, v1.1.0 with protocol,
+// from the module cache, and so does the answer.
+func TestAppHasPackageIgnoresAVendorDirectoryGoIgnores(t *testing.T) {
+	if testing.Short() {
+		t.Skip("go")
+	}
+	for _, tc := range []struct{ name, vendor, workspace string }{
+		{"go mod vendor next to go.work", "mod", "on"},
+		{"go work vendor with GOWORK=off", "work", "off"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			applicationEnv(t, "")
+			root := t.TempDir()
+			c := requiringApp(t, root, "v1.1.0", "")
+			work := filepath.Join(root, "go.work")
+			if tc.vendor == "mod" {
+				t.Setenv("GOWORK", "off")
+				if out, err := goOutput(root, "mod", "vendor"); err != nil {
+					t.Fatalf("go mod vendor: %v\n%s", err, out)
+				}
+				t.Setenv("GOWORK", "")
+				writeTestFile(t, work, "go "+goVersion()+"\n\nuse .\n")
+			} else {
+				writeTestFile(t, work, "go "+goVersion()+"\n\nuse .\n")
+				if out, err := goOutput(root, "work", "vendor"); err != nil {
+					t.Fatalf("go work vendor: %v\n%s", err, out)
+				}
+				t.Setenv("GOWORK", "off")
+			}
+			moduleDirs.m = map[string]moduleDirEntry{}
+			if out, err := goOutput(root, "build", "-o", os.DevNull, "."); err != nil {
+				t.Fatalf("go builds the app (it ignores that vendor directory): %v\n%s", err, out)
+			}
+			if has, err := appHasPackage(c, protocolPackage); err != nil || !has {
+				t.Errorf("MyGo v1.1.0 from the module cache has protocol: %v, %v", has, err)
+			}
+		})
+	}
+}
+
+// TestAppHasPackageReadsTheModuleLineAsGoDoes: a MyGo the workspace uses as a
+// directory is found whatever its module line carries, a comment or quotes.
+func TestAppHasPackageReadsTheModuleLineAsGoDoes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("go")
+	}
+	applicationEnv(t, "")
+	base := t.TempDir()
+	local := localMygo(t, base, true)
+	writeTestFile(t, filepath.Join(local, "go.mod"), "module \"github.com/egoist/mygo\" // MyGo\n\ngo "+goVersion()+"\n")
+	c := requiringApp(t, filepath.Join(base, "app"), "v1.0.0", "")
+	writeTestFile(t, filepath.Join(base, "go.work"), "go "+goVersion()+"\n\nuse (\n\t./app\n\t./mygo\n)\n")
+	if out, err := goOutput(base, "work", "vendor"); err != nil {
+		t.Fatalf("go work vendor: %v\n%s", err, out)
+	}
+	moduleDirs.m = map[string]moduleDirEntry{}
+	if has, err := appHasPackage(c, protocolPackage); err != nil || !has {
+		t.Errorf("the used directory has protocol: %v, %v", has, err)
 	}
 }
