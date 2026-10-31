@@ -211,7 +211,7 @@ func TestRetainTextInputRowsFollowAssistiveTechnology(t *testing.T) {
 // (not versioned: the row records the *string) and the options (versioned),
 // assistive technology, the window's focus, scrolling.
 func TestRetainTextInputRowsRandomWalk(t *testing.T) {
-	for seed := int64(1); seed <= walkSeeds(); seed++ {
+	for seed := int64(1); seed <= raceFewer(walkSeeds(), 3); seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			const n = 40
 			r := newTextRows(n)
@@ -224,7 +224,7 @@ func TestRetainTextInputRowsRandomWalk(t *testing.T) {
 			words := []string{"a", "bc", "Ada", "你好", "x y", ""}
 			keys := []Key{KeyBackspace, KeyDelete, KeyLeft, KeyRight, KeyHome, KeyEnd, KeyEscape, KeyTab}
 			cmds := []string{"selectAll", "copy", "cut", "paste", "undo", "redo"}
-			for step := range 90 {
+			for step := range int(raceFewer(90, 60)) {
 				x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
 				var what string
 				switch k := rng.Intn(18); k {

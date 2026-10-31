@@ -18,7 +18,7 @@ func TestRetainRowsOfTextInputUsersRandomWalk(t *testing.T) {
 	kinds := []string{"combobox", "autocomplete", "tokens", "number", "editable", "color"}
 	for _, kind := range kinds {
 		t.Run(kind, func(t *testing.T) {
-			for seed := int64(1); seed <= walkSeeds(); seed++ {
+			for seed := int64(1); seed <= raceFewer(walkSeeds(), 3); seed++ {
 				t.Run(fmt.Sprint(seed), func(t *testing.T) { textUsersWalk(t, kind, seed) })
 			}
 		})
@@ -77,7 +77,7 @@ func textUsersWalk(t *testing.T, kind string, seed int64) {
 	rng := rand.New(rand.NewSource(seed))
 	sys := newSystemTheme(uint64(seed))
 	keys := []Key{KeyDown, KeyUp, KeyEnter, KeyEscape, KeyTab, KeyF2}
-	for step := range 80 {
+	for step := range int(raceFewer(80, 40)) {
 		x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
 		var what string
 		switch k := rng.Intn(13); k {
@@ -267,4 +267,13 @@ func unretainable(e *node) string {
 		}
 	}
 	return ""
+}
+
+// raceFewer is n, or race when the race detector is on, which makes the walks
+// several times slower: they walk fewer seeds and steps then.
+func raceFewer(n, race int64) int64 {
+	if raceEnabled {
+		return race
+	}
+	return n
 }
