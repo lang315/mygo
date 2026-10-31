@@ -1,7 +1,8 @@
 package ui
 
 // valueRead is a value a control showed in a row as it was built, and where it
-// came from: the *bool of a Checkbox or Toggle, the *string of a Select. An app
+// came from: the *bool of a Checkbox or Toggle, the *string of a Select, the
+// *float64 of a Slider. An app
 // may change it without input (a "select all" outside the list) and without
 // saying so in RowVersion: a row is kept only while each holds what the row was
 // built with, so the control versions itself. (By address: see the doc of
@@ -11,6 +12,8 @@ type valueRead struct {
 	v  bool
 	s  *string
 	sv string
+	f  *float64
+	fv float64
 }
 
 // maxValueReads is how many different controls a row records; more, and the row
@@ -56,7 +59,7 @@ func (rb *rowBuild) neverKept() {
 // sameValues reports whether every *bool holds what the row was built with.
 func sameValues(bs []valueRead) bool {
 	for _, b := range bs {
-		if b.p != nil && *b.p != b.v || b.s != nil && *b.s != b.sv {
+		if b.p != nil && *b.p != b.v || b.s != nil && *b.s != b.sv || b.f != nil && *b.f != b.fv {
 			return false
 		}
 	}
@@ -88,4 +91,32 @@ func (rb *rowBuild) noteString(s *string, v string) {
 		rb.values = rb.f.valueBuf[:0]
 	}
 	rb.values = append(rb.values, valueRead{s: s, sv: v})
+}
+
+// readsFloat notes the *float64 a control (Slider) made the row show.
+func (c *context) readsFloat(f *float64, v float64) {
+	if c != nil && c.row != nil {
+		c.row.noteFloat(f, v)
+	}
+}
+
+// noteFloat is noteBool for a number. A NaN is never equal to itself, so a row
+// that shows one is built in every frame.
+func (rb *rowBuild) noteFloat(f *float64, v float64) {
+	for _, b := range rb.values {
+		if b.f == f && f != nil {
+			if b.fv != v {
+				rb.neverKept()
+			}
+			return
+		}
+	}
+	if len(rb.values) >= maxValueReads {
+		rb.neverKept()
+		return
+	}
+	if rb.values == nil && rb.f != nil {
+		rb.values = rb.f.valueBuf[:0]
+	}
+	rb.values = append(rb.values, valueRead{f: f, fv: v})
 }
