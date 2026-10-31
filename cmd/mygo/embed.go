@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -150,58 +151,93 @@ const mygoModule = "github.com/egoist/mygo"
 // code imports, not what this build adds), and nothing here can tell.
 //
 // An app builds from its vendor directory when -mod=vendor is in effect
-// (GOFLAGS or go env -w), or when no -mod is and vendor/modules.txt is next
-// to go.mod (go 1.14 and later). Otherwise the module is where go list -m says;
-// when it says none because the module is not in the cache yet, go list on
-// the package fetches it as a build would and tells.
+// (GOFLAGS or go env -w), or when no -mod is, there is no workspace (go.work,
+// which makes go ignore the vendor directories of its modules) and
+// vendor/modules.txt is next to go.mod (go 1.14 and later). Otherwise the
+// module is where go says it is, as the app's go.mod and go.work require it:
+// go list -m gives its directory, and for a module that is not in the module
+// cache yet go mod download fetches that version, which it never changes, as
+// a build would. The answer is not asked of go.mod's version beyond that: go
+// list on the package would raise the version of MyGo that the app builds
+// with, or fail, depending on -mod.
 //
-// The answers that are not errors are remembered for the run of the CLI, while
-// go.mod, go.sum and vendor/modules.txt stay as they were: a live-reloading
-// `mygo dev` builds again at every change of the app.
+// The directory of the module is remembered for the run of the CLI, while
+// go.mod, go.sum and go.work stay as they were, so that the builds of a
+// live-reloading `mygo dev` ask go for it once; the package is looked for in
+// that directory every time, so a MyGo that is a directory (a replace, a
+// workspace) is seen as it changes.
 func appHasPackage(c *Config, path string) (bool, error) {
-	key := c.root + "\x00" + path
-	pkgChecks.Lock()
-	known, ok := pkgChecks.m[key]
-	pkgChecks.Unlock()
-	if ok && known.fingerprint == fingerprint(known.files) {
-		return known.has, nil
-	}
-	gomodOut, err := goOutput(c.root, "env", "GOMOD")
-	if err != nil {
-		return false, fmt.Errorf("finding the go.mod of the app: %w", err)
-	}
-	gomod := strings.TrimSpace(gomodOut)
-	if gomod == "" || gomod == os.DevNull {
-		return false, fmt.Errorf("%s is not in a Go module", c.root)
-	}
-	root := filepath.Dir(gomod)
-	files := []string{gomod, filepath.Join(root, "go.sum"), filepath.Join(root, "vendor", "modules.txt")}
-	before := fingerprint(files)
-
-	var has bool
-	if vendorMode(c.root, root) {
-		has, err = hasInVendor(root, path)
-	} else {
-		has, err = hasInModule(c.root, path)
-	}
+	env, err := appBuildEnv(c.root)
 	if err != nil {
 		return false, err
 	}
-	pkgChecks.Lock()
-	pkgChecks.m[key] = pkgCheck{has: has, files: files, fingerprint: before}
-	pkgChecks.Unlock()
-	return has, nil
+	if env.GOMOD == "" || env.GOMOD == os.DevNull {
+		return false, fmt.Errorf("%s is not in a Go module", c.root)
+	}
+	root := filepath.Dir(env.GOMOD)
+	if env.vendorMode() {
+		return hasInVendor(root, path)
+	}
+	dir, err := mygoModuleDir(c.root, env)
+	if err != nil {
+		return false, err
+	}
+	rel := filepath.FromSlash(strings.TrimPrefix(path, mygoModule+"/"))
+	return hasGoFiles(filepath.Join(dir, rel)), nil
 }
 
-// pkgChecks remembers what appHasPackage found, for fingerprint(files) to
-// stay as it was.
-var pkgChecks = struct {
-	sync.Mutex
-	m map[string]pkgCheck
-}{m: map[string]pkgCheck{}}
+// buildEnv is what go says of the environment of the app's build.
+type buildEnv struct {
+	GOMOD, GOWORK, GOFLAGS string
+}
 
-type pkgCheck struct {
-	has         bool
+// appBuildEnv asks go, in dir, for the go.mod, the workspace and the flags of
+// a build: the environment variables and the env file (go env -w) both count.
+func appBuildEnv(dir string) (buildEnv, error) {
+	out, err := goOutput(dir, "env", "-json", "GOMOD", "GOWORK", "GOFLAGS")
+	if err != nil {
+		return buildEnv{}, fmt.Errorf("finding the go.mod of the app: %w", err)
+	}
+	var env buildEnv
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		return buildEnv{}, fmt.Errorf("reading go env: %w", err)
+	}
+	env.GOMOD = strings.TrimSpace(env.GOMOD)
+	env.GOWORK = strings.TrimSpace(env.GOWORK)
+	return env, nil
+}
+
+// inWorkspace reports whether go builds the app in workspace mode.
+func (e buildEnv) inWorkspace() bool { return e.GOWORK != "" && e.GOWORK != "off" }
+
+// vendorMode reports whether the app builds from the vendor directory next to
+// its go.mod.
+func (e buildEnv) vendorMode() bool {
+	mod := ""
+	for _, f := range strings.Fields(e.GOFLAGS) {
+		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "mod="); ok {
+			mod = v // the last one wins
+		}
+	}
+	if mod != "" {
+		return mod == "vendor"
+	}
+	if e.inWorkspace() {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(filepath.Dir(e.GOMOD), "vendor", "modules.txt"))
+	return err == nil
+}
+
+// moduleDirs remembers the directory of MyGo's module for the app at a root,
+// in an environment, for as long as the files that decide it stay as they were.
+var moduleDirs = struct {
+	sync.Mutex
+	m map[string]moduleDirEntry
+}{m: map[string]moduleDirEntry{}}
+
+type moduleDirEntry struct {
+	dir         string
 	files       []string
 	fingerprint string
 }
@@ -219,20 +255,46 @@ func fingerprint(files []string) string {
 	return b.String()
 }
 
-// vendorMode reports whether the app, whose go.mod is in root, builds from its
-// vendor directory.
-func vendorMode(dir, root string) bool {
-	mod := ""
-	for _, f := range goFlags(dir) {
-		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "mod="); ok {
-			mod = v // the last one wins
+// mygoModuleDir returns the directory of MyGo's module for the app at dir: the
+// version its go.mod requires, or the directory a replace or a workspace gives.
+func mygoModuleDir(dir string, env buildEnv) (string, error) {
+	files := []string{env.GOMOD, filepath.Join(filepath.Dir(env.GOMOD), "go.sum")}
+	if env.inWorkspace() {
+		files = append(files, env.GOWORK, env.GOWORK+".sum")
+	}
+	key := strings.Join([]string{dir, env.GOMOD, env.GOWORK, env.GOFLAGS}, "\x00")
+	moduleDirs.Lock()
+	known, ok := moduleDirs.m[key]
+	moduleDirs.Unlock()
+	if ok && known.fingerprint == fingerprint(known.files) {
+		if _, err := os.Stat(known.dir); err == nil {
+			return known.dir, nil
 		}
 	}
-	if mod != "" {
-		return mod == "vendor"
+	before := fingerprint(files)
+	out, err := goOutput(dir, "list", "-m", "-f", "{{.Dir}}", mygoModule)
+	if err != nil {
+		return "", fmt.Errorf("finding the MyGo of the app: %w", err)
 	}
-	_, err := os.Stat(filepath.Join(root, "vendor", "modules.txt"))
-	return err == nil
+	moduleDir := strings.TrimSpace(out)
+	if moduleDir == "" {
+		// The module is not in the module cache yet, so go list -m has no
+		// directory for it. go mod download fetches the version the app
+		// requires and changes no go.mod; go list on a package would raise it.
+		out, err = goOutput(dir, "mod", "download", "-json", mygoModule)
+		var got struct{ Dir, Error string }
+		if jerr := json.Unmarshal([]byte(out), &got); err != nil || jerr != nil || got.Error != "" || got.Dir == "" {
+			if err == nil {
+				err = errors.New(got.Error)
+			}
+			return "", fmt.Errorf("fetching the MyGo of the app: %w", err)
+		}
+		moduleDir = got.Dir
+	}
+	moduleDirs.Lock()
+	moduleDirs.m[key] = moduleDirEntry{dir: moduleDir, files: files, fingerprint: before}
+	moduleDirs.Unlock()
+	return moduleDir, nil
 }
 
 // hasInVendor looks for the package in the vendor directory in root.
@@ -245,33 +307,6 @@ func hasInVendor(root, path string) (bool, error) {
 		return true, nil
 	}
 	return false, fmt.Errorf("the vendor directory of the app, %s, has no %s, which this build needs, and go mod vendor copies only packages the app's code imports (not the ones this build adds): add import _ %q to a file of the app (main.go), run go get %s@latest if its MyGo is older than this CLI, and go mod vendor; or build without vendoring", vendor, path, path, mygoModule)
-}
-
-// hasInModule asks go where the app's MyGo is and looks for the package in
-// it.
-func hasInModule(dir, path string) (bool, error) {
-	out, err := goOutput(dir, "list", "-m", "-f", "{{.Dir}}", mygoModule)
-	if err != nil {
-		return false, fmt.Errorf("finding the MyGo of the app: %w", err)
-	}
-	if moduleDir := strings.TrimSpace(out); moduleDir != "" {
-		return hasGoFiles(filepath.Join(moduleDir, filepath.FromSlash(strings.TrimPrefix(path, mygoModule+"/")))), nil
-	}
-	// The module is not in the module cache yet, so it has no directory.
-	// go list on the package fetches it, as the build would, and says whether
-	// the package is there; only go's "does not contain package" is a no.
-	out, err = goOutput(dir, "list", "-e", "-f", "{{if .Error}}{{.Error.Err}}{{else}}ok{{end}}", path)
-	if err != nil {
-		return false, fmt.Errorf("finding the MyGo of the app: %w", err)
-	}
-	switch said := strings.TrimSpace(out); {
-	case said == "ok":
-		return true, nil
-	case strings.Contains(said, "does not contain package"):
-		return false, nil
-	default:
-		return false, fmt.Errorf("finding %s in the MyGo of the app: %s", path, said)
-	}
 }
 
 // goOutput runs go in dir and returns what it printed; its error holds what

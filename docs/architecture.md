@@ -1580,13 +1580,15 @@ as in Tauri:
   to sort before the app's, so that their `init` runs first and a
   `SetFrontend` of the app's own wins. With nothing to serve, the page
   explains how to get a frontend. An app whose go.mod pins a MyGo that has no
-  package `protocol` gets the old call, `mygo.SetFrontend` (`appHasPackage`,
-  which says no only when go says the module lacks the package, reads the
-  vendor directory when the app builds from one, and fetches a module that
-  is not in the cache yet; it remembers its answer while go.mod, go.sum and
-  vendor/modules.txt stay the same), and one whose vendor directory lacks the
-  package fails the build, saying to import it. Builds for browsers only
-  do not ask.
+  package `protocol` gets the old call, `mygo.SetFrontend` (`appHasPackage`:
+  it looks for the package in the directory of the MyGo the app builds with,
+  which `go list -m` gives, or `go mod download` fetches at the version the
+  app requires, never raising it; in a vendor directory when the app builds
+  from one, which a workspace never does; any error of go fails the build.
+  It remembers the module's directory while go.mod, go.sum and go.work stay
+  the same, and looks in it every time), and one whose vendor directory
+  lacks the package fails the build, saying to import it. Builds for
+  browsers only do not ask.
 
 ## Windows, lifecycle and quitting
 

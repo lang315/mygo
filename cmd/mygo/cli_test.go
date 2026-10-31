@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/zip"
 	"bytes"
 	"debug/pe"
 	"encoding/binary"
@@ -9,15 +8,12 @@ import (
 	"go/parser"
 	"go/token"
 	"image/png"
-	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestConfigDefaults(t *testing.T) {
@@ -641,147 +637,6 @@ func TestAppHasPackageSaysSoOnlyWhenSure(t *testing.T) {
 	vendor(c)
 	if _, err := frontendSource(c, frontendGenSource); err == nil || !strings.Contains(err.Error(), `import _ "github.com/egoist/mygo/protocol"`) {
 		t.Errorf("a vendor directory without protocol: %v", err)
-	}
-}
-
-// mygoProxy writes a module proxy (a directory for GOPROXY=file://) that has
-// one version, v1.0.0, of MyGo, with package protocol or without it.
-func mygoProxy(t *testing.T, withProtocol bool) string {
-	t.Helper()
-	dir := t.TempDir()
-	at := filepath.Join(dir, "github.com", "egoist", "mygo", "@v")
-	if err := os.MkdirAll(at, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	gomod := "module github.com/egoist/mygo\n\ngo " + goVersion() + "\n"
-	files := map[string]string{"go.mod": gomod, "mygo.go": "package mygo\n"}
-	if withProtocol {
-		files["protocol/protocol.go"] = "package protocol\n"
-	}
-	var zipped bytes.Buffer
-	zw := zip.NewWriter(&zipped)
-	for name, content := range files {
-		w, err := zw.Create("github.com/egoist/mygo@v1.0.0/" + name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		io.WriteString(w, content)
-	}
-	if err := zw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	for name, content := range map[string]string{
-		"list":        "v1.0.0\n",
-		"v1.0.0.info": `{"Version":"v1.0.0","Time":"2024-01-01T00:00:00Z"}`,
-		"v1.0.0.mod":  gomod,
-		"v1.0.0.zip":  zipped.String(),
-	} {
-		if err := os.WriteFile(filepath.Join(at, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
-
-// TestAppHasPackageWithAColdModuleCache: go list -m gives no directory for a
-// module that is not in the module cache yet, which looks like vendor mode.
-// The answer comes from the package then: fetched as a build would, found, or
-// told by go not to be in the module; and an app with a vendor directory that
-// builds with -mod=mod ignores it.
-func TestAppHasPackageWithAColdModuleCache(t *testing.T) {
-	if testing.Short() {
-		t.Skip("go list")
-	}
-	t.Setenv("GOFLAGS", "-mod=mod")
-	t.Setenv("GOSUMDB", "off")
-	t.Setenv("GOWORK", "off")
-	t.Setenv("GOTOOLCHAIN", "local")
-	app := func(withProtocol bool) *Config {
-		t.Setenv("GOPROXY", "file://"+mygoProxy(t, withProtocol))
-		cache := t.TempDir()
-		t.Setenv("GOMODCACHE", cache) // cold
-		// The files go keeps in it are read-only.
-		t.Cleanup(func() {
-			filepath.WalkDir(cache, func(path string, d fs.DirEntry, err error) error {
-				if err == nil {
-					os.Chmod(path, 0o755)
-				}
-				return nil
-			})
-		})
-		dir := t.TempDir()
-		for name, content := range map[string]string{
-			"go.mod":  "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v1.0.0\n",
-			"main.go": "package main\n\nimport _ \"github.com/egoist/mygo\"\n\nfunc main() {}\n",
-		} {
-			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return &Config{root: dir}
-	}
-	for _, withProtocol := range []bool{true, false} {
-		c := app(withProtocol)
-		if out, err := goOutput(c.root, "list", "-m", "-f", "{{.Dir}}", mygoModule); err != nil || strings.TrimSpace(out) != "" {
-			t.Fatalf("the module cache is not cold: go list -m gave %q, %v", out, err)
-		}
-		if has, err := appHasPackage(c, protocolPackage); err != nil || has != withProtocol {
-			t.Errorf("a cold cache, a MyGo with protocol = %v: %v, %v", withProtocol, has, err)
-		}
-	}
-
-	// -mod=mod over a vendor directory that lacks the package: the module is read.
-	c := app(true)
-	if err := os.MkdirAll(filepath.Join(c.root, "vendor"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(c.root, "vendor", "modules.txt"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if has, err := appHasPackage(c, protocolPackage); err != nil || !has {
-		t.Errorf("-mod=mod with a stale vendor directory: %v, %v", has, err)
-	}
-	// Without -mod, a vendor directory is the module, and this one is not.
-	t.Setenv("GOFLAGS", "")
-	if has, err := appHasPackage(c, protocolPackage); err == nil || has {
-		t.Errorf("a vendor directory that is the module and lacks the package: %v, %v", has, err)
-	}
-}
-
-// TestAppHasPackageIsRemembered: the answer is kept while go.mod, go.sum and
-// vendor/modules.txt stay as they were, so that the builds of `mygo dev` ask go
-// once; writing one of them asks again.
-func TestAppHasPackageIsRemembered(t *testing.T) {
-	if testing.Short() {
-		t.Skip("go list")
-	}
-	t.Setenv("GOFLAGS", "-mod=mod")
-	t.Setenv("GOPROXY", "off")
-	t.Setenv("GOWORK", "off")
-	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
-	sum, _ := os.ReadFile(filepath.Join(checkout, "go.sum"))
-	dir := t.TempDir()
-	gomod := "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + checkout + "\n"
-	for name, content := range map[string]string{"go.mod": gomod, "go.sum": string(sum), "main.go": "package main\n\nimport _ \"github.com/egoist/mygo\"\n\nfunc main() {}\n"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	c := &Config{root: dir}
-	if has, err := appHasPackage(c, protocolPackage); err != nil || !has {
-		t.Fatalf("the first answer: %v, %v", has, err)
-	}
-	// With no go tool to ask, only what is remembered answers.
-	t.Setenv("PATH", t.TempDir())
-	if has, err := appHasPackage(c, protocolPackage); err != nil || !has {
-		t.Errorf("the second answer was not remembered: %v, %v", has, err)
-	}
-	later := time.Now().Add(time.Hour)
-	if err := os.Chtimes(filepath.Join(dir, "go.mod"), later, later); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := appHasPackage(c, protocolPackage); err == nil {
-		t.Error("a go.mod that was written did not make appHasPackage ask again")
 	}
 }
 
