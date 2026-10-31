@@ -16,6 +16,10 @@ type textRows struct {
 	opts [2]textOpts
 	bump [2][]uint64
 	twin int
+	// buttonsBuilt builds the rows of buttons in every frame, so that a row
+	// kept is one of an input: a guard that counts the rows kept fails without it,
+	// as the rows of buttons were kept before text inputs.
+	buttonsBuilt bool
 }
 
 type textOpts struct {
@@ -64,6 +68,9 @@ func (r *textRows) scene(n int) func() func(c *Context) {
 								in.Password()
 							}
 						} else {
+							if r.buttonsBuilt {
+								c.build().neverKept()
+							}
 							Button(c, "press")
 						}
 					})
@@ -208,6 +215,7 @@ func TestRetainTextInputRowsRandomWalk(t *testing.T) {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			const n = 40
 			r := newTextRows(n)
+			r.buttonsBuilt = true
 			p := newPair(t, 500, 400, r.scene(n))
 			p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
 			p.idle(3)
@@ -313,11 +321,20 @@ func firstTextFieldOrZero(tt *Tester) uint64 {
 // app's own text-input client carry state the row does not hold: their rows are
 // built in every frame, as before.
 func TestRetainTextAreaAndClientRowsAreBuilt(t *testing.T) {
+	bufs := make([]*TextBuffer, 30)
+	clients := make([]*primitiveClient, 30)
+	for i := range bufs {
+		bufs[i], clients[i] = NewTextBuffer("x"), &primitiveClient{}
+	}
 	for _, tc := range []struct {
 		name string
-		row  func(c *Context, v *string)
+		row  func(c *Context, v *string, i int)
 	}{
-		{"TextArea", func(c *Context, v *string) { TextArea(c, v).Width(140) }},
+		{"TextArea", func(c *Context, v *string, i int) { TextArea(c, v).Width(140) }},
+		{"TextInputBuffer", func(c *Context, v *string, i int) { TextInputBuffer(c, bufs[i]).Width(140) }},
+		// Only HandleTextInput's neverKept keeps this row built: retainable no
+		// longer refuses a text client.
+		{"HandleTextInput", func(c *Context, v *string, i int) { Box(c).Size(100, 20).HandleTextInput(clients[i]) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			vals := make([]string, 30)
@@ -326,7 +343,7 @@ func TestRetainTextAreaAndClientRowsAreBuilt(t *testing.T) {
 				return func(c *Context) {
 					Column(c).Fill().Children(func() {
 						List(c, s, 30, func(i int) {
-							Row(c).Padding(4).Children(func() { tc.row(c, &vals[i]) })
+							Row(c).Padding(4).Children(func() { tc.row(c, &vals[i], i) })
 						}).Grow(1)
 					})
 				}

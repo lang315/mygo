@@ -145,7 +145,7 @@ func shownTexts(tt *Tester) (out []string) {
 // must show what a built one shows. Each user of the single-line input gets its
 // value to the row by its own path; this fails if that path is not noted.
 func TestRetainRowsOfTextInputUsersFollowTheApp(t *testing.T) {
-	for _, kind := range []string{"combobox", "autocomplete", "tokens", "number", "editable", "color"} {
+	for _, kind := range []string{"textinput", "textinputbase", "autocomplete", "comboboxbase", "combobox", "tokens", "number", "editable", "color"} {
 		t.Run(kind, func(t *testing.T) {
 			const n = 12
 			var text [2][]string
@@ -167,6 +167,12 @@ func TestRetainRowsOfTextInputUsersFollowTheApp(t *testing.T) {
 						List(c, s, n, func(i int) {
 							Row(c).Padding(4).Children(func() {
 								switch kind {
+								case "textinput":
+									TextInput(c, &text[me][i]).Width(140)
+								case "textinputbase":
+									TextInputBase(c, &text[me][i]).Width(140)
+								case "comboboxbase":
+									ComboboxBase(c, &text[me][i]).Input.Width(140)
 								case "combobox":
 									Combobox(c, &text[me][i], opts)
 								case "autocomplete":
@@ -215,8 +221,8 @@ func TestRetainRowsOfTextInputUsersFollowTheApp(t *testing.T) {
 			// with the field, popover and others behind it for the first two). The
 			// color picker is not either (a paint function of its own, and behind it a
 			// motion that is not animateRest, state.pending), the editable text uses a
-			// Handle, and the autocomplete is kept and watches the app's string itself
-			// (readsString).
+			// Handle, and the TextInput, TextInputBase, ComboboxBase and Autocomplete are
+			// kept and watch the app's string itself (readsString).
 			wantWhy := map[string]string{"combobox": "focusTo", "tokens": "focusTo", "number": "focusTo", "color": "paintFn"}
 			if want, never := wantWhy[kind]; never {
 				if why != want || p.kept.rt.rowsKept != 0 {
@@ -226,11 +232,13 @@ func TestRetainRowsOfTextInputUsersFollowTheApp(t *testing.T) {
 				if p.kept.rt.rowsKept != 0 {
 					t.Fatalf("%d rows kept: an editable text uses a Handle, which builds its row", p.kept.rt.rowsKept)
 				}
-			} else if p.kept.rt.rowsKept <= kept {
-				t.Fatalf("rows kept %d -> %d: the autocomplete's rows are kept", kept, p.kept.rt.rowsKept)
-			}
-			if got := shownTexts(p.kept); kind == "autocomplete" && got[2] != "apricot" {
-				t.Fatalf("a kept row shows %q after the app set apricot", got[2])
+			} else {
+				if p.kept.rt.rowsKept <= kept {
+					t.Fatalf("rows kept %d -> %d: the rows of a %s are kept", kept, p.kept.rt.rowsKept, kind)
+				}
+				if got := shownTexts(p.kept); got[2] != "apricot" {
+					t.Fatalf("a kept row shows %q after the app set apricot", got[2])
+				}
 			}
 		})
 	}
