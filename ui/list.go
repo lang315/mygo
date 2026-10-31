@@ -1307,12 +1307,13 @@ func (s *ListState) keyIn(i int) any {
 	return s.keyOf(i)
 }
 
-// chosen reports whether row i, of key k, is chosen.
+// chosen reports whether row i, of key k, is chosen: none is in a list that
+// chooses no rows (neither Selection nor Selected).
 func (f *listFrame) chosen(i int, k any) bool {
 	if sel := f.s.Selection; sel != nil {
 		return sel.has(k)
 	}
-	return *f.s.Selected == i
+	return f.s.Selected != nil && *f.s.Selected == i
 }
 
 // chosenRows returns the rows chosen, in their order.
