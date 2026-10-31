@@ -433,10 +433,18 @@ func ownWindow(h uintptr) bool { return h != 0 && windowProcess(h) == uint32(sys
 // release will come. If no release came within the given time, missed
 // describes the window under the point and the one in front, and what may
 // keep the click from coming back (diagnoseClick).
-func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string) {
+//
+// The system sends a button to the window it last found under the cursor, which
+// it updates as the mouse moves, and which lags behind a window that appeared
+// under a cursor that stayed: the button went to the window that was there
+// (the runner's terminal), or to none, and never came back. So the cursor
+// moves off the point and onto it, and the click waits for that move to reach a
+// window of the app. moves says how many times it moved: more than one means
+// the first move did not reach it.
+func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string, moves int) {
 	w := theBackend.windows[hwnd]
 	if w == nil || w.surface == nil {
-		return false, ""
+		return false, "", 0
 	}
 	pt := screenPoint(w, x, y)
 	// A window shown while another app is in front can stay behind it,
@@ -458,19 +466,31 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 	}
 	under := rootAt(pt)
 	if !ownWindow(under) {
-		return true, describe()
+		return true, describe(), 0
 	}
 	enabled, _, _ := procIsWindowEnabled.Call(under)
+	deadline := time.Now().Add(within)
+	// A window its modal child disables takes no mouse messages: there is
+	// no move to wait for.
+	if enabled != 0 {
+		reached, quit := false, false
+		if moves, reached, quit = moveCursorTo(pt, deadline); quit {
+			return true, "", moves
+		}
+		if !reached {
+			return true, describe() + fmt.Sprintf("; the cursor moved %d times to (%d, %d) and no move reached a window of the app", moves, pt.X, pt.Y), moves
+		}
+	}
 	placed, _, _ := user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
 	mouse := user32.NewProc("mouse_event")
 	const leftDown, leftUp = 0x0002, 0x0004
 	mouse.Call(leftDown, 0, 0, 0, 0)
 	mouse.Call(leftUp, 0, 0, 0, 0)
 	if enabled == 0 {
-		return true, ""
+		return true, "", moves
 	}
 	downs := 0 // for the diagnosis of a click that did not come back
-	for deadline := time.Now().Add(within); time.Now().Before(deadline); {
+	for time.Now().Before(deadline) {
 		procMsgWaitForMultipleObjectsEx.Call(0, 0, 100, qsAllInput, mwmoInputAvailable)
 		var m msg
 		for {
@@ -479,7 +499,7 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			}
 			if m.Message == wmQuit {
 				procPostQuitMessage.Call(m.WParam) // for the loop running outside
-				return true, ""
+				return true, "", moves
 			}
 			if m.Message == wmLButtonDown {
 				downs++
@@ -487,11 +507,79 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 			if m.Message == wmLButtonUp {
-				return true, ""
+				return true, "", moves
 			}
 		}
 	}
-	return true, describe() + diagnoseClick(pt, placed != 0, downs)
+	return true, describe() + diagnoseClick(pt, placed != 0, downs) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves), moves
+}
+
+// moveCursorTo moves the cursor off pt and onto it with the system's input,
+// as a mouse does, and handles messages until the move onto pt reaches a
+// window of the app, which says the system found the app's window under the
+// cursor. It moves again when the move did not come within a second, and
+// returns how many moves it made, and whether one reached the app before the
+// deadline. quit is set when the app is quitting.
+func moveCursorTo(pt point, deadline time.Time) (moves int, reached, quit bool) {
+	for time.Now().Before(deadline) {
+		moves++
+		absoluteMove(point{pt.X + 1, pt.Y})
+		absoluteMove(pt)
+		attempt := time.Now().Add(time.Second)
+		for time.Now().Before(attempt) && time.Now().Before(deadline) {
+			procMsgWaitForMultipleObjectsEx.Call(0, 0, 100, qsAllInput, mwmoInputAvailable)
+			var m msg
+			for {
+				if r, _, _ := procPeekMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0, pmRemove); r == 0 {
+					break
+				}
+				if m.Message == wmQuit {
+					procPostQuitMessage.Call(m.WParam) // for the loop running outside
+					return moves, false, true
+				}
+				procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
+				procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
+				// The point of a message is where the cursor was as it was posted.
+				if m.Message == wmMouseMove && abs32(m.Pt.X-pt.X) <= 1 && abs32(m.Pt.Y-pt.Y) <= 1 && ownWindow(rootOf(m.HWnd)) {
+					return moves, true, false
+				}
+			}
+		}
+	}
+	return moves, false, false
+}
+
+func abs32(n int32) int32 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+// absoluteMove moves the cursor to a point of the screen, in physical
+// pixels, with an input event, which the system routes to the window under
+// it (SetCursorPos sends none).
+func absoluteMove(pt point) {
+	const (
+		move, absolute, virtualDesk        = 0x0001, 0x8000, 0x4000
+		smXVirtual, smYVirtual, smCX, smCY = 76, 77, 78, 79
+	)
+	metric := func(i uintptr) int32 { r, _, _ := user32.NewProc("GetSystemMetrics").Call(i); return int32(r) }
+	x0, y0, cx, cy := metric(smXVirtual), metric(smYVirtual), metric(smCX), metric(smCY)
+	// 0..65535 over the virtual screen, rounded up so that the pixel is the point's.
+	norm := func(v, from, size int32) uintptr {
+		return uintptr((int64(v-from)*65536 + int64(size) - 1) / int64(size))
+	}
+	user32.NewProc("mouse_event").Call(move|absolute|virtualDesk, norm(pt.X, x0, cx), norm(pt.Y, y0, cy), 0, 0)
+}
+
+// rootOf returns the top-level window of h.
+func rootOf(h uintptr) uintptr {
+	const gaRoot = 2
+	if root, _, _ := user32.NewProc("GetAncestor").Call(h, gaRoot); root != 0 {
+		return root
+	}
+	return h
 }
 
 // diagnoseClick describes what may keep a click from coming back, for the
