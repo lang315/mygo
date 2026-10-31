@@ -143,6 +143,20 @@ type editorOptions struct {
 	caretLimit         func(text string) int
 }
 
+// busy reports whether the editor has something that a build has to take up, or
+// that goes on by itself, so that a row holding it cannot be kept: an input
+// method composing, edits and published text that wait for the next build,
+// a drag that selects, a text area or a document (they scroll, lay out and
+// reveal the caret), and an edit being filtered. The caret's blink and the
+// coalescing of typing in one undo step need a frame only while the input has
+// the focus, which an acting element is (retain.go). A single-line input that
+// has the focus and nothing else going on is at rest: what it shows is its state,
+// painted from it, and what it was built with is what its options are now.
+func (ed *editor) busy() bool {
+	return ed.compose != "" || ed.compositionActive || len(ed.queue) != 0 || ed.nativeDirty || ed.bufferDirty ||
+		ed.dragging || ed.base != nil || ed.filtering || ed.keying || ed.area != nil || ed.document != nil || ed.multiline
+}
+
 // rebuild starts a build of the input: what the build before set becomes
 // the options its pending edits apply by, and this build's start from
 // the defaults.

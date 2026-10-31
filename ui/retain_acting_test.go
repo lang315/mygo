@@ -171,10 +171,12 @@ func TestRetainActingDragOverARowElement(t *testing.T) {
 	p.idle(2)
 }
 
-// A text input of a row composing text (IME): the input has the focus.
+// A text input of a row composing text (IME): the input has the focus. The rows
+// of single-line inputs are kept while they have none, so this one was linked until
+// the click gave it the focus.
 func TestRetainActingCompositionInARow(t *testing.T) {
 	vals := make([]string, 60)
-	p := actingPairKept(t, false, func(c *Context, row int) {
+	p := actingPairKept(t, true, func(c *Context, row int) {
 		TextInput(c, &vals[row]).Width(100)
 	})
 	r := Rect{}

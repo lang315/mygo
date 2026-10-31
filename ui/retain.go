@@ -225,8 +225,11 @@ func setDepth(e *node) {
 // the focus (Button, Link, Toggle, Checkbox) is kept: the focus order is
 // collected as the rows are walked, not as they are built, the engine holds the
 // row that has or lost the focus as acting, and a replay refuses it
-// (TestRetainFocusableRowsRandomWalk). A text field still is not (textClient,
-// state.pending: its editor).
+// (TestRetainFocusableRowsRandomWalk). So is a single-line text input while it
+// has no focus (state.pending: its editor when it needs a frame; the *string it
+// shows is watched as a valueRead); a text area, a document editor and an app's
+// own text-input client (HandleTextInput) are built in every frame, each by its
+// own neverKept.
 //
 // A row with a Transition is never kept either (state.pending: its transition
 // record), and the layout of a moved row depends on it (retain_layout.go): the
@@ -237,7 +240,7 @@ func retainable(e *node) bool {
 	if e.popover != nil || e.placeOn != nil || e.nameFrom != nil || e.focusTo != nil || e.activeDescendant != nil ||
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||
 		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.objectFn != nil ||
-		e.paintAfterFn != nil || (e.paintFn != nil && !e.paintPure) || e.textClient != nil || e.accFill != nil || e.copyData != nil || e.tip ||
+		e.paintAfterFn != nil || (e.paintFn != nil && !e.paintPure) || e.accFill != nil || e.copyData != nil || e.tip ||
 		e.effect != nil || e.hidden || e.leaving != 0 || e.ghosts {
 		return false
 	}

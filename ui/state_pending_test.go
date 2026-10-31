@@ -97,7 +97,7 @@ func TestStatePendingReportsEachPendingField(t *testing.T) {
 		"dropped":       func(s *state) { s.dropped = []string{"a"} },
 		"hasDropped":    func(s *state) { s.hasDropped = true },
 		"dataDropped":   func(s *state) { s.dataDropped = new(transfer.Drop) },
-		"editor":        func(s *state) { s.editor = new(editor) },
+		"editor":        func(s *state) { s.editor = &editor{compose: "x"} },
 		"dragValue":     func(s *state) { s.dragValue = 1 },
 		"dragFn":        func(s *state) { s.dragFn = func() any { return nil } },
 		"accepts":       func(s *state) { s.accepts = func(any) bool { return true } },
@@ -157,6 +157,34 @@ func TestStatePendingCountsOnlyMovingRestableMotions(t *testing.T) {
 		s := state{motions: map[any]*channel{1: &tc.ch}}
 		if got := s.pending(); got != tc.want {
 			t.Errorf("%s: pending = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// An editor at rest does not make its state pending; each thing that needs a frame,
+// or a build to take it up, does (editor.busy).
+func TestEditorBusyListsWhatNeedsAFrame(t *testing.T) {
+	if (&state{editor: new(editor)}).pending() {
+		t.Error("a single-line input at rest makes its state pending")
+	}
+	for name, f := range map[string]func(ed *editor){
+		"compose":           func(ed *editor) { ed.compose = "ni" },
+		"compositionActive": func(ed *editor) { ed.compositionActive = true },
+		"queue":             func(ed *editor) { ed.queue = []editEvent{{}} },
+		"nativeDirty":       func(ed *editor) { ed.nativeDirty = true },
+		"bufferDirty":       func(ed *editor) { ed.bufferDirty = true },
+		"dragging":          func(ed *editor) { ed.dragging = true },
+		"base":              func(ed *editor) { ed.base = new(composeBase) },
+		"filtering":         func(ed *editor) { ed.filtering = true },
+		"keying":            func(ed *editor) { ed.keying = true },
+		"area":              func(ed *editor) { ed.area = new(area) },
+		"document":          func(ed *editor) { ed.document = new(TextBuffer) },
+		"multiline":         func(ed *editor) { ed.multiline = true },
+	} {
+		ed := new(editor)
+		f(ed)
+		if !(&state{editor: ed}).pending() {
+			t.Errorf("editor.%s is set, and the state is not pending", name)
 		}
 	}
 }
