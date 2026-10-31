@@ -215,15 +215,15 @@ func TestRetainRowsOfTextInputUsersFollowTheApp(t *testing.T) {
 					why = w
 				}
 			})
-			// The path that keeps the row from going stale. The combobox, the token
-			// field and the number input bind a state of their own, which a kept row
-			// would not see follow the app: they are never kept (retainable: focusTo,
-			// with the field, popover and others behind it for the first two). The
-			// color picker is not either (a paint function of its own, and behind it a
-			// motion that is not animateRest, state.pending), the editable text uses a
-			// Handle, and the TextInput, TextInputBase, ComboboxBase and Autocomplete are
-			// kept and watch the app's string itself (readsString).
-			wantWhy := map[string]string{"combobox": "focusTo", "tokens": "focusTo", "number": "focusTo", "color": "paintFn"}
+			// The path that keeps the row from going stale. The token field and the number
+			// input bind a state of their own, which a kept row would not see follow the
+			// app: they are never kept (retainable: focusTo; the token field has the
+			// field and the popover behind it). The color picker is not either (a paint
+			// function of its own, and behind it a motion that is not animateRest,
+			// state.pending), the editable text uses a Handle, and the TextInput,
+			// TextInputBase, Combobox, ComboboxBase and Autocomplete are kept and watch
+			// the app's string itself (readsString).
+			wantWhy := map[string]string{"tokens": "focusTo", "number": "focusTo", "color": "paintFn"}
 			if want, never := wantWhy[kind]; never {
 				if why != want || p.kept.rt.rowsKept != 0 {
 					t.Fatalf("rows kept %d, held back by %q: want none, held back by %q", p.kept.rt.rowsKept, why, want)

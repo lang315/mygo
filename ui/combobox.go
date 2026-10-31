@@ -284,7 +284,11 @@ func styleOptions(c *context, p *comboboxParts, options []string) *node {
 // its Focus and AutoFocus focus the input, and its Focused reports the
 // input's focus. Its shortcuts take the keys pressed in the input, which
 // it holds, as a text input's do; the input's own come first.
-func field(c *context, fn func() *node) (*node, *node) {
+func field(c *context, fn func() *node) (*node, *node) { return fieldOf(c, false, fn) }
+
+// fieldOf is field, whose row may be kept across frames if keep: its links
+// point inside the row (keepLinks), and its style reads them from the box.
+func fieldOf(c *context, keep bool, fn func() *node) (*node, *node) {
 	t := c.theme
 	f := coreRow(c).AlignItems(Center).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
 		Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Role(RoleNone).Cursor(CursorText)
@@ -293,17 +297,23 @@ func field(c *context, fn func() *node) (*node, *node) {
 	f.Children(func() { in = fn() })
 	in.nameFrom = f
 	f.focusTo = in
-	f.styleFn = func(f *node) { inputBorder(t, f, in) }
+	f.keepLinks, in.keepLinks = keep, keep
+	f.builtWith(t)
+	setStyle(f, fieldStyle, staticField)
 	if f.Clicked() {
 		in.Focus()
 	}
 	return f, in
 }
 
+// fieldStyle is the look of the box around an input, with the theme it was
+// built with.
+func fieldStyle(f *node) { inputBorder(f.builtTheme(), f, f.focusTo) }
+
 // chevronDown draws the arrow of a field that opens options.
 func chevronDown(c *context) *node {
 	t := c.theme
-	return coreBox(c).Size(t.Space(2.5), t.Space(2.5)).Shrink(0).Draw(func(p *Painter, r Rect) {
+	return coreBox(c).Size(t.Space(2.5), t.Space(2.5)).Shrink(0).drawPure(func(p *Painter, r Rect) {
 		var path Path
 		path.MoveTo(r.X+r.W*0.1, r.Y+r.H*0.3).LineTo(r.X+r.W*0.5, r.Y+r.H*0.7).LineTo(r.X+r.W*0.9, r.Y+r.H*0.3)
 		p.StrokePath(&path, 1.5, t.TextMuted)
@@ -323,7 +333,8 @@ func coreCombobox(c *context, selected *string, options []string) *node {
 	t := c.theme
 	var p *comboboxParts
 	var text *string
-	f, in := field(c, func() *node {
+	c.readsString(selected, *selected) // the text follows it once the input has lost the focus
+	f, in := fieldOf(c, true, func() *node {
 		text = coreLocal(c.parent, "combobox", func() string { return *selected })
 		p = comboboxBase(c, text, true)
 		p.Input.Grow(1).MinWidth(t.Space(25))
@@ -344,6 +355,11 @@ func coreCombobox(c *context, selected *string, options []string) *node {
 	p.anchor = f
 	// Whether the popup showed before this frame's input.
 	wasOpen := p.Open()
+	if !in.Focused() && !wasOpen && *text != *selected {
+		// The text goes back to the choice in afterInput, which a disabled
+		// element does not run: a row kept with the two apart would keep them so.
+		c.neverKept()
+	}
 	shown := options
 	if p.Filtering() {
 		shown = matching(options, *text)
