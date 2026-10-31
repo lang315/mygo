@@ -3,14 +3,14 @@ package ui
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"image"
-	_ "image/gif"  // DecodeBitmap
-	_ "image/jpeg" // DecodeBitmap
-	_ "image/png"  // DecodeBitmap
+	_ "image/gif" // DecodeBitmap
+	_ "image/png" // DecodeBitmap
+	"log"
 	"math"
-
-	_ "golang.org/x/image/bmp"  // DecodeBitmap
-	_ "golang.org/x/image/webp" // DecodeBitmap
+	"sync"
 
 	"github.com/egoist/mygo/internal/scene"
 )
@@ -60,10 +60,14 @@ func NewBitmap(img image.Image) *Bitmap {
 	return &Bitmap{img: s, w: s.W, h: s.H}
 }
 
-// DecodeBitmap decodes a PNG, JPEG, GIF (its first frame), WebP or BMP
-// image. A JPEG photo shows upright, as its camera's EXIF orientation
-// says. The bitmap keeps data, without a copy, to decode it again after
-// ReleasePixels.
+// DecodeBitmap decodes a PNG or GIF (its first frame) image, and a JPEG,
+// WebP or BMP image once the program imports its decoder, which an app that
+// has none of them does not link: `import _ "image/jpeg"`, `import _
+// "golang.org/x/image/webp"` or `import _ "golang.org/x/image/bmp"`. An image
+// of such a format with no decoder is an error that names the import
+// (errors.Is(err, image.ErrFormat) holds). A JPEG photo shows upright, as its
+// camera's EXIF orientation says. The bitmap keeps data, without a copy, to
+// decode it again after ReleasePixels.
 func DecodeBitmap(data []byte) (*Bitmap, error) {
 	s, err := decodeImage(data)
 	if err != nil {
@@ -72,18 +76,78 @@ func DecodeBitmap(data []byte) (*Bitmap, error) {
 	return &Bitmap{img: s, w: s.W, h: s.H, decode: func() (*scene.Image, error) { return decodeImage(data) }}, nil
 }
 
+// DecodeBitmapConfig reads the size of the image in data, as image.DecodeConfig
+// does, with the failures of DecodeBitmap: an image of a format whose decoder the
+// program did not import is an error that names the import. Use it in place
+// of image.DecodeConfig before DecodeBitmap.
+func DecodeBitmapConfig(data []byte) (image.Config, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return image.Config{}, missingDecoder(data, err)
+	}
+	return cfg, nil
+}
+
 // decodeImage decodes the bytes to a premultiplied RGBA bitmap, upright
 // as a JPEG's EXIF orientation says.
 func decodeImage(data []byte) (*scene.Image, error) {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return nil, missingDecoder(data, err)
 	}
 	s := scene.NewImage(img)
 	if o := exifOrientation(data); o > 1 {
 		s = orient(s, o)
 	}
 	return s, nil
+}
+
+// optionalDecoders are the formats of images that the program imports a decoder
+// for when it shows them, as the standard library's registry of decoders has
+// them: DecodeBitmap links only PNG and GIF.
+var optionalDecoders = []struct {
+	name, imp string
+	is        func(data []byte) bool
+	once      sync.Once
+}{
+	{name: "JPEG", imp: "image/jpeg", is: func(d []byte) bool { return bytes.HasPrefix(d, []byte{0xff, 0xd8, 0xff}) }},
+	{name: "WebP", imp: "golang.org/x/image/webp", is: func(d []byte) bool {
+		return len(d) >= 12 && string(d[:4]) == "RIFF" && string(d[8:12]) == "WEBP"
+	}},
+	{name: "BMP", imp: "golang.org/x/image/bmp", is: isBMP},
+}
+
+// isBMP reports whether data starts like a BMP file: "BM", the file header of 14
+// bytes and the size of a known bitmap header after it (two bytes would take
+// any text that starts with BM for one).
+func isBMP(d []byte) bool {
+	if len(d) < 18 || d[0] != 'B' || d[1] != 'M' {
+		return false
+	}
+	switch binary.LittleEndian.Uint32(d[14:18]) {
+	case 12, 40, 52, 56, 64, 108, 124:
+		return true
+	}
+	return false
+}
+
+// missingDecoder explains err, the failure of image.Decode on data, when data is
+// an image of a format whose decoder the program did not import: it names the
+// import. The reason is logged once for each format too, as the widgets that
+// show pictures show nothing for an image that does not decode.
+func missingDecoder(data []byte, err error) error {
+	if !errors.Is(err, image.ErrFormat) {
+		return err
+	}
+	for i := range optionalDecoders {
+		d := &optionalDecoders[i]
+		if d.is(data) {
+			err = fmt.Errorf("ui: cannot decode a %s image, its decoder is not linked: add the import `import _ %q` to the program: %w", d.name, d.imp, err)
+			d.once.Do(func() { log.Print("mygo: ", err) })
+			return err
+		}
+	}
+	return err
 }
 
 // Update shows img in place of the bitmap's picture, for one that changes

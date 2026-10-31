@@ -17,12 +17,33 @@ ui.Image(c, logo).Size(64, 64).Fit(ui.Contain).Radius(12)
 ## Bitmaps
 
 `ui.NewBitmap` makes a bitmap of an `image.Image`, and `ui.DecodeBitmap` of
-PNG, JPEG, GIF (its first frame), WebP or BMP data, turning photos upright
+PNG or GIF (its first frame) data, and of JPEG, WebP or BMP data once the
+program imports the decoder of that format (below), turning photos upright
 as their camera's EXIF orientation says. Make bitmaps once, not in the
 view: MyGo keeps a bitmap on the GPU as long as you use it. A bitmap shown
 much smaller than its pixels, as a photo in a thumbnail, is drawn from a
 copy halved as many times as that keeps it no smaller, made once, so that
 it shows every pixel's part rather than shimmering.
+
+### Formats
+
+An app pays only for the decoders it uses: package `ui` links PNG and GIF,
+and a program that shows JPEG, WebP or BMP images imports the decoder of the
+format, which registers itself with `image.Decode`:
+
+| Format | Import |
+|--------|--------|
+| PNG, GIF | none |
+| JPEG | `import _ "image/jpeg"` |
+| WebP | `import _ "golang.org/x/image/webp"` |
+| BMP | `import _ "golang.org/x/image/bmp"` |
+
+`DecodeBitmap` of an image whose decoder was not imported fails with an error
+that names the import (it still satisfies `errors.Is(err, image.ErrFormat)`),
+and logs it once for each format, as `PictureBox`, `ImageList` and the Markdown
+and rich text views show nothing for an image that does not decode. This used
+to be linked in every app that used package `ui` (about 170 KB of
+`counter-native`).
 
 A bitmap keeps its pixels on the CPU as well as on the GPU, which
 applications full of photos notice. Once a bitmap `DecodeBitmap` made has

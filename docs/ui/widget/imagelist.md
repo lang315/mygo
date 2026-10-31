@@ -7,7 +7,7 @@ images are shown at.
 
 ```go
 icons := widget.ImageList(16)
-icons.Add("folder", folder16, folder32) // PNG, JPEG, GIF, WebP or BMP; one size or several
+icons.Add("folder", folder16, folder32) // PNG or GIF, and JPEG, WebP or BMP with their decoders imported (docs/ui/image.md); one size or several
 icons.Add("file", file16, file32)
 
 tree := widget.TreeView(key, text).SetImageList(icons, func(n *Node) string { return n.Icon })

@@ -333,7 +333,7 @@ selected, copied and deleted as one character, and lines break around it.
 A box wider than the editor is scaled down to fit.
 
 ```go
-photo, _ := ui.DecodeBitmap(data)
+photo, _ := ui.DecodeBitmap(data) // a JPEG, WebP or BMP needs its decoder imported (docs/ui/image.md)
 app.doc.InsertAttachment(&richtext.Attachment{Image: photo, Name: "Beach", Width: 240})
 ```
 

@@ -1,11 +1,9 @@
 package richtext
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"html"
-	"image"
 	"strconv"
 	"strings"
 	"unicode"
@@ -147,7 +145,7 @@ const maxImagePixels = 1 << 25
 
 // smallImage reports whether the picture of data is small enough to decode.
 func smallImage(data []byte) bool {
-	c, _, err := image.DecodeConfig(bytes.NewReader(data))
+	c, err := ui.DecodeBitmapConfig(data) // names the import of a decoder the program lacks
 	return err == nil && c.Width > 0 && c.Height > 0 && int64(c.Width)*int64(c.Height) <= maxImagePixels
 }
 

@@ -56,8 +56,9 @@ func ImageList(size int) *ImageListWidget {
 // Size returns the side, in DIPs, the images are shown at.
 func (l *ImageListWidget) Size() int { return l.size }
 
-// Add decodes the images (PNG, JPEG, GIF, WebP or BMP, the same picture at
-// one size or several) and keeps them under key, in place of those it had. It
+// Add decodes the images (PNG or GIF, or JPEG, WebP or BMP once the program
+// imports their decoders, see ui.DecodeBitmap; the same picture at one size or
+// several) and keeps them under key, in place of those it had. It
 // fails, and changes nothing, if there is none, one does not decode, one is
 // empty or longer than 4096 pixels on a side, or their proportions differ.
 func (l *ImageListWidget) Add(key string, data ...[]byte) error {
@@ -66,7 +67,7 @@ func (l *ImageListWidget) Add(key string, data ...[]byte) error {
 	}
 	e := &listImage{}
 	for i, d := range data {
-		cfg, _, err := image.DecodeConfig(bytes.NewReader(d))
+		cfg, err := ui.DecodeBitmapConfig(d)
 		if err != nil {
 			return fmt.Errorf("widget: ImageList.Add %q: image %d: %w", key, i, err)
 		}

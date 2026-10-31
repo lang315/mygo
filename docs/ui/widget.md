@@ -774,8 +774,9 @@ Input and display:
   fails: `Label("").Rich(widget.ParseMarkup(status)...)`.
 - `Icon(svg, size)`: an SVG icon in the color of the text (`TextColor`
   changes it). There are no named icons: embed the SVGs you need.
-- `PictureBox(data, w, h)`: a PNG, JPEG, GIF, WebP or BMP, `SetImage` to change
-  it. The same bytes of an image up to 64 KB, as an icon, decode once (the
+- `PictureBox(data, w, h)`: a PNG or GIF, or a JPEG, WebP or BMP once the
+  program imports its decoder (see "Formats" in [Images](image.md)),
+  `SetImage` to change it. The same bytes of an image up to 64 KB, as an icon, decode once (the
   last 256 are kept); bytes that are no image leave an empty room.
 - `TextBox()`, `MultilineTextBox()`: one line or several of text; `Text`,
   `SetText`, `SetPlaceholder`, `SetEditable`, `OnChange`; `TextBox` also has

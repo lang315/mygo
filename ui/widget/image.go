@@ -29,8 +29,9 @@ type cachedImage struct {
 	bmp *ui.Bitmap
 }
 
-// decodeImage returns the bitmap of a PNG, JPEG, GIF, WebP or BMP, nil for
-// bytes that are none.
+// decodeImage returns the bitmap of a PNG or GIF, or of a JPEG, WebP or BMP
+// whose decoder the program imported (ui.DecodeBitmap), nil for bytes that
+// are none.
 func decodeImage(data []byte) *ui.Bitmap {
 	if len(data) == 0 {
 		return nil
@@ -71,7 +72,8 @@ type PictureBoxWidget struct {
 	w, h float32
 }
 
-// PictureBox shows the image in data (PNG, JPEG, GIF, WebP or BMP) w by h DIPs;
+// PictureBox shows the image in data (PNG or GIF; JPEG, WebP or BMP with their
+// decoders imported, see ui.DecodeBitmap) w by h DIPs;
 // 0 keeps the image's own size. Bytes that are no image leave the room
 // empty.
 func PictureBox(data []byte, w, h float32) *PictureBoxWidget {
