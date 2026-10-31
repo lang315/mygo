@@ -24,6 +24,9 @@ import (
 // maxDepth is how deep a document nests, as encoding/json allows.
 const maxDepth = 10000
 
+// maxLinearKeys is how many members of an object Strict compares one by one.
+const maxLinearKeys = 8
+
 // errors, with the offset of the byte that broke the document.
 var (
 	errSyntax = errors.New("jsonlite: invalid JSON")
@@ -43,9 +46,10 @@ type Reader struct {
 	// Strict makes the Reader refuse what encoding/json/v2 refuses.
 	Strict bool
 
-	b     []byte
-	i     int
-	depth int
+	b      []byte
+	i      int
+	depth  int
+	probes int // the comparisons and lookups of the check for duplicate names, for a test
 }
 
 // NewReader returns a Reader of the document b.
@@ -399,6 +403,7 @@ func (r *Reader) Object(fn func(key string) error) error {
 		return nil
 	}
 	var seen []string
+	var set map[string]struct{} // seen, once the object has more than maxLinearKeys
 	for {
 		if r.Peek() != '"' {
 			return errSyntax
@@ -408,14 +413,33 @@ func (r *Reader) Object(fn func(key string) error) error {
 			return err
 		}
 		if r.Strict {
-			// shortcut: a linear scan, quadratic in the members of one object; the
-			// objects of the IPC have a handful, upgrade to a map for more.
-			for _, k := range seen {
-				if k == key {
+			// An object of the IPC has a handful of members, which a scan finds
+			// duplicates among without allocating; a page can send any number, so a
+			// bigger object moves to a set.
+			if set == nil {
+				for _, k := range seen {
+					r.probes++
+					if k == key {
+						return errSyntax
+					}
+				}
+				if len(seen) < maxLinearKeys {
+					seen = append(seen, key)
+				} else {
+					set = make(map[string]struct{}, 2*maxLinearKeys)
+					for _, k := range seen {
+						set[k] = struct{}{}
+					}
+					set[key] = struct{}{}
+					seen = nil
+				}
+			} else {
+				r.probes++
+				if _, dup := set[key]; dup {
 					return errSyntax
 				}
+				set[key] = struct{}{}
 			}
-			seen = append(seen, key)
 		}
 		if r.Peek() != ':' {
 			return errSyntax
