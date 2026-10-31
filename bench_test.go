@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/protocol"
 )
 
 // The benchmarks measure the Go side of IPC and custom schemes on the fake
@@ -133,12 +134,12 @@ func (r discardResponder) Fail(error)                     { r.finished <- struct
 func BenchmarkScheme8MB(b *testing.B) {
 	const size = 8 << 20
 	chunk := make([]byte, 32<<10)
-	_ = Protocol.HandleFunc("bench", func(w http.ResponseWriter, r *http.Request) {
+	_ = protocol.HandleFunc("bench", func(w http.ResponseWriter, r *http.Request) {
 		for n := 0; n < size; n += len(chunk) {
 			_, _ = w.Write(chunk)
 		}
 	})
-	b.Cleanup(func() { Protocol.Unhandle("bench") })
+	b.Cleanup(func() { protocol.Unhandle("bench") })
 	_, fw := benchWindow(b, func(string) {})
 	resp := discardResponder{finished: make(chan struct{}, 1)}
 	b.SetBytes(size)

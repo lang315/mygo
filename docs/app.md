@@ -433,7 +433,7 @@ before its first page opens goes to that page. `mygo.Cookies` and
 `mygo.DefaultSession()` returns too. A window a page opens with
 `window.open` or a `target="_blank"` link is in its opener's session,
 whatever the `Session` of the options the open handler returns. Custom
-protocols (`mygo.Protocol`) serve the pages of every session, and a web
+protocols (`protocol.Handle`) serve the pages of every session, and a web
 view in [native UI](ui/web-view.md) takes a session in its `PageOptions`
 too.
 

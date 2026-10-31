@@ -134,8 +134,13 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 			os.Remove(p)
 		}
 	}
-	if opts.overlay, err = frontendFiles(c, opts.pkg, work); err != nil {
-		return err
+	// The frontend is embedded into native builds; browsers show no web page
+	// to serve it to, so a build for them only asks nothing of the app's MyGo
+	// and its vendor directory.
+	if hasNativePlatform(splitList(*platforms)) {
+		if opts.overlay, err = frontendFiles(c, opts.pkg, work); err != nil {
+			return err
+		}
 	}
 
 	var built []string

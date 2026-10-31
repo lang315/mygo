@@ -114,10 +114,10 @@ gzip, and the previews of these docs, with every component, 9.8 MB
 pages, which they do not show: its IPC, custom schemes and their HTTP, the
 TypeScript generator, the updater, with the JSON and the cryptography
 they take. Their API stays, doing nothing: `Bind` binds nothing, events
-reach no page, `Updater.Check` reports `ErrUpdatesDisabled`. Only
-`Protocol.Handle`, `HandleFunc` and `FileServer`, which take net/http's
-types, are missing, so that code using them is for desktops
-(`//go:build !js`). The tag `mygo_noinspector`, which `mygo build` sets
+reach no page, `Updater.Check` reports `ErrUpdatesDisabled`. Package
+`protocol` has `SetFrontend`, `Unhandle` and `IsHandled` there, doing nothing,
+and not `Handle`, `HandleFunc` and `FileServer`, which take net/http's types, so
+that code using those is for desktops (`//go:build !js`). The tag `mygo_noinspector`, which `mygo build` sets
 for production, leaves out the inspector of native UI too, some 350 KB.
 Building for browsers adds nothing to apps for desktops: the browser's
 code is only in `js/wasm` builds.

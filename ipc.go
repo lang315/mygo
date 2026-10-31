@@ -420,7 +420,7 @@ type callerKey struct{}
 
 // CallerWindow returns the window whose page called a bound method, given
 // the context.Context passed to that method, or whose page made a request
-// to a custom scheme (Protocol), given the request's Context: for the page
+// to a custom scheme (protocol.Handle), given the request's Context: for the page
 // of a web view (WebView), the window it is in. It returns nil for other
 // contexts.
 func CallerWindow(ctx context.Context) *Window {
@@ -433,7 +433,7 @@ type pageKey struct{}
 
 // CallerPage returns the page that called a bound method, given the
 // context.Context passed to that method, or that made a request to a
-// custom scheme (Protocol), given the request's Context: the page of the
+// custom scheme (protocol.Handle), given the request's Context: the page of the
 // calling window, or of a web view in it (WebView), whose window
 // CallerWindow returns. It returns nil for other contexts.
 func CallerPage(ctx context.Context) *Page {

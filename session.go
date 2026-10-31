@@ -25,7 +25,7 @@ import (
 //
 // For example, two accounts of a service side by side, a private window,
 // or a preview that must not see the user's sign-ins. A window opened by
-// window.open keeps its opener's session. Custom protocols (Protocol)
+// window.open keeps its opener's session. Custom protocols (protocol.Handle)
 // serve the pages of every session.
 //
 // On macOS, a session NewSession makes keeps its data on disk from macOS

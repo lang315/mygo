@@ -1,11 +1,11 @@
 package mygo
 
 import (
-	"io/fs"
 	"net/url"
 	"os"
 	"strings"
-	"sync"
+
+	"github.com/egoist/mygo/internal/schemehook"
 )
 
 // The app's frontend is its web UI. Windows load it with URLs without a
@@ -14,30 +14,12 @@ import (
 //
 //   - the dev server at devUrl (mygo.config.ts) while `mygo dev` runs the app;
 //   - otherwise mygo://localhost/, which serves the frontendDist files that
-//     `mygo build` embeds into the app (see SetFrontend).
+//     `mygo build` embeds into the app (see protocol.SetFrontend).
 //
 // The mygo scheme serves the frontend unless the app handles it itself with
-// Protocol.Handle.
-const frontendScheme = "mygo"
-
-var frontend struct {
-	sync.Mutex
-	fsys fs.FS
-}
-
-// SetFrontend serves fsys as the app's frontend at mygo://localhost/. Paths
-// without a file extension that match no file serve index.html, for
-// client-side routing.
-//
-// `mygo build` calls it with the frontendDist files it embeds into the app,
-// so apps rarely need to. Call it to ship a frontend without the mygo CLI,
-// e.g. from an embed.FS.
-func SetFrontend(fsys fs.FS) {
-	linkScheme()
-	frontend.Lock()
-	frontend.fsys = fsys
-	frontend.Unlock()
-}
+// protocol.Handle. Package protocol serves it, and an app imports that package
+// to have a frontend: `mygo build` makes the app do so.
+const frontendScheme = schemehook.FrontendScheme
 
 // devURL returns the dev server `mygo dev` points the app at, or "".
 func devURL() string {

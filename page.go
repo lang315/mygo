@@ -303,7 +303,7 @@ type PageOptions struct {
 	PreloadAllFrames bool
 	// TrustedOrigins lists extra origins, such as "https://example.com",
 	// whose pages may call bound Go methods. By default only the app's own
-	// content can: custom schemes registered with Protocol, file: and
+	// content can: custom schemes registered with protocol.Handle, file: and
 	// about: pages, and loopback dev servers during development. "*"
 	// trusts every origin.
 	TrustedOrigins []string

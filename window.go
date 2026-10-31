@@ -17,6 +17,7 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/schemehook"
 	"github.com/egoist/mygo/internal/surface"
 )
 
@@ -639,7 +640,7 @@ func (w *Window) platformOptions(o *WindowOptions) *platform.WindowOptions {
 		Autoplay:               po.Autoplay == AutoplayAllow,
 		SwipeNavigation:        po.SwipeNavigation,
 		PinchZoom:              po.PinchZoom,
-		Schemes:                Protocol.schemes(),
+		Schemes:                schemehook.Schemes(),
 		Panel:                  o.Panel,
 		PictureInPicture:       po.PictureInPicture,
 	}
@@ -1271,8 +1272,8 @@ func (w *Window) NativeHandle() uintptr { return get(w, platform.Window.Handle) 
 // LoadURL navigates the page to url. A URL without a scheme, such as "/" or
 // "/settings?tab=1", is a page of the app's frontend: the dev server at
 // devUrl during `mygo dev`, the frontend built into the app otherwise (see
-// SetFrontend). Besides http(s) URLs, schemes registered with
-// Protocol.Handle can be used.
+// protocol.SetFrontend). Besides http(s) URLs, schemes registered with
+// protocol.Handle can be used.
 func (p *Page) LoadURL(rawURL string) error {
 	if p.w.content != nil {
 		return errNoPage
@@ -1345,7 +1346,7 @@ func (w *Window) isTrusted(rawURL string) bool {
 	switch {
 	case scheme == "about" || scheme == "file" || scheme == frontendScheme:
 		return true
-	case Protocol.IsHandled(scheme):
+	case schemehook.Handled(scheme):
 		return true
 	}
 	origin := scheme + "://" + strings.ToLower(u.Host)

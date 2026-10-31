@@ -34,6 +34,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/protocol"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -159,7 +160,7 @@ func TestMain(m *testing.M) {
 	})
 	usePlugins(mux)
 	useBench(mux)
-	if err := mygo.Protocol.Handle("app", mux); err != nil {
+	if err := protocol.Handle("app", mux); err != nil {
 		panic(err)
 	}
 	// Another scheme, so another origin than app:// (TestSchemeCORS).
@@ -172,7 +173,7 @@ func TestMain(m *testing.M) {
 		b, _ := io.ReadAll(r.Body)
 		fmt.Fprintf(w, "posted:%s", b)
 	})
-	if err := mygo.Protocol.Handle("assets", assets); err != nil {
+	if err := protocol.Handle("assets", assets); err != nil {
 		panic(err)
 	}
 	mygo.App.OnWindowAllClosed(func() {})

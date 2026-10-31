@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/protocol"
 )
 
 func TestDownloadEvents(t *testing.T) {
@@ -36,13 +37,13 @@ func TestDownloadEvents(t *testing.T) {
 	off()
 
 	// Custom schemes are downloaded from their handler.
-	if err := Protocol.HandleFunc("dltest", func(w http.ResponseWriter, r *http.Request) {
+	if err := protocol.HandleFunc("dltest", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="data.json"`)
 		w.Write([]byte(`{"ok":true}`))
 	}); err != nil {
 		t.Fatal(err)
 	}
-	defer Protocol.Unhandle("dltest")
+	defer protocol.Unhandle("dltest")
 	done := make(chan *Download, 1)
 	defer w.Page().OnDownloadDone(func(d *Download) { done <- d })()
 	onMain(func() { fw.H.SchemeDownload("dltest://localhost/export") })

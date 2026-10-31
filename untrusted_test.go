@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/protocol"
 )
 
 // untrustedWebView returns a web view whose page is untrusted, though it
@@ -21,7 +22,7 @@ import (
 // and ready.
 func untrustedWebView(t *testing.T) (*Window, *WebView, *fake.WebView) {
 	t.Helper()
-	if err := Protocol.HandleFunc("plugin", func(w http.ResponseWriter, r *http.Request) {
+	if err := protocol.HandleFunc("plugin", func(w http.ResponseWriter, r *http.Request) {
 		p := CallerPage(r.Context())
 		if p == nil || p.WebView() == nil {
 			http.Error(w, "no page", http.StatusBadRequest)
@@ -31,7 +32,7 @@ func untrustedWebView(t *testing.T) (*Window, *WebView, *fake.WebView) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { Protocol.Unhandle("plugin") })
+	t.Cleanup(func() { protocol.Unhandle("plugin") })
 	show := true
 	w, v, _, fv := webViewWindowOpts(t, &show, WebViewOptions{Page: PageOptions{Untrusted: true, TrustedOrigins: []string{"*"}}})
 	onMain(func() { fv.H.NavigationCommitted("plugin://localhost/index.html") })

@@ -74,7 +74,7 @@ func (b *WebBrowserWidget) page(fn func(p *mygo.Page)) {
 
 // Navigate loads url. A javascript: URL is refused (logged and ignored, and
 // nothing is stored). A URL with a scheme (http, https, or one registered
-// with Protocol.Handle) is a page of the web; one without, such as "/docs",
+// with protocol.Handle) is a page of the web; one without, such as "/docs",
 // is a page of the app's frontend. A URL that cannot be loaded is logged.
 func (b *WebBrowserWidget) Navigate(url string) *WebBrowserWidget {
 	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(url)), "javascript:") {

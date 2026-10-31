@@ -164,10 +164,9 @@ func buildWeb(c *Config, opts buildOptions) ([]string, error) {
 	}
 	wasm := filepath.Join(stage, "app.wasm")
 	t := con.start("Compiling " + webPlatform)
-	overlay, err := writeOverlay(filepath.Join(opts.work, "overlay.json"), opts.overlay)
-	if err == nil {
-		err = compileWeb(context.Background(), c, t, wasm, opts.debug, overlay)
-	}
+	// No overlay: browsers have no web page to serve a frontend to (package
+	// protocol is not built for them), so the frontend is not embedded.
+	err = compileWeb(context.Background(), c, t, wasm, opts.debug, "")
 	if err := t.end(err, "Compiled "+webPlatform); err != nil {
 		return nil, err
 	}
@@ -476,6 +475,12 @@ func openBrowser(url string) {
 		return
 	}
 	go func() { _ = cmd.Wait() }()
+}
+
+// hasNativePlatform reports whether any -platform target is not the browsers':
+// only those embed the frontend and link the packages the CLI generates files for.
+func hasNativePlatform(platforms []string) bool {
+	return slices.ContainsFunc(platforms, func(p string) bool { return !isWebPlatform(p) })
 }
 
 // isWebPlatform reports whether a -platform target is the browsers'.
