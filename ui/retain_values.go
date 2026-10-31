@@ -1,5 +1,10 @@
 package ui
 
+import (
+	"math"
+	"unsafe"
+)
+
 // valueRead is a value a control showed in a row as it was built, and where it
 // came from: the *bool of a Checkbox or Toggle, the *string of a Select, the
 // *float64 of a Slider. An app
@@ -7,13 +12,59 @@ package ui
 // saying so in RowVersion: a row is kept only while each holds what the row was
 // built with, so the control versions itself. (By address: see the doc of
 // RowVersion for data that moves.)
+//
+// A read holds one pointer, the kind of what it points to, and what it held:
+// in bits (a bool, a number) or in str (a string).
 type valueRead struct {
-	p  *bool
-	v  bool
-	s  *string
-	sv string
-	f  *float64
-	fv float64
+	ptr  unsafe.Pointer
+	bits uint64
+	str  string
+	kind valueKind
+}
+
+type valueKind uint8
+
+const (
+	readBool valueKind = iota + 1
+	readString
+	readFloat
+)
+
+// same reports whether what r points to holds what the row was built with.
+// A NaN is never equal to itself.
+func (r *valueRead) same() bool {
+	switch r.kind {
+	case readBool:
+		return *(*bool)(r.ptr) == (r.bits != 0)
+	case readString:
+		return *(*string)(r.ptr) == r.str
+	case readFloat:
+		return *(*float64)(r.ptr) == math.Float64frombits(r.bits)
+	}
+	return true
+}
+
+// note records a read of kind at ptr once: a read again with another value, or
+// more controls than the limit, make the row (and the rows around it) built in
+// every frame.
+func (rb *rowBuild) note(r valueRead) {
+	for i := range rb.values {
+		if b := &rb.values[i]; b.ptr == r.ptr && b.kind == r.kind {
+			if r.kind == readFloat && math.Float64frombits(b.bits) == math.Float64frombits(r.bits) || r.kind != readFloat && b.bits == r.bits && b.str == r.str {
+				return
+			}
+			rb.neverKept()
+			return
+		}
+	}
+	if len(rb.values) >= maxValueReads {
+		rb.neverKept()
+		return
+	}
+	if rb.values == nil && rb.f != nil {
+		rb.values = rb.f.valueBuf[:0]
+	}
+	rb.values = append(rb.values, r)
 }
 
 // maxValueReads is how many different controls a row records; more, and the row
@@ -27,26 +78,9 @@ func (c *context) readsBool(p *bool, v bool) {
 	}
 }
 
-// noteBool records p once. A control read twice with two values in one build, or
-// more controls than the limit, make the row (and the rows around it) built in
-// every frame.
+// noteBool records p.
 func (rb *rowBuild) noteBool(p *bool, v bool) {
-	for _, b := range rb.values {
-		if b.p == p {
-			if b.v != v {
-				rb.neverKept()
-			}
-			return
-		}
-	}
-	if len(rb.values) >= maxValueReads {
-		rb.neverKept()
-		return
-	}
-	if rb.values == nil && rb.f != nil {
-		rb.values = rb.f.valueBuf[:0]
-	}
-	rb.values = append(rb.values, valueRead{p: p, v: v})
+	rb.note(valueRead{ptr: unsafe.Pointer(p), bits: uint64(b2i(v)), kind: readBool})
 }
 
 // neverKept marks the row, and the rows around it, built in every frame.
@@ -56,10 +90,10 @@ func (rb *rowBuild) neverKept() {
 	}
 }
 
-// sameValues reports whether every *bool holds what the row was built with.
+// sameValues reports whether every control holds what the row was built with.
 func sameValues(bs []valueRead) bool {
-	for _, b := range bs {
-		if b.p != nil && *b.p != b.v || b.s != nil && *b.s != b.sv || b.f != nil && *b.f != b.fv {
+	for i := range bs {
+		if !bs[i].same() {
 			return false
 		}
 	}
@@ -75,22 +109,7 @@ func (c *context) readsString(s *string, v string) {
 
 // noteString is noteBool for a string.
 func (rb *rowBuild) noteString(s *string, v string) {
-	for _, b := range rb.values {
-		if b.s == s && s != nil {
-			if b.sv != v {
-				rb.neverKept()
-			}
-			return
-		}
-	}
-	if len(rb.values) >= maxValueReads {
-		rb.neverKept()
-		return
-	}
-	if rb.values == nil && rb.f != nil {
-		rb.values = rb.f.valueBuf[:0]
-	}
-	rb.values = append(rb.values, valueRead{s: s, sv: v})
+	rb.note(valueRead{ptr: unsafe.Pointer(s), str: v, kind: readString})
 }
 
 // readsFloat notes the *float64 a control (Slider) made the row show.
@@ -103,20 +122,5 @@ func (c *context) readsFloat(f *float64, v float64) {
 // noteFloat is noteBool for a number. A NaN is never equal to itself, so a row
 // that shows one is built in every frame.
 func (rb *rowBuild) noteFloat(f *float64, v float64) {
-	for _, b := range rb.values {
-		if b.f == f && f != nil {
-			if b.fv != v {
-				rb.neverKept()
-			}
-			return
-		}
-	}
-	if len(rb.values) >= maxValueReads {
-		rb.neverKept()
-		return
-	}
-	if rb.values == nil && rb.f != nil {
-		rb.values = rb.f.valueBuf[:0]
-	}
-	rb.values = append(rb.values, valueRead{f: f, fv: v})
+	rb.note(valueRead{ptr: unsafe.Pointer(f), bits: math.Float64bits(v), kind: readFloat})
 }

@@ -1082,11 +1082,7 @@ func (f *listFrame) build(i int) *node {
 			saved.noteLayout(r)
 		}
 		for _, b := range values {
-			if b.s != nil {
-				saved.noteString(b.s, b.sv)
-			} else {
-				saved.noteBool(b.p, b.v)
-			}
+			saved.note(b)
 		}
 	}
 	if readMods || ctx != 0 || len(layouts) != 0 || listFocus != 0 || len(values) != 0 {
