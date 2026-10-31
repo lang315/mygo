@@ -247,9 +247,10 @@ type ListState struct {
 	// map that is replaced) is the app's to version: put the value in RowVersion,
 	// the sure way. The same holds for the *bool of a Switch (its row is kept once
 	// the knob rests), the *float64 of a Slider (its row is kept once the knob
-	// has let go) and the *string of a closed Select (and its options, which a
-	// closed one does not show: a change of them needs a new version to be seen
-	// once it opens), and a determinate Progress shows the number it was given: a
+	// has let go; its lo, hi and step, a StepSlider's, are read as the row is
+	// built, so a change of them needs a new version to be seen) and the *string
+	// of a closed Select (and its options, which a closed one does not show: a
+	// change of them needs a new version to be seen once it opens), and a determinate Progress shows the number it was given: a
 	// new one needs a new version. An open Select, an indeterminate Progress and
 	// anything else that Animate moves in a row (apart from the knobs of a Switch
 	// and a Slider) are animated or asked to be painted again, so their rows are not kept,

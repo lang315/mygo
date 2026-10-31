@@ -134,7 +134,11 @@ func TestRetainSliderRowsRandomWalk(t *testing.T) {
 			sys := newSystemTheme(uint64(seed))
 			keptSliders := 0
 			keys := []Key{KeyLeft, KeyRight, KeyUp, KeyDown, KeyPageUp, KeyPageDown, KeyHome, KeyEnd}
-			for step := range 120 {
+			steps := 120
+			if raceEnabled {
+				steps = 50 // -race is ten times slower, and the walks share a job with the rest
+			}
+			for step := range steps {
 				x, y := float32(rng.Intn(520)-10), float32(rng.Intn(420)-10)
 				var what string
 				switch k := rng.Intn(14); k {
