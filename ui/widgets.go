@@ -390,12 +390,18 @@ func slider(c *context, value *float64, lo, hi, step float64) *node {
 	return s
 }
 
-// fraction returns where v is from lo to hi, from 0 to 1.
+// fraction returns where v is from lo to hi, from 0 to 1: 0 for a range with
+// nothing in it, and for a number that is none (min and max pass a NaN on, and
+// the painter would fill a rect of that size).
 func fraction(v, lo, hi float64) float32 {
 	if hi <= lo {
 		return 0
 	}
-	return float32(max(0, min(1, (v-lo)/(hi-lo))))
+	f := (v - lo) / (hi - lo)
+	if f != f {
+		return 0
+	}
+	return float32(max(0, min(1, f)))
 }
 
 // snap returns v rounded to lo or a multiple of step from it, within hi;
