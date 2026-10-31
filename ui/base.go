@@ -78,7 +78,7 @@ func toggle(c *context, on *bool, role Role, widget string) *node {
 // radio button, on when *selected is value. Radio is RadioBase with the
 // theme's look.
 func coreRadioBase[T comparable](c *context, selected *T, value T) *node {
-	c.neverKept() // it reads *selected == value of any type, which a row cannot compare cheaply
+	readsChoice(c, selected) // it shows *selected == value
 	e := coreRow(c).Focusable().Shrink(0)
 	e.flags |= flagClickable | flagHover | flagToggle
 	e.widget, e.role = "Radio", RoleRadio

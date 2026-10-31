@@ -79,3 +79,55 @@ func floatRead(f *float64, v float64) valueRead {
 	rb.noteFloat(f, v)
 	return rb.values[0]
 }
+
+type choiceInt interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
+}
+
+// A row records the choice of a radio button in the bytes of its type, not of
+// another: a byte after it (a neighbor in the struct, in 8 bytes of the choice
+// of a 4-byte int on a 32-bit target) that changes leaves the read the same, and
+// every bit of the choice changes it.
+func checkChoiceWidth[T choiceInt](t *testing.T) {
+	t.Helper()
+	var d struct {
+		choice T
+		next   [8]byte
+	}
+	rb := &rowBuild{}
+	readsChoice(&context{row: rb}, &d.choice)
+	if len(rb.values) != 1 {
+		t.Fatalf("%T: %d reads, want 1", d.choice, len(rb.values))
+	}
+	same := func() bool { return sameValues(rb.values) }
+	for i := range d.next {
+		d.next[i] = 0xff
+	}
+	if !same() {
+		t.Errorf("%T: a byte after the choice changed the read", d.choice)
+	}
+	for bit := range unsafe.Sizeof(d.choice) * 8 {
+		d.choice = T(1) << bit
+		if same() {
+			t.Errorf("%T: bit %d of the choice is not read", d.choice, bit)
+		}
+	}
+	d.choice = 0
+	if !same() {
+		t.Errorf("%T: the choice changed back and the read did not", d.choice)
+	}
+}
+
+func TestChoiceWidth(t *testing.T) {
+	checkChoiceWidth[int](t)
+	checkChoiceWidth[int8](t)
+	checkChoiceWidth[int16](t)
+	checkChoiceWidth[int32](t)
+	checkChoiceWidth[int64](t)
+	checkChoiceWidth[uint](t)
+	checkChoiceWidth[uint8](t)
+	checkChoiceWidth[uint16](t)
+	checkChoiceWidth[uint32](t)
+	checkChoiceWidth[uint64](t)
+	checkChoiceWidth[uintptr](t)
+}

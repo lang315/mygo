@@ -88,6 +88,21 @@ func paintCheckbox(c *context, box *node, state int8) {
 	setStyle(box, checkboxStyle, staticCheckbox)
 }
 
+// paintRadio is paintCheckbox for the dot of a radio button: round, on (5) with
+// a dot in it, or off (4).
+func paintRadio(c *context, dot *node, on bool) {
+	t := c.theme
+	dot.checkmark = 4
+	if on {
+		dot.Background(t.Accent)
+		dot.checkmark = 5
+	} else {
+		dot.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
+	}
+	dot.builtWith(c.theme)
+	setStyle(dot, checkboxStyle, staticCheckbox)
+}
+
 // paintCheckmark paints the check or the dash of box, a check box's, and the
 // focus ring of the row holding it.
 func paintCheckmark(p *Painter, box *node, r Rect) {
@@ -97,15 +112,19 @@ func paintCheckmark(p *Painter, box *node, r Rect) {
 		p.StrokePath(checkPath(&p.rt.paths.check, r), t.Space(0.5), t.AccentText)
 	case 3:
 		p.Fill(Rect{r.X + r.W*0.25, r.Y + r.H/2 - 1, r.W * 0.5, 2}, t.AccentText, 1)
+	case 5:
+		d := t.Space(1.5)
+		p.Fill(Rect{r.X + (r.W-d)/2, r.Y + (r.H-d)/2, d, d}, t.AccentText, d/2)
 	}
 	if row.FocusVisible() {
 		p.FocusRing(r, box.radius)
 	}
 }
 
-// checkboxStyle shows the pointer over an unchecked check box on its box.
+// checkboxStyle shows the pointer over an unchecked check box or radio button
+// on its box.
 func checkboxStyle(box *node) {
-	if row := box.parent; box.checkmark == 1 && row.Hovered() {
+	if row := box.parent; (box.checkmark == 1 || box.checkmark == 4) && row.Hovered() {
 		box.borderC = box.builtTheme().Accent
 	}
 }
