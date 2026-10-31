@@ -74,7 +74,7 @@ func (s *keys[K]) keep(index map[K]int) {
 // CheckboxColumn shows a check box first in each row, and one in the
 // header that checks the rows shown.
 func (t *DataGridViewWidget[T, K]) CheckboxColumn() *DataGridViewWidget[T, K] {
-	t.change(func() { t.checks = true })
+	t.change(func() { t.checks = true; t.look++ })
 	return t
 }
 

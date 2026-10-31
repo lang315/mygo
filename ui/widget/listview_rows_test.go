@@ -265,3 +265,44 @@ func TestListViewKeptRowsFollowTheirImages(t *testing.T) {
 		})
 	}
 }
+
+// A list box and a tree show an image replaced in their image list, as a list
+// view does.
+func TestListBoxAndTreeKeptRowsFollowTheirImageList(t *testing.T) {
+	blue, red := color.RGBA{0, 0, 255, 255}, color.RGBA{255, 0, 0, 255}
+	newList := func(c color.RGBA) *ImageListWidget {
+		il := ImageList(16)
+		if err := il.Add("doc", pngOf(t, 16, c)); err != nil {
+			t.Fatal(err)
+		}
+		return il
+	}
+	for _, kind := range []string{"ListBox", "TreeView"} {
+		t.Run(kind, func(t *testing.T) {
+			mk := func(il *ImageListWidget) Control {
+				if kind == "ListBox" {
+					return newListBox().SetItems([]litem{{"a", "Apple"}, {"b", "Banana"}}).SetImageList(il, func(*litem) string { return "doc" })
+				}
+				return newTree().SetRoots([]tnode{{"A", "Alpha"}, {"B", "Beta"}}).SetImageList(il, func(*tnode) string { return "doc" })
+			}
+			il := newList(blue)
+			tt := ui.NewTester(content(mk(il)), 300, 200)
+			for range 4 {
+				tt.Frame()
+			}
+			if err := il.Add("doc", pngOf(t, 16, red)); err != nil {
+				t.Fatal(err)
+			}
+			for range 3 {
+				tt.Frame()
+			}
+			ft := ui.NewTester(content(mk(newList(red))), 300, 200)
+			for range 4 {
+				ft.Frame()
+			}
+			if !bytes.Equal(tt.Image().Pix, ft.Image().Pix) {
+				t.Errorf("%s: an image replaced in the list is not shown", kind)
+			}
+		})
+	}
+}

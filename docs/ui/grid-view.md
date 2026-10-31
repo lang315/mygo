@@ -123,8 +123,12 @@ frame instead of building it again, as `ListState.RowVersion` does for rows (see
 [List](list.md)): `RowVersion(item)` returns the version of an item, and a line
 is kept while it holds the same items, their versions are what they were, and the
 size they are built at is. Item `i`'s build must read nothing but its own data,
-which `RowVersion` versions, and the grid's state: the choice, the item the keys
-are on and the checks are versioned by the grid itself. Data that moves (a slice
+which `RowVersion` versions, and the grid's state. What the grid shows of an
+item itself is part of the version of its line, whatever `RowVersion` says: whether
+each item is chosen, the item the keys are on, whether each is checked and whether
+any is (a check box then shows on every item), how many items there are, and what
+the grid draws with (`Selected`, `Selection`, `Checked`, `Label`, `AccentChoice`,
+`PlainChecks`). Data that moves (a slice
 that `append` reallocates, a struct or a map that is replaced) is the app's to
 version; a change nobody versioned is not shown by a line kept. The width of the
 window, the size of the items, the headers and the theme build the lines they

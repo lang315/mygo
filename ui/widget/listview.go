@@ -194,7 +194,7 @@ func (lv *ListViewWidget[T, K]) View() ViewMode {
 // nil for none. fn runs under the package's lock and calls no widget method.
 // Without it the first column's Image is used, if it has one.
 func (lv *ListViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListViewWidget[T, K] {
-	lv.setImage(fn, 0)
+	lv.setImage(fn, 0, nil)
 	return lv
 }
 
@@ -203,15 +203,15 @@ func (lv *ListViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListViewWidget
 // says (Details draws 16 DIPs); no image for a key the list lacks. key runs under
 // the package's lock.
 func (lv *ListViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *ListViewWidget[T, K] {
-	lv.setImage(ImagesBy(il, key), float32(il.Size()))
+	lv.setImage(ImagesBy(il, key), float32(il.Size()), il)
 	return lv
 }
 
 // setImage sets the icon function and the side it is drawn at, and gives the
 // first Details column the function too.
-func (lv *ListViewWidget[T, K]) setImage(fn func(*T) *ui.Bitmap, side float32) {
+func (lv *ListViewWidget[T, K]) setImage(fn func(*T) *ui.Bitmap, side float32, il *ImageListWidget) {
 	lv.t.change(func() {
-		lv.image, lv.imageSize = fn, side
+		lv.image, lv.imageSize, lv.t.images = fn, side, il
 		lv.t.look++
 		if len(lv.t.cols) > 0 {
 			if fn == nil {
@@ -593,7 +593,7 @@ func (lv *ListViewWidget[T, K]) itemVersion(i int) uint64 {
 		}
 	}
 	look := t.look*0xff51afd7ed558ccd ^ uint64(lv.mode)*0xc4ceb9fe1a85ec53 ^ uint64(math.Float32bits(lv.iconSize))
-	return versionOf(t.src.gens.of(k), look, place)
+	return versionOf(t.src.gens.of(k), look^t.images.generation()*0xff51afd7ed558ccd, place)
 }
 
 // toggleChecks is Space in the small views, whose boxes are the items' own: it

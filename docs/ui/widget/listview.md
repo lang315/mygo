@@ -141,9 +141,13 @@ row shows what the widget holds of it, so it changes through the widget:
 `SetRows`, `AddRow`, `AddRows` and `UpdateRow` give a row a new version, as do
 the view, the icon size, the image function and the columns for every row; the
 choice, the checks and the groups' counts follow by themselves. A change made to
-the app's own slice is not seen (the widget holds a copy), and an image added to
-an `ImageList` after the rows were built is shown when the row changes, as in a
-`DataGridView`.
+the app's own slice is not seen (the widget holds a copy). Images from an
+`ImageList` given with `SetImageList` follow the list: adding, replacing or
+removing one shows in the rows at once. An image function given with `SetImage`
+that answers later (a thumbnail that loads) is not seen by a row already shown:
+call `UpdateRow(k, func(*T) {})` for that row when the image arrives, or keep the
+images in an `ImageList`. Checking `CheckBoxes()` after the first frames shows the
+boxes in every view.
 
 **Order of the keys.** With groups, `Selected()` and `Checked()` return the keys
 in the order shown, which is grouped in every view: the rows of the first group,

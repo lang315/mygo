@@ -55,6 +55,9 @@ type ListBoxWidget[T any, K comparable] struct {
 	// again. Under mu.
 	gens rowGens[K]
 	look uint64
+	// images is the list SetImageList gave, whose generation is part of the
+	// version of each row.
+	images *ImageListWidget
 
 	// ui's, on the main thread:
 	list   ui.ListState
@@ -94,7 +97,7 @@ func (l *ListBoxWidget[T, K]) Multi() *ListBoxWidget[T, K] {
 // SetImage shows an image before the text of each item, 16 DIPs square; nil,
 // or a nil image, for none. fn runs under the package's lock.
 func (l *ListBoxWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListBoxWidget[T, K] {
-	l.change(func() { l.image, l.imageSize = fn, 0; l.look++ })
+	l.change(func() { l.image, l.imageSize, l.images = fn, 0, nil; l.look++ })
 	return l
 }
 
@@ -102,7 +105,7 @@ func (l *ListBoxWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *ListBoxWidget[T,
 // key(item), drawn at the list's Size, as WinForms' ImageList.ImageSize says; no
 // image for a key the list lacks. key runs under the package's lock.
 func (l *ListBoxWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *ListBoxWidget[T, K] {
-	l.change(func() { l.image, l.imageSize = ImagesBy(il, key), float32(il.Size()); l.look++ })
+	l.change(func() { l.image, l.imageSize, l.images = ImagesBy(il, key), float32(il.Size()), il; l.look++ })
 	return l
 }
 
@@ -457,7 +460,7 @@ func (l *ListBoxWidget[T, K]) rowVersion(row int) uint64 {
 	if l.checks && l.checked.shown.Has(k) {
 		place = 1
 	}
-	return versionOf(l.gens.of(k), l.look, place)
+	return versionOf(l.gens.of(k), l.look^l.images.generation()*0xff51afd7ed558ccd, place)
 }
 
 // labelAt is ui's ListState.Label: typing the first letters of an item's text

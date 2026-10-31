@@ -276,6 +276,10 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 	// The list's own state is the rows': the grid takes the keys and tells
 	// assistive technology about its items.
 	e.rowsOf = nil
+	if cursor == nil && s.Selected != nil && *s.Selected >= 0 && *s.Selected < n {
+		// The cursor's line was kept, not built: its cell is in the tree all the same.
+		cursor = e.cellOf(*s.Selected + 1)
+	}
 	e.gridFit = &gridFit{cols: cols, minW: minWidth, gap: gap}
 	e.afterInput(func() { s.keys(e, n) })
 	e.activeDescendant = cursor
@@ -420,18 +424,13 @@ func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
 // headers move them between lines), their versions, and the size an item is
 // built at.
 func (s *GridState) lineVersion(r, n int, minWidth, height float32) uint64 {
+	const prime = 0x100000001b3
 	first, end, header := s.rowItems(r, n)
-	h := uint64(first)*0x9e3779b97f4a7c15 ^ uint64(end)*0xc2b2ae3d27d4eb4f ^ uint64(max(s.cols, 1))*0x165667b19e3779f9
-	h ^= uint64(math.Float32bits(minWidth))<<32 | uint64(math.Float32bits(height))
-	if header {
-		h ^= 0x27d4eb2f165667c5
-	}
-	// What the grid itself shows of an item beside the app's data: whether it is
-	// chosen, the item the keys are on, whether it is checked, and whether any is
-	// (a check box shows on every item then).
-	anyChecked := s.Checked != nil && s.Checked.size() > 0
-	if anyChecked {
-		h ^= 0x2545f4914f6cdd1d
+	// Each part has a step of its own: a multiply carries upward only, so parts
+	// xored into one word lose each other's bits.
+	h := uint64(first)
+	for _, v := range [...]uint64{uint64(end), uint64(max(s.cols, 1)), uint64(n), uint64(math.Float32bits(minWidth)), uint64(math.Float32bits(height)), s.flags(header)} {
+		h = (h ^ v) * prime
 	}
 	for i := first; i < end; i++ {
 		bits := uint64(0)
@@ -447,9 +446,48 @@ func (s *GridState) lineVersion(r, n int, minWidth, height float32) uint64 {
 				bits |= 4
 			}
 		}
-		h = (h ^ s.RowVersion(i) ^ bits<<56) * 0x100000001b3
+		h = (h ^ s.RowVersion(i)) * prime
+		h = (h ^ bits) * prime
 	}
 	return h
+}
+
+// flags is what the grid is set to draw with, for the version of a line: a
+// header, what it can choose and check, how it draws the choice and the boxes,
+// and whether any item is checked (a check box then shows on every item).
+func (s *GridState) flags(header bool) (f uint64) {
+	for i, on := range [...]bool{header, s.Selected != nil, s.Selection != nil, s.Checked != nil,
+		s.Checked != nil && s.Checked.size() > 0, s.AccentChoice, s.PlainChecks, s.Label != nil} {
+		if on {
+			f |= 1 << i
+		}
+	}
+	return f
+}
+
+// cellOf returns the cell below e that is the item at place pos (setPos), or
+// nil: a line kept holds its cells, which this frame did not build.
+func (e *node) cellOf(pos int) *node {
+	for ch := e.first; ch != nil; ch = ch.next {
+		if ch.setPos == pos && ch.role == RoleListItem {
+			return ch
+		}
+		if ch.listRow {
+			// A line: its cells are the children of its row.
+			for row := ch.first; row != nil; row = row.next {
+				for cell := row.first; cell != nil; cell = cell.next {
+					if cell.setPos == pos && cell.role == RoleListItem {
+						return cell
+					}
+				}
+			}
+			continue
+		}
+		if c := ch.cellOf(pos); c != nil {
+			return c
+		}
+	}
+	return nil
 }
 
 // header builds item i, a header, at the width of the grid: it is not chosen,
