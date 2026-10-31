@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"os/exec"
 	"runtime"
+	"strings"
 	"testing"
 
 	"golang.org/x/image/bmp"
+	_ "golang.org/x/image/webp" // the test decodes a WebP
 )
 
 // stripedImage returns a w×h image of vertical stripes, black and white, each
@@ -487,5 +491,46 @@ func TestReleasePixelsKeepsWhatCannotComeBack(t *testing.T) {
 	cv.Bitmap().ReleasePixels()
 	if cv.img.Restore != nil || len(cv.img.Pix) != len(pix) {
 		t.Error("a canvas's bitmap dropped its pixels")
+	}
+}
+
+// DecodeBitmap links the decoders of PNG and GIF only: a program that shows JPEG,
+// WebP or BMP images imports their decoders, and package ui (with the packages
+// of its widgets) does not import them for it.
+func TestOptionalDecodersAreNotLinkedByUI(t *testing.T) {
+	out, err := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "github.com/egoist/mygo/ui", "github.com/egoist/mygo/ui/widget", "github.com/egoist/mygo/ui/markdown", "github.com/egoist/mygo/ui/richtext").Output()
+	if err != nil {
+		t.Skip("no go command: ", err)
+	}
+	for _, pkg := range strings.Fields(string(out)) {
+		switch pkg {
+		case "image/jpeg", "golang.org/x/image/webp", "golang.org/x/image/bmp", "golang.org/x/image/vp8", "golang.org/x/image/vp8l":
+			t.Errorf("package ui links %s, the decoder of an optional format", pkg)
+		}
+	}
+}
+
+// An image of a format whose decoder the program did not import is an error that
+// names the import, and still is image.ErrFormat.
+func TestMissingDecoderNamesTheImport(t *testing.T) {
+	for _, tc := range []struct {
+		name, imp string
+		data      []byte
+	}{
+		{"JPEG", "image/jpeg", []byte{0xff, 0xd8, 0xff, 0xe0, 0, 0x10}},
+		{"WebP", "golang.org/x/image/webp", []byte("RIFF\x24\x00\x00\x00WEBPVP8 ")},
+		{"BMP", "golang.org/x/image/bmp", []byte("BM\x00\x00\x00\x00")},
+	} {
+		err := missingDecoder(tc.data, image.ErrFormat)
+		if err == nil || !errors.Is(err, image.ErrFormat) || !strings.Contains(err.Error(), tc.name) || !strings.Contains(err.Error(), `import _ "`+tc.imp+`"`) {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
+	if err := missingDecoder([]byte("not an image"), image.ErrFormat); err != image.ErrFormat {
+		t.Errorf("unknown bytes: %v", err)
+	}
+	other := errors.New("truncated")
+	if err := missingDecoder([]byte{0xff, 0xd8, 0xff}, other); err != other {
+		t.Errorf("a failure that is not an unknown format changed: %v", err)
 	}
 }
