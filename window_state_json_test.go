@@ -58,9 +58,16 @@ func sameEncoding(t *testing.T, states map[string]WindowState) {
 	if !bytes.Equal(got, want) {
 		t.Fatalf("%+v: jsonlite writes\n%s\nencoding/json writes\n%s", states, got, want)
 	}
+	// What it reads back is what encoding/json reads back from the same bytes: a
+	// key that is not valid UTF-8 is written as U+FFFD by both, so it is not the
+	// original key that comes back.
+	var wantBack map[string]WindowState
+	if err := json.Unmarshal(want, &wantBack); err != nil {
+		t.Fatal(err)
+	}
 	back, err := decodeWindowStates(got)
-	if err != nil || !reflect.DeepEqual(back, states) {
-		t.Fatalf("%s reads back as %+v, %v", got, back, err)
+	if err != nil || !reflect.DeepEqual(back, wantBack) {
+		t.Fatalf("%s reads back as %+v, %v; encoding/json reads %+v", got, back, err, wantBack)
 	}
 }
 

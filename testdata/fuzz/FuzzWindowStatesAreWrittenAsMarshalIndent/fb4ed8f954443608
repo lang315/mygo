@@ -1,0 +1,9 @@
+go test fuzz v1
+string("0")
+int(1)
+int(2)
+int(3)
+int(4)
+bool(true)
+bool(false)
+string("\xb8")
