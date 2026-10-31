@@ -273,6 +273,7 @@ func coreColorWell(c *context, color *Color) *node {
 	// Read as its value where buttons have none, as on Linux.
 	b.description = hexOf(*color)
 	open := coreLocal(b, popupOpen{}, func() bool { return false })
+	b.closeIfBlocked(open)
 	b.afterInput(func() {
 		if b.Clicked() {
 			*open = !*open
