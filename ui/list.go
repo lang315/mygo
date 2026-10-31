@@ -262,10 +262,9 @@ type ListState struct {
 	// Disabled, is the app's data: a change needs a new version, and a closure it
 	// gave is the one of the build the row was kept from. A Radio is kept when
 	// its *T is a bool, a string or an integer (the row records it, as it does a
-	// Checkbox's *bool); with any other T the row is built in every frame, as is
-	// one with a text
-	// area or a document editor, an input of the app's own (HandleTextInput), or a
-	// Checkbox inside a CheckboxGroup is built in every frame.
+	// Checkbox's *bool), and built in every frame with any other T, as is a row
+	// with a text area or a document editor, an input of the app's own
+	// (HandleTextInput), or a Checkbox inside a CheckboxGroup.
 	//
 	// The list builds a row again whatever RowVersion says when the row, or
 	// a row beside it, is chosen or checked anew, when the pointer presses

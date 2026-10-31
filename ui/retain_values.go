@@ -149,7 +149,7 @@ func (rb *rowBuild) noteFloat(f *float64, v float64) {
 
 // readsChoice notes the *T a radio button compares with its value, which the
 // app and the buttons of other rows may change: a row records it when T is a
-// bool, a string or an integer (read through the kind it has, once, as the row is
+// bool, a string or an integer (read through the kind and width it has, once, as the row is
 // built; the check in each frame uses the kind it stored). Any other T cannot be
 // compared without calling its ==, so the row is built in every frame.
 func readsChoice[T comparable](c *context, p *T) {
@@ -162,14 +162,20 @@ func readsChoice[T comparable](c *context, p *T) {
 		c.row.noteBool((*bool)(ptr), *(*bool)(ptr))
 	case reflect.String:
 		c.row.noteString((*string)(ptr), *(*string)(ptr))
-	case reflect.Int8, reflect.Uint8:
-		c.row.note(valueRead{ptr: ptr, bits: bitsAt(readBits1, ptr), kind: readBits1})
-	case reflect.Int16, reflect.Uint16:
-		c.row.note(valueRead{ptr: ptr, bits: bitsAt(readBits2, ptr), kind: readBits2})
-	case reflect.Int32, reflect.Uint32:
-		c.row.note(valueRead{ptr: ptr, bits: bitsAt(readBits4, ptr), kind: readBits4})
-	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64:
-		c.row.note(valueRead{ptr: ptr, bits: bitsAt(readBits8, ptr), kind: readBits8})
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		// The width is the type's here (int is 4 bytes on a 32-bit target), not
+		// the kind's: the row reads no byte after the choice.
+		kind := readBits8
+		switch unsafe.Sizeof(*p) {
+		case 1:
+			kind = readBits1
+		case 2:
+			kind = readBits2
+		case 4:
+			kind = readBits4
+		}
+		c.row.note(valueRead{ptr: ptr, bits: bitsAt(kind, ptr), kind: kind})
 	default:
 		c.row.neverKept()
 	}

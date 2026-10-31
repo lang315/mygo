@@ -224,3 +224,96 @@ func TestRetainRadioOfOtherTypesIsBuilt(t *testing.T) {
 		})
 	}
 }
+
+// Radio over a bool and a 16-bit enum in kept rows: the app flips them, and a
+// byte next to the enum changes, which is not the choice.
+func TestRetainRadioBoolAndUint16(t *testing.T) {
+	type u16 uint16
+	type app struct {
+		b bool
+		e u16
+		n int8 // next to the enum
+	}
+	var apps []*app
+	p := newPair(t, 400, 300, func() func(c *Context) {
+		a := &app{}
+		apps = append(apps, a)
+		s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+		return func(c *Context) {
+			List(c, s, 20, func(i int) {
+				Row(c).Padding(4).Children(func() {
+					Radio(c, &a.b, i%2 == 0, fmt.Sprint("B ", i))
+					Radio(c, &a.e, u16(i+300), fmt.Sprint("E ", i))
+				})
+			}).Fill()
+		}
+	})
+	p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+	p.idle(4)
+	if k := p.keptRows(func() { p.frame("idle") }); k == 0 {
+		t.Fatal("no row kept")
+	}
+	// 302+256 differs from 302 in the high byte only.
+	for _, v := range []u16{302, 305, 302 + 256} {
+		for _, a := range apps {
+			a.b = !a.b
+			a.e = v
+		}
+		p.frame(fmt.Sprint("app ", v))
+		p.frame(fmt.Sprint("app ", v, " +1"))
+		p.sameAccess(fmt.Sprint("app ", v))
+	}
+	for _, a := range apps {
+		a.n = 9
+	}
+	if k := p.keptRows(func() { p.frame("neighbor") }); k == 0 {
+		t.Error("a change of the byte next to the enum rebuilt every row")
+	}
+	p.both(func(tt *Tester) { tt.Click("B 3") })
+	p.frame("click")
+	p.sameAccess("click")
+}
+
+// The dot of a radio button shows: a checked one has a dot in its middle that
+// its ring does not, differing from an unchecked one and from the window; the
+// border of an unchecked one changes under the pointer. (No picture to compare
+// with: it would differ between fonts and systems.)
+func TestRadioDotShows(t *testing.T) {
+	sel := 1
+	var row *node
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Padding(10).Gap(8).Children(func() {
+			row = coreRadio(c, &sel, 1, "Checked")
+			coreRadio(c, &sel, 2, "Unchecked")
+		})
+	}, 200, 120)
+	tt.Frame()
+	tt.Frame()
+	dot := func(r *node) Rect { return r.first.Bounds() }
+	pixel := func(x, y float32) [4]uint8 {
+		c := tt.Image().RGBAAt(int(x), int(y))
+		return [4]uint8{c.R, c.G, c.B, c.A}
+	}
+	on := dot(row)
+	cx, cy := on.X+on.W/2, on.Y+on.H/2
+	centre, ring, window := pixel(cx, cy), pixel(on.X+2, cy), pixel(1, 1)
+	if centre == ring {
+		t.Errorf("a checked radio button has no dot in its middle: %v at the centre and in the ring", centre)
+	}
+	if ring == window {
+		t.Errorf("a checked radio button looks like the window: ring %v, window %v", ring, window)
+	}
+	off := dot(row.next)
+	ocy := off.Y + off.H/2
+	if pixel(off.X+2, ocy) == ring {
+		t.Errorf("an unchecked radio button is filled as a checked one is: %v", ring)
+	}
+	border := func() [4]uint8 { return pixel(off.X, ocy) }
+	resting := border()
+	tt.Move(off.X+off.W/2, ocy)
+	tt.Frame()
+	tt.Frame()
+	if hovered := border(); hovered == resting {
+		t.Errorf("the border of an unchecked radio button does not change under the pointer: %v", resting)
+	}
+}
