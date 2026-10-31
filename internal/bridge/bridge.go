@@ -47,15 +47,14 @@ func appendKey(b []byte, key string) []byte {
 	return append(b, ':')
 }
 
-func appendNumber(b []byte, f float64) []byte {
-	if out, ok := jsonlite.AppendFloat(b, f); ok {
-		return out
-	}
-	b = append(b, '0')
-	return b
+// appendNumber appends f; false for a NaN or an infinity, which JSON has no
+// text for and encoding/json refuses to write.
+func appendNumber(b []byte, f float64) ([]byte, bool) {
+	return jsonlite.AppendFloat(b, f)
 }
 
-// JSON returns the configuration as JSON.
+// JSON returns the configuration as JSON, or nil when the limits in Fit cannot
+// be written, as json.Marshal returned nothing for them.
 func (c Config) JSON() []byte {
 	b := append([]byte(nil), `{"platform":`...)
 	b = jsonlite.AppendString(b, c.Platform)
@@ -71,22 +70,35 @@ func (c Config) JSON() []byte {
 	b = jsonlite.AppendString(b, c.Dir)
 	if c.Fit != nil {
 		b = append(b, `,"fit":`...)
-		b = c.Fit.AppendJSON(b)
+		var ok bool
+		if b, ok = c.Fit.AppendJSON(b); !ok {
+			return nil
+		}
 	}
 	return append(b, '}')
 }
 
-// AppendJSON appends the limits as JSON.
-func (f FitContent) AppendJSON(b []byte) []byte {
+// AppendJSON appends the limits as JSON; false if one is a NaN or an infinity,
+// which encoding/json does not write either.
+func (f FitContent) AppendJSON(b []byte) ([]byte, bool) {
+	var ok bool
 	b = append(b, `{"minWidth":`...)
-	b = appendNumber(b, f.MinWidth)
+	if b, ok = appendNumber(b, f.MinWidth); !ok {
+		return nil, false
+	}
 	b = append(b, `,"minHeight":`...)
-	b = appendNumber(b, f.MinHeight)
+	if b, ok = appendNumber(b, f.MinHeight); !ok {
+		return nil, false
+	}
 	b = append(b, `,"maxWidth":`...)
-	b = appendNumber(b, f.MaxWidth)
+	if b, ok = appendNumber(b, f.MaxWidth); !ok {
+		return nil, false
+	}
 	b = append(b, `,"maxHeight":`...)
-	b = appendNumber(b, f.MaxHeight)
-	return append(b, '}')
+	if b, ok = appendNumber(b, f.MaxHeight); !ok {
+		return nil, false
+	}
+	return append(b, '}'), true
 }
 
 // JSON returns the payload of LocaleEvent as JSON, written as encoding/json/v2
@@ -104,15 +116,23 @@ func (l Locale) JSON() ([]byte, bool) {
 	return append(b, '}'), true
 }
 
-// JSON returns the payload of TitleBarEvent as JSON.
-func (t TitleBar) JSON() []byte {
+// JSON returns the payload of TitleBarEvent as JSON; false if a number is a NaN
+// or an infinity, which encoding/json does not write either.
+func (t TitleBar) JSON() ([]byte, bool) {
+	var ok bool
 	b := append([]byte(nil), `{"height":`...)
-	b = appendNumber(b, t.Height)
+	if b, ok = appendNumber(b, t.Height); !ok {
+		return nil, false
+	}
 	b = append(b, `,"left":`...)
-	b = appendNumber(b, t.Left)
+	if b, ok = appendNumber(b, t.Left); !ok {
+		return nil, false
+	}
 	b = append(b, `,"right":`...)
-	b = appendNumber(b, t.Right)
-	return append(b, '}')
+	if b, ok = appendNumber(b, t.Right); !ok {
+		return nil, false
+	}
+	return append(b, '}'), true
 }
 
 // TitleBarEvent tells a page of a window with a hidden title bar the room
@@ -183,7 +203,7 @@ func NewFitContent(minSize, maxSize platform.Size, zoom float64) FitContent {
 // bridge, so that a page lays out around the window controls before it
 // first paints.
 func TitleBarScript(tb platform.TitleBar, zoom float64) string {
-	p := NewTitleBar(tb, zoom).JSON()
+	p, _ := NewTitleBar(tb, zoom).JSON()
 	return `window.__mygo&&window.__mygo.receive({"t":"event","n":"` + TitleBarEvent + `","p":` + string(p) + `});`
 }
 

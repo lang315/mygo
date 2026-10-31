@@ -57,7 +57,9 @@ func (w *Window) zoomChanged() {
 	w.fit.zoom = w.native.Zoom()
 	w.userScripts = w.pageScripts()
 	w.native.SetUserScripts(w.userScripts)
-	w.enqueue(eventMessage(bridge.FitContentEvent, w.fitLimits().AppendJSON(nil)), true)
+	if p, ok := w.fitLimits().AppendJSON(nil); ok {
+		w.enqueue(eventMessage(bridge.FitContentEvent, p), true)
+	}
 	// The content keeps its size in CSS pixels, which are other DIPs now.
 	if f := w.fit; f.told {
 		w.fitContentSize(f.content)
@@ -282,7 +284,9 @@ func (w *Window) sendTitleBar() {
 	if w.content != nil || !w.hiddenTitleBar || w.native == nil {
 		return
 	}
-	w.enqueue(eventMessage(bridge.TitleBarEvent, bridge.NewTitleBar(w.native.TitleBar(), w.native.Zoom()).JSON()), true)
+	if p, ok := bridge.NewTitleBar(w.native.TitleBar(), w.native.Zoom()).JSON(); ok {
+		w.enqueue(eventMessage(bridge.TitleBarEvent, p), true)
+	}
 }
 
 // maxUntrustedMessage is the size of the largest message an untrusted

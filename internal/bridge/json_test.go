@@ -31,9 +31,18 @@ func TestJSONIsMarshal(t *testing.T) {
 		same("Config", cfg.JSON(), cfg)
 	}
 	for _, f := range floats {
-		same("TitleBar", TitleBar{Height: f, Left: -f, Right: f / 3}.JSON(), TitleBar{Height: f, Left: -f, Right: f / 3})
+		tb := TitleBar{Height: f, Left: -f, Right: f / 3}
+		got, ok := tb.JSON()
+		if !ok {
+			t.Fatalf("TitleBar %+v: not written", tb)
+		}
+		same("TitleBar", got, tb)
 		fit := FitContent{MinWidth: f, MinHeight: -f, MaxWidth: f / 2, MaxHeight: 0}
-		same("FitContent", fit.AppendJSON(nil), fit)
+		got, ok = fit.AppendJSON(nil)
+		if !ok {
+			t.Fatalf("FitContent %+v: not written", fit)
+		}
+		same("FitContent", got, fit)
 		cfg := Config{Platform: "darwin", WindowID: 3, Version: "1", Secret: "s", Locale: "en", Dir: "ltr", Fit: &fit}
 		same("Config with fit", cfg.JSON(), cfg)
 	}
@@ -54,10 +63,23 @@ func TestLocaleJSONIsV2(t *testing.T) {
 	}
 }
 
-// A number JSON has no text for is written as 0, not as nothing.
+// A number JSON has no text for is not written, as encoding/json refuses it: an
+// event of it is not sent, and a configuration with it has no JSON.
 func TestJSONOfANumberThatIsNone(t *testing.T) {
-	got := string(TitleBar{Height: math.NaN(), Left: math.Inf(1), Right: 1}.JSON())
-	if got != `{"height":0,"left":0,"right":1}` {
-		t.Errorf("written %s", got)
+	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		if got, ok := (TitleBar{Height: f, Left: 1, Right: 1}).JSON(); ok {
+			t.Errorf("TitleBar with %v: written %s", f, got)
+		}
+		if got, ok := (TitleBar{Height: 1, Left: 1, Right: f}).JSON(); ok {
+			t.Errorf("TitleBar with %v: written %s", f, got)
+		}
+		for _, fit := range []FitContent{{MinWidth: f}, {MinHeight: f}, {MaxWidth: f}, {MaxHeight: f}} {
+			if got, ok := fit.AppendJSON(nil); ok {
+				t.Errorf("%+v: written %s", fit, got)
+			}
+			if got := (Config{Platform: "x", Fit: &fit}).JSON(); got != nil {
+				t.Errorf("Config with %+v: written %s", fit, got)
+			}
+		}
 	}
 }
