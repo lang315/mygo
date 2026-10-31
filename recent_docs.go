@@ -1,7 +1,6 @@
 package mygo
 
 import (
-	"encoding/json/v2"
 	"errors"
 	"io"
 	"log"
@@ -10,6 +9,8 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+
+	"github.com/egoist/mygo/internal/jsonlite"
 )
 
 // The recent documents: those the app opened lately, newest first, which
@@ -49,7 +50,9 @@ func loadRecentLocked() {
 	recentDocs.loaded = true
 	if f, err := recentFile(); err == nil {
 		if data, err := readAppFile(f); err == nil {
-			_ = json.Unmarshal(data, &recentDocs.paths)
+			if paths, err := jsonlite.DecodeStrings(data); err == nil {
+				recentDocs.paths = paths
+			}
 		}
 	}
 }
@@ -153,7 +156,14 @@ func saveRecentLocked() error {
 func writeRecentLocked(f string) {
 	paths := slices.Clone(recentDocs.paths)
 	writeAppFileLater("recent-documents", func() {
-		err := recentWrite(f, func(w io.Writer) error { return json.MarshalWrite(w, paths) })
+		err := recentWrite(f, func(w io.Writer) error {
+			data, err := jsonlite.EncodeStrings(paths)
+			if err != nil {
+				return err
+			}
+			_, err = w.Write(data)
+			return err
+		})
 		recentDocs.failed.Store(err != nil)
 		if err != nil {
 			log.Printf("mygo: recent documents: %v", err)
