@@ -163,3 +163,201 @@ func TestRestoreFocusSkipsADisabledOpener(t *testing.T) {
 		})
 	}
 }
+
+// restoreScene: an input that opens an overlay with an input inside, the
+// opener in a box the app disables by off.
+func restoreScene(t *testing.T) (tt *Tester, open, off *bool, opener **node) {
+	open, off, opener = new(bool), new(bool), new(*node)
+	var inside string
+	var second *node
+	tt = coreNewTester(func(c *context) {
+		coreColumn(c).Children(func() {
+			coreBox(c).Disabled(*off).Children(func() {
+				*opener = coreTextInputBase(c, new(string))
+			})
+			second = coreTextInputBase(c, new(string)) // a second focusable after the opener
+			if *open {
+				coreOverlay(c, func() {
+					coreBox(c).Padding(8).Children(func() { coreTextInputBase(c, &inside) })
+				})
+			}
+		})
+	}, 300, 300)
+	tt.Frame()
+	(*opener).Focus()
+	tt.Frame()
+	*open = true
+	tt.Frame()
+	tt.rt.focused = 0
+	for id, s := range tt.rt.states {
+		if s.editor != nil && id != (*opener).id && id != second.id {
+			tt.rt.focused = id
+		}
+	}
+	if tt.rt.focused == 0 {
+		t.Fatal("no input in the overlay")
+	}
+	tt.Frame()
+	return
+}
+
+func TestRestoreFocusToAnOpenerEnabledAgain(t *testing.T) {
+	t.Run("enabled in the frame the overlay closes", func(t *testing.T) {
+		tt, open, off, opener := restoreScene(t)
+		*off = true
+		tt.Frame()
+		*off, *open = false, false
+		tt.Frame()
+		tt.Frame()
+		if tt.rt.focused != (*opener).id {
+			t.Errorf("focus %d, want opener %d", tt.rt.focused, (*opener).id)
+		}
+	})
+	t.Run("enabled one frame before the close", func(t *testing.T) {
+		tt, open, off, opener := restoreScene(t)
+		*off = true
+		tt.Frame()
+		*off = false
+		tt.Frame()
+		*open = false
+		tt.Frame()
+		tt.Frame()
+		if tt.rt.focused != (*opener).id {
+			t.Errorf("focus %d, want opener %d", tt.rt.focused, (*opener).id)
+		}
+	})
+	t.Run("enabled one frame after the close", func(t *testing.T) {
+		tt, open, off, opener := restoreScene(t)
+		*off = true
+		tt.Frame()
+		*open = false
+		tt.Frame()
+		*off = false
+		tt.Frame()
+		tt.Frame()
+		t.Logf("after close+enable: focused=%d opener=%d live=%v", tt.rt.focused, (*opener).id, tt.rt.states[tt.rt.focused] != nil)
+		tt.Key(0, KeyTab)
+		tt.Frame()
+		t.Logf("after Tab: focused=%d opener=%d live=%v", tt.rt.focused, (*opener).id, tt.rt.states[tt.rt.focused] != nil)
+		if tt.rt.focused != (*opener).id {
+			t.Errorf("focus %d, want opener %d", tt.rt.focused, (*opener).id)
+		}
+	})
+}
+
+// Rule 1 with the box disabled after its children are built (as
+// Fieldset(...).Disabled(true)): IsDisabled is false at build.
+func TestInputDisabledAfterItsBuildClosesItsPopup(t *testing.T) {
+	var text string
+	var off bool
+	var parts *comboboxParts
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Children(func() {
+			parts = comboboxBase(c, &text, true)
+			parts.Popup(func(panel *node) {
+				for _, o := range popupOptions {
+					item := parts.Item(o)
+					item.Children(func() { coreText(c, o) })
+				}
+			})
+		}).Disabled(off)
+	}, 300, 300)
+	tt.Frame()
+	tt.ClickAt(parts.Input.Bounds().X+5, parts.Input.Bounds().Y+5)
+	tt.Frame()
+	if !parts.Open() {
+		t.Fatal("a click did not open the popup")
+	}
+	off = true
+	for range 4 {
+		tt.Frame()
+	}
+	if parts.Open() {
+		t.Errorf("the popup of an input disabled after build is open")
+		tt.Click("banana")
+		tt.Frame()
+		t.Logf("text after clicking an option of the disabled input: %q", text)
+	}
+}
+
+// The opener is in a row of a List with RowVersion, kept, not built, while
+// the column around it is disabled and enabled again.
+func TestRestoreFocusToTheOpenerOfAKeptRow(t *testing.T) {
+	for _, order := range []string{"same frame", "enable before close", "disabled at close"} {
+		t.Run(order, func(t *testing.T) {
+			type app struct{ off, open bool }
+			var apps []*app
+			p := newPair(t, 500, 400, func() func(c *Context) {
+				a := &app{}
+				apps = append(apps, a)
+				vals := make([]string, 24)
+				var inside string
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+				return func(c *Context) {
+					Column(c).Fill().Disabled(a.off).Children(func() {
+						List(c, s, 24, func(i int) {
+							Row(c).Padding(4).Gap(8).Children(func() {
+								Textf(c, "row %d", i)
+								TextInput(c, &vals[i]).Width(180)
+							})
+						}).Grow(1)
+					})
+					if a.open {
+						Overlay(c, func() { TextInput(c, &inside) })
+					}
+				}
+			})
+			set := func(f func(a *app)) {
+				for _, a := range apps {
+					f(a)
+				}
+			}
+			p.idle(3)
+			p.both(func(tt *Tester) { tt.ClickAt(66, 284) })
+			p.frame("focused")
+			opener := [2]uint64{p.kept.rt.focused, p.built.rt.focused}
+			if opener[0] == 0 {
+				t.Fatal("no opener")
+			}
+			set(func(a *app) { a.open = true })
+			p.frame("open")
+			for _, tt := range []*Tester{p.kept, p.built} {
+				for id, s := range tt.rt.states {
+					if s.editor != nil && tt.rt.within(id, overlayID) {
+						tt.rt.focused = id
+					}
+				}
+			}
+			if p.kept.rt.focused == opener[0] {
+				t.Fatal("no input in the overlay")
+			}
+			p.frame("focus inside")
+			set(func(a *app) { a.off = true })
+			p.frame("disabled")
+			if order == "same frame" {
+				set(func(a *app) { a.off, a.open = false, false })
+				p.frame("enabled+closed")
+			} else if order == "disabled at close" {
+				set(func(a *app) { a.open = false })
+				p.frame("closed disabled")
+				for i, tt := range []*Tester{p.kept, p.built} {
+					if tt.rt.focused == opener[i] {
+						t.Errorf("twin %d: a disabled opener took the focus", i)
+					}
+				}
+				return
+			} else {
+				set(func(a *app) { a.off = false })
+				p.frame("enabled")
+				set(func(a *app) { a.open = false })
+				p.frame("closed")
+			}
+			p.frame("+1")
+			for i, tt := range []*Tester{p.kept, p.built} {
+				if tt.rt.focused != opener[i] {
+					t.Errorf("twin %d: focus %d, want opener %d", i, tt.rt.focused, opener[i])
+				}
+			}
+		})
+	}
+}
