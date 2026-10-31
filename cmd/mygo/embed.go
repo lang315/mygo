@@ -151,10 +151,11 @@ const mygoModule = "github.com/egoist/mygo"
 // code imports, not what this build adds), and nothing here can tell.
 //
 // An app builds from its vendor directory when -mod=vendor is in effect
-// (GOFLAGS or go env -w), or when no -mod is, there is no workspace (go.work,
-// which makes go ignore the vendor directories of its modules) and
-// vendor/modules.txt is next to go.mod (go 1.14 and later). Otherwise the
-// module is where go says it is, as the app's go.mod and go.work require it:
+// (GOFLAGS or go env -w), or when no -mod is and go itself would use the vendor
+// directory (vendorMode): next to go.mod, made by go mod vendor, or in a
+// workspace next to go.work, made by go work vendor; one made for the other is
+// ignored. A MyGo that the workspace uses as a directory is not vendored.
+// Otherwise the module is where go says it is, as the app's go.mod and go.work require it:
 // go list -m gives its directory, and for a module that is not in the module
 // cache yet go mod download fetches that version, which it never changes, as
 // a build would. The answer is not asked of go.mod's version beyond that: go
@@ -174,9 +175,18 @@ func appHasPackage(c *Config, path string) (bool, error) {
 	if env.GOMOD == "" || env.GOMOD == os.DevNull {
 		return false, fmt.Errorf("%s is not in a Go module", c.root)
 	}
-	root := filepath.Dir(env.GOMOD)
-	if env.vendorMode() {
-		return hasInVendor(root, path)
+	vendored, err := env.vendorMode()
+	if err != nil {
+		return false, err
+	}
+	if vendored {
+		uses, err := env.usesMygoDirectory()
+		if err != nil {
+			return false, err
+		}
+		if !uses {
+			return hasInVendor(env, path)
+		}
 	}
 	dir, err := mygoModuleDir(c.root, env)
 	if err != nil {
@@ -210,9 +220,74 @@ func appBuildEnv(dir string) (buildEnv, error) {
 // inWorkspace reports whether go builds the app in workspace mode.
 func (e buildEnv) inWorkspace() bool { return e.GOWORK != "" && e.GOWORK != "off" }
 
-// vendorMode reports whether the app builds from the vendor directory next to
-// its go.mod.
-func (e buildEnv) vendorMode() bool {
+// vendorRoot is the directory with the vendor directory the build uses: the
+// one of go.work in a workspace (go work vendor), else the one of go.mod.
+func (e buildEnv) vendorRoot() string {
+	if e.inWorkspace() {
+		return filepath.Dir(e.GOWORK)
+	}
+	return filepath.Dir(e.GOMOD)
+}
+
+// usesMygoDirectory reports whether the workspace uses MyGo as a directory:
+// go work vendor copies the dependencies of a workspace, not its modules, so
+// such a MyGo is built from that directory whatever the vendor directory has.
+func (e buildEnv) usesMygoDirectory() (bool, error) {
+	if !e.inWorkspace() {
+		return false, nil
+	}
+	out, err := goOutput(filepath.Dir(e.GOWORK), "work", "edit", "-json")
+	if err != nil {
+		return false, fmt.Errorf("reading go.work: %w", err)
+	}
+	var work struct{ Use []struct{ DiskPath string } }
+	if err := json.Unmarshal([]byte(out), &work); err != nil {
+		return false, fmt.Errorf("reading go.work: %w", err)
+	}
+	for _, use := range work.Use {
+		dir := filepath.FromSlash(use.DiskPath)
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(filepath.Dir(e.GOWORK), dir)
+		}
+		gomod := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(gomod); err != nil {
+			continue
+		}
+		path, _, err := modEdit(dir, gomod)
+		if err != nil {
+			return false, err
+		}
+		if path == mygoModule {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// modEdit gives the module path and the go version that go.mod says, as go
+// reads them (go mod edit -json): comments and quotes included.
+func modEdit(dir, gomod string) (path, version string, err error) {
+	out, err := goOutput(dir, "mod", "edit", "-json", gomod)
+	if err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", gomod, err)
+	}
+	var mod struct {
+		Module struct{ Path string }
+		Go     string
+	}
+	if err := json.Unmarshal([]byte(out), &mod); err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", gomod, err)
+	}
+	return mod.Module.Path, mod.Go, nil
+}
+
+// vendorMode reports whether the app builds from the vendor directory of
+// vendorRoot, as go decides it (setDefaultBuildMod in cmd/go/internal/modload):
+// -mod says so, or, with no -mod, the directory exists, the go line of go.work
+// (in a workspace) or go.mod is 1.14 or later, and the first line of its
+// modules.txt says "## workspace" if and only if the build is in a workspace
+// (modulesTextIsForWorkspace). Otherwise go ignores the directory.
+func (e buildEnv) vendorMode() (bool, error) {
 	mod := ""
 	for _, f := range strings.Fields(e.GOFLAGS) {
 		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "mod="); ok {
@@ -220,13 +295,52 @@ func (e buildEnv) vendorMode() bool {
 		}
 	}
 	if mod != "" {
-		return mod == "vendor"
+		return mod == "vendor", nil
 	}
+	vendor := filepath.Join(e.vendorRoot(), "vendor")
+	if fi, err := os.Stat(vendor); err != nil || !fi.IsDir() {
+		return false, nil
+	}
+	var version string
 	if e.inWorkspace() {
+		out, err := goOutput(filepath.Dir(e.GOWORK), "work", "edit", "-json")
+		if err != nil {
+			return false, fmt.Errorf("reading go.work: %w", err)
+		}
+		var work struct{ Go string }
+		if err := json.Unmarshal([]byte(out), &work); err != nil {
+			return false, fmt.Errorf("reading go.work: %w", err)
+		}
+		version = work.Go
+	} else {
+		var err error
+		if _, version, err = modEdit(filepath.Dir(e.GOMOD), e.GOMOD); err != nil {
+			return false, err
+		}
+	}
+	if !goAtLeast114(version) {
+		return false, nil // unspecified or older: go does not use the directory
+	}
+	// The first line of modules.txt, as go reads it (it may not exist).
+	head, _ := os.ReadFile(filepath.Join(vendor, "modules.txt"))
+	line, _, _ := strings.Cut(string(head), "\n")
+	forWorkspace := false
+	if notes, ok := strings.CutPrefix(line, "## "); ok {
+		for _, n := range strings.Split(notes, ";") {
+			forWorkspace = forWorkspace || strings.TrimSpace(n) == "workspace"
+		}
+	}
+	return forWorkspace == e.inWorkspace(), nil
+}
+
+// goAtLeast114 reports whether a go line (1.21, 1.22.3, 1.23rc1) names go 1.14
+// or later; an empty one does not.
+func goAtLeast114(v string) bool {
+	var major, minor int
+	if n, _ := fmt.Sscanf(v, "%d.%d", &major, &minor); n < 2 {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(filepath.Dir(e.GOMOD), "vendor", "modules.txt"))
-	return err == nil
+	return major > 1 || major == 1 && minor >= 14
 }
 
 // moduleDirs remembers the directory of MyGo's module for the app at a root,
@@ -297,16 +411,20 @@ func mygoModuleDir(dir string, env buildEnv) (string, error) {
 	return moduleDir, nil
 }
 
-// hasInVendor looks for the package in the vendor directory in root.
-func hasInVendor(root, path string) (bool, error) {
-	vendor := filepath.Join(root, "vendor")
+// hasInVendor looks for the package in the vendor directory the build uses.
+func hasInVendor(env buildEnv, path string) (bool, error) {
+	vendor := filepath.Join(env.vendorRoot(), "vendor")
+	command := "go mod vendor"
+	if env.inWorkspace() {
+		command = "go work vendor"
+	}
 	if _, err := os.Stat(filepath.Join(vendor, "modules.txt")); err != nil {
-		return false, fmt.Errorf("the app builds from a vendor directory, and %s has no modules.txt: run go mod vendor, or build without vendoring (-mod=mod)", vendor)
+		return false, fmt.Errorf("the app builds from a vendor directory, and %s has no modules.txt: run %s, or build without vendoring", vendor, command)
 	}
 	if hasGoFiles(filepath.Join(vendor, filepath.FromSlash(path))) {
 		return true, nil
 	}
-	return false, fmt.Errorf("the vendor directory of the app, %s, has no %s, which this build needs, and go mod vendor copies only packages the app's code imports (not the ones this build adds): add import _ %q to a file of the app (main.go), run go get %s@latest if its MyGo is older than this CLI, and go mod vendor; or build without vendoring", vendor, path, path, mygoModule)
+	return false, fmt.Errorf("the vendor directory of the app, %s, has no %s, which this build needs, and %s copies only packages the app's code imports (not the ones this build adds): add import _ %q to a file of the app (main.go), run go get %s@latest if its MyGo is older than this CLI, and %s; or build without vendoring", vendor, path, command, path, mygoModule, command)
 }
 
 // goOutput runs go in dir and returns what it printed; its error holds what
