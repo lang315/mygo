@@ -40,11 +40,11 @@ func (d *disabledPopupScene) mk(kind string, n int) func() func(c *Context) {
 						Textf(c, "row %d", i)
 						switch kind {
 						case "combo":
-							Combobox(c, &a.choice[i], popupOptions).Width(180)
+							Combobox(c, &a.choice[i], popupOptions).Label(fmt.Sprint("Field ", i)).Width(180)
 						case "auto":
-							Autocomplete(c, &a.choice[i], popupOptions).Width(180)
+							Autocomplete(c, &a.choice[i], popupOptions).Label(fmt.Sprint("Field ", i)).Width(180)
 						default:
-							TextInput(c, &a.choice[i]).Width(180)
+							TextInput(c, &a.choice[i]).Label(fmt.Sprint("Field ", i)).Width(180)
 						}
 					})
 				}).Grow(1)
@@ -62,7 +62,11 @@ func TestFocusedInputOfDisabledParentLosesFocusToAClickOutside(t *testing.T) {
 			var d disabledPopupScene
 			p := newPair(t, 500, 400, d.mk(kind, 24))
 			p.idle(3)
-			p.both(func(tt *Tester) { tt.ClickAt(66, 284) })
+			p.both(func(tt *Tester) {
+				if err := tt.Click("Field 3"); err != nil {
+					t.Fatal(err)
+				}
+			})
 			p.frame("focused")
 			if p.kept.rt.focused == 0 {
 				t.Fatal("the click did not focus an input")
@@ -298,7 +302,7 @@ func TestRestoreFocusToTheOpenerOfAKeptRow(t *testing.T) {
 						List(c, s, 24, func(i int) {
 							Row(c).Padding(4).Gap(8).Children(func() {
 								Textf(c, "row %d", i)
-								TextInput(c, &vals[i]).Width(180)
+								TextInput(c, &vals[i]).Label(fmt.Sprint("Field ", i)).Width(180)
 							})
 						}).Grow(1)
 					})
@@ -313,7 +317,11 @@ func TestRestoreFocusToTheOpenerOfAKeptRow(t *testing.T) {
 				}
 			}
 			p.idle(3)
-			p.both(func(tt *Tester) { tt.ClickAt(66, 284) })
+			p.both(func(tt *Tester) {
+				if err := tt.Click("Field 3"); err != nil {
+					t.Fatal(err)
+				}
+			})
 			p.frame("focused")
 			opener := [2]uint64{p.kept.rt.focused, p.built.rt.focused}
 			if opener[0] == 0 {
