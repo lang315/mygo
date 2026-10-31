@@ -11,7 +11,7 @@ import (
 // are ns/op and built/frame.
 func BenchmarkListRowsOfControls(b *testing.B) {
 	for _, n := range []int{1000, 100_000} {
-		for _, kind := range []string{"text", "widgets", "button-checkbox-link", "radio", "select-progress", "switch", "toggle-button", "slider", "text-input"} {
+		for _, kind := range []string{"text", "widgets", "button-checkbox-link", "radio", "select-progress", "switch", "toggle-button", "slider", "text-input", "combobox"} {
 			for _, phase := range []string{"idle", "hover"} {
 				b.Run(fmt.Sprintf("%d/%s/%s", n, kind, phase), func(b *testing.B) {
 					bs := make([]bool, n)
@@ -32,6 +32,8 @@ func BenchmarkListRowsOfControls(b *testing.B) {
 										TextInput(c, &ss[i]).Width(120)
 									case "text-input":
 										TextInput(c, &ss[i]).Width(120)
+									case "combobox":
+										Combobox(c, &ss[i], []string{"a", "b", "c"}).Label("Choice").Width(180)
 									case "switch":
 										Switch(c, &bs[i])
 										Textf(c, "row %d", i)

@@ -14,6 +14,7 @@ const (
 	staticCheckbox
 	staticInput
 	staticButton
+	staticField
 )
 
 // setStyle styles e with a static styleFn and its identity. Callers pass the

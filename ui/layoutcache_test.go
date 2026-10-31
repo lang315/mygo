@@ -778,7 +778,7 @@ func TestLayoutInputs(t *testing.T) {
 		" blur opacity opacitySet cursor " +
 		"inputFn textClient caret takesText noIME copyData maximizeButton fit gray dismissed rotate label widget role " +
 		"paintLook expanded vertical tip accValue accRange hasRange accFill accStep barInset scrollBase " +
-		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName focusTo " +
+		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName keepLinks focusTo " +
 		"setPos setSize choosesItems search description invalid followX sort level expandable " +
 		"chooseMany serial"
 	known := map[string]bool{}

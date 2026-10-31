@@ -415,6 +415,9 @@ type node struct {
 	// outOfName keeps the element's Label out of the name of the row or the
 	// item around it from content (innerText): a row's check box names itself.
 	outOfName bool
+	// keepLinks says focusTo and nameFrom point inside the row, which a copy
+	// of it links again (copyIn).
+	keepLinks bool
 	// focusTo is the element taking the focus that Focus and AutoFocus
 	// give this one, and whose focus Focused reports: the input of the box
 	// around it (field), a number input's text field for its row.

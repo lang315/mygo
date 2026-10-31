@@ -61,6 +61,8 @@ type rowKeep struct {
 	readsDrag bool
 	root      *node
 	nodes     []node   // the copy, root first, in the order of a walk
+	origs     []*node  // the elements copied, in the same order, to link the copies of keepLinks
+	links     bool     // an element of the copy has keepLinks
 	states    []*state // those of the nodes, which each pass stamps as seen
 	lay       rowLay   // what layout left of the row (retain_layout.go)
 	// scrollers are the indexes in nodes of the scroll containers of the row,
@@ -237,7 +239,7 @@ func setDepth(e *node) {
 // boxes saved would not hold. TestRetainTransitionRowsAreNeverHeld fails if that
 // changes.
 func retainable(e *node) bool {
-	if e.popover != nil || e.placeOn != nil || e.nameFrom != nil || e.focusTo != nil || e.activeDescendant != nil ||
+	if e.popover != nil || e.placeOn != nil || (e.nameFrom != nil || e.focusTo != nil) && !e.keepLinks || e.activeDescendant != nil ||
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||
 		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.objectFn != nil ||
 		e.paintAfterFn != nil || (e.paintFn != nil && !e.paintPure) || e.accFill != nil || e.copyData != nil || e.tip ||
@@ -263,7 +265,11 @@ func count(e *node) int {
 
 // copyIn writes e and the elements under it into k's storage, depth first,
 // linking the copies to each other, and notes their states.
-func (k *rowKeep) copyIn(e *node) {
+//
+// The links of elements with keepLinks (focusTo, nameFrom) are made to the
+// copies; it reports false when one points outside the row, which is then not
+// kept: a copy would hold an element of the pass.
+func (k *rowKeep) copyIn(e *node) bool {
 	n := count(e)
 	if cap(k.nodes) < n {
 		k.nodes = make([]node, n)
@@ -272,7 +278,38 @@ func (k *rowKeep) copyIn(e *node) {
 	}
 	k.states = k.states[:0]
 	at := 0
+	k.links = false
 	k.root = k.fill(e, &at, nil)
+	if !k.links {
+		return true
+	}
+	k.origs = k.origs[:0]
+	walkRow(e, func(o *node) { k.origs = append(k.origs, o) })
+	find := func(o *node) *node {
+		for i, c := range k.origs {
+			if c == o {
+				return &k.nodes[i]
+			}
+		}
+		return nil
+	}
+	for i := range k.nodes {
+		d := &k.nodes[i]
+		if !d.keepLinks {
+			continue
+		}
+		if d.focusTo != nil {
+			if d.focusTo = find(d.focusTo); d.focusTo == nil {
+				return false
+			}
+		}
+		if d.nameFrom != nil {
+			if d.nameFrom = find(d.nameFrom); d.nameFrom == nil {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (k *rowKeep) fill(e *node, at *int, parent *node) *node {
@@ -285,6 +322,7 @@ func (k *rowKeep) fill(e *node, at *int, parent *node) *node {
 	d.shadows, d.cols, d.rows, d.frags, d.spans = append(shadows[:0], e.shadows...), append(cols[:0], e.cols...),
 		append(rows[:0], e.rows...), append(frags[:0], e.frags...), append(spans[:0], e.spans...)
 	d.parent, d.first, d.last, d.next, d.nchild = parent, nil, nil, nil, 0
+	k.links = k.links || e.keepLinks
 	if e.st != nil {
 		k.states = append(k.states, e.st)
 	}
@@ -358,7 +396,14 @@ func (f *listFrame) capture() {
 			rec = f.spareKeep()
 		}
 		rec.unlink() // the copy may get another root state
-		rec.copyIn(r.e)
+		if !rec.copyIn(r.e) {
+			if fresh {
+				f.spare = append(f.spare, rec)
+			} else {
+				f.release(r.key)
+			}
+			continue
+		}
 		if !f.ok(r.i, rec.states, r.readsHover, r.readsDrag) {
 			if fresh {
 				f.spare = append(f.spare, rec)
