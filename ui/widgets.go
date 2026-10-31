@@ -359,6 +359,7 @@ func slider(c *context, value *float64, lo, hi, step float64) *node {
 	if ticks > 0 {
 		s.Height(t.Space(7))
 	}
+	c.readsFloat(value, *value)
 	frac := fraction(*value, lo, hi)
 	// Right to left, lo is at the right (sliderInput), and the track
 	// fills from there.
@@ -366,8 +367,8 @@ func slider(c *context, value *float64, lo, hi, step float64) *node {
 	if rtl {
 		frac = 1 - frac
 	}
-	held := s.Animate("held", b2f(s.st.pressed), 150*time.Millisecond)
-	s.Draw(func(p *Painter, r Rect) {
+	held := s.animateRest("held", b2f(s.st.pressed), 150*time.Millisecond)
+	s.drawPure(func(p *Painter, r Rect) {
 		// As thick as Progress; above the ticks.
 		h := t.Space(1.5)
 		cy := r.Y + t.Space(2.5)
@@ -385,7 +386,7 @@ func slider(c *context, value *float64, lo, hi, step float64) *node {
 		} else {
 			p.Fill(Rect{track.X, track.Y, x - track.X, h}, t.Accent, h/2)
 		}
-		paintKnob(p, t, k, held, s.FocusVisible())
+		paintKnob(p, t, k, held, p.cur.FocusVisible())
 	})
 	return s
 }
