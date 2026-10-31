@@ -126,6 +126,9 @@ jobs:
           # 32-bit Windows and Linux have no backend, but compile.
           GOOS=windows GOARCH=386 go build ./...
           GOOS=linux GOARCH=386 go build ./...
+          # Native UI runs on 32-bit ARM (the deb for armhf): its tests, which
+          # compile only if no constant overflows an int, are vetted.
+          GOOS=linux GOARCH=386 go vet ./ui/...
           # Browsers run native UI; the CLI is for desktops.
           export GOOS=js GOARCH=wasm
           go build $(go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./... | grep -v /cmd/mygo)

@@ -84,7 +84,7 @@ func TestForgetInputVisitsOnlyWhatThePassBuilt(t *testing.T) {
 	rt := tt.rt
 	built := len(rt.states)
 	for i := range 1000 {
-		id := uint64(1<<60 + i)
+		id := uint64(1<<60) + uint64(i)
 		rt.states[id] = &state{id: id, seen: 1}
 	}
 	before := rt.swept
