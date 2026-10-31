@@ -435,14 +435,17 @@ func (s *GridState) lineVersion(r, n int, minWidth, height float32) uint64 {
 	}
 	for i := first; i < end; i++ {
 		bits := uint64(0)
-		if s.chosen(i) {
-			bits |= 1
-		}
-		if s.Selected != nil && *s.Selected == i {
-			bits |= 2
-		}
-		if s.Checked != nil && s.Checked.has(s.key(i)) {
-			bits |= 4
+		// A header is not asked of the Selection: its key is of another type.
+		if !header {
+			if s.chosen(i) {
+				bits |= 1
+			}
+			if s.Selected != nil && *s.Selected == i {
+				bits |= 2
+			}
+			if s.Checked != nil && s.Checked.has(s.key(i)) {
+				bits |= 4
+			}
 		}
 		h = (h ^ s.RowVersion(i) ^ bits<<56) * 0x100000001b3
 	}

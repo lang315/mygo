@@ -41,7 +41,12 @@ func (g *gridScene) mk() func() func(c *Context) {
 		g.apps = append(g.apps, a)
 		a.st.Selected, a.st.Selection, a.st.Checked = &a.sel, &a.chosen, &a.checks
 		a.st.Label = func(i int) string { return a.names[i] }
-		a.st.Key = func(i int) any { return i }
+		a.st.Key = func(i int) any {
+			if g.heads && i%13 == 0 {
+				return fmt.Sprint("header ", i) // not of the Selection's type
+			}
+			return i
+		}
 		if g.heads {
 			a.st.Header = func(i int) bool { return i%13 == 0 }
 		}

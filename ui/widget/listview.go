@@ -3,6 +3,7 @@ package widget
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 
@@ -483,7 +484,7 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 	} else {
 		g.SetPivot(-1)
 	}
-	g.Key, g.Label, g.Selected, g.Header = t.keyAt, t.labelAt, &lv.cursor, nil
+	g.Key, g.Label, g.Selected, g.Header, g.RowVersion = t.keyAt, t.labelAt, &lv.cursor, nil, lv.itemVersion
 	if groups := t.view.Groups(); groups != nil {
 		g.Header = t.headerAt
 		// The grid is told where the headers are whenever they move, not left to
@@ -558,6 +559,41 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		}
 	}
 	return col
+}
+
+// itemVersion is ui's GridState.RowVersion: what the build of the item at i
+// reads of the view. For a row, the generation of its row in the source (a
+// row added, replaced or changed with UpdateRow has one of its own), how rows
+// look in this view (the view, the icon size, the image function and the
+// columns') and, in the small views, whether its own check box is on. For a
+// header, its title and its count. The choice, the cursor and the large views'
+// check boxes are the grid's own.
+func (lv *ListViewWidget[T, K]) itemVersion(i int) uint64 {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	t := lv.t
+	if gr, ok := t.headAt(i); ok {
+		h := uint64(gr.Len)*0x9e3779b97f4a7c15 ^ 0x27d4eb2f165667c5
+		for j := 0; j < len(gr.Title); j++ {
+			h = (h ^ uint64(gr.Title[j])) * 0x100000001b3
+		}
+		return h
+	}
+	r := t.rowAt(i)
+	if r == nil {
+		return 0
+	}
+	k := t.key(r)
+	place := 0
+	if lv.mode == ViewSmallIcon || lv.mode == ViewList {
+		place = 1 + int(lv.mode)
+		if t.checks && t.checked.shown.Has(k) {
+			place += 8
+		}
+	}
+	look := t.look*0xff51afd7ed558ccd ^ uint64(lv.mode)*0xc4ceb9fe1a85ec53 ^ uint64(math.Float32bits(lv.iconSize))
+	return versionOf(t.src.gens.of(k), look, place)
 }
 
 // toggleChecks is Space in the small views, whose boxes are the items' own: it
