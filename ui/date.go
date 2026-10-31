@@ -23,6 +23,7 @@ func coreDateInput(c *context, date *time.Time) *node {
 	open := coreLocal(b, popupOpen{}, func() bool { return false })
 	// cursor is the day the keys move in the calendar.
 	cursor := coreLocal(b, "cursor", func() time.Time { return *date })
+	b.closeIfBlocked(open)
 	b.afterInput(func() {
 		if b.Clicked() {
 			*open = !*open

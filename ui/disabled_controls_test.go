@@ -162,3 +162,36 @@ func TestDisabledControlDoesNotOpen(t *testing.T) {
 		}
 	}
 }
+
+// An app's own Popover anchored to a disabled element stays open, and its
+// open state is the app's: "why is this disabled" is a legitimate popover.
+func TestPopoverOfTheAppAnchoredToADisabledElementStaysOpen(t *testing.T) {
+	for _, mode := range disabledModes {
+		t.Run(mode, func(t *testing.T) {
+			open, off := true, true
+			tt := coreNewTester(func(c *context) {
+				build := func() {
+					b := coreButton(c, "Go")
+					if mode == "self" {
+						b.Disabled(off)
+					}
+					corePopover(c, b, &open, func() { coreText(c, "BECAUSE") })
+				}
+				switch mode {
+				case "self":
+					coreColumn(c).Padding(20).Children(build)
+				case "before":
+					coreColumn(c).Padding(20).Disabled(off).Children(build)
+				default:
+					coreColumn(c).Padding(20).Children(build).Disabled(off)
+				}
+			}, 400, 400)
+			for range 3 {
+				tt.Frame()
+			}
+			if !open || !tt.HasText("BECAUSE") {
+				t.Errorf("the popover closed: open %v, shown %v", open, tt.HasText("BECAUSE"))
+			}
+		})
+	}
+}

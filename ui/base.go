@@ -347,8 +347,18 @@ func coreSelectBase[T comparable](c *context, selected *T) *selectParts[T] {
 			}
 		}
 	})
+	b.closeIfBlocked(s.open)
 	b.expanded = *s.open
 	return s
+}
+
+// closeIfBlocked closes the popup of a control that is disabled, or inert
+// (also by an element around it, after its build): its afterInput does not
+// run, so nothing else would. The popup of an app's own Popover is the app's.
+func (e *node) closeIfBlocked(open *bool) {
+	if *open && (e.disabled() || e.c.inert) {
+		*open = false
+	}
 }
 
 func (s *selectParts[T]) choose(v T) {
