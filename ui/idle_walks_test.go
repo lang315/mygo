@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/transfer"
@@ -224,5 +225,79 @@ func TestPruneDropsTheStatesOfAnEarlierPass(t *testing.T) {
 	tt.Frame()
 	if d := countedSeen(tt.rt); d != "" {
 		t.Fatal(d)
+	}
+}
+
+// An app that never calls Selectable has no selectable text, no selection scope and
+// no selection, which the walks that prepare and collect selectable text would
+// find out in every frame: the engine does not make them until Selectable is
+// called on it, and then makes them whatever the next passes build.
+func TestSelectableWalksStartWithTheFirstSelectable(t *testing.T) {
+	selectable := false
+	tt := coreNewTester(func(c *context) {
+		col := coreColumn(c).Padding(10).Gap(6)
+		if selectable {
+			col.Selectable()
+		}
+		col.Children(func() {
+			coreText(c, "first paragraph")
+			coreText(c, "second paragraph")
+		})
+	}, 300, 100)
+	tt.Frame()
+	tt.Frame()
+	if tt.rt.selectable || len(tt.rt.texts) != 0 {
+		t.Fatalf("no Selectable yet: selectable %v, %d texts", tt.rt.selectable, len(tt.rt.texts))
+	}
+	for _, s := range tt.rt.states {
+		if s.textScope != 0 {
+			t.Fatalf("a text has a selection scope (%d) before any Selectable", s.textScope)
+		}
+	}
+	selectable = true
+	tt.Frame()
+	if len(tt.rt.texts) != 2 {
+		t.Fatalf("after the first Selectable: %d selectable paragraphs, want 2", len(tt.rt.texts))
+	}
+	selectBetween(t, tt, "first paragraph", 6, "second paragraph", 6)
+	tt.Key(Cmd, KeyC)
+	if got, want := tt.Clipboard(), "paragraph\nsecond"; got != want {
+		t.Errorf("copied %q, want %q", got, want)
+	}
+}
+
+// The rows of a list inside a Selectable container are kept in the frames at rest,
+// and the engine's walk of selectable text is skipped only before the first
+// Selectable: a selection across kept rows survives the frames and copies.
+func TestSelectionAcrossKeptRowsSurvivesFramesAtRest(t *testing.T) {
+	s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			coreButton(c, "elsewhere")
+			coreColumn(c).Selectable().Grow(1).Children(func() {
+				coreList(c, s, 20, func(i int) {
+					coreText(c, fmt.Sprintf("row %d", i))
+				}).Grow(1)
+			})
+		})
+	}, 300, 300)
+	for range 4 {
+		tt.Frame()
+	}
+	selectBetween(t, tt, "row 1", 4, "row 3", 4)
+	tt.Key(0, KeyTab) // the focus leaves the text
+	for range 6 {
+		tt.Advance(50 * time.Millisecond)
+		tt.Frame()
+	}
+	if tt.rt.selection.scope == 0 || len(tt.rt.texts) < 3 {
+		t.Fatalf("frames at rest lost the selection: scope %d, %d selectable paragraphs", tt.rt.selection.scope, len(tt.rt.texts))
+	}
+	var got []string
+	for _, part := range tt.rt.selectedTexts(tt.rt.selection.scope) {
+		got = append(got, string([]rune(part.Text)[part.Start:part.End]))
+	}
+	if want := []string{"1", "row 2", "row "}; !slices.Equal(got, want) {
+		t.Errorf("the selection holds %q, want %q", got, want)
 	}
 }

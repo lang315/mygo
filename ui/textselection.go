@@ -28,6 +28,9 @@ type textSelection struct {
 // prepareSelectable waits until inline children have finished their text,
 // so rebuilding a paragraph does not reset its selection to its own text.
 func (rt *engine) prepareSelectable(e *node) {
+	if !rt.selectable {
+		return
+	}
 	e.prepareSelectable()
 	for ch := e.first; ch != nil; ch = ch.next {
 		rt.prepareSelectable(ch)
@@ -35,7 +38,7 @@ func (rt *engine) prepareSelectable(e *node) {
 }
 
 func (e *node) prepareSelectable() {
-	if e.kind != kindText {
+	if e.kind != kindText || !e.c.rt.selectable {
 		return
 	}
 	if e.isInline() {
@@ -119,6 +122,9 @@ func prepareEditorText(e *node, scope uint64) {
 // (absolute children paint last). Inline children are already in their
 // paragraph's text, and must not be copied a second time.
 func (rt *engine) collectSelectable(e *node, hidden bool) {
+	if !rt.selectable {
+		return
+	}
 	hidden = hidden || e.flags&(flagInvisible|flagInert) != 0 || e.hidden
 	if !hidden && e.kind == kindText && !e.isInline() && e.st.flags&flagDisabled == 0 && e.flags&flagSelectable != 0 {
 		rt.texts = append(rt.texts, e.st)
