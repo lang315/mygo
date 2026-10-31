@@ -51,6 +51,12 @@ func (p *pair) compare(what string) {
 	if d == "" {
 		d = sameNodes(p.kept.rt.c.root, p.built.rt.c.root, "root")
 	}
+	if d == "" {
+		d = countedSeen(p.kept.rt)
+	}
+	if d == "" {
+		d = countedSeen(p.built.rt)
+	}
 	if d != "" {
 		s := p.steps
 		if len(s) > 6 {

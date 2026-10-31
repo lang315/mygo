@@ -751,6 +751,7 @@ func (rt *engine) lookState(id uint64) (s *state, built bool) {
 	s.seen, s.pass = rt.frame, rt.pass
 	if !built {
 		rt.noteBuilt(s)
+		rt.countSeen()
 	}
 	// What the element drags and takes, as this pass asks.
 	s.dragValue, s.dragFn, s.accepts = nil, nil, nil
@@ -768,8 +769,12 @@ func (rt *engine) lookState(id uint64) (s *state, built bool) {
 func (rt *engine) unlook(s *state) {
 	if s.lookedSeen != 0 {
 		s.seen, s.pass = s.lookedSeen, s.lookedPass
+		if s.seen != rt.frame || s.pass != rt.pass {
+			rt.seenN-- // the lookup counted it, and it is not seen by this pass after all
+		}
 		return
 	}
+	rt.seenN-- // the state the lookup made was counted
 	delete(rt.states, s.id)
 	if s.replay != nil && len(rt.rowPool) < maxFree {
 		rt.rowPool = append(rt.rowPool, s.replay)

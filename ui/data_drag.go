@@ -49,6 +49,7 @@ func (e *node) DragDataFrom(data func() transfer.Data, options ...transfer.DragO
 func coreDropData(e *node, options transfer.DropOptions) (transfer.Drop, bool) {
 	linkDrag()
 	e.st.dataTarget = &options
+	e.c.rt.targetFrame, e.c.rt.targetPass = e.c.rt.frame, e.c.rt.pass
 	if d := e.st.dataDropped; d != nil {
 		e.c.rt.consumed = true
 		return *d, true
@@ -62,6 +63,7 @@ func coreDropData(e *node, options transfer.DropOptions) (transfer.Drop, bool) {
 func coreDataDragOver(e *node, options transfer.DropOptions) (transfer.Offer, bool) {
 	linkDrag()
 	e.st.dataTarget = &options
+	e.c.rt.targetFrame, e.c.rt.targetPass = e.c.rt.frame, e.c.rt.pass
 	rt := e.c.rt
 	if rt.dataOver == e.id && rt.incoming != nil {
 		offer := rt.incoming.Offer
@@ -157,7 +159,13 @@ func (rt *engine) dropData(s *state, x, y float32, d *platform.DataDragEvent) bo
 
 func (rt *engine) syncDropFormats() {
 	formats := append(rt.dropScratch[:0], transfer.FileList, transfer.URIList, platform.DragSessionFormat)
+	// Only a pass that built a target has formats to add; one that built none
+	// registers the defaults, which takes the formats of a target that went back.
+	built := rt.targetFrame == rt.frame && rt.targetPass == rt.pass
 	for _, s := range rt.states {
+		if !built {
+			break
+		}
 		if s.dataTarget == nil || s.flags&flagDisabled != 0 || s.seen != rt.frame || s.pass != rt.pass {
 			continue
 		}

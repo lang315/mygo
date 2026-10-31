@@ -153,8 +153,16 @@ type engine struct {
 	built      []*state
 	builtFrame uint64
 	builtPass  int
-	noRetain   bool
-	bound      int
+	// seenN is how many states the pass (seenFrame, seenPass) holds as seen
+	// (countSeen): prune has nothing to retire when it is len(states).
+	seenN, seenPass int
+	seenFrame       uint64
+	// targetFrame and targetPass are the last pass that built a drop target
+	// (DropData, DataDragOver): the others register the default formats.
+	targetFrame uint64
+	targetPass  int
+	noRetain    bool
+	bound       int
 	// rowsLaidKept counts the kept rows whose layout a layout kept and place
 	// found where they were; rowsCommitReplayed those commit replayed
 	// (retain_layout.go). Reset by beginLayout.
@@ -1070,6 +1078,15 @@ func (rt *engine) noteBuilt(s *state) {
 	rt.built = append(rt.built, s)
 }
 
+// countSeen counts a state the pass stamped as seen that was not stamped before
+// in it; unlook takes the count back with the stamp.
+func (rt *engine) countSeen() {
+	if rt.seenFrame != rt.frame || rt.seenPass != rt.pass {
+		rt.seenFrame, rt.seenPass, rt.seenN = rt.frame, rt.pass, 0
+	}
+	rt.seenN++
+}
+
 // forgetInput forgets the input of the elements the pass built, which
 // they handled.
 func (rt *engine) forgetInput() {
@@ -1099,7 +1116,13 @@ func (rt *engine) prune() {
 			rt.host.cancelDataDrag()
 		}
 	}
+	// Every state built by the last pass: none to retire, and no walk of them
+	// (an idle frame holds hundreds, nearly all of a table's).
+	all := rt.seenFrame == rt.frame && rt.seenPass == rt.pass && rt.seenN == len(rt.states)
 	for id, s := range rt.states {
+		if all {
+			break
+		}
 		if s.seen != rt.frame || s.pass != rt.pass {
 			if rt.pressed == s {
 				rt.pressed = nil
