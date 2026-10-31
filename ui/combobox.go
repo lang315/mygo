@@ -131,6 +131,10 @@ func comboboxBase(c *context, text *string, first bool) *comboboxParts {
 			}
 		}
 	})
+	if *p.open && (in.IsDisabled() || c.inert) {
+		// afterInput does not run for a disabled element: its popup would stay.
+		*p.open, *p.typed, *p.highlight = false, false, -1
+	}
 	in.expanded = *p.open
 	return p
 }

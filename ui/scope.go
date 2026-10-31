@@ -139,6 +139,20 @@ func (rt *engine) openOverlay(back *node) {
 	}
 }
 
+// blocked reports whether the element, or one around it, was disabled or inert
+// in the last frame.
+func (rt *engine) blocked(id uint64) bool {
+	for s, n := rt.states[id], 0; s != nil && n < 1024; s, n = rt.states[s.parent], n+1 {
+		if s.flags&(flagDisabled|flagInert) != 0 {
+			return true
+		}
+		if s.parent == 0 {
+			break
+		}
+	}
+	return false
+}
+
 // restoreFocus gives the focus back to the element that had it as an
 // overlay opened, once the overlay is gone with the focus that was in it.
 func (rt *engine) restoreFocus() {
@@ -147,7 +161,8 @@ func (rt *engine) restoreFocus() {
 			continue
 		}
 		delete(rt.openers, id)
-		if rt.states[rt.focused] == nil && rt.states[opener] != nil {
+		// A disabled or inert opener takes no focus, as a click on it would not give it.
+		if rt.states[rt.focused] == nil && rt.states[opener] != nil && !rt.blocked(opener) {
 			rt.focused = opener
 		}
 	}
