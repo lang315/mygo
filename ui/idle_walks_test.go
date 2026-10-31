@@ -146,3 +146,83 @@ func countedSeen(rt *engine) string {
 	}
 	return ""
 }
+
+// dropDefaults are the formats the window registers with no target.
+func dropDefaults() []transfer.Format {
+	d := []transfer.Format{transfer.FileList, transfer.URIList, platform.DragSessionFormat}
+	slices.Sort(d)
+	return d
+}
+
+// A target built only with DataDragOver (no DropData) registers its formats.
+func TestDropFormatsOfATargetThatOnlyAsksForTheDrag(t *testing.T) {
+	custom := transfer.Format("application/vnd.mygo.dragover+json")
+	want := append(dropDefaults(), custom)
+	slices.Sort(want)
+	tt := coreNewTester(func(c *context) {
+		coreDataDragOver(coreBox(c).Size(50, 50), transfer.DropOptions{Formats: []transfer.Format{custom}, Operations: transfer.Copy})
+	}, 100, 100)
+	tt.Frame()
+	tt.Frame()
+	if !slices.Equal(tt.rt.dropFormats, want) {
+		t.Fatalf("the window registers %v, want %v", tt.rt.dropFormats, want)
+	}
+}
+
+// A target built in the first pass of a frame and not in the second, which the
+// same frame runs: the last pass built none, so the window registers the defaults.
+func TestDropFormatsOfATargetOnlyInAnEarlierPass(t *testing.T) {
+	custom := transfer.Format("application/vnd.mygo.earlier+json")
+	twoPass := false
+	tt := coreNewTester(func(c *context) {
+		if twoPass && c.rt.pass == 0 {
+			coreDropData(coreBox(c).Size(50, 50), transfer.DropOptions{Formats: []transfer.Format{custom}, Operations: transfer.Copy})
+			c.rt.consumed = true
+		} else {
+			coreBox(c).Size(10, 10)
+		}
+	}, 100, 100)
+	tt.Frame()
+	twoPass = true
+	tt.Frame()
+	if tt.rt.pass != 1 {
+		t.Fatalf("the frame ran %d passes, want 2", tt.rt.pass+1)
+	}
+	if !slices.Equal(tt.rt.dropFormats, dropDefaults()) {
+		t.Fatalf("the window registers %v, want the defaults", tt.rt.dropFormats)
+	}
+}
+
+// States built in the first pass of a frame only (keyed and not) are pruned with
+// the frame, and the count of the last pass matches its stamps.
+func TestPruneDropsTheStatesOfAnEarlierPass(t *testing.T) {
+	twoPass := false
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Children(func() {
+			if twoPass && c.rt.pass == 0 {
+				coreBox(c).Key("x").Size(5, 5)
+				coreBox(c).Size(5, 5)
+				coreBox(c).Size(5, 5)
+				c.rt.consumed = true
+			}
+		})
+	}, 100, 100)
+	tt.Frame()
+	tt.Frame()
+	twoPass = true
+	tt.Frame()
+	if d := countedSeen(tt.rt); d != "" {
+		t.Fatal(d)
+	}
+	for _, s := range tt.rt.states {
+		if s.seen != tt.rt.frame || s.pass != tt.rt.pass {
+			t.Errorf("a state born in frame %d, not built by the last pass, is kept", s.born)
+		}
+	}
+	twoPass = false
+	tt.Frame()
+	tt.Frame()
+	if d := countedSeen(tt.rt); d != "" {
+		t.Fatal(d)
+	}
+}
