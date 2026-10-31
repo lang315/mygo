@@ -1584,7 +1584,8 @@ as in Tauri:
   it looks for the package in the directory of the MyGo the app builds with,
   which `go list -m` gives, or `go mod download` fetches at the version the
   app requires, never raising it; in a vendor directory when the app builds
-  from one, which a workspace never does; any error of go fails the build.
+  from one (next to go.work in a workspace, a MyGo it uses as a directory is
+  not in it); any error of go fails the build.
   It remembers the module's directory while go.mod, go.sum and go.work stay
   the same, and looks in it every time), and one whose vendor directory
   lacks the package fails the build, saying to import it. Builds for
