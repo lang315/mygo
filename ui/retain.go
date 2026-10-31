@@ -196,6 +196,9 @@ func (f *listFrame) keep(i int, key any) *node {
 	for _, st := range rec.states {
 		// Stamped as built in every pass, as lookState would: not through it,
 		// which clears what a build sets again (drags, drops).
+		if st.seen != rt.frame || st.pass != rt.pass {
+			rt.countSeen()
+		}
 		st.seen, st.pass = rt.frame, rt.pass
 		rt.noteBuilt(st)
 	}
