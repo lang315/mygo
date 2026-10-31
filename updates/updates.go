@@ -72,7 +72,7 @@ var updateSource atomic.Pointer[Source]
 // mygo.config.ts configures (SetSource): an update service the app already
 // has, an endpoint that needs the user's credentials, or a channel the app
 // chooses while it runs. It serves what `mygo build` publishes, from
-// wherever the app keeps it, and Updater checks it as it checks the feed's:
+// wherever the app keeps it, and package updates checks it as it checks the feed's:
 // the archive and deltas must be signed with the key of updates.publicKey
 // that the app was built with, or they are not installed.
 type Source interface {

@@ -19,6 +19,7 @@ replaces the app with it.
 > | `mygo.Updater.Enabled()` | `updates.Enabled()` |
 > | `mygo.Updater.SetSource(s)` | `updates.SetSource(s)` |
 > | `mygo.Updater.SetPrereleases(on)`, `.Prereleases()` | `updates.SetPrereleases(on)`, `updates.Prereleases()` |
+> | `mygo.UpdaterModule`, the type of `mygo.Updater` | none: `updates` has functions, not a value; use the ones above |
 > | `mygo.Update` | `updates.Update` |
 > | `mygo.UpdateSource` | `updates.Source` |
 > | `mygo.ErrUpdatesDisabled` | `updates.ErrDisabled` |
@@ -26,7 +27,9 @@ replaces the app with it.
 > `mygo build` passes the feed and the key to package `updates`: an app that
 > built its own ldflags names `github.com/egoist/mygo/updates.buildFeed` and
 > `updates.buildKey` where it named `github.com/egoist/mygo.packageUpdateFeed`
-> and `packageUpdateKey`.
+> and `packageUpdateKey`. An app that still sets the old names in its own
+> ldflags builds without error and ships with updates disabled, so it must
+> switch to `updates.buildFeed` and `updates.buildKey`.
 
 ## Set up
 

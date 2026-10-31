@@ -36,7 +36,7 @@ func Check(ctx context.Context) (*Update, error) {
 	return nil, ErrDisabled
 }
 
-// Source is where Updater gets updates from instead of the feed that
+// Source is where package updates gets updates from instead of the feed that
 // mygo.config.ts configures. Browsers do not update apps.
 type Source interface {
 	// Manifest returns the manifest of the running platform.
