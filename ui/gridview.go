@@ -73,6 +73,17 @@ type GridState struct {
 	// keeps them readable over a picture: for items that have none.
 	PlainChecks bool
 
+	// RowVersion, when set, lets the grid keep a line it built in the last
+	// frame instead of building it again, as long as the versions of the items
+	// of the line, which RowVersion(item) returns, are what they were then and
+	// the line holds the same items: the contract of ListState.RowVersion, for
+	// the items of a grid. Item i's build must read nothing but its own data,
+	// which RowVersion versions, and the grid's state; data that moves (a slice
+	// that append reallocates) is the app's to version. It is ignored while
+	// Reorder is set: a drop is placed by the cells the last frame built, which
+	// a kept line does not build again.
+	RowVersion func(item int) uint64
+
 	rows ListState
 	// cells are the items of the cells the last frame built, by their
 	// elements' IDs, and built those of this frame.
