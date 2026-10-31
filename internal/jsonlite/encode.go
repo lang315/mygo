@@ -65,6 +65,36 @@ func AppendStringStrict(dst []byte, s string) ([]byte, bool) {
 	return append(dst, '"'), true
 }
 
+// AppendQuote appends s as encoding/json/jsontext's AppendQuote does: only the
+// quote, the backslash and the control characters are escaped, and each byte of
+// invalid UTF-8 is written as U+FFFD (AppendQuote reports an error for it, which
+// the callers of MyGo ignore).
+func AppendQuote(dst []byte, s string) []byte {
+	dst = append(dst, '"')
+	for i := 0; i < len(s); {
+		c := s[i]
+		switch {
+		case c == '"' || c == '\\':
+			dst = append(dst, '\\', c)
+		case c < ' ':
+			dst = appendControl(dst, c)
+		case c < utf8.RuneSelf:
+			dst = append(dst, c)
+		default:
+			r, n := utf8.DecodeRuneInString(s[i:])
+			if r == utf8.RuneError && n == 1 {
+				dst = append(dst, "�"...)
+			} else {
+				dst = append(dst, s[i:i+n]...)
+			}
+			i += n
+			continue
+		}
+		i++
+	}
+	return append(dst, '"')
+}
+
 // appendControl appends the escape of a byte below a space.
 func appendControl(dst []byte, c byte) []byte {
 	switch c {

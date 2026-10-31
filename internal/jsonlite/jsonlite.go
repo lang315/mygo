@@ -165,6 +165,14 @@ func (r *Reader) digits() bool {
 // Int reads a number written as an integer that an int holds: encoding/json
 // does not decode 1.0 or 1e2 into an int either.
 func (r *Reader) Int() (int, error) {
+	n, err := r.int(strconv.IntSize)
+	return int(n), err
+}
+
+// Int64 is Int for an int64.
+func (r *Reader) Int64() (int64, error) { return r.int(64) }
+
+func (r *Reader) int(bits int) (int64, error) {
 	c := r.Peek()
 	if c != '-' && (c < '0' || c > '9') {
 		return 0, r.typeError()
@@ -173,11 +181,22 @@ func (r *Reader) Int() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err := strconv.ParseInt(text, 10, strconv.IntSize)
+	n, err := strconv.ParseInt(text, 10, bits)
 	if err != nil {
 		return 0, errType
 	}
-	return int(n), nil
+	return n, nil
+}
+
+// Value reads a value of any kind, checks it, and returns its bytes, which are
+// those of the document: the caller must not change them.
+func (r *Reader) Value() ([]byte, error) {
+	r.space()
+	start := r.i
+	if err := r.Skip(); err != nil {
+		return nil, err
+	}
+	return r.b[start:r.i], nil
 }
 
 // String reads a string. Invalid UTF-8 and lone surrogates become U+FFFD, as
