@@ -355,6 +355,11 @@ func coreCombobox(c *context, selected *string, options []string) *node {
 	p.anchor = f
 	// Whether the popup showed before this frame's input.
 	wasOpen := p.Open()
+	if !in.Focused() && !wasOpen && *text != *selected {
+		// The text goes back to the choice in afterInput, which a disabled
+		// element does not run: a row kept with the two apart would keep them so.
+		c.neverKept()
+	}
 	shown := options
 	if p.Filtering() {
 		shown = matching(options, *text)

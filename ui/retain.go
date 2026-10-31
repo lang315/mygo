@@ -396,6 +396,7 @@ func (f *listFrame) capture() {
 			rec = f.spareKeep()
 		}
 		rec.unlink() // the copy may get another root state
+		// Not reached by a widget today (fieldControl stops at a List); it keeps a row with a link out of it from holding the pass's element.
 		if !rec.copyIn(r.e) {
 			if fresh {
 				f.spare = append(f.spare, rec)

@@ -291,3 +291,80 @@ func TestRetainRowsOfOtherFieldsAreBuilt(t *testing.T) {
 		})
 	}
 }
+
+// The box around a combobox's input paints with the theme it was built with, as
+// the frame's last SetTheme is not the one before it: without builtWith it would
+// take the border of the later theme.
+func TestComboboxFieldPaintsWithItsBuiltTheme(t *testing.T) {
+	light, dark := LightTheme(), DarkTheme()
+	choice := "apple"
+	var box *node
+	tt := coreNewTester(func(c *context) {
+		c.SetTheme(light)
+		box = coreCombobox(c, &choice, comboOptions)
+		c.SetTheme(dark)
+	}, 300, 100)
+	tt.Frame()
+	r := box.Bounds()
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	want := light.Border.Mix(light.Text, 0.25)
+	if got := painted(box).borderC; got != want {
+		t.Fatalf("hovered box border %v, want the built theme's %v", got, want)
+	}
+}
+
+// The app sets the choice while a parent is disabled, which runs no afterInput:
+// the text must not stay apart from the choice in a kept row once the parent is
+// enabled again.
+func TestRetainComboboxChoiceSetWhileParentDisabled(t *testing.T) {
+	for _, kind := range []string{"combo", "auto", "textinput"} {
+		t.Run(kind, func(t *testing.T) {
+			const n = 6
+			type app struct {
+				choice []string
+				off    bool
+			}
+			var apps []*app
+			p := newPair(t, 500, 300, func() func(c *Context) {
+				a := &app{choice: []string{"apple", "apple", "apple", "apple", "apple", "apple"}}
+				apps = append(apps, a)
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+				return func(c *Context) {
+					Column(c).Fill().Disabled(a.off).Children(func() {
+						List(c, s, n, func(i int) {
+							Row(c).Padding(4).Gap(8).Children(func() {
+								Textf(c, "row %d", i)
+								switch kind {
+								case "combo":
+									Combobox(c, &a.choice[i], comboOptions).Width(180)
+								case "auto":
+									Autocomplete(c, &a.choice[i], comboOptions).Width(180)
+								default:
+									TextInput(c, &a.choice[i]).Width(180)
+								}
+							})
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(3)
+			set := func(f func(a *app)) {
+				for _, a := range apps {
+					f(a)
+				}
+			}
+			set(func(a *app) { a.off = true })
+			p.frame("disabled")
+			set(func(a *app) { a.choice[1] = "banana" })
+			p.frame("choice set while disabled")
+			set(func(a *app) { a.off = false })
+			for range 10 {
+				p.frame("enabled again")
+			}
+			if !containsText(shownTexts(p.kept), "banana") {
+				t.Errorf("the kept row does not show the app's choice: %q", shownTexts(p.kept))
+			}
+		})
+	}
+}
