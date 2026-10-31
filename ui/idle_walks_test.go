@@ -301,3 +301,95 @@ func TestSelectionAcrossKeptRowsSurvivesFramesAtRest(t *testing.T) {
 		t.Errorf("the selection holds %q, want %q", got, want)
 	}
 }
+
+// While no Selectable was called on the engine its walks are not made: a container
+// flagged selectable by hand (not through Selectable, which tells the engine) is
+// neither prepared nor collected, so its texts have no scope, no editor and no
+// place in the list of selectable paragraphs. Red when the guards of the walks go.
+func TestSelectableWalksAreNotMadeBeforeSelectable(t *testing.T) {
+	tt := coreNewTester(func(c *context) {
+		col := coreColumn(c).Padding(10)
+		col.flags |= flagSelectable
+		col.Children(func() {
+			coreText(c, "first paragraph")
+			coreText(c, "second paragraph")
+		})
+	}, 300, 100)
+	tt.Frame()
+	tt.Frame()
+	if tt.rt.selectable {
+		t.Fatal("the engine took a hand-made flag for a call of Selectable")
+	}
+	if len(tt.rt.texts) != 0 {
+		t.Errorf("%d paragraphs collected without a call of Selectable", len(tt.rt.texts))
+	}
+	for _, s := range tt.rt.states {
+		if s.textScope != 0 || s.editor != nil {
+			t.Errorf("a state was prepared as selectable text without a call of Selectable (scope %d)", s.textScope)
+		}
+	}
+}
+
+// The first Selectable of the engine is in a list row built while the list lays
+// out: its text is selectable and copies in that same frame.
+func TestFirstSelectableInAListRowBuiltWhileLayingOut(t *testing.T) {
+	on := false
+	ver := uint64(1)
+	s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return ver }}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			coreButton(c, "elsewhere")
+			coreList(c, s, 50, func(i int) {
+				r := coreColumn(c).Children(func() {
+					coreText(c, fmt.Sprintf("row %d", i))
+				})
+				if on && i == 2 {
+					r.Selectable()
+				}
+			}).Grow(1)
+		})
+	}, 300, 300)
+	for range 3 {
+		tt.Frame()
+	}
+	if tt.rt.selectable {
+		t.Fatal("selectable before any Selectable")
+	}
+	on, ver = true, 2
+	tt.Frame()
+	if len(tt.rt.texts) != 1 {
+		t.Fatalf("%d selectable paragraphs, want 1", len(tt.rt.texts))
+	}
+	selectBetween(t, tt, "row 2", 0, "row 2", 5)
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "row 2" {
+		t.Errorf("copied %q", got)
+	}
+}
+
+// The first Selectable appears after a click.
+func TestFirstSelectableAfterAClick(t *testing.T) {
+	on := false
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Children(func() {
+			if coreButton(c, "go").Clicked() {
+				on = true
+			}
+			p := coreText(c, "hello world")
+			if on {
+				p.Selectable()
+			}
+		})
+	}, 300, 200)
+	tt.Frame()
+	tt.Click("go")
+	tt.Frame()
+	if !tt.rt.selectable || len(tt.rt.texts) != 1 {
+		t.Fatalf("selectable %v, %d paragraphs", tt.rt.selectable, len(tt.rt.texts))
+	}
+	selectBetween(t, tt, "hello world", 0, "hello world", 5)
+	tt.Key(Cmd, KeyC)
+	if got := tt.Clipboard(); got != "hello" {
+		t.Errorf("copied %q", got)
+	}
+}
