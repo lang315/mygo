@@ -260,7 +260,10 @@ type ListState struct {
 	// watched by its address like the others', and what its builder set, ReadOnly,
 	// MaxLength, Password, Placeholder, OnPaste, OnEdit, OnTextKey, CaretLimit and
 	// Disabled, is the app's data: a change needs a new version, and a closure it
-	// gave is the one of the build the row was kept from. A row with a Radio, a text
+	// gave is the one of the build the row was kept from. A Radio is kept when
+	// its *T is a bool, a string or an integer (the row records it, as it does a
+	// Checkbox's *bool); with any other T the row is built in every frame, as is
+	// one with a text
 	// area or a document editor, an input of the app's own (HandleTextInput), or a
 	// Checkbox inside a CheckboxGroup is built in every frame.
 	//

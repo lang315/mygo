@@ -60,7 +60,7 @@ type paintLook struct {
 	// checked is whether a check box, radio or switch is off (1), on (2) or
 	// mixed (3).
 	checked int8
-	// checkmark is the state of a check box (1 off, 2 on, 3 mixed) when its
+	// checkmark is the state of a check box (1 off, 2 on, 3 mixed; a radio button's dot: 4 off, 5 on) when its
 	// box was built, which the box paints (paintCheckmark), and 0 for any
 	// other element.
 	checkmark int8
