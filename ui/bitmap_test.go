@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -495,17 +496,30 @@ func TestReleasePixelsKeepsWhatCannotComeBack(t *testing.T) {
 }
 
 // DecodeBitmap links the decoders of PNG and GIF only: a program that shows JPEG,
-// WebP or BMP images imports their decoders, and package ui (with the packages
-// of its widgets) does not import them for it.
+// WebP or BMP images imports their decoders, and the packages that decode images
+// (ui, its widgets, Markdown and rich text, the plugins that draw bitmaps) do not
+// import them for it, on any system.
 func TestOptionalDecodersAreNotLinkedByUI(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "github.com/egoist/mygo/ui", "github.com/egoist/mygo/ui/widget", "github.com/egoist/mygo/ui/markdown", "github.com/egoist/mygo/ui/richtext").Output()
-	if err != nil {
+	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("no go command: ", err)
 	}
-	for _, pkg := range strings.Fields(string(out)) {
-		switch pkg {
-		case "image/jpeg", "golang.org/x/image/webp", "golang.org/x/image/bmp", "golang.org/x/image/vp8", "golang.org/x/image/vp8l":
-			t.Errorf("package ui links %s, the decoder of an optional format", pkg)
+	pkgs := []string{"ui", "ui/widget", "ui/markdown", "ui/richtext", "plugins/updater/native", "plugins/loading", "plugins/game"}
+	for i, p := range pkgs {
+		pkgs[i] = "github.com/egoist/mygo/" + p
+	}
+	for _, target := range [][2]string{{"darwin", "arm64"}, {"linux", "amd64"}, {"windows", "amd64"}, {"js", "wasm"}} {
+		cmd := exec.Command("go", append([]string{"list", "-deps", "-f", "{{.ImportPath}}"}, pkgs...)...)
+		cmd.Env = append(os.Environ(), "GOOS="+target[0], "GOARCH="+target[1], "CGO_ENABLED=0")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Errorf("go list for %s/%s: %v\n%s", target[0], target[1], err, out)
+			continue
+		}
+		for _, pkg := range strings.Fields(string(out)) {
+			switch pkg {
+			case "image/jpeg", "golang.org/x/image/webp", "golang.org/x/image/bmp", "golang.org/x/image/vp8", "golang.org/x/image/vp8l":
+				t.Errorf("%s/%s: these packages link %s, the decoder of an optional format", target[0], target[1], pkg)
+			}
 		}
 	}
 }
@@ -519,15 +533,17 @@ func TestMissingDecoderNamesTheImport(t *testing.T) {
 	}{
 		{"JPEG", "image/jpeg", []byte{0xff, 0xd8, 0xff, 0xe0, 0, 0x10}},
 		{"WebP", "golang.org/x/image/webp", []byte("RIFF\x24\x00\x00\x00WEBPVP8 ")},
-		{"BMP", "golang.org/x/image/bmp", []byte("BM\x00\x00\x00\x00")},
+		{"BMP", "golang.org/x/image/bmp", append([]byte("BM\x00\x00\x00\x00\x00\x00\x00\x00\x36\x00\x00\x00"), 40, 0, 0, 0)},
 	} {
 		err := missingDecoder(tc.data, image.ErrFormat)
 		if err == nil || !errors.Is(err, image.ErrFormat) || !strings.Contains(err.Error(), tc.name) || !strings.Contains(err.Error(), `import _ "`+tc.imp+`"`) {
 			t.Errorf("%s: %v", tc.name, err)
 		}
 	}
-	if err := missingDecoder([]byte("not an image"), image.ErrFormat); err != image.ErrFormat {
-		t.Errorf("unknown bytes: %v", err)
+	for _, text := range []string{"not an image", "BM is how this text starts, and it is no bitmap", "BMP file header only"} {
+		if err := missingDecoder([]byte(text), image.ErrFormat); err != image.ErrFormat {
+			t.Errorf("%q: %v", text, err)
+		}
 	}
 	other := errors.New("truncated")
 	if err := missingDecoder([]byte{0xff, 0xd8, 0xff}, other); err != other {

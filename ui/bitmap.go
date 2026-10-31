@@ -76,6 +76,18 @@ func DecodeBitmap(data []byte) (*Bitmap, error) {
 	return &Bitmap{img: s, w: s.W, h: s.H, decode: func() (*scene.Image, error) { return decodeImage(data) }}, nil
 }
 
+// DecodeBitmapConfig reads the size of the image in data, as image.DecodeConfig
+// does, with the failures of DecodeBitmap: an image of a format whose decoder the
+// program did not import is an error that names the import. Use it in place
+// of image.DecodeConfig before DecodeBitmap.
+func DecodeBitmapConfig(data []byte) (image.Config, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return image.Config{}, missingDecoder(data, err)
+	}
+	return cfg, nil
+}
+
 // decodeImage decodes the bytes to a premultiplied RGBA bitmap, upright
 // as a JPEG's EXIF orientation says.
 func decodeImage(data []byte) (*scene.Image, error) {
@@ -102,7 +114,21 @@ var optionalDecoders = []struct {
 	{name: "WebP", imp: "golang.org/x/image/webp", is: func(d []byte) bool {
 		return len(d) >= 12 && string(d[:4]) == "RIFF" && string(d[8:12]) == "WEBP"
 	}},
-	{name: "BMP", imp: "golang.org/x/image/bmp", is: func(d []byte) bool { return bytes.HasPrefix(d, []byte("BM")) }},
+	{name: "BMP", imp: "golang.org/x/image/bmp", is: isBMP},
+}
+
+// isBMP reports whether data starts like a BMP file: "BM", the file header of 14
+// bytes and the size of a known bitmap header after it (two bytes would take
+// any text that starts with BM for one).
+func isBMP(d []byte) bool {
+	if len(d) < 18 || d[0] != 'B' || d[1] != 'M' {
+		return false
+	}
+	switch binary.LittleEndian.Uint32(d[14:18]) {
+	case 12, 40, 52, 56, 64, 108, 124:
+		return true
+	}
+	return false
 }
 
 // missingDecoder explains err, the failure of image.Decode on data, when data is

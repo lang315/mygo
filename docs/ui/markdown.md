@@ -132,7 +132,8 @@ app.md.OnLink = func(url string) { app.open(url) }
 Images show their description until `LoadImage` loads them, on a
 goroutine of their own; without it, they stay descriptions, as a view
 loads nothing from the network by itself. `FileImages(dir)` loads the
-files of a directory. A paragraph of images alone shows them as large
+files of a directory (PNG and GIF; a JPEG, WebP or BMP needs the decoder
+imported, see "Formats" in [Images](image.md)). A paragraph of images alone shows them as large
 as they are, at most as wide as the view.
 
 ```go
