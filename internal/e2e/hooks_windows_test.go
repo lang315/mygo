@@ -58,7 +58,13 @@ func clickPage(*mygo.Window, float64, float64) bool { return false }
 func appClick(t testing.TB, w *mygo.Window, x, y float64) (ok bool) {
 	t.Helper()
 	var missed string
-	mygo.RunOnMain(func() { ok, missed = win.TestInputClick(w.NativeHandle(), x, y, wait.Guard) })
+	var moves int
+	mygo.RunOnMain(func() { ok, missed, moves = win.TestInputClick(w.NativeHandle(), x, y, wait.Guard) })
+	if moves > 1 {
+		// The system's idea of the window under the cursor was behind: what
+		// this wait is for.
+		t.Logf("the click at (%v, %v) reached the app after the cursor moved %d times", x, y, moves)
+	}
 	if missed != "" {
 		t.Fatalf("the click at (%v, %v) did not reach the app; the window there: %s", x, y, missed)
 	}
