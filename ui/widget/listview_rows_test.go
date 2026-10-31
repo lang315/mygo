@@ -159,3 +159,109 @@ func TestListViewRowsAreChangedByTheWidget(t *testing.T) {
 		t.Errorf("a change of the app's own slice reached the view: %q", fmt.Sprint(tt.Texts()))
 	}
 }
+
+// Check boxes turned on after the first frames show in the small views, whose
+// boxes are the items' own.
+func TestListViewCheckBoxesTurnedOnLate(t *testing.T) {
+	for _, m := range allModes {
+		t.Run(m.name, func(t *testing.T) {
+			r := newRowsView(60, m.mode)
+			r.lv.SetSelected("0")
+			tt := r.tester()
+			r.lv.CheckBoxes()
+			sameAsFresh(t, "check boxes turned on", tt, 60, m.mode, func(lv *ListViewWidget[vitem, string]) {
+				lv.SetSelected("0")
+				lv.CheckBoxes()
+			})
+		})
+	}
+}
+
+// The setters that change what the items show, after the first frames.
+func TestListViewKeptRowsFollowTheSetters(t *testing.T) {
+	cases := []struct {
+		name string
+		f    func(lv *ListViewWidget[vitem, string])
+	}{
+		{"disabled", func(lv *ListViewWidget[vitem, string]) { lv.SetDisabled(true) }},
+		{"search", func(lv *ListViewWidget[vitem, string]) { lv.Details().Search("Name", "Row 1") }},
+		{"a range chosen", func(lv *ListViewWidget[vitem, string]) { lv.SetSelected("3", "4", "5", "12", "13") }},
+		{"checked", func(lv *ListViewWidget[vitem, string]) { lv.SetChecked([]string{"3", "40"}, true) }},
+		{"groups", func(lv *ListViewWidget[vitem, string]) { lv.SetGroupBy(func(v *vitem) string { return v.kind }) }},
+	}
+	for _, m := range allModes {
+		for _, c := range cases {
+			t.Run(m.name+"/"+c.name, func(t *testing.T) {
+				r := newRowsView(60, m.mode)
+				r.lv.CheckBoxes()
+				tt := r.tester()
+				c.f(r.lv)
+				sameAsFresh(t, c.name, tt, 60, m.mode, func(lv *ListViewWidget[vitem, string]) { lv.CheckBoxes(); c.f(lv) })
+			})
+		}
+	}
+}
+
+// An image replaced in the image list the view shows is shown, and an image
+// function that answers later is followed by UpdateRow for its row.
+func TestListViewKeptRowsFollowTheirImages(t *testing.T) {
+	for _, m := range allModes {
+		t.Run(m.name, func(t *testing.T) {
+			mk := func() (*rowsView, *ImageListWidget) {
+				il := ImageList(16)
+				if err := il.Add("doc", pngOf(t, 16, color.RGBA{0, 0, 255, 255})); err != nil {
+					t.Fatal(err)
+				}
+				r := newRowsView(60, m.mode)
+				r.lv.SetImageList(il, func(*vitem) string { return "doc" })
+				return r, il
+			}
+			r, il := mk()
+			tt := r.tester()
+			if err := il.Add("doc", pngOf(t, 16, color.RGBA{255, 0, 0, 255})); err != nil {
+				t.Fatal(err)
+			}
+			f, fil := mk()
+			if err := fil.Add("doc", pngOf(t, 16, color.RGBA{255, 0, 0, 255})); err != nil {
+				t.Fatal(err)
+			}
+			ft := f.tester()
+			for range 3 {
+				tt.Frame()
+			}
+			if !bytes.Equal(tt.Image().Pix, ft.Image().Pix) {
+				t.Errorf("an image replaced in the list is not shown")
+			}
+			// An image function that answers later: the row says so with UpdateRow.
+			ready := false
+			r2 := newRowsView(60, m.mode)
+			var bmp *ui.Bitmap
+			late := ImageList(16)
+			_ = late.Add("doc", pngOf(t, 16, color.RGBA{0, 128, 0, 255}))
+			bmp = late.Image("doc")
+			r2.lv.SetImage(func(v *vitem) *ui.Bitmap {
+				if ready && v.id == "3" {
+					return bmp
+				}
+				return nil
+			})
+			tt2 := r2.tester()
+			ready = true
+			r2.lv.UpdateRow("3", func(*vitem) {})
+			for range 3 {
+				tt2.Frame()
+			}
+			f2 := newRowsView(60, m.mode)
+			f2.lv.SetImage(func(v *vitem) *ui.Bitmap {
+				if v.id == "3" {
+					return bmp
+				}
+				return nil
+			})
+			ft2 := f2.tester()
+			if !bytes.Equal(tt2.Image().Pix, ft2.Image().Pix) {
+				t.Errorf("a row updated after its image came does not show it")
+			}
+		})
+	}
+}
