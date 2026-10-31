@@ -118,7 +118,7 @@ export interface Config {
    * Without it, the app ships English only.
    */
   i18n?: I18nConfig;
-  /** Signed updates, which `mygo.Updater` installs. */
+  /** Signed updates, which package `updates` installs. */
   updates?: UpdatesConfig;
   /** macOS packaging. */
   macos?: MacOSConfig;

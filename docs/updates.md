@@ -2,9 +2,31 @@
 
 Apps built with MyGo update themselves from signed releases, published on
 GitHub or on any HTTPS server. `mygo build` signs each platform's build
-with your key, and `mygo.Updater` in the app downloads a newer version,
+with your key, and package `updates` in the app downloads a newer version,
 checks the signature against the public key built into the app, and
 replaces the app with it.
+
+
+> **Moved to package `updates`.** The updater is no longer part of package
+> `mygo`, so that an app that does not update itself does not link its
+> cryptography, archives and delta code (about 60 KB of every app). Import
+> `github.com/egoist/mygo/updates` (the update window of `plugins/updater`
+> does) and change:
+>
+> | Before | Now |
+> |--------|-----|
+> | `mygo.Updater.Check(ctx)` | `updates.Check(ctx)` |
+> | `mygo.Updater.Enabled()` | `updates.Enabled()` |
+> | `mygo.Updater.SetSource(s)` | `updates.SetSource(s)` |
+> | `mygo.Updater.SetPrereleases(on)`, `.Prereleases()` | `updates.SetPrereleases(on)`, `updates.Prereleases()` |
+> | `mygo.Update` | `updates.Update` |
+> | `mygo.UpdateSource` | `updates.Source` |
+> | `mygo.ErrUpdatesDisabled` | `updates.ErrDisabled` |
+>
+> `mygo build` passes the feed and the key to package `updates`: an app that
+> built its own ldflags names `github.com/egoist/mygo/updates.buildFeed` and
+> `updates.buildKey` where it named `github.com/egoist/mygo.packageUpdateFeed`
+> and `packageUpdateKey`.
 
 ## Set up
 
@@ -117,7 +139,7 @@ Each platform, such as `darwin-arm64`, `darwin-universal` or
 A release that GitHub marks a prerelease, such as `1.3.0-beta.1`, is never
 the latest release, so installed apps skip it. Apps with a beta let the
 users who chose it see prereleases with
-`mygo.Updater.SetPrereleases(true)`: their checks then read the release
+`updates.SetPrereleases(true)`: their checks then read the release
 of the highest version that is not a draft, through the GitHub API, so
 they get the next prerelease, and the release after it too. Versions
 compare as semantic versioning does, `1.3.0-beta.2` before
@@ -127,7 +149,7 @@ runs. The choice lasts while the app runs; the app keeps it, such as in
 its settings, and calls `SetPrereleases` at launch.
 
 ```go
-mygo.Updater.SetPrereleases(settings.Beta)
+updates.SetPrereleases(settings.Beta)
 ```
 
 Publish a prerelease as one, so that it does not become the latest
@@ -220,7 +242,7 @@ in native UI for apps that show no web page.
 
 ## Your own update UI
 
-`mygo.Updater` is what the plugin is built on. Use it for an interface of
+package `updates` is what the plugin is built on. Use it for an interface of
 your own, such as a banner in the app's page:
 
 ```go
@@ -228,10 +250,10 @@ your own, such as a banner in the app's page:
 var UpdateProgress = mygo.NewEvent[float64]("update-progress")
 
 func checkForUpdates(ctx context.Context) {
-	if !mygo.Updater.Enabled() {
+	if !updates.Enabled() {
 		return
 	}
-	up, err := mygo.Updater.Check(ctx)
+	up, err := updates.Check(ctx)
 	if err != nil || up == nil {
 		return // offline, or up to date
 	}
@@ -263,16 +285,16 @@ func checkForUpdates(ctx context.Context) {
   app's tile.
 - `Enabled` reports whether the app can update itself: it was built with
   updates, and it can write where it is installed. Development builds
-  cannot, and `Check` returns `mygo.ErrUpdatesDisabled` in them.
+  cannot, and `Check` returns `updates.ErrDisabled` in them.
 - `Check` and `Install` go through the proxy of the system's settings,
   or of `HTTPS_PROXY` when it is set (see [proxies](native.md#proxies)).
 
 ## Your own update service
 
-`mygo.Updater` reads the feed of `updates` in mygo.config.ts. An app that
+package `updates` reads the feed of `updates` in mygo.config.ts. An app that
 has its own update service, an endpoint that needs the user's
 credentials, or a channel the user picks while it runs, gives the updater
-a source instead with `mygo.Updater.SetSource`. The source returns the
+a source instead with `updates.SetSource`. The source returns the
 manifest of the platform and the files the manifest names; the updater
 checks them as it checks the feed's, so an archive or delta that is not
 signed with the key of `updates.publicKey` is refused and the app stays as
@@ -312,7 +334,7 @@ func (s accountUpdates) Open(ctx context.Context, url string) (io.ReadCloser, er
 }
 
 // Once the user has signed in:
-mygo.Updater.SetSource(accountUpdates{token: session.Token})
+updates.SetSource(accountUpdates{token: session.Token})
 ```
 
 `Check` then reads the manifest from the source, and `Install` downloads

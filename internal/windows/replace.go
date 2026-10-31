@@ -9,7 +9,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/egoist/mygo/internal/update"
+	"github.com/egoist/mygo/internal/fsretry"
 )
 
 var procReplaceFileW = kernel32.NewProc("ReplaceFileW")
@@ -43,7 +43,7 @@ var replaceFileW = func(target, replacement *uint16) error {
 // cloud client) gets a moment to let go.
 func (*Backend) ReplaceFile(target, replacement string) error {
 	if _, err := os.Lstat(target); os.IsNotExist(err) {
-		return update.Rename(replacement, target)
+		return fsretry.Rename(replacement, target)
 	}
 	t, err := syscall.UTF16PtrFromString(target)
 	if err != nil {

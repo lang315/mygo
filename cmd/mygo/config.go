@@ -95,7 +95,7 @@ type Config struct {
 	// I18n configures the catalogs of the app's messages, which make the
 	// languages it ships. Without it, the app ships English only.
 	I18n *I18n `json:"i18n"`
-	// Updates configures signed updates, which mygo.Updater installs.
+	// Updates configures signed updates, which package updates installs.
 	Updates *Updates `json:"updates"`
 	MacOS   MacOS    `json:"macos"`
 	Windows Windows  `json:"windows"`

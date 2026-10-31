@@ -130,6 +130,7 @@ import (
 	"os"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/updates"
 )
 
 func main() {
@@ -137,7 +138,7 @@ func main() {
 	if os.Getenv("UPDATE") == "" {
 		return
 	}
-	up, err := mygo.Updater.Check(context.Background())
+	up, err := updates.Check(context.Background())
 	if err != nil || up == nil {
 		fmt.Println("check:", up, err)
 		os.Exit(1)

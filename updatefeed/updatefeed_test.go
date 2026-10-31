@@ -13,7 +13,7 @@ import (
 )
 
 // TestImportingGivesTheFeed: importing the package is what links the HTTP
-// feed into mygo.Updater, and the source it gives fetches the manifest and
+// feed into package updates, and the source it gives fetches the manifest and
 // the files over HTTP (loopback only, https otherwise).
 func TestImportingGivesTheFeed(t *testing.T) {
 	feed := updatehook.Feed.Load()

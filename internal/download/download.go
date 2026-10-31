@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/egoist/mygo/internal/update"
+	"github.com/egoist/mygo/internal/fsretry"
 )
 
 // File is a file to download.
@@ -208,10 +208,10 @@ func Cached(ctx context.Context, f File, path string) error {
 	return nil
 }
 
-// rename is update.Rename, and waiting is called when Cached waits for
+// rename is fsretry.Rename, and waiting is called when Cached waits for
 // another process to download the file, both for tests to replace.
 var (
-	rename  = update.Rename
+	rename  = fsretry.Rename
 	waiting = func(path string) {}
 )
 

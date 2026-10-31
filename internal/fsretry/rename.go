@@ -1,4 +1,9 @@
-package update
+// Package fsretry renames and replaces files the way Windows allows: it tries
+// again for a few seconds while a file is in use, as antivirus software
+// scanning a new executable holds it. It is a package of its own so that the
+// code that needs only this (package mygo, the backends) does not import the
+// updater's cryptography with internal/update.
+package fsretry
 
 import (
 	"errors"

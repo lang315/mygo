@@ -4,8 +4,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/egoist/mygo/internal/fsretry"
 	"github.com/egoist/mygo/internal/platform"
-	"github.com/egoist/mygo/internal/update"
 )
 
 // FileWatch records the targets the core enrolls; tests report changes
@@ -98,7 +98,7 @@ func (w *FileWatch) Notify(n platform.FileWatchNotice) {
 
 // ReplaceFile renames replacement over target, with the target's
 // permissions. On Windows it gives a reader holding the target open
-// without sharing deletes a moment to let go, as update.Rename does for a
+// without sharing deletes a moment to let go, as fsretry.Rename does for a
 // file in use: a test reading the file while the app saves it is such a
 // reader.
 func (b *Backend) ReplaceFile(target, replacement string) error {
@@ -110,5 +110,5 @@ func (b *Backend) ReplaceFile(target, replacement string) error {
 			return err
 		}
 	}
-	return update.Rename(replacement, target)
+	return fsretry.Rename(replacement, target)
 }

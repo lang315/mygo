@@ -6,7 +6,7 @@
 //
 // Package mygo reads no feed itself, so that the apps that do not update
 // themselves over HTTP do not link net/http, which costs an app 2.2 MB.
-// Importing this package gives mygo.Updater its feed:
+// Importing this package gives package updates its feed:
 //
 //	import _ "github.com/egoist/mygo/updatefeed"
 //
@@ -14,14 +14,14 @@
 // mygo.config.ts, and the update window of plugins/updater has it, so most
 // apps never write it. An app built another way, with the -ldflags that
 // name the feed, and an app that wraps the feed in its own source
-// (mygo.Updater.SetSource) need it themselves; Updater.Check says so when
-// it is missing.
+// (updates.SetSource) need it themselves; updates.Check says so when it is
+// missing.
 package updatefeed
 
 import (
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/updatehook"
 	"github.com/egoist/mygo/internal/updatehttp"
+	"github.com/egoist/mygo/updates"
 )
 
 func init() {
@@ -31,8 +31,8 @@ func init() {
 
 // Source returns the source of the feed at url, the manifest of a platform
 // or a feed that names it (GitHub's included), as mygo.config.ts configures
-// it. Updater.SetSource takes it, for an app that adds to what the feed
+// it. updates.SetSource takes it, for an app that adds to what the feed
 // does, such as a header or a channel:
 //
-//	mygo.Updater.SetSource(channelSource{feed: updatefeed.Source(url)})
-func Source(url string) mygo.UpdateSource { return updatehttp.Feed(url) }
+//	updates.SetSource(channelSource{feed: updatefeed.Source(url)})
+func Source(url string) updates.Source { return updatehttp.Feed(url) }
