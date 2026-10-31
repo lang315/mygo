@@ -161,8 +161,13 @@ type engine struct {
 	// (DropData, DataDragOver): the others register the default formats.
 	targetFrame uint64
 	targetPass  int
-	noRetain    bool
-	bound       int
+	// selectable tells that a Selectable was called on this engine, ever: until
+	// then no text is selectable, no text has a selection scope, no selection
+	// exists, and the walks that prepare and collect selectable text have
+	// nothing to find (textselection.go).
+	selectable bool
+	noRetain   bool
+	bound      int
 	// rowsLaidKept counts the kept rows whose layout a layout kept and place
 	// found where they were; rowsCommitReplayed those commit replayed
 	// (retain_layout.go). Reset by beginLayout.

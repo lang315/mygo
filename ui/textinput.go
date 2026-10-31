@@ -373,6 +373,7 @@ func (e *node) Selectable() *node {
 		// Linked here, so that an app without selectable text, or a text
 		// input, does not link the editor.
 		linkSelectableText()
+		e.c.rt.selectable = true
 	}
 	return e
 }
