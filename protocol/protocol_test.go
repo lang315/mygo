@@ -259,6 +259,64 @@ func TestFileServer(t *testing.T) {
 	}
 }
 
+// TestHandleAndUnhandleKeepTheListsTogether: the handlers and the names that
+// package mygo keeps (for the schemes of the windows and for trust) change
+// together, under one lock, so a reader that holds it never sees them say
+// different things while Handle and Unhandle of one scheme run in several
+// goroutines.
+func TestHandleAndUnhandleKeepTheListsTogether(t *testing.T) {
+	var writers sync.WaitGroup
+	for g := range 4 {
+		writers.Add(1)
+		go func() {
+			defer writers.Done()
+			for i := range 20000 {
+				if (i+g)%2 == 0 {
+					_ = Handle("listsrace", http.NotFoundHandler())
+				} else {
+					Unhandle("listsrace")
+				}
+			}
+		}()
+	}
+	done := make(chan struct{})
+	go func() { writers.Wait(); close(done) }()
+	disagreements, checks := 0, 0
+	for running := true; running; {
+		select {
+		case <-done:
+			running = false
+		default:
+		}
+		mu.RLock()
+		_, handled := handlers["listsrace"]
+		named := schemehook.Handled("listsrace")
+		mu.RUnlock()
+		checks++
+		if handled != named {
+			disagreements++
+		}
+	}
+	Unhandle("listsrace")
+	if disagreements > 0 {
+		t.Errorf("the handlers and the names disagreed %d times of %d", disagreements, checks)
+	}
+}
+
+// TestBuildsForBrowsers: an app that imports the package builds for browsers
+// (GOOS=js), where it serves nothing: it has what package mygo has there.
+func TestBuildsForBrowsers(t *testing.T) {
+	goTool, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("no go tool")
+	}
+	cmd := exec.Command(goTool, "build", "-o", os.DevNull, ".")
+	cmd.Env = append(cmd.Environ(), "GOOS=js", "GOARCH=wasm")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go build for js/wasm: %v\n%s", err, out)
+	}
+}
+
 // TestProtocolDoesNotImportMygo: package mygo gives the serving what it needs
 // (schemehook.Call), so this package depends on the platform's types only, and
 // package mygo's own tests can import it.

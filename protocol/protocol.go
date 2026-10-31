@@ -63,10 +63,13 @@ func Handle(scheme string, handler http.Handler) error {
 	if reservedSchemes[scheme] {
 		return fmt.Errorf("mygo: scheme %q is reserved", scheme)
 	}
+	// The names package mygo keeps change with the handlers, under the same
+	// lock: apart, a Handle and an Unhandle of one scheme could leave the two
+	// lists saying different things.
 	mu.Lock()
 	handlers[scheme] = handler
-	mu.Unlock()
 	schemehook.Register(scheme)
+	mu.Unlock()
 	return nil
 }
 
@@ -80,8 +83,8 @@ func Unhandle(scheme string) {
 	scheme = strings.ToLower(scheme)
 	mu.Lock()
 	delete(handlers, scheme)
-	mu.Unlock()
 	schemehook.Unregister(scheme)
+	mu.Unlock()
 }
 
 // IsHandled reports whether scheme has a handler.

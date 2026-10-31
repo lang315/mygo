@@ -699,7 +699,9 @@ gained one field, `SurfaceNative.Canvas`.
   (`_js.go`) that keep their API and do nothing, or report that there is
   no page, without the packages they need: net/http, net, crypto,
   encoding/json, internal/tsgen with go/parser, internal/update. Package
-  `protocol`, which takes net/http's types, is not built for them. `Bind` binds nothing, so nothing calls
+  `protocol` has `SetFrontend`, `Unhandle` and `IsHandled` there, doing
+  nothing, and not `Handle`, `HandleFunc` and `FileServer`, which take
+  net/http's types. `Bind` binds nothing, so nothing calls
   `reflect.Value.Method`, which would make the linker keep every exported
   method of every type in an interface. `internal/platform` takes an
   `http.Header` as its type, `map[string][]string`, so that ui does not
@@ -1578,9 +1580,13 @@ as in Tauri:
   to sort before the app's, so that their `init` runs first and a
   `SetFrontend` of the app's own wins. With nothing to serve, the page
   explains how to get a frontend. An app whose go.mod pins a MyGo that has no
-  package `protocol` gets the old call, `mygo.SetFrontend` (`appHasPackage`),
-  and one whose vendor directory lacks the package fails the build, saying
-  to import it.
+  package `protocol` gets the old call, `mygo.SetFrontend` (`appHasPackage`,
+  which says no only when go says the module lacks the package, reads the
+  vendor directory when the app builds from one, and fetches a module that
+  is not in the cache yet; it remembers its answer while go.mod, go.sum and
+  vendor/modules.txt stay the same), and one whose vendor directory lacks the
+  package fails the build, saying to import it. Builds for browsers only
+  do not ask.
 
 ## Windows, lifecycle and quitting
 

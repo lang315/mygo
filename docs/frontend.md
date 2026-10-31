@@ -129,7 +129,10 @@ These were in package `mygo`; the compiler lists what to change.
 | `mygo.FileServer(fsys)` | `protocol.FileServer(fsys)` |
 | `mygo.SetFrontend(fsys)` | `protocol.SetFrontend(fsys)` |
 
-with `import "github.com/egoist/mygo/protocol"`. An app that serves nothing
+with `import "github.com/egoist/mygo/protocol"`. For browsers (`GOOS=js`) the
+package has `SetFrontend`, `Unhandle` and `IsHandled`, which do nothing, as
+`mygo` had them there; `Handle`, `HandleFunc` and `FileServer` take net/http's
+types and are not there, as before. An app that serves nothing
 and sets no frontend needs no change. An app built with `go build`, without
 the CLI, whose pages load `mygo://` and that does not import the package
 sees the page that says it has no frontend.

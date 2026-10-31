@@ -477,5 +477,11 @@ func openBrowser(url string) {
 	go func() { _ = cmd.Wait() }()
 }
 
+// hasNativePlatform reports whether any -platform target is not the browsers':
+// only those embed the frontend and link the packages the CLI generates files for.
+func hasNativePlatform(platforms []string) bool {
+	return slices.ContainsFunc(platforms, func(p string) bool { return !isWebPlatform(p) })
+}
+
 // isWebPlatform reports whether a -platform target is the browsers'.
 func isWebPlatform(p string) bool { return slices.Contains([]string{"web", webPlatform}, p) }

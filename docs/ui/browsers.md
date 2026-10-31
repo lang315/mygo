@@ -115,9 +115,9 @@ pages, which they do not show: its IPC, custom schemes and their HTTP, the
 TypeScript generator, the updater, with the JSON and the cryptography
 they take. Their API stays, doing nothing: `Bind` binds nothing, events
 reach no page, `Updater.Check` reports `ErrUpdatesDisabled`. Package
-`protocol` (`Handle`, `HandleFunc`, `FileServer`, `SetFrontend`), which takes
-net/http's types, is not built for them, so that code using it is for
-desktops (`//go:build !js`). The tag `mygo_noinspector`, which `mygo build` sets
+`protocol` has `SetFrontend`, `Unhandle` and `IsHandled` there, doing nothing,
+and not `Handle`, `HandleFunc` and `FileServer`, which take net/http's types, so
+that code using those is for desktops (`//go:build !js`). The tag `mygo_noinspector`, which `mygo build` sets
 for production, leaves out the inspector of native UI too, some 350 KB.
 Building for browsers adds nothing to apps for desktops: the browser's
 code is only in `js/wasm` builds.

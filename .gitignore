@@ -9,7 +9,9 @@ packages/cli/npm/*/bin/
 .DS_Store
 mygo.ts
 docs/superpowers/
-# go build ./examples/<name> in the root leaves the program there
+# go build ./examples/<name> in the root leaves the program there (an entry
+# also matches a directory of that name at the root; none has one)
+/*.exe
 /account-manager
 /blackhole
 /chart-streaming
