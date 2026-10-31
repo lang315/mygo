@@ -78,4 +78,5 @@ func (e *Event[T]) EmitPage(p *Page, payload T) error {
 // Broadcast sends the event to every page: there are none.
 func (e *Event[T]) Broadcast(payload T) error { return nil }
 
-func encodeEvent(name string, payload any) (message, error) { return message{}, errNoPage }
+// eventMessage is the message of an event: pages in browsers are none.
+func eventMessage(name string, p []byte) message { return message{} }

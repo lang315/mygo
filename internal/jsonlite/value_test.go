@@ -3,6 +3,7 @@ package jsonlite
 import (
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
+	"math"
 	"testing"
 )
 
@@ -53,6 +54,31 @@ func FuzzAppendStringJS(f *testing.F) {
 		got, ok := AppendStringJS(nil, s)
 		if ok != (werr == nil) || ok && string(got) != string(want) {
 			t.Fatalf("%q: jsonlite %q, %v; encoding/json/v2 %q, %v", s, got, ok, want, werr)
+		}
+	})
+}
+
+func FuzzStrictFloat64AgreesWithV2(f *testing.F) {
+	for _, d := range documents {
+		f.Add([]byte(d))
+	}
+	for _, d := range []string{`1e308`, `1e309`, `-1e309`, `1e-400`, `4.9e-324`, `0.1`, `-0`, `1E+2`, `123456789012345678901234567890`} {
+		f.Add([]byte(d))
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		if null, _ := NewReader(b).Null(); null {
+			return
+		}
+		r := NewReader(b)
+		r.Strict = true
+		got, err := r.Float64()
+		if err == nil {
+			err = r.End()
+		}
+		var want float64
+		werr := jsonv2.Unmarshal(b, &want)
+		if (err == nil) != (werr == nil) || err == nil && math.Float64bits(got) != math.Float64bits(want) {
+			t.Fatalf("%q: strict %v, %v; encoding/json/v2 %v, %v", b, got, err, want, werr)
 		}
 	})
 }

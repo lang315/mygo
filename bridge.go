@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/internal/bridge"
+	"github.com/egoist/mygo/internal/jsonlite"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -56,9 +57,7 @@ func (w *Window) zoomChanged() {
 	w.fit.zoom = w.native.Zoom()
 	w.userScripts = w.pageScripts()
 	w.native.SetUserScripts(w.userScripts)
-	if msg, err := encodeEvent(bridge.FitContentEvent, w.fitLimits()); err == nil {
-		w.enqueue(msg, true)
-	}
+	w.enqueue(eventMessage(bridge.FitContentEvent, w.fitLimits().AppendJSON(nil)), true)
 	// The content keeps its size in CSS pixels, which are other DIPs now.
 	if f := w.fit; f.told {
 		w.fitContentSize(f.content)
@@ -81,7 +80,12 @@ func (w *Window) pageScripts() []platform.UserScript {
 
 // localeEvent returns the message of LocaleEvent for locale.
 func localeEvent(locale string) (message, error) {
-	return encodeEvent(bridge.LocaleEvent, bridge.Locale{Locale: locale, Dir: appDir()})
+	l := bridge.Locale{Locale: locale, Dir: appDir()}
+	p, ok := l.JSON()
+	if !ok {
+		return message{}, fmt.Errorf("mygo: cannot encode event %q: invalid UTF-8 in %+v", bridge.LocaleEvent, l)
+	}
+	return eventMessage(bridge.LocaleEvent, p), nil
 }
 
 // sendLocale tells the page of a window the language the app shows, which
@@ -119,7 +123,10 @@ func pagesLocaleChanged(locale string) {
 // preferencesScript tells a page the desktop's preferences at document
 // start. Main thread only.
 func preferencesScript() string {
-	b, _ := json.Marshal(Theme.preferences())
+	b, err := Theme.preferences().appendJSON(nil)
+	if err != nil {
+		b = []byte("null")
+	}
 	return bridge.PreferencesScript(b)
 }
 
@@ -145,8 +152,8 @@ func (w *Window) sendPreferences(prefs ThemePreferences, script string) {
 	scripts[preferencesScriptIndex].Source = script
 	w.userScripts = scripts
 	w.native.SetUserScripts(scripts)
-	if msg, err := encodeEvent(bridge.PreferencesEvent, prefs); err == nil {
-		w.enqueue(msg, true)
+	if p, err := prefs.appendJSON(nil); err == nil {
+		w.enqueue(eventMessage(bridge.PreferencesEvent, p), true)
 	}
 }
 
@@ -221,18 +228,50 @@ func (w *Window) eval(ctx context.Context, code string) (jsontext.Value, error) 
 	if r.err != nil {
 		return nil, r.err
 	}
-	var out struct {
-		OK bool     `json:"ok"`
-		V  rawValue `json:"v"`
-		E  string   `json:"e"`
-	}
-	if err := json.Unmarshal(stringBytes(r.raw), &out); err != nil {
+	ok, v, msg, err := parseEvalResult(stringBytes(r.raw))
+	if err != nil {
 		return nil, fmt.Errorf("mygo: unexpected eval result %q: %w", r.raw, err)
 	}
-	if !out.OK {
-		return nil, &EvalError{Message: out.E}
+	if !ok {
+		return nil, &EvalError{Message: msg}
 	}
-	return jsontext.Value(out.V), nil
+	return jsontext.Value(v), nil
+}
+
+// parseEvalResult reads {"ok":bool,"v":value,"e":string}, as encoding/json/v2
+// reads it into a struct; v shares raw.
+func parseEvalResult(raw []byte) (ok bool, v []byte, msg string, err error) {
+	r := jsonlite.NewReader(raw)
+	r.Strict = true
+	if null, err := r.Null(); err != nil {
+		return false, nil, "", err
+	} else if null {
+		return false, nil, "", r.End()
+	}
+	err = r.Object(func(key string) error {
+		switch key {
+		case "ok", "e":
+			if null, err := r.Null(); null || err != nil {
+				return err
+			}
+			var err error
+			if key == "ok" {
+				ok, err = r.Bool()
+			} else {
+				msg, err = r.String()
+			}
+			return err
+		case "v":
+			var err error
+			v, err = r.Value()
+			return err
+		}
+		return r.Skip()
+	})
+	if err == nil {
+		err = r.End()
+	}
+	return ok, v, msg, err
 }
 
 // sendTitleBar tells the page of a window with a hidden title bar the room
@@ -243,9 +282,7 @@ func (w *Window) sendTitleBar() {
 	if w.content != nil || !w.hiddenTitleBar || w.native == nil {
 		return
 	}
-	if msg, err := encodeEvent(bridge.TitleBarEvent, bridge.NewTitleBar(w.native.TitleBar(), w.native.Zoom())); err == nil {
-		w.enqueue(msg, true)
-	}
+	w.enqueue(eventMessage(bridge.TitleBarEvent, bridge.NewTitleBar(w.native.TitleBar(), w.native.Zoom()).JSON()), true)
 }
 
 // maxUntrustedMessage is the size of the largest message an untrusted
@@ -274,28 +311,8 @@ func (w *Window) handleMessage(msg string) {
 		go handleCall(w, w.pageContext(), msg, w.trusted)
 		return
 	}
-	var m struct {
-		T  string  `json:"t"`
-		X  float64 `json:"x"` // drop
-		Y  float64 `json:"y"`
-		C  int64   `json:"c"` // channels
-		K  string  `json:"k"`
-		N  int64   `json:"n"`
-		V  string  `json:"v"` // theme-color
-		W  float64 `json:"w"` // content-size
-		H  float64 `json:"h"`
-		SW float64 `json:"sw"`
-		SH float64 `json:"sh"`
-		// context-menu: the link, its text, the image, the media, the
-		// selection, and whether it is editable.
-		L  string `json:"l"`
-		LT string `json:"lt"`
-		I  string `json:"i"`
-		M  string `json:"m"`
-		S  string `json:"s"`
-		E  bool   `json:"e"`
-	}
-	if err := json.Unmarshal(stringBytes(msg), &m); err != nil {
+	m, err := parsePageMessage(stringBytes(msg))
+	if err != nil {
 		return
 	}
 	switch m.T {
@@ -350,6 +367,99 @@ func (w *Window) handleMessage(msg string) {
 	case "chan-close":
 		w.pageClosedChannel(m.C, m.K)
 	}
+}
+
+// pageMessage is a message the bridge posts: {"t":"drop","x":1,"y":2}, with the
+// members of the kind named by t.
+type pageMessage struct {
+	T    string
+	X, Y float64 // drop, context-menu
+	C    int64   // channels
+	K    string
+	N    int64
+	V    string  // theme-color
+	W, H float64 // content-size
+	SW   float64
+	SH   float64
+	// context-menu: the link, its text, the image, the media, the
+	// selection, and whether it is editable.
+	L, LT, I, M, S string
+	E              bool
+}
+
+// parsePageMessage reads a message as encoding/json/v2 read it into a struct of
+// these members (the names are those of the fields, in lower case): names match
+// exactly, a duplicate name, invalid UTF-8 or a value of another type is an
+// error, members of other names are skipped, and null leaves a member as it is.
+func parsePageMessage(raw []byte) (m pageMessage, err error) {
+	r := jsonlite.NewReader(raw)
+	r.Strict = true
+	if null, err := r.Null(); err != nil {
+		return m, err
+	} else if null {
+		return m, r.End()
+	}
+	err = r.Object(func(key string) error {
+		var f *float64
+		var i *int64
+		var s *string
+		switch key {
+		case "x":
+			f = &m.X
+		case "y":
+			f = &m.Y
+		case "w":
+			f = &m.W
+		case "h":
+			f = &m.H
+		case "sw":
+			f = &m.SW
+		case "sh":
+			f = &m.SH
+		case "c":
+			i = &m.C
+		case "n":
+			i = &m.N
+		case "t":
+			s = &m.T
+		case "k":
+			s = &m.K
+		case "v":
+			s = &m.V
+		case "l":
+			s = &m.L
+		case "lt":
+			s = &m.LT
+		case "i":
+			s = &m.I
+		case "m":
+			s = &m.M
+		case "s":
+			s = &m.S
+		case "e":
+		default:
+			return r.Skip()
+		}
+		if null, err := r.Null(); null || err != nil {
+			return err
+		}
+		var err error
+		switch {
+		case f != nil:
+			*f, err = r.Float64()
+		case i != nil:
+			*i, err = r.Int64()
+		case s != nil:
+			*s, err = r.String()
+		default:
+			m.E, err = r.Bool()
+		}
+		return err
+	})
+	if err == nil {
+		err = r.End()
+	}
+	return m, err
 }
 
 // findScript returns the script with which FindInPage asks the bridge.

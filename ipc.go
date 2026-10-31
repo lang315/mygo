@@ -90,7 +90,6 @@ var (
 // method uses a type that cannot be encoded as JSON (channels, functions).
 func Bind(services ...any) {
 	linkClient()
-	linkCodec()
 	for _, s := range services {
 		if err := bind("", s, false); err != nil {
 			panic(err)
@@ -102,7 +101,6 @@ func Bind(services ...any) {
 // names collide.
 func BindAs(name string, service any) {
 	linkClient()
-	linkCodec()
 	if err := bind(name, service, false); err != nil {
 		panic(err)
 	}
@@ -145,6 +143,7 @@ func bind(name string, svc any, internal bool) error {
 
 // register adds the bound service s.
 func register(s *service) error {
+	linkCodec() // the values of its methods are coded with it
 	ipc.Lock()
 	defer ipc.Unlock()
 	for _, x := range ipc.services {

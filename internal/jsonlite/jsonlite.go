@@ -169,6 +169,24 @@ func (r *Reader) Int() (int, error) {
 	return int(n), err
 }
 
+// Float64 reads a number that a float64 holds: one beyond its range is an error,
+// as it is for encoding/json.
+func (r *Reader) Float64() (float64, error) {
+	c := r.Peek()
+	if c != '-' && (c < '0' || c > '9') {
+		return 0, r.typeError()
+	}
+	text, err := r.number()
+	if err != nil {
+		return 0, err
+	}
+	f, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		return 0, errType
+	}
+	return f, nil
+}
+
 // Int64 is Int for an int64.
 func (r *Reader) Int64() (int64, error) { return r.int(64) }
 

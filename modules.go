@@ -12,10 +12,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/egoist/mygo/internal/accelerator"
+	"github.com/egoist/mygo/internal/jsonlite"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/transfer"
 )
@@ -428,20 +430,37 @@ type themePreferencesJSON struct {
 // ThemePreferences, with the accent as "#rrggbb" ("#rrggbbaa" when it is
 // not opaque), or null where the desktop has none.
 func (p ThemePreferences) MarshalJSON() ([]byte, error) {
-	v := themePreferencesJSON{
-		ReduceMotion:       p.ReduceMotion,
-		ReduceTransparency: p.ReduceTransparency,
-		HighContrast:       p.HighContrast,
-		TextScale:          p.TextScale,
-	}
+	return p.appendJSON(nil)
+}
+
+// appendJSON appends what MarshalJSON encodes, written by hand as
+// encoding/json writes themePreferencesJSON: the pages' scripts and the
+// locale of every window say it, and an app with no page has no use for
+// encoding/json (TestThemePreferencesJSONIsMarshal holds it to the same
+// bytes). The text scale must be a number JSON has.
+func (p ThemePreferences) appendJSON(b []byte) ([]byte, error) {
+	b = append(b, `{"accent":`...)
 	if c := p.Accent; c.A != 0 {
 		s := fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
 		if c.A != 255 {
 			s += fmt.Sprintf("%02x", c.A)
 		}
-		v.Accent = &s
+		b = jsonlite.AppendString(b, s)
+	} else {
+		b = append(b, "null"...)
 	}
-	return json.Marshal(v)
+	b = append(b, `,"reduceMotion":`...)
+	b = strconv.AppendBool(b, p.ReduceMotion)
+	b = append(b, `,"reduceTransparency":`...)
+	b = strconv.AppendBool(b, p.ReduceTransparency)
+	b = append(b, `,"highContrast":`...)
+	b = strconv.AppendBool(b, p.HighContrast)
+	b = append(b, `,"textScale":`...)
+	b, ok := jsonlite.AppendFloat(b, p.TextScale)
+	if !ok {
+		return nil, fmt.Errorf("mygo: unsupported text scale %v", p.TextScale)
+	}
+	return append(b, '}'), nil
 }
 
 // UnmarshalJSON decodes what MarshalJSON encodes.
