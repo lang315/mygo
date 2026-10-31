@@ -1,0 +1,669 @@
+{
+	"call/any null": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		]
+	},
+	"call/any number": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":12345678901234567000}"
+		]
+	},
+	"call/any object": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"z\":[1,2,{\"q\":null}]}}"
+		]
+	},
+	"call/big result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":4611686018427387904}"
+		]
+	},
+	"call/bool": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":true}"
+		]
+	},
+	"call/bool number": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/bytes": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"aGVsbG8=\"}"
+		]
+	},
+	"call/bytes array": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/bytes bad": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/context": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":10}"
+		]
+	},
+	"call/duration": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":1500000000}"
+		]
+	},
+	"call/duration result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":1500000000}"
+		]
+	},
+	"call/duration string": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/empty method": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"method  is not bound\"}"
+		]
+	},
+	"call/envelope a missing": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"\"}"
+		]
+	},
+	"call/envelope a null": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"\"}"
+		]
+	},
+	"call/envelope a object": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope a string": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope a whitespace": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope bare key": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope big payload": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
+		]
+	},
+	"call/envelope comma": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope control char": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope depth": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"
+		]
+	},
+	"call/envelope duplicate id": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope duplicate m": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope id exponent": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope id float": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope id huge": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":9223372036854775807,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope id missing": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":0,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope id negative": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":-1,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope id null": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":0,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope id string": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope id too huge": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope invalid utf8 arg": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope k escapes": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"t\\\"o\\\\k\u2028\u003c\u0026\u003eé\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope k invalid utf8": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope k missing": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope k number": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope lone surrogate m": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope m missing": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"method  is not bound\"}"
+		]
+	},
+	"call/envelope m number": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope nested arg": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":[[[[[[[{\"a\":[1,2,[3]]}]]]]]]]}"
+		]
+	},
+	"call/envelope number leading zero": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope reordered": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":2,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope single quotes": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope spaces around": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope trailing garbage": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope trailing object": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope trailing space": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope truncated": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/envelope unknown field": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":3,\"k\":\"tok\",\"ok\":true,\"v\":\"x\"}"
+		]
+	},
+	"call/envelope uppercase names": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":0,\"k\":\"\",\"ok\":false,\"e\":\"method  is not bound\"}"
+		]
+	},
+	"call/fail": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"failed \u003c\u0026\u003e \u2028 \\\"quoted\\\"\"}"
+		]
+	},
+	"call/fail not": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"fine\"}"
+		]
+	},
+	"call/float": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":1.25}"
+		]
+	},
+	"call/float exponent": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":1e+21}"
+		]
+	},
+	"call/float negative zero": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":-0}"
+		]
+	},
+	"call/float result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":1e+21}"
+		]
+	},
+	"call/float tiny": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":1e-7}"
+		]
+	},
+	"call/html result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"\u003ca href=\\\"x\\\"\u003e\u0026'\\u2028\\u2029 é😀\\u0000\\u001f\u003c/a\u003e\"}"
+		]
+	},
+	"call/int": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":42}"
+		]
+	},
+	"call/int exponent": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/int float": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/int huge": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/int negative": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":-7}"
+		]
+	},
+	"call/int string": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/int8 overflow": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/invalid utf8 result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"cannot encode result: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/map": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"a\":1}}"
+		]
+	},
+	"call/map bad value": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/map duplicate key": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/method with html": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"method G.\u003c\u0026\u003e is not bound\"}"
+		]
+	},
+	"call/missing method": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"method G.Missing is not bound\"}"
+		]
+	},
+	"call/missing service": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"method Nope.Str is not bound\"}"
+		]
+	},
+	"call/nan result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"cannot encode result: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/nested result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"a\":1.5,\"b\":[1,\"two\",null,true,{}]}}"
+		]
+	},
+	"call/nil map": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{}}"
+		]
+	},
+	"call/nil slice": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":[]}"
+		]
+	},
+	"call/nothing": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		]
+	},
+	"call/optional": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"a:true\"}"
+		]
+	},
+	"call/optional null": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"a:true\"}"
+		]
+	},
+	"call/optional set": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"a:false\"}"
+		]
+	},
+	"call/panic": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"panic: boom\"}"
+		],
+		"log": "mygo: panic in G.Panic: boom\n"
+	},
+	"call/point": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"X\":1,\"Y\":2,\"tag\":\"t\"}}"
+		]
+	},
+	"call/point duplicate field": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/point lowercase": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"X\":0,\"Y\":0}}"
+		]
+	},
+	"call/point pointer": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"X\":3,\"Y\":0}}"
+		]
+	},
+	"call/point pointer null": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		]
+	},
+	"call/point skip field": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"X\":1,\"Y\":0}}"
+		]
+	},
+	"call/point unknown field": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":{\"X\":1,\"Y\":0}}"
+		]
+	},
+	"call/small result": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":1e-7}"
+		]
+	},
+	"call/str": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"hello\"}"
+		]
+	},
+	"call/str escapes": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"a\\\"b\\\\c\\n\\té😀\\u2028\u003c\u0026\u003e\"}"
+		]
+	},
+	"call/str extra": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"a\"}"
+		]
+	},
+	"call/str lone surrogate": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"call/str missing": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"\"}"
+		]
+	},
+	"call/str null": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"\"}"
+		]
+	},
+	"call/str number": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/strings": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":[\"a\",\"b\"]}"
+		]
+	},
+	"call/strings null": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":[]}"
+		]
+	},
+	"call/strings null element": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":[\"a\",\"\"]}"
+		]
+	},
+	"call/time": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"2026-10-31T12:00:00Z\"}"
+		]
+	},
+	"call/time bad": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/uint64 max": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":18446744073709551615}"
+		]
+	},
+	"call/uint64 negative": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/variadic": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"p[1 2 3]\"}"
+		]
+	},
+	"call/variadic bad": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 3: \u003cdecoder error\u003e\"}"
+		]
+	},
+	"call/variadic none": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"p[]\"}"
+		]
+	},
+	"foreign origin/call": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":2,\"k\":\"tok\",\"ok\":false,\"e\":\"this page is not allowed to call Go methods (see PageOptions.TrustedOrigins)\"}"
+		]
+	},
+	"foreign origin/malformed": {
+		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+	},
+	"message/chan-ack unknown": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/content-size": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/content-size strings": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/context menu": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/dom-ready": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/drag untrusted check": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/empty object": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/escape": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/field of another type": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/invalid utf8": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/lone surrogate": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/no type": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/not an object": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/not json": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/theme color": {
+		"note": "domReady true themeColor true {255 128 0 255} title \"two\""
+	},
+	"message/theme color bad": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/theme color duplicate": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/theme color empty": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/theme color named": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/theme color number": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/theme color uppercase key": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/trailing garbage": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/type number": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/unknown field": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"message/unknown type": {
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
+	},
+	"message/wrong secret": {
+		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+	},
+	"untrusted/call": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"this page is untrusted (PageOptions.Untrusted) and may not call Go methods\"}"
+		]
+	},
+	"window/is maximized": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":false}"
+		],
+		"note": "title \"MyGoTest\" maximized false fullscreen false"
+	},
+	"window/is maximized after": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":true}"
+		],
+		"note": "title \"MyGoTest\" maximized true fullscreen false"
+	},
+	"window/maximize": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"MyGoTest\" maximized true fullscreen false"
+	},
+	"window/set title": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"Set \u003cby\u003e page\" maximized false fullscreen false"
+	},
+	"window/set title extra": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"two\" maximized false fullscreen false"
+	},
+	"window/set title missing": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"\" maximized false fullscreen false"
+	},
+	"window/set title number": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
+		],
+		"note": "title \"Set \u003cby\u003e page\" maximized false fullscreen false"
+	},
+	"window/toggle full screen": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"MyGoTest\" maximized false fullscreen true"
+	},
+	"window/toggle full screen back": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"MyGoTest\" maximized false fullscreen false"
+	},
+	"window/toggle maximize": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"MyGoTest\" maximized true fullscreen false"
+	},
+	"window/toggle maximize back": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"MyGoTest\" maximized false fullscreen false"
+	},
+	"window/unknown": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"method mygo:window.Fly is not bound\"}"
+		],
+		"note": "title \"two\" maximized false fullscreen false"
+	},
+	"window/unmaximize": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":null}"
+		],
+		"note": "title \"MyGoTest\" maximized false fullscreen false"
+	}
+}
