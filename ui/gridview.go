@@ -249,6 +249,10 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 	e.setSize = n
 	e.chooseMany = s.Selection != nil
 	var cursor *node
+	s.rows.RowVersion = nil
+	if s.RowVersion != nil && s.Reorder == nil {
+		s.rows.RowVersion = func(r int) uint64 { return s.lineVersion(r, n, minWidth, height) }
+	}
 	buildList(c, e, e, &s.rows, rows, func(r int) {
 		first, end, header := s.rowItems(r, n)
 		row := coreRow(c).Gap(gap).PaddingY(gap / 2).AlignItems(Stretch).Role(RoleNone)
@@ -410,6 +414,40 @@ func (s *GridState) dropAt(x, y float32, n int) (to int, cell uint64, after bool
 // cellState returns the state of the cell of the last frame whose element
 // has id.
 func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
+
+// lineVersion is the version of line r, for ListState.RowVersion: it changes
+// with the items the line holds (the width, the size of the items and the
+// headers move them between lines), their versions, and the size an item is
+// built at.
+func (s *GridState) lineVersion(r, n int, minWidth, height float32) uint64 {
+	first, end, header := s.rowItems(r, n)
+	h := uint64(first)*0x9e3779b97f4a7c15 ^ uint64(end)*0xc2b2ae3d27d4eb4f ^ uint64(max(s.cols, 1))*0x165667b19e3779f9
+	h ^= uint64(math.Float32bits(minWidth))<<32 | uint64(math.Float32bits(height))
+	if header {
+		h ^= 0x27d4eb2f165667c5
+	}
+	// What the grid itself shows of an item beside the app's data: whether it is
+	// chosen, the item the keys are on, whether it is checked, and whether any is
+	// (a check box shows on every item then).
+	anyChecked := s.Checked != nil && s.Checked.size() > 0
+	if anyChecked {
+		h ^= 0x2545f4914f6cdd1d
+	}
+	for i := first; i < end; i++ {
+		bits := uint64(0)
+		if s.chosen(i) {
+			bits |= 1
+		}
+		if s.Selected != nil && *s.Selected == i {
+			bits |= 2
+		}
+		if s.Checked != nil && s.Checked.has(s.key(i)) {
+			bits |= 4
+		}
+		h = (h ^ s.RowVersion(i) ^ bits<<56) * 0x100000001b3
+	}
+	return h
+}
 
 // header builds item i, a header, at the width of the grid: it is not chosen,
 // dragged or checked, and assistive technology sees it as an item, named by

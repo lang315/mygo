@@ -87,7 +87,7 @@ func TestRetainGridRowsFollowTheApp(t *testing.T) {
 	// Changed without a word: the kept line shows what it was built with, as a
 	// list's row does; it follows once the version moves.
 	g.set(func(a *gridApp) { a.names[4] = "Silent" })
-	p.frame("silent")
+	p.both(func(tt *Tester) { tt.Frame() })
 	if p.kept.HasText("Silent") {
 		t.Error("a change nobody versioned reached a kept line")
 	}
