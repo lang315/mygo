@@ -124,3 +124,139 @@ func textUsersWalk(t *testing.T, kind string, seed int64) {
 	}
 	t.Logf("%s seed %d: rows kept %d", kind, seed, p.kept.rt.rowsKept)
 }
+
+// shownTexts returns the text of every single-line input in the last frame.
+func shownTexts(tt *Tester) (out []string) {
+	var walk func(n *node)
+	walk = func(n *node) {
+		if n.st != nil && n.st.editor != nil && n.kind == 3 {
+			out = append(out, n.st.editor.buf.string())
+		}
+		for c := n.first; c != nil; c = c.next {
+			walk(c)
+		}
+	}
+	walk(tt.rt.c.root)
+	return out
+}
+
+// App code changes the value a control is bound to without a version bump,
+// as it may when the control's own state is what the row watches: the kept row
+// must show what a built one shows. Each user of the single-line input gets its
+// value to the row by its own path; this fails if that path is not noted.
+func TestRetainRowsOfTextInputUsersFollowTheApp(t *testing.T) {
+	for _, kind := range []string{"combobox", "autocomplete", "tokens", "number", "editable", "color"} {
+		t.Run(kind, func(t *testing.T) {
+			const n = 12
+			var text [2][]string
+			var num [2][]float64
+			var toks [2][][]string
+			var col [2][]Color
+			var sel [2]int
+			for k := range 2 {
+				text[k], num[k], toks[k], col[k] = make([]string, n), make([]float64, n), make([][]string, n), make([]Color, n)
+			}
+			opts := []string{"apple", "apricot", "banana"}
+			twin := 0
+			p := newPair(t, 500, 400, func() func(c *Context) {
+				me := twin
+				twin++
+				s := &ListState{Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }, Selected: &sel[me]}
+				return func(c *Context) {
+					Column(c).Fill().Children(func() {
+						List(c, s, n, func(i int) {
+							Row(c).Padding(4).Children(func() {
+								switch kind {
+								case "combobox":
+									Combobox(c, &text[me][i], opts)
+								case "autocomplete":
+									Autocomplete(c, &text[me][i], opts)
+								case "tokens":
+									TokenField(c, &toks[me][i], opts)
+								case "number":
+									NumberInput(c, &num[me][i], 0, 100, 1)
+								case "editable":
+									EditableText(c, &text[me][i])
+								default:
+									ColorPicker(c, &col[me][i])
+								}
+							})
+						}).Grow(1)
+					})
+				}
+			})
+			p.idle(4)
+			kept := p.kept.rt.rowsKept
+			for k := range 2 {
+				text[k][2], num[k][2], toks[k][2], col[k][2] = "apricot", 42, []string{"banana"}, RGB(200, 30, 90)
+			}
+			for range 3 {
+				p.frame("app changed row 2")
+			}
+			var rows func(n *node, f func(r *node))
+			rows = func(n *node, f func(r *node)) {
+				if n.listRow {
+					f(n)
+					return
+				}
+				for c := n.first; c != nil; c = c.next {
+					rows(c, f)
+				}
+			}
+			why := ""
+			rows(p.kept.rt.c.root, func(r *node) {
+				if w := unretainable(r); w != "" {
+					why = w
+				}
+			})
+			// The path that keeps the row from going stale. The combobox, the token
+			// field and the number input bind a state of their own, which a kept row
+			// would not see follow the app: they are never kept (retainable: focusTo,
+			// with the field, popover and others behind it for the first two). The
+			// color picker is not either (a paint function of its own, and behind it a
+			// motion that is not animateRest, state.pending), the editable text uses a
+			// Handle, and the autocomplete is kept and watches the app's string itself
+			// (readsString).
+			wantWhy := map[string]string{"combobox": "focusTo", "tokens": "focusTo", "number": "focusTo", "color": "paintFn"}
+			if want, never := wantWhy[kind]; never {
+				if why != want || p.kept.rt.rowsKept != 0 {
+					t.Fatalf("rows kept %d, held back by %q: want none, held back by %q", p.kept.rt.rowsKept, why, want)
+				}
+			} else if kind == "editable" {
+				if p.kept.rt.rowsKept != 0 {
+					t.Fatalf("%d rows kept: an editable text uses a Handle, which builds its row", p.kept.rt.rowsKept)
+				}
+			} else if p.kept.rt.rowsKept <= kept {
+				t.Fatalf("rows kept %d -> %d: the autocomplete's rows are kept", kept, p.kept.rt.rowsKept)
+			}
+			if got := shownTexts(p.kept); kind == "autocomplete" && got[2] != "apricot" {
+				t.Fatalf("a kept row shows %q after the app set apricot", got[2])
+			}
+		})
+	}
+}
+
+// unretainable names the first thing that keeps e, or an element under it, from
+// being kept (retainable), or "" if none does.
+func unretainable(e *node) string {
+	for _, c := range []struct {
+		name string
+		is   bool
+	}{
+		{"popover", e.popover != nil}, {"placeOn", e.placeOn != nil}, {"nameFrom", e.nameFrom != nil},
+		{"focusTo", e.focusTo != nil}, {"activeDescendant", e.activeDescendant != nil}, {"field", e.field != nil},
+		{"form", e.form != nil}, {"overflow", e.overflow != nil}, {"inputFn", e.inputFn != nil},
+		{"paintAfterFn", e.paintAfterFn != nil}, {"paintFn", e.paintFn != nil && !e.paintPure}, {"tip", e.tip},
+		{"effect", e.effect != nil}, {"hidden", e.hidden}, {"copyData", e.copyData != nil},
+	} {
+		if c.is {
+			return c.name
+		}
+	}
+	for c := e.first; c != nil; c = c.next {
+		if w := unretainable(c); w != "" {
+			return w
+		}
+	}
+	return ""
+}
