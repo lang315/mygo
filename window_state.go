@@ -3,7 +3,6 @@
 package mygo
 
 import (
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"maps"
@@ -111,8 +110,8 @@ func (f stateFile) LoadWindowStates() (map[string]WindowState, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	var states map[string]WindowState
-	if err := json.Unmarshal(data, &states); err != nil {
+	states, err := decodeWindowStates(data)
+	if err != nil {
 		return nil, err // a damaged file is ignored, and replaced by the next save
 	}
 	return states, nil
@@ -123,10 +122,7 @@ func (f stateFile) SaveWindowStates(states map[string]WindowState) error {
 	if err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(states, "", "  ")
-	if err != nil {
-		return err
-	}
+	data := encodeWindowStates(states)
 	// An error, as Windows still reporting the file in use after rename's
 	// retries, keeps the states for the next save.
 	if err := os.WriteFile(path+".tmp", data, 0o644); err != nil {
