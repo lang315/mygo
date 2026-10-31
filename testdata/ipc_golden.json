@@ -26,7 +26,7 @@
 	},
 	"call/bool number": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number into Go bool\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/bytes": {
@@ -36,12 +36,12 @@
 	},
 	"call/bytes array": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON array into Go []uint8\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/bytes bad": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON string into Go []uint8: illegal base64 data at input byte 0\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/context": {
@@ -61,7 +61,7 @@
 	},
 	"call/duration string": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON string into Go time.Duration\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/empty method": {
@@ -269,17 +269,17 @@
 	},
 	"call/int exponent": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number 1e2 into Go int: invalid syntax\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/int float": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number 1.5 into Go int: invalid syntax\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/int huge": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number 9223372036854775808 into Go int: value out of range\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/int negative": {
@@ -289,17 +289,17 @@
 	},
 	"call/int string": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON string into Go int\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/int8 overflow": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number 200 into Go int8: value out of range\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/invalid utf8 result": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"cannot encode result: jsontext: invalid UTF-8\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"cannot encode result: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/map": {
@@ -309,7 +309,7 @@
 	},
 	"call/map bad value": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON string into Go int within \\\"/a\\\"\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/map duplicate key": {
@@ -332,7 +332,7 @@
 	},
 	"call/nan result": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"cannot encode result: json: cannot marshal from Go float64: unsupported value: NaN\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"cannot encode result: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/nested result": {
@@ -444,7 +444,7 @@
 	},
 	"call/str number": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number into Go string\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/strings": {
@@ -469,7 +469,7 @@
 	},
 	"call/time bad": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON string into Go time.Time: parsing time \\\"yesterday\\\" as \\\"2006-01-02T15:04:05Z07:00\\\": cannot parse \\\"yesterday\\\" as \\\"2006\\\"\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/uint64 max": {
@@ -479,7 +479,7 @@
 	},
 	"call/uint64 negative": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number -1 into Go uint64: invalid syntax\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/variadic": {
@@ -489,7 +489,7 @@
 	},
 	"call/variadic bad": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 3: json: cannot unmarshal JSON string into Go int\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 3: \u003cdecoder error\u003e\"}"
 		]
 	},
 	"call/variadic none": {
@@ -626,7 +626,7 @@
 	},
 	"window/set title number": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: json: cannot unmarshal JSON number into Go string\"}"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"invalid argument 1: \u003cdecoder error\u003e\"}"
 		],
 		"note": "title \"Set \u003cby\u003e page\" maximized false fullscreen false"
 	},

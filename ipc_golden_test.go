@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -233,6 +234,16 @@ func goldenLog(s string) string {
 	return s
 }
 
+// decoderText matches the text of the decoder's or the encoder's own error in a
+// reply, which varies with the version of Go ("cannot unmarshal" became "unable
+// to unmarshal"): the golden pins the words of mygo, the index of the argument,
+// and that the call failed, not the words of encoding/json.
+var decoderText = regexp.MustCompile(`("e":"(?:invalid argument \d+|cannot encode result): )(?:[^"\\]|\\.)*"`)
+
+func goldenReply(s string) string {
+	return decoderText.ReplaceAllString(s, `${1}<decoder error>"`)
+}
+
 func runGoldenCall(w *Window, trusted bool, msg string) goldenRecord {
 	var logs bytes.Buffer
 	flags := log.Flags()
@@ -249,7 +260,7 @@ func runGoldenCall(w *Window, trusted bool, msg string) goldenRecord {
 	w.outMu.Unlock()
 	rec := goldenRecord{Log: goldenLog(logs.String())}
 	for _, m := range msgs {
-		rec.Replies = append(rec.Replies, string(m.appendTo(nil)))
+		rec.Replies = append(rec.Replies, goldenReply(string(m.appendTo(nil))))
 	}
 	return rec
 }
