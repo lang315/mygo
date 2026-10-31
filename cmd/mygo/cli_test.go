@@ -460,7 +460,7 @@ func TestHasNativePlatform(t *testing.T) {
 }
 
 // TestUpdateFeedFiles: a build of an app with updates adds the file that
-// links the HTTP feed of mygo.Updater; one without adds nothing, and the
+// links the HTTP feed of package updates; one without adds nothing, and the
 // app's own file of the name is never overwritten.
 func TestUpdateFeedFiles(t *testing.T) {
 	pkg, work := t.TempDir(), t.TempDir()
@@ -694,7 +694,7 @@ func TestFrontendSourceOfAnOlderMygo(t *testing.T) {
 	}
 }
 
-// TestUpdateFeedIsLinkedByTheOverlay: an app that uses mygo.Updater links no
+// TestUpdateFeedIsLinkedByTheOverlay: an app that uses package updates links no
 // HTTP of its own, and the file the build adds gives it the feed: the
 // packages of the app, with and without the overlay (go list -deps).
 func TestUpdateFeedIsLinkedByTheOverlay(t *testing.T) {
@@ -709,7 +709,7 @@ func TestUpdateFeedIsLinkedByTheOverlay(t *testing.T) {
 	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
 	sum, _ := os.ReadFile(filepath.Join(checkout, "go.sum"))
 	gomod := "module demo-app\n\ngo " + goVersion() + "\n\nrequire github.com/egoist/mygo v0.0.0\n\nreplace github.com/egoist/mygo => " + checkout + "\n"
-	main := "package main\n\nimport \"github.com/egoist/mygo\"\n\nfunc main() { _, _ = mygo.Updater.Check(nil) }\n"
+	main := "package main\n\nimport \"github.com/egoist/mygo/updates\"\n\nfunc main() { _, _ = updates.Check(nil) }\n"
 	for name, content := range map[string]string{"go.mod": gomod, "go.sum": string(sum), "main.go": main} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
@@ -736,7 +736,7 @@ func TestUpdateFeedIsLinkedByTheOverlay(t *testing.T) {
 	const feed, proxy = "\ngithub.com/egoist/mygo/updatefeed\n", "\ngithub.com/egoist/mygo/netproxy\n"
 	without := deps(".")
 	if strings.Contains(without, feed) || strings.Contains(without, proxy) {
-		t.Errorf("an app that only uses mygo.Updater links the HTTP feed:\n%s", without)
+		t.Errorf("an app that only uses package updates links the HTTP feed:\n%s", without)
 	}
 	with := deps("-overlay", overlay, ".")
 	if !strings.Contains(with, feed) || !strings.Contains(with, proxy) {

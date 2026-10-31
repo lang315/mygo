@@ -1,6 +1,22 @@
 //go:build !js
 
-package mygo
+// Package updates installs new versions of the app, which `mygo build`
+// publishes when mygo.config.ts configures updates: signed archives and a
+// manifest per platform. It is not part of package mygo, so that an app
+// that does not update itself does not link the cryptography and the
+// archives, and Go's HTTP when the feed is fetched (package updatefeed).
+//
+//	update, err := updates.Check(ctx)
+//	if err == nil && update != nil {
+//		if err := update.Install(ctx, nil); err == nil {
+//			mygo.App.Relaunch()
+//		}
+//	}
+//
+// Builds that cannot update themselves, such as development builds, apps
+// without updates in mygo.config.ts and apps installed by a package manager,
+// say so (Enabled, ErrDisabled).
+package updates
 
 import (
 	"context"
@@ -20,6 +36,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/fsretry"
 	"github.com/egoist/mygo/internal/update"
 	"github.com/egoist/mygo/internal/updatehook"
 )
@@ -29,44 +47,35 @@ import (
 // feed in the newest tagged release (update.TaggedFeed), and the public key
 // updates must be signed with.
 var (
-	packageUpdateFeed string
-	packageUpdateKey  string
+	buildFeed string
+	buildKey  string
 )
 
 // startExe is the executable the app started from. On Linux, os.Executable
 // reports the old file once an update replaced it.
 var startExe, _ = os.Executable()
 
-// UpdaterModule installs new versions of the app, which `mygo build`
-// publishes when mygo.config.ts configures updates: signed archives and a
-// manifest per platform. Use the Updater singleton:
-//
-//	update, err := mygo.Updater.Check(ctx)
-//	if err == nil && update != nil {
-//		if err := update.Install(ctx, nil); err == nil {
-//			mygo.App.Relaunch()
-//		}
-//	}
-type UpdaterModule struct{}
-
-// Updater installs new versions of the app.
-var Updater = &UpdaterModule{}
+func init() {
+	// package mygo relaunches the app into an update staged on macOS.
+	f := relaunchUpdated
+	updatehook.RelaunchStaged.Store(&f)
+}
 
 // prereleases is set while Check offers prereleases (SetPrereleases).
 var prereleases atomic.Bool
 
 // updateSource is the source of SetSource, nil for the feed of
 // mygo.config.ts.
-var updateSource atomic.Pointer[UpdateSource]
+var updateSource atomic.Pointer[Source]
 
-// UpdateSource is where Updater gets updates from instead of the feed that
+// Source is where updates come from instead of the feed that
 // mygo.config.ts configures (SetSource): an update service the app already
 // has, an endpoint that needs the user's credentials, or a channel the app
 // chooses while it runs. It serves what `mygo build` publishes, from
-// wherever the app keeps it, and Updater checks it as it checks the feed's:
+// wherever the app keeps it, and package updates checks it as it checks the feed's:
 // the archive and deltas must be signed with the key of updates.publicKey
 // that the app was built with, or they are not installed.
-type UpdateSource interface {
+type Source interface {
 	// Manifest returns the manifest of the running platform: the JSON that
 	// `mygo build` writes as update-<target>.json, such as
 	// update-darwin-arm64.json, of at most 1 MiB.
@@ -84,7 +93,7 @@ type UpdateSource interface {
 // in mygo.config.ts (Enabled), which give the key that updates are checked
 // with. An Update that Check returned keeps downloading from the source it
 // came from. It may be called from any goroutine.
-func (u *UpdaterModule) SetSource(s UpdateSource) {
+func SetSource(s Source) {
 	if s == nil {
 		updateSource.Store(nil)
 		return
@@ -92,11 +101,11 @@ func (u *UpdaterModule) SetSource(s UpdateSource) {
 	updateSource.Store(&s)
 }
 
-// ErrUpdatesDisabled is returned by Check for builds without updates:
+// ErrDisabled is returned by Check for builds without updates:
 // development builds, and builds of apps without updates in mygo.config.ts.
-var ErrUpdatesDisabled = errors.New("mygo: updates are not enabled for this build")
+var ErrDisabled = errors.New("mygo: updates are not enabled for this build")
 
-// Update is a newer version of the app, found by Updater.Check.
+// Update is a newer version of the app, found by Check.
 type Update struct {
 	// Version of the update, and its release notes in Markdown.
 	Version string
@@ -107,7 +116,7 @@ type Update struct {
 	manifest update.Manifest
 	key      string
 	// source is where the manifest came from, which serves its files.
-	source UpdateSource
+	source Source
 	// current is the version that Check compared with, which delta updates
 	// update.
 	current string
@@ -116,8 +125,8 @@ type Update struct {
 // Enabled reports whether the app can update itself: it was built with
 // updates and can write where it is installed. Apps installed by a package
 // manager, such as a .deb in /opt, are updated by it instead.
-func (u *UpdaterModule) Enabled() bool {
-	if packageUpdateFeed == "" || packageUpdateKey == "" || IsDev() {
+func Enabled() bool {
+	if buildFeed == "" || buildKey == "" || mygo.IsDev() {
 		return false
 	}
 	target, err := installTarget()
@@ -135,25 +144,25 @@ func (u *UpdaterModule) Enabled() bool {
 // Check asks the update feed, or the source of SetSource, for a version
 // newer than the running one and returns it, or nil when the app is up to
 // date.
-func (u *UpdaterModule) Check(ctx context.Context) (*Update, error) {
-	if !u.Enabled() {
-		return nil, ErrUpdatesDisabled
+func Check(ctx context.Context) (*Update, error) {
+	if !Enabled() {
+		return nil, ErrDisabled
 	}
 	src, err := defaultSource()
 	if err != nil {
 		return nil, err
 	}
-	return checkUpdate(ctx, src, packageUpdateKey, App.Version(), prereleases.Load())
+	return checkUpdate(ctx, src, buildKey, mygo.App.Version(), prereleases.Load())
 }
 
 // errNoUpdateFeed is what Check says when the app has a feed and nothing to
 // fetch it with: the HTTP feed is package updatefeed, which package mygo does
 // not import, so that apps that do not update over HTTP do not link net/http.
-var errNoUpdateFeed = errors.New(`mygo: the update feed of this build has no HTTP source linked: add import _ "github.com/egoist/mygo/updatefeed" to the app (mygo build adds it for apps with updates in mygo.config.ts), or give Updater.SetSource a source`)
+var errNoUpdateFeed = errors.New(`mygo: the update feed of this build has no HTTP source linked: add import _ "github.com/egoist/mygo/updatefeed" to the app (mygo build adds it for apps with updates in mygo.config.ts), or give SetSource a source`)
 
 // defaultSource returns where Check reads from: the source of SetSource, else
 // the feed of mygo.config.ts, which package updatefeed fetches.
-func defaultSource() (UpdateSource, error) {
+func defaultSource() (Source, error) {
 	if s := updateSource.Load(); s != nil {
 		return *s, nil
 	}
@@ -161,7 +170,7 @@ func defaultSource() (UpdateSource, error) {
 	if feed == nil {
 		return nil, errNoUpdateFeed
 	}
-	return (*feed)(packageUpdateFeed), nil
+	return (*feed)(buildFeed), nil
 }
 
 // SetPrereleases makes Check offer prereleases too, such as 1.3.0-beta.1,
@@ -174,12 +183,12 @@ func defaultSource() (UpdateSource, error) {
 // the manifest the server has, whichever is set. It is off at launch; the
 // app keeps the user's choice and sets it again. It may be called from
 // any goroutine.
-func (u *UpdaterModule) SetPrereleases(on bool) { prereleases.Store(on) }
+func SetPrereleases(on bool) { prereleases.Store(on) }
 
 // Prereleases reports whether Check offers prereleases (SetPrereleases).
-func (u *UpdaterModule) Prereleases() bool { return prereleases.Load() }
+func Prereleases() bool { return prereleases.Load() }
 
-func checkUpdate(ctx context.Context, src UpdateSource, key, current string, pre bool) (*Update, error) {
+func checkUpdate(ctx context.Context, src Source, key, current string, pre bool) (*Update, error) {
 	body, err := src.Manifest(ctx, pre)
 	if err != nil {
 		return nil, fmt.Errorf("mygo: checking for updates: %w", err)
@@ -453,20 +462,20 @@ func swapFiles(dir, target string) error {
 	undo := func() {
 		for i := len(moved) - 1; i >= 0; i-- {
 			_ = os.RemoveAll(moved[i][0])
-			_ = rename(moved[i][1], moved[i][0])
+			_ = fsretry.Rename(moved[i][1], moved[i][0])
 		}
 	}
 	for _, e := range entries {
 		dst := filepath.Join(target, e.Name())
 		if _, err := os.Lstat(dst); err == nil {
 			aside := filepath.Join(target, "."+e.Name()+suffix)
-			if err := rename(dst, aside); err != nil {
+			if err := fsretry.Rename(dst, aside); err != nil {
 				undo()
 				return err
 			}
 			moved = append(moved, [2]string{dst, aside})
 		}
-		if err := rename(filepath.Join(dir, e.Name()), dst); err != nil {
+		if err := fsretry.Rename(filepath.Join(dir, e.Name()), dst); err != nil {
 			undo()
 			return err
 		}
@@ -475,58 +484,6 @@ func swapFiles(dir, target string) error {
 		_ = os.RemoveAll(m[1])
 	}
 	return nil
-}
-
-// relaunchNow starts the app again; it runs after the quit sequence.
-func relaunchNow() {
-	if launchedByDev() {
-		os.Exit(devRelaunchCode)
-	}
-	if runtime.GOOS == "darwin" && (relaunchUpdated() || openBundle()) {
-		return
-	}
-	// The executable the app started from, which an update may have
-	// replaced.
-	cmd := exec.Command(startExe, os.Args[1:]...)
-	cmd.Dir = startDir
-	if runtime.GOOS != "windows" {
-		// GUI executables on Windows have no standard streams to pass on.
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	}
-	if cmd.Start() == nil {
-		_ = cmd.Process.Release()
-	}
-}
-
-// openBundle starts the app bundle again through Launch Services, as the
-// Dock does, reporting whether it did. A child of this process would stay
-// in this instance's coalition, which has no app once this instance exits:
-// when an app that the new instance started quits, as one a terminal's
-// shell ran, loginwindow takes the coalition's other processes for that
-// app's and ends them with SIGTERM.
-func openBundle() bool {
-	bundle, err := installTarget()
-	if err != nil {
-		return false
-	}
-	// -n: this instance still runs, and would only be brought forward.
-	args := []string{"-n", bundle}
-	if len(os.Args) > 1 {
-		args = append(append(args, "--args"), os.Args[1:]...)
-	}
-	return exec.Command("/usr/bin/open", args...).Run() == nil
-}
-
-// cleanUpdateLeftovers removes what an update could not remove while the
-// previous version ran (Windows keeps running executables).
-func cleanUpdateLeftovers() {
-	if runtime.GOOS == "darwin" || startExe == "" {
-		return
-	}
-	olds, _ := filepath.Glob(filepath.Join(filepath.Dir(startExe), ".*.old-*"))
-	for _, p := range olds {
-		_ = os.RemoveAll(p)
-	}
 }
 
 // progressReader reports how much of a download was read.

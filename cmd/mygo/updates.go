@@ -22,7 +22,7 @@ import (
 	"github.com/egoist/mygo/internal/update"
 )
 
-// Signed updates (mygo.Updater): `mygo keygen` creates the key pair,
+// Signed updates (package updates): `mygo keygen` creates the key pair,
 // `mygo build` signs an archive of each platform's app with the private key
 // and writes update-<target>.json, which apps built with the public key
 // check.
@@ -134,8 +134,8 @@ func updateFlags(c *Config, target string) string {
 	if c.Updates == nil {
 		return ""
 	}
-	return " -X " + ldflagsQuote("github.com/egoist/mygo.packageUpdateFeed="+c.updateFeed(target)) +
-		" -X github.com/egoist/mygo.packageUpdateKey=" + c.Updates.PublicKey
+	return " -X " + ldflagsQuote("github.com/egoist/mygo/updates.buildFeed="+c.updateFeed(target)) +
+		" -X github.com/egoist/mygo/updates.buildKey=" + c.Updates.PublicKey
 }
 
 // signingKey returns the private key that signs updates, or nil when none

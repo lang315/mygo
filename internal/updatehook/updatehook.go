@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 )
 
-// Source is mygo.UpdateSource: where updates come from.
+// Source is updates.Source: where updates come from.
 type Source interface {
 	Manifest(ctx context.Context, prereleases bool) (io.ReadCloser, error)
 	Open(ctx context.Context, url string) (io.ReadCloser, error)
@@ -19,3 +19,9 @@ type Source interface {
 // updatefeed is linked into the app, which `mygo build` does for the apps
 // with updates in mygo.config.ts.
 var Feed atomic.Pointer[func(feed string) Source]
+
+// RelaunchStaged is set by package updates, which stages updates: it asks the
+// helper of an update staged on macOS to open the app once it has installed the
+// update, and reports whether there is one. Package mygo, which relaunches the
+// app, calls it if the app links package updates.
+var RelaunchStaged atomic.Pointer[func() bool]

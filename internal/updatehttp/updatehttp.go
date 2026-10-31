@@ -18,7 +18,7 @@ import (
 
 // Feed is the update feed that mygo.config.ts configures, the URL of a
 // manifest or a feed that update.ResolveFeed resolves. It is a
-// mygo.UpdateSource.
+// updates.Source.
 type Feed string
 
 // Manifest returns the manifest of the feed, resolved to the newest release

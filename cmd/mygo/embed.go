@@ -117,7 +117,7 @@ func devFrontendFiles(c *Config, pkg, work string) (map[string]string, error) {
 	return replace, nil
 }
 
-// An app with updates in mygo.config.ts needs the HTTP feed of mygo.Updater,
+// An app with updates in mygo.config.ts needs the HTTP feed of package updates,
 // which package mygo does not link (importing net/http costs an app 2.2
 // MB): the build adds a file that imports it, through the same overlay.
 const updateFeedGenFile = "0mygo_updates_gen.go"

@@ -4,7 +4,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/egoist/mygo/internal/update"
+	"github.com/egoist/mygo/internal/fsretry"
 )
 
 // Windows refuses to replace or delete a file that another program has
@@ -18,13 +18,13 @@ import (
 // rename renames a file of the app, retrying while Windows reports it in
 // use.
 func rename(from, to string) error {
-	return update.Rename(from, to)
+	return fsretry.Rename(from, to)
 }
 
 // readAppFile reads a file of the app, retrying while Windows reports it
 // in use.
 func readAppFile(path string) (data []byte, err error) {
-	err = update.RetryInUse(func() error {
+	err = fsretry.RetryInUse(func() error {
 		data, err = os.ReadFile(path)
 		return err
 	})

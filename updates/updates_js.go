@@ -1,6 +1,8 @@
 //go:build js
 
-package mygo
+// Package updates installs new versions of the app; browsers load the newest
+// version with the page, so there it disables updates.
+package updates
 
 import (
 	"context"
@@ -13,18 +15,11 @@ import (
 // update nor relaunch it, and builds for them leave out the updater, with
 // net/http and the signatures' cryptography.
 
-// UpdaterModule installs new versions of the app. In browsers updates are
-// disabled.
-type UpdaterModule struct{}
-
-// Updater installs new versions of the app.
-var Updater = &UpdaterModule{}
-
-// ErrUpdatesDisabled is returned by Check for builds without updates, as
+// ErrDisabled is returned by Check for builds without updates, as
 // those for browsers.
-var ErrUpdatesDisabled = errors.New("mygo: updates are not enabled for this build")
+var ErrDisabled = errors.New("mygo: updates are not enabled for this build")
 
-// Update is a newer version of the app, found by Updater.Check.
+// Update is a newer version of the app, found by Check.
 type Update struct {
 	// Version of the update, and its release notes in Markdown.
 	Version string
@@ -34,16 +29,16 @@ type Update struct {
 }
 
 // Enabled reports whether the app can update itself: not in browsers.
-func (u *UpdaterModule) Enabled() bool { return false }
+func Enabled() bool { return false }
 
-// Check returns ErrUpdatesDisabled.
-func (u *UpdaterModule) Check(ctx context.Context) (*Update, error) {
-	return nil, ErrUpdatesDisabled
+// Check returns ErrDisabled.
+func Check(ctx context.Context) (*Update, error) {
+	return nil, ErrDisabled
 }
 
-// UpdateSource is where Updater gets updates from instead of the feed that
+// Source is where package updates gets updates from instead of the feed that
 // mygo.config.ts configures. Browsers do not update apps.
-type UpdateSource interface {
+type Source interface {
 	// Manifest returns the manifest of the running platform.
 	Manifest(ctx context.Context, prereleases bool) (io.ReadCloser, error)
 	// Open returns the file at url, which the manifest names.
@@ -51,19 +46,15 @@ type UpdateSource interface {
 }
 
 // SetSource does nothing: browsers do not update apps.
-func (u *UpdaterModule) SetSource(s UpdateSource) {}
+func SetSource(s Source) {}
 
 // SetPrereleases does nothing: browsers do not update apps.
-func (u *UpdaterModule) SetPrereleases(on bool) {}
+func SetPrereleases(on bool) {}
 
 // Prereleases reports false.
-func (u *UpdaterModule) Prereleases() bool { return false }
+func Prereleases() bool { return false }
 
-// Install returns ErrUpdatesDisabled.
+// Install returns ErrDisabled.
 func (up *Update) Install(ctx context.Context, progress func(downloaded, total int64)) error {
-	return ErrUpdatesDisabled
+	return ErrDisabled
 }
-
-func relaunchNow() {}
-
-func cleanUpdateLeftovers() {}

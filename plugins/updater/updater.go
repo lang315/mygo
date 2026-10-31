@@ -16,7 +16,7 @@
 //		...
 //	}},
 //
-// It is built on mygo.Updater, so the app must be built with updates (see
+// It is built on package updates, so the app must be built with updates (see
 // the updates guide). Builds that cannot update themselves, such as
 // development builds and apps installed by a package manager, never check
 // in the background, and say why when the user checks.
@@ -44,6 +44,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater/internal/frontend"
+	"github.com/egoist/mygo/updates"
 )
 
 // Options configure the plugin.
@@ -190,7 +191,7 @@ func used() *updater {
 
 // Replaced by tests.
 var (
-	enabled        = mygo.Updater.Enabled
+	enabled        = updates.Enabled
 	check          = checkRelease
 	relaunch       = mygo.App.Relaunch
 	appVersion     = mygo.App.Version
@@ -210,7 +211,7 @@ type release struct {
 }
 
 func checkRelease(ctx context.Context) (*release, error) {
-	up, err := mygo.Updater.Check(ctx)
+	up, err := updates.Check(ctx)
 	if err != nil || up == nil {
 		return nil, err
 	}

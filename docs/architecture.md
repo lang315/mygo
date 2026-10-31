@@ -110,7 +110,7 @@ framework safely. Read it before changing anything under `internal/`.
 │   ├── schemehook/     where package protocol gives package mygo the serving of custom schemes, and the names of the handled ones
 │   ├── httplite/       the names of net/http that the backends use, without importing it
 │   ├── psl/            the public suffix list (x/net/publicsuffix without net/http/cookiejar), for content rules
-│   ├── updatehook/     where updatefeed gives mygo.Updater its HTTP feed, which package mygo cannot import
+│   ├── updatehook/     where updatefeed gives package updates its HTTP feed, which package updates cannot import
 │   ├── updatehttp/     the HTTP source of updates (net/http, netproxy), for updatefeed and mygo's tests
 │   ├── idlemem/        measures apps' memory once idle, for the benchmarks
 │   ├── inputlatency/   measures how long input takes to reach the screen in native UI (macOS)
@@ -140,7 +140,9 @@ framework safely. Read it before changing anything under `internal/`.
 ├── transfer/           immutable data items, representations, lazy providers and drag effects
 ├── protocol/           custom URL schemes served by http.Handler, FileServer and the app's
 │                       frontend (SetFrontend): imports net/http, so apps import it themselves
-├── updatefeed/         the HTTP feed of mygo.Updater: importing it links net/http (mygo
+├── updates/            the updater (Check, Install, SetSource): signatures, archives, deltas;
+│                       not in package mygo, so apps that do not update do not link it
+├── updatefeed/         the HTTP feed of package updates: importing it links net/http (mygo
 │                       build does for apps with updates, plugins/updater itself)
 ├── netproxy/           the proxy of the system's settings, for Go's HTTP clients
 │                       (updatefeed, plugins/fetch and plugins/websocket use it)
@@ -694,7 +696,7 @@ gained one field, `SurfaceNative.Canvas`.
   most 25 MiB): the root's files for pages leave it out. `ipc.go`,
   `channel.go`, `bridge.go` (what windows say to the bridge: its script,
   messages, `Eval`), `protocol.go` (custom schemes, the frontend's, their
-  downloads), `typescript.go`, `updater.go` (and `relaunchNow`),
+  downloads), `typescript.go`, `relaunch.go` (`relaunchNow`),
   `single_instance.go`, `window_state.go` and `random.go` have twins
   (`_js.go`) that keep their API and do nothing, or report that there is
   no page, without the packages they need: net/http, net, crypto,
@@ -1113,7 +1115,7 @@ build` like mygo-runtime and released with the same version.
   would otherwise race, and Go writes them in that order. Connections are
   keyed by window and a random id the page chooses.
 - **updater** is the update window, in the manner of Sparkle, built on
-  `mygo.Updater` alone. A *session* is a check and what follows it (the
+  package `updates` alone. A *session* is a check and what follows it (the
   release notes, the download, the offer to relaunch): a goroutine that
   sets the session's *view* (title, message, progress, release notes,
   buttons) and waits for responses, whether or not the window shows, so
@@ -1654,7 +1656,7 @@ as in Tauri:
   arguments and working directory. A development build exits with code 75
   instead, and `mygo dev` starts the same build again, also when that
   happens before it was ready.
-- Updates (`updater.go`, `internal/update`, `cmd/mygo/updates.go`), in pure
+- Updates (package `updates`, `internal/update`, `cmd/mygo/updates.go`), in pure
   Go on every platform. `mygo keygen` creates an Ed25519 key pair; with
   `updates` in the configuration (the public key, and a GitHub repository or a base
   URL) `mygo build` links the manifest URL of the target and the public key
@@ -1664,7 +1666,7 @@ as in Tauri:
   `<name>-<version>-<target>.tar.gz` (Linux builds always get it, for
   `install.sh`), signs its SHA-256, and writes
   `update-<target>.json` with the `## <version>` section of CHANGELOG.md as
-  notes. `Updater.Check` fetches the manifest (HTTPS only, loopback HTTP for
+  notes. `updates.Check` fetches the manifest (HTTPS only, loopback HTTP for
   tests) and compares versions semantically; `Update.Install` streams the
   archive next to the app, verifies size and signature, unpacks it (files,
   directories and relative links only) and swaps it in: the bundle is
@@ -1702,12 +1704,12 @@ as in Tauri:
   feed naming the manifest in the release `<tagPrefix>{version}`
   (`update.TaggedFeed`), which `update.ResolveFeed` turns into the manifest
   of the newest published, non-prerelease release with that prefix, from
-  the GitHub API's list of releases, newest first. `Updater.Check` and the
+  the GitHub API's list of releases, newest first. `updates.Check` and the
   delta step resolve it in Go, and `install.sh` in sh (`latest_tag`, which
   reads the `tag_name`, `draft` and `prerelease` fields in order). Such
   drafts are made with `--latest=false`, and published the same way, so
   the repository's latest release stays the others'. While the app turns
-  prereleases on (`Updater.SetPrereleases`, an `atomic.Bool` that `Check`
+  prereleases on (`updates.SetPrereleases`, an `atomic.Bool` that `Check`
   reads once), `Check` resolves the feed of the latest release (with the
   prefix `v`) and tagged feeds alike with `update.ResolvePrereleaseFeed`
   instead: the manifest of the release with the highest version
@@ -1719,15 +1721,15 @@ as in Tauri:
   by the service; the bucket goes in the host name on AWS, and in the path
   with a custom `endpoint` or a bucket name with dots, unless `pathStyle`
   says otherwise. An app with an update service of its own gives
-  `Updater.SetSource` an `UpdateSource` (an `atomic.Pointer` that `Check`
+  `updates.SetSource` an `updates.Source` (an `atomic.Pointer` that `Check`
   reads once): `Check` reads the manifest from its `Manifest` in place of
   the feed, and the `Update` keeps the source, whose `Open` downloads the
   archive and deltas. The configured feed is itself a source, the HTTP
   one of package `updatefeed` (`internal/updatehttp`), so parsing, sizes,
   signatures, staging and the swap are the same either way; `Enabled` still
-  needs a build with `updates`, for the public key. Package `mygo` does not
+  needs a build with `updates`, for the public key. Package `updates` does not
   import `updatefeed` (it would link net/http, 2.2 MB, into every app): the
-  package gives `mygo.Updater` its feed through `internal/updatehook` when
+  package gives package `updates` its feed through `internal/updatehook` when
   it is imported, which `mygo build` makes the app do for `updates` (a
   generated `0mygo_updates_gen.go`, in native builds) and `plugins/updater`
   does itself; `Check` without it, and without a `SetSource`, says what to
@@ -4356,7 +4358,7 @@ renderer's (`gputest.Compare`).
   comment, URL schemes; `Exec` is the app's path) and hicolor icons,
   depending on GTK 3 and WebKitGTK 4.1. Packages hold the same files as
   the update archive; apps installed by a package manager do not update
-  themselves (`Updater.Enabled` checks that the app can write where it is
+  themselves (`updates.Enabled` checks that the app can write where it is
   installed). Every Linux build also gets `install.sh`
   (`installscript.go`), a POSIX sh script, the same for every
   architecture, that installs the archive for the user in

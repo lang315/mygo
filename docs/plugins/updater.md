@@ -9,7 +9,7 @@ web pages and of [native UI](../ui/README.md) alike. Its window is a web page, o
 native UI with [`native.Plugin`](#native-ui), for apps that show no web
 page at all.
 
-It is built on `mygo.Updater`, so the app must be built with updates: see
+It is built on package `updates`, so the app must be built with updates: see
 [auto-updates](../updates.md) to sign and publish them.
 
 ## Set up
@@ -182,5 +182,5 @@ links that open in the browser.
 ## Your own update UI
 
 The window is one way to offer updates. For an interface of your own, such
-as a banner in the app's page, use `mygo.Updater` instead of the plugin:
+as a banner in the app's page, use package `updates` instead of the plugin:
 see [your own update UI](../updates.md#your-own-update-ui).

@@ -35,7 +35,7 @@
 // The rest of the package covers the desktop, for windows of both kinds: App
 // (the lifecycle, deep links, file associations, the Dock), Window and its
 // Page, NewMenu and NewTray, Dialog, NewNotification, Clipboard, Shell,
-// Screen, Theme, Power, GlobalShortcut and Updater. Package protocol serves
+// Screen, Theme, Power and GlobalShortcut. Package protocol serves
 // custom URL schemes and the frontend of web pages with an http.Handler; an
 // app imports it, as it imports net/http, which package mygo does not. The
 // guides in the repository's docs directory show how they fit together.

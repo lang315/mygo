@@ -691,7 +691,7 @@ cannot show: those items are not marked):
     waits for the first `OnClose` to return (#237);
   - `examples/account-manager/main_test.go`,
     `examples/account-manager/worker_test.go` and
-    `internal/update/rename_test.go`: a wait on the run's end, scheduler
+    `internal/fsretry/rename_test.go`: a wait on the run's end, scheduler
     turns for the overlap, and the file let go at `Rename`'s first wait
     (#240);
   - `ui/allocsites_test.go` and `ui/memory_test.go`: the alloc-count tests

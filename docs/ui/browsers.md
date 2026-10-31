@@ -114,7 +114,7 @@ gzip, and the previews of these docs, with every component, 9.8 MB
 pages, which they do not show: its IPC, custom schemes and their HTTP, the
 TypeScript generator, the updater, with the JSON and the cryptography
 they take. Their API stays, doing nothing: `Bind` binds nothing, events
-reach no page, `Updater.Check` reports `ErrUpdatesDisabled`. Package
+reach no page, `updates.Check` reports `updates.ErrDisabled`. Package
 `protocol` has `SetFrontend`, `Unhandle` and `IsHandled` there, doing nothing,
 and not `Handle`, `HandleFunc` and `FileServer`, which take net/http's types, so
 that code using those is for desktops (`//go:build !js`). The tag `mygo_noinspector`, which `mygo build` sets

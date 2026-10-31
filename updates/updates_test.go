@@ -1,6 +1,6 @@
 //go:build !js
 
-package mygo
+package updates
 
 import (
 	"bytes"
@@ -36,31 +36,31 @@ import (
 func TestDefaultSource(t *testing.T) {
 	saved := updatehook.Feed.Load()
 	defer updatehook.Feed.Store(saved)
-	defer func(f string) { packageUpdateFeed = f }(packageUpdateFeed)
-	defer Updater.SetSource(nil)
-	packageUpdateFeed = "https://updates.example/update.json"
+	defer func(f string) { buildFeed = f }(buildFeed)
+	defer SetSource(nil)
+	buildFeed = "https://updates.example/update.json"
 
 	updatehook.Feed.Store(nil)
-	Updater.SetSource(nil)
+	SetSource(nil)
 	if _, err := defaultSource(); err == nil || !strings.Contains(err.Error(), `import _ "github.com/egoist/mygo/updatefeed"`) {
 		t.Errorf("without the HTTP feed linked, defaultSource says %v", err)
 	}
 	own := fixedSource{}
-	Updater.SetSource(own)
-	if src, err := defaultSource(); err != nil || src != UpdateSource(own) {
+	SetSource(own)
+	if src, err := defaultSource(); err != nil || src != Source(own) {
 		t.Errorf("a source of SetSource, without the HTTP feed: %v, %v", src, err)
 	}
 
-	Updater.SetSource(nil)
+	SetSource(nil)
 	var asked string
 	feed := func(url string) updatehook.Source { asked = url; return fixedSource{} }
 	updatehook.Feed.Store(&feed)
-	if src, err := defaultSource(); err != nil || src == nil || asked != packageUpdateFeed {
+	if src, err := defaultSource(); err != nil || src == nil || asked != buildFeed {
 		t.Errorf("with the HTTP feed linked: %v, %v; it was asked for %q", src, err, asked)
 	}
-	Updater.SetSource(own)
+	SetSource(own)
 	asked = ""
-	if src, err := defaultSource(); err != nil || src != UpdateSource(own) || asked != "" {
+	if src, err := defaultSource(); err != nil || src != Source(own) || asked != "" {
 		t.Errorf("a source of SetSource wins over the feed: %v, %v, asked %q", src, err, asked)
 	}
 }
@@ -192,7 +192,7 @@ func TestUpdater(t *testing.T) {
 	ctx := context.Background()
 	srv, key, m, _ := updateServer(t, "1.2.0", "v2", "")
 
-	if _, err := Updater.Check(ctx); err != ErrUpdatesDisabled {
+	if _, err := Check(ctx); err != ErrDisabled {
 		t.Errorf("Check without updates: %v", err)
 	}
 	up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.1.9", false)
@@ -412,8 +412,8 @@ func TestUpdaterWaitsForOpenFiles(t *testing.T) {
 }
 
 func TestUpdaterPrereleases(t *testing.T) {
-	t.Cleanup(func() { Updater.SetPrereleases(false) })
-	if Updater.Prereleases() {
+	t.Cleanup(func() { SetPrereleases(false) })
+	if Prereleases() {
 		t.Error("prereleases are on at launch")
 	}
 	// Check may run on another goroutine.
@@ -421,16 +421,16 @@ func TestUpdaterPrereleases(t *testing.T) {
 	go func() {
 		defer close(done)
 		for range 100 {
-			Updater.Prereleases()
+			Prereleases()
 		}
 	}()
-	Updater.SetPrereleases(true)
+	SetPrereleases(true)
 	<-done
-	if !Updater.Prereleases() {
+	if !Prereleases() {
 		t.Error("SetPrereleases(true) did not turn them on")
 	}
-	Updater.SetPrereleases(false)
-	if Updater.Prereleases() {
+	SetPrereleases(false)
+	if Prereleases() {
 		t.Error("SetPrereleases(false) did not turn them off")
 	}
 }
@@ -514,13 +514,43 @@ func TestUpdaterSource(t *testing.T) {
 	}
 
 	// SetSource sets the source that Check reads, and nil the feed again.
-	t.Cleanup(func() { Updater.SetSource(nil) })
-	Updater.SetSource(src)
-	if s := updateSource.Load(); s == nil || *s != UpdateSource(src) {
+	t.Cleanup(func() { SetSource(nil) })
+	SetSource(src)
+	if s := updateSource.Load(); s == nil || *s != Source(src) {
 		t.Error("SetSource did not set the source")
 	}
-	Updater.SetSource(nil)
+	SetSource(nil)
 	if updateSource.Load() != nil {
 		t.Error("SetSource(nil) did not restore the feed")
+	}
+}
+
+// Package mygo is not the updater: an app that does not update itself links
+// neither package updates nor the signatures and archives under it, on any system.
+func TestPackageMygoDoesNotLinkTheUpdater(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go command: ", err)
+	}
+	for _, target := range [][2]string{{"darwin", "arm64"}, {"linux", "amd64"}, {"windows", "amd64"}, {"js", "wasm"}} {
+		cmd := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "github.com/egoist/mygo", "github.com/egoist/mygo/ui")
+		cmd.Env = append(os.Environ(), "GOOS="+target[0], "GOARCH="+target[1], "CGO_ENABLED=0")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Errorf("go list for %s/%s: %v\n%s", target[0], target[1], err, out)
+			continue
+		}
+		for _, pkg := range strings.Fields(string(out)) {
+			switch pkg {
+			case "github.com/egoist/mygo/updates", "github.com/egoist/mygo/internal/update", "crypto/ed25519":
+				t.Errorf("%s/%s: package mygo links %s", target[0], target[1], pkg)
+			}
+		}
+	}
+}
+
+// Package updates gives package mygo the relaunch of an update it staged.
+func TestUpdatesGivesTheRelaunchOfAStagedUpdate(t *testing.T) {
+	if updatehook.RelaunchStaged.Load() == nil {
+		t.Error("package updates did not register how a staged update is relaunched")
 	}
 }
