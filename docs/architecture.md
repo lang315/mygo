@@ -1098,12 +1098,35 @@ keeps it. A hello before the commit, a second one, and every message before the
 hello or with another secret are dropped (`handleMessage`). The bridge also
 takes `postMessage` (bound to its handler), `JSON.stringify` and
 `crypto.getRandomValues` once, before the page can replace them, so a page that
-does cannot read the secret from what the bridge posts afterwards. macOS
-additionally only accepts messages from the main frame
-(`WKScriptMessage.frameInfo.isMainFrame`); WebKitGTK exposes no frame
-information, so Linux relies on the secret. That the commit reaches Go before the
-hello is an ordering of each backend's events, held by `TestBridgeCallsAfterEveryKindOfLoad`
-in `internal/e2e` (CI).
+does cannot read the secret from what the bridge posts afterwards.
+
+The window takes the first valid hello after a commit, from whoever posted it:
+the wait is a slot, safe only when nothing but the bridge can post before the
+bridge does. The backends hold that, not Go:
+
+- **macOS** rejects the messages of subframes natively
+  (`WKScriptMessage.frameInfo.isMainFrame`).
+- **WebView2** raises its message event for the top-level document only.
+- **WebKitGTK** does not say which frame posted a message. A page restored from
+  the back/forward cache is committed (`WEBKIT_LOAD_COMMITTED`, so the window
+  waits for a hello) before the restore, and then WebKit runs `pageshow` in the
+  subframes before the main frame's, so a subframe's hello could take the slot
+  ahead of the bridge's. So Back and Forward on Linux load the page again
+  (`enable-page-cache` is off for every web view): the bridge runs at document
+  start, before the page has a frame. The cost is that a page on Linux does
+  not keep what the cache kept (form fields, a scroll position) on Back.
+
+`HideHandlerScript` (`internal/bridge`), a user script for every frame of
+WebKitGTK and WebView2, removes the handler from subframes at document start,
+as defense in depth; WebKit gives the initial empty document of a frame no
+user script, so it is not what holds the slot shut.
+
+On macOS a page that comes back from the cache keeps its bridge, which does not
+start again: the commit made the window wait for a hello, so the bridge listens
+for `pageshow` (`persisted`, from the engine) and says its secret again.
+
+That the commit reaches Go before the hello is an ordering of each backend's
+events, held by `TestBridgeCallsAfterEveryKindOfLoad` in `internal/e2e` (CI).
 
 ### Plugins
 

@@ -145,6 +145,33 @@ func TestARestoredDocumentSaysItsSecretAgain(t *testing.T) {
 	}
 }
 
+// The wait for a hello is a slot: the first valid hello after a commit takes it,
+// from whoever posted it. So the slot is safe only when nothing but the bridge can
+// post before the bridge does, and the backends hold that and not Go:
+//   - macOS rejects the messages of subframes natively;
+//   - WebView2 raises its message event for the top-level document only;
+//   - WebKitGTK does not say which frame posted, so Back and Forward there load
+//     the page again (enable-page-cache is off) and the bridge says its hello at
+//     document start, before the page has a frame. With the cache on, WebKit
+//     commits the restored page, then runs pageshow in its subframes before the
+//     main frame's, and a subframe's hello would come first.
+//
+// This test records the model's limit, as the review of the restore found it.
+func TestTheSlotTakesTheFirstHelloWhoeverPostsIt(t *testing.T) {
+	w, fw := testWindow(t, WindowOptions{})
+	hello(fw, secretA) // document A's bridge
+	commit(fw, "about:blank#b")
+	hello(fw, secretB)
+	commit(fw, "about:blank") // back to A, restored from a cache
+	hello(fw, secretC)        // a subframe's pageshow, before the main frame's
+	hello(fw, secretA)        // the bridge's, a second one: dropped
+	var owner string
+	onMain(func() { owner = w.secret })
+	if owner != secretC {
+		t.Errorf("the window's secret is %q: the first hello after the commit takes the slot", owner)
+	}
+}
+
 func TestADocumentThatStaysKeepsItsSecret(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	hello(fw, secretA)

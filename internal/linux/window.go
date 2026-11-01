@@ -332,6 +332,15 @@ func (w *window) createWebView() {
 	settings := webkitWebViewGetSettings(w.web)
 	webkitSettingsSetEnableDeveloperExtras(settings, o.DevTools)
 	webkitSettingsSetAllowFileAccessFromFileURLs(settings, true)
+	// Back and Forward load the page again rather than restore it from the
+	// back/forward cache. A restored document keeps its bridge, which does not
+	// start again, and WebKitGTK does not say which frame posted a message: the
+	// frames of a restored page run their pageshow before the main frame's, so
+	// one of them could say a hello of its own before the bridge says its secret
+	// again. A new load runs the bridge at document start, before any frame
+	// exists (see "Trust" in the architecture guide). Pages lose the state the
+	// cache kept (form fields, scroll of a page that unloads) on Back.
+	gObjectSetBool(settings, cs("enable-page-cache"), false, 0)
 	webkitSettingsSetJavascriptCanAccessClipboard(settings, true)
 	if o.UserAgent != "" {
 		webkitSettingsSetUserAgent(settings, cs(userAgentWithSuffix(o.UserAgent, o.UserAgentSuffix)))

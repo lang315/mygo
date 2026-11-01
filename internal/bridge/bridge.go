@@ -31,15 +31,21 @@ type Config struct {
 }
 
 // HideHandlerScript is the user script, for every frame, that takes the message
-// handler away from the frames that are not the page's own. The handler is
-// reachable from every frame, and the backends of WebKitGTK and WebView2 cannot
-// tell Go which frame posted (macOS can, and rejects subframes natively), so
-// the frames do not get it: a frame that cannot post cannot say a hello, or a
-// call with a secret it guessed. The bridge runs in the top frame only, and
-// nothing else in a subframe uses the handler. It runs at document start, before
-// any script of the frame, and removes the handler of MyGo only (webkit's
-// messageHandlers.mygo, chrome.webview), so pages that look for other things
-// on those objects keep them.
+// handler away from the frames that are not the page's own, on WebKitGTK and
+// WebView2. It is defense in depth, not the barrier. WebKitGTK does not say which
+// frame posted a message; there the barrier is that the page is never restored
+// from the back/forward cache, so the bridge's hello comes before the page has a
+// frame (enable-page-cache, see "Trust" in the architecture guide). WebView2
+// raises its message event for the top-level document only. macOS rejects the
+// messages of subframes natively.
+//
+// The script runs at document start, before any script of the frame, and
+// removes the handler of MyGo only (webkit's messageHandlers.mygo,
+// chrome.webview), so pages that look for other things on those objects keep
+// them. It does not run in the initial empty document of a frame (WebKit gives
+// those no user script), so a frame that makes a child with a source that has
+// not committed can still see the handler there. The bridge runs in the top
+// frame only, and nothing else in a subframe uses the handler.
 const HideHandlerScript = `(function(){
 if(window===window.top)return;
 var hide=function(o,k){

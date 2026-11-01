@@ -93,7 +93,7 @@ func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
 // handler); WebKitGTK and WebView2 cannot, so there the frames that are not the
 // page's own must not have a handler to post to at all (bridge.HideHandlerScript):
 // a frame of another origin, a srcdoc frame, an about:blank frame its script
-// made, and the frames inside those.
+// made, a frame whose source has not committed, and the frames inside those.
 func TestFramesGetNoHandler(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Hidden: true})
 	const reach = `function reach(w) {
@@ -133,8 +133,14 @@ document.body.append(s);
 const b = document.createElement("iframe");
 document.body.append(b);
 window.results.blank = reach(b.contentWindow);
+const q = document.createElement("iframe");
+q.src = "app://localhost/204";
+document.body.append(q);
+window.results.noCommit = reach(q.contentWindow);
 </script>`, "app://localhost/")
-	waitFor(t, w, "['data', 'dataBlank', 'dataSrcdoc', 'srcdoc', 'blank'].every((k) => k in window.results)")
+	// The frames that report to the page by message may not arrive (the relay of a
+	// frame of another origin): the ones that matter are read at once.
+	waitFor(t, w, "['data', 'dataBlank', 'blank', 'noCommit'].every((k) => k in window.results)")
 	res, err := mygo.EvalAs[map[string]string](w.Page(), "window.results")
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +150,14 @@ window.results.blank = reach(b.contentWindow);
 		t.Log("macOS rejects the messages of subframes natively (frameInfo.isMainFrame); its frames may see the handler")
 	} else {
 		for frame, via := range res {
-			if via != "" {
+			switch {
+			case via == "":
+			case frame == "noCommit" && runtime.GOOS == "linux":
+				// A frame whose source has not committed is an initial empty
+				// document, which WebKit gives no user script. WebKitGTK is held by
+				// not restoring pages from the cache, not by this.
+				t.Logf("the frame with a source that has not committed has a handler (%s): known on WebKitGTK", via)
+			default:
 				t.Errorf("the %s frame has a message handler (%s): it could post to Go", frame, via)
 			}
 		}
@@ -193,5 +206,76 @@ JSON.stringify = (v) => { window.stolen.push("stringify"); return stringify(v); 
 		if s != "stringify" {
 			t.Errorf("the page saw a message posted to Go: %q", s)
 		}
+	}
+}
+
+// On Linux Back and Forward load the page again rather than restore it from the
+// back/forward cache (enable-page-cache is off): a restored document keeps its
+// bridge, and WebKitGTK runs the pageshow of a restored page's subframes before
+// the main frame's, so a frame that can post could say its hello first. A new
+// load runs the bridge at document start, before the page has a frame.
+func TestBackIsANewLoadOnLinux(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("macOS keeps the cache (its frames are filtered natively); WebView2 keeps its own")
+	}
+	w := newWindow(t, mygo.WindowOptions{Hidden: true})
+	p := w.Page()
+	if err := p.LoadURL("app://localhost/"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, w, "window.mygo")
+	if _, err := p.Eval("window.restoredMarker = 1; window.restoredPersisted = null; addEventListener('pageshow', (e) => { window.restoredPersisted = e.persisted })"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.LoadURL("app://localhost/capture"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, w, "location.pathname === '/capture' && window.mygo")
+	p.GoBack()
+	waitFor(t, w, "location.pathname === '/' && window.mygo")
+	if got, err := mygo.EvalAs[bool](p, "window.restoredMarker === undefined"); err != nil || !got {
+		t.Errorf("Back restored the page from a cache: marker kept (%v, %v)", got, err)
+	}
+}
+
+// A page that is not trusted can post from its pagehide, as it is left for a page
+// of another site (the engine may swap processes, so its messages may reach Go
+// after the commit of the next page): neither a hello nor a call of it may run
+// with the trust of the page that comes next. Posted with the handler directly, as
+// a page can, with a secret it made up.
+func TestAPageCannotPostForTheNextOneFromPagehide(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Hidden: true})
+	p := w.Page()
+	secret := "0123456789abcdef0123456789abcdef"
+	hello := `{"t":"hello","k":"` + secret + `"}`
+	call := secret + `{"t":"call","id":1,"k":"x","m":"Probe.Touch","a":[]}`
+	hj, _ := json.Marshal(hello)
+	cj, _ := json.Marshal(call)
+	// A page of an origin the app does not trust, with MyGo's bridge (it is in
+	// every page), leaving for the app's own page.
+	p.LoadHTML(`<p>elsewhere</p><script>
+addEventListener("pagehide", () => {
+  const post = (m) => {
+    const h = window.webkit && webkit.messageHandlers && webkit.messageHandlers.mygo;
+    if (h) { h.postMessage(m); return; }
+    if (window.chrome && chrome.webview) chrome.webview.postMessage(m);
+  };
+  post(`+string(hj)+`);
+  post(`+string(cj)+`);
+});
+</script>`, "https://untrusted.example/")
+	waitFor(t, w, "window.mygo")
+	before := probe.n.Load()
+	if err := p.LoadURL("app://localhost/"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, w, "location.origin === 'app://localhost' && window.mygo")
+	// The next page's own call goes through the same channel after whatever the
+	// old page posted that has arrived.
+	if _, err := p.EvalContext(wait.Context(t), "mygo.call('Probe.Touch')"); err != nil {
+		t.Fatal(err)
+	}
+	if n := probe.n.Load(); n != before+1 {
+		t.Fatalf("Probe.Touch ran %d times, want 1 (the new page's own): a call posted from pagehide ran", n-before)
 	}
 }
