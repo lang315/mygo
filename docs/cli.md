@@ -149,6 +149,18 @@ Builds production apps: runs `buildCommand`, compiles the app with
 `frontendDist` embedded, and packages it for each platform in
 `<out>/<os>-<arch>`. See [Building and distributing](distribution.md).
 
+For an app that binds services (`mygo.Bind`), a release build also gives `Bind`
+the list of their methods, so that the linker does not keep every method of the
+program: about 1.3 to 1.5 MB less in a webview app. It takes the list from the
+running app: the same run in generate mode that writes the TypeScript client
+(for an app with no frontend, whose binary calls `Bind`, `mygo build` runs it in
+generate mode once for this, with a timeout, like `mygo generate` does for one
+with a frontend; an app that binds nothing is not run, and if the run fails the
+build warns and goes on). If some service cannot be named from the main package
+(an unexported type of another package, a generic type), it prints
+`Bind keeps reflection (...)` and builds as before. `go run`, `go build` and
+`mygo dev` bind by reflection and keep the size they had.
+
 The platform `web` (or `js/wasm`) builds an app of native UI for browsers
 into `<out>/web`, a static site to serve from anywhere: `index.html`, which
 loads the app, Go's `wasm_exec.js`, the app's WebAssembly, named by its

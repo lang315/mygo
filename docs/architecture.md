@@ -1005,13 +1005,39 @@ window (`CallerWindow`) and is canceled when the page navigates or the window
 closes. `Bind` validates every parameter and result type up front
 (`tsgen.Validate`), so unsupported types fail at startup, not at call time.
 
-`Bind` lists a service's methods with `reflect.Type.Method`, and a program
-that does that keeps every exported method of every type in an interface,
-since the linker cannot tell which it calls: about 2.5 MB of a native UI
-app. So only apps that call `Bind` (or `Use` a plugin with a service) link
-it. MyGo's own service, `mygo:window` behind `window.mygo.window`, is bound
-by `bindFuncs`, from funcs, without it; `go build -ldflags=-dumpdep`
-prints `<ReflectMethod>` on what does it.
+`Bind` lists a service's methods in `listMethods`, which has two forms. Without
+the tag `mygo_static` (`bind_reflect.go`) it uses `reflect.Type.Method` and
+`Value.Method`, and a program that does that keeps every exported method of every
+type in an interface, since the linker cannot tell which it calls: about 1.3 to
+1.5 MB of a webview app that binds, 2.5 MB of a native UI app. So only apps that
+call `Bind` (or `Use` a plugin with a service) link it. With the tag
+(`bind_static.go`) it reads a table of method expressions, `BindMethods`, and
+uses neither; `go build -ldflags=-dumpdep` prints `<ReflectMethod>` on what does.
+MyGo's own service, `mygo:window` behind `window.mygo.window`, is bound by
+`bindFuncs`, from funcs, without it.
+
+`mygo build` gives a release build the table and the tag
+(`cmd/mygo/bindgen.go`). Generate mode, which runs the app with `MYGO_GENERATE` to
+write the TypeScript client, also writes the bound types (package, name,
+pointer or value, methods in reflection's order) to `MYGO_GENERATE_BINDINGS`;
+`bindingsGo` turns them into `0mygo_bind_gen.go`, in the build's overlay, which
+calls `BindMethods` for each with `(*T).Method` or `T.Method` and imports aliased
+`mygo_<name>`. The tag goes in only when the file does, so a stale file is
+never paired with it. When some service cannot be named from package main
+(an unexported type of another package, a generic type, an internal package it
+cannot import, a plugin's own), the build prints "Bind keeps reflection (...)"
+and goes on as before: it is all or nothing. A table that lacks a method the type
+has fails at `Bind` ("build with mygo build again"), one that lacks the
+type too, and a method removed or renamed does not compile; nothing is silently
+reflected over. An app with no frontend has no client to write, so a release build
+builds it for this computer and runs it in generate mode once, with a timeout,
+only if its binary calls `Bind` (the symbol `mygo.bind` is in it); an app that binds
+nothing, most apps of native UI, is not run. If the run fails the build warns and
+keeps reflection. `go run` and `go build` without the CLI do not have the tag and
+bind by reflection, at the size they always had; `mygo dev` and `-debug` builds do
+too. The tests of the package bind many services the CLI has not seen, so under
+the tag they list by reflection (`staticFallback`, set only by a `_test.go` file;
+an app has none), and `go test -tags mygo_static .` runs the IPC goldens on the table.
 
 JSON options (`jsonOptions` in `ipc.go`) are shared by calls and events:
 json/v2 defaults (nil slices encode as `[]`, case-sensitive names),
@@ -4718,7 +4744,8 @@ rules, which took counter-native back to 8.9 MB after it had grown from
   `reflect.Type.Method`, `reflect.Value.Method` or `MethodByName` with a
   name the compiler cannot see makes the linker keep every exported method
   of every type used through an interface: 2.5 MB of counter-native. Only
-  `Bind`, `BindAs` and plugins with a service do it; MyGo's own services
+  `Bind`, `BindAs` and plugins with a service do it, and not in a build by
+  `mygo build` that has the tag `mygo_static` and its table; MyGo's own services
   use `bindFuncs`. `text/template` and `html/template` do it too.
 - *Backends stay thin.* Every method of `platform.Backend` and its
   controllers is linked into every app of that platform, used or not, so

@@ -115,7 +115,10 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 		return err
 	}
 	if !opts.debug && hasNativePlatform(splitList(*platforms)) {
-		listBoundTypes(context.Background(), c) // an app with no client to write
+		// An app with no client to write: list what it binds if it does.
+		if err := listBoundTypes(context.Background(), c); err != nil {
+			warnf("Bind keeps reflection (the app could not list the services it binds: %v), about 1.4 MB more", err)
+		}
 	}
 	if c.BuildCommand != "" && !*skipBuildCommand {
 		t := con.start("Building the frontend")

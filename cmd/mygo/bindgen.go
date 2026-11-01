@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"debug/elf"
+	"debug/macho"
+	"debug/pe"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // A boundType is a service the app bound, as generate mode lists it
@@ -79,35 +83,110 @@ func bindFiles(c *Config, pkg, work, mainPkg string) (files map[string]string, r
 	return files, "", nil
 }
 
-// listBoundTypes runs the app in generate mode to list the services it bound
-// when it has no TypeScript client to write (no frontend: an app like hello,
-// which calls its Go from a page of its own), as writeClient does for one that
-// has. A failure is no failure of the build, which does not need the list: Bind
-// keeps reflection, and the build says so.
-func listBoundTypes(ctx context.Context, c *Config) {
+// generateTimeout is how long a release build lets an app run in generate mode
+// to list what it binds. Generate mode returns from App.Run before any window,
+// but the code of the app before it runs.
+const generateTimeout = 2 * time.Minute
+
+// listBoundTypes lists the services an app with no TypeScript client to write
+// (no frontend: an app like hello, which calls its Go from a page of its own)
+// binds, as writeClient does for one that has a client. It builds the app for
+// this computer, and runs it in generate mode, once, only if the build calls
+// Bind (bindsServices): the code of an app that binds nothing, most apps of native
+// UI, does not run at build time, and its list is empty. An error leaves no
+// list: the caller says so and the build goes on with reflection, which
+// does not need one.
+func listBoundTypes(ctx context.Context, c *Config) error {
 	if c.Bindings != "" || c.boundRead {
-		return // writeClient listed them, or there is nothing to run for
+		return nil // writeClient listed them, or there is nothing to run for
 	}
 	t := con.start("Listing the services the app binds")
 	bin := tempBinary(c.executableName())
 	defer os.Remove(bin)
-	dir, err := os.MkdirTemp("", "mygo-bound-")
+	err := goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
+	binds := false
 	if err == nil {
-		defer os.RemoveAll(dir)
-		err = goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
+		binds, err = bindsServices(bin)
+	}
+	if err == nil && !binds {
+		c.boundRead = true // nothing bound: nothing to run
+		t.stop()
+		return nil
 	}
 	if err == nil {
 		t.set("running the app in generate mode")
-		err = runInGenerateMode(c, bin, filepath.Join(dir, "mygo.ts"))
-	}
-	if err != nil {
-		t.stop()
-		if ctx.Err() == nil {
-			warnf("Bind keeps reflection (the app could not list the services it binds: %v), about 1.4 MB more", err)
+		var dir string
+		if dir, err = os.MkdirTemp("", "mygo-bound-"); err == nil {
+			defer os.RemoveAll(dir)
+			run, cancel := context.WithTimeout(ctx, generateTimeout)
+			defer cancel()
+			err = runInGenerateMode(run, c, bin, filepath.Join(dir, "mygo.ts"))
+			if err != nil && run.Err() == context.DeadlineExceeded {
+				err = fmt.Errorf("it did not return from generate mode in %v", generateTimeout)
+			}
 		}
-		return
 	}
 	t.stop()
+	return err
+}
+
+// bindSymbol is the function that Bind, BindAs and Use register a service
+// with. A program that never calls any of them does not have it: the linker
+// leaves out what nothing reaches.
+const bindSymbol = "github.com/egoist/mygo.bind"
+
+// bindsServices reports whether the Go program at path, an executable of this
+// computer that is not stripped, calls Bind (or BindAs, or Use), from its
+// symbols, without running it.
+func bindsServices(path string) (bool, error) {
+	names, err := symbolNames(path)
+	if err != nil {
+		return false, err
+	}
+	for _, n := range names {
+		if n == bindSymbol || strings.HasSuffix(n, "/"+bindSymbol) { // a vendored MyGo
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// symbolNames returns the names in the symbol table of an ELF, Mach-O or PE
+// executable.
+func symbolNames(path string) ([]string, error) {
+	var names []string
+	if f, err := elf.Open(path); err == nil {
+		defer f.Close()
+		syms, err := f.Symbols()
+		if err != nil {
+			return nil, fmt.Errorf("reading the symbols of %s: %w", filepath.Base(path), err)
+		}
+		for _, s := range syms {
+			names = append(names, s.Name)
+		}
+		return names, nil
+	}
+	if f, err := macho.Open(path); err == nil {
+		defer f.Close()
+		if f.Symtab == nil {
+			return nil, fmt.Errorf("%s has no symbol table", filepath.Base(path))
+		}
+		for _, s := range f.Symtab.Syms {
+			names = append(names, strings.TrimPrefix(s.Name, "_"))
+		}
+		return names, nil
+	}
+	if f, err := pe.Open(path); err == nil {
+		defer f.Close()
+		if len(f.Symbols) == 0 {
+			return nil, fmt.Errorf("%s has no symbol table", filepath.Base(path))
+		}
+		for _, s := range f.Symbols {
+			names = append(names, s.Name)
+		}
+		return names, nil
+	}
+	return nil, fmt.Errorf("%s is not an ELF, Mach-O or PE executable", filepath.Base(path))
 }
 
 // bindTable gives a release build the table of the methods of the services

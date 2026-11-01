@@ -194,7 +194,7 @@ func generateBindings(c *Config, binary string) (bool, error) {
 	}
 	out := c.path(c.Bindings)
 	before, _ := os.ReadFile(out)
-	if err := runInGenerateMode(c, binary, out); err != nil {
+	if err := runInGenerateMode(context.Background(), c, binary, out); err != nil {
 		return false, err
 	}
 	after, _ := os.ReadFile(out)
@@ -204,11 +204,11 @@ func generateBindings(c *Config, binary string) (bool, error) {
 // runInGenerateMode runs a compiled app in generate mode with the client written to
 // out. The same run lists the bound types, for mygo build to name their
 // methods (c.bound).
-func runInGenerateMode(c *Config, binary, out string) error {
+func runInGenerateMode(ctx context.Context, c *Config, binary, out string) error {
 	list := binary + ".bound.json"
 	os.Remove(list)
 	defer os.Remove(list)
-	cmd := exec.Command(binary)
+	cmd := exec.CommandContext(ctx, binary)
 	cmd.Dir = c.root
 	o, e := con.output("app", os.Stdout), con.output("app", os.Stderr)
 	cmd.Stdout, cmd.Stderr = o, e

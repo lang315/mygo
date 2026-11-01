@@ -84,7 +84,7 @@ func main() {
 
 // bindTestApp writes an app that binds a service, with the config given, into
 // a new directory, and sets the environment to build it offline.
-func bindTestApp(t *testing.T, config string) string {
+func bindTestApp(t *testing.T, config, main string) string {
 	t.Helper()
 	dir := t.TempDir()
 	checkout, _ := filepath.Abs(filepath.Join("..", ".."))
@@ -93,7 +93,7 @@ func bindTestApp(t *testing.T, config string) string {
 	for name, content := range map[string]string{
 		"go.mod":    gomod,
 		"go.sum":    string(sum),
-		"main.go":   bindTestMain,
+		"main.go":   main,
 		"mygo.json": config,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
@@ -106,26 +106,129 @@ func bindTestApp(t *testing.T, config string) string {
 	return dir
 }
 
-// An app with no frontend, as hello is, has no client to write, but binds
-// services: the build runs it in generate mode all the same to list them.
-func TestListBoundTypesOfAnAppWithoutAFrontend(t *testing.T) {
+// Apps for the three ways listBoundTypes can go. Each writes a marker file
+// first thing in main, so that a test can tell whether the build ran it.
+const (
+	bindTestHead = `package main
+
+import (
+	"os"
+
+	"github.com/egoist/mygo"
+)
+
+type Greeter struct{}
+
+func (Greeter) Hello(name string) string { return name }
+
+func init() { os.WriteFile(os.Getenv("BINDTEST_MARKER"), []byte("ran"), 0o644) }
+`
+	bindTestNoBind = bindTestHead + `
+func main() {
+	if err := mygo.App.Run(); err != nil {
+		panic(err)
+	}
+}
+`
+	bindTestBinds = bindTestHead + `
+func main() {
+	mygo.Bind(&Greeter{})
+	if err := mygo.App.Run(); err != nil {
+		panic(err)
+	}
+}
+`
+	bindTestFails = bindTestHead + `
+func main() {
+	mygo.Bind(&Greeter{})
+	if os.Getenv("MYGO_GENERATE") != "" {
+		os.Exit(3)
+	}
+	if err := mygo.App.Run(); err != nil {
+		panic(err)
+	}
+}
+`
+)
+
+// listBound lists the bound types of the app written by main, and says whether
+// the build ran the app (its marker exists).
+func listBound(t *testing.T, main string) (c *Config, ran bool, err error) {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("building the app")
 	}
-	dir := bindTestApp(t, `{"name":"Bind Test","identifier":"com.example.bindtest"}`)
-	c, err := loadConfig(dir)
-	if err != nil {
-		t.Fatal(err)
+	dir := bindTestApp(t, `{"name":"Bind Test","identifier":"com.example.bindtest"}`, main)
+	marker := filepath.Join(t.TempDir(), "marker")
+	t.Setenv("BINDTEST_MARKER", marker)
+	c, lerr := loadConfig(dir)
+	if lerr != nil {
+		t.Fatal(lerr)
 	}
 	if c.Bindings != "" {
 		t.Fatalf("Bindings = %q: the app was meant to have no client", c.Bindings)
 	}
-	listBoundTypes(context.Background(), c)
-	if !c.boundRead || len(c.bound) != 1 || c.bound[0].Type != "Greeter" {
-		t.Fatalf("bound %+v (read %v), want the Greeter", c.bound, c.boundRead)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "mygo.ts")); err == nil {
+	err = listBoundTypes(context.Background(), c)
+	_, serr := os.Stat(marker)
+	if _, cerr := os.Stat(filepath.Join(dir, "mygo.ts")); cerr == nil {
 		t.Error("a client was written into the project")
+	}
+	return c, serr == nil, err
+}
+
+// An app with no frontend, as hello is, has no client to write, but may bind
+// services. The build runs the app in generate mode to list them, once, only if it
+// binds: the code of an app that binds nothing (most apps of native UI) does not
+// run at build time.
+func TestListBoundTypesRunsOnlyAnAppThatBinds(t *testing.T) {
+	t.Run("an app that binds nothing is not run", func(t *testing.T) {
+		c, ran, err := listBound(t, bindTestNoBind)
+		if err != nil || ran || len(c.bound) != 0 {
+			t.Errorf("ran %v, bound %+v, err %v: want none, and the app not run", ran, c.bound, err)
+		}
+		if !c.boundRead {
+			t.Error("nothing bound is a list read: the build can go on with no table")
+		}
+	})
+	t.Run("an app that binds is run in generate mode", func(t *testing.T) {
+		c, ran, err := listBound(t, bindTestBinds)
+		if err != nil || !ran || !c.boundRead || len(c.bound) != 1 || c.bound[0].Type != "Greeter" {
+			t.Errorf("ran %v, bound %+v (read %v), err %v: want the Greeter listed by a run", ran, c.bound, c.boundRead, err)
+		}
+	})
+	t.Run("an app that fails in generate mode is an error and no list", func(t *testing.T) {
+		c, ran, err := listBound(t, bindTestFails)
+		if err == nil || !ran || c.boundRead || len(c.bound) != 0 {
+			t.Errorf("ran %v, bound %+v (read %v), err %v: want an error and no list", ran, c.bound, c.boundRead, err)
+		}
+	})
+}
+
+// hasBindSymbol tells from the symbols of a host binary that is not stripped
+// whether the app calls Bind.
+func TestHasBindSymbol(t *testing.T) {
+	if testing.Short() {
+		t.Skip("building the app")
+	}
+	for name, c := range map[string]struct {
+		main string
+		want bool
+	}{"binds": {bindTestBinds, true}, "does not": {bindTestNoBind, false}} {
+		t.Run(name, func(t *testing.T) {
+			dir := bindTestApp(t, `{"name":"Bind Test","identifier":"com.example.bindtest"}`, c.main)
+			cfg, err := loadConfig(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bin := filepath.Join(t.TempDir(), "app")
+			if err := goBuild(context.Background(), cfg, nil, bin, nil, generatorTags(cfg.root)...); err != nil {
+				t.Fatal(err)
+			}
+			got, err := bindsServices(bin)
+			if err != nil || got != c.want {
+				t.Errorf("bindsServices = %v, %v, want %v", got, err, c.want)
+			}
+		})
 	}
 }
 
@@ -137,7 +240,7 @@ func TestBuildNamesTheMethodsThroughTheTable(t *testing.T) {
 	if testing.Short() {
 		t.Skip("building the app")
 	}
-	dir := bindTestApp(t, `{"name":"Bind Test","identifier":"com.example.bindtest","bindings":"mygo.ts"}`)
+	dir := bindTestApp(t, `{"name":"Bind Test","identifier":"com.example.bindtest","bindings":"mygo.ts"}`, bindTestMain)
 
 	c, err := loadConfig(dir)
 	if err != nil {
