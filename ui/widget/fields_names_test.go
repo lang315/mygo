@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -106,5 +107,48 @@ func TestFieldsHiddenLabelNamesNothing(t *testing.T) {
 		if n.Label == "Hidden" {
 			t.Fatalf("a hidden label named %v", n)
 		}
+	}
+}
+
+// A Fields form in a row of another: the inner rows' labels name their
+// controls; the outer label must not take the first one's name.
+func TestFieldsNestedKeepTheInnerNames(t *testing.T) {
+	tt := tester(t, Fields().Row("Address", Fields().Row("Street", TextBox()).Row("City", TextBox())))
+	var got []string
+	for _, n := range tt.Nodes() {
+		if n.Role == ui.RoleTextField {
+			got = append(got, n.Label)
+		}
+	}
+	if len(got) != 2 || got[0] != "Street" || got[1] != "City" {
+		t.Fatalf("text fields %q, want [Street City]", got)
+	}
+}
+
+// Controls that are several (a group of check boxes, a range of two numbers, a
+// tag field) are a group named by the row's label, as ui.Field makes it.
+func TestFieldsNameGroupsOfControls(t *testing.T) {
+	opts := []Option{{Value: "a", Text: "Alpha"}, {Value: "b", Text: "Beta"}}
+	for _, c := range []struct {
+		name string
+		w    Control
+	}{
+		{"CheckBoxGroup", CheckBoxGroup(true, opts...)},
+		{"RangeSpin", RangeSpin(1, 9, 1, 9, 1, "to", "")},
+		{"TagSelect", TagSelect(opts...)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			tt := tester(t, Fields().Row("Choices", c.w))
+			for _, n := range tt.Nodes() {
+				if n.Label == "Choices" && n.Role != ui.RoleText {
+					return
+				}
+			}
+			var got []string
+			for _, n := range tt.Nodes() {
+				got = append(got, fmt.Sprintf("%d:%q", n.Role, n.Label))
+			}
+			t.Fatalf("no node named Choices but its text: %v", got)
+		})
 	}
 }

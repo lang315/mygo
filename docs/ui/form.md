@@ -64,4 +64,4 @@ description and the error after it, and the value invalid while there is an
 error; a fieldset is a group named by its legend.
 In a form of your own, `Element.NamedBy(label)` names a control by a label the
 same way; a control that has a name of its own keeps it, and a number input's
-buttons take the name too ("Copies Increase").
+buttons take the name too ("Copies Increase"). Several controls that name themselves (a group of check boxes) or inputs (a range of two numbers) become a group the label names, as `Field` makes it. A label that is hidden names nothing.

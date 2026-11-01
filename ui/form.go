@@ -103,7 +103,7 @@ func coreField(c *context, label string, fn func()) *node {
 	}
 	if namesItself(ctrl) {
 		f.Role(RoleGroup).Label(label)
-	} else if ctrl.nameFrom == nil || ctrl.nameFrom.label == "" {
+	} else if ctrl.nameFrom == nil || ctrl.nameFrom.nameOf() == "" {
 		ctrl.nameFrom = l
 	}
 	l.flags |= flagClickable
@@ -139,16 +139,37 @@ func (e *node) NamedBy(label *node) *node {
 		e.flags&(flagFocusable|flagEditable) == 0 {
 		ctrl = fieldControl(e)
 	}
-	if ctrl == nil || namesItself(ctrl) {
+	if ctrl == nil {
 		return e
 	}
-	if ctrl.nameFrom == nil || ctrl.nameFrom.label == "" {
-		ctrl.nameFrom = label
+	if namesItself(ctrl) || ctrl != e && editables(e) > 1 {
+		// Several controls that name themselves (a group of check boxes, a
+		// range of two numbers) are a group the label names, as Field does.
+		if ctrl != e && e.role == RoleAuto && e.label == "" && e.nameFrom == nil {
+			e.Role(RoleGroup)
+			e.nameFrom, e.keepLinks = label, true
+		}
+		return e
+	}
+	if ctrl.nameFrom == nil || ctrl.nameFrom.nameOf() == "" {
+		ctrl.nameFrom, ctrl.keepLinks = label, true
 	}
 	if ctrl != e && e.label == "" && e.nameFrom == nil {
-		e.nameFrom = label // what is named after e, as a number's buttons, is named after label
+		e.nameFrom, e.keepLinks = label, true // what is named after e, as a number's buttons, is named after label
 	}
 	return e
+}
+
+// editables counts the inputs inside e: a range of two numbers has two.
+func editables(e *node) int {
+	n := 0
+	for c := e.first; c != nil; c = c.next {
+		if c.flags&flagEditable != 0 {
+			n++
+		}
+		n += editables(c)
+	}
+	return n
 }
 
 // fieldControl returns the control of a field: the first element inside e
@@ -215,13 +236,20 @@ func namesItself(e *node) bool {
 // nameOf returns the name an element gives another (nameFrom): its Label,
 // or the text it is.
 func (e *node) nameOf() string {
-	if e.label == "" && e.kind == kindText {
-		return e.text
+	// A name may come through elements named by others (NamedBy); a cycle
+	// of them, which is the app's mistake, has none rather than overflow.
+	for range 8 {
+		switch {
+		case e.label != "":
+			return e.label
+		case e.kind == kindText:
+			return e.text
+		case e.nameFrom == nil || e.nameFrom == e:
+			return ""
+		}
+		e = e.nameFrom
 	}
-	if e.label == "" && e.nameFrom != nil && e.nameFrom != e {
-		return e.nameFrom.nameOf()
-	}
-	return e.label
+	return ""
 }
 
 // Fieldset creates a group of the fields that fn builds, under legend,
