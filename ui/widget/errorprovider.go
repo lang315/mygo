@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"weak"
 
 	"github.com/egoist/mygo"
@@ -66,6 +67,82 @@ func (p *ErrorProviderWidget) HasErrors() bool {
 		delete(p.marked, k)
 	}
 	return false
+}
+
+// FocusFirst gives the keyboard focus, at the next frame, to the first control
+// of f that this provider marks, in the order Tab visits them (the order
+// ValidateChildren runs the handlers in, not the order the errors were set),
+// and reports whether there is one. A hidden or disabled control, and one in a
+// hidden or disabled container, is passed over. A control on a page of a
+// TabControl or a Sidebar that is not showing is reached: its pages show first
+// (ValidateChildren, which validates every page, does not switch them). It
+// changes nothing when no control can take the focus. Call it after a
+// ValidateChildren that returned false, so that the user lands on the first
+// field to fix:
+//
+//	if !form.ValidateChildren() {
+//		errors.FocusFirst(form)
+//	}
+//
+// It is safe from any goroutine: the request is kept under the package's lock
+// and made when the control builds.
+func (p *ErrorProviderWidget) FocusFirst(f *Form) bool {
+	mu.Lock()
+	var target *core
+	var pages []func()
+	seen := map[*core]bool{}
+	var walk func(c Control, path []func(), off bool) bool
+	walk = func(c Control, path []func(), off bool) bool {
+		if c == nil {
+			return false
+		}
+		b := c.base()
+		if b.hidden || seen[b] {
+			return false
+		}
+		seen[b] = true
+		off = off || b.disabled
+		if !off && b.errBy == p {
+			target, pages = b, slices.Clone(path)
+			return true
+		}
+		switch w := c.(type) {
+		case *TabControlWidget:
+			for i, k := range w.pages {
+				if walk(k, append(path, func() { w.SetPage(i) }), off) {
+					return true
+				}
+			}
+		case *SidebarWidget:
+			for i, k := range w.pages {
+				if walk(k, append(path, func() { w.Select(w.names[i]) }), off) {
+					return true
+				}
+			}
+		default:
+			if h, ok := c.(interface{ children() []Control }); ok {
+				for _, k := range h.children() {
+					if walk(k, path, off) {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	_ = (f.header != nil && walk(f.header, nil, false)) ||
+		(f.tools != nil && walk(f.tools, nil, false)) ||
+		walk(f.root, nil, false) ||
+		(f.status != nil && walk(f.status, nil, false))
+	mu.Unlock()
+	if target == nil {
+		return false
+	}
+	for _, show := range pages {
+		show()
+	}
+	target.change(func() { target.wantFocus = true })
+	return true
 }
 
 // Clear takes every mark off.

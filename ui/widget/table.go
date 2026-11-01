@@ -98,6 +98,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	checks                                  bool // the check box column shows
 	panel                                   *BoxWidget
 	totalLabel, selectedLabel, checkedLabel *LabelWidget
+	words                                   panelWords // what the panel's texts were worked out from
 	column                                  *ComboBoxWidget
 	keyword                                 *TextBoxWidget
 	searchButton                            *ButtonWidget
@@ -126,6 +127,9 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// images, when a ListView shows the first column's image from an image
 	// list, is that list: its generation is part of the version of each row.
 	images *ImageListWidget
+	// follow is FollowEnd, and toEnd a ScrollToEnd to make at the next build;
+	// the list is ui's, on the main thread, so the setters keep them here.
+	follow, toEnd bool
 
 	// ui's, on the main thread:
 	list   ui.ListState
@@ -499,6 +503,11 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Header = t.headerAt
 	}
 	t.handOver()
+	s.FollowEnd = t.follow
+	if t.toEnd && !c.Measuring() { // the request is for the real window
+		t.toEnd = false
+		s.ScrollToEnd()
+	}
 	vis := t.visCols // the columns ui is given now, for the cells it builds late
 	t.keepHidden(&s.Columns)
 	e := ui.Table(c, s, t.columns, t.view.Places(), func(row, col int) { t.cell(c, vis, row, col) }).

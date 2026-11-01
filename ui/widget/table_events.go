@@ -97,6 +97,23 @@ func (t *DataGridViewWidget[T, K]) SetColumnsLayout(l ui.TableLayout) *DataGridV
 	return t
 }
 
+// FollowEnd, when on, starts the table at its end and keeps the end in view as
+// rows are added or grow while it shows it, as a log does: scrolling away from
+// the end stops following it, and scrolling back to it follows again. It
+// starts the table at its end only before its first frame; one already shown
+// stays where it is, and ScrollToEnd takes it to the end.
+func (t *DataGridViewWidget[T, K]) FollowEnd(on bool) *DataGridViewWidget[T, K] {
+	t.change(func() { t.follow = on })
+	return t
+}
+
+// ScrollToEnd scrolls the table to its last row, at the next frame, where
+// FollowEnd follows it again.
+func (t *DataGridViewWidget[T, K]) ScrollToEnd() *DataGridViewWidget[T, K] {
+	t.change(func() { t.toEnd = true })
+	return t
+}
+
 // CopyFunc sets what the table copies: fn gets the keys of the rows
 // selected, in the order shown, and returns the text. Both Ctrl+C (Cmd+C)
 // and the Edit menu's Copy use it, so they agree; without it, or with nil,

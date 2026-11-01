@@ -1521,3 +1521,22 @@ func TestRightClickChoiceIsChanged(t *testing.T) {
 	}
 	tt.CloseMenu()
 }
+
+// FollowEnd turned off between two frames stops the following at once: rows
+// that come before the next frame do not scroll the list.
+func TestListFollowEndTurnedOffStopsFollowing(t *testing.T) {
+	n := 100
+	s := ListState{FollowEnd: true}
+	tt := coreNewTester(func(c *context) {
+		coreList(c, &s, n, func(i int) { coreBox(c).Height(40) }).Grow(1)
+	}, 300, 400)
+	if !s.AtEnd() {
+		t.Fatal("not at the end to start")
+	}
+	s.FollowEnd = false
+	n += 20
+	tt.Frame()
+	if s.AtEnd() {
+		t.Error("rows came after FollowEnd was turned off, and the list still followed the end")
+	}
+}

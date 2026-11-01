@@ -678,6 +678,15 @@ lock: they read the row and call no widget method.
   table.CopyFunc(func(ids []string) string { return strings.Join(ids, "\n") })
   ```
 
+  `FollowEnd(true)` keeps the last row of the table in view as rows are added,
+  as a log does, and starts it there before its first frame (a table already
+  shown stays where it is: call `ScrollToEnd()` too). Scrolling away stops
+  following, scrolling back to the end follows again, and rows added while away
+  do not move the table. `ScrollToEnd()` scrolls to the last row. `ListBox` has both too; a
+  `ListView` takes them through `Details()`, and only its Details view follows:
+  a `ScrollToEnd()` made while another view shows waits, and scrolls the Details
+  view when it shows again. Both take effect at the next frame.
+
 **Saving the columns' widths.** `OnColumnsChange` runs once a frame while the
 user drags a column, so it fires dozens of times for one resize: an app that
 writes the layout on each call writes dozens of times. Save when the user
