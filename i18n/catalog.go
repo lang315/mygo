@@ -1,7 +1,6 @@
 package i18n
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -12,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/egoist/mygo/internal/i18nlink"
+	"github.com/egoist/mygo/internal/jsonlite"
 )
 
 // A Catalog holds the messages of an app, or of a library, in the
@@ -381,24 +381,64 @@ func (l *langMsgs) load() map[string]*Message {
 	if err != nil {
 		return nil
 	}
-	var raw map[string]json.RawMessage
-	if json.Unmarshal(data, &raw) != nil {
+	raw, ok := readMessages(data)
+	if !ok {
 		return nil
 	}
 	msgs := make(map[string]*Message, len(raw))
-	for key, v := range raw {
+	for key, text := range raw {
 		if strings.HasPrefix(key, "@") {
 			continue
 		}
-		var s string
-		if json.Unmarshal(v, &s) != nil {
-			continue
-		}
-		if m, err := parseMessage(s); err == nil {
+		if m, err := parseMessage(text); err == nil {
 			msgs[key] = m
 		}
 	}
 	return msgs
+}
+
+// readMessages reads the file of a catalog, an object whose strings are the
+// messages: the document the way encoding/json reads a map of raw values, which
+// a key that is written twice takes the last of, and each value the way it reads
+// a string, so that a null is an empty message and any other value that is not a
+// string leaves its key out. It does not link encoding/json, which a native app
+// has no other use for. ok is false for a document that is not an object.
+func readMessages(data []byte) (map[string]string, bool) {
+	r := jsonlite.NewReader(data)
+	if null, err := r.Null(); err != nil {
+		return nil, false
+	} else if null {
+		return map[string]string{}, r.End() == nil
+	}
+	// A key is either a string or a value that is not one (false): last one wins.
+	values := map[string]*string{}
+	err := r.Object(func(key string) error {
+		if null, err := r.Null(); err != nil || null {
+			empty := ""
+			values[key] = &empty
+			return err
+		}
+		if r.Peek() != '"' {
+			values[key] = nil
+			return r.Skip()
+		}
+		text, err := r.String()
+		values[key] = &text
+		return err
+	})
+	if err == nil {
+		err = r.End()
+	}
+	if err != nil {
+		return nil, false
+	}
+	out := make(map[string]string, len(values))
+	for key, v := range values {
+		if v != nil {
+			out[key] = *v
+		}
+	}
+	return out, true
 }
 
 // registry holds the catalogs apps registered.

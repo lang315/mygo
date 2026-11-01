@@ -4,9 +4,6 @@ package mygo
 
 import (
 	"context"
-	jsonv1 "encoding/json"
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"log"
@@ -18,13 +15,8 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/egoist/mygo/internal/jsonlite"
 	"github.com/egoist/mygo/internal/tsgen"
-)
-
-// jsonOptions are used for every value crossing the IPC boundary.
-var jsonOptions = json.JoinOptions(
-	jsonv1.FormatDurationAsNano(true),
-	jsontext.EscapeForJS(true),
 )
 
 type service struct {
@@ -48,6 +40,9 @@ type method struct {
 	result  reflect.Type
 	hasErr  bool
 	pc      uintptr
+	// direct, if set, is the whole method: a window's own, which needs no
+	// reflection and no codec (windowMethods).
+	direct func(ctx context.Context, args []rawValue) (any, error)
 }
 
 type eventInfo struct {
@@ -146,33 +141,9 @@ func bind(name string, svc any, internal bool) error {
 	return register(s)
 }
 
-// bindFuncs binds a service of MyGo's own whose methods are funcs, by
-// name. Unlike bind, it does not list methods with reflect: a program
-// that does reflect.Type.Method keeps every exported method of its types,
-// as the linker cannot tell which it calls, so only apps that call Bind
-// should pay for it.
-func bindFuncs(name string, funcs ...namedFunc) error {
-	s := &service{name: name, internal: true}
-	for _, f := range funcs {
-		fn := reflect.ValueOf(f.fn)
-		mi, err := newMethod(name, f.name, fn)
-		if err != nil {
-			return err
-		}
-		mi.pc = fn.Pointer()
-		s.methods = append(s.methods, mi)
-	}
-	return register(s)
-}
-
-// namedFunc is a method of a service that bindFuncs binds.
-type namedFunc struct {
-	name string
-	fn   any
-}
-
 // register adds the bound service s.
 func register(s *service) error {
+	linkCodec() // the values of its methods are coded with it
 	ipc.Lock()
 	defer ipc.Unlock()
 	for _, x := range ipc.services {
@@ -264,7 +235,10 @@ func methodPC(t reflect.Type, name string) uintptr {
 func lookupMethod(name string) *method {
 	ipc.RLock()
 	defer ipc.RUnlock()
-	return ipc.methods[name]
+	if m := ipc.methods[name]; m != nil {
+		return m
+	}
+	return windowMethods[name]
 }
 
 // call calls the method for the page of w whose context is page and whose
@@ -289,6 +263,9 @@ func (m *method) call(w *Window, page context.Context, token string, args []rawV
 			log.Printf("mygo: panic in %s.%s: %v\n%s", m.service, m.name, r, debug.Stack())
 		}
 	}()
+	if m.direct != nil {
+		return m.direct(ctx, args)
+	}
 	in := make([]reflect.Value, 0, len(m.params)+1)
 	if m.ctx {
 		in = append(in, reflect.ValueOf(ctx))
@@ -299,7 +276,7 @@ func (m *method) call(w *Window, page context.Context, token string, args []rawV
 			// The page passes the id of its channel.
 			var id int64
 			if i < len(args) {
-				_ = json.Unmarshal(args[i], &id)
+				id, _ = readInt64(args[i])
 			}
 			if id <= 0 {
 				return nil, fmt.Errorf("invalid argument %d: not a Channel", i+1)
@@ -345,23 +322,104 @@ func (m *method) call(w *Window, page context.Context, token string, args []rawV
 
 func decodeArg(raw rawValue, t reflect.Type, i int) (reflect.Value, error) {
 	v := reflect.New(t)
-	if err := json.Unmarshal(raw, v.Interface(), jsonOptions); err != nil {
+	c, err := loadCodec()
+	if err == nil {
+		err = c.unmarshal(raw, v.Interface())
+	}
+	if err != nil {
 		return reflect.Value{}, fmt.Errorf("invalid argument %d: %w", i+1, err)
 	}
 	return v.Elem(), nil
 }
 
-// rawValue is a JSON value that shares the bytes it was decoded from,
-// which must outlive it unchanged: arguments, which can be large, go from
-// the message to their parameters without being copied.
+// rawValue is a JSON value that shares the bytes it was read from, which
+// must outlive it unchanged: arguments, which can be large, go from the
+// message to their parameters without being copied.
 type rawValue []byte
 
-// UnmarshalJSONFrom keeps the value in place. json.Unmarshal decodes from
-// the slice it is given, which it never modifies.
-func (v *rawValue) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
-	raw, err := dec.ReadValue()
-	*v = rawValue(raw)
-	return err
+// readInt64 reads raw as encoding/json/v2 reads an int64; null reads as 0.
+func readInt64(raw rawValue) (int64, error) {
+	r := jsonlite.NewReader(raw)
+	r.Strict = true
+	if null, err := r.Null(); null || err != nil {
+		return 0, err
+	}
+	n, err := r.Int64()
+	if err == nil {
+		err = r.End()
+	}
+	return n, err
+}
+
+// readStringArg reads the argument i of a window's method as encoding/json/v2 reads
+// a string; a missing argument and null read as "".
+func readStringArg(args []rawValue, i int) (string, error) {
+	if i >= len(args) {
+		return "", nil
+	}
+	r := jsonlite.NewReader(args[i])
+	r.Strict = true
+	if null, err := r.Null(); null || err != nil {
+		return "", err
+	}
+	s, err := r.String()
+	if err == nil {
+		err = r.End()
+	}
+	if err != nil {
+		return "", fmt.Errorf("invalid argument %d: %w", i+1, err)
+	}
+	return s, nil
+}
+
+// callMessage is a call from the page: {"id":1,"k":"token","m":"Service.Method","a":[...]}.
+type callMessage struct {
+	id    int64
+	token string
+	name  string
+	args  []rawValue // share the message
+}
+
+// parseCall reads a call as encoding/json/v2 read it into a struct of these
+// members: names match exactly, a duplicate name or invalid UTF-8 is an error,
+// members of other names are skipped, and null leaves a member as it is.
+func parseCall(raw []byte) (m callMessage, err error) {
+	r := jsonlite.NewReader(raw)
+	r.Strict = true
+	if null, err := r.Null(); err != nil {
+		return m, err
+	} else if null {
+		return m, r.End()
+	}
+	err = r.Object(func(key string) error {
+		if key != "id" && key != "k" && key != "m" && key != "a" {
+			return r.Skip()
+		}
+		if null, err := r.Null(); null || err != nil {
+			return err
+		}
+		var err error
+		switch key {
+		case "id":
+			m.id, err = r.Int64()
+		case "k":
+			m.token, err = r.String()
+		case "m":
+			m.name, err = r.String()
+		case "a":
+			m.args = []rawValue{}
+			err = r.Array(func() error {
+				v, err := r.Value()
+				m.args = append(m.args, v)
+				return err
+			})
+		}
+		return err
+	})
+	if err == nil {
+		err = r.End()
+	}
+	return m, err
 }
 
 // stringBytes returns the bytes of s without copying them. They must not
@@ -372,28 +430,22 @@ func stringBytes(s string) []byte { return unsafe.Slice(unsafe.StringData(s), le
 // goroutine, then queues the reply. Calls from untrusted pages are
 // rejected.
 func handleCall(w *Window, ctx context.Context, raw string, trusted bool) {
-	var m struct {
-		ID int64      `json:"id"`
-		K  string     `json:"k"`
-		M  string     `json:"m"`
-		A  []rawValue `json:"a"` // shares raw
-	}
-	if err := json.Unmarshal(stringBytes(raw), &m); err != nil {
+	m, err := parseCall(stringBytes(raw)) // shares raw
+	if err != nil {
 		log.Printf("mygo: malformed call from window %d: %v", w.id, err)
 		return
 	}
 	var result any
-	var err error
 	if w.untrusted {
 		err = errors.New("this page is untrusted (PageOptions.Untrusted) and may not call Go methods")
 	} else if !trusted {
 		err = fmt.Errorf("this page is not allowed to call Go methods (see PageOptions.TrustedOrigins)")
-	} else if mi := lookupMethod(m.M); mi == nil {
-		err = notBound(m.M)
+	} else if mi := lookupMethod(m.name); mi == nil {
+		err = notBound(m.name)
 	} else {
-		result, err = mi.call(w, ctx, m.K, m.A)
+		result, err = mi.call(w, ctx, m.token, m.args)
 	}
-	w.enqueue(encodeReply(m.ID, m.K, result, err), false)
+	w.enqueue(encodeReply(m.id, m.token, result, err), false)
 }
 
 var closeBrace = []byte("}")
@@ -403,17 +455,33 @@ func encodeReply(id int64, token string, result any, err error) message {
 	b = append(b, `{"t":"reply","id":`...)
 	b = strconv.AppendInt(b, id, 10)
 	b = append(b, `,"k":`...)
-	b, _ = jsontext.AppendQuote(b, token)
+	b = jsonlite.AppendQuote(b, token)
 	if err == nil {
-		v, merr := json.Marshal(result, jsonOptions)
+		v, merr := encodeResult(result)
 		if merr == nil {
 			return message{append(b, `,"ok":true,"v":`...), v, closeBrace}
 		}
 		err = fmt.Errorf("cannot encode result: %w", merr)
 	}
 	b = append(b, `,"ok":false,"e":`...)
-	b, _ = jsontext.AppendQuote(b, err.Error())
+	b = jsonlite.AppendQuote(b, err.Error())
 	return message{head: append(b, '}')}
+}
+
+// encodeResult encodes the result of a call. Methods that return nothing, and the
+// windows' own, need no codec.
+func encodeResult(result any) ([]byte, error) {
+	switch v := result.(type) {
+	case nil:
+		return []byte("null"), nil
+	case bool:
+		return strconv.AppendBool(nil, v), nil
+	}
+	c, err := loadCodec()
+	if err != nil {
+		return nil, err
+	}
+	return c.marshal(result)
 }
 
 type callerKey struct{}
@@ -465,6 +533,7 @@ func NewEvent[T any](name string) *Event[T] {
 	}
 	pc, file, line, _ := runtime.Caller(1)
 	linkClient()
+	linkCodec()
 	ipc.Lock()
 	defer ipc.Unlock()
 	for _, e := range ipc.events {
@@ -538,30 +607,56 @@ func (e *Event[T]) Broadcast(payload T) error {
 }
 
 func encodeEvent(name string, payload any) (message, error) {
-	p, err := json.Marshal(payload, jsonOptions)
+	c, err := loadCodec()
+	var p []byte
+	if err == nil {
+		p, err = c.marshal(payload)
+	}
 	if err != nil {
 		return message{}, fmt.Errorf("mygo: cannot encode event %q: %w", name, err)
 	}
+	return eventMessage(name, p), nil
+}
+
+// eventMessage is the message of the event name whose payload is p, JSON.
+func eventMessage(name string, p []byte) message {
 	b := make([]byte, 0, len(name)+32)
 	b = append(b, `{"t":"event","n":`...)
-	b, _ = jsontext.AppendQuote(b, name)
+	b = jsonlite.AppendQuote(b, name)
 	b = append(b, `,"p":`...)
-	return message{b, p, closeBrace}, nil
+	return message{b, p, closeBrace}
 }
 
 // The service mygo:window backs window.mygo.window in the page.
+//
+// Its methods are not bound like a service's: they take no reflection to list
+// and no codec to read their one string, so an app that binds nothing links
+// neither (and an app that does cannot shadow or list them).
+var windowMethods = map[string]*method{}
+
 func init() {
-	err := bindFuncs("mygo:window",
-		namedFunc{"Minimize", func(ctx context.Context) { CallerWindow(ctx).Minimize() }},
-		namedFunc{"Maximize", func(ctx context.Context) { CallerWindow(ctx).Maximize() }},
-		namedFunc{"Unmaximize", func(ctx context.Context) { CallerWindow(ctx).Unmaximize() }},
-		namedFunc{"ToggleMaximize", func(ctx context.Context) { CallerWindow(ctx).ToggleMaximize() }},
-		namedFunc{"IsMaximized", func(ctx context.Context) bool { return CallerWindow(ctx).IsMaximized() }},
-		namedFunc{"ToggleFullScreen", func(ctx context.Context) { CallerWindow(ctx).ToggleFullScreen() }},
-		namedFunc{"Close", func(ctx context.Context) { CallerWindow(ctx).Close() }},
-		namedFunc{"SetTitle", func(ctx context.Context, title string) { CallerWindow(ctx).SetTitle(title) }},
-	)
-	if err != nil {
-		panic(err)
+	window := func(name string, fn func(w *Window)) {
+		windowMethods["mygo:window."+name] = &method{service: "mygo:window", name: name,
+			direct: func(ctx context.Context, _ []rawValue) (any, error) {
+				fn(CallerWindow(ctx))
+				return nil, nil
+			}}
 	}
+	window("Minimize", (*Window).Minimize)
+	window("Maximize", (*Window).Maximize)
+	window("Unmaximize", (*Window).Unmaximize)
+	window("ToggleMaximize", (*Window).ToggleMaximize)
+	window("ToggleFullScreen", (*Window).ToggleFullScreen)
+	window("Close", (*Window).Close)
+	windowMethods["mygo:window.IsMaximized"] = &method{service: "mygo:window", name: "IsMaximized",
+		direct: func(ctx context.Context, _ []rawValue) (any, error) { return CallerWindow(ctx).IsMaximized(), nil }}
+	windowMethods["mygo:window.SetTitle"] = &method{service: "mygo:window", name: "SetTitle",
+		direct: func(ctx context.Context, args []rawValue) (any, error) {
+			title, err := readStringArg(args, 0)
+			if err != nil {
+				return nil, err
+			}
+			CallerWindow(ctx).SetTitle(title)
+			return nil, nil
+		}}
 }

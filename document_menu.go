@@ -198,8 +198,8 @@ const (
 // none of untrusted pages' business. Main thread only.
 func emitDocumentState(w *Window, s DocumentState) {
 	if w.trusted {
-		if msg, err := encodeEvent(documentStateEvent, s); err == nil {
-			w.enqueue(msg, true)
+		if p, ok := s.appendJSON(nil); ok {
+			w.enqueue(eventMessage(documentStateEvent, p), true)
 		}
 	}
 }
@@ -208,8 +208,6 @@ func emitDocumentState(w *Window, s DocumentState) {
 // again. Main thread only.
 func emitDocumentReload(w *Window) {
 	if w.trusted {
-		if msg, err := encodeEvent(documentReloadEvent, struct{}{}); err == nil {
-			w.enqueue(msg, true)
-		}
+		w.enqueue(eventMessage(documentReloadEvent, []byte("{}")), true)
 	}
 }

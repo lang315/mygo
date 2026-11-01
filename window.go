@@ -2055,8 +2055,8 @@ func (w *Window) filesDropped(paths []string, x, y int) {
 	fire1(&w.top().onFileDrop, &FileDropEvent{Paths: paths, X: x, Y: y})
 	// Local paths are none of other pages' business.
 	if w.trusted {
-		if msg, err := encodeEvent(fileDropEvent, FileDropEvent{Paths: paths, X: x, Y: y}); err == nil {
-			w.enqueue(msg, true)
+		if p, ok := (FileDropEvent{Paths: paths, X: x, Y: y}).appendJSON(nil); ok {
+			w.enqueue(eventMessage(fileDropEvent, p), true)
 		}
 	}
 }

@@ -6,8 +6,9 @@ package bridge
 
 import (
 	_ "embed"
-	"encoding/json"
+	"strconv"
 
+	"github.com/egoist/mygo/internal/jsonlite"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -33,8 +34,105 @@ type Config struct {
 
 // Script returns the bridge source configured for one window.
 func Script(cfg Config) string {
-	b, _ := json.Marshal(cfg)
-	return "(function(__MYGO_CONFIG__){\n" + source + "})(" + string(b) + ");"
+	return "(function(__MYGO_CONFIG__){\n" + source + "})(" + string(cfg.JSON()) + ");"
+}
+
+// The JSON of the types below is written here, as encoding/json writes their
+// fields (their tags), because the scripts and the events of every window say
+// it, and a native app, which has windows and no pages, has no other use for
+// encoding/json. TestJSONIsMarshal holds it to the same bytes.
+
+func appendKey(b []byte, key string) []byte {
+	b = jsonlite.AppendString(b, key)
+	return append(b, ':')
+}
+
+// appendNumber appends f; false for a NaN or an infinity, which JSON has no
+// text for and encoding/json refuses to write.
+func appendNumber(b []byte, f float64) ([]byte, bool) {
+	return jsonlite.AppendFloat(b, f)
+}
+
+// JSON returns the configuration as JSON, or nil when the limits in Fit cannot
+// be written, as json.Marshal returned nothing for them.
+func (c Config) JSON() []byte {
+	b := append([]byte(nil), `{"platform":`...)
+	b = jsonlite.AppendString(b, c.Platform)
+	b = append(b, `,"windowId":`...)
+	b = strconv.AppendInt(b, int64(c.WindowID), 10)
+	b = append(b, `,"version":`...)
+	b = jsonlite.AppendString(b, c.Version)
+	b = append(b, `,"secret":`...)
+	b = jsonlite.AppendString(b, c.Secret)
+	b = append(b, `,"locale":`...)
+	b = jsonlite.AppendString(b, c.Locale)
+	b = append(b, `,"dir":`...)
+	b = jsonlite.AppendString(b, c.Dir)
+	if c.Fit != nil {
+		b = append(b, `,"fit":`...)
+		var ok bool
+		if b, ok = c.Fit.AppendJSON(b); !ok {
+			return nil
+		}
+	}
+	return append(b, '}')
+}
+
+// AppendJSON appends the limits as JSON; false if one is a NaN or an infinity,
+// which encoding/json does not write either.
+func (f FitContent) AppendJSON(b []byte) ([]byte, bool) {
+	var ok bool
+	b = append(b, `{"minWidth":`...)
+	if b, ok = appendNumber(b, f.MinWidth); !ok {
+		return nil, false
+	}
+	b = append(b, `,"minHeight":`...)
+	if b, ok = appendNumber(b, f.MinHeight); !ok {
+		return nil, false
+	}
+	b = append(b, `,"maxWidth":`...)
+	if b, ok = appendNumber(b, f.MaxWidth); !ok {
+		return nil, false
+	}
+	b = append(b, `,"maxHeight":`...)
+	if b, ok = appendNumber(b, f.MaxHeight); !ok {
+		return nil, false
+	}
+	return append(b, '}'), true
+}
+
+// JSON returns the payload of LocaleEvent as JSON, written as encoding/json/v2
+// writes it for the IPC (U+2028 and U+2029 escaped); false if a string is not
+// valid UTF-8, which v2 does not write either.
+func (l Locale) JSON() ([]byte, bool) {
+	b, ok := jsonlite.AppendStringJS(append([]byte(nil), `{"locale":`...), l.Locale)
+	if !ok {
+		return nil, false
+	}
+	b = append(b, `,"dir":`...)
+	if b, ok = jsonlite.AppendStringJS(b, l.Dir); !ok {
+		return nil, false
+	}
+	return append(b, '}'), true
+}
+
+// JSON returns the payload of TitleBarEvent as JSON; false if a number is a NaN
+// or an infinity, which encoding/json does not write either.
+func (t TitleBar) JSON() ([]byte, bool) {
+	var ok bool
+	b := append([]byte(nil), `{"height":`...)
+	if b, ok = appendNumber(b, t.Height); !ok {
+		return nil, false
+	}
+	b = append(b, `,"left":`...)
+	if b, ok = appendNumber(b, t.Left); !ok {
+		return nil, false
+	}
+	b = append(b, `,"right":`...)
+	if b, ok = appendNumber(b, t.Right); !ok {
+		return nil, false
+	}
+	return append(b, '}'), true
 }
 
 // TitleBarEvent tells a page of a window with a hidden title bar the room
@@ -105,7 +203,7 @@ func NewFitContent(minSize, maxSize platform.Size, zoom float64) FitContent {
 // bridge, so that a page lays out around the window controls before it
 // first paints.
 func TitleBarScript(tb platform.TitleBar, zoom float64) string {
-	p, _ := json.Marshal(NewTitleBar(tb, zoom))
+	p, _ := NewTitleBar(tb, zoom).JSON()
 	return `window.__mygo&&window.__mygo.receive({"t":"event","n":"` + TitleBarEvent + `","p":` + string(p) + `});`
 }
 
