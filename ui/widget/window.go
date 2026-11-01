@@ -437,6 +437,30 @@ func (h *HeaderBarWidget) add(side, ws []Control) []Control {
 // and the room around it, in DIPs.
 const fitMargin = 80
 
+// sidebars returns the sidebars of the form's controls, hidden ones too.
+// Under mu.
+func (w *Form) sidebars() []*SidebarWidget {
+	var out []*SidebarWidget
+	seen := map[*core]bool{}
+	var walk func(Control)
+	walk = func(c Control) {
+		if c == nil || seen[c.base()] {
+			return
+		}
+		seen[c.base()] = true
+		if sb, ok := c.(*SidebarWidget); ok {
+			out = append(out, sb)
+		}
+		if h, ok := c.(interface{ children() []Control }); ok {
+			for _, k := range h.children() {
+				walk(k)
+			}
+		}
+	}
+	walk(w.root) // the header, tool strip and status strip hold no sidebars
+	return out
+}
+
 // fitWindow sizes the window to its content, as WinForms' AutoSize does at
 // show: the height of the content laid out at the window's width (800 when it
 // has none), as the size of its page area, no higher than the work area less
@@ -457,10 +481,32 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 	if over != nil {
 		disp = mygo.Screen.DisplayMatching(over.Bounds())
 	}
-	h := int(math.Ceil(float64(ui.View(w.view).MeasureHeight(float32(width), float32(disp.ScaleFactor)))))
+	measure := func() int {
+		return int(math.Ceil(float64(ui.View(w.view).MeasureHeight(float32(width), float32(disp.ScaleFactor)))))
+	}
+	h := measure()
+	// A sidebar's dialog fits its tallest page, not the one shown first: the
+	// others are measured, built headless once, each in its turn.
+	mu.Lock()
+	sidebars := w.sidebars()
+	mu.Unlock()
+	for _, sb := range sidebars {
+		mu.Lock()
+		pages := sb.pagesToMeasure()
+		mu.Unlock()
+		for _, name := range pages {
+			mu.Lock()
+			sb.measureAs = name
+			mu.Unlock()
+			h = max(h, measure())
+		}
+		mu.Lock()
+		sb.measureAs = ""
+		mu.Unlock()
+	}
 	scroll := false
 	if limit := disp.WorkArea.Height - fitMargin; limit > 0 && h > limit {
-		h, scroll = limit, true
+		h, scroll = limit, len(sidebars) == 0 // a sidebar's page scrolls inside it
 	}
 	mu.Lock()
 	w.fitScroll = scroll

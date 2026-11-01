@@ -300,12 +300,27 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 			}
 		}
 		if i := *p; i >= 0 && i < len(n.pages) {
-			outer := axis
-			axis = vertical
-			render(c, n.pages[i])
-			axis = outer
+			buildPage(c, n.pages[i])
 		}
 	})
+}
+
+// buildPage builds the page of a sidebar or a tab control. A page taller than the
+// room scrolls, as WinForms' AutoScroll does, unless it holds a viewport (a
+// table, a list, a scroll panel): that fills the room and scrolls itself.
+// Under mu, while building.
+func buildPage(c *ui.Context, w Control) {
+	build := func() {
+		outer := axis
+		axis = vertical
+		render(c, w)
+		axis = outer
+	}
+	if fillsAcross(w) {
+		build()
+		return
+	}
+	ui.Scroll(c).Grow(1).Children(build)
 }
 
 // SidebarWidget shows one of its pages, chosen in a list at its side.
@@ -315,6 +330,7 @@ type SidebarWidget struct {
 	pages         []Control
 	selected      mirror[string]
 	width         mirror[float32]
+	measureAs     string // while a dialog fits to its tallest page: the page measured
 }
 
 func Sidebar() *SidebarWidget {
@@ -359,6 +375,21 @@ func (s *SidebarWidget) Select(name string) *SidebarWidget {
 	return s
 }
 
+// pagesToMeasure returns the names of the pages but the one shown. Under mu.
+func (s *SidebarWidget) pagesToMeasure() []string {
+	shown := s.selected.value
+	if !slices.Contains(s.names, shown) && len(s.names) > 0 {
+		shown = s.names[0]
+	}
+	var out []string
+	for _, n := range s.names {
+		if n != shown {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // SetMenuWidth sets the width of the list, in DIPs.
 func (s *SidebarWidget) SetMenuWidth(w float32) *SidebarWidget {
 	s.change(func() { s.width.set(w) })
@@ -367,6 +398,9 @@ func (s *SidebarWidget) SetMenuWidth(w float32) *SidebarWidget {
 
 func (s *SidebarWidget) build(c *ui.Context) ui.Element {
 	sel, _ := s.selected.bind()
+	if m := s.measureAs; m != "" && c.Measuring() {
+		sel = &m
+	}
 	if !slices.Contains(s.names, *sel) && len(s.names) > 0 {
 		*sel = s.names[0]
 		s.selected.value = *sel
@@ -381,10 +415,7 @@ func (s *SidebarWidget) build(c *ui.Context) ui.Element {
 	}, func() {
 		for i, name := range s.names {
 			if name == *sel {
-				outer := axis
-				axis = vertical
-				render(c, s.pages[i])
-				axis = outer
+				buildPage(c, s.pages[i])
 			}
 		}
 	}).Fill()

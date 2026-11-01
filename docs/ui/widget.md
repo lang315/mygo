@@ -784,6 +784,12 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `Separator()`: a line.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
+- A `Sidebar` or `TabControl` page taller than the room scrolls, as WinForms'
+  `AutoScroll` does (a wheel over it, or Tab to a control below the fold); a page
+  that holds a table, a list or a scroll panel fills the room and they scroll
+  themselves. A dialog of height 0 with a `Sidebar` opens as high as its tallest
+  page, no higher than the work area allows, and does not resize when another
+  page is chosen.
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
   `SetPageLabel(i, s)` renames a tab ("Items (3)"), `InsertPage(i, label, w)`
   and `RemovePage(i)` add and take out pages. The page shown stays the page
