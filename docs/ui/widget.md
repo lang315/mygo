@@ -611,7 +611,8 @@ next shows. One slice and one index serve the lot; a table not drawn since
 `SetRows` or `DeleteRows` keeps the old slice alive (its frame and view
 hold it) until it draws again.
 A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
-(by `Text` otherwise), `Width`, `MinWidth`, `Align`, `Sortable`,
+(by `Text` otherwise; `IntColumn(title, width, get)` makes a number's column,
+sorted by value), `Width`, `MinWidth`, `Align`, `Sortable`,
 `Filterable`, `Filter` (case-insensitive containment otherwise), `Spans` (draws
 `[]ui.Span` in the cell, as `Label.Rich` does, for a badge or a colored word:
 `Text` still sorts, searches, copies and names the row, while assistive
