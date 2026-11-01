@@ -17,6 +17,8 @@ ui.RadioGroup(c, func() {
 }).Label("Size")
 ```
 
+In a group around a [list](list.md) of many rows, tab, the arrows, Home and End move only among the radio buttons of rows that are built, that is, in view; Tab enters at the first built one when the chosen button's row is out of view. A radio button in a row of a list is kept with the row when the choice is a bool, a string or an integer; the choice of another type builds its row in every frame.
+
 A radio group is a column; make it a row with `Row`:
 
 ```go

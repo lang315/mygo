@@ -34,7 +34,10 @@ const listSearch = 1000
 
 // ListState is a List's place among its rows, how it behaves, and what it
 // knows of the heights of its rows, kept in the app's state. Give each
-// List a ListState of its own; set its fields before building the List.
+// List a ListState of its own; set its fields before building the List. A
+// focus group around a List (a RadioGroup) spans the rows built, those in view:
+// Tab, the arrows, Home and End move only among them, and Tab enters at the first
+// built member when the one chosen is in a row out of view.
 type ListState struct {
 	// Handle names this list independently of its per-pass node.
 	Handle

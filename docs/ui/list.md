@@ -245,6 +245,11 @@ See [drag and drop](drag-and-drop.md).
 
 ## The focus
 
+A focus group, such as a [radio group](radio.md) around a list, spans the rows
+that are built, those in view: Tab, the arrows, Home and End move only among its
+members there, and Tab enters at the first one built when the one chosen is in a
+row out of view.
+
 A list keeps its control identity in `ListState.Handle`. Focus queries work
 before or after constructing the list, and a focus request waits while the
 list is hidden:
