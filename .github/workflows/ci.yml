@@ -161,12 +161,40 @@ jobs:
       # The race detector and a shuffled order of the tests and benchmarks'
       # run on the unit tests; the GUI tests below are not run with them.
       # cmd/mygo takes 9 to 10 minutes on macOS under -race, the default limit.
+      #
+      # ./ui runs its tests on one core, 15 to 20 minutes under -race:
+      # ci-test.sh runs its slowest in processes of their own, at once.
+      # Linux's ui shard also tests ui and the root package without the
+      # inspector, as production builds, at the same time as the shard: one
+      # after the other, they made this job the run's longest.
       - name: Unit tests
         if: matrix.shard != 'check'
         shell: bash
+        env:
+          NOINSPECTOR: ${{ runner.os == 'Linux' && matrix.shard == 'ui' }}
         run: |
           pkgs=$(bash .github/ci-shard.sh ${{ matrix.shard }})
-          if [ -z "$pkgs" ]; then echo "The change affects no package of this shard."; else go test -race -shuffle=on -timeout 25m $pkgs; fi
+          prod=
+          if [ "$NOINSPECTOR" = true ]; then
+            mod=$(go list -m)
+            prod=$(bash .github/ci-shard.sh all | grep -x -e "$mod" -e "$mod/ui" || true)
+            if [ -n "$prod" ]; then
+              bash .github/ci-test.sh -race -shuffle=on -timeout 25m -tags mygo_noinspector -- $prod > "$RUNNER_TEMP/noinspector.txt" 2>&1 &
+              prodpid=$!
+            fi
+          fi
+          status=0
+          if [ -z "$pkgs" ]; then echo "The change affects no package of this shard."; else bash .github/ci-test.sh -race -shuffle=on -timeout 25m -- $pkgs || status=$?; fi
+          if [ -n "$prod" ]; then
+            prodstatus=0
+            wait "$prodpid" || prodstatus=$?
+            echo "Without the inspector, as production builds:"
+            cat "$RUNNER_TEMP/noinspector.txt"
+            if [ "$prodstatus" -ne 0 ]; then status=$prodstatus; fi
+          elif [ "$NOINSPECTOR" = true ]; then
+            echo "The change affects neither ui nor the root package without the inspector."
+          fi
+          exit "$status"
       # Without cgo the apps run on purego's fakecgo, which links against the
       # runtime's internals: start every test binary that way, and the
       # packages of the native calls (the tests above use the real cgo where
@@ -178,13 +206,6 @@ jobs:
         run: |
           go test -count=1 -run '^$' ./...
           go test -count=1 ${{ runner.os == 'macOS' && './internal/darwin' || './internal/linux' }}
-      - name: Test without the inspector, as production builds
-        if: runner.os == 'Linux' && matrix.shard == 'ui'
-        shell: bash
-        run: |
-          mod=$(go list -m)
-          pkgs=$(bash .github/ci-shard.sh all | grep -x -e "$mod" -e "$mod/ui" || true)
-          if [ -z "$pkgs" ]; then echo "The change affects neither ui nor the root package."; else go test -race -shuffle=on -timeout 25m -tags mygo_noinspector $pkgs; fi
       - run: bun run test
         if: matrix.shard == 'rest'
       - run: bun run typecheck
@@ -259,7 +280,8 @@ jobs:
             ~/.cache/mygo/natives
             ~/.cache/mygo/nsis-*
           key: ${{ steps.downloads.outputs.cache-primary-key }}
-      - run: go test -race -shuffle=on -timeout 25m ./...
+      # ui's slowest tests in processes of their own, as in the job above.
+      - run: bash .github/ci-test.sh -race -shuffle=on -timeout 25m -- $(go list ./...)
       - name: Start every test binary through fakecgo
         env:
           CGO_ENABLED: 0
