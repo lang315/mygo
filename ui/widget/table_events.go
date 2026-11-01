@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -134,9 +135,9 @@ func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
 		if r == nil {
 			continue
 		}
-		cells := make([]string, len(t.cols))
-		for j := range t.cols {
-			cells[j] = t.cols[j].Text(r)
+		cells := make([]string, len(t.visCols))
+		for j, i := range t.visCols {
+			cells[j] = t.cols[i].Text(r)
 		}
 		lines = append(lines, strings.Join(cells, "\t"))
 	}
@@ -172,7 +173,10 @@ func (t *DataGridViewWidget[T, K]) events(e ui.Element) {
 	}
 	if fn := t.onColumns; fn != nil {
 		e.OnColumnsChange(func() {
+			mu.Lock()
+			t.keepHidden(&s.Columns)
 			l := s.Columns
+			mu.Unlock()
 			Post(func() { fn(l) })
 		})
 	}
@@ -180,4 +184,57 @@ func (t *DataGridViewWidget[T, K]) events(e ui.Element) {
 		fn := sc.fn
 		e.OnShortcut(sc.mods, sc.key, func() { Post(fn) })
 	}
+}
+
+// keepHidden puts the hidden columns back into l.Order, where ui, which
+// knows the columns shown only, left them out: each after the column it
+// followed before. Under mu.
+func (t *DataGridViewWidget[T, K]) keepHidden(l *ui.TableLayout) {
+	var hidden []string
+	for _, cl := range t.cols {
+		if cl.Hidden && !slices.Contains(hidden, cl.Title) && !slices.Contains(l.Order, cl.Title) {
+			hidden = append(hidden, cl.Title)
+		}
+	}
+	if len(l.Order) == 0 || len(hidden) == 0 {
+		t.full = slices.Clone(l.Order)
+		return
+	}
+	prev := t.full
+	if len(prev) == 0 {
+		if t.numbered {
+			prev = append(prev, "#")
+		}
+		for _, cl := range t.cols {
+			prev = append(prev, cl.Title)
+		}
+	}
+	after := map[string]string{} // a hidden title: the title before it in prev
+	last := ""
+	for _, id := range prev {
+		if slices.Contains(hidden, id) {
+			after[id] = last
+		} else {
+			last = id
+		}
+	}
+	out := make([]string, 0, len(l.Order)+len(hidden))
+	put := func(anchor string) {
+		for _, h := range hidden {
+			if a, ok := after[h]; ok && a == anchor {
+				out = append(out, h)
+			}
+		}
+	}
+	put("")
+	for _, id := range l.Order {
+		out = append(out, id)
+		put(id)
+	}
+	for _, h := range hidden {
+		if !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	l.Order, t.full = out, slices.Clone(out)
 }
