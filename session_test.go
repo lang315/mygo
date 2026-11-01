@@ -98,6 +98,9 @@ func TestSessionStores(t *testing.T) {
 		t.Fatal(err)
 	}
 	cleared := onMainValue(func() int { return fb.Cleared })
+	// The store is the fake's, which keeps what an earlier run of the test
+	// (-count) cleared: this run's are the ones after these.
+	clearedBefore := onMainValue(func() int { return len(store.Cleared) })
 	if err := work.ClearData(0); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +116,7 @@ func TestSessionStores(t *testing.T) {
 	if list, _ := work.Cookies.List(CookieFilter{}); len(list) != 0 {
 		t.Fatalf("ClearData(SiteDataCookies) kept %v", list)
 	}
-	if got := onMainValue(func() []platform.SiteData { return store.Cleared }); len(got) != 2 || got[0] != platform.SiteDataLocalStorage|platform.SiteDataCaches || got[1] != platform.SiteDataCookies {
+	if got := onMainValue(func() []platform.SiteData { return store.Cleared[clearedBefore:] }); len(got) != 2 || got[0] != platform.SiteDataLocalStorage|platform.SiteDataCaches || got[1] != platform.SiteDataCookies {
 		t.Fatalf("the store cleared %v", got)
 	}
 	if list, _ := Cookies.List(CookieFilter{}); len(list) != 1 || onMainValue(func() int { return fb.Cleared }) != cleared {
