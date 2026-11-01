@@ -41,6 +41,11 @@ type Column[T any] struct {
 	Color func(*T) ui.Color
 	// Image shows before the text, 16 DIPs square; nil for none.
 	Image func(*T) *ui.Bitmap
+	// Hidden leaves the column out of the table at first, as WinForms'
+	// Visible = false: SetColumnVisible shows it. A hidden column still
+	// sorts the rows once they are sorted by it, and its Filterable
+	// search works; it is not drawn, read by assistive technology or copied.
+	Hidden bool
 }
 
 // DataGridViewWidget shows rows of type T, each told apart by a key of type K,
@@ -54,7 +59,8 @@ type DataGridViewWidget[T any, K comparable] struct {
 	key     func(*T) K // src's
 	link    *tableLink // what src knows of the table
 	cols    []Column[T]
-	columns []ui.TableColumn // cols, after the index column if any
+	columns []ui.TableColumn // the cols shown, after the index column if any
+	visCols []int            // the indexes in cols of the columns shown
 	view    *ui.TableView[T]
 	filter  func(*T) bool // the view's, nil for none
 	// frame holds the rows of the frame ui shows, and order their order
@@ -134,7 +140,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 			compare[cl.Title] = func(a, b *T) int { return strings.Compare(text(a), text(b)) }
 		}
 	}
-	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: cols, view: ui.NewTableView(compare), cursor: -1}
+	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: slices.Clone(cols), view: ui.NewTableView(compare), cursor: -1}
 	t.columns = t.uiColumns()
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.RowVersion = t.rowVersion
@@ -154,11 +160,39 @@ func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 	if t.numbered {
 		cs = append(cs, ui.TableColumn{Title: "#", Width: 56, Align: ui.End, Fixed: true})
 	}
-	for _, cl := range t.cols {
+	t.visCols = t.visCols[:0]
+	for i, cl := range t.cols {
+		if cl.Hidden {
+			continue
+		}
+		t.visCols = append(t.visCols, i)
 		cs = append(cs, ui.TableColumn{Title: cl.Title, Width: cl.Width, MinWidth: cl.MinWidth,
 			Align: cl.Align.ui(), Sortable: cl.Sortable})
 	}
 	return cs
+}
+
+// SetColumnVisible shows or hides the column titled title, in the place its
+// position and the columns' layout give it; a title no column has is ignored.
+func (t *DataGridViewWidget[T, K]) SetColumnVisible(title string, on bool) *DataGridViewWidget[T, K] {
+	t.change(func() {
+		i := slices.IndexFunc(t.cols, func(cl Column[T]) bool { return cl.Title == title })
+		if i < 0 || t.cols[i].Hidden == !on {
+			return
+		}
+		t.cols[i].Hidden = !on
+		t.columns = t.uiColumns() // ui builds the rows it kept again when its columns change
+	})
+	return t
+}
+
+// ColumnVisible reports whether the column titled title shows; false for a
+// title no column has.
+func (t *DataGridViewWidget[T, K]) ColumnVisible(title string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	i := slices.IndexFunc(t.cols, func(cl Column[T]) bool { return cl.Title == title })
+	return i >= 0 && !t.cols[i].Hidden
 }
 
 // IndexColumn shows first the position of each row as shown, from 1.
@@ -414,8 +448,8 @@ func (t *DataGridViewWidget[T, K]) labelAtPos(pos int) string {
 
 // labelOfPos is labelAtPos under mu.
 func (t *DataGridViewWidget[T, K]) labelOfPos(pos int) string {
-	if r := t.rowAtPos(pos); r != nil && len(t.cols) > 0 {
-		return t.cols[0].Text(r)
+	if r := t.rowAtPos(pos); r != nil && len(t.visCols) > 0 {
+		return t.cols[t.visCols[0]].Text(r)
 	}
 	return ""
 }
@@ -476,7 +510,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, row, col int) {
 		}
 		col--
 	}
-	cl, r := &t.cols[col], t.rowAt(row)
+	cl, r := &t.cols[t.visCols[col]], t.rowAt(row)
 	// A selected row's text keeps the selection's color, which reads on
 	// the accent; a column's own may not.
 	colored := cl.Color != nil && !c.RowSelected()

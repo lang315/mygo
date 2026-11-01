@@ -644,6 +644,12 @@ lock: they read the row and call no widget method.
   again, meanwhile; it wins over `ContextMenu`),
   `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it (see
   below).
+  `SetColumnVisible(title, on)` and `Column.Hidden` hide a column, as WinForms'
+  `Visible`: it is not drawn, read by assistive technology (nor named in the
+  header row) or copied, and a row is named by its first column shown. The
+  columns' layout (order, widths) is kept for when it shows again. A table
+  sorted by a column stays sorted when it hides, and `Search` by a `Filterable`
+  hidden column still works, as does the panel's choice of it.
   Cmd/Ctrl+C and the Edit menu's Copy copy the selected rows, a line each,
   cells apart by tabs; `CopyFunc(fn)` replaces that text with what `fn` makes
   of the keys of the selected rows, in the order shown, for both, so they

@@ -134,9 +134,9 @@ func (t *DataGridViewWidget[T, K]) copyRows(rows []int) string {
 		if r == nil {
 			continue
 		}
-		cells := make([]string, len(t.cols))
-		for j := range t.cols {
-			cells[j] = t.cols[j].Text(r)
+		cells := make([]string, len(t.visCols))
+		for j, i := range t.visCols {
+			cells[j] = t.cols[i].Text(r)
 		}
 		lines = append(lines, strings.Join(cells, "\t"))
 	}
