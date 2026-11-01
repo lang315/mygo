@@ -761,6 +761,11 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
+  `SetPageLabel(i, s)` renames a tab ("Items (3)"), `InsertPage(i, label, w)`
+  and `RemovePage(i)` add and take out pages. The page shown stays the page
+  shown, whatever its index becomes; removing it shows the one before it (the
+  first, if it was the first). The tab with the keyboard focus keeps it. As
+  `SetPage` does, none of them runs `OnSwitch`: the app made the change.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
   `Remove`, `Selected`, `Select`, `SetMenuWidth`.
 

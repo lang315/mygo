@@ -2241,6 +2241,21 @@ func TabsBase(c *Context, selected *int, n int) TabsParts {
 	return wrapTabsParts(_p)
 }
 
+// TabsKeyed is Tabs whose tab i is told apart by keys[i] (comparable
+// values, one for each label), not by its position: when tabs are added or
+// removed, the tab that has the keyboard focus keeps it, whatever its index
+// becomes. A nil keys is Tabs.
+func TabsKeyed(c *Context, selected *int, keys []any, labels []string) Element {
+	_ctx := c.build()
+	if _ctx == nil {
+		return Element{}
+	}
+	_ctx.rt.beginBuild()
+	_e := coreTabsKeyed(_ctx, selected, keys, labels)
+	_ctx.rt.endBuild()
+	return wrapElement(_e)
+}
+
 // Text creates a text, which wraps at the width it gets.
 func Text(c *Context, s string) Element {
 	_ctx := c.build()

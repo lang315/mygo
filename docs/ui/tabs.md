@@ -19,6 +19,11 @@ case 2:
 }
 ```
 
+Tabs told apart by position lose the keyboard focus to the tab that takes
+their index when tabs come or go before them. `ui.TabsKeyed(c, &sel, keys,
+labels)` tells them apart by `keys[i]` (comparable values, one for each
+label), so the tab that has the focus keeps it whatever its index becomes.
+
 The tabs are one stop of Tab, which goes to the tab chosen. For pages with a
 history, which Back returns to, use a [router](navigation.md); for a choice
 of view in a toolbar, a [segmented control](segmented.md).

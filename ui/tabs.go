@@ -13,8 +13,19 @@ package ui
 //
 // Changed reports a new choice.
 func coreTabs(c *context, selected *int, labels ...string) *node {
+	return coreTabsKeyed(c, selected, nil, labels)
+}
+
+// TabsKeyed is Tabs whose tab i is told apart by keys[i] (comparable
+// values, one for each label), not by its position: when tabs are added or
+// removed, the tab that has the keyboard focus keeps it, whatever its index
+// becomes. A nil keys is Tabs.
+func coreTabsKeyed(c *context, selected *int, keys []any, labels []string) *node {
 	t := c.theme
 	tabs := coreTabsBase(c, selected, len(labels))
+	if keys != nil {
+		tabs.keys = keys[:len(labels):len(labels)]
+	}
 	list := tabs.List.Gap(t.Space(1))
 	list.Children(func() {
 		for i, label := range labels {

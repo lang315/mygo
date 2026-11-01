@@ -182,6 +182,8 @@ type tabsParts struct {
 	// follow is set when the keys chose a tab, which then takes the
 	// focus.
 	follow *bool
+	// keys, when set, tell the tabs apart in place of their positions.
+	keys []any
 }
 
 // TabsBase creates a list of n tabs without a look, of which *selected is
@@ -215,6 +217,9 @@ func coreTabsBase(c *context, selected *int, n int) tabsParts {
 // i when clicked. Style it from whether i is the one chosen.
 func (p tabsParts) Tab(i int) *node {
 	c := p.c
+	if p.keys != nil {
+		c.nextKey, c.keySet, c.keyGlobal = p.keys[i], true, false
+	}
 	tab := coreRow(c).Focusable().Shrink(0).Role(RoleTab)
 	tab.widget = "Tab"
 	tab.flags |= flagClickable | flagHover
