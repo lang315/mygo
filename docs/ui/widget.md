@@ -802,7 +802,9 @@ Input and display:
   [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon`; `Suggested()` and
   `Destructive()` are the button's own style (tw's `suggested-action` and
-  `destructive-action`). `LinkLabel(text, url)`.
+  `destructive-action`). `LinkLabel(text, url)`; `OnClick(fn)` runs `fn` on the event goroutine
+  in place of opening `url` (click, Enter or Space, assistive technology; nothing
+  when disabled), as WinForms' `LinkClicked`.
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
 - `CheckBoxGroup(row, options...)`, `TagSelect(options...)`: several of
   the options; `Values`, `SetValues`.
