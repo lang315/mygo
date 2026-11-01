@@ -11,12 +11,22 @@ import (
 	"github.com/egoist/mygo/internal/wait"
 )
 
+// resetProbe starts a test from a Probe.Touch count of nothing and leaves it so:
+// the count is shared by the tests of this package, and a test that fails with
+// calls counted must not make TestIframeCannotCall, which expects none, fail after it.
+func resetProbe(t *testing.T) {
+	t.Helper()
+	probe.n.Store(0)
+	t.Cleanup(func() { probe.n.Store(0) })
+}
+
 // The bridge of each document says a secret in a hello, which the window takes
 // after the main frame commits. On every backend the commit has to reach Go
 // before that hello (the Windows order is the one that needs proof), or a
 // document's calls would never be taken. So after each way a main frame can
 // load, the page's own call to Go must still run.
 func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
+	resetProbe(t)
 	w := newWindow(t, mygo.WindowOptions{Hidden: true})
 	p := w.Page()
 	touches := func(step string) {
@@ -29,6 +39,21 @@ func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
 		}
 	}
 
+	// navigate marks the document the page is in, runs the navigation, and waits
+	// for a document that does not have the mark and has the bridge: the old
+	// document has the bridge too, and a call evaluated in it dies with it.
+	navigate := func(name string, do func() error) {
+		t.Helper()
+		mark := "window.left_" + name
+		if _, err := p.Eval(mark + " = true"); err != nil {
+			t.Fatal(err)
+		}
+		if err := do(); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, w, mark+" === undefined && window.mygo && document.readyState === 'complete'")
+	}
+
 	p.LoadHTML(`<p>first</p>`, "app://localhost/")
 	waitFor(t, w, "window.mygo")
 	touches("LoadHTML")
@@ -37,17 +62,11 @@ func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
 	waitFor(t, w, "document.body.textContent === 'second'")
 	touches("another LoadHTML")
 
-	if err := p.LoadURL("app://localhost/"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, w, "window.mygo")
+	navigate("loadurl", func() error { return p.LoadURL("app://localhost/") })
 	touches("LoadURL")
 
 	// A reload is a new document, with a secret of its own.
-	if _, err := p.Eval("location.reload()"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, w, "window.mygo && document.readyState === 'complete'")
+	navigate("reload", func() error { _, err := p.Eval("location.reload()"); return err })
 	touches("reload")
 
 	// A navigation inside the document commits nothing: the secret stays.
@@ -61,10 +80,8 @@ func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
 	// bridge, which does not start again, while the main frame commits and Go
 	// waits for a hello. The bridge says its secret once more on pageshow, and
 	// the call of the restored page must run. Back to the page, then Forward.
-	if err := p.LoadURL("app://localhost/capture"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, w, "location.pathname === '/capture' && window.mygo")
+	navigate("second", func() error { return p.LoadURL("app://localhost/capture") })
+	waitFor(t, w, "location.pathname === '/capture'")
 	touches("a second page")
 	finished := make(chan struct{}, 1)
 	off := p.OnDidFinishLoad(func() {
@@ -95,6 +112,7 @@ func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
 // a frame of another origin, a srcdoc frame, an about:blank frame its script
 // made, a frame whose source has not committed, and the frames inside those.
 func TestFramesGetNoHandler(t *testing.T) {
+	resetProbe(t)
 	w := newWindow(t, mygo.WindowOptions{Hidden: true})
 	const reach = `function reach(w) {
   try {
@@ -112,12 +130,14 @@ func TestFramesGetNoHandler(t *testing.T) {
 	other := `<script>` + reach + `
 const out = { data: reach(window) };
 addEventListener("message", (e) => parent.postMessage(e.data, "*"));
+// This script runs in the head of a document with no body yet.
+const host = document.body || document.documentElement;
 const b = document.createElement("iframe");
-document.body.append(b);
+host.append(b);
 out.dataBlank = reach(b.contentWindow);
 const s = document.createElement("iframe");
 s.srcdoc = ` + js(nested) + `;
-document.body.append(s);
+host.append(s);
 parent.postMessage(out, "*");
 </script>`
 	w.Page().LoadHTML(`<p>main</p><script>`+reach+`
@@ -140,10 +160,18 @@ window.results.noCommit = reach(q.contentWindow);
 </script>`, "app://localhost/")
 	// The frames that report to the page by message may not arrive (the relay of a
 	// frame of another origin): the ones that matter are read at once.
-	waitFor(t, w, "['data', 'dataBlank', 'blank', 'noCommit'].every((k) => k in window.results)")
+	// The frames of another origin report by message, the others are read at once.
+	// A timeout says what did arrive.
+	arrived := wait.Poll(func() bool {
+		ok, _ := mygo.EvalAs[bool](w.Page(), "['data', 'dataBlank', 'blank', 'noCommit'].every((k) => k in window.results)")
+		return ok
+	})
 	res, err := mygo.EvalAs[map[string]string](w.Page(), "window.results")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !arrived {
+		t.Fatalf("the frames reported only %v", res)
 	}
 	t.Logf("the frames reach the handler through: %v", res)
 	if runtime.GOOS == "darwin" {
@@ -244,6 +272,7 @@ func TestBackIsANewLoadOnLinux(t *testing.T) {
 // with the trust of the page that comes next. Posted with the handler directly, as
 // a page can, with a secret it made up.
 func TestAPageCannotPostForTheNextOneFromPagehide(t *testing.T) {
+	resetProbe(t)
 	w := newWindow(t, mygo.WindowOptions{Hidden: true})
 	p := w.Page()
 	secret := "0123456789abcdef0123456789abcdef"
@@ -266,10 +295,15 @@ addEventListener("pagehide", () => {
 </script>`, "https://untrusted.example/")
 	waitFor(t, w, "window.mygo")
 	before := probe.n.Load()
+	// The page that is left has a mark; the app's page, whatever its origin is on
+	// this OS (WebView2 serves app:// as http://app.localhost), does not.
+	if _, err := p.Eval("window.leftUntrusted = true"); err != nil {
+		t.Fatal(err)
+	}
 	if err := p.LoadURL("app://localhost/"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, w, "location.origin === 'app://localhost' && window.mygo")
+	waitFor(t, w, "window.leftUntrusted === undefined && window.mygo && document.readyState === 'complete'")
 	// The next page's own call goes through the same channel after whatever the
 	// old page posted that has arrived.
 	if _, err := p.EvalContext(wait.Context(t), "mygo.call('Probe.Touch')"); err != nil {
