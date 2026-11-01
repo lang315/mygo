@@ -219,6 +219,9 @@ var (
 	gdkPixbufLoaderClose            func(l ptr, err *ptr) bool
 	gdkPixbufLoaderGetPixbuf        func(l ptr) ptr
 	gdkPixbufSaveToBufferv          func(p ptr, buf *ptr, size *uintptr, typ *byte, keys, values ptr, err *ptr) bool
+	gdkPixbufNew                    func(colorspace int32, hasAlpha bool, bits, width, height int32) ptr
+	gdkPixbufGetPixels              func(p ptr) unsafe.Pointer
+	gdkPixbufGetRowstride           func(p ptr) int32
 )
 
 type gdkRectangle struct{ X, Y, Width, Height int32 }
@@ -670,6 +673,9 @@ func load() error {
 	mustBind(p, &gdkPixbufLoaderClose, "gdk_pixbuf_loader_close")
 	mustBind(p, &gdkPixbufLoaderGetPixbuf, "gdk_pixbuf_loader_get_pixbuf")
 	mustBind(p, &gdkPixbufSaveToBufferv, "gdk_pixbuf_save_to_bufferv")
+	mustBind(p, &gdkPixbufNew, "gdk_pixbuf_new")
+	mustBind(p, &gdkPixbufGetPixels, "gdk_pixbuf_get_pixels")
+	mustBind(p, &gdkPixbufGetRowstride, "gdk_pixbuf_get_rowstride")
 
 	t := libGTK
 	mustBind(t, &gtkInitCheck, "gtk_init_check")

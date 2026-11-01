@@ -3,11 +3,9 @@
 package darwin
 
 import (
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"image"
-	"image/png"
 	"math"
 	"slices"
 	"strings"
@@ -197,13 +195,11 @@ func (s *surface) StartDataDrag(r platform.DragRequest) {
 		img := send(class("NSImage"), "imageNamed:", uintptr(nsString("NSMultipleDocuments")))
 		width, height := r.Width, r.Height
 		if len(r.Preview) > 0 {
-			pix := bytes.Clone(r.Preview)
-			for i := 0; i < len(pix); i += 4 {
-				pix[i], pix[i+2] = pix[i+2], pix[i]
+			if p := nsImageFromBGRA(r.Preview, width, height); p != 0 {
+				img = p
+			} else {
+				width, height = 32, 32
 			}
-			var b bytes.Buffer
-			png.Encode(&b, &image.RGBA{Pix: pix, Stride: 4 * width, Rect: image.Rect(0, 0, width, height)})
-			img = autorelease(send(send(class("NSImage"), "alloc"), "initWithData:", uintptr(nsData(b.Bytes()))))
 		} else {
 			width, height = 32, 32
 		}
