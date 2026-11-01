@@ -20,15 +20,18 @@ type boundTypeJSON struct {
 	Methods []string `json:"methods"`
 }
 
-// writeBoundTypes writes the bound services of the app, those of its own and
-// not MyGo's, to path as JSON. Generate mode (MYGO_GENERATE) does it when
-// MYGO_GENERATE_BINDINGS names the file.
+// writeBoundTypes writes the bound services of the app to path as JSON: those
+// of its own, and those of the plugins it uses that have no table of methods
+// of their own (BindMethods in the plugin: the official plugins have; a plugin
+// of another author has not, and its unexported service type cannot be named by
+// mygo build, which then keeps reflection for the build). Generate mode
+// (MYGO_GENERATE) does it when MYGO_GENERATE_BINDINGS names the file.
 func writeBoundTypes(path string) error {
 	list := []boundTypeJSON{}
 	ipc.RLock()
 	for _, s := range ipc.services {
-		if s.internal {
-			continue
+		if _, ok := staticMethods.Load(s.typ); s.internal && ok {
+			continue // a plugin that gives Bind its methods
 		}
 		t := s.typ
 		b := boundTypeJSON{Pointer: t.Kind() == reflect.Pointer}

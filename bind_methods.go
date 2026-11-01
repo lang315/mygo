@@ -10,6 +10,12 @@ import (
 type BoundMethod struct {
 	Name string
 	Func any
+	// Decl, when the service is bound as a pointer and the method is declared on
+	// the value type, is the method expression on that type, T.Name: its code is
+	// the method's own, where (*T).Name is a wrapper Go generates, which has no
+	// source position. The client generator reads the doc comment and the
+	// parameter names of a method from the position of its code.
+	Decl any
 }
 
 var staticMethods sync.Map // reflect.Type → []BoundMethod
