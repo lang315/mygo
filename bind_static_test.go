@@ -141,6 +141,22 @@ func TestStaticBindOfAnUnlistedType(t *testing.T) {
 	}
 }
 
+// An app built with the tag has no fallback: a service the build has no table for
+// is an error that says to build with mygo build, from Bind itself, and nothing
+// is bound; it never lists the methods by reflection in silence.
+func TestStaticBindWithoutATableFailsLoudly(t *testing.T) {
+	saved := staticFallback
+	staticFallback = nil
+	defer func() { staticFallback = saved }()
+	err := bind("NoTable", &unlistedSvc{}, false)
+	if err == nil || !strings.Contains(err.Error(), "mygo build") {
+		t.Fatalf("bind: %v, want an error that says to run mygo build", err)
+	}
+	if lookupMethod("NoTable.A") != nil {
+		t.Error("a service with no table was bound")
+	}
+}
+
 func TestStaticBindAsTwiceOnOneType(t *testing.T) {
 	bindForTest(t, "StaticOne", &staticSvc{n: 1})
 	bindForTest(t, "StaticTwo", &staticSvc{n: 2})
