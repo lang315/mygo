@@ -81,5 +81,12 @@ for a change made from the test, never from a handler. The embedded `*ui.Tester`
 `Frame`, `Key`, `Texts`, `Advance` and the rest; its `Nodes()` returns a copy
 of the last frame's elements.
 
+**What `Texts` holds.** `tt.Texts()` and `tt.HasText` are the texts the frame
+shows, labels and cells and tabs, once each, in tree order. They leave out the
+text a field holds (a `TextBox`'s, a `MultilineTextBox`'s, a number's): read it
+with the node, `tt.Find(widget.ByRole(ui.RoleTextField)).Value()`, or with the
+widget's own getter. `tt.Nodes()` lists the raw elements, as assistive
+technology sees them.
+
 `DialogTester` embeds this `Tester`, so its `Find` takes a `Query`; the
 `Find(string)` of `ui.Tester` (`tt.Tester.Tester.Find`) is shadowed.

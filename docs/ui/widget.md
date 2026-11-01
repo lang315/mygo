@@ -89,6 +89,18 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
 - **Handlers** (`OnClick`, `OnChange`, `OnClose`, ...) run one at a time on
   a goroutine of the package, the event goroutine, never on the main
   thread. A handler may block: the window keeps drawing.
+- **`OnChange` is for the user.** A setter (`SetText`, `SetChecked`, `SetOn`,
+  `SetValue`, `SetValues`) does not run the `OnChange` of the control it sets,
+  nor does `Reload` or a binding; only an edit by the user, or by a test
+  driving the control as the user does, does. This holds for `TextBox`,
+  `MultilineTextBox`, `MaskedTextBox`, `CheckBox`, `Switch`, `RadioButton`,
+  `RadioGroup`, `CheckBoxGroup`, `ComboBox`, `NumericUpDown`, `RangeSpin`,
+  `TrackBar`, `DomainUpDown` and `DateTimePicker` (`TestSettersDoNotRunOnChange`
+  pins it), and
+  for `TabControl`'s `OnSwitch` after `SetPage`, `InsertPage` and `RemovePage`
+  (but a page index the control had to clamp is reported). WinForms and GTK
+  differ, as their `TextChanged` and `changed` also run for code: a handler
+  that reacts to a setting's change must also run where the code changes it.
 - **`BeginInvoke(fn)`**, or `Post(fn)`, runs `fn` on the event goroutine
   after what was posted before it, without waiting. It works from anywhere,
   the main thread too.
