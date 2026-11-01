@@ -43,6 +43,10 @@ picked := list.Checked() // the keys of the items checked, in the order of the l
   key added again starts clean.
 - `AddItem(item)` and `AddItems(items)` show items after the others, each instead
   of the item of its key if one shows.
+- `FollowEnd(true)` keeps the last item in view as items are added, as a log
+  does, until the user scrolls away from the end; it starts the list there
+  before its first frame only. `ScrollToEnd()` scrolls to the end at the next
+  frame.
 - `UpdateItem(k, fn)` changes the item of key `k` in place; `RemoveItems(ks...)`
   removes items; `Clear()` removes all of them.
 - `Item(k)` and `Len()` read the list. `SetImage(fn)` shows a 16 DIPs image
