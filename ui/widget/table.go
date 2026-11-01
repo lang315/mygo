@@ -98,6 +98,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	checks                                  bool // the check box column shows
 	panel                                   *BoxWidget
 	totalLabel, selectedLabel, checkedLabel *LabelWidget
+	words                                   panelWords // what the panel's texts were worked out from
 	column                                  *ComboBoxWidget
 	keyword                                 *TextBoxWidget
 	searchButton                            *ButtonWidget

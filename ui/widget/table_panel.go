@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/internal/l10n"
 )
 
@@ -46,7 +47,7 @@ func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 // PanelText sets the words of the bottom panel, in the app's language by
 // default.
 func (t *DataGridViewWidget[T, K]) PanelText(pt PanelText) *DataGridViewWidget[T, K] {
-	t.change(func() { t.text, t.textSet = pt, true })
+	t.change(func() { t.text, t.textSet, t.words = pt, true, panelWords{} })
 	return t
 }
 
@@ -113,15 +114,36 @@ func (t *DataGridViewWidget[T, K]) keep(column, keyword string) func(*T) bool {
 	return func(r *T) bool { return strings.Contains(strings.ToLower(text(r)), kw) }
 }
 
-// counts sets the panel's counts, and its words. Under mu, while
-// building.
+// panelWords are the panel's texts and what they were worked out from.
+type panelWords struct {
+	ok                    bool
+	rows, selected, check int
+	locale                string
+	set                   bool
+	total, sel, chk, find string
+}
+
+// counts sets the panel's counts, and its words. They are worked out again
+// only when a count, the language or PanelText changed: through the catalog
+// each costs allocations, in every frame. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) counts() {
-	rows, selected, checked, search := len(t.src.rows), t.chosen.value.Len(), t.checked.value.Len(), l10n.TableSearch()
-	total, sel, chk := l10n.TableRows(rows), l10n.TableSelected(selected), l10n.TableChecked(checked)
-	if t.textSet {
-		search = t.text.Search
-		total, sel, chk = fmt.Sprintf(t.text.Rows, rows), fmt.Sprintf(t.text.Selected, selected), fmt.Sprintf(t.text.Checked, checked)
+	rows, selected, checked := len(t.src.rows), t.chosen.value.Len(), t.checked.value.Len()
+	locale := ""
+	if !t.textSet {
+		locale = i18n.Locale()
 	}
+	w := &t.words
+	if !w.ok || w.rows != rows || w.selected != selected || w.check != checked || w.locale != locale || w.set != t.textSet {
+		*w = panelWords{ok: true, rows: rows, selected: selected, check: checked, locale: locale, set: t.textSet}
+		if t.textSet {
+			w.find = t.text.Search
+			w.total, w.sel, w.chk = fmt.Sprintf(t.text.Rows, rows), fmt.Sprintf(t.text.Selected, selected), fmt.Sprintf(t.text.Checked, checked)
+		} else {
+			w.find = l10n.TableSearch()
+			w.total, w.sel, w.chk = l10n.TableRows(rows), l10n.TableSelected(selected), l10n.TableChecked(checked)
+		}
+	}
+	search, total, sel, chk := w.find, w.total, w.sel, w.chk
 	if t.searchButton != nil {
 		t.searchButton.text = search
 	}
