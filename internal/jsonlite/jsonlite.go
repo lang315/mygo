@@ -50,6 +50,12 @@ type Reader struct {
 	i      int
 	depth  int
 	probes int // the comparisons and lookups of the check for duplicate names, for a test
+
+	// Strict's check for duplicate names reuses these between objects: the names
+	// of the objects being read (each open object's after its parent's), and a
+	// set that an object with many names borrows.
+	names []string
+	spare map[string]struct{}
 }
 
 // NewReader returns a Reader of the document b.
@@ -402,8 +408,15 @@ func (r *Reader) Object(fn func(key string) error) error {
 		r.i++
 		return nil
 	}
-	var seen []string
-	var set map[string]struct{} // seen, once the object has more than maxLinearKeys
+	base := len(r.names)        // this object's names are r.names[base:]
+	var set map[string]struct{} // the names, once the object has more than maxLinearKeys
+	defer func() {
+		r.names = r.names[:base]
+		if set != nil {
+			clear(set)
+			r.spare = set
+		}
+	}()
 	for {
 		if r.Peek() != '"' {
 			return errSyntax
@@ -417,21 +430,24 @@ func (r *Reader) Object(fn func(key string) error) error {
 			// duplicates among without allocating; a page can send any number, so a
 			// bigger object moves to a set.
 			if set == nil {
-				for _, k := range seen {
+				for _, k := range r.names[base:] {
 					r.probes++
 					if k == key {
 						return errSyntax
 					}
 				}
-				if len(seen) < maxLinearKeys {
-					seen = append(seen, key)
+				if len(r.names)-base < maxLinearKeys {
+					r.names = append(r.names, key)
 				} else {
-					set = make(map[string]struct{}, 2*maxLinearKeys)
-					for _, k := range seen {
+					set, r.spare = r.spare, nil
+					if set == nil {
+						set = make(map[string]struct{}, 2*maxLinearKeys)
+					}
+					for _, k := range r.names[base:] {
 						set[k] = struct{}{}
 					}
 					set[key] = struct{}{}
-					seen = nil
+					r.names = r.names[:base]
 				}
 			} else {
 				r.probes++

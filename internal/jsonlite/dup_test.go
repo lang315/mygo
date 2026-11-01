@@ -100,3 +100,28 @@ func TestStrictInvalidUTF8WithEscape(t *testing.T) {
 		}
 	}
 }
+
+// The check for duplicate names allocates a bounded amount whatever the number
+// of objects: page messages are read on the main thread, and a megabyte of
+// small objects must not cost megabytes of garbage. Counted, not timed.
+func TestStrictDuplicateCheckDoesNotAllocatePerObject(t *testing.T) {
+	// 9 members: one more than the scan covers, so each object needs a set.
+	obj := `{"a":0,"b":0,"c":0,"d":0,"e":0,"f":0,"g":0,"h":0,"i":0}`
+	doc := []byte("[" + strings.TrimSuffix(strings.Repeat(obj+",", 2000), ",") + "]")
+	read := func(strict bool) float64 {
+		return testing.AllocsPerRun(5, func() {
+			r := NewReader(doc)
+			r.Strict = strict
+			err := r.Array(func() error {
+				return r.Object(func(string) error { return r.Skip() })
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	lax, strict := read(false), read(true)
+	if extra := strict - lax; extra > 16 {
+		t.Errorf("Strict allocates %.0f times more than lax for 2000 objects, want a constant", extra)
+	}
+}
