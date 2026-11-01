@@ -18,6 +18,32 @@ var replayExtras = []func(e *node){
 	func(e *node) { e.Opacity(0.6) },
 	func(e *node) { e.BorderColor(RGB(0, 150, 0)) },
 	func(e *node) { e.Radius(4).Background(RGB(230, 230, 190)) },
+	// A rich text's spans: what paints in them, one span or both, and spans
+	// added and removed.
+	func(e *node) { eachSpan(e, 0, func(s *Span) { s.Color = RGB(200, 0, 0) }) },
+	func(e *node) { eachSpan(e, 1, func(s *Span) { s.Color = RGB(0, 0, 200) }) },
+	func(e *node) { eachSpan(e, 0, func(s *Span) { s.Background, s.Radius = RGB(0, 150, 0), 4 }) },
+	func(e *node) { eachSpan(e, 1, func(s *Span) { s.Background = RGB(250, 220, 120) }) },
+	func(e *node) { eachSpan(e, 0, func(s *Span) { s.Underline, s.DecorationColor = true, RGB(0, 0, 200) }) },
+	func(e *node) { eachSpan(e, 1, func(s *Span) { s.Strikethrough, s.DecorationThickness = true, 2 }) },
+	func(e *node) { eachSpan(e, 1, func(s *Span) { s.WavyUnderline = true }) },
+	func(e *node) {
+		if len(e.spans) > 0 {
+			e.spans = append(e.spans, Span{Text: "!", Color: RGB(0, 120, 0)})
+		}
+	},
+	func(e *node) {
+		if len(e.spans) > 1 {
+			e.spans = e.spans[:1]
+		}
+	},
+}
+
+// eachSpan calls fn with the i-th span of the rich text e, if it has one.
+func eachSpan(e *node, i int, fn func(*Span)) {
+	if i < len(e.spans) {
+		fn(&e.spans[i])
+	}
 }
 
 // Replaying rows paints what painting them does, as random trees with lists

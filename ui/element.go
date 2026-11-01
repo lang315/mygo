@@ -288,6 +288,8 @@ type node struct {
 	// paintRare holds the fields few elements set (closures, effects,
 	// transforms, pictures, text made of parts), together.
 	paintRare
+	// spans are those of a RichText (paintStyle compares them).
+	spans []Span
 
 	// Visual geometry, composed after layout.
 	originX, originY float32
