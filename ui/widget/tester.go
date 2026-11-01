@@ -138,7 +138,15 @@ func (q Query) String() string {
 func (t *Tester) matching(q Query) []ui.TestNode {
 	t.Frame()
 	var out []ui.TestNode
-	for _, n := range t.Nodes() {
+	all := t.Nodes()
+	for i, n := range all {
+		// A control named by the text it shows (a sidebar entry) lists the
+		// text right after it, named alike: it is the control once, unless
+		// the query asks for texts.
+		if n.Role == ui.RoleText && !(q.hasRole && q.role == ui.RoleText) && i > 0 &&
+			all[i-1].Label == n.Label && all[i-1].Role != ui.RoleText {
+			continue
+		}
 		if q.matches(n) {
 			out = append(out, n)
 		}

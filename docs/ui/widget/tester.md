@@ -81,5 +81,14 @@ for a change made from the test, never from a handler. The embedded `*ui.Tester`
 `Frame`, `Key`, `Texts`, `Advance` and the rest; its `Nodes()` returns a copy
 of the last frame's elements.
 
+**What `Texts` holds.** `tt.Texts()` and `tt.HasText` are the texts the frame
+shows, labels and cells and tabs, once each, in tree order. They leave out the
+text a field holds (a `TextBox`'s, a `MultilineTextBox`'s, a number's): read it
+with the node, `tt.Find(widget.ByRole(ui.RoleTextField)).Value()`, or with the
+widget's own getter. In `tt.Nodes()`, the raw elements, a sidebar entry and the text it shows each
+appear, named alike; `ByLabel` and `Find` count the control once (ask for
+`ByRole(ui.RoleText)` to find the text), so use them for what the user sees and
+`Nodes()` for what a screen reader is told.
+
 `DialogTester` embeds this `Tester`, so its `Find` takes a `Query`; the
 `Find(string)` of `ui.Tester` (`tt.Tester.Tester.Find`) is shadowed.
