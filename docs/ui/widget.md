@@ -786,10 +786,14 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - A `Sidebar` or `TabControl` page taller than the room scrolls, as WinForms'
   `AutoScroll` does (a wheel over it, or Tab to a control below the fold); a page
-  that holds a table, a list or a scroll panel fills the room and they scroll
-  themselves. A dialog of height 0 with a `Sidebar` opens as high as its tallest
+  that asks for the room (a table, a list, a scroll panel, a web view, a chart, a
+  card, a control that `Expand`s, or a box with an expanding or `PackEnd` item)
+  is not wrapped: it keeps the room and scrolls itself, or not at all. A dialog of height 0 with a `Sidebar` opens as high as its tallest
   page, no higher than the work area allows, and does not resize when another
   page is chosen.
+  Only a `Sidebar` that is the dialog's content is measured so: a `TabControl`
+  fits the tab shown, and a sidebar inside another page is measured with that
+  page shown.
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
   `SetPageLabel(i, s)` renames a tab ("Items (3)"), `InsertPage(i, label, w)`
   and `RemovePage(i)` add and take out pages. The page shown stays the page

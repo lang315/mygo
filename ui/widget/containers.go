@@ -306,8 +306,8 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 }
 
 // buildPage builds the page of a sidebar or a tab control. A page taller than the
-// room scrolls, as WinForms' AutoScroll does, unless it holds a viewport (a
-// table, a list, a scroll panel): that fills the room and scrolls itself.
+// room scrolls, as WinForms' AutoScroll does, unless it asks for the
+// room (wantsRoom): a table, a list or a scroll panel fills it and scrolls itself.
 // Under mu, while building.
 func buildPage(c *ui.Context, w Control) {
 	build := func() {
@@ -316,11 +316,38 @@ func buildPage(c *ui.Context, w Control) {
 		render(c, w)
 		axis = outer
 	}
-	if fillsAcross(w) {
+	if wantsRoom(w) {
 		build()
 		return
 	}
 	ui.Scroll(c).Grow(1).Children(build)
+}
+
+// wantsRoom reports whether the page w asks for the room it is given, which
+// a scroller (laying its content out at any height) would take from it: a
+// viewport, a web view, a chart, a control of your own or a card; a control
+// that expands vertically; a box with an expanding item or one packed at the
+// end, or one that holds such a page. Under mu.
+func wantsRoom(w Control) bool {
+	if w == nil {
+		return false
+	}
+	if fillsAcross(w) || w.base().place.vexpand {
+		return true
+	}
+	switch w := w.(type) {
+	case *WebBrowserWidget, *ChartWidget, *CustomWidget, *CardWidget:
+		return true
+	case *BoxWidget:
+		for _, it := range w.items {
+			if it.expand || it.end || wantsRoom(it.w) {
+				return true
+			}
+		}
+	case *GroupBoxWidget:
+		return wantsRoom(w.child)
+	}
+	return false
 }
 
 // SidebarWidget shows one of its pages, chosen in a list at its side.

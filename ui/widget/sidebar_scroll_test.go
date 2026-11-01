@@ -2,8 +2,10 @@ package widget
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -227,5 +229,179 @@ func TestSidebarAndTabControlPagesWithATableKeepFillingTheRoom(t *testing.T) {
 				t.Fatalf("the table's panel at %v (found %v), not in a 400 high window", r, ok)
 			}
 		})
+	}
+}
+
+// A page that asks for the room (Expand) with a control pinned to its bottom
+// (PackEnd) or a web view that grows: the bottom button stays at the bottom.
+func TestSidebarAndTabControlPagesThatAskForRoomKeepIt(t *testing.T) {
+	pages := map[string]func() Control{
+		"PackEnd": func() Control {
+			return VBox(4).Add(Label("top")).PackEnd(Button("Apply"), false, false).Expand()
+		},
+		"WebBrowser": func() Control {
+			return VBox(4).Pack(WebBrowser(), true, true).Add(Button("Apply")).Expand()
+		},
+	}
+	for name, page := range pages {
+		for host, mk := range map[string]func() Control{
+			"Sidebar":    func() Control { return Sidebar().Add("a", "One", page()) },
+			"TabControl": func() Control { return TabControl().AddPage("One", page()).Expand() },
+		} {
+			t.Run(name+"/"+host, func(t *testing.T) {
+				tt := NewTester(t, mk(), 500, 300)
+				tt.Frame()
+				if y := buttonY(tt, "Apply"); y < 200 {
+					t.Fatalf("Apply at y=%v in a 300 high window: the page lost the room", y)
+				}
+			})
+		}
+	}
+}
+
+// A Sidebar as a TabControl page (or a Sidebar page): its list stays put
+// while its page scrolls, as a Sidebar at the root does.
+func TestSidebarInsideAPageKeepsItsListInView(t *testing.T) {
+	for host, mk := range map[string]func() Control{
+		"TabControl": func() Control {
+			return TabControl().AddPage("Tab", Sidebar().Add("a", "Inner", linesPage(30))).Expand()
+		},
+		"Sidebar": func() Control {
+			return Sidebar().Add("o", "Outer", Sidebar().Add("a", "Inner", linesPage(30)))
+		},
+	} {
+		t.Run(host, func(t *testing.T) {
+			tt := NewTester(t, mk(), 500, 300)
+			tt.Frame()
+			for range 80 {
+				tt.Key(0, ui.KeyTab)
+				tt.Frame()
+				for _, n := range tt.Nodes() {
+					if n.Label == "line 29" && n.Focused {
+						if n.Bounds.Y < 0 || n.Bounds.Y+n.Bounds.H > 300 {
+							t.Fatalf("line 29 has the focus but lies at %v", n.Bounds)
+						}
+						for _, m := range tt.Nodes() {
+							if m.Label == "Inner" && m.Bounds.Y < 0 {
+								t.Fatalf("the inner sidebar's list scrolled away with its page: Inner at %v", m.Bounds)
+							}
+						}
+						return
+					}
+				}
+			}
+			t.Fatal("Tab never reached line 29")
+		})
+	}
+}
+
+// fitTester fits a dialog of width 500 and height 0 to content, as Show
+// does, and tests its view at the size it got.
+func fitTester(t *testing.T, content Control) (*Tester, int) {
+	d := NewDialog(nil, "sbfit", "", 500, 0, content)
+	opts := mygo.WindowOptions{Width: 500}
+	d.fitWindow(&opts)
+	return newTester(t, d.view, opts.Width, opts.Height), opts.Height
+}
+
+// A dialog clamped to the work area must leave every control reachable, when
+// the overflow is not in a page the PR wraps in a scroller.
+func TestClampedDialogWithASidebarKeepsEverythingReachable(t *testing.T) {
+	tallWithText := func() Control {
+		b := VBox(4)
+		for i := range 150 {
+			b.Add(Button(fmt.Sprintf("line %d", i)))
+		}
+		return b.Add(MultilineTextBox()) // a page that holds a viewport: not wrapped
+	}
+	for name, mk := range map[string]func() Control{
+		"overflow outside the sidebar": func() Control {
+			return VBox(4).Add(linesPage(150), Sidebar().Add("a", "One", Label("short")))
+		},
+		"hidden sidebar": func() Control {
+			return VBox(4).Add(linesPage(150), Sidebar().Add("a", "One", Label("short")).SetVisible(false))
+		},
+		"page with a multi-line text box": func() Control {
+			return Sidebar().Add("a", "One", tallWithText())
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tt, h := fitTester(t, mk())
+			for range 200 {
+				tt.Key(0, ui.KeyTab)
+				tt.Frame()
+				for _, n := range tt.Nodes() {
+					if n.Label == "line 149" && n.Focused {
+						if n.Bounds.Y < 0 || n.Bounds.Y+n.Bounds.H > float32(h) {
+							t.Fatalf("line 149 has the focus but lies at %v in a %d high dialog", n.Bounds, h)
+						}
+						return
+					}
+				}
+			}
+			t.Fatal("Tab never reached line 149")
+		})
+	}
+}
+
+// The inert test's content on a page not shown: measuring it starts
+// nothing, posts nothing, calls no handler, and leaves the page shown.
+func TestFitMeasuringHiddenSidebarPagesIsInert(t *testing.T) {
+	var calls atomic.Int32
+	hook := func() { calls.Add(1) }
+	webViewCreateHook.Store(&hook)
+	t.Cleanup(func() { webViewCreateHook.Store(nil) })
+	items := make([]litem, 50)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	handler := func() { calls.Add(1) }
+	page := VBox(4).Add(
+		WebBrowser(),
+		ComboBox(Option{"a", "A"}, Option{"b", "B"}).SetValue("b").OnChange(handler),
+		TextBox().SetText("x").OnChange(handler).OnFocusOut(handler).Focus(),
+		NumericUpDown(0, 10, 1).SetValue(3).OnChange(handler),
+		newListBox().SetItems(items).OnSelect(func([]string) { calls.Add(1) }),
+		TabControl().AddPage("one", Label("p1")).AddPage("two", Label("p2")).OnSwitch(handler),
+		Sidebar().Add("x", "X", Label("x")).Add("y", "Y", Label("y")),
+	)
+	sb := Sidebar().Add("a", "A", Label("a")).Add("b", "B", page)
+	d := NewDialog(nil, "Fit inert pages", "", 500, 0, sb)
+	qmu.Lock()
+	before := posts
+	qmu.Unlock()
+	opts := mygo.WindowOptions{Width: 500}
+	d.fitWindow(&opts)
+	qmu.Lock()
+	after := posts
+	qmu.Unlock()
+	if after != before || calls.Load() != 0 {
+		t.Errorf("measuring made %d Posts and %d calls", after-before, calls.Load())
+	}
+	mu.Lock()
+	shown, m := sb.selected.value, sb.measureAs
+	mu.Unlock()
+	if shown != "a" || m != "" {
+		t.Errorf("after the fit the sidebar shows %q (measureAs %q)", shown, m)
+	}
+}
+
+// A list with rows kept stays kept inside a wrapped page.
+func TestSidebarPageKeepsTheRowsOfAListItHolds(t *testing.T) {
+	var calls atomic.Int64
+	items := make([]litem, 40)
+	for i := range items {
+		items[i] = litem{fmt.Sprint("k", i), fmt.Sprint("Item ", i)}
+	}
+	lb := ListBox(func(i *litem) string { return i.id }, func(i *litem) string { calls.Add(1); return i.name }).SetItems(items)
+	page := VBox(4).Add(Label("title"), Card().SetBody(Label("note")), lb).Expand()
+	tt := NewTester(t, Sidebar().Add("a", "One", page), 600, 400)
+	for range 4 {
+		tt.Frame()
+	}
+	calls.Store(0)
+	tt.Frame()
+	if calls.Load() != 0 {
+		t.Fatalf("%d item texts asked in an idle frame: the rows are not kept", calls.Load())
 	}
 }

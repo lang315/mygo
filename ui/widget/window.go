@@ -461,6 +461,32 @@ func (w *Form) sidebars() []*SidebarWidget {
 	return out
 }
 
+// soleSidebar returns the sidebar that is the content of root: root itself, or
+// the one thing but labels in a box (a dialog's title, subtitle and content).
+// Under mu.
+func soleSidebar(root Control) *SidebarWidget {
+	switch r := root.(type) {
+	case *SidebarWidget:
+		return r
+	case *BoxWidget:
+		var found *SidebarWidget
+		for _, it := range r.items {
+			switch w := it.w.(type) {
+			case *LabelWidget:
+			case *SidebarWidget:
+				if found != nil {
+					return nil
+				}
+				found = w
+			default:
+				return nil
+			}
+		}
+		return found
+	}
+	return nil
+}
+
 // fitWindow sizes the window to its content, as WinForms' AutoSize does at
 // show: the height of the content laid out at the window's width (800 when it
 // has none), as the size of its page area, no higher than the work area less
@@ -506,9 +532,18 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 	}
 	scroll := false
 	if limit := disp.WorkArea.Height - fitMargin; limit > 0 && h > limit {
-		h, scroll = limit, len(sidebars) == 0 // a sidebar's page scrolls inside it
+		h, scroll = limit, true
 	}
 	mu.Lock()
+	// A sidebar that is the whole content scrolls its pages inside it, and the
+	// sidebar's list stays in view: the dialog does not scroll as a whole,
+	// unless a page asks for the room and so does not scroll itself.
+	if sb := soleSidebar(w.root); sb != nil && scroll {
+		scroll = false
+		for _, p := range sb.pages {
+			scroll = scroll || wantsRoom(p)
+		}
+	}
 	w.fitScroll = scroll
 	mu.Unlock()
 	opts.Width, opts.Height, opts.UseContentSize = width, h, true
