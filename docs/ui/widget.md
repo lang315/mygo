@@ -764,7 +764,8 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   `SetPageLabel(i, s)` renames a tab ("Items (3)"), `InsertPage(i, label, w)`
   and `RemovePage(i)` add and take out pages. The page shown stays the page
   shown, whatever its index becomes; removing it shows the one before it (the
-  first, if it was the first). The tab with the keyboard focus keeps it. As
+  first, if it was the first). The tab with the keyboard focus keeps it; if its
+  page goes, the tab now shown takes it. As
   `SetPage` does, none of them runs `OnSwitch`: the app made the change.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
   `Remove`, `Selected`, `Select`, `SetMenuWidth`.

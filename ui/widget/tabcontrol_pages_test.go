@@ -216,15 +216,73 @@ func TestTabControlFocusFollowsItsTab(t *testing.T) {
 		nb, tt, _ := abc(t)
 		click(t, tt, "B")
 		settle(tt)
-		nb.RemovePage(1)
+		nb.RemovePage(nb.Page())
 		settle(tt)
-		if got := focused(tt); got == "C" {
-			t.Fatalf("focus moved to the tab after the removed one")
+		if got := focused(tt); got != "A" || nb.Page() != 0 {
+			t.Fatalf("focus on %q, Page %d: want the tab now shown, A", got, nb.Page())
 		}
 		tt.Key(0, ui.KeyRight)
 		settle(tt)
-		if names, _ := tabNames(tt); len(names) != 2 {
-			t.Fatalf("tabs %q", names)
+		if got := focused(tt); got != "C" || nb.Page() != 1 {
+			t.Fatalf("after Right: focus on %q, Page %d, want C and 1", got, nb.Page())
 		}
 	})
+}
+
+// A widget on two pages has a tab for each, with a state of its own.
+func TestTabControlSameWidgetOnTwoPages(t *testing.T) {
+	empty := Label("nothing yet")
+	nb := TabControl().AddPage("A", empty).AddPage("B", empty).AddPage("C", Label("page C"))
+	tt := tester(t, nb)
+	settle(tt)
+	if names, _ := tabNames(tt); len(names) != 3 {
+		t.Fatalf("tabs %q", names)
+	}
+	click(t, tt, "B")
+	settle(tt)
+	if _, chosen := tabNames(tt); chosen != 1 {
+		t.Fatalf("chosen %d after a click on B", chosen)
+	}
+	nb.InsertPage(0, "Z", empty)
+	settle(tt)
+	if names, _ := tabNames(tt); len(names) != 4 {
+		t.Fatalf("tabs %q", names)
+	}
+}
+
+func TestTabControlInsertBeforeTheFocusedTabKeepsTheArrowsWorking(t *testing.T) {
+	nb, tt, _ := abc(t)
+	click(t, tt, "B")
+	settle(tt)
+	nb.InsertPage(0, "N", Label("page N"))
+	settle(tt)
+	tt.Key(0, ui.KeyRight)
+	settle(tt)
+	if nb.Page() != 3 || !tt.HasText("page C") {
+		t.Fatalf("Page %d, texts %q", nb.Page(), tt.Texts())
+	}
+	tt.Key(0, ui.KeyHome)
+	settle(tt)
+	if nb.Page() != 0 || !tt.HasText("page N") {
+		t.Fatalf("Page %d, texts %q", nb.Page(), tt.Texts())
+	}
+}
+
+// An OnSwitch may remove pages, and pages may change before the first frame.
+func TestTabControlChangedFromOnSwitchAndBeforeTheFirstFrame(t *testing.T) {
+	nb := TabControl()
+	nb.RemovePage(0).SetPageLabel(0, "x").InsertPage(5, "A", Label("page A")).InsertPage(-3, "Z", Label("page Z"))
+	nb.OnSwitch(func() { nb.RemovePage(0) })
+	tt := tester(t, nb)
+	settle(tt)
+	if names, _ := tabNames(tt); len(names) != 2 || names[0] != "Z" || nb.Page() != 1 {
+		t.Fatalf("tabs %q, Page %d", names, nb.Page())
+	}
+	click(t, tt, "Z")
+	settle(tt)
+	flushEvents(t)
+	settle(tt)
+	if names, _ := tabNames(tt); len(names) != 1 || nb.Page() != 0 || !tt.HasText("page A") {
+		t.Fatalf("tabs %q, Page %d, texts %q", names, nb.Page(), tt.Texts())
+	}
 }

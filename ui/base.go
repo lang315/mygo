@@ -184,6 +184,9 @@ type tabsParts struct {
 	follow *bool
 	// keys, when set, tell the tabs apart in place of their positions.
 	keys []any
+	// focusKey, with keys, holds the key of the tab that had the focus in
+	// the last build, nil for none.
+	focusKey *any
 }
 
 // TabsBase creates a list of n tabs without a look, of which *selected is
@@ -253,6 +256,9 @@ func (p tabsParts) Tab(i int) *node {
 		tab.Focus()
 		c.rt.focusVisible = true
 		*p.follow = false
+	}
+	if p.focusKey != nil && tab.Focused() {
+		*p.focusKey = p.keys[i]
 	}
 	tab.checked = 1 + int8(b2f(on))
 	return tab

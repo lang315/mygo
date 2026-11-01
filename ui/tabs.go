@@ -1,5 +1,10 @@
 package ui
 
+import (
+	"fmt"
+	"slices"
+)
+
 // Tabs creates a row of tabs showing labels, of which *selected is the
 // index of the one chosen. A click chooses a tab, as do the arrows, Home
 // and End while one has the keyboard focus, which follows the choice:
@@ -24,7 +29,17 @@ func coreTabsKeyed(c *context, selected *int, keys []any, labels []string) *node
 	t := c.theme
 	tabs := coreTabsBase(c, selected, len(labels))
 	if keys != nil {
-		tabs.keys = keys[:len(labels):len(labels)]
+		if len(keys) != len(labels) {
+			panic(fmt.Sprintf("ui: TabsKeyed: %d keys for %d labels", len(keys), len(labels)))
+		}
+		tabs.keys = keys
+		tabs.focusKey = coreLocal(tabs.List, "focusKey", func() any { return nil })
+		// The tab that had the focus is gone (its page was removed): the
+		// tab chosen takes it, as the one at its index did.
+		if had := *tabs.focusKey; had != nil && !slices.Contains(keys, had) {
+			*tabs.follow = true
+		}
+		*tabs.focusKey = nil
 	}
 	list := tabs.List.Gap(t.Space(1))
 	list.Children(func() {
