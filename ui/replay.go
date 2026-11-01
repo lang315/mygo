@@ -188,6 +188,15 @@ func walkRow(e *node, fn func(e *node)) {
 	}
 }
 
+// collectRow appends e and every element inside it to nodes, depth first.
+func collectRow(e *node, nodes []*node) []*node {
+	nodes = append(nodes, e)
+	for c := e.first; c != nil; c = c.next {
+		nodes = collectRow(c, nodes)
+	}
+	return nodes
+}
+
 // replayRow appends what c, a list row, painted the last time, and reports
 // whether it could: c lays out and paints as then (layPaint), in the same
 // place, clip and surroundings, with the same elements in the same flags, and
@@ -227,25 +236,27 @@ func replayRow(p *Painter, c *node) bool {
 		}
 	}
 	// The same elements, in the same order, with the flags they were built
-	// with, in the same boxes (shifted by dy exactly, if the row moved).
-	i := 0
-	same := true
-	walkRow(c, func(e *node) {
-		b := r.boxes[min(i, len(r.boxes)-1)]
-		b.Y += dy
-		if i >= len(r.ids) || r.ids[i] != e.id || r.pre[i] != e.flags || b != (Rect{e.x, e.y, e.w, e.h}) {
-			same = false
-		}
-		i++
-	})
-	if !same || i != len(r.ids) {
+	// with, in the same boxes (shifted by dy exactly, if the row moved). One
+	// walk finds them; the rest goes over the list it makes.
+	rt.replayWalks++
+	nodes := collectRow(c, rt.rowNodes[:0])
+	rt.rowNodes = nodes[:0]
+	if len(nodes) != len(r.ids) {
 		return false
+	}
+	for i, e := range nodes {
+		b := r.boxes[i]
+		b.Y += dy
+		if r.ids[i] != e.id || r.pre[i] != e.flags || b != (Rect{e.x, e.y, e.w, e.h}) {
+			return false
+		}
 	}
 	if dy != 0 {
 		translate(r.ops, r.glyphs, d)
 		r.key.box.Y = newY
-		i = 0
-		walkRow(c, func(e *node) { r.boxes[i].Y = e.y; i++ })
+		for i, e := range nodes {
+			r.boxes[i].Y = e.y
+		}
 		rt.rowsShiftReplayed++
 	}
 	delta := int32(len(s.Glyphs)) - r.g0
@@ -259,8 +270,9 @@ func replayRow(p *Painter, c *node) bool {
 	}
 	s.Glyphs = append(s.Glyphs, r.glyphs...)
 	rt.text.Touch(&r.uses)
-	i = 0
-	walkRow(c, func(e *node) { e.flags = r.post[i]; i++ })
+	for i, e := range nodes {
+		e.flags = r.post[i]
+	}
 	r.at = rt.layouts
 	rt.replayed++
 	return true

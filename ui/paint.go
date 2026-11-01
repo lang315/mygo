@@ -56,7 +56,7 @@ const continuousCorners = runtime.GOOS == "darwin"
 
 func (rt *engine) paint(root *node, w, h, scale float32) {
 	rt.paints++
-	rt.recorded, rt.replayed = 0, 0
+	rt.recorded, rt.replayed, rt.replayWalks = 0, 0, 0
 	rt.drawn = rt.drawn[:0]
 	s := &rt.scene
 	// The root paints the theme's background: frames start transparent, so
