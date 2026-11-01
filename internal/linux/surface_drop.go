@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"errors"
 	"image"
-	"image/png"
 	"slices"
 	"unsafe"
 
@@ -348,13 +347,7 @@ func (s *surface) StartDataDrag(r platform.DragRequest) {
 		return
 	}
 	if len(r.Preview) > 0 {
-		pix := bytes.Clone(r.Preview)
-		for i := 0; i < len(pix); i += 4 {
-			pix[i], pix[i+2] = pix[i+2], pix[i]
-		}
-		var buf bytes.Buffer
-		png.Encode(&buf, &image.RGBA{Pix: pix, Stride: r.Width * 4, Rect: image.Rect(0, 0, r.Width, r.Height)})
-		if pb, err := pixbufFromPNG(buf.Bytes()); err == nil {
+		if pb := pixbufFromBGRA(r.Preview, r.Width, r.Height); pb != 0 {
 			gtkDragSetIconPixbuf(s.dragContext, pb, int32(r.HotX), int32(r.HotY))
 			gObjectUnref(pb)
 		}
