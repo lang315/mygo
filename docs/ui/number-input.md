@@ -21,3 +21,6 @@ chosen roughly, a [slider](slider.md).
 
 Assistive technology sees a spin button of the value, named by its `Label`
 or its [field](form.md), which it increments and decrements by the step.
+The text field takes the `Label`, and the two buttons take it before their own
+names ("Copies Increase", "Copies Decrease"), so that two numbers side by side
+are told apart.

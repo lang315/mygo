@@ -825,8 +825,10 @@ Input and display:
   on typing and on choosing. `Bind` takes the text of a combo made
   `Editable` before it is bound, and the `Value` of one bound before.
 - `MenuButton(text)`: see [Menus](#menus).
-- `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`.
-  `RangeSpin` is two, with text between and after.
+- `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`;
+  `SetAccessibleName(s)` names it and its buttons for assistive technology.
+  `RangeSpin` is two, with text between and after; they are "minimum" and
+  "maximum" to assistive technology unless `SetAccessibleNames(low, high)`.
 - `ProgressBar()`: `SetFraction` (negative for unknown length), `SetText`.
 - `DataGridView(key, columns...)`: rows in columns; see [DataGridView](#datagridview).
   `Spinner()`: `Start`, `Stop`.

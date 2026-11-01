@@ -16,6 +16,7 @@ type NumericUpDownWidget struct {
 	value          mirror[float64]
 	onChange       func()
 	onEnter        func()
+	name           string
 }
 
 // NumericUpDown makes a number input from min to max, stepping by step.
@@ -44,12 +45,22 @@ func (s *NumericUpDownWidget) OnChange(fn func()) *NumericUpDownWidget {
 	return s
 }
 
+// SetAccessibleName names the number for assistive technology, which reads it
+// before the buttons' "Increase" and "Decrease": "Copies Increase".
+func (s *NumericUpDownWidget) SetAccessibleName(name string) *NumericUpDownWidget {
+	s.change(func() { s.name = name })
+	return s
+}
+
 func (s *NumericUpDownWidget) build(c *ui.Context) ui.Element {
 	p, changed := s.value.bind()
 	if changed && s.onChange != nil {
 		Post(s.onChange)
 	}
 	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(editedOnce(&s.edit, &s.value, &s.bound, &s.onChange))
+	if s.name != "" {
+		e.Label(s.name)
+	}
 	if e.Submitted() {
 		if h := s.onEnter; h != nil {
 			Post(h)
@@ -71,6 +82,7 @@ type RangeSpinWidget struct {
 // high one from min2 to max2, with between and suffix shown around them.
 func RangeSpin(min1, max1, min2, max2, step float64, between, suffix string) *RangeSpinWidget {
 	r := &RangeSpinWidget{lo: NumericUpDown(min1, max1, step), hi: NumericUpDown(min2, max2, step), between: between, suffix: suffix}
+	r.lo.name, r.hi.name = "minimum", "maximum"
 	r.init(r)
 	return r
 }
@@ -82,6 +94,15 @@ func (r *RangeSpinWidget) SetValues(lo, hi float64) *RangeSpinWidget {
 	r.hi.SetValue(hi)
 	return r
 }
+
+// SetAccessibleNames names the two numbers for assistive technology; without
+// them they are "minimum" and "maximum", as a range slider's knobs are.
+func (r *RangeSpinWidget) SetAccessibleNames(low, high string) *RangeSpinWidget {
+	r.lo.SetAccessibleName(low)
+	r.hi.SetAccessibleName(high)
+	return r
+}
+
 func (r *RangeSpinWidget) OnChange(fn func()) *RangeSpinWidget {
 	r.lo.OnChange(fn)
 	r.hi.OnChange(fn)
