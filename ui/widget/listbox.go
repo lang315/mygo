@@ -44,6 +44,9 @@ type ListBoxWidget[T any, K comparable] struct {
 	// reveal is an item to scroll into view at the next build (EnsureVisible).
 	reveal    K
 	hasReveal bool
+	// follow is FollowEnd, and toEnd a ScrollToEnd to make at the next build;
+	// the list is ui's, on the main thread, so the setters keep them here.
+	follow, toEnd bool
 
 	onSelect   func([]K)
 	onCheck    func(K, bool)
@@ -149,16 +152,18 @@ func (l *ListBoxWidget[T, K]) SetItems(items []T) *ListBoxWidget[T, K] {
 
 // FollowEnd, when on, starts the list at its end and keeps the end in view as
 // items are added or grow while it shows it, as a log does: scrolling away from
-// the end stops following it, and scrolling back to it follows again.
+// the end stops following it, and scrolling back to it follows again. It
+// starts the list at its end only before its first frame; one already shown
+// stays where it is, and ScrollToEnd takes it to the end.
 func (l *ListBoxWidget[T, K]) FollowEnd(on bool) *ListBoxWidget[T, K] {
-	l.change(func() { l.list.FollowEnd = on })
+	l.change(func() { l.follow = on })
 	return l
 }
 
-// ScrollToEnd scrolls the list to its last item, where FollowEnd follows it
-// again.
+// ScrollToEnd scrolls the list to its last item, at the next frame, where
+// FollowEnd follows it again.
 func (l *ListBoxWidget[T, K]) ScrollToEnd() *ListBoxWidget[T, K] {
-	l.change(func() { l.list.ScrollToEnd() })
+	l.change(func() { l.toEnd = true })
 	return l
 }
 
@@ -515,7 +520,12 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 	if l.checks {
 		l.checked.bind()
 	}
+	s.FollowEnd = l.follow
 	e := ui.List(c, s, len(l.frame), func(i int) { l.row(c, i) }).Grow(1)
+	if l.toEnd && !c.Measuring() { // the request is for the real window
+		l.toEnd = false
+		s.ScrollToEnd()
+	}
 	if l.hasReveal && !c.Measuring() { // the request is for the real window
 		// Made once: ui keeps the request until the row is measured and shows,
 		// however far it is, and a row in view moves nothing.

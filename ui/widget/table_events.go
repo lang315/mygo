@@ -99,16 +99,18 @@ func (t *DataGridViewWidget[T, K]) SetColumnsLayout(l ui.TableLayout) *DataGridV
 
 // FollowEnd, when on, starts the table at its end and keeps the end in view as
 // rows are added or grow while it shows it, as a log does: scrolling away from
-// the end stops following it, and scrolling back to it follows again.
+// the end stops following it, and scrolling back to it follows again. It
+// starts the table at its end only before its first frame; one already shown
+// stays where it is, and ScrollToEnd takes it to the end.
 func (t *DataGridViewWidget[T, K]) FollowEnd(on bool) *DataGridViewWidget[T, K] {
-	t.change(func() { t.list.FollowEnd = on })
+	t.change(func() { t.follow = on })
 	return t
 }
 
-// ScrollToEnd scrolls the table to its last row, where FollowEnd follows it
-// again.
+// ScrollToEnd scrolls the table to its last row, at the next frame, where
+// FollowEnd follows it again.
 func (t *DataGridViewWidget[T, K]) ScrollToEnd() *DataGridViewWidget[T, K] {
-	t.change(func() { t.list.ScrollToEnd() })
+	t.change(func() { t.toEnd = true })
 	return t
 }
 
