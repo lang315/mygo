@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/internal/i18nlink"
 	"github.com/egoist/mygo/internal/l10n"
 )
 
@@ -119,6 +120,7 @@ type panelWords struct {
 	ok                    bool
 	rows, selected, check int
 	locale                string
+	catalogs              uint64
 	set                   bool
 	total, sel, chk, find string
 }
@@ -128,13 +130,13 @@ type panelWords struct {
 // each costs allocations, in every frame. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) counts() {
 	rows, selected, checked := len(t.src.rows), t.chosen.value.Len(), t.checked.value.Len()
-	locale := ""
+	locale, catalogs := "", uint64(0)
 	if !t.textSet {
-		locale = i18n.Locale()
+		locale, catalogs = i18n.Locale(), i18nlink.Version()
 	}
 	w := &t.words
-	if !w.ok || w.rows != rows || w.selected != selected || w.check != checked || w.locale != locale || w.set != t.textSet {
-		*w = panelWords{ok: true, rows: rows, selected: selected, check: checked, locale: locale, set: t.textSet}
+	if !w.ok || w.rows != rows || w.selected != selected || w.check != checked || w.locale != locale || w.catalogs != catalogs || w.set != t.textSet {
+		*w = panelWords{ok: true, rows: rows, selected: selected, check: checked, locale: locale, catalogs: catalogs, set: t.textSet}
 		if t.textSet {
 			w.find = t.text.Search
 			w.total, w.sel, w.chk = fmt.Sprintf(t.text.Rows, rows), fmt.Sprintf(t.text.Selected, selected), fmt.Sprintf(t.text.Checked, checked)

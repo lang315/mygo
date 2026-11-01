@@ -1,6 +1,11 @@
 package widget
 
-import "testing"
+import (
+	"testing"
+	"testing/fstest"
+
+	"github.com/egoist/mygo/i18n"
+)
 
 // The panel's counts are worked out again only when a count or the language
 // changes: a frame with none changed formats nothing (its words go through the
@@ -50,5 +55,31 @@ func TestPanelCountsFollowTheirChanges(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("N=3") || !tt.HasText("C=2") || tt.HasText("Số dòng: 3") {
 		t.Fatalf("after PanelText: %q", tt.Texts())
+	}
+}
+
+// An app catalog registered while the app runs changes MyGo's words in a
+// language (its messages "mygo.<key>"): the panel shows them at once, though no
+// count changed.
+func TestPanelWordsFollowACatalogRegisteredLater(t *testing.T) {
+	inLocale(t, "sw")
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}).BottomPanel()
+	tt := tester(t, tb)
+	tt.Frame()
+	if !tt.HasText("Rows: 2") {
+		t.Fatalf("texts %q", tt.Texts())
+	}
+	c, err := i18n.NewCatalog(fstest.MapFS{
+		"en.json": {Data: []byte(`{}`)},
+		"sw.json": {Data: []byte(`{"mygo.tableRows": "Lines: {n}"}`)},
+	}, "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i18n.Register(c)
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("Lines: 2") {
+		t.Fatalf("after the catalog registered: %q", tt.Texts())
 	}
 }

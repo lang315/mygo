@@ -502,6 +502,7 @@ func Locale() string {
 }
 
 func init() {
+	i18nlink.Version = func() uint64 { return registry.version.Load() }
 	i18nlink.NewLibraryCatalog = func(fsys fs.FS, source, namespace string) (any, error) {
 		return newLibraryCatalog(fsys, source, namespace)
 	}
