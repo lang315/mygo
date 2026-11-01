@@ -4056,6 +4056,22 @@ func (_handle Element) FillHeight() Element {
 	return wrapElement(_node.FillHeight())
 }
 
+// FillViewport makes a container that scrolls vertically lay its content
+// out at least as high as the container, as CSS's min-height: 100% does and
+// Android's fillViewport: what grows (Grow) or sits at the end of a short
+// content takes the room, and a long content scrolls. Without it the
+// content takes its own height. It costs a second layout of the content, and
+// only when the content is shorter than the container.
+func (_handle Element) FillViewport() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.FillViewport())
+}
+
 // FillWidth makes the element as wide as its parent's content.
 func (_handle Element) FillWidth() Element {
 	_node := _handle.node()

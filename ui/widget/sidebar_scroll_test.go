@@ -405,3 +405,112 @@ func TestSidebarPageKeepsTheRowsOfAListItHolds(t *testing.T) {
 		t.Fatalf("%d item texts asked in an idle frame: the rows are not kept", calls.Load())
 	}
 }
+
+// tabTo presses Tab until the button labelled label has the focus and
+// fails unless it then lies within a window h high.
+func tabToButton(t *testing.T, tt *Tester, label string, h int) {
+	t.Helper()
+	for range 400 {
+		tt.Key(0, ui.KeyTab)
+		tt.Frame()
+		for _, n := range tt.Nodes() {
+			if n.Label == label && n.Focused {
+				if n.Bounds.Y < 0 || n.Bounds.Y+n.Bounds.H > float32(h) {
+					t.Fatalf("%s has the focus but lies at %v in a %d high window", label, n.Bounds, h)
+				}
+				return
+			}
+		}
+	}
+	t.Fatalf("Tab never reached %s", label)
+}
+
+// Long pages of every shape: what is below the fold can be reached.
+func TestLongPagesOfEveryShapeScroll(t *testing.T) {
+	pages := map[string]func() Control{
+		// The usual form: rows of a label and a field that stretches across.
+		"rows with a field packed to expand across": func() Control {
+			b := VBox(4)
+			for i := range 30 {
+				b.Add(HBox(4).Add(Label("name")).Pack(Button(fmt.Sprintf("line %d", i)), true, true))
+			}
+			return b
+		},
+		"rows with a field that Expand()s": func() Control {
+			b := VBox(4)
+			for i := range 30 {
+				b.Add(HBox(4).Add(Label("name"), Button(fmt.Sprintf("line %d", i)).Expand()))
+			}
+			return b
+		},
+		// A long form with its Save button packed at the end.
+		"long form with PackEnd": func() Control {
+			b := VBox(4)
+			for i := range 30 {
+				b.Add(Button(fmt.Sprintf("line %d", i)))
+			}
+			return b.PackEnd(Button("Save"), false, false)
+		},
+		// A list shown later, hidden for now.
+		"hidden list": func() Control {
+			b := VBox(4)
+			for i := range 30 {
+				b.Add(Button(fmt.Sprintf("line %d", i)))
+			}
+			return b.Pack(newListBox().SetVisible(false), true, true)
+		},
+		"card": func() Control {
+			return Card().SetTitle(Label("Card")).SetBody(linesPage(30))
+		},
+	}
+	for name, page := range pages {
+		for host, mk := range map[string]func() Control{
+			"Sidebar":    func() Control { return Sidebar().Add("a", "One", page()) },
+			"TabControl": func() Control { return TabControl().AddPage("One", page()).Expand() },
+		} {
+			t.Run(name+"/"+host, func(t *testing.T) {
+				tt := NewTester(t, mk(), 500, 300)
+				tabToButton(t, tt, "line 29", 300)
+			})
+		}
+	}
+}
+
+// A Sidebar as a page (TabControl's or another Sidebar's) is wrapped, so its
+// own page that asks for the room loses it.
+func TestSidebarAsAPagePassesTheRoomOn(t *testing.T) {
+	page := func() Control { return VBox(4).Add(Label("top")).PackEnd(Button("Apply"), false, false).Expand() }
+	for host, mk := range map[string]func() Control{
+		"TabControl": func() Control { return TabControl().AddPage("Tab", Sidebar().Add("a", "Inner", page())).Expand() },
+		"Sidebar":    func() Control { return Sidebar().Add("o", "Outer", Sidebar().Add("a", "Inner", page())) },
+	} {
+		t.Run(host, func(t *testing.T) {
+			tt := NewTester(t, mk(), 500, 300)
+			tt.Frame()
+			if y := buttonY(tt, "Apply"); y < 200 {
+				t.Fatalf("Apply at y=%v in a 300 high window: the inner page lost the room", y)
+			}
+		})
+	}
+}
+
+// A dialog whose content is a sidebar, one page with a table (asks for the
+// room) and one long: clamped, every control of the long page is reachable.
+func TestSoleSidebarDialogWithATablePageAndALongPage(t *testing.T) {
+	for _, shown := range []string{"a", "b"} {
+		t.Run(shown, func(t *testing.T) {
+			rows := make([]acct, 50)
+			for i := range rows {
+				rows[i] = acct{i + 1, fmt.Sprintf("name%03d", i+1), i}
+			}
+			sb := Sidebar().Add("a", "Table", testTable(rows...)).Add("b", "Long", linesPage(150))
+			sb.Select(shown)
+			d := NewDialog(nil, "sbpage "+shown, "", 500, 0, sb)
+			opts := mygo.WindowOptions{Width: 500}
+			d.fitWindow(&opts)
+			sb.Select("b")
+			tt := newTester(t, d.view, opts.Width, opts.Height)
+			tabToButton(t, tt, "line 149", opts.Height)
+		})
+	}
+}

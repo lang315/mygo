@@ -537,11 +537,11 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 	mu.Lock()
 	// A sidebar that is the whole content scrolls its pages inside it, and the
 	// sidebar's list stays in view: the dialog does not scroll as a whole,
-	// unless a page asks for the room and so does not scroll itself.
+	// unless a page is a viewport and so does not scroll itself.
 	if sb := soleSidebar(w.root); sb != nil && scroll {
 		scroll = false
 		for _, p := range sb.pages {
-			scroll = scroll || wantsRoom(p)
+			scroll = scroll || isViewport(p)
 		}
 	}
 	w.fitScroll = scroll

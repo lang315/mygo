@@ -28,7 +28,7 @@ func TestPaintInputs(t *testing.T) {
 			"takesText noIME copyData runes maximizeButton dismissed label widget role expanded vertical tip accValue " +
 			"accRange hasRange accFill accStep popover rowsOf focusGroup groupSelects placeOn overflow segment " +
 			"activeDescendant nameFrom nameJoin outOfName keepLinks focusTo setPos setSize choosesItems search description " +
-			"field form rowMinW followX sort colFit level expandable chooseMany gridFit attach serial",
+			"field form rowMinW followX sort colFit level expandable chooseMany gridFit attach serial fillViewport",
 	}
 	where := map[string]string{}
 	for place, list := range fields {

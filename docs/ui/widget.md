@@ -785,10 +785,13 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - A `Sidebar` or `TabControl` page taller than the room scrolls, as WinForms'
-  `AutoScroll` does (a wheel over it, or Tab to a control below the fold); a page
-  that asks for the room (a table, a list, a scroll panel, a web view, a chart, a
-  card, a control that `Expand`s, or a box with an expanding or `PackEnd` item)
-  is not wrapped: it keeps the room and scrolls itself, or not at all. A dialog of height 0 with a `Sidebar` opens as high as its tallest
+  `AutoScroll` does (a wheel over it, or Tab to a control below the fold), in a
+  scroller that lays the page out at least as high as the room: a page that
+  `Expand`s, or has a button `PackEnd`ed, still fills a short room. A page that
+  is a viewport itself, or a box holding one (a table, a list, a tree, a
+  multi-line text box, a scroll panel, a web view), is not wrapped: it fills the
+  room and scrolls itself, so a page that gains or loses one does not keep its
+  scroll position. A dialog of height 0 with a `Sidebar` opens as high as its tallest
   page, no higher than the work area allows, and does not resize when another
   page is chosen.
   Only a `Sidebar` that is the dialog's content is measured so: a `TabControl`

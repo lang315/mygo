@@ -305,10 +305,12 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 	})
 }
 
-// buildPage builds the page of a sidebar or a tab control. A page taller than the
-// room scrolls, as WinForms' AutoScroll does, unless it asks for the
-// room (wantsRoom): a table, a list or a scroll panel fills it and scrolls itself.
-// Under mu, while building.
+// buildPage builds the page of a sidebar or a tab control. A page taller than
+// the room scrolls, as WinForms' AutoScroll does, in a scroller that lays it
+// out at least as high as the room (FillViewport), so that what grows or is
+// packed at the end of a short page still takes the room. A page that is a
+// viewport itself (isViewport) is not wrapped: it scrolls itself. Under mu,
+// while building.
 func buildPage(c *ui.Context, w Control) {
 	build := func() {
 		outer := axis
@@ -316,38 +318,34 @@ func buildPage(c *ui.Context, w Control) {
 		render(c, w)
 		axis = outer
 	}
-	if wantsRoom(w) {
+	if isViewport(w) {
 		build()
 		return
 	}
-	ui.Scroll(c).Grow(1).Children(build)
+	ui.Scroll(c).Grow(1).FillViewport().Children(build)
 }
 
-// wantsRoom reports whether the page w asks for the room it is given, which
-// a scroller (laying its content out at any height) would take from it: a
-// viewport, a web view, a chart, a control of your own or a card; a control
-// that expands vertically; a box with an expanding item or one packed at the
-// end, or one that holds such a page. Under mu.
-func wantsRoom(w Control) bool {
-	if w == nil {
-		return false
-	}
-	if fillsAcross(w) || w.base().place.vexpand {
-		return true
-	}
+// isViewport reports whether the page w scrolls or virtualizes itself, and so
+// is not put in a scroller: a table, a list, a tree, a multi-line text box,
+// a scroll panel or a box holding one (fillsAcross), or a web view, which is
+// a window of its own. Under mu.
+func isViewport(w Control) bool {
 	switch w := w.(type) {
-	case *WebBrowserWidget, *ChartWidget, *CustomWidget, *CardWidget:
+	case nil:
+		return false
+	case *WebBrowserWidget:
 		return true
 	case *BoxWidget:
 		for _, it := range w.items {
-			if it.expand || it.end || wantsRoom(it.w) {
+			if !it.w.base().hidden && isViewport(it.w) { // a hidden list asks for nothing
 				return true
 			}
 		}
+		return false
 	case *GroupBoxWidget:
-		return wantsRoom(w.child)
+		return isViewport(w.child)
 	}
-	return false
+	return fillsAcross(w)
 }
 
 // SidebarWidget shows one of its pages, chosen in a list at its side.
