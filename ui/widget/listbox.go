@@ -147,6 +147,21 @@ func (l *ListBoxWidget[T, K]) SetItems(items []T) *ListBoxWidget[T, K] {
 	return l
 }
 
+// FollowEnd, when on, starts the list at its end and keeps the end in view as
+// items are added or grow while it shows it, as a log does: scrolling away from
+// the end stops following it, and scrolling back to it follows again.
+func (l *ListBoxWidget[T, K]) FollowEnd(on bool) *ListBoxWidget[T, K] {
+	l.change(func() { l.list.FollowEnd = on })
+	return l
+}
+
+// ScrollToEnd scrolls the list to its last item, where FollowEnd follows it
+// again.
+func (l *ListBoxWidget[T, K]) ScrollToEnd() *ListBoxWidget[T, K] {
+	l.change(func() { l.list.ScrollToEnd() })
+	return l
+}
+
 // AddItem shows item after the others, or instead of the item of its key.
 func (l *ListBoxWidget[T, K]) AddItem(item T) *ListBoxWidget[T, K] { return l.AddItems([]T{item}) }
 

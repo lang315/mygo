@@ -798,6 +798,9 @@ func (s *ListState) sync(e *node, n int) {
 		}
 		s.header.row = -1
 	}
+	if !s.FollowEnd {
+		s.following = false // turned off since the last layout, which set it
+	}
 	if s.Version != s.version {
 		s.version, s.versionFrame = s.Version, rt.frame
 	}
