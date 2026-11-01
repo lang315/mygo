@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,6 +42,17 @@ type Column[T any] struct {
 	Color func(*T) ui.Color
 	// Image shows before the text, 16 DIPs square; nil for none.
 	Image func(*T) *ui.Bitmap
+}
+
+// IntColumn makes a sortable column of an int, right-aligned, whose Compare
+// is by value (so 9 sorts before 10): the cell shows get(row) in decimal. Set
+// its other fields, as Width is, on the Column it returns.
+func IntColumn[T any](title string, width float32, get func(*T) int) Column[T] {
+	return Column[T]{
+		Title: title, Width: width, Align: End, Sortable: true,
+		Text:    func(r *T) string { return strconv.Itoa(get(r)) },
+		Compare: func(a, b *T) int { return cmp.Compare(get(a), get(b)) },
+	}
 }
 
 // DataGridViewWidget shows rows of type T, each told apart by a key of type K,
