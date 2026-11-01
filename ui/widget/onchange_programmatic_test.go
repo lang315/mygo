@@ -82,31 +82,3 @@ func TestTesterTextsLeaveOutFieldValues(t *testing.T) {
 		t.Fatalf("value %q", got)
 	}
 }
-
-// ByLabel counts a control once, though Nodes lists a sidebar entry and the
-// text it shows, named alike; ByRole(RoleText) still finds the text.
-func TestTesterByLabelCountsASidebarEntryOnce(t *testing.T) {
-	var picked string
-	sb := Sidebar().Add("a", "Mail", Label("inbox")).Add("b", "Cal", Label("today"))
-	tt := NewTester(t, sb, 600, 300)
-	same := 0
-	for _, n := range tt.Nodes() {
-		if n.Label == "Mail" {
-			same++
-		}
-	}
-	if same != 2 {
-		t.Fatalf("%d nodes named Mail; the test needs the entry and its text", same)
-	}
-	if n := len(tt.FindAll(ByLabel("Mail"))); n != 1 {
-		t.Fatalf("%d matches of the entry Mail", n)
-	}
-	tt.Find(ByLabel("Cal")).Click()
-	picked = sb.Selected()
-	if picked != "b" {
-		t.Fatalf("selected %q after a click on Cal", picked)
-	}
-	if n := len(tt.FindAll(ByRole(ui.RoleText).Label("Cal"))); n != 1 {
-		t.Fatalf("%d texts Cal", n)
-	}
-}

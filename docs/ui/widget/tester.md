@@ -85,10 +85,8 @@ of the last frame's elements.
 shows, labels and cells and tabs, once each, in tree order. They leave out the
 text a field holds (a `TextBox`'s, a `MultilineTextBox`'s, a number's): read it
 with the node, `tt.Find(widget.ByRole(ui.RoleTextField)).Value()`, or with the
-widget's own getter. In `tt.Nodes()`, the raw elements, a sidebar entry and the text it shows each
-appear, named alike; `ByLabel` and `Find` count the control once (ask for
-`ByRole(ui.RoleText)` to find the text), so use them for what the user sees and
-`Nodes()` for what a screen reader is told.
+widget's own getter. `tt.Nodes()` lists the raw elements, as assistive
+technology sees them.
 
 `DialogTester` embeds this `Tester`, so its `Find` takes a `Query`; the
 `Find(string)` of `ui.Tester` (`tt.Tester.Tester.Find`) is shadowed.
