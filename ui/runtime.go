@@ -264,7 +264,11 @@ type engine struct {
 	// recorded and replayed count the rows of the last paint.
 	noReplay, replayCheck bool
 	recorded, replayed    int
-	replayMismatch        int
+	// replayWalks counts the walks of a replayed row's elements in the last paint.
+	replayWalks int
+	// rowNodes is the scratch list of the elements of the row replayed.
+	rowNodes       []*node
+	replayMismatch int
 
 	// layoutCheck lays out and commits every held row anyway, and counts in
 	// layoutMismatch those whose kept layout or replayed commit differ
