@@ -27,9 +27,13 @@ type service struct {
 }
 
 type method struct {
-	service  string
-	name     string
-	fn       reflect.Value
+	service string
+	name    string
+	fn      reflect.Value
+	// recv, if valid, is the value the service was bound as, and the first
+	// argument of fn: a method expression from the table of mygo build
+	// (BindMethods) takes its receiver as an argument.
+	recv     reflect.Value
 	ctx      bool
 	params   []reflect.Type
 	variadic bool
@@ -126,15 +130,11 @@ func bind(name string, svc any, internal bool) error {
 		return fmt.Errorf("mygo: service name %q is not a valid identifier", name)
 	}
 	s := &service{name: name, typ: t, internal: internal}
-	for i := range t.NumMethod() {
-		m := t.Method(i)
-		mi, err := newMethod(name, m.Name, v.Method(m.Index))
-		if err != nil {
-			return err
-		}
-		mi.pc = methodPC(t, m.Name)
-		s.methods = append(s.methods, mi)
+	ms, err := listMethods(t, v, name)
+	if err != nil {
+		return err
 	}
+	s.methods = ms
 	if len(s.methods) == 0 {
 		return fmt.Errorf("mygo: %s has no exported methods to bind", t)
 	}
@@ -163,13 +163,23 @@ func register(s *service) error {
 
 // newMethod makes the method name of service, which calls fn, a func.
 func newMethod(service, name string, fn reflect.Value) (*method, error) {
+	return newMethodRecv(service, name, fn, reflect.Value{})
+}
+
+// newMethodRecv is newMethod for a fn that is a method expression: its first
+// parameter is the receiver, which call passes as recv (it is invalid when fn
+// is a method value, which has none).
+func newMethodRecv(service, name string, fn, recv reflect.Value) (*method, error) {
 	ft := fn.Type()
-	mi := &method{service: service, name: name, fn: fn, variadic: ft.IsVariadic()}
+	mi := &method{service: service, name: name, fn: fn, recv: recv, variadic: ft.IsVariadic()}
 	where := service + "." + name
 	start := 0
-	if ft.NumIn() > 0 && ft.In(0) == contextType {
+	if recv.IsValid() {
+		start = 1 // the receiver is not a parameter of the method
+	}
+	if ft.NumIn() > start && ft.In(start) == contextType {
 		mi.ctx = true
-		start = 1
+		start++
 	}
 	for i := start; i < ft.NumIn(); i++ {
 		p := ft.In(i)
@@ -218,20 +228,6 @@ func validateType(t reflect.Type) error {
 	return tsgen.Validate(t)
 }
 
-// methodPC returns the entry of the method's own code rather than the
-// wrapper Go generates for value receivers called through a pointer.
-func methodPC(t reflect.Type, name string) uintptr {
-	if t.Kind() == reflect.Pointer {
-		if m, ok := t.Elem().MethodByName(name); ok {
-			return m.Func.Pointer()
-		}
-	}
-	if m, ok := t.MethodByName(name); ok {
-		return m.Func.Pointer()
-	}
-	return 0
-}
-
 func lookupMethod(name string) *method {
 	ipc.RLock()
 	defer ipc.RUnlock()
@@ -266,7 +262,10 @@ func (m *method) call(w *Window, page context.Context, token string, args []rawV
 	if m.direct != nil {
 		return m.direct(ctx, args)
 	}
-	in := make([]reflect.Value, 0, len(m.params)+1)
+	in := make([]reflect.Value, 0, len(m.params)+2)
+	if m.recv.IsValid() {
+		in = append(in, m.recv)
+	}
 	if m.ctx {
 		in = append(in, reflect.ValueOf(ctx))
 	}
