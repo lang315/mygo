@@ -119,10 +119,12 @@ func (b *ButtonWidget) onClicked() {
 	}
 }
 
-// LinkLabelWidget opens a web address when clicked.
+// LinkLabelWidget opens a web address when clicked, or runs its OnClick.
 type LinkLabelWidget struct {
 	common[LinkLabelWidget]
 	text, url string
+	onClick   func()
+	clicked   func() // onClicked, made once
 }
 
 // LinkLabel makes a link showing text that opens url.
@@ -132,7 +134,35 @@ func LinkLabel(text, url string) *LinkLabelWidget {
 	return l
 }
 
-func (l *LinkLabelWidget) build(c *ui.Context) ui.Element { return ui.Link(c, l.text, l.url) }
+// OnClick runs fn on the event goroutine when the link is clicked, or
+// activated with Enter or Space while it has the focus or by assistive
+// technology, in place of opening its address (as WinForms' LinkClicked: fn
+// decides what the link does). A nil fn gives back the opening. A disabled
+// link does neither.
+func (l *LinkLabelWidget) OnClick(fn func()) *LinkLabelWidget {
+	l.change(func() { l.onClick = fn })
+	return l
+}
+
+func (l *LinkLabelWidget) onClicked() {
+	mu.Lock()
+	h := l.onClick
+	mu.Unlock()
+	if h != nil {
+		Post(h)
+	}
+}
+
+func (l *LinkLabelWidget) build(c *ui.Context) ui.Element {
+	if l.onClick == nil {
+		return ui.Link(c, l.text, l.url)
+	}
+	e := ui.Link(c, l.text, "") // no address: ui opens nothing
+	if l.clicked == nil {
+		l.clicked = l.onClicked // once: a closure made in each build is an allocation each
+	}
+	return e.OnClick(l.clicked)
+}
 
 // ToggleWidget is a button that stays pressed.
 type ToggleWidget struct {
