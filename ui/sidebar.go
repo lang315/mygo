@@ -209,7 +209,9 @@ func coreSidebarItem(c *context, id string, icon *SVG, label string) *node {
 		if icon != nil {
 			coreIcon(c, icon).FontSize(16).TextColor(iconColor)
 		}
-		coreText(c, label).Grow(1).SingleLine()
+		// The entry is named by this text: left out of the tree, it is not a
+		// second node of the same name.
+		coreText(c, label).Grow(1).SingleLine().Role(RoleNone)
 	})
 	return item
 }
