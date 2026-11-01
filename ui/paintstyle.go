@@ -123,8 +123,6 @@ type paintRare struct {
 	webView      NativeWebView
 	image        *Bitmap
 	svg          *SVG // of an Icon, or an Image in its own colors
-	// spans are those of a RichText.
-	spans []Span
 	// list is the List the element is, while it builds and lays out.
 	list *listFrame
 	// poseFade is how far a pose fades the element (pose, AnimatePose).
@@ -153,6 +151,9 @@ type paintStyle struct {
 	look     paintLook
 	nshadows uint8
 	shadows  [paintShadows]shadow
+	// spans are those of a RichText, whose colors, lines and backgrounds
+	// paint (the layout compares their styles).
+	spans []Span
 }
 
 // paintShadows is how many shadows paintStyle holds, in the record itself so
@@ -162,8 +163,8 @@ const paintShadows = 2
 
 // paintVolatile reports whether e paints with something a later frame
 // cannot compare: a closure, an effect, a layer cache, a gradient, a
-// transform, a picture, an input, a scroll container, text made of spans or
-// inline elements, a color transition, or an element leaving.
+// transform, a picture, an input, a scroll container, text made of inline
+// elements, a color transition, or an element leaving.
 func paintVolatile(e *node) bool {
 	const n = unsafe.Sizeof(paintRare{})
 	return *(*[n]byte)(unsafe.Pointer(&e.paintRare)) != zeroRare ||
@@ -194,12 +195,13 @@ func setPaintStyle(ps *paintStyle, e *node) {
 		ps.theme = e.builtTheme()
 	}
 	ps.nshadows = uint8(copy(ps.shadows[:], e.shadows))
+	ps.spans = append(ps.spans[:0], e.spans...)
 }
 
 // same reports whether e, not volatile, paints as ps says. It compares the
 // node itself, which costs less than making a paintStyle of it to compare.
 func paintStyleSame(ps *paintStyle, e *node) bool {
-	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows[:ps.nshadows], e.shadows) &&
+	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows[:ps.nshadows], e.shadows) && slices.Equal(ps.spans, e.spans) &&
 		(!readsTheme(e) || ps.theme == e.builtTheme())
 }
 

@@ -18,7 +18,7 @@ func TestPaintInputs(t *testing.T) {
 		// layout: compared by sameLayout, or made by the layout
 		"layout": "layoutStyle cols rows hidden measured tl lay laid",
 		// compared by paintStyle, or by textPaint (ts)
-		"paint": "flags themeAt paintLook ts shadows styleFn",
+		"paint": "flags themeAt paintLook ts shadows styleFn spans",
 		// an element with one set is never paint-same
 		"volatile": "paintRare ownText paragraph merged frags spansKey grad stripes originX originY originSet content pose poseAnim", // the origin counts with a transform, in paintRare
 		// geometry and what the frame decides: the key of a replay
