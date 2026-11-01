@@ -589,6 +589,9 @@ func computeBox(e *node, w, h float32) {
 		lh = inf
 	}
 	uw, uh := boxLayout(e, lw, lh, true)
+	if e.fillViewport && e.flags&flagScrollY != 0 && uh < ch {
+		uw, uh = boxLayout(e, lw, ch, true) // again at the height of the viewport
+	}
 	if e.flags&flagScrollX != 0 && uw < cw && e.rtl() {
 		// Laid out from the right of what the content takes, which goes
 		// at the right of the container.

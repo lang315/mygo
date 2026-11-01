@@ -311,6 +311,9 @@ type node struct {
 	// it paints, takes input and reads to assistive technology as an
 	// invisible element does, while what is inside it keeps its state.
 	hidden bool
+	// fillViewport (FillViewport): a scroll container lays its content out at
+	// least as high as itself.
+	fillViewport bool
 
 	// Painting.
 	grad    LinearGradient
@@ -1311,6 +1314,14 @@ func (e *node) NoWrap() *node { e.noWrap = true; return e }
 // Ellipsis sets what ends text that MaxLines or SingleLine cuts, "…" by
 // default.
 func (e *node) Ellipsis(s string) *node { e.ellipsis = s; return e }
+
+// FillViewport makes a container that scrolls vertically lay its content
+// out at least as high as the container, as CSS's min-height: 100% does and
+// Android's fillViewport: what grows (Grow) or sits at the end of a short
+// content takes the room, and a long content scrolls. Without it the
+// content takes its own height. It costs a second layout of the content, and
+// only when the content is shorter than the container.
+func (e *node) FillViewport() *node { e.fillViewport = true; return e }
 
 // Label names the element for assistive technology and for finding it in
 // tests, when its text does not.
