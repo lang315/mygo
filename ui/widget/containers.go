@@ -190,9 +190,14 @@ type TabControlWidget struct {
 	common[TabControlWidget]
 	labels   []string
 	pages    []Control
+	keys     []*pageKey // one for each page: the key of its tab, so that a widget on two pages has two tabs
 	page     mirror[int]
 	onSwitch func()
 }
+
+// pageKey tells the tab of a page apart from the others'. It is not empty:
+// pointers to empty values may be equal.
+type pageKey struct{ _ byte }
 
 func TabControl() *TabControlWidget {
 	n := &TabControlWidget{}
@@ -202,8 +207,67 @@ func TabControl() *TabControlWidget {
 
 // AddPage adds a page showing w under a tab labeled label.
 func (n *TabControlWidget) AddPage(label string, w Control) *TabControlWidget {
-	n.change(func() { n.labels, n.pages = append(n.labels, label), append(n.pages, w) })
+	n.change(func() {
+		n.labels, n.pages, n.keys = append(n.labels, label), append(n.pages, w), append(n.keys, new(pageKey))
+		adopt(&n.core, w)
+	})
 	return n
+}
+
+// SetPageLabel changes the label of the tab of page i; an index out of
+// range is ignored.
+func (n *TabControlWidget) SetPageLabel(i int, label string) *TabControlWidget {
+	n.change(func() {
+		if i >= 0 && i < len(n.labels) {
+			n.labels[i] = label
+		}
+	})
+	return n
+}
+
+// InsertPage puts a page showing w under a tab labeled label at index i,
+// before the page now there; an index out of range is the nearest one. The
+// page shown stays the page shown, whatever its index becomes. Like SetPage,
+// it does not run OnSwitch.
+func (n *TabControlWidget) InsertPage(i int, label string, w Control) *TabControlWidget {
+	n.change(func() {
+		i = max(0, min(i, len(n.pages)))
+		cur := n.shownIndex()
+		n.labels, n.pages, n.keys = slices.Insert(n.labels, i, label), slices.Insert(n.pages, i, w), slices.Insert(n.keys, i, new(pageKey))
+		adopt(&n.core, w)
+		if len(n.pages) > 1 && i <= cur {
+			n.page.set(cur + 1)
+		}
+	})
+	return n
+}
+
+// RemovePage takes the page at index i out, with its tab; an index out of
+// range is ignored. If the page shown goes, the one before it is shown, or
+// the first if it was the first; otherwise the page shown stays the page
+// shown, whatever its index becomes. Like SetPage, it does not run OnSwitch.
+func (n *TabControlWidget) RemovePage(i int) *TabControlWidget {
+	n.change(func() {
+		if i < 0 || i >= len(n.pages) {
+			return
+		}
+		cur := n.shownIndex()
+		w := n.pages[i]
+		n.labels, n.pages, n.keys = slices.Delete(n.labels, i, i+1), slices.Delete(n.pages, i, i+1), slices.Delete(n.keys, i, i+1)
+		switch {
+		case i < cur:
+			n.page.set(cur - 1)
+		case i == cur:
+			n.page.set(max(cur-1, 0))
+		}
+		orphan(w)
+	})
+	return n
+}
+
+// shownIndex is the index of the page shown, as build clamps it. Under mu.
+func (n *TabControlWidget) shownIndex() int {
+	return max(0, min(n.page.value, len(n.pages)-1))
 }
 
 // Page returns the index of the page shown.
@@ -223,7 +287,11 @@ func (n *TabControlWidget) OnSwitch(fn func()) *TabControlWidget {
 func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 	return ui.Column(c).Gap(c.Theme().Space(2)).Children(func() {
 		p, _ := n.page.bind()
-		ui.Tabs(c, p, n.labels...).OnChange(onChange(&n.page, n.onSwitch))
+		keys := make([]any, len(n.keys))
+		for i, k := range n.keys {
+			keys[i] = k // a tab keeps the focus of its page, whatever its index
+		}
+		ui.TabsKeyed(c, p, keys, n.labels).OnChange(onChange(&n.page, n.onSwitch))
 		// Tabs clamps *p while it builds, without OnChange: see it here.
 		if changed := *p != n.page.value; changed {
 			n.page.value = *p

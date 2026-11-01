@@ -605,7 +605,10 @@ func (l *ListBoxWidget[T, K]) row(c *ui.Context, i int) {
 				ui.Image(c, bmp).Size(side, side)
 			}
 		}
-		ui.Text(c, text).SingleLine()
+		e := ui.Text(c, text).SingleLine()
+		if l.checks {
+			e.Role(ui.RoleNone) // the item, not its text, is the node
+		}
 	})
 }
 

@@ -89,6 +89,18 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
 - **Handlers** (`OnClick`, `OnChange`, `OnClose`, ...) run one at a time on
   a goroutine of the package, the event goroutine, never on the main
   thread. A handler may block: the window keeps drawing.
+- **`OnChange` is for the user.** A setter (`SetText`, `SetChecked`, `SetOn`,
+  `SetValue`, `SetValues`) does not run the `OnChange` of the control it sets,
+  nor does `Reload` or a binding; only an edit by the user, or by a test
+  driving the control as the user does, does. This holds for `TextBox`,
+  `MultilineTextBox`, `MaskedTextBox`, `CheckBox`, `Switch`, `RadioButton`,
+  `RadioGroup`, `CheckBoxGroup`, `ComboBox`, `NumericUpDown`, `RangeSpin`,
+  `TrackBar`, `DomainUpDown` and `DateTimePicker` (`TestSettersDoNotRunOnChange`
+  pins it), and
+  for `TabControl`'s `OnSwitch` after `SetPage`, `InsertPage` and `RemovePage`
+  (but a page index the control had to clamp is reported). WinForms and GTK
+  differ, as their `TextChanged` and `changed` also run for code: a handler
+  that reacts to a setting's change must also run where the code changes it.
 - **`BeginInvoke(fn)`**, or `Post(fn)`, runs `fn` on the event goroutine
   after what was posted before it, without waiting. It works from anywhere,
   the main thread too.
@@ -384,7 +396,10 @@ status.SetText("Saved") // and the window redraws
 `Fields()` lays out a form: a row is a label and the control it names. By
 default the labels make a column as wide as the widest of them, each at
 the middle of its control's height, and the controls fill a second column,
-as in WinForms or GTK:
+as in WinForms or GTK. Assistive technology reads each control by its
+row's label (a control with a name of its own, or a text that names it, as a
+check box's, keeps it; a group of controls is a group named by the label; a
+hidden label names nothing):
 
 ```go
 widget.Fields().
@@ -596,7 +611,8 @@ next shows. One slice and one index serve the lot; a table not drawn since
 `SetRows` or `DeleteRows` keeps the old slice alive (its frame and view
 hold it) until it draws again.
 A `Column` has a `Title`, the `Text` of its cells, and optionally `Compare`
-(by `Text` otherwise), `Width`, `MinWidth`, `Align`, `Sortable`,
+(by `Text` otherwise; `IntColumn(title, width, get)` makes a number's column,
+sorted by value), `Width`, `MinWidth`, `Align`, `Sortable`,
 `Filterable`, `Filter` (case-insensitive containment otherwise), `Spans` (draws
 `[]ui.Span` in the cell, as `Label.Rich` does, for a badge or a colored word:
 `Text` still sorts, searches, copies and names the row, while assistive
@@ -644,6 +660,14 @@ lock: they read the row and call no widget method.
   again, meanwhile; it wins over `ContextMenu`),
   `OnColumnsChange(fn)` with `SetColumnsLayout(l)` to restore it (see
   below).
+  `SetColumnVisible(title, on)` and `Column.Hidden` hide a column, as WinForms'
+  `Visible`: it is not drawn, read by assistive technology (nor named in the
+  header row) or copied, and a row is named by its first column shown. The
+  columns' layout (order, widths) is kept for when it shows again: the order
+  `OnColumnsChange` gives holds the hidden columns too, each after the column it
+  followed. Titles tell the columns apart, so they must differ. A table
+  sorted by a column stays sorted when it hides, and `Search` by a `Filterable`
+  hidden column still works, as does the panel's choice of it.
   Cmd/Ctrl+C and the Edit menu's Copy copy the selected rows, a line each,
   cells apart by tabs; `CopyFunc(fn)` replaces that text with what `fn` makes
   of the keys of the selected rows, in the order shown, for both, so they
@@ -761,6 +785,12 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
+  `SetPageLabel(i, s)` renames a tab ("Items (3)"), `InsertPage(i, label, w)`
+  and `RemovePage(i)` add and take out pages. The page shown stays the page
+  shown, whatever its index becomes; removing it shows the one before it (the
+  first, if it was the first). The tab with the keyboard focus keeps it; if its
+  page goes, the tab now shown takes it. As
+  `SetPage` does, none of them runs `OnSwitch`: the app made the change.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
   `Remove`, `Selected`, `Select`, `SetMenuWidth`.
 
@@ -788,7 +818,9 @@ Input and display:
   [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon`; `Suggested()` and
   `Destructive()` are the button's own style (tw's `suggested-action` and
-  `destructive-action`). `LinkLabel(text, url)`.
+  `destructive-action`). `LinkLabel(text, url)`; `OnClick(fn)` runs `fn` on the event goroutine
+  in place of opening `url` (click, Enter or Space, assistive technology; nothing
+  when disabled), as WinForms' `LinkClicked`.
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
 - `CheckBoxGroup(row, options...)`, `TagSelect(options...)`: several of
   the options; `Values`, `SetValues`.
@@ -809,8 +841,10 @@ Input and display:
   on typing and on choosing. `Bind` takes the text of a combo made
   `Editable` before it is bound, and the `Value` of one bound before.
 - `MenuButton(text)`: see [Menus](#menus).
-- `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`.
-  `RangeSpin` is two, with text between and after.
+- `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`;
+  `SetAccessibleName(s)` names it and its buttons for assistive technology.
+  `RangeSpin` is two, with text between and after; they are "minimum" and
+  "maximum" to assistive technology unless `SetAccessibleNames(low, high)`.
 - `ProgressBar()`: `SetFraction` (negative for unknown length), `SetText`.
 - `DataGridView(key, columns...)`: rows in columns; see [DataGridView](#datagridview).
   `Spinner()`: `Start`, `Stop`.

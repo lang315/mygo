@@ -1453,7 +1453,8 @@ func NewTester(view func(c *Context), width int, height int) *Tester {
 // by step. What is typed applies as soon as it is a number in range, and
 // shows rounded to the decimals of step once the input loses the focus.
 // Changed reports a new value, Submitted an Enter in it, and Focus gives
-// its text field the keyboard.
+// its text field the keyboard. Label names the field and, before
+// "Increase" and "Decrease", the buttons for assistive technology.
 //
 //	ui.NumberInput(c, &app.copies, 1, 99, 1)
 func NumberInput(c *Context, value *float64, lo float64, hi float64, step float64) Element {
@@ -2239,6 +2240,21 @@ func TabsBase(c *Context, selected *int, n int) TabsParts {
 	_p := coreTabsBase(_ctx, selected, n)
 	_ctx.rt.endBuild()
 	return wrapTabsParts(_p)
+}
+
+// TabsKeyed is Tabs whose tab i is told apart by keys[i] (comparable
+// values, one for each label), not by its position: when tabs are added or
+// removed, the tab that has the keyboard focus keeps it, whatever its index
+// becomes. A nil keys is Tabs.
+func TabsKeyed(c *Context, selected *int, keys []any, labels []string) Element {
+	_ctx := c.build()
+	if _ctx == nil {
+		return Element{}
+	}
+	_ctx.rt.beginBuild()
+	_e := coreTabsKeyed(_ctx, selected, keys, labels)
+	_ctx.rt.endBuild()
+	return wrapElement(_e)
 }
 
 // Text creates a text, which wraps at the width it gets.
@@ -5010,6 +5026,22 @@ func (_handle Element) Modal() Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Modal())
+}
+
+// NamedBy names the control of e for assistive technology by label, as Field
+// names its control, for a form of your own: e is the control or the element
+// holding it (the first element inside that takes the focus, or a group of
+// them, is the control). A control with a name of its own, or a text of its own
+// that names it, as a check box's, keeps it. A number input's buttons take the
+// name too, before their own: "Copies Increase". Call it once both are built.
+func (_handle Element) NamedBy(label Element) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.NamedBy(label.nodeFor(_ctx.rt)))
 }
 
 // NoWrap keeps each line of the element's text whole, breaking it only at

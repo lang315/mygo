@@ -11,7 +11,8 @@ import (
 // by step. What is typed applies as soon as it is a number in range, and
 // shows rounded to the decimals of step once the input loses the focus.
 // Changed reports a new value, Submitted an Enter in it, and Focus gives
-// its text field the keyboard.
+// its text field the keyboard. Label names the field and, before
+// "Increase" and "Decrease", the buttons for assistive technology.
 //
 //	ui.NumberInput(c, &app.copies, 1, 99, 1)
 func coreNumberInput(c *context, value *float64, lo, hi, step float64) *node {
@@ -62,12 +63,14 @@ func coreNumberInput(c *context, value *float64, lo, hi, step float64) *node {
 				*text = format(*value)
 			}
 		})
+		in.nameFrom = row // named by the Label of the number, which is set after this build
 		in.hasRange, in.accRange, in.accStep = true, [3]float64{lo, hi, *value}, step
 		for _, b := range []struct {
 			label string
 			delta float64
 		}{{"−", -step}, {"+", step}} {
 			btn := coreButton(c, b.label).Padding(t.Space(1), t.Space(2)).Label(map[bool]string{true: "Increase", false: "Decrease"}[b.delta > 0])
+			btn.nameFrom, btn.nameJoin = row, true // "Copies Increase"
 			btn.Disabled(b.delta < 0 && *value <= lo || b.delta > 0 && *value >= hi)
 			btn.afterInput(func() {
 				if btn.Clicked() {
