@@ -49,7 +49,8 @@ type TreeViewWidget[T any, K comparable] struct {
 	key       func(*T) K
 	text      func(*T) string
 	image     func(*T) *ui.Bitmap
-	imageSize float32 // the side the image is drawn at, 16 unless SetImageList
+	imageSize float32          // the side the image is drawn at, 16 unless SetImageList
+	images    *ImageListWidget // the list SetImageList gave, whose generation versions the rows
 
 	nodes   map[K]*treeNode[T, K]
 	roots   []treeItem[K]
@@ -91,7 +92,7 @@ func TreeView[T any, K comparable](key func(*T) K, text func(*T) string) *TreeVi
 // SetImage shows an image before the text of each node, 16 DIPs square;
 // nil, or a nil image, for none. fn runs under the package's lock.
 func (t *TreeViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *TreeViewWidget[T, K] {
-	t.change(func() { t.image, t.imageSize = fn, 0; t.look++ })
+	t.change(func() { t.image, t.imageSize, t.images = fn, 0, nil; t.look++ })
 	return t
 }
 
@@ -99,7 +100,7 @@ func (t *TreeViewWidget[T, K]) SetImage(fn func(*T) *ui.Bitmap) *TreeViewWidget[
 // key(node), drawn at the list's Size; no image for a key the list lacks. key
 // runs under the package's lock.
 func (t *TreeViewWidget[T, K]) SetImageList(il *ImageListWidget, key func(*T) string) *TreeViewWidget[T, K] {
-	t.change(func() { t.image, t.imageSize = ImagesBy(il, key), float32(il.Size()); t.look++ })
+	t.change(func() { t.image, t.imageSize, t.images = ImagesBy(il, key), float32(il.Size()), il; t.look++ })
 	return t
 }
 
@@ -792,7 +793,7 @@ func (t *TreeViewWidget[T, K]) itemVersion(it treeItem[K]) uint64 {
 	if t.checks && t.checked.shown.Has(it) {
 		place = 1
 	}
-	return versionOf(t.gens.of(it.k), t.look, place)
+	return versionOf(t.gens.of(it.k), foldLook(t.look, t.images.generation()), place)
 }
 
 // row builds the content of the row of it, after its arrow: while the tree

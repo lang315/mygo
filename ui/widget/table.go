@@ -104,6 +104,9 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// rows' own generations (RowSource.Version) do not: a change of it
 	// builds every row again. Under mu.
 	look uint64
+	// images, when a ListView shows the first column's image from an image
+	// list, is that list: its generation is part of the version of each row.
+	images *ImageListWidget
 
 	// ui's, on the main thread:
 	list   ui.ListState
@@ -369,7 +372,7 @@ func (t *DataGridViewWidget[T, K]) rowVersion(row int) uint64 {
 	if t.numbered {
 		place = pos + 1
 	}
-	return versionOf(t.src.gens.of(t.key(r)), t.look, place)
+	return versionOf(t.src.gens.of(t.key(r)), foldLook(t.look, t.images.generation()), place)
 }
 
 // keyAtPos is the key of the row at position pos of the view.

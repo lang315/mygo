@@ -73,6 +73,17 @@ type GridState struct {
 	// keeps them readable over a picture: for items that have none.
 	PlainChecks bool
 
+	// RowVersion, when set, lets the grid keep a line it built in the last
+	// frame instead of building it again, as long as the versions of the items
+	// of the line, which RowVersion(item) returns, are what they were then and
+	// the line holds the same items: the contract of ListState.RowVersion, for
+	// the items of a grid. Item i's build must read nothing but its own data,
+	// which RowVersion versions, and the grid's state; data that moves (a slice
+	// that append reallocates) is the app's to version. It is ignored while
+	// Reorder is set: a drop is placed by the cells the last frame built, which
+	// a kept line does not build again.
+	RowVersion func(item int) uint64
+
 	rows ListState
 	// cells are the items of the cells the last frame built, by their
 	// elements' IDs, and built those of this frame.
@@ -238,6 +249,10 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 	e.setSize = n
 	e.chooseMany = s.Selection != nil
 	var cursor *node
+	s.rows.RowVersion = nil
+	if s.RowVersion != nil && s.Reorder == nil {
+		s.rows.RowVersion = func(r int) uint64 { return s.lineVersion(r, n, minWidth, height) }
+	}
 	buildList(c, e, e, &s.rows, rows, func(r int) {
 		first, end, header := s.rowItems(r, n)
 		row := coreRow(c).Gap(gap).PaddingY(gap / 2).AlignItems(Stretch).Role(RoleNone)
@@ -261,6 +276,10 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
 	// The list's own state is the rows': the grid takes the keys and tells
 	// assistive technology about its items.
 	e.rowsOf = nil
+	if cursor == nil && s.Selected != nil && *s.Selected >= 0 && *s.Selected < n {
+		// The cursor's line was kept, not built: its cell is in the tree all the same.
+		cursor = e.cellOf(*s.Selected + 1)
+	}
 	e.gridFit = &gridFit{cols: cols, minW: minWidth, gap: gap}
 	e.afterInput(func() { s.keys(e, n) })
 	e.activeDescendant = cursor
@@ -399,6 +418,77 @@ func (s *GridState) dropAt(x, y float32, n int) (to int, cell uint64, after bool
 // cellState returns the state of the cell of the last frame whose element
 // has id.
 func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
+
+// lineVersion is the version of line r, for ListState.RowVersion: it changes
+// with the items the line holds (the width, the size of the items and the
+// headers move them between lines), their versions, and the size an item is
+// built at.
+func (s *GridState) lineVersion(r, n int, minWidth, height float32) uint64 {
+	const prime = 0x100000001b3
+	first, end, header := s.rowItems(r, n)
+	// Each part has a step of its own: a multiply carries upward only, so parts
+	// xored into one word lose each other's bits.
+	h := uint64(first)
+	for _, v := range [...]uint64{uint64(end), uint64(max(s.cols, 1)), uint64(n), uint64(math.Float32bits(minWidth)), uint64(math.Float32bits(height)), s.flags(header)} {
+		h = (h ^ v) * prime
+	}
+	for i := first; i < end; i++ {
+		bits := uint64(0)
+		// A header is not asked of the Selection: its key is of another type.
+		if !header {
+			if s.chosen(i) {
+				bits |= 1
+			}
+			if s.Selected != nil && *s.Selected == i {
+				bits |= 2
+			}
+			if s.Checked != nil && s.Checked.has(s.key(i)) {
+				bits |= 4
+			}
+		}
+		h = (h ^ s.RowVersion(i)) * prime
+		h = (h ^ bits) * prime
+	}
+	return h
+}
+
+// flags is what the grid is set to draw with, for the version of a line: a
+// header, what it can choose and check, how it draws the choice and the boxes,
+// and whether any item is checked (a check box then shows on every item).
+func (s *GridState) flags(header bool) (f uint64) {
+	for i, on := range [...]bool{header, s.Selected != nil, s.Selection != nil, s.Checked != nil,
+		s.Checked != nil && s.Checked.size() > 0, s.AccentChoice, s.PlainChecks, s.Label != nil} {
+		if on {
+			f |= 1 << i
+		}
+	}
+	return f
+}
+
+// cellOf returns the cell below e that is the item at place pos (setPos), or
+// nil: a line kept holds its cells, which this frame did not build.
+func (e *node) cellOf(pos int) *node {
+	for ch := e.first; ch != nil; ch = ch.next {
+		if ch.setPos == pos && ch.role == RoleListItem {
+			return ch
+		}
+		if ch.listRow {
+			// A line: its cells are the children of its row.
+			for row := ch.first; row != nil; row = row.next {
+				for cell := row.first; cell != nil; cell = cell.next {
+					if cell.setPos == pos && cell.role == RoleListItem {
+						return cell
+					}
+				}
+			}
+			continue
+		}
+		if c := ch.cellOf(pos); c != nil {
+			return c
+		}
+	}
+	return nil
+}
 
 // header builds item i, a header, at the width of the grid: it is not chosen,
 // dragged or checked, and assistive technology sees it as an item, named by

@@ -1,7 +1,9 @@
 package widget
 
 import (
+	"bytes"
 	"fmt"
+	"image"
 	"image/color"
 	"testing"
 
@@ -297,5 +299,43 @@ func TestListViewSetImageNilGivesTheColumnsOwnImageBack(t *testing.T) {
 	tt.Frame()
 	if n := row(); n < 16*16 {
 		t.Fatalf("after SetImage(nil): %d blue pixels, want the column's own Image back (%d)", n, 16*16)
+	}
+}
+
+// A setter and an ImageList that change in the same frame move the row's look
+// and the list's generation together: while the two are equal, the version
+// must still change.
+func TestListViewKeptRowsFollowASetterAndTheirImagesTogether(t *testing.T) {
+	mk := func() (*rowsView, *ImageListWidget) {
+		il := ImageList(16)
+		r := newRowsView(60, ViewSmallIcon)
+		r.lv.SetImageList(il, func(v *vitem) string { return v.id })
+		return r, il
+	}
+	img := func() image.Image {
+		m := image.NewRGBA(image.Rect(0, 0, 16, 16))
+		for i := 0; i < len(m.Pix); i += 4 {
+			m.Pix[i], m.Pix[i+3] = 255, 255
+		}
+		return m
+	}
+	r, il := mk()
+	for r.lv.t.look > il.gen.Load() { // the setter and the list count from different starts
+		_ = il.AddImage("unused", img())
+	}
+	if r.lv.t.look != il.gen.Load() {
+		t.Fatalf("look %d is behind generation %d", r.lv.t.look, il.gen.Load())
+	}
+	kept := r.tester()
+	_ = il.AddImage("0", img())
+	r.lv.CheckBoxes()
+	f, fil := mk()
+	_ = fil.AddImage("0", img())
+	f.lv.CheckBoxes()
+	fresh := f.tester()
+	kept.Frame()
+	kept.Frame()
+	if !bytes.Equal(kept.Image().Pix, fresh.Image().Pix) {
+		t.Fatal("kept list view differs from a fresh one")
 	}
 }

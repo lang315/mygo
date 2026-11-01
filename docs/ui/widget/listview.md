@@ -135,6 +135,20 @@ place, and the headers cost no pass over the rows. A row changed in place costs
 the icon views what it costs without groups (for a million rows, about 2 ms
 against 38 to 96 ms when they made their groups themselves).
 
+**Kept rows.** Every view keeps the rows it built while nothing they show has
+changed, as a `DataGridView` does: a frame at rest asks the app for no text. A
+row shows what the widget holds of it, so it changes through the widget:
+`SetRows`, `AddRow`, `AddRows` and `UpdateRow` give a row a new version, as do
+the view, the icon size, the image function and the columns for every row; the
+choice, the checks and the groups' counts follow by themselves. A change made to
+the app's own slice is not seen (the widget holds a copy). Images from an
+`ImageList` given with `SetImageList` follow the list: adding, replacing or
+removing one shows in the rows at once. An image function given with `SetImage`
+that answers later (a thumbnail that loads) is not seen by a row already shown:
+call `UpdateRow(k, func(*T) {})` for that row when the image arrives, or keep the
+images in an `ImageList`. Checking `CheckBoxes()` after the first frames shows the
+boxes in every view.
+
 **Order of the keys.** With groups, `Selected()` and `Checked()` return the keys
 in the order shown, which is grouped in every view: the rows of the first group,
 then those of the second, and so on. Before `SetGroupBy`, and in a list view

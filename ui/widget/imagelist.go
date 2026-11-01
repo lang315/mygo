@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -38,6 +39,19 @@ type ImageListWidget struct {
 	m    sync.RWMutex // keys and imgs
 	keys []string
 	imgs map[string]*listImage
+
+	// gen changes whenever an image is set, removed or cleared: the views that
+	// show the list's images fold it in the versions of their rows, so that a
+	// row kept shows the image now.
+	gen atomic.Uint64
+}
+
+// generation is gen, 0 for no list.
+func (l *ImageListWidget) generation() uint64 {
+	if l == nil {
+		return 0
+	}
+	return l.gen.Load()
 }
 
 // listImage is the sizes given for a key, by width, smallest first.
@@ -143,6 +157,7 @@ func (l *ImageListWidget) set(key string, e *listImage) {
 		l.keys = append(l.keys, key)
 	}
 	l.imgs[key] = e
+	l.gen.Add(1)
 	l.m.Unlock()
 	l.changed()
 }
@@ -180,6 +195,7 @@ func (l *ImageListWidget) Remove(keys ...string) {
 		delete(l.imgs, k)
 	}
 	l.keys = slices.DeleteFunc(l.keys, func(k string) bool { _, ok := l.imgs[k]; return !ok })
+	l.gen.Add(1)
 	l.m.Unlock()
 	l.changed()
 }
@@ -189,6 +205,7 @@ func (l *ImageListWidget) Clear() {
 	l.m.Lock()
 	clear(l.imgs)
 	l.keys = nil
+	l.gen.Add(1)
 	l.m.Unlock()
 	l.changed()
 }
