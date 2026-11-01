@@ -15,6 +15,7 @@ import (
 
 	"github.com/ebitengine/purego"
 
+	"github.com/egoist/mygo/internal/bridge"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -1162,6 +1163,9 @@ func (w *window) addUserScripts() {
 		// After the bridge, which it tells; top frame, document start.
 		add(w.titleBarScript(), 1, 0)
 	}
+	// WebKitGTK does not say which frame posted a message, so the frames that
+	// are not the page's own get no handler to post to.
+	add(bridge.HideHandlerScript, 0, 0)
 }
 
 // SetUserScripts replaces the user scripts, all of them, as the content

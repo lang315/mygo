@@ -19,6 +19,10 @@ function windowWith(kind: "webkit" | "webview2") {
     kind === "webkit"
       ? { webkit: { messageHandlers: { mygo: target } } }
       : { chrome: { webview: target } };
+  const listeners: Record<string, [(e: any) => void, unknown][]> = {};
+  w.addEventListener = (type: string, fn: (e: any) => void, capture?: unknown) => {
+    (listeners[type] ??= []).push([fn, capture]);
+  };
   w.JSON = { stringify: JSON.stringify };
   w.crypto = {
     getRandomValues<T extends ArrayBufferView>(a: T): T {
@@ -26,7 +30,7 @@ function windowWith(kind: "webkit" | "webview2") {
       return a;
     },
   };
-  return { w, target, posted, files };
+  return { w, target, posted, files, listeners };
 }
 
 for (const kind of ["webkit", "webview2"] as const) {
@@ -84,6 +88,101 @@ for (const kind of ["webkit", "webview2"] as const) {
     });
   });
 }
+
+// WebKit restores a page from its back/forward cache on Back and Forward: the
+// main frame commits, and the document comes back as it was, with its bridge,
+// which does not start again. Go waits for a hello after the commit, so the
+// bridge says the secret it has once more when the page is shown from the cache.
+describe("connect (pages restored from the cache)", () => {
+  const show = (listeners: ReturnType<typeof windowWith>["listeners"], event: object) =>
+    listeners["pageshow"]!.forEach(([fn]) => fn(event));
+
+  for (const kind of ["webkit", "webview2"] as const) {
+    test(`says the same secret again when a page is restored (${kind})`, () => {
+      const { w, posted, listeners } = windowWith(kind);
+      const ch = connect(w)!;
+      const hello = posted[0]!;
+      // Before the page's own scripts: a capturing listener on the window.
+      expect(listeners["pageshow"]).toHaveLength(1);
+      expect(listeners["pageshow"]![0]![1]).toBe(true);
+      show(listeners, { persisted: false, isTrusted: true }); // the first load
+      expect(posted).toEqual([hello]);
+      show(listeners, { persisted: true, isTrusted: false }); // a script's event
+      expect(posted).toEqual([hello]);
+      show(listeners, { persisted: true, isTrusted: true });
+      expect(posted).toEqual([hello, hello]);
+      // The secret did not change: the messages after it carry the same one.
+      ch.post(ch.stringify({ t: "escape" }));
+      expect(posted.at(-1)).toBe(JSON.parse(hello).k + '{"t":"escape"}');
+    });
+  }
+
+  test("a page that replaces postMessage does not get the hello of a restore", () => {
+    const { w, target, posted, listeners } = windowWith("webkit");
+    connect(w);
+    const seen: string[] = [];
+    target.postMessage = ((m: string) => void seen.push(m)) as any;
+    show(listeners, { persisted: true, isTrusted: true });
+    expect(seen).toEqual([]);
+    expect(posted).toHaveLength(2);
+  });
+});
+
+// A page that pollutes the builtins the secret passed through (hex digits,
+// concatenation) or the objects it stringifies never sees the secret.
+test("prototype pollution after connect does not reach the secret", () => {
+  const { w, posted } = windowWith("webkit");
+  const ch = connect(w)!;
+  const secret = JSON.parse(posted[0]!).k as string;
+
+  const seen: unknown[] = [];
+  const saved = {
+    toString: Number.prototype.toString,
+    slice: String.prototype.slice,
+    concat: String.prototype.concat,
+    stringify: JSON.stringify,
+  };
+  try {
+    Number.prototype.toString = function (this: number, ...a: any[]) {
+      seen.push(this);
+      return saved.toString.apply(this, a as any);
+    };
+    String.prototype.slice = function (this: string, ...a: any[]) {
+      seen.push(String(this));
+      return saved.slice.apply(this, a as any);
+    };
+    String.prototype.concat = function (this: string, ...a: any[]) {
+      seen.push(String(this), ...a);
+      return saved.concat.apply(this, a);
+    };
+    Object.defineProperty(Object.prototype, "toJSON", {
+      configurable: true,
+      value(this: unknown) {
+        seen.push(this);
+        return this;
+      },
+    });
+    JSON.stringify = (v: unknown) => {
+      seen.push(v);
+      return "{}";
+    };
+    const arg = {
+      [Symbol.toPrimitive]() {
+        seen.push("toPrimitive");
+        return "";
+      },
+    };
+    ch.post(ch.stringify({ t: "call", a: [arg] }));
+  } finally {
+    Number.prototype.toString = saved.toString;
+    String.prototype.slice = saved.slice;
+    String.prototype.concat = saved.concat;
+    delete (Object.prototype as any).toJSON;
+    JSON.stringify = saved.stringify;
+  }
+  expect(seen.map(String).some((s) => s.includes(secret))).toBe(false);
+  expect(posted.at(-1)!.startsWith(secret)).toBe(true);
+});
 
 describe("connect (WebView2 files)", () => {
   test("posts the files with the message, prefixed", () => {

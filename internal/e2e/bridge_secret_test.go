@@ -4,9 +4,11 @@ package e2e
 
 import (
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // The bridge of each document says a secret in a hello, which the window takes
@@ -20,7 +22,9 @@ func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
 	touches := func(step string) {
 		t.Helper()
 		before := probe.n.Load()
-		if _, err := p.Eval("mygo.call('Probe.Touch')"); err != nil || probe.n.Load() != before+1 {
+		// A bridge Go does not take messages from leaves the call pending: the
+		// context ends the wait.
+		if _, err := p.EvalContext(wait.Context(t), "mygo.call('Probe.Touch')"); err != nil || probe.n.Load() != before+1 {
 			t.Fatalf("%s: the page's call: %v, count %d, want %d", step, err, probe.n.Load(), before+1)
 		}
 	}
@@ -52,44 +56,102 @@ func TestBridgeCallsAfterEveryKindOfLoad(t *testing.T) {
 	}
 	waitFor(t, w, "location.hash === '#hash'")
 	touches("pushState and a hash")
+
+	// Back and Forward: WebKit restores a document from its cache with its
+	// bridge, which does not start again, while the main frame commits and Go
+	// waits for a hello. The bridge says its secret once more on pageshow, and
+	// the call of the restored page must run. Back to the page, then Forward.
+	if err := p.LoadURL("app://localhost/capture"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, w, "location.pathname === '/capture' && window.mygo")
+	touches("a second page")
+	finished := make(chan struct{}, 1)
+	off := p.OnDidFinishLoad(func() {
+		select {
+		case finished <- struct{}{}:
+		default:
+		}
+	})
+	defer off()
+	p.GoBack()
+	waitFor(t, w, "location.pathname === '/' && window.mygo")
+	select {
+	case <-finished:
+	case <-wait.Context(t).Done():
+		t.Fatal("Back: the page did not finish loading")
+	}
+	touches("Back")
+	p.GoForward()
+	waitFor(t, w, "location.pathname === '/capture' && window.mygo")
+	touches("Forward")
 }
 
-// An iframe can post to the handler on every backend, as a frame of another
-// origin would. Its hello comes after the page's, which the window took, so it
-// is ignored; a call that starts with the secret it made does not run. The page's
-// own call does. (Whether WebView2 hands Go the messages of an iframe at all is
-// what the log of this test says.)
-func TestIframeCannotSayHello(t *testing.T) {
+// The message handler is reachable from every frame, and the secret is all that
+// stands between a frame and Go on a backend that cannot tell which frame posted.
+// macOS can (it rejects subframes natively, so its frames may still see the
+// handler); WebKitGTK and WebView2 cannot, so there the frames that are not the
+// page's own must not have a handler to post to at all (bridge.HideHandlerScript):
+// a frame of another origin, a srcdoc frame, an about:blank frame its script
+// made, and the frames inside those.
+func TestFramesGetNoHandler(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Hidden: true})
-	secret := "0123456789abcdef0123456789abcdef"
-	forged := secret + `{"t":"call","id":1,"k":"x","m":"Probe.Touch","a":[]}`
-	frame := `<script>
-const post = (m) => {
-  const h = window.webkit && webkit.messageHandlers && webkit.messageHandlers.mygo;
-  if (h) { h.postMessage(m); return "webkit"; }
-  if (window.chrome && chrome.webview) { chrome.webview.postMessage(m); return "webview2"; }
+	const reach = `function reach(w) {
+  try {
+    const h = w.webkit && w.webkit.messageHandlers && w.webkit.messageHandlers.mygo;
+    if (h && typeof h.postMessage === "function") return "webkit";
+    if (w.chrome && w.chrome.webview && typeof w.chrome.webview.postMessage === "function") return "webview2";
+  } catch (e) { return "error: " + e; }
   return "";
-};
-const via = post(JSON.stringify({ t: "hello", k: "` + secret + `" }));
-post(` + "`" + forged + "`" + `);
-parent.postMessage(via, "*");
+}
+`
+	js := func(s string) string { b, _ := json.Marshal(s); return string(b) }
+	// A srcdoc frame inside a frame of another origin reports to it, which
+	// relays to the page.
+	nested := `<script>` + reach + `parent.postMessage({ dataSrcdoc: reach(window) }, "*");</script>`
+	other := `<script>` + reach + `
+const out = { data: reach(window) };
+addEventListener("message", (e) => parent.postMessage(e.data, "*"));
+const b = document.createElement("iframe");
+document.body.append(b);
+out.dataBlank = reach(b.contentWindow);
+const s = document.createElement("iframe");
+s.srcdoc = ` + js(nested) + `;
+document.body.append(s);
+parent.postMessage(out, "*");
 </script>`
-	src, _ := json.Marshal(frame)
-	w.Page().LoadHTML(`<p>main</p><script>
-addEventListener("message", (e) => { window.frameResult = e.data });
-const f = document.createElement("iframe");
-f.src = "data:text/html," + encodeURIComponent(`+string(src)+`);
-document.body.append(f);
+	w.Page().LoadHTML(`<p>main</p><script>`+reach+`
+window.results = {};
+addEventListener("message", (e) => Object.assign(window.results, e.data));
+const d = document.createElement("iframe");
+d.src = "data:text/html," + encodeURIComponent(`+js(other)+`);
+document.body.append(d);
+const s = document.createElement("iframe");
+s.srcdoc = "<p>srcdoc</p>";
+s.onload = () => { window.results.srcdoc = reach(s.contentWindow); };
+document.body.append(s);
+const b = document.createElement("iframe");
+document.body.append(b);
+window.results.blank = reach(b.contentWindow);
 </script>`, "app://localhost/")
-	waitFor(t, w, "window.frameResult !== undefined")
-	via, _ := mygo.EvalAs[string](w.Page(), "window.frameResult")
-	if via == "" {
-		t.Skip("the iframe had no handler to post to")
+	waitFor(t, w, "['data', 'dataBlank', 'dataSrcdoc', 'srcdoc', 'blank'].every((k) => k in window.results)")
+	res, err := mygo.EvalAs[map[string]string](w.Page(), "window.results")
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Logf("the iframe posted through %s", via)
-	// A call after the iframe's, so the forged ones were handled before it.
+	t.Logf("the frames reach the handler through: %v", res)
+	if runtime.GOOS == "darwin" {
+		t.Log("macOS rejects the messages of subframes natively (frameInfo.isMainFrame); its frames may see the handler")
+	} else {
+		for frame, via := range res {
+			if via != "" {
+				t.Errorf("the %s frame has a message handler (%s): it could post to Go", frame, via)
+			}
+		}
+	}
+	// A call of the page's own still runs.
 	before := probe.n.Load()
-	if _, err := w.Page().Eval("mygo.call('Probe.Touch')"); err != nil || probe.n.Load() != before+1 {
+	if _, err := w.Page().EvalContext(wait.Context(t), "mygo.call('Probe.Touch')"); err != nil || probe.n.Load() != before+1 {
 		t.Fatalf("the page's own call: %v, count %d, want %d", err, probe.n.Load(), before+1)
 	}
 }

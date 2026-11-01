@@ -47,7 +47,21 @@ export function connect(w: any): Channel | null {
   let secret = "";
   for (let i = 0; i < bytes.length; i++) secret += (bytes[i]! + 256).toString(16).slice(1);
 
-  rawPost(stringify({ t: "hello", k: secret }));
+  const hello = stringify({ t: "hello", k: secret });
+  rawPost(hello);
+  // WebKit restores a page from its back/forward cache on Back and Forward: the
+  // main frame commits, so Go waits for a hello, and the document comes back as
+  // it was, without running this script again. Say the secret it has once more.
+  // A capturing listener, so it is ahead of any the page adds; an event a script
+  // made (isTrusted false) is not the engine's. The page can stop neither this
+  // nor learn from it: the hello goes to the handler captured above.
+  w.addEventListener(
+    "pageshow",
+    (e: PageTransitionEvent) => {
+      if (e.persisted && e.isTrusted) rawPost(hello);
+    },
+    true,
+  );
   return {
     stringify,
     post: (message) => rawPost(secret + message),

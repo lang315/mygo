@@ -30,6 +30,27 @@ type Config struct {
 	Fit *FitContent `json:"fit,omitempty"`
 }
 
+// HideHandlerScript is the user script, for every frame, that takes the message
+// handler away from the frames that are not the page's own. The handler is
+// reachable from every frame, and the backends of WebKitGTK and WebView2 cannot
+// tell Go which frame posted (macOS can, and rejects subframes natively), so
+// the frames do not get it: a frame that cannot post cannot say a hello, or a
+// call with a secret it guessed. The bridge runs in the top frame only, and
+// nothing else in a subframe uses the handler. It runs at document start, before
+// any script of the frame, and removes the handler of MyGo only (webkit's
+// messageHandlers.mygo, chrome.webview), so pages that look for other things
+// on those objects keep them.
+const HideHandlerScript = `(function(){
+if(window===window.top)return;
+var hide=function(o,k){
+if(!o||!(k in o))return;
+try{delete o[k]}catch(e){}
+if(k in o&&o[k]!==undefined)try{Object.defineProperty(o,k,{value:undefined,configurable:true})}catch(e){}
+};
+try{var w=window.webkit;if(w)hide(w.messageHandlers,"mygo");if(w&&w.messageHandlers&&w.messageHandlers.mygo)hide(window,"webkit")}catch(e){}
+try{if(window.chrome)hide(window.chrome,"webview")}catch(e){}
+})();`
+
 // Script returns the bridge source configured for one window.
 func Script(cfg Config) string {
 	return "(function(__MYGO_CONFIG__){\n" + source + "})(" + string(cfg.JSON()) + ");"

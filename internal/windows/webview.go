@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/accelerator"
+	"github.com/egoist/mygo/internal/bridge"
 	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehost"
@@ -753,6 +754,9 @@ func (w *window) addUserScripts() {
 		// After the bridge, which it tells.
 		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.titleBarScript()})
 	}
+	// The messages of WebView2 do not say which frame posted them, so the frames
+	// that are not the page's own get no handler to post to.
+	scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: bridge.HideHandlerScript, AllFrames: true})
 	if w.hidingScript != "" {
 		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.hidingScript, AllFrames: true})
 	}

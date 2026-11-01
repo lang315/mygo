@@ -125,6 +125,26 @@ func TestAnyMainFrameLoadArmsAHello(t *testing.T) {
 	}
 }
 
+// Back and Forward restore a document from the engine's cache: the main frame
+// commits, the document's bridge does not start again, and it says the secret it
+// has once more (transport.ts, on pageshow). Its messages are taken again, and
+// the other document's are not.
+func TestARestoredDocumentSaysItsSecretAgain(t *testing.T) {
+	w, fw := testWindow(t, WindowOptions{})
+	hello(fw, secretA)
+	if !takes(w, fw, secretA) {
+		t.Fatal("setup: the first document's hello was not taken")
+	}
+	commit(fw, "about:blank#other")
+	hello(fw, secretB) // the other document
+	commit(fw, "about:blank")
+	onMain(func() { fw.H.LoadFinished() })
+	hello(fw, secretA) // the restored one, on pageshow
+	if !takes(w, fw, secretA) || takes(w, fw, secretB) {
+		t.Error("the restored document's secret was not the window's after its hello")
+	}
+}
+
 func TestADocumentThatStaysKeepsItsSecret(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	hello(fw, secretA)
