@@ -46,8 +46,7 @@ func (s *NumericUpDownWidget) OnChange(fn func()) *NumericUpDownWidget {
 }
 
 // SetAccessibleName names the number for assistive technology, which reads it
-// before the buttons' "Increase" and "Decrease": "Copies Increase". A field
-// label of a Fields form names it too, when it has no name of its own.
+// before the buttons' "Increase" and "Decrease": "Copies Increase".
 func (s *NumericUpDownWidget) SetAccessibleName(name string) *NumericUpDownWidget {
 	s.change(func() { s.name = name })
 	return s
