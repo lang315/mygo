@@ -30,6 +30,10 @@ type boundType struct {
 	Type    string   `json:"type"`
 	Pointer bool     `json:"pointer"`
 	Methods []string `json:"methods"`
+	// ValueMethods are the methods that the value type (T, not *T) has, when
+	// the type is bound as a pointer: the table names them also by T.Name, for
+	// the source position of their code. Read from the target (targetBoundTypes).
+	ValueMethods []string `json:"-"`
 }
 
 // bindGenFile is the name of the file in the overlay that gives Bind the
@@ -57,23 +61,38 @@ func readBoundTypes(path string) ([]boundType, error) {
 	return list, nil
 }
 
+// targetTypes reads the methods of the bound types for a target; a test replaces it.
+var targetTypes = targetBoundTypes
+
 // bindFiles returns the overlay entry that gives Bind the methods of the
-// services the app bound, writing the generated source into work, or the reason
-// it cannot (see bindingsGo): with a file the build gets the tag mygo_static,
-// without one it keeps reflection. mainPkg is the import path of the main
-// package in pkg. It returns neither when generate mode did not run (an app
-// without a frontend) or the app binds nothing of its own.
-func bindFiles(c *Config, pkg, work, mainPkg string) (files map[string]string, reason string, err error) {
+// services the app bound, for the build for goos/goarch with the tags (comma
+// separated), writing the generated source into work, or the reason it cannot
+// (see bindingsGo): with a file the build gets the tag mygo_static, without one
+// it keeps reflection. The types come from the run on this computer, their
+// methods from the target (targetBoundTypes). mainPkg is the import path of the
+// main package in pkg. It returns neither when generate mode did not run (an app
+// without a frontend that binds nothing) or the app binds nothing of its own.
+func bindFiles(c *Config, pkg, work, mainPkg, goos, goarch, tags string) (files map[string]string, reason string, err error) {
 	files = map[string]string{}
-	if !c.boundRead {
+	if !c.boundRead || len(c.bound) == 0 {
 		return files, "", nil
 	}
-	src, reason := bindingsGo(mainPkg, c.bound)
+	bound, reason, err := targetTypes(c, goos, goarch, tags, mainPkg, c.bound)
+	if err != nil {
+		return files, fmt.Sprintf("the methods of the services could not be read for %s/%s: %v", goos, goarch, firstLine(err.Error())), nil
+	}
+	if reason != "" {
+		return files, reason, nil
+	}
+	src, reason := bindingsGo(mainPkg, bound)
 	if src == nil {
 		return files, reason, nil
 	}
 	if _, err := os.Lstat(filepath.Join(pkg, bindGenFile)); err == nil {
 		return nil, "", fmt.Errorf("%s is in the way of giving Bind the methods of the services; rename it", filepath.Join(pkg, bindGenFile))
+	}
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		return nil, "", err
 	}
 	gen := filepath.Join(work, bindGenFile)
 	if err := os.WriteFile(gen, src, 0o644); err != nil {
@@ -81,6 +100,32 @@ func bindFiles(c *Config, pkg, work, mainPkg string) (files map[string]string, r
 	}
 	files[filepath.Join(pkg, bindGenFile)] = gen
 	return files, "", nil
+}
+
+// firstLine returns the first line of s.
+func firstLine(s string) string {
+	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
+	return s
+}
+
+// lineWith returns the first line of s that has sub in it, or its first line.
+func lineWith(s, sub string) string {
+	for _, l := range strings.Split(s, "\n") {
+		if strings.Contains(l, sub) {
+			return strings.TrimSpace(l)
+		}
+	}
+	return firstLine(s)
+}
+
+// tagValue returns the value of the -tags among flags, "" without one.
+func tagValue(flags []string) string {
+	for i, f := range flags {
+		if f == "-tags" && i+1 < len(flags) {
+			return flags[i+1]
+		}
+	}
+	return ""
 }
 
 // generateTimeout is how long a release build lets an app run in generate mode
@@ -189,29 +234,23 @@ func symbolNames(path string) ([]string, error) {
 	return nil, fmt.Errorf("%s is not an ELF, Mach-O or PE executable", filepath.Base(path))
 }
 
-// bindTable gives a release build the table of the methods of the services
-// the app bound, and the tag that makes Bind use it, when every service can be
-// named; otherwise it says why Bind keeps reflection, once.
-func bindTable(c *Config, opts *buildOptions) error {
-	if !c.boundRead || len(c.bound) == 0 {
-		return nil
+// bindTableFor returns the overlay entry that gives a release build for
+// goos/goarch the table of the methods of the services the app bound, when every
+// one can be named there; otherwise it says why Bind keeps reflection, for this
+// target.
+func bindTableFor(c *Config, opts *buildOptions, goos, goarch string) (map[string]string, error) {
+	if opts.debug || !c.boundRead || len(c.bound) == 0 {
+		return nil, nil
 	}
-	mainPkg, err := packageImportPath(c)
+	work := filepath.Join(opts.work, "bind-"+goos+"-"+goarch)
+	files, reason, err := bindFiles(c, opts.pkg, work, opts.mainPkg, goos, goarch, tagValue(productionTags(opts.debug, c.root)))
 	if err != nil {
-		return err
-	}
-	files, reason, err := bindFiles(c, opts.pkg, opts.work, mainPkg)
-	if err != nil {
-		return err
+		return nil, err
 	}
 	if reason != "" {
 		logf("Bind keeps reflection (%s), about 1.4 MB more", reason)
 	}
-	if len(files) > 0 {
-		opts.overlay = mergeFiles(opts.overlay, files)
-		opts.static = true
-	}
-	return nil
+	return files, nil
 }
 
 // packageImportPath returns the import path of the app's main package.
@@ -301,7 +340,11 @@ func bindingsGo(mainPkg string, bound []boundType) (src []byte, reason string) {
 		}
 		fmt.Fprintf(&out, "\tmygo_mygo.BindMethods(mygo_reflect.TypeFor[%s]()", recv)
 		for _, m := range b.Methods {
-			fmt.Fprintf(&out, ",\n\t\tmygo_mygo.BoundMethod{Name: %q, Func: %s.%s}", m, expr, m)
+			fmt.Fprintf(&out, ",\n\t\tmygo_mygo.BoundMethod{Name: %q, Func: %s.%s", m, expr, m)
+			if b.Pointer && slices.Contains(b.ValueMethods, m) {
+				fmt.Fprintf(&out, ", Decl: %s.%s", typ, m)
+			}
+			out.WriteString("}")
 		}
 		out.WriteString(")\n")
 	}

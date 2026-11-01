@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ type buildOptions struct {
 	pkg           string            // directory of the main package
 	work          string            // for generated files
 	overlay       map[string]string // go build -overlay entries (the frontend, the table of Bind)
-	static        bool              // Bind takes its methods from the table, with the tag mygo_static
+	mainPkg       string            // import path of the main package, when a table for Bind is made
 }
 
 func runBuild(args []string) error {
@@ -148,8 +149,8 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 		if opts.overlay, err = frontendFiles(c, opts.pkg, work); err != nil {
 			return err
 		}
-		if !opts.debug {
-			if err := bindTable(c, &opts); err != nil {
+		if !opts.debug && c.boundRead && len(c.bound) > 0 {
+			if opts.mainPkg, err = packageImportPath(c); err != nil {
 				return err
 			}
 		}
@@ -264,16 +265,36 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 			if err != nil {
 				return err
 			}
-			overlay, err := writeOverlay(filepath.Join(opts.work, "overlay.json"), mergeFiles(opts.overlay, feed))
+			base := mergeFiles(opts.overlay, feed)
+			env := []string{"GOOS=" + goos, "GOARCH=" + arch}
+			build := func(files map[string]string, static bool) error {
+				overlay, err := writeOverlay(filepath.Join(opts.work, "overlay.json"), files)
+				if err != nil {
+					return err
+				}
+				flags := []string{"-trimpath", "-ldflags", ldflags}
+				flags = append(flags, releaseTags(opts.debug, c.root, static)...)
+				if overlay != "" {
+					flags = append(flags, "-overlay", overlay)
+				}
+				return goBuild(context.Background(), c, t, out, env, flags...)
+			}
+			// The table of Bind's methods for this target, if every service can
+			// be named; if the generated file still does not compile, the build
+			// is made again without it, as it was before the table.
+			table, err := bindTableFor(c, &opts, goos, arch)
 			if err != nil {
 				return err
 			}
-			flags := []string{"-trimpath", "-ldflags", ldflags}
-			flags = append(flags, releaseTags(opts.debug, c.root, opts.static)...)
-			if overlay != "" {
-				flags = append(flags, "-overlay", overlay)
+			if len(table) > 0 {
+				err := build(mergeFiles(base, table), true)
+				var failed *goBuildError
+				if err == nil || !errors.As(err, &failed) || !strings.Contains(failed.out, bindGenFile) {
+					return err
+				}
+				warnf("Bind keeps reflection (the table for %s/%s did not compile: %s), about 1.4 MB more", goos, arch, lineWith(failed.out, bindGenFile))
 			}
-			return goBuild(context.Background(), c, t, out, []string{"GOOS=" + goos, "GOARCH=" + arch}, flags...)
+			return build(base, false)
 		}()
 		return t.end(err, "Compiled "+goos+"/"+arch)
 	}

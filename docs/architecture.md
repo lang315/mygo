@@ -1017,27 +1017,42 @@ MyGo's own service, `mygo:window` behind `window.mygo.window`, is bound by
 `bindFuncs`, from funcs, without it.
 
 `mygo build` gives a release build the table and the tag
-(`cmd/mygo/bindgen.go`). Generate mode, which runs the app with `MYGO_GENERATE` to
-write the TypeScript client, also writes the bound types (package, name,
-pointer or value, methods in reflection's order) to `MYGO_GENERATE_BINDINGS`;
-`bindingsGo` turns them into `0mygo_bind_gen.go`, in the build's overlay, which
-calls `BindMethods` for each with `(*T).Method` or `T.Method` and imports aliased
-`mygo_<name>`. The tag goes in only when the file does, so a stale file is
-never paired with it. When some service cannot be named from package main
-(an unexported type of another package, a generic type, an internal package it
-cannot import, a plugin's own), the build prints "Bind keeps reflection (...)"
-and goes on as before: it is all or nothing. A table that lacks a method the type
-has fails at `Bind` ("build with mygo build again"), one that lacks the
-type too, and a method removed or renamed does not compile; nothing is silently
-reflected over. An app with no frontend has no client to write, so a release build
-builds it for this computer and runs it in generate mode once, with a timeout,
-only if its binary calls `Bind` (the symbol `mygo.bind` is in it); an app that binds
-nothing, most apps of native UI, is not run. If the run fails the build warns and
-keeps reflection. `go run` and `go build` without the CLI do not have the tag and
-bind by reflection, at the size they always had; `mygo dev` and `-debug` builds do
-too. The tests of the package bind many services the CLI has not seen, so under
-the tag they list by reflection (`staticFallback`, set only by a `_test.go` file;
-an app has none), and `go test -tags mygo_static .` runs the IPC goldens on the table.
+(`cmd/mygo/bindgen.go`, `bindtarget.go`). Generate mode, which runs the app with
+`MYGO_GENERATE` to write the TypeScript client, also writes the bound types (package,
+name, pointer or value) to `MYGO_GENERATE_BINDINGS`. That run is on this
+computer, so the names of the types come from it and their methods do not: for
+each target the build type-checks the target's packages (`go list -export -deps`
+for its GOOS, GOARCH and tags, then `go/types` on the export data of their
+imports) and reads each type's method set there, so a method that exists only on
+this GOOS is not named for another, and one that exists only on the target is.
+`bindingsGo` turns the result into `0mygo_bind_gen.go`, in the build's overlay
+for that target, which calls `BindMethods` for each type with `(*T).Method` or
+`T.Method` (and `Decl: T.Method` for a method of the value type bound through a
+pointer, whose code, not Go's wrapper, has the source position the client
+generator reads) and imports aliased `mygo_<name>`. The tag goes in only when the
+file does, so a stale file is never paired with it. The services of the plugins
+that bind their own types (fetch, sqlite, updater, watch, websocket) give `Bind`
+their methods themselves: each has a `serviceMethods` table registered with
+`BindMethods` and a test (`internal/bindcheck`) that fails when a method is added
+to the service and not to the table. A service the build cannot name from package
+main (an unexported type of another package, which includes a plugin of another
+author that has no table; a generic type; a type declared inside a function; an
+internal package it cannot import) makes the build print "Bind keeps reflection
+(...)" and go on as before: it is all or nothing. If the generated file still
+does not compile, the build is made again without it and says so. A table that
+lacks a method the type has fails at `Bind` ("build with mygo build again"), one
+that lacks the type too (a service bound after `App.Run`, or only under a
+condition that was false when `mygo build` ran the app), and a method removed or
+renamed does not compile; nothing is silently reflected over. An app with no
+frontend has no client to write, so a release build builds it for this computer
+and runs it in generate mode once, with a timeout, only if its binary calls
+`Bind` (the symbol `mygo.bind` is in it); an app that binds nothing, most apps
+of native UI, is not run. If the run fails the build warns and keeps reflection.
+`go run` and `go build` without the CLI do not have the tag and bind by
+reflection, at the size they always had; `mygo dev` and `-debug` builds do too.
+The tests of the package bind many services the CLI has not seen, so under the
+tag they list by reflection (`staticFallback`, set only by a `_test.go` file; an
+app has none), and `go test -tags mygo_static .` runs the IPC goldens on the table.
 
 JSON options (`jsonOptions` in `ipc.go`) are shared by calls and events:
 json/v2 defaults (nil slices encode as `[]`, case-sensitive names),

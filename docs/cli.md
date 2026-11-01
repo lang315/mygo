@@ -157,8 +157,10 @@ running app: the same run in generate mode that writes the TypeScript client
 generate mode once for this, with a timeout, like `mygo generate` does for one
 with a frontend; an app that binds nothing is not run, and if the run fails the
 build warns and goes on). If some service cannot be named from the main package
-(an unexported type of another package, a generic type), it prints
-`Bind keeps reflection (...)` and builds as before. `go run`, `go build` and
+(an unexported type of another package, a generic type, a type declared inside a
+function, a plugin of another author), it prints `Bind keeps reflection (...)`
+and builds as before. The methods come from the build's own target, so a
+cross build (`-platform windows/amd64` on a Mac) names the methods Windows has. `go run`, `go build` and
 `mygo dev` bind by reflection and keep the size they had.
 
 The platform `web` (or `js/wasm`) builds an app of native UI for browsers

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -13,12 +14,17 @@ import (
 // bindFiles decides, from the bound types generate mode listed, whether the
 // build gets the file and the tag.
 func TestBindFilesDecides(t *testing.T) {
+	saved := targetTypes
+	targetTypes = func(_ *Config, _, _, _, _ string, bound []boundType) ([]boundType, string, error) {
+		return bound, "", nil
+	}
+	defer func() { targetTypes = saved }()
 	pkg, work := t.TempDir(), t.TempDir()
 	c := &Config{root: pkg, boundRead: true, bound: []boundType{
 		{Pkg: "main", Type: "Greeter", Pointer: true, Methods: []string{"Hello"}},
 	}}
 
-	files, reason, err := bindFiles(c, pkg, work, "example.com/app")
+	files, reason, err := bindFiles(c, pkg, work, "example.com/app", "linux", "amd64", "")
 	if err != nil || reason != "" || len(files) != 1 {
 		t.Fatalf("files %v, reason %q, err %v", files, reason, err)
 	}
@@ -30,7 +36,7 @@ func TestBindFilesDecides(t *testing.T) {
 
 	// A type that cannot be named: no file, and the reason for the line.
 	c.bound = append(c.bound, boundType{Pkg: "example.com/app/svc", Type: "clock", Methods: []string{"Now"}})
-	files, reason, err = bindFiles(c, pkg, work, "example.com/app")
+	files, reason, err = bindFiles(c, pkg, work, "example.com/app", "linux", "amd64", "")
 	if err != nil || len(files) != 0 || !strings.Contains(reason, "clock") {
 		t.Fatalf("files %v, reason %q, err %v", files, reason, err)
 	}
@@ -38,7 +44,7 @@ func TestBindFilesDecides(t *testing.T) {
 	// Nothing bound, or generate mode never ran (an app without a frontend):
 	// neither a file nor a reason.
 	for _, c := range []*Config{{root: pkg, boundRead: true}, {root: pkg}} {
-		if files, reason, err = bindFiles(c, pkg, work, "example.com/app"); err != nil || len(files) != 0 || reason != "" {
+		if files, reason, err = bindFiles(c, pkg, work, "example.com/app", "linux", "amd64", ""); err != nil || len(files) != 0 || reason != "" {
 			t.Errorf("%+v: files %v, reason %q, err %v", c, files, reason, err)
 		}
 	}
@@ -48,7 +54,7 @@ func TestBindFilesDecides(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pkg, bindGenFile), []byte("package main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := bindFiles(c, pkg, work, "example.com/app"); err == nil || !strings.Contains(err.Error(), "in the way") {
+	if _, _, err := bindFiles(c, pkg, work, "example.com/app", "linux", "amd64", ""); err == nil || !strings.Contains(err.Error(), "in the way") {
 		t.Errorf("err = %v, want one that says the file is in the way", err)
 	}
 }
@@ -71,6 +77,7 @@ import "github.com/egoist/mygo"
 
 type Greeter struct{ greeting string }
 
+// Hello greets name.
 func (g Greeter) Hello(name string) string { return g.greeting + name }
 func (g *Greeter) Reset()                  { g.greeting = "" }
 
@@ -258,7 +265,7 @@ func TestBuildNamesTheMethodsThroughTheTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	work := t.TempDir()
-	files, reason, err := bindFiles(c, pkg, work, mainPkg)
+	files, reason, err := bindFiles(c, pkg, work, mainPkg, runtime.GOOS, runtime.GOARCH, "")
 	if err != nil || reason != "" || len(files) != 1 {
 		t.Fatalf("files %v, reason %q, err %v", files, reason, err)
 	}
@@ -269,7 +276,7 @@ func TestBuildNamesTheMethodsThroughTheTable(t *testing.T) {
 
 	reflectMethods := func(tags string, overlay string) int {
 		t.Helper()
-		args := []string{"build", "-trimpath", "-tags", tags, "-ldflags", "-s -w -dumpdep", "-o", filepath.Join(work, "app-"+tags)}
+		args := []string{"build", "-tags", tags, "-ldflags", "-s -w -dumpdep", "-o", filepath.Join(work, "app-"+tags)}
 		if overlay != "" {
 			args = append(args, "-overlay", overlay)
 		}
@@ -301,6 +308,16 @@ func TestBuildNamesTheMethodsThroughTheTable(t *testing.T) {
 	run.Env = append(os.Environ(), "MYGO_GENERATE="+filepath.Join(work, "static.ts"), "MYGO_GENERATE_BINDINGS="+list)
 	if out, err := run.CombinedOutput(); err != nil {
 		t.Fatalf("the app built with the table: %v\n%s", err, out)
+	}
+	// The client the app built with the table writes is the one the app built
+	// with reflection wrote, doc comments included: they are found by the code
+	// of each method (its PC), which the table must give as reflection does.
+	want, err := os.ReadFile(filepath.Join(dir, "mygo.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(work, "static.ts")); err != nil || !bytes.Equal(got, want) {
+		t.Errorf("the client of the app with the table (%v) is not the one by reflection:\n%s\nwant\n%s", err, got, want)
 	}
 	got, err := readBoundTypes(list)
 	if err != nil || len(got) != 1 || got[0].Type != "Greeter" || !got[0].Pointer || strings.Join(got[0].Methods, ",") != "Hello,Reset" {

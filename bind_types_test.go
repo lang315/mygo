@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 )
@@ -21,7 +22,15 @@ func (boundTypesValue) V(a int) int { return a }
 
 type boundTypesInternal struct{}
 
-func (boundTypesInternal) Hidden() {}
+func (boundTypesInternal) Visible() {}
+
+type boundTypesTabled struct{}
+
+func (boundTypesTabled) Hidden() {}
+
+func init() {
+	BindMethods(reflect.TypeFor[boundTypesTabled](), BoundMethod{Name: "Hidden", Func: boundTypesTabled.Hidden})
+}
 
 type boundTypeJSONForTest struct {
 	Pkg     string   `json:"pkg"`
@@ -49,7 +58,9 @@ func readBoundTypes(t *testing.T, path string) map[string]boundTypeJSONForTest {
 
 // Generate mode lists the bound types for mygo build to name: the package, the
 // name, whether it is bound as a pointer, and the methods in the order
-// reflection lists them. Services of MyGo's own are left out.
+// reflection lists them. A service of a plugin is listed unless the plugin
+// gave Bind its methods itself (BindMethods), as the official plugins do: one that
+// did not is a type mygo build cannot name, and keeps reflection for the build.
 func TestGenerateModeWritesTheBoundTypes(t *testing.T) {
 	bindForTest(t, "BoundTypesPtr", &boundTypesPtr{})
 	bindForTest(t, "BoundTypesValue", boundTypesValue{})
@@ -57,6 +68,10 @@ func TestGenerateModeWritesTheBoundTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { unbind("plugin:boundtypes") })
+	if err := bind("plugin:tabled", boundTypesTabled{}, true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { unbind("plugin:tabled") })
 
 	path := filepath.Join(t.TempDir(), "bound.json")
 	if err := writeBoundTypes(path); err != nil {
@@ -70,8 +85,11 @@ func TestGenerateModeWritesTheBoundTypes(t *testing.T) {
 	if e := got["boundTypesValue"]; e.Pkg != pkg || e.Pointer || !slices.Equal(e.Methods, []string{"V"}) {
 		t.Errorf("boundTypesValue: %+v", e)
 	}
-	if _, ok := got["boundTypesInternal"]; ok {
-		t.Error("an internal service was listed")
+	if e := got["boundTypesInternal"]; e.Pkg != pkg || !slices.Equal(e.Methods, []string{"Visible"}) {
+		t.Errorf("a service of a plugin with no table is not listed: %+v", e)
+	}
+	if _, ok := got["boundTypesTabled"]; ok {
+		t.Error("a service of a plugin that gave Bind its methods was listed")
 	}
 }
 

@@ -24,22 +24,22 @@ type staticEmbedPtr struct{ *staticSvc }
 type staticStream struct{}
 
 func (staticStream) Count(ctx context.Context, n int, ch *Channel[int]) error { return nil }
-func (staticStream) Sum(prefix string, rest ...int) int                     { return len(rest) }
+func (staticStream) Sum(prefix string, rest ...int) int                       { return len(rest) }
 
 func init() {
-	BindMethods(reflect.TypeFor[staticSvc](), BoundMethod{"Value", staticSvc.Value})
+	BindMethods(reflect.TypeFor[staticSvc](), BoundMethod{Name: "Value", Func: staticSvc.Value})
 	BindMethods(reflect.TypeFor[*staticSvc](),
-		BoundMethod{"Fail", (*staticSvc).Fail},
-		BoundMethod{"Pointer", (*staticSvc).Pointer},
-		BoundMethod{"Value", (*staticSvc).Value})
-	BindMethods(reflect.TypeFor[staticEmbed](), BoundMethod{"Value", staticEmbed.Value})
+		BoundMethod{Name: "Fail", Func: (*staticSvc).Fail},
+		BoundMethod{Name: "Pointer", Func: (*staticSvc).Pointer},
+		BoundMethod{Name: "Value", Func: (*staticSvc).Value})
+	BindMethods(reflect.TypeFor[staticEmbed](), BoundMethod{Name: "Value", Func: staticEmbed.Value})
 	BindMethods(reflect.TypeFor[staticEmbedPtr](),
-		BoundMethod{"Fail", staticEmbedPtr.Fail},
-		BoundMethod{"Pointer", staticEmbedPtr.Pointer},
-		BoundMethod{"Value", staticEmbedPtr.Value})
+		BoundMethod{Name: "Fail", Func: staticEmbedPtr.Fail},
+		BoundMethod{Name: "Pointer", Func: staticEmbedPtr.Pointer},
+		BoundMethod{Name: "Value", Func: staticEmbedPtr.Value})
 	BindMethods(reflect.TypeFor[staticStream](),
-		BoundMethod{"Count", staticStream.Count},
-		BoundMethod{"Sum", staticStream.Sum})
+		BoundMethod{Name: "Count", Func: staticStream.Count},
+		BoundMethod{Name: "Sum", Func: staticStream.Sum})
 }
 
 // invoke calls the method with its arguments, as call does: after the receiver.
@@ -121,7 +121,7 @@ type staleSvc struct{}
 func (staleSvc) A() {}
 func (staleSvc) B() {} // not in the table below
 
-func init() { BindMethods(reflect.TypeFor[staleSvc](), BoundMethod{"A", staleSvc.A}) }
+func init() { BindMethods(reflect.TypeFor[staleSvc](), BoundMethod{Name: "A", Func: staleSvc.A}) }
 
 func TestStaticBindPanicsWhenTheTableIsStale(t *testing.T) {
 	_, err := listWithoutTheFallback(t, staleSvc{}, "Stale")
