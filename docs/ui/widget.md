@@ -384,7 +384,9 @@ status.SetText("Saved") // and the window redraws
 `Fields()` lays out a form: a row is a label and the control it names. By
 default the labels make a column as wide as the widest of them, each at
 the middle of its control's height, and the controls fill a second column,
-as in WinForms or GTK:
+as in WinForms or GTK. Assistive technology reads each control by its
+row's label (a control with a name of its own, or a text that names it, as a
+check box's, keeps it):
 
 ```go
 widget.Fields().

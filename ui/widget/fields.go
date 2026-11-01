@@ -111,7 +111,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					if !r.label.hidden && r.label.place.align == 0 {
 						e.AlignSelf(ui.Start)
 					}
-					render(c, r.w)
+					render(c, r.w).NamedBy(e)
 				})
 			}
 		})
@@ -140,7 +140,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					e.AlignSelf(ui.Center)
 				}
 			}
-			place(render(c, r.w), r.w, ui.Stretch)
+			place(render(c, r.w).NamedBy(e), r.w, ui.Stretch)
 		}
 	})
 }

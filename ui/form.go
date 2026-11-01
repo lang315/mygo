@@ -124,6 +124,33 @@ func coreField(c *context, label string, fn func()) *node {
 	return f
 }
 
+// NamedBy names the control of e for assistive technology by label, as Field
+// names its control, for a form of your own: e is the control or the element
+// holding it (the first element inside that takes the focus, or a group of
+// them, is the control). A control with a name of its own, or a text of its own
+// that names it, as a check box's, keeps it. A number input's buttons take the
+// name too, before their own: "Copies Increase". Call it once both are built.
+func (e *node) NamedBy(label *node) *node {
+	if label == nil {
+		return e
+	}
+	ctrl := e
+	if e.role != RoleRadioGroup && e.role != RoleToolbar && e.role != RoleList && e.role != RoleTable && e.role != RoleTree && e.role != RoleTabList &&
+		e.flags&(flagFocusable|flagEditable) == 0 {
+		ctrl = fieldControl(e)
+	}
+	if ctrl == nil || namesItself(ctrl) {
+		return e
+	}
+	if ctrl.nameFrom == nil || ctrl.nameFrom.label == "" {
+		ctrl.nameFrom = label
+	}
+	if ctrl != e && e.label == "" && e.nameFrom == nil {
+		e.nameFrom = label // what is named after e, as a number's buttons, is named after label
+	}
+	return e
+}
+
 // fieldControl returns the control of a field: the first element inside e
 // that takes the focus, or a group of them.
 func fieldControl(e *node) *node {
@@ -190,6 +217,9 @@ func namesItself(e *node) bool {
 func (e *node) nameOf() string {
 	if e.label == "" && e.kind == kindText {
 		return e.text
+	}
+	if e.label == "" && e.nameFrom != nil && e.nameFrom != e {
+		return e.nameFrom.nameOf()
 	}
 	return e.label
 }

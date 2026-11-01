@@ -62,3 +62,6 @@ and the field's label names the group around them.
 Assistive technology reads a control by its field's label, with the
 description and the error after it, and the value invalid while there is an
 error; a fieldset is a group named by its legend.
+In a form of your own, `Element.NamedBy(label)` names a control by a label the
+same way; a control that has a name of its own keeps it, and a number input's
+buttons take the name too ("Copies Increase").

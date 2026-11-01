@@ -61,3 +61,33 @@ func TestNumberInputNamedButtonStillSteps(t *testing.T) {
 		t.Fatalf("value %v after a click on Copies Increase", v)
 	}
 }
+
+// NamedBy names the control inside an element by a label of a form of one's
+// own; a control with a name of its own keeps it.
+func TestNamedByNamesTheControlAndTheButtonsOfANumber(t *testing.T) {
+	v, w := 3.0, 4.0
+	var on bool
+	tt := NewTester(func(c *Context) {
+		Column(c).Children(func() {
+			l1 := Text(c, "Copies")
+			NumberInput(c, &v, 0, 10, 1).NamedBy(l1)
+			l2 := Text(c, "Other")
+			NumberInput(c, &w, 0, 10, 1).Label("Own").NamedBy(l2)
+			l3 := Text(c, "Remember")
+			Checkbox(c, &on, "Keep me signed in").NamedBy(l3)
+		})
+	}, 400, 300)
+	tt.Frame()
+	fields, buttons := numberNodes(tt)
+	if !slices.Equal(fields, []string{"Copies", "Own"}) {
+		t.Errorf("fields %q: the second number keeps its own Label", fields)
+	}
+	if !slices.Contains(buttons, "Copies Increase") || !slices.Contains(buttons, "Copies Decrease") {
+		t.Errorf("buttons %q", buttons)
+	}
+	for _, n := range tt.Nodes() {
+		if n.Label == "Remember" && n.Role != RoleText {
+			t.Errorf("a check box with a text took the label's name: %v", n)
+		}
+	}
+}

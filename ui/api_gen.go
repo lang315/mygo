@@ -5013,6 +5013,22 @@ func (_handle Element) Modal() Element {
 	return wrapElement(_node.Modal())
 }
 
+// NamedBy names the control of e for assistive technology by label, as Field
+// names its control, for a form of your own: e is the control or the element
+// holding it (the first element inside that takes the focus, or a group of
+// them, is the control). A control with a name of its own, or a text of its own
+// that names it, as a check box's, keeps it. A number input's buttons take the
+// name too, before their own: "Copies Increase". Call it once both are built.
+func (_handle Element) NamedBy(label Element) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.NamedBy(label.nodeFor(_ctx.rt)))
+}
+
 // NoWrap keeps each line of the element's text whole, breaking it only at
 // newlines, even where it overflows the element.
 func (_handle Element) NoWrap() Element {
