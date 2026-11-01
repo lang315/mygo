@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/accelerator"
+	"github.com/egoist/mygo/internal/bridge"
 	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehost"
@@ -753,6 +754,10 @@ func (w *window) addUserScripts() {
 		// After the bridge, which it tells.
 		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.titleBarScript()})
 	}
+	// WebView2 raises its message event for the top-level document only, so a
+	// frame's messages do not reach Go. The frames still get no handler: defense
+	// in depth, for a WebView2 that delivers more.
+	scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: bridge.HideHandlerScript, AllFrames: true})
 	if w.hidingScript != "" {
 		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.hidingScript, AllFrames: true})
 	}

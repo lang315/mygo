@@ -27,7 +27,6 @@ func (w *Window) bridgeScript() string {
 		Platform: jsPlatform(),
 		WindowID: w.top().id, // the window a web view is in
 		Version:  Version,
-		Secret:   w.secret,
 		Locale:   App.Locale(),
 		Dir:      appDir(),
 		Fit:      w.fitLimits(),
@@ -294,11 +293,51 @@ func (w *Window) sendTitleBar() {
 // that call no Go method is much smaller.
 const maxUntrustedMessage = 4 << 10
 
+// helloPrefix starts the hello the bridge posts at document start, with the
+// secret of the document: {"t":"hello","k":"<32 hex digits>"}. A message that
+// has a secret starts with it, in hex, so the two do not meet.
+const helloPrefix = `{"t":"hello",`
+
+// takeHello makes the secret of a hello the window's, and stops waiting for
+// one. The bridge posts it synchronously, as the first thing its script does
+// at document start: before any script of the page, and before the page has an
+// iframe to post one. So the first valid hello after a commit is the
+// bridge's, and the window takes no other. One that is not a hello of a
+// secret is ignored and leaves the wait. Main thread only.
+func (w *Window) takeHello(msg string) {
+	m, err := parsePageMessage(stringBytes(msg))
+	if err != nil || m.T != "hello" || !isSecret(m.K) {
+		return
+	}
+	w.secret, w.helloArmed = m.K, false
+}
+
+// isSecret reports whether s is what the bridge makes: 16 random bytes in
+// lower case hex.
+func isSecret(s string) bool {
+	if len(s) != 32 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c < '0' || c > '9' && c < 'a' || c > 'f' {
+			return false
+		}
+	}
+	return true
+}
+
 // handleMessage routes a message posted by the page bridge. It runs on the
 // main thread.
 func (w *Window) handleMessage(msg string) {
 	if w.hostile() && len(msg) > maxUntrustedMessage {
 		return // what the bridge posts is smaller
+	}
+	if w.helloArmed && strings.HasPrefix(msg, helloPrefix) {
+		w.takeHello(msg)
+		return
+	}
+	if w.secret == "" {
+		return // the document has not said its secret
 	}
 	msg, ok := strings.CutPrefix(msg, w.secret)
 	if !ok {

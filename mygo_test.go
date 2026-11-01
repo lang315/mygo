@@ -4,6 +4,8 @@ package mygo
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
@@ -15,7 +17,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -119,14 +120,34 @@ func page(fw *fake.Window, msg string) {
 	onMain(func() { fw.H.Message(s + msg) })
 }
 
-// secret returns the secret the bridge of fw prefixes its messages with.
+// testSecrets are the secrets the tests' bridges choose, by window.
+var testSecrets sync.Map // *fake.Window -> string
+
+// secret returns the secret the bridge of fw prefixes its messages with. The
+// bridge makes its own at document start and says it in a hello, which a
+// window takes once after a navigation commits; secret says it again each
+// time, which a window that is not waiting for one ignores, so a test need not
+// know whether its window navigated.
 func secret(fw *fake.Window) string {
-	m := regexp.MustCompile(`"secret":"([^"]+)"`).FindStringSubmatch(fw.Opts.UserScripts[0].Source)
-	if m == nil {
-		panic("no secret in the bridge configuration")
+	s, ok := testSecrets.Load(fw)
+	if !ok {
+		s, _ = testSecrets.LoadOrStore(fw, newTestSecret())
 	}
-	return m[1]
+	onMain(func() { fw.H.Message(helloMessage(s.(string))) })
+	return s.(string)
 }
+
+// newTestSecret makes a secret as the bridge does: 16 random bytes in hex.
+func newTestSecret() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b[:])
+}
+
+// helloMessage is the hello a bridge posts at document start.
+func helloMessage(secret string) string { return `{"t":"hello","k":"` + secret + `"}` }
 
 // received waits until the page received a message matching pred.
 func received(t *testing.T, fw *fake.Window, pred func(m map[string]any) bool) map[string]any {
@@ -1925,7 +1946,7 @@ func TestThemePreferencesReachThePage(t *testing.T) {
 		t.Errorf("preferences after a change = %+v", p)
 	}
 	scripts := onMainValue(func() []platform.UserScript { return slices.Clone(fw.Opts.UserScripts) })
-	if len(scripts) != 3 || !strings.Contains(scripts[0].Source, `"secret"`) || scripts[2].Source != "preload();" {
+	if len(scripts) != 3 || !strings.Contains(scripts[0].Source, `"windowId"`) || scripts[2].Source != "preload();" {
 		t.Errorf("user scripts after a change = %+v", scripts)
 	} else if src := scripts[preferencesScriptIndex].Source; !strings.Contains(src, `"accent":null`) || !strings.Contains(src, `"textScale":2`) {
 		t.Errorf("preferences script after a change = %s", src)
@@ -1954,7 +1975,7 @@ func TestPreferencesScriptAtDocumentStart(t *testing.T) {
 	if len(scripts) != 3 {
 		t.Fatalf("UserScripts = %d, want the bridge, the preferences and the preload script", len(scripts))
 	}
-	if !strings.Contains(scripts[0].Source, `"secret"`) {
+	if !strings.Contains(scripts[0].Source, `"windowId"`) {
 		t.Error("the bridge configuration does not come first")
 	}
 	src := scripts[preferencesScriptIndex].Source

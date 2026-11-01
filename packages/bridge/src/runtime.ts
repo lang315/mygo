@@ -58,6 +58,7 @@ export class CallError extends Error {
 export function createRuntime(
   config: BridgeConfig,
   post: (message: string) => void,
+  stringify: (value: unknown) => string = JSON.stringify,
 ): { runtime: Runtime; internal: Internal } {
   // A per-page token keeps replies addressed to a previous page (before a
   // navigation) from resolving promises of the current one.
@@ -83,7 +84,7 @@ export function createRuntime(
   let locale = config.locale || "en";
   let dir: Direction = config.dir === "rtl" ? "rtl" : "ltr";
 
-  const send = (message: Outgoing) => post(JSON.stringify(message));
+  const send = (message: Outgoing) => post(stringify(message));
 
   const call = <T>(method: string, ...args: unknown[]): Promise<T> => {
     const id = ++seq;

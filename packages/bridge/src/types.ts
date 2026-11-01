@@ -18,8 +18,6 @@ export interface BridgeConfig {
   platform: Platform;
   windowId: number;
   version: string;
-  /** Prefixes every message, so Go can tell ours from other frames'. */
-  secret: string;
   /** The language the app shows, e.g. "zh-Hans", and its direction. */
   locale: string;
   dir: Direction;

@@ -951,11 +951,13 @@ package: docs say `bunx mygo-cli`, never `bunx mygo`, outside a project.
 
 ### Wire protocol
 
-Page → Go (a JSON string per message, prefixed with the window's secret; see
-Trust):
+Page → Go (a JSON string per message, prefixed with the secret of the page's
+document; see Trust). The first message of a document is the hello, which has
+no prefix and says the secret:
 
 | message | meaning |
 |---|---|
+| `{"t":"hello","k":"<32 hex digits>"}` | the document's secret; taken once after a main-frame commit |
 | `{"t":"call","id":N,"k":token,"m":"Service.Method","a":[...]}` | call a bound method |
 | `{"t":"chan-ack","c":N,"k":token,"n":S}` | the page took the values of channel N up to the S-th |
 | `{"t":"chan-close","c":N,"k":token}` | the page closed channel N |
@@ -1082,11 +1084,49 @@ of untrusted pages to the app.
 
 The message handler is reachable from every frame, while trust is decided
 by the main frame's URL, so an iframe of another origin must not be able to
-talk to Go: each window has a random secret (`crypto/rand`), passed only to
-the bridge's closure in its configuration, which prefixes every message;
-`handleMessage` drops messages without it. macOS additionally only accepts
-messages from the main frame (`WKScriptMessage.frameInfo.isMainFrame`);
-WebKitGTK exposes no frame information, so Linux relies on the secret.
+talk to Go: each document has a random secret, made by the bridge
+(`crypto.getRandomValues`) and kept in its closure, which prefixes every message.
+The secret is per document, not per window: a page that was visited, or an
+iframe of another origin that learned the secret of an earlier document, must
+not be able to speak for the next one. The bridge's script says it in a hello,
+the first thing it does at document start, which is before any script of the
+page and before the page has an iframe. The window takes exactly one hello
+after the main frame commits a navigation (`NavigationCommitted` clears the
+secret and waits for one: `Window.helloArmed`), so a reload rotates it and a
+navigation inside the document (pushState, a hash), which commits nothing,
+keeps it. A hello before the commit, a second one, and every message before the
+hello or with another secret are dropped (`handleMessage`). The bridge also
+takes `postMessage` (bound to its handler), `JSON.stringify` and
+`crypto.getRandomValues` once, before the page can replace them, so a page that
+does cannot read the secret from what the bridge posts afterwards.
+
+The window takes the first valid hello after a commit, from whoever posted it:
+the wait is a slot, safe only when nothing but the bridge can post before the
+bridge does. The backends hold that, not Go:
+
+- **macOS** rejects the messages of subframes natively
+  (`WKScriptMessage.frameInfo.isMainFrame`).
+- **WebView2** raises its message event for the top-level document only.
+- **WebKitGTK** does not say which frame posted a message. A page restored from
+  the back/forward cache is committed (`WEBKIT_LOAD_COMMITTED`, so the window
+  waits for a hello) before the restore, and then WebKit runs `pageshow` in the
+  subframes before the main frame's, so a subframe's hello could take the slot
+  ahead of the bridge's. So Back and Forward on Linux load the page again
+  (`enable-page-cache` is off for every web view): the bridge runs at document
+  start, before the page has a frame. The cost is that a page on Linux does
+  not keep what the cache kept (form fields, a scroll position) on Back.
+
+`HideHandlerScript` (`internal/bridge`), a user script for every frame of
+WebKitGTK and WebView2, removes the handler from subframes at document start,
+as defense in depth; WebKit gives the initial empty document of a frame no
+user script, so it is not what holds the slot shut.
+
+On macOS a page that comes back from the cache keeps its bridge, which does not
+start again: the commit made the window wait for a hello, so the bridge listens
+for `pageshow` (`persisted`, from the engine) and says its secret again.
+
+That the commit reaches Go before the hello is an ordering of each backend's
+events, held by `TestBridgeCallsAfterEveryKindOfLoad` in `internal/e2e` (CI).
 
 ### Plugins
 

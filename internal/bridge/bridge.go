@@ -20,8 +20,6 @@ type Config struct {
 	Platform string `json:"platform"`
 	WindowID int    `json:"windowId"`
 	Version  string `json:"version"`
-	// Secret prefixes every message the bridge posts.
-	Secret string `json:"secret"`
 	// Locale is the language the app shows, e.g. "zh-Hans", and Dir the
 	// direction it is written in, "ltr" or "rtl", which pages read as
 	// mygo.locale and mygo.dir from document start.
@@ -31,6 +29,33 @@ type Config struct {
 	// content (FitContent), nil for other windows.
 	Fit *FitContent `json:"fit,omitempty"`
 }
+
+// HideHandlerScript is the user script, for every frame, that takes the message
+// handler away from the frames that are not the page's own, on WebKitGTK and
+// WebView2. It is defense in depth, not the barrier. WebKitGTK does not say which
+// frame posted a message; there the barrier is that the page is never restored
+// from the back/forward cache, so the bridge's hello comes before the page has a
+// frame (enable-page-cache, see "Trust" in the architecture guide). WebView2
+// raises its message event for the top-level document only. macOS rejects the
+// messages of subframes natively.
+//
+// The script runs at document start, before any script of the frame, and
+// removes the handler of MyGo only (webkit's messageHandlers.mygo,
+// chrome.webview), so pages that look for other things on those objects keep
+// them. It does not run in the initial empty document of a frame (WebKit gives
+// those no user script), so a frame that makes a child with a source that has
+// not committed can still see the handler there. The bridge runs in the top
+// frame only, and nothing else in a subframe uses the handler.
+const HideHandlerScript = `(function(){
+if(window===window.top)return;
+var hide=function(o,k){
+if(!o||!(k in o))return;
+try{delete o[k]}catch(e){}
+if(k in o&&o[k]!==undefined)try{Object.defineProperty(o,k,{value:undefined,configurable:true})}catch(e){}
+};
+try{var w=window.webkit;if(w)hide(w.messageHandlers,"mygo");if(w&&w.messageHandlers&&w.messageHandlers.mygo)hide(window,"webkit")}catch(e){}
+try{if(window.chrome)hide(window.chrome,"webview")}catch(e){}
+})();`
 
 // Script returns the bridge source configured for one window.
 func Script(cfg Config) string {
@@ -62,8 +87,6 @@ func (c Config) JSON() []byte {
 	b = strconv.AppendInt(b, int64(c.WindowID), 10)
 	b = append(b, `,"version":`...)
 	b = jsonlite.AppendString(b, c.Version)
-	b = append(b, `,"secret":`...)
-	b = jsonlite.AppendString(b, c.Secret)
 	b = append(b, `,"locale":`...)
 	b = jsonlite.AppendString(b, c.Locale)
 	b = append(b, `,"dir":`...)

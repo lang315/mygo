@@ -3,7 +3,6 @@ package widget
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -238,15 +237,14 @@ func TestAWebBrowserPageNeverCallsGo(t *testing.T) {
 	b := WebBrowser().SetDocumentText("<p>app's HTML</p>")
 	_, s := shownBrowser(t, b)
 	v := theView(t, b, s)
-	secret := regexp.MustCompile(`"secret":"([^"]+)"`).FindStringSubmatch(v.UserScripts()[0].Source)
-	if secret == nil {
-		t.Fatal("no bridge secret")
-	}
+	// The bridge of each document says its secret in a hello after the commit.
+	const secret = "0123456789abcdef0123456789abcdef"
 	for i, url := range []string{"about:blank", "file:///tmp/x.html", "https://example.com/", "http://localhost:5173/"} {
 		mygo.RunOnMain(func() { v.H.NavigationCommitted(url) })
+		mygo.RunOnMain(func() { v.H.Message(`{"t":"hello","k":"` + secret + `"}`) })
 		id := 300 + i
 		msg := fmt.Sprintf(`{"t":"call","id":%d,"k":"tok","m":"BrowserHello.Hello","a":["x"]}`, id)
-		mygo.RunOnMain(func() { v.H.Message(secret[1] + msg) })
+		mygo.RunOnMain(func() { v.H.Message(secret + msg) })
 		wait.Until(t, "the reply", func() bool {
 			for _, sc := range v.Scripts() {
 				if strings.Contains(sc, fmt.Sprintf(`"id":%d`, id)) && strings.Contains(sc, `"ok":false`) {

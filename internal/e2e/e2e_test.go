@@ -145,6 +145,8 @@ func TestMain(m *testing.M) {
 		w.Header().Set("Content-Disposition", `attachment; filename="report.bin"`)
 		io.WriteString(w, "binary report")
 	})
+	// A source that never commits a document, for a frame in the initial empty document.
+	mux.HandleFunc("/204", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("/capture", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		io.WriteString(w, capturePage)
