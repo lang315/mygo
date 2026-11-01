@@ -2285,7 +2285,33 @@ func TestParseBackground(t *testing.T) {
 	}
 }
 
+// With no codec linked, which no Bind or NewEvent ran to do, coding a value is
+// an error and a reply says so: nothing panics.
+func TestCodingWithoutACodecIsAnError(t *testing.T) {
+	saved := codec.Load()
+	codec.Store(nil)
+	defer codec.Store(saved)
+	b := encodeReply(7, "k", map[string]any{"a": 1}, nil).appendTo(nil)
+	var m struct {
+		OK bool   `json:"ok"`
+		E  string `json:"e"`
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("%s: %v", b, err)
+	}
+	if m.OK || !strings.Contains(m.E, "no codec") {
+		t.Errorf("reply %s, want an error about the codec", b)
+	}
+	if _, err := encodeEvent("e", 1); err == nil {
+		t.Error("an event with no codec was encoded")
+	}
+	if _, err := decodeArg(rawValue("1"), reflect.TypeFor[int](), 0); err == nil {
+		t.Error("an argument with no codec was decoded")
+	}
+}
+
 func TestEncodeReply(t *testing.T) {
+	linkCodec() // as Bind does: the test does not depend on the tests before it
 	b := encodeReply(7, "k\"1", map[string]any{"line": "a b"}, nil).appendTo(nil)
 	var m map[string]jsontext.Value
 	if err := json.Unmarshal(b, &m); err != nil {

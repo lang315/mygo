@@ -322,7 +322,11 @@ func (m *method) call(w *Window, page context.Context, token string, args []rawV
 
 func decodeArg(raw rawValue, t reflect.Type, i int) (reflect.Value, error) {
 	v := reflect.New(t)
-	if err := codec.Load().unmarshal(raw, v.Interface()); err != nil {
+	c, err := loadCodec()
+	if err == nil {
+		err = c.unmarshal(raw, v.Interface())
+	}
+	if err != nil {
 		return reflect.Value{}, fmt.Errorf("invalid argument %d: %w", i+1, err)
 	}
 	return v.Elem(), nil
@@ -473,7 +477,11 @@ func encodeResult(result any) ([]byte, error) {
 	case bool:
 		return strconv.AppendBool(nil, v), nil
 	}
-	return codec.Load().marshal(result)
+	c, err := loadCodec()
+	if err != nil {
+		return nil, err
+	}
+	return c.marshal(result)
 }
 
 type callerKey struct{}
@@ -599,7 +607,11 @@ func (e *Event[T]) Broadcast(payload T) error {
 }
 
 func encodeEvent(name string, payload any) (message, error) {
-	p, err := codec.Load().marshal(payload)
+	c, err := loadCodec()
+	var p []byte
+	if err == nil {
+		p, err = c.marshal(payload)
+	}
 	if err != nil {
 		return message{}, fmt.Errorf("mygo: cannot encode event %q: %w", name, err)
 	}

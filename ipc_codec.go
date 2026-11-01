@@ -6,6 +6,7 @@ import (
 	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"errors"
 	"sync/atomic"
 )
 
@@ -27,6 +28,18 @@ type codecFuncs struct {
 }
 
 var codec atomic.Pointer[codecFuncs]
+
+var errNoCodec = errors.New("mygo: no codec is linked: Bind or NewEvent links it before values are coded")
+
+// loadCodec returns the codec, or an error when none is linked. Bind and
+// NewEvent link it, so a value of a bound method or an event always finds one;
+// the error is for a caller that codes a value without either.
+func loadCodec() (*codecFuncs, error) {
+	if c := codec.Load(); c != nil {
+		return c, nil
+	}
+	return nil, errNoCodec
+}
 
 func linkCodec() {
 	codec.CompareAndSwap(nil, &codecFuncs{
