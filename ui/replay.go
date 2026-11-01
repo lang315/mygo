@@ -241,6 +241,7 @@ func replayRow(p *Painter, c *node) bool {
 	rt.replayWalks++
 	nodes := collectRow(c, rt.rowNodes[:0])
 	rt.rowNodes = nodes[:0]
+	defer clear(nodes) // the scratch list keeps no element for the collector
 	if len(nodes) != len(r.ids) {
 		return false
 	}
