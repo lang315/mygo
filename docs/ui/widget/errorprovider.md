@@ -41,6 +41,18 @@ save := widget.Button("Save").OnClick(func() {
   run. When it returns false, the first failing control's message is
   announced to assistive technology once. Call it from the event goroutine (a
   button's handler), not from a view.
+- `FocusFirst(form)` gives the keyboard focus, at the next frame, to the first
+  control the provider marks, in Tab order (not the order the errors were set),
+  and reports whether there is one: a hidden or disabled control, or one in a
+  hidden or disabled container, is passed over, and a control on a page of a
+  `TabControl` or `Sidebar` that is not showing is reached by showing its pages
+  first (`ValidateChildren` does not switch pages). Safe from any goroutine.
+
+  ```go
+  if !form.ValidateChildren() {
+  	ep.FocusFirst(form)
+  }
+  ```
 - **Nothing validates by itself:** not a focus change, not a typed character.
   Call `ValidateChildren` (or your own checks, with `SetError`) when you want
   errors.
