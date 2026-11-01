@@ -788,8 +788,9 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   `AutoScroll` does (a wheel over it, or Tab to a control below the fold), in a
   scroller that lays the page out at least as high as the room: a page that
   `Expand`s, or has a button `PackEnd`ed, still fills a short room. A page that
-  is a viewport itself, or a box holding one (a table, a list, a tree, a
-  multi-line text box, a scroll panel, a web view), is not wrapped: it fills the
+  is a viewport itself, or a box, group box or card holding one (a table, a list,
+  a tree, a multi-line text box, a scroll panel, a web view), or is a `Custom`
+  control, whose element is opaque and may be a `ui.List`, is not wrapped: it fills the
   room and scrolls itself, so a page that gains or loses one does not keep its
   scroll position. A dialog of height 0 with a `Sidebar` opens as high as its tallest
   page, no higher than the work area allows, and does not resize when another

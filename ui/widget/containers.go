@@ -327,8 +327,9 @@ func buildPage(c *ui.Context, w Control) {
 
 // isViewport reports whether the page w scrolls or virtualizes itself, and so
 // is not put in a scroller: a table, a list, a tree, a multi-line text box,
-// a scroll panel or a box holding one (fillsAcross), or a web view, which is
-// a window of its own. Under mu.
+// a scroll panel or a box, group box or card holding one (fillsAcross), a web
+// view, which is a window of its own, or a Custom control, which may draw a
+// ui.List. Under mu.
 func isViewport(w Control) bool {
 	switch w := w.(type) {
 	case nil:
@@ -344,6 +345,10 @@ func isViewport(w Control) bool {
 		return false
 	case *GroupBoxWidget:
 		return isViewport(w.child)
+	case *CardWidget:
+		return isViewport(w.title) || !w.hideBody && isViewport(w.body)
+	case *CustomWidget:
+		return true // its element is opaque: a ui.List in it would be laid out unbounded
 	}
 	return fillsAcross(w)
 }

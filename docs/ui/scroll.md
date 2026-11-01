@@ -10,7 +10,8 @@ input does. `ui.ScrollBoth` scrolls both ways, as a canvas or a wide table
 does. `FillViewport` on a `ui.Scroll` lays its content out at least as high as the
 view (CSS's `min-height: 100%`): what `Grow`s, or sits at the end of a short
 content, takes the room, and a long content scrolls. It lays the content out
-once more, only when the content is shorter than the view. A notch of a mouse wheel glides over a short ease out, as browsers
+once more, only when the content is shorter than the view. It has no effect
+on a [list](list.md) node itself, which lays its rows out against its own height. A notch of a mouse wheel glides over a short ease out, as browsers
 scroll it, and notches in a row add up, until the app scrolls the
 container (a `ScrollState`, a `ListState`'s `ScrollTo`, `ScrollIntoView`
 and `ScrollToEnd`, or `ScrollIntoView` of an element in it), which takes

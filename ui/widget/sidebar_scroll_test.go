@@ -386,7 +386,9 @@ func TestFitMeasuringHiddenSidebarPagesIsInert(t *testing.T) {
 	}
 }
 
-// A list with rows kept stays kept inside a wrapped page.
+// A page holding a list is not wrapped (isViewport), so the list keeps its
+// rows as on main. The rows kept inside a FillViewport scroller are checked in
+// ui (TestFillViewportKeepsListRows).
 func TestSidebarPageKeepsTheRowsOfAListItHolds(t *testing.T) {
 	var calls atomic.Int64
 	items := make([]litem, 40)
