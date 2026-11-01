@@ -2,10 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
 	"go/token"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -25,6 +31,132 @@ type boundType struct {
 // bindGenFile is the name of the file in the overlay that gives Bind the
 // methods of the services without reflection (see bind_methods.go in package mygo).
 const bindGenFile = "0mygo_bind_gen.go"
+
+// staticTag is the build tag under which Bind takes the methods of a service
+// from the file bindingsGo writes, and not from reflection (package mygo).
+const staticTag = "mygo_static"
+
+// readBoundTypes reads the list generate mode wrote; a missing file is an
+// app that binds nothing of its own.
+func readBoundTypes(path string) ([]boundType, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var list []boundType
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// bindFiles returns the overlay entry that gives Bind the methods of the
+// services the app bound, writing the generated source into work, or the reason
+// it cannot (see bindingsGo): with a file the build gets the tag mygo_static,
+// without one it keeps reflection. mainPkg is the import path of the main
+// package in pkg. It returns neither when generate mode did not run (an app
+// without a frontend) or the app binds nothing of its own.
+func bindFiles(c *Config, pkg, work, mainPkg string) (files map[string]string, reason string, err error) {
+	files = map[string]string{}
+	if !c.boundRead {
+		return files, "", nil
+	}
+	src, reason := bindingsGo(mainPkg, c.bound)
+	if src == nil {
+		return files, reason, nil
+	}
+	if _, err := os.Lstat(filepath.Join(pkg, bindGenFile)); err == nil {
+		return nil, "", fmt.Errorf("%s is in the way of giving Bind the methods of the services; rename it", filepath.Join(pkg, bindGenFile))
+	}
+	gen := filepath.Join(work, bindGenFile)
+	if err := os.WriteFile(gen, src, 0o644); err != nil {
+		return nil, "", err
+	}
+	files[filepath.Join(pkg, bindGenFile)] = gen
+	return files, "", nil
+}
+
+// listBoundTypes runs the app in generate mode to list the services it bound
+// when it has no TypeScript client to write (no frontend: an app like hello,
+// which calls its Go from a page of its own), as writeClient does for one that
+// has. A failure is no failure of the build, which does not need the list: Bind
+// keeps reflection, and the build says so.
+func listBoundTypes(ctx context.Context, c *Config) {
+	if c.Bindings != "" || c.boundRead {
+		return // writeClient listed them, or there is nothing to run for
+	}
+	t := con.start("Listing the services the app binds")
+	bin := tempBinary(c.executableName())
+	defer os.Remove(bin)
+	dir, err := os.MkdirTemp("", "mygo-bound-")
+	if err == nil {
+		defer os.RemoveAll(dir)
+		err = goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
+	}
+	if err == nil {
+		t.set("running the app in generate mode")
+		err = runInGenerateMode(c, bin, filepath.Join(dir, "mygo.ts"))
+	}
+	if err != nil {
+		t.stop()
+		if ctx.Err() == nil {
+			warnf("Bind keeps reflection (the app could not list the services it binds: %v), about 1.4 MB more", err)
+		}
+		return
+	}
+	t.stop()
+}
+
+// bindTable gives a release build the table of the methods of the services
+// the app bound, and the tag that makes Bind use it, when every service can be
+// named; otherwise it says why Bind keeps reflection, once.
+func bindTable(c *Config, opts *buildOptions) error {
+	if !c.boundRead || len(c.bound) == 0 {
+		return nil
+	}
+	mainPkg, err := packageImportPath(c)
+	if err != nil {
+		return err
+	}
+	files, reason, err := bindFiles(c, opts.pkg, opts.work, mainPkg)
+	if err != nil {
+		return err
+	}
+	if reason != "" {
+		logf("Bind keeps reflection (%s), about 1.4 MB more", reason)
+	}
+	if len(files) > 0 {
+		opts.overlay = mergeFiles(opts.overlay, files)
+		opts.static = true
+	}
+	return nil
+}
+
+// packageImportPath returns the import path of the app's main package.
+func packageImportPath(c *Config) (string, error) {
+	var out bytes.Buffer
+	cmd := goCommand(c.root, nil, "list", "-f", "{{.ImportPath}}", c.Main)
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("go list %s: %w", c.Main, err)
+	}
+	return strings.TrimSpace(out.String()), nil
+}
+
+// withTag returns the go build flags with tag among the -tags.
+func withTag(flags []string, tag string) []string {
+	flags = slices.Clone(flags)
+	for i, f := range flags {
+		if f == "-tags" && i+1 < len(flags) {
+			flags[i+1] += "," + tag
+			return flags
+		}
+	}
+	return append(flags, "-tags", tag)
+}
 
 // bindingsGo returns the Go file, for the main package of the app, that gives
 // Bind the methods of every bound service as method expressions, which the

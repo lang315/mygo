@@ -107,6 +107,10 @@ type Config struct {
 	langs     []appLanguage
 	langsErr  error
 	langsRead bool
+	// bound are the services the app bound, which generate mode listed when
+	// writeClient ran it (boundRead): mygo build names their methods.
+	bound     []boundType
+	boundRead bool
 }
 
 // copyrightNoise is what publisher strips off a copyright notice: the

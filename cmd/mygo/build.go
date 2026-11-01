@@ -21,7 +21,8 @@ type buildOptions struct {
 	skipInstaller bool              // no Windows installer, nor NSIS for it
 	pkg           string            // directory of the main package
 	work          string            // for generated files
-	overlay       map[string]string // go build -overlay entries (the frontend)
+	overlay       map[string]string // go build -overlay entries (the frontend, the table of Bind)
+	static        bool              // Bind takes its methods from the table, with the tag mygo_static
 }
 
 func runBuild(args []string) error {
@@ -113,6 +114,9 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 	if err := writeClient(context.Background(), c, false); err != nil {
 		return err
 	}
+	if !opts.debug && hasNativePlatform(splitList(*platforms)) {
+		listBoundTypes(context.Background(), c) // an app with no client to write
+	}
 	if c.BuildCommand != "" && !*skipBuildCommand {
 		t := con.start("Building the frontend")
 		if err := t.end(run(t, "web", c.root, c.BuildCommand), "Built the frontend"); err != nil {
@@ -140,6 +144,11 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 	if hasNativePlatform(splitList(*platforms)) {
 		if opts.overlay, err = frontendFiles(c, opts.pkg, work); err != nil {
 			return err
+		}
+		if !opts.debug {
+			if err := bindTable(c, &opts); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -257,7 +266,7 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 				return err
 			}
 			flags := []string{"-trimpath", "-ldflags", ldflags}
-			flags = append(flags, productionTags(opts.debug, c.root)...)
+			flags = append(flags, releaseTags(opts.debug, c.root, opts.static)...)
 			if overlay != "" {
 				flags = append(flags, "-overlay", overlay)
 			}
@@ -468,13 +477,32 @@ func productionTags(debug bool, dir string) []string {
 	if debug || keepInspector() {
 		return nil
 	}
+	return []string{"-tags", strings.Join(append(goFlagsTags(dir), inspectorTag), ",")}
+}
+
+// goFlagsTags returns the tags GOFLAGS sets, which a -tags flag would override.
+func goFlagsTags(dir string) []string {
 	var tags []string
 	for _, f := range goFlags(dir) {
 		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags="); ok && v != "" {
 			tags = append(tags, v)
 		}
 	}
-	return []string{"-tags", strings.Join(append(tags, inspectorTag), ",")}
+	return tags
+}
+
+// releaseTags returns the -tags of a build: productionTags, and with static the
+// tag under which Bind takes the methods of the services from the table of
+// mygo build (staticTag), keeping the tags of GOFLAGS.
+func releaseTags(debug bool, dir string, static bool) []string {
+	tags := productionTags(debug, dir)
+	switch {
+	case !static:
+		return tags
+	case tags != nil:
+		return withTag(tags, staticTag)
+	}
+	return []string{"-tags", strings.Join(append(goFlagsTags(dir), staticTag), ",")}
 }
 
 // generatorTags returns the -tags of a build that writes the TypeScript
