@@ -239,3 +239,37 @@ func TestRichRowsReplayMatches(t *testing.T) {
 		t.Error("no row replayed")
 	}
 }
+
+// One rich text cell among twelve plain ones, as a table of badges shows
+// (widget.Column.Spans): the row replays whole, and the idle frame builds and
+// paints no row.
+func TestWideTableWithOneRichColumnReplays(t *testing.T) {
+	var list ListState
+	list.RowVersion = func(int) uint64 { return 1 }
+	cols := make([]TableColumn, 13)
+	for i := range cols {
+		cols[i] = TableColumn{Title: fmt.Sprint("C", i), Width: 120}
+	}
+	tt := NewTester(func(c *Context) {
+		Table(c, &list, cols, 1000, func(r, col int) {
+			if col == 6 {
+				RichText(c, Span{Text: "Done", Color: RGB(255, 255, 255), Background: RGB(0, 150, 0), Radius: 4, Weight: 800}, Span{Text: " ok"})
+				return
+			}
+			Textf(c, "r%d c%d", r, col)
+		}).Grow(1)
+	}, 1800, 800)
+	for range 4 {
+		tt.Frame()
+	}
+	tt.rt.replayCheck = true
+	first, last := list.Visible()
+	fresh, built := tt.rt.freshRows, tt.rt.rowsBuilt
+	tt.Frame()
+	if n := tt.rt.freshRows - fresh; n != 0 || tt.rt.rowsBuilt != built {
+		t.Fatalf("an idle frame painted %d of %d rows anew and built %d", n, last-first+1, tt.rt.rowsBuilt-built)
+	}
+	if tt.rt.replayed < last-first+1 || tt.rt.replayMismatch != 0 {
+		t.Fatalf("%d of %d rows replayed, %d differ from painting them", tt.rt.replayed, last-first+1, tt.rt.replayMismatch)
+	}
+}

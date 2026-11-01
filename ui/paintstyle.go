@@ -201,7 +201,7 @@ func setPaintStyle(ps *paintStyle, e *node) {
 // same reports whether e, not volatile, paints as ps says. It compares the
 // node itself, which costs less than making a paintStyle of it to compare.
 func paintStyleSame(ps *paintStyle, e *node) bool {
-	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows[:ps.nshadows], e.shadows) && slices.Equal(ps.spans, e.spans) &&
+	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows[:ps.nshadows], e.shadows) && (len(e.spans) == 0 && len(ps.spans) == 0 || slices.Equal(ps.spans, e.spans)) &&
 		(!readsTheme(e) || ps.theme == e.builtTheme())
 }
 
