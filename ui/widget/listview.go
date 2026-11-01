@@ -592,8 +592,8 @@ func (lv *ListViewWidget[T, K]) itemVersion(i int) uint64 {
 			place += 8
 		}
 	}
-	look := t.look*0xff51afd7ed558ccd ^ uint64(lv.mode)*0xc4ceb9fe1a85ec53 ^ uint64(math.Float32bits(lv.iconSize))
-	return versionOf(t.src.gens.of(k), look^t.images.generation()*0xff51afd7ed558ccd, place)
+	look := foldLook(t.look, uint64(lv.mode), uint64(math.Float32bits(lv.iconSize)), t.images.generation())
+	return versionOf(t.src.gens.of(k), look, place)
 }
 
 // toggleChecks is Space in the small views, whose boxes are the items' own: it

@@ -33,6 +33,9 @@ menu := widget.MenuItem{Text: "Open", IconPNG: icons.PNG("folder")}
   item whose key `key` returns at the list's `Size`, as WinForms' `ImageSize`
   says; nil for none. `SetImage(widget.ImagesBy(list, key))` does the same at
   the controls' own 16 DIPs.
+- A `DataGridView` whose `Column.Image` uses `ImagesBy(list, key)` does not
+  follow the list: its rows already shown keep the image they had. Give the list
+  to `SetImageList` for rows that follow it, or call `UpdateRow` when an image changes.
 - Every method, and the function `ImagesBy` returns, is safe from any goroutine.
   The list has a lock of its own, taken after the package's and never before it.
 

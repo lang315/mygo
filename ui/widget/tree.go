@@ -793,7 +793,7 @@ func (t *TreeViewWidget[T, K]) itemVersion(it treeItem[K]) uint64 {
 	if t.checks && t.checked.shown.Has(it) {
 		place = 1
 	}
-	return versionOf(t.gens.of(it.k), t.look^t.images.generation()*0xff51afd7ed558ccd, place)
+	return versionOf(t.gens.of(it.k), foldLook(t.look, t.images.generation()), place)
 }
 
 // row builds the content of the row of it, after its arrow: while the tree

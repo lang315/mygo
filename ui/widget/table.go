@@ -372,7 +372,7 @@ func (t *DataGridViewWidget[T, K]) rowVersion(row int) uint64 {
 	if t.numbered {
 		place = pos + 1
 	}
-	return versionOf(t.src.gens.of(t.key(r)), t.look^t.images.generation()*0xff51afd7ed558ccd, place)
+	return versionOf(t.src.gens.of(t.key(r)), foldLook(t.look, t.images.generation()), place)
 }
 
 // keyAtPos is the key of the row at position pos of the view.

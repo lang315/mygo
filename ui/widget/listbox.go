@@ -460,7 +460,7 @@ func (l *ListBoxWidget[T, K]) rowVersion(row int) uint64 {
 	if l.checks && l.checked.shown.Has(k) {
 		place = 1
 	}
-	return versionOf(l.gens.of(k), l.look^l.images.generation()*0xff51afd7ed558ccd, place)
+	return versionOf(l.gens.of(k), foldLook(l.look, l.images.generation()), place)
 }
 
 // labelAt is ui's ListState.Label: typing the first letters of an item's text

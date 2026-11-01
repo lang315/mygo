@@ -29,6 +29,16 @@ func (g *rowGens[K]) of(k K) uint64 { return g.m[k] }
 // versionOf mixes what a row's build reads: the generation of its row, one of
 // the control's own for how rows look (a column, an image), and the place the
 // row has among the rows shown, which a numbered column prints.
+// foldLook folds the parts of a row's look, each in a step of its own, so that
+// two parts that move together (a setter and an ImageList's change) never cancel.
+func foldLook(parts ...uint64) uint64 {
+	h := uint64(0xcbf29ce484222325)
+	for _, p := range parts {
+		h = (h ^ p) * 0x100000001b3
+	}
+	return h
+}
+
 func versionOf(row, look uint64, place int) uint64 {
 	return row*0x9e3779b97f4a7c15 ^ look*0xc2b2ae3d27d4eb4f ^ uint64(place)*0x165667b19e3779f9
 }
