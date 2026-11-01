@@ -20,8 +20,6 @@ type Config struct {
 	Platform string `json:"platform"`
 	WindowID int    `json:"windowId"`
 	Version  string `json:"version"`
-	// Secret prefixes every message the bridge posts.
-	Secret string `json:"secret"`
 	// Locale is the language the app shows, e.g. "zh-Hans", and Dir the
 	// direction it is written in, "ltr" or "rtl", which pages read as
 	// mygo.locale and mygo.dir from document start.
@@ -62,8 +60,6 @@ func (c Config) JSON() []byte {
 	b = strconv.AppendInt(b, int64(c.WindowID), 10)
 	b = append(b, `,"version":`...)
 	b = jsonlite.AppendString(b, c.Version)
-	b = append(b, `,"secret":`...)
-	b = jsonlite.AppendString(b, c.Secret)
 	b = append(b, `,"locale":`...)
 	b = jsonlite.AppendString(b, c.Locale)
 	b = append(b, `,"dir":`...)

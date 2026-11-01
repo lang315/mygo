@@ -17,7 +17,11 @@ func testFlyout(t *testing.T, opts FlyoutOptions) (*Window, *fake.Window) {
 	fl := NewFlyout(opts)
 	t.Cleanup(fl.Destroy)
 	wins := fb.Windows()
-	return fl, wins[len(wins)-1]
+	fw := wins[len(wins)-1]
+	// Like a page loaded with LoadHTML, as testWindow does: the bridge's hello
+	// is taken after a commit.
+	onMain(func() { fw.H.NavigationCommitted("about:blank") })
+	return fl, fw
 }
 
 func TestFlyoutOptions(t *testing.T) {

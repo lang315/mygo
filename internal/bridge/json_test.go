@@ -27,7 +27,7 @@ func TestJSONIsMarshal(t *testing.T) {
 		}
 	}
 	for _, s := range strs {
-		cfg := Config{Platform: s, WindowID: -7, Version: s, Secret: s, Locale: s, Dir: s}
+		cfg := Config{Platform: s, WindowID: -7, Version: s, Locale: s, Dir: s}
 		same("Config", cfg.JSON(), cfg)
 	}
 	for _, f := range floats {
@@ -43,7 +43,7 @@ func TestJSONIsMarshal(t *testing.T) {
 			t.Fatalf("FitContent %+v: not written", fit)
 		}
 		same("FitContent", got, fit)
-		cfg := Config{Platform: "darwin", WindowID: 3, Version: "1", Secret: "s", Locale: "en", Dir: "ltr", Fit: &fit}
+		cfg := Config{Platform: "darwin", WindowID: 3, Version: "1", Locale: "en", Dir: "ltr", Fit: &fit}
 		same("Config with fit", cfg.JSON(), cfg)
 	}
 }

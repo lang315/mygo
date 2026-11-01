@@ -5,6 +5,7 @@ import { find, stopFind } from "./find";
 import { type FitLimits, fitContent } from "./fit-content";
 import { createRuntime } from "./runtime";
 import { watchThemeColor } from "./theme-color";
+import { connect } from "./transport";
 import type { BridgeConfig, ThemePreferences } from "./types";
 
 declare const __MYGO_CONFIG__: BridgeConfig;
@@ -25,13 +26,13 @@ let rootStyle: HTMLStyleElement | null = null;
   const w = window as any;
   if (w.__mygo) return;
 
-  const raw = transport(w);
-  if (!raw) return;
-  // Only this closure knows the secret: the handler is also reachable from
-  // iframes, whose messages Go must ignore.
-  const post = (m: string) => raw.post(__MYGO_CONFIG__.secret + m);
+  // First of all, before any script of the page: the hello that tells Go this
+  // document's secret, and the functions every later message goes through.
+  const channel = connect(w);
+  if (!channel) return;
+  const { post, stringify } = channel;
 
-  const { runtime, internal } = createRuntime(__MYGO_CONFIG__, post);
+  const { runtime, internal } = createRuntime(__MYGO_CONFIG__, post, stringify);
   Object.defineProperty(w, "mygo", { value: runtime, enumerable: true });
   Object.defineProperty(w, "__mygo", { value: Object.freeze({ ...internal, find, stopFind }) });
 
@@ -57,7 +58,7 @@ let rootStyle: HTMLStyleElement | null = null;
 
   const notify = (t: "dom-ready" | "drag" | "dblclick" | "escape") => {
     try {
-      post(JSON.stringify({ t }));
+      post(stringify({ t }));
     } catch {
       // The page is being torn down.
     }
@@ -67,7 +68,7 @@ let rootStyle: HTMLStyleElement | null = null;
   // that Go knows it once the DOM is.
   const themeColorReady = watchThemeColor((v) => {
     try {
-      post(JSON.stringify({ t: "theme-color", v }));
+      post(stringify({ t: "theme-color", v }));
     } catch {
       // The page is being torn down.
     }
@@ -79,7 +80,7 @@ let rootStyle: HTMLStyleElement | null = null;
     __MYGO_CONFIG__.fit &&
     fitContent(__MYGO_CONFIG__.fit, setFitRule, (size) => {
       try {
-        post(JSON.stringify({ t: "content-size", ...size }));
+        post(stringify({ t: "content-size", ...size }));
       } catch {
         // The page is being torn down.
       }
@@ -123,12 +124,12 @@ let rootStyle: HTMLStyleElement | null = null;
     (e: DragEvent) => {
       const files = e.dataTransfer?.files;
       if (inPage || !files?.length) return;
-      const m = __MYGO_CONFIG__.secret + JSON.stringify({ t: "drop", x: Math.round(e.clientX), y: Math.round(e.clientY) });
+      const m = stringify({ t: "drop", x: Math.round(e.clientX), y: Math.round(e.clientY) });
       try {
-        raw.postWithFiles ? raw.postWithFiles(m, files) : raw.post(m);
+        channel.postWithFiles ? channel.postWithFiles(m, files) : post(m);
       } catch {
         try {
-          raw.post(m); // e.g. File objects not backed by a file
+          post(m); // e.g. File objects not backed by a file
         } catch {
           // The page is being torn down.
         }
@@ -163,7 +164,7 @@ let rootStyle: HTMLStyleElement | null = null;
       const el = e.composedPath()[0];
       const target = contextTarget(el instanceof Element ? el : null, getSelection()?.toString() ?? "");
       try {
-        post(JSON.stringify({ t: "context-menu", x: e.clientX, y: e.clientY, ...target }));
+        post(stringify({ t: "context-menu", x: e.clientX, y: e.clientY, ...target }));
       } catch {
         // The page is being torn down.
       }
@@ -231,23 +232,4 @@ function setRootStyle(css: string): void {
   };
   if (document.documentElement) attach();
   else document.addEventListener("DOMContentLoaded", attach, { once: true });
-}
-
-interface Transport {
-  post(message: string): void;
-  /** Posts File objects along with a message (WebView2). */
-  postWithFiles?(message: string, files: FileList): void;
-}
-
-function transport(w: any): Transport | null {
-  const handler = w.webkit?.messageHandlers?.mygo;
-  if (handler) return { post: (m) => handler.postMessage(m) };
-  const webview = w.chrome?.webview;
-  if (!webview) return null;
-  return {
-    post: (m) => webview.postMessage(m),
-    postWithFiles: webview.postMessageWithAdditionalObjects
-      ? (m, files) => webview.postMessageWithAdditionalObjects(m, files)
-      : undefined,
-  };
 }

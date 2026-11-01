@@ -295,10 +295,15 @@ type Window struct {
 	// start: the bridge, the preferences and the preload script. Main
 	// thread only.
 	userScripts []platform.UserScript
-	// secret starts every message of the bridge in this window's pages.
-	// Only the bridge knows it, so messages posted from elsewhere (an
-	// iframe of another origin) are ignored.
-	secret string
+	// secret starts every message of the bridge in the window's page. The
+	// bridge makes it at document start, for that document, and says it in a
+	// hello, which the window takes once after the main frame commits a
+	// navigation (helloArmed); the commit clears it. Only the bridge's
+	// closure knows it, so messages posted from elsewhere (an iframe of
+	// another origin, a page that was visited before) are ignored. Main
+	// thread only.
+	secret     string
+	helloArmed bool
 	// preload is PageOptions.PreloadScript, which the scripts of the pages
 	// loaded later keep (pageScripts), in their iframes too with
 	// preloadAllFrames.
@@ -519,7 +524,7 @@ func newWindow(opts WindowOptions, bg *background, native uintptr, flyout *flyou
 	id := windows.nextID
 	windows.Unlock()
 
-	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, secret: randomText(), stateKey: opts.StateKey, background: bg, content: opts.Content, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape}
+	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, content: opts.Content, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape}
 	w.pg = &Page{w}
 	if opts.Content == nil {
 		if flyout != nil {
@@ -1946,6 +1951,9 @@ func (h *windowHandler) NavigationCommitted(url string) {
 		}
 	}
 	h.w.trusted = !h.w.noBindings && h.w.isTrusted(url)
+	// A new document makes its own secret, and says it in a hello that comes
+	// after this commit (the script of the document starts after it).
+	h.w.secret, h.w.helloArmed = "", true
 	if h.w.untrusted {
 		h.w.origin = pageOrigin(url)
 	}
