@@ -151,9 +151,35 @@ type paintStyle struct {
 	look     paintLook
 	nshadows uint8
 	shadows  [paintShadows]shadow
-	// spans are those of a RichText, whose colors, lines and backgrounds
-	// paint (the layout compares their styles).
-	spans []Span
+	// spans are what paints in the spans of a RichText: their colors, lines and
+	// backgrounds. Their texts and the styles that lay them out are compared
+	// by the layout (layoutStyle.text and the spans key), and not kept here, so
+	// that the record holds none of the app's strings.
+	spans []spanLook
+}
+
+// spanLook is what a span paints besides its text's layout.
+type spanLook struct {
+	color, decoration, background Color
+	thickness, radius             float32
+	underline, wavy, strike       bool
+}
+
+func lookOf(s *Span) spanLook {
+	return spanLook{s.Color, s.DecorationColor, s.Background, s.DecorationThickness, s.Radius, s.Underline, s.WavyUnderline, s.Strikethrough}
+}
+
+// sameSpans reports whether spans paint as looks say.
+func sameSpans(looks []spanLook, spans []Span) bool {
+	if len(looks) != len(spans) {
+		return false
+	}
+	for i := range spans {
+		if looks[i] != lookOf(&spans[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // paintShadows is how many shadows paintStyle holds, in the record itself so
@@ -195,13 +221,16 @@ func setPaintStyle(ps *paintStyle, e *node) {
 		ps.theme = e.builtTheme()
 	}
 	ps.nshadows = uint8(copy(ps.shadows[:], e.shadows))
-	ps.spans = append(ps.spans[:0], e.spans...)
+	ps.spans = ps.spans[:0]
+	for i := range e.spans {
+		ps.spans = append(ps.spans, lookOf(&e.spans[i]))
+	}
 }
 
 // same reports whether e, not volatile, paints as ps says. It compares the
 // node itself, which costs less than making a paintStyle of it to compare.
 func paintStyleSame(ps *paintStyle, e *node) bool {
-	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows[:ps.nshadows], e.shadows) && (len(e.spans) == 0 && len(ps.spans) == 0 || slices.Equal(ps.spans, e.spans)) &&
+	return paintLookEqual(&ps.look, &e.paintLook) && ps.flags == e.flags&^layoutFlags && slices.Equal(ps.shadows[:ps.nshadows], e.shadows) && (len(e.spans) == 0 && len(ps.spans) == 0 || sameSpans(ps.spans, e.spans)) &&
 		(!readsTheme(e) || ps.theme == e.builtTheme())
 }
 
