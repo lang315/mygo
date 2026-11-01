@@ -1,9 +1,12 @@
 package widget
 
 import (
+	"bytes"
 	"cmp"
 	"fmt"
+	"slices"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -295,5 +298,164 @@ func TestColumnHiddenKeptRowsAreBuiltAgain(t *testing.T) {
 	settleTable(tt)
 	if tt.HasText("name001") || !tt.HasText("b0") {
 		t.Fatalf("texts %q", tt.Texts())
+	}
+}
+
+func samePixels(a, b *ui.Tester) bool { return bytes.Equal(a.Image().Pix, b.Image().Pix) }
+
+// Kept rows against a fresh table with the same columns, pixel for pixel.
+func TestColumnHiddenKeptRowsMatchAFreshTable(t *testing.T) {
+	cases := []struct {
+		name   string
+		start  []string
+		change func(tb *DataGridViewWidget[acct, int])
+		final  []string
+		scroll bool
+	}{
+		{"hide", nil, func(tb *DataGridViewWidget[acct, int]) { tb.SetColumnVisible("Score", false) }, []string{"Score"}, false},
+		{"show", []string{"Score"}, func(tb *DataGridViewWidget[acct, int]) { tb.SetColumnVisible("Score", true) }, nil, false},
+		{"hide-show one frame", nil, func(tb *DataGridViewWidget[acct, int]) {
+			tb.SetColumnVisible("Score", false).SetColumnVisible("Score", true)
+		}, nil, false},
+		{"swap same count", []string{"Note"}, func(tb *DataGridViewWidget[acct, int]) {
+			tb.SetColumnVisible("Name", false).SetColumnVisible("Note", true)
+		}, []string{"Name"}, false},
+		{"hide after scroll", nil, func(tb *DataGridViewWidget[acct, int]) { tb.SetColumnVisible("Score", false) }, []string{"Score"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			kept := threeColumns(200, c.start...)
+			tk := tester(t, kept)
+			if c.scroll {
+				tk.Wheel(300, 300, 0, -400)
+			}
+			settleTable(tk)
+			c.change(kept)
+			settleTable(tk)
+			fresh := threeColumns(200, c.final...)
+			tf := tester(t, fresh)
+			if c.scroll {
+				tf.Wheel(300, 300, 0, -400)
+			}
+			settleTable(tf)
+			if !samePixels(tk, tf) {
+				t.Fatalf("kept differs from fresh\nkept  %q\nfresh %q", tk.Texts()[:12], tf.Texts()[:12])
+			}
+		})
+	}
+}
+
+// A header moved while a column hides drops the hidden column from the
+// layout's Order: shown again, it lands last, and the saved layout lacks it.
+func TestColumnMovedWhileAnotherIsHiddenKeepsItsPlace(t *testing.T) {
+	got := make(chan ui.TableLayout, 64)
+	tb := threeColumns(3).SetColumnsLayout(ui.TableLayout{Order: []string{"Score", "Name", "Note"}}).
+		OnColumnsChange(func(l ui.TableLayout) { got <- l })
+	tt := tester(t, tb)
+	if h := headers(tt); !sameTitles(h, []string{"Score", "Name", "Note"}) {
+		t.Fatalf("headers %q", h)
+	}
+	tb.SetColumnVisible("Score", false)
+	settleTable(tt)
+	// Note dragged left past Name.
+	note := find(t, tt, "Note")
+	x, y := note.X+20, note.Y+note.H/2
+	tt.Press(x, y)
+	for _, d := range []float32{-5, -20, -60, -120, -180} {
+		tt.Move(x+d, y)
+	}
+	tt.Release(x-180, y)
+	settleTable(tt)
+	if h := headers(tt); !sameTitles(h, []string{"Note", "Name"}) {
+		t.Fatalf("the move did not happen: headers %q", h)
+	}
+	var l ui.TableLayout
+	for len(got) > 0 {
+		l = <-got
+	}
+	tb.SetColumnVisible("Score", true)
+	settleTable(tt)
+	h := headers(tt)
+	t.Logf("saved Order %q; headers after showing Score %q", l.Order, h)
+	if !slices.Contains(l.Order, "Score") {
+		t.Errorf("OnColumnsChange's Order %q lost the hidden Score", l.Order)
+	}
+	if h[0] != "Score" {
+		t.Errorf("Score was first; shown again it is at %q", h)
+	}
+}
+
+// visCols changes under ui's columns between the build and a row ui builds
+// while it lays out (buildLate), from another goroutine.
+func TestColumnToggledFromAGoroutineWhileRowsBuildLate(t *testing.T) {
+	tb := threeColumns(2000)
+	tt := tester(t, tb)
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for on := false; ; on = !on {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			tb.SetColumnVisible("Note", on)
+		}
+	}()
+	defer func() {
+		close(stop)
+		wg.Wait()
+		if r := recover(); r != nil {
+			panic(r)
+		}
+	}()
+	for i := range 400 {
+		tt.SetSize(800, 200+(i%2)*800)
+		tt.Frame()
+	}
+}
+
+func TestColumnHiddenBeforeTheFirstFrame(t *testing.T) {
+	tb := threeColumns(3).SetColumnVisible("Score", false)
+	if tb.ColumnVisible("Score") {
+		t.Fatal("ColumnVisible true")
+	}
+	tt := tester(t, tb)
+	if h := headers(tt); !sameTitles(h, []string{"Name", "Note"}) {
+		t.Fatalf("headers %q", h)
+	}
+}
+
+// The twin can tell tables apart: kept with Score hidden against fresh with all shown.
+func TestColumnTwinComparisonSeesAHiddenColumn(t *testing.T) {
+	kept := threeColumns(200)
+	tk := tester(t, kept)
+	settleTable(tk)
+	kept.SetColumnVisible("Score", false)
+	settleTable(tk)
+	tf := tester(t, threeColumns(200))
+	settleTable(tf)
+	if samePixels(tk, tf) {
+		t.Fatal("the twin compare sees no difference")
+	}
+	if tk.Image().Bounds().Dx() == 0 {
+		t.Fatal("no image")
+	}
+}
+
+// The table copies the columns it is given: hiding one changes neither the
+// caller's slice nor another table made from it.
+func TestColumnVisibilityDoesNotChangeTheCallersColumns(t *testing.T) {
+	cols := []Column[acct]{
+		{Title: "A", Text: func(a *acct) string { return "a" }, Width: 100},
+		{Title: "B", Text: func(a *acct) string { return "b" }, Width: 100},
+	}
+	one := DataGridView(func(a *acct) int { return a.id }, cols...).SetRows([]acct{{1, "n", 0}})
+	two := DataGridView(func(a *acct) int { return a.id }, cols...).SetRows([]acct{{1, "n", 0}})
+	one.SetColumnVisible("A", false)
+	if cols[0].Hidden || !two.ColumnVisible("A") {
+		t.Fatalf("the caller's Hidden %v, the other table's A visible %v", cols[0].Hidden, two.ColumnVisible("A"))
 	}
 }

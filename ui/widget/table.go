@@ -60,7 +60,8 @@ type DataGridViewWidget[T any, K comparable] struct {
 	link    *tableLink // what src knows of the table
 	cols    []Column[T]
 	columns []ui.TableColumn // the cols shown, after the index column if any
-	visCols []int            // the indexes in cols of the columns shown
+	visCols []int            // the indexes in cols of the columns shown: never changed, replaced
+	full    []string         // the last order of all the columns' titles, hidden ones too
 	view    *ui.TableView[T]
 	filter  func(*T) bool // the view's, nil for none
 	// frame holds the rows of the frame ui shows, and order their order
@@ -160,39 +161,43 @@ func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 	if t.numbered {
 		cs = append(cs, ui.TableColumn{Title: "#", Width: 56, Align: ui.End, Fixed: true})
 	}
-	t.visCols = t.visCols[:0]
+	vis := make([]int, 0, len(t.cols)) // a new slice: rows ui builds late hold the old one
 	for i, cl := range t.cols {
 		if cl.Hidden {
 			continue
 		}
-		t.visCols = append(t.visCols, i)
+		vis = append(vis, i)
 		cs = append(cs, ui.TableColumn{Title: cl.Title, Width: cl.Width, MinWidth: cl.MinWidth,
 			Align: cl.Align.ui(), Sortable: cl.Sortable})
 	}
+	t.visCols = vis
 	return cs
 }
 
 // SetColumnVisible shows or hides the column titled title, in the place its
 // position and the columns' layout give it; a title no column has is ignored.
+// Titles tell the columns apart, in layouts and in ui, so they must differ.
 func (t *DataGridViewWidget[T, K]) SetColumnVisible(title string, on bool) *DataGridViewWidget[T, K] {
 	t.change(func() {
-		i := slices.IndexFunc(t.cols, func(cl Column[T]) bool { return cl.Title == title })
-		if i < 0 || t.cols[i].Hidden == !on {
-			return
+		changed := false
+		for i := range t.cols {
+			if t.cols[i].Title == title && t.cols[i].Hidden == on {
+				t.cols[i].Hidden, changed = !on, true
+			}
 		}
-		t.cols[i].Hidden = !on
-		t.columns = t.uiColumns() // ui builds the rows it kept again when its columns change
+		if changed {
+			t.columns = t.uiColumns() // ui builds the rows it kept again when its columns change
+		}
 	})
 	return t
 }
 
-// ColumnVisible reports whether the column titled title shows; false for a
+// ColumnVisible reports whether a column titled title shows; false for a
 // title no column has.
 func (t *DataGridViewWidget[T, K]) ColumnVisible(title string) bool {
 	mu.Lock()
 	defer mu.Unlock()
-	i := slices.IndexFunc(t.cols, func(cl Column[T]) bool { return cl.Title == title })
-	return i >= 0 && !t.cols[i].Hidden
+	return slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.Title == title && !cl.Hidden })
 }
 
 // IndexColumn shows first the position of each row as shown, from 1.
@@ -482,7 +487,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Header = t.headerAt
 	}
 	t.handOver()
-	e := ui.Table(c, s, t.columns, t.view.Places(), func(row, col int) { t.cell(c, row, col) }).
+	vis := t.visCols // the columns ui is given now, for the cells it builds late
+	t.keepHidden(&s.Columns)
+	e := ui.Table(c, s, t.columns, t.view.Places(), func(row, col int) { t.cell(c, vis, row, col) }).
 		OnSortChange(onChange(&t.sort, nil)).
 		OnSelectionChange(func() { t.commit(&t.chosen) }).
 		OnCheckedChange(func() { t.commit(&t.checked) })
@@ -491,9 +498,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 }
 
 // cell builds the cell of the row shown at row in column col, an index
-// into t.columns: while the table builds, or when ui lays out rows it did
+// into t.columns, whose cols are vis: while the table builds, or when ui lays out rows it did
 // not build then.
-func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, row, col int) {
+func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) {
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
@@ -510,7 +517,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, row, col int) {
 		}
 		col--
 	}
-	cl, r := &t.cols[t.visCols[col]], t.rowAt(row)
+	cl, r := &t.cols[vis[col]], t.rowAt(row)
 	// A selected row's text keeps the selection's color, which reads on
 	// the accent; a column's own may not.
 	colored := cl.Color != nil && !c.RowSelected()

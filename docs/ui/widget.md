@@ -647,7 +647,9 @@ lock: they read the row and call no widget method.
   `SetColumnVisible(title, on)` and `Column.Hidden` hide a column, as WinForms'
   `Visible`: it is not drawn, read by assistive technology (nor named in the
   header row) or copied, and a row is named by its first column shown. The
-  columns' layout (order, widths) is kept for when it shows again. A table
+  columns' layout (order, widths) is kept for when it shows again: the order
+  `OnColumnsChange` gives holds the hidden columns too, each after the column it
+  followed. Titles tell the columns apart, so they must differ. A table
   sorted by a column stays sorted when it hides, and `Search` by a `Filterable`
   hidden column still works, as does the panel's choice of it.
   Cmd/Ctrl+C and the Edit menu's Copy copy the selected rows, a line each,
