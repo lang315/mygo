@@ -146,9 +146,16 @@ func sameOps(got, want []scene.Op) string {
 
 // sameScenes compares two frames' ops (without the clips around nothing)
 // together with everything they point at: the glyphs (where text is), the
-// stops, the wide colors and the effects. sameOps alone misses text that
+// stops, the wide colors and the effects, and the frame's own fields. sameOps alone misses text that
 // moved, since its positions are in Scene.Glyphs. The ops are compared by
 // what they point at, not by where in the scene's slices it is.
+//
+// Words (the effects' uniforms) is no op's index: the ops hold slices of it,
+// which DeepEqual compares by content, and the arena itself is compared as
+// it is. Canvases are the canvases drawn anew: the same pointers in one
+// tester (a replay must not drop or add a canvas), the same number between
+// two (each tester has canvases of its own); the ops point to their images
+// by pointer, not by index.
 //
 // Where a glyph's bitmap is in the atlas (U, V) is compared by sameScenes
 // only for frames of one tester: two testers place the same glyphs in
@@ -165,6 +172,18 @@ func sameScenesIn(got, want *scene.Scene, shared bool) string {
 			}
 			return x == y
 		})
+	}
+	if got.Width != want.Width || got.Height != want.Height || got.Scale != want.Scale || got.Zoom != want.Zoom ||
+		got.Clear != want.Clear || got.Background != want.Background || got.Text != want.Text || got.Drawn != want.Drawn {
+		return fmt.Sprintf("the frames differ: %dx%d scale %v zoom %v clear %v background %v text %v drawn %v, want %dx%d scale %v zoom %v clear %v background %v text %v drawn %v",
+			got.Width, got.Height, got.Scale, got.Zoom, got.Clear, got.Background, got.Text, got.Drawn,
+			want.Width, want.Height, want.Scale, want.Zoom, want.Clear, want.Background, want.Text, want.Drawn)
+	}
+	if !slices.Equal(got.Words, want.Words) {
+		return fmt.Sprintf("effect words %v, want %v", got.Words, want.Words)
+	}
+	if len(got.Canvases) != len(want.Canvases) || shared && !slices.Equal(got.Canvases, want.Canvases) {
+		return fmt.Sprintf("canvases %v, want %v", got.Canvases, want.Canvases)
 	}
 	g, w := withoutEmptyClips(got.Ops), withoutEmptyClips(want.Ops)
 	for i := range min(len(g), len(w)) {
@@ -187,6 +206,9 @@ func snapScene(s *scene.Scene) scene.Scene {
 		Stops:   slices.Clone(s.Stops),
 		Wide:    slices.Clone(s.Wide),
 		Effects: slices.Clone(s.Effects),
+		Words:   slices.Clone(s.Words), Canvases: slices.Clone(s.Canvases),
+		Width: s.Width, Height: s.Height, Scale: s.Scale, Zoom: s.Zoom,
+		Clear: s.Clear, Background: s.Background, Text: s.Text, Drawn: s.Drawn,
 	}
 }
 
@@ -257,5 +279,69 @@ func TestPaintCullsScrolledRows(t *testing.T) {
 		if n := tt.rt.culled - before; n < 188 || n > 190 {
 			t.Errorf("at %v, %d rows skipped", d, n)
 		}
+	}
+}
+
+// sameScenes sees a change in each channel an op points into or the frame
+// holds, and none in where in the slices the same content is.
+func TestSameScenesSeesEachChannel(t *testing.T) {
+	cv := &scene.Image{}
+	base := func() *scene.Scene {
+		return &scene.Scene{
+			Width: 10, Height: 10, Scale: 1,
+			Ops: []scene.Op{
+				{Kind: scene.OpGlyphs, Start: 0, End: 1},
+				{Kind: scene.OpFill, Paint: scene.PaintLinearStops, Stops: [2]int32{0, 2}},
+				{Kind: scene.OpFill, Wide: 1},
+				{Kind: scene.OpEffect, Start: 0},
+			},
+			Glyphs:   []scene.Glyph{{X: 1, Y: 2, W: 3, H: 4}},
+			Stops:    []scene.Stop{{At: 0}, {At: 1}},
+			Wide:     []scene.WideColors{{Color: [4]float32{2, 0, 0, 1}}},
+			Effects:  []scene.EffectOp{{Uniforms: []uint32{7}}},
+			Words:    []uint32{7},
+			Canvases: []*scene.Image{cv},
+		}
+	}
+	if d := sameScenes(base(), base()); d != "" {
+		t.Fatalf("the same scene differs from itself: %s", d)
+	}
+	for name, change := range map[string]func(s *scene.Scene){
+		"glyph":      func(s *scene.Scene) { s.Glyphs[0].Y++ },
+		"stop":       func(s *scene.Scene) { s.Stops[1].At = 0.5 },
+		"wide":       func(s *scene.Scene) { s.Wide[0].Color[0] = 3 },
+		"effect":     func(s *scene.Scene) { s.Effects[0].Blur = 2 },
+		"words":      func(s *scene.Scene) { s.Words[0] = 8 },
+		"canvas":     func(s *scene.Scene) { s.Canvases[0] = &scene.Image{} },
+		"no canvas":  func(s *scene.Scene) { s.Canvases = nil },
+		"clear":      func(s *scene.Scene) { s.Clear = scene.Color{R: 1} },
+		"background": func(s *scene.Scene) { s.Background = scene.Color{R: 1} },
+		"text":       func(s *scene.Scene) { s.Text.Contrast = 1 },
+		"size":       func(s *scene.Scene) { s.Width++ },
+	} {
+		s := base()
+		change(s)
+		if sameScenes(s, base()) == "" {
+			t.Errorf("a change of the %s is not seen", name)
+		}
+	}
+	// The same content at other indexes is the same frame.
+	moved := base()
+	moved.Glyphs = append([]scene.Glyph{{X: 9}}, moved.Glyphs...)
+	moved.Ops[0].Start, moved.Ops[0].End = 1, 2
+	moved.Stops = append([]scene.Stop{{At: 9}}, moved.Stops...)
+	moved.Ops[1].Stops = [2]int32{1, 3}
+	moved.Wide = append([]scene.WideColors{{}}, moved.Wide...)
+	moved.Ops[2].Wide = 2
+	moved.Effects = append([]scene.EffectOp{{}}, moved.Effects...)
+	moved.Ops[3].Start = 1
+	if d := sameScenes(moved, base()); d != "" {
+		t.Errorf("content at other indexes differs: %s", d)
+	}
+	// Two testers' canvases are told apart by their number.
+	other := base()
+	other.Canvases[0] = &scene.Image{}
+	if d := sameScenesAcross(other, base()); d != "" {
+		t.Errorf("another tester's canvas differs: %s", d)
 	}
 }
