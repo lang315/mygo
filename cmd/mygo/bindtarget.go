@@ -141,19 +141,43 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 
 	var found []foundType
 	var unseen []string
-	hasTable := map[string]bool{} // the packages that register a table of their own
+	tabled := map[string]bool{} // the types that have a table of their own (BindMethods), as pkg.Name
+	reaches := map[string]bool{}
+	var reachesMygo func(path string) bool
+	reachesMygo = func(path string) bool {
+		if v, ok := reaches[path]; ok {
+			return v
+		}
+		reaches[path] = false // an import cycle cannot happen; this also stops one
+		lp := pkgs[path]
+		if lp == nil {
+			return false
+		}
+		for _, imp := range lp.Imports {
+			if m, ok := lp.ImportMap[imp]; ok {
+				imp = m
+			}
+			if imp == mygoPath || strings.HasSuffix(imp, "/"+mygoPath) || reachesMygo(imp) {
+				reaches[path] = true
+				break
+			}
+		}
+		return reaches[path]
+	}
 	for _, lp := range pkgs {
-		if lp.Standard || lp.ImportPath == mygoPath || !importsMygo(lp) {
+		// A package that only imports one that imports mygo can still write the
+		// Service of a Plugin of its type (lib.P{Service: ...}, an embedded Plugin).
+		if lp.Standard || lp.ImportPath == mygoPath || !reachesMygo(lp.ImportPath) {
 			continue
 		}
-		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{}}
+		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{}, Instances: map[*ast.Ident]types.Instance{}}
 		_, files, err := typeCheck(lp, true, info)
 		if err != nil {
 			return nil, "", err
 		}
-		f, u, table := scanBinds(c.root, fset, files, lp, info)
-		if table {
-			hasTable[lp.ImportPath] = true
+		f, u, tb := scanBinds(c.root, fset, files, lp, info)
+		for _, k := range tb {
+			tabled[k] = true
 		}
 		found = append(found, f...)
 		unseen = append(unseen, u...)
@@ -169,6 +193,9 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 	seen := map[string]bool{}
 	var scanned []foundType
 	for _, f := range found {
+		if tabled[f.b.Pkg+"."+f.b.Type] {
+			continue // the type gives Bind its methods itself
+		}
 		if why := cannotName(mainPkg, f.b); why != "" {
 			return nil, f.place + ": " + why, nil
 		}
@@ -186,8 +213,8 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 		if isMainPackage(mainPkg, path) {
 			path = mainPkg
 		}
-		if hasTable[path] {
-			continue // the run, which has no tag, lists a service the plugin gives itself
+		if tabled[path+"."+b.Type] {
+			continue // the run, which has no tag, lists a service its type gives itself
 		}
 		if slices.ContainsFunc(scanned, func(f foundType) bool { return f.b.Pkg == path && f.b.Type == b.Type && f.b.Pointer == b.Pointer }) {
 			continue
@@ -239,29 +266,42 @@ type foundType struct {
 	typ   types.Type
 }
 
-// isPluginType reports whether t is mygo.Plugin or a pointer to it.
-func isPluginType(t types.Type, isMygo func(types.Object) bool) bool {
+// hasServiceField reports whether t is a struct (or a pointer to one) with the
+// field Service of mygo.Plugin: Plugin itself, an alias of it, a type defined as
+// it.
+func hasServiceField(t types.Type, isMygo func(types.Object) bool) bool {
 	if p, ok := types.Unalias(t).(*types.Pointer); ok {
 		t = p.Elem()
 	}
-	n, ok := types.Unalias(t).(*types.Named)
-	return ok && n.Obj().Name() == "Plugin" && isMygo(n.Obj())
+	st, ok := t.Underlying().(*types.Struct)
+	if !ok {
+		return false
+	}
+	for i := range st.NumFields() {
+		if f := st.Field(i); f.Name() == "Service" && isMygo(f) {
+			return true
+		}
+	}
+	return false
 }
 
-// importsMygo reports whether the package imports this module's root package,
-// vendored or not.
-func importsMygo(lp *listedPackage) bool {
-	return slices.ContainsFunc(lp.Imports, func(p string) bool {
-		return p == mygoPath || strings.HasSuffix(p, "/"+mygoPath)
-	})
-}
-
-// scanBinds reads the calls of Bind and BindAs, and the Service of every mygo.Plugin
-// literal, in a type-checked package: the services it binds, and the places of
-// the values whose type is not known statically. A package that registers a
-// table of its own (calls BindMethods) is left out: its services give Bind their
-// methods themselves.
-func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPackage, info *types.Info) (found []foundType, unseen []string, hasTable bool) {
+// scanBinds reads, in a type-checked package, the services it binds and the
+// places of the values whose type is not known statically (unseen). The types
+// that have a table of their own (BindMethods) are returned as pkg.Name: their
+// services give Bind their methods themselves.
+//
+// The forms of Go that give a Plugin its Service, and what the scan does with each
+// (the field is found by its declaration in mygo, so an alias, a defined type of
+// Plugin and an embedding all reach it):
+//   - a literal with the key Service: the value is read; an unkeyed literal: unseen;
+//   - x.Service = v, in any selector (a field, an element, through a pointer): the
+//     value is read; with several values on the right and one call: unseen;
+//   - for x.Service = range ...: unseen; &x.Service: unseen;
+//   - a conversion to a type with that field (mygo.Plugin(x)): unseen;
+//   - reflect or unsafe writing the field: not found, the release panics at start
+//     with the cause (documented);
+//   - Bind, BindAs and Use that are not called where they are named: unseen.
+func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPackage, info *types.Info) (found []foundType, unseen []string, tabled []string) {
 	isMygo := func(o types.Object) bool {
 		if o == nil || o.Pkg() == nil {
 			return false
@@ -285,10 +325,10 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 		v, ok := s.Obj().(*types.Var)
 		return ok && v.IsField() && v.Name() == "Service" && isMygo(v)
 	}
-	own := false
 	called := map[*ast.Ident]bool{} // the functions of mygo the package calls directly
 	var f []foundType
 	var u []string
+	var t []string // the types with a table
 	value := func(arg ast.Expr, what string) {
 		t := info.TypeOf(arg)
 		if t == nil {
@@ -328,7 +368,7 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch n := n.(type) {
 			case *ast.CallExpr:
-				if tv, ok := info.Types[n.Fun]; ok && tv.IsType() && isPluginType(tv.Type, isMygo) {
+				if tv, ok := info.Types[n.Fun]; ok && tv.IsType() && hasServiceField(tv.Type, isMygo) {
 					u = append(u, fmt.Sprintf("%s: a mygo.Plugin made by a conversion, whose Service is not known until the app runs", place(n.Pos())))
 					return true
 				}
@@ -345,7 +385,14 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 				called[id] = true
 				switch id.Name {
 				case "BindMethods":
-					own = true
+					if len(n.Args) == 0 {
+						return true
+					}
+					if k := tableType(n.Args[0], info); k != "" {
+						t = append(t, k)
+					} else {
+						u = append(u, fmt.Sprintf("%s: BindMethods is called with a type the scan cannot name", place(n.Pos())))
+					}
 				case "Bind", "BindAs":
 					args := n.Args
 					if id.Name == "BindAs" && len(args) > 1 {
@@ -378,18 +425,23 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 				if sel, ok := ast.Unparen(n.X).(*ast.SelectorExpr); ok && n.Op == token.AND && isServiceField(sel) {
 					u = append(u, fmt.Sprintf("%s: the address of the Service of a mygo.Plugin is taken, and what writes it is not known until the app runs", place(n.Pos())))
 				}
+			case *ast.RangeStmt:
+				for _, e := range []ast.Expr{n.Key, n.Value} {
+					if sel, ok := ast.Unparen(e).(*ast.SelectorExpr); ok && n.Tok == token.ASSIGN && isServiceField(sel) {
+						u = append(u, fmt.Sprintf("%s: the Service of a mygo.Plugin is the variable of a range, whose type is not known until the app runs", place(n.Pos())))
+					}
+				}
 			case *ast.CompositeLit:
-				nt, ok := types.Unalias(info.TypeOf(n)).(*types.Named)
-				if !ok || nt.Obj().Name() != "Plugin" || !isMygo(nt.Obj()) {
+				if !hasServiceField(info.TypeOf(n), isMygo) {
 					return true
 				}
 				for _, e := range n.Elts {
 					kv, ok := e.(*ast.KeyValueExpr)
 					if !ok {
 						u = append(u, fmt.Sprintf("%s: a mygo.Plugin with unkeyed fields", place(n.Pos())))
-						continue
+						return true
 					}
-					if k, ok := kv.Key.(*ast.Ident); ok && k.Name == "Service" {
+					if k, ok := kv.Key.(*ast.Ident); ok && k.Name == "Service" && isMygo(info.Uses[k]) {
 						value(kv.Value, "the plugin "+lp.ImportPath)
 					}
 				}
@@ -407,11 +459,54 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 			}
 		}
 	}
-	if own {
-		return nil, nil, true
-	}
 	slices.Sort(u) // the map above has no order
-	return f, u, false
+	return f, u, t
+}
+
+// tableType names the type a call of BindMethods gives a table to (its first
+// argument is reflect.TypeFor[T]() or reflect.TypeOf(x)), as pkg.Name, or "".
+func tableType(arg ast.Expr, info *types.Info) string {
+	call, ok := ast.Unparen(arg).(*ast.CallExpr)
+	if !ok {
+		return ""
+	}
+	var t types.Type
+	var fun *ast.Ident
+	switch f := ast.Unparen(call.Fun).(type) {
+	case *ast.IndexExpr:
+		fun = selName(f.X)
+	default:
+		fun = selName(f)
+	}
+	if fun != nil {
+		if inst, ok := info.Instances[fun]; ok && inst.TypeArgs.Len() == 1 {
+			t = inst.TypeArgs.At(0)
+		}
+	}
+	if t == nil && len(call.Args) == 1 {
+		t = info.TypeOf(call.Args[0])
+	}
+	if t == nil {
+		return ""
+	}
+	if p, ok := types.Unalias(t).(*types.Pointer); ok {
+		t = p.Elem()
+	}
+	n, ok := types.Unalias(t).(*types.Named)
+	if !ok || n.Obj().Pkg() == nil {
+		return ""
+	}
+	return n.Obj().Pkg().Path() + "." + n.Obj().Name()
+}
+
+func selName(e ast.Expr) *ast.Ident {
+	switch e := ast.Unparen(e).(type) {
+	case *ast.SelectorExpr:
+		return e.Sel
+	case *ast.Ident:
+		return e
+	}
+	return nil
 }
 
 // resolvingImporter imports by the path a package of the build means: the

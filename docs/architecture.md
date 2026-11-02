@@ -1031,7 +1031,7 @@ MyGo's own service, `mygo:window` behind `window.mygo.window`, is bound by
 `mygo build` gives a release build the table and the tag
 (`cmd/mygo/bindgen.go`, `bindtarget.go`). The services come from the build, not
 from a run of the app: for each target the CLI type-checks the packages that
-import mygo (`go list -export -deps -trimpath` for its GOOS, GOARCH and release
+import mygo or import a package that does (`go list -export -deps -trimpath` for its GOOS, GOARCH and release
 tags, then `go/types` with the bodies of the functions, on the export data of
 their imports), reads the static type of the value of every call of `Bind` and
 `BindAs` and of the `Service` of every `mygo.Plugin` (in its literal, or assigned
@@ -1073,7 +1073,9 @@ file and line, and it is all or nothing) when:
   (the scan reads its `Service`, in the literal or assigned), or the plugin is
   made by a conversion (`mygo.Plugin(x)`), has a literal with unkeyed fields,
   gets its `Service` from a call with several results, or has the address of its
-  `Service` taken; the scan does not guess what else writes it;
+  `Service` taken, or is the variable of a range. The scan does not guess what else
+  writes it, and a write by `reflect` or `unsafe` (`FieldByName("Service").Set(...)`)
+  is not found: the release app panics at start, with the cause;
 - a service is an unexported type of another package, or in an internal package
   main cannot import (the generated file cannot name it);
 - a package of the build for the target does not type-check, or uses cgo;
