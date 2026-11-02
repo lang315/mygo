@@ -45,19 +45,13 @@ func (m *Image) RGBA() []byte {
 	return out
 }
 
-// swapRB copies src to dst, a row of BGRA pixels to RGBA ones, two pixels at
-// a time (a byte at a time, this was a quarter of the time of the tests of
-// package ui on Windows).
+// swapRB copies src to dst, a row of BGRA pixels to RGBA ones, a pixel at a
+// time in a word (a byte at a time, this was a quarter of the time of the
+// tests of package ui on Windows).
 func swapRB(dst, src []byte) {
-	const rb = 0x00ff00ff00ff00ff
-	i := 0
-	for ; i+8 <= len(src); i += 8 {
-		v := binary.LittleEndian.Uint64(src[i:])
-		binary.LittleEndian.PutUint64(dst[i:], v&^rb|(v&0x000000ff000000ff)<<16|(v>>16)&0x000000ff000000ff)
-	}
-	for ; i+4 <= len(src); i += 4 {
-		d, s := dst[i:i+4], src[i:i+4]
-		d[0], d[1], d[2], d[3] = s[2], s[1], s[0], s[3]
+	for i := 0; i+4 <= len(src); i += 4 {
+		v := binary.LittleEndian.Uint32(src[i:])
+		binary.LittleEndian.PutUint32(dst[i:], v&0xff00ff00|v&0xff<<16|v>>16&0xff)
 	}
 }
 
