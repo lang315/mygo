@@ -295,10 +295,20 @@ func (s *surface) cloak() {
 	s.cloaked = hr == 0
 }
 
-// uncloak shows the window, as Windows shows it.
-func (s *surface) uncloak() {
+// uncloaks counts the windows uncloaked by the frame that showed in them
+// (reveal) and by the timer that shows one that no frame showed in, for a
+// test that has windows come out by the first (TestUncloaks).
+var uncloaks struct{ frame, timer int }
+
+// uncloak shows the window, as Windows shows it, byTimer when no frame did.
+func (s *surface) uncloak(byTimer bool) {
 	if !s.cloaked {
 		return
+	}
+	if byTimer {
+		uncloaks.timer++
+	} else {
+		uncloaks.frame++
 	}
 	s.cloaked = false
 	procKillTimer.Call(s.hwnd, timerUncloak)
@@ -325,7 +335,7 @@ func (s *surface) showing() {
 func (s *surface) reveal() {
 	s.fillUnder()
 	procGdiFlush.Call()
-	s.uncloak()
+	s.uncloak(false)
 }
 
 // FirstFrame tells that the content's first frame reached the surface
@@ -680,7 +690,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		}
 	case wmTimer:
 		if wp == timerUncloak {
-			s.uncloak()
+			s.uncloak(true)
 			return 0, true
 		}
 		if wp == timerCloak {

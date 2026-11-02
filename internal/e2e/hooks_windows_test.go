@@ -62,6 +62,15 @@ func clickPage(*mygo.Window, float64, float64) bool { return false }
 // click is sent.
 func appClick(t testing.TB, w *mygo.Window, x, y float64) (ok bool) {
 	t.Helper()
+	// A window shown shows nothing until its first frame does (it is cloaked,
+	// and the click lands on what is behind it): a build of its view is not
+	// that.
+	if !wait.Poll(func() bool {
+		c, _ := cloaked(w)
+		return !c
+	}) {
+		t.Fatalf("the window never came out of the cloak (waited %v)%s", wait.Guard, inputDiag())
+	}
 	var missed string
 	var moves int
 	mygo.RunOnMain(func() { ok, missed, moves = win.TestInputClick(w.NativeHandle(), x, y, wait.Guard) })

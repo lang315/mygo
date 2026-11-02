@@ -487,6 +487,11 @@ func TestCloaked(hwnd uintptr) (cloaked, drawn bool) {
 	return v != 0, s != nil && s.drawn
 }
 
+// TestUncloaks reports how many windows of native UI came out of DWM's cloak
+// by the frame that showed in them, and how many by the timer that shows a
+// window no frame showed in.
+func TestUncloaks() (byFrame, byTimer int) { return uncloaks.frame, uncloaks.timer }
+
 // TestUndrawnCloaked reports how many windows of native UI have not had
 // their first frame reach their surface, and whether DWM keeps all of them
 // out of sight: a window's first frame may build while NewWindow creates

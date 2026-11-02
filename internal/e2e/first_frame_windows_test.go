@@ -68,3 +68,31 @@ func firstFrameRevealed(w *mygo.Window) bool {
 	c, drawn := cloaked(w)
 	return !c && drawn
 }
+
+// uncloaks counts the windows that came out of the cloak by their frame and by
+// the timer that shows one no frame showed in.
+func uncloaks() (byFrame, byTimer int) {
+	mygo.RunOnMain(func() { byFrame, byTimer = win.TestUncloaks() })
+	return
+}
+
+// TestWindowsUncloakWithTheirFrame checks that a window of native UI and its
+// modal child come out of the cloak by the frame that showed in them, not by
+// the timer that rescues a window no frame shows in, which would have them
+// appear a second late.
+func TestWindowsUncloakWithTheirFrame(t *testing.T) {
+	frames0, timers0 := uncloaks()
+	parent := newWindow(t, mygo.WindowOptions{Title: "Uncloak parent", Width: 320, Height: 240,
+		Content: ui.View(func(c *ui.Context) { ui.Text(c, "parent") })})
+	child := newWindow(t, mygo.WindowOptions{Title: "Uncloak child", Width: 200, Height: 120, Parent: parent, Modal: true,
+		Content: ui.View(func(c *ui.Context) { ui.Text(c, "child") })})
+	eventually(t, "the parent uncloaked", func() bool { return firstFrameRevealed(parent) })
+	eventually(t, "the modal child uncloaked", func() bool { return firstFrameRevealed(child) })
+	frames, timers := uncloaks()
+	if timers != timers0 {
+		t.Errorf("%d windows came out of the cloak by the timer, not by a frame", timers-timers0)
+	}
+	if frames-frames0 < 2 {
+		t.Errorf("%d windows came out of the cloak by a frame, want the parent and its modal child", frames-frames0)
+	}
+}
