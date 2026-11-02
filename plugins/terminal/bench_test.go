@@ -32,7 +32,13 @@ func BenchmarkOutput(b *testing.B) {
 
 // BenchmarkFrame measures a frame of a 1600×1000 window whose every row
 // changed, as while a program scrolls.
-func BenchmarkFrame(b *testing.B) {
+func BenchmarkFrame(b *testing.B) { benchFrame(b, false) }
+
+// BenchmarkFrameApp is BenchmarkFrame without the CPU rasterizer that stands
+// in for the GPU: the work the terminal does.
+func BenchmarkFrameApp(b *testing.B) { benchFrame(b, true) }
+
+func benchFrame(b *testing.B, skip bool) {
 	if err := Load(); err != nil {
 		b.Skip(err)
 	}
@@ -43,6 +49,7 @@ func BenchmarkFrame(b *testing.B) {
 	defer term.Close()
 	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill() }, 1600, 1000)
 	tt.SetScale(2)
+	tt.SkipRaster(skip)
 	i := 0
 	for b.Loop() {
 		i++
