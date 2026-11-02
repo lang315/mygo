@@ -19,3 +19,5 @@ var errNativeOnly = errors.New("mygo: this app was built with nativeOnly: it has
 func (b *Backend) startEnvironment(*platform.WindowOptions) error { return errNativeOnly }
 
 func (w *window) createWebView() { w.webViewFailed(errNativeOnly) }
+
+func (b *Backend) explainMissingRuntime(error) {}

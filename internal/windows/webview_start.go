@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/webview2"
 )
 
 // startEnvironment starts creating the WebView2 environment, the first time
@@ -120,5 +121,48 @@ func (w *window) createWebView() {
 	})
 	if failed(hr) {
 		w.creationFailed(hr)
+	}
+}
+
+// runtimeBox shows the message about a missing WebView2 Runtime; tests
+// replace it.
+var runtimeBox = func(b *Backend, o *platform.MessageBoxOptions) platform.MessageBoxResult {
+	return b.messageBox(0, o)
+}
+
+// openDownload opens the page of the runtime's download; tests replace it.
+var openDownload = func() error { return shell{}.OpenExternal(webview2.Download) }
+
+// explainMissingRuntime tells the user, once, that a window showing a web
+// page needs a WebView2 Runtime the machine lacks or has broken, and offers
+// the page to get it from: a window that cannot be made panics (NewWindow of
+// package mygo), which an app without a console (-H=windowsgui), as
+// `mygo build` makes them, would do in silence. err is why the environment
+// could not start; it says nothing when the runtime is there. Main thread
+// only, as the backend's methods.
+func (b *Backend) explainMissingRuntime(err error) {
+	if b.envExplained || err == nil || loaderProc() != nil {
+		return
+	}
+	_, _, why := webview2.Find()
+	if why == nil {
+		return // the runtime is there: the failure is another's
+	}
+	b.envExplained = true
+	name := b.name
+	if name == "" {
+		name = "This app"
+	}
+	r := runtimeBox(b, &platform.MessageBoxOptions{
+		Type:    "error",
+		Title:   name,
+		Message: name + " needs the Microsoft Edge WebView2 Runtime to show its windows, and this computer has none that works.",
+		Detail:  why.Error() + "\n\nInstall the runtime from " + webview2.Download + " and start the app again.",
+		Buttons: []string{"Open the download page", "Close"}, DefaultID: 0, CancelID: 1,
+	})
+	if r.Response == 0 {
+		if oerr := openDownload(); oerr != nil {
+			log.Print(oerr)
+		}
 	}
 }

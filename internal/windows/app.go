@@ -41,7 +41,9 @@ type Backend struct {
 	env        uintptr
 	envErr     error
 	envStarted bool
-	envWaiters []func()
+	// envExplained: the message about a missing runtime was shown (once).
+	envExplained bool
+	envWaiters   []func()
 	// envUnthrottled tells that the environment's browser runs, or is
 	// starting, with unthrottledArguments, which the page that started it
 	// asked for; envWarned that a page that asked later was told it was
