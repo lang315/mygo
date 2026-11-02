@@ -109,7 +109,7 @@ func TestStartup(t *testing.T) {
 		exe := build(t, dir, strings.NewReplacer("+", "-", "=", "-").Replace(a.name), a.pkg, a.tags)
 		var all []sample
 		for i := 0; i < runs+1; i++ {
-			env := strings.ReplaceAll(a.env, "{fresh}", filepath.Join(dir, fmt.Sprintf("userdata-%d", i)))
+			env := strings.ReplaceAll(a.env, "{fresh}", filepath.Join(dir, fmt.Sprintf("userdata-%s-%d", strings.NewReplacer("+", "-", "=", "-", " ", "-", "(", "", ")", "").Replace(a.name), i)))
 			s := run(t, exe, filepath.Join(dir, "m.log"), strings.Fields(env)...)
 			all = append(all, s)
 		}
