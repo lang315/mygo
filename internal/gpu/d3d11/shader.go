@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -48,13 +49,32 @@ type shaders struct {
 	vs, ps, passVS, down, blur []byte
 }
 
+var (
+	unpackOnce sync.Once
+	unpacked   shaders
+	unpackErr  error
+)
+
+// unpackedShaders returns the bytecode of shaders.go, inflated the first time
+// a renderer asks and kept for the next ones (a renderer made again after the
+// device was lost): apps that never create a Direct3D renderer inflate none.
+func unpackedShaders() (shaders, error) {
+	unpackOnce.Do(func() {
+		var list [][]byte
+		if list, unpackErr = gpu.UnpackShaders(packedShaders, 5); unpackErr == nil {
+			unpacked = shaders{list[0], list[1], list[2], list[3], list[4]}
+		}
+	})
+	return unpacked, unpackErr
+}
+
 // shaderCode returns the bytecode of the shaders: that compiled ahead of
 // time into shaders.go, or, when shader.hlsl changed since (go generate
 // ./internal/gpu/d3d11 was not run), that compiled now from shader.hlsl,
 // with the compiler Windows has.
 func shaderCode() (code shaders, err error) {
 	if gpu.SourceSum(shaderSource) == shaderSum && !compileShaders {
-		return shaders{vertexShader, pixelShader, passVertexShader, downShader, blurShader}, nil
+		return unpackedShaders()
 	}
 	for _, f := range []struct {
 		code          *[]byte
