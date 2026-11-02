@@ -303,10 +303,7 @@ func (t *Terminal) dropFiles(paths []string) {
 	if len(paths) == 0 {
 		return
 	}
-	escaped := make([]string, len(paths))
-	for i, p := range paths {
-		escaped[i] = t.quoting.quote(p)
-	}
+	escaped := t.quoting.quoteAll(paths)
 	text := transfer.Bytes(transfer.Text, []byte(strings.Join(escaped, " ")))
 	d, err := transfer.FileData(paths...)
 	if err != nil {
@@ -317,6 +314,28 @@ func (t *Terminal) dropFiles(paths []string) {
 	first, _ := items[0].Read(transfer.FileList)
 	items[0] = transfer.NewItem(transfer.Bytes(transfer.FileList, first), transfer.Bytes(transfer.URIList, first), text)
 	t.PasteData(transfer.New(items...))
+}
+
+// quoteAll quotes the paths for the shell, and leaves out those it has no way
+// to spell (spellable).
+func (q quoting) quoteAll(paths []string) []string {
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if q.spellable(p) {
+			out = append(out, q.quote(p))
+		}
+	}
+	return out
+}
+
+// spellable reports whether the quoting can spell path without sending a
+// line break, which the shell of an unknown program, as tcsh or a REPL behind
+// ssh, may read as the end of the command, with what follows as a new one.
+// shortcut: no POSIX word can spell a newline without sending it raw, so a
+// dropped name with a line break is left out where a shell has no way to
+// spell it; upgrade if a real user needs it.
+func (q quoting) spellable(path string) bool {
+	return q != quotePOSIX || !strings.ContainsAny(path, "\r\n")
 }
 
 // quoting is how a shell takes a path as one argument, whatever it holds.
@@ -331,9 +350,8 @@ const (
 	// quotes, a single quote inside as '\'', and each such character as
 	// "$(printf '\ooo')" between them (octal, which every POSIX printf
 	// reads), so that no control byte is sent: one would be a key of the
-	// line editor where a paste is not bracketed. A newline stays in the
-	// single quotes, which a shell reads over the lines of a command: a
-	// command substitution would cut it off.
+	// line editor where a paste is not bracketed. A path with a line break
+	// is left out (spellable).
 	quotePOSIX quoting = iota
 	// quoteBash: as quotePOSIX, but control characters are $'\ooo' between
 	// the single quotes, which bash, zsh, ksh and mksh read. The text stays
@@ -444,9 +462,6 @@ func (q quoting) quote(path string) string {
 			return quoteRuns(path, func(b []byte) string { return fishBytes(b) }, `\'`)
 		}
 		return quoteRuns(path, func(b []byte) string {
-			if string(b) == "\n" {
-				return "'\n'" // inside single quotes: a command substitution would cut it off
-			}
 			return `"$(printf '` + octal(b, `\`) + `')"`
 		}, `'\''`)
 	}

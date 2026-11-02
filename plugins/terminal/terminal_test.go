@@ -2808,10 +2808,9 @@ func TestQuotePaths(t *testing.T) {
 		{quoteBash, "/tmp/a!b\x01", `'/tmp/a!b'$'\001'`},
 		{quoteBash, "/tmp/\u0085x", `'/tmp/'$'\302\205''x'`},
 		// Without $'…', and not fish: "$(printf '\ooo')" for a control
-		// character; a newline stays in the single quotes.
+		// character.
 		{quotePOSIX, "/tmp/a b (1).png", `/tmp/a\ b\ \(1\).png`},
 		{quotePOSIX, "/tmp/it's", `/tmp/it\'s`},
-		{quotePOSIX, "/tmp/x\ny", "'/tmp/x''\n''y'"},
 		{quotePOSIX, "/tmp/it's\tthere\\", `'/tmp/it'\''s'"$(printf '\011')"'there\'`},
 		{quotePOSIX, "/tmp/a'\x01b\x1b[201~c", `'/tmp/a'\'''"$(printf '\001')"'b'"$(printf '\033')"'[201~c'`},
 		{quotePOSIX, "/tmp/\xff.bin", `'/tmp/'"$(printf '\377')"'.bin'`},
@@ -2915,6 +2914,38 @@ var hardPaths = []string{
 	"/tmp/a\rb", "/tmp/a\x1b[201~b", "/tmp/a'\x01b\\'", "/tmp/\u0085x", "/tmp/a\\\x01'b!\x02", "/tmp/\xff.bin", "/tmp/a\xc3b",
 }
 
+// A name with a line break is left out where a shell has no way to spell it,
+// and the others are quoted as before.
+func TestQuoteAllLeavesOutWhatCannotBeSpelled(t *testing.T) {
+	paths := []string{"/tmp/a b", "/tmp/new\nline", "/tmp/c\rd", "/tmp/e"}
+	if got, want := quotePOSIX.quoteAll(paths), []string{`/tmp/a\ b`, "/tmp/e"}; !slices.Equal(got, want) {
+		t.Errorf("quotePOSIX.quoteAll = %q, want %q", got, want)
+	}
+	for _, q := range []quoting{quoteBash, quoteFish, quotePowerShell, quoteCmd} {
+		if got := q.quoteAll(paths); len(got) != len(paths) {
+			t.Errorf("quoting %d left out names: %q", q, got)
+		}
+	}
+}
+
+// A shell that cannot read what the generic quoting writes, as tcsh, reads
+// the path or fails: it runs nothing else, whatever the path holds.
+func TestQuotePathsTcshReadsThemOrFails(t *testing.T) {
+	bin, err := exec.LookPath("tcsh")
+	if err != nil {
+		t.Skip("no tcsh")
+	}
+	for _, p := range hardPaths {
+		if !quotePOSIX.spellable(p) {
+			continue
+		}
+		out, err := exec.Command(bin, "-f", "-c", "printf %s "+quotePOSIX.quote(p)).Output()
+		if err == nil && string(out) != p {
+			t.Errorf("tcsh read %s as %q, want the path or a failure", quotePOSIX.quote(p), out)
+		}
+	}
+}
+
 // Every shell the terminal quotes for reads a path back as the path, whatever
 // it holds: quotes, backslashes, control characters, characters its line
 // editor or globbing reads, bytes that are not UTF-8.
@@ -2940,6 +2971,9 @@ func TestQuotePathsRoundTrip(t *testing.T) {
 				args = []string{"ash", "-c"}
 			}
 			for _, p := range hardPaths {
+				if !c.q.spellable(p) {
+					continue
+				}
 				q := c.q.quote(p)
 				out, err := exec.Command(bin, append(args, "printf %s "+q)...).Output()
 				if err != nil || string(out) != p {
