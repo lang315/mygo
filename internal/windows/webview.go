@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -863,12 +864,36 @@ func (w *window) PostMessages(json string) {
 		w.Eval("__mygo.receive(" + json + ")")
 		return
 	}
+	// The UTF-16 copy of a reply lives in a buffer of the window's, unless
+	// another post holds it: the call below can run the message loop, and a
+	// post from a handler it runs would write over the one in flight.
+	var buf []uint16
+	reused := !w.posting
+	if reused {
+		w.posting = true
+		buf = appendUTF16z(w.postBuf[:0], json)
+	} else {
+		buf = appendUTF16z(make([]uint16, 0, len(json)+1), json)
+	}
 	w.withWebView(func() {
-		if hr := comCall(w.webview, wvPostWebMessageAsJSON, uintptr(unsafe.Pointer(u16(json)))); failed(hr) {
+		if hr := comCall(w.webview, wvPostWebMessageAsJSON, uintptr(unsafe.Pointer(&buf[0]))); failed(hr) {
 			log.Print(hresultError("posting a web message", hr))
+		}
+		runtime.KeepAlive(buf)
+		if reused {
+			if cap(buf) <= maxKeptPost {
+				w.postBuf = buf[:0]
+			} else {
+				w.postBuf = nil // a huge reply does not pin its buffer
+			}
+			w.posting = false
 		}
 	})
 }
+
+// maxKeptPost is the largest UTF-16 buffer, in units, a window keeps for the
+// next reply.
+const maxKeptPost = 1 << 20
 
 // CallAsyncFunction evaluates through the DevTools protocol, which awaits
 // promises, reports syntax errors and ignores the page's CSP.
@@ -1321,8 +1346,17 @@ type schemeResponse struct {
 	done     bool
 }
 
+// maxPresized bounds what a Content-Length makes the response buffer take
+// before a byte arrives: the header is the app's handler's, and may be wrong.
+const maxPresized = 64 << 20
+
 func (r *schemeResponse) Respond(status int, header map[string][]string) {
 	r.status, r.header = status, header
+	// The body arrives in chunks: a buffer that grows with them copies it
+	// about twice (256 KB, 512 KB, 1 MB for a megabyte).
+	if n, err := strconv.ParseInt(strings.TrimSpace(httplite.Header(header).Get("Content-Length")), 10, 64); err == nil && n > 0 {
+		r.body.Grow(int(min(n, maxPresized)))
+	}
 }
 
 func (r *schemeResponse) Write(p []byte) { r.body.Write(p) }

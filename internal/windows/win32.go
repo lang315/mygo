@@ -7,7 +7,6 @@ package windows
 import (
 	"sync"
 	"syscall"
-	"unicode/utf16"
 	"unsafe"
 )
 
@@ -607,19 +606,7 @@ func u16(s string) *uint16 { return &utf16z(s)[0] }
 
 // utf16z is u16 as a slice, NUL included.
 func utf16z(s string) []uint16 {
-	b := make([]uint16, 0, len(s)+1)
-	for _, r := range s {
-		if r == 0 {
-			continue
-		}
-		if r >= 0x10000 {
-			r1, r2 := utf16.EncodeRune(r)
-			b = append(b, uint16(r1), uint16(r2))
-		} else {
-			b = append(b, uint16(r))
-		}
-	}
-	return append(b, 0)
+	return appendUTF16z(make([]uint16, 0, len(s)+1), s)
 }
 
 // utf16Units is s in UTF-16, without a terminating NUL.
@@ -648,7 +635,7 @@ func wstr(p uintptr) string {
 	for *(*uint16)(unsafe.Add(native(p), 2*n)) != 0 {
 		n++
 	}
-	return string(utf16.Decode(unsafe.Slice((*uint16)(native(p)), n)))
+	return utf16ToString(unsafe.Slice((*uint16)(native(p)), n))
 }
 
 // takeWstr reads a string allocated with CoTaskMemAlloc and frees it.
