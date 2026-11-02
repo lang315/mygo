@@ -249,7 +249,7 @@ func TestInstallScript(t *testing.T) {
 	t.Setenv("LD_CACHE", "")
 	installed("1.0.0")
 	// The libraries it looks for are those the app loads.
-	ffi, err := os.ReadFile(filepath.Join("..", "..", "internal", "linux", "ffi.go"))
+	ffi, err := os.ReadFile(filepath.Join("..", "..", "internal", "linux", "webview_start.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
