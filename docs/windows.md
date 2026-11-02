@@ -80,6 +80,9 @@ win := mygo.NewWindow(mygo.WindowOptions{URL: "/", Hidden: true, BackgroundColor
 win.OnReadyToShow(win.Show)
 ```
 
+A listener added after the window is ready runs once, on the main thread, as
+soon as it can, not in the call that adds it.
+
 Windows of native UI need neither: they have no page to load, and show
 with their first frame (on Windows, the window stays out of sight until
 it drew it). One created `Hidden` is ready to show once it drew its first
