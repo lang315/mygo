@@ -393,7 +393,11 @@ func New(hwnd uintptr) (*Renderer, error) { return newRenderer(hwnd, false) }
 // (WS_EX_NOREDIRECTIONBITMAP), its system backdrop, as Mica.
 func NewComposed(hwnd uintptr) (*Renderer, error) { return newRenderer(hwnd, true) }
 
+// Trace is set by a measuring test (DRAFT).
+var Trace = func(string) {}
+
 func newRenderer(hwnd uintptr, composed bool) (*Renderer, error) {
+	Trace("d3d11 newRenderer")
 	if hwnd == 0 {
 		return nil, errors.New("d3d11: no window")
 	}
@@ -402,10 +406,12 @@ func newRenderer(hwnd uintptr, composed bool) (*Renderer, error) {
 	if r.device, r.ctx, r.warp, err = device.New(); err != nil {
 		return nil, err
 	}
+	Trace("d3d11 device.New done")
 	if err := r.init(); err != nil {
 		r.Release()
 		return nil, err
 	}
+	Trace("d3d11 init done")
 	return r, nil
 }
 
@@ -438,10 +444,12 @@ func (r *Renderer) init() error {
 		return errors.New("d3d11: DXGI 1.2 is required")
 	}
 
+	Trace("d3d11 factory")
 	code, err := shaderCode()
 	if err != nil {
 		return err
 	}
+	Trace("d3d11 shaderCode")
 	vsCode := code.vs
 	for _, s := range []struct {
 		code []byte
@@ -455,6 +463,7 @@ func (r *Renderer) init() error {
 			return fmt.Errorf("d3d11: cannot create the %s shader", s.name)
 		}
 	}
+	Trace("d3d11 shaders created")
 	names := []string{"RECT", "RADII", "INNER", "COLOR", "COLOR", "COLOR", "GRAD", "UV", "CLIP", "CLIPR", "PARAMS", "TRANSFORM", "TRANSFORM", "TRANSFORM"}
 	indices := []uint32{0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 1, 2}
 	elems := make([]inputElement, len(names))
@@ -551,6 +560,8 @@ func (r *Renderer) resize(w, h int) error {
 // buffers makes the swap chain n buffers of bw×bh pixels, which shows w×h
 // of them.
 func (r *Renderer) buffers(w, h, bw, bh, n int) error {
+	Trace("d3d11 buffers")
+	defer Trace("d3d11 buffers done")
 	free(&r.rtv)
 	r.held = false
 	if r.swapChain == 0 {
@@ -702,6 +713,8 @@ func (r *Renderer) setSourceSize(w, h int) error {
 // DirectComposition device of the renderer's own. The swap chain's frames
 // show as it presents them, with no commit.
 func (r *Renderer) composeSwapChain(desc swapChainDesc1) error {
+	Trace("d3d11 composeSwapChain")
+	defer Trace("d3d11 composeSwapChain done")
 	if err := procDCompositionCreateDevice.Find(); err != nil {
 		return fmt.Errorf("d3d11: no DirectComposition: %w", err)
 	}
@@ -772,6 +785,8 @@ func (r *Renderer) armSettle() {
 
 // Release frees the renderer's GPU objects.
 func (r *Renderer) Release() {
+	Trace("d3d11 Release")
+	defer Trace("d3d11 Release done")
 	r.pending, r.refreshing, r.wake = false, false, nil
 	r.lat.release()
 	r.b.Release()

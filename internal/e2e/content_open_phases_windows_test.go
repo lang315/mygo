@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/gpu/d3d11"
 	"github.com/egoist/mygo/internal/wait"
 	win "github.com/egoist/mygo/internal/windows"
 	"github.com/egoist/mygo/ui"
@@ -37,6 +38,8 @@ func TestContentWindowOpenPhases(t *testing.T) {
 		names []string
 		at    []time.Duration
 	}
+	d3d11.Trace = win.TestMark
+	t.Cleanup(func() { d3d11.Trace = func(string) {} })
 	var runs []trace
 	var totals []time.Duration
 	for i := 0; i < rounds; i++ {
@@ -48,13 +51,14 @@ func TestContentWindowOpenPhases(t *testing.T) {
 			t.Fatal("no frame")
 		}
 		mygo.RunOnMain(func() { win.TestMark("built seen") })
+		w.Destroy()
+		mygo.RunOnMain(func() { win.TestMark("Destroy returned") })
 		names, at := func() (n []string, a []time.Duration) {
 			mygo.RunOnMain(func() { n, a = win.TestPhases() })
 			return
 		}()
 		runs = append(runs, trace{names, at})
 		totals = append(totals, at[len(at)-1])
-		w.Destroy()
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "DEBUG phases (ms from NewWindow call; first run, then median of the other %d)\n", rounds-1)
