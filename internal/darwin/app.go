@@ -252,7 +252,6 @@ func registerClasses() {
 	registerClipboardClass()
 	registerAccessClass()
 	registerMenuTarget()
-	registerSchemeHandler()
 	registerTrayTarget()
 	registerNotificationDelegate()
 }

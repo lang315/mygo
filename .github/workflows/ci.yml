@@ -214,6 +214,11 @@ jobs:
         run: |
           go test -count=1 -tags mygo_nowebview -run TestNoWebViewInANativeOnlyBuild ./internal/windows
           go test -count=1 -tags mygo_nowebview -run TestNativeOnlyRefusesWebViews .
+      - name: macOS and Linux backends without a web view
+        if: runner.os != 'Windows' && matrix.shard == 'rest'
+        run: |
+          go test -count=1 -tags mygo_nowebview -run TestNoWebViewInANativeOnlyBuild ./internal/${{ runner.os == 'macOS' && 'darwin' || 'linux' }}
+          go test -count=1 -tags mygo_nowebview -run TestNativeOnlyRefusesWebViews .
       - name: GUI tests
         if: runner.os != 'Linux' && steps.affected.outputs.e2e == 'true'
         env:

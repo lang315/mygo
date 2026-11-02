@@ -370,6 +370,11 @@ var (
 )
 
 func (c *Config) applyDefaults() {
+	if c.NativeOnly {
+		// An app with no web view needs no WebKitGTK: the packages do not
+		// depend on it and install.sh does not ask for it.
+		c.Linux.WebView = new(false)
+	}
 	if c.Name == "" {
 		c.Name = filepath.Base(c.root)
 	}

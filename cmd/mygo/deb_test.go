@@ -287,3 +287,35 @@ func TestSlugify(t *testing.T) {
 		t.Errorf("%d romanizations of kana, for %d", len(kanaRomaji), 0x3096-0x3041+1)
 	}
 }
+
+// An app with nativeOnly has no web view, so its Linux packages do not depend
+// on WebKitGTK and install.sh does not ask for it, whatever linux.webView says.
+func TestNativeOnlyNeedsNoWebKitGTK(t *testing.T) {
+	for _, config := range []string{`{"name": "My App", "version": "1.0.0", "nativeOnly": true}`, `{"name": "My App", "version": "1.0.0", "nativeOnly": true, "linux": {"webView": true}}`} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "mygo.json"), []byte(config), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		c, err := loadConfig(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stage := t.TempDir()
+		if err := os.WriteFile(filepath.Join(stage, "my-app"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		deb, err := writeDeb(c, stage, "my-app", "amd64", []string{"my-app"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if control := debMember(t, deb, "control.tar.gz")["control"]; strings.Contains(control, "webkit") || !strings.Contains(control, "\nDepends: libgtk-3-0 | libgtk-3-0t64\n") {
+			t.Errorf("%s: control:\n%s", config, control)
+		}
+		if strings.Contains(installScript(c), "if ! has_webkit; then") {
+			t.Errorf("%s: install.sh checks for WebKitGTK", config)
+		}
+		if got, _ := c.Linux.archDepends(); slices.Contains(got, "webkit2gtk-4.1") {
+			t.Errorf("%s: the PKGBUILD depends on %q", config, got)
+		}
+	}
+}

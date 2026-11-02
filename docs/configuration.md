@@ -50,7 +50,7 @@ the fields of [the frontend](#development-and-the-frontend).
 | `copyright` | | the copyright notice of the app, in its `Info.plist` (macOS) and file properties (Windows) |
 | `publisher` | the copyright notice without its "©" and years, e.g. `Example Inc.` of `© 2026 Example Inc.` | who makes the app: the publisher that Settings > Apps lists for the installed app on Windows, and its company in the file properties |
 | `icon` | `resources/icon.png` when it exists | a square PNG, ideally 1024×1024; its name with `-dev`, as `icon-dev.png`, beside it is the development app's, when it exists |
-| `nativeOnly` | `false` | the app has no web view (its windows show native UI): `mygo build` and `mygo dev` build it with the tag `mygo_nowebview`, which leaves the code that makes web views out of the program (some 200 KB of a Windows app; other platforms ignore it so far), and a window that would show a page is an error |
+| `nativeOnly` | `false` | the app has no web view (its windows show native UI): `mygo build` and `mygo dev` build it with the tag `mygo_nowebview`, which leaves the code that makes web views out of the program (120 to 230 KB of an app of native UI, by platform), and a window that would show a page is an error |
 | `main` | `.` | the Go package of the app, relative to the project |
 
 ## Development and the frontend
@@ -147,7 +147,7 @@ See [Windows](distribution.md#windows).
 | `comment` | | a short description, for the desktop entry and the package |
 | `categories` | `["Utility"]` | the categories of the desktop entry, which place it in application menus |
 | `depends` | | Debian packages the app needs besides GTK and WebKitGTK; the PKGBUILD depends on the [Arch Linux packages](distribution.md#arch-linux) of those MyGo knows |
-| `webview` | `true` | `false` for an app that shows no web page, as one of native UI: the Debian package and the PKGBUILD depend on GTK alone, and install.sh and `mygo doctor` do not ask for WebKitGTK |
+| `webview` | `true` | `false` for an app that shows no web page, as one of native UI (always `false` with `nativeOnly`): the Debian package and the PKGBUILD depend on GTK alone, and install.sh and `mygo doctor` do not ask for WebKitGTK |
 | `command` | none | a command that runs the app, or a list of names, as `["my-app", "ma"]`, which adds a short one: `/usr/bin/<command>` from the Debian package and the PKGBUILD, `~/.local/bin/<command>` from install.sh, for each |
 
 See [Linux](distribution.md#linux).
