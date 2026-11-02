@@ -71,7 +71,8 @@ export const latestCommits = 300;
 const apps = ["hello", "counter-native", "widget-tour"];
 
 // The tags `mygo build` gives an example: the production one, and, when its
-// mygo.json says nativeOnly, the one that leaves the web view out.
+// mygo.json says nativeOnly, the one that leaves the web view out (the examples
+// have a mygo.json, not a mygo.config.ts).
 function tagsOf(app: string): string {
   const file = join("examples", app, "mygo.json");
   const config = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};

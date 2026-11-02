@@ -211,7 +211,9 @@ jobs:
       # nativeOnly apps are built with this tag (mygo build): no web view.
       - name: Windows backend without a web view
         if: runner.os == 'Windows' && matrix.shard == 'rest'
-        run: go test -count=1 -tags mygo_nowebview -run TestNoWebViewInANativeOnlyBuild ./internal/windows
+        run: |
+          go test -count=1 -tags mygo_nowebview -run TestNoWebViewInANativeOnlyBuild ./internal/windows
+          go test -count=1 -tags mygo_nowebview -run TestNativeOnlyRefusesWebViews .
       - name: GUI tests
         if: runner.os != 'Linux' && steps.affected.outputs.e2e == 'true'
         env:

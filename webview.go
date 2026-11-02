@@ -71,6 +71,9 @@ var errNoContent = errors.New("mygo: web views go in windows showing native UI (
 // where its view places it with ui.WebView. The window must show Content;
 // the web view closes with it.
 func (w *Window) NewWebView(opts WebViewOptions) (*WebView, error) {
+	if noWebView {
+		return nil, errNativeOnly
+	}
 	bg, err := backgroundOption(opts.BackgroundColor)
 	if err != nil {
 		return nil, err

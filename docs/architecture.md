@@ -5021,8 +5021,8 @@ native UI and `counter-native` do), and `mygo build`/`mygo dev` give it the tag
 instead of `webview_start.go`, and the code that makes a WebView2 (the
 environment, the controller, the handlers of its events, the scheme
 responses, cookies, the DevTools protocol) is not linked: counter-native is
-218 KB smaller on amd64 and 200 KB on arm64. A window that would show a page,
-or a web view in a surface, is an error that says so. A plain `go build` has no
+231 KB smaller on amd64 and 212 KB on arm64. A window that would show a page,
+or a web view in a surface, is an error that says so: on Windows from the backend, and on every platform from package mygo (`nowebview.go`: `newWindow` and `NewWebView`), so an app behaves alike where only Windows saves the size. A plain `go build` has no
 tag, so it has the web view and the size it always had; the other platforms
 ignore the tag for now. The benchmarks build each example with the tags
 `mygo build` would (`scripts/bench.ts`, `tagsOf`).

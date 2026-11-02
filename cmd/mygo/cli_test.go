@@ -1163,6 +1163,14 @@ func TestNativeOnly(t *testing.T) {
 	if got := flags(&Config{}, "-tags", "mygo_noinspector"); got != "-tags mygo_noinspector" {
 		t.Errorf("an app with a web view got %q", got)
 	}
+	t.Run("the tags of GOFLAGS stay", func(t *testing.T) {
+		t.Setenv("GOENV", "off")
+		t.Setenv("GOFLAGS", "-tags=foo")
+		cc := &Config{NativeOnly: true, root: t.TempDir()}
+		if got := strings.Join(nativeOnlyFlags(cc, []string{"-trimpath"}), " "); got != "-trimpath -tags foo,mygo_nowebview" {
+			t.Errorf("with GOFLAGS=-tags=foo: %q", got)
+		}
+	})
 	t.Run("the template of native UI is nativeOnly", func(t *testing.T) {
 		src, err := os.ReadFile(filepath.Join("template", "native", "mygo.json.tmpl"))
 		if err != nil {

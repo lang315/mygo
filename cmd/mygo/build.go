@@ -122,6 +122,9 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 			warnf("Bind keeps reflection (the app could not list the services it binds: %v), about 1.4 MB more", err)
 		}
 	}
+	if c.NativeOnly && (c.BuildCommand != "" || c.FrontendDist != "") {
+		warnf("nativeOnly is set, but the project has a frontend (buildCommand or frontendDist): the app is built without a web view, so nothing shows it")
+	}
 	if c.BuildCommand != "" && !*skipBuildCommand {
 		t := con.start("Building the frontend")
 		if err := t.end(run(t, "web", c.root, c.BuildCommand), "Built the frontend"); err != nil {
@@ -494,10 +497,14 @@ const inspectorTag = "mygo_noinspector"
 const webviewTag = "mygo_nowebview"
 
 // nativeOnlyFlags adds webviewTag to the -tags of a build of an app whose
-// configuration says nativeOnly.
+// configuration says nativeOnly. A build with no -tags yet gets the tags of
+// GOFLAGS with it, which a -tags flag would override.
 func nativeOnlyFlags(c *Config, flags []string) []string {
 	if !c.NativeOnly {
 		return flags
+	}
+	if !slices.Contains(flags, "-tags") {
+		return append(flags, "-tags", strings.Join(append(goFlagsTags(c.root), webviewTag), ","))
 	}
 	return withTag(flags, webviewTag)
 }

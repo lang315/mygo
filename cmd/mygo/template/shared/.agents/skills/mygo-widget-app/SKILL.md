@@ -11,6 +11,8 @@ description: Build or change the interface of a Go app with MyGo's ui/widget pac
 
 Make controls once, outside any callback that runs per frame. Keep them in variables or `AssignTo`; change them with setters.
 
+The project's configuration file (mygo.json) says nativeOnly: the app is built without a web view, so `widget.WebBrowser`, `Window.NewWebView` and windows that show a page are errors. Take nativeOnly out of it before adding any of them.
+
 ```go
 package main
 
