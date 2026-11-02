@@ -105,20 +105,6 @@ func touchSites(t *testing.T) (sites []touchSite) {
 		n, ok := rt.(*types.Named)
 		return ok && n.Obj().Name() == "state" && n.Obj().Pkg().Name() == "ui"
 	}
-	stripped := func(e ast.Expr) ast.Expr {
-		for {
-			switch x := e.(type) {
-			case *ast.IndexExpr:
-				e = x.X
-			case *ast.ParenExpr:
-				e = x.X
-			case *ast.StarExpr:
-				e = x.X
-			default:
-				return e
-			}
-		}
-	}
 	src := func(e ast.Expr) string { return types.ExprString(e) }
 	for _, f := range files {
 		for _, d := range f.Decls {
@@ -154,9 +140,11 @@ func touchSites(t *testing.T) (sites []touchSite) {
 						// value is a write to it. One behind a pointer (s.editor.queue)
 						// is a write to another object, which state.pending polls
 						// (editor.busy) and the row's watch list covers.
-						if _, ptr := info.Types[x.X].Type.Underlying().(*types.Pointer); !ptr && !isState(x) && isState(stripped(x.X)) {
-							e = x.X
-							continue
+						if t := info.TypeOf(x.X); t != nil && !isState(x) {
+							if _, ptr := t.Underlying().(*types.Pointer); !ptr {
+								e = x.X
+								continue
+							}
 						}
 					}
 					break
