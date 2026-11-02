@@ -803,6 +803,7 @@ func (r *Renderer) Release() {
 	}
 	if r.ctx != 0 {
 		call(r.ctx, ctxClearState)
+		call(r.ctx, ctxFlush) // MUTATION: the flush before the objects are released
 	}
 	for _, t := range r.images {
 		free(&t.srv)
@@ -842,9 +843,6 @@ func (r *Renderer) Release() {
 	// alive for the GPU, a flip swap chain's buffers among them, as the
 	// documentation of Flush asks: a device that stays would otherwise
 	// fail to make a swap chain for the window again.
-	if r.ctx != 0 {
-		call(r.ctx, ctxFlush)
-	}
 	// The device, the shaders and the states stay for the next renderer
 	// (devicepool.go), or go as well.
 	if r.device != 0 {
