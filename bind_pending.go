@@ -24,6 +24,8 @@ type pendingService struct {
 var pending struct {
 	sync.Mutex
 	list []pendingService
+	// closed is set by App.Run: a service bound after it has no table to wait for.
+	closed bool
 }
 
 // registerPending registers s with no methods; resolvePending gives it them.
@@ -77,6 +79,7 @@ func checkPending() {
 	if len(pending.list) > 0 {
 		panic(pending.list[0].err)
 	}
+	pending.closed = true
 }
 
 // pendBind is what bind does with the error of listMethods: a service the table
@@ -85,6 +88,12 @@ func pendBind(err error, s *service, v reflect.Value) (handled bool, rerr error)
 	nt, ok := err.(*noTableError)
 	if !ok {
 		return false, nil
+	}
+	pending.Lock()
+	closed := pending.closed
+	pending.Unlock()
+	if closed {
+		return true, nt // App.Run has checked: nothing is going to give it methods
 	}
 	return true, registerPending(s, v, nt)
 }

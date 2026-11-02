@@ -189,7 +189,7 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 		if hasTable[path] {
 			continue // the run, which has no tag, lists a service the plugin gives itself
 		}
-		if slices.ContainsFunc(scanned, func(f foundType) bool { return f.b.Pkg == path && f.b.Type == b.Type }) {
+		if slices.ContainsFunc(scanned, func(f foundType) bool { return f.b.Pkg == path && f.b.Type == b.Type && f.b.Pointer == b.Pointer }) {
 			continue
 		}
 		tp, err := declaredIn(path)
@@ -200,7 +200,11 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 			continue
 		}
 		if _, ok := tp.Scope().Lookup(b.Type).(*types.TypeName); ok {
-			return nil, fmt.Sprintf("the app bound %s.%s when it ran, which no call of Bind in the build names", b.Pkg, b.Type), nil
+			star := ""
+			if b.Pointer {
+				star = "*"
+			}
+			return nil, fmt.Sprintf("the app bound %s%s.%s when it ran, which no call of Bind or Service of a plugin in the build names", star, b.Pkg, b.Type), nil
 		}
 	}
 	for _, f := range scanned {
@@ -233,6 +237,15 @@ type foundType struct {
 	place string // file:line of the call
 	b     boundType
 	typ   types.Type
+}
+
+// isPluginType reports whether t is mygo.Plugin or a pointer to it.
+func isPluginType(t types.Type, isMygo func(types.Object) bool) bool {
+	if p, ok := types.Unalias(t).(*types.Pointer); ok {
+		t = p.Elem()
+	}
+	n, ok := types.Unalias(t).(*types.Named)
+	return ok && n.Obj().Name() == "Plugin" && isMygo(n.Obj())
 }
 
 // importsMygo reports whether the package imports this module's root package,
@@ -329,6 +342,17 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 					}
 					for _, a := range args {
 						value(a, id.Name)
+					}
+				}
+			case *ast.AssignStmt:
+				// p.Service = &S{}: the Service of a mygo.Plugin set after the literal.
+				for i, l := range n.Lhs {
+					sel, ok := l.(*ast.SelectorExpr)
+					if !ok || sel.Sel.Name != "Service" || len(n.Lhs) != len(n.Rhs) {
+						continue
+					}
+					if s := info.Selections[sel]; s != nil && isPluginType(s.Recv(), isMygo) {
+						value(n.Rhs[i], "the plugin "+lp.ImportPath)
 					}
 				}
 			case *ast.CompositeLit:
