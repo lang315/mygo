@@ -544,6 +544,7 @@ func (rt *engine) pointerUp(button, clicks int) {
 // it. A press that came since the release keeps it pressed.
 func (rt *engine) applyRelease(s *state) {
 	r := &s.releaseLater
+	s.touch()
 	s.pressed = rt.pressed == s
 	s.released = r.released
 	s.clicks += r.clicks
