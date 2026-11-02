@@ -864,7 +864,9 @@ func (w *window) PostMessages(json string) {
 		return
 	}
 	w.withWebView(func() {
-		comCall(w.webview, wvPostWebMessageAsJSON, uintptr(unsafe.Pointer(u16(json))))
+		if hr := comCall(w.webview, wvPostWebMessageAsJSON, uintptr(unsafe.Pointer(u16(json)))); failed(hr) {
+			log.Print(hresultError("posting a web message", hr))
+		}
 	})
 }
 

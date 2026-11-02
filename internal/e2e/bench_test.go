@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,15 +35,29 @@ func (Bench) Noop() {}
 
 // Hold answers once benchHold is closed, after saying it is running on
 // benchHeld: a call that outlives the page that made it.
-func (Bench) Hold() string {
+func (Bench) Hold() heldReply {
 	benchHeld <- struct{}{}
 	<-benchHold
 	return "FIRST-DOCUMENT-SECRET"
 }
 
+// heldReply says on benchReplying when the bridge encodes it, which it does
+// just before it queues the reply.
+type heldReply string
+
+func (r heldReply) MarshalJSON() ([]byte, error) {
+	select {
+	case benchReplying <- struct{}{}:
+	default:
+	}
+	return json.Marshal(string(r))
+}
+
 var (
 	benchHold = make(chan struct{})
 	benchHeld = make(chan struct{}, 1)
+	// benchReplying is signaled when the held call's reply is being queued.
+	benchReplying = make(chan struct{}, 1)
 )
 
 func (Bench) Items(v []BenchItem) []BenchItem { return v }

@@ -39,10 +39,10 @@ func (postService) Count(n int, ch *Channel[int]) error {
 	}
 	return nil
 }
-func (postService) Stream(ch *Channel[string]) error {
+func (postService) Early(ch *Channel[string]) error {
+	err := ch.Send("secret value queued early")
 	postStarted <- struct{}{}
-	<-postGate
-	return ch.Send("secret value of the first page")
+	return err
 }
 
 // postingWindow returns a ready window that takes web messages.
@@ -143,48 +143,54 @@ func TestPostedChannelValuesKeepTheirOrder(t *testing.T) {
 // reply, and the values of its channel, are not posted, for the listeners of
 // the page that came do not belong to the one that asked.
 func TestPostedRepliesDoNotReachAnotherDocument(t *testing.T) {
-	for _, tc := range []struct{ name, method, args, marker string }{
-		{"reply", "Slow", `[]`, "secret of the first page"},
-		{"channel", "Stream", `[1]`, "secret value of the first page"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			_, fw := postingWindow(t)
-			gate := postGate
-			postGate = make(chan struct{})
-			defer func() { postGate = gate }()
-			release := postGate
-			postCall(fw, 1, tc.method, tc.args)
-			<-postStarted
-			// The page navigates to another document, which says its hello.
-			commit(fw, "https://other.example/")
-			s := newTestSecret()
-			hello(fw, s)
-			onMain(func() { fw.H.Message(s + `{"t":"dom-ready"}`) })
-			close(release) // the first call answers now
-			// A call of the new document, answered after: when its reply is
-			// posted, what came before it has been posted or dropped.
-			onMain(func() {
-				fw.H.Message(s + `{"t":"call","id":2,"k":"tok2","m":"PostTest.Echo","a":["second page"]}`)
-			})
-			got := posted(t, fw, 1)
-			for _, m := range got {
-				if strings.Contains(string(m["v"]), tc.marker) || strings.Contains(string(m["p"]), tc.marker) {
-					t.Fatalf("the new document got a message of the first: %s", m["v"])
-				}
-			}
-			wait.Until(t, "the reply of the new document", func() bool {
-				for _, m := range posted(t, fw, 1) {
-					if string(m["id"]) == "2" {
-						return true
-					}
-				}
-				return false
-			})
-			for _, m := range posted(t, fw, 1) {
-				if strings.Contains(string(m["v"]), tc.marker) || strings.Contains(string(m["p"]), tc.marker) {
-					t.Fatalf("the new document got a message of the first: %s", m)
-				}
-			}
+	// finish is what both cases end with: the new document says its hello and
+	// makes a call, answered after what came before it, so when its reply is
+	// posted what came before has been posted or dropped.
+	finish := func(t *testing.T, fw *fake.Window, marker string) {
+		s := newTestSecret()
+		hello(fw, s)
+		onMain(func() { fw.H.Message(s + `{"t":"dom-ready"}`) })
+		onMain(func() {
+			fw.H.Message(s + `{"t":"call","id":2,"k":"tok2","m":"PostTest.Echo","a":["second page"]}`)
 		})
+		wait.Until(t, "the reply of the new document", func() bool {
+			for _, m := range posted(t, fw, 1) {
+				if string(m["id"]) == "2" {
+					return true
+				}
+			}
+			return false
+		})
+		for _, m := range posted(t, fw, 1) {
+			if strings.Contains(string(m["v"]), marker) || strings.Contains(string(m["p"]), marker) {
+				t.Fatalf("the new document got a message of the first: %v", m)
+			}
+		}
 	}
+	t.Run("reply", func(t *testing.T) {
+		_, fw := postingWindow(t)
+		gate := postGate
+		postGate = make(chan struct{})
+		defer func() { postGate = gate }()
+		release := postGate
+		postCall(fw, 1, "Slow", `[]`)
+		<-postStarted
+		// The page navigates to another document; the first call answers after.
+		commit(fw, "https://other.example/")
+		close(release)
+		finish(t, fw, "secret of the first page")
+	})
+	// A value queued before the navigation and flushed after it is dropped by
+	// its page, not by the closed channel: the main thread is held from the
+	// call until the commit, so the flush waits behind both.
+	t.Run("queued value", func(t *testing.T) {
+		_, fw := postingWindow(t)
+		s := secret(fw)
+		onMain(func() {
+			fw.H.Message(s + `{"t":"call","id":1,"k":"tok","m":"PostTest.Early","a":[1]}`)
+			<-postStarted // the value is queued, its flush is behind this task
+			fw.H.NavigationCommitted("https://other.example/")
+		})
+		finish(t, fw, "secret value queued early")
+	})
 }

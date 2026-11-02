@@ -39,8 +39,14 @@ func TestWebMessageReplyDoesNotReachANewDocument(t *testing.T) {
 	}
 	waitFor(t, w, "window.__spy !== undefined && window.mygo && document.readyState === 'complete'")
 	close(benchHold) // the first document's call is answered now
-	// Events wait for the new document's dom-ready and are posted after what
-	// came before them: when the tick is in the spy, the reply was posted, or dropped.
+	// The reply is encoded just before it is queued: a tick emitted after
+	// that is queued after the reply, and events wait for the new document's
+	// dom-ready, so when the tick is in the spy the reply was posted, or dropped.
+	select {
+	case <-benchReplying:
+	case <-time.After(wait.Guard):
+		t.Fatal("the held call was not answered")
+	}
 	if err := benchTick.Emit(w, Tick{N: 4242}); err != nil {
 		t.Fatal(err)
 	}
