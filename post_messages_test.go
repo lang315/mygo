@@ -188,3 +188,89 @@ func TestPostedRepliesDoNotReachAnotherDocument(t *testing.T) {
 		})
 	}
 }
+
+// While a navigation of the main frame runs, the messages wait: the document
+// it replaces may be gone when they are posted, and the next one's scripts
+// hear what they were. A navigation that ends without a commit (canceled, or
+// within the document) posts them to the page that stayed; one that commits
+// drops those the old page asked.
+func TestPostedMessagesWaitForANavigation(t *testing.T) {
+	for _, commitIt := range []bool{false, true} {
+		name := "canceled"
+		if commitIt {
+			name = "committed"
+		}
+		t.Run(name, func(t *testing.T) {
+			_, fw := postingWindow(t)
+			gate := postGate
+			postGate = make(chan struct{})
+			defer func() { postGate = gate }()
+			release := postGate
+			postCall(fw, 1, "Slow", `[]`)
+			<-postStarted
+			before := len(fw.Posts()) // the window's own events, at dom-ready
+			onMain(func() { fw.H.NavigationStarted("https://other.example/") })
+			close(release)
+			// Another message after, for the page that is current once it settles.
+			postCall(fw, 2, "Echo", `["after"]`)
+			// Both were enqueued; nothing is posted while the navigation runs.
+			wait.Until(t, "the replies enqueued", func() bool {
+				var n int
+				onMain(func() {
+					fw.H.Message("") // reaches the main loop: the flushes ran
+					n = 1
+				})
+				return n == 1
+			})
+			if n := len(fw.Posts()) - before; n != 0 {
+				t.Fatalf("%d posts while a navigation ran", n)
+			}
+			var s string
+			if commitIt {
+				commit(fw, "https://other.example/")
+				s = newTestSecret()
+				hello(fw, s)
+			} else {
+				s = secret(fw)
+				onMain(func() { fw.H.(interface{ NavigationSettled() }).NavigationSettled() })
+			}
+			if !commitIt {
+				got := posted(t, fw, 2)
+				var ids []string
+				for _, m := range got {
+					if string(m["t"]) == `"reply"` {
+						ids = append(ids, string(m["id"]))
+					}
+				}
+				wait.Until(t, "both replies posted", func() bool {
+					ids = ids[:0]
+					for _, m := range posted(t, fw, 1) {
+						if string(m["t"]) == `"reply"` {
+							ids = append(ids, string(m["id"]))
+						}
+					}
+					return len(ids) == 2
+				})
+				if ids[0] != "1" || ids[1] != "2" {
+					t.Fatalf("the replies came in the order %v after the navigation was canceled", ids)
+				}
+				return
+			}
+			// Committed: the call of the first page is not posted; a call of the new one is.
+			onMain(func() { fw.H.Message(s + `{"t":"call","id":3,"k":"tok3","m":"PostTest.Echo","a":["new"]}`) })
+			wait.Until(t, "the reply of the new page", func() bool {
+				for _, m := range posted(t, fw, 1) {
+					if string(m["id"]) == "3" {
+						return true
+					}
+				}
+				return false
+			})
+			for _, m := range posted(t, fw, 1) {
+				if id := string(m["id"]); string(m["t"]) == `"reply"` && id != "3" {
+					t.Fatalf("a reply of the page that went was posted: %s", id)
+				}
+			}
+		})
+	}
+}
