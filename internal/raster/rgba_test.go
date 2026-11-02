@@ -53,7 +53,7 @@ func BenchmarkRGBA(b *testing.B) {
 	})
 }
 
-// swapRB64 is swapRB two pixels at a time, which BenchmarkRGBA compares.
+// swapRB64 is swapRB two pixels at a time, which BenchmarkSwapRB compares.
 func swapRB64(dst, src []byte) {
 	const rb = 0x00ff00ff00ff00ff
 	i := 0
@@ -73,9 +73,9 @@ func BenchmarkSwapRB(b *testing.B) {
 	dst := make([]byte, len(src))
 	b.SetBytes(int64(len(src)))
 	for name, f := range map[string]func(dst, src []byte){
-		"32":   swapRB,
-		"64":   swapRB64,
-		"byte": func(dst, src []byte) { rgbaRowByByte(dst, src) },
+		"row":    swapRB,
+		"two":    swapRB64,
+		"pixels": func(dst, src []byte) { rgbaPixels(dst, src, 1200) },
 	} {
 		b.Run(name, func(b *testing.B) {
 			for b.Loop() {
@@ -85,9 +85,10 @@ func BenchmarkSwapRB(b *testing.B) {
 	}
 }
 
-func rgbaRowByByte(dst, src []byte) {
-	for i := 0; i+4 <= len(src); i += 4 {
-		d, s := dst[i:i+4], src[i:i+4]
+// rgbaPixels is the loop RGBA had: each pixel sliced out of the whole.
+func rgbaPixels(dst, src []byte, w int) {
+	for x := 0; x < w*len(src)/(4*w); x++ {
+		s, d := src[4*x:4*x+4], dst[4*x:4*x+4]
 		d[0], d[1], d[2], d[3] = s[2], s[1], s[0], s[3]
 	}
 }
