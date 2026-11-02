@@ -304,6 +304,12 @@ type Window struct {
 	// thread only.
 	secret     string
 	helloArmed bool
+	// navigating is set from the start of a navigation of the main frame
+	// until it commits or ends (NavigationStarted, NavigationCommitted,
+	// NavigationSettled): a backend that posts web messages (flush) keeps
+	// them in the outbox meanwhile, for a script of the document the
+	// navigation replaces could be the one to hear them. Main thread only.
+	navigating bool
 	// preload is PageOptions.PreloadScript, which the scripts of the pages
 	// loaded later keep (pageScripts), in their iframes too with
 	// preloadAllFrames.
@@ -1664,6 +1670,9 @@ func (w *Window) enqueue(msg message, event bool) {
 }
 
 func (w *Window) flush() {
+	if _, posting := w.native.(platform.MessagePoster); posting && w.navigating {
+		return // kept in the outbox, flushing still set: settleNavigation flushes
+	}
 	w.outMu.Lock()
 	msgs := w.outbox
 	w.outbox = nil
@@ -1955,7 +1964,26 @@ func (h *windowHandler) WillNavigate(nav platform.Navigation) bool {
 	return !e.prevented
 }
 
-func (h *windowHandler) NavigationStarted(string) {}
+func (h *windowHandler) NavigationStarted(string) { h.w.navigating = true }
+
+// NavigationSettled is called by a backend whose navigations end without a
+// commit as well as with one (WebView2): a navigation that was canceled, that
+// failed, that stayed within the document, or became a download. The messages
+// it kept wait no more.
+func (h *windowHandler) NavigationSettled() { h.w.settleNavigation() }
+
+// settleNavigation ends the wait of the messages flush kept while a navigation
+// ran, and flushes them: to the page that stays, or, after a commit, only
+// those of the new one (postMessages drops what the old page asked).
+func (w *Window) settleNavigation() {
+	w.navigating = false
+	w.outMu.Lock()
+	kept := w.flushing
+	w.outMu.Unlock()
+	if kept {
+		w.flush()
+	}
+}
 
 // pageOrigin returns the origin of a page at rawURL, as scheme://host,
 // that of the page that made it for a blob: URL.
@@ -1985,6 +2013,7 @@ func (h *windowHandler) NavigationCommitted(url string) {
 	// A new document makes its own secret, and says it in a hello that comes
 	// after this commit (the script of the document starts after it).
 	h.w.secret, h.w.helloArmed = "", true
+	defer h.w.settleNavigation()
 	if h.w.untrusted {
 		h.w.origin = pageOrigin(url)
 	}

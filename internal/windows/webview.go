@@ -432,6 +432,9 @@ func navigationKind(args uintptr) int32 {
 
 func (w *window) navigationCompleted(_, args uintptr) {
 	w.loading = false
+	if s, ok := w.h.(interface{ NavigationSettled() }); ok {
+		defer s.NavigationSettled()
+	}
 	var ok int32
 	comCall(args, navCompletedGetIsSuccess, uintptr(unsafe.Pointer(&ok)))
 	if ok != 0 {
