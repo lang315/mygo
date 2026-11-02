@@ -789,14 +789,18 @@ func (r *Renderer) Release() {
 	defer Trace("d3d11 Release done")
 	r.pending, r.refreshing, r.wake = false, false, nil
 	r.lat.release()
+	Trace("Release: lat done")
 	r.b.Release()
+	Trace("Release: b done")
 	if settling[r.hwnd] {
 		delete(settling, r.hwnd)
 		procKillTimer.Call(r.hwnd, settleTimer)
 	}
 	if r.ctx != 0 {
 		call(r.ctx, ctxClearState)
+		Trace("Release: ClearState done")
 		call(r.ctx, ctxFlush)
+		Trace("Release: Flush done")
 	}
 	for _, t := range r.images {
 		free(&t.srv)
@@ -827,11 +831,16 @@ func (r *Renderer) Release() {
 		free(&t.srv)
 		free(&t.tex)
 	}
+	Trace("Release: textures done")
 	// The target goes first: a window has one at most, which another
 	// renderer of it then makes.
+	names := map[*uintptr]string{&r.visual: "visual", &r.target: "target", &r.dcomp: "dcomp", &r.rtv: "rtv", &r.swapChain2: "swapChain2", &r.swapChain: "swapChain", &r.ctx: "ctx", &r.device: "device"}
 	for _, p := range []*uintptr{&r.visual, &r.target, &r.dcomp, &r.rtv, &r.swapChain2, &r.swapChain, &r.instBuf, &r.cbuf, &r.passCB, &r.samp, &r.raster, &r.holeBlend, &r.blend, &r.layout,
 		&r.blurPS, &r.downPS, &r.passVS, &r.ps, &r.vs, &r.factory, &r.ctx1, &r.ctx, &r.device} {
 		free(p)
+		if n, ok := names[p]; ok {
+			Trace("Release: freed " + n)
+		}
 	}
 }
 
