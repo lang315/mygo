@@ -135,7 +135,8 @@ func updateFlags(c *Config, target string) string {
 		return ""
 	}
 	return " -X " + ldflagsQuote("github.com/egoist/mygo/updates.buildFeed="+c.updateFeed(target)) +
-		" -X github.com/egoist/mygo/updates.buildKey=" + c.Updates.PublicKey
+		" -X github.com/egoist/mygo/updates.buildKey=" + c.Updates.PublicKey +
+		" -X " + ldflagsQuote("github.com/egoist/mygo/updates.buildIdentifier="+c.Identifier)
 }
 
 // signingKey returns the private key that signs updates, or nil when none

@@ -3,6 +3,7 @@
 package d3d11
 
 import (
+	"bytes"
 	"runtime"
 	"slices"
 	"syscall"
@@ -366,7 +367,14 @@ func TestShaderBytecode(t *testing.T) {
 	if gpu.SourceSum(shaderSource) != shaderSum {
 		t.Fatal("shader.hlsl changed since shaders.go was generated: run go generate ./internal/gpu/d3d11 on Windows")
 	}
-	for _, s := range []struct{ entry, target string }{{"vs", "vs_4_0"}, {"ps", "ps_4_0"}} {
+	packed, err := unpackedShaders()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, s := range []struct {
+		entry, target string
+		code          []byte
+	}{{"vs", "vs_4_0", packed.vs}, {"ps", "ps_4_0", packed.ps}, {"passvs", "vs_4_0", packed.passVS}, {"downps", "ps_4_0", packed.down}, {"blurps", "ps_4_0", packed.blur}} {
 		code, err := compileShader(s.entry, s.target)
 		if err != nil {
 			t.Fatal(err)
@@ -375,6 +383,34 @@ func TestShaderBytecode(t *testing.T) {
 		if len(code) < 4 || string(code[:4]) != "DXBC" {
 			t.Errorf("%s: not DXBC", s.entry)
 		}
+		// What the generator packed is what the compiler makes now.
+		if !bytes.Equal(code, s.code) {
+			t.Errorf("shader %d (%s): the packed bytecode (%d bytes) differs from the compiled one (%d bytes): run go generate ./internal/gpu/d3d11 on Windows", i, s.entry, len(s.code), len(code))
+		}
+	}
+}
+
+// BenchmarkUnpackShaders times inflating the bytecode of the shaders, which a
+// renderer does once.
+func BenchmarkUnpackShaders(b *testing.B) {
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := gpu.UnpackShaders(packedShaders, 5); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// Renderers made after one another, as after the device was lost, share the
+// bytecode inflated once.
+func TestShadersAreInflatedOnce(t *testing.T) {
+	a, err := unpackedShaders()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := unpackedShaders()
+	if &a.ps[0] != &b.ps[0] {
+		t.Error("the shaders were inflated again")
 	}
 }
 

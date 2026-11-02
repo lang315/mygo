@@ -863,6 +863,118 @@ func TestFileWatchEntryInfo(t *testing.T) {
 	}
 }
 
+// On Windows the scan takes what reading a directory says of an entry when
+// that has its identity, as the same as a stat of it says, and stats links
+// (TestFileWatchEntryInfo has the Unix side).
+func TestFileWatchEntryInfoWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the Windows side of TestFileWatchEntryInfo")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a"), []byte("xyz"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "d"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("a", filepath.Join(dir, "l")); err != nil {
+		t.Logf("no symlinks here: %v", err)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	f, err := root.Open(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	entries, err := f.ReadDir(-1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		got, err := fileWatchEntryInfo(root, entry)
+		if err != nil {
+			t.Fatalf("%s: %v", entry.Name(), err)
+		}
+		want, err := root.Lstat(entry.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if g, w := fileWatchEntryOf(got), fileWatchEntryOf(want); g != w {
+			t.Errorf("%s: entry says %+v, Lstat %+v", entry.Name(), g, w)
+		}
+		if _, ok := fileWatchIdentity(got); !ok && entry.Name() == "d" {
+			t.Error("d: the entry has no identity")
+		}
+		if entry.Name() == "l" && got.Mode()&fs.ModeSymlink == 0 {
+			t.Errorf("l: mode %v, want the symlink", got.Mode())
+		}
+	}
+}
+
+// A file written through an open handle: what the entry says changes with
+// the notification the system gives (Windows: when it is closed), and the
+// watch reports one write, however many notices of it come after.
+func TestFileWatchWriteCountsOnce(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f")
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	w, err := WatchFiles(context.Background(), dir, FileWatchOptions{Recursive: true, Debounce: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// What the directory says of the file follows its close (on Windows a
+	// moment after): the system's notice comes then, so wait for it.
+	wait.Until(t, "the directory to say the file's size", func() bool {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) != 1 {
+			return false
+		}
+		info, err := entries[0].Info()
+		return err == nil && info.Size() == 5
+	})
+	fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{Name: "f", Kind: platform.FileWatchWrite})
+	// More notices, then a creation to end on: the events up to it are
+	// counted, not waited for by time.
+	for range 3 {
+		fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{Name: "f"})
+	}
+	if err := os.WriteFile(filepath.Join(dir, "g"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{})
+	writes := 0
+	for {
+		e := fileWatchTestNext(t, w)
+		if e == (FileEvent{Op: FileCreate, Path: "g"}) {
+			break
+		}
+		if e != (FileEvent{Op: FileWrite, Path: "f"}) {
+			t.Fatalf("event = %+v", e)
+		}
+		writes++
+	}
+	if writes != 1 {
+		t.Fatalf("%d writes of f reported, want 1", writes)
+	}
+}
+
 // A file is watched through its directory: written, replaced as editors
 // save, removed and created again, then gone with its directory.
 func TestFileWatchFile(t *testing.T) {

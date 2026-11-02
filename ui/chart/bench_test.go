@@ -26,7 +26,13 @@ func BenchmarkLine(b *testing.B) {
 
 // BenchmarkStreamingFrame includes build, layout, paint and CPU fallback at 1x/2x.
 // The desktop example measures GPU submission and actual frame scheduling instead.
-func BenchmarkStreamingFrame(b *testing.B) {
+func BenchmarkStreamingFrame(b *testing.B) { benchStreamingFrame(b, false) }
+
+// BenchmarkStreamingFrameApp is BenchmarkStreamingFrame without the CPU
+// rasterizer that stands in for the GPU: the work an app does.
+func BenchmarkStreamingFrameApp(b *testing.B) { benchStreamingFrame(b, true) }
+
+func benchStreamingFrame(b *testing.B, skip bool) {
 	for _, scale := range []float32{1, 2} {
 		b.Run(fmt.Sprintf("%gx", scale), func(b *testing.B) {
 			xs, ys := make([]float32, 15000), make([]float32, 15000)
@@ -45,6 +51,7 @@ func BenchmarkStreamingFrame(b *testing.B) {
 				})
 			}, 1280, 720)
 			tt.SetScale(scale)
+			tt.SkipRaster(skip)
 			b.ReportAllocs()
 			for b.Loop() {
 				frame++

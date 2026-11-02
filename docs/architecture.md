@@ -2078,7 +2078,16 @@ it, and what is in it is looked at by name relative to it, one call each,
 as watchman and @parcel/watcher crawl with `openat` and `fstatat`: a
 root opens every directory of a deeper path in turn. On Unix, reading a
 directory opened in a root stats its entries already
-(`fileWatchEntryInfo`). Looking at everything again lists each directory
+(`fileWatchEntryInfo`); on Windows reading an NTFS or ReFS directory
+carries each entry's file index too, so the scan takes the entry as read
+and stats by name only a link or other reparse point, and an entry of a
+file system without a file index (opening a handle for every entry was
+three quarters of a scan). The entry says what the file system keeps in it,
+which is what the system notifies of: the size and times of a file open
+for writing show once it is closed, and a write through a hard link in
+another directory shows in this directory's entry when something opens it
+(the system tells this directory of neither; a directory read does not say
+how many links a file has). Looking at everything again lists each directory
 from the one that has it. A directory replaced by a symlink, which a root
 follows only within itself, is a replacement, wherever it leads.
 The backend's watcher (`platform.FileWatch`) is given targets, the entries
@@ -4728,6 +4737,16 @@ own allocations taking half (`footprint -p <pid>` breaks it down); on
 Windows its private working set is 14 MB, of a working set of 39 MB with
 the pages it shares, and 62 MB committed. Compare a series with itself.
 `--out` writes the results as JSON, with the commit and the runner's CPU.
+The frame benchmarks of native UI draw with the CPU rasterizer that stands in
+for the GPU (`ui.Tester`), and on frames that repaint much text, as a scroll,
+its `present` is most of the time. It is not what a window draws with
+(Metal, Direct3D 11 or WARP, OpenGL), and on Windows it takes ClearType text
+the slow way, in floats, so a scroll costs several times what it does on
+Linux. Compare Windows with Linux by the `App` series, which skip the
+rasterizer (`Tester.SkipRaster`) and time the work an app does: `StreamingFrameApp`,
+`CodeEditorScrollApp`, `CodeEditorScrollWrapApp`, `DiffViewerScrollApp`,
+`DiffScrollApp`, `DiffScrollSidebarApp`, `DiffScrollSidebarWarmApp`, the
+terminal's `FrameApp`, and `TableFrame100kPhases/...-app`.
 The benchmarks of `internal/e2e` time the real backend: a page calling Go
 (`PageCall`, `PageCallItems`), streaming (`PageChannel`), receiving events
 (`PageEvent`), fetching from the app's scheme (`PageFetch1MB`), and
