@@ -238,4 +238,3 @@ func closeWindows(pid int) bool {
 	enumWindows.Call(closeEach, 0)
 	return closing.n > 0
 }
-
