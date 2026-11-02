@@ -49,6 +49,9 @@ import (
 var (
 	buildFeed string
 	buildKey  string
+	// buildIdentifier is the app's identifier, which names its entry in
+	// Settings > Apps on Windows (internal/windows uninstallKey).
+	buildIdentifier string
 )
 
 // startExe is the executable the app started from. On Linux, os.Executable
@@ -228,7 +231,7 @@ func (up *Update) Install(ctx context.Context, progress func(downloaded, total i
 	if err != nil {
 		return err
 	}
-	if err := installUpdate(ctx, up.source.Open, up.manifest, up.key, up.current, target, progress); err != nil {
+	if err := installAndRecord(ctx, up.source.Open, up.manifest, up.key, up.current, target, progress, uninstallEntry, buildIdentifier); err != nil {
 		return fmt.Errorf("mygo: installing the update: %w", err)
 	}
 	if runtime.GOOS == "linux" {
@@ -238,6 +241,28 @@ func (up *Update) Install(ctx context.Context, progress func(downloaded, total i
 		}
 	}
 	return nil
+}
+
+// installAndRecord is installUpdate, then, once it installed the update and
+// not when it rolled back, recordVersion.
+func installAndRecord(ctx context.Context, get update.Getter, m update.Manifest, key, current, target string, progress func(downloaded, total int64), r update.Registry, identifier string) error {
+	if err := installUpdate(ctx, get, m, key, current, target, progress); err != nil {
+		return err
+	}
+	recordVersion(r, identifier, target, m.Version)
+	return nil
+}
+
+// recordVersion makes the entry of the installed app in Settings > Apps say
+// the version it is now (update.RecordVersion). The update is installed
+// whether or not that works: a failure is logged.
+func recordVersion(r update.Registry, identifier, dir, version string) {
+	if r == nil {
+		return
+	}
+	if _, err := update.RecordVersion(r, identifier, dir, version); err != nil {
+		log.Printf("mygo: the update is installed, but Settings > Apps still shows the old version: %v", err)
+	}
 }
 
 // installTarget returns what an update replaces: the app bundle on macOS,
