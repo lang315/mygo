@@ -135,6 +135,17 @@ func touchSites(t *testing.T) (sites []touchSite) {
 					case *ast.StarExpr:
 						e = x.X
 						continue
+					case *ast.SelectorExpr:
+						// s.releaseLater.due: a field of a pending field held by
+						// value is a write to it. One behind a pointer (s.editor.queue)
+						// is a write to another object, which state.pending polls
+						// (editor.busy) and the row's watch list covers.
+						if t := info.TypeOf(x.X); t != nil && !isState(x) {
+							if _, ptr := t.Underlying().(*types.Pointer); !ptr {
+								e = x.X
+								continue
+							}
+						}
 					}
 					break
 				}
