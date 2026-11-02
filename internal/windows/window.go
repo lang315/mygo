@@ -153,6 +153,8 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 			b.explainMissingRuntime(err)
 			return nil, err
 		}
+	} else if PrewarmFunc != nil {
+		PrewarmFunc() // the device is made while the window is created and shown
 	}
 	w := &window{
 		b: b, h: h, opts: o,
