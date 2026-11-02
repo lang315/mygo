@@ -150,6 +150,7 @@ type window struct {
 func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler) (platform.Window, error) {
 	if !o.Surface {
 		if err := b.startEnvironment(o); err != nil {
+			b.explainMissingRuntime(err)
 			return nil, err
 		}
 	}
