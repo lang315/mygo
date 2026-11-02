@@ -236,7 +236,12 @@ func (w *window) setUp(controller uintptr) {
 		withHandler(fn, func(h uintptr) uintptr { return comCall(w.webview, index, h, uintptr(unsafe.Pointer(&tok))) })
 	}
 	add(wvAddNavigationStarting, w.navigationStarting)
-	add(wvAddContentLoading, func(_, _ uintptr) { w.h.NavigationCommitted(w.URL()) })
+	add(wvAddContentLoading, func(_, _ uintptr) {
+		if h := commitHook; h != nil {
+			h()
+		}
+		w.h.NavigationCommitted(w.URL())
+	})
 	add(wvAddNavigationCompleted, w.navigationCompleted)
 	add(wvAddDocumentTitleChanged, func(_, _ uintptr) {
 		// DocumentTitle makes one up from the URL for a page with no
@@ -264,6 +269,9 @@ func (w *window) setUp(controller uintptr) {
 		}
 		if paths := postedFiles(args); len(paths) > 0 {
 			w.dropped = paths
+		}
+		if h := messageHook; h != nil {
+			h(w.messageSource(args), w.URL())
 		}
 		w.h.Message(takeWstr(p))
 	})
