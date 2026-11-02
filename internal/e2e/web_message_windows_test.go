@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -63,8 +64,13 @@ func TestWebMessageReplyDoesNotReachANewDocument(t *testing.T) {
 
 // TestWebMessageReplyLatency times a page's sequential calls to Go with the
 // reply posted as a web message and as a script, to compare them on this
-// machine. It logs, and asserts nothing about time.
+// machine. It logs, and asserts nothing about time, so CI does not run it
+// (its windows were followed by a native dialog that never took the keyboard
+// on Windows ARM64): MYGO_E2E_LATENCY=1 runs it.
 func TestWebMessageReplyLatency(t *testing.T) {
+	if os.Getenv("MYGO_E2E_LATENCY") == "" {
+		t.Skip("a measurement, not a check: set MYGO_E2E_LATENCY=1")
+	}
 	const n = 2000
 	run := func(asScript bool) time.Duration {
 		windows.PostMessagesAsScripts.Store(asScript)
