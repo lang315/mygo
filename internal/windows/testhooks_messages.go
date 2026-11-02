@@ -2,11 +2,7 @@
 
 package windows
 
-import (
-	"strings"
-	"sync"
-	"unsafe"
-)
+import "sync"
 
 // messageHook and commitHook are set by tests (TestWatchMessages) and nil
 // otherwise: the first hears each web message with the URL of the document
@@ -16,23 +12,6 @@ var (
 	messageHook func(source, current string)
 	commitHook  func()
 )
-
-// messageSource returns the URL of the document that sent a web message,
-// as the window names its documents (an app's scheme for its host).
-func (w *window) messageSource(args uintptr) string {
-	var p uintptr
-	if failed(comCall(args, msgGetSource, uintptr(unsafe.Pointer(&p)))) {
-		return ""
-	}
-	return w.appURL(takeWstr(p))
-}
-
-// documentURL is a URL without its fragment, which a navigation inside a
-// document changes and its identity does not.
-func documentURL(u string) string {
-	u, _, _ = strings.Cut(u, "#")
-	return u
-}
 
 var messageStats struct {
 	sync.Mutex
