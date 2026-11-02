@@ -226,7 +226,7 @@ func (w *window) setUp(controller uintptr) {
 	}
 	w.applyWebViewBackground()
 
-	w.addUserScripts()
+	w.addUserScripts(0)
 
 	// The add methods write a registration token. Its address is taken in
 	// each call (go:uintptrescapes), as a uintptr saved earlier goes stale
@@ -751,26 +751,29 @@ func (w *window) URL() string {
 
 func (w *window) IsLoading() bool { return w.loading }
 
-// addUserScripts adds the user scripts of the options to every document,
-// and the title bar's after them, keeping their ids, which arrive later.
-func (w *window) addUserScripts() {
-	scripts := w.opts.UserScripts
-	if w.caption != nil {
-		// After the bridge, which it tells.
-		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.titleBarScript()})
-	}
+// userScriptSources returns what every document runs at its start, in order:
+// the script that hides the message handler from frames, then the user
+// scripts of the options, the title bar's after them, and the window's own
+// after those. The first never changes and does nothing in the top frame,
+// where the bridge needs the handler, so it stays registered.
+func (w *window) userScriptSources() []string {
 	// WebView2 raises its message event for the top-level document only, so a
 	// frame's messages do not reach Go. The frames still get no handler: defense
 	// in depth, for a WebView2 that delivers more.
-	scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: bridge.HideHandlerScript, AllFrames: true})
+	scripts := []platform.UserScript{{Source: bridge.HideHandlerScript, AllFrames: true}}
+	scripts = append(scripts, w.opts.UserScripts...)
+	if w.caption != nil {
+		// After the bridge, which it tells.
+		scripts = append(scripts, platform.UserScript{Source: w.titleBarScript()})
+	}
 	if w.hidingScript != "" {
-		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.hidingScript, AllFrames: true})
+		scripts = append(scripts, platform.UserScript{Source: w.hidingScript, AllFrames: true})
 	}
 	if len(w.opts.Schemes) > 0 {
-		scripts = append(scripts[:len(scripts):len(scripts)], platform.UserScript{Source: w.openScript(), AllFrames: true})
+		scripts = append(scripts, platform.UserScript{Source: w.openScript(), AllFrames: true})
 	}
-	gen := w.scriptGen
-	for _, us := range scripts {
+	srcs := make([]string, len(scripts))
+	for i, us := range scripts {
 		src := us.Source
 		if us.AtDocumentEnd {
 			src = "document.readyState===\"loading\"?document.addEventListener(\"DOMContentLoaded\",()=>{\n" + src + "\n},{once:true}):(()=>{\n" + src + "\n})();"
@@ -779,12 +782,22 @@ func (w *window) addUserScripts() {
 			// Scripts run in every frame unless told otherwise.
 			src = "if(window===window.top){\n" + src + "\n}"
 		}
+		srcs[i] = src
+	}
+	return srcs
+}
+
+// addUserScripts adds the scripts of userScriptSources from the n-th on to
+// every document, keeping their ids, which arrive later.
+func (w *window) addUserScripts(from int) {
+	gen := w.scriptGen
+	for _, src := range w.userScriptSources()[from:] {
 		withHandler(func(hr, id uintptr) {
 			if failed(hr) || id == 0 || w.closed || w.webview == 0 {
 				return
 			}
 			if s := wstr(id); w.scriptGen == gen {
-				w.scriptIDs = append(w.scriptIDs, s)
+				w.scripts = append(w.scripts, addedScript{src, s})
 			} else {
 				// Replaced while it was being added.
 				comCall(w.webview, wvRemoveScriptToExecuteOnDocumentCreated, uintptr(unsafe.Pointer(u16(s))))
@@ -795,8 +808,21 @@ func (w *window) addUserScripts() {
 	}
 }
 
+// keptScripts is how many of the added scripts, from the first, are the
+// first of srcs too, and so stay registered.
+func keptScripts(added []addedScript, srcs []string) int {
+	n := 0
+	for n < len(added) && n < len(srcs) && added[n].src == srcs[n] {
+		n++
+	}
+	return n
+}
+
 // SetUserScripts replaces the user scripts. Scripts run in the order they
-// were added, so all of them are removed and added again.
+// were added, so those from the first that differs on are removed and added
+// again; the ones before it stay registered, as a document created meanwhile
+// needs them. The bridge is among them only while it does not change: it
+// carries the language and the zoom, so a change of those replaces it.
 func (w *window) SetUserScripts(scripts []platform.UserScript) {
 	if w.closed {
 		return
@@ -805,12 +831,14 @@ func (w *window) SetUserScripts(scripts []platform.UserScript) {
 	if w.webview == 0 {
 		return // setUp adds them
 	}
-	w.scriptGen++
-	for _, id := range w.scriptIDs {
-		comCall(w.webview, wvRemoveScriptToExecuteOnDocumentCreated, uintptr(unsafe.Pointer(u16(id))))
+	srcs := w.userScriptSources()
+	keep := keptScripts(w.scripts, srcs)
+	w.scriptGen++ // an id still to arrive is of a script that is replaced
+	for _, s := range w.scripts[keep:] {
+		comCall(w.webview, wvRemoveScriptToExecuteOnDocumentCreated, uintptr(unsafe.Pointer(u16(s.id))))
 	}
-	w.scriptIDs = nil
-	w.addUserScripts()
+	w.scripts = w.scripts[:keep]
+	w.addUserScripts(keep)
 }
 
 func (w *window) Eval(js string) {

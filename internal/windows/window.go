@@ -12,6 +12,9 @@ import (
 
 var errDestroyed = errors.New("mygo: window has been destroyed")
 
+// addedScript is a script added to every document, and its id.
+type addedScript struct{ src, id string }
+
 type window struct {
 	// webViewSeq numbers the window by its first creation of a webview
 	// (TestFailWebViews).
@@ -36,10 +39,11 @@ type window struct {
 	pending      []pendingCall
 	webViewErr   error
 	webViewFails int // creations that failed
-	// scriptIDs are the ids of the scripts added to every document, which
-	// SetUserScripts removes; scriptGen counts the replacements, so an id
-	// that arrives after one is removed at once.
-	scriptIDs  []string
+	// scripts are the scripts added to every document, in the order they
+	// arrived, with their ids; SetUserScripts removes those that change.
+	// scriptGen counts the replacements, so an id that arrives after one is
+	// removed at once.
+	scripts    []addedScript
 	scriptGen  int
 	closed     bool
 	destroying bool
