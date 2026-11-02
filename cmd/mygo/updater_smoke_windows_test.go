@@ -49,23 +49,27 @@ func TestUpdaterSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	const identifier = "com.example.updatesmoke"
-	newKey := func() (public string, private ed25519.PrivateKey) {
+	type signer struct {
+		public  string
+		private ed25519.PrivateKey
+	}
+	newKey := func() signer {
 		pub, priv, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return base64.StdEncoding.EncodeToString(pub), priv
+		return signer{base64.StdEncoding.EncodeToString(pub), priv}
 	}
-	publicA, privateA := newKey()
-	_, privateB := newKey()
-	// build returns the installer of the app of version, signed (its
-	// updates) with the private key, and the directory that holds the
-	// archive and the manifest.
-	build := func(version string, private ed25519.PrivateKey) (setup, files string) {
-		t.Setenv("MYGO_UPDATER_PRIVATE_KEY", base64.StdEncoding.EncodeToString(private))
+	keyA, keyB := newKey(), newKey()
+	// build returns the installer of the app of version, whose updates are
+	// signed with the key (mygo build checks that the app's updates.publicKey
+	// is the key's), and the directory that holds the archive and the
+	// manifest.
+	build := func(version string, k signer) (setup, files string) {
+		t.Setenv("MYGO_UPDATER_PRIVATE_KEY", base64.StdEncoding.EncodeToString(k.private))
 		_, _, artifacts := buildTestInstaller(t, map[string]string{
 			"main.go":   string(app),
-			"mygo.json": `{"name": "Update Smoke", "identifier": "` + identifier + `", "version": "` + version + `", "updates": {"publicKey": "` + publicA + `", "url": "https://updates.example.test/app", "deltas": 0}}`,
+			"mygo.json": `{"name": "Update Smoke", "identifier": "` + identifier + `", "version": "` + version + `", "updates": {"publicKey": "` + k.public + `", "url": "https://updates.example.test/app", "deltas": 0}}`,
 		})
 		archive := slices.IndexFunc(artifacts, func(a string) bool { return strings.HasSuffix(a, ".tar.gz") })
 		manifest := slices.IndexFunc(artifacts, func(a string) bool { return filepath.Base(a) == "update-windows-amd64.json" })
@@ -74,9 +78,11 @@ func TestUpdaterSmoke(t *testing.T) {
 		}
 		return artifacts[len(artifacts)-1], filepath.Dir(artifacts[archive])
 	}
-	setup1, files1 := build("1.0.0", privateA)
-	_, files2 := build("2.0.0", privateA)
-	_, filesWrongKey := build("2.0.0", privateB)
+	// The installed app trusts key A; the third build is an update that only
+	// key B signed.
+	setup1, files1 := build("1.0.0", keyA)
+	_, files2 := build("2.0.0", keyA)
+	_, filesWrongKey := build("2.0.0", keyB)
 
 	// The archive of 2.0.0 with one byte changed: as long as before, so
 	// that it is its signature that refuses it.
