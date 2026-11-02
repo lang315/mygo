@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -59,21 +60,27 @@ func TestCallbackCounter(t *testing.T) {
 // backend needs it made once, whatever the number of windows.
 func TestCallbacksDoNotGrowWithWindows(t *testing.T) {
 	cycle := func() {
-		w := mygo.NewWindow(mygo.WindowOptions{Width: 300, Height: 200, Hidden: true, Content: ui.View(func(c *ui.Context) {
-			ui.Text(c, "callbacks")
-		})})
+		// The listeners are added where the window is made, on the main thread:
+		// a hidden window draws its first frame there at its next turn, and
+		// a listener added later, from this goroutine, may miss it.
 		drawn, closed := make(chan struct{}, 1), make(chan struct{}, 1)
-		w.OnReadyToShow(func() { drawn <- struct{}{} })
-		w.OnClosed(func() { closed <- struct{}{} })
+		var w *mygo.Window
+		mygo.RunOnMain(func() {
+			w = mygo.NewWindow(mygo.WindowOptions{Width: 300, Height: 200, Hidden: true, Content: ui.View(func(c *ui.Context) {
+				ui.Text(c, "callbacks")
+			})})
+			w.OnReadyToShow(func() { drawn <- struct{}{} })
+			w.OnClosed(func() { closed <- struct{}{} })
+		})
 		w.Show()
-		<-drawn
+		wait.For(t, "the first frame of a hidden window", drawn)
 		web := mygo.NewWindow(mygo.WindowOptions{Hidden: true, URL: "app://localhost/"})
 		if _, err := web.Page().Eval("1"); err != nil {
 			t.Fatal(err)
 		}
 		web.Destroy()
 		w.Destroy()
-		<-closed
+		wait.For(t, "the window to close", closed)
 	}
 	cycle() // the first of each kind makes what the backend keeps
 	before, _ := callbackCount()
