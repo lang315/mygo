@@ -1384,11 +1384,22 @@ func (r *schemeResponse) Finish() {
 		return
 	}
 	if !r.w.closed {
-		r.w.respond(r.args, r.deferral, r.status, r.header, r.body.take())
+		status, header, body := r.outcome()
+		r.w.respond(r.args, r.deferral, status, header, body)
 	} else {
 		comCall(r.deferral, deferralComplete)
 	}
 	r.release()
+}
+
+// outcome is what the page gets: the response, or a 502 when its body could
+// not be kept (a truncated body with the status and Content-Length of the
+// whole would pass for it).
+func (r *schemeResponse) outcome() (status int, header httplite.Header, body []byte) {
+	if err := r.body.failure(); err != nil {
+		return httplite.StatusBadGateway, httplite.Header{"Content-Type": {"text/plain; charset=utf-8"}}, []byte(err.Error())
+	}
+	return r.status, r.header, r.body.take()
 }
 
 func (r *schemeResponse) Fail(err error) {

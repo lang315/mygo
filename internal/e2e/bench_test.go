@@ -64,8 +64,15 @@ func (Bench) Items(v []BenchItem) []BenchItem { return v }
 
 var benchTick = mygo.NewEvent[Tick]("bench:tick")
 
-// useBench serves the benchmarks' responses: /bench/1mb is a megabyte.
+// useBench serves the benchmarks' responses: /bench/1mb is a megabyte,
+// /bench/small a few hundred bytes.
 func useBench(mux *http.ServeMux) {
+	small := []byte(strings.Repeat("s", 300))
+	mux.HandleFunc("/bench/small", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Length", strconv.Itoa(len(small)))
+		w.Write(small)
+	})
 	mb := []byte(strings.Repeat("x", 1<<20))
 	mux.HandleFunc("/bench/1mb", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -154,6 +161,16 @@ func BenchmarkPageEvent(b *testing.B) {
 	if n != b.N {
 		b.Fatalf("the page got %d of %d events", n, b.N)
 	}
+}
+
+// BenchmarkPageFetchSmall fetches twenty small resources at once from the app's
+// custom scheme in a page, as a page loading its assets does.
+func BenchmarkPageFetchSmall(b *testing.B) {
+	w := benchWindow(b)
+	benchPage(b, w, `for (let i = 0; i < N; i++) {
+  const sizes = await Promise.all(Array.from({ length: 20 }, async (_, k) => (await (await fetch("/bench/small?" + i + "." + k)).arrayBuffer()).byteLength));
+  if (sizes.some((n) => n !== 300)) throw new Error("got " + sizes);
+}`)
 }
 
 // BenchmarkPageFetch1MB fetches a megabyte from the app's custom scheme in

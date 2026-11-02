@@ -41,13 +41,17 @@ type responseBody struct {
 	n    int     // bytes written
 	size int     // bytes allocated
 	open bool
-	used bool // start ran: a body that ended does not start again
+	used bool  // start ran: a body that ended does not start again
+	err  error // the first write that could not be kept: the response is not the body
 }
 
 // start makes the body writable; hint is the size expected, or 0.
 func (b *responseBody) start(hint int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.used {
+		return // a response that ended does not start again
+	}
 	b.open, b.used = true, true
 	if hint > 0 {
 		b.grow(hint)
@@ -70,6 +74,7 @@ func (b *responseBody) grow(need int) error {
 		p, _, _ = procHeapReAlloc.Call(b.heap, 0, b.p, uintptr(size))
 	}
 	if p == 0 {
+		b.err = errBodyMemory // a failed ReAlloc keeps the old block
 		return errBodyMemory
 	}
 	b.p, b.size = p, size
@@ -125,4 +130,12 @@ func (b *responseBody) free() {
 		procHeapFree.Call(b.heap, 0, b.p)
 		b.p, b.n, b.size = 0, 0, 0
 	}
+}
+
+// failure is why the body is not the response's: a write that found no
+// memory for it.
+func (b *responseBody) failure() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.err
 }

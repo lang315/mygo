@@ -912,9 +912,11 @@ type SchemeResponder interface {
 }
 
 // SchemeBodyWriter is implemented by SchemeResponders that take the body
-// from the goroutine serving the request instead of through Write,
-// blocking while the webview has not read enough of it: a large response
-// then takes little memory however slowly the webview reads it.
+// from the goroutine serving the request instead of through Write. A backend
+// whose webview reads the body as it comes blocks the writer while the webview
+// has not read enough of it, so that a large response takes little memory
+// however slowly the webview reads it (Linux); one whose webview wants the whole
+// body first keeps it and does not block (Windows).
 type SchemeBodyWriter interface {
 	// WriteBody writes p once Respond has run. It is called off the main
 	// thread, never at the same time as the other methods, and fails

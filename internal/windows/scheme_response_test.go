@@ -149,3 +149,33 @@ func TestResponseBodyAllocatesNothingOfGo(t *testing.T) {
 		t.Errorf("%v allocations a megabyte", n)
 	}
 }
+
+// A body that found no memory is a 502, not the status and headers of the
+// whole response over a short body; and a response that ended does not start
+// again, which would leave a block nobody frees.
+func TestSchemeResponseOutOfMemory(t *testing.T) {
+	r := &schemeResponse{}
+	defer r.body.free()
+	r.Respond(200, map[string][]string{"Content-Length": {"10"}})
+	r.body.mu.Lock()
+	err := r.body.grow(1 << 60) // more than there is address space for
+	r.body.mu.Unlock()
+	if err == nil {
+		t.Fatal("grow(1<<60) succeeded")
+	}
+	if status, _, body := r.outcome(); status != 502 || len(body) == 0 {
+		t.Errorf("outcome = %d, %q; want a 502 saying why", status, body)
+	}
+
+	ok := &schemeResponse{}
+	ok.Respond(200, nil)
+	ok.body.write([]byte("whole"))
+	if status, _, body := ok.outcome(); status != 200 || string(body) != "whole" {
+		t.Errorf("outcome = %d, %q; want the response", status, body)
+	}
+	ok.body.free()
+	ok.Respond(200, map[string][]string{"Content-Length": {"1048576"}}) // after the end
+	if ok.body.p != 0 || ok.body.open {
+		t.Error("Respond after the response ended opened the body again")
+	}
+}
