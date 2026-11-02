@@ -131,6 +131,13 @@ func bind(name string, svc any, internal bool) error {
 	}
 	s := &service{name: name, typ: t, internal: internal}
 	ms, err := listMethods(t, v, name)
+	// The table of mygo build is registered by an init function that runs after
+	// the package-level variables of main and the init functions of its imports,
+	// where this Bind may be. The service takes its place now, and its methods when
+	// BindMethods or App.Run comes.
+	if ok, err := pendBind(err, s, v); ok {
+		return err
+	}
 	if err != nil {
 		return err
 	}

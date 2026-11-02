@@ -141,20 +141,64 @@ func TestStaticBindOfAnUnlistedType(t *testing.T) {
 	}
 }
 
-// An app built with the tag has no fallback: a service the build has no table for
-// is an error that says to build with mygo build, from Bind itself, and nothing
-// is bound; it never lists the methods by reflection in silence.
-func TestStaticBindWithoutATableFailsLoudly(t *testing.T) {
+type lateSvc struct{}
+
+func (lateSvc) Late() string { return "late" }
+
+type neverSvc struct{}
+
+func (neverSvc) Never() {}
+
+// clearPending drops what a test left pending, and its service.
+func clearPending(t *testing.T, name string) {
+	t.Cleanup(func() {
+		pending.Lock()
+		pending.list = nil
+		pending.Unlock()
+		unbind(name)
+	})
+}
+
+// A build with the tag runs the init function that registers the table after the
+// package-level variables of main and the init functions of its imports, where
+// Bind may be called. Such a Bind does not fail: the service takes its place, in
+// order, and gets its methods when the table arrives.
+func TestStaticBindBeforeTheTableWaitsForIt(t *testing.T) {
 	saved := staticFallback
 	staticFallback = nil
 	defer func() { staticFallback = saved }()
-	err := bind("NoTable", &unlistedSvc{}, false)
-	if err == nil || !strings.Contains(err.Error(), "mygo build") {
-		t.Fatalf("bind: %v, want an error that says to run mygo build", err)
+	clearPending(t, "Late")
+	if err := bind("Late", &lateSvc{}, false); err != nil {
+		t.Fatalf("bind before the table: %v", err)
 	}
-	if lookupMethod("NoTable.A") != nil {
-		t.Error("a service with no table was bound")
+	if lookupMethod("Late.Late") != nil {
+		t.Fatal("a method was bound with no table")
 	}
+	BindMethods(reflect.TypeFor[*lateSvc](), BoundMethod{Name: "Late", Func: (*lateSvc).Late})
+	if lookupMethod("Late.Late") == nil {
+		t.Fatal("the table did not give the waiting service its method")
+	}
+	checkPending() // nothing is pending: no panic
+}
+
+// A service whose type the table never gets is a failure at App.Run, with the
+// cause, never a silent partial app.
+func TestStaticBindWithoutATableFailsAtRun(t *testing.T) {
+	saved := staticFallback
+	staticFallback = nil
+	defer func() { staticFallback = saved }()
+	clearPending(t, "Never")
+	if err := bind("Never", &neverSvc{}, false); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err, _ := recover().(error)
+		if err == nil || !strings.Contains(err.Error(), "mygo build") || !strings.Contains(err.Error(), "neverSvc") {
+			t.Fatalf("checkPending panicked with %v, want the cause: no list of the methods of *neverSvc, build with mygo build", err)
+		}
+	}()
+	checkPending()
+	t.Fatal("checkPending did not panic")
 }
 
 func TestStaticBindAsTwiceOnOneType(t *testing.T) {

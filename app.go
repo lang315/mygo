@@ -87,6 +87,7 @@ var App = &Application{readyCh: make(chan struct{}), Dock: &Dock{}, JumpList: &J
 // nothing when the app binds none, and returns without starting the event
 // loop.
 func (a *Application) Run() error {
+	checkPending()
 	if out := os.Getenv("MYGO_GENERATE"); out != "" {
 		return writeClient(out)
 	}
