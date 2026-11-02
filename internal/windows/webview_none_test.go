@@ -14,7 +14,7 @@ func TestNoWebViewInANativeOnlyBuild(t *testing.T) {
 	if err := (&Backend{}).startEnvironment(nil); err != errNativeOnly {
 		t.Errorf("startEnvironment = %v, want errNativeOnly", err)
 	}
-	w := &window{}
+	w := &window{b: &Backend{}}
 	w.createWebView()
 	if w.webViewErr != errNativeOnly {
 		t.Errorf("a window's web view failed with %v, want errNativeOnly", w.webViewErr)
