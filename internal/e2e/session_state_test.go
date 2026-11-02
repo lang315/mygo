@@ -46,10 +46,15 @@ func holds(state []byte, s string) bool {
 	return bytes.Contains(state, []byte(s)) || bytes.Contains(state, u)
 }
 
-// holdsScroll reports whether a session state holds a scroll position of y
-// (WebKit's history item data: the position as an int32 and the page scale
-// 1.0 as a float32, little-endian), which it learns of after the form fields.
+// holdsScroll reports whether a session state holds a scroll position of y,
+// which WebKit learns of after the form fields. It knows WKWebView's form: the
+// history item data has the position as an int32 and the page scale 1.0 as a
+// float32, little-endian. WebKitGTK's state is another encoding (393 bytes),
+// so there it says yes.
 func holdsScroll(state []byte, y uint32) bool {
+	if runtime.GOOS != "darwin" {
+		return true
+	}
 	return bytes.Contains(state, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, y), 0x3f800000))
 }
 
