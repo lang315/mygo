@@ -50,7 +50,7 @@ var (
 	buildFeed string
 	buildKey  string
 	// buildIdentifier is the app's identifier, which names its entry in
-	// Settings > Apps on Windows (update.UninstallKeyPath).
+	// Settings > Apps on Windows (internal/windows uninstallKey).
 	buildIdentifier string
 )
 
