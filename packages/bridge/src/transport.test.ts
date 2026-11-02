@@ -200,14 +200,14 @@ describe("connect (WebView2 files)", () => {
 });
 
 describe("listen", () => {
-  test("WebView2 hands the data of the host's web messages, of the engine's events only", () => {
+  test("WebView2 hands the data of the host's web messages", () => {
     const { w, webviewListeners } = windowWith("webview2");
     const ch = connect(w)!;
     const got: unknown[] = [];
     ch.listen!((d) => got.push(d));
     expect(webviewListeners).toHaveLength(1);
-    webviewListeners[0]!({ isTrusted: true, data: [{ t: "reply", id: 1 }] });
-    webviewListeners[0]!({ isTrusted: false, data: [{ t: "reply", id: 2 }] }); // made by a script
+    // WebView2 dispatches the host's messages with isTrusted false.
+    webviewListeners[0]!({ isTrusted: false, data: [{ t: "reply", id: 1 }] });
     expect(got).toEqual([[{ t: "reply", id: 1 }]]);
   });
 

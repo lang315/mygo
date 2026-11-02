@@ -72,8 +72,10 @@ export function connect(w: any): Channel | null {
     postWithFiles: rawFiles && ((message, files) => rawFiles(secret + message, files)),
     // Windows delivers the host's messages as web messages, not scripts it runs
     // (see Window.flush): listened to with the function bound here, ahead of
-    // any a page adds. Only the engine's own events (isTrusted) count; the
-    // host sends only what carries the secret of the current document.
-    listen: addListener && ((fn) => addListener("message", (e: MessageEvent) => void (e.isTrusted && fn(e.data)))),
+    // any a page adds. WebView2 dispatches them with isTrusted false, so that
+    // says nothing; a page that makes up a message only reaches what
+    // __mygo.receive already reaches, and the host posts a reply only while the
+    // page that asked is the window's.
+    listen: addListener && ((fn) => addListener("message", (e: MessageEvent) => fn(e.data))),
   };
 }
