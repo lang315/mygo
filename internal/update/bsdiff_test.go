@@ -75,6 +75,39 @@ func TestDiffPatch(t *testing.T) {
 	}
 }
 
+// TestDiffShiftedMatch diffs a new file one of whose long matches is also
+// in the old file at the alignment of the previous match, but for a byte
+// at either end: Diff then steps byte by byte through the match, and each
+// search compared it whole, so that the bytes compared grew with the square
+// of its length. They are counted, not timed: with matches cut at maxMatch
+// they stay within a few times the size of the files.
+func TestDiffShiftedMatch(t *testing.T) {
+	defer func(n int) { maxMatch = n }(maxMatch)
+	maxMatch = 1 << 10
+	r := rand.New(rand.NewPCG(5, 6))
+	x := make([]byte, 64<<10) // 64 times maxMatch
+	for i := range x {
+		x[i] = byte(r.Uint32())
+	}
+	near := slices.Clone(x)
+	near[0]++
+	near[len(near)-1]++
+	head := []byte("a header found once in the old file")
+	old, new := slices.Concat(x, head, near), slices.Concat(head, x)
+	var stats diffStats
+	patch := diff(old, new, &stats)
+	if limit := 8 * (len(old) + len(new)); stats.compared > limit {
+		t.Errorf("Diff compared %d bytes of files of %d and %d: over %d, so quadratic in a match", stats.compared, len(old), len(new), limit)
+	}
+	var out bytes.Buffer
+	if err := Patch(&out, int64(len(new)), bytes.NewReader(old), int64(len(old)), bytes.NewReader(patch), int64(len(patch))); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(out.Bytes(), new) {
+		t.Fatal("patching made bytes that differ from the new file")
+	}
+}
+
 func FuzzPatch(f *testing.F) {
 	f.Add([]byte("old file"), Diff([]byte("old file"), []byte("new file, longer")))
 	f.Add([]byte("old file"), Diff([]byte("old file, longer"), []byte("new file, longer")))

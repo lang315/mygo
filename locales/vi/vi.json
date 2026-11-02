@@ -200,5 +200,11 @@
   "tableSearch": "Tìm",
   "tableKeyword": "Từ khóa",
   "loading": "Đang tải…",
-  "colorDialogTitle": "Màu sắc"
+  "colorDialogTitle": "Màu sắc",
+  "decimalInvalid": "Nhập một số",
+  "decimalWhole": "Nhập một số nguyên",
+  "decimalPlaces": "{n, plural, other {Chỉ dùng tối đa # chữ số thập phân}}",
+  "decimalAtLeast": "Nhập {min} trở lên",
+  "decimalAtMost": "Nhập {max} trở xuống",
+  "desktopShortcut": "Tạo lối tắt trên màn hình nền"
 }

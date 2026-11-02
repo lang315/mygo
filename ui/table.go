@@ -346,6 +346,8 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		list.widget = "List"
 		list.flags |= flagScrollX
 		list.rowMinW = least
+		// The table's Scrollbars and KeepScrollbars are its rows'.
+		list.barsFrom = table
 		head.followX = list
 		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, lo, hi, cur, checkW, s), drag.fit != ""
 		buildList(c, list, table, s, n, func(i int) {
@@ -937,7 +939,7 @@ func (e *node) Selected(on bool) *node {
 		e.checked = 1
 		return e
 	}
-	t := e.c.theme
+	t := e.theme()
 	e.checked = 2
 	e.Background(t.Accent).TextColor(t.AccentText)
 	return e

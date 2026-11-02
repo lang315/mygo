@@ -293,7 +293,12 @@ type engine struct {
 
 	// What the last frame laid out, for input until the next one: the
 	// focus order, with the scope of each element, and the dialog on top.
-	hits        []hit
+	hits []hit
+	// liftHits gathers the hits of the elements flying as the frame
+	// commits, which go over the rest of their layer, as they paint
+	// (matches.paint); lifting tells that one is committing.
+	liftHits    []hit
+	lifting     bool
 	focusOrder  []uint64
 	focusScopes []focusScope
 	modal       uint64
@@ -331,12 +336,14 @@ type engine struct {
 
 	// trans are the transitions of the elements given one, by ID
 	// (transition.go): exitsBuilt tells that the last frame built elements
-	// with an Exit, whose arena the next frame keeps to copy those that
-	// go, laidW and laidH are the size the last frame was laid out at, and
-	// byID maps a frame's elements, for the copies going.
+	// with an Exit or flying with a Match, whose arena the next frame
+	// keeps to copy those that go, laidW and laidH are the size the last
+	// frame was laid out at, and byID maps a frame's elements, for the
+	// copies going.
 	trans map[uint64]*transition
-	// matched is where the elements of a Transition's Match showed.
-	matched map[any]*matchRec
+	// matches moves the elements of a Transition's Match, once one has
+	// one (match.go).
+	matches matcher
 	// instantFrame is the frame that DisableAnimations shows at once.
 	instantFrame uint64
 	// paints counts the frames painted, those painting the last frame's
@@ -378,6 +385,12 @@ type engine struct {
 	// pressClicks is the press's count of clicks, which its release
 	// carries.
 	pressClicks int
+	// pressLost is the handler of the element pressed when the frame
+	// built another element without one in its place, for prune to give
+	// the release to at pressLostX, pressLostY, the pointer in the axes
+	// the element had.
+	pressLost              func(InputEvent) bool
+	pressLostX, pressLostY float32
 	// downing counts the presses pointerDown is handling, and ups holds the
 	// releases (button, clicks) that came meanwhile, through a main loop
 	// a handler ran nested, for it to apply once the press is recorded.
@@ -1054,8 +1067,7 @@ func (rt *engine) endPass() {
 	// Clicks the view gave its elements, which the next pass sees.
 	for _, id := range rt.clickLater {
 		if s := rt.states[id]; s != nil {
-			s.clicks++
-			s.clickMods = 0
+			s.click(0)
 		}
 	}
 	rt.clickLater = rt.clickLater[:0]
@@ -1114,6 +1126,12 @@ func (rt *engine) forgetInput() {
 		s.dropped = nil
 		s.droppedValue, s.hasDropped = nil, false
 		s.dataDropped = nil
+		if s.releaseLater.due {
+			// The pass read the moves of a press that ended: the next
+			// pass sees it end, and the clicks it gave.
+			rt.applyRelease(s)
+			rt.consumed = true
+		}
 	}
 }
 
@@ -1125,6 +1143,25 @@ func (rt *engine) prune() {
 			rt.host.cancelDataDrag()
 		}
 	}
+	if p := rt.pressed; p != nil {
+		// The element pressed is gone, as when its press moved it into
+		// another container: not built again, or built over by one that
+		// does not take its input. Its release will not come to it, so
+		// its handler gets one now, as when the window loses the focus,
+		// rather than taking the next press for that release.
+		input, gone := p.input, p.seen != rt.frame || p.pass != rt.pass
+		x, y := p.local(rt.pointerX, rt.pointerY)
+		if rt.pressLost != nil {
+			input, gone, x, y = rt.pressLost, true, rt.pressLostX, rt.pressLostY
+		}
+		if gone {
+			rt.endPress(input, x, y)
+			// A frame built anew for the press ended and what the handler
+			// did with it, not one only painting again.
+			rt.animating = true
+		}
+	}
+	rt.pressLost = nil
 	// Every state built by the last pass: none to retire, and no walk of them
 	// (an idle frame holds hundreds, nearly all of a table's).
 	all := rt.seenFrame == rt.frame && rt.seenPass == rt.pass && rt.seenN == len(rt.states)
@@ -1133,9 +1170,6 @@ func (rt *engine) prune() {
 			break
 		}
 		if s.seen != rt.frame || s.pass != rt.pass {
-			if rt.pressed == s {
-				rt.pressed = nil
-			}
 			if rt.scrollDrag.st == s {
 				rt.scrollDrag.st = nil
 			}
@@ -1336,7 +1370,7 @@ func (rt *engine) endFrame() {
 // commit records the laid out frame in the elements' states: their
 // boxes, the hit list in paint order, the focus order.
 func (rt *engine) commit(root *node, w, h float32) {
-	rt.hits = rt.hits[:0]
+	rt.hits, rt.liftHits = rt.hits[:0], rt.liftHits[:0]
 	clear(rt.posed)
 	rt.posed = rt.posed[:0]
 	clear(rt.webPlaces)
@@ -1352,6 +1386,7 @@ func (rt *engine) commit(root *node, w, h float32) {
 	// The window, which the inspector shares with the root.
 	full := Rect{0, 0, w, h}
 	rt.commitElement(root, full, false)
+	rt.liftHitsOver()
 	rt.inkStale = false
 	rt.arrangeFocus()
 	rt.noteGroups()
@@ -1373,6 +1408,12 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	saved, savedPage := rt.enterScope(e), rt.commitPage
 	defer func() { rt.commitScope, rt.commitPage, rt.commitHidden = saved, savedPage, savedHidden }()
 	s := e.st
+	if s == rt.pressed && s.input != nil && e.inputFn == nil {
+		// Another element took the place of the one pressed (prune), in
+		// the axes the element pressed had.
+		rt.pressLost = s.input
+		rt.pressLostX, rt.pressLostY = s.local(rt.pointerX, rt.pointerY)
+	}
 	s.page = rt.commitPage
 	if e.flags&flagPage != 0 {
 		rt.commitPage = e.id
@@ -1388,6 +1429,16 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	s.clips = e.flags&(flagClipX|flagClipY|flagScrollX|flagScrollY) != 0
 	if s.clips {
 		s.clipRect, s.clipRadii = e.clipRect()
+	}
+	if len(rt.liftHits) > 0 && (e == e.c.overlay || e.parent != nil && e.parent == e.c.overlay) {
+		// The elements flying in the layer before, the window's content
+		// or an overlay, go over it, under this one.
+		rt.liftHitsOver()
+	}
+	s.lifted = e.lift
+	lifting := e.lift && !rt.lifting
+	if lifting {
+		clip = rt.lift()
 	}
 	s.x, s.y, s.w, s.h = e.x, e.y, e.w, e.h
 	if e.parent != nil {
@@ -1406,6 +1457,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		// disabled after building it, as a Fieldset.
 		s.flags |= flagDisabled
 	}
+	s.ignoreInput = e.ignoreInput || e.parent != nil && e.parent.st.ignoreInput
 	s.cursor, s.tip = e.cursor, e.tip
 	s.webView = e.webView
 	s.role = e.role
@@ -1431,25 +1483,30 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	if e.flags&(flagScrollX|flagScrollY) != 0 {
 		s.contentW, s.contentH = e.contentW, e.contentH
 		s.barInset = e.barInset
+		s.barWidth = e.theme().scrollbarWidth()
 	}
+	s.hideScrollbars, _ = e.scrollbars()
 	// What is invisible keeps its box but takes neither the pointer nor
 	// the focus, and has no text to find; so does what is inert, which
 	// shows, and what is Hidden, which has no box.
 	invisible := hidden || e.hiddenSelf()
 	if invisible {
 		s.vw, s.vh = 0, 0
-		if rt.focused == e.id {
-			rt.focused = 0
-		}
+	}
+	// What ignores input shows, has its text and reads to assistive
+	// technology, but takes neither the pointer nor the focus either.
+	noInput := invisible || s.ignoreInput
+	if noInput && rt.focused == e.id {
+		rt.focused = 0
 	}
 	if e.webView != nil {
 		rt.noteWebView(e, clip, invisible)
 	}
-	if e.maximizeButton && !invisible && rt.maxButton == (Rect{}) && v.W > 0 && v.H > 0 {
+	if e.maximizeButton && !noInput && rt.maxButton == (Rect{}) && v.W > 0 && v.H > 0 {
 		rt.maxButton = v
 	}
 	switch {
-	case e.flags&flagPassThrough != 0 || invisible:
+	case e.flags&flagPassThrough != 0 || noInput:
 	case inline:
 		// Inline elements take the pointer over their words.
 		for _, r := range e.frags {
@@ -1474,7 +1531,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 			rt.labels = append(rt.labels, labelNode{e.id, label, intersect(e.visualRect(e.frags[0]), clip)})
 		}
 	}
-	if e.takesFocus(invisible) {
+	if e.takesFocus(noInput) {
 		rt.focusOrder = append(rt.focusOrder, e.id)
 		rt.focusScopes = append(rt.focusScopes, rt.commitScope)
 		// Tab goes to the radio button or tab chosen; not to a toggle
@@ -1501,11 +1558,32 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 			rt.commitElement(ch, clip, invisible)
 		}
 	}
+	if lifting {
+		rt.lift()
+	}
 	e.setInk(vis)
 	if e.hidden {
 		// It paints nothing, wherever it is.
 		e.ink, e.noCull = [4]float32{inf, inf, -inf, -inf}, false
 	}
+}
+
+// lift starts or ends committing an element flying, which takes the
+// pointer where it paints: its hits go over the rest of its layer
+// (liftHits), out of the clips around it, but the window's, which it
+// returns.
+func (rt *engine) lift() Rect {
+	rt.lifting = !rt.lifting
+	rt.hits, rt.liftHits = rt.liftHits, rt.hits
+	w, h, _ := rt.size()
+	return Rect{0, 0, w, h}
+}
+
+// liftHitsOver puts the hits of the elements flying over those committed
+// so far, as a layer ends: the window's content or an overlay.
+func (rt *engine) liftHitsOver() {
+	rt.hits = append(rt.hits, rt.liftHits...)
+	rt.liftHits = rt.liftHits[:0]
 }
 
 func intersect(a, b Rect) Rect {
@@ -1524,6 +1602,9 @@ func intersect(a, b Rect) Rect {
 // thumb being dragged wherever the pointer goes, show the default, not
 // the cursor of the text under the bar.
 func (rt *engine) updateCursor() {
+	if dragging := rt.scrollDrag.st; dragging != nil && dragging.hideScrollbars {
+		rt.scrollDrag.st = nil
+	}
 	if rt.pressed == nil && rt.scrollDrag.st == nil && rt.overWebView() {
 		// The page sets the cursor over it: it is set again as the
 		// pointer comes back.
@@ -1562,13 +1643,13 @@ func (rt *engine) updateCursor() {
 // bar element id shows.
 func (rt *engine) overScrollbar(id uint64) bool {
 	s := rt.states[id]
-	if s == nil || s.flags&(flagScrollX|flagScrollY) == 0 {
+	if s == nil || s.flags&(flagScrollX|flagScrollY) == 0 || s.hideScrollbars {
 		return false
 	}
 	x, y := s.local(rt.pointerX, rt.pointerY)
 	x += s.x
 	y += s.y
-	g := scrollBars(Rect{s.x, s.y, s.w, s.h}, s.barInset, float32(s.contentW), float32(s.contentH), float32(s.scrollX), float32(s.scrollY), s.flags, rt.c.theme.scrollbarWidth(), s.rtl)
+	g := scrollBars(Rect{s.x, s.y, s.w, s.h}, s.barInset, float32(s.contentW), float32(s.contentH), float32(s.scrollX), float32(s.scrollY), s.flags, s.barWidth, s.rtl)
 	return g.vertical && g.vTrack.Contains(x, y) || g.horizontal && g.hTrack.Contains(x, y)
 }
 

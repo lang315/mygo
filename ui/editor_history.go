@@ -46,7 +46,7 @@ func (s *undoStep) before(text string) string {
 // the step becomes one change, from the text before it, so that it keeps
 // two texts however often the app sets one, as a log does.
 func (ed *editor) setText(s string) {
-	ed.compositionActive = false
+	ed.compositionActive, ed.preeditCleared = false, false
 	ed.dropBase()
 	if n := len(ed.undo); n > 0 {
 		step := &ed.undo[n-1]

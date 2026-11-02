@@ -12,6 +12,7 @@ var (
 	inputHeightFn      func(e *node, cw float32) float32
 	paintInputFn       func(e *node, p *Painter)
 	pressFn            func(ed *editor, x, y float32, clicks, button int)
+	dragFn             func(ed *editor, x, y float32)
 	wantsFn            func(ed *editor, k keyEvent) bool
 	textKeyFn          func(ed *editor, k keyEvent) bool
 	caretRectFn        func(ed *editor, st *state) Rect
@@ -34,6 +35,7 @@ func linkEditor() {
 		inputHeightFn = (*node).inputHeight
 		paintInputFn = (*node).paintInput
 		pressFn = (*editor).press
+		dragFn = (*editor).drag
 		wantsFn = (*editor).wants
 		textKeyFn = (*editor).textKey
 		caretRectFn = (*editor).caretRect

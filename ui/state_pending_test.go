@@ -17,7 +17,7 @@ var statePlaced = map[string][]string{
 	// frame that a kept row could not set. state.pending reports each.
 	"pending": {
 		"pendingSubmit", "pendingChange", "noticeQueued", "pendingEvents",
-		"rowPressed", "pressChose", "clicks", "rightClicks", "doubleClicks",
+		"rowPressed", "pressChose", "releaseLater", "clicks", "rightClicks", "doubleClicks",
 		"typing", "dragX", "dragY", "pressed", "released", "pressPending",
 		"changed", "submitted", "events", "expand", "holding", "dropped",
 		"hasDropped", "dataDropped", "editor",
@@ -32,7 +32,7 @@ var statePlaced = map[string][]string{
 		"rt", "world", "clips", "rtl", "clipRect", "clipRadii", "id", "seen", "pass", "born",
 		"lookedSeen", "lookedPass", "lay", "text", "x", "y", "w", "h", "vx", "vy", "vw", "vh",
 		"parent", "flags", "cursor", "tip", "effectLayer", "webView",
-		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barsShown", "track",
+		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barWidth", "barsShown", "hideScrollbars", "ignoreInput", "track",
 		"moveFrame", "startX", "startY", "list", "cx", "cy", "cw", "ch", "role",
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
@@ -41,6 +41,7 @@ var statePlaced = map[string][]string{
 	},
 	// neither: read only with a field that is pending, or set again by it.
 	"neither": {
+		"lifted", // set while it flies with a Match, which has its transition: pending
 		"pressMods", "clickMods", "typedAt", "pressX", "pressY", "drag",
 		"releaseVX", "releaseVY", "releaseWX", "releaseWY",
 		"changeDelivered", "submitDelivered", "eventsDelivered", "submitMods",
@@ -80,6 +81,7 @@ func TestStatePendingReportsEachPendingField(t *testing.T) {
 		"pendingEvents": func(s *state) { s.pendingEvents = eventChecked },
 		"rowPressed":    func(s *state) { s.rowPressed = true },
 		"pressChose":    func(s *state) { s.pressChose = true },
+		"releaseLater":  func(s *state) { s.releaseLater.due = true },
 		"clicks":        func(s *state) { s.clicks = 1 },
 		"rightClicks":   func(s *state) { s.rightClicks = 1 },
 		"doubleClicks":  func(s *state) { s.doubleClicks = 1 },

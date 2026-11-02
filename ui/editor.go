@@ -36,10 +36,14 @@ type editor struct {
 	buf       buffer
 	graphemes graphemes
 	editorSelection
-	compose            string
-	composeCaret       int
-	composeSelected    TextInputRange
-	compositionActive  bool // one undo transaction for preedit and its commit
+	compose           string
+	composeCaret      int
+	composeSelected   TextInputRange
+	compositionActive bool // one undo transaction for preedit and its commit
+	// preeditCleared: the input method emptied the preedit (SetMarkedText)
+	// with no base, which its commit follows, as GTK's fcitx module sends them:
+	// ReplaceText then goes in the composition's undo step.
+	preeditCleared     bool
 	client             editorClient
 	value              *string
 	nativeDirty        bool
@@ -81,6 +85,11 @@ type editor struct {
 	// wrapped text between them; zero for the paragraphs, at least three.
 	lines       [2]int
 	placeholder string
+	// Placeholder color is paint-only and reset by each widget build.
+	placeholderColor    Color
+	placeholderColorSet bool
+	// caretWidth is paint-only, in DIPs, and reset by each widget build.
+	caretWidth float32
 	// ranges style runs of the text (TextRanges): as given until apart is
 	// set, then merged into runs apart, sorted by Start (sortRanges).
 	ranges []TextRange
@@ -163,6 +172,8 @@ func (ed *editor) busy() bool {
 func (ed *editor) rebuild() {
 	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit}
 	ed.readOnly, ed.password, ed.maxLen, ed.lines, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit = false, false, 0, [2]int{}, nil, nil, nil, nil
+	ed.placeholderColorSet = false
+	ed.caretWidth = 1
 }
 
 // withShown runs fn, which applies the user's edits, with the options of
@@ -229,7 +240,7 @@ func (ed *editor) commitCompose() {
 		}
 	}
 	ed.composeCaret, ed.composeSelected = 0, TextInputRange{}
-	ed.compositionActive = false
+	ed.compositionActive, ed.preeditCleared = false, false
 }
 
 // process applies the input queued for the editor.

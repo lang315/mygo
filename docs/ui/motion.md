@@ -228,6 +228,10 @@ if dx, _, ok := dial.Dragged(); ok {
 dial.Transform(ui.Rotation(turn))
 ```
 
+The last moves of a drag come while `Dragged` still reports the press, and
+`DragEnded` in the build after: the dial turns as far as the pointer went
+before it springs to a notch.
+
 `DragVelocity` is the pointer's velocity while it presses, in DIPs per
 second along the element's axes, zero once it rests a moment. `Velocity(key)`
 is the velocity of an animated value. A click, which does not move, ends no
@@ -267,6 +271,8 @@ disablesAnimations: for a change that should not show as motion, as
 restoring a window's state or jumping to a search result. Call it before
 building what changes. `Keyframes` and timelines play on their own rather
 than towards a target, and go on as they were; seek a timeline to jump it.
+`c.Instant()` reports whether the frame does, for a view that moves a
+value of its own, so that it settles in the same frames.
 
 ## Keyframes
 

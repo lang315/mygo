@@ -7,14 +7,15 @@ import (
 	"github.com/egoist/mygo/internal/allocrun"
 )
 
-// A node's size is kept: its fields go in the padding. It is 1776 since
+// A node's size is kept: its fields go in the padding. It is 1800 since
 // upstream's Element.Cache (cache, a layerKeeper) and DrawObjects
 // (objectFn) took 24 bytes beside Hidden's bool, which fits in padding;
 // focusTo (#793, a field box's input, a number input's row's) is the one
-// field that forwards the focus.
+// field that forwards the focus; and upstream's Themed (themed) and
+// Scrollbars (barsFrom) took 24 more, their bools in the padding.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 1776 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1776", n)
+	if n := unsafe.Sizeof(node{}); n != 1800 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1800", n)
 	}
 }
 

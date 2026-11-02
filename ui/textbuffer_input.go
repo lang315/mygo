@@ -38,7 +38,7 @@ func (ed *editor) loadBuffer(s TextSnapshot) {
 	clear(ed.redo)
 	clear(ed.queue)
 	ed.undo, ed.redo, ed.queue = nil, nil, nil
-	ed.compose, ed.compositionActive = "", false
+	ed.compose, ed.compositionActive, ed.preeditCleared = "", false, false
 	ed.composeCaret, ed.composeSelected = 0, TextInputRange{}
 	ed.buf.setSnapshot(s)
 	ed.published = s

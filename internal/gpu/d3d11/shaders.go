@@ -8,7 +8,7 @@ import _ "embed"
 
 // shaderSum is the SHA-256 of the shader.hlsl the shaders were compiled
 // from.
-const shaderSum = "8af3fa3f3272d43c008bbe2e1406229460e57b393f0cfbb5cada2eb47bf221c5"
+const shaderSum = "5e29520088ba960d1e673a7fcb5bb4d83b148679b2c598f275a2eba4c29317dc"
 
 // packedShaders holds the bytecode of the vertex shader, the pixel shader,
 // the pass vertex shader, the down and the blur shaders (shaderCode), deflated

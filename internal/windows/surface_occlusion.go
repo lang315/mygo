@@ -9,9 +9,8 @@ import (
 )
 
 const (
-	dwmwaCloak   = 13 // DWMWA_CLOAK: a window cloaks itself with it, as the tests do
 	dwmwaCloaked = 14 // DWMWA_CLOAKED: why a window is cloaked, 0 if not
-	timerCloak   = 3  // the surface's timer that asks whether the window is uncloaked
+	timerCloak   = 4  // the surface's timer that asks whether the window is uncloaked
 	cloakPollMS  = 250
 )
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/scene"
+	"github.com/egoist/mygo/internal/wait"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/gomono"
 	"golang.org/x/image/font/gofont/goregular"
@@ -742,6 +743,121 @@ func TestFontsOfManySizes(t *testing.T) {
 	}
 }
 
+// TestLayoutKeptAcrossFontFlush draws a layout kept while the System lets
+// go of its fonts, as a cross-fade draws the text it fades out (#982): its
+// fonts still draw it as before.
+func TestLayoutKeptAcrossFontFlush(t *testing.T) {
+	s := newSystem()
+	f, ok := s.engine().(fontForgetter)
+	if !ok {
+		t.Skip("the engine keeps no fonts")
+	}
+	kept := s.Layout(Params{Text: "Saved", Style: Style{Size: 13}})
+	before := layoutInk(t, s, kept)
+	for i := 0; f.fontCount() <= maxFonts; i++ {
+		s.Layout(Params{Text: "Hi", Style: Style{Size: 20 + float32(i)/10}})
+	}
+	s.EndFrame()
+	if f.fontCount() != 0 {
+		t.Fatalf("%d fonts after letting go of them", f.fontCount())
+	}
+	// The fonts nothing refers to are released.
+	runtime.GC()
+	s.EndFrame()
+	if after := layoutInk(t, s, kept); after != before {
+		t.Fatalf("the kept layout draws %d of ink, %d before", after, before)
+	}
+}
+
+// layoutInk draws a layout's glyphs and returns their coverage.
+func layoutInk(t *testing.T, s *System, l *Layout) int {
+	t.Helper()
+	ink := 0
+	for _, g := range l.Lines[0].Glyphs {
+		img := s.Glyph(g.Font, g.ID, 2, 0, 0, false)
+		if !img.OK && s.Full() {
+			s.MakeRoom()
+			img = s.Glyph(g.Font, g.ID, 2, 0, 0, false)
+		}
+		if !img.OK || img.inColor() {
+			t.Fatalf("glyph %v: %+v", g.ID, img)
+		}
+		for y := range int(img.H) {
+			for x := range int(img.W) {
+				ink += int(s.MaskAtlas.Pix[(int(img.Y)+y)*s.MaskAtlas.W+int(img.X)+x])
+			}
+		}
+	}
+	return ink
+}
+
+// releasingEngine gives its Fonts native fonts, numbered, and records
+// which it released, as the system's engines release theirs.
+type releasingEngine struct {
+	stubEngine
+	nativeFonts
+	made     uintptr
+	released map[uintptr]bool
+}
+
+func (e *releasingEngine) font(style Style) *Font {
+	f := e.stubEngine.font(style)
+	if f.native == 0 {
+		e.made++
+		f.native = e.made
+		e.own(f)
+	}
+	return f
+}
+
+func (e *releasingEngine) shape(text []rune, style Style, spans []Span, width float32, rtl, wholeWords bool) []shapedLine {
+	e.font(style) // the stub's shape finds it among its fonts
+	return e.stubEngine.shape(text, style, spans, width, rtl, wholeWords)
+}
+
+func (e *releasingEngine) fontCount() int { return len(e.fonts) }
+
+func (e *releasingEngine) forgetFonts() { clear(e.fonts) }
+
+func (e *releasingEngine) releaseFonts() {
+	e.releaseDead(func(native uintptr) { e.released[native] = true })
+}
+
+// TestFontOfKeptLayoutOutlivesFlush keeps a layout while the System lets
+// go of its fonts (#982): the native font of the layout's Font stays for
+// as long as the layout refers to it, and goes after, as the others do.
+func TestFontOfKeptLayoutOutlivesFlush(t *testing.T) {
+	s := newSystem()
+	e := &releasingEngine{released: map[uintptr]bool{}}
+	s.eng = e
+	kept := s.Layout(Params{Text: "Saved", Style: Style{Size: 13}})
+	native := kept.Lines[0].Glyphs[0].Font.native
+	for i := 0; e.fontCount() <= maxFonts; i++ {
+		s.Layout(Params{Text: "Hi", Style: Style{Size: 20 + float32(i)/10}})
+	}
+	s.EndFrame()
+	if e.fontCount() != 0 || len(e.released) != 0 {
+		t.Fatalf("%d fonts kept, %d released as the System let go of them", e.fontCount(), len(e.released))
+	}
+	wait.Until(t, "the fonts nothing refers to released", func() bool {
+		runtime.GC()
+		s.EndFrame()
+		return len(e.released) == int(e.made)-1
+	})
+	if e.released[native] {
+		t.Fatal("the font of the kept layout was released")
+	}
+	if got := kept.Lines[0].Glyphs[0].Font.native; got != native {
+		t.Fatalf("the kept layout's font is %d, was %d", got, native)
+	}
+	runtime.KeepAlive(kept)
+	wait.Until(t, "the kept layout's font released", func() bool {
+		runtime.GC()
+		s.EndFrame()
+		return e.released[native]
+	})
+}
+
 // TestPlacement checks that glyphs go to the positions within a pixel the
 // system's text stack draws them at, and baselines to its whole pixels:
 // Core Graphics' two positions a pixel at 26 pixels an em, left of the pen,
@@ -886,4 +1002,113 @@ func TestLayoutAtMeasuredWidth(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestLayoutUnwrappedAtWidths checks that a text laid out at widths its
+// lines fit in is shaped once for every width, and lays out as it would at
+// each, its lines where its alignment puts them.
+func TestLayoutUnwrappedAtWidths(t *testing.T) {
+	style := Style{Size: 14}
+	for _, c := range []struct {
+		name   string
+		p      Params
+		shares bool
+	}{
+		{"label", Params{Text: "Forest in the rain", Style: style}, true},
+		{"lines", Params{Text: "Forest\nin the rain\n", Style: style}, true},
+		{"indented", Params{Text: "Forest in the rain", Style: style, Indent: 12}, true},
+		{"spans", Params{Text: "Forest in the rain", Style: style, Spans: EncodeSpans([]Span{{End: 6, Weight: 700}, {End: 18}})}, true},
+		{"right to left", Params{Text: "שלום עולם", Style: style}, true},
+		{"right to left at the end", Params{Text: "שלום עולם", Style: style, Align: End}, true},
+		{"centered", Params{Text: "Forest in the rain", Style: style, Align: Center}, true},
+		{"centered lines", Params{Text: "Forest\nin the rain", Style: style, Align: Center, Indent: 8}, true},
+		{"at the right", Params{Text: "Forest in the rain", Style: style, Align: Right}, true},
+		{"centered, not wrapped", Params{Text: "Forest in the rain, and the sea", Style: style, Align: Center, NoWrap: true}, true},
+		{"no wrap", Params{Text: "Forest in the rain, and the sea", Style: style, NoWrap: true}, true},
+		{"justified", Params{Text: "Forest in the rain", Style: style, Justify: true}, true},
+		{"cut", Params{Text: "Forest in the rain", Style: style, MaxLines: 1}, false},
+		{"wrapping", Params{Text: "Forest in the rain, and the sea at dusk", Style: style}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// From the layout at the width before, as a box resizing lays
+			// its text out, and from the text's unwrapped layout.
+			for _, unwrapped := range []bool{false, true} {
+				s := newSystem()
+				if unwrapped {
+					s.Layout(unwrappedParams(c.p))
+				}
+				var last *Layout
+				var n uint64
+				for _, w := range []float32{400, 300, 250.5, 200, 180} {
+					p := c.p
+					p.Width = w
+					made := s.LayoutsMade()
+					got := s.LayoutFrom(last, p)
+					if unwrapped {
+						got = s.Layout(p)
+					}
+					n += s.LayoutsMade() - made
+					// Made anew by the same system, whose glyph IDs are the
+					// same, as the browser's engine numbers glyphs as it meets
+					// them.
+					want := &s.layout(p).layout
+					last = got
+					if got.Params != p {
+						t.Fatalf("at %v, the layout's parameters are %+v", w, got.Params)
+					}
+					if !sameLayout(got, want) {
+						t.Fatalf("at %v, the layout differs from one made at that width:\n%+v\n%+v", w, got.Lines, want.Lines)
+					}
+					for i := range len(want.Runes) + 1 {
+						gx, gy, _ := got.CaretAt(CaretPosition{Index: i})
+						wx, wy, _ := want.CaretAt(CaretPosition{Index: i})
+						if gx != wx || gy != wy {
+							t.Fatalf("at %v, the caret at %d is at %v, %v, not %v, %v", w, i, gx, gy, wx, wy)
+						}
+					}
+				}
+				shaped := uint64(1)
+				if unwrapped {
+					shaped = 0
+				}
+				if c.shares && n != shaped {
+					t.Errorf("unwrapped first %v, laid out %d times, not %d", unwrapped, n, shaped)
+				}
+			}
+		})
+	}
+	// A text laid out at a width is shaped once, wrapping or not.
+	s := newSystem()
+	for _, p := range []Params{
+		{Text: "Harbor lights at night", Style: style, Width: 40},
+		{Text: "Lighthouse keepers", Style: style, Width: 400},
+	} {
+		made := s.LayoutsMade()
+		s.Layout(p)
+		if n := s.LayoutsMade() - made; n != 1 {
+			t.Errorf("%q at %v laid out %d times", p.Text, p.Width, n)
+		}
+	}
+}
+
+// sameLayout reports whether a and b place the same glyphs on the same
+// lines.
+func sameLayout(a, b *Layout) bool {
+	if a.Width != b.Width || a.Height != b.Height || a.Truncated != b.Truncated || !slices.Equal(a.Runes, b.Runes) || len(a.Lines) != len(b.Lines) {
+		return false
+	}
+	for i := range a.Lines {
+		x, y := &a.Lines[i], &b.Lines[i]
+		if x.X != y.X || x.Y != y.Y || x.Width != y.Width || x.Height != y.Height || x.Baseline != y.Baseline ||
+			x.Start != y.Start || x.End != y.End || x.RTL != y.RTL || len(x.Glyphs) != len(y.Glyphs) {
+			return false
+		}
+		for j := range x.Glyphs {
+			g, h := x.Glyphs[j], y.Glyphs[j]
+			if g.ID != h.ID || g.X != h.X || g.Y != h.Y || g.Advance != h.Advance || g.Cluster != h.Cluster || g.Size != h.Size {
+				return false
+			}
+		}
+	}
+	return true
 }

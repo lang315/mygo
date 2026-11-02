@@ -34,9 +34,23 @@ func TestPerformMenuItem(path ...string) error {
 	return err
 }
 
+// TestMenuItemEnabled reports whether an item of the application menu,
+// found as TestPerformMenuItem finds it, is enabled once its menu
+// validates its items, as before it opens.
+func TestMenuItemEnabled(path ...string) (enabled bool, err error) {
+	withPool(func() {
+		var menu id
+		var index int
+		if menu, index, err = menuItemAt(path); err == nil {
+			send(menu, "update")
+			enabled = sendBool(send(menu, "itemAtIndex:", uintptr(index)), "isEnabled")
+		}
+	})
+	return enabled, err
+}
+
 // menuItemAt finds an item of the application menu by the titles along
-// its path: the menu holding it, and its index there. It must run in
-// withPool.
+// its path, and returns its menu and its index there.
 func menuItemAt(path []string) (menu id, index int, err error) {
 	if len(path) == 0 {
 		return 0, 0, fmt.Errorf("mygo: no menu path")
@@ -53,11 +67,12 @@ func menuItemAt(path []string) (menu id, index int, err error) {
 		if index < 0 {
 			return 0, 0, fmt.Errorf("mygo: no menu item %q", title)
 		}
-		if i < len(path)-1 {
-			menu = send(send(menu, "itemAtIndex:", uintptr(index)), "submenu")
+		if i == len(path)-1 {
+			return menu, index, nil
 		}
+		menu = send(send(menu, "itemAtIndex:", uintptr(index)), "submenu")
 	}
-	return menu, index, nil
+	return 0, 0, fmt.Errorf("mygo: no menu item")
 }
 
 // TestMenuItemImage reports whether an item of the application menu,
@@ -352,6 +367,55 @@ func TestControlClick(handle uintptr, x, y float64) {
 			send(win, "sendEvent:", uintptr(ev))
 		}
 	})
+}
+
+// TestSecondaryClickAsPrimary clicks (x, y), in points from the top-left
+// corner of a window's content, with the secondary button as data loss
+// prevention agents post its events again: as the primary button's press
+// and release, which keep the secondary button's number.
+func TestSecondaryClickAsPrimary(handle uintptr, x, y float64) (ok bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	testSideOnce.Do(func() {
+		purego.RegisterLibFunc(&cgEventSetIntegerValueField, libCG, "CGEventSetIntegerValueField")
+	})
+	testPinchOnce.Do(func() {
+		purego.RegisterLibFunc(&cgEventSetType, libCG, "CGEventSetType")
+		purego.RegisterLibFunc(&cgEventSetDoubleValueField, libCG, "CGEventSetDoubleValueField")
+		purego.RegisterLibFunc(&cgEventSetLocation, libCG, "CGEventSetLocation")
+	})
+	withPool(func() {
+		content := msgRect(send(w.win, "contentView"), sel("frame"))
+		want := NSPoint{x, content.Size.Height - y}
+		near := func(p NSPoint) bool { return math.Abs(p.X-want.X) < 0.5 && math.Abs(p.Y-want.Y) < 0.5 }
+		number := sendInt(w.win, "windowNumber")
+		for _, typ := range []uint{1, 2} { // NSEventTypeLeftMouseDown, LeftMouseUp
+			ev := msgMouseEvent(class("NSEvent"), sel("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:"),
+				typ, want, 0, 0, number, 0, 0, 1, 1)
+			cg := uintptr(send(ev, "CGEvent"))
+			cgEventSetIntegerValueField(cg, 3, 1) // kCGMouseEventButtonNumber: the secondary button
+			ev = send(class("NSEvent"), "eventWithCGEvent:", cg)
+			// The way through CGEvent moves the point by the window's origin
+			// once more: move it back (CoreGraphics' y goes down).
+			if got := msgPoint(ev, sel("locationInWindow")); ev != 0 && !near(got) {
+				at := cgEventGetLocation(cg)
+				cgEventSetLocation(cg, NSPoint{at.X - (got.X - want.X), at.Y + (got.Y - want.Y)})
+				ev = send(class("NSEvent"), "eventWithCGEvent:", cg)
+			}
+			if ev == 0 || sendInt(ev, "type") != int(typ) || sendInt(ev, "buttonNumber") != 1 || !near(msgPoint(ev, sel("locationInWindow"))) {
+				return
+			}
+			name := "mouseDown:"
+			if typ == 2 {
+				name = "mouseUp:"
+			}
+			send(w.surface.view, name, uintptr(ev))
+		}
+		ok = true
+	})
+	return ok
 }
 
 var (
@@ -1379,6 +1443,62 @@ func TestTrayMenuImages() map[string]bool {
 		}
 	})
 	return items
+}
+
+// TestSheetDestructive reports whether each button of the alert attached
+// to a window as a sheet, in the order the alert was given them, has a
+// destructive action.
+func TestSheetDestructive(handle uintptr) (destructive []bool, ok bool) {
+	withPool(func() {
+		sheet := send(id(handle), "attachedSheet")
+		if sheet == 0 {
+			return
+		}
+		ok = true
+		tagged := map[int]id{}
+		var walk func(v id)
+		walk = func(v id) {
+			if sendBool(v, "isKindOfClass:", uintptr(class("NSButton"))) {
+				if i := sendInt(v, "tag") - nsAlertFirstButtonReturn; i >= 0 {
+					tagged[i] = v
+				}
+			}
+			for _, sub := range arrayItems(send(v, "subviews")) {
+				walk(sub)
+			}
+		}
+		walk(send(sheet, "contentView"))
+		for i := 0; i < len(tagged); i++ {
+			destructive = append(destructive, respondsTo(tagged[i], "hasDestructiveAction") && sendBool(tagged[i], "hasDestructiveAction"))
+		}
+	})
+	return
+}
+
+// TestSheetKey presses and releases a key in the sheet attached to a
+// window, with Command held when cmd is set, through the application's
+// event queue as the keyboard's keys go. It reports whether there was a
+// sheet.
+func TestSheetKey(handle uintptr, code uint16, chars string, cmd bool) bool {
+	sheet := send(id(handle), "attachedSheet")
+	if sheet == 0 {
+		return false
+	}
+	var flags uint
+	if cmd {
+		flags = 1 << 20 // NSEventModifierFlagCommand
+	}
+	withPool(func() {
+		number := sendInt(sheet, "windowNumber")
+		s := nsString(chars)
+		for _, typ := range []uint{10, 11} { // NSEventTypeKeyDown, KeyUp
+			ev := msgKeyEvent(class("NSEvent"), sel("keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:"),
+				typ, NSPoint{}, flags, 0, number, 0, s, s, false, code)
+			send(theBackend.app, "postEvent:atStart:", uintptr(ev), 0)
+		}
+	})
+	handlePosted()
+	return true
 }
 
 // TestModal reports whether a dialog runs for a window, as its sheet or
