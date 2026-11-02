@@ -1,3 +1,5 @@
+//go:build mygo_static
+
 package fetch
 
 import (

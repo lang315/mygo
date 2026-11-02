@@ -26,4 +26,5 @@ var staticMethods sync.Map // reflect.Type → []BoundMethod
 // order reflection lists them in.
 func BindMethods(t reflect.Type, methods ...BoundMethod) {
 	staticMethods.Store(t, methods)
+	resolvePending(t)
 }

@@ -149,7 +149,7 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 		if opts.overlay, err = frontendFiles(c, opts.pkg, work); err != nil {
 			return err
 		}
-		if !opts.debug && c.boundRead && len(c.bound) > 0 {
+		if !opts.debug && c.bindsToName() {
 			if opts.mainPkg, err = packageImportPath(c); err != nil {
 				return err
 			}

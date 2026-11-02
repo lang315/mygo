@@ -74,7 +74,7 @@ var targetTypes = targetBoundTypes
 // without a frontend that binds nothing) or the app binds nothing of its own.
 func bindFiles(c *Config, pkg, work, mainPkg, goos, goarch, tags string) (files map[string]string, reason string, err error) {
 	files = map[string]string{}
-	if !c.boundRead || len(c.bound) == 0 {
+	if !c.bindsToName() {
 		return files, "", nil
 	}
 	bound, reason, err := targetTypes(c, goos, goarch, tags, mainPkg, c.bound)
@@ -239,11 +239,11 @@ func symbolNames(path string) ([]string, error) {
 // one can be named there; otherwise it says why Bind keeps reflection, for this
 // target.
 func bindTableFor(c *Config, opts *buildOptions, goos, goarch string) (map[string]string, error) {
-	if opts.debug || !c.boundRead || len(c.bound) == 0 {
+	if opts.debug || !c.bindsToName() {
 		return nil, nil
 	}
 	work := filepath.Join(opts.work, "bind-"+goos+"-"+goarch)
-	files, reason, err := bindFiles(c, opts.pkg, work, opts.mainPkg, goos, goarch, tagValue(productionTags(opts.debug, c.root)))
+	files, reason, err := bindFiles(c, opts.pkg, work, opts.mainPkg, goos, goarch, tagValue(releaseTags(opts.debug, c.root, true)))
 	if err != nil {
 		return nil, err
 	}
