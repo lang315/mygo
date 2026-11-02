@@ -20,12 +20,15 @@ func TestZZStressHiddenContentWindows(t *testing.T) {
 	var hangs, closedLate int
 	var diag []string
 	cycle := func(rep, c int) {
-		w := mygo.NewWindow(mygo.WindowOptions{Width: 300, Height: 200, Hidden: true, Content: ui.View(func(c *ui.Context) {
-			ui.Text(c, "callbacks")
-		})})
 		drawn, closed := make(chan struct{}, 1), make(chan struct{}, 1)
-		w.OnReadyToShow(func() { drawn <- struct{}{} })
-		w.OnClosed(func() { closed <- struct{}{} })
+		var w *mygo.Window
+		mygo.RunOnMain(func() {
+			w = mygo.NewWindow(mygo.WindowOptions{Width: 300, Height: 200, Hidden: true, Content: ui.View(func(c *ui.Context) {
+				ui.Text(c, "callbacks")
+			})})
+			w.OnReadyToShow(func() { drawn <- struct{}{} })
+			w.OnClosed(func() { closed <- struct{}{} })
+		})
 		w.Show()
 		start := time.Now()
 		select {
