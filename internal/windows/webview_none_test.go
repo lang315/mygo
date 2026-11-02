@@ -5,6 +5,8 @@ package windows
 import (
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // In a build with nativeOnly there is no web view to make: the environment is
@@ -14,7 +16,7 @@ func TestNoWebViewInANativeOnlyBuild(t *testing.T) {
 	if err := (&Backend{}).startEnvironment(nil); err != errNativeOnly {
 		t.Errorf("startEnvironment = %v, want errNativeOnly", err)
 	}
-	w := &window{b: &Backend{}}
+	w := &window{b: &Backend{}, opts: &platform.WindowOptions{}}
 	w.createWebView()
 	if w.webViewErr != errNativeOnly {
 		t.Errorf("a window's web view failed with %v, want errNativeOnly", w.webViewErr)
