@@ -599,6 +599,17 @@ type Window interface {
 	Page
 }
 
+// MessagePoster is implemented by a Page that can hand the bridge its
+// messages without running a script (WebView2's PostWebMessageAsJson, which
+// skips compiling a script and the round trip of its result). The bridge of
+// the page listens for them (packages/bridge transport.listen). A message
+// goes to the document at the top of the page when the browser delivers it:
+// the window posts only the messages of the current document.
+type MessagePoster interface {
+	// PostMessages posts json, a JSON array of the messages of the bridge.
+	PostMessages(json string)
+}
+
 // Page is the web page of a Window, or of a WebView.
 type Page interface {
 	// WebViewHandle returns the native webview object.
