@@ -350,3 +350,26 @@ func init() {
 		t.Errorf("the table lacks Two, or the app fails: %v %s\n%s", rerr, firstLine(rout), gen)
 	}
 }
+
+// A table for *two does not cover the value two: Bind lists them apart.
+func TestRev338gTablePointerVsValue(t *testing.T) {
+	rev338eCheck(t, `	"bindtest/lib"
+`, "", `		mygo.Use(lib.Second())`, map[string]string{"lib/lib.go": `package lib
+
+import (
+	"reflect"
+
+	"github.com/egoist/mygo"
+)
+
+type two struct{}
+
+func (two) Q() string { return "" }
+
+func init() {
+	mygo.BindMethods(reflect.TypeFor[*two](), mygo.BoundMethod{Name: "Q", Func: (*two).Q})
+}
+
+func Second() mygo.Plugin { return mygo.Plugin{Name: "second", Service: two{}} }
+`})
+}

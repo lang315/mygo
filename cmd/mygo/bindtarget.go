@@ -141,7 +141,7 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 
 	var found []foundType
 	var unseen []string
-	tabled := map[string]bool{} // the types that have a table of their own (BindMethods), as pkg.Name
+	tabled := map[string]bool{} // the types that have a table of their own (BindMethods), by tabledKey
 	reaches := map[string]bool{}
 	var reachesMygo func(path string) bool
 	reachesMygo = func(path string) bool {
@@ -193,7 +193,7 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 	seen := map[string]bool{}
 	var scanned []foundType
 	for _, f := range found {
-		if tabled[f.b.Pkg+"."+f.b.Type] {
+		if tabled[tabledKey(f.b.Pkg, f.b.Type, f.b.Pointer)] {
 			continue // the type gives Bind its methods itself
 		}
 		if why := cannotName(mainPkg, f.b); why != "" {
@@ -213,7 +213,7 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 		if isMainPackage(mainPkg, path) {
 			path = mainPkg
 		}
-		if tabled[path+"."+b.Type] {
+		if tabled[tabledKey(path, b.Type, b.Pointer)] {
 			continue // the run, which has no tag, lists a service its type gives itself
 		}
 		if slices.ContainsFunc(scanned, func(f foundType) bool { return f.b.Pkg == path && f.b.Type == b.Type && f.b.Pointer == b.Pointer }) {
@@ -287,7 +287,7 @@ func hasServiceField(t types.Type, isMygo func(types.Object) bool) bool {
 
 // scanBinds reads, in a type-checked package, the services it binds and the
 // places of the values whose type is not known statically (unseen). The types
-// that have a table of their own (BindMethods) are returned as pkg.Name: their
+// that have a table of their own (BindMethods) are returned by tabledKey: their
 // services give Bind their methods themselves.
 //
 // The forms of Go that give a Plugin its Service, and what the scan does with each
@@ -464,7 +464,7 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 }
 
 // tableType names the type a call of BindMethods gives a table to (its first
-// argument is reflect.TypeFor[T]() or reflect.TypeOf(x)), as pkg.Name, or "".
+// argument is reflect.TypeFor[T]() or reflect.TypeOf(x)), as tabledKey, or "".
 func tableType(arg ast.Expr, info *types.Info) string {
 	call, ok := ast.Unparen(arg).(*ast.CallExpr)
 	if !ok {
@@ -489,14 +489,24 @@ func tableType(arg ast.Expr, info *types.Info) string {
 	if t == nil {
 		return ""
 	}
+	ptr := false
 	if p, ok := types.Unalias(t).(*types.Pointer); ok {
-		t = p.Elem()
+		t, ptr = p.Elem(), true
 	}
 	n, ok := types.Unalias(t).(*types.Named)
 	if !ok || n.Obj().Pkg() == nil {
 		return ""
 	}
-	return n.Obj().Pkg().Path() + "." + n.Obj().Name()
+	return tabledKey(n.Obj().Pkg().Path(), n.Obj().Name(), ptr)
+}
+
+// tabledKey names a type with a table of its own: the table of *T does not cover T,
+// which Bind lists apart.
+func tabledKey(pkg, name string, pointer bool) string {
+	if pointer {
+		return "*" + pkg + "." + name
+	}
+	return pkg + "." + name
 }
 
 func selName(e ast.Expr) *ast.Ident {
