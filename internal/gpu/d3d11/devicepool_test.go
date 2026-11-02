@@ -60,8 +60,19 @@ func newRendererOrSkip(t *testing.T) *Renderer {
 func TestDevicePoolReusesTheDevice(t *testing.T) {
 	emptyPool(t)
 	devices, shaders := devicesMade.Load(), shadersMade.Load()
-	for range 4 {
-		newRendererOrSkip(t).Release()
+	for i := range 4 {
+		r := newRendererOrSkip(t)
+		// The adapter's LUID is read from the device, and is the default
+		// adapter's for one the GPU made (a runner without a GPU makes WARP
+		// or the basic render driver, whose LUID is not the default's: only
+		// its being read is checked there). A wrong slot or layout would turn
+		// the reuse of a GPU's device off without a word.
+		if r.luid == 0 {
+			t.Errorf("round %d: the device's adapter has no LUID", i)
+		} else if def, ok := defaultLUID(); !r.warp && (!ok || def != r.luid) {
+			t.Errorf("round %d: LUID %#x of the device's adapter, %#x (%v) of the default adapter", i, r.luid, def, ok)
+		}
+		r.Release()
 	}
 	if n := devicesMade.Load() - devices; n != 1 {
 		t.Errorf("%d devices made for 4 renderers one after the other, want 1", n)
@@ -72,12 +83,14 @@ func TestDevicePoolReusesTheDevice(t *testing.T) {
 }
 
 // A renderer that takes the device of another draws as one with a device of
-// its own. The references held on the pooled device, which count what the
-// renderer's windows objects (textures, views, buffers, swap chain) left
-// on it as well as the device's own, stay the same round after round: a
-// renderer that leaked one of them, as it could not before the device
-// stayed alive, would add to it. That the device goes back only after
-// those are released, not before, is not checked here.
+// its own. The references held on the pooled device stay the same round
+// after round: they count what the device is held by in public, the swap
+// chain and the composition objects among others, so a renderer that
+// leaked one of those, as it could not before the device stayed alive,
+// would add to them. The children of the device that hold it internally
+// (textures, views, buffers) do not show in the count, and that the
+// device goes back only after everything is released, not before, is not
+// checked here.
 func TestDevicePoolKeepsNothingOfAWindow(t *testing.T) {
 	emptyPool(t)
 	s := gputest.BorderedCardScene(false)
