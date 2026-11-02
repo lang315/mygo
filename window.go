@@ -1756,7 +1756,9 @@ func (w *Window) OnReadyToShow(fn func()) (off func()) {
 	w.readyMu.Unlock()
 	var removed atomic.Bool
 	postMain(func() {
-		if !removed.Load() {
+		// As a listener added before the window was ready does not run when
+		// the window is destroyed before it is.
+		if !removed.Load() && !w.destroyed.Load() {
 			fn()
 		}
 	})

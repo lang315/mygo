@@ -571,30 +571,58 @@ func TestReadyToShowListenerAddedAfterReady(t *testing.T) {
 	}
 }
 
-// Listeners added from other goroutines while the window becomes ready run
-// once each, whether they came before or after.
-func TestReadyToShowListenersAddedWhileReady(t *testing.T) {
+// Listeners added from other goroutines run once each, whether they came
+// before the window became ready, as it did, or after: three groups, the
+// first added before ready, the second released with it (which listener is
+// in the list and which is posted differs from run to run, and each ran
+// once), the third added after it, as the call that made it ready returned.
+func TestReadyToShowListenersAddedAroundReady(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{Hidden: true})
-	const n = 64
-	var ran [n]atomic.Int32
+	const n = 30
+	var ran [3 * n]atomic.Int32
 	var wg sync.WaitGroup
-	start := make(chan struct{})
-	for i := range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			w.OnReadyToShow(func() { ran[i].Add(1) })
-		}()
+	release := [3]chan struct{}{make(chan struct{}), make(chan struct{}), make(chan struct{})}
+	for g := range release {
+		for i := range n {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-release[g]
+				w.OnReadyToShow(func() { ran[g*n+i].Add(1) })
+			}()
+		}
 	}
-	close(start)
+	close(release[0])
+	// Added before: wait until all are in the list.
+	for w.onReadyToShow.len() < n {
+		runtime.Gosched()
+	}
+	close(release[1])
 	onMain(fw.H.LoadFinished)
+	close(release[2]) // after the call that made the window ready returned
 	wg.Wait()
 	onMain(func() {}) // what was posted ran
 	for i := range ran {
 		if got := ran[i].Load(); got != 1 {
-			t.Errorf("listener %d ran %d times, want 1", i, got)
+			t.Errorf("listener %d (group %d) ran %d times, want 1", i, i/n, got)
 		}
+	}
+}
+
+// A listener added after the window is ready does not run if the window is
+// destroyed before it does, as one added before ready does not run when the
+// window is destroyed before it is.
+func TestReadyToShowLateListenerSkippedWhenDestroyed(t *testing.T) {
+	w, fw := testWindow(t, WindowOptions{Hidden: true})
+	onMain(fw.H.LoadFinished)
+	var ran atomic.Int32
+	onMain(func() {
+		w.OnReadyToShow(func() { ran.Add(1) }) // posted: runs after this call
+		w.Destroy()
+	})
+	onMain(func() {})
+	if ran.Load() != 0 {
+		t.Errorf("a listener ran %d times on a window destroyed before it", ran.Load())
 	}
 }
 
