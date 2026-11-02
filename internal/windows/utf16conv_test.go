@@ -2,6 +2,8 @@ package windows
 
 import (
 	"math/rand/v2"
+	"strconv"
+	"strings"
 	"testing"
 	"unicode/utf16"
 )
@@ -74,4 +76,67 @@ func stripNUL(s string) string {
 		}
 	}
 	return string(out)
+}
+
+func TestPostBufferAllocatesOnceForABigReply(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		n    int
+		// allocs a post takes once the window has posted one of the same size
+		steady float64
+	}{
+		{"300 KiB", 300 << 10, 0},
+		{"2 MiB, more than the buffer is kept", 2 << 20, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := strings.Repeat("a", tc.n)
+			var p postBuffer
+			u, owned := p.take(s)
+			p.give(u, owned)
+			if got := testing.AllocsPerRun(5, func() { u, owned := p.take(s); p.give(u, owned) }); got != tc.steady {
+				t.Errorf("%v allocations a post, want %v", got, tc.steady)
+			}
+			// The first post of a window grows no buffer by doubling.
+			var q postBuffer
+			if got := testing.AllocsPerRun(5, func() { q = postBuffer{}; u, owned := q.take(s); q.give(u, owned) }); got != 1 {
+				t.Errorf("%v allocations for the first post, want 1", got)
+			}
+		})
+	}
+}
+
+func TestPostBufferNestedPostGetsItsOwn(t *testing.T) {
+	var p postBuffer
+	a, aOwned := p.take("outer")
+	b, bOwned := p.take("inner")
+	if !aOwned || bOwned {
+		t.Fatalf("owned = %v, %v; want true, false", aOwned, bOwned)
+	}
+	if string(utf16.Decode(a[:len(a)-1])) != "outer" || string(utf16.Decode(b[:len(b)-1])) != "inner" {
+		t.Errorf("the inner post wrote over the outer: %q, %q", utf16.Decode(a), utf16.Decode(b))
+	}
+	p.give(b, bOwned)
+	if !p.busy {
+		t.Error("giving back the inner copy freed the outer's buffer")
+	}
+	p.give(a, aOwned)
+	if p.busy {
+		t.Error("the buffer is still busy once the outer copy is given back")
+	}
+}
+
+// BenchmarkPostBuffer is the first post of a window (or one after a huge reply),
+// the one that had the buffer grow by doubling.
+func BenchmarkPostBuffer(b *testing.B) {
+	for _, n := range []int{300 << 10, 2 << 20} {
+		s := strings.Repeat("a", n)
+		b.Run(strconv.Itoa(n>>10)+"KiB", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				var p postBuffer
+				u, owned := p.take(s)
+				p.give(u, owned)
+			}
+		})
+	}
 }

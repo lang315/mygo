@@ -16,10 +16,9 @@ var errDestroyed = errors.New("mygo: window has been destroyed")
 type addedScript struct{ src, id string }
 
 type window struct {
-	// postBuf is the UTF-16 copy of the reply being posted, kept for the next
-	// (PostMessages); posting is set while a post holds it.
-	postBuf []uint16
-	posting bool
+	// post is the UTF-16 copy of the reply being posted, kept for the next
+	// (PostMessages).
+	post postBuffer
 	// webViewSeq numbers the window by its first creation of a webview
 	// (TestFailWebViews).
 	webViewSeq uint64

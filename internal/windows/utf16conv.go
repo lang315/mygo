@@ -64,3 +64,43 @@ func appendUTF16z(dst []uint16, s string) []uint16 {
 	}
 	return append(dst, 0)
 }
+
+// maxKeptPost is the largest UTF-16 buffer, in units, a window keeps for the
+// next reply it posts.
+const maxKeptPost = 1 << 20
+
+// postBuffer holds the UTF-16 copy of the reply a window is posting, for the
+// next one. The COM call that posts can run the message loop, and a post from a
+// handler it runs would write over the copy in flight: while one holds the
+// buffer, another gets a buffer of its own.
+type postBuffer struct {
+	buf  []uint16
+	busy bool
+}
+
+// take returns s in UTF-16, NUL-terminated, in the buffer when it is free
+// (owned is true: give it back), or in a new one.
+func (p *postBuffer) take(s string) (units []uint16, owned bool) {
+	need := len(s) + 1 // a unit takes at least a byte of s, a pair four
+	if p.busy {
+		return appendUTF16z(make([]uint16, 0, need), s), false
+	}
+	p.busy = true
+	if cap(p.buf) < need {
+		p.buf = make([]uint16, 0, need) // appending to nil would grow it by doubling
+	}
+	return appendUTF16z(p.buf[:0], s), true
+}
+
+// give returns what take lent, kept for the next one unless it is huge.
+func (p *postBuffer) give(units []uint16, owned bool) {
+	if !owned {
+		return
+	}
+	if cap(units) <= maxKeptPost {
+		p.buf = units[:0]
+	} else {
+		p.buf = nil // a huge reply does not pin its buffer
+	}
+	p.busy = false
+}

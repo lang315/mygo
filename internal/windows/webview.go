@@ -865,35 +865,16 @@ func (w *window) PostMessages(json string) {
 		return
 	}
 	// The UTF-16 copy of a reply lives in a buffer of the window's, unless
-	// another post holds it: the call below can run the message loop, and a
-	// post from a handler it runs would write over the one in flight.
-	var buf []uint16
-	reused := !w.posting
-	if reused {
-		w.posting = true
-		buf = appendUTF16z(w.postBuf[:0], json)
-	} else {
-		buf = appendUTF16z(make([]uint16, 0, len(json)+1), json)
-	}
+	// another post holds it (postBuffer).
+	buf, owned := w.post.take(json)
 	w.withWebView(func() {
 		if hr := comCall(w.webview, wvPostWebMessageAsJSON, uintptr(unsafe.Pointer(&buf[0]))); failed(hr) {
 			log.Print(hresultError("posting a web message", hr))
 		}
 		runtime.KeepAlive(buf)
-		if reused {
-			if cap(buf) <= maxKeptPost {
-				w.postBuf = buf[:0]
-			} else {
-				w.postBuf = nil // a huge reply does not pin its buffer
-			}
-			w.posting = false
-		}
+		w.post.give(buf, owned)
 	})
 }
-
-// maxKeptPost is the largest UTF-16 buffer, in units, a window keeps for the
-// next reply.
-const maxKeptPost = 1 << 20
 
 // CallAsyncFunction evaluates through the DevTools protocol, which awaits
 // promises, reports syntax errors and ignores the page's CSP.
@@ -1277,7 +1258,7 @@ func (w *window) resourceRequested(_, args uintptr) {
 	addRef(args)
 	ctx, cancel := context.WithCancel(context.Background())
 	sreq.Context = ctx
-	sreq.Responder = &schemeResponse{w: w, args: args, deferral: deferral, cancel: cancel, url: target, document: resource == document}
+	sreq.Responder = &schemeResponse{w: w, args: args, deferral: deferral, cancel: cancel, url: target, document: resource == document, head: sreq.Method == "HEAD"}
 	w.h.SchemeRequest(sreq)
 }
 
@@ -1340,6 +1321,7 @@ type schemeResponse struct {
 	cancel   context.CancelFunc
 	url      string
 	document bool // a page loads, rather than a resource of one
+	head     bool // the request is a HEAD: no body
 	status   int
 	header   httplite.Header
 	body     bytes.Buffer
@@ -1353,7 +1335,11 @@ const maxPresized = 64 << 20
 func (r *schemeResponse) Respond(status int, header map[string][]string) {
 	r.status, r.header = status, header
 	// The body arrives in chunks: a buffer that grows with them copies it
-	// about twice (256 KB, 512 KB, 1 MB for a megabyte).
+	// about twice (256 KB, 512 KB, 1 MB for a megabyte). A response to HEAD,
+	// or a 204 or 304, has the Content-Length of a body it does not send.
+	if r.head || status == httplite.StatusNoContent || status == 304 {
+		return
+	}
 	if n, err := strconv.ParseInt(strings.TrimSpace(httplite.Header(header).Get("Content-Length")), 10, 64); err == nil && n > 0 {
 		r.body.Grow(int(min(n, maxPresized)))
 	}
