@@ -3,9 +3,12 @@
 package d3d11
 
 import (
+	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/gpu/d3d11/device"
@@ -226,12 +229,22 @@ func Prewarm() {
 	if prewarm.done != nil {
 		return
 	}
+	// MEASUREMENT ONLY (this branch): MYGO_PREWARM=off turns it off.
+	if os.Getenv("MYGO_PREWARM") == "off" {
+		return
+	}
 	done := make(chan struct{})
 	prewarm.done = done
 	go func() {
 		defer close(done)
 		if device.Debug() || softwareDefault() {
 			return
+		}
+		if p := os.Getenv("MYGO_STARTUP_LOG"); p != "" {
+			if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+				fmt.Fprintf(f, "prewarm-started %d\n", time.Now().UnixNano())
+				f.Close()
+			}
 		}
 		r := &Renderer{}
 		var err error
