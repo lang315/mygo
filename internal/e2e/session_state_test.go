@@ -86,7 +86,7 @@ func sessionStateOnce(t *testing.T) {
 			state, err = w.Page().SessionState()
 			return err == nil && holds(state, "typed second")
 		})
-		t.Logf("after Hide: state %d bytes", len(state))
+		t.Logf("after Hide: state %d bytes %x", len(state), state)
 	}
 	w.Destroy()
 
