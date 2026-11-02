@@ -4966,7 +4966,7 @@ rules, which took counter-native back to 8.9 MB after it had grown from
   an app imports it (`internal/schemehook`); messages format dates
   through what `i18n.NewCatalog` registers; on Windows, a window of
   native UI gets its surface (the GPU renderers, the text shaping, UI
-  Automation, the drop target: 130 to 220 KB) from what package `ui`
+  Automation, the drop target: 195 to 217 KiB of `hello`, on arm64 and amd64) from what package `ui`
   registers in `init` (`windows.UseSurface`), and `NewWindow` says so
   when a window asks for a surface and none is registered. The window and
   the message loop name the surface only through the narrow interface
