@@ -3,11 +3,11 @@
 package windows
 
 import (
-	"encoding/json"
 	"strings"
 	"unsafe"
 
 	"github.com/egoist/mygo/internal/accelerator"
+	"github.com/egoist/mygo/internal/cdp"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -424,8 +424,8 @@ func editRole(w *window, role string) bool {
 	switch role {
 	case "paste", "pasteAndMatchStyle":
 		text := clipboard{w.b}.ReadText()
-		params, _ := json.Marshal(map[string]string{"text": text})
-		w.withWebView(func() { w.devtools("Input.insertText", string(params), nil) })
+		params := cdp.InsertText(text)
+		w.withWebView(func() { w.devtools("Input.insertText", params, nil) })
 		return true
 	}
 	cmd, ok := commands[role]
@@ -436,8 +436,8 @@ func editRole(w *window, role string) bool {
 	if !ok {
 		return false
 	}
-	params, _ := json.Marshal(map[string]any{"expression": "document.execCommand(" + jsString(cmd) + ")", "userGesture": true})
-	w.withWebView(func() { w.devtools("Runtime.evaluate", string(params), nil) })
+	params := cdp.Evaluate("document.execCommand("+cdp.JSString(cmd)+")", true)
+	w.withWebView(func() { w.devtools("Runtime.evaluate", params, nil) })
 	return true
 }
 
@@ -468,11 +468,6 @@ func (w *window) enableEditItems(menu uintptr) {
 var formatCommands = map[string]string{
 	"bold": "bold", "italic": "italic", "underline": "underline", "strikethrough": "strikeThrough",
 	"alignLeft": "justifyLeft", "alignCenter": "justifyCenter", "alignRight": "justifyRight",
-}
-
-func jsString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
 }
 
 func (b *Backend) PopupMenu(m *platform.Menu, pw platform.Window, pos *platform.Point) {
