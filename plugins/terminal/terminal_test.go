@@ -2802,7 +2802,7 @@ func TestQuotePaths(t *testing.T) {
 		{quotePOSIX, "/tmp/$(id)`id`;x|y*", "/tmp/\\$\\(id\\)\\`id\\`\\;x\\|y\\*"},
 		{quotePOSIX, "/tmp/日本 語", `/tmp/日本\ 語`},
 		{quoteBash, "/tmp/x\ny", `'/tmp/x'$'\012''y'`},
-		{quoteBash, "/tmp/it's\tthere\\", `'/tmp/it'\''s'$'\011''there\'`},
+		{quoteBash, "/tmp/it's\tthere\\", `'/tmp/it'\''s'$'\011''there'\\`},
 		{quoteBash, "/tmp/a\rb\x1b[201~c", `'/tmp/a'$'\015''b'$'\033''[201~c'`},
 		{quoteBash, "/tmp/\xff.bin", `'/tmp/'$'\377''.bin'`},
 		{quoteBash, "/tmp/a!b\x01", `'/tmp/a!b'$'\001'`},
@@ -2811,13 +2811,14 @@ func TestQuotePaths(t *testing.T) {
 		// character.
 		{quotePOSIX, "/tmp/a b (1).png", `/tmp/a\ b\ \(1\).png`},
 		{quotePOSIX, "/tmp/it's", `/tmp/it\'s`},
-		{quotePOSIX, "/tmp/it's\tthere\\", `'/tmp/it'\''s'"$(printf '\011')"'there\'`},
-		{quotePOSIX, "/tmp/a'\x01b\x1b[201~c", `'/tmp/a'\'''"$(printf '\001')"'b'"$(printf '\033')"'[201~c'`},
+		{quotePOSIX, "", `''`},
+		{quotePOSIX, "/tmp/it's\tthere\\", `'/tmp/it'\''s'"$(printf '\011')"'there'\\`},
+		{quotePOSIX, "/tmp/a'\x01b\x1b[201~c", `'/tmp/a'\'"$(printf '\001')"'b'"$(printf '\033')"'[201~c'`},
 		{quotePOSIX, "/tmp/\xff.bin", `'/tmp/'"$(printf '\377')"'.bin'`},
 		// fish: a backslash and a single quote are escapes in single quotes.
 		{quoteFish, "/tmp/a b", `/tmp/a\ b`},
-		{quoteFish, "/tmp/a\\'b\x01", `'/tmp/a\\\'b'\X01`},
-		{quoteFish, "/tmp/it's\tthere\\", `'/tmp/it\'s'\X09'there\\'`},
+		{quoteFish, "/tmp/a\\'b\x01", `'/tmp/a'\\\''b'\X01`},
+		{quoteFish, "/tmp/it's\tthere\\", `'/tmp/it'\''s'\X09'there'\\`},
 		{quoteFish, "/tmp/\xff.bin", `'/tmp/'\Xff'.bin'`},
 		{quotePowerShell, `C:\tmp\ab.txt`, `C:\tmp\ab.txt`},
 		{quotePowerShell, `C:\Users\me\My Shots\shot (1).png`, `'C:\Users\me\My Shots\shot (1).png'`},
@@ -2852,6 +2853,12 @@ func TestQuotePaths(t *testing.T) {
 		{"linux", "/usr/bin/fish", quoteFish},
 		{"windows", `C:\Windows\System32\archiver.exe`, quotePowerShell},
 		{"windows", `C:\Windows\System32\wslconfig.exe`, quotePowerShell},
+		{"windows", `C:\x\kali.exe`, quotePOSIX},
+		{"windows", `C:\x\arch.exe`, quotePOSIX},
+		{"windows", `C:\x\fedora.exe`, quotePOSIX},
+		{"windows", `C:\x\oraclelinux.exe`, quotePOSIX},
+		{"windows", `C:\x\OracleLinux_9_1.exe`, quotePOSIX},
+		{"windows", `C:\x\SUSE-Linux-Enterprise-Server-15-SP5.exe`, quotePOSIX},
 		{"linux", "/usr/bin/ssh", quotePOSIX},
 		{"darwin", "/usr/bin/some-tool", quotePOSIX},
 		{"windows", `C:\Windows\System32\wsl.exe`, quotePOSIX},
@@ -2942,6 +2949,102 @@ func TestQuotePathsTcshReadsThemOrFails(t *testing.T) {
 		out, err := exec.Command(bin, "-f", "-c", "printf %s "+quotePOSIX.quote(p)).Output()
 		if err == nil && string(out) != p {
 			t.Errorf("tcsh read %s as %q, want the path or a failure", quotePOSIX.quote(p), out)
+		}
+	}
+}
+
+// plainSegments checks the structure of a quoted path: the single quotes of
+// the quoting never hold a backslash or a single quote, which a shell that is
+// not the one the terminal took the program's for reads as the end of them or
+// as an escape; the other parts are $'\ooo' and "$(printf '\ooo')" of octal
+// digits, and \XHH of fish. It returns what is wrong, or "".
+func plainSegments(q string) string {
+	for i := 0; i < len(q); {
+		switch {
+		case q[i] == '\\':
+			i += 2 // an escaped character, or \XHH: its digits are plain
+		case strings.HasPrefix(q[i:], `$'`):
+			j := i + 2
+			for j+3 < len(q) && q[j] == '\\' && strings.Trim(q[j+1:j+4], "01234567") == "" {
+				j += 4
+			}
+			if j >= len(q) || q[j] != '\'' {
+				return "bad $'…' at " + q[i:]
+			}
+			i = j + 1
+		case strings.HasPrefix(q[i:], `"$(printf '`):
+			j := i + len(`"$(printf '`)
+			for j+3 < len(q) && q[j] == '\\' && strings.Trim(q[j+1:j+4], "01234567") == "" {
+				j += 4
+			}
+			if !strings.HasPrefix(q[j:], `')"`) {
+				return "bad printf at " + q[i:]
+			}
+			i = j + 3
+		case q[i] == '\'':
+			j := strings.IndexByte(q[i+1:], '\'')
+			if j < 0 {
+				return "an open single quote"
+			}
+			if strings.ContainsRune(q[i+1:i+1+j], '\\') {
+				return "a backslash inside single quotes: " + q[i:i+j+2]
+			}
+			i += j + 2
+		default:
+			i++
+		}
+	}
+	return ""
+}
+
+func TestQuotedSingleQuotesHoldNoBackslashOrQuote(t *testing.T) {
+	for _, q := range []quoting{quotePOSIX, quoteBash, quoteFish} {
+		for _, p := range hardPaths {
+			if !q.spellable(p) {
+				continue
+			}
+			if bad := plainSegments(q.quote(p)); bad != "" {
+				t.Errorf("quoting %d of %q = %s: %s", q, p, q.quote(p), bad)
+			}
+		}
+	}
+}
+
+// A shell other than the one a path was quoted for, as one started in another
+// (over ssh, in tmux), never tries to run any word of the path: it reads the
+// path or fails.
+func TestQuotePathsInAnotherShellRunNothingOfThePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shells' own quoting")
+	}
+	paths := []string{
+		"/tmp/a\\'; nosuchword#\x01", "/tmp/a'; nosuchword; '", "/tmp/a\\; nosuchword", `/tmp/a\\'b nosuchword`,
+		"/tmp/a'\x01'; nosuchword", "/tmp/a\\\x01\\; nosuchword", "/tmp/nosuchword\x7f'\\", "/tmp/a b nosuchword",
+	}
+	for _, name := range []string{"bash", "/bin/bash", "zsh", "dash", "sh", "/bin/sh", "ksh", "mksh", "ash", "yash", "fish", "tcsh", "csh", "busybox"} {
+		bin, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		args := []string{"-c"}
+		if filepath.Base(bin) == "busybox" {
+			args = []string{"ash", "-c"}
+		}
+		for _, q := range []quoting{quotePOSIX, quoteBash, quoteFish} {
+			for _, p := range paths {
+				var stderr bytes.Buffer
+				cmd := exec.Command(bin, append(args, "printf %s "+q.quote(p))...)
+				cmd.Stderr = &stderr
+				cmd.Run()
+				// A shell that refuses the line may print it back in its message;
+				// one that runs a word of it says the command is not found.
+				for _, line := range strings.Split(stderr.String(), "\n") {
+					l := strings.ToLower(line)
+					if strings.Contains(l, "nosuchword") && (strings.Contains(l, "not found") || strings.Contains(l, "unknown command") || strings.Contains(l, "no such file")) {
+						t.Errorf("%s tried to run a word of the path %q quoted as %s: %s", bin, p, q.quote(p), line)
+					}
+				}
+			}
 		}
 	}
 }

@@ -347,8 +347,8 @@ const (
 	// shell that may not read $'…' (dash, ash, busybox, a program the
 	// terminal does not know, the shell behind ssh or wsl.exe). A path with
 	// control characters or bytes that are not UTF-8 is quoted in single
-	// quotes, a single quote inside as '\'', and each such character as
-	// "$(printf '\ooo')" between them (octal, which every POSIX printf
+	// quotes with a single quote and a backslash outside them (as \' and
+	// \\), and each such character as "$(printf '\ooo')" between them (octal, which every POSIX printf
 	// reads), so that no control byte is sent: one would be a key of the
 	// line editor where a paste is not bracketed. A path with a line break
 	// is left out (spellable).
@@ -357,9 +357,9 @@ const (
 	// the single quotes, which bash, zsh, ksh and mksh read. The text stays
 	// in single quotes, not $'…', as old bash expands ! in the second.
 	quoteBash
-	// quoteFish: as quotePOSIX, but in fish's single quotes a backslash and
-	// a single quote are escapes (\\ and \'), and control characters are
-	// \XHH between them.
+	// quoteFish: as quotePOSIX, but control characters are \XHH between the
+	// single quotes. Fish's single quotes read \\ and \' as escapes, which a
+	// POSIX shell's do not: neither is ever inside them.
 	quoteFish
 	// quotePowerShell: single quotes, in which PowerShell expands nothing,
 	// unlike its double quotes ($(…), $var and `), each single quote in the
@@ -415,13 +415,13 @@ func quotingFor(goos string, program string) quoting {
 // kali-linux, …): a Linux shell reads what is pasted to it.
 func wslLauncher(name string) bool {
 	switch name {
-	case "wsl", "ubuntu", "debian", "kali-linux", "archlinux", "fedoralinux", "alpine":
+	case "wsl", "ubuntu", "debian", "kali", "kali-linux", "arch", "archlinux", "fedora", "fedoralinux", "alpine", "oraclelinux":
 		return true
 	}
 	if rest, ok := strings.CutPrefix(name, "ubuntu"); ok {
 		return strings.Trim(rest, "0123456789.-") == ""
 	}
-	for _, p := range []string{"opensuse-", "sles-", "oraclelinux-", "fedoralinux-"} {
+	for _, p := range []string{"opensuse-", "sles-", "suse-linux-enterprise", "oraclelinux-", "oraclelinux_", "fedoralinux-", "kali-linux-"} {
 		if strings.HasPrefix(name, p) {
 			return true
 		}
@@ -457,13 +457,14 @@ func (q quoting) quote(path string) string {
 	if strings.ContainsFunc(path, func(r rune) bool { return r == utf8.RuneError || unicode.IsControl(r) }) {
 		switch q {
 		case quoteBash:
-			return quoteRuns(path, func(b []byte) string { return "$'" + octal(b, `\`) + "'" }, `'\''`)
+			return quoteRuns(path, func(b []byte) string { return "$'" + octal(b, `\`) + "'" })
 		case quoteFish:
-			return quoteRuns(path, func(b []byte) string { return fishBytes(b) }, `\'`)
+			return quoteRuns(path, fishBytes)
 		}
-		return quoteRuns(path, func(b []byte) string {
-			return `"$(printf '` + octal(b, `\`) + `')"`
-		}, `'\''`)
+		return quoteRuns(path, func(b []byte) string { return `"$(printf '` + octal(b, `\`) + `')"` })
+	}
+	if path == "" {
+		return "''"
 	}
 	var b strings.Builder
 	for _, r := range path {
@@ -485,10 +486,15 @@ func plainPathRune(r rune) bool {
 	return !strings.ContainsRune(`_-.:\/`, r)
 }
 
-// quoteRuns quotes s in single quotes, a single quote inside as quote, and
-// each control character or byte that is not UTF-8 as ctl says, between
-// them: ctl gets the bytes of one such character.
-func quoteRuns(s string, ctl func(b []byte) string, quote string) string {
+// quoteRuns quotes s in single quotes, and each control character or byte that
+// is not UTF-8 as ctl says, between them: ctl gets the bytes of one such
+// character. A single quote and a backslash are never inside the single
+// quotes, but outside, as \' and \\, which POSIX shells and fish read alike:
+// inside, they are text to a POSIX shell and escapes to fish, and a shell
+// that is not the one the terminal took for the program's (one started in
+// another, over ssh, in tmux) would end the quotes where the path has a
+// backslash or a quote, and run what follows.
+func quoteRuns(s string, ctl func(b []byte) string) string {
 	var b strings.Builder
 	open := false
 	for i := 0; i < len(s); {
@@ -500,31 +506,24 @@ func quoteRuns(s string, ctl func(b []byte) string, quote string) string {
 				open = false
 			}
 			b.WriteString(ctl([]byte(s[i : i+n])))
+		case r == '\'' || r == '\\':
+			if open {
+				b.WriteByte('\'')
+				open = false
+			}
+			b.WriteByte('\\')
+			b.WriteRune(r)
 		default:
 			if !open {
 				b.WriteByte('\'')
 				open = true
 			}
-			switch r {
-			case '\'':
-				b.WriteString(quote)
-			case '\\':
-				if quote == `\'` {
-					b.WriteString(`\\`) // fish's single quotes
-				} else {
-					b.WriteByte('\\')
-				}
-			default:
-				b.WriteString(s[i : i+n])
-			}
+			b.WriteString(s[i : i+n])
 		}
 		i += n
 	}
 	if open {
 		b.WriteByte('\'')
-	}
-	if b.Len() == 0 {
-		return "''"
 	}
 	return b.String()
 }
