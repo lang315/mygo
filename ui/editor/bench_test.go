@@ -22,13 +22,14 @@ func bigGo(n int) string {
 	return b.String()
 }
 
-func newBenchEditor(b *testing.B, text string, wrap bool) (*State, *ui.Tester) {
+func newBenchEditor(b *testing.B, text string, wrap bool, skip ...bool) (*State, *ui.Tester) {
 	st := &State{Buffer: NewBuffer(text), SoftWrap: wrap}
 	st.Buffer.SetLanguage(LanguageNamed("go"))
 	tt := ui.NewTester(func(c *ui.Context) {
 		View(c, st).Fill().AutoFocus()
 	}, 1200, 800)
 	tt.SetScale(2)
+	tt.SkipRaster(len(skip) > 0 && skip[0])
 	// Highlight the whole text first, as an idle editor has.
 	st.ed.view.advanceSyntax(st.ed.view.text.LineCount(), time.Hour)
 	tt.Frame()
@@ -41,6 +42,26 @@ func newBenchEditor(b *testing.B, text string, wrap bool) (*State, *ui.Tester) {
 // come into view, painting and drawing on the CPU.
 func BenchmarkCodeEditorScroll(b *testing.B) {
 	_, tt := newBenchEditor(b, bigGo(100_000), false)
+	b.ReportAllocs()
+	for b.Loop() {
+		tt.Scroll(600, 400, 0, 61)
+	}
+}
+
+// The App variants skip the CPU rasterizer that stands in for the GPU
+// (Tester.SkipRaster): the work an app does, which the rasterizer's ClearType
+// text on Windows does not mix up with (see "Benchmarks" in the architecture
+// guide).
+func BenchmarkCodeEditorScrollApp(b *testing.B) {
+	_, tt := newBenchEditor(b, bigGo(100_000), false, true)
+	b.ReportAllocs()
+	for b.Loop() {
+		tt.Scroll(600, 400, 0, 61)
+	}
+}
+
+func BenchmarkCodeEditorScrollWrapApp(b *testing.B) {
+	_, tt := newBenchEditor(b, bigGo(100_000), true, true)
 	b.ReportAllocs()
 	for b.Loop() {
 		tt.Scroll(600, 400, 0, 61)
@@ -91,7 +112,13 @@ func BenchmarkCodeEditorOpen(b *testing.B) {
 
 // BenchmarkDiffViewerScroll scrolls a split diff of two versions of a Go
 // file of 20,000 lines, a change every 50 lines, all lines shown.
-func BenchmarkDiffViewerScroll(b *testing.B) {
+func BenchmarkDiffViewerScroll(b *testing.B) { benchDiffViewerScroll(b, false) }
+
+// BenchmarkDiffViewerScrollApp is BenchmarkDiffViewerScroll without the CPU
+// rasterizer.
+func BenchmarkDiffViewerScrollApp(b *testing.B) { benchDiffViewerScroll(b, true) }
+
+func benchDiffViewerScroll(b *testing.B, skip bool) {
 	old := bigGo(20_000)
 	lines := strings.Split(old, "\n")
 	for i := 10; i < len(lines); i += 50 {
@@ -104,6 +131,7 @@ func BenchmarkDiffViewerScroll(b *testing.B) {
 		DiffView(c, d).Fill()
 	}, 1400, 800)
 	tt.SetScale(2)
+	tt.SkipRaster(skip)
 	tt.Frame()
 	tt.Move(700, 400)
 	b.ReportAllocs()
