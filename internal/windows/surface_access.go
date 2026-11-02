@@ -712,6 +712,8 @@ func (t *uiaTree) at(x, y float64) *uiaElement {
 }
 
 func initUIA() {
+	mark("initUIA")
+	defer mark("initUIA done")
 	cb := wincb.New
 	unknown := []uintptr{
 		cb(func(this, riid, p uintptr) uintptr {

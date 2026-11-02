@@ -145,6 +145,7 @@ type window struct {
 }
 
 func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler) (platform.Window, error) {
+	mark("NewWindow")
 	if !o.Surface {
 		if err := b.startEnvironment(o); err != nil {
 			return nil, err
@@ -192,6 +193,7 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 		}
 	}
 	w.hwnd = createWindow(ex, class, o.Title, style, 0, 0, 0, 0, owner)
+	mark("createWindow done")
 	if w.hwnd == 0 {
 		return nil, errors.New("mygo: cannot create a window")
 	}
@@ -262,6 +264,7 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 	if !o.Surface {
 		b.whenEnvironment(w.createWebView)
 	}
+	mark("NewWindow end")
 	return w, nil
 }
 
@@ -1044,6 +1047,8 @@ func (w *window) SetAlwaysOnTop(v bool) {
 func (w *window) IsAlwaysOnTop() bool { return windowLong(w.hwnd, gwlExStyle)&wsExTopmost != 0 }
 
 func (w *window) Show() {
+	mark("Show")
+	defer mark("Show done")
 	if f := w.opts.Flyout; f != nil && !f.Focusable {
 		procShowWindow.Call(w.hwnd, swShowNoActivate)
 		return

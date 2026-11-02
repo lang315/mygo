@@ -201,19 +201,24 @@ func registerSurfaceClass() {
 }
 
 func newSurface(w *window) *surface {
+	mark("newSurface")
 	registerSurfaceClass()
+	mark("surface class")
 	s := &surface{w: w}
 	s.hwnd = createWindow(0, surfaceClass, "", wsChild|wsVisible|wsClipSiblings, 0, 0, 0, 0, w.hwnd)
 	if s.hwnd == 0 {
 		return nil
 	}
+	mark("surface hwnd")
 	w.b.surfaces[s.hwnd] = s
 	w.sf, w.api = s, s
 	s.cloak()
+	mark("cloak")
 	// Input methods only come to text inputs.
 	procImmAssociateContextEx.Call(s.hwnd, 0, 0)
 	s.acceptFileDrops()
 	s.fit()
+	mark("newSurface end")
 	return s
 }
 
@@ -232,6 +237,7 @@ func (s *surface) toDIP(v int32) float64 { return float64(v) * 96 / float64(s.dp
 // draw into: in a window without a redirection bitmap, it composes the
 // window from then on, and the frames drawn in memory let go of it.
 func (s *surface) Native() platform.SurfaceNative {
+	mark("Native")
 	s.freeComp()
 	s.pixels = false
 	return platform.SurfaceNative{HWND: s.hwnd, Composed: s.viaComposition()}
@@ -312,6 +318,7 @@ func (s *surface) uncloak(byTimer bool) {
 		uncloaks.frame++
 	}
 	s.cloaked = false
+	mark("uncloak")
 	procKillTimer.Call(s.hwnd, timerUncloak)
 	off := int32(0)
 	procDwmSetWindowAttribute.Call(s.w.hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&off)), unsafe.Sizeof(off))
@@ -349,6 +356,7 @@ var _ platform.FirstFrameSurface = (*surface)(nil)
 // WM_PAINT asks for: the window is then ready to show, and shows the frame
 // from the swap chain as it shows. A window shown since gets WM_PAINT.
 func (s *surface) drawHidden() {
+	mark("drawHidden")
 	s.hiddenFrame = false
 	if s.drawn || s.w.closed || s.w.b.surfaces[s.hwnd] != s || s.w.IsVisible() {
 		return
@@ -710,6 +718,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 	}
 	switch m {
 	case wmPaint:
+		mark("WM_PAINT")
 		var ps paintStruct
 		dc, _, _ := procBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 		s.paintDC = dc
@@ -719,6 +728,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: !s.now})
 		s.paintDC = 0
 		procEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+		mark("WM_PAINT frame done")
 		if s.cloaked && s.drawn {
 			s.reveal()
 		}
