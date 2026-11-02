@@ -20,8 +20,8 @@ func messageStats() (heard, other int, others []string, commits int) {
 // and the engine may deliver them after the next document committed. They
 // take no effect there: after each round the next document's own call runs
 // once, and what the left documents posted never runs a method of Go.
-// The messages that reach Go from a document other than the one shown are
-// counted and logged, whatever the outcome, to see whether they come.
+// None reaches Go from a document other than the one shown (measured: 0 of
+// several hundred); the test fails if the engine starts to deliver them.
 func TestMessagesFromAPreviousDocumentTakeNoEffect(t *testing.T) {
 	const rounds = 25
 	resetProbe(t)
@@ -72,6 +72,9 @@ addEventListener("pagehide", () => {
 	}
 	heard, other, others, commits := messageStats()
 	t.Logf("%d rounds: %d messages heard, %d of them from a document other than the one shown, %d commits; first of those: %q", rounds, heard, other, commits, others)
+	if other != 0 {
+		t.Errorf("%d messages came from a document other than the one shown, first: %q", other, others)
+	}
 }
 
 // Back to a page after another has been shown: whether the engine restores
