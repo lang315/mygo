@@ -254,3 +254,75 @@ func TestDevicePoolSameWindowAgain(t *testing.T) {
 		r.Release()
 	}
 }
+
+// resetPrewarm forgets a prewarm, as a process that had none, and restores the
+// seam of the adapter.
+func resetPrewarm(t *testing.T) {
+	t.Helper()
+	soft := softwareDefault
+	t.Cleanup(func() {
+		waitPrewarm()
+		prewarm.Lock()
+		prewarm.done = nil
+		prewarm.Unlock()
+		softwareDefault = soft
+	})
+	waitPrewarm()
+	prewarm.Lock()
+	prewarm.done = nil
+	prewarm.Unlock()
+}
+
+// On a software adapter nothing starts: the device is made, as before, by
+// the first renderer.
+func TestPrewarmSkipsASoftwareAdapter(t *testing.T) {
+	emptyPool(t)
+	resetPrewarm(t)
+	softwareDefault = func() bool { return true }
+	devices := devicesMade.Load()
+	Prewarm()
+	prewarm.Lock()
+	started := prewarm.done != nil
+	prewarm.Unlock()
+	if started {
+		t.Error("a prewarm started on a software adapter")
+	}
+	if n := devicesMade.Load() - devices; n != 0 {
+		t.Errorf("%d devices made by a prewarm that did not start", n)
+	}
+}
+
+// With a hardware adapter the device and shaders are made once, by the prewarm,
+// and the first renderer takes them: it makes none.
+func TestPrewarmMakesTheFirstRenderersDevice(t *testing.T) {
+	emptyPool(t)
+	resetPrewarm(t)
+	softwareDefault = func() bool { return false }
+	devices, shaders := devicesMade.Load(), shadersMade.Load()
+	Prewarm()
+	Prewarm() // a second call does not make another
+	waitPrewarm()
+	pool.Lock()
+	has := pool.kit != nil
+	pool.Unlock()
+	if !has {
+		t.Skip("no Direct3D 11: the prewarm made no device")
+	}
+	if n := devicesMade.Load() - devices; n != 1 {
+		t.Fatalf("%d devices made by the prewarm, want 1", n)
+	}
+	r := newRendererOrSkip(t)
+	defer r.Release()
+	if n := devicesMade.Load() - devices; n != 1 {
+		t.Errorf("%d devices made for the prewarm and the first renderer, want 1: the renderer made its own", n)
+	}
+	if n := shadersMade.Load() - shaders; n != 1 {
+		t.Errorf("%d sets of shaders made, want 1", n)
+	}
+}
+
+// The default adapter's description reads: whatever it is, the check does not
+// fail, and on a machine whose adapter is Microsoft's it says software.
+func TestDefaultAdapterIsSoftwareReads(t *testing.T) {
+	t.Logf("the default adapter is software: %v", defaultAdapterIsSoftware())
+}

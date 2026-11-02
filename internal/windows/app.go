@@ -186,8 +186,16 @@ func sanitize(name string) string {
 	return string(out)
 }
 
+// PrewarmFunc, when ui sets it, is called as the app starts to run, before the
+// first window: it starts what the first window of native UI will need in the
+// background (the GPU's device, d3d11.Prewarm). An app of web views has none.
+var PrewarmFunc func()
+
 func (b *Backend) Run() error {
 	b.running = true
+	if PrewarmFunc != nil {
+		PrewarmFunc()
+	}
 	postMessage(b.appHwnd, wmAppReady, 0, 0)
 	var m msg
 	for {
