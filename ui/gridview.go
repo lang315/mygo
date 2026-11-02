@@ -327,6 +327,7 @@ func (s *GridState) reorder(e *node, n int, gap float32) {
 	linkDrag()
 	e.flags |= flagValueDrop
 	e.st.accepts = func(v any) bool { d, ok := v.(*itemDrag); return ok && d.s == s }
+	e.st.touch()
 	rt := e.c.rt
 	var d *itemDrag
 	dropped, x, y := false, rt.pointerX, rt.pointerY
@@ -335,6 +336,7 @@ func (s *GridState) reorder(e *node, n int, gap float32) {
 		// Where the items dropped, which the pointer may have left since.
 		d, _ = e.st.droppedValue.(*itemDrag)
 		e.st.hasDropped, dropped, x, y = false, true, e.st.dropX, e.st.dropY
+		e.st.touch()
 	case rt.drag != nil && !rt.drag.canceled && rt.drag.over == e.id:
 		d, _ = rt.drag.value.(*itemDrag)
 	}

@@ -59,6 +59,7 @@ func (rt *engine) fileDrop(x, y float32, files []string) bool {
 		return false
 	}
 	s.dropped = append(s.dropped, files...)
+	s.touch()
 	rt.requestFrame()
 	return true
 }

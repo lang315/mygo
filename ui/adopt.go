@@ -100,6 +100,7 @@ func moveState(d, s *state) {
 			e.buf.paras[i].layout, e.buf.paras[i].h = nil, 0
 		}
 		d.editor = e
+		d.touch()
 	}
 	d.locals = s.locals
 }

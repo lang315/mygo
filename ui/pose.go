@@ -71,6 +71,7 @@ func (rt *engine) samplePose(e *node) {
 		// Not posed in the frame before: it shows there at once.
 		r = &poseRec{}
 		st.pose = r
+		st.touch()
 		for i, v := range to {
 			r.ch[i] = channel{value: float64(v), target: float64(v), at: now}
 		}

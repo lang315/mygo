@@ -259,6 +259,7 @@ func (rt *engine) pointerMove(x, y float32) {
 		dx, dy := rt.pressed.vector(rt.pointerX, rt.pointerY, x-rt.pointerX, y-rt.pointerY)
 		rt.pressed.dragX += dx
 		rt.pressed.dragY += dy
+		rt.pressed.touch()
 		rt.pressed.drag.move(rt.now(), dx, dy, x-rt.pointerX, y-rt.pointerY)
 		if rt.pressed.flags&(flagTrackPointer|flagDraggable|flagEditable|flagSelectable) != 0 {
 			rt.requestFrame()
@@ -366,6 +367,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		rt.pressed, rt.pressButton, rt.pressClicks = h, button, clicks
 		h.pressed = true
 		h.pressPending = true
+		h.touch()
 		h.pressX, h.pressY = h.local(x, y)
 		h.drag.reset(rt.now(), x, y)
 		return
@@ -395,6 +397,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 	rt.pressDragger = rt.pressDraggerLinked(chain, target)
 	target.pressed, target.pressMods = true, mods
 	target.pressPending = true
+	target.touch()
 	target.pressX, target.pressY = target.local(x, y)
 	target.drag.reset(rt.now(), x, y)
 	if button == 0 && rt.pressTextSelection(target, x, y, mods, clicks) {
@@ -406,6 +409,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 	}
 	if clicks == 2 && button == 0 {
 		target.doubleClicks++
+		target.touch()
 	}
 }
 
@@ -500,6 +504,7 @@ func (rt *engine) pointerUp(button, clicks int) {
 	r.due, r.x, r.y = true, rt.pointerX, rt.pointerY
 	// A press that moved ends a drag; a click does not.
 	r.released = s.drag.n > 1
+	s.touch()
 	v := s.drag.velocities(rt.now())
 	s.releaseVX, s.releaseVY, s.releaseWX, s.releaseWY = v[0], v[1], v[2], v[3]
 	if ed := s.editor; ed != nil {
@@ -521,6 +526,7 @@ func (rt *engine) pointerUp(button, clicks int) {
 			s.click(s.pressMods)
 		case 1:
 			r.rightClicks++
+			s.touch()
 		}
 	}
 	// Moves no pass read yet (Dragged, or the pointer while Pressed) come
@@ -538,6 +544,7 @@ func (rt *engine) pointerUp(button, clicks int) {
 // it. A press that came since the release keeps it pressed.
 func (rt *engine) applyRelease(s *state) {
 	r := &s.releaseLater
+	s.touch()
 	s.pressed = rt.pressed == s
 	s.released = r.released
 	s.clicks += r.clicks
@@ -552,6 +559,7 @@ func (rt *engine) applyRelease(s *state) {
 // release of its press while that waits (releaseLater), so that the clicks
 // come in order, with the last one's modifiers.
 func (s *state) click(mods Modifiers) {
+	s.touch()
 	if r := &s.releaseLater; r.due {
 		r.clicks++
 		r.clickMods = mods

@@ -103,11 +103,13 @@ func (e *node) Timeline(key any, o TimelineOptions) *Timeline {
 	}
 	if e.st.timelines == nil {
 		e.st.timelines = map[any]*timelineState{}
+		e.st.touch()
 	}
 	st := e.st.timelines[key]
 	if st == nil {
 		st = &timelineState{}
 		e.st.timelines[key] = st
+		e.st.touch()
 	}
 	rt := e.c.rt
 	if st.node == e && st.frame == rt.frame && st.pass == rt.pass {

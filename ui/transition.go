@@ -488,6 +488,7 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 			r.head(r.next, moveAll, now)
 		}
 		e.st.trec = r
+		e.st.touch()
 		if u.t.Exit != nil || u.t.Fly && u.t.Match != nil {
 			// The next frame copies it if it goes: to go as its Exit
 			// says, or to fly with the element taking its Match.
