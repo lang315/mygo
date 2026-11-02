@@ -267,16 +267,11 @@ func (w *window) setUp(controller uintptr) {
 		if failed(comCall(args, msgTryGetWebMessageAsString, uintptr(unsafe.Pointer(&p)))) {
 			return // not a string
 		}
-		source, current := w.messageSource(args), w.URL()
-		if h := messageHook; h != nil {
-			h(source, current)
-		}
-		if source != "" && documentURL(source) != documentURL(current) {
-			takeWstr(p) // from a document the window no longer shows
-			return
-		}
 		if paths := postedFiles(args); len(paths) > 0 {
 			w.dropped = paths
+		}
+		if h := messageHook; h != nil {
+			h(w.messageSource(args), w.URL())
 		}
 		w.h.Message(takeWstr(p))
 	})
@@ -743,23 +738,6 @@ func (w *window) getBool(index int) bool {
 	var v int32
 	comCall(w.webview, index, uintptr(unsafe.Pointer(&v)))
 	return v != 0
-}
-
-// messageSource returns the URL of the document that sent a web message,
-// as the window names its documents (an app's scheme for its host).
-func (w *window) messageSource(args uintptr) string {
-	var p uintptr
-	if failed(comCall(args, msgGetSource, uintptr(unsafe.Pointer(&p)))) {
-		return ""
-	}
-	return w.appURL(takeWstr(p))
-}
-
-// documentURL is a URL without its fragment, which a navigation inside a
-// document changes and its identity does not.
-func documentURL(u string) string {
-	u, _, _ = strings.Cut(u, "#")
-	return u
 }
 
 func (w *window) URL() string {
