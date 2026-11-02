@@ -186,6 +186,12 @@ func sanitize(name string) string {
 	return string(out)
 }
 
+// PrewarmFunc, when ui sets it, is called as a window of native UI is made, before
+// it is created and shown: it starts what that window will need in the
+// background (the GPU's device, d3d11.Prewarm), which it makes once. An app
+// that shows no native UI never calls it.
+var PrewarmFunc func()
+
 func (b *Backend) Run() error {
 	b.running = true
 	postMessage(b.appHwnd, wmAppReady, 0, 0)
