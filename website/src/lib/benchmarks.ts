@@ -89,10 +89,10 @@ export const groups: Group[] = [
       terms: [
         ["macOS", "Physical footprint, as Activity Monitor shows it."],
         ["Linux", "Proportional set size: shared libraries count in part."],
-        ["Windows", "Private working set, as Task Manager shows it: shared pages left out."],
+        ["Windows", "Proportional working set: each page divided by the processes sharing it (at most 7), as Linux's. Before 5c6917e it was the private working set, as Task Manager shows it, which leaves shared pages out."],
         ["hello", "With its webview's processes; hello/app without."],
       ],
-      note: "GitHub's runners show 1024×768 at scale 1, so apps take less than on a Retina Mac: counter-native 22 MB there, 37 MB on an M5 MacBook.",
+      note: "GitHub's runners show 1024×768 at scale 1, so apps take less than on a Retina Mac: counter-native 22 MB there, 37 MB on an M5 MacBook. On Windows the step at 5c6917e (hello 59 to 154 MB) is the change of what is measured, not a regression.",
     },
   },
   {
