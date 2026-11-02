@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"html"
 	"net/http"
@@ -45,6 +46,18 @@ func holds(state []byte, s string) bool {
 	return bytes.Contains(state, []byte(s)) || bytes.Contains(state, u)
 }
 
+// holdsScroll reports whether a session state holds a scroll position of y,
+// which WebKit learns of after the form fields. It knows WKWebView's form: the
+// history item data has the position as an int32 and the page scale 1.0 as a
+// float32, little-endian. WebKitGTK's state is another encoding (393 bytes),
+// so there it says yes.
+func holdsScroll(state []byte, y uint32) bool {
+	if runtime.GOOS != "darwin" {
+		return true
+	}
+	return bytes.Contains(state, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, y), 0x3f800000))
+}
+
 // A page's session state brings back its back/forward list in a new
 // window, with what WebKit saved: the page's scroll position and form
 // field as its window was hidden, and the entry before's scroll position
@@ -58,13 +71,22 @@ func TestSessionState(t *testing.T) {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {
+		// WebKit saves a page's form fields as the page goes out of view: a page
+		// that was never in view (its window behind others, the app inactive)
+		// goes nowhere, and Hide saves nothing.
+		w.Focus()
+		waitFor(t, w, `document.visibilityState === "visible"`)
+	}
+	t.Logf("before Hide: scrollY %v, state %d bytes", mustEval(t, w, `scrollY`), len(state))
+	if runtime.GOOS != "windows" {
 		// WebKit saves the form fields of the page it shows as the page
 		// goes out of view, and tells it to the UI process later.
 		w.Hide()
 		wait.Until(t, "WebKit saving the page hidden", func() bool {
 			state, err = w.Page().SessionState()
-			return err == nil && holds(state, "typed second")
+			return err == nil && holds(state, "typed second") && holdsScroll(state, 1200)
 		})
+		t.Logf("after Hide: state %d bytes", len(state))
 	}
 	w.Destroy()
 
