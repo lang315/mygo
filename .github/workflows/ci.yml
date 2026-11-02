@@ -428,8 +428,9 @@ jobs:
 
   # The installer of a real app, on Windows: mygo build makes the installer of
   # examples/hello, a silent install, the app run and quit, a newer installer
-  # over the running app, and the uninstall (TestInstallerSmoke). It runs on
-  # main, and on a pull request that changes what that path goes through.
+  # over the running app, and the uninstall (TestInstallerSmoke); and the
+  # update of an installed app from a local server (TestUpdaterSmoke). It runs
+  # on main, and on a pull request that changes what those paths go through.
   installer:
     name: Windows installer
     runs-on: windows-latest
@@ -442,7 +443,7 @@ jobs:
         id: affected
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" != pull_request ] || git diff --name-only --no-renames HEAD^1 HEAD | grep -E -q '^(cmd/mygo/|internal/nsis/|internal/update/|internal/windows/|plugins/updater/|examples/hello/|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
+          if [ "${{ github.event_name }}" != pull_request ] || git diff --name-only --no-renames HEAD^1 HEAD | grep -E -q '^(cmd/mygo/|internal/nsis/|internal/update/|internal/updatehook/|internal/updatehttp/|internal/fsretry/|internal/windows/|updates/|updatefeed/|plugins/updater/|relaunch\.go$|examples/hello/|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "The change does not affect the installer."
@@ -459,11 +460,11 @@ jobs:
         with:
           path: ~/AppData/Local/mygo/nsis-*
           key: nsis-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/nsis/nsis.go') }}
-      - name: Build, install, run, update and uninstall examples/hello
+      - name: Build, install, run, update and uninstall
         if: steps.affected.outputs.run == 'true'
         env:
           MYGO_E2E: 1
-        run: go test -count=1 -v -run TestInstallerSmoke ./cmd/mygo
+        run: go test -count=1 -v -run 'TestInstallerSmoke|TestUpdaterSmoke' ./cmd/mygo
       - name: Save NSIS
         if: always() && steps.affected.outputs.run == 'true' && steps.nsis.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
