@@ -917,7 +917,7 @@ func TestFileWatchEntryInfoWindows(t *testing.T) {
 
 // A file written through an open handle: what the entry says changes with
 // the notification the system gives (Windows: when it is closed), and the
-// watch reports one write, however many notices come.
+// watch reports one write, however many notices of it come after.
 func TestFileWatchWriteCountsOnce(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f")
@@ -949,20 +949,29 @@ func TestFileWatchWriteCountsOnce(t *testing.T) {
 		info, err := entries[0].Info()
 		return err == nil && info.Size() == 5
 	})
+	fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{Name: "f", Kind: platform.FileWatchWrite})
+	// More notices, then a creation to end on: the events up to it are
+	// counted, not waited for by time.
 	for range 3 {
-		fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{Name: "f", Kind: platform.FileWatchWrite})
+		fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{Name: "f"})
 	}
-	if e := fileWatchTestNext(t, w); e != (FileEvent{Op: FileWrite, Path: "f"}) {
-		t.Fatalf("event = %+v", e)
-	}
-	// A notice of a file as it is (no write told): nothing more is reported.
-	fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{Name: "f"})
 	if err := os.WriteFile(filepath.Join(dir, "g"), nil, 0600); err != nil {
 		t.Fatal(err)
 	}
 	fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{})
-	if e := fileWatchTestNext(t, w); e != (FileEvent{Op: FileCreate, Path: "g"}) {
-		t.Fatalf("after a repeated notice, event = %+v, want only g's creation", e)
+	writes := 0
+	for {
+		e := fileWatchTestNext(t, w)
+		if e == (FileEvent{Op: FileCreate, Path: "g"}) {
+			break
+		}
+		if e != (FileEvent{Op: FileWrite, Path: "f"}) {
+			t.Fatalf("event = %+v", e)
+		}
+		writes++
+	}
+	if writes != 1 {
+		t.Fatalf("%d writes of f reported, want 1", writes)
 	}
 }
 
