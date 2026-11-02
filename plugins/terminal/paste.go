@@ -324,10 +324,19 @@ type quoting int
 
 const (
 	// quotePOSIX: a backslash before each character a POSIX shell, or
-	// fish, would read otherwise, as Ghostty escapes them; a path with
-	// control characters, as a newline, which would end the command, is
-	// quoted as $'…', where they are escapes.
+	// fish, would read otherwise, as Ghostty escapes them. It is for any
+	// shell that may not read $'…' (dash, ash, busybox, a program the
+	// terminal does not know, the shell behind ssh or wsl.exe): a path with
+	// control characters, as a newline, or bytes that are not UTF-8, is
+	// quoted as single quotes, a single quote inside as '\'', and each of
+	// those characters a ? between them, which the shell matches to
+	// the file's own character: nothing in it is read as anything but the
+	// path's text in any POSIX shell.
 	quotePOSIX quoting = iota
+	// quoteBash: as quotePOSIX, but a path with control characters is
+	// quoted as $'…', where they are escapes, which bash, zsh, ksh and mksh
+	// read.
+	quoteBash
 	// quotePowerShell: single quotes, in which PowerShell expands nothing,
 	// unlike its double quotes ($(…), $var and `), each single quote in the
 	// path doubled. A POSIX shell takes them too.
@@ -337,10 +346,13 @@ const (
 )
 
 // quotingFor returns the quoting of the shell a terminal runs, by the
-// program's name: PowerShell's, cmd.exe's or a POSIX shell's, and for
-// another program on Windows PowerShell's, the shell the terminal runs
-// when given none (command), elsewhere a POSIX shell's. A Conn's program, which the terminal does not know, takes the
-// platform's.
+// program's name: PowerShell's, cmd.exe's, that of the shells that read
+// $'…' (bash, zsh, ksh, mksh), or a POSIX shell's, which is that of the
+// ones that do not (sh, dash, ash, fish) and of wsl.exe and the launchers
+// of a WSL distribution, whose shell it cannot tell. For another program on
+// Windows it is PowerShell's, the shell the terminal runs when given none
+// (command), elsewhere a POSIX shell's. A Conn's program, which the
+// terminal does not know, takes the platform's.
 func quotingFor(goos string, program string) quoting {
 	name := program
 	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
@@ -352,7 +364,9 @@ func quotingFor(goos string, program string) quoting {
 		return quotePowerShell
 	case name == "cmd":
 		return quoteCmd
-	case slices.Contains([]string{"sh", "bash", "zsh", "fish", "dash", "ksh", "mksh"}, name):
+	case slices.Contains([]string{"bash", "zsh", "ksh", "mksh"}, name):
+		return quoteBash
+	case slices.Contains([]string{"sh", "dash", "ash", "fish", "busybox"}, name), wslLauncher(name):
 		return quotePOSIX
 	case goos == "windows":
 		if program == "" {
@@ -368,6 +382,18 @@ func quotingFor(goos string, program string) quoting {
 		return quotePowerShell
 	}
 	return quotePOSIX
+}
+
+// wslLauncher reports whether name, a program's name in lower case without
+// .exe, is wsl or the launcher of a WSL distribution (ubuntu2404, debian,
+// kali-linux, …): a Linux shell reads what is pasted to it.
+func wslLauncher(name string) bool {
+	for _, p := range []string{"wsl", "ubuntu", "debian", "kali", "opensuse", "suse", "sles", "oracle", "arch", "fedora", "alpine"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // quote quotes a path for the shell.
@@ -396,7 +422,10 @@ func (q quoting) quote(path string) string {
 		return path
 	}
 	if strings.ContainsFunc(path, func(r rune) bool { return r == utf8.RuneError || unicode.IsControl(r) }) {
-		return ansiCQuote(path)
+		if q == quoteBash {
+			return ansiCQuote(path)
+		}
+		return singleQuote(path)
 	}
 	var b strings.Builder
 	for _, r := range path {
@@ -418,10 +447,33 @@ func plainPathRune(r rune) bool {
 	return !strings.ContainsRune(`_-.:\/`, r)
 }
 
-// ansiCQuote quotes s as bash, zsh and ksh's $'…': control characters and
-// bytes that are not UTF-8 as \xHH, a backslash and a single quote
-// escaped. A shell without it, as fish, reads it as something other than
-// the path, never as a command.
+// singleQuote quotes s for any POSIX shell: in single quotes, a single quote
+// as '\”, and each control character and byte that is not UTF-8 as a ?
+// between them, which the shell matches to the character the file has,
+// where $'…' (ansiCQuote) is not there to say it: dash and ash read it as a
+// $ and a string.
+func singleQuote(s string) string {
+	var b strings.Builder
+	b.WriteByte('\'')
+	for i := 0; i < len(s); {
+		r, n := utf8.DecodeRuneInString(s[i:])
+		switch {
+		case r == utf8.RuneError && n <= 1, unicode.IsControl(r):
+			b.WriteString("'?'")
+		case r == '\'':
+			b.WriteString(`'\''`)
+		default:
+			b.WriteString(s[i : i+n])
+		}
+		i += n
+	}
+	b.WriteByte('\'')
+	return b.String()
+}
+
+// ansiCQuote quotes s as bash, zsh, ksh and mksh's $'…': control characters
+// and bytes that are not UTF-8 as \xHH, a backslash and a single quote
+// escaped. It is only for the shells that read $'…' (quoteBash).
 func ansiCQuote(s string) string {
 	var b strings.Builder
 	b.WriteString("$'")

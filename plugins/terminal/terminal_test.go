@@ -2801,10 +2801,17 @@ func TestQuotePaths(t *testing.T) {
 		{quotePOSIX, "/tmp/a&b.txt", `/tmp/a\&b.txt`},
 		{quotePOSIX, "/tmp/$(id)`id`;x|y*", "/tmp/\\$\\(id\\)\\`id\\`\\;x\\|y\\*"},
 		{quotePOSIX, "/tmp/日本 語", `/tmp/日本\ 語`},
-		{quotePOSIX, "/tmp/x\ntouch pwned", `$'/tmp/x\x0atouch pwned'`},
-		{quotePOSIX, "/tmp/it's\tthere\\", `$'/tmp/it\'s\x09there\\'`},
-		{quotePOSIX, "/tmp/a\rb\x1b[201~c", `$'/tmp/a\x0db\x1b[201~c'`},
-		{quotePOSIX, "/tmp/\xff.bin", `$'/tmp/\xff.bin'`},
+		{quoteBash, "/tmp/x\ntouch pwned", `$'/tmp/x\x0atouch pwned'`},
+		{quoteBash, "/tmp/it's\tthere\\", `$'/tmp/it\'s\x09there\\'`},
+		{quoteBash, "/tmp/a\rb\x1b[201~c", `$'/tmp/a\x0db\x1b[201~c'`},
+		{quoteBash, "/tmp/\xff.bin", `$'/tmp/\xff.bin'`},
+		// Without $'…': single quotes, and a ? for each control character.
+		{quotePOSIX, "/tmp/a b (1).png", `/tmp/a\ b\ \(1\).png`},
+		{quotePOSIX, "/tmp/it's", `/tmp/it\'s`},
+		{quotePOSIX, "/tmp/x\ny", `'/tmp/x'?'y'`},
+		{quotePOSIX, "/tmp/it's\tthere", `'/tmp/it'\''s'?'there'`},
+		{quotePOSIX, "/tmp/a'\x01b\x1b[201~c", `'/tmp/a'\'''?'b'?'[201~c'`},
+		{quotePOSIX, "/tmp/\xff.bin", `'/tmp/'?'.bin'`},
 		{quotePowerShell, `C:\tmp\ab.txt`, `C:\tmp\ab.txt`},
 		{quotePowerShell, `C:\Users\me\My Shots\shot (1).png`, `'C:\Users\me\My Shots\shot (1).png'`},
 		{quotePowerShell, `C:\dl\$(Start-Process calc) x.txt`, `'C:\dl\$(Start-Process calc) x.txt'`},
@@ -2823,12 +2830,24 @@ func TestQuotePaths(t *testing.T) {
 		goos, program string
 		want          quoting
 	}{
-		{"linux", "/bin/zsh", quotePOSIX},
+		{"linux", "/bin/zsh", quoteBash},
 		{"darwin", "/usr/local/bin/pwsh", quotePowerShell},
 		{"windows", `C:\Program Files\PowerShell\7\pwsh.exe`, quotePowerShell},
 		{"windows", `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, quotePowerShell},
 		{"windows", `C:\Windows\System32\cmd.exe`, quoteCmd},
-		{"windows", `C:\Program Files\Git\bin\bash.exe`, quotePOSIX},
+		{"windows", `C:\Program Files\Git\bin\bash.exe`, quoteBash},
+		{"linux", "/bin/bash", quoteBash},
+		{"linux", "/usr/bin/zsh", quoteBash},
+		{"linux", "/bin/ksh", quoteBash},
+		{"linux", "/bin/sh", quotePOSIX},
+		{"linux", "/bin/dash", quotePOSIX},
+		{"linux", "/bin/busybox", quotePOSIX},
+		{"linux", "/usr/bin/fish", quotePOSIX},
+		{"linux", "/usr/bin/ssh", quotePOSIX},
+		{"darwin", "/usr/bin/some-tool", quotePOSIX},
+		{"windows", `C:\Windows\System32\wsl.exe`, quotePOSIX},
+		{"windows", `C:\Users\me\AppData\Local\Microsoft\WindowsApps\ubuntu2404.exe`, quotePOSIX},
+		{"windows", `C:\Users\me\AppData\Local\Microsoft\WindowsApps\debian.exe`, quotePOSIX},
 		{"windows", `C:\tools\nu.exe`, quotePowerShell},
 	} {
 		if got := quotingFor(c.goos, c.program); got != c.want {
@@ -2842,7 +2861,8 @@ func TestQuotePaths(t *testing.T) {
 		args  func(quoted string) []string
 	}
 	shells := []shell{
-		{[]string{"bash", "zsh"}, quotePOSIX, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"bash", "zsh"}, quoteBash, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"bash", "zsh", "dash", "sh"}, quotePOSIX, func(q string) []string { return []string{"-c", "printf %s " + q} }},
 		{[]string{"pwsh", "powershell"}, quotePowerShell, func(q string) []string {
 			return []string{"-NoProfile", "-NonInteractive", "-Command", "& { [Console]::Out.Write($args[0]) } " + q}
 		}},
@@ -2850,18 +2870,81 @@ func TestQuotePaths(t *testing.T) {
 	for _, sh := range shells {
 		for _, name := range sh.names {
 			bin, err := exec.LookPath(name)
-			if err != nil {
-				continue
+			if err != nil || wslBash(bin) {
+				continue // not there, or WSL's launcher, which takes a command line through a shell of its own
 			}
 			for _, c := range cases {
 				if c.q != sh.q || (runtime.GOOS == "windows" && strings.ContainsFunc(c.path, unicode.IsControl)) {
 					continue
+				}
+				if sh.q == quotePOSIX && strings.Contains(c.want, "?") {
+					continue // a ? matches a file that has the character: TestQuotePathsOfFilesWithControlCharacters
 				}
 				out, err := exec.Command(bin, sh.args(c.want)...).Output()
 				if err != nil || string(out) != c.path {
 					t.Errorf("%s read %s as %q (%v), want %q", name, c.want, out, err, c.path)
 				}
 			}
+		}
+	}
+}
+
+// wslBash reports whether bin is the launcher of WSL that Windows has as
+// bash: it runs what its command line says in a Linux shell of its own.
+func wslBash(bin string) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	b := strings.ToLower(bin)
+	return strings.HasSuffix(b, `\bash.exe`) && (strings.Contains(b, `\windows\system32\`) || strings.Contains(b, `\windowsapps\`))
+}
+
+// A path with control characters, quotes and bytes that are not UTF-8 is
+// read back as the path by every POSIX shell the terminal quotes for: bash
+// and zsh as $'…', dash and sh in single quotes, where a ? matches the
+// character the file has.
+func TestQuotePathsOfFilesWithControlCharacters(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file names have no control characters on Windows")
+	}
+	dir := t.TempDir()
+	var paths []string
+	for _, name := range []string{"a'\x01b", "tab\there's", "new\nline", "x\xffy", "plain name"} {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, nil, 0o644); err != nil {
+			continue // as macOS does with bytes that are not UTF-8
+		}
+		paths = append(paths, p)
+	}
+	for _, c := range []struct {
+		q     quoting
+		names []string
+	}{{quoteBash, []string{"bash", "zsh"}}, {quotePOSIX, []string{"bash", "zsh", "dash", "sh"}}} {
+		for _, name := range c.names {
+			bin, err := exec.LookPath(name)
+			if err != nil {
+				continue
+			}
+			for _, p := range paths {
+				out, err := exec.Command(bin, "-c", "printf %s "+c.q.quote(p)).Output()
+				if err != nil || string(out) != p {
+					t.Errorf("%s read %s as %q (%v), want %q", name, c.q.quote(p), out, err, p)
+				}
+			}
+		}
+	}
+	// A shell that has no $'…' takes a path with controls and quotes as
+	// its text, and runs nothing in it.
+	for _, name := range []string{"dash", "sh"} {
+		bin, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		marker := filepath.Join(dir, "ran-"+name)
+		path := dir + "/q'\x01;touch " + marker + ";#"
+		exec.Command(bin, "-c", "printf %s "+quotePOSIX.quote(path)).Run()
+		if _, err := os.Stat(marker); err == nil {
+			t.Errorf("%s ran what is in the path %q", name, path)
 		}
 	}
 }
