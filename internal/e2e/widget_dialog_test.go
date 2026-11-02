@@ -20,14 +20,17 @@ func TestWidgetDialogEscape(t *testing.T) {
 	done := make(chan struct{})
 	go func() { d.Run(); close(done) }()
 	eventually(t, "the dialog to show", func() bool { n := d.Native(); return n != nil && n.IsVisible() })
-	// A sheet takes the keyboard as it shows: that is what Escape needs.
-	// ...unless another app has the front, as after a window the process
-	// destroyed: eventually's keepFront gets the right to take it back, Focus takes it.
+	// A sheet takes the keyboard as it shows: that is what Escape needs. Only
+	// when another app has the front (the environment's doing, as after a
+	// window the process destroyed) does the test focus the dialog; while the
+	// app has the front the dialog must take the keyboard by itself.
 	eventually(t, "the dialog to take the keyboard", func() bool {
 		if d.Native().IsFocused() {
 			return true
 		}
-		d.Native().Focus()
+		if frontIsAnotherApp() {
+			d.Native().Focus()
+		}
 		return false
 	})
 	if !pressEscape(d.Native()) {

@@ -407,6 +407,8 @@ func grantForeground() {}
 
 func regrantForeground() {}
 
+func frontIsAnotherApp() bool { return false }
+
 // foregroundState is for Windows.
 func foregroundState(*mygo.Window) string { return "" }
 

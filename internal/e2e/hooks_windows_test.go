@@ -182,10 +182,14 @@ func grantForeground() { win.TestGrantForeground() }
 // with another app, which only a process that received the last input takes
 // back. See keepFront.
 func regrantForeground() {
-	if !win.TestForegroundIsThisProcess() {
+	if frontIsAnotherApp() {
 		win.TestGrantForeground()
 	}
 }
+
+// frontIsAnotherApp reports whether the window in front belongs to another
+// process: the environment took the front, not the app's own windows.
+func frontIsAnotherApp() bool { return !win.TestForegroundIsThisProcess() }
 
 // foregroundState says who is in front, leaving the front as it is.
 func foregroundState(w *mygo.Window) (state string) {
