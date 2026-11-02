@@ -110,7 +110,7 @@ type Backend struct {
 	compFails            int
 
 	// surfaces are the windows of the content MyGo draws (surface.go).
-	surfaces map[uintptr]*surface
+	surfaces map[uintptr]surfaceHost
 }
 
 var (
@@ -129,7 +129,7 @@ func New() *Backend {
 		captions:      map[uintptr]*captionBar{},
 		topEdges:      map[uintptr]*window{},
 		captionFonts:  map[int]captionFont{},
-		surfaces:      map[uintptr]*surface{},
+		surfaces:      map[uintptr]surfaceHost{},
 	}
 }
 
@@ -156,8 +156,9 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 	b.taskbarCreated = registerWindowMessage("TaskbarCreated")
 	b.taskbarButtonCreated = registerWindowMessage("TaskbarButtonCreated")
 	b.applyMenuTheme() // for the menus of trays too, before any window
-	// Clipboard and drag/drop share startup-created OLE callback tables.
-	dropOnce.Do(initDropTarget)
+	// Clipboard and drag/drop share the OLE callback tables made at startup; the
+	// surface's drop target makes its own when the first surface comes.
+	oleOnce.Do(initOLE)
 	return nil
 }
 

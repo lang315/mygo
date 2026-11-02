@@ -146,7 +146,7 @@ func (b *Backend) holdForCookies(w *window) bool {
 func (b *Backend) pageWebView(s *cookieStore) *window {
 	var selected *window
 	for hwnd, w := range b.windows {
-		if w.closed || w.surface != nil || !w.ready || w.webview == 0 || b.cookiesOf(w.opts.DataStore) != s {
+		if w.closed || w.sf != nil || !w.ready || w.webview == 0 || b.cookiesOf(w.opts.DataStore) != s {
 			continue
 		}
 		if selected == nil || hwnd < selected.hwnd {

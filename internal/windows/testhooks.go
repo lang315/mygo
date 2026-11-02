@@ -419,24 +419,24 @@ func TestFrameExtension(hwnd uintptr) (top, bottom int32) {
 // web page.
 func TestClickSurface(hwnd uintptr, x, y float64) bool {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return false
 	}
-	scale := float64(w.surface.dpi()) / 96
+	scale := float64(w.surf().dpi()) / 96
 	lp := uintptr(uint16(int16(y*scale)))<<16 | uintptr(uint16(int16(x*scale)))
 	const mkLButton = 1
-	procSendMessageW.Call(w.surface.hwnd, wmMouseMove, 0, lp)
-	procSendMessageW.Call(w.surface.hwnd, wmLButtonDown, mkLButton, lp)
-	procSendMessageW.Call(w.surface.hwnd, wmLButtonUp, 0, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmMouseMove, 0, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmLButtonDown, mkLButton, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmLButtonUp, 0, lp)
 	return true
 }
 
 // screenPoint is a point of a window showing native UI, in DIPs from its
 // top-left corner, on the screen in physical pixels.
 func screenPoint(w *window, x, y float64) point {
-	scale := float64(w.surface.dpi()) / 96
+	scale := float64(w.surf().dpi()) / 96
 	pt := point{int32(x * scale), int32(y * scale)}
-	procClientToScreen.Call(w.surface.hwnd, uintptr(unsafe.Pointer(&pt)))
+	procClientToScreen.Call(w.surf().hwnd, uintptr(unsafe.Pointer(&pt)))
 	return pt
 }
 
@@ -445,7 +445,7 @@ func screenPoint(w *window, x, y float64) point {
 // of the app's, rather than another app's over it.
 func TestOwnWindowAt(hwnd uintptr, x, y float64) bool {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return false
 	}
 	return ownWindow(rootAt(screenPoint(w, x, y)))
@@ -479,7 +479,7 @@ func ownWindow(h uintptr) bool { return h != 0 && windowProcess(h) == uint32(sys
 // the first move did not reach it.
 func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string, moves int) {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return false, "", 0
 	}
 	pt := screenPoint(w, x, y)
@@ -710,17 +710,17 @@ func windowState(h uintptr) string {
 // sends.
 func TestSideButton(hwnd uintptr, back bool) bool {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return false
 	}
 	button, held := uintptr(2), uintptr(0x40) // XBUTTON2, MK_XBUTTON2
 	if back {
 		button, held = 1, 0x20 // XBUTTON1, MK_XBUTTON1
 	}
-	scale := float64(w.surface.dpi()) / 96
+	scale := float64(w.surf().dpi()) / 96
 	lp := uintptr(uint16(int16(20*scale)))<<16 | uintptr(uint16(int16(20*scale)))
-	procSendMessageW.Call(w.surface.hwnd, wmXButtonDown, button<<16|held, lp)
-	procSendMessageW.Call(w.surface.hwnd, wmXButtonUp, button<<16, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmXButtonDown, button<<16|held, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmXButtonUp, button<<16, lp)
 	return true
 }
 
@@ -729,20 +729,20 @@ func TestSideButton(hwnd uintptr, back bool) bool {
 // others, and releases it at the last, with the messages a mouse sends.
 func TestDragSurface(hwnd uintptr, points [][2]float64) bool {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil || len(points) < 2 {
+	if w == nil || w.sf == nil || len(points) < 2 {
 		return false
 	}
-	scale := float64(w.surface.dpi()) / 96
+	scale := float64(w.surf().dpi()) / 96
 	lp := func(p [2]float64) uintptr {
 		return uintptr(uint16(int16(p[1]*scale)))<<16 | uintptr(uint16(int16(p[0]*scale)))
 	}
 	const mkLButton = 1
-	procSendMessageW.Call(w.surface.hwnd, wmMouseMove, 0, lp(points[0]))
-	procSendMessageW.Call(w.surface.hwnd, wmLButtonDown, mkLButton, lp(points[0]))
+	procSendMessageW.Call(w.surf().hwnd, wmMouseMove, 0, lp(points[0]))
+	procSendMessageW.Call(w.surf().hwnd, wmLButtonDown, mkLButton, lp(points[0]))
 	for _, p := range points[1:] {
-		procSendMessageW.Call(w.surface.hwnd, wmMouseMove, mkLButton, lp(p))
+		procSendMessageW.Call(w.surf().hwnd, wmMouseMove, mkLButton, lp(p))
 	}
-	procSendMessageW.Call(w.surface.hwnd, wmLButtonUp, 0, lp(points[len(points)-1]))
+	procSendMessageW.Call(w.surf().hwnd, wmLButtonUp, 0, lp(points[len(points)-1]))
 	return true
 }
 
@@ -750,15 +750,15 @@ func TestDragSurface(hwnd uintptr, points [][2]float64) bool {
 // UI with the secondary button, as TestClickSurface does with the primary.
 func TestRightClickSurface(hwnd uintptr, x, y float64) bool {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return false
 	}
-	scale := float64(w.surface.dpi()) / 96
+	scale := float64(w.surf().dpi()) / 96
 	lp := uintptr(uint16(int16(y*scale)))<<16 | uintptr(uint16(int16(x*scale)))
 	const mkRButton = 2
-	procSendMessageW.Call(w.surface.hwnd, wmMouseMove, 0, lp)
-	procSendMessageW.Call(w.surface.hwnd, wmRButtonDown, mkRButton, lp)
-	procSendMessageW.Call(w.surface.hwnd, wmRButtonUp, 0, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmMouseMove, 0, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmRButtonDown, mkRButton, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmRButtonUp, 0, lp)
 	return true
 }
 
@@ -1014,7 +1014,7 @@ func TestTrayMenuImages() map[string]bool {
 // 0 when no window is over the button.
 func TestMaximizeButton(hwnd uintptr, press bool) uintptr {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.caption == nil || w.caption.snap == 0 || w.surface == nil {
+	if w == nil || w.caption == nil || w.caption.snap == 0 || w.sf == nil {
 		return 0
 	}
 	if v, _, _ := procIsWindowVisible.Call(w.caption.snap); v == 0 {
@@ -1037,7 +1037,7 @@ func TestMaximizeButton(hwnd uintptr, press bool) uintptr {
 // it handles the messages: the window needs not be in front.
 func TestSurfaceKey(hwnd uintptr, vk byte, mods ...byte) bool {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return false
 	}
 	getState, setState := user32.NewProc("GetKeyboardState"), user32.NewProc("SetKeyboardState")
@@ -1053,8 +1053,8 @@ func TestSurfaceKey(hwnd uintptr, vk byte, mods ...byte) bool {
 	if state[vkMenu] != 0 {
 		down, up = wmSysKeyDown, wmSysKeyUp
 	}
-	procSendMessageW.Call(w.surface.hwnd, uintptr(down), uintptr(vk), 1)
-	procSendMessageW.Call(w.surface.hwnd, uintptr(up), uintptr(vk), 1|3<<30)
+	procSendMessageW.Call(w.surf().hwnd, uintptr(down), uintptr(vk), 1)
+	procSendMessageW.Call(w.surf().hwnd, uintptr(up), uintptr(vk), 1|3<<30)
 	return true
 }
 
@@ -1120,16 +1120,16 @@ func TestPageGestures(hwnd uintptr, webView int) (swipe, pinch, ok bool) {
 // over whatever shows there: the content, or a web view's page.
 func TestWheelSurface(hwnd uintptr, x, y float64) bool {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return false
 	}
-	dpi := float64(w.surface.dpi()) / 96
+	dpi := float64(w.surf().dpi()) / 96
 	pt := point{int32(x * dpi), int32(y * dpi)}
-	procClientToScreen.Call(w.surface.hwnd, uintptr(unsafe.Pointer(&pt)))
+	procClientToScreen.Call(w.surf().hwnd, uintptr(unsafe.Pointer(&pt)))
 	down := int16(-120) // WHEEL_DELTA, toward the user
 	wp := uintptr(uint16(down)) << 16
 	lp := uintptr(uint16(int16(pt.Y)))<<16 | uintptr(uint16(int16(pt.X)))
-	procSendMessageW.Call(w.surface.hwnd, wmMouseWheel, wp, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmMouseWheel, wp, lp)
 	return true
 }
 
@@ -1139,20 +1139,20 @@ func TestWheelSurface(hwnd uintptr, x, y float64) bool {
 // scale the message makes, which rounds scale to a 360th of a doubling.
 func TestPinchSurface(hwnd uintptr, x, y, scale float64) (float64, bool) {
 	w := theBackend.windows[hwnd]
-	if w == nil || w.surface == nil {
+	if w == nil || w.sf == nil {
 		return 0, false
 	}
 	delta := int(math.Round(360 * math.Log2(scale)))
 	if delta%120 == 0 {
 		delta++ // a notch is a mouse wheel's
 	}
-	dpi := float64(w.surface.dpi()) / 96
+	dpi := float64(w.surf().dpi()) / 96
 	pt := point{int32(x * dpi), int32(y * dpi)}
-	procClientToScreen.Call(w.surface.hwnd, uintptr(unsafe.Pointer(&pt)))
+	procClientToScreen.Call(w.surf().hwnd, uintptr(unsafe.Pointer(&pt)))
 	const mkControl = 0x0008
 	wp := uintptr(uint16(int16(delta)))<<16 | mkControl
 	lp := uintptr(uint16(int16(pt.Y)))<<16 | uintptr(uint16(int16(pt.X)))
-	procSendMessageW.Call(w.surface.hwnd, wmMouseWheel, wp, lp)
+	procSendMessageW.Call(w.surf().hwnd, wmMouseWheel, wp, lp)
 	return math.Exp(float64(delta) / 120 * math.Ln2 / 3), true
 }
 

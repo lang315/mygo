@@ -25,6 +25,7 @@ var (
 	procReleaseStgMedium = ole32.NewProc("ReleaseStgMedium")
 	procDragQueryFileW   = shell32.NewProc("DragQueryFileW")
 
+	oleOnce        sync.Once
 	dropOnce       sync.Once
 	dropTargetVtbl [7]uintptr
 	dropTargets    = map[uintptr]*dropTarget{}
@@ -76,9 +77,16 @@ type stgMedium struct {
 
 var hdropFormat = formatEtc{Format: cfHDrop, Aspect: dvaspectContent, Index: -1, Tymed: tymedHGlobal}
 
-func initDropTarget() {
+// initOLE starts OLE and the data object the clipboard and the drags offer.
+func initOLE() {
 	procOleInitialize.Call(0)
 	initDataSource()
+}
+
+// initDropTarget makes the callbacks of the drop target of a surface. Only the
+// surface reaches it: a program of web views does not link the drop target.
+func initDropTarget() {
+	oleOnce.Do(initOLE)
 	target := func(this uintptr) *dropTarget { return dropTargets[this] }
 	dropTargetVtbl = [7]uintptr{
 		wincb.New(func(this, riid, out uintptr) uintptr {

@@ -69,7 +69,7 @@ func (w *window) withWebViewOr(fn func(), fail func(error)) {
 	switch {
 	case w.closed:
 		err = errDestroyed
-	case w.surface != nil:
+	case w.sf != nil:
 		err = errNoWebView
 	case w.webViewErr != nil:
 		err = w.webViewErr
@@ -183,8 +183,8 @@ func (w *window) creationFailed(hr uintptr) {
 	}
 	log.Printf("%v; trying again", err)
 	hwnd := w.hwnd
-	if w.host != nil && w.host.surface != nil {
-		hwnd = w.host.surface.hwnd // which asks again for its web views
+	if w.host != nil && w.host.sf != nil {
+		hwnd = w.host.surf().hwnd // which asks again for its web views
 	}
 	procSetTimer.Call(hwnd, timerWebView, uintptr(backoff(w.webViewFails-1)/time.Millisecond), 0)
 }
@@ -312,7 +312,7 @@ func (w *window) setUp(controller uintptr) {
 
 	if w.host != nil {
 		w.placeEmbedded()
-		if l := w.host.surface.layer; l != nil {
+		if l := w.host.surf().layer; l != nil {
 			l.commit()
 		}
 	} else {

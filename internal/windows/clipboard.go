@@ -90,7 +90,7 @@ func (c clipboard) listenForReplacement() {
 
 func (c clipboard) WriteData(data transfer.Data, released func()) error {
 	// One OLE initialization/vtable per process, shared with native drags.
-	dropOnce.Do(initDropTarget)
+	oleOnce.Do(initOLE)
 	if len(data.Formats()) == 0 {
 		hr := oleClipboard(func() uintptr { hr, _, _ := procOleSetClipboard.Call(0); return hr })
 		if failed(hr) {
