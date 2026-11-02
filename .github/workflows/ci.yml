@@ -425,3 +425,48 @@ jobs:
         if: always()
         shell: bash
         run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
+
+  # The installer of a real app, on Windows: mygo build makes the installer of
+  # examples/hello, a silent install, the app run and quit, a newer installer
+  # over the running app, and the uninstall (TestInstallerSmoke). It runs on
+  # main, and on a pull request that changes what that path goes through.
+  installer:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
+      - name: Whether the change affects the installer
+        id: affected
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ] || git diff --name-only --no-renames HEAD^1 HEAD | grep -E -q '^(cmd/mygo/|internal/nsis/|internal/update/|internal/windows/|plugins/updater/|examples/hello/|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The change does not affect the installer."
+          fi
+      - uses: actions/setup-go@v6
+        if: steps.affected.outputs.run == 'true'
+        with:
+          go-version-file: go.mod
+      # mygo build downloads the NSIS it pins when there is none.
+      - name: Restore NSIS
+        if: steps.affected.outputs.run == 'true'
+        id: nsis
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/AppData/Local/mygo/nsis-*
+          key: nsis-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/nsis/nsis.go') }}
+      - name: Build, install, run, update and uninstall examples/hello
+        if: steps.affected.outputs.run == 'true'
+        env:
+          MYGO_E2E: 1
+        run: go test -count=1 -v -run TestInstallerSmoke ./cmd/mygo
+      - name: Save NSIS
+        if: always() && steps.affected.outputs.run == 'true' && steps.nsis.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/AppData/Local/mygo/nsis-*
+          key: ${{ steps.nsis.outputs.cache-primary-key }}
