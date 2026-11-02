@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -40,8 +41,17 @@ func main() {
 	})
 	mygo.App.WhenReady(func() {
 		mark("appready")
-		win := mygo.NewWindow(mygo.WindowOptions{Width: 480, Height: 320})
-		win.Page().LoadHTML(page, "")
+		open := func() {
+			mark("lead-end")
+			win := mygo.NewWindow(mygo.WindowOptions{Width: 480, Height: 320})
+			win.Page().LoadHTML(page, "")
+		}
+		// MYGO_LEAD_MS stands for the app's own work before its first window.
+		if ms, _ := strconv.Atoi(os.Getenv("MYGO_LEAD_MS")); ms > 0 {
+			time.AfterFunc(time.Duration(ms)*time.Millisecond, func() { mygo.RunOnMain(open) })
+			return
+		}
+		open()
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

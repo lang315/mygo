@@ -89,6 +89,17 @@ func TestStartup(t *testing.T) {
 		apps = append(apps, app{"native (prewarm off)", "github.com/egoist/mygo/internal/startupbench/apps/native", "mygo_noinspector,mygo_nowebview", "MYGO_PREWARM=off"})
 	}
 	apps = append(apps, app{"web", "github.com/egoist/mygo/internal/startupbench/apps/web", "mygo_noinspector", ""})
+	if runtime.GOOS == "windows" { // DRAFT: the first window comes 300 ms after the app is ready, with and without the environment made at Init
+		const web = "github.com/egoist/mygo/internal/startupbench/apps/web"
+		for _, v := range []struct{ name, env string }{
+			{"web lead300", "MYGO_LEAD_MS=300"},
+			{"web lead300 prewarm", "MYGO_LEAD_MS=300 MYGO_PREWARM_ENV=1"},
+			{"web lead300 (new user data each run)", "MYGO_LEAD_MS=300 WEBVIEW2_USER_DATA_FOLDER={fresh}"},
+			{"web lead300 prewarm (new user data each run)", "MYGO_LEAD_MS=300 MYGO_PREWARM_ENV=1 WEBVIEW2_USER_DATA_FOLDER={fresh}"},
+		} {
+			apps = append(apps, app{v.name, web, "mygo_noinspector", v.env})
+		}
+	}
 	if runtime.GOOS == "windows" { // each run with a user data folder that is new (WEBVIEW2_USER_DATA_FOLDER), not the one the last run left
 		apps = append(apps, app{"web (new user data each run)", "github.com/egoist/mygo/internal/startupbench/apps/web", "mygo_noinspector", "WEBVIEW2_USER_DATA_FOLDER={fresh}"})
 	}
@@ -99,7 +110,7 @@ func TestStartup(t *testing.T) {
 		var all []sample
 		for i := 0; i < runs+1; i++ {
 			env := strings.ReplaceAll(a.env, "{fresh}", filepath.Join(dir, fmt.Sprintf("userdata-%d", i)))
-			s := run(t, exe, filepath.Join(dir, "m.log"), env)
+			s := run(t, exe, filepath.Join(dir, "m.log"), strings.Fields(env)...)
 			all = append(all, s)
 		}
 		phases := []struct{ label, from, to string }{
@@ -129,18 +140,28 @@ func TestStartup(t *testing.T) {
 				{"  webmsg-first -> DOM ready", "webmsg-first", "dom"},
 				{"  navigate -> DOM ready", "navigate", "dom"},
 				{"  env-start -> DOM ready", "env-start", "dom"},
+				{"  (DRAFT) lead-end -> ctl-call", "lead-end", "ctl-call"},
+				{"  (DRAFT) lead-end -> ctl-ready", "lead-end", "ctl-ready"},
+				{"  (DRAFT) lead-end -> DOM ready", "lead-end", "dom"},
+				{"  (DRAFT) prewarm-call -> env-ready", "prewarm-call", "env-ready"},
 			} {
 				phases = append(phases, struct{ label, from, to string }{p[0], p[1], p[2]})
 			}
 		}
 		phases = append(phases, struct{ label, from, to string }{"process start -> ready (total)", "", "ready"})
-		started := 0
+		started, existed, created := 0, 0, 0
 		for _, s := range all {
 			if _, ok := s["prewarm-started"]; ok {
 				started++
 			}
+			if _, ok := s["userdata-existed"]; ok {
+				existed++
+			}
+			if _, ok := s["userdata-new"]; ok {
+				created++
+			}
 		}
-		fmt.Fprintf(&report, "%s (%s):  first run | median of %d later; prewarm started in %d of %d runs\n", a.name, a.tags, runs, started, len(all))
+		fmt.Fprintf(&report, "%s (%s):  first run | median of %d later; prewarm started in %d of %d runs; user data folder existed in %d, new in %d\n", a.name, a.tags, runs, started, len(all), existed, created)
 		for _, p := range phases {
 			var v []time.Duration
 			var first time.Duration

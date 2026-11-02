@@ -157,6 +157,10 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 	// Clipboard and drag/drop share the OLE callback tables made at startup; the
 	// surface's drop target makes its own when the first surface comes.
 	oleOnce.Do(initOLE)
+	if os.Getenv("MYGO_PREWARM_ENV") == "1" { // DRAFT (measurement): the environment starts with the app, not with its first window
+		startupMark("prewarm-call")
+		b.startEnvironment(nil)
+	}
 	return nil
 }
 
