@@ -203,10 +203,12 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 		if ed.base != nil {
 			ed.compose = ""
 			ed.commitBase(s)
-		} else if ed.compose != "" {
+		} else if ed.compose != "" || ed.preeditCleared && ed.compositionActive && len(ed.undo) > 0 {
 			// The input method may clear the preedit before its commit delivers
-			// the text, as GTK's fcitx module does: the composition's undo step
-			// takes it then, rather than a step of its own that changes nothing.
+			// the text, as GTK's fcitx module does (SetMarkedText, preeditCleared):
+			// the composition's undo step takes it then, rather than a step of
+			// its own that changes nothing. An unmarked preedit is not that: its
+			// commit is an edit of its own (UnmarkText).
 			ed.compose = ""
 			ed.replace(ed.caret, ed.caret, s)
 		} else {
@@ -245,7 +247,7 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 			ed.replace(a, z, s)
 		}
 	}
-	ed.compose, ed.compositionActive = "", false
+	ed.compose, ed.compositionActive, ed.preeditCleared = "", false, false
 	ed.composeCaret, ed.composeSelected = 0, TextInputRange{}
 	ed.hasDesired = false
 	if ed.area != nil {
@@ -260,6 +262,7 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 	if ed.readOnly {
 		return
 	}
+	cleared := s == "" && ed.compose != "" && ed.base == nil
 	if s == "" && r == nil && ed.compose == "" {
 		// A preedit that is already gone, as GTK clears it after a commit
 		// delivered the text: nothing to mark, and no undo step to start.
@@ -305,6 +308,7 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 	selected.Start = countUnits(s[:UTF16ByteOffset(s, selected.Start)])
 	selected.End = countUnits(s[:UTF16ByteOffset(s, selected.End)])
 	ed.compose, ed.composeSelected = s, selected
+	ed.preeditCleared = cleared
 	ed.composeCaret = utf8.RuneCountInString(s[:UTF16ByteOffset(s, selected.End)])
 	if s == "" && ed.base != nil {
 		ed.restoreBase()
@@ -333,7 +337,7 @@ func (w *widgetTextInput) UnmarkText() {
 	ed.commitCompose()
 	// GTK/IMM32 can end preedit before committing their replacement. The
 	// platform remembers the range; both operations share this undo step.
-	ed.compositionActive = transaction
+	ed.compositionActive, ed.preeditCleared = transaction, false
 	w.publish()
 }
 

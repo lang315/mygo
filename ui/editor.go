@@ -36,10 +36,14 @@ type editor struct {
 	buf       buffer
 	graphemes graphemes
 	editorSelection
-	compose            string
-	composeCaret       int
-	composeSelected    TextInputRange
-	compositionActive  bool // one undo transaction for preedit and its commit
+	compose           string
+	composeCaret      int
+	composeSelected   TextInputRange
+	compositionActive bool // one undo transaction for preedit and its commit
+	// preeditCleared: the input method emptied the preedit (SetMarkedText)
+	// with no base, which its commit follows, as GTK's fcitx module sends them:
+	// ReplaceText then goes in the composition's undo step.
+	preeditCleared     bool
 	client             editorClient
 	value              *string
 	nativeDirty        bool
@@ -236,7 +240,7 @@ func (ed *editor) commitCompose() {
 		}
 	}
 	ed.composeCaret, ed.composeSelected = 0, TextInputRange{}
-	ed.compositionActive = false
+	ed.compositionActive, ed.preeditCleared = false, false
 }
 
 // process applies the input queued for the editor.

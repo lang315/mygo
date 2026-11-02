@@ -506,7 +506,8 @@ func (rt *engine) pointerUp(button, clicks int) {
 		if ed.dragging {
 			// Its selection ends where the pointer let go, as the text
 			// selection's does, before the keys that come after.
-			ed.drag(s.local(rt.pointerX, rt.pointerY))
+			x, y := s.local(rt.pointerX, rt.pointerY)
+			dragFn(ed, x, y)
 		}
 		ed.release()
 	}
