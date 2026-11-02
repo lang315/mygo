@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -40,6 +42,7 @@ const (
 // renderer, GPU and utility processes it runs.
 func usage(pid int, _ state) (app, total uint64, procs []int, err error) {
 	procs = append([]int{pid}, descendants(pid)...)
+	dump(pid, procs)
 	for i, p := range procs {
 		ws, err := privateWorkingSet(p)
 		if err != nil {
@@ -194,4 +197,32 @@ func closeWindows(pid int) bool {
 	closing.pid, closing.n = pid, 0
 	enumWindows.Call(closeEach, 0)
 	return closing.n > 0
+}
+
+// dump (TEMPORARY, IDLEMEM_VERBOSE=1) prints every process of the app's tree
+// and every msedgewebview2.exe on the machine, with parent and private
+// working set.
+func dump(app int, tree []int) {
+	if os.Getenv("IDLEMEM_VERBOSE") == "" {
+		return
+	}
+	snap, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return
+	}
+	defer syscall.CloseHandle(snap)
+	in := map[int]bool{}
+	for _, p := range tree {
+		in[p] = true
+	}
+	var e syscall.ProcessEntry32
+	e.Size = uint32(unsafe.Sizeof(e))
+	for err := syscall.Process32First(snap, &e); err == nil; err = syscall.Process32Next(snap, &e) {
+		name := syscall.UTF16ToString(e.ExeFile[:])
+		if !in[int(e.ProcessID)] && !strings.EqualFold(name, "msedgewebview2.exe") {
+			continue
+		}
+		ws, _ := privateWorkingSet(int(e.ProcessID))
+		fmt.Fprintf(os.Stderr, "idlemem: pid %d ppid %d %s tree=%v private=%d KB\n", e.ProcessID, e.ParentProcessID, name, in[int(e.ProcessID)], ws>>10)
+	}
 }
