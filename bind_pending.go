@@ -29,13 +29,20 @@ var pending struct {
 }
 
 // registerPending registers s with no methods; resolvePending gives it them.
+//
+// The check of closed and the append are one hold of the lock, so a Bind that
+// races App.Run's checkPending is either in the list when it checks or is refused.
+// The order of the locks is pending, then ipc; nothing takes them the other way.
 func registerPending(s *service, v reflect.Value, err *noTableError) error {
+	pending.Lock()
+	defer pending.Unlock()
+	if pending.closed {
+		return err // App.Run has checked: nothing is going to give it methods
+	}
 	if e := register(s); e != nil {
 		return e
 	}
-	pending.Lock()
 	pending.list = append(pending.list, pendingService{s, v, err})
-	pending.Unlock()
 	return nil
 }
 
@@ -88,12 +95,6 @@ func pendBind(err error, s *service, v reflect.Value) (handled bool, rerr error)
 	nt, ok := err.(*noTableError)
 	if !ok {
 		return false, nil
-	}
-	pending.Lock()
-	closed := pending.closed
-	pending.Unlock()
-	if closed {
-		return true, nt // App.Run has checked: nothing is going to give it methods
 	}
 	return true, registerPending(s, v, nt)
 }

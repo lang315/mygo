@@ -1068,8 +1068,12 @@ file and line, and it is all or nothing) when:
   (`func register[T any](v T) { mygo.Bind(v) }`, `mygo.Bind(pick())`), a slice
   spread (`mygo.Bind(all...)`), an unnamed or generic type, or a type declared
   inside a function;
+- `Bind`, `BindAs` or `Use` is used as a value (`reg := mygo.Bind`) and not called;
 - a `mygo.Plugin` of another author has an unexported service and no table
-  (the scan reads its `Service`), or a literal with unkeyed fields;
+  (the scan reads its `Service`, in the literal or assigned), or the plugin is
+  made by a conversion (`mygo.Plugin(x)`), has a literal with unkeyed fields,
+  gets its `Service` from a call with several results, or has the address of its
+  `Service` taken; the scan does not guess what else writes it;
 - a service is an unexported type of another package, or in an internal package
   main cannot import (the generated file cannot name it);
 - a package of the build for the target does not type-check, or uses cgo;

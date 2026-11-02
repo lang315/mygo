@@ -44,9 +44,8 @@ func main() {
 	}
 }
 
-// P2: a service the scan does not see and the run does not bind (bound after
-// Run, through a function value) is silently bound with no methods under the
-// tag: pendBind registers it, checkPending already ran, nothing panics.
+// P2: a service bound after Run, through a function value, which the scan
+// does not follow: it was silently bound with no methods under the tag.
 func TestRev338cBindAfterRunIsSilent(t *testing.T) {
 	gen, reason, berr, bout, rerr, rout := staticBuild(t, runtime.GOOS, map[string]string{"main.go": `package main
 
@@ -82,14 +81,17 @@ func main() {
 	fmt.Printf("LATE BIND OK\n%s\n", b)
 }
 `})
-	if berr != nil || reason != "" {
-		t.Fatalf("reason=%q build: %v %s", reason, berr, bout)
+	// A Bind through a function value is one the scan cannot follow: the build
+	// keeps reflection and says where, so the release app does not meet it. (The
+	// panic of a Bind after Run, when no table has the type, is the unit test
+	// TestStaticBindAfterRunWithoutATablePanics of package mygo.)
+	if berr != nil {
+		t.Fatalf("build: %v %s", berr, bout)
 	}
-	t.Logf("gen:\n%s", gen)
-	t.Logf("run err=%v out:\n%s", rerr, rout)
-	if rerr == nil && strings.Contains(rout, "LATE BIND OK") && !strings.Contains(rout, "y(") {
-		t.Errorf("BUG: Bind(&B{}) after Run returned without a panic and B has no methods in the tagged build")
+	if gen != "" || !strings.Contains(reason, "used as a value") || !strings.Contains(reason, "main.go:") {
+		t.Errorf("gen %q, reason %q: want reflection kept, with the place of Bind used as a value", gen, reason)
 	}
+	_, _ = rerr, rout
 }
 
 // P3: mygo dev and mygo generate now run generate mode with MYGO_ENV=production,

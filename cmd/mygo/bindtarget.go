@@ -146,7 +146,7 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 		if lp.Standard || lp.ImportPath == mygoPath || !importsMygo(lp) {
 			continue
 		}
-		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}}
+		info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{}}
 		_, files, err := typeCheck(lp, true, info)
 		if err != nil {
 			return nil, "", err
@@ -276,7 +276,17 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 		}
 		return fmt.Sprintf("%s:%d", p.Filename, p.Line)
 	}
+	// isServiceField reports whether sel selects the field Service of a mygo.Plugin.
+	isServiceField := func(sel *ast.SelectorExpr) bool {
+		s := info.Selections[sel]
+		if s == nil || s.Kind() != types.FieldVal {
+			return false
+		}
+		v, ok := s.Obj().(*types.Var)
+		return ok && v.IsField() && v.Name() == "Service" && isMygo(v)
+	}
 	own := false
+	called := map[*ast.Ident]bool{} // the functions of mygo the package calls directly
 	var f []foundType
 	var u []string
 	value := func(arg ast.Expr, what string) {
@@ -318,6 +328,10 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch n := n.(type) {
 			case *ast.CallExpr:
+				if tv, ok := info.Types[n.Fun]; ok && tv.IsType() && isPluginType(tv.Type, isMygo) {
+					u = append(u, fmt.Sprintf("%s: a mygo.Plugin made by a conversion, whose Service is not known until the app runs", place(n.Pos())))
+					return true
+				}
 				var id *ast.Ident
 				switch fun := n.Fun.(type) {
 				case *ast.SelectorExpr:
@@ -328,6 +342,7 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 				if id == nil || !isMygo(info.Uses[id]) {
 					return true
 				}
+				called[id] = true
 				switch id.Name {
 				case "BindMethods":
 					own = true
@@ -345,15 +360,23 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 					}
 				}
 			case *ast.AssignStmt:
-				// p.Service = &S{}: the Service of a mygo.Plugin set after the literal.
+				// p.Service = &S{}: the Service of a mygo.Plugin set after the literal,
+				// through any selector (embedded, nested, a pointer, an element).
 				for i, l := range n.Lhs {
-					sel, ok := l.(*ast.SelectorExpr)
-					if !ok || sel.Sel.Name != "Service" || len(n.Lhs) != len(n.Rhs) {
+					sel, ok := ast.Unparen(l).(*ast.SelectorExpr)
+					if !ok || !isServiceField(sel) {
 						continue
 					}
-					if s := info.Selections[sel]; s != nil && isPluginType(s.Recv(), isMygo) {
-						value(n.Rhs[i], "the plugin "+lp.ImportPath)
+					if len(n.Lhs) != len(n.Rhs) {
+						u = append(u, fmt.Sprintf("%s: the Service of a mygo.Plugin is assigned from a call with several results, whose type is not known until the app runs", place(n.Pos())))
+						continue
 					}
+					value(n.Rhs[i], "the plugin "+lp.ImportPath)
+				}
+			case *ast.UnaryExpr:
+				// &p.Service lets anything write it.
+				if sel, ok := ast.Unparen(n.X).(*ast.SelectorExpr); ok && n.Op == token.AND && isServiceField(sel) {
+					u = append(u, fmt.Sprintf("%s: the address of the Service of a mygo.Plugin is taken, and what writes it is not known until the app runs", place(n.Pos())))
 				}
 			case *ast.CompositeLit:
 				nt, ok := types.Unalias(info.TypeOf(n)).(*types.Named)
@@ -374,9 +397,20 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 			return true
 		})
 	}
+	// Bind, BindAs or Use that is not called where it is named (reg := mygo.Bind)
+	// binds what the scan cannot follow.
+	for id, obj := range info.Uses {
+		if fn, ok := obj.(*types.Func); ok && isMygo(fn) && !called[id] {
+			switch fn.Name() {
+			case "Bind", "BindAs", "Use":
+				u = append(u, fmt.Sprintf("%s: %s is used as a value, and what it binds is not known until the app runs; call it", place(id.Pos()), fn.Name()))
+			}
+		}
+	}
 	if own {
 		return nil, nil, true
 	}
+	slices.Sort(u) // the map above has no order
 	return f, u, false
 }
 

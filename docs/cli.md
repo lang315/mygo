@@ -164,7 +164,7 @@ checks the scan.
 A build keeps reflection, and prints `Bind keeps reflection (...)` with the file
 and line, when `Bind` is called with a value whose type is not known until the
 app runs (an interface, a type parameter such as `func register[T any](v T)`, a
-slice spread `Bind(all...)`), with an unnamed, generic or function-local type, or
+slice spread `Bind(all...)`, `Bind` used as a value), with a plugin whose `Service` the build cannot follow, with an unnamed, generic or function-local type, or
 a type it cannot name from the main package (an unexported type of another package,
 a plugin of another author); when a package of the build does not type-check; or
 when the run bound a type no call names. Bind each service with a call of its own
