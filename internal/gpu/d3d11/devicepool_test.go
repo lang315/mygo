@@ -62,11 +62,10 @@ func TestDevicePoolReusesTheDevice(t *testing.T) {
 	devices, shaders := devicesMade.Load(), shadersMade.Load()
 	for i := range 4 {
 		r := newRendererOrSkip(t)
-		// The adapter's LUID is read from the device, and is the default
-		// adapter's for one the GPU made (a runner without a GPU makes WARP
-		// or the basic render driver, whose LUID is not the default's: only
-		// its being read is checked there). A wrong slot or layout would turn
-		// the reuse of a GPU's device off without a word.
+		// The adapter's LUID is read from the device: the default adapter's
+		// for a device the GPU made (not checked for WARP, which may come from
+		// another adapter). A wrong slot or layout would turn the reuse of a
+		// GPU's device off without a word.
 		if r.luid == 0 {
 			t.Errorf("round %d: the device's adapter has no LUID", i)
 		} else if def, ok := defaultLUID(); !r.warp && (!ok || def != r.luid) {
