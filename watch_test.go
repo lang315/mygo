@@ -939,6 +939,16 @@ func TestFileWatchWriteCountsOnce(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
+	// What the directory says of the file follows its close (on Windows a
+	// moment after): the system's notice comes then, so wait for it.
+	wait.Until(t, "the directory to say the file's size", func() bool {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) != 1 {
+			return false
+		}
+		info, err := entries[0].Info()
+		return err == nil && info.Size() == 5
+	})
 	for range 3 {
 		fileWatchTestNotice(t, w, ".", platform.FileWatchNotice{Name: "f", Kind: platform.FileWatchWrite})
 	}
