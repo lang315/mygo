@@ -21,7 +21,9 @@ func TestWidgetDialogEscape(t *testing.T) {
 	go func() { d.Run(); close(done) }()
 	eventually(t, "the dialog to show", func() bool { n := d.Native(); return n != nil && n.IsVisible() })
 	// A sheet takes the keyboard as it shows: that is what Escape needs.
-	eventually(t, "the dialog to take the keyboard", func() bool { return d.Native().IsFocused() })
+	if !wait.Poll(func() bool { keepFront(); return d.Native().IsFocused() }) {
+		t.Fatalf("BISECT: the dialog never took the keyboard; %s", foregroundState(d.Native()))
+	}
 	if !pressEscape(d.Native()) {
 		t.Skip("no system keys on this platform")
 	}
