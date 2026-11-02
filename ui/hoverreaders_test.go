@@ -31,23 +31,22 @@ import (
 // Modifiers, which note it.
 var hoverReaders = map[string]string{
 	// The ways to ask in a build: they note it.
-	"input.go node.Hovered":         "notes the read (readsHover)",
-	"input.go node.PointerPosition": "notes the read (readsHover)",
-	"input.go context.readsMods":    "the note itself: it stores the modifier keys as the row reads them",
-	"input.go context.Modifiers":    "notes the read (readsMods)",
-	"input.go engine.modsChanged":   "an event",
-	"dragdrop.go coreDragHover":     "notes the read (readsDrag): a row that asked is built while a drag lasts",
-	"input.go node.Pressed":         "reads the position only while the element is pressed: a row with a press is built",
+	"input.go node.Hovered":           "notes the read (readsHover)",
+	"input.go node.PointerPosition":   "notes the read (readsHover)",
+	"input.go context.readsMods":      "the note itself: it stores the modifier keys as the row reads them",
+	"input.go context.Modifiers":      "notes the read (readsMods)",
+	"input.go engine.modsChanged":     "an event",
+	"input.go state.pointer":          "reads the position only while the element is pressed (node.Pressed, the sliders, the color picker): a row with a press is built",
+	"input.go engine.endPress":        "an event",
+	"runtime.go engine.commitElement": "the commit of a frame, not the callback of a row",
+	"dragdrop.go coreDragHover":       "notes the read (readsDrag): a row that asked is built while a drag lasts",
 	// Option lists that move a highlight with the pointer: Hovered notes the read.
 	"base.go selectParts.Item":       "asks Hovered, which notes the read",
 	"combobox.go comboboxParts.Item": "asks Hovered, which notes the read",
 	"popovermenu.go menuDraw.item":   "asks Hovered, which notes the read; a drawn menu is acting",
 	// Read in an afterInput callback or while pressed, dragging or open: outside the row's callback, or a row built.
 	"base.go coreSelectBase":                      "in an afterInput callback, when the select opens",
-	"colorpicker.go coreColorPicker":              "in an afterInput callback, while pressed",
 	"combobox.go comboboxBase":                    "in an afterInput callback",
-	"indicators.go coreRangeSlider":               "while pressed",
-	"value_input.go sliderInput":                  "while pressed",
 	"editor.go editor.process":                    "while pressed and dragging",
 	"cellselect.go listFrame.dragCells":           "a drag over the cells: the press is acting",
 	"dragselect.go engine.scrollDragSelect":       "a drag-select: the press is acting",

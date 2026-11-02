@@ -81,6 +81,11 @@ type editor struct {
 	// wrapped text between them; zero for the paragraphs, at least three.
 	lines       [2]int
 	placeholder string
+	// Placeholder color is paint-only and reset by each widget build.
+	placeholderColor    Color
+	placeholderColorSet bool
+	// caretWidth is paint-only, in DIPs, and reset by each widget build.
+	caretWidth float32
 	// ranges style runs of the text (TextRanges): as given until apart is
 	// set, then merged into runs apart, sorted by Start (sortRanges).
 	ranges []TextRange
@@ -163,6 +168,8 @@ func (ed *editor) busy() bool {
 func (ed *editor) rebuild() {
 	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit}
 	ed.readOnly, ed.password, ed.maxLen, ed.lines, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit = false, false, 0, [2]int{}, nil, nil, nil, nil
+	ed.placeholderColorSet = false
+	ed.caretWidth = 1
 }
 
 // withShown runs fn, which applies the user's edits, with the options of

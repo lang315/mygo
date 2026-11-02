@@ -125,7 +125,7 @@ func (rt *engine) collectSelectable(e *node, hidden bool) {
 	if !rt.selectable {
 		return
 	}
-	hidden = hidden || e.flags&(flagInvisible|flagInert) != 0 || e.hidden
+	hidden = hidden || e.flags&(flagInvisible|flagInert) != 0 || e.hidden || e.ignoreInput
 	if !hidden && e.kind == kindText && !e.isInline() && e.st.flags&flagDisabled == 0 && e.flags&flagSelectable != 0 {
 		rt.texts = append(rt.texts, e.st)
 	}

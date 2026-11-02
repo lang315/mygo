@@ -204,6 +204,9 @@ func (w *widgetTextInput) ReplaceText(r *TextInputRange, s string) {
 			ed.compose = ""
 			ed.commitBase(s)
 		} else if ed.compose != "" {
+			// The input method may clear the preedit before its commit delivers
+			// the text, as GTK's fcitx module does: the composition's undo step
+			// takes it then, rather than a step of its own that changes nothing.
 			ed.compose = ""
 			ed.replace(ed.caret, ed.caret, s)
 		} else {
@@ -255,6 +258,11 @@ func (w *widgetTextInput) SetMarkedText(r *TextInputRange, s string, selected Te
 	w.prepare()
 	ed := w.ed
 	if ed.readOnly {
+		return
+	}
+	if s == "" && r == nil && ed.compose == "" {
+		// A preedit that is already gone, as GTK clears it after a commit
+		// delivered the text: nothing to mark, and no undo step to start.
 		return
 	}
 	if ed.compose == "" || r != nil {

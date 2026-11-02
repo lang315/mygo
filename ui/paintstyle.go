@@ -134,9 +134,11 @@ type paintRare struct {
 	contentSet, poseSet, reposed, effecting bool
 	// leaving marks a copy of an element gone, which its exit transition
 	// animates (1 if it was in its parent's flow, 2 if absolute), and ghosts an
-	// element holding such copies.
+	// element holding such copies; lift one flying with a Match, which paints
+	// over the rest of its layer (matches.lifted).
 	leaving uint8
 	ghosts  bool
+	lift    bool
 }
 
 // paintStyle is what paints an element besides its layout (layoutStyle) and
@@ -190,13 +192,14 @@ const paintShadows = 2
 // paintVolatile reports whether e paints with something a later frame
 // cannot compare: a closure, an effect, a layer cache, a gradient, a
 // transform, a picture, an input, a scroll container, text made of inline
-// elements, a color transition, or an element leaving.
+// elements, a color transition, an element leaving, or a Themed (its
+// children paint with its theme).
 func paintVolatile(e *node) bool {
 	const n = unsafe.Sizeof(paintRare{})
 	return *(*[n]byte)(unsafe.Pointer(&e.paintRare)) != zeroRare ||
 		e.styleFn != nil && e.styleID == staticNone || len(e.shadows) > paintShadows ||
 		e.kind == kindInput || e.kind == kindImage || e.kind == kindIcon || e.kind == kindText && e.first != nil ||
-		e.flags&(flagScrollX|flagScrollY|flagDividers|flagDebug|flagSelectable) != 0 || e.isInline() ||
+		e.flags&(flagScrollX|flagScrollY|flagDividers|flagDebug|flagSelectable) != 0 || e.isInline() || e.themed != nil ||
 		e.st != nil && e.st.trec != nil
 }
 

@@ -777,10 +777,10 @@ func TestLayoutInputs(t *testing.T) {
 		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +
 		" blur opacity opacitySet cursor " +
 		"inputFn textClient caret takesText noIME copyData maximizeButton fit gray dismissed rotate label widget role " +
-		"paintLook expanded vertical tip accValue accRange hasRange accFill accStep barInset scrollBase " +
+		"paintLook expanded vertical tip accValue accRange hasRange accFill accStep barInset scrollBase hideScrollbars keepScrollbars barsFrom ignoreInput themed " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName keepLinks focusTo " +
 		"setPos setSize choosesItems search description invalid followX sort level expandable " +
-		"chooseMany serial"
+		"chooseMany serial ignoreInput themed lift"
 	known := map[string]bool{}
 	for _, f := range strings.Fields(read + " " + other) {
 		known[f] = true
