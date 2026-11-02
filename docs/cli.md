@@ -149,6 +149,29 @@ Builds production apps: runs `buildCommand`, compiles the app with
 `frontendDist` embedded, and packages it for each platform in
 `<out>/<os>-<arch>`. See [Building and distributing](distribution.md).
 
+For an app that binds services (`mygo.Bind`), a release build also gives `Bind`
+the list of their methods, so that the linker does not keep every method of the
+program: about 1.3 to 1.5 MB less in a webview app. It finds the services in the
+build itself: it reads every call of `Bind` and `BindAs` (and the `Service` of
+plugins) in the packages of the build for each target, so a service chosen by
+`runtime.GOOS`, one bound only when `mygo.IsDev()` is false, and one bound by the
+init function of a library are all in the table. The same run in generate mode
+that writes the TypeScript client (for an app with no frontend, whose binary calls
+`Bind`, `mygo build` runs it in generate mode once, with a timeout; an app that
+binds nothing is not run, and if the run fails the build warns and goes on)
+checks the scan.
+
+A build keeps reflection, and prints `Bind keeps reflection (...)` with the file
+and line, when `Bind` is called with a value whose type is not known until the
+app runs (an interface, a type parameter such as `func register[T any](v T)`, a
+slice spread `Bind(all...)`), with an unnamed, generic or function-local type, or
+a type it cannot name from the main package (an unexported type of another package,
+a plugin of another author); when a package of the build does not type-check; or
+when the run bound a type no call names. Bind each service with a call of its own
+type to get the table. The methods come from the build's own target, so a cross
+build (`-platform windows/amd64` on a Mac) names the methods Windows has. `go run`,
+`go build` and `mygo dev` bind by reflection and keep the size they had.
+
 The platform `web` (or `js/wasm`) builds an app of native UI for browsers
 into `<out>/web`, a static site to serve from anywhere: `index.html`, which
 loads the app, Go's `wasm_exec.js`, the app's WebAssembly, named by its

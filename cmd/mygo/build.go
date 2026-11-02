@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,7 +22,8 @@ type buildOptions struct {
 	skipInstaller bool              // no Windows installer, nor NSIS for it
 	pkg           string            // directory of the main package
 	work          string            // for generated files
-	overlay       map[string]string // go build -overlay entries (the frontend)
+	overlay       map[string]string // go build -overlay entries (the frontend, the table of Bind)
+	mainPkg       string            // import path of the main package, when a table for Bind is made
 }
 
 func runBuild(args []string) error {
@@ -113,6 +115,12 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 	if err := writeClient(context.Background(), c, false); err != nil {
 		return err
 	}
+	if !opts.debug && hasNativePlatform(splitList(*platforms)) {
+		// An app with no client to write: list what it binds if it does.
+		if err := listBoundTypes(context.Background(), c); err != nil {
+			warnf("Bind keeps reflection (the app could not list the services it binds: %v), about 1.4 MB more", err)
+		}
+	}
 	if c.BuildCommand != "" && !*skipBuildCommand {
 		t := con.start("Building the frontend")
 		if err := t.end(run(t, "web", c.root, c.BuildCommand), "Built the frontend"); err != nil {
@@ -140,6 +148,11 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 	if hasNativePlatform(splitList(*platforms)) {
 		if opts.overlay, err = frontendFiles(c, opts.pkg, work); err != nil {
 			return err
+		}
+		if !opts.debug && c.bindsToName() {
+			if opts.mainPkg, err = packageImportPath(c); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -252,16 +265,36 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 			if err != nil {
 				return err
 			}
-			overlay, err := writeOverlay(filepath.Join(opts.work, "overlay.json"), mergeFiles(opts.overlay, feed))
+			base := mergeFiles(opts.overlay, feed)
+			env := []string{"GOOS=" + goos, "GOARCH=" + arch}
+			build := func(files map[string]string, static bool) error {
+				overlay, err := writeOverlay(filepath.Join(opts.work, "overlay.json"), files)
+				if err != nil {
+					return err
+				}
+				flags := []string{"-trimpath", "-ldflags", ldflags}
+				flags = append(flags, releaseTags(opts.debug, c.root, static)...)
+				if overlay != "" {
+					flags = append(flags, "-overlay", overlay)
+				}
+				return goBuild(context.Background(), c, t, out, env, flags...)
+			}
+			// The table of Bind's methods for this target, if every service can
+			// be named; if the generated file still does not compile, the build
+			// is made again without it, as it was before the table.
+			table, err := bindTableFor(c, &opts, goos, arch)
 			if err != nil {
 				return err
 			}
-			flags := []string{"-trimpath", "-ldflags", ldflags}
-			flags = append(flags, productionTags(opts.debug, c.root)...)
-			if overlay != "" {
-				flags = append(flags, "-overlay", overlay)
+			if len(table) > 0 {
+				err := build(mergeFiles(base, table), true)
+				var failed *goBuildError
+				if err == nil || !errors.As(err, &failed) || !strings.Contains(failed.out, bindGenFile) {
+					return err
+				}
+				warnf("Bind keeps reflection (the table for %s/%s did not compile: %s), about 1.4 MB more", goos, arch, lineWith(failed.out, bindGenFile))
 			}
-			return goBuild(context.Background(), c, t, out, []string{"GOOS=" + goos, "GOARCH=" + arch}, flags...)
+			return build(base, false)
 		}()
 		return t.end(err, "Compiled "+goos+"/"+arch)
 	}
@@ -468,13 +501,32 @@ func productionTags(debug bool, dir string) []string {
 	if debug || keepInspector() {
 		return nil
 	}
+	return []string{"-tags", strings.Join(append(goFlagsTags(dir), inspectorTag), ",")}
+}
+
+// goFlagsTags returns the tags GOFLAGS sets, which a -tags flag would override.
+func goFlagsTags(dir string) []string {
 	var tags []string
 	for _, f := range goFlags(dir) {
 		if v, ok := strings.CutPrefix(strings.TrimLeft(f, "-"), "tags="); ok && v != "" {
 			tags = append(tags, v)
 		}
 	}
-	return []string{"-tags", strings.Join(append(tags, inspectorTag), ",")}
+	return tags
+}
+
+// releaseTags returns the -tags of a build: productionTags, and with static the
+// tag under which Bind takes the methods of the services from the table of
+// mygo build (staticTag), keeping the tags of GOFLAGS.
+func releaseTags(debug bool, dir string, static bool) []string {
+	tags := productionTags(debug, dir)
+	switch {
+	case !static:
+		return tags
+	case tags != nil:
+		return withTag(tags, staticTag)
+	}
+	return []string{"-tags", strings.Join(append(goFlagsTags(dir), staticTag), ",")}
 }
 
 // generatorTags returns the -tags of a build that writes the TypeScript

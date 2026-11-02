@@ -1005,13 +1005,80 @@ window (`CallerWindow`) and is canceled when the page navigates or the window
 closes. `Bind` validates every parameter and result type up front
 (`tsgen.Validate`), so unsupported types fail at startup, not at call time.
 
-`Bind` lists a service's methods with `reflect.Type.Method`, and a program
-that does that keeps every exported method of every type in an interface,
-since the linker cannot tell which it calls: about 2.5 MB of a native UI
-app. So only apps that call `Bind` (or `Use` a plugin with a service) link
-it. MyGo's own service, `mygo:window` behind `window.mygo.window`, is bound
-by `bindFuncs`, from funcs, without it; `go build -ldflags=-dumpdep`
-prints `<ReflectMethod>` on what does it.
+`Bind` lists a service's methods in `listMethods`, which has two forms. Without
+the tag `mygo_static` (`bind_reflect.go`) it uses `reflect.Type.Method` and
+`Value.Method`, and a program that does that keeps every exported method of every
+type in an interface, since the linker cannot tell which it calls: about 1.3 to
+1.5 MB of a webview app that binds, 2.5 MB of a native UI app. So only apps that
+call `Bind` (or `Use` a plugin with a service) link it. With the tag
+(`bind_static.go`) it reads a table of method expressions, `BindMethods`, and
+uses neither; `go build -ldflags=-dumpdep` prints `<ReflectMethod>` on what does.
+MyGo's own service, `mygo:window` behind `window.mygo.window`, is bound by
+`bindFuncs`, from funcs, without it.
+
+`mygo build` gives a release build the table and the tag
+(`cmd/mygo/bindgen.go`, `bindtarget.go`). The services come from the build, not
+from a run of the app: for each target the CLI type-checks the packages that
+import mygo (`go list -export -deps -trimpath` for its GOOS, GOARCH and release
+tags, then `go/types` with the bodies of the functions, on the export data of
+their imports), reads the static type of the value of every call of `Bind` and
+`BindAs` and of the `Service` of every `mygo.Plugin` (in its literal, or assigned
+as `p.Service = &S{}`), and reads each
+type's method set there. So a service chosen by `runtime.GOOS` or bound in a branch
+the run on this computer did not take is in the table of the target that binds it,
+and a method that exists only on this GOOS is not named for another. The run in
+generate mode (`MYGO_GENERATE`, which also writes the TypeScript client and the
+bound types to `MYGO_GENERATE_BINDINGS`) is a cross-check: a type it bound (as a
+value or as a pointer, they are two types) that is in the build for the target and
+that no call names is a call the scan missed, and the build keeps reflection. `bindingsGo`
+turns the types into `0mygo_bind_gen.go`, in the build's overlay for that target,
+which calls `BindMethods` for each with `(*T).Method` or `T.Method` (and
+`Decl: T.Method` for a method of the value type bound through a pointer, whose
+code, not Go's wrapper, has the source position the client generator reads) and
+imports aliased `mygo_<name>`. The tag goes in only when the file does, so a
+stale file is never paired with it. The file's `init` runs after the package-level
+variables of main and the init functions of its imports, so a `Bind` there waits:
+the service takes its place at once and gets its methods when `BindMethods` runs,
+and `App.Run` panics with the cause if one never does. A `Bind` after `App.Run`
+has no table to wait for and panics at once.
+
+The services of the plugins that bind their own types (fetch, sqlite, updater,
+watch, websocket) give `Bind` their methods themselves: each has a
+`serviceMethods` table in `bindtable.go` (under the tag), registered with
+`BindMethods`, and a test (`internal/bindcheck`) that fails when a method is added
+to the service and not to the table. The scan leaves out a package that calls
+`BindMethods`.
+
+The build keeps reflection (it prints "Bind keeps reflection (...)" with the
+file and line, and it is all or nothing) when:
+
+- a call of `Bind` or `BindAs` has a value of an interface or a type parameter
+  (`func register[T any](v T) { mygo.Bind(v) }`, `mygo.Bind(pick())`), a slice
+  spread (`mygo.Bind(all...)`), an unnamed or generic type, or a type declared
+  inside a function;
+- a `mygo.Plugin` of another author has an unexported service and no table
+  (the scan reads its `Service`), or a literal with unkeyed fields;
+- a service is an unexported type of another package, or in an internal package
+  main cannot import (the generated file cannot name it);
+- a package of the build for the target does not type-check, or uses cgo;
+- the run bound a type of the build that no call names (a service made by
+  reflection, say);
+- the generated file does not compile (the build is made again without it, with
+  a warning).
+
+A table that lacks a method the type has fails at `Bind` ("build with mygo build
+again"), and a method removed or renamed does not compile; nothing is silently
+reflected over. An app with no frontend has no client to write, so a release build
+builds it for this computer and runs it in generate mode once, with a timeout,
+only if its binary calls `Bind` (the symbol `mygo.bind` is in it); an app that
+binds nothing, most apps of native UI, is not run. If the run fails the build
+warns and keeps reflection. An app that imports a plugin from Go and never `Use`s
+it links the plugin's table when it is built with the tag (36 KB for sqlite, as a review measured).
+`go run` and `go build` without the CLI do not have the tag and bind by
+reflection, at the size they always had; `mygo dev` and `-debug` builds do too.
+The tests of the package bind many services the CLI has not seen, so under the
+tag they list by reflection (`staticFallback`, set only by a `_test.go` file; an
+app has none), and `go test -tags mygo_static .` runs the IPC goldens on the table.
 
 JSON options (`jsonOptions` in `ipc.go`) are shared by calls and events:
 json/v2 defaults (nil slices encode as `[]`, case-sensitive names),
@@ -4718,7 +4785,8 @@ rules, which took counter-native back to 8.9 MB after it had grown from
   `reflect.Type.Method`, `reflect.Value.Method` or `MethodByName` with a
   name the compiler cannot see makes the linker keep every exported method
   of every type used through an interface: 2.5 MB of counter-native. Only
-  `Bind`, `BindAs` and plugins with a service do it; MyGo's own services
+  `Bind`, `BindAs` and plugins with a service do it, and not in a build by
+  `mygo build` that has the tag `mygo_static` and its table; MyGo's own services
   use `bindFuncs`. `text/template` and `html/template` do it too.
 - *Backends stay thin.* Every method of `platform.Backend` and its
   controllers is linked into every app of that platform, used or not, so

@@ -42,7 +42,10 @@ wire protocol, TypeScript generation, and the checklist for adding features.
   constructor registers (as `linkedDocuments`), and keep heavy
   dependencies and data out of those paths. Never call
   `reflect.Type.Method`, `Value.Method` or `MethodByName` there: it makes
-  the linker keep every exported method of the program (2.5 MB). Measure
+  the linker keep every exported method of the program (2.5 MB of
+  counter-native). `Bind` does it unless the build has the tag `mygo_static`
+  and the table `mygo build` generates (about 1.3 to 1.5 MB of a webview
+  app that binds). Measure
   both apps before and after a change to `mygo`, `ui`, a backend or the
   dependencies; explain any growth of an app that doesn't use the feature
   in the PR, and find its cause with `-dumpdep` ("Binary size" in the

@@ -107,6 +107,19 @@ type Config struct {
 	langs     []appLanguage
 	langsErr  error
 	langsRead bool
+	// bound are the services the app bound, which generate mode listed when
+	// writeClient ran it (boundRead): mygo build names their methods.
+	bound     []boundType
+	boundRead bool
+	// binds is set when the app's binary calls Bind (or Use) though the run listed
+	// no type: a service it binds may be one only the build can see (a plugin's).
+	binds bool
+}
+
+// bindsToName reports whether the build has services to name the methods of: the
+// app ran in generate mode and bound some, or its code can.
+func (c *Config) bindsToName() bool {
+	return c.boundRead && (len(c.bound) > 0 || c.binds)
 }
 
 // copyrightNoise is what publisher strips off a copyright notice: the

@@ -194,20 +194,39 @@ func generateBindings(c *Config, binary string) (bool, error) {
 	}
 	out := c.path(c.Bindings)
 	before, _ := os.ReadFile(out)
-	cmd := exec.Command(binary)
+	if err := runInGenerateMode(context.Background(), c, binary, out); err != nil {
+		return false, err
+	}
+	after, _ := os.ReadFile(out)
+	return !bytes.Equal(before, after), nil
+}
+
+// runInGenerateMode runs a compiled app in generate mode with the client written to
+// out. The same run lists the bound types, for mygo build to name their
+// methods (c.bound).
+func runInGenerateMode(ctx context.Context, c *Config, binary, out string) error {
+	list := binary + ".bound.json"
+	os.Remove(list)
+	defer os.Remove(list)
+	cmd := exec.CommandContext(ctx, binary)
 	cmd.Dir = c.root
 	o, e := con.output("app", os.Stdout), con.output("app", os.Stderr)
 	cmd.Stdout, cmd.Stderr = o, e
-	cmd.Env = append(os.Environ(), "MYGO_GENERATE="+out)
+	cmd.Env = append(os.Environ(), "MYGO_GENERATE="+out, "MYGO_GENERATE_BINDINGS="+list)
 	cmd.WaitDelay = waitDelay
 	err := waited(cmd.Run())
 	o.flush()
 	e.flush()
 	if err != nil {
-		return false, fmt.Errorf("generating the TypeScript client: %w", err)
+		return fmt.Errorf("generating the TypeScript client: %w", err)
 	}
-	after, _ := os.ReadFile(out)
-	return !bytes.Equal(before, after), nil
+	// An app that binds nothing of its own writes no list: nothing is bound.
+	if c.bound, err = readBoundTypes(list); err != nil {
+		return fmt.Errorf("reading the bound types: %w", err)
+	}
+	c.boundRead = true
+	c.binds, _ = bindsServices(binary)
+	return nil
 }
 
 // writeClient builds the app for this computer and writes its TypeScript
