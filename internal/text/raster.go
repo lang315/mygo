@@ -293,6 +293,14 @@ func (s *System) GlyphsCalls() uint64 {
 	return s.glyphsCalls
 }
 
+// Rastered returns how many glyphs the text stack drew, those the cache of
+// glyphs held left out: the cost of a frame that needs new glyphs.
+func (s *System) Rastered() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rastered
+}
+
 // glyphAt is Glyph with s locked and the placement of f looked up.
 func (s *System) glyphAt(f *Font, id uint32, scale, x float32, shade Shade, subpixel bool, pl placement) GlyphImage {
 	shade = f.shadeFor(shade)
@@ -355,6 +363,7 @@ func (s *System) Baseline(y float32) float32 {
 }
 
 func (s *System) rasterize(f *Font, id uint32, scale, dx float32, shade Shade, subpixel bool) GlyphImage {
+	s.rastered++
 	b := s.engine().glyph(f, id, scale, dx, shade, subpixel)
 	if b.w <= 0 || b.h <= 0 || b.w > 2048 || b.h > 2048 {
 		return GlyphImage{}

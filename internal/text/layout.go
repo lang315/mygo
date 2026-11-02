@@ -374,6 +374,8 @@ type System struct {
 	made, gen uint64
 	// glyphsCalls counts the calls of Glyphs (GlyphsCalls).
 	glyphsCalls uint64
+	// rastered counts the glyphs the engine drew (Rastered).
+	rastered uint64
 
 	glyphs map[glyphKey]*atlasEntry
 	places map[placeKey]placement

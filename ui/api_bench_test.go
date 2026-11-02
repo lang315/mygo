@@ -259,6 +259,7 @@ func BenchmarkTableFrame100kPhases(b *testing.B) {
 					tt.SkipRaster(skip)
 					ui.MeasureFrames(tt)
 					var laps [4]time.Duration
+					r0, l0, g0 := ui.TextCounts(tt)
 					b.ReportAllocs()
 					b.ResetTimer()
 					i := 0
@@ -274,6 +275,12 @@ func BenchmarkTableFrame100kPhases(b *testing.B) {
 					for p, part := range [4]string{"build", "layout", "paint", "present"} {
 						b.ReportMetric(float64(laps[p].Nanoseconds())/float64(i)/1000, part+"-µs/frame")
 					}
+					// Counts, which do not depend on the machine: the glyphs the text
+					// stack drew, the layouts it made and the calls for a line's glyphs.
+					r1, l1, g1 := ui.TextCounts(tt)
+					b.ReportMetric(float64(r1-r0)/float64(i), "rasters/frame")
+					b.ReportMetric(float64(l1-l0)/float64(i), "layouts/frame")
+					b.ReportMetric(float64(g1-g0)/float64(i), "glyphcalls/frame")
 				})
 			}
 		}
