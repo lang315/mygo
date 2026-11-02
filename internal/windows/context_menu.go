@@ -162,8 +162,8 @@ func (w *window) showContextMenu(m *platform.Menu, c *contextNatives, at point, 
 	dpi := int32(dpiOf(w.hwnd))
 	pt := point{bounds.Left + (at.X*dpi+48)/96, bounds.Top + (at.Y*dpi+48)/96}
 	parent := w.hwnd
-	if w.host != nil && w.host.surface != nil {
-		parent = w.host.surface.hwnd
+	if w.host != nil && w.host.sf != nil {
+		parent = w.host.surf().hwnd
 	}
 	procClientToScreen.Call(parent, uintptr(unsafe.Pointer(&pt)))
 	b := w.b

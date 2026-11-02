@@ -21,7 +21,7 @@ import (
 
 func surfaceByHandle(hwnd uintptr) *surface {
 	if w := theBackend.windows[hwnd]; w != nil {
-		return w.surface
+		return w.surf()
 	}
 	return nil
 }
@@ -498,7 +498,8 @@ func TestUncloaks() (byFrame, byTimer int) { return uncloaks.frame, uncloaks.tim
 // it, before a test has its handle.
 func TestUndrawnCloaked() (n int, cloaked bool) {
 	cloaked = true
-	for _, s := range theBackend.surfaces {
+	for _, h := range theBackend.surfaces {
+		s := h.(*surface)
 		if s.drawn {
 			continue
 		}

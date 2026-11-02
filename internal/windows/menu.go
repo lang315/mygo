@@ -414,7 +414,7 @@ func editRole(w *window, role string) bool {
 		// The page of a web view in the content has the keyboard.
 		return editRole(v, role)
 	}
-	if w.surface != nil {
+	if w.sf != nil {
 		if !platform.EditCommands[role] {
 			return false
 		}
@@ -446,7 +446,7 @@ func editRole(w *window, role string) bool {
 // can act on them. Those of a page keep the app's state: what a page would
 // do is not known before.
 func (w *window) enableEditItems(menu uintptr) {
-	native := w.surface != nil && w.focusedWebView() == nil
+	native := w.sf != nil && w.focusedWebView() == nil
 	for cmd, e := range w.b.menus.entries {
 		if e.menu != menu || !platform.EditCommands[e.role] {
 			continue

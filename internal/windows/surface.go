@@ -208,6 +208,7 @@ func newSurface(w *window) *surface {
 		return nil
 	}
 	w.b.surfaces[s.hwnd] = s
+	w.sf, w.api = s, s
 	s.cloak()
 	// Input methods only come to text inputs.
 	procImmAssociateContextEx.Call(s.hwnd, 0, 0)
@@ -1102,10 +1103,7 @@ func vkKey(vk uintptr) platform.Key {
 // Surface returns the surface of a window created with
 // WindowOptions.Surface.
 func (w *window) Surface() platform.Surface {
-	if w.surface == nil {
-		return nil
-	}
-	return w.surface
+	return w.api
 }
 
 // menuShortcut runs the window's menu item whose shortcut the key down vk

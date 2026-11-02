@@ -168,7 +168,7 @@ func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler
 // createEmbedded asks WebView2 for the composition controller of a web
 // view in a window of native UI, through handler.
 func (w *window) createEmbedded(handler uintptr) uintptr {
-	return w.b.createController(storeOf(w.opts.DataStore), w.host.surface.hwnd, true, handler)
+	return w.b.createController(storeOf(w.opts.DataStore), w.host.surf().hwnd, true, handler)
 }
 
 // setUpEmbedded connects a web view's composition controller to its
@@ -185,7 +185,7 @@ func (w *window) setUpEmbedded(comp uintptr) uintptr {
 		var c uintptr
 		comCall(w.comp, compGetCursor, uintptr(unsafe.Pointer(&c)))
 		w.cursor = c
-		if s := w.host.surface; s != nil && s.webHover == w {
+		if s := w.host.surf(); s != nil && s.webHover == w {
 			procSetCursor.Call(c)
 		}
 	}, func(h uintptr) uintptr { return comCall(comp, compAddCursorChanged, h, uintptr(unsafe.Pointer(&tok))) })
@@ -221,7 +221,7 @@ func (w *window) TabInto(back bool) {
 // tabOut gives the content the keyboard back as Tab leaves the page of the
 // web view w past its last element, or Shift+Tab past its first.
 func (w *window) tabOut(back bool) {
-	s := w.host.surface
+	s := w.host.surf()
 	if s == nil || w.host.closed {
 		return
 	}
@@ -230,7 +230,7 @@ func (w *window) tabOut(back bool) {
 	if back {
 		ev.Mods = platform.ModShift
 	}
-	s.send(ev)
+	w.host.sf.send(ev)
 }
 
 // automationProvider returns WebView2's UI Automation provider of the
@@ -248,10 +248,10 @@ func (w *window) automationProvider() uintptr {
 // pagePoint converts a point of the screen, a POINTL as OLE passes it, to
 // the web view's pixels, as its composition controller takes them.
 func (w *window) pagePoint(pt uintptr) uintptr {
-	s := w.host.surface
+	s := w.host.surf()
 	p := point{int32(uint32(pt)), int32(uint32(pt >> 32))}
 	procScreenToClient.Call(s.hwnd, uintptr(unsafe.Pointer(&p)))
-	dpi := float64(s.dpi())
+	dpi := float64(dpiOf(w.host.hwnd))
 	p.X -= int32(math.Round(w.frame.X * dpi / 96))
 	p.Y -= int32(math.Round(w.frame.Y * dpi / 96))
 	return uintptr(uint32(p.X)) | uintptr(uint32(p.Y))<<32
@@ -304,11 +304,11 @@ const dcompVisualRemoveAllVisuals = 18
 // hides it, once it has its controller. It stays hidden while its host
 // is.
 func (w *window) placeEmbedded() {
-	s := w.host.surface
+	s := w.host.surf()
 	if s == nil {
 		return
 	}
-	dpi := s.dpi()
+	dpi := dpiOf(w.host.hwnd)
 	px := func(v float64) float32 { return float32(math.Round(v * float64(dpi) / 96)) }
 	cx, cy := px(w.clip.X), px(w.clip.Y)
 	fx, fy := px(w.frame.X), px(w.frame.Y)
@@ -488,7 +488,7 @@ func (w *window) closeWebView() {
 	}
 	w.failPending(errDestroyed)
 	h := w.host
-	s := h.surface
+	s := h.surf()
 	if w.focused && s != nil {
 		procSetFocus.Call(s.hwnd)
 	}
@@ -530,7 +530,7 @@ func (w *window) closeWebViews() {
 	for len(w.webViews) > 0 {
 		w.webViews[len(w.webViews)-1].closeWebView()
 	}
-	if s := w.surface; s != nil && s.layer != nil {
+	if s := w.surf(); s != nil && s.layer != nil {
 		s.layer.free()
 		s.layer = nil
 	}

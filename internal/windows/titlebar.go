@@ -579,7 +579,7 @@ func (c *captionBar) layoutSnap(dpi int) {
 	px := func(v float64) int32 { return int32(math.Round(v * float64(dpi) / 96)) }
 	x0, y0, x1, y1 := px(r.X), px(r.Y), px(r.X+r.W), px(r.Y+r.H)
 	show := uintptr(swpShowWindow)
-	if w.fullScreen || w.surface == nil || x1 <= x0 || y1 <= y0 || !w.hasStyle(wsMaximizeBox) {
+	if w.fullScreen || w.sf == nil || x1 <= x0 || y1 <= y0 || !w.hasStyle(wsMaximizeBox) {
 		show = swpHideWindow
 	}
 	// HWND_TOP (0): above the content's window.
@@ -589,13 +589,13 @@ func (c *captionBar) layoutSnap(dpi int) {
 // toContent gives the content a pointer event at the screen position of a
 // non-client mouse message.
 func (c *captionBar) toContent(kind platform.SurfaceEventKind, lp uintptr) {
-	s := c.w.surface
+	s := c.w.surf()
 	if s == nil {
 		return
 	}
 	pt := point{getXParam(lp), getYParam(lp)}
 	procScreenToClient.Call(s.hwnd, uintptr(unsafe.Pointer(&pt)))
-	s.pointer(kind, uintptr(uint16(pt.X))|uintptr(uint16(pt.Y))<<16, 0)
+	c.w.sf.pointer(kind, uintptr(uint16(pt.X))|uintptr(uint16(pt.Y))<<16, 0)
 }
 
 // cursorOver reports whether the window under the pointer is hwnd.
@@ -622,7 +622,7 @@ func (c *captionBar) snapMessage(m uint32, lp uintptr) (uintptr, bool) {
 		return 0, false
 	case wmNCMouseLeave, wmMouseLeave:
 		c.snapTrack = false
-		s := c.w.surface
+		s := c.w.surf()
 		if s == nil {
 			return 0, true
 		}
@@ -636,7 +636,7 @@ func (c *captionBar) snapMessage(m uint32, lp uintptr) (uintptr, bool) {
 		}
 		// The content tells its own pointer's moves.
 		if !cursorOver(s.hwnd) {
-			s.send(platform.SurfaceEvent{Kind: platform.PointerLeave})
+			c.w.sf.send(platform.SurfaceEvent{Kind: platform.PointerLeave})
 		}
 		return 0, true
 	case wmNCLButtonDown, wmNCLButtonDblClk:

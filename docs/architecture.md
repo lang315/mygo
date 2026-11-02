@@ -4964,7 +4964,15 @@ rules, which took counter-native back to 8.9 MB after it had grown from
   through what `Bind` and `NewEvent` register; windows serve custom
   schemes and the frontend through what package `protocol` registers when
   an app imports it (`internal/schemehook`); messages format dates
-  through what `i18n.NewCatalog` registers. Generic constructors are only
+  through what `i18n.NewCatalog` registers; on Windows, a window of
+  native UI gets its surface (the GPU renderers, the text shaping, UI
+  Automation, the drop target: 195 to 217 KiB of `hello`, on arm64 and amd64) from what package `ui`
+  registers in `init` (`windows.UseSurface`), and `NewWindow` says so
+  when a window asks for a surface and none is registered. The window and
+  the message loop name the surface only through the narrow interface
+  `surfaceHost` and have no field of type `*surface`: a type a struct
+  reaches is kept, with its exported methods, wherever the struct is
+  converted to an interface. Generic constructors are only
   linked when instantiated, so they are a good place to register.
 - *No reflective method lookups on shared paths.* A reachable call of
   `reflect.Type.Method`, `reflect.Value.Method` or `MethodByName` with a

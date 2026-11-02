@@ -202,8 +202,8 @@ func (b *Backend) loseComposition(err error) {
 			c.comp.free()
 		}
 	}
-	for _, s := range b.surfaces {
-		if s.comp != nil {
+	for _, h := range b.surfaces {
+		if s := h.(*surface); s.comp != nil {
 			s.comp.free()
 		}
 	}
@@ -247,7 +247,8 @@ func (b *Backend) recompose() {
 		c.paint()
 	}
 	// Frames drawn in memory that could not show draw again.
-	for _, s := range b.surfaces {
+	for _, h := range b.surfaces {
+		s := h.(*surface)
 		if s.comp == nil || s.comp.dev != nil {
 			continue
 		}
@@ -255,7 +256,7 @@ func (b *Backend) recompose() {
 			b.composeLater(s.comp.retry)
 			continue
 		}
-		s.RequestFrame()
+		s.w.api.RequestFrame()
 	}
 }
 

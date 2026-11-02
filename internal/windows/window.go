@@ -76,8 +76,15 @@ type window struct {
 		value float64
 	}
 	icons [2]uintptr // small and big, from SetIcon
-	// surface shows the content MyGo draws, in place of the webview.
-	surface *surface
+	// sf shows the content MyGo draws, in place of the webview (surface.go),
+	// behind the calls the window and the message loop make. The window has no
+	// field of type *surface: a type that a struct reaches is kept with its
+	// methods when the struct is converted to an interface, and only the code that
+	// makes a surface (UseSurface) may keep them. surf gives the concrete surface.
+	sf surfaceHost
+	// api is the same surface as platform.Surface, which Window.Surface hands to
+	// the content (a smaller interface than the two in one: its table is small).
+	api platform.Surface
 	// webViews are the web views under the surface (webview_embed.go), and
 	// host the window whose surface a web view is under, which shows it
 	// through its composition controller comp (comp3 its drag and drop,
@@ -223,9 +230,9 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 	}
 	w.newTopEdge()
 	if o.Surface {
-		if w.surface = newSurface(w); w.surface == nil {
+		if err := w.makeSurface(); err != nil {
 			procDestroyWindow.Call(w.hwnd)
-			return nil, errors.New("mygo: cannot create the window's surface")
+			return nil, err
 		}
 	}
 	b.applyWindowTheme(w)
@@ -475,8 +482,8 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		}
 		return 0, false
 	case wmSetFocus:
-		if w.surface != nil {
-			procSetFocus.Call(w.surface.hwnd)
+		if w.sf != nil {
+			procSetFocus.Call(w.surf().hwnd)
 		} else {
 			w.focusWebView()
 		}
@@ -504,11 +511,11 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		}
 	case wmEraseBkgnd:
 		brush := w.bgBrush
-		if w.surface != nil && w.surface.bgBrush != 0 {
+		if w.sf != nil && w.surf().bgBrush != 0 {
 			// Native UI's own background, around its surface (which the
 			// window clips out) while the surface does not fill the window
 			// yet: see fillUncovered.
-			brush = w.surface.bgBrush
+			brush = w.surf().bgBrush
 		}
 		if brush != 0 && w.vibrancy == "" {
 			var r rect
@@ -518,8 +525,8 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		return 1, true
 	case wmWindowPosChanging:
 		pos := (*windowPos)(native(lp))
-		if pos.Flags&swpShowWindow != 0 && w.surface != nil {
-			w.surface.showing()
+		if pos.Flags&swpShowWindow != 0 && w.sf != nil {
+			w.sf.showing()
 		}
 		w.maximizeInWorkArea(pos)
 		if !w.movable {
@@ -561,16 +568,16 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 // and tells the app.
 func (w *window) sized(kind uintptr) {
 	w.resizeWebView()
-	if w.surface != nil {
+	if w.sf != nil {
 		// What the window grew by shows the content's background, not
 		// black, until the surface presents the frame of its new size,
 		// which fitting it draws at once. The window's own pixels under
 		// the surface take it too, which show where the window next
 		// shrinks, until DWM takes its new size (fillUnder).
-		w.surface.fillUncovered()
-		w.surface.fit()
-		w.surface.fillUnder()
-		w.surface.checkShown()
+		w.sf.fillUncovered()
+		w.sf.fit()
+		w.sf.fillUnder()
+		w.sf.checkShown()
 	}
 	if kind != sizeMinimized {
 		w.layoutControls()

@@ -1224,7 +1224,7 @@ const (
 // page returns the web view whose page the element stands for, if any.
 func (e *uiaElement) page() *window {
 	v, ok := e.n.WebView.(*window)
-	if !ok || v.closed || v.comp == 0 || v.host == nil || v.host.surface != e.tree.s {
+	if !ok || v.closed || v.comp == 0 || v.host == nil || v.host.surf() != e.tree.s {
 		return nil
 	}
 	return v
