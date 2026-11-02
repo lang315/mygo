@@ -5,6 +5,8 @@ package d3d11
 import (
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"unsafe"
 
 	"github.com/egoist/mygo/internal/gpu/d3d11/device"
 )
@@ -22,8 +24,13 @@ import (
 // on the device (ClearState and Flush ran, its textures, buffers, views
 // and swap chain are released), the device has not been removed, and it
 // is not a debug device (MYGO_D3D_DEBUG=1, whose layer should report what
-// a renderer leaked, as it does without the pool). device.New always takes
-// the default adapter, so a kit is the device it would make. A kit that
+// a renderer leaked, as it does without the pool). The GPU always comes
+// first, as device.New makes it: a kit of the GPU is taken only while its
+// adapter is still the default one (the one device.New would take), and a
+// kit of WARP only when the GPU cannot make a device, so a window that
+// first got WARP (a remote session, a driver that was resetting) or
+// retried the GPU after rendering failed finds it again as soon as it can
+// (a kit of WARP that is not taken is released then, once). A kit that
 // finds the pool full is released as before. The pool holds a device until
 // the app ends, as a window of another renderer would; the pool needs a
 // mutex only for tests, as renderers are made and released on the main
@@ -31,6 +38,7 @@ import (
 type kit struct {
 	device, ctx, ctx1, factory uintptr
 	warp                       bool
+	luid                       uint64 // of the device's adapter
 
 	vs, ps, layout         uintptr
 	blend, holeBlend       uintptr
@@ -43,9 +51,12 @@ var pool struct {
 	kit *kit
 }
 
-// Replaced by tests: how a device is made, and whether one was removed.
+// Replaced by tests: how a device is made, with and without the software
+// rasterizer, which adapter is the default, and whether a device was removed.
 var (
 	newDevice   = device.New
+	newHardware = device.NewHardware
+	defaultLUID = defaultAdapterLUID
 	deviceGone  = deviceRemoved
 	devicesMade atomic.Int32 // devices made, for tests
 	shadersMade atomic.Int32 // sets of shaders made, for tests
@@ -60,9 +71,9 @@ func deviceRemoved(dev uintptr) bool { return failed(call(dev, devGetDeviceRemov
 // takeKit returns the part of the renderer that belongs to its device, and
 // takes it away from the renderer.
 func (r *Renderer) takeKit() *kit {
-	k := &kit{r.device, r.ctx, r.ctx1, r.factory, r.warp,
+	k := &kit{r.device, r.ctx, r.ctx1, r.factory, r.warp, r.luid,
 		r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS}
-	r.device, r.ctx, r.ctx1, r.factory = 0, 0, 0, 0
+	r.device, r.ctx, r.ctx1, r.factory, r.luid = 0, 0, 0, 0, 0
 	r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	return k
 }
@@ -83,7 +94,7 @@ func (k *kit) free() {
 
 // adopt takes the kit's device and its objects for the renderer.
 func (r *Renderer) adopt(k *kit) {
-	r.device, r.ctx, r.ctx1, r.factory, r.warp = k.device, k.ctx, k.ctx1, k.factory, k.warp
+	r.device, r.ctx, r.ctx1, r.factory, r.warp, r.luid = k.device, k.ctx, k.ctx1, k.factory, k.warp, k.luid
 	r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.raster, r.samp = k.vs, k.ps, k.layout, k.blend, k.holeBlend, k.raster, k.samp
 	r.passVS, r.downPS, r.blurPS = k.passVS, k.downPS, k.blurPS
 }
@@ -116,4 +127,71 @@ func keep(k *kit) {
 	if k != nil {
 		k.free()
 	}
+}
+
+// reusable returns the pooled kit the renderer takes, or nil when it makes
+// a device of its own, which it then may have started to make: r.device is
+// set for the GPU's device made while a kit of WARP waited (the kit is
+// released), so that it is not made twice. Only the GPU's device is kept
+// for its adapter, and WARP for no GPU.
+func reusable(r *Renderer) *kit {
+	k := pooled()
+	switch {
+	case k == nil:
+		return nil
+	case k.warp:
+		if dev, ctx, err := newHardware(); err == nil {
+			k.free()
+			r.device, r.ctx, r.warp = dev, ctx, false
+			return nil
+		}
+		return k
+	default:
+		if luid, ok := defaultLUID(); ok && luid == k.luid {
+			return k
+		}
+		k.free()
+		return nil
+	}
+}
+
+// adapterDesc is DXGI_ADAPTER_DESC.
+type adapterDesc struct {
+	Description                                 [128]uint16
+	VendorID, DeviceID, SubSysID, Revision      uint32
+	DedicatedVideoMemory, DedicatedSystemMemory uintptr
+	SharedSystemMemory                          uintptr
+	LUID                                        uint64
+}
+
+const dxgiAdapterGetDesc = 8 // IDXGIAdapter
+
+// adapterLUID returns the locally unique ID of an adapter.
+func adapterLUID(adapter uintptr) (uint64, bool) {
+	var d adapterDesc
+	if failed(call(adapter, dxgiAdapterGetDesc, uintptr(unsafe.Pointer(&d)))) {
+		return 0, false
+	}
+	return d.LUID, true
+}
+
+var procCreateDXGIFactory1 = syscall.NewLazyDLL(device.SystemDir() + `\dxgi.dll`).NewProc("CreateDXGIFactory1")
+
+var iidIDXGIFactory1 = guid{0x770aae78, 0xf26f, 0x4dba, [8]byte{0xa8, 0x29, 0x25, 0x3c, 0x83, 0xd1, 0xb3, 0x87}}
+
+const dxgiFactoryEnumAdapters = 7 // IDXGIFactory
+
+// defaultAdapterLUID returns the LUID of the adapter device.New takes, the
+// first one DXGI lists.
+func defaultAdapterLUID() (uint64, bool) {
+	var factory, adapter uintptr
+	if hr, _, _ := procCreateDXGIFactory1.Call(uintptr(unsafe.Pointer(&iidIDXGIFactory1)), uintptr(unsafe.Pointer(&factory))); failed(hr) {
+		return 0, false
+	}
+	defer free(&factory)
+	if failed(call(factory, dxgiFactoryEnumAdapters, 0, uintptr(unsafe.Pointer(&adapter)))) {
+		return 0, false
+	}
+	defer free(&adapter)
+	return adapterLUID(adapter)
 }

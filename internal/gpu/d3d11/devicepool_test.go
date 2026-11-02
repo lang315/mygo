@@ -3,6 +3,7 @@
 package d3d11
 
 import (
+	"errors"
 	"runtime"
 	"testing"
 
@@ -22,8 +23,27 @@ func emptyPool(t *testing.T) {
 	if k != nil {
 		k.free()
 	}
-	gone := deviceGone
-	t.Cleanup(func() { deviceGone = gone })
+	gone, hardware, adapter := deviceGone, newHardware, defaultLUID
+	t.Cleanup(func() { deviceGone, newHardware, defaultLUID = gone, hardware, adapter })
+}
+
+// pooledKit returns the kit a released renderer left in the pool, which
+// the test then edits as if it came from another kind of device.
+func pooledKit(t *testing.T) *kit {
+	t.Helper()
+	newRendererOrSkip(t).Release()
+	pool.Lock()
+	defer pool.Unlock()
+	if pool.kit == nil {
+		t.Fatal("the device did not go to the pool")
+	}
+	return pool.kit
+}
+
+func setKit(k *kit, warp bool, luid uint64) {
+	pool.Lock()
+	k.warp, k.luid = warp, luid
+	pool.Unlock()
 }
 
 func newRendererOrSkip(t *testing.T) *Renderer {
@@ -52,8 +72,12 @@ func TestDevicePoolReusesTheDevice(t *testing.T) {
 }
 
 // A renderer that takes the device of another draws as one with a device of
-// its own, and leaves nothing of its own on the device: what the device is
-// held by, as it goes back to the pool, stays the same.
+// its own. The references held on the pooled device, which count what the
+// renderer's windows objects (textures, views, buffers, swap chain) left
+// on it as well as the device's own, stay the same round after round: a
+// renderer that leaked one of them, as it could not before the device
+// stayed alive, would add to it. That the device goes back only after
+// those are released, not before, is not checked here.
 func TestDevicePoolKeepsNothingOfAWindow(t *testing.T) {
 	emptyPool(t)
 	s := gputest.BorderedCardScene(false)
@@ -118,5 +142,103 @@ func TestDevicePoolHoldsOne(t *testing.T) {
 	newRendererOrSkip(t).Release() // takes the one in the pool
 	if n := devicesMade.Load() - devices; n != 2 {
 		t.Errorf("%d devices made for two renderers alive at once and one after them, want 2", n)
+	}
+}
+
+// A renderer made while a kit of WARP is in the pool, and the GPU can make a
+// device, takes the GPU's, and the kit of WARP is released.
+func TestDevicePoolPrefersTheGPU(t *testing.T) {
+	emptyPool(t)
+	k := pooledKit(t)
+	setKit(k, true, 0)
+	hardwareTried := 0
+	newHardware = func() (uintptr, uintptr, error) {
+		hardwareTried++
+		dev, ctx, _, err := newDevice() // stands for the GPU's device
+		return dev, ctx, err
+	}
+	devices := devicesMade.Load()
+	r := newRendererOrSkip(t)
+	if hardwareTried != 1 {
+		t.Errorf("the GPU was tried %d times, want 1", hardwareTried)
+	}
+	if n := devicesMade.Load() - devices; n != 1 {
+		t.Errorf("%d devices made, want the GPU's (1)", n)
+	}
+	if r.warp {
+		t.Error("the renderer has WARP, though the GPU made a device")
+	}
+	pool.Lock()
+	left := pool.kit
+	pool.Unlock()
+	if left != nil {
+		t.Error("the kit of WARP is still in the pool")
+	}
+	r.Release()
+}
+
+// Without a GPU, a renderer takes the kit of WARP from the pool.
+func TestDevicePoolTakesWARPWhenThereIsNoGPU(t *testing.T) {
+	emptyPool(t)
+	k := pooledKit(t)
+	setKit(k, true, 0)
+	newHardware = func() (uintptr, uintptr, error) { return 0, 0, errors.New("no GPU") }
+	devices := devicesMade.Load()
+	r := newRendererOrSkip(t)
+	if n := devicesMade.Load() - devices; n != 0 {
+		t.Errorf("%d devices made, want the pooled WARP's", n)
+	}
+	r.Release()
+}
+
+// A kit of the GPU is taken while its adapter is the default one.
+func TestDevicePoolKeepsTheGPUWhileItIsTheDefault(t *testing.T) {
+	emptyPool(t)
+	for _, tc := range []struct {
+		name string
+		luid uint64
+		ok   bool
+		made int32
+	}{{"the default", 7, true, 0}, {"another is the default", 8, true, 1}, {"the default is unknown", 0, false, 1}} {
+		k := pooledKit(t)
+		setKit(k, false, 7)
+		defaultLUID = func() (uint64, bool) { return tc.luid, tc.ok }
+		devices := devicesMade.Load()
+		r := newRendererOrSkip(t)
+		if n := devicesMade.Load() - devices; n != tc.made {
+			t.Errorf("%s: %d devices made, want %d", tc.name, n, tc.made)
+		}
+		r.Release()
+		emptyPoolNow()
+	}
+}
+
+func emptyPoolNow() {
+	pool.Lock()
+	k := pool.kit
+	pool.kit = nil
+	pool.Unlock()
+	if k != nil {
+		k.free()
+	}
+}
+
+// A renderer made for a window again, as after a failure of its frames,
+// makes its swap chain with the device that stayed, and draws.
+func TestDevicePoolSameWindowAgain(t *testing.T) {
+	emptyPool(t)
+	s := gputest.BorderedCardScene(false)
+	hwnd := hiddenWindow(t, s.Width, s.Height)
+	for i := range 3 {
+		r, err := New(hwnd)
+		if err != nil {
+			t.Skip("no Direct3D 11:", err)
+		}
+		if err := r.draw(s); err != nil {
+			t.Fatalf("round %d: %v", i, err)
+		}
+		pix, stride := r.readBack(t)
+		gputest.CompareStraightEdges(t, "d3d11-same-window-again", pix, stride, s)
+		r.Release()
 	}
 }

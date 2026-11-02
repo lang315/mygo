@@ -277,8 +277,9 @@ type Renderer struct {
 	factory   uintptr
 	swapChain uintptr
 	rtv       uintptr
-	w, h      int  // the size drawn, which the swap chain shows
-	warp      bool // the device is WARP, Windows' software rasterizer
+	w, h      int    // the size drawn, which the swap chain shows
+	warp      bool   // the device is WARP, Windows' software rasterizer
+	luid      uint64 // the device's adapter
 
 	// composed tells that the swap chain shows on the window through
 	// DirectComposition, with its alpha, as the content of visual, the
@@ -398,12 +399,14 @@ func newRenderer(hwnd uintptr, composed bool) (*Renderer, error) {
 		return nil, errors.New("d3d11: no window")
 	}
 	r := &Renderer{hwnd: hwnd, composed: composed, images: map[uint64]*texture{}}
-	if k := pooled(); k != nil {
+	if k := reusable(r); k != nil {
 		r.adopt(k)
 	} else {
-		var err error
-		if r.device, r.ctx, r.warp, err = newDevice(); err != nil {
-			return nil, err
+		if r.device == 0 { // reusable made none
+			var err error
+			if r.device, r.ctx, r.warp, err = newDevice(); err != nil {
+				return nil, err
+			}
 		}
 		devicesMade.Add(1)
 		if err := r.initDevice(); err != nil {
@@ -443,6 +446,7 @@ func (r *Renderer) initDevice() error {
 		return errors.New("d3d11: no adapter")
 	}
 	defer free(&adapter)
+	r.luid, _ = adapterLUID(adapter)
 	if failed(call(adapter, dxgiGetParent, uintptr(unsafe.Pointer(&iidIDXGIFactory2)), uintptr(unsafe.Pointer(&r.factory)))) {
 		return errors.New("d3d11: DXGI 1.2 is required")
 	}
@@ -799,7 +803,6 @@ func (r *Renderer) Release() {
 	}
 	if r.ctx != 0 {
 		call(r.ctx, ctxClearState)
-		call(r.ctx, ctxFlush)
 	}
 	for _, t := range r.images {
 		free(&t.srv)
@@ -834,6 +837,13 @@ func (r *Renderer) Release() {
 	// renderer of it then makes.
 	for _, p := range []*uintptr{&r.visual, &r.target, &r.dcomp, &r.rtv, &r.swapChain2, &r.swapChain, &r.instBuf, &r.cbuf, &r.passCB} {
 		free(p)
+	}
+	// With everything released, the flush destroys what the device kept
+	// alive for the GPU, a flip swap chain's buffers among them, as the
+	// documentation of Flush asks: a device that stays would otherwise
+	// fail to make a swap chain for the window again.
+	if r.ctx != 0 {
+		call(r.ctx, ctxFlush)
 	}
 	// The device, the shaders and the states stay for the next renderer
 	// (devicepool.go), or go as well.
