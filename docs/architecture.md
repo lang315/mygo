@@ -5033,7 +5033,13 @@ platform (`nowebview.go`: `newWindow` and `NewWebView`); a backend that is
 asked all the same panics (macOS, Linux) or fails the window (Windows) with the same
 error. A plain `go build` has no tag, so it has the web view and the size it
 always had. The part of the engine that places web views in a surface
-(`placeWebViews`, some 10 to 25 KB) is linked all the same. The benchmarks build each example with the tags
+(`placeWebViews`, some 10 to 25 KB) is linked all the same. The platforms
+differ in what is left of WebKit: macOS still loads WebKit.framework at
+startup, because cookies, `NewDataStore` and content rules use
+WKWebsiteDataStore, and those calls keep working there; Linux loads no
+WebKitGTK, and the calls that need it return the nativeOnly error. A nativeOnly
+app's Linux packages do not depend on WebKitGTK and install.sh does not ask
+for it (`linux.webview` is false whatever the configuration says). The benchmarks build each example with the tags
 `mygo build` would (`scripts/bench.ts`, `tagsOf`).
 
 When an app grows, `go tool nm -size -sort size` on a build without `-s

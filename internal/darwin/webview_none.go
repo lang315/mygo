@@ -24,3 +24,5 @@ func registerWebViewClasses() {}
 func webViewDelegateMethods() []objc.MethodDef { return nil }
 
 func (w *window) createWebView(NSRect) { panic(errNativeOnly) }
+
+func (w *window) webViewValueChanged(string) {}

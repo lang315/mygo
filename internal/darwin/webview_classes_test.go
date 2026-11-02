@@ -20,10 +20,10 @@ func TestWebViewDelegateHasWebKitsMethods(t *testing.T) {
 		}
 	}
 	have := map[objc.SEL]bool{}
-	for _, m := range webViewDelegateMethods() {
+	for _, m := range windowDelegateMethods() {
 		have[m.Cmd] = true
 	}
-	for _, name := range []string{"webView:didCommitNavigation:", "userContentController:didReceiveScriptMessage:", "download:didFailWithError:resumeData:", "webView:decidePolicyForNavigationAction:decisionHandler:"} {
+	for _, name := range []string{"observeValueForKeyPath:ofObject:change:context:", "webView:didCommitNavigation:", "userContentController:didReceiveScriptMessage:", "download:didFailWithError:resumeData:", "webView:decidePolicyForNavigationAction:decisionHandler:"} {
 		if !have[sel(name)] {
 			t.Errorf("the window delegate lacks %s", name)
 		}

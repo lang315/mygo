@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"unsafe"
 
 	"github.com/ebitengine/purego/objc"
 
@@ -1884,144 +1885,151 @@ func registerWindowClasses() {
 	registerClipViewClass()
 	registerWebViewClasses()
 
+	classDef("MyGoWindowDelegate", "NSObject", append([]string{"NSWindowDelegate", "NSPopoverDelegate"}, webViewProtocols...), windowDelegateMethods())
+}
+
+// windowDelegateMethods are the methods of the window delegate: NSWindowDelegate's,
+// the popover's and, in a build with a web view, those WebKit calls.
+func windowDelegateMethods() []objc.MethodDef {
 	b := func() *Backend { return theBackend }
-	classDef("MyGoWindowDelegate", "NSObject",
-		append([]string{"NSWindowDelegate", "NSPopoverDelegate"}, webViewProtocols...),
-		append(append(popoverDelegateMethods(), webViewDelegateMethods()...), []objc.MethodDef{
-			// NSWindowDelegate
-			method("windowShouldClose:", func(self id, _ objc.SEL, sender id) bool {
-				if w := b().windowFor(self); w != nil {
-					return w.h.ShouldClose()
-				}
-				return true
-			}),
-			// WKUIDelegate (macOS 12): camera and microphone requests.
-			method("windowWillClose:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.cleanup()
-					w.h.Closed()
-				}
-			}),
-			method("windowDidBecomeKey:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.orderChildrenLater()
-					w.h.Focused()
-					w.surfaceKeyChanged(true)
-				}
-			}),
-			method("windowDidResignKey:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.h.Blurred()
-					w.surfaceKeyChanged(false)
-					if w.opts.Flyout != nil && w.popover == 0 {
-						// Once AppKit made another window key, or none,
-						// unless the press on its tray icon toggles it.
-						if t, ok := w.flyout.Tray.(*tray); !ok || !t.pressed() {
-							b().post(w.dismissFlyout)
-						}
+	return append(append(popoverDelegateMethods(), webViewDelegateMethods()...), []objc.MethodDef{
+		// Key-value observing: the window's appearance, which a window with
+		// traffic lights has observed, native UI or not, and what
+		// webViewValueChanged handles of a page.
+		method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx unsafe.Pointer) {
+			w := b().windowFor(self)
+			if w == nil {
+				return
+			}
+			switch key := goString(keyPath); key {
+			case "effectiveAppearance":
+				// AppKit lays the title bar out again after telling us.
+				b().post(w.layoutTrafficLights)
+			default:
+				w.webViewValueChanged(key)
+			}
+		}),
+		// NSWindowDelegate
+		method("windowShouldClose:", func(self id, _ objc.SEL, sender id) bool {
+			if w := b().windowFor(self); w != nil {
+				return w.h.ShouldClose()
+			}
+			return true
+		}),
+		// WKUIDelegate (macOS 12): camera and microphone requests.
+		method("windowWillClose:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.cleanup()
+				w.h.Closed()
+			}
+		}),
+		method("windowDidBecomeKey:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.orderChildrenLater()
+				w.h.Focused()
+				w.surfaceKeyChanged(true)
+			}
+		}),
+		method("windowDidResignKey:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.h.Blurred()
+				w.surfaceKeyChanged(false)
+				if w.opts.Flyout != nil && w.popover == 0 {
+					// Once AppKit made another window key, or none,
+					// unless the press on its tray icon toggles it.
+					if t, ok := w.flyout.Tray.(*tray); !ok || !t.pressed() {
+						b().post(w.dismissFlyout)
 					}
 				}
-			}),
-			method("windowDidResize:", func(self id, _ objc.SEL, n id) {
-				w := b().windowFor(self)
-				if w == nil {
-					return
+			}
+		}),
+		method("windowDidResize:", func(self id, _ objc.SEL, n id) {
+			w := b().windowFor(self)
+			if w == nil {
+				return
+			}
+			w.layoutTrafficLights()
+			if z := w.IsMaximized(); z != w.maximized {
+				w.maximized = z
+				if z {
+					w.h.Maximized()
+				} else {
+					w.h.Unmaximized()
 				}
+			}
+			w.h.Resized()
+		}),
+		method("windowWillMove:", func(self id, _ objc.SEL, n id) {
+			// The window server begins to move the window: a drag
+			// region's press is its (window_drag.go).
+			if w := b().windowFor(self); w != nil {
+				theDrag.willMove(w.win)
+			}
+		}),
+		method("windowDidMove:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.h.Moved()
+			}
+		}),
+		method("windowDidChangeOcclusionState:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil && w.surface != nil && w.surface.visible() {
+				w.surface.send(platform.SurfaceEvent{Kind: platform.SurfaceShown})
+			}
+		}),
+		method("windowDidMiniaturize:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.hideChildren()
+				w.h.Minimized()
+			}
+		}),
+		method("windowDidDeminiaturize:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.orderChildrenLater()
+				w.h.Restored()
+			}
+		}),
+		// The toolbar that insets the traffic lights holds no items: in
+		// full screen it hides with the menu bar instead of covering the
+		// top of the page.
+		method("window:willUseFullScreenPresentationOptions:", func(self id, _ objc.SEL, win id, proposed uint) uint {
+			const autoHide = presentationFullScreen | presentationAutoHideMenuBar
+			if send(win, "toolbar") != 0 && proposed&autoHide == autoHide {
+				return proposed | presentationAutoHideToolbar
+			}
+			return proposed
+		}),
+		// The child windows follow their parent into its full-screen
+		// Space, and are left where they are as it comes out of it.
+		method("windowWillEnterFullScreen:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.childrenAttached = true
+				w.attachChildren()
+			}
+		}),
+		method("windowDidFailToEnterFullScreen:", func(self id, _ objc.SEL, win id) {
+			if w := b().windowFor(self); w != nil {
+				w.leftFullScreen()
+			}
+		}),
+		method("windowDidEnterFullScreen:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.h.EnteredFullScreen()
+				if w.hiddenTitleBar() {
+					w.h.TitleBarChanged() // the traffic lights hid
+				}
+			}
+		}),
+		method("windowDidExitFullScreen:", func(self id, _ objc.SEL, n id) {
+			if w := b().windowFor(self); w != nil {
+				w.leftFullScreen()
 				w.layoutTrafficLights()
-				if z := w.IsMaximized(); z != w.maximized {
-					w.maximized = z
-					if z {
-						w.h.Maximized()
-					} else {
-						w.h.Unmaximized()
-					}
+				w.h.LeftFullScreen()
+				if w.hiddenTitleBar() {
+					w.h.TitleBarChanged()
 				}
-				w.h.Resized()
-			}),
-			method("windowWillMove:", func(self id, _ objc.SEL, n id) {
-				// The window server begins to move the window: a drag
-				// region's press is its (window_drag.go).
-				if w := b().windowFor(self); w != nil {
-					theDrag.willMove(w.win)
-				}
-			}),
-			method("windowDidMove:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.h.Moved()
-				}
-			}),
-			method("windowDidChangeOcclusionState:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil && w.surface != nil && w.surface.visible() {
-					w.surface.send(platform.SurfaceEvent{Kind: platform.SurfaceShown})
-				}
-			}),
-			method("windowDidMiniaturize:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.hideChildren()
-					w.h.Minimized()
-				}
-			}),
-			method("windowDidDeminiaturize:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.orderChildrenLater()
-					w.h.Restored()
-				}
-			}),
-			// The toolbar that insets the traffic lights holds no items: in
-			// full screen it hides with the menu bar instead of covering the
-			// top of the page.
-			method("window:willUseFullScreenPresentationOptions:", func(self id, _ objc.SEL, win id, proposed uint) uint {
-				const autoHide = presentationFullScreen | presentationAutoHideMenuBar
-				if send(win, "toolbar") != 0 && proposed&autoHide == autoHide {
-					return proposed | presentationAutoHideToolbar
-				}
-				return proposed
-			}),
-			// The child windows follow their parent into its full-screen
-			// Space, and are left where they are as it comes out of it.
-			method("windowWillEnterFullScreen:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.childrenAttached = true
-					w.attachChildren()
-				}
-			}),
-			method("windowDidFailToEnterFullScreen:", func(self id, _ objc.SEL, win id) {
-				if w := b().windowFor(self); w != nil {
-					w.leftFullScreen()
-				}
-			}),
-			method("windowDidEnterFullScreen:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.h.EnteredFullScreen()
-					if w.hiddenTitleBar() {
-						w.h.TitleBarChanged() // the traffic lights hid
-					}
-				}
-			}),
-			method("windowDidExitFullScreen:", func(self id, _ objc.SEL, n id) {
-				if w := b().windowFor(self); w != nil {
-					w.leftFullScreen()
-					w.layoutTrafficLights()
-					w.h.LeftFullScreen()
-					if w.hiddenTitleBar() {
-						w.h.TitleBarChanged()
-					}
-				}
-			}),
-
-			// WKScriptMessageHandler
-
-			// Key-value observing of the page title, its sound and
-			// capture, and the window's appearance.
-
-			// WKNavigationDelegate
-			// Responses the page cannot show, or sent as attachments, are
-			// downloads (macOS 11.3).
-			// WKDownloadDelegate.
-			// HTTP sign-in and server certificates (auth.go).
-
-			// WKUIDelegate
-		}...))
+			}
+		}),
+	}...)
 }
 
 // userInitiated reports whether a user's gesture started a navigation

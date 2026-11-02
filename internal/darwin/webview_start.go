@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"strings"
-	"unsafe"
 
 	"github.com/ebitengine/purego/objc"
 
@@ -84,27 +83,6 @@ func webViewDelegateMethods() []objc.MethodDef {
 				return
 			}
 			w.h.Message(goString(body))
-		}),
-		method("observeValueForKeyPath:ofObject:change:context:", func(self id, _ objc.SEL, keyPath, object, change id, ctx unsafe.Pointer) {
-			w := b().windowFor(self)
-			if w == nil {
-				return
-			}
-			switch goString(keyPath) {
-			case "title":
-				w.h.TitleChanged(goString(send(w.web, "title")))
-			case "_isPlayingAudio":
-				w.h.AudibleChanged(w.IsAudible())
-			case "cameraCaptureState":
-				w.captureChanged(platform.CaptureCamera)
-			case "microphoneCaptureState":
-				w.captureChanged(platform.CaptureMicrophone)
-			case "_displayCaptureState":
-				w.captureChanged(platform.CaptureDisplay)
-			case "effectiveAppearance":
-				// AppKit lays the title bar out again after telling us.
-				b().post(w.layoutTrafficLights)
-			}
 		}),
 		method("webView:decidePolicyForNavigationAction:decisionHandler:", func(self id, _ objc.SEL, web, action id, blk objc.Block) {
 			handler := uintptr(blk)
@@ -406,5 +384,22 @@ func (w *window) createWebView(content NSRect) {
 			w.observesCapture[kind] = true
 			send(w.web, "addObserver:forKeyPath:options:context:", uintptr(w.delegate), uintptr(nsString(key)), 0, 0)
 		}
+	}
+}
+
+// webViewValueChanged handles the key-value observing of a page: its title,
+// its sound and its capture (the window's appearance is the delegate's).
+func (w *window) webViewValueChanged(key string) {
+	switch key {
+	case "title":
+		w.h.TitleChanged(goString(send(w.web, "title")))
+	case "_isPlayingAudio":
+		w.h.AudibleChanged(w.IsAudible())
+	case "cameraCaptureState":
+		w.captureChanged(platform.CaptureCamera)
+	case "microphoneCaptureState":
+		w.captureChanged(platform.CaptureMicrophone)
+	case "_displayCaptureState":
+		w.captureChanged(platform.CaptureDisplay)
 	}
 }
