@@ -32,9 +32,9 @@ import (
 // retried the GPU after rendering failed finds it again as soon as it can
 // (a kit of WARP that is not taken is released then, once). A kit that
 // finds the pool full is released as before. The pool holds a device until
-// the app ends, as a window of another renderer would; the pool needs a
-// mutex only for tests, as renderers are made and released on the main
-// thread.
+// the app ends, as a window of another renderer would; renderers are made and released on the main
+// thread, and the prewarm's goroutine puts its kit in the pool, so the pool has a
+// mutex.
 type kit struct {
 	device, ctx, ctx1, factory uintptr
 	warp                       bool
@@ -202,31 +202,37 @@ func defaultAdapterLUID() (uint64, bool) {
 // A window of native UI waits, on the main thread, for a device and its shaders
 // that the first of them makes (11 ms for the device on a GPU, as many for the
 // shaders and states, which windows after it find in the pool). Prewarm makes
-// them in the background while the first window is created and shown, which
-// the app starts as it runs (ui has the backend call it): a first frame that took
-// 22 ms in the window's own time took 4. On a software adapter (Microsoft's
-// Basic Render Driver, which VMs, remote sessions and the CI runners have) it
-// does not start: there making a device is as much work for the CPU as the
-// window's, and the two only wait for each other. The renderer that finds a
-// prewarm running waits for it, as making a second device would double the work.
+// them in the background while the first window is created and shown (the
+// backend calls it as that window is made): a first frame that took 22 ms in the
+// window's own time took 4. On a software adapter (Microsoft's Basic Render
+// Driver, which VMs, remote sessions and the CI runners have) it does not
+// make them: there making a device is as much work for the CPU as the window's,
+// and the two only wait for each other. Nor does it for a debug device
+// (MYGO_D3D_DEBUG=1), whose layer should see what a renderer made. The renderer
+// that finds a prewarm running waits for it, as making a second device would
+// double the work, and a hung driver would hang it just the same.
 var prewarm struct {
 	sync.Mutex
 	done chan struct{}
 }
 
-// Prewarm starts making the device and shaders of the first renderer, unless
-// the default adapter is a software one. It does nothing the second time, and
-// does not wait.
+// Prewarm starts, in the background, making the device and shaders of the first
+// renderer. It returns at once, and does nothing from the second call on; the
+// goroutine looks at the default adapter and makes nothing when it is a software
+// one.
 func Prewarm() {
 	prewarm.Lock()
 	defer prewarm.Unlock()
-	if prewarm.done != nil || softwareDefault() {
+	if prewarm.done != nil {
 		return
 	}
 	done := make(chan struct{})
 	prewarm.done = done
 	go func() {
 		defer close(done)
+		if device.Debug() || softwareDefault() {
+			return
+		}
 		r := &Renderer{}
 		var err error
 		if r.device, r.ctx, r.warp, err = newDevice(); err != nil {
@@ -242,7 +248,7 @@ func Prewarm() {
 }
 
 // waitPrewarm returns once the prewarm, if one started, has put its kit in the
-// pool (or failed to).
+// pool (or made none).
 func waitPrewarm() {
 	prewarm.Lock()
 	done := prewarm.done
@@ -269,23 +275,26 @@ const (
 	vendorMicrosoft           = 0x1414
 )
 
-// defaultAdapterIsSoftware reports whether the adapter device.New takes, the
-// first one DXGI lists, is a software one: the flag says so, and Microsoft's
-// Basic Render Driver says it only by its vendor (it is a driver of its own
-// kind, and a device on it is not WARP's). It is false where that cannot be read.
-func defaultAdapterIsSoftware() bool {
+// defaultAdapterDesc1 describes the adapter device.New takes, the first one
+// DXGI lists.
+func defaultAdapterDesc1() (d adapterDesc1, ok bool) {
 	var factory, adapter uintptr
 	if hr, _, _ := procCreateDXGIFactory1.Call(uintptr(unsafe.Pointer(&iidIDXGIFactory1)), uintptr(unsafe.Pointer(&factory))); failed(hr) {
-		return false
+		return d, false
 	}
 	defer free(&factory)
 	if failed(call(factory, dxgiFactory1EnumAdapters1, 0, uintptr(unsafe.Pointer(&adapter)))) {
-		return false
+		return d, false
 	}
 	defer free(&adapter)
-	var d adapterDesc1
-	if failed(call(adapter, dxgiAdapter1GetDesc1, uintptr(unsafe.Pointer(&d)))) {
-		return false
-	}
-	return d.Flags&dxgiAdapterFlagSoftware != 0 || d.VendorID == vendorMicrosoft
+	return d, !failed(call(adapter, dxgiAdapter1GetDesc1, uintptr(unsafe.Pointer(&d))))
+}
+
+// defaultAdapterIsSoftware reports whether the default adapter is a software
+// one: the flag says so, and Microsoft's Basic Render Driver says it only by its
+// vendor (it is a driver of its own kind, and a device on it is not WARP's). It
+// is false where that cannot be read.
+func defaultAdapterIsSoftware() bool {
+	d, ok := defaultAdapterDesc1()
+	return ok && (d.Flags&dxgiAdapterFlagSoftware != 0 || d.VendorID == vendorMicrosoft)
 }

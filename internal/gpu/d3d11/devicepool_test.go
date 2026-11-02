@@ -5,9 +5,12 @@ package d3d11
 import (
 	"errors"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/internal/gpu/gputest"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // emptyPool releases the kit in the pool, which another test left, and has
@@ -256,73 +259,114 @@ func TestDevicePoolSameWindowAgain(t *testing.T) {
 }
 
 // resetPrewarm forgets a prewarm, as a process that had none, and restores the
-// seam of the adapter.
+// seams it changes.
 func resetPrewarm(t *testing.T) {
 	t.Helper()
-	soft := softwareDefault
-	t.Cleanup(func() {
+	soft, dev := softwareDefault, newDevice
+	forget := func() {
 		waitPrewarm()
 		prewarm.Lock()
 		prewarm.done = nil
 		prewarm.Unlock()
-		softwareDefault = soft
+	}
+	t.Cleanup(func() {
+		forget()
+		softwareDefault, newDevice = soft, dev
 	})
-	waitPrewarm()
-	prewarm.Lock()
-	prewarm.done = nil
-	prewarm.Unlock()
+	forget()
 }
 
-// On a software adapter nothing starts: the device is made, as before, by
-// the first renderer.
-func TestPrewarmSkipsASoftwareAdapter(t *testing.T) {
-	emptyPool(t)
-	resetPrewarm(t)
-	softwareDefault = func() bool { return true }
-	devices := devicesMade.Load()
-	Prewarm()
-	prewarm.Lock()
-	started := prewarm.done != nil
-	prewarm.Unlock()
-	if started {
-		t.Error("a prewarm started on a software adapter")
-	}
-	if n := devicesMade.Load() - devices; n != 0 {
-		t.Errorf("%d devices made by a prewarm that did not start", n)
+// On a software adapter, or with the debug layer, nothing is made by the
+// prewarm: the first renderer makes its device, as before.
+func TestPrewarmMakesNothingOnASoftwareAdapterOrDebug(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T)
+	}{
+		{"software adapter", func(t *testing.T) { softwareDefault = func() bool { return true } }},
+		{"debug layer", func(t *testing.T) { softwareDefault = func() bool { return false }; t.Setenv("MYGO_D3D_DEBUG", "1") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			emptyPool(t)
+			resetPrewarm(t)
+			tc.setup(t)
+			devices := devicesMade.Load()
+			Prewarm()
+			waitPrewarm()
+			pool.Lock()
+			has := pool.kit != nil
+			pool.Unlock()
+			if has {
+				t.Error("the prewarm left a kit in the pool")
+			}
+			if n := devicesMade.Load() - devices; n != 0 {
+				t.Errorf("%d devices made by a prewarm that has to make none", n)
+			}
+		})
 	}
 }
 
-// With a hardware adapter the device and shaders are made once, by the prewarm,
-// and the first renderer takes them: it makes none.
+// With a hardware adapter the device and shaders are made once, by the
+// prewarm, and a renderer made while it is still at it waits for it and takes
+// them: without the wait it would make a second device.
 func TestPrewarmMakesTheFirstRenderersDevice(t *testing.T) {
 	emptyPool(t)
 	resetPrewarm(t)
 	softwareDefault = func() bool { return false }
+	// The prewarm's device is the first one asked for, and is held back until the
+	// renderer has begun.
+	var calls atomic.Int32
+	entered, release := make(chan struct{}, 1), make(chan struct{})
+	made := newDevice
+	newDevice = func() (uintptr, uintptr, bool, error) {
+		if calls.Add(1) == 1 {
+			entered <- struct{}{}
+			<-release
+		}
+		return made()
+	}
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }) })
 	devices, shaders := devicesMade.Load(), shadersMade.Load()
 	Prewarm()
-	Prewarm() // a second call does not make another
-	waitPrewarm()
-	pool.Lock()
-	has := pool.kit != nil
-	pool.Unlock()
-	if !has {
-		t.Skip("no Direct3D 11: the prewarm made no device")
+	Prewarm() // a second call starts nothing
+	wait.For(t, "the prewarm to ask for its device", entered)
+	hwnd := hiddenWindow(t, 64, 64)
+	type made2 struct {
+		r   *Renderer
+		err error
 	}
-	if n := devicesMade.Load() - devices; n != 1 {
-		t.Fatalf("%d devices made by the prewarm, want 1", n)
+	got := make(chan made2, 1)
+	go func() {
+		r, err := New(hwnd)
+		got <- made2{r, err}
+	}()
+	once.Do(func() { close(release) })
+	g := wait.For(t, "the first renderer", got)
+	if g.err != nil {
+		t.Skip("no Direct3D 11:", g.err)
 	}
-	r := newRendererOrSkip(t)
-	defer r.Release()
+	defer g.r.Release()
 	if n := devicesMade.Load() - devices; n != 1 {
 		t.Errorf("%d devices made for the prewarm and the first renderer, want 1: the renderer made its own", n)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Errorf("the device was asked for %d times, want 1", n)
 	}
 	if n := shadersMade.Load() - shaders; n != 1 {
 		t.Errorf("%d sets of shaders made, want 1", n)
 	}
 }
 
-// The default adapter's description reads: whatever it is, the check does not
-// fail, and on a machine whose adapter is Microsoft's it says software.
-func TestDefaultAdapterIsSoftwareReads(t *testing.T) {
-	t.Logf("the default adapter is software: %v", defaultAdapterIsSoftware())
+// The description of the default adapter is the adapter device.New takes: the
+// LUID of DESC1 (read through its layout) is the one defaultLUID reads.
+func TestDefaultAdapterDescription(t *testing.T) {
+	d, ok := defaultAdapterDesc1()
+	if !ok {
+		t.Skip("no DXGI adapter")
+	}
+	if luid, ok := defaultAdapterLUID(); ok && luid != d.LUID {
+		t.Errorf("DESC1 has LUID %#x, DESC has %#x: a wrong layout or slot", d.LUID, luid)
+	}
+	t.Logf("the default adapter is software: %v (flags %#x, vendor %#x)", defaultAdapterIsSoftware(), d.Flags, d.VendorID)
 }
