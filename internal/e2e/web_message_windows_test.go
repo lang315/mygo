@@ -19,7 +19,6 @@ import (
 // the one that replaced it, which is of another origin and records every web
 // message (/spy). The tick that follows shows the listener works.
 func TestWebMessageReplyDoesNotReachANewDocument(t *testing.T) {
-	t.Skip("BISECT: does TestWidgetDialogEscape pass without this test?")
 	w := mygo.NewWindow(mygo.WindowOptions{Title: "Bridge", Width: 400, Height: 300})
 	t.Cleanup(w.Destroy)
 	p := w.Page()
