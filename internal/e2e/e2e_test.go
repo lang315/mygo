@@ -176,7 +176,7 @@ func TestMain(m *testing.M) {
 		w.Header().Set("Content-Type", "text/html")
 		io.WriteString(w, `<!doctype html><script>
 window.__spy = [];
-if (window.chrome && chrome.webview) chrome.webview.addEventListener("message", (e) => window.__spy.push(JSON.stringify(e.data)));
+if (window.chrome && chrome.webview) chrome.webview.addEventListener("message", (e) => window.__spy.push((e.isTrusted ? "trusted " : "UNTRUSTED ") + JSON.stringify(e.data)));
 </script><p>spy</p>`)
 	})
 	assets.HandleFunc("POST /data", func(w http.ResponseWriter, r *http.Request) {

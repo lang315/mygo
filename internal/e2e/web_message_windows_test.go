@@ -49,6 +49,7 @@ func TestWebMessageReplyDoesNotReachANewDocument(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("what the spy was posted:\n%.600s", log)
 	if strings.Contains(log, "FIRST-DOCUMENT-SECRET") {
 		t.Fatalf("the new document was posted the reply of the first:\n%s", log)
 	}
