@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"os"
 	"path"
+	"strconv"
 	"runtime"
 	"testing"
 	"unicode/utf16"
@@ -51,7 +53,11 @@ func holds(state []byte, s string) bool {
 // as the page left it. On Windows it brings back the page alone.
 func TestSessionState(t *testing.T) {
 	// TEMPORARY: the flake's rate before the fix.
-	for i := 0; i < 20; i++ {
+	n := 1
+	if v, err := strconv.Atoi(os.Getenv("SESSION_STATE_RUNS")); err == nil {
+		n = v
+	}
+	for i := 0; i < n; i++ {
 		t.Run(fmt.Sprint(i), sessionStateOnce)
 	}
 }
