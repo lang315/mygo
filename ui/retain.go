@@ -71,6 +71,26 @@ type rowKeep struct {
 	// rel are the boxes of the nodes after the root, relative to their parents,
 	// as the layout the nodes hold left them (retain_layout.go).
 	rel []relXY
+	// dirty: a field state.pending reads was written in a state of the row
+	// since the last pass that found the row clean (state.touch), or the
+	// engine's acting and hover ids changed on one. A row that is not dirty
+	// is pending in none of its states, as it was: keep needs no scan of
+	// them. watch are the states that scan anyway, whose pending does not
+	// depend on writes alone (an editor's busy, an animated value).
+	dirty bool
+	watch []*state
+}
+
+// checkDirty makes okRow scan the states of a row it finds clean, and panic
+// when one is pending (tests only: TestMain).
+var checkDirty bool
+
+// touch marks the kept row the state is in: something state.pending reads may
+// be set. Every write to such a field calls it (TestEveryWriteToPendingStateTouches).
+func (s *state) touch() {
+	if s != nil && s.row != nil {
+		s.row.dirty = true
+	}
 }
 
 // actingIDs gathers, once for a pass, the ids of the elements the engine is
@@ -98,6 +118,7 @@ func (rt *engine) actingIDs() {
 	}
 	b = append(b, rt.clickLater...)
 	rt.acting = b
+	rt.touchChanged()
 	rt.actBloom, rt.hoverBloom = [4]uint64{}, [4]uint64{}
 	for _, id := range b {
 		rt.actBloom[id>>6&3] |= 1 << (id & 63)
@@ -105,6 +126,34 @@ func (rt *engine) actingIDs() {
 	for _, id := range rt.hover {
 		rt.hoverBloom[id>>6&3] |= 1 << (id & 63)
 	}
+}
+
+// touchChanged touches the states of the ids that entered or left the acting
+// ids, or the hover chain, since the last time they were gathered: a kept row
+// not dirty is not asked whether the engine acts on it or the pointer is over
+// it, so the change is what tells it (rowKeep.dirty). An id that came and went
+// in between was touched when it came. The two sets are told apart: an id
+// hovered that gets the focus has entered the acting ids.
+func (rt *engine) touchChanged() {
+	rt.touchDiff(&rt.actPrev, rt.acting)
+	rt.touchDiff(&rt.hoverPrev, rt.hover)
+}
+
+func (rt *engine) touchDiff(prev *[]uint64, now []uint64) {
+	if slices.Equal(now, *prev) {
+		return
+	}
+	for _, id := range now {
+		if id != 0 && !slices.Contains(*prev, id) {
+			rt.states[id].touch()
+		}
+	}
+	for _, id := range *prev {
+		if id != 0 && !slices.Contains(now, id) {
+			rt.states[id].touch()
+		}
+	}
+	*prev = append((*prev)[:0], now...)
 }
 
 // isHovered reports whether the element id is in the hover chain, which is not
@@ -131,6 +180,11 @@ func (rt *engine) isActing(id uint64) bool {
 // of its elements, and it is an ordinary row. It does not compare what the row
 // was built with (see keep).
 func (f *listFrame) ok(i int, states []*state, readsHover, readsDrag bool) bool {
+	return f.okList(i, readsDrag) && f.okStates(states, readsHover)
+}
+
+// okList is what ok asks of the list and the engine, not of the row's states.
+func (f *listFrame) okList(i int, readsDrag bool) bool {
 	rt, s := f.c.rt, f.s
 	if rt.noRetain || rt.insp.open || f.isHeader(i) || s.dragSel.on {
 		return false
@@ -145,9 +199,58 @@ func (f *listFrame) ok(i int, states []*state, readsHover, readsDrag bool) bool 
 		return false // the drag path, which DragHover reads, is not among the acting ids
 	}
 	rt.actingIDs()
+	return true
+}
+
+// okStates scans the states of a row: none holds input or a request, the
+// engine acts on none, and none is hovered when the row read the hover.
+func (f *listFrame) okStates(states []*state, readsHover bool) bool {
+	rt := f.c.rt
 	for _, st := range states {
 		if st.pending() || rt.isActing(st.id) || readsHover && rt.isHovered(st.id) {
 			return false
+		}
+	}
+	return true
+}
+
+// okRow is ok for a record: a row that no write touched since it was found
+// clean is clean (rowKeep.dirty), and only the states in watch are asked.
+func (f *listFrame) okRow(i int, rec *rowKeep) bool {
+	if !f.okList(i, rec.readsDrag) {
+		return false
+	}
+	if !rec.dirty {
+		clean := true
+		for _, st := range rec.watch {
+			if st.pending() {
+				clean = false
+				break
+			}
+		}
+		if clean {
+			if checkDirty && !f.okStates(rec.states, rec.readsHover) {
+				panic("a row that no write touched is pending: a write to a state field lacks touch(), or the acting or hover ids changed unseen")
+			}
+			return true
+		}
+	}
+	return f.scanRow(rec)
+}
+
+// scanRow scans the states of rec; a clean row is not dirty until a write touches
+// one of its states, or the engine's acting or hover ids change on one.
+func (f *listFrame) scanRow(rec *rowKeep) bool {
+	if !f.okStates(rec.states, rec.readsHover) {
+		return false
+	}
+	rec.dirty = false
+	clear(rec.watch)
+	rec.watch = rec.watch[:0]
+	for _, st := range rec.states {
+		st.row = rec
+		if st.editor != nil || len(st.motions) != 0 {
+			rec.watch = append(rec.watch, st)
 		}
 	}
 	return true
@@ -185,7 +288,7 @@ func (f *listFrame) keep(i int, key any) *node {
 		// A row out of view for a frame had its states pruned and recycled.
 		return nil
 	}
-	if rec.chosen != f.chosenAround(i) || (f.s.Checked != nil && rec.checked != f.s.Checked.has(key)) || !f.ok(i, rec.states, rec.readsHover, rec.readsDrag) {
+	if rec.chosen != f.chosenAround(i) || (f.s.Checked != nil && rec.checked != f.s.Checked.has(key)) || !f.okRow(i, rec) {
 		return nil
 	}
 	root := rec.root
@@ -405,7 +508,8 @@ func (f *listFrame) capture() {
 			}
 			continue
 		}
-		if !f.ok(r.i, rec.states, r.readsHover, r.readsDrag) {
+		rec.readsHover, rec.readsDrag = r.readsHover, r.readsDrag
+		if !f.okList(r.i, r.readsDrag) || !f.scanRow(rec) {
 			if fresh {
 				f.spare = append(f.spare, rec)
 			} else {
@@ -487,7 +591,14 @@ func (f *listFrame) release(key any) {
 	if rec := f.kept[key]; rec != nil {
 		delete(f.kept, key)
 		rec.unlink() // a recycled state must not point at a released record
+		for _, st := range rec.states {
+			if st != nil && st.row == rec {
+				st.row = nil
+			}
+		}
 		clear(rec.states)
+		clear(rec.watch)
+		rec.watch = rec.watch[:0]
 		rec.root = nil
 		f.spare = append(f.spare, rec)
 	}

@@ -917,9 +917,11 @@ func (s *state) markEvent(ev tableEvent) {
 		// As a right-click choosing a row, between frames: the next
 		// frame's build reports it.
 		s.pendingEvents |= ev
+		s.touch()
 		return
 	}
 	s.events |= ev
+	s.touch()
 	s.eventsDelivered &^= ev
 	s.notice()
 }

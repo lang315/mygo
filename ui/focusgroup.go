@@ -141,6 +141,7 @@ func (rt *engine) groupKey(mods Modifiers, key Key) bool {
 	rt.groupLast[g] = id
 	if s := rt.states[id]; s != nil && info.selects && s.flags&flagClickable != 0 {
 		s.clicks++
+		s.touch()
 		s.clickMods = 0
 	}
 	rt.reveal(id)

@@ -97,6 +97,7 @@ func prepareEditorText(e *node, scope uint64) {
 		ed = newEditor(e.c.rt.now)
 		ed.readOnly, ed.multiline = true, true
 		e.st.editor = ed
+		e.st.touch()
 	}
 	if ed.source != e.text || len(ed.buf.paras) == 0 {
 		// Text only added at the end, as a reply being written, keeps
@@ -341,6 +342,7 @@ func (rt *engine) pressTextSelection(s *state, x, y float32, mods Modifiers, cli
 	rt.focused, rt.focusVisible = s.id, false
 	rt.pressed = s
 	s.pressed, s.pressMods = true, mods
+	s.touch()
 	s.editor.dragging = false
 	return true
 }

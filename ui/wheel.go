@@ -59,6 +59,7 @@ func (rt *engine) wheelScroll(s *state, dx, dy float32) {
 	if g == nil {
 		g = &wheelGlide{x: channel{at: now}, y: channel{at: now}}
 		s.wheel = g
+		s.touch()
 		if !slices.Contains(rt.wheeling, s.id) {
 			rt.wheeling = append(rt.wheeling, s.id)
 		}

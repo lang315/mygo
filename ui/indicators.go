@@ -237,6 +237,7 @@ func coreStepper(c *context, value *float64, lo, hi, step float64) *node {
 					held := c.now.Sub(s.holdStart)
 					if s.holdStart.IsZero() || !s.holding {
 						s.holdStart, s.holding, s.holdSteps = c.now, true, 0
+						s.touch()
 						held = 0
 					}
 					due := 1

@@ -260,6 +260,7 @@ func (rt *engine) pointerMove(x, y float32) {
 		dx, dy := rt.pressed.vector(rt.pointerX, rt.pointerY, x-rt.pointerX, y-rt.pointerY)
 		rt.pressed.dragX += dx
 		rt.pressed.dragY += dy
+		rt.pressed.touch()
 		rt.pressed.drag.move(rt.now(), dx, dy, x-rt.pointerX, y-rt.pointerY)
 		if rt.pressed.flags&(flagTrackPointer|flagDraggable|flagEditable|flagSelectable) != 0 {
 			rt.requestFrame()
@@ -357,6 +358,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		rt.pressed, rt.pressButton, rt.pressClicks = h, button, clicks
 		h.pressed = true
 		h.pressPending = true
+		h.touch()
 		h.pressX, h.pressY = h.local(x, y)
 		h.drag.reset(rt.now(), x, y)
 		return
@@ -386,6 +388,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 	rt.pressDragger = rt.pressDraggerLinked(chain, target)
 	target.pressed, target.pressMods = true, mods
 	target.pressPending = true
+	target.touch()
 	target.pressX, target.pressY = target.local(x, y)
 	target.drag.reset(rt.now(), x, y)
 	if button == 0 && rt.pressTextSelection(target, x, y, mods, clicks) {
@@ -397,6 +400,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 	}
 	if clicks == 2 && button == 0 {
 		target.doubleClicks++
+		target.touch()
 	}
 }
 
@@ -474,6 +478,7 @@ func (rt *engine) pointerUp(button, clicks int) {
 	s.pressed = false
 	// A press that moved ends a drag; a click does not.
 	s.released = s.drag.n > 1
+	s.touch()
 	v := s.drag.velocities(rt.now())
 	s.releaseVX, s.releaseVY, s.releaseWX, s.releaseWY = v[0], v[1], v[2], v[3]
 	if s.editor != nil {
@@ -487,9 +492,11 @@ func (rt *engine) pointerUp(button, clicks int) {
 				break // it moved the element (Draggable): no click
 			}
 			s.clicks++
+			s.touch()
 			s.clickMods = s.pressMods
 		case 1:
 			s.rightClicks++
+			s.touch()
 		}
 	}
 	rt.setHover(rt.hitChain(rt.pointerX, rt.pointerY))
@@ -785,6 +792,7 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 		window := s != nil && key == KeyEnter && s.flags&flagToggle != 0
 		if s != nil && !rt.claimedBy(k, window) && s.flags&flagClickable != 0 && s.flags&flagDisabled == 0 {
 			s.clicks++
+			s.touch()
 			s.clickMods = 0
 			rt.focusVisible = true
 			rt.requestFrame()
