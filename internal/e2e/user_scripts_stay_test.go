@@ -15,7 +15,6 @@ func loadAfterEach(t *testing.T, change func(i int)) {
 	t.Helper()
 	w := newWindow(t, mygo.WindowOptions{Hidden: true})
 	p := w.Page()
-	waitFor(t, w, "window.mygo")
 	for i := 1; i <= 200; i++ {
 		change(i)
 		if err := p.LoadURL(fmt.Sprintf("app://localhost/?n=%d", i)); err != nil {
