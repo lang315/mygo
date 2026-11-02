@@ -70,6 +70,13 @@ func sessionStateOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if runtime.GOOS != "windows" {
+		// WebKit saves a page's form fields as the page goes out of view: a page
+		// that was never in view (its window behind others, the app inactive)
+		// goes nowhere, and Hide saves nothing.
+		w.Focus()
+		waitFor(t, w, `document.visibilityState === "visible"`)
+	}
 	t.Logf("before Hide: scrollY %v, state %d bytes", mustEval(t, w, `scrollY`), len(state))
 	if runtime.GOOS != "windows" {
 		// WebKit saves the form fields of the page it shows as the page
