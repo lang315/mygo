@@ -15,8 +15,10 @@
 //     responsible process (a terminal, say, for an app not in a bundle);
 //   - Linux: the proportional set size of the app and of its descendants,
 //     WebKitGTK's processes, so that pages they share count once;
-//   - Windows: the private working set, as Task Manager shows it, of the
-//     app and of its descendants, WebView2's processes.
+//   - Windows: the working set of the app and of its descendants, WebView2's
+//     processes, each page divided by the processes sharing it (the share
+//     count, at most 7): the proportional number Linux's is, not the private
+//     working set Task Manager shows, which leaves out every shared page.
 package main
 
 import (

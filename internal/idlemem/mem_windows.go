@@ -2,9 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
-	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -42,9 +40,8 @@ const (
 // renderer, GPU and utility processes it runs.
 func usage(pid int, _ state) (app, total uint64, procs []int, err error) {
 	procs = append([]int{pid}, descendants(pid)...)
-	dump(pid, procs)
 	for i, p := range procs {
-		ws, err := privateWorkingSet(p)
+		ws, err := proportionalWorkingSet(p)
 		if err != nil {
 			if i == 0 {
 				return 0, 0, nil, err
@@ -58,6 +55,49 @@ func usage(pid int, _ state) (app, total uint64, procs []int, err error) {
 	}
 	return app, total, procs, nil
 }
+
+// proportionalWorkingSet returns the pages of pid in memory, each divided by
+// the processes that share it (the working set's share count, which Windows
+// caps at 7): the number Linux's proportional set size is, so that the DLLs and
+// sections WebView2's processes share count once between them. It falls back
+// to the private working set for a process it may not read.
+func proportionalWorkingSet(pid int) (uint64, error) {
+	const (
+		queryInformation = 0x0400
+		vmRead           = 0x0010
+		errBadLength     = syscall.Errno(24)
+		pageSize         = 4096
+	)
+	h, err := syscall.OpenProcess(queryInformation|vmRead, false, uint32(pid))
+	if err != nil {
+		return privateWorkingSet(pid)
+	}
+	defer syscall.CloseHandle(h)
+	// PSAPI_WORKING_SET_INFORMATION: the number of entries, then each one's
+	// flags: protection in bits 0-4, share count in bits 5-7, shared in bit 8.
+	buf := make([]uintptr, 1<<16)
+	for {
+		ok, _, err := queryWorkingSet.Call(uintptr(h), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf))*unsafe.Sizeof(buf[0]))
+		if ok != 0 {
+			break
+		}
+		if err != errBadLength {
+			return privateWorkingSet(pid)
+		}
+		buf = make([]uintptr, int(buf[0])*5/4+1024)
+	}
+	var total float64
+	for _, e := range buf[1 : 1+buf[0]] {
+		share := e >> 5 & 7
+		if e&(1<<8) == 0 || share == 0 {
+			share = 1
+		}
+		total += pageSize / float64(share)
+	}
+	return uint64(total), nil
+}
+
+var queryWorkingSet = syscall.NewLazyDLL("kernel32.dll").NewProc("K32QueryWorkingSet")
 
 // privateWorkingSet returns the pages of pid in memory that no other
 // process shares.
@@ -199,30 +239,3 @@ func closeWindows(pid int) bool {
 	return closing.n > 0
 }
 
-// dump (TEMPORARY, IDLEMEM_VERBOSE=1) prints every process of the app's tree
-// and every msedgewebview2.exe on the machine, with parent and private
-// working set.
-func dump(app int, tree []int) {
-	if os.Getenv("IDLEMEM_VERBOSE") == "" {
-		return
-	}
-	snap, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
-	if err != nil {
-		return
-	}
-	defer syscall.CloseHandle(snap)
-	in := map[int]bool{}
-	for _, p := range tree {
-		in[p] = true
-	}
-	var e syscall.ProcessEntry32
-	e.Size = uint32(unsafe.Sizeof(e))
-	for err := syscall.Process32First(snap, &e); err == nil; err = syscall.Process32Next(snap, &e) {
-		name := syscall.UTF16ToString(e.ExeFile[:])
-		if !in[int(e.ProcessID)] && !strings.EqualFold(name, "msedgewebview2.exe") {
-			continue
-		}
-		ws, _ := privateWorkingSet(int(e.ProcessID))
-		fmt.Fprintf(os.Stderr, "idlemem: pid %d ppid %d %s tree=%v private=%d KB\n", e.ProcessID, e.ParentProcessID, name, in[int(e.ProcessID)], ws>>10)
-	}
-}
