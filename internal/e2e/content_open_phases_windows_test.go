@@ -68,7 +68,13 @@ func TestContentWindowOpenPhases(t *testing.T) {
 	}
 	// Median offset of each phase name's first occurrence, in the order of the second run.
 	seen := map[string]bool{}
-	for i, n := range runs[1].names {
+	type row struct {
+		name string
+		ms   float64
+		n    int
+	}
+	var rows []row
+	for _, n := range runs[1].names {
 		if seen[n] {
 			continue
 		}
@@ -80,8 +86,19 @@ func TestContentWindowOpenPhases(t *testing.T) {
 			}
 		}
 		slices.Sort(v)
-		_ = i
-		fmt.Fprintf(&b, "  median %-22s %8.2f (n=%d)\n", n, v[len(v)/2], len(v))
+		rows = append(rows, row{n, v[len(v)/2], len(v)})
+	}
+	slices.SortStableFunc(rows, func(a, b row) int {
+		switch {
+		case a.ms < b.ms:
+			return -1
+		case a.ms > b.ms:
+			return 1
+		}
+		return 0
+	})
+	for _, r := range rows {
+		fmt.Fprintf(&b, "  median %-30s %8.2f (n=%d)\n", r.name, r.ms, r.n)
 	}
 	var tm []float64
 	for _, d := range totals {

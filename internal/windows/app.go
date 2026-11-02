@@ -374,6 +374,32 @@ func registerWindowMessage(name string) uint32 {
 }
 
 func wndProc(hwnd, m, wp, lp uintptr) uintptr {
+	if !phases.on {
+		return wndProcInner(hwnd, m, wp, lp)
+	}
+	t0 := time.Now()
+	r := wndProcInner(hwnd, m, wp, lp)
+	if d := time.Since(t0); d >= 300*time.Microsecond {
+		kind := "other"
+		if b := theBackend; b != nil {
+			switch {
+			case b.windows[hwnd] != nil:
+				kind = "window"
+			case b.surfaces[hwnd] != nil:
+				kind = "surface"
+			case b.captions[hwnd] != nil:
+				kind = "caption"
+			case hwnd == b.appHwnd:
+				kind = "app"
+			}
+		}
+		markAt(fmt.Sprintf("msg 0x%X %s begin", m, kind), t0)
+		markAt(fmt.Sprintf("msg 0x%X %s end", m, kind), t0.Add(d))
+	}
+	return r
+}
+
+func wndProcInner(hwnd, m, wp, lp uintptr) uintptr {
 	b := theBackend
 	if b != nil {
 		if hwnd == b.appHwnd {

@@ -1059,6 +1059,7 @@ func (w *window) Show() {
 	} else {
 		procShowWindow.Call(w.hwnd, swShow)
 	}
+	mark("ShowWindow returned")
 	procSetForegroundWindow.Call(w.hwnd)
 }
 

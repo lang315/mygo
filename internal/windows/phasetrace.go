@@ -17,13 +17,15 @@ var phases struct {
 	at    []time.Duration
 }
 
-func mark(name string) {
+func mark(name string) { markAt(name, time.Now()) }
+
+func markAt(name string, t time.Time) {
 	if !phases.on {
 		return
 	}
 	phases.Lock()
 	phases.names = append(phases.names, name)
-	phases.at = append(phases.at, time.Since(phases.start))
+	phases.at = append(phases.at, t.Sub(phases.start))
 	phases.Unlock()
 }
 
