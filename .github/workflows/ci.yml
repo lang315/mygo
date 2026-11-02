@@ -196,6 +196,13 @@ jobs:
         run: |
           go test -count=1 -run '^$' ./...
           go test -count=1 ${{ runner.os == 'macOS' && './internal/darwin' || './internal/linux' }}
+      # mygo build gives Bind a table of methods and sets this tag (bind_static.go):
+      # the goldens of the IPC, and the tests of the table, run on it. The tables
+      # of the plugins' services (bindtable.go) have the tag too: without this step
+      # their tests do not run at all.
+      - name: Test Bind with the table of mygo build
+        if: runner.os == 'Linux' && matrix.shard == 'rest'
+        run: go test -count=1 -tags mygo_static . ./plugins/fetch ./plugins/sqlite ./plugins/updater ./plugins/watch ./plugins/websocket
       - run: bun run test
         if: matrix.shard == 'rest'
       - run: bun run typecheck
