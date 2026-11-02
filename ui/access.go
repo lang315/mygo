@@ -593,8 +593,10 @@ func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 	case platform.AccessExpand, platform.AccessCollapse:
 		// The tree opens or closes the item as it builds it.
 		s.expand = 1
+		s.touch()
 		if ev.Action == platform.AccessCollapse {
 			s.expand = -1
+			s.touch()
 		}
 	case platform.AccessSelectText:
 		if ed := s.editor; ed != nil && s.flags&flagEditable != 0 {

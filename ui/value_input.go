@@ -344,9 +344,11 @@ func listRowValueInput(n *node) {
 		// spreadsheets do; one chosen waits for the release, which keeps a
 		// drag of the choice.
 		st.rowPressed, st.pressChose = true, false
+		st.touch()
 		if st.pressed && rt.pressButton == 0 && f.dragSelects() && !f.chosenAt(b.i, st.drag.ox, st.drag.oy) {
 			f.clickAt(b.i, st.drag.ox, st.drag.oy, st.pressMods)
 			st.pressChose = true
+			st.touch()
 		}
 	}
 	if n.Clicked() {
@@ -388,6 +390,7 @@ func (s *state) notice() {
 	if s.rt != nil && !s.noticeQueued {
 		s.rt.notices = append(s.rt.notices, s)
 		s.noticeQueued = true
+		s.touch()
 	}
 }
 func (s *state) markChanged() {
@@ -395,20 +398,24 @@ func (s *state) markChanged() {
 		// A change made between frames: the next frame's build reports
 		// it.
 		s.pendingChange = true
+		s.touch()
 		return
 	}
 	s.changed, s.changeDelivered = true, false
+	s.touch()
 	s.notice()
 }
 func (s *state) markSubmitted() {
 	if s.rt != nil && !s.rt.inFrame {
 		s.pendingSubmit = true
+		s.touch()
 		return
 	}
 	s.submitted, s.submitDelivered = true, false
+	s.touch()
 	s.notice()
 }
-func (s *state) markTyping() { s.typing = true; s.notice() }
+func (s *state) markTyping() { s.typing = true; s.touch(); s.notice() }
 
 // Composite controls schedule small input actions after their children.
 // Queries apply them once, or they run after construction if not queried.

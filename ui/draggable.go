@@ -104,6 +104,7 @@ func (e *node) Draggable(offset *Point, o DraggableOptions) *node {
 	if r == nil {
 		r = &dragRec{}
 		st.dragRec = r
+		st.touch()
 	}
 	if offset == nil {
 		offset = &r.own

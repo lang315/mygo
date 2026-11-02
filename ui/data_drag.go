@@ -40,6 +40,7 @@ func (e *node) DragDataFrom(data func() transfer.Data, options ...transfer.DragO
 	}
 	e.flags |= flagDraggable | flagHover
 	e.st.dataSource = &dataSource{data, o}
+	e.st.touch()
 	return e
 }
 
@@ -49,6 +50,7 @@ func (e *node) DragDataFrom(data func() transfer.Data, options ...transfer.DragO
 func coreDropData(e *node, options transfer.DropOptions) (transfer.Drop, bool) {
 	linkDrag()
 	e.st.dataTarget = &options
+	e.st.touch()
 	e.c.rt.targetFrame, e.c.rt.targetPass = e.c.rt.frame, e.c.rt.pass
 	if d := e.st.dataDropped; d != nil {
 		e.c.rt.consumed = true
@@ -63,6 +65,7 @@ func coreDropData(e *node, options transfer.DropOptions) (transfer.Drop, bool) {
 func coreDataDragOver(e *node, options transfer.DropOptions) (transfer.Offer, bool) {
 	linkDrag()
 	e.st.dataTarget = &options
+	e.st.touch()
 	e.c.rt.targetFrame, e.c.rt.targetPass = e.c.rt.frame, e.c.rt.pass
 	rt := e.c.rt
 	if rt.dataOver == e.id && rt.incoming != nil {
@@ -144,6 +147,7 @@ func (rt *engine) dataDrop(x, y float32, d *platform.DataDragEvent) bool {
 func (rt *engine) dropData(s *state, x, y float32, d *platform.DataDragEvent) bool {
 	if s.accepts != nil && d.Local != nil && s.accepts(d.Local) {
 		s.droppedValue, s.hasDropped = d.Local, true
+		s.touch()
 		s.dropX, s.dropY = x, y
 	} else {
 		data, err := d.Data.Materialize(d.Formats)
@@ -152,6 +156,7 @@ func (rt *engine) dropData(s *state, x, y float32, d *platform.DataDragEvent) bo
 			return false
 		}
 		s.dataDropped = &transfer.Drop{Data: data, Operation: d.Operation}
+		s.touch()
 	}
 	rt.requestFrame()
 	return true

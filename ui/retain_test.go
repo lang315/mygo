@@ -465,6 +465,7 @@ func TestRetainARowAskedToExpandIsBuilt(t *testing.T) {
 		t.Fatal("row 5 is not in view")
 	}
 	holder.expand = 1
+	holder.touch()
 	if got := a.frame(); got[5] == 0 {
 		t.Errorf("row 5 was asked to expand: rows built %v, want row 5 built", got)
 	}
