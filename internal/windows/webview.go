@@ -1313,7 +1313,9 @@ func (w *window) respond(args, deferral uintptr, status int, header httplite.Hea
 	}
 }
 
-// schemeResponse buffers a response: WebView2 wants it whole.
+// schemeResponse buffers a response: WebView2 wants it whole. The body goes
+// into memory the serving goroutine writes (WriteBody), and into a stream
+// at the end (Finish).
 type schemeResponse struct {
 	w        *window
 	args     uintptr
@@ -1324,7 +1326,7 @@ type schemeResponse struct {
 	head     bool // the request is a HEAD: no body
 	status   int
 	header   httplite.Header
-	body     bytes.Buffer
+	body     responseBody
 	done     bool
 }
 
@@ -1335,17 +1337,28 @@ const maxPresized = 64 << 20
 func (r *schemeResponse) Respond(status int, header map[string][]string) {
 	r.status, r.header = status, header
 	// The body arrives in chunks: a buffer that grows with them copies it
-	// about twice (256 KB, 512 KB, 1 MB for a megabyte). A response to HEAD,
-	// or a 204 or 304, has the Content-Length of a body it does not send.
-	if r.head || status == httplite.StatusNoContent || status == 304 {
-		return
+	// about twice. A response to HEAD, or a 204 or 304, has the
+	// Content-Length of a body it does not send.
+	hint := 0
+	if !r.head && status != httplite.StatusNoContent && status != 304 {
+		if n, err := strconv.ParseInt(strings.TrimSpace(httplite.Header(header).Get("Content-Length")), 10, 64); err == nil && n > 0 {
+			hint = int(min(n, maxPresized))
+		}
 	}
-	if n, err := strconv.ParseInt(strings.TrimSpace(httplite.Header(header).Get("Content-Length")), 10, 64); err == nil && n > 0 {
-		r.body.Grow(int(min(n, maxPresized)))
-	}
+	r.body.start(hint)
 }
 
-func (r *schemeResponse) Write(p []byte) { r.body.Write(p) }
+// Write takes a chunk on the main thread; WriteBody is the way the serving
+// goroutine gives them, and a responder that has it gets them there.
+func (r *schemeResponse) Write(p []byte) {
+	r.body.startOnce()
+	_ = r.body.write(p)
+}
+
+// WriteBody implements platform.SchemeBodyWriter: it is called off the main
+// thread, after Respond and before Finish or Fail (the protocol package posts
+// those once the handler returned), and fails once the response ended.
+func (r *schemeResponse) WriteBody(p []byte) error { return r.body.write(p) }
 
 // isDownload reports whether a page response is a file to save: an
 // attachment, or plain bytes.
@@ -1371,11 +1384,22 @@ func (r *schemeResponse) Finish() {
 		return
 	}
 	if !r.w.closed {
-		r.w.respond(r.args, r.deferral, r.status, r.header, r.body.Bytes())
+		status, header, body := r.outcome()
+		r.w.respond(r.args, r.deferral, status, header, body)
 	} else {
 		comCall(r.deferral, deferralComplete)
 	}
 	r.release()
+}
+
+// outcome is what the page gets: the response, or a 502 when its body could
+// not be kept (a truncated body with the status and Content-Length of the
+// whole would pass for it).
+func (r *schemeResponse) outcome() (status int, header httplite.Header, body []byte) {
+	if err := r.body.failure(); err != nil {
+		return httplite.StatusBadGateway, httplite.Header{"Content-Type": {"text/plain; charset=utf-8"}}, []byte(err.Error())
+	}
+	return r.status, r.header, r.body.take()
 }
 
 func (r *schemeResponse) Fail(err error) {
@@ -1392,6 +1416,7 @@ func (r *schemeResponse) Fail(err error) {
 }
 
 func (r *schemeResponse) release() {
+	r.body.free()
 	r.cancel()
 	release(r.deferral)
 	release(r.args)

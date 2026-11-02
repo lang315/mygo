@@ -1680,6 +1680,14 @@ Backends turn responses into native ones:
   pipe (`WriteBody`), waiting while it is full, so the main loop never
   blocks and a response WebKit reads slowly does not pile up in memory.
   Custom schemes are registered as secure and CORS-enabled.
+- Windows: WebView2 wants the whole response in an `IStream` before it reads
+  any of it, so the handler's goroutine (`WriteBody`) fills a block of the
+  process heap, not of Go's (`responseBody`, one chunk buffer reused on the Go
+  side), and `Finish` copies it into the stream on the main thread and frees the
+  block. Nothing blocks the writer, and a response takes about twice its body
+  in memory at `Finish`, as it did before; what changed is that Go's heap and
+  collector no longer see it. No COM object is touched off the main thread. A
+  body that could not be allocated ends as a 502.
 
 Schemes are registered per webview at creation time, so call
 `protocol.Handle` before creating windows. `protocol.FileServer(fsys)` serves an
