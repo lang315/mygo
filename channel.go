@@ -137,6 +137,7 @@ type channel struct {
 	w      *Window
 	id     int64 // the page's
 	token  string
+	page   context.Context // of the page that made the call: its messages are for it
 	ctx    context.Context // the call's
 	cancel context.CancelFunc
 	// head and ackHead start its values' messages, the latter asking for
@@ -161,7 +162,7 @@ type channelAsk struct{ seq, sent int64 }
 // whose context is ctx, canceled by cancel. page is the context of the page
 // that made the call: after a navigation, the channel starts closed.
 func (w *Window) newChannel(page, ctx context.Context, cancel context.CancelFunc, id int64, token string) *channel {
-	c := &channel{w: w, id: id, token: token, ctx: ctx, cancel: cancel}
+	c := &channel{w: w, id: id, token: token, page: page, ctx: ctx, cancel: cancel}
 	c.cond.L = &c.mu
 	head := make([]byte, 0, 48+len(token))
 	head = append(head, `{"t":"chan","c":`...)
@@ -259,7 +260,7 @@ func (c *channel) send(p []byte) error {
 		head = c.ackHead
 	}
 	// Under the lock, so values are queued in order.
-	c.w.enqueue(message{head, p, closeBrace}, false)
+	c.w.enqueue(message{head: head, value: p, tail: closeBrace, doc: c.page}, false)
 	return nil
 }
 
@@ -290,7 +291,7 @@ func (c *channel) close(by int) {
 	if by == closedByGo {
 		// After the values sent so far.
 		end := append(c.head[:len(c.head)-len(`,"p":`):len(c.head)-len(`,"p":`)], `,"end":true}`...)
-		c.w.enqueue(message{head: end}, false)
+		c.w.enqueue(message{head: end, doc: c.page}, false)
 	}
 	stop := c.stop
 	c.mu.Unlock()

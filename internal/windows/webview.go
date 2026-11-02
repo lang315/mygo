@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -846,6 +847,24 @@ func (w *window) Eval(js string) {
 		withHandler(func(uintptr, uintptr) {}, func(h uintptr) uintptr {
 			return comCall(w.webview, wvExecuteScript, uintptr(unsafe.Pointer(u16(js))), h)
 		})
+	})
+}
+
+// PostMessagesAsScripts makes PostMessages run a script, as every flush did
+// before web messages, for tests that time the two.
+var PostMessagesAsScripts atomic.Bool
+
+// PostMessages posts json to the page's top-level document as a web message
+// (ICoreWebView2::PostWebMessageAsJson): no script is compiled and no result
+// comes back, so a reply costs the page one message, not a script and its
+// completion (platform.MessagePoster).
+func (w *window) PostMessages(json string) {
+	if PostMessagesAsScripts.Load() {
+		w.Eval("__mygo.receive(" + json + ")")
+		return
+	}
+	w.withWebView(func() {
+		comCall(w.webview, wvPostWebMessageAsJSON, uintptr(unsafe.Pointer(u16(json))))
 	})
 }
 

@@ -2313,7 +2313,7 @@ func TestCodingWithoutACodecIsAnError(t *testing.T) {
 	saved := codec.Load()
 	codec.Store(nil)
 	defer codec.Store(saved)
-	b := encodeReply(7, "k", map[string]any{"a": 1}, nil).appendTo(nil)
+	b := encodeReply(7, "k", nil, map[string]any{"a": 1}, nil).appendTo(nil)
 	var m struct {
 		OK bool   `json:"ok"`
 		E  string `json:"e"`
@@ -2334,7 +2334,7 @@ func TestCodingWithoutACodecIsAnError(t *testing.T) {
 
 func TestEncodeReply(t *testing.T) {
 	linkCodec() // as Bind does: the test does not depend on the tests before it
-	b := encodeReply(7, "k\"1", map[string]any{"line": "a b"}, nil).appendTo(nil)
+	b := encodeReply(7, "k\"1", nil, map[string]any{"line": "a b"}, nil).appendTo(nil)
 	var m map[string]jsontext.Value
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatalf("%s: %v", b, err)
@@ -2342,7 +2342,7 @@ func TestEncodeReply(t *testing.T) {
 	if strings.Contains(string(b), " ") {
 		t.Error("U+2028 must be escaped for JavaScript")
 	}
-	b = encodeReply(8, "k", make(chan int), nil).appendTo(nil)
+	b = encodeReply(8, "k", nil, make(chan int), nil).appendTo(nil)
 	if !strings.Contains(string(b), `"ok":false`) {
 		t.Errorf("unencodable result should be an error: %s", b)
 	}

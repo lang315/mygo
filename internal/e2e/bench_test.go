@@ -30,7 +30,21 @@ type BenchItem struct {
 	Tags  []string `json:"tags"`
 }
 
-func (Bench) Noop()                           {}
+func (Bench) Noop() {}
+
+// Hold answers once benchHold is closed, after saying it is running on
+// benchHeld: a call that outlives the page that made it.
+func (Bench) Hold() string {
+	benchHeld <- struct{}{}
+	<-benchHold
+	return "FIRST-DOCUMENT-SECRET"
+}
+
+var (
+	benchHold = make(chan struct{})
+	benchHeld = make(chan struct{}, 1)
+)
+
 func (Bench) Items(v []BenchItem) []BenchItem { return v }
 
 var benchTick = mygo.NewEvent[Tick]("bench:tick")
