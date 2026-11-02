@@ -1,10 +1,13 @@
 package ui
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/surface"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // occludedSurface is a testSurface that can be out of sight, counting the
@@ -20,10 +23,18 @@ func (s *occludedSurface) RequestFrame()  { s.requested++ }
 
 // occludedHost is a window host on an occludedSurface, showing count, with
 // the number of views built and of times the window was ready to show.
+//
+// Like the main thread's, its posts run on the test's goroutine, at the end of
+// the call into the host that made them (event, capture) or of the test's
+// drain: the idle timer posts from a goroutine of its own, and what it posts
+// must not run there, where it would free the renderer the test is drawing with.
 type occludedHost struct {
 	*windowHost
 	s                    *occludedSurface
 	count, builds, ready int
+
+	postMu sync.Mutex // the timer's goroutine posts too
+	posted []func()
 }
 
 func newOccludedHost(t *testing.T, occluded bool) *occludedHost {
@@ -32,13 +43,47 @@ func newOccludedHost(t *testing.T, occluded bool) *occludedHost {
 	o.windowHost = &windowHost{conn: &surface.Conn{
 		Surface: o.s,
 		Ready:   func() { o.ready++ },
-		Post:    func(f func()) { f() },
+		Post:    o.post,
 	}}
 	o.rt = newRuntime(func(c *context) {
 		o.builds++
 		coreTextf(c, "%d", o.count)
 	}, o.windowHost)
 	return o
+}
+
+func (o *occludedHost) post(f func()) {
+	o.postMu.Lock()
+	o.posted = append(o.posted, f)
+	o.postMu.Unlock()
+}
+
+// drain runs what was posted, on the caller's goroutine.
+func (o *occludedHost) drain() {
+	for {
+		o.postMu.Lock()
+		if len(o.posted) == 0 {
+			o.postMu.Unlock()
+			return
+		}
+		f := o.posted[0]
+		o.posted = o.posted[1:]
+		o.postMu.Unlock()
+		f()
+	}
+}
+
+// event is the host's, and then what it posted.
+func (o *occludedHost) event(ev platform.SurfaceEvent) {
+	o.windowHost.event(ev)
+	o.drain()
+}
+
+// capture is the host's, and then what it posted.
+func (o *occludedHost) capture() (w, h int, pix []byte) {
+	w, h, pix = o.windowHost.capture()
+	o.drain()
+	return w, h, pix
 }
 
 func (o *occludedHost) frame() { o.event(platform.SurfaceEvent{Kind: platform.SurfaceFrame}) }
@@ -159,4 +204,24 @@ func TestOccludedHoldsWithAccessibility(t *testing.T) {
 	if o.shows() != "1" {
 		t.Errorf("accessibility reads %q, not what the window shows now", o.shows())
 	}
+}
+
+// TestIdleRunsWhereTheHostPosts checks that what the idle timer posts runs on
+// the goroutine that drains the posts, as the main thread's does, not on the
+// timer's: it frees the renderer that the next frame draws with (-race sees
+// them meet otherwise).
+func TestIdleRunsWhereTheHostPosts(t *testing.T) {
+	o := newOccludedHost(t, false)
+	o.frame()
+	o.lastFrame = time.Now().Add(-2 * frameIdle) // idle for long: its timer frees the frame
+	o.armIdle(time.Millisecond)
+	wait.Until(t, "the idle timer to post", func() bool {
+		o.postMu.Lock()
+		defer o.postMu.Unlock()
+		return len(o.posted) > 0
+	})
+	o.count = 1
+	o.rt.changed()
+	o.frame() // draws with the renderer that idle frees, after it
+	o.drain()
 }
