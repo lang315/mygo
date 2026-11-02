@@ -1,5 +1,10 @@
 # WebBrowser
 
+An app with `nativeOnly` in its `mygo.json` (the template of native UI has it) is
+built with the tag `mygo_nowebview`: it has no `WebBrowser`, `Window.NewWebView`
+or window that shows a page, on any platform; each is an error. Take `nativeOnly`
+out of `mygo.json` for an app that shows web pages.
+
 `WebBrowser()` shows a web page in a window: the system's web view (WKWebView,
 WebView2, WebKitGTK) over [`ui.WebView`](../web-view.md).
 

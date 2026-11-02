@@ -5011,9 +5011,21 @@ To check a change, build both apps as the benchmarks do, before and
 after, on each platform it touches:
 
 ```sh
-go build -trimpath -tags mygo_noinspector -ldflags "-s -w -X github.com/egoist/mygo.production=1" -o /tmp/counter-native ./examples/counter-native
+go build -trimpath -tags mygo_noinspector,mygo_nowebview -ldflags "-s -w -X github.com/egoist/mygo.production=1" -o /tmp/counter-native ./examples/counter-native
 GOOS=windows go build -trimpath -tags mygo_noinspector -ldflags "-s -w -H=windowsgui -X github.com/egoist/mygo.production=1" -o /tmp/hello.exe ./examples/hello
 ```
+
+An app of native UI only has `nativeOnly` in its `mygo.json` (the template of
+native UI and `counter-native` do), and `mygo build`/`mygo dev` give it the tag
+`mygo_nowebview`: on Windows `internal/windows` then builds `webview_none.go`
+instead of `webview_start.go`, and the code that makes a WebView2 (the
+environment, the controller, the handlers of its events, the scheme
+responses, cookies, the DevTools protocol) is not linked: counter-native is
+231 KB smaller on amd64 and 212 KB on arm64. A window that would show a page,
+or a web view in a surface, is an error that says so: on Windows from the backend, and on every platform from package mygo (`nowebview.go`: `newWindow` and `NewWebView`), so an app behaves alike where only Windows saves the size. A plain `go build` has no
+tag, so it has the web view and the size it always had; the other platforms
+ignore the tag for now. The benchmarks build each example with the tags
+`mygo build` would (`scripts/bench.ts`, `tagsOf`).
 
 When an app grows, `go tool nm -size -sort size` on a build without `-s
 -w` shows which symbols grew, and `go build -ldflags=-dumpdep ... 2>

@@ -574,7 +574,7 @@ func (s *devSession) buildAndLaunch(ctx context.Context, t *task, running [32]by
 		}
 		flags = append(flags, "-overlay", overlay)
 	}
-	err = goBuild(ctx, c, t, bin, nil, append(flags, "-ldflags", strings.TrimSpace(packageFlags(dc)))...)
+	err = goBuild(ctx, c, t, bin, nil, nativeOnlyFlags(c, append(flags, "-ldflags", strings.TrimSpace(packageFlags(dc))))...)
 	cleanup()
 	if err != nil {
 		return nil, sum, err

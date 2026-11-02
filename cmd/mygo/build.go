@@ -122,6 +122,9 @@ WebAssembly, named by its content: a static site, to serve from anywhere.`)
 			warnf("Bind keeps reflection (the app could not list the services it binds: %v), about 1.4 MB more", err)
 		}
 	}
+	if c.NativeOnly && (c.BuildCommand != "" || c.FrontendDist != "") {
+		warnf("nativeOnly is set, but the project has a frontend (buildCommand or frontendDist): the app is built without a web view, so nothing shows it")
+	}
 	if c.BuildCommand != "" && !*skipBuildCommand {
 		t := con.start("Building the frontend")
 		if err := t.end(run(t, "web", c.root, c.BuildCommand), "Built the frontend"); err != nil {
@@ -274,7 +277,7 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 					return err
 				}
 				flags := []string{"-trimpath", "-ldflags", ldflags}
-				flags = append(flags, releaseTags(opts.debug, c.root, static)...)
+				flags = nativeOnlyFlags(c, append(flags, releaseTags(opts.debug, c.root, static)...))
 				if overlay != "" {
 					flags = append(flags, "-overlay", overlay)
 				}
@@ -487,6 +490,24 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 // generator of the TypeScript client (client_off.go), some 400 KB of an app
 // that binds a service. Production builds have their developer tools off.
 const inspectorTag = "mygo_noinspector"
+
+// webviewTag leaves the web view out of a build of an app with nativeOnly: the
+// backend of Windows (internal/windows' webview_none.go) does not link the
+// code that makes a WebView2, and a window that would show a page is an error.
+const webviewTag = "mygo_nowebview"
+
+// nativeOnlyFlags adds webviewTag to the -tags of a build of an app whose
+// configuration says nativeOnly. A build with no -tags yet gets the tags of
+// GOFLAGS with it, which a -tags flag would override.
+func nativeOnlyFlags(c *Config, flags []string) []string {
+	if !c.NativeOnly {
+		return flags
+	}
+	if !slices.Contains(flags, "-tags") {
+		return append(flags, "-tags", strings.Join(append(goFlagsTags(c.root), webviewTag), ","))
+	}
+	return withTag(flags, webviewTag)
+}
 
 // keepInspector reports whether MYGO_INSPECTOR=1 keeps the inspector in
 // production builds, as to look into one with DevToolsEnabled.

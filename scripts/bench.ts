@@ -16,7 +16,7 @@
 // history/<yyyy-mm-dd>.json keeps every commit of a day (UTC), small files
 // that each push rewrites one of, and latest.json the last commits, by
 // series, which the website fetches.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -69,6 +69,15 @@ export const latestCommits = 300;
 
 /** The examples whose release builds are measured. */
 const apps = ["hello", "counter-native", "widget-tour"];
+
+// The tags `mygo build` gives an example: the production one, and, when its
+// mygo.json says nativeOnly, the one that leaves the web view out (the examples
+// have a mygo.json, not a mygo.config.ts).
+function tagsOf(app: string): string {
+  const file = join("examples", app, "mygo.json");
+  const config = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+  return config.nativeOnly ? "mygo_noinspector,mygo_nowebview" : "mygo_noinspector";
+}
 
 /** The apps whose size is measured but not their memory: the tour shows many tabs, and its idle memory would depend on which opens first. */
 const sizeOnly = new Set(["widget-tour"]);
@@ -256,7 +265,7 @@ async function measureApps(
       if (!existsSync(join("examples", app))) continue;
       const bin = join(dir, goos === "windows" ? app + ".exe" : app);
       const ldflags = "-s -w -X github.com/egoist/mygo.production=1" + (goos === "windows" ? " -H=windowsgui" : "");
-      output(["go", "build", "-trimpath", "-tags", "mygo_noinspector", "-ldflags", ldflags, "-o", bin, "./examples/" + app]);
+      output(["go", "build", "-trimpath", "-tags", tagsOf(app), "-ldflags", ldflags, "-o", bin, "./examples/" + app]);
       size[app] = { bytes: (await stat(bin)).size };
       if (!sizeOnly.has(app)) bins.push(bin);
     }

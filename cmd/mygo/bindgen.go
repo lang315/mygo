@@ -243,7 +243,7 @@ func bindTableFor(c *Config, opts *buildOptions, goos, goarch string) (map[strin
 		return nil, nil
 	}
 	work := filepath.Join(opts.work, "bind-"+goos+"-"+goarch)
-	files, reason, err := bindFiles(c, opts.pkg, work, opts.mainPkg, goos, goarch, tagValue(releaseTags(opts.debug, c.root, true)))
+	files, reason, err := bindFiles(c, opts.pkg, work, opts.mainPkg, goos, goarch, tagValue(nativeOnlyFlags(c, releaseTags(opts.debug, c.root, true))))
 	if err != nil {
 		return nil, err
 	}

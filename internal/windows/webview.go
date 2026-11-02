@@ -121,59 +121,6 @@ const (
 	timerWebView      = 2          // the window's timer that asks again
 )
 
-func (w *window) createWebView() {
-	if w.closed {
-		return
-	}
-	if w.b.envErr != nil {
-		w.webViewFailed(w.b.envErr)
-		return
-	}
-	if w.opts.DataStore != nil && !w.b.hasProfiles() {
-		w.webViewFailed(errNoProfiles)
-		return
-	}
-	fail := w.failsWebView()
-	hr := withHandler(func(hr, controller uintptr) {
-		// A web view in a window of native UI gets a composition
-		// controller, whose controller closes it.
-		closeController := func() {
-			if c := queryInterface(controller, &iidICoreWebView2Controller); c != 0 {
-				comCall(c, ctlClose)
-				release(c)
-			}
-		}
-		if fail && controller != 0 { // TestFailWebViews
-			closeController()
-			hr, controller = eFail, 0
-		}
-		// Closing the window aborts the creation (E_ABORT).
-		if w.closed || w.destroying || w.host != nil && w.host.closed {
-			if controller != 0 {
-				closeController()
-			}
-			return
-		}
-		if failed(hr) || controller == 0 {
-			w.creationFailed(hr)
-			return
-		}
-		addRef(controller)
-		if w.host != nil {
-			controller = w.setUpEmbedded(controller)
-		}
-		w.setUp(controller)
-	}, func(h uintptr) uintptr {
-		if w.host != nil {
-			return w.createEmbedded(h)
-		}
-		return w.b.createController(storeOf(w.opts.DataStore), w.hwnd, false, h)
-	})
-	if failed(hr) {
-		w.creationFailed(hr)
-	}
-}
-
 // creationFailed has the window ask for its webview again later, or, if it
 // may not, fails the calls waiting for it.
 func (w *window) creationFailed(hr uintptr) {

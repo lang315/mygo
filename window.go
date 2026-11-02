@@ -573,6 +573,10 @@ func newWindow(opts WindowOptions, bg *background, native uintptr, flyout *flyou
 		w.joinSession(s)
 		popts.DataStore = store
 	}
+	if err := webViewAllowed(w.content != nil); err != nil {
+		w.detachSession()
+		panic(fmt.Sprintf("mygo: cannot create window: %v", err))
+	}
 	nw, err := backend().NewWindow(popts, &windowHandler{w})
 	if err != nil {
 		w.detachSession()

@@ -46,6 +46,12 @@ type Config struct {
 	// resources/icon.png when it exists). Beside it, the same name with
 	// -dev, as icon-dev.png, is the development app's, when it exists.
 	Icon string `json:"icon"`
+	// NativeOnly says the app has no web view: its windows show native UI
+	// (WindowOptions.Content) and nothing else. `mygo build` and `mygo dev` then
+	// build it with the tag mygo_nowebview, which leaves the code that makes web
+	// views out of the program (some 200 KB of a Windows app; the other platforms
+	// have no such saving yet), and a window that would show a page is an error.
+	NativeOnly bool `json:"nativeOnly"`
 	// Main is the Go package of the app (default ".").
 	Main string `json:"main"`
 	// Out is where builds are written (default "dist").
