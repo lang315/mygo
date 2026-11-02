@@ -315,6 +315,7 @@ type Window struct {
 	destroyed atomic.Bool
 	shown     bool
 	readyShow bool
+	readyMu   sync.Mutex // guards readyShow with the listeners of onReadyToShow
 	// background is the BackgroundColor, if any. Main thread only.
 	background *background
 	// hiddenTitleBar is a TitleBarStyle that hides the title bar: the pages
@@ -1741,8 +1742,26 @@ func (w *Window) OnHide(fn func()) (off func()) { return w.onHide.add(fn, false)
 // OnReadyToShow is called once, when the first page is ready to be
 // displayed. Create the window with Hidden and call Show here to avoid a
 // visual flash. A window showing Content is ready once it drew its first
-// frame, which a hidden window draws while hidden.
-func (w *Window) OnReadyToShow(fn func()) (off func()) { return w.onReadyToShow.add(fn, false) }
+// frame, which a hidden window draws while hidden. A listener added after
+// the window is ready runs once, on the main thread, as soon as it can,
+// not in the call that adds it: from another goroutine, the window may
+// have become ready before the listener was added.
+func (w *Window) OnReadyToShow(fn func()) (off func()) {
+	w.readyMu.Lock()
+	if !w.readyShow {
+		off = w.onReadyToShow.add(fn, false)
+		w.readyMu.Unlock()
+		return off
+	}
+	w.readyMu.Unlock()
+	var removed atomic.Bool
+	postMain(func() {
+		if !removed.Load() {
+			fn()
+		}
+	})
+	return func() { removed.Store(true) }
+}
 
 // OnResize is called after the window was resized.
 func (w *Window) OnResize(fn func()) (off func()) { return w.onResize.add(fn, false) }
@@ -1824,10 +1843,13 @@ func (p *Page) OnRenderProcessGone(fn func(reason string)) (off func()) {
 }
 
 func (w *Window) readyToShow() {
+	w.readyMu.Lock()
 	if w.readyShow {
+		w.readyMu.Unlock()
 		return
 	}
 	w.readyShow = true
+	w.readyMu.Unlock()
 	fire(&w.onReadyToShow)
 }
 
