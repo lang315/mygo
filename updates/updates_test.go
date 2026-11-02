@@ -554,3 +554,65 @@ func TestUpdatesGivesTheRelaunchOfAStagedUpdate(t *testing.T) {
 		t.Error("package updates did not register how a staged update is relaunched")
 	}
 }
+
+// fakeUninstall is the entry of the installed app in Settings > Apps.
+type fakeUninstall struct {
+	location string
+	versions []string
+	err      error
+}
+
+func (f *fakeUninstall) Location(string) (string, bool) { return f.location, f.location != "" }
+func (f *fakeUninstall) SetVersion(_, v string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.versions = append(f.versions, v)
+	return nil
+}
+
+// An update that was installed says so in the entry of the app in Settings >
+// Apps; one that rolled back, or whose entry cannot be written, changes the
+// update's result in no way.
+func TestInstalledUpdateRecordsItsVersion(t *testing.T) {
+	ctx := context.Background()
+	srv, key, _, _ := updateServer(t, "1.2.0", "v2", "")
+	up, err := checkUpdate(ctx, updatehttp.Feed(srv.URL+"/update.json"), key, "1.1.9", false)
+	if err != nil || up == nil {
+		t.Fatalf("checkUpdate = %+v, %v", up, err)
+	}
+	install := func(m update.Manifest, k string, r update.Registry) (string, error) {
+		target, main := installedApp(t)
+		err := installAndRecord(ctx, updatehttp.Get, m, k, up.current, target, nil, r, "com.example.app")
+		b, _ := os.ReadFile(main)
+		return string(b), err
+	}
+	// Installed: the version is written, for the entry of this folder only.
+	target, _ := installedApp(t)
+	reg := &fakeUninstall{location: target}
+	if err := installAndRecord(ctx, updatehttp.Get, up.manifest, key, up.current, target, nil, reg, "com.example.app"); err != nil || len(reg.versions) != 1 || reg.versions[0] != "1.2.0" {
+		t.Errorf("installed: %v, versions %v", err, reg.versions)
+	}
+	// The entry of a copy installed elsewhere is left alone.
+	reg = &fakeUninstall{location: filepath.Join(t.TempDir(), "elsewhere")}
+	if body, err := install(up.manifest, key, reg); err != nil || body != "v2" || len(reg.versions) != 0 {
+		t.Errorf("another copy: %q, %v, versions %v", body, err, reg.versions)
+	}
+	// An entry that cannot be written does not fail the update.
+	target, _ = installedApp(t)
+	reg = &fakeUninstall{location: target, err: errors.New("access denied")}
+	if err := installAndRecord(ctx, updatehttp.Get, up.manifest, key, up.current, target, nil, reg, "com.example.app"); err != nil {
+		t.Errorf("a failed write of the version failed the update: %v", err)
+	}
+	// An update refused writes nothing.
+	target, main := installedApp(t)
+	reg = &fakeUninstall{location: target}
+	bad := up.manifest
+	bad.Signature = base64.StdEncoding.EncodeToString(make([]byte, 64))
+	if err := installAndRecord(ctx, updatehttp.Get, bad, key, up.current, target, nil, reg, "com.example.app"); err == nil || len(reg.versions) != 0 {
+		t.Errorf("refused: %v, versions %v", err, reg.versions)
+	}
+	if b, _ := os.ReadFile(main); string(b) != "v1" {
+		t.Errorf("a refused update changed main to %q", b)
+	}
+}
