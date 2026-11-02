@@ -251,6 +251,16 @@ jobs:
             echo "#### linux $app $(stat -c %s /tmp/ip-$app) bytes"
             python3 internal/initprobe/initagg.py /tmp/ipout/$app-*.txt
           done
+      - name: Start to main, by imports (TEMPORARY, draft PR)
+        if: matrix.shard == 'rest' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p ipv
+          for v in empty windows d3d11 root native; do
+            CGO_ENABLED=0 go build -trimpath -tags mygo_noinspector -ldflags "-s -w -X github.com/egoist/mygo.production=1 -H=windowsgui" -o ipv/$v.exe ./internal/initprobe/v/$v
+          done
+          go build -o ipv/cost.exe ./internal/initprobe/cost
+          ./ipv/cost.exe "$PWD/ipv/empty.exe" "$PWD/ipv/windows.exe" "$PWD/ipv/d3d11.exe" "$PWD/ipv/root.exe" "$PWD/ipv/native.exe" "$PWD/ipv/empty.exe"
       - name: Callbacks the GUI tests made
         if: always()
         shell: bash
@@ -441,10 +451,6 @@ jobs:
         env:
           MYGO_E2E: 1
         run: go test ./internal/e2e
-      - name: Callbacks the GUI tests made
-        if: always()
-        shell: bash
-        run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
 
   # The installer of a real app, on Windows: mygo build makes the installer of
   # examples/hello, a silent install, the app run and quit, a newer installer
