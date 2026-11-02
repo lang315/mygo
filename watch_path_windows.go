@@ -33,9 +33,21 @@ func fileWatchInaccessible(err error) bool {
 	return errors.Is(err, fs.ErrPermission) || errors.Is(err, errorSharingViolation) || errors.Is(err, errorLockViolation)
 }
 
-// fileWatchEntryInfo returns what entry is, read from a directory opened in
-// root, by its name in root. What reading a directory says of an entry
-// lacks its identity, which os.SameFile would load by its path.
+// fileWatchEntryInfo returns what entry is, as reading its directory said.
+// On NTFS and ReFS that reading (FILE_ID_BOTH_DIR_INFO, which Go reads since
+// 1.23) carries the volume and file index os.SameFile compares, so the entry
+// needs no stat of its own: opening a handle for each one cost 30 µs an entry,
+// three quarters of a scan. It says what the file system keeps in the entry,
+// which is what it notifies of: the size and times of a file open for writing
+// show once it is closed, and a write through a hard link in another
+// directory shows in this one's entry when something opens it. A file system
+// that has no file index (FAT), and a link or other reparse point, are
+// looked at in root by name (Lstat), which says what they are.
 func fileWatchEntryInfo(root *os.Root, entry fs.DirEntry) (os.FileInfo, error) {
+	if info, err := entry.Info(); err == nil && info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) == 0 {
+		if _, ok := fileWatchIdentity(info); ok {
+			return info, nil
+		}
+	}
 	return root.Lstat(entry.Name())
 }
