@@ -2801,17 +2801,25 @@ func TestQuotePaths(t *testing.T) {
 		{quotePOSIX, "/tmp/a&b.txt", `/tmp/a\&b.txt`},
 		{quotePOSIX, "/tmp/$(id)`id`;x|y*", "/tmp/\\$\\(id\\)\\`id\\`\\;x\\|y\\*"},
 		{quotePOSIX, "/tmp/日本 語", `/tmp/日本\ 語`},
-		{quoteBash, "/tmp/x\ntouch pwned", `$'/tmp/x\x0atouch pwned'`},
-		{quoteBash, "/tmp/it's\tthere\\", `$'/tmp/it\'s\x09there\\'`},
-		{quoteBash, "/tmp/a\rb\x1b[201~c", `$'/tmp/a\x0db\x1b[201~c'`},
-		{quoteBash, "/tmp/\xff.bin", `$'/tmp/\xff.bin'`},
-		// Without $'…': single quotes, and a ? for each control character.
+		{quoteBash, "/tmp/x\ny", `'/tmp/x'$'\012''y'`},
+		{quoteBash, "/tmp/it's\tthere\\", `'/tmp/it'\''s'$'\011''there\'`},
+		{quoteBash, "/tmp/a\rb\x1b[201~c", `'/tmp/a'$'\015''b'$'\033''[201~c'`},
+		{quoteBash, "/tmp/\xff.bin", `'/tmp/'$'\377''.bin'`},
+		{quoteBash, "/tmp/a!b\x01", `'/tmp/a!b'$'\001'`},
+		{quoteBash, "/tmp/\u0085x", `'/tmp/'$'\302\205''x'`},
+		// Without $'…', and not fish: "$(printf '\ooo')" for a control
+		// character; a newline stays in the single quotes.
 		{quotePOSIX, "/tmp/a b (1).png", `/tmp/a\ b\ \(1\).png`},
 		{quotePOSIX, "/tmp/it's", `/tmp/it\'s`},
-		{quotePOSIX, "/tmp/x\ny", `'/tmp/x'?'y'`},
-		{quotePOSIX, "/tmp/it's\tthere", `'/tmp/it'\''s'?'there'`},
-		{quotePOSIX, "/tmp/a'\x01b\x1b[201~c", `'/tmp/a'\'''?'b'?'[201~c'`},
-		{quotePOSIX, "/tmp/\xff.bin", `'/tmp/'?'.bin'`},
+		{quotePOSIX, "/tmp/x\ny", "'/tmp/x''\n''y'"},
+		{quotePOSIX, "/tmp/it's\tthere\\", `'/tmp/it'\''s'"$(printf '\011')"'there\'`},
+		{quotePOSIX, "/tmp/a'\x01b\x1b[201~c", `'/tmp/a'\'''"$(printf '\001')"'b'"$(printf '\033')"'[201~c'`},
+		{quotePOSIX, "/tmp/\xff.bin", `'/tmp/'"$(printf '\377')"'.bin'`},
+		// fish: a backslash and a single quote are escapes in single quotes.
+		{quoteFish, "/tmp/a b", `/tmp/a\ b`},
+		{quoteFish, "/tmp/a\\'b\x01", `'/tmp/a\\\'b'\X01`},
+		{quoteFish, "/tmp/it's\tthere\\", `'/tmp/it\'s'\X09'there\\'`},
+		{quoteFish, "/tmp/\xff.bin", `'/tmp/'\Xff'.bin'`},
 		{quotePowerShell, `C:\tmp\ab.txt`, `C:\tmp\ab.txt`},
 		{quotePowerShell, `C:\Users\me\My Shots\shot (1).png`, `'C:\Users\me\My Shots\shot (1).png'`},
 		{quotePowerShell, `C:\dl\$(Start-Process calc) x.txt`, `'C:\dl\$(Start-Process calc) x.txt'`},
@@ -2842,7 +2850,9 @@ func TestQuotePaths(t *testing.T) {
 		{"linux", "/bin/sh", quotePOSIX},
 		{"linux", "/bin/dash", quotePOSIX},
 		{"linux", "/bin/busybox", quotePOSIX},
-		{"linux", "/usr/bin/fish", quotePOSIX},
+		{"linux", "/usr/bin/fish", quoteFish},
+		{"windows", `C:\Windows\System32\archiver.exe`, quotePowerShell},
+		{"windows", `C:\Windows\System32\wslconfig.exe`, quotePowerShell},
 		{"linux", "/usr/bin/ssh", quotePOSIX},
 		{"darwin", "/usr/bin/some-tool", quotePOSIX},
 		{"windows", `C:\Windows\System32\wsl.exe`, quotePOSIX},
@@ -2861,8 +2871,9 @@ func TestQuotePaths(t *testing.T) {
 		args  func(quoted string) []string
 	}
 	shells := []shell{
-		{[]string{"bash", "zsh"}, quoteBash, func(q string) []string { return []string{"-c", "printf %s " + q} }},
-		{[]string{"bash", "zsh", "dash", "sh"}, quotePOSIX, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"bash", "zsh", "ksh"}, quoteBash, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"bash", "zsh", "dash", "sh", "ksh"}, quotePOSIX, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"fish"}, quoteFish, func(q string) []string { return []string{"-c", "printf %s " + q} }},
 		{[]string{"pwsh", "powershell"}, quotePowerShell, func(q string) []string {
 			return []string{"-NoProfile", "-NonInteractive", "-Command", "& { [Console]::Out.Write($args[0]) } " + q}
 		}},
@@ -2876,9 +2887,6 @@ func TestQuotePaths(t *testing.T) {
 			for _, c := range cases {
 				if c.q != sh.q || (runtime.GOOS == "windows" && strings.ContainsFunc(c.path, unicode.IsControl)) {
 					continue
-				}
-				if sh.q == quotePOSIX && strings.Contains(c.want, "?") {
-					continue // a ? matches a file that has the character: TestQuotePathsOfFilesWithControlCharacters
 				}
 				out, err := exec.Command(bin, sh.args(c.want)...).Output()
 				if err != nil || string(out) != c.path {
@@ -2899,52 +2907,45 @@ func wslBash(bin string) bool {
 	return strings.HasSuffix(b, `\bash.exe`) && (strings.Contains(b, `\windows\system32\`) || strings.Contains(b, `\windowsapps\`))
 }
 
-// A path with control characters, quotes and bytes that are not UTF-8 is
-// read back as the path by every POSIX shell the terminal quotes for: bash
-// and zsh as $'…', dash and sh in single quotes, where a ? matches the
-// character the file has.
-func TestQuotePathsOfFilesWithControlCharacters(t *testing.T) {
+// hardPaths are paths a quoting gets wrong easily.
+var hardPaths = []string{
+	`/tmp/a\'b`, `/tmp/a\\b`, `/tmp/a\`, `/tmp/it's`, `/tmp/a'b'c`, `/tmp/a!!b`, `/tmp/a!b`,
+	`/tmp/?*[]{}~^=%`, `/tmp/-x`, "/tmp/$HOME $(x) `x` \"q\" a#b;c|d&e<f>g",
+	"/tmp/日本 語 é", "/tmp/a\x01b", "/tmp/a\x1fb", "/tmp/a\x7fb", "/tmp/tab\there's", "/tmp/new\nline",
+	"/tmp/a\rb", "/tmp/a\x1b[201~b", "/tmp/a'\x01b\\'", "/tmp/\u0085x", "/tmp/a\\\x01'b!\x02", "/tmp/\xff.bin", "/tmp/a\xc3b",
+}
+
+// Every shell the terminal quotes for reads a path back as the path, whatever
+// it holds: quotes, backslashes, control characters, characters its line
+// editor or globbing reads, bytes that are not UTF-8.
+func TestQuotePathsRoundTrip(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("file names have no control characters on Windows")
-	}
-	dir := t.TempDir()
-	var paths []string
-	for _, name := range []string{"a'\x01b", "tab\there's", "new\nline", "x\xffy", "plain name"} {
-		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, nil, 0o644); err != nil {
-			continue // as macOS does with bytes that are not UTF-8
-		}
-		paths = append(paths, p)
+		t.Skip("POSIX shells' own quoting")
 	}
 	for _, c := range []struct {
-		q     quoting
-		names []string
-	}{{quoteBash, []string{"bash", "zsh"}}, {quotePOSIX, []string{"bash", "zsh", "dash", "sh"}}} {
-		for _, name := range c.names {
+		q      quoting
+		shells []string
+	}{
+		{quoteBash, []string{"bash", "/bin/bash", "zsh", "ksh"}},
+		{quotePOSIX, []string{"bash", "/bin/bash", "zsh", "dash", "sh", "/bin/sh", "ksh", "busybox"}},
+		{quoteFish, []string{"fish"}},
+	} {
+		for _, name := range c.shells {
 			bin, err := exec.LookPath(name)
 			if err != nil {
 				continue
 			}
-			for _, p := range paths {
-				out, err := exec.Command(bin, "-c", "printf %s "+c.q.quote(p)).Output()
+			args := []string{"-c"}
+			if filepath.Base(bin) == "busybox" {
+				args = []string{"ash", "-c"}
+			}
+			for _, p := range hardPaths {
+				q := c.q.quote(p)
+				out, err := exec.Command(bin, append(args, "printf %s "+q)...).Output()
 				if err != nil || string(out) != p {
-					t.Errorf("%s read %s as %q (%v), want %q", name, c.q.quote(p), out, err, p)
+					t.Errorf("%s read %s as %q (%v), want %q", bin, q, out, err, p)
 				}
 			}
-		}
-	}
-	// A shell that has no $'…' takes a path with controls and quotes as
-	// its text, and runs nothing in it.
-	for _, name := range []string{"dash", "sh"} {
-		bin, err := exec.LookPath(name)
-		if err != nil {
-			continue
-		}
-		marker := filepath.Join(dir, "ran-"+name)
-		path := dir + "/q'\x01;touch " + marker + ";#"
-		exec.Command(bin, "-c", "printf %s "+quotePOSIX.quote(path)).Run()
-		if _, err := os.Stat(marker); err == nil {
-			t.Errorf("%s ran what is in the path %q", name, path)
 		}
 	}
 }

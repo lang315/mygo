@@ -326,17 +326,23 @@ const (
 	// quotePOSIX: a backslash before each character a POSIX shell, or
 	// fish, would read otherwise, as Ghostty escapes them. It is for any
 	// shell that may not read $'…' (dash, ash, busybox, a program the
-	// terminal does not know, the shell behind ssh or wsl.exe): a path with
-	// control characters, as a newline, or bytes that are not UTF-8, is
-	// quoted as single quotes, a single quote inside as '\'', and each of
-	// those characters a ? between them, which the shell matches to
-	// the file's own character: nothing in it is read as anything but the
-	// path's text in any POSIX shell.
+	// terminal does not know, the shell behind ssh or wsl.exe). A path with
+	// control characters or bytes that are not UTF-8 is quoted in single
+	// quotes, a single quote inside as '\'', and each such character as
+	// "$(printf '\ooo')" between them (octal, which every POSIX printf
+	// reads), so that no control byte is sent: one would be a key of the
+	// line editor where a paste is not bracketed. A newline stays in the
+	// single quotes, which a shell reads over the lines of a command: a
+	// command substitution would cut it off.
 	quotePOSIX quoting = iota
-	// quoteBash: as quotePOSIX, but a path with control characters is
-	// quoted as $'…', where they are escapes, which bash, zsh, ksh and mksh
-	// read.
+	// quoteBash: as quotePOSIX, but control characters are $'\ooo' between
+	// the single quotes, which bash, zsh, ksh and mksh read. The text stays
+	// in single quotes, not $'…', as old bash expands ! in the second.
 	quoteBash
+	// quoteFish: as quotePOSIX, but in fish's single quotes a backslash and
+	// a single quote are escapes (\\ and \'), and control characters are
+	// \XHH between them.
+	quoteFish
 	// quotePowerShell: single quotes, in which PowerShell expands nothing,
 	// unlike its double quotes ($(…), $var and `), each single quote in the
 	// path doubled. A POSIX shell takes them too.
@@ -347,9 +353,9 @@ const (
 
 // quotingFor returns the quoting of the shell a terminal runs, by the
 // program's name: PowerShell's, cmd.exe's, that of the shells that read
-// $'…' (bash, zsh, ksh, mksh), or a POSIX shell's, which is that of the
-// ones that do not (sh, dash, ash, fish) and of wsl.exe and the launchers
-// of a WSL distribution, whose shell it cannot tell. For another program on
+// $'…' (bash, zsh, ksh, mksh), fish's, or a POSIX shell's, which is that of
+// the ones that do not read $'…' (sh, dash, ash) and of wsl.exe and the
+// launchers of a WSL distribution, whose shell it cannot tell. For another program on
 // Windows it is PowerShell's, the shell the terminal runs when given none
 // (command), elsewhere a POSIX shell's. A Conn's program, which the
 // terminal does not know, takes the platform's.
@@ -366,7 +372,9 @@ func quotingFor(goos string, program string) quoting {
 		return quoteCmd
 	case slices.Contains([]string{"bash", "zsh", "ksh", "mksh"}, name):
 		return quoteBash
-	case slices.Contains([]string{"sh", "dash", "ash", "fish", "busybox"}, name), wslLauncher(name):
+	case name == "fish":
+		return quoteFish
+	case slices.Contains([]string{"sh", "dash", "ash", "busybox"}, name), wslLauncher(name):
 		return quotePOSIX
 	case goos == "windows":
 		if program == "" {
@@ -388,7 +396,14 @@ func quotingFor(goos string, program string) quoting {
 // .exe, is wsl or the launcher of a WSL distribution (ubuntu2404, debian,
 // kali-linux, …): a Linux shell reads what is pasted to it.
 func wslLauncher(name string) bool {
-	for _, p := range []string{"wsl", "ubuntu", "debian", "kali", "opensuse", "suse", "sles", "oracle", "arch", "fedora", "alpine"} {
+	switch name {
+	case "wsl", "ubuntu", "debian", "kali-linux", "archlinux", "fedoralinux", "alpine":
+		return true
+	}
+	if rest, ok := strings.CutPrefix(name, "ubuntu"); ok {
+		return strings.Trim(rest, "0123456789.-") == ""
+	}
+	for _, p := range []string{"opensuse-", "sles-", "oraclelinux-", "fedoralinux-"} {
 		if strings.HasPrefix(name, p) {
 			return true
 		}
@@ -422,14 +437,22 @@ func (q quoting) quote(path string) string {
 		return path
 	}
 	if strings.ContainsFunc(path, func(r rune) bool { return r == utf8.RuneError || unicode.IsControl(r) }) {
-		if q == quoteBash {
-			return ansiCQuote(path)
+		switch q {
+		case quoteBash:
+			return quoteRuns(path, func(b []byte) string { return "$'" + octal(b, `\`) + "'" }, `'\''`)
+		case quoteFish:
+			return quoteRuns(path, func(b []byte) string { return fishBytes(b) }, `\'`)
 		}
-		return singleQuote(path)
+		return quoteRuns(path, func(b []byte) string {
+			if string(b) == "\n" {
+				return "'\n'" // inside single quotes: a command substitution would cut it off
+			}
+			return `"$(printf '` + octal(b, `\`) + `')"`
+		}, `'\''`)
 	}
 	var b strings.Builder
 	for _, r := range path {
-		if strings.ContainsRune("\\ ()[]{}<>\"'`!#$&;|*?\t", r) {
+		if strings.ContainsRune("\\ ()[]{}<>\"'`!#$&;|*?~^\t", r) {
 			b.WriteByte('\\')
 		}
 		b.WriteRune(r)
@@ -447,51 +470,64 @@ func plainPathRune(r rune) bool {
 	return !strings.ContainsRune(`_-.:\/`, r)
 }
 
-// singleQuote quotes s for any POSIX shell: in single quotes, a single quote
-// as '\”, and each control character and byte that is not UTF-8 as a ?
-// between them, which the shell matches to the character the file has,
-// where $'…' (ansiCQuote) is not there to say it: dash and ash read it as a
-// $ and a string.
-func singleQuote(s string) string {
+// quoteRuns quotes s in single quotes, a single quote inside as quote, and
+// each control character or byte that is not UTF-8 as ctl says, between
+// them: ctl gets the bytes of one such character.
+func quoteRuns(s string, ctl func(b []byte) string, quote string) string {
 	var b strings.Builder
-	b.WriteByte('\'')
+	open := false
 	for i := 0; i < len(s); {
 		r, n := utf8.DecodeRuneInString(s[i:])
 		switch {
 		case r == utf8.RuneError && n <= 1, unicode.IsControl(r):
-			b.WriteString("'?'")
-		case r == '\'':
-			b.WriteString(`'\''`)
+			if open {
+				b.WriteByte('\'')
+				open = false
+			}
+			b.WriteString(ctl([]byte(s[i : i+n])))
 		default:
-			b.WriteString(s[i : i+n])
+			if !open {
+				b.WriteByte('\'')
+				open = true
+			}
+			switch r {
+			case '\'':
+				b.WriteString(quote)
+			case '\\':
+				if quote == `\'` {
+					b.WriteString(`\\`) // fish's single quotes
+				} else {
+					b.WriteByte('\\')
+				}
+			default:
+				b.WriteString(s[i : i+n])
+			}
 		}
 		i += n
 	}
-	b.WriteByte('\'')
+	if open {
+		b.WriteByte('\'')
+	}
+	if b.Len() == 0 {
+		return "''"
+	}
 	return b.String()
 }
 
-// ansiCQuote quotes s as bash, zsh, ksh and mksh's $'…': control characters
-// and bytes that are not UTF-8 as \xHH, a backslash and a single quote
-// escaped. It is only for the shells that read $'…' (quoteBash).
-func ansiCQuote(s string) string {
+// octal writes bytes as three-digit octal escapes after prefix.
+func octal(bytes []byte, prefix string) string {
 	var b strings.Builder
-	b.WriteString("$'")
-	for i := 0; i < len(s); {
-		r, n := utf8.DecodeRuneInString(s[i:])
-		switch {
-		case r == utf8.RuneError && n <= 1 || unicode.IsControl(r):
-			for _, c := range []byte(s[i : i+n]) {
-				fmt.Fprintf(&b, "\\x%02x", c)
-			}
-		case r == '\\' || r == '\'':
-			b.WriteByte('\\')
-			b.WriteRune(r)
-		default:
-			b.WriteString(s[i : i+n])
-		}
-		i += n
+	for _, c := range bytes {
+		fmt.Fprintf(&b, "%s%03o", prefix, c)
 	}
-	b.WriteByte('\'')
+	return b.String()
+}
+
+// fishBytes writes bytes as fish's \XHH escapes.
+func fishBytes(bytes []byte) string {
+	var b strings.Builder
+	for _, c := range bytes {
+		fmt.Fprintf(&b, "\\X%02x", c)
+	}
 	return b.String()
 }
