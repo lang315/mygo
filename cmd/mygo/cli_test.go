@@ -1138,3 +1138,38 @@ func TestICNSIcon(t *testing.T) {
 		t.Errorf("without macos.icon, the .icns is not icon's rendering: %v", err)
 	}
 }
+
+// nativeOnly reads from the configuration, and builds with the tag that leaves
+// the web view out, among the others.
+func TestNativeOnly(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mygo.json"), []byte(`{"nativeOnly": true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := loadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.NativeOnly {
+		t.Fatal("nativeOnly not read")
+	}
+	flags := func(c *Config, in ...string) string { return strings.Join(nativeOnlyFlags(c, in), " ") }
+	if got := flags(c, "-trimpath"); got != "-trimpath -tags mygo_nowebview" {
+		t.Errorf("no tags: %q", got)
+	}
+	if got := flags(c, "-tags", "mygo_noinspector", "-trimpath"); got != "-tags mygo_noinspector,mygo_nowebview -trimpath" {
+		t.Errorf("with the inspector's: %q", got)
+	}
+	if got := flags(&Config{}, "-tags", "mygo_noinspector"); got != "-tags mygo_noinspector" {
+		t.Errorf("an app with a web view got %q", got)
+	}
+	t.Run("the template of native UI is nativeOnly", func(t *testing.T) {
+		src, err := os.ReadFile(filepath.Join("template", "native", "mygo.json.tmpl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(src), `"nativeOnly": true`) {
+			t.Error("the native template does not say nativeOnly")
+		}
+	})
+}

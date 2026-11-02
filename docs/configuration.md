@@ -50,6 +50,7 @@ the fields of [the frontend](#development-and-the-frontend).
 | `copyright` | | the copyright notice of the app, in its `Info.plist` (macOS) and file properties (Windows) |
 | `publisher` | the copyright notice without its "©" and years, e.g. `Example Inc.` of `© 2026 Example Inc.` | who makes the app: the publisher that Settings > Apps lists for the installed app on Windows, and its company in the file properties |
 | `icon` | `resources/icon.png` when it exists | a square PNG, ideally 1024×1024; its name with `-dev`, as `icon-dev.png`, beside it is the development app's, when it exists |
+| `nativeOnly` | `false` | the app has no web view (its windows show native UI): `mygo build` and `mygo dev` build it with the tag `mygo_nowebview`, which leaves the code that makes web views out of the program (some 200 KB of a Windows app; other platforms ignore it so far), and a window that would show a page is an error |
 | `main` | `.` | the Go package of the app, relative to the project |
 
 ## Development and the frontend

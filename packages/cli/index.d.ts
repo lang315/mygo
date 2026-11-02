@@ -76,6 +76,14 @@ export interface Config {
   publisher?: string;
   /** A square PNG, ideally 1024×1024 (default: `resources/icon.png` when it exists). */
   icon?: string;
+  /**
+   * The app has no web view: its windows show native UI (`WindowOptions.Content`)
+   * and nothing else. `mygo build` and `mygo dev` build it with the tag
+   * `mygo_nowebview`, which leaves the code that makes web views out of the
+   * program (some 200 KB of a Windows app; the other platforms save nothing
+   * yet), and a window that would show a page is an error.
+   */
+  nativeOnly?: boolean;
   /** The Go package of the app, relative to the project (default: `.`). */
   main?: string;
   /** Where `mygo build` writes the builds, one directory per platform (default: `dist`). */
