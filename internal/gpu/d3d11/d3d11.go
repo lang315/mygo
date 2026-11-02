@@ -277,8 +277,9 @@ type Renderer struct {
 	factory   uintptr
 	swapChain uintptr
 	rtv       uintptr
-	w, h      int  // the size drawn, which the swap chain shows
-	warp      bool // the device is WARP, Windows' software rasterizer
+	w, h      int    // the size drawn, which the swap chain shows
+	warp      bool   // the device is WARP, Windows' software rasterizer
+	luid      uint64 // the device's adapter
 
 	// composed tells that the swap chain shows on the window through
 	// DirectComposition, with its alpha, as the content of visual, the
@@ -398,9 +399,20 @@ func newRenderer(hwnd uintptr, composed bool) (*Renderer, error) {
 		return nil, errors.New("d3d11: no window")
 	}
 	r := &Renderer{hwnd: hwnd, composed: composed, images: map[uint64]*texture{}}
-	var err error
-	if r.device, r.ctx, r.warp, err = device.New(); err != nil {
-		return nil, err
+	if k := reusable(r); k != nil {
+		r.adopt(k)
+	} else {
+		if r.device == 0 { // reusable made none
+			var err error
+			if r.device, r.ctx, r.warp, err = newDevice(); err != nil {
+				return nil, err
+			}
+		}
+		devicesMade.Add(1)
+		if err := r.initDevice(); err != nil {
+			r.Release()
+			return nil, err
+		}
 	}
 	if err := r.init(); err != nil {
 		r.Release()
@@ -409,7 +421,10 @@ func newRenderer(hwnd uintptr, composed bool) (*Renderer, error) {
 	return r, nil
 }
 
-func (r *Renderer) init() error {
+// initDevice makes what belongs to a new device and not to a window, which
+// a pooled device keeps: the factory, the shaders, the input layout and the
+// states.
+func (r *Renderer) initDevice() error {
 	// The factory that made the device's adapter makes the swap chain.
 	var dxgiDev, adapter uintptr
 	if failed(call(r.device, 0, uintptr(unsafe.Pointer(&iidIDXGIDevice)), uintptr(unsafe.Pointer(&dxgiDev)))) {
@@ -427,13 +442,11 @@ func (r *Renderer) init() error {
 	if noPartial || failed(call(r.ctx, 0, uintptr(unsafe.Pointer(&iidID3D11DeviceContext1)), uintptr(unsafe.Pointer(&r.ctx1)))) {
 		r.ctx1 = 0
 	}
-	// Quads reach a pixel out of their shapes, glyphs half a pixel more, as
-	// they draw at whole pixels.
-	r.diff.Reach = 2
 	if failed(call(dxgiDev, dxgiDevGetAdapter, uintptr(unsafe.Pointer(&adapter)))) {
 		return errors.New("d3d11: no adapter")
 	}
 	defer free(&adapter)
+	r.luid, _ = adapterLUID(adapter)
 	if failed(call(adapter, dxgiGetParent, uintptr(unsafe.Pointer(&iidIDXGIFactory2)), uintptr(unsafe.Pointer(&r.factory)))) {
 		return errors.New("d3d11: DXGI 1.2 is required")
 	}
@@ -455,6 +468,7 @@ func (r *Renderer) init() error {
 			return fmt.Errorf("d3d11: cannot create the %s shader", s.name)
 		}
 	}
+	shadersMade.Add(1)
 	names := []string{"RECT", "RADII", "INNER", "COLOR", "COLOR", "COLOR", "GRAD", "UV", "CLIP", "CLIPR", "PARAMS", "TRANSFORM", "TRANSFORM", "TRANSFORM"}
 	indices := []uint32{0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 1, 2}
 	elems := make([]inputElement, len(names))
@@ -490,6 +504,14 @@ func (r *Renderer) init() error {
 	if failed(call(r.device, devCreateSamplerState, uintptr(unsafe.Pointer(&sd)), uintptr(unsafe.Pointer(&r.samp)))) {
 		return errors.New("d3d11: cannot create the sampler")
 	}
+	return nil
+}
+
+// init makes what belongs to a window's renderer on its device.
+func (r *Renderer) init() error {
+	// Quads reach a pixel out of their shapes, glyphs half a pixel more, as
+	// they draw at whole pixels.
+	r.diff.Reach = 2
 	cd := bufferDesc{ByteWidth: 16, Usage: usageDefault, BindFlags: bindConstantBuffer}
 	if failed(call(r.device, devCreateBuffer, uintptr(unsafe.Pointer(&cd)), 0, uintptr(unsafe.Pointer(&r.cbuf)))) {
 		return errors.New("d3d11: cannot create the constant buffer")
@@ -781,7 +803,6 @@ func (r *Renderer) Release() {
 	}
 	if r.ctx != 0 {
 		call(r.ctx, ctxClearState)
-		call(r.ctx, ctxFlush)
 	}
 	for _, t := range r.images {
 		free(&t.srv)
@@ -814,9 +835,20 @@ func (r *Renderer) Release() {
 	}
 	// The target goes first: a window has one at most, which another
 	// renderer of it then makes.
-	for _, p := range []*uintptr{&r.visual, &r.target, &r.dcomp, &r.rtv, &r.swapChain2, &r.swapChain, &r.instBuf, &r.cbuf, &r.passCB, &r.samp, &r.raster, &r.holeBlend, &r.blend, &r.layout,
-		&r.blurPS, &r.downPS, &r.passVS, &r.ps, &r.vs, &r.factory, &r.ctx1, &r.ctx, &r.device} {
+	for _, p := range []*uintptr{&r.visual, &r.target, &r.dcomp, &r.rtv, &r.swapChain2, &r.swapChain, &r.instBuf, &r.cbuf, &r.passCB} {
 		free(p)
+	}
+	// With everything released, the flush destroys what the device kept
+	// alive for the GPU, a flip swap chain's buffers among them, as the
+	// documentation of Flush asks: a device that stays would otherwise
+	// fail to make a swap chain for the window again.
+	if r.ctx != 0 {
+		call(r.ctx, ctxFlush)
+	}
+	// The device, the shaders and the states stay for the next renderer
+	// (devicepool.go), or go as well.
+	if r.device != 0 {
+		keep(r.takeKit())
 	}
 }
 
