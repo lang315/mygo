@@ -1022,14 +1022,15 @@ from a run of the app: for each target the CLI type-checks the packages that
 import mygo (`go list -export -deps -trimpath` for its GOOS, GOARCH and release
 tags, then `go/types` with the bodies of the functions, on the export data of
 their imports), reads the static type of the value of every call of `Bind` and
-`BindAs` and of the `Service` of every `mygo.Plugin` literal, and reads each
+`BindAs` and of the `Service` of every `mygo.Plugin` (in its literal, or assigned
+as `p.Service = &S{}`), and reads each
 type's method set there. So a service chosen by `runtime.GOOS` or bound in a branch
 the run on this computer did not take is in the table of the target that binds it,
 and a method that exists only on this GOOS is not named for another. The run in
-generate mode (`MYGO_GENERATE`, with `MYGO_ENV=production`, which also writes the
-TypeScript client and the bound types to `MYGO_GENERATE_BINDINGS`) is a
-cross-check: a type it bound that is in the build for the target and that no call
-names is a call the scan missed, and the build keeps reflection. `bindingsGo`
+generate mode (`MYGO_GENERATE`, which also writes the TypeScript client and the
+bound types to `MYGO_GENERATE_BINDINGS`) is a cross-check: a type it bound (as a
+value or as a pointer, they are two types) that is in the build for the target and
+that no call names is a call the scan missed, and the build keeps reflection. `bindingsGo`
 turns the types into `0mygo_bind_gen.go`, in the build's overlay for that target,
 which calls `BindMethods` for each with `(*T).Method` or `T.Method` (and
 `Decl: T.Method` for a method of the value type bound through a pointer, whose
@@ -1038,7 +1039,8 @@ imports aliased `mygo_<name>`. The tag goes in only when the file does, so a
 stale file is never paired with it. The file's `init` runs after the package-level
 variables of main and the init functions of its imports, so a `Bind` there waits:
 the service takes its place at once and gets its methods when `BindMethods` runs,
-and `App.Run` panics with the cause if one never does.
+and `App.Run` panics with the cause if one never does. A `Bind` after `App.Run`
+has no table to wait for and panics at once.
 
 The services of the plugins that bind their own types (fetch, sqlite, updater,
 watch, websocket) give `Bind` their methods themselves: each has a

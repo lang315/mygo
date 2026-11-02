@@ -212,10 +212,7 @@ func runInGenerateMode(ctx context.Context, c *Config, binary, out string) error
 	cmd.Dir = c.root
 	o, e := con.output("app", os.Stdout), con.output("app", os.Stderr)
 	cmd.Stdout, cmd.Stderr = o, e
-	// MYGO_ENV=production: the services an app binds when mygo.IsDev() is false
-	// are listed too, as the release build binds them (the binary here is built
-	// without the production flag, so IsDev would be true).
-	cmd.Env = append(os.Environ(), "MYGO_GENERATE="+out, "MYGO_GENERATE_BINDINGS="+list, "MYGO_ENV=production")
+	cmd.Env = append(os.Environ(), "MYGO_GENERATE="+out, "MYGO_GENERATE_BINDINGS="+list)
 	cmd.WaitDelay = waitDelay
 	err := waited(cmd.Run())
 	o.flush()

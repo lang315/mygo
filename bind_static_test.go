@@ -151,9 +151,14 @@ func (neverSvc) Never() {}
 
 // clearPending drops what a test left pending, and its service.
 func clearPending(t *testing.T, name string) {
+	pending.Lock()
+	wasClosed := pending.closed
+	pending.closed = false // other tests of the package have run App.Run
+	pending.Unlock()
 	t.Cleanup(func() {
 		pending.Lock()
 		pending.list = nil
+		pending.closed = wasClosed
 		pending.Unlock()
 		unbind(name)
 	})
@@ -183,6 +188,23 @@ func TestStaticBindBeforeTheTableWaitsForIt(t *testing.T) {
 
 // A service whose type the table never gets is a failure at App.Run, with the
 // cause, never a silent partial app.
+func TestStaticBindAfterRunWithoutATablePanics(t *testing.T) {
+	saved := staticFallback
+	staticFallback = nil
+	defer func() { staticFallback = saved }()
+	clearPending(t, "AfterRun")
+	pending.Lock()
+	pending.closed = true
+	pending.Unlock()
+	err := bind("AfterRun", &neverSvc{}, false)
+	if err == nil || !strings.Contains(err.Error(), "mygo build") {
+		t.Fatalf("bind after Run with no table: %v, want the error that says to build with mygo build", err)
+	}
+	if lookupMethod("AfterRun.Never") != nil {
+		t.Error("a service with no table was bound after Run")
+	}
+}
+
 func TestStaticBindWithoutATableFailsAtRun(t *testing.T) {
 	saved := staticFallback
 	staticFallback = nil

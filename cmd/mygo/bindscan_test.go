@@ -1,9 +1,6 @@
 package main
 
 import (
-	"context"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -146,47 +143,5 @@ var _ = mygo.Version
 `})
 	if gen != "" || !strings.Contains(reason, "cannot type-check") {
 		t.Errorf("gen %q, reason %q: want reflection kept, with the type error", gen, reason)
-	}
-}
-
-// The run in generate mode is a production run: the client it writes is the
-// release's, with the services bound when mygo.IsDev() is false.
-func TestGenerateRunIsProduction(t *testing.T) {
-	if testing.Short() {
-		t.Skip("building the app")
-	}
-	dir := bindTestApp(t, `{"name":"Bind Test","identifier":"com.example.bindtest"}`, `package main
-
-import (
-	"os"
-
-	"github.com/egoist/mygo"
-)
-
-type API struct{}
-
-func (API) Hello() string { return "hi" }
-
-func main() {
-	if mygo.IsDev() {
-		os.WriteFile(os.Getenv("BINDTEST_MARKER"), nil, 0o644)
-	}
-	mygo.Bind(&API{})
-	if err := mygo.App.Run(); err != nil {
-		panic(err)
-	}
-}
-`)
-	c, err := loadConfig(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	marker := filepath.Join(t.TempDir(), "marker")
-	t.Setenv("BINDTEST_MARKER", marker)
-	if err := listBoundTypes(context.Background(), c); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(marker); err == nil {
-		t.Error("the run in generate mode had mygo.IsDev() true")
 	}
 }
