@@ -239,6 +239,18 @@ jobs:
           MYGO_E2E: 1
           MYGO_GPU: 1
         run: xvfb-run -a dbus-run-session -- go test -run 'TestContentWindow' ./internal/e2e
+      - name: Init trace (TEMPORARY, draft PR)
+        if: matrix.shard == 'rest' && runner.os == 'Linux'
+        shell: bash
+        run: |
+          for app in native web; do
+            tags=mygo_noinspector; [ $app = native ] && tags=mygo_noinspector,mygo_nowebview
+            CGO_ENABLED=0 go build -trimpath -tags $tags -ldflags "-s -w -X github.com/egoist/mygo.production=1" -o /tmp/ip-$app ./internal/initprobe/$app
+            mkdir -p /tmp/ipout
+            for i in $(seq 1 15); do GODEBUG=inittrace=1 /tmp/ip-$app 2> /tmp/ipout/$app-$i.txt; done
+            echo "#### linux $app $(stat -c %s /tmp/ip-$app) bytes"
+            python3 internal/initprobe/initagg.py /tmp/ipout/$app-*.txt
+          done
       - name: Callbacks the GUI tests made
         if: always()
         shell: bash
@@ -311,10 +323,6 @@ jobs:
           MYGO_E2E: 1
           MYGO_GPU: 1
         run: xvfb-run -a dbus-run-session -- go test -run 'TestContentWindow' ./internal/e2e
-      - name: Callbacks the GUI tests made
-        if: always()
-        shell: bash
-        run: cat "$GITHUB_WORKSPACE/callbacks.txt" || true
 
   # Windows on ARM64, which no machine of the maintainers runs: DirectWrite's
   # methods taking floats go through purego, which sets the floating point
