@@ -9,6 +9,8 @@ func inputDiag() string { return "" }
 // desktop in a way the tests see.
 func frontmostBundleID() string { return "" }
 
-// keepFront brings the window of the last input back to the front; only
-// macOS tests lose it to other apps.
-func keepFront() {}
+// keepFront gets the front back for the waits that poll it. macOS tests lose
+// it to other apps and focus the window of the last input. Windows gives the
+// front of a window it destroys to the next one down, which can be another
+// app's, and only a process that received the last input takes it back.
+func keepFront() { regrantForeground() }
