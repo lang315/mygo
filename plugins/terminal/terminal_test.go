@@ -3018,8 +3018,11 @@ func TestQuotePathsInAnotherShellRunNothingOfThePath(t *testing.T) {
 		t.Skip("POSIX shells' own quoting")
 	}
 	paths := []string{
-		"/tmp/a\\'; nosuchword#\x01", "/tmp/a'; nosuchword; '", "/tmp/a\\; nosuchword", `/tmp/a\\'b nosuchword`,
-		"/tmp/a'\x01'; nosuchword", "/tmp/a\\\x01\\; nosuchword", "/tmp/nosuchword\x7f'\\", "/tmp/a b nosuchword",
+		// Each ends its line as a shell reads it (; then a # that starts a word),
+		// so that a shell that ends a quote early reads what follows as a command.
+		"/tmp/a\\'; nosuchword;#\x01", "/tmp/a'; nosuchword;#\x01", "/tmp/a'\x01; nosuchword;#", "/tmp/a\\'\x01; nosuchword;#",
+		"/tmp/a\\\x01; nosuchword;#", "/tmp/a; nosuchword;#\x01", "/tmp/a\\; nosuchword;#", "/tmp/nosuchword\x7f'; nosuchword;#",
+		"/tmp/a\\\\'; nosuchword;#\x01", "/tmp/a'\\'\x01'; nosuchword;#", "/tmp/a b nosuchword",
 	}
 	for _, name := range []string{"bash", "/bin/bash", "zsh", "dash", "sh", "/bin/sh", "ksh", "mksh", "ash", "yash", "fish", "tcsh", "csh", "busybox"} {
 		bin, err := exec.LookPath(name)
