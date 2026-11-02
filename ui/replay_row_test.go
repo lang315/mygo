@@ -2,28 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"slices"
 	"testing"
-
-	"github.com/egoist/mygo/internal/scene"
 )
-
-// replayRowSame compares two frames' ops and glyphs (sameOps alone misses text
-// that moved: its positions are in the glyphs).
-func replayRowSame(a, b *scene.Scene) string {
-	if d := sameOps(withoutEmptyClips(a.Ops), withoutEmptyClips(b.Ops)); d != "" {
-		return d
-	}
-	if !slices.Equal(a.Glyphs, b.Glyphs) {
-		for i := range min(len(a.Glyphs), len(b.Glyphs)) {
-			if a.Glyphs[i] != b.Glyphs[i] {
-				return fmt.Sprintf("glyph %d of %d: %+v, want %+v", i, len(b.Glyphs), a.Glyphs[i], b.Glyphs[i])
-			}
-		}
-		return fmt.Sprintf("%d glyphs, want %d", len(a.Glyphs), len(b.Glyphs))
-	}
-	return ""
-}
 
 // replayRowTwins runs view in two testers, one replaying rows and one painting
 // them all (noReplay), and after each step compares their ops and their
@@ -42,7 +22,7 @@ func replayRowTwins(t *testing.T, view func(c *Context), steps int, step func(i 
 			if i > 0 {
 				replayed += rep.rt.replayed
 			}
-			if d := replayRowSame(&rep.rt.scene, &fresh.rt.scene); d != "" {
+			if d := sameScenesAcross(&rep.rt.scene, &fresh.rt.scene); d != "" {
 				t.Fatalf("step %d.%d (%d replayed): %s", i, rr, rep.rt.replayed, d)
 			}
 			got, want := map[uint64]uint32{}, map[uint64]uint32{}
@@ -147,7 +127,7 @@ func TestReplayRowShiftThenColumnWidth(t *testing.T) {
 	fresh.rt.noReplay = true
 	cmp := func(what string) {
 		t.Helper()
-		if d := replayRowSame(&rep.rt.scene, &fresh.rt.scene); d != "" {
+		if d := sameScenesAcross(&rep.rt.scene, &fresh.rt.scene); d != "" {
 			t.Fatalf("%s (%d replayed): %s", what, rep.rt.replayed, d)
 		}
 	}
@@ -205,12 +185,12 @@ func replayRowStaleRecord(t *testing.T, spoil func(r *rowKeep)) {
 	}
 	tt.Frame()
 	t.Logf("replayed %d", tt.rt.replayed)
-	got := scene.Scene{Ops: slices.Clone(tt.rt.scene.Ops), Glyphs: slices.Clone(tt.rt.scene.Glyphs)}
+	got := snapScene(&tt.rt.scene)
 	w, h, sc := tt.h.size()
 	tt.rt.noReplay = true
 	tt.rt.paint(tt.rt.c.root, w, h, sc)
 	tt.rt.noReplay = false
-	if d := replayRowSame(&got, &tt.rt.scene); d != "" {
+	if d := sameScenes(&got, &tt.rt.scene); d != "" {
 		t.Fatalf("replayed frame differs from painting every row: %s", d)
 	}
 }

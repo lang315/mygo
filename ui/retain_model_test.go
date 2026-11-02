@@ -25,7 +25,7 @@ func sameFrames(kept, built *Tester, pictures bool) string {
 		px := at / 4
 		return fmt.Sprintf("the pictures differ, first at %d,%d (kept %v, built %v); boxes: %q", px%ia.Rect.Dx(), px/ia.Rect.Dx(), ia.Pix[at-at%4:at-at%4+4], ib.Pix[at-at%4:at-at%4+4], sameBoxes(kept.rt.c.root, built.rt.c.root, "root"))
 	}
-	if d := sameOps(withoutEmptyClips(kept.rt.scene.Ops), withoutEmptyClips(built.rt.scene.Ops)); d != "" {
+	if d := sameScenesAcross(&kept.rt.scene, &built.rt.scene); d != "" {
 		return "ops: " + d
 	}
 	a, b := kept.rt, built.rt
