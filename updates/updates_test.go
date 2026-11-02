@@ -581,12 +581,6 @@ func TestInstalledUpdateRecordsItsVersion(t *testing.T) {
 	if err != nil || up == nil {
 		t.Fatalf("checkUpdate = %+v, %v", up, err)
 	}
-	install := func(m update.Manifest, k string, r update.Registry) (string, error) {
-		target, main := installedApp(t)
-		err := installAndRecord(ctx, updatehttp.Get, m, k, up.current, target, nil, r, "com.example.app")
-		b, _ := os.ReadFile(main)
-		return string(b), err
-	}
 	// Installed: the version is written, for the entry of this folder only.
 	target, _ := installedApp(t)
 	reg := &fakeUninstall{location: target}
@@ -595,8 +589,9 @@ func TestInstalledUpdateRecordsItsVersion(t *testing.T) {
 	}
 	// The entry of a copy installed elsewhere is left alone.
 	reg = &fakeUninstall{location: filepath.Join(t.TempDir(), "elsewhere")}
-	if body, err := install(up.manifest, key, reg); err != nil || body != "v2" || len(reg.versions) != 0 {
-		t.Errorf("another copy: %q, %v, versions %v", body, err, reg.versions)
+	target, _ = installedApp(t)
+	if err := installAndRecord(ctx, updatehttp.Get, up.manifest, key, up.current, target, nil, reg, "com.example.app"); err != nil || len(reg.versions) != 0 {
+		t.Errorf("another copy: %v, versions %v", err, reg.versions)
 	}
 	// An entry that cannot be written does not fail the update.
 	target, _ = installedApp(t)

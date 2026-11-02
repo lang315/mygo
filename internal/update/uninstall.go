@@ -5,13 +5,6 @@ import (
 	"strings"
 )
 
-// UninstallKeyPath is the registry key, under HKEY_CURRENT_USER, of the entry
-// of an app in Settings > Apps that the Windows installer writes
-// (cmd/mygo nsisUninstallEntry), by the app's identifier.
-func UninstallKeyPath(identifier string) string {
-	return `Software\Microsoft\Windows\CurrentVersion\Uninstall\` + identifier
-}
-
 // SameInstallDir reports whether the InstallLocation an installer wrote and
 // the directory of the running executable are one folder: Windows paths are
 // compared without case, and without a trailing backslash or quotes.
