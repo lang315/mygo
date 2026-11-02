@@ -686,7 +686,23 @@ func describeWindow(h uintptr) string {
 	user32.NewProc("GetClassNameW").Call(h, uintptr(unsafe.Pointer(&class[0])), uintptr(len(class)))
 	title := make([]uint16, 256)
 	procGetWindowTextW.Call(h, uintptr(unsafe.Pointer(&title[0])), uintptr(len(title)))
-	return fmt.Sprintf("%#x, class %q, title %q, process %d (this one %d)", h, syscall.UTF16ToString(class), syscall.UTF16ToString(title), windowProcess(h), syscall.Getpid())
+	return fmt.Sprintf("%#x, class %q, title %q, process %d (this one %d)%s", h, syscall.UTF16ToString(class), syscall.UTF16ToString(title), windowProcess(h), syscall.Getpid(), windowState(h))
+}
+
+// windowState says what may keep a window from showing where it is: whether
+// it is visible, cloaked (DWMWA_CLOAKED: 1 by its app, 2 by the shell, 4 by
+// the system), topmost, and its rectangle on the screen.
+func windowState(h uintptr) string {
+	var r rect
+	procGetWindowRect.Call(h, uintptr(unsafe.Pointer(&r)))
+	visible, _, _ := procIsWindowVisible.Call(h)
+	var cloaked uint32
+	if has(procDwmGetWindowAttribute) {
+		procDwmGetWindowAttribute.Call(h, dwmwaCloaked, uintptr(unsafe.Pointer(&cloaked)), 4)
+	}
+	const gwlExStyle, wsExTopmost = -20, 0x8
+	ex, _, _ := procGetWindowLongPtrW.Call(h, ^uintptr(-gwlExStyle-1))
+	return fmt.Sprintf(" [visible %v, cloaked %d, topmost %v, rect (%d, %d)-(%d, %d)]", visible != 0, cloaked, ex&wsExTopmost != 0, r.Left, r.Top, r.Right, r.Bottom)
 }
 
 // TestSideButton clicks a mouse's back or forward button (XBUTTON1 and

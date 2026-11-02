@@ -23,7 +23,12 @@ import (
 // alone, and read in order: the updater patches from the delta file.
 
 // Diff returns the patch that turns old into new.
-func Diff(old, new []byte) []byte {
+func Diff(old, new []byte) []byte { return diff(old, new, nil) }
+
+// diffStats counts what a Diff compares, for a test of how much that is.
+type diffStats struct{ compared int }
+
+func diff(old, new []byte, stats *diffStats) []byte {
 	sa := suffixArray(old)
 	type block struct {
 		diff, extra int
@@ -37,7 +42,7 @@ func Diff(old, new []byte) []byte {
 		oldScore := 0
 		scan += length
 		for scsc := scan; scan < len(new); scan++ {
-			length, pos = search(sa, old, new[scan:])
+			length, pos = search(sa, old, new[scan:], stats)
 			for ; scsc < scan+length; scsc++ {
 				if scsc+lastOffset < len(old) && old[scsc+lastOffset] == new[scsc] {
 					oldScore++
@@ -125,11 +130,11 @@ func Diff(old, new []byte) []byte {
 // byte while a match is barely better than the previous alignment, so
 // comparing whole matches makes a long one cost time quadratic in its
 // length; a longer match is still taken, in pieces.
-const maxMatch = 64 << 10
+var maxMatch = 64 << 10
 
 // search returns the longest prefix of b found in old, up to maxMatch
 // bytes, and where, by a binary search of the suffix array of old.
-func search(sa []int32, old, b []byte) (length, pos int) {
+func search(sa []int32, old, b []byte, stats *diffStats) (length, pos int) {
 	b = b[:min(len(b), maxMatch)]
 	lo, hi := 0, len(sa)-1
 	for hi-lo >= 2 {
@@ -141,6 +146,9 @@ func search(sa []int32, old, b []byte) (length, pos int) {
 		}
 	}
 	x, y := matchLen(old[sa[lo]:], b), matchLen(old[sa[hi]:], b)
+	if stats != nil {
+		stats.compared += x + y
+	}
 	if x > y {
 		return x, int(sa[lo])
 	}
