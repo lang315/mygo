@@ -281,6 +281,12 @@ func BenchmarkTableFrame100kPhases(b *testing.B) {
 					b.ReportMetric(float64(r1-r0)/float64(i), "rasters/frame")
 					b.ReportMetric(float64(l1-l0)/float64(i), "layouts/frame")
 					b.ReportMetric(float64(g1-g0)/float64(i), "glyphcalls/frame")
+					// What the last frame drew: the rasterizer's work on text.
+					gl, sub, subPx, px := ui.SceneGlyphs(tt)
+					b.ReportMetric(float64(gl), "glyphs-in-frame")
+					b.ReportMetric(float64(sub), "subpixel-glyphs-in-frame")
+					b.ReportMetric(float64(subPx), "subpixel-px-in-frame")
+					b.ReportMetric(float64(px), "glyph-px-in-frame")
 				})
 			}
 		}
