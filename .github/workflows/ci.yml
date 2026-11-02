@@ -39,11 +39,15 @@ jobs:
       # check, one more, the formatting and the builds and vets of every
       # platform, and noinspector the tests of production builds. rest has the
       # other steps, which need no -race. A pull request tests the packages
-      # its change affects (internal/ciaffected).
+      # its change affects (internal/ciaffected). A pull request runs the cmd
+      # and ui shards on macOS and Windows only, which cover them under -race
+      # as Linux does; Linux keeps rest, the GUI tests of its backend, and
+      # runs every shard on main.
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["macos-latest","windows-latest"]') || fromJSON('["macos-latest","ubuntu-latest","windows-latest"]') }}
         shard: [cmd, ui, rest]
         include:
+          - { os: ubuntu-latest, shard: rest }
           - { os: ubuntu-latest, shard: check }
           - { os: ubuntu-latest, shard: noinspector }
     steps:
@@ -228,9 +232,11 @@ jobs:
   #
   # Linux on ARM64, which no machine of the maintainers runs: purego's calls
   # into WebKitGTK, GTK and Mesa pass floats and structs in registers of the
-  # arm64 calling convention, which the amd64 runners never exercise.
+  # arm64 calling convention, which the amd64 runners never exercise. It is
+  # the longest job, so it runs on main, not on pull requests.
   linux-arm64:
     name: Linux ARM64
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     env:
