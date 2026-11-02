@@ -180,12 +180,15 @@ type engine struct {
 	rowsShifted, rowsShiftReplayed int
 	// acting are the ids of the elements the engine acts on in this pass
 	// (actingIDs), with a filter over them.
-	acting     []uint64
-	actBloom   [4]uint64
-	hoverBloom [4]uint64
-	actFrame   uint64
-	actPass    int
-	ghostMoved []uint16
+	acting []uint64
+	// actPrev and hoverPrev are the acting and hover ids the last time they
+	// were gathered (touchChanged).
+	actPrev, hoverPrev []uint64
+	actBloom           [4]uint64
+	hoverBloom         [4]uint64
+	actFrame           uint64
+	actPass            int
+	ghostMoved         []uint16
 
 	inputs          []valueInput
 	inputAt         int
@@ -1055,6 +1058,7 @@ func (rt *engine) endPass() {
 	for _, id := range rt.clickLater {
 		if s := rt.states[id]; s != nil {
 			s.clicks++
+			s.touch()
 			s.clickMods = 0
 		}
 	}

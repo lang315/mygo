@@ -70,12 +70,14 @@ func (e *node) Loop(key any, period time.Duration, ease Easing) float32 {
 	st := e.st
 	if st.anims == nil {
 		st.anims = map[any]*anim{}
+		st.touch()
 	}
 	a := st.anims[key]
 	now := e.c.now
 	if a == nil {
 		a = &anim{start: now}
 		st.anims[key] = a
+		st.touch()
 	}
 	e.c.AnimationFrame()
 	p := max(period, time.Millisecond)

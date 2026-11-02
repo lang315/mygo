@@ -548,6 +548,7 @@ type state struct {
 	// painted (replay.go).
 	replay        *rowPaint
 	krec          *rowKeep // the record of the kept row whose root this is (retain_layout.go)
+	row           *rowKeep // the record of the kept row this state is in: touch marks it (retain.go)
 	pendingSubmit bool
 	pendingChange bool
 	noticeQueued  bool

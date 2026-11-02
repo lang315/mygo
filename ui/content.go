@@ -65,6 +65,7 @@ func (p *Painter) contentStep(e *node, x, y float32, color Color) (*contentRec, 
 		// Not painted in the frame before: it shows at once.
 		r = &contentRec{}
 		st.crec = r
+		st.touch()
 		r.frame, r.text, r.tl, r.svg, r.image = rt.paints, e.text, e.tl, e.svg, e.image
 		r.k = channel{value: 1, target: 1, at: rt.c.now}
 		return r, 1, false

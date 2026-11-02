@@ -44,6 +44,7 @@ func (e *node) Drag(value any) *node {
 	linkDrag()
 	e.flags |= flagDraggable | flagHover
 	e.st.dragValue = value
+	e.st.touch()
 	if d := e.c.rt.drag; d != nil && d.src == e.id {
 		d.elem = e
 		// The value as the frame has it, as of rows that moved.
@@ -60,6 +61,7 @@ func (e *node) dragFrom(value func() any) *node {
 	linkDrag()
 	e.flags |= flagDraggable | flagHover
 	e.st.dragFn = value
+	e.st.touch()
 	if d := e.c.rt.drag; d != nil && d.src == e.id {
 		d.elem = e
 	}
@@ -122,9 +124,11 @@ func coreDragOver[T any](e *node) (T, bool) {
 func (e *node) acceptType(pred func(any) bool) {
 	if prev := e.st.accepts; prev != nil {
 		e.st.accepts = func(v any) bool { return prev(v) || pred(v) }
+		e.st.touch()
 		return
 	}
 	e.st.accepts = pred
+	e.st.touch()
 }
 
 // DragHover returns the value of type T dragged within the window while
@@ -270,6 +274,7 @@ func (rt *engine) handPress(x, y float32) *state {
 	rt.pressed, rt.pressDragger = a, 0
 	s.pressed = false
 	a.pressed, a.pressMods, a.pressPending = true, s.pressMods, true
+	a.touch()
 	a.pressX, a.pressY = a.local(px, py)
 	a.drag.reset(rt.now(), px, py)
 	return a
@@ -289,6 +294,7 @@ func (rt *engine) dragEnd() bool {
 	if !d.canceled {
 		if t := rt.states[rt.valueTarget(rt.pointerX, rt.pointerY, d.value)]; t != nil {
 			t.droppedValue, t.hasDropped = d.value, true
+			t.touch()
 			t.dropX, t.dropY = rt.pointerX, rt.pointerY
 		}
 	}

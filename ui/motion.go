@@ -284,11 +284,13 @@ func (e *node) channel(key any, value float64) (*channel, bool) {
 	st := e.st
 	if st.motions == nil {
 		st.motions = map[any]*channel{}
+		st.touch()
 	}
 	ch := st.motions[key]
 	if ch == nil {
 		ch = &channel{value: value, target: value, at: e.c.now}
 		st.motions[key] = ch
+		st.touch()
 		return ch, true
 	}
 	return ch, false
@@ -497,10 +499,12 @@ func (e *node) AnimateColor(key any, target Color, a Animation) Color {
 	st, rt, now := e.st, e.c.rt, e.c.now
 	if st.colorMotions == nil {
 		st.colorMotions = map[any]*colorMotion{}
+		st.touch()
 	}
 	m := st.colorMotions[key]
 	if m == nil {
 		st.colorMotions[key] = &colorMotion{from: target, to: target, shown: target, k: channel{value: 1, target: 1, at: now}}
+		st.touch()
 		return target
 	}
 	moving := m.k.moving || m.k.pending
@@ -619,6 +623,7 @@ func (e *node) Keyframes(key any, frames []Keyframe, options ...KeyframeOptions)
 	st := e.st
 	if st.sequences == nil {
 		st.sequences = map[any]*sequence{}
+		st.touch()
 	}
 	s := st.sequences[key]
 	now := e.c.now
@@ -629,6 +634,7 @@ func (e *node) Keyframes(key any, frames []Keyframe, options ...KeyframeOptions)
 		}
 		s = &sequence{frames: slices.Clone(frames), options: o, start: now.Add(o.Delay), from: from, value: from}
 		st.sequences[key] = s
+		st.touch()
 	}
 	rt := e.c.rt
 	switch {

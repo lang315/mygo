@@ -73,7 +73,8 @@ var hoverReaders = map[string]string{
 	"dragdrop.go engine.handPress":   "an event",
 	"repaint.go engine.repaintParts": "no part is repainted while a drag lasts",
 	"replay.go recordable":           "no row is replayed while a drag lasts",
-	"retain.go listFrame.ok":         "the rule itself (a row that asked DragHover is not kept during a drag)",
+	"retain.go listFrame.okList":     "the rule itself (a row that asked DragHover is not kept during a drag)",
+	"retain.go engine.touchChanged":  "the rule itself: the change of the hover chain marks the rows dirty",
 	"runtime.go engine.close":        "the end of the window",
 	"runtime.go engine.prune":        "after the frame",
 	// Events, the cursor, the frame's own work and paint.

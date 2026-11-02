@@ -1189,6 +1189,7 @@ func (f *listFrame) reorder() {
 	linkDrag()
 	e.flags |= flagValueDrop
 	e.st.accepts = func(v any) bool { d, ok := v.(*rowDrag); return ok && d.s == s }
+	e.st.touch()
 	rt := f.c.rt
 	var d *rowDrag
 	dropped, y := false, rt.pointerY
@@ -1198,6 +1199,7 @@ func (f *listFrame) reorder() {
 		// as when Windows moves it back to the mouse after a test's drag.
 		d, _ = e.st.droppedValue.(*rowDrag)
 		e.st.hasDropped, dropped, y = false, true, e.st.dropY
+		e.st.touch()
 	case rt.drag != nil && !rt.drag.canceled && rt.drag.over == e.id:
 		d, _ = rt.drag.value.(*rowDrag)
 	}

@@ -467,6 +467,7 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 			r.head(r.next, moveAll, now)
 		}
 		e.st.trec = r
+		e.st.touch()
 		if u.t.Exit != nil {
 			rt.exitsBuilt = true
 		}
