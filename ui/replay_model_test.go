@@ -121,7 +121,7 @@ func TestReplayMatches(t *testing.T) {
 					w, h, sc := tt.h.size()
 					tt.rt.paint(tt.rt.c.root, w, h, sc)
 					replayed += tt.rt.replayed
-					got := withoutEmptyClips(tt.rt.scene.Ops)
+					got := snapScene(&tt.rt.scene)
 					tt.rt.noReplay = true
 					tt.rt.paint(tt.rt.c.root, w, h, sc)
 					tt.rt.noReplay = false
@@ -132,7 +132,7 @@ func TestReplayMatches(t *testing.T) {
 						t.Fatalf("scale %v, seed %d, frame %d.%d, after %s: %d replayed rows differ from painting them",
 							scale, seed, f, rep, strings.Join(log, ", "), tt.rt.replayMismatch)
 					}
-					if d := sameOps(got, withoutEmptyClips(tt.rt.scene.Ops)); d != "" {
+					if d := sameScenes(&got, &tt.rt.scene); d != "" {
 						t.Fatalf("scale %v, seed %d, frame %d.%d, after %s: %s", scale, seed, f, rep, strings.Join(log, ", "), d)
 					}
 				}

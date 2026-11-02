@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -93,11 +94,11 @@ func TestPaintCullMatches(t *testing.T) {
 			// images taking their size, is done.
 			w, h, scale := tt.h.size()
 			tt.rt.paint(tt.rt.c.root, w, h, scale)
-			got := withoutEmptyClips(tt.rt.scene.Ops)
+			got := snapScene(&tt.rt.scene)
 			tt.rt.noCull = true
 			tt.rt.paint(tt.rt.c.root, w, h, scale)
 			tt.rt.noCull = false
-			if d := sameOps(got, withoutEmptyClips(tt.rt.scene.Ops)); d != "" {
+			if d := sameScenes(&got, &tt.rt.scene); d != "" {
 				if len(log) > 6 {
 					log = log[len(log)-6:]
 				}
@@ -139,6 +140,94 @@ func sameOps(got, want []scene.Op) string {
 	}
 	if len(got) != len(want) {
 		return fmt.Sprintf("%d ops, want %d", len(got), len(want))
+	}
+	return ""
+}
+
+// sameScenes compares two frames' ops (without the clips around nothing)
+// together with everything they point at: the glyphs (where text is), the
+// stops, the wide colors and the effects. sameOps alone misses text that
+// moved, since its positions are in Scene.Glyphs. The ops are compared by
+// what they point at, not by where in the scene's slices it is.
+//
+// Where a glyph's bitmap is in the atlas (U, V) is compared by sameScenes
+// only for frames of one tester: two testers place the same glyphs in
+// different places, which sameScenesAcross ignores.
+func sameScenes(got, want *scene.Scene) string { return sameScenesIn(got, want, true) }
+
+func sameScenesAcross(got, want *scene.Scene) string { return sameScenesIn(got, want, false) }
+
+func sameScenesIn(got, want *scene.Scene, shared bool) string {
+	sameGlyphs := func(a, b []scene.Glyph) bool {
+		return slices.EqualFunc(a, b, func(x, y scene.Glyph) bool {
+			if !shared {
+				x.U, x.V, y.U, y.V = 0, 0, 0, 0
+			}
+			return x == y
+		})
+	}
+	g, w := withoutEmptyClips(got.Ops), withoutEmptyClips(want.Ops)
+	for i := range min(len(g), len(w)) {
+		if d := sameOpIn(g[i], got, w[i], want, sameGlyphs); d != "" {
+			return fmt.Sprintf("op %d of %d: %s", i, len(w), d)
+		}
+	}
+	if len(g) != len(w) {
+		return fmt.Sprintf("%d ops, want %d", len(g), len(w))
+	}
+	return ""
+}
+
+// snapScene copies what sameScenes compares, for a scene its renderer
+// reuses for the next frame.
+func snapScene(s *scene.Scene) scene.Scene {
+	return scene.Scene{
+		Ops:     slices.Clone(s.Ops),
+		Glyphs:  slices.Clone(s.Glyphs),
+		Stops:   slices.Clone(s.Stops),
+		Wide:    slices.Clone(s.Wide),
+		Effects: slices.Clone(s.Effects),
+	}
+}
+
+func sameOpIn(x scene.Op, as *scene.Scene, y scene.Op, bs *scene.Scene, sameGlyphs func(a, b []scene.Glyph) bool) string {
+	// The slices the ops index are compared through them.
+	switch x.Kind {
+	case scene.OpGlyphs:
+		if !sameGlyphs(as.Glyphs[x.Start:x.End], bs.Glyphs[y.Start:y.End]) {
+			return fmt.Sprintf("glyphs %+v, want %+v", as.Glyphs[x.Start:x.End], bs.Glyphs[y.Start:y.End])
+		}
+		x.Start, x.End, y.Start, y.End = 0, 0, 0, 0
+	case scene.OpEffect:
+		ea, eb := as.Effects[x.Start], bs.Effects[y.Start]
+		ga, gb := ea.Glyphs, eb.Glyphs
+		var ra, rb []scene.Glyph
+		if ga != ([2]int32{}) {
+			ra = as.Glyphs[ga[0]:ga[1]]
+		}
+		if gb != ([2]int32{}) {
+			rb = bs.Glyphs[gb[0]:gb[1]]
+		}
+		ea.Glyphs, eb.Glyphs = [2]int32{}, [2]int32{}
+		if !sameGlyphs(ra, rb) || !reflect.DeepEqual(ea, eb) {
+			return fmt.Sprintf("effect %+v, want %+v (glyphs %+v, want %+v)", ea, eb, ra, rb)
+		}
+		x.Start, x.End, y.Start, y.End = 0, 0, 0, 0
+	}
+	if x.Stops != ([2]int32{}) || y.Stops != ([2]int32{}) {
+		if !slices.Equal(as.Stops[x.Stops[0]:x.Stops[1]], bs.Stops[y.Stops[0]:y.Stops[1]]) {
+			return "stops differ"
+		}
+		x.Stops, y.Stops = [2]int32{}, [2]int32{}
+	}
+	if x.Wide != 0 || y.Wide != 0 {
+		if x.Wide == 0 || y.Wide == 0 || !reflect.DeepEqual(as.Wide[x.Wide-1], bs.Wide[y.Wide-1]) {
+			return fmt.Sprintf("wide colors differ (%d, %d)", x.Wide, y.Wide)
+		}
+		x.Wide, y.Wide = 0, 0
+	}
+	if !reflect.DeepEqual(x, y) {
+		return fmt.Sprintf("%+v, want %+v", x, y)
 	}
 	return ""
 }
