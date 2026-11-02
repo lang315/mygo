@@ -62,6 +62,9 @@ var (
 	shadersMade atomic.Int32 // sets of shaders made, for tests
 )
 
+// DRAFT counters for the stress run.
+var stressTried, stressWARPTaken, stressGPUTaken, stressGPUDropped atomic.Int32
+
 const devGetDeviceRemovedReason = 39 // ID3D11Device
 
 // deviceRemoved reports whether the device was removed or reset, which
@@ -140,16 +143,20 @@ func reusable(r *Renderer) *kit {
 	case k == nil:
 		return nil
 	case k.warp:
+		stressTried.Add(1)
 		if dev, ctx, err := newHardware(); err == nil {
 			k.free()
 			r.device, r.ctx, r.warp = dev, ctx, false
 			return nil
 		}
+		stressWARPTaken.Add(1)
 		return k
 	default:
 		if luid, ok := defaultLUID(); ok && luid == k.luid {
+			stressGPUTaken.Add(1)
 			return k
 		}
+		stressGPUDropped.Add(1)
 		k.free()
 		return nil
 	}
