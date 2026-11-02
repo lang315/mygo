@@ -11,6 +11,15 @@ import (
 	"testing"
 )
 
+// exeName is the file name of a program built for goos: Windows runs only files
+// that end in .exe.
+func exeName(goos, name string) string {
+	if goos == "windows" {
+		return name + ".exe"
+	}
+	return name
+}
+
 // staticBuild does what a release build does for an app with no frontend
 // (listBoundTypes, bindFiles for the target, the overlay and the tag mygo_static)
 // for goos on this computer's architecture, and, when goos is this computer's,
@@ -63,7 +72,7 @@ func staticBuild(t *testing.T, goos string, files map[string]string) (gen, reaso
 	if err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(work, "app")
+	bin := filepath.Join(work, exeName(goos, "app"))
 	var out bytes.Buffer
 	cmd := goCommand(dir, []string{"GOOS=" + goos, "GOARCH=" + runtime.GOARCH}, "build", "-trimpath", "-tags", "mygo_static", "-overlay", overlay, "-o", bin, ".")
 	cmd.Stdout, cmd.Stderr = &out, &out

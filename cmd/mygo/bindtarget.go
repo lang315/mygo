@@ -312,7 +312,7 @@ func scanBinds(root string, fset *token.FileSet, files []*ast.File, lp *listedPa
 	place := func(pos token.Pos) string {
 		p := fset.Position(pos)
 		if rel, err := filepath.Rel(root, p.Filename); err == nil && !strings.HasPrefix(rel, "..") {
-			p.Filename = rel
+			p.Filename = filepath.ToSlash(rel)
 		}
 		return fmt.Sprintf("%s:%d", p.Filename, p.Line)
 	}

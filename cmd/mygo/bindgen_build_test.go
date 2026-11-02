@@ -227,7 +227,7 @@ func TestHasBindSymbol(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bin := filepath.Join(t.TempDir(), "app")
+			bin := filepath.Join(t.TempDir(), exeName(runtime.GOOS, "app"))
 			if err := goBuild(context.Background(), cfg, nil, bin, nil, generatorTags(cfg.root)...); err != nil {
 				t.Fatal(err)
 			}
@@ -276,7 +276,7 @@ func TestBuildNamesTheMethodsThroughTheTable(t *testing.T) {
 
 	reflectMethods := func(tags string, overlay string) int {
 		t.Helper()
-		args := []string{"build", "-tags", tags, "-ldflags", "-s -w -dumpdep", "-o", filepath.Join(work, "app-"+tags)}
+		args := []string{"build", "-tags", tags, "-ldflags", "-s -w -dumpdep", "-o", filepath.Join(work, exeName(runtime.GOOS, "app-"+tags))}
 		if overlay != "" {
 			args = append(args, "-overlay", overlay)
 		}
@@ -303,7 +303,7 @@ func TestBuildNamesTheMethodsThroughTheTable(t *testing.T) {
 		t.Errorf("the generator build with the tag sees %d <ReflectMethod>", n)
 	}
 	list := filepath.Join(work, "static-bound.json")
-	run := exec.Command(filepath.Join(work, "app-mygo_static"))
+	run := exec.Command(filepath.Join(work, exeName(runtime.GOOS, "app-mygo_static")))
 	run.Dir = dir
 	run.Env = append(os.Environ(), "MYGO_GENERATE="+filepath.Join(work, "static.ts"), "MYGO_GENERATE_BINDINGS="+list)
 	if out, err := run.CombinedOutput(); err != nil {

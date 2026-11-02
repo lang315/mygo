@@ -127,7 +127,7 @@ func main() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(t.TempDir(), "app")
+	bin := filepath.Join(t.TempDir(), exeName(runtime.GOOS, "app"))
 	tk := con.start("build")
 	if err := goBuild(context.Background(), c, tk, bin, nil, generatorTags(c.root)...); err != nil {
 		t.Fatal(err)

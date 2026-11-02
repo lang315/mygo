@@ -50,7 +50,7 @@ func rev338bStatic(t *testing.T, main string) (reason string, buildErr error, ru
 	if err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(work, "app")
+	bin := filepath.Join(work, exeName(runtime.GOOS, "app"))
 	var b bytes.Buffer
 	cmd := goCommand(dir, nil, "build", "-trimpath", "-tags", "mygo_static", "-ldflags", "-X github.com/egoist/mygo.production=1", "-overlay", overlay, "-o", bin, ".")
 	cmd.Stdout, cmd.Stderr = &b, &b
@@ -350,7 +350,7 @@ func main() {
 	}
 }
 `)
-	bin := filepath.Join(t.TempDir(), "app")
+	bin := filepath.Join(t.TempDir(), exeName(runtime.GOOS, "app"))
 	var b bytes.Buffer
 	cmd := goCommand(dir, nil, "build", "-trimpath", "-o", bin, ".")
 	cmd.Stdout, cmd.Stderr = &b, &b
