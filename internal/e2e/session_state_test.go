@@ -50,6 +50,13 @@ func holds(state []byte, s string) bool {
 // field as its window was hidden, and the entry before's scroll position
 // as the page left it. On Windows it brings back the page alone.
 func TestSessionState(t *testing.T) {
+	// TEMPORARY: the flake's rate before the fix.
+	for i := 0; i < 20; i++ {
+		t.Run(fmt.Sprint(i), sessionStateOnce)
+	}
+}
+
+func sessionStateOnce(t *testing.T) {
 	w := newWindow(t, mygo.WindowOptions{Title: "Session", Width: 300, Height: 200})
 	visit(t, w, "one", "typed first", 700)
 	visit(t, w, "two", "typed second", 1200)
@@ -57,6 +64,7 @@ func TestSessionState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("before Hide: scrollY %v, state %d bytes", mustEval(t, w, `scrollY`), len(state))
 	if runtime.GOOS != "windows" {
 		// WebKit saves the form fields of the page it shows as the page
 		// goes out of view, and tells it to the UI process later.
@@ -65,6 +73,7 @@ func TestSessionState(t *testing.T) {
 			state, err = w.Page().SessionState()
 			return err == nil && holds(state, "typed second")
 		})
+		t.Logf("after Hide: state %d bytes", len(state))
 	}
 	w.Destroy()
 
