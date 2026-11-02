@@ -2862,10 +2862,25 @@ func TestQuotePaths(t *testing.T) {
 		{quotePOSIX, "/tmp/a&b.txt", `/tmp/a\&b.txt`},
 		{quotePOSIX, "/tmp/$(id)`id`;x|y*", "/tmp/\\$\\(id\\)\\`id\\`\\;x\\|y\\*"},
 		{quotePOSIX, "/tmp/日本 語", `/tmp/日本\ 語`},
-		{quotePOSIX, "/tmp/x\ntouch pwned", `$'/tmp/x\x0atouch pwned'`},
-		{quotePOSIX, "/tmp/it's\tthere\\", `$'/tmp/it\'s\x09there\\'`},
-		{quotePOSIX, "/tmp/a\rb\x1b[201~c", `$'/tmp/a\x0db\x1b[201~c'`},
-		{quotePOSIX, "/tmp/\xff.bin", `$'/tmp/\xff.bin'`},
+		{quoteBash, "/tmp/x\ny", `'/tmp/x'$'\012''y'`},
+		{quoteBash, "/tmp/it's\tthere\\", `'/tmp/it'\''s'$'\011''there'\\`},
+		{quoteBash, "/tmp/a\rb\x1b[201~c", `'/tmp/a'$'\015''b'$'\033''[201~c'`},
+		{quoteBash, "/tmp/\xff.bin", `'/tmp/'$'\377''.bin'`},
+		{quoteBash, "/tmp/a!b\x01", `'/tmp/a!b'$'\001'`},
+		{quoteBash, "/tmp/\u0085x", `'/tmp/'$'\302\205''x'`},
+		// Without $'…', and not fish: "$(printf '\ooo')" for a control
+		// character.
+		{quotePOSIX, "/tmp/a b (1).png", `/tmp/a\ b\ \(1\).png`},
+		{quotePOSIX, "/tmp/it's", `/tmp/it\'s`},
+		{quotePOSIX, "", `''`},
+		{quotePOSIX, "/tmp/it's\tthere\\", `'/tmp/it'\''s'"$(printf '\011')"'there'\\`},
+		{quotePOSIX, "/tmp/a'\x01b\x1b[201~c", `'/tmp/a'\'"$(printf '\001')"'b'"$(printf '\033')"'[201~c'`},
+		{quotePOSIX, "/tmp/\xff.bin", `'/tmp/'"$(printf '\377')"'.bin'`},
+		// fish: a backslash and a single quote are escapes in single quotes.
+		{quoteFish, "/tmp/a b", `/tmp/a\ b`},
+		{quoteFish, "/tmp/a\\'b\x01", `'/tmp/a'\\\''b'\X01`},
+		{quoteFish, "/tmp/it's\tthere\\", `'/tmp/it'\''s'\X09'there'\\`},
+		{quoteFish, "/tmp/\xff.bin", `'/tmp/'\Xff'.bin'`},
 		{quotePowerShell, `C:\tmp\ab.txt`, `C:\tmp\ab.txt`},
 		{quotePowerShell, `C:\Users\me\My Shots\shot (1).png`, `'C:\Users\me\My Shots\shot (1).png'`},
 		{quotePowerShell, `C:\dl\$(Start-Process calc) x.txt`, `'C:\dl\$(Start-Process calc) x.txt'`},
@@ -2884,12 +2899,32 @@ func TestQuotePaths(t *testing.T) {
 		goos, program string
 		want          quoting
 	}{
-		{"linux", "/bin/zsh", quotePOSIX},
+		{"linux", "/bin/zsh", quoteBash},
 		{"darwin", "/usr/local/bin/pwsh", quotePowerShell},
 		{"windows", `C:\Program Files\PowerShell\7\pwsh.exe`, quotePowerShell},
 		{"windows", `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, quotePowerShell},
 		{"windows", `C:\Windows\System32\cmd.exe`, quoteCmd},
-		{"windows", `C:\Program Files\Git\bin\bash.exe`, quotePOSIX},
+		{"windows", `C:\Program Files\Git\bin\bash.exe`, quoteBash},
+		{"linux", "/bin/bash", quoteBash},
+		{"linux", "/usr/bin/zsh", quoteBash},
+		{"linux", "/bin/ksh", quoteBash},
+		{"linux", "/bin/sh", quotePOSIX},
+		{"linux", "/bin/dash", quotePOSIX},
+		{"linux", "/bin/busybox", quotePOSIX},
+		{"linux", "/usr/bin/fish", quoteFish},
+		{"windows", `C:\Windows\System32\archiver.exe`, quotePowerShell},
+		{"windows", `C:\Windows\System32\wslconfig.exe`, quotePowerShell},
+		{"windows", `C:\x\kali.exe`, quotePOSIX},
+		{"windows", `C:\x\arch.exe`, quotePOSIX},
+		{"windows", `C:\x\fedora.exe`, quotePOSIX},
+		{"windows", `C:\x\oraclelinux.exe`, quotePOSIX},
+		{"windows", `C:\x\OracleLinux_9_1.exe`, quotePOSIX},
+		{"windows", `C:\x\SUSE-Linux-Enterprise-Server-15-SP5.exe`, quotePOSIX},
+		{"linux", "/usr/bin/ssh", quotePOSIX},
+		{"darwin", "/usr/bin/some-tool", quotePOSIX},
+		{"windows", `C:\Windows\System32\wsl.exe`, quotePOSIX},
+		{"windows", `C:\Users\me\AppData\Local\Microsoft\WindowsApps\ubuntu2404.exe`, quotePOSIX},
+		{"windows", `C:\Users\me\AppData\Local\Microsoft\WindowsApps\debian.exe`, quotePOSIX},
 		{"windows", `C:\tools\nu.exe`, quotePowerShell},
 	} {
 		if got := quotingFor(c.goos, c.program); got != c.want {
@@ -2903,7 +2938,9 @@ func TestQuotePaths(t *testing.T) {
 		args  func(quoted string) []string
 	}
 	shells := []shell{
-		{[]string{"bash", "zsh"}, quotePOSIX, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"bash", "zsh", "ksh"}, quoteBash, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"bash", "zsh", "dash", "sh", "ksh"}, quotePOSIX, func(q string) []string { return []string{"-c", "printf %s " + q} }},
+		{[]string{"fish"}, quoteFish, func(q string) []string { return []string{"-c", "printf %s " + q} }},
 		{[]string{"pwsh", "powershell"}, quotePowerShell, func(q string) []string {
 			return []string{"-NoProfile", "-NonInteractive", "-Command", "& { [Console]::Out.Write($args[0]) } " + q}
 		}},
@@ -2911,8 +2948,8 @@ func TestQuotePaths(t *testing.T) {
 	for _, sh := range shells {
 		for _, name := range sh.names {
 			bin, err := exec.LookPath(name)
-			if err != nil {
-				continue
+			if err != nil || wslBash(bin) {
+				continue // not there, or WSL's launcher, which takes a command line through a shell of its own
 			}
 			for _, c := range cases {
 				if c.q != sh.q || (runtime.GOOS == "windows" && strings.ContainsFunc(c.path, unicode.IsControl)) {
@@ -2921,6 +2958,193 @@ func TestQuotePaths(t *testing.T) {
 				out, err := exec.Command(bin, sh.args(c.want)...).Output()
 				if err != nil || string(out) != c.path {
 					t.Errorf("%s read %s as %q (%v), want %q", name, c.want, out, err, c.path)
+				}
+			}
+		}
+	}
+}
+
+// wslBash reports whether bin is the launcher of WSL that Windows has as
+// bash: it runs what its command line says in a Linux shell of its own.
+func wslBash(bin string) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	b := strings.ToLower(bin)
+	return strings.HasSuffix(b, `\bash.exe`) && (strings.Contains(b, `\windows\system32\`) || strings.Contains(b, `\windowsapps\`))
+}
+
+// hardPaths are paths a quoting gets wrong easily.
+var hardPaths = []string{
+	`/tmp/a\'b`, `/tmp/a\\b`, `/tmp/a\`, `/tmp/it's`, `/tmp/a'b'c`, `/tmp/a!!b`, `/tmp/a!b`,
+	`/tmp/?*[]{}~^=%`, `/tmp/-x`, "/tmp/$HOME $(x) `x` \"q\" a#b;c|d&e<f>g",
+	"/tmp/日本 語 é", "/tmp/a\x01b", "/tmp/a\x1fb", "/tmp/a\x7fb", "/tmp/tab\there's", "/tmp/new\nline",
+	"/tmp/a\rb", "/tmp/a\x1b[201~b", "/tmp/a'\x01b\\'", "/tmp/\u0085x", "/tmp/a\\\x01'b!\x02", "/tmp/\xff.bin", "/tmp/a\xc3b",
+}
+
+// A name with a line break is left out where a shell has no way to spell it,
+// and the others are quoted as before.
+func TestQuoteAllLeavesOutWhatCannotBeSpelled(t *testing.T) {
+	paths := []string{"/tmp/a b", "/tmp/new\nline", "/tmp/c\rd", "/tmp/e"}
+	if got, want := quotePOSIX.quoteAll(paths), []string{`/tmp/a\ b`, "/tmp/e"}; !slices.Equal(got, want) {
+		t.Errorf("quotePOSIX.quoteAll = %q, want %q", got, want)
+	}
+	for _, q := range []quoting{quoteBash, quoteFish, quotePowerShell, quoteCmd} {
+		if got := q.quoteAll(paths); len(got) != len(paths) {
+			t.Errorf("quoting %d left out names: %q", q, got)
+		}
+	}
+}
+
+// A shell that cannot read what the generic quoting writes, as tcsh, reads
+// the path or fails: it runs nothing else, whatever the path holds.
+func TestQuotePathsTcshReadsThemOrFails(t *testing.T) {
+	bin, err := exec.LookPath("tcsh")
+	if err != nil {
+		t.Skip("no tcsh")
+	}
+	for _, p := range hardPaths {
+		if !quotePOSIX.spellable(p) {
+			continue
+		}
+		out, err := exec.Command(bin, "-f", "-c", "printf %s "+quotePOSIX.quote(p)).Output()
+		if err == nil && string(out) != p {
+			t.Errorf("tcsh read %s as %q, want the path or a failure", quotePOSIX.quote(p), out)
+		}
+	}
+}
+
+// plainSegments checks the structure of a quoted path: the single quotes of
+// the quoting never hold a backslash or a single quote, which a shell that is
+// not the one the terminal took the program's for reads as the end of them or
+// as an escape; the other parts are $'\ooo' and "$(printf '\ooo')" of octal
+// digits, and \XHH of fish. It returns what is wrong, or "".
+func plainSegments(q string) string {
+	for i := 0; i < len(q); {
+		switch {
+		case q[i] == '\\':
+			i += 2 // an escaped character, or \XHH: its digits are plain
+		case strings.HasPrefix(q[i:], `$'`):
+			j := i + 2
+			for j+3 < len(q) && q[j] == '\\' && strings.Trim(q[j+1:j+4], "01234567") == "" {
+				j += 4
+			}
+			if j >= len(q) || q[j] != '\'' {
+				return "bad $'…' at " + q[i:]
+			}
+			i = j + 1
+		case strings.HasPrefix(q[i:], `"$(printf '`):
+			j := i + len(`"$(printf '`)
+			for j+3 < len(q) && q[j] == '\\' && strings.Trim(q[j+1:j+4], "01234567") == "" {
+				j += 4
+			}
+			if !strings.HasPrefix(q[j:], `')"`) {
+				return "bad printf at " + q[i:]
+			}
+			i = j + 3
+		case q[i] == '\'':
+			j := strings.IndexByte(q[i+1:], '\'')
+			if j < 0 {
+				return "an open single quote"
+			}
+			if strings.ContainsRune(q[i+1:i+1+j], '\\') {
+				return "a backslash inside single quotes: " + q[i:i+j+2]
+			}
+			i += j + 2
+		default:
+			i++
+		}
+	}
+	return ""
+}
+
+func TestQuotedSingleQuotesHoldNoBackslashOrQuote(t *testing.T) {
+	for _, q := range []quoting{quotePOSIX, quoteBash, quoteFish} {
+		for _, p := range hardPaths {
+			if !q.spellable(p) {
+				continue
+			}
+			if bad := plainSegments(q.quote(p)); bad != "" {
+				t.Errorf("quoting %d of %q = %s: %s", q, p, q.quote(p), bad)
+			}
+		}
+	}
+}
+
+// A shell other than the one a path was quoted for, as one started in another
+// (over ssh, in tmux), never tries to run any word of the path: it reads the
+// path or fails.
+func TestQuotePathsInAnotherShellRunNothingOfThePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shells' own quoting")
+	}
+	paths := []string{
+		// Each ends its line as a shell reads it (; then a # that starts a word),
+		// so that a shell that ends a quote early reads what follows as a command.
+		"/tmp/a\\'; nosuchword;#\x01", "/tmp/a'; nosuchword;#\x01", "/tmp/a'\x01; nosuchword;#", "/tmp/a\\'\x01; nosuchword;#",
+		"/tmp/a\\\x01; nosuchword;#", "/tmp/a; nosuchword;#\x01", "/tmp/a\\; nosuchword;#", "/tmp/nosuchword\x7f'; nosuchword;#",
+		"/tmp/a\\\\'; nosuchword;#\x01", "/tmp/a'\\'\x01'; nosuchword;#", "/tmp/a b nosuchword",
+	}
+	for _, name := range []string{"bash", "/bin/bash", "zsh", "dash", "sh", "/bin/sh", "ksh", "mksh", "ash", "yash", "fish", "tcsh", "csh", "busybox"} {
+		bin, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		args := []string{"-c"}
+		if filepath.Base(bin) == "busybox" {
+			args = []string{"ash", "-c"}
+		}
+		for _, q := range []quoting{quotePOSIX, quoteBash, quoteFish} {
+			for _, p := range paths {
+				var stderr bytes.Buffer
+				cmd := exec.Command(bin, append(args, "printf %s "+q.quote(p))...)
+				cmd.Stderr = &stderr
+				cmd.Run()
+				// A shell that refuses the line may print it back in its message;
+				// one that runs a word of it says the command is not found.
+				for _, line := range strings.Split(stderr.String(), "\n") {
+					l := strings.ToLower(line)
+					if strings.Contains(l, "nosuchword") && (strings.Contains(l, "not found") || strings.Contains(l, "unknown command") || strings.Contains(l, "no such file")) {
+						t.Errorf("%s tried to run a word of the path %q quoted as %s: %s", bin, p, q.quote(p), line)
+					}
+				}
+			}
+		}
+	}
+}
+
+// Every shell the terminal quotes for reads a path back as the path, whatever
+// it holds: quotes, backslashes, control characters, characters its line
+// editor or globbing reads, bytes that are not UTF-8.
+func TestQuotePathsRoundTrip(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shells' own quoting")
+	}
+	for _, c := range []struct {
+		q      quoting
+		shells []string
+	}{
+		{quoteBash, []string{"bash", "/bin/bash", "zsh", "ksh"}},
+		{quotePOSIX, []string{"bash", "/bin/bash", "zsh", "dash", "sh", "/bin/sh", "ksh", "busybox"}},
+		{quoteFish, []string{"fish"}},
+	} {
+		for _, name := range c.shells {
+			bin, err := exec.LookPath(name)
+			if err != nil {
+				continue
+			}
+			args := []string{"-c"}
+			if filepath.Base(bin) == "busybox" {
+				args = []string{"ash", "-c"}
+			}
+			for _, p := range hardPaths {
+				if !c.q.spellable(p) {
+					continue
+				}
+				q := c.q.quote(p)
+				out, err := exec.Command(bin, append(args, "printf %s "+q)...).Output()
+				if err != nil || string(out) != p {
+					t.Errorf("%s read %s as %q (%v), want %q", bin, q, out, err, p)
 				}
 			}
 		}
