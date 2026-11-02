@@ -369,9 +369,14 @@ func TestColumnMovedWhileAnotherIsHiddenKeepsItsPlace(t *testing.T) {
 	if h := headers(tt); !sameTitles(h, []string{"Note", "Name"}) {
 		t.Fatalf("the move did not happen: headers %q", h)
 	}
+	// The callback may arrive after the frames settle: wait for the layout
+	// that has the move.
 	var l ui.TableLayout
-	for len(got) > 0 {
-		l = <-got
+	for {
+		l = received(t, got)
+		if i, j := slices.Index(l.Order, "Note"), slices.Index(l.Order, "Name"); i >= 0 && j >= 0 && i < j {
+			break
+		}
 	}
 	tb.SetColumnVisible("Score", true)
 	settleTable(tt)
