@@ -3,25 +3,32 @@
 package darwin
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ebitengine/purego/objc"
 )
 
-// The window delegate answers what WebKit calls and the classes of web views
-// are registered, with the others, when the build has a web view.
-func TestWebViewClassesAreRegistered(t *testing.T) {
+// The window delegate has the protocols and methods WebKit calls when the build
+// has a web view. (It registers no class: another test of the package
+// registers a stand-in for the web view's.)
+func TestWebViewDelegateHasWebKitsMethods(t *testing.T) {
 	load()
-	registerClasses()
-	for _, name := range []string{"MyGoWebView", "MyGoSchemeHandler"} {
-		if objc.GetClass(name) == 0 {
-			t.Errorf("the class %s is not registered", name)
+	for _, p := range []string{"WKNavigationDelegate", "WKUIDelegate", "WKScriptMessageHandler", "WKDownloadDelegate"} {
+		if !slices.Contains(webViewProtocols, p) {
+			t.Errorf("the window delegate does not answer %s", p)
 		}
 	}
-	delegate := id(objc.GetClass("MyGoWindowDelegate"))
-	for _, name := range []string{"windowShouldClose:", "webView:didCommitNavigation:", "userContentController:didReceiveScriptMessage:", "download:didFailWithError:resumeData:"} {
-		if !sendBool(delegate, "instancesRespondToSelector:", uintptr(sel(name))) {
-			t.Errorf("the window delegate does not answer %s", name)
+	have := map[objc.SEL]bool{}
+	for _, m := range webViewDelegateMethods() {
+		have[m.Cmd] = true
+	}
+	for _, name := range []string{"webView:didCommitNavigation:", "userContentController:didReceiveScriptMessage:", "download:didFailWithError:resumeData:", "webView:decidePolicyForNavigationAction:decisionHandler:"} {
+		if !have[sel(name)] {
+			t.Errorf("the window delegate lacks %s", name)
 		}
+	}
+	if len(have) < 20 {
+		t.Errorf("%d methods of WebKit, want about 23", len(have))
 	}
 }
