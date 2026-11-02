@@ -1621,6 +1621,10 @@ func (w *Window) pageContext() context.Context {
 // not copied into it.
 type message struct {
 	head, value, tail []byte
+	// doc is the context of the page the message is for (a reply, the values
+	// of a channel), canceled when the page navigates away; nil for an event,
+	// which any page of the window gets.
+	doc context.Context
 }
 
 func (m message) len() int { return len(m.head) + len(m.value) + len(m.tail) }
@@ -1668,6 +1672,7 @@ func (w *Window) flush() {
 	if w.native == nil || len(msgs) == 0 {
 		return
 	}
+	poster, posting := w.native.(platform.MessagePoster)
 	size := 64
 	for _, m := range msgs {
 		size += m.len() + 1
@@ -1675,15 +1680,41 @@ func (w *Window) flush() {
 	js := make([]byte, 0, size)
 	// A script shaped like a.b(JSON) runs without being compiled: WebKit's
 	// JavaScriptCore parses the value as JSON unless the inspector is on,
-	// several times faster. Pages without the runtime only throw.
-	js = append(js, "__mygo.receive(["...)
-	for i, m := range msgs {
-		if i > 0 {
+	// several times faster. Pages without the runtime only throw. A backend
+	// that posts web messages (platform.MessagePoster) takes the array alone.
+	if !posting {
+		js = append(js, "__mygo.receive("...)
+	}
+	js = append(js, '[')
+	n := 0
+	for _, m := range msgs {
+		// A web message reaches every listener of the page, not only the
+		// bridge's receive: a reply, or the values of a channel, goes only
+		// while the page that asked is the window's (its context is not
+		// canceled). After a navigation the reply of a call of the last
+		// document is dropped, and with it what a page of another origin
+		// could read with a listener of its own. A navigation that the browser
+		// has committed and the window has yet to hear of (the commit
+		// callback) leaves a moment in which the browser delivers a posted
+		// message to the new document.
+		if posting && m.doc != nil && m.doc.Err() != nil {
+			continue
+		}
+		if n > 0 {
 			js = append(js, ',')
 		}
 		js = m.appendTo(js)
+		n++
 	}
-	js = append(js, "])"...)
+	if n == 0 {
+		return
+	}
+	js = append(js, ']')
+	if posting {
+		poster.PostMessages(unsafe.String(unsafe.SliceData(js), len(js)))
+		return
+	}
+	js = append(js, ')')
 	// js is not used again, so the script can share its memory.
 	w.native.Eval(unsafe.String(unsafe.SliceData(js), len(js)))
 }

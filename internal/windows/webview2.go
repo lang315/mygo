@@ -49,6 +49,7 @@ const (
 	wvExecuteScript                          = 29
 	wvCapturePreview                         = 30
 	wvReload                                 = 31
+	wvPostWebMessageAsJSON                   = 32
 	wvAddWebMessageReceived                  = 34
 	wvCallDevToolsProtocolMethod             = 36
 	wvGetBrowserProcessId                    = 37

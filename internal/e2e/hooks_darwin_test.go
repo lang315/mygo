@@ -318,6 +318,10 @@ func resizeCursor(*mygo.Window) (string, bool) { return "", false }
 // grantForeground is for Windows, whose foreground rules need it.
 func grantForeground() {}
 
+func regrantForeground() {}
+
+func frontIsAnotherApp() bool { return false }
+
 // foregroundState is for Windows.
 func foregroundState(*mygo.Window) string { return "" }
 

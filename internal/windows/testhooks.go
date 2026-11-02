@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"slices"
 	"strings"
 	"syscall"
@@ -155,6 +156,13 @@ func TestGrantForeground() {
 	key := user32.NewProc("keybd_event")
 	key.Call(vkF24, 0, 0, 0)
 	key.Call(vkF24, 0, keyUp, 0)
+}
+
+// TestForegroundIsThisProcess reports whether the window in front is one of
+// this process.
+func TestForegroundIsThisProcess() bool {
+	fg, _, _ := procGetForegroundWindow.Call()
+	return fg != 0 && windowProcess(fg) == uint32(os.Getpid())
 }
 
 // TestEndMenu leaves the menus, as Escape does.

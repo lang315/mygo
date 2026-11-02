@@ -6,6 +6,8 @@ export interface Channel {
   post(message: string): void;
   /** Posts File objects along with a message (WebView2). */
   postWithFiles?(message: string, files: FileList): void;
+  /** Calls fn with each message the host posts as a web message (WebView2). */
+  listen?(fn: (data: unknown) => void): void;
 }
 
 /**
@@ -30,6 +32,8 @@ export interface Channel {
 export function connect(w: any): Channel | null {
   const handler = w.webkit?.messageHandlers?.mygo;
   const webview = w.chrome?.webview;
+  const addListener: ((type: string, fn: (e: MessageEvent) => void) => void) | undefined =
+    webview?.addEventListener?.bind(webview);
   let rawPost: (message: string) => void;
   let rawFiles: ((message: string, files: FileList) => void) | undefined;
   if (handler) {
@@ -66,5 +70,12 @@ export function connect(w: any): Channel | null {
     stringify,
     post: (message) => rawPost(secret + message),
     postWithFiles: rawFiles && ((message, files) => rawFiles(secret + message, files)),
+    // Windows delivers the host's messages as web messages, not scripts it runs
+    // (see Window.flush): listened to with the function bound here, ahead of
+    // any a page adds. WebView2 dispatches them with isTrusted false, so that
+    // says nothing; a page that makes up a message only reaches what
+    // __mygo.receive already reaches, and the host posts a reply only while the
+    // page that asked is the window's.
+    listen: addListener && ((fn) => addListener("message", (e: MessageEvent) => fn(e.data))),
   };
 }

@@ -33,6 +33,9 @@ let rootStyle: HTMLStyleElement | null = null;
   const { post, stringify } = channel;
 
   const { runtime, internal } = createRuntime(__MYGO_CONFIG__, post, stringify);
+  // The messages a host posts reach the runtime as they do the script of a
+  // flush: receive checks the secret of each reply and channel value.
+  channel.listen?.((data) => internal.receive(data as any));
   Object.defineProperty(w, "mygo", { value: runtime, enumerable: true });
   Object.defineProperty(w, "__mygo", { value: Object.freeze({ ...internal, find, stopFind }) });
 

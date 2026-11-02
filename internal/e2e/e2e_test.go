@@ -171,6 +171,14 @@ func TestMain(m *testing.M) {
 		w.Header().Set("X-Count", "3")
 		io.WriteString(w, "asset data")
 	})
+	// A page of another origin that records every web message it is posted.
+	assets.HandleFunc("GET /spy", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, `<!doctype html><script>
+window.__spy = [];
+if (window.chrome && chrome.webview) chrome.webview.addEventListener("message", (e) => window.__spy.push((e.isTrusted ? "trusted " : "UNTRUSTED ") + JSON.stringify(e.data)));
+</script><p>spy</p>`)
+	})
 	assets.HandleFunc("POST /data", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		fmt.Fprintf(w, "posted:%s", b)

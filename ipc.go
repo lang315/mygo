@@ -451,12 +451,15 @@ func handleCall(w *Window, ctx context.Context, raw string, trusted bool) {
 	} else {
 		result, err = mi.call(w, ctx, m.token, m.args)
 	}
-	w.enqueue(encodeReply(m.id, m.token, result, err), false)
+	if ctx == nil {
+		ctx = w.pageContext() // rejected on the main thread, with no page context
+	}
+	w.enqueue(encodeReply(m.id, m.token, ctx, result, err), false)
 }
 
 var closeBrace = []byte("}")
 
-func encodeReply(id int64, token string, result any, err error) message {
+func encodeReply(id int64, token string, doc context.Context, result any, err error) message {
 	b := make([]byte, 0, 96)
 	b = append(b, `{"t":"reply","id":`...)
 	b = strconv.AppendInt(b, id, 10)
@@ -465,13 +468,13 @@ func encodeReply(id int64, token string, result any, err error) message {
 	if err == nil {
 		v, merr := encodeResult(result)
 		if merr == nil {
-			return message{append(b, `,"ok":true,"v":`...), v, closeBrace}
+			return message{head: append(b, `,"ok":true,"v":`...), value: v, tail: closeBrace, doc: doc}
 		}
 		err = fmt.Errorf("cannot encode result: %w", merr)
 	}
 	b = append(b, `,"ok":false,"e":`...)
 	b = jsonlite.AppendQuote(b, err.Error())
-	return message{head: append(b, '}')}
+	return message{head: append(b, '}'), doc: doc}
 }
 
 // encodeResult encodes the result of a call. Methods that return nothing, and the
@@ -630,7 +633,7 @@ func eventMessage(name string, p []byte) message {
 	b = append(b, `{"t":"event","n":`...)
 	b = jsonlite.AppendQuote(b, name)
 	b = append(b, `,"p":`...)
-	return message{b, p, closeBrace}
+	return message{head: b, value: p, tail: closeBrace}
 }
 
 // The service mygo:window backs window.mygo.window in the page.

@@ -177,6 +177,20 @@ func resizeCursor(*mygo.Window) (string, bool) { return "", false }
 // another app. See TestMain.
 func grantForeground() { win.TestGrantForeground() }
 
+// regrantForeground is grantForeground for a wait that finds another app in
+// front: a window the process destroyed, or one it shows, can leave the front
+// with another app, which only a process that received the last input takes
+// back. See keepFront.
+func regrantForeground() {
+	if frontIsAnotherApp() {
+		win.TestGrantForeground()
+	}
+}
+
+// frontIsAnotherApp reports whether the window in front belongs to another
+// process: the environment took the front, not the app's own windows.
+func frontIsAnotherApp() bool { return !win.TestForegroundIsThisProcess() }
+
 // foregroundState says who is in front, leaving the front as it is.
 func foregroundState(w *mygo.Window) (state string) {
 	mygo.RunOnMain(func() { state = win.TestForegroundState(w.NativeHandle()) })

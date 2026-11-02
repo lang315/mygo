@@ -26,11 +26,14 @@ var ErrNoReply = errors.New("fake: no reply")
 
 // Backend is a fake platform backend.
 type Backend struct {
-	h      platform.AppHandler
-	mainID uint64
-	signal chan struct{}
-	wake   chan struct{}
-	quit   chan struct{}
+	// Posting makes the windows it makes after it take messages as web
+	// messages, as WebView2's do (platform.MessagePoster), not as scripts.
+	Posting bool
+	h       platform.AppHandler
+	mainID  uint64
+	signal  chan struct{}
+	wake    chan struct{}
+	quit    chan struct{}
 	// IgnoresQuit makes Quit leave the event loop running, as AppKit's
 	// has been seen to; Quits counts the calls.
 	IgnoresQuit bool
@@ -267,8 +270,22 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 	}
 	b.mu.Lock()
 	b.windows = append(b.windows, w)
+	posting := b.Posting
 	b.mu.Unlock()
+	if posting {
+		return &postingWindow{w}, nil
+	}
 	return w, nil
+}
+
+// postingWindow is a Window that takes the bridge's messages as web
+// messages (platform.MessagePoster), recorded in Window.Posts.
+type postingWindow struct{ *Window }
+
+func (p *postingWindow) PostMessages(json string) {
+	p.mu.Lock()
+	p.posts = append(p.posts, json)
+	p.mu.Unlock()
 }
 
 // PlaceFlyout places a flyout as the real backends do, against the
@@ -570,6 +587,8 @@ type Window struct {
 	// OnEval, when set, receives the scripts passed to Eval instead of
 	// recording them.
 	OnEval func(js string)
+	// posts are the web messages posted (postingWindow).
+	posts []string
 
 	surface *Surface
 }
@@ -1701,4 +1720,11 @@ func (b *Backend) SetSecretError(err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.secretError = err
+}
+
+// Posts returns the web messages the window took (Backend.Posting).
+func (w *Window) Posts() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.posts...)
 }

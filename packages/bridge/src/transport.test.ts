@@ -6,7 +6,12 @@ import { connect } from "./transport";
 function windowWith(kind: "webkit" | "webview2") {
   const posted: string[] = [];
   const files: [string, unknown][] = [];
+  const webviewListeners: ((e: any) => void)[] = [];
   const target = {
+    addEventListener(type: string, fn: (e: any) => void) {
+      if (this !== target) throw new Error("addEventListener called with another this");
+      if (type === "message") webviewListeners.push(fn);
+    },
     postMessage(m: string) {
       if (this !== target) throw new Error("postMessage called with another this");
       posted.push(m);
@@ -30,7 +35,7 @@ function windowWith(kind: "webkit" | "webview2") {
       return a;
     },
   };
-  return { w, target, posted, files, listeners };
+  return { w, target, posted, files, listeners, webviewListeners };
 }
 
 for (const kind of ["webkit", "webview2"] as const) {
@@ -191,5 +196,23 @@ describe("connect (WebView2 files)", () => {
     const secret = JSON.parse(posted[0]!).k as string;
     ch.postWithFiles!(ch.stringify({ t: "drop", x: 1, y: 2 }), "FILES" as any);
     expect(files).toEqual([[secret + '{"t":"drop","x":1,"y":2}', "FILES"]]);
+  });
+});
+
+describe("listen", () => {
+  test("WebView2 hands the data of the host's web messages", () => {
+    const { w, webviewListeners } = windowWith("webview2");
+    const ch = connect(w)!;
+    const got: unknown[] = [];
+    ch.listen!((d) => got.push(d));
+    expect(webviewListeners).toHaveLength(1);
+    // WebView2 dispatches the host's messages with isTrusted false.
+    webviewListeners[0]!({ isTrusted: false, data: [{ t: "reply", id: 1 }] });
+    expect(got).toEqual([[{ t: "reply", id: 1 }]]);
+  });
+
+  test("WebKit has nothing to listen to: the host runs a script", () => {
+    const { w } = windowWith("webkit");
+    expect(connect(w)!.listen).toBeUndefined();
   });
 });
