@@ -4568,6 +4568,16 @@ own allocations taking half (`footprint -p <pid>` breaks it down); on
 Windows its private working set is 14 MB, of a working set of 39 MB with
 the pages it shares, and 62 MB committed. Compare a series with itself.
 `--out` writes the results as JSON, with the commit and the runner's CPU.
+The frame benchmarks of native UI draw with the CPU rasterizer that stands in
+for the GPU (`ui.Tester`), and on frames that repaint much text, as a scroll,
+its `present` is most of the time. It is not what a window draws with
+(Metal, Direct3D 11 or WARP, OpenGL), and on Windows it takes ClearType text
+the slow way, in floats, so a scroll costs several times what it does on
+Linux. Compare Windows with Linux by the `App` series, which skip the
+rasterizer (`Tester.SkipRaster`) and time the work an app does: `StreamingFrameApp`,
+`CodeEditorScrollApp`, `CodeEditorScrollWrapApp`, `DiffViewerScrollApp`,
+`DiffScrollApp`, `DiffScrollSidebarApp`, `DiffScrollSidebarWarmApp`, the
+terminal's `FrameApp`, and `TableFrame100kPhases/...-app`.
 The benchmarks of `internal/e2e` time the real backend: a page calling Go
 (`PageCall`, `PageCallItems`), streaming (`PageChannel`), receiving events
 (`PageEvent`), fetching from the app's scheme (`PageFetch1MB`), and

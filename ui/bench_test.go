@@ -265,8 +265,21 @@ func BenchmarkDiffScrollSidebar(b *testing.B)     { benchDiffScroll(b, false, 0,
 func BenchmarkDiffScroll(b *testing.B)            { benchDiffScroll(b, true, 0, 0) }
 func BenchmarkDiffScrollSidebarWarm(b *testing.B) { benchDiffScroll(b, false, 80, 120) }
 
-func benchDiffScroll(b *testing.B, diff bool, lo, hi int) {
+// The App variants skip the rasterizer that stands in for the GPU
+// (Tester.SkipRaster), so that they measure the work an app does: the CPU
+// rasterizer draws ClearType text the slow way on Windows, which no renderer
+// of a window does (see "Benchmarks" in the architecture guide).
+func BenchmarkDiffScrollSidebarApp(b *testing.B)     { benchDiffScroll(b, false, 0, 0, skipRaster) }
+func BenchmarkDiffScrollApp(b *testing.B)            { benchDiffScroll(b, true, 0, 0, skipRaster) }
+func BenchmarkDiffScrollSidebarWarmApp(b *testing.B) { benchDiffScroll(b, false, 80, 120, skipRaster) }
+
+func skipRaster(tt *Tester) { tt.SkipRaster(true) }
+
+func benchDiffScroll(b *testing.B, diff bool, lo, hi int, setup ...func(*Tester)) {
 	tt, d := diffSceneTester(diff)
+	for _, f := range setup {
+		f(tt)
+	}
 	s := &sidebarScroller{tt: tt, d: d, lo: lo, hi: hi}
 	for range 100 {
 		s.step()
