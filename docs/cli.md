@@ -153,7 +153,7 @@ An app of native UI only, with no web view, says `"nativeOnly": true` in `mygo.j
 (the template of native UI does): `mygo build` and `mygo dev` then build it
 with the tag `mygo_nowebview`, which leaves the code that makes web views out of
 the program (on Windows, some 200 KB), and a window that would show a page is
-an error, as is `Window.NewWebView` (so `widget.WebBrowser`) on every platform, though only Windows leaves the code out so far. `mygo build` warns when `nativeOnly` goes with a frontend (`buildCommand` or `frontendDist`).
+an error, as is `Window.NewWebView` (so `widget.WebBrowser`) on every platform; the backends of Windows, macOS and Linux leave the code that makes web views out of the program. `mygo build` warns when `nativeOnly` goes with a frontend (`buildCommand` or `frontendDist`).
 
 For an app that binds services (`mygo.Bind`), a release build also gives `Bind`
 the list of their methods, so that the linker does not keep every method of the
