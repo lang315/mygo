@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/egoist/mygo/internal/accelerator"
 	"github.com/egoist/mygo/internal/bridge"
+	"github.com/egoist/mygo/internal/cdp"
 	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehost"
@@ -244,8 +244,11 @@ func (w *window) setUp(controller uintptr) {
 		// backends. It is read later than the change, so two changes in a
 		// row read the second title twice.
 		withHandler(func(hr, result uintptr) {
-			var title string
-			if failed(hr) || w.closed || json.Unmarshal([]byte(wstr(result)), &title) != nil || title == w.pageTitle {
+			if failed(hr) || w.closed {
+				return
+			}
+			title, err := cdp.Title(wstr(result))
+			if err != nil || title == w.pageTitle {
 				return
 			}
 			w.pageTitle = title
@@ -813,43 +816,14 @@ func (w *window) Eval(js string) {
 // CallAsyncFunction evaluates through the DevTools protocol, which awaits
 // promises, reports syntax errors and ignores the page's CSP.
 func (w *window) CallAsyncFunction(body string, cb func(string, error)) {
-	params, _ := json.Marshal(map[string]any{
-		"expression":    "(async () => {\n" + body + "\n})()",
-		"awaitPromise":  true,
-		"returnByValue": true,
-	})
+	params := cdp.EvaluateAsync("(async () => {\n" + body + "\n})()")
 	w.withWebViewOr(func() {
-		w.devtools("Runtime.evaluate", string(params), func(result string, err error) {
+		w.devtools("Runtime.evaluate", params, func(result string, err error) {
 			if err != nil {
 				cb("", err)
 				return
 			}
-			var out struct {
-				Result struct {
-					Value json.RawMessage `json:"value"`
-				} `json:"result"`
-				ExceptionDetails *struct {
-					Text      string `json:"text"`
-					Exception *struct {
-						Description string `json:"description"`
-					} `json:"exception"`
-				} `json:"exceptionDetails"`
-			}
-			if err := json.Unmarshal([]byte(result), &out); err != nil {
-				cb("", err)
-				return
-			}
-			if d := out.ExceptionDetails; d != nil {
-				msg := d.Text
-				if d.Exception != nil && d.Exception.Description != "" {
-					msg = d.Exception.Description
-				}
-				cb("", errors.New(msg))
-				return
-			}
-			var s string
-			_ = json.Unmarshal(out.Result.Value, &s)
-			cb(s, nil)
+			cb(cdp.Value(result))
 		})
 	}, func(err error) { cb("", err) })
 }
@@ -1070,8 +1044,8 @@ func (w *window) SetCaptureState(platform.CaptureKind, platform.CaptureState) {}
 // DevTools protocol as a user's gesture, which
 // requestPictureInPicture() needs.
 func (w *window) TogglePictureInPicture() {
-	params, _ := json.Marshal(map[string]any{"expression": platform.TogglePictureInPicture, "userGesture": true})
-	w.withWebView(func() { w.devtools("Runtime.evaluate", string(params), nil) })
+	params := cdp.Evaluate(platform.TogglePictureInPicture, true)
+	w.withWebView(func() { w.devtools("Runtime.evaluate", params, nil) })
 }
 
 // PictureInPictureActive asks the page for its
@@ -1159,31 +1133,23 @@ func (w *window) Print() { w.Eval("window.print()") }
 
 // PrintToPDF uses the DevTools protocol, like Chromium's headless mode.
 func (w *window) PrintToPDF(o platform.PDFOptions, cb func([]byte, error)) {
-	params, _ := json.Marshal(map[string]any{
-		"landscape":         o.Landscape,
-		"printBackground":   o.Background,
-		"paperWidth":        o.PageWidth,
-		"paperHeight":       o.PageHeight,
-		"marginTop":         o.MarginTop,
-		"marginRight":       o.MarginRight,
-		"marginBottom":      o.MarginBottom,
-		"marginLeft":        o.MarginLeft,
-		"preferCSSPageSize": false,
-	})
+	params, err := cdp.PrintToPDF(o.Landscape, o.Background, o.PageWidth, o.PageHeight, o.MarginTop, o.MarginRight, o.MarginBottom, o.MarginLeft)
+	if err != nil {
+		cb(nil, err)
+		return
+	}
 	w.withWebViewOr(func() {
-		w.devtools("Page.printToPDF", string(params), func(res string, err error) {
+		w.devtools("Page.printToPDF", params, func(res string, err error) {
 			if err != nil {
 				cb(nil, fmt.Errorf("mygo: printing to PDF: %w", err))
 				return
 			}
-			var r struct {
-				Data string `json:"data"`
-			}
-			if err := json.Unmarshal([]byte(res), &r); err != nil {
+			data, err := cdp.Data(res)
+			if err != nil {
 				cb(nil, err)
 				return
 			}
-			pdf, err := base64.StdEncoding.DecodeString(r.Data)
+			pdf, err := base64.StdEncoding.DecodeString(data)
 			cb(pdf, err)
 		})
 	}, func(err error) { cb(nil, err) })
@@ -1358,9 +1324,8 @@ func (r *schemeResponse) release() {
 // as the http://[<host>.]<scheme>.localhost/ URLs that serve them (webURL), which
 // the popup can load as it opens, keeping its opener (newWindowRequested).
 func (w *window) openScript() string {
-	schemes, _ := json.Marshal(w.opts.Schemes)
 	return `(() => {
-	const schemes = ` + string(schemes) + `, open = window.open;
+	const schemes = ` + cdp.Strings(w.opts.Schemes) + `, open = window.open;
 	if (typeof open !== "function") return;
 	window.open = function (url, ...rest) {
 		try {
