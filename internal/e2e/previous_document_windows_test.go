@@ -72,7 +72,6 @@ addEventListener("pagehide", () => {
 	}
 	heard, other, others, commits := messageStats()
 	t.Logf("%d rounds: %d messages heard, %d of them from a document other than the one shown, %d commits; first of those: %q", rounds, heard, other, commits, others)
-	t.Fatalf("DEBUG %d rounds: heard=%d other=%d commits=%d first=%q", rounds, heard, other, commits, others)
 }
 
 // Back to a page after another has been shown: whether the engine restores
@@ -103,7 +102,6 @@ addEventListener("pageshow", (e) => window.shows.push(e.persisted));
 	}
 	_, _, _, commitsAfter := messageStats()
 	t.Logf("Back: the same document restored (kept its state): %v; %d commits for the Back", v, commitsAfter-commitsBefore)
-	t.Errorf("DEBUG Back: %v commits=%d", v, commitsAfter-commitsBefore)
 	before := probe.n.Load()
 	if _, err := p.EvalContext(wait.Context(t), "mygo.call('Probe.Touch')"); err != nil || probe.n.Load() != before+1 {
 		t.Fatalf("the page's call after Back: %v, count %d, want %d", err, probe.n.Load(), before+1)
