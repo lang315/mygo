@@ -22,6 +22,7 @@ import (
 // all the app's pages share, and a page that asks once it runs is too
 // late, which the log tells.
 func (b *Backend) startEnvironment(o *platform.WindowOptions) error {
+	startupMark("env-start")
 	unthrottled := o != nil && o.NoBackgroundThrottling
 	autoplay := o != nil && o.Autoplay
 	if b.envStarted {
@@ -40,7 +41,13 @@ func (b *Backend) startEnvironment(o *platform.WindowOptions) error {
 		dir = os.TempDir()
 	}
 	userData := filepath.Join(dir, sanitize(b.name), "WebView2")
+	if _, err := os.Stat(userData); err == nil {
+		startupMark("userdata-existed")
+	} else {
+		startupMark("userdata-new")
+	}
 	_ = os.MkdirAll(userData, 0o755)
+	startupMark("userdata-ready")
 	language := ""
 	if len(b.languages) > 0 {
 		language = b.languages[0]
@@ -48,7 +55,9 @@ func (b *Backend) startEnvironment(o *platform.WindowOptions) error {
 	// What the first page asked for counts from now, so that a page shown
 	// while the environment is being made isn't told it is too late.
 	b.envUnthrottled, b.envAutoplay = unthrottled, autoplay
+	startupMark("env-call")
 	err := createEnvironment(userData, language, browserArguments(unthrottled, autoplay), func(env uintptr, withArgs bool, err error) {
+		startupMark("env-ready")
 		b.env, b.envErr = env, err
 		if err != nil || !withArgs {
 			b.envUnthrottled, b.envAutoplay = false, false
@@ -74,6 +83,7 @@ func (w *window) createWebView() {
 	if w.closed {
 		return
 	}
+	startupMark("ctl-call")
 	if w.b.envErr != nil {
 		w.webViewFailed(w.b.envErr)
 		return
@@ -84,6 +94,7 @@ func (w *window) createWebView() {
 	}
 	fail := w.failsWebView()
 	hr := withHandler(func(hr, controller uintptr) {
+		startupMark("ctl-ready")
 		// A web view in a window of native UI gets a composition
 		// controller, whose controller closes it.
 		closeController := func() {

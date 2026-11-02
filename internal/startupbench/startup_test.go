@@ -89,13 +89,17 @@ func TestStartup(t *testing.T) {
 		apps = append(apps, app{"native (prewarm off)", "github.com/egoist/mygo/internal/startupbench/apps/native", "mygo_noinspector,mygo_nowebview", "MYGO_PREWARM=off"})
 	}
 	apps = append(apps, app{"web", "github.com/egoist/mygo/internal/startupbench/apps/web", "mygo_noinspector", ""})
+	if runtime.GOOS == "windows" { // each run with a user data folder that is new (WEBVIEW2_USER_DATA_FOLDER), not the one the last run left
+		apps = append(apps, app{"web (new user data each run)", "github.com/egoist/mygo/internal/startupbench/apps/web", "mygo_noinspector", "WEBVIEW2_USER_DATA_FOLDER={fresh}"})
+	}
 	var report strings.Builder
 	fmt.Fprintf(&report, "\nSTARTUP %s/%s, %d CPUs, %s\n", runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), time.Now().UTC().Format(time.RFC3339))
 	for _, a := range apps {
 		exe := build(t, dir, strings.NewReplacer("+", "-", "=", "-").Replace(a.name), a.pkg, a.tags)
 		var all []sample
 		for i := 0; i < runs+1; i++ {
-			s := run(t, exe, filepath.Join(dir, "m.log"), a.env)
+			env := strings.ReplaceAll(a.env, "{fresh}", filepath.Join(dir, fmt.Sprintf("userdata-%d", i)))
+			s := run(t, exe, filepath.Join(dir, "m.log"), env)
 			all = append(all, s)
 		}
 		phases := []struct{ label, from, to string }{
@@ -106,6 +110,28 @@ func TestStartup(t *testing.T) {
 		}
 		if strings.HasPrefix(a.name, "web") {
 			phases = append(phases, struct{ label, from, to string }{"  (window shown -> DOM ready)", "show", "dom"})
+			// Inside the web view's start (Windows backend marks, DRAFT).
+			for _, p := range [][3]string{
+				{"  App ready -> env-start (NewWindow, LoadHTML)", "appready", "env-start"},
+				{"  env-start -> userdata-ready (folder)", "env-start", "userdata-ready"},
+				{"  userdata-ready -> env-call", "userdata-ready", "env-call"},
+				{"  env-call -> env-ready (CreateEnvironment)", "env-call", "env-ready"},
+				{"  env-ready -> ctl-call", "env-ready", "ctl-call"},
+				{"  ctl-call -> ctl-ready (CreateController)", "ctl-call", "ctl-ready"},
+				{"  ctl-ready -> setup-start", "ctl-ready", "setup-start"},
+				{"  setup-start -> scripts-registered", "setup-start", "scripts-registered"},
+				{"  scripts-registered -> handlers-added", "scripts-registered", "handlers-added"},
+				{"  handlers-added -> setup-end", "handlers-added", "setup-end"},
+				{"  setup-end -> navigate", "setup-end", "navigate"},
+				{"  navigate -> nav-starting", "navigate", "nav-starting"},
+				{"  nav-starting -> content-loading", "nav-starting", "content-loading"},
+				{"  content-loading -> webmsg-first (bridge hello)", "content-loading", "webmsg-first"},
+				{"  webmsg-first -> DOM ready", "webmsg-first", "dom"},
+				{"  navigate -> DOM ready", "navigate", "dom"},
+				{"  env-start -> DOM ready", "env-start", "dom"},
+			} {
+				phases = append(phases, struct{ label, from, to string }{p[0], p[1], p[2]})
+			}
 		}
 		phases = append(phases, struct{ label, from, to string }{"process start -> ready (total)", "", "ready"})
 		started := 0

@@ -139,6 +139,7 @@ func (w *window) creationFailed(hr uintptr) {
 }
 
 func (w *window) setUp(controller uintptr) {
+	startupMark("setup-start")
 	w.controller = controller
 	comCall(controller, ctlGetCoreWebView2, uintptr(unsafe.Pointer(&w.webview)))
 	comCall(w.webview, wvGetSettings, uintptr(unsafe.Pointer(&w.settings)))
@@ -176,6 +177,7 @@ func (w *window) setUp(controller uintptr) {
 	w.applyWebViewBackground()
 
 	w.addUserScripts(0)
+	startupMark("scripts-registered")
 
 	// The add methods write a registration token. Its address is taken in
 	// each call (go:uintptrescapes), as a uintptr saved earlier goes stale
@@ -186,6 +188,7 @@ func (w *window) setUp(controller uintptr) {
 	}
 	add(wvAddNavigationStarting, w.navigationStarting)
 	add(wvAddContentLoading, func(_, _ uintptr) {
+		startupMark("content-loading")
 		if h := commitHook; h != nil {
 			h()
 		}
@@ -216,6 +219,7 @@ func (w *window) setUp(controller uintptr) {
 		if failed(comCall(args, msgTryGetWebMessageAsString, uintptr(unsafe.Pointer(&p)))) {
 			return // not a string
 		}
+		startupMark("webmsg-first")
 		if paths := postedFiles(args); len(paths) > 0 {
 			w.dropped = paths
 		}
@@ -267,6 +271,7 @@ func (w *window) setUp(controller uintptr) {
 		return comCall(controller, ctlAddAcceleratorKeyPressed, h, uintptr(unsafe.Pointer(&tok)))
 	})
 
+	startupMark("handlers-added")
 	if w.host != nil {
 		w.placeEmbedded()
 		if l := w.host.surf().layer; l != nil {
@@ -285,6 +290,7 @@ func (w *window) setUp(controller uintptr) {
 		w.focusWebView()
 	}
 
+	startupMark("setup-end")
 	if !w.b.holdForCookies(w) {
 		w.becomeReady()
 	}
@@ -331,6 +337,7 @@ func (w *window) focusWebView() {
 }
 
 func (w *window) navigationStarting(_, args uintptr) {
+	startupMark("nav-starting")
 	var p uintptr
 	comCall(args, navStartingGetURI, uintptr(unsafe.Pointer(&p)))
 	uri := w.appURL(takeWstr(p))
@@ -379,6 +386,7 @@ func navigationKind(args uintptr) int32 {
 }
 
 func (w *window) navigationCompleted(_, args uintptr) {
+	startupMark("nav-completed")
 	w.loading = false
 	var ok int32
 	comCall(args, navCompletedGetIsSuccess, uintptr(unsafe.Pointer(&ok)))
@@ -633,14 +641,18 @@ func pageEditKey(key accelKey) bool {
 }
 
 func (w *window) LoadURL(raw string) {
+	startupMark("loadurl-call")
 	w.withWebView(func() {
+		startupMark("navigate")
 		w.programmatic = true
 		comCall(w.webview, wvNavigate, uintptr(unsafe.Pointer(u16(w.webURL(raw)))))
 	})
 }
 
 func (w *window) LoadHTML(html, baseURL string) {
+	startupMark("loadhtml-call")
 	w.withWebView(func() {
+		startupMark("navigate")
 		w.programmatic = true
 		if baseURL == "" {
 			comCall(w.webview, wvNavigateToString, uintptr(unsafe.Pointer(u16(html))))
