@@ -45,7 +45,7 @@ func TestZZDestroyFocusedWindow(t *testing.T) {
 			start := time.Now()
 			a.Destroy()
 			got := wait.Poll(b.IsFocused)
-			t.Logf("BISECT %s: after A is destroyed B focused=%v (after %v); front: %s", name, got, time.Since(start).Round(time.Millisecond), foregroundState(b))
+			t.Errorf("BISECT %s: after A is destroyed B focused=%v (after %v); front: %s", name, got, time.Since(start).Round(time.Millisecond), foregroundState(b))
 			if hold {
 				close(benchHold)
 			}
