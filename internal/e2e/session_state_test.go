@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"html"
 	"net/http"
@@ -47,6 +48,13 @@ func holds(state []byte, s string) bool {
 	return bytes.Contains(state, []byte(s)) || bytes.Contains(state, u)
 }
 
+// holdsScroll reports whether a session state holds a scroll position of y
+// (WebKit's history item data: the position as an int32 and the page scale
+// 1.0 as a float32, little-endian), which it learns of after the form fields.
+func holdsScroll(state []byte, y uint32) bool {
+	return bytes.Contains(state, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, y), 0x3f800000))
+}
+
 // A page's session state brings back its back/forward list in a new
 // window, with what WebKit saved: the page's scroll position and form
 // field as its window was hidden, and the entry before's scroll position
@@ -84,7 +92,7 @@ func sessionStateOnce(t *testing.T) {
 		w.Hide()
 		wait.Until(t, "WebKit saving the page hidden", func() bool {
 			state, err = w.Page().SessionState()
-			return err == nil && holds(state, "typed second")
+			return err == nil && holds(state, "typed second") && holdsScroll(state, 1200)
 		})
 		t.Logf("after Hide: state %d bytes %x", len(state), state)
 	}
