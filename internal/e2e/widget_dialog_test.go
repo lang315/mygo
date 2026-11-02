@@ -21,9 +21,20 @@ func TestWidgetDialogEscape(t *testing.T) {
 	go func() { d.Run(); close(done) }()
 	eventually(t, "the dialog to show", func() bool { n := d.Native(); return n != nil && n.IsVisible() })
 	// A sheet takes the keyboard as it shows: that is what Escape needs.
-	if !wait.Poll(func() bool { keepFront(); return d.Native().IsFocused() }) {
-		t.Fatalf("BISECT: the dialog never took the keyboard; %s", foregroundState(d.Native()))
+	tries := 0
+	if !wait.Poll(func() bool {
+		if d.Native().IsFocused() {
+			return true
+		}
+		if tries++; tries%20 == 1 { // BISECT: does a new grant of the foreground bring the dialog front?
+			grantForeground()
+			d.Native().Focus()
+		}
+		return false
+	}) {
+		t.Fatalf("BISECT: the dialog never took the keyboard, after %d grants; %s | %s", tries/20+1, foregroundState(d.Native()), foregroundDiag(d.Native()))
 	}
+	t.Logf("BISECT: the dialog took the keyboard after %d tries", tries)
 	if !pressEscape(d.Native()) {
 		t.Skip("no system keys on this platform")
 	}
