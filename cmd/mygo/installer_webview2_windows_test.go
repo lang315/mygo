@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // webView2Server stands in for Microsoft's download: it serves an
@@ -122,6 +124,30 @@ func TestInstallerWebView2(t *testing.T) {
 			t.Errorf("the installer downloaded %d times with the bootstrapper embedded", n)
 		}
 	})
+	t.Run("signed by another", func(t *testing.T) {
+		// A file of Windows with a valid signature of another signer than
+		// Microsoft Corporation, as the bootstrapper of someone else.
+		other := filepath.Join(t.TempDir(), "setup.exe")
+		src, err := os.ReadFile(filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(other, src, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := signatureOf(t, other); !strings.HasPrefix(got, "Valid|") || got == "Valid|Microsoft Corporation" {
+			t.Skipf("cmd.exe is signed %q here, not by another signer", got)
+		}
+		srv, _ := webView2Server(t)
+		setWebView2Test(t, srv.URL, "")
+		fetch := fetchWebView2Setup
+		t.Cleanup(func() { fetchWebView2Setup = fetch })
+		fetchWebView2Setup = func(string) (string, error) { return other, nil }
+		log := installWebView2Test(t, "com.example.rtother", "embed")
+		if !strings.Contains(log, "not installed: signed by ") {
+			t.Errorf("log %q: want the signer refused", log)
+		}
+	})
 	t.Run("download fails", func(t *testing.T) {
 		srv, hits := webView2Server(t)
 		srv.Close()
@@ -150,4 +176,79 @@ func TestInstallerWebView2(t *testing.T) {
 			t.Errorf("none touched the runtime: %d downloads", n)
 		}
 	})
+}
+
+// signatureOf returns "<status>|<signer>" of an executable's Authenticode
+// signature.
+func signatureOf(t *testing.T, path string) string {
+	t.Helper()
+	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		"$s = Get-AuthenticodeSignature -LiteralPath '"+path+"'; $s.Status.ToString() + '|' + $s.SignerCertificate.GetNameInfo('SimpleName', $false)").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// runWebView2Step runs the step that holds the bootstrapper and runs it
+// (webView2HoldPS1 and webView2RunPS1, those of the installer) on a script
+// of cmd.exe in PowerShell 5.1, which is the installer's, and returns its
+// output and exit code.
+func runWebView2Step(t *testing.T, script string) (string, int) {
+	t.Helper()
+	dir := t.TempDir()
+	bat := filepath.Join(dir, "setup.bat")
+	if err := os.WriteFile(bat, []byte(script), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ps1 := filepath.Join(dir, "step.ps1")
+	if err := os.WriteFile(ps1, []byte("$file = $env:MYGO_WV2_FILE\n"+webView2HoldPS1+webView2RunPS1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", ps1)
+	cmd.Env = append(os.Environ(), "MYGO_WV2_FILE="+bat)
+	type result struct {
+		out  []byte
+		code int
+	}
+	done := make(chan result, 1)
+	go func() {
+		out, err := cmd.CombinedOutput()
+		code := 0
+		if e, ok := err.(*exec.ExitError); ok {
+			code = e.ExitCode()
+		} else if err != nil {
+			code = -1
+		}
+		done <- result{out, code}
+	}()
+	r := wait.For(t, "the step to end while the bootstrapper's child lives", done)
+	return string(r.out), r.code
+}
+
+// TestWebView2RunDoesNotWaitForChildren has a stand-in for the
+// bootstrapper start a child that lives on, as the updater it leaves
+// running, and exit with 0: the step ends with 0 at once, and does not
+// wait for the child, as Start-Process -Wait does, which would hold the
+// installer, a silent update's too.
+func TestWebView2RunDoesNotWaitForChildren(t *testing.T) {
+	const marker = "-n 97 127.0.0.1"
+	t.Cleanup(func() {
+		exec.Command("powershell", "-NoProfile", "-Command",
+			"Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*"+marker+"*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }").Run()
+	})
+	out, code := runWebView2Step(t, "@echo off\r\nstart \"\" /b ping "+marker+" >nul\r\nexit /b 0\r\n")
+	if code != 0 {
+		t.Errorf("exit code %d, output %q, want 0", code, out)
+	}
+	alive, _ := exec.Command("powershell", "-NoProfile", "-Command",
+		"@(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*"+marker+"*' }).Count").Output()
+	if strings.TrimSpace(string(alive)) == "0" {
+		t.Error("the child did not outlive the stand-in: the test proves nothing")
+	}
+	// The bootstrapper's own failure is the step's.
+	out, code = runWebView2Step(t, "@echo off\r\nexit /b 3\r\n")
+	if code != 4 || !strings.Contains(out, "bootstrapper exit code 3") {
+		t.Errorf("a failing bootstrapper: exit code %d, output %q, want 4 and its code", code, out)
+	}
 }

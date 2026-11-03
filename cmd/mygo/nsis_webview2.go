@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,12 +36,19 @@ var webView2Client = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 // (download) and in the build (embed); tests name a server of their own.
 var webView2URL = webview2.Download
 
+// webView2Page is the page the message offers, where Microsoft lists the
+// runtime's downloads.
+const webView2Page = "https://developer.microsoft.com/microsoft-edge/webview2"
+
 // webView2PS1 downloads the bootstrapper to $env:MYGO_WV2_FILE unless
 // $env:MYGO_WV2_URL is empty (embed), checks its Authenticode signature,
 // which must be valid and Microsoft Corporation's, since the evergreen
 // file has no fixed hash, and runs it. It prints why it failed and exits
 // with 1 (download), 2 (signature), 3 (signer) or 4 (the bootstrapper).
-const webView2PS1 = `$ErrorActionPreference = 'Stop'
+const webView2PS1 = webView2FetchPS1 + webView2HoldPS1 + webView2CheckPS1 + webView2RunPS1
+
+// webView2FetchPS1 downloads the bootstrapper, unless the installer carries it.
+const webView2FetchPS1 = `$ErrorActionPreference = 'Stop'
 $file = $env:MYGO_WV2_FILE
 if ($env:MYGO_WV2_URL) {
 	try {
@@ -48,11 +57,30 @@ if ($env:MYGO_WV2_URL) {
 		Invoke-WebRequest -UseBasicParsing -Uri $env:MYGO_WV2_URL -OutFile $file -TimeoutSec 120
 	} catch { Write-Output ('download failed: ' + $_.Exception.Message); exit 1 }
 }
-$sig = Get-AuthenticodeSignature -LiteralPath $file
+`
+
+// webView2HoldPS1 opens the file for reading and keeps it open, until the
+// script ends, so that no one replaces it between the signature's check
+// and the run.
+const webView2HoldPS1 = `try { $hold = [IO.File]::Open($file, 'Open', 'Read', 'Read') } catch { Write-Output ('cannot open the bootstrapper: ' + $_.Exception.Message); exit 1 }
+`
+
+// webView2CheckPS1 requires a valid signature of Microsoft Corporation,
+// issued to it by a Microsoft authority, compared with case.
+const webView2CheckPS1 = `$sig = Get-AuthenticodeSignature -LiteralPath $file
 if ($sig.Status -ne 'Valid') { Write-Output ('signature ' + $sig.Status); exit 2 }
 $signer = $sig.SignerCertificate.GetNameInfo('SimpleName', $false)
-if ($signer -ne 'Microsoft Corporation') { Write-Output ('signed by ' + $signer); exit 3 }
-$p = Start-Process -FilePath $file -ArgumentList '/silent', '/install' -Wait -PassThru
+if ($signer -cne 'Microsoft Corporation') { Write-Output ('signed by ' + $signer); exit 3 }
+if ($sig.SignerCertificate.Issuer -cnotmatch '(^|, )O=Microsoft Corporation(,|$)') { Write-Output ('issued by ' + $sig.SignerCertificate.Issuer); exit 3 }
+`
+
+// webView2RunPS1 runs the bootstrapper and waits for it alone, not for
+// what it leaves running: Start-Process -Wait of PowerShell 5.1 waits for
+// its child processes too, and the bootstrapper leaves an updater that
+// lives on, which would hold the installer for good.
+const webView2RunPS1 = `$p = Start-Process -FilePath $file -ArgumentList '/silent', '/install' -PassThru
+$null = $p.Handle
+$p.WaitForExit()
 if ($p.ExitCode -ne 0) { Write-Output ('bootstrapper exit code ' + $p.ExitCode); exit 4 }
 exit 0
 `
@@ -126,6 +154,10 @@ Function EnsureWebView2
   System::Call 'Kernel32::SetEnvironmentVariable(t "MYGO_WV2_FILE", t "$PLUGINSDIR\wv2setup.exe")'
 ` + get + `  nsExec::ExecToStack ` + command + `
   Pop $2
+  ; Without a process to run, nsExec pushes "error" and no output.
+  StrCmp $2 "error" 0 +3
+  StrCpy $0 "PowerShell did not start"
+  Goto failed
   Pop $0
   StrCmp $2 "0" installed
   failed:
@@ -133,7 +165,7 @@ Function EnsureWebView2
   FileWrite $2 "WebView2 Runtime not installed: $0$\r$\n"
   FileClose $2
   MessageBox MB_YESNO|MB_ICONEXCLAMATION ` + message + ` /SD IDNO IDNO done
-  ExecShell "open" ` + nsisString(webview2.Download) + `
+  ExecShell "open" ` + nsisString(webView2Page) + `
   Goto done
   installed:
   FileOpen $2 ` + log + ` w
@@ -164,8 +196,31 @@ var fetchWebView2Setup = func(dir string) (string, error) {
 	if t.end(err, "Downloaded the WebView2 Runtime's bootstrapper") != nil {
 		return "", fmt.Errorf("windows.webview2 is embed, and downloading the bootstrapper failed (use download, or build with -skip-installer):\n%w", err)
 	}
-	if info, err := os.Stat(path); err != nil || info.Size() == 0 {
-		return "", fmt.Errorf("the WebView2 bootstrapper downloaded from %s is empty", webView2URL)
+	if err := checkWebView2Setup(path); err != nil {
+		return "", fmt.Errorf("the WebView2 bootstrapper downloaded from %s: %w", webView2URL, err)
 	}
 	return path, nil
+}
+
+// checkWebView2Setup tells a downloaded bootstrapper from what stands in
+// for it on some networks, as the page of a captive portal: an executable
+// of a size the bootstrapper's (some 1.8 MB) is near.
+func checkWebView2Setup(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	head := make([]byte, 2)
+	if _, err := io.ReadFull(f, head); err != nil || string(head) != "MZ" {
+		return errors.New("is not an executable")
+	}
+	if n := info.Size(); n < 500<<10 || n > 20<<20 {
+		return fmt.Errorf("is %d bytes, not the 1.8 MB of an installer's bootstrapper", n)
+	}
+	return nil
 }

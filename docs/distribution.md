@@ -451,8 +451,12 @@ as Tauri's does. `windows.webview2` chooses how:
 | Value | The installer |
 |-------|---------------|
 | `download` (default) | downloads Microsoft's bootstrapper (`go.microsoft.com/fwlink/p/?LinkId=2124703`) when the machine has no runtime |
-| `embed` | carries the bootstrapper, 1.8 MB more, and needs no network |
+| `embed` | carries the bootstrapper, 1.8 MB more, so that the installer does not download it; the bootstrapper still downloads the runtime itself (100 MB or more) when it runs, so an install without a network fails all the same |
 | `none` | leaves the runtime alone; always the choice with `nativeOnly`, whose apps have no web view |
+
+Microsoft describes the choices in [Distribute your app and the WebView2
+Runtime](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution);
+MyGo uses the Evergreen Bootstrapper, with no standalone installer.
 
 The installer first looks for the runtime's version (`pv`) under
 `EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` in the

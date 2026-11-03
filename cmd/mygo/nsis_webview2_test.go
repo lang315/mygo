@@ -57,7 +57,8 @@ func TestNSISWebView2(t *testing.T) {
 		`Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`,
 		`SetRegView 32`, `SetRegView 64`, `ReadRegStr $0 HKLM`, `ReadRegStr $0 HKCU`,
 		`"pv"`, `"0.0.0.0"`,
-		`Get-AuthenticodeSignature`, `-ne 'Valid'`, `'Microsoft Corporation'`, `'/silent', '/install'`,
+		`Get-AuthenticodeSignature`, `-ne 'Valid'`, `-cne 'Microsoft Corporation'`, nsisEscape(`.Issuer -cnotmatch`), `O=Microsoft Corporation`, `'/silent', '/install'`,
+		nsisEscape(`[IO.File]::Open($file, 'Open', 'Read', 'Read')`), nsisEscape(`$p.WaitForExit()`), `StrCmp $2 "error"`, `https://developer.microsoft.com/microsoft-edge/webview2`,
 		`/SD IDNO`, `"$TEMP\com.example.notes-webview2.log"`,
 		"  Call EnsureWebView2\n",
 	}
@@ -79,6 +80,9 @@ func TestNSISWebView2(t *testing.T) {
 		if strings.Contains(s, "File \"/oname=wv2setup.exe\"") != (mode == "embed") {
 			t.Errorf("%q: the bootstrapper is carried in the installer only with embed", mode)
 		}
+	}
+	if s := script("download"); strings.Contains(s, "-Wait") {
+		t.Error("Start-Process -Wait waits for the bootstrapper's children, which outlive it")
 	}
 	none := script("none")
 	for _, s := range []string{"EnsureWebView2", "EdgeUpdate", "webview2", "Authenticode"} {
@@ -112,6 +116,30 @@ func TestWebView2Compiles(t *testing.T) {
 		writeFiles(t, stage, map[string]string{"Notes.exe": "app"})
 		if _, err := writeInstaller(c, stage, work, "Notes.exe", "amd64", []string{"Notes.exe"}); err != nil {
 			t.Fatalf("%s: %v", mode, err)
+		}
+	}
+}
+
+// TestCheckWebView2Setup tells the bootstrapper from a captive portal's page.
+func TestCheckWebView2Setup(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data []byte
+		ok   bool
+	}{
+		{"bootstrapper", append([]byte("MZ"), make([]byte, 1800<<10)...), true},
+		{"html", []byte("<html>sign in to the network</html>"), false},
+		{"html of its size", append([]byte("<!"), make([]byte, 1800<<10)...), false},
+		{"tiny executable", []byte("MZ"), false},
+		{"huge", append([]byte("MZ"), make([]byte, 21<<20)...), false},
+		{"empty", nil, false},
+	} {
+		p := filepath.Join(t.TempDir(), "setup.exe")
+		if err := os.WriteFile(p, tc.data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := checkWebView2Setup(p); (err == nil) != tc.ok {
+			t.Errorf("%s: %v, want ok=%v", tc.name, err, tc.ok)
 		}
 	}
 }
