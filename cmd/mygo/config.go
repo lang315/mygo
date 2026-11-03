@@ -120,6 +120,9 @@ type Config struct {
 	// binds is set when the app's binary calls Bind (or Use) though the run listed
 	// no type: a service it binds may be one only the build can see (a plugin's).
 	binds bool
+	// webView2Setup is the WebView2 bootstrapper that an installer with
+	// windows.webview2 "embed" carries (see writeInstaller).
+	webView2Setup string
 }
 
 // bindsToName reports whether the build has services to name the methods of: the
@@ -312,6 +315,11 @@ func (c *Config) validate() error {
 	if c.Windows.Certificate != "" && c.Windows.SignCommand != "" {
 		return errors.New("windows.certificate and windows.signCommand exclude each other")
 	}
+	switch c.Windows.WebView2 {
+	case "", webView2Download, webView2Embed, webView2None: // "" before applyDefaults
+	default:
+		return fmt.Errorf(`windows.webview2 is "download", "embed" or "none", not %q`, c.Windows.WebView2)
+	}
 	if strings.ContainsFunc(c.Windows.DisplayName, unicode.IsControl) {
 		return fmt.Errorf("windows.displayName %q cannot hold control characters, such as line breaks", c.Windows.DisplayName)
 	}
@@ -374,6 +382,11 @@ func (c *Config) applyDefaults() {
 		// An app with no web view needs no WebKitGTK: the packages do not
 		// depend on it and install.sh does not ask for it.
 		c.Linux.WebView = new(false)
+		// Nor does the Windows installer install WebView2.
+		c.Windows.WebView2 = webView2None
+	}
+	if c.Windows.WebView2 == "" {
+		c.Windows.WebView2 = webView2Download
 	}
 	if c.Name == "" {
 		c.Name = filepath.Base(c.root)

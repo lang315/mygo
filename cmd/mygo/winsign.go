@@ -50,6 +50,12 @@ type Windows struct {
 	// the installer starts, at the end of the install, and in the
 	// uninstall before the app's folder is removed (see nsisHooks).
 	InstallerInclude string `json:"installerInclude"`
+	// WebView2 says what the installer does about the WebView2 Runtime,
+	// which an app of web views needs: "download" has it fetch Microsoft's
+	// bootstrapper when the machine has no runtime, "embed" carries the
+	// bootstrapper in the installer (some 1.8 MB more), and "none" does
+	// nothing (default "download"; always "none" with nativeOnly).
+	WebView2 string `json:"webview2"`
 }
 
 func (w *Windows) signs() bool { return w.Certificate != "" || w.SignCommand != "" }

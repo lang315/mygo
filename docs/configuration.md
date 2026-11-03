@@ -136,6 +136,7 @@ See [macOS](distribution.md#macos).
 | `signCommand` | | instead of `certificate`, a command that signs a file, with `%1` for its path |
 | `timestampUrl` | `http://timestamp.digicert.com` | the time stamping server of `certificate` |
 | `installerInclude` | | an NSIS script that the installer includes, e.g. `build/installer.nsh`, whose `customInit`, `customInstall` and `customUnInstall` macros run when the installer starts, at the end of the install, and in the uninstall before the app's folder is removed. See [installer hooks](distribution.md#installer-hooks) |
+| `webview2` | `download` | what the installer does about the WebView2 Runtime, which an app of web views needs: `download` fetches Microsoft's bootstrapper when the machine has no runtime, `embed` carries it in the installer (some 1.8 MB more), `none` does nothing (always `none` with `nativeOnly`). See [the WebView2 Runtime](distribution.md#the-webview2-runtime) |
 
 See [Windows](distribution.md#windows).
 

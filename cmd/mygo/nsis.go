@@ -148,6 +148,11 @@ func writeInstaller(c *Config, stage, work, exe, goarch string, installed []stri
 		}
 		icon = "!define MUI_ICON " + nsisString(path) + "\n!define MUI_UNICON " + nsisString(path) + "\n"
 	}
+	if c.Windows.WebView2 == webView2Embed {
+		if c.webView2Setup, err = fetchWebView2Setup(work); err != nil {
+			return "", err
+		}
+	}
 	signing, env, err := uninstallerSigning(c, tool)
 	if err != nil {
 		return "", err
@@ -193,6 +198,7 @@ func installerScript(c *Config, out, exe, files, icon, signing string) (string, 
 	if err != nil {
 		return "", err
 	}
+	webView2, ensureWebView2 := nsisWebView2(c)
 	return `Unicode true
 ManifestDPIAware true
 SetCompressor /SOLID lzma
@@ -216,14 +222,14 @@ BrandingText " "
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 ` + languages + include + `
-` + nsisCloseApp(c) + `
+` + nsisCloseApp(c) + webView2 + `
 Section
   Push "$INSTDIR"
   Call CloseApp
   SetOutPath "$INSTDIR"
 ` + files + `  WriteUninstaller "$INSTDIR\Uninstall.exe"
 ` + nsisRenamedShortcuts(c) + `  CreateShortCut "$SMPROGRAMS\` + shortcut + `" "$INSTDIR\` + nsisEscape(exe) + `"
-` + nsisUninstallEntry(c, uninstallKey, exe) + register + install + `SectionEnd
+` + nsisUninstallEntry(c, uninstallKey, exe) + register + ensureWebView2 + install + `SectionEnd
 
 ; The finish page offers it, so silent installs (/S) make none.
 Function CreateDesktopShortcut
@@ -401,12 +407,6 @@ func nsisCloseApp(c *Config) string {
 	// command line: the installer writes it to a file, line by line, which
 	// PowerShell reads, named by the environment, as quotes would not do
 	// for every path. Execution policies do not apply to a command.
-	var write strings.Builder
-	for _, line := range strings.SplitAfter(closeAppPS1, "\n") {
-		if line != "" {
-			write.WriteString("  FileWrite $2 " + nsisString(strings.TrimSuffix(line, "\n")+"\r\n") + "\n")
-		}
-	}
 	command := `'"$1" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create([IO.File]::ReadAllText($$env:MYGO_APP_SCRIPT)))"'`
 	running := nsisString(c.windowsName() + " is running. Close it to continue?")
 	stuck := nsisString(c.windowsName() + " is still running. Quit it, then try again.")
@@ -425,7 +425,7 @@ Function ` + prefix + `CloseApp
   IfFileExists $1 0 done
   InitPluginsDir
   FileOpen $2 "$PLUGINSDIR\close-app.ps1" w
-` + write.String() + `  FileClose $2
+` + nsisWriteLines(closeAppPS1) + `  FileClose $2
   System::Call 'Kernel32::SetEnvironmentVariable(t "MYGO_APP_SCRIPT", t "$PLUGINSDIR\close-app.ps1")'
   System::Call 'Kernel32::SetEnvironmentVariable(t "MYGO_APP_DIR", t r0)'
   IfSilent close
