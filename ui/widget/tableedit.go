@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"strconv"
 
 	"github.com/egoist/mygo"
@@ -23,22 +24,11 @@ const (
 	EditProgrammatically
 )
 
-// editState is the edit of a cell in progress: the draft lives here, in the
-// table, and never in the row or the source until the edit is written. Under mu.
+// editState is the edit of a cell in progress: its core, which names no type, and
+// the row's key. Under mu.
 type editState[K comparable] struct {
-	key              K
-	col              int    // the column's index in cols
-	orig, draft      string // the text the editor started with, and the user's
-	err              string // the last refusal, shown by the editor
-	fresh, selectAll bool   // the next build gives the editor the focus; all selected
-	at               struct {
-		has  bool
-		x, y float32
-	}
-	gen       uint64 // versions the edited row while the edit lasts
-	focused   bool   // the editor held the focus in the last frame
-	announced string // the refusal the user was told
-	hadFocus  bool   // the editor has held the focus: losing it commits
+	editCore
+	key K
 }
 
 // curCell is a current cell asked for by SetCurrentCell or BeginEdit, which
@@ -61,16 +51,16 @@ func (t *DataGridViewWidget[T, K]) enableEdit() {
 	d := &tableEditing[T, K]{}
 	t.edAny = d
 	t.editCell, t.startCell = t.editsCell, t.startEdit
-	t.prepareEdit = func() { t.wireEdit(); t.followCurrent() }
-	t.cellHook = func(c *ui.Context, col int, r *T) bool {
-		if e := d.edit; e != nil && col == e.col && t.key(r) == e.key {
-			t.editor(c, e)
+	t.prepareEdit = func() { t.wireEdit(); t.followCurrent(); t.dropHiddenEdit() }
+	t.cellHook = func(c *ui.Context, col int, r any) bool {
+		if e := d.edit; e != nil && col == e.col && t.key(r.(*T)) == e.key {
+			buildEditor(c, &e.editCore)
 			return true
 		}
 		return false
 	}
-	t.versionHook = func(r *T) uint64 {
-		if e := d.edit; e != nil && t.key(r) == e.key {
+	t.versionHook = func(r any) uint64 {
+		if e := d.edit; e != nil && t.key(r.(*T)) == e.key {
 			return e.gen
 		}
 		return 0
@@ -187,14 +177,18 @@ func (t *DataGridViewWidget[T, K]) CurrentCell() (k K, column string, ok bool) {
 
 // SetCurrentCell makes the cell of the row of key k and the column titled
 // column the current one, chooses its row, and scrolls it into view at the
-// next frame. It reports false for a row that is not there or a column that
-// is hidden or unknown.
+// next frame. It reports false for a row that is not there or a column that is
+// hidden or unknown, and for a grid with no editable column (EditColumn),
+// which keeps no current cell.
 func (t *DataGridViewWidget[T, K]) SetCurrentCell(k K, column string) bool {
 	ok := false
 	t.change(func() {
-		t.enableEdit()
+		d := t.ed()
+		if d == nil || !d.editable {
+			return
+		}
 		if _, _, found := t.cellOf(k, column); found {
-			t.ed().pendingCur, ok = &curCell[K]{k, column}, true
+			d.pendingCur, ok = &curCell[K]{k, column}, true
 		}
 	})
 	return ok
@@ -202,24 +196,44 @@ func (t *DataGridViewWidget[T, K]) SetCurrentCell(k K, column string) bool {
 
 // BeginEdit starts editing the cell of the row of key k and the column titled
 // column, which becomes the current cell; the editor shows at the next frame.
-// It reports false for a cell that is read-only, hidden, or not there.
+// An edit already open is written first (EndEdit); if that is refused the new
+// one does not open and BeginEdit reports false, the refused edit keeping its
+// draft and the focus. It also reports false for a cell that is read-only,
+// hidden, or not there, and for a grid with no editable column (EditColumn).
 func (t *DataGridViewWidget[T, K]) BeginEdit(k K, column string) bool {
 	ok := false
+	var wins []*mygo.Window
 	t.change(func() {
-		t.enableEdit()
+		d := t.ed()
+		if d == nil || !d.editable {
+			return
+		}
 		i, ci, found := t.cellOf(k, column)
 		if !found || !t.canEdit(&t.src.rows[i], ci) {
 			return
 		}
-		t.beginLocked(k, ci, false, 0, 0)
-		t.ed().pendingCur, ok = &curCell[K]{k, column}, true
+		if wins, ok = t.beginLocked(k, ci, false, 0, 0); ok {
+			d.pendingCur = &curCell[K]{k, column}
+		}
 	})
+	for _, w := range wins {
+		invalidate(w)
+	}
+	t.flushEdit()
 	return ok
 }
 
 // CancelEdit ends the edit in progress and discards the draft.
-func (t *DataGridViewWidget[T, K]) CancelEdit() {
-	t.change(func() { t.closeEdit() })
+func (t *DataGridViewWidget[T, K]) CancelEdit() { t.cancelEdit(nil) }
+
+// cancelEdit ends the edit only, or the one in progress when only is nil: a
+// cancel posted by the editor must not end an edit begun after it.
+func (t *DataGridViewWidget[T, K]) cancelEdit(only *editState[K]) {
+	t.change(func() {
+		if d := t.ed(); d != nil && (only == nil || d.edit == only) {
+			t.closeEdit()
+		}
+	})
 }
 
 // IsEditing reports whether a cell is being edited.
@@ -308,17 +322,37 @@ func (t *DataGridViewWidget[T, K]) editText(r *T, ci int) string {
 	return text
 }
 
-// beginLocked starts the edit of the cell of key k in column ci. Under mu.
-func (t *DataGridViewWidget[T, K]) beginLocked(k K, ci int, hasAt bool, x, y float32) {
-	i, ok := t.src.index[k]
-	if !ok {
-		return
+// beginLocked starts the edit of the cell of key k in column ci, writing the one
+// open before it. It returns the windows that write asks to redraw, and false
+// when the open edit was refused (it stays, to be fixed) or the row is gone.
+// Under mu.
+func (t *DataGridViewWidget[T, K]) beginLocked(k K, ci int, hasAt bool, x, y float32) ([]*mygo.Window, bool) {
+	d := t.ed()
+	i, found := t.src.index[k]
+	if !found {
+		return nil, false
+	}
+	var wins []*mygo.Window
+	if old := d.edit; old != nil {
+		if old.key == k && old.col == ci { // already editing this cell
+			return nil, true
+		}
+		var err error
+		if wins, err = t.commitEditLocked(nil); err != nil {
+			// Refused: it stays open, with its error, and takes the focus back.
+			old.fresh, old.selectAll, old.hadFocus, old.at.has = true, false, false, false
+			return wins, false
+		}
 	}
 	text := t.editText(&t.src.rows[i], ci)
-	t.ed().editGen++
-	e := &editState[K]{key: k, col: ci, orig: text, draft: text, fresh: true, selectAll: !hasAt, gen: t.ed().editGen}
+	d.editGen++
+	e := &editState[K]{key: k, editCore: editCore{col: ci, title: t.cols[ci].Title, orig: text, draft: text,
+		fresh: true, selectAll: !hasAt, gen: d.editGen}}
 	e.at.has, e.at.x, e.at.y = hasAt, x, y
-	t.ed().edit = e
+	e.end = func() { _ = t.endEdit(e) }
+	e.cancel = func() { t.cancelEdit(e) }
+	d.edit, d.refocus = e, false // the new editor takes the focus, not the table
+	return wins, true
 }
 
 // closeEdit ends the edit without writing it. Under mu.
@@ -372,8 +406,13 @@ func (t *DataGridViewWidget[T, K]) startEdit(row, col int, x, y float32, how ui.
 	if !ok || r == nil {
 		return
 	}
-	t.beginLocked(t.key(r), ci, how == ui.EditClick, x, y)
-	Post(t.touch) // the editor builds in the next frame
+	wins, _ := t.beginLocked(t.key(r), ci, how == ui.EditClick, x, y)
+	Post(func() { // the editor builds in the next frame
+		for _, w := range wins {
+			invalidate(w)
+		}
+		t.touch()
+	})
 }
 
 // wireEdit gives ui the hooks of editing, or takes them away. Under mu.
@@ -415,38 +454,12 @@ func (t *DataGridViewWidget[T, K]) followCurrent() {
 	}
 }
 
-// editor builds the editor of the cell being edited in place of its text.
-// Under mu, while building.
-func (t *DataGridViewWidget[T, K]) editor(c *ui.Context, e *editState[K]) {
-	start := ui.CellStart{Fresh: e.fresh, SelectAll: e.selectAll, HasAt: e.at.has, X: e.at.x, Y: e.at.y}
-	if e.fresh && !c.Measuring() {
-		c.Announce("Editing " + t.cols[e.col].Title)
-		e.fresh = false
-	}
-	in := ui.CellInput(c, &e.draft, start)
-	if now := in.Focused(); !c.Measuring() {
-		e.focused = now
-		switch {
-		case now:
-			e.hadFocus = true
-		case e.hadFocus && !start.Fresh:
-			// The focus went elsewhere: what was typed is written, or, when
-			// Validate refuses it, the edit stays open with its error and the
-			// focus stays where the user put it. Once per loss.
-			e.hadFocus = false
-			Post(func() { _ = t.endEdit(e) })
-		}
-	}
-	if e.err != "" {
-		in.Error(e.err)
-	}
-	in.OnShortcut(0, ui.KeyEscape, func() { Post(t.CancelEdit) })
-	if in.Submitted() {
-		Post(func() { _ = t.EndEdit() })
-	}
-	if e.err != "" && e.announced != e.err && !c.Measuring() {
-		e.announced = e.err
-		c.Announce(e.err)
+// dropHiddenEdit cancels the edit of a column that no longer shows: its editor
+// is gone, and a later commit would write a draft nobody sees. Under mu, while
+// building.
+func (t *DataGridViewWidget[T, K]) dropHiddenEdit() {
+	if e := t.ed().edit; e != nil && !slices.Contains(t.visCols, e.col) {
+		t.closeEdit()
 	}
 }
 
@@ -454,12 +467,6 @@ func (t *DataGridViewWidget[T, K]) editor(c *ui.Context, e *editState[K]) {
 type endedEdit[K comparable] struct {
 	key    K
 	column string
-}
-
-// reported is a panic of a column function, for OnPanic.
-type reported struct {
-	v     any
-	stack []byte
 }
 
 // EndEdit commits the edit in progress now, with the draft the table holds: it
@@ -496,59 +503,62 @@ func (t *DataGridViewWidget[T, K]) endEdit(only *editState[K]) error {
 }
 
 // commitEditLocked writes the draft of the edit, or refuses it. Under mu. The
-// windows to redraw are for the caller to invalidate once it released mu.
+// windows to redraw are for the caller to invalidate once it released mu. The
+// row is changed through updateLocked on a copy, assigned back only when Set
+// returns: a Set that panics after writing a field leaves the row, its
+// generation and the views as they were.
 func (t *DataGridViewWidget[T, K]) commitEditLocked(only *editState[K]) ([]*mygo.Window, error) {
-	e := t.ed().edit
+	d := t.ed()
+	if d == nil {
+		return nil, nil
+	}
+	e := d.edit
 	if e == nil || only != nil && e != only {
 		return nil, nil
 	}
-	if e.draft == e.orig { // nothing typed: nothing written
-		t.closeEdit()
-		return nil, nil
+	i, rowThere := t.src.index[e.key]
+	ed := t.cols[e.col].editor()
+	var validate func(string) error
+	if rowThere && ed.Validate != nil {
+		r := &t.src.rows[i]
+		validate = func(draft string) error { return ed.Validate(r, draft) }
 	}
-	i, ok := t.src.index[e.key]
-	if !ok { // the row went
-		t.closeEdit()
-		return nil, nil
+	write := func(draft string) []*mygo.Window {
+		wins, _ := t.src.updateLocked(e.key, func(row *T) {
+			n := *row
+			ed.Set(&n, draft)
+			*row = n
+		})
+		return wins
 	}
-	r, cl := &t.src.rows[i], &t.cols[e.col]
-	if cl.editor().Validate != nil {
-		var refusal error
-		if v, stack, panicked := runColumnFn(func() { refusal = cl.editor().Validate(r, e.draft) }); panicked {
-			t.ed().panics = append(t.ed().panics, reported{v, stack})
-			t.closeEdit()
-			return nil, nil
-		}
-		if refusal != nil {
-			e.err = refusal.Error()
-			t.ed().editGen++
-			e.gen = t.ed().editGen
-			return nil, refusal
-		}
+	out := commitCore(&e.editCore, rowThere, validate, write)
+	switch out.kind {
+	case committedRefused:
+		d.editGen++
+		e.gen = d.editGen
+		return nil, out.err
+	case committedWrote:
+		d.ended = append(d.ended, endedEdit[K]{e.key, e.title})
+	case committedPanicked:
+		d.panics = append(d.panics, out.panic)
 	}
-	var wins []*mygo.Window
-	if v, stack, panicked := runColumnFn(func() {
-		wins, _ = t.src.updateLocked(e.key, func(row *T) { cl.editor().Set(row, e.draft) })
-	}); panicked {
-		t.ed().panics = append(t.ed().panics, reported{v, stack})
-		t.closeEdit()
-		return nil, nil
-	}
-	t.ed().ended = append(t.ed().ended, endedEdit[K]{e.key, cl.Title})
 	t.closeEdit()
-	return wins, nil
+	return out.wins, nil
 }
 
 // flushEdit delivers what commits collected under the lock: the edits written
 // to OnCellEndEdit, the panics to OnPanic, both on the event goroutine.
 func (t *DataGridViewWidget[T, K]) flushEdit() {
 	mu.Lock()
-	ended, panics, fn := t.ed().ended, t.ed().panics, t.ed().onEndEdit
-	t.ed().ended, t.ed().panics = nil, nil
-	mu.Unlock()
-	for _, p := range panics {
-		Post(func() { report(p.v, p.stack) })
+	d := t.ed()
+	if d == nil {
+		mu.Unlock()
+		return
 	}
+	ended, panics, fn := d.ended, d.panics, d.onEndEdit
+	d.ended, d.panics = nil, nil
+	mu.Unlock()
+	postReports(panics)
 	if fn == nil {
 		return
 	}

@@ -7,11 +7,14 @@ package widget
 // they run under and hang. A panic in one is recovered and reported with
 // OnPanic, and the edit is cancelled.
 type CellEditor[T any] struct {
-	// Set stores text, the user's, in the row. It parses what the column needs
-	// and changes the row in place but not its key. It must not leave the row
-	// half written: when it can fail after it changed a field, build the new
-	// value on a copy and assign the copy (n := *row; ...; *row = n). Validate
-	// runs before it. Required.
+	// Set stores text, the user's, in the row. The table gives it a copy of the
+	// row and keeps the copy only when Set returns: a Set that panics after it
+	// changed a field leaves the row, its generation and the views as they
+	// were. The copy is shallow (*row), so a T that holds a pointer, a slice or
+	// a map still reaches the real data through it: Set must not write through
+	// those before it can no longer fail, and a T that is itself a pointer is
+	// not copied at all. It parses what the column needs and changes the row but
+	// not its key. Validate runs before it. Required.
 	Set func(row *T, text string)
 	// Validate, when set, is asked before Set whether text may be written; a
 	// non-nil error refuses it: the editor stays open and shows the error's

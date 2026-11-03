@@ -125,11 +125,11 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// editing is turned on (enableEdit). The table names none of editing's types,
 	// so a program that never edits does not link them.
 	edAny       any
-	cellHook    func(c *ui.Context, col int, r *T) bool // builds the editor in the cell being edited
-	versionHook func(r *T) uint64                       // the edited row's version
-	pruneHook   func()                                  // rows went
-	prepareEdit func()                                  // before the table builds
-	afterTable  func(e ui.Element, c *ui.Context)       // after it built
+	cellHook    func(c *ui.Context, col int, r any) bool // builds the editor in the cell being edited (r is a *T)
+	versionHook func(r any) uint64                       // the edited row's version (r is a *T)
+	pruneHook   func()                                   // rows went
+	prepareEdit func()                                   // before the table builds
+	afterTable  func(e ui.Element, c *ui.Context)        // after it built
 	editCell    func(row, col int, how ui.EditHow) bool
 	startCell   func(row, col int, x, y float32, how ui.EditHow)
 

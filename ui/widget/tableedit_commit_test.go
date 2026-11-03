@@ -173,3 +173,129 @@ func TestSetPanicReleasesTheLockAndCancelsTheEdit(t *testing.T) {
 		t.Errorf("row %+v was written", r)
 	}
 }
+
+// Set writes a field of the row and then panics: the row is as it was, its
+// generation did not move, and a sorted view is not left stale.
+func TestSetPanicAfterWritingAFieldLeavesTheRowAlone(t *testing.T) {
+	OnPanic(func(v any, stack []byte) {})
+	defer OnPanic(nil)
+	grid := DataGridView(acctKey,
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200, Sortable: true},
+	).SetRows([]acct{{1, "ann", 30}, {2, "bob", 10}}).Expand().
+		EditColumn("Name", CellEditor[acct]{Set: func(a *acct, s string) {
+			a.name = "zz" // written before the panic
+			panic("boom")
+		}})
+	tt := tester(t, grid)
+	before := grid.src.Version(1)
+	grid.BeginEdit(1, "Name")
+	settleEdit(tt)
+	tt.Type("x")
+	tt.Frame()
+	_ = grid.EndEdit()
+	settleEdit(tt)
+	if r := rowOf(t, grid, 1); r.name != "ann" {
+		t.Fatalf("row %+v: Set's partial write stayed", r)
+	}
+	if v := grid.src.Version(1); v != before {
+		t.Errorf("Version moved from %d to %d for a write that did not happen", before, v)
+	}
+	inOrder(t, tt, "ann", "bob")
+}
+
+// EndEdit and CancelEdit on a grid that never had an editable column do
+// nothing: a Save handler shared by every form calls them.
+func TestEditCallsOnAGridWithoutEditColumn(t *testing.T) {
+	grid := testTable(acct{1, "ann", 1})
+	if err := grid.EndEdit(); err != nil {
+		t.Fatalf("EndEdit = %v", err)
+	}
+	grid.CancelEdit()
+	if grid.IsEditing() || grid.ReadOnly() {
+		t.Error("a grid with no editable column is editing or read-only")
+	}
+	if _, _, ok := grid.EditingCell(); ok {
+		t.Error("EditingCell reports a cell")
+	}
+	if _, _, ok := grid.CurrentCell(); ok {
+		t.Error("CurrentCell reports a cell before a frame")
+	}
+	if grid.SetCurrentCell(1, "Name") {
+		t.Error("SetCurrentCell reported success on a grid that does not edit")
+	}
+	if grid.BeginEdit(1, "Name") {
+		t.Error("BeginEdit reported success on a grid that does not edit")
+	}
+}
+
+// Beginning another edit commits the open one; when that is refused the new
+// edit does not open and the refused one keeps its draft.
+func TestBeginningAnotherEditCommitsTheOpenOne(t *testing.T) {
+	tt, grid, ends := editGrid(t)
+	grid.BeginEdit(1, "Name")
+	settleEdit(tt)
+	tt.Type("beta")
+	tt.Frame()
+	if !grid.BeginEdit(2, "Name") {
+		t.Fatal("BeginEdit refused while another edit was open and valid")
+	}
+	if r := rowOf(t, grid, 1); r.name != "beta" {
+		t.Fatalf("row %+v, want the first edit written", r)
+	}
+	if k, _, _ := grid.EditingCell(); k != 2 {
+		t.Fatalf("editing row %d, want 2", k)
+	}
+	if got := endsOf(ends); len(got) != 1 {
+		t.Fatalf("ends %v, want one", got)
+	}
+
+	grid.CancelEdit()
+	grid.BeginEdit(1, "Score")
+	settleEdit(tt)
+	tt.Type("abc")
+	tt.Frame()
+	if grid.BeginEdit(3, "Name") {
+		t.Fatal("BeginEdit opened a new edit over a refused one")
+	}
+	if k, col, _ := grid.EditingCell(); k != 1 || col != "Score" || grid.editDraft() != "abc" {
+		t.Fatalf("the refused edit is %v %q with draft %q, want 1 Score abc", k, col, grid.editDraft())
+	}
+}
+
+// Hiding the column being edited cancels the edit: the editor is gone, so a
+// later EndEdit must not write a draft nobody sees.
+func TestHidingTheEditedColumnCancelsTheEdit(t *testing.T) {
+	tt, grid, ends := editGrid(t)
+	grid.BeginEdit(1, "Name")
+	settleEdit(tt)
+	tt.Type("beta")
+	tt.Frame()
+	grid.SetColumnVisible("Name", false)
+	settleEdit(tt)
+	if grid.IsEditing() {
+		t.Fatal("the edit of a hidden column stayed open")
+	}
+	_ = grid.EndEdit()
+	if r := rowOf(t, grid, 1); r.name != "ann" || len(endsOf(ends)) != 0 {
+		t.Fatalf("row %+v written from a hidden editor", r)
+	}
+}
+
+// A cancel or a commit that the editor posted for an edit does not end an edit
+// begun after it.
+func TestStaleCancelDoesNotEndANewEdit(t *testing.T) {
+	tt, grid, _ := editGrid(t)
+	grid.BeginEdit(1, "Name")
+	settleEdit(tt)
+	stale := grid.ed().edit
+	grid.CancelEdit()
+	grid.BeginEdit(2, "Name")
+	settleEdit(tt)
+	grid.cancelEdit(stale)
+	if err := grid.endEdit(stale); err != nil {
+		t.Fatal(err)
+	}
+	if k, _, ok := grid.EditingCell(); !ok || k != 2 {
+		t.Fatalf("the new edit was ended by a stale call: %v %v", k, ok)
+	}
+}
