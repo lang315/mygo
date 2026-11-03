@@ -226,3 +226,110 @@ func TestRetainCurrentCellAccess(t *testing.T) {
 		t.Fatalf("focus %q, want r4c1", focusedCell(t, p.kept.h.access).Label)
 	}
 }
+
+// An OutlineTable keeps the focus on its row, which holds the level and
+// whether it is open; Right opens it.
+func TestOutlineTableAccessFocusStaysOnRow(t *testing.T) {
+	var s OutlineState[string]
+	s.List.Selection, s.List.CurrentCell = &Selection[string]{}, true
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100}}
+	tt := NewTester(func(c *Context) {
+		OutlineTable(c, &s, cols, []string{"src", "docs"}, children, func(path string, col int) {
+			Textf(c, "%s/%d", baseName(path), col).SingleLine()
+		}).Grow(1)
+	}, 400, 300)
+	tt.Frame()
+	tt.Click("src/0")
+	tree := accessOn(tt)
+	if n, _ := accessByID(tree, tree.Focus); n.Role != platform.RoleTreeItem && n.Role != platform.RoleRow {
+		t.Fatalf("focus is %+v, want the row", n)
+	}
+	for _, n := range tree.Nodes {
+		if n.Role == platform.RoleCell && (n.Actions&platform.ActionFocus != 0 || n.Description != "") {
+			t.Errorf("a cell of an outline changed: %+v", n)
+		}
+	}
+	tt.Key(0, KeyRight)
+	if n, _ := accessByID(accessOn(tt), tree.Focus); n.States&platform.AccessExpanded == 0 {
+		t.Errorf("the row focused is not expanded after Right: %+v", n)
+	}
+}
+
+// A cell holding an element of its own is not named by its texts: the element
+// names itself, once.
+func TestCurrentCellMixedCellsAreNotNamed(t *testing.T) {
+	s := &ListState{CurrentCell: true, Selection: &Selection[int]{}}
+	done := []bool{false, true, false}
+	cols := []TableColumn{{Title: "Done"}, {Title: "Progress"}}
+	tt := NewTester(func(c *Context) {
+		Table(c, s, cols, 3, func(row, col int) {
+			if col == 0 {
+				Checkbox(c, &done[row], fmt.Sprintf("done%d", row))
+			} else {
+				Progress(c, 0.5)
+				Textf(c, "half%d", row)
+			}
+		}).Grow(1)
+	}, 400, 300)
+	tt.Frame()
+	tt.Click("half1")
+	tree := accessOn(tt)
+	count := func(label string) (n int) {
+		for _, x := range tree.Nodes {
+			if x.Label == label {
+				n++
+			}
+		}
+		return
+	}
+	if got := count("done0"); got != 1 {
+		t.Errorf("done0 is read by %d nodes, want the check box alone", got)
+	}
+	if got := count("half1"); got != 1 {
+		t.Errorf("half1 is read by %d nodes, want its text alone", got)
+	}
+	cell := focusedCell(t, tree)
+	if cell.Description != "Progress" || cell.Label != "" {
+		t.Errorf("focused mixed cell %q (%q), want it unnamed in column Progress", cell.Label, cell.Description)
+	}
+}
+
+// A table that tracks cells beside a plain one: the plain one keeps its tree
+// and its row as the focus.
+func TestPlainTableBesideTrackedTable(t *testing.T) {
+	tracked := &ListState{CurrentCell: true, Selection: &Selection[int]{}}
+	plain := &ListState{Selection: &Selection[int]{}}
+	cols := []TableColumn{{Title: "A"}, {Title: "B"}}
+	tt := NewTester(func(c *Context) {
+		Column(c).Grow(1).Children(func() {
+			Table(c, tracked, cols, 3, func(row, col int) { Textf(c, "t%dc%d", row, col) }).Height(120)
+			Table(c, plain, cols, 3, func(row, col int) { Textf(c, "p%dc%d", row, col) }).Height(120)
+		})
+	}, 400, 300)
+	tt.Frame()
+	tt.Click("p1c1")
+	tree := accessOn(tt)
+	if n, _ := accessByID(tree, tree.Focus); n.Role != platform.RoleRow {
+		t.Fatalf("focus in the plain table is %+v, want its row", n)
+	}
+	for i, n := range tree.Nodes {
+		if n.Role == platform.RoleCell && n.Label == "" && n.Description == "" && n.Actions&platform.ActionFocus == 0 {
+			if i+1 >= len(tree.Nodes) || tree.Nodes[i+1].Parent != i || tree.Nodes[i+1].Role != platform.RoleText {
+				t.Errorf("an untracked cell %d lost its text", i)
+			}
+		}
+	}
+	named := 0
+	for _, n := range tree.Nodes {
+		if n.Role == platform.RoleCell && n.Label != "" {
+			named++
+		}
+	}
+	if named != 6 { // the tracked table's cells, 3 rows of 2
+		t.Errorf("%d cells are named, want the tracked table's 6", named)
+	}
+	tt.Click("t2c1")
+	if got := focusedCell(t, accessOn(tt)); got.Label != "t2c1" {
+		t.Errorf("focus in the tracked table is %q, want t2c1", got.Label)
+	}
+}

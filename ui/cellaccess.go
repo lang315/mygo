@@ -34,7 +34,9 @@ func accessCellOf(e *node) (f *listFrame, k int, row *node) {
 			return nil, 0, nil
 		}
 	}
-	if b == nil || !b.f.tracksCells() {
+	// An OutlineTable keeps the focus on its rows: they hold the level and
+	// whether they are open, and Left and Right open and close them.
+	if b == nil || !b.f.tracksCells() || b.f.tree {
 		return nil, 0, nil
 	}
 	id, ok := e.key.(string)
@@ -57,7 +59,10 @@ func accessCellDetails(rt *engine, t *platform.AccessTree, e *node, n *platform.
 	if f == nil {
 		return false
 	}
-	if n.Label == "" {
+	// Named by its texts when they are all there is: an element inside, as a
+	// check box or a progress bar, names itself and is read as it was.
+	leaf := textOnly(e)
+	if leaf && n.Label == "" {
 		n.Label = e.innerText()
 	}
 	if n.Description == "" {
@@ -67,12 +72,12 @@ func accessCellDetails(rt *engine, t *platform.AccessTree, e *node, n *platform.
 		n.States |= platform.AccessFocusable
 		n.Actions |= platform.ActionFocus
 	}
-	if t.Focus == 0 && rt.windowFocus() && rt.focused == f.owner.id && k == f.s.colIndex(f.s.Cells.Cursor) {
+	if t.Focus == 0 && rt.windowFocus() && rt.focused == f.owner.id && f.s.tableCols[k].id == f.s.Cells.Cursor {
 		if c := f.s.cursor(); c != nil && *c == row.st.valueBinding.(*listRowInput).i {
 			t.Focus = e.id
 		}
 	}
-	return n.Label != "" && textOnly(e)
+	return leaf && n.Label != ""
 }
 
 // textOnly reports whether what is inside e shows no element of assistive
@@ -89,7 +94,8 @@ func textOnly(e *node) bool {
 	return true
 }
 
-// elementByID returns the element with id inside e.
+// elementByID returns the element with id inside e. Assistive technology
+// focusing a cell is as rare as a key, and a state does not know its element.
 func elementByID(e *node, id uint64) *node {
 	if e.id == id {
 		return e
