@@ -1,40 +1,55 @@
 package ui
 
 import (
-	"hash/crc32"
 	"testing"
+	"time"
 )
 
-// editableFrame returns the checksum of the frame of an EditableText being
-// edited, after "!" was typed.
-func editableFrame(t *testing.T) uint32 {
-	t.Helper()
+// EditableText still edits as it did when its editor became CellInput's: a
+// double click starts it, typing and Enter write the value, Escape goes back.
+// (The refactor was checked to leave the pixels of an editing EditableText as
+// they were, on one machine; a pixel checksum is not portable across the
+// fonts and rasterizers of the three systems, so none is pinned.)
+func TestEditableTextEditsAsBefore(t *testing.T) {
 	name := "report.txt"
+	changed := 0
 	tt := NewTester(func(c *Context) {
-		Row(c).Padding(8).Children(func() { EditableText(c, &name) })
+		Row(c).Padding(8).Children(func() {
+			if EditableText(c, &name).Changed() {
+				changed++
+			}
+		})
 	}, 300, 80)
 	tt.Frame()
-	r, ok := tt.Find("report.txt")
-	if !ok {
-		t.Fatalf("the text is not shown: %q", tt.Texts())
+	edit := func() {
+		t.Helper()
+		tt.Advance(time.Second) // clicks of an earlier edit are not part of this double click
+		r, ok := tt.Find(name)
+		if !ok {
+			t.Fatalf("the text %q is not shown: %q", name, tt.Texts())
+		}
+		tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+		tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+		tt.Frame()
+		if active, _ := tt.TextInputActive(); !active {
+			t.Fatalf("the double click on %q did not start editing", name)
+		}
 	}
-	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
-	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	edit()
+	tt.Key(Cmd, KeyA)
+	tt.Type("notes.md")
+	tt.Key(0, KeyEnter)
 	tt.Frame()
-	if active, _ := tt.TextInputActive(); !active {
-		t.Fatal("the double click did not start editing")
+	if name != "notes.md" || changed == 0 {
+		t.Fatalf("after typing and Enter: name %q, changed %d; want notes.md and a change reported", name, changed)
 	}
-	tt.Type("!")
+	edit()
+	tt.Key(Cmd, KeyA)
+	tt.Type("lost.txt")
+	tt.Key(0, KeyEscape)
 	tt.Frame()
-	return crc32.ChecksumIEEE(tt.Image().Pix)
-}
-
-// EditableText keeps its look: the refactor that builds its editor with the
-// code CellInput shares must not change a frame.
-func TestEditableTextEditorUnchanged(t *testing.T) {
-	const want = 0xf4cdd1ed
-	if got := editableFrame(t); got != want {
-		t.Fatalf("frame checksum %#x, want %#x", got, want)
+	if name != "notes.md" {
+		t.Fatalf("Escape kept %q, want notes.md", name)
 	}
 }
 
