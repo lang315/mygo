@@ -83,7 +83,7 @@ func nsisWebView2(c *Config) (function, call string) {
 		return "", ""
 	}
 	key := nsisString(`Software\Microsoft\EdgeUpdate\Clients\` + webView2Client)
-	log := nsisString(`$TEMP\` + fsName(c.Identifier) + `-webview2.log`)
+	log := `"$TEMP\` + nsisEscape(fsName(c.Identifier)) + `-webview2.log"`
 	// Reads pv from root, and goes to found with the version unless it is empty or zero.
 	read := func(view, root string) string {
 		return `  SetRegView ` + view + `

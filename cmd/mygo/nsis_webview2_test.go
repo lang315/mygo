@@ -58,7 +58,7 @@ func TestNSISWebView2(t *testing.T) {
 		`SetRegView 32`, `SetRegView 64`, `ReadRegStr $0 HKLM`, `ReadRegStr $0 HKCU`,
 		`"pv"`, `"0.0.0.0"`,
 		`Get-AuthenticodeSignature`, `-ne 'Valid'`, `'Microsoft Corporation'`, `'/silent', '/install'`,
-		`/SD IDNO`, `$TEMP\com.example.notes-webview2.log`,
+		`/SD IDNO`, `"$TEMP\com.example.notes-webview2.log"`,
 		"  Call EnsureWebView2\n",
 	}
 	for mode, extra := range map[string][]string{
