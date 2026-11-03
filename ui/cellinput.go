@@ -55,7 +55,8 @@ func coreCellInput(c *context, draft *string, start CellStart) *node {
 				st.pending = false
 				return
 			case s.HasAt:
-				at = ed.hit(s.X, s.Y)
+				lx, ly := in.st.local(s.X, s.Y) // the point is in the window, hit takes the element's
+				at = ed.hit(lx, ly)
 			}
 			ed.anchor, ed.caret = at, at
 			st.pending = false
