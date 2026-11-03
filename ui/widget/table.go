@@ -143,21 +143,25 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// In-cell editing (tableedit.go), all under mu: the edit in progress, the
 	// generation that versions its row, whether a column has a Set, the
 	// current cell of the last frame and one asked for.
-	edit       *editState[K]
-	editGen    uint64
-	editable   bool
-	readOnly   bool
-	editMode   EditMode
-	editCell   func(row, col int, how ui.EditHow) bool
-	startCell  func(row, col int, x, y float32, how ui.EditHow)
-	onEndEdit  func(K, string)
-	pendingCur *curCell[K]
-	curKey     K
-	curCol     string
-	curOK      bool
-	refocus    bool           // an edit ended while its editor had the focus: the table takes it
-	ended      []endedEdit[K] // edits written, for OnCellEndEdit, delivered by flushEdit
-	panics     []reported     // panics of column functions, for OnPanic
+	edit     *editState[K]
+	editGen  uint64
+	editable bool
+	readOnly bool
+	editMode EditMode
+	// The parts of editing the table calls, nil until the app opts in
+	// (enableEdit): the code behind them is linked only into apps that edit.
+	editorFn    func(c *ui.Context, e *editState[K])
+	prepareEdit func()
+	editCell    func(row, col int, how ui.EditHow) bool
+	startCell   func(row, col int, x, y float32, how ui.EditHow)
+	onEndEdit   func(K, string)
+	pendingCur  *curCell[K]
+	curKey      K
+	curCol      string
+	curOK       bool
+	refocus     bool           // an edit ended while its editor had the focus: the table takes it
+	ended       []endedEdit[K] // edits written, for OnCellEndEdit, delivered by flushEdit
+	panics      []reported     // panics of column functions, for OnPanic
 
 	// watch, when set by a ListView, gets the keys the user added to and took
 	// out of the choice, or of the checks (checks).
@@ -202,9 +206,6 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	}
 	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: slices.Clone(cols), view: ui.NewTableView(compare), cursor: -1}
 	t.columns = t.uiColumns()
-	if t.editable = slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Set != nil }); t.editable {
-		t.editCell, t.startCell = t.editsCell, t.startEdit // made once: a method value allocates
-	}
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.RowVersion = t.rowVersion
 	t.list.Copy = t.copyRows
@@ -552,8 +553,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
-	t.wireEdit()
-	t.followCurrent()
+	if t.prepareEdit != nil {
+		t.prepareEdit()
+	}
 	s.Version = t.view.Version()
 	s.Header = nil
 	if t.view.Groups() != nil {
@@ -601,7 +603,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	cl, r := &t.cols[vis[col]], t.rowAt(row)
 	if e := t.edit; e != nil && vis[col] == e.col && t.key(r) == e.key {
-		t.editor(c, e)
+		t.editorFn(c, e)
 		return
 	}
 	// A selected row's text keeps the selection's color, which reads on

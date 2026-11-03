@@ -27,7 +27,8 @@ func editGrid(t *testing.T) (*ui.Tester, *DataGridViewWidget[acct, int], chan st
 			},
 			Set: func(a *acct, s string) { a.score, _ = strconv.Atoi(s) }},
 	).SetRows([]acct{{1, "ann", 30}, {2, "bob", 10}, {3, "cat", 20}}).Expand()
-	grid.OnCellEndEdit(func(k int, column string) { ends <- strconv.Itoa(k) + ":" + column })
+	grid.OnCellEndEdit(func(k int, column string) { ends <- strconv.Itoa(k) + ":" + column }).
+		SetEditMode(EditOnEnterOrF2)
 	return tester(t, grid), grid, ends
 }
 
@@ -136,6 +137,7 @@ func TestListViewDoesNotEditEditableColumns(t *testing.T) {
 			Set: func(v *vitem, s string) { v.name = s }},
 		Column[vitem]{Title: "Kind", Text: func(v *vitem) string { return v.kind }, Width: 100}).
 		SetRows(fruits)
+	lv.t.SetEditMode(EditOnEnterOrF2) // even opted in, a ListView does not edit
 	tt := tester(t, lv)
 	tt.Click("Apple")
 	tt.Key(0, ui.KeyF2)
@@ -148,5 +150,29 @@ func TestListViewDoesNotEditEditableColumns(t *testing.T) {
 	}
 	if lv.t.BeginEdit("a", "Name") {
 		t.Error("BeginEdit accepted a cell of a ListView")
+	}
+}
+
+// A column with a Set makes the grid editable once the app opts in with
+// SetEditMode (or another editing method): the code of editing is linked only
+// into programs that ask for it, so a grid that never does leaves F2 alone.
+func TestSetColumnsEditOnlyAfterOptIn(t *testing.T) {
+	grid := DataGridView(acctKey,
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200,
+			Set: func(a *acct, s string) { a.name = s }},
+	).SetRows([]acct{{1, "ann", 30}}).Expand()
+	tt := tester(t, grid)
+	tt.Click("ann")
+	tt.Key(0, ui.KeyF2)
+	tt.Frame()
+	if grid.IsEditing() {
+		t.Fatal("F2 edited a grid that did not opt in")
+	}
+	grid.SetEditMode(EditOnEnterOrF2)
+	tt.Click("ann")
+	tt.Key(0, ui.KeyF2)
+	tt.Frame()
+	if !grid.IsEditing() {
+		t.Fatal("F2 did not edit after SetEditMode")
 	}
 }

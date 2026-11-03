@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"slices"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
@@ -46,6 +48,20 @@ type curCell[K comparable] struct {
 	col string
 }
 
+// enableEdit opts the table in to in-cell editing: it hands the table the parts
+// of editing it calls (method values, made once: one made in every build would
+// allocate). Nothing else refers to them, so the code of editing is linked only
+// into programs that call an editing method (SetEditMode, BeginEdit,
+// SetCurrentCell, OnCellEndEdit). Under mu.
+func (t *DataGridViewWidget[T, K]) enableEdit() {
+	if t.editorFn != nil {
+		return
+	}
+	t.editable = slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.Set != nil })
+	t.editorFn, t.editCell, t.startCell = t.editor, t.editsCell, t.startEdit
+	t.prepareEdit = func() { t.wireEdit(); t.followCurrent() }
+}
+
 // SetReadOnly makes every cell of the grid read-only, as WinForms'
 // DataGridView.ReadOnly does: no cell edits, whatever its column's Set.
 func (t *DataGridViewWidget[T, K]) SetReadOnly(on bool) *DataGridViewWidget[T, K] {
@@ -65,9 +81,13 @@ func (t *DataGridViewWidget[T, K]) ReadOnly() bool {
 	return t.readOnly
 }
 
-// SetEditMode sets what starts the edit of a cell: EditOnEnterOrF2 by default.
+// SetEditMode sets what starts the edit of a cell, and opts the table in to
+// editing: the columns with a Set edit only once the program calls
+// SetEditMode (EditOnEnterOrF2 is the usual mode), BeginEdit, SetCurrentCell
+// or OnCellEndEdit, so that the code of editing is linked only into programs
+// that ask for it. Call it while setting the table up.
 func (t *DataGridViewWidget[T, K]) SetEditMode(m EditMode) *DataGridViewWidget[T, K] {
-	t.change(func() { t.editMode = m })
+	t.change(func() { t.enableEdit(); t.editMode = m })
 	return t
 }
 
@@ -86,6 +106,7 @@ func (t *DataGridViewWidget[T, K]) CurrentCell() (k K, column string, ok bool) {
 func (t *DataGridViewWidget[T, K]) SetCurrentCell(k K, column string) bool {
 	ok := false
 	t.change(func() {
+		t.enableEdit()
 		if _, _, found := t.cellOf(k, column); found {
 			t.pendingCur, ok = &curCell[K]{k, column}, true
 		}
@@ -99,6 +120,7 @@ func (t *DataGridViewWidget[T, K]) SetCurrentCell(k K, column string) bool {
 func (t *DataGridViewWidget[T, K]) BeginEdit(k K, column string) bool {
 	ok := false
 	t.change(func() {
+		t.enableEdit()
 		i, ci, found := t.cellOf(k, column)
 		if !found || !t.canEdit(&t.src.rows[i], ci) {
 			return
@@ -135,7 +157,7 @@ func (t *DataGridViewWidget[T, K]) EditingCell() (k K, column string, ok bool) {
 // OnCellEndEdit runs fn, on the event goroutine with no lock held, with the
 // row's key and the column's title of each edit that was written.
 func (t *DataGridViewWidget[T, K]) OnCellEndEdit(fn func(k K, column string)) *DataGridViewWidget[T, K] {
-	t.change(func() { t.onEndEdit = fn })
+	t.change(func() { t.enableEdit(); t.onEndEdit = fn })
 	return t
 }
 
