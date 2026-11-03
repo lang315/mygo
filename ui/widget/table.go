@@ -153,7 +153,9 @@ type DataGridViewWidget[T any, K comparable] struct {
 	curKey     K
 	curCol     string
 	curOK      bool
-	refocus    bool // an edit ended while its editor had the focus: the table takes it
+	refocus    bool           // an edit ended while its editor had the focus: the table takes it
+	ended      []endedEdit[K] // edits written, for OnCellEndEdit, delivered by flushEdit
+	panics     []reported     // panics of column functions, for OnPanic
 
 	// watch, when set by a ListView, gets the keys the user added to and took
 	// out of the choice, or of the checks (checks).

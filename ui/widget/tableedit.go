@@ -1,6 +1,9 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+)
 
 // EditMode says what starts the edit of a cell of a DataGridView whose
 // columns have a Set.
@@ -30,8 +33,9 @@ type editState[K comparable] struct {
 		has  bool
 		x, y float32
 	}
-	gen     uint64 // versions the edited row while the edit lasts
-	focused bool   // the editor held the focus in the last frame
+	gen       uint64 // versions the edited row while the edit lasts
+	focused   bool   // the editor held the focus in the last frame
+	announced string // the refusal the user was told
 }
 
 // curCell is a current cell asked for by SetCurrentCell or BeginEdit, which
@@ -314,4 +318,114 @@ func (t *DataGridViewWidget[T, K]) editor(c *ui.Context, e *editState[K]) {
 		in.Error(e.err)
 	}
 	in.OnShortcut(0, ui.KeyEscape, func() { Post(t.CancelEdit) })
+	if in.Submitted() {
+		Post(func() { _ = t.EndEdit() })
+	}
+	if e.err != "" && e.announced != e.err && !c.Measuring() {
+		e.announced = e.err
+		c.Announce(e.err)
+	}
+}
+
+// endedEdit is an edit that was written, for OnCellEndEdit.
+type endedEdit[K comparable] struct {
+	key    K
+	column string
+}
+
+// reported is a panic of a column function, for OnPanic.
+type reported struct {
+	v     any
+	stack []byte
+}
+
+// EndEdit commits the edit in progress now, with the draft the table holds: it
+// asks the column's Validate, and when that allows it writes the draft with
+// the column's Set, in the row as it is. It returns the refusal's error, which
+// the editor then shows (the edit stays open with its draft); nil when it
+// wrote, when the draft is the text the editor started with (nothing is
+// written, nothing reported), or when nothing was being edited. A Save
+// button's handler calls it before it saves.
+//
+// A panic in Validate or Set is recovered and reported with OnPanic, and the
+// edit is cancelled; EndEdit returns nil then. Do not call it from a column
+// function: those run under the package's lock.
+func (t *DataGridViewWidget[T, K]) EndEdit() error {
+	var wins []*mygo.Window
+	var err error
+	func() {
+		mu.Lock()
+		defer mu.Unlock() // a column function may panic; runColumnFn recovers, and the unlock stays a defer
+		wins, err = t.commitEditLocked()
+	}()
+	for _, w := range wins {
+		invalidate(w)
+	}
+	t.flushEdit()
+	if err != nil {
+		t.touch() // the editor builds again with the error
+	}
+	return err
+}
+
+// commitEditLocked writes the draft of the edit, or refuses it. Under mu. The
+// windows to redraw are for the caller to invalidate once it released mu.
+func (t *DataGridViewWidget[T, K]) commitEditLocked() ([]*mygo.Window, error) {
+	e := t.edit
+	if e == nil {
+		return nil, nil
+	}
+	if e.draft == e.orig { // nothing typed: nothing written
+		t.closeEdit()
+		return nil, nil
+	}
+	i, ok := t.src.index[e.key]
+	if !ok { // the row went
+		t.closeEdit()
+		return nil, nil
+	}
+	r, cl := &t.src.rows[i], &t.cols[e.col]
+	if cl.Validate != nil {
+		var refusal error
+		if v, stack, panicked := runColumnFn(func() { refusal = cl.Validate(r, e.draft) }); panicked {
+			t.panics = append(t.panics, reported{v, stack})
+			t.closeEdit()
+			return nil, nil
+		}
+		if refusal != nil {
+			e.err = refusal.Error()
+			t.editGen++
+			e.gen = t.editGen
+			return nil, refusal
+		}
+	}
+	var wins []*mygo.Window
+	if v, stack, panicked := runColumnFn(func() {
+		wins, _ = t.src.updateLocked(e.key, func(row *T) { cl.Set(row, e.draft) })
+	}); panicked {
+		t.panics = append(t.panics, reported{v, stack})
+		t.closeEdit()
+		return nil, nil
+	}
+	t.ended = append(t.ended, endedEdit[K]{e.key, cl.Title})
+	t.closeEdit()
+	return wins, nil
+}
+
+// flushEdit delivers what commits collected under the lock: the edits written
+// to OnCellEndEdit, the panics to OnPanic, both on the event goroutine.
+func (t *DataGridViewWidget[T, K]) flushEdit() {
+	mu.Lock()
+	ended, panics, fn := t.ended, t.panics, t.onEndEdit
+	t.ended, t.panics = nil, nil
+	mu.Unlock()
+	for _, p := range panics {
+		Post(func() { report(p.v, p.stack) })
+	}
+	if fn == nil {
+		return
+	}
+	for _, e := range ended {
+		Post(func() { fn(e.key, e.column) })
+	}
 }
