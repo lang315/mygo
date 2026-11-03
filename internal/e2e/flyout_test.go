@@ -336,7 +336,7 @@ func TestTrayFlyout(t *testing.T) {
 		t.Skip("no tray: ", err)
 	}
 	defer tray.Destroy()
-	waitTrayLaidOut(tray)
+	waitTrayLaidOut(t, tray)
 	for _, popover := range []bool{false, true} {
 		fl := mygo.NewFlyout(mygo.FlyoutOptions{Tray: tray, Placement: mygo.PlacementBottom, Gap: 4, Width: 200, Height: 120, Focusable: true, Popover: popover,
 			Content: ui.View(func(c *ui.Context) {})})
@@ -363,8 +363,10 @@ func TestTrayFlyout(t *testing.T) {
 
 // waitTrayLaidOut waits for the menu bar to lay a tray icon out, which it
 // does after the icon was made, off the screen until then, as a click on
-// it would find it.
-func waitTrayLaidOut(tray *mygo.Tray) {
+// it would find it. A full menu bar, as one beside a notch, keeps the icon
+// off the screen: the test skips then.
+func waitTrayLaidOut(t *testing.T, tray *mygo.Tray) {
+	t.Helper()
 	onScreen := func() bool {
 		r := tray.Bounds()
 		for _, d := range mygo.Screen.Displays() {
@@ -383,6 +385,9 @@ func waitTrayLaidOut(tray *mygo.Tray) {
 		} else {
 			last, still = b, 0
 		}
+	}
+	if !onScreen() {
+		t.Skip("the menu bar has no room for the tray icon, at", tray.Bounds())
 	}
 }
 

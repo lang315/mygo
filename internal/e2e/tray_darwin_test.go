@@ -24,7 +24,7 @@ func TestTrayPopoverToggle(t *testing.T) {
 		t.Skip("no tray: ", err)
 	}
 	defer tray.Destroy()
-	waitTrayLaidOut(tray)
+	waitTrayLaidOut(t, tray)
 	elsewhere := newWindow(t, mygo.WindowOptions{Width: 300, Height: 200})
 	waitOnScreen(elsewhere)
 
