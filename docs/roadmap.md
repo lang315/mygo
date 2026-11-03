@@ -7,7 +7,7 @@ DataGridView, MenuStrip and so on. Building a good-looking UI should be as
 easy as with HTML and Tailwind. It should be as fast and smooth as egui. A
 real app, fhtool, will prove it.
 
-**Status, 2026-10-26.** An item marked **done** names its evidence: a file, a
+**Status, 2026-11-03.** An item marked **done** names its evidence: a file, a
 test or a pull request; `go test ./internal/skillsdocs` checks that every path
 named in backticks exists. An item without a mark is open, or has no evidence
 here. Numbers are the CI runs on `benchmarks` (commit `c4cf118`, the machines
@@ -19,7 +19,10 @@ The M1 Pro figures are medians of `go test -run '^$' -bench
 `-bench 'BenchmarkTableCheckedLarge/click' -benchtime 300x -count 3` in
 `ui/widget`, at commit `93a267b` (macOS 15.7, Go 1.27.3; the CI runs Go 1.27.1). The CI figures are
 the latest entries of `latest.json` on `benchmarks`, which has a column for
-each commit and runner.
+each commit and runner. The figures below stay at the commits that name
+them; 2026-11-03 brought up to date the Phase 1 exit gate on table cells, the
+binary-size item and the `TableFrame100k` item of Track 3 (CI read up to
+`b482a854`).
 
 The phases run in order. Track 3 runs alongside them. A phase is done when
 its exit criteria hold on three real machines: a Mac, Windows 10 amd64 and
@@ -137,7 +140,17 @@ Windows 11 ARM64.
     groups overlap, and a group the app uses cannot be cut. Only a build
     counts: change the code, build stripped for the three OSes, compare. The
     real results so far: SVG -220 KB on macOS (the table said 131 KB, #256);
-    the i18n formats below.
+    the i18n formats below; the editor's drag, which `engine.pointerUp` now
+    reaches through `dragFn` as it does `pressFn`, so an app without a text
+    input no longer links it (#345); on Windows the DevTools parameters and
+    replies without encoding/json (#353: `counter-native` 7,515,648 to
+    6,852,608 bytes, -663 KB), the surface of native UI behind an interface so
+    that `hello` does not link it (#356: -222 KB), and `nativeOnly` (#372,
+    tag `mygo_nowebview`: `counter-native` on windows/amd64 6,885,376 to
+    6,654,464 bytes, -230,912, and on windows/arm64 6,285,312 to 6,072,832,
+    -212,480), and the same for macOS and Linux (#373: `counter-native` on
+    darwin/arm64 6,608,306 to 6,423,074, -185,232; linux/amd64 6,516,999 to
+    6,398,215, -118,784; linux/arm64 6,095,111 to 5,964,039, -131,072).
 
     | Group | macOS | Linux | What keeps it | Next step |
     |---|---|---|---|---|
@@ -217,10 +230,11 @@ cannot show: those items are not marked):
   window with its table, a settings dialog and the toolbar.
 - They run on Windows 10 amd64 and Windows 11 ARM64.
 - Vietnamese Telex typing works in text boxes and table cells, on Windows
-  and macOS. *Open, the owner's decision:* `DataGridView` has no editing in a
-  cell (no `ui/widget` control edits the text of a cell in place), so Telex in
-  table cells cannot be tested yet; text boxes can. Either the grid gets
-  in-cell editing, or the gate drops the table cells.
+  and macOS. *Decided by the owner, 2026-11-03:* `DataGridView` gets in-place
+  editing of the text of a cell, as WinForms has, and the gate keeps the table
+  cells. Until it lands no `ui/widget` control edits the text of a cell in
+  place, so Telex in table cells cannot be tested yet; text boxes can. The spec
+  is being written.
 - A click on a table of 1M rows takes ≤ 1 ms of the app's work (`clickApp`). **Done**, see above: 0.67 ms at worst on CI.
 - API changes the port forces land before Phase 2.
 
@@ -286,9 +300,23 @@ cannot show: those items are not marked):
 
 **Later:**
 
-- Bring `TableFrame100k` down to tens of µs. *Open:* 104 µs on an M1 Pro
-  (85 µs once the rows reuse their layout, below);
-  allocations went from 223 to 22 a frame (#169: 164, #179: 22).
+- Bring `TableFrame100k` down to tens of µs. **Done for a table with a
+  `RowVersion`**, which is how `ui/widget`'s Table runs (the owner's decision
+  of 2026-11-02: the idle work ends with #346). The idle frame, `idle-rv-app`
+  of `BenchmarkTableFrame100kPhases`: 25.4 µs on an M1 Pro at the final gate of
+  P3 and P4 (below); #346 (a kept row is asked about its states only after a
+  write touched one) took it from 21.1 to 17.8 µs (-15.8%, benchstat, 6 runs
+  interleaved), and the widest table, `WideTableIdle` with 12 columns, from
+  50.1 to 41.6 µs (-17.1%). CI, from `latest.json` on `benchmarks`: at
+  `976d0690` Linux 16.83 µs, Windows 28.74 µs, the macOS runner 31.49 µs; at
+  `b482a854` 33.79, 34.47 and 18.03 µs (the runners' CPUs differ from run to
+  run, so compare those figures only within one run). *Not covered:* a
+  `ui.Table` without a `RowVersion` builds its rows every frame by contract and
+  stays at 60.4 µs idle after #346 (60.7 before); the ideas left for it (shrink
+  `node`, skip `captureRows` and `forgetInput` for a clean row, about 1.5 to 8
+  µs) were dropped until a real app needs them. The history of this item, from
+  the 104 µs it began with on an M1 Pro (85 µs once the rows reuse their
+  layout, below); allocations went from 223 to 22 a frame (#169: 164, #179: 22).
   Where the 104 µs goes (an M1 Pro, 195 elements, the scene of
   `BenchmarkTableFrame100k`, the mean of 100,000 frames; 0.55 µs an element):
 
@@ -481,7 +509,8 @@ cannot show: those items are not marked):
     Element panicked on a kept row. A second review found that the copy of a
     row was recorded with the version read at the end of the frame, not the
     one it was built with. The oracle does not yet generate two-pass hides,
-    keys, context menus, `EditableText`, `After` or `Draw` (direct tests do);
+    keys, `EditableText`, `After` or `Draw` (direct tests do; its right-clicks open
+    a menu since #268, `retainRightClicks` in `ui/retain_model_test.go`);
     the branch rows of an Outline and TreeView are built every frame (their
     arrow animation leaves `motions` set).
 
@@ -585,8 +614,8 @@ cannot show: those items are not marked):
     with fewer seeds (the package took 1036 s and 488 s now).
   "Tens of µs" in the sense of 20–30 needed the build skipped (P2, 47 µs idle
   on an M1 Pro) and the layout and commit (P3, 26.5 µs); a scroll frame is 52 µs.
-  *Open:* the layout twin (`rt.layoutCheck`) compares the text layouts and
-  lay bits of a kept row as well as its boxes (#271, open). A pointer resting
+  *Done (#271):* the layout twin (`rt.layoutCheck`) compares the text layouts and
+  lay bits of a kept row as well as its boxes. A pointer resting
   on a row adds 3.5 to 4 µs and 26 allocations to an idle frame: the row under
   it is hovered, so it is built, laid out and painted in every frame and never
   replayed (`rowInteractive`), even when it only has a hover look and no hover
