@@ -12,12 +12,10 @@
 #    them, so that every test runs once. The skip is of every package the
 #    main process has, so a name of the splits must be the name of no test
 #    in another of them (--check looks).
-#  - The slowest packages (heavy below) run in one process of their own, from
-#    the start: go test starts packages in the order of their names, and
-#    one that starts late, as internal/raster, is what the job waits for.
-#    The two processes (heavy and the others) take -p of half the cores
-#    each, so that together they start as many packages as a single go test
-#    would, and no more.
+#  - go test starts packages in the order it is given them, so the slowest
+#    packages (slowest below) go first and the quick ones fill the cores
+#    as these are busy: with the packages in the order of their names, one
+#    that starts late, as internal/raster, is what the job waits for.
 #
 #   ci-test.sh -race -shuffle=on -- $(bash .github/ci-shard.sh ui)
 #   ci-test.sh --check     # the lists below against the packages and tests
@@ -36,14 +34,13 @@ splits=(
   'cmd/mygo:TestBuildResources|TestBuildDMGSize|TestBuildDMG'
   'cmd/mygo:TestBuildLinuxSlug|TestRev338eScanCost|TestResourceErrors'
 )
-# Packages that take 1 to 6 minutes of a runner's cores under -race, each
-# alone. Those of another system or another shard are not among the
-# arguments, and are left out. None is a package of the splits (the main
-# process skips their names, and this one does not).
-heavy=(
-  . examples/account-manager examples/wind internal/e2e internal/gpu
-  internal/gpu/d3d11 internal/gpu/gl internal/gpu/metal internal/raster
-  plugins/terminal
+# The packages that take the longest under -race, longest first (the
+# order of the slowest runner of each); those of another system or another
+# shard are not among the arguments, and are left out.
+slowest=(
+  internal/gpu/metal internal/raster internal/gpu/gl ui examples/wind
+  internal/e2e internal/gpu ui/widget internal/gpu/d3d11 ui/markdown/parser
+  plugins/terminal examples/account-manager ui/editor cmd/mygo .
 )
 
 mod=$(go list -m)
@@ -51,7 +48,7 @@ mod=$(go list -m)
 if [ "${1:-}" = --check ]; then
   all=$(go list ./...)
   fail=0
-  seen=$'\n' seen_heavy=$'\n'
+  seen=$'\n' seen_slowest=$'\n'
   for s in "${splits[@]}"; do
     pkg=${s%%:*}
     if ! grep -qx "$mod/$pkg" <<<"$all"; then echo "ci-test.sh: split package $pkg is no package" >&2; fail=1; continue; fi
@@ -69,14 +66,11 @@ if [ "${1:-}" = --check ]; then
       fi
     done
   done
-  for p in "${heavy[@]}"; do
-    if grep -qxF "$p" <<<"$seen_heavy"; then echo "ci-test.sh: heavy package $p is listed twice" >&2; fail=1; fi
-    seen_heavy+="$p"$'\n'
-    for s in "${splits[@]}"; do
-      if [ "$p" = "${s%%:*}" ]; then echo "ci-test.sh: heavy package $p is a package of the splits" >&2; fail=1; fi
-    done
+  for p in "${slowest[@]}"; do
+    if grep -qxF "$p" <<<"$seen_slowest"; then echo "ci-test.sh: slowest package $p is listed twice" >&2; fail=1; fi
+    seen_slowest+="$p"$'\n'
     # A directory: a package of another system is no package of this one.
-    if [ ! -d "./$p" ]; then echo "ci-test.sh: heavy package $p is no directory" >&2; fail=1; fi
+    if [ ! -d "./$p" ]; then echo "ci-test.sh: slowest package $p is no directory" >&2; fail=1; fi
   done
   exit "$fail"
 fi
@@ -84,7 +78,7 @@ fi
 flags=()
 while [ "$#" -gt 0 ] && [ "$1" != -- ]; do flags+=("$1"); shift; done
 if [ "$#" -gt 0 ]; then shift; fi
-listflags=("${flags[@]}")
+listflags=(${flags[@]+"${flags[@]}"})
 # shellcheck disable=SC2206
 [ -n "${CI_TEST_FLAGS:-}" ] && flags+=($CI_TEST_FLAGS)
 pkgs=("$@")
@@ -97,19 +91,18 @@ for s in "${splits[@]}"; do
   if has "$p"; then groups+=("${s#*:}"); gpkgs+=("$p"); names+=("${s#*:}"); fi
 done
 all=$(IFS='|'; echo "${names[*]:-}")
-# The heavy packages among the arguments, and the others.
-hv=() light=()
+# The arguments, the slowest first.
+ordered=()
+for h in "${slowest[@]}"; do
+  if [ "$h" = . ]; then q=$mod; else q=$mod/$h; fi
+  if has "$q"; then ordered+=("$q"); fi
+done
 for p in "${pkgs[@]}"; do
-  is=0
-  for h in "${heavy[@]}"; do
-    if [ "$h" = . ]; then q=$mod; else q=$mod/$h; fi
-    if [ "$p" = "$q" ]; then is=1; fi
-  done
-  if [ "$is" = 1 ]; then hv+=("$p"); else light+=("$p"); fi
+  grep -qxF "$p" < <(printf '%s\n' ${ordered[@]+"${ordered[@]}"}) || ordered+=("$p")
 done
 # One process, as before, when there is nothing to split.
-if [ "${#groups[@]}" = 0 ] && { [ "${#hv[@]}" = 0 ] || [ "${#light[@]}" = 0 ]; }; then
-  exec go test "${flags[@]}" "${pkgs[@]}"
+if [ "${#groups[@]}" = 0 ]; then
+  exec go test ${flags[@]+"${flags[@]}"} "${ordered[@]}"
 fi
 
 if [ "${#groups[@]}" -gt 0 ]; then
@@ -117,7 +110,7 @@ if [ "${#groups[@]}" -gt 0 ]; then
   # splits that is no test of its package any more (renamed, removed) fails
   # the run: its group would still pass, with fewer tests, and the split
   # drift unseen.
-  listed=$(go test "${listflags[@]}" -list "^($all)\$" $(printf '%s\n' "${gpkgs[@]}" | sort -u))
+  listed=$(go test ${listflags[@]+"${listflags[@]}"} -list "^($all)\$" $(printf '%s\n' "${gpkgs[@]}" | sort -u))
   missing=""
   for i in "${!groups[@]}"; do
     # The names listed before the line of their package are its own.
@@ -142,14 +135,11 @@ start() { # title, then the go test command
   pids+=($!)
   titles+=("$title")
 }
-skip=() par=() cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)
-if [ -n "$all" ]; then skip=(-skip "^($all)\$"); fi
-# Two processes share the cores; a groups' process is one package, one at a time.
-if [ "${#light[@]}" -gt 0 ] && [ "${#hv[@]}" -gt 0 ]; then par=(-p $(((cores + 1) / 2))); fi
-if [ "${#light[@]}" -gt 0 ]; then start "--- the other packages (${par[*]:--p $cores})" go test "${flags[@]}" ${par[@]+"${par[@]}"} ${skip[@]+"${skip[@]}"} ${light[@]+"${light[@]}"}; fi
-if [ "${#hv[@]}" -gt 0 ]; then start "--- the slowest packages, alone from the start (${par[*]:--p $cores})" go test "${flags[@]}" ${par[@]+"${par[@]}"} ${hv[@]+"${hv[@]}"}; fi
+skip=(-skip "^($all)\$")
+start "--- the other tests of the packages (-p $(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc))" go test ${flags[@]+"${flags[@]}"} "${skip[@]}" "${ordered[@]}"
 for i in "${!groups[@]}"; do
-  start "--- ${gpkgs[$i]#"$mod/"}, group $((i + 1)): ${groups[$i]}" go test "${flags[@]}" -run "^(${groups[$i]})\$" "${gpkgs[$i]}"
+  k=$(printf '%s\n' "${gpkgs[@]:0:$i}" | grep -cxF "${gpkgs[$i]}" || true)
+  start "--- ${gpkgs[$i]#"$mod/"}, group $((k + 1)): ${groups[$i]}" go test ${flags[@]+"${flags[@]}"} -run "^(${groups[$i]})\$" "${gpkgs[$i]}"
 done
 status=0
 for i in "${!pids[@]}"; do
