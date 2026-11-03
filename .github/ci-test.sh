@@ -9,6 +9,11 @@
 # once. The skip is of every package given, so a name of the splits must be no
 # test's name in another of them (--check looks).
 #
+# CI_PART=a or b splits the ui shard between two jobs (Windows has the longest
+# job, and 4 cores): a runs ./ui itself, without the groups marked #b, b the
+# packages below ui and the groups marked #b; between them every test runs
+# once (--check looks too).
+#
 #   ci-test.sh -race -shuffle=on -- $(bash .github/ci-shard.sh ui)
 #   ci-test.sh --check     # the lists below against the packages and tests
 #
@@ -19,23 +24,46 @@ set -euo pipefail
 # M-series core (cmd/mygo: 1 to 1.5; its tests run the Go toolchain, which
 # uses every core, so on a runner of fewer than 4 cores, macOS's 3, their
 # processes only slow one another down: cmd/mygo@4 splits from 4 cores).
+# #a and #b say which job of CI_PART has a group.
 splits=(
-  'ui:TestPaintCullMatches|TestRetainSliderRowsRandomWalk|TestRetainShiftPaintMixedScales|TestRetainComboboxRowsRandomWalk|TestPureDrawsReachNoNode'
-  'ui:TestLayoutCacheMatches|TestRetainScrollFuzz|TestRetainFocusableRowsRandomWalk|TestRetainLayoutInnerScrollModelSeed'
-  'ui:TestRetainSwitchRowsRandomWalk|TestRetainRowsOfTextInputUsersRandomWalk|TestRetainSelectProgressRowsRandomWalk|TestRetainMatchesFresh'
-  'ui:TestRetainRandomWalkOfReaders|TestReplayMatches'
+  'ui#a:TestPaintCullMatches|TestRetainSliderRowsRandomWalk|TestRetainShiftPaintMixedScales|TestRetainComboboxRowsRandomWalk|TestPureDrawsReachNoNode'
+  'ui#b:TestLayoutCacheMatches|TestRetainScrollFuzz|TestRetainFocusableRowsRandomWalk|TestRetainLayoutInnerScrollModelSeed'
+  'ui#a:TestRetainSwitchRowsRandomWalk|TestRetainRowsOfTextInputUsersRandomWalk|TestRetainSelectProgressRowsRandomWalk|TestRetainMatchesFresh'
+  'ui#b:TestRetainRandomWalkOfReaders|TestReplayMatches'
   'cmd/mygo@4:TestUpdateEndToEnd|TestSkipInstaller'
   'cmd/mygo@4:TestBuildResources|TestBuildDMGSize|TestBuildDMG'
   'cmd/mygo@4:TestBuildLinuxSlug|TestRev338eScanCost|TestResourceErrors'
 )
 mod=$(go list -m)
 
+# The packages the main process of part $1 runs, of those after it: with no
+# part, all; a, ./ui alone; b, the others.
+part_pkgs() {
+  local part=$1 p
+  shift
+  for p in "$@"; do
+    case $part in
+    a) [ "$p" = "$mod/ui" ] && echo "$p" ;;
+    b) [ "$p" = "$mod/ui" ] || echo "$p" ;;
+    *) echo "$p" ;;
+    esac
+  done
+  return 0
+}
+
 if [ "${1:-}" = --check ]; then
   all=$(go list ./...)
   fail=0
-  seen=$'\n'
+  seen=$'\n' in_a=0 in_b=0
   for s in "${splits[@]}"; do
-    pkg=${s%%:*} pkg=${pkg%%@*}
+    pkg=${s%%:*} tag=""
+    case $pkg in *"#"*) tag=${pkg#*#} pkg=${pkg%%#*} ;; esac
+    pkg=${pkg%%@*}
+    if [ "$pkg" = ui ]; then
+      case $tag in a) in_a=1 ;; b) in_b=1 ;; *) echo "ci-test.sh: a group of ui needs #a or #b" >&2; fail=1 ;; esac
+    elif [ -n "$tag" ]; then
+      echo "ci-test.sh: only the groups of ui have a part" >&2; fail=1
+    fi
     if ! grep -qx "$mod/$pkg" <<<"$all"; then echo "ci-test.sh: split package $pkg is no package" >&2; fail=1; continue; fi
     dir=$pkg
     IFS='|' read -ra names <<<"${s#*:}"
@@ -51,6 +79,8 @@ if [ "${1:-}" = --check ]; then
       fi
     done
   done
+  # Both parts have groups.
+  [ "$in_a" = 1 ] && [ "$in_b" = 1 ] || { echo "ci-test.sh: each part of ui needs a group" >&2; fail=1; }
   exit "$fail"
 fi
 
@@ -68,15 +98,23 @@ has() { printf '%s\n' "${pkgs[@]}" | grep -qxF "$1"; }
 cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)
 groups=() gpkgs=() names=()
 for s in "${splits[@]}"; do
-  p=${s%%:*} min=0
+  p=${s%%:*} min=0 tag=""
+  case $p in *"#"*) tag=${p#*#} p=${p%%#*} ;; esac
   case $p in *@*) min=${p#*@} p=${p%%@*} ;; esac
   p=$mod/$p
-  if has "$p" && [ "$cores" -ge "$min" ]; then groups+=("${s#*:}"); gpkgs+=("$p"); names+=("${s#*:}"); fi
+  if has "$p" && [ "$cores" -ge "$min" ]; then
+    # Every name is skipped by the main process; the part has its groups.
+    names+=("${s#*:}")
+    if [ -z "$tag" ] || [ -z "${CI_PART:-}" ] || [ "$tag" = "${CI_PART:-}" ]; then groups+=("${s#*:}"); gpkgs+=("$p"); fi
+  fi
 done
+case "${CI_PART:-}" in ""|a|b) ;; *) echo "ci-test.sh: CI_PART must be a or b, not ${CI_PART}" >&2; exit 1 ;; esac
+main=($(part_pkgs "${CI_PART:-}" "${pkgs[@]}"))
 all=$(IFS='|'; echo "${names[*]:-}")
 # One process, as before, when there is nothing to split.
 if [ "${#groups[@]}" = 0 ]; then
-  exec go test ${flags[@]+"${flags[@]}"} "${pkgs[@]}"
+  if [ "${#main[@]}" = 0 ]; then echo "Nothing of the part ${CI_PART:-} to test."; exit 0; fi
+  exec go test ${flags[@]+"${flags[@]}"} "${main[@]}"
 fi
 
 if [ "${#groups[@]}" -gt 0 ]; then
@@ -110,7 +148,7 @@ start() { # title, then the go test command
   titles+=("$title")
 }
 skip=(-skip "^($all)\$")
-start "" go test ${flags[@]+"${flags[@]}"} "${skip[@]}" "${pkgs[@]}"
+if [ "${#main[@]}" -gt 0 ]; then start "" go test ${flags[@]+"${flags[@]}"} "${skip[@]}" "${main[@]}"; fi
 for i in "${!groups[@]}"; do
   k=$(printf '%s\n' "${gpkgs[@]:0:$i}" | grep -cxF "${gpkgs[$i]}" || true)
   start "--- ${gpkgs[$i]#"$mod/"}, group $((k + 1)): ${groups[$i]}" go test ${flags[@]+"${flags[@]}"} -run "^(${groups[$i]})\$" "${gpkgs[$i]}"
