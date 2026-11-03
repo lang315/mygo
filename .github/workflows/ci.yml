@@ -25,12 +25,13 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.os == 'macos-latest' && 'macOS' || matrix.os == 'windows-latest' && 'Windows' || 'Linux' }} (${{ matrix.shard }})
+    name: ${{ matrix.os == 'macos-latest' && 'macOS' || matrix.os == 'windows-latest' && 'Windows' || 'Linux' }} (${{ matrix.shard }}${{ matrix.part && format(' {0}', matrix.part) || '' }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45 # -race: Linux took 24 minutes, macOS 18
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
       CI_DIFF: ${{ github.event_name == 'pull_request' && 'HEAD^1 HEAD' || '' }} # the change of a pull request (its merge commit and the base)
+      CI_PART: ${{ matrix.part }} # which half of the ui shard (ci-test.sh), where it is split in two
       LINUX_PACKAGES: libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
     strategy:
       fail-fast: false
@@ -46,7 +47,13 @@ jobs:
       matrix:
         os: ${{ github.event_name == 'pull_request' && fromJSON('["macos-latest","windows-latest"]') || fromJSON('["macos-latest","ubuntu-latest","windows-latest"]') }}
         shard: [cmd, ui, rest]
+        # Windows, whose job was the longest, has the ui shard in two jobs
+        # (ci-test.sh, CI_PART); Check the shards looks at the halves.
+        exclude:
+          - { os: windows-latest, shard: ui }
         include:
+          - { os: windows-latest, shard: ui, part: a }
+          - { os: windows-latest, shard: ui, part: b }
           - { os: ubuntu-latest, shard: rest }
           - { os: ubuntu-latest, shard: check }
           - { os: ubuntu-latest, shard: noinspector }
