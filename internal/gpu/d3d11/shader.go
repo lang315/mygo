@@ -47,7 +47,8 @@ func CompileEffect(src string) ([]byte, error) {
 }
 
 // compileShaders makes shaderCode compile shader.hlsl even when the
-// bytecode of shaders.go comes from it, for tests.
+// bytecode of shaders.go comes from it, for tests. It has no effect in a
+// release build (mygo_noinspector; compileFromSource).
 var compileShaders bool
 
 // shaders is the bytecode of the shader's functions: the instances' vertex
@@ -83,7 +84,7 @@ func unpackedShaders() (shaders, error) {
 // ./internal/gpu/d3d11 was not run; sourceStale), that compiled now from shader.hlsl,
 // with the compiler Windows has.
 func shaderCode() (code shaders, err error) {
-	if !sourceStale() && !compileShaders {
+	if !compileFromSource() {
 		return unpackedShaders()
 	}
 	for _, f := range []struct {

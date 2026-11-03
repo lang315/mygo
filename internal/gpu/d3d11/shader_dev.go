@@ -22,9 +22,10 @@ var classSource string
 // shaders.go was generated.
 func sourceStale() bool { return gpu.SourceSum(shaderSource+classSource) != shaderSum }
 
-// compileClassesNow reports whether the shaders of classes are compiled from
-// their sources, for shaders.go older than them, or for tests.
-func compileClassesNow() bool { return sourceStale() || compileShaders }
+// compileFromSource reports whether the shaders are compiled from their
+// sources at startup, rather than taken from shaders.z: when they changed
+// since go generate, or for tests (compileShaders).
+func compileFromSource() bool { return sourceStale() || compileShaders }
 
 // classDefines returns what classes.hlsl needs defined for the classes cl (a
 // bit, 1 << gpu.Class, for each), as gen.go compiles it.
