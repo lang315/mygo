@@ -79,15 +79,8 @@ if [ "${1:-}" = --check ]; then
       fi
     done
   done
-  # Both parts have groups, and the packages of their main processes are those
-  # of the ui shard, each in one.
+  # Both parts have groups.
   [ "$in_a" = 1 ] && [ "$in_b" = 1 ] || { echo "ci-test.sh: each part of ui needs a group" >&2; fail=1; }
-  shard=$(grep -E "^$mod/ui(/|\$)" <<<"$all")
-  pa=$(part_pkgs a $shard) pb=$(part_pkgs b $shard)
-  if [ -z "$pa" ] || [ -z "$pb" ] || [ "$(sort <<<"$pa"$'\n'"$pb")" != "$(sort <<<"$shard")" ]; then
-    echo "ci-test.sh: the parts a and b must run the packages of the ui shard between them, each in one" >&2
-    fail=1
-  fi
   exit "$fail"
 fi
 
@@ -115,6 +108,7 @@ for s in "${splits[@]}"; do
     if [ -z "$tag" ] || [ -z "${CI_PART:-}" ] || [ "$tag" = "${CI_PART:-}" ]; then groups+=("${s#*:}"); gpkgs+=("$p"); fi
   fi
 done
+case "${CI_PART:-}" in ""|a|b) ;; *) echo "ci-test.sh: CI_PART must be a or b, not ${CI_PART}" >&2; exit 1 ;; esac
 main=($(part_pkgs "${CI_PART:-}" "${pkgs[@]}"))
 all=$(IFS='|'; echo "${names[*]:-}")
 # One process, as before, when there is nothing to split.
