@@ -122,3 +122,26 @@ func TestCellInputCaretAtPointRight(t *testing.T) {
 		t.Fatalf("caret past the text: draft %q, want abcdefX", draft)
 	}
 }
+
+// Fresh is for the first frame only, as the contract says: the point is
+// applied once the editor has a layout, not in the frame that builds it.
+func TestCellInputCaretAtPointWhenFreshOnlyOnTheFirstFrame(t *testing.T) {
+	for _, tc := range []struct {
+		x    float32
+		want string
+	}{{0, "Xabcdef"}, {290, "abcdefX"}} {
+		draft, frames := "abcdef", 0
+		tt := NewTester(func(c *Context) {
+			CellInput(c, &draft, CellStart{Fresh: frames == 0, HasAt: true, X: tc.x, Y: 20})
+			frames++
+		}, 300, 80)
+		for range 4 {
+			tt.Frame()
+		}
+		tt.Type("X")
+		tt.Frame()
+		if draft != tc.want {
+			t.Errorf("point x=%v, Fresh on the first frame only: draft %q, want %q", tc.x, draft, tc.want)
+		}
+	}
+}

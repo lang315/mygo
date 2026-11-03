@@ -30,20 +30,42 @@ func cellEditor(c *context, draft *string) *node {
 //	}
 func coreCellInput(c *context, draft *string, start CellStart) *node {
 	in := cellEditor(c, draft)
+	// The start is asked on the first frame, but a caret at a point needs the
+	// editor's layout, which a frame later has: keep it until then.
+	st := coreLocal(in, "cellstart", func() cellStarting { return cellStarting{} })
 	if start.Fresh {
+		*st = cellStarting{pending: true, start: start}
+	}
+	if st.pending {
 		in.afterInput(func() {
-			in.Focus()
 			ed := in.st.editor
+			if !st.focused {
+				in.Focus()
+				st.focused = true
+			}
+			s := st.start
+			if s.HasAt && !s.SelectAll && ed.layout == nil {
+				c.rt.requestFrame()
+				return
+			}
 			at := ed.buf.n
 			switch {
-			case start.SelectAll:
+			case s.SelectAll:
 				ed.anchor, ed.caret = 0, ed.buf.n
+				st.pending = false
 				return
-			case start.HasAt:
-				at = ed.hit(start.X, start.Y)
+			case s.HasAt:
+				at = ed.hit(s.X, s.Y)
 			}
 			ed.anchor, ed.caret = at, at
+			st.pending = false
 		})
 	}
 	return in
+}
+
+// cellStarting is a CellInput's start not yet carried out.
+type cellStarting struct {
+	pending, focused bool
+	start            CellStart
 }

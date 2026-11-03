@@ -367,7 +367,7 @@ func listRowValueInput(n *node) {
 		}
 	}
 	if n.DoubleClicked() {
-		if col, ok := f.editsCell(b.i, EditClick); ok {
+		if col, ok := f.editsCellIn(b.i, f.columnAt(st.drag.ox, st.drag.oy), EditClick); ok {
 			// The cell edits instead: the point is where it was pressed.
 			f.s.OnEditCell(b.i, col, st.drag.ox, st.drag.oy, EditClick)
 		} else {

@@ -156,7 +156,8 @@ type ListState struct {
 	// Right move it (Shift does not extend), and a border shows the cell
 	// while the table has the focus. Rows are chosen whole, as without it;
 	// Cells.Anchor and All are not used. A table cannot set both CurrentCell
-	// and CellSelect.
+	// and CellSelect. In an OutlineTable Left and Right still open and close
+	// the rows, as with CellSelect, and the column is set with the pointer.
 	CurrentCell bool
 	// EditCell, with CurrentCell, is asked on Enter, F2 and a double click
 	// whether the cell of that row and column edits; when it says yes, the
@@ -1728,7 +1729,8 @@ func (f *listFrame) navigate() {
 	in := *sel >= 0 && *sel < n
 	// Enter on macOS, as in Finder, and F2 elsewhere edit the text of the
 	// row chosen in place (EditableText), where it has one.
-	enter, f2 := o.Shortcut(0, KeyEnter), o.Shortcut(0, KeyF2)
+	// F2 is asked only where the list edits: a list that does not opt in leaves it to the window.
+	enter, f2 := o.Shortcut(0, KeyEnter), (s.editables || s.EditCell != nil) && o.Shortcut(0, KeyF2)
 	if in && (enter || f2) {
 		how := EditKey
 		if f2 {

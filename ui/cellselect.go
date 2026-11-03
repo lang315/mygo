@@ -46,12 +46,17 @@ const (
 // editsCell reports whether the cell at row and the current column edits,
 // asked how it would start.
 func (f *listFrame) editsCell(row int, how EditHow) (col int, ok bool) {
+	return f.editsCellIn(row, f.s.colIndex(f.s.Cells.Cursor), how)
+}
+
+// editsCellIn is editsCell for the column shown at place k (a RowHeader column
+// never edits).
+func (f *listFrame) editsCellIn(row, k int, how EditHow) (col int, ok bool) {
 	s := f.s
 	if s.EditCell == nil || s.OnEditCell == nil || !f.tracksCells() || f.isHeader(row) {
 		return 0, false
 	}
-	k := s.colIndex(s.Cells.Cursor)
-	if k < 0 {
+	if k < 0 || k >= len(s.tableCols) || s.tableCols[k].rowHeader {
 		return 0, false
 	}
 	col = s.tableCols[k].col

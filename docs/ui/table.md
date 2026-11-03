@@ -114,7 +114,8 @@ grid's current cell, without choosing blocks of cells: a click sets
 `Cells.Cursor` to the column it hit, Left and Right move it (Shift does not
 extend it), and a border shows the cell while the table has the focus. Rows are
 chosen whole, as without it. A table cannot set both `CurrentCell` and
-`CellSelect`.
+`CellSelect`. In an `OutlineTable`, Left and Right still open and close the
+rows, as with `CellSelect`; the column is set with the pointer.
 
 ## Editing a cell
 

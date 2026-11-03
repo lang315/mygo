@@ -69,3 +69,63 @@ func TestCurrentCellWithCellSelectPanics(t *testing.T) {
 	}, 200, 100)
 	tt.Frame()
 }
+
+// Moving the current column rebuilds the row that has the cursor, not the rows
+// the table keeps: the column is not part of what the kept rows were built with.
+func TestCurrentCellMoveRebuildsOneRow(t *testing.T) {
+	s := &ListState{CurrentCell: true, Selection: &Selection[int]{}, Key: func(i int) any { return i },
+		RowVersion: func(i int) uint64 { return uint64(i) + 1 }}
+	builds := make([]int, 30)
+	cols := []TableColumn{{Title: "A"}, {Title: "B"}, {Title: "C"}}
+	tt := NewTester(func(c *Context) {
+		Table(c, s, cols, 30, func(row, col int) {
+			if col == 0 {
+				builds[row]++
+			}
+			Textf(c, "r%dc%d", row, col)
+		}).Grow(1)
+	}, 400, 600)
+	for range 3 {
+		tt.Frame()
+	}
+	tt.Click("r3c0")
+	for range 3 {
+		tt.Frame()
+	}
+	before := append([]int(nil), builds...)
+	tt.Key(0, KeyRight)
+	tt.Frame()
+	rebuilt := 0
+	for i := range builds {
+		if builds[i] != before[i] {
+			rebuilt++
+		}
+	}
+	if s.Cells.Cursor != "B" {
+		t.Fatalf("the column is %q after Right, want B", s.Cells.Cursor)
+	}
+	if rebuilt > 1 {
+		t.Errorf("Right rebuilt %d rows, want only the row with the cursor", rebuilt)
+	}
+}
+
+// Hiding the current column moves the current cell to a column that shows.
+func TestCurrentCellHidingTheCurrentColumn(t *testing.T) {
+	s := &ListState{CurrentCell: true, Selection: &Selection[int]{}}
+	cols := []TableColumn{{Title: "A"}, {Title: "B"}, {Title: "C"}}
+	shown := cols
+	tt := NewTester(func(c *Context) {
+		Table(c, s, shown, 4, func(row, col int) { Textf(c, "r%d%s", row, shown[col].Title) }).Grow(1)
+	}, 400, 300)
+	tt.Frame()
+	tt.Click("r1B")
+	if s.Cells.Cursor != "B" {
+		t.Fatalf("the column is %q, want B", s.Cells.Cursor)
+	}
+	shown = []TableColumn{{Title: "A"}, {Title: "C"}}
+	tt.Frame()
+	tt.Frame()
+	if got := s.Cells.Cursor; got != "A" && got != "C" {
+		t.Errorf("after hiding B the column is %q, want one that shows", got)
+	}
+}

@@ -354,7 +354,14 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		// The table's Scrollbars and KeepScrollbars are its rows'.
 		list.barsFrom = table
 		head.followX = list
-		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, lo, hi, cur, checkW, s), drag.fit != ""
+		// Only a block of cells (CellSelect) is part of what the rows were built
+		// with: a current cell is drawn by the row that has the cursor, which
+		// the list never keeps.
+		slo, shi, scur := lo, hi, cur
+		if !s.CellSelect {
+			slo, shi, scur = 0, -1, -1
+		}
+		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, slo, shi, scur, checkW, s), drag.fit != ""
 		buildList(c, list, table, s, n, func(i int) {
 			row := coreRow(c).MinHeight(tableRow).AlignItems(Stretch)
 			// The list's element holding the row is the row.
