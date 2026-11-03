@@ -207,7 +207,7 @@ jobs:
       # run on the unit tests; the GUI tests below are not run with them.
       # ./ui and cmd/mygo run their tests on one core, 15 to 20 and 9 to 10
       # minutes under -race: ci-test.sh runs their slowest in processes of
-      # their own, at once, as it does the slowest packages of the others
+      # their own, at once, and starts the slowest packages first
       # (--check, in the check job, looks that its lists are right). Ui's
       # production build, without the inspector, is the noinspector job's:
       # in the ui job too, it left the four cores short.
