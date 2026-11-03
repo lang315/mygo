@@ -36,6 +36,11 @@ type NativeWebView = surface.WebView
 // window's see. Its background and border paint around the page, which
 // its opacity fades, and assistive technology finds the page inside it.
 func coreWebView(c *context, v NativeWebView) *node {
+	// What notes and places web views is reached from here only: an app
+	// without a web view in its content does not link it.
+	if webViewPlace == nil {
+		webViewNote, webViewPlace = (*engine).noteWebView, (*engine).placeWebViews
+	}
 	e := c.newElement(kindBox)
 	e.webView = v
 	e.self = Stretch
@@ -44,6 +49,14 @@ func coreWebView(c *context, v NativeWebView) *node {
 	e.flags |= flagFocusable | flagOwnRing
 	return e
 }
+
+// webViewNote and webViewPlace are noteWebView and placeWebViews once a
+// web view was built (coreWebView), nil before: the engine calls them
+// through these.
+var (
+	webViewNote  func(rt *engine, e *node, clip Rect, invisible bool)
+	webViewPlace func(rt *engine)
+)
 
 // webPlace is where a frame shows a web view: size is the size its page
 // lays out at, which frame shows scaled, and radii its corners', in its

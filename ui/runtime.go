@@ -845,7 +845,9 @@ func (rt *engine) runFrame() {
 	rt.stats.lap(phasePaint)
 	rt.insp.lap(2)
 	rt.host.present(&rt.scene)
-	rt.placeWebViews()
+	if webViewPlace != nil {
+		webViewPlace(rt)
+	}
 	// The window hit-tests its maximize button in its own DIPs.
 	if r := rt.windowRect(rt.maxButton); r != rt.maxSent {
 		rt.maxSent = r
@@ -1522,7 +1524,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		rt.focused = 0
 	}
 	if e.webView != nil {
-		rt.noteWebView(e, clip, invisible)
+		webViewNote(rt, e, clip, invisible)
 	}
 	if e.maximizeButton && !noInput && rt.maxButton == (Rect{}) && v.W > 0 && v.H > 0 {
 		rt.maxButton = v

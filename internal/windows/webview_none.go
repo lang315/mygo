@@ -21,3 +21,8 @@ func (b *Backend) startEnvironment(*platform.WindowOptions) error { return errNa
 func (w *window) createWebView() { w.webViewFailed(errNativeOnly) }
 
 func (b *Backend) explainMissingRuntime(error) {}
+
+// A build without a web view places none.
+func (s *surface) PlaceWebViews([]platform.WebViewPlacement) {}
+
+func (w *window) placeEmbedded() {}
