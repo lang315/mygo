@@ -541,7 +541,7 @@ func (r *Renderer) init() error {
 	// What a renderer does with its batches is not the device's, which it may
 	// take from the pool: every renderer sets it, after initDevice or adopt.
 	r.b.Classes = true
-	r.compileClasses = sourceSum() != shaderSum || compileShaders
+	r.compileClasses = compileClassesNow()
 	// Quads reach a pixel out of their shapes, glyphs half a pixel more, as
 	// they draw at whole pixels.
 	r.diff.Reach = 2
