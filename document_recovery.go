@@ -333,8 +333,8 @@ func newestCopies(orphans []orphan) []orphan {
 // restore opens the documents of the sessions no instance holds, edited,
 // and keeps their copies in this session.
 func (k *docKind) restore() int {
-	orphans, done := k.recovery.claim()
-	orphans = newestCopies(orphans)
+	all, done := k.recovery.claim()
+	orphans := newestCopies(all)
 	n := 0
 	restored := map[string]bool{}
 	for _, o := range orphans {
@@ -375,7 +375,11 @@ func (k *docKind) restore() int {
 			continue
 		}
 		k.show(b)
-		restored[o.file] = true
+		for _, c := range all { // the older copies newestCopies left go too
+			if c.entry.ID == e.ID {
+				restored[c.file] = true
+			}
+		}
 		n++
 	}
 	done(restored)

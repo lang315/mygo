@@ -891,6 +891,13 @@ func TestDocumentRecoveryRestoresOneCopyOfADocumentInTwoSessions(t *testing.T) {
 			}
 			t.Fatalf("tie %v: restored %d documents", tie, len(docs))
 		}
+		// Both claimed sessions go: the older copy left would be restored
+		// again at the next launch, over the document's later changes.
+		for i := range 2 {
+			if _, err := os.Stat(filepath.Join(root, fmt.Sprintf("session%d", i))); !os.IsNotExist(err) {
+				t.Errorf("tie %v: session%d is still there: %v", tie, i, err)
+			}
+		}
 		for _, d := range docs {
 			d.SetEdited(false)
 			d.Close()
