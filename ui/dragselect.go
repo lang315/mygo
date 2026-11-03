@@ -4,14 +4,13 @@ package ui
 // (ListState.DragSelect), in a Table choosing cells the columns too; the
 // engine scrolls the list as the pointer nears its edges
 // (scrollDragSelect).
-func (f *listFrame) dragSelect() {
+func (f *listFrame) dragSelect(p *state) {
 	s, rt := f.s, f.c.rt
 	d := &s.dragSel
 	if !f.dragSelects() {
 		d.on = false
 		return
 	}
-	p := rt.pressed
 	if p == nil || rt.pressButton != 0 {
 		if d.on && p == nil {
 			if _, built := s.rows[d.id]; !built {
@@ -46,7 +45,8 @@ func (f *listFrame) dragSelect() {
 	if d.id != p.id {
 		return
 	}
-	if to := f.rowAtPointer(); to >= 0 && !f.isHeader(to) {
+	x, y := p.pointer(rt)
+	if to := f.rowAt(x, y); to >= 0 && !f.isHeader(to) {
 		// The rows from the one pressed to the one under the pointer take the
 		// place of those the drag chose before: rows it leaves are no longer
 		// chosen. Adding to the choice (Cmd) keeps the others; without it
@@ -54,7 +54,7 @@ func (f *listFrame) dragSelect() {
 		f.extendBy(to, d.add, d.add)
 	}
 	if f.choosesCells() {
-		f.dragCells()
+		f.dragCells(x, y)
 	}
 }
 
@@ -77,10 +77,10 @@ func (f *listFrame) dragSelects() bool {
 	return f.s.Selection != nil && (f.s.DragSelect || f.choosesCells())
 }
 
-// rowAtPointer returns the row of the last frame under the pointer, as the
-// rows show, the first or last of those built when the pointer is above or
-// below them, or -1 for none.
-func (f *listFrame) rowAtPointer() int {
+// rowAt returns the row of the last frame at the window's point (x, y), as
+// the rows show, the first or last of those built when the point is above
+// or below them, or -1 for none.
+func (f *listFrame) rowAt(x, y float32) int {
 	rt := f.c.rt
 	at := -1
 	var first, last *state
@@ -90,7 +90,7 @@ func (f *listFrame) rowAtPointer() int {
 		if st == nil || r.row >= f.n {
 			continue
 		}
-		if _, y := st.local(rt.pointerX, rt.pointerY); y >= 0 && y < st.h {
+		if _, ly := st.local(x, y); ly >= 0 && ly < st.h {
 			at = r.row
 		}
 		if first == nil || st.y < first.y {
@@ -106,10 +106,10 @@ func (f *listFrame) rowAtPointer() int {
 	case first == nil:
 		return -1
 	}
-	if _, y := first.local(rt.pointerX, rt.pointerY); y < 0 {
+	if _, ly := first.local(x, y); ly < 0 {
 		return firstRow
 	}
-	if _, y := last.local(rt.pointerX, rt.pointerY); y >= last.h {
+	if _, ly := last.local(x, y); ly >= last.h {
 		return lastRow
 	}
 	return -1

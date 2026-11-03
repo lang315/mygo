@@ -637,6 +637,27 @@ func (_handle *Context) Vibrancy() bool {
 	return _ctx.Vibrancy()
 }
 
+// WindowActive reports whether the window is drawn as active: the window
+// the user's input goes to, as native apps draw it, while it or one of its
+// flyouts has the keyboard (and always as Window.SetActiveAppearance keeps
+// it). The built-in widgets fade their accent to gray in a window that is
+// not, as AppKit's do (Theme.InactiveAccent), and macOS fades the
+// window's material. A frame that reads it is drawn again as it changes;
+// draw what shows which window has the user's input in a view of your own
+// with it:
+//
+//	icon := c.Theme().Accent
+//	if !c.WindowActive() {
+//		icon = c.Theme().TextMuted
+//	}
+func (_handle *Context) WindowActive() bool {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return false
+	}
+	return _ctx.WindowActive()
+}
+
 func (_handle *Context) WriteClipboard(s string) {
 	_ctx := _handle.build()
 	if _ctx == nil {
@@ -2785,8 +2806,10 @@ func View(view func(c *Context)) *Content {
 // menus, dialogs, tooltips and toasts. The page takes the pointer where
 // it shows and nothing painted over it takes it, and the keyboard once
 // clicked, focused (mygo.WebView.Focus) or tabbed into: Tab stops at the
-// element. Its background and border paint around the page, which its
-// opacity fades, and assistive technology finds the page inside it.
+// element. The keys the page leaves unhandled come to the native UI as if
+// the element had the focus, which the shortcuts around it and the
+// window's see. Its background and border paint around the page, which
+// its opacity fades, and assistive technology finds the page inside it.
 func WebView(c *Context, v NativeWebView) Element {
 	_ctx := c.build()
 	if _ctx == nil {

@@ -324,6 +324,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 	chain := rt.hitChain(x, y)
 	rt.setHover(chain)
 	rt.pressDragger = 0
+	rt.pressEnded = nil
 	if len(chain) > 0 {
 		rt.downs = append(rt.downs, chain[0])
 	} else {
@@ -535,6 +536,8 @@ func (rt *engine) pointerUp(button, clicks int) {
 	// now.
 	if s.dragX == 0 && s.dragY == 0 {
 		rt.applyRelease(s)
+	} else {
+		rt.pressEnded = s
 	}
 	rt.setHover(rt.hitChain(rt.pointerX, rt.pointerY))
 	rt.requestFrame()
@@ -553,6 +556,9 @@ func (rt *engine) applyRelease(s *state) {
 		s.clickMods = r.clickMods
 	}
 	r.due, r.clicks, r.rightClicks = false, 0, 0
+	if rt.pressEnded == s {
+		rt.pressEnded = nil
+	}
 }
 
 // click clicks s with mods held, for the next pass to see: after the
@@ -1769,6 +1775,22 @@ func (rt *engine) scrollbarPress(chain []uint64, x, y float32) bool {
 func (rt *engine) windowFocus() bool {
 	rt.focusRead = true
 	return rt.windowFocused
+}
+
+// windowActive reports whether the window is drawn as active, the window
+// the user's input goes to (Context.WindowActive), noting that the frame
+// depends on it.
+func (rt *engine) windowActive() bool {
+	rt.activeRead = true
+	return rt.host.active()
+}
+
+// activeChanged draws a frame after the window became active or ceased to
+// be, when the last frame read it, as focusChanged does.
+func (rt *engine) activeChanged() {
+	if rt.activeRead {
+		rt.requestFrame()
+	}
 }
 
 // focusChanged draws a frame after the window gained or lost the keyboard

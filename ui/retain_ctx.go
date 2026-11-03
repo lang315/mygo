@@ -5,7 +5,7 @@ import "github.com/egoist/mygo/i18n"
 // ctxRead is the set of values of the window that the callback of a row read
 // through the Context, which the row's own states do not say: a row built
 // with them is linked only while they are the same (like Modifiers).
-type ctxRead uint8
+type ctxRead uint16
 
 const (
 	ctxSize ctxRead = 1 << iota
@@ -16,6 +16,7 @@ const (
 	ctxVibrancy
 	ctxTitleBar
 	ctxRouter
+	ctxActive
 )
 
 // ctxView is the values read, as they were when the row was built.
@@ -26,6 +27,7 @@ type ctxView struct {
 	lang     string
 	region   i18n.Region
 	vibrancy bool
+	active   bool // the window is drawn as active
 	titleBar TitleBar
 	// the router and what a read of it can tell: the entry showing, its place
 	// in the history and the length of it.
@@ -92,6 +94,9 @@ func (c *context) viewOf(what ctxRead) (v ctxView) {
 	if what&ctxTitleBar != 0 {
 		v.titleBar = c.titleBar
 	}
+	if what&ctxActive != 0 {
+		v.active = c.rt.windowActive()
+	}
 	if what&ctxRouter != 0 && c.router != nil {
 		r := c.router
 		e := r.current()
@@ -128,6 +133,9 @@ func (v *ctxView) take(what ctxRead, o ctxView) {
 	}
 	if what&ctxTitleBar != 0 {
 		v.titleBar = o.titleBar
+	}
+	if what&ctxActive != 0 {
+		v.active = o.active
 	}
 	if what&ctxRouter != 0 {
 		v.router, v.entry, v.loc, v.title, v.at, v.n = o.router, o.entry, o.loc, o.title, o.at, o.n
