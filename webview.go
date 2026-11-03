@@ -91,8 +91,14 @@ func (w *Window) NewWebView(opts WebViewOptions) (*WebView, error) {
 	return v, err
 }
 
+// windowPlaceWebViews is (*Window).placeWebViews once a web view was
+// made, nil before: a window's content places its web views through it,
+// so that an app without one does not link the code that does.
+var windowPlaceWebViews func(w *Window, views []platform.WebViewPlacement)
+
 // newWebView creates a web view of the window. Main thread only.
 func (w *Window) newWebView(opts WebViewOptions, bg *background) (*WebView, error) {
+	windowPlaceWebViews = (*Window).placeWebViews
 	windows.Lock()
 	windows.nextID++
 	id := windows.nextID

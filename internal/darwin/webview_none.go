@@ -6,6 +6,8 @@ import (
 	"errors"
 
 	"github.com/ebitengine/purego/objc"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // This file stands in for webview_start.go in a build with the tag
@@ -26,3 +28,6 @@ func webViewDelegateMethods() []objc.MethodDef { return nil }
 func (w *window) createWebView(NSRect) { panic(errNativeOnly) }
 
 func (w *window) webViewValueChanged(string) {}
+
+// A build without a web view places none.
+func (s *surface) PlaceWebViews([]platform.WebViewPlacement) {}

@@ -2,7 +2,11 @@
 
 package linux
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/egoist/mygo/internal/platform"
+)
 
 // This file stands in for webview_start.go in a build with the tag
 // mygo_nowebview (`mygo build` of a project with nativeOnly): the app has no
@@ -18,3 +22,8 @@ func loadWebKit() error { return errNativeOnly }
 func initWebCallbacks() {}
 
 func (w *window) createWebView() { panic(errNativeOnly) }
+
+// A build without a web view places none.
+func (s *surface) PlaceWebViews([]platform.WebViewPlacement) {}
+
+func (s *surface) shape() {}
