@@ -4195,7 +4195,9 @@ either.
     generated file records the SHA-256 of the source it came from, line
     endings aside (`gpu.SourceSum`), as Metal's does: bytecode older than
     `shader.hlsl` falls back to compiling that with the same DLL, which
-    Windows has, and its test fails. Both compilation paths enable IEEE
+    Windows has, and its test fails; a release build (`mygo_noinspector`)
+    leaves `classes.hlsl` out, so it has no such fallback for the shaders of
+    classes, whose bytecode in `shaders.z` the test checks. Both compilation paths enable IEEE
     strictness with optimization, avoiding a native compiler optimizer crash
     on transformed coverage sampling. Batches of a class (`gpu.Class`) draw
     with shaders of their own (`classes.hlsl`, after `shader.hlsl`, whose
