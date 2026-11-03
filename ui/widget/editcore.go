@@ -16,7 +16,7 @@ type editCore struct {
 	col              int    // the column's index in cols
 	title            string // the column's title
 	orig, draft      string // the text the editor started with, and the user's
-	err              string // the last refusal, shown by the editor
+	err, errDraft    string // the last refusal, shown by the editor, and the draft it refused
 	fresh, selectAll bool   // the next build gives the editor the focus; all selected
 	at               struct {
 		has  bool
@@ -58,8 +58,18 @@ func buildEditor(c *ui.Context, e *editCore) {
 			Post(e.end)
 		}
 	}
+	if e.err != "" && e.draft != e.errDraft { // typing again takes the refusal away
+		e.err, e.announced = "", ""
+	}
 	if e.err != "" {
 		in.Error(e.err)
+		// The message shows under the cell, text only: the editor keeps the focus.
+		open, th := true, c.Theme()
+		ui.PopoverBase(c, in, &open, func(panel ui.Element) {
+			panel.Margin(4, 0, 0, 0).Padding(th.Space(0.5), th.Space(1)).Radius(th.Space(0.5)).
+				Background(th.Background).Border(1, th.Danger)
+			ui.Text(c, e.err).TextColor(th.Danger)
+		})
 	}
 	in.OnShortcut(0, ui.KeyEscape, func() { Post(e.cancel) })
 	if e.canNext {
@@ -123,7 +133,7 @@ func commitCore(e *editCore, rowThere bool, validate func(draft string) error, w
 			return commitOutcome{kind: committedPanicked, panic: reported{v, stack}}
 		}
 		if refusal != nil {
-			e.err = refusal.Error()
+			e.err, e.errDraft = refusal.Error(), e.draft
 			return commitOutcome{kind: committedRefused, err: refusal}
 		}
 	}

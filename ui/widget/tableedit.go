@@ -534,11 +534,11 @@ func (t *DataGridViewWidget[T, K]) followCurrent() {
 	}
 }
 
-// dropHiddenEdit cancels the edit of a column that no longer shows: its editor
-// is gone, and a later commit would write a draft nobody sees. Under mu, while
-// building.
+// dropHiddenEdit cancels the edit of a column or a row that no longer shows (a
+// hidden column, a search that filters the row out): its editor is gone, and a
+// later commit would write a draft nobody sees. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) dropHiddenEdit() {
-	if e := t.ed().edit; e != nil && !slices.Contains(t.visCols, e.col) {
+	if e := t.ed().edit; e != nil && (!slices.Contains(t.visCols, e.col) || t.positionOf(e.key) < 0) {
 		t.closeEdit()
 	}
 }
