@@ -1,7 +1,7 @@
 package widget
 
-// CellEditor says how the cells of a column are edited in place; Column.Editable
-// gives it to the column. Its functions run under the package's lock, as the
+// CellEditor says how the cells of a column are edited in place; the table's
+// EditColumn gives it to a column. Its functions run under the package's lock, as the
 // column's Compare does: they read the row and call no widget method and no
 // RowSource method (UpdateRow, AddRows, Row, ...), which would wait for the lock
 // they run under and hang. A panic in one is recovered and reported with
@@ -25,36 +25,8 @@ type CellEditor[T any] struct {
 	EditText func(*T) string
 }
 
-// enabler is a table that opts in to editing.
-type enabler interface{ enableEdit() }
-
-// Editable returns the column with its cells editable in place: F2, Enter or a
-// double click on a cell of the current row edit it (SetEditMode changes
-// that), Enter writes, Escape cancels. A column without Editable is read-only.
-//
-// It is also what opts a table in to editing: the code of editing is linked
-// only into programs that call Editable (or another editing method of the
-// table), through the function this stores, so a table that never edits pays
-// nothing for it.
-//
-//	widget.Column[Account]{Title: "Name", Text: func(a *Account) string { return a.Name }}.
-//		Editable(widget.CellEditor[Account]{Set: func(a *Account, s string) { a.Name = s }})
-func (c Column[T]) Editable(e CellEditor[T]) Column[T] {
-	if e.Set == nil {
-		panic("widget: Column.Editable needs a Set")
-	}
-	c.edit, c.enable = &e, enableEditing
-	return c
-}
-
-// editor returns the column's CellEditor, nil for a column that is not Editable.
+// editor returns the column's CellEditor, nil for a column that is not editable.
 func (c *Column[T]) editor() *CellEditor[T] {
 	e, _ := c.edit.(*CellEditor[T])
 	return e
 }
-
-// enableEditing is the Column's enable: it turns editing on in the table the
-// column belongs to. It is a function of its own, referred to only by
-// Editable, so that the linker keeps the table's enableEdit method only for
-// programs that call Editable.
-func enableEditing(table any) { table.(enabler).enableEdit() }

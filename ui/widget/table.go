@@ -48,10 +48,9 @@ type Column[T any] struct {
 	// search works; it is not drawn, read by assistive technology or copied.
 	Hidden bool
 
-	// edit (a *CellEditor[T], held as an any so that Column does not name the
-	// type) and enable are what Editable gives the column.
-	edit   any
-	enable func(table any)
+	// edit is the column's *CellEditor[T] (EditColumn), held as an any so that
+	// Column does not name the type.
+	edit any
 }
 
 // IntColumn makes a sortable column of an int, right-aligned, whose Compare
@@ -184,12 +183,6 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t.link.id, t.link.prune = t.id, t.prune
 	mu.Lock()
 	src.attach(t.link)
-	for i := range t.cols {
-		if enable := t.cols[i].enable; enable != nil { // Editable: the only way editing is linked in
-			enable(t)
-			break
-		}
-	}
 	mu.Unlock()
 	return t
 }

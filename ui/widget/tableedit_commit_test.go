@@ -141,13 +141,13 @@ func TestSetPanicReleasesTheLockAndCancelsTheEdit(t *testing.T) {
 	OnPanic(func(v any, stack []byte) { panics <- v })
 	defer OnPanic(nil)
 	grid := DataGridView(acctKey,
-		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200}.
-			Editable(CellEditor[acct]{Set: func(a *acct, s string) {
-				n := *a
-				n.name = s
-				panic("boom " + strconv.Itoa(n.id))
-			}}),
-	).SetRows([]acct{{1, "ann", 30}}).Expand()
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200},
+	).SetRows([]acct{{1, "ann", 30}}).Expand().
+		EditColumn("Name", CellEditor[acct]{Set: func(a *acct, s string) {
+			n := *a
+			n.name = s
+			panic("boom " + strconv.Itoa(n.id))
+		}})
 	tt := tester(t, grid)
 	grid.BeginEdit(1, "Name")
 	settleEdit(tt)

@@ -16,18 +16,18 @@ func editGrid(t *testing.T) (*ui.Tester, *DataGridViewWidget[acct, int], chan st
 	ends := make(chan string, 16)
 	grid := DataGridView(acctKey,
 		Column[acct]{Title: "Id", Text: func(a *acct) string { return "#" + strconv.Itoa(a.id) }, Width: 60},
-		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200, Sortable: true}.
-			Editable(CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }}),
-		Column[acct]{Title: "Score", Text: func(a *acct) string { return strconv.Itoa(a.score) }, Width: 100}.
-			Editable(CellEditor[acct]{
-				Validate: func(a *acct, s string) error {
-					if _, err := strconv.Atoi(s); err != nil {
-						return errors.New("Score must be a number")
-					}
-					return nil
-				},
-				Set: func(a *acct, s string) { a.score, _ = strconv.Atoi(s) }}),
-	).SetRows([]acct{{1, "ann", 30}, {2, "bob", 10}, {3, "cat", 20}}).Expand()
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200, Sortable: true},
+		Column[acct]{Title: "Score", Text: func(a *acct) string { return strconv.Itoa(a.score) }, Width: 100},
+	).SetRows([]acct{{1, "ann", 30}, {2, "bob", 10}, {3, "cat", 20}}).Expand().
+		EditColumn("Name", CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }}).
+		EditColumn("Score", CellEditor[acct]{
+			Validate: func(a *acct, s string) error {
+				if _, err := strconv.Atoi(s); err != nil {
+					return errors.New("Score must be a number")
+				}
+				return nil
+			},
+			Set: func(a *acct, s string) { a.score, _ = strconv.Atoi(s) }})
 	grid.OnCellEndEdit(func(k int, column string) { ends <- strconv.Itoa(k) + ":" + column })
 	return tester(t, grid), grid, ends
 }
@@ -133,10 +133,10 @@ func TestCellEditorShowsTheCellText(t *testing.T) {
 // column with a Set does not make it edit.
 func TestListViewDoesNotEditEditableColumns(t *testing.T) {
 	lv := ListView(func(v *vitem) string { return v.id },
-		Column[vitem]{Title: "Name", Text: func(v *vitem) string { return v.name }, Width: 200}.
-			Editable(CellEditor[vitem]{Set: func(v *vitem, s string) { v.name = s }}),
+		Column[vitem]{Title: "Name", Text: func(v *vitem) string { return v.name }, Width: 200},
 		Column[vitem]{Title: "Kind", Text: func(v *vitem) string { return v.kind }, Width: 100}).
 		SetRows(fruits)
+	lv.t.EditColumn("Name", CellEditor[vitem]{Set: func(v *vitem, s string) { v.name = s }}) // the table under the view
 	tt := tester(t, lv)
 	tt.Click("Apple")
 	tt.Key(0, ui.KeyF2)
@@ -152,10 +152,10 @@ func TestListViewDoesNotEditEditableColumns(t *testing.T) {
 	}
 }
 
-// Editable is all a column needs: no SetEditMode, the default mode edits with
-// F2; a column that is not Editable stays read-only, and a grid with none leaves
-// F2 alone.
-func TestEditableColumnNeedsNoSetEditMode(t *testing.T) {
+// EditColumn is all a grid needs: no SetEditMode, the default mode edits with
+// F2; a grid with no EditColumn leaves F2 alone, and a column not given to it
+// stays read-only.
+func TestEditColumnNeedsNoSetEditMode(t *testing.T) {
 	plain := DataGridView(acctKey,
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200},
 	).SetRows([]acct{{1, "ann", 30}}).Expand()
@@ -167,24 +167,34 @@ func TestEditableColumnNeedsNoSetEditMode(t *testing.T) {
 		t.Fatal("F2 edited a grid with no editable column")
 	}
 	grid := DataGridView(acctKey,
-		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200}.
-			Editable(CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }}),
-	).SetRows([]acct{{1, "ann", 30}}).Expand()
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200},
+	).SetRows([]acct{{1, "ann", 30}}).Expand().
+		EditColumn("Name", CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }})
 	tt = tester(t, grid)
 	tt.Click("ann")
 	tt.Key(0, ui.KeyF2)
 	tt.Frame()
 	if !grid.IsEditing() {
-		t.Fatal("F2 did not edit a grid with an Editable column, without SetEditMode")
+		t.Fatal("F2 did not edit a grid with an editable column, without SetEditMode")
 	}
 }
 
-// Editable without a Set is a programming error.
-func TestEditableNeedsASet(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Error("Editable with no Set did not panic")
-		}
-	}()
-	Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }}.Editable(CellEditor[acct]{})
+// EditColumn without a Set, or for a title no column has, is a programming
+// error: it panics, with the lock released.
+func TestEditColumnPanicsOnMistakes(t *testing.T) {
+	grid := DataGridView(acctKey, Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }})
+	for name, f := range map[string]func(){
+		"no Set":   func() { grid.EditColumn("Name", CellEditor[acct]{}) },
+		"no title": func() { grid.EditColumn("Nope", CellEditor[acct]{Set: func(*acct, string) {}}) },
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s: EditColumn did not panic", name)
+				}
+			}()
+			f()
+		}()
+	}
+	grid.Len() // takes the lock: it hangs if the panic left it held
 }

@@ -1,7 +1,7 @@
 package widget
 
 import (
-	"slices"
+	"strconv"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -50,17 +50,16 @@ type curCell[K comparable] struct {
 
 // enableEdit turns in-cell editing on: it hands the table the parts of editing
 // it calls (method values, made once: one made in every build would allocate).
-// Column.Editable has the table call it through the column's enable function,
-// and the editing methods that need it call it too. Nothing else refers to
-// the parts, so the code of editing is linked only into programs that edit.
-// Under mu.
+// EditColumn and the other editing methods call it. Nothing else refers to the
+// parts, and these methods are called, not reached through an interface, so
+// the code of editing is linked only for the table shapes (T, K) of programs
+// that call them. Under mu.
 func (t *DataGridViewWidget[T, K]) enableEdit() {
 	if t.edAny != nil {
 		return
 	}
 	d := &tableEditing[T, K]{}
 	t.edAny = d
-	d.editable = slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.edit != nil })
 	t.editCell, t.startCell = t.editsCell, t.startEdit
 	t.prepareEdit = func() { t.wireEdit(); t.followCurrent() }
 	t.cellHook = func(c *ui.Context, col int, r *T) bool {
@@ -116,6 +115,37 @@ func (t *DataGridViewWidget[T, K]) ed() *tableEditing[T, K] {
 	return d
 }
 
+// EditColumn makes the cells of the column titled title editable in place, as
+// the CellEditor says: F2, Enter or a double click on a cell of the current row
+// edit it (SetEditMode changes that), Enter writes, Escape cancels. A column
+// not given to EditColumn is read-only. It panics for a title no column has,
+// or an editor without a Set.
+//
+// Calling it is also what links the code of editing into the program, for this
+// table's types only: a table that never calls it pays nothing for editing.
+//
+//	grid := widget.DataGridView(key, cols...).
+//		EditColumn("Name", widget.CellEditor[Account]{Set: func(a *Account, s string) { a.Name = s }})
+func (t *DataGridViewWidget[T, K]) EditColumn(title string, e CellEditor[T]) *DataGridViewWidget[T, K] {
+	if e.Set == nil {
+		panic("widget: EditColumn needs a Set")
+	}
+	t.change(func() {
+		found := false
+		for i := range t.cols {
+			if t.cols[i].Title == title {
+				t.cols[i].edit, found = &e, true
+			}
+		}
+		if !found {
+			panic("widget: EditColumn: no column is titled " + strconv.Quote(title))
+		}
+		t.enableEdit()
+		t.ed().editable = true
+	})
+	return t
+}
+
 // SetReadOnly makes every cell of the grid read-only, as WinForms'
 // DataGridView.ReadOnly does: no cell edits, whatever its column's Set.
 func (t *DataGridViewWidget[T, K]) SetReadOnly(on bool) *DataGridViewWidget[T, K] {
@@ -138,7 +168,7 @@ func (t *DataGridViewWidget[T, K]) ReadOnly() bool {
 }
 
 // SetEditMode sets what starts the edit of a cell: EditOnEnterOrF2 by default.
-// The cells of a column are editable when the column is Editable.
+// The cells of the columns given to EditColumn are the editable ones.
 func (t *DataGridViewWidget[T, K]) SetEditMode(m EditMode) *DataGridViewWidget[T, K] {
 	t.change(func() { t.enableEdit(); t.ed().editMode = m })
 	return t

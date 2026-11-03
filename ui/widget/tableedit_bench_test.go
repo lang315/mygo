@@ -17,10 +17,10 @@ func BenchmarkTableEdit(b *testing.B) {
 			{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200, Sortable: true, Filterable: true},
 			{Title: "Score", Text: func(a *acct) string { return strconv.Itoa(a.score) }, Width: 100},
 		}
-		if editable {
-			cols[0] = cols[0].Editable(CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }})
-		}
 		tb := DataGridView(acctKey, cols...).SetRows(manyAccts(n)).Expand()
+		if editable {
+			tb.EditColumn("Name", CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }})
+		}
 		tt := ui.NewTester(content(tb), 1280, 800)
 		for range 3 {
 			tt.Frame()
