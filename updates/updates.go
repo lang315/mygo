@@ -301,7 +301,8 @@ func installUpdate(ctx context.Context, get update.Getter, m update.Manifest, ke
 	staged := false
 	defer func() {
 		if !staged {
-			os.RemoveAll(work)
+			// A scanner may hold the files just written.
+			fsretry.RetryInUse(func() error { return os.RemoveAll(work) })
 		}
 	}()
 	unpacked := filepath.Join(work, "app")

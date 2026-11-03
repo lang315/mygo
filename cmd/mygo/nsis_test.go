@@ -9,7 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // TestNSISUninstallEntry checks the entry of the app in Settings > Apps.
@@ -702,16 +703,10 @@ func uninstall(t *testing.T, dir string) {
 	}
 	// The uninstaller copies itself away and runs from there, and removes
 	// the app's folder last.
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the uninstaller left the app installed")
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	wait.Until(t, "the uninstaller to remove the app's folder", func() bool {
+		_, err := os.Stat(dir)
+		return os.IsNotExist(err)
+	})
 }
 
 // TestWindowsSigning signs a build with a throwaway self-signed

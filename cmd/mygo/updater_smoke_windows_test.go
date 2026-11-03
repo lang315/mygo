@@ -152,7 +152,7 @@ func TestUpdaterSmoke(t *testing.T) {
 
 	// names lists the app's folder and the folder around it, where an update
 	// works.
-	names := func() []string {
+	names := func(t *testing.T) []string {
 		var all []string
 		for _, dir := range []string{install, filepath.Dir(install)} {
 			entries, err := os.ReadDir(dir)
@@ -183,7 +183,7 @@ func TestUpdaterSmoke(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			serve(c.dir)
-			listed, out := names(), filepath.Join(t.TempDir(), "out.txt")
+			listed, out := names(t), filepath.Join(t.TempDir(), "out.txt")
 			if err := wait.For(t, "the app to quit", run(out).done); err != nil {
 				t.Errorf("the app quit with %v", err)
 			}
@@ -196,8 +196,8 @@ func TestUpdaterSmoke(t *testing.T) {
 			if strings.Contains(got, "installed") {
 				t.Errorf("the app reported %q", got)
 			}
-			if fileHash(t, exe) != before || !slices.Equal(names(), listed) {
-				t.Errorf("the refused update changed the app's folder: %q, was %q", names(), listed)
+			if fileHash(t, exe) != before || !slices.Equal(names(t), listed) {
+				t.Errorf("the refused update changed the app's folder: %q, was %q", names(t), listed)
 			}
 			if !strings.Contains(displayVersion(), "1.0.0") {
 				t.Errorf("Settings > Apps lists %q, want 1.0.0", displayVersion())
@@ -228,9 +228,17 @@ func TestUpdaterSmoke(t *testing.T) {
 	// The update: installed while the app runs, then the new version.
 	serve(files2)
 	out := filepath.Join(t.TempDir(), "out.txt")
+	// The relaunched app is not a child of the test: whatever the outcome, end
+	// it before the cleanup that uninstalls (cleanups run last to first).
+	t.Cleanup(func() {
+		exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq "+filepath.Base(exe)).Run()
+	})
 	first := run(out)
-	wait.Until(t, "the app to relaunch into 2.0.0", func() bool {
-		return strings.Contains(lines(out), "started 2.0.0 enabled=true")
+	// The new version starts while the old one still quits, and ends by
+	// itself once it has checked: its "uptodate" is the last line.
+	wait.Until(t, "the app to relaunch into 2.0.0 and find it up to date", func() bool {
+		got := lines(out)
+		return strings.Contains(got, "started 2.0.0 enabled=true") && strings.Contains(got, "uptodate")
 	})
 	wait.For(t, "the old app to quit", first.done)
 	got := lines(out)
@@ -247,7 +255,7 @@ func TestUpdaterSmoke(t *testing.T) {
 	}
 	// The new version removes what the update could not while the old one ran.
 	wait.Until(t, "the update's leftovers to go", func() bool {
-		for _, n := range names() {
+		for _, n := range names(t) {
 			if strings.Contains(n, ".old-") || strings.Contains(n, ".update-") {
 				return false
 			}

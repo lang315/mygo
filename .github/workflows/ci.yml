@@ -443,7 +443,7 @@ jobs:
         id: affected
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" != pull_request ] || git diff --name-only --no-renames HEAD^1 HEAD | grep -E -q '^(cmd/mygo/|internal/nsis/|internal/update/|internal/updatehook/|internal/updatehttp/|internal/fsretry/|internal/windows/|updates/|updatefeed/|plugins/updater/|relaunch\.go$|examples/hello/|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
+          if [ "${{ github.event_name }}" != pull_request ] || git diff --name-only --no-renames HEAD^1 HEAD | grep -E -q '^(cmd/mygo/|internal/nsis/|internal/update/|internal/updatehook/|internal/updatehttp/|internal/fsretry/|internal/windows/|updates/|updatefeed/|netproxy/|app\.go$|login\.go$|relaunch[a-z_]*\.go$|examples/hello/|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "The change does not affect the installer."
