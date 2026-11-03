@@ -127,9 +127,10 @@ type smokeApp struct {
 	done chan error
 }
 
-func startApp(t *testing.T, exe string) *smokeApp {
+func startApp(t *testing.T, exe string, env ...string) *smokeApp {
 	t.Helper()
 	a := &smokeApp{cmd: exec.Command(exe), done: make(chan error, 1)}
+	a.cmd.Env = append(os.Environ(), env...)
 	if err := a.cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

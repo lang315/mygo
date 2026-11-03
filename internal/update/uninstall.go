@@ -7,17 +7,31 @@ import (
 
 // SameInstallDir reports whether the InstallLocation an installer wrote and
 // the directory of the running executable are one folder: Windows paths are
-// compared without case, and without a trailing backslash or quotes.
+// compared without case, and without a trailing backslash or quotes. The
+// installer writes the folder as the user gave it (/D=, a short name such as
+// C:\Users\RUNNER~1), while the running executable's folder is the real one,
+// in long names: when the spellings differ, both are resolved
+// (filepath.EvalSymlinks gives Windows paths their long names).
 func SameInstallDir(location, dir string) bool {
+	trim := func(p string) string { return strings.Trim(strings.TrimSpace(p), `"`) }
 	clean := func(p string) string {
-		p = strings.Trim(strings.TrimSpace(p), `"`)
 		if p == "" {
 			return ""
 		}
 		return strings.ToLower(strings.TrimRight(filepath.Clean(strings.ReplaceAll(p, "/", `\`)), `\`))
 	}
+	resolved := func(p string) string {
+		if p == "" {
+			return ""
+		}
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			p = real
+		}
+		return clean(p)
+	}
+	location, dir = trim(location), trim(dir)
 	a, b := clean(location), clean(dir)
-	return a != "" && a == b
+	return a != "" && b != "" && (a == b || resolved(location) == resolved(dir))
 }
 
 // Registry is the entry of an app in Settings > Apps, as RecordVersion needs

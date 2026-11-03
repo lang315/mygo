@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/egoist/mygo/internal/fsretry"
 	"github.com/egoist/mygo/internal/updatehook"
 )
 
@@ -69,13 +70,16 @@ func openBundle() bool {
 }
 
 // cleanUpdateLeftovers removes what an update could not remove while the
-// previous version ran (Windows keeps running executables).
+// previous version ran (Windows keeps running executables). A version that
+// an update relaunched starts while the one that installed it still quits, and
+// its executable stays in use until then: fsretry waits for it for a few
+// seconds, and what is left is removed the next time the app starts.
 func cleanUpdateLeftovers() {
 	if runtime.GOOS == "darwin" || startExe == "" {
 		return
 	}
 	olds, _ := filepath.Glob(filepath.Join(filepath.Dir(startExe), ".*.old-*"))
 	for _, p := range olds {
-		_ = os.RemoveAll(p)
+		_ = fsretry.RetryInUse(func() error { return os.RemoveAll(p) })
 	}
 }
