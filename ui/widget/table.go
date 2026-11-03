@@ -47,6 +47,30 @@ type Column[T any] struct {
 	// sorts the rows once they are sorted by it, and its Filterable
 	// search works; it is not drawn, read by assistive technology or copied.
 	Hidden bool
+
+	// Set stores text, the user's, in the row: a column with a Set is
+	// editable (F2, Enter or a double click edit its cells), one without is
+	// read-only. It parses what the column needs and changes the row in place
+	// but not its key. It must not leave the row half written: when it can
+	// fail after it changed a field, build the new value on a copy and assign
+	// the copy (n := *row; ...; *row = n). Validate runs before it.
+	//
+	// Set, Validate, CanEdit and EditText run under the package's lock, as
+	// Compare does: they read the row and call no widget method and no
+	// RowSource method (UpdateRow, AddRows, Row, ...), which would wait for
+	// the lock they run under and hang. A panic in one is recovered and
+	// reported with OnPanic, and the edit is cancelled.
+	Set func(row *T, text string)
+	// Validate, when set, is asked before Set whether text may be written; a
+	// non-nil error refuses it: the editor stays open and shows the error's
+	// message. It reads the row and changes nothing.
+	Validate func(row *T, text string) error
+	// CanEdit, when set, tells whether the cell of this row may be edited
+	// (nil: it may); a column with a Set only.
+	CanEdit func(*T) bool
+	// EditText is the text the editor starts with; nil starts with Text.
+	// For a column whose Text is decorated (a unit, a badge).
+	EditText func(*T) string
 }
 
 // IntColumn makes a sortable column of an int, right-aligned, whose Compare
