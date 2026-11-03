@@ -65,7 +65,7 @@ func coreTabsKeyed(c *context, selected *int, keys []any, labels []string) *node
 					p.Fill(Rect{r.X + in, r.Y + r.H - h, r.W - 2*in, h}, line, h/2)
 				}
 				if tab.FocusVisible() {
-					p.FocusRing(r, [4]float32{t.Radius, t.Radius, t.Radius, t.Radius})
+					p.focusRingOf(tab, r, [4]float32{t.Radius, t.Radius, t.Radius, t.Radius})
 				}
 			})
 			tab.Children(func() { coreText(c, label).SingleLine() })

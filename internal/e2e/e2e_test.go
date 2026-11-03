@@ -118,6 +118,10 @@ func TestMain(m *testing.M) {
 		coverPeer()
 		return
 	}
+	if os.Getenv("MYGO_E2E_FAKE_PORTAL") == "1" {
+		fakePortal()
+		return
+	}
 	if os.Getenv("MYGO_E2E_QUIT_DURING_DIALOG") == "1" {
 		quitDuringDialog()
 		return
@@ -128,6 +132,10 @@ func TestMain(m *testing.M) {
 	}
 	if os.Getenv("MYGO_E2E_COOKIES_WHILE_OPENING") == "1" {
 		cookiesWhileOpening()
+		return
+	}
+	if os.Getenv("MYGO_E2E_COOKIE_VIEW") == "1" {
+		cookieViewApp()
 		return
 	}
 	if os.Getenv("MYGO_E2E_AUTOMATION_APP") == "1" {
@@ -319,6 +327,7 @@ func beforeRun(source mygo.ThemeSource) {
 	// Asked before the first window, which may then show native UI.
 	fmt.Println("webview:", mygo.WebViewAvailable())
 	mygo.Power.IsOnBattery()
+	styled := gtkCSSBeforeRun()
 	for _, c := range beforeRunCalls {
 		func() {
 			defer func() { fmt.Printf("%s: %v\n", c.name, recover()) }()
@@ -327,6 +336,7 @@ func beforeRun(source mygo.ThemeSource) {
 	}
 	mygo.App.WhenReady(func() {
 		fmt.Println("dark:", mygo.Theme.IsDark())
+		fmt.Println("gtk css:", styled())
 		go func() {
 			defer mygo.App.Quit()
 			titles, ok := dockMenu(0)
@@ -348,9 +358,9 @@ func beforeRun(source mygo.ThemeSource) {
 }
 
 // TestBeforeRun: apps set up and configure themselves in main, before Run,
-// e.g. with a saved appearance, while calls that need the running app fail
-// clearly on every platform. Both appearances are tried, so one differs
-// from the system's.
+// e.g. with a saved appearance or a GTK style sheet, while calls that need
+// the running app fail clearly on every platform. Both appearances are
+// tried, so one differs from the system's.
 func TestBeforeRun(t *testing.T) {
 	for _, source := range []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight} {
 		ctx, cancel := context.WithTimeout(t.Context(), wait.Guard)
@@ -363,7 +373,7 @@ func TestBeforeRun(t *testing.T) {
 			t.Errorf("%s: %v:\n%s", source, err, out)
 			continue
 		}
-		wants := []string{"locale: true\n", "webview: true\n", fmt.Sprintf("dark: %v\n", source == mygo.ThemeDark)}
+		wants := []string{"locale: true\n", "webview: true\n", fmt.Sprintf("dark: %v\n", source == mygo.ThemeDark), "gtk css: true\n"}
 		for _, c := range beforeRunCalls {
 			wants = append(wants, c.name+": mygo: "+c.name+" called before ")
 		}
@@ -3531,6 +3541,48 @@ func TestContentWindowIgnoreInput(t *testing.T) {
 		if _, d := get(); d != 1 {
 			t.Errorf("the click went to the button ignoring input: %d deletes", d)
 		}
+	}
+}
+
+// TestContentWindowAccessHidden shows a card behind the front one, hidden
+// from assistive technology: the platform's tree has the front card's
+// button but not the one behind, which a click still presses (#1093).
+func TestContentWindowAccessHidden(t *testing.T) {
+	var frames atomic.Int32
+	backs := 0
+	view := func(c *ui.Context) {
+		frames.Add(1)
+		ui.Column(c).Children(func() {
+			ui.Button(c, "Front").Width(100).Height(40)
+			ui.Column(c).AccessHidden(true).Children(func() {
+				if ui.Button(c, "Behind").Width(100).Height(40).Clicked() {
+					backs++
+				}
+			})
+		})
+	}
+	w := newWindow(t, mygo.WindowOptions{Title: "Access hidden", Width: 400, Height: 200, Content: ui.View(view)})
+	eventually(t, "a frame", func() bool { return frames.Load() > 0 })
+	if _, ok := accessibility(w); !ok {
+		t.Skip("accessibility automation not available on this platform")
+	}
+	var nodes []accessNode
+	eventually(t, "the front button in the tree", func() bool {
+		nodes, _ = accessibility(w)
+		return slices.ContainsFunc(nodes, func(n accessNode) bool { return n.role == roleButton && n.label == "Front" })
+	})
+	if slices.ContainsFunc(nodes, func(n accessNode) bool { return n.label == "Behind" }) {
+		t.Errorf("the button hidden from assistive technology is in the tree: %v", nodes)
+	}
+	if accessPerform(w, "Behind", "press", "") {
+		t.Error("assistive technology pressed the hidden button")
+	}
+	if click(w, 50, 60) {
+		eventually(t, "the click on the hidden button", func() bool {
+			var n int
+			mygo.RunOnMain(func() { n = backs })
+			return n == 1
+		})
 	}
 }
 

@@ -247,6 +247,7 @@ type layoutStyle struct {
 	noWrap   bool
 	// destructive marks a control that destroys (Destructive).
 	destructive bool
+	balance     bool
 	ellipsis    string
 }
 
@@ -325,6 +326,10 @@ type node struct {
 	// fillViewport (FillViewport): a scroll container lays its content out at
 	// least as high as itself.
 	fillViewport bool
+	// accessHidden leaves it and the elements inside it out of what
+	// assistive technology reads, while they still show and take input
+	// (AccessHidden).
+	accessHidden bool
 
 	// Painting.
 	grad    LinearGradient
@@ -1085,8 +1090,29 @@ func (e *node) Invisible() *node { e.flags |= flagInvisible; return e }
 //	})
 //
 // Unlike HTML's inert, it leaves them to assistive technology. Invisible
-// and Hidden hide them from it too, and Disabled takes their press away.
+// and Hidden hide them from it too, and Disabled takes their press away;
+// AccessHidden hides them from it alone.
 func (e *node) IgnoreInput(ignore bool) *node { e.ignoreInput = ignore; return e }
+
+// AccessHidden leaves the element and those inside it out of what
+// assistive technology reads when hide is true, while they still show, as
+// HTML's aria-hidden does: none of them is in its tree, their text names
+// no element around them, and it can neither press, focus nor edit them.
+// The pointer and the keyboard still reach them, unless they IgnoreInput
+// too, which makes them inert, as HTML's inert does; without it, keep the
+// keyboard focus out of them, where assistive technology cannot follow.
+//
+// What shows but is not there to read is so read once, or not at all: a
+// page sliding out beside the one that replaces it, the cards peeking from
+// behind the front one of a stack, a copy of a text fading into another:
+//
+//	if app.leaving >= 0 {
+//		page(c, app.leaving).Absolute().Translate(-x, 0).IgnoreInput(true).AccessHidden(true)
+//	}
+//	page(c, app.tab).Translate(width-x, 0)
+//
+// RoleNone leaves out the element but not those inside it.
+func (e *node) AccessHidden(hide bool) *node { e.accessHidden = hide; return e }
 
 // Hidden hides the element and its children when hide is true, as CSS's
 // display: none does: unlike an Invisible element, it takes no room in
@@ -1444,6 +1470,15 @@ func (e *node) SingleLine() *node { e.single = true; e.maxLines = 1; return e }
 // newlines, even where it overflows the element.
 func (e *node) NoWrap() *node { e.noWrap = true; return e }
 
+// Balance wraps the element's text in lines of about the same length, as
+// CSS's text-wrap: balance does: a heading or a short callout that takes
+// two lines takes two of half its length each, rather than a full line
+// and a word alone on the next. The text takes as many lines as it would
+// without it, at the width layout gives it, and keeps its alignment
+// within that width. Each paragraph is balanced on its own, once a
+// layout, as the text system keeps it.
+func (e *node) Balance() *node { e.balance = true; return e }
+
 // Ellipsis sets what ends text that MaxLines or SingleLine cuts, "…" by
 // default.
 func (e *node) Ellipsis(s string) *node { e.ellipsis = s; return e }
@@ -1584,6 +1619,34 @@ func (e *node) FocusRing(show bool) *node {
 	}
 	return e
 }
+
+// FocusRingOffset sets how far outside the element's edge its focus ring
+// goes, in DIPs, in place of the theme's FocusRingOffset: 0 puts it on
+// the edge, and a negative offset inside it, as for an element whose
+// ancestor clips what goes past it, as a header in an accordion's box.
+// Its corners follow the element's, as CSS's outline does. The widgets
+// that ring a part of themselves, as a check box its box, ring it so.
+func (e *node) FocusRingOffset(d float32) *node {
+	e.ringOffset = d
+	e.ringSet |= ringOffsetSet
+	return e
+}
+
+// FocusRingColor sets the color of the element's focus ring, in place of
+// the theme's Focus, as for an element on a background the theme's ring
+// does not stand out on.
+func (e *node) FocusRingColor(color Color) *node {
+	e.ringColor = color
+	e.ringSet |= ringColorSet
+	return e
+}
+
+// What an element sets of its focus ring (FocusRingOffset,
+// FocusRingColor).
+const (
+	ringOffsetSet uint8 = 1 << iota
+	ringColorSet
+)
 
 // Draw paints on the element with p after its background, before its
 // children; r is its box. fn only paints: it may run more than once a

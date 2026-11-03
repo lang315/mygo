@@ -140,13 +140,31 @@ func (t Transform) Then(next Transform) Transform {
 	return in3D(p)
 }
 
-// Transform sets the element's visual transform. Its origin is the center
-// of its border box unless TransformOrigin changes it.
-func (e *node) Transform(t Transform) *node { e.transform = t; return e }
+// Transform sets the element's visual transform, in place of the one it
+// had, TranslatePercent's included. Its origin is the center of its
+// border box unless TransformOrigin changes it.
+func (e *node) Transform(t Transform) *node { e.transform, e.translatePct = t, [2]float32{}; return e }
 
 // Translate moves the element after its existing transform.
 func (e *node) Translate(x, y float32) *node {
 	e.transform = e.transform.Then(Translation(x, y))
+	return e
+}
+
+// TranslatePercent moves the element by x and y percent of its own width
+// and height, as CSS's translate(-50%, -50%) does: of its border box as
+// the frame lays it out, so that it is in place from its first frame and
+// follows its size as it changes. It acts after the element's other
+// transforms, wherever it is called among them, and before its pose
+// (AnimatePose), and adds to a TranslatePercent before it. A callout
+// centered above a point:
+//
+//	ui.Box(c).Absolute().Left(p.X).Top(p.Y).TranslatePercent(-50, -100)
+func (e *node) TranslatePercent(x, y float32) *node {
+	finiteTransform(x, y)
+	scene.FoldTranslations() // renderers draw them as untransformed content
+	e.translatePct[0] += x
+	e.translatePct[1] += y
 	return e
 }
 
@@ -232,12 +250,17 @@ func finiteTransform(v ...float32) {
 }
 
 func (e *node) transformAt(x, y float32) scene.Affine {
-	// Most elements have neither: skip the matrices of every commit.
-	if !e.poseM.Set && !e.transform.set() {
+	// Most elements have none: skip the matrices of every commit.
+	if !e.poseM.Set && !e.transform.set() && e.translatePct == [2]float32{} {
 		return scene.Affine{}
 	}
-	// Its pose (AnimatePose) acts after its own transform.
-	m := e.poseM.Mul(e.transform.flat())
+	// Its pose (AnimatePose) acts after its own transform, which ends
+	// with its TranslatePercent.
+	m := e.transform.flat()
+	if p := e.translatePct; p != [2]float32{} {
+		m = scene.Translation(p[0]/100*e.w, p[1]/100*e.h).Mul(m)
+	}
+	m = e.poseM.Mul(m)
 	if !m.Set {
 		return scene.Affine{}
 	}
@@ -312,15 +335,16 @@ func (rt *engine) inWindow(x, y float32) bool {
 func (rt *engine) containsIn(s *state, r Rect, x, y float32) bool {
 	rt.hitWork++
 	lx, ly, ok := inversePoint(s.world, x, y)
-	if !ok || !r.Contains(lx, ly) {
+	if !ok || !r.Contains(lx, ly) || s.selfClips && !roundedContains(s.selfClip, uniformRadii(s.selfRadius), lx, ly) {
 		return false
 	}
 	// The clips around an element flying stop at it, as it paints out of
 	// them.
 	for p := rt.states[s.parent]; p != nil && !s.lifted; p = rt.states[p.parent] {
-		if p.clips {
+		if p.clips || p.selfClips {
 			px, py, ok := inversePoint(p.world, x, y)
-			if !ok || !roundedContains(p.clipRect, p.clipRadii, px, py) {
+			if !ok || p.clips && !roundedContains(p.clipRect, p.clipRadii, px, py) ||
+				p.selfClips && !roundedContains(p.selfClip, uniformRadii(p.selfRadius), px, py) {
 				return false
 			}
 		}
@@ -349,6 +373,8 @@ func inversePoint(m scene.Affine, x, y float32) (float32, float32, bool) {
 	lx, ly := inv.Point(x, y)
 	return lx, ly, true
 }
+
+func uniformRadii(r float32) [4]float32 { return [4]float32{r, r, r, r} }
 
 func roundedContains(r Rect, radii [4]float32, x, y float32) bool {
 	if !r.Contains(x, y) {
@@ -414,7 +440,7 @@ func (p *Painter) inlineTransforms() bool {
 	var walk func(*node) bool
 	walk = func(e *node) bool {
 		for ch := e.first; ch != nil; ch = ch.next {
-			if ch.transform.set() || walk(ch) {
+			if ch.transform.set() || ch.translatePct != [2]float32{} || walk(ch) {
 				return true
 			}
 		}

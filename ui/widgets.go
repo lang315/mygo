@@ -272,6 +272,29 @@ func checkboxOf(c *context, checked *bool, label string, mixed, track bool) *nod
 	case mixed:
 		state = 3
 	}
+	checkboxFace(c, row, state, label)
+	if state == 3 {
+		row.Mixed()
+	}
+	return row
+}
+
+// CheckboxState creates a check box that can be mixed, with a label: a
+// click, or Space while it has the focus, checks it, or unchecks it when
+// it is checked, setting *state, and Changed reports a click. It shows a
+// dash while mixed, and assistive technology sees it mixed. CheckboxGroup
+// is one over the check boxes it holds.
+func coreCheckboxState(c *context, state *CheckState, label string) *node {
+	t := c.theme
+	row := coreCheckboxStateBase(c, state).Gap(t.Space(2)).FocusRing(false)
+	checkboxFace(c, row, checkedOf(*state), label)
+	return row
+}
+
+// checkboxFace builds the box of check box row, off (1), on (2) or mixed
+// (3), and its label.
+func checkboxFace(c *context, row *node, state int8, label string) {
+	t := c.theme
 	row.Children(func() {
 		box := coreBox(c).Size(t.Space(4), t.Space(4)).Radius(t.Space(1)).Shrink(0)
 		paintCheckbox(c, box, state)
@@ -279,10 +302,6 @@ func checkboxOf(c *context, checked *bool, label string, mixed, track bool) *nod
 			coreText(c, label)
 		}
 	})
-	if state == 3 {
-		row.Mixed()
-	}
-	return row
 }
 
 // Radio creates a radio button that selects value into *selected, with a

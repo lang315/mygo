@@ -215,7 +215,11 @@ func documentsAt(path string) []*docBase {
 // wrote, and returns a function to call when the look ends, or nil.
 var afterDiskLook atomic.Pointer[func(changed bool) func()]
 
-// checkDisk compares b's file with what b last read or wrote.
+// checkDisk compares b's file with what b last read or wrote. A file gone
+// from its path is looked for in its directory by what b read, as the
+// watch does: this look can come between a rename and the watch's batch
+// (the look when the watch started, or a window focused), and the watch
+// doesn't look for what a document it finds deleted read.
 func (b *docBase) checkDisk() {
 	b.io.Lock()
 	b.mu.Lock()
@@ -251,8 +255,11 @@ func (b *docBase) checkDisk() {
 			return
 		}
 		b.mu.Lock()
-		changed := !b.deleted
-		b.deleted = true
+		// The watch followed the file while this looked.
+		changed := b.path == path && !b.deleted
+		if changed {
+			b.deleted = true
+		}
 		b.mu.Unlock()
 		b.io.Unlock()
 		if changed {
