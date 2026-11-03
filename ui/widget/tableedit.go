@@ -54,7 +54,8 @@ func (t *DataGridViewWidget[T, K]) enableEdit() {
 	t.prepareEdit = func() { t.wireEdit(); t.followCurrent(); t.dropHiddenEdit() }
 	t.cellHook = func(c *ui.Context, col int, r any) bool {
 		if e := d.edit; e != nil && col == e.col && t.key(r.(*T)) == e.key {
-			e.canNext, e.canPrev = t.mayTab(e, 1), t.mayTab(e, -1)
+			_, _, e.canNext = t.nextEditable(e, 1)
+			_, _, e.canPrev = t.nextEditable(e, -1)
 			buildEditor(c, &e.editCore)
 			return true
 		}
@@ -363,26 +364,35 @@ func (t *DataGridViewWidget[T, K]) beginLocked(k K, ci int, hasAt bool, x, y flo
 	return wins, true
 }
 
-// mayTab is a cheap guess, made while building, at whether Tab (dir 1) or
-// Shift+Tab (dir -1) has a cell to go to: another editable column in the row, or
-// another row. It does not ask CanEdit; tabFrom does. Under mu.
-func (t *DataGridViewWidget[T, K]) mayTab(e *editState[K], dir int) bool {
-	at := slices.Index(t.visCols, e.col)
-	if at < 0 {
-		return false
+// maxTabScan bounds how many rows Tab looks through for a cell that may edit.
+//
+// shortcut: a table whose next 10000 rows all refuse CanEdit does not tab past
+// them; lift the bound when someone has such a table.
+const maxTabScan = 10000
+
+// framePos returns where the row of key k is in the order of the frame on the
+// screen, which is not the view's when rows changed since: -1 if it is not
+// there. Under mu.
+func (t *DataGridViewWidget[T, K]) framePos(k K) int {
+	if !t.kept {
+		return t.positionOf(k)
 	}
-	for j := at + dir; j >= 0 && j < len(t.visCols); j += dir {
-		if t.cols[t.visCols[j]].edit != nil {
-			return true
+	if r := t.rowAt(t.cursor); r != nil && t.key(r) == k { // the usual case: the edit is on the current row
+		return t.posAt(t.cursor)
+	}
+	for pos, i := range t.order {
+		if t.key(&t.frame[i]) == k {
+			return pos
 		}
 	}
-	pos := t.positionOf(e.key)
-	return pos >= 0 && t.rowAtPos(pos+dir) != nil
+	return -1
 }
 
 // nextEditable finds the cell Tab (dir 1) or Shift+Tab (dir -1) goes to from
-// the edit e: the next editable cell of its row, then the first of the next
-// row in the order the table shows now, before any commit re-sorts it. Under mu.
+// the edit e: the next editable cell of its row, then the first of the next row
+// in the order on the screen, before any commit re-sorts it. The editor takes
+// Tab only when there is such a cell, so that a Tab with nowhere to go moves the
+// focus on. Under mu.
 func (t *DataGridViewWidget[T, K]) nextEditable(e *editState[K], dir int) (k K, ci int, ok bool) {
 	at := slices.Index(t.visCols, e.col)
 	row, there := t.src.index[e.key]
@@ -394,11 +404,11 @@ func (t *DataGridViewWidget[T, K]) nextEditable(e *editState[K], dir int) (k K, 
 			return e.key, t.visCols[j], true
 		}
 	}
-	pos := t.positionOf(e.key)
+	pos := t.framePos(e.key)
 	if pos < 0 {
 		return k, 0, false
 	}
-	for p := pos + dir; ; p += dir {
+	for n, p := 0, pos+dir; n < maxTabScan; n, p = n+1, p+dir {
 		r := t.rowAtPos(p)
 		if r == nil {
 			return k, 0, false
@@ -412,26 +422,36 @@ func (t *DataGridViewWidget[T, K]) nextEditable(e *editState[K], dir int) (k K, 
 			}
 		}
 	}
+	return k, 0, false
 }
 
 // tabFrom is Tab (dir 1) or Shift+Tab (dir -1) in the editor of e: the draft is
-// written and the next editable cell edits. The cell is chosen before the
-// write, which may re-sort the rows. A refusal keeps the edit where it is;
-// with no cell to go to the edit is written and ends.
+// written and the next editable cell edits, all under one hold of the lock. The
+// cell is chosen before the write, which may re-sort the rows. A refusal keeps
+// the edit where it is. When the write leaves no cell to edit (a search now
+// hides the row, CanEdit changed), the edit ends and the table has the focus.
 func (t *DataGridViewWidget[T, K]) tabFrom(e *editState[K], dir int) {
-	mu.Lock()
-	if t.ed().edit != e { // an edit that already ended
-		mu.Unlock()
-		return
+	var wins []*mygo.Window
+	t.change(func() {
+		d := t.ed()
+		if d.edit != e { // an edit that already ended
+			return
+		}
+		k, ci, ok := t.nextEditable(e, dir)
+		var err error
+		if wins, err = t.commitEditLocked(e); err != nil || !ok {
+			return
+		}
+		title := t.cols[ci].Title
+		if more, began := t.beginLocked(k, ci, false, 0, 0); began {
+			d.pendingCur = &curCell[K]{k, title}
+			wins = append(wins, more...)
+		}
+	})
+	for _, w := range wins {
+		invalidate(w)
 	}
-	k, ci, ok := t.nextEditable(e, dir)
-	title := t.cols[ci].Title
-	mu.Unlock()
-	if !ok {
-		_ = t.endEdit(e)
-		return
-	}
-	t.BeginEdit(k, title)
+	t.flushEdit()
 }
 
 // closeEdit ends the edit without writing it. Under mu.

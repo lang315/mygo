@@ -661,8 +661,11 @@ lock: they read the row and call no widget method.
   Enter or a double click edit the current cell; Enter writes, Escape cancels. Tab
   writes and edits the next editable cell of the row, then the first of the next
   row; Shift+Tab goes back (the next row is the one the table shows when Tab is
-  pressed, even if the write re-sorts the rows; past the last cell, or when the
-  write is refused, Tab does not move). `Validate(row, text) error` of the
+  pressed, even if the write re-sorts the rows). When no cell is left to go to
+  (past the last cell, or the rest refuse `CanEdit`) Tab is not taken: it writes
+  and the focus moves on to the next element; when the write is refused the edit
+  stays. If only the write takes the last cell away (a search now hides the row,
+  `CanEdit` changed), the edit ends and the table has the focus. `Validate(row, text) error` of the
   `CellEditor`, asked before `Set(row, text)`, refuses a value: the editor stays
   open, with a red border and the error in a small popover under the cell until
   the next keystroke. A search that hides the edited row, or hiding its column,
