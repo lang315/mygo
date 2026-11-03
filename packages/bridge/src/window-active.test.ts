@@ -18,7 +18,7 @@ function element() {
 
 test("a page starts active, and its <html> follows the event", () => {
   const { runtime, internal } = createRuntime(
-    { platform: "darwin", windowId: 1, version: "0.0.0-test", secret: "s", locale: "en", dir: "ltr" },
+    { platform: "darwin", windowId: 1, version: "0.0.0-test", locale: "en", dir: "ltr" },
     () => {},
   );
   const root = element();
