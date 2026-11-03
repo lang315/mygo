@@ -314,9 +314,13 @@ function formatNs(ns: number): string {
   return `${ns.toPrecision(3)} ns`;
 }
 
-/** Adds runs to the history in dir, and writes latest.json anew. */
+/** Adds the runs in files to the history in dir, and writes latest.json anew. */
 export async function merge(dir: string, files: string[]): Promise<void> {
-  const runs: Run[] = await Promise.all(files.map(async (f) => JSON.parse(await readFile(f, "utf8"))));
+  await mergeRuns(dir, await Promise.all(files.map(async (f): Promise<Run> => JSON.parse(await readFile(f, "utf8")))));
+}
+
+/** Adds runs to the history in dir, and writes latest.json anew with the last keep commits. */
+export async function mergeRuns(dir: string, runs: Run[], keep = latestCommits): Promise<void> {
   const history = join(dir, "history");
   await mkdir(history, { recursive: true });
   const days = new Map<string, Commit[]>();
@@ -345,9 +349,9 @@ export async function merge(dir: string, files: string[]): Promise<void> {
   const shards = (await readdir(history)).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse();
   for (const shard of shards) {
     recent.unshift(...(await readShard(join(history, shard))));
-    if (recent.length >= latestCommits) break;
+    if (recent.length >= keep) break;
   }
-  await writeFile(join(dir, "latest.json"), JSON.stringify(latest(recent.slice(-latestCommits))));
+  await writeFile(join(dir, "latest.json"), JSON.stringify(latest(recent.slice(-keep))));
   await writeFile(join(dir, "README.md"), readme);
 }
 

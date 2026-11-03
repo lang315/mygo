@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Latest, type Run, latestCommits, merge, parse } from "./bench.ts";
+import { type Latest, type Run, merge, mergeRuns as mergeInto, parse } from "./bench.ts";
 
 const output = `goos: darwin
 goarch: arm64
@@ -104,17 +104,21 @@ describe("merge", () => {
     expect(data.runners.linux).toEqual([null, { arch: "arm64", cpu: "Apple M5", go: "go1.27.1" }, null]);
   });
 
+  // Few runs and none of them in a file of its own: a file written and read
+  // costs milliseconds on Windows, where this test took more than five seconds
+  // with latestCommits + 5 runs of their own files.
   test("keeps the last commits in latest.json, and every day in history", async () => {
     const dir = await mkdtemp(join(tmpdir(), "bench-test-"));
-    const runs = Array.from({ length: latestCommits + 5 }, (_, i) =>
+    const keep = 12;
+    const runs = Array.from({ length: keep + 5 }, (_, i) =>
       run(`c${i}`, new Date(Date.UTC(2026, 8, 1) + i * 3_600_000 * 4).toISOString(), "linux", i),
     );
-    await mergeRuns(dir, runs);
+    await mergeInto(join(dir, "data"), runs, keep);
     // Six commits a day from September 1st.
-    expect((await readdir(join(dir, "data", "history"))).length).toBe(Math.ceil((latestCommits + 5) / 6));
+    expect((await readdir(join(dir, "data", "history"))).length).toBe(Math.ceil((keep + 5) / 6));
     const data = await readLatest(dir);
-    expect(data.commits.length).toBe(latestCommits);
+    expect(data.commits.length).toBe(keep);
     expect(data.commits[0]?.sha).toBe("c5");
-    expect(data.series.linux?.["."]?.CallNoop?.["ns/op"]?.at(-1)).toBe(latestCommits + 4);
+    expect(data.series.linux?.["."]?.CallNoop?.["ns/op"]?.at(-1)).toBe(keep + 4);
   });
 });
