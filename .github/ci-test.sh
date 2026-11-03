@@ -120,7 +120,7 @@ if [ "${#groups[@]}" -gt 0 ]; then
   missing=""
   for i in "${!groups[@]}"; do
     # The names listed before the line of their package are its own.
-    have=$(awk -v pkg="${gpkgs[$i]}" '$1 == "ok" && $2 == pkg { print last; exit } { last = last "\n" $0 }' <<<"$listed")
+    have=$(awk -v pkg="${gpkgs[$i]}" '$1 == "ok" { if ($2 == pkg) { print last; exit } last = ""; next } { last = last "\n" $0 }' <<<"$listed")
     IFS='|' read -ra ns <<<"${groups[$i]}"
     for n in "${ns[@]}"; do
       grep -qxF "$n" <<<"$have" || missing+="${gpkgs[$i]}: $n"$'\n'

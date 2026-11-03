@@ -62,11 +62,9 @@ jobs:
         run: |
           unformatted=$(gofmt -l $(git ls-files '*.go'))
           if [ -n "$unformatted" ]; then echo "gofmt -w these files:"; echo "$unformatted"; exit 1; fi
-      # The GUI tests are rest's, except on macOS, where they are cmd's: rest
-      # had the most to do there, cmd the least.
       - name: Which GUI and Direct3D tests the change affects
         id: affected
-        if: matrix.shard == 'rest' && runner.os != 'macOS' || matrix.shard == 'cmd' && runner.os == 'macOS'
+        if: matrix.shard == 'rest'
         shell: bash
         run: |
           all=$(bash .github/ci-shard.sh all)
