@@ -14,14 +14,28 @@ import (
 )
 
 // drawClasses draws s with a new renderer that set changes, and returns its
-// pixels.
-func drawClasses(t *testing.T, s *scene.Scene, set func(r *Renderer)) []byte {
+// pixels. With pooled, the renderer takes the device a released one left in
+// the pool, as every window after the first does and the first does after a
+// prewarm; without, the pool is empty and the renderer makes a device.
+func drawClasses(t *testing.T, s *scene.Scene, pooled bool, set func(r *Renderer)) []byte {
 	t.Helper()
+	emptyPool(t)
+	if pooled {
+		first, err := New(hiddenWindow(t, s.Width, s.Height))
+		if err != nil {
+			t.Skip("no Direct3D 11:", err)
+		}
+		first.Release()
+	}
+	devices := devicesMade.Load()
 	r, err := New(hiddenWindow(t, s.Width, s.Height))
 	if err != nil {
 		t.Skip("no Direct3D 11:", err)
 	}
 	defer r.Release()
+	if made := devicesMade.Load() - devices; pooled == (made != 0) {
+		t.Fatalf("pooled %v, and the renderer made %d devices", pooled, made)
+	}
 	set(r)
 	if err := r.draw(s); err != nil {
 		t.Fatal(err)
@@ -47,18 +61,70 @@ func compareToGeneral(t *testing.T, name string, pix, general []byte) {
 func TestClassesDrawAsTheGeneralShader(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	for _, sc := range []struct {
-		name string
-		s    *scene.Scene
-	}{{"scene", gputest.Scene()}, {"card", gputest.BorderedCardScene(false)}} {
-		general := drawClasses(t, sc.s, func(r *Renderer) { r.b.NoClasses = true })
-		compareToGeneral(t, sc.name, drawClasses(t, sc.s, func(r *Renderer) {}), general)
-		compareToGeneral(t, sc.name+" joined", drawClasses(t, sc.s, func(r *Renderer) {
-			all := r.classPipeFor(classShaders[len(classShaders)-1].classes)
-			for c := gpu.ClassPlain; c < gpu.NumClasses; c++ {
-				r.classes[1<<c] = all
+	for _, pooled := range []bool{false, true} {
+		for _, sc := range []struct {
+			name string
+			s    *scene.Scene
+		}{{"scene", gputest.Scene()}, {"card", gputest.BorderedCardScene(false)}} {
+			name := sc.name
+			if pooled {
+				name += " on a pooled device"
 			}
-		}), general)
+			general := drawClasses(t, sc.s, pooled, func(r *Renderer) { r.b.NoClasses = true })
+			compareToGeneral(t, name, drawClasses(t, sc.s, pooled, func(r *Renderer) {
+				if !r.b.Classes || r.b.NoClasses {
+					t.Fatal("the renderer does not draw with the shaders of classes")
+				}
+			}), general)
+			compareToGeneral(t, name+" joined", drawClasses(t, sc.s, pooled, func(r *Renderer) {
+				all := r.classPipeFor(classShaders[len(classShaders)-1].classes)
+				for c := gpu.ClassPlain; c < gpu.NumClasses; c++ {
+					r.classes[1<<c] = all
+				}
+			}), general)
+		}
+	}
+}
+
+// TestPooledRendererDrawsWithClasses checks that a renderer that took the
+// device of a released one, or of the prewarm, draws with the shaders of the
+// classes of its batches, as a renderer that made its device does: what
+// makes a device (initDevice) is not what makes a renderer.
+func TestPooledRendererDrawsWithClasses(t *testing.T) {
+	emptyPool(t)
+	for _, name := range []string{"released", "prewarmed"} {
+		t.Run(name, func(t *testing.T) {
+			emptyPool(t)
+			if name == "released" {
+				newRendererOrSkip(t).Release()
+			} else {
+				resetPrewarm(t)
+				Prewarm()
+				waitPrewarm()
+			}
+			pool.Lock()
+			have := pool.kit != nil
+			pool.Unlock()
+			if !have {
+				t.Skip("no kit in the pool (a software adapter prewarms none)")
+			}
+			devices := devicesMade.Load()
+			r := newRendererOrSkip(t)
+			defer r.Release()
+			if devicesMade.Load() != devices {
+				t.Fatal("the renderer made a device instead of taking the pooled one")
+			}
+			if !r.b.Classes {
+				t.Fatal("a renderer with a pooled device does not batch by classes")
+			}
+			vs, ps, blend := r.pipeline(&gpu.Batch{Class: gpu.ClassPlain})
+			if vs == r.vs || ps == r.ps || blend != r.overBlend {
+				t.Fatal("a plain fill on a pooled device does not draw with its class's shaders")
+			}
+			if err := r.draw(gputest.Scene()); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
