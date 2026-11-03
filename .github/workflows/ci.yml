@@ -71,6 +71,7 @@ jobs:
           mod=$(go list -m)
           if grep -qx "$mod/internal/e2e" <<<"$all"; then echo "e2e=true" >> "$GITHUB_OUTPUT"; fi
           if grep -qx "$mod/internal/gpu/d3d11/device" <<<"$all"; then echo "d3d=true" >> "$GITHUB_OUTPUT"; fi
+          if grep -qx "$mod/internal/gpu/d3d11" <<<"$all"; then echo "d3d11=true" >> "$GITHUB_OUTPUT"; fi
       - uses: oven-sh/setup-bun@v2
       # Ubuntu's mirrors are slow now and then (9 minutes for these packages
       # once), so the packages are kept in the Actions cache, under a key of
@@ -214,6 +215,12 @@ jobs:
         run: |
           go test -count=1 -tags mygo_nowebview -run TestNoWebViewInANativeOnlyBuild ./internal/windows
           go test -count=1 -tags mygo_nowebview -run TestNativeOnlyRefusesWebViews .
+      # A release build (mygo_noinspector, as mygo build makes it) has no
+      # classes.hlsl: the shaders of classes are those of shaders.z, with no
+      # fallback (shader_release.go).
+      - name: Direct3D renderer of a release build
+        if: runner.os == 'Windows' && matrix.shard == 'rest' && steps.affected.outputs.d3d11 == 'true'
+        run: go test -count=1 -tags mygo_noinspector ./internal/gpu/d3d11
       - name: macOS and Linux backends without a web view
         if: runner.os != 'Windows' && matrix.shard == 'rest'
         run: |

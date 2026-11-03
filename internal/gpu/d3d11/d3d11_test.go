@@ -364,7 +364,7 @@ func TestReleasedImageWithNewRenderer(t *testing.T) {
 // from shader.hlsl as it is, and that the compiler renderers fall back to
 // compiles it.
 func TestShaderBytecode(t *testing.T) {
-	if sourceSum() != shaderSum {
+	if sourceStale() {
 		t.Fatal("shader.hlsl changed since shaders.go was generated: run go generate ./internal/gpu/d3d11 on Windows")
 	}
 	packed, err := unpackedShaders()
