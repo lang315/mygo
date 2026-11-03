@@ -566,7 +566,7 @@ func (f *listFrame) releaseAll() {
 // choice, the menus, the drags. A row kept was built with the settings the
 // list had.
 func (s *ListState) settingsSig() (h uint64) {
-	for i, on := range [...]bool{s.cursor() != nil, s.Selection != nil, s.DragSelect, s.CellSelect, s.Reorder != nil,
+	for i, on := range [...]bool{s.cursor() != nil, s.Selection != nil, s.DragSelect, s.CellSelect, s.Reorder != nil, s.DragRows != nil,
 		s.RowMenu != nil, s.CellMenu != nil, s.Label != nil, s.Checked != nil} {
 		if on {
 			h |= 1 << i

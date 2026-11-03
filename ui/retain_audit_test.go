@@ -68,6 +68,30 @@ func TestRetainLayoutDragRowsListHoldsNothing(t *testing.T) {
 	p.idle(2)
 }
 
+// DragRows turned on after the rows were held: the rows held were built
+// without a drag source, so the list builds them again (settingsSig), and a
+// drag from a row works as in the twin whose rows are built every frame.
+func TestRetainLayoutDragRowsTurnedOnAfterRowsAreHeld(t *testing.T) {
+	var states []*ListState
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		states = append(states, s)
+		return func(c *Context) { auditRows(c, s, 30).Grow(1) }
+	})
+	p.idle(4)
+	if p.kept.rt.rowsLaidKept == 0 {
+		t.Fatal("no row held before DragRows is set")
+	}
+	for _, s := range states {
+		s.DragRows = func(rows []int) any { return rows }
+	}
+	p.idle(1)
+	b, _ := p.kept.Find("row 3")
+	p.both(func(tt *Tester) { drag(tt, b.X+2, b.Y+b.H/2, b.X+2, b.Y+4*b.H) })
+	p.compare("dragged after DragRows was turned on")
+	p.idle(2)
+}
+
 func TestRetainLayoutDragOverTheList(t *testing.T) {
 	p := newPair(t, 300, 400, func() func(c *Context) {
 		s := auditState()
