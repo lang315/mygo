@@ -658,9 +658,15 @@ lock: they read the row and call no widget method.
   table's types only, so a table that never edits pays nothing for it (a
   `Column` field could not do this: it reaches the table through an interface,
   and the linker then keeps the editing code of every table in the program). F2,
-  Enter or a double click edit the current cell; Enter writes, Escape cancels, Tab
-  leaves and writes. `Validate(row, text) error` of the `CellEditor`, asked before
-  `Set(row, text)`, refuses a value: the editor stays open and shows the error.
+  Enter or a double click edit the current cell; Enter writes, Escape cancels. Tab
+  writes and edits the next editable cell of the row, then the first of the next
+  row; Shift+Tab goes back (the next row is the one the table shows when Tab is
+  pressed, even if the write re-sorts the rows; past the last cell, or when the
+  write is refused, Tab does not move). `Validate(row, text) error` of the
+  `CellEditor`, asked before `Set(row, text)`, refuses a value: the editor stays
+  open, with a red border and the error in a small popover under the cell until
+  the next keystroke. A search that hides the edited row, or hiding its column,
+  cancels the edit; scrolling, sorting and resizing columns keep it.
   `CanEdit(row)` makes some cells read-only, `SetReadOnly(true)` the whole grid,
   `EditText(row)` is the text the editor starts with. `BeginEdit(key, column)`,
   `CancelEdit()`, `EndEdit() error` (commits now, for a Save button),
@@ -690,7 +696,7 @@ lock: they read the row and call no widget method.
   method (`UpdateRow`, `AddRows`, `Row`, ...), which would wait for the lock
   they run under and hang. `Set` must not leave the row half written: build the
   new value on a copy and assign it. A panic in one is recovered, reported with
-  `OnPanic`, and cancels the edit. Leaving the editor (a click elsewhere, Tab)
+  `OnPanic`, and cancels the edit. Leaving the editor (a click elsewhere)
   writes what was typed; when `Validate` refuses it the edit stays open with its
   error and nothing takes the focus back, so a Save handler calls `EndEdit()`
   and reads its error. A draft the user did not change writes nothing; one they
