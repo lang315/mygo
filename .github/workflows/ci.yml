@@ -120,9 +120,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build the JavaScript packages
         run: bun run build
-      # The platforms build and vet at once, each in a log of its own, which
-      # is printed in turn when they are done (a failure shows the lines of
-      # the command that failed, as it did when they ran one after another).
       - name: Check the shards
         if: matrix.shard == 'check'
         run: |
@@ -137,48 +134,25 @@ jobs:
       - name: Build and vet every platform
         if: matrix.shard == 'check'
         run: |
-          logs=$(mktemp -d)
-          pids=() names=()
-          spawn() { # a name for the log, then the function to run
-            local name=$1
-            shift
-            ( set -exo pipefail; "$@" ) >"$logs/$name" 2>&1 &
-            pids+=($!)
-            names+=("$name")
-          }
-          desktop() {
-            GOOS=$1 go build ./...
-            GOOS=$1 go vet ./...
+          for os in darwin linux windows; do
+            GOOS=$os go build ./...
+            GOOS=$os go vet ./...
             # Production builds leave the inspector of native UI out.
-            GOOS=$1 go vet -tags mygo_noinspector ./...
-            GOOS=$1 go vet -tags mygo_nowebview ./...
-          }
-          others() {
-            GOOS=freebsd go build ./...
-            # 32-bit Windows and Linux have no backend, but compile.
-            GOOS=windows GOARCH=386 go build ./...
-            GOOS=linux GOARCH=386 go build ./...
-            # Native UI runs on 32-bit ARM (the deb for armhf): its tests, which
-            # compile only if no constant overflows an int, are vetted.
-            GOOS=linux GOARCH=386 go vet ./ui/...
-          }
-          browsers() {
-            # Browsers run native UI; the CLI is for desktops.
-            export GOOS=js GOARCH=wasm
-            go build $(go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./... | grep -v /cmd/mygo)
-            go vet $(go list ./... | grep -v /cmd/mygo)
-            go test -exec "$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/web ./internal/gpu/gl
-          }
-          for os in darwin linux windows; do spawn $os desktop $os; done
-          spawn others others
-          spawn browsers browsers
-          status=0
-          for i in "${!pids[@]}"; do
-            wait "${pids[$i]}" || { status=1; echo "FAILED: ${names[$i]}"; }
-            echo "=== ${names[$i]}"
-            cat "$logs/${names[$i]}"
+            GOOS=$os go vet -tags mygo_noinspector ./...
+            GOOS=$os go vet -tags mygo_nowebview ./...
           done
-          exit $status
+          GOOS=freebsd go build ./...
+          # 32-bit Windows and Linux have no backend, but compile.
+          GOOS=windows GOARCH=386 go build ./...
+          GOOS=linux GOARCH=386 go build ./...
+          # Native UI runs on 32-bit ARM (the deb for armhf): its tests, which
+          # compile only if no constant overflows an int, are vetted.
+          GOOS=linux GOARCH=386 go vet ./ui/...
+          # Browsers run native UI; the CLI is for desktops.
+          export GOOS=js GOARCH=wasm
+          go build $(go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./... | grep -v /cmd/mygo)
+          go vet $(go list ./... | grep -v /cmd/mygo)
+          go test -exec "$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/web ./internal/gpu/gl
       # The plugins' tests load the native libraries their mygo-plugin.json
       # pins, and on Windows the installer tests run the NSIS that
       # internal/nsis pins, all of which they download into the user's cache
@@ -205,10 +179,12 @@ jobs:
           key: ${{ steps.downloads.outputs.cache-primary-key }}
       # The race detector and a shuffled order of the tests and benchmarks'
       # run on the unit tests; the GUI tests below are not run with them.
-      # ./ui and cmd/mygo run their tests on one core, 15 to 20 and 9 to 10
-      # minutes under -race: ci-test.sh runs their slowest in processes of
-      # their own, at once, and starts the slowest packages first
-      # (--check, in the check job, looks that its lists are right). Ui's
+      # cmd/mygo takes 9 to 10 minutes on macOS under -race, the default limit.
+      #
+      # ./ui runs its tests on one core, 15 to 20 minutes under -race, and
+      # cmd/mygo's run one after another: ci-test.sh runs their slowest in
+      # processes of their own, at once (cmd/mygo's only on 4 cores or more).
+      # Its
       # production build, without the inspector, is the noinspector job's:
       # in the ui job too, it left the four cores short.
       - name: Unit tests
