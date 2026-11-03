@@ -550,7 +550,8 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item 
 		case chosen && s.AccentChoice:
 			cell.Selected(true)
 		case chosen && grid.Focused():
-			cell.Background(t.Accent.Alpha(0.2)).Border(2, t.Accent)
+			a := c.accent(t)
+			cell.Background(a.Alpha(0.2)).Border(2, a)
 		case chosen:
 			cell.Background(t.SurfacePressed).Border(2, t.Border)
 		default:
