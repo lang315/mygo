@@ -235,9 +235,10 @@ cannot show: those items are not marked):
   cells. The editing is in (`EditColumn`, F2, Enter or a double click; Tab and
   Shift+Tab move between cells; `Validate` refuses a value; #383, #385, #388,
   and the focused cell for screen readers in #386), and the widget tour edits
-  the Name column of its table. **Not done:** typing real Telex in a text box
-  and in a table cell is still a check by hand, by the owner, on a Mac and on
-  Windows. The automated tests cannot stand in for an input method.
+  the Name column of its table. **Done** 2026-11-04: the owner typed real
+  Telex in a text box and in a table cell of the widget tour, by hand, on a Mac
+  and on Windows 10 amd64 (a build of `b4c9d978`). The automated tests cannot
+  stand in for an input method.
 - A click on a table of 1M rows takes ≤ 1 ms of the app's work (`clickApp`). **Done**, see above: 0.67 ms at worst on CI.
 - API changes the port forces land before Phase 2.
 
