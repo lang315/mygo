@@ -47,8 +47,12 @@ const webView2Page = "https://developer.microsoft.com/microsoft-edge/webview2"
 // with 1 (download), 2 (signature), 3 (signer) or 4 (the bootstrapper).
 const webView2PS1 = webView2FetchPS1 + webView2HoldPS1 + webView2CheckPS1 + webView2RunPS1
 
-// webView2FetchPS1 downloads the bootstrapper, unless the installer carries it.
+// webView2FetchPS1 downloads the bootstrapper, unless the installer carries it,
+// with the module path of this PowerShell alone.
 const webView2FetchPS1 = `$ErrorActionPreference = 'Stop'
+# Only Windows PowerShell's own modules: one started from PowerShell 7 inherits its
+# module path, whose Microsoft.PowerShell.Security this PowerShell cannot load.
+$env:PSModulePath = Join-Path $PSHOME 'Modules'
 $file = $env:MYGO_WV2_FILE
 if ($env:MYGO_WV2_URL) {
 	try {

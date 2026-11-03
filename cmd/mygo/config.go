@@ -316,7 +316,7 @@ func (c *Config) validate() error {
 		return errors.New("windows.certificate and windows.signCommand exclude each other")
 	}
 	switch c.Windows.WebView2 {
-	case webView2Download, webView2Embed, webView2None:
+	case "", webView2Download, webView2Embed, webView2None: // "" before applyDefaults
 	default:
 		return fmt.Errorf(`windows.webview2 is "download", "embed" or "none", not %q`, c.Windows.WebView2)
 	}

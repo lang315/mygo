@@ -182,8 +182,9 @@ func TestInstallerWebView2(t *testing.T) {
 // signature.
 func signatureOf(t *testing.T, path string) string {
 	t.Helper()
-	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
-		"$s = Get-AuthenticodeSignature -LiteralPath '"+path+"'; $s.Status.ToString() + '|' + $s.SignerCertificate.GetNameInfo('SimpleName', $false)").Output()
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		"$env:PSModulePath = Join-Path $PSHOME 'Modules'; $s = Get-AuthenticodeSignature -LiteralPath '"+path+"'; $s.Status.ToString() + '|' + $s.SignerCertificate.GetNameInfo('SimpleName', $false)")
+	out, err := cmd.Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,9 +195,12 @@ func signatureOf(t *testing.T, path string) string {
 // (webView2HoldPS1 and webView2RunPS1, those of the installer) on a script
 // of cmd.exe in PowerShell 5.1, which is the installer's, and returns its
 // output and exit code.
-func runWebView2Step(t *testing.T, script string) (string, int) {
+func runWebView2Step(t *testing.T, script, marker string) (string, int) {
 	t.Helper()
 	dir := t.TempDir()
+	// After the folder, so that it runs before the folder's removal: a child
+	// that lives on must not hold, or outlive, the test's files.
+	t.Cleanup(func() { killWebView2Children(marker) })
 	bat := filepath.Join(dir, "setup.bat")
 	if err := os.WriteFile(bat, []byte(script), 0o644); err != nil {
 		t.Fatal(err)
@@ -233,11 +237,7 @@ func runWebView2Step(t *testing.T, script string) (string, int) {
 // installer, a silent update's too.
 func TestWebView2RunDoesNotWaitForChildren(t *testing.T) {
 	const marker = "-n 97 127.0.0.1"
-	t.Cleanup(func() {
-		exec.Command("powershell", "-NoProfile", "-Command",
-			"Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*"+marker+"*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }").Run()
-	})
-	out, code := runWebView2Step(t, "@echo off\r\nstart \"\" /b ping "+marker+" >nul\r\nexit /b 0\r\n")
+	out, code := runWebView2Step(t, "@echo off\r\nstart \"\" /b ping "+marker+" >nul\r\nexit /b 0\r\n", marker)
 	if code != 0 {
 		t.Errorf("exit code %d, output %q, want 0", code, out)
 	}
@@ -247,8 +247,14 @@ func TestWebView2RunDoesNotWaitForChildren(t *testing.T) {
 		t.Error("the child did not outlive the stand-in: the test proves nothing")
 	}
 	// The bootstrapper's own failure is the step's.
-	out, code = runWebView2Step(t, "@echo off\r\nexit /b 3\r\n")
+	out, code = runWebView2Step(t, "@echo off\r\nexit /b 3\r\n", marker)
 	if code != 4 || !strings.Contains(out, "bootstrapper exit code 3") {
 		t.Errorf("a failing bootstrapper: exit code %d, output %q, want 4 and its code", code, out)
 	}
+}
+
+// killWebView2Children ends the processes whose command lines have marker.
+func killWebView2Children(marker string) {
+	exec.Command("powershell", "-NoProfile", "-Command",
+		"Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*"+marker+"*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }").Run()
 }
