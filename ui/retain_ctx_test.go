@@ -55,6 +55,19 @@ func TestRetainRowsShowingTheWindow(t *testing.T) {
 			Checkbox(c, &on, "row")
 		}, func(tt *Tester) { tt.SetWindowActive(false) }},
 		{"Primary button", func(c *Context, i int) { PrimaryButton(c, "go") }, func(tt *Tester) { tt.SetWindowActive(false) }},
+		{"Radio", func(c *Context, i int) {
+			v := 1
+			Radio(c, &v, 1, "row")
+		}, func(tt *Tester) { tt.SetWindowActive(false) }},
+		{"Switch", func(c *Context, i int) {
+			on := true
+			Switch(c, &on)
+		}, func(tt *Tester) { tt.SetWindowActive(false) }},
+		{"Slider", func(c *Context, i int) {
+			v := 0.5
+			Slider(c, &v, 0, 1)
+		}, func(tt *Tester) { tt.SetWindowActive(false) }},
+		{"Progress", func(c *Context, i int) { Progress(c, 0.5) }, func(tt *Tester) { tt.SetWindowActive(false) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newPair(t, 300, 400, ctxScene(tc.show))
@@ -64,8 +77,12 @@ func TestRetainRowsShowingTheWindow(t *testing.T) {
 			if b, k := p.kept.rt.rowsBuilt-built, p.kept.rt.rowsKept-kept; b != 0 || k == 0 {
 				t.Errorf("idle: %d rows built, %d kept; want none built (the value did not change)", b, k)
 			}
+			built = p.kept.rt.rowsBuilt
 			p.both(tc.do)
 			p.frame("changed")
+			if p.kept.rt.rowsBuilt == built {
+				t.Error("changed: no row was built again, though the value the rows read changed")
+			}
 			p.frame("changed 2")
 		})
 	}
