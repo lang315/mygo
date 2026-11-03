@@ -47,6 +47,14 @@ func TestRetainRowsShowingTheWindow(t *testing.T) {
 		}},
 		{"Vibrancy", func(c *Context, i int) { Textf(c, "row %d vibrancy %v", i, c.Vibrancy()) }, func(tt *Tester) { tt.SetVibrancy(true) }},
 		{"TitleBar", func(c *Context, i int) { Textf(c, "row %d bar %v", i, c.TitleBar().Height) }, func(tt *Tester) { tt.SetTitleBar(TitleBar{Height: 30}) }},
+		{"WindowActive", func(c *Context, i int) { Textf(c, "row %d active %v", i, c.WindowActive()) }, func(tt *Tester) { tt.SetWindowActive(false) }},
+		// The accent of a checked box fades in a window that is not active
+		// (c.accent): the row reads the window's state without asking.
+		{"Accent", func(c *Context, i int) {
+			on := true
+			Checkbox(c, &on, "row")
+		}, func(tt *Tester) { tt.SetWindowActive(false) }},
+		{"Primary button", func(c *Context, i int) { PrimaryButton(c, "go") }, func(tt *Tester) { tt.SetWindowActive(false) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newPair(t, 300, 400, ctxScene(tc.show))
