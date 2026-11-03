@@ -18,6 +18,16 @@ func tourTableTab(t *testing.T) *ui.Tester {
 	return tt
 }
 
+// settle lets the handlers the frames posted run (Enter writes through a
+// posted call), and the frames they ask for.
+func settle(tt *ui.Tester) {
+	tt.Frame()
+	done := make(chan struct{})
+	widget.Post(func() { close(done) })
+	<-done
+	tt.Frame()
+}
+
 // The Name column of the tour's table edits in place: F2 opens the editor,
 // typing replaces the text and Enter writes it.
 func TestTourTableEditsAName(t *testing.T) {
@@ -26,11 +36,10 @@ func TestTourTableEditsAName(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Key(0, ui.KeyF2)
-	tt.Frame()
+	settle(tt)
 	tt.Type("Nguyễn")
 	tt.Key(0, ui.KeyEnter)
-	tt.Frame()
-	tt.Frame()
+	settle(tt)
 	if !tt.HasText("Nguyễn") {
 		t.Fatalf("the edited name is not shown; texts %q", tt.Texts())
 	}
@@ -43,11 +52,10 @@ func TestTourTableRefusesAnEmptyName(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Key(0, ui.KeyF2)
-	tt.Frame()
+	settle(tt)
 	tt.Key(0, ui.KeyBackspace) // the text starts selected
 	tt.Key(0, ui.KeyEnter)
-	tt.Frame()
-	tt.Frame()
+	settle(tt)
 	if !tt.HasText("A name cannot be empty") {
 		t.Fatalf("no refusal shown; texts %q", tt.Texts())
 	}
