@@ -47,6 +47,10 @@ type Column[T any] struct {
 	// sorts the rows once they are sorted by it, and its Filterable
 	// search works; it is not drawn, read by assistive technology or copied.
 	Hidden bool
+
+	// edit is the column's *CellEditor[T] (EditColumn), held as an any so that
+	// Column does not name the type.
+	edit any
 }
 
 // IntColumn makes a sortable column of an int, right-aligned, whose Compare
@@ -115,6 +119,19 @@ type DataGridViewWidget[T any, K comparable] struct {
 	lateSeq                                 uint64               // its latest right-click
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
 	numbered                                bool                 // the index column shows
+
+	// In-cell editing (tableedit.go): its state is edAny, a *tableEditing, and the
+	// parts of editing the table calls are the func fields below, all nil until
+	// editing is turned on (enableEdit). The table names none of editing's types,
+	// so a program that never edits does not link them.
+	edAny       any
+	cellHook    func(c *ui.Context, col int, r any) bool // builds the editor in the cell being edited (r is a *T)
+	versionHook func(r any) uint64                       // the edited row's version (r is a *T)
+	pruneHook   func()                                   // rows went
+	prepareEdit func()                                   // before the table builds
+	afterTable  func(e ui.Element, c *ui.Context)        // after it built
+	editCell    func(row, col int, how ui.EditHow) bool
+	startCell   func(row, col int, x, y float32, how ui.EditHow)
 
 	// watch, when set by a ListView, gets the keys the user added to and took
 	// out of the choice, or of the checks (checks).
@@ -289,6 +306,9 @@ func (t *DataGridViewWidget[T, K]) prune() {
 	t.gone = true
 	t.chosen.keep(t.src.index)
 	t.checked.keep(t.src.index)
+	if t.pruneHook != nil {
+		t.pruneHook()
+	}
 }
 
 // Row returns the row of key k.
@@ -427,7 +447,11 @@ func (t *DataGridViewWidget[T, K]) rowVersion(row int) uint64 {
 	if t.numbered {
 		place = pos + 1
 	}
-	return versionOf(t.src.gens.of(t.key(r)), foldLook(t.look, t.images.generation()), place)
+	look := foldLook(t.look, t.images.generation())
+	if t.versionHook != nil {
+		look ^= t.versionHook(r) * 0x9ddfea08eb382d69 // the row of the edit builds again when the edit begins or ends
+	}
+	return versionOf(t.src.gens.of(t.key(r)), look, place)
 }
 
 // keyAtPos is the key of the row at position pos of the view.
@@ -497,6 +521,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
+	if t.prepareEdit != nil {
+		t.prepareEdit()
+	}
 	s.Version = t.view.Version()
 	s.Header = nil
 	if t.view.Groups() != nil {
@@ -514,6 +541,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		OnSortChange(onChange(&t.sort, nil)).
 		OnSelectionChange(func() { t.commit(&t.chosen) }).
 		OnCheckedChange(func() { t.commit(&t.checked) })
+	if t.afterTable != nil {
+		t.afterTable(e, c)
+	}
 	t.events(e)
 	return e
 }
@@ -539,6 +569,9 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 		col--
 	}
 	cl, r := &t.cols[vis[col]], t.rowAt(row)
+	if t.cellHook != nil && t.cellHook(c, vis[col], r) {
+		return
+	}
 	// A selected row's text keeps the selection's color, which reads on
 	// the accent; a column's own may not.
 	colored := cl.Color != nil && !c.RowSelected()

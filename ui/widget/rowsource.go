@@ -112,25 +112,45 @@ func (s *RowSource[T, K]) since(seq uint64) ([]srcChange, bool) {
 // change runs fn under mu, then redraws the windows that show a table over
 // the source.
 func (s *RowSource[T, K]) change(fn func()) {
-	wins := func() (wins []*mygo.Window) {
+	wins := func() []*mygo.Window {
 		mu.Lock()
 		defer mu.Unlock() // fn runs the program's key func and UpdateRow's fn: it may panic
 		fn()
-		for w, f := range shown {
-			for _, t := range s.tables {
-				if l := t.Value(); l != nil {
-					if _, ok := f.keep.widgets[l.id]; ok {
-						wins = append(wins, w)
-						break
-					}
-				}
-			}
-		}
-		return wins
+		return s.windows()
 	}()
 	for _, w := range wins {
 		invalidate(w)
 	}
+}
+
+// windows returns the windows that show a table over the source. Under mu.
+func (s *RowSource[T, K]) windows() (wins []*mygo.Window) {
+	for w, f := range shown {
+		for _, t := range s.tables {
+			if l := t.Value(); l != nil {
+				if _, ok := f.keep.widgets[l.id]; ok {
+					wins = append(wins, w)
+					break
+				}
+			}
+		}
+	}
+	return wins
+}
+
+// updateLocked is UpdateRow for a caller that holds the package's lock: it
+// runs fn on the row of key k, bumps its generation and logs the change, and
+// returns the windows to invalidate once the lock is released (false when the
+// source holds no row of k). Under mu.
+func (s *RowSource[T, K]) updateLocked(k K, fn func(*T)) ([]*mygo.Window, bool) {
+	i, ok := s.index[k]
+	if !ok {
+		return nil, false
+	}
+	fn(&s.rows[i])
+	s.gens.bump(k)
+	s.record(i)
+	return s.windows(), true
 }
 
 // logLen and attached are for tests.
@@ -189,13 +209,15 @@ func (s *RowSource[T, K]) add(rows []T) {
 // place. fn runs under the package's lock: it changes the row but not its
 // key, and calls no widget method.
 func (s *RowSource[T, K]) UpdateRow(k K, fn func(*T)) *RowSource[T, K] {
-	s.change(func() {
-		if i, ok := s.index[k]; ok {
-			fn(&s.rows[i])
-			s.gens.bump(k)
-			s.record(i)
-		}
-	})
+	var wins []*mygo.Window
+	func() {
+		mu.Lock()
+		defer mu.Unlock() // fn is the program's: it may panic
+		wins, _ = s.updateLocked(k, fn)
+	}()
+	for _, w := range wins {
+		invalidate(w)
+	}
 	return s
 }
 
