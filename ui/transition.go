@@ -453,8 +453,8 @@ func (r *transition) properties() uint8 {
 // out of view may skip it.
 func (r *transition) colorsOnly() bool {
 	t := &r.t
-	return t.Colors && !t.Position && !t.Size && t.Enter == nil && t.Exit == nil && t.Match == nil &&
-		r.moving == 0 && !r.matching && r.ghost == nil
+	return t.Colors && !t.Position && !t.Size && t.Enter == nil && t.Exit == nil && t.Match == nil && !t.AfterExits &&
+		!r.held && r.moving == 0 && !r.matching && r.ghost == nil
 }
 
 func lerp(a, b, k float32) float32 { return a + (b-a)*k }

@@ -575,6 +575,38 @@ func TestTransitionAfterExits(t *testing.T) {
 	}
 }
 
+// An element whose Transition moves only colors still waits, with
+// AfterExits, for the copies of its siblings to leave: the fork's path for
+// colors only would show it at once.
+func TestTransitionAfterExitsColorsOnly(t *testing.T) {
+	page := 0
+	leaves := ElementTransition{Duration: 100 * time.Millisecond, Ease: Linear, Exit: &Motion{}}
+	comes := ElementTransition{Duration: 100 * time.Millisecond, Ease: Linear, Colors: true, AfterExits: true}
+	tt, now := clockTester(func(c *context) {
+		coreBox(c).Size(200, 100).Children(func() {
+			tr := leaves
+			if page == 1 {
+				tr = comes
+			}
+			keep(page, coreBox(c).Key(page)).Absolute().Size(100, 100).Background(RGB(0, 0, 255)).Transition(tr)
+		})
+	}, 200, 100)
+	slot := func() *node { return tt.rt.c.root.first }
+	page = 1
+	tt.Frame()
+	if len(leavingUnder(slot())) != 1 {
+		t.Fatal("the page gone does not leave")
+	}
+	if e := keyed(tt, 1); e.flags&flagInvisible == 0 {
+		t.Error("the page coming shows while the other leaves")
+	}
+	*now = now.Add(110 * time.Millisecond)
+	tt.Frame()
+	if e := keyed(tt, 1); e.flags&flagInvisible != 0 || len(leavingUnder(slot())) != 0 {
+		t.Error("the page gone gone, the page coming does not show")
+	}
+}
+
 func TestTransitionMotionPercent(t *testing.T) {
 	show := false
 	tt, now := clockTester(func(c *context) {
