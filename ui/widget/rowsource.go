@@ -209,7 +209,15 @@ func (s *RowSource[T, K]) add(rows []T) {
 // place. fn runs under the package's lock: it changes the row but not its
 // key, and calls no widget method.
 func (s *RowSource[T, K]) UpdateRow(k K, fn func(*T)) *RowSource[T, K] {
-	s.change(func() { s.updateLocked(k, fn) })
+	var wins []*mygo.Window
+	func() {
+		mu.Lock()
+		defer mu.Unlock() // fn is the program's: it may panic
+		wins, _ = s.updateLocked(k, fn)
+	}()
+	for _, w := range wins {
+		invalidate(w)
+	}
 	return s
 }
 
