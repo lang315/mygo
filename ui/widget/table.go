@@ -140,6 +140,21 @@ type DataGridViewWidget[T any, K comparable] struct {
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
 	numbered                                bool                 // the index column shows
 
+	// In-cell editing (tableedit.go), all under mu: the edit in progress, the
+	// generation that versions its row, whether a column has a Set, the
+	// current cell of the last frame and one asked for.
+	edit       *editState[K]
+	editGen    uint64
+	editable   bool
+	readOnly   bool
+	editMode   EditMode
+	onEndEdit  func(K, string)
+	pendingCur *curCell[K]
+	curKey     K
+	curCol     string
+	curOK      bool
+	refocus    bool // an edit ended while its editor had the focus: the table takes it
+
 	// watch, when set by a ListView, gets the keys the user added to and took
 	// out of the choice, or of the checks (checks).
 	watch func(checks bool, on, off []K)
@@ -183,6 +198,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	}
 	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: slices.Clone(cols), view: ui.NewTableView(compare), cursor: -1}
 	t.columns = t.uiColumns()
+	t.editable = slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Set != nil })
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.RowVersion = t.rowVersion
 	t.list.Copy = t.copyRows
@@ -451,7 +467,11 @@ func (t *DataGridViewWidget[T, K]) rowVersion(row int) uint64 {
 	if t.numbered {
 		place = pos + 1
 	}
-	return versionOf(t.src.gens.of(t.key(r)), foldLook(t.look, t.images.generation()), place)
+	look := foldLook(t.look, t.images.generation())
+	if e := t.edit; e != nil && t.key(r) == e.key {
+		look ^= e.gen * 0x9ddfea08eb382d69 // the row of the edit builds again when the edit begins or ends
+	}
+	return versionOf(t.src.gens.of(t.key(r)), look, place)
 }
 
 // keyAtPos is the key of the row at position pos of the view.
@@ -521,6 +541,8 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
+	t.wireEdit()
+	t.followCurrent()
 	s.Version = t.view.Version()
 	s.Header = nil
 	if t.view.Groups() != nil {
@@ -538,6 +560,10 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		OnSortChange(onChange(&t.sort, nil)).
 		OnSelectionChange(func() { t.commit(&t.chosen) }).
 		OnCheckedChange(func() { t.commit(&t.checked) })
+	if t.refocus && !c.Measuring() {
+		t.refocus = false
+		e.Focus()
+	}
 	t.events(e)
 	return e
 }
@@ -563,6 +589,10 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 		col--
 	}
 	cl, r := &t.cols[vis[col]], t.rowAt(row)
+	if e := t.edit; e != nil && vis[col] == e.col && t.key(r) == e.key {
+		t.editor(c, e)
+		return
+	}
 	// A selected row's text keeps the selection's color, which reads on
 	// the accent; a column's own may not.
 	colored := cl.Color != nil && !c.RowSelected()
