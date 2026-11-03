@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -176,5 +177,52 @@ func TestCurrentCellAccessFocusInEditor(t *testing.T) {
 	n, ok := accessByID(tree, tree.Focus)
 	if !ok || n.Role != platform.RoleTextField {
 		t.Fatalf("while editing: focus %+v (found %v), want the editor", n, ok)
+	}
+}
+
+// The twin that keeps the rows of a table with a current cell tells assistive
+// technology what the twin that builds them all does: the same cells, names,
+// descriptions and focus, as the column and the row move.
+func TestRetainCurrentCellAccess(t *testing.T) {
+	mk := func() func(c *Context) {
+		s := &ListState{CurrentCell: true, Selection: &Selection[int]{}, Key: func(i int) any { return i }, RowVersion: func(int) uint64 { return 1 }}
+		cols := []TableColumn{{Title: "A"}, {Title: "B"}, {Title: "C"}}
+		return func(c *Context) {
+			Table(c, s, cols, 40, func(row, col int) { Textf(c, "r%dc%d", row, col) }).Grow(1)
+		}
+	}
+	p := newPair(t, 400, 300, mk)
+	p.both(func(tt *Tester) { tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn}) })
+	p.idle(4)
+	same := func(what string) {
+		t.Helper()
+		view := func(tt *Tester) (out []string) {
+			tree := tt.h.access
+			out = append(out, fmt.Sprint("focus ", slices.IndexFunc(tree.Nodes, func(n platform.AccessNode) bool { return n.ID == tree.Focus })))
+			for _, n := range tree.Nodes {
+				out = append(out, fmt.Sprint(n.Parent, n.Role, n.Label, "|", n.Description, n.States, n.Actions))
+			}
+			return out
+		}
+		if a, b := view(p.kept), view(p.built); !slices.Equal(a, b) {
+			t.Fatalf("after %s: the trees differ\nkept  %q\nbuilt %q", what, a, b)
+		}
+	}
+	for _, step := range []struct {
+		what string
+		do   func(tt *Tester)
+	}{
+		{"click", func(tt *Tester) { tt.Click("r3c1") }},
+		{"Right", func(tt *Tester) { tt.Key(0, KeyRight) }},
+		{"Down", func(tt *Tester) { tt.Key(0, KeyDown) }},
+		{"Left", func(tt *Tester) { tt.Key(0, KeyLeft) }},
+	} {
+		p.both(step.do)
+		p.frame(step.what)
+		p.frame(step.what + " +1")
+		same(step.what)
+	}
+	if focusedCell(t, p.kept.h.access).Label != "r4c1" {
+		t.Fatalf("focus %q, want r4c1", focusedCell(t, p.kept.h.access).Label)
 	}
 }

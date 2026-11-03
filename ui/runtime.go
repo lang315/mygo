@@ -409,6 +409,9 @@ type engine struct {
 	cellClick   func(f *listFrame, x, y float32, mods Modifiers)
 	cellInBlock func(f *listFrame, x, y float32) bool
 	cellColumn  func(f *listFrame, k int, mods Modifiers)
+	// cellAccess is the part of tables with a current cell that assistive
+	// technology reaches, set as cellClick is.
+	cellAccess *cellAccessHooks
 	// pressDragger is the element around the one pressed that drags a
 	// value, which takes the press as it moves (dragMove), or 0.
 	pressDragger uint64
@@ -545,9 +548,6 @@ type engine struct {
 	dropOver    uint64
 	access      bool
 	accessNodes int
-	// accessCells are the cells of the last tree that assistive technology
-	// can focus, by element (focusCell).
-	accessCells map[uint64]accessCell
 	blinkStart  time.Time
 	inFrame     bool
 	dark        bool

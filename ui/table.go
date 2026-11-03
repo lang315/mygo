@@ -190,6 +190,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	if cellSel {
 		if c.rt.cellClick == nil {
 			c.rt.cellClick, c.rt.cellInBlock, c.rt.cellColumn = (*listFrame).clickCell, (*listFrame).cellInBlockAt, (*listFrame).clickColumn
+			c.rt.cellAccess = &cellAccessFuncs
 		}
 		for _, j := range order {
 			s.tableCols = append(s.tableCols, tableCol{id: columns[j].id(), col: j, rowHeader: columns[j].RowHeader, title: columns[j].Title})

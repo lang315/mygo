@@ -2,11 +2,20 @@ package ui
 
 import "github.com/egoist/mygo/internal/platform"
 
-// accessCell is a cell of a table with a current cell or choosing cells, as
-// assistive technology sees it: its row's element and its column's id.
-type accessCell struct {
-	row uint64
-	col string
+// cellAccessHooks are the parts of tables with a current cell that the
+// accessibility tree reaches, so that apps without them do not link them.
+type cellAccessHooks struct {
+	// cell describes a cell and reports whether its texts, which name it,
+	// are all it holds, and gives it the focus of the tree while it is the
+	// table's current cell. focus does what a click on a cell does for
+	// assistive technology focusing it.
+	cell  func(rt *engine, t *platform.AccessTree, e *node, n *platform.AccessNode) bool
+	focus func(rt *engine, id uint64) bool
+}
+
+var cellAccessFuncs = cellAccessHooks{
+	cell:  accessCellDetails,
+	focus: (*engine).focusCell,
 }
 
 // accessCellOf returns the list frame and the column's place of e when it is
@@ -39,12 +48,14 @@ func accessCellOf(e *node) (f *listFrame, k int, row *node) {
 }
 
 // accessCellDetails names a cell of such a Table by what is inside it, tells
-// its column in the description and lets assistive technology focus it, and
-// notes it for focusCell.
-func (rt *engine) accessCellDetails(e *node, n *platform.AccessNode) {
+// its column in the description and lets assistive technology focus it; the
+// current cell of the row the keys move from has the tree's focus while the
+// table has the keyboard's. It reports whether the texts are all that is
+// inside.
+func accessCellDetails(rt *engine, t *platform.AccessTree, e *node, n *platform.AccessNode) bool {
 	f, k, row := accessCellOf(e)
 	if f == nil {
-		return
+		return false
 	}
 	if n.Label == "" {
 		n.Label = e.innerText()
@@ -52,14 +63,16 @@ func (rt *engine) accessCellDetails(e *node, n *platform.AccessNode) {
 	if n.Description == "" {
 		n.Description = f.s.tableCols[k].title
 	}
-	if rt.accessCells == nil {
-		rt.accessCells = map[uint64]accessCell{}
-	}
-	rt.accessCells[e.id] = accessCell{row: row.id, col: f.s.tableCols[k].id}
 	if !e.IsDisabled() && !e.st.ignoreInput {
 		n.States |= platform.AccessFocusable
 		n.Actions |= platform.ActionFocus
 	}
+	if t.Focus == 0 && rt.windowFocus() && rt.focused == f.owner.id && k == f.s.colIndex(f.s.Cells.Cursor) {
+		if c := f.s.cursor(); c != nil && *c == row.st.valueBinding.(*listRowInput).i {
+			t.Focus = e.id
+		}
+	}
+	return n.Label != "" && textOnly(e)
 }
 
 // textOnly reports whether what is inside e shows no element of assistive
@@ -76,45 +89,39 @@ func textOnly(e *node) bool {
 	return true
 }
 
-// currentCellID returns the id of the cell in the current column of the
-// element of row, 0 when the list keeps none.
-func (f *listFrame) currentCellID(row *node) uint64 {
-	if !f.tracksCells() {
-		return 0
+// elementByID returns the element with id inside e.
+func elementByID(e *node, id uint64) *node {
+	if e.id == id {
+		return e
 	}
-	k := f.s.colIndex(f.s.Cells.Cursor)
-	if k < 0 {
-		return 0
-	}
-	id := f.s.tableCols[k].id
-	// The cells are in a box inside the row's element.
-	for box := row.first; box != nil; box = box.next {
-		for ch := box.first; ch != nil; ch = ch.next {
-			if key, ok := ch.key.(string); ok && key == id && ch.role == RoleCell {
-				return ch.id
-			}
+	for ch := e.first; ch != nil; ch = ch.next {
+		if n := elementByID(ch, id); n != nil {
+			return n
 		}
 	}
-	return 0
+	return nil
 }
 
 // focusCell does for assistive technology moving to a cell what a click on
 // it does: it chooses the row and, with the row's click in the next frame,
 // the column (takeAccessPick). It reports whether id is such a cell.
 func (rt *engine) focusCell(id uint64) bool {
-	c, ok := rt.accessCells[id]
-	if !ok {
+	if rt.c.root == nil {
 		return false
 	}
-	row := rt.states[c.row]
+	e := elementByID(rt.c.root, id)
+	if e == nil || e.role != RoleCell {
+		return false
+	}
+	f, k, rowNode := accessCellOf(e)
+	if f == nil {
+		return false
+	}
+	row := rt.states[rowNode.id]
 	if row == nil || row.flags&flagDisabled != 0 || row.ignoreInput || row.seen != rt.frame || row.pass != rt.pass {
 		return false
 	}
-	b, ok := row.valueBinding.(*listRowInput)
-	if !ok {
-		return false
-	}
-	b.f.s.accessPick.set, b.f.s.accessPick.col, b.f.s.accessPick.frame = true, c.col, rt.frame
+	f.s.accessPick.set, f.s.accessPick.col, f.s.accessPick.frame = true, f.s.tableCols[k].id, rt.frame
 	row.click(0)
 	return true
 }
