@@ -62,8 +62,8 @@ jobs:
         run: |
           unformatted=$(gofmt -l $(git ls-files '*.go'))
           if [ -n "$unformatted" ]; then echo "gofmt -w these files:"; echo "$unformatted"; exit 1; fi
-      # The fakecgo run and the GUI tests are rest's, except on macOS, where
-      # they are cmd's: rest had the most to do there, cmd the least.
+      # The GUI tests are rest's, except on macOS, where they are cmd's: rest
+      # had the most to do there, cmd the least.
       - name: Which GUI and Direct3D tests the change affects
         id: affected
         if: matrix.shard == 'rest' && runner.os != 'macOS' || matrix.shard == 'cmd' && runner.os == 'macOS'
@@ -231,7 +231,7 @@ jobs:
       # packages of the native calls (the tests above use the real cgo where
       # a C compiler is, so none of them meets fakecgo).
       - name: Start every test binary through fakecgo
-        if: runner.os == 'Linux' && matrix.shard == 'rest' || runner.os == 'macOS' && matrix.shard == 'cmd'
+        if: runner.os != 'Windows' && matrix.shard == 'rest'
         env:
           CGO_ENABLED: 0
         run: |

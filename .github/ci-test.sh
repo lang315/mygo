@@ -24,15 +24,17 @@
 set -euo pipefail
 
 # package:names of its tests, about 3 minutes each under -race on an
-# M-series core (cmd/mygo: 1 to 1.5, its tests need the Go toolchain too).
+# M-series core (cmd/mygo: 1 to 1.5; its tests run the Go toolchain, which
+# uses every core, so on a runner of fewer than 4 cores, macOS's 3, their
+# processes only slow one another down: cmd/mygo@4 splits from 4 cores).
 splits=(
   'ui:TestPaintCullMatches|TestRetainSliderRowsRandomWalk|TestRetainShiftPaintMixedScales|TestRetainComboboxRowsRandomWalk|TestPureDrawsReachNoNode'
   'ui:TestLayoutCacheMatches|TestRetainScrollFuzz|TestRetainFocusableRowsRandomWalk|TestRetainLayoutInnerScrollModelSeed'
   'ui:TestRetainSwitchRowsRandomWalk|TestRetainRowsOfTextInputUsersRandomWalk|TestRetainSelectProgressRowsRandomWalk|TestRetainMatchesFresh'
   'ui:TestRetainRandomWalkOfReaders|TestReplayMatches'
-  'cmd/mygo:TestUpdateEndToEnd|TestSkipInstaller'
-  'cmd/mygo:TestBuildResources|TestBuildDMGSize|TestBuildDMG'
-  'cmd/mygo:TestBuildLinuxSlug|TestRev338eScanCost|TestResourceErrors'
+  'cmd/mygo@4:TestUpdateEndToEnd|TestSkipInstaller'
+  'cmd/mygo@4:TestBuildResources|TestBuildDMGSize|TestBuildDMG'
+  'cmd/mygo@4:TestBuildLinuxSlug|TestRev338eScanCost|TestResourceErrors'
 )
 # The packages that take the longest under -race, longest first (the
 # order of the slowest runner of each); those of another system or another
@@ -50,7 +52,7 @@ if [ "${1:-}" = --check ]; then
   fail=0
   seen=$'\n' seen_slowest=$'\n'
   for s in "${splits[@]}"; do
-    pkg=${s%%:*}
+    pkg=${s%%:*} pkg=${pkg%%@*}
     if ! grep -qx "$mod/$pkg" <<<"$all"; then echo "ci-test.sh: split package $pkg is no package" >&2; fail=1; continue; fi
     dir=$pkg
     IFS='|' read -ra names <<<"${s#*:}"
@@ -84,11 +86,15 @@ listflags=(${flags[@]+"${flags[@]}"})
 pkgs=("$@")
 has() { printf '%s\n' "${pkgs[@]}" | grep -qxF "$1"; }
 
-# The splits whose package is among the arguments, and every name of them.
+# The splits whose package is among the arguments (and which this many cores
+# split), and every name of them.
+cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)
 groups=() gpkgs=() names=()
 for s in "${splits[@]}"; do
-  p=$mod/${s%%:*}
-  if has "$p"; then groups+=("${s#*:}"); gpkgs+=("$p"); names+=("${s#*:}"); fi
+  p=${s%%:*} min=0
+  case $p in *@*) min=${p#*@} p=${p%%@*} ;; esac
+  p=$mod/$p
+  if has "$p" && [ "$cores" -ge "$min" ]; then groups+=("${s#*:}"); gpkgs+=("$p"); names+=("${s#*:}"); fi
 done
 all=$(IFS='|'; echo "${names[*]:-}")
 # The arguments, the slowest first.
@@ -136,7 +142,7 @@ start() { # title, then the go test command
   titles+=("$title")
 }
 skip=(-skip "^($all)\$")
-start "--- the other tests of the packages (-p $(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc))" go test ${flags[@]+"${flags[@]}"} "${skip[@]}" "${ordered[@]}"
+start "--- the other tests of the packages (-p $cores)" go test ${flags[@]+"${flags[@]}"} "${skip[@]}" "${ordered[@]}"
 for i in "${!groups[@]}"; do
   k=$(printf '%s\n' "${gpkgs[@]:0:$i}" | grep -cxF "${gpkgs[$i]}" || true)
   start "--- ${gpkgs[$i]#"$mod/"}, group $((k + 1)): ${groups[$i]}" go test ${flags[@]+"${flags[@]}"} -run "^(${groups[$i]})\$" "${gpkgs[$i]}"
