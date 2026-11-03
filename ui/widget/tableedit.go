@@ -208,11 +208,9 @@ func (t *DataGridViewWidget[T, K]) BeginEdit(k K, column string) bool {
 		if d == nil || !d.editable {
 			return
 		}
-		i, ci, found := t.cellOf(k, column)
-		if !found || !t.canEdit(&t.src.rows[i], ci) {
+		if _, ci, found := t.cellOf(k, column); !found {
 			return
-		}
-		if wins, ok = t.beginLocked(k, ci, false, 0, 0); ok {
+		} else if wins, ok = t.beginLocked(k, ci, false, 0, 0); ok {
 			d.pendingCur = &curCell[K]{k, column}
 		}
 	})
@@ -339,10 +337,18 @@ func (t *DataGridViewWidget[T, K]) beginLocked(k K, ci int, hasAt bool, x, y flo
 		}
 		var err error
 		if wins, err = t.commitEditLocked(nil); err != nil {
-			// Refused: it stays open, with its error, and takes the focus back.
-			old.fresh, old.selectAll, old.hadFocus, old.at.has = true, false, false, false
+			// Refused: it stays open, with its error, which is read again; and
+			// it takes the focus back if the editor held it, not from elsewhere.
+			old.announced = ""
+			if old.focused {
+				old.fresh, old.selectAll, old.hadFocus, old.at.has = true, false, false, false
+			}
 			return wins, false
 		}
+	}
+	// Asked once the open edit is written: CanEdit may read what it wrote.
+	if !t.canEdit(&t.src.rows[i], ci) {
+		return wins, false
 	}
 	text := t.editText(&t.src.rows[i], ci)
 	d.editGen++
@@ -411,6 +417,7 @@ func (t *DataGridViewWidget[T, K]) startEdit(row, col int, x, y float32, how ui.
 		for _, w := range wins {
 			invalidate(w)
 		}
+		t.flushEdit() // the end of the edit it wrote, and the panics of Validate and Set
 		t.touch()
 	})
 }

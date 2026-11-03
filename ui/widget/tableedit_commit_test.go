@@ -299,3 +299,102 @@ func TestStaleCancelDoesNotEndANewEdit(t *testing.T) {
 		t.Fatalf("the new edit was ended by a stale call: %v %v", k, ok)
 	}
 }
+
+// An edit begun from the UI (F2, Enter, a double click: OnEditCell) that writes
+// the open one delivers its OnCellEndEdit, as the other commits do.
+func TestStartEditDeliversTheEndOfTheEditItWrote(t *testing.T) {
+	tt, grid, ends := editGrid(t)
+	grid.BeginEdit(1, "Name")
+	settleEdit(tt)
+	tt.Type("beta")
+	tt.Frame()
+	grid.startEdit(1, 1, 0, 0, ui.EditF2) // bob's Name: line 1, column 1
+	<-posted()
+	if r := rowOf(t, grid, 1); r.name != "beta" {
+		t.Fatalf("row %+v, want the open edit written", r)
+	}
+	if got := endsOf(ends); len(got) != 1 || got[0] != "1:Name" {
+		t.Fatalf("ends %v, want [1:Name]", got)
+	}
+}
+
+// A refused edit that a code BeginEdit turned down reads its error again
+// (the edit takes the focus back, announcing it), when the editor held the focus.
+func TestRefusedEditIsAnnouncedAgainWhenAnotherBeginsAndFocusWasInIt(t *testing.T) {
+	tt, grid, _ := editGrid(t)
+	grid.BeginEdit(1, "Score")
+	settleEdit(tt)
+	tt.Type("abc")
+	tt.Frame()
+	_ = grid.EndEdit()
+	settleEdit(tt)
+	count := func() (n int) {
+		for _, a := range tt.Announcements() {
+			if a == "Score must be a number" {
+				n++
+			}
+		}
+		return n
+	}
+	count() // Announcements returns what came since the last call
+	if grid.BeginEdit(3, "Name") {
+		t.Fatal("BeginEdit opened over a refused edit")
+	}
+	settleEdit(tt)
+	if count() == 0 {
+		t.Error("the refusal was not read again after a BeginEdit turned down")
+	}
+	if active, _ := tt.TextInputActive(); !active {
+		t.Error("the refused edit does not have the focus")
+	}
+}
+
+// When the focus was elsewhere (Tab left the editor), a code BeginEdit that is
+// turned down does not pull the focus into the refused cell.
+func TestRefusedEditDoesNotTakeTheFocusFromElsewhere(t *testing.T) {
+	tt, grid, _ := editGrid(t)
+	grid.BeginEdit(1, "Score")
+	settleEdit(tt)
+	tt.Type("abc")
+	tt.Key(0, ui.KeyTab) // leaves the editor; the commit is refused, the edit stays
+	settleEdit(tt)
+	if !grid.IsEditing() {
+		t.Fatal("the refused edit closed")
+	}
+	if active, _ := tt.TextInputActive(); active {
+		t.Skip("Tab left the focus in a text input here")
+	}
+	if grid.BeginEdit(3, "Name") {
+		t.Fatal("BeginEdit opened over a refused edit")
+	}
+	settleEdit(tt)
+	if active, _ := tt.TextInputActive(); active {
+		t.Error("BeginEdit pulled the focus into the refused cell")
+	}
+}
+
+// CanEdit that reads a field the open edit is about to write sees the value
+// after the write: BeginEdit asks it once the open edit is written.
+func TestBeginEditAsksCanEditAfterWritingTheOpenEdit(t *testing.T) {
+	grid := DataGridView(acctKey,
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200},
+		Column[acct]{Title: "Score", Text: func(a *acct) string { return strconv.Itoa(a.score) }, Width: 100},
+	).SetRows([]acct{{1, "ann", 5}}).Expand().
+		EditColumn("Name", CellEditor[acct]{CanEdit: func(a *acct) bool { return a.score >= 20 },
+			Set: func(a *acct, s string) { a.name = s }}).
+		EditColumn("Score", CellEditor[acct]{Set: func(a *acct, s string) { a.score, _ = strconv.Atoi(s) }})
+	tt := tester(t, grid)
+	if grid.BeginEdit(1, "Name") {
+		t.Fatal("Name is editable at score 5")
+	}
+	grid.BeginEdit(1, "Score")
+	settleEdit(tt)
+	tt.Type("30")
+	tt.Frame()
+	if !grid.BeginEdit(1, "Name") {
+		t.Fatal("BeginEdit asked CanEdit before it wrote the score: Name is editable at 30")
+	}
+	if r := rowOf(t, grid, 1); r.score != 30 {
+		t.Fatalf("row %+v, want the score written", r)
+	}
+}
