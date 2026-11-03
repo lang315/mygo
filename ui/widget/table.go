@@ -331,6 +331,11 @@ func (t *DataGridViewWidget[T, K]) prune() {
 	t.gone = true
 	t.chosen.keep(t.src.index)
 	t.checked.keep(t.src.index)
+	if e := t.edit; e != nil {
+		if _, ok := t.src.index[e.key]; !ok { // the row of the edit went
+			t.closeEdit()
+		}
+	}
 }
 
 // Row returns the row of key k.

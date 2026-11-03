@@ -36,6 +36,7 @@ type editState[K comparable] struct {
 	gen       uint64 // versions the edited row while the edit lasts
 	focused   bool   // the editor held the focus in the last frame
 	announced string // the refusal the user was told
+	hadFocus  bool   // the editor has held the focus: losing it commits
 }
 
 // curCell is a current cell asked for by SetCurrentCell or BeginEdit, which
@@ -313,7 +314,19 @@ func (t *DataGridViewWidget[T, K]) editor(c *ui.Context, e *editState[K]) {
 		e.fresh = false
 	}
 	in := ui.CellInput(c, &e.draft, start)
-	e.focused = in.Focused() || e.focused && e.fresh
+	if now := in.Focused(); !c.Measuring() {
+		e.focused = now
+		switch {
+		case now:
+			e.hadFocus = true
+		case e.hadFocus && !start.Fresh:
+			// The focus went elsewhere: what was typed is written, or, when
+			// Validate refuses it, the edit stays open with its error and the
+			// focus stays where the user put it. Once per loss.
+			e.hadFocus = false
+			Post(func() { _ = t.endEdit(e) })
+		}
+	}
 	if e.err != "" {
 		in.Error(e.err)
 	}
@@ -350,13 +363,17 @@ type reported struct {
 // A panic in Validate or Set is recovered and reported with OnPanic, and the
 // edit is cancelled; EndEdit returns nil then. Do not call it from a column
 // function: those run under the package's lock.
-func (t *DataGridViewWidget[T, K]) EndEdit() error {
+func (t *DataGridViewWidget[T, K]) EndEdit() error { return t.endEdit(nil) }
+
+// endEdit is EndEdit for the edit only, or for the one in progress when only is
+// nil: a commit posted by the editor must not end an edit begun after it.
+func (t *DataGridViewWidget[T, K]) endEdit(only *editState[K]) error {
 	var wins []*mygo.Window
 	var err error
 	func() {
 		mu.Lock()
 		defer mu.Unlock() // a column function may panic; runColumnFn recovers, and the unlock stays a defer
-		wins, err = t.commitEditLocked()
+		wins, err = t.commitEditLocked(only)
 	}()
 	for _, w := range wins {
 		invalidate(w)
@@ -370,9 +387,9 @@ func (t *DataGridViewWidget[T, K]) EndEdit() error {
 
 // commitEditLocked writes the draft of the edit, or refuses it. Under mu. The
 // windows to redraw are for the caller to invalidate once it released mu.
-func (t *DataGridViewWidget[T, K]) commitEditLocked() ([]*mygo.Window, error) {
+func (t *DataGridViewWidget[T, K]) commitEditLocked(only *editState[K]) ([]*mygo.Window, error) {
 	e := t.edit
-	if e == nil {
+	if e == nil || only != nil && e != only {
 		return nil, nil
 	}
 	if e.draft == e.orig { // nothing typed: nothing written
