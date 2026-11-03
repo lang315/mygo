@@ -624,16 +624,30 @@ func (t *Tester) HasText(s string) bool {
 // targetCenter checks the named element before sending any input. Labels
 // include clipped boxes, and a visible box may be covered by another control.
 func (t *Tester) targetCenter(s string, button int) (float32, float32, error) {
-	var n *labelNode
+	// Several elements may show s: a list's row is named by its content
+	// too, and the pointer at its center may land on another cell. The
+	// first that is the input target at its center wins.
+	var first error
 	for i := range t.rt.labels {
-		if t.rt.labels[i].text == s {
-			n = &t.rt.labels[i]
-			break
+		if t.rt.labels[i].text != s {
+			continue
+		}
+		x, y, err := t.labelCenter(&t.rt.labels[i], s, button)
+		if err == nil {
+			return x, y, nil
+		}
+		if first == nil {
+			first = err
 		}
 	}
-	if n == nil {
+	if first == nil {
 		return 0, 0, fmt.Errorf("ui: no element shows %q", s)
 	}
+	return 0, 0, first
+}
+
+// labelCenter is targetCenter for n, one of the elements showing s.
+func (t *Tester) labelCenter(n *labelNode, s string, button int) (float32, float32, error) {
 	r, z := n.r, t.rt.zoomFactor()
 	cx, cy := r.X+r.W/2, r.Y+r.H/2
 	x, y := cx*z, cy*z
