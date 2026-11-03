@@ -36,7 +36,6 @@ const renameDelay = 500 * time.Millisecond
 //		}
 //	})
 func coreEditableText(c *context, value *string) *node {
-	t := c.theme
 	box := coreRow(c).AlignItems(Center).MinWidth(0)
 	box.widget = "EditableText"
 	st := coreLocal(box, "edit", func() editState { return editState{} })
@@ -91,10 +90,7 @@ func coreEditableText(c *context, value *string) *node {
 	var in *node
 	box.Children(func() {
 		// Where the text was, within its padding and border.
-		pad := t.Space(0.5)
-		in = coreTextInputBase(c, &st.draft).Grow(1).MinWidth(t.Space(10)).Padding(pad, pad*2).
-			Margin(-pad-1, -pad*2-1).Radius(t.Space(1)).Background(t.Background).Border(1, t.Accent).
-			TextColor(t.Text)
+		in = cellEditor(c, &st.draft)
 	})
 	box.afterInput(func() {
 		focused := c.rt.focused == in.id
