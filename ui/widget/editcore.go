@@ -29,6 +29,11 @@ type editCore struct {
 	// end and cancel commit and cancel this edit, and only this one: the table
 	// makes them when the edit begins.
 	end, cancel func()
+	// tab moves the edit to the next editable cell (dir 1) or the previous (-1);
+	// canNext and canPrev say whether the table may have one, so that a Tab with
+	// nowhere to go keeps moving the focus on.
+	tab              func(dir int)
+	canNext, canPrev bool
 }
 
 // buildEditor builds the editor of the cell being edited in place of its text.
@@ -57,6 +62,12 @@ func buildEditor(c *ui.Context, e *editCore) {
 		in.Error(e.err)
 	}
 	in.OnShortcut(0, ui.KeyEscape, func() { Post(e.cancel) })
+	if e.canNext {
+		in.OnShortcut(0, ui.KeyTab, func() { Post(func() { e.tab(1) }) })
+	}
+	if e.canPrev {
+		in.OnShortcut(ui.Shift, ui.KeyTab, func() { Post(func() { e.tab(-1) }) })
+	}
 	if in.Submitted() {
 		Post(e.end)
 	}
