@@ -475,7 +475,6 @@ func (r *Renderer) initDevice() error {
 	if err != nil {
 		return err
 	}
-	r.compileClasses = sourceSum() != shaderSum || compileShaders
 	vsCode := code.vs
 	for _, s := range []struct {
 		code []byte
@@ -526,7 +525,6 @@ func (r *Renderer) initDevice() error {
 	if failed(call(r.device, devCreateBlendState, uintptr(unsafe.Pointer(&bd)), uintptr(unsafe.Pointer(&r.overHoleBlend)))) {
 		return errors.New("d3d11: cannot create the blend state of holes of one color")
 	}
-	r.b.Classes = true
 	rd := rasterizerDesc{FillMode: 3, CullMode: 1, DepthClip: 1, Scissor: 1}
 	if failed(call(r.device, devCreateRasterizerState, uintptr(unsafe.Pointer(&rd)), uintptr(unsafe.Pointer(&r.raster)))) {
 		return errors.New("d3d11: cannot create the rasterizer state")
@@ -540,6 +538,10 @@ func (r *Renderer) initDevice() error {
 
 // init makes what belongs to a window's renderer on its device.
 func (r *Renderer) init() error {
+	// What a renderer does with its batches is not the device's, which it may
+	// take from the pool: every renderer sets it, after initDevice or adopt.
+	r.b.Classes = true
+	r.compileClasses = sourceSum() != shaderSum || compileShaders
 	// Quads reach a pixel out of their shapes, glyphs half a pixel more, as
 	// they draw at whole pixels.
 	r.diff.Reach = 2
