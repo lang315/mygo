@@ -36,6 +36,12 @@ func TestInstallerSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	const identifier = "com.example.smokeapp"
+	// The runner has the WebView2 Runtime: its installer must find it and
+	// download nothing (the server stands in for Microsoft's).
+	srv, downloads := webView2Server(t)
+	from := webView2URL
+	t.Cleanup(func() { webView2URL = from })
+	webView2URL = srv.URL
 	build := func(version string) string {
 		_, _, artifacts := buildTestInstaller(t, map[string]string{
 			"main.go":   string(hello),
@@ -74,6 +80,10 @@ func TestInstallerSmoke(t *testing.T) {
 	}
 	if !strings.Contains(displayVersion(), "1.0.0") {
 		t.Fatalf("Settings > Apps lists %q, want version 1.0.0", displayVersion())
+	}
+	log, _ := os.ReadFile(filepath.Join(os.TempDir(), identifier+"-webview2.log"))
+	if !strings.Contains(string(log), "WebView2 Runtime found") || downloads.Load() != 0 {
+		t.Fatalf("the installer must find the runtime and download nothing: log %q, %d downloads", log, downloads.Load())
 	}
 	before := fileHash(t, exe)
 

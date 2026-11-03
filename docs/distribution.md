@@ -442,6 +442,38 @@ which apps installed before keep updating from. It writes no `install.ps1`
 either, which runs the installer, so the one-line install needs a release
 that has both.
 
+### The WebView2 Runtime
+
+An app of web views needs the WebView2 Runtime. Windows 11 and most
+Windows 10 machines have it; for the others the installer installs it,
+as Tauri's does. `windows.webview2` chooses how:
+
+| Value | The installer |
+|-------|---------------|
+| `download` (default) | downloads Microsoft's bootstrapper (`go.microsoft.com/fwlink/p/?LinkId=2124703`) when the machine has no runtime |
+| `embed` | carries the bootstrapper, 1.8 MB more, and needs no network |
+| `none` | leaves the runtime alone; always the choice with `nativeOnly`, whose apps have no web view |
+
+The installer first looks for the runtime's version (`pv`) under
+`EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` in the
+registry, in HKLM (both views) and HKCU; with one there it does nothing,
+and downloads nothing. Otherwise it checks the bootstrapper's Authenticode
+signature before running it, which must be valid and Microsoft
+Corporation's, since the file has no fixed hash, and runs it with
+`/silent /install`.
+
+When anything fails, the network, the signature or the bootstrapper, the
+installer shows a message with a button that opens the download page, and
+installs the app all the same: the app tells its user at run time as well,
+when it finds no runtime. A silent install (`/S`, as updates run) shows no
+message. Each install writes its outcome (found, installed, or why not) to
+`%TEMP%\<identifier>-webview2.log`. The uninstaller leaves the runtime,
+which other apps use.
+
+The installer is per user and asks for no administrator rights, and it
+runs the bootstrapper as the user; what the bootstrapper does for a
+machine without the runtime, as asking for those rights, is Microsoft's.
+
 ### Installer hooks
 
 `windows.installerInclude` adds steps of the app's own to the installer:

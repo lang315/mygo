@@ -155,6 +155,8 @@ with the tag `mygo_nowebview`, which leaves the code that makes web views out of
 the program (on Windows, some 200 KB), and a window that would show a page is
 an error, as is `Window.NewWebView` (so `widget.WebBrowser`) on every platform; the backends of Windows, macOS and Linux leave the code that makes web views out of the program. `mygo build` warns when `nativeOnly` goes with a frontend (`buildCommand` or `frontendDist`).
 
+With `nativeOnly`, `windows.webview2` is `none`: the Windows installer installs no WebView2 Runtime.
+
 For an app that binds services (`mygo.Bind`), a release build also gives `Bind`
 the list of their methods, so that the linker does not keep every method of the
 program: about 1.3 to 1.5 MB less in a webview app. It finds the services in the
@@ -193,7 +195,7 @@ content so that it can be cached for good, and the icon. See
 | `-skip-build-command` | does not run `buildCommand` |
 | `-skip-dmg` | does not make macOS disk images |
 | `-skip-notarize` | does not notarize, even with `macos.notarize` set |
-| `-skip-installer` | does not make Windows installers, nor download NSIS for them (nor `install.ps1`, which runs the installer) |
+| `-skip-installer` | does not make Windows installers, nor download NSIS or, with `windows.webview2` `embed`, the WebView2 bootstrapper for them (nor `install.ps1`, which runs the installer) |
 | `-upload` | uploads the installers and updates to a draft GitHub release of the version (`updates.github`), with `gh`, or to the bucket of `updates.s3` |
 
 ## mygo generate
