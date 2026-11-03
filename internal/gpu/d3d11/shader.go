@@ -23,6 +23,13 @@ var shaderSource string
 //go:embed effect.hlsl
 var effectSource string
 
+// classShader is what batches of some classes draw with, compiled ahead of
+// time: the vertex and pixel shaders of classes.hlsl with CLASSES defined.
+type classShader struct {
+	classes uint32
+	vs, ps  []byte
+}
+
 // EffectSource returns the source of an effect's pixel shader: shader.hlsl
 // with EFFECT defined, the head of effect.hlsl, the effect's shader (see
 // scene.Effect), and the tail, which draws its instances with it
@@ -40,7 +47,8 @@ func CompileEffect(src string) ([]byte, error) {
 }
 
 // compileShaders makes shaderCode compile shader.hlsl even when the
-// bytecode of shaders.go comes from it, for tests.
+// bytecode of shaders.go comes from it, for tests. It has no effect in a
+// release build (mygo_noinspector; compileFromSource).
 var compileShaders bool
 
 // shaders is the bytecode of the shader's functions: the instances' vertex
@@ -61,19 +69,22 @@ var (
 func unpackedShaders() (shaders, error) {
 	unpackOnce.Do(func() {
 		var list [][]byte
-		if list, unpackErr = gpu.UnpackShaders(packedShaders, 5); unpackErr == nil {
+		if list, unpackErr = gpu.UnpackShaders(packedShaders, 5+2*len(classShaders)); unpackErr == nil {
 			unpacked = shaders{list[0], list[1], list[2], list[3], list[4]}
+			for i := range classShaders {
+				classShaders[i].vs, classShaders[i].ps = list[5+2*i], list[6+2*i]
+			}
 		}
 	})
 	return unpacked, unpackErr
 }
 
 // shaderCode returns the bytecode of the shaders: that compiled ahead of
-// time into shaders.go, or, when shader.hlsl changed since (go generate
-// ./internal/gpu/d3d11 was not run), that compiled now from shader.hlsl,
+// time into shaders.go, or, when shader.hlsl or classes.hlsl changed since (go generate
+// ./internal/gpu/d3d11 was not run; sourceStale), that compiled now from shader.hlsl,
 // with the compiler Windows has.
 func shaderCode() (code shaders, err error) {
-	if gpu.SourceSum(shaderSource) == shaderSum && !compileShaders {
+	if !compileFromSource() {
 		return unpackedShaders()
 	}
 	for _, f := range []struct {

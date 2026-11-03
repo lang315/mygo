@@ -85,6 +85,7 @@ func (v *Content) AttachContent(conn *surface.Conn) {
 		rt.themeChanged()
 	}
 	conn.TitleBarChanged = rt.requestFrame
+	conn.ActiveChanged = rt.activeChanged
 	conn.Changed = rt.changed
 	conn.LocaleChanged = func() {
 		h.textLanguage()
@@ -316,9 +317,14 @@ func (h *windowHost) event(ev platform.SurfaceEvent) bool {
 		h.requestFrame()
 		return false
 	}
-	if ev.Kind == platform.WebViewTabOut {
-		if i := slices.IndexFunc(h.placed, func(p platform.WebViewPlacement) bool { return p.WebView == ev.WebView }); i >= 0 {
+	if ev.Kind == platform.WebViewTabOut || ev.Kind == platform.WebViewKey {
+		i := slices.IndexFunc(h.placed, func(p platform.WebViewPlacement) bool { return p.WebView == ev.WebView })
+		switch {
+		case i < 0:
+		case ev.Kind == platform.WebViewTabOut:
 			h.rt.webViewTabOut(h.views[i], ev.Mods&platform.ModShift != 0)
+		default:
+			h.rt.webViewKey(h.views[i], Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey), ev.Repeat)
 		}
 		return false
 	}
@@ -883,6 +889,8 @@ func (h *windowHost) vibrancy() bool {
 	return ok && s.ShowsMaterial()
 }
 
+func (h *windowHost) active() bool { return h.conn.Active == nil || h.conn.Active() }
+
 func (h *windowHost) invalidate() { h.conn.Invalidate() }
 
 func (h *windowHost) openURL(u string, done func(error)) {
@@ -898,12 +906,13 @@ func (h *windowHost) placeWebViews(views []placedWebView) {
 	natives := make([]NativeWebView, 0, len(views))
 	for _, v := range views {
 		if n := v.v.SurfaceWebView(h.conn); n != nil {
-			list = append(list, platform.WebViewPlacement{WebView: n, Frame: v.frame, Clip: v.clip, Covers: v.covers})
+			list = append(list, v.placement(n))
 			natives = append(natives, v.v)
 		}
 	}
 	if slices.EqualFunc(list, h.placed, func(a, b platform.WebViewPlacement) bool {
-		return a.WebView == b.WebView && a.Frame == b.Frame && a.Clip == b.Clip && slices.Equal(a.Covers, b.Covers)
+		return a.WebView == b.WebView && a.Frame == b.Frame && a.Clip == b.Clip && a.Width == b.Width && a.Height == b.Height &&
+			a.Radii == b.Radii && slices.Equal(a.Covers, b.Covers)
 	}) {
 		return
 	}

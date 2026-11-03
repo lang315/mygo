@@ -359,6 +359,7 @@ func listRowValueInput(n *node) {
 		default:
 			// The keyboard or assistive technology: the row, and no column.
 			f.click(b.i, n.ClickModifiers())
+			f.takeAccessPick()
 		}
 		if !f.owner.FocusWithin() {
 			// Leave the focus on a control inside a row, such as an editor
@@ -384,10 +385,16 @@ func listInput(n *node) {
 		return
 	}
 	f := n.rowsOf
+	if p := f.c.rt.pressEnded; p != nil {
+		// The pass that reads the last moves of a press sees it go on, up
+		// to where the pointer let go, before the keys that came after its
+		// release.
+		f.dragSelect(p)
+	}
 	if f.s.cursor() != nil {
 		f.navigate()
 	}
-	f.dragSelect()
+	f.dragSelect(f.c.rt.pressed)
 	f.reorder()
 }
 

@@ -342,7 +342,7 @@ func (md *menuDraw) item(level int, it *platform.MenuItem, marks bool) *node {
 		row.Background(t.SurfaceHover)
 	case hi:
 		color, muted = t.AccentText, t.AccentText
-		row.Background(t.Accent).TextColor(color)
+		row.Background(c.accent(t)).TextColor(color)
 	case it.Destructive:
 		color = t.Danger
 		row.TextColor(color)

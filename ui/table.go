@@ -189,10 +189,11 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	s.tableCols = s.tableCols[:0]
 	if cellSel {
 		if c.rt.cellClick == nil {
-			c.rt.cellClick, c.rt.cellInBlock = (*listFrame).clickCell, (*listFrame).cellInBlockAt
+			c.rt.cellClick, c.rt.cellInBlock, c.rt.cellColumn = (*listFrame).clickCell, (*listFrame).cellInBlockAt, (*listFrame).clickColumn
+			c.rt.cellAccess = &cellAccessFuncs
 		}
 		for _, j := range order {
-			s.tableCols = append(s.tableCols, tableCol{id: columns[j].id(), col: j, rowHeader: columns[j].RowHeader})
+			s.tableCols = append(s.tableCols, tableCol{id: columns[j].id(), col: j, rowHeader: columns[j].RowHeader, title: columns[j].Title})
 		}
 		s.fixCells()
 		lo, hi = s.block()
@@ -269,9 +270,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				switch {
 				case !on && !at, box.FocusWithin():
 				case on && at:
-					box.Background(t.Accent).TextColor(t.AccentText).DrawOver(cursorBorder(table, t.AccentText))
+					box.Background(c.accent(t)).TextColor(t.AccentText).DrawOver(cursorBorder(table, t.AccentText))
 				case on:
-					box.Background(t.Accent).TextColor(t.AccentText)
+					box.Background(c.accent(t)).TextColor(t.AccentText)
 				case at && c.row.chosen: // the row's own tint is the accent
 					box.DrawOver(cursorBorder(table, t.AccentText))
 				case at:
@@ -955,6 +956,6 @@ func (e *node) Selected(on bool) *node {
 	}
 	t := e.theme()
 	e.checked = 2
-	e.Background(t.Accent).TextColor(t.AccentText)
+	e.Background(e.c.accent(t)).TextColor(t.AccentText)
 	return e
 }

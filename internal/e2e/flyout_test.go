@@ -286,6 +286,36 @@ func TestFlyoutEscape(t *testing.T) {
 	pressEscape(page)
 	eventually(t, "the page's flyout closed", page.IsDestroyed)
 
+	// A flyout of native UI showing a web view whose page has the
+	// keyboard closes on an Escape the page leaves.
+	parent.Focus()
+	eventually(t, "the parent focused", parent.IsFocused)
+	var view *mygo.WebView
+	var shown atomic.Int32
+	reader := mygo.NewFlyout(mygo.FlyoutOptions{Parent: parent, Width: 150, Height: 100, Focusable: true, Content: ui.View(func(c *ui.Context) {
+		if view != nil {
+			ui.WebView(c, view).Fill()
+			shown.Add(1)
+		}
+	})})
+	defer reader.Destroy()
+	v, err := reader.NewWebView(mygo.WebViewOptions{Page: mygo.PageOptions{Untrusted: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader.Update(func() { view = v })
+	v.Page().LoadHTML(`<p>Text to read.</p><script>window.ready = true</script>`, "")
+	waitForPage(t, v.Page(), "window.ready")
+	eventually(t, "two frames showing the web view", func() bool {
+		reader.Invalidate()
+		return shown.Load() >= 2
+	})
+	eventually(t, "the reader focused", reader.IsFocused)
+	v.Focus()
+	waitForPage(t, v.Page(), "document.hasFocus()")
+	pressEscape(reader)
+	eventually(t, "the reader closed", reader.IsDestroyed)
+
 	// A popover of the system's (macOS) closes so too.
 	parent.Focus()
 	eventually(t, "the parent focused", parent.IsFocused)
@@ -299,39 +329,14 @@ func TestFlyoutEscape(t *testing.T) {
 // TestTrayFlyout places a flyout next to a tray icon, below the macOS menu
 // bar's or above an icon of a taskbar at the bottom, and in the middle of
 // the primary display's work area where the icon has no bounds. (Clicks
-// on the icon, which toggle it, are checked by hand: synthesized ones do
-// not reach a status item.)
+// on the icon, which toggle it, are TestTrayPopoverToggle's on macOS.)
 func TestTrayFlyout(t *testing.T) {
 	tray, err := mygo.NewTray(mygo.TrayOptions{Icon: squarePNG(), ToolTip: "flyout"})
 	if err != nil {
 		t.Skip("no tray: ", err)
 	}
 	defer tray.Destroy()
-	// The menu bar lays the icon out after it was made, off the screen
-	// until then: wait for it, as a click on it would find it.
-	onScreen := func() bool {
-		r := tray.Bounds()
-		for _, d := range mygo.Screen.Displays() {
-			b := d.Bounds
-			if r.Width > 0 && r.Height > 0 && r.X >= b.X && r.X+r.Width <= b.X+b.Width && r.Y >= b.Y-2 && r.Y+r.Height <= b.Y+b.Height {
-				return true
-			}
-		}
-		return false
-	}
-	last, still := tray.Bounds(), 0
-	for deadline := time.Now().Add(3 * time.Second); still < 10 && time.Now().Before(deadline); {
-		time.Sleep(30 * time.Millisecond)
-		if b := tray.Bounds(); b == last && onScreen() {
-			still++
-		} else {
-			last, still = b, 0
-		}
-	}
-	if !onScreen() {
-		// A full menu bar, as one beside a notch, keeps the icon off the screen.
-		t.Skip("the menu bar has no room for the tray icon, at", tray.Bounds())
-	}
+	waitTrayLaidOut(t, tray)
 	for _, popover := range []bool{false, true} {
 		fl := mygo.NewFlyout(mygo.FlyoutOptions{Tray: tray, Placement: mygo.PlacementBottom, Gap: 4, Width: 200, Height: 120, Focusable: true, Popover: popover,
 			Content: ui.View(func(c *ui.Context) {})})
@@ -353,6 +358,36 @@ func TestTrayFlyout(t *testing.T) {
 			eventuallyAt(t, "the flyout in the middle of the work area", fl, func() mygo.Rectangle { return want })
 		}
 		fl.Destroy()
+	}
+}
+
+// waitTrayLaidOut waits for the menu bar to lay a tray icon out, which it
+// does after the icon was made, off the screen until then, as a click on
+// it would find it. A full menu bar, as one beside a notch, keeps the icon
+// off the screen: the test skips then.
+func waitTrayLaidOut(t *testing.T, tray *mygo.Tray) {
+	t.Helper()
+	onScreen := func() bool {
+		r := tray.Bounds()
+		for _, d := range mygo.Screen.Displays() {
+			b := d.Bounds
+			if r.Width > 0 && r.Height > 0 && r.X >= b.X && r.X+r.Width <= b.X+b.Width && r.Y >= b.Y-2 && r.Y+r.Height <= b.Y+b.Height {
+				return true
+			}
+		}
+		return false
+	}
+	last, still := tray.Bounds(), 0
+	for deadline := time.Now().Add(3 * time.Second); still < 10 && time.Now().Before(deadline); {
+		time.Sleep(30 * time.Millisecond)
+		if b := tray.Bounds(); b == last && onScreen() {
+			still++
+		} else {
+			last, still = b, 0
+		}
+	}
+	if !onScreen() {
+		t.Skip("the menu bar has no room for the tray icon, at", tray.Bounds())
 	}
 }
 

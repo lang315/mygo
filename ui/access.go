@@ -283,7 +283,8 @@ func (rt *engine) accessTree() *platform.AccessTree {
 		focus := rt.focused
 		// A list choosing rows with the arrows has the focus for them:
 		// assistive technology follows the row chosen, as the arrows move
-		// the choice, while it shows.
+		// the choice, while it shows (a table with a current cell sets the
+		// focus to the cell, in the row that stays chosen: accessCellDetails).
 		if f := focused.rowsOfElement(); f != nil && f.s.cursor() != nil {
 			for _, r := range f.rows {
 				if r.i == *f.s.cursor() {
@@ -346,6 +347,10 @@ func (rt *engine) accessElement(t *platform.AccessTree, e *node, parent int, scr
 		}
 		rt.accessDetails(e, n)
 		parent = len(t.Nodes) - 1
+		if h := rt.cellAccess; h != nil && role == platform.RoleCell && h.cell(rt, t, e, n) {
+			// Named by its texts: they are not read a second time.
+			return
+		}
 		if e.kind == kindText {
 			rt.accessInline(t, e, parent)
 			return
@@ -552,6 +557,9 @@ func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 	case platform.AccessFocus:
 		if s.ignoreInput {
 			return
+		}
+		if rt.cellAccess != nil && rt.cellAccess.focus(rt, ev.ID) {
+			break
 		}
 		if s.flags&flagChoosable != 0 {
 			// A row of a list choosing rows: its list takes the focus for

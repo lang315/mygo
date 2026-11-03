@@ -533,6 +533,7 @@ var (
 	appIndicatorSetIconThemePath func(ind ptr, path *byte)
 	appIndicatorSetTitle         func(ind ptr, title *byte)
 	appIndicatorSetLabel         func(ind ptr, label, guide *byte)
+	appIndicatorSetTooltipFull   func(ind ptr, icon, title, body *byte)
 )
 
 var webkitVersion string
@@ -858,6 +859,7 @@ func load() error {
 		bind(libIndicator, &appIndicatorSetIconThemePath, "app_indicator_set_icon_theme_path")
 		bind(libIndicator, &appIndicatorSetTitle, "app_indicator_set_title")
 		bind(libIndicator, &appIndicatorSetLabel, "app_indicator_set_label")
+		bind(libIndicator, &appIndicatorSetTooltipFull, "app_indicator_set_tooltip_full")
 	}
 	return nil
 }
@@ -883,4 +885,10 @@ func webKit() error {
 // connect connects a signal handler with the given user data.
 func connect(instance ptr, signal string, handler ptr, data ptr) uint64 {
 	return gSignalConnectData(instance, cs(signal), handler, data, 0, 0)
+}
+
+// connectAfter connects a signal handler that runs after the class's
+// (G_CONNECT_AFTER).
+func connectAfter(instance ptr, signal string, handler ptr, data ptr) uint64 {
+	return gSignalConnectData(instance, cs(signal), handler, data, 0, 1)
 }

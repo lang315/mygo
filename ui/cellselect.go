@@ -19,6 +19,7 @@ type tableCol struct {
 	col       int
 	rowHeader bool
 	head      uint64
+	title     string
 }
 
 // choosesCells reports whether the list holds the rows of a Table choosing
@@ -229,8 +230,13 @@ func (f *listFrame) columnAt(x, y float32) int {
 // clickCell sets the columns of the block for a click with mods on a row
 // at the window's point (x, y): those of a RowHeader cell are all.
 func (f *listFrame) clickCell(x, y float32, mods Modifiers) {
+	f.clickColumn(f.columnAt(x, y), mods)
+}
+
+// clickColumn sets the columns of the block for a click with mods on the
+// column shown at place k, which is none when negative.
+func (f *listFrame) clickColumn(k int, mods Modifiers) {
 	s := f.s
-	k := f.columnAt(x, y)
 	if k < 0 {
 		return
 	}
@@ -337,18 +343,17 @@ func (f *listFrame) revealColumn(k int) {
 }
 
 // dragCells sets the columns of the block a drag over the cells chooses:
-// from the column of the cell pressed to the one under the pointer. Near
-// the table's left or right edge, or past them, it scrolls the table
-// sideways, faster farther out.
-func (f *listFrame) dragCells() {
-	s, rt := f.s, f.c.rt
+// from the column of the cell pressed to the one at the window's point
+// (x, y).
+func (f *listFrame) dragCells(x, y float32) {
+	s := f.s
 	from := s.colIndex(s.dragSel.fromCol)
 	if from < 0 || s.tableCols[from].rowHeader {
 		// None, or a drag from a RowHeader cell, which chooses whole rows
 		// (fromCol is "", which an untitled RowHeader column's ID is too).
 		return
 	}
-	to := f.columnAt(rt.pointerX, rt.pointerY)
+	to := f.columnAt(x, y)
 	if to < 0 {
 		return
 	}

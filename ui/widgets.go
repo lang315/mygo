@@ -157,9 +157,14 @@ func styleButton(c *context, b *node, primary bool) {
 	base, fg, border := t.Surface, t.Text, t.Border
 	b.buttonLook = buttonPlain
 	switch {
-	case primary:
+	case primary && c.emphasized(t):
 		base, fg, border = t.Accent, t.AccentText, Color{}
 		b.buttonLook = buttonPrimary
+	case primary:
+		// As other buttons in a window not drawn as active, as AppKit's
+		// default button: its border inside the padding, so that it is as
+		// large as active and nothing around it moves.
+		b.Padding(t.Space(1.5)-1, t.Space(3.5)-1)
 	case c.buttons == toolbarButtons:
 		b.Padding(t.Space(1.5), t.Space(2.5))
 		base, border = Color{}, Color{}
@@ -301,7 +306,11 @@ func coreSwitch(c *context, on *bool) *node {
 	sw := coreSwitchBase(c, on).Size(t.Space(9), t.Space(5)).Radius(t.Space(2.5))
 	pos := sw.animateRest("knob", b2f(*on), 140*time.Millisecond)
 	off := t.Border.Mix(t.Text, 0.15)
-	sw.Background(off.Mix(t.Accent, pos))
+	if pos > 0 {
+		sw.Background(off.Mix(c.accent(t), pos))
+	} else {
+		sw.Background(off)
+	}
 	rtl := sw.rtl()
 	sw.drawPure(func(p *Painter, r Rect) {
 		in := t.Space(0.5)
@@ -352,6 +361,7 @@ func slider(c *context, value *float64, lo, hi, step float64) *node {
 		frac = 1 - frac
 	}
 	held := s.animateRest("held", b2f(s.st.pressed), 150*time.Millisecond)
+	fill := c.accent(t)
 	s.drawPure(func(p *Painter, r Rect) {
 		// As thick as Progress; above the ticks.
 		h := t.Space(1.5)
@@ -366,9 +376,9 @@ func slider(c *context, value *float64, lo, hi, step float64) *node {
 		}
 		p.Fill(track, t.Border, h/2)
 		if rtl {
-			p.Fill(Rect{x, track.Y, track.X + track.W - x, h}, t.Accent, h/2)
+			p.Fill(Rect{x, track.Y, track.X + track.W - x, h}, fill, h/2)
 		} else {
-			p.Fill(Rect{track.X, track.Y, x - track.X, h}, t.Accent, h/2)
+			p.Fill(Rect{track.X, track.Y, x - track.X, h}, fill, h/2)
 		}
 		paintKnob(p, t, k, held, p.cur.FocusVisible())
 	})
@@ -492,6 +502,7 @@ func coreProgress(c *context, value float64) *node {
 	rad := t.Space(0.75)
 	e := coreBox(c).Height(t.Space(1.5)).Radius(rad).Background(t.Border).Clip()
 	e.role, e.hasRange, e.accRange = RoleProgress, true, [3]float64{0, 1, value}
+	fill := c.accent(t)
 	if value >= 0 {
 		// Painted from its arguments and the element the painter says, not from
 		// e: a row holding it may be kept (drawPure).
@@ -502,7 +513,7 @@ func coreProgress(c *context, value float64) *node {
 			if n.reverse != n.rtl() {
 				x = r.X + r.W - w
 			}
-			p.Fill(Rect{x, r.Y, w, r.H}, t.Accent, rad)
+			p.Fill(Rect{x, r.Y, w, r.H}, fill, rad)
 		})
 		return e
 	}
@@ -517,7 +528,7 @@ func coreProgress(c *context, value float64) *node {
 		if fromRight {
 			x = r.X + r.W - (r.W+w)*phase
 		}
-		p.Clip(r, rad, func() { p.Fill(Rect{x, r.Y, w, r.H}, t.Accent, rad) })
+		p.Clip(r, rad, func() { p.Fill(Rect{x, r.Y, w, r.H}, fill, rad) })
 	})
 	return e
 }
