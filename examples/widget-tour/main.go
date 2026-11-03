@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -11,6 +12,7 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -474,6 +476,14 @@ func table() widget.Control {
 		widget.Column[account]{Title: "Score", Text: func(a *account) string { return strconv.Itoa(a.score) },
 			Compare: func(a, b *account) int { return cmp.Compare(a.score, b.score) }, Align: widget.End, Sortable: true},
 	).SetRows(rows).CheckboxColumn().IndexColumn().BottomPanel().
+		EditColumn("Name", widget.CellEditor[account]{
+			Set: func(a *account, s string) { a.name = s },
+			Validate: func(_ *account, s string) error {
+				if strings.TrimSpace(s) == "" {
+					return errors.New("A name cannot be empty")
+				}
+				return nil
+			}}).
 		ContextMenu(widget.MenuItem{Text: "Delete", OnClick: func() { t.DeleteRows(t.Selected()...) }}).
 		OnKey(ui.KeySpace, ui.Shift, func() { t.AutoCheck() }).
 		Expand()
@@ -489,7 +499,8 @@ func table() widget.Control {
 		stop = make(chan struct{})
 		go liveUpdates(t, stop)
 	})
-	return widget.VBox(8).Add(widget.HBox(8).Add(live, activated)).Pack(t, true, true).Expand()
+	hint := widget.Label("F2 edits a Name: try Vietnamese Telex typing here").Muted()
+	return widget.VBox(8).Add(widget.HBox(8).Add(live, activated, hint)).Pack(t, true, true).Expand()
 }
 
 // liveUpdates fails or fixes a hundred accounts every 100 ms until stop
