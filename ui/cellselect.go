@@ -19,6 +19,7 @@ type tableCol struct {
 	col       int
 	rowHeader bool
 	head      uint64
+	title     string
 }
 
 // choosesCells reports whether the list holds the rows of a Table choosing
@@ -229,8 +230,13 @@ func (f *listFrame) columnAt(x, y float32) int {
 // clickCell sets the columns of the block for a click with mods on a row
 // at the window's point (x, y): those of a RowHeader cell are all.
 func (f *listFrame) clickCell(x, y float32, mods Modifiers) {
+	f.clickColumn(f.columnAt(x, y), mods)
+}
+
+// clickColumn sets the columns of the block for a click with mods on the
+// column shown at place k, which is none when negative.
+func (f *listFrame) clickColumn(k int, mods Modifiers) {
 	s := f.s
-	k := f.columnAt(x, y)
 	if k < 0 {
 		return
 	}

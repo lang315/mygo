@@ -408,6 +408,10 @@ type engine struct {
 	listDrag    func(rt *engine)
 	cellClick   func(f *listFrame, x, y float32, mods Modifiers)
 	cellInBlock func(f *listFrame, x, y float32) bool
+	cellColumn  func(f *listFrame, k int, mods Modifiers)
+	// cellAccess is the part of tables with a current cell that assistive
+	// technology reaches, set as cellClick is.
+	cellAccess *cellAccessHooks
 	// pressDragger is the element around the one pressed that drags a
 	// value, which takes the press as it moves (dragMove), or 0.
 	pressDragger uint64

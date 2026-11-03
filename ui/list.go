@@ -403,6 +403,13 @@ type ListState struct {
 		x, y  float32
 		frame uint64
 	}
+	// accessPick is the column of a cell that assistive technology focused
+	// (focusCell), for the click it queued on the cell's row to take.
+	accessPick struct {
+		set   bool
+		col   string
+		frame uint64
+	}
 	// dragSel is the drag choosing rows (DragSelect): the row pressed, the
 	// state of its element, and whether it adds to the rows chosen.
 	dragSel struct {

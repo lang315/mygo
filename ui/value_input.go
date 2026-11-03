@@ -359,6 +359,7 @@ func listRowValueInput(n *node) {
 		default:
 			// The keyboard or assistive technology: the row, and no column.
 			f.click(b.i, n.ClickModifiers())
+			f.takeAccessPick()
 		}
 		if !f.owner.FocusWithin() {
 			// Leave the focus on a control inside a row, such as an editor
