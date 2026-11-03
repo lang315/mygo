@@ -70,6 +70,9 @@ type host interface {
 	// vibrancy reports whether the window shows a material where the
 	// frames are transparent.
 	vibrancy() bool
+	// active reports whether the window is drawn as active, the window
+	// the user's input goes to; it costs nothing.
+	active() bool
 	// invalidate asks for a frame from any goroutine.
 	invalidate()
 	// post runs fn on the main thread soon; it is safe from any goroutine.
@@ -388,6 +391,11 @@ type engine struct {
 	// pressClicks is the press's count of clicks, which its release
 	// carries.
 	pressClicks int
+	// pressEnded is the element of the last press while its release, which
+	// came with moves no pass read, waits for the pass that reads them
+	// (releaseLater) and no press came since: that pass sees it still
+	// pressed, by the button pressButton holds.
+	pressEnded *state
 	// pressLost is the handler of the element pressed when the frame
 	// built another element without one in its place, for prune to give
 	// the release to at pressLostX, pressLostY, the pointer in the axes
@@ -436,6 +444,10 @@ type engine struct {
 	// windowFocus reads; focusRead, that the last frame read it, so that a
 	// change of it draws a frame.
 	windowFocused, focusRead bool
+	// activeRead tells that the last frame read whether the window is
+	// drawn as active (windowActive), so that a change of it draws a
+	// frame.
+	activeRead bool
 	// toasts are the toasts the window holds, oldest first, and
 	// toastList those showing, as ToastViewportBase gives them; their time
 	// stops while toastsPaused. A viewport of them was built in the pass
@@ -687,7 +699,7 @@ func (rt *engine) runFrame() {
 
 	rt.frame++
 	rt.input = false
-	rt.focusRead = false
+	rt.focusRead, rt.activeRead = false, false
 	rt.stats.begin(rt)
 	now := rt.frameTime()
 	rt.zoomChanged = false
@@ -1219,6 +1231,9 @@ func (rt *engine) dropState(id uint64, s *state) {
 		rt.owners.drop(id, rt)
 	}
 	delete(rt.states, id)
+	if rt.pressEnded == s {
+		rt.pressEnded = nil
+	}
 	// Recycle the state itself, without keeping the editor, local
 	// resources or callbacks of the element that went.
 	if s.replay != nil && len(rt.rowPool) < maxFree {

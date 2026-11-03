@@ -40,10 +40,11 @@ type kit struct {
 	warp                       bool
 	luid                       uint64 // of the device's adapter
 
-	vs, ps, layout         uintptr
-	blend, holeBlend       uintptr
-	raster, samp           uintptr
-	passVS, downPS, blurPS uintptr
+	vs, ps, layout           uintptr
+	blend, holeBlend         uintptr
+	overBlend, overHoleBlend uintptr
+	raster, samp             uintptr
+	passVS, downPS, blurPS   uintptr
 }
 
 var pool struct {
@@ -74,9 +75,9 @@ func deviceRemoved(dev uintptr) bool { return failed(call(dev, devGetDeviceRemov
 // takes it away from the renderer.
 func (r *Renderer) takeKit() *kit {
 	k := &kit{r.device, r.ctx, r.ctx1, r.factory, r.warp, r.luid,
-		r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS}
+		r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.overBlend, r.overHoleBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS}
 	r.device, r.ctx, r.ctx1, r.factory, r.luid = 0, 0, 0, 0, 0
-	r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.overBlend, r.overHoleBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	return k
 }
 
@@ -84,11 +85,11 @@ func (r *Renderer) takeKit() *kit {
 // (ctx1 may be 0: a device without ID3D11DeviceContext1).
 func (k *kit) complete() bool {
 	return k.device != 0 && k.ctx != 0 && k.factory != 0 && k.vs != 0 && k.ps != 0 && k.layout != 0 &&
-		k.blend != 0 && k.holeBlend != 0 && k.raster != 0 && k.samp != 0 && k.passVS != 0 && k.downPS != 0 && k.blurPS != 0
+		k.blend != 0 && k.holeBlend != 0 && k.overBlend != 0 && k.overHoleBlend != 0 && k.raster != 0 && k.samp != 0 && k.passVS != 0 && k.downPS != 0 && k.blurPS != 0
 }
 
 func (k *kit) free() {
-	for _, p := range []*uintptr{&k.samp, &k.raster, &k.holeBlend, &k.blend, &k.layout,
+	for _, p := range []*uintptr{&k.samp, &k.raster, &k.overHoleBlend, &k.overBlend, &k.holeBlend, &k.blend, &k.layout,
 		&k.blurPS, &k.downPS, &k.passVS, &k.ps, &k.vs, &k.factory, &k.ctx1, &k.ctx, &k.device} {
 		free(p)
 	}
@@ -98,6 +99,7 @@ func (k *kit) free() {
 func (r *Renderer) adopt(k *kit) {
 	r.device, r.ctx, r.ctx1, r.factory, r.warp, r.luid = k.device, k.ctx, k.ctx1, k.factory, k.warp, k.luid
 	r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.raster, r.samp = k.vs, k.ps, k.layout, k.blend, k.holeBlend, k.raster, k.samp
+	r.overBlend, r.overHoleBlend = k.overBlend, k.overHoleBlend
 	r.passVS, r.downPS, r.blurPS = k.passVS, k.downPS, k.blurPS
 }
 

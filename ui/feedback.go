@@ -79,7 +79,7 @@ func coreCheckboxGroup(c *context, label string, fn func()) *node {
 func paintCheckbox(c *context, box *node, state int8) {
 	t := c.theme
 	if state > 1 {
-		box.Background(t.Accent)
+		box.Background(c.accent(t))
 	} else {
 		box.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
 	}
@@ -94,7 +94,7 @@ func paintRadio(c *context, dot *node, on bool) {
 	t := c.theme
 	dot.checkmark = 4
 	if on {
-		dot.Background(t.Accent)
+		dot.Background(c.accent(t))
 		dot.checkmark = 5
 	} else {
 		dot.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
