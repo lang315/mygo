@@ -146,8 +146,11 @@ Windows 11 ARM64.
     replies without encoding/json (#353: `counter-native` 7,515,648 to
     6,852,608 bytes, -663 KB), the surface of native UI behind an interface so
     that `hello` does not link it (#356: -222 KB), and `nativeOnly` (#372,
-    tag `mygo_nowebview`: `counter-native` -218 KB on amd64, -200 KB on arm64;
-    #373 does the same for macOS and Linux, its size not stated there).
+    tag `mygo_nowebview`: `counter-native` on windows/amd64 6,885,376 to
+    6,654,464 bytes, -230,912, and on windows/arm64 6,285,312 to 6,072,832,
+    -212,480), and the same for macOS and Linux (#373: `counter-native` on
+    darwin/arm64 6,608,306 to 6,423,074, -185,232; linux/amd64 6,516,999 to
+    6,398,215, -118,784; linux/arm64 6,095,111 to 5,964,039, -131,072).
 
     | Group | macOS | Linux | What keeps it | Next step |
     |---|---|---|---|---|
