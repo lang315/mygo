@@ -54,6 +54,8 @@ func (t *DataGridViewWidget[T, K]) enableEdit() {
 	t.prepareEdit = func() { t.wireEdit(); t.followCurrent(); t.dropHiddenEdit() }
 	t.cellHook = func(c *ui.Context, col int, r any) bool {
 		if e := d.edit; e != nil && col == e.col && t.key(r.(*T)) == e.key {
+			_, _, e.canNext = t.nextEditable(e, 1)
+			_, _, e.canPrev = t.nextEditable(e, -1)
 			buildEditor(c, &e.editCore)
 			return true
 		}
@@ -357,8 +359,99 @@ func (t *DataGridViewWidget[T, K]) beginLocked(k K, ci int, hasAt bool, x, y flo
 	e.at.has, e.at.x, e.at.y = hasAt, x, y
 	e.end = func() { _ = t.endEdit(e) }
 	e.cancel = func() { t.cancelEdit(e) }
+	e.tab = func(dir int) { t.tabFrom(e, dir) }
 	d.edit, d.refocus = e, false // the new editor takes the focus, not the table
 	return wins, true
+}
+
+// maxTabScan bounds how many rows Tab looks through for a cell that may edit.
+//
+// shortcut: a table whose next 10000 rows all refuse CanEdit does not tab past
+// them; lift the bound when someone has such a table.
+const maxTabScan = 10000
+
+// framePos returns where the row of key k is in the order of the frame on the
+// screen, which is not the view's when rows changed since: -1 if it is not
+// there. Under mu.
+func (t *DataGridViewWidget[T, K]) framePos(k K) int {
+	if !t.kept {
+		return t.positionOf(k)
+	}
+	if r := t.rowAt(t.cursor); r != nil && t.key(r) == k { // the usual case: the edit is on the current row
+		return t.posAt(t.cursor)
+	}
+	for pos, i := range t.order {
+		if t.key(&t.frame[i]) == k {
+			return pos
+		}
+	}
+	return -1
+}
+
+// nextEditable finds the cell Tab (dir 1) or Shift+Tab (dir -1) goes to from
+// the edit e: the next editable cell of its row, then the first of the next row
+// in the order on the screen, before any commit re-sorts it. The editor takes
+// Tab only when there is such a cell, so that a Tab with nowhere to go moves the
+// focus on. Under mu.
+func (t *DataGridViewWidget[T, K]) nextEditable(e *editState[K], dir int) (k K, ci int, ok bool) {
+	at := slices.Index(t.visCols, e.col)
+	row, there := t.src.index[e.key]
+	if at < 0 || !there {
+		return k, 0, false
+	}
+	for j := at + dir; j >= 0 && j < len(t.visCols); j += dir {
+		if t.canEdit(&t.src.rows[row], t.visCols[j]) {
+			return e.key, t.visCols[j], true
+		}
+	}
+	pos := t.framePos(e.key)
+	if pos < 0 {
+		return k, 0, false
+	}
+	for n, p := 0, pos+dir; n < maxTabScan; n, p = n+1, p+dir {
+		r := t.rowAtPos(p)
+		if r == nil {
+			return k, 0, false
+		}
+		for j := range t.visCols {
+			if dir < 0 {
+				j = len(t.visCols) - 1 - j
+			}
+			if t.canEdit(r, t.visCols[j]) {
+				return t.key(r), t.visCols[j], true
+			}
+		}
+	}
+	return k, 0, false
+}
+
+// tabFrom is Tab (dir 1) or Shift+Tab (dir -1) in the editor of e: the draft is
+// written and the next editable cell edits, all under one hold of the lock. The
+// cell is chosen before the write, which may re-sort the rows. A refusal keeps
+// the edit where it is. When the write leaves no cell to edit (a search now
+// hides the row, CanEdit changed), the edit ends and the table has the focus.
+func (t *DataGridViewWidget[T, K]) tabFrom(e *editState[K], dir int) {
+	var wins []*mygo.Window
+	t.change(func() {
+		d := t.ed()
+		if d.edit != e { // an edit that already ended
+			return
+		}
+		k, ci, ok := t.nextEditable(e, dir)
+		var err error
+		if wins, err = t.commitEditLocked(e); err != nil || !ok {
+			return
+		}
+		title := t.cols[ci].Title
+		if more, began := t.beginLocked(k, ci, false, 0, 0); began {
+			d.pendingCur = &curCell[K]{k, title}
+			wins = append(wins, more...)
+		}
+	})
+	for _, w := range wins {
+		invalidate(w)
+	}
+	t.flushEdit()
 }
 
 // closeEdit ends the edit without writing it. Under mu.
@@ -461,11 +554,11 @@ func (t *DataGridViewWidget[T, K]) followCurrent() {
 	}
 }
 
-// dropHiddenEdit cancels the edit of a column that no longer shows: its editor
-// is gone, and a later commit would write a draft nobody sees. Under mu, while
-// building.
+// dropHiddenEdit cancels the edit of a column or a row that no longer shows (a
+// hidden column, a search that filters the row out): its editor is gone, and a
+// later commit would write a draft nobody sees. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) dropHiddenEdit() {
-	if e := t.ed().edit; e != nil && !slices.Contains(t.visCols, e.col) {
+	if e := t.ed().edit; e != nil && (!slices.Contains(t.visCols, e.col) || t.positionOf(e.key) < 0) {
 		t.closeEdit()
 	}
 }

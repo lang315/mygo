@@ -16,7 +16,7 @@ type editCore struct {
 	col              int    // the column's index in cols
 	title            string // the column's title
 	orig, draft      string // the text the editor started with, and the user's
-	err              string // the last refusal, shown by the editor
+	err, errDraft    string // the last refusal, shown by the editor, and the draft it refused
 	fresh, selectAll bool   // the next build gives the editor the focus; all selected
 	at               struct {
 		has  bool
@@ -29,6 +29,11 @@ type editCore struct {
 	// end and cancel commit and cancel this edit, and only this one: the table
 	// makes them when the edit begins.
 	end, cancel func()
+	// tab moves the edit to the next editable cell (dir 1) or the previous (-1);
+	// canNext and canPrev say whether the table may have one, so that a Tab with
+	// nowhere to go keeps moving the focus on.
+	tab              func(dir int)
+	canNext, canPrev bool
 }
 
 // buildEditor builds the editor of the cell being edited in place of its text.
@@ -53,10 +58,26 @@ func buildEditor(c *ui.Context, e *editCore) {
 			Post(e.end)
 		}
 	}
+	if e.err != "" && e.draft != e.errDraft { // typing again takes the refusal away
+		e.err, e.announced = "", ""
+	}
 	if e.err != "" {
 		in.Error(e.err)
+		// The message shows under the cell, text only: the editor keeps the focus.
+		open, th := true, c.Theme()
+		ui.PopoverBase(c, in, &open, func(panel ui.Element) {
+			panel.Margin(4, 0, 0, 0).Padding(th.Space(0.5), th.Space(1)).Radius(th.Space(0.5)).
+				Background(th.Background).Border(1, th.Danger)
+			ui.Text(c, e.err).TextColor(th.Danger)
+		})
 	}
 	in.OnShortcut(0, ui.KeyEscape, func() { Post(e.cancel) })
+	if e.canNext {
+		in.OnShortcut(0, ui.KeyTab, func() { Post(func() { e.tab(1) }) })
+	}
+	if e.canPrev {
+		in.OnShortcut(ui.Shift, ui.KeyTab, func() { Post(func() { e.tab(-1) }) })
+	}
 	if in.Submitted() {
 		Post(e.end)
 	}
@@ -112,7 +133,7 @@ func commitCore(e *editCore, rowThere bool, validate func(draft string) error, w
 			return commitOutcome{kind: committedPanicked, panic: reported{v, stack}}
 		}
 		if refusal != nil {
-			e.err = refusal.Error()
+			e.err, e.errDraft = refusal.Error(), e.draft
 			return commitOutcome{kind: committedRefused, err: refusal}
 		}
 	}

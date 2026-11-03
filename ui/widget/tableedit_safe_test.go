@@ -2,8 +2,6 @@ package widget
 
 import (
 	"testing"
-
-	"github.com/egoist/mygo/ui"
 )
 
 // Clicking another cell commits the edit: a written one closes.
@@ -65,19 +63,6 @@ func TestDeletingTheRowCancelsTheEdit(t *testing.T) {
 	}
 	if got := endsOf(ends); len(got) != 0 {
 		t.Fatalf("ends %v for a deleted row", got)
-	}
-}
-
-// Tab leaves the editor, and what was typed is written.
-func TestTabCommitsAndLeaves(t *testing.T) {
-	tt, grid, _ := editGrid(t)
-	grid.BeginEdit(1, "Name")
-	settleEdit(tt)
-	tt.Type("beta")
-	tt.Key(0, ui.KeyTab)
-	settleEdit(tt)
-	if r := rowOf(t, grid, 1); r.name != "beta" || grid.IsEditing() {
-		t.Fatalf("Tab: row %+v editing %v; want written and closed", r, grid.IsEditing())
 	}
 }
 
