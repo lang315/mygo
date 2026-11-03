@@ -30,10 +30,11 @@ var statePlaced = map[string][]string{
 	// fields of the element, and what the app keeps in it.
 	"kept": {
 		"rt", "world", "clips", "rtl", "clipRect", "clipRadii", "id", "seen", "pass", "born",
+		"selfClips", "selfClip", "selfRadius", // the element's own ClipInset, from its build: a row built again changes it
 		"lookedSeen", "lookedPass", "lay", "text", "x", "y", "w", "h", "vx", "vy", "vw", "vh",
 		"parent", "flags", "cursor", "tip", "effectLayer", "webView",
 		"tipDelay", "tipWarm", // the theme's TooltipDelay, set by the build; a new theme (themeGen, theme) builds the row again
-		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barWidth", "barsShown", "hideScrollbars", "ignoreInput", "track",
+		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barWidth", "barsShown", "hideScrollbars", "ignoreInput", "accessHidden", "track",
 		"moveFrame", "startX", "startY", "list", "cx", "cy", "cw", "ch", "role",
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
