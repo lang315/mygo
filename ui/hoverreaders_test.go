@@ -43,7 +43,7 @@ var hoverReaders = map[string]string{
 	// Option lists that move a highlight with the pointer: Hovered notes the read.
 	"base.go selectParts.Item":       "asks Hovered, which notes the read",
 	"combobox.go comboboxParts.Item": "asks Hovered, which notes the read",
-	"popovermenu.go menuDraw.item":   "asks Hovered, which notes the read; a drawn menu is acting",
+	"popovermenu.go menuParts.item":  "asks Hovered, which notes the read; an open menu is acting",
 	// Read in an afterInput callback or while pressed, dragging or open: outside the row's callback, or a row built.
 	"base.go coreSelectBase":                      "in an afterInput callback, when the select opens",
 	"combobox.go comboboxBase":                    "in an afterInput callback",
@@ -56,8 +56,9 @@ var hoverReaders = map[string]string{
 	"dragdrop.go engine.paintDrag":                "a drag, at paint",
 	"data_drag.go engine.dataDragOver":            "an event",
 	"menu.go engine.menuRelease":                  "an event; a menu is acting",
-	"popovermenu.go engine.drawMenu":              "a menu drawn: acting",
-	"popovermenu.go engine.openDrawnMenu":         "a menu asked by an event: acting",
+	"popovermenu.go menuParts.Popup":              "an open menu, in its overlay: acting",
+	"popovermenu.go menuShown.openAt":             "a menu asked by an event: acting",
+	"popovermenu.go newMenu":                      "only as the menu opens, which shows its overlay: acting",
 	"textselection.go engine.scrollTextSelection": "a selection drag: the press is acting",
 	"textselection.go engine.syncTextSelection":   "a selection drag: the press is acting",
 	// The drag (rt.drag): its source and the element it is over are acting.
