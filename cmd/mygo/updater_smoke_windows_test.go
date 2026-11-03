@@ -251,7 +251,8 @@ func TestUpdaterSmoke(t *testing.T) {
 		t.Error("the update did not replace the executable")
 	}
 	if !strings.Contains(displayVersion(), "2.0.0") {
-		t.Errorf("Settings > Apps lists %q, want 2.0.0", displayVersion())
+		loc, _ := exec.Command("reg", "query", key, "/v", "InstallLocation").CombinedOutput()
+		t.Errorf("Settings > Apps lists %q, want 2.0.0 (the app is in %s; %s)", displayVersion(), install, loc)
 	}
 	// The new version removes what the update could not while the old one ran.
 	wait.Until(t, "the update's leftovers to go", func() bool {
