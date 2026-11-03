@@ -264,6 +264,7 @@ func (rt *engine) accessTree() *platform.AccessTree {
 	// to: growing the slice from empty would copy it again and again.
 	t := &platform.AccessTree{Nodes: make([]platform.AccessNode, 0, rt.accessNodes)}
 	defer func() { rt.accessNodes = len(t.Nodes) }()
+	clear(rt.accessCells)
 	var focused *node
 	switch root := rt.c.root; {
 	case root == nil:
@@ -280,14 +281,15 @@ func (rt *engine) accessTree() *platform.AccessTree {
 		rt.accessElement(t, root, -1, false, &focused)
 	}
 	if rt.windowFocus() && rt.focused != 0 {
-		focus := rt.focused
+		focus, cell := rt.focused, uint64(0)
 		// A list choosing rows with the arrows has the focus for them:
 		// assistive technology follows the row chosen, as the arrows move
-		// the choice, while it shows.
+		// the choice, while it shows; a table with a current cell, the
+		// cell, in the row that stays chosen.
 		if f := focused.rowsOfElement(); f != nil && f.s.cursor() != nil {
 			for _, r := range f.rows {
 				if r.i == *f.s.cursor() {
-					focus = r.e.id
+					focus, cell = r.e.id, f.currentCellID(r.e)
 				}
 			}
 		}
@@ -295,7 +297,7 @@ func (rt *engine) accessTree() *platform.AccessTree {
 		if focused != nil && focused.activeDescendant != nil {
 			focus = focused.activeDescendant.id
 		}
-		for _, id := range []uint64{focus, rt.focused} {
+		for _, id := range []uint64{cell, focus, rt.focused} {
 			if t.Focus == 0 && slices.ContainsFunc(t.Nodes, func(n platform.AccessNode) bool { return n.ID == id }) {
 				t.Focus = id
 			}
@@ -346,6 +348,10 @@ func (rt *engine) accessElement(t *platform.AccessTree, e *node, parent int, scr
 		}
 		rt.accessDetails(e, n)
 		parent = len(t.Nodes) - 1
+		if _, cell := rt.accessCells[e.id]; cell && role == platform.RoleCell && n.Label != "" && textOnly(e) {
+			// Named by its texts: they are not read a second time.
+			return
+		}
 		if e.kind == kindText {
 			rt.accessInline(t, e, parent)
 			return
@@ -407,6 +413,9 @@ func (rt *engine) accessDetails(e *node, n *platform.AccessNode) {
 		n.States |= platform.AccessSortDescending
 	}
 	n.Description = e.description
+	if n.Role == platform.RoleCell {
+		rt.accessCellDetails(e, n)
+	}
 	if f := e.nameFrom; f != nil {
 		switch {
 		case n.Label == "":
@@ -552,6 +561,9 @@ func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 	case platform.AccessFocus:
 		if s.ignoreInput {
 			return
+		}
+		if rt.focusCell(ev.ID) {
+			break
 		}
 		if s.flags&flagChoosable != 0 {
 			// A row of a list choosing rows: its list takes the focus for
