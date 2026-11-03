@@ -148,6 +148,8 @@ type DataGridViewWidget[T any, K comparable] struct {
 	editable   bool
 	readOnly   bool
 	editMode   EditMode
+	editCell   func(row, col int, how ui.EditHow) bool
+	startCell  func(row, col int, x, y float32, how ui.EditHow)
 	onEndEdit  func(K, string)
 	pendingCur *curCell[K]
 	curKey     K
@@ -200,7 +202,9 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	}
 	t := &DataGridViewWidget[T, K]{src: src, key: src.key, link: &tableLink{}, cols: slices.Clone(cols), view: ui.NewTableView(compare), cursor: -1}
 	t.columns = t.uiColumns()
-	t.editable = slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Set != nil })
+	if t.editable = slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Set != nil }); t.editable {
+		t.editCell, t.startCell = t.editsCell, t.startEdit // made once: a method value allocates
+	}
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.RowVersion = t.rowVersion
 	t.list.Copy = t.copyRows

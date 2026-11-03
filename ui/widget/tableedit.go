@@ -273,7 +273,7 @@ func (t *DataGridViewWidget[T, K]) wireEdit() {
 		return
 	}
 	s.CurrentCell = true
-	s.EditCell, s.OnEditCell = t.editsCell, t.startEdit
+	s.EditCell, s.OnEditCell = t.editCell, t.startCell
 }
 
 // followCurrent applies a SetCurrentCell or BeginEdit, and keeps what the
