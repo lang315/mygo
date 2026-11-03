@@ -158,6 +158,14 @@ type ListState struct {
 	// Cells.Anchor and All are not used. A table cannot set both CurrentCell
 	// and CellSelect.
 	CurrentCell bool
+	// EditCell, with CurrentCell, is asked on Enter, F2 and a double click
+	// whether the cell of that row and column edits; when it says yes, the
+	// list does not submit or activate the row but calls OnEditCell: with
+	// how EditKey or EditF2 (x and y are zero), and EditClick with the point
+	// of the window the user double-clicked. Both are called in a frame, on
+	// the main thread. With EditCell nil nothing changes.
+	EditCell   func(row, col int, how EditHow) bool
+	OnEditCell func(row, col int, x, y float32, how EditHow)
 	// Sort, when set, is the column a Table's rows are sorted by: a click
 	// on the header of a Sortable column sorts by it, ascending, and
 	// another reverses the order, which the header shows. Sort the rows as
@@ -1720,8 +1728,19 @@ func (f *listFrame) navigate() {
 	in := *sel >= 0 && *sel < n
 	// Enter on macOS, as in Finder, and F2 elsewhere edit the text of the
 	// row chosen in place (EditableText), where it has one.
-	enter := o.Shortcut(0, KeyEnter)
-	edit := s.editables && (o.Shortcut(0, KeyF2) || mac && enter)
+	enter, f2 := o.Shortcut(0, KeyEnter), o.Shortcut(0, KeyF2)
+	if in && (enter || f2) {
+		how := EditKey
+		if f2 {
+			how = EditF2
+		}
+		if col, ok := f.editsCell(*sel, how); ok {
+			s.ScrollIntoView(*sel)
+			s.OnEditCell(*sel, col, 0, 0, how)
+			enter, f2 = false, false // the cell's edit took the key, not the row
+		}
+	}
+	edit := s.editables && (f2 || mac && enter)
 	switch {
 	case edit && in && !f.isHeader(*sel):
 		s.editKey, s.editAsked = f.key(*sel), true

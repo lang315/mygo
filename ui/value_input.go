@@ -367,8 +367,13 @@ func listRowValueInput(n *node) {
 		}
 	}
 	if n.DoubleClicked() {
-		f.owner.st.markSubmitted()
-		f.owner.st.activate(b.i)
+		if col, ok := f.editsCell(b.i, EditClick); ok {
+			// The cell edits instead: the point is where it was pressed.
+			f.s.OnEditCell(b.i, col, st.drag.ox, st.drag.oy, EditClick)
+		} else {
+			f.owner.st.markSubmitted()
+			f.owner.st.activate(b.i)
+		}
 	}
 	if !st.pressed {
 		st.rowPressed, st.pressChose = false, false

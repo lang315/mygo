@@ -34,6 +34,30 @@ func (s *ListState) tracksCells() bool {
 	return (s.CellSelect || s.CurrentCell) && s.Selection != nil
 }
 
+// EditHow says what started the edit of a cell.
+type EditHow int
+
+const (
+	EditKey   EditHow = iota // Enter
+	EditF2                   // F2
+	EditClick                // a double click
+)
+
+// editsCell reports whether the cell at row and the current column edits,
+// asked how it would start.
+func (f *listFrame) editsCell(row int, how EditHow) (col int, ok bool) {
+	s := f.s
+	if s.EditCell == nil || s.OnEditCell == nil || !f.tracksCells() || f.isHeader(row) {
+		return 0, false
+	}
+	k := s.colIndex(s.Cells.Cursor)
+	if k < 0 {
+		return 0, false
+	}
+	col = s.tableCols[k].col
+	return col, s.EditCell(row, col, how)
+}
+
 // tracksCells reports whether the list holds the rows of such a Table.
 func (f *listFrame) tracksCells() bool { return f.flat && f.s.tracksCells() }
 
