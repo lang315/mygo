@@ -192,16 +192,19 @@ func webViewDelegateMethods() []objc.MethodDef {
 		}),
 		method("webView:didFinishNavigation:", func(self id, _ objc.SEL, web, nav id) {
 			if w := b().windowFor(self); w != nil {
+				w.keepRestoredScroll()
 				w.h.LoadFinished()
 			}
 		}),
 		method("webView:didFailProvisionalNavigation:withError:", func(self id, _ objc.SEL, web, nav, err id) {
 			if w := b().windowFor(self); w != nil {
+				w.restoredScroll = NSPoint{}
 				w.loadFailed(err, w.provisionalURL)
 			}
 		}),
 		method("webView:didFailNavigation:withError:", func(self id, _ objc.SEL, web, nav, err id) {
 			if w := b().windowFor(self); w != nil {
+				w.restoredScroll = NSPoint{}
 				w.loadFailed(err, w.URL())
 			}
 		}),

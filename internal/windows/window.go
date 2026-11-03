@@ -210,6 +210,10 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 			class = flyoutShadowClass
 		}
 	}
+	if p := w.parent; p != nil && p.opts.Flyout != nil && p.IsAlwaysOnTop() {
+		// Above a tray's flyout, which is above other apps' windows.
+		ex |= wsExTopmost
+	}
 	initial := initialWindowBounds(o, screenSpace())
 	w.hwnd = createWindow(ex, class, o.Title, style, initial.Left, initial.Top, initial.Right-initial.Left, initial.Bottom-initial.Top, owner)
 	if w.hwnd == 0 {
@@ -883,10 +887,16 @@ func (w *window) destroy() {
 			procEnableWindow.Call(w.parent.hwnd, 1)
 		}
 		// Windows gives the front of a window it destroys to the next one
-		// down, which can be another app's, rather than to its owner: hand
-		// it over first, to the parent or the modal child still blocking it.
+		// down, which can be another app's (once the user switched to one
+		// and back, #1055), rather than to its owner: hand it over first, to
+		// the modal child still blocking the parent, or to the parent as
+		// Focus does, which also shows a flyout that is never activated.
 		if w.holdsFront() {
-			procSetForegroundWindow.Call(w.nextFront().hwnd)
+			if next := w.nextFront(); next != w.parent {
+				procSetForegroundWindow.Call(next.hwnd)
+			} else if w.parent.IsVisible() && !w.parent.IsMinimized() {
+				w.parent.Focus()
+			}
 		}
 	}
 	procDestroyWindow.Call(w.hwnd)

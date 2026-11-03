@@ -216,6 +216,10 @@ type engine struct {
 	glyphReqs   []text.GlyphRequest
 	glyphImages []text.GlyphImage
 
+	// fit sizes a window that takes its content's size (fit.go), nil
+	// for others.
+	fit *fitter
+
 	// contentZoom is the content's zoom (Context.SetZoom), 0 for none;
 	// zoomChanged tells that it changed since the frame's size was read.
 	contentZoom float32
@@ -450,14 +454,16 @@ type engine struct {
 	activeRead bool
 	// toasts are the toasts the window holds, oldest first, and
 	// toastList those showing, as ToastViewportBase gives them; their time
-	// stops while toastsPaused. A viewport of them was built in the pass
-	// toastPass of the frame toastFrame.
-	toasts       []toast
-	nextToast    uint64
-	toastList    []Toast
-	toastsPaused bool
-	toastFrame   uint64
-	toastPass    int
+	// stops while toastsPaused, as the user holds them, and, but for those
+	// that RunInBackground, while toastsBackground. A viewport of them was
+	// built in the pass toastPass of the frame toastFrame.
+	toasts           []toast
+	nextToast        uint64
+	toastList        []Toast
+	toastsPaused     bool
+	toastsBackground bool
+	toastFrame       uint64
+	toastPass        int
 	// mods are the modifiers of the last pointer event.
 	mods Modifiers
 
@@ -809,6 +815,7 @@ func (rt *engine) runFrame() {
 	rt.insp.lap(0)
 	root := rt.c.root
 	layoutTree(root, appW, h)
+	rt.measureFit(root)
 	rt.commit(root, w, h)
 	// Scrolling can put a new native drop target under a stationary
 	// pointer. Resolve it against this frame's geometry, then rebuild if
