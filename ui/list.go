@@ -121,6 +121,14 @@ type ListState struct {
 	// number of rows for the end. Move them there: the list shows where
 	// they would go as they are dragged, and scrolls near its edges.
 	Reorder func(rows []int, to int)
+	// DragRows, when set, lets the user drag rows out of the list, as
+	// Element.Drag drags a value: the rows chosen, when the row dragged is
+	// one, else that row, which the list passes in order, drag the value
+	// DragRows returns, for Drop and DragOver elsewhere to take, as a
+	// folder in a list of files takes the files dropped on it. The list
+	// itself takes nothing and shows no place between the rows. Return nil
+	// for rows that do not drag. A list cannot both DragRows and Reorder.
+	DragRows func(rows []int) any
 	// DragSelect, with Selection, chooses rows as the pointer drags over
 	// them from the row it pressed: those from that row to the one under
 	// the pointer, as a Shift-click on it would, and with Cmd (Ctrl on
@@ -130,7 +138,7 @@ type ListState struct {
 	// pointer goes down, as a click would, and a press on a row chosen
 	// waits for the release, so that a drag of the choice keeps it; this
 	// is so in a Table choosing cells too. A list cannot both DragSelect
-	// and Reorder.
+	// and Reorder (or DragRows).
 	DragSelect bool
 	// CellSelect, with Selection, makes a Table choose a block of cells:
 	// the rows chosen, times the columns from Cells.Anchor to Cells.Cursor
@@ -147,7 +155,7 @@ type ListState struct {
 	// whole rows chosen, and the one at Cells.Cursor in the row the keys
 	// move from has a border while the table has the focus. A RowHeader
 	// column chooses whole rows. A table cannot both CellSelect and
-	// Reorder.
+	// Reorder (or DragRows).
 	CellSelect bool
 	// Cells are the columns of the block CellSelect chooses.
 	Cells ColumnRange
@@ -750,8 +758,11 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 	if s.CurrentCell && s.CellSelect {
 		panic("ui: a list cannot both CellSelect and keep a CurrentCell")
 	}
-	if (s.DragSelect || s.CellSelect && flat) && s.Reorder != nil {
-		panic("ui: a list cannot both DragSelect (or CellSelect) and Reorder")
+	if (s.DragSelect || s.CellSelect && flat) && (s.Reorder != nil || s.DragRows != nil) {
+		panic("ui: a list cannot both DragSelect (or CellSelect) and Reorder (or DragRows)")
+	}
+	if s.Reorder != nil && s.DragRows != nil {
+		panic("ui: a list cannot both Reorder and DragRows")
 	}
 	n = max(n, 0)
 	sig, noKeep := s.rowSig, s.rowNoKeep
@@ -1075,8 +1086,8 @@ func (f *listFrame) build(i int) *node {
 			})
 		}
 	}
-	if s.Reorder != nil && !f.isHeader(i) {
-		w.dragFrom(func() any { return &rowDrag{s: s, rows: f.dragged(i)} })
+	if (s.Reorder != nil || s.DragRows != nil) && !f.isHeader(i) {
+		w.dragFrom(func() any { return f.dragValue(i) })
 		if w.Dragging() {
 			// Where the row was, as it moves with the pointer.
 			w.Opacity(0.4)
@@ -1193,7 +1204,16 @@ type rowDrag struct {
 	rows []int
 }
 
-func (d *rowDrag) dragCount() int { return len(d.rows) }
+// dragValue returns what a drag from row i drags: the rows to reorder,
+// or the value DragRows makes of them, with their number.
+func (f *listFrame) dragValue(i int) any {
+	rows := f.dragged(i)
+	var v any = &rowDrag{s: f.s, rows: rows}
+	if f.s.DragRows != nil {
+		v = f.s.DragRows(rows)
+	}
+	return countedDrag{v, len(rows)}
+}
 
 // dragged returns the rows a drag from row i moves: those chosen when it
 // is one of them, else row i.

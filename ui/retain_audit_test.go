@@ -50,6 +50,24 @@ func TestRetainLayoutReorderListHoldsNothing(t *testing.T) {
 	p.idle(2)
 }
 
+// A list with DragRows (#1089) is like one with Reorder: its rows are drag
+// sources, which keep nothing, and a drag out of it leaves the rows as built.
+func TestRetainLayoutDragRowsListHoldsNothing(t *testing.T) {
+	p := newPair(t, 300, 400, func() func(c *Context) {
+		s := auditState()
+		s.DragRows = func(rows []int) any { return rows }
+		return func(c *Context) { auditRows(c, s, 30).Grow(1) }
+	})
+	p.idle(4)
+	if n := p.kept.rt.rowsLaidKept; n != 0 {
+		t.Errorf("%d rows of a DragRows list kept their layout", n)
+	}
+	b, _ := p.kept.Find("row 3")
+	p.both(func(tt *Tester) { drag(tt, b.X+2, b.Y+b.H/2, b.X+2, b.Y+4*b.H) })
+	p.compare("dragged")
+	p.idle(2)
+}
+
 func TestRetainLayoutDragOverTheList(t *testing.T) {
 	p := newPair(t, 300, 400, func() func(c *Context) {
 		s := auditState()

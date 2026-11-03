@@ -46,23 +46,11 @@ func holds(state []byte, s string) bool {
 	return bytes.Contains(state, []byte(s)) || bytes.Contains(state, u)
 }
 
-// holdsScroll reports whether a session state holds a scroll position of y,
-// which WebKit learns of after the form fields. It knows WKWebView's form: the
-// history item data has the position as an int32 and the page scale 1.0 as a
-// float32, little-endian. WebKitGTK's state is another encoding (393 bytes),
-// so there it says yes.
-func holdsScroll(state []byte, y uint32) bool {
-	if runtime.GOOS != "darwin" {
-		return true
-	}
-	return bytes.Contains(state, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, y), 0x3f800000))
-}
-
-// A page's session state brings back its back/forward list in a new
-// window, with what WebKit saved: the page's scroll position and form
-// field as its window was hidden, and the entry before's scroll position
-// as the page left it. On Windows it brings back the page alone.
-func TestSessionState(t *testing.T) {
+// savedSession saves the session state of a window that visited "one",
+// scrolled to 700, then "two", typed "typed second" into its field and
+// scrolled to 1200, once WebKit saved the latter two.
+func savedSession(t *testing.T) []byte {
+	t.Helper()
 	w := newWindow(t, mygo.WindowOptions{Title: "Session", Width: 300, Height: 200})
 	visit(t, w, "one", "typed first", 700)
 	visit(t, w, "two", "typed second", 1200)
@@ -71,25 +59,42 @@ func TestSessionState(t *testing.T) {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {
-		// WebKit saves a page's form fields as the page goes out of view: a page
-		// that was never in view (its window behind others, the app inactive)
-		// goes nowhere, and Hide saves nothing.
+		// WebKit saves the scroll position of the page it shows a moment
+		// after it stopped scrolling, and its form fields as the page goes
+		// out of view, so once it came into view: a window shows on
+		// screen a while after it is shown, longer on a busy runner. A
+		// page that was never in view (its window behind others, the app
+		// inactive) goes nowhere, and Hide saves nothing: Focus brings it
+		// forward. WebKit tells them to the UI process later.
 		w.Focus()
 		waitFor(t, w, `document.visibilityState === "visible"`)
-	}
-	t.Logf("before Hide: scrollY %v, state %d bytes", mustEval(t, w, `scrollY`), len(state))
-	if runtime.GOOS != "windows" {
-		// WebKit saves the form fields of the page it shows as the page
-		// goes out of view, and tells it to the UI process later.
 		w.Hide()
 		wait.Until(t, "WebKit saving the page hidden", func() bool {
 			state, err = w.Page().SessionState()
-			return err == nil && holds(state, "typed second") && holdsScroll(state, 1200)
+			return err == nil && holds(state, "typed second") && holdsScroll(state, 0, 1200)
 		})
-		t.Logf("after Hide: state %d bytes", len(state))
 	}
 	w.Destroy()
+	return state
+}
 
+// holdsScroll reports whether a session state holds the scroll position
+// (x, y), as WebKit encodes it on macOS and in WebKitGTK: two 32-bit
+// integers in a row, little-endian on the machines MyGo runs on.
+func holdsScroll(state []byte, x, y int32) bool {
+	return bytes.Contains(state, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, uint32(x)), uint32(y)))
+}
+
+// A page's session state brings back its back/forward list in a new
+// window, with what WebKit saved: the page's scroll position and form
+// field as its window was hidden, and the entry before's scroll position
+// as the page left it. On Windows it brings back the page alone.
+//
+// On macOS the page may load before the window server puts the new
+// window on screen, and WebKit then puts it back at the top, as in
+// TestSessionStateHiddenWindow: the backend puts it back where it was.
+func TestSessionState(t *testing.T) {
+	state := savedSession(t)
 	r := newWindow(t, mygo.WindowOptions{Title: "Session restored", Width: 300, Height: 200, URL: "app://localhost/session/wrong",
 		Page: mygo.PageOptions{SessionState: state}})
 	waitFor(t, r, `document.title === "two" && document.readyState === "complete"`)
@@ -111,4 +116,22 @@ func TestSessionState(t *testing.T) {
 	if !r.Page().CanGoForward() {
 		t.Error("CanGoForward = false back in the page restored")
 	}
+}
+
+// A session state brought back in a window made hidden keeps its scroll
+// position once the window shows. WebKit on macOS puts a page that
+// scrolled before its window first showed on screen back at the top as
+// the window does; the backend puts it back where it was.
+func TestSessionStateHiddenWindow(t *testing.T) {
+	state := savedSession(t)
+	r := newWindow(t, mygo.WindowOptions{Hidden: true, Title: "Session restored hidden", Width: 300, Height: 200, URL: "app://localhost/session/wrong",
+		Page: mygo.PageOptions{SessionState: state}})
+	waitFor(t, r, `document.title === "two" && document.readyState === "complete"`)
+	if runtime.GOOS == "windows" {
+		return
+	}
+	r.Show()
+	waitFor(t, r, `document.visibilityState === "visible"`)
+	waitFor(t, r, `scrollY === 1200`)
+	waitFor(t, r, `field.value === "typed second"`)
 }

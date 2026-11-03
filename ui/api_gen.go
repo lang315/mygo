@@ -514,7 +514,8 @@ func (_handle *Context) SetTheme(t *Theme) {
 // What the view sees is zoomed: Size, TitleBar, Bounds and every length
 // are in the content's DIPs, z of them to the window's. The pointer, text
 // input, input methods, accessibility, context menus, drags and web views
-// follow it.
+// follow it. The window's own sizes are not zoomed: Window.SetContentSize
+// and Window.ContentSize are in the window's DIPs, z times the content's.
 //
 //	c.SetZoom(app.zoom) // 1.25 for 125%
 func (_handle *Context) SetZoom(z float32) {
@@ -2553,9 +2554,9 @@ func ToastBase(c *Context, t Toast) ToastParts {
 //	})
 //
 // The time of the toasts stops while the pointer rests on viewport, the
-// keyboard focus is in it, or the window is in the background. viewport
-// stays while no toast shows, for the last one to go with an exit
-// transition. It returns viewport.
+// keyboard focus is in it, or the window is in the background, for those
+// without RunInBackground. viewport stays while no toast shows, for the
+// last one to go with an exit transition. It returns viewport.
 func ToastViewportBase(c *Context, fn func(viewport Element, toasts []Toast)) Element {
 	_ctx := c.build()
 	if _ctx == nil {
@@ -2676,7 +2677,8 @@ func Toolbar(c *Context, fn func()) Element {
 // builds its content. It shows once the pointer has rested on anchor for
 // 0.6 seconds, at once as anchor gets the keyboard focus from the
 // keyboard, and at once too within 0.4 seconds of another tip going, as
-// the pointer moves along a toolbar. It goes as the pointer leaves anchor
+// the pointer moves along a toolbar; the theme's TooltipDelay changes
+// both. It goes as the pointer leaves anchor
 // or presses it, and with Escape, until the pointer comes back or the
 // focus does. Over elements inside one another, the innermost one's tip
 // shows; one shows at a time.
@@ -2955,10 +2957,28 @@ func (_handle Element) AnimateColor(key any, target Color, a Animation) Color {
 // Animation and the Web Animations API run transforms and opacity: the
 // cheapest motion there is, which a view large or slow to build keeps
 // smooth. The pointer, carets and overlays follow it as they follow
-// transforms. It starts at the first pose. While the desktop asks for less
-// motion, it moves at once, and only fades smoothly.
+// transforms. While the desktop asks for less motion, it moves at once,
+// and only fades smoothly.
 //
 //	card.AnimatePose(ui.Pose{Y: lift, Scale: 1.02}, ui.Snappy)
+//
+// It starts at the first pose: an element that the frame before did not
+// pose, as one built for the first time, shows at p at once, and moves
+// only when a later frame poses it elsewhere. To come in from a pose, as
+// a flyout's panel rising as it shows, pose the element there in one
+// build, ask for another frame (Context.Invalidate), and pose it at its
+// place in the next:
+//
+//	entered := ui.Local(panel, "entered", func() bool { return false })
+//	p := ui.Pose{}
+//	if !*entered {
+//		p, *entered = ui.Pose{Y: 8, Fade: 1}, true
+//		c.Invalidate()
+//	}
+//	panel.AnimatePose(p, ui.Snappy)
+//
+// An element appearing in a parent that the frame before showed comes in
+// with the Enter of its Transition too.
 func (_handle Element) AnimatePose(p Pose, a Animation) Element {
 	_node := _handle.node()
 	if _node == nil {
