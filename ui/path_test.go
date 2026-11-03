@@ -166,9 +166,29 @@ func TestPathsTheAtlasHoldsDrawFromOneMask(t *testing.T) {
 			})
 		}, 1600, 100)
 		tt.SetScale(2)
+		growAtlas(t, tt, func() bool { return len(tt.rt.scene.Glyphs) == 1 })
 		if n := len(tt.rt.scene.Glyphs); n != 1 {
 			t.Errorf("transformed %v, the path draws %d masks", moved, n)
 		}
+	}
+}
+
+// growAtlas paints frames of tt until one draws what holds says, which it
+// does from one mask where the atlas holds the mask. The atlas of a process
+// that painted little is too small for a large mask, which draws as tiles
+// (the Tester's first frame): it grows as the runtime makes room for the
+// mask, in a frame or two, past the paths' crowded paints. The atlas is the
+// process's, shared by its Testers, so what an earlier test drew decides
+// whether it has grown: a test of it that is run alone (go test -run) or
+// first, as -shuffle may, would find it small.
+func growAtlas(t *testing.T, tt *Tester, holds func() bool) {
+	t.Helper()
+	for i := 0; i < 4 && !holds(); i++ {
+		tt.rt.paints = tt.rt.paths.crowded
+		tt.Frame()
+	}
+	if !holds() {
+		t.Fatalf("the atlas holds no mask of the path, which draws as %d glyphs", len(tt.rt.scene.Glyphs))
 	}
 }
 
@@ -264,6 +284,7 @@ func TestCrowdedPathsDrawAsTilesForAWhile(t *testing.T) {
 		r.Render(s)
 		return r.Image.RGBA()
 	}
+	growAtlas(t, tt, func() bool { long, _ := masks(); return long == 1 })
 	whole := pixels()
 	tt.rt.paths.crowded = tt.rt.paints + pathCrowdedPaints
 	tt.Frame()
