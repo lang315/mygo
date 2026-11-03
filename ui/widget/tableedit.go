@@ -48,16 +48,17 @@ type curCell[K comparable] struct {
 	col string
 }
 
-// enableEdit opts the table in to in-cell editing: it hands the table the parts
-// of editing it calls (method values, made once: one made in every build would
-// allocate). Nothing else refers to them, so the code of editing is linked only
-// into programs that call an editing method (SetEditMode, BeginEdit,
-// SetCurrentCell, OnCellEndEdit). Under mu.
+// enableEdit turns in-cell editing on: it hands the table the parts of editing
+// it calls (method values, made once: one made in every build would allocate).
+// Column.Editable has the table call it through the column's enable function,
+// and the editing methods that need it call it too. Nothing else refers to
+// the parts, so the code of editing is linked only into programs that edit.
+// Under mu.
 func (t *DataGridViewWidget[T, K]) enableEdit() {
 	if t.editorFn != nil {
 		return
 	}
-	t.editable = slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.Set != nil })
+	t.editable = slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.edit != nil })
 	t.editorFn, t.editCell, t.startCell = t.editor, t.editsCell, t.startEdit
 	t.prepareEdit = func() { t.wireEdit(); t.followCurrent() }
 }
@@ -81,11 +82,8 @@ func (t *DataGridViewWidget[T, K]) ReadOnly() bool {
 	return t.readOnly
 }
 
-// SetEditMode sets what starts the edit of a cell, and opts the table in to
-// editing: the columns with a Set edit only once the program calls
-// SetEditMode (EditOnEnterOrF2 is the usual mode), BeginEdit, SetCurrentCell
-// or OnCellEndEdit, so that the code of editing is linked only into programs
-// that ask for it. Call it while setting the table up.
+// SetEditMode sets what starts the edit of a cell: EditOnEnterOrF2 by default.
+// The cells of a column are editable when the column is Editable.
 func (t *DataGridViewWidget[T, K]) SetEditMode(m EditMode) *DataGridViewWidget[T, K] {
 	t.change(func() { t.enableEdit(); t.editMode = m })
 	return t
@@ -190,14 +188,14 @@ func (t *DataGridViewWidget[T, K]) cellOf(k K, column string) (row, col int, ok 
 // grid is not read-only, the column has a Set, and CanEdit allows it. Under mu.
 func (t *DataGridViewWidget[T, K]) canEdit(r *T, ci int) bool {
 	cl := &t.cols[ci]
-	if t.readOnly || cl.Set == nil || t.watch != nil { // a ListView never edits
+	if t.readOnly || cl.edit == nil || cl.edit.Set == nil || t.watch != nil { // a ListView never edits
 		return false
 	}
-	if cl.CanEdit == nil {
+	if cl.edit.CanEdit == nil {
 		return true
 	}
 	allowed := false
-	if v, stack, panicked := runColumnFn(func() { allowed = cl.CanEdit(r) }); panicked {
+	if v, stack, panicked := runColumnFn(func() { allowed = cl.edit.CanEdit(r) }); panicked {
 		Post(func() { report(v, stack) })
 		return false
 	}
@@ -209,8 +207,8 @@ func (t *DataGridViewWidget[T, K]) editText(r *T, ci int) string {
 	cl := &t.cols[ci]
 	text := ""
 	if v, stack, panicked := runColumnFn(func() {
-		if cl.EditText != nil {
-			text = cl.EditText(r)
+		if cl.edit != nil && cl.edit.EditText != nil {
+			text = cl.edit.EditText(r)
 		} else {
 			text = cl.Text(r)
 		}
@@ -424,9 +422,9 @@ func (t *DataGridViewWidget[T, K]) commitEditLocked(only *editState[K]) ([]*mygo
 		return nil, nil
 	}
 	r, cl := &t.src.rows[i], &t.cols[e.col]
-	if cl.Validate != nil {
+	if cl.edit.Validate != nil {
 		var refusal error
-		if v, stack, panicked := runColumnFn(func() { refusal = cl.Validate(r, e.draft) }); panicked {
+		if v, stack, panicked := runColumnFn(func() { refusal = cl.edit.Validate(r, e.draft) }); panicked {
 			t.panics = append(t.panics, reported{v, stack})
 			t.closeEdit()
 			return nil, nil
@@ -440,7 +438,7 @@ func (t *DataGridViewWidget[T, K]) commitEditLocked(only *editState[K]) ([]*mygo
 	}
 	var wins []*mygo.Window
 	if v, stack, panicked := runColumnFn(func() {
-		wins, _ = t.src.updateLocked(e.key, func(row *T) { cl.Set(row, e.draft) })
+		wins, _ = t.src.updateLocked(e.key, func(row *T) { cl.edit.Set(row, e.draft) })
 	}); panicked {
 		t.panics = append(t.panics, reported{v, stack})
 		t.closeEdit()

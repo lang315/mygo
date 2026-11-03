@@ -18,12 +18,9 @@ func BenchmarkTableEdit(b *testing.B) {
 			{Title: "Score", Text: func(a *acct) string { return strconv.Itoa(a.score) }, Width: 100},
 		}
 		if editable {
-			cols[0].Set = func(a *acct, s string) { a.name = s }
+			cols[0] = cols[0].Editable(CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }})
 		}
 		tb := DataGridView(acctKey, cols...).SetRows(manyAccts(n)).Expand()
-		if editable {
-			tb.SetEditMode(EditOnEnterOrF2)
-		}
 		tt := ui.NewTester(content(tb), 1280, 800)
 		for range 3 {
 			tt.Frame()

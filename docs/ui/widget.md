@@ -652,37 +652,38 @@ lock: they read the row and call no widget method.
   default), `SetSearchPlaceholder` its keyword's placeholder, and
   `OnBeforeSearch(fn)` runs before a search from it. `Search(column,
   keyword)` searches from code. The filter runs once per search.
-- **Editing cells.** A `Column` with a `Set` is editable, once the table opts
-  in with `SetEditMode(widget.EditOnEnterOrF2)` (the code of editing is linked
-  only into programs that ask for it, so a table that never does pays nothing).
-  F2, Enter or a double click edit the current cell in place; Enter writes,
-  Escape cancels, Tab leaves and writes. `Validate(row, text) error`, asked
-  before `Set(row, text)`, refuses a value: the editor stays open and shows the
-  error. `CanEdit(row)` makes a cell read-only, a column without `Set` is
-  read-only, `SetReadOnly(true)` makes the whole grid so, `EditText(row)` is the
-  text the editor starts with. `BeginEdit(key, column)`, `CancelEdit()`,
-  `EndEdit() error` (commits now, for a Save button), `IsEditing()`,
-  `EditingCell()`, `CurrentCell()`, `SetCurrentCell(key, column)` and
-  `OnCellEndEdit(fn)` drive it from code. With `EditOnF2`, Enter and the double
-  click keep activating the row (`OnActivate`); `EditProgrammatically` starts
-  edits with `BeginEdit` only. A `ListView` over the same columns never edits.
+- **Editing cells.** `Column.Editable(widget.CellEditor{Set: ...})` makes the
+  cells of a column editable in place; a column without it is read-only. Calling
+  it is also what links the code of editing into the program, so a table that
+  never edits pays nothing for it. F2, Enter or a double click edit the current
+  cell; Enter writes, Escape cancels, Tab leaves and writes. `Validate(row, text)
+  error` of the `CellEditor`, asked before `Set(row, text)`, refuses a value: the
+  editor stays open and shows the error. `CanEdit(row)` makes some cells
+  read-only, `SetReadOnly(true)` the whole grid, `EditText(row)` is the text the
+  editor starts with. `BeginEdit(key, column)`, `CancelEdit()`, `EndEdit() error`
+  (commits now, for a Save button), `IsEditing()`, `EditingCell()`,
+  `CurrentCell()`, `SetCurrentCell(key, column)` and `OnCellEndEdit(fn)` drive it
+  from code. `SetEditMode(widget.EditOnF2)` keeps Enter and the double click for
+  `OnActivate`; `EditProgrammatically` starts edits with `BeginEdit` only. A
+  `ListView` over the same columns never edits.
 
   ```go
   grid := widget.DataGridView(func(a *Account) uint { return a.ID },
-  	widget.Column[Account]{Title: "Name", Text: func(a *Account) string { return a.Name },
-  		Set: func(a *Account, s string) { a.Name = s }},
-  	widget.Column[Account]{Title: "Qty", Text: func(a *Account) string { return strconv.Itoa(a.Qty) },
-  		Validate: func(a *Account, s string) error {
-  			if _, err := strconv.Atoi(s); err != nil {
-  				return errors.New("Qty must be a number")
-  			}
-  			return nil
-  		},
-  		Set: func(a *Account, s string) { a.Qty, _ = strconv.Atoi(s) }},
-  ).SetEditMode(widget.EditOnEnterOrF2)
+  	widget.Column[Account]{Title: "Name", Text: func(a *Account) string { return a.Name }}.
+  		Editable(widget.CellEditor[Account]{Set: func(a *Account, s string) { a.Name = s }}),
+  	widget.Column[Account]{Title: "Qty", Text: func(a *Account) string { return strconv.Itoa(a.Qty) }}.
+  		Editable(widget.CellEditor[Account]{
+  			Validate: func(a *Account, s string) error {
+  				if _, err := strconv.Atoi(s); err != nil {
+  					return errors.New("Qty must be a number")
+  				}
+  				return nil
+  			},
+  			Set: func(a *Account, s string) { a.Qty, _ = strconv.Atoi(s) }}),
+  )
   ```
 
-  `Set`, `Validate`, `CanEdit` and `EditText` run under the package's lock like
+  The `CellEditor`'s functions run under the package's lock like
   `Compare`: they read the row and call no widget method and no `RowSource`
   method (`UpdateRow`, `AddRows`, `Row`, ...), which would wait for the lock
   they run under and hang. `Set` must not leave the row half written: build the
