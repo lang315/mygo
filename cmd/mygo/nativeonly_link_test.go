@@ -17,7 +17,7 @@ import (
 // the tag: the test would not tell the two apart otherwise.
 func TestNativeOnlyLinksNoWebViewPlacement(t *testing.T) {
 	if testing.Short() {
-		t.Skip("building two apps")
+		t.Skip("building three apps")
 	}
 	switch runtime.GOOS {
 	case "darwin", "linux", "windows":
@@ -48,6 +48,15 @@ func TestNativeOnlyLinksNoWebViewPlacement(t *testing.T) {
 	for _, sym := range placement {
 		if !strings.Contains(with, sym) {
 			t.Errorf("an app with a web view in its content does not link %s: this test would not tell", sym)
+		}
+	}
+	// An app that does not say nativeOnly (no mygo_nowebview) and builds no
+	// web view in its content links none of the engine's and the window's
+	// either: the registration, not the tag, keeps them out.
+	plain := dumped("counter-native", "mygo_noinspector")
+	for _, sym := range placement[:3] {
+		if strings.Contains(plain, sym) {
+			t.Errorf("an app without a web view in its content links %s without the tag", sym)
 		}
 	}
 	without := dumped("counter-native", "mygo_noinspector,mygo_nowebview")

@@ -38,7 +38,9 @@ type NativeWebView = surface.WebView
 func coreWebView(c *context, v NativeWebView) *node {
 	// What notes and places web views is reached from here only: an app
 	// without a web view in its content does not link it.
-	webViewNote, webViewPlace = (*engine).noteWebView, (*engine).placeWebViews
+	if webViewPlace == nil {
+		webViewNote, webViewPlace = (*engine).noteWebView, (*engine).placeWebViews
+	}
 	e := c.newElement(kindBox)
 	e.webView = v
 	e.self = Stretch
