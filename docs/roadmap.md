@@ -232,9 +232,12 @@ cannot show: those items are not marked):
 - Vietnamese Telex typing works in text boxes and table cells, on Windows
   and macOS. *Decided by the owner, 2026-11-03:* `DataGridView` gets in-place
   editing of the text of a cell, as WinForms has, and the gate keeps the table
-  cells. Until it lands no `ui/widget` control edits the text of a cell in
-  place, so Telex in table cells cannot be tested yet; text boxes can. The spec
-  is being written.
+  cells. The editing is in (`EditColumn`, F2, Enter or a double click; Tab and
+  Shift+Tab move between cells; `Validate` refuses a value; #383, #385, #388,
+  and the focused cell for screen readers in #386), and the widget tour edits
+  the Name column of its table. **Not done:** typing real Telex in a text box
+  and in a table cell is still a check by hand, by the owner, on a Mac and on
+  Windows. The automated tests cannot stand in for an input method.
 - A click on a table of 1M rows takes ≤ 1 ms of the app's work (`clickApp`). **Done**, see above: 0.67 ms at worst on CI.
 - API changes the port forces land before Phase 2.
 
