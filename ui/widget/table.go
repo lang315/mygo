@@ -48,8 +48,9 @@ type Column[T any] struct {
 	// search works; it is not drawn, read by assistive technology or copied.
 	Hidden bool
 
-	// edit and enable are what Editable gives the column.
-	edit   *CellEditor[T]
+	// edit (a *CellEditor[T], held as an any so that Column does not name the
+	// type) and enable are what Editable gives the column.
+	edit   any
 	enable func(table any)
 }
 
@@ -120,28 +121,18 @@ type DataGridViewWidget[T any, K comparable] struct {
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
 	numbered                                bool                 // the index column shows
 
-	// In-cell editing (tableedit.go), all under mu: the edit in progress, the
-	// generation that versions its row, whether a column has a Set, the
-	// current cell of the last frame and one asked for.
-	edit     *editState[K]
-	editGen  uint64
-	editable bool
-	readOnly bool
-	editMode EditMode
-	// The parts of editing the table calls, nil until the app opts in
-	// (enableEdit): the code behind them is linked only into apps that edit.
-	editorFn    func(c *ui.Context, e *editState[K])
-	prepareEdit func()
+	// In-cell editing (tableedit.go): its state is edAny, a *tableEditing, and the
+	// parts of editing the table calls are the func fields below, all nil until
+	// editing is turned on (enableEdit). The table names none of editing's types,
+	// so a program that never edits does not link them.
+	edAny       any
+	cellHook    func(c *ui.Context, col int, r *T) bool // builds the editor in the cell being edited
+	versionHook func(r *T) uint64                       // the edited row's version
+	pruneHook   func()                                  // rows went
+	prepareEdit func()                                  // before the table builds
+	afterTable  func(e ui.Element, c *ui.Context)       // after it built
 	editCell    func(row, col int, how ui.EditHow) bool
 	startCell   func(row, col int, x, y float32, how ui.EditHow)
-	onEndEdit   func(K, string)
-	pendingCur  *curCell[K]
-	curKey      K
-	curCol      string
-	curOK       bool
-	refocus     bool           // an edit ended while its editor had the focus: the table takes it
-	ended       []endedEdit[K] // edits written, for OnCellEndEdit, delivered by flushEdit
-	panics      []reported     // panics of column functions, for OnPanic
 
 	// watch, when set by a ListView, gets the keys the user added to and took
 	// out of the choice, or of the checks (checks).
@@ -322,10 +313,8 @@ func (t *DataGridViewWidget[T, K]) prune() {
 	t.gone = true
 	t.chosen.keep(t.src.index)
 	t.checked.keep(t.src.index)
-	if e := t.edit; e != nil {
-		if _, ok := t.src.index[e.key]; !ok { // the row of the edit went
-			t.closeEdit()
-		}
+	if t.pruneHook != nil {
+		t.pruneHook()
 	}
 }
 
@@ -466,8 +455,8 @@ func (t *DataGridViewWidget[T, K]) rowVersion(row int) uint64 {
 		place = pos + 1
 	}
 	look := foldLook(t.look, t.images.generation())
-	if e := t.edit; e != nil && t.key(r) == e.key {
-		look ^= e.gen * 0x9ddfea08eb382d69 // the row of the edit builds again when the edit begins or ends
+	if t.versionHook != nil {
+		look ^= t.versionHook(r) * 0x9ddfea08eb382d69 // the row of the edit builds again when the edit begins or ends
 	}
 	return versionOf(t.src.gens.of(t.key(r)), look, place)
 }
@@ -559,9 +548,8 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		OnSortChange(onChange(&t.sort, nil)).
 		OnSelectionChange(func() { t.commit(&t.chosen) }).
 		OnCheckedChange(func() { t.commit(&t.checked) })
-	if t.refocus && !c.Measuring() {
-		t.refocus = false
-		e.Focus()
+	if t.afterTable != nil {
+		t.afterTable(e, c)
 	}
 	t.events(e)
 	return e
@@ -588,8 +576,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 		col--
 	}
 	cl, r := &t.cols[vis[col]], t.rowAt(row)
-	if e := t.edit; e != nil && vis[col] == e.col && t.key(r) == e.key {
-		t.editorFn(c, e)
+	if t.cellHook != nil && t.cellHook(c, vis[col], r) {
 		return
 	}
 	// A selected row's text keeps the selection's color, which reads on

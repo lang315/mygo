@@ -47,6 +47,12 @@ func (c Column[T]) Editable(e CellEditor[T]) Column[T] {
 	return c
 }
 
+// editor returns the column's CellEditor, nil for a column that is not Editable.
+func (c *Column[T]) editor() *CellEditor[T] {
+	e, _ := c.edit.(*CellEditor[T])
+	return e
+}
+
 // enableEditing is the Column's enable: it turns editing on in the table the
 // column belongs to. It is a function of its own, referred to only by
 // Editable, so that the linker keeps the table's enableEdit method only for

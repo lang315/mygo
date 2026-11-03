@@ -55,19 +55,73 @@ type curCell[K comparable] struct {
 // the parts, so the code of editing is linked only into programs that edit.
 // Under mu.
 func (t *DataGridViewWidget[T, K]) enableEdit() {
-	if t.editorFn != nil {
+	if t.edAny != nil {
 		return
 	}
-	t.editable = slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.edit != nil })
-	t.editorFn, t.editCell, t.startCell = t.editor, t.editsCell, t.startEdit
+	d := &tableEditing[T, K]{}
+	t.edAny = d
+	d.editable = slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.edit != nil })
+	t.editCell, t.startCell = t.editsCell, t.startEdit
 	t.prepareEdit = func() { t.wireEdit(); t.followCurrent() }
+	t.cellHook = func(c *ui.Context, col int, r *T) bool {
+		if e := d.edit; e != nil && col == e.col && t.key(r) == e.key {
+			t.editor(c, e)
+			return true
+		}
+		return false
+	}
+	t.versionHook = func(r *T) uint64 {
+		if e := d.edit; e != nil && t.key(r) == e.key {
+			return e.gen
+		}
+		return 0
+	}
+	t.pruneHook = func() {
+		if e := d.edit; e != nil {
+			if _, ok := t.src.index[e.key]; !ok { // the row of the edit went
+				t.closeEdit()
+			}
+		}
+	}
+	t.afterTable = func(e ui.Element, c *ui.Context) {
+		if d.refocus && !c.Measuring() {
+			d.refocus = false
+			e.Focus()
+		}
+	}
+}
+
+// tableEditing is the state of in-cell editing of a table, kept in the table as
+// an any so that the table's own type does not name it: a program that never
+// edits does not link its types. Under mu.
+type tableEditing[T any, K comparable] struct {
+	edit       *editState[K] // the edit in progress
+	editGen    uint64        // versions the edited row
+	editable   bool          // a column is Editable
+	readOnly   bool
+	editMode   EditMode
+	onEndEdit  func(K, string)
+	pendingCur *curCell[K] // a current cell asked for, for the next build
+	curKey     K           // the current cell of the last frame
+	curCol     string
+	curOK      bool
+	refocus    bool           // an edit ended while its editor had the focus: the table takes it
+	ended      []endedEdit[K] // edits written, for OnCellEndEdit, delivered by flushEdit
+	panics     []reported     // panics of column functions, for OnPanic
+}
+
+// ed returns the table's editing state, nil until editing is turned on.
+func (t *DataGridViewWidget[T, K]) ed() *tableEditing[T, K] {
+	d, _ := t.edAny.(*tableEditing[T, K])
+	return d
 }
 
 // SetReadOnly makes every cell of the grid read-only, as WinForms'
 // DataGridView.ReadOnly does: no cell edits, whatever its column's Set.
 func (t *DataGridViewWidget[T, K]) SetReadOnly(on bool) *DataGridViewWidget[T, K] {
 	t.change(func() {
-		t.readOnly = on
+		t.enableEdit()
+		t.ed().readOnly = on
 		if on {
 			t.closeEdit()
 		}
@@ -79,13 +133,14 @@ func (t *DataGridViewWidget[T, K]) SetReadOnly(on bool) *DataGridViewWidget[T, K
 func (t *DataGridViewWidget[T, K]) ReadOnly() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return t.readOnly
+	d := t.ed()
+	return d != nil && d.readOnly
 }
 
 // SetEditMode sets what starts the edit of a cell: EditOnEnterOrF2 by default.
 // The cells of a column are editable when the column is Editable.
 func (t *DataGridViewWidget[T, K]) SetEditMode(m EditMode) *DataGridViewWidget[T, K] {
-	t.change(func() { t.enableEdit(); t.editMode = m })
+	t.change(func() { t.enableEdit(); t.ed().editMode = m })
 	return t
 }
 
@@ -94,7 +149,10 @@ func (t *DataGridViewWidget[T, K]) SetEditMode(m EditMode) *DataGridViewWidget[T
 func (t *DataGridViewWidget[T, K]) CurrentCell() (k K, column string, ok bool) {
 	mu.Lock()
 	defer mu.Unlock()
-	return t.curKey, t.curCol, t.curOK
+	if d := t.ed(); d != nil {
+		return d.curKey, d.curCol, d.curOK
+	}
+	return k, "", false
 }
 
 // SetCurrentCell makes the cell of the row of key k and the column titled
@@ -106,7 +164,7 @@ func (t *DataGridViewWidget[T, K]) SetCurrentCell(k K, column string) bool {
 	t.change(func() {
 		t.enableEdit()
 		if _, _, found := t.cellOf(k, column); found {
-			t.pendingCur, ok = &curCell[K]{k, column}, true
+			t.ed().pendingCur, ok = &curCell[K]{k, column}, true
 		}
 	})
 	return ok
@@ -124,7 +182,7 @@ func (t *DataGridViewWidget[T, K]) BeginEdit(k K, column string) bool {
 			return
 		}
 		t.beginLocked(k, ci, false, 0, 0)
-		t.pendingCur, ok = &curCell[K]{k, column}, true
+		t.ed().pendingCur, ok = &curCell[K]{k, column}, true
 	})
 	return ok
 }
@@ -138,7 +196,8 @@ func (t *DataGridViewWidget[T, K]) CancelEdit() {
 func (t *DataGridViewWidget[T, K]) IsEditing() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return t.edit != nil
+	d := t.ed()
+	return d != nil && d.edit != nil
 }
 
 // EditingCell returns the row's key and the column's title of the cell being
@@ -146,8 +205,8 @@ func (t *DataGridViewWidget[T, K]) IsEditing() bool {
 func (t *DataGridViewWidget[T, K]) EditingCell() (k K, column string, ok bool) {
 	mu.Lock()
 	defer mu.Unlock()
-	if e := t.edit; e != nil {
-		return e.key, t.cols[e.col].Title, true
+	if d := t.ed(); d != nil && d.edit != nil {
+		return d.edit.key, t.cols[d.edit.col].Title, true
 	}
 	return k, "", false
 }
@@ -155,7 +214,7 @@ func (t *DataGridViewWidget[T, K]) EditingCell() (k K, column string, ok bool) {
 // OnCellEndEdit runs fn, on the event goroutine with no lock held, with the
 // row's key and the column's title of each edit that was written.
 func (t *DataGridViewWidget[T, K]) OnCellEndEdit(fn func(k K, column string)) *DataGridViewWidget[T, K] {
-	t.change(func() { t.enableEdit(); t.onEndEdit = fn })
+	t.change(func() { t.enableEdit(); t.ed().onEndEdit = fn })
 	return t
 }
 
@@ -163,10 +222,11 @@ func (t *DataGridViewWidget[T, K]) OnCellEndEdit(fn func(k K, column string)) *D
 func (t *DataGridViewWidget[T, K]) editDraft() string {
 	mu.Lock()
 	defer mu.Unlock()
-	if t.edit == nil {
+	if d := t.ed(); d == nil || d.edit == nil {
 		return ""
+	} else {
+		return d.edit.draft
 	}
-	return t.edit.draft
 }
 
 // cellOf finds the row of key k in the source and the visible column titled
@@ -188,14 +248,14 @@ func (t *DataGridViewWidget[T, K]) cellOf(k K, column string) (row, col int, ok 
 // grid is not read-only, the column has a Set, and CanEdit allows it. Under mu.
 func (t *DataGridViewWidget[T, K]) canEdit(r *T, ci int) bool {
 	cl := &t.cols[ci]
-	if t.readOnly || cl.edit == nil || cl.edit.Set == nil || t.watch != nil { // a ListView never edits
+	if t.ed().readOnly || cl.edit == nil || cl.editor().Set == nil || t.watch != nil { // a ListView never edits
 		return false
 	}
-	if cl.edit.CanEdit == nil {
+	if cl.editor().CanEdit == nil {
 		return true
 	}
 	allowed := false
-	if v, stack, panicked := runColumnFn(func() { allowed = cl.edit.CanEdit(r) }); panicked {
+	if v, stack, panicked := runColumnFn(func() { allowed = cl.editor().CanEdit(r) }); panicked {
 		Post(func() { report(v, stack) })
 		return false
 	}
@@ -207,8 +267,8 @@ func (t *DataGridViewWidget[T, K]) editText(r *T, ci int) string {
 	cl := &t.cols[ci]
 	text := ""
 	if v, stack, panicked := runColumnFn(func() {
-		if cl.edit != nil && cl.edit.EditText != nil {
-			text = cl.edit.EditText(r)
+		if cl.edit != nil && cl.editor().EditText != nil {
+			text = cl.editor().EditText(r)
 		} else {
 			text = cl.Text(r)
 		}
@@ -225,18 +285,18 @@ func (t *DataGridViewWidget[T, K]) beginLocked(k K, ci int, hasAt bool, x, y flo
 		return
 	}
 	text := t.editText(&t.src.rows[i], ci)
-	t.editGen++
-	e := &editState[K]{key: k, col: ci, orig: text, draft: text, fresh: true, selectAll: !hasAt, gen: t.editGen}
+	t.ed().editGen++
+	e := &editState[K]{key: k, col: ci, orig: text, draft: text, fresh: true, selectAll: !hasAt, gen: t.ed().editGen}
 	e.at.has, e.at.x, e.at.y = hasAt, x, y
-	t.edit = e
+	t.ed().edit = e
 }
 
 // closeEdit ends the edit without writing it. Under mu.
 func (t *DataGridViewWidget[T, K]) closeEdit() {
-	if e := t.edit; e != nil {
-		t.refocus = t.refocus || e.focused // the table takes the focus the editor held
-		t.edit = nil
-		t.editGen++
+	if e := t.ed().edit; e != nil {
+		t.ed().refocus = t.ed().refocus || e.focused // the table takes the focus the editor held
+		t.ed().edit = nil
+		t.ed().editGen++
 	}
 }
 
@@ -250,7 +310,7 @@ func (t *DataGridViewWidget[T, K]) editsCell(row, col int, how ui.EditHow) bool 
 	if lockOutsideView() {
 		defer mu.Unlock()
 	}
-	if t.readOnly || t.editMode == EditProgrammatically || (t.editMode == EditOnF2 && how != ui.EditF2) {
+	if t.ed().readOnly || t.ed().editMode == EditProgrammatically || (t.ed().editMode == EditOnF2 && how != ui.EditF2) {
 		return false
 	}
 	ci, ok := t.colAt(col)
@@ -289,7 +349,7 @@ func (t *DataGridViewWidget[T, K]) startEdit(row, col int, x, y float32, how ui.
 // wireEdit gives ui the hooks of editing, or takes them away. Under mu.
 func (t *DataGridViewWidget[T, K]) wireEdit() {
 	s := &t.list
-	if !t.editable || t.watch != nil { // a ListView never edits
+	if !t.ed().editable || t.watch != nil { // a ListView never edits
 		return
 	}
 	s.CurrentCell = true
@@ -299,12 +359,12 @@ func (t *DataGridViewWidget[T, K]) wireEdit() {
 // followCurrent applies a SetCurrentCell or BeginEdit, and keeps what the
 // last frame left as the current cell. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) followCurrent() {
-	if !t.editable || t.watch != nil {
+	if !t.ed().editable || t.watch != nil {
 		return
 	}
 	s := &t.list
-	if p := t.pendingCur; p != nil {
-		t.pendingCur = nil
+	if p := t.ed().pendingCur; p != nil {
+		t.ed().pendingCur = nil
 		if line := t.lineOf(p.key); line >= 0 {
 			for k := range t.chosen.value.All() {
 				t.chosen.set(k, false)
@@ -315,13 +375,13 @@ func (t *DataGridViewWidget[T, K]) followCurrent() {
 			s.ScrollIntoView(line)
 		}
 	}
-	t.curOK = false
+	t.ed().curOK = false
 	if r := t.rowAt(t.cursor); r != nil {
 		col := s.Cells.Cursor
 		if col == "" && len(t.visCols) > 0 {
 			col = t.cols[t.visCols[0]].Title
 		}
-		t.curKey, t.curCol, t.curOK = t.key(r), col, true
+		t.ed().curKey, t.ed().curCol, t.ed().curOK = t.key(r), col, true
 	}
 }
 
@@ -408,7 +468,7 @@ func (t *DataGridViewWidget[T, K]) endEdit(only *editState[K]) error {
 // commitEditLocked writes the draft of the edit, or refuses it. Under mu. The
 // windows to redraw are for the caller to invalidate once it released mu.
 func (t *DataGridViewWidget[T, K]) commitEditLocked(only *editState[K]) ([]*mygo.Window, error) {
-	e := t.edit
+	e := t.ed().edit
 	if e == nil || only != nil && e != only {
 		return nil, nil
 	}
@@ -422,29 +482,29 @@ func (t *DataGridViewWidget[T, K]) commitEditLocked(only *editState[K]) ([]*mygo
 		return nil, nil
 	}
 	r, cl := &t.src.rows[i], &t.cols[e.col]
-	if cl.edit.Validate != nil {
+	if cl.editor().Validate != nil {
 		var refusal error
-		if v, stack, panicked := runColumnFn(func() { refusal = cl.edit.Validate(r, e.draft) }); panicked {
-			t.panics = append(t.panics, reported{v, stack})
+		if v, stack, panicked := runColumnFn(func() { refusal = cl.editor().Validate(r, e.draft) }); panicked {
+			t.ed().panics = append(t.ed().panics, reported{v, stack})
 			t.closeEdit()
 			return nil, nil
 		}
 		if refusal != nil {
 			e.err = refusal.Error()
-			t.editGen++
-			e.gen = t.editGen
+			t.ed().editGen++
+			e.gen = t.ed().editGen
 			return nil, refusal
 		}
 	}
 	var wins []*mygo.Window
 	if v, stack, panicked := runColumnFn(func() {
-		wins, _ = t.src.updateLocked(e.key, func(row *T) { cl.edit.Set(row, e.draft) })
+		wins, _ = t.src.updateLocked(e.key, func(row *T) { cl.editor().Set(row, e.draft) })
 	}); panicked {
-		t.panics = append(t.panics, reported{v, stack})
+		t.ed().panics = append(t.ed().panics, reported{v, stack})
 		t.closeEdit()
 		return nil, nil
 	}
-	t.ended = append(t.ended, endedEdit[K]{e.key, cl.Title})
+	t.ed().ended = append(t.ed().ended, endedEdit[K]{e.key, cl.Title})
 	t.closeEdit()
 	return wins, nil
 }
@@ -453,8 +513,8 @@ func (t *DataGridViewWidget[T, K]) commitEditLocked(only *editState[K]) ([]*mygo
 // to OnCellEndEdit, the panics to OnPanic, both on the event goroutine.
 func (t *DataGridViewWidget[T, K]) flushEdit() {
 	mu.Lock()
-	ended, panics, fn := t.ended, t.panics, t.onEndEdit
-	t.ended, t.panics = nil, nil
+	ended, panics, fn := t.ed().ended, t.ed().panics, t.ed().onEndEdit
+	t.ed().ended, t.ed().panics = nil, nil
 	mu.Unlock()
 	for _, p := range panics {
 		Post(func() { report(p.v, p.stack) })
