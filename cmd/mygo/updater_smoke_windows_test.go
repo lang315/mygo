@@ -76,7 +76,15 @@ func TestUpdaterSmoke(t *testing.T) {
 		if archive < 0 || manifest < 0 || filepath.Dir(artifacts[archive]) != filepath.Dir(artifacts[manifest]) {
 			t.Fatalf("artifacts of %s = %q, want an archive and update-windows-amd64.json in one directory", version, artifacts)
 		}
-		return artifacts[len(artifacts)-1], filepath.Dir(artifacts[archive])
+		// With updates, the installer is followed by the archive, the manifest
+		// and install.ps1 (another way to install): pick the installer by name.
+		installer := slices.IndexFunc(artifacts, func(a string) bool {
+			return strings.Contains(filepath.Base(a), installerMark) && strings.HasSuffix(a, ".exe")
+		})
+		if installer < 0 {
+			t.Fatalf("artifacts of %s = %q, want the installer", version, artifacts)
+		}
+		return artifacts[installer], filepath.Dir(artifacts[archive])
 	}
 	// The installed app trusts key A; the third build is an update that only
 	// key B signed.
