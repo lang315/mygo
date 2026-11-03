@@ -254,8 +254,8 @@ func TestCellSelectAccessibility(t *testing.T) {
 	cell := func(text string) platform.AccessNode {
 		t.Helper()
 		for _, n := range tree.Nodes {
-			if n.Label == text && n.Parent >= 0 && tree.Nodes[n.Parent].Role == platform.RoleCell {
-				return tree.Nodes[n.Parent]
+			if n.Label == text && n.Role == platform.RoleCell {
+				return n // named by its text, which is no node of its own
 			}
 		}
 		t.Fatalf("no cell holding %q", text)
