@@ -16,6 +16,7 @@ var uiResults = map[string]string{
 	"Button":               "Element",
 	"ButtonBase":           "Element",
 	"Calendar":             "Element",
+	"CellInput":            "Element",
 	"Checkbox":             "Element",
 	"CheckboxBase":         "Element",
 	"CheckboxGroup":        "Element",

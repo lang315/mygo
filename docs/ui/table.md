@@ -107,6 +107,44 @@ ui.Table(c, &app.grid, cols, len(rows), func(row, col int) {
 }).Grow(1)
 ```
 
+## Keeping a current cell
+
+`CurrentCell`, with `Selection`, makes the table keep a current column, as a
+grid's current cell, without choosing blocks of cells: a click sets
+`Cells.Cursor` to the column it hit, Left and Right move it (Shift does not
+extend it), and a border shows the cell while the table has the focus. Rows are
+chosen whole, as without it. A table cannot set both `CurrentCell` and
+`CellSelect`. In an `OutlineTable`, Left and Right still open and close the
+rows, as with `CellSelect`; the column is set with the pointer.
+
+## Editing a cell
+
+With `CurrentCell`, `EditCell(row, col, how)` is asked on Enter, F2 and a
+double click whether the cell of that row and the current column edits. When
+it says yes the table does not submit or activate the row: it calls
+`OnEditCell(row, col, x, y, how)`, where `how` is `EditKey`, `EditF2` or
+`EditClick`, and `x`, `y` are the window's point of the double click (zero for
+the keys). With `EditCell` nil nothing changes. Both run in a frame, on the
+main thread.
+
+`ui.CellInput` is the editor to build in that cell: the same text input as an
+[editable text](editable-text.md)'s, which the caller shows when it likes and
+owns the draft of. `CellStart{Fresh: true}` on its first frame gives it the
+focus, with all the text selected (`SelectAll`), the caret at the point of the
+window (`HasAt`, `X`, `Y`) or at the end. `Submitted` reports Enter;
+`OnShortcut` takes Escape and Tab; `Error(msg)` marks it not valid.
+
+```go
+if app.editing == row && col == app.editCol {
+	e := ui.CellInput(c, &app.draft, ui.CellStart{Fresh: app.fresh, SelectAll: true})
+	e.OnShortcut(0, ui.KeyEscape, app.cancel)
+	if e.Submitted() {
+		app.commit(row)
+	}
+	return
+}
+```
+
 ## Arranging columns
 
 The user arranges the columns, as in Finder:

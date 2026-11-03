@@ -862,6 +862,26 @@ func Calendar(c *Context, date *time.Time) Element {
 	return wrapElement(_e)
 }
 
+// CellInput is a text input that fills the cell of a Table, drawn as an
+// EditableText's editor is. The caller owns draft and decides when the
+// input shows; Submitted reports Enter, and OnShortcut Escape and Tab.
+// Error(msg) marks it not valid: red border, msg read with it.
+//
+//	if editing {
+//		ui.CellInput(c, &draft, ui.CellStart{Fresh: first, SelectAll: true}).
+//			OnShortcut(0, ui.KeyEscape, cancel)
+//	}
+func CellInput(c *Context, draft *string, start CellStart) Element {
+	_ctx := c.build()
+	if _ctx == nil {
+		return Element{}
+	}
+	_ctx.rt.beginBuild()
+	_e := coreCellInput(_ctx, draft, start)
+	_ctx.rt.endBuild()
+	return wrapElement(_e)
+}
+
 // Checkbox creates a check box toggling *checked, with a label. In a row of a
 // List with RowVersion, *checked is watched by its address: when the data it is
 // in moves (append reallocates a slice), put the value in RowVersion.

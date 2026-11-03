@@ -151,6 +151,22 @@ type ListState struct {
 	CellSelect bool
 	// Cells are the columns of the block CellSelect chooses.
 	Cells ColumnRange
+	// CurrentCell, with Selection, makes a Table keep a current column in
+	// Cells.Cursor, as a grid's current cell: a click sets it, Left and
+	// Right move it (Shift does not extend), and a border shows the cell
+	// while the table has the focus. Rows are chosen whole, as without it;
+	// Cells.Anchor and All are not used. A table cannot set both CurrentCell
+	// and CellSelect. In an OutlineTable Left and Right still open and close
+	// the rows, as with CellSelect, and the column is set with the pointer.
+	CurrentCell bool
+	// EditCell, with CurrentCell, is asked on Enter, F2 and a double click
+	// whether the cell of that row and column edits; when it says yes, the
+	// list does not submit or activate the row but calls OnEditCell: with
+	// how EditKey or EditF2 (x and y are zero), and EditClick with the point
+	// of the window the user double-clicked. Both are called in a frame, on
+	// the main thread. With EditCell nil nothing changes.
+	EditCell   func(row, col int, how EditHow) bool
+	OnEditCell func(row, col int, x, y float32, how EditHow)
 	// Sort, when set, is the column a Table's rows are sorted by: a click
 	// on the header of a Sortable column sorts by it, ascending, and
 	// another reverses the order, which the header shows. Sort the rows as
@@ -723,6 +739,9 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 	}
 	if rt.listMenu == nil {
 		rt.listMenu, rt.listDrag = (*engine).chooseRowAt, (*engine).scrollDragSelect
+	}
+	if s.CurrentCell && s.CellSelect {
+		panic("ui: a list cannot both CellSelect and keep a CurrentCell")
 	}
 	if (s.DragSelect || s.CellSelect && flat) && s.Reorder != nil {
 		panic("ui: a list cannot both DragSelect (or CellSelect) and Reorder")
@@ -1613,7 +1632,7 @@ func (f *listFrame) chosenAt(i int, x, y float32) bool {
 // choosing cells the cell at the window's point (x, y).
 func (f *listFrame) clickAt(i int, x, y float32, mods Modifiers) {
 	f.click(i, mods)
-	if f.choosesCells() && f.c.rt.cellClick != nil {
+	if f.tracksCells() && f.c.rt.cellClick != nil {
 		f.c.rt.cellClick(f, x, y, mods)
 	}
 }
@@ -1710,8 +1729,20 @@ func (f *listFrame) navigate() {
 	in := *sel >= 0 && *sel < n
 	// Enter on macOS, as in Finder, and F2 elsewhere edit the text of the
 	// row chosen in place (EditableText), where it has one.
-	enter := o.Shortcut(0, KeyEnter)
-	edit := s.editables && (o.Shortcut(0, KeyF2) || mac && enter)
+	// F2 is asked only where the list edits: a list that does not opt in leaves it to the window.
+	enter, f2 := o.Shortcut(0, KeyEnter), (s.editables || s.EditCell != nil) && o.Shortcut(0, KeyF2)
+	if in && (enter || f2) {
+		how := EditKey
+		if f2 {
+			how = EditF2
+		}
+		if col, ok := f.editsCell(*sel, how); ok {
+			s.ScrollIntoView(*sel)
+			s.OnEditCell(*sel, col, 0, 0, how)
+			enter, f2 = false, false // the cell's edit took the key, not the row
+		}
+	}
+	edit := s.editables && (f2 || mac && enter)
 	switch {
 	case edit && in && !f.isHeader(*sel):
 		s.editKey, s.editAsked = f.key(*sel), true
@@ -1753,7 +1784,7 @@ func (f *listFrame) navigate() {
 	case how == cursor:
 		f.lead(to, false)
 	}
-	if f.choosesCells() {
+	if f.tracksCells() {
 		f.cellKeys(how == move || how == cursor, all)
 	}
 	if all {

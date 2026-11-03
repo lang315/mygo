@@ -184,7 +184,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	order := layout.arrange(columns)
 	// The block of cells chosen (CellSelect): its columns' places, from lo
 	// to hi, and the Cursor's.
-	cellSel := s.choosesCells()
+	cellSel := s.tracksCells()
 	lo, hi, cur := 0, -1, -1
 	s.tableCols = s.tableCols[:0]
 	if cellSel {
@@ -260,15 +260,20 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				// keys move from, has a border while the table has the
 				// focus. A cell holding the focus, as an editor in it, shows
 				// what it holds.
-				on := c.row.chosen && k >= lo && k <= hi && (!col.RowHeader || s.Cells.All)
+				block := s.CellSelect // CurrentCell only marks the cursor's cell
+				on := block && c.row.chosen && k >= lo && k <= hi && (!col.RowHeader || s.Cells.All)
 				at := k == cur && *s.cursor() == c.row.i
-				box.checked = 1 + int8(b2f(on))
+				if block {
+					box.checked = 1 + int8(b2f(on))
+				}
 				switch {
 				case !on && !at, box.FocusWithin():
 				case on && at:
 					box.Background(t.Accent).TextColor(t.AccentText).DrawOver(cursorBorder(table, t.AccentText))
 				case on:
 					box.Background(t.Accent).TextColor(t.AccentText)
+				case at && c.row.chosen: // the row's own tint is the accent
+					box.DrawOver(cursorBorder(table, t.AccentText))
 				case at:
 					box.DrawOver(cursorBorder(table, t.Accent))
 				}
@@ -349,7 +354,14 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		// The table's Scrollbars and KeepScrollbars are its rows'.
 		list.barsFrom = table
 		head.followX = list
-		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, lo, hi, cur, checkW, s), drag.fit != ""
+		// Only a block of cells (CellSelect) is part of what the rows were built
+		// with: a current cell is drawn by the row that has the cursor, which
+		// the list never keeps.
+		slo, shi, scur := lo, hi, cur
+		if !s.CellSelect {
+			slo, shi, scur = 0, -1, -1
+		}
+		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, slo, shi, scur, checkW, s), drag.fit != ""
 		buildList(c, list, table, s, n, func(i int) {
 			row := coreRow(c).MinHeight(tableRow).AlignItems(Stretch)
 			// The list's element holding the row is the row.

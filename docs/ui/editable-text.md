@@ -30,6 +30,10 @@ ui.Table(c, &app.files, cols, len(files), func(row, col int) {
 })
 ```
 
+The text input an `EditableText` shows is `ui.CellInput`'s: a table whose
+cells edit under the app's control builds that directly (see
+[Editing a cell](table.md#editing-a-cell)).
+
 ## Accessibility
 
 Assistive technology reads the text, and the text field while it is

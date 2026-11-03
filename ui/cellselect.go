@@ -28,6 +28,44 @@ func (f *listFrame) choosesCells() bool { return f.flat && f.s.choosesCells() }
 // choosesCells reports whether a Table of the list chooses cells.
 func (s *ListState) choosesCells() bool { return s.CellSelect && s.Selection != nil }
 
+// tracksCells reports whether a Table of the list keeps a cursor column: it
+// chooses cells (CellSelect) or has a current cell (CurrentCell).
+func (s *ListState) tracksCells() bool {
+	return (s.CellSelect || s.CurrentCell) && s.Selection != nil
+}
+
+// EditHow says what started the edit of a cell.
+type EditHow int
+
+const (
+	EditKey   EditHow = iota // Enter
+	EditF2                   // F2
+	EditClick                // a double click
+)
+
+// editsCell reports whether the cell at row and the current column edits,
+// asked how it would start.
+func (f *listFrame) editsCell(row int, how EditHow) (col int, ok bool) {
+	return f.editsCellIn(row, f.s.colIndex(f.s.Cells.Cursor), how)
+}
+
+// editsCellIn is editsCell for the column shown at place k (a RowHeader column
+// never edits).
+func (f *listFrame) editsCellIn(row, k int, how EditHow) (col int, ok bool) {
+	s := f.s
+	if s.EditCell == nil || s.OnEditCell == nil || !f.tracksCells() || f.isHeader(row) {
+		return 0, false
+	}
+	if k < 0 || k >= len(s.tableCols) || s.tableCols[k].rowHeader {
+		return 0, false
+	}
+	col = s.tableCols[k].col
+	return col, s.EditCell(row, col, how)
+}
+
+// tracksCells reports whether the list holds the rows of such a Table.
+func (f *listFrame) tracksCells() bool { return f.flat && f.s.tracksCells() }
+
 // chooseAllColumns makes the block every column, the rows as they are.
 func (f *listFrame) chooseAllColumns() {
 	c := f.s.Cells
@@ -197,6 +235,12 @@ func (f *listFrame) clickCell(x, y float32, mods Modifiers) {
 		return
 	}
 	c, id := s.Cells, s.tableCols[k].id
+	if !s.CellSelect { // CurrentCell: the column clicked, whatever the modifiers
+		if !s.tableCols[k].rowHeader {
+			f.setCells(ColumnRange{Cursor: id, Anchor: id})
+		}
+		return
+	}
 	switch {
 	case s.tableCols[k].rowHeader:
 		c.All = true
@@ -247,6 +291,10 @@ func (f *listFrame) cellKeys(collapse, all bool) {
 	if o.rtl() {
 		d = -d
 	}
+	current := !s.CellSelect // CurrentCell moves the column only: no block, rows untouched
+	if current {
+		extend, all = false, false
+	}
 	c := s.Cells
 	if d != 0 {
 		if at := s.colIndex(c.Cursor); at >= 0 {
@@ -256,7 +304,7 @@ func (f *listFrame) cellKeys(collapse, all bool) {
 			}
 		}
 		collapse = collapse || !extend
-		if cur := *s.cursor(); !extend && cur >= 0 && cur < f.n && !f.isHeader(cur) {
+		if cur := *s.cursor(); !extend && !current && cur >= 0 && cur < f.n && !f.isHeader(cur) {
 			f.choose(cur) // leave one cell, as the keys that move the rows do
 		}
 	}
