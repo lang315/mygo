@@ -450,8 +450,13 @@ type engine struct {
 	// the frame being built gave no shortcut, or gave one the view no
 	// longer asks for (routeKeys, settleKeys).
 	keys, retried []keyEvent
-	unrouted      []shortcutReg
-	menu          menuState
+	// holdKeys is set once a menu bar's key (KeyMenuBar, or F10 where a
+	// shortcut asks for KeyMenuBar) was taken: the key events after it,
+	// heldKeys, wait for the frame that answers it (replayKeys).
+	holdKeys bool
+	heldKeys []platform.SurfaceEvent
+	unrouted []shortcutReg
+	menu     menuState
 	// windowFocused tells that the window has the keyboard focus, which
 	// windowFocus reads; focusRead, that the last frame read it, so that a
 	// change of it draws a frame.
@@ -709,6 +714,7 @@ func (rt *engine) runFrame() {
 		return
 	}
 	rt.inFrame = true
+	defer rt.replayKeys() // after endFrame, with the frame done
 	defer rt.endFrame()
 
 	rt.frame++

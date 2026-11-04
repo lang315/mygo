@@ -24,7 +24,7 @@ type MenuBarWidget struct {
 	// once a menu opened in the mode, back is the control that had the
 	// focus before, to give it back, and form the form whose mode it is.
 	// release, set once the mode ended, has the next build take the focus
-	// off a title, which no longer takes it.
+	// off a title, which no longer takes it, for one frame ignoring input.
 	mode                   int
 	focus, inMenu, release bool
 	back                   Control
@@ -181,6 +181,11 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 			} else if b.open[i] || title.Hovered() || b.mode == i {
 				title.Background(t.SurfaceHover)
 			}
+			if b.release && b.mode < 0 && title.FocusWithin() {
+				// The mode ended with the focus still here, nothing having
+				// had it before: an element ignoring input loses it.
+				title.IgnoreInput(true)
+			}
 			if b.mode == i && b.opens(i) {
 				title.Focusable()
 				if b.focus {
@@ -232,11 +237,6 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 		})
 	}
 	b.hot = hot
-	if b.release {
-		b.release = false
-		if b.mode < 0 {
-			bar.ReleaseFocus() // a title kept it: nothing had it before
-		}
-	}
+	b.release = false
 	return bar
 }

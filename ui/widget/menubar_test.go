@@ -625,15 +625,82 @@ func TestMenuBarModeKeyClosesAMenuOpenedInIt(t *testing.T) {
 // Right to left, Left goes to the title after.
 func TestMenuBarModeArrowsFollowTheDirection(t *testing.T) {
 	withMac(t, false)
+	for _, rtl := range []bool{false, true} {
+		bar := MenuBar(
+			MenuItem{Text: "&File", Children: []MenuItem{{Text: "Open"}}},
+			MenuItem{Text: "&Edit", Children: []MenuItem{{Text: "Undo"}}},
+			MenuItem{Text: "&View", Children: []MenuItem{{Text: "Zoom"}}},
+		)
+		f := NewForm("rtl", 600, 200)
+		f.SetContent(VBox(4).Add(bar))
+		tt := TestForm(t, f)
+		if rtl {
+			tt.SetDirection(ui.RightToLeft)
+		}
+		tt.Settle()
+		tt.KeyTaken(0, ui.KeyF10)
+		tt.Settle()
+		tt.Key(0, ui.KeyLeft)
+		tt.Settle()
+		// From File, Left goes before it, round to View; right to left, the
+		// title before is on the right: Left goes on to Edit.
+		want := "View"
+		if rtl {
+			want = "Edit"
+		}
+		if !tt.Find(ByRole(ui.RoleMenuItem).Label(want)).Focused() {
+			t.Errorf("right to left %v: Left did not go to %s", rtl, want)
+		}
+	}
+}
+
+// Alt alone or F10 over a menu opened by a click or by Alt and its letter,
+// not in the mode, close it, rather than going to the system.
+func TestMenuBarKeyClosesAMenuOpenedOutsideTheMode(t *testing.T) {
+	withMac(t, false)
+	for name, open := range map[string]func(a *barApp){
+		"click":      func(a *barApp) { a.title("File").Click() },
+		"Alt+letter": func(a *barApp) { a.tt.Key(ui.Alt, ui.KeyF); a.tt.Settle() },
+	} {
+		for _, key := range []ui.Key{ui.KeyMenuBar, ui.KeyF10} {
+			a := newBarApp(t)
+			open(a)
+			if !a.shows("Open") {
+				t.Fatalf("%s did not open File: %q", name, a.tt.Texts())
+			}
+			if !a.tt.KeyTaken(0, key) && (key == ui.KeyMenuBar || runtime.GOOS == "windows") {
+				t.Errorf("%s, key %d: not taken with the menu open", name, key)
+			}
+			a.tt.Settle()
+			if a.shows("Open") || a.inMode() >= 0 {
+				t.Errorf("%s, key %d: menu open %v, mode %d", name, key, a.shows("Open"), a.inMode())
+			}
+		}
+	}
+}
+
+// Alt alone, a letter and Enter typed faster than the window draws (no
+// frame between them, as on Windows) choose the item: the letter and Enter
+// wait for the frame that takes the keyboard to the bar.
+func TestMenuBarModeTakesKeysTypedAhead(t *testing.T) {
+	withMac(t, false)
 	a := barMode(t)
-	a.tt.SetDirection(ui.RightToLeft)
+	a.tt.KeysAtOnce(ui.KeyMenuBar, ui.KeyF, ui.KeyEnter)
 	a.tt.Settle()
-	a.tt.KeyTaken(0, ui.KeyF10)
+	if got := a.got(); !slices.Equal(got, []string{"Open"}) {
+		t.Errorf("Alt, F, Enter at once ran %q, want Open", got)
+	}
+	if v := a.tt.Find(ByRole(ui.RoleTextField)).Value(); v != "" {
+		t.Errorf("the text box got %q", v)
+	}
+	if !a.boxFocused() {
+		t.Error("the focus did not go back to the text box")
+	}
+	// Alt and Escape at once leave the mode; the X after reaches the box.
+	a.tt.KeysAtOnce(ui.KeyMenuBar, ui.KeyEscape)
 	a.tt.Settle()
-	a.tt.Key(0, ui.KeyLeft)
-	a.tt.Settle()
-	if !a.title("Edit").Focused() {
-		t.Error("Left right to left did not go to Edit")
+	if a.inMode() >= 0 || !a.boxFocused() {
+		t.Errorf("Alt, Escape at once: mode %d, text box focused %v", a.inMode(), a.boxFocused())
 	}
 }
 

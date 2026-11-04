@@ -97,7 +97,10 @@ const (
 	// alone, which on Windows takes the keyboard to the menu bar.
 	// Windows hands it to the view when the window has no menu bar of the
 	// system's; only a Shortcut gets it, never a handler of keys, and the
-	// system has it when no shortcut answers it.
+	// system has it when no shortcut answers it. A view asking for it has a
+	// menu bar of its own (widget.MenuBar): F10, the bar's other key, then
+	// answers its shortcut once while held, and the keys typed after either
+	// wait for the frame that answers it, so that they reach the bar.
 	KeyMenuBar = Key(platform.KeyMenuBar)
 )
 

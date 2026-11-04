@@ -1172,8 +1172,8 @@ func TestPinchSurface(hwnd uintptr, x, y, scale float64) (float64, bool) {
 }
 
 // TestInMenuMode reports whether the foreground thread is in menu mode (a menu
-// bar item highlighted or a menu open), as after an Alt key the window did not
-// take.
+// bar item highlighted, the window menu's loop, or a menu open), as after an
+// Alt key the window did not take. The flags are GUITHREADINFO's.
 func TestInMenuMode() bool {
 	type guiThreadInfo struct {
 		size, flags                                        uint32
@@ -1182,8 +1182,12 @@ func TestInMenuMode() bool {
 	}
 	info := guiThreadInfo{size: uint32(unsafe.Sizeof(guiThreadInfo{}))}
 	r, _, _ := user32.NewProc("GetGUIThreadInfo").Call(0, uintptr(unsafe.Pointer(&info)))
-	const guiInMenuMode, guiPopupMenuMode = 0x1, 0x10
-	return r != 0 && info.flags&(guiInMenuMode|guiPopupMenuMode) != 0
+	const (
+		guiInMenuMode     = 0x4
+		guiSystemMenuMode = 0x8
+		guiPopupMenuMode  = 0x10
+	)
+	return r != 0 && info.flags&(guiInMenuMode|guiSystemMenuMode|guiPopupMenuMode) != 0
 }
 
 // TestCloak cloaks a window, or shows it again, as Windows does a window of

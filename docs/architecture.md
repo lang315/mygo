@@ -1403,10 +1403,13 @@ build` like mygo-runtime and released with the same version.
     (`surface.menuKey`, through `surfaceHost`, which apps without native UI
     do not link): F10 it saw going down (`lastDown`), Alt alone it gets as
     `KeyMenuBar`, a key no keyboard has, which ui gives to shortcuts only
-    (`menuBarKey`), never to a handler of keys. The window menu's loop
-    starts only if the view did not take it: `widget.MenuBar`'s form asks
-    for both, and ui reports F10 taken as it does an Alt+key
-    (`swallowAltShortcuts`), its repeats answering no shortcut.
+    (`keyDownPhysical`), never to a handler of keys. The window menu's
+    loop starts only if the view did not take it: `widget.MenuBar`'s form
+    asks for both, and ui reports F10 taken as it does an Alt+key
+    (`swallowAltShortcuts`). A view asking for `KeyMenuBar` has a menu bar:
+    there F10's repeats answer no shortcut, and the key events after either
+    key wait for the frame that answers it (`holdKeys`, `replayKeys`), as
+    keys typed ahead reach native menus.
   - *Threads.* A goroutine reads the program's output and writes it to the
     emulator under the terminal's lock, then asks the view for a frame;
     another writes what is typed, from a queue, so that a program that does

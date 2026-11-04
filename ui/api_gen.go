@@ -6247,20 +6247,6 @@ func (_handle Element) ReadOnly(on bool) Element {
 	return wrapElement(_node.ReadOnly(on))
 }
 
-// ReleaseFocus leaves the keyboard focus nowhere if the element, or one
-// inside it, has it: for an element that took the focus for a while and has
-// none to give back, as a menu bar's title in its keyboard mode, entered
-// with nothing focused.
-func (_handle Element) ReleaseFocus() Element {
-	_node := _handle.node()
-	if _node == nil {
-		return Element{}
-	}
-	_ctx := _node.c
-	_ = _ctx
-	return wrapElement(_node.ReleaseFocus())
-}
-
 // Reverse lays the children out in the other direction: a Row from right
 // to left, a Column from bottom to top, as CSS's row-reverse and
 // column-reverse do. Justify's Start is then the right or the bottom.

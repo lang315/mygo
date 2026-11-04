@@ -70,6 +70,11 @@ f.Shortcut(ui.Ctrl, ui.KeyO, openFile) // the shortcut an item shows answers not
   `MenuStrip`) leaves them to that bar. Not in `widget.View`, nor on macOS.
   Alt alone reaches the form as `ui.KeyMenuBar`, which only a shortcut
   gets: no control sees a key, as a terminal would send F10 to its program.
+  Keys typed right after Alt alone or F10, before the window draws again,
+  wait for the bar to take the keyboard, so Alt, F, Enter typed at once
+  choose File's first item. In a form with a `MenuBar`, F10 held takes the
+  bar to its mode once; elsewhere a `Shortcut` of F10 answers each repeat
+  as before.
 - Assistive technology sees a menu bar of menu items, each expanded while
   its menu shows, and the menus as menus of menu items and check box items.
 

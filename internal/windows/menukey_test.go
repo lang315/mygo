@@ -55,6 +55,16 @@ func TestSurfaceMenuKey(t *testing.T) {
 	}
 }
 
+// testWindow is a window without a native one, of a menu bar of Win32's or
+// of a flyout, as far as window.message reads one up to WM_SYSCOMMAND: its
+// backend, its options, as NewWindow always gives it, its handler and its
+// surface, after Alt alone.
+func testWindow(content *keyContent) *window {
+	w := &window{b: &Backend{}, opts: &platform.WindowOptions{}, h: content}
+	w.sf = &surface{w: w, lastDown: vkMenu}
+	return w
+}
+
 // The window answers SC_KEYMENU without a letter itself, so that
 // DefWindowProc starts no window menu loop, only when it has no menu bar of
 // Win32's and its content took the key.
@@ -67,17 +77,14 @@ func TestWindowSysCommandKeyMenu(t *testing.T) {
 		{"a menu bar in the content", true, true},
 		{"none", false, false},
 	} {
-		content := &keyContent{bar: c.bar}
-		w := &window{b: &Backend{}, h: content}
-		w.sf = &surface{w: w, lastDown: vkMenu}
+		w := testWindow(&keyContent{bar: c.bar})
 		if _, ok := w.message(wmSysCommand, scKeyMenu, 0); ok != c.want {
 			t.Errorf("%s: answered %v, want %v", c.name, ok, c.want)
 		}
 	}
 	// Alt and a letter, and Alt and Space, are not this key.
 	content := &keyContent{bar: true}
-	w := &window{b: &Backend{}, h: content}
-	w.sf = &surface{w: w, lastDown: vkMenu}
+	w := testWindow(content)
 	for _, lp := range []uintptr{'f', ' '} {
 		if _, ok := w.message(wmSysCommand, scKeyMenu, lp); ok {
 			t.Errorf("SC_KEYMENU with %q was answered", rune(lp))

@@ -12,6 +12,15 @@ import (
 // an element takes files dragged over or dropped at the event's position,
 // the key pressed or the composition (platform.WindowHandler.SurfaceEvent).
 func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
+	if rt.holdKeys {
+		switch ev.Kind {
+		case platform.KeyPressed, platform.KeyReleased, platform.TextInput, platform.TextComposition, platform.SurfaceCommand:
+			// Typed ahead of the frame a menu bar's key asked for: they go
+			// to the menu bar once it has the keyboard (replayKeys).
+			rt.heldKeys = append(rt.heldKeys, ev)
+			return true
+		}
+	}
 	if ev.Kind == platform.SurfaceCommandEnabled {
 		// A menu asking about its item changes nothing.
 		return rt.commandEnabled(ev.Text)
@@ -85,10 +94,6 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		rt.pointerMove(x, y)
 		rt.zoom(float32(ev.Scale), Modifiers(ev.Mods))
 	case platform.KeyPressed:
-		if Key(ev.Key) == KeyMenuBar {
-			taken = rt.menuBarKey()
-			break
-		}
 		rt.modsChanged(Modifiers(ev.Mods))
 		taken = rt.keyDownPhysical(Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey), ev.Repeat)
 	case platform.ModifiersChanged:
@@ -798,6 +803,19 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 		return true
 	}
 	k := keyEvent{mods, key}
+	if key == KeyMenuBar {
+		// Alt alone, as Windows' backend hands it over: a shortcut asking
+		// for it gets it, and no handler of keys, which would take it for a
+		// key typed; it is taken only when a shortcut answers it, and the
+		// keys after it wait for the frame that answers it.
+		if !rt.answers(k) {
+			return false
+		}
+		rt.keys = append(rt.keys, k)
+		rt.requestFrame()
+		rt.holdKeys = true
+		return true
+	}
 	if key == KeyEscape && mods == 0 && rt.dragCancelLinked() {
 		return true
 	}
@@ -879,10 +897,15 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	// Windows opens its menu mode (and beeps) for an Alt+key the window did
 	// not take, and for F10: one a shortcut of the view answers is taken.
 	menuKey := swallowAltShortcuts && (mods&Alt != 0 && mods&^(Alt|Shift) == 0 || k == keyEvent{0, KeyF10})
-	if repeat && k == (keyEvent{0, KeyF10}) {
-		// Held, it would take a menu bar in and out of its keyboard mode:
-		// the repeats answer no shortcut, but are taken as the press was.
-		return menuKey && rt.answers(k)
+	if k == (keyEvent{0, KeyF10}) && rt.answers(keyEvent{0, KeyMenuBar}) {
+		// The key of a menu bar (a shortcut asks for KeyMenuBar): held, it
+		// would take the bar in and out of its keyboard mode, so its repeats
+		// answer nothing but are taken as the press was; pressed, the keys
+		// after it wait for the frame that answers it.
+		if repeat {
+			return menuKey && rt.answers(k)
+		}
+		rt.holdKeys = rt.answers(k)
 	}
 	rt.keys = append(rt.keys, k)
 	rt.requestFrame()
@@ -896,17 +919,23 @@ func (rt *engine) answers(k keyEvent) bool {
 	return found
 }
 
-// menuBarKey answers KeyMenuBar, Alt alone as Windows' backend hands it
-// over: a shortcut asking for it gets it, and no handler of keys, which
-// would take it for a key typed; it is taken only when a shortcut answers.
-func (rt *engine) menuBarKey() bool {
-	k := keyEvent{0, KeyMenuBar}
-	if !rt.answers(k) {
-		return false
+// replayKeys hands over, once a frame is built, the keys held while the
+// frame a menu bar's key asked for was to come (holdKeys): the bar has the
+// keyboard by then, as native menus take the keys typed ahead.
+func (rt *engine) replayKeys() {
+	if !rt.holdKeys {
+		return
 	}
-	rt.keys = append(rt.keys, k)
-	rt.requestFrame()
-	return true
+	rt.holdKeys = false
+	held := rt.heldKeys
+	rt.heldKeys = nil
+	for i, ev := range held {
+		if rt.holdKeys {
+			rt.heldKeys = append(rt.heldKeys, held[i:]...) // a menu bar's key again
+			return
+		}
+		rt.event(ev)
+	}
 }
 
 // swallowAltShortcuts is whether a key with Alt, or F10, that a shortcut
@@ -1462,17 +1491,6 @@ func (e *node) focusWithin() bool {
 		}
 	}
 	return false
-}
-
-// ReleaseFocus leaves the keyboard focus nowhere if the element, or one
-// inside it, has it: for an element that took the focus for a while and has
-// none to give back, as a menu bar's title in its keyboard mode, entered
-// with nothing focused.
-func (e *node) ReleaseFocus() *node {
-	if e.focusWithin() {
-		e.c.rt.focused = 0
-	}
-	return e
 }
 
 // Focus gives the element the keyboard focus. Called in every frame, it
