@@ -65,3 +65,7 @@ error; a fieldset is a group named by its legend.
 In a form of your own, `Element.NamedBy(label)` names a control by a label the
 same way; a control that has a name of its own keeps it, and a number input's
 buttons take the name too ("Copies Increase"). Several controls that name themselves (a group of check boxes) or inputs (a range of two numbers) become a group the label names, as `Field` makes it. A label that is hidden names nothing.
+`Element.AccessibleName(name)` gives a control a name of its own, which wins
+over its text and a field's label: called on the element holding the
+control, it names the control `NamedBy` would find (else the first element
+inside with a role of its own, as a progress bar), or the group.

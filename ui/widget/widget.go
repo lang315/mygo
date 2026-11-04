@@ -36,6 +36,7 @@ type core struct {
 	focusIn     int  // the view that last built it focused, noView for none
 	builtIn     int  // the view that last built it
 	tooltip     string
+	accName     string  // SetAccessibleName's
 	ownStyle    Style   // what the control's own methods set
 	applied     []Style // Apply's styles
 	style       Style   // applied merged, ownStyle last: what frames resolve
@@ -136,6 +137,27 @@ func (c *common[W]) SetDisabled(d bool) *W { c.change(func() { c.disabled = d })
 // SetTooltip sets the text shown while the pointer rests on the widget.
 func (c *common[W]) SetTooltip(s string) *W { c.change(func() { c.tooltip = s }); return c.self }
 
+// SetAccessibleName names the widget for assistive technology and a Tester
+// (ByLabel), in place of the name it takes from its text, its tooltip or the
+// label of its Fields row: an icon-only button, say. "" gives that name back.
+func (c *common[W]) SetAccessibleName(s string) *W {
+	c.change(func() { c.accName, nameControl = s, nameControlOf })
+	return c.self
+}
+
+// nameControl names the control a widget built, set by SetAccessibleName: an
+// app that names none does not link the search for the control. Under mu.
+var nameControl func(w Control, e ui.Element, name string)
+
+// nameControlOf names the control e holds, or e, a container's group.
+func nameControlOf(w Control, e ui.Element, name string) {
+	if _, ok := w.(interface{ children() []Control }); ok {
+		e.Label(name) // a container names its group
+	} else {
+		e.AccessibleName(name) // the control, not a box around it
+	}
+}
+
 // OnFocusOut runs fn when the widget loses the keyboard focus.
 func (c *common[W]) OnFocusOut(fn func()) *W { c.change(func() { c.onFocusOut = fn }); return c.self }
 
@@ -171,6 +193,9 @@ func render(c *ui.Context, w Control) ui.Element {
 		e.AlignSelf(ui.Stretch) // before the widget's own alignment, which wins
 	}
 	b.place.apply(e)
+	if b.accName != "" {
+		nameControl(w, e, b.accName)
+	}
 	if b.styled {
 		p := b.style.effective(c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled)
 		p.apply(c, e, b.textKey)

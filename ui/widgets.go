@@ -641,6 +641,9 @@ func (e *node) intrinsicSize() (w, h float32) {
 		if s := e.svg; s != nil && s.h > 0 {
 			return em * s.w / s.h, em
 		}
+		if e.image != nil {
+			return iconImageSizeFn(e, em)
+		}
 		return em, em
 	}
 	return 0, 0

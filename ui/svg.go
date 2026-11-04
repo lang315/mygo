@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"sync"
 	"sync/atomic"
 
 	"github.com/egoist/mygo/internal/scene"
@@ -144,6 +145,77 @@ func coreIcon(c *context, s *SVG) *node {
 		e.aspect = s.w / s.h
 	}
 	return e
+}
+
+// IconImage creates an element showing a bitmap as an icon, in its own
+// colors: as high as the font size (FontSize), keeping the bitmap's aspect
+// ratio, unless given a size, and not stretching across a column, as Icon.
+// Give it a bitmap twice that size to stay sharp on a 2× display. It is a
+// decoration that assistive technology does not see, unless Label names it.
+func coreIconImage(c *context, b *Bitmap) *node {
+	iconImageOnce.Do(func() {
+		iconImageSizeFn, paintIconImageFn, paintOldIconImageFn = iconImageSize, paintIconImage, paintOldIconImage
+	})
+	e := c.newElement(kindIcon)
+	e.image = b
+	if b != nil && b.h > 0 {
+		e.aspect = float32(b.w) / float32(b.h)
+	}
+	return e
+}
+
+// The engine sizes and paints IconImage's icons through these functions,
+// which IconImage sets before it makes one: an icon holds a bitmap only
+// after that, so they are set wherever they are called. Apps that make none
+// do not link them.
+var (
+	iconImageSizeFn     func(e *node, em float32) (w, h float32)
+	paintIconImageFn    func(p *Painter, e *node)
+	paintOldIconImageFn func(p *Painter, e *node, old *Bitmap, box Rect)
+	// iconImageOnce makes the first IconImage the only one to write, as
+	// editorOnce does for the editor's functions.
+	iconImageOnce sync.Once
+)
+
+// iconImageSize is the size of an icon showing a bitmap: em high, keeping
+// the bitmap's aspect ratio.
+func iconImageSize(e *node, em float32) (w, h float32) {
+	if b := e.image; b.h > 0 {
+		return em * float32(b.w) / float32(b.h), em
+	}
+	return em, em
+}
+
+// paintIconImage paints an icon showing a bitmap, in its own colors, turned
+// as Rotate says.
+func paintIconImage(p *Painter, e *node) {
+	turned(p, e.contentBox(), e.rotate, func() {
+		if !e.contentSet || !p.contentImage(e) {
+			p.image(e)
+		}
+	})
+}
+
+// paintOldIconImage paints old, the bitmap an icon showed before, in box as
+// its content changes, turned as e is.
+func paintOldIconImage(p *Painter, e *node, old *Bitmap, box Rect) {
+	if old.w > 0 && old.h > 0 {
+		turned(p, box, e.rotate, func() { p.drawBitmap(old, box, e.fit, e.radius, e.gray) })
+	}
+}
+
+// turned runs paint turned clockwise by degrees around the center of box,
+// as Rotate turns an icon.
+func turned(p *Painter, box Rect, degrees float32, paint func()) {
+	if degrees == 0 {
+		paint()
+		return
+	}
+	saved := p.transform
+	cx, cy := box.X+box.W/2, box.Y+box.H/2
+	p.transform = saved.Mul(scene.Translation(cx, cy)).Mul(scene.Rotation(degrees)).Mul(scene.Translation(-cx, -cy))
+	paint()
+	p.transform = saved
 }
 
 // Icon draws the shapes of an SVG fitted in r, in color c.

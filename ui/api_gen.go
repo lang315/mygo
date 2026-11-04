@@ -1540,6 +1540,22 @@ func Icon(c *Context, s *SVG) Element {
 	return wrapElement(_e)
 }
 
+// IconImage creates an element showing a bitmap as an icon, in its own
+// colors: as high as the font size (FontSize), keeping the bitmap's aspect
+// ratio, unless given a size, and not stretching across a column, as Icon.
+// Give it a bitmap twice that size to stay sharp on a 2× display. It is a
+// decoration that assistive technology does not see, unless Label names it.
+func IconImage(c *Context, b *Bitmap) Element {
+	_ctx := c.build()
+	if _ctx == nil {
+		return Element{}
+	}
+	_ctx.rt.beginBuild()
+	_e := coreIconImage(_ctx, b)
+	_ctx.rt.endBuild()
+	return wrapElement(_e)
+}
+
 // Image creates an element showing a bitmap, or an SVG in its own colors
 // (with the text color for its currentColor), by default at its size as
 // DIPs, scaled to fit when given another size.
@@ -3228,6 +3244,23 @@ func (_handle Element) AccessHidden(hide bool) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.AccessHidden(hide))
+}
+
+// AccessibleName names the control of e for assistive technology, as Label
+// does, over the name it takes from its text or a form's label (NamedBy): e
+// is the control or the element holding it. Inside an element that has no
+// role of its own and takes no focus, the control is the one NamedBy finds,
+// else the first element with a role of its own (a progress bar); several
+// controls that name themselves, or several inputs, are a group that e is,
+// as NamedBy has them. Call it once what is inside e is built.
+func (_handle Element) AccessibleName(s string) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.AccessibleName(s))
 }
 
 // Activated applies pending input and reports the row of this List or

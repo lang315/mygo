@@ -224,9 +224,15 @@ func (p *Painter) contentIcon(e *node, box Rect, c Color) bool {
 		}
 		fn()
 	}
-	if r.oldSVG != nil {
+	if r.oldSVG != nil || r.oldImg != nil {
 		p.opacity = saved * (1 - k)
-		scaled(1-0.5*k, func() { p.drawIcon(r.oldSVG, box, r.oldColor, e.rotate) })
+		scaled(1-0.5*k, func() {
+			if r.oldSVG != nil {
+				p.drawIcon(r.oldSVG, box, r.oldColor, e.rotate)
+			} else { // an IconImage's bitmap, so its functions are set
+				paintOldIconImageFn(p, e, r.oldImg, box)
+			}
+		})
 	}
 	p.opacity = saved * k
 	scaled(0.5+0.5*k, func() { p.drawIcon(e.svg, box, c, e.rotate) })

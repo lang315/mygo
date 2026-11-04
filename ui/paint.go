@@ -377,6 +377,10 @@ func (p *Painter) element(e *node) {
 				p.image(e)
 			}
 		case kindIcon:
+			if e.image != nil {
+				paintIconImageFn(p, e)
+				break
+			}
 			c := e.resolvedText().color
 			if e.gray {
 				c = c.gray()
