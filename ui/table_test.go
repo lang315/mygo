@@ -113,6 +113,24 @@ func TestTableResize(t *testing.T) {
 	}
 }
 
+// FixedColumnOrder: a header dragged past its neighbor stays where it is.
+func TestTableFixedColumnOrder(t *testing.T) {
+	s := ListState{FixedColumnOrder: true}
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80}}
+	tt := coreNewTester(tableView(&s, cols, []string{"a.txt"}), 500, 300)
+	kind := header(t, tt, "Kind")
+	y := float32(kind.Y + kind.H/2)
+	x := float32(kind.X + 20)
+	tt.Press(x, y)
+	for _, d := range []float32{5, 20, 50, 60} {
+		tt.Move(x+d, y)
+	}
+	tt.Release(x+60, y)
+	if got := s.Columns.Order; got != nil {
+		t.Fatalf("the order: %q", got)
+	}
+}
+
 func TestTableReorder(t *testing.T) {
 	sort := SortOrder{}
 	s := ListState{Sort: &sort}

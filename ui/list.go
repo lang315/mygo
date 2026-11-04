@@ -237,6 +237,9 @@ type ListState struct {
 	// GridLines draws a line under each row of a Table and at the end of
 	// each of its cells.
 	GridLines bool
+	// FixedColumnOrder keeps a Table's columns in their order: the user
+	// does not move them by their headers, and still resizes them.
+	FixedColumnOrder bool
 	// RoundRows rounds the corners of a Table's chosen and hovered rows at
 	// the theme's Radius, as a List's are, rather than leaving them square
 	// from edge to edge.

@@ -691,7 +691,8 @@ lock: they read the row and call no widget method.
   sets the keyword's width, and `JoinSearch(true)` draws the column, the
   keyword and the button as one control. Call these after `BottomPanel`.
   `SetRowHeight(h)` makes every row `h` DIPs tall, `SetGridLines(true)` draws
-  lines between rows and cells.
+  lines between rows and cells, and `SetColumnsMovable(false)` keeps the user
+  from reordering the columns by their headers (resizing them still works).
 
   ```go
   grid.CheckboxColumn().BottomPanel().
