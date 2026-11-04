@@ -137,3 +137,42 @@ func TestEditableComboShowsASubmenusOptionsInline(t *testing.T) {
 		t.Fatalf("typed pe: %q", tt.Texts())
 	}
 }
+
+// A combo with a submenu takes Enter and Escape before the form's buttons,
+// as a plain combo does.
+func TestSubmenuComboTakesEnterAndEscapeBeforeTheFormsButtons(t *testing.T) {
+	ok, cancels := 0, 0
+	okBtn := Button("OK").OnClick(func() { ok++ })
+	cancel := Button("Cancel").OnClick(func() { cancels++ })
+	combo := ComboBox(Option{"a", "Apple"}).AddSubmenu("More", nil, Option{"b", "Banana"}).SetValue("a")
+	f := keysForm(VBox(4).Add(combo, okBtn, cancel)).SetAcceptButton(okBtn).SetCancelButton(cancel)
+	tt := TestForm(t, f)
+	tt.Find(ByLabel("Apple")).Focus().Key(0, ui.KeyEnter)
+	tt.Settle()
+	if ok != 0 || !tt.Has(ByLabel("More")) {
+		t.Fatalf("Enter on the closed combo: OK clicked %d times; menu open %v", ok, tt.Has(ByLabel("More")))
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Settle()
+	if cancels != 0 || tt.Has(ByLabel("More")) {
+		t.Fatalf("Escape on the open combo: Cancel clicked %d times; menu open %v", cancels, tt.Has(ByLabel("More")))
+	}
+}
+
+// Hiding a combo closes its menu, which does not show again with it.
+func TestHidingASubmenuComboClosesItsMenu(t *testing.T) {
+	c := ComboBox(Option{"a", "Apple"}).AddSubmenu("More", nil, Option{"b", "Banana"}).SetValue("a")
+	tt := tester(t, VBox(4).Add(c))
+	click(t, tt, "Apple")
+	if !tt.HasText("More") {
+		t.Fatalf("menu not open: %q", tt.Texts())
+	}
+	c.SetVisible(false)
+	tt.Frame()
+	c.SetVisible(true)
+	tt.Frame()
+	tt.Frame()
+	if tt.HasText("More") {
+		t.Fatalf("the menu showed again with the combo: %q", tt.Texts())
+	}
+}

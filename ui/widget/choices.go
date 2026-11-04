@@ -157,8 +157,10 @@ type ComboBoxWidget struct {
 	editable, bindsText bool
 	text                mirror[string]
 	// menuOpen says the popup of a combo with a submenu shows. Only the
-	// drawing thread touches it.
-	menuOpen bool
+	// drawing thread touches it. menuHides is the hides it saw: hiding
+	// the combo closes it, as ui closes the popup of a select kept hidden.
+	menuOpen  bool
+	menuHides int
 }
 
 // comboSection is a titled group of options. value makes its title an
@@ -546,6 +548,9 @@ func sectionTitle(ctx *ui.Context, s comboSection, header bool) {
 // submenus' titles as items opening them. Under mu, while building.
 func (c *ComboBoxWidget) buildMenu(ctx *ui.Context, p *string, text string) ui.Element {
 	t, sections := ctx.Theme(), c.sections
+	if c.menuHides != c.hides {
+		c.menuOpen, c.menuHides = false, c.hides
+	}
 	m := ui.MenuBase(ctx, &c.menuOpen)
 	comboTrigger(ctx, m.Trigger, text)
 	option := func(o Option, fn func()) {
