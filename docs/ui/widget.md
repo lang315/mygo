@@ -75,6 +75,7 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
 | `Alert`, `Confirm` | MessageBox | `Alert`, `Confirm` |
 | `Custom` | UserControl | — |
 | `MenuStrip` (`Form.MenuStrip`) | MenuStrip | `MenuBar` |
+| `MenuBar` (in the content) | MenuStrip docked in the form | — |
 | `ToolStrip` | ToolStrip | `Toolbar` |
 | `StatusStrip` | StatusStrip | — |
 | `NotifyIcon` | NotifyIcon | — |
@@ -241,11 +242,18 @@ A `MenuItem` has `Text` (a separator when empty), `OnClick`, which runs on
 the event goroutine and so may open a dialog, `Children` for a submenu, and
 `Checked` and `Disabled`, and `Icon` (an `*ui.SVG`) or `IconPNG` (a PNG,
 32×32 pixels) before the text: `MenuItem{Text: "Copy", Icon: copyIcon,
-OnClick: …}`. A menu bar keeps the colors of its SVG icons from when it was
+OnClick: …}`. `Shortcut` (`widget.Shortcut{Mods: ui.Ctrl, Key: ui.KeyC}`)
+shows a key at the item's end and answers nothing: give the form the same
+`Form.Shortcut`. The menus of `MenuBar`, `MenuButton` and `ContextMenu`
+show it; the native bar of `Form.SetMenuBar` does not, as a key there is
+the system's to answer (use `MenuStrip`'s `SetShortcut`). Only an item
+`Checked` is a check box item; the others are plain items. A menu bar keeps the colors of its SVG icons from when it was
 set: on Linux and Windows they do not follow a later change of the theme;
 on macOS they do.
 
 - `MenuButton(text).SetMenu(items...)`: a button opening a menu.
+- `MenuBar(menus...)`: a menu bar that mygo draws in the content, where the
+  content puts it, as under a `HeaderBar`; see [MenuBar](widget/menubar.md).
 - `ContextMenu(items...)` on any widget: the menu of a right click.
 - `Form.SetMenuBar(items...)`: the window's menu bar, on Linux and
   Windows. On macOS the menu bar is the app's: set it with
@@ -361,7 +369,10 @@ status.SetText("Saved") // and the window redraws
   `SetText`, `SetShortcut`, `SetEnabled`, `SetVisible` and `SetChecked` update
   the native menu; `OnClick` runs on the event goroutine. `SetMenuBar`, of
   plain `MenuItem` values you set again to change, stays for a menu that does
-  not change.
+  not change. A form with a `HeaderBar` shows no such bar on Windows (Alt
+  and F10 open its menus in a popup) and has GTK's above the header on
+  Linux: for menus under the header, draw a [`MenuBar`](widget/menubar.md)
+  in the content.
 - **`StatusStrip`** holds `StatusLabel(text)` (`SetText`, `SetIcon`),
   `Spring()` (takes the free width), `StatusProgress()` (a small
   `ProgressBar`) and `Separator()`. `Form.StatusStrip` docks it below the
@@ -918,6 +929,7 @@ Input and display:
   on typing and on choosing. `Bind` takes the text of a combo made
   `Editable` before it is bound, and the `Value` of one bound before.
 - `MenuButton(text)`: see [Menus](#menus).
+- `MenuBar(menus...)`: a menu bar in the content; see [MenuBar](widget/menubar.md).
 - `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`;
   `SetAccessibleName(s)` names it and its buttons for assistive technology.
   `RangeSpin` is two, with text between and after; they are "minimum" and

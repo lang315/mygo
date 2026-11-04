@@ -267,9 +267,20 @@ func TestMenuBarGivesTheFocusBack(t *testing.T) {
 	a := newBarApp(t)
 	focused := func() bool { return a.tt.Find(ByRole(ui.RoleTextField)).Focused() }
 	opens := map[string]func(){
-		"click":  func() { a.title("File").Click() },
-		"hover":  func() { a.title("File").Click(); e := a.title("Edit").Bounds(); a.tt.Move(e.X+e.W/2, e.Y+e.H/2); a.tt.Settle() },
-		"arrows": func() { a.title("File").Click(); a.tt.Key(0, ui.KeyRight); a.tt.Key(0, ui.KeyRight); a.tt.Key(0, ui.KeyLeft); a.tt.Settle() },
+		"click": func() { a.title("File").Click() },
+		"hover": func() {
+			a.title("File").Click()
+			e := a.title("Edit").Bounds()
+			a.tt.Move(e.X+e.W/2, e.Y+e.H/2)
+			a.tt.Settle()
+		},
+		"arrows": func() {
+			a.title("File").Click()
+			a.tt.Key(0, ui.KeyRight)
+			a.tt.Key(0, ui.KeyRight)
+			a.tt.Key(0, ui.KeyLeft)
+			a.tt.Settle()
+		},
 	}
 	if runtime.GOOS != "darwin" {
 		// On macOS a text box with the focus types Option and a letter: the

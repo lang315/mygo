@@ -3703,7 +3703,11 @@ either.
   Enter typed quickly into a menu, the Enter choosing the item the Down
   highlighted. Each element
   built at the top of `Overlay` notes the focus as it opens (`openers`),
-  which pruning gives back once it is gone with the focus that was in it.
+  which pruning gives back once it is gone with the focus that was in it;
+  when the focus was in another overlay, it notes too the element outside
+  every overlay that one came from (`opener.before`), which takes the
+  focus back if the other overlay is gone first, as a menu bar's menu
+  opened from the menu before it.
   An element attached to another (`AttachTo`, which `PopoverBase` and the
   popups of selects and comboboxes use) is that element's popover
   (`Element.popover`, and `state.anchor` once committed): its layout
@@ -3921,7 +3925,11 @@ either.
   context menu goes at its point. Opened by the keys or assistive
   technology (`menuState.key`), it starts on its first item, and a press
   on the button while it shows closes it (`buildMenu`, and `newMenu` for
-  the bases).
+  the bases). `MenuBase`'s `PopupMenu` draws its menu with the same look
+  (`menuParts.draw`, which `drawMenu` calls with the `menuShown` of
+  `menuState.drawn`), `OpenFirst` opens it as the keys do, and `Across`
+  reports Left at the top level and Right on an item opening no submenu,
+  which `keys` otherwise ignores: `widget.MenuBar` is a row of them.
 - **Scenes** are flat lists of operations in device pixels: rounded
   rectangles with borders of a width per side, solid or dashed, filled
   with a color, a linear gradient mixed in sRGB or Oklab, a gradient of
