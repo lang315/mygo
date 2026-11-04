@@ -127,7 +127,7 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 		// one's menu shows instead, in the next build.
 		Post(func() {
 			b.change(func() {
-				if hot < len(b.open) && b.open[was] { // as it was: SetMenus or Escape came first
+				if hot < len(b.open) && was < len(b.open) && b.open[was] { // as it was: SetMenus or Escape came first
 					b.open[was], b.open[hot] = false, true
 				}
 			})

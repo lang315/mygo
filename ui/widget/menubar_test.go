@@ -212,6 +212,15 @@ func TestMenuBarAltLetterOpensAMenuAndBeatsAControl(t *testing.T) {
 	if !keys['f'] || !keys['e'] || keys['h'] {
 		t.Errorf("menu bar keys %v; the disabled Help's is not one", keys)
 	}
+	// With a menu open, another title's key opens that one instead.
+	a.title("File").Click()
+	a.tt.Key(ui.Alt, ui.KeyE)
+	a.tt.Settle()
+	if !a.shows("Undo") || a.shows("Open") {
+		t.Fatalf("Alt+E with File open: %q", a.tt.Texts())
+	}
+	a.tt.Key(0, ui.KeyEscape)
+	a.tt.Settle()
 	// A disabled title's key opens nothing.
 	a.tt.Key(ui.Alt, ui.KeyH)
 	a.tt.Settle()
@@ -279,6 +288,11 @@ func TestMenuBarGivesTheFocusBack(t *testing.T) {
 			a.tt.Key(0, ui.KeyRight)
 			a.tt.Key(0, ui.KeyRight)
 			a.tt.Key(0, ui.KeyLeft)
+			a.tt.Settle()
+		},
+		"alt in a menu": func() {
+			a.title("File").Click()
+			a.tt.Key(ui.Alt, ui.KeyE)
 			a.tt.Settle()
 		},
 	}
