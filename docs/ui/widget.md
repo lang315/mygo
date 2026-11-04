@@ -91,7 +91,7 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
   a goroutine of the package, the event goroutine, never on the main
   thread. A handler may block: the window keeps drawing.
 - **`OnChange` is for the user.** A setter (`SetText`, `SetChecked`, `SetOn`,
-  `SetValue`, `SetValues`) does not run the `OnChange` of the control it sets,
+  `SetValue`, `SetValues`, a `ComboBox`'s `Unselect`) does not run the `OnChange` of the control it sets,
   nor does `Reload` or a binding; only an edit by the user, or by a test
   driving the control as the user does, does. This holds for `TextBox`,
   `MultilineTextBox`, `MaskedTextBox`, `CheckBox`, `Switch`, `RadioButton`,
@@ -102,6 +102,10 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
   (but a page index the control had to clamp is reported). WinForms and GTK
   differ, as their `TextChanged` and `changed` also run for code: a handler
   that reacts to a setting's change must also run where the code changes it.
+  From gota: a combo's `changed` ran for a choice the code made, as GTK's
+  does, and `SelectedIndexChanged` does in WinForms; here `SetValue` and
+  `Unselect` leave `OnChange` alone, as every control's setter does, so
+  call the handler after them where it must react.
 - **`BeginInvoke(fn)`**, or `Post(fn)`, runs `fn` on the event goroutine
   after what was posted before it, without waiting. It works from anywhere,
   the main thread too.
@@ -922,6 +926,10 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   fits the tab shown, and a sidebar inside another page is measured with that
   page shown.
 - `TabControl()`: pages under tabs; `AddPage`, `Page`, `SetPage`, `OnSwitch`.
+  `StripStyle(styles...)` styles the strip of tabs as `Apply` styles a
+  control, its background across the control past the last tab:
+  `StripStyle(tw.S("bg-slate-100 rounded-md"))`; `Apply` styles the whole
+  control.
   `SetPageLabel(i, s)` renames a tab ("Items (3)"), `InsertPage(i, label, w)`
   and `RemovePage(i)` add and take out pages. The page shown stays the page
   shown, whatever its index becomes; removing it shows the one before it (the
@@ -972,7 +980,15 @@ Input and display:
   it groups options in titled sections with icons: `AddSection(title, png,
   options...)`, `RemoveSection`, `RemoveOption`, `SetOptionText`,
   `SectionLen`, `Selected`, `Unselect`; sections, icons and texts change
-  while the combo shows, and it redraws. `Editable()` lets the user type a
+  while the combo shows, and it redraws. A title names one section:
+  `AddSection` of a title the combo has adds the options to that section
+  (and its icon, unless nil). A section's title chooses nothing until
+  `SetSectionValue(title, v)` makes it an option of value `v` ("" undoes
+  it). `AddSubmenu(title, png, options...)` adds an option that opens a
+  nested list of options, as a menu's submenu, on the pointer, a click,
+  Right, Enter or Space; a combo with one is a menu button to assistive
+  technology, its options radio items, and an `Editable` one shows a
+  submenu's options as a section's. `Editable()` lets the user type a
   text that is no option, which `Text` and `SetText` give and set; `Value`
   is then the `Value` of the option with that text, or ""; `OnChange` runs
   on typing and on choosing. `Bind` takes the text of a combo made
@@ -981,6 +997,12 @@ Input and display:
 - `MenuBar(menus...)`: a menu bar in the content; see [MenuBar](widget/menubar.md).
 - `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`;
   `SetAccessibleName(s)` names it and its buttons for assistive technology.
+  It is a classic spin box, as WinForms' (`ui.SpinBox`): an up arrow over a
+  down one joined at the end of the box, which `Apply`, a `Style` or tw's
+  classes style (background, border, radius, padding, size). Up and Down
+  step it, as do the arrows. `SideButtons()` gives it the look of
+  `ui.NumberInput` instead, − and + buttons beside the box; `Apply` then
+  styles the row of the box and the buttons.
   `RangeSpin` is two, with text between and after; they are "minimum" and
   "maximum" to assistive technology unless `SetAccessibleNames(low, high)`.
 - `ProgressBar()`: `SetFraction` (negative for unknown length), `SetText`.

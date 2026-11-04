@@ -17,6 +17,7 @@ type NumericUpDownWidget struct {
 	onChange       func()
 	onEnter        func()
 	name           string
+	side           bool // SideButtons
 }
 
 // NumericUpDown makes a number input from min to max, stepping by step.
@@ -31,6 +32,18 @@ func (s *NumericUpDownWidget) Value() float64 { mu.Lock(); defer mu.Unlock(); re
 func (s *NumericUpDownWidget) Int() int       { return int(math.Round(s.Value())) }
 func (s *NumericUpDownWidget) SetValue(v float64) *NumericUpDownWidget {
 	s.change(func() { s.value.set(v) })
+	return s
+}
+
+// SideButtons gives the number the look of ui.NumberInput: − and + buttons
+// beside its box, which are then the controls apart from it that Apply does
+// not style; Apply styles the row holding the box and the buttons. Without
+// it, the number is a classic spin box, as WinForms' NumericUpDown: its
+// arrows, an up one over a down one, are joined at the end of the box,
+// and Apply (Style, tw) styles that box: background, border, radius,
+// padding and size.
+func (s *NumericUpDownWidget) SideButtons() *NumericUpDownWidget {
+	s.change(func() { s.side = true })
 	return s
 }
 
@@ -58,7 +71,11 @@ func (s *NumericUpDownWidget) build(c *ui.Context) ui.Element {
 	if changed && s.onChange != nil {
 		Post(s.onChange)
 	}
-	e := ui.NumberInput(c, p, s.min, s.max, s.step).OnChange(editedOnce(&s.edit, &s.value, &s.bound, &s.onChange))
+	box := ui.SpinBox
+	if s.side {
+		box = ui.NumberInput
+	}
+	e := box(c, p, s.min, s.max, s.step).OnChange(editedOnce(&s.edit, &s.value, &s.bound, &s.onChange))
 	if s.name != "" {
 		e.Label(s.name)
 	}
@@ -139,13 +156,20 @@ type ComboBoxWidget struct {
 	// the text, not the Value, of an editable combo (Editable, then Bind).
 	editable, bindsText bool
 	text                mirror[string]
+	// menuOpen says the popup of a combo with a submenu shows. Only the
+	// drawing thread touches it.
+	menuOpen bool
 }
 
-// comboSection is a titled group of options.
+// comboSection is a titled group of options. value makes its title an
+// option of that value (SetSectionValue); sub shows its options in a
+// submenu that the title opens (AddSubmenu).
 type comboSection struct {
 	title string
 	icon  *ui.Bitmap
 	opts  []Option
+	value string
+	sub   bool
 }
 
 // sectionKey keys a section's header row in the popup.
@@ -167,6 +191,9 @@ func (c *ComboBoxWidget) find(v string) (Option, bool) {
 		return Option{}, false
 	}
 	for _, s := range c.sections {
+		if s.value == v {
+			return Option{s.value, s.title}, true
+		}
 		for _, o := range s.opts {
 			if o.Value == v {
 				return o, true
@@ -212,6 +239,9 @@ func (c *ComboBoxWidget) Editable() *ComboBoxWidget {
 // byText returns the option whose text is s. Under mu.
 func (c *ComboBoxWidget) byText(s string) (Option, bool) {
 	for _, sec := range c.sections {
+		if sec.value != "" && sec.title == s {
+			return Option{sec.value, sec.title}, true
+		}
 		for _, o := range sec.opts {
 			if o.Text == s {
 				return o, true
@@ -315,11 +345,57 @@ func (c *ComboBoxWidget) SetOptions(opts ...Option) *ComboBoxWidget {
 }
 
 // AddSection adds a section titled title, with the icon in the bytes of
-// a PNG (nil for none), holding opts.
+// a PNG (nil for none), holding opts. A section of that title the combo
+// has already gets opts after its own, and the icon, unless nil: a title
+// names one section.
 func (c *ComboBoxWidget) AddSection(title string, icon []byte, opts ...Option) *ComboBoxWidget {
+	return c.addSection(title, icon, false, opts)
+}
+
+// AddSubmenu adds a section, as AddSection, that shows as an option
+// opening a nested list of opts, as a menu's submenu: the pointer moving
+// onto it, a click, Right, Enter or Space open it. A section of that title
+// the combo has becomes a submenu, with opts after its own. The combo is
+// then a menu button to assistive technology, its options radio items. An
+// Editable combo shows the options of a submenu as a section's, which
+// typing filters.
+func (c *ComboBoxWidget) AddSubmenu(title string, icon []byte, opts ...Option) *ComboBoxWidget {
+	return c.addSection(title, icon, true, opts)
+}
+
+func (c *ComboBoxWidget) addSection(title string, icon []byte, sub bool, opts []Option) *ComboBoxWidget {
 	bmp, opts := decodeImage(icon), slices.Clone(opts) // outside mu
 	c.change(func() {
-		c.edit(func(s []comboSection) []comboSection { return append(s, comboSection{title, bmp, opts}) })
+		c.edit(func(s []comboSection) []comboSection {
+			i := slices.IndexFunc(s, func(x comboSection) bool { return x.title != "" && x.title == title })
+			if i < 0 {
+				return append(s, comboSection{title: title, icon: bmp, opts: opts, sub: sub})
+			}
+			s[i].opts, s[i].sub = append(s[i].opts, opts...), s[i].sub || sub
+			if bmp != nil {
+				s[i].icon = bmp
+			}
+			return s
+		})
+	})
+	return c
+}
+
+// SetSectionValue makes the title of the section titled title an option
+// of value v, which the user can choose as the others, and Value, Text and
+// SetValue give and take; "" makes it a title again, which chooses nothing.
+// v must differ from the other values. A submenu's chosen title is the
+// first option of its list.
+func (c *ComboBoxWidget) SetSectionValue(title, v string) *ComboBoxWidget {
+	c.change(func() {
+		c.edit(func(s []comboSection) []comboSection {
+			for i := range s {
+				if s[i].title != "" && s[i].title == title {
+					s[i].value = v
+				}
+			}
+			return s
+		})
 	})
 	return c
 }
@@ -334,12 +410,16 @@ func (c *ComboBoxWidget) RemoveSection(title string) *ComboBoxWidget {
 	return c
 }
 
-// RemoveOption removes the option of value v.
+// RemoveOption removes the option of value v; a section title of value v
+// becomes a title again.
 func (c *ComboBoxWidget) RemoveOption(v string) *ComboBoxWidget {
 	c.change(func() {
 		c.edit(func(s []comboSection) []comboSection {
 			for i := range s {
 				s[i].opts = slices.DeleteFunc(s[i].opts, func(o Option) bool { return o.Value == v })
+				if s[i].value == v {
+					s[i].value = ""
+				}
 			}
 			return s
 		})
@@ -394,41 +474,134 @@ func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 	if o, ok := c.find(*p); ok {
 		text = o.Text
 	}
+	if slices.ContainsFunc(sections, func(s comboSection) bool { return s.sub }) {
+		return c.buildMenu(ctx, p, text)
+	}
 	sel := ui.SelectBase(ctx, p)
-	// The look of ui.Select (ui/widgets.go coreSelect), from public API.
-	sel.Trigger.Padding(t.Space(1.5), t.Space(3)).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).
-		Justify(ui.SpaceBetween).AlignItems(ui.Center).Gap(t.Space(2)).MinWidth(t.Space(35)).
-		OnChange(edited(&c.value, &c.bound, c.onChange)).
-		Children(func() {
-			ui.Text(ctx, text).SingleLine()
-			ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted)
-		})
+	comboTrigger(ctx, sel.Trigger, text).OnChange(edited(&c.value, &c.bound, c.onChange))
 	sel.Popup(func(panel ui.Element) {
-		panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).
-			Background(t.Background).Border(1, t.Border).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
+		comboPanel(t, panel)
 		for i, s := range sections {
-			if s.title != "" {
+			if s.value != "" {
+				comboOption(t, sel.Item(s.value), s.value == *p, func() { sectionTitle(ctx, s, false) })
+			} else if s.title != "" {
 				ui.Row(ctx.Key(sectionKey(i))).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
-					AlignItems(ui.Center).Children(func() {
-					if s.icon != nil {
-						ui.Image(ctx, s.icon).Width(16).Height(16)
-					}
-					ui.Text(ctx, s.title).Bold().TextColor(t.TextMuted)
-				})
+					AlignItems(ui.Center).Children(func() { sectionTitle(ctx, s, true) })
 			}
 			for _, o := range s.opts {
-				item := sel.Item(o.Value).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
-				switch {
-				case item.Highlighted():
-					item.Background(t.Accent).TextColor(t.AccentText)
-				case o.Value == *p:
-					item.Background(t.Surface)
-				}
-				item.Children(func() { ui.Text(ctx, o.Text).SingleLine() })
+				comboOption(t, sel.Item(o.Value), o.Value == *p, func() { ui.Text(ctx, o.Text).SingleLine() })
 			}
 		}
 	})
 	return sel.Trigger
+}
+
+// comboTrigger gives e the look of ui.Select's trigger (ui/widgets.go
+// coreSelect), from public API, showing text.
+func comboTrigger(ctx *ui.Context, e ui.Element, text string) ui.Element {
+	t := ctx.Theme()
+	return e.Padding(t.Space(1.5), t.Space(3)).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).
+		Justify(ui.SpaceBetween).AlignItems(ui.Center).Gap(t.Space(2)).MinWidth(t.Space(35)).
+		Children(func() {
+			ui.Text(ctx, text).SingleLine()
+			ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted)
+		})
+}
+
+// comboPanel gives a combo's popup, or a submenu of it, its look.
+func comboPanel(t *ui.Theme, panel ui.Element) {
+	panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).
+		Background(t.Background).Border(1, t.Border).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
+}
+
+// comboOption gives item, an option of a combo's popup, its look, chosen
+// or not, and the children fn builds.
+func comboOption(t *ui.Theme, item ui.Element, chosen bool, fn func()) ui.Element {
+	item.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Gap(t.Space(1.5)).AlignItems(ui.Center)
+	switch {
+	case item.Highlighted():
+		item.Background(t.Accent).TextColor(t.AccentText)
+	case chosen:
+		item.Background(t.Surface)
+	}
+	return item.Children(fn)
+}
+
+// sectionTitle shows a section's icon and title: muted when it is a header
+// only.
+func sectionTitle(ctx *ui.Context, s comboSection, header bool) {
+	if s.icon != nil {
+		ui.Image(ctx, s.icon).Width(16).Height(16)
+	}
+	e := ui.Text(ctx, s.title).Bold()
+	if header {
+		e.TextColor(ctx.Theme().TextMuted)
+	} else {
+		e.SingleLine()
+	}
+}
+
+// buildMenu builds a combo with a submenu: a menu button in the look of
+// the drop-down, whose menu holds the options as radio items and the
+// submenus' titles as items opening them. Under mu, while building.
+func (c *ComboBoxWidget) buildMenu(ctx *ui.Context, p *string, text string) ui.Element {
+	t, sections := ctx.Theme(), c.sections
+	m := ui.MenuBase(ctx, &c.menuOpen)
+	comboTrigger(ctx, m.Trigger, text)
+	option := func(o Option, fn func()) {
+		if item := m.RadioItem(o.Value == *p); comboOption(t, item, o.Value == *p, fn).Clicked() {
+			c.pick(o.Value)
+		}
+	}
+	options := func(s comboSection) {
+		if s.value != "" {
+			option(Option{s.value, s.title}, func() { sectionTitle(ctx, s, false) })
+		}
+		for _, o := range s.opts {
+			option(o, func() { ui.Text(ctx, o.Text).SingleLine() })
+		}
+	}
+	m.Popup(func(panel ui.Element) {
+		comboPanel(t, panel)
+		for i, s := range sections {
+			switch {
+			case s.sub:
+				item := comboOption(t, m.SubmenuItem(), false, func() {
+					sectionTitle(ctx, s, false)
+					ui.Box(ctx).Grow(1)
+					ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Rotate(-90)
+				})
+				m.Submenu(item, func(panel ui.Element) {
+					comboPanel(t, panel)
+					options(s)
+				})
+				continue
+			case s.title != "" && s.value == "":
+				ui.Row(ctx.Key(sectionKey(i))).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
+					AlignItems(ui.Center).Children(func() { sectionTitle(ctx, s, true) })
+			}
+			options(s)
+		}
+	})
+	return m.Trigger
+}
+
+// pick takes the option of value v the user chose in a combo's menu. Under
+// mu, while building.
+func (c *ComboBoxWidget) pick(v string) {
+	if c.value.value == v {
+		return
+	}
+	c.value.value, c.value.shown, c.value.dirty = v, v, false
+	h, write := c.onChange, c.bound.write
+	Post(func() {
+		if h != nil {
+			h()
+		}
+		if write != nil {
+			write(v)
+		}
+	})
 }
 
 // buildEditable builds an Editable combo: a text input with a chevron in
@@ -446,25 +619,24 @@ func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 			cb.Input.OnSubmit(h) // Enter clicks the form's accept button
 		}
 		cb.Popup(func(panel ui.Element) {
-			panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).
-				Background(t.Background).Border(1, t.Border).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
+			comboPanel(t, panel)
 			typed := strings.ToLower(strings.TrimSpace(*p))
 			for i, s := range sections {
 				shown := s.opts
 				if cb.Filtering() && typed != "" {
 					shown = matchingOptions(s.opts, typed)
 				}
-				if len(shown) == 0 {
+				// A title of a value is an option, filtered as the others.
+				title := s.value != "" && (!cb.Filtering() || typed == "" || len(matchingOptions([]Option{{s.value, s.title}}, typed)) > 0)
+				if len(shown) == 0 && !title {
 					continue
 				}
-				if s.title != "" {
+				switch {
+				case title:
+					comboOption(t, cb.Item(s.value), false, func() { sectionTitle(ctx, s, false) })
+				case s.title != "":
 					ui.Row(ctx.Key(sectionKey(i))).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
-						AlignItems(ui.Center).Children(func() {
-						if s.icon != nil {
-							ui.Image(ctx, s.icon).Width(16).Height(16)
-						}
-						ui.Text(ctx, s.title).Bold().TextColor(t.TextMuted)
-					})
+						AlignItems(ui.Center).Children(func() { sectionTitle(ctx, s, true) })
 				}
 				for _, o := range shown {
 					item := cb.Item(o.Value).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)

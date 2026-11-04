@@ -245,6 +245,11 @@ func extras() widget.Control {
 		widget.HBox(8).Add(widget.Label("Sectioned combo").VAlign(widget.Center), widget.ComboBox().
 			AddSection("Fruits", swatch(color.RGBA{230, 160, 40, 255}), widget.Option{Value: "apple", Text: "Apple"}, widget.Option{Value: "pear", Text: "Pear"}).
 			AddSection("Vegetables", swatch(color.RGBA{60, 160, 80, 255}), widget.Option{Value: "kale", Text: "Kale"})),
+		widget.HBox(8).Add(widget.Label("Combo with a submenu").VAlign(widget.Center), widget.ComboBox(widget.Option{Value: "any", Text: "Any food"}).
+			AddSubmenu("Fruits", swatch(color.RGBA{230, 160, 40, 255}), widget.Option{Value: "apple", Text: "Apple"}, widget.Option{Value: "pear", Text: "Pear"}).
+			AddSection("Vegetables", swatch(color.RGBA{60, 160, 80, 255}), widget.Option{Value: "kale", Text: "Kale"}).
+			SetSectionValue("Vegetables", "vegetables").
+			SetValue("any")),
 		clockRow(),
 		chartRow(),
 		richRow(),
@@ -443,6 +448,10 @@ func containers() widget.Control {
 		Add("frame", "GroupBox and grid", widget.VBox(8).Add(widget.GroupBox("Frame").Add(grid))).
 		Add("card", "Card", widget.Card().SetTitle(widget.Label("Card title").Bold()).SetBody(widget.Label("Card body"))).
 		Add("flow", "FlowPanel", flow).
+		Add("tabs", "TabControl", widget.TabControl().
+			AddPage("First", widget.Label("The first page")).
+			AddPage("Second", widget.Label("The second page")).
+			StripStyle(widget.NewStyle().Background(widget.Hex("#dbeafe")).Radius(2))).
 		Add("scroll", "ScrollPanel", widget.ScrollPanel(longList())).
 		Add("drag", "Drag and drop", dragRow()).
 		Add("split", "SplitContainer", widget.SplitContainer(

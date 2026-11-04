@@ -36,6 +36,11 @@ func TestSettersDoNotRunOnChange(t *testing.T) {
 	add("RadioButton.SetChecked", VBox(2).Add(r1, r2), func() { r2.SetChecked(true) })
 	co := ComboBox(Option{Value: "a", Text: "A"}, Option{Value: "b", Text: "B"}).OnChange(count)
 	add("ComboBox.SetValue", co, func() { co.SetValue("b") })
+	cu := ComboBox(Option{Value: "a", Text: "A"}).SetValue("a").OnChange(count)
+	add("ComboBox.Unselect", cu, func() { cu.Unselect() })
+	cs := ComboBox().AddSubmenu("S", nil, Option{Value: "a", Text: "A"}).AddSection("T", nil, Option{Value: "b", Text: "B"}).
+		SetSectionValue("T", "t").OnChange(count)
+	add("ComboBox.SetValue (submenu, section title)", cs, func() { cs.SetValue("a").SetValue("t") })
 	nu := NumericUpDown(0, 10, 1).OnChange(count)
 	add("NumericUpDown.SetValue", nu, func() { nu.SetValue(4) })
 	rs := RangeSpin(0, 10, 0, 10, 1, "to", "").OnChange(count)

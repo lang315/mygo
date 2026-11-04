@@ -18,6 +18,18 @@ For a value the user only steps, use a [stepper](stepper.md); for one
 chosen roughly, a [slider](slider.md); for an amount of money, which a
 `float64` cannot hold exactly, a [decimal input](decimal-input.md).
 
+## Spin box
+
+`ui.SpinBox` takes the same arguments and is a number input in the look
+of a classic spin box, as WinForms' `NumericUpDown`: one box holding the
+text and, joined at its end, an up arrow over a down one. It edits,
+steps, reports and is named as `NumberInput` is; its arrows are the
+buttons "Increase" and "Decrease", in that order.
+
+```go
+ui.SpinBox(c, &app.copies, 1, 99, 1).Label("Copies")
+```
+
 ## Accessibility
 
 Assistive technology sees a spin button of the value, named by its `Label`
