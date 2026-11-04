@@ -153,7 +153,9 @@ func coreIcon(c *context, s *SVG) *node {
 // Give it a bitmap twice that size to stay sharp on a 2× display. It is a
 // decoration that assistive technology does not see, unless Label names it.
 func coreIconImage(c *context, b *Bitmap) *node {
-	iconImageOnce.Do(func() { iconImageSizeFn, paintIconImageFn = iconImageSize, paintIconImage })
+	iconImageOnce.Do(func() {
+		iconImageSizeFn, paintIconImageFn, paintOldIconImageFn = iconImageSize, paintIconImage, paintOldIconImage
+	})
 	e := c.newElement(kindIcon)
 	e.image = b
 	if b != nil && b.h > 0 {
@@ -167,8 +169,9 @@ func coreIconImage(c *context, b *Bitmap) *node {
 // after that, so they are set wherever they are called. Apps that make none
 // do not link them.
 var (
-	iconImageSizeFn  func(e *node, em float32) (w, h float32)
-	paintIconImageFn func(p *Painter, e *node)
+	iconImageSizeFn     func(e *node, em float32) (w, h float32)
+	paintIconImageFn    func(p *Painter, e *node)
+	paintOldIconImageFn func(p *Painter, e *node, old *Bitmap, box Rect)
 	// iconImageOnce makes the first IconImage the only one to write, as
 	// editorOnce does for the editor's functions.
 	iconImageOnce sync.Once
@@ -183,11 +186,36 @@ func iconImageSize(e *node, em float32) (w, h float32) {
 	return em, em
 }
 
-// paintIconImage paints an icon showing a bitmap, in its own colors.
+// paintIconImage paints an icon showing a bitmap, in its own colors, turned
+// as Rotate says.
 func paintIconImage(p *Painter, e *node) {
-	if !e.contentSet || !p.contentImage(e) {
-		p.image(e)
+	turned(p, e.contentBox(), e.rotate, func() {
+		if !e.contentSet || !p.contentImage(e) {
+			p.image(e)
+		}
+	})
+}
+
+// paintOldIconImage paints old, the bitmap an icon showed before, in box as
+// its content changes, turned as e is.
+func paintOldIconImage(p *Painter, e *node, old *Bitmap, box Rect) {
+	if old.w > 0 && old.h > 0 {
+		turned(p, box, e.rotate, func() { p.drawBitmap(old, box, e.fit, e.radius, e.gray) })
 	}
+}
+
+// turned runs paint turned clockwise by degrees around the center of box,
+// as Rotate turns an icon.
+func turned(p *Painter, box Rect, degrees float32, paint func()) {
+	if degrees == 0 {
+		paint()
+		return
+	}
+	saved := p.transform
+	cx, cy := box.X+box.W/2, box.Y+box.H/2
+	p.transform = saved.Mul(scene.Translation(cx, cy)).Mul(scene.Rotation(degrees)).Mul(scene.Translation(-cx, -cy))
+	paint()
+	p.transform = saved
 }
 
 // Icon draws the shapes of an SVG fitted in r, in color c.
