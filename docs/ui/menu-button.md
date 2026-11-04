@@ -154,6 +154,40 @@ each submenu named by its item. Separators and headings are elements of
 your own between the items. See [custom widgets](custom-widgets.md), and
 [`ContextMenuBase`](context-menu.md#without-a-look) for a context menu.
 
+`PopupMenu(build)` is `Popup` with the look and the items of
+`PopoverMenuButton`'s: `build` fills it as the function of `Menu` does, and
+the item chosen reports `Chosen`. A menu bar is a row of `RoleMenuBar` with
+a `MenuBase` for each title, which are menu items that keep the focus where
+it is (`Unfocusable`, `KeepFocus`), so that it goes back there as the menu
+closes:
+
+```go
+ui.Row(c).Role(ui.RoleMenuBar).Children(func() {
+	for i, title := range []string{"File", "Edit"} {
+		m := ui.MenuBase(c, &app.open[i])
+		m.Trigger.Unfocusable().KeepFocus().Role(ui.RoleMenuItem).Label(title).Padding(4, 8)
+		m.Trigger.Children(func() { ui.Text(c, title) })
+		if app.first == i {
+			app.first = -1
+			m.OpenFirst() // on its first item, as the keys open it
+		}
+		m.PopupMenu(func(m *ui.Menu) { app.items(m, i) })
+		if d := m.Across(); d != 0 { // Left or Right: the menu before or after
+			app.open[i], app.first = false, (i+d+2)%2
+		}
+	}
+})
+```
+
+`OpenFirst` opens the menu on its first item with the focus, as the keys
+open it: for keys of your own, as an access key. `Across` reports the menu
+the keys asked for in this pass, -1 for the one before (Left) and +1 for
+the one after (Right on an item that opens no submenu, also in a
+submenu), the other way round right to left; the menu stays open until you
+close it. The focus goes back to where it was before the first menu
+opened, past the menus that had it in between. `widget.MenuBar` is built
+so ([MenuBar](widget/menubar.md)).
+
 ## Accessibility
 
 Assistive technology sees a menu button: `AXMenuButton` on macOS, a push

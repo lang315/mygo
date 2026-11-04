@@ -114,11 +114,25 @@ func shell() widget.Control {
 			state.SetText(map[bool]string{true: "Shown again", false: "Hidden"}[toggle.Checked()])
 		}
 	})
+	picked := widget.Label("Nothing picked from the MenuBar").Muted()
+	pick := func(s string) func() { return func() { picked.SetText("Picked " + s) } }
+	inPage := widget.MenuBar(
+		widget.MenuItem{Text: "&File", Children: []widget.MenuItem{
+			{Text: "&New", Shortcut: widget.Shortcut{Mods: ui.Ctrl, Key: ui.KeyN}, OnClick: pick("New")},
+			{Text: "Open &recent", Children: []widget.MenuItem{{Text: "notes.txt", OnClick: pick("notes.txt")}}},
+			{},
+			{Text: "&Delete", Destructive: true, OnClick: pick("Delete")},
+		}},
+		widget.MenuItem{Text: "&Help", Children: []widget.MenuItem{{Text: "&About", OnClick: pick("About")}}},
+	)
 	return widget.VBox(8).Add(
 		widget.Label("App shell").TextSize(widget.XL).Bold(),
 		widget.Label("The menu bar (a MenuStrip), the tool strip above this page and the status strip below it are set on the Form and change while the app runs: try the Plus and Bold buttons, the Menu drop-down and the View menu's Status bar."),
 		widget.Separator(),
 		toggle, state,
+		widget.Separator(),
+		widget.Label("A MenuBar is drawn in the content, where it is put, as under a header bar: this one is in the page. Alt and a letter open its menus, except on macOS."),
+		inPage, picked,
 	)
 }
 

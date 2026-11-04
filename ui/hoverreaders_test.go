@@ -58,6 +58,7 @@ var hoverReaders = map[string]string{
 	"menu.go engine.menuRelease":                  "an event; a menu is acting",
 	"popovermenu.go menuParts.Popup":              "an open menu, in its overlay: acting",
 	"popovermenu.go menuShown.openAt":             "a menu asked by an event: acting",
+	"popovermenu.go menuParts.OpenFirst":          "only as the menu opens, which shows its overlay: acting",
 	"popovermenu.go newMenu":                      "only as the menu opens, which shows its overlay: acting",
 	"textselection.go engine.scrollTextSelection": "a selection drag: the press is acting",
 	"textselection.go engine.syncTextSelection":   "a selection drag: the press is acting",

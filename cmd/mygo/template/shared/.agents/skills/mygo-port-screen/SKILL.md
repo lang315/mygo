@@ -18,7 +18,7 @@ description: Port a screen written for WinForms (or for gota, the GTK Go toolkit
 ## Layout
 
 - `TableLayoutPanel` of labels and controls: `widget.Fields()` with one `widget.FieldsWidget.Row` per row. Other `TableLayoutPanel`s: `widget.Grid` and `widget.GridWidget.Attach`.
-- `FlowLayoutPanel`: `widget.FlowPanel`. `Panel` with `AutoScroll`: `widget.ScrollPanel`. `GroupBox`: `widget.GroupBox`. `SplitContainer`, `TabControl`, `StatusStrip`, `ToolStrip`, `MenuStrip`: the widgets of those names.
+- `FlowLayoutPanel`: `widget.FlowPanel`. `Panel` with `AutoScroll`: `widget.ScrollPanel`. `GroupBox`: `widget.GroupBox`. `SplitContainer`, `TabControl`, `StatusStrip`, `ToolStrip`, `MenuStrip`: the widgets of those names. A `MenuStrip` that must sit in the window's content, as under the header bar of `widget.Form.UseHeaderBar`: `widget.MenuBar` (`docs/ui/widget/menubar.md`); its items' `ShortcutKeys` become `widget.Shortcut`, shown only, with a `widget.Form.Shortcut` that answers it.
 - `Dock` and `Anchor` do not exist. Put controls in `widget.VBox` and `widget.HBox`: a control that fills the room left grows (`HExpand` in an `HBox`, `VExpand` in a `VBox`); alignment across the box is `Align` in a `VBox` and `VAlign` in an `HBox`. gota's `halign-*`, `valign-*`, `hexpand` and `vexpand` work the same way, in the box that holds the control.
 - Fixed pixel positions become gaps and padding. Padding, margin and radius are in theme units (4 DIPs by default); widths, heights and borders in DIPs.
 

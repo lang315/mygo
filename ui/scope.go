@@ -126,16 +126,37 @@ func (rt *engine) overlayShortcut(e *node, mods Modifiers, key Key) bool {
 }
 
 // openOverlay notes, as overlay id opens, the element that had the focus,
-// to give it back as the overlay closes (restoreFocus).
+// to give it back as the overlay closes (restoreFocus). When that element
+// is in another overlay, it notes too the one outside every overlay that
+// had the focus before (befores), which takes it back if the other overlay
+// is gone first, as for a menu bar's menu opened from the menu before it.
 func (rt *engine) openOverlay(back *node) {
 	if back.st.born != rt.frame {
 		return
 	}
 	if rt.openers == nil {
-		rt.openers = map[uint64]uint64{}
+		rt.openers, rt.befores = map[uint64]uint64{}, map[uint64]uint64{}
 	}
-	if _, ok := rt.openers[back.id]; !ok {
-		rt.openers[back.id] = rt.focused
+	if _, ok := rt.openers[back.id]; ok {
+		return
+	}
+	rt.openers[back.id] = rt.focused
+	for id, n := rt.focused, 0; id != 0 && n < 1024; n++ {
+		s := rt.states[id]
+		if s == nil {
+			break
+		}
+		if focus, ok := rt.openers[id]; ok {
+			// Outside every overlay: the one it was itself opened from may
+			// be the overlay opening now, as a menu bar comes back to it.
+			before := rt.befores[id]
+			if before == 0 {
+				before = focus
+			}
+			rt.befores[back.id] = before
+			break
+		}
+		id = s.parent
 	}
 }
 
@@ -156,14 +177,18 @@ func (rt *engine) blocked(id uint64) bool {
 // restoreFocus gives the focus back to the element that had it as an
 // overlay opened, once the overlay is gone with the focus that was in it.
 func (rt *engine) restoreFocus() {
-	for id, opener := range rt.openers {
+	for id, to := range rt.openers {
 		if rt.states[id] != nil {
 			continue
 		}
 		delete(rt.openers, id)
+		if rt.states[to] == nil {
+			to = rt.befores[id]
+		}
+		delete(rt.befores, id)
 		// A disabled or inert opener takes no focus, as a click on it would not give it.
-		if rt.states[rt.focused] == nil && rt.states[opener] != nil && !rt.blocked(opener) {
-			rt.focused = opener
+		if rt.states[rt.focused] == nil && rt.states[to] != nil && !rt.blocked(to) {
+			rt.focused = to
 		}
 	}
 }

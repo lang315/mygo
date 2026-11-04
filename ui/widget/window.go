@@ -41,6 +41,7 @@ type Form struct {
 	fit           bool          // a dialog of height 0: Show measures its content
 	fitScroll     bool          // the content is higher than the screen: it scrolls
 	mnemonics     []mnemonic    // the Alt keys the last build asked for
+	barKeys       []barKey      // the Alt keys of the menu bars the last build drew, before the controls'
 	built         []builtEl     // the controls the build made, in order (a Label's mnemonic finds the next)
 	announce      string        // a validation message for the next build to announce
 }
@@ -334,6 +335,7 @@ func (w *Form) view(c *ui.Context) {
 	axis, building, buildingForm = vertical, w.id, w
 	defer func() { buildingForm = nil }()
 	w.keep.begin()
+	w.barKeys = w.barKeys[:0]
 	formAccept = w.acceptClick()
 	defer func() { formAccept = nil }()
 	ui.Column(c).Fill().Children(func() {

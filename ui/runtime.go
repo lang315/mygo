@@ -339,9 +339,12 @@ type engine struct {
 	memberOf   map[uint64]uint64
 	groupLast  map[uint64]uint64
 	// openers are the elements that had the focus as overlays opened, by
-	// overlay; downs the elements the pointer went down on since the last
-	// pass (0 for none), for PressedOutside.
+	// overlay, and befores those outside every overlay before them, for an
+	// opener in an overlay that is gone (openOverlay); downs the elements
+	// the pointer went down on since the last pass (0 for none), for
+	// PressedOutside.
 	openers   map[uint64]uint64
+	befores   map[uint64]uint64
 	downs     []uint64
 	regs      []shortcutReg
 	nextRegs  []shortcutReg
