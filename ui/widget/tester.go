@@ -52,7 +52,8 @@ func TestForm(t TB, f *Form) *Tester {
 // RequestClose asks to close the form, as its window's close button does:
 // OnClose answers, and the form closes unless it says no or a dialog's
 // SetDeletable(false) forbids the user to. It settles, so OnClose has
-// answered, and reports whether the form closed. Only a Tester of
+// answered, and reports whether the form closed: an OnClose that runs a
+// dialog (Confirm) is still asking when it returns, and the form open. Only a Tester of
 // TestForm or TestDialog has a form to close.
 func (t *Tester) RequestClose() (closed bool) {
 	t.tb.Helper()

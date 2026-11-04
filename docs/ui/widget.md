@@ -210,9 +210,10 @@ new show. The test's end closes the dialog, so no `Run` outlives it.
 takes it, else it is a request to close, which asks `OnClose` (on the event
 goroutine: wait for it before `Closed`) and closes the dialog unless that
 says no or `SetDeletable(false)`. A `Close` before the dialog's first `Run`
-makes that `Run` return at once, with a window as with a tester. A
-`TestForm` tester's `RequestClose` asks to close the form as its close button
-does: it waits for `OnClose`'s answer and reports whether the form closed.
+or in `OnBeforeRun`, makes that `Run` return at once, with a window as with
+a tester. A `TestForm` tester's `RequestClose` asks to close the form as its
+close button does: it settles, so `OnClose` has answered, and reports whether
+the form closed. An `OnClose` that runs a dialog is still asking then.
 
 ```go
 dt := widget.TestDialog(t, d.Dialog)

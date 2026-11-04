@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -182,5 +183,50 @@ func TestTesterRequestCloseAsksOnClose(t *testing.T) {
 	dt := TestDialog(t, d)
 	if dt.RequestClose() || dt.Closed() {
 		t.Fatal("an undeletable dialog closed on the user's request")
+	}
+}
+
+// A Close in OnBeforeRun cancels that Run, on a later Run too; a Close
+// between Runs does not cancel the next, and a Show then a Close leave a
+// Run showing. With a window as headless.
+func TestDialogRunCanceledOnlyByACloseBeforeItShows(t *testing.T) {
+	for _, headless := range []bool{false, true} {
+		title := fmt.Sprintf("Cancel%v", headless)
+		var d *Dialog
+		cancel := false
+		d = NewDialog(nil, title, "", 300, 200, Button("Done").OnClick(func() { d.Close() })).
+			OnBeforeRun(func() {
+				if cancel {
+					d.Close()
+				}
+			})
+		var dt *DialogTester
+		if headless {
+			dt = TestDialog(t, d)
+		}
+		// shows runs d and closes it once it shows, as the user would.
+		shows := func() {
+			t.Helper()
+			ran := runAsync(func() bool { d.Run(); return true })
+			if headless {
+				wait.Until(t, "the Run to show", func() bool { return !dt.Closed() })
+				d.Close()
+			} else {
+				press(t, waitFake(t, title), "Done")
+			}
+			received(t, ran)
+		}
+		shows()
+		cancel = true
+		received(t, runAsync(func() bool { d.Run(); return true })) // canceled in OnBeforeRun
+		cancel = false
+		d.Close()
+		shows() // a Close between Runs cancels none
+		if !headless {
+			d.Show()
+			d.Close()
+			waitClosed(t, d.Form)
+			shows() // nor a Close of a Show
+		}
 	}
 }
