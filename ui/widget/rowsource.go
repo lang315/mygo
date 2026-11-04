@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"weak"
 
 	"github.com/egoist/mygo"
@@ -203,6 +204,56 @@ func (s *RowSource[T, K]) add(rows []T) {
 		s.index[k] = len(s.rows)
 		s.rows = append(s.rows, rows[i])
 	}
+}
+
+// InsertRows holds rows before the row at i, from 0 (a place past the last
+// row adds them after it), each instead of the row of its key if one is
+// held, where that row is. The rows after i move down a place: their
+// versions stay, so tables keep the rows they built of them. It copies the
+// rows and renumbers those after i, as DeleteRows does.
+func (s *RowSource[T, K]) InsertRows(i int, rows ...T) *RowSource[T, K] {
+	s.change(func() {
+		i = min(max(i, 0), len(s.rows))
+		var ins []T
+		var pos map[K]int // a key's place in ins: of a key twice, the last stays, where the first was
+		for j := range rows {
+			k := s.key(&rows[j])
+			s.gens.bump(k)
+			if at, ok := s.index[k]; ok {
+				s.rows[at] = rows[j]
+				s.record(at)
+				continue
+			}
+			if at, ok := pos[k]; ok {
+				ins[at] = rows[j]
+				continue
+			}
+			if pos == nil {
+				pos = map[K]int{}
+			}
+			pos[k] = len(ins)
+			ins = append(ins, rows[j])
+		}
+		if len(ins) == 0 {
+			return
+		}
+		// A new slice: a table's frame holds the old one.
+		out := make([]T, 0, len(s.rows)+len(ins))
+		out = append(append(append(out, s.rows[:i]...), ins...), s.rows[i:]...)
+		for j := i; j < len(out); j++ {
+			s.index[s.key(&out[j])] = j
+		}
+		s.rows = out
+		s.record(-1)
+	})
+	return s
+}
+
+// Rows returns a copy of the rows held, in their order.
+func (s *RowSource[T, K]) Rows() []T {
+	mu.Lock()
+	defer mu.Unlock()
+	return slices.Clone(s.rows)
 }
 
 // UpdateRow runs fn on the row of key k, if one is held, to change it in

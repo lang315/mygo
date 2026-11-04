@@ -125,6 +125,41 @@ func (t *DataGridViewWidget[T, K]) CopyFunc(fn func(selected []K) string) *DataG
 	return t
 }
 
+// SetClipboardCopy turns the table's copy on Ctrl+C (Cmd+C) and the Edit
+// menu's Copy off, or back on; it is on by default.
+func (t *DataGridViewWidget[T, K]) SetClipboardCopy(on bool) *DataGridViewWidget[T, K] {
+	t.change(func() { t.noCopy = !on })
+	return t
+}
+
+// OnSelectionChanged runs fn on the event goroutine after the rows Selected
+// returns change (WinForms' SelectionChanged): when the user chooses rows
+// (a click, Shift or Ctrl with it, the keys, select all), when selected rows
+// are deleted, and when a search hides or shows selected rows. Changes made
+// before fn runs run it once.
+func (t *DataGridViewWidget[T, K]) OnSelectionChanged(fn func()) *DataGridViewWidget[T, K] {
+	t.change(func() { t.onSelChanged = fn })
+	return t
+}
+
+// selectionChanged posts OnSelectionChanged's fn, unless it is posted and has
+// not run yet. Under mu.
+func (t *DataGridViewWidget[T, K]) selectionChanged() {
+	if t.onSelChanged == nil || t.selPending {
+		return
+	}
+	t.selPending = true
+	Post(func() {
+		mu.Lock()
+		fn := t.onSelChanged
+		t.selPending = false
+		mu.Unlock()
+		if fn != nil {
+			fn()
+		}
+	})
+}
+
 // copyRows is ui's ListState.Copy: the rows shown at the lines rows, a text
 // each, their cells apart by tabs, or what CopyFunc makes of their keys. On
 // the main thread, without mu.

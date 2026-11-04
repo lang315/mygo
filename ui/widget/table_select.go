@@ -327,7 +327,7 @@ func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 // commitLocked is commit under mu. If watch is set, it gets the keys the user
 // added to and took out of the set.
 func (t *DataGridViewWidget[T, K]) commitLocked(s *keys[K]) {
-	watching := t.watch != nil
+	watching := t.watch != nil || s == &t.chosen && t.onSelChanged != nil
 	var on, off []K
 	ks, all := s.shown.TakeChanges()
 	if all {
@@ -381,7 +381,12 @@ func (t *DataGridViewWidget[T, K]) commitLocked(s *keys[K]) {
 	if t.gone {
 		s.keep(t.src.index)
 	}
-	if watching && len(on)+len(off) > 0 {
-		t.watch(s == &t.checked, on, off)
+	if len(on)+len(off) > 0 {
+		if s == &t.chosen {
+			t.selectionChanged()
+		}
+		if t.watch != nil {
+			t.watch(s == &t.checked, on, off)
+		}
 	}
 }

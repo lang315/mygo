@@ -96,8 +96,16 @@ func (t *DataGridViewWidget[T, K]) Search(column, keyword string) *DataGridViewW
 		entry.SetText(keyword)
 	}
 	t.change(func() {
+		var before []K
+		watch := t.onSelChanged != nil && t.chosen.value.Len() > 0
+		if watch {
+			before = t.shown(&t.chosen.value)
+		}
 		t.filter = t.keep(column, keyword)
 		t.view.SetFilter(t.filter)
+		if watch && !slices.Equal(before, t.shown(&t.chosen.value)) {
+			t.selectionChanged()
+		}
 	})
 	return t
 }

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -119,6 +120,10 @@ type DataGridViewWidget[T any, K comparable] struct {
 	lateSeq                                 uint64               // its latest right-click
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
 	numbered                                bool                 // the index column shows
+	bySource                                bool                 // it numbers the rows by their place in the source, and sorts by it
+	noCopy                                  bool                 // SetClipboardCopy(false)
+	onSelChanged                            func()               // OnSelectionChanged's
+	selPending                              bool                 // a selection change is posted, not run yet
 
 	// In-cell editing (tableedit.go): its state is edAny, a *tableEditing, and the
 	// parts of editing the table calls are the func fields below, all nil until
@@ -163,7 +168,11 @@ func DataGridView[T any, K comparable](key func(*T) K, cols ...Column[T]) *DataG
 // other tables may show too: the table has its own sort, search, selection
 // and checks. Its SetRows, AddRows, UpdateRow and DeleteRows change src.
 func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]) *DataGridViewWidget[T, K] {
-	compare := map[string]func(a, b *T) int{}
+	compare := map[string]func(a, b *T) int{
+		// The view compares rows of one slice, the source's: their addresses
+		// are in the source's order.
+		"#": func(a, b *T) int { return cmp.Compare(uintptr(unsafe.Pointer(a)), uintptr(unsafe.Pointer(b))) },
+	}
 	for _, cl := range cols {
 		switch {
 		case !cl.Sortable:
@@ -192,7 +201,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 	var cs []ui.TableColumn
 	if t.numbered {
-		cs = append(cs, ui.TableColumn{Title: "#", Width: 56, Align: ui.End, Fixed: true})
+		cs = append(cs, ui.TableColumn{Title: "#", Width: 56, Align: ui.End, Fixed: true, Sortable: t.bySource})
 	}
 	vis := make([]int, 0, len(t.cols)) // a new slice: rows ui builds late hold the old one
 	for i, cl := range t.cols {
@@ -235,7 +244,16 @@ func (t *DataGridViewWidget[T, K]) ColumnVisible(title string) bool {
 
 // IndexColumn shows first the position of each row as shown, from 1.
 func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
-	t.change(func() { t.numbered = true; t.columns = t.uiColumns(); t.look++ })
+	t.change(func() { t.numbered, t.bySource = true, false; t.columns = t.uiColumns(); t.look++ })
+	return t
+}
+
+// IndexColumnBySource shows first the place of each row in the source, from
+// 1: the order rows show in unsorted, which sorting and searching do not
+// change (inserting and deleting rows do). A click on its header, titled
+// "#", sorts by it, as Sort("#", descending) does.
+func (t *DataGridViewWidget[T, K]) IndexColumnBySource() *DataGridViewWidget[T, K] {
+	t.change(func() { t.numbered, t.bySource = true, true; t.columns = t.uiColumns(); t.look++ })
 	return t
 }
 
@@ -258,6 +276,18 @@ func (t *DataGridViewWidget[T, K]) AddRows(rows []T) *DataGridViewWidget[T, K] {
 	t.src.AddRows(rows)
 	return t
 }
+
+// InsertRows shows rows before the row at i of the source, the order the
+// rows show in unsorted, from 0, each instead of the row of its key if one
+// shows; see RowSource.InsertRows.
+func (t *DataGridViewWidget[T, K]) InsertRows(i int, rows ...T) *DataGridViewWidget[T, K] {
+	t.src.InsertRows(i, rows...)
+	return t
+}
+
+// Rows returns a copy of the rows, the hidden by a search too, in the
+// source's order.
+func (t *DataGridViewWidget[T, K]) Rows() []T { return t.src.Rows() }
 
 // UpdateRow runs fn on the row of key k, if one shows, to change it in
 // place. fn runs under the package's lock: it changes the row but not its
@@ -304,7 +334,11 @@ func (t *DataGridViewWidget[T, K]) catchUp() {
 func (t *DataGridViewWidget[T, K]) prune() {
 	t.view.Reset()
 	t.gone = true
+	n := t.chosen.value.Len()
 	t.chosen.keep(t.src.index)
+	if t.chosen.value.Len() != n {
+		t.selectionChanged()
+	}
 	t.checked.keep(t.src.index)
 	if t.pruneHook != nil {
 		t.pruneHook()
@@ -320,6 +354,18 @@ func (t *DataGridViewWidget[T, K]) Len() int { return t.src.Len() }
 // ClearSort shows the rows in the order added, as before a header click.
 func (t *DataGridViewWidget[T, K]) ClearSort() *DataGridViewWidget[T, K] {
 	t.change(func() { t.sort.set(ui.SortOrder{}) })
+	return t
+}
+
+// Sort sorts the rows by the column titled column, as a click on its header
+// does, and the header shows the direction. A title of no Sortable column
+// is ignored.
+func (t *DataGridViewWidget[T, K]) Sort(column string, descending bool) *DataGridViewWidget[T, K] {
+	t.change(func() {
+		if column == "#" && t.bySource || slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.Sortable && cl.Title == column }) {
+			t.sort.set(ui.SortOrder{Column: column, Descending: descending})
+		}
+	})
 	return t
 }
 
@@ -341,15 +387,33 @@ func (t *DataGridViewWidget[T, K]) sync() {
 // rowAtPos returns the row at position pos of the view in the frame ui shows,
 // whatever goroutines deleted or reordered since. Under mu.
 func (t *DataGridViewWidget[T, K]) rowAtPos(pos int) *T {
-	switch {
-	case pos < 0:
-		return nil
-	case t.kept && pos < len(t.order):
-		return &t.frame[t.order[pos]]
-	case !t.kept && pos < t.view.Len():
-		return &t.frame[t.view.Row(pos)]
+	if i := t.indexAtPos(pos); i >= 0 {
+		return &t.frame[i]
 	}
 	return nil
+}
+
+// indexAtPos returns the index in the frame ui shows of the row at position
+// pos of the view, -1 for none. Under mu.
+func (t *DataGridViewWidget[T, K]) indexAtPos(pos int) int {
+	switch {
+	case pos < 0:
+		return -1
+	case t.kept && pos < len(t.order):
+		return t.order[pos]
+	case !t.kept && pos < t.view.Len():
+		return t.view.Row(pos)
+	}
+	return -1
+}
+
+// numberAt is what the index column shows of the row at position pos of the
+// view. Under mu.
+func (t *DataGridViewWidget[T, K]) numberAt(pos int) int {
+	if t.bySource {
+		return t.indexAtPos(pos) + 1
+	}
+	return pos + 1
 }
 
 // groupsOf returns the groups of the frame ui shows: none without groups.
@@ -445,7 +509,7 @@ func (t *DataGridViewWidget[T, K]) rowVersion(row int) uint64 {
 	}
 	place := 0
 	if t.numbered {
-		place = pos + 1
+		place = t.numberAt(pos)
 	}
 	look := foldLook(t.look, t.images.generation())
 	if t.versionHook != nil {
@@ -521,6 +585,11 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
+	if t.noCopy {
+		s.Copy = nil
+	} else if s.Copy == nil {
+		s.Copy = t.copyRows
+	}
 	if t.prepareEdit != nil {
 		t.prepareEdit()
 	}
@@ -563,7 +632,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	if t.numbered {
 		if col == 0 {
-			ui.Text(c, strconv.Itoa(t.posAt(row)+1)).SingleLine()
+			ui.Text(c, strconv.Itoa(t.numberAt(t.posAt(row)))).SingleLine()
 			return
 		}
 		col--
