@@ -30,6 +30,7 @@ type Tester struct {
 	*ui.Tester
 	tb   TB
 	w, h int
+	form *Form // TestForm's
 }
 
 // NewTester returns a Tester of c in a window of w by h DIPs (0 for 600
@@ -43,7 +44,29 @@ func TestForm(t TB, f *Form) *Tester {
 	mu.Lock()
 	w, h := f.width, f.height
 	mu.Unlock()
-	return newTester(t, f.view, w, h)
+	tt := newTester(t, f.view, w, h)
+	tt.form = f
+	return tt
+}
+
+// RequestClose asks to close the form, as its window's close button does:
+// OnClose answers, and the form closes unless it says no or a dialog's
+// SetDeletable(false) forbids the user to. It settles, so OnClose has
+// answered, and reports whether the form closed. Only a Tester of
+// TestForm or TestDialog has a form to close.
+func (t *Tester) RequestClose() (closed bool) {
+	t.tb.Helper()
+	if t.form == nil {
+		t.fatalf("RequestClose: not a Tester of a form")
+		return false
+	}
+	if !t.form.closeRequest() {
+		t.form.Close()
+	}
+	t.Settle()
+	mu.Lock()
+	defer mu.Unlock()
+	return t.form.closing
 }
 
 func newTester(t TB, view func(c *ui.Context), w, h int) *Tester {

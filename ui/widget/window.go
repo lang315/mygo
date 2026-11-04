@@ -184,6 +184,11 @@ func (w *Form) Show() {
 		mu.Unlock()
 		return
 	}
+	if w.dialog && w.closing && w.done == nil { // a Close before the first Run: that Run returns at once
+		w.closing = false
+		mu.Unlock()
+		return
+	}
 	w.showing, w.closing = true, false
 	w.keep.shown()
 	done := make(chan struct{})
