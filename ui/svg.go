@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"sync"
 	"sync/atomic"
 
 	"github.com/egoist/mygo/internal/scene"
@@ -152,12 +153,41 @@ func coreIcon(c *context, s *SVG) *node {
 // Give it a bitmap twice that size to stay sharp on a 2× display. It is a
 // decoration that assistive technology does not see, unless Label names it.
 func coreIconImage(c *context, b *Bitmap) *node {
+	iconImageOnce.Do(func() { iconImageSizeFn, paintIconImageFn = iconImageSize, paintIconImage })
 	e := c.newElement(kindIcon)
 	e.image = b
 	if b != nil && b.h > 0 {
 		e.aspect = float32(b.w) / float32(b.h)
 	}
 	return e
+}
+
+// The engine sizes and paints IconImage's icons through these functions,
+// which IconImage sets before it makes one: an icon holds a bitmap only
+// after that, so they are set wherever they are called. Apps that make none
+// do not link them.
+var (
+	iconImageSizeFn  func(e *node, em float32) (w, h float32)
+	paintIconImageFn func(p *Painter, e *node)
+	// iconImageOnce makes the first IconImage the only one to write, as
+	// editorOnce does for the editor's functions.
+	iconImageOnce sync.Once
+)
+
+// iconImageSize is the size of an icon showing a bitmap: em high, keeping
+// the bitmap's aspect ratio.
+func iconImageSize(e *node, em float32) (w, h float32) {
+	if b := e.image; b.h > 0 {
+		return em * float32(b.w) / float32(b.h), em
+	}
+	return em, em
+}
+
+// paintIconImage paints an icon showing a bitmap, in its own colors.
+func paintIconImage(p *Painter, e *node) {
+	if !e.contentSet || !p.contentImage(e) {
+		p.image(e)
+	}
 }
 
 // Icon draws the shapes of an SVG fitted in r, in color c.

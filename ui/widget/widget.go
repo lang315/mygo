@@ -141,8 +141,21 @@ func (c *common[W]) SetTooltip(s string) *W { c.change(func() { c.tooltip = s })
 // (ByLabel), in place of the name it takes from its text, its tooltip or the
 // label of its Fields row: an icon-only button, say. "" gives that name back.
 func (c *common[W]) SetAccessibleName(s string) *W {
-	c.change(func() { c.accName = s })
+	c.change(func() { c.accName, nameControl = s, nameControlOf })
 	return c.self
+}
+
+// nameControl names the control a widget built, set by SetAccessibleName: an
+// app that names none does not link the search for the control. Under mu.
+var nameControl func(w Control, e ui.Element, name string)
+
+// nameControlOf names the control e holds, or e, a container's group.
+func nameControlOf(w Control, e ui.Element, name string) {
+	if _, ok := w.(interface{ children() []Control }); ok {
+		e.Label(name) // a container names its group
+	} else {
+		e.AccessibleName(name) // the control, not a box around it
+	}
 }
 
 // OnFocusOut runs fn when the widget loses the keyboard focus.
@@ -181,11 +194,7 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	b.place.apply(e)
 	if b.accName != "" {
-		if _, ok := w.(interface{ children() []Control }); ok {
-			e.Label(b.accName) // a container names its group
-		} else {
-			e.AccessibleName(b.accName) // the control, not a box around it
-		}
+		nameControl(w, e, b.accName)
 	}
 	if b.styled {
 		p := b.style.effective(c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled)
