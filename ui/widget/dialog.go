@@ -64,7 +64,7 @@ func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return
 // or with its parent. In a handler it runs the other handlers meanwhile,
 // as gtk_dialog_run runs the main loop, so the dialog's buttons work; on
 // another goroutine it waits; on the main thread it panics. A Close before
-// the dialog's first Run, or in OnBeforeRun, makes that Run return at once
+// the dialog first shows, or in OnBeforeRun, makes that Run return at once
 // without showing the dialog, with a window as with a DialogTester.
 func (d *Dialog) Run() {
 	notMain("Dialog.Run")
