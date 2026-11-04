@@ -105,6 +105,9 @@ func TestNumericUpDownPaddingLeavesTheArrowsAtTheEdge(t *testing.T) {
 func TestNumericUpDownNegativeStep(t *testing.T) {
 	n := NumericUpDown(0, 10, -1).SetValue(5)
 	tt := tester(t, n)
+	if up, down := find(t, tt, "Increase"), find(t, tt, "Decrease"); up.Y >= down.Y {
+		t.Fatalf("Increase %v is not over Decrease %v", up, down)
+	}
 	click(t, tt, "Increase")
 	if n.Value() != 6 {
 		t.Fatalf("Increase with step -1: %v, want 6", n.Value())

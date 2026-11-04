@@ -193,7 +193,15 @@ func menuWidth(tt *ui.Tester) float32 {
 func TestSubmenuComboMenuIsAsWideAsTheComboAndUpOpensIt(t *testing.T) {
 	c := ComboBox(Option{"a", "Apple"}).AddSubmenu("More", nil, Option{"b", "Banana"}).SetValue("a")
 	tt := tester(t, c)
-	trigger := find(t, tt, "Apple")
+	var trigger ui.Rect
+	for _, n := range tt.Nodes() {
+		if n.Role == ui.RoleMenuButton {
+			trigger = n.Bounds
+		}
+	}
+	if trigger.W < 400 {
+		t.Fatalf("the combo is %v, want it across the window", trigger)
+	}
 	click(t, tt, "Apple")
 	if w := menuWidth(tt); w < trigger.W-0.5 {
 		t.Fatalf("menu %v wide, the combo %v", w, trigger.W)
