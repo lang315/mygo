@@ -262,18 +262,11 @@ func coreStepper(c *context, value *float64, lo, hi, step float64) *node {
 			arrow.builtWith(t)
 			setStyle(arrow, pressSurface, staticPressSurface)
 			arrow.Draw(func(p *Painter, r Rect) {
-				cx, cy, d := r.X+r.W/2, r.Y+r.H/2, r.H*0.22
-				var path Path
-				if up {
-					path.MoveTo(cx-d, cy+d/2).LineTo(cx, cy-d/2).LineTo(cx+d, cy+d/2)
-				} else {
-					path.MoveTo(cx-d, cy-d/2).LineTo(cx, cy+d/2).LineTo(cx+d, cy-d/2)
-				}
 				color := t.Text
 				if !can {
 					color = t.TextMuted.Alpha(0.5)
 				}
-				p.StrokePath(&path, 1.5, color)
+				stepArrow(p, r, up, color)
 			})
 		}
 	})
@@ -283,6 +276,19 @@ func coreStepper(c *context, value *float64, lo, hi, step float64) *node {
 		}
 	})
 	return e
+}
+
+// stepArrow draws the arrow of a stepper or a spin box in r, pointing up or
+// down.
+func stepArrow(p *Painter, r Rect, up bool, color Color) {
+	cx, cy, d := r.X+r.W/2, r.Y+r.H/2, min(r.H, r.W)*0.22
+	var path Path
+	if up {
+		path.MoveTo(cx-d, cy+d/2).LineTo(cx, cy-d/2).LineTo(cx+d, cy+d/2)
+	} else {
+		path.MoveTo(cx-d, cy-d/2).LineTo(cx, cy+d/2).LineTo(cx+d, cy-d/2)
+	}
+	p.StrokePath(&path, 1.5, color)
 }
 
 // RangeSlider creates a slider of two knobs setting *low and *high between

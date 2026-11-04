@@ -424,6 +424,7 @@ colors, renamed). A class that translates by name parses but gives another color
 | `combobox-rounded-r-none` | `rounded-r-none` |
 | `text-green`, a color with no shade | has no effect in gota's own stylesheet: leave it out (do not guess a shade) |
 | `gota-card`, `gota-table`, `gota-tag-select*` | not classes: widget controls |
+| a combo's `changed` running for a choice the code made | not a class: `SetValue` and `Unselect` do not run `OnChange` (see "Handlers" in [the widget guide](../widget.md)) |
 
 ```tw
 text-emerald-600

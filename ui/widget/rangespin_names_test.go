@@ -26,7 +26,7 @@ func TestRangeSpinFieldsAreToldApartByAssistiveTechnology(t *testing.T) {
 	if !slices.Equal(fields, []string{"minimum", "maximum"}) {
 		t.Errorf("fields %q", fields)
 	}
-	if want := []string{"minimum Decrease", "minimum Increase", "maximum Decrease", "maximum Increase"}; !slices.Equal(buttons, want) {
+	if want := []string{"minimum Increase", "minimum Decrease", "maximum Increase", "maximum Decrease"}; !slices.Equal(buttons, want) {
 		t.Errorf("buttons %q, want %q", buttons, want)
 	}
 	// Told apart, a button steps its own number.
@@ -53,13 +53,13 @@ func TestRangeSpinSetAccessibleNames(t *testing.T) {
 func TestNumericUpDownAccessibleName(t *testing.T) {
 	n := NumericUpDown(0, 10, 1)
 	tt := tester(t, n)
-	if fields, buttons := spinNames(tt); !slices.Equal(fields, []string{""}) || !slices.Equal(buttons, []string{"Decrease", "Increase"}) {
+	if fields, buttons := spinNames(tt); !slices.Equal(fields, []string{""}) || !slices.Equal(buttons, []string{"Increase", "Decrease"}) {
 		t.Fatalf("unnamed: fields %q, buttons %q", fields, buttons)
 	}
 	n.SetAccessibleName("Copies")
 	tt.Frame()
 	fields, buttons := spinNames(tt)
-	if !slices.Equal(fields, []string{"Copies"}) || !slices.Equal(buttons, []string{"Copies Decrease", "Copies Increase"}) {
+	if !slices.Equal(fields, []string{"Copies"}) || !slices.Equal(buttons, []string{"Copies Increase", "Copies Decrease"}) {
 		t.Fatalf("named: fields %q, buttons %q", fields, buttons)
 	}
 }

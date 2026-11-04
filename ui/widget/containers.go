@@ -193,6 +193,7 @@ type TabControlWidget struct {
 	keys     []*pageKey // one for each page: the key of its tab, so that a widget on two pages has two tabs
 	page     mirror[int]
 	onSwitch func()
+	strip    Style // StripStyle's, merged
 }
 
 // pageKey tells the tab of a page apart from the others'. It is not empty:
@@ -278,6 +279,20 @@ func (n *TabControlWidget) SetPage(i int) *TabControlWidget {
 	return n
 }
 
+// StripStyle styles the strip of tabs, as Apply styles a control: its
+// background across the control, past the last tab, its border, padding
+// and the rest. A later style wins; StripStyle() removes them. Apply styles
+// the whole control, strip and page.
+func (n *TabControlWidget) StripStyle(styles ...Style) *TabControlWidget {
+	n.change(func() {
+		n.strip = Style{}
+		for _, s := range styles {
+			n.strip = n.strip.Merge(s)
+		}
+	})
+	return n
+}
+
 // OnSwitch runs fn after the page shown changes.
 func (n *TabControlWidget) OnSwitch(fn func()) *TabControlWidget {
 	n.change(func() { n.onSwitch = fn })
@@ -291,7 +306,11 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 		for i, k := range n.keys {
 			keys[i] = k // a tab keeps the focus of its page, whatever its index
 		}
-		ui.TabsKeyed(c, p, keys, n.labels).OnChange(onChange(&n.page, n.onSwitch))
+		strip := ui.TabsKeyed(c, p, keys, n.labels).OnChange(onChange(&n.page, n.onSwitch))
+		if !n.strip.empty() {
+			st := n.strip.effective(c.Theme().Dark, strip.Hovered(), strip.Focused(), strip.Pressed(), n.disabled)
+			st.apply(c, strip, n) // n keys the strip's text color, apart from the control's
+		}
 		// Tabs clamps *p while it builds, without OnChange: see it here.
 		if changed := *p != n.page.value; changed {
 			n.page.value = *p

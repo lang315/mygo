@@ -24,7 +24,7 @@ description: Port a screen written for WinForms (or for gota, the GTK Go toolkit
 
 ## Events and data
 
-- WinForms events become `On…` methods that take a function: `widget.ButtonWidget.OnClick`, `widget.TextBoxWidget.OnChange`, `widget.ComboBoxWidget.OnChange`, `widget.CheckBoxWidget.OnChange`, `widget.Form.SetAcceptButton` and `widget.Form.SetCancelButton` for `AcceptButton` and `CancelButton`. Look an event up in the control's page of `docs/ui/widget.md` or `docs/ui/widget/`; do not invent a name.
+- WinForms events become `On…` methods that take a function: `widget.ButtonWidget.OnClick`, `widget.TextBoxWidget.OnChange`, `widget.ComboBoxWidget.OnChange`, `widget.CheckBoxWidget.OnChange`, `widget.Form.SetAcceptButton` and `widget.Form.SetCancelButton` for `AcceptButton` and `CancelButton`. Look an event up in the control's page of `docs/ui/widget.md` or `docs/ui/widget/`; do not invent a name. Unlike `TextChanged` and `SelectedIndexChanged`, `OnChange` does not run for the program's own setters (`SetText`, `SetValue`, a `ComboBox`'s `Unselect`): where the old code relied on that, call the handler after the setter.
 - Handlers run one at a time on the event goroutine, never on the main thread.
 - `BindingSource` and `DataBindings`: `widget.Bind(control, get, set)` for a value, `widget.NewRowSource` and `widget.DataGridView` for rows.
 - Validation: `widget.ErrorProvider` marks a control, the control's `OnValidating` says whether it is valid, and `widget.Form.ValidateChildren` runs them all (`docs/ui/widget/errorprovider.md`).

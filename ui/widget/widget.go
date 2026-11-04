@@ -30,6 +30,7 @@ type Control interface {
 type core struct {
 	id          int
 	hidden      bool
+	hides       int // views that did not build it, and shows of its form, for a popup of its own to close
 	disabled    bool
 	wantFocus   bool // Focus asked for the keyboard focus
 	focusIn     int  // the view that last built it focused, noView for none

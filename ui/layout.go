@@ -1320,7 +1320,9 @@ func beside(at, self float32) bool { return at == 1 && self == 0 || at == 0 && s
 // window, limit long, with its point at fraction self on target's point at
 // fraction at, moved by off: on the other side of target, or the other way
 // along it, where that overflows the window less, then moved into the
-// window along target.
+// window: along target, or over it for one placed beside it that has no
+// room on either side, as a submenu of a menu as wide as the window,
+// which then covers the menu as macOS's do.
 func alongTarget(t0, tsize, at, self, size, off, limit float32) float32 {
 	pos := func(at, self, off float32) float32 { return t0 + at*tsize - self*size + off }
 	over := func(p float32) float32 {
@@ -1332,7 +1334,7 @@ func alongTarget(t0, tsize, at, self, size, off, limit float32) float32 {
 			p = q
 		}
 	}
-	if !beside(at, self) && over(p) > 0 {
+	if over(p) > 0 {
 		p = max(windowMargin, min(p, limit-windowMargin-size))
 	}
 	return p

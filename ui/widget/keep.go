@@ -59,6 +59,16 @@ func (k *keeper) key(c *ui.Context, b *core) {
 	c.GlobalKey(b.idKey)
 }
 
+// shown counts a new show of the view for the widgets it holds: the popups
+// of their own close, as in a window that closed. Under mu.
+func (k *keeper) shown() {
+	for _, p := range k.widgets {
+		if b := p.Value(); b != nil {
+			b.hides++
+		}
+	}
+}
+
 // end keeps alive the state of the widgets not built that the app still
 // holds, and forgets the others, whose state ui then frees: those dropped,
 // and those another view built since.
@@ -75,6 +85,7 @@ func (k *keeper) end(c *ui.Context) {
 				// or inside something hidden), so a hover on it ends.
 				b.dnd.endHovers()
 			}
+			b.hides++ // out of sight: a popup of the widget's own closes
 			c.KeepAlive(id)
 		}
 	}

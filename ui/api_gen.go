@@ -2255,6 +2255,28 @@ func Spacer(c *Context) Element {
 	return wrapElement(_e)
 }
 
+// SpinBox creates a NumberInput in the look of a classic spin box, as
+// WinForms' NumericUpDown and GTK's SpinButton: one box holding the text
+// and, joined at its end, an up arrow over a down arrow. It edits, steps,
+// reports and is named as NumberInput is. Its arrows are the buttons
+// "Increase" and "Decrease" to assistive technology, but no stops of Tab:
+// a press on one steps, again as it is held, faster after a while, and
+// leaves the keyboard in the text, as WinForms' does. They stay at the
+// end of the box, whatever its padding. A negative step steps by its
+// absolute value.
+//
+//	ui.SpinBox(c, &app.copies, 1, 99, 1).Label("Copies")
+func SpinBox(c *Context, value *float64, lo float64, hi float64, step float64) Element {
+	_ctx := c.build()
+	if _ctx == nil {
+		return Element{}
+	}
+	_ctx.rt.beginBuild()
+	_e := coreSpinBox(_ctx, value, lo, hi, step)
+	_ctx.rt.endBuild()
+	return wrapElement(_e)
+}
+
 // Spinner creates an indicator of work of unknown length, as AppKit's
 // spinning progress indicator: spokes turning, as high as the font size,
 // in the theme's muted text color, or the color TextColor gives it, as one

@@ -183,6 +183,7 @@ func (w *Form) Show() {
 		return
 	}
 	w.showing, w.closing = true, false
+	w.keep.shown()
 	done := make(chan struct{})
 	w.done = done
 	opts := mygo.WindowOptions{

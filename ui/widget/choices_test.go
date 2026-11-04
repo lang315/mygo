@@ -41,9 +41,7 @@ func TestSpinFocus(t *testing.T) {
 		t.Fatal("OnFocusOut ran while the spin's field had the focus")
 	default:
 	}
-	focus(tt, 1) // past the minus, to the plus button
-	focus(tt, 1)
-	focus(tt, 1) // the entry
+	focus(tt, 1) // the arrows are no stops of Tab: to the text box
 	received(t, left)
 }
 

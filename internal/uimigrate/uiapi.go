@@ -81,6 +81,7 @@ var uiResults = map[string]string{
 	"Slider":               "Element",
 	"SliderBase":           "Element",
 	"Spacer":               "Element",
+	"SpinBox":              "Element",
 	"Spinner":              "Element",
 	"Split":                "Element",
 	"SplitPercent":         "Element",
