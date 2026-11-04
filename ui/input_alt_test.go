@@ -257,3 +257,37 @@ func TestHeldKeysAreDroppedWhenTheWindowGoesAway(t *testing.T) {
 		tt.rt.close()
 	}
 }
+
+// focusSeenApp is a view whose element reads its own focus, then takes it
+// the first time, as widget.render gives a control the focus once its build
+// returned.
+type focusSeenApp struct {
+	take bool
+	seen []bool // what each build of the frame read
+}
+
+func (a *focusSeenApp) view(c *Context) {
+	e := Box(c).Size(100, 100).Focusable().Label("Field")
+	a.seen = append(a.seen, e.Focused())
+	if a.take {
+		a.take = false
+		e.Focus()
+	}
+}
+
+// A build that moves the focus builds again in the same frame, as an event
+// handled while building does: what read the focus before sees it moved.
+// Without it the frame ended with the element reading false, and, with no
+// other frame asked for, it never read true: on Windows, a control focused
+// with widget's Focus() before the window showed never saw its focus.
+func TestFocusMovedInABuildBuildsAgain(t *testing.T) {
+	a := &focusSeenApp{}
+	tt := NewTester(a.view, 200, 200)
+	defer tt.rt.close()
+	tt.Frame()
+	a.take, a.seen = true, nil
+	tt.rt.runFrame() // one frame, its passes, and no other
+	if len(a.seen) < 2 || !a.seen[len(a.seen)-1] {
+		t.Errorf("the builds of the frame that moved the focus read %v; the last must read true", a.seen)
+	}
+}

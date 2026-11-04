@@ -1480,6 +1480,9 @@ func (e *node) Focus() *node {
 	if rt.focused != e.id {
 		rt.focused = e.id
 		rt.blinkStart = rt.now()
+		// What was built before read the focus where it was: build again,
+		// as for an event handled while building.
+		rt.consumed = true
 	}
 	return e
 }
