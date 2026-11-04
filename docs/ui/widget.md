@@ -387,8 +387,9 @@ status.SetText("Saved") // and the window redraws
   it is one stop of Tab with the arrow keys moving among its items, and
   what does not fit goes from the last item into a menu at its end (a
   `ComboBox` there under its chosen text, a `DropDownButton` under its own);
-  there is no overflow of the package's own. `ToolButton(text)` has `SetIcon`,
-  `SetTooltip` (from every control), `OnClick`, and `SetToggle` with
+  there is no overflow of the package's own. `ToolButton(text)` has `SetIcon`
+  and `SetIconPNG` (as `Button`'s), `SetTooltip` (from every control, which
+  names an icon-only button), `OnClick`, and `SetToggle` with
   `Checked`, `SetChecked` and `OnChange`, and `Suggested()` and
   `Destructive()`, which look as a `Button`'s do (the accent, or the danger
   color, with the same hover and pressed looks, in both themes). In the
@@ -855,9 +856,10 @@ style hover, focus, pressed, disabled and dark states, see
 | `Suggested()`, `Destructive()` on buttons and tool buttons | `suggested-action`, `destructive-action` |
 
 Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
-`OnFocusOut`, `OnClick` (gota's `EventBox`), `ContextMenu`, `Focus`, which
-moves the keyboard focus to it, and `AssignTo(&v)`, which keeps a widget
-made inside a chain.
+`SetAccessibleName` (its name for assistive technology and `ByLabel`, over the
+one its text, tooltip or `Fields` row gives), `OnFocusOut`, `OnClick` (gota's
+`EventBox`), `ContextMenu`, `Focus`, which moves the keyboard focus to it,
+and `AssignTo(&v)`, which keeps a widget made inside a chain.
 
 ## What a widget keeps
 
@@ -961,9 +963,13 @@ Input and display:
 - `Bind(control, get, set)`, `BindInt`, `Reload(control)`: tie a `TextBox`,
   `CheckBox`, `ComboBox` or `NumericUpDown` to a value kept elsewhere; see
   [Binding](#binding).
-- `Button(text)`: `OnClick`, `SetText`, `SetIcon`; `Suggested()` and
+- `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
+  color) or `SetIconPNG` (a PNG or GIF in its own colors, a square of the
+  theme's text size: give it 32 by 32 pixels to stay sharp on 2× displays).
+  `Button("")` with an icon is named by its tooltip for assistive technology
+  and the Tester, or by `SetAccessibleName`. `Suggested()` and
   `Destructive()` are the button's own style (tw's `suggested-action` and
-  `destructive-action`). `LinkLabel(text, url)`; `OnClick(fn)` runs `fn` on the event goroutine
+  `destructive-action`); the last one given wins. `LinkLabel(text, url)`; `OnClick(fn)` runs `fn` on the event goroutine
   in place of opening `url` (click, Enter or Space, assistive technology; nothing
   when disabled), as WinForms' `LinkClicked`.
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.

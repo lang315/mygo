@@ -46,6 +46,8 @@ type ToolButtonWidget struct {
 	common[ToolButtonWidget]
 	text     string
 	icon     *ui.SVG
+	png      *ui.Bitmap // SetIconPNG's, drawn in its own colors
+	look     lookKind
 	toggle   bool
 	on       mirror[bool]
 	onClick  func()
@@ -69,9 +71,17 @@ func (b *ToolButtonWidget) SetText(s string) *ToolButtonWidget {
 }
 
 // SetIcon shows an icon before the text, in the color of the text; nil
-// removes it.
+// removes it. It replaces a PNG icon.
 func (b *ToolButtonWidget) SetIcon(icon *ui.SVG) *ToolButtonWidget {
-	b.change(func() { b.icon = icon })
+	b.change(func() { b.icon, b.png = icon, nil })
+	return b
+}
+
+// SetIconPNG shows the image in data before the text, in its own colors, as
+// Button's SetIconPNG does; nil removes it. It replaces an SVG icon.
+func (b *ToolButtonWidget) SetIconPNG(data []byte) *ToolButtonWidget {
+	bmp := decodeImage(data) // outside mu: decoding takes a while
+	b.change(func() { b.png, b.icon, bitmapIcon = bmp, nil, drawBitmapIcon })
 	return b
 }
 
@@ -79,20 +89,21 @@ func (b *ToolButtonWidget) SetIcon(icon *ui.SVG) *ToolButtonWidget {
 // does: the accent for its background, with the accent's text, and the
 // accent's hover and pressed roles. It is the button's own style, which
 // wins over applied ones. In the overflow menu it is a normal item: menus
-// have no suggested role.
+// have no suggested role. It replaces a Destructive given before.
 func (b *ToolButtonWidget) Suggested() *ToolButtonWidget {
 	b.change(func() { b.destructive = false })
-	return b.own(suggestedStyle)
+	return b.own(b.look.to(suggestedLook, suggestedStyle))
 }
 
 // Destructive draws the button as an action that destroys, as Button's
 // Destructive does: the danger color for its background, with the accent's
 // text, fading to 0.9 opacity when hovered and 0.8 pressed. It is the
 // button's own style. In the overflow menu it is a destructive item
-// (MenuItem.Destructive), which only Windows 11 and the web draw apart.
+// (MenuItem.Destructive), which only Windows 11 and the web draw apart. It
+// replaces a Suggested given before.
 func (b *ToolButtonWidget) Destructive() *ToolButtonWidget {
 	b.change(func() { b.destructive = true })
-	return b.own(destructiveStyle)
+	return b.own(b.look.to(destructiveLook, destructiveStyle))
 }
 
 // SetToggle makes the button a toggle: a click checks it or unchecks it,
@@ -128,7 +139,7 @@ func (b *ToolButtonWidget) OnChange(fn func()) *ToolButtonWidget {
 
 func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 	label := b.text
-	if b.icon != nil {
+	if b.icon != nil || b.png != nil {
 		label = ""
 	}
 	var e ui.Element
@@ -145,20 +156,8 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 		}
 	}
 	e.Destructive(b.destructive)
-	if b.icon != nil {
-		icon, text := b.icon, b.text
-		name := text
-		if name == "" {
-			name = b.tooltip // an icon-only button is named by its tooltip
-		}
-		e.Label(name).Children(func() {
-			ui.Row(c).Gap(c.Theme().Space(1.5)).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, icon)
-				if text != "" {
-					ui.Text(c, text)
-				}
-			})
-		})
+	if b.icon != nil || b.png != nil {
+		iconFace(c, e, b.icon, b.png, b.text, b.tooltip, true)
 	}
 	return e
 }

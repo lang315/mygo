@@ -15,6 +15,8 @@ type ButtonWidget struct {
 	common[ButtonWidget]
 	text    string
 	icon    *ui.SVG
+	png     *ui.Bitmap // SetIconPNG's, drawn in its own colors
+	look    lookKind
 	onClick func()
 	clicked func() // onClicked, made once
 }
@@ -32,14 +34,42 @@ func (b *ButtonWidget) OnClick(fn func()) *ButtonWidget {
 }
 func (b *ButtonWidget) SetText(s string) *ButtonWidget { b.change(func() { b.text = s }); return b }
 
-// SetIcon shows an icon before the text; nil removes it.
-func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget { b.change(func() { b.icon = s }); return b }
+// SetIcon shows an icon before the text, in the color of the text; nil
+// removes it. It replaces a PNG icon.
+func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget {
+	b.change(func() { b.icon, b.png = s, nil })
+	return b
+}
+
+// SetIconPNG shows the image in data (PNG or GIF, see PictureBox) before the
+// text, in its own colors, as MenuItem.IconPNG does: a square of the theme's
+// text size, an SVG icon's side. Give it 32 by 32 pixels to stay sharp on a
+// 2× display. nil, or bytes that are no image, remove it. It replaces an SVG
+// icon.
+func (b *ButtonWidget) SetIconPNG(data []byte) *ButtonWidget {
+	bmp := decodeImage(data) // outside mu: decoding takes a while
+	b.change(func() { b.png, b.icon, bitmapIcon = bmp, nil, drawBitmapIcon })
+	return b
+}
+
+// bitmapIcon draws a bitmap icon, set by SetIconPNG: an app that gives none
+// does not link the drawing of images. Under mu.
+var bitmapIcon func(c *ui.Context, bmp *ui.Bitmap)
+
+// drawBitmapIcon draws bmp as a square of the theme's text size, an SVG
+// icon's side.
+func drawBitmapIcon(c *ui.Context, bmp *ui.Bitmap) {
+	em := c.Theme().FontSize
+	ui.Image(c, bmp).Size(em, em)
+}
 
 // Suggested draws the button as the main action, gota's suggested-action
 // and tw's: the accent for its background, with the accent's text, and the
 // accent's hover and pressed roles. It is the button's own style, which
-// wins over applied ones.
-func (b *ButtonWidget) Suggested() *ButtonWidget { return b.own(suggestedStyle) }
+// wins over applied ones. It replaces a Destructive given before.
+func (b *ButtonWidget) Suggested() *ButtonWidget {
+	return b.own(b.look.to(suggestedLook, suggestedStyle))
+}
 
 // suggestedStyle is the look of Suggested, of buttons and tool buttons.
 func suggestedStyle(s Style) Style {
@@ -51,14 +81,50 @@ func suggestedStyle(s Style) Style {
 // Destructive draws the button as an action that destroys, as Delete,
 // gota's destructive-action and tw's: the danger color for its background,
 // with the accent's text, fading to 0.9 opacity when hovered and 0.8
-// pressed. It is the button's own style.
-func (b *ButtonWidget) Destructive() *ButtonWidget { return b.own(destructiveStyle) }
+// pressed. It is the button's own style. It replaces a Suggested given
+// before.
+func (b *ButtonWidget) Destructive() *ButtonWidget {
+	return b.own(b.look.to(destructiveLook, destructiveStyle))
+}
 
 // destructiveStyle is the look of Destructive, of buttons and tool buttons.
 func destructiveStyle(s Style) Style {
 	s = s.Background(RoleDanger).TextColor(RoleAccentText)
 	s = withMerged(s, vHover, NewStyle().Opacity(0.9))
 	return withMerged(s, vPressed, NewStyle().Opacity(0.8))
+}
+
+// lookKind is the last look a button was given: Suggested or Destructive.
+type lookKind uint8
+
+const (
+	plainLook lookKind = iota
+	suggestedLook
+	destructiveLook
+)
+
+// lookHoverProps is what each look sets in its hover and pressed variants.
+var lookHoverProps = [...]prop{suggestedLook: pBackground, destructiveLook: pOpacity}
+
+// to returns the own style function giving look l, which style draws, in
+// place of *k: it takes out the hover and pressed properties the look before
+// set, so the last look wins whole, and keeps the rest of the hover and
+// pressed looks. It runs under mu, in own. style is passed, not looked up, so
+// that an app links only the looks it uses.
+func (k *lookKind) to(l lookKind, style func(Style) Style) func(Style) Style {
+	return func(s Style) Style {
+		if bits := lookHoverProps[*k]; bits != 0 {
+			for _, v := range [...]variant{vHover, vPressed} {
+				if old := s.v[v]; old != nil {
+					w := *old
+					w.set &^= bits
+					s.v[v] = &w
+				}
+			}
+		}
+		*k = l
+		return style(s)
+	}
 }
 
 // withMerged sets variant k of s to v over the one s has, so a hover or
@@ -74,31 +140,23 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 	label, key, at := parseMnemonic(b.text)
 	// The underline shows while Alt is held, as Windows and GTK show access
 	// keys, and only where the key is answered (a form is building it).
-	underlined := key != 0 && b.icon == nil && !macMenus && buildingForm != nil && c.Modifiers()&ui.Alt != 0
+	hasIcon := b.icon != nil || b.png != nil
+	underlined := key != 0 && !hasIcon && !macMenus && buildingForm != nil && c.Modifiers()&ui.Alt != 0
 	shown := label
-	if b.icon != nil || underlined {
+	if hasIcon || underlined {
 		shown = ""
 	}
 	e := ui.Button(c, shown)
 	if underlined {
 		e.Label(label).Children(func() { ui.RichText(c, mnemonicSpans(label, at)...) })
 	}
-	if h := b.onClick; h != nil && b.icon == nil {
+	if h := b.onClick; h != nil && !hasIcon {
 		if key != 0 { // the closure is made only for a mnemonic: it would be allocated in each build
 			registerMnemonic(key, e, b, func() { Post(h) })
 		}
 	}
-	if b.icon != nil {
-		text, _, _ := parseMnemonic(b.text)
-		icon := b.icon
-		e.Children(func() {
-			ui.Row(c).Gap(c.Theme().Space(1.5)).Children(func() {
-				ui.Icon(c, icon)
-				if text != "" {
-					ui.Text(c, text)
-				}
-			})
-		})
+	if hasIcon {
+		iconFace(c, e, b.icon, b.png, label, b.tooltip, false)
 	}
 	if b.onClick != nil {
 		if b.clicked == nil {
@@ -107,6 +165,33 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 		e.OnClick(b.clicked)
 	}
 	return e
+}
+
+// iconFace shows an icon, SVG or bitmap, and text on e, a button, and names
+// it by its text, or by its tooltip when it has none, so that assistive
+// technology and a Tester find an icon-only button by name. center centers
+// the icon and the text across, as a tool button does.
+func iconFace(c *ui.Context, e ui.Element, svg *ui.SVG, bmp *ui.Bitmap, text, tooltip string, center bool) {
+	name := text
+	if name == "" {
+		name = tooltip
+	}
+	e.Label(name).Children(func() {
+		row := ui.Row(c).Gap(c.Theme().Space(1.5))
+		if center {
+			row.AlignItems(ui.Center)
+		}
+		row.Children(func() {
+			if svg != nil {
+				ui.Icon(c, svg)
+			} else {
+				bitmapIcon(c, bmp)
+			}
+			if text != "" {
+				ui.Text(c, text)
+			}
+		})
+	})
 }
 
 // onClicked is ui's OnClick callback: it runs the OnClick of the moment.
