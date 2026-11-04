@@ -24,7 +24,7 @@ func (k *keyContent) SurfaceEvent(ev platform.SurfaceEvent) bool {
 // Alt alone or F10 (SC_KEYMENU without a letter) in a window without a menu
 // bar of the system's go to the content as F10; the window menu's loop
 // starts only when the content does not take them.
-func TestContentMenuKeyOffersAltAloneAndF10ToTheContent(t *testing.T) {
+func TestSurfaceMenuKeyOffersAltAloneAndF10ToTheContent(t *testing.T) {
 	for _, c := range []struct {
 		name      string
 		bar       bool // the content draws a menu bar
@@ -38,10 +38,8 @@ func TestContentMenuKeyOffersAltAloneAndF10ToTheContent(t *testing.T) {
 		{"F10 not taken, no menu bar", false, false, false, 1},
 	} {
 		content := &keyContent{bar: c.bar}
-		w := &window{h: content}
-		s := &surface{w: w, keyTaken: c.f10Taken}
-		w.sf = s
-		if got := w.contentMenuKey(); got != c.want {
+		s := &surface{w: &window{h: content}, keyTaken: c.f10Taken}
+		if got := s.menuKey(); got != c.want {
 			t.Errorf("%s: taken %v, want %v", c.name, got, c.want)
 		}
 		if len(content.got) != c.wantSends {
@@ -52,9 +50,5 @@ func TestContentMenuKeyOffersAltAloneAndF10ToTheContent(t *testing.T) {
 				t.Errorf("%s: the content got %+v, want F10", c.name, ev)
 			}
 		}
-	}
-	// A window with a page, no surface, leaves the key to the system.
-	if (&window{}).contentMenuKey() {
-		t.Error("a window without native UI took the key")
 	}
 }

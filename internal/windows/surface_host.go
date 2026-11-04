@@ -23,6 +23,7 @@ type surfaceHost interface {
 	message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool)
 	pointer(kind platform.SurfaceEventKind, lp uintptr, extra int)
 	send(platform.SurfaceEvent) bool
+	menuKey() bool
 }
 
 // makeSurfaceFunc makes the surface of a window. It is nil until UseSurface.

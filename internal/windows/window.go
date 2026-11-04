@@ -644,7 +644,7 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		// and a letter (lp the letter) open the menu of the letter; Alt and
 		// Space open the window menu. WebView2 passes no Alt+letter on: the
 		// letters come from native UI only.
-		if wp&0xFFF0 == scKeyMenu && lp == 0 && w.hmenu == 0 && w.contentMenuKey() {
+		if wp&0xFFF0 == scKeyMenu && lp == 0 && w.hmenu == 0 && w.sf != nil && w.sf.menuKey() {
 			// No bar of the system's, and the content took the keyboard
 			// to one of its own: the window menu's loop does not start.
 			return 0, true
@@ -660,20 +660,6 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		}
 	}
 	return 0, false
-}
-
-// contentMenuKey offers native UI Alt alone or F10, which ask for the menu
-// bar (SC_KEYMENU without a letter), as F10, in a window without a menu bar
-// of the system's, and reports whether the content took it: a menu bar it
-// draws takes the keyboard (widget.MenuBar). F10 itself the content saw
-// as it went down, and took then or not; Alt alone it did not see, its
-// press having taken nothing.
-func (w *window) contentMenuKey() bool {
-	s := w.surf()
-	if s == nil {
-		return false
-	}
-	return s.keyTaken || s.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.KeyF10})
 }
 
 // sized lays the window out after it changed size or state (a WM_SIZE kind),

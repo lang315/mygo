@@ -617,6 +617,17 @@ func (s *surface) send(ev platform.SurfaceEvent) bool {
 	return s.w.h.SurfaceEvent(ev)
 }
 
+// menuKey offers the content Alt alone or F10, which ask for the menu bar
+// (SC_KEYMENU without a letter), as F10, in a window without a menu bar of
+// the system's, and reports whether it took it: a menu bar it draws takes
+// the keyboard (widget.MenuBar). F10 itself the content saw as it went
+// down, and took then or not; Alt alone it did not see, its press having
+// taken nothing. Reached through surfaceHost, so that an app without native
+// UI does not link it.
+func (s *surface) menuKey() bool {
+	return s.keyTaken || s.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.KeyF10})
+}
+
 // modifierKey is whether the virtual key vk is Shift, Ctrl, Alt or a Windows key.
 func modifierKey(vk uintptr) bool {
 	switch vk {
