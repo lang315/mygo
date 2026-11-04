@@ -673,11 +673,28 @@ lock: they read the row and call no widget method.
   default order other than the source's), with the header's arrow, and
   ignores a title of no `Sortable` column; `ClearSort` shows the rows in the
   order added.
-- `BottomPanel()`: the counts of rows, selected and checked, and a search
-  over the `Filterable` columns. `PanelText` sets its words (English by
-  default), `SetSearchPlaceholder` its keyword's placeholder, and
+- `BottomPanel()`: the counts of rows, and of the rows shown that are
+  selected and checked (what `Selected`, `CountSelected` and `Checked`
+  return: a search hides the rows it leaves out, selected or not), and a
+  search over the `Filterable` columns. `PanelText` sets its words (English
+  by default): a format without `%` shows as it is, an empty one hides its
+  count, and a `%` shown is written `%%` (`"%d%% done"`). `SetSearchPlaceholder` sets its keyword's placeholder, and
   `OnBeforeSearch(fn)` runs before a search from it. `Search(column,
   keyword)` searches from code. The filter runs once per search.
+  `ApplyPanel(styles...)` styles the panel (its `Background`, and a
+  `TextSize` or `FontSize` its counts and search take), `SetSearchWidth(w)`
+  sets the keyword's width, and `JoinSearch(true)` draws the column, the
+  keyword and the button as one control. Call these after `BottomPanel`.
+  `SetRowHeight(h)` makes every row `h` DIPs tall, `SetGridLines(true)` draws
+  lines between rows and cells.
+
+  ```go
+  grid.CheckboxColumn().BottomPanel().
+  	PanelText(widget.PanelText{Rows: "%d rows", Selected: "%d selected", Search: "Find"}). // no checked count
+  	ApplyPanel(widget.Style{}.Background(widget.Fixed(ui.RGB(240, 244, 250))).TextSize(widget.SM)).
+  	SetSearchWidth(320).JoinSearch(true).
+  	SetRowHeight(28).SetGridLines(true)
+  ```
 - **Editing cells.** `EditColumn(title, widget.CellEditor{Set: ...})` makes the
   cells of a column editable in place; a column not given to it is read-only.
   Calling it is also what links the code of editing into the program, for that

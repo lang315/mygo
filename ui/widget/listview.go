@@ -290,7 +290,7 @@ func (lv *ListViewWidget[T, K]) Len() int { return lv.t.Len() }
 // Selected returns the keys of the rows chosen that show, in the order shown.
 func (lv *ListViewWidget[T, K]) Selected() []K { return lv.t.Selected() }
 
-// CountSelected returns how many rows are chosen.
+// CountSelected returns how many rows are chosen that show, as Selected.
 func (lv *ListViewWidget[T, K]) CountSelected() int { return lv.t.CountSelected() }
 
 // SetSelected chooses the rows of keys ks instead of those chosen, firing no

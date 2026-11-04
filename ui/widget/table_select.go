@@ -243,12 +243,27 @@ func (t *DataGridViewWidget[T, K]) Selected() []K {
 	return t.shown(&t.chosen.value)
 }
 
-// CountSelected returns how many rows are selected.
+// CountSelected returns how many rows are selected that show, as many as
+// Selected returns: a search hides the rows it leaves out, selected or not.
 func (t *DataGridViewWidget[T, K]) CountSelected() int {
 	mu.Lock()
 	defer mu.Unlock()
 	t.catchUp()
-	return t.chosen.value.Len()
+	return t.shownCount(&t.chosen.value)
+}
+
+// shownCount returns how many keys of ks are of rows the search keeps: ks
+// holds keys of rows only, so without a search, all of them. Under mu.
+func (t *DataGridViewWidget[T, K]) shownCount(ks *ui.Selection[K]) (n int) {
+	if t.filter == nil {
+		return ks.Len()
+	}
+	for k := range ks.All() {
+		if i, ok := t.src.index[k]; ok && t.filter(&t.src.rows[i]) {
+			n++
+		}
+	}
+	return n
 }
 
 // Checked returns the keys of the rows checked that show, in the order
@@ -301,16 +316,7 @@ func (t *DataGridViewWidget[T, K]) AutoCheck() *DataGridViewWidget[T, K] {
 // are checked, of how many. Under mu, while building, after bind: the
 // checks hold keys of rows only, so without a search, all of them show.
 func (t *DataGridViewWidget[T, K]) checkedCount() (count, total int) {
-	ks := &t.checked.shown
-	if t.filter == nil {
-		return ks.Len(), t.view.Len()
-	}
-	for k := range ks.All() {
-		if i, ok := t.src.index[k]; ok && t.filter(&t.src.rows[i]) {
-			count++
-		}
-	}
-	return count, t.view.Len()
+	return t.shownCount(&t.checked.shown), t.view.Len()
 }
 
 // commit takes what the user changed in s: only the keys ui changed,

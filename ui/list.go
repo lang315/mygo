@@ -230,6 +230,13 @@ type ListState struct {
 	// Windows) or the Edit menu's Copy while the Table has the keyboard
 	// focus. A text being edited in a row copies its own instead.
 	Copy func(rows []int) string
+	// RowHeight, when above 0, makes each row of a Table that many DIPs
+	// tall, whatever its cells hold, which clip; 0 keeps the theme's least
+	// height, which a taller cell grows.
+	RowHeight float32
+	// GridLines draws a line under each row of a Table and at the end of
+	// each of its cells.
+	GridLines bool
 	// RoundRows rounds the corners of a Table's chosen and hovered rows at
 	// the theme's Radius, as a List's are, rather than leaving them square
 	// from edge to edge.

@@ -154,6 +154,13 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// images, when a ListView shows the first column's image from an image
 	// list, is that list: its generation is part of the version of each row.
 	images *ImageListWidget
+	// rowHeight and grid are SetRowHeight's and SetGridLines'; searchBox holds
+	// the panel's search; shownN are its counts under a search.
+	rowHeight float32
+	grid      bool
+	searchBox *BoxWidget
+	shownN    shownCounts
+
 	// follow is FollowEnd, and toEnd a ScrollToEnd to make at the next build;
 	// the list is ui's, on the main thread, so the setters keep them here.
 	follow, toEnd bool
@@ -259,6 +266,20 @@ func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
 // "#", sorts by it, as Sort("#", descending) does.
 func (t *DataGridViewWidget[T, K]) IndexColumnBySource() *DataGridViewWidget[T, K] {
 	t.change(func() { t.numbered, t.bySource = true, true; t.columns = t.uiColumns(); t.look++ })
+	return t
+}
+
+// SetRowHeight makes every row h DIPs tall, its cells clipped; 0, the
+// default, keeps the theme's least height, which a taller cell grows.
+func (t *DataGridViewWidget[T, K]) SetRowHeight(h float32) *DataGridViewWidget[T, K] {
+	t.change(func() { t.rowHeight = h })
+	return t
+}
+
+// SetGridLines draws a line under each row and between the cells, or not,
+// as by default.
+func (t *DataGridViewWidget[T, K]) SetGridLines(on bool) *DataGridViewWidget[T, K] {
+	t.change(func() { t.grid = on })
 	return t
 }
 
@@ -649,6 +670,7 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.handOver()
 	s.FollowEnd = t.follow
+	s.RowHeight, s.GridLines = t.rowHeight, t.grid
 	if t.toEnd && !c.Measuring() { // the request is for the real window
 		t.toEnd = false
 		s.ScrollToEnd()

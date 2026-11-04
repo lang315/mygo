@@ -251,6 +251,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				box.Justify(End)
 			}
 			box.Children(func() { fill(j) })
+			if s.GridLines && role == RoleCell {
+				box.BorderEndWidth(1).BorderColor(t.Border)
+			}
 			if menu := s.CellMenu; menu != nil && role == RoleCell && c.row != nil {
 				row := c.row.i
 				box.ContextMenu(func(m *Menu) { menu(m, row, j) })
@@ -365,6 +368,12 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, slo, shi, scur, checkW, s), drag.fit != ""
 		buildList(c, list, table, s, n, func(i int) {
 			row := coreRow(c).MinHeight(tableRow).AlignItems(Stretch)
+			if s.RowHeight > 0 {
+				row.Height(s.RowHeight).MinHeight(0)
+			}
+			if s.GridLines {
+				row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+			}
 			// The list's element holding the row is the row.
 			row.Role(RoleNone)
 			if s.Header != nil && s.Header(i) {
@@ -716,7 +725,8 @@ func tableRowStyle(row *node) {
 // rowSignature hashes what a Table's rows are built with besides their own
 // data, which a list that keeps rows compares (ListState.RowVersion versions
 // the data): the columns in the order shown, how wide each is, how its text
-// aligns, the block of cells chosen, whether the rows have check boxes.
+// aligns, the block of cells chosen, whether the rows have check boxes, their
+// height and grid lines.
 func rowSignature(columns []TableColumn, order []int, layout *TableLayout, lo, hi, cur int, checkW float32, s *ListState) uint64 {
 	h := uint64(14695981039346656037)
 	mix := func(v uint64) { h = (h ^ v) * 1099511628211 }
@@ -745,6 +755,10 @@ func rowSignature(columns []TableColumn, order []int, layout *TableLayout, lo, h
 	if s.RoundRows {
 		mix(4)
 	}
+	if s.GridLines {
+		mix(5)
+	}
+	mix(uint64(math.Float32bits(s.RowHeight)))
 	return h
 }
 
