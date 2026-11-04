@@ -7,6 +7,7 @@ import (
 	"weak"
 
 	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/internal/keyhold"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/scene"
 	"github.com/egoist/mygo/internal/text"
@@ -450,11 +451,11 @@ type engine struct {
 	// the frame being built gave no shortcut, or gave one the view no
 	// longer asks for (routeKeys, settleKeys).
 	keys, retried []keyEvent
-	// holdKeys is set once a menu bar's key (KeyMenuBar, or F10 where a
-	// shortcut asks for KeyMenuBar) was taken: the key events after it,
-	// heldKeys, wait for the frame that answers it (replayKeys).
-	holdKeys bool
-	heldKeys []platform.SurfaceEvent
+	// hold holds the key events after a menu bar's key (KeyMenuBar, or F10
+	// a shortcut answers) until the frame that answers it (event, endFrame),
+	// and F10's repeats; nil in an app without a widget.MenuBar, which does
+	// not link the holding.
+	hold     keyhold.Holder
 	unrouted []shortcutReg
 	menu     menuState
 	// windowFocused tells that the window has the keyboard focus, which
@@ -714,7 +715,6 @@ func (rt *engine) runFrame() {
 		return
 	}
 	rt.inFrame = true
-	defer rt.replayKeys() // after endFrame, with the frame done
 	defer rt.endFrame()
 
 	rt.frame++
@@ -1409,6 +1409,15 @@ func (rt *engine) endFrame() {
 	rt.inFrame = false
 	if rt.closing {
 		rt.close()
+	} else if holdsMenuKeys {
+		if rt.hold != nil {
+			// The keys typed ahead of the frame a menu bar's key asked for,
+			// to the bar, which has the keyboard now: that frame was built,
+			// as the first after input always is.
+			rt.hold.Release()
+		} else if keyhold.New != nil {
+			rt.hold = keyhold.New(rt.event) // a widget.MenuBar enabled holding: from the first frame, before any key
+		}
 	}
 }
 

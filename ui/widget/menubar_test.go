@@ -683,6 +683,9 @@ func TestMenuBarKeyClosesAMenuOpenedOutsideTheMode(t *testing.T) {
 // frame between them, as on Windows) choose the item: the letter and Enter
 // wait for the frame that takes the keyboard to the bar.
 func TestMenuBarModeTakesKeysTypedAhead(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("no holding of menu bar keys on macOS, where a MenuBar has no keyboard mode")
+	}
 	withMac(t, false)
 	a := barMode(t)
 	a.tt.KeysAtOnce(ui.KeyMenuBar, ui.KeyF, ui.KeyEnter)

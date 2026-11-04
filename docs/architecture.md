@@ -1406,10 +1406,14 @@ build` like mygo-runtime and released with the same version.
     (`keyDownPhysical`), never to a handler of keys. The window menu's
     loop starts only if the view did not take it: `widget.MenuBar`'s form
     asks for both, and ui reports F10 taken as it does an Alt+key
-    (`swallowAltShortcuts`). A view asking for `KeyMenuBar` has a menu bar:
-    there F10's repeats answer no shortcut, and the key events after either
-    key wait for the frame that answers it (`holdKeys`, `replayKeys`), as
-    keys typed ahead reach native menus.
+    (`swallowAltShortcuts`). In an app that makes a `widget.MenuBar`, which
+    enables `internal/keyhold` (its `New`, nil otherwise, so other apps link
+    none of it), the key events after either key wait for the frame that
+    answers it, and F10's repeats are dropped: `engine.event` hands each
+    event to the window's `keyhold.Holder` first, `endFrame` makes it and
+    releases what it held, as keys typed ahead reach native menus; a blur
+    or `SurfaceShown` drops them. Not on macOS (`holdsMenuKeys`), where a
+    MenuBar has no keyboard mode.
   - *Threads.* A goroutine reads the program's output and writes it to the
     emulator under the terminal's lock, then asks the view for a frame;
     another writes what is typed, from a queue, so that a program that does

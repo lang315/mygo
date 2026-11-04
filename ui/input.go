@@ -12,14 +12,8 @@ import (
 // an element takes files dragged over or dropped at the event's position,
 // the key pressed or the composition (platform.WindowHandler.SurfaceEvent).
 func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
-	if rt.holdKeys {
-		switch ev.Kind {
-		case platform.KeyPressed, platform.KeyReleased, platform.TextInput, platform.TextComposition, platform.SurfaceCommand:
-			// Typed ahead of the frame a menu bar's key asked for: they go
-			// to the menu bar once it has the keyboard (replayKeys).
-			rt.heldKeys = append(rt.heldKeys, ev)
-			return true
-		}
+	if holdsMenuKeys && rt.hold != nil && rt.hold.Hold(ev) {
+		return true // typed ahead of the frame a menu bar's key asked for, or F10 held
 	}
 	if ev.Kind == platform.SurfaceCommandEnabled {
 		// A menu asking about its item changes nothing.
@@ -806,15 +800,14 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	if key == KeyMenuBar {
 		// Alt alone, as Windows' backend hands it over: a shortcut asking
 		// for it gets it, and no handler of keys, which would take it for a
-		// key typed; it is taken only when a shortcut answers it, and the
-		// keys after it wait for the frame that answers it.
-		if !rt.answers(k) {
+		// key typed; it is taken only when a shortcut answers it. The frame
+		// it asks for, taken or not, sends the keys a MenuBar holds after it
+		// (keyhold).
+		if !rt.claimed(k) {
+			rt.requestFrame()
 			return false
 		}
-		rt.keys = append(rt.keys, k)
-		rt.requestFrame()
-		rt.holdKeys = true
-		return true
+		goto queue
 	}
 	if key == KeyEscape && mods == 0 && rt.dragCancelLinked() {
 		return true
@@ -894,49 +887,26 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	if !rt.claimed(k) && rt.scrollKey(mods, key) {
 		return false
 	}
-	// Windows opens its menu mode (and beeps) for an Alt+key the window did
-	// not take, and for F10: one a shortcut of the view answers is taken.
-	menuKey := swallowAltShortcuts && (mods&Alt != 0 && mods&^(Alt|Shift) == 0 || k == keyEvent{0, KeyF10})
-	if k == (keyEvent{0, KeyF10}) && rt.answers(keyEvent{0, KeyMenuBar}) {
-		// The key of a menu bar (a shortcut asks for KeyMenuBar): held, it
-		// would take the bar in and out of its keyboard mode, so its repeats
-		// answer nothing but are taken as the press was; pressed, the keys
-		// after it wait for the frame that answers it.
-		if repeat {
-			return menuKey && rt.answers(k)
-		}
-		rt.holdKeys = rt.answers(k)
-	}
+queue:
 	rt.keys = append(rt.keys, k)
 	rt.requestFrame()
-	return menuKey && rt.answers(k)
+	if key == KeyMenuBar {
+		return true
+	}
+	if swallowAltShortcuts && (mods&Alt != 0 && mods&^(Alt|Shift) == 0 || k == keyEvent{0, KeyF10}) {
+		// Windows opens its menu mode (and beeps) for an Alt+key the window did
+		// not take, and for F10: one a shortcut of the view answers is taken.
+		_, found := routeKey(rt.regs, rt.focusChain(), k)
+		return found
+	}
+	return false
 }
 
-// answers reports whether a shortcut of the view answers k, around the
-// focus or the window's.
-func (rt *engine) answers(k keyEvent) bool {
-	_, found := routeKey(rt.regs, rt.focusChain(), k)
-	return found
-}
-
-// replayKeys hands over, once a frame is built, the keys held while the
-// frame a menu bar's key asked for was to come (holdKeys): the bar has the
-// keyboard by then, as native menus take the keys typed ahead.
-func (rt *engine) replayKeys() {
-	if !rt.holdKeys {
-		return
-	}
-	rt.holdKeys = false
-	held := rt.heldKeys
-	rt.heldKeys = nil
-	for i, ev := range held {
-		if rt.holdKeys {
-			rt.heldKeys = append(rt.heldKeys, held[i:]...) // a menu bar's key again
-			return
-		}
-		rt.event(ev)
-	}
-}
+// holdsMenuKeys is whether the key events typed after a menu bar's key are
+// held for the frame that answers it (keyhold, which widget.MenuBar
+// enables): not on macOS, where a MenuBar has no keyboard mode, so that its
+// apps link nothing of it.
+const holdsMenuKeys = runtime.GOOS != "darwin"
 
 // swallowAltShortcuts is whether a key with Alt, or F10, that a shortcut
 // answers is reported as taken, so that Windows does not take it for a menu

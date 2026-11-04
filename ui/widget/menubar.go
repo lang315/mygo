@@ -3,6 +3,7 @@ package widget
 import (
 	"slices"
 
+	"github.com/egoist/mygo/internal/keyhold"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -55,6 +56,7 @@ type barKey struct {
 func MenuBar(menus ...MenuItem) *MenuBarWidget {
 	b := &MenuBarWidget{menus: menus, first: -1, hot: -1, mode: -1}
 	b.init(b)
+	keyhold.Enable() // the keys typed after Alt alone or F10 reach the bar
 	return b
 }
 

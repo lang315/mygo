@@ -72,9 +72,11 @@ f.Shortcut(ui.Ctrl, ui.KeyO, openFile) // the shortcut an item shows answers not
   gets: no control sees a key, as a terminal would send F10 to its program.
   Keys typed right after Alt alone or F10, before the window draws again,
   wait for the bar to take the keyboard, so Alt, F, Enter typed at once
-  choose File's first item. In a form with a `MenuBar`, F10 held takes the
-  bar to its mode once; elsewhere a `Shortcut` of F10 answers each repeat
-  as before.
+  choose File's first item; they are dropped if the window goes inactive
+  or out of sight first, as the mode then ends. In an app with a
+  `MenuBar`, F10 held takes the bar to its mode once; in other apps a
+  `Shortcut` of F10 answers each repeat as before. Both are on Windows and
+  Linux, linked only into apps that make a `MenuBar` (`internal/keyhold`).
 - Assistive technology sees a menu bar of menu items, each expanded while
   its menu shows, and the menus as menus of menu items and check box items.
 
