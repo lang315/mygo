@@ -155,3 +155,46 @@ func TestTablePanelCountFollowsRowsChangedUnderASearch(t *testing.T) {
 		})
 	}
 }
+
+// inkIn counts the dark pixels inside r, inset past its border: the text the
+// control draws.
+func inkIn(tt *ui.Tester, r ui.Rect) (n int) {
+	img := tt.Image()
+	scale := float32(img.Rect.Dx()) / 800 // tester's window is 800 wide
+	for y := int((r.Y + 4) * scale); y < int((r.Y+r.H-4)*scale); y++ {
+		for x := int((r.X + 4) * scale); x < int((r.X+r.W-4)*scale); x++ {
+			c := img.RGBAAt(x, y)
+			if int(c.R)+int(c.G)+int(c.B) < 3*128 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// ApplyPanel's text size reaches the search's controls, not only the counts:
+// each draws its text with more ink.
+func TestTablePanelTextSizeReachesTheSearch(t *testing.T) {
+	tb := testTable(acct{1, "ann", 10}).BottomPanel()
+	tt := tester(t, tb)
+	tb.Search("Name", "kw")
+	tt.Frame()
+	type part struct {
+		role  ui.Role
+		label string
+	}
+	parts := []part{{ui.RolePopUpButton, ""}, {ui.RoleTextField, ""}, {ui.RoleButton, "Search"}}
+	before := make([]int, len(parts))
+	for i, p := range parts {
+		before[i] = inkIn(tt, boundsOf(t, tt, p.role, p.label))
+	}
+	tb.ApplyPanel(Style{}.TextSize(XL))
+	tt.Frame()
+	for i, p := range parts {
+		after := inkIn(tt, boundsOf(t, tt, p.role, p.label))
+		t.Logf("%v %q: ink %d, was %d", p.role, p.label, after, before[i])
+		if before[i] == 0 || after*10 < before[i]*12 {
+			t.Errorf("%v %q: ink %d with TextSize(XL), was %d", p.role, p.label, after, before[i])
+		}
+	}
+}
