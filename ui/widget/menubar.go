@@ -18,6 +18,14 @@ type MenuBarWidget struct {
 	// its access key or the arrows ask, -1 for none; hot is the title the
 	// pointer was on in the last build, -1 for none.
 	first, hot int
+	// mode is the title that has the keyboard focus while F10 (or Alt alone
+	// on Windows) put the bar in its keyboard mode, -1 outside it; focus is
+	// set while the title is to take the focus in the next build, inMenu
+	// once a menu opened in the mode, and back is the control that had the
+	// focus before, to give it back.
+	mode          int
+	focus, inMenu bool
+	back          Control
 }
 
 // barKey is the access key of a menu bar's title, which opens its menu.
@@ -35,10 +43,14 @@ type barKey struct {
 // the letter after "&" open a menu on its first item, before the
 // controls' access keys, and the letters are underlined while Alt is held,
 // except on macOS, where access keys are off (see mnemonics). Escape
-// closes the menu, and the focus goes back to where it was. Assistive
-// technology sees a menu bar of menu items, and the menus as menus.
+// closes the menu, and the focus goes back to where it was. F10, and on
+// Windows Alt alone, take the keyboard to the first bar of a form that has
+// no bar of the system's, as the system's bar: its first title takes the
+// focus, the arrows go along the bar, a letter or Down opens a menu, and
+// Escape, F10 or Alt alone leave. Assistive technology sees a menu bar of
+// menu items, and the menus as menus.
 func MenuBar(menus ...MenuItem) *MenuBarWidget {
-	b := &MenuBarWidget{menus: menus, first: -1, hot: -1}
+	b := &MenuBarWidget{menus: menus, first: -1, hot: -1, mode: -1}
 	b.init(b)
 	return b
 }
@@ -46,7 +58,10 @@ func MenuBar(menus ...MenuItem) *MenuBarWidget {
 // SetMenus sets the menus of the bar; set them again when their items
 // change.
 func (b *MenuBarWidget) SetMenus(menus ...MenuItem) *MenuBarWidget {
-	b.change(func() { b.menus, b.open, b.first = menus, nil, -1 })
+	b.change(func() {
+		b.menus, b.open, b.first = menus, nil, -1
+		b.leaveMode(false)
+	})
 	return b
 }
 
@@ -70,13 +85,68 @@ func (b *MenuBarWidget) next(i, d int) int {
 	return i
 }
 
+// enterMode puts the bar in its keyboard mode, its first title that opens
+// a menu taking the focus from back, the control that has it. Under mu.
+func (b *MenuBarWidget) enterMode(back Control) {
+	for i := range b.menus {
+		if b.opens(i) {
+			b.mode, b.focus, b.inMenu, b.back = i, true, false, back
+			return
+		}
+	}
+}
+
+// leaveMode ends the keyboard mode, giving the focus back to the control
+// that had it when restore is set. Under mu.
+func (b *MenuBarWidget) leaveMode(restore bool) {
+	if restore && b.mode >= 0 && b.back != nil {
+		focusLater(b.back)
+	}
+	b.mode, b.focus, b.inMenu, b.back = -1, false, false, nil
+}
+
+// modeKeys answers the keys of the keyboard mode while title i has the
+// focus: the arrows along the bar, a menu's letter, Down, Up, Enter and
+// Space to open it, and Escape and F10 (Alt alone on Windows) to leave.
+func (b *MenuBarWidget) modeKeys(title ui.Element, i int) {
+	switch {
+	case title.Shortcut(0, ui.KeyLeft):
+		b.mode, b.focus = b.next(i, -1), true
+	case title.Shortcut(0, ui.KeyRight):
+		b.mode, b.focus = b.next(i, 1), true
+	case title.Shortcut(0, ui.KeyDown), title.Shortcut(0, ui.KeyUp), title.Shortcut(0, ui.KeyEnter), title.Shortcut(0, ui.KeySpace):
+		b.first = i
+	case title.Shortcut(0, ui.KeyEscape), title.Shortcut(0, ui.KeyF10):
+		b.leaveMode(true)
+	}
+	for j, it := range b.menus {
+		if _, key, _ := parseMnemonic(it.Text); key != 0 && b.opens(j) {
+			if k, ok := mnemonicKey(key); ok && title.Shortcut(0, k) {
+				b.first = j
+			}
+		}
+	}
+}
+
 func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
 	if len(b.open) != len(b.menus) {
 		b.open = make([]bool, len(b.menus))
 	}
+	if buildingForm == nil || macMenus {
+		b.mode = -1 // no mode outside a form, nor on macOS, as access keys
+	} else if buildingForm.menuBar == nil {
+		buildingForm.menuBar = b // the form's F10 (answerMnemonics)
+	}
 	was := slices.Index(b.open, true)
-	alt := !macMenus && buildingForm != nil && c.Modifiers()&ui.Alt != 0
+	switch {
+	case b.mode < 0:
+	case was >= 0 || b.first >= 0:
+		b.inMenu = true
+	case b.inMenu:
+		b.leaveMode(true) // the menu opened in the mode closed
+	}
+	alt := !macMenus && buildingForm != nil && (c.Modifiers()&ui.Alt != 0 || b.mode >= 0)
 	hot := -1
 	bar := ui.Row(c).Role(ui.RoleMenuBar).Padding(t.Space(0.5), t.Space(1))
 	bar.Children(func() {
@@ -89,8 +159,21 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 				Padding(t.Space(1), t.Space(2.5)).Radius(t.Radius).Disabled(!b.opens(i))
 			if !b.opens(i) {
 				title.TextColor(t.TextMuted)
-			} else if b.open[i] || title.Hovered() {
+			} else if b.open[i] || title.Hovered() || b.mode == i {
 				title.Background(t.SurfaceHover)
+			}
+			if b.mode == i && b.opens(i) {
+				title.Focusable()
+				switch {
+				case b.focus:
+					b.focus = false
+					title.Focus()
+					b.modeKeys(title, i) // asked for from now: the keys of the next frame are its
+				case !b.inMenu && !title.Focused():
+					b.leaveMode(false) // the focus went elsewhere
+				default:
+					b.modeKeys(title, i)
+				}
 			}
 			title.Children(func() {
 				if alt && key != 0 {

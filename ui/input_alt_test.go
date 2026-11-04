@@ -28,3 +28,31 @@ func TestAltShortcutsAreTakenWhereTheSystemWouldTakeThemForMenus(t *testing.T) {
 		t.Error("taken where the rule is off")
 	}
 }
+
+// F10, which Windows takes to its menu mode as it does Alt alone (which the
+// backend hands the view as F10), is taken when a shortcut answers it, and
+// left to the system otherwise.
+func TestF10IsTakenWhereAShortcutAnswersIt(t *testing.T) {
+	old := swallowAltShortcuts
+	swallowAltShortcuts = true
+	defer func() { swallowAltShortcuts = old }()
+	bar := false
+	tt := NewTester(func(c *Context) {
+		if bar {
+			c.Shortcut(0, KeyF10)
+		}
+	}, 200, 100)
+	defer tt.rt.close()
+	tt.Frame()
+	if tt.rt.keyDown(0, KeyF10, false) {
+		t.Error("F10, which nothing answers, was taken")
+	}
+	bar = true
+	tt.Frame()
+	if !tt.rt.keyDown(0, KeyF10, false) {
+		t.Error("F10, which a shortcut answers, was left to the system")
+	}
+	if tt.rt.keyDown(Shift, KeyF10, false) {
+		t.Error("Shift+F10, the context menu's key, was taken by this rule")
+	}
+}

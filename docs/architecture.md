@@ -1398,7 +1398,12 @@ build` like mygo-runtime and released with the same version.
     login shell (`-zsh`), when the first frame of a view sizes the screen
     (or after half a second without one), so that it starts at its size.
     A key the view takes tells Windows' backend to open no menu for the
-    `WM_SYSCHAR` of Alt and the key.
+    `WM_SYSCHAR` of Alt and the key. In a window without a bar of Win32's,
+    the `SC_KEYMENU` of Alt alone or F10 (no letter) goes to native UI as
+    F10 (`window.contentMenuKey`; F10 itself it saw going down), and the
+    window menu's loop starts only if the view did not take it:
+    `widget.MenuBar`'s form asks for F10, and ui reports F10 taken as it
+    does an Alt+key (`swallowAltShortcuts`).
   - *Threads.* A goroutine reads the program's output and writes it to the
     emulator under the terminal's lock, then asks the view for a frame;
     another writes what is typed, from a queue, so that a program that does

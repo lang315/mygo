@@ -125,6 +125,12 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 	defer func() { w.built = w.built[:0] }()
 	done := map[rune]bool{}
 	menuKeys := w.menuBarKeys() // the menu bar's access keys beat the controls'
+	if b := w.menuBar; b != nil && b.mode < 0 && w.menu == nil && w.strip == nil && c.Shortcut(0, ui.KeyF10) {
+		// F10, or Alt alone, which Windows hands the content as F10: the
+		// keyboard goes to the bar. Asked for only with a bar, and none of
+		// the system's, so that without one the system has the key.
+		b.enterMode(w.focusedControl())
+	}
 	for _, b := range w.barKeys {
 		if done[b.key] {
 			continue // two titles of one key: the first opens
@@ -247,6 +253,18 @@ func (w *Form) menuBarKeys() map[rune]bool {
 		}
 	}
 	return keys
+}
+
+// focusedControl returns the control the form built that has the focus, or
+// holds the element that has it, the innermost; nil for none. Under mu, at
+// the end of a build.
+func (w *Form) focusedControl() Control {
+	for _, b := range w.built {
+		if b.el.FocusWithin() {
+			return b.ctrl
+		}
+	}
+	return nil
 }
 
 // builtEl is a control a form built, and its element, valid until the build

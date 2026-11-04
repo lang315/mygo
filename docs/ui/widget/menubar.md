@@ -52,6 +52,18 @@ f.Shortcut(ui.Ctrl, ui.KeyO, openFile) // the shortcut an item shows answers not
   The `&` of an item is taken out of its text; the letter does not choose
   the item, but typing the first letters of an item goes to it. Access keys
   answer only in a form, as every [mnemonic](mnemonics.md).
+- **The bar's keyboard mode.** F10, and on Windows Alt pressed and let go
+  alone, take the keyboard to the bar, as in the system's: the first title
+  that opens a menu takes the focus, and the letters are underlined. Left
+  and Right go along the bar; a title's letter, without Alt, opens its menu,
+  as do Down, Up, Enter and Space. Escape, F10 or Alt alone again leave the
+  mode, and the focus goes back to the control that had it; so does a
+  menu opened in the mode as it closes, chosen or not (Windows goes back
+  to the bar on Escape). A click elsewhere leaves the mode too. The first
+  `MenuBar` of a form answers; only a form with one asks for F10, so
+  without one Windows has F10 and Alt alone as before (the window menu).
+  A form that also has a bar of the system's (`SetMenuBar`, `MenuStrip`)
+  leaves them to that bar. Not in `widget.View`, nor on macOS.
 - Assistive technology sees a menu bar of menu items, each expanded while
   its menu shows, and the menus as menus of menu items and check box items.
 
@@ -63,7 +75,7 @@ the header:
 
 | | `MenuBar` | `SetMenuBar`, `MenuStrip` |
 |---|---|---|
-| Windows | Where the content puts it. Alt+letter opens its menu, and the system does not beep or enter its own menu mode. | No bar: a window without a caption has no room for Win32's. Alt and F10 open its menus in a popup below the title bar. |
+| Windows | Where the content puts it. Alt+letter opens its menu, and Alt alone or F10 take the keyboard to it; the system does not beep or enter its own menu mode. | No bar: a window without a caption has no room for Win32's. Alt and F10 open its menus in a popup below the title bar. |
 | Linux | Where the content puts it. | GTK's bar, at the top of the window, above the HeaderBar. |
 | macOS | Where the content puts it, without access keys: Option types characters there. | The app's menu bar at the top of the screen (`MenuStrip`; `SetMenuBar` is not used there). |
 
@@ -75,9 +87,6 @@ too.
 
 ## Not yet
 
-- Alt alone, and F10, which on Windows take the keyboard to the menu bar.
-  On Windows they still go to the system, as in a window without a menu
-  bar.
 - An item's letter choosing it while its menu shows.
 - `MenuStripItem`'s live setters: set the menus again instead.
 - Drawn by `ui`, the menus do not leave the window: a menu longer than the
