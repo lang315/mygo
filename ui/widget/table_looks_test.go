@@ -47,10 +47,10 @@ func noVerbErrors(t *testing.T, tt *ui.Tester) {
 
 func TestTablePanelTextWithoutACount(t *testing.T) {
 	tb := testTable(acct{1, "ann", 10}).CheckboxColumn().BottomPanel().
-		PanelText(PanelText{Rows: "%d rows", Selected: "Selected: %d", Checked: "Ticked", Search: "Go"})
+		PanelText(PanelText{Rows: "%d rows", Selected: "%d%% of them", Checked: "Ticked 100%%", Search: "Go"})
 	tt := tester(t, tb)
 	noVerbErrors(t, tt)
-	if !tt.HasText("Ticked") || !tt.HasText("1 rows") {
+	if !tt.HasText("Ticked 100%") || !tt.HasText("1 rows") || !tt.HasText("0% of them") {
 		t.Fatalf("panel: %q", tt.Texts())
 	}
 }
@@ -119,5 +119,39 @@ func TestTableRowHeightAndGridLines(t *testing.T) {
 	tt.Frame()
 	if slices.Equal(plain, tt.Image().Pix) {
 		t.Fatal("grid lines draw nothing")
+	}
+}
+
+// Under a search, the panel's count follows rows that changed in the source
+// while the view shows the same places.
+func TestTablePanelCountFollowsRowsChangedUnderASearch(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		rows []acct
+		act  func(tb *DataGridViewWidget[acct, int])
+	}{
+		{"SetRows", []acct{{1, "xa", 1}, {2, "yb", 2}}, func(tb *DataGridViewWidget[acct, int]) {
+			tb.SetRows([]acct{{2, "xb", 2}, {1, "ya", 1}})
+		}},
+		{"InsertRows and UpdateRow", []acct{{1, "xa", 1}}, func(tb *DataGridViewWidget[acct, int]) {
+			tb.InsertRows(0, acct{2, "xb", 2})
+			tb.UpdateRow(1, func(a *acct) { a.name = "ya" })
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			tb := testTable(c.rows...).BottomPanel()
+			tt := tester(t, tb)
+			click(t, tt, "xa")
+			tb.Search("Name", "x")
+			settleTable(tt)
+			if !tt.HasText("Selected: 1") {
+				t.Fatalf("before: %q", tt.Texts())
+			}
+			c.act(tb)
+			settleTable(tt)
+			if n := tb.CountSelected(); n != 0 || !tt.HasText("Selected: 0") {
+				t.Fatalf("CountSelected %d, panel %q", n, tt.Texts())
+			}
+		})
 	}
 }

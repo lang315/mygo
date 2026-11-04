@@ -664,8 +664,8 @@ lock: they read the row and call no widget method.
   selected and checked (what `Selected`, `CountSelected` and `Checked`
   return: a search hides the rows it leaves out, selected or not), and a
   search over the `Filterable` columns. `PanelText` sets its words (English
-  by default): a format without `%` shows as it is, and an empty one hides
-  its count. `SetSearchPlaceholder` sets its keyword's placeholder, and
+  by default): a format without `%` shows as it is, an empty one hides its
+  count, and a `%` shown is written `%%` (`"%d%% done"`). `SetSearchPlaceholder` sets its keyword's placeholder, and
   `OnBeforeSearch(fn)` runs before a search from it. `Search(column,
   keyword)` searches from code. The filter runs once per search.
   `ApplyPanel(styles...)` styles the panel (its `Background`, and a

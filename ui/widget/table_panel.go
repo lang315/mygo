@@ -11,8 +11,9 @@ import (
 )
 
 // PanelText holds the words of a table's bottom panel: the formats of its
-// counts, each with one %d (a text without % shows as it is, and an empty
-// one hides its count), and the text of its search button.
+// counts, each with one %d (a text without % shows as it is, an empty one
+// hides its count, and a % shown is written %%), and the text of its search
+// button.
 type PanelText struct {
 	Rows, Selected, Checked string
 	Search                  string
@@ -83,7 +84,7 @@ func (t *DataGridViewWidget[T, K]) SetSearchWidth(w float32) *DataGridViewWidget
 
 // JoinSearch, when on, draws the panel's column, keyword and search button
 // as one control: side by side, with no room and no rounded corners between
-// them. Call it after BottomPanel.
+// them; off, as by default, undoes it. Call it after BottomPanel.
 func (t *DataGridViewWidget[T, K]) JoinSearch(on bool) *DataGridViewWidget[T, K] {
 	mu.Lock()
 	box, column, keyword, button := t.searchBox, t.column, t.keyword, t.searchButton
@@ -97,6 +98,8 @@ func (t *DataGridViewWidget[T, K]) JoinSearch(on bool) *DataGridViewWidget[T, K]
 			box.spacing = 0
 		}
 	})
+	// The three are the panel's own, styled by nothing else: Apply() undoes
+	// what JoinSearch(true) applied, and only that.
 	if on {
 		column.Apply(Style{}.RadiusTopRight(0).RadiusBottomRight(0))
 		keyword.Apply(Style{}.Radius(0))
@@ -239,32 +242,34 @@ func (t *DataGridViewWidget[T, K]) counts() {
 	t.checkedLabel.hidden = !t.checks || t.textSet && t.text.Checked == ""
 }
 
-// countText is a count of n in format, a text without % as it is.
+// countText is a count of n in format; a format with no verb, but %% at
+// most, is a text, with %% for %.
 func countText(format string, n int) string {
-	if !strings.Contains(format, "%") {
-		return format
+	if !strings.Contains(strings.ReplaceAll(format, "%%", ""), "%") {
+		return strings.ReplaceAll(format, "%%", "%")
 	}
 	return fmt.Sprintf(format, n)
 }
 
 // shownCounts are the counts of the rows selected and checked that a search
-// shows, as of a version of the view and of the keys.
+// shows, as of a version of the view, a change of the source (which may put
+// other rows in the places the view shows) and a version of the keys.
 type shownCounts struct {
-	ok                bool
-	version, sel, chk uint64
-	selected, checked int
+	ok                     bool
+	version, seq, sel, chk uint64
+	selected, checked      int
 }
 
 // panelCounts returns how many rows shown are selected and checked. Under a
-// search it counts them only when the view or the keys changed: counts runs
-// in every frame. Under mu, while building.
+// search it counts them only when the view, the source or the keys changed:
+// counts runs in every frame. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) panelCounts() (selected, checked int) {
 	if t.filter == nil {
 		return t.chosen.value.Len(), t.checked.value.Len()
 	}
 	c := &t.shownN
-	if !c.ok || c.version != t.view.Version() || c.sel != t.chosen.gen || c.chk != t.checked.gen {
-		*c = shownCounts{true, t.view.Version(), t.chosen.gen, t.checked.gen,
+	if !c.ok || c.version != t.view.Version() || c.seq != t.src.seq || c.sel != t.chosen.gen || c.chk != t.checked.gen {
+		*c = shownCounts{true, t.view.Version(), t.src.seq, t.chosen.gen, t.checked.gen,
 			t.shownCount(&t.chosen.value), t.shownCount(&t.checked.value)}
 	}
 	return c.selected, c.checked
