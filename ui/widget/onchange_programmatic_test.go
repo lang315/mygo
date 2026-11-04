@@ -59,6 +59,12 @@ func TestSettersDoNotRunOnChange(t *testing.T) {
 	add("MaskedTextBox.SetText", mk, func() { mk.SetText("1234") })
 	di := DomainUpDown("a", "b", "c").OnChange(count)
 	add("DomainUpDown.SetSelectedIndex", di, func() { di.SetSelectedIndex(2) })
+	ts := TagSelect(Option{Value: "a", Text: "A"}, Option{Value: "b", Text: "B"}).OnChange(count)
+	add("TagSelect.SetValues", ts, func() { ts.SetValues("b") })
+	mc := MonthCalendar().OnChange(count)
+	add("MonthCalendar.SetValue", mc, func() { mc.SetValue(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)) })
+	tbn := ToolButton("b").SetToggle(true).OnChange(count)
+	add("ToolButton.SetChecked", tbn, func() { tbn.SetChecked(true) })
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			n.Store(0)

@@ -91,13 +91,14 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
   a goroutine of the package, the event goroutine, never on the main
   thread. A handler may block: the window keeps drawing.
 - **`OnChange` is for the user.** A setter (`SetText`, `SetChecked`, `SetOn`,
-  `SetActive`, `SetValue`, `SetValues`, a `ComboBox`'s `Unselect`) does not run the `OnChange` of the control it sets,
+  `SetActive`, `SetValue`, `SetValues`, `SetSelectedIndex`, a `ComboBox`'s
+  `Unselect`) does not run the `OnChange` of the control it sets,
   nor does `Reload` or a binding; only an edit by the user, or by a test
   driving the control as the user does, does. This holds for `TextBox`,
   `MultilineTextBox`, `MaskedTextBox`, `CheckBox`, `Switch`, `Toggle`, `RadioButton`,
   `RadioGroup`, `CheckBoxGroup`, `ComboBox`, `NumericUpDown`, `RangeSpin`,
-  `TrackBar`, `DomainUpDown` and `DateTimePicker` (`TestSettersDoNotRunOnChange`
-  pins it), and
+  `TrackBar`, `DomainUpDown`, `DateTimePicker`, `MonthCalendar`, `TagSelect`
+  and a toggle `ToolButton` (`TestSettersDoNotRunOnChange` pins it), and
   for `TabControl`'s `OnSwitch` after `SetPage`, `InsertPage` and `RemovePage`
   (but a page index the control had to clamp is reported). WinForms and GTK
   differ, as their `TextChanged` and `changed` also run for code: a handler
