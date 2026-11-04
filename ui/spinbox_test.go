@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // A SpinBox edits, steps and names as a NumberInput does.
@@ -226,5 +228,26 @@ func TestNegativeStep(t *testing.T) {
 	}
 	if b != 6 {
 		t.Fatalf("Increase with step -1 took 5 to %v, want 6", b)
+	}
+}
+
+// Assistive technology presses an arrow: one step.
+func TestSpinBoxArrowPressedByAssistiveTechnologyStepsOnce(t *testing.T) {
+	v := 5.0
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Padding(10).AlignItems(Start).Children(func() {
+			coreSpinBox(c, &v, 0, 10, 1).Label("Count")
+		})
+	}, 400, 100)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	up := accessNode(t, tt.h.access, platform.RoleButton, "Count Increase")
+	if up.Actions&platform.ActionPress == 0 {
+		t.Fatalf("the up arrow takes no press: %+v", up)
+	}
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessAction, ID: up.ID, Action: platform.AccessPress})
+	tt.Frame()
+	tt.Frame()
+	if v != 6 {
+		t.Fatalf("pressed by assistive technology: %v, want 6", v)
 	}
 }
