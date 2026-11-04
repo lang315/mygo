@@ -32,6 +32,8 @@ func TestSettersDoNotRunOnChange(t *testing.T) {
 	add("CheckBox.SetChecked", cb, func() { cb.SetChecked(true) })
 	sw := Switch().OnChange(count)
 	add("Switch.SetOn", sw, func() { sw.SetOn(true) })
+	tg := Toggle("t").OnChange(count)
+	add("Toggle.SetActive", tg, func() { tg.SetActive(true) })
 	r1, r2 := RadioButton("a").OnChange(count), RadioButton("b").OnChange(count)
 	add("RadioButton.SetChecked", VBox(2).Add(r1, r2), func() { r2.SetChecked(true) })
 	co := ComboBox(Option{Value: "a", Text: "A"}, Option{Value: "b", Text: "B"}).OnChange(count)
