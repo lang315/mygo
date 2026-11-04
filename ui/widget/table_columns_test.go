@@ -464,3 +464,31 @@ func TestColumnVisibilityDoesNotChangeTheCallersColumns(t *testing.T) {
 		t.Fatalf("the caller's Hidden %v, the other table's A visible %v", cols[0].Hidden, two.ColumnVisible("A"))
 	}
 }
+
+// SetColumnsMovable(false): a header dragged past its neighbor stays; true
+// moves it again.
+func TestColumnsNotMovable(t *testing.T) {
+	tb := threeColumns(3).SetColumnsMovable(false)
+	tt := tester(t, tb)
+	drag := func() {
+		note := find(t, tt, "Note")
+		x, y := note.X+20, note.Y+note.H/2
+		tt.Press(x, y)
+		for _, d := range []float32{-5, -20, -60, -120, -180} {
+			tt.Move(x+d, y)
+		}
+		tt.Release(x-180, y)
+		settleTable(tt)
+	}
+	before := headers(tt)
+	drag()
+	if h := headers(tt); !sameTitles(h, before) {
+		t.Fatalf("a column moved: headers %q, were %q", h, before)
+	}
+	tb.SetColumnsMovable(true)
+	settleTable(tt)
+	drag()
+	if h := headers(tt); sameTitles(h, before) {
+		t.Fatalf("movable again, the column did not move: headers %q", h)
+	}
+}

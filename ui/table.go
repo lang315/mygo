@@ -469,7 +469,7 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 		h.Label(col.Title) // the title alone, not the place number beside it
 	}
 	// Moving the column, once the pointer went a few DIPs.
-	if dx, _, held := h.Dragged(); held && !col.Fixed {
+	if dx, _, held := h.Dragged(); held && !col.Fixed && !s.FixedColumnOrder {
 		if drag.id != id {
 			*drag = tableDrag{id: id}
 		}

@@ -158,6 +158,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// the panel's search; shownN are its counts under a search.
 	rowHeight float32
 	grid      bool
+	fixedCols bool // SetColumnsMovable(false)
 	searchBox *BoxWidget
 	shownN    shownCounts
 
@@ -280,6 +281,14 @@ func (t *DataGridViewWidget[T, K]) SetRowHeight(h float32) *DataGridViewWidget[T
 // as by default.
 func (t *DataGridViewWidget[T, K]) SetGridLines(on bool) *DataGridViewWidget[T, K] {
 	t.change(func() { t.grid = on })
+	return t
+}
+
+// SetColumnsMovable lets the user reorder the columns by dragging their
+// headers, as by default, or not (WinForms' AllowUserToOrderColumns). The
+// user resizes them either way.
+func (t *DataGridViewWidget[T, K]) SetColumnsMovable(on bool) *DataGridViewWidget[T, K] {
+	t.change(func() { t.fixedCols = !on })
 	return t
 }
 
@@ -670,7 +679,7 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.handOver()
 	s.FollowEnd = t.follow
-	s.RowHeight, s.GridLines = t.rowHeight, t.grid
+	s.RowHeight, s.GridLines, s.FixedColumnOrder = t.rowHeight, t.grid, t.fixedCols
 	if t.toEnd && !c.Measuring() { // the request is for the real window
 		t.toEnd = false
 		s.ScrollToEnd()

@@ -42,6 +42,8 @@ rows are, for an app whose other lists are rounded.
 `RowHeight` makes every row that many DIPs tall, its cells clipped (0 keeps
 the theme's least height, which a taller cell grows), and `GridLines` draws a
 line under each row and at the end of each cell, in the theme's `Border`.
+`FixedColumnOrder` keeps the columns in their order: the user still resizes
+them, but does not move them by their headers.
 
 A chosen row's text takes the theme's `AccentText`, which reads on the
 accent; a cell coloring its own text leaves the color out where

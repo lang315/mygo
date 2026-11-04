@@ -113,6 +113,44 @@ func TestTableResize(t *testing.T) {
 	}
 }
 
+// FixedColumnOrder: a header dragged past its neighbor stays where it is;
+// one released on itself is a click, which sorts, as a Fixed column's is;
+// the edge still resizes.
+func TestTableFixedColumnOrder(t *testing.T) {
+	sort := SortOrder{}
+	s := ListState{FixedColumnOrder: true, Sort: &sort}
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100, Sortable: true}, {Title: "Size", Width: 80}}
+	tt := coreNewTester(tableView(&s, cols, []string{"a.txt"}), 500, 300)
+	kind := header(t, tt, "Kind")
+	y := float32(kind.Y + kind.H/2)
+	x := float32(kind.X + 20)
+	drag := func(to float32) {
+		tt.Press(x, y)
+		for _, d := range []float32{5, 20, to} {
+			tt.Move(x+d, y)
+		}
+		tt.Release(x+to, y)
+	}
+	drag(90) // past the middle of Size
+	if got := s.Columns.Order; got != nil {
+		t.Fatalf("the order: %q", got)
+	}
+	if sort.Column != "" {
+		t.Fatalf("a drag released on Size sorted by %q", sort.Column)
+	}
+	drag(30) // released on Kind
+	if s.Columns.Order != nil || sort.Column != "Kind" {
+		t.Fatalf("released on its header: the order %q, sorted by %q", s.Columns.Order, sort.Column)
+	}
+	edge := float32(kind.X+kind.W) - 2
+	tt.Press(edge, y)
+	tt.Move(edge+30, y)
+	tt.Release(edge+30, y)
+	if w := s.Columns.Widths["Kind"]; w != 130 || s.Columns.Order != nil {
+		t.Fatalf("the edge dragged 30 DIPs: width %v, order %q", w, s.Columns.Order)
+	}
+}
+
 func TestTableReorder(t *testing.T) {
 	sort := SortOrder{}
 	s := ListState{Sort: &sort}
