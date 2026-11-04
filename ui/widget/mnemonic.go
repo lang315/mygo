@@ -125,12 +125,7 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 	defer func() { w.built = w.built[:0] }()
 	done := map[rune]bool{}
 	menuKeys := w.menuBarKeys() // the menu bar's access keys beat the controls'
-	if b := w.menuBar; b != nil && b.mode < 0 && w.menu == nil && w.strip == nil && c.Shortcut(0, ui.KeyF10) {
-		// F10, or Alt alone, which Windows hands the content as F10: the
-		// keyboard goes to the bar. Asked for only with a bar, and none of
-		// the system's, so that without one the system has the key.
-		b.enterMode(w.focusedControl())
-	}
+	w.menuBarMode(c)
 	for _, b := range w.barKeys {
 		if done[b.key] {
 			continue // two titles of one key: the first opens
@@ -197,6 +192,49 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 			}
 			focusLater(targets[next].ctrl)
 		}
+	}
+}
+
+// menuBarMode answers F10, and Alt alone (KeyMenuBar), which take the
+// keyboard to the form's MenuBar and back, and ends the bar's keyboard mode
+// when the bar is gone, the window inactive or the focus elsewhere. The
+// keys are asked for only with a MenuBar and no bar of the system's, so
+// that without one the system has them. Under mu, at the end of a build.
+func (w *Form) menuBarMode(c *ui.Context) {
+	if b := w.modeBar; b != nil {
+		if slices.Contains(b.open, true) || b.first >= 0 {
+			b.inMenu = true // opened in this build: the keys of the menu button, its letter
+		}
+		switch {
+		case b != w.menuBar:
+			b.leaveMode(true) // the bar is gone
+		case b.inMenu || b.focus:
+		case !c.WindowActive():
+			b.leaveMode(true)
+		case w.focusedControl() != b:
+			b.leaveMode(false) // a click or Tab took the focus elsewhere: it stays there
+		}
+	}
+	b := w.menuBar
+	if b == nil || w.menu != nil || w.strip != nil {
+		return
+	}
+	pressed := c.Shortcut(0, ui.KeyF10)
+	if c.Shortcut(0, ui.KeyMenuBar) {
+		pressed = true
+	}
+	switch {
+	case !pressed:
+	case b.mode >= 0 || slices.Contains(b.open, true):
+		// Out of the mode, and out of a menu that shows, which the system
+		// would otherwise start its window menu's loop over.
+		for j := range b.open {
+			b.open[j] = false
+		}
+		b.first = -1
+		b.leaveMode(true)
+	default:
+		b.enterMode(w, w.focusedControl())
 	}
 }
 

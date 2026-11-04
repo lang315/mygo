@@ -504,51 +504,166 @@ func TestMenuBarModeLetterOpensItsMenu(t *testing.T) {
 	}
 }
 
-// A click elsewhere leaves the mode with the focus where it went.
+// inMode reports the title the bar's keyboard mode is on, -1 for none.
+func (a *barApp) inMode() int {
+	mu.Lock()
+	defer mu.Unlock()
+	return a.bar.mode
+}
+
+// noTitleFocused reports whether no title of the bar has the focus.
+func (a *barApp) noTitleFocused() bool {
+	for _, n := range a.tt.FindAll(ByRole(ui.RoleMenuItem)) {
+		if n.Focused() {
+			return false
+		}
+	}
+	return true
+}
+
+// Alt alone, which Windows hands the content as KeyMenuBar, takes the
+// keyboard to the bar as F10 does, and leaves it again.
+func TestMenuBarAltAloneTakesTheKeyboardToTheBar(t *testing.T) {
+	withMac(t, false)
+	a := barMode(t)
+	if !a.tt.KeyTaken(0, ui.KeyMenuBar) {
+		t.Fatal("Alt alone was not taken with a menu bar")
+	}
+	a.tt.Settle()
+	if !a.title("File").Focused() || a.inMode() != 0 {
+		t.Fatalf("Alt alone: File focused %v, mode %d", a.title("File").Focused(), a.inMode())
+	}
+	if !a.tt.KeyTaken(0, ui.KeyMenuBar) {
+		t.Error("Alt alone in the mode was not taken")
+	}
+	a.tt.Settle()
+	if a.inMode() >= 0 || !a.boxFocused() {
+		t.Errorf("Alt alone again: mode %d, text box focused %v", a.inMode(), a.boxFocused())
+	}
+}
+
+// A click on another control leaves the mode, with the focus there.
 func TestMenuBarModeLeavesWhenTheFocusGoesElsewhere(t *testing.T) {
 	withMac(t, false)
 	a := barMode(t)
 	a.tt.KeyTaken(0, ui.KeyF10)
 	a.tt.Settle()
-	a.tt.Find(ByRole(ui.RoleTextField)).Click()
+	a.tt.Find(ByRole(ui.RoleButton).Label("File")).Click()
 	a.tt.Key(0, ui.KeyRight)
 	a.tt.Settle()
-	if a.title("Edit").Focused() || !a.boxFocused() {
-		t.Error("the bar kept its mode after the text box took the focus")
+	if a.inMode() >= 0 || !a.noTitleFocused() || a.boxFocused() {
+		t.Errorf("after a click on the button: mode %d, no title focused %v, text box focused %v", a.inMode(), a.noTitleFocused(), a.boxFocused())
 	}
 }
 
-// Without a MenuBar, or on macOS, F10 is not taken: on Windows it goes on
-// to the system, as before.
-func TestF10IsNotTakenWithoutAMenuBar(t *testing.T) {
+// Each way out of the mode takes the focus off the title, which no longer
+// takes it: back to the text box, or nowhere when nothing had it.
+func TestMenuBarModeEndsWithoutLeavingTheFocusOnATitle(t *testing.T) {
+	withMac(t, false)
+	for name, c := range map[string]struct {
+		focusBox bool
+		leave    func(a *barApp)
+	}{
+		"SetMenus": {true, func(a *barApp) {
+			a.bar.SetMenus(MenuItem{Text: "&File", Children: []MenuItem{{Text: "Open"}}})
+		}},
+		"the window inactive and back": {true, func(a *barApp) {
+			a.tt.SetWindowActive(false)
+			a.tt.Settle()
+			a.tt.SetWindowActive(true)
+		}},
+		"the bar hidden":                     {true, func(a *barApp) { a.bar.SetVisible(false) }},
+		"Escape with nothing focused before": {false, func(a *barApp) { a.tt.Key(0, ui.KeyEscape) }},
+	} {
+		a := newBarApp(t)
+		if c.focusBox {
+			a.tt.Find(ByRole(ui.RoleTextField)).Click()
+		}
+		a.tt.KeyTaken(0, ui.KeyF10)
+		a.tt.Settle()
+		if a.inMode() != 0 {
+			t.Fatalf("%s: F10 did not enter the mode", name)
+		}
+		c.leave(a)
+		a.tt.Settle()
+		if a.inMode() >= 0 {
+			t.Errorf("%s: still in the mode", name)
+		}
+		if a.bar.Visible() && !a.noTitleFocused() {
+			t.Errorf("%s: a title kept the focus", name)
+		}
+		if c.focusBox && !a.boxFocused() {
+			t.Errorf("%s: the focus did not go back to the text box", name)
+		}
+	}
+}
+
+// Alt alone or F10 while a menu opened in the mode shows close it and leave
+// the mode, rather than going to the system, which would start the window
+// menu's loop over the menu.
+func TestMenuBarModeKeyClosesAMenuOpenedInIt(t *testing.T) {
+	withMac(t, false)
+	for _, key := range []ui.Key{ui.KeyMenuBar, ui.KeyF10} {
+		a := barMode(t)
+		a.tt.KeyTaken(0, ui.KeyF10)
+		a.tt.Settle()
+		a.tt.Key(0, ui.KeyDown)
+		a.tt.Settle()
+		if !a.shows("Open") {
+			t.Fatalf("Down did not open File: %q", a.tt.Texts())
+		}
+		if !a.tt.KeyTaken(0, key) && (key == ui.KeyMenuBar || runtime.GOOS == "windows") {
+			t.Errorf("key %d with the menu open was not taken", key)
+		}
+		a.tt.Settle()
+		if a.shows("Open") || a.inMode() >= 0 || !a.boxFocused() {
+			t.Errorf("key %d: menu open %v, mode %d, text box focused %v", key, a.shows("Open"), a.inMode(), a.boxFocused())
+		}
+	}
+}
+
+// Right to left, Left goes to the title after.
+func TestMenuBarModeArrowsFollowTheDirection(t *testing.T) {
+	withMac(t, false)
+	a := barMode(t)
+	a.tt.SetDirection(ui.RightToLeft)
+	a.tt.Settle()
+	a.tt.KeyTaken(0, ui.KeyF10)
+	a.tt.Settle()
+	a.tt.Key(0, ui.KeyLeft)
+	a.tt.Settle()
+	if !a.title("Edit").Focused() {
+		t.Error("Left right to left did not go to Edit")
+	}
+}
+
+// Without a MenuBar, with a bar of the system's, or on macOS, the form asks
+// for neither F10 nor Alt alone: on Windows they go on to the system.
+func TestTheMenuKeysAreNotAskedForWithoutAMenuBar(t *testing.T) {
 	withMac(t, false)
 	f := NewForm("plain", 400, 200)
 	f.SetContent(VBox(4).Add(TextBox(), Button("&Save")))
 	tt := TestForm(t, f)
 	tt.Settle()
-	if tt.KeyTaken(0, ui.KeyF10) {
-		t.Error("a form without a menu bar took F10")
+	if tt.KeyTaken(0, ui.KeyMenuBar) {
+		t.Error("a form without a menu bar took Alt alone")
 	}
-	withMac(t, true)
-	a := newBarApp(t)
-	if a.tt.KeyTaken(0, ui.KeyF10) {
-		t.Error("a menu bar took F10 on macOS")
-	}
-}
-
-// A form with a bar of the system's too leaves F10 to it.
-func TestMenuBarLeavesF10ToASystemBar(t *testing.T) {
-	withMac(t, false)
-	f := NewForm("both", 400, 200)
-	f.SetMenuBar(MenuItem{Text: "&Window", Children: []MenuItem{{Text: "Close"}}})
-	f.SetContent(VBox(4).Add(MenuBar(MenuItem{Text: "&File", Children: []MenuItem{{Text: "Open"}}}), TextBox()))
-	tt := TestForm(t, f)
+	both := NewForm("both", 400, 200)
+	both.SetMenuBar(MenuItem{Text: "&Window", Children: []MenuItem{{Text: "Close"}}})
+	both.SetContent(VBox(4).Add(MenuBar(MenuItem{Text: "&File", Children: []MenuItem{{Text: "Open"}}}), TextBox()))
+	tt = TestForm(t, both)
 	tt.Settle()
-	if tt.KeyTaken(0, ui.KeyF10) {
-		t.Error("F10 was taken with a bar of the system's")
+	if tt.KeyTaken(0, ui.KeyMenuBar) {
+		t.Error("a form with a bar of the system's took Alt alone")
 	}
+	tt.KeyTaken(0, ui.KeyF10)
 	tt.Settle()
 	if tt.Find(ByRole(ui.RoleMenuItem).Label("File")).Focused() {
 		t.Error("F10 took the keyboard to the MenuBar with a bar of the system's")
+	}
+	withMac(t, true)
+	a := newBarApp(t)
+	if a.tt.KeyTaken(0, ui.KeyMenuBar) {
+		t.Error("a menu bar took Alt alone on macOS")
 	}
 }

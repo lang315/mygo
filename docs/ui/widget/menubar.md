@@ -55,15 +55,21 @@ f.Shortcut(ui.Ctrl, ui.KeyO, openFile) // the shortcut an item shows answers not
 - **The bar's keyboard mode.** F10, and on Windows Alt pressed and let go
   alone, take the keyboard to the bar, as in the system's: the first title
   that opens a menu takes the focus, and the letters are underlined. Left
-  and Right go along the bar; a title's letter, without Alt, opens its menu,
-  as do Down, Up, Enter and Space. Escape, F10 or Alt alone again leave the
-  mode, and the focus goes back to the control that had it; so does a
+  and Right go along the bar (the other way round right to left); a
+  title's letter, without Alt, opens its menu, as do Down, Up, Enter and
+  Space. Escape, F10 or Alt alone again leave the mode, and the focus goes
+  back to the control that had it, or nowhere when none had it; so does a
   menu opened in the mode as it closes, chosen or not (Windows goes back
-  to the bar on Escape). A click elsewhere leaves the mode too. The first
-  `MenuBar` of a form answers; only a form with one asks for F10, so
-  without one Windows has F10 and Alt alone as before (the window menu).
-  A form that also has a bar of the system's (`SetMenuBar`, `MenuStrip`)
-  leaves them to that bar. Not in `widget.View`, nor on macOS.
+  to the bar on Escape), and F10 or Alt alone while a menu shows close it.
+  The mode ends too when the window goes inactive, the bar is hidden or
+  its menus are set again (the focus goes back), and when a click or Tab
+  takes the focus elsewhere (it stays there). F10 held does not go in and
+  out. The first `MenuBar` of a form answers; only a form with one asks for
+  these keys, so without one Windows has F10 and Alt alone as before (the
+  window menu). A form that also has a bar of the system's (`SetMenuBar`,
+  `MenuStrip`) leaves them to that bar. Not in `widget.View`, nor on macOS.
+  Alt alone reaches the form as `ui.KeyMenuBar`, which only a shortcut
+  gets: no control sees a key, as a terminal would send F10 to its program.
 - Assistive technology sees a menu bar of menu items, each expanded while
   its menu shows, and the menus as menus of menu items and check box items.
 

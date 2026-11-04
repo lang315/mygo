@@ -306,6 +306,7 @@ var elementChains = map[string]bool{
 	"Range":                true,
 	"ReadOnly":             true,
 	"Ref":                  true,
+	"ReleaseFocus":         true,
 	"Reverse":              true,
 	"Right":                true,
 	"RightPercent":         true,

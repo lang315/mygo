@@ -410,6 +410,7 @@ const (
 	vkShift   = 0x10
 	vkControl = 0x11
 	vkMenu    = 0x12
+	vkF10     = 0x79
 	vkLWin    = 0x5B
 	vkRWin    = 0x5C
 

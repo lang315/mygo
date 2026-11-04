@@ -21,11 +21,14 @@ type MenuBarWidget struct {
 	// mode is the title that has the keyboard focus while F10 (or Alt alone
 	// on Windows) put the bar in its keyboard mode, -1 outside it; focus is
 	// set while the title is to take the focus in the next build, inMenu
-	// once a menu opened in the mode, and back is the control that had the
-	// focus before, to give it back.
-	mode          int
-	focus, inMenu bool
-	back          Control
+	// once a menu opened in the mode, back is the control that had the
+	// focus before, to give it back, and form the form whose mode it is.
+	// release, set once the mode ended, has the next build take the focus
+	// off a title, which no longer takes it.
+	mode                   int
+	focus, inMenu, release bool
+	back                   Control
+	form                   *Form
 }
 
 // barKey is the access key of a menu bar's title, which opens its menu.
@@ -60,7 +63,7 @@ func MenuBar(menus ...MenuItem) *MenuBarWidget {
 func (b *MenuBarWidget) SetMenus(menus ...MenuItem) *MenuBarWidget {
 	b.change(func() {
 		b.menus, b.open, b.first = menus, nil, -1
-		b.leaveMode(false)
+		b.leaveMode(true)
 	})
 	return b
 }
@@ -85,38 +88,53 @@ func (b *MenuBarWidget) next(i, d int) int {
 	return i
 }
 
-// enterMode puts the bar in its keyboard mode, its first title that opens
-// a menu taking the focus from back, the control that has it. Under mu.
-func (b *MenuBarWidget) enterMode(back Control) {
+// enterMode puts the bar in form w's keyboard mode, its first title that
+// opens a menu taking the focus from back, the control that has it. Under
+// mu.
+func (b *MenuBarWidget) enterMode(w *Form, back Control) {
 	for i := range b.menus {
 		if b.opens(i) {
-			b.mode, b.focus, b.inMenu, b.back = i, true, false, back
+			b.mode, b.focus, b.inMenu, b.back, b.form = i, true, false, back, w
+			w.modeBar = b
 			return
 		}
 	}
 }
 
-// leaveMode ends the keyboard mode, giving the focus back to the control
-// that had it when restore is set. Under mu.
+// leaveMode ends the keyboard mode. The focus leaves the title, which no
+// longer takes it: to the control that had it before when restore is set,
+// else it stays where it went, or goes nowhere. Under mu.
 func (b *MenuBarWidget) leaveMode(restore bool) {
-	if restore && b.mode >= 0 && b.back != nil {
+	if b.mode < 0 {
+		return
+	}
+	if restore && b.back != nil {
 		focusLater(b.back)
 	}
-	b.mode, b.focus, b.inMenu, b.back = -1, false, false, nil
+	Post(func() { b.change(func() { b.release = true }) })
+	if b.form != nil && b.form.modeBar == b {
+		b.form.modeBar = nil
+	}
+	b.mode, b.focus, b.inMenu, b.back, b.form = -1, false, false, nil, nil
 }
 
 // modeKeys answers the keys of the keyboard mode while title i has the
-// focus: the arrows along the bar, a menu's letter, Down, Up, Enter and
-// Space to open it, and Escape and F10 (Alt alone on Windows) to leave.
-func (b *MenuBarWidget) modeKeys(title ui.Element, i int) {
+// focus: the arrows along the bar (the other way round right to left), a
+// menu's letter, Down, Up, Enter and Space to open it, and Escape to
+// leave; the form answers F10 and Alt alone (answerMnemonics).
+func (b *MenuBarWidget) modeKeys(title ui.Element, i int, rtl bool) {
+	back, ahead := ui.KeyLeft, ui.KeyRight
+	if rtl {
+		back, ahead = ahead, back
+	}
 	switch {
-	case title.Shortcut(0, ui.KeyLeft):
+	case title.Shortcut(0, back):
 		b.mode, b.focus = b.next(i, -1), true
-	case title.Shortcut(0, ui.KeyRight):
+	case title.Shortcut(0, ahead):
 		b.mode, b.focus = b.next(i, 1), true
 	case title.Shortcut(0, ui.KeyDown), title.Shortcut(0, ui.KeyUp), title.Shortcut(0, ui.KeyEnter), title.Shortcut(0, ui.KeySpace):
 		b.first = i
-	case title.Shortcut(0, ui.KeyEscape), title.Shortcut(0, ui.KeyF10):
+	case title.Shortcut(0, ui.KeyEscape):
 		b.leaveMode(true)
 	}
 	for j, it := range b.menus {
@@ -147,6 +165,7 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 		b.leaveMode(true) // the menu opened in the mode closed
 	}
 	alt := !macMenus && buildingForm != nil && (c.Modifiers()&ui.Alt != 0 || b.mode >= 0)
+	rtl := c.Direction() == ui.RightToLeft
 	hot := -1
 	bar := ui.Row(c).Role(ui.RoleMenuBar).Padding(t.Space(0.5), t.Space(1))
 	bar.Children(func() {
@@ -164,16 +183,11 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 			}
 			if b.mode == i && b.opens(i) {
 				title.Focusable()
-				switch {
-				case b.focus:
+				if b.focus {
 					b.focus = false
 					title.Focus()
-					b.modeKeys(title, i) // asked for from now: the keys of the next frame are its
-				case !b.inMenu && !title.Focused():
-					b.leaveMode(false) // the focus went elsewhere
-				default:
-					b.modeKeys(title, i)
 				}
+				b.modeKeys(title, i, rtl)
 			}
 			title.Children(func() {
 				if alt && key != 0 {
@@ -218,5 +232,11 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 		})
 	}
 	b.hot = hot
+	if b.release {
+		b.release = false
+		if b.mode < 0 {
+			bar.ReleaseFocus() // a title kept it: nothing had it before
+		}
+	}
 	return bar
 }

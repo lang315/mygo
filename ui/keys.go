@@ -93,6 +93,12 @@ const (
 	// macOS swipes between pages. A Router takes them.
 	KeyBack    = Key(platform.KeyBack)
 	KeyForward = Key(platform.KeyForward)
+	// KeyMenuBar is no key of a keyboard: it is Alt pressed and let go
+	// alone, which on Windows takes the keyboard to the menu bar.
+	// Windows hands it to the view when the window has no menu bar of the
+	// system's; only a Shortcut gets it, never a handler of keys, and the
+	// system has it when no shortcut answers it.
+	KeyMenuBar = Key(platform.KeyMenuBar)
 )
 
 // Modifiers are modifier keys.

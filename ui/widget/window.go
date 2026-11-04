@@ -43,6 +43,7 @@ type Form struct {
 	mnemonics     []mnemonic     // the Alt keys the last build asked for
 	barKeys       []barKey       // the Alt keys of the menu bars the last build drew, before the controls'
 	menuBar       *MenuBarWidget // the first menu bar the last build drew, which F10 takes the keyboard to
+	modeBar       *MenuBarWidget // the menu bar in its keyboard mode, nil for none
 	built         []builtEl      // the controls the build made, in order (a Label's mnemonic finds the next)
 	announce      string         // a validation message for the next build to announce
 }

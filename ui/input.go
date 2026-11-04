@@ -85,6 +85,10 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		rt.pointerMove(x, y)
 		rt.zoom(float32(ev.Scale), Modifiers(ev.Mods))
 	case platform.KeyPressed:
+		if Key(ev.Key) == KeyMenuBar {
+			taken = rt.menuBarKey()
+			break
+		}
 		rt.modsChanged(Modifiers(ev.Mods))
 		taken = rt.keyDownPhysical(Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey), ev.Repeat)
 	case platform.ModifiersChanged:
@@ -872,6 +876,12 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	if !rt.claimed(k) && rt.scrollKey(mods, key) {
 		return false
 	}
+	if repeat && k == (keyEvent{0, KeyF10}) {
+		// Held, it would take a menu bar in and out of its keyboard mode:
+		// the repeats answer no shortcut, but are taken as the press was.
+		_, found := routeKey(rt.regs, rt.focusChain(), k)
+		return swallowAltShortcuts && found
+	}
 	rt.keys = append(rt.keys, k)
 	rt.requestFrame()
 	if swallowAltShortcuts && (mods&Alt != 0 && mods&^(Alt|Shift) == 0 || key == KeyF10 && mods == 0) {
@@ -882,6 +892,19 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 		return found
 	}
 	return false
+}
+
+// menuBarKey answers KeyMenuBar, Alt alone as Windows' backend hands it
+// over: a shortcut asking for it gets it, and no handler of keys, which
+// would take it for a key typed; it is taken only when a shortcut answers.
+func (rt *engine) menuBarKey() bool {
+	k := keyEvent{0, KeyMenuBar}
+	if _, found := routeKey(rt.regs, rt.focusChain(), k); !found {
+		return false
+	}
+	rt.keys = append(rt.keys, k)
+	rt.requestFrame()
+	return true
 }
 
 // swallowAltShortcuts is whether a key with Alt, or F10, that a shortcut
@@ -1437,6 +1460,17 @@ func (e *node) focusWithin() bool {
 		}
 	}
 	return false
+}
+
+// ReleaseFocus leaves the keyboard focus nowhere if the element, or one
+// inside it, has it: for an element that took the focus for a while and has
+// none to give back, as a menu bar's title in its keyboard mode, entered
+// with nothing focused.
+func (e *node) ReleaseFocus() *node {
+	if e.focusWithin() {
+		e.c.rt.focused = 0
+	}
+	return e
 }
 
 // Focus gives the element the keyboard focus. Called in every frame, it
