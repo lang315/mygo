@@ -876,22 +876,24 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	if !rt.claimed(k) && rt.scrollKey(mods, key) {
 		return false
 	}
+	// Windows opens its menu mode (and beeps) for an Alt+key the window did
+	// not take, and for F10: one a shortcut of the view answers is taken.
+	menuKey := swallowAltShortcuts && (mods&Alt != 0 && mods&^(Alt|Shift) == 0 || k == keyEvent{0, KeyF10})
 	if repeat && k == (keyEvent{0, KeyF10}) {
 		// Held, it would take a menu bar in and out of its keyboard mode:
 		// the repeats answer no shortcut, but are taken as the press was.
-		_, found := routeKey(rt.regs, rt.focusChain(), k)
-		return swallowAltShortcuts && found
+		return menuKey && rt.answers(k)
 	}
 	rt.keys = append(rt.keys, k)
 	rt.requestFrame()
-	if swallowAltShortcuts && (mods&Alt != 0 && mods&^(Alt|Shift) == 0 || key == KeyF10 && mods == 0) {
-		// Windows opens its menu mode (and beeps) for an Alt+key the window did
-		// not take, and for F10, or Alt alone, which the backend hands the
-		// view as F10: one a shortcut of the view answers is taken.
-		_, found := routeKey(rt.regs, rt.focusChain(), k)
-		return found
-	}
-	return false
+	return menuKey && rt.answers(k)
+}
+
+// answers reports whether a shortcut of the view answers k, around the
+// focus or the window's.
+func (rt *engine) answers(k keyEvent) bool {
+	_, found := routeKey(rt.regs, rt.focusChain(), k)
+	return found
 }
 
 // menuBarKey answers KeyMenuBar, Alt alone as Windows' backend hands it
@@ -899,7 +901,7 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 // would take it for a key typed; it is taken only when a shortcut answers.
 func (rt *engine) menuBarKey() bool {
 	k := keyEvent{0, KeyMenuBar}
-	if _, found := routeKey(rt.regs, rt.focusChain(), k); !found {
+	if !rt.answers(k) {
 		return false
 	}
 	rt.keys = append(rt.keys, k)
