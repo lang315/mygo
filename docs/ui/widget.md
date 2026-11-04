@@ -982,13 +982,16 @@ Input and display:
   `SectionLen`, `Selected`, `Unselect`; sections, icons and texts change
   while the combo shows, and it redraws. A title names one section:
   `AddSection` of a title the combo has adds the options to that section
-  (and its icon, unless nil). A section's title chooses nothing until
+  (and its icon, unless nil). An option of a value the combo has is left
+  out of `AddSection` and `AddSubmenu`: the first option of a value stays.
+  A section's title chooses nothing until
   `SetSectionValue(title, v)` makes it an option of value `v` ("" undoes
   it). `AddSubmenu(title, png, options...)` adds an option that opens a
   nested list of options, as a menu's submenu, on the pointer, a click,
   Right, Enter or Space; a combo with one is a menu button to assistive
-  technology, its options radio items, and an `Editable` one shows a
-  submenu's options as a section's. `Editable()` lets the user type a
+  technology, its options radio items, its menu as wide as the combo and
+  opened by Up too, and an `Editable` one shows a submenu's options as a
+  section's. `Editable()` lets the user type a
   text that is no option, which `Text` and `SetText` give and set; `Value`
   is then the `Value` of the option with that text, or ""; `OnChange` runs
   on typing and on choosing. `Bind` takes the text of a combo made
@@ -999,10 +1002,14 @@ Input and display:
   `SetAccessibleName(s)` names it and its buttons for assistive technology.
   It is a classic spin box, as WinForms' (`ui.SpinBox`): an up arrow over a
   down one joined at the end of the box, which `Apply`, a `Style` or tw's
-  classes style (background, border, radius, padding, size). Up and Down
-  step it, as do the arrows. `SideButtons()` gives it the look of
-  `ui.NumberInput` instead, − and + buttons beside the box; `Apply` then
-  styles the row of the box and the buttons.
+  classes style (background, border, radius, padding, size). Padding pads
+  the text: the arrows stay at the edge, as high as the box. Up and Down
+  step it, as do the arrows, again as one is held; they are no stops of
+  Tab, and a press on one leaves the keyboard in the text. A negative step
+  steps by its absolute value. `SideButtons()` gives it the look of
+  `ui.NumberInput` instead, − and + buttons beside the box, which are
+  stops of Tab and take the keyboard when pressed; `Apply` then styles the
+  row of the box and the buttons.
   `RangeSpin` is two, with text between and after; they are "minimum" and
   "maximum" to assistive technology unless `SetAccessibleNames(low, high)`.
 - `ProgressBar()`: `SetFraction` (negative for unknown length), `SetText`.

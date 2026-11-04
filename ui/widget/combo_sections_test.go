@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -79,7 +80,7 @@ func TestComboSubmenu(t *testing.T) {
 		AddSection("Vegetables", nil, Option{"kale", "Kale"}).
 		SetValue("none").
 		OnChange(func() { changed <- c.Value() })
-	tt := tester(t, c)
+	tt := tester(t, HBox(0).Add(c)) // as wide as its text: its submenu has room beside it
 	click(t, tt, "None")
 	if !tt.HasText("Fruits") || !tt.HasText("Kale") || tt.HasText("Pear") {
 		t.Fatalf("closed submenu: %q", tt.Texts())
@@ -174,5 +175,116 @@ func TestHidingASubmenuComboClosesItsMenu(t *testing.T) {
 	tt.Frame()
 	if tt.HasText("More") {
 		t.Fatalf("the menu showed again with the combo: %q", tt.Texts())
+	}
+}
+
+// menuWidth is the width of the outermost menu shown, 0 for none.
+func menuWidth(tt *ui.Tester) float32 {
+	for _, n := range tt.Nodes() {
+		if n.Role == ui.RoleMenu {
+			return n.Bounds.W
+		}
+	}
+	return 0
+}
+
+// The menu of a combo with a submenu is as wide as the combo, as a plain
+// combo's drop-down is; Up opens it too.
+func TestSubmenuComboMenuIsAsWideAsTheComboAndUpOpensIt(t *testing.T) {
+	c := ComboBox(Option{"a", "Apple"}).AddSubmenu("More", nil, Option{"b", "Banana"}).SetValue("a")
+	tt := tester(t, c)
+	trigger := find(t, tt, "Apple")
+	click(t, tt, "Apple")
+	if w := menuWidth(tt); w < trigger.W-0.5 {
+		t.Fatalf("menu %v wide, the combo %v", w, trigger.W)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if tt.HasText("More") {
+		t.Fatalf("Escape left the menu open: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyUp)
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("More") {
+		t.Fatalf("Up did not open the menu: %q", tt.Texts())
+	}
+}
+
+// The menu closes when the combo goes out of sight in any way: a box
+// around it hidden, its TabControl page left, its dialog shown again.
+func TestSubmenuComboMenuClosesOutOfSight(t *testing.T) {
+	combo := func() *ComboBoxWidget {
+		return ComboBox(Option{"a", "Apple"}).AddSubmenu("More", nil, Option{"b", "Banana"}).SetValue("a")
+	}
+	t.Run("box hidden", func(t *testing.T) {
+		box := VBox(4).Add(combo())
+		tt := tester(t, VBox(4).Add(box))
+		click(t, tt, "Apple")
+		box.SetVisible(false)
+		tt.Frame()
+		box.SetVisible(true)
+		tt.Frame()
+		tt.Frame()
+		if !tt.HasText("Apple") || tt.HasText("More") {
+			t.Fatalf("the menu showed again with the box: %q", tt.Texts())
+		}
+	})
+	t.Run("page left", func(t *testing.T) {
+		nb := TabControl().AddPage("One", combo()).AddPage("Two", Label("page two"))
+		tt := tester(t, nb)
+		click(t, tt, "Apple")
+		nb.SetPage(1)
+		tt.Frame()
+		nb.SetPage(0)
+		tt.Frame()
+		tt.Frame()
+		if !tt.HasText("Apple") || tt.HasText("More") {
+			t.Fatalf("the menu showed again with the page: %q", tt.Texts())
+		}
+	})
+	t.Run("dialog shown again", func(t *testing.T) {
+		d := NewDialog(nil, "Pick", "", 400, 300, combo())
+		dt := TestDialog(t, d)
+		ran := make(chan struct{}, 2)
+		run := func() { go func() { d.Run(); ran <- struct{}{} }() }
+		run()
+		dt.Find(ByLabel("Apple")).Click()
+		if !dt.Has(ByLabel("More")) {
+			t.Fatalf("menu not open: %q", dt.Texts())
+		}
+		d.Close()
+		wait.For(t, "the first Run", ran)
+		run()
+		wait.Until(t, "the second Run", func() bool { return !dt.Closed() })
+		dt.Settle()
+		if dt.Has(ByLabel("More")) {
+			t.Fatalf("the menu showed again with the dialog: %q", dt.Texts())
+		}
+		d.Close()
+		wait.For(t, "the second Run", ran)
+	})
+}
+
+// An option whose value the combo has is left out: the first stays.
+func TestComboAddSectionLeavesOutValuesItHas(t *testing.T) {
+	c := ComboBox(Option{"none", "None"}).
+		AddSection("Fruits", nil, Option{"apple", "Apple"}).
+		AddSection("Fruits", nil, Option{"apple", "Apple again"}, Option{"pear", "Pear"}, Option{"pear", "Pear again"}).
+		AddSubmenu("More", nil, Option{"none", "None again"}).
+		SetValue("none")
+	if n, m := c.SectionLen("Fruits"), c.SectionLen("More"); n != 2 || m != 0 {
+		t.Fatalf("SectionLen Fruits %d, More %d; want 2 and 0", n, m)
+	}
+	tt := tester(t, HBox(0).Add(c))
+	click(t, tt, "None")
+	for _, s := range []string{"Apple again", "Pear again", "None again"} {
+		if tt.HasText(s) {
+			t.Fatalf("%q shown: %q", s, tt.Texts())
+		}
+	}
+	click(t, tt, "Apple")
+	if c.Value() != "apple" || c.Text() != "Apple" {
+		t.Fatalf("chose %q %q", c.Value(), c.Text())
 	}
 }

@@ -24,7 +24,12 @@ chosen roughly, a [slider](slider.md); for an amount of money, which a
 of a classic spin box, as WinForms' `NumericUpDown`: one box holding the
 text and, joined at its end, an up arrow over a down one. It edits,
 steps, reports and is named as `NumberInput` is; its arrows are the
-buttons "Increase" and "Decrease", in that order.
+buttons "Increase" and "Decrease", in that order, to assistive
+technology. They are no stops of Tab: a press on one steps, again as it
+is held, faster after a while, and leaves the keyboard in the text, as
+WinForms' do. They stay at the end of the box, its left right to
+left, whatever its padding. A negative step steps by its
+absolute value.
 
 ```go
 ui.SpinBox(c, &app.copies, 1, 99, 1).Label("Copies")

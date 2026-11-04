@@ -3,6 +3,7 @@ package ui
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 // A SpinBox edits, steps and names as a NumberInput does.
@@ -94,5 +95,136 @@ func TestSpinBoxArrowsAreJoinedAtTheEndOfTheBox(t *testing.T) {
 	}
 	if h := down.Y + down.H - up.Y; h < box.H-2.5 {
 		t.Fatalf("arrows %v high in a box %v", h, box)
+	}
+}
+
+// focusedLabel is the label of the element with the keyboard focus.
+func focusedLabel(tt *Tester) string {
+	for _, n := range tt.Nodes() {
+		if n.Focused {
+			return n.Label
+		}
+	}
+	return ""
+}
+
+// Its arrows are no stops of Tab, and a press on one leaves the keyboard
+// in the text, as WinForms' NumericUpDown does.
+func TestSpinBoxArrowsKeepTheKeyboardInTheText(t *testing.T) {
+	v := 5.0
+	tt := NewTester(func(c *Context) {
+		Row(c).Gap(8).Padding(10).Children(func() {
+			Button(c, "Before")
+			SpinBox(c, &v, 0, 10, 1).Label("Count")
+			Button(c, "After")
+		})
+	}, 600, 100)
+	tt.Frame()
+	var order []string
+	for range 3 {
+		tt.Key(0, KeyTab)
+		tt.Frame()
+		order = append(order, focusedLabel(tt))
+	}
+	if !slices.Equal(order, []string{"Before", "Count", "After"}) {
+		t.Fatalf("Tab went %q", order)
+	}
+	if err := tt.Click("Increase"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v != 6 || focusedLabel(tt) != "Count" {
+		t.Fatalf("after a click on the up arrow: %v, focus on %q", v, focusedLabel(tt))
+	}
+	tt.Key(0, KeyUp)
+	if v != 7 {
+		t.Fatalf("Up after a click on the up arrow: %v", v)
+	}
+}
+
+// Held, an arrow keeps stepping, faster after a while.
+func TestSpinBoxHeldArrowRepeats(t *testing.T) {
+	v := 0.0
+	tt := NewTester(func(c *Context) {
+		Column(c).Padding(10).AlignItems(Start).Children(func() {
+			SpinBox(c, &v, 0, 100, 1).Label("Count")
+		})
+	}, 400, 100)
+	tt.Frame()
+	up, _ := tt.Find("Increase")
+	x, y := up.X+up.W/2, up.Y+up.H/2
+	tt.Press(x, y)
+	if v != 1 {
+		t.Fatalf("a press stepped to %v, want 1", v)
+	}
+	tt.Advance(700 * time.Millisecond)
+	tt.Release(x, y)
+	tt.Frame()
+	// 1, then one each 80 ms past 400 ms: 300 ms held past it is 3 more.
+	if v != 4 {
+		t.Fatalf("held 0.7 s: %v, want 4", v)
+	}
+	tt.Advance(time.Second)
+	if v != 4 {
+		t.Fatalf("released, it went on to %v", v)
+	}
+}
+
+// Right to left, the arrows are at the box's start, its left, flush with
+// its border, and the line between them and the text is on their right.
+func TestSpinBoxRightToLeft(t *testing.T) {
+	v := 5.0
+	tt := NewTester(func(c *Context) {
+		Column(c).Padding(10).AlignItems(Start).Children(func() {
+			SpinBox(c, &v, 0, 10, 1).Label("Count")
+		})
+	}, 400, 100)
+	tt.SetDirection(RightToLeft)
+	tt.Frame()
+	box, _ := tt.Find("Count")
+	up, _ := tt.Find("Increase")
+	var text Rect
+	for _, n := range tt.Nodes() {
+		if n.Role == RoleTextField {
+			text = n.Bounds
+		}
+	}
+	if up.X > box.X+1.5 || text.X < up.X+up.W {
+		t.Fatalf("arrows %v not at the start of the box %v, before the text %v", up, box, text)
+	}
+	img := tt.Image()
+	y := int(up.Y + up.H)
+	border := img.RGBAAt(int(box.X+box.W-0.5), y)
+	if d := img.RGBAAt(int(up.X+up.W), y); d != border {
+		t.Fatalf("no line right of the arrows: %v, the border %v", d, border)
+	}
+}
+
+// NumberInput keeps its look for a negative step: − then +, which steps
+// by step; SpinBox steps by its absolute value.
+func TestNegativeStep(t *testing.T) {
+	a, b := 5.0, 5.0
+	tt := NewTester(func(c *Context) {
+		Column(c).Padding(10).Gap(10).AlignItems(Start).Children(func() {
+			NumberInput(c, &a, 0, 10, -1)
+			SpinBox(c, &b, 0, 10, -1).Label("Spin")
+		})
+	}, 400, 200)
+	tt.Frame()
+	plus, ok := tt.Find("+")
+	if !ok {
+		t.Fatalf("no + in %q", tt.Texts())
+	}
+	tt.ClickAt(plus.X+plus.W/2, plus.Y+plus.H/2)
+	if a != 4 {
+		t.Fatalf("+ with step -1 took 5 to %v, want 4 as before", a)
+	}
+	for _, n := range tt.Nodes() {
+		if n.Label == "Spin Increase" {
+			tt.ClickAt(n.Bounds.X+n.Bounds.W/2, n.Bounds.Y+n.Bounds.H/2)
+		}
+	}
+	if b != 6 {
+		t.Fatalf("Increase with step -1 took 5 to %v, want 6", b)
 	}
 }

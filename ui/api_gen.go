@@ -2258,8 +2258,12 @@ func Spacer(c *Context) Element {
 // SpinBox creates a NumberInput in the look of a classic spin box, as
 // WinForms' NumericUpDown and GTK's SpinButton: one box holding the text
 // and, joined at its end, an up arrow over a down arrow. It edits, steps,
-// reports and is named as NumberInput is; its arrows are the buttons
-// "Increase" and "Decrease".
+// reports and is named as NumberInput is. Its arrows are the buttons
+// "Increase" and "Decrease" to assistive technology, but no stops of Tab:
+// a press on one steps, again as it is held, faster after a while, and
+// leaves the keyboard in the text, as WinForms' does. They stay at the
+// end of the box, whatever its padding. A negative step steps by its
+// absolute value.
 //
 //	ui.SpinBox(c, &app.copies, 1, 99, 1).Label("Copies")
 func SpinBox(c *Context, value *float64, lo float64, hi float64, step float64) Element {

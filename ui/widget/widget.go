@@ -30,7 +30,7 @@ type Control interface {
 type core struct {
 	id          int
 	hidden      bool
-	hides       int // SetVisible(false)'s, for a popup of the widget's own to close
+	hides       int // views that did not build it, and shows of its form, for a popup of its own to close
 	disabled    bool
 	wantFocus   bool // Focus asked for the keyboard focus
 	focusIn     int  // the view that last built it focused, noView for none
@@ -91,9 +91,6 @@ func (b *core) restyle() {
 func (c *common[W]) SetVisible(v bool) *W {
 	c.change(func() {
 		c.hidden = !v
-		if !v {
-			c.hides++
-		}
 		if !v && c.focusIn != noView {
 			c.focusIn = noView
 			if c.onFocusOut != nil {

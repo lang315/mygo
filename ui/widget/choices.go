@@ -22,7 +22,7 @@ type NumericUpDownWidget struct {
 
 // NumericUpDown makes a number input from min to max, stepping by step.
 func NumericUpDown(min, max, step float64) *NumericUpDownWidget {
-	s := &NumericUpDownWidget{min: min, max: max, step: step}
+	s := &NumericUpDownWidget{min: min, max: max, step: math.Abs(step)}
 	s.value.set(min)
 	s.init(s)
 	return s
@@ -157,8 +157,9 @@ type ComboBoxWidget struct {
 	editable, bindsText bool
 	text                mirror[string]
 	// menuOpen says the popup of a combo with a submenu shows. Only the
-	// drawing thread touches it. menuHides is the hides it saw: hiding
-	// the combo closes it, as ui closes the popup of a select kept hidden.
+	// drawing thread touches it. menuHides is the hides it saw: the combo
+	// out of sight, or its form shown again, closes it, as ui closes the
+	// popup of a select kept hidden.
 	menuOpen  bool
 	menuHides int
 }
@@ -349,7 +350,8 @@ func (c *ComboBoxWidget) SetOptions(opts ...Option) *ComboBoxWidget {
 // AddSection adds a section titled title, with the icon in the bytes of
 // a PNG (nil for none), holding opts. A section of that title the combo
 // has already gets opts after its own, and the icon, unless nil: a title
-// names one section.
+// names one section. An option of a value the combo has, or that opts has
+// before it, is left out: the first option of a value stays.
 func (c *ComboBoxWidget) AddSection(title string, icon []byte, opts ...Option) *ComboBoxWidget {
 	return c.addSection(title, icon, false, opts)
 }
@@ -368,6 +370,14 @@ func (c *ComboBoxWidget) AddSubmenu(title string, icon []byte, opts ...Option) *
 func (c *ComboBoxWidget) addSection(title string, icon []byte, sub bool, opts []Option) *ComboBoxWidget {
 	bmp, opts := decodeImage(icon), slices.Clone(opts) // outside mu
 	c.change(func() {
+		// An option of a value the combo has is left out: values name one option.
+		kept := opts[:0]
+		for _, o := range opts {
+			if _, ok := c.find(o.Value); !ok && !slices.ContainsFunc(kept, func(k Option) bool { return k.Value == o.Value }) {
+				kept = append(kept, o)
+			}
+		}
+		opts := kept
 		c.edit(func(s []comboSection) []comboSection {
 			i := slices.IndexFunc(s, func(x comboSection) bool { return x.title != "" && x.title == title })
 			if i < 0 {
@@ -553,6 +563,13 @@ func (c *ComboBoxWidget) buildMenu(ctx *ui.Context, p *string, text string) ui.E
 	}
 	m := ui.MenuBase(ctx, &c.menuOpen)
 	comboTrigger(ctx, m.Trigger, text)
+	if !c.menuOpen && m.Trigger.Shortcut(0, ui.KeyUp) {
+		c.menuOpen = true // Up opens it too, as a plain combo's
+	}
+	chevron := float32(-90)
+	if ctx.Direction() == ui.RightToLeft {
+		chevron = 90
+	}
 	option := func(o Option, fn func()) {
 		if item := m.RadioItem(o.Value == *p); comboOption(t, item, o.Value == *p, fn).Clicked() {
 			c.pick(o.Value)
@@ -568,13 +585,15 @@ func (c *ComboBoxWidget) buildMenu(ctx *ui.Context, p *string, text string) ui.E
 	}
 	m.Popup(func(panel ui.Element) {
 		comboPanel(t, panel)
+		panel.MinWidth(m.Trigger.Bounds().W) // as wide as the combo, as its drop-down; not the submenus
+
 		for i, s := range sections {
 			switch {
 			case s.sub:
 				item := comboOption(t, m.SubmenuItem(), false, func() {
 					sectionTitle(ctx, s, false)
 					ui.Box(ctx).Grow(1)
-					ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Rotate(-90)
+					ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Rotate(chevron)
 				})
 				m.Submenu(item, func(panel ui.Element) {
 					comboPanel(t, panel)

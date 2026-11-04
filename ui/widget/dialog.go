@@ -69,6 +69,7 @@ func (d *Dialog) Run() {
 	mu.Lock()
 	if d.headless != nil && d.ran { // a DialogTester's: a Run after a Run is a new show
 		d.headless, d.closing, d.ran = make(chan struct{}), false, false
+		d.keep.shown()
 	}
 	before := d.onBeforeRun
 	mu.Unlock()
