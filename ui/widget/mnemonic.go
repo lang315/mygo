@@ -227,8 +227,8 @@ func focusLater(c Control) {
 // menuBarKeys returns the access keys of the form's menu bar: the top items
 // whose text marks one with "&". Where the bar is the system's (Windows,
 // Linux) those keys open its menus, and a control that asked for the same key
-// does not answer it; so do those of a MenuBar the form draws, while it is
-// building them (answerMnemonics). Under mu.
+// does not answer it; so do those of the MenuBars the last build drew.
+// Under mu.
 func (w *Form) menuBarKeys() map[rune]bool {
 	keys := map[rune]bool{}
 	for _, b := range w.barKeys {

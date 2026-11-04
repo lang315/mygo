@@ -3705,7 +3705,7 @@ either.
   built at the top of `Overlay` notes the focus as it opens (`openers`),
   which pruning gives back once it is gone with the focus that was in it;
   when the focus was in another overlay, it notes too the element outside
-  every overlay that one came from (`opener.before`), which takes the
+  every overlay that one came from (`befores`), which takes the
   focus back if the other overlay is gone first, as a menu bar's menu
   opened from the menu before it.
   An element attached to another (`AttachTo`, which `PopoverBase` and the
