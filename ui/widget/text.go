@@ -266,7 +266,7 @@ func (v *MultilineTextBoxWidget) OnChange(fn func()) *MultilineTextBoxWidget {
 // onEdited is the callback of ui's OnChange, made once (see TextBoxWidget).
 func (v *MultilineTextBoxWidget) onEdited() {
 	mu.Lock()
-	fn := onChange(&v.text, v.onChange)
+	fn := edited(&v.text, &v.bound, v.onChange)
 	mu.Unlock()
 	fn()
 }

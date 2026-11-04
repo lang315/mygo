@@ -3,9 +3,11 @@ package widget
 import "math"
 
 // Bindable is a control that edits one value. Only these are bindable; the
-// interface cannot be implemented outside the package:
+// interface cannot be implemented outside the package (BindRange binds a
+// RangeSpin, and BindValues a CheckBoxGroup):
 //
 //   - TextBox (string)
+//   - MultilineTextBox (string)
 //   - DomainUpDown (the selected item's text, a string)
 //   - CheckBox (bool)
 //   - ComboBox (the Value of its option, a string)
@@ -21,6 +23,7 @@ type Bindable[T comparable] interface {
 type binding struct {
 	write  func(v any) // gives the source the value the user entered, a T
 	reload func()      // gives the source's value to the control
+	value  func() any  // if set, the value write gets, under mu: a control of several values gives them all
 }
 
 // edited returns ui's OnChange callback for m, a control's value: it
@@ -38,7 +41,11 @@ func edited[T comparable](m *mirror[T], b *binding, h func()) func() {
 		mu.Lock()
 		changed := m.value != m.shown
 		m.value, m.dirty = m.shown, false
-		v, write := m.value, b.write // the binding of the moment of the edit
+		var v any = m.value
+		if b.value != nil {
+			v = b.value()
+		}
+		write := b.write // the binding of the moment of the edit
 		mu.Unlock()
 		if !changed {
 			return
@@ -113,6 +120,44 @@ func BindBool(c *ComboBoxWidget, yes, no Option, get func() bool, set func(bool)
 	})
 }
 
+// BindRange is Bind for a RangeSpin, whose two numbers the source keeps:
+// after the user edits either, set gets both, as they are at that edit. Bind's
+// rules hold: set runs after OnChange, off the lock; a program setter and
+// Reload do not call set; binding again replaces the binding. As with a
+// NumericUpDown, get's numbers are clamped to their ranges, and a clamped
+// number is not written back.
+func BindRange(c *RangeSpinWidget, get func() (lo, hi float64), set func(lo, hi float64)) *RangeSpinWidget {
+	reload := func() {
+		lo, hi := get()
+		c.lo.bindApply(lo)
+		c.hi.bindApply(hi)
+	}
+	b := binding{
+		write:  func(v any) { r := v.([2]float64); set(r[0], r[1]) },
+		reload: reload,
+		value:  func() any { return [2]float64{c.lo.value.value, c.hi.value.value} },
+	}
+	c.change(func() { c.bound, c.lo.bound, c.hi.bound = b, b, b })
+	reload()
+	return c
+}
+
+// BindValues is Bind for a CheckBoxGroup, whose checked values the source
+// keeps: the group checks get()'s values at once, and after the user checks
+// or unchecks a box, set gets the checked values in option order, as they
+// are at that click. A value of get's that is no option's is ignored, as
+// SetValues ignores it, and is absent from the next set. Bind's rules hold:
+// set runs after OnChange, off the lock; a program setter and Reload do not
+// call set; binding again replaces the binding.
+func BindValues(c *CheckBoxGroupWidget, get func() []string, set func([]string)) *CheckBoxGroupWidget {
+	reload := func() { c.SetValues(get()...) }
+	c.change(func() {
+		c.bound = binding{write: func(v any) { set(v.([]string)) }, reload: reload, value: func() any { return c.values() }}
+	})
+	reload()
+	return c
+}
+
 // Reload gives c the value of its binding's source again, as Bind did, for
 // a source that changed elsewhere. It does nothing for a control that is
 // not bound, and does not call set.
@@ -127,6 +172,9 @@ func Reload(c Control) {
 
 func (e *TextBoxWidget) bindValue() string  { return e.Text() }
 func (e *TextBoxWidget) bindApply(v string) { e.SetText(v) }
+
+func (v *MultilineTextBoxWidget) bindValue() string  { return v.Text() }
+func (v *MultilineTextBoxWidget) bindApply(s string) { v.SetText(s) }
 
 func (b *CheckBoxWidget) bindValue() bool  { return b.Checked() }
 func (b *CheckBoxWidget) bindApply(v bool) { b.SetChecked(v) }
