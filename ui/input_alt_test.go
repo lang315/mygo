@@ -97,43 +97,64 @@ func TestMenuBarKeyGoesToShortcutsOnly(t *testing.T) {
 	}
 }
 
-// F10 held answers its shortcut at each repeat, on every system, unless the
-// app has a widget.MenuBar, which enables holding: held, F10 would take the
-// bar in and out of its keyboard mode, so there it answers once, its
-// repeats taken.
+// F10 held answers its shortcut, and reaches a handler of keys, at each
+// repeat, unless the view asks for KeyMenuBar (a form with a MenuBar): held,
+// F10 would take the bar in and out of its keyboard mode, so there it
+// answers once, its repeats taken. A window without a bar keeps every
+// repeat even while a MenuBar, somewhere in the app, enabled holding.
 func TestF10RepeatsAnswerNoShortcutOnlyWithAMenuBar(t *testing.T) {
-	needsKeyHold(t)
-	for _, bar := range []bool{false, true} {
-		old := keyhold.New
-		keyhold.New = nil
-		if bar {
-			keyhold.Enable()
-		}
-		n := 0
-		tt := NewTester(func(c *Context) {
-			if c.Shortcut(0, KeyF10) {
-				n++
-			}
-		}, 200, 100)
+	enableKeyHold(t)
+	// hold presses F10 and holds it for three repeats in a window built by
+	// view, and counts what took them.
+	hold := func(view func(c *Context), focus string) {
+		tt := NewTester(view, 200, 100)
+		defer tt.rt.close()
 		tt.Frame()
+		if focus != "" {
+			if err := tt.Click(focus); err != nil {
+				t.Fatal(err)
+			}
+		}
 		press := platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.KeyF10}
 		tt.send(press)
 		press.Repeat = true
 		for range 3 {
-			if taken := tt.rt.event(press); bar && !taken {
-				t.Error("with a menu bar, a repeat of F10 was left to the system")
+			tt.send(press)
+		}
+	}
+	// A terminal, a handler of every key, in a window without a bar.
+	handled := 0
+	hold(func(c *Context) {
+		Box(c).Size(100, 100).Focusable().Label("Terminal").HandleInput(func(ev InputEvent) bool {
+			if ev.Kind == InputKeyDown && ev.Key == KeyF10 {
+				handled++
 			}
-			tt.Frame()
+			return true
+		})
+	}, "Terminal")
+	if handled != 4 {
+		t.Errorf("without a menu bar: the terminal got %d of 4 F10 presses", handled)
+	}
+	// The window's own shortcut, without a bar.
+	shortcut := 0
+	hold(func(c *Context) {
+		if c.Shortcut(0, KeyF10) {
+			shortcut++
 		}
-		want := 4
-		if bar {
-			want = 1
+	}, "")
+	if shortcut != 4 {
+		t.Errorf("without a menu bar: F10 held answered its shortcut %d times, want 4", shortcut)
+	}
+	// A view with a menu bar (it asks for KeyMenuBar): once.
+	bar := 0
+	hold(func(c *Context) {
+		if c.Shortcut(0, KeyF10) {
+			bar++
 		}
-		if n != want {
-			t.Errorf("menu bar %v: F10 held answered %d times, want %d", bar, n, want)
-		}
-		tt.rt.close()
-		keyhold.New = old
+		c.Shortcut(0, KeyMenuBar)
+	}, "")
+	if bar != 1 {
+		t.Errorf("with a menu bar: F10 held answered %d times, want 1", bar)
 	}
 }
 
@@ -148,9 +169,13 @@ func needsKeyHold(t *testing.T) {
 // widget.MenuBar does, for the test.
 func enableKeyHold(t *testing.T) {
 	needsKeyHold(t)
-	old := keyhold.New
+	was := keyhold.Enabled()
 	keyhold.Enable()
-	t.Cleanup(func() { keyhold.New = old })
+	t.Cleanup(func() {
+		if !was {
+			keyhold.Disable()
+		}
+	})
 }
 
 // After a menu bar's key, the keys typed before the frame that answers it
@@ -208,9 +233,10 @@ func (a *keyOrderApp) view(c *Context) {
 // Without a MenuBar, which enables holding, nothing is held: the keys after
 // KeyMenuBar come at once, as before.
 func TestKeysAreNotHeldWithoutHolding(t *testing.T) {
-	old := keyhold.New
-	keyhold.New = nil
-	t.Cleanup(func() { keyhold.New = old })
+	if keyhold.Enabled() {
+		keyhold.Disable()
+		t.Cleanup(keyhold.Enable)
+	}
 	a := &keyOrderApp{}
 	tt := NewTester(a.view, 200, 200)
 	defer tt.rt.close()
@@ -289,5 +315,45 @@ func TestFocusMovedInABuildBuildsAgain(t *testing.T) {
 	tt.rt.runFrame() // one frame, its passes, and no other
 	if len(a.seen) < 2 || !a.seen[len(a.seen)-1] {
 		t.Errorf("the builds of the frame that moved the focus read %v; the last must read true", a.seen)
+	}
+}
+
+// modsApp is a view with Ctrl+S, a menu bar's key, and the modifiers it
+// read last.
+type modsApp struct {
+	saves int
+	mods  Modifiers
+}
+
+func (a *modsApp) view(c *Context) {
+	c.Shortcut(0, KeyMenuBar)
+	if c.Shortcut(Ctrl, KeyS) {
+		a.saves++
+	}
+	a.mods = c.Modifiers()
+}
+
+// Ctrl+S typed ahead of the frame Alt alone asked for runs once, and leaves
+// no modifier held: the changes of the modifiers wait with the keys, so
+// that they come back in their order, Ctrl up last.
+func TestModifiersTypedAheadWaitWithTheKeys(t *testing.T) {
+	enableKeyHold(t)
+	a := &modsApp{}
+	tt := NewTester(a.view, 200, 100)
+	defer tt.rt.close()
+	tt.Frame()
+	for _, ev := range []platform.SurfaceEvent{
+		{Kind: platform.KeyPressed, Key: platform.KeyMenuBar},
+		{Kind: platform.ModifiersChanged, Mods: platform.ModCtrl},
+		{Kind: platform.KeyPressed, Key: platform.KeyS, Mods: platform.ModCtrl},
+		{Kind: platform.KeyReleased, Key: platform.KeyS, Mods: platform.ModCtrl},
+		{Kind: platform.ModifiersChanged, Mods: 0},
+	} {
+		tt.rt.event(ev)
+	}
+	tt.Frame()
+	tt.Frame()
+	if a.saves != 1 || a.mods != 0 || tt.rt.mods != 0 {
+		t.Errorf("Ctrl+S typed ahead: saved %d times, modifiers %v (engine %v), want once and none", a.saves, a.mods, tt.rt.mods)
 	}
 }

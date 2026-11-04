@@ -1415,7 +1415,7 @@ func (rt *engine) endFrame() {
 			// to the bar, which has the keyboard now: that frame was built,
 			// as the first after input always is.
 			rt.hold.Release()
-		} else if keyhold.New != nil {
+		} else if keyhold.Enabled() {
 			rt.hold = keyhold.New(rt.event) // a widget.MenuBar enabled holding: from the first frame, before any key
 		}
 	}

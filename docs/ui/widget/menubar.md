@@ -73,10 +73,11 @@ f.Shortcut(ui.Ctrl, ui.KeyO, openFile) // the shortcut an item shows answers not
   Keys typed right after Alt alone or F10, before the window draws again,
   wait for the bar to take the keyboard, so Alt, F, Enter typed at once
   choose File's first item; they are dropped if the window goes inactive
-  or out of sight first, as the mode then ends. In an app with a
-  `MenuBar`, F10 held takes the bar to its mode once; in other apps a
-  `Shortcut` of F10 answers each repeat as before. Both are on Windows and
-  Linux, linked only into apps that make a `MenuBar` (`internal/keyhold`).
+  or out of sight first, as the mode then ends. In a form with a
+  `MenuBar`, F10 held takes the bar to its mode once; in other windows,
+  of the same app too, a `Shortcut` of F10 or a control taking keys gets
+  each repeat as before. Both are on Windows and Linux, linked only into
+  apps that make a `MenuBar` (`internal/keyhold`).
 - Assistive technology sees a menu bar of menu items, each expanded while
   its menu shows, and the menus as menus of menu items and check box items.
 
@@ -97,6 +98,14 @@ On macOS the menu bar at the top of the screen stays the norm: keep a
 and the Edit menu, and show a `MenuBar` only where it is not macOS
 (`runtime.GOOS != "darwin"`) unless the app wants its menus in the window
 too.
+
+## Known limits
+
+- Space right after Alt alone opens the menu of the bar's first title, as
+  Space does in the bar's keyboard mode, not the window menu that Alt and
+  Space open in a window without a bar.
+- The pointer is not held with the keys typed ahead: a click right after
+  Alt alone, before the window draws, comes before the keys typed with it.
 
 ## Not yet
 

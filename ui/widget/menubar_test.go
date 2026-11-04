@@ -737,3 +737,28 @@ func TestTheMenuKeysAreNotAskedForWithoutAMenuBar(t *testing.T) {
 		t.Error("a menu bar took Alt alone on macOS")
 	}
 }
+
+// A MenuBar made on another goroutine, as a handler on the event goroutine
+// opening a new form makes one, while a window builds frames: enabling the
+// holding of keys races with nothing (go test -race).
+func TestMenuBarMadeWhileAWindowDrawsFrames(t *testing.T) {
+	f := NewForm("frames", 300, 100)
+	f.SetContent(VBox(4).Add(TextBox()))
+	tt := TestForm(t, f)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 20 {
+			MenuBar(MenuItem{Text: "&File", Children: []MenuItem{{Text: "Open"}}})
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			tt.Frame()
+			return
+		default:
+			tt.Frame()
+		}
+	}
+}

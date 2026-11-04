@@ -12,8 +12,11 @@ import (
 // an element takes files dragged over or dropped at the event's position,
 // the key pressed or the composition (platform.WindowHandler.SurfaceEvent).
 func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
-	if holdsMenuKeys && rt.hold != nil && rt.hold.Hold(ev) {
-		return true // typed ahead of the frame a menu bar's key asked for, or F10 held
+	if holdsMenuKeys && rt.hold != nil && rt.claimed(keyEvent{0, KeyMenuBar}) && rt.hold.Hold(ev) {
+		// Typed ahead of the frame a menu bar's key asked for, or F10 held,
+		// in a view with a menu bar (it asks for KeyMenuBar): the others
+		// get every event as it comes, F10's repeats included.
+		return true
 	}
 	if ev.Kind == platform.SurfaceCommandEnabled {
 		// A menu asking about its item changes nothing.

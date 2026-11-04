@@ -7,13 +7,19 @@
 // do not link it, as ui reaches it only through New.
 package keyhold
 
-import "github.com/egoist/mygo/internal/platform"
+import (
+	"sync/atomic"
+
+	"github.com/egoist/mygo/internal/platform"
+)
 
 // Holder holds the key events of one window.
 type Holder interface {
 	// Hold takes ev before the view does, and reports whether it took it:
-	// a key, text or command event while holding, and a repeat of F10, which
-	// would take the bar out of its mode again. Alt alone (KeyMenuBar) or F10
+	// a key, modifiers, text or command event while holding, and a repeat
+	// of F10, which would take the bar out of its mode again. The changes
+	// of the modifiers wait with the keys, so that a modifier let go after
+	// a held key comes back after it, not held for good. Alt alone (KeyMenuBar) or F10
 	// pressed, which the view gets, hold the events after them until the
 	// frame they ask for, taken or not. A window going inactive or
 	// out of sight (SurfaceBlur, SurfaceShown) drops the events held: the
@@ -25,14 +31,31 @@ type Holder interface {
 	Release()
 }
 
-// New makes the Holder of a window whose events send handles; nil until
-// Enable, so that ui holds nothing.
-var New func(send func(platform.SurfaceEvent) bool) Holder
+// maker makes a window's Holder once Enable stored it: Enable may run on
+// the event goroutine (a handler opening a form with a MenuBar) while ui
+// reads it on the main thread.
+var maker atomic.Pointer[func(send func(platform.SurfaceEvent) bool) Holder]
 
 // Enable makes ui hold the keys typed after a menu bar's key. It is
-// idempotent.
+// idempotent and safe from any goroutine.
 func Enable() {
-	New = func(send func(platform.SurfaceEvent) bool) Holder { return &holder{send: send} }
+	f := func(send func(platform.SurfaceEvent) bool) Holder { return &holder{send: send} }
+	maker.Store(&f)
+}
+
+// Disable undoes Enable, for tests: windows that made a Holder keep it.
+func Disable() { maker.Store(nil) }
+
+// Enabled reports whether Enable ran.
+func Enabled() bool { return maker.Load() != nil }
+
+// New makes the Holder of a window whose events send handles, nil until
+// Enable, so that ui holds nothing.
+func New(send func(platform.SurfaceEvent) bool) Holder {
+	if f := maker.Load(); f != nil {
+		return (*f)(send)
+	}
+	return nil
 }
 
 type holder struct {
@@ -48,7 +71,7 @@ func menuKey(ev platform.SurfaceEvent) bool {
 
 func (h *holder) Hold(ev platform.SurfaceEvent) bool {
 	switch ev.Kind {
-	case platform.KeyPressed, platform.KeyReleased, platform.TextInput, platform.TextComposition, platform.SurfaceCommand:
+	case platform.KeyPressed, platform.KeyReleased, platform.ModifiersChanged, platform.TextInput, platform.TextComposition, platform.SurfaceCommand:
 		if h.holding {
 			h.held = append(h.held, ev)
 			return true

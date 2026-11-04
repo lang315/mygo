@@ -1409,8 +1409,9 @@ build` like mygo-runtime and released with the same version.
     (`swallowAltShortcuts`). In an app that makes a `widget.MenuBar`, which
     enables `internal/keyhold` (its `New`, nil otherwise, so other apps link
     none of it), the key events after either key wait for the frame that
-    answers it, and F10's repeats are dropped: `engine.event` hands each
-    event to the window's `keyhold.Holder` first, `endFrame` makes it and
+    answers it, and F10's repeats are dropped, in a view that asks for
+    `KeyMenuBar` (other windows get every event): `engine.event` hands
+    each event to the window's `keyhold.Holder` first, `endFrame` makes it and
     releases what it held, as keys typed ahead reach native menus; a blur
     or `SurfaceShown` drops them. Not on macOS (`holdsMenuKeys`), where a
     MenuBar has no keyboard mode.
