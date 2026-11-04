@@ -576,20 +576,22 @@ name := widget.Bind(widget.TextBox(),
 
 | Control | Value | |
 |---|---|---|
-| `TextBox` | `string` | `Bind` |
+| `TextBox`, `MultilineTextBox` | `string` | `Bind` |
 | `DomainUpDown` | the selected item's text, a `string` | `Bind` |
 | `CheckBox` | `bool` | `Bind` |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
+| `RangeSpin` | its two numbers, `float64` | `BindRange(c, get, set)`, with `get func() (lo, hi float64)` and `set func(lo, hi float64)`: `set` gets both numbers after an edit of either; each is clamped to its range, as `NumericUpDown` |
+| `CheckBoxGroup` | the `Value`s of the checked options, a `[]string` | `BindValues(c, get, set)`: `set` gets them in option order |
 | `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options and makes it a plain choice, not `Editable`; `set` is called for yes and no only |
 
 - The control takes `get()`'s value at once. After each edit of the user,
   `set(v)` runs with the new value on the event goroutine, after the
   control's own `OnChange` (`Bind` does not replace it), and off the
   package's lock, so `set` may call the control's getters.
-- **A program setter does not call `set`.** `SetText`, `SetChecked` and
-  `SetValue` change what the control shows, not the source: the program
+- **A program setter does not call `set`.** `SetText`, `SetChecked`,
+  `SetValue` and `SetValues` change what the control shows, not the source: the program
   already knows the value it gave. This keeps a binding from looping.
 - `widget.Reload(c)` takes the source's value again, for a source that
   changed elsewhere; it does not call `set`, and does nothing for a control
@@ -967,9 +969,10 @@ Input and display:
   `Password`, `OnEnter`, `MaxLength(n)` (runes, as in WinForms: typing or
   pasting past it is cut at it, and so is `SetText`; 0 for no limit) and
   `Icon(bitmap)` (16 DIPs, inside the box before the text; nil removes it).
-- `Bind(control, get, set)`, `BindInt`, `Reload(control)`: tie a `TextBox`,
-  `CheckBox`, `ComboBox` or `NumericUpDown` to a value kept elsewhere; see
-  [Binding](#binding).
+- `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
+  `Reload(control)`: tie a `TextBox`, `MultilineTextBox`, `CheckBox`,
+  `ComboBox`, `NumericUpDown`, `RangeSpin` or `CheckBoxGroup` to a value
+  kept elsewhere; see [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
   color) or `SetIconPNG` (a PNG or GIF in its own colors, as high as the
   text, as an SVG icon: give it 32 by 32 pixels to stay sharp on 2×
@@ -1025,6 +1028,7 @@ Input and display:
   row of the box and the buttons.
   `RangeSpin` is two, with text between and after; they are "minimum" and
   "maximum" to assistive technology unless `SetAccessibleNames(low, high)`.
+  Its `SideButtons()` gives both numbers the look `NumericUpDown`'s gives.
 - `ProgressBar()`: `SetFraction` (negative for unknown length), `SetText`.
 - `DataGridView(key, columns...)`: rows in columns; see [DataGridView](#datagridview).
   `Spinner()`: `Start`, `Stop`.

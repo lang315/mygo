@@ -400,6 +400,11 @@ func CheckBoxGroup(row bool, opts ...Option) *CheckBoxGroupWidget {
 func (g *CheckBoxGroupWidget) Values() []string {
 	mu.Lock()
 	defer mu.Unlock()
+	return g.values()
+}
+
+// values is Values, under mu.
+func (g *CheckBoxGroupWidget) values() []string {
 	var vs []string
 	for i, o := range g.opts {
 		if g.on[i].value {
@@ -432,7 +437,7 @@ func (g *CheckBoxGroupWidget) build(c *ui.Context) ui.Element {
 	return e.Gap(c.Theme().Space(3)).Children(func() {
 		for i, o := range g.opts {
 			p, changed := g.on[i].bind()
-			ui.Checkbox(c.Key(i), p, o.Text).OnChange(onChange(&g.on[i], g.onChange))
+			ui.Checkbox(c.Key(i), p, o.Text).OnChange(edited(&g.on[i], &g.bound, g.onChange))
 			if changed && g.onChange != nil {
 				Post(g.onChange)
 			}

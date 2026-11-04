@@ -341,3 +341,109 @@ func TestBindFromManyGoroutines(t *testing.T) {
 	<-done
 	Update(func() {})
 }
+
+// order records what ran, in order, for tests of OnChange before set.
+type order struct {
+	mu  sync.Mutex
+	ran []string
+}
+
+func (o *order) note(s string) { o.mu.Lock(); o.ran = append(o.ran, s); o.mu.Unlock() }
+
+func (o *order) want(t *testing.T, want ...string) {
+	t.Helper()
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !slices.Equal(o.ran, want) {
+		t.Fatalf("ran %q, want %q", o.ran, want)
+	}
+}
+
+func TestBindMultilineTextBox(t *testing.T) {
+	src := newSource("ab")
+	var o order
+	ml := MultilineTextBox().OnChange(func() { o.note("OnChange") })
+	Bind(ml, src.get, func(v string) { o.note("set " + v); src.set(v) })
+	if ml.Text() != "ab" {
+		t.Fatalf("Text %q, want the source's ab", ml.Text())
+	}
+	tt := tester(t, ml)
+	typeInto(t, tt, 1, "c")
+	if v := only(t, src); v != "abc" {
+		t.Fatalf("set got %q, want abc", v)
+	}
+	o.want(t, "OnChange", "set abc")
+	ml.SetText("prog")
+	tt.Frame()
+	src.change("two")
+	Reload(ml)
+	tt.Frame()
+	if ml.Text() != "two" || len(src.calls()) != 1 {
+		t.Fatalf("Text %q after Reload, set calls %q: SetText and Reload must not call set", ml.Text(), src.calls())
+	}
+}
+
+func TestBindRange(t *testing.T) {
+	src := newSource([2]float64{2, 8})
+	var o order
+	r := RangeSpin(0, 10, 0, 10, 1, "to", "").OnChange(func() { o.note("OnChange") })
+	BindRange(r, func() (lo, hi float64) { v := src.get(); return v[0], v[1] },
+		func(lo, hi float64) { o.note("set"); src.set([2]float64{lo, hi}) })
+	if lo, hi := r.Values(); lo != 2 || hi != 8 {
+		t.Fatalf("values %v, %v, want the source's 2, 8", lo, hi)
+	}
+	tt := tester(t, r)
+	clickNode(t, tt, "maximum Increase")
+	if v := only(t, src); v != [2]float64{2, 9} {
+		t.Fatalf("set got %v, want [2 9]", v)
+	}
+	o.want(t, "OnChange", "set")
+	r.SetValues(3, 4)
+	tt.Frame()
+	src.change([2]float64{5, 60}) // the high one is clamped to 10, not written back
+	Reload(r)
+	tt.Frame()
+	if lo, hi := r.Values(); lo != 5 || hi != 10 || len(src.calls()) != 1 {
+		t.Fatalf("values %v, %v after Reload, set calls %v: SetValues and Reload must not call set", lo, hi, src.calls())
+	}
+}
+
+// The value set gets is taken as the user commits it: OnChange's setter
+// is not what the source gets.
+func TestBindRangeTakesTheValueAsCommitted(t *testing.T) {
+	src := newSource([2]float64{2, 8})
+	var r *RangeSpinWidget
+	r = RangeSpin(0, 10, 0, 10, 1, "to", "").OnChange(func() { r.SetValues(0, 0) })
+	BindRange(r, func() (lo, hi float64) { v := src.get(); return v[0], v[1] },
+		func(lo, hi float64) { src.set([2]float64{lo, hi}) })
+	tt := tester(t, r)
+	clickNode(t, tt, "minimum Increase")
+	if v := only(t, src); v != [2]float64{3, 8} {
+		t.Fatalf("set got %v, want the user's [3 8]", v)
+	}
+}
+
+func TestBindValuesCheckBoxGroup(t *testing.T) {
+	src := newSource("a") // the checked values, joined by spaces
+	var o order
+	g := CheckBoxGroup(false, Option{"a", "A"}, Option{"b", "B"}, Option{"c", "C"}).OnChange(func() { o.note("OnChange") })
+	BindValues(g, func() []string { return strings.Fields(src.get()) },
+		func(vs []string) { o.note("set"); src.set(strings.Join(vs, " ")) })
+	if got := g.Values(); !slices.Equal(got, []string{"a"}) {
+		t.Fatalf("Values %q, want the source's a", got)
+	}
+	tt := tester(t, g)
+	click(t, tt, "B")
+	if v := only(t, src); v != "a b" {
+		t.Fatalf("set got %q, want a b", v)
+	}
+	o.want(t, "OnChange", "set")
+	g.SetValues("c")
+	tt.Frame()
+	src.change("b c")
+	Reload(g)
+	tt.Frame()
+	if got := g.Values(); !slices.Equal(got, []string{"b", "c"}) || len(src.calls()) != 1 {
+		t.Fatalf("Values %q after Reload, set calls %q: SetValues and Reload must not call set", got, src.calls())
+	}
+}

@@ -113,6 +113,14 @@ func (r *RangeSpinWidget) SetValues(lo, hi float64) *RangeSpinWidget {
 	return r
 }
 
+// SideButtons gives both numbers NumericUpDown.SideButtons' look: − and +
+// buttons beside each box, instead of the arrows joined at its end.
+func (r *RangeSpinWidget) SideButtons() *RangeSpinWidget {
+	r.lo.SideButtons()
+	r.hi.SideButtons()
+	return r
+}
+
 // SetAccessibleNames names the two numbers for assistive technology; without
 // them they are "minimum" and "maximum", as a range slider's knobs are.
 func (r *RangeSpinWidget) SetAccessibleNames(low, high string) *RangeSpinWidget {
