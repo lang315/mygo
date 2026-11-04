@@ -265,4 +265,6 @@ func TestTableOnSelectionChangedFiresWhenASearchHidesAChangedRow(t *testing.T) {
 	step("AddRow replacing a selected row, hidden", true, func() { tb.AddRow(acct{2, "yb", 20}) })
 	step("InsertRows replacing it, shown", true, func() { tb.InsertRows(0, acct{2, "xb", 20}) })
 	step("SetRows hiding one", true, func() { tb.SetRows([]acct{{1, "xa", 10}, {2, "yb", 20}, {3, "xc", 30}}) })
+	// The search shows the same places of the source, with other rows in them.
+	step("SetRows swapping rows", true, func() { tb.SetRows([]acct{{2, "xb", 20}, {1, "ya", 10}, {3, "xc", 30}}) })
 }

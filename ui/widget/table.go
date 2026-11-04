@@ -125,10 +125,10 @@ type DataGridViewWidget[T any, K comparable] struct {
 	onSelChanged                            func()               // OnSelectionChanged's
 	selPending                              bool                 // a selection change is posted, not run yet
 	// selSeen are the keys of the rows selected that a search showed, as of
-	// the view's version selVersion and the selection's generation selGen;
-	// nil when not known (see watchSearch).
-	selSeen            map[K]struct{}
-	selVersion, selGen uint64
+	// the view's version selVersion, the selection's generation selGen and
+	// the source's change selSeq; nil when not known (see watchSearch).
+	selSeen                    map[K]struct{}
+	selVersion, selGen, selSeq uint64
 
 	// In-cell editing (tableedit.go): its state is edAny, a *tableEditing, and the
 	// parts of editing the table calls are the func fields below, all nil until
@@ -396,13 +396,14 @@ func (t *DataGridViewWidget[T, K]) sync() {
 }
 
 // watchSearch fires OnSelectionChanged when the rows changed so that the
-// search hides or shows other selected rows: the view's version moved, the
+// search hides or shows other selected rows: the view or the source changed
+// (the source may put other rows in the places the view shows), the
 // selection did not (the user's changes, and deletes, fire by themselves). It
-// costs a pass over the rows selected when the view changes. Under mu, after
-// the view synced.
+// costs a pass over the rows selected when the view or the source changes.
+// Under mu, after the view synced.
 func (t *DataGridViewWidget[T, K]) watchSearch() {
-	v, gen := t.view.Version(), t.chosen.gen
-	if t.selSeen != nil && v == t.selVersion && gen == t.selGen {
+	v, gen, seq := t.view.Version(), t.chosen.gen, t.src.seq
+	if t.selSeen != nil && v == t.selVersion && gen == t.selGen && seq == t.selSeq {
 		return
 	}
 	known := t.selSeen != nil && gen == t.selGen
@@ -429,7 +430,7 @@ func (t *DataGridViewWidget[T, K]) watchSearch() {
 			t.selectionChanged()
 		}
 	}
-	t.selVersion, t.selGen = v, gen
+	t.selVersion, t.selGen, t.selSeq = v, gen, seq
 }
 
 // rowAtPos returns the row at position pos of the view in the frame ui shows,
