@@ -583,7 +583,7 @@ name := widget.Bind(widget.TextBox(),
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `RangeSpin` | its two numbers, `float64` | `BindRange(c, get, set)`, with `get func() (lo, hi float64)` and `set func(lo, hi float64)`: `set` gets both numbers after an edit of either; each is clamped to its range, as `NumericUpDown` |
-| `CheckBoxGroup` | the `Value`s of the checked options, a `[]string` | `BindValues(c, get, set)`: `set` gets them in option order |
+| `CheckBoxGroup` | the `Value`s of the checked options, a `[]string` | `BindValues(c, get, set)`: `set` gets them in option order; a value of `get()` that is no option's is ignored, and absent from the next `set` |
 | `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options and makes it a plain choice, not `Editable`; `set` is called for yes and no only |
 
 - The control takes `get()`'s value at once. After each edit of the user,
@@ -970,9 +970,9 @@ Input and display:
   pasting past it is cut at it, and so is `SetText`; 0 for no limit) and
   `Icon(bitmap)` (16 DIPs, inside the box before the text; nil removes it).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
-  `Reload(control)`: tie a `TextBox`, `MultilineTextBox`, `CheckBox`,
-  `ComboBox`, `NumericUpDown`, `RangeSpin` or `CheckBoxGroup` to a value
-  kept elsewhere; see [Binding](#binding).
+  `Reload(control)`: tie a `TextBox`, `MultilineTextBox`, `DomainUpDown`,
+  `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`, `RangeSpin` or
+  `CheckBoxGroup` to a value kept elsewhere; see [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
   color) or `SetIconPNG` (a PNG or GIF in its own colors, as high as the
   text, as an SVG icon: give it 32 by 32 pixels to stay sharp on 2×

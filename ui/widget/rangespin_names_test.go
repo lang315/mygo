@@ -19,8 +19,8 @@ func spinNames(tt *ui.Tester) (fields, buttons []string) {
 	return
 }
 
-// node returns the bounds of the node labeled label, which Find does not
-// match when the label joins a field's name and a button's.
+// node returns the bounds of the node whose accessibility label in Nodes()
+// is exactly label: Find matches only drawn text, never such labels.
 func node(t *testing.T, tt *ui.Tester, label string) ui.Rect {
 	t.Helper()
 	for _, n := range tt.Nodes() {

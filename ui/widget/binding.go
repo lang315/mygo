@@ -145,9 +145,10 @@ func BindRange(c *RangeSpinWidget, get func() (lo, hi float64), set func(lo, hi 
 // BindValues is Bind for a CheckBoxGroup, whose checked values the source
 // keeps: the group checks get()'s values at once, and after the user checks
 // or unchecks a box, set gets the checked values in option order, as they
-// are at that click. Bind's rules hold: set runs after OnChange, off the
-// lock; a program setter and Reload do not call set; binding again replaces
-// the binding.
+// are at that click. A value of get's that is no option's is ignored, as
+// SetValues ignores it, and is absent from the next set. Bind's rules hold:
+// set runs after OnChange, off the lock; a program setter and Reload do not
+// call set; binding again replaces the binding.
 func BindValues(c *CheckBoxGroupWidget, get func() []string, set func([]string)) *CheckBoxGroupWidget {
 	reload := func() { c.SetValues(get()...) }
 	c.change(func() {
