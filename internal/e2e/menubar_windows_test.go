@@ -68,8 +68,10 @@ func recorderForm(t *testing.T, bar, header bool, opened *atomic.Int32) (*widget
 	f.Show()
 	t.Cleanup(f.Close)
 	eventually(t, "the form's window", func() bool { return f.Native() != nil })
-	eventually(t, "the recorder's focus", rec.hasFocus)
+	// An element has the focus only while its window has the keyboard: the
+	// window comes to the front first, then the recorder reports it.
 	mnFront(t, f)
+	eventually(t, "the recorder's focus", rec.hasFocus)
 	return f, rec
 }
 
