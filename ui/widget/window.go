@@ -178,11 +178,19 @@ func (w *Form) Native() *mygo.Window {
 
 // Show makes the window and shows it. It does nothing while the window is
 // shown; a window that closed shows again.
-func (w *Form) Show() {
+func (w *Form) Show() { w.show(false) }
+
+// show shows the window, as Show does; with cancel, a Close since Dialog.Run
+// began keeps it hidden, and show reports false.
+func (w *Form) show(cancel bool) bool {
 	mu.Lock()
 	if w.showing {
 		mu.Unlock()
-		return
+		return true
+	}
+	if cancel && w.closing {
+		mu.Unlock()
+		return false
 	}
 	w.showing, w.closing = true, false
 	w.keep.shown()
@@ -257,6 +265,7 @@ func (w *Form) Show() {
 	} else if macMenus {
 		claimAppMenuIfFree(w)
 	}
+	return true
 }
 
 // closeAsked answers a request to close the window, on the main thread.

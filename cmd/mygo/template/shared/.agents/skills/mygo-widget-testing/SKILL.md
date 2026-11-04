@@ -100,6 +100,8 @@ func TestRenameDialog(t *testing.T) {
 ```
 
 - `widget.DialogTester.Escape` presses Escape as a window does: an open drop-down or a shortcut takes it, else it asks `OnClose` (on the event goroutine: wait for it before `Closed`) and closes unless that says no or the dialog is not deletable.
+- `widget.Tester.RequestClose` asks to close a `widget.TestForm` (or `widget.TestDialog`) tester's form as its close button does. It settles, so `OnClose` has answered, and reports whether the form closed. Use it to test an app's `OnClose` handler. An `OnClose` that runs a dialog such as `widget.Confirm` is still asking when it returns.
+- A `widget.Dialog.Close` before the dialog first shows, or in its `OnBeforeRun`, makes that `Run` return at once, with or without a tester.
 - A `DialogTester` embeds the `Tester`, so its `Find` takes a `widget.Query`; `ui.Tester`'s `Find(string)` is shadowed.
 - Only a dialog you made with `widget.NewDialog` and hold in the test can be driven by `widget.TestDialog`. `widget.Alert`, `widget.Confirm`, `widget.InputString` and the other input and file dialogs make their own dialog and show a real window, so a test cannot reach them and one that calls them hangs or opens a window. Have the app call them through a function variable or an interface that the test replaces.
 

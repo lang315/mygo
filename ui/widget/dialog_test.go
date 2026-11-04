@@ -1,11 +1,13 @@
 package widget
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // shownParent shows a window to be a dialog's parent.
@@ -131,5 +133,100 @@ func TestUndeletableDialogLetsTheAppQuit(t *testing.T) {
 	})
 	if !closes {
 		t.Fatal("an undeletable dialog vetoed the app's quit")
+	}
+}
+
+// A Close before the first Run ends that Run at once, with no window, as a
+// DialogTester's does; the next Run shows the dialog.
+func TestDialogClosedBeforeItsFirstRunReturnsAtOnce(t *testing.T) {
+	var d *Dialog
+	d = NewDialog(nil, "Early", "", 300, 200, Button("Done").OnClick(func() { d.Close() }))
+	d.Close()
+	received(t, runAsync(func() bool { d.Run(); return true }))
+	for _, fw := range fb.Windows() {
+		if fw.Title() == "Early" {
+			t.Fatal("a dialog closed before its Run showed a window")
+		}
+	}
+	ran := runAsync(func() bool { d.Run(); return true })
+	press(t, waitFake(t, "Early"), "Done")
+	received(t, ran)
+}
+
+// Headless, the same: Run returns at once, then shows again.
+func TestTestDialogClosedBeforeItsFirstRunReturnsAtOnce(t *testing.T) {
+	d := NewDialog(nil, "EarlyT", "", 300, 200, Label("x"))
+	dt := TestDialog(t, d)
+	d.Close()
+	received(t, runAsync(func() bool { d.Run(); return true }))
+	ran := runAsync(func() bool { d.Run(); return true })
+	wait.Until(t, "the second Run to show", func() bool { return !dt.Closed() })
+	d.Close()
+	received(t, ran)
+}
+
+// A Tester of a form asks OnClose as the close button does.
+func TestTesterRequestCloseAsksOnClose(t *testing.T) {
+	f := NewForm("Ask", 300, 200)
+	answer := false
+	asked := 0
+	f.OnClose(func() bool { asked++; return answer })
+	tt := TestForm(t, f)
+	if tt.RequestClose() || asked != 1 {
+		t.Fatalf("OnClose said no: closed, asked %d", asked)
+	}
+	answer = true
+	if !tt.RequestClose() || asked != 2 {
+		t.Fatalf("OnClose said yes: open, asked %d", asked)
+	}
+	d := NewDialog(nil, "Fixed", "", 300, 200, Label("x")).SetDeletable(false)
+	dt := TestDialog(t, d)
+	if dt.RequestClose() || dt.Closed() {
+		t.Fatal("an undeletable dialog closed on the user's request")
+	}
+}
+
+// A Close in OnBeforeRun cancels that Run, on a later Run too; a Close
+// between Runs does not cancel the next, and a Show then a Close leave a
+// Run showing. With a window as headless.
+func TestDialogRunCanceledOnlyByACloseBeforeItShows(t *testing.T) {
+	for _, headless := range []bool{false, true} {
+		title := fmt.Sprintf("Cancel%v", headless)
+		var d *Dialog
+		cancel := false
+		d = NewDialog(nil, title, "", 300, 200, Button("Done").OnClick(func() { d.Close() })).
+			OnBeforeRun(func() {
+				if cancel {
+					d.Close()
+				}
+			})
+		var dt *DialogTester
+		if headless {
+			dt = TestDialog(t, d)
+		}
+		// shows runs d and closes it once it shows, as the user would.
+		shows := func() {
+			t.Helper()
+			ran := runAsync(func() bool { d.Run(); return true })
+			if headless {
+				wait.Until(t, "the Run to show", func() bool { return !dt.Closed() })
+				d.Close()
+			} else {
+				press(t, waitFake(t, title), "Done")
+			}
+			received(t, ran)
+		}
+		shows()
+		cancel = true
+		received(t, runAsync(func() bool { d.Run(); return true })) // canceled in OnBeforeRun
+		cancel = false
+		d.Close()
+		shows() // a Close between Runs cancels none
+		if !headless {
+			d.Show()
+			d.Close()
+			waitClosed(t, d.Form)
+			shows() // nor a Close of a Show
+		}
 	}
 }

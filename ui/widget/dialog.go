@@ -10,7 +10,7 @@ type Dialog struct {
 	*Form
 	title, subtitle *LabelWidget
 	onBeforeRun     func()
-	ran             bool // a headless Run returned
+	ran             bool // a Run returned: the next one is a new show
 }
 
 // NewDialog makes a dialog over parent (nil for none) titled title, with
@@ -63,13 +63,18 @@ func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return
 // Run shows the dialog and returns when it closes: by Close, by the user,
 // or with its parent. In a handler it runs the other handlers meanwhile,
 // as gtk_dialog_run runs the main loop, so the dialog's buttons work; on
-// another goroutine it waits; on the main thread it panics.
+// another goroutine it waits; on the main thread it panics. A Close before
+// the dialog first shows, or in OnBeforeRun, makes that Run return at once
+// without showing the dialog, with a window as with a DialogTester.
 func (d *Dialog) Run() {
 	notMain("Dialog.Run")
 	mu.Lock()
-	if d.headless != nil && d.ran { // a DialogTester's: a Run after a Run is a new show
-		d.headless, d.closing, d.ran = make(chan struct{}), false, false
-		d.keep.shown()
+	if (d.ran || d.done != nil) && !d.showing { // a Run after a Run, or a Show, is a new show
+		d.closing, d.ran = false, false
+		if d.headless != nil { // a DialogTester's
+			d.headless = make(chan struct{})
+			d.keep.shown()
+		}
 	}
 	before := d.onBeforeRun
 	mu.Unlock()
@@ -78,18 +83,18 @@ func (d *Dialog) Run() {
 	}
 	mu.Lock()
 	done := d.headless
-	headless := done != nil
 	mu.Unlock()
 	if done == nil { // a DialogTester has none, and shows no window
-		d.Show()
-		mu.Lock()
-		done = d.done
-		mu.Unlock()
+		if d.show(true) {
+			mu.Lock()
+			done = d.done
+			mu.Unlock()
+		}
 	}
-	block("Dialog.Run", done)
-	if headless {
-		mu.Lock()
-		d.ran = true
-		mu.Unlock()
+	if done != nil {
+		block("Dialog.Run", done)
 	}
+	mu.Lock()
+	d.ran = true
+	mu.Unlock()
 }
