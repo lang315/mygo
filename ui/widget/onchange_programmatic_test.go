@@ -32,6 +32,8 @@ func TestSettersDoNotRunOnChange(t *testing.T) {
 	add("CheckBox.SetChecked", cb, func() { cb.SetChecked(true) })
 	sw := Switch().OnChange(count)
 	add("Switch.SetOn", sw, func() { sw.SetOn(true) })
+	tg := Toggle("t").OnChange(count)
+	add("Toggle.SetActive", tg, func() { tg.SetActive(true) })
 	r1, r2 := RadioButton("a").OnChange(count), RadioButton("b").OnChange(count)
 	add("RadioButton.SetChecked", VBox(2).Add(r1, r2), func() { r2.SetChecked(true) })
 	co := ComboBox(Option{Value: "a", Text: "A"}, Option{Value: "b", Text: "B"}).OnChange(count)
@@ -57,6 +59,12 @@ func TestSettersDoNotRunOnChange(t *testing.T) {
 	add("MaskedTextBox.SetText", mk, func() { mk.SetText("1234") })
 	di := DomainUpDown("a", "b", "c").OnChange(count)
 	add("DomainUpDown.SetSelectedIndex", di, func() { di.SetSelectedIndex(2) })
+	ts := TagSelect(Option{Value: "a", Text: "A"}, Option{Value: "b", Text: "B"}).OnChange(count)
+	add("TagSelect.SetValues", ts, func() { ts.SetValues("b") })
+	mc := MonthCalendar().OnChange(count)
+	add("MonthCalendar.SetValue", mc, func() { mc.SetValue(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)) })
+	tbn := ToolButton("b").SetToggle(true).OnChange(count)
+	add("ToolButton.SetChecked", tbn, func() { tbn.SetChecked(true) })
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			n.Store(0)
