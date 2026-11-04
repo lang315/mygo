@@ -513,7 +513,7 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 	g.Selection = t.chosen.bind()
 	g.AccentChoice = true
 	g.Copy, g.ItemMenu = nil, nil
-	if t.copyFn != nil {
+	if t.copyFn != nil && !t.noCopy {
 		g.Copy = t.copyRows
 	}
 	switch menu := t.menu; {

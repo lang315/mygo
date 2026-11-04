@@ -196,7 +196,8 @@ func TestTableOnSelectionChangedFiresOncePerChange(t *testing.T) {
 	step("down key", true, func() { tt.Key(0, ui.KeyDown) })
 	step("select all", true, func() { tt.Key(ui.Cmd, ui.KeyA) })
 	step("frames", false, func() { tt.Frame() })
-	step("delete a row not selected", false, func() { tb.AddRow(acct{5, "eve", 50}) })
+	step("add a row", false, func() { tb.AddRow(acct{5, "eve", 50}) })
+	step("delete a row not selected", false, func() { tb.DeleteRows(5) })
 	step("delete a selected row", true, func() { tb.DeleteRows(1) })
 	step("search hiding selected rows", true, func() { tb.Search("Name", "bob") })
 	step("search showing the same", false, func() { tb.Search("Name", "bo") })
@@ -216,5 +217,17 @@ func TestTableClipboardCopyOff(t *testing.T) {
 	tt.Key(ui.Cmd, ui.KeyC)
 	if got := tt.Clipboard(); !strings.HasPrefix(got, "bob") {
 		t.Fatalf("copied %q with copy on", got)
+	}
+}
+
+// The icon views copy with CopyFunc only, and not when copy is off.
+func TestListViewClipboardCopyOffInIconViews(t *testing.T) {
+	lv := newView().CopyFunc(func(ks []string) string { return strings.Join(ks, ",") }).SetView(ViewSmallIcon)
+	lv.Details().SetClipboardCopy(false)
+	tt := tester(t, lv)
+	click(t, tt, "Banana")
+	tt.Key(ui.Cmd, ui.KeyC)
+	if got := tt.Clipboard(); got != "" {
+		t.Fatalf("copied %q with copy off", got)
 	}
 }

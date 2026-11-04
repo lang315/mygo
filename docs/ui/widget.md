@@ -752,7 +752,8 @@ lock: they read the row and call no widget method.
   cells apart by tabs; `CopyFunc(fn)` replaces that text with what `fn` makes
   of the keys of the selected rows, in the order shown, for both, so they
   agree. `fn` runs on the main thread, off the lock: it may call the table's
-  getters, but should be quick. `SetClipboardCopy(false)` turns both off.
+  getters, but should be quick. `SetClipboardCopy(false)` turns both off, in
+  a `ListView`'s every view too (through `Details()`).
 
   ```go
   table.CopyFunc(func(ids []string) string { return strings.Join(ids, "\n") })
