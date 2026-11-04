@@ -78,7 +78,8 @@ func (b *ToolButtonWidget) SetIcon(icon *ui.SVG) *ToolButtonWidget {
 }
 
 // SetIconPNG shows the image in data before the text, in its own colors, as
-// Button's SetIconPNG does; nil removes it. It replaces an SVG icon.
+// Button's SetIconPNG does; nil, or bytes that are no image, remove it (the
+// tooltip still names a button with no text). It replaces an SVG icon.
 func (b *ToolButtonWidget) SetIconPNG(data []byte) *ToolButtonWidget {
 	bmp := decodeImage(data) // outside mu: decoding takes a while
 	b.change(func() { b.png, b.icon, bitmapIcon = bmp, nil, drawBitmapIcon })
@@ -158,6 +159,8 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 	e.Destructive(b.destructive)
 	if b.icon != nil || b.png != nil {
 		iconFace(c, e, b.icon, b.png, b.text, b.tooltip, true)
+	} else if b.text == "" && b.tooltip != "" {
+		e.Label(b.tooltip) // a button with no text is named by its tooltip
 	}
 	return e
 }

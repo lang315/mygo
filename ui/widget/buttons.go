@@ -42,10 +42,10 @@ func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget {
 }
 
 // SetIconPNG shows the image in data (PNG or GIF, see PictureBox) before the
-// text, in its own colors, as MenuItem.IconPNG does: a square of the theme's
-// text size, an SVG icon's side. Give it 32 by 32 pixels to stay sharp on a
-// 2× display. nil, or bytes that are no image, remove it. It replaces an SVG
-// icon.
+// text, in its own colors, as MenuItem.IconPNG does: as high as the text, as
+// an SVG icon. Give it 32 by 32 pixels to stay sharp on a 2× display. nil, or
+// bytes that are no image, remove it (the tooltip still names a button with
+// no text). It replaces an SVG icon.
 func (b *ButtonWidget) SetIconPNG(data []byte) *ButtonWidget {
 	bmp := decodeImage(data) // outside mu: decoding takes a while
 	b.change(func() { b.png, b.icon, bitmapIcon = bmp, nil, drawBitmapIcon })
@@ -56,12 +56,8 @@ func (b *ButtonWidget) SetIconPNG(data []byte) *ButtonWidget {
 // does not link the drawing of images. Under mu.
 var bitmapIcon func(c *ui.Context, bmp *ui.Bitmap)
 
-// drawBitmapIcon draws bmp as a square of the theme's text size, an SVG
-// icon's side.
-func drawBitmapIcon(c *ui.Context, bmp *ui.Bitmap) {
-	em := c.Theme().FontSize
-	ui.Image(c, bmp).Size(em, em)
-}
+// drawBitmapIcon draws bmp as an icon, as high as the text, as an SVG icon.
+func drawBitmapIcon(c *ui.Context, bmp *ui.Bitmap) { ui.IconImage(c, bmp) }
 
 // Suggested draws the button as the main action, gota's suggested-action
 // and tw's: the accent for its background, with the accent's text, and the
@@ -157,6 +153,8 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 	}
 	if hasIcon {
 		iconFace(c, e, b.icon, b.png, label, b.tooltip, false)
+	} else if label == "" && b.tooltip != "" {
+		e.Label(b.tooltip) // a button with no text is named by its tooltip
 	}
 	if b.onClick != nil {
 		if b.clicked == nil {

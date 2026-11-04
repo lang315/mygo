@@ -856,8 +856,9 @@ style hover, focus, pressed, disabled and dark states, see
 | `Suggested()`, `Destructive()` on buttons and tool buttons | `suggested-action`, `destructive-action` |
 
 Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
-`SetAccessibleName` (its name for assistive technology and `ByLabel`, over the
-one its text, tooltip or `Fields` row gives), `OnFocusOut`, `OnClick` (gota's
+`SetAccessibleName` (the name of the control itself for assistive technology
+and `ByLabel`, over the one its text, tooltip or `Fields` row gives; a
+container's, or a group's, names the group), `OnFocusOut`, `OnClick` (gota's
 `EventBox`), `ContextMenu`, `Focus`, which moves the keyboard focus to it,
 and `AssignTo(&v)`, which keeps a widget made inside a chain.
 
@@ -964,9 +965,9 @@ Input and display:
   `CheckBox`, `ComboBox` or `NumericUpDown` to a value kept elsewhere; see
   [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
-  color) or `SetIconPNG` (a PNG or GIF in its own colors, a square of the
-  theme's text size: give it 32 by 32 pixels to stay sharp on 2× displays).
-  `Button("")` with an icon is named by its tooltip for assistive technology
+  color) or `SetIconPNG` (a PNG or GIF in its own colors, as high as the
+  text, as an SVG icon: give it 32 by 32 pixels to stay sharp on 2×
+  displays). `Button("")` is named by its tooltip for assistive technology
   and the Tester, or by `SetAccessibleName`. `Suggested()` and
   `Destructive()` are the button's own style (tw's `suggested-action` and
   `destructive-action`); the last one given wins. `LinkLabel(text, url)`; `OnClick(fn)` runs `fn` on the event goroutine

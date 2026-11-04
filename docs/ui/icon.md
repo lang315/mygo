@@ -23,6 +23,11 @@ ui.Icon(c, save).FontSize(24).TextColor(c.Theme().Danger)
 `FontSize` and `TextColor` size and color it, as they do text; `Size` gives
 it another size. An icon does not stretch across a column.
 
+`ui.IconImage(c, bitmap)` shows a `*ui.Bitmap` (`ui.DecodeBitmap`) as an
+icon in its own colors: as high as the font size, as `Icon`, keeping the
+bitmap's aspect ratio. Give it a bitmap twice that size, 32 by 32 pixels
+for text of 16, to stay sharp on a 2× display.
+
 ## In buttons
 
 Inside a button, which lays out its children in a row and gives them its

@@ -181,7 +181,11 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	b.place.apply(e)
 	if b.accName != "" {
-		e.Label(b.accName)
+		if _, ok := w.(interface{ children() []Control }); ok {
+			e.Label(b.accName) // a container names its group
+		} else {
+			e.AccessibleName(b.accName) // the control, not a box around it
+		}
 	}
 	if b.styled {
 		p := b.style.effective(c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled)

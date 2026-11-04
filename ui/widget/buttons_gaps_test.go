@@ -43,23 +43,83 @@ func TestIconButtonNamedByTooltip(t *testing.T) {
 	}
 }
 
-// SetAccessibleName names any control, and wins over the tooltip of an
-// icon-only button and the label of a Fields row.
+// namedRow is a row of the lists and trees named in
+// TestSetAccessibleNameOnEveryControl.
+type namedRow struct{ id int }
+
+// SetAccessibleName names the control itself, not a box around it, plain
+// and in a Fields row, whose label it wins over; a group of controls, and a
+// container, is named as a group. An icon-only button's name wins over its
+// tooltip.
 func TestSetAccessibleNameOnEveryControl(t *testing.T) {
+	key := func(r *namedRow) int { return r.id }
+	text := func(r *namedRow) string { return "x" }
+	ab := []Option{{"a", "A"}, {"b", "B"}}
+	for _, c := range []struct {
+		name string
+		role ui.Role
+		make func() Control
+	}{
+		{"Button", ui.RoleButton, func() Control { return Button("Go").SetAccessibleName("ZZ") }},
+		{"icon-only Button", ui.RoleButton, func() Control {
+			return Button("").SetIcon(chevronDown).SetTooltip("Tip").SetAccessibleName("ZZ")
+		}},
+		{"ToolButton", ui.RoleButton, func() Control {
+			return ToolStrip(ToolButton("").SetIcon(chevronDown).SetTooltip("Tip").SetAccessibleName("ZZ"))
+		}},
+		{"LinkLabel", ui.RoleLink, func() Control { return LinkLabel("Site", "https://example.com").SetAccessibleName("ZZ") }},
+		{"Toggle", ui.RoleToggleButton, func() Control { return Toggle("T").SetAccessibleName("ZZ") }},
+		{"CheckBox", ui.RoleCheckBox, func() Control { return CheckBox("C").SetAccessibleName("ZZ") }},
+		{"Switch", ui.RoleSwitch, func() Control { return Switch().SetAccessibleName("ZZ") }},
+		{"CheckBoxGroup", ui.RoleGroup, func() Control { return CheckBoxGroup(false, ab...).SetAccessibleName("ZZ") }},
+		{"TagSelect", ui.RoleGroup, func() Control { return TagSelect(ab...).SetAccessibleName("ZZ") }},
+		{"RadioGroup", ui.RoleRadioGroup, func() Control { return RadioGroup(false, ab...).SetAccessibleName("ZZ") }},
+		{"RangeSpin", ui.RoleGroup, func() Control { return RangeSpin(0, 10, 0, 10, 1, "to", "").SetAccessibleName("ZZ") }},
+		{"ComboBox", ui.RolePopUpButton, func() Control { return ComboBox(ab...).SetAccessibleName("ZZ") }},
+		{"ProgressBar", ui.RoleProgress, func() Control { return ProgressBar().SetAccessibleName("ZZ") }},
+		{"DateTimePicker", ui.RolePopUpButton, func() Control { return DateTimePicker().SetAccessibleName("ZZ") }},
+		{"MonthCalendar", ui.RoleTable, func() Control { return MonthCalendar().SetAccessibleName("ZZ") }},
+		{"DomainUpDown", ui.RoleStepper, func() Control { return DomainUpDown("a", "b").SetAccessibleName("ZZ") }},
+		{"MaskedTextBox", ui.RoleTextField, func() Control { return MaskedTextBox("000").SetAccessibleName("ZZ") }},
+		{"MenuButton", ui.RoleMenuButton, func() Control { return MenuButton("M").SetAccessibleName("ZZ") }},
+		{"TextBox", ui.RoleTextField, func() Control { return TextBox().SetAccessibleName("ZZ") }},
+		{"MultilineTextBox", ui.RoleTextField, func() Control { return MultilineTextBox().SetAccessibleName("ZZ") }},
+		{"TrackBar", ui.RoleSlider, func() Control { return TrackBar(0, 10).SetAccessibleName("ZZ") }},
+		{"ListBox", ui.RoleList, func() Control { return ListBox(key, text).SetAccessibleName("ZZ") }},
+		{"TreeView", ui.RoleTree, func() Control { return TreeView(key, text).SetAccessibleName("ZZ") }},
+		{"VBox", ui.RoleGroup, func() Control { return VBox(0).Add(TextBox()).SetAccessibleName("ZZ") }},
+	} {
+		for _, inRow := range []bool{false, true} {
+			w := c.make()
+			if inRow {
+				w = Fields().Row("Row", w)
+			}
+			tt := NewTester(t, VBox(0).Add(w), 0, 0)
+			named := tt.FindAll(ByLabel("ZZ"))
+			if len(named) != 1 || named[0].Role() != c.role {
+				t.Errorf("%s (in a row: %v): named %v, want one %s", c.name, inRow, named, roleName(c.role))
+				continue
+			}
+			if inRow && tt.Has(ByRole(c.role).Label("Row")) {
+				t.Errorf("%s: the row's label names it over its accessible name", c.name)
+			}
+			if tt.Has(ByLabel("Tip")) {
+				t.Errorf("%s: the tooltip names it over its accessible name", c.name)
+			}
+		}
+	}
+}
+
+// A button with no text is named by its tooltip even when its PNG icon is
+// no image, so it still has a name.
+func TestButtonWithBadPNGNamedByTooltip(t *testing.T) {
+	junk := []byte("no image")
 	tt := NewTester(t, VBox(0).Add(
-		Button("").SetIcon(chevronDown).SetTooltip("Go to the next one").SetAccessibleName("Next"),
-		Fields().Row("Query", TextBox().SetAccessibleName("Search")),
-		ToolStrip(ToolButton("").SetIcon(chevronDown).SetTooltip("Older").SetAccessibleName("Previous")),
+		Button("").SetIconPNG(junk).SetTooltip("Paint"),
+		ToolStrip(ToolButton("").SetIconPNG(junk).SetTooltip("Erase")),
 	), 0, 0)
-	tt.Find(ByRole(ui.RoleButton).Label("Next"))
-	tt.Find(ByLabel("Search"))
-	tt.Find(ByRole(ui.RoleButton).Label("Previous"))
-	if tt.Has(ByLabel("Go to the next one")) {
-		t.Fatal("the tooltip names the button over its accessible name")
-	}
-	if tt.Has(ByRole(ui.RoleTextField).Label("Query")) {
-		t.Fatal("the row's label names the text box over its accessible name")
-	}
+	tt.Find(ByRole(ui.RoleButton).Label("Paint"))
+	tt.Find(ByRole(ui.RoleButton).Label("Erase"))
 }
 
 // twoColorPNG is a side×side PNG, red on its left half and blue on its right.
@@ -114,5 +174,22 @@ func TestButtonIconKinds(t *testing.T) {
 	b.SetIconPNG(data)
 	if b.icon != nil {
 		t.Fatal("SetIconPNG kept the SVG")
+	}
+}
+
+// A PNG icon is as high as an SVG icon at every text size, as both follow
+// the button's text.
+func TestButtonPNGIconFollowsTextSize(t *testing.T) {
+	data := twoColorPNG(t, 32)
+	for _, size := range []Size{XS, Base, XXL} {
+		tt := NewTester(t, VBox(0).Add(
+			Button("").SetIcon(chevronDown).SetTooltip("SVG").TextSize(size),
+			Button("").SetIconPNG(data).SetTooltip("PNG").TextSize(size),
+		), 0, 0)
+		svg := tt.Find(ByLabel("SVG")).Bounds()
+		png := tt.Find(ByLabel("PNG")).Bounds()
+		if svg.H != png.H || svg.W != png.W {
+			t.Errorf("size %v: the SVG button is %vx%v, the PNG one %vx%v", size, svg.W, svg.H, png.W, png.H)
+		}
 	}
 }

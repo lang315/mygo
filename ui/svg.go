@@ -146,6 +146,20 @@ func coreIcon(c *context, s *SVG) *node {
 	return e
 }
 
+// IconImage creates an element showing a bitmap as an icon, in its own
+// colors: as high as the font size (FontSize), keeping the bitmap's aspect
+// ratio, unless given a size, and not stretching across a column, as Icon.
+// Give it a bitmap twice that size to stay sharp on a 2× display. It is a
+// decoration that assistive technology does not see, unless Label names it.
+func coreIconImage(c *context, b *Bitmap) *node {
+	e := c.newElement(kindIcon)
+	e.image = b
+	if b != nil && b.h > 0 {
+		e.aspect = float32(b.w) / float32(b.h)
+	}
+	return e
+}
+
 // Icon draws the shapes of an SVG fitted in r, in color c.
 func (p *Painter) Icon(s *SVG, r Rect, c Color) { p.drawIcon(s, r, c, 0) }
 

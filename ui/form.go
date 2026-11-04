@@ -166,6 +166,42 @@ func (e *node) NamedBy(label *node) *node {
 	return e
 }
 
+// AccessibleName names the control of e for assistive technology, as Label
+// does, over the name it takes from its text or a form's label (NamedBy): e
+// is the control or the element holding it. Inside an element that has no
+// role of its own and takes no focus, the control is the one NamedBy finds,
+// else the first element with a role of its own (a progress bar); several
+// controls that name themselves, or several inputs, are a group that e is,
+// as NamedBy has them. Call it once what is inside e is built.
+func (e *node) AccessibleName(s string) *node {
+	ctrl := e
+	if e.role == RoleAuto && e.flags&(flagFocusable|flagEditable) == 0 {
+		switch ctrl = fieldControl(e); {
+		case ctrl == nil:
+			if ctrl = roleIn(e); ctrl == nil {
+				ctrl = e
+			}
+		case namesItself(ctrl) || editables(e) > 1:
+			ctrl = e
+		}
+	}
+	ctrl.Label(s)
+	return e
+}
+
+// roleIn returns the first element inside e with a role of its own.
+func roleIn(e *node) *node {
+	for ch := e.first; ch != nil; ch = ch.next {
+		if ch.role != RoleAuto && ch.role != RoleNone {
+			return ch
+		}
+		if r := roleIn(ch); r != nil {
+			return r
+		}
+	}
+	return nil
+}
+
 // editables counts the inputs inside e: a range of two numbers has two.
 func editables(e *node) int {
 	n := 0

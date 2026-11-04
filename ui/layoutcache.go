@@ -179,7 +179,11 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 			media[0], media[1] = e.svg.imageSize()
 		}
 	case kindIcon:
-		media[0], media[1] = e.svg.imageSize()
+		if e.image != nil {
+			media[0], media[1] = e.image.imageSize()
+		} else {
+			media[0], media[1] = e.svg.imageSize()
+		}
 	}
 	var placeOn uint64
 	if e.placeOn != nil {
