@@ -250,8 +250,13 @@ func (b *docBase) checkDisk() {
 		// Renamed in its directory by an app whose rename the watch missed or
 		// started after: it is where the file it read or wrote went.
 		if to := b.findMoved(filepath.Dir(path)); to != "" {
+			b.mu.Lock()
+			current := b.path == path // the watch followed the file while this looked
+			b.mu.Unlock()
 			b.io.Unlock()
-			b.moved(to)
+			if current {
+				b.moved(to)
+			}
 			return
 		}
 		b.mu.Lock()
