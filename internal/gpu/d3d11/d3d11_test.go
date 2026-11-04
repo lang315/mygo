@@ -403,7 +403,7 @@ func TestShaderBytecode(t *testing.T) {
 func BenchmarkUnpackShaders(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := gpu.UnpackShaders(packedShaders, 5); err != nil {
+		if _, err := gpu.UnpackShaders(packedShaders, 5+2*len(classShaders)); err != nil {
 			b.Fatal(err)
 		}
 	}
