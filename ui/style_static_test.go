@@ -12,10 +12,14 @@ import (
 // (objectFn) took 24 bytes beside Hidden's bool, which fits in padding;
 // focusTo (#793, a field box's input, a number input's row's) is the one
 // field that forwards the focus; and upstream's Themed (themed) and
-// Scrollbars (barsFrom) took 24 more, their bools in the padding.
+// Scrollbars (barsFrom) took 24 more, their bools in the padding. It is
+// 1848 since upstream's TranslatePercent (translatePct), ClipInset and masks
+// (clipping, a pointer), the settable focus ring (ringOffset, ringColor,
+// ringSet), all in paintRare, and balanced text and AccessHidden's bools
+// took 48 more.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 1800 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1800", n)
+	if n := unsafe.Sizeof(node{}); n != 1848 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1848", n)
 	}
 }
 

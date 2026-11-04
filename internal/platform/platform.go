@@ -153,12 +153,23 @@ type WindowStateBackend interface {
 	RestoreWindowState(opts *WindowOptions, pixels Rect) bool
 }
 
+// StyleBackend styles the widgets the toolkit draws for the app with the
+// app's own style sheet (Linux: GTK's CSS, Theme.SetGTKCSS). SetStyleSheet
+// replaces the sheet set before, or removes it for "", and keeps that one
+// when css does not parse, returning why.
+type StyleBackend interface {
+	SetStyleSheet(css string) error
+}
+
 // AppOptions configures Backend.Init.
 type AppOptions struct {
 	Name string
 	// ActivationPolicy is "regular" (default), "accessory" or "prohibited".
 	// Only meaningful on macOS.
 	ActivationPolicy string
+	// DMABUFRenderer is "off" (or ""), "on" or "auto": whether WebKitGTK
+	// may draw with its DMA-BUF renderer. Only meaningful on Linux.
+	DMABUFRenderer string
 }
 
 // AppHandler receives application level events from the backend.

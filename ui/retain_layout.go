@@ -88,9 +88,11 @@ type commitEnv struct {
 	clip      Rect
 	hidden    bool
 	parentDis bool
-	scope     focusScope
-	page      uint64
-	world     scene.Affine
+	// What commit passes down from the parent: IgnoreInput, AccessHidden.
+	parentIgnore, parentUnread bool
+	scope                      focusScope
+	page                       uint64
+	world                      scene.Affine
 }
 
 // zero makes the nodes what an element just built holds before layout.
@@ -337,6 +339,7 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	env := commitEnv{clip: clip, hidden: hidden || rt.commitHidden, scope: rt.commitScope, page: rt.commitPage}
 	if p := e.parent; p != nil {
 		env.parentDis, env.world = p.st.flags&flagDisabled != 0, p.world
+		env.parentIgnore, env.parentUnread = p.st.ignoreInput, p.st.accessHidden
 	}
 	// zero clears cok whenever layout ran on the row, so a record that is set
 	// is the layout of the last frame, kept (settle) and placed where it was.

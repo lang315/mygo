@@ -84,6 +84,7 @@ framework safely. Read it before changing anything under `internal/`.
 │   ├── web/            browsers (js/wasm): native UI on canvases, through syscall/js
 │   ├── unsupported/    stub for other platforms
 │   ├── fake/           in-memory backend for unit tests
+│   ├── automationcli/  mygo-automation, the command line client of plugins/automation's socket
 │   ├── watchdriver/    the goroutine that runs a backend's file watcher
 │   ├── bridge/         embeds bridge.js, built from packages/bridge
 │   ├── surface/        the connection between a window and its native UI
@@ -129,7 +130,9 @@ framework safely. Read it before changing anything under `internal/`.
 │                       beyond what apps do (game/gamepad), loading,
 │                       loading.dev's indicators for native UI,
 │                       automation, a socket other processes drive the
-│                       app through, for end-to-end tests, and
+│                       app through, for end-to-end tests, with its
+│                       command line client for agents
+│                       (automation/cmd/mygo-automation), and
 │                       permissionflow, the system's permissions and a
 │                       guide to System Settings, after PermissionFlow
 ├── ui/                 native UI: views, layout, widgets, text editing, Tester;
@@ -206,8 +209,9 @@ rules are:
    functions directly, and generate mode never initializes it. So a public
    method that reaches the backend either keeps its value in the core
    until the backend can take it, for settings (`SetActivationPolicy`
-   through `AppOptions`, `SetMenu` once ready, `Theme.SetSource` and
-   `Dock.SetMenu` right after `Init`), or starts with `needsApp`, which
+   through `AppOptions`, `SetMenu` once ready, `Theme.SetSource`,
+   `Theme.SetGTKCSS` and `Dock.SetMenu` right after `Init`), or starts
+   with `needsApp`, which
    panics on the main thread before `Run` with the name of the call,
    rather than letting it crash on Linux, hang in `await` or answer wrong
    on macOS. Only calls that work before `Init` on every backend (`Locale`,
@@ -435,8 +439,24 @@ purego gives three primitives, used everywhere:
   layout says. `ClientDecorations` turns that around: the window announces
   client-side decorations and keeps the bars. A panel, a layer surface,
   gets no bars at all.
-- `WEBKIT_DISABLE_DMABUF_RENDERER=1` is set unless the user set it, which
-  avoids blank webviews on NVIDIA drivers, VMs and containers.
+- The app's GTK style sheet (`Theme.SetGTKCSS`, `style.go`) is a
+  `GtkCssProvider` of its own for the default screen, at
+  `GTK_STYLE_PROVIDER_PRIORITY_USER`: GTK 3 looks providers up from the
+  highest priority, and among equal ones from the last added, so it wins
+  over the theme, MyGo's own provider (600) and the user's `gtk.css`.
+  Each sheet loads into a new provider, which replaces the one before only
+  once it parsed (`gtk_css_provider_load_from_data` with a `GError`, which
+  takes GTK's first parse error instead of a warning). The core reaches it
+  through `platform.StyleBackend`, which only Linux and the fake backend
+  implement, so apps that never set a sheet do not link it; one set on the
+  main goroutine before `Run` waits in `pendingGTKCSS` until `Init`.
+- `WEBKIT_DISABLE_DMABUF_RENDERER=1` is set before GTK starts unless the
+  user set it, which avoids blank webviews on NVIDIA drivers, VMs and
+  containers, at the cost of drawing pages on the CPU. `App.SetDMABUFRenderer`
+  (`AppOptions.DMABUFRenderer`) leaves it unset: always (`on`), or where
+  `dmabufSafe` (`dmabuf.go`) finds Wayland and a GPU of Mesa's outside
+  containers and virtual machines (`auto`, whose call links that probe in
+  with `LinkDMABUFProbe`).
 - XDG desktop portal calls go through `portalCall` (`portal.go`), which
   first registers the app's ID, the name of its desktop entry, with
   `org.freedesktop.host.portal.Registry`: the portal only accepts that
@@ -2460,7 +2480,9 @@ Recent (about 290 KB).
   `flock` or `LockFileEx` while the instance runs; at launch an instance
   takes the sessions whose lock it gets, reopens their documents edited
   (in conflict when the file's stamp changed), writes them into its own
-  session, then removes the old ones.
+  session, then removes only the old copies it restored. A copy it skips or
+  cannot read, and one whose new copy cannot be written, stays for the next
+  launch.
 - *Watches.* One `WatchFiles` per file of open documents, shared by
   reference count, which costs the same whatever else its folder holds: a
   watch covers the folder, not each file in it. A batch
@@ -2624,7 +2646,12 @@ either.
   the flags are all taken, and of its state, which the elements inside
   it inherit at commit) adds no hits nor stop of Tab and drops the focus,
   but stays in the tree, its presses counted as any other's; it offers no
-  focus, nor the increments that go through the keys.
+  focus, nor the increments that go through the keys. One hidden from
+  assistive technology (`AccessHidden`, a field of the node and of its
+  inherited state, as `IgnoreInput`; inert ones count too) paints and
+  takes input, but `accessElement` skips it with what is inside it, as an
+  invisible one, its text names no ancestor (`innerText`), and its
+  state drops what `AccessAction` sends it.
   `AccessTree.Announcements` are texts to read out once
   (`Context.Announce`, toasts, routers): `AXAnnouncementRequested` posted
   on the application with a medium priority on macOS, AtkObject's
@@ -2864,7 +2891,10 @@ either.
   into its parent's plane as CSS's flat transform-style does, composes
   with its ancestors after layout as a projective map
   (`scene.Affine`, with G and H in perspective); boxes keep their original
-  layout space. Painting stores the composed transform on scene
+  layout space. `TranslatePercent` stays apart from the transform
+  (`translatePct`): `transformAt` resolves it from the box as laid out,
+  after the transform and before the pose, as a pose's percents
+  (`showPose`) and a `Motion`'s (`tbox.moved`) are. Painting stores the composed transform on scene
   operations and clips, and committing keeps it on the state for
   inverse-mapped pointer input, carets, accessibility bounds, and overlays
   attached to visual bounds. The CPU renderer inverse maps pixels for
@@ -2884,6 +2914,20 @@ either.
   there, including resting changes to transformed content.
   Metal retains wide colors under transforms. See
   [Transforms](ui/transforms.md#rendering) for rendering details.
+- **Masked clips** (`ui/mask.go`, `scene.ClipShapeOf`). A clip
+  (`OpPushClip`) may carry a gradient paint, whose alpha masks it
+  (`MaskLinearGradient` and the others, around the element's inset
+  rectangle from `ClipInset`), or an image, whose alpha masks it over its
+  rectangle (`Painter.ClipPath`: the path's coverage, rasterized by
+  `internal/vec` once for each shape and kept by the engine while paints
+  use it). The GPU builders draw such clips into the cached clip-mask
+  textures, as transformed or rounded clips do (`raster.ClipMask`), and
+  never evaluate them in the shaders, so no shader changed for them. The
+  CPU renderer multiplies the clip's coverage by the mask
+  (`raster.clipMasking`). Each op under a mask is masked on its own, as
+  `Opacity` fades each, rather than through a group layer. A clip moved
+  by a translation moves its gradient with it (`scene.MovedClipOp`), and
+  damage compares the version of its image.
 - **Motion** (`ui/motion.go`): every animated value of an element
   (`AnimateTo`, `Animate`, `AnimateWith`, `Spring`, `Jump`) is a `channel`
   by key, with a value, a velocity and the time they hold for, moving
@@ -2923,9 +2967,12 @@ either.
   which then moves itself). Moving with a parent or a scroll offset is no
   change; resizing the window animates nothing, and reduced motion only
   fades and colors. Each moving component (position, size, opacity, and a
-  `Motion`'s scale and rotation) is a motion `channel`, so a spring keeps
-  its velocity through changes and a delay holds them. Colors move as
-  elements paint, after their `styleFn`. A `Match` moves an element
+  `Motion`'s scale, rotation and blur) is a motion `channel`, so a spring keeps
+  its velocity through changes and a delay holds them. A blur goes with
+  the opacity, as it moves nothing, and adds to the element's `Blur` as
+  Gaussians compose, which `paintEffect` draws on every renderer. Colors move as
+  elements paint, after their `styleFn`, mixed premultiplied in sRGB, or
+  in Oklab (`mixLab`) with the `Oklab` of their `Animation`. A `Match` moves an element
   appearing where another of the same identity showed the frame before
   (`ui/match.go`, `matchRec`, in window coordinates) after `place`
   (`matches.move`), laying it out anew at each box on the way, or scaling
@@ -2990,7 +3037,12 @@ either.
   elements with an `Exit` leave their arena to the next frame, which
   builds in the other (`Context.spare`), so that the next one copies those
   gone (`ghostOf`), with states of their own and nothing referring to the
-  app's state. Siblings are not laid out around a size moving; they move
+  app's state. The parent's `ChildExit` in the frame it goes
+  (`context.childExits`) takes the place of its `Exit`. An element
+  appearing with `AfterExits` waits unseen (`transition.held`,
+  `flagInvisible`) while copies leave under its parent (`ghosts`, which
+  `animateExits` sets after the elements built have moved), and comes in
+  with its `Enter` in the frame they are gone. Siblings are not laid out around a size moving; they move
   with their own transitions, in step when they share it.
 - **The inspector** (`ui/inspector.go`, `inspector_details.go`,
   `inspector_panel.go`, `inspector_overlay.go`), as Chrome's developer
@@ -3044,7 +3096,15 @@ either.
   `Conn.Event` on the main thread, as the backend's events do; menu items
   are chosen through the backends' test hooks (`TestPerformMenuItem`,
   `TestActivateMenuItem`); captures and scripts through `Window`'s and
-  `Page`'s methods.
+  `Page`'s methods. `mygo-automation` (`plugins/automation/cmd/mygo-automation`, its code
+  in `internal/automationcli` so that `internal/e2e` runs it in process)
+  is a client of the socket on Go's standard library alone: it prints
+  trees as lines with refs (`@e7`) that a session's file maps to windows
+  and element IDs, gives a number once per session so that a stale ref
+  never names another element, and after `--settle` (`idle`, then
+  `tree`) diffs the elements by ID against what the session saw last.
+  Its guide, `SKILL.md`, is embedded in the command (`skills`), so that
+  it matches the version installed.
 - **Input taken as it comes.** An element with `HandleInput` gets its
   input on the main thread as the backend reports it, before the frame
   (`ui/handler.go`): keys (with their releases, which ui otherwise
@@ -3831,27 +3891,37 @@ either.
   the function matches to report `Chosen`; text inputs' menus queue their
   editing commands instead. `PopoverMenu` opens the same way and draws
   the menu in the window instead (`ui/popovermenu.go`): the frame that
-  would show it notes it (`menuState.drawn`: where it opened, from the
-  element's corner, and the submenus open with their highlights), and
-  while it shows, each frame runs the function to collect the
-  `platform.Menu` and builds from it an overlay of a point attached to
-  the element where the menu opened, so that the menu flips about that
-  point at the window's edges, and a panel (`RoleMenu`) for the menu and
-  each submenu open, each attached to the item opening it. A panel keeps
-  the focus for its items, which the keys and the pointer highlight
-  (`ActiveDescendant`), and the menu closes for presses outside it but in
-  the frame it opened, whose press opened it. An item chosen runs the
-  function again at once, as the choice from a menu of the system's does
-  in the next frame, or does its editing command; the overlay going gives
-  the focus back to the element that had it. A menu whose element a pass
-  does not build closes (`resolveMenu`). `PopoverMenuButton` draws a menu
-  button's menu so (`drawnMenu.below`): opened below the button itself
-  (`menuState.below`, which `openMenuButton` sets), its panel attaches to
-  the button's bottom, flipping above it, and the button shows expanded;
-  opened from a toolbar's overflow menu, it goes at the overflow button's
-  corner as a context menu goes at its point. Opened by the keys or
-  assistive technology (`menuState.key`), it starts on its first item,
-  and a press on the button while it shows closes it (`buildMenu`).
+  would show it notes it (`menuState.drawn`, whose `menuShown` holds where
+  it opened, from the element's corner, and the submenus open with their
+  highlights), and while it shows, each frame runs the function to
+  collect the `platform.Menu` and builds the menu from it with the parts
+  of `MenuBase` (`menuParts`), which hold the keyboard and focus model of
+  every drawn menu: themed, and headless for `MenuBase` and
+  `ContextMenuBase`, whose `menuShown` is a local of their trigger and
+  whose open state is the app's `*bool`. `Popup` builds an overlay of a
+  point attached to the element where the menu opened, so that the menu
+  flips about that point at the window's edges, and a panel (`RoleMenu`)
+  for the menu and each submenu open, each attached to the item opening
+  it (the submenus that `Submenu` registers, built after their menu's
+  panel, as its siblings). A panel keeps the focus for its items, which
+  the keys and the pointer highlight (`ActiveDescendant`), by their
+  element IDs; the keys are read once the panel's items are built, which
+  they move among, and Enter clicks the item highlighted for the next
+  pass (`clickLater`), which reports it as `Clicked`. The menu closes for
+  presses outside it but in the frame it opened, whose press opened it.
+  An item chosen runs the function again at once, as the choice from a
+  menu of the system's does in the next frame, or does its editing
+  command; the overlay going gives the focus back to the element that
+  had it. A menu whose element a pass does not build closes
+  (`resolveMenu`). `PopoverMenuButton` draws a menu button's menu so
+  (`menuShown.below`): opened below the button itself (`menuState.below`,
+  which `openMenuButton` sets), its panel attaches to the button's
+  bottom, flipping above it, and the button shows expanded; opened from a
+  toolbar's overflow menu, it goes at the overflow button's corner as a
+  context menu goes at its point. Opened by the keys or assistive
+  technology (`menuState.key`), it starts on its first item, and a press
+  on the button while it shows closes it (`buildMenu`, and `newMenu` for
+  the bases).
 - **Scenes** are flat lists of operations in device pixels: rounded
   rectangles with borders of a width per side, solid or dashed, filled
   with a color, a linear gradient mixed in sRGB or Oklab, a gradient of
@@ -4097,7 +4167,10 @@ either.
   redrawn every frame, leave no room for the frame's other paths, which
   would not show. A path whose mask finds no room draws as tiles at once,
   and the runtime's repaint (`System.MakeRoom`) draws the frame's large
-  paths as tiles, which pack eight to a row of the largest atlas. On the
+  paths as tiles, which pack eight to a row of the largest atlas: the
+  room made lets go of the masks of those the paint drew before
+  (`System.Unkeep`), which it would keep as the frame drew them, and
+  which would leave the tiles no room. On the
   pixel grid tiles show the pixels of one mask; under a transform off
   it, a faint line where they meet. A stroke's mask is the outline of
   its center line, each edge drawn once (`strokeInto`): one side,
@@ -4172,6 +4245,10 @@ either.
   breaking allows (else the hyphen overflows, as a long word does), and
   the rest anew (`breakLines`). A paragraph without an indent or a soft
   hyphen is shaped once.
+  `Params.Balance` (`Element.Balance`) breaks a paragraph that wraps at
+  narrower widths, bisecting to a quarter of a DIP, for the narrowest
+  that keeps its count of lines (`System.balance`). The layout cache
+  keys it with the other params, so a build lays it out once.
   Text elements built inside a text (`ui/inline.go`) are inline: the
   paragraph takes their text when its `Children` returns, and their
   styles as spans over its own when it lays out. At commit, each gets the
@@ -4992,10 +5069,10 @@ Native library and shader generation commands are listed in [AGENTS.md](../AGENT
 | generator | `go test ./internal/tsgen` | TS output, json/v2 rules, source lookup; type-checks the output with `tsc` when `bun install` was run |
 | CLI | `go test ./cmd/mygo` | config, Info.plist, icons, universal binaries, template, dev launch/ready/stop (the test binary plays the app), watcher and `go list` inputs, the console's output (replayed as a terminal shows it), resources (platform directories, universal pairs, exclusions, staging, conflicts, dev placement; builds for every OS), frontend embedding (compiles an app with the overlay), `.DS_Store` against a dmgbuild golden file, a real DMG (`hdiutil`); builds and tools are skipped with `-short` |
 | runtime | `bun run test` | the injected runtime, `mygo-runtime` and the plugins' packages (against a fake Go side on the real runtime, `plugins/fake-go.ts`) |
-| plugins | `go test ./plugins/...` | the fetch plugin against `httptest` servers, the WebSocket client against a test server (ordering, fragments, pings, closing handshakes); the terminal's binding of libghostty-vt (layouts, rendering, encoders, selections), its pseudo-terminals, and its view through `Tester` with real shells: typing, keys as programs ask, input methods, mouse reports, selecting and copying, pasting, scrollback, exits (the library is downloaded, or named by `MYGO_GHOSTTY_VT`; `-short` skips them); the automation plugin's protocol (requests, errors, elements as JSON, input events) against a fake app, and its socket (mode, stale and taken paths) |
+| plugins | `go test ./plugins/...` | the fetch plugin against `httptest` servers, the WebSocket client against a test server (ordering, fragments, pings, closing handshakes); the terminal's binding of libghostty-vt (layouts, rendering, encoders, selections), its pseudo-terminals, and its view through `Tester` with real shells: typing, keys as programs ask, input methods, mouse reports, selecting and copying, pasting, scrollback, exits (the library is downloaded, or named by `MYGO_GHOSTTY_VT`; `-short` skips them); the automation plugin's protocol (requests, errors, elements as JSON, input events) against a fake app, and its socket (mode, stale and taken paths); `mygo-automation` (`go test ./internal/automationcli ./plugins/automation/cmd/...`): lines, refs and their staleness, diffs, sessions, and its commands against a fake socket; `skills` printing `SKILL.md` as it is |
 | native UI | `go test ./ui ./internal/text ./internal/scene ./internal/raster ./internal/svg ./internal/gpu/...` | the GPU renderers against the CPU renderer (Direct3D on Windows, Metal on macOS, OpenGL on Linux); views through `Tester`: input, focus, editing, lists, overlays, frames that fill the glyph atlas; text layout and caret geometry; atlas zones and repacking; the CPU renderer against its formulas; SVG parsing and drawing, with `FuzzParse`; `go test -run '^$' -bench . ./ui` times a frame |
 | bindings | `go test ./internal/bindcheck` | every function variable of a package that the package calls is bound or assigned somewhere (`mustBind(lib, &gtkFoo, "gtk_foo")`), in every OS's sources, so it runs on any host: a bind lost in a merge leaves a nil function, which crashes the process on its first call (`non-Go code set up signal handler without SA_ONSTACK flag` inside a callback). A variable the package compares with nil is an optional hook and is left out |
-| GUI | `MYGO_E2E=1 go test ./internal/e2e` | the real backend: an app driven from another process through `plugins/automation`, IPC, channels, protocol, Eval, geometry, capture, menus, window.open, native UI (frames, clicks, input methods replacing typed text, file drops, assistive technology reading and acting; on macOS typing, skipped while an input method is selected, and composing; on Linux with `MYGO_GPU=1`, what OpenGL drew in the GtkGLArea, from the first frame and once a window drawing in memory asks for the GPU); on Windows too (a GitHub Actions `windows-latest` runner has WebView2) |
+| GUI | `MYGO_E2E=1 go test ./internal/e2e` | the real backend: an app driven from another process through `plugins/automation`, and with `mygo-automation`'s commands, IPC, channels, protocol, Eval, geometry, capture, menus, window.open, native UI (frames, clicks, input methods replacing typed text, file drops, assistive technology reading and acting; on macOS typing, skipped while an input method is selected, and composing; on Linux with `MYGO_GPU=1`, what OpenGL drew in the GtkGLArea, from the first frame and once a window drawing in memory asks for the GPU); on Windows too (a GitHub Actions `windows-latest` runner has WebView2) |
 
 Browsers run the `js` tests of the renderer, the text engine and package
 ui: `GOOS=js GOARCH=wasm go test -c` builds a test binary, which a page
@@ -5500,7 +5577,8 @@ which npm allows only for packages that exist: the first release uses an
 | regional formats | `autoupdatingCurrentLocale`, its calendar's first weekday, the hour of the skeleton "j"; `NSCurrentLocaleDidChangeNotification` and System Settings' distributed notifications | glibc's `nl_langinfo_l` of `LC_TIME` (`_NL_TIME_FIRST_WEEKDAY`, `T_FMT`), else by region | `GetLocaleInfoEx` of the user's default: `LOCALE_IFIRSTDAYOFWEEK`, `LOCALE_STIMEFORMAT` |
 | the app's language kept | `AppleLanguages` of the app's defaults | the file `locale` in PathUserData | the file `locale` in PathUserData, and the process's preferred UI languages |
 | web views' language | from the app's `AppleLanguages`, next launch | `webkit_web_context_set_preferred_languages`, live | the environment's `Language`, as it is created |
-| `Theme.SetSource` | `NSApp`'s appearance (Aqua, DarkAqua, or none) | `gtk-application-prefer-dark-theme`; light also puts a theme named for its dark variant (Yaru-dark) in place of its light one (Yaru), which GTK and WebKitGTK otherwise take for dark, and the other sources reset the theme | the title bars, menus and native UI, and pages through the DevTools protocol's emulated `prefers-color-scheme` |
+| `Theme.SetSource` | `NSApp`'s appearance (Aqua, DarkAqua, or none) | `gtk-application-prefer-dark-theme`; light also puts a theme named for its dark variant (Yaru-dark) in place of its light one (Yaru), which GTK and WebKitGTK otherwise take for dark, and the other sources reset the theme. Without a source, or with system, the setting follows the settings portal's `color-scheme` (GNOME's and KDE's dark style, which GTK 3 does not read) from `Init` on: dark where the portal prefers dark, else the desktop's own GTK settings | the title bars, menus and native UI, and pages through the DevTools protocol's emulated `prefers-color-scheme` |
+| `Theme.SetGTKCSS` | nothing | a `GtkCssProvider` for the default screen at `GTK_STYLE_PROVIDER_PRIORITY_USER`, replaced by the next sheet that parses | nothing |
 | traffic lights, Dock | yes | ignored | ignored |
 | hidden title bar | AppKit's traffic lights over a full-size content view | GTK's title buttons in header bars over the page, per `gtk-decoration-layout`; none where the Wayland compositor decorates windows | caption buttons drawn in a layered child window, through DirectComposition over a material, light or dark per window (`SetWindowButtonsTheme`); snap layouts; a top edge that resizes |
 | progress bar | Dock tile content view (NSBoxes: NSProgressIndicator does not draw there), app-wide | Unity launcher API over D-Bus (`com.canonical.Unity.LauncherEntry`), app-wide | `ITaskbarList3`, per window |
@@ -5514,7 +5592,7 @@ which npm allows only for packages that exist: the first release uses an
 | window icon | ignored | `gtk_window_set_icon` (X11; Wayland takes it from the app's `.desktop` file) | `WM_SETICON` at the window's DPI |
 | URL schemes | Info.plist (`urlSchemes`); `RegisterURLScheme` makes the app the default handler | desktop entry + `mimeapps.list` | `HKCU\Software\Classes` |
 | downloads | `shouldPerformDownload`, non-displayable or attachment responses → `WKDownload` delegate | `download-started` / `decide-destination` on the web context; response policy for attachments | `DownloadStarting` (`ICoreWebView2_4`), replacing WebView2's download UI |
-| Cookies | the session's `WKWebsiteDataStore`'s `WKHTTPCookieStore`, URLs matched in Go (`platform.CookieMatchesURL`), `Set` through `NSHTTPCookie`'s parser with a stand-in name and value; `Clear` with `removeDataOfTypes:` | the session's web context's `WebKitCookieManager` (2.42+; `get_cookies` for a URL), kept in `cookies.sqlite` of the user data directory, or of a persistent session's directory (`set_persistent_storage`, as WebKitGTK keeps them in memory otherwise); libsoup 3 or 2.4 to match WebKitGTK 4.1 or 4.0; `Clear` with `webkit_website_data_manager_clear` | `ICoreWebView2CookieManager` (`ICoreWebView2_2`) of a window's web view of the session's profile, or before one shows a page of a hidden web view of the profile in the app window, closed once one does, or once an ephemeral session's store closes; a window's first navigation waits for the calls under way; `ClearBrowsingData` goes the same way; changes are polled with `GetCookies` until they show, failing after 2 s; `GetCookies(uri)`, `DeleteAllCookies`; `put_Expires` called with `comCallFloat` |
+| Cookies | the session's `WKWebsiteDataStore`'s `WKHTTPCookieStore`, URLs matched in Go (`platform.CookieMatchesURL`), `Set` through `NSHTTPCookie`'s parser with a stand-in name and value; `Clear` with `removeDataOfTypes:` | the session's web context's `WebKitCookieManager` (2.42+; `get_cookies` for a URL), kept in `cookies.sqlite` of the user data directory, or of a persistent session's directory (`set_persistent_storage`, as WebKitGTK keeps them in memory otherwise); libsoup 3 or 2.4 to match WebKitGTK 4.1 or 4.0; `Clear` with `webkit_website_data_manager_clear` | `ICoreWebView2CookieManager` (`ICoreWebView2_2`) of a web view of the session's profile showing a page, a window's or one in native UI, or while there is none of a hidden web view of the profile in the app window, closed once one shows a page, once an ephemeral session's store closes, or once no call needed it for 5 s and closing it loses no cookie (a `GetCookies` finds no session cookie, nor any of an InPrivate profile, which go with WebView2's processes); a window's first navigation waits for the calls under way; `ClearBrowsingData` goes the same way; changes are polled with `GetCookies` until they show, failing after 2 s; `GetCookies(uri)`, `DeleteAllCookies`; `put_Expires` called with `comCallFloat` |
 | content rules | the default `WKContentRuleListStore`, which keeps compiled lists under an identifier of the id and a hash of the rules (looked up first, the id's others removed), on each window's `WKUserContentController`; the store's reason for a failure is in `NSHelpAnchorErrorKey` | a `WebKitUserContentFilterStore` in `content-rules` of the user data directory (2.24+), on each window's `WebKitUserContentManager` | matched in Go (`internal/contentrules`, indexed by the domains of `url-filter`s and four bytes of their literals) from `WebResourceRequested` with a `*` filter, blocked pages answered with an empty 403 and other blocked requests with a redirect to `data:`, which Chromium fails as a network error; WebSocket handshakes never reach it; `css-display-none` rules as a style sheet a document-creation script adopts, kept when the page sets `adoptedStyleSheets`; parsed on a goroutine, nothing kept |
 | `FitContent` | the bridge, as elsewhere; WebKit's private `_setSizeToContentAutoSizeMaximumSize:` is not used; native UI measures itself (`ui/fit.go`) | the bridge; native UI measures itself | the bridge; native UI measures itself |
 | `Page.ThemeColor` | the bridge, as elsewhere; WKWebView's `themeColor` (macOS 12+) is not used | the bridge | the bridge |

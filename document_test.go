@@ -850,8 +850,8 @@ func TestDocumentRecoveryQuitDuringARestoreKeepsTheSession(t *testing.T) {
 	if len(orphans) != 1 {
 		t.Fatalf("claimed %d copies", len(orphans))
 	}
-	ds.kind.recovery.close() // quit
-	done()                   // the restore ends
+	ds.kind.recovery.close()                     // quit
+	done(map[string]bool{orphans[0].file: true}) // the restore ends, having restored it
 	if _, err := os.Stat(filepath.Join(session, "a")); err != nil {
 		t.Fatalf("the session claimed was removed at quit: %v", err)
 	}
@@ -890,6 +890,13 @@ func TestDocumentRecoveryRestoresOneCopyOfADocumentInTwoSessions(t *testing.T) {
 				t.Logf("doc %q %q", d.Name(), d.Content())
 			}
 			t.Fatalf("tie %v: restored %d documents", tie, len(docs))
+		}
+		// Both claimed sessions go: the older copy left would be restored
+		// again at the next launch, over the document's later changes.
+		for i := range 2 {
+			if _, err := os.Stat(filepath.Join(root, fmt.Sprintf("session%d", i))); !os.IsNotExist(err) {
+				t.Errorf("tie %v: session%d is still there: %v", tie, i, err)
+			}
 		}
 		for _, d := range docs {
 			d.SetEdited(false)
@@ -1060,6 +1067,31 @@ func TestDocumentFollowsReplacedRename(t *testing.T) {
 	}
 	// Following it records it as recent, in the user data the test removes.
 	waitFor(t, "the document to follow the rename", func() bool {
+		return d.Path() == renamed && slices.Contains(App.RecentDocuments(), renamed)
+	})
+	if d.State().Deleted {
+		t.Error("deleted")
+	}
+}
+
+// TestDocumentLookFollowsRename looks at a document's file after another
+// app renamed it and before the watch did, as a window focused then does:
+// the look follows the file by what the document read rather than taking
+// it for deleted, which the watch would then never follow. It is the order
+// in which TestDocumentFollowsReplacedRename's look when the watch started
+// sometimes ran.
+func TestDocumentLookFollowsRename(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	path := writeTemp(t, "look.txt", "one")
+	path, _ = filepath.EvalSymlinks(path)
+	d, _ := ds.Open(path)
+	renamed := filepath.Join(filepath.Dir(path), "looked.txt")
+	if err := os.Rename(path, renamed); err != nil {
+		t.Fatal(err)
+	}
+	// The watch is never told: only a look can follow it.
+	d.checkDisk()
+	waitFor(t, "the look to follow the rename", func() bool {
 		return d.Path() == renamed && slices.Contains(App.RecentDocuments(), renamed)
 	})
 	if d.State().Deleted {

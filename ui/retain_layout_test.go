@@ -565,6 +565,8 @@ type around struct {
 	invisible bool
 	group     bool
 	page      bool
+	ignore    bool    // IgnoreInput, which commit passes down
+	unread    bool    // AccessHidden, which commit passes down
 	listH     float32 // 0: fill
 	listW     float32 // 0: fill
 }
@@ -585,6 +587,7 @@ func (a *around) mk() func(c *Context) {
 		if a.page {
 			col.node().flags |= flagPage
 		}
+		col.IgnoreInput(a.ignore).AccessHidden(a.unread)
 		col.Children(func() {
 			l := List(c, s, 50, func(i int) { Row(c).Children(func() { Textf(c, "row %d", i); Text(c, "·") }) })
 			if a.listW > 0 {
@@ -655,6 +658,16 @@ func TestRetainCommitParentPose(t *testing.T) {
 func TestRetainCommitParentDisabled(t *testing.T) {
 	a := &around{}
 	heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.off = true }, "disabled ancestor")
+}
+
+func TestRetainCommitParentIgnoresInput(t *testing.T) {
+	a := &around{}
+	heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.ignore = true }, "ancestor ignoring input")
+}
+
+func TestRetainCommitParentAccessHidden(t *testing.T) {
+	a := &around{}
+	heldThenCommit(t, a.mk, 300, 400, func(p *pair) { a.unread = true }, "ancestor hidden from assistive technology")
 }
 
 func TestRetainCommitHidden(t *testing.T) {

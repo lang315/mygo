@@ -162,13 +162,19 @@ type orphan struct {
 	file  string
 }
 
+type claimedRecovery struct {
+	dir     string
+	lock    *os.File
+	entries []recoveryEntry
+}
+
 // claim takes the sessions that no instance holds: those of an instance
-// that crashed or quit keeping documents. It returns their copies and a
-// function removing the sessions, once the documents are restored.
-func (s *recoveryStore) claim() (orphans []orphan, done func()) {
+// that crashed or quit keeping documents. The function it returns releases
+// their locks and removes only the copies reported as restored.
+func (s *recoveryStore) claim() (orphans []orphan, done func(restored map[string]bool)) {
 	root, err := s.root()
 	if err != nil {
-		return nil, func() {}
+		return nil, func(map[string]bool) {}
 	}
 	s.mu.Lock()
 	own, closed := s.dir, s.closed
@@ -176,11 +182,10 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 	if closed {
 		// Quit: the session of this instance is no one's now, and the
 		// documents restored would write no copy of their own.
-		return nil, func() {}
+		return nil, func(map[string]bool) {}
 	}
 	dirs, _ := os.ReadDir(root)
-	var claimed []string
-	var locks []*os.File
+	var claimed []claimedRecovery
 	for _, d := range dirs {
 		dir := filepath.Join(root, d.Name())
 		if !d.IsDir() || dir == own {
@@ -194,28 +199,52 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 			lock.Close() // alive
 			continue
 		}
-		locks = append(locks, lock)
-		claimed = append(claimed, dir)
-		var entries []recoveryEntry
+		c := claimedRecovery{dir: dir, lock: lock}
 		if data, err := readAppFile(filepath.Join(dir, "index.json")); err == nil {
-			if err := json.Unmarshal(data, &entries); err != nil {
+			if err := json.Unmarshal(data, &c.entries); err != nil {
 				log.Printf("mygo: documents: %s: %v", dir, err)
 			}
 		}
-		for _, e := range entries {
+		claimed = append(claimed, c)
+		for _, e := range c.entries {
 			if e.ID != "" && !strings.ContainsAny(e.ID, `/\.`) {
 				orphans = append(orphans, orphan{e, filepath.Join(dir, e.ID)})
 			}
 		}
 	}
-	return orphans, func() {
+	return orphans, func(restored map[string]bool) {
 		s.mu.Lock() // quit (close) comes before or after all of it
 		defer s.mu.Unlock()
 		closed := s.closed
-		for i, dir := range claimed {
-			locks[i].Close()
-			if !closed { // quit came meanwhile: the copies were not written again, they stay
-				os.RemoveAll(dir)
+		for i := range claimed {
+			c := &claimed[i]
+			if closed { // quit came meanwhile: the copies were not written again, they stay
+				c.lock.Close()
+				continue
+			}
+			var kept, remove []recoveryEntry
+			for _, e := range c.entries {
+				if restored[filepath.Join(c.dir, e.ID)] {
+					remove = append(remove, e)
+				} else {
+					kept = append(kept, e)
+				}
+			}
+			if len(remove) > 0 && len(kept) > 0 {
+				err := writeAppFile(filepath.Join(c.dir, "index.json"), func(w io.Writer) error {
+					return json.MarshalWrite(w, kept)
+				})
+				if err != nil {
+					log.Printf("mygo: documents: cannot update the recovery index of %s: %v", c.dir, err)
+					remove = nil
+				}
+			}
+			for _, e := range remove {
+				os.Remove(filepath.Join(c.dir, e.ID))
+			}
+			c.lock.Close()
+			if len(kept) == 0 {
+				os.RemoveAll(c.dir)
 			}
 		}
 	}
@@ -225,15 +254,16 @@ func (s *recoveryStore) claim() (orphans []orphan, done func()) {
 // recovery copy; each further failure doubles the wait, up to 32 times this.
 var backupRetry = time.Second
 
-// backup writes the recovery copy of b, if it changed since the last.
-func (b *docBase) backup() {
+// backup writes the recovery copy of b, if it changed since the last, and
+// reports whether the current changes have a recovery copy.
+func (b *docBase) backup() bool {
 	snap := b.ops.capture()
 	b.io.Lock()
 	defer b.io.Unlock()
 	b.mu.Lock()
 	if !b.edited || snap.at == b.backedUp {
 		b.mu.Unlock()
-		return
+		return true
 	}
 	e := recoveryEntry{ID: b.id, Path: b.path, Stamp: b.stamp}
 	if b.path == "" {
@@ -242,7 +272,7 @@ func (b *docBase) backup() {
 	b.mu.Unlock()
 	err := b.kind.recovery.save(e, snap.write)
 	if err == errRecoveryClosed {
-		return // quit: the session is gone, and no other is made
+		return false // quit: the session is gone, and no other is made
 	}
 	b.mu.Lock()
 	if err != nil {
@@ -252,7 +282,7 @@ func (b *docBase) backup() {
 		if first {
 			log.Printf("mygo: documents: cannot write the recovery copy of %s: %v", e.Name+e.Path, err)
 		}
-		return
+		return false
 	}
 	b.backupFails = 0
 	b.backedUp = snap.at
@@ -261,6 +291,7 @@ func (b *docBase) backup() {
 		b.dirtySince = time.Now() // edited while it was written
 	}
 	b.mu.Unlock()
+	return true
 }
 
 // newestCopies keeps one copy of each document: quit in the middle of a
@@ -302,9 +333,10 @@ func newestCopies(orphans []orphan) []orphan {
 // restore opens the documents of the sessions no instance holds, edited,
 // and keeps their copies in this session.
 func (k *docKind) restore() int {
-	orphans, done := k.recovery.claim()
-	orphans = newestCopies(orphans)
+	all, done := k.recovery.claim()
+	orphans := newestCopies(all)
 	n := 0
+	restored := map[string]bool{}
 	for _, o := range orphans {
 		e := o.entry
 		if e.Path != "" && openDocument(e.Path) != nil {
@@ -339,11 +371,18 @@ func (k *docKind) restore() int {
 			b.untitled = n
 		}
 		b.dirtySince = time.Now()
-		b.backup()
+		if !b.backup() {
+			continue
+		}
 		k.show(b)
+		for _, c := range all { // the older copies newestCopies left go too
+			if c.entry.ID == e.ID {
+				restored[c.file] = true
+			}
+		}
 		n++
 	}
-	done()
+	done(restored)
 	return n
 }
 

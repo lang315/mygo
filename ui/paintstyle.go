@@ -107,6 +107,7 @@ type paintRare struct {
 	fit          Fit
 	gray         bool
 	transform    Transform
+	translatePct [2]float32 // TranslatePercent's
 	material     Material
 	effect       Effect
 	// cache keeps the element's layer while what it paints is the same
@@ -115,6 +116,14 @@ type paintRare struct {
 	// grads holds a conic fill and a border's gradient, which few elements
 	// have.
 	grads *gradients
+	// clipping is how the element clips and masks all it paints
+	// (ClipInset, MaskLinearGradient), which few elements do.
+	clipping *clipping
+	// ringOffset and ringColor are the offset and the color of the
+	// element's focus ring, where ringSet says it sets them.
+	ringOffset float32
+	ringColor  Color
+	ringSet    uint8
 	// paintFn draws the element (Draw), objectFn the inline objects of a text
 	// (DrawObjects) and paintAfterFn goes over its children.
 	paintFn      func(p *Painter, r Rect)
