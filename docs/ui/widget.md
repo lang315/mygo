@@ -247,7 +247,9 @@ shows a key at the item's end and answers nothing: give the form the same
 `Form.Shortcut`. The menus of `MenuBar`, `MenuButton` and `ContextMenu`
 show it; the native bar of `Form.SetMenuBar` does not, as a key there is
 the system's to answer (use `MenuStrip`'s `SetShortcut`). Only an item
-`Checked` is a check box item; the others are plain items. A menu bar keeps the colors of its SVG icons from when it was
+`Checked` is a check box item; the others are plain items, as in the
+system's menus and WinForms: a toggle not checked is a plain item, and a
+menu with no item checked has no column for the mark. A menu bar keeps the colors of its SVG icons from when it was
 set: on Linux and Windows they do not follow a later change of the theme;
 on macOS they do.
 

@@ -52,9 +52,10 @@ func (b *MenuBarWidget) SetMenus(menus ...MenuItem) *MenuBarWidget {
 
 func (b *MenuBarWidget) fillsAcross() bool { return true }
 
-// opens reports whether menu i opens: enabled, with items.
+// opens reports whether menu i opens: enabled, with an item that is not a
+// separator.
 func (b *MenuBarWidget) opens(i int) bool {
-	return !b.menus[i].Disabled && len(b.menus[i].Children) > 0
+	return !b.menus[i].Disabled && slices.ContainsFunc(b.menus[i].Children, func(c MenuItem) bool { return c.Text != "" })
 }
 
 // next returns the menu that opens after i, by d (1 or -1), round the

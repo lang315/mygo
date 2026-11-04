@@ -28,8 +28,10 @@ f.Shortcut(ui.Ctrl, ui.KeyO, openFile) // the shortcut an item shows answers not
   They have what a `MenuItem` has: submenus, separators (`MenuItem{}`),
   `Checked`, `Disabled`, `Icon` or `IconPNG`, `Destructive`, and `Shortcut`,
   which the item shows at its end. A shortcut shown answers nothing: give
-  the form the same `Form.Shortcut`. A title `Disabled`, or without
-  children, opens nothing.
+  the form the same `Form.Shortcut`. A title `Disabled`, or with no item
+  but separators, opens nothing and looks disabled. Only a `Checked` item
+  is a check box item: a toggle not checked is a plain item, and a menu
+  with no item checked has no column for the mark, as in WinForms.
 - `SetMenus(menus...)` sets them again, as when an item is checked or
   disabled: menus take their items, not a function building them (see
   [Menus](../widget.md#menus)).

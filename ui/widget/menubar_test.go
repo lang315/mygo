@@ -353,3 +353,33 @@ func TestMenuBarSetMenusChangesTheTitles(t *testing.T) {
 		t.Errorf("Alt+V did not open View: %q", a.tt.Texts())
 	}
 }
+
+// A title whose menu holds separators only opens nothing: it looks disabled
+// and the arrows pass it by.
+func TestMenuBarPassesATitleWithSeparatorsOnly(t *testing.T) {
+	withMac(t, false)
+	ran := ""
+	bar := MenuBar(
+		MenuItem{Text: "&File", Children: []MenuItem{{Text: "Open"}}},
+		MenuItem{Text: "&Odd", Children: []MenuItem{{}}},
+		MenuItem{Text: "&Edit", Children: []MenuItem{{Text: "Undo", OnClick: func() { ran = "Undo" }}}},
+	)
+	f := NewForm("bar", 600, 400)
+	f.SetContent(VBox(4).Add(bar))
+	tt := TestForm(t, f)
+	tt.Settle()
+	if !tt.Find(ByRole(ui.RoleMenuItem).Label("Odd")).Disabled() {
+		t.Error("Odd, with nothing to show, does not look disabled")
+	}
+	tt.Find(ByRole(ui.RoleMenuItem).Label("File")).Click()
+	tt.Key(0, ui.KeyRight)
+	tt.Settle()
+	if !tt.Has(ByRole(ui.RoleMenuItem).Label("Undo")) {
+		t.Fatalf("Right from File did not go past Odd to Edit: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	<-posted()
+	if ran != "Undo" {
+		t.Errorf("ran %q", ran)
+	}
+}

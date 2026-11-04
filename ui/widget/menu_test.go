@@ -140,3 +140,27 @@ func TestSetMenuBarClicks(t *testing.T) {
 	}
 	received(t, opened)
 }
+
+// buildMenu, which MenuButton and ContextMenu build their menus with, makes
+// an item a check box item only while it is Checked, as nativeMenu does. The
+// system's menus of a headless window show no roles, so a drawn menu, whose
+// items assistive technology sees, shows what buildMenu made.
+func TestBuildMenuMakesOnlyACheckedItemACheckBoxItem(t *testing.T) {
+	items := []MenuItem{{Text: "Name"}, {Text: "Date", Checked: true}}
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.PopoverMenuButton(c, "Sort by", func(m *ui.Menu) { buildMenu(m, items) })
+	}, 400, 300)
+	tt.Frame()
+	if err := tt.Click("Sort by"); err != nil {
+		t.Fatal(err)
+	}
+	roles := map[string]ui.Role{}
+	for _, n := range tt.Nodes() {
+		if n.Label == "Name" || n.Label == "Date" {
+			roles[n.Label] = n.Role
+		}
+	}
+	if roles["Name"] != ui.RoleMenuItem || roles["Date"] != ui.RoleMenuItemCheckBox {
+		t.Errorf("Name has role %d (want menu item %d), Date %d (want check box item %d)", roles["Name"], ui.RoleMenuItem, roles["Date"], ui.RoleMenuItemCheckBox)
+	}
+}
