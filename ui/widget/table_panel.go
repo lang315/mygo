@@ -11,15 +11,17 @@ import (
 )
 
 // PanelText holds the words of a table's bottom panel: the formats of its
-// counts, each with one %d, and the text of its search button.
+// counts, each with one %d (a text without % shows as it is, and an empty
+// one hides its count), and the text of its search button.
 type PanelText struct {
 	Rows, Selected, Checked string
 	Search                  string
 }
 
-// BottomPanel shows under the table how many rows it has, are selected
-// and are checked, and, with Filterable columns, a search: a column
-// chosen in a combo, a keyword, and a button (or Enter) running it.
+// BottomPanel shows under the table how many rows it has, how many of those
+// shown are selected and checked (as Selected and Checked return them), and,
+// with Filterable columns, a search: a column chosen in a combo, a keyword,
+// and a button (or Enter) running it.
 func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 	total, selected, checked := Label(""), Label(""), Label("")
 	panel := HBox(12).Add(total, selected, checked)
@@ -32,15 +34,17 @@ func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 	var column *ComboBoxWidget
 	var keyword *TextBoxWidget
 	var button *ButtonWidget
+	var search *BoxWidget
 	if len(opts) > 0 {
 		column = ComboBox(opts...).SetValue(opts[0].Value)
 		keyword = TextBox().SetPlaceholder(l10n.TableKeyword()).OnEnter(t.searchPanel).SetSize(240, 0)
 		button = Button("").OnClick(t.searchPanel) // counts sets its text
-		panel.PackEnd(button, false, false).PackEnd(keyword, false, false).PackEnd(column, false, false)
+		search = HBox(12).Add(column, keyword, button)
+		panel.PackEnd(search, false, false)
 	}
 	t.change(func() {
 		t.panel, t.totalLabel, t.selectedLabel, t.checkedLabel = panel, total, selected, checked
-		t.column, t.keyword, t.searchButton = column, keyword, button
+		t.column, t.keyword, t.searchButton, t.searchBox = column, keyword, button, search
 	})
 	return t
 }
@@ -49,6 +53,59 @@ func (t *DataGridViewWidget[T, K]) BottomPanel() *DataGridViewWidget[T, K] {
 // default.
 func (t *DataGridViewWidget[T, K]) PanelText(pt PanelText) *DataGridViewWidget[T, K] {
 	t.change(func() { t.text, t.textSet, t.words = pt, true, panelWords{} })
+	return t
+}
+
+// ApplyPanel styles the bottom panel with styles, as Apply does a widget:
+// its Background, and a TextSize or FontSize its counts and its search
+// take. Call it after BottomPanel.
+func (t *DataGridViewWidget[T, K]) ApplyPanel(styles ...Style) *DataGridViewWidget[T, K] {
+	mu.Lock()
+	p := t.panel
+	mu.Unlock()
+	if p != nil {
+		p.Apply(styles...)
+	}
+	return t
+}
+
+// SetSearchWidth sets the width of the panel's keyword, in DIPs: 240 by
+// default. Call it after BottomPanel.
+func (t *DataGridViewWidget[T, K]) SetSearchWidth(w float32) *DataGridViewWidget[T, K] {
+	mu.Lock()
+	e := t.keyword
+	mu.Unlock()
+	if e != nil {
+		e.SetSize(w, 0)
+	}
+	return t
+}
+
+// JoinSearch, when on, draws the panel's column, keyword and search button
+// as one control: side by side, with no room and no rounded corners between
+// them. Call it after BottomPanel.
+func (t *DataGridViewWidget[T, K]) JoinSearch(on bool) *DataGridViewWidget[T, K] {
+	mu.Lock()
+	box, column, keyword, button := t.searchBox, t.column, t.keyword, t.searchButton
+	mu.Unlock()
+	if box == nil {
+		return t
+	}
+	box.change(func() {
+		box.spacing = 12
+		if on {
+			box.spacing = 0
+		}
+	})
+	if on {
+		column.Apply(Style{}.RadiusTopRight(0).RadiusBottomRight(0))
+		keyword.Apply(Style{}.Radius(0))
+		button.Apply(Style{}.RadiusTopLeft(0).RadiusBottomLeft(0))
+	} else {
+		column.Apply()
+		keyword.Apply()
+		button.Apply()
+	}
 	return t
 }
 
@@ -155,7 +212,8 @@ type panelWords struct {
 // only when a count, the language or PanelText changed: through the catalog
 // each costs allocations, in every frame. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) counts() {
-	rows, selected, checked := len(t.src.rows), t.chosen.value.Len(), t.checked.value.Len()
+	rows := len(t.src.rows)
+	selected, checked := t.panelCounts()
 	locale, catalogs := "", uint64(0)
 	if !t.textSet {
 		locale, catalogs = i18n.Locale(), i18nlink.Version()
@@ -165,7 +223,7 @@ func (t *DataGridViewWidget[T, K]) counts() {
 		*w = panelWords{ok: true, rows: rows, selected: selected, check: checked, locale: locale, catalogs: catalogs, set: t.textSet}
 		if t.textSet {
 			w.find = t.text.Search
-			w.total, w.sel, w.chk = fmt.Sprintf(t.text.Rows, rows), fmt.Sprintf(t.text.Selected, selected), fmt.Sprintf(t.text.Checked, checked)
+			w.total, w.sel, w.chk = countText(t.text.Rows, rows), countText(t.text.Selected, selected), countText(t.text.Checked, checked)
 		} else {
 			w.find = l10n.TableSearch()
 			w.total, w.sel, w.chk = l10n.TableRows(rows), l10n.TableSelected(selected), l10n.TableChecked(checked)
@@ -176,5 +234,38 @@ func (t *DataGridViewWidget[T, K]) counts() {
 		t.searchButton.text = search
 	}
 	t.totalLabel.text, t.selectedLabel.text, t.checkedLabel.text = total, sel, chk
-	t.checkedLabel.hidden = !t.checks
+	t.totalLabel.hidden = t.textSet && t.text.Rows == ""
+	t.selectedLabel.hidden = t.textSet && t.text.Selected == ""
+	t.checkedLabel.hidden = !t.checks || t.textSet && t.text.Checked == ""
+}
+
+// countText is a count of n in format, a text without % as it is.
+func countText(format string, n int) string {
+	if !strings.Contains(format, "%") {
+		return format
+	}
+	return fmt.Sprintf(format, n)
+}
+
+// shownCounts are the counts of the rows selected and checked that a search
+// shows, as of a version of the view and of the keys.
+type shownCounts struct {
+	ok                bool
+	version, sel, chk uint64
+	selected, checked int
+}
+
+// panelCounts returns how many rows shown are selected and checked. Under a
+// search it counts them only when the view or the keys changed: counts runs
+// in every frame. Under mu, while building.
+func (t *DataGridViewWidget[T, K]) panelCounts() (selected, checked int) {
+	if t.filter == nil {
+		return t.chosen.value.Len(), t.checked.value.Len()
+	}
+	c := &t.shownN
+	if !c.ok || c.version != t.view.Version() || c.sel != t.chosen.gen || c.chk != t.checked.gen {
+		*c = shownCounts{true, t.view.Version(), t.chosen.gen, t.checked.gen,
+			t.shownCount(&t.chosen.value), t.shownCount(&t.checked.value)}
+	}
+	return c.selected, c.checked
 }

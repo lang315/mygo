@@ -39,6 +39,9 @@ Ctrl+Shift with the arrows, Home and End (and Page Up and Page Down off macOS) e
 Chosen and hovered rows are square from edge to edge, as in Finder's list
 view; `RoundRows` rounds their corners at the theme's `Radius`, as a list's
 rows are, for an app whose other lists are rounded.
+`RowHeight` makes every row that many DIPs tall, its cells clipped (0 keeps
+the theme's least height, which a taller cell grows), and `GridLines` draws a
+line under each row and at the end of each cell, in the theme's `Border`.
 
 A chosen row's text takes the theme's `AccentText`, which reads on the
 accent; a cell coloring its own text leaves the color out where
