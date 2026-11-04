@@ -639,6 +639,13 @@ lock: they read the row and call no widget method.
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
   place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.
+  `InsertRows(i, rows...)` puts rows before the row at `i` of the source
+  (0 puts them first; a key held is replaced where it is), and `Rows()`
+  returns a copy of all the rows, in the source's order. Both are on
+  `RowSource`, `DataGridView` and `ListView`. Rows moved by an insert keep
+  their `Version`, so the tables keep the rows they built; it still copies
+  the slice and renumbers the rows after `i` (about 1 ms at 100,000 rows,
+  40 ms at a million), cheaper than `SetRows`, which builds every row again.
 - `RowSource.AddRowsInBatches(rows, batch, progress)` adds a large slice in
   a goroutine, `batch` rows at a time, so the tables fill as it goes, and
   calls `progress(done, total)` on the event goroutine after each batch: bind
@@ -658,8 +665,14 @@ lock: they read the row and call no widget method.
   shows. `Selected` and `CountSelected` read the selection. `Checked` and
   `Selected` list the rows shown, in the order shown; deleted rows are
   neither.
-- `IndexColumn()`: each row's position as shown, from 1. A header click
-  sorts by its column; `ClearSort` shows the rows in the order added.
+- `IndexColumn()`: each row's position as shown, from 1.
+  `IndexColumnBySource()` numbers each row by its place in the source
+  instead, the order rows show in unsorted: sorting and searching keep the
+  numbers, and a click on its header, `#`, sorts by it. A header click
+  sorts by its column; `Sort(column, descending)` does it from code (a
+  default order other than the source's), with the header's arrow, and
+  ignores a title of no `Sortable` column; `ClearSort` shows the rows in the
+  order added.
 - `BottomPanel()`: the counts of rows, selected and checked, and a search
   over the `Filterable` columns. `PanelText` sets its words (English by
   default), `SetSearchPlaceholder` its keyword's placeholder, and
@@ -719,6 +732,22 @@ lock: they read the row and call no widget method.
   changed wins over a change another goroutine made to the same cell meanwhile
   (the last writer wins on the cell; the row's other fields are kept). Closing
   the window discards an open draft: `IsEditing` tells an app there is one.
+- `OnSelectionChanged(fn)` runs `fn` on the event goroutine once the set of
+  rows `Selected` returns changes: the user's clicks, Shift and Ctrl clicks,
+  keys and select all, a delete of selected rows, and a search that hides or
+  shows selected rows (a new search, or rows changed under one by
+  `UpdateRow`, `AddRows`, `InsertRows` or `SetRows`, seen as the table next
+  builds). Sorting only orders them and does not run it. Changes made before
+  `fn` runs run it once, never once per frame. Read the rows with `Selected`
+  in it.
+
+  ```go
+  grid := widget.DataGridView(func(a *Account) uint { return a.ID },
+  	widget.Column[Account]{Title: "Name", Text: func(a *Account) string { return a.Name }, Sortable: true},
+  ).IndexColumnBySource().Sort("Name", false)
+  grid.OnSelectionChanged(func() { status.SetText(fmt.Sprint(len(grid.Selected()), " selected")) })
+  grid.InsertRows(0, Account{ID: 7, Name: "newest"}) // first in the source: number 1
+  ```
 - `OnActivate(fn)` (double click, Enter), `OnKey(key, mods, fn)`,
   `ContextMenu(items...)` (on rows only; read them with `Selected`),
   `ContextMenuFunc(fn)` (fn gets the keys selected at the right-click, on the
@@ -739,7 +768,8 @@ lock: they read the row and call no widget method.
   cells apart by tabs; `CopyFunc(fn)` replaces that text with what `fn` makes
   of the keys of the selected rows, in the order shown, for both, so they
   agree. `fn` runs on the main thread, off the lock: it may call the table's
-  getters, but should be quick.
+  getters, but should be quick. `SetClipboardCopy(false)` turns both off, in
+  a `ListView`'s every view too (through `Details()`).
 
   ```go
   table.CopyFunc(func(ids []string) string { return strings.Join(ids, "\n") })

@@ -16,6 +16,8 @@ type keys[K comparable] struct {
 	// all of value.
 	changed []K
 	dirty   bool
+	// gen counts the changes of value, for what is worked out from it.
+	gen uint64
 }
 
 // bind returns the set to hand ui. Under mu, while building.
@@ -44,6 +46,7 @@ func (s *keys[K]) bindInto(dst *ui.Selection[K]) {
 
 // set adds or removes k. Under mu.
 func (s *keys[K]) set(k K, on bool) {
+	s.gen++
 	if on {
 		s.value.Add(k)
 	} else {
@@ -202,6 +205,7 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 		}
 		c.value.Clear()
 		c.dirty = true
+		c.gen++
 	} else {
 		for i := first; i <= last; i++ {
 			r := t.rowAt(i)
@@ -327,7 +331,8 @@ func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 // commitLocked is commit under mu. If watch is set, it gets the keys the user
 // added to and took out of the set.
 func (t *DataGridViewWidget[T, K]) commitLocked(s *keys[K]) {
-	watching := t.watch != nil
+	s.gen++
+	watching := t.watch != nil || s == &t.chosen && t.onSelChanged != nil
 	var on, off []K
 	ks, all := s.shown.TakeChanges()
 	if all {
@@ -381,7 +386,12 @@ func (t *DataGridViewWidget[T, K]) commitLocked(s *keys[K]) {
 	if t.gone {
 		s.keep(t.src.index)
 	}
-	if watching && len(on)+len(off) > 0 {
-		t.watch(s == &t.checked, on, off)
+	if len(on)+len(off) > 0 {
+		if s == &t.chosen {
+			t.selectionChanged()
+		}
+		if t.watch != nil {
+			t.watch(s == &t.checked, on, off)
+		}
 	}
 }

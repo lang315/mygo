@@ -249,6 +249,17 @@ func (lv *ListViewWidget[T, K]) AddRows(rows []T) *ListViewWidget[T, K] {
 	return lv
 }
 
+// InsertRows shows rows before the row at i, in the order added, each
+// instead of the row of its key if one shows; see RowSource.InsertRows.
+func (lv *ListViewWidget[T, K]) InsertRows(i int, rows ...T) *ListViewWidget[T, K] {
+	lv.t.InsertRows(i, rows...)
+	return lv
+}
+
+// Rows returns a copy of the rows, in the source's order (as added, and
+// inserted).
+func (lv *ListViewWidget[T, K]) Rows() []T { return lv.t.Rows() }
+
 // UpdateRow runs fn on the row of key k, if one shows, to change it in place.
 // fn runs under the package's lock: it changes the row but not its key, and
 // calls no widget method.
@@ -503,7 +514,7 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 	g.Selection = t.chosen.bind()
 	g.AccentChoice = true
 	g.Copy, g.ItemMenu = nil, nil
-	if t.copyFn != nil {
+	if t.copyFn != nil && !t.noCopy {
 		g.Copy = t.copyRows
 	}
 	switch menu := t.menu; {
