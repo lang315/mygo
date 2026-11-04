@@ -139,8 +139,9 @@ type surface struct {
 	input    platform.TextInputState
 
 	// keyTaken tells that the content took the key down, whose
-	// WM_SYSCHAR then opens no menu.
+	// WM_SYSCHAR then opens no menu; lastDown is that key's virtual key.
 	keyTaken bool
+	lastDown uintptr
 	// menuRan tells that the key down ran a menu item (menuShortcut): its
 	// character goes nowhere.
 	menuRan bool
@@ -617,6 +618,21 @@ func (s *surface) send(ev platform.SurfaceEvent) bool {
 	return s.w.h.SurfaceEvent(ev)
 }
 
+// menuKey offers the content Alt alone or F10, which ask for the menu bar
+// (SC_KEYMENU without a letter), in a window without a menu bar of the
+// system's, and reports whether it took them: a menu bar it draws takes the
+// keyboard (widget.MenuBar). F10 the content saw as it went down, and took
+// then or not. Alt alone it did not see: it gets KeyMenuBar, which only a
+// shortcut answers, never a handler of keys, as a terminal's, which would
+// take it for a key typed. Reached through surfaceHost, so that an app
+// without native UI does not link it.
+func (s *surface) menuKey() bool {
+	if s.lastDown == vkF10 {
+		return s.keyTaken
+	}
+	return s.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.KeyMenuBar})
+}
+
 // modifierKey is whether the virtual key vk is Shift, Ctrl, Alt or a Windows key.
 func modifierKey(vk uintptr) bool {
 	switch vk {
@@ -867,7 +883,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		return 0, true
 	case wmKeyDown, wmSysKeyDown:
 		s.clientComposition.Reset()
-		s.keyTaken, s.menuRan = false, false
+		s.keyTaken, s.menuRan, s.lastDown = false, false, wp
 		modifiers := mods()
 		if modifierKey(wp) {
 			s.send(platform.SurfaceEvent{Kind: platform.ModifiersChanged, Mods: modifiers})

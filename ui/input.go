@@ -12,6 +12,12 @@ import (
 // an element takes files dragged over or dropped at the event's position,
 // the key pressed or the composition (platform.WindowHandler.SurfaceEvent).
 func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
+	if holdsMenuKeys && rt.hold != nil && rt.claimed(keyEvent{0, KeyMenuBar}) && rt.hold.Hold(ev) {
+		// Typed ahead of the frame a menu bar's key asked for, or F10 held,
+		// in a view with a menu bar (it asks for KeyMenuBar): the others
+		// get every event as it comes, F10's repeats included.
+		return true
+	}
 	if ev.Kind == platform.SurfaceCommandEnabled {
 		// A menu asking about its item changes nothing.
 		return rt.commandEnabled(ev.Text)
@@ -794,6 +800,18 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 		return true
 	}
 	k := keyEvent{mods, key}
+	if key == KeyMenuBar {
+		// Alt alone, as Windows' backend hands it over: a shortcut asking
+		// for it gets it, and no handler of keys, which would take it for a
+		// key typed; it is taken only when a shortcut answers it. The frame
+		// it asks for, taken or not, sends the keys a MenuBar holds after it
+		// (keyhold).
+		if !rt.claimed(k) {
+			rt.requestFrame()
+			return false
+		}
+		goto queue
+	}
 	if key == KeyEscape && mods == 0 && rt.dragCancelLinked() {
 		return true
 	}
@@ -872,19 +890,30 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, repeat bool
 	if !rt.claimed(k) && rt.scrollKey(mods, key) {
 		return false
 	}
+queue:
 	rt.keys = append(rt.keys, k)
 	rt.requestFrame()
-	if swallowAltShortcuts && mods&Alt != 0 && mods&^(Alt|Shift) == 0 {
+	if key == KeyMenuBar {
+		return true
+	}
+	if swallowAltShortcuts && (mods&Alt != 0 && mods&^(Alt|Shift) == 0 || k == keyEvent{0, KeyF10}) {
 		// Windows opens its menu mode (and beeps) for an Alt+key the window did
-		// not take: one a shortcut of the view answers is taken.
+		// not take, and for F10: one a shortcut of the view answers is taken.
 		_, found := routeKey(rt.regs, rt.focusChain(), k)
 		return found
 	}
 	return false
 }
 
-// swallowAltShortcuts is whether a key with Alt that a shortcut answers is
-// reported as taken, so that Windows does not take it for a menu key.
+// holdsMenuKeys is whether the key events typed after a menu bar's key are
+// held for the frame that answers it (keyhold, which widget.MenuBar
+// enables): not on macOS, where a MenuBar has no keyboard mode, so that its
+// apps link nothing of it.
+const holdsMenuKeys = runtime.GOOS != "darwin"
+
+// swallowAltShortcuts is whether a key with Alt, or F10, that a shortcut
+// answers is reported as taken, so that Windows does not take it for a menu
+// key.
 var swallowAltShortcuts = runtime.GOOS == "windows"
 
 // typePause is how long after a letter typed to choose a row the next
@@ -1454,6 +1483,9 @@ func (e *node) Focus() *node {
 	if rt.focused != e.id {
 		rt.focused = e.id
 		rt.blinkStart = rt.now()
+		// What was built before read the focus where it was: build again,
+		// as for an event handled while building.
+		rt.consumed = true
 	}
 	return e
 }

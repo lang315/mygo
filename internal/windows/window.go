@@ -644,6 +644,11 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		// and a letter (lp the letter) open the menu of the letter; Alt and
 		// Space open the window menu. WebView2 passes no Alt+letter on: the
 		// letters come from native UI only.
+		if wp&0xFFF0 == scKeyMenu && lp == 0 && w.hmenu == 0 && w.sf != nil && w.sf.menuKey() {
+			// No bar of the system's, and the content took the keyboard
+			// to one of its own: the window menu's loop does not start.
+			return 0, true
+		}
 		if wp&0xFFF0 == scKeyMenu && lp != ' ' && w.hmenu != 0 {
 			if w.barless() {
 				w.popupMenuBar(lp)

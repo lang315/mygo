@@ -468,6 +468,11 @@ const (
 	// macOS swipes between pages.
 	KeyBack
 	KeyForward
+	// KeyMenuBar is no key of a keyboard: it is Alt pressed and let go
+	// alone, which on Windows takes the keyboard to the menu bar, as the
+	// backend hands it to native UI in a window without a bar of Win32's.
+	// It goes to shortcuts only, never to a handler of keys.
+	KeyMenuBar
 )
 
 // KeyForRune returns the key typing r unshifted, KeyUnknown for others.

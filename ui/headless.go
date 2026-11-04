@@ -941,6 +941,29 @@ func (t *Tester) Key(mods Modifiers, key Key) {
 	t.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: platform.Key(key), Mods: platform.Modifiers(mods)})
 }
 
+// KeysAtOnce presses and lets go each key in turn, without modifiers, with
+// no frame between them, as keys typed faster than the window draws come
+// on Windows, which draws a frame only once its queue holds no input; the
+// frames run after the last.
+func (t *Tester) KeysAtOnce(keys ...Key) {
+	for _, k := range keys {
+		t.rt.event(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.Key(k)})
+		t.rt.event(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: platform.Key(k)})
+	}
+	t.settle()
+}
+
+// KeyTaken presses key with mods and lets it go, as Key does, and reports
+// whether the content took the press: what a backend asks before it lets
+// the system have a key, as Windows' F10, which also stands for Alt
+// pressed alone.
+func (t *Tester) KeyTaken(mods Modifiers, key Key) bool {
+	taken := t.rt.event(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.Key(key), Mods: platform.Modifiers(mods)})
+	t.settle()
+	t.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: platform.Key(key), Mods: platform.Modifiers(mods)})
+	return taken
+}
+
 // KeyDown presses a key and holds it, as a player holds a key that walks,
 // until KeyUp.
 func (t *Tester) KeyDown(key Key) {

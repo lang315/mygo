@@ -36,14 +36,16 @@ type Form struct {
 	done          chan struct{} // closed when the shown window closes
 	headless      chan struct{} // a DialogTester's: closed by Close, instead of a window
 	shortcuts     []formShortcut
-	accept        *ButtonWidget // Enter clicks it
-	cancel        *ButtonWidget // Escape clicks it
-	fit           bool          // a dialog of height 0: Show measures its content
-	fitScroll     bool          // the content is higher than the screen: it scrolls
-	mnemonics     []mnemonic    // the Alt keys the last build asked for
-	barKeys       []barKey      // the Alt keys of the menu bars the last build drew, before the controls'
-	built         []builtEl     // the controls the build made, in order (a Label's mnemonic finds the next)
-	announce      string        // a validation message for the next build to announce
+	accept        *ButtonWidget  // Enter clicks it
+	cancel        *ButtonWidget  // Escape clicks it
+	fit           bool           // a dialog of height 0: Show measures its content
+	fitScroll     bool           // the content is higher than the screen: it scrolls
+	mnemonics     []mnemonic     // the Alt keys the last build asked for
+	barKeys       []barKey       // the Alt keys of the menu bars the last build drew, before the controls'
+	menuBar       *MenuBarWidget // the first menu bar the last build drew, which F10 takes the keyboard to
+	modeBar       *MenuBarWidget // the menu bar in its keyboard mode, nil for none
+	built         []builtEl      // the controls the build made, in order (a Label's mnemonic finds the next)
+	announce      string         // a validation message for the next build to announce
 }
 
 // quit quits the app; tests replace it.
@@ -336,7 +338,7 @@ func (w *Form) view(c *ui.Context) {
 	axis, building, buildingForm = vertical, w.id, w
 	defer func() { buildingForm = nil }()
 	w.keep.begin()
-	w.barKeys = w.barKeys[:0]
+	w.barKeys, w.menuBar = w.barKeys[:0], nil
 	formAccept = w.acceptClick()
 	defer func() { formAccept = nil }()
 	ui.Column(c).Fill().Children(func() {

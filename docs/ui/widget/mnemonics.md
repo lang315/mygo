@@ -35,7 +35,9 @@ character no key types (`&@`) makes no mnemonic. An `&` at the end, or before wh
   the platform's access keys on Windows (`MenuItem` text goes to the native
   menu), and the menu bar's access keys (`SetMenuBar`, `MenuStrip`) come before
   the controls': a button `&File` does not answer Alt+F when the bar has a
-  `&File` menu.
+  `&File` menu. A [`MenuBar`](menubar.md) drawn in the content
+  answers its access keys the same way, and takes Alt alone and F10 to
+  its keyboard mode; without one, they are the system's as before.
 - **Not yet:** menu items on Linux, and an access-key property for assistive
   technology.
 - Alt+letter does not reach the form while a text box has the keyboard focus on
