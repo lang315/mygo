@@ -132,13 +132,16 @@ func (t *DataGridViewWidget[T, K]) SetClipboardCopy(on bool) *DataGridViewWidget
 	return t
 }
 
-// OnSelectionChanged runs fn on the event goroutine after the rows Selected
-// returns change (WinForms' SelectionChanged): when the user chooses rows
-// (a click, Shift or Ctrl with it, the keys, select all), when selected rows
-// are deleted, and when a search hides or shows selected rows. Changes made
-// before fn runs run it once.
+// OnSelectionChanged runs fn on the event goroutine after the set of rows
+// Selected returns changes (WinForms' SelectionChanged): when the user
+// chooses rows (a click, Shift or Ctrl with it, the keys, select all), when
+// selected rows are deleted, and when a search hides or shows selected rows,
+// a new search or rows that changed under one. Sorting, which only orders
+// them, does not run it. Changes made before fn runs run it once. A change of
+// the rows under a search is seen as the table next builds, or when Selected
+// or Checked is read.
 func (t *DataGridViewWidget[T, K]) OnSelectionChanged(fn func()) *DataGridViewWidget[T, K] {
-	t.change(func() { t.onSelChanged = fn })
+	t.change(func() { t.onSelChanged, t.selSeen = fn, nil })
 	return t
 }
 

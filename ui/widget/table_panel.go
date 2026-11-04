@@ -97,17 +97,35 @@ func (t *DataGridViewWidget[T, K]) Search(column, keyword string) *DataGridViewW
 	}
 	t.change(func() {
 		var before []K
+		t.selSeen = nil // the shown selection is taken anew under the new search
 		watch := t.onSelChanged != nil && t.chosen.value.Len() > 0
 		if watch {
 			before = t.shown(&t.chosen.value)
 		}
 		t.filter = t.keep(column, keyword)
 		t.view.SetFilter(t.filter)
-		if watch && !slices.Equal(before, t.shown(&t.chosen.value)) {
+		if watch && !sameKeys(before, t.shown(&t.chosen.value)) {
 			t.selectionChanged()
 		}
 	})
 	return t
+}
+
+// sameKeys reports whether a and b, keys each once, hold the same keys.
+func sameKeys[K comparable](a, b []K) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	in := make(map[K]struct{}, len(a))
+	for _, k := range a {
+		in[k] = struct{}{}
+	}
+	for _, k := range b {
+		if _, ok := in[k]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // keep returns the filter of a search, nil for none. Under mu.

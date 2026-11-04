@@ -124,6 +124,11 @@ type DataGridViewWidget[T any, K comparable] struct {
 	noCopy                                  bool                 // SetClipboardCopy(false)
 	onSelChanged                            func()               // OnSelectionChanged's
 	selPending                              bool                 // a selection change is posted, not run yet
+	// selSeen are the keys of the rows selected that a search showed, as of
+	// the view's version selVersion and the selection's generation selGen;
+	// nil when not known (see watchSearch).
+	selSeen            map[K]struct{}
+	selVersion, selGen uint64
 
 	// In-cell editing (tableedit.go): its state is edAny, a *tableEditing, and the
 	// parts of editing the table calls are the func fields below, all nil until
@@ -279,7 +284,7 @@ func (t *DataGridViewWidget[T, K]) AddRows(rows []T) *DataGridViewWidget[T, K] {
 
 // InsertRows shows rows before the row at i of the source, the order the
 // rows show in unsorted, from 0, each instead of the row of its key if one
-// shows; see RowSource.InsertRows.
+// is held (a row a search hides too); see RowSource.InsertRows.
 func (t *DataGridViewWidget[T, K]) InsertRows(i int, rows ...T) *DataGridViewWidget[T, K] {
 	t.src.InsertRows(i, rows...)
 	return t
@@ -351,7 +356,8 @@ func (t *DataGridViewWidget[T, K]) Row(k K) (T, bool) { return t.src.Row(k) }
 // Len returns how many rows the table has, the hidden by a search too.
 func (t *DataGridViewWidget[T, K]) Len() int { return t.src.Len() }
 
-// ClearSort shows the rows in the order added, as before a header click.
+// ClearSort shows the rows in the source's order (as added, and inserted),
+// as before a header click.
 func (t *DataGridViewWidget[T, K]) ClearSort() *DataGridViewWidget[T, K] {
 	t.change(func() { t.sort.set(ui.SortOrder{}) })
 	return t
@@ -382,6 +388,48 @@ func (t *DataGridViewWidget[T, K]) sync() {
 		t.kept = true
 	}
 	t.view.Sync(t.src.rows, t.sort.value)
+	if t.onSelChanged != nil && t.filter != nil {
+		t.watchSearch()
+	} else {
+		t.selSeen = nil
+	}
+}
+
+// watchSearch fires OnSelectionChanged when the rows changed so that the
+// search hides or shows other selected rows: the view's version moved, the
+// selection did not (the user's changes, and deletes, fire by themselves). It
+// costs a pass over the rows selected when the view changes. Under mu, after
+// the view synced.
+func (t *DataGridViewWidget[T, K]) watchSearch() {
+	v, gen := t.view.Version(), t.chosen.gen
+	if t.selSeen != nil && v == t.selVersion && gen == t.selGen {
+		return
+	}
+	known := t.selSeen != nil && gen == t.selGen
+	same, n := t.selSeen != nil, 0
+	for k := range t.chosen.value.All() {
+		if i, ok := t.src.index[k]; ok && t.filter(&t.src.rows[i]) {
+			n++
+			if _, was := t.selSeen[k]; !was {
+				same = false
+			}
+		}
+	}
+	if same = same && n == len(t.selSeen); !same {
+		if t.selSeen == nil {
+			t.selSeen = make(map[K]struct{}, n)
+		}
+		clear(t.selSeen)
+		for k := range t.chosen.value.All() {
+			if i, ok := t.src.index[k]; ok && t.filter(&t.src.rows[i]) {
+				t.selSeen[k] = struct{}{}
+			}
+		}
+		if known {
+			t.selectionChanged()
+		}
+	}
+	t.selVersion, t.selGen = v, gen
 }
 
 // rowAtPos returns the row at position pos of the view in the frame ui shows,

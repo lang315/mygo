@@ -719,11 +719,14 @@ lock: they read the row and call no widget method.
   changed wins over a change another goroutine made to the same cell meanwhile
   (the last writer wins on the cell; the row's other fields are kept). Closing
   the window discards an open draft: `IsEditing` tells an app there is one.
-- `OnSelectionChanged(fn)` runs `fn` on the event goroutine once the rows
-  `Selected` returns change: the user's clicks, Shift and Ctrl clicks, keys
-  and select all, a delete of selected rows, and a search that hides or
-  shows selected rows. Changes made before `fn` runs run it once, never once
-  per frame. Read the rows with `Selected` in it.
+- `OnSelectionChanged(fn)` runs `fn` on the event goroutine once the set of
+  rows `Selected` returns changes: the user's clicks, Shift and Ctrl clicks,
+  keys and select all, a delete of selected rows, and a search that hides or
+  shows selected rows (a new search, or rows changed under one by
+  `UpdateRow`, `AddRows`, `InsertRows` or `SetRows`, seen as the table next
+  builds). Sorting only orders them and does not run it. Changes made before
+  `fn` runs run it once, never once per frame. Read the rows with `Selected`
+  in it.
 
   ```go
   grid := widget.DataGridView(func(a *Account) uint { return a.ID },

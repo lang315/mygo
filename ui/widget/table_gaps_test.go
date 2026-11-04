@@ -231,3 +231,38 @@ func TestListViewClipboardCopyOffInIconViews(t *testing.T) {
 		t.Fatalf("copied %q with copy off", got)
 	}
 }
+
+// A row's change that the search now hides or shows changes the rows
+// Selected returns: OnSelectionChanged fires. Sorting them does not.
+func TestTableOnSelectionChangedFiresWhenASearchHidesAChangedRow(t *testing.T) {
+	var n atomic.Int32
+	tb := testTable(acct{1, "xa", 10}, acct{2, "xb", 20}, acct{3, "xc", 30}).OnSelectionChanged(func() { n.Add(1) })
+	tt := tester(t, tb)
+	want := int32(0)
+	step := func(name string, changes bool, act func()) {
+		t.Helper()
+		act()
+		settleTable(tt)
+		flushEvents(t)
+		if changes {
+			want++
+		}
+		if got := n.Load(); got != want {
+			t.Fatalf("%s: fired %d times, want %d (Selected %v)", name, got, want, tb.Selected())
+		}
+	}
+	step("click", true, func() { click(t, tt, "xa") })
+	step("cmd-click", true, func() {
+		if err := tt.ClickWith(ui.Cmd, "xb"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	step("search keeping both", false, func() { tb.Search("Name", "x") })
+	step("sort", false, func() { tb.Sort("Score", true) })
+	step("update a row not selected", false, func() { tb.UpdateRow(3, func(a *acct) { a.score = 5 }) })
+	step("update hiding a selected row", true, func() { tb.UpdateRow(1, func(a *acct) { a.name = "ya" }) })
+	step("update showing it again", true, func() { tb.UpdateRow(1, func(a *acct) { a.name = "xa" }) })
+	step("AddRow replacing a selected row, hidden", true, func() { tb.AddRow(acct{2, "yb", 20}) })
+	step("InsertRows replacing it, shown", true, func() { tb.InsertRows(0, acct{2, "xb", 20}) })
+	step("SetRows hiding one", true, func() { tb.SetRows([]acct{{1, "xa", 10}, {2, "yb", 20}, {3, "xc", 30}}) })
+}

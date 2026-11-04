@@ -256,7 +256,8 @@ func (lv *ListViewWidget[T, K]) InsertRows(i int, rows ...T) *ListViewWidget[T, 
 	return lv
 }
 
-// Rows returns a copy of the rows, in the order added.
+// Rows returns a copy of the rows, in the source's order (as added, and
+// inserted).
 func (lv *ListViewWidget[T, K]) Rows() []T { return lv.t.Rows() }
 
 // UpdateRow runs fn on the row of key k, if one shows, to change it in place.

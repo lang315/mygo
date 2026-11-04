@@ -238,7 +238,8 @@ func (s *RowSource[T, K]) InsertRows(i int, rows ...T) *RowSource[T, K] {
 			return
 		}
 		// A new slice: a table's frame holds the old one.
-		out := make([]T, 0, len(s.rows)+len(ins))
+		// It keeps the room a batched load reserved (AddRowsInBatches).
+		out := make([]T, 0, max(cap(s.rows), len(s.rows)+len(ins)))
 		out = append(append(append(out, s.rows[:i]...), ins...), s.rows[i:]...)
 		for j := i; j < len(out); j++ {
 			s.index[s.key(&out[j])] = j
