@@ -105,6 +105,8 @@ type menuParts struct {
 	// moved is set while the pointer moved since it last highlighted an
 	// item; closed once the menu closes in this pass.
 	moved, closed bool
+	// across is the menu the keys asked for along a menu bar (Across).
+	across int
 }
 
 // menuBuilt is a menu, or a submenu, built in a pass: its panel, its items
@@ -140,6 +142,9 @@ type menuShown struct {
 	// pointer is where the pointer was when it last moved the highlight:
 	// it moves it again once it moves.
 	pointer [2]float32
+	// icons are the bitmaps of the items' PNG icons of a menu drawn with
+	// the theme's look, decoded once as the menu shows, by their bytes.
+	icons map[string]*Bitmap
 }
 
 // menuLevel is a menu that shows: the item, by its element, whose submenu
@@ -537,10 +542,14 @@ func (m *menuParts) keys(level int, panel *node, choices []*node) {
 	case panel.Shortcut(0, into):
 		if at >= 0 && choices[at].expandable {
 			m.openSubmenu(level, choices[at].id, true)
+		} else {
+			m.across = 1
 		}
 	case panel.Shortcut(0, out):
 		if level > 0 {
 			m.closeLevel(level)
+		} else {
+			m.across = -1
 		}
 	case panel.Shortcut(0, KeyEnter), panel.Shortcut(0, KeySpace):
 		switch {
@@ -592,9 +601,6 @@ type drawnMenu struct {
 	built uint64
 	pass  int
 	menu  menuShown
-	// icons are the bitmaps of the items' PNG icons, decoded once as the
-	// menu shows, by their bytes.
-	icons map[string]*Bitmap
 }
 
 // openDrawnMenu opens the drawn menu of e, at the point asked for.
@@ -620,17 +626,76 @@ func (rt *engine) drawMenu(e *node, build func(m *Menu)) {
 		rt.menu.drawn = nil
 		return
 	}
-	run := &menuRun{collect: true, iconColor: e.c.Theme().Text}
-	pm := &platform.Menu{}
-	build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[d.text]})
-	if !slices.ContainsFunc(pm.Items, func(it *platform.MenuItem) bool { return it.Visible && it.Type != platform.MenuItemSeparator }) {
+	open := true
+	m := &menuParts{Trigger: e, c: e.c, open: &open, s: &d.menu, level: -1}
+	m.draw(build, d.text)
+	if !open {
 		rt.menu.drawn = nil
+	} else if d.menu.below {
+		e.expanded = true
+	}
+}
+
+// PopupMenu shows the menu while it is open, as Popup does, with the
+// look and the items of PopoverMenu's: build fills it with the items
+// ContextMenu's function takes, and the item chosen reports Chosen as
+// there. It returns the panel, or nil while the menu is closed. A menu bar
+// is a row of MenuBase triggers, each with a PopupMenu:
+//
+//	m := ui.MenuBase(c, &app.fileOpen)
+//	m.Trigger.Unfocusable().KeepFocus().Role(ui.RoleMenuItem).Label("File").Padding(4, 8)
+//	m.Trigger.Children(func() { ui.Text(c, "File") })
+//	m.PopupMenu(func(m *ui.Menu) {
+//		if m.Item("Open…").Shortcut(ui.Ctrl, ui.KeyO).Chosen() {
+//			app.open()
+//		}
+//	})
+func (m *menuParts) PopupMenu(build func(m *Menu)) *node {
+	if !*m.open || len(m.s.levels) == 0 {
+		return nil // nothing to build: the items are collected only to show
+	}
+	return m.draw(build, 0)
+}
+
+// OpenFirst opens the menu on its first item that can be chosen, with the
+// focus, as the keyboard opens it: for keys of one's own that open it, as
+// a menu bar's access key or its arrows going from one menu to the next.
+// Call it before Popup.
+func (m *menuParts) OpenFirst() {
+	e := m.Trigger
+	if !e.hasState() || e.disabled() {
 		return
 	}
-	c := e.c
-	t := c.theme
-	open := true
-	m := &menuParts{Trigger: e, c: c, open: &open, s: &d.menu, level: -1}
+	rt := m.c.rt
+	*m.open = true
+	*m.s = menuShown{below: true, opened: rt.frame, levels: append(m.s.levels[:0], menuLevel{first: true}), pointer: [2]float32{rt.pointerX, rt.pointerY}}
+	if m.button {
+		e.expanded = true
+	}
+	rt.consumed = true
+}
+
+// Across reports the menu the keys asked for along a menu bar in this
+// pass: -1 for the one before, as Left does in the menu, +1 for the one
+// after, as Right does on an item opening no submenu, also in a submenu,
+// the other way round right to left (Direction); 0 for none. The menu
+// stays open: close it and open the other. Read it after Popup.
+func (m *menuParts) Across() int { return m.across }
+
+// draw builds the menu with the theme's look, as PopoverMenu draws it: a
+// panel for the menu and each submenu open, holding the items build adds;
+// text is the text input or selectable text it opened on, 0 for none. It
+// returns the panel, nil when the menu shows no item.
+func (m *menuParts) draw(build func(m *Menu), text uint64) *node {
+	c := m.c
+	rt, t := c.rt, c.theme
+	run := &menuRun{collect: true, iconColor: c.Theme().Text}
+	pm := &platform.Menu{}
+	build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[text]})
+	if !slices.ContainsFunc(pm.Items, func(it *platform.MenuItem) bool { return it.Visible && it.Type != platform.MenuItemSeparator }) {
+		*m.open = false
+		return nil
+	}
 	var chosen *platform.MenuItem
 	style := func(panel *node) {
 		panel.widget = "PopoverMenu"
@@ -650,7 +715,7 @@ func (rt *engine) drawMenu(e *node, build func(m *Menu)) {
 				coreBox(c).Height(1).Margin(t.Space(1), t.Space(2)).Background(t.Border).Shrink(0)
 				continue
 			}
-			row := m.drawnItem(it, marks, d.icon(it.Icon))
+			row := m.drawnItem(it, marks, m.s.icon(it.Icon))
 			if sub := it.Submenu; it.Type == platform.MenuItemSubmenu && sub != nil {
 				m.Submenu(row, func(panel *node) {
 					style(panel)
@@ -662,32 +727,28 @@ func (rt *engine) drawMenu(e *node, build func(m *Menu)) {
 			}
 		}
 	}
-	m.Popup(func(panel *node) {
+	root := m.Popup(func(panel *node) {
 		style(panel)
-		if d.menu.below {
+		if m.s.below {
 			// Below the menu button, or above it where the window has no
 			// room, lined up with its start.
 			panel.Margin(t.Space(1), 0, 0, 0)
 		}
 		items(pm.Items)
 	})
-	if !open {
-		rt.menu.drawn = nil
-	} else if d.menu.below {
-		e.expanded = true
-	}
 	if it := chosen; it != nil {
 		if name := run.commands[it.ID-1]; name != "" {
-			target := d.text
+			target := text
 			if target == 0 {
-				target = d.id
+				target = m.Trigger.id
 			}
 			rt.menuCommand(target, name)
 			rt.requestFrame()
 		} else {
-			rt.menuChoice(build, it.ID, it.Label, d.text)
+			rt.menuChoice(build, it.ID, it.Label, text)
 		}
 	}
+	return root
 }
 
 // drawnItem builds item it of the menu being drawn, with room for the
@@ -763,21 +824,21 @@ func (m *menuParts) drawnItem(it *platform.MenuItem, marks bool, icon *Bitmap) *
 
 // icon returns the bitmap of an item's icon, nil for none or for a PNG that
 // does not decode, as the system's menus show no icon for it.
-func (d *drawnMenu) icon(ic *platform.MenuIcon) *Bitmap {
+func (s *menuShown) icon(ic *platform.MenuIcon) *Bitmap {
 	if ic == nil || len(ic.PNG) == 0 {
 		return nil
 	}
-	if bm, ok := d.icons[string(ic.PNG)]; ok {
+	if bm, ok := s.icons[string(ic.PNG)]; ok {
 		return bm
 	}
 	bm, err := DecodeBitmap(ic.PNG)
 	if err != nil {
 		bm = nil
 	}
-	if d.icons == nil {
-		d.icons = map[string]*Bitmap{}
+	if s.icons == nil {
+		s.icons = map[string]*Bitmap{}
 	}
-	d.icons[string(ic.PNG)] = bm
+	s.icons[string(ic.PNG)] = bm
 	return bm
 }
 

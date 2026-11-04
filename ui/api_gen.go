@@ -2984,6 +2984,21 @@ func WebView(c *Context, v NativeWebView) Element {
 	return wrapElement(_e)
 }
 
+// Across reports the menu the keys asked for along a menu bar in this
+// pass: -1 for the one before, as Left does in the menu, +1 for the one
+// after, as Right does on an item opening no submenu, also in a submenu,
+// the other way round right to left (Direction); 0 for none. The menu
+// stays open: close it and open the other. Read it after Popup.
+func (_handle MenuParts) Across() int {
+	_parts := _handle.resolve()
+	if _parts == nil {
+		return 0
+	}
+	_ctx := _parts.c
+	_ = _ctx
+	return _parts.Across()
+}
+
 // CheckItem creates an item, as Item does, that assistive technology sees
 // as a check box item, checked while checked is set: flip what it shows
 // when it is Clicked.
@@ -3029,6 +3044,20 @@ func (_handle MenuParts) Open() bool {
 	return _parts.Open()
 }
 
+// OpenFirst opens the menu on its first item that can be chosen, with the
+// focus, as the keyboard opens it: for keys of one's own that open it, as
+// a menu bar's access key or its arrows going from one menu to the next.
+// Call it before Popup.
+func (_handle MenuParts) OpenFirst() {
+	_parts := _handle.resolve()
+	if _parts == nil {
+		return
+	}
+	_ctx := _parts.c
+	_ = _ctx
+	_parts.OpenFirst()
+}
+
 // Popup shows the menu while it is open: below the trigger of a menu
 // button, lined up with its start, or above it where the window has no
 // room, and a context menu after where it opened, or before it, as from a
@@ -3044,6 +3073,33 @@ func (_handle MenuParts) Popup(fn func(panel Element)) Element {
 	_ = _ctx
 	_ctx.rt.beginBuild()
 	_e := _parts.Popup(func(panel *node) { fn(wrapElement(panel)) })
+	_ctx.rt.endBuild()
+	return wrapElement(_e)
+}
+
+// PopupMenu shows the menu while it is open, as Popup does, with the
+// look and the items of PopoverMenu's: build fills it with the items
+// ContextMenu's function takes, and the item chosen reports Chosen as
+// there. It returns the panel, or nil while the menu is closed. A menu bar
+// is a row of MenuBase triggers, each with a PopupMenu:
+//
+//	m := ui.MenuBase(c, &app.fileOpen)
+//	m.Trigger.Unfocusable().KeepFocus().Role(ui.RoleMenuItem).Label("File").Padding(4, 8)
+//	m.Trigger.Children(func() { ui.Text(c, "File") })
+//	m.PopupMenu(func(m *ui.Menu) {
+//		if m.Item("Open…").Shortcut(ui.Ctrl, ui.KeyO).Chosen() {
+//			app.open()
+//		}
+//	})
+func (_handle MenuParts) PopupMenu(build func(m *Menu)) Element {
+	_parts := _handle.resolve()
+	if _parts == nil {
+		return Element{}
+	}
+	_ctx := _parts.c
+	_ = _ctx
+	_ctx.rt.beginBuild()
+	_e := _parts.PopupMenu(build)
 	_ctx.rt.endBuild()
 	return wrapElement(_e)
 }

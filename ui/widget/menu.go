@@ -16,6 +16,11 @@ import (
 // item that destroys, as Delete: it shows in the danger color and semibold
 // where mygo draws the menu itself (Windows 11, the web), and as a normal
 // item in native menus (macOS, Linux, Windows 10), which have no role for it.
+// Shortcut shows a key by the item, as WinForms' ShortcutKeyDisplayString:
+// it answers nothing, so give the form the same Form.Shortcut. The menus of
+// MenuBar, MenuButton and ContextMenu show it; Form.SetMenuBar's native
+// bar does not, as a key shown there is the system's to answer (MenuStrip's
+// SetShortcut is).
 type MenuItem struct {
 	Text     string
 	OnClick  func()
@@ -24,21 +29,41 @@ type MenuItem struct {
 	Disabled bool
 	Icon     *ui.SVG
 	IconPNG  []byte
+	Shortcut Shortcut
 
 	Destructive bool
 }
 
+// Shortcut is a key with modifiers, as {ui.Ctrl, ui.KeyS}, which a menu item
+// shows; the zero Shortcut is none.
+type Shortcut struct {
+	Mods ui.Modifiers
+	Key  ui.Key
+}
+
 // buildMenu adds items to a ui menu, posting the OnClick of the item
 // chosen.
-func buildMenu(m *ui.Menu, items []MenuItem) {
+func buildMenu(m *ui.Menu, items []MenuItem) { addItems(m, items, false) }
+
+// addItems is buildMenu; drawn, for a menu mygo draws, shows the text of an
+// item without the "&" of its access key, which a native menu takes.
+func addItems(m *ui.Menu, items []MenuItem, drawn bool) {
 	for _, it := range items {
+		text := it.Text
+		if drawn {
+			text, _, _ = parseMnemonic(text)
+		}
 		switch {
 		case it.Text == "":
 			m.Separator()
 		case len(it.Children) > 0:
-			m.Submenu(it.Text, func(m *ui.Menu) { buildMenu(m, it.Children) }).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Destructive(it.Destructive)
+			m.Submenu(text, func(m *ui.Menu) { addItems(m, it.Children, drawn) }).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Destructive(it.Destructive)
 		default:
-			if m.Item(it.Text).Checked(it.Checked).Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Destructive(it.Destructive).Chosen() && it.OnClick != nil {
+			item := m.Item(text)
+			if it.Checked { // as nativeMenu: an item not checked is a plain one, not a check box
+				item.Checked(true)
+			}
+			if item.Disabled(it.Disabled).Icon(it.Icon).IconPNG(it.IconPNG).Destructive(it.Destructive).Shortcut(it.Shortcut.Mods, it.Shortcut.Key).Chosen() && it.OnClick != nil {
 				Post(it.OnClick)
 			}
 		}

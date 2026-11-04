@@ -341,7 +341,7 @@ type engine struct {
 	// openers are the elements that had the focus as overlays opened, by
 	// overlay; downs the elements the pointer went down on since the last
 	// pass (0 for none), for PressedOutside.
-	openers   map[uint64]uint64
+	openers   map[uint64]opener
 	downs     []uint64
 	regs      []shortcutReg
 	nextRegs  []shortcutReg
