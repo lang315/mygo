@@ -159,7 +159,8 @@ func nameControlOf(w Control, e ui.Element, name string) {
 }
 
 // OnFocusOut runs fn when the widget loses the keyboard focus, and when
-// its form closes with the focus in it (before a dialog's Run returns).
+// its form closes with the focus in it (before a dialog's Run returns;
+// the app quitting does not wait for it).
 func (c *common[W]) OnFocusOut(fn func()) *W { c.change(func() { c.onFocusOut = fn }); return c.self }
 
 // direction is how a box lays out its children.
@@ -254,7 +255,7 @@ func render(c *ui.Context, w Control) ui.Element {
 			b.focusIn = building
 		case b.focusIn == building:
 			b.focusIn = noView
-			Post(b.onFocusOut)
+			buildingForm.postFocusOut(b.onFocusOut)
 		}
 	}
 	return e

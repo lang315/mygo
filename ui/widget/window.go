@@ -35,6 +35,7 @@ type Form struct {
 	asking        bool          // OnClose is asking the user
 	done          chan struct{} // closed when the shown window closes
 	headless      chan struct{} // a DialogTester's: closed by Close, instead of a window
+	focusOut      chan struct{} // closed once the last OnFocusOut its view posted ran
 	shortcuts     []formShortcut
 	accept        *ButtonWidget  // Enter clicks it
 	cancel        *ButtonWidget  // Escape clicks it
@@ -342,19 +343,34 @@ func (w *Form) closeAnyway() {
 }
 
 // leaveFocus posts the OnFocusOut of the control that had the keyboard
-// focus when the form closed, as GTK and WinForms tell it. Called under mu.
+// focus when the form closed, as GTK and WinForms tell it, and forgets the
+// focus of every control so a show again reports no stale focus-out. A
+// control that left the tree while focused (its box hidden, its page
+// switched) is not the one that had it last. Called under mu.
 func (w *Form) leaveFocus() {
 	for _, p := range w.keep.widgets {
 		c := p.Value()
 		if c == nil || c.focusIn != w.id {
 			continue
 		}
-		c.focusIn = noView // a show again starts unfocused, with no stale focus-out
-		if c.onFocusOut != nil {
-			Post(c.onFocusOut)
+		c.focusIn = noView
+		if c.onFocusOut != nil && w.keep.built[c.id] {
+			w.postFocusOut(c.onFocusOut)
 		}
+	}
+}
+
+// postFocusOut posts fn, an OnFocusOut, and has w.focusOut close once it
+// ran, for Run to wait on. w is nil for a view that is no form's. Called
+// under mu.
+func (w *Form) postFocusOut(fn func()) {
+	if w == nil {
+		Post(fn)
 		return
 	}
+	ran := make(chan struct{})
+	w.focusOut = ran
+	Post(func() { defer close(ran); fn() })
 }
 
 func (w *Form) view(c *ui.Context) {

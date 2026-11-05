@@ -868,7 +868,7 @@ Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
 and `ByLabel`, over the one its text, tooltip or `Fields` row gives; a
 container's, or a group's, names the group), `OnFocusOut` (also when the
 form closes with the focus in the widget, before a dialog's `Run`
-returns), `OnClick` (gota's `EventBox`), `ContextMenu`, `Focus`, which
+returns; the app quitting does not wait for it), `OnClick` (gota's `EventBox`), `ContextMenu`, `Focus`, which
 moves the keyboard focus to it, and `AssignTo(&v)`, which keeps a widget
 made inside a chain.
 
