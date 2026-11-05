@@ -934,7 +934,9 @@ func (rt *engine) runFrame() {
 	if webViewPlace != nil {
 		webViewPlace(rt)
 	}
-	rt.placeNativeGlass()
+	if glassPlace != nil {
+		glassPlace(rt)
+	}
 	// The window hit-tests its maximize button in its own DIPs.
 	if r := rt.windowRect(rt.maxButton); r != rt.maxSent {
 		rt.maxSent = r
@@ -1643,10 +1645,8 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	if e.webView != nil {
 		webViewNote(rt, e, clip, invisible)
 	}
-	if m, ok := e.material.(NativeGlassMaterial); ok && rt.host.nativeGlass() && !rt.preferences().ReduceTransparency {
-		if spec, ok := m.NativeGlass(); ok {
-			rt.noteNativeGlass(e, clip, invisible, spec)
-		}
+	if glassNote != nil {
+		glassNote(rt, e, clip, invisible)
 	}
 	if e.maximizeButton && !noInput && rt.maxButton == (Rect{}) && v.W > 0 && v.H > 0 {
 		rt.maxButton = v

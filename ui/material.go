@@ -32,9 +32,22 @@ func (e *node) Material(m Material) *node {
 	if b, ok := m.(nodeMaterialBuilder); ok {
 		m = b.BuildMaterial(e)
 	}
+	if _, ok := m.(NativeGlassMaterial); ok && glassPlace == nil {
+		// What notes and places the system's glass is reached from here
+		// only: an app without a glass material does not link it.
+		glassNote, glassPlace = (*engine).noteGlassOf, (*engine).placeNativeGlass
+	}
 	e.material, e.fill = m, fillMaterial
 	return e
 }
+
+// glassNote and glassPlace are noteGlassOf and placeNativeGlass once a
+// NativeGlassMaterial was given to an element (Material), nil before: the
+// engine calls them through these.
+var (
+	glassNote  func(rt *engine, e *node, clip Rect, invisible bool)
+	glassPlace func(rt *engine)
+)
 
 // Theme returns the theme of the element being painted: that of the
 // Themed around it, else the window's.
