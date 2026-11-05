@@ -11,19 +11,13 @@ import (
 	"testing"
 )
 
-// recoveryDocs keeps the automatic restore from racing the explicit restores below.
+// recoveryDocs keeps the automatic restore from racing the explicit restores
+// below: the restore of the app's start (posted by the first kind of the
+// process, or made by registerDocKind for a later one) has ended when it
+// returns, and cannot take an orphan the test writes or read a field it sets.
 func recoveryDocs(t *testing.T) *Documents[string] {
 	t.Helper()
-	docRegistry.Lock()
-	launched := docRegistry.launched
-	docRegistry.launched = false
-	docRegistry.Unlock()
-	defer func() {
-		docRegistry.Lock()
-		docRegistry.launched = launched
-		docRegistry.Unlock()
-	}()
-	return testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	return testDocsSettled(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 }
 
 func writeRecoveryOrphan(t *testing.T, ds *Documents[string], name string, entries []recoveryEntry, copies map[string]string) string {
