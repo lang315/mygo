@@ -866,9 +866,11 @@ style hover, focus, pressed, disabled and dark states, see
 Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
 `SetAccessibleName` (the name of the control itself for assistive technology
 and `ByLabel`, over the one its text, tooltip or `Fields` row gives; a
-container's, or a group's, names the group), `OnFocusOut`, `OnClick` (gota's
-`EventBox`), `ContextMenu`, `Focus`, which moves the keyboard focus to it,
-and `AssignTo(&v)`, which keeps a widget made inside a chain.
+container's, or a group's, names the group), `OnFocusOut` (also when the
+form closes with the focus in the widget, before a dialog's `Run`
+returns; the app quitting does not wait for it), `OnClick` (gota's `EventBox`), `ContextMenu`, `Focus`, which
+moves the keyboard focus to it, and `AssignTo(&v)`, which keeps a widget
+made inside a chain.
 
 ## What a widget keeps
 

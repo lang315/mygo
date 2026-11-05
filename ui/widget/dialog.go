@@ -65,7 +65,10 @@ func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return
 // as gtk_dialog_run runs the main loop, so the dialog's buttons work; on
 // another goroutine it waits; on the main thread it panics. A Close before
 // the dialog first shows, or in OnBeforeRun, makes that Run return at once
-// without showing the dialog, with a window as with a DialogTester.
+// without showing the dialog, with a window as with a DialogTester. The
+// OnFocusOut of the control with the keyboard focus runs as it closes, and
+// Run returns once it ran: in a handler, Run runs what was queued before
+// it; on another goroutine, Run waits for the event goroutine to run it.
 func (d *Dialog) Run() {
 	notMain("Dialog.Run")
 	mu.Lock()
@@ -96,5 +99,10 @@ func (d *Dialog) Run() {
 	}
 	mu.Lock()
 	d.ran = true
+	out := d.focusOut
+	d.focusOut = nil
 	mu.Unlock()
+	if out != nil { // the last focus-out a frame or the close posted runs first (not SetVisible's)
+		block("Dialog.Run", out)
+	}
 }
