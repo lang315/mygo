@@ -237,6 +237,7 @@ func (w *Form) show(cancel bool) bool {
 		mu.Lock()
 		delete(shown, n)
 		w.win, w.showing, w.asking = nil, false, false
+		w.leaveFocus()
 		mu.Unlock()
 		close(done)
 		releaseAppMenu(w)
@@ -327,6 +328,7 @@ func (w *Form) closeAnyway() {
 		select {
 		case <-h:
 		default:
+			w.leaveFocus()
 			close(h)
 		}
 	}
@@ -336,6 +338,22 @@ func (w *Form) closeAnyway() {
 		mu.Lock()
 		delete(shown, n)
 		mu.Unlock()
+	}
+}
+
+// leaveFocus posts the OnFocusOut of the control that had the keyboard
+// focus when the form closed, as GTK and WinForms tell it. Called under mu.
+func (w *Form) leaveFocus() {
+	for _, p := range w.keep.widgets {
+		c := p.Value()
+		if c == nil || c.focusIn != w.id {
+			continue
+		}
+		c.focusIn = noView // a show again starts unfocused, with no stale focus-out
+		if c.onFocusOut != nil {
+			Post(c.onFocusOut)
+		}
+		return
 	}
 }
 
