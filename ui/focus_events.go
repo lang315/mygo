@@ -18,7 +18,7 @@ package ui
 // (Focused, FocusWithin), and a Handle's FocusWithin before its control
 // is.
 func (e *node) FocusLeft() bool {
-	e.asksOutside()
+	e.neverKept() // it tells a frame late when the focus went to an element made in the frame, which no state of the row versions
 	if !e.hasState() {
 		return false
 	}
