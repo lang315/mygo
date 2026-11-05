@@ -102,7 +102,7 @@ func (d *Dialog) Run() {
 	out := d.focusOut
 	d.focusOut = nil
 	mu.Unlock()
-	if out != nil { // the last focus-out, of the close or before it, runs first
+	if out != nil { // the last focus-out a frame or the close posted runs first (not SetVisible's)
 		block("Dialog.Run", out)
 	}
 }
