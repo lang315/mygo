@@ -44,7 +44,11 @@ func TestHoverLooksMakeNoClosurePerFrame(t *testing.T) {
 				}
 			})
 		}},
-		{"tree item", 5.5, func(c *context, n int) {
+		// 6.5 since upstream's treeItemParts.Group makes coreTreeItem's open
+		// parameter escape (go build -gcflags=-m=2: "parameter open leaks to
+		// {heap}"), so the bool this test passes (&open of a local) moves to the
+		// heap: 6.03 allocations per item against 5.03 before the sync.
+		{"tree item", 6.5, func(c *context, n int) {
 			coreTree(c, func() {
 				for range n {
 					open := false

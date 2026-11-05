@@ -85,6 +85,11 @@ type host interface {
 	// placeWebViews shows the web views where the frame shows them, and
 	// hides the others.
 	placeWebViews(views []placedWebView)
+	// nativeGlass reports whether the surface draws the system's glass.
+	nativeGlass() bool
+	// placeGlass shows the system's glass where the frame shows it, and
+	// hides the rest.
+	placeGlass(places []platform.GlassPlacement)
 	// tabIntoWebView gives the page of v the keyboard as Tab does, from
 	// its end when back (platform.WebView.TabInto).
 	tabIntoWebView(v NativeWebView, back bool)
@@ -111,6 +116,7 @@ type engine struct {
 	arena        *elementOwner
 	handleChecks bool
 	afterInputs  []inputAction
+	afterBuild   []func() // run once the view is built (onBuilt)
 	// itemChecks holds the check boxes of the rows and items of the frame.
 	itemChecks itemCheckSlab
 	// themes are those that elements built with a static paint function
@@ -193,24 +199,23 @@ type engine struct {
 	actFrame           uint64
 	actPass            int
 	ghostMoved         []uint16
-
-	inputs          []valueInput
-	inputAt         int
-	afterInputAt    int
-	applyingInputs  bool
-	notices         []*state
-	typedInputs     []*state
-	focusFields     map[any]*focusField
-	refs            []*refState
-	actions         []action
-	textInputClosed bool
-	view            func(*context)
-	host            host
-	c               context
-	text            *text.System
-	scene           scene.Scene
-	painter         Painter
-	glyphRun        glyphRun
+	inputs             []valueInput
+	inputAt            int
+	afterInputAt       int
+	applyingInputs     bool
+	notices            []*state
+	typedInputs        []*state
+	focusFields        map[any]*focusField
+	refs               []*refState
+	actions            []action
+	textInputClosed    bool
+	view               func(*context)
+	host               host
+	c                  context
+	text               *text.System
+	scene              scene.Scene
+	painter            Painter
+	glyphRun           glyphRun
 	// glyphAsks, glyphReqs and glyphImages are the engine's buffers for
 	// the glyphs of the line being painted (textForeground).
 	glyphAsks   []glyphAsk
@@ -239,8 +244,10 @@ type engine struct {
 	nextMeasured int
 	paths        paths
 	// pathClips are the masks of the paths clips were cut to lately, by
-	// their shapes (clipMask).
+	// their shapes (clipMask), and of the layers of masks (Masks), and
+	// maskScene the scene the layers are drawn from.
 	pathClips map[uint64]*pathClip
+	maskScene *scene.Scene
 	svgs      svgs
 	flex      flexScratch
 	grid      gridScratch
@@ -311,8 +318,10 @@ type engine struct {
 	// liftHits gathers the hits of the elements flying as the frame
 	// commits, which go over the rest of their layer, as they paint
 	// (matches.paint); lifting tells that one is committing.
-	liftHits    []hit
-	lifting     bool
+	liftHits []hit
+	lifting  bool
+	// z is what ordering children by their z-index works in (ZIndex).
+	z           zScratch
 	focusOrder  []uint64
 	focusScopes []focusScope
 	modal       uint64
@@ -326,6 +335,10 @@ type engine struct {
 	webPlaces []webPlace
 	webOut    []placedWebView
 	webShown  bool
+	// glassPlaces are where the frame shows the system's glass, and
+	// glassShown tells that the last frame showed some.
+	glassPlaces []platform.GlassPlacement
+	glassShown  bool
 	// maxButton is where the frame shows the window's maximize button
 	// (MaximizeButton), and maxSent what the host got of it, in the
 	// window's DIPs.
@@ -339,6 +352,12 @@ type engine struct {
 	groups     map[uint64]groupInfo
 	memberOf   map[uint64]uint64
 	groupLast  map[uint64]uint64
+	// focusFrom is the element that had the keyboard focus as the last
+	// pass ended, 0 for none or while the window did not have the keyboard
+	// (FocusLeft); leftRead tells that this pass read FocusLeft, which saw
+	// the focus on leftSaw.
+	focusFrom, leftSaw uint64
+	leftRead           bool
 	// openers are the elements that had the focus as overlays opened, by
 	// overlay, and befores those outside every overlay before them, for an
 	// opener in an overlay that is gone (openOverlay); downs the elements
@@ -350,13 +369,23 @@ type engine struct {
 	regs      []shortcutReg
 	nextRegs  []shortcutReg
 	delivered []shortcutReg
+	// shortcutRepeat tells that the last key a shortcut took this frame
+	// came as the auto-repeat of a key held down (ShortcutRepeated).
+	shortcutRepeat bool
+	// observers counts the elements the last commit found observing the
+	// input in them (ObserveInput), and observeBuf is the chain observe
+	// walks, kept between events.
+	observers  int
+	observeBuf []uint64
 
 	// trans are the transitions of the elements given one, by ID
 	// (transition.go): exitsBuilt tells that the last frame built elements
 	// with an Exit or flying with a Match, whose arena the next frame
 	// keeps to copy those that go, laidW and laidH are the size the last
 	// frame was laid out at, and byID maps a frame's elements, for the
-	// copies going.
+	// copies going. overlayExits tells that the last frame had elements
+	// with an Exit in the overlay layer, or copies leaving it: the next
+	// builds the layer, though nothing else does, for them to leave in.
 	trans map[uint64]*transition
 	// matches moves the elements of a Transition's Match, once one has
 	// one (match.go).
@@ -370,6 +399,7 @@ type engine struct {
 	// (AnimatePose), parents first.
 	posed        []*node
 	exitsBuilt   bool
+	overlayExits bool
 	laidW, laidH float32
 	byID         map[uint64]*node
 	// going are animateExits' copies going, in order, and holding the
@@ -466,6 +496,11 @@ type engine struct {
 	// drawn as active (windowActive), so that a change of it draws a
 	// frame.
 	activeRead bool
+	// withinRead tells that the frame read FocusWithin, which follows the
+	// parents its last layout committed: the focus moving as it builds, to
+	// an element it builds for the first time or after the read, draws
+	// another frame.
+	withinRead bool
 	// toasts are the toasts the window holds, oldest first, and
 	// toastList those showing, as ToastViewportBase gives them; their time
 	// stops while toastsPaused, as the user holds them, and, but for those
@@ -544,8 +579,8 @@ type engine struct {
 	// late is set when lists built elements while laying out.
 	late bool
 	// revealIDs are the elements to scroll into view once the frame is
-	// laid out.
-	revealIDs []uint64
+	// laid out, and how.
+	revealIDs []revealAsk
 	wakeMu    sync.Mutex
 	wakeAt    time.Time
 	cursor    Cursor
@@ -611,6 +646,15 @@ type engine struct {
 	// wheeling are the elements of the scroll containers that the notches
 	// of a mouse wheel scroll smoothly (glideWheels).
 	wheeling []uint64
+	// snapping are the elements of the scroll containers that snap that
+	// are on their way to rest, or wait for the user's scrolling to settle
+	// (glideSnaps).
+	snapping []uint64
+	// dropped closes the Locals of the states the frame dropped, after it
+	// (closeDropped), and exits holds those of states whose elements'
+	// copies are leaving with exit transitions, until they are gone.
+	dropped []func() error
+	exits   []exitCloses
 	// lastPress is the element of the press (id) and of the one before
 	// (prev), and how many of the backend's count of clicks were before
 	// the first on it.
@@ -657,11 +701,16 @@ type shortcutReg struct {
 	// retried marks a key delivered, or left unrouted, in the frame after
 	// the one it came to (settleKeys): it is not retried again.
 	retried bool
+	// repeat marks a key delivered that came as the auto-repeat of a key
+	// held down.
+	repeat bool
 }
 
 type keyEvent struct {
 	mods Modifiers
 	key  Key
+	// repeat marks the auto-repeat of a key held down.
+	repeat bool
 }
 
 func newRuntime(view func(*context), h host) *engine {
@@ -719,7 +768,7 @@ func (rt *engine) runFrame() {
 
 	rt.frame++
 	rt.input = false
-	rt.focusRead, rt.activeRead = false, false
+	rt.focusRead, rt.activeRead, rt.withinRead = false, false, false
 	rt.stats.begin(rt)
 	now := rt.frameTime()
 	rt.zoomChanged = false
@@ -737,6 +786,7 @@ func (rt *engine) runFrame() {
 	rt.repaintRate, rt.repaintFull, rt.untracked = 0, false, false
 	rt.routeKeys()
 	rt.glideWheels(now)
+	rt.glideSnaps(now)
 	if rt.drag != nil {
 		// The source's element is this frame's, if it builds one.
 		rt.drag.elem = nil
@@ -765,6 +815,7 @@ func (rt *engine) runFrame() {
 		rt.themeGen++
 	}
 
+	focused := rt.focused
 	// An event handled while building (a click, an edit) may change what
 	// was built before it: build again, so the frame shows the outcome.
 	for pass := 0; pass < 3; pass++ {
@@ -789,6 +840,12 @@ func (rt *engine) runFrame() {
 			return
 		}
 		rt.buildToasts(&rt.c)
+		if rt.overlayExits {
+			// Copies of the elements gone from the layer leave in it
+			// (animateExits), empty as it is otherwise: it lets the
+			// pointer through, and holds nothing to focus.
+			rt.c.overlayRoot()
+		}
 		if ov := rt.c.overlay; ov != nil {
 			rt.c.root.add(ov)
 		}
@@ -796,6 +853,7 @@ func (rt *engine) runFrame() {
 			rt.buildInspector(&rt.c, appW, w, h)
 		}
 		rt.applyAllInputs()
+		rt.runAfterBuild()
 		rt.finishInputs()
 		// Commit derived values while callbacks still hold this pass's
 		// bindings. Delivered callbacks do not repeat in the next pass.
@@ -822,12 +880,19 @@ func (rt *engine) runFrame() {
 		rt.painted = [3]float32{w, h, scale}
 		rt.host.requestFrame()
 	}
+	if rt.withinRead && rt.focused != focused {
+		rt.animating = true
+	}
 	if rt.stats != nil {
 		rt.stats.passes = rt.pass + 1
 	}
+	root := rt.c.root
+	if rt.insp.open {
+		// What the inspector's Styles tab changed, over what the view built.
+		rt.insp.applyEdits(root)
+	}
 	rt.stats.lap(phaseBuild)
 	rt.insp.lap(0)
-	root := rt.c.root
 	layoutTree(root, appW, h)
 	rt.measureFit(root)
 	rt.commit(root, w, h)
@@ -869,6 +934,7 @@ func (rt *engine) runFrame() {
 	if webViewPlace != nil {
 		webViewPlace(rt)
 	}
+	rt.placeNativeGlass()
 	// The window hit-tests its maximize button in its own DIPs.
 	if r := rt.windowRect(rt.maxButton); r != rt.maxSent {
 		rt.maxSent = r
@@ -1125,11 +1191,10 @@ func (rt *engine) endPass() {
 	rt.unrouted = append(rt.unrouted, rt.delivered...)
 	rt.delivered = rt.delivered[:0]
 	rt.downs = rt.downs[:0]
+	rt.passFocus()
 	// The next pass may not ask again, as when the view cleared what asked.
-	for _, e := range rt.c.reveal {
-		if !slices.Contains(rt.revealIDs, e.id) {
-			rt.revealIDs = append(rt.revealIDs, e.id)
-		}
+	for _, r := range rt.c.reveal {
+		rt.askReveal(r.e.id, r.o)
 	}
 }
 
@@ -1204,6 +1269,9 @@ func (rt *engine) prune() {
 		}
 	}
 	rt.pressLost = nil
+	if len(rt.exits) > 0 {
+		rt.exitsEnded()
+	}
 	// Every state built by the last pass: none to retire, and no walk of them
 	// (an idle frame holds hundreds, nearly all of a table's).
 	all := rt.seenFrame == rt.frame && rt.seenPass == rt.pass && rt.seenN == len(rt.states)
@@ -1249,6 +1317,9 @@ const maxFree = 256
 func (rt *engine) dropState(id uint64, s *state) {
 	if s.textAdapter != nil {
 		s.textAdapter.release()
+	}
+	if s.closes != nil {
+		rt.dropCloses(s)
 	}
 	if s.flags&flagPage != 0 {
 		rt.owners.drop(id, rt)
@@ -1383,6 +1454,8 @@ func (rt *engine) close() {
 	rt.itemChecks = itemCheckSlab{}
 	rt.themes, rt.prevThemes, rt.ghostThemes, rt.ghostSpare, rt.ghostMoved = nil, nil, nil, nil, nil
 	rt.themeGen++
+	clear(rt.afterBuild)
+	rt.afterBuild = nil
 	clear(rt.inputs)
 	rt.inputs = nil
 	rt.arena.rt = nil
@@ -1401,6 +1474,9 @@ func (rt *engine) close() {
 	}
 	rt.host.afterTimer(time.Time{})
 	rt.host.repaintTimer(time.Time{})
+	// Last, with the engine closed: a Close that asks for a frame, or reads
+	// the window, finds it closed rather than half so.
+	rt.closeLocals()
 }
 
 // endFrame ends a frame, and closes the engine when its window closed
@@ -1408,7 +1484,9 @@ func (rt *engine) close() {
 func (rt *engine) endFrame() {
 	rt.inFrame = false
 	if rt.closing {
-		rt.close()
+		rt.close() // which closes the Locals the frame dropped too
+	} else if len(rt.dropped) > 0 {
+		rt.closeDropped()
 	} else if holdsMenuKeys {
 		if rt.hold != nil {
 			// The keys typed ahead of the frame a menu bar's key asked for,
@@ -1429,9 +1507,12 @@ func (rt *engine) commit(root *node, w, h float32) {
 	rt.posed = rt.posed[:0]
 	clear(rt.webPlaces)
 	rt.webPlaces = rt.webPlaces[:0]
+	clear(rt.glassPlaces)
+	rt.glassPlaces = rt.glassPlaces[:0]
 	rt.maxButton = Rect{}
 	rt.focusOrder, rt.focusScopes = rt.focusOrder[:0], rt.focusScopes[:0]
 	rt.modal, rt.modalLayer, rt.commitScope, rt.commitPage = 0, 0, focusScope{}, 0
+	rt.observers = 0
 	if rt.groups == nil {
 		rt.groups = map[uint64]groupInfo{}
 	}
@@ -1518,6 +1599,9 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	s.webView = e.webView
 	s.role = e.role
 	s.input, s.caret, s.takesText, s.noIME = e.inputFn, e.caret, e.takesText, e.noIME
+	if s.observe = e.observeFn; s.observe != nil {
+		rt.observers++
+	}
 	s.copyData = e.copyData
 	if s.textClient != e.textClient {
 		if s.textAdapter != nil {
@@ -1546,6 +1630,7 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	// the focus, and has no text to find; so does what is inert, which
 	// shows, and what is Hidden, which has no box.
 	invisible := hidden || e.hiddenSelf()
+	s.invisible = invisible
 	if invisible {
 		s.vw, s.vh = 0, 0
 	}
@@ -1557,6 +1642,11 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	}
 	if e.webView != nil {
 		webViewNote(rt, e, clip, invisible)
+	}
+	if m, ok := e.material.(NativeGlassMaterial); ok && rt.host.nativeGlass() && !rt.preferences().ReduceTransparency {
+		if spec, ok := m.NativeGlass(); ok {
+			rt.noteNativeGlass(e, clip, invisible, spec)
+		}
 	}
 	if e.maximizeButton && !noInput && rt.maxButton == (Rect{}) && v.W > 0 && v.H > 0 {
 		rt.maxButton = v
@@ -1607,14 +1697,32 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		clip = intersect(clip, e.visualRect(s.selfClip))
 	}
 	// Children in flow first, absolute ones above them: the paint order.
-	for ch := e.first; ch != nil; ch = ch.next {
-		if ch.flags&flagAbsolute == 0 {
-			rt.commitElement(ch, clip, invisible)
+	// Sticky ones are in the flow for the focus, and paint among the
+	// absolute ones, where their hits go.
+	// A child with a z-index moves its hits to where it paints.
+	if e.zOrder && e != e.c.overlay && zCommit != nil {
+		zCommit(rt, e, clip, invisible)
+	} else {
+		var stuckBuf [4][2]int
+		stuck := stuckBuf[:0]
+		for ch := e.first; ch != nil; ch = ch.next {
+			if ch.flags&flagAbsolute == 0 {
+				from := len(rt.hits)
+				rt.commitElement(ch, clip, invisible)
+				if ch.sticky {
+					stuck = append(stuck, [2]int{from, len(rt.hits)})
+				}
+			}
 		}
-	}
-	for ch := e.first; ch != nil; ch = ch.next {
-		if ch.flags&flagAbsolute != 0 {
-			rt.commitElement(ch, clip, invisible)
+		moved := 0
+		for ch := e.first; ch != nil; ch = ch.next {
+			switch {
+			case ch.flags&flagAbsolute != 0:
+				rt.commitElement(ch, clip, invisible)
+			case ch.sticky:
+				moved = rt.stickyHits(stuck[0], moved)
+				stuck = stuck[1:]
+			}
 		}
 	}
 	if lifting {

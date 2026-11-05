@@ -14,17 +14,21 @@ type textPaint struct {
 	underline, wavy, strike bool
 	decoColor               Color
 	decoThick               float32
+	decoOffset              float32
+	strokeWidth             float32
+	strokeColor             Color
 	background, selection   Color
 }
 
 // textPaintSet are the text styles that paint text and are not laid out.
-const textPaintSet = setColor | setUnderline | setStrike | setDecoColor | setDecoThick | setBackground | setSelection
+const textPaintSet = setColor | setUnderline | setStrike | setDecoColor | setDecoThick | setBackground | setSelection | setDecoOffset | setStroke
 
 // textPaintOf returns what of t paints.
 func textPaintOf(t *textStyle) textPaint {
 	return textPaint{
 		set: t.set & textPaintSet, color: t.color, underline: t.underline, wavy: t.wavy, strike: t.strike,
-		decoColor: t.decoColor, decoThick: t.decoThick, background: t.background, selection: t.selection,
+		decoColor: t.decoColor, decoThick: t.decoThick, decoOffset: t.decoOffset, strokeWidth: t.strokeWidth, strokeColor: t.strokeColor,
+		background: t.background, selection: t.selection,
 	}
 }
 
@@ -40,6 +44,8 @@ func textPaintSame(p *textPaint, t *textStyle) bool {
 			(set&setStrike == 0 || p.strike == t.strike) &&
 			(set&setDecoColor == 0 || p.decoColor == t.decoColor) &&
 			(set&setDecoThick == 0 || p.decoThick == t.decoThick) &&
+			(set&setDecoOffset == 0 || p.decoOffset == t.decoOffset) &&
+			(set&setStroke == 0 || p.strokeWidth == t.strokeWidth && p.strokeColor == t.strokeColor) &&
 			(set&setBackground == 0 || p.background == t.background) &&
 			(set&setSelection == 0 || p.selection == t.selection)
 }
@@ -55,8 +61,12 @@ type paintLook struct {
 	rowIndex int
 	radius   [4]float32
 	opacity  float32
-	bg       Color
-	borderC  Color
+	// zIndex orders the element's painting and its hits among its siblings
+	// (ZIndex); zOrder is set on an element with a child having one, which
+	// paints and commits its children in that order alone (zindex.go).
+	zIndex  int32
+	bg      Color
+	borderC Color
 	// checked is whether a check box, radio or switch is off (1), on (2) or
 	// mixed (3).
 	checked int8
@@ -81,11 +91,14 @@ type paintLook struct {
 	// are on.
 	highlighted bool
 	listRow     bool
+	// undimmed keeps the element at its opacity while disabled (DimDisabled).
+	undimmed bool
+	zOrder   bool
 	// collapsed: a toolbar's control with no room, out of its flow.
 	collapsed bool
 	// invalid marks a value that is not valid (Description, Error).
 	invalid bool
-	_       [4]byte // the padding, written out
+	_       [6]byte // the padding, written out
 }
 
 // equal reports whether a and b are the same, byte by byte.
@@ -106,6 +119,9 @@ type paintRare struct {
 	blur, rotate float32
 	fit          Fit
 	gray         bool
+	// objectPos is where ObjectPosition puts the picture in its box, from
+	// its middle: 0, 0 by default.
+	objectPos    [2]float32
 	transform    Transform
 	translatePct [2]float32 // TranslatePercent's
 	material     Material

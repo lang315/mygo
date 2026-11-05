@@ -35,6 +35,11 @@ ui.TextArea(c, &app.notes).Height(160)
 - `ReadOnly(true)` shows the text without letting the user change it: it
   still takes the focus, without a caret, and its text can be selected and
   copied.
+- `MaxLength(n)` keeps the user from making the text longer than n runes
+  (not UTF-16 code units, as HTML's `maxlength` counts them): what is typed,
+  pasted or committed by an input method is cut to what fits, at a grapheme
+  boundary, so that the rune typed at the limit is refused. A value the app
+  sets is not cut, and n <= 0 means no limit.
 - `Disabled(true)` grays it out.
 - `OnPaste(fn)` sees a paste (Cmd+V or Ctrl+V, the Edit menu's or the
   context menu's Paste) before it is inserted, with the clipboard's text,

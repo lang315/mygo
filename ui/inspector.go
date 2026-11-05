@@ -72,12 +72,8 @@ type inspector struct {
 	selected, hovered uint64
 	reveal            bool
 	// notes are what elements left for the inspector in this frame
-	// (InspectNote), by ID. forceID has the states in forced (forceHover…)
-	// forced on it.
-	notes   map[uint64]inspNote
-	forceID uint64
-	forced  uint8
-	forceOK bool
+	// (InspectNote), by ID.
+	notes map[uint64]inspNote
 	// source is where the app built the element chosen.
 	source string
 	// panel is the ID of the panel, width its width, and appW the width
@@ -112,6 +108,28 @@ type inspector struct {
 	query   string
 	match   int
 	matches []int32
+	// edits are what the Styles tab changed, by element, until the
+	// inspector closes (inspector_edit.go), and editing the value being
+	// typed.
+	edits   map[uint64][]inspEdit
+	editing inspEditing
+	// sources are where the app builds the elements chosen that have
+	// edits, as changesAsGo tells.
+	sources map[uint64]string
+	// forced are the states forced on elements, by element, until the
+	// inspector closes, and statesOpen shows the Styles tab's bar of them.
+	forced     map[uint64]uint8
+	statesOpen bool
+	// openable notes whether the file of the element's source can open.
+	openable openableSource
+	// layoutOn holds the containers whose layout shows over the content,
+	// tracks what their grids noted as they laid out, and overlays what
+	// the walk of this frame's elements found of them. uncached tells that
+	// they turned the layout cache off, which cacheWasOff says it was.
+	layoutOn              map[uint64]bool
+	tracks                map[uint64]inspTracks
+	overlays              []inspOverlay
+	uncached, cacheWasOff bool
 	// Scroll offsets of the breadcrumbs, the sidebar and the issues.
 	crumbs       ScrollState
 	sideScroll   ScrollState
@@ -151,11 +169,6 @@ func (in *inspector) note(id uint64, title string, fields func() []InspectorFiel
 	in.notes[id] = inspNote{title, fields}
 }
 
-// forces tells that a state of mask is forced on the element id.
-func (in *inspector) forces(id uint64, mask uint8) bool {
-	return in.forced&mask != 0 && in.forceID == id
-}
-
 // inspNode is an element of the tree: its tag (name), the attributes it
 // shows (its key and label), and the text of a text. key keys its row:
 // the element's ID, unless another element had it (a duplicate key).
@@ -165,6 +178,7 @@ type inspNode struct {
 	parent   int32
 	kids     bool
 	name     string
+	layout   uint8 // what its badge shows
 	keyText  string
 	label    string
 	text     string
@@ -243,10 +257,14 @@ func (rt *engine) toggleInspector() {
 	in := &rt.insp
 	in.open = !in.open
 	in.picking, in.hovered = false, 0
-	in.forceID, in.forced = 0, 0
 	if !in.open {
 		in.nodes, in.rows, in.sel = nil, nil, inspDetails{}
 		clear(in.notes)
+		// What the Styles tab changed goes with the panel: the window shows
+		// what the view builds again.
+		in.edits, in.editing, in.sources, in.forced = nil, inspEditing{}, nil, nil
+		in.layoutOn, in.tracks, in.overlays = nil, nil, nil
+		in.keepLaidOut(rt, false)
 	} else if in.keys == nil {
 		in.keys = map[uint64]any{}
 	}
@@ -308,6 +326,60 @@ func (rt *engine) inspectKey(mods Modifiers, key Key) bool {
 	return false
 }
 
+// isForced reports whether the inspector forces one of the states on the
+// element id.
+func (in *inspector) isForced(id uint64, states uint8) bool {
+	return in.forced != nil && in.forced[id]&states != 0
+}
+
+// toggleForced forces a state on the element id, or stops forcing it.
+func (in *inspector) toggleForced(id uint64, state uint8) {
+	if in.forced == nil {
+		in.forced = map[uint64]uint8{}
+	}
+	if in.forced[id] ^= state; in.forced[id] == 0 {
+		delete(in.forced, id)
+	}
+	in.changed = true
+}
+
+// setForced forces every state of bits on the element id, or stops forcing
+// them all.
+func (in *inspector) setForced(id uint64, bits uint8, on bool) {
+	if in.forced == nil {
+		in.forced = map[uint64]uint8{}
+	}
+	if on {
+		in.forced[id] |= bits
+	} else if in.forced[id] &^= bits; in.forced[id] == 0 {
+		delete(in.forced, id)
+	}
+	in.changed = true
+}
+
+// forcedNames lists the states forced on the element id, as CSS names them.
+func (in *inspector) forcedNames(id uint64) string {
+	var names []string
+	for _, s := range inspStates {
+		if in.isForced(id, s.state) {
+			names = append(names, s.name)
+		}
+	}
+	return strings.Join(names, " ")
+}
+
+// inspStates are the states the inspector can force, as CSS names them.
+var inspStates = [...]struct {
+	name  string
+	state uint8
+}{
+	{":hover", forceHover},
+	{":active", forceActive},
+	{":focus", forceFocus},
+	{":focus-visible", forceFocusVisible},
+	{":focus-within", forceFocusWithin},
+}
+
 // noteSource notes where the app builds the element chosen.
 func (in *inspector) noteSource() { in.source = callSite() }
 
@@ -357,8 +429,8 @@ func (in *inspector) pointer(rt *engine, ev platform.SurfaceEvent, x, y float32)
 // choose chooses the element id.
 func (in *inspector) choose(id uint64) {
 	if id != in.selected {
+		in.finishEdit(true)
 		in.selected, in.source = id, ""
-		in.forceID, in.forced = 0, 0
 		// The breadcrumbs show the element chosen, at their end.
 		in.crumbs.X = math.MaxFloat32
 		in.sideScroll.Y = 0
@@ -370,23 +442,27 @@ func (in *inspector) choose(id uint64) {
 func (in *inspector) snapshot(rt *engine, root *node) {
 	in.nodes = in.nodes[:0]
 	in.selElem, in.hoverElem = nil, nil
+	in.overlays = in.overlays[:0]
 	if in.seen == nil {
 		in.seen = map[uint64]bool{}
 	}
 	clear(in.seen)
 	var sum uint64
-	in.forceOK = false
 	in.walk(rt, root, 0, -1, &sum)
 	if in.widgets() {
 		in.widgetTree()
 	}
-	if in.forced != 0 && !in.forceOK {
-		in.forceID, in.forced = 0, 0 // the element is gone
-	}
+	in.measureLayouts()
 	in.elements = len(in.nodes)
 	in.sel = inspDetails{}
 	if e := in.selElem; e != nil {
 		in.sel = describe(rt, e)
+		if in.source != "" && len(in.edits[e.id]) > 0 {
+			if in.sources == nil {
+				in.sources = map[uint64]string{}
+			}
+			in.sources[e.id] = in.source
+		}
 	}
 	sum = mix(sum, in.sel.hash())
 	sum = mix(sum, uint64(len(rt.warnings)))
@@ -407,7 +483,7 @@ func (in *inspector) walk(rt *engine, e *node, depth, parent int32, sum *uint64)
 	}
 	in.seen[key] = true
 	n := inspNode{id: e.id, key: key, depth: depth, parent: parent, name: elementName(e), label: e.label,
-		w: e.w, h: e.h, leaving: e.leaving != 0}
+		w: e.w, h: e.h, leaving: e.leaving != 0, layout: inspLayoutKind(e)}
 	if k, ok := in.keys[e.id]; ok {
 		n.keyText = fmt.Sprint(k)
 	}
@@ -424,7 +500,7 @@ func (in *inspector) walk(rt *engine, e *node, depth, parent int32, sum *uint64)
 		}
 	}
 	in.nodes = append(in.nodes, n)
-	*sum = mix(*sum, e.id^uint64(depth)<<56)
+	*sum = mix(*sum, e.id^uint64(depth)<<56^uint64(n.layout)<<48)
 	*sum = mix(*sum, uint64(math.Float32bits(e.x))<<32|uint64(math.Float32bits(e.y)))
 	*sum = mix(*sum, uint64(math.Float32bits(e.w))<<32|uint64(math.Float32bits(e.h)))
 	if n.text != "" || n.label != "" || n.keyText != "" {
@@ -433,11 +509,11 @@ func (in *inspector) walk(rt *engine, e *node, depth, parent int32, sum *uint64)
 	if e.id == in.selected {
 		in.selElem = e
 	}
-	if e.id == in.forceID {
-		in.forceOK = true
-	}
 	if e.id == in.hovered {
 		in.hoverElem = e
+	}
+	if n.layout != inspNoLayout && !e.hidden && in.layoutOn[e.id] {
+		in.overlays = append(in.overlays, inspOverlay{e: e})
 	}
 	for c := e.first; c != nil; c = c.next {
 		in.walk(rt, c, depth+1, int32(i), sum)
@@ -691,6 +767,8 @@ func roleName(r Role) string {
 		return "MenuItemRadio"
 	case RoleHeading:
 		return "Heading"
+	case RoleNavigation:
+		return "Navigation"
 	}
 	return ""
 }

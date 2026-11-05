@@ -114,7 +114,12 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 		// A width of its own is the control's size where there is room, and
 		// no more than the room: wider than its container it would paint
 		// outside the card it is in.
-		e.Width(p.width).MaxWidthPercent(100)
+		// Upstream's bounds add up (the smaller maximum applies), so a MaxWidth
+		// of the style takes the cap's place instead of meeting it.
+		e.Width(p.width)
+		if s&pMaxWidth == 0 {
+			e.MaxWidthPercent(100)
+		}
 	}
 	if s&pHeight != 0 {
 		e.Height(p.height)

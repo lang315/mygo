@@ -140,7 +140,7 @@ func (rt *engine) revealsIn(rec *rowKeep) bool {
 		return false
 	}
 	for _, st := range rec.states {
-		if slices.Contains(rt.revealIDs, st.id) {
+		if revealIndex(rt.revealIDs, st.id) >= 0 {
 			return true
 		}
 	}

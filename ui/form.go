@@ -285,7 +285,7 @@ func (e *node) nameOf() string {
 		case e.label != "":
 			return e.label
 		case e.kind == kindText:
-			return e.text
+			return e.accessText()
 		case e.nameFrom == nil || e.nameFrom == e:
 			return ""
 		}
