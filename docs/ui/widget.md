@@ -1039,6 +1039,18 @@ Input and display:
   `Spinner()`: `Start`, `Stop`.
 - `ListView(key, columns...)`: rows in columns, as icons, or as a list, over the same choice and checks; see [ListView](widget/listview.md).
 
+`SetSize(width, 0)` on a form (or dialog) that is shown fits its height, once, to
+its content laid out at `width`, on the next frame: call it after `SetContent`
+when the content changed (a splash swapped for a login view). It is measured as
+a dialog of height 0 is at show, at the scale of the display the window is on,
+and no higher than that display's work area less 80 DIPs, where the content
+scrolls; the width is the page area's, and a window that would end below the
+work area moves up (never above its top) in the same resize. Later changes of
+the content do not resize the window again, a later `SetSize` wins, a
+maximized or minimized window is left alone, and a dialog fits again at its
+next `Show`. A `TestForm` or `TestDialog` tester's viewport follows
+on its next frame. Before `Show`, a height of 0 is the window default as ever.
+
 Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`
 (before `Show` too), `Unmaximize`, `SetContent`, `SetMenuBar`,
 `OnClose(func() bool)` (false keeps the window open; quitting the app asks

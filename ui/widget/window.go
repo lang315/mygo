@@ -41,6 +41,8 @@ type Form struct {
 	cancel        *ButtonWidget  // Escape clicks it
 	fit           bool           // a dialog of height 0: Show measures its content
 	fitScroll     bool           // the content is higher than the screen: it scrolls
+	refit         int            // SetSize(width, 0) on a shown form: the width to fit the height at, on the next frame
+	tester        *Tester        // TestForm's: a refit resizes its viewport
 	mnemonics     []mnemonic     // the Alt keys the last build asked for
 	barKeys       []barKey       // the Alt keys of the menu bars the last build drew, before the controls'
 	menuBar       *MenuBarWidget // the first menu bar the last build drew, which F10 takes the keyboard to
@@ -100,10 +102,54 @@ func (w *Form) SetTitle(s string) *Form {
 	return w
 }
 
+// SetSize sizes the window, in DIPs. On a form that is shown, a height of 0
+// fits the window, once, to its content laid out at width (as a dialog of
+// height 0 is at Show, and no higher than the work area less a margin,
+// where the content scrolls): call it after SetContent when the content
+// changed. Later changes of the content do not resize the window again, a
+// later SetSize wins, and a maximized or minimized window is left alone. A
+// dialog with a height of 0 fits again at its next Show.
 func (w *Form) SetSize(width, height int) *Form {
-	w.change(func() { w.width, w.height, w.fit = width, height, false })
-	w.do(func(n *mygo.Window) { n.SetSize(width, height) })
+	refit := false
+	var n *mygo.Window
+	w.change(func() {
+		w.width, w.height, w.fit = width, height, height == 0 && w.dialog
+		refit = height == 0 && (w.win != nil || w.tester != nil)
+		w.refit = 0
+		if refit {
+			w.refit = width
+		}
+		n = w.win
+	})
+	if !refit {
+		w.do(func(n *mygo.Window) { n.SetSize(width, height) })
+	} else if n != nil { // after what the caller posted or set, the content is built
+		Post(func() { w.refitWindow(n) })
+	}
 	return w
+}
+
+// refitWindow fits the shown window n to the content at the width SetSize
+// asked, once. A headless form's Tester does it on its next frame.
+func (w *Form) refitWindow(n *mygo.Window) {
+	mu.Lock()
+	width := w.refit
+	w.refit = 0
+	live := w.win == n
+	mu.Unlock()
+	if width == 0 || !live || n.IsMaximized() || n.IsMinimized() {
+		return
+	}
+	h, scroll := w.measureFit(width, n)
+	w.change(func() { w.fitScroll = scroll })
+	// One resize, which moves the window up if it would end below the work
+	// area, but not above the work area's top.
+	b, cb := n.Bounds(), n.ContentBounds()
+	r := mygo.Rectangle{X: cb.X, Y: cb.Y, Width: width, Height: h}
+	if wa := mygo.Screen.DisplayMatching(b).WorkArea; r.Y+h > wa.Y+wa.Height {
+		r.Y = max(wa.Y+wa.Height-h, wa.Y+cb.Y-b.Y)
+	}
+	n.SetContentBounds(r)
 }
 
 // SetIcon sets the window's icon from a PNG. macOS shows no window icons:
@@ -406,7 +452,7 @@ func (w *Form) view(c *ui.Context) {
 		}
 	})
 	w.formKeys(c)
-	if w.announce != "" {
+	if w.announce != "" && !c.Measuring() { // a measure leaves it to the real frame
 		c.Announce(w.announce)
 		w.announce = ""
 	}
@@ -551,6 +597,17 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 		over = p.win
 	}
 	mu.Unlock()
+	h, scroll := w.measureFit(width, over)
+	mu.Lock()
+	w.fitScroll = scroll
+	mu.Unlock()
+	opts.Width, opts.Height, opts.UseContentSize = width, h, true
+}
+
+// measureFit returns the height of the content laid out at width, the page
+// area's, clamped to the work area of the display of over (nil for the
+// primary one) less fitMargin, and whether it was: the content scrolls then.
+func (w *Form) measureFit(width int, over *mygo.Window) (h int, scroll bool) {
 	disp := mygo.Screen.PrimaryDisplay()
 	if over != nil {
 		disp = mygo.Screen.DisplayMatching(over.Bounds())
@@ -558,7 +615,7 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 	measure := func() int {
 		return int(math.Ceil(float64(ui.View(w.view).MeasureHeight(float32(width), float32(disp.ScaleFactor)))))
 	}
-	h := measure()
+	h = measure()
 	// A sidebar's dialog fits its tallest page, not the one shown first: the
 	// others are measured, built headless once, each in its turn.
 	mu.Lock()
@@ -578,11 +635,11 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 		sb.measureAs = ""
 		mu.Unlock()
 	}
-	scroll := false
 	if limit := disp.WorkArea.Height - fitMargin; limit > 0 && h > limit {
 		h, scroll = limit, true
 	}
 	mu.Lock()
+	defer mu.Unlock()
 	// A sidebar that is the whole content scrolls its pages inside it, and the
 	// sidebar's list stays in view: the dialog does not scroll as a whole,
 	// unless a page is a viewport and so does not scroll itself.
@@ -592,8 +649,6 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 			scroll = scroll || isViewport(p)
 		}
 	}
-	w.fitScroll = scroll
-	mu.Unlock()
-	opts.Width, opts.Height, opts.UseContentSize = width, h, true
+	return h, scroll
 }
 func (h *HeaderBarWidget) children() []Control { return append(slices.Clone(h.start), h.end...) }
