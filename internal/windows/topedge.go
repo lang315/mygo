@@ -2,7 +2,10 @@
 
 package windows
 
-import "unsafe"
+import (
+	"log"
+	"unsafe"
+)
 
 // A window without a caption, frameless or with a hidden title bar, has no
 // border at the top: frameCalcSize keeps the left, right and bottom ones,
@@ -27,8 +30,9 @@ func (w *window) newTopEdge() {
 	if !w.captionless() || w.opts.Flyout != nil {
 		return
 	}
-	e := createWindow(wsExLayered|wsExNoRedirect, captionClass, "", wsChild|wsClipSiblings, 0, 0, 0, 0, w.hwnd)
+	e, err := createWindowErr(wsExLayered|wsExNoRedirect, captionClass, "", wsChild|wsClipSiblings, 0, 0, 0, 0, w.hwnd)
 	if e == 0 {
+		log.Printf("mygo: cannot create the top edge of a window without a caption, which resizes it (parent %#x): %v; if the app has a manifest of its own, it must declare Windows 8 or later (supportedOS)", w.hwnd, err)
 		return
 	}
 	// A layered window shows, and takes the mouse, once it has attributes;

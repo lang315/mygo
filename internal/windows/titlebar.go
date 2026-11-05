@@ -107,7 +107,7 @@ func newCaptionBar(w *window) *captionBar {
 	var err error
 	c.buttons, err = createWindowErr(ex, captionClass, "", wsChild|wsClipSiblings, 0, 0, 0, 0, w.hwnd)
 	if c.buttons == 0 {
-		log.Printf("mygo: cannot create the window controls of a window with a hidden title bar (CreateWindowEx ex style %#x, parent %#x): %v; a manifest of the app's own must declare Windows 10 (supportedOS)", ex, w.hwnd, err)
+		log.Printf("mygo: cannot create the window controls of a window with a hidden title bar (CreateWindowEx ex style %#x, parent %#x): %v; if the app has a manifest of its own, it must declare Windows 8 or later (supportedOS)", ex, w.hwnd, err)
 		return nil
 	}
 	if w.noRedirect {
