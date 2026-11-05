@@ -65,7 +65,9 @@ func TestCalendarMonthEnds(t *testing.T) {
 					if month := tc.to.Format("January 2006"); !tt.HasText(month) {
 						t.Fatalf("paging from %s did not show %s", tc.from.Format("2006-01-02"), month)
 					}
-					if widget == "Calendar" {
+					// The fork keeps the day chosen when the buttons page (76f6cdf6): only the
+					// keys move the choice.
+					if widget == "Calendar" && input == "keyboard" {
 						if date != tc.to || changed != 1 {
 							t.Fatalf("date %v, changes %d; want %v, 1", date, changed, tc.to)
 						}
