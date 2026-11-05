@@ -903,7 +903,7 @@ func (in *inspector) widgetPane(c *context) {
 			for _, f := range []struct {
 				label string
 				bit   uint8
-			}{{"hover", forceHover}, {"pressed", forceActive}, {"focus", forceFocus}} {
+			}{{"hover", forceHover}, {"pressed", forceActive}, {"focus", forceFocus | forceFocusVisible}} {
 				on := in.isForced(w.owner, f.bit)
 				b := coreBox(c).Key(f.label).PaddingX(8).PaddingY(2).Radius(10).Label("Force " + f.label).Role(RoleToggleButton)
 				b.checked = 1
