@@ -25,6 +25,15 @@ type NativeGlassMaterial interface {
 	NativeGlass() (NativeGlassSpec, bool)
 }
 
+// noteGlassOf notes the glass of e, if its material asks for the system's.
+func (rt *engine) noteGlassOf(e *node, clip Rect, invisible bool) {
+	if m, ok := e.material.(NativeGlassMaterial); ok && rt.host.nativeGlass() && !rt.preferences().ReduceTransparency {
+		if spec, ok := m.NativeGlass(); ok {
+			rt.noteNativeGlass(e, clip, invisible, spec)
+		}
+	}
+}
+
 // noteNativeGlass notes where the frame shows the system's glass of e,
 // which the surface places under it (Surface.PlaceGlass).
 func (rt *engine) noteNativeGlass(e *node, clip Rect, invisible bool, spec NativeGlassSpec) {
