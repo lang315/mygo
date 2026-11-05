@@ -46,7 +46,28 @@ func TestForm(t TB, f *Form) *Tester {
 	mu.Unlock()
 	tt := newTester(t, f.view, w, h)
 	tt.form = f
+	mu.Lock()
+	f.tester = tt
+	mu.Unlock()
 	return tt
+}
+
+// Frame draws a frame. A SetSize(width, 0) of the form since the last frame
+// first fits the viewport to the content, as it does the window of a shown
+// form.
+func (t *Tester) Frame() {
+	if f := t.form; f != nil {
+		mu.Lock()
+		width := f.refit
+		f.refit = 0
+		mu.Unlock()
+		if width > 0 {
+			h, scroll := f.measureFit(width, nil)
+			f.change(func() { f.fitScroll = scroll })
+			t.SetSize(width, h)
+		}
+	}
+	t.Tester.Frame()
 }
 
 // RequestClose asks to close the form, as its window's close button does:
