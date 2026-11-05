@@ -308,10 +308,20 @@ func registerClasses() error {
 }
 
 func createWindow(exStyle uint32, class, title string, style uint32, x, y, w, h int32, parent uintptr) uintptr {
-	hwnd, _, _ := procCreateWindowExW.Call(uintptr(exStyle),
+	hwnd, _ := createWindowErr(exStyle, class, title, style, x, y, w, h, parent)
+	return hwnd
+}
+
+// createWindowErr is createWindow with the error CreateWindowEx left when it
+// failed (GetLastError, read by the call itself before anything can change it).
+func createWindowErr(exStyle uint32, class, title string, style uint32, x, y, w, h int32, parent uintptr) (uintptr, error) {
+	hwnd, _, err := procCreateWindowExW.Call(uintptr(exStyle),
 		uintptr(unsafe.Pointer(u16(class))), uintptr(unsafe.Pointer(u16(title))), uintptr(style),
 		uintptr(x), uintptr(y), uintptr(w), uintptr(h), parent, 0, instance(), 0)
-	return hwnd
+	if hwnd != 0 {
+		return hwnd, nil
+	}
+	return 0, err
 }
 
 func registerWindowMessage(name string) uint32 {

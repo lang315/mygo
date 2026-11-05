@@ -98,20 +98,21 @@ type captionBar struct {
 
 func newCaptionBar(w *window) *captionBar {
 	c := &captionBar{w: w, hot: -1, pressed: -1}
+	ex := uint32(wsExLayered)
 	if w.noRedirect {
 		// Layered, so that it blends over the webview instead of cutting
 		// its rectangle out of it, and shown through DirectComposition.
-		c.buttons = createWindow(wsExLayered|wsExNoRedirect, captionClass, "", wsChild|wsClipSiblings, 0, 0, 0, 0, w.hwnd)
-		if c.buttons != 0 {
-			procSetLayeredWindowAttributes.Call(c.buttons, 0, 255, lwaAlpha)
-			c.comp = newCompositor(w.b, c.buttons)
-		}
-	} else {
-		c.buttons = createWindow(wsExLayered, captionClass, "", wsChild|wsClipSiblings, 0, 0, 0, 0, w.hwnd)
+		ex |= wsExNoRedirect
 	}
+	var err error
+	c.buttons, err = createWindowErr(ex, captionClass, "", wsChild|wsClipSiblings, 0, 0, 0, 0, w.hwnd)
 	if c.buttons == 0 {
-		log.Print("mygo: cannot create the window controls of a window with a hidden title bar")
+		log.Printf("mygo: cannot create the window controls of a window with a hidden title bar (CreateWindowEx ex style %#x, parent %#x): %v; if the app has a manifest of its own, it must declare Windows 8 or later (supportedOS)", ex, w.hwnd, err)
 		return nil
+	}
+	if w.noRedirect {
+		procSetLayeredWindowAttributes.Call(c.buttons, 0, 255, lwaAlpha)
+		c.comp = newCompositor(w.b, c.buttons)
 	}
 	w.b.captions[c.buttons] = c
 	c.shown = w.shownButtons()
