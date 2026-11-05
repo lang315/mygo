@@ -14,17 +14,21 @@ type textPaint struct {
 	underline, wavy, strike bool
 	decoColor               Color
 	decoThick               float32
+	decoOffset              float32
+	strokeWidth             float32
+	strokeColor             Color
 	background, selection   Color
 }
 
 // textPaintSet are the text styles that paint text and are not laid out.
-const textPaintSet = setColor | setUnderline | setStrike | setDecoColor | setDecoThick | setBackground | setSelection
+const textPaintSet = setColor | setUnderline | setStrike | setDecoColor | setDecoThick | setBackground | setSelection | setDecoOffset | setStroke
 
 // textPaintOf returns what of t paints.
 func textPaintOf(t *textStyle) textPaint {
 	return textPaint{
 		set: t.set & textPaintSet, color: t.color, underline: t.underline, wavy: t.wavy, strike: t.strike,
-		decoColor: t.decoColor, decoThick: t.decoThick, background: t.background, selection: t.selection,
+		decoColor: t.decoColor, decoThick: t.decoThick, decoOffset: t.decoOffset, strokeWidth: t.strokeWidth, strokeColor: t.strokeColor,
+		background: t.background, selection: t.selection,
 	}
 }
 
@@ -40,6 +44,8 @@ func textPaintSame(p *textPaint, t *textStyle) bool {
 			(set&setStrike == 0 || p.strike == t.strike) &&
 			(set&setDecoColor == 0 || p.decoColor == t.decoColor) &&
 			(set&setDecoThick == 0 || p.decoThick == t.decoThick) &&
+			(set&setDecoOffset == 0 || p.decoOffset == t.decoOffset) &&
+			(set&setStroke == 0 || p.strokeWidth == t.strokeWidth && p.strokeColor == t.strokeColor) &&
 			(set&setBackground == 0 || p.background == t.background) &&
 			(set&setSelection == 0 || p.selection == t.selection)
 }
