@@ -513,7 +513,9 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 }
 
 // inspectorTag leaves the developer tools out of a build: the inspector of
-// native UI (package ui's inspector_off.go), some 250 KB of a binary, and the
+// native UI (package ui's inspector_off.go), some 990 KB of counter-native
+// (7.57 MB with it, 6.58 MB without, darwin/arm64, measured at the sync of
+// upstream ee3d4bd9), and the
 // generator of the TypeScript client (client_off.go), some 400 KB of an app
 // that binds a service. Production builds have their developer tools off.
 const inspectorTag = "mygo_noinspector"
