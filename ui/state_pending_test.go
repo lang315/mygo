@@ -38,6 +38,9 @@ var statePlaced = map[string][]string{
 		"moveFrame", "startX", "startY", "list", "cx", "cy", "cw", "ch", "role",
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
+		"placed", "asked", // where AttachTo put the element, from its layout (AttachedAnchors)
+		"snap",              // the scroll snap of a scroll container, like its offsets
+		"observe", "closes", // set at commit from the element (a row with ObserveInput is never kept: retainable), and the Locals closers
 		"replay", // what the row painted (replay.go): painting memory, with its own key
 		"krec",   // the record of the kept row: layout and commit memory, with its own checks
 		"row",    // the record of the kept row the state is in, which touch marks dirty
@@ -49,6 +52,8 @@ var statePlaced = map[string][]string{
 		"releaseVX", "releaseVY", "releaseWX", "releaseWY",
 		"changeDelivered", "submitDelivered", "eventsDelivered", "submitMods",
 		"holdStart", "holdSteps", "droppedValue", "dropX", "dropY",
+		"invisible",   // only motion.go reads it, for an element with a transition: pending
+		"pressButton", // read with pressed
 	},
 }
 

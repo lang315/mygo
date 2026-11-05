@@ -344,7 +344,7 @@ func setDepth(e *node) {
 func retainable(e *node) bool {
 	if e.popover != nil || e.placeOn != nil || (e.nameFrom != nil || e.focusTo != nil) && !e.keepLinks || e.activeDescendant != nil ||
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||
-		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.objectFn != nil ||
+		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.observeFn != nil || e.objectFn != nil ||
 		e.paintAfterFn != nil || (e.paintFn != nil && !e.paintPure) || e.accFill != nil || e.copyData != nil || e.tip ||
 		e.effect != nil || e.hidden || e.leaving != 0 || e.ghosts {
 		return false
