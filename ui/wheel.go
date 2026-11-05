@@ -145,6 +145,7 @@ func (rt *engine) glideScroll(s *state, x, y float64, a Animation, now time.Time
 	headFor(&g.x, dx, a, now)
 	headFor(&g.y, dy, a, now)
 	s.wheel = g
+	s.touch()
 	if !slices.Contains(rt.wheeling, s.id) {
 		rt.wheeling = append(rt.wheeling, s.id)
 	}
