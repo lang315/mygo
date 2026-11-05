@@ -18,6 +18,7 @@ package ui
 // (Focused, FocusWithin), and a Handle's FocusWithin before its control
 // is.
 func (e *node) FocusLeft() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}
@@ -85,6 +86,7 @@ func (rt *engine) passFocus() {
 // It is false while the window does not have the keyboard, as the
 // window tells the system's input methods then.
 func (c *context) FocusTakesText() bool {
+	c.neverKept() // the window's focus, which no state of the row versions
 	rt := c.rt
 	s := rt.states[rt.focused]
 	if s == nil || !rt.windowFocus() {

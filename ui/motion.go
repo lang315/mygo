@@ -497,6 +497,7 @@ func (e *node) InViewMargin(margin ...float32) bool {
 	if !e.hasState() {
 		return false
 	}
+	e.neverKept() // the layout of the frame before
 	s, rt := e.st, e.c.rt
 	if s.seen+1 < rt.frame || s.invisible {
 		return false

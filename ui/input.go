@@ -1490,6 +1490,7 @@ func (e *node) Pressed() bool {
 // the middle button, as a canvas, reads the button here and where the
 // pointer goes with PointerPosition.
 func (e *node) PressedButton() (button int, ok bool) {
+	e.asksOutside()
 	if !e.hasState() {
 		return 0, false
 	}

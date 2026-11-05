@@ -1178,6 +1178,7 @@ func (e *node) AttachTo(target *node, at, self Anchor) *node {
 func (e *node) AttachedAnchors() (at, self Anchor) {
 	a := e.placed
 	if a == 0 && e.attach != 0 && e.hasState() && e.st.asked == e.attach {
+		e.neverKept() // the layout of the frame before
 		a = e.st.placed
 	}
 	if a == 0 {

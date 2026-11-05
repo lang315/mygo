@@ -656,7 +656,10 @@ func (c *context) Shortcut(mods Modifiers, key Key) bool {
 //	}
 //
 // It is false in a frame no shortcut took a key in yet.
-func (c *context) ShortcutRepeated() bool { return c.rt.shortcutRepeat }
+func (c *context) ShortcutRepeated() bool {
+	c.neverKept() // what the last Shortcut took, which no state of the row versions
+	return c.rt.shortcutRepeat
+}
 
 // Local returns state of type T that element e keeps from frame to frame,
 // keyed by key among its states; init creates it the first time. Custom
