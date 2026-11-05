@@ -52,5 +52,5 @@ func focusLeftPair(t *testing.T, auto bool) {
 	}
 }
 
-func TestRetainRowsFocusLeftWhenTheFocusGoesToANewElement(t *testing.T)  { focusLeftPair(t, true) }
+func TestRetainRowsFocusLeftWhenTheFocusGoesToANewElement(t *testing.T)    { focusLeftPair(t, true) }
 func TestRetainRowsFocusLeftWhenTheFocusGoesToAnotherElement(t *testing.T) { focusLeftPair(t, false) }

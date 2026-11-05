@@ -83,6 +83,39 @@ func TestInspectorWidgetTab(t *testing.T) {
 	}
 }
 
+// The Widget tab's focus button is on when both :focus and :focus-visible are
+// forced, and sets or clears both: with :focus forced alone from the Styles
+// tab it is off, and pressing it does not flip the pair.
+func TestInspectorWidgetFocusButtonSetsAndClearsBothStates(t *testing.T) {
+	made := 0
+	var st notedState
+	tt, _ := inspected(noted(&made, &st))
+	openInspector(tt)
+	var card uint64
+	for _, n := range tt.rt.insp.nodes {
+		if n.label == "Card" {
+			card = n.id
+			tt.rt.insp.choose(n.id)
+		}
+	}
+	tt.rt.insp.toggleForced(card, forceFocus)
+	tt.Frame()
+	tt.Click("Widget")
+	both := forceFocus | forceFocusVisible
+	if err := tt.Click("Force focus"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.rt.insp.forced[card]; got&both != both {
+		t.Errorf("pressed with :focus forced alone, the states are %b, want both", got)
+	}
+	if err := tt.Click("Force focus"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.rt.insp.forced[card]; got&both != 0 {
+		t.Errorf("pressed again, the states are %b, want none", got)
+	}
+}
+
 func TestInspectorWidgetForcesStates(t *testing.T) {
 	made := 0
 	var st notedState

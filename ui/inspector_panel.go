@@ -904,7 +904,7 @@ func (in *inspector) widgetPane(c *context) {
 				label string
 				bit   uint8
 			}{{"hover", forceHover}, {"pressed", forceActive}, {"focus", forceFocus | forceFocusVisible}} {
-				on := in.isForced(w.owner, f.bit)
+				on := in.forced[w.owner]&f.bit == f.bit
 				b := coreBox(c).Key(f.label).PaddingX(8).PaddingY(2).Radius(10).Label("Force " + f.label).Role(RoleToggleButton)
 				b.checked = 1
 				color := pal.muted
@@ -920,7 +920,7 @@ func (in *inspector) widgetPane(c *context) {
 				}
 				b.Children(func() { coreText(c, f.label).FontSize(11).TextColor(color).SingleLine() })
 				if b.Clicked() {
-					in.toggleForced(w.owner, f.bit)
+					in.setForced(w.owner, f.bit, !on)
 					c.rt.requestFrame()
 				}
 			}

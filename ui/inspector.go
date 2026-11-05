@@ -343,6 +343,20 @@ func (in *inspector) toggleForced(id uint64, state uint8) {
 	in.changed = true
 }
 
+// setForced forces every state of bits on the element id, or stops forcing
+// them all.
+func (in *inspector) setForced(id uint64, bits uint8, on bool) {
+	if in.forced == nil {
+		in.forced = map[uint64]uint8{}
+	}
+	if on {
+		in.forced[id] |= bits
+	} else if in.forced[id] &^= bits; in.forced[id] == 0 {
+		delete(in.forced, id)
+	}
+	in.changed = true
+}
+
 // forcedNames lists the states forced on the element id, as CSS names them.
 func (in *inspector) forcedNames(id uint64) string {
 	var names []string
