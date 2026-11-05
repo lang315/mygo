@@ -16,10 +16,12 @@ import (
 // 1848 since upstream's TranslatePercent (translatePct), ClipInset and masks
 // (clipping, a pointer), the settable focus ring (ringOffset, ringColor,
 // ringSet), all in paintRare, and balanced text and AccessHidden's bools
-// took 48 more.
+// took 48 more. It is 1936 since upstream's ObserveInput (observeFn),
+// KeyShortcuts, ObjectPosition (objectPos, in paintRare), ScrollSnap, AttachedAnchors
+// (placed), ZIndex, Busy, Current and DimDisabled took 88 more.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 1848 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1848", n)
+	if n := unsafe.Sizeof(node{}); n != 1936 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1936", n)
 	}
 }
 

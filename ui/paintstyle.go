@@ -55,8 +55,12 @@ type paintLook struct {
 	rowIndex int
 	radius   [4]float32
 	opacity  float32
-	bg       Color
-	borderC  Color
+	// zIndex orders the element's painting and its hits among its siblings
+	// (ZIndex); zOrder is set on an element with a child having one, which
+	// paints and commits its children in that order alone (zindex.go).
+	zIndex  int32
+	bg      Color
+	borderC Color
 	// checked is whether a check box, radio or switch is off (1), on (2) or
 	// mixed (3).
 	checked int8
@@ -83,11 +87,12 @@ type paintLook struct {
 	listRow     bool
 	// undimmed keeps the element at its opacity while disabled (DimDisabled).
 	undimmed bool
+	zOrder   bool
 	// collapsed: a toolbar's control with no room, out of its flow.
 	collapsed bool
 	// invalid marks a value that is not valid (Description, Error).
 	invalid bool
-	_       [4]byte // the padding, written out
+	_       [6]byte // the padding, written out
 }
 
 // equal reports whether a and b are the same, byte by byte.

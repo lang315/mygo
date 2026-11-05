@@ -24,7 +24,7 @@ func TestPaintInputs(t *testing.T) {
 		// geometry and what the frame decides: the key of a replay
 		"key": "x y w h contentW contentH world poseM ink scrollBase track",
 		// not read by paint
-		"neither": "epoch key valueInput ignoreInput accessHidden c id parent first last next nchild depth st cursor inputFn textClient caret " +
+		"neither": "originAttached observeFn busy current keepOpen keyShortcuts snap snapAlign placed flips epoch key valueInput ignoreInput accessHidden c id parent first last next nchild depth st cursor inputFn textClient caret " +
 			"takesText noIME copyData runes maximizeButton dismissed label widget role expanded vertical tip accValue " +
 			"accRange hasRange accFill accStep popover rowsOf focusGroup groupSelects placeOn overflow segment " +
 			"activeDescendant nameFrom nameJoin outOfName keepLinks focusTo setPos setSize choosesItems search description " +

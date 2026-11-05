@@ -573,12 +573,6 @@ type node struct {
 	attach attachment
 	placed attachment
 	flips  uint8
-	// zIndex orders the element's painting and its hits among its
-	// siblings (ZIndex); zOrder is set on an element with a child having
-	// one, which paints and commits its children in that order alone
-	// (zindex.go).
-	zIndex int32
-	zOrder bool
 	// serial is the order the pass made the element in: of overlays, the
 	// one made last shows on top.
 	serial int32
