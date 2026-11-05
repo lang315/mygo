@@ -955,7 +955,8 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 Input and display:
 
 - `DateTimePicker()`, `MonthCalendar()`: a `time.Time` in a date and time field, or a calendar; see [DateTimePicker](widget/date-time-picker.md).
-- `Label(text)`: a line of text; `Rich(spans...)` shows styled `ui.Span`s
+- `Label(text)`: text, which wraps at its container's width (a long one in
+  a dialog of fixed width takes more lines, none cut); `Rich(spans...)` shows styled `ui.Span`s
   instead, where gota used Pango markup. `ParseMarkup(s)` makes the spans of a
   Pango subset: `<span foreground background weight>`, `<b>`, `<i>`, `<u>` and
   the entities; anything else, malformed markup too, stays as text and never
@@ -997,7 +998,9 @@ Input and display:
   the user sees. A combo's values must differ (its texts may repeat), and
   it groups options in titled sections with icons: `AddSection(title, png,
   options...)`, `RemoveSection`, `RemoveOption`, `SetOptionText`,
-  `SectionLen`, `Selected`, `Unselect`; sections, icons and texts change
+  `SectionLen`, `Selected`, `Unselect`; `AddOption(options...)` appends to
+  the options outside any section, as WinForms' `Items.Add`, keeping the
+  choice, and `Options()` returns a copy of those, in order; sections, icons and texts change
   while the combo shows, and it redraws. A title names one section:
   `AddSection` of a title the combo has adds the options to that section
   (and its icon, unless nil). An option of a value the combo has is left

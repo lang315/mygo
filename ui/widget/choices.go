@@ -355,6 +355,25 @@ func (c *ComboBoxWidget) SetOptions(opts ...Option) *ComboBoxWidget {
 	return c
 }
 
+// AddOption appends opts to the options outside any section, after the
+// last, as WinForms' Items.Add; the sections and the chosen option stay.
+// As with SetOptions, their values must differ from the combo's.
+func (c *ComboBoxWidget) AddOption(opts ...Option) *ComboBoxWidget {
+	opts = slices.Clone(opts) // the caller's slice may back opts
+	c.change(func() {
+		c.edit(func(s []comboSection) []comboSection { s[0].opts = append(s[0].opts, opts...); return s })
+	})
+	return c
+}
+
+// Options returns a copy of the options outside any section, in order:
+// those SetOptions and AddOption give, not the sections'.
+func (c *ComboBoxWidget) Options() []Option {
+	mu.Lock()
+	defer mu.Unlock()
+	return slices.Clone(c.sections[0].opts)
+}
+
 // AddSection adds a section titled title, with the icon in the bytes of
 // a PNG (nil for none), holding opts. A section of that title the combo
 // has already gets opts after its own, and the icon, unless nil: a title
