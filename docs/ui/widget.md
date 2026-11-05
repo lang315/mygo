@@ -176,7 +176,10 @@ the title and subtitle are drawn in the dialog for the same reason.
 A `height` of 0 fits the dialog to its content, as WinForms' `AutoSize`
 (`GrowAndShrink`) does at show: `Run` measures the content laid out at `width`
 (one headless layout) and the window's page area gets that height, no higher
-than the screen's work area less 80 DIPs, where the content scrolls instead.
+than the screen's work area less 80 DIPs, where the content scrolls instead,
+vertically only: it keeps the dialog's width, so its labels wrap there. A control
+wider than the dialog is cut at its right edge, as in a dialog that fits: wrap it
+in `ScrollPanel` to reach it.
 A `width` of 0 is the window default, 800. The size is taken when the dialog
 shows: later changes of its content do not resize it, `SetSize` after
 `NewDialog` wins, and a list in the content counts eight rows, a multi-line

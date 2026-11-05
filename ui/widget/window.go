@@ -438,7 +438,10 @@ func (w *Form) view(c *ui.Context) {
 			render(c, w.tools)
 		}
 		if w.root != nil && w.fitScroll {
-			ui.ScrollBoth(c).Grow(1).Children(func() {
+			// Vertical only: the content keeps the window's width, so its labels
+			// wrap there, as when it fits. (Content wider than the window is cut
+			// at its edge, as it is when it fits.)
+			ui.Scroll(c).Grow(1).Children(func() {
 				axis = vertical
 				render(c, w.root)
 			})
