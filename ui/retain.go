@@ -346,7 +346,7 @@ func retainable(e *node) bool {
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||
 		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.observeFn != nil || e.objectFn != nil ||
 		e.paintAfterFn != nil || (e.paintFn != nil && !e.paintPure) || e.accFill != nil || e.copyData != nil || e.tip ||
-		e.effect != nil || e.hidden || e.leaving != 0 || e.ghosts {
+		e.effect != nil || nativeGlassOf(e.material) || e.hidden || e.leaving != 0 || e.ghosts {
 		return false
 	}
 	for c := e.first; c != nil; c = c.next {
@@ -355,6 +355,17 @@ func retainable(e *node) bool {
 		}
 	}
 	return true
+}
+
+// nativeGlassOf reports whether m asks for the system's glass, which the commit
+// of the frame places and a kept row would not (noteNativeGlass).
+func nativeGlassOf(m Material) bool {
+	g, ok := m.(NativeGlassMaterial)
+	if !ok {
+		return false
+	}
+	_, on := g.NativeGlass()
+	return on
 }
 
 // count returns how many elements e has with those under it.
