@@ -379,7 +379,7 @@ func (s *DataTableState[T, K]) searchBar(c *Context) {
 }
 
 // dataMatcher returns what keeps the rows whose text matches keyword: a
-// keyword with | lists the values to match exactly, as fhtool's UID1|UID2
+// keyword with | lists the values to match exactly, as the pilot app's UID1|UID2
 // search; another matches the texts containing it, case aside. It returns
 // nil for a keyword that keeps all rows, as one listing nothing.
 func dataMatcher[T any](text func(x *T) string, keyword string) func(x *T) bool {

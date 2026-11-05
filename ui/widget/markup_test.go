@@ -8,12 +8,12 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-func TestParseMarkupFhtoolStrings(t *testing.T) {
+func TestParseMarkupPilotAppStrings(t *testing.T) {
 	for _, c := range []struct {
 		in   string
 		want []ui.Span
 	}{
-		// fhtool's state.go: the Done and Error badges before a message.
+		// The pilot app's state.go: the Done and Error badges before a message.
 		{`<span foreground='white' background='green' weight='800'>Done</span> msg`, []ui.Span{
 			{Text: "Done", Color: ui.RGB(255, 255, 255), Background: ui.RGB(0, 255, 0), Weight: 800},
 			{Text: " msg"},
@@ -110,7 +110,7 @@ func TestLabelRichTakesParsedMarkup(t *testing.T) {
 }
 
 func TestParseMarkupUnknownTagsStayAsText(t *testing.T) {
-	// fhtool's logger puts an unescaped message inside a span.
+	// The pilot app's logger puts an unescaped message inside a span.
 	for in, want := range map[string]string{
 		"err: <nil>":                              "err: <nil>",
 		"if x<y then <b>bold</b>":                 "if x<y then bold",

@@ -237,9 +237,9 @@ func TestButtons(t *testing.T) {
 	}
 }
 
-// fhtool lists the classes fhtool's AddClass calls use (recounted
+// pilotGood and pilotBad list the classes the pilot app's AddClass calls use (recounted
 // 2026-10-24): those tw takes, and those its port must change.
-var fhtoolGood = []string{
+var pilotGood = []string{
 	"halign-start", "p-2", "mt-3", "mb-3", "p-3", "mt-5", "font-bold", "hexpand", "halign-end",
 	"text-gray-500", "rounded-l-none", "border-l-0", "rounded-r-none", "border-solid", "text-xl",
 	"border-r-0", "border", "px-3", "halign-center", "suggested-action", "text-xs", "rounded-md",
@@ -250,22 +250,22 @@ var fhtoolGood = []string{
 	"bg-blue-50",
 }
 
-var fhtoolBad = []string{
+var pilotBad = []string{
 	"text-italic", "text-green", "combobox-rounded-r-none", "combobox-rounded-none", "gota-card",
 	"gota-table", "gota-table-bottom-panel", "gota-tag-select", "gota-tag-select-item",
 	"gota-tag-select-item-text",
 }
 
-func TestFhtoolClasses(t *testing.T) {
-	if len(fhtoolGood) != 57 || len(fhtoolBad) != 10 {
-		t.Fatalf("lists hold %d and %d, want 57 and 10", len(fhtoolGood), len(fhtoolBad))
+func TestPilotAppClasses(t *testing.T) {
+	if len(pilotGood) != 57 || len(pilotBad) != 10 {
+		t.Fatalf("lists hold %d and %d, want 57 and 10", len(pilotGood), len(pilotBad))
 	}
-	for _, c := range fhtoolGood {
+	for _, c := range pilotGood {
 		if _, bad := Parse(c); len(bad) != 0 {
 			t.Errorf("%s: %v", c, bad)
 		}
 	}
-	for _, c := range fhtoolBad {
+	for _, c := range pilotBad {
 		if _, bad := Parse(c); len(bad) != 1 || bad[0].Reason != Unknown {
 			t.Errorf("%s: %v, want unknown", c, bad)
 		}

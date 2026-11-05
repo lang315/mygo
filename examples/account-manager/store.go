@@ -9,13 +9,13 @@ import (
 // for good.
 const trash = 2
 
-// folder is a category of accounts, as fhtool's.
+// folder is a category of accounts, as the pilot app's.
 type folder struct {
 	ID   int
 	Name string
 }
 
-// store holds the accounts and their folders, as fhtool's database does.
+// store holds the accounts and their folders, as the pilot app's database does.
 // Only the main thread touches it.
 type store struct {
 	accounts []account

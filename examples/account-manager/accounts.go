@@ -22,7 +22,7 @@ const (
 	failed
 )
 
-// account is a row of the table: an account of fhtool's, made up.
+// account is a row of the table: an account of the pilot app's, made up.
 type account struct {
 	ID, Folder                                            int
 	UID, Password, TwoFA, Email, RecoveryEmail, Proxy, IP string
@@ -64,7 +64,7 @@ const (
 	colClientID
 )
 
-// columns are the table's, titled as fhtool's; compare() has a sort for each.
+// columns are the table's, titled as the pilot app's; compare() has a sort for each.
 var columns = []ui.TableColumn{
 	{Title: "UID", Width: 150},
 	{Title: "Mật khẩu", Width: 110},
@@ -110,7 +110,7 @@ const (
 var tabLabels = []string{"Tài khoản", "Ads", "Email"}
 
 // tabColumns are the columns each tab shows, as indexes of allColumns:
-// fhtool's.
+// the pilot app's.
 var tabColumns = [...][]int{
 	tabAccounts: {colUID, colPassword, colTwoFA, colEmail, colRecovery, colProxy, colIP, colLastRun, colStatus, colCookie, colName, colFriends, colGroups, colCountry, colResource, colCreated, colBackup, colNote},
 	tabAds:      {colUID, colPassword, colTwoFA, colCookie, colStatus, colBM, colTKQC},

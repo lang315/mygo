@@ -29,7 +29,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | Panel | done | `VBox`, `HBox`, `Card`, `ScrollPanel` (AutoScroll) |
 | PictureBox | done | `PictureBox` |
 | ProgressBar | done | `ProgressBar` |
-| PropertyGrid | dropped (Phase 2) | fhtool and the target apps edit settings in dialogs built from `Fields` and `Bind`; a reflection-driven grid can come later on request |
+| PropertyGrid | dropped (Phase 2) | The pilot app and the target apps edit settings in dialogs built from `Fields` and `Bind`; a reflection-driven grid can come later on request |
 | RadioButton | done | `RadioButton`, `RadioGroup` |
 | RichTextBox | done | [RichTextBox](widget/richtextbox.md) |
 | SplitContainer | done | [SplitContainer](widget/split-container.md) |
@@ -65,7 +65,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
 | MessageBox | done | `Alert`, `Confirm`, `InputString`, `InputSelect` |
 | NotifyIcon | done | `NotifyIcon` |
 | OpenFileDialog, SaveFileDialog | done | `OpenFile`, `OpenFiles`, `SaveFile` |
-| PageSetupDialog, PrintDialog, PrintDocument, PrintPreviewControl, PrintPreviewDialog | dropped (Phase 2) | fhtool doesn't print; native print APIs would be engine work (Track 3) if an app needs them |
+| PageSetupDialog, PrintDialog, PrintDocument, PrintPreviewControl, PrintPreviewDialog | dropped (Phase 2) | The pilot app doesn't print; native print APIs would be engine work (Track 3) if an app needs them |
 | StatusStrip | done | `StatusStrip` |
 | Timer | done | [Timer](widget/timer.md) |
 | ToolTip | done | `SetTooltip` on any control |
@@ -82,7 +82,7 @@ and who), or **dropped** (why). This is the exit audit of Phase 2 of the
   a subsystem of its own; `SplitContainer` and `TabControl` cover fixed
   layouts. Revisit on request.
 - **Printing** (`PrintDocument`, preview, page setup): dropped for Phase 2.
-  fhtool doesn't print; native print APIs would be engine work (Track 3) if an
+  The pilot app doesn't print; native print APIs would be engine work (Track 3) if an
   app needs them.
 
 ## Open rows

@@ -956,7 +956,7 @@ func TestTableSelectedRowDropsTheColumnColor(t *testing.T) {
 	}
 }
 
-// BenchmarkTableFrames100k is the frame of fhtool's table, 100,000 rows with
+// BenchmarkTableFrames100k is the frame of the pilot app's table, 100,000 rows with
 // the check box and index columns: at rest, scrolled by the wheel, and with
 // 1000 rows changed. allocs/op and B/op are the figures to read.
 func BenchmarkTableFrames100k(b *testing.B) {
