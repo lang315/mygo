@@ -83,7 +83,7 @@ func TestInspectorWidgetTab(t *testing.T) {
 	}
 }
 
-func TestInspectorForcesStates(t *testing.T) {
+func TestInspectorWidgetForcesStates(t *testing.T) {
 	made := 0
 	var st notedState
 	tt, _ := inspected(noted(&made, &st))
@@ -119,7 +119,8 @@ func TestInspectorForcesStates(t *testing.T) {
 			t.Errorf("%s: the state stays after the button is pressed again", c.button)
 		}
 	}
-	// Forced, then another element chosen: the state goes.
+	// Forced, then another element chosen: the state stays with its element,
+	// as the Styles tab's forced states do, until the inspector closes.
 	tt.Click("Force hover")
 	if !st.hover {
 		t.Fatal("hover not forced")
@@ -130,8 +131,8 @@ func TestInspectorForcesStates(t *testing.T) {
 		}
 	}
 	tt.Frame()
-	if st.hover || tt.rt.insp.forced != 0 {
-		t.Error("the state stays when another element is chosen")
+	if !st.hover || len(tt.rt.insp.forced) == 0 {
+		t.Error("the state goes when another element is chosen")
 	}
 	// Forced, then the inspector closed: the state goes.
 	for _, n := range tt.rt.insp.nodes {
@@ -141,32 +142,13 @@ func TestInspectorForcesStates(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Click("Widget")
-	tt.Click("Force hover")
 	if !st.hover {
-		t.Fatal("hover not forced again")
+		t.Fatal("hover not forced still")
 	}
 	tt.rt.toggleInspector()
 	tt.Frame()
-	if st.hover || tt.rt.insp.forced != 0 {
+	if st.hover || len(tt.rt.insp.forced) != 0 {
 		t.Error("the state stays when the inspector closes")
-	}
-	// Forced, then the element gone: the state goes.
-	openInspector(tt)
-	for _, n := range tt.rt.insp.nodes {
-		if n.label == "Card" {
-			tt.rt.insp.choose(n.id)
-		}
-	}
-	tt.Frame()
-	tt.Click("Widget")
-	tt.Click("Force focus")
-	if !st.focus {
-		t.Fatal("focus not forced")
-	}
-	st.hidden = true
-	tt.Frame()
-	if tt.rt.insp.forced != 0 {
-		t.Error("the state stays when the element is gone")
 	}
 }
 

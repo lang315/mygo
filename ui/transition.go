@@ -3,6 +3,7 @@ package ui
 import (
 	"math"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo/internal/scene"
@@ -10,15 +11,17 @@ import (
 
 // ElementTransition animates an element (Element.Transition) from what the
 // last frame showed to what the layout makes of it in this one: where it
-// is in its parent, its size, and its background and border colors. Enter
-// and Exit animate it as it appears and as it goes:
+// is in its parent, its size, its background and border colors, and its
+// shadows. Enter and Exit animate it as it appears and as it goes:
 //
 //	ui.Row(c).Key(item.ID).Transition(ui.ElementTransition{
 //		Enter: &ui.Motion{Collapse: true},
 //		Exit:  &ui.Motion{Collapse: true},
 //	})
 type ElementTransition struct {
-	// Duration is how long a change takes: 200 ms when zero.
+	// Duration is how long a change takes: 200 ms when zero, and none
+	// when negative, which shows every change, the Enter and the Exit at
+	// once, as for an app asking for less motion of its own.
 	Duration time.Duration
 	// Ease is how the element goes, as for AnimateWith: EaseOut when nil.
 	Ease Easing
@@ -27,19 +30,34 @@ type ElementTransition struct {
 	// going as it went; with a Delay, changes wait, as the rows of a list
 	// entering one after another.
 	Animation *Animation
-	// Position, Size and Colors choose what animates: where the element is
-	// in its parent, its width and height (its content laid out at each
-	// size on the way), and its background and border colors. None set
-	// animates them all.
-	Position, Size, Colors bool
+	// ExitDuration and ExitEase, if set, are how long the Exit takes and
+	// how it goes, in place of Duration and Ease, or of Animation's spring
+	// (whose Delay still holds it): a popup that comes in over 150 ms and
+	// goes over 100. When zero, ExitDuration is Duration's, or about as
+	// long as Animation's spring; when negative, the element goes at once,
+	// without a copy. ExitEase is Ease's, or that of Animation's curve,
+	// when nil.
+	ExitDuration time.Duration
+	ExitEase     Easing
+	// Position, Size, Colors and Shadows choose what animates: where the
+	// element is in its parent, its width and height (its content laid out
+	// at each size on the way), its background and border colors, and its
+	// shadows (Shadow, InsetShadow), as a resting shadow fading on hover.
+	// None set animates them all.
+	Position, Size, Colors, Shadows bool
+	// Width and Height, in place of Size, animate the element's width or
+	// its height alone, as CSS's transition-property lists one of them:
+	// the other follows the layout at once, as a panel springing open
+	// while the split view holding it is dragged wider.
+	Width, Height bool
 	// Enter, if set, is where the element comes from as it appears in a
 	// parent that the last frame showed: it starts there, and goes to its
 	// place.
 	Enter *Motion
 	// Exit, if set, is where the element goes once it is no longer built,
 	// while its parent still is: a copy of it, as the last frame showed
-	// it, goes there under its siblings, taking neither room, the pointer
-	// nor the focus, and is then gone. The parent's ChildExit, in the
+	// it, goes there under its siblings of the same z-index (ZIndex),
+	// taking neither room, the pointer nor the focus, and is then gone. The parent's ChildExit, in the
 	// frame it goes, says where it goes instead.
 	Exit *Motion
 	// AfterExits holds the element appearing while copies of its siblings
@@ -91,6 +109,35 @@ type Motion struct {
 	// Blur blurs it there by as many DIPs, as Element.Blur does: text or
 	// an icon crossing over to another through a blur of 4 or so.
 	Blur float32
+	// Flip, for an element attached to another (AttachTo), mirrors X and
+	// XPercent where the layout put it across its target from where it
+	// was asked to go, and Y and YPercent where it put it the other way
+	// down (AttachedAnchors), from the frame it appears: a menu asked
+	// below its button, coming down from Y: -8, comes up from 8 where it
+	// opens above it, as its Exit goes.
+	Flip bool
+}
+
+// The sides AttachTo put an element on, across and down from those asked
+// (node.flips).
+const (
+	flipAcross uint8 = 1 << iota
+	flipDown
+)
+
+// flippedFor returns m, mirrored where the layout flipped e (Flip).
+func (m *Motion) flippedFor(e *node) *Motion {
+	if !m.Flip || e.flips == 0 {
+		return m
+	}
+	f := *m
+	if e.flips&flipAcross != 0 {
+		f.X, f.XPercent = -f.X, -f.XPercent
+	}
+	if e.flips&flipDown != 0 {
+		f.Y, f.YPercent = -f.Y, -f.YPercent
+	}
+	return &f
 }
 
 // defaultDuration is the Duration of a Transition without one.
@@ -114,6 +161,7 @@ const defaultDuration = 200 * time.Millisecond
 // collapsing fades and blurs in place.
 func (e *node) Transition(t ElementTransition) *node {
 	e.c.transitions = append(e.c.transitions, transitionUse{e: e, t: t})
+	linkShadows.Do(func() { animateShadows = (*engine).animateShadows })
 	if t.Match != nil || t.ScaleContent {
 		e.c.rt.linkMatches()
 	}
@@ -207,15 +255,17 @@ func boxOf(v [8]float32) tbox { return tbox{v[0], v[1], v[2], v[3], v[4], v[5], 
 // What a transition moves now.
 const (
 	movePos uint8 = 1 << iota
-	moveSize
+	moveWidth
+	moveHeight
 	moveAlpha
 	moveTurn
-	moveAll = movePos | moveSize | moveAlpha | moveTurn
+	moveSize = moveWidth | moveHeight
+	moveAll  = movePos | moveSize | moveAlpha | moveTurn
 )
 
 // groupOf is what moves each channel of a transition: a blur goes with
 // the opacity, as it moves nothing.
-var groupOf = [8]uint8{movePos, movePos, moveSize, moveSize, moveAlpha, moveTurn, moveTurn, moveAlpha}
+var groupOf = [8]uint8{movePos, movePos, moveWidth, moveHeight, moveAlpha, moveTurn, moveTurn, moveAlpha}
 
 // The axes a Motion collapses an element along.
 const (
@@ -245,8 +295,9 @@ type transition struct {
 	// Colors-only transition leaves them, which moves nothing.
 	chStale bool
 	// held keeps the element appearing unseen while copies of its
-	// siblings leave (AfterExits).
-	held bool
+	// siblings leave (AfterExits), and focus the keyboard focus given to
+	// it meanwhile, which it takes as it shows.
+	held, focus bool
 	// collapse is the axis a Motion collapses the element along, while it
 	// does.
 	collapse uint8
@@ -255,6 +306,12 @@ type transition struct {
 	colorTarget, colorFrom, colorShown [2]Color
 	colorMoving, colorSet              bool
 	colorFrame                         uint64
+	// The shadows, which move as the colors do, k of the way from
+	// shadowFrom.
+	shadowTarget, shadowFrom, shadowShown []shadow
+	shadowK                               channel
+	shadowMoving, shadowSet               bool
+	shadowFrame                           uint64
 	// ghost is the copy of the element going, which moves from gone,
 	// where it showed as it went; opacity and blur are its own, and turn
 	// its transform then.
@@ -291,10 +348,17 @@ func (r *transition) mot() *tmotion {
 	return r.mv
 }
 
+// instantly is the Animation of a transition with a negative Duration,
+// which headFor shows at its target at once.
+var instantly = Animation{Duration: -1}
+
 // animation returns how the transition's changes go.
 func (r *transition) animation() Animation {
 	if a := r.t.Animation; a != nil {
 		return *a
+	}
+	if r.t.Duration < 0 {
+		return instantly
 	}
 	ease := r.t.Ease
 	if ease == nil {
@@ -303,8 +367,38 @@ func (r *transition) animation() Animation {
 	return Animation{Duration: r.duration(), Ease: ease}
 }
 
+// exitAnimation returns how the transition's Exit goes: as its changes do
+// but for its ExitDuration and ExitEase.
+func (r *transition) exitAnimation() Animation {
+	t := &r.t
+	if t.ExitDuration == 0 && t.ExitEase == nil {
+		return r.animation()
+	}
+	d := t.ExitDuration
+	if d == 0 {
+		d = r.duration()
+	}
+	if d <= 0 {
+		return instantly
+	}
+	a := Animation{Duration: d, Ease: t.ExitEase}
+	if b := t.Animation; b != nil {
+		a.Delay = b.Delay
+		if a.Ease == nil && b.Duration > 0 {
+			a.Ease = b.Ease
+		}
+	} else if a.Ease == nil {
+		a.Ease = t.Ease
+	}
+	return a
+}
+
+// exitsAtOnce reports whether the transition's Exit takes no time: the
+// element goes without a copy.
+func (r *transition) exitsAtOnce() bool { return r.exitAnimation().Duration < 0 }
+
 // duration returns how long the transition's changes take, about as long
-// for a spring.
+// for a spring, and 0 for none.
 func (r *transition) duration() time.Duration {
 	if a := r.t.Animation; a != nil {
 		if a.Duration > 0 {
@@ -319,8 +413,11 @@ func (r *transition) duration() time.Duration {
 		m, k, _, _ := a.Spring.physics()
 		return time.Duration(2 * math.Pi * math.Sqrt(m/k) * float64(time.Second))
 	}
-	if r.t.Duration > 0 {
+	switch {
+	case r.t.Duration > 0:
 		return r.t.Duration
+	case r.t.Duration < 0:
+		return 0
 	}
 	return defaultDuration
 }
@@ -328,7 +425,12 @@ func (r *transition) duration() time.Duration {
 // head sends the channels of move from where they are to target, as the
 // transition's animation says, from now.
 func (r *transition) head(target tbox, move uint8, now time.Time) {
-	a := r.animation()
+	r.headWith(target, move, r.animation(), now)
+}
+
+// headWith sends the channels of move from where they are to target, as a
+// says, from now.
+func (r *transition) headWith(target tbox, move uint8, a Animation, now time.Time) {
 	to := target.vals()
 	ch := &r.mot().ch
 	for i := range ch {
@@ -339,8 +441,13 @@ func (r *transition) head(target tbox, move uint8, now time.Time) {
 	r.moving |= move
 }
 
-// headFor sends ch from where it is now to to, as a says.
+// headFor sends ch from where it is now to to, as a says: there at once
+// with a negative Duration (instantly).
 func headFor(ch *channel, to float64, a Animation, now time.Time) {
+	if a.Duration < 0 {
+		*ch = channel{value: to, target: to, at: now}
+		return
+	}
 	ch.advance(now)
 	if to == ch.goal() && (ch.moving || ch.pending || ch.value == to) {
 		return
@@ -355,19 +462,12 @@ func headFor(ch *channel, to float64, a Animation, now time.Time) {
 	}
 }
 
-// follow shifts what moves that the Transition does not animate, as an
-// Enter's place, by as much as the layout moved it since the frame before:
-// that follows the layout at once, as it would without the Enter. A size
-// scales instead, so that one collapsed opens on in proportion, never
-// below nothing as the layout makes it smaller.
-func (r *transition) follow(next tbox, props uint8) {
-	var own uint8
-	if props&propPosition != 0 {
-		own |= movePos
-	}
-	if props&propSize != 0 {
-		own |= moveSize
-	}
+// follow shifts what moves that the Transition does not animate (own
+// does not hold), as an Enter's place, by as much as the layout moved it
+// since the frame before: that follows the layout at once, as it would
+// without the Enter. A size scales instead, so that one collapsed opens
+// on in proportion, never below nothing as the layout makes it smaller.
+func (r *transition) follow(next tbox, own uint8) {
 	was, to := r.target.vals(), next.vals()
 	ch := &r.mot().ch
 	for i := range ch {
@@ -377,7 +477,7 @@ func (r *transition) follow(next tbox, props uint8) {
 		}
 		switch d := to[i] - was[i]; {
 		case d == 0:
-		case g == moveSize && was[i] > 0:
+		case g&moveSize != 0 && was[i] > 0:
 			ch[i].scale(float64(was[i]), float64(to[i]))
 		default:
 			ch[i].shift(float64(d))
@@ -425,14 +525,17 @@ func (r *transition) sample(target tbox, now time.Time) tbox {
 // What a transition animates.
 const (
 	propPosition uint8 = 1 << iota
-	propSize
+	propWidth
+	propHeight
 	propColors
+	propShadows
+	propSize = propWidth | propHeight
 )
 
 func (r *transition) properties() uint8 {
 	t := &r.t
-	if !t.Position && !t.Size && !t.Colors {
-		return propPosition | propSize | propColors
+	if !t.Position && !t.Size && !t.Colors && !t.Shadows && !t.Width && !t.Height {
+		return propPosition | propSize | propColors | propShadows
 	}
 	var p uint8
 	if t.Position {
@@ -441,8 +544,17 @@ func (r *transition) properties() uint8 {
 	if t.Size {
 		p |= propSize
 	}
+	if t.Width {
+		p |= propWidth
+	}
+	if t.Height {
+		p |= propHeight
+	}
 	if t.Colors {
 		p |= propColors
+	}
+	if t.Shadows {
+		p |= propShadows
 	}
 	return p
 }
@@ -508,7 +620,7 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 	resized := w != rt.laidW || h != rt.laidH || rt.instant()
 	rt.laidW, rt.laidH = w, h
 	uses := c.transitions
-	rt.exitsBuilt = false
+	rt.exitsBuilt, rt.overlayExits = false, false
 	if len(uses) == 0 && len(rt.trans) == 0 {
 		return
 	}
@@ -559,6 +671,9 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 			// The next frame copies it if it goes: to go as its Exit
 			// says, or to fly with the element taking its Match.
 			rt.exitsBuilt = true
+			if u.t.Exit != nil && e.parent == c.overlay {
+				rt.overlayExits = true
+			}
 		}
 		u.r = r
 		uses[n] = u
@@ -585,7 +700,13 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 		}
 		// An element appearing in a parent that was there comes in;
 		// whole new parts of the interface, as a page, appear at once.
-		appears := r.fresh && !resized && e.st.born == rt.frame && e.parent.st.born != rt.frame
+		// The overlay layer is the window's, though built only while it
+		// holds something: what appears in it comes in as in the root.
+		parent := e.parent
+		if parent == c.overlay {
+			parent = root
+		}
+		appears := r.fresh && !resized && e.st.born == rt.frame && parent.st.born != rt.frame
 		if r.held || appears && r.t.AfterExits {
 			// Unseen until the copies of its siblings are gone, which
 			// animateExits makes: then it comes in.
@@ -605,19 +726,31 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 			r.rest(next, now)
 		default:
 			props := r.properties()
-			var changed uint8
-			if props&propPosition != 0 && (next.x != r.target.x || next.y != r.target.y) {
-				changed |= movePos
+			// The groups of channels the Transition animates: an axis of
+			// the size it does not choose follows the layout at once.
+			var own, changed uint8
+			if props&propPosition != 0 {
+				own |= movePos
+				if next.x != r.target.x || next.y != r.target.y {
+					changed |= movePos
+				}
 			}
-			if props&propSize != 0 && (next.w != r.target.w || next.h != r.target.h) {
-				changed |= moveSize
+			if props&propWidth != 0 {
+				own |= moveWidth
+			}
+			if props&propHeight != 0 {
+				own |= moveHeight
+			}
+			if own&moveWidth != 0 && next.w != r.target.w || own&moveHeight != 0 && next.h != r.target.h {
+				// Both axes chosen (Size), either changing heads both.
+				changed |= own & moveSize
 			}
 			if still {
 				changed = 0
 			}
 			if r.laid+1 == rt.frame {
 				// Not back as its copy went: that heads for next already.
-				r.follow(next, props)
+				r.follow(next, own)
 			}
 			if changed != 0 {
 				r.head(next, changed, now)
@@ -640,9 +773,22 @@ func (rt *engine) animateLayout(root *node, w, h float32) {
 		e, r := u.e, u.r
 		if e.parent.ghosts {
 			e.flags |= flagInvisible
+			if rt.focused == e.id {
+				// Unseen, it takes no focus yet, but keeps it for later.
+				rt.focused, r.focus = 0, true
+			}
 			continue
 		}
 		r.held = false
+		if r.focus {
+			r.focus = false
+			if rt.focused == 0 {
+				// Unless the focus went elsewhere meanwhile; the next
+				// frame builds it focused.
+				e.Focus()
+				rt.animating = true
+			}
+		}
 		if !resized {
 			r.enter(e, r.next, still, now)
 		}
@@ -659,6 +805,7 @@ func (r *transition) enter(e *node, next tbox, still bool, now time.Time) {
 	if m == nil || still && !m.fades() {
 		return
 	}
+	m = m.flippedFor(e)
 	var axis uint8
 	if !still {
 		axis = collapseAxis(m, e.parent)
@@ -802,11 +949,12 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 				// Its parent says where the children going now go.
 				r.t.Exit = &m
 			}
-			if still && !r.t.Exit.fades() {
+			if still && !r.t.Exit.fades() || r.exitsAtOnce() {
 				delete(rt.trans, id)
 				continue
 			}
 			e := r.elem
+			r.t.Exit = r.t.Exit.flippedFor(e)
 			r.ghost = ghostOf(e)
 			if r.colorSet && r.colorFrame+1 == rt.frame {
 				// The colors a transition of them showed, not those it aims at.
@@ -829,8 +977,9 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 			if !still {
 				r.collapse = collapseAxis(r.t.Exit, p)
 			}
-			// From where it showed, as fast as it went.
-			r.head(r.gone.moved(r.t.Exit, r.collapse, still), moveAll, now)
+			// From where it showed, as fast as it went, or as its
+			// ExitDuration says.
+			r.headWith(r.gone.moved(r.t.Exit, r.collapse, still), moveAll, r.exitAnimation(), now)
 			// The frame it went from is still whole.
 			r.index = 0
 			for c := e.parent.first; c != nil && c != e; c = c.next {
@@ -858,6 +1007,9 @@ func (rt *engine) animateExits(root *node, now time.Time, still, instant bool) {
 		g.next = nil
 		p.add(g)
 		p.ghosts = true
+		if p == rt.c.overlay {
+			rt.overlayExits = true
+		}
 		layoutBox(g, r.gone.w, r.gone.h)
 		if s.w != r.gone.w || s.h != r.gone.h {
 			g.w, g.h = max(s.w, 0), max(s.h, 0)
@@ -991,7 +1143,7 @@ func ghostOf(e *node) *node {
 	g.activeDescendant, g.nameFrom, g.focusTo, g.field, g.form = nil, nil, nil, nil, nil
 	g.followX, g.colFit, g.gridFit = nil, nil, nil
 	// It no longer flies (Fly), if it did: it goes as its parent's copy.
-	g.inputFn, g.ghosts, g.lift = nil, false, false
+	g.inputFn, g.observeFn, g.ghosts, g.lift = nil, nil, false, false
 	g.themeAt = e.c.rt.pinTheme(e)
 	if g.themed != nil {
 		// The app may change its theme while the copy leaves.
@@ -1049,12 +1201,99 @@ func (rt *engine) animateColors(e *node, r *transition) {
 	e.bg, e.borderC = r.colorShown[0], r.colorShown[1]
 }
 
+// animateShadows is engine.animateShadows once a view asks for a
+// Transition, so that apps without one do not link it.
+var (
+	animateShadows func(rt *engine, e *node, r *transition)
+	linkShadows    sync.Once
+)
+
+// animateShadows moves e's shadows, once its styleFn ran, as its
+// Transition asks and as animateColors moves its colors: each shadow
+// from the one in its place in the frame before, a missing one from a
+// transparent one at no offset, as CSS interpolates box-shadow lists.
+// Lists with an inner shadow where the other has an outer one change at
+// once.
+func (rt *engine) animateShadows(e *node, r *transition) {
+	if r.properties()&propShadows == 0 {
+		return
+	}
+	now := rt.c.now
+	if r.shadowFrame != rt.frame {
+		switch {
+		case !r.shadowSet || r.shadowFrame+1 != rt.frame:
+			r.shadowMoving = false
+		case slices.Equal(e.shadows, r.shadowTarget):
+		case rt.instant() || !shadowsMix(r.shadowShown, e.shadows):
+			r.shadowMoving = false
+		default:
+			r.shadowFrom, r.shadowMoving = append(r.shadowFrom[:0], r.shadowShown...), true
+			r.shadowK = channel{at: now}
+			headFor(&r.shadowK, 1, r.animation(), now)
+		}
+		r.shadowSet, r.shadowFrame = true, rt.frame
+		r.shadowTarget = append(r.shadowTarget[:0], e.shadows...)
+		r.shadowShown = append(r.shadowShown[:0], e.shadows...)
+		if r.shadowMoving {
+			r.shadowK.advance(now)
+			if !r.shadowK.moving && !r.shadowK.pending {
+				r.shadowMoving = false
+			} else {
+				k := max(0, min(float32(r.shadowK.value), 1))
+				r.shadowShown = mixShadows(r.shadowShown[:0], r.shadowFrom, r.shadowTarget, k, r.animation().Oklab)
+				rt.animating = true
+			}
+		}
+	}
+	if r.shadowMoving {
+		e.shadows = append(e.shadows[:0], r.shadowShown...)
+	}
+}
+
+// shadowsMix reports whether the shadows a and b move from one to the
+// other: those in the same place in both are inner or outer alike.
+func shadowsMix(a, b []shadow) bool {
+	for i := range min(len(a), len(b)) {
+		if a[i].inset != b[i].inset {
+			return false
+		}
+	}
+	return true
+}
+
+// mixShadows appends to dst the shadows k of the way from a to b, the
+// shorter list taken on with transparent shadows at no offset.
+func mixShadows(dst, a, b []shadow, k float32, lab bool) []shadow {
+	for i := range max(len(a), len(b)) {
+		var x, y shadow
+		switch {
+		case i >= len(a):
+			y = b[i]
+			x.inset = y.inset
+		case i >= len(b):
+			x = a[i]
+			y.inset = x.inset
+		default:
+			x, y = a[i], b[i]
+		}
+		dst = append(dst, shadow{
+			x:      lerp(x.x, y.x, k),
+			y:      lerp(x.y, y.y, k),
+			blur:   max(0, lerp(x.blur, y.blur, k)),
+			spread: lerp(x.spread, y.spread, k),
+			color:  mixPremultiplied(x.color, y.color, k, lab),
+			inset:  x.inset,
+		})
+	}
+	return dst
+}
+
 // forgetColors shows the colors of the elements at once: a route change is
 // where an element that comes back shows its own colors, not the color of
 // the element that took its place while it was away.
 func (rt *engine) forgetColors() {
 	for _, r := range rt.trans {
-		r.colorSet = false
+		r.colorSet, r.shadowSet = false, false
 	}
 }
 

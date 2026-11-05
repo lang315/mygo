@@ -1,13 +1,5 @@
 package ui
 
-// The states the inspector can force on an element to see how it looks in
-// them, as Chrome's :hov panel does.
-const (
-	forceHover uint8 = 1 << iota
-	forcePressed
-	forceFocus
-)
-
 // InspectorField is a line of a note an element leaves for the inspector:
 // a Name and its Value, or, when Value is empty, a heading. A Struck line is
 // drawn struck through and dim: a value that something else took the place

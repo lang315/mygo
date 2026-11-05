@@ -81,6 +81,8 @@ type paintLook struct {
 	// are on.
 	highlighted bool
 	listRow     bool
+	// undimmed keeps the element at its opacity while disabled (DimDisabled).
+	undimmed bool
 	// collapsed: a toolbar's control with no room, out of its flow.
 	collapsed bool
 	// invalid marks a value that is not valid (Description, Error).
@@ -106,6 +108,9 @@ type paintRare struct {
 	blur, rotate float32
 	fit          Fit
 	gray         bool
+	// objectPos is where ObjectPosition puts the picture in its box, from
+	// its middle: 0, 0 by default.
+	objectPos    [2]float32
 	transform    Transform
 	translatePct [2]float32 // TranslatePercent's
 	material     Material
