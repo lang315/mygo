@@ -11,7 +11,10 @@ import (
 	"testing"
 )
 
-// recoveryDocs keeps the automatic restore from racing the explicit restores below.
+// recoveryDocs keeps the automatic restore from racing the explicit restores
+// below. The first kind of the process posts startDocuments, which restores
+// every kind whatever launched says: it runs, and its restore ends, before
+// recoveryDocs returns, so that it cannot take an orphan the test writes.
 func recoveryDocs(t *testing.T) *Documents[string] {
 	t.Helper()
 	docRegistry.Lock()
@@ -23,7 +26,10 @@ func recoveryDocs(t *testing.T) *Documents[string] {
 		docRegistry.launched = launched
 		docRegistry.Unlock()
 	}()
-	return testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	onMain(func() {}) // the post of startDocuments, made by NewDocuments, ran: it added to docWork
+	docWork.Wait()
+	return ds
 }
 
 func writeRecoveryOrphan(t *testing.T, ds *Documents[string], name string, entries []recoveryEntry, copies map[string]string) string {
@@ -156,5 +162,16 @@ func TestDocumentRecoveryRemovesSessionsWithoutEntries(t *testing.T) {
 				t.Fatalf("the session without entries remains: %v", err)
 			}
 		})
+	}
+}
+
+// No restore is left to take an orphan the test writes after recoveryDocs.
+func TestRecoveryDocsLeavesNoStartupRestoreBehind(t *testing.T) {
+	ds := recoveryDocs(t)
+	dir := writeRecoveryOrphan(t, ds, "startup", []recoveryEntry{{ID: "unsaved", Name: "Untitled"}}, map[string]string{"unsaved": "unsaved changes"})
+	onMain(func() {})
+	docWork.Wait()
+	if got := readString(t, filepath.Join(dir, "unsaved")); got != "unsaved changes" {
+		t.Fatalf("recovery copy = %q: a background restore took it", got)
 	}
 }
