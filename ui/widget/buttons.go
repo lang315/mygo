@@ -244,6 +244,11 @@ func (l *LinkLabelWidget) build(c *ui.Context) ui.Element {
 	if l.clicked == nil {
 		l.clicked = l.onClicked // once: a closure made in each build is an allocation each
 	}
+	// ui's Link takes Enter alone (a web page's link); WinForms' LinkLabel
+	// takes Space too.
+	if e.Shortcut(0, ui.KeySpace) {
+		Post(l.onClick) // build holds mu, which onClicked takes
+	}
 	return e.OnClick(l.clicked)
 }
 
