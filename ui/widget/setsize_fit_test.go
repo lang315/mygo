@@ -103,8 +103,8 @@ func TestShownFormRefitIsClampedToTheWorkAreaAndScrolls(t *testing.T) {
 	}
 }
 
-// Before Show, SetSize(w, 0) is what it was: the window opens at that size,
-// and nothing fits it afterwards.
+// Before Show, SetSize(w, 0) is what it was: the window opens at that width and
+// the window default height of 600, and nothing fits it afterwards.
 func TestSetSizeOfHeightZeroBeforeShowIsUnchanged(t *testing.T) {
 	f := NewForm("Refit before", 420, 200)
 	f.SetContent(lines(12))
@@ -112,12 +112,12 @@ func TestSetSizeOfHeightZeroBeforeShowIsUnchanged(t *testing.T) {
 	f.Show()
 	t.Cleanup(f.Close)
 	fw := waitFake(t, "Refit before")
-	if fw.Opts.Height != 0 && fw.Opts.Height != 600 || fw.Opts.Width != 600 || fw.Opts.UseContentSize {
-		t.Errorf("opened %dx%d content size %v", fw.Opts.Width, fw.Opts.Height, fw.Opts.UseContentSize)
+	if o := fw.Opts; o.Width != 600 || o.Height != 600 || o.UseContentSize {
+		t.Errorf("opened %dx%d content size %v, want 600x600 not content size", o.Width, o.Height, o.UseContentSize)
 	}
 	drain()
-	if h := fw.Bounds().Height; h != fw.Opts.Height && h != 600 {
-		t.Errorf("height became %d", h)
+	if b := fw.Bounds(); b.Width != 600 || b.Height != 600 {
+		t.Errorf("bounds %dx%d, want 600x600", b.Width, b.Height)
 	}
 }
 
@@ -169,5 +169,102 @@ func TestHeadlessDialogSetSizeOfHeightZeroFitsTheNewContent(t *testing.T) {
 	}
 	if want := fitOf(500, other); dt.w != 500 || dt.h != want {
 		t.Errorf("viewport %dx%d, want 500x%d", dt.w, dt.h, want)
+	}
+}
+
+// A later explicit SetSize wins over a refit still pending.
+func TestShownFormLaterSetSizeBeatsAPendingRefit(t *testing.T) {
+	f := NewForm("Refit later", 420, 200)
+	f.SetContent(lines(12))
+	f.Show()
+	t.Cleanup(f.Close)
+	fw := waitFake(t, "Refit later")
+	f.SetSize(600, 0)
+	f.SetSize(800, 500)
+	drain()
+	if b := fw.Bounds(); b.Width != 800 || b.Height != 500 {
+		t.Errorf("bounds %dx%d, want 800x500", b.Width, b.Height)
+	}
+}
+
+// The measure of a live form leaves its pending announcement for the real
+// frame: a screen reader must hear it.
+func TestMeasureFitLeavesAPendingAnnouncement(t *testing.T) {
+	f := NewForm("Refit announce", 420, 200)
+	f.SetContent(lines(3))
+	mu.Lock()
+	f.announce = "Name is required"
+	mu.Unlock()
+	f.measureFit(500, nil)
+	mu.Lock()
+	a := f.announce
+	mu.Unlock()
+	if a != "Name is required" {
+		t.Errorf("announcement %q after the measure", a)
+	}
+}
+
+// A window low on the screen is moved up to keep its bottom in the work area
+// (25 to 900), never above its top, in the one resize.
+func TestShownFormRefitMovesUpToStayOnTheWorkArea(t *testing.T) {
+	f := NewForm("Refit low", 420, 200)
+	f.SetContent(Label("splash"))
+	f.Show()
+	t.Cleanup(f.Close)
+	fw := waitFake(t, "Refit low")
+	f.Native().SetPosition(500, 400)
+	drain()
+	f.SetContent(lines(40))
+	f.SetSize(600, 0)
+	want := fitOfForm(600, lines(40))
+	wait.Until(t, "the window fitted", func() bool { return fw.Bounds().Height == want })
+	if b := fw.Bounds(); b.X != 500 || b.Y < 25 || b.Y+b.Height > 900 {
+		t.Errorf("bounds %+v: want x 500 and inside the work area 25 to 900", b)
+	}
+	// Not low: it stays where it is.
+	f.Native().SetPosition(500, 30)
+	drain()
+	f.SetContent(lines(3))
+	f.SetSize(600, 0)
+	want = fitOfForm(600, lines(3))
+	wait.Until(t, "the window fitted again", func() bool { return fw.Bounds().Height == want })
+	if b := fw.Bounds(); b.X != 500 || b.Y != 30 {
+		t.Errorf("bounds %+v: moved from 500,30", b)
+	}
+}
+
+// A dialog that is refitted still fits at its next Run: a height of 0 means fit.
+func TestDialogRefitKeepsFittingAtTheNextShow(t *testing.T) {
+	card := lines(3)
+	d := NewDialog(nil, "Refit again", "", 500, 0, card)
+	d.Show()
+	first := waitFake(t, "Refit again")
+	d.SetSize(500, 0)
+	drain()
+	d.Close()
+	wait.Until(t, "the first window closed", first.IsClosed)
+	card.Add(Label("one more"))
+	d.Show()
+	t.Cleanup(d.Close)
+	fw := waitFake(t, "Refit again")
+	if fw.Opts.Height == 0 || fw.Opts.Height == 600 || !fw.Opts.UseContentSize {
+		t.Errorf("reopened at %d (content size %v): want it fitted", fw.Opts.Height, fw.Opts.UseContentSize)
+	}
+}
+
+// A maximized or minimized window is left alone.
+func TestShownFormRefitLeavesAMaximizedWindowAlone(t *testing.T) {
+	f := NewForm("Refit max", 420, 200)
+	f.SetContent(Label("splash"))
+	f.Show()
+	t.Cleanup(f.Close)
+	fw := waitFake(t, "Refit max")
+	before := fw.Bounds()
+	f.Native().Maximize()
+	f.SetContent(lines(12))
+	f.SetSize(600, 0)
+	drain()
+	if b := fw.Bounds(); b != before {
+		t.Errorf("a maximized window went from %+v to %+v", before, b)
 	}
 }

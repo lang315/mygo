@@ -106,22 +106,24 @@ func (w *Form) SetTitle(s string) *Form {
 // fits the window, once, to its content laid out at width (as a dialog of
 // height 0 is at Show, and no higher than the work area less a margin,
 // where the content scrolls): call it after SetContent when the content
-// changed. Later changes of the content do not resize the window again.
+// changed. Later changes of the content do not resize the window again, a
+// later SetSize wins, and a maximized or minimized window is left alone. A
+// dialog with a height of 0 fits again at its next Show.
 func (w *Form) SetSize(width, height int) *Form {
 	refit := false
+	var n *mygo.Window
 	w.change(func() {
-		w.width, w.height, w.fit = width, height, false
+		w.width, w.height, w.fit = width, height, height == 0 && w.dialog
 		refit = height == 0 && (w.win != nil || w.tester != nil)
+		w.refit = 0
+		if refit {
+			w.refit = width
+		}
+		n = w.win
 	})
 	if !refit {
 		w.do(func(n *mygo.Window) { n.SetSize(width, height) })
-		return w
-	}
-	mu.Lock()
-	w.refit = width
-	n := w.win
-	mu.Unlock()
-	if n != nil { // after what the caller posted or set, the content is built
+	} else if n != nil { // after what the caller posted or set, the content is built
 		Post(func() { w.refitWindow(n) })
 	}
 	return w
@@ -135,12 +137,19 @@ func (w *Form) refitWindow(n *mygo.Window) {
 	w.refit = 0
 	live := w.win == n
 	mu.Unlock()
-	if width == 0 || !live {
+	if width == 0 || !live || n.IsMaximized() || n.IsMinimized() {
 		return
 	}
 	h, scroll := w.measureFit(width, n)
 	w.change(func() { w.fitScroll = scroll })
-	n.SetContentSize(width, h)
+	// One resize, which moves the window up if it would end below the work
+	// area, but not above the work area's top.
+	b, cb := n.Bounds(), n.ContentBounds()
+	r := mygo.Rectangle{X: cb.X, Y: cb.Y, Width: width, Height: h}
+	if wa := mygo.Screen.DisplayMatching(b).WorkArea; r.Y+h > wa.Y+wa.Height {
+		r.Y = max(wa.Y+wa.Height-h, wa.Y+cb.Y-b.Y)
+	}
+	n.SetContentBounds(r)
 }
 
 // SetIcon sets the window's icon from a PNG. macOS shows no window icons:
@@ -443,7 +452,7 @@ func (w *Form) view(c *ui.Context) {
 		}
 	})
 	w.formKeys(c)
-	if w.announce != "" {
+	if w.announce != "" && !c.Measuring() { // a measure leaves it to the real frame
 		c.Announce(w.announce)
 		w.announce = ""
 	}
