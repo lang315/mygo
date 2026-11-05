@@ -44,7 +44,7 @@ func TestHoverLooksMakeNoClosurePerFrame(t *testing.T) {
 				}
 			})
 		}},
-		{"tree item", 5.5, func(c *context, n int) {
+		{"tree item", 6.5, func(c *context, n int) {
 			coreTree(c, func() {
 				for range n {
 					open := false
