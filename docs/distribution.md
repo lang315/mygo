@@ -408,6 +408,12 @@ build environment. See Apple's
 The executable carries the icon, the version information and a manifest
 (per-monitor DPI awareness, modern controls), and runs without a console
 window. A `.syso` file of your own in the main package replaces them.
+Its manifest must declare Windows 10 in `<compatibility>` (`<supportedOS
+Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>`), as the one `mygo build`
+writes does: a manifest without it runs the app in an older mode, where
+the window controls of a window with a hidden title bar (a layered child
+window) cannot be created, and the window shows no minimize, maximize or
+close buttons.
 
 ### The installer
 
