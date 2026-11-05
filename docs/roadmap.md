@@ -5,7 +5,7 @@ This is the long-term plan of the lang315/mygo fork, dated 2026-10-23. It grows
 controls feel familiar to WinForms users: Form, TextBox, ComboBox,
 DataGridView, MenuStrip and so on. Building a good-looking UI should be as
 easy as with HTML and Tailwind. It should be as fast and smooth as egui. A
-real app, fhtool, will prove it.
+real app, private and called the pilot app here, will prove it.
 
 **Status, 2026-11-03.** An item marked **done** names its evidence: a file, a
 test or a pull request; `go test ./internal/skillsdocs` checks that every path
@@ -79,7 +79,7 @@ Windows 11 ARM64.
 5. **Add `widget.Style`** with its state variants and transitions. **Done:**
    `ui/widget/stylevalue.go`.
 6. **Add `ui/widget/tw`.**
-   - It covers every class fhtool uses.
+   - It covers every class the pilot app uses.
    - Semantic colours follow the theme.
    - A `uivet` rule rejects unknown classes.
    **Done:** `ui/widget/tw/tw.go`, `internal/twclass`, `internal/uivet`,
@@ -166,11 +166,11 @@ Windows 11 ARM64.
     Table, Outline and TreeView add 1.3 KB: their hooks work. Next, each by a
     build before a PR: the list (`listLayout`), the drag and drop and the
     editor, after P3; only what a build shows to be worth it.
-- fhtool's classes parse. **Done:** `internal/twclass/twclass_test.go`
-  (`TestFhtoolClasses`).
+- The pilot app's classes parse. **Done:** `internal/twclass/twclass_test.go`
+  (`TestPilotAppClasses`).
 - e2e is green on the three machines.
 
-## Phase 1: what fhtool needs
+## Phase 1: what the pilot app needs
 
 1. **Label-and-control rows.** Add `widget.Fields`, a two-column grid of
    labels and controls. **Done:** `ui/widget/fields.go`.
@@ -183,7 +183,7 @@ Windows 11 ARM64.
    **Done:** `ui/widget/text.go` (`MaxLength`, an icon), `ui/widget/buttons.go`
    (`RadioButton`, `Suggested`, `Destructive`), `ui/widget/choices.go`
    (`Editable`).
-4. **DataGridView for fhtool.**
+4. **DataGridView for the pilot app.**
    - A shared `RowProvider`. **Done** as `RowSource`: `ui/widget/rowsource.go`.
    - A context menu built on click. **Done:** `ContextMenuFunc`,
      `ui/widget/table_events.go`.
@@ -223,10 +223,10 @@ Windows 11 ARM64.
    recovered and reported. **Done:** `ui/widget/events.go` (`Invoke`,
    `BeginInvoke`, `OnPanic`).
 
-**Exit gate** (the port is in the fhtool repository, which this repository
+**Exit gate** (the port is in the pilot app's repository, which this repository
 cannot show: those items are not marked):
 
-- Three fhtool screens are ported in the fhtool repository: the main
+- Three of the pilot app's screens are ported in its repository: the main
   window with its table, a settings dialog and the toolbar.
 - They run on Windows 10 amd64 and Windows 11 ARM64.
 - Vietnamese Telex typing works in text boxes and table cells, on Windows

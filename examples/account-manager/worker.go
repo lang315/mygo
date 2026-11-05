@@ -21,7 +21,7 @@ type result struct {
 	note            string
 }
 
-// runner runs jobs on accounts in goroutines, as fhtool's Start does. The
+// runner runs jobs on accounts in goroutines, as the pilot app's Start does. The
 // workers never touch the rows: they add their results to a batch the
 // main thread takes a few times a second.
 type runner struct {
@@ -104,7 +104,7 @@ func (r *runner) take() []result {
 	return b
 }
 
-// fakeWork stands for one of fhtool's actions: 50 to 300 ms, one in ten
+// fakeWork stands for one of the pilot app's actions: 50 to 300 ms, one in ten
 // failing.
 func fakeWork(action string) func(ctx context.Context, id int) result {
 	return func(ctx context.Context, id int) result {

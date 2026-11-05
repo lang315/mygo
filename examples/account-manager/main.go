@@ -1,4 +1,4 @@
-// Account-manager rebuilds the account manager of fhtool, a GTK tool that
+// Account-manager rebuilds the account manager of the pilot app, a GTK tool that
 // runs jobs on many accounts, in native UI: 100,000 made-up accounts in
 // folders, in a table that sorts, searches and checks them, with a menu
 // on its rows, and workers whose results the rows show as they come. Tabs
@@ -27,7 +27,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// actions are the jobs Start runs, the first of fhtool's.
+// actions are the jobs Start runs, the first of the pilot app's.
 var actions = []string{"Đăng nhập", "Backup", "Bật 2FA", "Kiểm tra tài nguyên"}
 
 // app is the state the window shows.
@@ -73,7 +73,7 @@ func newApp(rows int) *app {
 	for i, t := range a.tables() {
 		t.Key = func(x *account) int { return x.ID }
 		t.Columns = dataColumns(tabColumns[i])
-		// The search bar is the footer's, with fhtool's texts.
+		// The search bar is the footer's, with the pilot app's texts.
 		t.NoSearchBar = true
 		t.Filter = func(x *account) bool { return x.Folder == t.FilterKey }
 		t.Copy = func(rows []*account) string { return copyText(rows, colUID, colPassword, colTwoFA) }
@@ -136,7 +136,7 @@ func (a *app) build(c *ui.Context) {
 	})
 }
 
-// toolbar is fhtool's: a run's controls on the left, the folders' on the
+// toolbar is the pilot app's: a run's controls on the left, the folders' on the
 // right.
 func (a *app) toolbar(c *ui.Context) {
 	busy := a.run != nil
@@ -245,7 +245,7 @@ func (a *app) later(fn func(c *ui.Context)) {
 	a.update(func() { a.pending = append(a.pending, fn) })
 }
 
-// menu is the menu bar: fhtool's menus for the actions on accounts and for
+// menu is the menu bar: the pilot app's menus for the actions on accounts and for
 // folders, between the usual ones.
 func (a *app) menu() []*mygo.MenuItem {
 	item := func(label string, fn func(c *ui.Context)) *mygo.MenuItem {
@@ -279,7 +279,7 @@ func (a *app) tabStrip(c *ui.Context) {
 }
 
 // showFolder shows the folder a.folder names afresh, none of its
-// accounts checked or highlighted, as fhtool loads a folder.
+// accounts checked or highlighted, as the pilot app loads a folder.
 func (a *app) showFolder() {
 	for _, tb := range a.tables() {
 		tb.Checked.Clear()
@@ -340,7 +340,7 @@ var copies = []struct {
 	{"UID|Mật khẩu|2FA", []int{colUID, colPassword, colTwoFA}},
 }
 
-// rowMenu is fhtool's menu of the rows chosen, but for its items opening
+// rowMenu is the pilot app's menu of the rows chosen, but for its items opening
 // Chrome, proxies and tokens.
 func (a *app) rowMenu(c *ui.Context, m *ui.Menu, rows []*account) {
 	ids := make([]int, len(rows))
@@ -426,9 +426,9 @@ func (a *app) footer(c *ui.Context) {
 		ui.Spacer(c)
 		column := ui.Select(c, &a.column, tabTitles[a.tab]).Label("Cột tìm kiếm").Width(170).Changed()
 		const hint = "Nhập từ khoá (UID1|UID2|…)"
-		// A text input, as fhtool's entry: a search field shows "Search".
+		// A text input, as the pilot app's entry: a search field shows "Search".
 		search := ui.TextInput(c, &a.keyword).Label(hint).Placeholder(hint).Width(400)
-		// The search runs on Tìm kiếm or Enter, as fhtool's, or once
+		// The search runs on Tìm kiếm or Enter, as the pilot app's, or once
 		// cleared: on every key it would go through all the rows.
 		cleared := search.Changed() && a.keyword == ""
 		if ui.Button(c, "Tìm kiếm").Clicked() || search.Submitted() || column || cleared {

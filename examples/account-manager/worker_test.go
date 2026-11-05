@@ -69,7 +69,7 @@ func TestRunStartsNoMoreWorkersThanAccounts(t *testing.T) {
 	}
 }
 
-// A loop starts once the one before it ended, as fhtool's do: one account
+// A loop starts once the one before it ended, as the pilot app's do: one account
 // in two jobs at once would be two browsers on it.
 func TestRunNeverRunsAnAccountTwiceAtOnce(t *testing.T) {
 	var mu sync.Mutex

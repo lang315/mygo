@@ -9,7 +9,7 @@ import (
 )
 
 // copyTable is a table of three accounts with a CopyFunc that copies their
-// ids, as fhtool copies its UIDs; got collects what the function was given.
+// ids, as the pilot app copies its UIDs; got collects what the function was given.
 func copyTable(got *[][]int) *DataGridViewWidget[acct, int] {
 	return testTable(acct{1, "cat", 10}, acct{2, "ann", 9}, acct{3, "bob", 100}).
 		CopyFunc(func(ids []int) string {
