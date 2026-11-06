@@ -120,6 +120,8 @@ type DataGridViewWidget[T any, K comparable] struct {
 	lateSeq                                 uint64               // its latest right-click
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
 	numbered                                bool                 // the index column shows
+	indexKey                                indexKey             // what indexWidth was measured for; zero before the first frame
+	indexWidth                              float32              // the # column's width for the digits, before uiColumns applies its floor of 56
 	bySource                                bool                 // it numbers the rows by their place in the source, and sorts by it
 	noCopy                                  bool                 // SetClipboardCopy(false)
 	onSelChanged                            func()               // OnSelectionChanged's
@@ -214,7 +216,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 	var cs []ui.TableColumn
 	if t.numbered {
-		cs = append(cs, ui.TableColumn{Title: "#", Width: 56, Align: ui.End, Fixed: true, Sortable: t.bySource})
+		cs = append(cs, ui.TableColumn{Title: "#", Width: max(56, t.indexWidth), Align: ui.End, Fixed: true, Sortable: t.bySource})
 	}
 	vis := make([]int, 0, len(t.cols)) // a new slice: rows ui builds late hold the old one
 	for i, cl := range t.cols {
@@ -664,6 +666,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
+	if t.numbered {
+		t.fitIndex(c)
+	}
 	if t.noCopy {
 		s.Copy = nil
 	} else if s.Copy == nil {
@@ -695,6 +700,49 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.events(e)
 	return e
+}
+
+// indexKey is what the width of the # column is measured for: the digits of
+// the largest number, the font size (the OS's text scale changes it live) and
+// the grid lines, which take 1 DIP of a cell. A live theme change of the
+// spacing or the font family alone is not in it: the width keeps until the key
+// changes (limit: main cuts these too).
+type indexKey struct {
+	digits int
+	font   float32
+	grid   bool
+}
+
+// fitIndex widens the # column to the largest number it can show: the rows in
+// the source for IndexColumnBySource, else the rows shown. It measures, and
+// makes the columns again, only when the key changes, so a frame at rest does
+// neither; ui builds the rows it kept again then. Under mu.
+func (t *DataGridViewWidget[T, K]) fitIndex(c *ui.Context) {
+	n := t.view.Len()
+	if t.bySource {
+		n = len(t.src.rows)
+	}
+	digits := 1
+	for ; n >= 10; n /= 10 {
+		digits++
+	}
+	th := c.Theme()
+	key := indexKey{digits, th.FontSize, t.grid}
+	if key == t.indexKey {
+		return
+	}
+	// The widest digit is not 9: the number is digits of it.
+	var widest float32
+	for d := '0'; d <= '9'; d++ {
+		w, _ := c.MeasureText(0, ui.Span{Text: string(d)})
+		widest = max(widest, w)
+	}
+	grid := float32(0)
+	if t.grid {
+		grid = 1
+	}
+	t.indexKey, t.indexWidth = key, float32(digits)*widest+2*th.Space(2.5)+grid
+	t.columns = t.uiColumns()
 }
 
 // cell builds the cell of the row shown at row in column col, an index
