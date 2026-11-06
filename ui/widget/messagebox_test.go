@@ -3,10 +3,8 @@ package widget
 import (
 	"image"
 	"image/color"
-	"image/png"
 	"math"
-	"os"
-	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -24,7 +22,7 @@ func fitted(t *testing.T, d *Dialog) *DialogTester {
 
 // The caption shows the title; the dialog does not repeat it.
 func TestMessageTitleShowsOnce(t *testing.T) {
-	d, _ := messageDialog(nil, Info, "Heading", "Body", nil, nil, "OK")
+	d, _ := messageDialog(nil, Info, 0, "Heading", "Body", nil, nil, "OK")
 	dt := TestDialog(t, d)
 	n := 0
 	for _, s := range dt.Texts() {
@@ -91,7 +89,7 @@ func TestConfirmEnterIsNo(t *testing.T) {
 
 // Yes comes first, then No.
 func TestConfirmButtonsYesThenNo(t *testing.T) {
-	d, _ := messageDialog(nil, Question, "Order", "", nil, nil, "Yes", "No")
+	d, _ := messageDialog(nil, Question, 0, "Order", "", nil, nil, "Yes", "No")
 	dt := fitted(t, d)
 	yes, no := find(t, dt.Tester.Tester, "Yes"), find(t, dt.Tester.Tester, "No")
 	if yes.X >= no.X {
@@ -119,7 +117,7 @@ func TestMessageHeightFitsTheText(t *testing.T) {
 // One line sits beside the icon's middle; several leave the icon on top.
 func TestMessageIconAlignsWithText(t *testing.T) {
 	place := func(text string) (iconBox image.Rectangle, textBox ui.Rect) {
-		d, _ := messageDialog(nil, Info, "Align", text, nil, nil, "OK")
+		d, _ := messageDialog(nil, Info, 0, "Align", text, nil, nil, "OK")
 		dt := fitted(t, d)
 		img := dt.Image()
 		iconBox = image.Rectangle{Min: img.Bounds().Max}
@@ -170,17 +168,16 @@ func TestMessageIconColors(t *testing.T) {
 		if !closeTo(img.RGBAAt(bodyPt.X, bodyPt.Y), w.body) {
 			t.Errorf("kind %d: body at %v is %v, want about %v", w.kind, bodyPt, img.RGBAAt(bodyPt.X, bodyPt.Y), w.body)
 		}
+		// The mark is at the icon's centre: without it, the centre is the body's.
+		c := image.Pt((b.Min.X+b.Max.X)/2, (b.Min.Y+b.Max.Y)/2)
 		found := false
-		for y := b.Min.Y; y < b.Max.Y && !found; y++ {
-			for x := b.Min.X; x < b.Max.X; x++ {
-				if closeTo(img.RGBAAt(x, y), w.mark) {
-					found = true
-					break
-				}
+		for y := c.Y - 3; y <= c.Y+3; y++ {
+			for x := c.X - 3; x <= c.X+3; x++ {
+				found = found || closeTo(img.RGBAAt(x, y), w.mark)
 			}
 		}
 		if !found {
-			t.Errorf("kind %d: no pixel near %v", w.kind, w.mark)
+			t.Errorf("kind %d: no pixel near %v at the centre %v", w.kind, w.mark, c)
 		}
 	}
 }
@@ -205,28 +202,59 @@ func closeTo(a, b color.RGBA) bool {
 	return d(a.R, b.R) < 40 && d(a.G, b.G) < 40 && d(a.B, b.B) < 40
 }
 
-// Not a test of the product: MYGO_MSGBOX_PNG=dir writes each Kind's dialog.
-func TestMessagePNGs(t *testing.T) {
-	dir := os.Getenv("MYGO_MSGBOX_PNG")
-	if dir == "" {
-		t.Skip("MYGO_MSGBOX_PNG not set")
-	}
-	for name, d := range map[string]*Dialog{
-		"error":    first(messageDialog(nil, Error, "Error", "The file could not be saved.", nil, nil, "OK")),
-		"warning":  first(messageDialog(nil, Warning, "Warning", "The disk is almost full. Delete some files, or the next save may fail and lose your changes.", nil, nil, "OK")),
-		"info":     first(messageDialog(nil, Info, "Information", "Saved.", nil, nil, "OK")),
-		"question": first(messageDialog(nil, Question, "Delete", "Delete the file?", nil, nil, "Yes", "No")),
+func TestCaptionShowsTitle(t *testing.T) {
+	for _, c := range []struct {
+		goos      string
+		hasParent bool
+		want      bool
+	}{
+		{"windows", false, true}, {"windows", true, true},
+		{"linux", false, true}, {"linux", true, true},
+		{"darwin", false, true}, {"darwin", true, false}, // a sheet has no caption
+		{"js", false, false}, {"js", true, false}, // a browser sets only the page's title
 	} {
-		dt := fitted(t, d)
-		f, err := os.Create(filepath.Join(dir, name+".png"))
-		if err != nil {
-			t.Fatal(err)
+		if got := captionShowsTitle(c.goos, c.hasParent); got != c.want {
+			t.Errorf("%s, parent %v: %v, want %v", c.goos, c.hasParent, got, c.want)
 		}
-		if err := png.Encode(f, dt.Image()); err != nil {
-			t.Fatal(err)
-		}
-		f.Close()
 	}
 }
 
-func first(d *Dialog, _ func() int) *Dialog { return d }
+// With a parent, the dialog shows its title itself where the caption does not.
+func TestMessageWithParentShowsTitleWhereNoCaptionDoes(t *testing.T) {
+	parent := NewForm("Parent", 300, 200)
+	d, _ := messageDialog(parent, Warning, 0, "Delete?", "", nil, nil, "Yes", "No")
+	dt := fitted(t, d)
+	shown := false
+	for _, s := range dt.Texts() {
+		shown = shown || s == "Delete?"
+	}
+	if want := !captionShowsTitle(runtime.GOOS, true); shown != want {
+		t.Fatalf("title shown %v, want %v on %s: %q", shown, want, runtime.GOOS, dt.Texts())
+	}
+}
+
+// InputSelect keeps room for its open list, which is drawn inside the window.
+func TestInputSelectListFitsTheWindow(t *testing.T) {
+	got := runAsync(func() answer[string] {
+		s, ok := InputSelect(nil, Question, "Pick", "Which", Option{"a", "opta"}, Option{"b", "optb"}, Option{"c", "optc"})
+		return answer[string]{s, ok}
+	})
+	fw := waitFake(t, "Pick")
+	frame(fw)
+	press(t, fw, "") // the combo
+	found := false
+	for _, n := range accessNodes(fw) {
+		if n.Label == "optc" {
+			found = true
+			if n.Bounds.Y+n.Bounds.H > float64(fw.Opts.Height) {
+				t.Errorf("optc ends at %v, below the window's %d", n.Bounds.Y+n.Bounds.H, fw.Opts.Height)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no optc in %q", labels(fw))
+	}
+	key(fw, platform.KeyEscape)
+	key(fw, platform.KeyEscape)
+	received(t, got)
+}

@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"runtime"
+
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
 )
@@ -76,15 +78,22 @@ func (i *kindIconWidget) build(c *ui.Context) ui.Element {
 // and buttons at the bottom, the last the default. It returns the index of
 // the button chosen, -1 when the dialog closed otherwise. wire, if any,
 // gets the default button and a function choosing it.
-func message(parent *Form, kind Kind, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
-	d, chosen := messageDialog(parent, kind, title, text, input, wire, buttons...)
+func message(parent *Form, kind Kind, height int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
+	d, chosen := messageDialog(parent, kind, height, title, text, input, wire, buttons...)
 	d.Run()
 	return chosen()
 }
 
+// captionShowsTitle is whether the window of a dialog has a caption that
+// shows its title: a dialog with a parent is a sheet on macOS, which has
+// none, and a browser sets only the page's title.
+func captionShowsTitle(goos string, hasParent bool) bool {
+	return goos != "js" && !(goos == "darwin" && hasParent)
+}
+
 // messageDialog makes message's dialog, and the function that tells which
 // button was chosen once it closed.
-func messageDialog(parent *Form, kind Kind, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) (*Dialog, func() int) {
+func messageDialog(parent *Form, kind Kind, height int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) (*Dialog, func() int) {
 	chosen := -1
 	// The first answer wins: a second, queued while the first ran, must
 	// not change what Run's caller reads.
@@ -103,7 +112,7 @@ func messageDialog(parent *Form, kind Kind, title, text string, input Control, w
 	ok.Suggested()
 	// The text keeps the icon's height at least, centred in it: one line sits
 	// beside the icon's middle, more lines leave the icon at the top.
-	body := VBox(8).Apply(Style{}.MinHeight(32))
+	body := VBox(8)
 	if text != "" {
 		body.Pack(Label(text).Align(Start), input == nil, false)
 	}
@@ -115,8 +124,8 @@ func messageDialog(parent *Form, kind Kind, title, text string, input Control, w
 	content := VBox(12).
 		Pack(HBox(12).Add(kindIcon(kind).VAlign(Start)).Pack(body, true, true), true, true).
 		Add(bar)
-	d = NewDialog(parent, title, "", 420, 0, content)
-	d.title.SetVisible(false) // the window's caption shows it
+	d = NewDialog(parent, title, "", 420, height, content)
+	d.title.SetVisible(!captionShowsTitle(runtime.GOOS, parent != nil))
 	d.change(func() { d.fixedFrame = true })
 	d.SetResizable(false)
 	if wire != nil {
@@ -129,20 +138,20 @@ func messageDialog(parent *Form, kind Kind, title, text string, input Control, w
 // Alert shows text in a dialog over parent (nil for none) and returns when
 // the user dismisses it. It blocks as Dialog.Run does.
 func Alert(parent *Form, kind Kind, title, text string) {
-	message(parent, kind, title, text, nil, nil, l10n.Ok())
+	message(parent, kind, 0, title, text, nil, nil, l10n.Ok())
 }
 
 // Confirm asks a question in a dialog over parent and reports whether the
 // user chose Yes; No, which is the default, and closing the dialog say no.
 func Confirm(parent *Form, kind Kind, title, text string) bool {
-	return message(parent, kind, title, text, nil, nil, l10n.Yes(), l10n.No()) == 0
+	return message(parent, kind, 0, title, text, nil, nil, l10n.Yes(), l10n.No()) == 0
 }
 
 // InputString asks for a line of text, label above an entry holding value,
 // and returns it with ok true for OK or Enter.
 func InputString(parent *Form, kind Kind, title, label, value string) (s string, ok bool) {
 	e := TextBox().SetText(value).Focus()
-	n := message(parent, kind, title, label, e, func(_ *ButtonWidget, choose func()) { e.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
+	n := message(parent, kind, 0, title, label, e, func(_ *ButtonWidget, choose func()) { e.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return e.Text(), n == 1
 }
 
@@ -150,15 +159,16 @@ func InputString(parent *Form, kind Kind, title, label, value string) (s string,
 // starting at value.
 func InputInt(parent *Form, kind Kind, title, label string, min, max, step, value int) (n int, ok bool) {
 	s := NumericUpDown(float64(min), float64(max), float64(step)).SetValue(float64(value)).Focus()
-	i := message(parent, kind, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
+	i := message(parent, kind, 0, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return s.Int(), i == 1
 }
 
 // InputSelect asks to choose one of opts and returns its Value. OK stays
-// disabled until a choice is made.
+// disabled until a choice is made. Its dialog keeps a fixed height, which
+// the open list needs: it is drawn inside the window.
 func InputSelect(parent *Form, kind Kind, title, label string, opts ...Option) (value string, ok bool) {
 	c := ComboBox(opts...)
-	n := message(parent, kind, title, label, c, func(okButton *ButtonWidget, _ func()) {
+	n := message(parent, kind, 240, title, label, c, func(okButton *ButtonWidget, _ func()) {
 		okButton.SetDisabled(true)
 		c.OnChange(func() { okButton.SetDisabled(c.Value() == "") })
 	}, l10n.Cancel(), l10n.Ok())
