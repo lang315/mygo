@@ -17,6 +17,7 @@ type Form struct {
 	title         string
 	width, height int
 	resizable     bool
+	minW, minH    int // SetMinimumSize
 	maximized     bool
 	icon          []byte
 	root          Control
@@ -166,6 +167,15 @@ func (w *Form) SetResizable(on bool) *Form {
 	return w
 }
 
+// SetMinimumSize limits how small the user can resize the window, in DIPs; 0
+// means no limit on that side. It applies at Show, on a window that is shown,
+// and again at each later Show.
+func (w *Form) SetMinimumSize(width, height int) *Form {
+	w.change(func() { w.minW, w.minH = width, height })
+	w.do(func(n *mygo.Window) { n.SetMinimumSize(width, height) })
+	return w
+}
+
 // Maximize maximizes the window, or makes it maximized when shown.
 func (w *Form) Maximize() *Form {
 	w.change(func() { w.maximized = true })
@@ -245,8 +255,8 @@ func (w *Form) show(cancel bool) bool {
 	w.done = done
 	opts := mygo.WindowOptions{
 		Title: w.title, Width: w.width, Height: w.height,
-		Maximized: w.maximized,
-		Content:   ui.View(w.view),
+		Maximized: w.maximized, MinWidth: w.minW, MinHeight: w.minH,
+		Content: ui.View(w.view),
 		// A dialog asks to close on Escape, as its close button does.
 		CloseOnEscape: w.dialog,
 	}
@@ -657,6 +667,8 @@ func (w *Form) measureFit(width int, over *mygo.Window) (h int, scroll bool) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	// The window is no lower than its minimum (SetMinimumSize).
+	h = max(h, w.minH)
 	// A sidebar that is the whole content scrolls its pages inside it, and the
 	// sidebar's list stays in view: the dialog does not scroll as a whole,
 	// unless a page is a viewport and so does not scroll itself.

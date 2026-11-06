@@ -537,6 +537,7 @@ type Window struct {
 	title     string
 	url       string
 	bounds    platform.Rect
+	minSize   platform.Size // SetMinimumSize
 	visible   bool
 	focused   bool
 	minimized bool
@@ -711,20 +712,23 @@ func (w *Window) SetBounds(r platform.Rect) {
 func (w *Window) Bounds() platform.Rect            { w.mu.Lock(); defer w.mu.Unlock(); return w.bounds }
 func (w *Window) SetContentBounds(r platform.Rect) { w.SetBounds(r) }
 func (w *Window) ContentBounds() platform.Rect     { return w.Bounds() }
-func (w *Window) SetMinimumSize(platform.Size)     {}
-func (w *Window) SetMaximumSize(platform.Size)     {}
-func (w *Window) SetResizable(bool)                {}
-func (w *Window) IsResizable() bool                { return w.Opts.Resizable }
-func (w *Window) SetMovable(bool)                  {}
-func (w *Window) IsMovable() bool                  { return w.Opts.Movable }
-func (w *Window) SetMinimizable(bool)              {}
-func (w *Window) IsMinimizable() bool              { return w.Opts.Minimizable }
-func (w *Window) SetMaximizable(bool)              {}
-func (w *Window) IsMaximizable() bool              { return w.Opts.Maximizable }
-func (w *Window) SetClosable(bool)                 {}
-func (w *Window) IsClosable() bool                 { return w.Opts.Closable }
-func (w *Window) SetAlwaysOnTop(bool)              {}
-func (w *Window) IsAlwaysOnTop() bool              { return w.Opts.AlwaysOnTop }
+func (w *Window) SetMinimumSize(s platform.Size)   { w.mu.Lock(); w.minSize = s; w.mu.Unlock() }
+
+// MinimumSize is the last size SetMinimumSize set.
+func (w *Window) MinimumSize() platform.Size   { w.mu.Lock(); defer w.mu.Unlock(); return w.minSize }
+func (w *Window) SetMaximumSize(platform.Size) {}
+func (w *Window) SetResizable(bool)            {}
+func (w *Window) IsResizable() bool            { return w.Opts.Resizable }
+func (w *Window) SetMovable(bool)              {}
+func (w *Window) IsMovable() bool              { return w.Opts.Movable }
+func (w *Window) SetMinimizable(bool)          {}
+func (w *Window) IsMinimizable() bool          { return w.Opts.Minimizable }
+func (w *Window) SetMaximizable(bool)          {}
+func (w *Window) IsMaximizable() bool          { return w.Opts.Maximizable }
+func (w *Window) SetClosable(bool)             {}
+func (w *Window) IsClosable() bool             { return w.Opts.Closable }
+func (w *Window) SetAlwaysOnTop(bool)          {}
+func (w *Window) IsAlwaysOnTop() bool          { return w.Opts.AlwaysOnTop }
 func (w *Window) Show() {
 	w.mu.Lock()
 	w.visible = true
