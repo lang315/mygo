@@ -120,6 +120,8 @@ type DataGridViewWidget[T any, K comparable] struct {
 	lateSeq                                 uint64               // its latest right-click
 	layout                                  *ui.TableLayout      // SetColumnsLayout's, not handed to ui yet
 	numbered                                bool                 // the index column shows
+	indexDigits                             int                  // the digits indexWidth was measured for; 0 before the first frame
+	indexWidth                              float32              // the # column's width, at least 56
 	bySource                                bool                 // it numbers the rows by their place in the source, and sorts by it
 	noCopy                                  bool                 // SetClipboardCopy(false)
 	onSelChanged                            func()               // OnSelectionChanged's
@@ -214,7 +216,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 	var cs []ui.TableColumn
 	if t.numbered {
-		cs = append(cs, ui.TableColumn{Title: "#", Width: 56, Align: ui.End, Fixed: true, Sortable: t.bySource})
+		cs = append(cs, ui.TableColumn{Title: "#", Width: max(56, t.indexWidth), Align: ui.End, Fixed: true, Sortable: t.bySource})
 	}
 	vis := make([]int, 0, len(t.cols)) // a new slice: rows ui builds late hold the old one
 	for i, cl := range t.cols {
@@ -257,7 +259,7 @@ func (t *DataGridViewWidget[T, K]) ColumnVisible(title string) bool {
 
 // IndexColumn shows first the position of each row as shown, from 1.
 func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
-	t.change(func() { t.numbered, t.bySource = true, false; t.columns = t.uiColumns(); t.look++ })
+	t.change(func() { t.numbered, t.bySource, t.indexDigits = true, false, 0; t.columns = t.uiColumns(); t.look++ })
 	return t
 }
 
@@ -266,7 +268,7 @@ func (t *DataGridViewWidget[T, K]) IndexColumn() *DataGridViewWidget[T, K] {
 // change (inserting and deleting rows do). A click on its header, titled
 // "#", sorts by it, as Sort("#", descending) does.
 func (t *DataGridViewWidget[T, K]) IndexColumnBySource() *DataGridViewWidget[T, K] {
-	t.change(func() { t.numbered, t.bySource = true, true; t.columns = t.uiColumns(); t.look++ })
+	t.change(func() { t.numbered, t.bySource, t.indexDigits = true, true, 0; t.columns = t.uiColumns(); t.look++ })
 	return t
 }
 
@@ -664,6 +666,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.sync()
 	t.frame, t.kept, t.gone = t.src.rows, false, false
+	if t.numbered {
+		t.fitIndex(c)
+	}
 	if t.noCopy {
 		s.Copy = nil
 	} else if s.Copy == nil {
@@ -695,6 +700,27 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	}
 	t.events(e)
 	return e
+}
+
+// fitIndex widens the # column to the largest number it can show: the rows in
+// the source for IndexColumnBySource, else the rows shown. It measures, and
+// makes the columns again, only when the digits change, so a frame at rest
+// does neither; ui builds the rows it kept again then. Under mu.
+func (t *DataGridViewWidget[T, K]) fitIndex(c *ui.Context) {
+	n := t.view.Len()
+	if t.bySource {
+		n = len(t.src.rows)
+	}
+	digits := 1
+	for ; n >= 10; n /= 10 {
+		digits++
+	}
+	if digits == t.indexDigits {
+		return
+	}
+	w, _ := c.MeasureText(0, ui.Span{Text: strings.Repeat("9", digits)})
+	t.indexDigits, t.indexWidth = digits, w+2*c.Theme().Space(2.5)
+	t.columns = t.uiColumns()
 }
 
 // cell builds the cell of the row shown at row in column col, an index
