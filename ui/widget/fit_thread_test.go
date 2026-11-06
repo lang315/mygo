@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -60,7 +61,7 @@ func TestFirstShowOfADialogMeasuresOnTheMainThread(t *testing.T) {
 	d := NewDialog(nil, "Fit thread dialog", "", 500, 0, m.control())
 	done := make(chan struct{})
 	go func() { defer close(done); d.Show() }() // a goroutine, as an app's worker or handler is
-	<-done
+	wait.For(t, "Show to return", done)
 	t.Cleanup(d.Close)
 	m.assert(t, "the first Show of a dialog")
 }
