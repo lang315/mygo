@@ -135,3 +135,85 @@ func TestDialogSetMinimumSizeReturnsTheDialog(t *testing.T) {
 		t.Errorf("options %v, want 200x100", fw.Opts.MinSize)
 	}
 }
+
+// A dialog of height 0 taller than the work area does not scroll as a whole
+// when its root holds a scroll panel: the panel scrolls, and the button bar
+// beside it stays in view.
+func TestClampedDialogKeepsTheButtonBarBesideAVerticalPanel(t *testing.T) {
+	d := NewDialog(nil, "t", "", 500, 300, VBox(0).Add(ScrollPanel(rows(150)).Vertical(), Button("OK")).Expand())
+	dt := TestDialog(t, d)
+	d.SetSize(500, 0)
+	dt.Settle()
+	ok := find(t, dt.Tester.Tester, "OK")
+	if ok.Y < 0 || ok.Y+ok.H > float32(dt.h) {
+		t.Fatalf("OK %v is out of the %d high window", ok, dt.h)
+	}
+	before := find(t, dt.Tester.Tester, "row 100").Y
+	dt.Tester.Tester.Scroll(250, 50, 0, 300)
+	dt.Frame()
+	if after := find(t, dt.Tester.Tester, "row 100").Y; after >= before {
+		t.Errorf("the panel did not scroll: row 100 at %v, was %v", after, before)
+	}
+	if again := find(t, dt.Tester.Tester, "OK"); again != ok {
+		t.Errorf("OK moved from %v to %v", ok, again)
+	}
+}
+
+// Same, a sole Sidebar whose page is a Vertical panel: the list stays put.
+func TestClampedDialogKeepsTheSidebarListBesideAVerticalPanelPage(t *testing.T) {
+	sb := Sidebar().Add("a", "Page A", ScrollPanel(rows(150)).Vertical()).Add("b", "Page B", Label("b"))
+	d := NewDialog(nil, "t", "", 500, 300, sb)
+	dt := TestDialog(t, d)
+	d.SetSize(500, 0)
+	dt.Settle()
+	before := find(t, dt.Tester.Tester, "Page B").Y
+	dt.Tester.Tester.Scroll(300, 50, 0, 300)
+	dt.Frame()
+	if after := find(t, dt.Tester.Tester, "Page B").Y; after != before {
+		t.Errorf("the list scrolled away: Page B at %v, was %v", after, before)
+	}
+}
+
+// A dialog that fits to its content is no lower than its minimum height.
+func TestFitIsNoLowerThanTheMinimumHeight(t *testing.T) {
+	d := NewDialog(nil, "Fit min", "", 500, 0, Label("short")).SetMinimumSize(0, 400)
+	d.Show()
+	t.Cleanup(d.Close)
+	if h := waitFake(t, "Fit min").Opts.Height; h < 400 {
+		t.Errorf("fitted to %d, below the minimum 400", h)
+	}
+}
+
+// The panel builds its content in a vertical axis, whatever the box around it:
+// the content's Align is across the panel.
+func TestVerticalScrollPanelBuildsInAVerticalAxis(t *testing.T) {
+	tt := NewTester(t, HBox(0).Add(ScrollPanel(Label("x").Align(End)).Vertical().Expand()), 300, 200)
+	if x := find(t, tt.Tester, "x").X; x < 250 {
+		t.Errorf("label at x %v: Align(End) did not put it at the right", x)
+	}
+}
+
+// A dialog that is not clamped keeps its window as before: at a fixed height
+// the panel scrolls and the button bar stays in view; at height 0 with short
+// content it fits the content, and nothing scrolls as a whole.
+func TestVerticalPanelInADialogThatIsNotClamped(t *testing.T) {
+	d := NewDialog(nil, "t", "", 500, 300, VBox(0).Add(ScrollPanel(rows(150)).Vertical(), Button("OK")).Expand())
+	dt := TestDialog(t, d)
+	dt.Settle()
+	if ok := find(t, dt.Tester.Tester, "OK"); ok.Y+ok.H > 300 {
+		t.Errorf("fixed height: OK %v is out of the 300 high window", ok)
+	}
+	short := NewDialog(nil, "t", "", 500, 0, VBox(0).Add(ScrollPanel(rows(3)).Vertical(), Button("OK")).Expand())
+	st := TestDialog(t, short)
+	short.SetSize(500, 0)
+	st.Settle()
+	mu.Lock()
+	scrolls := short.fitScroll
+	mu.Unlock()
+	if scrolls || st.h > 300 {
+		t.Errorf("short content: fitScroll %v, window %d high", scrolls, st.h)
+	}
+	if ok := find(t, st.Tester.Tester, "OK"); ok.Y+ok.H > float32(st.h) {
+		t.Errorf("short content: OK %v is out of the %d high window", ok, st.h)
+	}
+}

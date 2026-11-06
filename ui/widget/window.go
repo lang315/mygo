@@ -667,13 +667,22 @@ func (w *Form) measureFit(width int, over *mygo.Window) (h int, scroll bool) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	// The window is no lower than its minimum (SetMinimumSize).
+	h = max(h, w.minH)
+	// A root holding a scroll panel does not scroll as a whole: the panel does,
+	// and what is beside it stays in view.
+	// shortcut: content beside the panel that alone exceeds the work area is
+	// cut, upgrade when a dialog needs both to scroll.
+	if scroll && holdsScrollPanel(w.root) {
+		scroll = false
+	}
 	// A sidebar that is the whole content scrolls its pages inside it, and the
 	// sidebar's list stays in view: the dialog does not scroll as a whole,
 	// unless a page is a viewport and so does not scroll itself.
 	if sb := soleSidebar(w.root); sb != nil && scroll {
 		scroll = false
 		for _, p := range sb.pages {
-			scroll = scroll || isViewport(p)
+			scroll = scroll || isViewport(p) && !holdsScrollPanel(p)
 		}
 	}
 	return h, scroll

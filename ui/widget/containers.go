@@ -363,6 +363,23 @@ func buildPage(c *ui.Context, w Control) {
 	ui.Scroll(c).Grow(1).FillViewport().Children(build)
 }
 
+// holdsScrollPanel reports whether w is a scroll panel, or a box holding a
+// visible one, or a box that does (a dialog's content is in a box of its
+// own): it scrolls itself. Under mu.
+func holdsScrollPanel(w Control) bool {
+	switch w := w.(type) {
+	case *ScrollPanelWidget:
+		return true
+	case *BoxWidget:
+		for _, it := range w.items {
+			if !it.w.base().hidden && holdsScrollPanel(it.w) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // isViewport reports whether the page w scrolls or virtualizes itself, and so
 // is not put in a scroller: a table, a list, a tree, a multi-line text box,
 // a scroll panel or a box, group box or card holding one (fillsAcross), a web
