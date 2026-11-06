@@ -1,12 +1,14 @@
 package widget
 
 import (
+	"image/color"
 	"sync"
 	"testing"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/ui"
 )
 
 // lastFake returns the fake of the window shown last.
@@ -281,4 +283,64 @@ func TestCloseWhileShowMakesTheWindow(t *testing.T) {
 	defer off()
 	w.Show()
 	waitClosed(t, w)
+}
+
+// redBounds is the box of the pure red pixels of the frame (the picture).
+func redBounds(t *testing.T, tt *ui.Tester) ui.Rect {
+	t.Helper()
+	img := tt.Image()
+	minX, minY, maxX, maxY := 1<<30, 1<<30, -1, -1
+	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+			if p := img.RGBAAt(x, y); p.R == 255 && p.G == 0 && p.B == 0 {
+				minX, minY, maxX, maxY = min(minX, x), min(minY, y), max(maxX, x), max(maxY, y)
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("no red picture in the frame")
+	}
+	return ui.Rect{X: float32(minX), Y: float32(minY), W: float32(maxX - minX + 1), H: float32(maxY - minY + 1)}
+}
+
+func TestHeaderBarGrowsToHoldTitleAndSubtitle(t *testing.T) {
+	f := NewForm("Title", 800, 600).SetContent(Label("content"))
+	f.UseHeaderBar("subtitle").PackStart(PictureBox(testPNG(t, color.RGBA{255, 0, 0, 255}), 32, 32))
+	tt := formTester(t, f)
+	title, sub, content := find(t, tt, "Title"), find(t, tt, "subtitle"), find(t, tt, "content")
+	if title.Y <= 0 {
+		t.Fatalf("the title at %v sits against the window's top edge", title)
+	}
+	if bottom := sub.Y + sub.H; bottom >= content.Y {
+		t.Fatalf("the subtitle ends at %v, not above the content at %v", bottom, content.Y)
+	}
+	pic := redBounds(t, tt)
+	barH := content.Y // the content starts where the bar ends (up to its padding)
+	if pic.Y <= 0 || pic.Y+pic.H >= barH {
+		t.Fatalf("the picture %v is not inside the bar of height ~%v", pic, barH)
+	}
+	// Centered on the text column, as on the bar's middle.
+	if mid, textMid := pic.Y+pic.H/2, (title.Y+sub.Y+sub.H)/2; mid < textMid-1 || mid > textMid+1 {
+		t.Fatalf("the picture's middle %v is not the text's middle %v", mid, textMid)
+	}
+}
+
+func TestHeaderBarWithoutSubtitleKeepsItsHeight(t *testing.T) {
+	f := NewForm("Title", 800, 600).SetContent(Label("content"))
+	f.UseHeaderBar("").PackEnd(Label("hdr"))
+	tt := formTester(t, f)
+	if content := find(t, tt, "content"); content.Y != 32 {
+		t.Fatalf("a bar with no subtitle grew: the content starts at %v", content.Y)
+	}
+}
+
+func TestFitCountsAGrownHeaderBar(t *testing.T) {
+	height := func(sub string) float32 {
+		f := NewForm("Title", 800, 600).SetContent(Label("content"))
+		f.UseHeaderBar(sub)
+		return ui.View(f.view).MeasureHeight(800, 1)
+	}
+	if plain, tall := height(""), height("subtitle"); tall <= plain {
+		t.Fatalf("a fitted window with a subtitle is %v high, one without %v", tall, plain)
+	}
 }

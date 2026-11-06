@@ -498,7 +498,8 @@ func (h *HeaderBarWidget) ClientDecorations(on bool) *HeaderBarWidget {
 
 func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 	bar, t := c.TitleBar(), c.Theme()
-	return ui.Row(c).Height(max(bar.Height, 32)).Padding(0, bar.Right+t.Space(2), 0, bar.Left+t.Space(2)).
+	// A minimum, not a fixed height: a subtitle or a tall child makes the bar grow.
+	return ui.Row(c).MinHeight(max(bar.Height, 32)).AlignItems(ui.Center).Padding(t.Space(1), bar.Right+t.Space(2), t.Space(1), bar.Left+t.Space(2)).
 		Gap(t.Space(2)).DragWindow().Children(func() {
 		outer := axis
 		axis = horizontal
