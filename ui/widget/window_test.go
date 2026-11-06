@@ -345,8 +345,29 @@ func TestFitCountsAGrownHeaderBar(t *testing.T) {
 	}
 }
 
-func TestHeaderBarLongTitleKeepsItsHeightAndTheFitCutsNothing(t *testing.T) {
-	f := NewForm("A very long title that does not fit the narrow window at all", 800, 600).SetContent(Label("content"))
+// A fitted window measures without a title bar, so the bar must not depend on
+// the inset the real one has: a title or subtitle that wraps there would cut the
+// content.
+func TestHeaderBarHeightDoesNotDependOnTheTitleBarInset(t *testing.T) {
+	long := "A very long text that does not fit the narrow window at all, nor the next line of it, nor the one after"
+	for _, c := range []struct{ name, title, sub string }{{"title", long, ""}, {"subtitle", "T", long}} {
+		contentY := func(inset float32) float32 {
+			f := NewForm(c.title, 400, 600).SetContent(Label("content"))
+			f.UseHeaderBar(c.sub)
+			tt := ui.NewTester(f.view, 400, 600)
+			tt.SetTitleBar(ui.TitleBar{Height: 32, Right: inset})
+			tt.Frame()
+			return find(t, tt, "content").Y
+		}
+		with, without := contentY(138), contentY(0)
+		if with != without {
+			t.Fatalf("long %s: the content starts at %v with a title bar's inset, %v without (a fitted window cuts the difference)", c.name, with, without)
+		}
+	}
+}
+
+func TestHeaderBarLongTitleKeepsItsHeight(t *testing.T) {
+	f := NewForm("A very long title that does not fit the narrow window at all", 200, 600).SetContent(Label("content"))
 	f.UseHeaderBar("")
 	tt := ui.NewTester(f.view, 200, 600)
 	tt.SetTitleBar(ui.TitleBar{Height: 32, Right: 138})

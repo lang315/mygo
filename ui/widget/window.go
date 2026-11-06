@@ -510,11 +510,12 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 		}
 		ui.Spacer(c)
 		// Padding here, not on the row: only the title and subtitle grow the
-		// bar by it. One line, so a long title cannot grow the bar.
+		// bar by it. One line each, so a long title or subtitle cannot grow the bar
+		// (a measure has no title bar, so a wrapped bar would cut a fitted window).
 		ui.Column(c).AlignItems(ui.Center).PaddingY(t.Space(1)).Children(func() {
 			ui.Text(c, h.win.title).Bold().MaxLines(1)
 			if h.subtitle != "" {
-				ui.Text(c, h.subtitle).TextColor(t.TextMuted)
+				ui.Text(c, h.subtitle).TextColor(t.TextMuted).MaxLines(1)
 			}
 		})
 		ui.Spacer(c)
