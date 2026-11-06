@@ -470,13 +470,16 @@ it, so there is never a double or a trailing one. The row gap applies on
 each side of a divider. Of `Stacked` and `SettingsRows`, the last call wins.
 Description lines under a label and full-width rows are not part of it.
 
-A control keeps its own size, centered on a wrapped label. Controls that
-fill (`ProgressBar`, an empty `ListBox`) collapse to no width in the fit
-column: give them `SetSize`, or use `Stacked` for multi-line boxes and tables.
-A word with no spaces wider than the window pushes the control off the right
-edge. As a form's direct content (in a card or a box), free height goes to the
-rows, as it does for any `Fields`. In a `ScrollPanel` use `.Vertical()`: the
-both-ways panel gives the form no width to wrap at.
+A control keeps its own size, centered on a wrapped label. A `ProgressBar` and
+an empty `ListBox` get no width in the fit column, and a `ListBox` with items or
+a table a narrow one: give them `SetSize`, or use `Stacked` for multi-line boxes
+and tables. The label column is no narrower than its longest word, so in a
+narrow window the controls are pushed toward or past the right edge, by a long
+word and by ordinary ones alike (a `ComboBox` beside "Notifications" needs about
+229 DIPs): give the window a `SetMinimumSize` wide enough. Only as a form's
+direct content does free height go to the rows (in a `VBox`, `Card` or
+`GroupBox` the rows keep their height). In a `ScrollPanel` use `.Vertical()`:
+the both-ways panel gives the form no width to wrap at.
 
 ```go
 widget.Fields().SettingsRows().

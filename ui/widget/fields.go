@@ -69,11 +69,13 @@ func (f *FieldsWidget) Stacked() *FieldsWidget {
 // width the control leaves and wraps, the control sits at the right edge in
 // its own size (a control's Align overrides), and a divider separates one row
 // from the next. A hidden control takes its label and its divider away. Of
-// Stacked and SettingsRows, the last call wins. A control that fills (a
-// ProgressBar, a ListBox, a table) has no width in the fit column: give it
-// SetSize, or use Stacked. A word wider than the window pushes the control off
-// the right edge. In a ScrollPanel use Vertical, or the form gets no width to
-// wrap at.
+// Stacked and SettingsRows, the last call wins. A ProgressBar and an empty
+// ListBox have no width in the fit column, and a ListBox with items or a
+// table a narrow one: give them SetSize, or use Stacked. The label column is
+// no narrower than its longest word, so in a narrow window the controls are
+// pushed toward or past the right edge (a ComboBox beside "Notifications"
+// needs about 229 DIPs): give the window a SetMinimumSize wide enough. In a
+// ScrollPanel use Vertical, or the form gets no width to wrap at.
 func (f *FieldsWidget) SettingsRows() *FieldsWidget {
 	f.change(func() { f.settings, f.stacked = true, false })
 	return f

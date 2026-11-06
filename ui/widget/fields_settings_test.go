@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -200,5 +201,35 @@ func TestSettingsRowsAndStackedLastCallWins(t *testing.T) {
 	}
 	if l, c := find(t, tb.Tester, "Name"), find(t, tb.Tester, "c1"); c.Y > l.Y+l.H {
 		t.Errorf("SettingsRows last: control %v is under label %v", c, l)
+	}
+}
+
+// The centring of a control is for SettingsRows alone and gives way to what
+// the control asks: an explicit VAlign wins, a control that fills across
+// (a multi-line box) fills the row's height, and the other layouts do not
+// centre their controls.
+func TestSettingsRowsCentringBranches(t *testing.T) {
+	// An explicit VAlign wins: at the top of a row a wrapped label makes tall.
+	top := TextBox().VAlign(Start)
+	tt := NewTester(t, Fields().SettingsRows().Row(longLine, top), 400, 400)
+	l, c := find(t, tt.Tester, longLine), tt.Find(ByRole(ui.RoleTextField)).Bounds()
+	if !approx(c.Y, l.Y) {
+		t.Errorf("VAlign(Start): control at y %v, the label's row starts at %v", c.Y, l.Y)
+	}
+	// A control that fills across fills the row's height.
+	multi := MultilineTextBox()
+	tall := strings.Repeat(longLine+" ", 4)
+	tf := NewTester(t, Fields().SettingsRows().Row(tall, multi), 400, 400)
+	l, c = find(t, tf.Tester, tall), tf.Find(ByRole(ui.RoleTextField)).Bounds()
+	if c.H < l.H-1 {
+		t.Errorf("a multi-line box is %v high next to a label %v high: it does not fill the row", c.H, l.H)
+	}
+	// Other layouts do not centre: the default two-column form stretches the
+	// control to the row's height as before.
+	td := NewTester(t, Fields().Row(longLine, TextBox()), 400, 400)
+	l, c = find(t, td.Tester, longLine), td.Find(ByRole(ui.RoleTextField)).Bounds()
+	alone := NewTester(t, Fields().Row("Name", TextBox()), 400, 300).Find(ByRole(ui.RoleTextField)).Bounds()
+	if l.H > alone.H && approx(c.H, alone.H) {
+		t.Errorf("the default layout centred the control: %v high, %v alone", c.H, alone.H)
 	}
 }
