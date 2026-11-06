@@ -110,3 +110,31 @@ func TestIndexColumnWideningKeepsTheWidthsOfTheOthers(t *testing.T) {
 		t.Fatalf("Name was %v wide before the # column widened, %v after", before, after)
 	}
 }
+
+// A grid line takes 1 DIP of a cell, and SetGridLines can come after a frame.
+func TestIndexColumnFollowsLiveGridLines(t *testing.T) {
+	tb := testTable(manyAccts(99_999)...).IndexColumnBySource()
+	tt := ui.NewTester(content(tb), 1280, 800)
+	tt.Frame()
+	plain := indexWidth(tb)
+	tb.SetGridLines(true)
+	tt.Frame()
+	if got := indexWidth(tb); got != plain+1 {
+		t.Fatalf("the # column is %v with grid lines, want %v", got, plain+1)
+	}
+}
+
+// Frames at rest keep the columns ui was given: a remake each frame would
+// build every kept row again.
+func TestIndexColumnIsNotRemadeAtRest(t *testing.T) {
+	tb := testTable(manyAccts(1000)...).IndexColumnBySource()
+	tt := ui.NewTester(content(tb), 1280, 800)
+	tt.Frame()
+	first := &tb.columns[0]
+	for range 3 {
+		tt.Frame()
+	}
+	if &tb.columns[0] != first {
+		t.Fatal("a frame at rest made the columns again")
+	}
+}

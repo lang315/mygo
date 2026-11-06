@@ -702,9 +702,11 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	return e
 }
 
-// indexKey is what the width of the # column depends on besides the theme's
-// spacing: the digits of the largest number, the font size (the OS's text
-// scale changes it live) and the grid lines, which take 1 DIP of a cell.
+// indexKey is what the width of the # column is measured for: the digits of
+// the largest number, the font size (the OS's text scale changes it live) and
+// the grid lines, which take 1 DIP of a cell. A live theme change of the
+// spacing or the font family alone is not in it: the width keeps until the key
+// changes (limit: main cuts these too).
 type indexKey struct {
 	digits int
 	font   float32
