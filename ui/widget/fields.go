@@ -7,6 +7,7 @@ type FieldsWidget struct {
 	common[FieldsWidget]
 	rows           []fieldRow
 	stacked        bool
+	settings       bool
 	rowGap, colGap float32
 	gapSet         bool
 }
@@ -23,6 +24,7 @@ type fieldRow struct {
 type (
 	fieldRowKey int
 	fieldHole   int
+	fieldRule   int // the divider above a settings row, by the label's id
 )
 
 // Fields makes a form with no rows. Row adds them; by default the labels
@@ -59,14 +61,31 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 // Stacked puts each label above its control, over the form's width, as a
 // VBox of a label and a control does, instead of in a column of their own.
 func (f *FieldsWidget) Stacked() *FieldsWidget {
-	f.change(func() { f.stacked = true })
+	f.change(func() { f.stacked, f.settings = true, false })
+	return f
+}
+
+// SettingsRows lays the form out as a page of settings: each label takes the
+// width the control leaves and wraps, the control sits at the right edge in
+// its own size (a control's Align overrides), and a divider separates one row
+// from the next. A hidden control takes its label and its divider away. Of
+// Stacked and SettingsRows, the last call wins. A ProgressBar and an empty
+// ListBox have no width in the fit column, and a ListBox with items or a
+// table a narrow one: give them SetSize, or use Stacked. The label column is
+// no narrower than its longest word, so in a narrow window the controls are
+// pushed toward or past the right edge (a ComboBox beside "Notifications"
+// needs about 229 DIPs): give the window a SetMinimumSize wide enough. In a
+// ScrollPanel use Vertical, or the form gets no width to wrap at.
+func (f *FieldsWidget) SettingsRows() *FieldsWidget {
+	f.change(func() { f.settings, f.stacked = true, false })
 	return f
 }
 
 // Gap sets the space between rows, and between the label column and the
 // control column, in DIPs; stacked, between a label and its control. The
 // default is the theme's: 2 units between rows and 3 between the columns,
-// or 1 between a stacked label and its control.
+// or 1 between a stacked label and its control. In SettingsRows the row gap
+// applies on each side of a divider.
 func (f *FieldsWidget) Gap(row, col int) *FieldsWidget {
 	f.change(func() { f.rowGap, f.colGap, f.gapSet = float32(max(row, 0)), float32(max(col, 0)), true })
 	return f
@@ -116,17 +135,26 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			}
 		})
 	}
-	return ui.Grid(c).ColumnTracks(ui.FitContent(), ui.Fr(1)).GapX(colGap).GapY(rowGap).Children(func() {
+	tracks := []ui.Track{ui.FitContent(), ui.Fr(1)}
+	if f.settings {
+		tracks = []ui.Track{ui.Fr(1).MinContent(), ui.FitContent()}
+	}
+	return ui.Grid(c).ColumnTracks(tracks...).GapX(colGap).GapY(rowGap).Children(func() {
 		// A cell's Align and VAlign are across and along the cell, not a
 		// box's axes: build the cells as for a row, whose cross axis is vertical.
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()
+		first := true
 		for _, r := range f.rows {
 			if r.w.base().hidden {
 				f.hold(r)
 				continue
 			}
+			if f.settings && !first {
+				ui.Divider(c.Key(fieldRule(r.label.id))).ColumnSpan(2)
+			}
+			first = false
 			r.underline(c)
 			e := render(c, r.label) // holds a hidden label
 			if r.key != 0 {
@@ -140,7 +168,17 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					e.AlignSelf(ui.Center)
 				}
 			}
-			place(render(c, r.w).NamedBy(e), r.w, ui.Stretch)
+			def := ui.Stretch
+			if f.settings {
+				def = ui.End
+			}
+			ce := render(c, r.w).NamedBy(e)
+			place(ce, r.w, def)
+			// A control keeps its own height next to a wrapped label, and sits
+			// at its middle, as the label does.
+			if f.settings && r.w.base().place.valign == 0 && !fillsAcross(r.w) {
+				ce.AlignSelf(ui.Center)
+			}
 		}
 	})
 }

@@ -462,6 +462,31 @@ widget.VBox(4).Add(widget.Label("Name").Align(widget.Start), nameBox)
 widget.Fields().Stacked().Row("Name", nameBox)
 ```
 
+`SettingsRows()` lays the form out as a page of settings: the label takes the
+width the control leaves and wraps, the control keeps its own size at the right
+edge (its `Align` overrides), and a divider separates each row from the next.
+Dividers are always on. A hidden control takes its label and its divider with
+it, so there is never a double or a trailing one. The row gap applies on
+each side of a divider. Of `Stacked` and `SettingsRows`, the last call wins.
+Description lines under a label and full-width rows are not part of it.
+
+A control keeps its own size, centered on a wrapped label. A `ProgressBar` and
+an empty `ListBox` get no width in the fit column, and a `ListBox` with items or
+a table a narrow one: give them `SetSize`, or use `Stacked` for multi-line boxes
+and tables. The label column is no narrower than its longest word, so in a
+narrow window the controls are pushed toward or past the right edge, by a long
+word and by ordinary ones alike (a `ComboBox` beside "Notifications" needs about
+229 DIPs): give the window a `SetMinimumSize` wide enough. Only as a form's
+direct content does free height go to the rows (in a `VBox`, `Card` or
+`GroupBox` the rows keep their height). In a `ScrollPanel` use `.Vertical()`:
+the both-ways panel gives the form no width to wrap at.
+
+```go
+widget.Fields().SettingsRows().
+	Row("Notifications", widget.Switch()).
+	Row("Name shown to others", widget.TextBox())
+```
+
 ## Styles
 
 A `widget.Style` is a set of properties, made once and shared by as many
@@ -918,7 +943,8 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   at least as high as the panel, so a root that `Expand()`s takes the room.
   A dialog of height 0 fits the whole content of a `Vertical` panel. A button
   bar outside the panel stays in view when the panel is bounded: at a fixed
-  height, in a box that grows, or when the fit is below the screen. A height-0
+  height with every box around the panel growing (`Expand`), or when the fit
+  stays below the screen. A height-0
   dialog taller than the screen scrolls as a whole, the bar included. A
   sidebar's or a tab's page already scrolls: it needs no panel. Lists, tables
   and trees scroll themselves: do not put them in a `ScrollPanel` (a
