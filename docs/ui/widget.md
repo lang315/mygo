@@ -1061,7 +1061,9 @@ it too, and a yes quits again; it asks once at a time), `Close`. A window
 that closed shows again with `Show`, and `Native()` is nil while it is not
 shown.
 `UseHeaderBar(subtitle)`, before `Show`, draws the title bar with `ui` and
-returns a `*HeaderBarWidget` with `PackStart` and `PackEnd`. Under a Wayland
+returns a `*HeaderBarWidget` with `PackStart` and `PackEnd`. The bar is 32 DIPs
+high (the platform's title bar height, if higher) and grows to hold a subtitle or a
+child taller than the bar; its children are centered. Under a Wayland
 compositor that decorates windows (Sway, KWin), the compositor's title bar
 shows above the header bar; `ClientDecorations(true)` on the header bar,
 before `Show`, makes the header bar the only one, with the desktop's window

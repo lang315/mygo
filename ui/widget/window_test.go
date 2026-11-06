@@ -1,12 +1,14 @@
 package widget
 
 import (
+	"image/color"
 	"sync"
 	"testing"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/ui"
 )
 
 // lastFake returns the fake of the window shown last.
@@ -281,4 +283,98 @@ func TestCloseWhileShowMakesTheWindow(t *testing.T) {
 	defer off()
 	w.Show()
 	waitClosed(t, w)
+}
+
+// redBounds is the box of the pure red pixels of the frame (the picture).
+func redBounds(t *testing.T, tt *ui.Tester) ui.Rect {
+	t.Helper()
+	img := tt.Image()
+	minX, minY, maxX, maxY := 1<<30, 1<<30, -1, -1
+	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+			if p := img.RGBAAt(x, y); p.R == 255 && p.G == 0 && p.B == 0 {
+				minX, minY, maxX, maxY = min(minX, x), min(minY, y), max(maxX, x), max(maxY, y)
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("no red picture in the frame")
+	}
+	return ui.Rect{X: float32(minX), Y: float32(minY), W: float32(maxX - minX + 1), H: float32(maxY - minY + 1)}
+}
+
+func TestHeaderBarGrowsToHoldTitleAndSubtitle(t *testing.T) {
+	f := NewForm("Title", 800, 600).SetContent(Label("content"))
+	f.UseHeaderBar("subtitle").PackStart(PictureBox(testPNG(t, color.RGBA{255, 0, 0, 255}), 32, 32))
+	tt := formTester(t, f)
+	title, sub, content := find(t, tt, "Title"), find(t, tt, "subtitle"), find(t, tt, "content")
+	if title.Y <= 0 {
+		t.Fatalf("the title at %v sits against the window's top edge", title)
+	}
+	if bottom := sub.Y + sub.H; bottom >= content.Y {
+		t.Fatalf("the subtitle ends at %v, not above the content at %v", bottom, content.Y)
+	}
+	pic := redBounds(t, tt)
+	barH := content.Y // the content starts where the bar ends (up to its padding)
+	if pic.Y <= 0 || pic.Y+pic.H >= barH {
+		t.Fatalf("the picture %v is not inside the bar of height ~%v", pic, barH)
+	}
+	// Centered on the text column, as on the bar's middle.
+	if mid, textMid := pic.Y+pic.H/2, (title.Y+sub.Y+sub.H)/2; mid < textMid-1 || mid > textMid+1 {
+		t.Fatalf("the picture's middle %v is not the text's middle %v", mid, textMid)
+	}
+}
+
+// The child is a picture of the bar's own height, which needs no font: a
+// Button is 29.3 high on macOS and 32.6 on Windows, whose font differs.
+func TestHeaderBarWithoutSubtitleKeepsItsHeight(t *testing.T) {
+	f := NewForm("Title", 800, 600).SetContent(Label("content"))
+	f.UseHeaderBar("").PackEnd(PictureBox(testPNG(t, color.RGBA{0, 0, 255, 255}), 32, 32))
+	tt := formTester(t, f)
+	if content := find(t, tt, "content"); content.Y != 32 {
+		t.Fatalf("a bar with no subtitle grew: the content starts at %v", content.Y)
+	}
+}
+
+func TestFitCountsAGrownHeaderBar(t *testing.T) {
+	height := func(sub string) float32 {
+		f := NewForm("Title", 800, 600).SetContent(Label("content"))
+		f.UseHeaderBar(sub)
+		return ui.View(f.view).MeasureHeight(800, 1)
+	}
+	if plain, tall := height(""), height("subtitle"); tall <= plain {
+		t.Fatalf("a fitted window with a subtitle is %v high, one without %v", tall, plain)
+	}
+}
+
+// A fitted window measures without a title bar, so the bar must not depend on
+// the inset the real one has: a title or subtitle that wraps there would cut the
+// content.
+func TestHeaderBarHeightDoesNotDependOnTheTitleBarInset(t *testing.T) {
+	long := "A very long text that does not fit the narrow window at all, nor the next line of it, nor the one after"
+	for _, c := range []struct{ name, title, sub string }{{"title", long, ""}, {"subtitle", "T", long}} {
+		contentY := func(inset float32) float32 {
+			f := NewForm(c.title, 400, 600).SetContent(Label("content"))
+			f.UseHeaderBar(c.sub)
+			tt := ui.NewTester(f.view, 400, 600)
+			tt.SetTitleBar(ui.TitleBar{Height: 32, Right: inset})
+			tt.Frame()
+			return find(t, tt, "content").Y
+		}
+		with, without := contentY(138), contentY(0)
+		if with != without {
+			t.Fatalf("long %s: the content starts at %v with a title bar's inset, %v without (a fitted window cuts the difference)", c.name, with, without)
+		}
+	}
+}
+
+func TestHeaderBarLongTitleKeepsItsHeight(t *testing.T) {
+	f := NewForm("A very long title that does not fit the narrow window at all", 200, 600).SetContent(Label("content"))
+	f.UseHeaderBar("")
+	tt := ui.NewTester(f.view, 200, 600)
+	tt.SetTitleBar(ui.TitleBar{Height: 32, Right: 138})
+	tt.Frame()
+	if content := find(t, tt, "content"); content.Y != 32 {
+		t.Fatalf("a long title grew the bar: the content starts at %v", content.Y)
+	}
 }
