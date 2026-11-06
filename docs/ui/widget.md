@@ -943,7 +943,8 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   at least as high as the panel, so a root that `Expand()`s takes the room.
   A dialog of height 0 fits the whole content of a `Vertical` panel. A button
   bar outside the panel stays in view when the panel is bounded: at a fixed
-  height, in a box that grows, or when the fit is below the screen. A height-0
+  height with every box around the panel growing (`Expand`), or when the fit
+  stays below the screen. A height-0
   dialog taller than the screen scrolls as a whole, the bar included. A
   sidebar's or a tab's page already scrolls: it needs no panel. Lists, tables
   and trees scroll themselves: do not put them in a `ScrollPanel` (a

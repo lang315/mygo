@@ -137,14 +137,14 @@ func TestDialogSetMinimumSizeReturnsTheDialog(t *testing.T) {
 }
 
 // reachable fails the test unless the control labeled label can be scrolled
-// into the window of dt: it is in view now, or a wheel turn at one of the
-// points brings it there.
+// into the window of dt: it is in view now (a clipped control comes back with
+// no height), or turns of the wheel over the middle of the window bring it there.
 func reachable(t *testing.T, dt *DialogTester, label string) {
 	t.Helper()
 	tt := dt.Tester.Tester
 	in := func() bool {
 		r, ok := tt.Find(label)
-		return ok && r.Y >= 0 && r.Y+r.H <= float32(dt.h)
+		return ok && r.H > 0 && r.Y >= 0 && r.Y+r.H <= float32(dt.h)
 	}
 	for i := 0; i < 60 && !in(); i++ {
 		tt.Scroll(250, 100, 0, 400)
