@@ -325,9 +325,11 @@ func TestHeaderBarGrowsToHoldTitleAndSubtitle(t *testing.T) {
 	}
 }
 
+// The child is a picture of the bar's own height, which needs no font: a
+// Button is 29.3 high on macOS and 32.6 on Windows, whose font differs.
 func TestHeaderBarWithoutSubtitleKeepsItsHeight(t *testing.T) {
 	f := NewForm("Title", 800, 600).SetContent(Label("content"))
-	f.UseHeaderBar("").PackEnd(Button("x"))
+	f.UseHeaderBar("").PackEnd(PictureBox(testPNG(t, color.RGBA{0, 0, 255, 255}), 32, 32))
 	tt := formTester(t, f)
 	if content := find(t, tt, "content"); content.Y != 32 {
 		t.Fatalf("a bar with no subtitle grew: the content starts at %v", content.Y)
