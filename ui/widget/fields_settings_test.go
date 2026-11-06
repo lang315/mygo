@@ -79,8 +79,32 @@ func TestSettingsRowsLongLabelWraps(t *testing.T) {
 	if l.H < 2*one {
 		t.Errorf("label %v is one line (%v high)", l, one)
 	}
-	if c := find(t, tt.Tester, "c1"); c.X+60 > 301 || c.X < l.X+l.W-1 && c.X < 300-60-1 {
-		t.Errorf("control at %v overlaps the label %v", c, l)
+}
+
+// The label stops before the control, whatever its longest word: the label
+// column is no narrower than its content.
+func TestSettingsRowsLabelEndsBeforeTheControl(t *testing.T) {
+	tt := NewTester(t, Fields().SettingsRows().Row("Name shown to others", TextBox()), 200, 300)
+	l := find(t, tt.Tester, "Name shown to others")
+	if c := tt.Find(ByRole(ui.RoleTextField)).Bounds(); l.X+l.W > c.X+0.5 {
+		t.Errorf("the label %v runs under the control %v", l, c)
+	}
+}
+
+// A real control next to a wrapped label keeps the height it has alone and
+// sits at the label's middle.
+func TestSettingsRowsControlKeepsItsHeightNextToAWrappedLabel(t *testing.T) {
+	alone := NewTester(t, Fields().SettingsRows().Row("Name", TextBox()), 400, 300).Find(ByRole(ui.RoleTextField)).Bounds()
+	tt := NewTester(t, Fields().SettingsRows().Row(longLine, TextBox()), 400, 300)
+	l, c := find(t, tt.Tester, longLine), tt.Find(ByRole(ui.RoleTextField)).Bounds()
+	if l.H <= alone.H {
+		t.Fatalf("label %v is not taller than the control alone %v: make the label longer", l, alone)
+	}
+	if !approx(c.H, alone.H) {
+		t.Errorf("control %v next to the wrapped label, %v alone", c, alone)
+	}
+	if lm, cm := l.Y+l.H/2, c.Y+c.H/2; !approx(lm, cm) {
+		t.Errorf("label's middle at %v, control's at %v", lm, cm)
 	}
 }
 

@@ -466,9 +466,17 @@ widget.Fields().Stacked().Row("Name", nameBox)
 width the control leaves and wraps, the control keeps its own size at the right
 edge (its `Align` overrides), and a divider separates each row from the next.
 Dividers are always on. A hidden control takes its label and its divider with
-it, so there is never a double or a trailing one. Of `Stacked` and
-`SettingsRows`, the last call wins. Description lines under a label and
-full-width rows are not part of it.
+it, so there is never a double or a trailing one. The row gap applies on
+each side of a divider. Of `Stacked` and `SettingsRows`, the last call wins.
+Description lines under a label and full-width rows are not part of it.
+
+A control keeps its own size, centered on a wrapped label. Controls that
+fill (`ProgressBar`, an empty `ListBox`) collapse to no width in the fit
+column: give them `SetSize`, or use `Stacked` for multi-line boxes and tables.
+A word with no spaces wider than the window pushes the control off the right
+edge. As a form's direct content (in a card or a box), free height goes to the
+rows, as it does for any `Fields`. In a `ScrollPanel` use `.Vertical()`: the
+both-ways panel gives the form no width to wrap at.
 
 ```go
 widget.Fields().SettingsRows().

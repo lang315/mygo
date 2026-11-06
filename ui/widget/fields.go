@@ -69,7 +69,11 @@ func (f *FieldsWidget) Stacked() *FieldsWidget {
 // width the control leaves and wraps, the control sits at the right edge in
 // its own size (a control's Align overrides), and a divider separates one row
 // from the next. A hidden control takes its label and its divider away. Of
-// Stacked and SettingsRows, the last call wins.
+// Stacked and SettingsRows, the last call wins. A control that fills (a
+// ProgressBar, a ListBox, a table) has no width in the fit column: give it
+// SetSize, or use Stacked. A word wider than the window pushes the control off
+// the right edge. In a ScrollPanel use Vertical, or the form gets no width to
+// wrap at.
 func (f *FieldsWidget) SettingsRows() *FieldsWidget {
 	f.change(func() { f.settings, f.stacked = true, false })
 	return f
@@ -78,7 +82,8 @@ func (f *FieldsWidget) SettingsRows() *FieldsWidget {
 // Gap sets the space between rows, and between the label column and the
 // control column, in DIPs; stacked, between a label and its control. The
 // default is the theme's: 2 units between rows and 3 between the columns,
-// or 1 between a stacked label and its control.
+// or 1 between a stacked label and its control. In SettingsRows the row gap
+// applies on each side of a divider.
 func (f *FieldsWidget) Gap(row, col int) *FieldsWidget {
 	f.change(func() { f.rowGap, f.colGap, f.gapSet = float32(max(row, 0)), float32(max(col, 0)), true })
 	return f
@@ -130,7 +135,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 	}
 	tracks := []ui.Track{ui.FitContent(), ui.Fr(1)}
 	if f.settings {
-		tracks = []ui.Track{ui.Fr(1), ui.FitContent()}
+		tracks = []ui.Track{ui.Fr(1).MinContent(), ui.FitContent()}
 	}
 	return ui.Grid(c).ColumnTracks(tracks...).GapX(colGap).GapY(rowGap).Children(func() {
 		// A cell's Align and VAlign are across and along the cell, not a
@@ -165,7 +170,13 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			if f.settings {
 				def = ui.End
 			}
-			place(render(c, r.w).NamedBy(e), r.w, def)
+			ce := render(c, r.w).NamedBy(e)
+			place(ce, r.w, def)
+			// A control keeps its own height next to a wrapped label, and sits
+			// at its middle, as the label does.
+			if f.settings && r.w.base().place.valign == 0 && !fillsAcross(r.w) {
+				ce.AlignSelf(ui.Center)
+			}
 		}
 	})
 }
