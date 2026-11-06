@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"runtime"
+
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
 )
@@ -15,13 +17,17 @@ const (
 	Error
 )
 
-// kindIcons are Lucide's info, triangle-alert, circle-help and circle-x
-// (ISC license).
+// kindIcons are the message dialogs' icons: filled, in their own colors,
+// the same on every platform and theme, drawn in a 32 by 32 box.
 var kindIcons = [...]*ui.SVG{
-	Info:     lucide(`<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`),
-	Warning:  lucide(`<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>`),
-	Question: lucide(`<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>`),
-	Error:    lucide(`<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>`),
+	Info:     filledIcon(`<circle cx="16" cy="16" r="15" fill="#1976d2"/><circle cx="16" cy="9.5" r="2.2" fill="#fff"/><path d="M16 14.5v9" stroke="#fff" stroke-width="3.4" stroke-linecap="round" fill="none"/>`),
+	Warning:  filledIcon(`<path d="M16 3 30 28H2z" fill="#fbc02d" stroke="#fbc02d" stroke-width="3" stroke-linejoin="round"/><path d="M16 11.5v8" stroke="#000" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24" r="1.9"/>`),
+	Question: filledIcon(`<circle cx="16" cy="16" r="15" fill="#1976d2"/><path d="M11.5 12.5a4.5 4.5 0 1 1 6.5 4c-1.6.9-2 1.9-2 3.3" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24.5" r="2" fill="#fff"/>`),
+	Error:    filledIcon(`<circle cx="16" cy="16" r="15" fill="#d32f2f"/><path d="m10.5 10.5 11 11m0-11-11 11" stroke="#fff" stroke-width="3.4" stroke-linecap="round" fill="none"/>`),
+}
+
+func filledIcon(shapes string) *ui.SVG {
+	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">` + shapes + `</svg>`))
 }
 
 // lucide wraps the shapes of a Lucide icon in its svg element.
@@ -52,7 +58,7 @@ func (i *IconWidget) build(c *ui.Context) ui.Element {
 	return e
 }
 
-// kindIconWidget is a message dialog's icon, in its kind's theme color.
+// kindIconWidget is a message dialog's icon, in its kind's own colors.
 type kindIconWidget struct {
 	common[kindIconWidget]
 	kind Kind
@@ -65,22 +71,29 @@ func kindIcon(k Kind) *kindIconWidget {
 }
 
 func (i *kindIconWidget) build(c *ui.Context) ui.Element {
-	t := c.Theme()
-	col := t.Accent
-	switch i.kind {
-	case Warning:
-		col = t.Warning
-	case Error:
-		col = t.Danger
-	}
-	return ui.Icon(c, kindIcons[i.kind]).FontSize(32).TextColor(col)
+	return ui.Image(c, kindIcons[i.kind]).Size(32, 32)
 }
 
 // message runs a dialog over parent showing text, input under it if any,
 // and buttons at the bottom, the last the default. It returns the index of
 // the button chosen, -1 when the dialog closed otherwise. wire, if any,
 // gets the default button and a function choosing it.
-func message(parent *Form, kind Kind, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
+func message(parent *Form, kind Kind, minHeight int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
+	d, chosen := messageDialog(parent, kind, minHeight, title, text, input, wire, buttons...)
+	d.Run()
+	return chosen()
+}
+
+// captionShowsTitle is whether the window of a dialog has a caption that
+// shows its title: a dialog with a parent is a sheet on macOS, which has
+// none, and a browser sets only the page's title.
+func captionShowsTitle(goos string, hasParent bool) bool {
+	return goos != "js" && !(goos == "darwin" && hasParent)
+}
+
+// messageDialog makes message's dialog, and the function that tells which
+// button was chosen once it closed.
+func messageDialog(parent *Form, kind Kind, minHeight int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) (*Dialog, func() int) {
 	chosen := -1
 	// The first answer wins: a second, queued while the first ran, must
 	// not change what Run's caller reads.
@@ -97,46 +110,54 @@ func message(parent *Form, kind Kind, title, text string, input Control, wire fu
 		bar.Add(ok)
 	}
 	ok.Suggested()
-	body := VBox(8).VAlign(Center) // a box stretches across a row: its text stays beside the icon
-	if text != "" {
-		body.Add(Label(text))
+	// The text keeps the icon's height at least, centred in it: one line sits
+	// beside the icon's middle, more lines leave the icon at the top.
+	body := VBox(8)
+	if input != nil {
+		body.VAlign(Start) // the label and the input start at the icon's top
 	}
-	height := 200
+	if text != "" {
+		body.Pack(Label(text).Align(Start), input == nil, false)
+	}
 	if input != nil {
 		body.Add(input)
-		height = 240
 	} else {
 		ok.Focus() // Enter or Space answers with the default
 	}
 	content := VBox(12).
-		Pack(HBox(12).Add(kindIcon(kind)).Pack(body, true, true), true, true).
+		Pack(HBox(12).Add(kindIcon(kind).VAlign(Start)).Pack(body, true, true), true, true).
 		Add(bar)
-	d = NewDialog(parent, title, "", 420, height, content)
+	d = NewDialog(parent, title, "", 420, 0, content)
+	if minHeight > 0 {
+		d.SetMinimumSize(0, minHeight)
+	}
+	d.title.SetVisible(!captionShowsTitle(runtime.GOOS, parent != nil))
+	d.change(func() { d.fixedFrame = true })
+	d.SetResizable(false)
 	if wire != nil {
 		last := len(buttons) - 1
 		wire(ok, func() { answer(last); d.Close() })
 	}
-	d.Run()
-	return chosen
+	return d, func() int { return chosen }
 }
 
 // Alert shows text in a dialog over parent (nil for none) and returns when
 // the user dismisses it. It blocks as Dialog.Run does.
 func Alert(parent *Form, kind Kind, title, text string) {
-	message(parent, kind, title, text, nil, nil, l10n.Ok())
+	message(parent, kind, 0, title, text, nil, nil, l10n.Ok())
 }
 
 // Confirm asks a question in a dialog over parent and reports whether the
-// user chose OK; Cancel and closing the dialog say no.
+// user chose Yes; No, which is the default, and closing the dialog say no.
 func Confirm(parent *Form, kind Kind, title, text string) bool {
-	return message(parent, kind, title, text, nil, nil, l10n.Cancel(), l10n.Ok()) == 1
+	return message(parent, kind, 0, title, text, nil, nil, l10n.Yes(), l10n.No()) == 0
 }
 
 // InputString asks for a line of text, label above an entry holding value,
 // and returns it with ok true for OK or Enter.
 func InputString(parent *Form, kind Kind, title, label, value string) (s string, ok bool) {
 	e := TextBox().SetText(value).Focus()
-	n := message(parent, kind, title, label, e, func(_ *ButtonWidget, choose func()) { e.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
+	n := message(parent, kind, 0, title, label, e, func(_ *ButtonWidget, choose func()) { e.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return e.Text(), n == 1
 }
 
@@ -144,15 +165,16 @@ func InputString(parent *Form, kind Kind, title, label, value string) (s string,
 // starting at value.
 func InputInt(parent *Form, kind Kind, title, label string, min, max, step, value int) (n int, ok bool) {
 	s := NumericUpDown(float64(min), float64(max), float64(step)).SetValue(float64(value)).Focus()
-	i := message(parent, kind, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
+	i := message(parent, kind, 0, title, label, s, func(_ *ButtonWidget, choose func()) { s.OnEnter(choose) }, l10n.Cancel(), l10n.Ok())
 	return s.Int(), i == 1
 }
 
 // InputSelect asks to choose one of opts and returns its Value. OK stays
-// disabled until a choice is made.
+// disabled until a choice is made. Its dialog fits its content, no lower
+// than 240 DIPs: the open list is drawn inside the window.
 func InputSelect(parent *Form, kind Kind, title, label string, opts ...Option) (value string, ok bool) {
 	c := ComboBox(opts...)
-	n := message(parent, kind, title, label, c, func(okButton *ButtonWidget, _ func()) {
+	n := message(parent, kind, 240, title, label, c, func(okButton *ButtonWidget, _ func()) {
 		okButton.SetDisabled(true)
 		c.OnChange(func() { okButton.SetDisabled(c.Value() == "") })
 	}, l10n.Cancel(), l10n.Ok())

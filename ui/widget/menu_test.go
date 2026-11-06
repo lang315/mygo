@@ -102,7 +102,7 @@ func TestMenuItemOpensAConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	press(t, waitFake(t, "Really delete?"), "OK")
+	press(t, waitFake(t, "Really delete?"), "Yes")
 	if !received(t, answer) {
 		t.Fatal("Confirm in a menu handler returned false")
 	}

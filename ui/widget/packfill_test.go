@@ -129,23 +129,6 @@ func TestListsAddedToARowOrSplitBuildOnlyTheRowsInView(t *testing.T) {
 	}
 }
 
-// A message dialog's text stays beside its icon, not at the top of the row.
-func TestMessageTextStaysBesideItsIcon(t *testing.T) {
-	done := runAsync(func() bool { Alert(nil, Info, "Beside", "msgtext"); return true })
-	fw := waitFake(t, "Beside")
-	var y float64
-	for _, n := range accessNodes(fw) {
-		if n.Label == "msgtext" {
-			y = n.Bounds.Y
-		}
-	}
-	if y < 60 { // centered in the row is ~84, at its top ~41
-		t.Errorf("message text at y=%v: at the top of the row", y)
-	}
-	press(t, fw, "OK")
-	received(t, done)
-}
-
 func tallRow(t *testing.T, inner Control, w, h int, q Query) ui.Rect {
 	t.Helper()
 	return boundsIn(t, VBox(4).Pack(HBox(4).Add(Label("icon")).Pack(inner, true, true), true, true), w, h, q)

@@ -2810,6 +2810,34 @@ func (msgs Messages) ColorName(color string) string {
 	return Catalog.Format(msgs.locale, "colorName", map[string]any{"color": color})
 }
 
+// Yes says "Yes"
+// in the language the app shows.
+//
+// The button of a question dialog that agrees.
+func Yes() string { return In(i18n.Locale()).Yes() }
+
+// Yes says "Yes"
+// in the language of msgs.
+//
+// The button of a question dialog that agrees.
+func (msgs Messages) Yes() string {
+	return Catalog.Format(msgs.locale, "yes", nil)
+}
+
+// No says "No"
+// in the language the app shows.
+//
+// The button of a question dialog that declines; it is the default.
+func No() string { return In(i18n.Locale()).No() }
+
+// No says "No"
+// in the language of msgs.
+//
+// The button of a question dialog that declines; it is the default.
+func (msgs Messages) No() string {
+	return Catalog.Format(msgs.locale, "no", nil)
+}
+
 // Ok says "OK"
 // in the language the app shows.
 //

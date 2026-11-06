@@ -192,6 +192,8 @@
   "saveManyChanges": "Do you want to save the changes to the following {n} documents?",
   "documentFailed": "{action, select, opened {The document “{name}” could not be opened.} renamed {The document “{name}” could not be renamed.} moved {The document “{name}” could not be moved.} reverted {The document “{name}” could not be reverted.} other {The document “{name}” could not be saved.}}",
   "colorName": "{color, select, red {Red} orange {Orange} yellow {Yellow} green {Green} teal {Teal} blue {Blue} indigo {Indigo} purple {Purple} pink {Pink} brown {Brown} gray {Gray} black {Black} other {{color}}}",
+  "yes": "Yes",
+  "no": "No",
   "ok": "OK",
   "open": "Open",
   "selectFolder": "Select Folder",

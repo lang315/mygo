@@ -11,18 +11,18 @@ import (
 
 func TestConfirmOK(t *testing.T) {
 	got := runAsync(func() bool { return Confirm(nil, Question, "Delete?", "It goes for good.") })
-	press(t, waitFake(t, "Delete?"), "OK")
+	press(t, waitFake(t, "Delete?"), "Yes")
 	if !received(t, got) {
-		t.Fatal("OK returned false")
+		t.Fatal("Yes returned false")
 	}
 }
 
 // Cancel and the close button both say no, once.
 func TestConfirmCancelAndCloseSayNo(t *testing.T) {
 	got := runAsync(func() bool { return Confirm(nil, Warning, "Cancel?", "") })
-	press(t, waitFake(t, "Cancel?"), "Cancel")
+	press(t, waitFake(t, "Cancel?"), "No")
 	if received(t, got) {
-		t.Fatal("Cancel returned true")
+		t.Fatal("No returned true")
 	}
 	got = runAsync(func() bool { return Confirm(nil, Warning, "Closed?", "") })
 	fw := waitFake(t, "Closed?")
@@ -125,11 +125,11 @@ func TestConfirmFirstAnswerWins(t *testing.T) {
 	busy, release := make(chan struct{}), make(chan struct{})
 	Post(func() { close(busy); <-release })
 	<-busy
-	press(t, fw, "Cancel")
-	press(t, fw, "OK")
+	press(t, fw, "No")
+	press(t, fw, "Yes")
 	close(release)
 	if received(t, got) {
-		t.Fatal("OK after Cancel won")
+		t.Fatal("Yes after No won")
 	}
 }
 

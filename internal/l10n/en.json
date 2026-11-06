@@ -923,6 +923,14 @@
       }
     }
   },
+  "yes": "Yes",
+  "@yes": {
+    "description": "The button of a question dialog that agrees."
+  },
+  "no": "No",
+  "@no": {
+    "description": "The button of a question dialog that declines; it is the default."
+  },
   "ok": "OK",
   "@ok": {
     "description": "The button of a dialog that only tells something, and of a page's alert, confirm and prompt."
