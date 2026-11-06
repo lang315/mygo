@@ -258,3 +258,31 @@ func TestInputSelectListFitsTheWindow(t *testing.T) {
 	key(fw, platform.KeyEscape)
 	received(t, got)
 }
+
+// A long label makes InputSelect's dialog taller, with the combo and OK
+// still inside the window.
+func TestInputSelectLongLabelKeepsComboAndOKInWindow(t *testing.T) {
+	got := runAsync(func() answer[string] {
+		s, ok := InputSelect(nil, Question, "Long", strings.Repeat("Choose the one that suits this machine best. ", 14), Option{"a", "opta"})
+		return answer[string]{s, ok}
+	})
+	fw := waitFake(t, "Long")
+	if fw.Opts.Height <= 240 {
+		t.Errorf("height %d: a long label did not make it taller than 240", fw.Opts.Height)
+	}
+	frame(fw)
+	seen := 0
+	for _, n := range accessNodes(fw) {
+		if n.Label == "OK" || n.Label == "" { // the combo has no label
+			seen++
+		}
+		if (n.Label == "OK" || n.Label == "Cancel" || n.Label == "") && n.Bounds.Y+n.Bounds.H > float64(fw.Opts.Height) {
+			t.Errorf("%q (%v) ends at %v, below the window's %d", n.Label, n.Role, n.Bounds.Y+n.Bounds.H, fw.Opts.Height)
+		}
+	}
+	if seen != 2 {
+		t.Errorf("found %d of the combo and OK in %q", seen, labels(fw))
+	}
+	press(t, fw, "Cancel")
+	received(t, got)
+}

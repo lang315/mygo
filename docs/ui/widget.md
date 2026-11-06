@@ -229,12 +229,14 @@ got := <-result
 
 Ready-made dialogs, as a WinForms `MessageBox` looks: the window's caption
 shows the title (the dialog shows it itself only where there is no caption:
-a dialog with a parent on macOS, which is a sheet, and in browsers), only
-the close button shows (no minimize or maximize, no resizing), and the
-height fits the text at 420 DIPs wide, except `InputSelect`'s, which keeps
-a fixed height for its open list. Each has a filled icon for its `Kind`
-(`Info`, `Warning`, `Question`, `Error`), drawn the same on every platform
-and theme. Their buttons are in the app's language:
+a dialog with a parent on macOS, which is a sheet, and in browsers), the
+window cannot be minimized, maximized or resized where the platform
+honours that (a macOS window without a parent still draws its yellow and
+green buttons, disabled; Linux may still show minimize), and the height
+fits the text at 420 DIPs wide; `InputSelect`'s fits too, but is no lower
+than 240 for its open list. Each has a filled icon for its `Kind` (`Info`,
+`Warning`, `Question`, `Error`), drawn the same on every platform and
+theme. Their buttons are in the app's language:
 
 - `Alert(parent, kind, title, text)` waits for OK.
 - `ColorDialog()`: a color picker with OK and Cancel; see [ColorDialog](widget/colordialog.md).

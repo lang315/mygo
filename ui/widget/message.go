@@ -78,8 +78,8 @@ func (i *kindIconWidget) build(c *ui.Context) ui.Element {
 // and buttons at the bottom, the last the default. It returns the index of
 // the button chosen, -1 when the dialog closed otherwise. wire, if any,
 // gets the default button and a function choosing it.
-func message(parent *Form, kind Kind, height int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
-	d, chosen := messageDialog(parent, kind, height, title, text, input, wire, buttons...)
+func message(parent *Form, kind Kind, minHeight int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) int {
+	d, chosen := messageDialog(parent, kind, minHeight, title, text, input, wire, buttons...)
 	d.Run()
 	return chosen()
 }
@@ -93,7 +93,7 @@ func captionShowsTitle(goos string, hasParent bool) bool {
 
 // messageDialog makes message's dialog, and the function that tells which
 // button was chosen once it closed.
-func messageDialog(parent *Form, kind Kind, height int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) (*Dialog, func() int) {
+func messageDialog(parent *Form, kind Kind, minHeight int, title, text string, input Control, wire func(ok *ButtonWidget, choose func()), buttons ...string) (*Dialog, func() int) {
 	chosen := -1
 	// The first answer wins: a second, queued while the first ran, must
 	// not change what Run's caller reads.
@@ -113,6 +113,9 @@ func messageDialog(parent *Form, kind Kind, height int, title, text string, inpu
 	// The text keeps the icon's height at least, centred in it: one line sits
 	// beside the icon's middle, more lines leave the icon at the top.
 	body := VBox(8)
+	if input != nil {
+		body.VAlign(Start) // the label and the input start at the icon's top
+	}
 	if text != "" {
 		body.Pack(Label(text).Align(Start), input == nil, false)
 	}
@@ -124,7 +127,10 @@ func messageDialog(parent *Form, kind Kind, height int, title, text string, inpu
 	content := VBox(12).
 		Pack(HBox(12).Add(kindIcon(kind).VAlign(Start)).Pack(body, true, true), true, true).
 		Add(bar)
-	d = NewDialog(parent, title, "", 420, height, content)
+	d = NewDialog(parent, title, "", 420, 0, content)
+	if minHeight > 0 {
+		d.SetMinimumSize(0, minHeight)
+	}
 	d.title.SetVisible(!captionShowsTitle(runtime.GOOS, parent != nil))
 	d.change(func() { d.fixedFrame = true })
 	d.SetResizable(false)
@@ -164,8 +170,8 @@ func InputInt(parent *Form, kind Kind, title, label string, min, max, step, valu
 }
 
 // InputSelect asks to choose one of opts and returns its Value. OK stays
-// disabled until a choice is made. Its dialog keeps a fixed height, which
-// the open list needs: it is drawn inside the window.
+// disabled until a choice is made. Its dialog fits its content, no lower
+// than 240 DIPs: the open list is drawn inside the window.
 func InputSelect(parent *Form, kind Kind, title, label string, opts ...Option) (value string, ok bool) {
 	c := ComboBox(opts...)
 	n := message(parent, kind, 240, title, label, c, func(okButton *ButtonWidget, _ func()) {
