@@ -136,41 +136,76 @@ func TestDialogSetMinimumSizeReturnsTheDialog(t *testing.T) {
 	}
 }
 
-// A dialog of height 0 taller than the work area does not scroll as a whole
-// when its root holds a scroll panel: the panel scrolls, and the button bar
-// beside it stays in view.
-func TestClampedDialogKeepsTheButtonBarBesideAVerticalPanel(t *testing.T) {
-	d := NewDialog(nil, "t", "", 500, 300, VBox(0).Add(ScrollPanel(rows(150)).Vertical(), Button("OK")).Expand())
-	dt := TestDialog(t, d)
-	d.SetSize(500, 0)
-	dt.Settle()
-	ok := find(t, dt.Tester.Tester, "OK")
-	if ok.Y < 0 || ok.Y+ok.H > float32(dt.h) {
-		t.Fatalf("OK %v is out of the %d high window", ok, dt.h)
+// reachable fails the test unless the control labeled label can be scrolled
+// into the window of dt: it is in view now, or a wheel turn at one of the
+// points brings it there.
+func reachable(t *testing.T, dt *DialogTester, label string) {
+	t.Helper()
+	tt := dt.Tester.Tester
+	in := func() bool {
+		r, ok := tt.Find(label)
+		return ok && r.Y >= 0 && r.Y+r.H <= float32(dt.h)
 	}
-	before := find(t, dt.Tester.Tester, "row 100").Y
-	dt.Tester.Tester.Scroll(250, 50, 0, 300)
-	dt.Frame()
-	if after := find(t, dt.Tester.Tester, "row 100").Y; after >= before {
-		t.Errorf("the panel did not scroll: row 100 at %v, was %v", after, before)
+	for i := 0; i < 60 && !in(); i++ {
+		tt.Scroll(250, 100, 0, 400)
+		dt.Frame()
 	}
-	if again := find(t, dt.Tester.Tester, "OK"); again != ok {
-		t.Errorf("OK moved from %v to %v", ok, again)
+	if !in() {
+		r, _ := tt.Find(label)
+		t.Errorf("%q at %v is out of the %d high window, and scrolling does not bring it in", label, r, dt.h)
 	}
 }
 
-// Same, a sole Sidebar whose page is a Vertical panel: the list stays put.
-func TestClampedDialogKeepsTheSidebarListBesideAVerticalPanelPage(t *testing.T) {
-	sb := Sidebar().Add("a", "Page A", ScrollPanel(rows(150)).Vertical()).Add("b", "Page B", Label("b"))
-	d := NewDialog(nil, "t", "", 500, 300, sb)
+// A height-0 dialog taller than the work area scrolls as a whole: what is
+// below the fold, a button bar included, can be reached, whether the panel is
+// the content, nested in a box, or beside long content, and whether it
+// scrolls both ways or only up and down.
+func TestClampedDialogsWithAScrollPanelStayReachable(t *testing.T) {
+	cases := map[string]func() Control{
+		"panel and bar": func() Control {
+			return VBox(0).Add(ScrollPanel(rows(150)).Vertical(), Button("OK")).Expand()
+		},
+		"panel in a box": func() Control {
+			return VBox(0).Add(VBox(0).Add(ScrollPanel(rows(150)).Vertical()), Button("OK")).Expand()
+		},
+		"long content beside a short panel": func() Control {
+			return VBox(0).Add(rows(150), ScrollPanel(rows(3)).Vertical(), Button("OK")).Expand()
+		},
+		"long content beside a both-ways panel": func() Control {
+			return VBox(0).Add(rows(150), ScrollPanel(rows(3)), Button("OK")).Expand()
+		},
+	}
+	for name, mk := range cases {
+		t.Run(name, func(t *testing.T) {
+			d := NewDialog(nil, "t", "", 500, 300, mk())
+			dt := TestDialog(t, d)
+			d.SetSize(500, 0)
+			dt.Settle()
+			reachable(t, dt, "OK")
+			reachable(t, dt, "row 149")
+		})
+	}
+}
+
+// At a fixed height the button bar outside the panel stays in view, and the
+// panel scrolls.
+func TestFixedHeightDialogKeepsTheButtonBarBesideAVerticalPanel(t *testing.T) {
+	d := NewDialog(nil, "t", "", 500, 300, VBox(0).Add(ScrollPanel(rows(150)).Vertical(), Button("OK")).Expand())
 	dt := TestDialog(t, d)
-	d.SetSize(500, 0)
 	dt.Settle()
-	before := find(t, dt.Tester.Tester, "Page B").Y
-	dt.Tester.Tester.Scroll(300, 50, 0, 300)
+	tt := dt.Tester.Tester
+	ok := find(t, tt, "OK")
+	if ok.Y < 0 || ok.Y+ok.H > float32(dt.h) {
+		t.Fatalf("OK %v is out of the %d high window", ok, dt.h)
+	}
+	before := find(t, tt, "row 100").Y
+	tt.Scroll(250, 50, 0, 300)
 	dt.Frame()
-	if after := find(t, dt.Tester.Tester, "Page B").Y; after != before {
-		t.Errorf("the list scrolled away: Page B at %v, was %v", after, before)
+	if after := find(t, tt, "row 100").Y; after >= before {
+		t.Errorf("the panel did not scroll: row 100 at %v, was %v", after, before)
+	}
+	if again := find(t, tt, "OK"); again != ok {
+		t.Errorf("OK moved from %v to %v", ok, again)
 	}
 }
 

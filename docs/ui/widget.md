@@ -916,12 +916,13 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   `.Vertical()` scrolls up and down only, as a page of a sidebar does: the
   content keeps the panel's width, so its labels wrap there, and it is laid out
   at least as high as the panel, so a root that `Expand()`s takes the room.
-  A dialog of height 0 fits the whole content of a `Vertical` panel; when that
-  is taller than the screen, the panel scrolls and not the dialog, so a button
-  bar outside the panel stays in view (content beside the panel that alone is
-  taller than the screen is cut). Lists, tables and trees scroll themselves:
-  do not put them in a `ScrollPanel` (a `DataGridView` of 20000 rows inside one
-  stops at row 4097).
+  A dialog of height 0 fits the whole content of a `Vertical` panel. A button
+  bar outside the panel stays in view when the panel is bounded: at a fixed
+  height, in a box that grows, or when the fit is below the screen. A height-0
+  dialog taller than the screen scrolls as a whole, the bar included. A
+  sidebar's or a tab's page already scrolls: it needs no panel. Lists, tables
+  and trees scroll themselves: do not put them in a `ScrollPanel` (a
+  `DataGridView` of 20000 rows inside one stops at row 4097).
 - `SplitContainer(first, second)`: two panes with a divider; see [SplitContainer](widget/split-container.md).
 - `TrackBar(min, max)`: a slider; see [TrackBar](widget/trackbar.md).
 - `DomainUpDown(items...)`: arrows over a list of texts; see [DomainUpDown](widget/domainupdown.md).
@@ -1067,7 +1068,8 @@ Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`,
 `SetMinimumSize(w, h)` (the least the user can resize it to, in DIPs, 0 for
 no limit on a side; the window's outer size, the title bar included on macOS
 and Windows; before `Show` too, and kept for the next `Show`; a `Dialog` has
-it too, and a height-0 dialog fits no lower than its minimum height), `Maximize`
+it too, and a height-0 dialog fits no lower than its minimum height, which
+wins over the fit's clamp to the work area), `Maximize`
 (before `Show` too), `Unmaximize`, `SetContent`, `SetMenuBar`,
 `OnClose(func() bool)` (false keeps the window open; quitting the app asks
 it too, and a yes quits again; it asks once at a time), `Close`. A window
