@@ -175,6 +175,8 @@
   "saveManyChanges": "次の {n} 個の書類の変更内容を保存しますか？",
   "documentFailed": "{action, select, opened {書類“{name}”を開けませんでした。} renamed {書類“{name}”の名前を変更できませんでした。} moved {書類“{name}”を移動できませんでした。} reverted {書類“{name}”を復帰できませんでした。} other {書類“{name}”を保存できませんでした。}}",
   "colorName": "{color, select, red {レッド} orange {オレンジ} yellow {イエロー} green {グリーン} teal {ティール} blue {ブルー} indigo {インディゴ} purple {パープル} pink {ピンク} brown {ブラウン} gray {グレイ} black {ブラック} other {{color}}}",
+  "yes": "はい",
+  "no": "いいえ",
   "ok": "OK",
   "open": "開く",
   "selectFolder": "フォルダを選択",

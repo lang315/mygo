@@ -72,7 +72,7 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
 | `Fields` | TableLayoutPanel of labels and controls | `VBox` of a label and a control per row |
 | `VBox`, `HBox` | — | `VBox`, `HBox` |
 | `Label`, `Button`, `RadioGroup` | Label, Button, RadioButton | same |
-| `Alert`, `Confirm` | MessageBox | `Alert`, `Confirm` |
+| `Alert`, `Confirm` | MessageBox (OK; Yes and No) | `Alert`, `Confirm` |
 | `Custom` | UserControl | — |
 | `MenuStrip` (`Form.MenuStrip`) | MenuStrip | `MenuBar` |
 | `MenuBar` (in the content) | MenuStrip docked in the form | — |
@@ -227,15 +227,19 @@ dt.Click("OK")
 got := <-result
 ```
 
-Ready-made dialogs, each with an icon for its `Kind` (`Info`, `Warning`,
-`Question`, `Error`), 420 DIPs wide, their OK and Cancel in the app's
-language:
+Ready-made dialogs, as a WinForms `MessageBox` looks: the window's caption
+shows the title (the dialog does not repeat it), only the close button
+shows (no minimize or maximize, no resizing), and the height fits the text
+at 420 DIPs wide. Each has a filled icon for its `Kind` (`Info`, `Warning`,
+`Question`, `Error`), drawn the same on every platform and theme. Their
+buttons are in the app's language:
 
 - `Alert(parent, kind, title, text)` waits for OK.
 - `ColorDialog()`: a color picker with OK and Cancel; see [ColorDialog](widget/colordialog.md).
 - `FontDialog()`: families, styles, a size and a sample, with OK and Cancel; see [FontDialog](widget/fontdialog.md).
-- `Confirm(parent, kind, title, text) bool`: OK is true; Cancel and closing
-  the dialog are false.
+- `Confirm(parent, kind, title, text) bool`: Yes is true; No, which is the
+  default (it has the focus, and Enter answers it), Escape and closing the
+  dialog are false.
 - `InputString(parent, kind, title, label, value) (string, bool)`,
   `InputInt(parent, kind, title, label, min, max, step, value) (int, bool)`
   and `InputSelect(parent, kind, title, label, options...) (string, bool)`

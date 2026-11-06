@@ -29,6 +29,7 @@ type Form struct {
 	tools         *ToolStripWidget
 	parent        *Form         // a dialog's; nil for a top-level window
 	dialog        bool          // made by NewDialog: Escape asks to close it
+	fixedFrame    bool          // a message dialog's: close button only, as a WinForms MessageBox
 	deletable     bool          // the user may close it
 	win           *mygo.Window  // nil until shown, and again once closed
 	showing       bool          // shown, or being made, and not closed yet
@@ -268,6 +269,8 @@ func (w *Form) show(cancel bool) bool {
 		opts.Parent, opts.Modal = p.win, true
 	}
 	icon, resizable, menu, strip := w.icon, w.resizable, w.menu, w.strip
+	opts.DisableResize = !resizable
+	opts.DisableMinimize, opts.DisableMaximize = w.fixedFrame, w.fixedFrame
 	fit := w.fit
 	mu.Unlock()
 	if fit {

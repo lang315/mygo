@@ -186,6 +186,8 @@
   "saveManyChanges": "Bạn có muốn lưu các thay đổi của {n} tài liệu sau không?",
   "documentFailed": "{action, select, opened {Không thể mở tài liệu “{name}”.} renamed {Không thể đổi tên tài liệu “{name}”.} moved {Không thể di chuyển tài liệu “{name}”.} reverted {Không thể hoàn nguyên tài liệu “{name}”.} other {Không thể lưu tài liệu “{name}”.}}",
   "colorName": "{color, select, red {Đỏ} orange {Cam} yellow {Vàng} green {Xanh lá} teal {Xanh lơ} blue {Xanh dương} indigo {Chàm} purple {Tím} pink {Hồng} brown {Nâu} gray {Xám} black {Đen} other {{color}}}",
+  "yes": "Có",
+  "no": "Không",
   "ok": "OK",
   "open": "Mở",
   "selectFolder": "Chọn thư mục",
