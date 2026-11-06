@@ -498,8 +498,9 @@ func (h *HeaderBarWidget) ClientDecorations(on bool) *HeaderBarWidget {
 
 func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 	bar, t := c.TitleBar(), c.Theme()
-	// A minimum, not a fixed height: a subtitle or a tall child makes the bar grow.
-	return ui.Row(c).MinHeight(max(bar.Height, 32)).AlignItems(ui.Center).Padding(t.Space(1), bar.Right+t.Space(2), t.Space(1), bar.Left+t.Space(2)).
+	// A minimum, not a fixed height: a subtitle or a child taller than the bar
+	// makes it grow. The row centers its items (Row's default).
+	return ui.Row(c).MinHeight(max(bar.Height, 32)).Padding(0, bar.Right+t.Space(2), 0, bar.Left+t.Space(2)).
 		Gap(t.Space(2)).DragWindow().Children(func() {
 		outer := axis
 		axis = horizontal
@@ -508,8 +509,10 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 			render(c, w)
 		}
 		ui.Spacer(c)
-		ui.Column(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, h.win.title).Bold()
+		// Padding here, not on the row: only the title and subtitle grow the
+		// bar by it. One line, so a long title cannot grow the bar.
+		ui.Column(c).AlignItems(ui.Center).PaddingY(t.Space(1)).Children(func() {
+			ui.Text(c, h.win.title).Bold().MaxLines(1)
 			if h.subtitle != "" {
 				ui.Text(c, h.subtitle).TextColor(t.TextMuted)
 			}

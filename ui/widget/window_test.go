@@ -327,7 +327,7 @@ func TestHeaderBarGrowsToHoldTitleAndSubtitle(t *testing.T) {
 
 func TestHeaderBarWithoutSubtitleKeepsItsHeight(t *testing.T) {
 	f := NewForm("Title", 800, 600).SetContent(Label("content"))
-	f.UseHeaderBar("").PackEnd(Label("hdr"))
+	f.UseHeaderBar("").PackEnd(Button("x"))
 	tt := formTester(t, f)
 	if content := find(t, tt, "content"); content.Y != 32 {
 		t.Fatalf("a bar with no subtitle grew: the content starts at %v", content.Y)
@@ -342,5 +342,16 @@ func TestFitCountsAGrownHeaderBar(t *testing.T) {
 	}
 	if plain, tall := height(""), height("subtitle"); tall <= plain {
 		t.Fatalf("a fitted window with a subtitle is %v high, one without %v", tall, plain)
+	}
+}
+
+func TestHeaderBarLongTitleKeepsItsHeightAndTheFitCutsNothing(t *testing.T) {
+	f := NewForm("A very long title that does not fit the narrow window at all", 800, 600).SetContent(Label("content"))
+	f.UseHeaderBar("")
+	tt := ui.NewTester(f.view, 200, 600)
+	tt.SetTitleBar(ui.TitleBar{Height: 32, Right: 138})
+	tt.Frame()
+	if content := find(t, tt, "content"); content.Y != 32 {
+		t.Fatalf("a long title grew the bar: the content starts at %v", content.Y)
 	}
 }
