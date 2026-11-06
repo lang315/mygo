@@ -140,7 +140,7 @@ func (w *Form) refitWindow(n *mygo.Window) {
 	if width == 0 || !live || n.IsMaximized() || n.IsMinimized() {
 		return
 	}
-	h, scroll := w.measureFit(width, n)
+	h, scroll := w.measureOnMain(width, n)
 	w.change(func() { w.fitScroll = scroll })
 	// One resize, which moves the window up if it would end below the work
 	// area, but not above the work area's top.
@@ -600,11 +600,20 @@ func (w *Form) fitWindow(opts *mygo.WindowOptions) {
 		over = p.win
 	}
 	mu.Unlock()
-	h, scroll := w.measureFit(width, over)
+	h, scroll := w.measureOnMain(width, over)
 	mu.Lock()
 	w.fitScroll = scroll
 	mu.Unlock()
 	opts.Width, opts.Height, opts.UseContentSize = width, h, true
+}
+
+// measureOnMain is measureFit on the main thread, where the windows draw: the
+// measure builds the view with the process's text system, whose glyph atlas
+// is for one thread only, and writes the package's build state. The caller
+// holds no lock. After the app quit it measures nothing, and returns 0.
+func (w *Form) measureOnMain(width int, over *mygo.Window) (h int, scroll bool) {
+	mygo.RunOnMain(func() { h, scroll = w.measureFit(width, over) })
+	return h, scroll
 }
 
 // measureFit returns the height of the content laid out at width, the page
