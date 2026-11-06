@@ -60,6 +60,13 @@ func (d *Dialog) SetDeletable(on bool) *Dialog { d.change(func() { d.deletable =
 // SetResizable lets the user resize the dialog, or not.
 func (d *Dialog) SetResizable(on bool) *Dialog { d.Form.SetResizable(on); return d }
 
+// SetMinimumSize limits how small the user can resize the dialog (see
+// Form.SetMinimumSize).
+func (d *Dialog) SetMinimumSize(width, height int) *Dialog {
+	d.Form.SetMinimumSize(width, height)
+	return d
+}
+
 // Run shows the dialog and returns when it closes: by Close, by the user,
 // or with its parent. In a handler it runs the other handlers meanwhile,
 // as gtk_dialog_run runs the main loop, so the dialog's buttons work; on

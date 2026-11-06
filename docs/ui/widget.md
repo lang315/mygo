@@ -912,7 +912,12 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps.
-- `ScrollPanel(w)`: scrolls a widget larger than its room.
+- `ScrollPanel(w)`: scrolls a widget larger than its room, both ways.
+  `.Vertical()` scrolls up and down only, as a page of a sidebar does: the
+  content keeps the panel's width, so its labels wrap there, and it is laid out
+  at least as high as the panel, so a root that `Expand()`s takes the room.
+  A dialog of height 0 fits the whole content of a `Vertical` panel. Put a
+  button bar outside the panel to keep it in view.
 - `SplitContainer(first, second)`: two panes with a divider; see [SplitContainer](widget/split-container.md).
 - `TrackBar(min, max)`: a slider; see [TrackBar](widget/trackbar.md).
 - `DomainUpDown(items...)`: arrows over a list of texts; see [DomainUpDown](widget/domainupdown.md).
@@ -1054,7 +1059,10 @@ maximized or minimized window is left alone, and a dialog fits again at its
 next `Show`. A `TestForm` or `TestDialog` tester's viewport follows
 on its next frame. Before `Show`, a height of 0 is the window default as ever.
 
-Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`, `Maximize`
+Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`,
+`SetMinimumSize(w, h)` (the least the user can resize it to, in DIPs, 0 for
+no limit on a side; before `Show` too, and kept for the next `Show`; a
+`Dialog` has it too), `Maximize`
 (before `Show` too), `Unmaximize`, `SetContent`, `SetMenuBar`,
 `OnClose(func() bool)` (false keeps the window open; quitting the app asks
 it too, and a yes quits again; it asks once at a time), `Close`. A window

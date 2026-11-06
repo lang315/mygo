@@ -156,7 +156,8 @@ func (g *GridWidget) build(c *ui.Context) ui.Element {
 // ScrollPanelWidget scrolls a widget larger than its room.
 type ScrollPanelWidget struct {
 	common[ScrollPanelWidget]
-	child Control
+	child    Control
+	vertical bool
 }
 
 func ScrollPanel(w Control) *ScrollPanelWidget {
@@ -165,7 +166,25 @@ func ScrollPanel(w Control) *ScrollPanelWidget {
 	return s
 }
 
+// Vertical makes the panel scroll up and down only, as a page of a sidebar
+// does (buildPage): the content keeps the panel's width, so its labels wrap
+// there, and it is laid out at least as high as the panel (FillViewport), so
+// that what grows or is packed at the end takes the room. Without it the
+// panel scrolls both ways and lays the content out at its natural size.
+func (s *ScrollPanelWidget) Vertical() *ScrollPanelWidget {
+	s.change(func() { s.vertical = true })
+	return s
+}
+
 func (s *ScrollPanelWidget) build(c *ui.Context) ui.Element {
+	if s.vertical {
+		return ui.Scroll(c).Grow(1).FillViewport().Children(func() {
+			outer := axis
+			axis = vertical
+			defer func() { axis = outer }()
+			render(c, s.child)
+		})
+	}
 	return ui.ScrollBoth(c).Grow(1).Children(func() {
 		outer := axis
 		axis = vertical
