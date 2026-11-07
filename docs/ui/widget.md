@@ -465,7 +465,10 @@ widget.Fields().
   control column too, and the labels stay left-aligned, as before. The heading
   is a heading to screen readers and takes no focus. In `SettingsRows` the
   heading takes the place of the divider before its rows. There is no divider
-  option.
+  option. `Section("")` is a group break: the room a section has above it,
+  with no heading and no node for screen readers. It adds none first, nor when
+  its rows are all hidden, and in `SettingsRows` it too takes the place of the
+  divider.
 
 ```go
 widget.Fields().

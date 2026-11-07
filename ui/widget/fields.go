@@ -32,6 +32,7 @@ type (
 	fieldRowKey int
 	fieldHole   int
 	fieldRule   int // the divider above a settings row, by the label's id
+	fieldBreak  int // the gap of a Section("") before row i
 )
 
 // Fields makes a form with no rows. Row adds them; by default the labels
@@ -70,6 +71,9 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 // label column, and a section after the first has more room above it than a
 // row has. A section whose rows are all hidden hides its heading and its room.
 // In SettingsRows the heading takes the place of the divider before its rows.
+// An empty title makes a group break: the room a section has above it and no
+// heading, so no node for assistive technology; there is none first, nor
+// where the section's rows are all hidden.
 func (f *FieldsWidget) Section(title string) *FieldsWidget {
 	l := Label(title).Bold()
 	f.change(func() { f.heads = append(f.heads, fieldHead{l, len(f.rows)}) })
@@ -151,6 +155,8 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 	}
 	// A section after the first starts further down than a row would.
 	sectionGap := t.Space(4)
+	// A Section("") is a spacer in a row of its own, between two row gaps.
+	breakGap := max(sectionGap-rowGap, 0)
 	if f.stacked {
 		return ui.Column(c).Gap(rowGap).Children(func() {
 			// The rows are a column, whatever the box around the form.
@@ -159,11 +165,20 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			defer func() { axis = outer }()
 			shown := false
 			for i, r := range f.rows {
+				titled, brk := false, false
 				for _, h := range f.headings(i) {
+					if h.text == "" {
+						brk = true
+						continue
+					}
+					titled = true
 					e := render(c, h).Role(ui.RoleHeading)
 					if shown {
 						e.Margin(sectionGap, 0, 0, 0)
 					}
+				}
+				if brk && !titled && shown && breakGap > 0 {
+					ui.Box(c.Key(fieldBreak(i))).Height(breakGap)
 				}
 				if r.w.base().hidden { // the row goes, its label with it
 					f.hold(r)
@@ -196,12 +211,21 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 		defer func() { axis = outer }()
 		first, shown := true, false // no divider is due; a row is up
 		for i, r := range f.rows {
+			titled, brk := false, false
 			for _, h := range f.headings(i) {
+				first = true
+				if h.text == "" {
+					brk = true
+					continue
+				}
+				titled = true
 				e := render(c, h).Role(ui.RoleHeading).ColumnSpan(2)
 				if shown {
 					e.Margin(sectionGap, 0, 0, 0)
 				}
-				first = true
+			}
+			if brk && !titled && shown && breakGap > 0 {
+				ui.Box(c.Key(fieldBreak(i))).ColumnSpan(2).Height(breakGap)
 			}
 			if r.w.base().hidden {
 				f.hold(r)
