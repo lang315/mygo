@@ -42,7 +42,7 @@ func main() {
 
 ## Layout
 
-- `widget.VBox(gap)` and `widget.HBox(gap)` stack controls; the gap is in DIPs. `widget.Grid(colGap, rowGap)` and `widget.GridWidget.Attach(w, col, row, width, height)` place by cell. `widget.FlowPanel(gap)` wraps. `widget.ScrollPanel(w)` scrolls what is larger than its room; `.Vertical()` scrolls up and down only, so labels wrap at its width.
+- `widget.VBox(gap)` and `widget.HBox(gap)` stack controls; the gap is in DIPs. `widget.Grid(colGap, rowGap)` and `widget.GridWidget.Attach(w, col, row, width, height)` place by cell. `widget.FlowPanel(gap)` wraps; `.Justify()` stretches each line, the last too, to both edges (never `HExpand()` its items). `widget.ScrollPanel(w)` scrolls what is larger than its room; `.Vertical()` scrolls up and down only, so labels wrap at its width.
 - Use `widget.Fields()` for a form: `widget.FieldsWidget.Row("Label", control)` per row, the labels in one column. `widget.FieldsWidget.Stacked` puts labels above; `widget.FieldsWidget.SettingsRows` makes a settings page (wrapping labels, controls at the right edge, dividers); `widget.FieldsWidget.Gap(row, col)` is in DIPs.
 - Alignment and growth work in one box only. In a `VBox`: `Align` places a control horizontally and `VExpand` gives it the free height. In an `HBox`: `VAlign` places it vertically and `HExpand` gives it the free width. The other axis does nothing. `widget.BoxWidget.Pack(w, expand, fill)` is the explicit form.
 - A table, list or text area needs room: `Expand` the boxes and the `TabControl` that hold it, or it gets none.

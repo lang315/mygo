@@ -3782,6 +3782,20 @@ func (_handle Element) Basis(v float32) Element {
 	return wrapElement(_node.Basis(v))
 }
 
+// BasisAuto sets the basis back to the element's content, as flex-basis:
+// auto: after Grow, whose basis is 0, it makes a wrapping row break its
+// lines at the items' natural sizes and then grow each line's items to fill
+// it. Call it after Grow: Grow sets the basis back to 0 when it is auto.
+func (_handle Element) BasisAuto() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.BasisAuto())
+}
+
 // BasisPercent sets the basis as a percentage of the parent's size along
 // its main axis.
 func (_handle Element) BasisPercent(p float32) Element {
