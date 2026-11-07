@@ -201,6 +201,7 @@ how a control takes its place in the box that holds it.
 | `hexpand` | takes the free width of its `HBox` (layout: an error in a variant) |
 | `italic` | italic text |
 | `not-italic` | not italic (clears an `italic` earlier in the string; an error in a variant) |
+| `truncate` | one line of text, ending in an ellipsis where it does not fit (the control shrinks below its text; its name stays the whole text) |
 | `valign-center` | places the control vertically in an `HBox`: center (layout: an error in a variant) |
 | `valign-end` | places the control vertically in an `HBox`: end (layout: an error in a variant) |
 | `valign-fill` | places the control vertically in an `HBox`: fill (layout: an error in a variant) |
@@ -295,6 +296,7 @@ group-hover:bg-accent | unknown class
 | FontWeight | `FontWeight` |
 | Italic | `Italic` |
 | Mono | `Mono` |
+| Truncate | `Truncate` |
 | Opacity | `Opacity` |
 | Cursor | `Cursor` |
 | Shadows | `Shadow, InsetShadow, NoShadow` |
@@ -351,7 +353,6 @@ free width. The other axis of each does nothing.
 | `overflow-auto`, `overflow-scroll` | scrolling is a control | `widget.ScrollPanel(w)` |
 | `hidden`, `block` | | `SetVisible(false)` / `SetVisible(true)`: a hidden control takes no room |
 | `invisible` | a hidden control gives up its room | `opacity-0` hides it and keeps the room; it still takes clicks and focus |
-| `truncate` | `Style` has no text overflow | list controls (ListBox, ListView, DataGridView) keep a line each; for a `Label`, `widget.Custom` with `ui.Text(c, s).SingleLine()` (cut with an ellipsis) |
 | `text-left`, `text-center`, `text-right` | `halign-*` moves the control, not the lines of its text; `Style` has no text alignment | `widget.Custom` with `ui.Text(c, s).TextAlign(ui.Center)` |
 | `absolute`, `relative`, `top-N`, `z-N` | no positioning | `widget.Custom` and `ui` for what overlaps |
 | `bg-blue-600/50`, `text-black/70` | no color alpha | `opacity-N` on the whole control; `Style.Background` with a color that has alpha in Go |
@@ -389,7 +390,6 @@ w-screen | unknown class
 overflow-auto | unknown class
 hidden | unknown class
 invisible | unknown class
-truncate | unknown class
 text-center | unknown class
 absolute | unknown class
 bg-blue-600/50 | unknown class

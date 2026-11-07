@@ -53,6 +53,7 @@ var fixed = map[string][]Decl{
 	"italic":        {{Kind: Italic, Value: 1}},
 	"not-italic":    {{Kind: Italic, Value: 0}},
 	"font-mono":     {{Kind: Mono}},
+	"truncate":      {{Kind: Truncate}},
 	"hexpand":       {{Kind: HExpand}},
 	"vexpand":       {{Kind: VExpand}},
 	"halign-start":  {{Kind: Align, Value: 1}},

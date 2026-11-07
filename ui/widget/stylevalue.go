@@ -147,6 +147,7 @@ const (
 	pHExpand
 	pVExpand
 	pFontWeight
+	pTruncate
 
 	pEnd // after the last property: loops over the properties stop before it
 )
@@ -396,6 +397,11 @@ func (s Style) FontSize(dips float32) Style {
 func (s Style) Bold() Style   { return s.FontWeight(700) }
 func (s Style) Italic() Style { s.set |= pItalic; return s }
 func (s Style) Mono() Style   { s.set |= pMono; return s }
+
+// Truncate keeps the text on one line, ending it with an ellipsis where it
+// does not fit, as tw's truncate: the control shrinks below its text's
+// width, and its accessible name stays the whole text.
+func (s Style) Truncate() Style { s.set |= pTruncate; return s }
 
 // FontWeight sets the weight of the text, 100 (thin) to 900 (black).
 func (s Style) FontWeight(w int) Style {

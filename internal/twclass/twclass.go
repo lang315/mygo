@@ -49,6 +49,7 @@ const (
 	FontWeight // Value 100 to 900
 	Italic     // Value 1 italic, 0 not
 	Mono
+	Truncate
 	Opacity // Value 0 to 1
 	Cursor  // Name
 	Shadows // Shadows; none clears them

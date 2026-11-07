@@ -178,6 +178,9 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 	if s&pMono != 0 {
 		e.Font("monospace")
 	}
+	if s&pTruncate != 0 {
+		e.SingleLine()
+	}
 	if s&pTextColor != 0 {
 		col := p.text.resolve(t)
 		if p.transition > 0 {
