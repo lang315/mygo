@@ -99,8 +99,13 @@ func TestPathContains(t *testing.T) {
 		t.Error("an empty path contains a point")
 	}
 	ring.Contains(50, 50)
-	if n := testing.AllocsPerRun(100, func() { ring.Contains(50, 20) }); n != 0 {
-		t.Errorf("Contains allocates %v times", n)
+	// Contains reuses its flattened path from a sync.Pool, and under the race
+	// detector Pool.Put drops one item in four, so Contains then allocates a
+	// new one: the count holds in the runs without it.
+	if !raceEnabled {
+		if n := testing.AllocsPerRun(100, func() { ring.Contains(50, 20) }); n != 0 {
+			t.Errorf("Contains allocates %v times", n)
+		}
 	}
 }
 

@@ -201,7 +201,10 @@ more.PopoverMenuButton(func(m *ui.Menu) {
   deletes or discards. Highlighted, it keeps the theme's highlight, its
   label in `Danger` where that is legible on the highlight, else in
   `AccentText`. Assistive technology hears no color: let the label say
-  what the item does.
+  what the item does. It also marks the item `Destructive`, so that the
+  menus MyGo draws elsewhere (Windows 11's popup menus and menu bars, the
+  web's) show it in their danger color and semibold too; native menus show
+  a normal item.
 - `Trailing(s)` shows a value at the item's end, before its shortcut, as a
   file's size; assistive technology reads it in the item's description.
 - `Content(fn)` builds what the item shows in place of its label and

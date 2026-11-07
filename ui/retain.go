@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"hash/maphash"
 	"math"
 	"slices"
 )
@@ -346,7 +347,8 @@ func retainable(e *node) bool {
 		e.field != nil || e.form != nil || e.followX != nil || e.colFit != nil || e.gridFit != nil || e.overflow != nil ||
 		e.list != nil || e.rowsOf != nil || e.track != nil || e.webView != nil || e.inputFn != nil || e.observeFn != nil || e.objectFn != nil ||
 		e.paintAfterFn != nil || (e.paintFn != nil && !e.paintPure) || e.accFill != nil || e.copyData != nil || e.tip ||
-		e.effect != nil || nativeGlassOf(e.material) || e.hidden || e.leaving != 0 || e.ghosts {
+		e.effect != nil || nativeGlassOf(e.material) || e.hidden || e.leaving != 0 || e.ghosts ||
+		len(e.describedBy) > 0 || len(e.errorMessage) > 0 || len(e.controls) > 0 { // relations to elements of the pass, which a copy would not follow
 		return false
 	}
 	for c := e.first; c != nil; c = c.next {
@@ -436,6 +438,7 @@ func (k *rowKeep) fill(e *node, at *int, parent *node) *node {
 	d.shadows, d.cols, d.rows, d.frags, d.spans = append(shadows[:0], e.shadows...), append(cols[:0], e.cols...),
 		append(rows[:0], e.rows...), append(frags[:0], e.frags...), append(spans[:0], e.spans...)
 	d.parent, d.first, d.last, d.next, d.nchild = parent, nil, nil, nil, 0
+	d.describedBy, d.errorMessage, d.controls = nil, nil, nil // none in a kept row (retainable): nothing of the pass's is shared
 	k.links = k.links || e.keepLinks
 	if e.st != nil {
 		k.states = append(k.states, e.st)
@@ -583,7 +586,8 @@ func (s *ListState) settingsSig() (h uint64) {
 			h |= 1 << i
 		}
 	}
-	return h<<48 ^ math.Float64bits(s.gap)>>16
+	// CellsStyle's colors are read as the rows and the cells build.
+	return h<<48 ^ math.Float64bits(s.gap)>>16 ^ maphash.Comparable(keySeed, s.CellsStyle)
 }
 
 // spareKeep returns a record for a row, from those released.

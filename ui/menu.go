@@ -514,15 +514,17 @@ func (it *MenuItem) ID(id string) *MenuItem {
 // the Danger color where that is legible on the highlight, else in the
 // highlight's text color (Theme.AccentText). The color alone tells no one
 // using assistive technology: let the label say what the item does, as
-// "Delete…". PopoverMenu draws it so; the system's menus show the item as
-// the others.
+// "Delete…". PopoverMenu draws it so. It also marks the item Destructive,
+// for the hosts that draw their own items (Windows 11's menus, the web's)
+// to show it in their danger color and semibold; native menus show the item
+// as the others.
 //
 //	if m.Item("Delete…").Danger().Chosen() {
 //		app.confirmDelete()
 //	}
 func (it *MenuItem) Danger() *MenuItem {
 	it.danger = true
-	return it
+	return it.Destructive(true)
 }
 
 // Trailing shows s at the end of the item, before its shortcut, in the

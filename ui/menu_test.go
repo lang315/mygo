@@ -496,6 +496,27 @@ func TestMenuItemDestructiveReachesThePlatformItem(t *testing.T) {
 	}
 }
 
+// Danger marks the item destructive for the hosts that draw their own items
+// (Windows 11's menus, the web's), which only see the platform's item.
+func TestMenuItemDangerReachesThePlatformItem(t *testing.T) {
+	view := func(c *context) {
+		coreColumn(c).Fill().Padding(20).Children(func() {
+			coreBox(c).Padding(8).ContextMenu(func(m *Menu) {
+				m.Item("Rename")
+				m.Item("Delete 3 accounts").Danger()
+			}).Children(func() { coreText(c, "row") })
+		})
+	}
+	tt := coreNewTester(view, 400, 300)
+	if err := tt.RightClick("row"); err != nil {
+		t.Fatal(err)
+	}
+	items := tt.h.menu.Items
+	if items[0].Destructive || !items[1].Destructive {
+		t.Fatalf("Rename %v, Delete %v: want false and true", items[0].Destructive, items[1].Destructive)
+	}
+}
+
 // An editing command chosen from a menu goes to the input that was built in
 // the frame, not to the state of one the view stopped building and keeps
 // alive (GlobalKey, KeepAlive), which would run it unseen when it returns.
