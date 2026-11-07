@@ -143,6 +143,7 @@ func TestAccountsTable(t *testing.T) {
 
 - A row is named by the text of its **first column**, and its text is a `ui.RoleText` node of its own, so `widget.ByLabel("Ada")` matches both. Find the row with `widget.ByRole(ui.RoleRow).Label("Ada")` and a text in a cell with `widget.ByRole(ui.RoleText).Label("ada@x")`: the `ui.RoleCell` nodes have no label. The header is a row too, named by its titles joined (`Name Mail`), so `widget.ByRole(ui.RoleRow).Nth(0)` is the header; its titles are `ui.RoleColumnHeader` nodes.
 - The check boxes of a `CheckboxColumn` are named `Check <first column's text>` and `Check all`. A table shows what is in view: scroll it (`widget.Node.Click` scrolls an element into view first) or size the window to the rows.
+- An open combo box's popup is a list box (a `ui.RoleList` node), and its options are `ui.RoleListItem` nodes named by their text, whose text is a `ui.RoleText` node of its own, so `widget.ByLabel("Beta")` matches both. Find the option with `widget.ByRole(ui.RoleListItem).Label("Beta")`.
 - Read rows from the table, not from the screen: `widget.DataGridViewWidget.Row`, `Selected`, `Checked`, `Len`.
 
 ## A bug is a failing test first
