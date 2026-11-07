@@ -456,6 +456,23 @@ widget.Fields().
   row's gap too, and showing it brings them back. A hidden label alone
   keeps its cell empty, so the control stays in its column.
 - A row without a control, or with one the form already has, is not added.
+- `Section(title)` adds a bold heading across both columns before the rows
+  that follow, up to the next `Section`. All the rows of a form share one
+  label column, whatever their section: use it instead of one `Fields` per
+  group, whose label columns each fit their own labels. A section after the
+  first has more room above it than a row has, the first none. A section whose
+  rows are all hidden hides its heading and that room. In `SettingsRows` the
+  heading takes the place of the divider before its rows. There is no divider
+  option.
+
+```go
+widget.Fields().
+	Section("Account").
+	Row("Name", nameBox).
+	Row("Email address", emailBox).
+	Section("Privacy").
+	Row("Country", countryBox)
+```
 
 `Fields` is a control like the others: `Apply` a style, `Align` it in a
 box, and put it in a `GroupBox`, a `Card` or a dialog.
