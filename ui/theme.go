@@ -2,6 +2,7 @@ package ui
 
 import (
 	"runtime"
+	"sync/atomic"
 	"time"
 )
 
@@ -218,4 +219,26 @@ func DarkTheme() *Theme {
 		Spacing:         4,
 		FontSize:        defaultFontSize(),
 	}
+}
+
+// defaultBorder are the border colors SetDefaultBorder set, light then dark,
+// and borderGen counts its calls, which a window takes up as it builds.
+var (
+	defaultBorder atomic.Pointer[[2]Color]
+	borderGen     atomic.Uint64
+)
+
+// SetDefaultBorder sets Theme.Border of the default theme of each
+// appearance, light and dark: for an app that has no Context to set a Theme
+// with, as one of ui/widget's, which draws every control's outline and
+// divider in it. A color that is zero leaves the theme's own for that
+// appearance. The windows follow the appearance as before, and a window that
+// is open takes the colors in its next frame. A Theme a view sets itself
+// (Context.SetTheme) is its own: this changes the defaults only. Call it
+// from any goroutine, once at startup as a rule.
+//
+//	ui.SetDefaultBorder(ui.Hex("#9ca3af"), ui.Hex("#6b7280"))
+func SetDefaultBorder(light, dark Color) {
+	defaultBorder.Store(&[2]Color{light, dark})
+	borderGen.Add(1)
 }

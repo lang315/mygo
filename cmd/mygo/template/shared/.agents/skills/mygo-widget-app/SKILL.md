@@ -144,6 +144,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 - `widget.Style` is typed: `Padding`, `Margin` and `Radius` are in theme units (4 DIPs by default); `Width`, `Height`, `BorderWidth` and font sizes are in DIPs. It has `Hover`, `Pressed`, `Focused`, `Disabled` and `Dark` variants and `Transition`.
 - `ui/widget/tw` compiles Tailwind classes to a Style: `control.Apply(tw.S("px-3 py-2 rounded-lg bg-accent text-on-accent hover:bg-accent-hover transition"))`. An unknown class is logged once and ignored; `go tool mygo vet .` reports it in a literal. Read `docs/ui/widget/tw.md` for the classes and for what Tailwind has that `tw` does not (`flex`, `gap`, `w-full`, arbitrary values).
 - Follow the theme's colors (`bg-accent`, `text-muted`) rather than fixed palette colors so the dark theme works.
+- The outline of the controls and their dividers is the theme's border, faint on some screens. `widget.SetBorder(light, dark)` (colors from `ui.Hex`) sets it for both appearances at once, without touching a control, once at startup; a zero color keeps the theme's.
 
 ## Controls of your own
 

@@ -638,6 +638,7 @@ type engine struct {
 	// starts from a copy, passTheme, which the view may change.
 	theme      Theme
 	themeOK    bool
+	borderGen  uint64 // the SetDefaultBorder the default theme was made with
 	passTheme  Theme
 	collect    bool
 	labels     []labelNode
@@ -735,10 +736,19 @@ func (rt *engine) defaultTheme() *Theme {
 	if !rt.prefsKnown {
 		rt.themeOK = false
 	}
+	if g := borderGen.Load(); g != rt.borderGen {
+		rt.borderGen, rt.themeOK = g, false
+		rt.themeGen++ // the rows kept across frames have the theme the pass lent them
+	}
 	if !rt.themeOK {
 		t := LightTheme()
 		if rt.dark {
 			t = DarkTheme()
+		}
+		if b := defaultBorder.Load(); b != nil {
+			if c := b[b2i(rt.dark)]; c.A != 0 {
+				t.Border = c
+			}
 		}
 		t.follow(rt.preferences())
 		rt.theme, rt.themeOK = *t, true

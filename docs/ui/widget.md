@@ -877,6 +877,13 @@ the `TabControl` holding it, or it gets no room.
 `Clipboard.SetText(s)`, `Clipboard.SetImage(png)` and `Clipboard.Text()`
 use the system clipboard. `SetTheme(ThemeSystem/ThemeLight/ThemeDark)` sets
 the app's appearance, which every window follows, and `IsDark` reports it.
+`SetBorder(light, dark)` sets the color of the outline of the controls
+(`TextBox`, `ComboBox`, `NumericUpDown` and the others) and of their dividers
+in each appearance, with no control touched: the theme's own is faint on some
+screens (a 1.4:1 contrast against the window in the light appearance, 1.7:1 in
+the dark, where WCAG 1.4.11 asks 3:1 of a control's boundary). A zero color
+leaves the theme's; every window follows the appearance as before. Call it
+once at startup: `widget.SetBorder(ui.Hex("#9ca3af"), ui.Hex("#6b7280"))`.
 `ScreenSize()` returns the main display's size in DIPs, once the app runs.
 
 ## Styling
