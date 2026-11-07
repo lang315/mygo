@@ -399,7 +399,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			}
 			row.Children(func() {
 				if s.Checked != nil {
-					checkCell(c, checkW, func() {
+					box := checkCell(c, checkW, func() {
 						label := "Check"
 						if s.Label != nil {
 							// The list's element holding the row has it already.
@@ -407,6 +407,10 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 						}
 						itemCheckbox(c, table, s.Checked, s.keyIn(i), label)
 					})
+					if s.GridLines {
+						// Ends in a line as the cells after it do.
+						box.BorderEndWidth(1).BorderColor(t.Border)
+					}
 				}
 				cells(RoleCell, func(j int) { cell(i, j) })
 			})
@@ -842,8 +846,8 @@ func (s *itemCheckSlab) reset() {
 
 // checkCell builds the checkbox cell of a row or of the header, which
 // comes first in it, so its ID stays apart from the columns' keyed cells.
-func checkCell(c *context, w float32, fill func()) {
-	coreRow(c).Width(w).Shrink(0).AlignItems(Center).Justify(Center).Role(RoleCell).Children(fill)
+func checkCell(c *context, w float32, fill func()) *node {
+	return coreRow(c).Width(w).Shrink(0).AlignItems(Center).Justify(Center).Role(RoleCell).Children(fill)
 }
 
 // syncSort keeps Sort, when set with SortBy, the first column SortBy sorts
