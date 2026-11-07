@@ -209,6 +209,8 @@ func (p *props) describeSides(th *ui.Theme, prefix string, collapse bool) (out [
 			add("font-style", "italic")
 		case pMono:
 			add("font-family", "monospace")
+		case pTruncate:
+			add("text-overflow", "ellipsis")
 		case pTransition:
 			add("transition", p.transition.String())
 		case pAlign:

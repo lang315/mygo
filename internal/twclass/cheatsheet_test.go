@@ -85,7 +85,7 @@ var styleOf = map[Kind]string{
 	BorderWidth: "BorderTop … BorderLeft", BorderStyle: "BorderStyle", Width: "Width", Height: "Height",
 	MinWidth: "MinWidth", MaxWidth: "MaxWidth", MinHeight: "MinHeight", MaxHeight: "MaxHeight",
 	Background: "Background", TextColor: "TextColor", BorderColor: "BorderColor", TextSize: "TextSize",
-	FontSize: "FontSize", FontWeight: "FontWeight", Italic: "Italic", Mono: "Mono", Opacity: "Opacity",
+	FontSize: "FontSize", FontWeight: "FontWeight", Italic: "Italic", Mono: "Mono", Truncate: "Truncate", Opacity: "Opacity",
 	Cursor: "Cursor", Shadows: "Shadow, InsetShadow, NoShadow", Align: "Align", VAlign: "VAlign",
 	HExpand: "HExpand", VExpand: "VExpand", Transition: "Transition",
 }
@@ -95,7 +95,7 @@ var kindNames = map[Kind]string{
 	Width: "Width", Height: "Height", MinWidth: "MinWidth", MaxWidth: "MaxWidth", MinHeight: "MinHeight",
 	MaxHeight: "MaxHeight", Background: "Background", TextColor: "TextColor", BorderColor: "BorderColor",
 	TextSize: "TextSize", FontSize: "FontSize", FontWeight: "FontWeight", Italic: "Italic", Mono: "Mono",
-	Opacity: "Opacity", Cursor: "Cursor", Shadows: "Shadows", Align: "Align", VAlign: "VAlign",
+	Truncate: "Truncate", Opacity: "Opacity", Cursor: "Cursor", Shadows: "Shadows", Align: "Align", VAlign: "VAlign",
 	HExpand: "HExpand", VExpand: "VExpand", Transition: "Transition",
 }
 
@@ -328,6 +328,8 @@ func describe(d Decl) string {
 		return map[float32]string{1: "italic text", 0: "not italic (clears an `italic` earlier in the string; an error in a variant)"}[d.Value]
 	case Mono:
 		return "the monospace font"
+	case Truncate:
+		return "one line of text, ending in an ellipsis where it does not fit (the control shrinks below its text; its name stays the whole text)"
 	case HExpand:
 		return "takes the free width of its `HBox` (layout: an error in a variant)"
 	case VExpand:

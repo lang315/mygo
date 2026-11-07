@@ -235,6 +235,8 @@ func (d *draft) add(c twclass.Decl) {
 		d.italic = c.Value == 1
 	case twclass.Mono:
 		s = s.Mono()
+	case twclass.Truncate:
+		s = s.Truncate()
 	case twclass.Opacity:
 		s = s.Opacity(c.Value)
 	case twclass.Cursor:

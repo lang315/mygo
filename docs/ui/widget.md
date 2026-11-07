@@ -590,7 +590,7 @@ tables, and what to use for the Tailwind classes it does not have.
 | Border | `border`, `border-{0,2,4,8}`, `border-{x,y,t,r,b,l}[-N]`, `border-solid`, `border-dashed` |
 | Colors | `bg- text- border-` with the v3 palette (`blue-600`), `black white transparent` |
 | Theme colors | `default muted surface surface-hover surface-pressed accent accent-hover accent-pressed on-accent danger warning success selection focus inverse on-inverse` |
-| Text | `text-xs … text-9xl`, `font-thin … font-black`, `italic`, `not-italic`, `font-mono` |
+| Text | `text-xs … text-9xl`, `font-thin … font-black`, `italic`, `not-italic`, `font-mono`, `truncate` (a `Label` on one line, ending in an ellipsis; it shrinks below its text, whose whole is still its name) |
 | Effects | `shadow-sm shadow shadow-md lg xl 2xl inner none`, `opacity-0 … 100`, `cursor-pointer …` |
 | Layout (gota) | `halign-/valign-{start,center,end,fill}`, `hexpand`, `vexpand` |
 | Buttons (gota) | `suggested-action`, `destructive-action` |
