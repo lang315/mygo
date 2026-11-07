@@ -461,7 +461,9 @@ widget.Fields().
   label column, whatever their section: use it instead of one `Fields` per
   group, whose label columns each fit their own labels. A section after the
   first has more room above it than a row has, the first none. A section whose
-  rows are all hidden hides its heading and that room. In `SettingsRows` the
+  rows are all hidden hides its heading and that room. The sections share the
+  control column too, and the labels stay left-aligned, as before. The heading
+  is a heading to screen readers and takes no focus. In `SettingsRows` the
   heading takes the place of the divider before its rows. There is no divider
   option.
 

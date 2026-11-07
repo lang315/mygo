@@ -1,6 +1,10 @@
 package widget
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/ui"
+)
 
 // sectionForm is three sections of rows whose controls are 24 DIPs high: the
 // long labels are in the first section, the short ones in the others.
@@ -125,5 +129,54 @@ func TestSettingsRowsDividersNextToHeadings(t *testing.T) {
 	left := int(find(t, tt.Tester, "c3").X) - 4
 	if ys := rules(tt.Tester, left); len(ys) != 1 {
 		t.Fatalf("%d dividers (at %v), want 1: the one between the rows of Alpha", len(ys), rules(tt.Tester, left))
+	}
+}
+
+// A heading is a heading to assistive technology, which jumps between them,
+// and not a stop of the keyboard focus.
+func TestFieldsSectionHeadingIsAHeading(t *testing.T) {
+	for _, mode := range []string{"default", "stacked", "settings"} {
+		f, _ := sectionForm()
+		switch mode {
+		case "stacked":
+			f.Stacked()
+		case "settings":
+			f.SettingsRows()
+		}
+		tt := sectionTester(t, f)
+		for _, name := range []string{"Alpha", "Beta", "Gamma"} {
+			a, ok := tt.AccessByRole(ui.RoleHeading, name)
+			if !ok {
+				t.Fatalf("%s: no heading %q", mode, name)
+			}
+			if a.Focusable {
+				t.Errorf("%s: heading %q takes the focus", mode, name)
+			}
+		}
+	}
+}
+
+// Stacked shows the headings too, with room above a later section, none above
+// the first, and none for a section whose rows are all hidden.
+func TestFieldsSectionStacked(t *testing.T) {
+	f, cs := sectionForm()
+	tt := sectionTester(t, f.Stacked())
+	base := sectionTester(t, Fields().Stacked().Row("x", bar("c1", 24)))
+	if a, b := find(t, tt.Tester, "Alpha"), find(t, base.Tester, "x"); !approx(a.Y, b.Y) {
+		t.Fatalf("first heading at y %v, the first label would be at %v", a.Y, b.Y)
+	}
+	c1, c2 := find(t, tt.Tester, "c1"), find(t, tt.Tester, "c2")
+	rowGap := find(t, tt.Tester, "Another long one").Y - (c1.Y + 24)
+	if sec := find(t, tt.Tester, "Beta").Y - (c2.Y + 24); sec <= rowGap+1 {
+		t.Fatalf("gap above section %v, between rows %v: want the section's larger", sec, rowGap)
+	}
+	gamma := find(t, tt.Tester, "Gamma")
+	cs[2].SetVisible(false)
+	tt.Frame()
+	if tt.HasText("Beta") {
+		t.Fatalf("heading of a hidden section shows: %q", tt.Texts())
+	}
+	if g := find(t, tt.Tester, "Gamma"); g.Y >= gamma.Y {
+		t.Fatalf("Gamma at y %v, was %v: the hidden section's room remains", g.Y, gamma.Y)
 	}
 }

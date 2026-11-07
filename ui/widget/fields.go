@@ -160,11 +160,10 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			shown := false
 			for i, r := range f.rows {
 				for _, h := range f.headings(i) {
-					e := render(c, h)
+					e := render(c, h).Role(ui.RoleHeading)
 					if shown {
 						e.Margin(sectionGap, 0, 0, 0)
 					}
-					shown = true
 				}
 				if r.w.base().hidden { // the row goes, its label with it
 					f.hold(r)
@@ -195,14 +194,14 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()
-		first, shown := true, false // no divider is due; a row or heading is up
+		first, shown := true, false // no divider is due; a row is up
 		for i, r := range f.rows {
 			for _, h := range f.headings(i) {
-				e := render(c, h).ColumnSpan(2)
+				e := render(c, h).Role(ui.RoleHeading).ColumnSpan(2)
 				if shown {
 					e.Margin(sectionGap, 0, 0, 0)
 				}
-				first, shown = true, true
+				first = true
 			}
 			if r.w.base().hidden {
 				f.hold(r)
