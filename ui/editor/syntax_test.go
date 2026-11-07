@@ -113,7 +113,11 @@ func TestJSONLongLine(t *testing.T) {
 	line := "{" + strings.Repeat(`"key":[1.5,"v"],`, 100_000) + `"end":0}`
 	start := time.Now()
 	toks, _ := LanguageNamed("json").Tokenizer.Tokenize(line, 0, nil)
-	if d := time.Since(start); d > 2*time.Second {
+	// The tokenizer exposes no count of its steps, so a quadratic lexer is
+	// told by the time (100,000 keys would take minutes). The race detector
+	// slows it five to ten times, to within a few percent of the bound, so
+	// there the test only counts tokens.
+	if d := time.Since(start); !raceEnabled && d > 2*time.Second {
 		t.Errorf("a line of %d keys took %v to lex", 100_000, d)
 	}
 	if n := len(toks); n < 700_000 {

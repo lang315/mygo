@@ -147,15 +147,31 @@ func TestTestersAskingAMissingElementInParallelAreRight(t *testing.T) {
 			}
 		}
 	}
-	var wg sync.WaitGroup
+	// Testers share the text system's glyph atlas, which two goroutines must
+	// not grow: build them all and draw a frame each here, so every glyph is
+	// in the atlas before the goroutines start.
+	type twins struct{ kept, built *Tester }
+	pairs := map[bool]twins{}
 	for _, asks := range []bool{true, false} {
+		kept, built := NewTester(mk(asks)(), 300, 400), NewTester(mk(asks)(), 300, 400)
+		start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+		kept.now, built.now = start, start
+		built.rt.noRetain, built.rt.noReplay = true, true
+		kept.Frame()
+		built.Frame()
+		pairs[asks] = twins{kept, built}
+	}
+	atlases := func() (v [2]uint64) {
+		a := pairs[true].kept.rt.text
+		return [2]uint64{a.MaskAtlas.Version(), a.ColorAtlas.Version()}
+	}
+	before := atlases()
+	var wg sync.WaitGroup
+	for asks, tw := range pairs {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			kept, built := NewTester(mk(asks)(), 300, 400), NewTester(mk(asks)(), 300, 400)
-			start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-			kept.now, built.now = start, start
-			built.rt.noRetain, built.rt.noReplay = true, true
+			kept, built := tw.kept, tw.built
 			for range 40 {
 				kept.Frame()
 				built.Frame()
@@ -170,6 +186,11 @@ func TestTestersAskingAMissingElementInParallelAreRight(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	// Nothing was put into the atlases while the goroutines ran (the race
+	// detector sees it only when they happen to overlap).
+	if after := atlases(); after != before {
+		t.Errorf("the atlases changed during the parallel frames: version %v, then %v", before, after)
+	}
 }
 
 // Every query of Element answers an element that is not there by noting it for
