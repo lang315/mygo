@@ -511,6 +511,11 @@ func (h *HeaderBarWidget) ClientDecorations(on bool) *HeaderBarWidget {
 
 func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 	bar, t := c.TitleBar(), c.Theme()
+	// The start and end items each take an equal share of what the title
+	// leaves, the side with the smaller inset starting from the difference:
+	// so the title is centred on the window, not on what the buttons and
+	// items leave. Items wider than their share push the title aside instead.
+	lead, trail := max(bar.Right-bar.Left, 0), max(bar.Left-bar.Right, 0)
 	// A minimum, not a fixed height: a subtitle or a child taller than the bar
 	// makes it grow. The row centers its items (Row's default).
 	return ui.Row(c).MinHeight(max(bar.Height, 32)).Padding(0, bar.Right+t.Space(2), 0, bar.Left+t.Space(2)).
@@ -518,10 +523,11 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()
-		for _, w := range h.start {
-			render(c, w)
-		}
-		ui.Spacer(c)
+		ui.Row(c).Grow(1).Basis(lead).Gap(t.Space(2)).Children(func() {
+			for _, w := range h.start {
+				render(c, w)
+			}
+		})
 		// Padding here, not on the row: only the title and subtitle grow the
 		// bar by it. One line each, so a long title or subtitle cannot grow the bar
 		// (a measure has no title bar, so a wrapped bar would cut a fitted window).
@@ -531,10 +537,11 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 				ui.Text(c, h.subtitle).TextColor(t.TextMuted).MaxLines(1)
 			}
 		})
-		ui.Spacer(c)
-		for i := len(h.end) - 1; i >= 0; i-- {
-			render(c, h.end[i])
-		}
+		ui.Row(c).Grow(1).Basis(trail).Gap(t.Space(2)).Justify(ui.End).Children(func() {
+			for i := len(h.end) - 1; i >= 0; i-- {
+				render(c, h.end[i])
+			}
+		})
 	})
 }
 
