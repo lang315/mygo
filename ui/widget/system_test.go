@@ -35,9 +35,9 @@ func TestSetThemeAndIsDark(t *testing.T) {
 	}
 }
 
-// SetBorder sets the outline of the controls in each appearance, with no
+// SetControlBorder sets the outline of the controls in each appearance, with no
 // control touched, and a window that follows the appearance keeps it.
-func TestSetBorderColorsTheOutlines(t *testing.T) {
+func TestSetControlBorderColorsTheOutlines(t *testing.T) {
 	light, dark := ui.Hex("#9ca3af"), ui.Hex("#6b7280")
 	outline := func(tt *ui.Tester, want ui.Color) bool {
 		t.Helper()
@@ -59,13 +59,13 @@ func TestSetBorderColorsTheOutlines(t *testing.T) {
 	}
 	tt := tester(t, TextBox())
 	if outline(tt, light) {
-		t.Fatal("the outline has the light color before SetBorder")
+		t.Fatal("the outline has the light color before SetControlBorder")
 	}
-	SetBorder(light, dark)
-	t.Cleanup(func() { SetBorder(ui.Color{}, ui.Color{}) })
+	SetControlBorder(light, dark)
+	t.Cleanup(func() { SetControlBorder(ui.Color{}, ui.Color{}) })
 	tt.Frame()
 	if !outline(tt, light) {
-		t.Error("the text box outline is not the light color after SetBorder")
+		t.Error("the text box outline is not the light color after SetControlBorder")
 	}
 	tt.SetDark(true)
 	if !outline(tt, dark) {

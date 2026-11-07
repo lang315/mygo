@@ -78,7 +78,7 @@ func paintCheckbox(c *context, box *node, state int8) {
 	if state > 1 {
 		box.Background(c.accent(t))
 	} else {
-		box.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
+		box.Background(t.Background).Border(1, t.Outline())
 	}
 	box.checkmark = state
 	box.builtWith(c.theme)
@@ -94,7 +94,7 @@ func paintRadio(c *context, dot *node, on bool) {
 		dot.Background(c.accent(t))
 		dot.checkmark = 5
 	} else {
-		dot.Background(t.Background).Border(1, t.Border.Mix(t.Text, 0.25))
+		dot.Background(t.Background).Border(1, t.Outline())
 	}
 	dot.builtWith(c.theme)
 	setStyle(dot, checkboxStyle, staticCheckbox)

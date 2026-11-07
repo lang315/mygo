@@ -539,7 +539,7 @@ func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 // coreSelect), from public API, showing text.
 func comboTrigger(ctx *ui.Context, e ui.Element, text string) ui.Element {
 	t := ctx.Theme()
-	return e.Padding(t.Space(1.5), t.Space(3)).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).
+	return e.Padding(t.Space(1.5), t.Space(3)).Radius(t.Radius).Border(1, t.Outline()).Background(t.Surface).
 		Justify(ui.SpaceBetween).AlignItems(ui.Center).Gap(t.Space(2)).MinWidth(t.Space(35)).
 		Children(func() {
 			ui.Text(ctx, text).SingleLine()
@@ -661,7 +661,7 @@ func (c *ComboBoxWidget) pick(v string) {
 func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 	p, _ := c.text.bind()
 	t, sections := ctx.Theme(), c.sections
-	frame := ui.Row(ctx).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).
+	frame := ui.Row(ctx).Radius(t.Radius).Border(1, t.Outline()).Background(t.Surface).
 		AlignItems(ui.Center).MinWidth(t.Space(35))
 	frame.Children(func() {
 		cb := ui.ComboboxBase(ctx, p)

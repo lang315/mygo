@@ -660,7 +660,7 @@ type engine struct {
 	// starts from a copy, passTheme, which the view may change.
 	theme      Theme
 	themeOK    bool
-	borderGen  uint64 // the SetDefaultBorder the default theme was made with
+	borderGen  uint64 // the SetControlBorder the default theme was made with
 	passTheme  Theme
 	collect    bool
 	labels     []labelNode
@@ -767,9 +767,9 @@ func (rt *engine) defaultTheme() *Theme {
 		if rt.dark {
 			t = DarkTheme()
 		}
-		if b := defaultBorder.Load(); b != nil {
+		if b := controlBorder.Load(); b != nil {
 			if c := b[b2i(rt.dark)]; c.A != 0 {
-				t.Border = c
+				t.ControlBorder = c
 			}
 		}
 		t.follow(rt.preferences())

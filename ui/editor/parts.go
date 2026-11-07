@@ -131,7 +131,7 @@ func DefaultFindBar(c *ui.Context, bar ui.Element, f *FindBar) {
 		Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.18))
 	field := func(value *string, placeholder string) ui.Element {
 		return ui.TextInputBase(c, value).Width(t.Space(50)).Placeholder(placeholder).Padding(t.Space(1), t.Space(2)).
-			Background(t.Background).Border(1, t.Border).Radius(t.Radius - 2).FontSize(t.FontSize - 1).Label(placeholder)
+			Background(t.Background).Border(1, t.Outline()).Radius(t.Radius - 2).FontSize(t.FontSize - 1).Label(placeholder)
 	}
 	button := func(label, tip string) ui.Element {
 		b := ui.ButtonBase(c).Padding(t.Space(0.5), t.Space(1.5)).Radius(t.Radius - 2).Label(tip).Tooltip(tip).KeepFocus()
@@ -275,7 +275,7 @@ func DefaultGoToLine(c *ui.Context, bar ui.Element, g *GoToLineBar) {
 		Border(1, t.Border).Radius(t.Radius).Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.18))
 	bar.Children(func() {
 		g.Input(ui.TextInputBase(c, g.Text()).Width(t.Space(60)).Padding(t.Space(1), t.Space(2)).Background(t.Background).
-			Border(1, t.Border).Radius(t.Radius - 2).Label(tx.GoToLine()).Placeholder(tx.LineRange(g.LineCount())))
+			Border(1, t.Outline()).Radius(t.Radius - 2).Label(tx.GoToLine()).Placeholder(tx.LineRange(g.LineCount())))
 		cur := g.Cursor()
 		ui.Text(c, tx.CurrentLine(cur.Line+1, g.LineCount(), cur.Col+1)).
 			FontSize(t.FontSize - 2).TextColor(t.TextMuted)

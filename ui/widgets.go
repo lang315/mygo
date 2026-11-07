@@ -154,7 +154,7 @@ func button(c *context, label string, primary bool) *node {
 func styleButton(c *context, b *node, primary bool) {
 	t := c.theme
 	b.Padding(t.Space(1.5), t.Space(3.5)).Gap(t.Space(1.5)).Radius(t.Radius)
-	base, fg, border := t.Surface, t.Text, t.Border
+	base, fg, border := t.Surface, t.Text, t.Outline()
 	b.buttonLook = buttonPlain
 	switch {
 	case primary && c.emphasized(t):
@@ -327,7 +327,7 @@ func coreSwitch(c *context, on *bool) *node {
 	t := c.theme
 	sw := coreSwitchBase(c, on).Size(t.Space(9), t.Space(5)).Radius(t.Space(2.5))
 	pos := sw.animateRest("knob", b2f(*on), 140*time.Millisecond)
-	off := t.Border.Mix(t.Text, 0.15)
+	off := t.Outline() // the off track identifies the switch: 3:1 against the window
 	if pos > 0 {
 		sw.Background(off.Mix(c.accent(t), pos))
 	} else {

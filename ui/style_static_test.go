@@ -113,7 +113,7 @@ func TestButtonsAndTextInputsFollowTheThemeAndThePointer(t *testing.T) {
 		r := input().Bounds()
 		tt.Move(r.X+r.W/2, r.Y+r.H/2)
 		tt.Frame()
-		if got, want := painted(input()).borderC, c.th.Border.Mix(c.th.Text, 0.25); got != want {
+		if got, want := painted(input()).borderC, c.th.Outline().Mix(c.th.Text, 0.25); got != want { // a control's outline, darker than at rest
 			t.Errorf("%s: hovered input border %v, want %v", c.name, got, want)
 		}
 		tt.Move(395, 315)

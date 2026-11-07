@@ -14,7 +14,15 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   header with `BorderWidth(0, 0, 1, 0)`, and `BorderStyle(ui.BorderDashed)`
   dashes it. As with CSS's `box-sizing: border-box`, the border takes room
   within the element's size, and the padding and the children are inside
-  it.
+  it. The theme has two colors for it: `t.Border` for what divides and
+  holds (dividers, grid lines, the edges of cards and popups) and
+  `t.ControlBorder` for the boundary of a control that the user must see
+  (an input, a button), darker for WCAG 1.4.11's 3:1; give a control of your
+  own `t.Outline()`, which is `ControlBorder`, or `Border` in a theme that
+  sets none. `ui.SetControlBorder(light, dark)` sets it for the default
+  themes. A theme copied from `LightTheme` or `DarkTheme` that changes only
+  `Border` keeps their `ControlBorder`: set it too, or zero it for the
+  controls to follow `Border`.
 - **Shadows.** `Shadow(x, y, blur, spread, c)` casts a box shadow, as CSS's
   `box-shadow` does: several stack, and each shows only outside the box,
   so a translucent background never shows its own shadow through.

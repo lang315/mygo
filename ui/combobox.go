@@ -322,7 +322,7 @@ func field(c *context, fn func() *node) (*node, *node) { return fieldOf(c, false
 func fieldOf(c *context, keep bool, fn func() *node) (*node, *node) {
 	t := c.theme
 	f := coreRow(c).AlignItems(Center).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
-		Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Role(RoleNone).Cursor(CursorText)
+		Radius(t.Radius).Background(t.Surface).Border(1, t.Outline()).Role(RoleNone).Cursor(CursorText)
 	f.flags |= flagClickable | flagHover
 	var in *node
 	f.Children(func() { in = fn() })
@@ -434,7 +434,7 @@ func coreAutocomplete(c *context, value *string, suggestions []string) *node {
 	in := p.Input
 	in.autoComplete = AutoCompleteList
 	t := c.theme
-	in.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Border)
+	in.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Outline())
 	in.builtWith(t)
 	setStyle(in, inputStyle, staticInput)
 	var shown []string

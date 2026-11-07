@@ -308,7 +308,7 @@ func TestComboboxFieldPaintsWithItsBuiltTheme(t *testing.T) {
 	r := box.Bounds()
 	tt.Move(r.X+r.W/2, r.Y+r.H/2)
 	tt.Frame()
-	want := light.Border.Mix(light.Text, 0.25)
+	want := light.Outline().Mix(light.Text, 0.25) // a control's outline, darker as hovered
 	if got := painted(box).borderC; got != want {
 		t.Fatalf("hovered box border %v, want the built theme's %v", got, want)
 	}

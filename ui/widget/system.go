@@ -31,14 +31,16 @@ const (
 // SetTheme sets the app's appearance; every window follows.
 func SetTheme(t Theme) { mygo.Theme.SetSource(t) }
 
-// SetBorder sets the color of the outline of the controls (TextBox,
-// ComboBox, NumericUpDown and the others) and of their dividers, in the
-// light and the dark appearance: the theme's own is faint on some screens.
-// A zero color leaves the theme's. Every window follows, as the appearance
-// changes. Call it once at startup.
+// SetControlBorder sets the color of the outline of the controls (TextBox,
+// ComboBox, NumericUpDown, buttons and the other inputs), in the light and the
+// dark appearance. The theme's own is 3.4:1 against the window in the light
+// appearance and 3.7:1 in the dark (WCAG 1.4.11 asks 3:1); dividers, grid
+// lines and the edges of containers keep the theme's lighter border. A zero
+// color leaves the theme's. Every window follows, as the appearance changes.
+// Call it once at startup.
 //
-//	widget.SetBorder(ui.Hex("#9ca3af"), ui.Hex("#6b7280")) // gray-400, gray-500
-func SetBorder(light, dark ui.Color) { ui.SetDefaultBorder(light, dark) }
+//	widget.SetControlBorder(ui.Hex("#6b7280"), ui.Hex("#9ca3af")) // gray-500, gray-400
+func SetControlBorder(light, dark ui.Color) { ui.SetControlBorder(light, dark) }
 
 // IsDark reports whether the app draws dark.
 func IsDark() bool { return mygo.Theme.IsDark() }
