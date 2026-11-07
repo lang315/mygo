@@ -41,7 +41,8 @@ ui.Row(c).Gap(8).Padding(12).Children(func() {
 - `Grow(1)` gives an element the free space along its parent's direction,
   like `flex: 1`: a list that fills the rest of a window, or a `Spacer` that
   pushes the elements after it to the end. `Shrink`, `Basis` and
-  `BasisPercent` work as in CSS.
+  `BasisPercent` work as in CSS; `BasisAuto` sets the basis back to the
+  content's, as `flex: 1 1 auto`: call it after `Grow`, which sets a basis of 0.
 - `AspectRatio` keeps an element's proportions.
 
 ## Spacing

@@ -948,8 +948,10 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   the last too, to both edges: lines break at the items' natural widths as
   without it, then each line's items grow equally (gaps unchanged, a
   toggle's text stays centred). An item alone on the last line takes the
-  whole width. Do not `HExpand()` the items instead: that sets their basis
-  to 0, so they shrink and share one line.
+  whole width. It overrides an item's own width and grow weight (an item
+  with `SetSize(80, 0)` grows too). Do not `HExpand()` the items instead:
+  that sets their basis to 0, so they shrink to their minimum widths and
+  more of them pack onto each line.
 - `ScrollPanel(w)`: scrolls a widget larger than its room, both ways.
   `.Vertical()` scrolls up and down only, as a page of a sidebar does: the
   content keeps the panel's width, so its labels wrap there, and it is laid out

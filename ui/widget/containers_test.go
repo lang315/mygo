@@ -198,7 +198,7 @@ func flowLines(t *testing.T, justify bool) (items []ui.Rect, panel ui.Rect) {
 	if justify {
 		f.Justify()
 	}
-	names := []string{"go", "native ui", "webview", "typed ipc", "a", "windows", "linux", "macos", "plugins", "tags", "wasm", "cli", "bun", "docs", "x"}
+	names := []string{"go", "native ui", "webview", "typed ipc", "a", "windows", "linux", "macos", "plugins", "tags", "wasm", "cli", "bun", "docs", "x", "the lone last one"}
 	for _, s := range names {
 		f.Add(Toggle(s))
 	}
@@ -237,6 +237,9 @@ func TestFlowPanelJustifyFillsEveryLine(t *testing.T) {
 	if len(pl) < 3 {
 		t.Fatalf("only %d lines: the test needs wrapping", len(pl))
 	}
+	if last := pl[len(pl)-1]; len(last) != 1 {
+		t.Fatalf("last line has %d items: the test needs a lone one", len(last))
+	}
 	if len(jl) != len(pl) {
 		t.Fatalf("%d lines justified, %d plain: breaks moved", len(jl), len(pl))
 	}
@@ -251,6 +254,10 @@ func TestFlowPanelJustifyFillsEveryLine(t *testing.T) {
 			t.Errorf("line %d starts at %v, panel at %v", i, first.X, panel.X)
 		}
 		for j, r := range l {
+			// Every item of a line grows by the same amount.
+			if d, d0 := r.W-pl[i][j].W, l[0].W-pl[i][0].W; d < d0-0.5 || d > d0+0.5 {
+				t.Errorf("item %d of line %d grew by %v, the first by %v", j, i, d, d0)
+			}
 			if r.W < pl[i][j].W-0.01 {
 				t.Errorf("item %d of line %d shrank: %v < %v", j, i, r.W, pl[i][j].W)
 			}

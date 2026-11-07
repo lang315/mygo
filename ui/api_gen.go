@@ -3785,7 +3785,7 @@ func (_handle Element) Basis(v float32) Element {
 // BasisAuto sets the basis back to the element's content, as flex-basis:
 // auto: after Grow, whose basis is 0, it makes a wrapping row break its
 // lines at the items' natural sizes and then grow each line's items to fill
-// it.
+// it. Call it after Grow: Grow sets the basis back to 0 when it is auto.
 func (_handle Element) BasisAuto() Element {
 	_node := _handle.node()
 	if _node == nil {

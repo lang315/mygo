@@ -1000,7 +1000,7 @@ func (e *node) BasisPercent(p float32) *node { e.basis = percent(p); return e }
 // BasisAuto sets the basis back to the element's content, as flex-basis:
 // auto: after Grow, whose basis is 0, it makes a wrapping row break its
 // lines at the items' natural sizes and then grow each line's items to fill
-// it.
+// it. Call it after Grow: Grow sets the basis back to 0 when it is auto.
 func (e *node) BasisAuto() *node { e.basis = length{}; return e }
 
 // Justify places the children along the main axis.
