@@ -189,3 +189,90 @@ func TestTabsAndMenuButtonFocusFollowTheWidget(t *testing.T) {
 	}
 	tt.CloseMenu()
 }
+
+// flowLines lays out toggles in a FlowPanel 400 wide and returns their
+// boxes, in order, and the panel's.
+func flowLines(t *testing.T, justify bool) (items []ui.Rect, panel ui.Rect) {
+	t.Helper()
+	f := FlowPanel(6).SetSize(400, 0)
+	if justify {
+		f.Justify()
+	}
+	names := []string{"go", "native ui", "webview", "typed ipc", "a", "windows", "linux", "macos", "plugins", "tags", "wasm", "cli", "bun", "docs", "x"}
+	for _, s := range names {
+		f.Add(Toggle(s))
+	}
+	tt := tester(t, f)
+	for _, s := range names {
+		for _, n := range tt.Nodes() {
+			if n.Label == s {
+				items = append(items, n.Bounds)
+			}
+		}
+	}
+	if len(items) != len(names) {
+		t.Fatalf("found %d of %d toggles", len(items), len(names))
+	}
+	// The panel starts where its first item does and is 400 wide.
+	return items, ui.Rect{X: items[0].X, Y: items[0].Y, W: 400}
+}
+
+// rowsOf groups boxes by their top edge.
+func rowsOf(rs []ui.Rect) [][]ui.Rect {
+	var out [][]ui.Rect
+	for _, r := range rs {
+		if n := len(out); n > 0 && out[n-1][0].Y == r.Y {
+			out[n-1] = append(out[n-1], r)
+		} else {
+			out = append(out, []ui.Rect{r})
+		}
+	}
+	return out
+}
+
+func TestFlowPanelJustifyFillsEveryLine(t *testing.T) {
+	plain, _ := flowLines(t, false)
+	just, panel := flowLines(t, true)
+	pl, jl := rowsOf(plain), rowsOf(just)
+	if len(pl) < 3 {
+		t.Fatalf("only %d lines: the test needs wrapping", len(pl))
+	}
+	if len(jl) != len(pl) {
+		t.Fatalf("%d lines justified, %d plain: breaks moved", len(jl), len(pl))
+	}
+	for i, l := range jl {
+		if len(l) != len(pl[i]) {
+			t.Fatalf("line %d has %d items, plain %d", i, len(l), len(pl[i]))
+		}
+		if last := l[len(l)-1]; last.X+last.W < panel.X+panel.W-1 || last.X+last.W > panel.X+panel.W+1 {
+			t.Errorf("line %d ends at %v, panel's right edge %v", i, last.X+last.W, panel.X+panel.W)
+		}
+		if first := l[0]; first.X != panel.X {
+			t.Errorf("line %d starts at %v, panel at %v", i, first.X, panel.X)
+		}
+		for j, r := range l {
+			if r.W < pl[i][j].W-0.01 {
+				t.Errorf("item %d of line %d shrank: %v < %v", j, i, r.W, pl[i][j].W)
+			}
+			if j > 0 {
+				if gap, was := r.X-(l[j-1].X+l[j-1].W), pl[i][j].X-(pl[i][j-1].X+pl[i][j-1].W); gap < was-0.01 || gap > was+0.01 {
+					t.Errorf("gap %d of line %d is %v, plain %v", j, i, gap, was)
+				}
+			}
+		}
+	}
+}
+
+func TestFlowPanelJustifyKeepsToggleTextCentred(t *testing.T) {
+	f := FlowPanel(6).SetSize(400, 0).Justify().Add(Toggle("go"), Toggle("native ui"))
+	tt := tester(t, f)
+	for _, n := range tt.Nodes() {
+		if n.Label != "go" && n.Label != "native ui" {
+			continue
+		}
+		txt := find(t, tt, n.Label)
+		if d := (txt.X + txt.W/2) - (n.Bounds.X + n.Bounds.W/2); d < -1 || d > 1 {
+			t.Errorf("%q text centre is %v off its toggle's", n.Label, d)
+		}
+	}
+}

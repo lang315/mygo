@@ -546,6 +546,7 @@ type FlowPanelWidget struct {
 	common[FlowPanelWidget]
 	spacing float32
 	items   []Control
+	justify bool
 }
 
 func FlowPanel(spacing int) *FlowPanelWidget {
@@ -576,13 +577,25 @@ func (f *FlowPanelWidget) Clear() *FlowPanelWidget {
 	return f
 }
 
+// Justify makes every line, the last too, reach both edges: the lines break
+// at the items' natural widths as without it, then each line's items grow
+// equally to fill it, the gaps unchanged. An item alone on the last line
+// takes all its width.
+func (f *FlowPanelWidget) Justify() *FlowPanelWidget {
+	f.change(func() { f.justify = true })
+	return f
+}
+
 func (f *FlowPanelWidget) build(c *ui.Context) ui.Element {
 	return ui.Row(c).Wrap().Gap(f.spacing).Children(func() {
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()
 		for _, w := range f.items {
-			render(c, w)
+			e := render(c, w)
+			if f.justify {
+				e.Grow(1).BasisAuto()
+			}
 		}
 	})
 }

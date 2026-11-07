@@ -997,6 +997,12 @@ func (e *node) Basis(v float32) *node { e.basis = px(v); return e }
 // its main axis.
 func (e *node) BasisPercent(p float32) *node { e.basis = percent(p); return e }
 
+// BasisAuto sets the basis back to the element's content, as flex-basis:
+// auto: after Grow, whose basis is 0, it makes a wrapping row break its
+// lines at the items' natural sizes and then grow each line's items to fill
+// it.
+func (e *node) BasisAuto() *node { e.basis = length{}; return e }
+
 // Justify places the children along the main axis.
 func (e *node) Justify(a Align) *node { e.justify = a; return e }
 

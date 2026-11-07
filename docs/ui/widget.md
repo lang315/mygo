@@ -944,7 +944,12 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   an icon in the notification area; see [App shell](#app-shell).
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
-- `FlowPanel(spacing)`: a row that wraps.
+- `FlowPanel(spacing)`: a row that wraps. `.Justify()` fills every line,
+  the last too, to both edges: lines break at the items' natural widths as
+  without it, then each line's items grow equally (gaps unchanged, a
+  toggle's text stays centred). An item alone on the last line takes the
+  whole width. Do not `HExpand()` the items instead: that sets their basis
+  to 0, so they shrink and share one line.
 - `ScrollPanel(w)`: scrolls a widget larger than its room, both ways.
   `.Vertical()` scrolls up and down only, as a page of a sidebar does: the
   content keeps the panel's width, so its labels wrap there, and it is laid out
