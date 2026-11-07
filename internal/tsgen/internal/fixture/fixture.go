@@ -32,6 +32,11 @@ type Timestamps struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// Channel groups tasks, and shares its name with the runtime's stream type.
+type Channel struct {
+	Name string `json:"name"`
+}
+
 // Task is a unit of work.
 type Task struct {
 	ID int64 `json:"id"`
@@ -43,6 +48,7 @@ type Task struct {
 	Due      *time.Time       `json:"due"`
 	Meta     map[string]any   `json:"meta,omitempty"`
 	Parent   *Task            `json:"parent,omitzero"`
+	Channel  *Channel         `json:"channel,omitzero"`
 	Secret   string           `json:"-"`
 	Count    int64            `json:"count,string"`
 	CountPtr *int64           `json:"countPtr,string"`
@@ -88,6 +94,12 @@ func (Tasks) Count() int { return 0 }
 
 // Delete removes a task; the parameter is unnamed on purpose.
 func (Tasks) Delete(int64) {}
+
+// Dispatch deliberately names parameters after the runtime's call function.
+func (Tasks) Dispatch(call, call_ string) {}
+
+// DispatchMany uses the runtime's call name for a variadic parameter.
+func (Tasks) DispatchMany(call ...string) {}
 
 // Watch sends the tasks with the given status as they change. The test
 // declares updates a channel of tasks.

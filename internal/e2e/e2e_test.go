@@ -135,6 +135,10 @@ func TestMain(m *testing.M) {
 		cookiesWhileOpening()
 		return
 	}
+	if os.Getenv("MYGO_E2E_WEBVIEW_OFF_MAIN") == "1" {
+		webViewOffMain()
+		return
+	}
 	if os.Getenv("MYGO_E2E_COOKIE_VIEW") == "1" {
 		cookieViewApp()
 		return
@@ -560,6 +564,10 @@ func pageState(p *mygo.Page) string {
 
 func newWindow(t *testing.T, opts mygo.WindowOptions) *mygo.Window {
 	t.Helper()
+	// Registered first, it runs last, with the test's own cleanups and
+	// this window's Destroy done.
+	check := watchLeftBehind()
+	t.Cleanup(func() { check(t.Errorf) })
 	w := mygo.NewWindow(opts)
 	t.Cleanup(w.Destroy)
 	return w
@@ -894,6 +902,63 @@ func TestGlass(t *testing.T) {
 	if class, _, _, _, _ := material(w); class != "" {
 		t.Errorf("no material: %s", class)
 	}
+}
+
+// TestGlassWithoutTransparent gives Liquid Glass to windows that are not
+// transparent (macOS 26). The glass shows what is under it in the window,
+// which is made clear while it shows, and opaque again once another
+// material or none takes its place. A rounded window's content view gives
+// its color up to the glass too, and gets it back, the color set meanwhile.
+// A transparent window stays clear.
+func TestGlassWithoutTransparent(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Width: 300, Height: 200, Vibrancy: mygo.VibrancyGlass})
+	class, _, _, _, ok := material(w)
+	if !ok {
+		t.Skip("the material is macOS's")
+	}
+	if class != "NSGlassEffectView" {
+		t.Skip("the system has no NSGlassEffectView")
+	}
+	wantClear := func(name string, w *mygo.Window) {
+		t.Helper()
+		if opaque, alpha, _ := windowBacking(w); opaque || alpha != 0 {
+			t.Errorf("%s: opaque %v, background alpha %v; want a clear window", name, opaque, alpha)
+		}
+	}
+	wantClear("glass", w)
+	w.SetVibrancy(mygo.VibrancyPopover)
+	if opaque, alpha, _ := windowBacking(w); !opaque || alpha == 0 {
+		t.Errorf("popover: opaque %v, background alpha %v; want the window opaque again", opaque, alpha)
+	}
+	w.SetVibrancy(mygo.VibrancyGlassClear)
+	wantClear("clear glass", w)
+	w.SetVibrancy(mygo.VibrancyNone)
+	if opaque, alpha, _ := windowBacking(w); !opaque || alpha == 0 {
+		t.Errorf("no material: opaque %v, background alpha %v; want the window opaque again", opaque, alpha)
+	}
+
+	view := ui.View(func(c *ui.Context) { c.Root().Background(ui.Transparent) })
+	r := newWindow(t, mygo.WindowOptions{Width: 300, Height: 200, Frameless: true, CornerRadius: 12, BackgroundColor: "#ff0000",
+		Vibrancy: mygo.VibrancyGlass, Content: view})
+	if opaque, alpha, _, _ := roundedBacking(r); opaque || alpha != 0 {
+		t.Errorf("rounded glass: opaque %v, the content view's color's alpha %v; want both clear", opaque, alpha)
+	}
+	r.SetBackgroundColor("#00ff0080")
+	if _, alpha, _, _ := roundedBacking(r); alpha != 0 {
+		t.Errorf("rounded glass after SetBackgroundColor: the content view's color's alpha %v; want it clear", alpha)
+	}
+	r.SetVibrancy(mygo.VibrancyNone)
+	if opaque, alpha, _, _ := roundedBacking(r); opaque || alpha < .49 || alpha > .51 {
+		t.Errorf("rounded, no material: opaque %v, the content view's color's alpha %v; want a clear window, the new color on the content view", opaque, alpha)
+	}
+	if _, _, radius, _, _ := material(r); radius != 12 {
+		t.Errorf("rounded, no material: corners %v, want 12", radius)
+	}
+
+	tr := newWindow(t, mygo.WindowOptions{Width: 300, Height: 200, Transparent: true, Vibrancy: mygo.VibrancyGlass})
+	wantClear("transparent glass", tr)
+	tr.SetVibrancy(mygo.VibrancyNone)
+	wantClear("transparent, no material", tr)
 }
 
 // TestNativeGlassOverWebView puts a toolbar of the system's glass over a
@@ -1381,6 +1446,51 @@ func TestPageProcessID(t *testing.T) {
 	}
 	if pid <= 0 || pid == os.Getpid() {
 		t.Errorf("ProcessID = %d, want another process than the app's (%d)", pid, os.Getpid())
+	}
+}
+
+// gpuPage draws on a canvas with 2D and WebGL contexts and loads a second
+// of silence in an audio element, which WebKit does in its GPU process,
+// starting it.
+const gpuPage = `<canvas id=c width=64 height=64></canvas><script>
+const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 64, 64);
+const gl = document.createElement('canvas').getContext('webgl'); if (gl) gl.clear(gl.COLOR_BUFFER_BIT);
+const n = 8000, wav = new Uint8Array(44 + n).fill(128), v = new DataView(wav.buffer);
+const tag = (at, s) => [...s].forEach((ch, i) => v.setUint8(at + i, ch.charCodeAt(0)));
+tag(0, 'RIFF'); v.setUint32(4, 36 + n, true); tag(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+v.setUint16(32, 1, true); v.setUint16(34, 8, true); tag(36, 'data'); v.setUint32(40, n, true);
+const a = new Audio(URL.createObjectURL(new Blob([wav], {type: 'audio/wav'}))); a.load(); document.body.append(a);
+</script>`
+
+// GPUProcessID is WebKit's GPU process on macOS (com.apple.WebKit.GPU) and
+// WebView2's GPU process on Windows, one of WebView2's processes, neither
+// the app's own nor ProcessID's; Linux has none.
+func TestPageGPUProcessID(t *testing.T) {
+	w := newWindow(t, mygo.WindowOptions{Width: 300, Height: 200})
+	w.Page().LoadHTML(gpuPage, "")
+	waitFor(t, w, "document.readyState === 'complete'")
+	if runtime.GOOS == "linux" {
+		if pid := w.Page().GPUProcessID(); pid != 0 {
+			t.Errorf("GPUProcessID = %d on Linux, want 0", pid)
+		}
+		return
+	}
+	var pid int
+	wait.Until(t, "a GPU process", func() bool { pid = w.Page().GPUProcessID(); return pid != 0 })
+	if pid < 0 || pid == os.Getpid() || pid == w.Page().ProcessID() {
+		t.Errorf("GPUProcessID = %d, want another process than the app's (%d) and ProcessID's (%d)", pid, os.Getpid(), w.Page().ProcessID())
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("ps", "-o", "comm=", "-p", strconv.Itoa(pid)).Output()
+		if err != nil || !strings.Contains(string(out), "com.apple.WebKit.GPU") {
+			t.Errorf("GPUProcessID %d is %q (%v), want com.apple.WebKit.GPU", pid, strings.TrimSpace(string(out)), err)
+		}
+	case "windows":
+		if procs := webViewProcesses(); !slices.Contains(procs, pid) {
+			t.Errorf("GPUProcessID %d is none of WebView2's processes %v", pid, procs)
+		}
 	}
 }
 
@@ -3956,6 +4066,66 @@ func TestContentWindowComposingKeys(t *testing.T) {
 	eventually(t, "Escape closing the dialog", func() bool { o, _, _ := state(); return !o })
 }
 
+// TestContentWindowComposingReturn presses Return in a chat box while an
+// input method composes. The Korean one commits the syllable and passes
+// Return on (doCommandBySelector:): the box sends the message on that
+// press, as a text view acts on it. The Japanese one commits the
+// candidate and keeps Return: nothing is sent. A command asked for while
+// the input method still composes, or for a key the content got already,
+// sends no key.
+func TestContentWindowComposingReturn(t *testing.T) {
+	var frames atomic.Int32
+	draft := ""
+	var sent []string
+	view := func(c *ui.Context) {
+		frames.Add(1)
+		ui.TextArea(c, &draft).AutoFocus().OnTextKey(func(k ui.TextKey) bool {
+			if k.Key == ui.KeyEnter && k.Mods == 0 {
+				sent = append(sent, k.Text())
+				k.SetText("")
+				return true
+			}
+			return false
+		})
+	}
+	state := func() (d string, s []string) {
+		mygo.RunOnMain(func() { d, s = draft, slices.Clone(sent) })
+		return
+	}
+	w := newWindow(t, mygo.WindowOptions{Title: "Composing Return", Width: 400, Height: 200, Content: ui.View(view)})
+	eventually(t, "a frame", func() bool { return frames.Load() > 1 })
+
+	// Korean: Return commits 한 and sends it.
+	compose(w, "한", 1, false)
+	if !pressKeyComposing(w, 36, "\r", "한", "insertNewline:") {
+		t.Skip("input method automation not available on this platform")
+	}
+	eventually(t, "Return sending the committed syllable", func() bool { _, s := state(); return len(s) == 1 })
+	if d, s := state(); s[0] != "한" || d != "" {
+		t.Fatalf("sent %q, the draft %q", s, d)
+	}
+
+	// Japanese: Return commits 日本 and is the input method's.
+	compose(w, "にほん", 3, false)
+	pressKeyComposing(w, 36, "\r", "日本", "")
+	eventually(t, "the committed candidate", func() bool { d, _ := state(); return d == "日本" })
+
+	// The input method asks for the command while it still composes.
+	compose(w, "ㄱ", 1, false)
+	pressKeyComposing(w, 36, "\r", "", "insertNewline:")
+	compose(w, "가", 0, true)
+	eventually(t, "the composition committed", func() bool { d, _ := state(); return d == "日本가" })
+
+	// No composition: the key goes to the content once, not again for its
+	// command.
+	pressKeyComposing(w, 36, "\r", "", "insertNewline:")
+	compose(w, "x", 0, true)
+	eventually(t, "the text typed after Return", func() bool { d, _ := state(); return d == "x" })
+	if _, s := state(); len(s) != 2 || s[1] != "日本가" {
+		t.Fatalf("sent %q, want [한 日本가]", s)
+	}
+}
+
 // TestContentWindowTextKeys has a composer's OnTextKey take Return and
 // Tab as the platform delivers them, reading the text typed before them:
 // the text area inserts no newline, and the focus stays.
@@ -4347,6 +4517,60 @@ func TestContentWindowPopoverMenuButton(t *testing.T) {
 	pressKeys("Down")
 	pressKeys("Return")
 	eventually(t, "the choice", func() bool { return chosen.Load() == "As PNG" })
+}
+
+// TestContentWindowDrawnEditMenu right-clicks a text input of a window
+// that draws its menus (SetMenuPresentation): its editing menu draws in the
+// window and takes the focus, the system shows none, and its keys choose
+// Select All, after which the focus is back in the input, whose typing
+// replaces the text.
+func TestContentWindowDrawnEditMenu(t *testing.T) {
+	var frames atomic.Int32
+	var text atomic.Value
+	var inInput atomic.Bool
+	value := "hello world"
+	text.Store(value)
+	view := func(c *ui.Context) {
+		frames.Add(1)
+		c.SetMenuPresentation(ui.PopoverMenus)
+		ui.Box(c).Fill().Padding(20).Children(func() {
+			ui.TextInput(c, &value).Size(200, 32)
+		})
+		text.Store(value)
+		inInput.Store(c.FocusTakesText())
+	}
+	w := newWindow(t, mygo.WindowOptions{Title: "Drawn editing menu", Width: 400, Height: 300, Content: ui.View(view)})
+	eventually(t, "a frame", func() bool { return frames.Load() > 0 })
+	// focusIs asks for a frame each time it looks, so that the view reads
+	// the focus as it is, not as it was when the window last drew.
+	focusIs := func(input bool) func() bool {
+		return func() bool {
+			w.Invalidate()
+			return inInput.Load() == input
+		}
+	}
+	// A click first gives the window the keyboard, with no window manager.
+	if _, ok := popupMenus(); !ok || !click(w, 120, 36) {
+		t.Skip("context menu automation not available on this platform")
+	}
+	eventually(t, "the input's focus", focusIs(true))
+	rightClick(w, 120, 36)
+	if !wait.Poll(focusIs(false)) {
+		menus, _ := popupMenus()
+		t.Fatalf("the menu never took the focus: %d frames, the system's menus %q", frames.Load(), menus)
+	}
+	if menus, _ := popupMenus(); len(menus) != 0 {
+		t.Fatalf("the system shows a menu: %q", menus)
+	}
+	// It opened on no item: End goes to its last, Select All, on every
+	// platform.
+	if !pressKeys("End") {
+		t.Skip("key automation not available on this platform")
+	}
+	pressKeys("Return")
+	eventually(t, "the focus back in the input", focusIs(true))
+	pressKeys("x")
+	eventually(t, "the text replaced", func() bool { return text.Load() == "x" })
 }
 
 // TestReorderByDragging drags a row of a list below another with the

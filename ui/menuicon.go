@@ -5,6 +5,8 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // MenuIconPNG draws s as a menu icon: a 32×32 PNG, shown at 16×16 points,
@@ -19,4 +21,12 @@ func MenuIconPNG(s *SVG, c Color) (b []byte, template bool) {
 		return nil, false
 	}
 	return buf.Bytes(), s.doc.OnlyCurrentColor()
+}
+
+// PlatformMenuIcon makes an *SVG a MenuIcon, so that MenuItem.Icon takes it:
+// MenuItem.Icon draws it for the color of the text of the theme, which this
+// does not know, and uses black.
+func (s *SVG) PlatformMenuIcon() *platform.MenuIcon {
+	png, template := MenuIconPNG(s, Color{A: 255})
+	return menuIcon(png, template)
 }

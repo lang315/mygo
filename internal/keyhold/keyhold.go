@@ -16,7 +16,7 @@ import (
 // Holder holds the key events of one window.
 type Holder interface {
 	// Hold takes ev before the view does, and reports whether it took it:
-	// a key, modifiers, text or command event while holding, and a repeat
+	// a key (also a raw one, a lone modifier's), modifiers, text or command event while holding, and a repeat
 	// of F10, which would take the bar out of its mode again. The changes
 	// of the modifiers wait with the keys, so that a modifier let go after
 	// a held key comes back after it, not held for good. Alt alone (KeyMenuBar) or F10
@@ -71,7 +71,7 @@ func menuKey(ev platform.SurfaceEvent) bool {
 
 func (h *holder) Hold(ev platform.SurfaceEvent) bool {
 	switch ev.Kind {
-	case platform.KeyPressed, platform.KeyReleased, platform.ModifiersChanged, platform.TextInput, platform.TextComposition, platform.SurfaceCommand:
+	case platform.KeyPressed, platform.KeyReleased, platform.RawKeyPressed, platform.RawKeyReleased, platform.ModifiersChanged, platform.TextInput, platform.TextComposition, platform.SurfaceCommand:
 		if h.holding {
 			h.held = append(h.held, ev)
 			return true

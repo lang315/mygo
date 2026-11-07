@@ -41,6 +41,9 @@ type headless struct {
 	// escapes counts the Escapes nothing handled.
 	escapes int
 	openErr error
+	// clipboardErr fails the writes of text to the clipboard
+	// (FailClipboard).
+	clipboardErr error
 	// later are what the view asked to run after the frame, as a window
 	// posts them to the main thread.
 	later  []func()
@@ -119,7 +122,6 @@ func (h *headless) repaintTimer(at time.Time)                  { h.repaintAt = a
 func (h *headless) setCursor(c Cursor)                         { h.cursor = c }
 func (h *headless) setTextInput(t platform.TextInputState)     { h.ime = t }
 func (h *headless) updateAccessibility(t *platform.AccessTree) { h.keepAccess(t) }
-func (h *headless) writeClipboard(s string)                    { h.clipboard, h.clipboardData = s, transfer.Data{} }
 func (h *headless) startDrag()                                 {}
 func (h *headless) setDropFormats([]transfer.Format)           {}
 func (h *headless) readClipboard() string {
@@ -186,6 +188,21 @@ func (h *headless) active() bool                      { return !h.inactive }
 func (h *headless) invalidate() {
 	h.invalidated.Store(true)
 	h.requested.Store(true)
+}
+
+// writeClipboard copies s, unless FailClipboard set an error;
+// writeClipboardThen gives done that error before the next frame too, as
+// a window gives it after the system wrote the clipboard.
+func (h *headless) writeClipboard(s string) {
+	if h.clipboardErr == nil {
+		h.clipboard, h.clipboardData = s, transfer.Data{}
+	}
+}
+
+func (h *headless) writeClipboardThen(s string, done func(error)) {
+	h.writeClipboard(s)
+	err := h.clipboardErr
+	h.later = append(h.later, func() { done(err) })
 }
 
 // openURL notes the link, and gives done the error FailOpenURL set before
@@ -258,13 +275,38 @@ type Tester struct {
 
 	mu      sync.Mutex
 	updates []func()
+	// pointer and pressure are the device of the pointer's events, and
+	// how hard it presses (UsePointer).
+	pointer  PointerType
+	pressure float32
 }
 
 // NewTester starts testing view in a window of width×height DIPs. Two
 // elements given one key under one parent make it panic where the second
 // was given, as apps only log it.
 func coreNewTester(view func(c *context), width, height int) *Tester {
-	h := &headless{w: float32(width), h: float32(height), scale: 1}
+	return coreNewTesterWith(view, width, height, TesterOptions{})
+}
+
+// TesterOptions are settings of the desktop that a Tester starts with,
+// which its first frame follows, as Media Queries 5 has the user's
+// preferences apply from the first time styles resolve: a view mounted
+// under ReduceMotion starts no animation in its first frames either, as
+// it would before a SetPreferences after NewTester.
+type TesterOptions struct {
+	// Preferences are the desktop's settings that controls follow
+	// (SetPreferences).
+	Preferences Preferences
+	// Dark starts in the dark appearance (SetDark).
+	Dark bool
+}
+
+// NewTesterWith starts testing view in a window of width×height DIPs, as
+// NewTester does, with the desktop's settings of o from the first frame:
+//
+//	tt := ui.NewTesterWith(view, 400, 300, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+func coreNewTesterWith(view func(c *context), width, height int, o TesterOptions) *Tester {
+	h := &headless{w: float32(width), h: float32(height), scale: 1, prefs: platformPreferences(o.Preferences), dark: o.Dark}
 	t := &Tester{rt: newRuntime(view, h), h: h, now: time.Now()}
 	t.rt.clock = t.Now
 	h.clock = t.Now
@@ -402,6 +444,10 @@ func (t *Tester) timerDue(at, armed time.Time) (time.Time, bool) {
 }
 
 func (t *Tester) send(ev platform.SurfaceEvent) {
+	switch ev.Kind {
+	case platform.PointerMove, platform.PointerDown, platform.PointerUp:
+		ev.Pointer, ev.Pressure = platform.PointerKind(t.pointer), float64(t.pressure)
+	}
 	if ev.Kind == platform.PointerDown && ev.Clicks == 0 {
 		// Counted as a backend counts.
 		ev.Clicks = t.clicks.Press(ev.Button, ev.X, ev.Y, uint32(t.now.UnixMilli()), platform.DefaultDoubleClick)
@@ -472,6 +518,22 @@ func (t *Tester) SetWindowActive(active bool) {
 	t.settle()
 }
 
+// SetWindowHidden hides all of the window from sight, as minimizing it
+// or covering it with other windows does, or shows it again:
+// Context.WindowHidden returns it, and what moves waits while it is
+// hidden.
+func (t *Tester) SetWindowHidden(hidden bool) {
+	if t.h.hidden == hidden {
+		return
+	}
+	t.h.hidden = hidden
+	kind := platform.SurfaceShown
+	if hidden {
+		kind = platform.SurfaceHidden
+	}
+	t.send(platform.SurfaceEvent{Kind: kind})
+}
+
 // SetDark switches between the light and the dark appearance.
 func (t *Tester) SetDark(dark bool) {
 	t.h.dark = dark
@@ -482,10 +544,16 @@ func (t *Tester) SetDark(dark bool) {
 // SetPreferences changes the desktop's settings that controls follow, as
 // the user does in the system's settings.
 func (t *Tester) SetPreferences(p Preferences) {
-	t.h.prefs = platform.Preferences{Accent: platform.Color{R: p.Accent.R, G: p.Accent.G, B: p.Accent.B, A: p.Accent.A}, ReduceMotion: p.ReduceMotion,
-		ReduceTransparency: p.ReduceTransparency, HighContrast: p.HighContrast, TextScale: float64(p.TextScale)}
+	t.h.prefs = platformPreferences(p)
 	t.rt.themeChanged()
 	t.settle()
+}
+
+// platformPreferences returns p as a backend gives them.
+func platformPreferences(p Preferences) platform.Preferences {
+	return platform.Preferences{Accent: platform.Color{R: p.Accent.R, G: p.Accent.G, B: p.Accent.B, A: p.Accent.A}, ReduceMotion: p.ReduceMotion,
+		ReduceTransparency: p.ReduceTransparency, HighContrast: p.HighContrast, TextScale: float64(p.TextScale),
+		Pointer: platform.PointerAccuracy(p.Pointer), AnyPointer: platform.PointerAccuracy(p.AnyPointer), NoHover: p.NoHover, NoAnyHover: p.NoAnyHover}
 }
 
 // SetLocale makes tag the language the app shows, as mygo.App.SetLocale
@@ -698,25 +766,39 @@ func (t *Tester) labelCenter(n *labelNode, s string, button int) (float32, float
 	if button == 1 {
 		flags |= flagContextMenu
 	}
-	receiver := func(chain []uint64) *state {
+	receiverOf := func(chain []uint64, f uint32) *state {
 		for _, id := range chain {
 			if st := t.rt.states[id]; st != nil &&
-				(st.flags&flags != 0 || st.input != nil || st.webView != nil) {
+				(st.flags&f != 0 || st.input != nil || st.webView != nil) {
 				return st
 			}
 		}
 		return nil
 	}
+	receiver := func(chain []uint64) *state { return receiverOf(chain, flags) }
 	want := receiver(named)
 	// A field's label can name its outer container, which delegates focus
 	// to an input nested inside. Clicking that input is the same target.
 	matches := slices.Contains(hit, n.id)
 	if want != nil {
-		matches = receiver(hit) == want && t.rt.handler(hit) == t.rt.handler(named) &&
+		got := receiver(hit)
+		matches = got == want && t.rt.handler(hit) == t.rt.handler(named) &&
 			(button != 1 || t.rt.menuTarget(hit) == t.rt.menuTarget(named))
+		// A control without a menu of its own, as a list's row, opens
+		// the menu of the content it holds (#1414): the press reaches the
+		// named control, nothing between takes a primary click or input,
+		// and the menu opened is that content's. A control over the named
+		// one is not inside it, and one inside with a menu of its own
+		// keeps it.
+		if i := slices.Index(hit, want.id); !matches && button == 1 && i > 0 &&
+			want.flags&flagContextMenu == 0 && got != nil && got != want &&
+			receiverOf(hit[:i], interactive) == nil && t.rt.menuTarget(hit) == got &&
+			t.rt.handler(hit) == t.rt.handler(named) {
+			matches = true
+		}
 		for i := range t.rt.c.used {
 			e := t.rt.nodeAt(uint32(i))
-			if e.id == want.id && e.focusTo != nil && receiver(hit) == e.focusTo.st && slices.Contains(hit, n.id) {
+			if e.id == want.id && e.focusTo != nil && got == e.focusTo.st && slices.Contains(hit, n.id) {
 				matches = true
 				break
 			}
@@ -768,7 +850,8 @@ func (t *Tester) ClickAtWith(mods Modifiers, x, y float32) {
 
 // RightClick clicks the center of the element showing text or labeled s
 // with the secondary button. It checks the target before sending input,
-// as Click does.
+// as Click does. On an element without a context menu of its own, as a
+// list's row, it opens the menu of the content the element holds there.
 func (t *Tester) RightClick(s string) error {
 	x, y, err := t.targetCenter(s, 1)
 	if err != nil {
@@ -788,13 +871,15 @@ func (t *Tester) RightClickAt(x, y float32) {
 }
 
 // Menu returns the labels of the items of the context menu shown, "-" for
-// separators, or nil when none is.
+// separators, or nil when none is: the system's, or one drawn in the window
+// (PopoverMenu, SetMenuPresentation).
 func (t *Tester) Menu() []string {
-	if t.h.menu == nil {
+	m, _ := t.currentMenu()
+	if m == nil {
 		return nil
 	}
 	out := []string{}
-	for _, it := range t.h.menu.Items {
+	for _, it := range m.Items {
 		label := it.Label
 		if it.Type == platform.MenuItemSeparator {
 			label = "-"
@@ -821,7 +906,7 @@ func (t *Tester) MenuItemDestructive(label string) bool {
 // ChooseMenuItem chooses the item of the context menu shown labeled with
 // the last of path, in the submenus the others label, and closes the menu.
 func (t *Tester) ChooseMenuItem(path ...string) error {
-	m := t.h.menu
+	m, choose := t.currentMenu()
 	if m == nil {
 		return fmt.Errorf("ui: no context menu is shown")
 	}
@@ -852,15 +937,37 @@ func (t *Tester) ChooseMenuItem(path ...string) error {
 	if found.Type == platform.MenuItemSubmenu {
 		return fmt.Errorf("ui: %q opens a submenu", strings.Join(path, " > "))
 	}
-	chosen := t.h.chosen
-	t.h.menu, t.h.chosen = nil, nil
-	chosen(found.ID)
+	choose(found.ID)
 	t.settle()
 	return nil
 }
 
 // CloseMenu closes the context menu shown without choosing an item.
-func (t *Tester) CloseMenu() { t.h.menu, t.h.chosen = nil, nil }
+func (t *Tester) CloseMenu() {
+	if t.rt.menu.drawn != nil {
+		t.rt.menu.drawn = nil
+		t.settle()
+		return
+	}
+	t.h.menu, t.h.chosen = nil, nil
+}
+
+// currentMenu returns the context menu shown, the one drawn in the window
+// or else the system's, and what chooses its item id and closes it; nil
+// when none shows.
+func (t *Tester) currentMenu() (*platform.Menu, func(id int)) {
+	if d := t.rt.menu.drawn; d != nil && d.items != nil {
+		return d.items, func(id int) { d.choose = id }
+	}
+	if t.h.menu == nil {
+		return nil, nil
+	}
+	chosen := t.h.chosen
+	return t.h.menu, func(id int) {
+		t.h.menu, t.h.chosen = nil, nil
+		chosen(id)
+	}
+}
 
 // Press presses (x, y) without releasing; Release releases it.
 func (t *Tester) Press(x, y float32) { t.PressButton(0, x, y) }
@@ -881,6 +988,13 @@ func (t *Tester) PressButton(button int, x, y float32) {
 // ReleaseButton releases the pointer's button at (x, y).
 func (t *Tester) ReleaseButton(button int, x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: float64(x), Y: float64(y), Button: button})
+}
+
+// CancelPress has the system take the pointer's press, as a browser's
+// pointercancel does: every button held goes up without a release, which
+// clicks nothing (InputEvent.Canceled, PressCanceled).
+func (t *Tester) CancelPress() {
+	t.send(platform.SurfaceEvent{Kind: platform.PointerCancel})
 }
 
 // WebViewAt returns the web view (WebView) that takes the pointer at
@@ -904,6 +1018,20 @@ func (t *Tester) webViewPress(x, y float32, button int, mods platform.Modifiers)
 	}
 	t.send(platform.SurfaceEvent{Kind: platform.WebViewPress, X: float64(x), Y: float64(y), Button: button, Mods: mods})
 	return true
+}
+
+// UsePointer has the pointer's presses and moves from now on come from
+// the device pointer pressing with pressure, from 0 to 1, as a pen's, which
+// a system tells: 0 is a mouse's, which tells none. The Tester starts with
+// UsePointer(PointerMouse, 0). Calling it between moves while the pointer
+// presses changes the pressure as a pen pressing harder does:
+//
+//	tt.UsePointer(ui.PointerPen, 0.2)
+//	tt.Press(10, 10)
+//	tt.UsePointer(ui.PointerPen, 0.9)
+//	tt.Move(10, 10) // the pen presses harder where it stands
+func (t *Tester) UsePointer(pointer PointerType, pressure float32) {
+	t.pointer, t.pressure = pointer, pressure
 }
 
 // Move moves the pointer to (x, y).
@@ -999,6 +1127,19 @@ func (t *Tester) KeyAt(mods Modifiers, physical Key) {
 	t.send(platform.SurfaceEvent{Kind: platform.KeyReleased, PhysicalKey: platform.Key(physical), Mods: platform.Modifiers(mods)})
 }
 
+// CodeDown presses a key that only its position names, as a modifier on its
+// own or Caps Lock (InputEvent.Code): mods are the modifiers held with it,
+// its own among them.
+func (t *Tester) CodeDown(mods Modifiers, code KeyCode) {
+	t.send(platform.SurfaceEvent{Kind: platform.RawKeyPressed, Code: platform.KeyCode(code), Mods: platform.Modifiers(mods)})
+}
+
+// CodeUp lets go of a key CodeDown pressed: mods are the modifiers still
+// held.
+func (t *Tester) CodeUp(mods Modifiers, code KeyCode) {
+	t.send(platform.SurfaceEvent{Kind: platform.RawKeyReleased, Code: platform.KeyCode(code), Mods: platform.Modifiers(mods)})
+}
+
 // TypeKey presses a key that types text, as a keyboard does: the key goes
 // down, the text comes, then the key goes up.
 func (t *Tester) TypeKey(mods Modifiers, key Key, text string) {
@@ -1078,6 +1219,12 @@ func (t *Tester) Cursor() Cursor { return t.h.cursor }
 
 // OpenedURLs returns the links the view opened.
 func (t *Tester) OpenedURLs() []string { return t.h.opened }
+
+// FailClipboard makes the view's writes of text to the clipboard from now
+// on fail with err, copying nothing, as a browser refuses them without
+// the user acting (Context.WriteClipboardThen); nil lets them through
+// again.
+func (t *Tester) FailClipboard(err error) { t.h.clipboardErr = err }
 
 // FailOpenURL makes the links the view opens from now on fail with err, as
 // those no app opens, or opens them again for nil.

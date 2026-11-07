@@ -20,7 +20,7 @@ var statePlaced = map[string][]string{
 		"rowPressed", "pressChose", "releaseLater", "clicks", "rightClicks", "doubleClicks",
 		"typing", "dragX", "dragY", "pressed", "released", "pressPending",
 		"changed", "submitted", "events", "expand", "holding", "dropped",
-		"hasDropped", "dataDropped", "editor",
+		"hasDropped", "dataDropped", "editor", "dragMissed", "focusAsked",
 		"dragValue", "dragFn", "accepts", "dataSource", "dataTarget", "dragRec",
 		"anims", "motions", "colorMotions", "sequences", "timelines", "crec", "pose", "trec",
 		"shortcuts", "delivered", "wheel",
@@ -39,6 +39,9 @@ var statePlaced = map[string][]string{
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
 		"placed", "asked", // where AttachTo put the element, from its layout (AttachedAnchors)
+		"hitFn",                                                 // HitTest's, set at commit from the element, as input is
+		"accessDisabled", "activeDescendant", "focusHighlights", // set at commit from the element, as accessHidden is
+		"grouped", "ink", "lastInk", "inkFrame", // painting memory of a layer, as effectLayer is
 		"snap",              // the scroll snap of a scroll container, like its offsets
 		"observe", "closes", // set at commit from the element (a row with ObserveInput is never kept: retainable), and the Locals closers
 		"replay", // what the row painted (replay.go): painting memory, with its own key
@@ -52,8 +55,10 @@ var statePlaced = map[string][]string{
 		"releaseVX", "releaseVY", "releaseWX", "releaseWY",
 		"changeDelivered", "submitDelivered", "eventsDelivered", "submitMods",
 		"holdStart", "holdSteps", "droppedValue", "dropX", "dropY",
-		"invisible",   // only motion.go reads it, for an element with a transition: pending
-		"pressButton", // read with pressed
+		"invisible",                                 // only motion.go reads it, for an element with a transition: pending
+		"pressButton",                               // read with pressed
+		"pressPointer", "pressPressure", "canceled", // read with pressed, released
+		"missX", "missY", // read with dragMissed
 	},
 }
 
@@ -108,6 +113,8 @@ func TestStatePendingReportsEachPendingField(t *testing.T) {
 		"hasDropped":    func(s *state) { s.hasDropped = true },
 		"dataDropped":   func(s *state) { s.dataDropped = new(transfer.Drop) },
 		"editor":        func(s *state) { s.editor = &editor{compose: "x"} },
+		"dragMissed":    func(s *state) { s.dragMissed = true },
+		"focusAsked":    func(s *state) { s.focusAsked = true },
 		"dragValue":     func(s *state) { s.dragValue = 1 },
 		"dragFn":        func(s *state) { s.dragFn = func() any { return nil } },
 		"accepts":       func(s *state) { s.accepts = func(any) bool { return true } },

@@ -145,9 +145,12 @@ type paintRare struct {
 	paintFn      func(p *Painter, r Rect)
 	objectFn     func(p *Painter, at int, r Rect)
 	paintAfterFn func(p *Painter, r Rect)
-	webView      NativeWebView
-	image        *Bitmap
-	svg          *SVG // of an Icon, or an Image in its own colors
+	// hitFn tells where in its box the element takes the pointer
+	// (HitTest).
+	hitFn   func(x, y float32, r Rect) bool
+	webView NativeWebView
+	image   *Bitmap
+	svg     *SVG // of an Icon, or an Image in its own colors
 	// list is the List the element is, while it builds and lays out.
 	list *listFrame
 	// poseFade is how far a pose fades the element (pose, AnimatePose).
@@ -177,7 +180,7 @@ type paintStyle struct {
 	theme    *Theme
 	look     paintLook
 	nshadows uint8
-	shadows  [paintShadows]shadow
+	shadows  [paintShadowSlots]shadow
 	// spans are what paints in the spans of a RichText: their colors, lines and
 	// backgrounds. Their texts and the styles that lay them out are compared
 	// by the layout (layoutStyle.text and the spans key), and not kept here, so
@@ -209,10 +212,10 @@ func sameSpans(looks []spanLook, spans []Span) bool {
 	return true
 }
 
-// paintShadows is how many shadows paintStyle holds, in the record itself so
+// paintShadowSlots is how many shadows paintStyle holds, in the record itself so
 // that keeping them allocates nothing: an element with more is never
 // paint-same.
-const paintShadows = 2
+const paintShadowSlots = 2
 
 // paintVolatile reports whether e paints with something a later frame
 // cannot compare: a closure, an effect, a layer cache, a gradient, a
@@ -222,7 +225,7 @@ const paintShadows = 2
 func paintVolatile(e *node) bool {
 	const n = unsafe.Sizeof(paintRare{})
 	return *(*[n]byte)(unsafe.Pointer(&e.paintRare)) != zeroRare ||
-		e.styleFn != nil && e.styleID == staticNone || len(e.shadows) > paintShadows ||
+		e.styleFn != nil && e.styleID == staticNone || len(e.shadows) > paintShadowSlots ||
 		e.kind == kindInput || e.kind == kindImage || e.kind == kindIcon || e.kind == kindText && e.first != nil ||
 		e.flags&(flagScrollX|flagScrollY|flagDividers|flagDebug|flagSelectable) != 0 || e.isInline() || e.themed != nil ||
 		e.st != nil && e.st.trec != nil

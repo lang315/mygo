@@ -50,6 +50,23 @@ func TestMenuItemEnabled(path ...string) (enabled bool, err error) {
 	return enabled, err
 }
 
+// TestMenuItemSubtitle returns the title and the subtitle of an item of the
+// application menu, found by its title as TestPerformMenuItem finds it.
+func TestMenuItemSubtitle(path ...string) (title, subtitle string, err error) {
+	withPool(func() {
+		var menu id
+		var index int
+		if menu, index, err = menuItemAt(path); err == nil {
+			item := send(menu, "itemAtIndex:", uintptr(index))
+			title = goString(send(item, "title"))
+			if respondsTo(item, "subtitle") {
+				subtitle = goString(send(item, "subtitle"))
+			}
+		}
+	})
+	return title, subtitle, err
+}
+
 // menuItemAt finds an item of the application menu by the titles along
 // its path, and returns its menu and its index there.
 func menuItemAt(path []string) (menu id, index int, err error) {
@@ -945,6 +962,23 @@ func TestRoundedBacking(handle uintptr) (opaque bool, alpha, red float64) {
 	return opaque, alpha, red
 }
 
+// TestWindowBacking reports whether a window is opaque, and the alpha of
+// its background color, in sRGB.
+func TestWindowBacking(handle uintptr) (opaque bool, alpha float64) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil {
+		return false, 0
+	}
+	opaque = sendBool(w.win, "isOpaque")
+	withPool(func() {
+		c := send(send(w.win, "backgroundColor"), "colorUsingColorSpace:", uintptr(send(class("NSColorSpace"), "sRGBColorSpace")))
+		if c != 0 {
+			alpha = msgFloat(c, sel("alphaComponent"))
+		}
+	})
+	return opaque, alpha
+}
+
 // TestDockInspector opens the web inspector of a window docked to it, and
 // reports whether the window has one.
 func TestDockInspector(handle uintptr) bool {
@@ -1246,6 +1280,34 @@ func TestComposeOver(handle uintptr, text string, caret int, commit bool, from, 
 	return true
 }
 
+// TestKeyComposing presses the key of virtual key code code, typing chars,
+// in a window showing native UI, with the test standing in for the input
+// method that interprets it: the input method inserts commit, unless it
+// is empty, then asks for the key's command (doCommandBySelector:), unless
+// command is empty. The Korean input method takes Return so while it
+// composes: it commits the syllable and asks for insertNewline:. The
+// Japanese one commits the candidate and asks for nothing. It reports
+// false for a window showing a web page.
+func TestKeyComposing(handle uintptr, code uint16, chars, commit, command string) bool {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	loadTestInput()
+	interpret := interpretKeys
+	defer func() { interpretKeys = interpret }()
+	interpretKeys = func(view, ev id) {
+		if commit != "" {
+			msgInsertText(view, sel("insertText:replacementRange:"), nsString(commit), nsRange{Location: nsNotFound})
+		}
+		if command != "" {
+			send(view, "doCommandBySelector:", uintptr(sel(command)))
+		}
+	}
+	sendKeyToWindow(w, code, chars, false)
+	return true
+}
+
 // TestInputClient returns what a window's surface tells input methods: the
 // selected range and the whole text of their document.
 func TestInputClient(handle uintptr) (selected [2]int, document string) {
@@ -1362,7 +1424,10 @@ type TestAccessNode struct {
 	Focused  bool
 	Depth    int
 	Children int
-	obj      id
+	// Index is a row's place among its table's rows, from 0, and
+	// RowCount how many rows a table has, through the newer API.
+	Index, RowCount int
+	obj             id
 }
 
 // TestAccessibility reads the elements of a window showing native UI as
@@ -1386,6 +1451,10 @@ func TestAccessibility(handle uintptr) []TestAccessNode {
 					Depth:    depth,
 					Children: len(kids),
 					obj:      obj,
+				}
+				// Ours, not a page's elements, which may not answer them.
+				if theBackend.byAccess[obj] != nil {
+					n.Index, n.RowCount = sendInt(obj, "accessibilityIndex"), sendInt(obj, "accessibilityRowCount")
 				}
 				if v := send(obj, "accessibilityValue"); v != 0 {
 					n.Value = goString(send(v, "description"))

@@ -208,5 +208,6 @@
   "decimalPlaces": "{n, plural, other {Chỉ dùng tối đa # chữ số thập phân}}",
   "decimalAtLeast": "Nhập {min} trở lên",
   "decimalAtMost": "Nhập {max} trở xuống",
-  "desktopShortcut": "Tạo lối tắt trên màn hình nền"
+  "desktopShortcut": "Tạo lối tắt trên màn hình nền",
+  "selected": "đã chọn"
 }

@@ -76,7 +76,7 @@ func (d *disabledScene) open() bool {
 		return true
 	}
 	for _, n := range d.tt.Nodes() {
-		if n.Role == RolePopup || n.Role == RoleMenu {
+		if n.Role == RolePopup || n.Role == RoleMenu || n.Role == RoleList { // a select's popup is a list box, which assistive technology reads as a list
 			return true
 		}
 	}

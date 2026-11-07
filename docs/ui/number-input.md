@@ -7,7 +7,8 @@ between two bounds, which Up and Down, and the buttons beside it, change by
 a step. What is typed applies as soon as it is a number in range, and shows
 rounded to the decimals of the step once the input loses the focus.
 `Changed` reports a new value and `Submitted` an Enter in it; `Focus` and
-`AutoFocus` give its text field the keyboard.
+`AutoFocus` give its text field the keyboard. A `Width` sizes the whole input,
+its buttons included: the field narrows to keep them within it.
 
 ```go
 ui.NumberInput(c, &app.copies, 1, 99, 1).Label("Copies")

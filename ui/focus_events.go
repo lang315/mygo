@@ -87,7 +87,11 @@ func (rt *engine) passFocus() {
 // window tells the system's input methods then.
 func (c *context) FocusTakesText() bool {
 	c.neverKept() // the window's focus, which no state of the row versions
-	rt := c.rt
+	return c.rt.focusTakesText()
+}
+
+// focusTakesText is FocusTakesText.
+func (rt *engine) focusTakesText() bool {
 	s := rt.states[rt.focused]
 	if s == nil || !rt.windowFocus() {
 		return false

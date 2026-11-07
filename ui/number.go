@@ -65,9 +65,9 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 		if joined {
 			// The arrows are out of the row's layout, at its end: the text
 			// leaves them their room.
-			in = coreTextInputBase(c, text).Width(t.Space(20)).Grow(1).MarginEnd(arrowW)
+			in = coreTextInputBase(c, text).Width(t.Space(20)).Grow(1).Shrink(1).MinWidth(0).MarginEnd(arrowW)
 		} else {
-			in = coreTextInput(c, text).Width(t.Space(20))
+			in = coreTextInput(c, text).Width(t.Space(20)).Shrink(1).MinWidth(0)
 		}
 		in.widget = "NumberInput"
 		in.afterInput(func() {

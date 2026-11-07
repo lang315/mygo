@@ -128,6 +128,7 @@ func deactivateApp() bool                                        { return false 
 func material(*mygo.Window) (string, int, float64, bool, bool)   { return "", 0, 0, false, false }
 func materialState(*mygo.Window) (int, bool)                     { return 0, false }
 func roundedBacking(*mygo.Window) (bool, float64, float64, bool) { return false, 0, 0, false }
+func windowBacking(*mygo.Window) (bool, float64, bool)           { return false, 0, false }
 func appActive() (bool, bool)                                    { return false, false }
 func appDeactivated() bool                                       { return false }
 
@@ -423,6 +424,8 @@ func popupItemEnabled(label string) (enabled, ok bool) {
 // composition the test makes up does not show.
 func pressKey(*mygo.Window, uint16, string) bool { return false }
 
+func pressKeyComposing(*mygo.Window, uint16, string, string, string) bool { return false }
+
 // dragFiles drags files from another application to (x, y) of a window of
 // native UI and drops them, as OLE does, waiting for the target to answer.
 func dragFiles(w *mygo.Window, x, y float64, paths []string) (dropped, ok bool) {
@@ -584,3 +587,7 @@ func nativeGlassTint(*mygo.Window) (red, green, blue, alpha float64) { return 0,
 func activateApp() {}
 
 func hitView(*mygo.Window, float64, float64) string { return "" }
+
+// Only X servers keep a keyboard's state for the tests after a test: see
+// left_behind_linux_test.go.
+func keyboardState() (state string, restore func()) { return "", func() {} }

@@ -633,6 +633,9 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		}
 	case wmEnterMenuLoop:
 		w.inMenu = true
+		if w.sf != nil {
+			w.sf.liftKeys()
+		}
 	case wmExitMenuLoop:
 		w.inMenu = false
 	case wmMenuChar:

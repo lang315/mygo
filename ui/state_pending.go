@@ -9,7 +9,7 @@ func (s *state) pending() bool {
 	// Input the pass applies: pointer, keys, edits, drops.
 	if s.clicks != 0 || s.rightClicks != 0 || s.doubleClicks != 0 ||
 		s.pressed || s.pressPending || s.released || s.releaseLater.due || s.rowPressed || s.pressChose ||
-		s.dragX != 0 || s.dragY != 0 || s.typing || s.holding ||
+		s.dragX != 0 || s.dragY != 0 || s.typing || s.holding || s.dragMissed || s.focusAsked ||
 		len(s.dropped) != 0 || s.hasDropped || s.dataDropped != nil || s.editor != nil && s.editor.busy() {
 		return true
 	}

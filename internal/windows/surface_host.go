@@ -24,6 +24,7 @@ type surfaceHost interface {
 	pointer(kind platform.SurfaceEventKind, lp uintptr, extra int)
 	send(platform.SurfaceEvent) bool
 	menuKey() bool
+	liftKeys()
 }
 
 // makeSurfaceFunc makes the surface of a window. It is nil until UseSurface.

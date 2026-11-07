@@ -47,3 +47,4 @@ docs/superpowers/
 /video
 /widget-tour
 /wind
+benchmarks/*/target/
