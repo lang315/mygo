@@ -152,7 +152,9 @@ framework safely. Read it before changing anything under `internal/`.
 ├── netproxy/           the proxy of the system's settings, for Go's HTTP clients
 │                       (updatefeed, plugins/fetch and plugins/websocket use it)
 ├── audio/              sound: players, the mixer, the output of each platform, WAV;
-│                       audio/vorbis and audio/mp3 decode Ogg Vorbis and MP3
+│                       audio/vorbis and audio/mp3 decode Ogg Vorbis and MP3,
+│                       audio/mp4 MP4 (fragmented too) with ALAC, audio/aac
+│                       AAC, audio/flac FLAC
 ├── cmd/mygo/           the CLI: init, generate, dev, build, doctor
 ├── examples/           hello, todo, frameless, native; counter-native, vibrancy,
 │                       effort-slider, flyout, menubar-flyout, piano, farm
@@ -1679,7 +1681,12 @@ DirectWrite's locale of text formats and of ranges
 (`IDWriteTextLayout::SetLocaleName`), Pango's language attributes. Han
 characters in a language that does not write them get the engine's own
 choice (`langRuns`), as Chromium's `LocaleForHan` does; Core Text does so
-by itself.
+by itself. DirectWrite's choice goes by the locale of the user's regional
+formats (`GetUserDefaultLocaleName`), whose fallback for English mixes Yu
+Gothic UI and Microsoft JhengHei UI in one Chinese text: where that locale
+writes no Han characters, they take the first of the user's preferred
+languages that does (`userHanRuns`, `userHanLanguage`), read once with
+`GetUserPreferredUILanguages`.
 
 WebView2's environment takes the language through
 `ICoreWebView2EnvironmentOptions`, a COM object of ours
@@ -2425,7 +2432,17 @@ Where `openDevice` fails, a null device takes the frames on the wall
 clock and fails after two seconds, so the output tries the device again;
 `audio.Err` reports the failure. Formats register a magic prefix and a
 constructor as `image` does: WAV is built in, `audio/vorbis` and
-`audio/mp3` wrap pure Go decoders.
+`audio/mp3` wrap pure Go decoders, and so do `audio/aac` and `audio/flac`.
+A file that starts with an ID3 tag is matched by what follows it.
+`audio/mp4` reads the container and leaves its packets to a codec
+registered by the sample entry's type (`mp4.RegisterCodec`): ALAC, an
+in-package port of Apple's decoder, `mp4a` from `audio/aac`, `fLaC` from
+`audio/flac`, so that the LGPL of go-aac stays with the apps that import
+`audio/aac`. It places packets from the sample table, or, of a fragmented
+file, from each `moof`'s `trun` as playing reaches it, with the length
+from the `sidx`; AAC's packets it places 1024 frames apart whatever their
+durations say, since that is what each decodes to, and a seek decodes one
+packet before the one it lands in, whose sound overlaps it.
 
 ## Watching files (`watch.go`)
 
@@ -3245,7 +3262,9 @@ either.
   through the inverse. Nested
   transformed or rounded clips use cached masks, independent of content
   moving within them, once they hold content that a transform does more
-  than move (`scene.Reshaped`); hard clips in the drawing's coordinates,
+  than move (`scene.Reshaped`), or a clip reaching into their rounded
+  corners (`scene.ClipCorners`, which the scissor rectangles of outer
+  clips would not cut); hard clips in the drawing's coordinates,
   and clips around content only moved, evaluate on the GPU. Backdrop
   effects map local samples into the frame. With a GPU, every frame draws
   there, including resting changes to transformed content.
@@ -4629,10 +4648,14 @@ either.
   `languageShapes` leaves the attribute out where it changes nothing. A
   number, new in each frame on a dashboard, is put together from the glyphs
   and kerning of its characters, measured once for each font and checked
-  against Core Text from time to time (`numbers_darwin.go`). Latin text
-  kept across widths is shaped into one line that its lines take their glyphs
-  from, breaking at the spaces before plain words and asking Core Text for
-  every other break, checked in the same way (`wrap_darwin.go`). Korean text
+  against Core Text or DirectWrite from time to time (`numbers.go`). Latin
+  text kept across widths is shaped into one line that its lines take their
+  glyphs from, breaking at the spaces before plain words, checked in the same
+  way (`wrap.go`): Core Text is asked for every other break, and DirectWrite,
+  which shapes a whole text before breaking it, lays out a text with any other
+  break, keeping the one line 8 frames after the last, or as windows go idle,
+  and drawing the spaces ending a line as a run of their own, as DirectWrite
+  does. Korean text
   breaks between words, as CSS's `word-break: keep-all` (`keepWordsWhole`
   takes the breaks between two letters or digits out of Unicode's): Core Text
   moves the break it suggests back to the last one left in the line; Pango
@@ -4906,7 +4929,8 @@ either.
   shader that computes the signed distance to rounded rectangles, Evan
   Wallace's blurred rounded box, gradients, stripes, the dashes of borders,
   atlas coverage and the innermost rounded clip; outer clips are scissor
-  rectangles. The builder omits operations wholly hidden by the certainly
+  rectangles, and a clip reaching into an outer one's rounded corners cuts
+  with that one's mask as well. The builder omits operations wholly hidden by the certainly
   opaque core of a later fill, keeping at most eight occluders and treating
   backdrop-reading effects as barriers. Its planner shares clipping rules
   with drawing, grows shadow support before transforming it, and skips

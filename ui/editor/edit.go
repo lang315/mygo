@@ -71,8 +71,7 @@ func (ed *editor) apply(edits []Edit, kind editKind, after func(move func(int, b
 	if sels != nil {
 		// Placed in the text the edit made, and moved through the edits
 		// made after it before the editor followed.
-		ed.followEdits(sels, b, made, madeText)
-		ed.sels = mergeSels(sels)
+		ed.sels = mergeSels(followSels(b, sels, made, madeText, ed.view.version, ed.view.text))
 	}
 	b.setSelectionsAfter(ed, slices.Clone(ed.sels))
 	ed.reveal = max(ed.reveal, revealFit)
@@ -81,30 +80,32 @@ func (ed *editor) apply(edits []Edit, kind editKind, after func(move func(int, b
 	return true
 }
 
-// followEdits moves sels, placed in the text of version made (madeText), through
-// the edits made after it, up to the version the editor follows.
-func (ed *editor) followEdits(sels []sel, b *Buffer, made uint64, madeText rope.Text) {
-	if ed.view.version == made {
-		return
+// followSels moves sels, placed in text of version made, through the
+// buffer's edits up to version to and its text: by the edits themselves,
+// or, when the log no longer reaches back to made, as another goroutine
+// edited the buffer many times meanwhile, by the lines changed between
+// the two texts, as an editor that far behind follows (view.sync).
+func followSels(b *Buffer, sels []sel, made uint64, madeText rope.Text, to uint64, toText rope.Text) []sel {
+	if to == made {
+		return sels
 	}
 	entries, _, ok := b.entriesSince(made)
 	if !ok {
-		// Too far behind the buffer's log to follow its edits, as the
-		// editor's own sync was: the changes of the lines between the text
-		// made and the text it follows.
-		cs := changesBetween(madeText, ed.view.text)
+		cs := changesBetween(madeText, toText)
 		for i := range sels {
 			sels[i] = mapSel(sels[i], cs)
 		}
+		return sels
 	}
 	for _, e := range entries {
-		if e.version > ed.view.version {
+		if e.version > to {
 			break
 		}
 		for i := range sels {
 			sels[i] = mapSel(sels[i], e.changes)
 		}
 	}
+	return sels
 }
 
 // replaceEach replaces each selection with the text of fn and puts the
@@ -381,8 +382,7 @@ func (ed *editor) undo(redo bool) bool {
 	if s, ok := saved.([]sel); ok && tx.owner == ed && s != nil {
 		// Placed in the text the step made, and moved through the edits made
 		// after it before the editor followed.
-		s = slices.Clone(s)
-		ed.followEdits(s, b, made, madeText)
+		s = followSels(b, slices.Clone(s), made, madeText, ed.view.version, ed.view.text)
 		ed.sels = mergeSels(ed.clampSels(s))
 	}
 	ed.reveal = revealFit
