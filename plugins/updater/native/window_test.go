@@ -329,3 +329,15 @@ func TestLayout(t *testing.T) {
 		}
 	}
 }
+
+// The update window has the look of the page of package updater: its controls
+// are outlined by the page's border, not by the theme's darker ControlBorder
+// that a copy of a default theme would keep.
+func TestThemeKeepsThePagesBorderForItsControls(t *testing.T) {
+	for _, base := range []*ui.Theme{ui.LightTheme(), ui.DarkTheme()} {
+		th := theme(base)
+		if th.ControlBorder != th.Border {
+			t.Errorf("dark=%v: ControlBorder is %v, want the window's Border %v", th.Dark, th.ControlBorder, th.Border)
+		}
+	}
+}

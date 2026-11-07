@@ -25,7 +25,9 @@ type Theme struct {
 	// toggle. It is the one a user must see against the window and the face
 	// of the control (WCAG 1.4.11 asks 3:1), so it is darker than Border.
 	// Left zero, as in a Theme written before it, controls take Border
-	// (Outline).
+	// (Outline). A Theme copied from LightTheme or DarkTheme that changes
+	// only Border keeps their ControlBorder: set it too, or zero it for the
+	// controls to follow Border.
 	ControlBorder Color
 	// Text and TextMuted color text; TextMuted is for secondary text and
 	// placeholders.

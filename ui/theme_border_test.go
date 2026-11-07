@@ -3,7 +3,16 @@ package ui
 import (
 	"math"
 	"testing"
+	"time"
 )
+
+// diff returns how far apart two color channels are.
+func diff(a, b uint8) int {
+	if a > b {
+		return int(a - b)
+	}
+	return int(b - a)
+}
 
 // wcagContrast returns WCAG's contrast ratio of two opaque colors, from 1 to
 // 21.
@@ -125,66 +134,207 @@ func TestThemeOutlineFallsBackToBorder(t *testing.T) {
 	}
 }
 
-// What the user takes for a control has the ControlBorder around it, and
-// what only divides, or holds, has Border.
-func TestControlsAreOutlinedByControlBorderAndDecorationByBorder(t *testing.T) {
-	pixel := func(tt *Tester, n TestNode) Color {
-		b := tt.Image().RGBAAt(int(n.Bounds.X), int(n.Bounds.Y+n.Bounds.H/2))
-		return Color{R: b.R, G: b.G, B: b.B, A: b.A}
+// outlineScene builds each control of the review's list in a column, under th,
+// and returns the Tester and the nodes by label.
+type outlineControl struct {
+	label string
+	build func(c *context, label string)
+}
+
+func outlineControls() []outlineControl {
+	var (
+		text, area, sel, combo, auto string
+		num, step                    float64
+		segment                      int
+		when                         time.Time
+		pinned, starred              bool
+		buffer                       = NewTextBuffer("")
+	)
+	return []outlineControl{
+		{"Input", func(c *context, l string) { coreTextInput(c, &text).Width(200).Label(l) }},
+		{"Area", func(c *context, l string) { coreTextArea(c, &area).Width(200).Label(l) }},
+		{"Select", func(c *context, l string) { coreSelect(c, &sel, []string{"a", "b", "c"}).Width(200).Label(l) }},
+		{"Combobox", func(c *context, l string) { coreCombobox(c, &combo, []string{"a", "b", "c"}).Width(200).Label(l) }},
+		{"Number", func(c *context, l string) { coreNumberInput(c, &num, 0, 10, 1).Width(200).Label(l) }},
+		{"Time", func(c *context, l string) { coreTimeInput(c, &when).Label(l) }},
+		{"Stepper", func(c *context, l string) { coreStepper(c, &step, 0, 10, 1).Label(l) }},
+		{"Segmented", func(c *context, l string) { coreSegmented(c, &segment, "One", "Two").Label(l) }},
+		{"Button", func(c *context, l string) { coreButton(c, "Button").Label(l) }},
+		{"Autocomplete", func(c *context, l string) { coreAutocomplete(c, &auto, []string{"a", "b"}).Width(200).Label(l) }},
+		{"AreaBuffer", func(c *context, l string) { coreTextAreaBuffer(c, buffer).Width(200).Label(l) }},
+		{"ToggleGroup", func(c *context, l string) {
+			coreToggleGroup(c, func() {
+				coreToggle(c, &pinned, "Pin")
+				coreToggle(c, &starred, "Star")
+			}).Label(l)
+		}},
 	}
+}
+
+// What the user takes for a control has the ControlBorder around it, and what
+// only divides, or holds, has Border: each control of the list, in both
+// appearances, and a divider.
+func TestControlsAreOutlinedByControlBorderAndDecorationByBorder(t *testing.T) {
 	same := func(a, b Color) bool { return a.R == b.R && a.G == b.G && a.B == b.B }
 	for _, dark := range []bool{false, true} {
 		th := LightTheme()
 		if dark {
 			th = DarkTheme()
 		}
-		var text string
-		var sel string
-		var num float64
+		controls := outlineControls()
 		tt := coreNewTester(func(c *context) {
 			c.SetTheme(th)
 			coreColumn(c).Gap(10).Padding(20).Children(func() {
-				coreTextInput(c, &text).Width(200).Label("Input")
-				coreSelect(c, &sel, []string{"a", "b", "c"}).Width(200).Label("Select")
-				coreNumberInput(c, &num, 0, 10, 1).Width(200).Label("Number")
-				coreButton(c, "Button")
+				for _, k := range controls {
+					k.build(c, k.label)
+				}
 				coreDivider(c).Height(3).Label("Divider")
 			})
-		}, 400, 300)
+		}, 400, 1100)
 		tt.Frame()
+		img := tt.Image()
 		seen := map[string]bool{}
 		for _, n := range tt.Nodes() {
 			if n.Label == "Divider" {
-				// Decoration keeps the lighter Border.
-				c := tt.Image().RGBAAt(int(n.Bounds.X+n.Bounds.W/2), int(n.Bounds.Y+n.Bounds.H/2))
+				c := img.RGBAAt(int(n.Bounds.X+n.Bounds.W/2), int(n.Bounds.Y+n.Bounds.H/2))
 				if !same(Color{R: c.R, G: c.G, B: c.B}, th.Border) {
 					t.Errorf("dark=%v: the divider is %v, want Border %v", dark, c, th.Border)
 				}
 				seen[n.Label] = true
 				continue
 			}
-			if n.Label != "Input" && n.Label != "Select" && n.Label != "Number" && n.Label != "Button" {
-				continue
+			isControl := false
+			for _, k := range controls {
+				isControl = isControl || k.label == n.Label
 			}
-			if n.Bounds.W == 0 || n.Role == RoleText {
+			if !isControl || n.Bounds.W == 0 || n.Role == RoleText {
 				continue
 			}
 			seen[n.Label] = true
+			// The edge of the box: a column of pixels just inside or outside it,
+			// a row at its middle (the stepper and the segmented control are
+			// narrow, so the left edge serves for all).
 			found := false
-			img := tt.Image()
 			y := int(n.Bounds.Y + n.Bounds.H/2)
-			for x := int(n.Bounds.X) - 1; x <= int(n.Bounds.X)+2; x++ {
+			for x := int(n.Bounds.X) - 16; x <= int(n.Bounds.X)+2; x++ { // a field is labelled by its input, inside its padding
 				c := img.RGBAAt(x, y)
 				if same(Color{R: c.R, G: c.G, B: c.B}, th.ControlBorder) {
 					found = true
 				}
 			}
 			if !found {
-				t.Errorf("dark=%v: %q (%v) is not outlined by ControlBorder %v: pixel %v", dark, n.Label, n.Bounds, th.ControlBorder, pixel(tt, n))
+				c := img.RGBAAt(int(n.Bounds.X), y)
+				t.Errorf("dark=%v: %q (%v) is not outlined by ControlBorder %v: pixel %v", dark, n.Label, n.Bounds, th.ControlBorder, c)
 			}
 		}
-		if len(seen) != 5 {
-			t.Errorf("dark=%v: the test found %v of the Input, Select, Number, Button and Divider", dark, seen)
+		if len(seen) != len(controls)+1 {
+			t.Errorf("dark=%v: the test found %v of the %d controls and the divider", dark, seen, len(controls))
+		}
+	}
+}
+
+// The boundary of a check box, a radio button and the off track of a switch
+// identify the control as the outline of an input does: against the window
+// they are 3:1 or more, in both appearances, and are the ControlBorder.
+func TestToggleControlsReachNonTextContrast(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		th := LightTheme()
+		if dark {
+			th = DarkTheme()
+		}
+		var on bool
+		var choice string
+		tt := coreNewTester(func(c *context) {
+			c.SetTheme(th)
+			coreColumn(c).Gap(14).Padding(20).Children(func() {
+				coreCheckbox(c, &on, "Check").Label("Check")
+				coreRadio(c, &choice, "a", "Radio").Label("Radio")
+				coreSwitch(c, &on).Label("Switch")
+			})
+		}, 300, 200)
+		tt.Frame()
+		img := tt.Image()
+		for _, n := range tt.Nodes() {
+			var edge bool
+			switch n.Label {
+			case "Check", "Radio":
+				edge = true
+			case "Switch":
+			default:
+				continue
+			}
+			y := int(n.Bounds.Y + n.Bounds.H/2)
+			var got Color
+			ok := false
+			if edge {
+				// The left edge of the box: the pixel nearest the ControlBorder
+				// there (the dot of a radio button is round, and anti-aliased
+				// where its outline is leftmost).
+				near := 1 << 30
+				for x := int(n.Bounds.X) - 1; x <= int(n.Bounds.X)+2; x++ {
+					c := img.RGBAAt(x, y)
+					d := diff(c.R, th.ControlBorder.R) + diff(c.G, th.ControlBorder.G) + diff(c.B, th.ControlBorder.B)
+					if d < near {
+						near, got = d, Color{R: c.R, G: c.G, B: c.B}
+					}
+				}
+				ok = near <= 30
+			} else { // the off track, past the knob at its left
+				c := img.RGBAAt(int(n.Bounds.X+n.Bounds.W)-6, y)
+				got = Color{R: c.R, G: c.G, B: c.B}
+				ok = got.R == th.ControlBorder.R && got.G == th.ControlBorder.G && got.B == th.ControlBorder.B
+			}
+			if !ok {
+				t.Errorf("dark=%v: %q is %v, want ControlBorder %v", dark, n.Label, got, th.ControlBorder)
+			}
+			if r := wcagContrast(got, th.Background); r < 3 {
+				t.Errorf("dark=%v: %q is %.2f:1 against the window, under 3:1", dark, n.Label, r)
+			}
+		}
+	}
+}
+
+// The outline of a text input does not get lighter as the pointer comes over
+// it: hovered, it is as strong against the window as at rest.
+func TestHoveredInputOutlineIsNotLighterThanAtRest(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		th := LightTheme()
+		if dark {
+			th = DarkTheme()
+		}
+		var text string
+		tt := coreNewTester(func(c *context) {
+			c.SetTheme(th)
+			coreColumn(c).Padding(20).Children(func() { coreTextInput(c, &text).Width(200).Label("Input") })
+		}, 300, 100)
+		tt.Frame()
+		edge := func() Color {
+			for _, n := range tt.Nodes() {
+				if n.Label == "Input" && n.Role == RoleTextField {
+					c := tt.Image().RGBAAt(int(n.Bounds.X), int(n.Bounds.Y+n.Bounds.H/2))
+					return Color{R: c.R, G: c.G, B: c.B}
+				}
+			}
+			t.Fatal("no input")
+			return Color{}
+		}
+		rest := edge()
+		in, _ := tt.Find("Input")
+		_ = in
+		for _, n := range tt.Nodes() {
+			if n.Label == "Input" {
+				tt.Move(n.Bounds.X+n.Bounds.W/2, n.Bounds.Y+n.Bounds.H/2)
+				break
+			}
+		}
+		tt.Frame()
+		hover := edge()
+		if wcagContrast(hover, th.Background) < wcagContrast(rest, th.Background) {
+			t.Errorf("dark=%v: hovered, the outline %v is %.2f:1 against the window, under %v at rest, %.2f:1", dark, hover,
+				wcagContrast(hover, th.Background), rest, wcagContrast(rest, th.Background))
+		}
+		if hover == rest {
+			t.Errorf("dark=%v: the outline does not change as the pointer comes over it: the test shows nothing", dark)
 		}
 	}
 }
@@ -231,8 +381,7 @@ func TestSetControlBorderRebuildsKeptRows(t *testing.T) {
 	}
 }
 
-// A high contrast setting does not take the outline of a control under what
-// it was.
+// A high contrast setting makes the outline of a control stronger than it was.
 func TestHighContrastKeepsControlBorderStrong(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		var got, bg Color
@@ -240,8 +389,8 @@ func TestHighContrastKeepsControlBorderStrong(t *testing.T) {
 		tt.SetDark(dark)
 		normal := wcagContrast(got, bg)
 		tt.SetPreferences(Preferences{HighContrast: true})
-		if r := wcagContrast(got, bg); r < normal {
-			t.Errorf("dark=%v: high contrast gives the control border %.2f:1, under the normal %.2f:1", dark, r, normal)
+		if r := wcagContrast(got, bg); r <= normal {
+			t.Errorf("dark=%v: high contrast gives the control border %.2f:1, not above the normal %.2f:1", dark, r, normal)
 		}
 	}
 }

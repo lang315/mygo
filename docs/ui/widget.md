@@ -881,8 +881,10 @@ The outline of the controls (`TextBox`, `ComboBox`, `NumericUpDown`, buttons
 and the other inputs) is the theme's `ControlBorder`: `#8a8a93` in the light
 appearance (3.4:1 against the window, 3.1:1 against a control's face) and
 `#71717a` in the dark (3.7:1 and 3.1:1), where WCAG 1.4.11 asks 3:1 of a
-control's boundary. Dividers, grid lines and the edges of containers and popups
-keep the lighter `Border`. `SetControlBorder(light, dark)` sets the outline in
+control's boundary. The box of a check box and a radio button, and the off
+track of a switch, are the same color, and an input's outline is a darker
+shade of it while the pointer is over it. Dividers, grid lines and the edges
+of containers and popups keep the lighter `Border`. `SetControlBorder(light, dark)` sets the outline in
 each appearance, with no control touched; a zero color leaves the theme's, and
 every window follows the appearance as before. Call it once at startup:
 `widget.SetControlBorder(ui.Hex("#6b7280"), ui.Hex("#9ca3af"))`. An app's own

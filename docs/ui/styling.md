@@ -20,7 +20,9 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   (an input, a button), darker for WCAG 1.4.11's 3:1; give a control of your
   own `t.Outline()`, which is `ControlBorder`, or `Border` in a theme that
   sets none. `ui.SetControlBorder(light, dark)` sets it for the default
-  themes.
+  themes. A theme copied from `LightTheme` or `DarkTheme` that changes only
+  `Border` keeps their `ControlBorder`: set it too, or zero it for the
+  controls to follow `Border`.
 - **Shadows.** `Shadow(x, y, blur, spread, c)` casts a box shadow, as CSS's
   `box-shadow` does: several stack, and each shows only outside the box,
   so a translucent background never shows its own shadow through.
