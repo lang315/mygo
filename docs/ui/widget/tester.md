@@ -42,6 +42,12 @@ no button labeled "OK" (found: button "Ok", button "Cancel")
 2 elements match button (found: button "Ok", button "Cancel")
 ```
 
+A name can match more than one node. An open combo box's popup is a list box
+(a `ui.RoleList` node) whose options are `ui.RoleListItem` nodes named by their
+text, and the text of each option is a `ui.RoleText` node of its own, so
+`ByLabel("Beta")` matches both: find the option with
+`ByRole(ui.RoleListItem).Label("Beta")`. A table's rows are the same.
+
 ## Acting and reading
 
 A `*Node` looks itself up again by identity in the last frame each time, so it
