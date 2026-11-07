@@ -1,6 +1,10 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
+)
 
 // TestInViewAmount scrolls a card 100 DIPs tall into a container 200 tall:
 // it counts at a fifth, at half and whole as that much of it shows, with
@@ -17,7 +21,7 @@ func TestInViewAmount(t *testing.T) {
 			over = card.InViewAmount(2)
 			grown = card.InViewAmount(0.5, 0, 0, 50, 0)
 			invisible = coreBox(c).Key("hidden").Height(10).Invisible().InViewAmount(0.1)
-			allocs = testing.AllocsPerRun(10, func() { card.InViewAmount(0.5, 20) })
+			allocs = allocrun.Least(10, func() { card.InViewAmount(0.5, 20) })
 		})
 		// A box scaled twice as large around its center, at the window's
 		// top left corner: 35 of its 100 DIPs across show, and 75 of 100

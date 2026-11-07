@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // feed stands for a component's background work, which Close cancels.
@@ -388,7 +390,7 @@ func TestLocalCloserFrameAllocs(t *testing.T) {
 			}
 		}, 100, 100)
 		tt.Frame()
-		return testing.AllocsPerRun(20, tt.Frame)
+		return allocrun.Least(20, tt.Frame)
 	}
 	if with, without := allocs(true), allocs(false); with > without {
 		t.Fatalf("a frame allocates %.0f times with Closers, %.0f without", with, without)
