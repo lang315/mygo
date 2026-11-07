@@ -84,3 +84,87 @@ func TestHeaderBarLongTitleFallsBackWithoutOverlap(t *testing.T) {
 		})
 	}
 }
+
+// nodeBox returns the box of the control labelled s.
+func nodeBox(t *testing.T, tt *ui.Tester, s string) ui.Rect {
+	t.Helper()
+	for _, n := range tt.Nodes() {
+		if n.Label == s {
+			return n.Bounds
+		}
+	}
+	t.Fatalf("no node %q", s)
+	return ui.Rect{}
+}
+
+// Buttons wider than a Label's minimum must not end up under the title, at
+// any width.
+func TestHeaderBarTitleNeverOverlapsButtons(t *testing.T) {
+	names := []string{"Alpha", "Bravo", "Charlie", "Z"}
+	for _, bar := range []ui.TitleBar{windowsBar, macBar, {Height: 32}} {
+		for w := 900; w >= 200; w -= 4 {
+			tt := barTester(t, w, bar, "Document Title Here.txt", "",
+				[]Control{Button("Alpha"), Button("Bravo"), Button("Charlie")}, []Control{Button("Z")})
+			title := find(t, tt, "Document Title Here.txt")
+			for _, s := range names {
+				if b := nodeBox(t, tt, s); b.W > 0 && overlaps(title, b) {
+					t.Fatalf("insets %v, width %d: title %v overlaps %s %v", bar, w, title, s, b)
+				}
+			}
+		}
+	}
+}
+
+// The end items keep their order and sit against the right edge; the
+// start items against the left; in a right-to-left window the other way.
+func TestHeaderBarItemsKeepTheirSidesAndOrder(t *testing.T) {
+	for _, rtl := range []bool{false, true} {
+		for _, bar := range []ui.TitleBar{windowsBar, macBar} {
+			f := NewForm("Title", 800, 300)
+			f.UseHeaderBar("").PackStart(Button("S1"), Button("S2")).PackEnd(Button("E1"), Button("E2"))
+			tt := ui.NewTester(f.view, 800, 300)
+			tt.SetTitleBar(bar)
+			if rtl {
+				tt.SetDirection(ui.RightToLeft)
+			}
+			tt.Frame()
+			s1, s2, e1, e2 := nodeBox(t, tt, "S1"), nodeBox(t, tt, "S2"), nodeBox(t, tt, "E1"), nodeBox(t, tt, "E2")
+			// The first packed item is at the outer edge, on each side.
+			if rtl {
+				if !(s1.X > s2.X && e1.X < e2.X) {
+					t.Errorf("rtl %v: order S1 %v S2 %v, E1 %v E2 %v", bar, s1, s2, e1, e2)
+				}
+				if right := s1.X + s1.W; right > 800-bar.Right || right < 800-bar.Right-20 {
+					t.Errorf("rtl %v: start items begin at %v, not at the right edge %v", bar, right, 800-bar.Right)
+				}
+				if e1.X < bar.Left || e1.X > bar.Left+20 {
+					t.Errorf("rtl %v: end items end at %v, not at the left edge", bar, e1.X)
+				}
+				continue
+			}
+			if !(s1.X < s2.X && e2.X < e1.X) {
+				t.Errorf("%v: order S1 %v S2 %v, E1 %v E2 %v", bar, s1, s2, e1, e2)
+			}
+			if right := e1.X + e1.W; right > 800-bar.Right || right < 800-bar.Right-20 {
+				t.Errorf("%v: end items end at %v, not at the right edge %v", bar, right, 800-bar.Right)
+			}
+			if s1.X < bar.Left || s1.X > bar.Left+20 {
+				t.Errorf("%v: start items begin at %v", bar, s1.X)
+			}
+		}
+	}
+}
+
+func TestHeaderBarTitleIsCentredInARightToLeftWindow(t *testing.T) {
+	for _, bar := range []ui.TitleBar{windowsBar, macBar} {
+		f := NewForm("Title", 800, 300)
+		f.UseHeaderBar("Subtitle").PackStart(Button("S1"), Button("S2")).PackEnd(Button("E1"), Button("E2"))
+		tt := ui.NewTester(f.view, 800, 300)
+		tt.SetTitleBar(bar)
+		tt.SetDirection(ui.RightToLeft)
+		tt.Frame()
+		if c := centreX(find(t, tt, "Title")); c < 399 || c > 401 {
+			t.Errorf("insets %v: title centre %v, window centre 400", bar, c)
+		}
+	}
+}

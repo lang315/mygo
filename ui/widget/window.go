@@ -516,6 +516,9 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 	// so the title is centred on the window, not on what the buttons and
 	// items leave. Items wider than their share push the title aside instead.
 	lead, trail := max(bar.Right-bar.Left, 0), max(bar.Left-bar.Right, 0)
+	if c.Direction() == ui.RightToLeft { // the start items are on the right
+		lead, trail = trail, lead
+	}
 	// A minimum, not a fixed height: a subtitle or a child taller than the bar
 	// makes it grow. The row centers its items (Row's default).
 	return ui.Row(c).MinHeight(max(bar.Height, 32)).Padding(0, bar.Right+t.Space(2), 0, bar.Left+t.Space(2)).
