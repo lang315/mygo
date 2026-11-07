@@ -424,6 +424,10 @@ func measureIntrinsic(e *node, maxContent bool) float32 {
 					if ch.shrink == 0 {
 						cw = max(cw, b)
 					}
+				} else if ch.shrink == 0 && !maxContent {
+					// One that cannot shrink is no narrower than its content,
+					// whatever its parent's min-content counts (CSS flexbox §9.9.1).
+					cw = intrinsic(ch, true)
 				}
 			}
 			cw += ch.marginX()
