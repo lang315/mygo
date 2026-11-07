@@ -6,6 +6,7 @@ import "github.com/egoist/mygo/ui"
 type FieldsWidget struct {
 	common[FieldsWidget]
 	rows           []fieldRow
+	heads          []fieldHead
 	stacked        bool
 	settings       bool
 	rowGap, colGap float32
@@ -17,6 +18,12 @@ type fieldRow struct {
 	w     Control
 	key   rune // the label's mnemonic: Alt+key focuses w
 	at    int  // its place in the label, in runes
+}
+
+// fieldHead is a section's heading, shown before row at.
+type fieldHead struct {
+	label *LabelWidget
+	at    int
 }
 
 // fieldRowKey keys the box of a stacked row, and fieldHole the cell of a
@@ -56,6 +63,38 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 		adopt(&f.core, c)
 	})
 	return f
+}
+
+// Section adds a heading, in bold, across the form's width before the rows
+// that follow it, up to the next Section. The rows of all sections share one
+// label column, and a section after the first has more room above it than a
+// row has. A section whose rows are all hidden hides its heading and its room.
+// In SettingsRows the heading takes the place of the divider before its rows.
+func (f *FieldsWidget) Section(title string) *FieldsWidget {
+	l := Label(title).Bold()
+	f.change(func() { f.heads = append(f.heads, fieldHead{l, len(f.rows)}) })
+	return f
+}
+
+// headings returns the headings to show before row i: those of the sections
+// that start there and have a row that shows. Under mu.
+func (f *FieldsWidget) headings(i int) (ls []*LabelWidget) {
+	for h, head := range f.heads {
+		if head.at != i {
+			continue
+		}
+		end := len(f.rows)
+		if h+1 < len(f.heads) {
+			end = f.heads[h+1].at
+		}
+		for _, r := range f.rows[i:end] {
+			if !r.w.base().hidden {
+				ls = append(ls, head.label)
+				break
+			}
+		}
+	}
+	return ls
 }
 
 // Stacked puts each label above its control, over the form's width, as a
@@ -110,17 +149,27 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 	if f.gapSet {
 		rowGap, colGap = f.rowGap, f.colGap
 	}
+	// A section after the first starts further down than a row would.
+	sectionGap := t.Space(4)
 	if f.stacked {
 		return ui.Column(c).Gap(rowGap).Children(func() {
 			// The rows are a column, whatever the box around the form.
 			outer := axis
 			axis = vertical
 			defer func() { axis = outer }()
-			for _, r := range f.rows {
+			shown := false
+			for i, r := range f.rows {
+				for _, h := range f.headings(i) {
+					e := render(c, h).Role(ui.RoleHeading)
+					if shown {
+						e.Margin(sectionGap, 0, 0, 0)
+					}
+				}
 				if r.w.base().hidden { // the row goes, its label with it
 					f.hold(r)
 					continue
 				}
+				shown = true
 				ui.Column(c.Key(fieldRowKey(r.label.id))).Gap(colGap).Children(func() {
 					r.underline(c)
 					e := render(c, r.label) // holds a hidden label
@@ -145,8 +194,15 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()
-		first := true
-		for _, r := range f.rows {
+		first, shown := true, false // no divider is due; a row is up
+		for i, r := range f.rows {
+			for _, h := range f.headings(i) {
+				e := render(c, h).Role(ui.RoleHeading).ColumnSpan(2)
+				if shown {
+					e.Margin(sectionGap, 0, 0, 0)
+				}
+				first = true
+			}
 			if r.w.base().hidden {
 				f.hold(r)
 				continue
@@ -154,7 +210,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			if f.settings && !first {
 				ui.Divider(c.Key(fieldRule(r.label.id))).ColumnSpan(2)
 			}
-			first = false
+			first, shown = false, true
 			r.underline(c)
 			e := render(c, r.label) // holds a hidden label
 			if r.key != 0 {
