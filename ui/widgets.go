@@ -154,7 +154,7 @@ func button(c *context, label string, primary bool) *node {
 func styleButton(c *context, b *node, primary bool) {
 	t := c.theme
 	b.Padding(t.Space(1.5), t.Space(3.5)).Gap(t.Space(1.5)).Radius(t.Radius)
-	base, fg, border := t.Surface, t.Text, t.Border
+	base, fg, border := t.Surface, t.Text, t.Outline()
 	b.buttonLook = buttonPlain
 	switch {
 	case primary && c.emphasized(t):

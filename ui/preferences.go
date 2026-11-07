@@ -115,6 +115,7 @@ func (t *Theme) follow(p Preferences) {
 	}
 	if p.HighContrast {
 		t.Border = t.Border.Mix(t.Text, 0.45)
+		t.ControlBorder = t.ControlBorder.Mix(t.Text, 0.45)
 		t.TextMuted = t.TextMuted.Mix(t.Text, 0.4)
 		t.Focus.A = 255
 		t.Scrollbar = t.Scrollbar.Alpha(1.6)

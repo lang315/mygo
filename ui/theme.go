@@ -17,8 +17,16 @@ type Theme struct {
 	Surface        Color
 	SurfaceHover   Color
 	SurfacePressed Color
-	// Border outlines controls.
+	// Border draws the lines that divide and hold: dividers, grid lines,
+	// the edges of containers and popups.
 	Border Color
+	// ControlBorder is the boundary of an interactive control, which is what
+	// identifies it: the outline of an input, a combo box, a button, a
+	// toggle. It is the one a user must see against the window and the face
+	// of the control (WCAG 1.4.11 asks 3:1), so it is darker than Border.
+	// Left zero, as in a Theme written before it, controls take Border
+	// (Outline).
+	ControlBorder Color
 	// Text and TextMuted color text; TextMuted is for secondary text and
 	// placeholders.
 	Text      Color
@@ -172,6 +180,7 @@ func LightTheme() *Theme {
 		SurfaceHover:    Hex("#e9e9ec"),
 		SurfacePressed:  Hex("#dddde1"),
 		Border:          Hex("#d9d9de"),
+		ControlBorder:   Hex("#8a8a93"), // 3.42:1 on Background, 3.11:1 on Surface
 		Text:            Hex("#18181b"),
 		TextMuted:       Hex("#71717a"),
 		Accent:          Hex("#2563eb"),
@@ -201,6 +210,7 @@ func DarkTheme() *Theme {
 		SurfaceHover:    Hex("#323236"),
 		SurfacePressed:  Hex("#3c3c41"),
 		Border:          Hex("#3f3f46"),
+		ControlBorder:   Hex("#71717a"), // 3.67:1 on Background, 3.08:1 on Surface
 		Text:            Hex("#f4f4f5"),
 		TextMuted:       Hex("#a1a1aa"),
 		Accent:          Hex("#3b82f6"),
@@ -221,24 +231,33 @@ func DarkTheme() *Theme {
 	}
 }
 
-// defaultBorder are the border colors SetDefaultBorder set, light then dark,
-// and borderGen counts its calls, which a window takes up as it builds.
+// Outline returns the color of the boundary of a control: ControlBorder, or
+// Border in a Theme that sets none.
+func (t *Theme) Outline() Color {
+	if t.ControlBorder.A != 0 {
+		return t.ControlBorder
+	}
+	return t.Border
+}
+
+// controlBorder are the colors SetControlBorder set, light then dark, and
+// borderGen counts its calls, which a window takes up as it builds.
 var (
-	defaultBorder atomic.Pointer[[2]Color]
+	controlBorder atomic.Pointer[[2]Color]
 	borderGen     atomic.Uint64
 )
 
-// SetDefaultBorder sets Theme.Border of the default theme of each
+// SetControlBorder sets Theme.ControlBorder of the default theme of each
 // appearance, light and dark: for an app that has no Context to set a Theme
-// with, as one of ui/widget's, which draws every control's outline and
-// divider in it. A color that is zero leaves the theme's own for that
+// with, as one of ui/widget's, which draws the outline of every control in
+// it. A color that is zero leaves the theme's own for that
 // appearance. The windows follow the appearance as before, and a window that
 // is open takes the colors in its next frame. A Theme a view sets itself
 // (Context.SetTheme) is its own: this changes the defaults only. Call it
 // from any goroutine, once at startup as a rule.
 //
-//	ui.SetDefaultBorder(ui.Hex("#9ca3af"), ui.Hex("#6b7280"))
-func SetDefaultBorder(light, dark Color) {
-	defaultBorder.Store(&[2]Color{light, dark})
+//	ui.SetControlBorder(ui.Hex("#6b7280"), ui.Hex("#9ca3af"))
+func SetControlBorder(light, dark Color) {
+	controlBorder.Store(&[2]Color{light, dark})
 	borderGen.Add(1)
 }

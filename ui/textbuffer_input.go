@@ -24,7 +24,7 @@ func coreTextAreaBufferBase(c *context, value *TextBuffer) *node {
 func styledBufferInput(c *context, value *TextBuffer, multiline bool) *node {
 	t := c.theme
 	e := bufferInputBase(c, value, multiline)
-	e.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Border)
+	e.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Outline())
 	if multiline {
 		e.MinHeight(t.Space(20))
 	}

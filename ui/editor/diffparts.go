@@ -190,7 +190,7 @@ func DefaultHunkActions(c *ui.Context, bar ui.Element, a *DiffHunkActions) {
 			fn         func()
 		}{{"revert", tx.Revert(), a.Revert}, {"keep", tx.Keep(), a.Keep}} {
 			btn := ui.ButtonBase(c).Key(act.key).Padding(0, t.Space(2)).Height(lh-4).Radius(t.Radius-2).
-				Background(t.Surface).Border(1, t.Border).Label(tx.HunkAction(act.label))
+				Background(t.Surface).Border(1, t.Outline()).Label(tx.HunkAction(act.label))
 			btn.Children(func() { ui.Text(c, act.label).FontSize(max(11, t.FontSize-2)) })
 			if btn.Clicked() {
 				act.fn()

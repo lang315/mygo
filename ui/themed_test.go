@@ -47,8 +47,9 @@ func TestThemedScopesItsChildren(t *testing.T) {
 	if got := v.text.resolvedText(); got.color != light.Text || got.size != light.FontSize || got.family != light.Font {
 		t.Errorf("bare text in the scope is %v, %v, %q; want the light theme's %v, %v, %q", got.color, got.size, got.family, light.Text, light.FontSize, light.Font)
 	}
-	if v.ok.bg != light.Surface || v.ok.borderC != light.Border {
-		t.Errorf("the button's face is %v bordered %v, want the light theme's %v bordered %v", v.ok.bg, v.ok.borderC, light.Surface, light.Border)
+	// A button's border is the boundary of a control, the theme's ControlBorder.
+	if v.ok.bg != light.Surface || v.ok.borderC != light.ControlBorder {
+		t.Errorf("the button's face is %v bordered %v, want the light theme's %v bordered %v", v.ok.bg, v.ok.borderC, light.Surface, light.ControlBorder)
 	}
 	if label := v.ok.first; label == nil || label.resolvedText().color != light.Text {
 		t.Errorf("the button's label is not in the light theme's text color %v", light.Text)

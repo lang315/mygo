@@ -75,6 +75,7 @@ func (rt *engine) buildInspector(c *context, appW, w, h float32) {
 	in.theme = rt.theme
 	t := &in.theme
 	t.Background, t.Surface, t.SurfaceHover, t.Border = pal.bg, pal.toolbar, pal.hover, pal.border
+	t.ControlBorder = pal.border
 	t.Text, t.TextMuted, t.FontSize = pal.text, pal.muted, 12
 	// Rows chosen span the tree, square, as Chrome's.
 	t.Radius = 0

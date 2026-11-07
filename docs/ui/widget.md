@@ -877,13 +877,17 @@ the `TabControl` holding it, or it gets no room.
 `Clipboard.SetText(s)`, `Clipboard.SetImage(png)` and `Clipboard.Text()`
 use the system clipboard. `SetTheme(ThemeSystem/ThemeLight/ThemeDark)` sets
 the app's appearance, which every window follows, and `IsDark` reports it.
-`SetBorder(light, dark)` sets the color of the outline of the controls
-(`TextBox`, `ComboBox`, `NumericUpDown` and the others) and of their dividers
-in each appearance, with no control touched: the theme's own is faint on some
-screens (a 1.4:1 contrast against the window in the light appearance, 1.7:1 in
-the dark, where WCAG 1.4.11 asks 3:1 of a control's boundary). A zero color
-leaves the theme's; every window follows the appearance as before. Call it
-once at startup: `widget.SetBorder(ui.Hex("#9ca3af"), ui.Hex("#6b7280"))`.
+The outline of the controls (`TextBox`, `ComboBox`, `NumericUpDown`, buttons
+and the other inputs) is the theme's `ControlBorder`: `#8a8a93` in the light
+appearance (3.4:1 against the window, 3.1:1 against a control's face) and
+`#71717a` in the dark (3.7:1 and 3.1:1), where WCAG 1.4.11 asks 3:1 of a
+control's boundary. Dividers, grid lines and the edges of containers and popups
+keep the lighter `Border`. `SetControlBorder(light, dark)` sets the outline in
+each appearance, with no control touched; a zero color leaves the theme's, and
+every window follows the appearance as before. Call it once at startup:
+`widget.SetControlBorder(ui.Hex("#6b7280"), ui.Hex("#9ca3af"))`. An app's own
+`ui.Theme` that sets no `ControlBorder` outlines its controls with `Border`
+(`Theme.Outline`).
 `ScreenSize()` returns the main display's size in DIPs, once the app runs.
 
 ## Styling

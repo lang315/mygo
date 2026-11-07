@@ -165,7 +165,7 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 		}
 		if joined {
 			coreColumn(c).Absolute().Top(0).Bottom(0).End(0).Width(arrowW).
-				BorderStartWidth(1).BorderColor(t.Border).Children(arrows)
+				BorderStartWidth(1).BorderColor(t.Outline()).Children(arrows)
 		} else {
 			arrows()
 		}

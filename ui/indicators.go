@@ -198,7 +198,7 @@ func starPath(r Rect) *Path {
 // sees a spin button; name it with Label.
 func coreStepper(c *context, value *float64, lo, hi, step float64) *node {
 	t := c.theme
-	e := coreColumn(c).Focusable().Shrink(0).Width(t.Space(5)).Radius(t.Radius).Border(1, t.Border).Background(t.Surface).Clip().Role(RoleStepper)
+	e := coreColumn(c).Focusable().Shrink(0).Width(t.Space(5)).Radius(t.Radius).Border(1, t.Outline()).Background(t.Surface).Clip().Role(RoleStepper)
 	e.widget = "Stepper"
 	e.flags |= flagOwnRing
 	set := func(v float64) {
