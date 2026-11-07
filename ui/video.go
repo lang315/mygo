@@ -13,7 +13,7 @@ import (
 )
 
 // A VideoDecoder decodes a video's frames one after another, for a
-// VideoPlayer to show. NewGIFDecoder returns one for animated GIFs;
+// VideoPlayer to show. gifvideo.NewDecoder returns one for animated GIFs;
 // implement one for another format. A player calls it from one goroutine
 // at a time.
 type VideoDecoder interface {
@@ -184,7 +184,7 @@ func (p *VideoPlayer) Close() {
 //	//go:embed waves.gif
 //	var wavesGIF []byte
 //
-//	d, err := ui.NewGIFDecoder(wavesGIF)
+//	d, err := gifvideo.NewDecoder(wavesGIF)
 //	...
 //	app.waves, err = ui.NewVideoPlayer(d)
 //	app.waves.SetLoop(true)

@@ -41,7 +41,7 @@ func (b *ButtonWidget) SetIcon(s *ui.SVG) *ButtonWidget {
 	return b
 }
 
-// SetIconPNG shows the image in data (PNG or GIF, see PictureBox) before the
+// SetIconPNG shows the image in data (PNG, see PictureBox) before the
 // text, in its own colors, as MenuItem.IconPNG does: as high as the text, as
 // an SVG icon. Give it 32 by 32 pixels to stay sharp on a 2× display. nil, or
 // bytes that are no image, remove it (the tooltip still names a button with

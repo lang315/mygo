@@ -70,7 +70,7 @@ func ImageList(size int) *ImageListWidget {
 // Size returns the side, in DIPs, the images are shown at.
 func (l *ImageListWidget) Size() int { return l.size }
 
-// Add decodes the images (PNG or GIF, or JPEG, WebP or BMP once the program
+// Add decodes the images (PNG, or GIF, JPEG, WebP or BMP once the program
 // imports their decoders, see ui.DecodeBitmap; the same picture at one size or
 // several) and keeps them under key, in place of those it had. It
 // fails, and changes nothing, if there is none, one does not decode, one is

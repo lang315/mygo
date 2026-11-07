@@ -154,18 +154,24 @@ Windows 11 ARM64.
 
     | Group | macOS | Linux | What keeps it | Next step |
     |---|---|---|---|---|
-    | editor and text areas (`ui/editor*.go`, `textarea.go`, `textbuffer*.go`) | 285 KB | 250 KB | the type descriptor of `widgetTextInput` (used in an interface), `System.Shape` of `internal/text`, `engine.keyDownPhysical` | break the interface conversion; touches several files |
+    | editor and text areas (`ui/editor*.go`, `textarea.go`, `textbuffer*.go`) | 285 KB | 250 KB | the type descriptor of `widgetTextInput` (used in an interface), `System.Shape` of `internal/text`, `engine.keyDownPhysical` | **Mostly done** in 08058a6f, 5e221a90 and faf94198: the editor's layout, painting and keys are behind hooks (`ui/editorlink.go`). A residual is left: about 14 KB of editor methods (`String`, `edit`, `replace`, `commitBase`, `wants`, `hitPosition`...) are still linked in `counter-native` on darwin, before and after the GIF PR |
     | i18n catalog and messages | 215 KB | 188 KB | `mygo.platformTexts`, the package init | the platform's own strings need it: kept |
     | i18n formats (`cldr`, `number`, `format`) | 154 KB | 133 KB | `mygo.regionOf` (on the path of every app), `i18n.loadTables`, `Catalog.format` | **Tried, not merged, measured:** region filled in only when read (`App.Region`, `OnRegionChanged`, native UI) alone: macOS +16.6 KB (a 16 KB page step), Linux 0, Windows -0.5 KB, since `loadTables` and the language-matching tables of the Go text library stay reachable through `Catalog.format` and `i18n.Normalize`; with the number and plural arms of the message formatter removed as well (the most a hook could take): macOS -18 KB, Linux -64 KB (one step), Windows -19 KB. Under the 30 KB bar, and a hook that is not linked would print numbers and plurals wrongly without telling anyone: dropped. The branch feat/lazy-region stays local as a reference |
     | SVG (`ui/svg.go`, `internal/svg`) | 131 KB | 132 KB | the search icon of the combobox parsed by a package variable, and `*svg.Doc` named by the painting | **Done in #256**: -220 KB macOS, -197 KB Linux, -215 KB Windows, `hello` 0 |
-    | drag and drop (`ui/dragdrop.go`, `data_drag.go`) | 128 KB | 107 KB | `engine.event` and `engine.runFrame`, the surface type on macOS | a hook; touches `ui/input.go` and `ui/runtime.go` |
+    | drag and drop (`ui/dragdrop.go`, `data_drag.go`) | 128 KB | 107 KB | `engine.event` and `engine.runFrame`, the surface type on macOS | **Done in 7d5c5132**: drag and drop is behind hooks (`ui/dragfns.go`) |
     | accessibility bridge (`internal/darwin/access.go`) | 66 KB | | `registerClasses`, `registerSurfaceClass` | kept: VoiceOver needs it |
-    | list (`ui/list.go`) | 41 KB | 41 KB | `computeBox` calls `layoutList` (`ui/layout.go`), which pulls `listFrame.build`, `extendBy`, the sorts of `listRow` | a `listLayout` function variable set by `buildList` (as `rowPainter` is), in its own PR after P3 |
+    | list (`ui/list.go`) | 41 KB | 41 KB | `computeBox` calls `layoutList` (`ui/layout.go`), which pulls `listFrame.build`, `extendBy`, the sorts of `listRow` | **Done in 3d16eeec and 56b4cede**: `layoutListFn` and `relayoutListFn` (`ui/layoutcache.go`) are set when the first list is built; `go tool nm` of `counter-native` shows no `layoutList`, `listFrame` or `listRow` symbol |
     | raster effects, transitions, text selection and menu, path drawing, grid, toast, rich text | 34, 26, 20, 20, 19, 11, 9.5 KB | the same | calls from `ui/layout.go`, `ui/runtime.go`, `ui/paint.go` | after P3 |
 
-    Table, Outline and TreeView add 1.3 KB: their hooks work. Next, each by a
-    build before a PR: the list (`listLayout`), the drag and drop and the
-    editor, after P3; only what a build shows to be worth it.
+    Table, Outline and TreeView add 1.3 KB: their hooks work. The list, the
+    drag and drop and the editor are done (the rows above). The standard
+    library's GIF decoder (which `ui` linked for `NewGIFDecoder` and `DecodeBitmap`) is
+    opt-in now, as JPEG, WebP and BMP are: see the numbers in the PR that moved
+    it to `ui/gifvideo`. Next, only what a build shows to be worth it. A survey
+    with `go tool nm -size` of `counter-native` at `0f8932e6` (an estimate, of
+    its three largest groups it does not use) found the i18n tables above and
+    the `regexp` package (about 85 KB of symbols, imported by purego's objc
+    package on macOS, a third-party one), neither a cheap cut.
 - The pilot app's classes parse. **Done:** `internal/twclass/twclass_test.go`
   (`TestPilotAppClasses`).
 - e2e is green on the three machines.

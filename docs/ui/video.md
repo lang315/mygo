@@ -12,7 +12,7 @@ decoder gives it, and is laid out, fitted and rounded as an
 //go:embed waves.gif
 var wavesGIF []byte
 
-d, err := ui.NewGIFDecoder(wavesGIF)
+d, err := gifvideo.NewDecoder(wavesGIF) // "github.com/egoist/mygo/ui/gifvideo"
 if err != nil {
 	log.Fatal(err)
 }
@@ -78,12 +78,15 @@ play; it goes on from where it stood once the desktop no longer asks.
 
 ## Decoders
 
-`ui.NewGIFDecoder` decodes animated GIFs, in Go, as browsers show them:
-each frame drawn over what the ones before it left, as its disposal says,
-and a frame of 10 ms or less shown for 100 ms. The GIF decodes into memory
-at once, a byte a pixel for each frame, and each frame is drawn as it
-plays. It plays once or loops as `SetLoop` says, whatever loop count the
-GIF gives.
+`gifvideo.NewDecoder` (package `github.com/egoist/mygo/ui/gifvideo`)
+decodes animated GIFs, in Go, as browsers show them: each frame drawn over
+what the ones before it left, as its disposal says, and a frame of 10 ms
+or less shown for 100 ms. The GIF decodes into memory at once, a byte a
+pixel for each frame, and each frame is drawn as it plays. It plays once or
+loops as `SetLoop` says, whatever loop count the GIF gives. Package `ui`
+does not link the GIF decoder (`image/gif`): an app that plays no GIF does
+not pay for it, and one that does imports `gifvideo`, which also lets
+`ui.DecodeBitmap` read a GIF's first frame. It was `ui.NewGIFDecoder`.
 
 A `ui.VideoDecoder` of your own plays another format: `Next` returns the
 next frame, a picture of any image type and how long it shows, or `io.EOF`

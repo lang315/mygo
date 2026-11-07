@@ -17,7 +17,7 @@ ui.Image(c, logo).Size(64, 64).Fit(ui.Contain).Radius(12)
 ## Bitmaps
 
 `ui.NewBitmap` makes a bitmap of an `image.Image`, and `ui.DecodeBitmap` of
-PNG or GIF (its first frame) data, and of JPEG, WebP or BMP data once the
+PNG data, and of GIF (its first frame), JPEG, WebP or BMP data once the
 program imports the decoder of that format (below), turning photos upright
 as their camera's EXIF orientation says. Make bitmaps once, not in the
 view: MyGo keeps a bitmap on the GPU as long as you use it. A bitmap shown
@@ -27,13 +27,14 @@ it shows every pixel's part rather than shimmering.
 
 ### Formats
 
-An app pays only for the decoders it uses: package `ui` links PNG and GIF,
-and a program that shows JPEG, WebP or BMP images imports the decoder of the
+An app pays only for the decoders it uses: package `ui` links PNG, and a
+program that shows GIF, JPEG, WebP or BMP images imports the decoder of the
 format, which registers itself with `image.Decode`:
 
 | Format | Import |
 |--------|--------|
-| PNG, GIF | none |
+| PNG | none |
+| GIF | `import _ "image/gif"` (`ui/gifvideo`, for animated GIFs, imports it) |
 | JPEG | `import _ "image/jpeg"` |
 | WebP | `import _ "golang.org/x/image/webp"` |
 | BMP | `import _ "golang.org/x/image/bmp"` |
@@ -93,7 +94,7 @@ go func() {
 ```
 
 [`ui.Video`](video.md) plays a video's frames so, decoded ahead and each
-shown as it comes due, with animated GIFs out of the box.
+shown as it comes due; `ui/gifvideo` decodes animated GIFs for it.
 
 `Pixelated` draws a bitmap shown larger than its pixels as squares of
 their colors, as pixel art and game sprites are drawn, where it would
