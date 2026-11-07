@@ -1,4 +1,8 @@
-package ui
+// Package gifvideo decodes animated GIFs for ui.NewVideoPlayer. It is a package
+// of its own so that an app that plays no GIF does not link image/gif: package
+// ui does not import it. Importing it also lets ui.DecodeBitmap read the first
+// frame of a GIF.
+package gifvideo
 
 import (
 	"bytes"
@@ -6,6 +10,8 @@ import (
 	"image/gif"
 	"io"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // gifDecoder decodes an animated GIF's frames, each drawn over what the
@@ -21,12 +27,12 @@ type gifDecoder struct {
 	palette [256][4]byte
 }
 
-// NewGIFDecoder returns a decoder of an animated GIF's frames, for
-// NewVideoPlayer, as browsers show them: a frame of 10 ms or less shows
+// NewDecoder returns a decoder of an animated GIF's frames, for
+// ui.NewVideoPlayer, as browsers show them: a frame of 10 ms or less shows
 // for 100 ms. The GIF decodes into memory at once, its frames' pixels a
 // byte each, and each frame is drawn as it plays. The player's SetLoop,
 // not the GIF's loop count, says whether it plays again.
-func NewGIFDecoder(data []byte) (VideoDecoder, error) {
+func NewDecoder(data []byte) (ui.VideoDecoder, error) {
 	g, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -43,11 +49,11 @@ func NewGIFDecoder(data []byte) (VideoDecoder, error) {
 	return &gifDecoder{g: g, pic: image.NewRGBA(image.Rect(0, 0, w, h))}, nil
 }
 
-func (d *gifDecoder) Next() (VideoFrame, error) {
+func (d *gifDecoder) Next() (ui.VideoFrame, error) {
 	g := d.g
 	i := d.next
 	if i >= len(g.Image) {
-		return VideoFrame{}, io.EOF
+		return ui.VideoFrame{}, io.EOF
 	}
 	if i > 0 {
 		d.dispose(i - 1)
@@ -61,7 +67,7 @@ func (d *gifDecoder) Next() (VideoFrame, error) {
 	if i < len(g.Delay) && g.Delay[i] > 1 {
 		delay = time.Duration(g.Delay[i]) * 10 * time.Millisecond
 	}
-	return VideoFrame{Image: d.pic, Duration: delay}, nil
+	return ui.VideoFrame{Image: d.pic, Duration: delay}, nil
 }
 
 func (d *gifDecoder) Rewind() error {

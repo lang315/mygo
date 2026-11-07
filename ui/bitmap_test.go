@@ -511,15 +511,16 @@ func TestReleasePixelsKeepsWhatCannotComeBack(t *testing.T) {
 	}
 }
 
-// DecodeBitmap links the decoders of PNG and GIF only: a program that shows JPEG,
-// WebP or BMP images imports their decoders, and the packages that decode images
-// (ui, its widgets, Markdown and rich text, the plugins that draw bitmaps) do not
-// import them for it, on any system.
+// DecodeBitmap links the decoder of PNG only: a program that shows GIF, JPEG,
+// WebP or BMP images imports their decoders (ui/gifvideo imports GIF's), and the
+// packages that decode images (ui, its widgets, Markdown and rich text, the
+// plugins that draw bitmaps, and counter-native, an app of native UI that shows
+// none) do not import them for it, on any system.
 func TestOptionalDecodersAreNotLinkedByUI(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("no go command: ", err)
 	}
-	pkgs := []string{"ui", "ui/widget", "ui/markdown", "ui/richtext", "plugins/updater/native", "plugins/loading", "plugins/game"}
+	pkgs := []string{"ui", "ui/widget", "ui/markdown", "ui/richtext", "plugins/updater/native", "plugins/loading", "plugins/game", "examples/counter-native"}
 	for i, p := range pkgs {
 		pkgs[i] = "github.com/egoist/mygo/" + p
 	}
@@ -533,7 +534,7 @@ func TestOptionalDecodersAreNotLinkedByUI(t *testing.T) {
 		}
 		for _, pkg := range strings.Fields(string(out)) {
 			switch pkg {
-			case "image/jpeg", "golang.org/x/image/webp", "golang.org/x/image/bmp", "golang.org/x/image/vp8", "golang.org/x/image/vp8l":
+			case "image/gif", "compress/lzw", "image/jpeg", "golang.org/x/image/webp", "golang.org/x/image/bmp", "golang.org/x/image/vp8", "golang.org/x/image/vp8l":
 				t.Errorf("%s/%s: these packages link %s, the decoder of an optional format", target[0], target[1], pkg)
 			}
 		}
@@ -547,6 +548,7 @@ func TestMissingDecoderNamesTheImport(t *testing.T) {
 		name, imp string
 		data      []byte
 	}{
+		{"GIF", "image/gif", []byte("GIF89a\x01\x00\x01\x00")},
 		{"JPEG", "image/jpeg", []byte{0xff, 0xd8, 0xff, 0xe0, 0, 0x10}},
 		{"WebP", "golang.org/x/image/webp", []byte("RIFF\x24\x00\x00\x00WEBPVP8 ")},
 		{"BMP", "golang.org/x/image/bmp", append([]byte("BM\x00\x00\x00\x00\x00\x00\x00\x00\x36\x00\x00\x00"), 40, 0, 0, 0)},

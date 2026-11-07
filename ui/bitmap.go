@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	_ "image/gif" // DecodeBitmap
 	_ "image/png" // DecodeBitmap
 	"log"
 	"math"
@@ -114,10 +113,11 @@ func weakOf[T any, P interface {
 	}
 }
 
-// DecodeBitmap decodes a PNG or GIF (its first frame) image, and a JPEG,
-// WebP or BMP image once the program imports its decoder, which an app that
-// has none of them does not link: `import _ "image/jpeg"`, `import _
-// "golang.org/x/image/webp"` or `import _ "golang.org/x/image/bmp"`. An image
+// DecodeBitmap decodes a PNG image, and a GIF (its first frame), JPEG, WebP or
+// BMP image once the program imports its decoder, which an app that has none
+// of them does not link: `import _ "image/gif"`, `import _ "image/jpeg"`,
+// `import _ "golang.org/x/image/webp"` or `import _ "golang.org/x/image/bmp"`
+// (package gifvideo imports image/gif as well). An image
 // of such a format with no decoder is an error that names the import
 // (errors.Is(err, image.ErrFormat) holds). A JPEG photo shows upright, as its
 // camera's EXIF orientation says. The bitmap keeps data, without a copy, to
@@ -158,12 +158,13 @@ func decodeImage(data []byte) (*scene.Image, error) {
 
 // optionalDecoders are the formats of images that the program imports a decoder
 // for when it shows them, as the standard library's registry of decoders has
-// them: DecodeBitmap links only PNG and GIF.
+// them: DecodeBitmap links only PNG.
 var optionalDecoders = []struct {
 	name, imp string
 	is        func(data []byte) bool
 	once      sync.Once
 }{
+	{name: "GIF", imp: "image/gif", is: func(d []byte) bool { return bytes.HasPrefix(d, []byte("GIF8")) }},
 	{name: "JPEG", imp: "image/jpeg", is: func(d []byte) bool { return bytes.HasPrefix(d, []byte{0xff, 0xd8, 0xff}) }},
 	{name: "WebP", imp: "golang.org/x/image/webp", is: func(d []byte) bool {
 		return len(d) >= 12 && string(d[:4]) == "RIFF" && string(d[8:12]) == "WEBP"

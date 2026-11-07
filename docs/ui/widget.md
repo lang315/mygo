@@ -1052,7 +1052,7 @@ Input and display:
   fails: `Label("").Rich(widget.ParseMarkup(status)...)`.
 - `Icon(svg, size)`: an SVG icon in the color of the text (`TextColor`
   changes it). There are no named icons: embed the SVGs you need.
-- `PictureBox(data, w, h)`: a PNG or GIF, or a JPEG, WebP or BMP once the
+- `PictureBox(data, w, h)`: a PNG, or a GIF, JPEG, WebP or BMP once the
   program imports its decoder (see "Formats" in [Images](image.md)),
   `SetImage` to change it. The same bytes of an image up to 64 KB, as an icon, decode once (the
   last 256 are kept); bytes that are no image leave an empty room.
@@ -1066,7 +1066,7 @@ Input and display:
   `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`, `RangeSpin` or
   `CheckBoxGroup` to a value kept elsewhere; see [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
-  color) or `SetIconPNG` (a PNG or GIF in its own colors, as high as the
+  color) or `SetIconPNG` (a PNG in its own colors, as high as the
   text, as an SVG icon: give it 32 by 32 pixels to stay sharp on 2×
   displays). `Button("")` is named by its tooltip for assistive technology
   and the Tester, or by `SetAccessibleName`. `Suggested()` and

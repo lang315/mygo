@@ -17,6 +17,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/gifvideo"
 )
 
 //go:embed waves.gif
@@ -28,7 +29,7 @@ type app struct {
 }
 
 func newApp() (*app, error) {
-	d, err := ui.NewGIFDecoder(wavesGIF)
+	d, err := gifvideo.NewDecoder(wavesGIF)
 	if err != nil {
 		return nil, err
 	}

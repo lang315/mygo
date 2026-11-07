@@ -3210,7 +3210,7 @@ func TreeItem(c *Context, label string, open *bool, children func()) Element {
 //	//go:embed waves.gif
 //	var wavesGIF []byte
 //
-//	d, err := ui.NewGIFDecoder(wavesGIF)
+//	d, err := gifvideo.NewDecoder(wavesGIF)
 //	...
 //	app.waves, err = ui.NewVideoPlayer(d)
 //	app.waves.SetLoop(true)
