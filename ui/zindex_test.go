@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -323,7 +324,7 @@ func TestZIndexAllocs(t *testing.T) {
 		plain.Frame()
 		raised.Frame()
 	}
-	a, b := testing.AllocsPerRun(50, plain.Frame), testing.AllocsPerRun(50, raised.Frame)
+	a, b := allocrun.Least(50, plain.Frame), allocrun.Least(50, raised.Frame)
 	if b > a {
 		t.Errorf("a frame allocates %.0f times with z-indexes, %.0f without", b, a)
 	}

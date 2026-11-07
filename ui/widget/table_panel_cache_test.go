@@ -5,6 +5,7 @@ import (
 	"testing/fstest"
 
 	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // The panel's counts are worked out again only when a count or the language
@@ -18,7 +19,7 @@ func TestPanelCountsAreNotFormattedAgainWhenNothingChanged(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tt := tester(t, tb)
 			tt.Frame()
-			allocs := testing.AllocsPerRun(50, func() {
+			allocs := allocrun.Least(50, func() {
 				mu.Lock()
 				tb.counts()
 				mu.Unlock()

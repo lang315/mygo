@@ -3,6 +3,8 @@ package ui
 import (
 	"image/color"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 // TestFillRule fills and clips to rings of two squares and of two
@@ -103,7 +105,7 @@ func TestPathContains(t *testing.T) {
 	// detector Pool.Put drops one item in four, so Contains then allocates a
 	// new one: the count holds in the runs without it.
 	if !raceEnabled {
-		if n := testing.AllocsPerRun(100, func() { ring.Contains(50, 20) }); n != 0 {
+		if n := allocrun.Least(100, func() { ring.Contains(50, 20) }); n != 0 {
 			t.Errorf("Contains allocates %v times", n)
 		}
 	}

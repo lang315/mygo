@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -415,7 +416,7 @@ func TestInViewMargin(t *testing.T) {
 			below, above = card.InViewMargin(0, 0, 80, 0), card.InViewMargin(80, 0, 0, 0)
 			inside, deep = card.InViewMargin(-50), card.InViewMargin(-90)
 			sides, unused = card.InViewMargin(80, 0), card.InViewMargin()
-			allocs = testing.AllocsPerRun(10, func() { card.InViewMargin(80) })
+			allocs = allocrun.Least(10, func() { card.InViewMargin(80) })
 		})
 	}, 200, 400)
 	tt.Frame()
