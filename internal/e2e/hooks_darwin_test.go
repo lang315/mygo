@@ -270,6 +270,13 @@ func roundedBacking(w *mygo.Window) (opaque bool, alpha, red float64, supported 
 	return opaque, alpha, red, true
 }
 
+// windowBacking reports whether the window is opaque, and the alpha of its
+// background color.
+func windowBacking(w *mygo.Window) (opaque bool, alpha float64, supported bool) {
+	mygo.RunOnMain(func() { opaque, alpha = darwin.TestWindowBacking(w.NativeHandle()) })
+	return opaque, alpha, true
+}
+
 func dockDevTools(w *mygo.Window) (ok bool) {
 	mygo.RunOnMain(func() { ok = darwin.TestDockInspector(w.NativeHandle()) })
 	return ok
@@ -384,6 +391,14 @@ func dragFiles(*mygo.Window, float64, float64, []string) (bool, bool) { return f
 // the keyboard does: in the content or in the page of a web view.
 func pressTab(w *mygo.Window, back bool) (ok bool) {
 	sendFront(w, "pressTab", func() { ok = darwin.TestKeyShift(w.NativeHandle(), 48, "\t", back) })
+	return ok
+}
+
+// pressKeyComposing presses a key in a window of native UI with the test
+// standing in for the input method: it commits commit, unless empty, then
+// passes the key on as command (doCommandBySelector:), unless empty.
+func pressKeyComposing(w *mygo.Window, code uint16, chars, commit, command string) (ok bool) {
+	mygo.RunOnMain(func() { ok = darwin.TestKeyComposing(w.NativeHandle(), code, chars, commit, command) })
 	return ok
 }
 
@@ -599,3 +614,7 @@ func nativeGlassTint(w *mygo.Window) (red, green, blue, alpha float64) {
 }
 
 func activateApp() { mygo.RunOnMain(darwin.TestActivate) }
+
+// Only X servers keep a keyboard's state for the tests after a test: see
+// left_behind_linux_test.go.
+func keyboardState() (state string, restore func()) { return "", func() {} }

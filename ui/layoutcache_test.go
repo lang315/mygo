@@ -775,7 +775,7 @@ func TestLayoutInputs(t *testing.T) {
 	// or made volatile by sameLayout, and those it writes.
 	read := "paintRare flags ts cols rows placeOn form colFit overflow gridFit attach popover " +
 		"first last next nchild parent st c measured tl lay laid x y w h contentW contentH runes frags paragraph ownText merged " +
-		"spansKey collapsed rowMinW field hidden fillViewport spans placed flips originAttached"
+		"spansKey collapsed rowMinW field hidden fillViewport spans placed flips originAttached edgeMargin edgeMarginSet"
 	// Fields the layout never reads.
 	other := "shadows styleFn epoch key valueInput id themeAt depth track originX originY originSet world content " +
 		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +
@@ -784,7 +784,7 @@ func TestLayoutInputs(t *testing.T) {
 		"paintLook expanded busy current vertical tip keepOpen accValue accRange hasRange accFill accStep barInset scrollBase hideScrollbars keepScrollbars barsFrom ignoreInput themed " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName keepLinks focusTo snap snapAlign keyShortcuts " +
 		"setPos setSize choosesItems search description invalid followX sort level expandable " +
-		"chooseMany serial ignoreInput accessHidden themed lift ringOffset ringColor ringSet clipping zIndex zOrder"
+		"chooseMany serial ignoreInput accessHidden themed lift ringOffset ringColor ringSet clipping zIndex zOrder hitFn focusHighlights labelledBy describedBy errorMessage roleDescription controls hasPopup accessDisabled autoComplete orient accGrid accSet"
 	known := map[string]bool{}
 	for _, f := range strings.Fields(read + " " + other) {
 		known[f] = true

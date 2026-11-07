@@ -114,7 +114,11 @@ type MenuItem struct {
 	// (AppKit, GTK, and Win32's on Windows 10) show a normal item, since they
 	// have no role for it.
 	Destructive bool
-	Submenu     []*MenuItem
+	// Subtitle is a second, smaller line under the label: macOS 14 and
+	// browsers show it so, and earlier macOS, Windows and Linux after the
+	// label, as "Label — Subtitle".
+	Subtitle string
+	Submenu  []*MenuItem
 	// Click is called on the main thread when the item is chosen. On Linux
 	// and Windows, win is the window whose menu bar or context menu was
 	// chosen. Other menus use the focused window, which may be nil.
@@ -315,6 +319,9 @@ func (it *MenuItem) IsDestructive() bool { return it.get(func() bool { return it
 // SetAccelerator changes the keyboard shortcut of the item.
 func (it *MenuItem) SetAccelerator(acc string) { it.update(func() { it.Accelerator = acc }) }
 
+// SetSubtitle changes the second line of the item; "" removes it.
+func (it *MenuItem) SetSubtitle(subtitle string) { it.update(func() { it.Subtitle = subtitle }) }
+
 // SetIcon replaces the image beside the label; nil removes it.
 func (it *MenuItem) SetIcon(icon *MenuIcon) { it.update(func() { it.Icon = icon }) }
 
@@ -433,12 +440,21 @@ func prepareItem(it *MenuItem, parent *Menu) *MenuItem {
 // given to any number of items (MenuItem.Icon, SetIcon).
 type MenuIcon struct{ p *platform.MenuIcon }
 
+// PlatformMenuIcon returns what the icon shows, for the items of package
+// ui's menus (ui.MenuItem.Icon), nil for a nil icon.
+func (m *MenuIcon) PlatformMenuIcon() *platform.MenuIcon {
+	if m == nil {
+		return nil
+	}
+	return m.p
+}
+
 // NewMenuIcon makes an icon for menu items of a PNG image, which it copies.
 // The image is shown in its own colors, as a flag; with template, it is a
 // black and transparent image shown in the color of the menu's text, white
 // in a dark menu and on the highlight, as macOS tints template images
 // (Linux shows it as it is). It returns an error for data that is not a
-// PNG image.
+// PNG image. NewMenuIconSVG makes one of an SVG document.
 //
 // The image fits a box of 16 by 16 points, keeping its aspect: give it at
 // least 32 by 32 pixels, for high-resolution displays. A checkbox or radio
@@ -538,6 +554,7 @@ func (it *MenuItem) snapshotLocked() *platform.MenuItem {
 	p := &platform.MenuItem{
 		ID:          it.uid,
 		Label:       it.Label,
+		Subtitle:    it.Subtitle,
 		Role:        string(it.Role),
 		Accelerator: it.Accelerator,
 		Enabled:     !it.Disabled,
@@ -640,7 +657,7 @@ func performRole(role MenuRole, win *Window) {
 			return
 		}
 	case RoleReload, RoleForceReload, RoleResetZoom, RoleZoomIn, RoleZoomOut:
-		if win.content != nil {
+		if win.content {
 			return
 		}
 	}
@@ -681,7 +698,7 @@ func performRole(role MenuRole, win *Window) {
 			RoleUndo: "undo", RoleRedo: "redo", RoleCut: "cut", RoleCopy: "copy", RolePaste: "paste",
 			RoleDelete: "delete", RoleSelectAll: "selectAll", RolePasteAndMatchStyle: "pasteAndMatchStyle",
 		}[role]
-		if win.content != nil {
+		if win.content {
 			win.contentCommand(cmd)
 			return
 		}
@@ -690,7 +707,7 @@ func performRole(role MenuRole, win *Window) {
 		}
 		n.Eval("document.execCommand(" + `"` + cmd + `"` + ")")
 	case RoleBold, RoleItalic, RoleUnderline, RoleStrikethrough, RoleAlignLeft, RoleAlignCenter, RoleAlignRight:
-		if win.content != nil {
+		if win.content {
 			win.contentCommand(string(role))
 			return
 		}

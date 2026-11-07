@@ -70,7 +70,11 @@ behaves and to move it:
   does; scrolling back to the end follows it again. `FollowAnimation`
   makes it glide there, as a spring (`&ui.Smooth`) or a curve, rather
   than show the end at once: what is added comes up from below, as the
-  chat apps scroll, and the user scrolling stops it.
+  chat apps scroll, and the user scrolling stops it. Each layout reads
+  `FollowEnd` as it is then, and `HoldPlace` keeps the list where it is
+  for the next layout alone: call it in the frame a click opens a fold in
+  the last message, and the line clicked stays under the pointer rather
+  than following the end as the row grows.
 - `Header` names the rows heading sections: the header of the section at
   the top stays pinned there while its rows scroll under it, until the next
   header pushes it away. Give headers a background.
@@ -313,6 +317,8 @@ the rows it is, "5 of 10,000", although the list builds only those in view.
 A list choosing its rows gives assistive technology the focus on the row
 chosen: Up and Down are read as they move the choice, and focusing a row
 chooses it. A screen reader moving out of view asks the list to scroll
-there, which builds the rows it reaches.
+there, which builds the rows it reaches. A list of rows of cells, as a
+spreadsheet's, is a [grid](accessibility.md#grids) with
+`Role(ui.RoleGrid)`: its rows are then rows of a table.
 
 For rows in columns, see [Table](table.md); for a tree, [Outline](outline.md).

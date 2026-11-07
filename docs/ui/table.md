@@ -97,6 +97,24 @@ to show on the accent. A cell that reads its
 row's double click with `RowDoubleClicked` leaves the click to the row, so
 the block follows it.
 
+`CellsStyle` paints the block in colors of its own rather than the accent,
+as a spreadsheet's two levels and stripes: `Cell` fills the block's cells,
+`CellText` colors their text, `Row` fills the rest of the rows chosen, and
+`Stripe` fills every other row. A zero color paints none. The cursor's
+border takes `CellText` in the block and `Cell` out of it, or the accent
+and its text where those are zero.
+
+```go
+t := c.Theme()
+app.grid.CellSelect = true
+app.grid.CellsStyle = ui.CellsStyle{
+	Cell:     t.Accent,
+	CellText: t.AccentText,
+	Row:      t.Accent.Alpha(0.12),
+	Stripe:   t.Text.Alpha(0.04),
+}
+```
+
 ```go
 cols := []ui.TableColumn{{Title: "#", RowHeader: true, Width: 48, Fixed: true}, {Title: "Name"}, {Title: "Size", Width: 90}}
 app.grid.Selection, app.grid.CellSelect = &app.chosen, true
@@ -214,6 +232,19 @@ app.files.HeaderMenu = func(m *ui.Menu, col int) {
 	if m.Item("Show All Columns").Chosen() {
 		app.showAll()
 	}
+}
+```
+
+## Header cells
+
+`ListState.HeaderCell` is called as the table builds each column's header
+cell, with the cell and the column's index, as `HeaderMenu`'s: what it
+builds goes in the cell after the title and the sort arrow, and it may
+give the cell a tooltip or a card of its own:
+
+```go
+app.files.HeaderCell = func(cell ui.Element, col int) {
+	cell.Tooltip(app.columnTypes[col])
 }
 ```
 
@@ -542,8 +573,9 @@ for range time.Tick(100 * time.Millisecond) {
 
 Assistive technology sees a table, named by its `Label`, of rows named by
 the text inside them, each saying which of all the rows it is, with column
-headers that say the order the rows are sorted in. With `CellSelect`, the
-cells of the block say they are chosen.
+headers that say the order the rows are sorted in, and the cells of a
+`RowHeader` column naming their rows as row headers. With `CellSelect`,
+the cells of the block say they are chosen.
 The header's checkbox is a plain cell, not a column header, so that
 assistive technology finds "Check all".
 

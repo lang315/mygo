@@ -266,6 +266,19 @@ func (e *node) PressedOutside() bool {
 	return true
 }
 
+// PressedInside reports whether the pointer went down since the last
+// frame on the element, inside it, or in a popover attached to it, as
+// PressedOutside reports one outside. Unlike Pressed and Clicked, the
+// element does not take the pointer.
+func (e *node) PressedInside() bool {
+	e.neverKept() // a press elsewhere, outside the row too, is not among the row's states
+	if !e.hasState() || len(e.c.rt.downs) == 0 {
+		return false
+	}
+	rt := e.c.rt
+	return rt.pressedWithin(rt.downs[len(rt.downs)-1], e)
+}
+
 // pressedWithin reports whether element id of the last frame is e, inside it,
 // the element e is attached to, or in an overlay attached to one of them.
 func (rt *engine) pressedWithin(id uint64, e *node) bool {

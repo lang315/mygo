@@ -326,11 +326,14 @@ type Window struct {
 	// pg is the window's page, which Page returns unless the window shows
 	// native UI.
 	pg *Page
-	// content is WindowOptions.Content; conn connects it to the native
+	// content tells that the window shows WindowOptions.Content, which
+	// the window hands to its surface as it attaches it and keeps no
+	// reference to: the Content's view, and all it reaches, stays only as
+	// long as the window is open (#1281). conn connects it to the native
 	// surface (main thread only). devTools tells that PageOptions.DevTools
 	// turned the developer tools on: the web inspector, or the inspector
 	// of the Content.
-	content      Content
+	content      bool
 	conn         *surface.Conn
 	devTools     bool
 	invalidating atomic.Bool
@@ -604,7 +607,7 @@ func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout 
 	id := windows.nextID
 	windows.Unlock()
 
-	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true}
+	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content != nil, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true}
 	w.pg = &Page{w}
 	if flyout != nil {
 		w.fit = flyout.fit
@@ -650,7 +653,7 @@ func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout 
 		w.joinSession(s)
 		popts.DataStore = store
 	}
-	if err := webViewAllowed(w.content != nil); err != nil {
+	if err := webViewAllowed(w.content); err != nil {
 		w.detachSession()
 		panic(fmt.Sprintf("mygo: cannot create window: %v", err))
 	}
@@ -663,8 +666,8 @@ func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout 
 	if w.stateKey != "" {
 		w.initState(popts)
 	}
-	if w.content != nil {
-		w.attachContent()
+	if w.content {
+		w.attachContent(opts.Content)
 	} else {
 		startContentRules(nw, opts.Page.ContentRules)
 	}
@@ -674,12 +677,12 @@ func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout 
 	windows.Unlock()
 
 	fire1(&App.onWindowCreated, w)
-	if w.content == nil {
+	if !w.content {
 		w.loadPage(opts.Page.SessionState, opts.URL)
 	}
 	switch {
 	case opts.Hidden:
-	case w.content != nil:
+	case w.content:
 		// The window of native UI shows, and its view runs for the first
 		// frame, once NewWindow returned on the main thread, so that the
 		// view can use what NewWindow returns (#1053): shown now, the
@@ -1461,7 +1464,7 @@ func (w *Window) NativeHandle() uintptr { return get(w, platform.Window.Handle) 
 // protocol.SetFrontend). Besides http(s) URLs, schemes registered with
 // protocol.Handle can be used.
 func (p *Page) LoadURL(rawURL string) error {
-	if p.w.content != nil {
+	if p.w.content {
 		return errNoPage
 	}
 	resolved, err := resolveURL(rawURL)
@@ -1479,7 +1482,7 @@ func (p *Page) LoadURL(rawURL string) error {
 // working directory, then against the directory of the executable (and the
 // Resources directory of a macOS app bundle).
 func (p *Page) LoadFile(path string) error {
-	if p.w.content != nil {
+	if p.w.content {
 		return errNoPage
 	}
 	abs, err := resolveFile(path)
@@ -1652,6 +1655,31 @@ func (p *Page) UserAgent() string { return pageGet(p.w, platform.Window.UserAgen
 //   - Linux: always 0, WebKitGTK has no API for the web process of a page.
 func (p *Page) ProcessID() int { return pageGet(p.w, platform.Window.ProcessID) }
 
+// GPUProcessID returns the ID of the operating system's process that does
+// the page's graphics and media, which on macOS is where its sound comes
+// out (to capture it with a Core Audio process tap, for instance), 0 when
+// it is unknown: before the web view started one, after the window
+// closed, for a window showing native UI, and on Linux and in browsers.
+// Which process it is depends on the platform:
+//
+//   - macOS: WebKit's GPU process (com.apple.WebKit.GPU), which plays the
+//     page's audio and video, from WebKit's private
+//     -[WKWebView _gpuProcessIdentifier]; 0 when WebKit doesn't answer it
+//     or hasn't started the process yet, which it does once a page first
+//     needs it, to play media or draw with the GPU.
+//   - Windows: WebView2's GPU process (msedgewebview2.exe
+//     --type=gpu-process), a child of ProcessID's browser process, from
+//     ICoreWebView2Environment8's GetProcessInfos; 0 on runtimes without
+//     it. Sound on Windows comes out of WebView2's audio service, a
+//     utility process, not this one: capture the tree of ProcessID's
+//     process for it.
+//   - Linux: always 0, WebKitGTK has no API for its GPU process.
+//
+// The app's web views may share the process. It gets a new ID each time
+// the app runs and whenever the web view starts it again, after it
+// crashed or exited, so ask again rather than keep it.
+func (p *Page) GPUProcessID() int { return pageGet(p.w, platform.Window.GPUProcessID) }
+
 // OpenDevTools opens the web inspector (unless disabled with
 // PageOptions.DevTools).
 func (p *Page) OpenDevTools() { p.w.page(platform.Window.OpenDevTools) }
@@ -1679,7 +1707,7 @@ func (p *Page) Print() { p.w.page(platform.Window.Print) }
 // CapturePage returns a PNG screenshot of the visible page. For a window
 // showing Content it renders the content as it is.
 func (w *Window) CapturePage() ([]byte, error) {
-	if w.content != nil {
+	if w.content {
 		return w.captureContent()
 	}
 	type result struct {
@@ -1824,7 +1852,7 @@ const maxHeldEvents = 1024
 // the DOM of the page is ready; replies to calls are sent right away since
 // the page is waiting for them.
 func (w *Window) enqueue(msg message, event bool) {
-	if w.content != nil {
+	if w.content {
 		return
 	}
 	w.outMu.Lock()

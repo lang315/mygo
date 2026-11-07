@@ -212,7 +212,7 @@ func (e *node) textParams(width float32) text.Params {
 	if ts.fixedLine && ts.lineHeight > 0 {
 		style.LineHeight = ts.lineHeight / style.FontSize()
 	}
-	p := text.Params{Text: e.text, Width: width, MaxLines: e.maxLines, Style: style, Spans: e.textSpans(), NoWrap: e.noWrap, Balance: e.balance, Ellipsis: e.ellipsis, RTL: e.rtl()}
+	p := text.Params{Text: e.text, Width: width, MaxLines: e.maxLines, Style: style, Spans: e.textSpans(), NoWrap: e.noWrap, Balance: e.balance, Pretty: e.pretty, KeepSpaces: e.keepSpaces, Ellipsis: e.ellipsis, RTL: e.rtl()}
 	switch {
 	case ts.align == Center:
 		p.Align = text.Center
@@ -291,11 +291,17 @@ func (e *node) resolvedText() textStyle {
 		if take&setSelection != 0 {
 			out.selection = t.selection
 		}
+		if take&setCaret != 0 {
+			out.caret = t.caret
+		}
 		if take&setStroke != 0 {
 			out.strokeWidth, out.strokeColor = t.strokeWidth, t.strokeColor
 		}
 		if take&setTabSize != 0 {
 			out.tabSize = t.tabSize
+		}
+		if take&setShadow != 0 {
+			out.shadow = t.shadow
 		}
 		out.set |= take
 	}
@@ -1303,7 +1309,7 @@ func attachTo(c, e *node, pw, ph float32) {
 	t := laidOutVisualBox(c.popover)
 	if c.flags&flagScrollY != 0 {
 		_, ay, _, sy := c.attachFractions()
-		h = min(h, roomAlong(t.Y, t.H, beside(ay, sy), c.m(0)+c.m(2), c.c.h))
+		h = min(h, roomAlong(t.Y, t.H, beside(ay, sy), c.m(0)+c.m(2), c.c.h, c.windowEdge()))
 	}
 	c.x, c.y = attachedAt(c, e, t, pw, ph, w, h)
 	layoutBox(c, w, h)
@@ -1311,7 +1317,9 @@ func attachTo(c, e *node, pw, ph float32) {
 
 // reattach moves the elements of the overlay ov attached to others
 // (AttachTo) to where those show in this frame, after transitions. It
-// keeps their size and what is inside them, which transitions moved too.
+// keeps their size and what is inside them, which transitions moved too,
+// and the distance their own transition has them from their place, as an
+// Enter's X and Y.
 func reattach(ov *node) {
 	pw, ph := ov.w-ov.border[1]-ov.border[3], ov.h-ov.border[0]-ov.border[2]
 	for c := ov.first; c != nil; c = c.next {
@@ -1319,6 +1327,10 @@ func reattach(ov *node) {
 			continue
 		}
 		c.x, c.y = attachedAt(c, ov, laidOutVisualBox(c.popover), pw, ph, c.w, c.h)
+		if r := ov.c.rt.trans[c.id]; r != nil && r.entering&movePos != 0 {
+			c.x += r.shown.x - r.target.x
+			c.y += r.shown.y - r.target.y
+		}
 	}
 }
 
@@ -1328,8 +1340,9 @@ func reattach(ov *node) {
 // transform origin on the element's (AttachedOrigin).
 func attachedAt(c, e *node, t Rect, pw, ph, w, h float32) (x, y float32) {
 	ax, ay, sx, sy := c.attachFractions()
-	x, fx := alongTarget(t.X, t.W, ax, sx, w, c.m(3)-c.m(1), c.c.w)
-	y, fy := alongTarget(t.Y, t.H, ay, sy, h, c.m(0)-c.m(2), c.c.h)
+	edge := c.windowEdge()
+	x, fx := alongTarget(t.X, t.W, ax, sx, w, c.m(3)-c.m(1), c.c.w, edge)
+	y, fy := alongTarget(t.Y, t.H, ay, sy, h, c.m(0)-c.m(2), c.c.h, edge)
 	c.placed, c.flips = c.attach.flipped(fx, fy), 0
 	if fx {
 		c.flips |= flipAcross
@@ -1364,17 +1377,26 @@ func (c *node) attachFractions() (ax, ay, sx, sy float32) {
 	return ax, ay, sx, sy
 }
 
-// windowMargin keeps what overlays place apart from the window's edges.
+// windowMargin keeps what overlays place apart from the window's edges,
+// unless the element says otherwise (AttachEdgeMargin).
 const windowMargin = 4
 
+// windowEdge returns how far AttachTo keeps c from the window's edges.
+func (c *node) windowEdge() float32 {
+	if c.edgeMarginSet {
+		return c.edgeMargin
+	}
+	return windowMargin
+}
+
 // roomAlong returns the most an element attached to target can be along
-// an axis of the window, limit long, and stay in it: the larger side of
-// target for one placed beside it, else the window. One that scrolls, as a
-// select's long list of options, is no longer.
-func roomAlong(t0, tsize float32, beside bool, margins, limit float32) float32 {
-	room := limit - 2*windowMargin - margins
+// an axis of the window, limit long, and stay in it, edge from its ends:
+// the larger side of target for one placed beside it, else the window.
+// One that scrolls, as a select's long list of options, is no longer.
+func roomAlong(t0, tsize float32, beside bool, margins, limit, edge float32) float32 {
+	room := limit - 2*edge - margins
 	if beside {
-		room = max(t0, limit-(t0+tsize)) - windowMargin - margins
+		room = max(t0, limit-(t0+tsize)) - edge - margins
 	}
 	return max(room, 0)
 }
@@ -1386,14 +1408,14 @@ func beside(at, self float32) bool { return at == 1 && self == 0 || at == 0 && s
 // alongTarget returns where an element size long goes along an axis of the
 // window, limit long, with its point at fraction self on target's point at
 // fraction at, moved by off: on the other side of target, or the other way
-// along it, where that overflows the window less (flipped), then moved
-// into the window: along target, or over it for one placed beside it that
-// has no room on either side, as a submenu of a menu as wide as the
-// window, which then covers the menu as macOS's do.
-func alongTarget(t0, tsize, at, self, size, off, limit float32) (p float32, flipped bool) {
+// along it, where that overflows the window, less edge at each end, less
+// (flipped), then moved into it along target: along target, or over it for
+// one placed beside it that has no room on either side, as a submenu of a
+// menu as wide as the window, which then covers the menu as macOS's do.
+func alongTarget(t0, tsize, at, self, size, off, limit, edge float32) (p float32, flipped bool) {
 	pos := func(at, self, off float32) float32 { return t0 + at*tsize - self*size + off }
 	over := func(p float32) float32 {
-		return max(0, windowMargin-p) + max(0, p+size-(limit-windowMargin))
+		return max(0, edge-p) + max(0, p+size-(limit-edge))
 	}
 	p = pos(at, self, off)
 	if over(p) > 0 {
@@ -1402,7 +1424,7 @@ func alongTarget(t0, tsize, at, self, size, off, limit float32) (p float32, flip
 		}
 	}
 	if over(p) > 0 {
-		p = max(windowMargin, min(p, limit-windowMargin-size))
+		p = max(edge, min(p, limit-edge-size))
 	}
 	return p, flipped
 }

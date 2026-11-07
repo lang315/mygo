@@ -52,9 +52,15 @@ func (s *surface) out() (out, poll bool) {
 }
 
 // checkShown tells the content that some of the window shows again, if
-// Occluded last said none did.
+// Occluded last said none did, and that none of it shows any more (SurfaceHidden)
+// as the window is minimized, which it learns of at once, rather than as
+// Occluded is asked.
 func (s *surface) checkShown() {
 	if !s.wasOut {
+		if iconic, _, _ := procIsIconic.Call(s.w.hwnd); iconic != 0 {
+			s.wasOut = true
+			s.send(platform.SurfaceEvent{Kind: platform.SurfaceHidden})
+		}
 		return
 	}
 	if out, poll := s.out(); !out {

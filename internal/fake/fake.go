@@ -158,6 +158,9 @@ type Backend struct {
 	// before. Main thread only.
 	StyleSheet      string
 	StyleSheetError error
+	// StartButtons and EndButtons are the desktop's window buttons that
+	// WindowButtons reports, as Linux's button layout gives them.
+	StartButtons, EndButtons []string
 	// notifications are the notifications shown and not yet removed, by
 	// id.
 	notifications map[string]*platform.Notification
@@ -547,6 +550,7 @@ type Window struct {
 	closed    bool
 	devtools  bool
 	pid       int  // SetProcessID
+	gpuPID    int  // SetGPUProcessID
 	audible   bool // SetAudible
 	muted     bool // SetAudioMuted
 	// capture is the page's capture of each kind (SetCapture).
@@ -816,6 +820,7 @@ func (w *Window) Zoom() float64                      { w.mu.Lock(); defer w.mu.U
 func (w *Window) SetUserAgent(string)                {}
 func (w *Window) UserAgent() string                  { return "fake" }
 func (w *Window) ProcessID() int                     { w.mu.Lock(); defer w.mu.Unlock(); return w.pid }
+func (w *Window) GPUProcessID() int                  { w.mu.Lock(); defer w.mu.Unlock(); return w.gpuPID }
 func (w *Window) IsAudible() bool                    { w.mu.Lock(); defer w.mu.Unlock(); return w.audible }
 func (w *Window) SetAudioMuted(v bool)               { w.mu.Lock(); w.muted = v; w.mu.Unlock() }
 func (w *Window) IsAudioMuted() bool                 { w.mu.Lock(); defer w.mu.Unlock(); return w.muted }
@@ -870,6 +875,10 @@ func (w *Window) RestoreSessionState(state []byte) bool {
 // SetProcessID sets the process ID the page reports, as a backend whose
 // web view runs in a process of that ID; 0, the default, is none known.
 func (w *Window) SetProcessID(pid int) { w.mu.Lock(); w.pid = pid; w.mu.Unlock() }
+
+// SetGPUProcessID sets the GPU process ID the page reports
+// (GPUProcessID); 0, the default, is none known.
+func (w *Window) SetGPUProcessID(pid int) { w.mu.Lock(); w.gpuPID = pid; w.mu.Unlock() }
 
 // SetAudible sets whether the page plays sound (IsAudible) and reports it
 // to the handler (AudibleChanged), as a backend does whenever the page
@@ -1324,6 +1333,10 @@ func (screen) Displays() []platform.Display {
 	}}
 }
 func (screen) CursorPoint() platform.Point { return platform.Point{X: 10, Y: 20} }
+
+// WindowButtons returns StartButtons and EndButtons, as Linux's desktop
+// layout gives them (platform.WindowButtonsBackend).
+func (b *Backend) WindowButtons() (start, end []string) { return b.StartButtons, b.EndButtons }
 
 // SetStyleSheet loads css in place of the sheet before, as Linux's GTK
 // does (platform.StyleBackend).

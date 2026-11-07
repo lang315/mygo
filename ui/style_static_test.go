@@ -18,10 +18,15 @@ import (
 // ringSet), all in paintRare, and balanced text and AccessHidden's bools
 // took 48 more. It is 1936 since upstream's ObserveInput (observeFn),
 // KeyShortcuts, ObjectPosition (objectPos, in paintRare), ScrollSnap, AttachedAnchors
-// (placed), ZIndex, Busy, Current and DimDisabled took 88 more.
+// (placed), ZIndex, Busy, Current and DimDisabled took 88 more. It is 2112
+// since upstream's accessibility attributes (RowCount and the other grid
+// positions, PositionInSet, RoleDescription, Controls, HasPopup,
+// DescribedBy, ErrorMessage, AutoComplete, Orientation, AccessDisabled),
+// LabelledBy, AttachEdgeMargin and pretty and space-keeping text took 176
+// more (hitFn went to paintRare).
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 1936 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 1936", n)
+	if n := unsafe.Sizeof(node{}); n != 2112 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2112", n)
 	}
 }
 

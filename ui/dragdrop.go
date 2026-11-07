@@ -72,6 +72,20 @@ func (e *node) dragFrom(value func() any) *node {
 	return e
 }
 
+// DragMissed reports, in the frame after, that the value the element
+// drags (Drag) was let go over no element taking it, and where, in the
+// window's coordinates: outside the window when it was let go past its
+// edge, as to tear a tab out into a window of its own. A drag given up,
+// with Escape, is not missed.
+func (e *node) DragMissed() (Point, bool) {
+	e.asksOutside()
+	if !e.hasState() || !e.st.dragMissed {
+		return Point{}, false
+	}
+	e.c.rt.consumed = true
+	return Point{e.st.missX, e.st.missY}, true
+}
+
 // Dragging reports whether the element is dragging its value (Drag), or
 // the pointer is dragging the element (Draggable).
 func (e *node) Dragging() bool {
@@ -311,6 +325,9 @@ func (rt *engine) dragEnd() bool {
 			t.droppedValue, t.hasDropped = d.value, true
 			t.touch()
 			t.dropX, t.dropY = rt.pointerX, rt.pointerY
+		} else if s := rt.states[d.src]; s != nil {
+			s.dragMissed, s.missX, s.missY = true, rt.pointerX, rt.pointerY
+			s.touch()
 		}
 	}
 	rt.requestFrame()
