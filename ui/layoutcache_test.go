@@ -784,7 +784,7 @@ func TestLayoutInputs(t *testing.T) {
 		"paintLook expanded busy current vertical tip keepOpen accValue accRange hasRange accFill accStep barInset scrollBase hideScrollbars keepScrollbars barsFrom ignoreInput themed " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName keepLinks focusTo snap snapAlign keyShortcuts " +
 		"setPos setSize choosesItems search description invalid followX sort level expandable " +
-		"chooseMany serial ignoreInput accessHidden themed lift ringOffset ringColor ringSet clipping zIndex zOrder hitFn focusHighlights labelledBy describedBy errorMessage roleDescription controls hasPopup accessDisabled autoComplete orient accGrid accSet"
+		"chooseMany serial ignoreInput accessHidden themed lift ringOffset ringColor ringSet clipping zIndex zOrder hitFn focusHighlights labelledBy describedBy errorMessage roleDescription controls hasPopup accessDisabled autoComplete orient accGrid accSet popupSet"
 	known := map[string]bool{}
 	for _, f := range strings.Fields(read + " " + other) {
 		known[f] = true

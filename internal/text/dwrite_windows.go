@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/egoist/mygo/internal/wincb"
+	"hash/maphash"
 	"log"
 	"math"
 	"reflect"
@@ -49,6 +50,7 @@ var (
 	procDWriteCreate    = dwriteDLL.NewProc("DWriteCreateFactory")
 	kernel32DLL         = syscall.NewLazyDLL(systemDir() + `\kernel32.dll`)
 	procUserLocaleName  = kernel32DLL.NewProc("GetUserDefaultLocaleName")
+	procPreferredLangs  = kernel32DLL.NewProc("GetUserPreferredUILanguages")
 	procSystemDirectory = syscall.NewLazyDLL("kernel32.dll").NewProc("GetSystemDirectoryW")
 	procSystemParams    = syscall.NewLazyDLL(systemDir() + `\user32.dll`).NewProc("SystemParametersInfoW")
 )
@@ -380,6 +382,10 @@ type dwrite struct {
 	factory5 uintptr // IDWriteFactory5, from Windows 10 1703
 	system   uintptr // the system font collection
 	locale   []uint16
+	// han is the locale of Han characters in no language that writes
+	// them, which would otherwise take locale (userHanLanguage); nil when
+	// they keep it.
+	han []uint16
 
 	exists  map[string]bool // whether the system has a family
 	formats map[formatKey]uintptr
@@ -390,7 +396,16 @@ type dwrite struct {
 	// fonts are the Fonts of faces at sizes, which hold a reference to
 	// their face until they are unreachable (nativeFonts).
 	fonts map[fontKey]*Font
-	thin  map[uintptr]bool // whether a font face is too thin for antialiasing
+	// numbers holds what text formats shape numbers into (shapeNumber).
+	numbers map[formatKey]*numberFont
+	// wholes are the texts wrapping lately, shaped into one line, wrapFonts
+	// what wrapping them keeps for text formats (wrapWhole), textSeed seeds
+	// the hashes of their keys, and frame counts the frames.
+	wholes    map[wholeKey]*keptWhole
+	wrapFonts map[formatKey]*wrapFont
+	textSeed  maphash.Seed
+	frame     uint64
+	thin      map[uintptr]bool // whether a font face is too thin for antialiasing
 
 	// The system's settings for text (settings): its rendering parameters,
 	// the correction renderers apply, whether it smooths fonts with
@@ -414,6 +429,9 @@ type dwrite struct {
 	names   []string
 
 	scratch []byte
+	// firsts is room for the code unit starting the cluster of each glyph of
+	// a run (run).
+	firsts []uint32
 }
 
 // appFont is a font file the app registers: its own families, the
@@ -470,6 +488,10 @@ func newDWrite() (*dwrite, error) {
 		fallbacks: map[string]uintptr{},
 		faces:     map[faceKey]uintptr{},
 		fonts:     map[fontKey]*Font{},
+		numbers:   map[formatKey]*numberFont{},
+		wholes:    map[wholeKey]*keptWhole{},
+		wrapFonts: map[formatKey]*wrapFont{},
+		textSeed:  maphash.MakeSeed(),
 		thin:      map[uintptr]bool{},
 		aliases:   map[string]string{},
 	}
@@ -489,7 +511,35 @@ func newDWrite() (*dwrite, error) {
 	} else {
 		e.locale = utf16z("en-US")
 	}
+	if han := userHanLanguage(syscall.UTF16ToString(e.locale), preferredLanguages()); han != "" {
+		e.han = utf16z(han)
+	}
 	return e, nil
+}
+
+// preferredLanguages returns the user's preferred languages, in order
+// (GetUserPreferredUILanguages), as the backend reads them.
+func preferredLanguages() []string {
+	const muiLanguageName = 0x8
+	var count, size uint32
+	if ok, _, _ := procPreferredLangs.Call(muiLanguageName, uintptr(unsafe.Pointer(&count)), 0, uintptr(unsafe.Pointer(&size))); ok == 0 || size == 0 {
+		return nil
+	}
+	buf := make([]uint16, size)
+	if ok, _, _ := procPreferredLangs.Call(muiLanguageName, uintptr(unsafe.Pointer(&count)), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size))); ok == 0 {
+		return nil
+	}
+	var out []string
+	start := 0
+	for i, c := range buf {
+		if c == 0 {
+			if i > start {
+				out = append(out, syscall.UTF16ToString(buf[start:i]))
+			}
+			start = i + 1
+		}
+	}
+	return out
 }
 
 // has reports whether a collection has a family.
@@ -816,6 +866,19 @@ func collect(run *dwGlyphRun, desc *dwGlyphRunDescription) {
 }
 
 func (e *dwrite) shape(text []rune, style Style, spans []Span, width float32, rtl, wholeWords bool) []shapedLine {
+	if lines := e.shapeNumber(text, style, spans, width, rtl); lines != nil {
+		return lines
+	}
+	if wrapsFromWhole(text, style, spans, width, rtl, wholeWords) {
+		if lines := e.wrapWhole(text, style, width); lines != nil {
+			return lines
+		}
+	}
+	return e.shapeText(text, style, spans, width, rtl, wholeWords)
+}
+
+// shapeText has DirectWrite shape text.
+func (e *dwrite) shapeText(text []rune, style Style, spans []Span, width float32, rtl, wholeWords bool) []shapedLine {
 	format := e.format(style)
 	if format == 0 || len(text) == 0 {
 		return nil
@@ -1149,6 +1212,13 @@ func (e *dwrite) typeset(layout uintptr, style Style, spans []Span, text []rune)
 		call(layout, layoutSetLocaleName, uintptr(unsafe.Pointer(&name[0])), textRange(run.start, run.end))
 		runtime.KeepAlive(name)
 	}
+	// Han characters left in the user's locale take the first of the
+	// user's languages that writes them, when the locale does not (#1454).
+	if e.han != nil {
+		for _, run := range userHanRuns(text, style.Lang, spans) {
+			call(layout, layoutSetLocaleName, uintptr(unsafe.Pointer(&e.han[0])), textRange(run.start, run.end))
+		}
+	}
 	setObjects(layout, spans, units)
 }
 
@@ -1194,9 +1264,12 @@ func (e *dwrite) typography(layout uintptr, list string, r uintptr) {
 // those hit testing finds.
 func (e *dwrite) run(layout uintptr, u16 []uint16, r dwRun, x float32, index []int) (shapedRun, float32) {
 	f := e.fontOf(r.face, r.size)
-	out := shapedRun{font: f, start: index[r.pos], end: index[r.pos+r.n], glyphs: make([]Glyph, len(r.glyphs))}
+	// The glyphs last until the next layout, which takes them into its lines.
+	out := shapedRun{font: f, start: index[r.pos], end: index[r.pos+r.n], glyphs: e.glyphRoom(len(r.glyphs))}
 	// The code unit starting the cluster of each glyph.
-	first := make([]uint32, len(r.glyphs))
+	e.firsts = slices.Grow(e.firsts[:0], len(r.glyphs))[:len(r.glyphs)]
+	first := e.firsts
+	clear(first)
 	for k := 0; k < len(r.clusters); {
 		g0 := int(r.clusters[k])
 		k1 := k + 1
@@ -1977,6 +2050,9 @@ func (e *dwrite) fontCount() int { return len(e.fonts) }
 // refers to them (releaseFonts).
 func (e *dwrite) forgetFonts() {
 	clear(e.fonts)
+	clear(e.numbers)
+	clear(e.wholes)
+	clear(e.wrapFonts)
 	e.dropScratch()
 }
 

@@ -29,7 +29,7 @@ func TestPaintInputs(t *testing.T) {
 			"accRange hasRange accFill accStep popover rowsOf focusGroup groupSelects placeOn overflow segment " +
 			"activeDescendant nameFrom nameJoin outOfName keepLinks focusTo setPos setSize choosesItems search description " +
 			"field form rowMinW followX sort colFit level expandable chooseMany gridFit attach serial fillViewport " +
-			"accessDisabled autoComplete orient focusHighlights accGrid accSet labelledBy describedBy errorMessage roleDescription controls hasPopup edgeMargin edgeMarginSet",
+			"accessDisabled autoComplete orient focusHighlights accGrid accSet labelledBy describedBy errorMessage roleDescription controls hasPopup popupSet edgeMargin edgeMarginSet",
 	}
 	where := map[string]string{}
 	for place, list := range fields {
