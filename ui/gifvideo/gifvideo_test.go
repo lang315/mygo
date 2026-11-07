@@ -8,6 +8,8 @@ import (
 	"io"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 var (
@@ -16,6 +18,31 @@ var (
 	videoBlue  = color.RGBA{0, 0, 255, 255}
 	videoWhite = color.RGBA{255, 255, 255, 255}
 )
+
+// Importing this package is enough for ui to read a GIF: its test binary
+// imports no other GIF decoder, and DecodeBitmap and DecodeBitmapConfig read
+// a small GIF.
+func TestImportingGifvideoLetsUIReadGIFs(t *testing.T) {
+	g := &gif.GIF{
+		Config: image.Config{Width: 3, Height: 2},
+		Image:  []*image.Paletted{image.NewPaletted(image.Rect(0, 0, 3, 2), color.Palette{videoRed})},
+		Delay:  []int{10},
+	}
+	var b bytes.Buffer
+	if err := gif.EncodeAll(&b, g); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := ui.DecodeBitmapConfig(b.Bytes()); err != nil || cfg.Width != 3 || cfg.Height != 2 {
+		t.Errorf("DecodeBitmapConfig: %v, %v", cfg, err)
+	}
+	bm, err := ui.DecodeBitmap(b.Bytes())
+	if err != nil || bm == nil {
+		t.Fatalf("DecodeBitmap: %v, %v", bm, err)
+	}
+	if w, h := bm.Size(); w != 3 || h != 2 {
+		t.Errorf("the bitmap is %d by %d, want 3 by 2", w, h)
+	}
+}
 
 // TestDecoderFrames checks that a GIF's frames draw over what the ones
 // before left as their disposal says, with their transparent pixels

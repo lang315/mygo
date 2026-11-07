@@ -221,7 +221,7 @@ app.md.LinkIcon = func(dest string, size float32) (markdown.InlineObject, bool) 
 Images show their description until `LoadImage` loads them, on a
 goroutine of their own; without it, they stay descriptions, as a view
 loads nothing from the network by itself. `FileImages(dir)` loads the
-files of a directory (PNG and GIF; a JPEG, WebP or BMP needs the decoder
+files of a directory (PNG; a GIF, JPEG, WebP or BMP needs the decoder
 imported, see "Formats" in [Images](image.md)). A paragraph of images alone shows them as large
 as they are, at most as wide as the view.
 
