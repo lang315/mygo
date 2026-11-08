@@ -57,6 +57,26 @@ func loadCoreVideo() error {
 	return cvErr
 }
 
+// The renderer reaches this code through these functions, which LinkVideo
+// sets: a texture comes from a frame of video only after a player of the
+// system's decoder made one, so apps that play none do not link it, nor
+// CoreVideo's bindings.
+var (
+	surfaceTextureFn func(r *Renderer, img *scene.Image, s *scene.Surface) id
+	dropWrappedFn    func(r *Renderer, t *texture)
+	releaseHeldFn    func(r *Renderer, slot int)
+	releaseVideoFn   func(r *Renderer)
+)
+
+// LinkVideo links the renderer's code for frames of video. Call it before
+// the first frame of video.
+func LinkVideo() {
+	surfaceTextureFn = (*Renderer).surfaceTexture
+	dropWrappedFn = (*Renderer).dropWrapped
+	releaseHeldFn = (*Renderer).releaseHeld
+	releaseVideoFn = (*Renderer).releaseVideo
+}
+
 // videoState is what the renderer keeps of frames of video: the texture
 // cache, and the CVMetalTextures (CF objects) that frames in flight read,
 // released once the frame of their slot completed.
@@ -166,21 +186,15 @@ func (r *Renderer) chromaTexture(img *scene.Image) uintptr {
 	return 0
 }
 
-// dropTexture frees an image's textures: at once those the renderer
-// made, and those wrapping a CVPixelBuffer once the frames in flight,
-// which may read them, completed.
-func (r *Renderer) dropTexture(t *texture) {
-	if t.cv != [2]uintptr{} {
-		for _, c := range t.cv {
-			if c != 0 {
-				r.video.held[r.inUse] = append(r.video.held[r.inUse], c)
-			}
+// dropWrapped frees the textures wrapping a CVPixelBuffer once the frames in
+// flight, which may read them, completed.
+func (r *Renderer) dropWrapped(t *texture) {
+	for _, c := range t.cv {
+		if c != 0 {
+			r.video.held[r.inUse] = append(r.video.held[r.inUse], c)
 		}
-		t.cv, t.tex, t.chroma = [2]uintptr{}, 0, 0
-		return
 	}
-	release(&t.tex)
-	release(&t.chroma)
+	t.cv, t.tex, t.chroma = [2]uintptr{}, 0, 0
 }
 
 // releaseHeld releases the CVMetalTextures given up while the frame of a

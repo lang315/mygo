@@ -548,9 +548,15 @@ func (r *Renderer) imageTexture(img *scene.Image) uintptr {
 		return 0
 	}
 	if s := img.Surface; s != nil && s.Format == scene.SurfaceNV12 && s.Planes[1].Pix != nil {
-		return r.planesTexture(img, s)
+		if planesTextureFn == nil {
+			return 0 // no player of the system's decoder made a frame of video
+		}
+		return planesTextureFn(r, img, s)
 	} else if s != nil && s.Native != 0 {
-		return r.elementTexture(img, s)
+		if elementTextureFn == nil {
+			return 0
+		}
+		return elementTextureFn(r, img, s)
 	}
 	t := r.images[img.ID()]
 	if t != nil && t.chroma != 0 {
@@ -587,6 +593,21 @@ func (r *Renderer) imageTexture(img *scene.Image) uintptr {
 	}
 	t.lastFrame = r.frame
 	return uintptr(t.tex)
+}
+
+// The renderer reaches the code for frames of video through these functions,
+// which LinkVideo sets: a texture comes from one only after a player of the
+// system's decoder made it, so apps that play none do not link it.
+var (
+	planesTextureFn  func(r *Renderer, img *scene.Image, s *scene.Surface) uintptr
+	elementTextureFn func(r *Renderer, img *scene.Image, s *scene.Surface) uintptr
+)
+
+// LinkVideo links the renderer's code for frames of video. Call it before
+// the first frame of video.
+func LinkVideo() {
+	planesTextureFn = (*Renderer).planesTexture
+	elementTextureFn = (*Renderer).elementTexture
 }
 
 // planesTexture uploads the planes of a frame of video in NV12, the luma

@@ -15,3 +15,7 @@ func newGPURenderer(n platform.SurfaceNative) (gpuRenderer, error) {
 	}
 	return metal.New(n.Layer)
 }
+
+// linkVideoRenderers links the renderer's code for frames of video, which an
+// app that plays none does not carry.
+func linkVideoRenderers() { metal.LinkVideo() }

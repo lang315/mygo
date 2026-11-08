@@ -17,6 +17,7 @@ import (
 // It is exported for ui/video only, as media is internal: apps open
 // videos with ui/video.
 func NewEngineVideoPlayer(e media.Engine) *VideoPlayer {
+	linkVideo()
 	v := &videoEngine{e: e, held: true}
 	p := &VideoPlayer{bitmap: &Bitmap{img: scene.NewImageRGBA(0, 0, nil)}, eng: v, rate: 1, volume: 1}
 	e.SetWake(v.wakeWindow)

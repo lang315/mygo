@@ -1539,8 +1539,8 @@ func sampleOp(op *scene.Op, u, v, du, dv float32) [4]float32 {
 		u, v = pixelated(u, du), pixelated(v, dv)
 	}
 	var c [4]float32
-	if s := op.Image.Surface; s != nil && s.Format == scene.SurfaceNV12 && s.Planes[1].Pix != nil {
-		c = sampleNV12(op.Image, s, u, v, unflipped(op.Src))
+	if s := op.Image.Surface; s != nil && sampleNV12Fn != nil && s.Format == scene.SurfaceNV12 && s.Planes[1].Pix != nil {
+		c = sampleNV12Fn(op.Image, s, u, v, unflipped(op.Src))
 	} else {
 		c = sample(op.Image, u, v, unflipped(op.Src))
 	}
@@ -1583,6 +1583,14 @@ func pixelated(t, d float32) float32 {
 }
 
 func abs32(v float32) float32 { return float32(math.Abs(float64(v))) }
+
+// sampleNV12Fn is sampleNV12 once LinkVideo set it: the scene has a frame of
+// video in planes only after a player of the system's decoder made one.
+var sampleNV12Fn func(img *scene.Image, s *scene.Surface, u, v float32, src scene.Rect) [4]float32
+
+// LinkVideo links the drawing of frames of video in NV12 planes, which an app
+// that plays none does not carry. Call it before the first frame of video.
+func LinkVideo() { sampleNV12Fn = sampleNV12 }
 
 // sampleNV12 reads a frame of video in NV12 at (u, v) as the GPU
 // renderers' shaders do: its luma and its chroma each with bilinear

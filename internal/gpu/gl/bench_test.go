@@ -44,6 +44,7 @@ func benchRender(b *testing.B, s *scene.Scene) {
 // on the CPU (as a decoder in Go would, or the CPU renderer does) and
 // uploaded, 8 MB a frame.
 func BenchmarkVideoFrameRGBA(b *testing.B) {
+	LinkVideo()
 	img := gputest.NV12Frame(1920, 1080, scene.BT709)
 	rgb := scene.NewImageRGBA(1920, 1080, nil)
 	s := videoBenchScene(rgb)
@@ -57,6 +58,7 @@ func BenchmarkVideoFrameRGBA(b *testing.B) {
 // from its NV12 planes, as GStreamer leaves them: 3 MB uploaded, and
 // converted in the shader.
 func BenchmarkVideoFrameNV12(b *testing.B) {
+	LinkVideo()
 	img := gputest.NV12Frame(1920, 1080, scene.BT709)
 	s := videoBenchScene(img)
 	benchVideo(b, s, img.Changed)

@@ -39,3 +39,7 @@ func (r *areaRenderer) Render(s *scene.Scene) error {
 	gl.MakeAreaCurrent(r.area)
 	return r.Renderer.Render(s)
 }
+
+// linkVideoRenderers links the renderer's code for frames of video, which an
+// app that plays none does not carry.
+func linkVideoRenderers() { gl.LinkVideo() }

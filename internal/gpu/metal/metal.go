@@ -965,6 +965,18 @@ func (r *Renderer) syncAtlas(t *texture, a *scene.Atlas, format uint) error {
 
 // imageTexture returns the texture of an image, uploading it when new or
 // changed.
+// dropTexture frees an image's textures: at once those the renderer made,
+// and those wrapping a CVPixelBuffer once the frames in flight, which may
+// read them, completed (video.go).
+func (r *Renderer) dropTexture(t *texture) {
+	if t.cv != [2]uintptr{} {
+		dropWrappedFn(r, t) // only frames of video have them: set
+		return
+	}
+	release(&t.tex)
+	release(&t.chroma)
+}
+
 func (r *Renderer) imageTexture(img *scene.Image) uintptr {
 	if img.Scene != nil {
 		// A canvas, drawn before the scene showing it.
@@ -974,7 +986,10 @@ func (r *Renderer) imageTexture(img *scene.Image) uintptr {
 		return 0
 	}
 	if s := img.Surface; s != nil && (s.Native != 0 || s.Format == scene.SurfaceNV12 && s.Planes[1].Pix != nil) {
-		return r.surfaceTexture(img, s)
+		if surfaceTextureFn == nil {
+			return 0 // no player of the system's decoder made a frame of video
+		}
+		return surfaceTextureFn(r, img, s)
 	}
 	t := r.images[img.ID()]
 	if t != nil && (t.chroma != 0 || t.cv != [2]uintptr{}) {
@@ -1037,7 +1052,9 @@ func (r *Renderer) waitSlot(slot int) {
 		r.err = fmt.Errorf("metal: a frame failed: %s", describe(send(cb, "error")))
 	}
 	release(&r.inflight[slot])
-	r.releaseHeld(slot)
+	if releaseHeldFn != nil {
+		releaseHeldFn(r, slot)
+	}
 }
 
 // waitLast waits for the GPU to finish the frames in flight, so that this
@@ -2003,7 +2020,9 @@ func (r *Renderer) Release() {
 			release(&r.layer)
 		}
 		r.releaseTextures()
-		r.releaseVideo()
+		if releaseVideoFn != nil {
+			releaseVideoFn(r)
+		}
 		r.ages.Reset()
 		release(&r.empty)
 		release(&r.sampler)

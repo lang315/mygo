@@ -1522,7 +1522,9 @@ func (rt *engine) close() {
 	}
 	rt.host.afterTimer(time.Time{})
 	rt.host.repaintTimer(time.Time{})
-	rt.releaseVideos()
+	if len(rt.videos) > 0 || len(rt.shownVideos) > 0 { // only an engine that has videos reads the hook
+		releaseVideosFn(rt)
+	}
 	// Last, with the engine closed: a Close that asks for a frame, or reads
 	// the window, finds it closed rather than half so.
 	rt.closeLocals()
@@ -1558,7 +1560,10 @@ func (rt *engine) dropFrame() {
 func (rt *engine) endFrame() {
 	rt.inFrame = false
 	if !rt.closing && !rt.closed {
-		rt.sweepVideos()
+		// A video that just left the view is still in shownVideos.
+		if len(rt.videos) > 0 || len(rt.shownVideos) > 0 { // only an engine that has videos reads the hook
+			sweepVideosFn(rt)
+		}
 	}
 	if rt.closing {
 		rt.close() // which closes the Locals the frame dropped too

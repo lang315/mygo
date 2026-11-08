@@ -6150,7 +6150,14 @@ builds a web view in its content: `coreWebView` and `Window.newWebView`
 register it (`webViewNote`, `webViewPlace`, `windowPlaceWebViews`), as
 `linkedDocuments` does for documents, and `webview_place.go` of each backend
 is left out with `mygo_nowebview` (`TestNativeOnlyLinksNoWebViewPlacement`
-asks the linker). The platforms
+asks the linker). The engine's holding of the videos of the system's
+media engines (`sweepVideos`, `releaseVideos`), the CPU rasterizer's NV12
+sampling and the Metal, Direct3D 11 and GL renderers' code for their frames
+(`metal.LinkVideo`, `d3d11.LinkVideo`, `gl.LinkVideo`, `raster.LinkVideo`)
+are linked only by an app that plays one: `ui.NewEngineVideoPlayer` calls
+`linkVideo`, which sets the function values the engine and the renderers
+call through (`TestAppWithoutVideoLinksNoVideoPath` asks the linker, with
+`examples/video` as the app that links it all). The platforms
 differ in what is left of WebKit: macOS still loads WebKit.framework at
 startup, because cookies, `NewDataStore` and content rules use
 WKWebsiteDataStore, and those calls keep working there; Linux loads no

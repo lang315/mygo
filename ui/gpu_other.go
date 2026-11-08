@@ -11,3 +11,6 @@ import (
 func newGPURenderer(platform.SurfaceNative) (gpuRenderer, error) {
 	return nil, errors.New("no GPU renderer for this platform yet")
 }
+
+// linkVideoRenderers has no renderer's code to link.
+func linkVideoRenderers() {}
