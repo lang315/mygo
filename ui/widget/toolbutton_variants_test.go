@@ -53,8 +53,12 @@ func TestToolButtonVariantsLookAsTheButtons(t *testing.T) {
 			if got != want {
 				t.Errorf("destructive: ToolButton %v, Button %v", got, want)
 			}
-			if !near(got.rest, th.Danger) {
-				t.Errorf("destructive %v: want the danger color %v", got.rest, th.Danger)
+			fill := th.Danger // the dark theme's is darkened for its white text (TestDestructiveFillContrast)
+			if dark {
+				fill = th.Danger.Mix(ui.RGB(0, 0, 0), 0.16)
+			}
+			if !near(got.rest, fill) {
+				t.Errorf("destructive %v: want the danger color %v, darkened in the dark theme", got.rest, fill)
 			}
 			if got.hover == got.rest || got.pressed == got.hover {
 				t.Errorf("destructive %v: hover and pressed must differ from rest and each other", got)
