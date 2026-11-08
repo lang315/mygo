@@ -3219,10 +3219,11 @@ func TreeItem(c *Context, label string, open *bool, children func()) Element {
 //
 // The video moves on only while the view builds it and some of the window
 // shows: one that went out of the view, or a window out of sight, goes on
-// from where it stood. Each frame of the video is a frame of the window,
-// which After asks for as it comes due. While the desktop asks for less
-// motion (Preferences.ReduceMotion), it shows its first frame and does
-// not play.
+// from where it stood; a system's video with sound plays on, unseen, as a
+// browser's does. Each frame of the video is a frame of the window, which
+// After asks for as it comes due. While the desktop asks for less motion
+// (Preferences.ReduceMotion), a decoder's video, and a system's muted one,
+// shows its first frame and does not play.
 func Video(c *Context, p *VideoPlayer) Element {
 	_ctx := c.build()
 	if _ctx == nil {

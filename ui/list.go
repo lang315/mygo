@@ -77,7 +77,12 @@ type ListState struct {
 	// End do while the list has the keyboard focus, and Page Up and Page
 	// Down on Linux and Windows: *Selected is the chosen row, -1 for none,
 	// which shows in the accent color. The list's Changed reports a new
-	// choice, and its Submitted a double click or Enter.
+	// choice, and its Submitted a double click or Enter. With a Key, the
+	// choice follows its item as rows come and go, and becomes -1 when the
+	// item is no longer among the rows: the list writes that as it builds,
+	// so what the app builds after the list in the same pass reads -1. An
+	// app that shows another set of rows in the same list can start it
+	// afresh (list = ListState{}), which forgets the item chosen before.
 	Selected *int
 	// RowsOf, when set, returns the rows Selection chooses, in order, and
 	// true; false leaves it to the list to find them, by asking Selection

@@ -39,6 +39,11 @@ func (d *solidDecoder) Next() (VideoFrame, error) {
 
 func (d *solidDecoder) Rewind() error { d.next = 0; return nil }
 
+// Duration is the length of the video, as a GIF decoder's is.
+func (d *solidDecoder) Duration() time.Duration {
+	return time.Duration(len(d.colors)) * 100 * time.Millisecond
+}
+
 // newVideo returns a player of frames of solid colors, a tenth of a second
 // each, closed as the test ends.
 func newVideo(t *testing.T, colors ...color.RGBA) *VideoPlayer {
