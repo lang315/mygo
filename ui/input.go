@@ -1414,7 +1414,7 @@ func (rt *engine) commandEnabled(name string) bool {
 	if s == nil || s.editor == nil || s.flags&(flagEditable|flagSelectable) == 0 {
 		return rt.commandShortcut(name)
 	}
-	if k, ok := commandKeys[name]; ok && s.editor.readOnly && !s.editor.wants(k) {
+	if k, ok := commandKeys[name]; ok && s.editor.readOnly && !wantsFn(s.editor, k) {
 		return rt.commandShortcut(name)
 	}
 	return rt.editCommandOn(s, name)

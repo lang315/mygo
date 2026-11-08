@@ -19,6 +19,8 @@ var (
 	textSelectionKeyFn func(rt *engine, s *state, k keyEvent) bool
 	textUnitFn         func(s *state, at, unit int) (int, int)
 	placeMenuCaretFn   func(s *state, x, y float32)
+	textHitFn          func(s *state, x, y float32) textPoint
+	commitComposeFn    func(ed *editor)
 )
 
 // editorOnce makes the first linkEditor the only one to write: the functions
@@ -42,6 +44,8 @@ func linkEditor() {
 		textSelectionKeyFn = (*engine).textSelectionKey
 		textUnitFn = textUnit
 		placeMenuCaretFn = placeMenuCaret
+		textHitFn = textHit
+		commitComposeFn = (*editor).commitCompose
 	})
 }
 
