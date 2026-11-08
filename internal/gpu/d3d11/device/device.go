@@ -30,26 +30,39 @@ func SystemDir() string {
 // or, when there is none, with Windows' software rasterizer (WARP), which
 // software reports. The caller releases the device and the context.
 func New() (device, context uintptr, software bool, err error) {
-	return create(hardware, warp)
+	return create(0, hardware, warp)
 }
 
 // NewHardware is New without the software rasterizer: it fails when the GPU
 // cannot make a device.
 func NewHardware() (device, context uintptr, err error) {
-	device, context, _, err = create(hardware)
+	device, context, _, err = create(0, hardware)
 	return
+}
+
+// NewForVideo is New for a device that decodes and converts video, as
+// Media Foundation's: one that supports Direct3D's video API where the
+// GPU has it, else as New.
+func NewForVideo() (device, context uintptr, software bool, err error) {
+	const videoSupport = 0x800
+	if d, c, sw, err := create(videoSupport, hardware, warp); err == nil {
+		return d, c, sw, nil
+	}
+	return create(0, hardware, warp)
 }
 
 const hardware, warp = 1, 5
 
-func create(drivers ...uintptr) (device, context uintptr, software bool, err error) {
+// create makes a device with the creation flags extra besides the ones it
+// always sets, on the first of drivers that can.
+func create(extra uintptr, drivers ...uintptr) (device, context uintptr, software bool, err error) {
 	if err := procD3D11CreateDevice.Find(); err != nil {
 		return 0, 0, false, err
 	}
 	levels := []uint32{0xb000, 0xa100, 0xa000} // 11_0, 10_1, 10_0
 	const bgraSupport = 0x20
 	var hr uintptr
-	flags := uintptr(bgraSupport)
+	flags := uintptr(bgraSupport) | extra
 	if Debug() {
 		flags |= createDeviceDebug
 	}
