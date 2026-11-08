@@ -227,7 +227,7 @@ func (rt *engine) textSelectionAt(scope uint64, x, y float32) textPoint {
 	// Respect the topmost hit, including a link inside a rich paragraph.
 	for _, id := range rt.hitChain(x, y) {
 		if s := rt.states[id]; s != nil && s.textScope == scope && s.editor != nil && s.flags&flagDisabled == 0 {
-			return textHit(s, x, y)
+			return textHitFn(s, x, y)
 		}
 	}
 	var nearest *state
@@ -250,7 +250,7 @@ func (rt *engine) textSelectionAt(scope uint64, x, y float32) textPoint {
 	if nearest == nil {
 		return textPoint{}
 	}
-	return textHit(nearest, x, y)
+	return textHitFn(nearest, x, y)
 }
 
 func textHit(s *state, x, y float32) textPoint {
@@ -551,7 +551,7 @@ func (rt *engine) textSelectionMenu(s *state, x, y float32) bool {
 	if s.textScope == 0 {
 		return false
 	}
-	p := textHit(s, x, y)
+	p := textHitFn(s, x, y)
 	a, b, selected := rt.textSelectionBounds()
 	if !rt.textSelectionVisible(s) || !selected || rt.compareTextPoints(p, a) < 0 || rt.compareTextPoints(p, b) > 0 {
 		rt.selection = textSelection{scope: s.textScope, anchor: p, caret: p}
