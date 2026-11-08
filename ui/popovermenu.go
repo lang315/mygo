@@ -861,6 +861,11 @@ type drawnMenu struct {
 	// edit is set for the editing menu of a text input or selectable text
 	// (drawEditMenu).
 	edit bool
+	// later, x, y and gen are what Menu.Later needs, for the menu's first
+	// build only: later is cleared by it.
+	later bool
+	x, y  float32
+	gen   uint64
 }
 
 // drawnIcon is an icon of a drawn menu in a color: the color of the text
@@ -1012,7 +1017,12 @@ func (m *menuParts) draw(build func(m *Menu), text uint64, d *drawnMenu) *node {
 		run.highlighted = d.highlighted
 	}
 	pm := &platform.Menu{}
-	build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[text]})
+	menu := &Menu{run: run, menu: pm, rt: rt, text: rt.states[text]}
+	if d != nil && d.later {
+		d.later = false
+		menu.id, menu.x, menu.y, menu.gen, menu.later = m.Trigger.id, d.x, d.y, d.gen, true
+	}
+	build(menu)
 	if !slices.ContainsFunc(pm.Items, func(it *platform.MenuItem) bool { return it.Visible && it.Type != platform.MenuItemSeparator }) {
 		*m.open = false
 		return nil

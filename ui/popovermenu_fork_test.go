@@ -132,17 +132,21 @@ func TestPopoverMenuDrawsIcons(t *testing.T) {
 	}
 }
 
-// Menu.Later returns nil in a drawn menu, which is built each frame: code
-// that makes its items Later (a table's menu) fills them at once.
-func TestPopoverMenuLaterIsNil(t *testing.T) {
+// Menu.Later works in a drawn menu as in the system's: the build that opens
+// it returns the function and shows nothing; calling it opens the menu
+// again with Later nil, and the items shown (a table's ContextMenuFunc under
+// automation, which draws menus).
+func TestPopoverMenuLater(t *testing.T) {
+	var open func()
 	var laters, fills int
 	tt := coreNewTester(func(c *context) {
 		coreColumn(c).Fill().Padding(20).Children(func() {
 			coreRow(c).Padding(8).Label("Report").Children(func() {
 				coreText(c, "Report.pdf")
 			}).PopoverMenu(func(m *Menu) {
-				if m.Later() != nil {
+				if f := m.Later(); f != nil {
 					laters++
+					open = f
 					return
 				}
 				fills++
@@ -152,7 +156,12 @@ func TestPopoverMenuLaterIsNil(t *testing.T) {
 	}, 400, 300)
 	r, _ := tt.Find("Report.pdf")
 	tt.RightClickAt(r.X+10, r.Y+r.H/2)
-	if !tt.HasText("Open") || laters != 0 || fills == 0 {
-		t.Errorf("Later returned a function %d times, items filled %d, shows Open %v", laters, fills, tt.HasText("Open"))
+	if open == nil || tt.HasText("Open") {
+		t.Fatalf("before the items are known: Later returned a function %v, shows Open %v", open != nil, tt.HasText("Open"))
+	}
+	open()
+	tt.Frame()
+	if !tt.HasText("Open") || laters != 1 || fills == 0 {
+		t.Errorf("after: Later's function was returned %d times, items filled %d, shows Open %v", laters, fills, tt.HasText("Open"))
 	}
 }
