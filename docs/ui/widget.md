@@ -922,8 +922,9 @@ and the date field (as in WinForms), take the `Field`; the controls that
 open a list to choose from (`Select`, a drop-down `ComboBox`) keep the
 button look. `widget.RoleField` is the `Field` for a `Style`;
 a theme that sets none fills the inputs with `Surface`. A destructive
-button is the danger color, darker by 8% hovered and 16% pressed
-(`widget.RoleDangerHover`, `widget.RoleDangerPressed`), and the focus ring
+button is the danger color, darker by 8% hovered and 16% pressed, and
+darker still where the white text on it would be under 4.5:1 (the dark
+theme's `#ef4444` is 3.76:1), and the focus ring
 is 3.6:1 against the light window.
 `ScreenSize()` returns the main display's size in DIPs, once the app runs.
 

@@ -75,8 +75,10 @@ func suggestedStyle(s Style) Style {
 }
 
 // Destructive draws the button as an action that destroys, as Delete,
-// gota's destructive-action and tw's: the danger color for its background,
-// with the accent's text, darker by 8% when hovered and 16% pressed. It is
+// gota's destructive-action and tw's: the danger color for its background
+// (darkened where the accent's text would be under 4.5:1 on it, as in the
+// dark theme), with the accent's text, darker by 8% when hovered and 16%
+// pressed. It is
 // the button's own style. It replaces a Suggested given
 // before.
 func (b *ButtonWidget) Destructive() *ButtonWidget {
@@ -85,9 +87,9 @@ func (b *ButtonWidget) Destructive() *ButtonWidget {
 
 // destructiveStyle is the look of Destructive, of buttons and tool buttons.
 func destructiveStyle(s Style) Style {
-	s = s.Background(RoleDanger).TextColor(RoleAccentText)
-	s = withMerged(s, vHover, NewStyle().Background(RoleDangerHover))
-	return withMerged(s, vPressed, NewStyle().Background(RoleDangerPressed))
+	s = s.Background(Color{role: roleDestructive, ok: true}).TextColor(RoleAccentText)
+	s = withMerged(s, vHover, NewStyle().Background(Color{role: roleDestructiveHover, ok: true}))
+	return withMerged(s, vPressed, NewStyle().Background(Color{role: roleDestructivePressed, ok: true}))
 }
 
 // lookKind is the last look a button was given: Suggested or Destructive.

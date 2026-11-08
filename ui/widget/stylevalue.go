@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -35,6 +36,9 @@ const (
 	roleDanger
 	roleDangerHover
 	roleDangerPressed
+	roleDestructive // the Destructive button's fill, and hovered and pressed
+	roleDestructiveHover
+	roleDestructivePressed
 	roleField
 	roleWarning
 	roleSuccess
@@ -75,6 +79,42 @@ var (
 	RoleInverseText    = Color{role: roleInverseText, ok: true}
 )
 
+// destructiveFill is the fill of a Destructive button: the Danger color, or
+// where the theme's AccentText on it is under WCAG's 4.5:1, Danger mixed
+// with black by the least of a few steps that reaches it (the dark theme's
+// #ef4444 is 3.76:1 under white). Danger itself, which is also the color of
+// error text, stays as the theme has it.
+func destructiveFill(t *ui.Theme) ui.Color {
+	fill := t.Danger
+	for _, k := range [...]float32{0.08, 0.16, 0.24} {
+		if contrastOf(t.AccentText, fill) >= 4.5 {
+			break
+		}
+		fill = t.Danger.Mix(ui.RGB(0, 0, 0), k)
+	}
+	return fill
+}
+
+// contrastOf is WCAG's contrast ratio of two opaque colors; ui has the same
+// unexported, which widget does not reach.
+func contrastOf(a, b ui.Color) float64 {
+	l := func(c ui.Color) float64 {
+		ch := func(v uint8) float64 {
+			s := float64(v) / 255
+			if s <= 0.04045 {
+				return s / 12.92
+			}
+			return math.Pow((s+0.055)/1.055, 2.4)
+		}
+		return 0.2126*ch(c.R) + 0.7152*ch(c.G) + 0.0722*ch(c.B)
+	}
+	x, y := l(a)+0.05, l(b)+0.05
+	if x < y {
+		x, y = y, x
+	}
+	return x / y
+}
+
 // resolve returns the color for the theme t.
 func (c Color) resolve(t *ui.Theme) ui.Color {
 	switch c.role {
@@ -106,6 +146,12 @@ func (c Color) resolve(t *ui.Theme) ui.Color {
 		return t.Danger.Mix(ui.RGB(0, 0, 0), 0.08)
 	case roleDangerPressed:
 		return t.Danger.Mix(ui.RGB(0, 0, 0), 0.16)
+	case roleDestructive:
+		return destructiveFill(t)
+	case roleDestructiveHover:
+		return destructiveFill(t).Mix(ui.RGB(0, 0, 0), 0.08)
+	case roleDestructivePressed:
+		return destructiveFill(t).Mix(ui.RGB(0, 0, 0), 0.16)
 	case roleField:
 		return t.FieldFill()
 	case roleWarning:
