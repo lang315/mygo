@@ -847,8 +847,10 @@ func (r *Renderer) Release() {
 		freeTexture(t)
 	}
 	r.images = nil
-	r.releaseShared()
-	r.sweepShared(true)
+	if sweepSharedFn != nil {
+		releaseSharedFn(r)
+		sweepSharedFn(r, true)
+	}
 	for _, t := range r.canvases {
 		freeCanvas(t)
 	}
@@ -953,7 +955,10 @@ func (r *Renderer) imageView(img *scene.Image) uintptr {
 		return 0
 	}
 	if s := img.Surface; s != nil && (s.Native != 0 || s.Format == scene.SurfaceNV12 && s.Planes[1].Pix != nil) {
-		return r.surfaceView(img, s)
+		if surfaceViewFn == nil {
+			return 0 // no player of the system's decoder made a frame of video
+		}
+		return surfaceViewFn(r, img, s)
 	}
 	t := r.images[img.ID()]
 	if t != nil && t.chroma != nil {
@@ -1066,7 +1071,9 @@ func (r *Renderer) draw(s *scene.Scene) error {
 // changed since the last frame when the swap chain shows that one, and
 // reports whether it drew: a frame that changed nothing draws nothing.
 func (r *Renderer) drawFrame(s *scene.Scene) (bool, error) {
-	defer r.releaseShared()
+	if releaseSharedFn != nil {
+		defer releaseSharedFn(r)
+	}
 	r.frame++
 	r.used = 0
 	if err := r.resize(s.Width, s.Height); err != nil {
@@ -1886,7 +1893,9 @@ func (r *Renderer) sweep() {
 			delete(r.images, id)
 		}
 	}
-	r.sweepShared(false)
+	if sweepSharedFn != nil {
+		sweepSharedFn(r, false)
+	}
 	for id, t := range r.canvases {
 		if c := t.canvas.Value(); c == nil || c.Transient && t.lastFrame != r.frame {
 			freeCanvas(t)

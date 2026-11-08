@@ -157,6 +157,7 @@ func TestPresentsFramesDrawnInMemory(t *testing.T) {
 // TestDrawsVideoAsTheCPURenderer draws frames of video in NV12 from their
 // planes, which the shader converts as the CPU renderer does.
 func TestDrawsVideoAsTheCPURenderer(t *testing.T) {
+	LinkVideo()
 	for _, api := range apis {
 		t.Run(api.name, func(t *testing.T) {
 			s := gputest.VideoScene()

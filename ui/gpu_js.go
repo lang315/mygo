@@ -22,3 +22,7 @@ func newGPURenderer(n platform.SurfaceNative) (gpuRenderer, error) {
 	r.Partial = true
 	return r, nil
 }
+
+// linkVideoRenderers links the renderer's code for frames of video, which an
+// app that plays none does not carry.
+func linkVideoRenderers() { gl.LinkVideo() }

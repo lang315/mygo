@@ -17,6 +17,7 @@ import (
 // the renderer samples where they are, as the shader converts them as
 // the CPU renderer does.
 func TestDrawsVideoAsTheCPURenderer(t *testing.T) {
+	LinkVideo()
 	r, err := newRenderer()
 	if err != nil {
 		unavailable(t, err)

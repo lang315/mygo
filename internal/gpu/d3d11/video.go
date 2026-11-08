@@ -31,6 +31,23 @@ var (
 	iidIDXGIKeyedMutex = guid{0x9d8e1289, 0xd7b3, 0x465f, [8]byte{0x81, 0x26, 0x25, 0x0e, 0x34, 0x9a, 0xf8, 0x5d}}
 )
 
+// The renderer reaches this code through these functions, which LinkVideo
+// sets: a view comes from a frame of video only after a player of the
+// system's decoder made one, so apps that play none do not link it.
+var (
+	surfaceViewFn   func(r *Renderer, img *scene.Image, s *scene.Surface) uintptr
+	releaseSharedFn func(r *Renderer)
+	sweepSharedFn   func(r *Renderer, all bool)
+)
+
+// LinkVideo links the renderer's code for frames of video. Call it before
+// the first frame of video.
+func LinkVideo() {
+	surfaceViewFn = (*Renderer).surfaceView
+	releaseSharedFn = (*Renderer).releaseShared
+	sweepSharedFn = (*Renderer).sweepShared
+}
+
 // sharedTexture is a texture a decoder shares, opened on the renderer's
 // device.
 type sharedTexture struct {

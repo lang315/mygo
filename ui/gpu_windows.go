@@ -17,3 +17,7 @@ func newGPURenderer(n platform.SurfaceNative) (gpuRenderer, error) {
 	}
 	return d3d11.New(n.HWND)
 }
+
+// linkVideoRenderers links the renderer's code for frames of video, which an
+// app that plays none does not carry.
+func linkVideoRenderers() { d3d11.LinkVideo() }

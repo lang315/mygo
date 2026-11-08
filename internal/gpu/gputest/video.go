@@ -1,12 +1,16 @@
 package gputest
 
-import "github.com/egoist/mygo/internal/scene"
+import (
+	"github.com/egoist/mygo/internal/raster"
+	"github.com/egoist/mygo/internal/scene"
+)
 
 // NV12Frame returns a w×h frame of video in NV12 with the matrix m, its
 // planes in memory with rows padded past their width, as decoders pad
 // them: bars of saturated colors over a gradient of luma, which the
 // renderers sample as planes and the CPU renderer converts (Restore).
 func NV12Frame(w, h int, m scene.YUVMatrix) *scene.Image {
+	raster.LinkVideo() // as a player of the system's decoder does, which makes such frames
 	ls, cs := w+13, 2*((w+1)/2)+6
 	cw, ch := (w+1)/2, (h+1)/2
 	luma, chroma := make([]byte, ls*h), make([]byte, cs*ch)

@@ -18,6 +18,7 @@ import (
 // then frames in BGRA that another device drew into textures it shares,
 // as Media Foundation does, which the renderer reads where they are.
 func TestDrawsVideoAsTheCPURenderer(t *testing.T) {
+	LinkVideo()
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	s := gputest.VideoScene()
