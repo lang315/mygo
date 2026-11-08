@@ -12,6 +12,13 @@ import (
 // every call below is made after linkVideo ran. Apps that play no such video
 // never make one, and do not link the code that holds them, nor, through
 // linkVideoRenderers, that which draws their frames.
+//
+// Each is read only by an engine whose videos or shownVideos are not empty,
+// which advance wrote after a player existed, on that engine's goroutine: it
+// waited for the write. An engine with no video does not read them, as one
+// with no editor does not read the editor's functions (editorlink.go), so
+// that a window building the first video of the process, on a goroutine of
+// its own, does not race the others, which go on ending frames.
 var (
 	sweepVideosFn   func(rt *engine)
 	releaseVideosFn func(rt *engine)
