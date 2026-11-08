@@ -339,5 +339,9 @@ func TestThemeKeepsThePagesBorderForItsControls(t *testing.T) {
 		if th.ControlBorder != th.Border {
 			t.Errorf("dark=%v: ControlBorder is %v, want the window's Border %v", th.Dark, th.ControlBorder, th.Border)
 		}
+		// And its fields the page's face, not the default theme's Field.
+		if th.FieldFill() != th.Surface {
+			t.Errorf("dark=%v: a field is filled %v, want the page's Surface %v", th.Dark, th.FieldFill(), th.Surface)
+		}
 	}
 }

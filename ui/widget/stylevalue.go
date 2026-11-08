@@ -33,6 +33,9 @@ const (
 	roleAccentPressed
 	roleAccentText
 	roleDanger
+	roleDangerHover
+	roleDangerPressed
+	roleField
 	roleWarning
 	roleSuccess
 	roleSelection
@@ -61,6 +64,9 @@ var (
 	RoleAccentPressed  = Color{role: roleAccentPressed, ok: true}
 	RoleAccentText     = Color{role: roleAccentText, ok: true}
 	RoleDanger         = Color{role: roleDanger, ok: true}
+	RoleDangerHover    = Color{role: roleDangerHover, ok: true}
+	RoleDangerPressed  = Color{role: roleDangerPressed, ok: true}
+	RoleField          = Color{role: roleField, ok: true}
 	RoleWarning        = Color{role: roleWarning, ok: true}
 	RoleSuccess        = Color{role: roleSuccess, ok: true}
 	RoleSelection      = Color{role: roleSelection, ok: true}
@@ -96,6 +102,12 @@ func (c Color) resolve(t *ui.Theme) ui.Color {
 		return t.AccentText
 	case roleDanger:
 		return t.Danger
+	case roleDangerHover:
+		return t.Danger.Mix(ui.RGB(0, 0, 0), 0.08)
+	case roleDangerPressed:
+		return t.Danger.Mix(ui.RGB(0, 0, 0), 0.16)
+	case roleField:
+		return t.FieldFill()
 	case roleWarning:
 		return t.Warning
 	case roleSuccess:

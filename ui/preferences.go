@@ -104,7 +104,7 @@ func (t *Theme) follow(p Preferences) {
 			t.Selection, t.Focus = a.Alpha(0.4), a.Mix(white, 0.2).Alpha(0.6)
 		} else {
 			t.AccentHover, t.AccentPressed = a.Mix(black, 0.12), a.Mix(black, 0.25)
-			t.Selection, t.Focus = a.Alpha(0.25), a.Alpha(0.55)
+			t.Selection, t.Focus = a.Alpha(0.25), a.Alpha(0.8)
 		}
 		// Text on the accent is black where white would not stand out, as
 		// on yellow.

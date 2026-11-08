@@ -267,7 +267,7 @@ func num(v float32) string { return strconv.FormatFloat(float64(v), 'f', -1, 32)
 var colorRoleNames = [...]string{
 	roleBackground: "background", roleSurface: "surface", roleSurfaceHover: "surface-hover", roleSurfacePressed: "surface-pressed",
 	roleBorder: "border", roleText: "text", roleTextMuted: "text-muted", roleAccent: "accent", roleAccentHover: "accent-hover",
-	roleAccentPressed: "accent-pressed", roleAccentText: "accent-text", roleDanger: "danger", roleWarning: "warning",
+	roleAccentPressed: "accent-pressed", roleAccentText: "accent-text", roleDanger: "danger", roleDangerHover: "danger-hover", roleDangerPressed: "danger-pressed", roleField: "field", roleWarning: "warning",
 	roleSuccess: "success", roleSelection: "selection", roleFocus: "focus", roleInverse: "inverse", roleInverseText: "inverse-text",
 }
 

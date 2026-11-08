@@ -912,6 +912,16 @@ every window follows the appearance as before. Call it once at startup:
 `widget.SetControlBorder(ui.Hex("#6b7280"), ui.Hex("#9ca3af"))`. An app's own
 `ui.Theme` that sets no `ControlBorder` outlines its controls with `Border`
 (`Theme.Outline`).
+Inputs and buttons do not share a fill: `TextBox`, `MultilineTextBox`,
+`MaskedTextBox`, `NumericUpDown`, `DomainUpDown`, `DateTimePicker` and an
+editable `ComboBox` are filled with the theme's `Field` (`#ffffff` light,
+`#101012` dark), and `Button`, `ToolButton`, a drop-down `ComboBox` and the
+toggles with its `Surface` (`#f4f4f5`, `#27272a`), so that a button is not
+read as a second text box. `widget.RoleField` is the `Field` for a `Style`;
+a theme that sets none fills the inputs with `Surface`. A destructive
+button is the danger color, darker by 8% hovered and 16% pressed
+(`widget.RoleDangerHover`, `widget.RoleDangerPressed`), and the focus ring
+is 3.6:1 against the light window.
 `ScreenSize()` returns the main display's size in DIPs, once the app runs.
 
 ## Styling

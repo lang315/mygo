@@ -189,6 +189,7 @@ const (
 	buttonPlain uint8 = iota
 	buttonPrimary
 	buttonFlat
+	buttonField // a date field: the look of a text input
 )
 
 // buttonPaint is the look of a button as it paints, with the theme it was
@@ -197,6 +198,10 @@ const (
 // closure is made for each button in each frame.
 func buttonPaint(b *node) {
 	t := b.builtTheme()
+	if b.buttonLook == buttonField {
+		inputBorder(t, b, b)
+		return
+	}
 	base, hover, pressed := t.Surface, t.SurfaceHover, t.SurfacePressed
 	switch b.buttonLook {
 	case buttonPrimary:

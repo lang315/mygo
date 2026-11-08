@@ -23,6 +23,19 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   themes. A theme copied from `LightTheme` or `DarkTheme` that changes only
   `Border` keeps their `ControlBorder`: set it too, or zero it for the
   controls to follow `Border`.
+- **Fields and buttons.** A text input is not the face of a button, so the
+  theme has a fill for each: `t.Field` for the inputs (`TextInput`,
+  `TextArea`, `Combobox`, `Autocomplete`, `NumberInput`, `TimeInput`,
+  `DateInput`, the rich text editor) and `t.Surface` for buttons and what
+  looks like one (`Select`, `Stepper`, `Segmented`, `ToggleGroup`). Light,
+  `Field` is `#ffffff` and `Surface` `#f4f4f5`; dark, `#101012` and
+  `#27272a`. Give an input of your own `t.FieldFill()`, which is `Field`,
+  or `Surface` in a theme that sets none, as one written before `Field`
+  did. A theme copied from `LightTheme` or `DarkTheme` that changes
+  `Surface` keeps their `Field`: set it too, or zero it for the inputs to
+  follow `Surface`. An input has `ControlBorder` at rest (3.4:1 on the
+  light `Field`, 3.9:1 on the dark), a darker one while hovered, and the
+  `Accent` while it has the focus, inside the focus ring.
 - **Shadows.** `Shadow(x, y, blur, spread, c)` casts a box shadow, as CSS's
   `box-shadow` does: several stack, and each shows only outside the box,
   so a translucent background never shows its own shadow through.
