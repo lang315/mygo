@@ -13,6 +13,9 @@ type Automated interface {
 	// FramePending reports whether the content asked for a frame that has
 	// not come yet, as it does after input and while something animates.
 	FramePending() bool
+	// DrawMenus has the window draw its popup menus in the window
+	// (ui.PopoverMenus), so that the tree shows their items.
+	DrawMenus()
 }
 
 // Automate is set by plugins/automation, in an app that links it and

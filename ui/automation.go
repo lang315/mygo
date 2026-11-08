@@ -35,4 +35,10 @@ func (a automated) AutomationTree() (*platform.AccessTree, map[uint64]any) {
 	return rt.windowAccess(rt.accessTree()), keys
 }
 
+// DrawMenus has the window draw its popup menus, which the system's would
+// hide from the automation behind a modal loop; an app that calls
+// SetMenuPresentation itself still wins. Only the plugin calls it, so apps
+// without the plugin do not link the drawn menus for it.
+func (a automated) DrawMenus() { a.h.rt.setMenuPresentation(PopoverMenus) }
+
 func (a automated) FramePending() bool { return a.h.frameAsked && !a.h.detached }
