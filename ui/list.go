@@ -1977,6 +1977,11 @@ func (e *node) layoutList(w, h float32) {
 	}
 	gap := float64(max(e.gapY, 0))
 	padTop, padBottom := float64(e.contentY()), float64(e.pad[2]+e.border[2])
+	if hide, _ := e.scrollbars(); e.flags&flagScrollX != 0 && !hide && cw+e.padX() > w+0.5 {
+		// The last row ends above the horizontal bar's track (scrollBars),
+		// shown or not, so that the pointer coming over moves nothing.
+		padBottom = max(padBottom, float64(e.barInset[2]+e.theme().scrollbarWidth()+6))
+	}
 	H := float64(h)
 	top, bottom := float64(e.border[0]), H-float64(e.border[2])
 	s.gap, s.padTop, s.border = gap, padTop, top
