@@ -917,7 +917,10 @@ Inputs and buttons do not share a fill: `TextBox`, `MultilineTextBox`,
 editable `ComboBox` are filled with the theme's `Field` (`#ffffff` light,
 `#101012` dark), and `Button`, `ToolButton`, a drop-down `ComboBox` and the
 toggles with its `Surface` (`#f4f4f5`, `#27272a`), so that a button is not
-read as a second text box. `widget.RoleField` is the `Field` for a `Style`;
+read as a second text box. The rule: the controls you type a value into,
+and the date field (as in WinForms), take the `Field`; the controls that
+open a list to choose from (`Select`, a drop-down `ComboBox`) keep the
+button look. `widget.RoleField` is the `Field` for a `Style`;
 a theme that sets none fills the inputs with `Surface`. A destructive
 button is the danger color, darker by 8% hovered and 16% pressed
 (`widget.RoleDangerHover`, `widget.RoleDangerPressed`), and the focus ring

@@ -27,7 +27,10 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   theme has a fill for each: `t.Field` for the inputs (`TextInput`,
   `TextArea`, `Combobox`, `Autocomplete`, `NumberInput`, `TimeInput`,
   `DateInput`, the rich text editor) and `t.Surface` for buttons and what
-  looks like one (`Select`, `Stepper`, `Segmented`, `ToggleGroup`). Light,
+  looks like one (`Select`, `Stepper`, `Segmented`, `ToggleGroup`): the
+  controls you type a value into, and the date field (as in WinForms), take
+  the `Field`, and those that open a list to choose from keep the button
+  look. Light,
   `Field` is `#ffffff` and `Surface` `#f4f4f5`; dark, `#101012` and
   `#27272a`. Give an input of your own `t.FieldFill()`, which is `Field`,
   or `Surface` in a theme that sets none, as one written before `Field`
