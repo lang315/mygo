@@ -67,7 +67,7 @@ type EditorOptions struct {
 func Editor(c *ui.Context, doc *Document, options ...EditorOptions) ui.Element {
 	t := c.Theme()
 	e := build(c, doc, options, true)
-	e.Radius(t.Radius).Background(t.Surface).Border(1, t.Outline()).MinHeight(t.Space(30))
+	e.Radius(t.Radius).Background(t.FieldFill()).Border(1, t.Outline()).MinHeight(t.Space(30))
 	// The editor draws its text itself, so it has no natural width: this is
 	// the width of a text box, which gives way to a container narrower.
 	e.Children(func() { ui.Box(c).Width(t.Space(50)).Height(0) })

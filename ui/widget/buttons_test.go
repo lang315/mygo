@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"image/color"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -136,22 +138,48 @@ func TestSuggestedButtonLooksAsTwSuggestedAction(t *testing.T) {
 	}
 }
 
+// wcagRatio returns WCAG's contrast ratio of two opaque colors.
+func wcagRatio(a, b color.RGBA) float64 {
+	lum := func(c color.RGBA) float64 {
+		ch := func(v uint8) float64 {
+			s := float64(v) / 255
+			if s <= 0.04045 {
+				return s / 12.92
+			}
+			return math.Pow((s+0.055)/1.055, 2.4)
+		}
+		return 0.2126*ch(c.R) + 0.7152*ch(c.G) + 0.0722*ch(c.B)
+	}
+	x, y := lum(a)+0.05, lum(b)+0.05
+	if x < y {
+		x, y = y, x
+	}
+	return x / y
+}
+
+// A destructive button is the danger color, darker by 8% hovered and 16%
+// pressed, and the accent's text stays 4.5:1 on each in the light appearance.
 func TestDestructiveButtonLooksAsTwDestructiveAction(t *testing.T) {
 	th := ui.LightTheme()
 	tt := lightTester(t, Button("Delete").Destructive())
-	if c := pixelLeft(t, tt, "Delete"); !near(c, th.Danger) {
-		t.Fatalf("destructive %v, want danger %v", c, th.Danger)
+	black := ui.RGB(0, 0, 0)
+	text := color.RGBA{R: th.AccentText.R, G: th.AccentText.G, B: th.AccentText.B, A: 255}
+	check := func(state string, want ui.Color) {
+		t.Helper()
+		got := pixelLeft(t, tt, "Delete")
+		if !near(got, want) {
+			t.Fatalf("%s %v, want %v", state, got, want)
+		}
+		if r := wcagRatio(got, text); r < 4.5 {
+			t.Fatalf("%s: the text on %v is %.2f:1, under 4.5:1", state, got, r)
+		}
 	}
+	check("destructive", th.Danger)
 	x, y := centerOf(t, tt, "Delete")
-	pg := page(tt)
 	tt.Move(x, y)
-	if c := pixelLeft(t, tt, "Delete"); !near(c, mix(th.Danger, pg, 0.9)) {
-		t.Fatalf("hovered %v, want danger at 0.9 over the page", c)
-	}
+	check("hovered", th.Danger.Mix(black, 0.08))
 	tt.Press(x, y)
-	if c := pixelLeft(t, tt, "Delete"); !near(c, mix(th.Danger, pg, 0.8)) {
-		t.Fatalf("pressed %v, want danger at 0.8 over the page", c)
-	}
+	check("pressed", th.Danger.Mix(black, 0.16))
 }
 
 func TestSuggestedButtonIsTheWidgetsOwnStyle(t *testing.T) {

@@ -661,7 +661,7 @@ func (c *ComboBoxWidget) pick(v string) {
 func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 	p, _ := c.text.bind()
 	t, sections := ctx.Theme(), c.sections
-	frame := ui.Row(ctx).Radius(t.Radius).Border(1, t.Outline()).Background(t.Surface).
+	frame := ui.Row(ctx).Radius(t.Radius).Border(1, t.Outline()).Background(t.FieldFill()).
 		AlignItems(ui.Center).MinWidth(t.Space(35))
 	frame.Children(func() {
 		cb := ui.ComboboxBase(ctx, p)

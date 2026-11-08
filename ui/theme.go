@@ -17,6 +17,15 @@ type Theme struct {
 	Surface        Color
 	SurfaceHover   Color
 	SurfacePressed Color
+	// Field is the fill of text inputs and what looks like one: TextBox,
+	// the editable combo box, the number, date and time fields. It is not
+	// Surface, the face of buttons, so that a field is not read as a
+	// button: light, it is the window's own color, and dark darker than
+	// the window. Left zero, as in a Theme written before it, fields take
+	// Surface (FieldFill). A Theme copied from LightTheme or DarkTheme that
+	// changes Surface or Background keeps their Field: set it too, or zero
+	// it for fields to follow Surface.
+	Field Color
 	// Border draws the lines that divide and hold: dividers, grid lines,
 	// the edges of containers and popups.
 	Border Color
@@ -179,6 +188,7 @@ func LightTheme() *Theme {
 	return &Theme{
 		Background:      Hex("#ffffff"),
 		Surface:         Hex("#f4f4f5"),
+		Field:           Hex("#ffffff"), // 1.10:1 against Surface, 3.42:1 against its ControlBorder
 		SurfaceHover:    Hex("#e9e9ec"),
 		SurfacePressed:  Hex("#dddde1"),
 		Border:          Hex("#d9d9de"),
@@ -193,7 +203,7 @@ func LightTheme() *Theme {
 		Warning:         Hex("#d97706"),
 		Success:         Hex("#16a34a"),
 		Selection:       RGBA(37, 99, 235, 0.25),
-		Focus:           RGBA(37, 99, 235, 0.55),
+		Focus:           RGBA(37, 99, 235, 0.8), // 3.62:1 on Background
 		FocusRingWidth:  2,
 		FocusRingOffset: 1,
 		Scrollbar:       RGBA(0, 0, 0, 0.32),
@@ -209,6 +219,7 @@ func DarkTheme() *Theme {
 		Dark:            true,
 		Background:      Hex("#18181b"),
 		Surface:         Hex("#27272a"),
+		Field:           Hex("#101012"), // 1.28:1 against Surface, 3.93:1 against its ControlBorder
 		SurfaceHover:    Hex("#323236"),
 		SurfacePressed:  Hex("#3c3c41"),
 		Border:          Hex("#3f3f46"),
@@ -231,6 +242,15 @@ func DarkTheme() *Theme {
 		Spacing:         4,
 		FontSize:        defaultFontSize(),
 	}
+}
+
+// FieldFill returns the fill of text inputs: Field, or Surface in a Theme
+// that sets none.
+func (t *Theme) FieldFill() Color {
+	if t.Field.A != 0 {
+		return t.Field
+	}
+	return t.Surface
 }
 
 // Outline returns the color of the boundary of a control: ControlBorder, or

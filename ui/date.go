@@ -18,6 +18,9 @@ func coreDateInput(c *context, date *time.Time) *node {
 		return i18n.FormatDate(locale, *date, i18n.DateOptions{Skeleton: "yMd"})
 	})
 	b := coreButton(c, "")
+	// A field, not a button: the fill and the border of a text input.
+	b.Background(t.FieldFill()).Border(1, t.Outline())
+	b.buttonLook = buttonField
 	b.widget, b.role, b.accValue = "DateInput", RolePopUpButton, text
 	b.MinWidth(t.Space(32.5)).Justify(SpaceBetween)
 	open := coreLocal(b, popupOpen{}, func() bool { return false })

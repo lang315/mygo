@@ -244,6 +244,7 @@ func theme(base *ui.Theme) *ui.Theme {
 		t.Accent = ui.Hex("#007aff")
 	}
 	t.ControlBorder = t.Border // its controls keep the page's look, not the theme's darker outline
+	t.Field = ui.Color{}       // and its fields the page's face, not the theme's
 	black := ui.RGB(0, 0, 0)
 	t.SurfaceHover, t.SurfacePressed = t.Surface.Mix(black, 0.05), t.Surface.Mix(black, 0.1)
 	t.AccentHover, t.AccentPressed = t.Accent.Mix(black, 0.08), t.Accent.Mix(black, 0.16)
