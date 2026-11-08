@@ -109,6 +109,11 @@ func (e *node) buildMenu(button, drawn bool, build func(m *Menu)) {
 		mr.reopened = false
 		if drawn {
 			rt.openDrawnMenu(e)
+			if d := mr.drawn; d != nil && d.id == e.id {
+				// The first build of the drawn menu is the one that may
+				// call Later.
+				d.later, d.x, d.y, d.gen = !button && !reopened, mr.x, mr.y, mr.gen.Load()
+			}
 			break
 		}
 		build(&Menu{run: run, menu: pm, rt: rt, text: rt.states[mr.text],
