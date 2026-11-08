@@ -276,8 +276,12 @@ wrong. Errors from the app start with its code:
 
 ## Limits
 
-- Context menus, and the menus of the Dock and of tray icons, can't be
-  chosen: don't open a context menu with `click --button right`.
+- Popup menus of native UI (context menus, a table's header and cell
+  menus) draw in the window while you drive the app: `click --button right`
+  opens one, its items are `menuItem` elements in the next `snapshot`, and
+  `click` chooses one. The menu bar, the menus of the Dock, of tray icons
+  and of web views are the system's and can't be chosen (the menu bar's
+  through `menu` only).
 - Settling waits for frames asked for, not for timers the app set
   (`Context.After`) or work it does in the background: use `wait <sel>`
   or `wait --text` for those.

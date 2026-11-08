@@ -45,3 +45,72 @@ func TestAutomationTreeKeys(t *testing.T) {
 		t.Errorf("found %d of the keyed elements in %+v", seen, tree.Nodes)
 	}
 }
+
+// TestAutomationDrawsMenusInTheWindow: a window the automation attaches to
+// draws its context menus, so that its snapshot lists their items and
+// choosing one runs its action; without the automation the menu is the
+// system's, and an app that sets the presentation itself wins.
+func TestAutomationDrawsMenusInTheWindow(t *testing.T) {
+	run := func(attach bool, app func(c *Context)) (*Tester, *bool) {
+		chosen := new(bool)
+		tt := NewTester(func(c *Context) {
+			if app != nil {
+				app(c)
+			}
+			Column(c).Fill().Padding(20).Children(func() {
+				row := Row(c).Padding(8).Children(func() { Text(c, "Report.pdf") })
+				row.ContextMenu(func(m *Menu) {
+					if m.Item("Open").Chosen() {
+						*chosen = true
+					}
+					m.Item("Delete")
+				})
+			})
+		}, 400, 300)
+		if attach {
+			automated{&windowHost{rt: tt.rt}}.DrawMenus()
+		}
+		tt.Frame()
+		if err := tt.RightClick("Report.pdf"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		return tt, chosen
+	}
+
+	tt, chosen := run(true, nil)
+	tree, _ := automated{&windowHost{rt: tt.rt}}.AutomationTree()
+	items := map[string]bool{}
+	for _, n := range tree.Nodes {
+		if n.Role == platform.RoleMenuItem {
+			items[n.Label] = true
+		}
+	}
+	if !items["Open"] || !items["Delete"] {
+		t.Fatalf("the snapshot's menu items are %v, want Open and Delete", items)
+	}
+	if err := tt.Click("Open"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !*chosen {
+		t.Error("choosing Open from the snapshot's menu did not run its action")
+	}
+	if got := tt.Menu(); got != nil {
+		t.Errorf("the menu stays open: %q", got)
+	}
+
+	// Without the automation the system shows the menu: none is in the tree.
+	tt, _ = run(false, nil)
+	tree, _ = automated{&windowHost{rt: tt.rt}}.AutomationTree()
+	for _, n := range tree.Nodes {
+		if n.Role == platform.RoleMenuItem {
+			t.Errorf("without automation the tree has the menu item %q", n.Label)
+		}
+	}
+	// An app that chooses the presentation after the attach keeps its own.
+	tt, _ = run(true, func(c *Context) { c.SetMenuPresentation(SystemMenus) })
+	if got := tt.rt.menuPresentation; got != SystemMenus {
+		t.Errorf("presentation %v after the app chose SystemMenus", got)
+	}
+}

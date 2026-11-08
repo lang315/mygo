@@ -51,6 +51,7 @@ type target struct {
 // attached takes a window's content as it attaches (surface.Automate).
 // Main thread only.
 func (a *app) attached(conn *surface.Conn, content surface.Automated) {
+	content.DrawMenus()
 	for w := range a.targets {
 		if w.IsDestroyed() {
 			delete(a.targets, w)
