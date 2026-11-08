@@ -492,6 +492,13 @@ func ownWindow(h uintptr) bool { return h != 0 && windowProcess(h) == uint32(sys
 // moves off the point and onto it, and the click waits for that move to reach a
 // window of the app. moves says how many times it moved: more than one means
 // the first move did not reach it.
+//
+// Another app's window can rise over the point after that check: Windows
+// raises the next window in front, the runner's terminal, when the window of
+// the test before closes. A click that no window of the app received, with
+// such a window over its point, went to it: the window is brought to the
+// front and clicked again (clickWentElsewhere). A click that may have reached
+// the app is never sent twice.
 func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string, moves int) {
 	w := theBackend.windows[hwnd]
 	if w == nil || w.sf == nil {
@@ -515,55 +522,90 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		fg, _, _ := procGetForegroundWindow.Call()
 		return fmt.Sprintf("%s, with %s in front%s", describeWindow(rootAt(pt)), describeWindow(fg), raised)
 	}
-	under := rootAt(pt)
-	if !ownWindow(under) {
-		return true, describe(), 0
-	}
-	enabled, _, _ := procIsWindowEnabled.Call(under)
 	deadline := time.Now().Add(within)
-	// A window its modal child disables takes no mouse messages: there is
-	// no move to wait for.
-	if enabled != 0 {
-		reached, quit := false, false
-		if moves, reached, quit = moveCursorTo(pt, deadline); quit {
+	var placed uintptr
+	downs := 0 // for the diagnosis of a click that did not come back
+	for attempt := 0; time.Now().Before(deadline); attempt++ {
+		if attempt > 0 {
+			// The click went to another app's window that rose over the
+			// point after the check: the runner's terminal, which Windows
+			// raises when a window of the app closes. Bring the window back
+			// to the front, as a user does, and click again.
+			procSetForegroundWindow.Call(w.hwnd)
+		}
+		under := rootAt(pt)
+		if !ownWindow(under) {
+			if attempt == 0 {
+				return true, describe(), 0
+			}
+			procMsgWaitForMultipleObjectsEx.Call(0, 0, 50, qsAllInput, mwmoInputAvailable)
+			continue
+		}
+		enabled, _, _ := procIsWindowEnabled.Call(under)
+		// A window its modal child disables takes no mouse messages: there is
+		// no move to wait for.
+		if enabled != 0 {
+			m, reached, quit := moveCursorTo(pt, deadline)
+			moves += m
+			if quit {
+				return true, "", moves
+			}
+			if !reached {
+				return true, describe() + fmt.Sprintf("; the cursor moved %d times to (%d, %d) and no move reached a window of the app", moves, pt.X, pt.Y), moves
+			}
+		}
+		// The window can have gone under another's since the check, or the
+		// move: a click now would go to that window.
+		if !ownWindow(rootAt(pt)) {
+			procMsgWaitForMultipleObjectsEx.Call(0, 0, 50, qsAllInput, mwmoInputAvailable)
+			continue
+		}
+		placed, _, _ = user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
+		mouse := user32.NewProc("mouse_event")
+		const leftDown, leftUp = 0x0002, 0x0004
+		mouse.Call(leftDown, 0, 0, 0, 0)
+		mouse.Call(leftUp, 0, 0, 0, 0)
+		if enabled == 0 {
 			return true, "", moves
 		}
-		if !reached {
-			return true, describe() + fmt.Sprintf("; the cursor moved %d times to (%d, %d) and no move reached a window of the app", moves, pt.X, pt.Y), moves
-		}
-	}
-	placed, _, _ := user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
-	mouse := user32.NewProc("mouse_event")
-	const leftDown, leftUp = 0x0002, 0x0004
-	mouse.Call(leftDown, 0, 0, 0, 0)
-	mouse.Call(leftUp, 0, 0, 0, 0)
-	if enabled == 0 {
-		return true, "", moves
-	}
-	downs := 0 // for the diagnosis of a click that did not come back
-	for time.Now().Before(deadline) {
-		procMsgWaitForMultipleObjectsEx.Call(0, 0, 100, qsAllInput, mwmoInputAvailable)
-		var m msg
-		for {
-			if r, _, _ := procPeekMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0, pmRemove); r == 0 {
+		pumped := false
+		for time.Now().Before(deadline) {
+			procMsgWaitForMultipleObjectsEx.Call(0, 0, 100, qsAllInput, mwmoInputAvailable)
+			var m msg
+			for {
+				if r, _, _ := procPeekMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0, pmRemove); r == 0 {
+					break
+				}
+				if m.Message == wmQuit {
+					procPostQuitMessage.Call(m.WParam) // for the loop running outside
+					return true, "", moves
+				}
+				if m.Message == wmLButtonDown {
+					downs++
+				}
+				procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
+				procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
+				if m.Message == wmLButtonUp {
+					return true, "", moves
+				}
+			}
+			// Messages of the click wait in the queue a moment: once they have
+			// been handled and none of the app's windows is under the point,
+			// the click went elsewhere. A slow app that has not answered while
+			// its window is under the point gets no second click.
+			if pumped && clickWentElsewhere(downs, ownWindow(rootAt(pt))) {
 				break
 			}
-			if m.Message == wmQuit {
-				procPostQuitMessage.Call(m.WParam) // for the loop running outside
-				return true, "", moves
-			}
-			if m.Message == wmLButtonDown {
-				downs++
-			}
-			procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
-			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
-			if m.Message == wmLButtonUp {
-				return true, "", moves
-			}
+			pumped = true
 		}
 	}
 	return true, describe() + diagnoseClick(pt, placed != 0, downs) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves), moves
 }
+
+// clickWentElsewhere reports whether a click that no window of the app has
+// received, with another app's window now over its point, went to that
+// window: sending it again to the app's window is then not a double click.
+func clickWentElsewhere(downs int, ownUnderPoint bool) bool { return downs == 0 && !ownUnderPoint }
 
 // moveCursorTo moves the cursor off pt and onto it with the system's input,
 // as a mouse does, and handles messages until the move onto pt reaches a

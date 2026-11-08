@@ -23,3 +23,22 @@ func TestDiagnoseClick(t *testing.T) {
 		}
 	}
 }
+
+// A click is sent again only when another app's window took it: not while a
+// window of the app is under the point, where a slow app would take two.
+func TestClickWentElsewhere(t *testing.T) {
+	for _, c := range []struct {
+		downs int
+		own   bool
+		want  bool
+	}{
+		{0, false, true},  // the runner's terminal over the point, no button reached the app
+		{0, true, false},  // the app's window there: its answer is slow
+		{1, false, false}, // the button reached the app, a window rose after it
+		{1, true, false},
+	} {
+		if got := clickWentElsewhere(c.downs, c.own); got != c.want {
+			t.Errorf("clickWentElsewhere(%d, %v) = %v, want %v", c.downs, c.own, got, c.want)
+		}
+	}
+}
