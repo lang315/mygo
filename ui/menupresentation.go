@@ -28,14 +28,16 @@ const (
 // are the web view's own.
 //
 //	c.SetMenuPresentation(ui.PopoverMenus)
-func (c *context) SetMenuPresentation(p MenuPresentation) {
+func (c *context) SetMenuPresentation(p MenuPresentation) { c.rt.setMenuPresentation(p) }
+
+func (rt *engine) setMenuPresentation(p MenuPresentation) {
 	if p == PopoverMenus {
 		linkMenusInWindow.Do(func() {
 			menusInWindow.contextMenu, menusInWindow.menuButton = (*node).PopoverMenu, popoverMenuButton
 			menusInWindow.openEditMenu, menusInWindow.drawEditMenu = (*engine).openDrawnEditMenu, (*engine).drawEditMenu
 		})
 	}
-	c.rt.menuPresentation = p
+	rt.menuPresentation = p
 }
 
 // menusInWindow are what draws the menus of a window that draws them

@@ -244,12 +244,17 @@ the menu bar does, and answers once the item's `Click` returned:
 ```
 
 On Linux and Windows it chooses from the window's menu bar, which shows
-the application menu. The menus of the Dock and of tray icons, and open
-context menus, are left out: the system shows a context menu in a loop
-of its own, which the plugin cannot choose from on every platform, so
-don't open one with a right click through `input`. Test them with
-[ui.Tester](../ui/testing.md), whose `RightClick` and `ChooseMenuItem`
-open and choose from the view's context menus.
+the application menu. The menus of the Dock and of tray icons, the menu
+bar's own and a web view's are the system's: they stay out of reach,
+because the system shows them in a loop of its own.
+
+The popup menus MyGo builds (`ContextMenu`, `Menu`, the table's header and
+cell menus, the editing menu of text) are in reach: a window of native UI
+draws them in the window (`ui.PopoverMenus`) while the plugin is attached,
+so a right click through `input` opens one, its items are `menuItem`
+elements of the next `snapshot`, and a click on one chooses it. An app
+that calls `Context.SetMenuPresentation` itself keeps its choice. Without
+`MYGO_AUTOMATION` nothing changes.
 
 ### capture
 
