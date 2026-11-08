@@ -87,6 +87,7 @@ type TextBoxWidget struct {
 	onChange    func()
 	onEnter     func()
 	edit        func() // onEdited, made once
+	selectAll   bool   // SelectAll asked, not yet carried out
 }
 
 // iconSize is the side of a TextBox's icon, in DIPs.
@@ -155,6 +156,14 @@ func (e *TextBoxWidget) OnChange(fn func()) *TextBoxWidget {
 	return e
 }
 
+// SelectAll selects all the text, as a rename dialog that opens with the
+// name selected does: call it with Focus. It does not give the keyboard
+// focus, and it selects once, in the next frame the box is shown in.
+func (e *TextBoxWidget) SelectAll() *TextBoxWidget {
+	e.change(func() { e.selectAll = true })
+	return e
+}
+
 // OnEnter runs fn when the user presses Enter.
 func (e *TextBoxWidget) OnEnter(fn func()) *TextBoxWidget {
 	e.change(func() { e.onEnter = fn })
@@ -183,6 +192,10 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	}
 	el.ReadOnly(e.readOnly)
 	el.MaxLength(e.maxLen)
+	if e.selectAll && !c.Measuring() {
+		el.SetTextSelection(0, utf8.RuneCountInString(*p))
+		e.selectAll = false
+	}
 	if icon := e.icon; icon != nil {
 		// The icon's room is added to the start padding once the user's
 		// styles have set it, and the icon drawn in the padding.
@@ -236,6 +249,7 @@ type MultilineTextBoxWidget struct {
 	readOnly    bool
 	onChange    func()
 	edit        func() // onEdited, made once
+	selectAll   bool   // SelectAll asked, not yet carried out
 }
 
 // MultilineTextBox makes an empty text input of several lines.
@@ -252,6 +266,12 @@ func (v *MultilineTextBoxWidget) SetText(s string) *MultilineTextBoxWidget {
 }
 func (v *MultilineTextBoxWidget) SetPlaceholder(s string) *MultilineTextBoxWidget {
 	v.change(func() { v.placeholder = s })
+	return v
+}
+
+// SelectAll selects all the text (see TextBoxWidget.SelectAll).
+func (v *MultilineTextBoxWidget) SelectAll() *MultilineTextBoxWidget {
+	v.change(func() { v.selectAll = true })
 	return v
 }
 func (v *MultilineTextBoxWidget) SetEditable(on bool) *MultilineTextBoxWidget {
@@ -278,6 +298,10 @@ func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 		el.Placeholder(v.placeholder)
 	}
 	el.ReadOnly(v.readOnly)
+	if v.selectAll && !c.Measuring() {
+		el.SetTextSelection(0, utf8.RuneCountInString(*p))
+		v.selectAll = false
+	}
 	if c.Measuring() {
 		el.Lines(1, 8) // a window fitted to its content counts a few lines
 	}
