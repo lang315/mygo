@@ -39,6 +39,7 @@ func (e *node) RowDoubleClicked() bool {
 //		}
 //	})
 func (e *node) RowClicked() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}

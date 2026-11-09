@@ -1190,7 +1190,7 @@ func TestNativeOnly(t *testing.T) {
 	if got := flags(c, "-tags", "mygo_noinspector", "-trimpath"); got != "-tags mygo_noinspector,mygo_nowebview -trimpath" {
 		t.Errorf("with the inspector's: %q", got)
 	}
-	if got := flags(&Config{}, "-tags", "mygo_noinspector"); got != "-tags mygo_nodownload,mygo_noinspector" {
+	if got := flags(&Config{}, "-tags", "mygo_noinspector"); got != "-tags mygo_noinspector" {
 		t.Errorf("an app with a web view got %q", got)
 	}
 	t.Run("the tags of GOFLAGS stay", func(t *testing.T) {

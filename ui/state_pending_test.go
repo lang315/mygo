@@ -39,6 +39,9 @@ var statePlaced = map[string][]string{
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
 		"placed", "asked", // where AttachTo put the element, from its layout (AttachedAnchors)
+		"handleDoubleClick", // set at commit from the element, as accessHidden is
+		"laidX", "laidY",    // the offset the last frame laid the content out at: set at commit, like the offsets
+		"popped",                                                // the last frame a popup attached to the element showed: a row with an open popup is built (acting)
 		"hitFn",                                                 // HitTest's, set at commit from the element, as input is
 		"accessDisabled", "activeDescendant", "focusHighlights", // set at commit from the element, as accessHidden is
 		"grouped", "ink", "lastInk", "inkFrame", // painting memory of a layer, as effectLayer is
@@ -57,6 +60,7 @@ var statePlaced = map[string][]string{
 		"holdStart", "holdSteps", "droppedValue", "dropX", "dropY",
 		"invisible",                                 // only motion.go reads it, for an element with a transition: pending
 		"pressButton",                               // read with pressed
+		"quietClicks",                               // read with clicks (RowClicked)
 		"pressPointer", "pressPressure", "canceled", // read with pressed, released
 		"missX", "missY", // read with dragMissed
 	},

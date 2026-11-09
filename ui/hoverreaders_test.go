@@ -87,6 +87,7 @@ var hoverReaders = map[string]string{
 	"input.go engine.pointerUp":        "an event",
 	"input.go engine.pressMove":        "an event",
 	"input.go engine.rehover":          "after the frame, from the hits",
+	"input.go engine.hoverScrolled":    "the frame's own work, before the view builds: it sets the hover chain, which marks the rows dirty",
 	"input.go engine.scroll":           "an event",
 	"input.go engine.scrollKey":        "an event",
 	"input.go engine.setHover":         "after the frame, from the hits",

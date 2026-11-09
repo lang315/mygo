@@ -100,7 +100,13 @@ type paintLook struct {
 	collapsed bool
 	// invalid marks a value that is not valid (Description, Error).
 	invalid bool
-	_       [6]byte // the padding, written out
+	// readOnly and multiline are what a text box with no editor of MyGo's
+	// reports (ReadOnly, Multiline), and handleDoubleClick marks a
+	// DragWindow handle whose double click the view takes
+	// (WindowDoubleClicked) rather than the window: here, in the padding,
+	// for the size of node.
+	readOnly, multiline, handleDoubleClick bool
+	_                                      [3]byte // the padding, written out
 }
 
 // equal reports whether a and b are the same, byte by byte.

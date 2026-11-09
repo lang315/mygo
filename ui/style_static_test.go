@@ -23,10 +23,12 @@ import (
 // positions, PositionInSet, RoleDescription, Controls, HasPopup,
 // DescribedBy, ErrorMessage, AutoComplete, Orientation, AccessDisabled),
 // LabelledBy, AttachEdgeMargin and pretty and space-keeping text took 176
-// more (hitFn went to paintRare).
+// more (hitFn went to paintRare). It is 2128 since upstream's native
+// textures (texture, an interface, in paintRare); ReadOnly, Multiline and
+// WindowDoubleClicked's bools went into paintRare's padding.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 2112 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2112", n)
+	if n := unsafe.Sizeof(node{}); n != 2128 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2128", n)
 	}
 }
 

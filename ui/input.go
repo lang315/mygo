@@ -811,6 +811,7 @@ func (s *state) click(mods Modifiers) {
 // as one of its own (RowClicked): a later click of a double or triple
 // click, or assistive technology's focus choosing a row.
 func (s *state) quietClick(mods Modifiers) {
+	s.touch()
 	if r := &s.releaseLater; r.due {
 		r.quietClicks++
 	} else {

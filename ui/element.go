@@ -403,9 +403,6 @@ type node struct {
 	// fillViewport (FillViewport): a scroll container lays its content out at
 	// least as high as itself.
 	fillViewport bool
-	// handleDoubleClick marks a DragWindow handle whose double click the
-	// view takes (WindowDoubleClicked) rather than the window.
-	handleDoubleClick bool
 	// accessHidden leaves it and the elements inside it out of what
 	// assistive technology reads, while they still show and take input
 	// (AccessHidden).
@@ -569,12 +566,9 @@ type node struct {
 	// Invalid). describedBy are the elements whose text describes it too
 	// (DescribedBy), and errorMessage those holding its error, read while
 	// it is invalid (ErrorMessage).
-	description string
-	// readOnly and multiline are what a text box with no editor of
-	// MyGo's reports (ReadOnly, Multiline).
-	readOnly, multiline bool
-	describedBy         []*node
-	errorMessage        []*node
+	description  string
+	describedBy  []*node
+	errorMessage []*node
 	// field is set on a Field, form on a Form, whose layout makes its
 	// labels as wide as the widest.
 	field *fieldParts
@@ -2007,6 +2001,7 @@ func (e *node) DragWindow() *node { e.flags |= flagDragWindow; return e }
 // click there means to it, as a sidebar starting something new. The
 // handle still moves the window, which DoubleClicked would stop.
 func (e *node) WindowDoubleClicked() bool {
+	e.asksOutside()
 	if !e.hasState() {
 		return false
 	}

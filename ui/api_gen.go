@@ -7624,6 +7624,7 @@ func (_handle Element) Row() Element {
 func (_handle Element) RowClicked() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
@@ -8823,6 +8824,7 @@ func (_handle Element) WidthPercent(p float32) Element {
 func (_handle Element) WindowDoubleClicked() bool {
 	_node := _handle.node()
 	if _node == nil {
+		noteMissingElement()
 		return false
 	}
 	_ctx := _node.c
