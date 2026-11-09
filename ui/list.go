@@ -391,7 +391,11 @@ type ListState struct {
 	padTop      float64
 	border      float64
 	first, last int
-	atEnd       bool
+	// whole0 and whole1 are the first and last of them that show whole,
+	// not cut by the list's edges or the horizontal bar's track: Visible
+	// counts the cut ones.
+	whole0, whole1 int
+	atEnd          bool
 	// read is set when the view read where the list is, which a frame
 	// that moves it then builds another for.
 	read bool
@@ -1740,7 +1744,8 @@ func (f *listFrame) step(i, d int) int {
 }
 
 // page returns the row a page down from the one the keys move from (up
-// for d -1): the last row in view, or a page further from there.
+// for d -1): the last row in view that shows whole, or a page further from
+// there.
 func (f *listFrame) page(d int) int {
 	s, n := f.s, f.n
 	i := *s.cursor()
@@ -1750,10 +1755,10 @@ func (f *listFrame) page(d int) int {
 	}
 	to := s.heights.rowAt(max(0, s.heights.top(i, s.gap)+float64(d)*view), s.gap)
 	switch {
-	case d > 0 && i >= s.first && i < s.last:
-		to = s.last
-	case d < 0 && i > s.first && i <= s.last:
-		to = s.first
+	case d > 0 && i >= s.whole0 && i < s.whole1:
+		to = s.whole1
+	case d < 0 && i > s.whole0 && i <= s.whole1:
+		to = s.whole0
 	}
 	to = max(0, min(to, n-1))
 	if f.isHeader(to) {
@@ -1981,10 +1986,13 @@ func (e *node) layoutList(w, h float32) {
 	}
 	gap := float64(max(e.gapY, 0))
 	padTop, padBottom := float64(e.contentY()), float64(e.pad[2]+e.border[2])
+	// barTrack is how much of the bottom the horizontal bar's track covers.
+	barTrack := 0.0
 	if hide, _ := e.scrollbars(); e.flags&flagScrollX != 0 && !hide && cw+e.padX() > w+0.5 {
 		// The last row ends above the horizontal bar's track (scrollBars),
 		// shown or not, so that the pointer coming over moves nothing.
-		padBottom = max(padBottom, float64(e.barInset[2]+e.theme().scrollbarWidth()+6))
+		barTrack = float64(e.barInset[2] + e.theme().scrollbarWidth() + 6)
+		padBottom = max(padBottom, barTrack)
 	}
 	H := float64(h)
 	top, bottom := float64(e.border[0]), H-float64(e.border[2])
@@ -2165,6 +2173,20 @@ func (e *node) layoutList(w, h float32) {
 	if first < 0 {
 		first, last = a, a-1
 	}
+	// The rows that show whole, which paging counts as in view.
+	whole0, whole1 := -1, -1
+	for i := first; i <= last; i++ {
+		if y := f.rows[f.at[i]].y; y >= top && y+ht(i) <= bottom-barTrack+0.5 {
+			if whole0 < 0 {
+				whole0 = i
+			}
+			whole1 = i
+		}
+	}
+	if whole0 < 0 { // a row taller than the view
+		whole0, whole1 = first, last
+	}
+	s.whole0, s.whole1 = whole0, whole1
 	inset := padTop - f.rows[f.at[first]].y
 	var pinned *node
 	if s.Header != nil && last >= first {
