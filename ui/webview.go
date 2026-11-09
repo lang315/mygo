@@ -93,9 +93,9 @@ func coreNativeView(c *context, v PlatformView) *node {
 	}
 	rt := c.rt
 	var pv *platformView
-	for _, p := range rt.platformViews {
+	for _, a := range rt.platformViews {
 		// One gone may have had the address of a view made since.
-		if p.h == h && !p.gone {
+		if p := a.(*platformView); p.h == h && !p.gone {
 			pv = p
 			break
 		}
@@ -163,9 +163,9 @@ func (p *platformView) leave() {
 // pruneViews forgets the views of the platform that are gone.
 func (rt *engine) pruneViews() {
 	kept := rt.platformViews[:0]
-	for _, pv := range rt.platformViews {
-		if !pv.gone {
-			kept = append(kept, pv)
+	for _, a := range rt.platformViews {
+		if !a.(*platformView).gone {
+			kept = append(kept, a)
 		}
 	}
 	clear(rt.platformViews[len(kept):])
