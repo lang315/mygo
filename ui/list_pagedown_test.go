@@ -99,8 +99,9 @@ func TestPageDownTwiceMovesAPageEachTime(t *testing.T) {
 	if s.lead-first <= 1 {
 		t.Errorf("the second PageDown went from row %d to %d", first, s.lead)
 	}
+	second := s.lead
 	tt.Key(0, KeyPageUp)
-	if first-s.lead <= 1 {
-		t.Errorf("PageUp went from row %d to %d", first+(s.lead-first), s.lead)
+	if second-s.lead <= 1 {
+		t.Errorf("PageUp went from row %d to %d", second, s.lead)
 	}
 }

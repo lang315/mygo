@@ -238,6 +238,13 @@ func TestListPageKeys(t *testing.T) {
 	}, 300, 400)
 	tt.Click("Row 1")
 	first, last := s.Visible()
+	// The last row drawn is cut by the bottom of the list (400 DIPs, 30 a
+	// row): Page Down goes to the last that shows whole, as the next goes a
+	// page from there.
+	if r, ok := rowBox(tt, &s, last); !ok || r.Y+r.H <= 400 {
+		t.Fatalf("setup: row %d should be cut by the bottom, at %v", last, r)
+	}
+	last--
 	tt.Key(0, KeyPageDown)
 	if runtime.GOOS == "darwin" {
 		// Page Down scrolls, as in AppKit.
@@ -247,16 +254,19 @@ func TestListPageKeys(t *testing.T) {
 		return
 	}
 	if sel != last {
-		t.Fatalf("Page Down chose %d, not the last row in view, %d", sel, last)
+		t.Fatalf("Page Down chose %d, not the last row in view that shows whole, %d", sel, last)
 	}
 	tt.Key(0, KeyPageDown)
 	if f, l := s.Visible(); sel < last+10 || sel < f || sel > l {
 		t.Fatalf("Page Down again chose %d, showing %d to %d", sel, f, l)
 	}
 	first, _ = s.Visible()
+	if r, ok := rowBox(tt, &s, first); ok && r.Y < 0 {
+		first++ // cut by the top: Page Up goes to the first that shows whole
+	}
 	tt.Key(0, KeyPageUp)
 	if sel != first {
-		t.Errorf("Page Up chose %d, not the first row in view, %d", sel, first)
+		t.Errorf("Page Up chose %d, not the first row in view that shows whole, %d", sel, first)
 	}
 }
 
