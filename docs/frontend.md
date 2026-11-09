@@ -137,21 +137,6 @@ and sets no frontend needs no change. An app built with `go build`, without
 the CLI, whose pages load `mygo://` and that does not import the package
 sees the page that says it has no frontend.
 
-On Windows, WebView2 takes a response once its handler returned, or
-once it wrote 1 MB: the rest then streams, the handler's writes waiting
-while WebView2 is behind. WebView2 reads the responses of custom schemes
-one at a time, and seems to give the page none of a response before it
-read all of it. A handler that keeps a response open, as server-sent
-events or long polling do, reaches the page only once it returns, and
-past its first megabyte holds back the app's other responses meanwhile:
-send such updates with [events](bindings.md#events) instead. For the same
-reason a `<video>` or `<audio>` that asks for the rest of a file
-(`Range: bytes=X-`) gets at most 4 MB: its handler sees the range
-narrowed to `bytes=X-(X+4 MB-1)`, answers with that part (206), as
-`mygo.FileServer` and `http.ServeFile` do, and the element asks for what
-follows as it plays. A request's context is canceled once WebView2 lets
-go of its response, so that the handler stops writing.
-
 Audio and video are the exception: WebKitGTK's media player does not play
 from a custom scheme, so on Linux a `<video>` or `<audio>` of one fails with
 `MEDIA_ERR_SRC_NOT_SUPPORTED` (`error.code` 4), whatever the handler

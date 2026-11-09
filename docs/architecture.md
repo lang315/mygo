@@ -81,7 +81,6 @@ framework safely. Read it before changing anything under `internal/`.
 │   ├── linux/          Linux: GTK 3 + WebKitGTK through dlopen
 │   ├── windows/        Windows: Win32 + WebView2 through syscall and COM
 │   ├── schemehost/     maps custom scheme URLs to the http://*.localhost URLs WebView2 serves them at
-│   ├── schemestream/   the bounded pipe custom scheme bodies stream to WebView2 through, and media ranges narrowed
 │   ├── web/            browsers (js/wasm): native UI on canvases, through syscall/js
 │   ├── unsupported/    stub for other platforms
 │   ├── fake/           in-memory backend for unit tests
