@@ -299,13 +299,9 @@ func (lv *ListViewWidget[T, K]) CountSelected() int { return lv.t.CountSelected(
 func (lv *ListViewWidget[T, K]) SetSelected(ks ...K) *ListViewWidget[T, K] {
 	t := lv.t
 	lv.change(func() {
-		t.catchUp()
-		for _, k := range slices.Collect(t.chosen.value.All()) {
-			t.chosen.set(k, false)
-		}
+		t.setSelected(ks)
 		for _, k := range ks {
 			if _, ok := t.src.index[k]; ok {
-				t.chosen.set(k, true)
 				lv.cursorKey, lv.hasCursor, lv.fixed = k, true, true
 				lv.anchorKey, lv.hasAnchor = k, true
 			}

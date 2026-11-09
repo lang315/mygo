@@ -294,6 +294,32 @@ func (t *DataGridViewWidget[T, K]) SetChecked(ks []K, on bool) *DataGridViewWidg
 	return t
 }
 
+// SetSelected selects the rows of keys ks instead of those selected, firing
+// no event (OnSelectionChanged is for the user's changes, as for SetChecked).
+// A key that is not a row is ignored. Selected and CountSelected return the
+// new set at once, so it can be called, from any goroutine, in a
+// ContextMenuFunc's fn and read there. Unlike a click, it does not move the
+// cursor: ui owns it, and moves it while it builds. In a ContextMenuFunc's
+// fn, keep the right-clicked row in ks: the menu is built after fn, and a
+// row it acts on that is not selected is selected then, as for a click.
+func (t *DataGridViewWidget[T, K]) SetSelected(ks ...K) *DataGridViewWidget[T, K] {
+	t.change(func() { t.setSelected(ks) })
+	return t
+}
+
+// setSelected is SetSelected's core, which ListView's shares. Under mu.
+func (t *DataGridViewWidget[T, K]) setSelected(ks []K) {
+	t.catchUp()
+	for _, k := range slices.Collect(t.chosen.value.All()) {
+		t.chosen.set(k, false)
+	}
+	for _, k := range ks {
+		if _, ok := t.src.index[k]; ok {
+			t.chosen.set(k, true)
+		}
+	}
+}
+
 // AutoCheck unchecks the rows selected that show when at least half of
 // them are checked, and checks them all otherwise.
 func (t *DataGridViewWidget[T, K]) AutoCheck() *DataGridViewWidget[T, K] {
