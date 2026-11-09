@@ -2,18 +2,20 @@ package widget
 
 import (
 	"slices"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
 
 func TestSetSelectedChoosesTheRowsAndIgnoresUnknownKeysWithoutAnEvent(t *testing.T) {
-	events := 0
-	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).OnSelectionChanged(func() { events++ })
+	var events atomic.Int32
+	tb := testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).OnSelectionChanged(func() { events.Add(1) })
 	tt := ui.NewTester(content(tb), 800, 600)
 	tt.Frame()
 	click(t, tt, "ann")
-	events = 0
+	<-posted() // the click's event has run
+	events.Store(0)
 	if got := tb.SetSelected(3, 99, 2); got != tb {
 		t.Fatal("SetSelected does not return the table")
 	}
@@ -22,8 +24,8 @@ func TestSetSelectedChoosesTheRowsAndIgnoresUnknownKeysWithoutAnEvent(t *testing
 	}
 	tt.Frame()
 	<-posted()
-	if events != 0 {
-		t.Fatalf("OnSelectionChanged fired %d times for a change made by code", events)
+	if n := events.Load(); n != 0 {
+		t.Fatalf("OnSelectionChanged fired %d times for a change made by code", n)
 	}
 	if sel := tb.Selected(); !slices.Equal(sel, []int{2, 3}) {
 		t.Fatalf("after a frame Selected %v, want [2 3]", sel)
@@ -32,22 +34,25 @@ func TestSetSelectedChoosesTheRowsAndIgnoresUnknownKeysWithoutAnEvent(t *testing
 
 func TestSetSelectedInsideContextMenuFuncShowsAtOnceAndTheItemSeesIt(t *testing.T) {
 	inClick := make(chan []int, 1)
-	var inFn []int
-	var count int
+	type seen struct {
+		sel   []int
+		count int
+	}
+	inFn := make(chan seen, 1)
 	var tb *DataGridViewWidget[acct, int]
 	tb, tt := menuTable(func([]int) []MenuItem {
 		tb.SetSelected(2, 3) // must not deadlock; keeps the right-clicked row
-		inFn, count = tb.Selected(), tb.CountSelected()
+		inFn <- seen{tb.Selected(), tb.CountSelected()}
 		return []MenuItem{{Text: "Go", OnClick: func() { inClick <- tb.Selected() }}}
 	})
 	click(t, tt, "bob")
 	if err := tt.RightClick("bob"); err != nil {
 		t.Fatal(err)
 	}
-	<-posted()
+	got := soon(t, inFn)
 	tt.Frame()
-	if !slices.Equal(inFn, []int{2, 3}) || count != 2 {
-		t.Fatalf("in fn Selected %v, CountSelected %d, want [2 3], 2", inFn, count)
+	if !slices.Equal(got.sel, []int{2, 3}) || got.count != 2 {
+		t.Fatalf("in fn Selected %v, CountSelected %d, want [2 3], 2", got.sel, got.count)
 	}
 	if err := tt.ChooseMenuItem("Go"); err != nil {
 		t.Fatal(err)
