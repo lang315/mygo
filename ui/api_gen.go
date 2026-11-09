@@ -1871,6 +1871,38 @@ func Modal(c *Context, open *bool, fn func()) Element {
 	return wrapElement(_e)
 }
 
+// NativeView shows a view of the platform, a value of a native module's
+// interface that embeds native.View (an NSView on macOS), in the element's
+// content box, as WebView shows a web view: it has no size of its own and
+// takes its size from layout, it is cut to the element's Radius, and what
+// paints after it shows over it, its children first. Make the view once,
+// outside the view function, and show it from there:
+//
+//	ui.NativeView(c, app.player).Fill().Children(func() {
+//		ui.Text(c, caption).Absolute().Left(24).Bottom(24)
+//	})
+//
+// The view takes the pointer where it shows, and the keyboard once
+// clicked or tabbed into, as any view of the platform. A view the frame
+// does not build hides and keeps its state; one closed leaves the window.
+// Where views of the platform cannot show, as in browsers, the element
+// shows nothing.
+//
+// v is nil where the module has no implementation, its constructor having
+// returned errors.ErrUnsupported: the element is then a plain box, which
+// paints its background and children, so a view can show something else
+// in the view's place.
+func NativeView(c *Context, v PlatformView) Element {
+	_ctx := c.build()
+	if _ctx == nil {
+		return Element{}
+	}
+	_ctx.rt.beginBuild()
+	_e := coreNativeView(_ctx, v)
+	_ctx.rt.endBuild()
+	return wrapElement(_e)
+}
+
 // NewTester starts testing view in a window of width×height DIPs. Two
 // elements given one key under one parent make it panic where the second
 // was given, as apps only log it.
@@ -3082,9 +3114,10 @@ func Toolbar(c *Context, fn func()) Element {
 // keyboard, and at once too within 0.4 seconds of another tip going, as
 // the pointer moves along a toolbar; the theme's TooltipDelay changes
 // both. It goes as the pointer leaves anchor
-// or presses it, and with Escape, until the pointer comes back or the
-// focus does. Over elements inside one another, the innermost one's tip
-// shows; one shows at a time.
+// or presses it, as a menu or popover of anchor opens, and with Escape,
+// until the pointer comes back or the focus does; it does not show while
+// that menu or popover shows. Over elements inside one another, the
+// innermost one's tip shows; one shows at a time.
 //
 // The tip goes above anchor, centered, or below it where there is no room
 // above; fn may place it elsewhere with AttachTo, as after it:
@@ -6697,6 +6730,20 @@ func (_handle Element) Modal() Element {
 	return wrapElement(_node.Modal())
 }
 
+// Multiline tells assistive technology that an element of the text box
+// role (Role(RoleTextField)) that MyGo does not edit takes several lines,
+// as ARIA's aria-multiline. Text inputs and text areas know it
+// themselves, from the control they are, and other roles ignore it.
+func (_handle Element) Multiline(on bool) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Multiline(on))
+}
+
 // Multiselectable tells assistive technology whether the user chooses
 // several of the items of the element, a list, grid, tree or tree grid
 // of your own, as ARIA's aria-multiselectable: screen readers offer to
@@ -7401,6 +7448,17 @@ func (_handle Element) Range(lo float64, hi float64, value float64) Element {
 // change it: the text can still be selected and copied, from the keyboard
 // too, as it takes the focus, without a caret; assistive technology reads
 // it as read-only.
+//
+// On an element of your own that MyGo does not edit or operate, a widget
+// that draws its value and handles its keys itself, it only tells
+// assistive technology that the element is read-only, as ARIA's
+// aria-readonly, and takes set-value, increment and decrement from it:
+// for a text box
+// (RoleTextField), combo box, check box, switch, slider, stepper, radio
+// group, list box, grid or tree grid, and for the cells and headers
+// (RoleCell, RoleColumnHeader, RoleRowHeader) of a grid or a tree grid,
+// not of a table. Other roles, and MyGo's own controls but for the text
+// inputs and text areas it is meant for, ignore it.
 func (_handle Element) ReadOnly(on bool) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -7542,6 +7600,35 @@ func (_handle Element) Row() Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Row())
+}
+
+// RowClicked reports, while a row of a List or a Table builds, that the
+// row was clicked since the last frame with the pointer over the element:
+// a row's content acts on a click this way and leaves the click to the
+// row, which goes on choosing, where Clicked would take it, so that the
+// row's ListState.Label names what takes the click, for typing its first
+// letters, screen readers and Tester.Click alike. It reports each click of
+// the primary button without modifiers, on the row chosen too, and not the
+// keys that move the choice, nor a Shift- or Cmd-click extending it. A
+// double click reports its first click here and its second with
+// RowDoubleClicked, as on the systems' own lists. Assistive technology
+// pressing the row, without the pointer, reports it to the first element
+// asking. In a list that does not choose its rows, asking makes the row
+// take the click.
+//
+//	ui.List(c, &app.files, len(app.names), func(i int) {
+//		if ui.Text(c, app.names[i]).Padding(6, 12).FillWidth().RowClicked() {
+//			app.open(i)
+//		}
+//	})
+func (_handle Element) RowClicked() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.RowClicked()
 }
 
 // RowCount tells assistive technology how many rows a table, grid or tree
@@ -8727,6 +8814,21 @@ func (_handle Element) WidthPercent(p float32) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.WidthPercent(p))
+}
+
+// WindowDoubleClicked reports a double click on a DragWindow handle,
+// which then no longer maximizes the window: the view does what a double
+// click there means to it, as a sidebar starting something new. The
+// handle still moves the window, which DoubleClicked would stop.
+func (_handle Element) WindowDoubleClicked() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	_ctx.rt.applyInputs()
+	return _node.WindowDoubleClicked()
 }
 
 // WindowToLocal maps a window point into the previous frame's border box.

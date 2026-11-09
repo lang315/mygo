@@ -403,6 +403,9 @@ type node struct {
 	// fillViewport (FillViewport): a scroll container lays its content out at
 	// least as high as itself.
 	fillViewport bool
+	// handleDoubleClick marks a DragWindow handle whose double click the
+	// view takes (WindowDoubleClicked) rather than the window.
+	handleDoubleClick bool
 	// accessHidden leaves it and the elements inside it out of what
 	// assistive technology reads, while they still show and take input
 	// (AccessHidden).
@@ -566,9 +569,12 @@ type node struct {
 	// Invalid). describedBy are the elements whose text describes it too
 	// (DescribedBy), and errorMessage those holding its error, read while
 	// it is invalid (ErrorMessage).
-	description  string
-	describedBy  []*node
-	errorMessage []*node
+	description string
+	// readOnly and multiline are what a text box with no editor of
+	// MyGo's reports (ReadOnly, Multiline).
+	readOnly, multiline bool
+	describedBy         []*node
+	errorMessage        []*node
 	// field is set on a Field, form on a Form, whose layout makes its
 	// labels as wide as the widest.
 	field *fieldParts
@@ -1995,6 +2001,22 @@ func (e *node) TabStop(stop bool) *node {
 // title bar of a frameless window. A double click on it maximizes the
 // window, as on a title bar.
 func (e *node) DragWindow() *node { e.flags |= flagDragWindow; return e }
+
+// WindowDoubleClicked reports a double click on a DragWindow handle,
+// which then no longer maximizes the window: the view does what a double
+// click there means to it, as a sidebar starting something new. The
+// handle still moves the window, which DoubleClicked would stop.
+func (e *node) WindowDoubleClicked() bool {
+	if !e.hasState() {
+		return false
+	}
+	e.handleDoubleClick = true
+	if e.disabled() || e.st.doubleClicks == 0 {
+		return false
+	}
+	e.c.rt.consumed = true
+	return true
+}
 
 // MaximizeButton marks the element as the window's maximize button, which
 // the view draws in a window with a hidden title bar without the system's

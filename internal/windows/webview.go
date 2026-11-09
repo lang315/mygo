@@ -26,6 +26,7 @@ import (
 	"github.com/egoist/mygo/internal/httplite"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehost"
+	"github.com/egoist/mygo/internal/schemestream"
 )
 
 // Custom schemes are served from http://<scheme>.localhost/, and their
@@ -90,6 +91,7 @@ func (w *window) withWebViewOr(fn func(), fail func(error)) {
 // failPending fails the calls waiting for the webview.
 func (w *window) failPending(err error) {
 	failCookieRequests(w, err)
+	w.abortSchemes(err)
 	pending := w.pending
 	w.pending = nil
 	for _, c := range pending {
@@ -1228,7 +1230,10 @@ func (w *window) resourceRequested(_, args uintptr) {
 	uri := takeWstr(p)
 	var resource int32
 	comCall(args, resReqGetResourceContext, uintptr(unsafe.Pointer(&resource)))
-	const document = 1 // COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
+	const (
+		document = 1 // COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
+		media    = 4 // COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA
+	)
 	if w.contentFilter != nil && w.contentFilter(args, req, uri, resource) {
 		return
 	}
@@ -1248,6 +1253,15 @@ func (w *window) resourceRequested(_, args uintptr) {
 		sreq.Body = io.NopCloser(bytes.NewReader(readStream(content)))
 		release(content)
 	}
+	if resource == media {
+		// Media elements ask for the rest of the file from a byte on
+		// (bytes=X-): narrowed, a response ends soon, and the element asks
+		// for what follows as it plays.
+		header := httplite.Header(sreq.Header)
+		if r := header.Get("Range"); r != "" {
+			header.Set("Range", schemestream.ClampRange(r, mediaRange))
+		}
+	}
 	var deferral uintptr
 	if comCall(args, resReqGetDeferral, uintptr(unsafe.Pointer(&deferral))) != sOK {
 		return
@@ -1255,7 +1269,13 @@ func (w *window) resourceRequested(_, args uintptr) {
 	addRef(args)
 	ctx, cancel := context.WithCancel(context.Background())
 	sreq.Context = ctx
-	sreq.Responder = &schemeResponse{w: w, args: args, deferral: deferral, cancel: cancel, url: target, document: resource == document, head: sreq.Method == "HEAD"}
+	r := &schemeResponse{w: w, args: args, deferral: deferral, cancel: cancel, url: target, document: resource == document}
+	r.pipe = schemestream.NewPipe(streamLimit, func() { w.b.post(r.handover) })
+	if w.schemes == nil {
+		w.schemes = map[*schemeResponse]struct{}{}
+	}
+	w.schemes[r] = struct{}{}
+	sreq.Responder = r
 	w.h.SchemeRequest(sreq)
 }
 
@@ -1290,13 +1310,17 @@ func requestHeaders(req uintptr) httplite.Header {
 // respond answers a WebResourceRequested event; deferral is 0 for a
 // synchronous answer.
 func (w *window) respond(args, deferral uintptr, status int, header httplite.Header, body []byte) {
+	w.respondStream(args, deferral, status, header, memStream(body))
+}
+
+// respondStream answers with the body stream, and releases it.
+func (w *window) respondStream(args, deferral uintptr, status int, header httplite.Header, stream uintptr) {
 	var raw strings.Builder
 	for k, vs := range header {
 		for _, v := range vs {
 			raw.WriteString(k + ": " + v + "\r\n")
 		}
 	}
-	stream := memStream(body)
 	var resp uintptr
 	hr := comCall(w.b.env, envCreateWebResourceResponse, stream, uintptr(status),
 		uintptr(unsafe.Pointer(u16(httplite.StatusText(status)))), uintptr(unsafe.Pointer(u16(raw.String()))), uintptr(unsafe.Pointer(&resp)))
@@ -1310,9 +1334,31 @@ func (w *window) respond(args, deferral uintptr, status int, header httplite.Hea
 	}
 }
 
-// schemeResponse buffers a response: WebView2 wants it whole. The body goes
-// into memory the serving goroutine writes (WriteBody), and into a stream
-// at the end (Finish).
+const (
+	// streamLimit is how much of a response's body MyGo holds for
+	// WebView2: the handler's writes, the shared layer's chunks
+	// (protocol.go), wait once this much was not read.
+	streamLimit = 1 << 20
+	// mediaRange is the most a media element gets for a range it left
+	// open (bytes=X-).
+	mediaRange = 4 << 20
+)
+
+// schemeResponse answers a custom scheme request. The handler's goroutine
+// writes the body into a pipe (WriteBody). A body that ends before it
+// fills the pipe (streamLimit) is answered whole at Finish, as WebView2's
+// documentation asks: a response's content is all there when the
+// deferral completes. A larger one is answered as the pipe fills, with a
+// stream that reads the pipe as the handler writes it (bodyStream): MyGo
+// holds at most about streamLimit of it, and the handler waits while
+// WebView2 is behind. WebView2 reads the streams of all responses on one
+// thread (MicrosoftEdge/WebView2Feedback#3519), and a Read waiting for a
+// handler holds the others back: answering only once that much was
+// written keeps a handler that is slow to start from doing so.
+//
+// The request's context is canceled once the response is answered whole,
+// once WebView2 releases the stream of a streaming one, and when the
+// window closes.
 type schemeResponse struct {
 	w        *window
 	args     uintptr
@@ -1320,42 +1366,78 @@ type schemeResponse struct {
 	cancel   context.CancelFunc
 	url      string
 	document bool // a page loads, rather than a resource of one
-	head     bool // the request is a HEAD: no body
 	status   int
 	header   httplite.Header
-	body     responseBody
-	done     bool
+	pipe     *schemestream.Pipe
+	// answered is set once WebView2 has its answer and the deferral is
+	// complete; streaming when that answer is the pipe's stream; done
+	// once the handler is done with the response (Finish, Fail) or the
+	// window closed.
+	answered, streaming, done bool
 }
-
-// maxPresized bounds what a Content-Length makes the response buffer take
-// before a byte arrives: the header is the app's handler's, and may be wrong.
-const maxPresized = 64 << 20
 
 func (r *schemeResponse) Respond(status int, header map[string][]string) {
-	r.status, r.header = status, header
-	// The body arrives in chunks: a buffer that grows with them copies it
-	// about twice. A response to HEAD, or a 204 or 304, has the
-	// Content-Length of a body it does not send.
-	hint := 0
-	if !r.head && status != httplite.StatusNoContent && status != 304 {
-		if n, err := strconv.ParseInt(strings.TrimSpace(httplite.Header(header).Get("Content-Length")), 10, 64); err == nil && n > 0 {
-			hint = int(min(n, maxPresized))
-		}
+	if r.done || r.answered {
+		return
 	}
-	r.body.start(hint)
+	r.status, r.header = status, header
+	if r.w.closed {
+		r.abort(errDestroyed)
+		return
+	}
+	if r.document && status < 300 && isDownload(r.header) {
+		// WebView2 does not download what it gets from here: the page
+		// stays, and the app serves the URL again into a download.
+		r.answer(httplite.StatusNoContent, nil, nil)
+		r.pipe.Release() // the handler's writes fail: nothing reads them
+		r.w.h.SchemeDownload(r.url)
+	}
 }
 
-// Write takes a chunk on the main thread; WriteBody is the way the serving
-// goroutine gives them, and a responder that has it gets them there.
-func (r *schemeResponse) Write(p []byte) {
-	r.body.startOnce()
-	_ = r.body.write(p)
+// Write is not used: the body goes through WriteBody.
+func (r *schemeResponse) Write([]byte) {}
+
+// WriteBody writes to the pipe, waiting while it is full. It fails once
+// WebView2 no longer reads the response.
+func (r *schemeResponse) WriteBody(p []byte) error { return r.pipe.Write(p) }
+
+// handover answers with the stream of the pipe, which the handler filled
+// (the pipe's onFull, posted to the main thread).
+func (r *schemeResponse) handover() {
+	if r.answered || r.done {
+		return
+	}
+	if r.w.closed {
+		r.abort(errDestroyed)
+		return
+	}
+	if r.status == 0 {
+		r.status = httplite.StatusOK
+	}
+	r.answered, r.streaming = true, true
+	size := int64(-1)
+	if n, err := strconv.ParseInt(r.header.Get("Content-Length"), 10, 64); err == nil && n >= 0 {
+		size = n
+	}
+	// The stream cancels the context once WebView2 releases it.
+	r.w.respondStream(r.args, r.deferral, r.status, r.header, newBodyStream(r.pipe, size, r.cancel))
+	release(r.deferral)
+	release(r.args)
 }
 
-// WriteBody implements platform.SchemeBodyWriter: it is called off the main
-// thread, after Respond and before Finish or Fail (the protocol package posts
-// those once the handler returned), and fails once the response ended.
-func (r *schemeResponse) WriteBody(p []byte) error { return r.body.write(p) }
+// answer answers with a body held whole, and cancels the context. With
+// status 0, it only completes the deferral: WebView2 gets no response.
+func (r *schemeResponse) answer(status int, header httplite.Header, body []byte) {
+	r.answered = true
+	if !r.w.closed && status != 0 {
+		r.w.respond(r.args, r.deferral, status, header, body)
+	} else {
+		comCall(r.deferral, deferralComplete)
+	}
+	release(r.deferral)
+	release(r.args)
+	r.cancel()
+}
 
 // isDownload reports whether a page response is a file to save: an
 // attachment, or plain bytes.
@@ -1368,55 +1450,60 @@ func (r *schemeResponse) Finish() {
 	if r.done {
 		return
 	}
-	r.done = true
+	r.end()
+	r.pipe.Close() // a streaming body ends after what the pipe holds
+	if r.answered {
+		return
+	}
 	if r.status == 0 {
 		r.status = httplite.StatusOK
 	}
-	if r.document && r.status < 300 && isDownload(r.header) && !r.w.closed {
-		// WebView2 does not download what it gets from here: the page
-		// stays, and the app serves the URL again into a download.
-		r.w.respond(r.args, r.deferral, httplite.StatusNoContent, nil, nil)
-		r.w.h.SchemeDownload(r.url)
-		r.release()
-		return
-	}
-	if !r.w.closed {
-		status, header, body := r.outcome()
-		r.w.respond(r.args, r.deferral, status, header, body)
-	} else {
-		comCall(r.deferral, deferralComplete)
-	}
-	r.release()
-}
-
-// outcome is what the page gets: the response, or a 502 when its body could
-// not be kept (a truncated body with the status and Content-Length of the
-// whole would pass for it).
-func (r *schemeResponse) outcome() (status int, header httplite.Header, body []byte) {
-	if err := r.body.failure(); err != nil {
-		return httplite.StatusBadGateway, httplite.Header{"Content-Type": {"text/plain; charset=utf-8"}}, []byte(err.Error())
-	}
-	return r.status, r.header, r.body.take()
+	r.answer(r.status, r.header, r.pipe.Take())
+	r.pipe.Release()
 }
 
 func (r *schemeResponse) Fail(err error) {
 	if r.done {
 		return
 	}
-	r.done = true
-	if !r.w.closed {
-		r.w.respond(r.args, r.deferral, httplite.StatusBadGateway, httplite.Header{"Content-Type": {"text/plain; charset=utf-8"}}, []byte(err.Error()))
-	} else {
-		comCall(r.deferral, deferralComplete)
+	r.end()
+	switch {
+	case r.streaming:
+		r.pipe.Fail(err) // WebView2's reads fail once they took what came before
+	case !r.answered:
+		r.answer(httplite.StatusBadGateway, httplite.Header{"Content-Type": {"text/plain; charset=utf-8"}}, []byte(err.Error()))
+		r.pipe.Release()
 	}
-	r.release()
 }
 
-func (r *schemeResponse) release() {
-	r.body.free()
+// abort ends a response whose handler still runs as its window closes:
+// the handler's writes fail and its context is canceled.
+func (r *schemeResponse) abort(err error) {
+	if r.done {
+		return
+	}
+	r.end()
+	switch {
+	case r.streaming:
+		r.pipe.Fail(err)
+	case !r.answered:
+		r.answer(0, nil, nil)
+	}
+	r.pipe.Release()
 	r.cancel()
-	release(r.deferral)
-	release(r.args)
+}
+
+// end records that the handler is done with the response.
+func (r *schemeResponse) end() {
+	r.done = true
+	delete(r.w.schemes, r)
+}
+
+// abortSchemes ends the responses whose handlers still run.
+func (w *window) abortSchemes(err error) {
+	for r := range w.schemes {
+		r.abort(err)
+	}
 }
 
 // openScript makes window.open give WebView2 the URLs of the app's schemes

@@ -247,10 +247,12 @@ func (rt *engine) watchHover(chain []uint64) bool {
 	return false
 }
 
-// rehover makes the elements under the pointer hover after a frame built
-// and laid them out anew, as the row taking the place of one removed: a
-// pointer standing still sends no event that would. It asks for the frame
-// that shows them hovering, which a frame being built cannot.
+// rehover makes the elements under the pointer hover once a frame built
+// and laid them out anew, as the row taking the place of one removed or a
+// row a scroll brought there: a pointer standing still sends no event
+// that would. The frame paints them hovering; it asks for the next to
+// build them so, for what read its hover as it built, which a frame being
+// built cannot.
 func (rt *engine) rehover() {
 	if rt.pressed != nil || rt.scrollDrag.st != nil {
 		// The hover holds the elements under the pointer as the press
@@ -266,8 +268,11 @@ func (rt *engine) rehover() {
 		rt.chain = chain[:0]
 		return
 	}
+	// The element the pointer left looks at its hover too: setHover's
+	// frame is dropped while one is built.
+	watch := rt.watchHover(chain) || rt.watchHover(old)
 	rt.chain = old[:0]
-	if rt.watchHover(chain) {
+	if watch {
 		rt.redraw, rt.repaintDue = false, time.Time{}
 		rt.host.requestFrame()
 	}
@@ -311,6 +316,49 @@ func (rt *engine) unhoverGone() bool {
 	}
 	rt.hover, rt.chain = chain, old[:0]
 	return rt.watchHover(chain) || rt.watchHover(old)
+}
+
+// hoverScrolled makes what a scroll since the last frame brings under the
+// pointer hover before the view builds: what is inside a container that
+// scrolled moves by as much as its offset did, so the last frame's layout,
+// moved by that, tells it, as the row a wheel or a touchpad brings under a
+// pointer standing still. What reads its hover as it builds sees the frame
+// that shows the scroll as it is, rather than as it was until the frame
+// after (rehover), which then has nothing to change and asks for none.
+func (rt *engine) hoverScrolled() {
+	if len(rt.hover) == 0 || !rt.pointerIn || rt.pressed != nil || rt.scrollDrag.st != nil {
+		return
+	}
+	moved := false
+	for _, id := range rt.hover {
+		if s := rt.states[id]; s != nil && (s.scrollX != s.laidX || s.scrollY != s.laidY) {
+			moved = true
+			break
+		}
+	}
+	if !moved {
+		return
+	}
+	chain := rt.chain[:0]
+	for i := len(rt.hits) - 1; i >= 0; i-- {
+		h := &rt.hits[i]
+		if !rt.containsScrolled(h.st, h.r, rt.pointerX, rt.pointerY, true) {
+			continue
+		}
+		for s := h.st; s != nil; s = rt.states[s.parent] {
+			chain = append(chain, s.id)
+			if s.parent == 0 {
+				break
+			}
+		}
+		break
+	}
+	old := rt.hover
+	if !rt.setHover(chain) {
+		rt.chain = chain[:0]
+		return
+	}
+	rt.chain = old[:0]
 }
 
 func (rt *engine) pointerMove(x, y float32) {
@@ -499,9 +547,12 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		return
 	}
 	if button == 0 && target.flags&flagDragWindow != 0 && target.flags&(interactive&^flagDragWindow) == 0 {
-		if clicks == 2 {
+		switch {
+		case clicks == 2 && target.handleDoubleClick:
+			target.doubleClicks++
+		case clicks == 2:
 			rt.host.titleBarDoubleClicked()
-		} else {
+		default:
 			rt.host.startDrag()
 		}
 		return
@@ -700,7 +751,11 @@ func (rt *engine) pointerUp(button, clicks int, canceled bool) {
 			if s.dragRec.dragged(rt, s) {
 				break // it moved the element (Draggable): no click
 			}
-			s.click(s.pressMods)
+			if clicks > 1 {
+				s.quietClick(s.pressMods)
+			} else {
+				s.click(s.pressMods)
+			}
 		case 1:
 			r.rightClicks++
 			s.touch()
@@ -727,11 +782,12 @@ func (rt *engine) applyRelease(s *state) {
 	s.pressed = rt.pressed == s
 	s.released, s.canceled = r.released, r.canceled
 	s.clicks += r.clicks
+	s.quietClicks += r.quietClicks
 	s.rightClicks += r.rightClicks
 	if r.clicks > 0 {
 		s.clickMods = r.clickMods
 	}
-	r.due, r.canceled, r.clicks, r.rightClicks = false, false, 0, 0
+	r.due, r.canceled, r.clicks, r.quietClicks, r.rightClicks = false, false, 0, 0, 0
 	if rt.pressEnded == s {
 		rt.pressEnded = nil
 	}
@@ -749,6 +805,18 @@ func (s *state) click(mods Modifiers) {
 	}
 	s.clicks++
 	s.clickMods = mods
+}
+
+// quietClick clicks s as click does, with a click its row does not report
+// as one of its own (RowClicked): a later click of a double or triple
+// click, or assistive technology's focus choosing a row.
+func (s *state) quietClick(mods Modifiers) {
+	if r := &s.releaseLater; r.due {
+		r.quietClicks++
+	} else {
+		s.quietClicks++
+	}
+	s.click(mods)
 }
 
 func (rt *engine) scroll(dx, dy float32, mods Modifiers, precise, momentum bool) {

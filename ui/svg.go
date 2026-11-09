@@ -30,6 +30,7 @@ import (
 // selectors. It leaves out text, embedded images, patterns, markers and
 // filters: convert text to paths before.
 type SVG struct {
+	imageMark
 	doc  svgDoc
 	id   uint64
 	w, h float32

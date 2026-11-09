@@ -802,6 +802,8 @@ func roleName(r Role) string {
 		return "Deletion"
 	case RoleInsertion:
 		return "Insertion"
+	case RoleTabPanel:
+		return "TabPanel"
 	}
 	return ""
 }
@@ -822,6 +824,8 @@ func accessibleRole(e *node) (string, bool) {
 		return "deletion", true
 	case RoleInsertion:
 		return "insertion", true
+	case RoleTabPanel:
+		return "tabpanel", true
 	}
 	switch role := Role(r) + RoleGroup; role {
 	case RoleGroup:

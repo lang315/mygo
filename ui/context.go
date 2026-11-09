@@ -797,6 +797,9 @@ type state struct {
 	// accessDisabled, that assistive technology reads it as unavailable
 	// (AccessDisabled).
 	ignoreInput, accessHidden, accessDisabled bool
+	// handleDoubleClick tells that the element, a DragWindow handle,
+	// takes its double click (WindowDoubleClicked).
+	handleDoubleClick bool
 	// activeDescendant is the element that has the keyboard focus while
 	// this one does (ActiveDescendant), 0 for none.
 	activeDescendant uint64
@@ -806,6 +809,10 @@ type state struct {
 	// of another going: its theme's TooltipDelay.
 	tip               bool
 	tipDelay, tipWarm time.Duration
+	// popped is the last frame a popup attached to the element showed in
+	// (popupShows): a menu, a popover or a select's options, while which
+	// its tip does not show.
+	popped uint64
 	// effectLayer is what the element and its children render into for
 	// its Effect, its blur, its Cache or its opacity as a group
 	// (paintGroup), kept from frame to frame. grouped tells that, faded
@@ -824,6 +831,10 @@ type state struct {
 	webView NativeWebView
 
 	clicks, rightClicks, doubleClicks int
+	// quietClicks counts those of clicks that a row does not report as a
+	// click of its own (RowClicked): the later clicks of a double or
+	// triple click, and assistive technology's focus choosing a row.
+	quietClicks int
 	// pressMods are the modifiers held as the pointer went down on the
 	// element, and clickMods those of its last click.
 	pressMods, clickMods Modifiers
@@ -865,6 +876,7 @@ type state struct {
 		canceled            bool
 		x, y                float32
 		clicks, rightClicks int
+		quietClicks         int
 		clickMods           Modifiers
 	}
 	// dragRec is what Draggable keeps of the element from frame to frame.
@@ -895,6 +907,9 @@ type state struct {
 	// startX and startY are the offset before frame moveFrame moved it.
 	moveFrame      uint64
 	startX, startY float64
+	// laidX and laidY are the offset the last frame laid the content out
+	// at, where the hits of what is inside are (hoverScrolled).
+	laidX, laidY float64
 	// list is the ListState that placed the rows of a List last.
 	list *ListState
 	// cx, cy, cw and ch are the element's content box, inside its

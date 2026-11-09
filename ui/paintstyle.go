@@ -3,6 +3,8 @@ package ui
 import (
 	"slices"
 	"unsafe"
+
+	"github.com/egoist/mygo/internal/imagesrc"
 )
 
 // textPaint is what of a text style paints text besides what lays it out
@@ -150,7 +152,8 @@ type paintRare struct {
 	hitFn   func(x, y float32, r Rect) bool
 	webView NativeWebView
 	image   *Bitmap
-	svg     *SVG // of an Icon, or an Image in its own colors
+	texture imagesrc.Frames // of an Image showing a native.Texture
+	svg     *SVG            // of an Icon, or an Image in its own colors
 	// list is the List the element is, while it builds and lays out.
 	list *listFrame
 	// poseFade is how far a pose fades the element (pose, AnimatePose).

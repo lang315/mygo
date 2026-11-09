@@ -19,6 +19,7 @@ import (
 // Bitmap is an image to show with Image. Create it once: converting an
 // image is not free.
 type Bitmap struct {
+	imageMark
 	img  *scene.Image
 	w, h int
 	// levels are the bitmap halved again and again, made as it shows
@@ -47,8 +48,10 @@ type Bitmap struct {
 	// an image of a type of its own, and other bitmaps.
 	source func() image.Image
 	// videoPix are the pixels a frame of video was converted into, for
-	// the next (showPicture).
+	// the next (showPicture), and chroma the chroma of an I420 frame,
+	// interleaved as NV12's (UpdateYUV).
 	videoPix []byte
+	chroma   []byte
 }
 
 // Pixelated draws the bitmap's pixels as squares of their colors where it
@@ -216,7 +219,8 @@ func missingDecoder(data []byte, err error) error {
 // origin, as image.NewRGBA makes, is taken as it is, without a copy:
 // don't change its pixels until the next Update. Call it on the main
 // thread, in the view or through Window.Update, which redraws the window
-// to show it.
+// to show it. UpdateYUV shows frames in Y′CbCr, as decoders give them,
+// without converting them.
 func (b *Bitmap) Update(img image.Image) {
 	if b.img.Scene != nil {
 		return // a canvas's: Canvas.Draw draws it
