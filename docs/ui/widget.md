@@ -734,7 +734,11 @@ lock: they read the row and call no widget method.
   checks them otherwise). The header's box checks the rows a search
   shows. `Selected` and `CountSelected` read the selection. `Checked` and
   `Selected` list the rows shown, in the order shown; deleted rows are
-  neither.
+  neither. `SetSelected(ks...)` chooses rows from code, firing no
+  `OnSelectionChanged` (as `SetChecked`): unknown keys are ignored, any
+  goroutine may call it, and `Selected` returns the new set at once, also
+  inside a `ContextMenuFunc` fn, where the right-clicked row must stay in
+  `ks`, or the menu's build selects it again. It does not move the cursor.
 - `IndexColumn()`: each row's position as shown, from 1.
   `IndexColumnBySource()` numbers each row by its place in the source
   instead, the order rows show in unsorted: sorting and searching keep the
