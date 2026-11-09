@@ -146,8 +146,10 @@ type DataGridViewWidget[T any, K comparable] struct {
 	startCell   func(row, col int, x, y float32, how ui.EditHow)
 
 	// watch, when set by a ListView, gets the keys the user added to and took
-	// out of the choice, or of the checks (checks).
-	watch func(checks bool, on, off []K)
+	// out of the choice.
+	watch func(on, off []K)
+	// onCheck is OnCheck's: it gets the keys the user checked and unchecked.
+	onCheck func(K, bool)
 
 	// look versions how rows look (the columns, a column's image), which the
 	// rows' own generations (RowSource.Version) do not: a change of it

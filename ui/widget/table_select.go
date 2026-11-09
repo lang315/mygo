@@ -200,7 +200,7 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 	// since, or a filter or a view that changed since, are not its. The lines
 	// of a grouped frame are its rows and a header for each group.
 	if !on && !t.gone && first == 0 && last+1-len(t.groupsOf()) == len(t.src.rows) {
-		if t.watch != nil {
+		if t.onCheck != nil {
 			flipped = slices.Collect(c.value.All())
 		}
 		c.value.Clear()
@@ -218,7 +218,7 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 			}
 			if c.value.Has(k) != on {
 				c.set(k, on)
-				if t.watch != nil {
+				if t.onCheck != nil {
 					flipped = append(flipped, k)
 				}
 			}
@@ -227,9 +227,9 @@ func (t *DataGridViewWidget[T, K]) checkRows(first, last int, on bool) bool {
 	if len(flipped) > 0 {
 		// The header's box is the user's: it reports what it flipped.
 		if on {
-			t.watch(true, flipped, nil)
+			t.fireCheck(flipped, nil)
 		} else {
-			t.watch(true, nil, flipped)
+			t.fireCheck(nil, flipped)
 		}
 	}
 	return c.value.Len() != before
@@ -360,11 +360,23 @@ func (t *DataGridViewWidget[T, K]) commit(s *keys[K]) {
 	t.commitLocked(s)
 }
 
+// fireCheck posts OnCheck for the keys the user checked and unchecked. Under mu.
+func (t *DataGridViewWidget[T, K]) fireCheck(on, off []K) {
+	if h := t.onCheck; h != nil {
+		for _, k := range on {
+			Post(func() { h(k, true) })
+		}
+		for _, k := range off {
+			Post(func() { h(k, false) })
+		}
+	}
+}
+
 // commitLocked is commit under mu. If watch is set, it gets the keys the user
 // added to and took out of the set.
 func (t *DataGridViewWidget[T, K]) commitLocked(s *keys[K]) {
 	s.gen++
-	watching := t.watch != nil || s == &t.chosen && t.onSelChanged != nil
+	watching := s == &t.chosen && (t.watch != nil || t.onSelChanged != nil) || s == &t.checked && t.onCheck != nil
 	var on, off []K
 	ks, all := s.shown.TakeChanges()
 	if all {
@@ -422,8 +434,10 @@ func (t *DataGridViewWidget[T, K]) commitLocked(s *keys[K]) {
 		if s == &t.chosen {
 			t.selectionChanged()
 		}
-		if t.watch != nil {
-			t.watch(s == &t.checked, on, off)
+		if s == &t.checked {
+			t.fireCheck(on, off)
+		} else if t.watch != nil {
+			t.watch(on, off)
 		}
 	}
 }
