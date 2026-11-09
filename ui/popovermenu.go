@@ -382,6 +382,7 @@ func (m *menuParts) Popup(fn func(panel *node)) *node {
 		return nil
 	}
 	c, rt := m.c, m.c.rt
+	m.Trigger.popupShows()
 	m.moved = [2]float32{rt.pointerX, rt.pointerY} != s.pointer
 	m.built = m.built[:0]
 	var root *node
@@ -935,18 +936,24 @@ func (rt *engine) openDrawnMenu(e *node) {
 // ContextMenuBase with the theme's look: a panel for the menu and each
 // submenu open, holding the items build adds.
 func (rt *engine) drawMenu(e *node, build func(m *Menu)) {
-	d := rt.menu.drawn
-	if d == nil || d.id != e.id || !e.hasState() || e.c.inert {
+	drawMenuWith(rt, e, build, (*engine).beginDrawnMenu, (*engine).drawnMenuBuilt)
+}
+
+// drawMenuWith is drawMenu, through begin, which starts the menu drawn
+// for e, and built, which draws it once build filled it and says whether
+// it stays open. It hands build to neither, so that the function given to
+// ContextMenu or Menu does not escape to the heap in every frame where
+// they reach the drawn menus through menusInWindow.
+func drawMenuWith(rt *engine, e *node, build func(m *Menu), begin func(rt *engine, e *node) (*drawnMenu, *Menu), built func(rt *engine, e *node, d *drawnMenu, m *Menu) (*platform.MenuItem, bool)) {
+	d, m := begin(rt, e)
+	if m == nil {
 		return
 	}
-	d.built, d.pass = rt.frame, rt.pass
-	if e.disabled() {
-		rt.menu.drawn = nil
-		return
+	build(m)
+	it, open := built(rt, e, d, m)
+	if it != nil {
+		rt.drawnChoice(d.text, e.id, m.run, build, it)
 	}
-	open := true
-	m := &menuParts{Trigger: e, c: e.c, open: &open, s: &d.menu, level: -1}
-	m.draw(build, d.text, d)
 	switch {
 	case !open:
 		if rt.menu.drawn == d { // a choice made while building may have opened another
@@ -955,6 +962,32 @@ func (rt *engine) drawMenu(e *node, build func(m *Menu)) {
 	case d.menu.below:
 		e.expanded = true
 	}
+}
+
+// beginDrawnMenu starts building the menu drawn for e while it shows: it
+// returns the menu, and what its build fills, nil while none shows.
+func (rt *engine) beginDrawnMenu(e *node) (*drawnMenu, *Menu) {
+	d := rt.menu.drawn
+	if d == nil || d.id != e.id || !e.hasState() || e.c.inert {
+		return nil, nil
+	}
+	d.built, d.pass = rt.frame, rt.pass
+	if e.disabled() {
+		rt.menu.drawn = nil
+		return nil, nil
+	}
+	return d, newDrawMenu(e, d.text, d)
+}
+
+// drawnMenuBuilt draws the menu d drawn for e, which its build filled as
+// m: a panel for the menu and each submenu open, holding m's items. It
+// returns the item chosen from it, nil if none, and whether the menu stays
+// open.
+func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) (*platform.MenuItem, bool) {
+	open := true
+	parts := &menuParts{Trigger: e, c: e.c, open: &open, s: &d.menu, level: -1}
+	_, chosen := parts.drawBuilt(m.run, m.menu, d.text, d)
+	return chosen, open
 }
 
 // PopupMenu shows the menu while it is open, as Popup does, with the
@@ -1010,22 +1043,42 @@ func (m *menuParts) Across() int { return m.across }
 // nil for a menu of a menu bar (PopupMenu). It returns the panel, nil when
 // the menu shows no item.
 func (m *menuParts) draw(build func(m *Menu), text uint64, d *drawnMenu) *node {
-	c := m.c
-	rt, t := c.rt, c.theme
+	menu := newDrawMenu(m.Trigger, text, d)
+	build(menu)
+	root, chosen := m.drawBuilt(menu.run, menu.menu, text, d)
+	if chosen != nil {
+		m.c.rt.drawnChoice(text, m.Trigger.id, menu.run, build, chosen)
+	}
+	return root
+}
+
+// newDrawMenu makes the Menu that a menu's function fills while it is drawn
+// (draw, beginDrawnMenu): d is the menu drawn in the window, nil for a menu
+// of a menu bar.
+func newDrawMenu(e *node, text uint64, d *drawnMenu) *Menu {
+	c := e.c
+	rt := c.rt
 	run := &menuRun{collect: true, iconColor: c.Theme().Text}
 	if d != nil {
 		run.highlighted = d.highlighted
 	}
-	pm := &platform.Menu{}
-	menu := &Menu{run: run, menu: pm, rt: rt, text: rt.states[text]}
+	menu := &Menu{run: run, menu: &platform.Menu{}, rt: rt, text: rt.states[text]}
 	if d != nil && d.later {
 		d.later = false
-		menu.id, menu.x, menu.y, menu.gen, menu.later = m.Trigger.id, d.x, d.y, d.gen, true
+		menu.id, menu.x, menu.y, menu.gen, menu.later = e.id, d.x, d.y, d.gen, true
 	}
-	build(menu)
+	return menu
+}
+
+// drawBuilt draws the menu whose function filled pm, with what it collected
+// in run, and returns the panel and the item chosen from it, nil if none
+// (the caller does what choosing it does, drawnChoice).
+func (m *menuParts) drawBuilt(run *menuRun, pm *platform.Menu, text uint64, d *drawnMenu) (*node, *platform.MenuItem) {
+	c := m.c
+	rt, t := c.rt, c.theme
 	if !slices.ContainsFunc(pm.Items, func(it *platform.MenuItem) bool { return it.Visible && it.Type != platform.MenuItemSeparator }) {
 		*m.open = false
-		return nil
+		return nil, nil
 	}
 	if d != nil {
 		keys := d.keys
@@ -1037,10 +1090,7 @@ func (m *menuParts) draw(build func(m *Menu), text uint64, d *drawnMenu) *node {
 				// The item with the ID of the one chosen, wherever it is now.
 				id = slices.Index(run.keys, keys[id-1]) + 1
 			}
-			if it := menuItemByID(pm.Items, id); it != nil {
-				rt.drawnChoice(text, m.Trigger.id, run, build, it)
-			}
-			return nil
+			return nil, menuItemByID(pm.Items, id)
 		}
 	}
 	var chosen *platform.MenuItem
@@ -1111,10 +1161,7 @@ func (m *menuParts) draw(build func(m *Menu), text uint64, d *drawnMenu) *node {
 			rt.consumed = true
 		}
 	}
-	if chosen != nil {
-		rt.drawnChoice(text, m.Trigger.id, run, build, chosen)
-	}
-	return root
+	return root, chosen
 }
 
 // buttonAnchors returns the points of a menu button's box and of its menu

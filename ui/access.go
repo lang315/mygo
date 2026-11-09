@@ -162,6 +162,14 @@ const (
 	//	})
 	RoleDeletion
 	RoleInsertion
+	// RoleTabPanel holds the content of a tab, as ARIA's tabpanel does in
+	// its Tabs pattern: name it after its tab with Label (or LabelledBy,
+	// a text), and have the tab point to it with Controls, so that screen
+	// readers can move between a tab and its content.
+	//
+	//	panel := ui.Column(c).Role(ui.RoleTabPanel).Label("Settings").Children(content)
+	//	tab.Controls(panel)
+	RoleTabPanel
 )
 
 // tabular reports whether elements of a role hold rows of cells: tables,
@@ -559,6 +567,8 @@ func (e *node) accessRole() (platform.AccessRole, bool) {
 		return platform.RoleDeletion, true
 	case RoleInsertion:
 		return platform.RoleInsertion, true
+	case RoleTabPanel:
+		return platform.RoleTabPanel, true
 	default:
 		return platform.AccessRole(e.role - RoleGroup), true
 	}
@@ -598,7 +608,7 @@ func leafRole(r platform.AccessRole) bool {
 		platform.RoleTabList, platform.RoleTable, platform.RoleRow, platform.RoleCell, platform.RoleColumnHeader, platform.RoleRowHeader, platform.RoleTree,
 		platform.RoleListItem, platform.RoleTreeItem, platform.RoleToolbar, platform.RoleRadioGroup, platform.RoleMenu, platform.RoleMenuBar, platform.RoleHeading, platform.RoleNavigation,
 		platform.RoleRegion, platform.RoleLog, platform.RoleTimer, platform.RoleAlert, platform.RoleSearch,
-		platform.RoleArticle, platform.RoleGrid, platform.RoleTreeGrid, platform.RoleDeletion, platform.RoleInsertion:
+		platform.RoleArticle, platform.RoleGrid, platform.RoleTreeGrid, platform.RoleDeletion, platform.RoleInsertion, platform.RoleTabPanel:
 		return false
 	}
 	return true
@@ -973,6 +983,12 @@ func (rt *engine) accessDetails(e *node, n *platform.AccessNode) {
 	if st := e.st; (st.vw <= 0 || st.vh <= 0) && e.w > 0 && e.h > 0 {
 		n.States |= platform.AccessOffscreen
 	}
+	// An element of your own that shows a value it does not let the user
+	// change says so (ReadOnly), also while it is disabled.
+	readOnly := e.readOnly && e.reportsReadOnly(n.Role)
+	if readOnly {
+		n.States |= platform.AccessReadOnly
+	}
 	if disabled {
 		return
 	}
@@ -1011,10 +1027,20 @@ func (rt *engine) accessDetails(e *node, n *platform.AccessNode) {
 			n.SelStart, n.SelEnd = ed.selection()
 		}
 	}
+	// A text box of your own, with no editor of MyGo's, says it takes
+	// several lines (Multiline).
+	if n.Role == platform.RoleTextField && e.multiline && (e.st.editor == nil || e.flags&flagEditable == 0) {
+		n.States |= platform.AccessMultiline
+	}
 	// Custom text clients without an editor take set-value here; inputs and
 	// text areas with an editor follow the editor branch above.
-	if e.textClient != nil && (e.st == nil || e.st.editor == nil || e.flags&flagEditable == 0) {
+	if e.textClient != nil && (e.st == nil || e.st.editor == nil || e.flags&flagEditable == 0) && n.States&platform.AccessReadOnly == 0 {
 		n.Actions |= platform.ActionSetValue
+	}
+	if readOnly {
+		// Its value is not settable (Core-AAM's aria-readonly): not by
+		// assistive technology's set-value, increment and decrement.
+		n.Actions &^= platform.ActionSetValue | platform.ActionIncrement | platform.ActionDecrement
 	}
 	if e.accFill != nil {
 		e.accFill(n)
@@ -1024,6 +1050,36 @@ func (rt *engine) accessDetails(e *node, n *platform.AccessNode) {
 	if e.st.accessDisabled {
 		n.Actions &= platform.ActionFocus | platform.ActionScrollIntoView
 	}
+}
+
+// reportsReadOnly reports whether an element that shows a role of
+// platform r tells assistive technology that it is read-only (ReadOnly),
+// the roles ARIA's aria-readonly is supported on, with the cells, row
+// headers and column headers of a grid or a tree grid, which a table's do
+// not have. A control of MyGo's own, with its behavior, decides for itself,
+// as a text box with an editor of MyGo's does.
+func (e *node) reportsReadOnly(r platform.AccessRole) bool {
+	if r == platform.RoleTextField {
+		return e.st.editor == nil || e.flags&flagEditable == 0
+	}
+	if e.widget != "" {
+		return false
+	}
+	switch r {
+	case platform.RoleComboBox, platform.RoleCheckBox, platform.RoleSwitch, platform.RoleSlider, platform.RoleStepper,
+		platform.RoleRadioGroup, platform.RoleGrid, platform.RoleTreeGrid:
+		return true
+	case platform.RoleList:
+		return e.role == RoleListBox
+	case platform.RoleCell, platform.RoleColumnHeader, platform.RoleRowHeader:
+		// A cell of a table is only a cell; of a grid, a grid cell.
+		for p := e.parent; p != nil; p = p.parent {
+			if tabular(p.role) {
+				return p.role != RoleTable
+			}
+		}
+	}
+	return false
 }
 
 // accessRelations fills in what describes a node: the elements whose
@@ -1128,8 +1184,9 @@ func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 		}
 		if s.flags&flagChoosable != 0 {
 			// A row of a list choosing rows: its list takes the focus for
-			// it, choosing it.
-			s.click(0)
+			// it, choosing it, as the keys would, which no RowClicked
+			// reports.
+			s.quietClick(0)
 			break
 		}
 		rt.focusOn(s)

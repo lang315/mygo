@@ -118,12 +118,36 @@ func (e *node) CaretWidth(width float32) *node {
 // change it: the text can still be selected and copied, from the keyboard
 // too, as it takes the focus, without a caret; assistive technology reads
 // it as read-only.
+//
+// On an element of your own that MyGo does not edit or operate, a widget
+// that draws its value and handles its keys itself, it only tells
+// assistive technology that the element is read-only, as ARIA's
+// aria-readonly, and takes set-value, increment and decrement from it:
+// for a text box
+// (RoleTextField), combo box, check box, switch, slider, stepper, radio
+// group, list box, grid or tree grid, and for the cells and headers
+// (RoleCell, RoleColumnHeader, RoleRowHeader) of a grid or a tree grid,
+// not of a table. Other roles, and MyGo's own controls but for the text
+// inputs and text areas it is meant for, ignore it.
 func (e *node) ReadOnly(on bool) *node {
 	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
 		ed.readOnly = on
 		if on {
 			ed.compose = ""
 		}
+	} else {
+		e.readOnly = on
+	}
+	return e
+}
+
+// Multiline tells assistive technology that an element of the text box
+// role (Role(RoleTextField)) that MyGo does not edit takes several lines,
+// as ARIA's aria-multiline. Text inputs and text areas know it
+// themselves, from the control they are, and other roles ignore it.
+func (e *node) Multiline(on bool) *node {
+	if ed := e.st.editor; ed == nil || e.flags&flagEditable == 0 {
+		e.multiline = on
 	}
 	return e
 }

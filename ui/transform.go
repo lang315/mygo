@@ -413,8 +413,40 @@ func (rt *engine) inWindow(x, y float32) bool {
 
 // containsIn is contains for a point in the window (inWindow).
 func (rt *engine) containsIn(s *state, r Rect, x, y float32) bool {
+	return rt.containsScrolled(s, r, x, y, false)
+}
+
+// scrolled returns how far in the window the content of s moved since the
+// last frame laid it out, as its offset moved since: the other way.
+func (s *state) scrolled() (dx, dy float32) {
+	ox, oy := float32(s.scrollX-s.laidX), float32(s.scrollY-s.laidY)
+	if ox == 0 && oy == 0 {
+		return 0, 0
+	}
+	if s.rtl {
+		// Right to left, the offset counts from the right.
+		ox = -ox
+	}
+	return s.world.VectorAt(s.x, s.y, -ox, -oy)
+}
+
+// containsScrolled is contains, where scrolled has what is inside scroll
+// containers that scrolled since the last frame laid them out tested
+// where their offsets moved it, as the next frame will lay it out.
+func (rt *engine) containsScrolled(s *state, r Rect, x, y float32, scrolled bool) bool {
+	// How far the containers around s moved it.
+	var sx, sy float32
+	if scrolled && !s.lifted {
+		for p := rt.states[s.parent]; p != nil; p = rt.states[p.parent] {
+			dx, dy := p.scrolled()
+			sx, sy = sx+dx, sy+dy
+			if p.lifted || p.parent == 0 {
+				break
+			}
+		}
+	}
 	rt.hitWork++
-	lx, ly, ok := inversePoint(s.world, x, y)
+	lx, ly, ok := inversePoint(s.world, x-sx, y-sy)
 	if !ok || !r.Contains(lx, ly) || s.selfClips && !roundedContains(s.selfClip, uniformRadii(s.selfRadius), lx, ly) ||
 		s.hitFn != nil && !s.hitFn(lx, ly, Rect{s.x, s.y, s.w, s.h}) {
 		return false
@@ -422,8 +454,14 @@ func (rt *engine) containsIn(s *state, r Rect, x, y float32) bool {
 	// The clips around an element flying stop at it, as it paints out of
 	// them.
 	for p := rt.states[s.parent]; p != nil && !s.lifted; p = rt.states[p.parent] {
+		if scrolled {
+			// A container's own box, and its clip, stay where they were
+			// as its content scrolls.
+			dx, dy := p.scrolled()
+			sx, sy = sx-dx, sy-dy
+		}
 		if p.clips || p.selfClips {
-			px, py, ok := inversePoint(p.world, x, y)
+			px, py, ok := inversePoint(p.world, x-sx, y-sy)
 			if !ok || p.clips && !roundedContains(p.clipRect, p.clipRadii, px, py) ||
 				p.selfClips && !roundedContains(p.selfClip, uniformRadii(p.selfRadius), px, py) {
 				return false
@@ -508,6 +546,8 @@ func laidOutVisualBox(e *node) Rect {
 }
 
 func (p *Painter) add(op scene.Op) {
+	// Every op goes through here, and most are painted outside any
+	// Transform: an unset one leaves op.Transform as it is.
 	if p.transform.Set {
 		op.Transform = p.transform.Pixels(p.scale).Mul(op.Transform)
 	}

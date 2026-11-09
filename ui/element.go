@@ -1996,6 +1996,23 @@ func (e *node) TabStop(stop bool) *node {
 // window, as on a title bar.
 func (e *node) DragWindow() *node { e.flags |= flagDragWindow; return e }
 
+// WindowDoubleClicked reports a double click on a DragWindow handle,
+// which then no longer maximizes the window: the view does what a double
+// click there means to it, as a sidebar starting something new. The
+// handle still moves the window, which DoubleClicked would stop.
+func (e *node) WindowDoubleClicked() bool {
+	e.asksOutside()
+	if !e.hasState() {
+		return false
+	}
+	e.handleDoubleClick = true
+	if e.disabled() || e.st.doubleClicks == 0 {
+		return false
+	}
+	e.c.rt.consumed = true
+	return true
+}
+
 // MaximizeButton marks the element as the window's maximize button, which
 // the view draws in a window with a hidden title bar without the system's
 // (mygo.WindowOptions.HideWindowButtons): on Windows 11, holding the

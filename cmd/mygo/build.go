@@ -332,6 +332,10 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 		return t.end(err, "Compiled "+goos+"/"+arch)
 	}
 
+	if err := prepareNative(c, goos, goarch, nativeRelease); err != nil {
+		return nil, err
+	}
+	defer func() { c.native = nil }()
 	name := c.executableName()
 	var artifacts []string
 	switch goos {
@@ -563,14 +567,23 @@ func goFlags(dir string) []string {
 	return strings.Fields(out.String())
 }
 
+// noDownloadTag leaves out of a build what downloads native libraries for
+// programs that are not packaged apps (package ffi's fetch.go), and HTTP
+// with it: packaged apps carry theirs.
+const noDownloadTag = "mygo_nodownload"
+
 // productionTags returns the -tags of a build: those GOFLAGS sets, which a
-// -tags flag would override, and the inspector's in a production build
-// unless it keeps it.
+// -tags flag would override, the downloader's, and the inspector's in a
+// production build unless it keeps it.
 func productionTags(debug bool, dir string) []string {
-	if debug || keepInspector() {
+	if debug {
 		return nil
 	}
-	return []string{"-tags", strings.Join(append(goFlagsTags(dir), inspectorTag), ",")}
+	tags := append(goFlagsTags(dir), noDownloadTag)
+	if !keepInspector() {
+		tags = append(tags, inspectorTag)
+	}
+	return []string{"-tags", strings.Join(tags, ",")}
 }
 
 // goFlagsTags returns the tags GOFLAGS sets, which a -tags flag would override.

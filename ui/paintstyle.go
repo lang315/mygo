@@ -3,6 +3,8 @@ package ui
 import (
 	"slices"
 	"unsafe"
+
+	"github.com/egoist/mygo/internal/imagesrc"
 )
 
 // textPaint is what of a text style paints text besides what lays it out
@@ -98,7 +100,13 @@ type paintLook struct {
 	collapsed bool
 	// invalid marks a value that is not valid (Description, Error).
 	invalid bool
-	_       [6]byte // the padding, written out
+	// readOnly and multiline are what a text box with no editor of MyGo's
+	// reports (ReadOnly, Multiline), and handleDoubleClick marks a
+	// DragWindow handle whose double click the view takes
+	// (WindowDoubleClicked) rather than the window: here, in the padding,
+	// for the size of node.
+	readOnly, multiline, handleDoubleClick bool
+	_                                      [3]byte // the padding, written out
 }
 
 // equal reports whether a and b are the same, byte by byte.
@@ -150,7 +158,8 @@ type paintRare struct {
 	hitFn   func(x, y float32, r Rect) bool
 	webView NativeWebView
 	image   *Bitmap
-	svg     *SVG // of an Icon, or an Image in its own colors
+	texture imagesrc.Frames // of an Image showing a native.Texture
+	svg     *SVG            // of an Icon, or an Image in its own colors
 	// list is the List the element is, while it builds and lays out.
 	list *listFrame
 	// poseFade is how far a pose fades the element (pose, AnimatePose).

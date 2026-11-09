@@ -189,6 +189,16 @@ jobs:
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/natives
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/nsis-*
           key: ${{ steps.downloads.outputs.cache-primary-key }}
+      - uses: mlugg/setup-zig@v2
+        if: matrix.shard != 'check' && matrix.shard != 'noinspector'
+        with:
+          version: 0.16.0
+      # The SQLite plugin's native module, from its Zig and the SQLite its
+      # build.zig.zon pins, which the plugin's tests and the end-to-end
+      # tests load: built here, so that they test these sources.
+      - name: Build the SQLite plugin's native module
+        if: matrix.shard != 'check' && matrix.shard != 'noinspector'
+        run: go run ./cmd/mygo native build -target host plugins/sqlite/internal/sqlitecore
       # The race detector and a shuffled order of the tests and benchmarks'
       # run on the unit tests; the GUI tests below are not run with them.
       # cmd/mygo takes 9 to 10 minutes on macOS under -race, the default limit.
@@ -205,6 +215,39 @@ jobs:
         run: |
           pkgs=$(bash .github/ci-shard.sh ${{ matrix.shard }})
           if [ -z "$pkgs" ]; then echo "The change affects no package of this shard."; else bash .github/ci-test.sh -race -shuffle=on -timeout 25m -- $pkgs; fi
+      # A Rust crate that the CLI builds and package ffi binds, with the
+      # cargo of the runners' images, which go test ./... skips unbuilt.
+      - name: Test a native library built from its sources
+        if: matrix.shard == 'rest'
+        env:
+          MYGO_NATIVE_TESTS: 1
+        run: |
+          go run ./cmd/mygo native build -target host examples/rust-native
+          go test -count=1 ./examples/rust-native/...
+      # A native module's three implementations, built with the runners'
+      # own Swift (Xcode's, and that of Ubuntu's image) and cargo, and Zig:
+      # every kind of value both ways, which go test ./... skips unbuilt. On
+      # macOS, the examples too, whose Swift uses Apple's frameworks.
+      - name: Test a native module built from its Swift
+        if: runner.os != 'Windows' && matrix.shard == 'rest'
+        run: |
+          go run ./cmd/mygo native build -target host -lang swift native/internal/roundtrip/uses  # and roundtrip, which it uses
+          go test -count=1 ./native/internal/roundtrip/...
+      - name: Test a native module built from its Rust, and from its Zig
+        if: matrix.shard == 'rest'
+        shell: bash
+        run: |
+          go test -count=1 -run TestScaffoldBuildsRustZig ./internal/nativegen
+          for lang in rust zig; do
+            go run ./cmd/mygo native build -target host -lang $lang native/internal/roundtrip
+            out=$(go test -count=1 -v ./native/internal/roundtrip) || { echo "$out"; exit 1; }
+            if grep -- '--- SKIP' <<<"$out"; then exit 1; fi  # as when the library did not load
+            echo "$lang: $(grep -c -- '--- PASS' <<<"$out") tests passed"
+          done
+      - name: Build the example's native modules
+        if: runner.os == 'macOS' && matrix.shard == 'rest'
+        working-directory: examples/native-module
+        run: for m in language motion places; do go run ../../cmd/mygo native check modules/$m; done
       - name: Test without the inspector, as production builds
         if: matrix.shard == 'noinspector'
         shell: bash
@@ -382,6 +425,18 @@ jobs:
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/natives
             ${{ runner.os == 'Windows' && '~/AppData/Local' || runner.os == 'macOS' && '~/Library/Caches' || '~/.cache' }}/mygo/nsis-*
           key: ${{ steps.downloads.outputs.cache-primary-key }}
+      # Zig 0.16's aarch64 Windows build crashes running zig build (the
+      # build runner segfaults at once), so this job uses its x86_64
+      # build, which Windows runs emulated and which cross-compiles the
+      # arm64 library just the same.
+      - name: Install Zig (x86_64)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://ziglang.org/download/0.16.0/zig-x86_64-windows-0.16.0.zip -OutFile "$env:RUNNER_TEMP\zig.zip"
+          Expand-Archive "$env:RUNNER_TEMP\zig.zip" -DestinationPath "$env:RUNNER_TEMP"
+          "$env:RUNNER_TEMP\zig-x86_64-windows-0.16.0" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Build the SQLite plugin's native module
+        run: go run ./cmd/mygo native build -target host plugins/sqlite/internal/sqlitecore
       # The race detector does not run on Windows ARM64.
       - run: go test -shuffle=on ./...
       # The runner's provisioning daemon (provjobd, under hosted-compute-agent)

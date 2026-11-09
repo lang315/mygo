@@ -194,7 +194,7 @@ var uiaControlTypes = map[platform.AccessRole]int32{
 	platform.RoleRegion: 50026, platform.RoleLog: 50026, platform.RoleTimer: 50026, platform.RoleAlert: 50026,
 	platform.RoleSeparator: 50038, platform.RoleRowHeader: 50035, platform.RoleSearch: 50026,
 	platform.RoleArticle: 50026, platform.RoleGrid: 50028, platform.RoleTreeGrid: 50028, // DataGrid
-	platform.RoleDeletion: 50020, platform.RoleInsertion: 50020,
+	platform.RoleDeletion: 50020, platform.RoleInsertion: 50020, platform.RoleTabPanel: 50033, // Pane
 }
 
 // ariaRoles are the ARIA roles of nodes whose control type does not say
@@ -205,7 +205,7 @@ var ariaRoles = map[platform.AccessRole]string{
 	platform.RoleTimer: "timer", platform.RoleAlert: "alert", platform.RoleSeparator: "separator",
 	platform.RoleRowHeader: "rowheader", platform.RoleSearch: "search", platform.RoleArticle: "article",
 	platform.RoleGrid: "grid", platform.RoleTreeGrid: "treegrid",
-	platform.RoleDeletion: "deletion", platform.RoleInsertion: "insertion",
+	platform.RoleDeletion: "deletion", platform.RoleInsertion: "insertion", platform.RoleTabPanel: "tabpanel",
 }
 
 // variant is VARIANT, with the value of the types used here.
@@ -1097,7 +1097,8 @@ func initUIA() {
 		setValue,
 		rangeOf(rangeValue),
 		cb(func(this, p uintptr) uintptr { // get_IsReadOnly
-			setBool(p, uiaOf(this).n.Actions&platform.ActionIncrement == 0)
+			n := uiaOf(this).n
+			setBool(p, n.Actions&platform.ActionIncrement == 0 || n.States&platform.AccessReadOnly != 0)
 			return sOK
 		}),
 		rangeOf(func(n platform.AccessNode) float64 { return n.Max }),
@@ -1122,7 +1123,8 @@ func initUIA() {
 			return sOK
 		}),
 		cb(func(this, p uintptr) uintptr { // get_IsReadOnly
-			setBool(p, uiaOf(this).n.Actions&platform.ActionSetValue == 0)
+			n := uiaOf(this).n
+			setBool(p, n.Actions&platform.ActionSetValue == 0 || n.States&platform.AccessReadOnly != 0)
 			return sOK
 		}),
 	)
@@ -1207,6 +1209,8 @@ func (e *uiaElement) property(id int, v *variant) {
 			str(ariaRoles[n.Role])
 		case platform.RoleRowHeader:
 			str("row header")
+		case platform.RoleTabPanel:
+			str("tab panel")
 		case platform.RoleTextField:
 			if n.States&platform.AccessSearch != 0 {
 				str("search box") // as Core-AAM's searchbox
