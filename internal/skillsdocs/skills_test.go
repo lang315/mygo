@@ -202,15 +202,8 @@ func (l *loader) pkg(t *testing.T, path string) *types.Package {
 }
 
 // allowedNames are names a skill may write that the package does not
-// export; there should be none but Zig's: mygo-native-modules shows a Zig
-// implementation, whose `mygo` is the module zig/src/mygo.zig, not this package.
-var allowedNames = map[string]string{
-	"mygo.zig":       "Zig's file of the runtime, imported as mygo",
-	"mygo.Error":     "Zig's error set of the runtime",
-	"mygo.T":         "Zig's handle of an object",
-	"mygo.T.of":      "Zig's constructor of a handle",
-	"mygo.allocator": "Zig's allocator of the runtime",
-}
+// export; there should be none.
+var allowedNames = map[string]string{}
 
 // mentionRE finds, inside the backtick spans of the prose, pkg.Name and
 // pkg.Type.Member where pkg is one of the packages; the character before pkg

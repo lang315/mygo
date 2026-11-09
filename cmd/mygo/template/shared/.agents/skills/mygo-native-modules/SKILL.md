@@ -46,11 +46,12 @@ then Zig.
    - Rust, in `rust/src/lib.rs` (with `mod mygo; use mygo::*;`): a
      factory `make_<t>() -> Result<Arc<dyn T>, Error>` and types
      implementing the generated traits.
-   - Zig, in `zig/src/<name>.zig` (with `const mygo = @import("mygo.zig");`):
-     a factory `make<T>() mygo.Error!mygo.T`, returning `mygo.T.of(ptr)`
-     of a struct with a `pub fn` per method, taking `arena: Allocator`
-     after `self`. Results may live in the arena; what outlives the call
-     uses `mygo.allocator` and is freed in `deinit`.
+   - Zig, in `zig/src/<name>.zig` (importing the runtime, `zig/src/mygo.zig`,
+     as `mygo`): a factory `make<T>()` that returns the runtime's `Error`
+     set or its handle type `T`, made with `of(ptr)` from a struct with a
+     `pub fn` per method, taking `arena: Allocator` after `self`. Results
+     may live in the arena; what outlives the call uses the runtime's
+     `allocator` and is freed in `deinit`.
    The compiler names any method missing.
 4. Try a method without the app:
    `mygo native call [dir] <Interface>.<Method> '{"param": value}'`
