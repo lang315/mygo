@@ -208,7 +208,7 @@ func (f *listFrame) okList(i int, readsDrag bool) bool {
 func (f *listFrame) okStates(states []*state, readsHover bool) bool {
 	rt := f.c.rt
 	for _, st := range states {
-		if st.pending() || rt.isActing(st.id) || readsHover && rt.isHovered(st.id) {
+		if st.pending() || rt.isActing(st.id) || readsHover && (rt.isHovered(st.id) || rt.hoveredLate(st.id)) {
 			return false
 		}
 	}

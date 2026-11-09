@@ -358,7 +358,33 @@ func (rt *engine) hoverScrolled() {
 		rt.chain = chain[:0]
 		return
 	}
+	// Only what entered or left the chain, which touchChanged touches.
+	late := rt.hoverLate[:0]
+	for _, id := range old {
+		if !slices.Contains(chain, id) {
+			late = append(late, id)
+		}
+	}
+	for _, id := range chain {
+		if !slices.Contains(old, id) {
+			late = append(late, id)
+		}
+	}
+	rt.hoverLate = late
+	for _, id := range late {
+		rt.states[id].touch()
+	}
+	rt.hoverLateFrame = rt.frame
 	rt.chain = old[:0]
+}
+
+// hoveredLate reports whether the hover of id was moved by hoverScrolled in
+// this frame, before it was laid out: a row that read it (Hovered,
+// PointerPosition) was built with the last layout, which has not the scroll,
+// and the next frame builds it again, though the chain has nothing to change
+// then (okStates).
+func (rt *engine) hoveredLate(id uint64) bool {
+	return rt.hoverLateFrame == rt.frame && slices.Contains(rt.hoverLate, id)
 }
 
 func (rt *engine) pointerMove(x, y float32) {

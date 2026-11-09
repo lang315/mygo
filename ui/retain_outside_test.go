@@ -85,6 +85,16 @@ func TestRetainRandomWalkOfReaders(t *testing.T) {
 	}
 }
 
+// Walks of the seeds where a scroll brought a row under the pointer: the hover
+// moves before the build (hoverScrolled), so rows that read it (PointerPosition)
+// are built with the layout before the scroll and must not be kept as built
+// (hoveredLate): the next frame builds them again.
+func TestRetainRowsBuiltBeforeAScrollMovedTheHover(t *testing.T) {
+	for _, seed := range []int64{128, 200, 395} {
+		t.Run(fmt.Sprint(seed), func(t *testing.T) { walkOfReaders(t, seed) })
+	}
+}
+
 func walkOfReaders(t *testing.T, seed int64) {
 	red, blue := Hex("#ff0000"), Hex("#0000ff")
 	vers := make([]uint64, 60)
