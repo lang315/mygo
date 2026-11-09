@@ -182,3 +182,55 @@ func TestContextMenuFuncRace(t *testing.T) {
 	<-posted()
 	tt.Frame()
 }
+
+// A SetSelected in fn stands: the right-click's own selection of its row
+// reaches the widget before fn starts, not in a frame that runs while fn
+// does, where it would replace the set fn made.
+func TestContextMenuFuncSetSelectedSurvivesFramesWhileFnRuns(t *testing.T) {
+	set, after := make(chan struct{}, 1), make(chan struct{}, 1)
+	var tb *DataGridViewWidget[acct, int]
+	tb = testTable(acct{1, "ann", 1}, acct{2, "bob", 2}, acct{3, "cat", 3}).ContextMenuFunc(func(sel []int) []MenuItem {
+		tb.SetSelected(append(tb.Checked(), sel...)...)
+		set <- struct{}{}
+		<-after // the frames of the right-click have run
+		return []MenuItem{{Text: fmt.Sprintf("Delete %d rows", len(tb.Selected()))}}
+	})
+	// The build that posted fn returns, and its lock is free, before the
+	// frame applies the right-click's choice (commit): fn runs in between.
+	body, seen := content(tb), uint64(0)
+	tt := ui.NewTester(func(c *ui.Context) {
+		body(c)
+		mu.Lock()
+		posted := tb.lateSeq
+		mu.Unlock()
+		if posted > seen {
+			seen = posted
+			<-set
+		}
+	}, 800, 600)
+	tt.Frame()
+	tb.SetChecked([]int{1, 2}, true)
+	tt.Frame()
+	click(t, tt, "cat")
+	if err := tt.RightClick("ann"); err != nil {
+		t.Fatal(err)
+	}
+	after <- struct{}{}
+	<-posted()
+	tt.Frame()
+	if m := tt.Menu(); !slices.Equal(m, []string{"Delete 2 rows"}) {
+		t.Fatalf("menu %q, want the 2 rows SetSelected chose (Selected %v)", m, tb.Selected())
+	}
+	// The selection now holds two rows: a right-click on a row outside it
+	// replaces the set, which SetSelected's must not give way to.
+	tt.Key(0, ui.KeyEscape)
+	if err := tt.RightClick("cat"); err != nil {
+		t.Fatal(err)
+	}
+	after <- struct{}{}
+	<-posted()
+	tt.Frame()
+	if m := tt.Menu(); !slices.Equal(m, []string{"Delete 3 rows"}) {
+		t.Fatalf("menu %q, want the 3 rows SetSelected chose (Selected %v)", m, tb.Selected())
+	}
+}
