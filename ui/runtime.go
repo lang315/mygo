@@ -197,32 +197,28 @@ type engine struct {
 	// actPrev and hoverPrev are the acting and hover ids the last time they
 	// were gathered (touchChanged).
 	actPrev, hoverPrev []uint64
-	// hoverLate are the ids hoverScrolled moved the hover between in frame
-	// hoverLateFrame, which a later frame touches (touchLate).
-	hoverLate       []uint64
-	hoverLateFrame  uint64
-	actBloom        [4]uint64
-	hoverBloom      [4]uint64
-	actFrame        uint64
-	actPass         int
-	ghostMoved      []uint16
-	inputs          []valueInput
-	inputAt         int
-	afterInputAt    int
-	applyingInputs  bool
-	notices         []*state
-	typedInputs     []*state
-	focusFields     map[any]*focusField
-	refs            []*refState
-	actions         []action
-	textInputClosed bool
-	view            func(*context)
-	host            host
-	c               context
-	text            *text.System
-	scene           scene.Scene
-	painter         Painter
-	glyphRun        glyphRun
+	actBloom           [4]uint64
+	hoverBloom         [4]uint64
+	actFrame           uint64
+	actPass            int
+	ghostMoved         []uint16
+	inputs             []valueInput
+	inputAt            int
+	afterInputAt       int
+	applyingInputs     bool
+	notices            []*state
+	typedInputs        []*state
+	focusFields        map[any]*focusField
+	refs               []*refState
+	actions            []action
+	textInputClosed    bool
+	view               func(*context)
+	host               host
+	c                  context
+	text               *text.System
+	scene              scene.Scene
+	painter            Painter
+	glyphRun           glyphRun
 	// glyphAsks, glyphReqs and glyphImages are the engine's buffers for
 	// the glyphs of the line being painted (textForeground).
 	glyphAsks   []glyphAsk
@@ -697,6 +693,12 @@ type engine struct {
 		id, prev uint64
 		base     int
 	}
+
+	// hoverLate are the ids hoverScrolled moved in or out of the hover chain
+	// in frame hoverLateFrame, and touched there: a row that reads its hover
+	// is not kept as built in that frame (hoveredLate).
+	hoverLate      []uint64
+	hoverLateFrame uint64
 }
 
 // scrollDrag is the scroll bar thumb being dragged: where the pointer
