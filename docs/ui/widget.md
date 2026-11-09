@@ -832,6 +832,10 @@ lock: they read the row and call no widget method.
   builds). Sorting only orders them and does not run it. Changes made before
   `fn` runs run it once, never once per frame. Read the rows with `Selected`
   in it.
+- `OnCheck(fn)` runs `fn(key, on)` on the event goroutine for each row the
+  user checks or unchecks: a click on the row's box, Space, and the header's
+  box, once for each row it flips. `SetChecked` and the other setters do not
+  run it.
 
   ```go
   grid := widget.DataGridView(func(a *Account) uint { return a.ID },

@@ -36,6 +36,15 @@ func (t *DataGridViewWidget[T, K]) ContextMenu(items ...MenuItem) *DataGridViewW
 	return t
 }
 
+// OnCheck runs fn on the event goroutine with the key of a row the user
+// checked or unchecked, and whether it is checked (WinForms' ItemCheck): a
+// click on the row's box or Space, and the header's box, once for each row it
+// flips. SetChecked and the other setters do not run it.
+func (t *DataGridViewWidget[T, K]) OnCheck(fn func(k K, on bool)) *DataGridViewWidget[T, K] {
+	t.change(func() { t.onCheck = fn })
+	return t
+}
+
 // ContextMenuFunc shows the items fn makes when rows are right-clicked, or
 // the menu key is pressed on them: fn gets the keys of the rows selected at
 // that moment, in the order shown. fn runs on the event goroutine, after

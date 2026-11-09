@@ -60,7 +60,6 @@ type ListViewWidget[T any, K comparable] struct {
 	imageSize float32
 
 	onSelect func([]K)
-	onCheck  func(K, bool)
 
 	// cursorKey is the row the keys move from, and anchorKey the row Shift
 	// extends the choice from, in every view: they cross a switch of the view
@@ -340,7 +339,7 @@ func (lv *ListViewWidget[T, K]) OnSelect(fn func(selected []K)) *ListViewWidget[
 // OnCheck runs fn on the event goroutine with the key of a row the user
 // checked or unchecked, and whether it is checked (WinForms' ItemCheck).
 func (lv *ListViewWidget[T, K]) OnCheck(fn func(k K, on bool)) *ListViewWidget[T, K] {
-	lv.change(func() { lv.onCheck = fn })
+	lv.t.OnCheck(fn)
 	return lv
 }
 
@@ -372,20 +371,9 @@ func (lv *ListViewWidget[T, K]) CopyFunc(fn func(selected []K) string) *ListView
 	return lv
 }
 
-// watched is the underlying table's watch: it posts OnSelect and OnCheck for
-// what the user changed. Under mu.
-func (lv *ListViewWidget[T, K]) watched(checks bool, on, off []K) {
-	if checks {
-		if h := lv.onCheck; h != nil {
-			for _, k := range on {
-				Post(func() { h(k, true) })
-			}
-			for _, k := range off {
-				Post(func() { h(k, false) })
-			}
-		}
-		return
-	}
+// watched is the underlying table's watch: it posts OnSelect for what the
+// user chose. Under mu.
+func (lv *ListViewWidget[T, K]) watched(on, off []K) {
 	if h := lv.onSelect; h != nil {
 		ks := lv.t.shown(&lv.t.chosen.value)
 		Post(func() { h(ks) })
