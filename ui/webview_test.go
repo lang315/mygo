@@ -449,7 +449,7 @@ func TestNativeViewGone(t *testing.T) {
 			coreNativeView(c, v).Size(20, 20)
 		}
 	}, 20, 20)
-	if len(tt.rt.platformViews) != 1 || tt.rt.platformViews[0].(*platformView).h != 1 {
+	if len(tt.rt.platformViews) != 1 || tt.rt.platformViews[0].h != 1 {
 		t.Fatalf("%d views stand for the one shown", len(tt.rt.platformViews))
 	}
 	// Hidden, it keeps its state: it stays.
@@ -458,7 +458,7 @@ func TestNativeViewGone(t *testing.T) {
 	if len(tt.rt.platformViews) != 1 {
 		t.Fatal("a view the frame does not build was dropped")
 	}
-	tt.rt.platformViews[0].(*platformView).leave() // as native tells of it
+	tt.rt.platformViews[0].leave() // as native tells of it
 	tt.Frame()
 	if len(tt.rt.platformViews) != 0 {
 		t.Fatal("a view gone is still in the window")
