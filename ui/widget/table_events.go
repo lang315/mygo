@@ -57,6 +57,10 @@ func (t *DataGridViewWidget[T, K]) ContextMenuFunc(fn func(selected []K) []MenuI
 // Under mu, while building.
 func (t *DataGridViewWidget[T, K]) lateMenu(m *ui.Menu, rows []int) {
 	if open := m.Later(); open != nil {
+		// The right-click chose its row in ui's set while building: take it
+		// now, not in the frame that reports it, which may run while fn
+		// does and would replace what fn set with SetSelected.
+		t.commitLocked(&t.chosen)
 		ks := make([]K, 0, len(rows))
 		for _, row := range rows {
 			if r := t.rowAt(row); r != nil {
