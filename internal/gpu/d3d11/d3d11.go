@@ -1839,9 +1839,11 @@ func (r *Renderer) awaitDisplay(least, most time.Duration) {
 		return
 	}
 	r.refreshing = true
-	post := r.post
+	// The hook is read here, on the main thread: a test replaces it, and
+	// restores it while the goroutine may still run.
+	post, wait := r.post, awaitRefresh
 	go func() {
-		awaitRefresh(least, most)
+		wait(least, most)
 		post(r.refreshed)
 	}()
 }
