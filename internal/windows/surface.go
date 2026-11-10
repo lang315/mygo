@@ -289,6 +289,12 @@ func (s *surface) RequestFrame() {
 // unpainted reports whether no WM_PAINT draws the window's next frame: a
 // window minimized gets none, nor does one hidden before its first frame.
 func (s *surface) unpainted() bool {
+	if s.cloaked && s.w.IsVisible() {
+		// Cloaked until its first frame shows (cloak), a window visible to
+		// Windows gets WM_PAINT as any, and its frame there reveals it
+		// (Occluded counts its cloak as nothing showing).
+		return false
+	}
 	return s.Occluded() || !s.drawn && !s.w.IsVisible()
 }
 
