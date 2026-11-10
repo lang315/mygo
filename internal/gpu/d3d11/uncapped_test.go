@@ -342,6 +342,11 @@ func TestUncappedResizeWhileDWMStalls(t *testing.T) {
 	if done := inFlightFlush(); done != nil {
 		wait.For(t, "the window manager", done)
 	}
+	// The waits are told apart by thread: the main thread, the test's, may
+	// wait for DWM only within a bound, and never call DwmFlush, which
+	// stalls on other threads alone, so that a call on the main thread
+	// fails the test rather than hanging it.
+	main := threadID()
 	stalled := make(chan struct{})
 	defer func(f func()) {
 		close(stalled)
@@ -351,14 +356,30 @@ func TestUncappedResizeWhileDWMStalls(t *testing.T) {
 		}
 		dwmFlushCall = f
 	}(dwmFlushCall)
-	dwmFlushCall = func() { <-stalled }
-	// Count the waits of frames of a new size, the only ones with no least.
+	dwmFlushCall = func() {
+		if threadID() == main {
+			t.Error("DwmFlush called on the main thread")
+			return
+		}
+		<-stalled
+	}
+	// Count the waits of frames of a new size, the only ones with no least,
+	// and those on the main thread, each checked against its bound, two
+	// refreshes of the renderer drawing, as it is when the wait begins.
 	var shown atomic.Int32
+	var onMain int
+	var cur *Renderer
 	defer func(f func(_, _ time.Duration)) { awaitRefresh = f }(awaitRefresh)
 	await := awaitRefresh
 	awaitRefresh = func(least, most time.Duration) {
 		if least == 0 {
 			shown.Add(1)
+		}
+		if threadID() == main {
+			onMain++
+			if bound := 2 * cur.cost.refreshPeriod(); most <= 0 || most > bound {
+				t.Errorf("a wait for DWM on the main thread of at most %v; want within (0, %v]", most, bound)
+			}
 		}
 		await(least, most)
 	}
@@ -367,7 +388,8 @@ func TestUncappedResizeWhileDWMStalls(t *testing.T) {
 		if err != nil {
 			t.Skip("no Direct3D 11:", err)
 		}
-		resizeWhileDWMStalls(t, r, &shown)
+		cur = r
+		resizeWhileDWMStalls(t, r, &shown, &onMain)
 		r.Release()
 	}
 }
@@ -380,7 +402,7 @@ func inFlightFlush() <-chan struct{} {
 	return dwmFlush.done
 }
 
-func resizeWhileDWMStalls(t *testing.T, r *Renderer, shown *atomic.Int32) {
+func resizeWhileDWMStalls(t *testing.T, r *Renderer, shown *atomic.Int32, onMain *int) {
 	t.Helper()
 	kind := "window"
 	if r.composed {
@@ -388,9 +410,6 @@ func resizeWhileDWMStalls(t *testing.T, r *Renderer, shown *atomic.Int32) {
 	}
 	posted := make(chan func(), 16)
 	r.SetPost(func(f func()) { posted <- f })
-	// Two refreshes, the longest a frame waits, and time for a slow
-	// machine to draw, far below the 2 s seen.
-	tooLong := 2*r.cost.refreshPeriod() + 200*time.Millisecond
 	colors := []scene.Color{{R: 24, G: 24, B: 27, A: 255}, {R: 250, G: 250, B: 250, A: 255}}
 	n := 0
 	// frame draws a frame of w×h, changing the background, once it can, as
@@ -405,12 +424,14 @@ func resizeWhileDWMStalls(t *testing.T, r *Renderer, shown *atomic.Int32) {
 			}
 		}
 		n++
-		start := time.Now()
+		// The frame waits for DWM on the main thread once at most, within
+		// its bound (the awaitRefresh hook), and never in DwmFlush.
+		before := *onMain
 		if err := r.Render(&scene.Scene{Width: w, Height: h, Background: colors[n%2]}); err != nil {
 			t.Fatal(err)
 		}
-		if d := time.Since(start); d > tooLong {
-			t.Errorf("%s: a %dx%d frame took %v, resizing %v; want at most %v", kind, w, h, d, r.resizing, tooLong)
+		if waits := *onMain - before; waits > 1 {
+			t.Errorf("%s: a %dx%d frame waited for DWM %d times on the main thread, resizing %v; want at most once", kind, w, h, waits, r.resizing)
 		}
 	}
 	frame(200, 150)
