@@ -28,6 +28,10 @@ model guidance, is in [model-guidance.md](model-guidance.md).
   - `~/.claude/settings.json` allows Edit and Write everywhere, and settings files merge. That is why Write and Edit
     are denied outright, and why reports go through `write-report <name>` with a quoted heredoc.
   - Tested 2026-11-10: Write and `git push --dry-run` were denied; `gh run list` and write-report worked.
+  - Pipes work (`gh run view <id> --log-failed | grep -c FAIL`, `2>&1 | grep`, `| head`, `| wc -l`).
+  - Refused: `for` loops, `$(...)`, redirects (`>`), and `cd … &&` (even with a `cd` rule). So the brief asks for one
+    command per call, with paths instead of `cd`.
+  - `git grep`, `sort`, `uniq`, `cut` and `tr` are allowed; `sort -o` is denied, because it writes a file.
 - **Code workers:** `--permission-mode acceptEdits` and `worker-settings.json`.
   - Allowed: go, gotip, gofmt, `git add/commit/diff/status/log`, `mkdir`/`rmdir`, `hc send`, heavy-lock,
     measure-size.
