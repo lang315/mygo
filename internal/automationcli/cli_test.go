@@ -126,9 +126,9 @@ func (f *fakeApp) serve(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { l.Close() })
 	var conns sync.WaitGroup
-	t.Cleanup(conns.Wait) // a connection ends when its CLI run closes it
+	t.Cleanup(conns.Wait) // runs after the listener closes (cleanups are LIFO); a connection ends when its CLI run closes it
+	t.Cleanup(func() { l.Close() })
 	go func() {
 		for {
 			c, err := l.Accept()
