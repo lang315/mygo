@@ -41,12 +41,13 @@ Rules:
 - Temp files go in <R>/.orch/tmp/<name>/, never /tmp.
 - Run heavy commands (-race, go test ./cmd/mygo, go build ./..., gotip vet ./..., any GOOS=... vet or build)
   through <S>/scripts/heavy-lock. It takes only GO*/CGO_ENABLED/MYGO_* variables and go, gotip or gofmt.
-- Keep commands simple: one command per Bash call, no cd, no $(...), no loops. If a command is refused,
-  do not work around it: report it.
+- Keep commands simple: one command per Bash call, no cd, no $(...), no loops. Commands outside your allowlist
+  are refused, not asked: do not work around a refusal, by another tool or a Go program either; report it.
 - Report: write <R>/.orch/reports/<name>.md with:
   - root cause;
   - files changed;
   - every verification command with its exit status and last output lines;
+  - every refused command;
   - what you did not check.
   Then run exactly: hc send <orch> "<name> done: <R>/.orch/reports/<name>.md"
   If stuck, or the criterion still fails after 2 attempts, write what you found, then:
