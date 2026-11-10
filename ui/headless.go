@@ -394,7 +394,7 @@ func (t *Tester) Advance(d time.Duration) {
 		if t.asked() {
 			// Built anew after invalidate, as a window's.
 			if t.h.invalidated.Swap(false) {
-				t.rt.redraw = false
+				t.rt.buildNext()
 			}
 			t.h.requested.Store(false)
 			t.runLater()
@@ -757,7 +757,7 @@ func (t *Tester) labelCenter(n *labelNode, s string, button int) (float32, float
 			lx, ly := st.local(cx, cy)
 			lx, ly = lx+st.x, ly+st.y
 			g := scrollBars(Rect{st.x, st.y, st.w, st.h}, st.barInset, float32(st.contentW), float32(st.contentH),
-				float32(st.scrollX), float32(st.scrollY), st.flags, st.barWidth, st.rtl)
+				float32(st.scrollX), float32(st.scrollY), st.flags, st.scrollbarStyle(), st.rtl)
 			if g.vertical && g.vTrack.Contains(lx, ly) || g.horizontal && g.hTrack.Contains(lx, ly) {
 				return 0, 0, fmt.Errorf("ui: %q is covered by a scroll bar", s)
 			}

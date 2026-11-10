@@ -295,7 +295,7 @@ func installUpdate(ctx context.Context, get update.Getter, m update.Manifest, ke
 		return err
 	}
 	// Next to the app, so that it can be renamed into place.
-	work, err := os.MkdirTemp(filepath.Dir(target), "."+filepath.Base(target)+".update-")
+	work, err := os.MkdirTemp(filepath.Dir(target), workPattern(target))
 	if err != nil {
 		return fmt.Errorf("cannot write next to the app: %w", err)
 	}
@@ -347,6 +347,18 @@ func installUpdate(ctx context.Context, get update.Getter, m update.Manifest, ke
 		return err
 	}
 	return swap(unpacked, target)
+}
+
+// workPattern returns the pattern of the directory an update of the app
+// at target is unpacked in, next to it: named after the app, or after no
+// name where target is the root of a drive or share, as D:\ (#1529),
+// whose base name is a separator, which os.MkdirTemp rejects.
+func workPattern(target string) string {
+	name := filepath.Base(target)
+	if name == "." || strings.ContainsFunc(name, func(r rune) bool { return r < 0x80 && os.IsPathSeparator(uint8(r)) }) {
+		name = "app"
+	}
+	return "." + name + ".update-"
 }
 
 // applyDelta downloads the delta d into work and makes the new version of
@@ -430,11 +442,7 @@ func stageBundle(work, dir, target string) error {
 		return errors.New("the update holds no app bundle")
 	}
 	p := &stagedUpdate{work: work, bundle: filepath.Join(dir, entries[0].Name()), target: target}
-	args := []string{"-c", installAfterExit, "mygo-update", strconv.Itoa(appPid), p.target, p.bundle, p.work, p.target}
-	if len(os.Args) > 1 {
-		args = append(append(args, "--args"), os.Args[1:]...)
-	}
-	p.helper = exec.Command("/bin/sh", args...)
+	p.helper = exec.Command("/bin/sh", "-c", installAfterExit, "mygo-update", strconv.Itoa(appPid), p.target, p.bundle, p.work)
 	if err := p.helper.Start(); err != nil {
 		return err
 	}
@@ -447,30 +455,53 @@ func stageBundle(work, dir, target string) error {
 }
 
 // installAfterExit is the script of /bin/sh that installs a staged update:
-// with the pid of the app, the target, bundle and work of the update and
-// then the arguments of open, it waits for the app to exit, swaps the
-// bundles, putting the old one back if the new one cannot be moved in, and
-// opens the app again when Relaunch asked for it (relaunchUpdated). Through
+// with the pid of the app, the target, bundle and work of the update, it
+// waits for the app to exit, swaps the bundles, putting the old one back
+// if the new one cannot be moved in, and opens the app again when Relaunch
+// asked for it (relaunchUpdated), with the arguments of open that
+// work/relaunch sets: Relaunch's arguments are known only then. Through
 // Launch Services, as openBundle, but without -n: the app has exited, and
 // the Dock gives the new version the app's tile.
 const installAfterExit = `pid=$1 target=$2 new=$3 work=$4
-shift 4
 trap '' HUP
 while kill -0 "$pid" 2>/dev/null; do sleep 0.05; done
 if mv "$target" "$work/old"; then
 	mv "$new" "$target" || mv "$work/old" "$target"
 fi
 relaunch=
-if [ -e "$work/relaunch" ]; then relaunch=1; fi
+if [ -e "$work/relaunch" ]; then relaunch=1; . "$work/relaunch"; fi
 rm -rf "$work"
 if [ -n "$relaunch" ]; then exec /usr/bin/open "$@"; fi
 `
 
 // relaunchUpdated asks the helper of a staged update to open the app once
-// it has installed the update, reporting whether there is one.
-func relaunchUpdated() bool {
+// it has installed the update, with args, reporting whether there is one.
+func relaunchUpdated(args []string) bool {
 	p := pendingUpdate.Load()
-	return p != nil && os.WriteFile(filepath.Join(p.work, "relaunch"), nil, 0o644) == nil
+	return p != nil && os.WriteFile(filepath.Join(p.work, "relaunch"), []byte(setArgs(openArgs(p.target, args))), 0o644) == nil
+}
+
+// openArgs returns the arguments of /usr/bin/open that open the app bundle
+// with the arguments args.
+func openArgs(bundle string, args []string) []string {
+	if len(args) == 0 {
+		return []string{bundle}
+	}
+	return append([]string{bundle, "--args"}, args...)
+}
+
+// setArgs returns the command of /bin/sh that makes args its positional
+// parameters.
+func setArgs(args []string) string {
+	var b strings.Builder
+	b.WriteString("set --")
+	for _, a := range args {
+		b.WriteString(" '")
+		b.WriteString(strings.ReplaceAll(a, "'", `'\''`))
+		b.WriteString("'")
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 // swapFiles replaces the entries of the app directory target with those in

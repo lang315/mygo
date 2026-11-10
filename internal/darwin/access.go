@@ -144,6 +144,11 @@ var accessRoles = map[platform.AccessRole][2]string{
 	platform.RoleNavigation: {"AXGroup", "AXLandmarkNavigation"},
 	platform.RoleRegion:     {"AXGroup", "AXLandmarkRegion"},
 	platform.RoleSearch:     {"AXGroup", "AXLandmarkSearch"},
+	// The other landmarks, as WebKit's.
+	platform.RoleMain:          {"AXGroup", "AXLandmarkMain"},
+	platform.RoleBanner:        {"AXGroup", "AXLandmarkBanner"},
+	platform.RoleContentInfo:   {"AXGroup", "AXLandmarkContentInfo"},
+	platform.RoleComplementary: {"AXGroup", "AXLandmarkComplementary"},
 	// An article, as WebKit's.
 	platform.RoleArticle: {"AXGroup", "AXDocumentArticle"},
 	// Live regions, as WebKit's, and a rule, as WebKit's separator.
@@ -367,6 +372,12 @@ func titled(r platform.AccessRole) bool {
 		return true
 	}
 	return false
+}
+
+// secret reports whether n is a password field, whose text, as
+// NSSecureTextField's, assistive technology never reads.
+func secret(n platform.AccessNode) bool {
+	return n.Role == platform.RoleTextField && n.States&platform.AccessPassword != 0
 }
 
 // textual reports whether elements of a role edit text: text fields and
@@ -1259,16 +1270,25 @@ func registerAccessClass() {
 			}
 		}),
 		method("setAccessibilityValue:", func(self id, cmd objc.SEL, value id) {
-			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(value))
-			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) {
+			// What assistive technology writes to a password field is
+			// not kept, or any other could read it back; the content's
+			// own value, empty, still is.
+			el := b().accessElementOf(self)
+			if el == nil || !secret(el.node) || el.s.updating {
+				sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(value))
+			}
+			if el != nil && textual(el.node.Role) {
 				el.act(platform.AccessSetValue, stringOf(value))
 			}
 		}),
 		// Typing into a text field over its selection, as Voice Control,
 		// dictation and automation insert text (kAXSelectedTextAttribute).
 		method("setAccessibilitySelectedText:", func(self id, cmd objc.SEL, text id) {
-			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(text))
-			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
+			el := b().accessElementOf(self)
+			if el == nil || !secret(el.node) {
+				sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(text))
+			}
+			if el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
 				el.act(platform.AccessInsertText, stringOf(text))
 			}
 		}),

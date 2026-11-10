@@ -27,13 +27,13 @@ func drawClasses(t *testing.T, s *scene.Scene, pooled bool, set func(r *Renderer
 		}
 		first.Release()
 	}
-	devices := devicesMade.Load()
+	made0 := devicesMade.Load()
 	r, err := New(hiddenWindow(t, s.Width, s.Height))
 	if err != nil {
 		t.Skip("no Direct3D 11:", err)
 	}
 	defer r.Release()
-	if made := devicesMade.Load() - devices; pooled == (made != 0) {
+	if made := devicesMade.Load() - made0; pooled == (made != 0) {
 		t.Fatalf("pooled %v, and the renderer made %d devices", pooled, made)
 	}
 	set(r)
@@ -102,16 +102,16 @@ func TestPooledRendererDrawsWithClasses(t *testing.T) {
 				Prewarm()
 				waitPrewarm()
 			}
-			pool.Lock()
-			have := pool.kit != nil
-			pool.Unlock()
+			devices.Lock()
+			have := devices.parked != nil
+			devices.Unlock()
 			if !have {
-				t.Skip("no kit in the pool (a software adapter prewarms none)")
+				t.Skip("no device in the pool (a software adapter prewarms none)")
 			}
-			devices := devicesMade.Load()
+			made0 := devicesMade.Load()
 			r := newRendererOrSkip(t)
 			defer r.Release()
-			if devicesMade.Load() != devices {
+			if devicesMade.Load() != made0 {
 				t.Fatal("the renderer made a device instead of taking the pooled one")
 			}
 			if !r.b.Classes {

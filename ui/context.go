@@ -786,11 +786,28 @@ type state struct {
 	// text what it measured and laid out of its text (heldText).
 	lay  layoutRecord
 	text *heldText
-	// The element's box and its visible part in the last frame.
+	// The element's box and its visible part in the last frame, and
+	// whether a pose moved it since (updateWorld), which leaves the
+	// visible part as commit found it.
 	x, y, w, h     float32
 	vx, vy, vw, vh float32
+	reposed        bool
 	parent         uint64
 	flags          uint32
+	// hoverBuilt tells that the pass building the element read its hover
+	// (Hovered): its hover changing builds the view anew. hoverLook tells
+	// that the last frame's painting did, as a button's styleFn picks its
+	// hovered background and a scroll container shows its bars: its hover
+	// changing paints the last frame's elements again, and no more
+	// (hoverNeeds).
+	hoverBuilt, hoverLook bool
+	// built is what the element's styleFn may change of it as it paints, as
+	// the view built it, kept as it first paints (styled): painting it again,
+	// as a frame only painting does for a hover (lookDue), starts from it
+	// rather than from what the last painting changed. In the state, not
+	// the node, to keep the node's size.
+	built  builtStyle
+	styled bool
 	// ignoreInput tells that the element, or one around it, ignores the
 	// pointer and the keyboard (IgnoreInput); accessHidden, that it is
 	// out of what assistive technology reads (AccessHidden, or inert);
@@ -887,10 +904,11 @@ type state struct {
 	scrollX, scrollY float64
 	contentW         float64
 	contentH         float64
-	// barInset is the element's ScrollbarInsets, and barWidth the width
-	// of its scroll bars, its theme's ScrollbarWidth.
+	// barInset is the element's ScrollbarInsets, and barStyle how its
+	// scroll bars look, its ScrollbarStyle with the theme's zero fields
+	// filled in.
 	barInset [4]float32
-	barWidth float32
+	barStyle *ScrollbarStyle
 	// barsShown reports whether the last frame painted the element's
 	// scroll bars: they show only while it is hovered or a bar is
 	// dragged, unless it keeps them (KeepScrollbars).
@@ -1034,6 +1052,7 @@ func (rt *engine) lookState(id uint64) (s *state, built bool) {
 		rt.noteBuilt(s)
 		rt.countSeen()
 	}
+	s.hoverBuilt, s.styled = false, false
 	// What the element drags and takes, as this pass asks.
 	s.dragValue, s.dragFn, s.accepts = nil, nil, nil
 	s.dataSource, s.dataTarget = nil, nil

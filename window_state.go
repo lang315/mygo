@@ -19,7 +19,8 @@ import (
 // app set its own. It is captured shortly after the window moves, resizes
 // or changes state, when it settled (maximizing and full screen
 // transitions resize the window on the way), and when it closes; it is
-// saved when a window closes and when the app quits.
+// saved when a window closes and when the app quits, until
+// App.ClearWindowStates.
 
 const windowStateFile = "window-state.json"
 
@@ -36,6 +37,12 @@ var windowStates struct {
 	// that succeeded; the next save, at the latest the one of quitting,
 	// writes the states again.
 	failed atomic.Bool
+	// cleared: App.ClearWindowStates dropped the states, and the windows
+	// capture none for the rest of the run.
+	cleared bool
+	// emptied is set once ClearWindowStates emptied the store: a background
+	// write queued before it must not bring the old states back.
+	emptied atomic.Bool
 }
 
 func loadWindowStates() {
@@ -65,6 +72,9 @@ func saveWindowStates() {
 		// thread. A failure keeps the states for the next save, as below.
 		windowStates.dirty = false
 		writeAppFileLater("window-state", func() {
+			if windowStates.emptied.Load() {
+				return
+			}
 			windowStates.failed.Store(store.SaveWindowStates(states) != nil)
 		})
 		return
@@ -78,6 +88,18 @@ func saveWindowStates() {
 type backgroundStore interface{ background() }
 
 func (stateFile) background() {}
+
+// clearWindowStates drops the states, in the store too, and keeps the
+// windows from capturing theirs again (App.ClearWindowStates). A save
+// that fails is tried again by the next one. Main thread only.
+func clearWindowStates() error {
+	windowStates.loaded, windowStates.cleared = true, true
+	windowStates.byKey = map[string]WindowState{}
+	err := App.windowStateStore().SaveWindowStates(map[string]WindowState{})
+	windowStates.dirty = err != nil
+	windowStates.emptied.Store(err == nil)
+	return err
+}
 
 // windowStateStore is the store of App.SetWindowStateStore, or the file.
 func (a *Application) windowStateStore() WindowStateStore {
@@ -123,12 +145,12 @@ func (f stateFile) SaveWindowStates(states map[string]WindowState) error {
 		return err
 	}
 	data := encodeWindowStates(states)
-	// An error, as Windows still reporting the file in use after rename's
-	// retries, keeps the states for the next save.
+	// An error, as Windows still reporting the file in use after
+	// replaceAppFile's retries, keeps the states for the next save.
 	if err := os.WriteFile(path+".tmp", data, 0o644); err != nil {
 		return err
 	}
-	return rename(path+".tmp", path)
+	return replaceAppFile(path+".tmp", path)
 }
 
 // restoreWindowState applies the state saved under key to p, if the
@@ -199,6 +221,9 @@ func onDisplay(r Rectangle, displays []platform.Display) bool {
 // p. A window that starts maximized or full screen has not shown its normal
 // bounds yet, so they are the requested ones.
 func (w *Window) initState(p *platform.WindowOptions) {
+	if windowStates.cleared {
+		return
+	}
 	if _, ok := windowStates.byKey[w.stateKey]; !ok && (p.Maximized || p.FullScreen) {
 		st := WindowState{X: p.X, Y: p.Y, Width: p.Width, Height: p.Height, Maximized: p.Maximized, FullScreen: p.FullScreen}
 		if p.Center {
@@ -231,7 +256,7 @@ func (w *Window) stateChanged() {
 // captureState records the window's current state under its key.
 func (w *Window) captureState() {
 	n := w.native
-	if w.stateKey == "" || n == nil {
+	if w.stateKey == "" || n == nil || windowStates.cleared {
 		return
 	}
 	loadWindowStates()

@@ -92,10 +92,10 @@ func TestColorsTransitionMovesNothingThenPositionStartsFromHere(t *testing.T) {
 	}
 }
 
-// A Colors-only child of a box that a Transition resizes shows where the
-// layout put it, as one without a Transition does (here, at the end of
-// the box's final width), not where the resized box would put it.
-func TestColorsOnlyChildStaysWhereTheLayoutPutIt(t *testing.T) {
+// A Colors-only child of a box that a Transition resizes follows the box as
+// it resizes, as one without a Transition does (TestTransitionChildFollowsParentSize):
+// here, at the right edge the box has now, not at the end of its final width.
+func TestColorsOnlyChildFollowsTheResizingBox(t *testing.T) {
 	w := float32(100)
 	tt, now := clockTester(func(c *context) {
 		keep("parent", coreBox(c).Key("parent")).Width(w).Height(50).Transition(ElementTransition{Size: true, Ease: Linear}).Children(func() {
@@ -111,8 +111,8 @@ func TestColorsOnlyChildStaysWhereTheLayoutPutIt(t *testing.T) {
 		t.Fatalf("halfway, the parent is %v wide, want about 200", p.w)
 	}
 	r := at(t, tt, "Right")
-	if edge := r.X + r.W; edge < p.x+299 || edge > p.x+301 {
-		t.Errorf("the child's right edge is at %v, want %v, the end of the final width", edge, p.x+300)
+	if edge := r.X + r.W; edge < p.x+p.w-1 || edge > p.x+p.w+1 {
+		t.Errorf("the child's right edge is at %v, want %v, the box's right edge now", edge, p.x+p.w)
 	}
 }
 

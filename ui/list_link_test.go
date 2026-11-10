@@ -56,6 +56,9 @@ func TestBuildingAListLinksItsLayout(t *testing.T) {
 		t.Errorf("the first row is not shown: %q", tt.Texts())
 	}
 	tt.Scroll(150, 100, 0, 400)
+	// The hover the scroll moves asks for no frame of its own that only paints
+	// (hoverLook): the rows that left show in the labels until the next one.
+	tt.Frame()
 	if tt.HasText("row 0") || !tt.HasText("row 30") {
 		t.Errorf("after scrolling: %q", tt.Texts())
 	}

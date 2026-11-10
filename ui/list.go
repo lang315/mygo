@@ -206,8 +206,11 @@ type ListState struct {
 	// that sorts first.
 	SortBy *[]SortOrder
 	// Columns keeps the order and the widths the user gave a Table's
-	// columns, by ID: restore it from saved settings, and save it as it
-	// changes.
+	// columns, by ID: restore it from saved settings, and save it when
+	// the table's Changed reports it. It changes as the user drags a
+	// header or its edge, and Changed reports it once, as the user lets
+	// go, when the order or a width is new, and once a double click on
+	// an edge fits a column to its cells.
 	Columns TableLayout
 	// Checked, when set, gives a Table a checkbox before its columns in
 	// each row, checking the row by its key (Key), apart from the rows
@@ -800,7 +803,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 		panic("ui: a ListState shown by two Lists")
 	}
 	if rt.listMenu == nil {
-		rt.listMenu, rt.listDrag = (*engine).chooseRowAt, (*engine).scrollDragSelect
+		rt.listMenu, rt.listMenuKey, rt.listDrag = (*engine).chooseRowAt, (*engine).chosenRowMenu, (*engine).scrollDragSelect
 	}
 	if s.CurrentCell && s.CellSelect {
 		panic("ui: a list cannot both CellSelect and keep a CurrentCell")
@@ -1670,6 +1673,52 @@ func (rt *engine) chooseRowAt(chain []uint64, x, y float32) {
 	}
 }
 
+// chosenRowMenu returns, for the menu key, the outermost element with a
+// context menu in the row chosen in the focused list, where the keys
+// moved the choice, and the row's element; nil when the row does not show
+// or has no menu.
+func (rt *engine) chosenRowMenu() (menu, row *state) {
+	depth := 0
+	for i := range rt.hits {
+		// top is the outermost element with a menu on the way up, d the
+		// steps from it.
+		var top *state
+		d := 0
+		for st := rt.hits[i].st; st != nil && st.parent != 0; st = rt.states[st.parent] {
+			if st.flags&flagContextMenu != 0 && st.flags&flagDisabled == 0 {
+				top, d = st, 0
+			}
+			d++
+			if p := rt.states[st.parent]; p != nil && p.list != nil && top != nil && rt.isChosenRow(p.list, st) {
+				if menu == nil || d < depth {
+					menu, row, depth = top, st, d
+				}
+				break
+			}
+		}
+	}
+	return menu, row
+}
+
+// isChosenRow reports whether st is the element of the row of s the keys
+// are on, chosen, in the last frame, while the list has the focus.
+func (rt *engine) isChosenRow(s *ListState, st *state) bool {
+	f := &s.frame
+	if f.e == nil || f.frame != rt.frame || f.owner.id != rt.focused {
+		return false
+	}
+	c := s.cursor()
+	if c == nil || *c < 0 || *c >= f.n || f.isHeader(*c) {
+		return false
+	}
+	r, ok := s.rows[st.id]
+	if !ok || r.row != *c {
+		return false
+	}
+	k := f.key(*c)
+	return (s.Key == nil || r.key == k) && f.chosen(*c, k)
+}
+
 // pickForMenu chooses the row a right-click was on since the last frame
 // (chooseRowAt) unless it is chosen: a right-click acts on the row it is
 // on, as in Finder, and on all those chosen when it is one of them. In a
@@ -1991,7 +2040,7 @@ func (e *node) layoutList(w, h float32) {
 	if hide, _ := e.scrollbars(); e.flags&flagScrollX != 0 && !hide && cw+e.padX() > w+0.5 {
 		// The last row ends above the horizontal bar's track (scrollBars),
 		// shown or not, so that the pointer coming over moves nothing.
-		barTrack = float64(e.barInset[2] + e.theme().scrollbarWidth() + 6)
+		barTrack = float64(e.barInset[2] + e.scrollbarStyle().Resolve(e.theme()).TrackWidth)
 		padBottom = max(padBottom, barTrack)
 	}
 	H := float64(h)

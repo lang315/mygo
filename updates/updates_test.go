@@ -19,6 +19,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -609,5 +611,75 @@ func TestInstalledUpdateRecordsItsVersion(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(main); string(b) != "v1" {
 		t.Errorf("a refused update changed main to %q", b)
+	}
+}
+
+// TestWorkPattern checks that an app at the root of a drive or share, as
+// D:\, unpacks its update next to it (#1529).
+func TestWorkPattern(t *testing.T) {
+	roots := []string{string(filepath.Separator), "."}
+	if runtime.GOOS == "windows" {
+		roots = append(roots, `D:\`, `\\server\share\`)
+	}
+	for _, target := range roots {
+		pattern := workPattern(target)
+		if strings.ContainsFunc(pattern, func(r rune) bool { return r < 0x80 && os.IsPathSeparator(uint8(r)) }) {
+			t.Errorf("workPattern(%q) = %q, which holds a separator", target, pattern)
+		}
+	}
+	if got, want := workPattern(filepath.Join(t.TempDir(), "MyApp")), ".MyApp.update-"; got != want {
+		t.Errorf("workPattern of an app in a folder = %q, want %q", got, want)
+	}
+	// The pattern makes a directory next to a root.
+	dir, err := os.MkdirTemp(t.TempDir(), workPattern(string(filepath.Separator)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(dir)
+}
+
+// TestRelaunchArguments: Relaunch's arguments reach the new instance
+// through Launch Services, and after a staged update on macOS (the root
+// package's TestRelaunchArgumentsReplaceTheApps has the rest).
+func TestRelaunchArguments(t *testing.T) {
+	args := []string{"--reason", "it's an update", "a b", `$HOME "quoted" \ back`, "line\nbreak", ""}
+	if got := openArgs("/A.app", nil); !slices.Equal(got, []string{"/A.app"}) {
+		t.Errorf("open without arguments: %q", got)
+	}
+	if got := openArgs("/A.app", args); !slices.Equal(got, append([]string{"/A.app", "--args"}, args...)) {
+		t.Errorf("open with arguments: %q", got)
+	}
+
+	if runtime.GOOS == "windows" {
+		return
+	}
+	// The script that installs a staged update opens the app with the
+	// arguments of open that the relaunch file sets, as Relaunch wrote
+	// them once the update was staged. It prints them here.
+	dir := t.TempDir()
+	target, bundle, work := filepath.Join(dir, "A.app"), filepath.Join(dir, "new", "A.app"), filepath.Join(dir, "work")
+	for _, d := range []string{target, bundle, work} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(work, "relaunch"), []byte(setArgs(openArgs(target, args))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	exited := exec.Command("/bin/sh", "-c", "exit 0")
+	if err := exited.Run(); err != nil {
+		t.Fatal(err)
+	}
+	script := strings.Replace(installAfterExit, "exec /usr/bin/open", `printf '%s\0'`, 1)
+	out, err := exec.Command("/bin/sh", "-c", script, "mygo-update", strconv.Itoa(exited.Process.Pid), target, bundle, work).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(string(out), "\x00")
+	if want := openArgs(target, args); !slices.Equal(got[:len(got)-1], want) {
+		t.Errorf("the update opened the app with %q, want %q", got, want)
+	}
+	if _, err := os.Stat(work); !os.IsNotExist(err) {
+		t.Error("the update left its work")
 	}
 }
