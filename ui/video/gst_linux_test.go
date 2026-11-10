@@ -1,3 +1,5 @@
+//go:build linux && (amd64 || arm64)
+
 package video
 
 import (
@@ -12,9 +14,11 @@ import (
 // TestMissingDecoder checks that a video GStreamer has no decoder for
 // fails with an error that says so, whichever of the pipeline's two
 // reports, the missing plugin's and the demuxer's "not linked", comes
-// first. rgb.mp4's H.264 is made a codec nothing decodes.
+// first. rgb.mp4's H.264 and AAC are made codecs nothing decodes: with
+// the sound playing, the pipeline would not fail at all.
 func TestMissingDecoder(t *testing.T) {
 	data := bytes.ReplaceAll(rgbMP4, []byte("avc1"), []byte("zzzz"))
+	data = bytes.ReplaceAll(data, []byte("mp4a"), []byte("yyyy"))
 	if bytes.Equal(data, rgbMP4) {
 		t.Fatal("rgb.mp4 has no avc1")
 	}
