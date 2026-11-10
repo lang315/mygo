@@ -20,7 +20,6 @@ import (
 
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo/internal/scene"
-	"golang.org/x/text/width"
 )
 
 // DirectWrite lays out paragraphs with IDWriteTextLayout, which finds the
@@ -1637,7 +1636,7 @@ func emojiCluster(u16 []uint16) bool {
 	if utf16.IsSurrogate(r) && len(u16) > 1 {
 		r = utf16.DecodeRune(r, rune(u16[1]))
 	}
-	return r >= 0x1F1E6 && r <= 0x1F1FF || width.LookupRune(r).Kind() == width.EastAsianWide
+	return r >= 0x1F1E6 && r <= 0x1F1FF || eastAsianWide(r)
 }
 
 // textGlyph returns the font and glyph that draw glyph id of a run of a
