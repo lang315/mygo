@@ -84,6 +84,7 @@ type Application struct {
 	onWindowAllClosed listeners[func()]
 	onBeforeQuit      listeners[func(*QuitEvent)]
 	onWillQuit        listeners[func(*QuitEvent)]
+	onQuitCanceled    listeners[func()]
 	onQuit            listeners[func()]
 	onActivate        listeners[func(bool)]
 	onDidBecomeActive listeners[func()]
@@ -131,6 +132,7 @@ func (a *Application) Run() error {
 		Name:             a.Name(),
 		ActivationPolicy: string(a.ActivationPolicy()),
 		DMABUFRenderer:   string(a.dmabuf),
+		Background:       devBackground,
 	}); err != nil {
 		return err
 	}
@@ -253,12 +255,14 @@ func (a *Application) prepareQuit() bool {
 	before := &QuitEvent{}
 	fire1(&a.onBeforeQuit, before)
 	if before.prevented {
+		fire(&a.onQuitCanceled)
 		return false
 	}
 	a.quitting = true
 	for _, w := range Windows() {
 		if !w.close() {
 			a.quitting = false
+			fire(&a.onQuitCanceled)
 			return false
 		}
 	}
@@ -266,6 +270,7 @@ func (a *Application) prepareQuit() bool {
 	fire1(&a.onWillQuit, will)
 	if will.prevented {
 		a.quitting = false
+		fire(&a.onQuitCanceled)
 		return false
 	}
 	// Providers are application-owned, independent of the windows just
@@ -577,6 +582,16 @@ func (a *Application) OnWillQuit(fn func(e *QuitEvent)) (off func()) {
 	return a.onWillQuit.add(fn, false)
 }
 
+// OnQuitCanceled is called when a quit that started was canceled: a
+// listener prevented it in OnBeforeQuit or OnWillQuit, or a window kept
+// itself open in OnClose. The windows a canceled OnWillQuit had already
+// closed stay closed. Apps that track the quit in their own state from
+// OnBeforeQuit clear it here; without this event that state would stay set
+// although the app goes on running.
+func (a *Application) OnQuitCanceled(fn func()) (off func()) {
+	return a.onQuitCanceled.add(fn, false)
+}
+
 // OnQuit is called after the event loop has stopped, and after the
 // windows' states are saved (WindowOptions.StateKey). When the OS ends
 // the session, it is called after OnBeforeQuit and OnWillQuit (see
@@ -742,7 +757,10 @@ func (appHandler) Terminating() {
 func (appHandler) Activated(visible bool) {
 	fire1(&App.onActivate, visible)
 }
-func (appHandler) DidBecomeActive() { fire(&App.onDidBecomeActive) }
+func (appHandler) DidBecomeActive() {
+	backgroundShow = false
+	fire(&App.onDidBecomeActive)
+}
 func (appHandler) DidResignActive() { fire(&App.onDidResignActive) }
 func (appHandler) OpenURLs(urls []string) {
 	for _, u := range urls {

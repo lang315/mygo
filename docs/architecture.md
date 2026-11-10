@@ -3292,12 +3292,30 @@ either.
   modifier keys builds anew, as views may show what they do. The frame
   that builds a scroll's rows under a still pointer paints their looks
   already (`rehover(false)`); after it presents, a hover moved by `prune`
-  asks for a frame painting (`rehover(true)`). A styleFn changes the
-  colors and opacity of its element as it paints, so painting it again
-  starts from those it was built with (`node.built`, kept as it first
-  paints, `styled`), not from what the last painting chose.
+  asks for a frame painting (`rehover(true)`). A styleFn, and a
+  `Transition` moving colors or shadows, change the element's colors,
+  opacity and shadows as it paints; `Painter.element` puts back those it
+  was built with once it painted (`builtStyle`), so that painting it again
+  starts from them, not from what the last painting chose (a moving
+  shadow points to the transition's own array, never into the built one).
   `TestHoverLookPaintsAsBuilt` compares each frame painted for a hover
-  with the frame built anew, over many controls. A frame of another size, or after the text
+  with the frame built anew, over many controls.
+  What the frame writes after the build into fields the view builds goes
+  in the journal (`ui/journal.go`): a table's, a form's and a toolbar's
+  fits, a List's offset, an attached element's origin and hiding, the
+  spans a paragraph merges from the texts inside it, the parent of exit
+  copies, and whole elements before a transition, a magic move or the
+  inspector's edits change them (`journalKeepNode`). The journal goes
+  as the next build begins, its elements built anew; it is what lets an
+  element kept to a later frame without being built again go back to
+  what it was built with (`rollback`) before that frame lays it out
+  (#1599). What the frame computes in fields of its own needs none: the
+  boxes, `world`, `ink`, the measures and layout records, the inline
+  fragments and the tree's links. ui's tests (`TestMain`) check after each
+  frame that the other fields, the journal rolled back, are what the view
+  built (`checkBuilt`, `builtcheck_test.go`, comparing their bytes and the
+  elements of their slices); `MYGO_BUILT_COLLECT=1` checks after each
+  phase and lists what changed rather than failing, to find the writer. A frame of another size, or after the text
   system forgot its layouts (`text.System.Generation`, as it lets go of
   fonts the elements' layouts hold), builds anew all the same. The timers
   the last frame built armed stay; the host arms them (`afterTimer`,
@@ -3330,7 +3348,10 @@ either.
   asking for frames of a window out of sight itself); covering windows are
   not told, since X11's visibility events are deprecated and a missed
   "unobscured" would hold the frames for good. In browsers it is a
-  page in a background tab. A frame asked for by a change of the state
+  page in a background tab. Where no display link tick or `WM_PAINT`
+  comes for a window hidden or minimized (macOS, Windows), `RequestFrame`
+  draws the frame from the backend's queue (`drawSoon`) instead. A frame
+  asked for by a change of the state
   waits too (`holdFrame`; both `held`), as browsers draw nothing for
   windows out of sight and as Apple asks of Mac apps: the view function,
   `Draw` and the work `After` drives wait until some of the window shows.
@@ -4295,10 +4316,10 @@ either.
     Attachments are inline objects of the text system; a first line's
     indent is the layout's (`TextShape.Indent`), on the side the
     paragraph starts at, the right of one reading right to left.
-    `Document.VisibleParagraphs` lays out what is in view as it is read,
-    as painting does, and the paint that finds the paragraphs elsewhere
-    than read asks for a frame (`Services.Invalidate`), as
-    `ListState.Visible` builds another.
+    `Document.VisibleParagraphs` and `Document.CaretRect` lay out what is
+    in view as they are read, as painting does, and the paint that finds
+    the paragraphs or the caret elsewhere than read asks for a frame
+    (`Services.Invalidate`), as `ListState.Visible` builds another.
   - *Formats out of the process.* The clipboard carries the editor's JSON,
     HTML (`golang.org/x/net/html` reads what is pasted) and plain text;
     browsers carry each text format through the clipboard events. The
@@ -5978,6 +5999,11 @@ make it work:
     environment (`dev.go`): `App.Relaunch` then exits with code 75, which
     has `mygo dev` start the same build again, with the arguments
     `Relaunch` wrote in the file of `MYGO_DEV_RELAUNCH`. Production builds ignore it.
+    `-background` adds `MYGO_DEV_BACKGROUND=1`, taken out the same way:
+    the app does not come to the front as it launches
+    (`AppOptions.Background`, macOS), and its windows show as
+    `ShowInactive` would (`backgroundShow`) until a window takes the
+    focus or the app becomes active.
     A build counts as started once its process is: one that crashes on
     start is reported as it exits.
   - *Reload.* A change (polling every 250 ms, debounced) rebuilds;

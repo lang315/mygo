@@ -268,14 +268,16 @@ func (p *Painter) element(e *node) {
 	r := e.st.trec
 	animated := r != nil && r.built == p.rt.frame && r.elem == e
 	var built nodeLook
+	var shadows []shadow
 	restore := e.styleFn != nil || animated
 	if restore {
-		built = e.look() // the styleFn and color transition below change the paint, not the node
+		built, shadows = e.look(), e.shadows // the styleFn and color transition below change the paint, not the node
 	}
 	defer func() {
 		p.transform, p.inline, p.theme = savedTransform, savedInline, savedTheme
 		if restore {
 			e.setLook(built)
+			e.shadows = shadows
 		}
 	}()
 
@@ -283,14 +285,6 @@ func (p *Painter) element(e *node) {
 	// (Hovered): an element not painted keeps what its last did.
 	e.st.hoverLook = false
 	if e.styleFn != nil {
-		if st := e.st; !st.styled {
-			b := &st.built
-			st.styled = true
-			*b = builtStyle{e.bg, e.borderC, e.ts.color, e.opacity, e.opacitySet}
-		} else {
-			b := &st.built
-			e.bg, e.borderC, e.ts.color, e.opacity, e.opacitySet = b.bg, b.border, b.text, b.opacity, b.opacitySet
-		}
 		e.styleFn(e)
 	}
 	if animated {

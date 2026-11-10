@@ -13,6 +13,10 @@ func TestMain(m *testing.M) {
 	checkDirty = os.Getenv("MYGO_CHECK_DIRTY") != "off"
 	if f := flag.Lookup("test.bench"); f != nil && f.Value.String() != "" {
 		checkDirty = false
+	} else {
+		checkBuilt = checkBuiltFields
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	reportBuilt()
+	os.Exit(code)
 }
