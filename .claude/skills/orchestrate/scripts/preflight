@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# usage: preflight
+# The orchestrator's checks before it routes any task. Prints PASS, FAIL or WARN per check and exits 1 on any FAIL.
+# Run it from the orchestrator session itself: it reads the launch flags of the claude process above it.
+set -u
+S="$(cd "$(dirname "$0")/.." && pwd)"
+R="$(cd "$S/../../.." && pwd)"
+fails=0
+pass() { echo "PASS  $1"; }
+fail() { echo "FAIL  $1"; fails=$((fails + 1)); }
+warn() { echo "WARN  $1"; }
+
+# The claude process this script runs under, and how it was started.
+p=$$ a=""
+while [ "${p:-1}" -gt 1 ]; do
+	a=$(ps -o args= -p "$p")
+	case "$a" in claude\ * | claude | */claude\ * | */claude) break ;; esac
+	a=""
+	p=$(ps -o ppid= -p "$p" | tr -d ' ')
+done
+if [ -z "$a" ]; then
+	fail "launch flags: no claude process above this shell"
+else
+	case " $a " in
+	*" --model claude-opus-5-5 "*) pass "launch model: claude-opus-5-5" ;;
+	*) fail "launch model: want --model claude-opus-5-5 in: $a" ;;
+	esac
+	case " $a " in
+	*" --effort high "*) pass "launch effort: high" ;;
+	*) fail "launch effort: want --effort high in: $a" ;;
+	esac
+	case " $a " in
+	*" --dangerously-skip-permissions "* | *bypassPermissions*) warn "started without permission checks: only the ask rules in .claude/settings.json still hold" ;;
+	*" --permission-mode auto "*) warn "--permission-mode auto: the classifier approves most calls; the ask rules still hold" ;;
+	*" --permission-mode "*) pass "permission mode set on the command line" ;;
+	*)
+		m=$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.claude/settings.json"))).get("permissions",{}).get("defaultMode","default"))' 2>/dev/null)
+		case "$m" in
+		bypassPermissions) warn "defaultMode bypassPermissions in ~/.claude/settings.json: only the ask rules hold" ;;
+		auto) warn "defaultMode auto in ~/.claude/settings.json: the classifier approves most calls; the ask rules still hold" ;;
+		*) pass "permission mode: ${m:-default}" ;;
+		esac
+		;;
+	esac
+fi
+case "${CLAUDE_CODE_EFFORT_LEVEL:-unset}" in
+unset | high) pass "CLAUDE_CODE_EFFORT_LEVEL=${CLAUDE_CODE_EFFORT_LEVEL:-unset}" ;;
+*) fail "CLAUDE_CODE_EFFORT_LEVEL=$CLAUDE_CODE_EFFORT_LEVEL overrides --effort; unset it" ;;
+esac
+
+v=$(claude --version 2>/dev/null | awk '{print $1}')
+if [ -n "$v" ] && [ "$(printf '%s\n%s\n' 2.1.293 "$v" | sort -V | head -1)" = 2.1.293 ]; then
+	pass "claude $v >= 2.1.293"
+else
+	fail "claude version '${v:-none}' < 2.1.293 (Haiku 5.5 needs it)"
+fi
+
+[ -n "${HC_TERMINAL_ID:-}" ] && pass "hc address $HC_TERMINAL_ID" || fail "HC_TERMINAL_ID empty: not in a herdr pane"
+command -v hc >/dev/null && pass "hc on PATH" || fail "hc not on PATH"
+
+hook="$(git -C "$R" rev-parse --git-common-dir 2>/dev/null)"
+case "$hook" in /*) ;; *) hook="$R/$hook" ;; esac
+hook="$hook/hooks/pre-push"
+if grep -q orchestrate-push-guard "$hook" 2>/dev/null && [ -x "$hook" ]; then
+	pass "push guard installed ($hook)"
+else
+	fail "push guard missing: move an existing pre-push to pre-push.chained, then cp $S/scripts/pre-push $hook && chmod +x it"
+fi
+
+for f in "$S/worker-settings.json" "$S/reader-settings.json"; do
+	for x in $(grep -o '/Users/[^ )"]*/scripts/[^ )"]*' "$f"); do
+		[ -x "$x" ] && pass "script $(basename "$x") ($(basename "$f"))" || fail "script missing or not executable: $x (named in $(basename "$f"); update the path if the repo moved)"
+	done
+done
+
+for f in "$R/.claude/settings.json" "$S/worker-settings.json" "$S/reader-settings.json"; do
+	python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$f" 2>/dev/null && pass "valid JSON: ${f#"$R"/}" || fail "invalid JSON: $f"
+done
+grep -q '"Bash(gh pr merge \*)"' "$R/.claude/settings.json" && pass "merge ask rule present" || fail "ask rule for gh pr merge missing in .claude/settings.json"
+
+mkdir -p "$R/.orch/reports" "$R/.orch/tmp" && touch "$R/.orch/log.md"
+git -C "$R" check-ignore -q .orch/log.md && pass ".orch/ gitignored" || fail ".orch/ not gitignored: add .orch/ to .gitignore"
+
+git -C "$R" fetch -q origin 2>/dev/null || warn "git fetch origin failed"
+[ "$(git -C "$R" branch --show-current)" = main ] && pass "main checkout on main" || warn "main checkout not on main"
+[ -z "$(git -C "$R" status --porcelain)" ] && pass "main checkout clean" || warn "main checkout has local changes: $(git -C "$R" status --porcelain | wc -l | tr -d ' ') path(s); worktrees get only committed settings"
+if [ -d "$R/.orch/heavy.lock" ]; then
+	if kill -0 "$(cat "$R/.orch/heavy.lock/pid" 2>/dev/null)" 2>/dev/null; then
+		warn "heavy.lock held by pid $(cat "$R/.orch/heavy.lock/pid")"
+	else
+		warn "heavy.lock is stale (its pid is gone): rm $R/.orch/heavy.lock/pid; rmdir $R/.orch/heavy.lock; log it"
+	fi
+fi
+
+echo "---"
+[ "$fails" -eq 0 ] && { echo "preflight: PASS"; exit 0; }
+echo "preflight: $fails FAIL"
+exit 1

@@ -1,0 +1,15 @@
+#!/bin/sh
+# orchestrate-push-guard: installed into the shared hooks dir ($(git rev-parse --git-common-dir)/hooks),
+# so it runs in every worktree. Workers' worktrees are ../mygo-wt-*; they must not push.
+# A pre-push hook that existed before is kept as pre-push.chained and runs after this check.
+case "$(basename "$(git rev-parse --show-toplevel)")" in
+mygo-wt-*)
+	echo "workers must not push; the orchestrator pushes from the main repo" >&2
+	exit 1
+	;;
+esac
+chained="$(dirname "$0")/pre-push.chained"
+if [ -x "$chained" ]; then
+	exec "$chained" "$@"
+fi
+exit 0

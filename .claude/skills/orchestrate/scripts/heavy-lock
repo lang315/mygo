@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# usage: heavy-lock [GO*=val ...] go|gotip|gofmt args...
+# Runs one heavy Go command at a time across all workers and the orchestrator:
+# -race, go build ./..., GOOS=... cross vet or build, release builds, gotip vet ./...
+# Variable assignments go through this script because permission allow rules
+# do not match past a leading GOOS=... assignment.
+set -u
+root="$(cd "$(dirname "$0")/../../../.." && pwd)"
+mkdir -p "$root/.orch"
+lock="$root/.orch/heavy.lock"
+vars=()
+while [[ $# -gt 0 && $1 == *=* ]]; do
+	case "$1" in GO*=* | CGO_ENABLED=* | MYGO_*=*) vars+=("$1") ;; *) echo "heavy-lock: only GO*, CGO_ENABLED, MYGO_* variables" >&2; exit 2 ;; esac
+	shift
+done
+case "${1:-}" in go | gotip | gofmt) ;; *) echo "heavy-lock: runs only go, gotip or gofmt" >&2; exit 2 ;; esac
+mkdir "$lock" 2>/dev/null || {
+	echo "heavy-lock: waiting for $lock, held by pid $(cat "$lock/pid" 2>/dev/null) (stale if that pid is gone)" >&2
+	until mkdir "$lock" 2>/dev/null; do sleep 10; done
+}
+echo $$ >"$lock/pid"
+trap 'rm -f "$lock/pid"; rmdir "$lock"' EXIT
+env ${vars[@]+"${vars[@]}"} "$@"

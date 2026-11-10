@@ -1,12 +1,31 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh api -X PUT repos/egoist/mygo/pulls/*/ccr/auto_merge *)",
       "Bash(gh api -X POST repos/egoist/mygo/pulls/*/ccr/ready_for_review*)",
       "Bash(gh api -X PATCH repos/egoist/mygo/pulls/*)",
-      "Bash(gh api -X PUT repos/egoist/mygo/pulls/*/merge *)",
       "Bash(gh api -X POST repos/egoist/mygo/actions/runs/*/approve)",
       "Bash(gh api -X POST repos/egoist/mygo/actions/runs/*/rerun-failed-jobs)"
+    ],
+    "ask": [
+      "Bash(gh pr merge *)",
+      "Bash(gh api * repos/*/mygo/pulls/*/merge*)",
+      "Bash(gh api * repos/*/mygo/pulls/*/ccr/auto_merge*)",
+      "Bash(gh api * repos/*/mygo/merges*)",
+      "Bash(git push)",
+      "Bash(git push *main*)",
+      "Bash(git push * HEAD)",
+      "Bash(git push * HEAD *)",
+      "Bash(git * push *main*)",
+      "Bash(git * push * HEAD)",
+      "Bash(git * push * HEAD *)",
+      "Bash(git push origin)",
+      "Bash(git push upstream)",
+      "Bash(git push * origin)",
+      "Bash(git push * upstream)",
+      "Bash(bash -c *push*)",
+      "Bash(sh -c *push*)",
+      "Bash(zsh -c *push*)",
+      "Bash(gh api graphql *mergePullRequest*)"
     ]
   }
 }
