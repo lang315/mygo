@@ -20,6 +20,15 @@ PR, CI and merge. You do not write the code. Keep your context lean: read worker
   - starting a worker in a hard-rule zone;
   - changing any model or effort.
 
+**Away mode.** The owner says they are away and names the batch: the tasks, and each plan or yes given in advance.
+- Work only the batch. A task that needs a yes the owner did not give is **parked**: log
+  `state: parked (<what it waits for>)` and take the next task.
+- Never run a command from the list above without its yes. Its permission dialog stops this session, and the
+  workers' reports queue behind it. A PR with its runs green is logged `state: ready-to-merge`.
+- Wherever this skill says to tell or ask the owner: log it, park the task, and go on.
+- When every task is ready-to-merge or parked, post one list: each PR with its evidence, and each parked task with
+  what it waits for.
+
 Reference files:
 - [routing.md](routing.md): roles, permissions, hard-rule zones, examples, escalation.
 - [task-brief.md](task-brief.md): the worker brief.
@@ -97,11 +106,12 @@ sessions (`git worktree list`): the owner's disk rule.
 5. Code workers have no `gh`. Paste the decisive CI log lines into the brief, or point it to a haiku report.
 
 **Permissions** ([routing.md](routing.md#permissions)):
-- Haiku runs in `dontAsk` mode, so it never blocks.
-- Code workers run in `acceptEdits` mode, and `go *` runs anything: your diff review is the real guard.
+- Every worker runs in `dontAsk` mode: a command outside its allowlist is refused, not asked, so no worker waits
+  on a dialog.
+- For code workers `go *` runs anything: your diff review is the real guard.
 - The `ask` rules gate merges and pushes to main in every mode.
-- A code worker blocked outside its allowlist: let it block, don't press keys, log the command, tell the owner.
-  Never widen the settings yourself.
+- A worker reports a refused command. Log it as `blocked`, and tell the owner when the task cannot finish without
+  it. Never widen the settings yourself.
 
 ## Done criteria (every code task)
 
@@ -138,8 +148,10 @@ Workers never push. The commands are in the cheatsheet.
    - the AI disclosure, naming the worker's model and yours;
    - no "a human read every line" box, and no session link.
 5. **CI.** After **every** push of `orch/<name>`, dispatch `ci.yml`. Once the PR exists, its `pull_request` run
-   restarts by itself. Both runs must be green on the last pushed commit. If a run fails, haiku triages it and the
-   fix goes back to the worker.
+   restarts by itself. Both runs must be green on the last pushed commit: compare each run's `headSha` with
+   `git -C "$R" rev-parse orch/<name>`. A PR that changes only `*.md` or `LICENSE` starts no `pull_request` run
+   (`paths-ignore` in `ci.yml`): the dispatched run alone decides. If a run fails, haiku triages it and the fix
+   goes back to the worker.
 6. **Ask.** When both are green, compare `gh pr diff <n> --name-only` with the intent. Then **ask the owner**, and
    merge only after a yes.
 7. **After the merge:** kill the worker, remove its worktree, delete the branch, and fast-forward `main` in `$R`.
@@ -151,7 +163,7 @@ Workers never push. The commands are in the cheatsheet.
 - **Kill a haiku worker** once you have read its report.
 - Kill only terminals you started.
 - **Log:** after every change of a task's state, append one line to `$R/.orch/log.md`. Format:
-  `task (source) | role (model, effort from the banner) | reason | state: assigned/done/round/escalated/PR/merged/dropped/blocked | escalations`
+  `task (source) | role (model, effort from the banner) | reason | state: assigned/done/round/escalated/PR/ready-to-merge/merged/dropped/blocked/parked | escalations`
   - Example: `listinputs (run 42757887133) | sonnet (claude-sonnet-5-5, medium) | one package, local repro | state: PR #462 | none`.
   - Your own rows use `(orchestrator)` as the role.
 

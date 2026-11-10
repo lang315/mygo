@@ -6,9 +6,9 @@ Use this with the checklist in SKILL.md. It comes from the 2026-11-10 trial: 34 
 
 | Role | Launch | Does | Never does |
 |---|---|---|---|
-| haiku | `--model claude-haiku-5-5 --effort high`, `dontAsk` + `reader-settings.json` | Read-only work: CI triage (failed jobs and steps, `--- FAIL` lines, the first decisive error line); summarizing a finished CI run's failures (it cannot watch a running one); `gh pr diff --name-only` against intent; code and caller search; history and doc lookups | Edit tracked files, commit, push, rerun/cancel/dispatch CI, delete |
-| sonnet | `--model claude-sonnet-5-5 --effort medium`, `acceptEdits` + `worker-settings.json` | One package with a local automated test; the same mechanical fix applied across several packages; prose-only docs or skills fixes; a locale string with its own `go generate`; app sizes via `scripts/measure-size.sh` | Exported API, backends, `loop.go`, purego, shared size paths |
-| opus | `--model claude-opus-5-5 --effort medium`, `acceptEdits` + `worker-settings.json` | Real logic across two or more packages; Windows-only failures with no local repro; work in the hard-rule zones below that the owner has approved for a worker | Push, merge |
+| haiku | `--model claude-haiku-5-5 --effort high`, `--setting-sources user`, `dontAsk` + `reader-settings.json` | Read-only work: CI triage (failed jobs and steps, `--- FAIL` lines, the first decisive error line); summarizing a finished CI run's failures (it cannot watch a running one); `gh pr diff --name-only` against intent; code and caller search; history and doc lookups | Edit tracked files, commit, push, rerun/cancel/dispatch CI, delete |
+| sonnet | `--model claude-sonnet-5-5 --effort medium`, `dontAsk` + `worker-settings.json` | One package with a local automated test; the same mechanical fix applied across several packages; prose-only docs or skills fixes; a locale string with its own `go generate`; app sizes via `scripts/measure-size.sh` | Exported API, backends, `loop.go`, purego, shared size paths |
+| opus | `--model claude-opus-5-5 --effort medium`, `dontAsk` + `worker-settings.json` | Real logic across two or more packages; Windows-only failures with no local repro; work in the hard-rule zones below that the owner has approved for a worker | Push, merge |
 | orchestrator | this session (`claude --model claude-opus-5-5 --effort high`) | Specs, routing, the duplicate check, review of every diff, rerunning the tests, push, PR, CI, merge after the owner says yes, cleanup, log | Write the code itself |
 
 Haiku is read-only. App sizes need builds, so they go to sonnet.
@@ -20,23 +20,31 @@ model guidance, is in [model-guidance.md](model-guidance.md).
 
 ## Permissions
 
-- **Haiku:** `--permission-mode dontAsk` and `reader-settings.json`. `dontAsk` denies anything outside the allowlist
-  instead of prompting, so a reader never blocks.
+`dontAsk` refuses anything outside the allowlist instead of prompting, so no worker waits on a dialog. Read-only
+Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
+
+- **Haiku:** `--setting-sources user`, `--permission-mode dontAsk` and `reader-settings.json`.
+  - `--setting-sources user` keeps out the checkout's `.claude/settings.json` and `settings.local.json`. Both allow
+    commands a reader must not run: `gh api` writes on the upstream, `gh pr *`, `git branch *`, `hc kill *`.
   - Allowed: read-only `gh` and `git` subcommands, `grep`/`rg`/`ls`/`cat`/`head`/`tail`/`wc`, `hc send`,
     Read/Grep/Glob, and `scripts/write-report`.
   - Denied: Write, Edit, `git push`/`commit`/`checkout`/`reset`, `gh pr merge`/`create`/`comment`, `rm`.
   - `~/.claude/settings.json` allows Edit and Write everywhere, and settings files merge. That is why Write and Edit
     are denied outright, and why reports go through `write-report <name>` with a quoted heredoc.
   - Tested 2026-11-10: Write and `git push --dry-run` were denied; `gh run list` and write-report worked.
+    Without `--setting-sources user`, `git branch <new>` and `hc rm` ran; with it, both were refused.
   - Pipes work (`gh run view <id> --log-failed | grep -c FAIL`, `2>&1 | grep`, `| head`, `| wc -l`).
   - Refused: `for` loops, `$(...)`, redirects (`>`), and `cd … &&` (even with a `cd` rule). So the brief asks for one
     command per call, with paths instead of `cd`.
   - `git grep`, `sort`, `uniq`, `cut` and `tr` are allowed; `sort -o` is denied, because it writes a file.
-- **Code workers:** `--permission-mode acceptEdits` and `worker-settings.json`.
-  - Allowed: go, gotip, gofmt, `git add/commit/diff/status/log`, `mkdir`/`rmdir`, `hc send`, heavy-lock,
-    measure-size.
+- **Code workers:** `--permission-mode dontAsk` and `worker-settings.json`. A worker reports a refused command
+  (task-brief.md).
+  - Allowed: Read/Edit/Write/Grep/Glob, go, gotip, gofmt, `git add/commit/diff/status/log/show/mv/rm`,
+    `mkdir`/`rmdir`, `hc send`, heavy-lock, measure-size.
   - Denied: `git push`, `git stash`, `git commit --amend`, `git worktree remove`, `gh pr merge`, `rm -rf`.
   - `go *` runs any Go program, so this is not a sandbox.
+  - Tested 2026-11-10 with `-p`: Edit, Write, `go version`, `git commit` and `git mv` ran; `rm`, `git push --dry-run`
+    and `gh pr list` were refused with no dialog.
   - The pre-push hook refuses pushes run inside a `mygo-wt-*` worktree, `git -C . push` included. It does not stop
     `--no-verify`.
 - **Orchestrator:** `.claude/settings.json` has `ask` rules. They hold in every mode, including your default `auto`
@@ -45,12 +53,15 @@ model guidance, is in [model-guidance.md](model-guidance.md).
   - merges through `gh api` on `repos/*/mygo` (REST `/merge`, `/merges`, `ccr/auto_merge`, GraphQL
     `mergePullRequest`);
   - `git push` to `main`, to `HEAD`, a bare `git push`, and a push with only a remote;
-  - `git <opts> push`, and `bash`/`sh`/`zsh -c` commands that mention push.
+  - the same forms written `git <opts> push`, as in `git -C "$R" push origin`;
+  - `bash`/`sh`/`zsh -c` commands that mention push.
 
   Notes:
   - `bypassPermissions` honors `ask` rules (docs: "Actions no mode auto-approves").
   - Tested 2026-11-10 under `--dangerously-skip-permissions`: all those forms were held, and a push of an `orch/`
     branch ran.
+  - Tested 2026-11-10 with `-p` and `Bash(git *)` allowed: `git -C "$R" push --dry-run origin` was held, and
+    `git -C "$R" push --dry-run -u origin orch/<name>` ran.
   - Not covered: a push made from inside a script or another program, e.g. Python's `subprocess`.
   - This skill's commit removes the two egoist/mygo merge allows that came from upstream. This fork never merges
     there.

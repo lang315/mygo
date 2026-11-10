@@ -29,16 +29,16 @@ hc get <t>                    # one terminal: state, status, exit_code
 # code worker (sonnet / opus), in its own worktree
 git -C "$R" worktree add "$R/../mygo-wt-<name>" -b "orch/<name>" origin/main
 hc run --bg --name <name> --cwd "$R/../mygo-wt-<name>" claude --add-dir "$R/.orch" \
-  --settings "$S/worker-settings.json" --permission-mode acceptEdits \
+  --settings "$S/worker-settings.json" --permission-mode dontAsk \
   --model claude-sonnet-5-5 --effort medium "Read $R/.orch/tmp/<name>-brief.md and follow it."
 
 # opus code worker, in its own worktree
 hc run --bg --name <name> --cwd "$R/../mygo-wt-<name>" claude --add-dir "$R/.orch" \
-  --settings "$S/worker-settings.json" --permission-mode acceptEdits \
+  --settings "$S/worker-settings.json" --permission-mode dontAsk \
   --model claude-opus-5-5 --effort medium "Read $R/.orch/tmp/<name>-brief.md and follow it."
 
 # read-only worker (haiku)
-hc run --bg --name <name> --cwd "$R" claude --settings "$S/reader-settings.json" \
+hc run --bg --name <name> --cwd "$R" claude --setting-sources user --settings "$S/reader-settings.json" \
   --permission-mode dontAsk --model claude-haiku-5-5 --effort high "Read $R/.orch/tmp/<name>-brief.md and follow it."
 ```
 
@@ -95,7 +95,7 @@ git -C "$R" diff --stat origin/main...orch/<name>
 git -C "$R" push -u origin orch/<name>          # from the main checkout; the hook refuses worktrees
 gh pr create --repo lang315/mygo --base main --head orch/<name> --title "<title>" --body-file "$R/.orch/tmp/<name>-pr.md"
 gh workflow run ci.yml --repo lang315/mygo --ref orch/<name>
-gh run list --repo lang315/mygo --branch orch/<name> --limit 4 --json databaseId,event,status
+gh run list --repo lang315/mygo --branch orch/<name> --limit 4 --json databaseId,event,status,conclusion,headSha
 hc run --bg --name ci-<id> -- gh run watch <id> --repo lang315/mygo --exit-status --interval 60
 hc wait ci-<id> --timeout 570; hc get ci-<id>; hc rm ci-<id>    # exit_code 0 = green
 gh run view <id> --repo lang315/mygo --json status,conclusion   # check before believing a watcher's exit
@@ -111,9 +111,10 @@ git -C "$R" push origin --delete orch/<name>; git -C "$R" pull --ff-only
 
 ## Blocked worker
 
-- Status `blocked` means a permission dialog. Read it: `hc read --lines 0 <t>`.
-- Do not approve it with `hc keys`, and do not widen `worker-settings.json`. Log the command and tell the owner;
-  the owner approves it in the pane (`hc attach <t>`) or has you kill the worker.
+- Workers run in `dontAsk`: a refused command comes back in the report, not as a dialog.
+- Status `blocked` is then a dialog of another kind (trust, login). Read it: `hc read --lines 0 <t>`.
+- Do not answer it with `hc keys`, and do not widen the settings files. Log it and tell the owner; the owner
+  answers it in the pane (`hc attach <t>`) or has you kill the worker.
 
 ## Cleanup
 
