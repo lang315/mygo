@@ -33,6 +33,10 @@ Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
     are denied outright, and why reports go through `write-report <name>` with a quoted heredoc.
   - Tested 2026-11-10: Write and `git push --dry-run` were denied; `gh run list` and write-report worked.
     Without `--setting-sources user`, `git branch <new>` and `hc rm` ran; with it, both were refused.
+  - Pipes work (`gh run view <id> --log-failed | grep -c FAIL`, `2>&1 | grep`, `| head`, `| wc -l`).
+  - Refused: `for` loops, `$(...)`, redirects (`>`), and `cd … &&` (even with a `cd` rule). So the brief asks for one
+    command per call, with paths instead of `cd`.
+  - `git grep`, `sort`, `uniq`, `cut` and `tr` are allowed; `sort -o` is denied, because it writes a file.
 - **Code workers:** `--permission-mode dontAsk` and `worker-settings.json`. A worker reports a refused command
   (task-brief.md).
   - Allowed: Read/Edit/Write/Grep/Glob, go, gotip, gofmt, `git add/commit/diff/status/log/show/mv/rm`,

@@ -71,6 +71,8 @@ You cannot use Write or Edit. Write the report (under 80 lines) with one Bash ca
 ...report...
 EOF
 Commands outside your allowlist are refused, not asked: do not work around a refusal; say so in the report.
+Filter with pipes, one command per call, e.g. gh run view <id> --repo lang315/mygo --log-failed | grep -- '--- FAIL'.
+for loops, $(...), redirects (>) and `cd ... &&` are refused: run one command per run, and pass paths instead of cd.
 Never copy tokens or secrets.
 Then run exactly: hc send <orch> "<name> done: <R>/.orch/reports/<name>.md"
 If stuck: hc send <orch> "<name> stuck: <one line>"
