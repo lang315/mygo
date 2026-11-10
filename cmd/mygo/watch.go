@@ -160,8 +160,17 @@ func listBuildInputs(c *Config) (*buildInputs, error) {
 
 var goEnvCache sync.Map
 
+// goEnvInputs are the variables go env's answers come from, besides its env
+// file: a value is remembered only for the values they have, so that a process
+// that changes them (a test setting HOME) does not get the old answer.
+var goEnvInputs = []string{"HOME", "GOPATH", "GOMODCACHE", "GOROOT", "GOENV"}
+
 func goEnv(key string) string {
-	if v, ok := goEnvCache.Load(key); ok {
+	cacheKey := key
+	for _, name := range goEnvInputs {
+		cacheKey += "\x00" + os.Getenv(name)
+	}
+	if v, ok := goEnvCache.Load(cacheKey); ok {
 		return v.(string)
 	}
 	out, err := exec.Command("go", "env", key).Output()
@@ -169,7 +178,7 @@ func goEnv(key string) string {
 		return ""
 	}
 	v := strings.TrimSpace(string(out))
-	goEnvCache.Store(key, v)
+	goEnvCache.Store(cacheKey, v)
 	return v
 }
 
