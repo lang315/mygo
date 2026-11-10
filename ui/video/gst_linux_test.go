@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/internal/wait"
+	"github.com/egoist/mygo/ui"
 )
 
 // TestMissingDecoder checks that a video GStreamer has no decoder for
@@ -33,7 +34,9 @@ func TestMissingDecoder(t *testing.T) {
 	if gstIsMissingPlugin == nil {
 		t.Skip("no libgstpbutils")
 	}
-	wait.Until(t, "an error", func() bool { return p.Err() != nil })
+	// Err is what the last frame saw, so a window shows the video.
+	tt := ui.NewTester(func(c *ui.Context) { ui.Video(c, p).Size(64, 48) }, 64, 48)
+	wait.Until(t, "an error", func() bool { tt.Frame(); return p.Err() != nil })
 	if err := p.Err(); !strings.Contains(err.Error(), "decoder") {
 		t.Fatalf("error %q does not name the missing decoder", err)
 	}
