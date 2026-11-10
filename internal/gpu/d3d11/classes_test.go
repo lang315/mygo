@@ -61,6 +61,10 @@ func compareToGeneral(t *testing.T, name string, pix, general []byte) {
 func TestClassesDrawAsTheGeneralShader(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	// The joined case maps every class to the set holding all in the device's
+	// cache, which the pool keeps: free that device, or the next test's
+	// renderer takes it and draws a plain fill with dual-source blending.
+	defer emptyPoolNow()
 	for _, pooled := range []bool{false, true} {
 		for _, sc := range []struct {
 			name string
@@ -161,6 +165,14 @@ func TestClassPipelines(t *testing.T) {
 	if ps1 == r.ps || ps1 != ps2 || blend1 != r.blend {
 		t.Fatal("the set holding all classes does not draw what no other holds")
 	}
+}
+
+// TestClassPipelinesAfterJoined runs TestClassPipelines right after the test
+// that changes the classes' cache of its device, as -shuffle may: the device
+// it leaves in the pool must not draw a plain fill with the set holding all.
+func TestClassPipelinesAfterJoined(t *testing.T) {
+	TestClassesDrawAsTheGeneralShader(t)
+	TestClassPipelines(t)
 }
 
 // TestFrameCostFits checks that a frame that takes much of a refresh has the
