@@ -193,12 +193,13 @@ const (
 	flagClip = flagClipX | flagClipY
 )
 
-// builtStyle is what a styleFn may change of an element: its colors and
-// opacity.
+// builtStyle is what a styleFn or a Transition may change of an element
+// as it paints: its colors, opacity and shadows.
 type builtStyle struct {
 	bg, border, text Color
 	opacity          float32
 	opacitySet       bool
+	shadows          []shadow
 }
 
 type shadow struct {
@@ -2200,6 +2201,7 @@ func (e *node) add(child *node) {
 	child.parent = e
 	child.depth = e.depth + 1
 	if child.zIndex != 0 {
+		journalKeep(e.c.rt, &e.zOrder)
 		e.zOrder = true // set before it was added, as on a copy leaving (ghostOf)
 	}
 	if e.last == nil {

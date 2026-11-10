@@ -34,7 +34,7 @@ var statePlaced = map[string][]string{
 		"lookedSeen", "lookedPass", "lay", "text", "x", "y", "w", "h", "vx", "vy", "vw", "vh",
 		"parent", "flags", "cursor", "tip", "effectLayer", "webView",
 		"tipDelay", "tipWarm", // the theme's TooltipDelay, set by the build; a new theme (themeGen, theme) builds the row again
-		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barStyle", "reposed", "hoverBuilt", "hoverLook", "built", "styled", "barsShown", "hideScrollbars", "ignoreInput", "accessHidden", "track",
+		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barStyle", "reposed", "hoverBuilt", "hoverLook", "barsShown", "hideScrollbars", "ignoreInput", "accessHidden", "track",
 		"moveFrame", "startX", "startY", "list", "cx", "cy", "cw", "ch", "role",
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",

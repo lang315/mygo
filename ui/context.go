@@ -801,13 +801,6 @@ type state struct {
 	// changing paints the last frame's elements again, and no more
 	// (hoverNeeds).
 	hoverBuilt, hoverLook bool
-	// built is what the element's styleFn may change of it as it paints, as
-	// the view built it, kept as it first paints (styled): painting it again,
-	// as a frame only painting does for a hover (lookDue), starts from it
-	// rather than from what the last painting changed. In the state, not
-	// the node, to keep the node's size.
-	built  builtStyle
-	styled bool
 	// ignoreInput tells that the element, or one around it, ignores the
 	// pointer and the keyboard (IgnoreInput); accessHidden, that it is
 	// out of what assistive technology reads (AccessHidden, or inert);
@@ -1052,7 +1045,7 @@ func (rt *engine) lookState(id uint64) (s *state, built bool) {
 		rt.noteBuilt(s)
 		rt.countSeen()
 	}
-	s.hoverBuilt, s.styled = false, false
+	s.hoverBuilt = false
 	// What the element drags and takes, as this pass asks.
 	s.dragValue, s.dragFn, s.accepts = nil, nil, nil
 	s.dataSource, s.dataTarget = nil, nil
