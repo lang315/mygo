@@ -292,8 +292,11 @@ func (s *surface) unpainted() bool {
 	if s.cloaked && s.w.IsVisible() {
 		// Cloaked until its first frame shows (cloak), a window visible to
 		// Windows gets WM_PAINT as any, and its frame there reveals it
-		// (Occluded counts its cloak as nothing showing).
-		return false
+		// (Occluded counts its cloak as nothing showing). Not one
+		// minimized meanwhile, which gets none.
+		if iconic, _, _ := procIsIconic.Call(s.w.hwnd); iconic == 0 {
+			return false
+		}
 	}
 	return s.Occluded() || !s.drawn && !s.w.IsVisible()
 }
