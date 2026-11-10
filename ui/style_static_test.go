@@ -25,10 +25,12 @@ import (
 // LabelledBy, AttachEdgeMargin and pretty and space-keeping text took 176
 // more (hitFn went to paintRare). It is 2128 since upstream's native
 // textures (texture, an interface, in paintRare); ReadOnly, Multiline and
-// WindowDoubleClicked's bools went into paintRare's padding.
+// WindowDoubleClicked's bools went into paintRare's padding. It is 2136
+// since upstream's ScrollbarStyle (barStyle, a pointer, in paintRare);
+// TruncateMiddle's bool went into the padding of the text style.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 2128 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2128", n)
+	if n := unsafe.Sizeof(node{}); n != 2136 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2136", n)
 	}
 }
 

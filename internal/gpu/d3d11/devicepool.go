@@ -14,148 +14,85 @@ import (
 // Releasing the last reference of a Direct3D device takes tens of
 // milliseconds (35 to 70 on CI runners), which closing a window waited for
 // on the main thread, and a device with its shaders takes several to make
-// for the next window. So a renderer that is released leaves its device
-// and what belongs to the device alone, not to a window (shaders, input
-// layout, states), in a pool of one, which the next renderer takes instead
-// of making them. The pool is for the usual case, a window that stays
-// open and dialogs that open and close in turn.
+// for the next window. The renderers of a process share one device
+// (shared.go); when the last releases it, the device and what belongs to it,
+// not to a window (shaders, input layout, states), go to a pool of one
+// (devices.parked), which the next renderer takes instead of making them. The
+// pool is for the usual case, a window that stays open and dialogs that open
+// and close in turn, and the app whose only window closes and opens again.
 //
-// A kit goes back only when the renderer let go of everything else it made
-// on the device (ClearState and Flush ran, its textures, buffers, views
-// and swap chain are released), the device has not been removed, and it
-// is not a debug device (MYGO_D3D_DEBUG=1, whose layer should report what
-// a renderer leaked, as it does without the pool). The GPU always comes
-// first, as device.New makes it: a kit of the GPU is taken only while its
-// adapter is still the default one (the one device.New would take), and a
-// kit of WARP only when the GPU cannot make a device, so a window that
-// first got WARP (a remote session, a driver that was resetting) or
-// retried the GPU after rendering failed finds it again as soon as it can
-// (a kit of WARP that is not taken is released then, once). A kit that
-// finds the pool full is released as before. The pool holds a device until
-// the app ends, as a window of another renderer would; renderers are made and released on the main
-// thread, and the prewarm's goroutine puts its kit in the pool, so the pool has a
-// mutex.
-type kit struct {
-	device, ctx, ctx1, factory uintptr
-	warp                       bool
-	luid                       uint64 // of the device's adapter
+// A device goes back only when the renderer let go of everything else it made
+// on it (ClearState and Flush ran, its textures, buffers, views and swap
+// chain are released), it has not been removed, and it is not a debug device
+// (MYGO_D3D_DEBUG=1, whose layer should report what a renderer leaked, as it
+// does without the pool). The GPU always comes first, as device.New makes it:
+// a pooled device of the GPU is taken only while its adapter is still the
+// default one (the one device.New would take), and one of WARP only when the
+// GPU cannot make a device, so a window that first got WARP (a remote
+// session, a driver that was resetting) finds the GPU again as soon as it can
+// (a WARP device that is not taken is released then, once). A device that
+// finds the pool full is released. The pool holds a device until the app
+// ends, as a window of another renderer would; renderers are made and
+// released on the main thread, and the prewarm's goroutine puts its device in
+// the pool, so the pool is guarded by devices' mutex.
 
-	vs, ps, layout           uintptr
-	blend, holeBlend         uintptr
-	overBlend, overHoleBlend uintptr
-	raster, samp             uintptr
-	passVS, downPS, blurPS   uintptr
-}
-
-var pool struct {
-	sync.Mutex
-	kit *kit
-}
-
-// Replaced by tests: how a device is made, with and without the software
-// rasterizer, which adapter is the default, and whether a device was removed.
+// Replaced by tests: how a device is made, which adapter is the default, and
+// whether the default adapter is a software one.
 var (
 	newDevice   = device.New
-	newHardware = device.NewHardware
 	defaultLUID = defaultAdapterLUID
-	deviceGone  = deviceRemoved
 	// softwareDefault reports whether the default adapter is a software one.
 	softwareDefault = defaultAdapterIsSoftware
 	devicesMade     atomic.Int32 // devices made, for tests
 	shadersMade     atomic.Int32 // sets of shaders made, for tests
 )
 
-const devGetDeviceRemovedReason = 39 // ID3D11Device
-
-// deviceRemoved reports whether the device was removed or reset, which
-// makes every call on it fail.
-func deviceRemoved(dev uintptr) bool { return failed(call(dev, devGetDeviceRemovedReason)) }
-
-// takeKit returns the part of the renderer that belongs to its device, and
-// takes it away from the renderer.
-func (r *Renderer) takeKit() *kit {
-	k := &kit{r.device, r.ctx, r.ctx1, r.factory, r.warp, r.luid,
-		r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.overBlend, r.overHoleBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS}
-	r.device, r.ctx, r.ctx1, r.factory, r.luid = 0, 0, 0, 0, 0
-	r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.overBlend, r.overHoleBlend, r.raster, r.samp, r.passVS, r.downPS, r.blurPS = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-	return k
-}
-
-// complete reports whether the kit has everything a renderer needs of it
+// complete reports whether the device has everything a renderer needs of it
 // (ctx1 may be 0: a device without ID3D11DeviceContext1).
-func (k *kit) complete() bool {
-	return k.device != 0 && k.ctx != 0 && k.factory != 0 && k.vs != 0 && k.ps != 0 && k.layout != 0 &&
-		k.blend != 0 && k.holeBlend != 0 && k.overBlend != 0 && k.overHoleBlend != 0 && k.raster != 0 && k.samp != 0 && k.passVS != 0 && k.downPS != 0 && k.blurPS != 0
+func (d *sharedDevice) complete() bool {
+	return d.device != 0 && d.ctx != 0 && d.factory != 0 && d.vs != 0 && d.ps != 0 && d.layout != 0 &&
+		d.blend != 0 && d.holeBlend != 0 && d.overBlend != 0 && d.overHoleBlend != 0 && d.raster != 0 && d.samp != 0 && d.passVS != 0 && d.downPS != 0 && d.blurPS != 0
 }
 
-func (k *kit) free() {
-	for _, p := range []*uintptr{&k.samp, &k.raster, &k.overHoleBlend, &k.overBlend, &k.holeBlend, &k.blend, &k.layout,
-		&k.blurPS, &k.downPS, &k.passVS, &k.ps, &k.vs, &k.factory, &k.ctx1, &k.ctx, &k.device} {
-		free(p)
-	}
-}
-
-// adopt takes the kit's device and its objects for the renderer.
-func (r *Renderer) adopt(k *kit) {
-	r.device, r.ctx, r.ctx1, r.factory, r.warp, r.luid = k.device, k.ctx, k.ctx1, k.factory, k.warp, k.luid
-	r.vs, r.ps, r.layout, r.blend, r.holeBlend, r.raster, r.samp = k.vs, k.ps, k.layout, k.blend, k.holeBlend, k.raster, k.samp
-	r.overBlend, r.overHoleBlend = k.overBlend, k.overHoleBlend
-	r.passVS, r.downPS, r.blurPS = k.passVS, k.downPS, k.blurPS
-}
-
-// pooled returns the kit in the pool, or nil.
-func pooled() *kit {
-	pool.Lock()
-	defer pool.Unlock()
-	k := pool.kit
-	pool.kit = nil
-	if k != nil && deviceGone(k.device) {
-		k.free()
-		return nil
-	}
-	return k
-}
-
-// keep puts a kit in the pool, or releases it when it cannot go there.
-func keep(k *kit) {
-	if device.Debug() || !k.complete() || deviceGone(k.device) {
-		k.free()
+// park puts a device nobody holds in the pool, or releases it when it cannot
+// go there. devices is locked.
+func park(d *sharedDevice) {
+	if device.Debug() || !d.complete() || deviceRemoved(d) || devices.parked != nil {
+		d.free()
 		return
 	}
-	pool.Lock()
-	if pool.kit == nil {
-		pool.kit = k
-		k = nil
-	}
-	pool.Unlock()
-	if k != nil {
-		k.free()
-	}
+	call(d.ctx, ctxClearState)
+	devices.parked = d
 }
 
-// reusable returns the pooled kit the renderer takes, or nil when it makes
-// a device of its own, which it then may have started to make: r.device is
-// set for the GPU's device made while a kit of WARP waited (the kit is
-// released), so that it is not made twice. Only the GPU's device is kept
-// for its adapter, and WARP for no GPU.
-func reusable(r *Renderer) *kit {
-	waitPrewarm()
-	k := pooled()
+// takeParked returns the pooled device the next renderer takes, or nil when
+// it makes one of its own. devices is locked.
+func takeParked() *sharedDevice {
+	d := devices.parked
+	devices.parked = nil
 	switch {
-	case k == nil:
+	case d == nil:
 		return nil
-	case k.warp:
-		if dev, ctx, err := newHardware(); err == nil {
-			k.free()
-			r.device, r.ctx, r.warp = dev, ctx, false
-			return nil
+	case deviceRemoved(d):
+		d.free()
+		return nil
+	case d.warp:
+		// Only the GPU's device is kept for its adapter, and WARP for no GPU.
+		if dev, ctx, err := newDeviceOnGPU(); err == nil {
+			devicesMade.Add(1)
+			n, err := newSharedDevice(dev, ctx, false)
+			d.free()
+			if err != nil {
+				return nil
+			}
+			return n
 		}
-		return k
+		return d
 	default:
-		if luid, ok := defaultLUID(); ok && luid == k.luid {
-			return k
+		if luid, ok := defaultLUID(); ok && luid == d.luid {
+			return d
 		}
-		k.free()
+		d.free()
 		return nil
 	}
 }
@@ -235,21 +172,26 @@ func Prewarm() {
 		if device.Debug() || softwareDefault() {
 			return
 		}
-		r := &Renderer{}
-		var err error
-		if r.device, r.ctx, r.warp, err = newDevice(); err != nil {
+		dev, ctx, warp, err := newDevice()
+		if err != nil {
 			return
 		}
 		devicesMade.Add(1)
-		if err := r.initDevice(); err != nil {
-			r.takeKit().free()
+		d, err := newSharedDevice(dev, ctx, warp)
+		if err != nil {
 			return
 		}
-		keep(r.takeKit())
+		devices.Lock()
+		defer devices.Unlock()
+		if devices.current != nil || devices.parked != nil || device.Debug() {
+			d.free()
+			return
+		}
+		devices.parked = d
 	}()
 }
 
-// waitPrewarm returns once the prewarm, if one started, has put its kit in the
+// waitPrewarm returns once the prewarm, if one started, has put its device in the
 // pool (or made none).
 func waitPrewarm() {
 	prewarm.Lock()

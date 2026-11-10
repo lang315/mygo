@@ -22,6 +22,7 @@ var Feed atomic.Pointer[func(feed string) Source]
 
 // RelaunchStaged is set by package updates, which stages updates: it asks the
 // helper of an update staged on macOS to open the app once it has installed the
-// update, and reports whether there is one. Package mygo, which relaunches the
-// app, calls it if the app links package updates.
-var RelaunchStaged atomic.Pointer[func() bool]
+// update, with the arguments the new instance gets, and reports whether there is
+// one. Package mygo, which relaunches the app, calls it if the app links
+// package updates.
+var RelaunchStaged atomic.Pointer[func(args []string) bool]

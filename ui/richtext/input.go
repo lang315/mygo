@@ -13,6 +13,11 @@ const scrollbarWidth = 10
 // input takes the editor's input as it comes: keys, text, edit commands,
 // the pointer and the wheel.
 func (v *view) input(ev ui.InputEvent) bool {
+	// The app is asked first, before the editor takes the document's state
+	// and gives its own back: what the app does to the document is kept.
+	if ev.Kind == ui.InputKeyDown && v.opts.OnKey != nil && v.opts.OnKey(ev.Key, ev.Mods) {
+		return true
+	}
 	v.sync()
 	defer v.publish()
 	switch ev.Kind {
@@ -517,6 +522,19 @@ func (v *view) editCommand(name string) bool {
 
 // press handles a press of the pointer.
 func (v *view) press(ev ui.InputEvent) bool {
+	if ev.Button == 1 && !v.overScrollbar(ev.X) {
+		// A right-click outside the selection puts the caret where it
+		// is, as in a TextArea, so that the context menu acts there; the
+		// press goes on to open the menu.
+		x, y := v.contentPoint(ev.X, ev.Y)
+		i, aff := v.positionAt(x, y)
+		if a, b := min(v.selAnchor, v.caret), max(v.selAnchor, v.caret); a == b || i < a || i > b {
+			v.commitCompose()
+			v.hasDesired = false
+			v.moveTo(i, aff, false)
+		}
+		return false
+	}
 	if ev.Button != 0 {
 		return false
 	}
@@ -691,12 +709,16 @@ func (v *view) taskBox(x float32, y float64) (int, bool) {
 
 // overScrollbar reports whether x of the element is on the scroll bar.
 func (v *view) overScrollbar(x float32) bool {
-	return v.hs.top(len(v.paras)) > float64(v.viewH) && x >= v.rect.W-scrollbarWidth
+	width := v.barStyle.TrackWidth
+	if width <= 0 {
+		width = scrollbarWidth
+	}
+	return v.hs.top(len(v.paras)) > float64(v.viewH) && x >= v.rect.W-width
 }
 
 // bar returns the scroll bar, in the element.
 func (v *view) bar() ui.Scrollbar {
-	return ui.Scrollbar{Box: ui.Rect{W: v.rect.W, H: v.rect.H}, View: v.viewH, Content: float32(v.hs.top(len(v.paras))), Offset: float32(v.scroll)}
+	return ui.Scrollbar{Box: ui.Rect{W: v.rect.W, H: v.rect.H}, View: v.viewH, Content: float32(v.hs.top(len(v.paras))), Offset: float32(v.scroll), Style: v.barStyle}
 }
 
 // thumbBox returns the top and the height of the scroll bar's thumb, in

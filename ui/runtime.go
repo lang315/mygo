@@ -278,6 +278,9 @@ type engine struct {
 	layGen          uint64
 	layGenOK        bool
 	noLayoutCache   bool
+	// noHitFilter has contains test every element's box, as tests
+	// compare with the filter by what showed of it.
+	noHitFilter bool
 
 	// paintSameRows counts the list rows that lay out and paint as in the last
 	// layout (layPaint), for tests and benchmarks.
@@ -472,12 +475,14 @@ type engine struct {
 	// handler ran nested, for it to apply once the press is recorded.
 	downing int
 	ups     []pendingUp
-	// listMenu and listDrag are the parts of lists a right-click and a
-	// drag reach, set as the first list builds, and cellClick and
+	// listMenu, listMenuKey and listDrag are the parts of lists a
+	// right-click, the menu key and a drag reach, set as the first list
+	// builds, and cellClick and
 	// cellInBlock the parts of tables choosing cells a click and a press
 	// reach, set as the first of those builds, so apps without them do not
 	// link them.
 	listMenu    func(rt *engine, chain []uint64, x, y float32)
+	listMenuKey func(rt *engine) (menu, row *state)
 	listDrag    func(rt *engine)
 	cellClick   func(f *listFrame, x, y float32, mods Modifiers)
 	cellInBlock func(f *listFrame, x, y float32) bool
@@ -558,6 +563,16 @@ type engine struct {
 	repainting bool
 	repaintAt  time.Time
 	redraw     bool
+	// lookDue tells that the frame asked for since the last one only
+	// paints the last frame's elements again (repaintFrame), whole, for
+	// the elements whose look follows their hover as they paint (setHover,
+	// hoverNeeds): whatever asks for a frame built anew (askBuild) clears
+	// it. painting tells that the frame is painting, for Hovered.
+	lookDue, painting bool
+	// buildAsked tells that a frame built anew was asked for since the
+	// last one began (askBuild): one only painting for the hover's look
+	// is not asked for then, as that frame shows it.
+	buildAsked bool
 	held       bool
 	shown      time.Time
 	input      bool
@@ -800,8 +815,8 @@ func (rt *engine) themeChanged() {
 	// Rows kept across frames have the theme the pass lent them, which is
 	// the same pointer whatever the system's appearance.
 	rt.themeGen++
-	rt.redraw, rt.repaintDue = false, time.Time{}
-	rt.host.requestFrame()
+	rt.repaintDue = time.Time{}
+	rt.askBuild()
 }
 
 // runFrame builds, lays out, paints and presents a frame.
@@ -812,6 +827,7 @@ func (rt *engine) runFrame() {
 	rt.inFrame = true
 	defer rt.endFrame()
 
+	rt.buildAsked, rt.lookDue = false, false
 	rt.frame++
 	rt.input = false
 	rt.focusRead, rt.activeRead, rt.withinRead, rt.keysRead = false, false, false, false
@@ -930,7 +946,7 @@ func (rt *engine) runFrame() {
 		appW = rt.insp.contentWidth(w)
 		rt.c.titleBar = rt.titleBar()
 		rt.painted = [3]float32{w, h, scale}
-		rt.host.requestFrame()
+		rt.askBuild()
 	}
 	if rt.withinRead && rt.focused != focused {
 		rt.animating = true
@@ -976,7 +992,7 @@ func (rt *engine) runFrame() {
 	// What the frame moved under the pointer, as the rows a scroll brings
 	// there, hovers in the frame that shows it: elements pick the look of
 	// their hover as they paint (#1508).
-	rt.rehover()
+	rt.rehover(false)
 	rt.paint(root, w, h, scale)
 	for try := 0; try < 2 && rt.text.Full(); try++ {
 		// The glyph atlas filled up and left some out: make room, keeping
@@ -1021,14 +1037,14 @@ func (rt *engine) runFrame() {
 	if len(rt.retried) > 0 || len(rt.keys) > 0 {
 		// The keys retried, and those waiting for an element that took
 		// one (routeKeys), route in a frame built anew, at once.
-		rt.redraw, rt.repaintDue = false, time.Time{}
-		rt.host.requestFrame()
+		rt.repaintDue = time.Time{}
+		rt.askBuild()
 	}
 	// With the element pressed gone (prune), as a button showing over a
 	// row the pointer left, what the pointer is over now hovers rather
 	// than what it was over as the press began, in the frame this asks
 	// for.
-	rt.rehover()
+	rt.rehover(true)
 	rt.armTimer()
 	rt.showMenu()
 	rt.c.finish()
@@ -1069,7 +1085,7 @@ func (rt *engine) next() {
 		rt.held = true
 	case rt.animating:
 		rt.pace(0)
-		rt.host.requestFrame()
+		rt.askBuild()
 	case rt.repainting:
 		rt.redraw = true
 		fps := rt.repaintRate
@@ -1167,7 +1183,7 @@ func (rt *engine) surfaceFrame() {
 			rt.pacedAt = next
 		}
 	}
-	if w, h, scale := rt.size(); rt.redraw && !rt.inFrame && rt.c.root != nil &&
+	if w, h, scale := rt.size(); (rt.redraw || rt.lookDue) && !rt.inFrame && rt.c.root != nil &&
 		rt.painted == [3]float32{w, h, scale} && rt.text.Generation() == rt.gen {
 		rt.repaintFrame(w, h, scale)
 		return
@@ -1188,7 +1204,8 @@ func (rt *engine) holdFrame() bool {
 		return false
 	}
 	rt.held = true
-	rt.redraw, rt.repaintDue = false, time.Time{}
+	rt.repaintDue = time.Time{}
+	rt.buildNext()
 	// The time the display asked for this frame at, as one waiting for
 	// the GPU renderer (windowHost.waitDisplay), is not that of the frame
 	// drawn once the window shows.
@@ -1212,7 +1229,10 @@ func (rt *engine) repaintFrame(w, h, scale float32) {
 	rt.repainting, rt.repaintAt = false, time.Time{}
 	// What the last frame painted outside Draw callbacks that asked to be
 	// painted again, as a content transition, moves only painted whole.
-	whole := rt.untracked
+	// Hovers that change looks (lookDue) change what any element may
+	// paint: paint them whole too.
+	whole := rt.untracked || rt.lookDue
+	rt.lookDue = false
 	rt.repaintRate, rt.repaintFull, rt.untracked = 0, false, false
 	root := rt.c.root
 	rt.repose()
@@ -1450,15 +1470,38 @@ func (rt *engine) requestFrame() {
 	if rt.inFrame {
 		return
 	}
-	rt.redraw, rt.repaintDue = false, time.Time{}
+	rt.repaintDue = time.Time{}
+	rt.askBuild()
+}
+
+// askBuild asks the host for a frame built anew, rather than one only
+// painting the last frame's elements again (redraw, lookDue).
+func (rt *engine) askBuild() {
+	rt.buildNext()
+	rt.buildAsked = true
+	rt.host.requestFrame()
+}
+
+// buildNext has the frame asked for next build the view anew, as when an
+// event may have changed what it shows.
+func (rt *engine) buildNext() { rt.redraw, rt.lookDue = false, false }
+
+// askLook asks for a frame painting the last frame's elements again,
+// whole, for elements whose look follows their hover as they paint
+// (hoverNeeds), unless a frame built anew was asked for, which shows it.
+func (rt *engine) askLook() {
+	if rt.inFrame || rt.buildAsked {
+		return
+	}
+	rt.lookDue = true
 	rt.host.requestFrame()
 }
 
 // changed asks the host for a frame built anew after the app changed what
 // the view shows, from outside the view (surface.Conn.Changed).
 func (rt *engine) changed() {
-	rt.redraw, rt.repaintDue = false, time.Time{}
-	rt.host.requestFrame()
+	rt.repaintDue = time.Time{}
+	rt.askBuild()
 }
 
 // scheduleAt asks for a frame at t (After).
@@ -1723,13 +1766,18 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	}
 	vis := e.visualRect(Rect{e.x, e.y, e.w, e.h})
 	v := intersect(vis, clip)
-	s.vx, s.vy, s.vw, s.vh = v.X, v.Y, v.W, v.H
+	s.vx, s.vy, s.vw, s.vh, s.reposed = v.X, v.Y, v.W, v.H, false
 	s.cx, s.cy = e.x+e.contentX(), e.y+e.contentY()
 	s.cw, s.ch = max(e.w-e.padX(), 0), max(e.h-e.padY(), 0)
 	if e.flags&(flagScrollX|flagScrollY) != 0 {
 		s.contentW, s.contentH = e.contentW, e.contentH
 		s.barInset = e.barInset
-		s.barWidth = e.theme().scrollbarWidth()
+		if s.barStyle == nil {
+			// Allocated once: a scroll container resolves its style every
+			// frame, and a steady frame allocates nothing.
+			s.barStyle = new(ScrollbarStyle)
+		}
+		*s.barStyle = e.scrollbarStyle().Resolve(e.theme())
 	}
 	s.hideScrollbars, _ = e.scrollbars()
 	// What is invisible keeps its box but takes neither the pointer nor
@@ -1920,7 +1968,7 @@ func (rt *engine) overScrollbar(id uint64) bool {
 	x, y := s.local(rt.pointerX, rt.pointerY)
 	x += s.x
 	y += s.y
-	g := scrollBars(Rect{s.x, s.y, s.w, s.h}, s.barInset, float32(s.contentW), float32(s.contentH), float32(s.scrollX), float32(s.scrollY), s.flags, s.barWidth, s.rtl)
+	g := scrollBars(Rect{s.x, s.y, s.w, s.h}, s.barInset, float32(s.contentW), float32(s.contentH), float32(s.scrollX), float32(s.scrollY), s.flags, s.scrollbarStyle(), s.rtl)
 	return g.vertical && g.vTrack.Contains(x, y) || g.horizontal && g.hTrack.Contains(x, y)
 }
 

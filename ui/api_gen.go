@@ -1842,8 +1842,9 @@ func MenuButton(c *Context, label string, build func(m *Menu)) Element {
 
 // Meter creates a bar showing value between lo and hi, as AppKit's level
 // indicator and the web's meter: the theme's Success color, or Warning and
-// Danger from the levels given, nil for none. Assistive technology sees a
-// level indicator of that value; name it with Label.
+// Danger from the levels given, nil for none, or the levels' own colors.
+// Background colors its track. Assistive technology sees a level
+// indicator of that value; name it with Label.
 //
 //	ui.Meter(c, app.disk.Used, 0, app.disk.Size, &ui.MeterLevels{Warning: 0.8 * size, Critical: 0.95 * size}).Label("Disk")
 func Meter(c *Context, value float64, lo float64, hi float64, levels *MeterLevels) Element {
@@ -2085,7 +2086,11 @@ func PrimaryButton(c *Context, label string) Element {
 // Progress creates a progress bar filled to value between 0 and 1; a
 // negative value shows activity of unknown length. It fills from its
 // start: the right right to left (Direction). Reverse fills it from the
-// other side.
+// other side. It fills in the accent color, or the color TextColor gives
+// it, as a quota bar in a product's own color, over a track in the
+// theme's Border color, or the one Background gives it.
+//
+//	ui.Progress(c, app.used/app.quota).TextColor(brand).Label("Storage")
 func Progress(c *Context, value float64) Element {
 	_ctx := c.build()
 	if _ctx == nil {
@@ -2301,6 +2306,8 @@ func SearchField(c *Context, query *string) Element {
 // click chooses a segment, as do the arrows while it has the focus, and
 // Changed reports a new choice. Assistive technology sees a radio group;
 // name it with Label. For icons, build the segments with SegmentedBase.
+// Its segments are as wide as their labels; FillEqually makes it as wide
+// as its parent, its segments sharing the width.
 //
 //	ui.Segmented(c, &app.view, "List", "Grid").Label("View")
 func Segmented(c *Context, selected *int, labels ...string) Element {
@@ -2676,7 +2683,9 @@ func SwitchBase(c *Context, on *bool) Element {
 // the rows of its section scroll under it.
 //
 // The user resizes columns by dragging the edges of their headers, and
-// moves them by dragging the headers, which s.Columns keeps; columns wider
+// moves them by dragging the headers, which s.Columns keeps; Changed
+// reports the new layout once the user lets go, or once a double click
+// fits a column to its cells, for the app to save. Columns wider
 // than the table scroll sideways, the header with them. With s.Sort, a
 // click on the header of a Sortable column sorts the rows by it; with
 // s.SortBy, a Cmd-click or a Shift-click sorts by it after the others;
@@ -4696,7 +4705,8 @@ func (_handle Element) ContentTransition(t ContentTransition) Element {
 // items. The system shows it where the element is clicked with the
 // secondary button, or Control-clicked on macOS, and, while the element or
 // one inside it has the focus, below it when the menu key or Shift+F10 is
-// pressed. build runs when the menu opens, and again in the frame after an
+// pressed; in a list, while the list has the focus and the element's row
+// is chosen. build runs when the menu opens, and again in the frame after an
 // item was chosen, where the item's Chosen reports it:
 //
 //	row.ContextMenu(func(m *ui.Menu) {
@@ -5355,6 +5365,26 @@ func (_handle Element) Fill() Element {
 	return wrapElement(_node.Fill())
 }
 
+// FillEqually makes a Segmented or a ToggleGroup as wide as its parent's
+// content, as FillWidth does, and shares that width equally among its
+// segments, as AppKit's fillEqually distribution: the one chosen takes
+// its share, its label in the middle, and a label longer than its share
+// ends with an ellipsis. The segments look and behave as they do
+// otherwise, disabled ones too. Call it on SegmentedBase's Track after
+// building its segments; on other elements it is FillWidth. A width set
+// after it sets the control's, which its segments share still.
+//
+//	ui.Segmented(c, &app.theme, "Light", "Dark", "System").FillEqually().Label("Appearance")
+func (_handle Element) FillEqually() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.FillEqually())
+}
+
 // FillHeight makes the element as tall as its parent's content.
 func (_handle Element) FillHeight() Element {
 	_node := _handle.node()
@@ -5854,6 +5884,11 @@ func (_handle Element) HitTest(fn func(x float32, y float32, r Rect) bool) Eleme
 // them, as in CSS, and the others hover no more: a button that shows over
 // a row stays as it is pressed, and dragging over other elements does not
 // light them up.
+//
+// Read as the view builds, the pointer coming over the element or leaving
+// it builds the view anew, every element of it; read in a Draw callback,
+// as the window paints, it only paints the last frame's elements again,
+// as the toolkit's controls do for their hovered looks.
 func (_handle Element) Hovered() bool {
 	_node := _handle.node()
 	if _node == nil {
@@ -7853,6 +7888,31 @@ func (_handle Element) ScrollbarInsets(v ...float32) Element {
 	return wrapElement(_node.ScrollbarInsets(v...))
 }
 
+// ScrollbarStyle styles this scroll container's scroll bars, as a theme's
+// ScrollbarStyle does every scroll bar: their track and thumb colors, the
+// widths of their bars and thumbs, their corners and shortest thumb. Its
+// zero fields follow the theme's, so leaving it out draws as the theme
+// does; it applies to Scroll, ScrollHorizontal, ScrollBoth, List and Table,
+// and is not inherited.
+//
+//	// As VS Code's editor: a 14 DIP square thumb in a 14 DIP bar, flush
+//	// with its ends.
+//	ui.Scroll(c).ScrollbarStyle(ui.ScrollbarStyle{
+//		TrackWidth: 14, ThumbWidth: 14, Square: true, Flush: true, MinLength: 20,
+//		Thumb: ui.RGBA(121, 121, 121, 0.4),
+//		Hover: ui.RGBA(100, 100, 100, 0.7),
+//		Active: ui.RGBA(191, 191, 191, 0.4),
+//	})
+func (_handle Element) ScrollbarStyle(s ScrollbarStyle) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.ScrollbarStyle(s))
+}
+
 // Scrollbars controls the overlay indicators and their pointer hit targets on
 // this scroll container. They show on hover by default. With false, scrolling
 // by wheel, TrackScroll, keyboard focus and accessibility remains available.
@@ -8689,6 +8749,21 @@ func (_handle Element) TranslateZ(z float32) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.TranslateZ(z))
+}
+
+// TruncateMiddle puts the ellipsis of text that SingleLine or MaxLines
+// cuts in the middle of its last line rather than at its end, so that it
+// keeps both its start and its end, about as wide each, in the room
+// layout gives it: a list of files shows "src/components/…/picker.go",
+// whose folder and file's name both show.
+func (_handle Element) TruncateMiddle() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.TruncateMiddle())
 }
 
 // Underline underlines text.

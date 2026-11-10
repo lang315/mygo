@@ -124,6 +124,7 @@ type paintRare struct {
 	// deviation of the element's blur, in DIPs. rotate is that of an Icon, in
 	// degrees; fit and gray are those of an image.
 	barInset     [4]float32
+	barStyle     *ScrollbarStyle // ScrollbarStyle's; its zero fields follow the theme's
 	blur, rotate float32
 	fit          Fit
 	gray         bool

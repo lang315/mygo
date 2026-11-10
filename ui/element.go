@@ -193,6 +193,14 @@ const (
 	flagClip = flagClipX | flagClipY
 )
 
+// builtStyle is what a styleFn may change of an element: its colors and
+// opacity.
+type builtStyle struct {
+	bg, border, text Color
+	opacity          float32
+	opacitySet       bool
+}
+
 type shadow struct {
 	x, y, blur, spread float32
 	color              Color
@@ -321,6 +329,7 @@ type layoutStyle struct {
 	balance     bool
 	pretty      bool
 	keepSpaces  bool
+	middle      bool
 	ellipsis    string
 }
 
@@ -947,6 +956,23 @@ func (e *node) MarginY(v float32) *node { e.margin[0], e.margin[2] = v, v; retur
 //	ui.Scroll(c).Fill().Padding(64, 16, 16).ScrollbarInsets(64, 0, 0)
 func (e *node) ScrollbarInsets(v ...float32) *node { e.barInset = edges(v); return e }
 
+// ScrollbarStyle styles this scroll container's scroll bars, as a theme's
+// ScrollbarStyle does every scroll bar: their track and thumb colors, the
+// widths of their bars and thumbs, their corners and shortest thumb. Its
+// zero fields follow the theme's, so leaving it out draws as the theme
+// does; it applies to Scroll, ScrollHorizontal, ScrollBoth, List and Table,
+// and is not inherited.
+//
+//	// As VS Code's editor: a 14 DIP square thumb in a 14 DIP bar, flush
+//	// with its ends.
+//	ui.Scroll(c).ScrollbarStyle(ui.ScrollbarStyle{
+//		TrackWidth: 14, ThumbWidth: 14, Square: true, Flush: true, MinLength: 20,
+//		Thumb: ui.RGBA(121, 121, 121, 0.4),
+//		Hover: ui.RGBA(100, 100, 100, 0.7),
+//		Active: ui.RGBA(191, 191, 191, 0.4),
+//	})
+func (e *node) ScrollbarStyle(s ScrollbarStyle) *node { e.barStyle = &s; return e }
+
 // Scrollbars controls the overlay indicators and their pointer hit targets on
 // this scroll container. They show on hover by default. With false, scrolling
 // by wheel, TrackScroll, keyboard focus and accessibility remains available.
@@ -972,6 +998,19 @@ func (e *node) scrollbars() (hide, keep bool) {
 		e = e.barsFrom
 	}
 	return e.hideScrollbars, e.keepScrollbars
+}
+
+// scrollbarStyle returns how the element's scroll bars look, as it says or
+// the element it takes them from does (barsFrom), as a table's rows take
+// the table's.
+func (e *node) scrollbarStyle() ScrollbarStyle {
+	if e.barsFrom != nil {
+		e = e.barsFrom
+	}
+	if e.barStyle != nil {
+		return *e.barStyle
+	}
+	return ScrollbarStyle{}
 }
 
 // Width sets the width in DIPs.
@@ -1868,6 +1907,21 @@ func (e *node) Ellipsis(s string) *node { e.ellipsis = s; return e }
 // content takes its own height. It costs a second layout of the content, and
 // only when the content is shorter than the container.
 func (e *node) FillViewport() *node { e.fillViewport = true; return e }
+
+// TruncateMiddle puts the ellipsis of text that SingleLine or MaxLines
+// cuts in the middle of its last line rather than at its end, so that it
+// keeps both its start and its end, about as wide each, in the room
+// layout gives it: a list of files shows "src/components/…/picker.go",
+// whose folder and file's name both show.
+func (e *node) TruncateMiddle() *node {
+	linkTruncateMiddle.Do(text.Shared().UseTruncateMiddle)
+	e.middle = true
+	return e
+}
+
+// linkTruncateMiddle lets the text system cut text in its middle once an
+// element asks for it, so that apps that never do not link it.
+var linkTruncateMiddle sync.Once
 
 // Label names the element for assistive technology and for finding it in
 // tests, when its text does not.

@@ -40,6 +40,9 @@ func NewHardware() (device, context uintptr, err error) {
 	return
 }
 
+// NewOnGPU is NewHardware under the name package d3d11's shared device uses.
+func NewOnGPU() (device, context uintptr, err error) { return NewHardware() }
+
 // NewForVideo is New for a device that decodes and converts video, as
 // Media Foundation's: one that supports Direct3D's video API where the
 // GPU has it, else as New.

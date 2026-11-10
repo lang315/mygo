@@ -10,7 +10,7 @@ import (
 func hBarTop(tt *Tester, s *ListState) (float32, bool) {
 	st := listStateOf(s)
 	g := scrollBars(Rect{st.x, st.y, st.w, st.h}, st.barInset, float32(st.contentW), float32(st.contentH),
-		float32(st.scrollX), float32(st.scrollY), st.flags, st.barWidth, st.rtl)
+		float32(st.scrollX), float32(st.scrollY), st.flags, ScrollbarStyle{}.Resolve(tt.rt.c.theme), st.rtl)
 	return g.hTrack.Y, g.horizontal
 }
 

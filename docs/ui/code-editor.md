@@ -177,7 +177,9 @@ app.code.OnInput = func(ev ui.InputEvent) bool {
 ## Options
 
 - `SoftWrap` wraps lines at the editor's width, or at `WrapColumn` columns
-  when narrower; wrapped rows keep the line's indentation.
+  when narrower; wrapped rows keep the line's indentation. CJK text wraps
+  between any two characters, but closing punctuation such as `，` and `。`
+  starts no row, and opening punctuation such as `（` and `「` ends none.
 - `LineNumbers` shows the gutter's numbers, absolute, relative to the
   caret's line, or not at all; `GutterMarks` put dots of a color by lines,
   as breakpoints, and `OnGutterClick` reports clicks on numbers.
@@ -207,6 +209,20 @@ app.code.OnInput = func(ev ui.InputEvent) bool {
   away, as a scroll container's `KeepScrollbars`; `NoScrollbars` takes
   the bars away, with their room, the wheel and the keys still
   scrolling.
+- `Scrollbar` styles the scroll bars, as a theme's `ScrollbarStyle`: their
+  track and thumb colors, widths, corners and shortest thumb. Its zero
+  fields follow the theme's; its `TrackWidth` is 10 DIPs when 0, unless the
+  theme's style sets one, as the editor's bar has always been. As VS
+  Code's editor:
+
+  ```go
+  st.Scrollbar = ui.ScrollbarStyle{
+      TrackWidth: 14, ThumbWidth: 14, Square: true, Flush: true, MinLength: 20,
+      Thumb: ui.RGBA(121, 121, 121, 0.4),
+      Hover: ui.RGBA(100, 100, 100, 0.7),
+      Active: ui.RGBA(191, 191, 191, 0.4),
+  }
+  ```
 - `Font` and `LineHeight` set the text: the system's monospaced font of
   13 DIPs, 1.5 times as high, by default.
 - `NoAutoClose`, `NoFolding`, `NoActiveLine` and `NoScrollPastEnd` turn
@@ -224,12 +240,14 @@ app.code.OnInput = func(ev ui.InputEvent) bool {
 
 ## Languages and highlighting
 
-`LanguageFor` finds a file's language by its name, and `LanguageNamed` by
-its own; `Languages` lists them. The editor knows Go, JavaScript,
+`LanguageFor` finds a file's language by its name, `LanguageForText` by
+its name or else the `#!` line its text opens with, as
+`#!/usr/bin/env ruby`, and `LanguageNamed` by its own; `Languages` lists
+them. The editor knows Go, JavaScript,
 TypeScript, JSON, Python, Rust, C, C++, Java, Kotlin, Scala, Swift, Dart,
-C#, shell scripts, YAML, TOML, SQL, R, Ruby, Lua, PHP, CSS, HTML, XML,
-Markdown, diffs, Dockerfiles, Makefiles, Protocol Buffers, GraphQL, Zig
-and Nix.
+C#, shell scripts, YAML, TOML, SQL, R, Ruby, Lua, PHP, CSS, HTML, ERB,
+Svelte, XML, Markdown, diffs, Dockerfiles, Makefiles, Protocol Buffers,
+GraphQL, Zig, Nix, Jinja templates and HCL (Terraform).
 A `Language` says how to highlight, comment, match brackets and indent its
 text, and with `Imports`, a pattern of a line that imports (`^import\b` for
 Go), which lines fold as a run: build one for another language, or copy
