@@ -100,6 +100,8 @@ func owner(file string, byDir map[string]*Package, pkgs []Package) (p *Package, 
 		return byDir["website/docs-demo"], true, true
 	case strings.HasPrefix(file, "docs/"):
 		return nil, false, true // the tests that read it are always run
+	case strings.HasPrefix(file, ".claude/"):
+		return nil, false, true // the agents' skills and settings, which no test reads
 	case file == "go.mod", file == "go.sum", strings.HasPrefix(file, ".github/"),
 		strings.HasPrefix(file, "packages/"), strings.HasPrefix(file, "scripts/"):
 		return nil, false, false
@@ -120,7 +122,11 @@ func owner(file string, byDir map[string]*Package, pkgs []Package) (p *Package, 
 		}
 		// A directory without a package here, such as another system's:
 		// it imports and is imported by nothing here, but the command line
-		// tool builds for every system.
+		// tool builds for every system. It builds no test: those run on
+		// their own system, and the check job vets them for every one.
+		if strings.HasSuffix(file, "_test.go") {
+			return nil, false, true
+		}
 		return byDir[cmdDir], true, true
 	}
 	if strings.HasPrefix(file, "plugins/") {
