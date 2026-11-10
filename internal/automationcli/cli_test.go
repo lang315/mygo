@@ -129,7 +129,9 @@ func (f *fakeApp) serve(t *testing.T) string {
 	var conns sync.WaitGroup
 	t.Cleanup(conns.Wait) // runs after the listener closes (cleanups are LIFO); a connection ends when its CLI run closes it
 	t.Cleanup(func() { l.Close() })
+	conns.Add(1) // the accept loop counts too, so each connection's Add runs while the counter is above 0
 	go func() {
+		defer conns.Done()
 		for {
 			c, err := l.Accept()
 			if err != nil {
