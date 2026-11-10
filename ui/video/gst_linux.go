@@ -90,6 +90,7 @@ const (
 	gstMessageEOS             = 1 << 0
 	gstMessageError           = 1 << 1
 	gstMessageBuffering       = 1 << 5
+	gstMessageElement         = 1 << 15
 	gstMessageDurationChanged = 1 << 18
 	gstMessageAsyncDone       = 1 << 21
 
@@ -106,6 +107,13 @@ const (
 	// gstBufferPTSOffset is where a GstBuffer keeps its PTS, after its
 	// GstMiniObject and pool (GST_BUFFER_PTS).
 	gstBufferPTSOffset = 72
+)
+
+// libgstpbutils's functions, nil when it is absent: then a missing plugin
+// is told by its error only.
+var (
+	gstIsMissingPlugin          func(msg uintptr) bool
+	gstMissingPluginDescription func(msg uintptr) uintptr
 )
 
 // gValue is a GValue: its type, and two words of value.
@@ -182,6 +190,10 @@ func loadGStreamer() error {
 		purego.RegisterLibFunc(&gErrorFree, glib, "g_error_free")
 		purego.RegisterLibFunc(&gFree, glib, "g_free")
 		gstInit(0, 0)
+		if pb, err := purego.Dlopen("libgstpbutils-1.0.so.0", purego.RTLD_NOW|purego.RTLD_GLOBAL); err == nil {
+			purego.RegisterLibFunc(&gstIsMissingPlugin, pb, "gst_is_missing_plugin_message")
+			purego.RegisterLibFunc(&gstMissingPluginDescription, pb, "gst_missing_plugin_message_get_description")
+		}
 	})
 	return gstErr
 }
@@ -225,6 +237,7 @@ type gstEngine struct {
 	// pending are a seek, and a rate, asked for before the pipeline
 	// could take them, once it prerolled (prerolled).
 	prerolled  bool
+	missing    string // the description of a plugin the pipeline lacks
 	seekTo     time.Duration
 	seekSet    bool
 	rate       float64
@@ -456,7 +469,7 @@ func le64(b []byte) uint64 { return uint64(le32(b)) | uint64(le32(b[4:]))<<32 }
 // an error, a stream's buffering.
 func (e *gstEngine) messages() {
 	defer e.done.Done()
-	const types = gstMessageEOS | gstMessageError | gstMessageBuffering | gstMessageDurationChanged | gstMessageAsyncDone
+	const types = gstMessageEOS | gstMessageError | gstMessageBuffering | gstMessageDurationChanged | gstMessageAsyncDone | gstMessageElement
 	for {
 		select {
 		case <-e.quit:
@@ -471,6 +484,12 @@ func (e *gstEngine) messages() {
 		e.handle(msg, kind)
 		gstMiniObjectUnref(msg)
 	}
+}
+
+// missingError is the error of a video that needs a plugin the system
+// lacks. It is not ErrUnsupported, which says there is no engine at all.
+func missingError(what string) error {
+	return fmt.Errorf("video: GStreamer has no decoder for this video: missing %s (install gst-libav)", what)
 }
 
 func (e *gstEngine) handle(msg uintptr, kind uint32) {
@@ -505,6 +524,24 @@ func (e *gstEngine) handle(msg uintptr, kind uint32) {
 			gFree(debug)
 		}
 		e.state, e.err = media.Failed, errors.New("video: "+text)
+		if e.missing != "" {
+			e.err = missingError(e.missing)
+		}
+	case gstMessageElement:
+		// A missing plugin is posted before the error it causes, or
+		// beside it: either way the error names the plugin.
+		if gstIsMissingPlugin == nil || !gstIsMissingPlugin(msg) {
+			break
+		}
+		d := gstMissingPluginDescription(msg)
+		if d == 0 {
+			break
+		}
+		e.missing = goString((*byte)(cptr(d)))
+		gFree(d)
+		if e.state == media.Failed {
+			e.err = missingError(e.missing)
+		}
 	case gstMessageBuffering:
 		var percent int32
 		gstMessageParseBuffering(msg, &percent)
