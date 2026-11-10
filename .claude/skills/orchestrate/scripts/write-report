@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# usage: write-report <name> <<'EOF' ... EOF
+# The read-only worker's only way to write: stdin becomes <repo>/.orch/reports/<name>.md.
+# reader-settings.json denies Write and Edit, and allows this script.
+set -euo pipefail
+name="${1:?usage: write-report <name> (report on stdin)}"
+[[ $name =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "write-report: name must match [a-z0-9-]+" >&2; exit 2; }
+root="$(cd "$(dirname "$0")/../../../.." && pwd)"
+mkdir -p "$root/.orch/reports"
+cat >"$root/.orch/reports/$name.md"
+echo "$root/.orch/reports/$name.md"
