@@ -84,17 +84,16 @@ hc wait cmdtest --timeout 570; hc read cmdtest --lines 15; hc rm cmdtest
 
 ## PR, CI and merge (always `--repo lang315/mygo`; never the upstream)
 
-CI has two runs per branch:
-- **The `pull_request` run:** macOS and Windows, on the affected packages only. It skips Linux ARM64.
-- **A dispatched `ci.yml` on the branch:** all three OSes, Linux ARM64, and every package.
-
-Watch both.
+- **The `pull_request` run** is the gate: the affected packages on macOS, Windows and Linux, every package on
+  Windows ARM64. It skips Linux ARM64 and, on Linux, the cmd and ui shards.
+- **A dispatched `ci.yml` on the branch** is the full run: every package, all three OSes, Linux ARM64. Only for
+  the cases step 5 of SKILL.md names.
 
 ```sh
 git -C "$R" diff --stat origin/main...orch/<name>
 git -C "$R" push -u origin orch/<name>          # from the main checkout; the hook refuses worktrees
 gh pr create --repo lang315/mygo --base main --head orch/<name> --title "<title>" --body-file "$R/.orch/tmp/<name>-pr.md"
-gh workflow run ci.yml --repo lang315/mygo --ref orch/<name>
+gh workflow run ci.yml --repo lang315/mygo --ref orch/<name>      # the full run: only for the cases of step 5
 gh run list --repo lang315/mygo --branch orch/<name> --limit 4 --json databaseId,event,status,conclusion,headSha
 hc run --bg --name ci-<id> -- gh run watch <id> --repo lang315/mygo --exit-status --interval 60
 hc wait ci-<id> --timeout 570; hc get ci-<id>; hc rm ci-<id>    # exit_code 0 = green
