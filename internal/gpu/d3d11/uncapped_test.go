@@ -109,10 +109,10 @@ func TestUncappedSwapChain(t *testing.T) {
 // settled, frames present uncapped again. Uncapped frames flooding DWM as
 // it resized the window had a present take 2 s on a Radeon 780M; WARP,
 // without a display, may not show that, but the frames are those of a live
-// resize, the size changing every other frame. Real DXGI takes DXGI_PRESENT_DO_NOT_WAIT,
-// and a frame of a new size that it refused for a refresh, as WARP on a
-// busy runner may, waits to present (holdFrame) and presents before the
-// frame after draws.
+// resize, the size changing every other frame. Real DXGI takes
+// DXGI_PRESENT_DO_NOT_WAIT, and a frame of a new size that it refused for
+// a refresh, as WARP on a busy runner may, waits to present (holdFrame)
+// and presents before the frame after draws.
 func TestUncappedResizePaced(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -677,20 +677,19 @@ func presentRefused(t *testing.T, r *Renderer, p *refusingPresent) {
 	}
 	posted := make(chan func(), 16)
 	r.SetPost(func(f func()) { posted <- f })
-	// Present is tried for a refresh at most (showSoon), which sleeps a
-	// millisecond at least between two tries: a slow machine makes fewer,
-	// never more.
-	maxTries := int(r.cost.refreshPeriod()/time.Millisecond) + 2
 	// tried checks that what the main thread ran since the from'th present
 	// and refused refused, uncapped while the window changes size, made no
 	// present that waits, all of them on the main thread here, and tried
-	// Present for a refresh at most.
+	// Present for a refresh at most (showSoon), which sleeps a millisecond
+	// at least between two tries: a slow machine makes fewer, never more.
+	// The period changes only in what the renderer posts (readPeriodAside),
+	// so it is read once the tries were made.
 	tried := func(what string, from, refused int) {
 		t.Helper()
 		if !r.uncapped || !r.resizing {
 			return
 		}
-		if p.mayWait(from) || p.refused-refused > maxTries {
+		if maxTries := int(r.cost.refreshPeriod()/time.Millisecond) + 2; p.mayWait(from) || p.refused-refused > maxTries {
 			t.Errorf("%s: %s: presents without DXGI_PRESENT_DO_NOT_WAIT %v, %d refused, flags %#x; want none, at most %d",
 				kind, what, p.mayWait(from), p.refused-refused, p.flags[from:], maxTries)
 		}
@@ -1058,9 +1057,9 @@ func refusedThroughSettle(t *testing.T, r *Renderer, p *refusingPresent) {
 	r.SetPost(func(f func()) { posted <- f })
 	colors := []scene.Color{{R: 24, G: 24, B: 27, A: 255}, {R: 250, G: 250, B: 250, A: 255}}
 	n := 0
-	// timed runs what the main thread runs, a frame or what the renderer
+	// onMain runs what the main thread runs, a frame or what the renderer
 	// posted, and checks that it made no call that waits there.
-	timed := func(what string, f func()) {
+	onMain := func(what string, f func()) {
 		t.Helper()
 		before := p.state().waitedOnMain
 		f()
@@ -1073,7 +1072,7 @@ func refusedThroughSettle(t *testing.T, r *Renderer, p *refusingPresent) {
 	render := func(w, h int) {
 		t.Helper()
 		n++
-		timed("a frame", func() {
+		onMain("a frame", func() {
 			if err := r.Render(&scene.Scene{Width: w, Height: h, Clear: colors[n%2], Background: colors[n%2]}); err != nil {
 				t.Fatal(err)
 			}
@@ -1122,7 +1121,7 @@ func refusedThroughSettle(t *testing.T, r *Renderer, p *refusingPresent) {
 			return
 		}
 		for !woke {
-			timed("what the renderer posted", wait.For(t, kind+": what the frame after waits for", posted))
+			onMain("what the renderer posted", wait.For(t, kind+": what the frame after waits for", posted))
 			putOffNow(w, h)
 		}
 	}
@@ -1131,6 +1130,11 @@ func refusedThroughSettle(t *testing.T, r *Renderer, p *refusingPresent) {
 		ready(w, h)
 		render(w, h)
 		note()
+		// With no call under way on another goroutine, DXGI took frames
+		// again before the frame drew, which then presents.
+		if s := p.state(); s.accepted && !s.taken && r.aside == "" && !r.putOff {
+			t.Fatalf("%s: a %dx%d frame drawn after DXGI took frames again presented nothing (resizing %v, gave up %v, says %q)", kind, w, h, r.resizing, r.gaveUp, r.FrameInfo())
+		}
 	}
 	frame(200, 150)
 	if r.swapChain2 == 0 {
@@ -1184,11 +1188,6 @@ func refusedThroughSettle(t *testing.T, r *Renderer, p *refusingPresent) {
 			}
 			frame(w, h)
 			frames++
-			// With no call under way on another goroutine, DXGI took frames
-			// again before the frame drew, which then presents.
-			if s := p.state(); s.accepted && !s.taken && r.aside == "" && !r.putOff {
-				t.Fatalf("%s: a frame drawn after DXGI took frames again presented nothing (resizing %v, gave up %v, says %q)", kind, r.resizing, r.gaveUp, r.FrameInfo())
-			}
 		}
 		s := p.state()
 		if s.refuse || s.waitedOnMain != 0 || !s.taken {
