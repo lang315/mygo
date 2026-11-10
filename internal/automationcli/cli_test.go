@@ -149,6 +149,9 @@ func (f *fakeApp) serve(t *testing.T) string {
 					}
 					c.Write(append(line, '\n'))
 				}
+				if err := sc.Err(); err != nil {
+					t.Error(err)
+				}
 			}()
 		}
 	}()

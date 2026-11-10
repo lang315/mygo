@@ -25,6 +25,10 @@ func main() {
 			changed = append(changed, filepath.ToSlash(f))
 		}
 	}
+	if err := in.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, "ciaffected:", err)
+		os.Exit(1)
+	}
 	pkgs, err := list()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ciaffected:", err)

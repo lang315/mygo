@@ -248,6 +248,9 @@ func start(path, scene string, env ...string) (*process, error) {
 		for s.Scan() {
 			p.lines <- s.Text()
 		}
+		if err := s.Err(); err != nil {
+			fmt.Fprintln(os.Stderr, "reading the app's output:", err)
+		}
 	}()
 	return p, nil
 }

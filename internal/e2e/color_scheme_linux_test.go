@@ -108,6 +108,9 @@ func TestPageColorSchemePortal(t *testing.T) {
 			fmt.Fprintln(portalIn, scheme)
 		}
 	}
+	if err := lines.Err(); err != nil {
+		t.Fatal(err)
+	}
 	if err := app.Wait(); err != nil {
 		t.Errorf("%v:\n%s\nthe fake portal:\n%s", err, log.String(), portalErr.String())
 	}
@@ -282,6 +285,10 @@ func fakePortal() {
 				parse(fmt.Sprintf("('%s', '%s', <uint32 %d>)", appearance, colorID, s)), &gerr) {
 				fail("SettingChanged", gerr)
 			}
+		}
+		if err := lines.Err(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
 		os.Exit(0) // the test is done with it
 	}()
