@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -126,13 +127,17 @@ func (f *fakeApp) serve(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { l.Close() })
+	var conns sync.WaitGroup
+	t.Cleanup(conns.Wait) // a connection ends when its CLI run closes it
 	go func() {
 		for {
 			c, err := l.Accept()
 			if err != nil {
 				return
 			}
+			conns.Add(1)
 			go func() {
+				defer conns.Done()
 				defer c.Close()
 				sc := bufio.NewScanner(c)
 				for sc.Scan() {
@@ -149,7 +154,7 @@ func (f *fakeApp) serve(t *testing.T) string {
 					}
 					c.Write(append(line, '\n'))
 				}
-				if err := sc.Err(); err != nil {
+				if err := sc.Err(); err != nil && !errors.Is(err, net.ErrClosed) {
 					t.Error(err)
 				}
 			}()
