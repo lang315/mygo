@@ -232,9 +232,7 @@ func TestNativesFromSources(t *testing.T) {
 
 	// The same package in the module cache has no published build.
 	writeFiles(t, dir, map[string]string{"lib/" + pluginFile: `{"libraries": [{"name": "adder", "build": {"cargo": "./rust"}}]}`})
-	old := goEnv("GOMODCACHE")
-	goEnvCache.Store("GOMODCACHE", dir)
-	defer goEnvCache.Store("GOMODCACHE", old)
+	t.Setenv("GOMODCACHE", dir)
 	if _, err := c.natives(runtime.GOOS, runtime.GOARCH); err == nil || !strings.Contains(err.Error(), "has no build for") {
 		t.Errorf("a package of the module cache: %v", err)
 	}
