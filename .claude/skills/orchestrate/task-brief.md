@@ -57,6 +57,7 @@ Rules:
   - root cause;
   - files changed;
   - every verification command with its exit status and last output lines;
+  - every assertion you changed or removed, test you deleted and t.Skip you added, each with its reason;
   - <for a feature or API task: "each case with its test, the line (file:line) you broke, and the assertion that
     failed;">
   - every refused command;

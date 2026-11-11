@@ -161,6 +161,9 @@ sessions (`git worktree list`): the owner's disk rule.
 Workers never push. The commands are in the cheatsheet.
 1. **Review.** Read the report, then review `git -C "$R" diff origin/main...orch/<name>` for correctness, scope,
    goroutines that outlive a test, and the hard rules in AGENTS.md.
+   - **Existing tests:** read `git -C "$R" diff origin/main...orch/<name> -- '*_test.go'` by itself. An assertion
+     changed or removed, a `t.Skip` added, or a test deleted needs its reason in the report, drawn from what the
+     product must do. One with no such reason goes back to the worker.
 2. **Rerun** the repro and the done criterion. For `cmd/mygo`, run the full `go test ./cmd/mygo` under heavy-lock.
    - **Break check**, for a feature or API task: a test is real when it goes red on broken code. Start when the
      worker has reported and `git -C "$R/../mygo-wt-<name>" status --porcelain` is empty: the restore below
@@ -177,6 +180,7 @@ Workers never push. The commands are in the cheatsheet.
 4. **Push and open the PR.** Push from `$R`. Open the PR on `lang315/mygo`, never upstream, from
    `.github/pull_request_template.md`. The body has:
    - evidence: commands, exit status, output;
+   - the break check, when one ran: each line, the edit, and red or green;
    - the AI disclosure, naming the worker's model and yours;
    - no "a human read every line" box, and no session link.
 5. **CI.** The PR's `pull_request` run is the gate. It restarts by itself after every push, and it must be green
