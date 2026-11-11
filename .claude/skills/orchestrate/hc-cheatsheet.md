@@ -68,8 +68,9 @@ hc wait --children any --timeout 570
 
 - The wait returns `reason: message` when a report arrives. It returns `timeout` when the time runs out, which is
   a check-in, not a failure. Wait again until no child is working.
-- It returns `reason: status` when a child ends with no message, as when its `hc send` was refused: read
-  `$R/.orch/reports/<name>.md`, the report is there.
+- A child with `reason: status` and `status: done` ended its turn and no message came, as when its `hc send`
+  was refused: read `$R/.orch/reports/<name>.md`, the report is there. `status: blocked` is a dialog in the
+  child: see "Blocked worker".
 - Reports arrive as input: `<hc from="t2k listinputs">listinputs done: <path></hc>`.
 - `hc send <t> "<review finding>"` gives a worker another round in the same context.
 - `hc send` wraps the text in `<hc from=...>`, so a slash command sent this way does not run.
