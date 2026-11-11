@@ -19,8 +19,9 @@ Source: <run ID, PR #, or file:line>. Decisive lines (you have no gh; these are 
 Scope: change only <package(s)/files>. <"No exported identifiers." unless the owner approved an API plan; then: the approved API, verbatim>. <other limits>.
 Hypothesis to confirm, not assume: <what the orchestrator suspects, with file:line>.
 Steps:
-<For a feature or API task, replace step 1 with: "Write the failing test for the done criterion first; show it
-   failing.">
+<For a feature or API task, replace step 1 with: "List the cases before the code, one line each: no input, one
+   and many; each bound; each error the code returns; a call that stops midway; goroutines, and behaviour that
+   differs by OS, where the code has them. Write one named test a case, and show them failing.">
 1. Reproduce on the unchanged code first. Put the exact command and its output in the report.
    If you cannot reproduce after 3 tries, stop and report stuck; do not fix blind.
    <For a CI-only bug, replace step 1 with: "No local repro exists; CI is the repro. Fix from the log lines above;
@@ -29,6 +30,9 @@ Steps:
 3. Done criterion, all must pass:
    - <the reproducing command>
    - <the package tests, e.g. go test -count=1 ./<pkg>>
+   - <for a feature or API task: "break check: for each case, break the line of your code its test holds (negate
+     the condition, move the bound by one, drop the error return), run that test alone with -run, see its
+     assertion fail, and restore the line. A test that stays green gets a stronger assertion.">
    - for ui or ui/widget: <S>/scripts/heavy-lock go test -race -count=<1, or 20 for a race> -run '<the tests the
      change touches>' ./<pkg>
    - gofmt -l <touched dirs> prints nothing
@@ -53,6 +57,9 @@ Rules:
   - root cause;
   - files changed;
   - every verification command with its exit status and last output lines;
+  - every assertion you changed or removed, test you deleted and t.Skip you added, each with its reason;
+  - <for a feature or API task: "each case with its test, the line (file:line) you broke, and the assertion that
+    failed;">
   - every refused command;
   - what you did not check.
   Then run exactly: hc send <orch> "<name> done: <R>/.orch/reports/<name>.md"
