@@ -41,8 +41,10 @@ Rules:
 - Temp files go in <R>/.orch/tmp/<name>/, never /tmp.
 - Run heavy commands (-race, go test ./cmd/mygo, go build ./..., gotip vet ./..., any GOOS=... vet or build)
   through <S>/scripts/heavy-lock. It takes only GO*/CGO_ENABLED/MYGO_* variables and go, gotip or gofmt.
-- Keep commands simple: one command per Bash call, no cd, no $(...), no loops. Commands outside your allowlist
-  are refused, not asked: do not work around a refusal, by another tool or a Go program either; report it.
+- Keep commands simple: one command per Bash call, no cd, no $(...), no loops. Run git without -C: you are in
+  your worktree. Search with the Grep tool: a grep whose pattern has a $ is refused. Commands outside your
+  allowlist are refused, not asked: do not work around a refusal, by another tool or a Go program either;
+  report it.
 - Report: write <R>/.orch/reports/<name>.md with:
   - root cause;
   - files changed;
