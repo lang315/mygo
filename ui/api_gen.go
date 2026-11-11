@@ -6022,7 +6022,9 @@ func (_handle Element) IgnoreInput(ignore bool) Element {
 
 // InView reports whether some of the element showed in the window in the
 // frame before, within the scroll containers and clips around it: to
-// animate it in as it scrolls into view, as Motion's whileInView.
+// animate it in as it scrolls into view, as Motion's whileInView. When
+// what it answers from changes, as a scroll brings the element in, MyGo
+// builds another frame, so that the view reads the new answer.
 // A row of a List with RowVersion that calls it is built until the answer
 // settles, and again when it changes.
 func (_handle Element) InView() bool {
@@ -6040,7 +6042,8 @@ func (_handle Element) InView() bool {
 // from 0 to 1, showed in the frame before, within the window and the
 // scroll containers and clips around it, grown by margin as InViewMargin
 // grows them: as IntersectionObserver's threshold, and Motion's amount
-// for whileInView and useInView. An impression counts once half of a
+// for whileInView and useInView, and builds another frame when what it
+// answers from changes, as InView does. An impression counts once half of a
 // card shows with 0.5, an animation starts at a fifth of it with 0.2,
 // and 1 waits for all of it; 0 is InViewMargin. Its area is that of its
 // box as transforms move it, the box holding them as InView's clips do.
@@ -6067,7 +6070,8 @@ func (_handle Element) InViewAmount(amount float32, margin ...float32) bool {
 // IntersectionObserver's rootMargin and scrollMargin, a margin of 200
 // has the element in view once it is within 200 DIPs of showing, to load
 // what it shows before it scrolls in, and a negative one only once it is
-// that far inside; other clips around it clip it as they do.
+// that far inside; other clips around it clip it as they do. As InView
+// does, it has MyGo build another frame when what it answers from changes.
 func (_handle Element) InViewMargin(margin ...float32) bool {
 	_node := _handle.node()
 	if _node == nil {
