@@ -645,11 +645,26 @@ func (t *tray) appearanceChanged(dark bool) {
 // reach every app, but only those with a tray need its image code.
 var traysAppearanceChanged func()
 
+var trayImageOnce sync.Once
+
+// loadTrayImages binds the getters of a pixbuf's size and channels that
+// whiten reads, the first time a tray shows a template image white. The
+// same functions as notifications' and menu icons' bind, and no more.
+func loadTrayImages() {
+	trayImageOnce.Do(func() {
+		mustBind(libPixbuf, &gdkPixbufGetWidth, "gdk_pixbuf_get_width")
+		mustBind(libPixbuf, &gdkPixbufGetHeight, "gdk_pixbuf_get_height")
+		mustBind(libPixbuf, &gdkPixbufGetHasAlpha, "gdk_pixbuf_get_has_alpha")
+		mustBind(libPixbuf, &gdkPixbufGetBitsPerSample, "gdk_pixbuf_get_bits_per_sample")
+		mustBind(libPixbuf, &gdkPixbufGetNChannels, "gdk_pixbuf_get_n_channels")
+	})
+}
+
 // whiten draws a template image white, keeping its alpha, as the Windows
 // backend does on a dark taskbar. GdkPixbuf decodes and encodes it: the
 // backend links no image/png (TestBackendsDoNotImportPNG).
 func whiten(data []byte) ([]byte, error) {
-	loadNotifyImages() // the getters of a pixbuf's size and channels
+	loadTrayImages()
 	src, err := pixbufFromPNG(data)
 	if err != nil {
 		return nil, err

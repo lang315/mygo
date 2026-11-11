@@ -43,6 +43,10 @@ func TestWhiten(t *testing.T) {
 // template turns white before the callback, then returns to the original
 // black; an image in color is unchanged in either scheme.
 func TestTrayTemplateAppearance(t *testing.T) {
+	// GdkPixbuf whitens the template, as the backend has it once loaded.
+	if err := load(); err != nil {
+		t.Skip(err)
+	}
 	oldSet := appIndicatorSetIconFull
 	t.Cleanup(func() { appIndicatorSetIconFull = oldSet })
 	var shown []byte
