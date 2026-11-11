@@ -128,8 +128,9 @@ sessions (`git worktree list`): the owner's disk rule.
 - **Repro:** a bug fix comes with a repro that fails on `origin/main` and passes on the branch. For a CI-only bug,
   see the flow above.
 - **Tests:** the package tests of every touched package pass. For `ui` and `ui/widget`, also run `-race` through
-  heavy-lock, with `-count=20` when the task is a race, and with `-timeout 30m`: the run of `ui` takes about 20
-  minutes, over `go test`'s default of 10.
+  heavy-lock on the tests the change touches (`-run`), with `-count=20` when the task is a race. The `-race` run
+  of the whole package is CI's: here `ui` takes over 25 minutes with the heavy lock held, and the pull request's
+  run does it on three systems meanwhile.
 - **Format:** `gofmt -l <touched dirs>` prints nothing.
 - **Vet:** `heavy-lock GOOS=<os> go vet` passes on the touched packages, for darwin, linux and windows. CI's
   `Linux (check)` job covers the `mygo_noinspector` and js/wasm vets.

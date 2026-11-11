@@ -91,8 +91,7 @@ hc run --bg --name cmdtest --cwd "$R/../mygo-wt-<name>" -- "$S/scripts/heavy-loc
 hc wait cmdtest --timeout 570; hc read cmdtest --lines 15; hc rm cmdtest
 ```
 
-- The same for `go test -race -count=1 -timeout 30m ./ui`: your Bash call ends after 10 minutes, the run takes
-  about 20.
+- Your Bash call ends after 10 minutes: any run that can pass that goes through a pane like this.
 - A worker runs such a command in the background: its turn ends while the command runs, and it goes on by
   itself when the command ends.
 
