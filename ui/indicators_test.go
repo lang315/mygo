@@ -157,6 +157,7 @@ func TestProgressColor(t *testing.T) {
 		t.Errorf("it reads %+v", n)
 	}
 	value = -1
+	tt.now = time.UnixMilli(700) // phase 0.5, whose edges land on whole pixels: the wall clock's phases can round to 61
 	tt.Frame()
 	if f := fillsOf(tt, brand); len(f) != 1 || f[0].W != 60 {
 		t.Errorf("of unknown length, it slides %v in its color", f)
