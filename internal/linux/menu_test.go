@@ -17,6 +17,10 @@ import (
 // TestWhiten draws a template tray image white while the desktop prefers
 // dark, as macOS tints it, keeping its shape.
 func TestWhiten(t *testing.T) {
+	// GdkPixbuf whitens the template, as the backend has it once loaded.
+	if err := load(); err != nil {
+		t.Skip(err)
+	}
 	src := image.NewNRGBA(image.Rect(0, 0, 2, 1))
 	src.SetNRGBA(0, 0, color.NRGBA{0, 0, 0, 255})
 	src.SetNRGBA(1, 0, color.NRGBA{0, 0, 0, 56})
