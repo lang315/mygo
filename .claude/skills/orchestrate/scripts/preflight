@@ -47,7 +47,7 @@ else
 fi
 case "${CLAUDE_CODE_EFFORT_LEVEL:-unset}" in
 unset) pass "CLAUDE_CODE_EFFORT_LEVEL unset" ;;
-*) warn "CLAUDE_CODE_EFFORT_LEVEL=$CLAUDE_CODE_EFFORT_LEVEL overrides --effort in every session that inherits it: check each worker's banner" ;;
+*) fail "CLAUDE_CODE_EFFORT_LEVEL=$CLAUDE_CODE_EFFORT_LEVEL overrides --effort, the workers' pinned ones too: unset it, and choose your effort with --effort or /effort" ;;
 esac
 
 v=$(claude --version 2>/dev/null | awk '{print $1}')
