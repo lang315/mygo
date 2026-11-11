@@ -48,7 +48,9 @@ hc run --bg --name <name> --cwd "$R" claude --setting-sources user --settings "$
   - It must show `Haiku 5.5 with high effort`, `Sonnet 5.5 with medium effort` or `Opus 5.5 with medium effort`.
   - If there is no banner yet, run `hc wait <name> --timeout 5` once, then read again.
   - Still no banner, and the screen shows the worker at work: the banner scrolled off. Check the flags it runs
-    with instead: `pgrep -fl -- '<name>-brief.md'` must show its template's `--model` and `--effort`.
+    with instead: `pgrep -fl -- '<name>-brief.md'` must show its template's `--model` and `--effort`. That
+    proves the flags, not the effort in force: `CLAUDE_CODE_EFFORT_LEVEL` in the worker's pane overrides
+    `--effort`, and only the banner shows it.
   - Still no banner, and no work: run `hc get <name>`. If `first_message.sent` is false, or the screen shows a
     trust dialog, tell the owner. Never press keys yourself.
 - `--add-dir` and `--allowedTools` take several values: one of them right before the prompt eats the prompt.
@@ -112,8 +114,8 @@ git -C "$R" push origin --delete orch/<name>; git -C "$R" pull --ff-only
 
 - A `gh run watch` once exited 1 while its run was still `queued`. Confirm with `gh run view` before acting on a
   watcher's exit code.
-- A watcher started right after `gh run rerun` exits at once with the old attempt's result. Start it when
-  `attempt` has gone up and `status` is `in_progress`.
+- A watcher started right after `gh run rerun` can exit at once with the old attempt's result (seen twice, not
+  every time). Start it when `attempt` has gone up and `status` is `in_progress`.
 
 ## Blocked worker
 
