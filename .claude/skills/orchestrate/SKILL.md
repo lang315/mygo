@@ -133,6 +133,9 @@ sessions (`git worktree list`): the owner's disk rule.
 
 - **Repro:** a bug fix comes with a repro that fails on `origin/main` and passes on the branch. For a CI-only bug,
   see the flow above.
+- **Cases:** a task that adds behaviour lists its cases before the code, with one named test a case. Such a test
+  fails on `origin/main` only for want of the code, which says nothing of what it asserts: the break check of
+  your review does.
 - **Tests:** the package tests of every touched package pass. For `ui` and `ui/widget`, also run `-race` through
   heavy-lock on the tests the change touches (`-run`), with `-count=20` when the task is a race. The `-race` run
   of the whole package is CI's: here `ui` takes over 25 minutes with the heavy lock held, and the pull request's
@@ -159,6 +162,15 @@ Workers never push. The commands are in the cheatsheet.
 1. **Review.** Read the report, then review `git -C "$R" diff origin/main...orch/<name>` for correctness, scope,
    goroutines that outlive a test, and the hard rules in AGENTS.md.
 2. **Rerun** the repro and the done criterion. For `cmd/mygo`, run the full `go test ./cmd/mygo` under heavy-lock.
+   - **Break check**, when the task adds behaviour: a test is real when it goes red on broken code. In the
+     worktree, break 3 to 5 lines of product code the diff adds, one at a time, of your own choice: negate a
+     condition, move a bound by one, drop an error return. Keep each edit compiling.
+   - After each, run the tests the task added, and those alone
+     (`go -C "$R/../mygo-wt-<name>" test -count=1 -run '<their names>' ./<pkg>`): an assertion must fail. Then
+     restore the file (`git -C "$R/../mygo-wt-<name>" checkout -- <file>`), and end with `git status --porcelain`
+     empty there.
+   - A break that leaves them green is a finding for the worker: the line, the edit, and the case no test holds.
+     Log the round with `break survived` in its reason.
 3. **Check** that `git -C "$R" diff --stat origin/main...orch/<name>` matches the intent.
 4. **Push and open the PR.** Push from `$R`. Open the PR on `lang315/mygo`, never upstream, from
    `.github/pull_request_template.md`. The body has:
@@ -197,8 +209,8 @@ Workers never push. The commands are in the cheatsheet.
 
 ## Tuning
 
-About every 10 tasks in `.orch/log.md`, review four things: picks that needed escalation, roles bigger than the
-task needed, review rounds, and blocked commands.
+About every 10 tasks in `.orch/log.md`, review five things: picks that needed escalation, roles bigger than the
+task needed, review rounds, blocked commands, and breaks that survived.
 
 Weigh them by cost per finished task, using [model-guidance.md](model-guidance.md): verify first, then raise effort,
 then raise the model. Then propose the edits to the owner: changing the skill needs the owner's yes.
