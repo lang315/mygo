@@ -27,6 +27,9 @@ type rowKey struct {
 	themeGen       uint64
 	focusVisible   bool
 	windowFocus    bool
+	// undimmed is the painting theme's DisableAutoDimming, which disabled
+	// elements read as they paint: a new theme leaves themeGen as it was.
+	undimmed bool
 }
 
 // rowPaint is what a row painted (see the comment above).
@@ -79,6 +82,7 @@ func rowKeyOf(p *Painter, c *node) rowKey {
 	return rowKey{
 		box: Rect{c.x, c.y, c.w, c.h}, clip: p.clip, scale: p.scale, opacity: p.opacity, opaque: p.opaque,
 		atlases: atlasGenerations(p.s), text: p.s.Text, themeGen: rt.themeGen, focusVisible: rt.focusVisible, windowFocus: rt.windowFocused,
+		undimmed: p.Theme().DisableAutoDimming,
 	}
 }
 
