@@ -121,4 +121,7 @@ These are out of scope for workers unless the owner asks: release config (`relea
     `origin/<head>` instead.
   - Give it the brief and the failed report. Moving from haiku to a code role needs a code brief.
 - A review finding is not an escalation. Send it back to the same worker with `hc send` (scannererr took one round).
+- A worker stuck on a fixed case is not one either: it asks a question. The owner answers for a case of the
+  plan, you for one of yours, from the task's source and never from the worker's code. Send the answer to the
+  same worker.
 - When a haiku triage ends in "needs a code change", run the checklist on it as a new task.
