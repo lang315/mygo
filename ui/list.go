@@ -837,8 +837,11 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 	sig, noKeep := s.rowSig, s.rowNoKeep
 	if s.RowVersion != nil {
 		sig ^= s.settingsSig()
-	} else if f.kept != nil {
-		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
+	}
+	if f.kept != nil && (s.RowVersion == nil || f.c.rt != rt) {
+		// RowVersion was taken away, or the list moved to another window,
+		// whose states the copies do not hold: the copies go.
+		f.kept, f.spare = nil, nil
 	}
 	s.rowSig, s.rowNoKeep = 0, false
 	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], valueBuf: f.valueBuf[:0], valueArena: f.valueArena[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
