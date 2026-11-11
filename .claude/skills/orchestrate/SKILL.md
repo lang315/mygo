@@ -93,9 +93,8 @@ Answer in order. The highest role any answer requires wins.
 6. **Hard-rule zone?** See [routing.md](routing.md): **opus**, plan first. Release config and upstream sync are never
    worker tasks unless the owner asks.
 
-- **Plan first:** post the plan in chat (scope, files, API, done criterion, and the cases: each an input and the
-  result expected, a flow once whatever its values). Haiku may gather facts for it. Start the worker only after
-  the owner's yes.
+- **Plan first:** post the plan in chat (scope, files, API, done criterion, and the cases). Haiku may gather
+  facts for it. Start the worker only after the owner's yes.
 - Before you start any worker, say its role and the reason in one line.
 - Route again when the facts change: a triage ends in "needs a code change", or a cause sits in a hard-rule zone.
 
@@ -136,7 +135,8 @@ sessions (`git worktree list`): the owner's disk rule.
   see the flow above.
 - **Cases:** a feature or API task lists its cases before the code, with one named test a case. Its brief
   carries the cases fixed before the code, each an input and the result expected: the plan's, or yours from the
-  task's source when it had no plan. The worker adds cases and changes none of these: a result that came from
+  task's source when it had no plan. A rule or a bound of the source gets one case, and a second input is a case
+  only where the source tells it apart. The worker adds cases and changes none of these: a result that came from
   the code proves the code against itself.
 - Such a test fails on `origin/main` only for want of the code, which says nothing of what it asserts: the break
   check of your review does.
