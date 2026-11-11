@@ -133,7 +133,7 @@ sessions (`git worktree list`): the owner's disk rule.
 
 - **Repro:** a bug fix comes with a repro that fails on `origin/main` and passes on the branch. For a CI-only bug,
   see the flow above.
-- **Cases:** a task that adds behaviour lists its cases before the code, with one named test a case. Such a test
+- **Cases:** a feature or API task lists its cases before the code, with one named test a case. Such a test
   fails on `origin/main` only for want of the code, which says nothing of what it asserts: the break check of
   your review does.
 - **Tests:** the package tests of every touched package pass. For `ui` and `ui/widget`, also run `-race` through
@@ -162,15 +162,17 @@ Workers never push. The commands are in the cheatsheet.
 1. **Review.** Read the report, then review `git -C "$R" diff origin/main...orch/<name>` for correctness, scope,
    goroutines that outlive a test, and the hard rules in AGENTS.md.
 2. **Rerun** the repro and the done criterion. For `cmd/mygo`, run the full `go test ./cmd/mygo` under heavy-lock.
-   - **Break check**, when the task adds behaviour: a test is real when it goes red on broken code. In the
-     worktree, break 3 to 5 lines of product code the diff adds, one at a time, of your own choice: negate a
-     condition, move a bound by one, drop an error return. Keep each edit compiling.
+   - **Break check**, for a feature or API task: a test is real when it goes red on broken code. Start when the
+     worker has reported and `git -C "$R/../mygo-wt-<name>" status --porcelain` is empty: the restore below
+     discards what is not committed. Break 3 to 5 lines of product code the diff adds, one at a time, of your
+     own choice: negate a condition, move a bound by one, drop an error return. Keep each edit compiling.
    - After each, run the tests the task added, and those alone
      (`go -C "$R/../mygo-wt-<name>" test -count=1 -run '<their names>' ./<pkg>`): an assertion must fail. Then
-     restore the file (`git -C "$R/../mygo-wt-<name>" checkout -- <file>`), and end with `git status --porcelain`
-     empty there.
+     restore the file (`git -C "$R/../mygo-wt-<name>" checkout -- <file>`), and end with that status empty
+     again, before any message to the worker.
    - A break that leaves them green is a finding for the worker: the line, the edit, and the case no test holds.
      Log the round with `break survived` in its reason.
+   - Tests that run only in CI cannot be broken here: skip the check, and say so under "Not tested" in the PR.
 3. **Check** that `git -C "$R" diff --stat origin/main...orch/<name>` matches the intent.
 4. **Push and open the PR.** Push from `$R`. Open the PR on `lang315/mygo`, never upstream, from
    `.github/pull_request_template.md`. The body has:
