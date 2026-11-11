@@ -162,8 +162,9 @@ Workers never push. The commands are in the cheatsheet.
      245 job-minutes from the runners every session shares; a PR's run takes 70 to 190.
    - A PR that changes only `.claude/**`, `*.md` or `LICENSE` starts no run (`paths-ignore` in `ci.yml`): there
      is nothing to wait for.
-   - A job that ends `cancelled` with no steps waited too long for a runner and ran nothing. Rerun it with
-     `gh run rerun <id> --failed`: it needs no triage.
+   - A run on the last pushed commit that ends `failure` with no failed job, only jobs `cancelled` with no steps:
+     those waited too long for a runner and ran nothing. Rerun them with `gh run rerun <id> --failed`, with no
+     triage. A run that itself ends `cancelled` was stopped by hand or replaced by a newer push: leave it.
    - If a run fails, haiku triages it and the fix goes back to the worker.
 6. **Ask.** When the run is green (and the dispatched one, if any), compare `gh pr diff <n> --name-only` with the intent. Then **ask the owner**, and
    merge only after a yes.

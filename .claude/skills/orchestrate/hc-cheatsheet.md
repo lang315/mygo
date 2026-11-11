@@ -100,8 +100,8 @@ gh run list --repo lang315/mygo --branch orch/<name> --limit 4 --json databaseId
 hc run --bg --name ci-<id> -- gh run watch <id> --repo lang315/mygo --exit-status --interval 60
 hc wait ci-<id> --timeout 570; hc get ci-<id>; hc rm ci-<id>    # exit_code 0 = green
 gh run view <id> --repo lang315/mygo --json status,conclusion   # check before believing a watcher's exit
-gh run view <id> --repo lang315/mygo --json jobs --jq '.jobs[]|select(.conclusion=="cancelled")|"\(.name) \(.steps|length)"'
-gh run rerun <id> --repo lang315/mygo --failed                  # a cancelled job with 0 steps: it got no runner
+gh run view <id> --repo lang315/mygo --json conclusion,jobs --jq '.conclusion, (.jobs[]|select(.conclusion=="cancelled" or .conclusion=="failure")|"\(.name) \(.conclusion) \(.steps|length)")'
+gh run rerun <id> --repo lang315/mygo --failed                  # only for: failure, then every job "cancelled 0"
 gh run view <id> --repo lang315/mygo --json attempt,status      # after a rerun, before the watcher
 gh pr diff <n> --repo lang315/mygo --name-only
 # only after the owner's yes:
