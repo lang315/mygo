@@ -105,8 +105,9 @@ sessions (`git worktree list`): the owner's disk rule.
    Fill every `<...>` with an absolute value, your address included.
 2. A code worker gets a worktree: `git -C "$R" worktree add "$R/../mygo-wt-<name>" -b orch/<name> origin/main`.
 3. Start the worker with its role's template from the cheatsheet. Use the pinned model IDs, never aliases.
-4. Check its banner at once. A wrong model or effort: kill the worker, log it, tell the owner. No banner, a trust
-   dialog, or `first_message.sent: false`: tell the owner, and don't press keys.
+4. Check its banner at once; a worker already at work has scrolled it off, so check its flags instead
+   ([hc-cheatsheet.md](hc-cheatsheet.md)). A wrong model or effort: kill the worker, log it, tell the owner. No
+   banner and no work, a trust dialog, or `first_message.sent: false`: tell the owner, and don't press keys.
 5. Code workers have no `gh`. Paste the decisive CI log lines into the brief, or point it to a haiku report.
 
 **Permissions** ([routing.md](routing.md#permissions)):
@@ -161,6 +162,8 @@ Workers never push. The commands are in the cheatsheet.
      245 job-minutes from the runners every session shares; a PR's run takes 70 to 190.
    - A PR that changes only `.claude/**`, `*.md` or `LICENSE` starts no run (`paths-ignore` in `ci.yml`): there
      is nothing to wait for.
+   - A job that ends `cancelled` with no steps waited too long for a runner and ran nothing. Rerun it with
+     `gh run rerun <id> --failed`: it needs no triage.
    - If a run fails, haiku triages it and the fix goes back to the worker.
 6. **Ask.** When the run is green (and the dispatched one, if any), compare `gh pr diff <n> --name-only` with the intent. Then **ask the owner**, and
    merge only after a yes.
