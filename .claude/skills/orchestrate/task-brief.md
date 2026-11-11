@@ -29,7 +29,7 @@ Steps:
 3. Done criterion, all must pass:
    - <the reproducing command>
    - <the package tests, e.g. go test -count=1 ./<pkg>>
-   - for ui or ui/widget: <S>/scripts/heavy-lock go test -race -count=<1, or 20 for a race> ./<pkg>
+   - for ui or ui/widget: <S>/scripts/heavy-lock go test -race -count=<1, or 20 for a race> -timeout 30m ./<pkg>
    - gofmt -l <touched dirs> prints nothing
    - <S>/scripts/heavy-lock GOOS=<os> go vet ./<pkgs> for darwin, linux and windows
 
@@ -41,6 +41,9 @@ Rules:
 - Temp files go in <R>/.orch/tmp/<name>/, never /tmp.
 - Run heavy commands (-race, go test ./cmd/mygo, go build ./..., gotip vet ./..., any GOOS=... vet or build)
   through <S>/scripts/heavy-lock. It takes only GO*/CGO_ENABLED/MYGO_* variables and go, gotip or gofmt.
+- A Bash call ends after 10 minutes, and go test's own limit is 10 minutes a package. The -race run of ui takes
+  about 20, and the tests of cmd/mygo can pass 10: give such a run -timeout 30m, start it as a background
+  command, and report only after it has ended.
 - Keep commands simple: one command per Bash call, no cd, no $(...), no loops. Run git without -C: you are in
   your worktree. Search with the Grep tool: a grep whose pattern has a $ is refused. Commands outside your
   allowlist are refused, not asked: do not work around a refusal, by another tool or a Go program either;

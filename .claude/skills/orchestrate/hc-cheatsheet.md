@@ -68,9 +68,10 @@ hc wait --children any --timeout 570
 
 - The wait returns `reason: message` when a report arrives. It returns `timeout` when the time runs out, which is
   a check-in, not a failure. Wait again until no child is working.
-- A child with `reason: status` and `status: done` ended its turn and no message came, as when its `hc send`
-  was refused: read `$R/.orch/reports/<name>.md`, the report is there. `status: blocked` is a dialog in the
-  child: see "Blocked worker".
+- A child with `reason: status` and `status: done` ended its turn and no message came. Read
+  `$R/.orch/reports/<name>.md`: a report there means its `hc send` was refused; none means it waits on a
+  background command ("Slow commands"), so wait again. `status: blocked` is a dialog in the child: see "Blocked
+  worker".
 - Reports arrive as input: `<hc from="t2k listinputs">listinputs done: <path></hc>`.
 - `hc send <t> "<review finding>"` gives a worker another round in the same context.
 - `hc send` wraps the text in `<hc from=...>`, so a slash command sent this way does not run.
@@ -89,6 +90,11 @@ in `heavy.lock/pid`. If `kill -0 "$(cat "$R/.orch/heavy.lock/pid")"` fails, the 
 hc run --bg --name cmdtest --cwd "$R/../mygo-wt-<name>" -- "$S/scripts/heavy-lock" GOFLAGS=-trimpath go test -count=1 -timeout 30m ./cmd/mygo
 hc wait cmdtest --timeout 570; hc read cmdtest --lines 15; hc rm cmdtest
 ```
+
+- The same for `go test -race -count=1 -timeout 30m ./ui`: your Bash call ends after 10 minutes, the run takes
+  about 20.
+- A worker runs such a command in the background: its turn ends while the command runs, and it goes on by
+  itself when the command ends.
 
 ## PR, CI and merge (always `--repo lang315/mygo`; never the upstream)
 
