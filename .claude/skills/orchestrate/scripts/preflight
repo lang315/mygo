@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # usage: preflight
-# The orchestrator's checks before it routes any task. Prints PASS, FAIL or WARN per check and exits 1 on any FAIL.
+# The orchestrator's checks before it routes any task. Prints PASS, FAIL, WARN or INFO per check and exits 1 on any
+# FAIL. The orchestrator's model and effort are the owner's choice: the script reports them and checks neither.
 # Run it from the orchestrator session itself: it reads the launch flags of the claude process above it.
 set -u
 S="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,6 +10,7 @@ fails=0
 pass() { echo "PASS  $1"; }
 fail() { echo "FAIL  $1"; fails=$((fails + 1)); }
 warn() { echo "WARN  $1"; }
+info() { echo "INFO  $1"; }
 
 # The claude process this script runs under, and how it was started.
 p=$$ a=""
@@ -21,14 +23,10 @@ done
 if [ -z "$a" ]; then
 	fail "launch flags: no claude process above this shell"
 else
-	case " $a " in
-	*" --model claude-opus-5-5 "*) pass "launch model: claude-opus-5-5" ;;
-	*) fail "launch model: want --model claude-opus-5-5 in: $a" ;;
-	esac
-	case " $a " in
-	*" --effort high "*) pass "launch effort: high" ;;
-	*) fail "launch effort: want --effort high in: $a" ;;
-	esac
+	m=$(printf '%s\n' "$a" | sed -n 's/.* --model[ =]\([^ ]*\).*/\1/p')
+	e=$(printf '%s\n' "$a" | sed -n 's/.* --effort[ =]\([^ ]*\).*/\1/p')
+	info "launch model: ${m:-the session default (no --model flag)}"
+	info "launch effort: ${e:-the session default (no --effort flag)}"
 	case " $a " in
 	*" --settings "*orchestrator-settings.json*) pass "launch settings: orchestrator-settings.json" ;;
 	*) fail "launch settings: want --settings .claude/skills/orchestrate/orchestrator-settings.json in: $a" ;;
@@ -48,8 +46,8 @@ else
 	esac
 fi
 case "${CLAUDE_CODE_EFFORT_LEVEL:-unset}" in
-unset | high) pass "CLAUDE_CODE_EFFORT_LEVEL=${CLAUDE_CODE_EFFORT_LEVEL:-unset}" ;;
-*) fail "CLAUDE_CODE_EFFORT_LEVEL=$CLAUDE_CODE_EFFORT_LEVEL overrides --effort; unset it" ;;
+unset) pass "CLAUDE_CODE_EFFORT_LEVEL unset" ;;
+*) fail "CLAUDE_CODE_EFFORT_LEVEL=$CLAUDE_CODE_EFFORT_LEVEL overrides --effort, and a worker pane that has it too loses its pinned effort: unset it, and choose your effort with --effort or /effort" ;;
 esac
 
 v=$(claude --version 2>/dev/null | awk '{print $1}')

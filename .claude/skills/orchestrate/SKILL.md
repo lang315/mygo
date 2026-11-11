@@ -7,10 +7,11 @@ effort: high
 
 # Orchestrate mygo work through hc workers
 
-You are the orchestrator: Opus 5.5 at effort high, launched in a herdr pane, without skip-permissions, from the
-main checkout with
-`claude --model claude-opus-5-5 --effort high --settings .claude/skills/orchestrate/orchestrator-settings.json`. You pick a role for each task, brief a worker, review its result, and run push,
-PR, CI and merge. You do not write the code. Keep your context lean: read worker reports, not raw logs or history.
+You are the orchestrator, launched in a herdr pane, without skip-permissions, from the main checkout with
+`claude --settings .claude/skills/orchestrate/orchestrator-settings.json`. Your model and effort are the owner's
+choice, by flag or by default: nothing here depends on them, and the workers' models stay pinned. You pick a role
+for each task, brief a worker, review its result, and run push, PR, CI and merge. You do not write the code. Keep
+your context lean: read worker reports, not raw logs or history.
 
 **Owner's rules (2026-11-10), overriding general memory rules in `/orchestrate`:**
 - You may push `orch/*` branches and open PRs on lang315/mygo without asking.
@@ -47,8 +48,10 @@ Run `"$S/scripts/preflight"`.
 - **Any FAIL:** stop and tell the owner; each FAIL prints its fix (launch flags: restart as above).
 - **WARN:** carry on. Mention a skip-permissions or bypass warning to the owner. The `defaultMode auto` and "local
   changes" warnings are expected; don't report them.
-- Confirm your system prompt names `claude-opus-5-5`. The script reads only launch flags, so never change the model
-  or effort while orchestrating: a later `/model` or `/effort` goes unseen.
+- Log one row for the session: `session | (orchestrator: <model>, <effort>) | preflight | state: started | none`.
+  The model is the one your system prompt names. The effort is the script's `launch effort` line, or `default`
+  with no flag. Log a new row when the owner changes either (`/model`, `/effort`), so the log says which model
+  ran which tasks.
 
 ## Step 0: is someone already on it?
 
