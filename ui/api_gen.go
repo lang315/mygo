@@ -3602,7 +3602,9 @@ func (_handle Element) Absolute() Element {
 // as it builds the element's node, only while assistive technology reads
 // the window: what costs too much to give every frame, as the text of a
 // large document. The node is a type internal to this module, so only
-// its packages describe elements so, as package ui/editor does.
+// its packages describe elements so, as package ui/editor does. The
+// elements inside a text field described so show to assistive technology
+// too, as those of other text fields do not.
 func (_handle Element) Access(fn func(n *platform.AccessNode)) Element {
 	_node := _handle.node()
 	if _node == nil {
