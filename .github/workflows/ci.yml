@@ -517,8 +517,10 @@ jobs:
         if: steps.sqlitecore-cache.outputs.cache-hit == 'true'
         shell: bash
         run: touch "${{ steps.sqlitecore.outputs.path }}"
-      # The race detector does not run on Windows ARM64.
-      - run: go test -shuffle=on ./...
+      # The race detector does not run on Windows ARM64. internal/nativegen
+      # takes eight or nine minutes here, near go test's default of 10 per
+      # package; 15 leaves it room and the GUI tests theirs in the job's 30.
+      - run: go test -shuffle=on -timeout 15m ./...
       # The runner's provisioning daemon (provjobd, under hosted-compute-agent)
       # runs wsl.exe every 30 seconds. This image has no WSL, and some of those
       # runs start `wsl.exe --update --confirm --prompt-before-exit`, whose new
