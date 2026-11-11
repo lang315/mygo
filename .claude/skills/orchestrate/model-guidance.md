@@ -49,13 +49,13 @@ Source: Addy Osmani, "Which Claude model should you build with? Fable, Opus, Son
 
 | Point | Rule here |
 |---|---|
-| 1. Opus default, move down when scoped | Routing checklist items 3–6 (SKILL.md): sonnet for one package with a local test, opus for API, backends and hard-rule zones. The orchestrator is Opus. |
+| 1. Opus default, move down when scoped | Routing checklist items 3–6 (SKILL.md): sonnet for one package with a local test, opus for API, backends and hard-rule zones. The orchestrator runs on the model the owner opens it with. |
 | 2. Cost per finished task | Tuning (SKILL.md): count escalations, review rounds and oversized roles in `.orch/log.md`, not model prices. |
 | 3. Effort before model | Roles (routing.md) pin efforts: haiku high, sonnet medium, opus medium. **Open for tuning:** the article's order adds "raise effort one level" before moving up a model; our chain goes straight to the next model. |
 | 4. Self-verification first | Done criteria (SKILL.md): every code task has a repro and commands that pass or fail. A worker must reproduce before fixing (task-brief.md), and the orchestrator reruns the decisive commands. |
 | 5. Lean main context | SKILL.md intro: the orchestrator reads reports, never raw logs; workers write reports to `.orch/reports/`. |
-| 6. Switch at natural breaks | Each worker is a fresh session with a written brief. Escalation starts a new worker (`<name>-2`) with the brief and the failed report, never a mid-session `/model`. Preflight forbids changing the orchestrator's model or effort mid-session. |
+| 6. Switch at natural breaks | Each worker is a fresh session with a written brief. Escalation starts a new worker (`<name>-2`) with the brief and the failed report, never a mid-session `/model`. The orchestrator's model and effort are the owner's; a change mid-session gets a log row. |
 | 7. Small models for cheap-to-verify work | Haiku is read-only: CI triage, logs, search, PR diff checks (routing.md). Code edits go to sonnet or opus; judgment, review and merge stay with the orchestrator. **Open for tuning:** the article runs such subagents at the model's default effort; ours run haiku at `high`. |
 | 8. Lead plus cheap workers, not for dependent chains | At most 3 code workers in parallel. A task that is one dependent chain stays with one worker; work that fits in one context is not split. |
-| 9. Code picks the model | `scripts/preflight` and the pinned launch templates (hc-cheatsheet.md) fix model and effort; the banner check confirms them. |
-| 10. Measure on your own tasks | The log row records model and effort from the banner. Tuning compares outcomes every ~10 tasks. Changing a pinned model ID means re-checking the routing (routing.md). |
+| 9. Code picks the model | The pinned launch templates (hc-cheatsheet.md) fix each worker's model and effort; the banner check confirms them. `scripts/preflight` reports the orchestrator's and checks neither. |
+| 10. Measure on your own tasks | The log row records model and effort from the banner, and a session row the orchestrator's. Tuning compares outcomes every ~10 tasks. Changing a pinned model ID means re-checking the routing (routing.md). |
