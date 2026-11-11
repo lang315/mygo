@@ -50,8 +50,14 @@ This is a code example.
 `,
   }
   for (const [file, source] of Object.entries(sources)) await fs.writeFile(path.join(repo, "docs", file), source)
+  // The Chinese tree, as the repository has it: its pages are published, not listed.
+  await fs.mkdir(path.join(repo, "docs-zh"), { recursive: true })
+  await fs.writeFile(path.join(repo, "docs-zh/README.md"), "# 介绍\n\n概述。\n\n[原生界面](ui/README.md)\n")
   const assets = await docsAssets(repo)
-  expect([...assets.keys()]).toEqual(["/docs.md", "/docs/plugins/fetch.md", "/docs/ui.md", "/llms.txt", "/llms-full.txt"])
+  expect([...assets.keys()]).toEqual(["/docs.md", "/docs/plugins/fetch.md", "/docs/ui.md", "/zh/docs.md", "/llms.txt", "/llms-full.txt"])
+  expect(assets.get("/zh/docs.md")).toContain("https://mygo.egoist.dev/zh/docs/ui.md")
+  expect(assets.get("/llms.txt")).not.toContain("/zh/docs")
+  expect(assets.get("/llms-full.txt")).not.toContain("介绍")
   const index = assets.get("/llms.txt")!
   expect(index).toStartWith("# MyGo\n\n> ")
   for (const file of ["/docs.md", "/docs/plugins/fetch.md", "/docs/ui.md"]) {
