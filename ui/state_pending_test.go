@@ -34,7 +34,7 @@ var statePlaced = map[string][]string{
 		"lookedSeen", "lookedPass", "lay", "text", "x", "y", "w", "h", "vx", "vy", "vw", "vh",
 		"parent", "flags", "cursor", "tip", "effectLayer", "webView",
 		"tipDelay", "tipWarm", // the theme's TooltipDelay, set by the build; a new theme (themeGen, theme) builds the row again
-		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barStyle", "reposed", "hoverBuilt", "hoverLook", "barsShown", "hideScrollbars", "ignoreInput", "accessHidden", "track",
+		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barStyle", "reposed", "hoverBuilt", "hoverLook", "barsShown", "barFlags", "ignoreInput", "accessHidden", "track",
 		"moveFrame", "startX", "startY", "list", "cx", "cy", "cw", "ch", "role",
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
@@ -50,6 +50,7 @@ var statePlaced = map[string][]string{
 		"replay", // what the row painted (replay.go): painting memory, with its own key
 		"krec",   // the record of the kept row: layout and commit memory, with its own checks
 		"row",    // the record of the kept row the state is in, which touch marks dirty
+		"view",   // what InView read, set at commit; a kept row marks it read again (listFrame.keep)
 	},
 	// neither: read only with a field that is pending, or set again by it.
 	"neither": {

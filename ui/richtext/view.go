@@ -59,6 +59,19 @@ type EditorOptions struct {
 	// it does changes, for the paragraphs to be laid out again.
 	Spans        func(p int, style ParagraphStyle, spans []ui.Span) []ui.Span
 	SpansVersion int
+	// Space is given paragraph p (from 0) and returns the room in DIPs to
+	// leave above it, more than the theme's, as a list opens a place
+	// where an item dragged would go. It is asked as the paragraphs are
+	// laid out, each frame for those in view, so that what it returns can
+	// change from frame to frame and the paragraphs below move with it.
+	Space func(p int) float32
+	// NoScrollbar draws no scroll bar of the editor's own, and a press
+	// where it would be goes to the text: an app that makes the editor as
+	// tall as its text, and scrolls it with a page around it, shows the
+	// page's bar alone, even in a frame where the editor's height falls
+	// short of its text and it scrolls a little itself. The editor still
+	// scrolls to keep the caret in view, and with the wheel.
+	NoScrollbar bool
 }
 
 // Editor creates an editor of doc's attributed text, as NSTextView edits
@@ -171,6 +184,13 @@ type view struct {
 	// placed is room for the boxes of the paragraphs painted, which moved
 	// compares with those the app read.
 	placed []ParagraphBox
+	// read is set as the app reads this editor's paragraphs in view
+	// (VisibleParagraphs), which readBoxes holds, and readCaret as it reads
+	// its caret (CaretRect), which readCaretRect holds: for its next paint
+	// to tell whether it moved them. Under the document's lock.
+	read, readCaret bool
+	readBoxes       []ParagraphBox
+	readCaretRect   ui.Rect
 }
 
 type editMode uint8
@@ -229,9 +249,14 @@ func build(c *ui.Context, doc *Document, options []EditorOptions, styled bool) u
 		doc.lock()
 		v.selAnchor, v.caret = doc.anchor, doc.caret
 		v.selVersion = doc.selVersion
-		doc.shownIn = weak.Make(v)
 		doc.mu.Unlock()
 	}
+	// the editor built last shows the document for what the app reads
+	// next (VisibleParagraphs, CaretRect): with two editors of one
+	// document, each one's are read right after it is built
+	doc.lock()
+	doc.shownIn = weak.Make(v)
+	doc.mu.Unlock()
 	v.opts = EditorOptions{}
 	if len(options) > 0 {
 		v.opts = options[0]
@@ -513,6 +538,9 @@ func (v *view) space(p int, st ParagraphStyle) (above, below float32) {
 		if p+1 >= len(v.paras) || !v.para(p+1).style.CodeBlock {
 			below = look.size * look.CodeBlockPadding[1]
 		}
+	}
+	if v.opts.Space != nil {
+		above += max(0, v.opts.Space(p))
 	}
 	return above, below
 }
@@ -884,8 +912,12 @@ func (d *Document) VisibleParagraphs() []ParagraphBox {
 		boxes = v.boxes(nil)
 	}
 	d.lock()
-	d.read = true
-	d.boxes = append(d.boxes[:0], boxes...)
+	if v != nil && v.doc == d {
+		v.read = true
+		v.readBoxes = append(v.readBoxes[:0], boxes...)
+	} else {
+		d.readNone = true
+	}
 	d.mu.Unlock()
 	return boxes
 }
@@ -911,7 +943,11 @@ func (d *Document) CaretRect() (r ui.Rect, ok bool) {
 		r, ok = v.caretRect()
 	}
 	d.lock()
-	d.readCaret, d.caretRect = true, r
+	if v != nil && v.doc == d {
+		v.readCaret, v.readCaretRect = true, r
+	} else {
+		d.readNone = true
+	}
 	d.mu.Unlock()
 	return r, ok
 }
@@ -929,10 +965,16 @@ func (v *view) caretRect() (ui.Rect, bool) {
 
 // boxes appends the boxes of the paragraphs in view to out.
 func (v *view) boxes(out []ParagraphBox) []ParagraphBox {
-	for i := v.first; i <= v.last && i < len(v.paras); i++ {
+	if v.first > v.last || v.first >= len(v.paras) {
+		return out
+	}
+	// Each start is counted on from the one before, as paint does: found
+	// from the start of the text, each cost as much as the text is long.
+	ps := v.shown.paraStart(v.first)
+	for i := v.first; i <= v.last && i < len(v.paras); i, ps = i+1, ps+v.para(i).n+1 {
 		pv := v.paraLayout(i)
 		_, y := v.origin(i)
-		out = append(out, ParagraphBox{Index: i, Start: v.shown.paraStart(i), Top: v.padY + float32(y-v.scroll), Height: pv.h - pv.space})
+		out = append(out, ParagraphBox{Index: i, Start: ps, Top: v.padY + float32(y-v.scroll), Height: pv.h - pv.space})
 	}
 	return out
 }
@@ -943,9 +985,12 @@ func (v *view) boxes(out []ParagraphBox) []ParagraphBox {
 func (v *view) moved() {
 	d := v.doc
 	d.lock()
-	read, was := d.read, d.boxes
-	readCaret, caretWas := d.readCaret, d.caretRect
-	d.read, d.readCaret = false, false
+	read, was := v.read, v.readBoxes
+	readCaret, caretWas := v.readCaret, v.readCaretRect
+	v.read, v.readCaret = false, false
+	if d.readNone { // read before any editor showed it: what this one placed is news
+		d.readNone, read, was = false, true, nil
+	}
 	d.mu.Unlock()
 	if read {
 		v.placed = v.boxes(v.placed[:0])

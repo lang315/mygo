@@ -216,6 +216,7 @@ var (
 
 	// shlwapi
 	procSHCreateMemStream = shlwapi.NewProc("SHCreateMemStream")
+	procAssocQueryStringW = shlwapi.NewProc("AssocQueryStringW")
 
 	// dwmapi
 	procDwmSetWindowAttribute        = dwmapi.NewProc("DwmSetWindowAttribute")

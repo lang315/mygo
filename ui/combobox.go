@@ -332,7 +332,7 @@ func fieldOf(c *context, keep bool, fn func() *node) (*node, *node) {
 	f.builtWith(t)
 	setStyle(f, fieldStyle, staticField)
 	if f.Clicked() {
-		in.Focus()
+		in.focus(false)
 	}
 	return f, in
 }
@@ -375,7 +375,7 @@ func coreCombobox(c *context, selected *string, options []string) *node {
 		arrow.afterInput(func() {
 			if arrow.Clicked() {
 				p.SetOpen(!p.Open())
-				p.Input.Focus()
+				p.Input.focus(false)
 				if p.Open() {
 					// As a click in the text opening them does.
 					p.Input.st.editor.selectAll()
@@ -490,7 +490,7 @@ func coreSearchField(c *context, query *string) *node {
 					*query = ""
 					in.st.editor.setText("")
 					in.st.markChanged()
-					in.Focus()
+					in.focus(false)
 					c.rt.consumed = true
 				}
 			})

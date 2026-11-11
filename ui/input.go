@@ -446,21 +446,29 @@ func (rt *engine) hoveredLate(id uint64) bool {
 func (rt *engine) pointerMove(x, y float32) {
 	if d := &rt.scrollDrag; d.st != nil {
 		s := d.st
-		g := d.bars(s.scrollbarStyle())
+		g := s.scrollbarGeometry(s.x, s.y, d.contentW, d.contentH, s.scrollX, s.scrollY)
 		lx, ly := s.local(x, y)
-		lx += s.x
-		ly += s.y
+		travel := g.vTrack.H - 4 - g.v.H
+		moved := ly + s.y - d.start
+		reach, now := d.contentH-float64(s.h), s.contentH-float64(s.h)
 		if d.horizontal {
-			if travel := g.hTrack.W - 4 - g.h.W; travel > 0 {
-				moved := lx - d.start
-				if s.rtl {
-					// The offset counts from the right.
-					moved = -moved
-				}
-				s.scrollTo(dragTo(d.from, moved, travel, d.contentW-float64(s.w), s.contentW-float64(s.w)), s.scrollY)
+			travel = g.hTrack.W - 4 - g.h.W
+			moved = lx + s.x - d.start
+			reach, now = d.contentW-float64(s.w), s.contentW-float64(s.w)
+			if s.rtl {
+				// The offset counts from the right.
+				moved = -moved
 			}
-		} else if travel := g.vTrack.H - 4 - g.v.H; travel > 0 {
-			s.scrollTo(s.scrollX, dragTo(d.from, ly-d.start, travel, d.contentH-float64(s.h), s.contentH-float64(s.h)))
+		}
+		if travel > 0 {
+			offset := dragTo(d.from, moved, travel, reach, now)
+			x, y := s.scrollX, s.scrollY
+			if d.horizontal {
+				x = offset
+			} else {
+				y = offset
+			}
+			s.scrollTo(x, y)
 		}
 		rt.pointerX, rt.pointerY = x, y
 		rt.requestFrame()
@@ -989,11 +997,16 @@ func dragTo(from float64, moved, travel float32, reach, now float64) float64 {
 	return max(0, min(along, 1)) * now
 }
 
-// bars returns the scroll bars of the container being dragged, with the
-// content's size as the drag started.
-func (d *scrollDrag) bars(style ScrollbarStyle) scrollGeometry {
-	s := d.st
-	return scrollBars(Rect{s.x, s.y, s.w, s.h}, s.barInset, float32(d.contentW), float32(d.contentH), float32(s.scrollX), float32(s.scrollY), s.flags, style, s.rtl)
+// keepBarsVisible is separate from the two axis bits in state.barFlags.
+const keepBarsVisible = 1
+
+// scrollbarGeometry lays out both axes before filtering their visibility,
+// so hiding a bar leaves the other track and the shared corner in place.
+func (s *state) scrollbarGeometry(left, top float32, w, h, x, y float64) scrollGeometry {
+	g := scrollBars(Rect{left, top, s.w, s.h}, s.barInset, float32(w), float32(h), float32(x), float32(y), s.flags, *s.barStyle, s.rtl)
+	g.vertical = g.vertical && s.barFlags&flagScrollY != 0
+	g.horizontal = g.horizontal && s.barFlags&flagScrollX != 0
+	return g
 }
 
 // scrollBy scrolls a container by dx, dy within its content, and reports
@@ -1912,15 +1925,50 @@ func (e *node) focusWithin() bool {
 
 // Focus gives the element the keyboard focus. Called in every frame, it
 // keeps it there; AutoFocus gives it once. A field around an input, as
-// SearchField's, gives it to its input, where typing goes.
-func (e *node) Focus() *node {
+// SearchField's, gives it to its input, where typing goes. When the focus
+// moves to it, it scrolls the containers around it as little as shows it,
+// as Tab does and the web's focus() does; ScrollIntoView lines it up
+// otherwise. While a pointer button is held it scrolls nothing: what a
+// press focuses, as the line a grip moves, is under the pointer.
+//
+// Its options, as the web's focus() options, keep the scroll where the
+// user left it: the focus returned to a cell of a grid when a dialog
+// closes, without scrolling the grid.
+//
+//	cell.Focus(ui.FocusOptions{PreventScroll: true})
+func (e *node) Focus(options ...FocusOptions) *node {
+	if len(options) > 1 {
+		panic("ui: Focus takes at most one FocusOptions")
+	}
+	var o FocusOptions
+	if len(options) > 0 {
+		o = options[0]
+	}
+	e.focus(!o.PreventScroll)
+	return e
+}
+
+// FocusOptions say how Focus gives the focus, as the web's FocusOptions
+// do. The zero options do what Focus does without them.
+type FocusOptions struct {
+	// PreventScroll keeps the containers around the element where they
+	// are when the focus moves to it, as the web's preventScroll does,
+	// rather than scrolling them as little as shows it.
+	PreventScroll bool
+}
+
+// focus gives the element the keyboard focus, as Focus does, and scrolls
+// it into view when reveal is set and the focus moves to it. A click on a
+// control focuses it where the user scrolled it, as on the web, and so does
+// the focus a page or a transition gives back.
+func (e *node) focus(reveal bool) {
 	e.neverKept() // an action of the build: a row linked would not run it
 	if e != nil && e.focusTo != nil {
-		e.focusTo.Focus()
-		return e
+		e.focusTo.focus(reveal)
+		return
 	}
 	if !e.hasState() {
-		return e
+		return
 	}
 	e.flags |= flagFocusable
 	rt := e.c.rt
@@ -1930,8 +1978,10 @@ func (e *node) Focus() *node {
 		// What was built before read the focus where it was: build again,
 		// as for an event handled while building.
 		rt.consumed = true
+		if reveal && rt.buttons == 0 {
+			rt.reveal(e.id)
+		}
 	}
-	return e
 }
 
 // AutoFocus gives the element the keyboard focus in the frame it appears,
@@ -2230,13 +2280,13 @@ func (e *node) Dismissed() bool {
 func (rt *engine) scrollbarPress(chain []uint64, x, y float32) bool {
 	for _, id := range chain {
 		s := rt.states[id]
-		if s == nil || s.flags&(flagScrollX|flagScrollY) == 0 || !s.barsShown || s.hideScrollbars {
+		if s == nil || !s.barsShown || s.barFlags == 0 {
 			continue
 		}
 		lx, ly := s.local(x, y)
 		lx += s.x
 		ly += s.y
-		g := scrollBars(Rect{s.x, s.y, s.w, s.h}, s.barInset, float32(s.contentW), float32(s.contentH), float32(s.scrollX), float32(s.scrollY), s.flags, s.scrollbarStyle(), s.rtl)
+		g := s.scrollbarGeometry(s.x, s.y, s.contentW, s.contentH, s.scrollX, s.scrollY)
 		d := &rt.scrollDrag
 		w, h := float64(s.w), float64(s.h)
 		s.wheel = nil

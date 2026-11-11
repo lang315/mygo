@@ -338,4 +338,22 @@ export const showcase: ShowcaseApp[] = [
     mode: "native",
     image: "/showcase/golder.jpg",
   },
+  {
+    name: "Vole",
+    description:
+      "A disk cleaner for macOS. A treemap of what fills your disk, safe cache cleanup you review item by item, app uninstalls that take the leftovers too, and live system status in the menu bar. Built on Mole.",
+    url: "https://github.com/hellozhangran/vole",
+    author: "hellozhangran",
+    mode: "native",
+    image: "/showcase/vole.jpg",
+  },
+  {
+    name: "MiguWave",
+    description:
+      "A third-party Migu Music desktop client for macOS and Windows, drawn with MyGo's native UI. Discovery, charts, playlists and artist pages, scrolling lyrics, a full-screen vinyl stage with GPU-drawn effects, and Apple Music-style crossfade between tracks.",
+    url: "https://github.com/horizon0514/MiguWave",
+    author: "horizon0514",
+    mode: "native",
+    image: "/showcase/miguwave.jpg",
+  },
 ]

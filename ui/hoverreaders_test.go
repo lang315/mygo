@@ -256,6 +256,7 @@ var elementQueriesNotNoted = map[string]string{
 	"timeline.go node.Timeline":         "as AnimateTo: a row with a timeline is not kept",
 	"element.go node.AttachedAnchors":   "reads the layout of the frame before only in a build, and then calls neverKept first",
 	"motion.go node.InViewMargin":       "InView notes the read; a margin that shrinks the area reads the layout of the frame before, and calls neverKept first",
+	"motion.go node.watchView":          "no answer: it marks that the build read InView, for the commit to ask for another frame when the answer may change; InView, InViewMargin and InViewAmount note the read first, and a kept row marks it again (listFrame.keep)",
 	"rowclick.go node.RowDoubleClicked": "asks Hovered of the element, which notes the read",
 }
 

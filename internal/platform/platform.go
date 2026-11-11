@@ -41,8 +41,10 @@ type Rect struct{ X, Y, Width, Height int }
 
 // TitleBar is the room the window controls take at the top of a window
 // with a hidden title bar, in DIPs: they sit in a band of Height along the
-// top edge, Left wide from the left edge and Right wide from the right.
-type TitleBar struct{ Height, Left, Right int }
+// top edge, Left wide from the left edge and Right wide from the right,
+// and end Bottom below the top edge, which is Height where they fill the
+// band.
+type TitleBar struct{ Height, Left, Right, Bottom int }
 
 // Color is an 8-bit RGBA color.
 type Color struct{ R, G, B, A uint8 }
@@ -964,6 +966,14 @@ type WindowHandler interface {
 	// AuthRequested answers an HTTP authentication challenge of the page,
 	// or of what it loads.
 	AuthRequested(req AuthRequest) AuthResponse
+	// ClientCertificateRequested asks which client certificate to give a
+	// server that asks for one, of the page or of what it loads.
+	ClientCertificateRequested(req ClientCertificateRequest) ClientCertificateResponse
+	// HandlesClientCertificates tells whether the app answers client
+	// certificate challenges at all: a backend that lists certificates
+	// (macOS, whose keychain asks the user for them) lists them only
+	// while it does, and leaves the challenge to the web view otherwise.
+	HandlesClientCertificates() bool
 	// CertificateError asks whether to load what a server sent with a
 	// certificate that does not verify: false fails it, as without the
 	// call. A backend that verifies certificates itself to tell (macOS)
@@ -1231,6 +1241,12 @@ type Shell interface {
 	// OpenApplication starts the application at Application.Path, or
 	// brings it to the front.
 	OpenApplication(path string) error
+	// DefaultApp returns the application the system would use to open
+	// url. url may be a web URL such as https://example.com, a file://
+	// URL, or any URL whose scheme is registered with the system. It
+	// is supported on macOS, Linux and Windows; other platforms return
+	// (Application{}, ErrUnsupported).
+	DefaultApp(url string) (Application, error)
 }
 
 // Application is an installed application (Backend.Applications): Path is
