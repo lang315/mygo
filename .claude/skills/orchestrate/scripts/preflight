@@ -31,18 +31,17 @@ else
 	*" --settings "*orchestrator-settings.json*) pass "launch settings: orchestrator-settings.json" ;;
 	*) fail "launch settings: want --settings .claude/skills/orchestrate/orchestrator-settings.json in: $a" ;;
 	esac
+	# The permission mode is the owner's choice too. The ask rules of .claude/settings.json and the deny rules of
+	# orchestrator-settings.json hold in each; in bypass nothing else checks a command.
 	case " $a " in
-	*" --dangerously-skip-permissions "* | *bypassPermissions*) warn "started without permission checks: only the ask rules in .claude/settings.json still hold" ;;
-	*" --permission-mode auto "*) warn "--permission-mode auto: the classifier approves most calls; the ask rules still hold" ;;
-	*" --permission-mode "*) pass "permission mode set on the command line" ;;
-	*)
-		m=$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.claude/settings.json"))).get("permissions",{}).get("defaultMode","default"))' 2>/dev/null)
-		case "$m" in
-		bypassPermissions) warn "defaultMode bypassPermissions in ~/.claude/settings.json: only the ask rules hold" ;;
-		auto) warn "defaultMode auto in ~/.claude/settings.json: the classifier approves most calls; the ask rules still hold" ;;
-		*) pass "permission mode: ${m:-default}" ;;
-		esac
-		;;
+	*" --dangerously-skip-permissions "* | *bypassPermissions*) pm=bypass ;;
+	*" --permission-mode "*) pm=$(printf '%s\n' "$a" | sed -n 's/.* --permission-mode[ =]\([^ ]*\).*/\1/p') ;;
+	*) pm=$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.claude/settings.json"))).get("permissions",{}).get("defaultMode","default"))' 2>/dev/null) ;;
+	esac
+	case "${pm:-default}" in
+	bypass | bypassPermissions) info "permission mode: bypass (only the ask and deny rules check a command)" ;;
+	auto) info "permission mode: auto (the classifier, and the ask and deny rules)" ;;
+	*) info "permission mode: ${pm:-default} (routine commands will ask the owner)" ;;
 	esac
 fi
 case "${CLAUDE_CODE_EFFORT_LEVEL:-unset}" in
@@ -79,6 +78,7 @@ for f in "$R/.claude/settings.json" "$S/worker-settings.json" "$S/reader-setting
 	python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$f" 2>/dev/null && pass "valid JSON: ${f#"$R"/}" || fail "invalid JSON: $f"
 done
 grep -q '"Bash(gh pr merge \*)"' "$R/.claude/settings.json" && pass "merge ask rule present" || fail "ask rule for gh pr merge missing in .claude/settings.json"
+grep -q '"Bash(gh \* egoist/mygo\*)"' "$S/orchestrator-settings.json" && pass "deny rules present (orchestrator-settings.json)" || fail "deny rules missing in orchestrator-settings.json: tags, force pushes, the upstream"
 
 mkdir -p "$R/.orch/reports" "$R/.orch/tmp" && touch "$R/.orch/log.md"
 git -C "$R" check-ignore -q .orch/log.md && pass ".orch/ gitignored" || fail ".orch/ not gitignored: add .orch/ to .gitignore"

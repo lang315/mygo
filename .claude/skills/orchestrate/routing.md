@@ -9,7 +9,7 @@ Use this with the checklist in SKILL.md. It comes from the 2026-11-10 trial: 34 
 | haiku | `--model claude-haiku-5-5 --effort high`, `--setting-sources user`, `dontAsk` + `reader-settings.json` | Read-only work: CI triage (failed jobs and steps, `--- FAIL` lines, the first decisive error line); summarizing a finished CI run's failures (it cannot watch a running one); `gh pr diff --name-only` against intent; code and caller search; history and doc lookups | Edit tracked files, commit, push, rerun/cancel/dispatch CI, delete |
 | sonnet | `--model claude-sonnet-5-5 --effort medium`, `dontAsk` + `worker-settings.json` | One package with a local automated test; the same mechanical fix applied across several packages; prose-only docs or skills fixes; a locale string with its own `go generate`; app sizes via `scripts/measure-size.sh` | Exported API, backends, `loop.go`, purego, shared size paths |
 | opus | `--model claude-opus-5-5 --effort medium`, `dontAsk` + `worker-settings.json` | Real logic across two or more packages; Windows-only failures with no local repro; work in the hard-rule zones below that the owner has approved for a worker | Push, merge |
-| orchestrator | this session, on the model and effort the owner opened it with (`claude --settings …/orchestrator-settings.json`) | Specs, routing, the duplicate check, review of every diff, rerunning the tests, push, PR, CI, merge after the owner says yes, cleanup, log | Write the code itself |
+| orchestrator | this session, on the model, effort and permission mode the owner opened it with (`claude --dangerously-skip-permissions --settings …/orchestrator-settings.json`) | Specs, routing, the duplicate check, review of every diff, rerunning the tests, push, PR, CI, merge after the owner says yes, cleanup, log | Write the code itself |
 
 Haiku is read-only. App sizes need builds, so they go to sonnet.
 
@@ -47,8 +47,8 @@ Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
     and `gh pr list` were refused with no dialog.
   - The pre-push hook refuses pushes run inside a `mygo-wt-*` worktree, `git -C . push` included. It does not stop
     `--no-verify`.
-- **Orchestrator:** `.claude/settings.json` has `ask` rules. They hold in every mode, including your default `auto`
-  (`defaultMode` in `~/.claude/settings.json`); tested 2026-11-10. They cover:
+- **Orchestrator:** `.claude/settings.json` has `ask` rules. They hold in every mode, bypass and `auto` included;
+  tested 2026-11-10 and 2026-11-11. They cover:
   - `gh pr merge`;
   - merges through `gh api` on `repos/*/mygo` (REST `/merge`, `/merges`, `ccr/auto_merge`, GraphQL
     `mergePullRequest`);
@@ -62,6 +62,20 @@ Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
     what it must not (a `v*` tag, anything on the upstream). The classifier reads `autoMode` from the user's
     settings and from `--settings` only, never from a checkout's `.claude/`. Tested 2026-11-10:
     `claude --settings <file> auto-mode config` lists the entries.
+  - `orchestrator-settings.json` also has `deny` rules, for what the orchestrator never does: a push of a tag
+    (`refs/tags/`, `--tags`, a ref that starts with `v`), a force push (`--force`, `-f`, `+ref`, `--mirror`,
+    `--all`), a push to `upstream`, a `gh` command on egoist/mygo (`--repo`, `-R`, `repos/…` in `gh api`, a pull
+    request's or an issue's URL), `gh release`, and an edit of `.claude/`. A deny refuses with no dialog, so it
+    never blocks a worker's `hc send`. Tested 2026-11-11 with `-p`, in bypass and in `auto`: such commands were
+    refused, and a push and a delete of an `orch/` branch, a PR list on the fork and `git fetch upstream` ran.
+  - A `gh` command with the text ` egoist/mygo` in an argument is refused too, a title included: put such text in
+    the `--body-file`. The module's path, `github.com/egoist/mygo/ui`, passes.
+  - The limits: the rules match a command's text, so a script or another spelling passes them, and the edit rule
+    stops the Edit and Write tools, not a shell command. No pattern says "every branch but `orch/*`": a push or
+    a delete of another session's branch (`sync/`, `dbg/`) is held by this skill's words alone. In bypass nothing
+    else checks a command, and the docs say that mode "offers no protection against prompt injection or
+    unintended actions". In `auto` the classifier does; a dry run of a tag push passed it, so its hold on the
+    real one is not shown.
   - `bypassPermissions` honors `ask` rules (docs: "Actions no mode auto-approves").
   - Tested 2026-11-10 under `--dangerously-skip-permissions`: all those forms were held, and a push of an `orch/`
     branch ran.

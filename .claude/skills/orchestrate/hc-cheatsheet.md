@@ -130,7 +130,8 @@ git -C "$R" push origin --delete orch/<name>; git -C "$R" pull --ff-only
 
 - Workers run in `dontAsk`: a refused command comes back in the report, not as a dialog.
 - A dialog in your own pane refuses every worker's `hc send` (exit 9, `blocked`) until the owner answers it. A
-  permission prompt is one; so is a message held from a session in another permission mode.
+  permission prompt is one; so is a message held from a session in another permission mode: in bypass you hold
+  those of sessions that prompt, and otherwise those of sessions in bypass.
 - Status `blocked` is then a dialog of another kind (trust, login). Read it: `hc read --lines 0 <t>`.
 - Do not answer it with `hc keys`, and do not widen the settings files. Log it and tell the owner; the owner
   answers it in the pane (`hc attach <t>`) or has you kill the worker.
