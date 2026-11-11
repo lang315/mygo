@@ -6,11 +6,18 @@ disable-model-invocation: true
 
 # Orchestrate mygo work through hc workers
 
-You are the orchestrator, launched in a herdr pane, without skip-permissions, from the main checkout with
-`claude --settings .claude/skills/orchestrate/orchestrator-settings.json`. Your model and effort are the owner's
-choice, by flag or by default: nothing here depends on them, and the workers' models stay pinned. You pick a role
-for each task, brief a worker, review its result, and run push, PR, CI and merge. You do not write the code. Keep
-your context lean: read worker reports, not raw logs or history.
+You are the orchestrator, launched in a herdr pane from the main checkout with
+`claude --dangerously-skip-permissions --settings .claude/skills/orchestrate/orchestrator-settings.json`. Your
+model, effort and permission mode are the owner's choice, by flag or by default: nothing here depends on them,
+and the workers' models stay pinned. You pick a role for each task, brief a worker, review its result, and run
+push, PR, CI and merge. You do not write the code. Keep your context lean: read worker reports, not raw logs or
+history.
+
+**What holds you in every permission mode:** a merge and a push to `main` open the owner's dialog (`ask` rules
+of `.claude/settings.json`); the settings file of the launch line refuses a tag push, a force push, a push to
+`upstream`, any `gh` command on egoist/mygo, `gh release` and an edit of `.claude/`. These match a command's
+text, so they stop a slip, not a detour. In bypass nothing else checks a command: the rules below are yours to
+keep.
 
 **Owner's rules (2026-11-10), overriding general memory rules in `/orchestrate`:**
 - You may push `orch/*` branches and open PRs on lang315/mygo without asking.
@@ -47,8 +54,7 @@ workers' settings files, and the paths in orchestrator-settings.json.
 
 Run `"$S/scripts/preflight"`.
 - **Any FAIL:** stop and tell the owner; each FAIL prints its fix (launch flags: restart as above).
-- **WARN:** carry on. Mention a skip-permissions or bypass warning to the owner. The `defaultMode auto` and "local
-  changes" warnings are expected; don't report them.
+- **WARN:** carry on. The "local changes" warning is expected; don't report it.
 - Log one row for the session: `session | orchestrator (<model>, <effort>) | preflight | state: started | none`.
   The model is the one your system prompt names. The effort is the script's `launch effort` line, or the word
   `default` with no flag: do not look it up, the settings hold several values and none proves the effort in

@@ -1,4 +1,23 @@
 {
+  "permissions": {
+    "deny": [
+      "Bash(git *push *refs/tags/*)",
+      "Bash(git *push *--tags*)",
+      "Bash(git *push *--follow-tags*)",
+      "Bash(git *push * v*)",
+      "Bash(git *push *--force*)",
+      "Bash(git *push -f*)",
+      "Bash(git *push * -f*)",
+      "Bash(git *push * +*)",
+      "Bash(git *push *--mirror*)",
+      "Bash(git *push *--all*)",
+      "Bash(git *push upstream*)",
+      "Bash(git *push * upstream*)",
+      "Bash(gh *egoist/mygo*)",
+      "Bash(gh release *)",
+      "Edit(.claude/**)"
+    ]
+  },
   "autoMode": {
     "allow": [
       "In /Users/lang/GolandProjects/github.com/lang315/mygo and its worktrees (../mygo-wt-*), origin lang315/mygo: `go build ./...`, `go vet ./...` and `go test ./...` (its AGENTS.md requires them); pushing `orch/*` branches to origin; opening PRs on lang315/mygo; dispatching ci.yml on an `orch/*` branch; adding and removing `mygo-wt-*` worktrees; deleting an `orch/*` branch, local and on origin, once its PR is merged or dropped. This clears nothing for `main`, tags, force pushes, other branches or egoist/mygo"
