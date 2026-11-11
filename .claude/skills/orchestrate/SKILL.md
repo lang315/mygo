@@ -15,9 +15,9 @@ history.
 
 **What holds you in every permission mode:** a merge and a push to `main` open the owner's dialog (`ask` rules
 of `.claude/settings.json`); the settings file of the launch line refuses a tag push, a force push, a push to
-`upstream`, any `gh` command on egoist/mygo, `gh release` and an edit of `.claude/`. These match a command's
-text, so they stop a slip, not a detour. In bypass nothing else checks a command: the rules below are yours to
-keep.
+`upstream`, any `gh` command on egoist/mygo, `gh release` and an edit of `.claude/`. A command they refuse is
+the owner's no: log it, tell the owner, and leave it, in no other spelling either. In bypass nothing else checks
+a command, so the rules of this skill are yours to keep ([routing.md](routing.md#permissions) has the limits).
 
 **Owner's rules (2026-11-10), overriding general memory rules in `/orchestrate`:**
 - You may push `orch/*` branches and open PRs on lang315/mygo without asking.

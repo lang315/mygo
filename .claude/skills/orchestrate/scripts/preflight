@@ -78,7 +78,7 @@ for f in "$R/.claude/settings.json" "$S/worker-settings.json" "$S/reader-setting
 	python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$f" 2>/dev/null && pass "valid JSON: ${f#"$R"/}" || fail "invalid JSON: $f"
 done
 grep -q '"Bash(gh pr merge \*)"' "$R/.claude/settings.json" && pass "merge ask rule present" || fail "ask rule for gh pr merge missing in .claude/settings.json"
-grep -q '"Bash(gh \*egoist/mygo\*)"' "$S/orchestrator-settings.json" && pass "deny rules present (orchestrator-settings.json)" || fail "deny rules missing in orchestrator-settings.json: tags, force pushes, the upstream"
+grep -q '"Bash(gh \* egoist/mygo\*)"' "$S/orchestrator-settings.json" && pass "deny rules present (orchestrator-settings.json)" || fail "deny rules missing in orchestrator-settings.json: tags, force pushes, the upstream"
 
 mkdir -p "$R/.orch/reports" "$R/.orch/tmp" && touch "$R/.orch/log.md"
 git -C "$R" check-ignore -q .orch/log.md && pass ".orch/ gitignored" || fail ".orch/ not gitignored: add .orch/ to .gitignore"

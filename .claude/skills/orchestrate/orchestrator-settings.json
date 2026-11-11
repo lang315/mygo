@@ -13,7 +13,11 @@
       "Bash(git *push *--all*)",
       "Bash(git *push upstream*)",
       "Bash(git *push * upstream*)",
-      "Bash(gh *egoist/mygo*)",
+      "Bash(gh * egoist/mygo*)",
+      "Bash(gh *=egoist/mygo*)",
+      "Bash(gh *repos/egoist/mygo*)",
+      "Bash(gh *github.com/egoist/mygo/pull*)",
+      "Bash(gh *github.com/egoist/mygo/issues*)",
       "Bash(gh release *)",
       "Edit(.claude/**)"
     ]

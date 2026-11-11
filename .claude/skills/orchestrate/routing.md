@@ -64,14 +64,18 @@ Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
     `claude --settings <file> auto-mode config` lists the entries.
   - `orchestrator-settings.json` also has `deny` rules, for what the orchestrator never does: a push of a tag
     (`refs/tags/`, `--tags`, a ref that starts with `v`), a force push (`--force`, `-f`, `+ref`, `--mirror`,
-    `--all`), a push to `upstream`, any `gh` command that names egoist/mygo, `gh release`, and an edit of
-    `.claude/`. A deny refuses with no dialog, so it never blocks a worker's `hc send`. Tested 2026-11-11 with
-    `-p`, in bypass and in `auto`: 12 such commands were refused, and a push and a delete of an `orch/` branch, a
-    PR list on the fork and `git fetch upstream` ran.
+    `--all`), a push to `upstream`, a `gh` command on egoist/mygo (`--repo`, `-R`, `repos/…` in `gh api`, a pull
+    request's or an issue's URL), `gh release`, and an edit of `.claude/`. A deny refuses with no dialog, so it
+    never blocks a worker's `hc send`. Tested 2026-11-11 with `-p`, in bypass and in `auto`: such commands were
+    refused, and a push and a delete of an `orch/` branch, a PR list on the fork and `git fetch upstream` ran.
+  - A `gh` command with the text ` egoist/mygo` in an argument is refused too, a title included: put such text in
+    the `--body-file`. The module's path, `github.com/egoist/mygo/ui`, passes.
   - The limits: the rules match a command's text, so a script or another spelling passes them, and the edit rule
-    stops the Edit and Write tools, not a shell command. In bypass nothing else checks a command, and the docs
-    say that mode "offers no protection against prompt injection or unintended actions". In `auto` the
-    classifier does; a dry run of a tag push passed it, so its hold on the real one is not shown.
+    stops the Edit and Write tools, not a shell command. No pattern says "every branch but `orch/*`": a push or
+    a delete of another session's branch (`sync/`, `dbg/`) is held by this skill's words alone. In bypass nothing
+    else checks a command, and the docs say that mode "offers no protection against prompt injection or
+    unintended actions". In `auto` the classifier does; a dry run of a tag push passed it, so its hold on the
+    real one is not shown.
   - `bypassPermissions` honors `ask` rules (docs: "Actions no mode auto-approves").
   - Tested 2026-11-10 under `--dangerously-skip-permissions`: all those forms were held, and a push of an `orch/`
     branch ran.
