@@ -155,6 +155,10 @@ func (t TitleBar) JSON() ([]byte, bool) {
 	if b, ok = appendNumber(b, t.Right); !ok {
 		return nil, false
 	}
+	b = append(b, `,"bottom":`...)
+	if b, ok = appendNumber(b, t.Bottom); !ok {
+		return nil, false
+	}
 	return append(b, '}'), true
 }
 

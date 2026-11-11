@@ -3,17 +3,15 @@
 package linux
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"unicode"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 
@@ -648,25 +646,45 @@ func (t *tray) appearanceChanged(dark bool) {
 var traysAppearanceChanged func()
 
 // whiten draws a template image white, keeping its alpha, as the Windows
-// backend does on a dark taskbar.
+// backend does on a dark taskbar. GdkPixbuf decodes and encodes it: the
+// backend links no image/png (TestBackendsDoNotImportPNG).
 func whiten(data []byte) ([]byte, error) {
-	src, err := png.Decode(bytes.NewReader(data))
+	loadNotifyImages() // the getters of a pixbuf's size and channels
+	src, err := pixbufFromPNG(data)
 	if err != nil {
 		return nil, err
 	}
-	r := src.Bounds()
-	dst := image.NewNRGBA(r)
-	for y := r.Min.Y; y < r.Max.Y; y++ {
-		for x := r.Min.X; x < r.Max.X; x++ {
-			_, _, _, a := src.At(x, y).RGBA()
-			dst.SetNRGBA(x, y, color.NRGBA{255, 255, 255, uint8(a >> 8)})
+	defer gObjectUnref(src)
+	if gdkPixbufGetBitsPerSample(src) != 8 {
+		return nil, errors.New("mygo: a tray image with other than 8 bits a sample")
+	}
+	w, h := int(gdkPixbufGetWidth(src)), int(gdkPixbufGetHeight(src))
+	const rgb = 0 // GDK_COLORSPACE_RGB
+	dst := gdkPixbufNew(rgb, true, 8, int32(w), int32(h))
+	if dst == 0 {
+		return nil, errors.New("mygo: cannot make the tray image")
+	}
+	defer gObjectUnref(dst)
+	n, alpha := int(gdkPixbufGetNChannels(src)), gdkPixbufGetHasAlpha(src)
+	ss, ds := int(gdkPixbufGetRowstride(src)), int(gdkPixbufGetRowstride(dst))
+	// The last row of a GdkPixbuf is not padded.
+	sp := unsafe.Slice((*byte)(gdkPixbufGetPixels(src)), ss*(h-1)+n*w)
+	dp := unsafe.Slice((*byte)(gdkPixbufGetPixels(dst)), ds*(h-1)+4*w)
+	for y := range h {
+		for x := range w {
+			a := byte(255)
+			if alpha {
+				a = sp[y*ss+x*n+n-1]
+			}
+			d := dp[y*ds+4*x:]
+			d[0], d[1], d[2], d[3] = 255, 255, 255, a
 		}
 	}
-	var b bytes.Buffer
-	if err := png.Encode(&b, dst); err != nil {
-		return nil, err
+	out := pngFromPixbuf(dst)
+	if out == nil {
+		return nil, errors.New("mygo: cannot encode the tray image")
 	}
-	return b.Bytes(), nil
+	return out, nil
 }
 
 // SetID does nothing: the indicator's ID is given as it is made, and
