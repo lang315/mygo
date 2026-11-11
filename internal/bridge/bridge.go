@@ -155,6 +155,10 @@ func (t TitleBar) JSON() ([]byte, bool) {
 	if b, ok = appendNumber(b, t.Right); !ok {
 		return nil, false
 	}
+	b = append(b, `,"bottom":`...)
+	if b, ok = appendNumber(b, t.Bottom); !ok {
+		return nil, false
+	}
 	return append(b, '}'), true
 }
 
@@ -181,6 +185,7 @@ type TitleBar struct {
 	Height float64 `json:"height"`
 	Left   float64 `json:"left"`
 	Right  float64 `json:"right"`
+	Bottom float64 `json:"bottom"`
 }
 
 // NewTitleBar converts the room of the window controls to the CSS pixels
@@ -189,7 +194,7 @@ func NewTitleBar(tb platform.TitleBar, zoom float64) TitleBar {
 	if zoom <= 0 {
 		zoom = 1
 	}
-	return TitleBar{Height: float64(tb.Height) / zoom, Left: float64(tb.Left) / zoom, Right: float64(tb.Right) / zoom}
+	return TitleBar{Height: float64(tb.Height) / zoom, Left: float64(tb.Left) / zoom, Right: float64(tb.Right) / zoom, Bottom: float64(tb.Bottom) / zoom}
 }
 
 // FitContentEvent tells the page of a window that takes the size of its

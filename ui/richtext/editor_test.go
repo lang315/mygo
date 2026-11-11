@@ -2,11 +2,13 @@ package richtext
 
 import (
 	"bytes"
+	"fmt"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -868,5 +870,133 @@ func TestRichTextRightClickMovesCaret(t *testing.T) {
 	tt.RightClickAt(30, y)
 	if a, z := doc.Selection(); a != 0 || z != len("first paragraph") {
 		t.Errorf("a right-click in the selection made it %d…%d", a, z)
+	}
+}
+
+// Space leaves room above a paragraph, more than the theme's: the paragraphs from it down move by as much, in the
+// frame it changes, and back when it goes.
+func TestRichTextSpace(t *testing.T) {
+	doc := NewDocument(NewText("one\ntwo\nthree"))
+	var room float32
+	tt := ui.NewTester(func(c *ui.Context) {
+		Editor(c, doc, EditorOptions{Space: func(p int) float32 {
+			if p == 1 {
+				return room
+			}
+			return 0
+		}}).Fill()
+	}, 500, 400)
+	tt.Frame()
+	before := doc.VisibleParagraphs()
+	room = 40
+	tt.Frame()
+	tt.Frame()
+	after := doc.VisibleParagraphs()
+	if after[0].Top != before[0].Top || after[1].Top != before[1].Top+40 || after[2].Top != before[2].Top+40 {
+		t.Fatalf("room above the second: %+v, then %+v", before, after)
+	}
+	room = 0
+	tt.Frame()
+	tt.Frame()
+	if back := doc.VisibleParagraphs(); back[1].Top != before[1].Top || back[2].Top != before[2].Top {
+		t.Fatalf("the room gone: %+v, then %+v", before, back)
+	}
+}
+
+// With NoScrollbar the editor draws no scroll bar, the pointer over it or
+// not, and a press where the bar would be places the caret in the text.
+func TestNoScrollbar(t *testing.T) {
+	doc := NewDocument(NewText(strings.Repeat("line\n", 200)))
+	tt := ui.NewTester(func(c *ui.Context) { Editor(c, doc, EditorOptions{NoScrollbar: true}).Fill() }, 500, 400)
+	tt.Move(250, 200)
+	tt.Frame()
+	img := tt.Image()
+	s := img.Bounds().Dx() / 500
+	for y := 10 * s; y < 390*s; y++ {
+		if img.RGBAAt(494*s, y) != img.RGBAAt(480*s, y) {
+			t.Fatal("a scroll bar shows")
+		}
+	}
+	tt.ClickAt(495, 30)
+	if a, z := doc.Selection(); a != z || a == 0 {
+		t.Fatalf("a press on the bar's place did not place the caret in the text: %d, %d", a, z)
+	}
+}
+
+// A document shown in two editors gives each one's paragraphs in view
+// when they are read right after it is built, as an app that shows one
+// page in two panes lines each up with its own; and what each painted is
+// told apart, so the frames settle.
+func TestVisibleParagraphsPerEditor(t *testing.T) {
+	doc := NewDocument(NewText(strings.Repeat("a word or two, again and again, to wrap at a narrow width; ", 6) + "\nsecond\nthird"))
+	var wide, narrow []ParagraphBox
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Fill().Children(func() {
+			EditorBase(c, doc).Width(600).Height(400)
+			wide = doc.VisibleParagraphs()
+			EditorBase(c, doc).Width(150).Height(400)
+			narrow = doc.VisibleParagraphs()
+		})
+	}, 800, 400)
+	tt.Frame()
+	tt.Frame()
+	if len(wide) < 2 || len(narrow) < 2 {
+		t.Fatalf("boxes: %d and %d", len(wide), len(narrow))
+	}
+	if narrow[0].Height <= wide[0].Height {
+		t.Fatalf("the narrow editor's first paragraph is %v high, the wide one's %v: one editor's boxes for both", narrow[0].Height, wide[0].Height)
+	}
+	if tt.FramePending() {
+		t.Fatal("the frames do not settle")
+	}
+}
+
+// An editor as tall as its text, in a scroll container (a page that
+// scrolls as a whole), paints the paragraphs the container shows when it
+// is scrolled down the text, though it paints only those, and gives each
+// paragraph in its box with the rune it starts at.
+func TestTallEditorInScroll(t *testing.T) {
+	var b strings.Builder
+	var starts []int
+	at := 0
+	for i := 0; i < 300; i++ {
+		line := fmt.Sprintf("paragraph %d: çok güzel, %s", i, strings.Repeat("é", i%7))
+		starts = append(starts, at)
+		at += utf8.RuneCountInString(line) + 1
+		b.WriteString(line + "\n")
+	}
+	doc := NewDocument(NewText(strings.TrimSuffix(b.String(), "\n")))
+	var boxes []ParagraphBox
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Scroll(c).Fill().Children(func() {
+			Editor(c, doc, EditorOptions{NoScrollbar: true}).FillWidth().Height(300 * 40)
+			boxes = doc.VisibleParagraphs()
+		})
+	}, 500, 400)
+	tt.Frame()
+	tt.Frame()
+	if len(boxes) != len(starts) {
+		t.Fatalf("%d boxes in an editor as tall as its %d paragraphs", len(boxes), len(starts))
+	}
+	for i, bx := range boxes {
+		if bx.Index != i || bx.Start != starts[i] {
+			t.Fatalf("box %d: paragraph %d at rune %d, want %d", i, bx.Index, bx.Start, starts[i])
+		}
+	}
+	tt.Wheel(250, 200, 0, 2000)
+	tt.Advance(time.Second)
+	img := tt.Image()
+	s := img.Bounds().Dx() / 500
+	ground := img.RGBAAt(498*s, 2*s)
+	ink := 0
+	for y := 0; y < 400*s; y += 2 {
+		for x := 0; x < 300*s; x += 2 {
+			if img.RGBAAt(x, y) != ground {
+				ink++
+			}
+		}
+	}
+	if ink < 2000 {
+		t.Fatalf("scrolled down the text, the view shows no text (%d marked pixels)", ink)
 	}
 }

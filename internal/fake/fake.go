@@ -285,7 +285,8 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 	}
 	if !o.Frameless && (o.TitleBarStyle == "hidden" || o.TitleBarStyle == "hiddenInset") && !o.HideWindowButtons {
 		// Three buttons 46 wide at the top right, as on Windows.
-		w.TitleBarRoom = platform.TitleBar{Height: cmp.Or(o.TitleBarHeight, 32), Right: 138}
+		h := cmp.Or(o.TitleBarHeight, 32)
+		w.TitleBarRoom = platform.TitleBar{Height: h, Right: 138, Bottom: h}
 	}
 	if o.Flyout != nil {
 		w.place(*o.Flyout, platform.Size{Width: o.Width, Height: o.Height})
@@ -1275,6 +1276,14 @@ var Opened []string
 func (shell) OpenApplication(path string) error {
 	Opened = append(Opened, path)
 	return nil
+}
+
+// DefaultAppURLs are the URLs DefaultApp was asked about, in order.
+var DefaultAppURLs []string
+
+func (shell) DefaultApp(url string) (platform.Application, error) {
+	DefaultAppURLs = append(DefaultAppURLs, url)
+	return platform.Application{Name: "Default", ID: "app.default", Path: "/Applications/Default.app"}, nil
 }
 
 // FileIcon returns a transparent PNG of the size asked for, or the error of

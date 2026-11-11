@@ -576,9 +576,12 @@ type engine struct {
 	// last one began (askBuild): one only painting for the hover's look
 	// is not asked for then, as that frame shows it.
 	buildAsked bool
-	held       bool
-	shown      time.Time
-	input      bool
+	// viewMoved tells that what an element read of whether it is in view
+	// changed in this frame's commit (watchView).
+	viewMoved bool
+	held      bool
+	shown     time.Time
+	input     bool
 	// hiddenAsked tells that a view asked whether the window shows
 	// (WindowHidden), which builds it again as that changes.
 	hiddenAsked bool
@@ -804,8 +807,7 @@ func (rt *engine) defaultTheme() *Theme {
 				t.ControlBorder = c
 			}
 		}
-		t.follow(rt.preferences())
-		rt.theme, rt.themeOK = *t, true
+		rt.theme, rt.themeOK = *t.WithPreferences(rt.preferences()), true
 	}
 	rt.passTheme = rt.theme
 	return &rt.passTheme
@@ -830,7 +832,7 @@ func (rt *engine) runFrame() {
 	rt.inFrame = true
 	defer rt.endFrame()
 
-	rt.buildAsked, rt.lookDue = false, false
+	rt.buildAsked, rt.lookDue, rt.viewMoved = false, false, false
 	rt.frame++
 	rt.input = false
 	rt.focusRead, rt.activeRead, rt.withinRead, rt.keysRead = false, false, false, false
@@ -1052,6 +1054,12 @@ func (rt *engine) runFrame() {
 	}
 	rt.announcements = rt.announcements[:0]
 	rt.next()
+	if rt.viewMoved {
+		// What a view read of whether an element is in view (watchView)
+		// changed in this commit: built again, once, to read it.
+		rt.viewMoved = false
+		rt.askBuild()
+	}
 	if len(rt.retried) > 0 || len(rt.keys) > 0 {
 		// The keys retried, and those waiting for an element that took
 		// one (routeKeys), route in a frame built anew, at once.
@@ -1813,17 +1821,43 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	s.vx, s.vy, s.vw, s.vh, s.reposed = v.X, v.Y, v.W, v.H, false
 	s.cx, s.cy = e.x+e.contentX(), e.y+e.contentY()
 	s.cw, s.ch = max(e.w-e.padX(), 0), max(e.h-e.padY(), 0)
-	if e.flags&(flagScrollX|flagScrollY) != 0 {
+	barFlags := e.flags & (flagScrollX | flagScrollY)
+	if barFlags != 0 {
 		s.contentW, s.contentH = e.contentW, e.contentH
 		s.barInset = e.barInset
+		source := e
+		if e.barsFrom != nil {
+			source = e.barsFrom
+		}
+		if source.hiddenScrollbars&hideAllScrollbars != 0 {
+			barFlags = 0
+		} else {
+			barFlags &^= source.hiddenScrollbars
+		}
+		if barFlags != 0 && source.keepScrollbars {
+			barFlags |= keepBarsVisible
+		}
 		if s.barStyle == nil {
 			// Allocated once: a scroll container resolves its style every
 			// frame, and a steady frame allocates nothing.
 			s.barStyle = new(ScrollbarStyle)
 		}
-		*s.barStyle = e.scrollbarStyle().Resolve(e.theme())
+		style := ScrollbarStyle{}
+		if source.barStyle != nil {
+			style = *source.barStyle
+		}
+		*s.barStyle = style.Resolve(e.theme())
 	}
-	s.hideScrollbars, _ = e.scrollbars()
+	if d := &rt.scrollDrag; d.st == s {
+		axis := flagScrollY
+		if d.horizontal {
+			axis = flagScrollX
+		}
+		if barFlags&axis == 0 {
+			d.st = nil
+		}
+	}
+	s.barFlags = barFlags
 	// What is invisible keeps its box but takes neither the pointer nor
 	// the focus, and has no text to find; so does what is inert, which
 	// shows, and what is Hidden, which has no box.
@@ -1831,6 +1865,15 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	s.invisible = invisible
 	if invisible {
 		s.vw, s.vh = 0, 0
+	}
+	if w := s.view; w != nil {
+		// What InView read in this build came from the last commit: when
+		// what it depends on moved since, its answer may have changed.
+		now := s.viewInputs()
+		if w.read == rt.frame && now != w.inputs {
+			rt.viewMoved = true
+		}
+		w.inputs = now
 	}
 	// What ignores input shows, has its text and reads to assistive
 	// technology, but takes neither the pointer nor the focus either.
@@ -1965,9 +2008,6 @@ func intersect(a, b Rect) Rect {
 // thumb being dragged wherever the pointer goes, show the default, not
 // the cursor of the text under the bar.
 func (rt *engine) updateCursor() {
-	if dragging := rt.scrollDrag.st; dragging != nil && dragging.hideScrollbars {
-		rt.scrollDrag.st = nil
-	}
 	if rt.pressed == nil && rt.scrollDrag.st == nil && rt.overWebView() {
 		// The page sets the cursor over it: it is set again as the
 		// pointer comes back.
@@ -2006,13 +2046,13 @@ func (rt *engine) updateCursor() {
 // bar element id shows.
 func (rt *engine) overScrollbar(id uint64) bool {
 	s := rt.states[id]
-	if s == nil || s.flags&(flagScrollX|flagScrollY) == 0 || s.hideScrollbars {
+	if s == nil || s.barFlags == 0 {
 		return false
 	}
 	x, y := s.local(rt.pointerX, rt.pointerY)
 	x += s.x
 	y += s.y
-	g := scrollBars(Rect{s.x, s.y, s.w, s.h}, s.barInset, float32(s.contentW), float32(s.contentH), float32(s.scrollX), float32(s.scrollY), s.flags, s.scrollbarStyle(), s.rtl)
+	g := s.scrollbarGeometry(s.x, s.y, s.contentW, s.contentH, s.scrollX, s.scrollY)
 	return g.vertical && g.vTrack.Contains(x, y) || g.horizontal && g.hTrack.Contains(x, y)
 }
 

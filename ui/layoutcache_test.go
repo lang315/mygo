@@ -781,7 +781,7 @@ func TestLayoutInputs(t *testing.T) {
 		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +
 		" blur opacity opacitySet cursor " +
 		"inputFn observeFn textClient caret takesText noIME copyData maximizeButton fit gray dismissed rotate label widget role " +
-		"paintLook expanded busy current vertical tip keepOpen accValue accRange hasRange accFill accStep barInset barStyle scrollBase hideScrollbars keepScrollbars barsFrom ignoreInput themed " +
+		"paintLook expanded busy current vertical tip keepOpen accValue accRange hasRange accFill accStep barInset barStyle scrollBase keepScrollbars hiddenScrollbars barsFrom ignoreInput themed " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName keepLinks middle focusTo snap snapAlign keyShortcuts " +
 		"setPos setSize choosesItems search description invalid readOnly multiline followX sort level expandable handleDoubleClick " +
 		"chooseMany serial ignoreInput accessHidden themed lift ringOffset ringColor ringSet clipping zIndex zOrder hitFn focusHighlights labelledBy describedBy errorMessage roleDescription controls hasPopup accessDisabled autoComplete orient accGrid accSet popupSet"

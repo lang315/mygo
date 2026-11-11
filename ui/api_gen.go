@@ -707,6 +707,10 @@ func (_handle *Context) Theme() *Theme {
 //
 //	bar := c.TitleBar()
 //	ui.Row(c).Height(max(bar.Height, 32)).Padding(0, bar.Right, 0, bar.Left).DragWindow()
+//
+// A sidebar under the controls starts below Bottom:
+//
+//	ui.Column(c).Padding(bar.Bottom+8, 0, 0, 0)
 func (_handle *Context) TitleBar() TitleBar {
 	_ctx := _handle.build()
 	if _ctx == nil {
@@ -5501,15 +5505,25 @@ func (_handle Element) FixedLineHeight(v float32) Element {
 
 // Focus gives the element the keyboard focus. Called in every frame, it
 // keeps it there; AutoFocus gives it once. A field around an input, as
-// SearchField's, gives it to its input, where typing goes.
-func (_handle Element) Focus() Element {
+// SearchField's, gives it to its input, where typing goes. When the focus
+// moves to it, it scrolls the containers around it as little as shows it,
+// as Tab does and the web's focus() does; ScrollIntoView lines it up
+// otherwise. While a pointer button is held it scrolls nothing: what a
+// press focuses, as the line a grip moves, is under the pointer.
+//
+// Its options, as the web's focus() options, keep the scroll where the
+// user left it: the focus returned to a cell of a grid when a dialog
+// closes, without scrolling the grid.
+//
+//	cell.Focus(ui.FocusOptions{PreventScroll: true})
+func (_handle Element) Focus(options ...FocusOptions) Element {
 	_node := _handle.node()
 	if _node == nil {
 		return Element{}
 	}
 	_ctx := _node.c
 	_ = _ctx
-	return wrapElement(_node.Focus())
+	return wrapElement(_node.Focus(options...))
 }
 
 // FocusGroup makes the elements inside the element that take the focus one
@@ -6008,7 +6022,9 @@ func (_handle Element) IgnoreInput(ignore bool) Element {
 
 // InView reports whether some of the element showed in the window in the
 // frame before, within the scroll containers and clips around it: to
-// animate it in as it scrolls into view, as Motion's whileInView.
+// animate it in as it scrolls into view, as Motion's whileInView. When
+// what it answers from changes, as a scroll brings the element in, MyGo
+// builds another frame, so that the view reads the new answer.
 // A row of a List with RowVersion that calls it is built until the answer
 // settles, and again when it changes.
 func (_handle Element) InView() bool {
@@ -6026,7 +6042,8 @@ func (_handle Element) InView() bool {
 // from 0 to 1, showed in the frame before, within the window and the
 // scroll containers and clips around it, grown by margin as InViewMargin
 // grows them: as IntersectionObserver's threshold, and Motion's amount
-// for whileInView and useInView. An impression counts once half of a
+// for whileInView and useInView, and builds another frame when what it
+// answers from changes, as InView does. An impression counts once half of a
 // card shows with 0.5, an animation starts at a fifth of it with 0.2,
 // and 1 waits for all of it; 0 is InViewMargin. Its area is that of its
 // box as transforms move it, the box holding them as InView's clips do.
@@ -6053,7 +6070,8 @@ func (_handle Element) InViewAmount(amount float32, margin ...float32) bool {
 // IntersectionObserver's rootMargin and scrollMargin, a margin of 200
 // has the element in view once it is within 200 DIPs of showing, to load
 // what it shows before it scrolls in, and a negative one only once it is
-// that far inside; other clips around it clip it as they do.
+// that far inside; other clips around it clip it as they do. As InView
+// does, it has MyGo build another frame when what it answers from changes.
 func (_handle Element) InViewMargin(margin ...float32) bool {
 	_node := _handle.node()
 	if _node == nil {
@@ -6258,9 +6276,9 @@ func (_handle Element) KeepOpen() Element {
 // content overflows it, with the pointer over it or not, rather than only
 // while it is hovered or a bar is dragged: a view whose place in its content
 // matters, as a long diff filling a window, shows how far down it is. The
-// bars look and take presses as they do on hover; Scrollbars(false) hides
-// them still. It applies where Scrollbars does (a code editor's State has
-// KeepScrollbars), and is not inherited.
+// bars look and take presses as they do on hover; Scrollbars(false) and
+// ScrollbarAxes still hide them. It applies where Scrollbars does (a code
+// editor's State has KeepScrollbars), and is not inherited.
 func (_handle Element) KeepScrollbars(keep bool) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -6970,11 +6988,33 @@ func (_handle Element) OnEdit(fn func(e TextEdit) (string, int, bool)) Element {
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with
-// an image, which the app reads from the clipboard itself. fn reports
+// an image, which fn reads with Services.ReadClipboardData. fn reports
 // whether it took the paste; a paste taken changes nothing, its selection
 // and undo history included, as when a web page prevents a paste's
 // default and attaches a large block instead of inserting it. Like
 // ReadOnly, it holds for the input that comes until the next frame.
+//
+// fn runs between frames, where an Element kept from the view is no
+// longer valid, and the input writes what it holds over its bound value,
+// so setting the value from fn is lost. To put text of its own in place
+// of the paste, as a link to an image it attaches, fn keeps the text and
+// the view inserts it with ReplaceText as it is built again, which a
+// paste seen by fn does at once:
+//
+//	svc := c.Services()
+//	in := ui.TextArea(c, &app.draft).OnPaste(func(string) bool {
+//		img := svc.ReadClipboardData(transfer.PNG)
+//		if len(img.Items()) == 0 {
+//			return false // text pastes as usual
+//		}
+//		app.insert = app.attach(img) // "![image](https://…)"
+//		return true
+//	})
+//	if app.insert != "" {
+//		start, end := in.TextSelection()
+//		in.ReplaceText(start, end, app.insert) // a step of undo
+//		app.insert = ""
+//	}
 func (_handle Element) OnPaste(fn func(text string) bool) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -7025,6 +7065,37 @@ func (_handle Element) OnTextKey(fn func(k TextKey) bool) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.OnTextKey(fn))
+}
+
+// OnUnmount has fn run when the element goes: once, on the main thread,
+// after the first frame that no longer builds it, as a Local that is an
+// io.Closer closes, without a type to give a Close. A view stops in fn
+// the work it started, as a streaming request, a ticker or a
+// subscription:
+//
+//	e := ui.Column(c)
+//	cancel := ui.Local(e, "feed", func() context.CancelFunc {
+//		ctx, cancel := context.WithCancel(context.Background())
+//		go read(ctx, url)
+//		return cancel
+//	})
+//	e.OnUnmount(*cancel)
+//
+// Call it as the element is built, after Key: each call replaces the
+// function, and the last one given runs. A frame that does not call it
+// keeps the one given before, and a nil fn takes it away. An element
+// leaving with an exit transition runs fn once its exit ended, and every
+// element as its window closes. fn may change the app's state; ask for
+// the frame that shows it with Window.Invalidate, or Invalidate of the
+// c.Services() the view kept.
+func (_handle Element) OnUnmount(fn func()) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.OnUnmount(fn))
 }
 
 // Opacity makes the element and its children translucent as one group,
@@ -7298,10 +7369,10 @@ func (_handle Element) PopoverMenu(build func(m *Menu)) Element {
 // such a menu, as MenuButton is one with a menu of the system's, and
 // MenuBase a menu button without a look.
 //
-// Its options place the menu elsewhere along the button, and let the app
-// open and close it (PopoverMenuButtonOptions): the menu of a toolbar's
-// button at the window's end lines up with the button's end, and closes
-// from an event of the app's:
+// Its options place the menu elsewhere along the button, let the app open
+// and close it, and style its panel (PopoverMenuButtonOptions): the menu
+// of a toolbar's button at the window's end lines up with the button's
+// end, and closes from an event of the app's:
 //
 //	more.PopoverMenuButton(build, ui.PopoverMenuButtonOptions{
 //		At: ui.AnchorBottomEnd, Self: ui.AnchorTopEnd, Open: &app.moreOpen,
@@ -7555,6 +7626,28 @@ func (_handle Element) ReadOnly(on bool) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.ReadOnly(on))
+}
+
+// ReplaceText replaces the runes of a text input from start to end with s,
+// as an edit, a step of undo of its own: Undo brings back the text the
+// user had, and Redo s again. A command that writes a message replaces all
+// of it, from 0 to math.MaxInt; a completion, the word before the caret.
+// The offsets are kept within the text, as SetTextSelection's, and what was
+// typed in this frame is applied first. Setting the bound value instead
+// takes the new text into the last step, which suits a reformat of what
+// the user typed, not a text that replaces it (see TextInput). As a paste
+// does, it puts the caret after s, and a single-line input takes line
+// breaks as spaces; MaxLength does not cut it, as it does not cut a value
+// the app sets. Changed reports it. It does nothing when the runes are s
+// already.
+func (_handle Element) ReplaceText(start int, end int, s string) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.ReplaceText(start, end, s))
 }
 
 // Reverse lays the children out in the other direction: a Row from right
@@ -7920,6 +8013,24 @@ func (_handle Element) ScrollWith(scroller Element) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.ScrollWith(scroller.nodeFor(_ctx.rt)))
+}
+
+// ScrollbarAxes controls the horizontal and vertical indicators and their
+// pointer hit targets independently. Both are enabled by default, showing
+// while the container overflows and is hovered, or as KeepScrollbars says.
+// Hiding the axis being dragged ends that drag. Wheel, TrackScroll, keyboard
+// focus and accessibility still scroll both axes.
+// Scrollbars(false) hides both regardless of call order; Scrollbars(true)
+// preserves the axis settings. It applies where Scrollbars does and is not
+// inherited. Omitting it in the next build enables both axes again.
+func (_handle Element) ScrollbarAxes(horizontal bool, vertical bool) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.ScrollbarAxes(horizontal, vertical))
 }
 
 // ScrollbarInsets moves a scroll container's scroll bars in from its

@@ -20,7 +20,7 @@ func TestPaintInputs(t *testing.T) {
 		// compared by paintStyle, or by textPaint (ts)
 		"paint": "flags themeAt paintLook ts shadows styleFn spans",
 		// an element with one set is never paint-same
-		"volatile": "paintRare ownText paragraph merged frags spansKey grad stripes originX originY originSet content pose poseAnim themed hideScrollbars keepScrollbars barsFrom", // only scroll containers read the scroll bars' fields, and they are volatile; a Themed is volatile (paintVolatile); the origin counts with a transform, in paintRare
+		"volatile": "paintRare ownText paragraph merged frags spansKey grad stripes originX originY originSet content pose poseAnim themed hiddenScrollbars keepScrollbars barsFrom", // only scroll containers read the scroll bars' fields, and they are volatile; a Themed is volatile (paintVolatile); the origin counts with a transform, in paintRare
 		// geometry and what the frame decides: the key of a replay
 		"key": "x y w h contentW contentH world poseM ink scrollBase track",
 		// not read by paint

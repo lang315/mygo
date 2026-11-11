@@ -3,6 +3,7 @@
 package linux
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 
@@ -549,14 +551,22 @@ type tray struct {
 	// activate is the handler of the "activate" signal, 0 while the icon
 	// does not answer activation.
 	activate uint64
+	// dark is the desktop's color scheme, as last told. image is the PNG
+	// the icon shows, and template whether it is black and transparent,
+	// which the icon shows white while the desktop prefers dark, as macOS
+	// tints a template image.
+	dark     bool
+	image    []byte
+	template bool
 }
 
 func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
 	if appIndicatorNew == nil {
 		return nil, fmt.Errorf("mygo: tray icons need libayatana-appindicator3: %w", platform.ErrUnsupported)
 	}
+	traysAppearanceChanged = b.traysAppearance
 	b.nextTray++
-	t := &tray{b: b, h: h, id: b.nextTray}
+	t := &tray{b: b, h: h, id: b.nextTray, dark: desktopDark()}
 	name := fmt.Sprintf("mygo-%d-%d", os.Getpid(), t.id)
 	t.ind = appIndicatorNew(cs(name), cs("application-x-executable"), 0) // APPLICATION_STATUS
 	appIndicatorSetStatus(t.ind, 1)                                      // ACTIVE
@@ -566,7 +576,14 @@ func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
 	return t, nil
 }
 
-func (t *tray) SetImage(png []byte, template bool) error {
+func (t *tray) SetImage(data []byte, template bool) error {
+	img := data
+	if template && t.dark {
+		var err error
+		if img, err = whiten(data); err != nil {
+			return err
+		}
+	}
 	if t.iconDir == "" {
 		dir, err := os.MkdirTemp("", "mygo-tray-")
 		if err != nil {
@@ -580,16 +597,110 @@ func (t *tray) SetImage(png []byte, template bool) error {
 	// "icon", and showed a theme's icon in place of the app's.
 	t.icons++
 	file := filepath.Join(t.iconDir, fmt.Sprintf("icon-%d.png", t.icons))
-	if err := os.WriteFile(file, png, 0o644); err != nil {
+	if err := os.WriteFile(file, img, 0o644); err != nil {
 		return err
 	}
 	appIndicatorSetIconFull(t.ind, cs(file), cs(""))
+	t.image, t.template = data, template
 	return nil
 }
 
-// Dark reports false: AppIndicator tells nothing of the panel, whose
-// icon theme draws the icon in its own colors.
-func (t *tray) Dark() bool { return false }
+// Dark reports whether the desktop prefers dark. AppIndicator tells
+// nothing of the panel itself, whose theme can differ from the desktop's.
+func (t *tray) Dark() bool { return desktopDark() }
+
+// desktopDark reads the desktop's color scheme from the settings portal:
+// the system's, not the app's own (Theme.SetSource), which the panel does
+// not follow. Without a portal it is false.
+func desktopDark() bool {
+	scheme, ok := portalColorScheme()
+	return ok && scheme == 1
+}
+
+// traysAppearance tells the icons that the desktop turned dark or light.
+func (b *Backend) traysAppearance() {
+	if len(b.trays) == 0 {
+		return
+	}
+	dark := desktopDark()
+	for _, t := range b.trays {
+		t.appearanceChanged(dark)
+	}
+}
+
+func (t *tray) appearanceChanged(dark bool) {
+	if dark == t.dark {
+		return
+	}
+	t.dark = dark
+	if t.template && t.image != nil {
+		_ = t.SetImage(t.image, true)
+	}
+	if t.h != nil {
+		t.h.AppearanceChanged()
+	}
+}
+
+// traysAppearanceChanged is linked by NewTray: portal settings changes
+// reach every app, but only those with a tray need its image code.
+var traysAppearanceChanged func()
+
+var trayImageOnce sync.Once
+
+// loadTrayImages binds the getters of a pixbuf's size and channels that
+// whiten reads, the first time a tray shows a template image white. The
+// same functions as notifications' and menu icons' bind, and no more.
+func loadTrayImages() {
+	trayImageOnce.Do(func() {
+		mustBind(libPixbuf, &gdkPixbufGetWidth, "gdk_pixbuf_get_width")
+		mustBind(libPixbuf, &gdkPixbufGetHeight, "gdk_pixbuf_get_height")
+		mustBind(libPixbuf, &gdkPixbufGetHasAlpha, "gdk_pixbuf_get_has_alpha")
+		mustBind(libPixbuf, &gdkPixbufGetBitsPerSample, "gdk_pixbuf_get_bits_per_sample")
+		mustBind(libPixbuf, &gdkPixbufGetNChannels, "gdk_pixbuf_get_n_channels")
+	})
+}
+
+// whiten draws a template image white, keeping its alpha, as the Windows
+// backend does on a dark taskbar. GdkPixbuf decodes and encodes it: the
+// backend links no image/png (TestBackendsDoNotImportPNG).
+func whiten(data []byte) ([]byte, error) {
+	loadTrayImages()
+	src, err := pixbufFromPNG(data)
+	if err != nil {
+		return nil, err
+	}
+	defer gObjectUnref(src)
+	if gdkPixbufGetBitsPerSample(src) != 8 {
+		return nil, errors.New("mygo: a tray image with other than 8 bits a sample")
+	}
+	w, h := int(gdkPixbufGetWidth(src)), int(gdkPixbufGetHeight(src))
+	const rgb = 0 // GDK_COLORSPACE_RGB
+	dst := gdkPixbufNew(rgb, true, 8, int32(w), int32(h))
+	if dst == 0 {
+		return nil, errors.New("mygo: cannot make the tray image")
+	}
+	defer gObjectUnref(dst)
+	n, alpha := int(gdkPixbufGetNChannels(src)), gdkPixbufGetHasAlpha(src)
+	ss, ds := int(gdkPixbufGetRowstride(src)), int(gdkPixbufGetRowstride(dst))
+	// The last row of a GdkPixbuf is not padded.
+	sp := unsafe.Slice((*byte)(gdkPixbufGetPixels(src)), ss*(h-1)+n*w)
+	dp := unsafe.Slice((*byte)(gdkPixbufGetPixels(dst)), ds*(h-1)+4*w)
+	for y := range h {
+		for x := range w {
+			a := byte(255)
+			if alpha {
+				a = sp[y*ss+x*n+n-1]
+			}
+			d := dp[y*ds+4*x:]
+			d[0], d[1], d[2], d[3] = 255, 255, 255, a
+		}
+	}
+	out := pngFromPixbuf(dst)
+	if out == nil {
+		return nil, errors.New("mygo: cannot encode the tray image")
+	}
+	return out, nil
+}
 
 // SetID does nothing: the indicator's ID is given as it is made, and
 // panels place indicators themselves.

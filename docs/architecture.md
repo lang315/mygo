@@ -381,6 +381,12 @@ by `mygo build` with `mygo_noinspector`) leave out its downloader and
 - The main thread is the one that called `gtk_init_check`; `IsMainThread`
   compares `gettid`. `Step` is `g_main_context_iteration(NULL, TRUE)` and
   `Wake` is `g_main_context_wakeup`.
+- `Init` names the program after its executable (`g_set_prgname`) before
+  `gtk_init_check`, which would name it after `argv[0]`: GTK names the
+  class of the windows and the app id after the program, as the desktop
+  entry does (`StartupWMClass`), and WebKitGTK the directories of the
+  pages' data. Started through a link of another name, as `linux.command`
+  puts in `/usr/bin`, the app is then the same program.
 - `Bounds` are those of the frame a reparenting X11 window manager puts
   around the window (`gdk_window_get_frame_extents`): GTK positions the
   frame (NORTH_WEST gravity) and sizes the window inside it, without the
@@ -2169,7 +2175,16 @@ as in Tauri:
   allows them; macOS checks certificates itself
   (`SecTrustEvaluateAsyncWithError`) only while
   `HandlesCertificateErrors` is true, and Linux and Windows extract the
-  certificate only then. Client certificates are left to the platform.
+  certificate only then. Client certificates go to
+  `WindowHandler.ClientCertificateRequested`, which
+  `SetClientCertificateHandler` answers with one of the offered
+  certificates or an empty response to refuse; without a handler the
+  answer is `Default`, the web view's own handling. Linux lists no
+  certificates to offer (WebKitGTK has none), so a handler there can
+  only refuse, and a refusal ends the load as a cancellation, which
+  `OnDidFailLoad` does not report. macOS lists the keychain's identities
+  only while `HandlesClientCertificates` is true, for the keychain asks
+  the user for them.
 - Active windows (`active.go`): a window is drawn as active, the one the
   user's input goes to, while it or a flyout of it (through flyouts'
   parents) has the keyboard (`windows.focused`), always while
@@ -3192,12 +3207,18 @@ either.
   or an ancestor's, leaves with an `Exit` wait in `engine.exits` until
   the transition's record is gone or no longer holds that copy (the
   exit ended, or the element came back), and the engine's `close` closes
-  every state's as the window closes. `Context` is stable for the window; `Element` values expire between build
+  every state's as the window closes. An element's `OnUnmount` keeps its
+  function in such a `Local`, under a key of its own (`unmount`,
+  `ui/local_close.go`), whose `Close` runs the function given last.
+  `Context` is stable for the window; `Element` values expire between build
   passes and validate their owner, slot and generation before accessing storage. `ListState` resolves
   its focus owner only for the current context, frame and pass, exposing
   focus and shortcuts without retaining an element in app state. Scroll
   offsets move in the layout too
-  (`ui/scroll.go`): elements that asked to `ScrollIntoView`, and the focus,
+  (`ui/scroll.go`): elements that asked to `ScrollIntoView`, and the focus
+  as the keyboard or the app moved it (`node.focus`; a click does not,
+  nor the app while a pointer button is held or with
+  `FocusOptions.PreventScroll`),
   come into view before the boxes are placed, lined up as its options say
   (or glide there as a wheel's notches do, by what they went each frame,
   `glideScroll`), and placing keeps each offset within its content; a
@@ -3349,8 +3370,10 @@ either.
   not told, since X11's visibility events are deprecated and a missed
   "unobscured" would hold the frames for good. In browsers it is a
   page in a background tab. Where no display link tick or `WM_PAINT`
-  comes for a window hidden or minimized (macOS, Windows), `RequestFrame`
-  draws the frame from the backend's queue (`drawSoon`) instead. A frame
+  comes for a window hidden or minimized, the frames `RequestFrame` asks
+  for are drawn otherwise: on macOS a timer draws them, a refresh after
+  the last, and the backend's queue (`drawSoon`) the one after a pause;
+  on Windows the queue draws them. A frame
   asked for by a change of the state
   waits too (`holdFrame`; both `held`), as browsers draw nothing for
   windows out of sight and as Apple asks of Mac apps: the view function,
@@ -5457,7 +5480,9 @@ either.
     that took back the drawables given back when idle: drawn in AppKit's
     display of the view, presented with the transaction too, it did not
     show, and the window kept the last frame stretched to its new size
-    (#1044). The main thread never
+    (#1044). So does one asked for after a pause, which would otherwise
+    draw from the backend's queue (`drawSoon`) in a pass of its own, and
+    not show either. The main thread never
     waits for the display: after each frame presented as soon as drawn, a
     goroutine on a thread of its own (`present.go`) takes the next frame's
     drawable, which `nextDrawable` holds back while the display holds the
@@ -6211,7 +6236,9 @@ make it work:
   of the app: the app in `/opt/<name>`, a `/usr/bin` link for each name
   of `linux.command`, the desktop entry (categories,
   comment, URL schemes; `Exec` is the app's path) and hicolor icons,
-  depending on GTK 3 and WebKitGTK 4.1. It also gets a `PKGBUILD`
+  depending on GTK 3 and WebKitGTK 4.1. It also gets an RPM package
+  (`rpm.go`), built with `go.digitalxero.dev/rpm`, with the same files
+  and metadata, and a `PKGBUILD`
   (`pkgbuild.go`), from which `makepkg -si` packages the archive for
   Arch Linux (`source` is its file name, with its SHA-256): its
   `package()` installs what the Debian package holds, with the same
@@ -6223,10 +6250,13 @@ make it work:
   Debian do. `pkgver` is the version without the hyphen of a
   pre-release (`1.2.0beta.1`; vercmp sorts `1.2.0_beta.1` after
   `1.2.0`, as a remainder starting with a separator wins), `depends`
-  maps the Debian dependencies through `archPackages`, warning about
-  those it lacks, and `options` keeps the executable unstripped. Every
+  takes per-format `deb`, `rpm` and `arch` lists, or maps a list of
+  Debian dependencies through `archPackages` and `rpmPackages`, warning
+  about those they lack, and `options` keeps the executable unstripped. Every
   value is quoted for the shell, and `-upload` leaves it out (`uploads`
-  takes only known kinds). Packages hold the same files as
+  takes only known kinds). `linux.formats` chooses which of the three
+  packages a build writes (`writeLinuxPackages`), all by default; the
+  archive is always written. Packages hold the same files as
   the update archive; apps installed by a package manager do not update
   themselves (`updates.Enabled` checks that the app can write where it is
   installed). Every Linux build also gets `install.sh`
@@ -6861,12 +6891,13 @@ which npm allows only for packages that exist: the first release uses an
 | sessions (`PageOptions.Session`) | a `WKWebsiteDataStore` set on each web view's configuration: `dataStoreForIdentifier:` of a UUID made of the name (macOS 14+; before, `nonPersistentDataStore` kept until the app quits), `nonPersistentDataStore` for an ephemeral one, released when its last page closes; `window.open` hands the opener's configuration over | a `WebKitWebContext` per session, made with `webkit_web_context_new_with_website_data_manager` of a manager with base data and cache directories in `Sessions/<UUID>` of the user data and cache directories, or `webkit_website_data_manager_new_ephemeral`; web views made with `g_object_new` and `web-context`, which keeps a reference to it; custom schemes, languages and downloads set up on each context; unreferenced when an ephemeral one's last page closes | a WebView2 profile per session (`ICoreWebView2Environment10`'s controller options: `put_ProfileName` `mygo-<UUID>`, or `mygo-private-<n>` with `put_IsInPrivateModeEnabled` for an ephemeral one, a new name for each of its stores); windows, web views in native UI and the cookie calls' hidden web views made with those options |
 | HTTP sign-in (`SetAuthHandler`) | `webView:didReceiveAuthenticationChallenge:completionHandler:`, `NSURLCredential` for the session; none: no prompt, the 401 page; empty answer: `RejectProtectionSpace` | `WebKitWebView::authenticate`, `webkit_credential_new` for the session; none: WebKitGTK's dialog; empty answer: authenticates without credentials | `ICoreWebView2_10`'s `BasicAuthenticationRequested`, scheme and realm parsed from its challenge, no proxy flag; none: WebView2's dialog; empty answer: `Cancel` |
 | certificate errors (`SetCertificateErrorHandler`) | the server trust challenge of every connection, checked with `SecTrustEvaluateAsyncWithError` while a handler is set, allowed with `credentialForTrust:` for that connection | `load-failed-with-tls-errors`, the main frame only; allowed with `webkit_web_context_allow_tls_certificate_for_host` (app-wide) and loaded again | `ICoreWebView2_14`'s `ServerCertificateErrorDetected`, every request, after `NavigationCompleted` failed; allowed with `ALWAYS_ALLOW` (app-wide) |
+| client certificates (`SetClientCertificateHandler`) | the client certificate challenge, identities of the keychain (`SecItemCopyMatching`, `kSecClassIdentity`), which the keychain asks the user for, answered with `credentialWithIdentity:certificates:persistence:`; none: WebKit never asks; empty answer: reject | scheme `CLIENT_CERTIFICATE_REQUESTED` on `WebKitWebView::authenticate`; WebKitGTK lists no certificates, so none are offered and a handler can only cancel (`webkit_authentication_request_cancel`), which ends the load as a cancellation `OnDidFailLoad` does not report; none: WebKitGTK's certificate chooser | `ICoreWebView2_5`'s `ClientCertificateRequested`, the mutually trusted certificates; none: WebView2's dialog; empty answer: the challenge is canceled, as a user's dismissal of the dialog is; a runtime without `_5` never asks |
 | a page's context menu (`OnContextMenu`) | `-[NSView willOpenMenu:withEvent:]` of `MyGoWebView`, on a menu with an item of `forwardContextMenuAction:` or a `WKMenuItemIdentifier*`: items named by their identifier, else WebKit's tag or AppKit's action, emptied and filled again in place; the target from the bridge alone, matched by the event's point; the app's items are `buildItem`'s, sent to `mygoContextItemClicked:` and the menu's window | `WebKitWebView::context-menu`: items named by their stock action, labels from their `GtkAction`, state from their `GAction`; the hit test tells all but the selection; renamed stock items are new ones of the same action; the app's items wrap a `GSimpleAction` (`webkit_context_menu_item_new_from_gaction`) | `ICoreWebView2_11`'s `ContextMenuRequested`, with the whole target (`Complete`); a changed menu is `Handled`, built by `buildMenu` and tracked after a deferral, and a WebView2 item chosen is its `SelectedCommandId`; a runtime without `_11` never asks |
 | permissions | `WKUIDelegate` media capture (camera, microphone) | `permission-request` (camera, microphone, geolocation, notifications) | `PermissionRequested` (the same four; WebView2 asks about others) |
 | user agent | `customUserAgent`; `UserAgentSuffix` is the configuration's `applicationNameForUserAgent`, which a `window.open()` window does not inherit | `WebKitSettings:user-agent`; `UserAgentSuffix` appends application details, split at the first "/" | `ICoreWebView2Settings2`'s user agent, and a suffix appended to the settings' own user agent; a runtime without `Settings2` ignores both |
 | swipes and pinches (`SwipeNavigation`, `PinchZoom`) | `allowsBackForwardNavigationGestures` and `allowsMagnification` of the `WKWebView`, both off unless asked for | `WebKitSettings:enable-back-forward-navigation-gestures`; WebKitGTK has no setting for pinches, so the web view's `GtkGestureZoom`, which it keeps in its data as `wk-view-zoom-gesture` (2.38+), is given `GTK_PHASE_NONE` unless `PinchZoom`: it then sees neither a touchpad's pinch nor a touchscreen's | `ICoreWebView2Settings6`'s `IsSwipeNavigationEnabled` and `ICoreWebView2Settings5`'s `IsPinchZoomEnabled`, both on in WebView2 and put to the options' values in `setUp`, before the first navigation |
 | the browser's keys (reload, print, find, zoom) | none | none | WebView2's (F5, Ctrl+R, Ctrl+P, Ctrl+F, Ctrl+Plus, ...) only with the inspector (`ICoreWebView2Settings3`'s `AreBrowserAcceleratorKeysEnabled`); `AcceleratorKeyPressed` still gives the menus every key |
-| file associations | `CFBundleDocumentTypes`; files arrive with `application:openURLs:` | desktop entry `MimeType` (`%U`), a shared-mime-info package in the .deb for types the app defines (`x-`) | ProgIDs and `OpenWithProgids` written by the installer |
+| file associations | `CFBundleDocumentTypes`; files arrive with `application:openURLs:` | desktop entry `MimeType` (`%U`), a shared-mime-info package in the .deb and .rpm for types the app defines (`x-`) | ProgIDs and `OpenWithProgids` written by the installer |
 | document windows | `representedURL` (proxy icon, Command-click folder menu) and `setDocumentEdited:` (the dot), then the traffic lights are laid out again | the core puts `*` before the title | the core puts `*` before the title |
 | replacing a document's file | `-[NSFileManager replaceItemAtURL:withItemAtURL:…]` (permissions, dates, extended attributes, ACLs, identity) | rename after `chmod` and `lchown` to the target's | `ReplaceFileW`, retried on sharing violations; when it stops halfway, having removed the target, the replacement is renamed into place |
 | recent documents | `noteNewRecentDocumentURL:` / `clearRecentDocuments:` of the shared `NSDocumentController` (the Dock menu) | `gtk_recent_manager_add_item`, removing the items of `g_get_application_name()` | `SHAddToRecentDocs` (`SHARD_PATHW`), `IApplicationDestinations::RemoveAllDestinations`; the process keeps the AppUserModelID the shell derives from its path, which the installer's shortcuts have too |

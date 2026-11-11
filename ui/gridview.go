@@ -538,7 +538,7 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item 
 		cell.afterInput(func() {
 			if cell.Clicked() {
 				s.click(grid, i, cell.ClickModifiers())
-				grid.Focus()
+				grid.focus(false)
 			}
 			if cell.DoubleClicked() {
 				grid.st.markSubmitted()

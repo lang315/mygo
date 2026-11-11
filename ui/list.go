@@ -81,8 +81,10 @@ type ListState struct {
 	// choice follows its item as rows come and go, and becomes -1 when the
 	// item is no longer among the rows: the list writes that as it builds,
 	// so what the app builds after the list in the same pass reads -1. An
-	// app that shows another set of rows in the same list can start it
-	// afresh (list = ListState{}), which forgets the item chosen before.
+	// app that chooses another item at the row the choice had, as rows
+	// change, chooses it with Choose. An app that shows another set of rows
+	// in the same list can start it afresh (list = ListState{}), which
+	// forgets the item chosen before.
 	Selected *int
 	// RowsOf, when set, returns the rows Selection chooses, in order, and
 	// true; false leaves it to the list to find them, by asking Selection
@@ -532,6 +534,22 @@ func (s *ListState) ScrollToEnd() {
 	s.scrolled = true
 }
 
+// Choose chooses row, as setting *Selected does, -1 for none, and tells
+// the list that the app chose it: with a Key, the list otherwise takes
+// *Selected left at the row it chose last for its item staying chosen,
+// and moves the choice with that item as rows come above it. Choose the
+// row of another item that lands there, as a new file sorted above the
+// one chosen, then chosen, and the choice stays with the new item. Call
+// it from the view, or as the rows change. It does nothing without
+// Selected.
+func (s *ListState) Choose(row int) {
+	if s.Selected == nil {
+		return
+	}
+	*s.Selected = row
+	s.selKey = nil
+}
+
 // HoldPlace keeps the list where it is in the next layout rather than
 // following its end, as a row opening a fold in the last message of a
 // chat does, for the line clicked to stay under the pointer. FollowEnd
@@ -799,6 +817,7 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 	flat, tree := kind == tableList || kind == treeTableList, kind == treeList || kind == treeTableList
 	rt := c.rt
 	f := &s.frame
+	// Another window's numbers can match: a list moved to it is no second List.
 	if f.e != nil && f.c.rt == rt && f.frame == rt.frame && f.pass == rt.pass {
 		panic("ui: a ListState shown by two Lists")
 	}
@@ -818,8 +837,11 @@ func buildList(c *context, e, owner *node, s *ListState, n int, row func(i int),
 	sig, noKeep := s.rowSig, s.rowNoKeep
 	if s.RowVersion != nil {
 		sig ^= s.settingsSig()
-	} else if f.kept != nil {
-		f.kept, f.spare = nil, nil // RowVersion was taken away: the copies go
+	}
+	if f.kept != nil && (s.RowVersion == nil || f.c.rt != rt) {
+		// RowVersion was taken away, or the list moved to another window,
+		// whose states the copies do not hold: the copies go.
+		f.kept, f.spare = nil, nil
 	}
 	s.rowSig, s.rowNoKeep = 0, false
 	*f = listFrame{sig: sig, noKeep: noKeep, c: c, e: e, owner: owner, s: s, n: n, row: row, frame: rt.frame, pass: rt.pass, flat: flat, tree: tree, grid: kind == gridList, theme: c.theme, rows: f.rows[:0], reads: f.reads[:0], valueBuf: f.valueBuf[:0], valueArena: f.valueArena[:0], at: f.at, kept: f.kept, capSeq: f.capSeq, spare: f.spare, handles: f.handles[:0], kc: f.kc}
@@ -2038,10 +2060,18 @@ func (e *node) layoutList(w, h float32) {
 	padTop, padBottom := float64(e.contentY()), float64(e.pad[2]+e.border[2])
 	// barTrack is how much of the bottom the horizontal bar's track covers.
 	barTrack := 0.0
-	if hide, _ := e.scrollbars(); e.flags&flagScrollX != 0 && !hide && cw+e.padX() > w+0.5 {
+	bars := e
+	if e.barsFrom != nil {
+		bars = e.barsFrom
+	}
+	if e.flags&flagScrollX != 0 && bars.hiddenScrollbars&(hideAllScrollbars|flagScrollX) == 0 && cw+e.padX() > w+0.5 {
 		// The last row ends above the horizontal bar's track (scrollBars),
 		// shown or not, so that the pointer coming over moves nothing.
-		barTrack = float64(e.barInset[2] + e.scrollbarStyle().Resolve(e.theme()).TrackWidth)
+		var style ScrollbarStyle
+		if bars.barStyle != nil {
+			style = *bars.barStyle
+		}
+		barTrack = float64(e.barInset[2] + style.Resolve(e.theme()).TrackWidth)
 		padBottom = max(padBottom, barTrack)
 	}
 	H := float64(h)

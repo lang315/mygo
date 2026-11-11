@@ -306,6 +306,11 @@ func (f *listFrame) keep(i int, key any) *node {
 			rt.countSeen()
 		}
 		st.seen, st.pass = rt.frame, rt.pass
+		if w := st.view; w != nil {
+			// The row's build read InView (watchView): its commit asks for
+			// another frame when the answer may change, as a build's does.
+			w.read = rt.frame
+		}
 		rt.noteBuilt(st)
 	}
 	if rec.lay.at == 0 {

@@ -179,11 +179,33 @@ func (e *node) TextInsetEnd(v float32) *node {
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with
-// an image, which the app reads from the clipboard itself. fn reports
+// an image, which fn reads with Services.ReadClipboardData. fn reports
 // whether it took the paste; a paste taken changes nothing, its selection
 // and undo history included, as when a web page prevents a paste's
 // default and attaches a large block instead of inserting it. Like
 // ReadOnly, it holds for the input that comes until the next frame.
+//
+// fn runs between frames, where an Element kept from the view is no
+// longer valid, and the input writes what it holds over its bound value,
+// so setting the value from fn is lost. To put text of its own in place
+// of the paste, as a link to an image it attaches, fn keeps the text and
+// the view inserts it with ReplaceText as it is built again, which a
+// paste seen by fn does at once:
+//
+//	svc := c.Services()
+//	in := ui.TextArea(c, &app.draft).OnPaste(func(string) bool {
+//		img := svc.ReadClipboardData(transfer.PNG)
+//		if len(img.Items()) == 0 {
+//			return false // text pastes as usual
+//		}
+//		app.insert = app.attach(img) // "![image](https://…)"
+//		return true
+//	})
+//	if app.insert != "" {
+//		start, end := in.TextSelection()
+//		in.ReplaceText(start, end, app.insert) // a step of undo
+//		app.insert = ""
+//	}
 func (e *node) OnPaste(fn func(text string) bool) *node {
 	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
 		ed.onPaste = fn
@@ -374,6 +396,60 @@ func (e *node) SetTextSelection(start, end int) *node {
 	if ed.area != nil {
 		ed.area.reveal = true
 	}
+	e.c.rt.requestFrame()
+	return e
+}
+
+// ReplaceText replaces the runes of a text input from start to end with s,
+// as an edit, a step of undo of its own: Undo brings back the text the
+// user had, and Redo s again. A command that writes a message replaces all
+// of it, from 0 to math.MaxInt; a completion, the word before the caret.
+// The offsets are kept within the text, as SetTextSelection's, and what was
+// typed in this frame is applied first. Setting the bound value instead
+// takes the new text into the last step, which suits a reformat of what
+// the user typed, not a text that replaces it (see TextInput). As a paste
+// does, it puts the caret after s, and a single-line input takes line
+// breaks as spaces; MaxLength does not cut it, as it does not cut a value
+// the app sets. Changed reports it. It does nothing when the runes are s
+// already.
+func (e *node) ReplaceText(start, end int, s string) *node {
+	if !e.hasState() || e.st.editor == nil || e.flags&flagEditable == 0 {
+		return e
+	}
+	// What was typed this frame comes first.
+	e.c.rt.applyInputs()
+	ed := e.st.editor
+	ed.syncBuffer()
+	n := ed.buf.n
+	start, end = min(max(start, 0), n), min(max(end, 0), n)
+	start, end = min(start, end), max(start, end)
+	// As the input takes it, a text it holds already is no edit.
+	s = ed.edited(s)
+	if ed.buf.slice(start, end) == s {
+		return e
+	}
+	ed.compose, ed.compositionActive = "", false
+	ed.record(false)
+	maxLen := ed.maxLen
+	ed.maxLen = 0
+	ed.replace(start, end, s)
+	ed.maxLen = maxLen
+	if ed.document != nil {
+		snapshot, ok := ed.document.compareRestore(ed.published, ed.buf.root)
+		if !ok {
+			// The app changed the buffer meanwhile, from another goroutine:
+			// its text wins, as it does over the user's edits.
+			ed.loadBuffer(snapshot)
+			return e
+		}
+		ed.published = snapshot
+	} else if ed.value != nil {
+		*ed.value = ed.buf.s
+	}
+	if ed.area != nil {
+		ed.area.reveal = true
+	}
+	e.st.markChanged()
 	e.c.rt.requestFrame()
 	return e
 }
