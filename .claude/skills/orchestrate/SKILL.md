@@ -2,7 +2,6 @@
 name: orchestrate
 description: Run mygo work through herdr workers (haiku, sonnet, opus) from an orchestrator session. Route each task by the checklist, review every diff, push and open PRs yourself, watch CI, and merge only after the owner says yes. Use when the owner types /orchestrate in a herdr pane.
 disable-model-invocation: true
-effort: high
 ---
 
 # Orchestrate mygo work through hc workers
@@ -20,13 +19,15 @@ your context lean: read worker reports, not raw logs or history.
   - pushing to `main`;
   - landing a fix on someone else's PR branch;
   - starting a worker in a hard-rule zone;
-  - changing any model or effort.
+  - changing any model or effort;
+  - changing this skill: its files, `routing.md` or a settings file.
 
 **Away mode.** The owner says they are away and names the batch: the tasks, and each plan or yes given in advance.
 - Work only the batch. A task that needs a yes the owner did not give is **parked**: log
   `state: parked (<what it waits for>)` and take the next task.
-- Never run a command from the list above without its yes. Its permission dialog stops this session, and the
-  workers' reports queue behind it. A PR with its runs green is logged `state: ready-to-merge`.
+- Never run a command from the list above without its yes. Its permission dialog stops this session, and while
+  it is open every worker's `hc send` is refused, not queued. A PR with its runs green is logged
+  `state: ready-to-merge`.
 - Wherever this skill says to tell or ask the owner: log it, park the task, and go on.
 - When every task is ready-to-merge or parked, post one list: each PR with its evidence, and each parked task with
   what it waits for.
@@ -48,10 +49,11 @@ Run `"$S/scripts/preflight"`.
 - **Any FAIL:** stop and tell the owner; each FAIL prints its fix (launch flags: restart as above).
 - **WARN:** carry on. Mention a skip-permissions or bypass warning to the owner. The `defaultMode auto` and "local
   changes" warnings are expected; don't report them.
-- Log one row for the session: `session | (orchestrator: <model>, <effort>) | preflight | state: started | none`.
-  The model is the one your system prompt names. The effort is the script's `launch effort` line, or `default`
-  with no flag. Log a new row when the owner changes either (`/model`, `/effort`), so the log says which model
-  ran which tasks.
+- Log one row for the session: `session | orchestrator (<model>, <effort>) | preflight | state: started | none`.
+  The model is the one your system prompt names. The effort is the script's `launch effort` line, or the word
+  `default` with no flag: do not look it up, the settings hold several values and none proves the effort in
+  force. Log a new row when the owner changes either (`/model`, `/effort`), so the log says which model ran
+  which tasks.
 
 ## Step 0: is someone already on it?
 
@@ -191,5 +193,4 @@ About every 10 tasks in `.orch/log.md`, review four things: picks that needed es
 task needed, review rounds, and blocked commands.
 
 Weigh them by cost per finished task, using [model-guidance.md](model-guidance.md): verify first, then raise effort,
-then raise the model. Then propose `routing.md` edits to the owner. Do not change routing.md, this file or the
-settings without the owner's yes.
+then raise the model. Then propose the edits to the owner: changing the skill needs the owner's yes.

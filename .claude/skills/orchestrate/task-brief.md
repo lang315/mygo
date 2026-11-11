@@ -54,6 +54,8 @@ Rules:
   Then run exactly: hc send <orch> "<name> done: <R>/.orch/reports/<name>.md"
   If stuck, or the criterion still fails after 2 attempts, write what you found, then:
   hc send <orch> "<name> stuck: <R>/.orch/reports/<name>.md"
+  If hc send answers blocked (exit 9), leave it, with no --force and no retry: the orchestrator reads the
+  report file.
 - Stay open after reporting: review findings may come back to you with hc send.
 ```
 
@@ -75,7 +77,10 @@ EOF
 Commands outside your allowlist are refused, not asked: do not work around a refusal; say so in the report.
 Filter with pipes, one command per call, e.g. gh run view <id> --repo lang315/mygo --log-failed | grep -- '--- FAIL'.
 for loops, $(...), redirects (>) and `cd ... &&` are refused: run one command per run, and pass paths instead of cd.
+Run git without -C: you are in the main checkout.
 Never copy tokens or secrets.
 Then run exactly: hc send <orch> "<name> done: <R>/.orch/reports/<name>.md"
 If stuck: hc send <orch> "<name> stuck: <one line>"
+If hc send answers blocked (exit 9), leave it, with no --force and no retry: the orchestrator reads the report
+file.
 ```
