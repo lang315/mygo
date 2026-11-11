@@ -9,6 +9,7 @@ R=/Users/lang/GolandProjects/github.com/lang315/mygo; S=$R/.claude/skills/orches
 ## Step 0 (is someone already on it?)
 
 ```sh
+git -C "$R" fetch -q origin                              # or the branch list below is stale
 gh pr list --repo lang315/mygo --state open
 gh pr list --repo lang315/mygo --state merged --limit 15
 git -C "$R" branch -r --sort=-committerdate | head -20    # other sessions' branches (fix/, sync/, feat/, dbg/)
@@ -67,6 +68,10 @@ hc wait --children any --timeout 570
 
 - The wait returns `reason: message` when a report arrives. It returns `timeout` when the time runs out, which is
   a check-in, not a failure. Wait again until no child is working.
+- A child with `reason: status` and `status: done` ended its turn and no message came. Read
+  `$R/.orch/reports/<name>.md`: a report there means its `hc send` was refused; none means it waits on a
+  background command ("Slow commands"), so wait again. `status: blocked` is a dialog in the child: see "Blocked
+  worker".
 - Reports arrive as input: `<hc from="t2k listinputs">listinputs done: <path></hc>`.
 - `hc send <t> "<review finding>"` gives a worker another round in the same context.
 - `hc send` wraps the text in `<hc from=...>`, so a slash command sent this way does not run.
@@ -85,6 +90,10 @@ in `heavy.lock/pid`. If `kill -0 "$(cat "$R/.orch/heavy.lock/pid")"` fails, the 
 hc run --bg --name cmdtest --cwd "$R/../mygo-wt-<name>" -- "$S/scripts/heavy-lock" GOFLAGS=-trimpath go test -count=1 -timeout 30m ./cmd/mygo
 hc wait cmdtest --timeout 570; hc read cmdtest --lines 15; hc rm cmdtest
 ```
+
+- Your Bash call ends after 10 minutes: any run that can pass that goes through a pane like this.
+- A worker runs such a command in the background: its turn ends while the command runs, and it goes on by
+  itself when the command ends.
 
 ## PR, CI and merge (always `--repo lang315/mygo`; never the upstream)
 
@@ -120,6 +129,8 @@ git -C "$R" push origin --delete orch/<name>; git -C "$R" pull --ff-only
 ## Blocked worker
 
 - Workers run in `dontAsk`: a refused command comes back in the report, not as a dialog.
+- A dialog in your own pane refuses every worker's `hc send` (exit 9, `blocked`) until the owner answers it. A
+  permission prompt is one; so is a message held from a session in another permission mode.
 - Status `blocked` is then a dialog of another kind (trust, login). Read it: `hc read --lines 0 <t>`.
 - Do not answer it with `hc keys`, and do not widen the settings files. Log it and tell the owner; the owner
   answers it in the pane (`hc attach <t>`) or has you kill the worker.

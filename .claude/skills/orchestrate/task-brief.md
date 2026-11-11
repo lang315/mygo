@@ -29,7 +29,8 @@ Steps:
 3. Done criterion, all must pass:
    - <the reproducing command>
    - <the package tests, e.g. go test -count=1 ./<pkg>>
-   - for ui or ui/widget: <S>/scripts/heavy-lock go test -race -count=<1, or 20 for a race> ./<pkg>
+   - for ui or ui/widget: <S>/scripts/heavy-lock go test -race -count=<1, or 20 for a race> -run '<the tests the
+     change touches>' ./<pkg>
    - gofmt -l <touched dirs> prints nothing
    - <S>/scripts/heavy-lock GOOS=<os> go vet ./<pkgs> for darwin, linux and windows
 
@@ -41,6 +42,9 @@ Rules:
 - Temp files go in <R>/.orch/tmp/<name>/, never /tmp.
 - Run heavy commands (-race, go test ./cmd/mygo, go build ./..., gotip vet ./..., any GOOS=... vet or build)
   through <S>/scripts/heavy-lock. It takes only GO*/CGO_ENABLED/MYGO_* variables and go, gotip or gofmt.
+- A Bash call ends after 10 minutes, and go test's own limit is 10 minutes a package. A run that can pass
+  that, as the tests of cmd/mygo, gets -timeout 30m and starts as a background command; report only after it
+  has ended. Never run -race on the whole of ui: it takes over 25 minutes here, and CI does it.
 - Keep commands simple: one command per Bash call, no cd, no $(...), no loops. Run git without -C: you are in
   your worktree. Search with the Grep tool: a grep whose pattern has a $ is refused. Commands outside your
   allowlist are refused, not asked: do not work around a refusal, by another tool or a Go program either;
@@ -54,6 +58,8 @@ Rules:
   Then run exactly: hc send <orch> "<name> done: <R>/.orch/reports/<name>.md"
   If stuck, or the criterion still fails after 2 attempts, write what you found, then:
   hc send <orch> "<name> stuck: <R>/.orch/reports/<name>.md"
+  If hc send answers blocked (exit 9), leave it, with no --force and no retry: the orchestrator reads the
+  report file.
 - Stay open after reporting: review findings may come back to you with hc send.
 ```
 
@@ -75,7 +81,10 @@ EOF
 Commands outside your allowlist are refused, not asked: do not work around a refusal; say so in the report.
 Filter with pipes, one command per call, e.g. gh run view <id> --repo lang315/mygo --log-failed | grep -- '--- FAIL'.
 for loops, $(...), redirects (>) and `cd ... &&` are refused: run one command per run, and pass paths instead of cd.
+Run git without -C: you are in the main checkout.
 Never copy tokens or secrets.
 Then run exactly: hc send <orch> "<name> done: <R>/.orch/reports/<name>.md"
 If stuck: hc send <orch> "<name> stuck: <one line>"
+If hc send answers blocked (exit 9), leave it, with no --force and no retry: the orchestrator reads the report
+file.
 ```
