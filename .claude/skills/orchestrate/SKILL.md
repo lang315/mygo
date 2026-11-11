@@ -182,7 +182,8 @@ Workers never push. The commands are in the cheatsheet.
 - **Log:** after every change of a task's state, append one line to `$R/.orch/log.md`. Format:
   `task (source) | role (model, effort from the banner) | reason | state: assigned/done/round/escalated/PR/ready-to-merge/merged/dropped/blocked/parked | escalations`
   - Example: `listinputs (run 42757887133) | sonnet (claude-sonnet-5-5, medium) | one package, local repro | state: PR #462 | none`.
-  - Your own rows use `(orchestrator)` as the role.
+  - Your own rows use `(orchestrator)` as the role. The session row of preflight is the only one with the state
+    `started`.
 
 ## Tuning
 
