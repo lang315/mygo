@@ -545,7 +545,10 @@ func TestOnUnmountAfterExit(t *testing.T) {
 func TestOnUnmountFrameAllocs(t *testing.T) {
 	ran := 0
 	fn := func() { ran++ }
-	allocs := func(unmount bool) float64 {
+	// allocsPerRun, not testing.AllocsPerRun: under -race -shuffle an earlier
+	// test's goroutines malloc meanwhile, which the count would blame on a
+	// frame (a CI run read 4 with OnUnmount, 0 without).
+	allocs := func(unmount bool, limit float64) float64 {
 		tt := NewTester(func(c *Context) {
 			for i := range 50 {
 				e := Box(c).Key(i).Size(2, 2)
@@ -555,9 +558,10 @@ func TestOnUnmountFrameAllocs(t *testing.T) {
 			}
 		}, 100, 100)
 		tt.Frame()
-		return testing.AllocsPerRun(20, tt.Frame)
+		return allocsPerRun(t, 20, limit, tt.Frame)
 	}
-	if with, without := allocs(true), allocs(false); with > without {
+	without := allocs(false, 0)
+	if with := allocs(true, without); with > without {
 		t.Fatalf("a frame allocates %.0f times with OnUnmount, %.0f without", with, without)
 	}
 	if ran != 0 {
