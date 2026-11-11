@@ -93,8 +93,9 @@ Answer in order. The highest role any answer requires wins.
 6. **Hard-rule zone?** See [routing.md](routing.md): **opus**, plan first. Release config and upstream sync are never
    worker tasks unless the owner asks.
 
-- **Plan first:** post the plan in chat (scope, files, API, done criterion). Haiku may gather facts for it. Start
-  the worker only after the owner's yes.
+- **Plan first:** post the plan in chat (scope, files, API, done criterion, and the cases: each an input and the
+  result expected, a flow once whatever its values). Haiku may gather facts for it. Start the worker only after
+  the owner's yes.
 - Before you start any worker, say its role and the reason in one line.
 - Route again when the facts change: a triage ends in "needs a code change", or a cause sits in a hard-rule zone.
 
@@ -133,9 +134,12 @@ sessions (`git worktree list`): the owner's disk rule.
 
 - **Repro:** a bug fix comes with a repro that fails on `origin/main` and passes on the branch. For a CI-only bug,
   see the flow above.
-- **Cases:** a feature or API task lists its cases before the code, with one named test a case. Such a test
-  fails on `origin/main` only for want of the code, which says nothing of what it asserts: the break check of
-  your review does.
+- **Cases:** a feature or API task lists its cases before the code, with one named test a case. Its brief
+  carries the cases fixed before the code, each an input and the result expected: the plan's, or yours from the
+  task's source when it had no plan. The worker adds cases and changes none of these: a result that came from
+  the code proves the code against itself.
+- Such a test fails on `origin/main` only for want of the code, which says nothing of what it asserts: the break
+  check of your review does.
 - **Tests:** the package tests of every touched package pass. For `ui` and `ui/widget`, also run `-race` through
   heavy-lock on the tests the change touches (`-run`), with `-count=20` when the task is a race. The `-race` run
   of the whole package is CI's: here `ui` takes over 25 minutes with the heavy lock held, and the pull request's

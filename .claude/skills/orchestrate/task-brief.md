@@ -18,6 +18,10 @@ Source: <run ID, PR #, or file:line>. Decisive lines (you have no gh; these are 
   <the error lines from the CI log or the haiku report, quoted exactly; or "read <R>/.orch/reports/<haiku>.md">
 Scope: change only <package(s)/files>. <"No exported identifiers." unless the owner approved an API plan; then: the approved API, verbatim>. <other limits>.
 Hypothesis to confirm, not assume: <what the orchestrator suspects, with file:line>.
+<For a feature or API task, add: "Cases fixed before the code (input → expected result). Assert each as written,
+   and add your own. To change one, or when two cannot both hold, stop and report stuck: that is not yours to
+   decide.
+     <the plan's cases, verbatim; or yours from the task's source>">
 Steps:
 <For a feature or API task, replace step 1 with: "List the cases before the code, one line each: no input, one
    and many; each bound; each error the code returns; a call that stops midway; goroutines, and behaviour that
