@@ -7,8 +7,9 @@ effort: high
 
 # Orchestrate mygo work through hc workers
 
-You are the orchestrator: Opus 5.5 at effort high, launched with `claude --model claude-opus-5-5 --effort high` in a
-herdr pane, without skip-permissions. You pick a role for each task, brief a worker, review its result, and run push,
+You are the orchestrator: Opus 5.5 at effort high, launched in a herdr pane, without skip-permissions, from the
+main checkout with
+`claude --model claude-opus-5-5 --effort high --settings .claude/skills/orchestrate/orchestrator-settings.json`. You pick a role for each task, brief a worker, review its result, and run push,
 PR, CI and merge. You do not write the code. Keep your context lean: read worker reports, not raw logs or history.
 
 **Owner's rules (2026-11-10), overriding general memory rules in `/orchestrate`:**
@@ -37,7 +38,8 @@ Reference files:
 
 The Bash tool keeps no variables between calls. Start each call that needs them with
 `R=/Users/lang/GolandProjects/github.com/lang315/mygo; S=$R/.claude/skills/orchestrate`.
-If the repo moves, update `R` in this file, the cheatsheet and task-brief.md, and the script paths in both settings files.
+If the repo moves, update `R` in this file, the cheatsheet and task-brief.md, the script paths in both
+workers' settings files, and the paths in orchestrator-settings.json.
 
 ## Preflight
 
@@ -87,7 +89,9 @@ Answer in order. The highest role any answer requires wins.
 
 **CI-only flow (Windows and similar):** haiku triages the finished run, and opus fixes it with no local repro. Then
 loop until green:
-1. You review, push `orch/<name>`, and dispatch `ci.yml`.
+1. You review, push `orch/<name>` and open the PR: its `pull_request` run is the repro. Dispatch `ci.yml` on the
+   branch as well only when the failing job is one a PR does not run (Linux ARM64, or the cmd or ui shard on
+   Linux).
 2. You watch the run (haiku can't watch one).
 3. Haiku summarizes the finished run, and you `hc send` the summary to the same opus worker.
 
@@ -147,12 +151,18 @@ Workers never push. The commands are in the cheatsheet.
    - evidence: commands, exit status, output;
    - the AI disclosure, naming the worker's model and yours;
    - no "a human read every line" box, and no session link.
-5. **CI.** After **every** push of `orch/<name>`, dispatch `ci.yml`. Once the PR exists, its `pull_request` run
-   restarts by itself. Both runs must be green on the last pushed commit: compare each run's `headSha` with
-   `git -C "$R" rev-parse orch/<name>`. A PR that changes only `*.md` or `LICENSE` starts no `pull_request` run
-   (`paths-ignore` in `ci.yml`): the dispatched run alone decides. If a run fails, haiku triages it and the fix
-   goes back to the worker.
-6. **Ask.** When both are green, compare `gh pr diff <n> --name-only` with the intent. Then **ask the owner**, and
+5. **CI.** The PR's `pull_request` run is the gate. It restarts by itself after every push, and it must be green
+   on the last pushed commit: compare its `headSha` with `git -C "$R" rev-parse orch/<name>`.
+   - It tests the packages the change affects on macOS and Windows, and on Linux but for the cmd and ui shards,
+     and every package on Windows ARM64. The push to `main` after the merge tests every package, Linux ARM64
+     included.
+   - Dispatch the full run (`ci.yml` on the branch) as well only when the change touches Linux-only code
+     (`internal/linux`, a `*_linux*.go` file), in the CI-only flow above, or when the owner asks. It takes about
+     245 job-minutes from the runners every session shares; a PR's run takes 70 to 190.
+   - A PR that changes only `.claude/**`, `*.md` or `LICENSE` starts no run (`paths-ignore` in `ci.yml`): there
+     is nothing to wait for.
+   - If a run fails, haiku triages it and the fix goes back to the worker.
+6. **Ask.** When the run is green (and the dispatched one, if any), compare `gh pr diff <n> --name-only` with the intent. Then **ask the owner**, and
    merge only after a yes.
 7. **After the merge:** kill the worker, remove its worktree, delete the branch, and fast-forward `main` in `$R`.
 

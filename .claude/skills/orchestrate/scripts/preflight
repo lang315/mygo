@@ -30,6 +30,10 @@ else
 	*) fail "launch effort: want --effort high in: $a" ;;
 	esac
 	case " $a " in
+	*" --settings "*orchestrator-settings.json*) pass "launch settings: orchestrator-settings.json" ;;
+	*) fail "launch settings: want --settings .claude/skills/orchestrate/orchestrator-settings.json in: $a" ;;
+	esac
+	case " $a " in
 	*" --dangerously-skip-permissions "* | *bypassPermissions*) warn "started without permission checks: only the ask rules in .claude/settings.json still hold" ;;
 	*" --permission-mode auto "*) warn "--permission-mode auto: the classifier approves most calls; the ask rules still hold" ;;
 	*" --permission-mode "*) pass "permission mode set on the command line" ;;
@@ -73,7 +77,7 @@ for f in "$S/worker-settings.json" "$S/reader-settings.json"; do
 	done
 done
 
-for f in "$R/.claude/settings.json" "$S/worker-settings.json" "$S/reader-settings.json"; do
+for f in "$R/.claude/settings.json" "$S/worker-settings.json" "$S/reader-settings.json" "$S/orchestrator-settings.json"; do
 	python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$f" 2>/dev/null && pass "valid JSON: ${f#"$R"/}" || fail "invalid JSON: $f"
 done
 grep -q '"Bash(gh pr merge \*)"' "$R/.claude/settings.json" && pass "merge ask rule present" || fail "ask rule for gh pr merge missing in .claude/settings.json"

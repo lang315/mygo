@@ -9,7 +9,7 @@ Use this with the checklist in SKILL.md. It comes from the 2026-11-10 trial: 34 
 | haiku | `--model claude-haiku-5-5 --effort high`, `--setting-sources user`, `dontAsk` + `reader-settings.json` | Read-only work: CI triage (failed jobs and steps, `--- FAIL` lines, the first decisive error line); summarizing a finished CI run's failures (it cannot watch a running one); `gh pr diff --name-only` against intent; code and caller search; history and doc lookups | Edit tracked files, commit, push, rerun/cancel/dispatch CI, delete |
 | sonnet | `--model claude-sonnet-5-5 --effort medium`, `dontAsk` + `worker-settings.json` | One package with a local automated test; the same mechanical fix applied across several packages; prose-only docs or skills fixes; a locale string with its own `go generate`; app sizes via `scripts/measure-size.sh` | Exported API, backends, `loop.go`, purego, shared size paths |
 | opus | `--model claude-opus-5-5 --effort medium`, `dontAsk` + `worker-settings.json` | Real logic across two or more packages; Windows-only failures with no local repro; work in the hard-rule zones below that the owner has approved for a worker | Push, merge |
-| orchestrator | this session (`claude --model claude-opus-5-5 --effort high`) | Specs, routing, the duplicate check, review of every diff, rerunning the tests, push, PR, CI, merge after the owner says yes, cleanup, log | Write the code itself |
+| orchestrator | this session (`claude --model claude-opus-5-5 --effort high --settings …/orchestrator-settings.json`) | Specs, routing, the duplicate check, review of every diff, rerunning the tests, push, PR, CI, merge after the owner says yes, cleanup, log | Write the code itself |
 
 Haiku is read-only. App sizes need builds, so they go to sonnet.
 
@@ -57,6 +57,11 @@ Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
   - `bash`/`sh`/`zsh -c` commands that mention push.
 
   Notes:
+  - `orchestrator-settings.json`, given with `--settings`, tells auto mode's classifier this repository's rules:
+    what the orchestrator does every day (`go build ./...`, pushes of `orch/*`, PRs on the fork, worktrees), and
+    what it must not (a `v*` tag, anything on the upstream). The classifier reads `autoMode` from the user's
+    settings and from `--settings` only, never from a checkout's `.claude/`. Tested 2026-11-10:
+    `claude --settings <file> auto-mode config` lists the entries.
   - `bypassPermissions` honors `ask` rules (docs: "Actions no mode auto-approves").
   - Tested 2026-11-10 under `--dangerously-skip-permissions`: all those forms were held, and a push of an `orch/`
     branch ran.

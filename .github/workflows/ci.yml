@@ -6,10 +6,12 @@ on:
     paths-ignore:
       - "**/*.md"
       - LICENSE
+      - ".claude/**"
   pull_request:
     paths-ignore:
       - "**/*.md"
       - LICENSE
+      - ".claude/**"
   workflow_dispatch:
 
 permissions:

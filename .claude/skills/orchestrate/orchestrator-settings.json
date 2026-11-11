@@ -1,0 +1,13 @@
+{
+  "autoMode": {
+    "allow": [
+      "In /Users/lang/GolandProjects/github.com/lang315/mygo and its worktrees (../mygo-wt-*), origin lang315/mygo: `go build ./...`, `go vet ./...` and `go test ./...` (its AGENTS.md requires them); pushing `orch/*` branches to origin; opening PRs on lang315/mygo; dispatching ci.yml on an `orch/*` branch; adding and removing `mygo-wt-*` worktrees; deleting an `orch/*` branch, local and on origin, once its PR is merged or dropped. This clears nothing for `main`, tags, force pushes, other branches or egoist/mygo"
+    ],
+    "soft_deny": [
+      "In lang315/mygo: pushing a `v*` tag (it starts the release workflow); any push, pull request or comment on egoist/mygo (the upstream)"
+    ],
+    "environment": [
+      "**Trusted repo (mygo)**: lang315/mygo (local: /Users/lang/GolandProjects/github.com/lang315/mygo and its worktrees ../mygo-wt-*), PUBLIC, a fork of egoist/mygo: nothing private may be committed or pushed there; egoist/mygo (remote `upstream`) is read-only"
+    ]
+  }
+}
