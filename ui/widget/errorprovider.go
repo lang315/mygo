@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // ErrorProviderWidget shows why a control's value is not valid, as WinForms'
@@ -255,9 +256,16 @@ const (
 	errorMarkInset = 6
 )
 
-// paintErrorMark draws a red disc with a white exclamation mark at the end of
-// r, centred across it.
+// plainErrorGlyph is the exclamation mark's color without a skin.
+var plainErrorGlyph = ui.RGB(255, 255, 255)
+
+// paintErrorMark draws a red disc with an exclamation mark at the end of r,
+// centred across it: the mark white, or the skin's Danger.On.
 func paintErrorMark(p *ui.Painter, r ui.Rect, rtl bool, danger ui.Color) {
+	glyph := plainErrorGlyph
+	if t := skinhook.Get(p.Theme().Dark); t != nil {
+		glyph = t.Danger.On
+	}
 	x := r.X + r.W - errorMarkInset - errorMarkSize
 	if rtl {
 		x = r.X + errorMarkInset
@@ -265,6 +273,6 @@ func paintErrorMark(p *ui.Painter, r ui.Rect, rtl bool, danger ui.Color) {
 	y := r.Y + (r.H-errorMarkSize)/2
 	p.Fill(ui.Rect{X: x, Y: y, W: errorMarkSize, H: errorMarkSize}, danger, errorMarkSize/2)
 	cx := x + errorMarkSize/2
-	p.Line(cx, y+3, cx, y+errorMarkSize-6, 1.6, ui.RGB(255, 255, 255))
-	p.Fill(ui.Rect{X: cx - 0.9, Y: y + errorMarkSize - 4.5, W: 1.8, H: 1.8}, ui.RGB(255, 255, 255), 0.9)
+	p.Line(cx, y+3, cx, y+errorMarkSize-6, 1.6, glyph)
+	p.Fill(ui.Rect{X: cx - 0.9, Y: y + errorMarkSize - 4.5, W: 1.8, H: 1.8}, glyph, 0.9)
 }

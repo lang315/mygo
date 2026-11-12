@@ -55,6 +55,8 @@ type Tokens struct {
 	// Info is the running and info state, kept apart from the status
 	// colors.
 	Info Family
+	// Chart colors the series and slices of charts, in order.
+	Chart [8]ui.Color
 
 	ControlHeight, RowHeight, HeaderHeight, SettingsRowHeight    float32
 	TabStripHeight, MenuBarStripHeight, MenuBarItemHeight        float32

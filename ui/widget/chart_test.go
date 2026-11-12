@@ -3,12 +3,14 @@ package widget
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 func barChart() *ChartWidget {
@@ -250,6 +252,94 @@ func TestChartPaintAndSettersFromAWorkerDoNotRace(t *testing.T) {
 		tt.Image()
 	}
 	wg.Wait()
+}
+
+// The chart colors of today, which a chart without a skin keeps.
+var todayChartColors = []ui.Color{
+	ui.Hex("#2563eb"), ui.Hex("#16a34a"), ui.Hex("#ea580c"), ui.Hex("#9333ea"),
+	ui.Hex("#0891b2"), ui.Hex("#db2777"), ui.Hex("#ca8a04"), ui.Hex("#4b5563"),
+}
+
+// nineSeries is a chart of kind k with nine series (bars, lines) or nine
+// slices (pie), so that the ninth takes the first color again.
+func nineSeries(k ChartKind) *ChartWidget {
+	c := Chart(k).SetTitle("Nine")
+	if k == PieChart {
+		return c.SetLabels("a", "b", "c", "d", "e", "f", "g", "h", "i").
+			SetSeries(ChartSeries{Values: []float64{1, 1, 1, 1, 1, 1, 1, 1, 1}})
+	}
+	var s []ChartSeries
+	for i := range 9 {
+		s = append(s, ChartSeries{Name: fmt.Sprint("s", i), Values: []float64{float64(i + 1), float64(i + 1)}})
+	}
+	return c.SetLabels("x", "y").SetSeries(s...)
+}
+
+// A chart with a skin draws its series, slices and legend in the skin's
+// chart colors, in order, the ninth in the first again, light and dark;
+// without one, in today's colors.
+func TestChartUsesSkinColors(t *testing.T) {
+	if !slices.Equal(plainChartColors, todayChartColors) {
+		t.Fatalf("plainChartColors is %v, want today's %v", plainChartColors, todayChartColors)
+	}
+	light, dark := testTokens()
+	for _, k := range []ChartKind{BarChart, LineChart, PieChart} {
+		for _, c := range []struct {
+			name   string
+			skin   bool
+			dark   bool
+			colors []ui.Color
+		}{
+			{"plain", false, false, todayChartColors},
+			{"plain dark", false, true, todayChartColors},
+			{"light", true, false, light.Chart[:]},
+			{"dark", true, true, dark.Chart[:]},
+		} {
+			if c.skin {
+				useTestSkin(t)
+			} else {
+				skinhook.Set(nil, nil)
+			}
+			tt := NewTester(t, nineSeries(k), 600, 420)
+			if c.dark {
+				tt.SetDark(true)
+				tt.Settle()
+			}
+			plot := tt.Find(ByLabel("Nine")).Bounds()
+			img := tt.Image()
+			for i, col := range c.colors {
+				// The plot: bars and slices are filled, lines 2 wide.
+				if n := countNear(img, plot, false, col, 6); n < 20 {
+					t.Errorf("kind %d, %s: %d pixels of color %d (%v) in the plot, want 20 or more", k, c.name, n, i, col)
+				}
+				// The legend, under the plot: a 10 by 10 box an entry, two of the
+				// first color.
+				min := 50
+				if i == 0 {
+					min = 150
+				}
+				if n := countNear(img, plot, true, col, 6); n < min {
+					t.Errorf("kind %d, %s: %d pixels of color %d (%v) in the legend, want %d or more", k, c.name, n, i, col, min)
+				}
+			}
+			// None of the other set's colors, whichever skin is on.
+			others := [][]ui.Color{todayChartColors, light.Chart[:], dark.Chart[:]}
+			for _, o := range others {
+				if slices.Equal(o, c.colors) {
+					continue
+				}
+				for i, col := range o {
+					if slices.Contains(c.colors, col) {
+						continue
+					}
+					if n := countNear(img, ui.Rect{}, true, col, 2); n > 4 {
+						t.Errorf("kind %d, %s: %d pixels of the color %v (index %d of another set)", k, c.name, n, col, i)
+					}
+				}
+			}
+		}
+	}
+	skinhook.Set(nil, nil)
 }
 
 func linePoints(n int) *ChartWidget {
