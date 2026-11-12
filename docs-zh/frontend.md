@@ -54,7 +54,7 @@ func main() {
 
 ## 自定义协议
 
-`mygo.Protocol.Handle` 用 `http.Handler` 为一个 URL 协议提供服务，用于应用在运行时生成或读取的内容：页面、图片、用户的文件。处理器在自己的 goroutine 上运行并流式发送响应：webview 落后时写入会等待，因此大文件永远不会被整体保存在内存中。页面像加载普通 Web URL 一样加载这类 URL，可以用 `fetch`、`<img>`、ES 模块和相对 URL：
+`mygo.Protocol.Handle` 用 `http.Handler` 处理 URL 协议，提供应用在运行时生成或读取的内容：页面、图片、用户文件。处理器各自在独立的 goroutine 中运行，以流式方式发送响应：webview 读取不及时，写入就会等待，因此无需将整个大文件放入内存。页面可以像普通 Web URL 一样，通过 `fetch`、`<img>`、ES 模块和相对 URL 加载这些内容：
 
 ```go
 // Thumbnails generated into the cache directory.
@@ -74,7 +74,7 @@ mygo.Protocol.HandleFunc("api", func(w http.ResponseWriter, r *http.Request) {
 
 在创建使用这些协议的窗口之前注册它们。`mygo.FileServer` 为 `fs.FS` 提供 HTTP 服务，支持内容类型和范围请求，并像前端一样回退到 `index.html`。处理 `mygo` 协议会用你的处理器替换前端。自定义协议的页面属于应用自己：它们可以调用 Go 方法，见[信任](#信任)。
 
-在 Windows 上，处理器返回后，或写入 1 MB 后，WebView2 才会接收响应：其余部分随后流式传输，WebView2 落后时处理器的写入会等待。WebView2 一次读取一个自定义协议的响应，而且似乎在读完整响应之前不会给页面任何内容。让响应保持打开的处理器（例如服务器发送事件或长轮询），其响应只有在处理器返回后才会到达页面，而且超过第一个兆字节后，还会在此期间挡住应用的其他响应：这类更新请改用[事件](bindings.md#事件)发送。出于同样的原因，请求文件剩余部分的 `<video>` 或 `<audio>`（`Range: bytes=X-`）最多得到 4 MB：它的处理器看到的范围被缩小为 `bytes=X-(X+4 MB-1)`，用这一部分作答（206），`mygo.FileServer` 和 `http.ServeFile` 就是这么做的，元素会在播放时请求后续内容。WebView2 一旦释放响应，请求的上下文就会被取消，处理器从而停止写入。
+在 Windows 上，处理器返回或写入达到 1 MB 后，WebView2 才开始接收响应，其余部分随后流式传输；WebView2 读取不及时，处理器的写入就会等待。WebView2 一次只读取一个自定义协议响应，而且似乎读完整个响应后才向页面交付内容。因此，服务器发送事件或长轮询等持续保持响应连接的处理器，只有返回后才能将内容交给页面；写入超过 1 MB 后，还会阻塞应用的其他响应。这类更新请改用[事件](bindings.md#事件)发送。同样，请求文件剩余部分的 `<video>` 或 `<audio>`（`Range: bytes=X-`）一次最多获取 4 MB：处理器收到的范围会缩小为 `bytes=X-(X+4 MB-1)`，并返回该部分内容（206），`mygo.FileServer` 和 `http.ServeFile` 均如此处理。播放时，元素会继续请求后续内容。WebView2 释放响应后，请求上下文会被取消，处理器便可停止写入。
 
 音频和视频是例外：WebKitGTK 的媒体播放器无法播放自定义协议中的媒体，因此在 Linux 上，来自自定义协议的 `<video>` 或 `<audio>` 会以 `MEDIA_ERR_SRC_NOT_SUPPORTED`（`error.code` 4）失败，无论处理器如何作答。改为从环回 HTTP 服务器提供媒体，各平台做法相同，并把它的 URL 交给页面：
 
@@ -93,7 +93,7 @@ mediaURL := "http://" + ln.Addr().String() + "/" // <video src="{mediaURL}clip.m
 
 ### 信任
 
-窗口信任应用自己的页面：它的前端、自定义协议的页面、`file:` 和 `about:` 页面（不带 base URL 的 `LoadHTML` 显示 `about:blank`）、`PageOptions.TrustedOrigins` 中的源，以及在开发构建中从 localhost 提供的页面。信任取决于页面的 URL——无论是在窗口中还是在 [Web 视图](ui/web-view.md)中——并随页面导航而变化。受信任的页面可以：
+窗口会信任以下页面：应用前端、自定义协议页面、`file:` 和 `about:` 页面（`LoadHTML` 未指定基准 URL 时显示 `about:blank`）、来自 `PageOptions.TrustedOrigins` 中所列源的页面，以及开发构建中由 localhost 提供的页面。无论页面位于窗口还是 [Web 视图](ui/web-view.md)中，信任状态都取决于页面 URL，并随导航变化。受信任的页面可以：
 
 - 调用每个用 `mygo.Bind` 绑定的方法，以及应用使用的插件；
 - 调用 `window.mygo.window` 设置标题、最小化、最大化、全屏或关闭窗口；
@@ -101,11 +101,11 @@ mediaURL := "http://" + ln.Addr().String() + "/" // <video src="{mediaURL}clip.m
 - 读取每个自定义协议的响应，这些响应带有供它使用的 CORS 头；
 - 获知拖放到它上面的文件的路径，以及其窗口文稿的路径。
 
-因此，绝不要在受信任的页面里，从自定义协议提供第三方或用户提供的 HTML，也不要用不带 base URL 的 `LoadHTML` 加载它：插件的 UI 或用户 HTML 的预览就会获得上述全部能力。改为在不受信任的页面中显示它，或从窗口不信任的源加载，例如 `https` 站点或 `data:` URL：它不调用任何 Go 方法，也不会获得权限，除非[权限处理器](windows.md#权限)授予它。
+因此，绝不要在受信任的页面中通过自定义协议提供第三方或用户的 HTML，也不要用未指定基准 URL 的 `LoadHTML` 加载这类内容，否则插件 UI 或用户 HTML 的预览也会获得上述全部能力。应改为使用不受信任的页面，或从窗口不信任的源加载，例如 `https` 站点或 `data:` URL。这些页面不能调用任何 Go 方法，也不能获得权限，除非[权限处理器](windows.md#权限)明确授权。
 
 #### 不受信任的页面
 
-`PageOptions.Untrusted` 把页面视为他人的页面，无论 URL 是什么，适用于从自定义协议展示插件 UI 的窗口或 [Web 视图](ui/web-view.md)。它不信任任何源，包括 `TrustedOrigins`，并且比来自不受信任源的普通页面管得更严：MyGo 默认允许每个页面做的事，对不受信任的页面，只有在应用的处理器同意时才允许。
+`PageOptions.Untrusted` 将页面明确标记为不受信任，不受 URL 影响，适用于通过自定义协议展示插件 UI 的窗口或 [Web 视图](ui/web-view.md)。此时不信任任何源，`TrustedOrigins` 中的源也不例外，限制也比普通的不受信任源页面更严格：MyGo 默认允许普通页面执行的操作，只有经应用处理器批准后才允许该页面执行。
 
 - 它对绑定方法和 `window.mygo.window` 的调用会被拒绝，它的拖动区域也不起作用。页面发布的消息超过 4 KiB 时，MyGo 会在解码前丢弃；其余的都在主线程上应答，不会为每条消息开一个 goroutine。
 - `Broadcast` 不会到达它，对包含它的 Web 视图所在的窗口调用 `Emit`，也到不了它。用 `EmitPage` 向它发送。
@@ -148,7 +148,7 @@ window.mygo.on("plugin-reply", (reply) => { ... });
 有些东西会到达每个页面，无论受信任与否：
 
 - 事件：`Broadcast` 发送到每个窗口的每个页面，`Emit` 发送到原生 UI 窗口的每个 Web 视图。向单个页面发送用 `EmitPage`。
-- 发往 Go 的消息：不受信任页面的调用会被拒绝，但应用会先接收并解码它们，无论大小，除非该页面是[不受信任的页面](#不受信任的页面)。
+- 发往 Go 的消息：来自不受信任源的页面调用会被拒绝，但应用仍会先接收并解码消息，不限制大小；只有显式标记为[不受信任的页面](#不受信任的页面)才会受到上述消息限制。
 - `window.open` 和 `target="_blank"` 链接会在默认浏览器中打开 `http(s)` URL，除非 `SetWindowOpenHandler` 另行决定（[链接与新窗口](#链接与新窗口)）。
 - 下载的文件会进入“下载”文件夹，除非 `OnWillDownload` 另行决定（[下载](windows.md#下载)）。
 - 页面可以导航到任何地方，除非 `OnWillNavigate` 取消（[页面](windows.md#页面)）。导航到受信任 URL 的页面就是受信任的。
@@ -320,7 +320,7 @@ mygo.NewWindow(mygo.WindowOptions{URL: "/", BackgroundColor: "light-dark(#f5f5f7
 }
 ```
 
-`mygo-runtime` 的 `preferences()` 返回设置本身，从文档一开始就是当前值，`onPreferences` 会告知它们的变化，而这些变化只由桌面引起；组件读取前者并订阅后者，就像使用 `matchMedia` 一样：
+`mygo-runtime` 的 `preferences()` 返回这些设置，从文档开始加载时就能读取当前值；`onPreferences` 通知设置变化，这些变化只能由桌面设置触发。组件可以像使用 `matchMedia` 一样，读取前者并订阅后者：
 
 ```ts
 import { onPreferences, preferences, type ThemePreferences } from "mygo-runtime";
@@ -343,7 +343,7 @@ const off = onPreferences(apply);
 
 ## 非活动窗口
 
-原生应用会把用户输入所去的窗口与其他窗口区别绘制：macOS 会把非活动窗口的侧边栏及其选中项的强调色淡化为灰色，Windows 把它的 Mica 绘制为纯色填充，GTK 用 `:backdrop` 为它设置样式。页面通过 `<html>` 得知自己的窗口属于哪种状态，窗口不活动时它带 `data-mygo-window-inactive` 属性：
+原生应用会用不同的外观区分接收用户输入的窗口和其他窗口：macOS 会把非活动窗口的侧边栏及其选中项的强调色淡化为灰色，Windows 把 Mica 绘制为纯色填充，GTK 用 `:backdrop` 设置样式。页面可通过 `<html>` 判断窗口状态：非活动窗口的 `<html>` 带有 `data-mygo-window-inactive` 属性：
 
 ```css
 .sidebar .selected {
@@ -356,7 +356,7 @@ const off = onPreferences(apply);
 }
 ```
 
-窗口本身或其某个浮出窗口拥有键盘焦点时，该窗口就是活动的：窗口的浮出窗口不会让窗口失去活动状态，而在同样的情况下，DOM 焦点会离开页面。面板、没有父窗口的浮出窗口，以及 `SetActiveAppearance` 始终保持活动的窗口，都是活动的。页面一开始是活动的，DOM 就绪后才会被告知相反的状态；`mygo-runtime` 的 `windowActive()` 读取状态，`onWindowActive` 会告知它的变化。透明页面后面的材质会自行跟随（macOS 上在面板和浮出窗口之外的窗口中，Windows 上是 Mica）。显示它的窗口见[原生 UI](ui/windows.md#活动与非活动窗口)。
+窗口本身或其某个浮出窗口具有键盘焦点时，该窗口就是活动的：窗口的浮出窗口不会让窗口失去活动状态，而在同样的情况下，DOM 焦点会离开页面。面板、没有父窗口的浮出窗口，以及 `SetActiveAppearance` 始终保持活动的窗口，都是活动的。页面一开始是活动的，DOM 就绪后才会被告知相反的状态；`mygo-runtime` 的 `windowActive()` 读取状态，`onWindowActive` 会告知它的变化。透明页面后面的材质会自行跟随（macOS 上在面板和浮出窗口之外的窗口中，Windows 上是 Mica）。显示它的窗口见[原生 UI](ui/windows.md#活动与非活动窗口)。
 
 ## 调整自身窗口大小的页面
 
@@ -388,7 +388,7 @@ win.Page().SetWindowOpenHandler(func(req mygo.WindowOpenRequest) *mygo.WindowOpt
 })
 ```
 
-在 Linux 上，WebKitGTK 自己会阻止没有用户手势的 `window.open()`，因此处理器只会被问到由手势产生的那些。应用用 `Page.Eval` 自行运行的脚本在 macOS 和 Linux 上算作用户手势，因为 WebKit 就是这样运行它的。
+在 Linux 上，WebKitGTK 会直接阻止非用户操作触发的 `window.open()`，因此只有用户操作触发的打开请求才会传给处理器。在 macOS 和 Linux 上，WebKit 会将应用通过 `Page.Eval` 执行的脚本视为用户操作。
 
 `win.Page().OnWillNavigate` 可以取消页面自己的导航，例如让应用的窗口留在应用内：见[窗口](windows.md#页面)。
 

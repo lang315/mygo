@@ -2,9 +2,9 @@
 
 fetch 插件为页面提供一个 `fetch`，由 Go 发起 HTTP 请求。它接受标准 `fetch` 的选项，返回标准的 `Response`，但请求从应用的 Go 一侧发出，因此：
 
-- 它不受 CORS 限制：任何服务器都会响应，除 `Set-Cookie` 和 `Set-Cookie2`（插件会过滤它们）外，每个响应头都可读取；
+- 它不受 CORS 限制：可向任意服务器发起请求，除 `Set-Cookie` 和 `Set-Cookie2`（插件会过滤它们）外，每个响应头都可读取；
 - 它可以设置任何请求头，包括 webview 禁止的，例如 `Origin`、`Cookie`、`Referer` 和 `User-Agent`；
-- 它的正文随 Go 的读取流式传给页面，中止它会取消 Go 中的请求。
+- 响应正文随 Go 的读取流式传给页面，中止请求也会取消 Go 端的请求。
 
 ## 设置
 
@@ -51,11 +51,11 @@ const item = await res.json();
 
 `Request` 可以代替 URL 使用。请求正文与标准 `fetch` 的一样，例如字符串、`FormData`、`URLSearchParams`、`Blob` 和 `ArrayBuffer`，并带上标准 `fetch` 会给它们的 `Content-Type`；请求开始前会完整读取它们，流也一样。
 
-许多 API 客户端之类的库允许传入自己的 `fetch`，可以把这一个交给它们。不要把它赋给 `globalThis.fetch`：插件会把不由它发起请求的 URL（协议不是 http 或 https 的）交给 webview 的 `fetch`。
+许多 API 客户端之类的库允许传入自己的 `fetch`，可以把插件的实现传给它们。不要把它赋给 `globalThis.fetch`：插件会把不由它发起请求的 URL（协议不是 http 或 https 的）交给 webview 的 `fetch`。
 
 ## 流式响应
 
-响应的正文是一个 `ReadableStream`，Go 会在服务器发送数据时填充它，这适合服务器发送事件和模型 API 的流式回答：
+响应正文是一个 `ReadableStream`，Go 收到服务器发来的数据后就写入流中，适合服务端推送事件（SSE）和模型 API 的流式回复：
 
 ```ts
 const res = await fetch("https://api.example.com/events");
@@ -88,7 +88,7 @@ promise 或正文的读取会以该 `signal` 的 `reason` 拒绝。取消正文�
 
 ## 错误
 
-与 webview 的 `fetch` 一样，响应无论状态如何都不算错误：检查 `res.ok`。请求失败时，promise 会以 `TypeError` 拒绝，例如无法连接服务器、TLS 失败或重定向过多，错误消息会说明原因：
+与 webview 的 `fetch` 一样，HTTP 错误状态码也不会使请求失败：检查 `res.ok`。请求失败时，promise 会以 `TypeError` 拒绝，例如无法连接服务器、TLS 失败或重定向过多，错误消息会说明原因：
 
 ```ts
 try {
@@ -107,7 +107,7 @@ try {
 
 ## 选项
 
-`fetch.Plugin` 通过系统的代理设置发起请求，与 webview 一样（见[代理](../native.md#proxies)），并允许页面请求任何 URL。`fetch.New` 则接受选项：
+`fetch.Plugin` 通过系统的代理设置发起请求，与 webview 一样（见[代理](../native.md#代理)），并允许页面请求任何 URL。`fetch.New` 则接受选项：
 
 ```go
 jar, _ := cookiejar.New(nil)
@@ -121,6 +121,6 @@ mygo.Use(fetch.New(fetch.Options{
 ```
 
 - `Client` 负责发起请求，因此它的 `Transport`（代理、TLS 设置）、`Jar`（请求之间保存的 Cookie）和 `Timeout` 都会生效，它的 `CheckRedirect` 限制跟随的重定向。没有提供时，传输层使用 `netproxy.Transport()`：环境变量（`HTTPS_PROXY`、`NO_PROXY`）指定了代理时用环境变量的代理，否则用系统的。自己的客户端会保留自己的 `Transport`；要使用同样的代理，请给它 `netproxy.Transport()`，或把它的 `Proxy` 设为 `netproxy.Proxy`。
-- `Allow` 在 Go 发起每个请求前看到它，包括它的 URL、方法和请求头，并决定页面是否可以发起它：它拒绝的请求会以错误拒绝。它只看到第一个请求，看不到随后的重定向，客户端的 `CheckRedirect` 可以拒绝那些重定向。
+- `Allow` 在 Go 发起请求前接收请求的 URL、方法和请求头，并决定是否允许页面发起该请求；不允许时，请求会以错误拒绝。它只检查初始请求，不检查随后的重定向；要限制重定向，使用客户端的 `CheckRedirect`。
 
-只有应用自己的页面可以调用插件，与每个绑定方法一样（见[谁可以调用](../bindings.md#who-may-call)）；`Allow` 可以阻止运行了不该运行的代码的页面（例如通过跨站脚本漏洞）访问其他服务器。
+只有应用自己的页面可以调用插件，与每个绑定方法一样（见[谁可以调用](../bindings.md#谁能调用)）；`Allow` 可以阻止运行了不该运行的代码的页面（例如通过跨站脚本漏洞）访问其他服务器。

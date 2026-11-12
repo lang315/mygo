@@ -356,4 +356,13 @@ export const showcase: ShowcaseApp[] = [
     mode: "native",
     image: "/showcase/miguwave.jpg",
   },
+  {
+    name: "OpenBee",
+    description:
+      "An open-source AI team for macOS, Windows and Linux, with its server built in. Message Bee, the coordinator, and it hands each task to a worker running Claude Code, Codex or pi in its own folder, now, later or on a cron schedule; the same workers also answer in the browser and in chat apps like Telegram, Discord and Lark.",
+    url: "https://github.com/theopenbee/openbee",
+    author: "theopenbee",
+    mode: "native",
+    image: "/showcase/openbee.jpg",
+  },
 ]

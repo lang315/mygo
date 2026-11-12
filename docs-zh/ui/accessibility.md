@@ -2,8 +2,8 @@
 
 辅助技术，例如 macOS 上的 VoiceOver、Linux 上的 Orca，以及 Windows 上的
 Narrator 或 NVDA，会像读取其他应用一样读取窗口的原生 UI：控件及其角色、
-名称、值和状态，文本，以及随内容变化而取得焦点的元素。它也像键盘和指针那样
-操作它们：按下按钮、勾选复选框、移动滑块、编辑文本输入框并移动焦点。
+名称、值和状态、文本，以及内容变化时获得焦点的元素。辅助技术也能完成键盘和
+指针的操作：按下按钮、勾选复选框、移动滑块、编辑文本输入框并移动焦点。
 
 ## 名称
 
@@ -17,12 +17,12 @@ ui.Box(c).Size(24, 24).Draw(drawIcon).Label("Unread messages")
 ```
 
 [字段](form.md)用标签为控件命名；`LabelledBy` 则用视图绘制的一段说明文字为
-控件命名，点击这段文字会落到控件上（[自己的标签](form.md#自己的标签)）。
+控件命名，点击这段文字等同于点击控件（[自己的标签](form.md#自己的标签)）。
 
 ## 角色
 
-其他元素根据它们的行为获得角色：可点击并取得焦点的元素是按钮，滚动容器是滚动
-区域，带 `Label` 或取得焦点的元素是组。对于被绘制成某种控件、却并非由该控件
+其他元素根据它们的行为获得角色：可点击并获得焦点的元素是按钮，滚动容器是滚动
+区域，带 `Label` 或获得焦点的元素是组。对于被绘制成某种控件、却并非由该控件
 构建的元素，可以用 `Role` 设置角色；`ui.RoleNone` 把元素本身排除在树外，但保留
 它的子元素（[`AccessHidden`](#不挡辅助功能的路) 会把它们也排除）：
 
@@ -32,15 +32,15 @@ toggle := ui.Box(c).Size(36, 20).Focusable().Role(ui.RoleSwitch).Label("Wi-Fi")
 
 除 MyGo 控件自带的角色之外，`ui.RoleHeading` 是章节的标题，用 `Level` 分级；
 `ui.RoleNavigation` 是由在应用或文稿中跳转的链接构成的地标，如面包屑导航或
-导航栏，屏幕阅读器会列出并跳转到它（[`Breadcrumbs`](breadcrumbs.md) 就是
+导航栏，屏幕阅读器会列出这些地标并支持跳转（[`Breadcrumbs`](breadcrumbs.md) 就是
 如此）；`ui.RoleMenu`、`ui.RoleMenuBar`、`ui.RoleMenuItem`、
 `ui.RoleMenuItemCheckBox` 和 `ui.RoleMenuItemRadio` 让画在窗口中的菜单具备
 菜单角色，如下拉菜单或你自己的菜单栏（MyGo 画在窗口中的每个菜单，
 [`PopoverMenu`](context-menu.md#在窗口中绘制) 的、
 [`PopoverMenuButton`](menu-button.md#在窗口中绘制) 的，以及[窗口
 的](context-menu.md#窗口的每个菜单)，都有这些角色，
-[`MenuBase`](menu-button.md#没有外观) 和 `ContextMenuBase` 也有，它们
-是没有外观、保留按键和焦点的菜单）：
+[`MenuBase`](menu-button.md#无外观) 和 `ContextMenuBase` 也有，它们
+是无外观、保留键盘操作和焦点行为的菜单）：
 
 ```go
 ui.Text(c, "Appearance").Bold().Role(ui.RoleHeading).Level(2)
@@ -61,7 +61,7 @@ ui.Row(c).Role(ui.RoleColumnHeader).Children(func() { // named "Sort Options"
 })
 ```
 
-`ui.RoleGrid` 和 `ui.RoleTreeGrid` 是你自己构建的表格，单元格可以取得焦点，
+`ui.RoleGrid` 和 `ui.RoleTreeGrid` 是你自己构建的表格，单元格可以获得焦点，
 并用方向键移动焦点，像电子表格那样；`ui.RoleTable` 则是只供阅读的表格：见
 [网格](#网格)。
 
@@ -93,7 +93,7 @@ if len(app.matches) > 0 {
 ```
 
 按下选项——辅助技术选择它时就是这样——会点击它；只有它是 `Focusable` 时，
-它才会取得焦点。
+它才会获得焦点。
 
 ## 状态
 
@@ -109,12 +109,12 @@ if len(app.matches) > 0 {
 | `Range(lo, hi, value)`, `Step(step)` | 滑块、进度条、量度计或步进器的范围和值，以及按键每次移动多远 |
 | `Level(n)` | 标题的层级，或树中某项的深度 |
 | `PositionInSet(pos, size)` | 说明列表、树、菜单或标签页列表中的某一项是共多少项中的第几项，从 1 起，用于已构建内容本身未说明的情况（[下文](#在集合中的位置)） |
-| `ActiveDescendant(e)` | 在元素保留焦点时拥有焦点的选项，如菜单或列表中方向键所在的选项 |
+| `ActiveDescendant(e)` | 元素保留键盘焦点时，作为当前活动项的选项，如菜单或列表中方向键选中的选项 |
 | `Busy(on)` | 元素的内容即将变化，如正在加载的区域：屏幕阅读器会等它加载完再读取 |
 | `Current(kind)` | 元素是周围各项中当前的一项：`ui.CurrentPage`（用户所在的页面）、`CurrentStep`、`CurrentLocation`、`CurrentDate`、`CurrentTime` 或 `CurrentItem` |
 | `AutoComplete(kind)` | 用户输入时，文本框的建议以何种方式补全：`ui.AutoCompleteList`（弹出层中列出建议）、`AutoCompleteInline`（就地补全文本）或 `AutoCompleteBoth`（[下文](#建议)） |
 | `RoleDescription(s)` | 用来称呼其角色的名称，代替角色本身的名称，如把一组幻灯片称为“carousel”，把每一张称为“slide” |
-| `Controls(e)` | 它控制 `e` 的内容或存在，如展开按钮控制它打开的区块；每控制一个对象就调用一次 |
+| `Controls(e)` | 元素控制 `e` 的内容或是否显示，如展开按钮控制打开的区块；每个受控对象调用一次 |
 | `HasPopup(kind)` | 它打开的弹出层类型：`ui.PopupMenu`、`PopupListBox`、`PopupTree`、`PopupGrid` 或 `PopupDialog` |
 | `Sort(dir)` | 它作为表头的这一列对表格行排序的顺序：`ui.SortAscending`、`SortDescending`、`SortOther` 或 `SortNone` |
 | `Orientation(o)` | 你自己的滑块、分隔线、分隔条、工具栏、标签页列表或菜单的方向：`ui.Vertical` 或 `ui.Horizontal`（[下文](#方向)） |
@@ -157,7 +157,7 @@ ui.Row(c).Role(ui.RoleNavigation).Label("Main").Children(func() {
 ```
 
 既没有自己的角色也没有 `Label` 的元素，在 `Busy` 或 `Current` 标记它之后，
-仍会作为一个组被看到，就像 ARIA 的状态让 Web 上的通用元素被看到一样。
+仍会作为一个组出现在辅助功能树中，就像 Web 上带 ARIA 状态的通用元素一样。
 `Busy` 是 AppKit 的 `AXElementBusy`、ATK 的 `busy` 状态和 UI Automation 的
 `AriaProperties`（`busy=true`）；`Current` 是 AppKit 的 `AXARIACurrent`、
 ATK 带 `active` 状态的 `current` 属性，以及 `AriaProperties`
@@ -206,7 +206,7 @@ day := ui.Box(c).Role(ui.RoleCell).Label(d.Format("January 2")).AccessSelected(d
 说明的那样。选中的单元格是 AppKit 的 `AXSelected`，其表格的
 `AXSelectedCells` 也包含它，它的行则在表格的 `AXSelectedRows` 中，正如
 NSTableView 报告自己的选择；由于 VoiceOver 既不读取单元格的状态，也不读取
-它的变化，单元格会在名称之后用应用的语言说“selected”，而远离焦点被选中的
+它的变化，因此会在单元格名称之后用应用的语言读出“已选中”，不在焦点处被选中的
 单元格会被朗读出来。在 Linux 上它是 ATK 的 selectable 和 selected 状态，在
 Windows 上则是表格 Selection 中的 UI Automation SelectionItem。
 
@@ -242,7 +242,7 @@ in := ui.TextInputBase(c, &app.query).Role(ui.RoleComboBox).Label("Search")
 in.Expanded(len(app.matches) > 0).AutoComplete(ui.AutoCompleteList)
 ```
 
-它只说明：建议由视图自己显示。默认的 `AutoCompleteNone` 不说明任何内容，
+它只提供辅助功能信息，建议仍由视图显示。默认的 `AutoCompleteNone` 不提供补全信息，
 适用于无论输入什么都显示相同选项的组合框。它在 macOS 上是 AppKit 的
 `AXAutocompleteValue`（如 WebKit 所给），在 Linux 上是 ATK 的 `autocomplete`
 对象属性及 supports-autocompletion 状态（如 Core-AAM 所映射），在 Windows
@@ -259,8 +259,8 @@ Automation 没有的那些 ARIA 属性的存放处。[测试](testing.md#辅助�
 
 视图单独绘制成元素的提示或帮助文本，可以用 `DescribedBy` 来描述一个控件，就像
 ARIA 的 `aria-describedby`：屏幕阅读器会在控件的名称、值和 `Description` 之后
-朗读它的文本，其中含链接的句子会作为一个文本朗读。即使它对辅助技术隐藏也
-算数，所以提示可以不在阅读顺序中，却仍随字段一起被朗读：
+朗读提示文本，含链接的句子也会连贯朗读。即使提示对辅助技术隐藏，这一关联仍然
+有效，因此可以将提示排除在阅读顺序之外，同时保留聚焦字段时的朗读：
 
 ```go
 hint := ui.Text(c, "16 digits, no spaces").TextColor(t.TextMuted)
@@ -293,7 +293,7 @@ if app.submitted && app.email == "" {
 用上下方向键操作的滑块、分隔线、分隔条、工具栏、标签页列表或菜单，方向是
 `ui.Vertical`，屏幕阅读器会随它一起朗读。它只负责说明：视图负责布局该元素并
 接收它的按键（[`FocusGroup`](input.md#焦点组) 用方向键移动焦点）。没有说明方向
-的滑块或分隔线横向延伸；比宽度高的分隔线纵向延伸；竖直方向（`Vertical`）的
+的滑块或分隔线默认为横向；高度大于宽度的分隔线为纵向；竖直方向（`Vertical`）的
 [`SliderBase`](slider.md) 会自己说明方向：
 
 ```go
@@ -344,11 +344,11 @@ VoiceOver 通过 `AXAttributedStringForRange` 读取它们，Orca 通过 ATK 的
 ## 列表和表格
 
 [列表](list.md)的行是列表项；[表格](table.md)的行同样由其中的文本命名，每一
-行都说明自己在所有行中是第几行，“10,000 行中的第 5 行”，尽管列表只构建
-视口内的行。列表负责选择行时，会把辅助技术的焦点放在被选中的行上：上下
-方向键移动选择时会被朗读，聚焦一行会选中它。屏幕阅读器移到视口之外时，会
+行都说明自己在所有行中是第几行，如“10,000 行中的第 5 行”，即使列表只构建
+视口内的行。支持行选择的列表会将辅助技术焦点置于选中行：上下
+方向键改变选中行时会朗读新行，聚焦一行也会将其选中。屏幕阅读器移到视口之外时，会
 请求列表滚动到那里，这会构建它到达的行。`Label` 为列表或表格命名。你自己的
-表格，或单元格接受方向键的表格，是[网格](#网格)。
+表格若需要通过方向键在单元格间移动焦点，应使用[网格](#网格)。
 
 ## 在集合中的位置
 
@@ -409,15 +409,15 @@ ui.Row(c).Role(ui.RoleTabList).Label("Views").Children(func() {
 })
 ```
 
-它设置 `Selected` 所设置的状态，`Checked` 在这些角色上也会设置该状态，因此它
-像 `Selected` 一样映射到每个平台：一行或一个单元格说明它是否被选中（`false`
-或 `true`），它就是所在表格或网格在多项中选择的一项，选择由表格或网格持有。
-它只负责说明：选择的显示和点击后的改变由视图完成。
+它与 `Selected` 设置相同的状态，`Checked` 对这些角色也会设置该状态，因此它
+与 `Selected` 一样映射到各平台：行或单元格一旦说明是否选中（`false`
+或 `true`），就成为所在表格或网格的可选项，选择状态由表格或网格管理。
+它只提供状态信息，选中效果的绘制和点击后的状态更新仍由视图完成。
 [测试](testing.md#辅助技术看到什么)把它读作 `Selected`。
 
 ## 网格
 
-网格是一种表格，单元格可以取得焦点，并用方向键移动焦点，如电子表格或数据
+网格是一种表格，单元格可以获得焦点，并用方向键移动焦点，如电子表格或数据
 网格；`ui.RoleTable` 则是只供阅读的表格。`ui.RoleTreeGrid` 是一种网格，行像
 树项那样展开和收起，行上有 `Level` 和 `Expanded`。它们的行、单元格和表头是
 `ui.RoleRow`、`ui.RoleCell`、`ui.RoleColumnHeader` 和 `ui.RoleRowHeader`，
@@ -425,14 +425,14 @@ ui.Row(c).Role(ui.RoleTabList).Label("Views").Children(func() {
 在行内构建单元格。
 
 有数千行的网格只构建视口内的行，因此它要用 `RowCount` 和 `ColumnCount`
-告诉屏幕阅读器自己有多少行和列（ARIA 的 `aria-rowcount` 和 `aria-colcount`，
-表头行也计算在内），并用从 1 起的 `RowIndex`（`aria-rowindex`）告诉每一行它
-在所有行中是第几行；某一列没有构建，或位于被略过的列之后时，单元格用
-`ColumnIndex`（`aria-colindex`）说明自己的列，它之后的单元格则跟着它。屏幕
+告诉屏幕阅读器行数和列数（ARIA 的 `aria-rowcount` 和 `aria-colcount`，
+包含表头行），每一行再用从 1 起的 `RowIndex`（`aria-rowindex`）说明
+在所有行中的位置；列未全部构建，或单元格前有列被省略时，用
+`ColumnIndex`（`aria-colindex`）说明列号，后续单元格的列号依次递增。屏幕
 阅读器随后朗读“第 4,121 行，共 10,000 行”。跨越多列或多行的单元格，如两列
 下方的合计，用 `ColumnSpan` 和 `RowSpan`（`aria-colspan`、`aria-rowspan`）
-说明；如果它的行是 [Grid](grid.md)，这还会让它跨过这些列布局：同一行中它
-后面的单元格位于它跨过的那些列之后，而跨过若干行时，它下方各行中跟随它的
+说明；如果所在行是 [Grid](grid.md)，这些属性还会使单元格跨列布局：同一行中
+后续单元格排在所跨列之后；若单元格跨行，下方各行中位于它之后的
 单元格用 `ColumnIndex` 说明自己的列。`Multiselectable(true)` 说明用户可以
 选择多行（`aria-multiselectable`），每一行用 `Selected` 或 `Checked` 说明它
 是否被选中，后者不绘制它：
@@ -492,7 +492,7 @@ ui.Grid(c).Role(ui.RoleRow).ColumnTracks(ui.Fixed(120), ui.Fr(1), ui.Fr(1), ui.F
 `GridItem` 的 `ColumnSpan` 和 `RowSpan`；网格会找到它覆盖的每个位置上的
 单元格。单元格也用 [`Checked`](#状态) 说明自己是否被选中，选择由网格持有，
 和表格一样。选择多行的网格在 Linux 上是 `multiselectable`，在 Windows 上是
-`CanSelectMultiple`，其行在那两个平台上是 `selectable` 和 `selected`，在
+`CanSelectMultiple`，其行在这些平台上具有 `selectable` 和 `selected` 状态，在
 macOS 上则位于它的 `AXSelectedRows` 中。
 
 ## 不可用，但仍可到达
@@ -503,7 +503,7 @@ macOS 上则位于它的 `AXSelectedRows` 中。
 的 `aria-disabled="true"`，用于用户在无法使用时仍须找到的内容，例如 APG 所
 要求的、操作被阻止的菜单项，被禁用但仍留在方向键顺序中的标签页，或表单无效
 时的提交按钮：该元素及其内部的元素会被读作已禁用（变暗、不可用），并保留
-焦点、它们在 Tab 顺序中的位置、指针和外观。
+焦点、Tab 顺序中的位置、指针交互和外观。
 
 ```go
 del := ui.Button(c, "Delete project").AccessDisabled(app.locked)
@@ -515,8 +515,8 @@ if del.Clicked() && !app.locked {
 }
 ```
 
-它只负责说明：点击、Enter 和空格仍会按下元素，视图会在它不可用时忽略这些，
-如同 Web 上那样；外观仍由视图的样式决定。辅助技术会聚焦并朗读它，连同它的
+它只提供状态信息：点击、Enter 和空格仍会触发元素，不可用时视图须忽略这些操作，
+与 Web 上一样；外观仍由视图的样式决定。辅助技术可以聚焦并朗读元素及其
 `Description`，但既不会按下也不会编辑它。它在 macOS 上是 AppKit 的
 `AXEnabled` 为 false，在 Linux 上则是 ATK 省略了 enabled 和 sensitive 状态，
 在 Windows 上是 UI Automation 的 `IsEnabled` 为 false，而
@@ -529,7 +529,7 @@ aria-disabled。[测试](testing.md#辅助技术看到什么)在
 `IgnoreInput(true)` 把一个元素及其内部的元素只留给辅助技术：指针穿过它到达
 它下面的内容，Tab 和点击都不会给它焦点，但辅助技术仍能找到它，连同它的角色
 和名称，并按下它，`Clicked` 会报告这次按下。这样，在行被悬停时才显示的按钮
-可以在静止时保持构建，处于 `Opacity(0)`，屏幕阅读器能找到它，而点击这一行
+可以在未悬停时仍被构建，并设为 `Opacity(0)`，屏幕阅读器仍能找到它，而点击这一行
 仍然算作点击该行：
 
 ```go
@@ -554,13 +554,13 @@ row.Children(func() {
 可以设置文本输入的值。与 HTML 的 `inert`（它还会对辅助技术隐藏元素）不同，
 它仍留在树中：`Invisible` 和 `Hidden` 把它移出树，`AccessHidden` 也会在它
 仍显示时把它移出；`Disabled` 把它留在树中，但不接受按下；`AccessDisabled`
-连焦点也不接受。
+则在禁用操作的同时仍允许聚焦。
 
 ## 不挡辅助功能的路
 
 `AccessHidden(true)` 把一个元素及其内部的元素排除在辅助技术读取的内容之外，
-而它们仍然绘制，如同 HTML 的 `aria-hidden="true"`：它们都不在它的树中，它们
-的文本不为周围的元素命名，它既不能按下、聚焦也不能编辑它们。它用于显示出来
+但仍正常绘制，如同 HTML 的 `aria-hidden="true"`：这些元素不在辅助功能树中，
+文本不会用于为外层元素命名，辅助技术也不能按下、聚焦或编辑它们。它用于显示出来
 但不需要读取，或已经读取过的内容：
 
 - 在替代它的页面或面板旁边滑出的页面或面板，两者都还在显示；
@@ -581,9 +581,9 @@ ui.Box(c).Fill().Children(func() {
 })
 ```
 
-单独使用时，它把它们留给指针和键盘，把它们的文本留给选择，如同
-`aria-hidden`：让键盘焦点远离它们，因为辅助技术无法跟到那里。`RoleNone`
-只略去一个元素本身，适合叶子，如装饰性图标。
+单独使用时，元素仍接受指针和键盘操作，文本仍可选择，如同
+`aria-hidden`：应避免键盘焦点进入这些元素，因为辅助技术无法跟随。`RoleNone`
+只排除元素本身，适合装饰性图标等叶子元素。
 
 ## 播报
 
@@ -609,13 +609,13 @@ Mappings 的规定映射到各平台：
 | 角色 | 是什么 | macOS | Linux（ATK） | Windows（UI Automation） |
 |---|---|---|---|---|
 | `ui.RoleRegion` | 带 `Label` 的地标，如活动流或面板；没有 `Label` 时则是一个组 | `AXGroup`, `AXLandmarkRegion` | landmark, `xml-roles:region` | Group，自定义地标类型 "region" |
-| `ui.RoleSearch` | 容纳用于搜索应用或文稿内容的地标，如窗口顶部的搜索框及其按钮 | `AXGroup`, `AXLandmarkSearch` | landmark, `xml-roles:search` | Group，搜索地标类型 |
+| `ui.RoleSearch` | 容纳搜索应用或文稿所需控件的地标，如窗口顶部的搜索框及其按钮 | `AXGroup`, `AXLandmarkSearch` | landmark, `xml-roles:search` | Group，搜索地标类型 |
 | `ui.RoleArticle` | 独立完整的一段内容，如信息流中的帖子或讨论串中的评论，由它的 `Label` 命名；不是地标 | `AXGroup`, `AXDocumentArticle` | article | Group "article" |
 | `ui.RoleLog` | 按顺序添加的消息的实时区域，如聊天的记录 | `AXGroup`, `AXApplicationLog` | log | Group "log"，`LiveSetting` polite |
 | `ui.RoleTimer` | 时间的计数，如倒计时，只在用户转到它时朗读 | `AXGroup`, `AXApplicationTimer` | timer | Group "timer" |
 | `ui.RoleAlert` | 重要消息的实时区域，如字段的错误，会立即朗读 | `AXGroup`, `AXApplicationAlert` | notification | Group "alert"，`LiveSetting` assertive |
-| `ui.RoleStatus` | 提示性信息的实时区域，如“已选择 3 行”或“已保存”，其全部文本在变化时会被礼貌地朗读 | `AXGroup`, `AXApplicationStatus` | notification，或在 ATK 支持它之前则是状态栏 | StatusBar，`LiveSetting` polite |
-| `ui.RoleSeparator` | 内容组或控件组之间的分隔线，高于宽时纵向延伸 | `AXSplitter` | separator，vertical 或 horizontal | Separator，带 `Orientation` |
+| `ui.RoleStatus` | 提示信息的实时区域，如“已选择 3 行”或“已保存”，文本变化后会等待当前朗读结束，再完整朗读 | `AXGroup`, `AXApplicationStatus` | notification，旧版 ATK 不支持时为状态栏 | StatusBar，`LiveSetting` polite |
+| `ui.RoleSeparator` | 内容组或控件组之间的分隔线，高度大于宽度时为纵向 | `AXSplitter` | separator，vertical 或 horizontal | Separator，带 `Orientation` |
 | `ui.RoleRowHeader` | 为表格中它的行命名的单元格，由它的内容命名，其中的按钮和其他元素像普通单元格那样仍可访问 | `AXCell` | row header | HeaderItem "row header" |
 | `ui.RoleDeletion` | 从文稿中移除的内容，如差异中删除的行或划掉的旧价格，如同 HTML 的 `<del>`；它的文本在它内部 | `AXGroup`, `AXDeleteStyleGroup` | content deletion，`xml-roles:deletion` | Text "deletion" |
 | `ui.RoleInsertion` | 添加到文稿中的内容，如差异中新增的行，如同 HTML 的 `<ins>` | `AXGroup`, `AXInsertStyleGroup` | content insertion，`xml-roles:insertion` | Text "insertion" |
@@ -632,7 +632,7 @@ Mappings 的规定映射到各平台：
 朗读（VoiceOver 的高优先级播报，ATK 的 `notification` 信号——ATK 2.50 支持
 它时为 assertive，否则改用一次播报——以及 Windows 上的 assertive 实时
 区域）；状态（`ui.RoleStatus`）的文本变化时，会按 `aria-atomic` 的规定，
-完整而礼貌地朗读。辅助技术接入时已经显示的内容，或日志、状态刚出现时已有的内容，
+等待当前朗读结束，再完整朗读。辅助技术接入时已经显示的内容，或日志、状态刚出现时已有的内容，
 都不会被朗读；计时器本身则不朗读任何内容：
 
 ```go
@@ -655,10 +655,10 @@ ui.Row(c).Role(ui.RoleToolbar).Label("Format").Children(func() {
 ```
 
 日志会朗读它新增的元素，每一行的元素一起朗读；警报会朗读它的文本；状态在
-变化后朗读它的全部文本（被清空时不朗读）。状态通过它的元素与上一帧的状态
-区分，所以当可能有元素出现在它之前时，给它一个 `Key`；位于日志、警报或其他
-状态内部的状态会作为它的一部分朗读，而不是单独朗读。带键的行（`Key`）在有行
-出现在其他行之前时，会把日志已显示的内容与它新增的内容区分开。
+变化后朗读全部文本（清空时不朗读）。状态区域通过元素身份与上一帧对应，
+因此，若前面可能插入其他元素，应为它设置 `Key`；嵌套在日志、警报或其他
+状态区域中的状态会随外层区域一起朗读，不会单独朗读。为行设置键（`Key`）后，
+即使在已有行之前插入新行，也能区分日志中的原有内容与新增内容。
 
 屏幕阅读器会列出地标并跳转到它们，所以窗口顶部的搜索字段及其按钮放在搜索
 地标中，如同 HTML 的 `<search>`：

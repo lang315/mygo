@@ -44,7 +44,7 @@ mygo.Use(sqlite.New(sqlite.Options{
 
 ## 查询和值
 
-`execute(sql, params?)` 只接受一个语句，消耗任何 `RETURNING` 行，并返回 `{ changes, lastInsertId }`。`changes` 计算直接受影响的行数；`lastInsertId` 是该连接上 SQLite 最后插入的 rowid，在 TypeScript 中总是 `bigint`。
+`execute(sql, params?)` 只接受一条语句，会读取完所有 `RETURNING` 结果行，并返回 `{ changes, lastInsertId }`。`changes` 是直接受影响的行数；`lastInsertId` 是该连接上 SQLite 最后插入的 rowid，在 TypeScript 中始终为 `bigint`。
 
 `query(sql, params?)` 返回 `{ columns, rows }`。每一行是按列顺序排列的单元格数组，保留重复的列名。它支持 `SELECT`、pragma 以及带 `RETURNING` 的语句。结果会被缓冲；对于大表，使用 `LIMIT` 和分页。
 
@@ -71,9 +71,9 @@ await db.transaction([
 
 `transaction` 在 COMMIT 之后为每个语句返回一个执行结果。它使用 `BEGIN IMMEDIATE`，在整个批次期间保持连接，并在任何错误或取消时回滚。空批次返回 `[]`。事务控制语句（`BEGIN`、`COMMIT`、`ROLLBACK`、`SAVEPOINT`、`RELEASE`）在用户 SQL 中会被拒绝；使用批次 API。`ATTACH`、`DETACH` 和 `VACUUM INTO` 会被拒绝，使 SQL 无法打开配置目录之外的文件。普通的 `VACUUM` 受支持。SQLite 扩展无法加载。
 
-每个连接属于调用它的页面。其他窗口不能使用它的句柄。页面导航和窗口关闭会取消调用并关闭页面的连接；应用退出会关闭每个剩余的连接。`close()` 是幂等的，并取消活动操作。一个连接上的并发操作会串行化；等待有依赖的调用以给它们顺序。
+每个连接归发起调用的页面所有，其他窗口不能使用其句柄。页面导航或窗口关闭会取消调用，并关闭该页面的连接；应用退出会关闭所有剩余连接。`close()` 是幂等的，还会取消正在进行的操作。同一连接上的并发操作会串行执行；存在先后依赖时，应等待前一次调用完成后再发起下一次。
 
-取消一个操作会用 `sqlite3_interrupt` 中断它的语句，以及它对另一个连接的锁的等待。Go 调用者可以用各自的上下文取消每个操作。
+取消操作时，会通过 `sqlite3_interrupt` 中断正在执行的语句，以及对其他连接所持锁的等待。Go 调用者可以通过各次操作的上下文取消操作。
 
 ## 从 Go 或原生 UI
 
@@ -110,7 +110,7 @@ SQLite 在原生模块 `plugins/sqlite/internal/sqlitecore` 中运行：一个 G
 go run ./cmd/mygo native build -target host plugins/sqlite/internal/sqlitecore
 ```
 
-在模块未构建的平台上，插件的测试会跳过。`mygo native build -upload` 为每个平台发布它（见[发布模块](../native-modules.md#publish-a-module)）。
+在模块未构建的平台上，插件的测试会跳过。`mygo native build -upload` 为每个平台发布它（见[发布模块](../native-modules.md#发布模块)）。
 
 关于发布版本资源的上传与编译选项，见[插件 README](https://github.com/egoist/mygo/tree/main/plugins/sqlite)。SQLite 上游的 [C API](https://www.sqlite.org/c3ref/intro.html) 描述它的 SQL 行为。
 

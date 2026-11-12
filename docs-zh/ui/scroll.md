@@ -12,7 +12,7 @@ ui.Scroll(c).Grow(1).Padding(16).Gap(12).Children(func() {
 })
 ```
 
-要给它们一个大小，或让它们在父元素中增长。对于集合的行，使用[列表](list.md)，它只构建视口中的行。
+需要设置容器大小，或让容器在父元素中扩展。要显示多行数据，使用[列表](list.md)，只构建视口内的行。
 
 在[从右向左](right-to-left.md)布局时，横向滚动的容器会先显示内容的开头，位置在右侧，`ScrollState.X` 也从那里开始计数：0 是开头，`MaxX` 是末尾，如同 Flutter 的偏移那样。
 
@@ -27,7 +27,7 @@ if app.log.Y >= app.log.MaxY {
 ui.Scroll(c).TrackScroll(&app.log).Grow(1).Children(app.lines)
 ```
 
-`ScrollTo(x, y, animation)` 平滑地滚到那里，以弹簧或曲线的方式（见[动效](motion.md)），如果在途中再次调用，会转向新目标；用户滚动会停止它，`Scrolling()` 报告它是否正在滚动。如果桌面要求减少动效，它会立即滚动：
+`ScrollTo(x, y, animation)` 按弹簧或曲线动画平滑滚动到指定位置（见[动效](motion.md)）；途中再次调用会改为滚向新目标。用户滚动会停止动画，`Scrolling()` 报告动画是否仍在进行。系统启用减少动效时，会立即滚动到目标位置：
 
 ```go
 if ui.Button(c, "Back to top").Clicked() {
@@ -37,7 +37,7 @@ if ui.Button(c, "Back to top").Clicked() {
 
 ## 粘性元素
 
-`Sticky` 让元素留在文档流中并占据自己的空间，同时在父元素可见时把它固定在周围的滚动容器内，如同 CSS 的 `position: sticky`：`Top`、`Right`、`Bottom` 和 `Left`（或 `Start` 和 `End`，以及它们占容器大小的百分比）说明它保持在距容器边缘多远的位置（边框以内）。它不会超出父元素的内容盒，所以父元素滚走时，元素会随之离开，下一个父元素会顶替它的位置。日期标题会停在时间线顶部，直到第二天把它推走：
+`Sticky` 让元素保留在布局流中并占用原有空间，同时在父元素可见时，将其固定在周围的滚动容器内，类似 CSS 的 `position: sticky`。`Top`、`Right`、`Bottom` 和 `Left`（或 `Start` 和 `End`，也可用容器尺寸的百分比）指定元素距容器边框内侧的距离。元素不会超出父元素的内容盒，因此父元素滚出视口时，元素也会随之离开，随后由下一组的对应元素接替。例如，时间线上的日期标题会固定在顶部，直到下一天的标题将其顶出：
 
 ```go
 ui.Scroll(c).Fill().Children(func() {
@@ -142,7 +142,7 @@ c.SetTheme(&t)
 ui.Scroll(c).ScrollbarStyle(ui.ScrollbarStyle{TrackWidth: 14, ThumbWidth: 14, Square: true, Flush: true}).Children(func() { /* ... */ })
 ```
 
-`ScrollbarInsets` 按类似 CSS `Padding` 的方式把滚动条从容器边缘向内收：垂直滚动条从顶部内缩值延伸到底部内缩值，再从右侧内缩值向左收；水平滚动条从左侧内缩值延伸到右侧内缩值，并从底部内缩值向上收。这样滚动条就能避开浮在内容上方的东西，例如它从其下方滚过的工具栏，AppKit 和 UIKit 也是这样：
+`ScrollbarInsets` 以类似 CSS `Padding` 的方式设置滚动条距容器边缘的距离：垂直滚动条的上、下端分别避开顶部和底部指定距离，整体距右边缘指定距离；水平滚动条的左、右端分别避开左右指定距离，整体距底边指定距离。这样就能避开覆盖在滚动内容上方的工具栏等元素，与 AppKit 和 UIKit 的做法相同：
 
 ```go
 ui.Scroll(c).Fill().Padding(64, 16, 16).ScrollbarInsets(64, 0, 0).Children(func() { /* ... */ })
@@ -150,7 +150,7 @@ ui.Scroll(c).Fill().Padding(64, 16, 16).ScrollbarInsets(64, 0, 0).Children(func(
 ui.Row(c).Absolute().Top(0).Left(0).Right(0).Height(64).Children(func() { /* ... */ })
 ```
 
-`Scrollbars(false)` 会从自己绘制外观或自行显示位置的容器上移除滚动条，滚动条上的按压也不再响应，例如轮播或地图：滚轮、`TrackScroll`、键盘和辅助技术仍能滚动它。
+对于自行绘制外观或指示当前位置的容器，例如轮播或地图，可用 `Scrollbars(false)` 隐藏滚动条，同时禁用其点击区域；滚轮、`TrackScroll`、键盘和辅助技术仍可滚动容器。
 
 `ScrollbarAxes(horizontal, vertical)` 独立控制两个指示器及其指针命中目标。对于自带垂直导航的视图，保留水平滚动条并隐藏垂直滚动条：
 

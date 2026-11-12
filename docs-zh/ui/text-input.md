@@ -17,13 +17,13 @@ ui.TextArea(c, &app.notes).Height(160)
 ```
 
 - `Placeholder` 在输入为空时显示一段文本，在 `TextInput` 中只占一行，在文本区域中会换行。在包裹输入框的字段上，如 `SearchField`、`TokenField` 或 `Combobox`，它会显示在该输入框中。`PlaceholderColor` 用不同于主题 `TextMuted` 的颜色绘制它，例如表单里的警告提示。
-- `CaretWidth` 把光标画得比 1 DIP 宽，例如终端的方块光标，或大字号主题所用的宽度；设为 0 则隐藏光标。除此之外它不改变任何东西。
-- `Password` 隐藏其中的内容，并且在调用它的那些帧里，让内容不会进入剪贴板和输入法：显示文本的眼睛按钮只要不再调用它即可。只有 `TextInput` 接受它：和所有平台一样，文本区域没有密码模式。
+- `CaretWidth` 可将光标宽度设为大于 1 DIP，例如终端的方块光标，或适合大字号主题的宽光标；设为 0 则隐藏光标。它只影响绘制，不改变其他行为。
+- `Password` 隐藏文本，并在调用它的帧中阻止文本传入剪贴板和输入法：实现显示密码的眼睛按钮时，只需在显示期间不调用它。仅 `TextInput` 支持此选项；与各平台的文本控件一样，多行文本区域没有密码模式。
 - `AutoFocus` 让输入框一出现就获得键盘焦点，例如对话框的第一个字段。
 - `ReadOnly(true)` 显示文本而不让用户修改：它仍能获得焦点，但没有光标，文本可以被选择和复制。
 - `MaxLength(n)` 限制用户输入的文本长度不超过 n，计数方式与 HTML 的 `maxlength` 相同，按 UTF-16 代码单元计算：键入、粘贴或由输入法提交的内容都会被裁到放得下的长度。应用设置的值不会被裁剪；n <= 0 表示不限制长度。
 - `Disabled(true)` 使它变灰。
-- `OnPaste(fn)` 在粘贴内容（Cmd+V 或 Ctrl+V，或编辑菜单、上下文菜单中的“粘贴”）插入之前看到它，并收到剪贴板中的文本；剪贴板里没有文本时为空字符串，例如只有图像时。返回 true 表示接管这次粘贴，之后什么也不会改变，如同 Web 上的 `preventDefault`：
+- `OnPaste(fn)` 在粘贴内容（Cmd+V、Ctrl+V，或编辑菜单、上下文菜单中的“粘贴”）插入前调用，参数为剪贴板文本；没有文本时（例如只有图像）传入空字符串。返回 true 表示接管本次粘贴，不再执行默认插入，类似 Web 的 `preventDefault`：
 
   ```go
   ui.TextArea(c, &app.draft).Lines(1, 8).OnPaste(func(text string) bool {
@@ -41,7 +41,7 @@ ui.TextArea(c, &app.notes).Height(160)
   })
   ```
 
-- `OnTextKey(fn)` 在输入框接收不产生文本的按键之前看到它：Enter、Tab、Escape、Backspace 和 Delete、方向键等移动光标的按键，以及带 Cmd 或 Ctrl 的组合键，就像 AppKit 的 `doCommandBySelector` 和网页的 `keydown`。fn 在按键到来时运行，运行于此前键入的按键和文本之后；返回 true 即接管该按键：文本区域不插入换行，`TextInput` 不提交，Tab 不移动焦点。没有接管的按键则照常处理，就像没有 fn 一样。焦点周围的 `Shortcut` 能处理的按键会先交给它，和 `HandleInput` 一样，除非输入框本身要用这些键编辑，例如 Enter 和方向键。fn 可能在帧与帧之间运行，因此要通过传入的 `ui.TextKey` 读写文本，而不是使用从视图中留存的 `Element`（fn 返回后它们会 panic），例如聊天输入框用 Enter 发送、Shift+Enter 换行、Up 把上一条消息放回：
+- `OnTextKey(fn)` 在输入框处理非文本按键前调用，包括 Enter、Tab、Escape、Backspace、Delete、方向键等光标移动键，以及带 Cmd 或 Ctrl 的组合键，类似 AppKit 的 `doCommandBySelector` 和网页的 `keydown`。fn 在按键到来时执行，此前到来的按键和文本已处理完毕；返回 true 即接管该按键，阻止默认行为，例如文本区域插入换行、`TextInput` 提交或 Tab 移动焦点。未接管的按键照常处理。与 `HandleInput` 一样，焦点周围的 `Shortcut` 会先处理其可处理的按键，但输入框编辑本身需要的键（例如 Enter 和方向键）除外。fn 可能在两帧之间执行，因此应通过传入的 `ui.TextKey` 读写文本，不要使用视图中留存的 `Element`（在 fn 返回后使用会 panic），例如聊天输入框用 Enter 发送、Shift+Enter 换行、Up 恢复上一条消息：
 
   ```go
   ui.TextArea(c, &app.draft).Lines(1, 8).OnTextKey(func(k ui.TextKey) bool {
@@ -69,7 +69,7 @@ for _, m := range mentions(app.draft) {
 }
 ```
 
-范围以文本的 rune 为单位，每帧在文本中查找。它们可以重叠和嵌套，就像属性字符串（`NSAttributedString`）的属性：范围会设置 `Color`（alpha 不为零时）和 `Weight`（字重不为零时），范围重叠时，颜色和字重分别取本帧各次调用中最后一个设置它的范围的值。粗体范围中若有带颜色的提及，该提及会同时显示为粗体和彩色：
+范围以文本中的 rune 偏移指定，每帧应用于当前文本。范围可以重叠和嵌套，类似属性字符串（`NSAttributedString`）的属性：`Color` 在 alpha 非零时生效，`Weight` 在字重非零时生效；重叠处的颜色和字重分别取本帧最后一次设置该属性的值。因此，粗体范围内的彩色提及会同时显示为粗体和彩色：
 
 ```go
 in.TextRanges(
@@ -86,7 +86,7 @@ in.TextRanges(
 ui.TextArea(c, &app.draft).Lines(1, 8)
 ```
 
-文本区域只布置视口中的段落，并保留它们的布局直到它们改变，因此它可以容纳数十万行的文本，如日志或源文件，输入速度依然很快。
+文本区域只排版视口中的段落，并在段落变化前复用排版结果，因此即使容纳数十万行的日志或源文件，输入仍然流畅。
 
 ## 编辑
 
@@ -111,7 +111,7 @@ if name, ok := app.mentionPicked(); ok {
 
 `ReplaceText` 把光标放到文本末尾，并像键入一样通过 `Changed` 报告这次编辑。单行输入框会把换行当作空格，`MaxLength` 也不会裁剪它。它同样适用于 `TextInputBuffer` 和 `TextAreaBuffer`。
 
-要开始新的编辑会话，清空字符串并更改输入框的[键](views.md#键)。新的身份会得到新的编辑器，不保留旧的选区、组合状态或撤销历史：
+要开始新的编辑会话，清空字符串并更改输入框的[键](views.md#键)。键改变后会创建新的编辑器，不保留旧的选区、输入法组合状态或撤销历史：
 
 ```go
 // Keep secret and secretSession in app state.
@@ -135,7 +135,7 @@ ui.TextInput(c, &app.secret).Password().OnPaste(func(text string) bool {
 
 ## 光标
 
-`TextSelection` 以文本中按 rune 计的偏移返回选区，两者相等处即光标；`SetTextSelection` 可以移动选区，例如应用补全正在键入的词后，把光标放到词后：
+`TextSelection` 以 rune 偏移返回选区的两个端点；端点相等时，该位置就是光标。`SetTextSelection` 可移动光标或设置选区，例如补全正在输入的词后，将光标放在词后：
 
 ```go
 input := ui.TextArea(c, &app.draft)
@@ -145,7 +145,7 @@ if start, _ := input.TextSelection(); app.completed != "" {
 }
 ```
 
-`TextSelection` 按顺序返回选区。`TextAnchorCaret` 返回从选区起点到光标的范围，这样应用就能区分向前和向后做出的选区：编辑器自身用于扩展选区的按键（例如 Shift-Home 移到行首）会从锚点开始扩展选区：
+`TextSelection` 按从小到大的顺序返回选区端点。`TextAnchorCaret` 则返回选择起点和光标位置，以区分正向和反向选择：编辑器用于扩展选区的按键（例如 Shift-Home 选到行首）始终以起点为锚点扩展选区：
 
 ```go
 anchor, caret := input.TextAnchorCaret()
@@ -154,7 +154,7 @@ input.SetTextSelection(anchor, lineStart(app.draft, caret))
 
 ## 行旁
 
-`TrackLines` 把文本区域布置其文本各行的位置记录到 `ui.TextLines` 中，供需要在行旁绘制的应用使用：例如在每行的第一显示行旁画行号，或在一行的某些片段上画标记。这里的一行指两个换行符之间的文本，如果文本区域对它换行，就会占多个显示行。`Top(i)` 是第 `i` 行在区域内容中的顶部位置，从内边距下缘算起，尚未计入滚动；`At(y)` 返回某个高度处的行；`Rows(i)` 是第 `i` 行每个显示行起始处的 rune；`Height` 是文本的高度。配合区域的 [`ScrollState`](scroll.md#保持偏移)，行号栏就能为视口中的行编号：
+`TrackLines` 将文本区域各行的布局位置记录到 `ui.TextLines`，供应用在行旁绘制内容，例如在每个逻辑行的首个显示行旁绘制行号，或标记行内片段。逻辑行指换行符之间的文本，自动换行后可能占多个显示行。`Top(i)` 是第 `i` 行在内容中的顶部位置，不含内边距和滚动偏移；`At(y)` 返回指定高度处的行；`Rows(i)` 返回第 `i` 行各显示行起始位置的 rune 偏移；`Height` 是文本总高度。配合文本区域的 [`ScrollState`](scroll.md#保持偏移)，即可在行号栏中绘制可见行的行号：
 
 ```go
 const pad = 8 // the text area's top padding
@@ -172,11 +172,11 @@ ui.Row(c).Grow(1).Children(func() {
 })
 ```
 
-区域尚未布置的行，其高度只是估算值，滚动条也同样如此，直到它显示这些行。在 `Draw` 中，行是当前帧的行；构建视图时，则是上一帧的行。
+尚未排版的行会使用估算高度，滚动条也依据这些估算值，直到对应行进入显示范围。在 `Draw` 中读取的是当前帧的行布局，构建视图时读取的则是上一帧的布局。
 
 ## 错误
 
-在[字段](form.md)中，`Error` 会把值标记为无效：输入框会用主题的 `Danger` 颜色绘制边框，辅助技术会把它和消息一起读出。
+在[字段](form.md)中，`Error` 将值标记为无效：输入框使用主题的 `Danger` 颜色绘制边框，辅助技术会在读取输入框时一并读出错误消息。
 
 ```go
 ui.Field(c, "Email", func() {
@@ -184,10 +184,10 @@ ui.Field(c, "Email", func() {
 }).Error(app.emailError)
 ```
 
-## 没有外观
+## 无外观
 
 `ui.TextInputBase` 和 `ui.TextAreaBase` 是没有内边距、背景、边框和圆角的文本输入框，适合自行设计的输入框：见[自定义控件](custom-widgets.md)。
 
 ## 辅助功能
 
-辅助技术看到一个文本框或文本区域，其名称来自 `Label` 或所在字段，其值就是文本，并带有光标和选区；除非是只读的，否则可以像键入一样编辑。密码字段会隐藏其值。
+辅助技术将其识别为文本框或文本区域，名称来自 `Label` 或所在字段，可读取文本值、光标和选区；非只读时，可像键入一样编辑。密码框不会暴露文本值。

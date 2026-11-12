@@ -1,6 +1,6 @@
 # Loading
 
-loading 插件为原生 UI 提供 [loading.dev](https://loading.dev) 的 29 个加载指示器，即 Jakub Krehel 为 React 编写的 `loading-dev`：弧、环、点、条和方块，全部由 MyGo 自己绘制，每个都是显示时会移动的元素。它们的外观和运动方式与 loading.dev 的一致：相同的形状、关键帧和时间函数，相同的节奏。全部用 Go 写成：没有 JavaScript 包，也不需要 `mygo.Use`。页面有 CSS，可以直接使用 `loading-dev` 本身。
+loading 插件将 Jakub Krehel 为 React 编写的 `loading-dev` 中的 29 种 [loading.dev](https://loading.dev) 加载指示器用于原生 UI：弧、环、点、条和方块都由 MyGo 绘制，每个都是显示期间播放动画的元素。外观和动效与 loading.dev 一致：形状、关键帧、时间函数和节奏相同。全部用 Go 实现，没有 JavaScript 包，也不需要调用 `mygo.Use`。网页可以使用 CSS，直接采用 `loading-dev` 即可。
 
 [examples/loading](../../examples/loading) 展示了全部指示器及其选项：
 
@@ -19,12 +19,12 @@ ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 
 | 函数 | 绘制的内容 |
 | --- | --- |
-| `Arc` | 在圆中转动的一条开口描边。 |
+| `Arc` | 一条开口弧线绕圆周转动。 |
 | `Atom` | 在圆内翻滚的三个环。 |
-| `Blocks` | 九个方块扫过网格，缩小又放大。 |
+| `Blocks` | 九个方块在网格中依次缩小、放大，形成扫过的效果。 |
 | `BouncingDots` | 三个错开的点上下弹跳。 |
 | `Cascade` | 三条嵌套的弧展开成螺旋，然后瞬间收回成一线。 |
-| `CircularDots` | 环上的八个点，最亮的那个绕圈。 |
+| `CircularDots` | 八个点围成一圈，最亮的位置沿圆周移动。 |
 | `Classic` | 十二根以放射状排列、逐渐淡出的条。 |
 | `ClassicV2` | 环上的八个刻度依次点亮。 |
 | `Clock` | 一根指针在暗淡的表盘上扫过。 |
@@ -49,7 +49,7 @@ ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 | `Trace` | 一条短线沿圆角方块的轮廓描画。 |
 | `Wave` | 五根条像波浪一样起伏。 |
 
-`loading.All()` 列出它们及其名称，用于画廊或让用户选择的设置：
+`loading.All()` 列出所有指示器及其名称，可用于示例展示或供用户选择的设置项：
 
 ```go
 for _, s := range loading.All() {
@@ -75,10 +75,10 @@ loading.Ring(c, loading.Options{
 ```
 
 - **`Size`** 是指示器的高度，也是它的宽度，`BouncingDots` 和 `LinearDots` 除外，它们是点组成的行，宽分别是高的 1.15 和 0.9375 倍。元素自身的大小（由 `Size`、`Fill` 或父级的布局决定）会缩放绘制内容以居中适应。
-- **`Color`** 是它绘制所用的颜色，较淡的部分（环的轨道、淡出的点）以各自的透明度使用它。零值是主题的 `Text`。
+- **`Color`** 指定绘制颜色，较淡的部分（环的轨道、淡出的点）使用同一颜色，但透明度不同。零值使用主题的 `Text`。
 - **`Duration`** 是它运动的一个周期，各指示器不同：`Arc` 为 800 ms，`Slide` 为 2.4 s。
-- **`Paused`** 让它停在当前位置；设回 false，它从那里继续。
-- **`Easing`** 是转动的指示器（`Arc`、`Atom`、`Clock`、`Comet`、`Dual`、`Orbit`、`Radar`、`Ring`、`Snake`、`Trace`）如何转动：`Linear` 匀速，`EaseInOut` 在每圈结束时减速，`Stacked` 两者相加，每周期两圈，中间快。
+- **`Paused`** 将动画暂停在当前位置；设回 false 后从暂停处继续。
+- **`Easing`** 控制旋转类指示器（`Arc`、`Atom`、`Clock`、`Comet`、`Dual`、`Orbit`、`Radar`、`Ring`、`Snake`、`Trace`）的速度变化：`Linear` 匀速，`EaseInOut` 在每圈结束时减速，`Stacked` 叠加两者，每周期转两圈，中段加快。
 - **`Cap`** 决定 `Arc`、`Cascade`、`Dual`、`Ring`、`Snake` 和 `Trace` 描边端点的形状：`RoundCap` 或 `FlatCap`。
 - **`Sweep`** 是 `Blocks` 方块的顺序：`Diagonal`、`Rows` 或 `Columns`。
 - **`Direction`** 让 `Ripple` 的环从中心向外（`RippleOut`）或向内（`RippleIn`）。
@@ -86,7 +86,7 @@ loading.Ring(c, loading.Options{
 
 ## 动效与辅助功能
 
-指示器每次被绘制时都会请求一帧，与旋转加载指示器一样（`Painter.AnimationFrame`），并且只在显示时请求：不在视野中的指示器不会被绘制，也不会请求帧，它不会重新构建视图。每个指示器在首次显示时开始自己的周期，与 CSS 动画一样。
+指示器与旋转加载指示器一样，每次绘制时都会请求下一帧（`Painter.AnimationFrame`），但仅在可见时请求：视口外的指示器不会被绘制，也不请求帧；动画无需重新构建视图。与 CSS 动画一样，每个指示器首次显示时开始计时。
 
 当桌面要求减少动效时（`ui.Preferences.ReduceMotion`：macOS 的“减弱动态效果”、Windows 的动画效果关闭或 GNOME 的动画关闭），指示器会停在 loading.dev 为减少动效设定的姿态，例如变暗的点或一圈环，并且不请求帧。
 

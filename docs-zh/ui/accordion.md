@@ -2,7 +2,7 @@
 
 <!-- preview accordion 300 -->
 
-`ui.Accordion` 在带边框的盒子里从上到下创建各节，每一节由 `ui.AccordionItem` 构建：标题栏显示标题，单击即可打开或关闭这一节，按 Enter 和 Space 也是如此；标题栏下方是它的函数在 `*bool` 为 true 时构建的内容。各节独立开合；Up 和 Down 在标题之间移动焦点，Home 和 End 也一样。每个项的 `Changed` 报告单击。
+`ui.Accordion` 在带边框的容器中纵向排列多个分区，每个分区由 `ui.AccordionItem` 构建：单击标题栏，或按 Enter、Space，可以展开或折叠分区；`*bool` 为 true 时，回调函数在标题栏下方构建内容。各分区独立开合；Up 和 Down 在标题之间移动焦点，Home 和 End 分别跳到首尾标题。每个分区的 `Changed` 报告单击。
 
 ```go
 ui.Accordion(c, func() {
@@ -12,7 +12,7 @@ ui.Accordion(c, func() {
 })
 ```
 
-若一次只打开一节，就在一节打开时关闭其余各节：
+若一次只展开一个分区，就在它展开时折叠其余分区：
 
 ```go
 for i, s := range sections {
@@ -26,7 +26,7 @@ for i, s := range sections {
 }
 ```
 
-一节打开时，Tab 从标题进入该节的内容。
+分区展开时，按 Tab 可将焦点从标题移入内容。
 
 ## 无外观
 
@@ -53,4 +53,4 @@ acc.Root.Gap(4).Children(func() {
 
 ## 辅助功能
 
-辅助技术把每个标题看作一个展开或折叠的展开控件（disclosure），位于其所在节的内容之前。
+辅助技术将每个标题识别为展开控件（disclosure），状态为展开或折叠，顺序位于对应分区的内容之前。

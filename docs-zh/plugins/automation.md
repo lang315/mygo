@@ -4,7 +4,7 @@
 
 元素正是 MyGo 提供给辅助技术的那些元素，因此客户端看到的与屏幕阅读器看到的一致，操作方式也相同；它使用引擎的 ID，以及应用为元素设置的 `Key`。[ui.Tester](../ui/testing.md) 仍然是在 `go test` 中测试视图的方式；这个插件针对的是构建好的应用，从外部驱动。
 
-客户端可以自己实现[协议](#协议)，也可以运行它的命令行客户端 [`mygo-automation`](#命令行mygo-automation)，这是给 agent 用的工具。
+客户端可以自行实现[协议](#协议)，也可以使用面向智能体的命令行客户端 [`mygo-automation`](#命令行mygo-automation)。
 
 ## 开启
 
@@ -50,7 +50,7 @@ MYGO_AUTOMATION=/tmp/app.sock ./app
 | `no_window` | 没有窗口拥有该 ID，或应用没有窗口。 |
 | `no_element` | 窗口最后一帧中没有元素拥有该 ID 或 `key`。 |
 | `unsupported` | 窗口无法执行该操作，例如读取页面的元素。 |
-| `timeout` | `idle` 在其 `timeout` 之后放弃。 |
+| `timeout` | `idle` 等待超过 `timeout`，已超时。 |
 | `failed` | 应用无法完成，例如脚本抛出异常。 |
 
 除 `windows` 外，每个方法都接受一个 `window`，即 `windows` 列出的 ID；省略时取获得焦点的窗口，没有则取第一个窗口。坐标和尺寸以 DIP 为单位，相对于窗口的内容，元素的边界也是如此。
@@ -68,7 +68,7 @@ MYGO_AUTOMATION=/tmp/app.sock ./app
 
 ### windows
 
-列出打开的窗口。原生 UI 窗口的 `kind` 是 `content`，显示网页的窗口是 `page`，并给出其 `url`；`bounds` 是窗口在屏幕上的帧，`contentBounds` 是其内容的帧，每个都是 `{x, y, width, height}`。
+列出打开的窗口。原生 UI 窗口的 `kind` 是 `content`，显示网页的窗口是 `page`，并给出其 `url`；`bounds` 是窗口在屏幕上的位置和大小，`contentBounds` 是内容区域的位置和大小，均为 `{x, y, width, height}`。
 
 ```json
 {"id": 1, "method": "windows"}
@@ -220,7 +220,7 @@ echo '{"id": 1, "method": "windows"}' | socat - UNIX-CONNECT:/tmp/app.sock
 
 ## 命令行：mygo-automation
 
-驱动自己开发的应用的 AI 编程 agent，希望能用简短的命令查看 UI、对其操作，并读到简短的回答：不必自己写套接字客户端，也不必把整棵 JSON 树和 20 位的元素 ID 读进上下文。`mygo-automation` 就是这样的客户端，仍走同一个套接字：
+AI 编程智能体在控制自己开发的应用时，需要用简短命令查看和操作 UI，并获得简短响应，而不是自行编写套接字客户端，或将整棵 JSON 树和 20 位的元素 ID 读入上下文。`mygo-automation` 就是这样的客户端，使用同一个套接字：
 
 ```sh
 mygo-automation open --socket /tmp/app.sock
@@ -238,7 +238,7 @@ mygo-automation close
 
 `snapshot` 每行打印窗口的一个元素：短引用（`@e1`）、角色、标签、值、`key` 和状态，为空的部分省略；`-i` 只保留控件，`--json` 打印协议的原始回答。操作接受一个引用、`key=<key>` 或 `id=<digits>`，覆盖协议的方法：`press`、`fill` 及其他操作、`click`、`pointer`、`wheel`、`type`、`key`、`menu`、`eval`、`wait`、`screenshot`（保存到文件）和 `windows`。使用 `--settle` 时，操作会用 `idle` 和超时等待窗口稳定，并打印自上次快照以来的变化：`+` 和 `-` 表示出现、消失或改变的元素，`=` 表示它们周围的元素，并带上各自的引用。
 
-会话（`--session`，或 `MYGO_AUTOMATION_SESSION`）把自己的套接字、窗口和引用保存在用户缓存目录下的独立文件中，因此并行的 agent 不会改变彼此的引用。引用在其窗口显示该元素期间一直有效，而且绝不会再分配给另一个元素：元素已消失的引用会被当作过期而拒绝。`close` 结束会话，并让应用继续运行。
+会话（`--session`，或 `MYGO_AUTOMATION_SESSION`）将套接字、窗口和引用信息保存在用户缓存目录下的独立文件中，因此并行运行的智能体不会互相修改引用。只要窗口仍显示对应元素，引用就一直有效，且绝不会分配给其他元素；元素消失后，使用该引用会被拒绝，提示已过期。`close` 结束会话，但不退出应用。
 
 `mygo-automation skills` 打印它的指南，即内置于命令中的 `SKILL.md`：所安装版本的命令、会话、选择器、引用、等待稳定与差异、限制和错误，别无其他。
 
@@ -258,9 +258,9 @@ go install github.com/egoist/mygo/plugins/automation/cmd/mygo-automation@vX.Y.Z
 
 `mygo-automation version` 打印它构建时所用的版本。升级应用的 MyGo 不会升级已安装的命令：升级时重新安装它，指南也随之而来。它只需要 Go 的标准库，并且与插件一样可在 macOS、Linux 和 Windows 上运行。
 
-### 给 agent 的技能
+### 面向智能体的技能
 
-既然指南来自命令本身，agent 的配置只需要说明它存在。把这个存根保留为一项技能：Claude Code 放在 `.claude/skills/mygo-automation/SKILL.md`，Codex 及在那里读取技能的 agent 放在 `.agents/skills/mygo-automation/SKILL.md`：
+指南由命令本身提供，因此智能体的配置只需说明如何获取指南。将以下简短说明保存为技能文件：Claude Code 使用 `.claude/skills/mygo-automation/SKILL.md`，Codex 及从同一位置读取技能的智能体使用 `.agents/skills/mygo-automation/SKILL.md`：
 
 ````markdown
 ---

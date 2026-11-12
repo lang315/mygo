@@ -27,7 +27,7 @@ sfsymbols.Symbol(c, "sparkles").Fallback(sparklesSVG) // where the system has no
 
 `SymbolElement` 也是 `ui.Element`：`Margin`、`Tooltip` 等对它都有效。系统没有该名称的符号时（在另一个操作系统上，或较旧的 macOS 上），它以相同的大小绘制回退内容，或什么都不画。
 
-与 SwiftUI 不同，它有以下几点不做：不跟随所在元素的文本颜色（而是使用主题的文本颜色，或 `Color` 指定的颜色），不与旁边的文本对齐到基线，也不用多种颜色绘制多色和分层符号。
+与 SwiftUI 不同，它不跟随所在元素的文本颜色（而是使用主题的文本颜色，或 `Color` 指定的颜色），不与旁边的文本按基线对齐，也不支持以多种颜色绘制多色符号和分层符号。
 
 ## 名称
 
@@ -39,11 +39,11 @@ sfsymbols.Symbol(c, "sparkles").Fallback(sparklesSVG) // where the system has no
 
 - `opts` 含有 `Natural` 和 `Weight`，与 `Symbol` 的修饰符相同。
 - `px` 限于 8 到 512；像素尺寸超过此范围的 `Symbol` 会从 512 放大。请按 DIP 尺寸的两倍或三倍绘制，让符号在任何显示器上都保持锐利。
-- 默认情况下，符号的墨迹填满它所在的盒子，居中并留有一点内边距。`Options{Natural: true}` 改为以同一缩放比例绘制每个符号，即它与同字号的其他符号并排时的大小：十字形仍比宽矩形小，SF Symbols 正是这样平衡它们的。
+- 默认情况下，符号图形会填满边界框，居中并留少量内边距。`Options{Natural: true}` 改为以统一比例绘制所有符号，保留同字号符号并排时的相对大小：十字形比宽矩形小，以维持 SF Symbols 的视觉平衡。
 - 结果按名称、大小、颜色和选项缓存，系统没有对应符号的名称也会缓存；超过限制时丢弃最久未使用的，因此动画变化的颜色或大小不会让内存无休止地增长。`Image` 可从任何 goroutine 安全调用。
 
 其他操作系统都没有 SF Symbols：`Image` 在那里返回 false，所以请准备一个自己的图标作为回退，并对它返回的内容使用 `ui.Image` 或 `Painter.Image`（配合 `ui.Contain`）。
 
 不导入该插件的应用不会因此增加开销。
 
-见 `examples/sf-symbols`，它显示每个符号并带一个搜索：`go run ./examples/sf-symbols`。
+见 `examples/sf-symbols`，可查看所有符号并搜索：`go run ./examples/sf-symbols`。

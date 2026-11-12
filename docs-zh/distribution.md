@@ -12,7 +12,7 @@ go tool mygo build   # in a project of native UI
 1. 有 Web 前端时，写出 TypeScript 客户端，让前端基于 Go 代码构建，并运行配置里的 `buildCommand`，由它把前端构建到 `frontendDist`；
 2. 编译应用的生产版本，有前端时把前端嵌入其中：不带 Web 检查器，并把配置里的名称、标识符和版本链接进去；
 3. 为每个平台打包到 `build/<os>-<arch>/`（配置里的 `out`）；
-4. 为能签名的地方签名，配置了[更新](updates.md)时，写出已签名的更新归档，以及基于已发布版本的增量更新。
+4. 在支持签名的平台上为产物签名；配置了[更新](updates.md)时，还会生成已签名的更新归档，以及基于已发布版本的增量更新。
 
 ## 平台
 
@@ -55,7 +55,7 @@ export default defineConfig({
 
 在 macOS 上，`macos.icon` 会添加一个资源目录，macOS 会优先使用它而不是 `.icns`：一个是 `actool` 编译出的 `Assets.car`，其中应用图标名为 `AppIcon`（或 `macos.infoPlist` 设置的 `CFBundleIconName`）；另一个是 Icon Composer `.icon`，即 macOS 26 的分层图标，由 `mygo build` 用 Xcode 26 或更高版本的 `actool` 编译，并用 `actool` 从中渲染出的 `.icns` 替代 PNG 生成的那份。在其他系统上构建，或者编译失败时，构建会跳过 `.icon` 并给出提示，应用仍使用 PNG 生成的 `.icns`。`mygo dev` 显示 `.icns`。
 
-`macos.icon` 也可以是你自己的 `.icns`，应用会用它替代从 PNG 渲染出的那份：适用于按尺寸分别绘制的图标，比如 16 点和 32 点用更近的裁剪，由 `iconutil` 从 `.iconset` 制作。`mygo dev` 仍显示 PNG 生成的那份。
+`macos.icon` 也可以指定自备的 `.icns`，替代从 PNG 生成的图标。适合为不同尺寸单独绘制图标的情况，例如在 16 点和 32 点尺寸下采用更紧凑的裁剪，再用 `iconutil` 从 `.iconset` 生成图标文件。`mygo dev` 仍使用 PNG 生成的图标。
 
 ```ts
 export default defineConfig({
@@ -76,7 +76,7 @@ xcrun actool AppIcon.icon --compile icon --platform macosx --target-device mac \
 
 ## 资源
 
-应用在运行时读取的文件随应用一起发布，例如数据库种子、辅助二进制文件或托盘图标的图片。项目 `resources` 目录中的所有内容都会复制进应用，只有 Go 源文件和 [`resourcesExclude`](#排除文件) 排除的内容例外；配置里 `resources` 列出的文件和目录也会按基本名称复制进去：
+应用运行时需要读取的文件应随应用一起发布，例如数据库初始数据、辅助程序或托盘图标。项目 `resources` 目录中的内容都会复制进应用，但 Go 源文件和 [`resourcesExclude`](#排除文件) 匹配的内容除外；配置中 `resources` 列出的文件和目录也会复制进去，并保留各自的文件名或目录名：
 
 ```ts
 export default defineConfig({
@@ -120,7 +120,7 @@ resources/
 └── windows-amd64/bin/server.exe    Windows on x86-64
 ```
 
-它们的命名方式和 `-platform` 的目标一样：只写系统（`darwin`、`linux` 或 `windows`）时适用于该系统的所有应用；系统加架构（如 `darwin-arm64` 或 `windows-amd64`）则只适用于其中一种。应用会把它所用目标的平台目录与其他资源合并后带上，所以上面的 Linux x86-64 应用有 `data/seed.db` 和自己的一份 `bin/server`，不包含其他平台的任何内容。如果两个目录会安装同一路径，构建就会失败；用其他工具常用的平台名来命名目录（如 `darwin-x64` 或 `macos`）也会失败，因为它们会被带进每个平台的应用。如果某个系统的另一种架构有自己的目录，构建还会提示没有自己目录的目标，例如紧挨着 `linux-amd64` 的 `linux/arm64`。
+目录名采用与 `-platform` 目标相同的命名：只写系统（`darwin`、`linux` 或 `windows`）时适用于该系统的所有架构；同时指定系统和架构（如 `darwin-arm64` 或 `windows-amd64`）时只适用于对应目标。构建会将当前目标的平台资源与通用资源合并，所以上例的 Linux x86-64 应用包含 `data/seed.db` 和对应的 `bin/server`，不包含其他平台的资源。如果两个目录的文件会安装到同一路径，构建就会失败；使用其他工具的平台命名（如 `darwin-x64` 或 `macos`）也会报错，避免这些目录被误当作通用资源带入所有平台。如果同一系统下已有其他架构的目录，构建还会提示缺少专用目录的目标，例如已有 `linux-amd64` 时提示 `linux/arm64`。
 
 通用 macOS 应用（`darwin/universal`）会带上 `darwin` 和 `darwin-universal`，并合并 `darwin-arm64` 与 `darwin-amd64`：一边的每个文件都必须在另一边有对应文件，程序和库会变成通用二进制文件（如 `lipo` 生成的那样），其他文件必须完全相同。两种架构都要用的内容，例如已经是通用二进制文件的程序，放在 `darwin` 里。
 
@@ -191,7 +191,7 @@ export default defineConfig({
 
 ### 签名与公证
 
-默认的 ad hoc 签名的应用能在构建它的 Mac 上运行，但 Gatekeeper 会在其他 Mac 上阻止它。要发布应用，用 [Apple Developer Program](https://developer.apple.com/programs/) 的 Developer ID 为它签名，并让 Apple 公证：
+默认使用 ad hoc 签名，应用能在构建它的 Mac 上运行，但会在其他 Mac 上被 Gatekeeper 拦截。要分发应用，应使用 [Apple Developer Program](https://developer.apple.com/programs/) 提供的 Developer ID 签名，并提交 Apple 公证：
 
 ```ts
 export default defineConfig({
@@ -208,7 +208,7 @@ export default defineConfig({
 xcrun notarytool store-credentials notary
 ```
 
-随后 `mygo build` 会用强化运行时为应用签名，把磁盘映像提交给公证服务，再把票据装订到磁盘映像和应用上，更新也会带上它。`security find-identity -v -p codesigning` 会列出你的身份，`mygo doctor` 会统计 Developer ID 的数量。
+随后 `mygo build` 会在签名时启用强化运行时，将磁盘映像提交给公证服务，再将公证票据附加到磁盘映像和应用上；更新也会包含票据。`security find-identity -v -p codesigning` 可列出签名身份，`mygo doctor` 会统计 Developer ID 的数量。
 
 ### Info.plist 与授权
 
@@ -264,13 +264,13 @@ export default defineConfig(({ command }) => ({
 
 ## Windows
 
-可执行文件带有图标、版本信息和一个清单（按显示器进行 DPI 感知、使用现代控件），运行时没有控制台窗口。在主包里放一个自己的 `.syso` 文件，可以替换这些内容。
+可执行文件包含图标、版本信息和应用清单（启用逐显示器 DPI 感知及现代控件），运行时不显示控制台窗口。可以在主包中放入自己的 `.syso` 文件来替换这些内容。
 
 ### 安装程序
 
-`mygo build` 还会生成 `my-app-setup-1.2.0-amd64.exe`，名称取自应用的 [`slug`](configuration.md#应用)，并像磁盘映像一样带上架构，这样把两个目标的安装程序上传到同一个发布版本时，两者都能保留。它把应用安装到当前用户的 `%LOCALAPPDATA%\Programs\My App`，无需管理员权限，应用因此可以[自我更新](updates.md)；它还会添加开始菜单快捷方式和“设置”中列出的卸载项，并注册应用的 URL 方案和文件关联。最后一页提供运行应用和创建桌面快捷方式的选项，后者默认勾选；静默安装（`/S`）不创建桌面快捷方式。
+`mygo build` 还会生成 `my-app-setup-1.2.0-amd64.exe`，名称取自应用的 [`slug`](configuration.md#应用)，并像磁盘映像一样包含架构，方便将不同架构的安装程序上传到同一个发布版本。它将应用安装到当前用户的 `%LOCALAPPDATA%\Programs\My App`，无需管理员权限，因此应用可以[自我更新](updates.md)；还会添加开始菜单快捷方式和“设置”中的卸载项，并注册应用的 URL 协议和文件关联。完成页提供运行应用和创建桌面快捷方式的选项，后者默认勾选；静默安装（`/S`）不创建桌面快捷方式。
 
-快捷方式、“设置 > 应用”中的条目和安装程序的标题显示应用的 `name`；如果可执行文件和它的文件夹要保留普通名称，则显示 [`windows.displayName`](configuration.md#windows)，例如一个显示为 `天气助手` 的应用，其 `weather.exe` 位于 `%LOCALAPPDATA%\Programs\weather`：
+快捷方式、“设置 > 应用”条目和安装程序标题默认使用应用的 `name`。如果希望可执行文件和文件夹保留简单名称，可以用 [`windows.displayName`](configuration.md#windows) 单独指定显示名称。例如，应用显示为 `天气助手`，可执行文件仍为 `%LOCALAPPDATA%\Programs\weather` 中的 `weather.exe`：
 
 ```ts
 export default defineConfig({
@@ -306,7 +306,7 @@ export default defineConfig({
 });
 ```
 
-下面的脚本把应用随附的[辅助可执行文件](#辅助可执行文件)（在应用中为 `resources/windows/bin/helper.exe`，安装后为 `$INSTDIR\bin\helper.exe`）复制到用户的数据目录，并在卸载时删除它：
+下面的脚本将随应用发布的[辅助可执行文件](#辅助可执行文件)（项目中为 `resources/windows/bin/helper.exe`，安装后为 `$INSTDIR\bin\helper.exe`）复制到用户数据目录，并在卸载时删除它：
 
 ```nsis
 ; build/installer.nsh
@@ -323,7 +323,7 @@ export default defineConfig({
 
 这些宏在静默安装和卸载（`/S`）中也会运行，[`install.ps1`](#macos-与-windows-的安装脚本)正是这样运行安装程序的：`IfSilent` 可以区分两者，消息框需要 `/SD` 才能自动应答。[更新](updates.md)不用安装程序就替换应用的文件，所以不会运行任何宏。`customUnInstall` 调用的函数属于卸载程序，以 `un.` 命名。
 
-安装程序为当前用户安装，不需要管理员权限，以便应用能自我更新：钩子应只使用用户可写的内容，如 `$LOCALAPPDATA` 和 `HKCU`。安装程序已经让用户选择文件夹，卸载程序只移除应用的文件夹，保留应用的数据。签名像没有钩子时一样适用于安装程序及其卸载程序。
+安装程序仅为当前用户安装，无需管理员权限，便于应用自我更新。因此钩子也应只操作用户可写的位置，例如 `$LOCALAPPDATA` 和 `HKCU`。安装程序已提供安装目录选择，卸载程序只移除应用文件夹，保留应用数据。添加钩子不影响安装程序及卸载程序的签名。
 
 ### 代码签名
 
@@ -349,7 +349,7 @@ export default defineConfig({
 
 ## Linux
 
-`mygo build` 写出可执行文件（名称取自应用的 [`slug`](configuration.md#应用)，默认是应用名的小写形式）、桌面条目和图标，以及 Debian 和 RPM 包；这些包会把应用安装到 `/opt/my-app`，连同它的桌面条目、图标、URL 方案和文件类型：
+`mygo build` 生成可执行文件（以应用的 [`slug`](configuration.md#应用) 命名，默认为应用名的小写形式）、桌面条目和图标，以及 Debian 和 RPM 包。这些包将应用安装到 `/opt/my-app`，并安装桌面条目、图标，注册 URL 协议和文件类型：
 
 ```ts
 export default defineConfig({
@@ -368,7 +368,7 @@ export default defineConfig({
 ```
 
 这些包依赖 GTK 3 和 WebKitGTK；`depends` 可以为每种格式（`deb`、`rpm` 和 `arch`）添加更多包，也可以接受一个 Debian 包列表（如 `["libayatana-appindicator3-1"]`），由 MyGo 映射到它知道的 Arch Linux 和 RPM 包。
-不显示网页的应用（无论窗口还是 `ui.WebView` 里都没有网页），如[原生 UI](native.md) 的应用，只需要 GTK：`webview: false` 会让 WebKitGTK 不进它的包，也不进 `install.sh` 和 `mygo doctor`（在项目里运行时）检查的内容，因为应用从不加载它。
+完全不显示网页的应用（窗口和 `ui.WebView` 中都没有网页），例如[原生 UI](native.md) 应用，只需要 GTK。设置 `webview: false` 后，包依赖不再包含 WebKitGTK，`install.sh` 和在项目中运行的 `mygo doctor` 也不再检查它，因为应用不会加载它。
 `maintainer` 默认取 package.json 的 `author`，否则取应用名称。
 `comment` 在桌面条目和包中描述应用，`categories` 把它放进应用程序菜单（默认 `Utility`）。
 应用从应用程序菜单打开。`command` 还会给应用一个命令：来自包的 `/usr/bin/my-app`，以及来自 [`install.sh`](#安装脚本) 的 `~/.local/bin/my-app`；也可以给多个命令，如 `["my-app", "ma"]`，这样就多了一个短名称。不设置它时，两者都不会添加命令，这个名字就留给同名的命令行工具，比如应用自己的命令行工具。
@@ -394,7 +394,7 @@ cd build/linux-amd64
 makepkg -si
 ```
 
-这个包安装的内容与 Debian 包相同：应用在 `/opt/my-app`，命令在 `/usr/bin`，还有桌面条目、图标、URL 方案和文件类型，由 pacman 的钩子注册。图标取 PKGBUILD 旁边的 `my-app-256x256.png` 和 `my-app-512x512.png`，因为归档里保存的就是原图。它的字段来自配置：
+这个包安装的内容与 Debian 包相同：应用位于 `/opt/my-app`，命令位于 `/usr/bin`，并通过 pacman 钩子注册桌面条目、图标、URL 协议和文件类型。图标使用 PKGBUILD 旁的 `my-app-256x256.png` 和 `my-app-512x512.png`，因为归档中只有原始图像。各字段取自配置：
 
 | 字段 | 来源 |
 |---|---|
@@ -410,7 +410,7 @@ makepkg -si
 
 ### 安装脚本
 
-每次 Linux 构建还会得到应用的归档 `my-app-1.2.0-linux-amd64.tar.gz`，以及 `install.sh`；它无需 root 就能为用户安装。应用会装到 `~/.local/my-app.app`，在那里可以[自我更新](updates.md)，同时安装桌面条目、图标、URL 方案和文件类型；配置了 `linux.command` 时，还会在 `~/.local/bin` 中安装命令，每个命令只在没有其他程序占用时安装，并会提示用其中链接的第一个命令运行应用。配置了[更新](updates.md)时，它会下载最新版本（版本由这台机器的更新清单指定），并在安装前像应用的更新器一样，对照 `updates.publicKey` 校验大小和 Ed25519 签名，所以一行命令即可安装应用：
+每次 Linux 构建还会生成应用归档 `my-app-1.2.0-linux-amd64.tar.gz` 和 `install.sh`，无需 root 即可安装。脚本将应用安装到 `~/.local/my-app.app`，使其可以[自我更新](updates.md)，并安装桌面条目、图标，注册 URL 协议和文件类型。配置了 `linux.command` 时，还会在 `~/.local/bin` 中创建命令链接，但不会占用其他程序已有的命令名；安装后会提示用成功创建的第一个命令启动应用。配置了[更新](updates.md)时，脚本会下载当前机器对应更新清单中的最新版本，并在安装前像应用更新器一样，校验大小，再用 `updates.publicKey` 校验 Ed25519 签名，因此一行命令即可安装应用：
 
 ```sh
 curl -fsSL https://github.com/me/my-app/releases/latest/download/install.sh | sh
@@ -429,7 +429,7 @@ sh install.sh --uninstall   # keeps the settings and data of the app
 
 再次运行会在已安装版本之上安装它找到的版本；指向应用已不再使用的名称的链接（slug 除外）会保留，就像用户自己创建的链接一样，直到 `--uninstall` 移除 `~/.local/bin` 中所有指向应用的链接。
 应用需要 WebKitGTK，而 `install.sh` 不安装它：系统的库缓存中没有它时，脚本会在安装后说明这一点，并给出在 Debian、Ubuntu、Fedora、Arch 和 openSUSE 上安装它的命令，除非 `linux.webview` 为 `false`。
-应用自我更新时，会注册新版本的桌面条目和文件类型，所以添加了 URL 方案或文件类型的版本会得到它们。Debian 和 RPM 包适合希望由系统包管理器来更新应用的人；`install.sh` 则适合其他人，也是能自我更新的 Linux 安装方式。
+应用自我更新时，会重新注册新版本的桌面条目和文件类型，因此新添加的 URL 协议或文件类型也会生效。希望通过系统包管理器更新应用时，可使用 Debian 或 RPM 包；其他情况可使用 `install.sh`，以便应用在 Linux 上自我更新。
 
 ### macOS 与 Windows 的安装脚本
 
@@ -450,7 +450,7 @@ irm https://github.com/me/my-app/releases/latest/download/install.ps1 | iex
 
 带更新的构建会把 `SHA256SUMS`（安装程序、归档和脚本的 SHA-256，格式与 `sha256sum` 相同）写到输出目录，`-upload` 会随它们一起发布，并合并其他平台早先上传的行：同一个 GitHub 发布版本的那些行，或 `updates.url` 为 `updates.s3` 提供的 `SHA256SUMS` 中的那些行，但不包含上传所替换的早期版本的文件。它按构建的方式命名文件；GitHub 会把上传名称中的空格变成点，`install.ps1` 也遵循这一点。使用 `updates.url` 和自己的服务器时，把脚本和 `SHA256SUMS` 发布在清单旁边，其中包含每个平台最新文件对应的行。
 
-`SHA256SUMS` 没有签名：它能发现损坏或中断的下载，但发现不了文件被人替换过的发布版本。在 Windows 上，为安装程序签名（[代码签名](#代码签名)），让 Windows 显示它的制作者。
+`SHA256SUMS` 未签名，只能检测下载损坏或不完整，无法防范发布文件被恶意替换。在 Windows 上应为安装程序签名（[代码签名](#代码签名)），让系统显示其发布者。
 
 测试时，`MY_APP_DOWNLOAD_URL`（应用的 [`slug`](configuration.md#应用) 的大写形式）是两个脚本改为下载的位置，`MY_APP_INSTALL_DIR` 是 macOS 上应用的文件夹，`MY_APP_NO_OPEN=1` 让应用保持关闭。
 
@@ -460,7 +460,7 @@ irm https://github.com/me/my-app/releases/latest/download/install.ps1 | iex
 
 - macOS：`CFBundleDevelopmentRegion`、`CFBundleLocalizations`，以及 `Contents/Resources` 中每种语言一个本地化文件夹，按 Xcode 的命名方式命名（`de.lproj`、`zh-Hans.lproj`，`zh-Hant-HK` 为 `zh-HK.lproj`），这样 AppKit 的界面文字（“服务”菜单、各种面板）会使用应用显示的语言，系统设置也会列出应用的语言。
 - Linux：桌面条目中的 `Name[xx]` 和 `Comment[xx]`，按 POSIX 区域设置（`de`、`zh_CN`、`zh_TW`、`sr@latin`）。
-- Windows：安装程序会为每种语言各提供一份，并选择用户显示语言对应的那种，否则选择源语言；只用中文写的应用（`"i18n": { "source": "zh-Hans" }`）安装程序也只有中文，但 MyGo 自己的少数文本例外：那些是关于正在运行的应用的消息，使用英文。完成页中创建桌面快捷方式的复选框是 MyGo 的字符串 `mygo.desktopShortcut`，为英文，属于 [MyGo 自己的语言](i18n.md#mygo-自己的字符串)；应用可以在自己的消息目录中把它翻译成其他语言，或者直接修改它。NSIS 3 带有约 60 种语言的文件；如果某种语言没有对应文件，构建会停止，并列出它支持哪些语言。文件属性中有一张按语言排列的字符串表。
+- Windows：安装程序内置各语言的文本，优先使用用户的显示语言，找不到时使用源语言。仅使用中文的应用（`"i18n": { "source": "zh-Hans" }`）也只有中文安装界面，但 MyGo 提供的少数文本除外：有关应用正在运行的消息仍使用英文。完成页中创建桌面快捷方式的复选框使用 MyGo 的英文字符串 `mygo.desktopShortcut`，属于 [MyGo 自己的语言](i18n.md#mygo-自己的字符串)；应用可以在自己的消息目录中翻译或修改它。NSIS 3 提供约 60 种语言的文件；如果缺少所需语言，构建会停止并列出支持的语言。文件属性中还包含按语言组织的字符串表。
 
 应用在某种语言中的名称和描述来自消息目录的 `mygo.appName` 和 `mygo.appDescription`；配置里的 `name` 和 `linux.comment` 是源语言的，Windows 上如果有 `windows.displayName`，则用它代替 `name`。没有消息目录的应用不声明任何语言。
 
@@ -474,7 +474,7 @@ resources/darwin/
 
 该文件是 Xcode 写出的文本格式，使用 UTF-8 或 UTF-16，或是 XML 属性列表。
 
-## URL 方案与文件类型
+## URL 协议与文件类型
 
 配置中的 `urlSchemes` 和 `fileAssociations`（见[深度链接](app.md#深度链接)和[文件关联](app.md#文件关联)）由每个包注册：macOS 应用的 `Info.plist`、Windows 安装程序，以及 Linux 桌面条目、安装脚本、Debian 和 RPM 包和 PKGBUILD。
 

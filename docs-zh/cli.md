@@ -42,7 +42,7 @@ mygo init [flags] <dir>
 
 使用 `-template native` 时，项目就是一个 Go 模块，其窗口显示[原生 UI](ui/README.md)：`main.go`、视图的测试、`mygo.json` 和图标。该模块把 CLI 作为[工具](https://go.dev/doc/modules/managing-dependencies#tools)，所以 `go tool mygo dev` 和 `go tool mygo build` 会运行它固定的 CLI 版本，不需要 Bun。见[原生 UI](getting-started.md#原生-ui)。
 
-两个模板都在 `.agents/skills/mygo-maintenance/` 中包含 `mygo-maintenance` agent 技能，讲解维护应用时的元素生命周期、稳定标识、线程和测试。
+两个模板都在 `.agents/skills/mygo-maintenance/` 中包含 `mygo-maintenance` 智能体技能，讲解维护应用时的元素生命周期、稳定标识、线程和测试。
 
 | 标志 | |
 |---|---|
@@ -57,7 +57,7 @@ mygo init [flags] <dir>
 mygo install-skills [dir]
 ```
 
-在现有项目的 `.agents/skills/` 中，安装或更新随你运行的 CLI 版本一起捆绑的 agent 技能。目录默认为当前目录；不需要项目配置、Go 构建环境或前端工具。新项目也会通过 `mygo init` 获得这些技能。
+在现有项目的 `.agents/skills/` 中，安装或更新随你运行的 CLI 版本一起捆绑的智能体技能。目录默认为当前目录；不需要项目配置、Go 构建环境或前端工具。新项目也会通过 `mygo init` 获得这些技能。
 
 该命令会覆盖捆绑的文件，例如 `mygo-maintenance/SKILL.md` 和 `mygo-maintenance/agents/openai.yaml`，这些文件的本地修改也会被覆盖。其他技能和额外的自定义文件会被保留。升级 CLI 后再次运行该命令，即可刷新这些指导内容。
 
@@ -89,7 +89,7 @@ mygo dev [flags] [dir]
 | `-port` | 使用 `-web` 时，供应用使用的端口，或下一个空闲端口（默认：5174） |
 | `-open` | 使用 `-web` 时，在浏览器中打开应用（默认：true） |
 | `-lang` | 以某种语言运行应用，例如 `de` 或 `zh-Hant`，或伪区域设置 `en-XA` 或 `ar-XB`，但不改变应用保存的语言；见[尝试一种语言](i18n.md#试用一种语言) |
-| `-background` | 启动应用，并在每次重新构建后再次启动它，而不把它带到前台：它的窗口显示时不带焦点，直到你点击其中一个，这样你保存时编辑器仍保持焦点（Windows 上最大化的窗口仍会取得焦点） |
+| `-background` | 启动应用，并在每次重新构建后再次启动它，而不把它带到前台：它的窗口显示时不带焦点，直到你点击其中一个，这样你保存时编辑器仍保持焦点（Windows 上最大化的窗口仍会获得焦点） |
 
 ## mygo build
 
@@ -166,7 +166,7 @@ mygo native new [-lang <languages>] <module name>
 mygo native add <language> [module dir]
 ```
 
-用另一种语言（`swift`、`rust` 或 `zig`）实现现有模块，为每个入口点提供一个工厂，以及声明不受支持的方法，使模块马上就能构建。
+为现有模块添加另一种语言（`swift`、`rust` 或 `zig`）的实现，生成每个入口点的工厂函数和返回“不支持”错误的方法，使模块立即可以构建。
 
 ### mygo native check
 
@@ -182,7 +182,7 @@ mygo native check [-lang <language>] [module dir]
 mygo native call [-timeout <duration>] [module dir] <Interface>.<Method> [<arguments>]
 ```
 
-创建入口点的实现，用 `<arguments>` 调用一个方法，也就是一个 JSON 对象，按参数的 Go 名称给出参数值，并把结果以 JSON 打印，流中的每个值一行。它为方法创建上下文，其超时由 `-timeout` 限制，并打印回调的调用。
+创建入口点的实现，并用 `<arguments>` 调用其中一个方法；参数以 JSON 对象传入，键为参数的 Go 名称。结果以 JSON 输出，流中的每个值占一行。命令会为方法创建上下文，用 `-timeout` 限制超时，并打印回调调用记录。
 
 `mygo dev` 和 `mygo build` 生成并构建应用的每个原生模块；见[构建、运行和测试](native-modules.md#构建运行和测试)。
 

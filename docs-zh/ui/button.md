@@ -2,7 +2,7 @@
 
 <!-- preview button 140 -->
 
-`ui.Button` 创建一个显示标签的按钮，`ui.PrimaryButton` 则创建一个强调色的按钮，用于窗口或对话框的主要操作。`Clicked` 报告单击，或按钮持有键盘焦点时按下的 Enter 或 Space：
+`ui.Button` 创建一个显示标签的按钮，`ui.PrimaryButton` 则创建一个强调色的按钮，用于窗口或对话框的主要操作。单击按钮，或在按钮具有键盘焦点时按 Enter 或 Space，都会触发 `Clicked`：
 
 ```go
 ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
@@ -17,7 +17,7 @@ ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 
 ## 内容
 
-按钮把子元素排成一行，并把自身的文本颜色给它们。用 `Children` 配合空标签给它其他内容，如标签前的图标：
+按钮把子元素排成一行，子元素继承按钮的文本颜色。用空标签配合 `Children` 可以自定义内容，例如在标签前添加图标：
 
 ```go
 ui.PrimaryButton(c, "").Children(func() {
@@ -44,11 +44,11 @@ if ui.PrimaryButton(c, "Sign in").Clicked() || c.Shortcut(0, ui.KeyEnter) {
 }
 ```
 
-持有焦点的按钮会独占 Enter 和 Space，因此快捷键只在焦点在别处时触发。
+具有焦点的按钮会自行处理 Enter 和 Space，因此快捷键只在焦点位于别处时触发。
 
 ## 样式
 
-按钮返回自身的元素：其后的调用会改变它的外观，如 `ui.Button(c, "Save").Padding(10, 20).Radius(999)`。`ui.ButtonBase` 是无外观的按钮，一个可获取焦点并报告 `Clicked` 的行，用于你自己的设计：见[自定义控件](custom-widgets.md)。
+按钮返回自身的元素：其后的调用会改变它的外观，如 `ui.Button(c, "Save").Padding(10, 20).Radius(999)`。`ui.ButtonBase` 是无预设外观的按钮，本质上是一个可获取焦点并报告 `Clicked` 的行，供你自定义外观：见[自定义控件](custom-widgets.md)。
 
 ## 辅助功能
 

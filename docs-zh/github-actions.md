@@ -85,7 +85,7 @@ git push origin v1.2.0
 - 发布页面会显示 GitHub 根据上次发布版本以来的拉取请求生成的发布说明，你可以在草稿里编辑。更新窗口会显示 `CHANGELOG.md` 中该版本的部分，这部分由更新清单携带。
 - 工作流的 `GITHUB_TOKEN` 让运行器上自带的 `gh` 创建发布版本并上传到它。有 `tagPrefix` 时，它还能让 `mygo build` 找到[增量更新](updates.md#增量更新)所基于的更早发布版本。
 
-照现在这样，工作流构建出的应用可以运行，但没有针对其他机器签名：macOS 应用以 ad hoc 方式签名，Gatekeeper 会在其他 Mac 上阻止它；Windows 应用没有签名，SmartScreen 会警告用户。接下来的几节介绍如何给它们签名。
+上述工作流构建的应用可以运行，但签名尚不满足分发要求：macOS 应用使用临时签名（ad hoc），在其他 Mac 上会被 Gatekeeper 阻止；Windows 应用没有签名，SmartScreen 会向用户发出警告。接下来介绍如何签名。
 
 ## 给 macOS 应用签名和公证
 
@@ -138,7 +138,7 @@ export default defineConfig({
 });
 ```
 
-随后 `mygo build` 会给应用签名，把磁盘映像提交给公证服务并等待结果（通常几分钟），再把票据装订上去。也可以用 App Store Connect API 密钥代替 Apple ID：用 `--key`、`--key-id` 和 `--issuer` 把密钥文件、ID 和颁发者提供给 `notarytool store-credentials`。
+随后 `mygo build` 会给应用签名，把磁盘映像提交给公证服务并等待结果（通常几分钟），再将公证票据附加到磁盘映像。也可以用 App Store Connect API 密钥代替 Apple ID：用 `--key`、`--key-id` 和 `--issuer` 把密钥文件、ID 和颁发者提供给 `notarytool store-credentials`。
 
 ## 给 Windows 应用签名
 
@@ -237,7 +237,7 @@ export default defineConfig({
         run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
 ```
 
-使用 `desktop-v` 这样的 `tagPrefix` 时，用带该前缀的标签触发工作流（`tags: ["desktop-v*"]`），对照 `desktop-v` 和版本检查标签，并用 `--latest=false` 创建并发布它，这样仓库的最新发布版本仍然是其他发布版本中的那个（见[构建和发布](updates.md#构建与发布)）。
+使用 `desktop-v` 这样的 `tagPrefix` 时，用带该前缀的标签触发工作流（`tags: ["desktop-v*"]`），检查标签是否与 `desktop-v` 加版本号一致，并用 `--latest=false` 创建并发布版本，避免替换仓库中其他系列的最新发布版本（见[构建和发布](updates.md#构建与发布)）。
 
 发布预发布版本的标签（如 `v1.3.0-beta.1`）时，也要加上 `--prerelease`，这样只有用户选择了预发布的应用才会更新到它（[预发布](updates.md#预发布)）。
 

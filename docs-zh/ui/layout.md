@@ -26,11 +26,11 @@ ui.Row(c).Gap(8).Padding(12).Children(func() {
 
 `Gap` 设置子元素之间的间距，`GapX` 和 `GapY` 分别设置横向和纵向的间隔；`Padding` 和 `Margin` 接受一个、两个或四个值，如同 CSS，而 `PaddingX`、`PaddingY`、`MarginX` 和 `MarginY` 分别设置两侧。`ui.Auto` 的外边距占取所在侧的空闲空间，如同 CSS：`Margin(0, ui.Auto)` 在列中居中一个元素，`Margin(0, 0, 0, ui.Auto)` 把行中的一个子元素及其后的元素推到右边。
 
-`PaddingStart` 和 `PaddingEnd`、`MarginStart` 和 `MarginEnd`，以及 `BorderStartWidth` 和 `BorderEndWidth` 设置行起始的一侧和另一侧：在[从右到左](right-to-left.md)排版的元素中，分别是左边和右边，或右边和左边，如同 CSS 的逻辑属性那样。`MarginStart(ui.Auto)` 无论方向如何，都把行中的子元素推到末尾。
+`PaddingStart` 和 `PaddingEnd`、`MarginStart` 和 `MarginEnd`，以及 `BorderStartWidth` 和 `BorderEndWidth` 设置行的起始侧和结束侧：通常分别为左侧和右侧，在[从右到左](right-to-left.md)布局中则分别为右侧和左侧，如同 CSS 的逻辑属性。`MarginStart(ui.Auto)` 无论方向如何，都把行中的子元素推到末尾。
 
 ## 对齐
 
-`Justify` 沿主轴放置子元素（`Start`、`Center`、`End`、`SpaceBetween`、`SpaceAround`、`SpaceEvenly`），`AlignItems` 沿交叉轴放置它们（`Start`、`Center`、`End`、`Stretch`、`Baseline`），`AlignSelf` 则放置单个子元素；`Center` 在两个方向上都居中。`Start` 是行的左端和列的顶部，在[从右到左](right-to-left.md)排版的元素中则是右边，后者从那里开始排布一行。`Wrap` 让一行换到多行，`WrapReverse` 把这些行向上堆叠，`AlignContent` 放置这些行（如同 `Justify` 放置子元素，或 `Stretch`）。
+`Justify` 设置子元素在主轴上的对齐方式（`Start`、`Center`、`End`、`SpaceBetween`、`SpaceAround`、`SpaceEvenly`），`AlignItems` 设置交叉轴上的对齐方式（`Start`、`Center`、`End`、`Stretch`、`Baseline`），`AlignSelf` 则单独设置某个子元素；`Center` 在两个方向上都居中。`Start` 通常是行的左端和列的顶部；在[从右到左](right-to-left.md)布局中，行从右端开始。`Wrap` 允许子元素换行，`WrapReverse` 让后续行向上堆叠，`AlignContent` 设置这些行的对齐方式（与 `Justify` 的选项相同，另有 `Stretch`）。
 
 `Baseline` 让行中子元素的第一行文本对齐，例如大号价格旁的小号单位，行的高度也随之达到所需值。盒子的基线取其第一个子元素的基线（在行中，是第一个按基线对齐的子元素），没有文本的子元素则以底部对齐，如同 CSS：
 

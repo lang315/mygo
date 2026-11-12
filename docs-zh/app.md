@@ -24,7 +24,7 @@ func main() {
 
 MyGo 的每个函数和方法都可从任意 goroutine 安全调用：在主线程之外发起的调用会被发送到主线程，并等待结果。各部分在哪个线程上运行：
 
-- 事件监听器（如 `OnClose` 或 `OnActivate`）、菜单项点击和全局快捷键在主线程上运行，主线程也负责绘制 UI：保持它们简短，慢工作另起 goroutine。
+- 事件监听器（如 `OnClose` 或 `OnActivate`）、菜单项点击和全局快捷键的回调在主线程上运行，主线程也负责绘制 UI：回调应尽快返回，耗时任务另起 goroutine。
 - 绑定方法在自己的 goroutine 上运行，每次调用一个：它们可以阻塞。
 - `mygo.RunOnMain(fn)` 在主线程上运行 `fn`，用于通过 `Window.NativeHandle` 调用的原生 API。
 
@@ -62,8 +62,8 @@ mygo.App.OnActivate(func(hasVisibleWindows bool) {
 ```
 
 - `App.Quit()` 关闭每个窗口（`OnClose` 监听器可以拒绝），然后退出；`OnBeforeQuit` 和 `OnWillQuit` 监听器也可以取消它。Cmd+Q、退出菜单项和终端中的 Ctrl+C（SIGINT 和 SIGTERM）以同样的方式退出；第二次信号会立即退出。
-- 其中任何一个取消退出时，`OnQuitCanceled` 运行：在 `OnBeforeQuit` 中设置了自己退出状态的应用在那里清除它，否则它会带着该状态继续运行。被取消的 `OnWillQuit` 已经关闭的窗口保持关闭。
-- 在 Windows 和 macOS 上，操作系统结束会话（注销、重启、关机）时，退出监听器和窗口的 `OnClose` 仍会照常运行，顺序不变，且在 `OnQuit` 之前，但取消不了它：`QuitEvent` 的 `SessionEnding` 已设置，进程可能在它们和 `OnQuit` 返回后立即结束。在那里同步保存必须留存的内容，不要有对话框，也不要启动要等待的 goroutine。已经运行过它们的退出只会完成。Linux 不告诉 MyGo 会话结束：关机和停止用户进程的注销会发送 SIGTERM，它像 `App.Quit()` 一样退出。
+- 任何监听器或窗口取消退出时，都会触发 `OnQuitCanceled`：如果应用在 `OnBeforeQuit` 中设置了退出状态，就应在这里清除，否则应用继续运行时仍会保留该状态。在 `OnWillQuit` 阶段取消退出，不会重新打开已经关闭的窗口。
+- 在 Windows 和 macOS 上，操作系统结束会话（注销、重启、关机）时，仍会依次运行退出监听器和窗口的 `OnClose`，然后运行 `OnQuit`，但这些回调无法取消退出：`QuitEvent` 的 `SessionEnding` 已设置，进程可能在这些回调和 `OnQuit` 返回后立即结束。必须保留的数据应在回调中同步保存，不要弹出对话框，也不要依赖需要等待的 goroutine。如果退出流程已运行过这些回调，则只完成剩余流程。Linux 不会向 MyGo 通知会话结束：关机或终止用户进程的注销会发送 SIGTERM，按与 `App.Quit()` 相同的流程退出。
 - `App.Exit(code)` 立即退出，不触发事件。
 - `App.Relaunch()` 退出，然后用相同的参数再次启动应用，例如在更改了需要重启的设置之后。`App.Relaunch(args...)` 改为传入其他参数，替换应用启动时的参数，让新实例知道它为什么启动，而不用依赖两者共享的文件：
 
@@ -94,7 +94,7 @@ func main() {
 
 ## 深度链接
 
-应用打开自己 scheme 的 URL，如 `myapp://open?note=42`。在 mygo.config.ts 中列出这些 scheme，应用安装时会把它们注册到系统：
+应用可以打开使用自身协议的 URL，如 `myapp://open?note=42`。在 mygo.config.ts 中列出这些协议，安装应用时会将它们注册到系统：
 
 ```ts
 export default defineConfig({
@@ -114,7 +114,7 @@ mygo.App.OnOpenURL(func(rawURL string) {
 })
 ```
 
-在 Windows 和 Linux 上，URL 会启动应用的新实例：请求[单一实例锁](#单一实例)，后续实例的 URL 会到达第一个实例的 `OnOpenURL`。没有通过 `mygo build` 生成的安装包安装的应用，例如便携式可执行文件，在运行时用 `App.RegisterURLScheme("myapp")` 注册它们的 scheme；每次启动调用它开销很小，`UnregisterURLScheme` 和 `IsURLSchemeRegistered` 与它配套。在 macOS 上，scheme 必须在配置中列出。
+在 Windows 和 Linux 上，打开 URL 会启动应用的新实例：请求[单一实例锁](#单一实例)后，后续实例收到的 URL 会传给第一个实例的 `OnOpenURL`。没有通过 `mygo build` 生成的安装包安装的应用，例如便携式可执行文件，可在运行时用 `App.RegisterURLScheme("myapp")` 注册协议；每次启动时调用的开销很小，还可配合 `UnregisterURLScheme` 和 `IsURLSchemeRegistered` 使用。在 macOS 上，协议必须在配置中列出。
 
 ## 文件关联
 
@@ -142,7 +142,7 @@ mygo.App.OnOpenFile(func(path string) {
 
 它也会收到拖放到应用 Dock 图标上的文件（macOS），以及命令行传入的文件。与深度链接一样，单一实例锁让第一个实例在 Windows 和 Linux 上收到后续实例的文件。
 
-每个窗口各显示一个文件的应用，可以从[文稿](documents.md)得到这一点，以及基于文稿的应用的其他功能。
+每个窗口各显示一个文件的应用，可以通过[文稿](documents.md)功能实现上述行为，以及文稿类应用的其他功能。
 
 ## 最近使用的文稿
 
@@ -156,7 +156,7 @@ if err := mygo.App.AddRecentDocument(path); err != nil {
 
 `App.RecentDocuments()` 返回它们，最新的在前，最多十个，也包括更早运行时的那些，但不包含已不存在的文件；“打开最近使用”菜单（`RoleOpenRecent`，见[菜单](menus.md)）列出它们。macOS 也会在应用的 Dock 菜单中列出它们，Linux 在用户最近使用的文件（`~/.local/share/recently-used.xbel`，文件选择器和文件管理器的“最近使用”）中列出，Windows 在应用[跳转列表](#跳转列表)的“最近”类别中列出，前提是应用注册了打开这些文件类型（见[文件关联](#文件关联)）。在“打开最近使用”菜单、Dock 菜单或跳转列表中选择一项，会用应用打开该文件，应用通过 `OnOpenFile` 收到它。[文稿](documents.md)记录它们打开和保存的文件，并自己打开选中的那些；其他应用，例如打开文件夹的应用，记录它们打开的内容。
 
-`ClearRecentDocuments` 移除它们全部，例如在用户要求清除应用历史时，如同“打开最近使用”菜单的“清除菜单”所做的那样。在 Linux 上，用户的其他最近文件保留。
+`ClearRecentDocuments` 清空最近使用记录，例如用户要求清除应用历史时调用，与“打开最近使用”菜单中的“清除菜单”作用相同。在 Linux 上，不影响用户其他文件的最近使用记录。
 
 ## 登录时启动
 
@@ -228,7 +228,7 @@ if err := mygo.App.JumpList.SetTasks([]mygo.JumpListTask{
 }
 ```
 
-运行应用的任务会用 `Args` 再次启动它：应用未运行时，新实例收到它们；应用正在运行时，如果用了[单一实例](#单一实例)，则由运行中的实例收到。应用某个 [scheme](#深度链接)的 URL 两种情况下都会到达 `OnOpenURL`，其类型的文件则到达 `OnOpenFile`，所以任务最好由它们构成。其他参数进入新实例的 `os.Args`，以及运行中实例的 `OnSecondInstance`：在两个地方都处理它们。每个参数按原样传递，MyGo 为命令行加引号。
+运行应用的任务会用 `Args` 再次启动它：应用未运行时，新实例收到这些参数；应用正在运行时，如果用了[单一实例](#单一实例)，则由运行中的实例收到。使用应用已注册[协议](#深度链接)的 URL 在两种情况下都会传给 `OnOpenURL`，已关联类型的文件则传给 `OnOpenFile`，所以任务最好使用这两种参数。其他参数会传入新实例的 `os.Args` 或运行中实例的 `OnSecondInstance`：两处都需要处理。每个参数均按原样传递，MyGo 会为命令行添加所需的引号。
 
 除非另行设置，`Path` 是应用自己的可执行文件，`WorkingDir` 是它运行的目录，`Description` 是工具提示，图标是程序自己的，除非 `IconPath`（连同 `IconIndex`）指定另一个。不设置任何任务则会移除它们。应用更改跳转列表的一部分时，Windows 会替换整个跳转列表，所以 `App.JumpList` 保留各部分并一起提交。它的方法在 macOS 和 Linux 上不做任何事。
 
@@ -236,7 +236,7 @@ if err := mygo.App.JumpList.SetTasks([]mygo.JumpListTask{
 
 WebKitGTK 在可能时用 DMA-BUF 渲染器在 GPU 上绘制页面，而该渲染器在 NVIDIA 驱动、虚拟机和容器中会显示空白窗口。所以 MyGo 默认关闭它：在 GTK 启动之前，`App.Run` 设置 `WEBKIT_DISABLE_DMABUF_RENDERER=1`，除非环境已有该变量。页面随后在 CPU 上绘制，这在渲染器本可工作的地方会损失帧率：在 Intel GPU 的 Wayland 桌面上，长页面（4,600 个元素的聊天记录）以每秒 11–19 帧滚动，一个 CPU 核心满载，而使用渲染器时为 56 帧，CPU 占用减半。
 
-知道自己在何处运行的应用，可以在 `App.Run` 之前保持渲染器开启：
+如果应用的运行环境已知，可以在 `App.Run` 之前设置为保留渲染器：
 
 ```go
 mygo.App.SetDMABUFRenderer(mygo.DMABUFRendererAuto)
@@ -287,7 +287,7 @@ Cookie 的名称、域和路径标识它：`Set` 替换同名、同域、同路�
 
 应用运行后，这些方法可从任意 goroutine 安全调用，在等待时主线程仍继续处理事件。Cookie 可能携带用户的凭据：与其把模块绑定到页面，不如绑定一个完成页面所需操作的后端方法。
 
-在 Windows 上，WebView2 只能通过 web 视图提供 Cookie：当原生 UI 中没有窗口或 web 视图显示页面时，这些方法以及 `App.ClearBrowsingData` 会创建一个隐藏的 web 视图，这也会让 WebView2 浏览器进程启动，而窗口的第一个页面会在其 web 视图创建时等待正在进行的调用。页面显示后，或在没有显示任何页面的应用中最后一次调用几秒后，隐藏的 web 视图会关闭，WebView2 的进程也随之退出；当会话有 WebView2 只在运行时保留的 Cookie 时，它会保持：零值 `Expires` 的，以及临时会话的任何 Cookie。WebView2 在调用返回后应用更改，所以这些方法会等到更改显现，在两秒内没有显现时失败，例如引擎拒绝某个 Cookie 时。在 Linux 上它们需要 WebKitGTK 2.42 或更新版本，`Set` 需要 libsoup 2.70 或更新版本；WebKitGTK 把 Cookie 保存在应用用户数据目录（`~/.config/<Name>`）的 `cookies.sqlite` 中。
+在 Windows 上，WebView2 只能通过 web 视图提供 Cookie：如果没有窗口或原生 UI 中的 web 视图显示页面，这些方法以及 `App.ClearBrowsingData` 会创建隐藏的 web 视图，并启动 WebView2 浏览器进程。窗口创建首个页面的 web 视图时，会等待正在进行的调用完成。页面显示后，或应用不显示页面且最后一次调用结束几秒后，隐藏的 web 视图会关闭，WebView2 进程也随之退出；但如果会话中有仅在 WebView2 进程运行期间保留的 Cookie，隐藏视图就会保持打开，包括 `Expires` 为零值的 Cookie，以及临时会话中的所有 Cookie。WebView2 在调用返回后才应用更改，因此这些方法会等待更改生效；如果两秒内未生效（例如引擎拒绝了某个 Cookie），则返回错误。在 Linux 上，这些方法需要 WebKitGTK 2.42 或更新版本，`Set` 还需要 libsoup 2.70 或更新版本；WebKitGTK 将 Cookie 保存在应用用户数据目录（`~/.config/<Name>`）下的 `cookies.sqlite` 中。
 
 ### 会话
 

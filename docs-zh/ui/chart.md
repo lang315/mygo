@@ -2,7 +2,7 @@
 
 <!-- preview chart 300 -->
 
-`ui/chart` 包不预设图表外观，类似 Web 上的 visx 等无头图表库，同时提供 Swift Charts 中常见的图表组件：将数据映射到绘图区并选取规整刻度的标度、带坐标轴的绘图区、可像普通元素一样设置样式的数据标记、供 `Draw` 使用的折线、面积和饼图扇区路径、数据堆叠，以及支持指针和键盘操作的选择功能。颜色、尺寸和字体均由你决定。
+`ui/chart` 包不预设图表外观，类似 Web 上的 visx 等无外观图表库，同时提供 Swift Charts 中常见的图表组件：将数据映射到绘图区并选取规整刻度的标度、带坐标轴的绘图区、可像普通元素一样设置样式的数据标记、供 `Draw` 使用的折线、面积和饼图扇区路径、数据堆叠，以及支持指针和键盘操作的选择功能。颜色、尺寸和字体均由你决定。
 
 ```go
 import "github.com/egoist/mygo/ui/chart"
@@ -29,13 +29,13 @@ chart.Plot(c, chart.Axes{Left: ticks, Bottom: x.Ticks()}, func(area ui.Element) 
 
 ## 标度
 
-- `chart.NewLinear(lo, hi)` 映射数字。`Nice(n)` 把定义域扩展到约 n 个刻度所在的圆整值，`Ticks(n)` 返回这些刻度：间隔为 1、2 或 5 乘以 10 的幂，和 d3、Swift Charts 的取法一样；小数位数按步长需要而定，或者由 `Format` 标注。`At(v)` 返回某个值的位置，`Span(a, b)` 返回两个值之间的区间，例如柱子从 0 到它的值；`Invert(f)` 返回某个比例处的值，例如指针下方的值。`Clamp` 把定义域之外的值限制在两端；`chart.Extent(values...)` 返回最小值和最大值。
-- `chart.NewLog(lo, hi)` 让相等的比值有相等的距离：1、10 和 100 等距。两端必须同时为正或同时为负；反向的定义域也可以。`Base` 默认为 10（2 和 `math.E` 也可以）；它改变刻度和 `Nice()`，不改变位置。`Nice()` 会扩展到基数的整数次幂。`Ticks(n)` 只是密度提示：基数取整数、定义域又较短时，会包含次一级的倍数，它们太拥挤时则省略标签。设置 `Format` 时标注每个刻度。定义域为常量时，只在该值处得到一个刻度，基数不是整数时也一样。
-- `chart.NewSymLog(lo, hi)` 包含负值和零，使用 `sign(v) * log1p(abs(v)/c)`。`Constant` 是 c，为零时是 1：即零附近近似线性区域的范围；数值更大时则按对数处理。`Ticks(n)` 和 `Nice(n)` 在原始单位中选取圆整的数，非线性地放置。如果计数不是正数，或取整请求无法得到稳定的定义域，就保持原始定义域不变。
+- `chart.NewLinear(lo, hi)` 映射数字。`Nice(n)` 向外扩展定义域，使边界落在约 n 个规整刻度上，`Ticks(n)` 返回这些刻度：间隔为 1、2 或 5 乘以 10 的幂，和 d3、Swift Charts 的取法一样；小数位数按步长需要而定，或者由 `Format` 标注。`At(v)` 返回某个值的位置，`Span(a, b)` 返回两个值之间的区间，例如柱子从 0 到它的值；`Invert(f)` 返回某个比例处的值，例如指针下方的值。`Clamp` 把定义域之外的值限制在两端；`chart.Extent(values...)` 返回最小值和最大值。
+- `chart.NewLog(lo, hi)` 让相等的比值有相等的距离：1、10 和 100 等距。两端必须同时为正或同时为负；反向的定义域也可以。`Base` 默认为 10（2 和 `math.E` 也可以）；它改变刻度和 `Nice()`，不改变位置。`Nice()` 会扩展到基数的整数次幂。`Ticks(n)` 只是密度提示：基数取整数、定义域又较短时，会包含次刻度，它们太拥挤时则省略标签。设置 `Format` 时标注每个刻度。定义域上下限相同时，只在该值处生成一个刻度；基数不是整数时也如此。
+- `chart.NewSymLog(lo, hi)` 包含负值和零，使用 `sign(v) * log1p(abs(v)/c)`。`Constant` 是 c，为零时是 1：即零附近近似线性区域的范围；数值更大时则按对数处理。`Ticks(n)` 和 `Nice(n)` 按数据的原始单位选取规整的刻度值，再按非线性关系定位。如果计数不是正数，或取整请求无法得到稳定的定义域，就保持原始定义域不变。
 - `chart.NewBand(labels...)` 为每个标签分配一个带（band），就像柱状图的柱子：`Band(i)` 是第 i 个的区间，`At(i)` 是它的中间，`Width()` 是它们的宽度，`Index(f)` 是某个比例处的带。`Padding(inner, outer)` 在带之间和带周围留出空间，单位是带步长的比例。它的 `Ticks()` 是标签，位于各自带的中间。
-- `chart.NewTime(from, to)` 映射时间。它的刻度落在时间所在时区的圆整时刻上，按时间跨度选取，和 d3 一样：秒、一刻钟、午夜、周日、每月或每年的第一天；每个刻度标注的是相对上一个更粗单位的圆整时刻发生变化的部分：“2026”、“Mar”、“Mar 5”、“14:00”、“:30”。
+- `chart.NewTime(from, to)` 映射时间。它按时间跨度在对应时区内选取规整的刻度，和 d3 一样：秒、一刻钟、午夜、周日、每月或每年的第一天；每个刻度的标签只显示相对上一个较大时间单位边界发生变化的部分：“2026”、“Mar”、“Mar 5”、“14:00”、“:30”。
 
-刻度是 `chart.Tick` 值，`At` 是一个比例，`Value` 和 `Label`：对于标度不标记的坐标轴，可以自己创建刻度。
+刻度由 `chart.Tick` 值表示，其中 `At` 是位置比例，`Value` 和 `Label` 分别是数值和标签；标度没有提供所需刻度时，可以自行创建。
 
 ### 宽范围与带符号数据
 
@@ -71,8 +71,8 @@ chart.Plot(c, chart.Axes{Left: y.Ticks(4), Bottom: x.Ticks(), Label: label}, bui
 
 标记是绘图区中的元素，按绘图区的百分比定位：像任何元素一样设置样式、为辅助技术设置名称、添加工具提示，并处理它们的点击。
 
-- `chart.Rect(c, x, y)` 覆盖沿 x 的一段并向上延伸到 y：一根柱、一个范围的带、热图的一个单元格。
-- `chart.Point(c, x, y, w, h)` 是宽 w、高 h DIP，以某个点为中心：散点图的一个点，选择所在的那个点。
+- `chart.Rect(c, x, y)` 覆盖 x 和 y 方向上各自指定的区间：可用于柱形、范围带或热图单元格。
+- `chart.Point(c, x, y, w, h)` 以指定点为中心，宽 w、高 h DIP：可用于散点图中的点或选中点。
 - `chart.RuleX(c, x, width)` 是横跨绘图区的竖线，`chart.RuleY(c, y, height)` 是横线：一个阈值、一个平均值。
 - `chart.Anchor(c, x, y, h, v, build)` 把 `build` 添加的内容放在某个点上，尺寸不限：`ui.Center` 将它居中于该点，`ui.Start` 把它的左边缘（h）或上边缘（v）放在那里，`ui.End` 把它的右边缘或下边缘放在那里，因此 `ui.Center, ui.End` 会把标签显示在柱子上方。
 
@@ -97,7 +97,7 @@ chart.Rect(c, x.Band(i), y.Span(0, v)).Background(t.Accent).
 
 ## 线与区域
 
-`chart.Line(r, xs, ys, curve)` 返回穿过各点的折线路径，`chart.Area(r, xs, lo, hi, curve)` 返回两条线之间区域的路径，供绘图区的 `Draw` 函数描边和填充。`xs` 和 `ys` 是比例，与标度返回的一致；`lo` 为 nil 时表示绘图区底部，遇到缺失值时，NaN 会在该处断开线或区域。曲线连接各点：`chart.CurveLinear` 用直线，`chart.CurveMonotone` 平滑连接，且不会越过所连接点的值，`chart.CurveStepAfter`、`CurveStepBefore` 和 `CurveStep` 分步连接。
+`chart.Line(r, xs, ys, curve)` 返回穿过各点的线条路径，`chart.Area(r, xs, lo, hi, curve)` 返回两条线之间区域的路径，供绘图区的 `Draw` 函数描边和填充。`xs` 和 `ys` 是比例，与标度返回的一致；`lo` 为 nil 时表示绘图区底部，NaN 表示缺失值，会在该处断开线或区域。各点的连接方式由曲线类型决定：`chart.CurveLinear` 用直线，`chart.CurveMonotone` 平滑连接且不超出相邻点的数值范围，`chart.CurveStepAfter`、`CurveStepBefore` 和 `CurveStep` 则用阶梯线连接。
 
 ```go
 area.Draw(func(p *ui.Painter, r ui.Rect) {
@@ -108,7 +108,7 @@ area.Draw(func(p *ui.Painter, r ui.Rect) {
 
 ### 实时数据
 
-一条包含数千个样本、每帧随新样本到达而重绘的线，实际需要的点比样本少：`chart.MinMax` 会保留每个像素列中最低和最高的样本（按样本顺序），以及每一段的端点，这样线条看起来不变，狭窄的尖峰也仍能显示。它的 `xs` 是从不递减的比例；NaN 仍会断开线。它写入你传入的切片，`chart.LineInto` 写入你传入的路径，因此视图保留它们后，预热完成即可不再分配内存地绘制。样本本身则要保留，供选择和读数使用。
+包含数千个样本、随新样本逐帧重绘的折线，通常无需绘制全部采样点：`chart.MinMax` 会保留每个像素列中最低和最高的样本（按样本顺序），以及每一段的端点，这样线条看起来不变，狭窄的尖峰也仍能显示。它的 `xs` 是从不递减的比例；NaN 仍会断开线。它写入你传入的切片，`chart.LineInto` 写入你传入的路径，因此视图保留它们后，预热完成即可不再分配内存地绘制。样本本身则要保留，供选择和读数使用。
 
 `Painter.StrokePolyline` 按 DIP 描边各个点，使用圆角连接和端点，效果和 `StrokePath` 一样，但对于每帧都变化的线更快：在 GPU 上，它把每一段画成圆角矩形，而不是在 CPU 上把整条线栅格化为遮罩。在段与段重叠的地方，抗锯齿边缘可能比 `StrokePath` 的略粗。半透明的线以及没有 GPU 时的绘制则走 `StrokePath` 的路径，因为在那里重叠的段会显得更深；只有一段的半透明线没有可重叠的部分，在 GPU 上依然很快。
 
@@ -124,7 +124,7 @@ area.Draw(func(p *ui.Painter, r ui.Rect) {
 })
 ```
 
-用 `Context.AnimationFrame` 请求帧，并处理自上一帧以来到达的样本，而不是每个样本都使视图失效。`examples/chart-streaming` 滚动显示三条各含 15,000 个样本的波形，每条每秒 1,000 个样本；`-mode path` 和 `-mode raw` 用 `StrokePath` 绘制，以便比较。
+用 `Context.AnimationFrame` 请求帧，并集中处理自上一帧以来到达的样本，不要每收到一个样本就请求重绘。`examples/chart-streaming` 滚动显示三条各含 15,000 个样本的波形，每条每秒接收 1,000 个样本；`-mode path` 和 `-mode raw` 用 `StrokePath` 绘制，以便比较。
 
 ## 堆叠
 

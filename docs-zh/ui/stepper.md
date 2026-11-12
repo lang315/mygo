@@ -2,7 +2,7 @@
 
 <!-- preview stepper 100 -->
 
-`ui.Stepper` 创建一对箭头，用于在两个边界之间按步长改变 `*float64`，如同字段旁的 AppKit 步进器：单击箭头会向上或向下步进，步进器持有键盘焦点时 Up 和 Down 也一样，按住箭头会持续步进，按得越久速度越快。`Changed` 报告新值。
+`ui.Stepper` 创建一对箭头，在上下限之间按步长改变 `*float64`，如同文本框旁的 AppKit 步进器：单击箭头可递增或递减，步进器获得键盘焦点时按 Up 和 Down 也一样；按住箭头会持续调整，按得越久速度越快。`Changed` 报告新值。
 
 ```go
 ui.Row(c).Gap(6).Children(func() {

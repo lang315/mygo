@@ -21,7 +21,7 @@ if ui.Table(c, &app.files, cols, len(files), func(row, col int) {
 
 ## 选择行
 
-表格使用和列表相同的 `ListState`（也可以传 `nil`），并据此获得键盘焦点：设置 `Selected` 时，单击或按键选择一行；设置 `Selection` 时可以选择多行，`Submitted` 报告双击或 Enter；`Key`、`Label`、`Reorder`、`DragRows` 等的用法和在列表中相同。行的 `Header` 名称会横跨所有列，`cell` 会把它构建为第 0 列，它会在所属分区的行从下方滚过时留在顶部。
+表格接受与列表相同的 `ListState`（也可以传 `nil`），并可获得键盘焦点：设置 `Selected` 后，单击或按键可选择一行；设置 `Selection` 后可选择多行，`Submitted` 报告双击或 Enter；`Key`、`Label`、`Reorder`、`DragRows` 等的用法与列表相同。由 `Header` 指定的标题行横跨所有列，交给 `cell` 按第 0 列构建；所属分区的各行滚动时，标题行固定在顶部。
 
 被选中和悬停的行从一边到另一边都是方角，就像 Finder 的列表视图；`RoundRows` 会按主题的 `Radius` 给它们加圆角，和列表的行一样，适合其他列表已经使用圆角的应用。
 
@@ -35,7 +35,7 @@ if ui.Table(c, &app.files, cols, len(files), func(row, col int) {
 - **右键单击。** 在块外的单元格上右键，会先选中该单元格再打开上下文菜单；在块内右键，块保持不变。`MenuKeepsSelection` 会让块保持原样。
 - **行标题。** `RowHeader` 列就像电子表格的行号，用于选择整行：单击或拖动它的单元格会选中整行及所有列，单击它的表头则选择所有行。它不参与排序。
 
-块中的单元格显示效果和选中的行一样，使用强调色及其文字颜色；整行被选中时，行标题也是如此。表格有焦点时，按键移出的那一行中，位于 `Cells.Cursor` 的单元格会带边框。单元格自身持有焦点时（例如里面有编辑器），则按它本来的样子显示。被选中的行不会整体着色。`SelectedColumns` 按显示顺序返回块中列的 ID，`SelectColumns` 用于应用自己的命令，选择所有行以及一段列。`CellSelected(row, col)` 告诉单元格构建器它的单元格是否被选中，以便使用适合强调色背景的文字颜色。如果单元格用 `RowClicked` 读取所在行的单击，或用 `RowDoubleClicked` 读取双击，就会把点击让给行，块也随之跟随。
+选区内的单元格与选中行一样，使用强调色背景及配套的文字颜色；选中整行时，行标题也如此显示。表格有焦点时，键盘导航当前所在行中 `Cells.Cursor` 对应的单元格会显示边框。单元格内部有焦点时（例如正在编辑），则保持原有外观。选中的行不会整行着色。`SelectedColumns` 按显示顺序返回选区的列 ID；应用可用 `SelectColumns` 实现选择所有行和一段列的命令。`CellSelected(row, col)` 告诉单元格构建器当前单元格是否选中，以便自定义文字颜色适应强调色背景。用 `RowClicked` 读取所在行的单击，或用 `RowDoubleClicked` 读取双击，不会消费点击事件，行仍会处理该事件并更新选区。
 
 `CellsStyle` 用自定义颜色而非强调色绘制块，就像电子表格的两级配色和条纹：`Cell` 填充块内的单元格，`CellText` 为其中文本着色，`Row` 填充选中行的其余部分，`Stripe` 填充隔行。颜色为零时不绘制。游标的边框在块内使用 `CellText`，在块外使用 `Cell`；这些颜色为零时，则使用强调色及其文字颜色。
 
@@ -96,7 +96,7 @@ sorted := sortFiles(app.files, app.sort) // by app.sort.Column, Descending or no
 app.files.Key = func(i int) any { return sorted[i].ID }
 ```
 
-要按多列排序，设置 `ListState.SortBy`。单击仍然只按一列排序，如果该列原本就是排序依据，则反转方向；Cmd+单击（Linux 和 Windows 上为 Ctrl+单击）或 Shift+单击（如 Web 数据网格中那样）会把该列按升序添加到已排序列之后；再次操作会改为降序，第三次则把它移除。标题会显示排序方向；有多列时，还会显示它们的次序。`SortBy` 变化时会得到新切片，因此应用保留的旧切片保持不变。同时设置 `Sort` 时，表格会让它始终对应 `SortBy` 的第一项；不按任何列排序时，它的值是零 `SortOrder`，这样原先读取列排序的代码仍可继续读取 `Sort`：
+要按多列排序，设置 `ListState.SortBy`。普通单击仍只按一列排序；如果该列原本就是首要排序列，则反转方向。Cmd+单击（Linux 和 Windows 上为 Ctrl+单击）或 Shift+单击会像 Web 数据网格一样，将该列按升序追加为次要排序依据；再次操作改为降序，第三次移除该列。标题显示排序方向；按多列排序时，还会显示优先次序。`SortBy` 每次变化都会创建新切片，不会改变应用保留的旧切片。同时设置 `Sort` 时，它始终对应 `SortBy` 的第一项；没有排序列时则为零值 `SortOrder`，因此原先读取首要排序列的代码仍可使用 `Sort`：
 
 ```go
 app.files.SortBy = &app.sortBy // []ui.SortOrder, the first first
@@ -120,7 +120,7 @@ app.files.HeaderMenu = func(m *ui.Menu, col int) {
 
 ## 表头单元格
 
-`ListState.HeaderCell` 在表格构建每列的表头单元格时被调用，参数是该单元格和列的索引，与 `HeaderMenu` 相同：它构建的内容会放进标题和排序箭头之后的单元格，它可以给该单元格设置自己的工具提示或卡片：
+表格构建每列的表头单元格时，会调用 `ListState.HeaderCell`，传入该单元格和列索引，索引的含义与 `HeaderMenu` 相同。回调构建的内容放在该单元格的标题和排序箭头之后，也可为单元格设置自定义工具提示或卡片：
 
 ```go
 app.files.HeaderCell = func(cell ui.Element, col int) {

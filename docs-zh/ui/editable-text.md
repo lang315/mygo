@@ -2,7 +2,7 @@
 
 <!-- preview editable-text 120 -->
 
-`ui.EditableText` 把一个 `*string` 显示为就地编辑的文本，如同 Finder 中文件的名字：双击它，或它持有焦点时按 Enter，会显示一个编辑它的文本框，并选中扩展名之前的文本。Enter 会保留输入的内容，移开焦点也一样，Escape 则恢复原值；`Changed` 报告新值。
+`ui.EditableText` 把一个 `*string` 显示为可就地编辑的文本，如同 Finder 中的文件名：双击文本，或在文本具有焦点时按 Enter，会显示文本框，并选中扩展名之前的文本。按 Enter 或移开焦点会保留输入的内容，Escape 则恢复原值；`Changed` 报告新值。
 
 ```go
 if ui.EditableText(c, &app.title).Changed() {
@@ -12,7 +12,7 @@ if ui.EditableText(c, &app.title).Changed() {
 
 ## 在列表和表格中
 
-在[列表](list.md)或[表格](table.md)的行中，由列表持有焦点，文本不取得焦点：macOS 上的 Return 和其他平台上的 F2 会编辑选中行的文本，而双击行则为 `Submitted`；单击已选中行上的文本会编辑它，此时第二次单击已不再构成双击。
+在[列表](list.md)或[表格](table.md)的行中，焦点保留在列表上，文本不单独获取焦点：macOS 上按 Return，其他平台上按 F2，会编辑选中行的文本；双击行则触发 `Submitted`。选中一行后，等到双击判定间隔结束，再单击该行的文本即可编辑。
 
 ```go
 ui.Table(c, &app.files, cols, len(files), func(row, col int) {

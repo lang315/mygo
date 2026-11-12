@@ -2,7 +2,7 @@
 
 <!-- preview switch 130 -->
 
-`ui.Switch` 创建一个开关，用于打开和关闭 `*bool`，适合立即生效的设置：单击会切换它，持有键盘焦点时按 Space 也一样，滑块随之滑动。`Changed` 报告单击。
+`ui.Switch` 创建一个开关，用于切换 `*bool` 的值，适合立即生效的设置：单击会切换状态，获得键盘焦点后按 Space 也一样，滑块随之滑动。`Changed` 报告这次操作。
 
 ```go
 ui.Row(c).Gap(12).Children(func() {

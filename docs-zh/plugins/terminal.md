@@ -37,7 +37,7 @@ func main() {
 
 `terminal.View` 与其他元素一样：用 `Fill` 或 `Grow` 设置它的大小，也可以把它放在其他元素旁边，如同编辑器的窗格。它的大小以字体的单元格为单位决定终端的大小；点击会让它获得键盘焦点。一个终端一次只在一个视图中显示。程序会在视图第一次显示它时启动，以便按视图的大小绘制第一屏；如果没有视图显示它，则在 `New` 之后半秒以 80×24 启动。
 
-终端做终端应用会做的事：
+终端支持常见终端功能：
 
 - 颜色（16、256 和 24 位）、粗体、斜体、淡色、反色、删除线、上划线和下划线（单线、双线、波浪线、点线、虚线，各自有颜色）；
 - Unicode：宽字符、emoji 和字形簇占用其宽度对应的单元格，如同在 Ghostty 中，系统字体会补上终端字体缺少的内容；
@@ -97,7 +97,7 @@ term, err := terminal.New(terminal.Options{
 - `Keybinds` 在默认值之上把按键绑定到动作（见[按键](#按键)）。
 - `RightClick` 是次要点击所做的事，如同 Ghostty 的 `right-click-action`：默认是上下文菜单，`RightClickPaste`、`RightClickCopy`、`RightClickCopyOrPaste`（复制选择，没有选择时粘贴，如同 Windows Terminal）或 `RightClickIgnore`。复制后会取消选择。接收鼠标的程序仍会收到点击，除非按住 Shift。
 - `NoClipboardWrite` 阻止程序写入剪贴板（OSC 52 和 OSC 5522），如同 Ghostty 的 `clipboard-write = deny`；读取由 `ClipboardRead` 管理，而粘贴时向程序提供的内容仍会得到回应。
-- `ClipboardRead` 是程序读取剪贴板（OSC 52 的“?”，以及 Kitty 剪贴板协议的 OSC 5522）时得到的结果：默认是 `ClipboardDeny`，如同 Ghostty 的 `clipboard-read = deny`（Ghostty 默认询问，但询问的终端需要一个视图），或 `ClipboardAllow` 用剪贴板的内容回答，或 `ClipboardAsk` 先询问应用。剪贴板在视图构建其下一帧时于主线程上读取并写入答案，那也是终端自己的提示符所在的帧：没有视图显示的终端的读取会等待，已关闭终端的读取永远不会被回答。
+- `ClipboardRead` 决定如何处理程序的剪贴板读取请求（OSC 52 的“?”，以及 Kitty 剪贴板协议的 OSC 5522）：默认为 `ClipboardDeny`，对应 Ghostty 的 `clipboard-read = deny`（Ghostty 默认询问，但询问需要有视图显示终端）；`ClipboardAllow` 用剪贴板内容响应，`ClipboardAsk` 则先询问应用。视图构建下一帧时，会在主线程上读取剪贴板并写入响应，终端自带的提示框也在这一帧显示：没有视图显示的终端会等待，已关闭的终端则不会再响应读取请求。
 - `OnClipboardRequest` 在程序读取剪贴板之前询问应用，当 `ClipboardRead` 为 `ClipboardAsk` 时。它在主线程上运行，参数是一个 `ClipboardRequest`：程序请求的 MIME 类型（`Mimes`）、它请求的是否为可用的类型（`List`，即 Kitty 协议的目标列表，这种请求无需询问就会得到回答）、它想要的选择（`Primary`）以及剪贴板中的文本内容（`Text`），用于向用户提问。`Allow` 和 `Deny` 用来回答请求，可以在钩子中调用，也可以稍后从任何 goroutine 调用，先调用的那个生效；钩子没有回答的请求会继续等待。没有钩子时，终端会在视图中绘制自己的提示框，一次处理一个读取，带一行程序将读取内容的预览，以及 Allow 和 Deny 按钮（Enter 允许，Escape 拒绝）：
 
   ```go
@@ -124,10 +124,10 @@ term, err := terminal.New(terminal.Options{
   	}
   },
   ```
-- `OnClear` 在主线程上、终端清除之前看到用户的清除操作：`ClearScreen`，用于 `ActionClearScreen` 的按键和上下文菜单的清除。它报告自己是否接管了这次清除，如果接管，这里就什么也不清除。显示服务器终端的窗口会接管它，由服务器的终端来清除（见[在别处显示服务器的终端](#在别处显示服务器的终端)）。全屏程序的屏幕上不会询问它。
+- `OnClear` 在终端执行用户的清除操作前于主线程上调用：绑定到 `ActionClearScreen` 的按键和上下文菜单中的清除操作都会传入 `ClearScreen`。返回值表示是否接管操作；若接管，本地终端便不执行清除。显示服务器终端的窗口可接管操作，交由服务器端清除（见[在别处显示服务器的终端](#在别处显示服务器的终端)）。在全屏程序的屏幕上不会调用此回调。
 - `OnTitle`、`OnExit`、`OnBell` 和 `OnNotify` 在程序设置标题、结束、响铃或请求桌面通知时，于终端的 goroutine 上运行。它们可能在显示终端的窗口存在之前运行，而窗口由 `NewWindow` 在 `New` 之后创建：使用窗口的回调会等待它，如同终端示例所做（在 `win` 之前 `<-ready`，`NewWindow` 设置 `win` 后 `close(ready)`）。`Done` 在程序退出后关闭，`ExitCode` 返回其代码（无法启动的程序为 -1）；终端随后显示“[Process exited]”。
 - `OpenLink` 在主线程上接收 Command+click 打开的链接；有了它，也能接收作为文本打印的文件路径（`/abs/path`、`~/notes.md`、`./a.go`、`src/app.go:12:3`、`main.go:250`、`app.ts(12,3)`、`app.go#L12C3`、带空格且用引号括起的路径、中文行文中两侧没有空格的路径），无论文件中的位置原本怎样打印，都会以 `path:line:col` 给出，并去掉引号；相对路径相对于程序的 `Dir`。它报告是否打开了链接；它留下的超链接或 URL 会用系统打开，如同没有 `OpenLink` 时每个链接都会那样。应用可以用这种方式在自己的预览中打开远程 shell 的路径，而不是让系统在本地打开它们。
-- `OnPaste` 在主线程上看到一次剪贴板粘贴（由按键、粘贴菜单项或次要点击触发），带上剪贴板持有的每种格式作为 `transfer.Data`，并通过返回 true 接管它：什么也不粘贴。驱动远程 shell 的应用以这种方式上传剪贴板的文件（`d.Files()`）或图像（`d.Read(transfer.PNG)`），并改用 `Paste` 粘贴它们的远程路径：
+- `OnPaste` 在按键、粘贴菜单项或次要点击触发剪贴板粘贴时于主线程上调用，参数为包含剪贴板所有格式的 `transfer.Data`。返回 true 表示接管操作，终端不再自行粘贴。驱动远程 shell 的应用可借此上传剪贴板中的文件（`d.Files()`）或图像（`d.Read(transfer.PNG)`），改用 `Paste` 粘贴远程路径：
 
   ```go
   OnPaste: func(d transfer.Data) bool {
@@ -141,7 +141,7 @@ term, err := terminal.New(terminal.Options{
   ```
 
 - `OnPasteStatus` 在终端的 goroutine 上，用 `PasteProgress` 告知向自行读取剪贴板的程序粘贴的进展：先是 `PasteOffered`，然后程序读取时是带 `Sent`/`Total` 字节的 `PasteSending`（写入它的字节，按协议发送的方式编码），然后是 `PasteSent`；如果提供的内容写入 5 秒后程序仍未读取，则为 `PasteNotTaken`（它仍可能读取，直到下一次粘贴到来）；如果没有文本的粘贴（如只有图像）发往既不读取剪贴板也不读取括号粘贴的程序，则为 `PasteNoText`，这种情况下什么也不粘贴。应用可以用这种方式在慢速链路上显示大图像的进度，并说明为什么什么也没粘贴。
-- `OnKey` 在主线程上、按键绑定之前、终端发送按键之前看到按键，并通过返回 true 接管它：按键及其输入的文本都不会到达程序。与视图周围的 `Shortcut`（它随下一帧运行）不同，它会与之后输入的按键保持原有的先后顺序，它用 `Send` 发送的内容也是如此。只输入文本的按键可能只以文本形式到来，如在 Linux 上，`OnKey` 看不到这些。
+- `OnKey` 在处理按键绑定及向程序发送按键之前于主线程上调用。返回 true 表示接管操作，按键及其输入的文本都不会发送给程序。与视图周围的 `Shortcut`（下一帧才运行）不同，该回调及其中通过 `Send` 发送的内容会保持与后续按键的先后顺序。只输入文本的按键可能仅以文本形式传入（例如在 Linux 上），不会触发 `OnKey`。
 - `OnScroll` 在主线程上、终端滚动回滚缓冲区之前，看到滚轮以整行滚动视图（向上为负），并通过返回 true 接管它：回滚缓冲区保持不动。程序接收滚轮时不会询问它：接收鼠标时滚轮作为鼠标报告（除非按住 Shift），或在全屏程序的屏幕上作为方向键（备用滚动，`\x1b[?1007l` 会关闭它）。历史记录在另一端的 `Conn`（如只流式传输屏幕的远程多路复用器）可以用这种方式把滚轮发送到那里。鼠标滚轮的一格是三行，或在 Windows 上按“每次滚动行数”设置要求的行数（除非更改，否则为 3），与 Windows Terminal 相同；触控板按其移动的距离滚动。
 - `OnZoom` 在主线程上看到缩放：滚轮加 Control（macOS 上为 Command），它会在 `OnScroll` 和接收鼠标的程序看到之前先缩放；或绑定到字体大小动作的按键。其 `Zoom` 包含 `Steps`（向上滚动为正；滚轮事件是一格，触控板的移动会累加成格），或为 `Reset`。它通过返回 true 接管缩放，如同一次性设置所有文本大小的应用那样；没有它，或对于它留下的缩放，终端会自己更改字体大小，每步一个 DIP，最小到 1，重置时回到 `Font.Size`。macOS 的捏合手势（原生 UI 不报告）不会缩放。
 
@@ -151,8 +151,8 @@ term, err := terminal.New(terminal.Options{
 
 | 动作 | macOS | Linux 和 Windows | Windows 另有 |
 | --- | --- | --- | --- |
-| `ActionCopy` | Cmd+C | Ctrl+Shift+C、Ctrl+Insert | Ctrl+C（可执行） |
-| `ActionPaste` | Cmd+V | Ctrl+Shift+V、Shift+Insert | Ctrl+V（可执行） |
+| `ActionCopy` | Cmd+C | Ctrl+Shift+C、Ctrl+Insert | Ctrl+C（仅操作有效时拦截） |
+| `ActionPaste` | Cmd+V | Ctrl+Shift+V、Shift+Insert | Ctrl+V（仅操作有效时拦截） |
 | `ActionSelectAll` | Cmd+A | Ctrl+Shift+A | |
 | `ActionClearScreen` | Cmd+K | | Ctrl+Shift+K |
 | `ActionIncreaseFontSize` | Cmd+=、Cmd++ | Ctrl+=、Ctrl++ | |
@@ -161,7 +161,7 @@ term, err := terminal.New(terminal.Options{
 | `ActionScrollPageUp`, `…Down` | Shift+ 或 Cmd+Page Up/Down | Shift+Page Up/Down | Ctrl+Shift+Page Up/Down |
 | `ActionScrollToTop`, `…Bottom` | Cmd+Home/End | Shift+Home/End（Linux） | Ctrl+Shift+Home/End |
 
-清除屏幕和滚动的按键也是可执行的，这样全屏程序（如编辑器）能得到它们。`Options.Keybinds` 在默认值之上绑定更多：一个绑定会替换同一按键和修饰键的默认绑定，绑定到 `ActionNone` 会解除默认绑定，使程序得到该按键；`NoDefaultKeybinds` 从没有任何默认绑定开始，如同 Ghostty 的 `keybind = clear`：
+清除屏幕和滚动的按键也仅在操作有效时拦截，以便全屏程序（如编辑器）接收这些按键。`Options.Keybinds` 在默认绑定上添加或覆盖：同一按键和修饰键的新绑定会替换默认绑定，绑定到 `ActionNone` 则解除绑定，让程序接收该按键；`NoDefaultKeybinds` 禁用所有默认绑定，对应 Ghostty 的 `keybind = clear`：
 
 ```go
 term, err := terminal.New(terminal.Options{Keybinds: []terminal.Keybind{
@@ -173,9 +173,9 @@ term, err := terminal.New(terminal.Options{Keybinds: []terminal.Keybind{
 }})
 ```
 
-`Performable` 绑定，如同 Ghostty 的 `performable:` 前缀，只在其动作确实做某事时才接管按键：有选择时才复制，剪贴板有内容时才粘贴，只有在全屏程序的屏幕之外才清除屏幕和滚动；否则按键会继续传给程序，如同未绑定：没有选择时 Control+C 会中断。可执行的复制还会放开选择，使该键下一次按下时中断。`ActionClearScreen` 清除回滚缓冲区以及光标所在行上方的屏幕，光标所在行会随 shell 的提示符移到顶部，如同 Kitty 的 `clear_terminal to_cursor`，上下文菜单的清除也会这样做；`Terminal.ClearScreen` 从代码中做同样的事，`Terminal.ClearScrollback` 只清除回滚缓冲区。`ActionIgnore` 接管按键并什么也不做。
+`Performable` 绑定对应 Ghostty 的 `performable:` 前缀，仅在操作有效时拦截按键：有选区才复制，剪贴板有内容才粘贴，不在全屏程序的屏幕上才清除屏幕和滚动；否则按键会像未绑定一样传给程序，例如没有选区时 Control+C 会中断程序。这种复制绑定还会取消选择，使下次按键可以中断程序。`ActionClearScreen` 清除回滚缓冲区及光标所在行上方的屏幕，将光标所在行连同 shell 提示符移到顶部，对应 Kitty 的 `clear_terminal to_cursor`；上下文菜单的清除操作及代码中的 `Terminal.ClearScreen` 效果相同，`Terminal.ClearScrollback` 则只清除回滚缓冲区。`ActionIgnore` 拦截按键，不执行任何操作。
 
-按键首先去应用的快捷键，然后去 `OnKey`，然后去按键绑定，然后去程序。上下文菜单显示绑定到其各项的按键。
+按键依次由应用快捷键、`OnKey`、按键绑定和程序处理。上下文菜单会显示各菜单项绑定的按键。
 
 ## 字体
 
@@ -265,8 +265,8 @@ term, err := terminal.New(terminal.Options{
 - `Feed` 显示字节，如同程序写入了它们，包括文本和转义序列。
 - `Title`、`Dir`（shell 报告的目录）、`Size`（以单元格计）和 `Text`（屏幕及其回滚缓冲区）读取终端。
 - `HoveredLink` 返回视图中按住 Command（其他地方为 Control）悬停的链接，如同 `OpenLink` 接收的那样，它是否为文件路径，以及其单元格相对于视图的矩形：在 `View` 之后读取它，以在视图上方显示链接的预览。
-- `SetFont` 和 `SetTheme` 更改字体和颜色；`SetFont` 还设置缩放重置到的大小，并放弃当前缩放。
-- `Resize` 设置没有视图显示的终端的大小，`Snapshot` 把终端显示的内容作为转义序列返回：其回滚缓冲区和屏幕及其样式、光标以及程序设置的模式。喂给相同大小的新终端，它会显示相同的内容，如同服务器为连接它的窗口保留会话屏幕时那样。
+- `SetFont` 和 `SetTheme` 更改字体和颜色；`SetFont` 还会设置重置缩放时恢复的大小，并清除当前缩放。
+- `Resize` 设置没有视图显示的终端的大小，`Snapshot` 以转义序列返回终端的显示内容：回滚缓冲区、屏幕及其样式、光标，以及程序设置的模式。将这些序列输入相同大小的新终端，即可恢复相同画面，例如服务器为连接到会话的窗口保留屏幕状态。
 - `Close` 挂断程序，它会收到 SIGHUP，并释放终端。
 
 ## 没有程序
@@ -281,7 +281,7 @@ term, err := terminal.New(terminal.Options{Conn: session})
 
 ## 在别处显示服务器的终端
 
-让会话保持运行的服务器（如多路复用器）会保留每个会话的终端，程序的输出会写入其中，而窗口从另一个进程显示它。服务器终端的 `Mirror` 把它的显示内容分成帧：`Frame` 返回 VT 序列，把显示此前帧的终端更新为服务器当前显示的内容。窗口的终端从它的 `Conn` 读取这些序列，如同程序写入的一样，并逐单元格显示服务器的屏幕和回滚缓冲区，包括光标、改变终端所发送内容的模式（光标键、键盘协议、鼠标、括号粘贴）、程序设置的颜色（OSC 4、10、11、12）以及 shell 提示符的行（OSC 133）；同时它仍像任何终端一样选择、复制、打开链接、组合文本，并在 Option+click 时移动 shell 的光标。它从不自己排版程序的输出，所以不会变成显示别的内容：而如果把程序输出从服务器屏幕的快照喂给窗口，就可能出现这种情况，正如通过相对当前位置移动光标来重绘的程序（如代理的界面）所示。
+让会话保持运行的服务器（如多路复用器）会保留每个会话的终端，程序的输出会写入其中，而窗口从另一个进程显示它。服务器终端的 `Mirror` 把它的显示内容分成帧：`Frame` 返回 VT 序列，把显示此前帧的终端更新为服务器当前显示的内容。窗口的终端从它的 `Conn` 读取这些序列，如同程序写入的一样，并逐单元格显示服务器的屏幕和回滚缓冲区，包括光标、改变终端所发送内容的模式（光标键、键盘协议、鼠标、括号粘贴）、程序设置的颜色（OSC 4、10、11、12）以及 shell 提示符的行（OSC 133）；同时它仍像任何终端一样选择、复制、打开链接、组合文本，并在 Option+click 时移动 shell 的光标。窗口端不再自行排版程序输出，因此画面不会与服务器端产生偏差。如果先恢复服务器屏幕快照，再继续输入程序输出，画面就可能出现偏差，尤其是通过相对移动光标来重绘的程序，例如智能体的界面。
 
 ```go
 // The server, one Mirror for each window, its first frame starting it over:
@@ -291,7 +291,7 @@ frame, due := m.Frame() // after output; due: a synchronized update holds it
 
 帧就地绘制各行，滚出屏幕的行按顺序穿过窗口的屏幕，使其回滚缓冲区成为服务器的回滚缓冲区；软换行保持为软换行。每个单元格以自己的样式绘制，所以空单元格在有色单元格之后仍为空。帧像视图一样读取终端，取用它对变化内容的记录：要镜像没有视图显示的终端（如服务器的终端）时，它有多少窗口就用多少个 Mirror。程序持有同步更新（模式 2026）时，最多一秒不会产生帧：`Frame` 随后会报告有一帧待生成。程序不改变光标形状时，窗口的光标采用自己的 `Cursor` 和 `NoBlink`；程序设置时则采用程序的。
 
-窗口的终端设置 `ResizeByConn`：它的视图只向 `Conn` 询问自己能够容纳的大小，屏幕则保持原大小，直到窗口在服务器流表明服务器已调整大小的位置调用 `Resize`，并且要发生在新尺寸的帧之前。
+窗口端的终端设置 `ResizeByConn` 后，视图只会通过 `Conn` 请求调整为自身可容纳的尺寸，屏幕仍保持原尺寸；窗口收到服务器流中的尺寸变更通知后，再调用 `Resize`，且必须在处理新尺寸的帧之前调用。
 
 ```go
 term, err := terminal.New(terminal.Options{Conn: stream, ResizeByConn: true})
@@ -321,7 +321,7 @@ term.ClearScreen()
 
 程序对剪贴板的写入（OSC 52）随帧一起传递，由窗口的终端按自己的策略写入。服务器的终端设置 `ClipboardRead: terminal.ClipboardForward` 时，程序的读取也会传递，由窗口的终端回答，并像它本来那样询问用户：服务器的终端什么也不回答。程序的其他查询由服务器自己回答，以它们所写入的终端的身份。
 
-`History` 以行的形式返回服务器的回滚缓冲区和直到光标处的屏幕，不含光标和模式，用于在程序结束后接管会话的终端，如在服务器重启之后：喂给它时，光标会留在它所显示内容的下方，使下一个程序在其下方而不是在其上开始。全屏程序的屏幕没有这些。
+`History` 以行的形式返回服务器的回滚缓冲区及屏幕上直到光标处的内容，不含光标和模式，供程序结束后接管会话的终端使用，例如服务器重启之后：将这些内容输入终端，光标会停在显示内容下方，让下一个程序从下方开始，而不覆盖已有内容。全屏程序的屏幕不返回这些历史内容。
 
 ## 库
 

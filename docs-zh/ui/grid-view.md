@@ -14,9 +14,9 @@ ui.GridView(c, &app.photos, len(photos), 140, 120, func(i int) {
 
 ## 网格状态
 
-`GridState` 保存网格的位置，并规定项的选择方式，如同 `ListState` 对行所做；也可以为 `nil`：
+`GridState` 保存网格的滚动位置并控制条目的选择方式，与列表行的 `ListState` 类似；也可以传入 `nil`：
 
-- `Selected` 让单击选中项，网格持有键盘焦点时，两个方向的方向键以及 Home、End 和 Enter 也可以（`Submitted`）。
+- `Selected` 允许单击选择条目；网格获得键盘焦点时，还可用方向键在行列间移动、用 Home 和 End 跳到首尾，并用 Enter 提交选择（`Submitted`）。
 - `Selection` 让用户选择多个项，以 `Key` 区分：Cmd 单击会添加或移除一项；Shift 单击和 Shift 加方向键会选择从最后选中项开始的一段；Cmd+A 选择全部。
 - `Label` 返回项的文本：输入它的首字母即可选中它，辅助技术把它读作项的名称。
 - `Reorder` 让用户把项拖到其他位置，如同列表的行：[拖放](drag-and-drop.md)。

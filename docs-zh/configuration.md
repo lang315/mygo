@@ -1,6 +1,6 @@
 # 配置
 
-`mygo.config.ts` 位于项目的根目录，描述应用以及 CLI 如何开发和构建它。它的默认导出就是配置，由项目依赖的 `mygo-cli` 包中的 `defineConfig` 提供类型，所以编辑器会补全每个字段，并显示它的文档：
+`mygo.config.ts` 位于项目根目录，描述应用及 CLI 的开发、构建方式。默认导出即为配置，项目依赖的 `mygo-cli` 包通过 `defineConfig` 提供类型，让编辑器能补全字段并显示相应文档：
 
 ```ts
 import { defineConfig } from "mygo-cli";
@@ -51,7 +51,7 @@ export default defineConfig({
 
 | 字段 | 默认值 | |
 |---|---|---|
-| `devUrl` | | `mygo dev` 让应用指向的开发服务器，一个 `http(s)` URL；遇到没有 scheme 的 URL（如 `/`）时，窗口加载它 |
+| `devUrl` | | `mygo dev` 使用的开发服务器地址，须为 `http(s)` URL；窗口使用不带 URL 协议名（scheme）的地址（如 `/`）时，从该服务器加载 |
 | `devCommand` | | `mygo dev` 运行期间在项目目录中运行，例如 Vite 开发服务器；`devUrl` 有响应后应用才启动 |
 | `buildCommand` | | 在 `mygo build` 编译应用之前构建前端 |
 | `frontendDist` | | 构建后的前端目录，`mygo build` 把它嵌入应用；没有 `devUrl` 时，`mygo dev` 从磁盘提供它 |
@@ -66,7 +66,7 @@ export default defineConfig({
 |---|---|
 | `resources` | 复制到每个平台的应用中的文件和目录，与 `resources` 目录的内容放在一起，以各自的基名为名；见[资源](distribution.md#资源)，以及[平台资源](distribution.md#平台资源)，了解某个平台的文件 |
 | `resourcesExclude` | `resources` 目录中不放进应用的文件：它们在该目录中路径的模式，如 `["**/*.psd", "design"]`，其中 `**` 匹配任意数量的目录；Go 源文件总是被排除。见[排除文件](distribution.md#排除文件) |
-| `urlSchemes` | 应用打开的 URL scheme，例如 `myapp://…` 的 `myapp`，它们会传给 `App.OnOpenURL`；见[深度链接](app.md#深度链接) |
+| `urlSchemes` | 应用打开的 URL 协议，例如 `myapp://…` 的 `myapp`，它们会传给 `App.OnOpenURL`；见[深度链接](app.md#深度链接) |
 | `fileAssociations` | 应用打开的文件类型，它们会传给 `App.OnOpenFile`；见[文件关联](app.md#文件关联) |
 
 每个文件关联有：
@@ -75,7 +75,7 @@ export default defineConfig({
 |---|---|
 | `ext` | 文件扩展名，不带点：`["md", "markdown"]` |
 | `name` | 文件是什么：`"Markdown Document"` |
-| `mimeType` | 它们的 MIME 类型，Linux 用它识别文件；应用会定义一个未注册的类型（`x-`），不指定时则为 `application/x-<app>-<ext>` |
+| `mimeType` | 文件的 MIME 类型，Linux 用它识别文件；应用会定义一个未注册的类型（`x-`），未指定时为 `application/x-<app>-<ext>` |
 | `role` | macOS 上的 `Editor`（默认）或 `Viewer` |
 
 ## i18n
@@ -106,7 +106,7 @@ export default defineConfig({
 
 | 字段 | 默认值 | |
 |---|---|---|
-| `icon` | | 作为资源目录（asset catalog）的图标：`Assets.car` 或 Icon Composer 的 `.icon`，放在 `icon` 的 `.icns` 旁边；或改用 `.icns` 替代它。见[图标](distribution.md#名称图标与版本) |
+| `icon` | | 以资源目录（asset catalog）、`Assets.car` 或 Icon Composer 的 `.icon` 提供图标，放在 `icon` 指定的 `.icns` 旁边；也可用另一个 `.icns` 替代原图标。见[图标](distribution.md#名称图标与版本) |
 | `minimumSystemVersion` | `12.0` | 应用支持的最旧 macOS 版本 |
 | `signingIdentity` | `-`，临时签名 | 签署应用及其磁盘映像的身份，例如 `Developer ID Application: Jane Doe (TEAMID)` |
 | `entitlements` | | 用于签署应用的权限（entitlements）属性列表 |
@@ -147,7 +147,7 @@ export default defineConfig({
 
 ## 计算出的配置
 
-配置就是代码，所以它可以计算字段：从 package.json 读取版本，或从 CI 的环境读取签名身份。默认导出也可以是一个函数，可以是异步的，参数是当前运行的命令（`"dev"`、`"build"`、`"generate"` 或 `"init"`）：
+配置本身就是代码，可以计算字段值，例如从 package.json 读取版本，或从 CI 环境中读取签名身份。默认导出也可以是同步或异步函数，参数为当前运行的命令（`"dev"`、`"build"`、`"generate"` 或 `"init"`）：
 
 ```ts
 import { defineConfig } from "mygo-cli";

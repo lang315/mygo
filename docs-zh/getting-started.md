@@ -166,13 +166,13 @@ bun run build -- -platform darwin/universal,windows/amd64,linux/amd64
 go tool mygo build -platform darwin/universal,windows/amd64,linux/amd64
 ```
 
-应用在构建它的机器上就能运行，但要交付给用户，还需要签名：见[构建与分发](distribution.md)。
+生成的应用可以直接运行，但交付给用户前应进行签名：见[构建与分发](distribution.md)。
 
 ## 下一步
 
-- [窗口](windows.md)和[应用](app.md)，用来打造你的应用。
+- [窗口](windows.md)和[应用](app.md)，了解应用的窗口与生命周期。
 - [原生 UI](ui/README.md)，用 Go 构建界面；或[前端](frontend.md)，用于网页。
 - [菜单与托盘](menus.md)和[桌面 API](native.md)。
 - 仓库中的示例：
   - 有网页的：`examples/hello`（最小的应用）、`examples/todo`（带类型的服务和事件、持久化、对话框、菜单、多个窗口）、`examples/frameless`（自定义标题栏）和 `examples/native`（菜单、托盘图标、对话框、通知、全局快捷键、剪贴板和深色模式）；
-  - 原生 UI 的：`examples/clipboard`（复制和拖动文本、HTML、惰性 JSON 和文件列表）、`examples/counter-native`（一个计数器，带视图测试）、`examples/vibrancy`（内嵌标题栏下方的半透明侧边栏，材质可在其中选择）、`examples/effort-slider`（重绘一个 Web 演示的动画滑块：字母模糊淡入、像素迸发、卡片震动）、`examples/confetti`（canvas-confetti 的演示，每一片都以纯绘制的姿态飞舞）、`examples/wind`（Claude 应用 Code 标签页背后的字形纹理：字符被一阵风点亮，点击泛起涟漪，由两个用 Go 编写的着色器绘制）、`examples/blackhole`（一个黑洞，着色器追踪它的光穿过引力：透镜化的吸积盘、多普勒增亮和星星的爱因斯坦环，分三遍绘制并带泛光）、`examples/chat-glow`（像 Apple Intelligence 那样发光的助手：它思考时窗口边缘发光，圆锥渐变边框做了模糊，还有发光的场、闪烁的文字和球体，都是着色器）、`examples/timeline`（在一个播放头上编排的片头：卡片滑入，标题和各行跟随它，可播放、暂停、倒放和重来）和 `examples/gallery`（工具包的导览：布局、控件、文本编辑、一万行的列表、绘制和浮层）。
+  - 原生 UI 的：`examples/clipboard`（复制和拖动文本、HTML、按需生成的 JSON 和文件列表）、`examples/counter-native`（计数器，附带视图测试）、`examples/vibrancy`（内嵌标题栏下方的半透明侧边栏，可在其中选择材质）、`examples/effort-slider`（重绘 Web 演示中的动画滑块：字母模糊淡入、像素迸发、卡片晃动）、`examples/confetti`（canvas-confetti 的演示，彩纸飞舞时只更新绘制姿态，不触发布局）、`examples/wind`（Claude 应用 Code 标签页背后的字形纹理：风吹过时字符亮起，点击时泛起涟漪，由两个 Go 着色器绘制）、`examples/blackhole`（着色器追踪光线经过黑洞引力场的路径，呈现引力透镜下的吸积盘、多普勒增亮和星光形成的爱因斯坦环，分三遍绘制并加入泛光）、`examples/chat-glow`（Apple Intelligence 风格的发光助手：思考时窗口边缘发光，使用模糊的锥形渐变边框，以及着色器绘制的发光输入框、闪烁文字和光球）、`examples/timeline`（用同一播放头编排片头：卡片滑入，标题和各行依次跟入，支持播放、暂停、倒放和重新开始）和 `examples/gallery`（工具包导览：布局、控件、文本编辑、一万行的列表、绘制和浮层）。

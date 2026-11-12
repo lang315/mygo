@@ -4,8 +4,8 @@
 构建该元素的地方处理结果。
 
 一个 `ui.Element` 值只在一次构建中有效。它的零值表示不存在，对该值的
-查询返回 false 或零值。用 `Valid` 检查可选的控件。过期的使用在开发构建和
-`Tester` 中会被诊断；生产环境的方法返回空结果或忽略该操作。
+查询返回 false 或零值。用 `Valid` 检查可选控件。开发构建和 `Tester` 会检测
+过期元素的使用；生产构建中的方法则返回空结果或忽略操作。
 
 要跨构建保留焦点或快捷键，就保存一个 `ui.Handle`。每个窗口对该句柄各有
 自己的绑定；查询时要用该窗口的 Context。
@@ -29,9 +29,9 @@ if card.DoubleClicked() {
 在它们变化时重新绘制：一个在按住 Cmd 时显示每行 Cmd+1–9 的列表会读取它。
 `PassThrough` 让指针穿过元素到达下面的内容；`HitTest` 根据指针位置的函数
 决定哪里可以穿过，如圆环的孔或饼图各段之间的空隙（见[绘制](drawing.md#填充规则与命中)）；
-`IgnoreInput` 让指针穿过它及其内部的元素，并让键盘焦点远离它们；再配合
-[`AccessHidden`](accessibility.md#不挡辅助功能的路)（它对辅助技术隐藏它们），
-它们就处于惰性状态。
+`IgnoreInput` 让指针穿过元素及其内部元素，并阻止它们获得键盘焦点；再配合
+[`AccessHidden`](accessibility.md#不挡辅助功能的路) 对辅助技术隐藏这些元素，
+即可完全禁用交互。
 
 接收指针的元素会把指针交给它下面最内层的元素：可点击行中的按钮接收自己的
 点击。
@@ -76,11 +76,11 @@ if b, ok := canvas.PressedButton(); ok && b == 2 {
 
 每次按下都来自主指针：鼠标，或触摸屏上的第一根手指；第二根手指不会按下任何
 东西，在浏览器中也是如此（`isPrimary`）。[`HandleInput`](#每个键随到随处理)
-能通过 `InputEvent.Button` 听到每个按钮的按下和松开。
+能通过 `InputEvent.Button` 接收每个按钮的按下和松开事件。
 
 `PressedPointer` 说明是哪种设备在按元素、按得多重，如同 Pointer Events 的
 `pointerType` 和 `pressure`：`PointerMouse`（鼠标或触摸板）、`PointerPen`
-（平板电脑或屏幕上的笔）或 `PointerTouch`（触摸屏上的手指），以及 0 到 1 的
+（数位板或屏幕上的笔）或 `PointerTouch`（触摸屏上的手指），以及 0 到 1 的
 压力，取自这次按下最后一次移动。不报告压力的设备，如鼠标，在按钮按下时压力
 为 0.5。`HandleInput` 在每个 `InputPointerDown`、`InputPointerMove` 和
 `InputPointerUp` 上得到同样的信息（`InputEvent.Pointer` 和 `Pressure`），
@@ -102,7 +102,7 @@ ui.Box(c).Grow(1).Draw(app.paint).HandleInput(func(ev ui.InputEvent) bool {
 })
 ```
 
-各系统告诉每次按下和移动所用的设备：macOS 上是 AppKit 的平板电脑事件（鼠标
+各系统都会报告按下和移动事件所用的设备：macOS 上是 AppKit 的数位板事件（鼠标
 事件的 subtype 和 `pressure`，以及移动之间的 `tabletPoint:`），Windows 上是
 笔和手指的 `WM_POINTER` 消息——Windows 会把它们转成标记为来自这些设备的
 鼠标消息，Linux 上是 GDK 的源设备和压力轴，浏览器中是 `PointerEvent`。
@@ -112,11 +112,11 @@ ui.Box(c).Grow(1).Draw(app.paint).HandleInput(func(ev ui.InputEvent) bool {
 
 系统可以在指针没有松开的情况下结束一次按下，如同 Pointer Events 的
 `pointercancel`：浏览器把触摸变成页面滚动，按住按钮时菜单或另一个窗口夺走
-鼠标，Windows 放弃一支笔或一根手指。窗口失去键盘也会以同样的方式结束按下。
+鼠标输入，或 Windows 停止跟踪笔或手指。窗口失去键盘焦点也会以同样的方式结束按下。
 这样的按下不会提交松开本会提交的任何东西：它不点击任何东西（`Clicked`、
 `RightClicked`），不放下它拖动的值（`Drop`），不结束拖动（`DragEnded`），
 也不打开上下文菜单，`Draggable` 元素会回到按下把它拖走前的位置。
-`PressCanceled` 在下一帧报告它，让手势撤销自己开始的事情：
+`PressCanceled` 在下一帧报告取消事件，供手势处理逻辑撤销已开始的操作：
 
 ```go
 dx, _, held := handle.Dragged()
@@ -130,8 +130,8 @@ case app.preview != 0:
 }
 ```
 
-`HandleInput` 仍会得到这次按下的 `InputPointerUp`，好让它持有的内容松开，
-并且 `InputEvent.Canceled` 已置位：回滚，而不是提交。
+`HandleInput` 仍会收到 `InputPointerUp`，以便释放按下时保留的状态；
+此时 `InputEvent.Canceled` 已置位，应回滚而不是提交操作。
 
 ```go
 ui.Box(c).Size(120, 40).HandleInput(func(ev ui.InputEvent) bool {
@@ -167,7 +167,7 @@ row.Children(func() {
 ```
 
 只在行被悬停时构建的按钮，对辅助技术来说并不存在。`IgnoreInput` 让它保持
-构建，在静止时透明且不挡指针和键盘的路，仍能被辅助技术读取和按下（见
+构建，平时保持透明且不响应指针和键盘输入，但仍能被辅助技术读取和激活（见
 [辅助功能](accessibility.md#不挡指针的路)）：
 
 ```go
@@ -179,7 +179,7 @@ if !hovered {
 
 ## 键盘焦点
 
-`Focusable` 元素在被点击时取得焦点，Tab 和 Shift+Tab 在它们之间移动焦点，
+`Focusable` 元素在被点击时获得焦点，Tab 和 Shift+Tab 在它们之间移动焦点，
 用键盘移动焦点时还会显示焦点环。`AutoFocus` 在元素出现时给它焦点，如对话框
 的第一个字段；`Focus` 在你调用期间让焦点保持在那里；`Focused`、
 `FocusVisible` 和 `FocusWithin` 报告它。Enter 和空格按下有焦点的按钮，空格切换有焦点的复选框、
@@ -191,8 +191,8 @@ if !hovered {
 滚动容器会以刚好显示它的最小幅度滚动，如 Web 的 `element.focus()` 那样，这样
 你自己的键盘导航会让焦点保持在视野中。它只在焦点移动时滚动一次：每帧都调用
 `Focus` 不会干扰用户的滚动。点击会让元素在原地获得焦点，按住指针按钮时调用
-`Focus` 也一样，例如一行通过按下它的手柄来取得焦点。要以其他方式让它对齐，
-就在它取得焦点的那一帧调用 `ScrollIntoView` 并带上它的选项。要让滚动留在
+`Focus` 也一样，例如一行通过按下它的手柄来获得焦点。要以其他方式让它对齐，
+就在它获得焦点的那一帧调用 `ScrollIntoView` 并带上它的选项。要让滚动留在
 原处，如 Web 的 `focus({ preventScroll: true })`，传入 `ui.FocusOptions`：
 `cell.Focus(ui.FocusOptions{PreventScroll: true})` 在对话框关闭时把焦点还给
 网格的某个单元格，而不滚动网格。对于把焦点交给内部输入框的字段，这个选项也
@@ -201,7 +201,7 @@ if !hovered {
 `TabStop(false)` 让元素可聚焦但不在 Tab 顺序中，如同 HTML 的
 `tabindex="-1"`：它仍可由点击、`Focus`、`AutoFocus` 和辅助技术聚焦，
 而 Tab 和 Shift+Tab 会越过它，继续到它内部和它之后的控件。卡片或面板通过
-这种方式取得焦点，从而能接收自己的按键，又不会排在自己的按钮之前；
+这种方式获得焦点，从而能接收自己的按键，又不会排在自己的按钮之前；
 `TabStop(true)` 把它放回顺序中。在[焦点组](#焦点组)中，Tab 从它停留的成员进入，而方向键仍能到达其他
 成员。
 
@@ -216,7 +216,7 @@ if card.Shortcut(0, ui.KeyDelete) {
 ```
 
 `FocusLeft` 报告自上一帧以来焦点离开了某个元素：它曾在元素上或元素内，现在
-在元素外，或不在任何地方，如窗口失去键盘时。这就是 Web 的 `focusout`，其
+在元素外，或没有任何元素获得焦点，例如窗口失去键盘焦点时。这对应 Web 的 `focusout`，其
 `relatedTarget` 不在元素内。附加到该元素及其内部元素（`AttachTo`）的浮层，
 如组合框的列表或按钮的浮层，都在它内部，`PressedOutside` 也是如此，所以弹出
 字段在焦点离开它时关闭，但在焦点移入它自己的列表时不关闭：
@@ -242,8 +242,8 @@ if app.open {
 `c.FocusTakesText()` 报告当前焦点是否接收文本，无论是键入的还是合成的：
 不是只读的文本输入或文本区域、富文本或代码编辑器，或自己接收文本的元素
 （`HandleTextInput`、`TextCaret`）。它就是 Web 上单键快捷键所用的判断
-（`isContentEditable`、`input` 或 `textarea`）：字段在输入这些字母时，命令
-面板的字母快捷键就会让路。
+（`isContentEditable`、`input` 或 `textarea`）：在字段中输入文本时，命令
+面板不应响应字母快捷键。
 
 ```go
 if !c.FocusTakesText() && c.Shortcut(0, ui.KeyK) {
@@ -261,13 +261,13 @@ ui.TextInput(c.Key("search"), &app.query).Bind(&app.search)
 
 在应用状态中声明 `search ui.Handle`。`app.search.Focus()` 请求焦点，并在
 控件隐藏时等待。`CancelFocus()` 取消请求。`Focused(c)` 和 `FocusWithin(c)`
-在控件构建之前或之后读取它的身份。`c.Resolve(app.search)` 只返回本次构建的
-元素。`app.search.Bounds(c)` 从已提交的帧读取它的盒子，包括在输入回调中、
-两次构建之间。关闭窗口会取消它的焦点请求。
+可在控件构建前后查询其焦点状态。`c.Resolve(app.search)` 只返回本次构建的
+元素。`app.search.Bounds(c)` 从已提交的帧读取控件边界，输入回调中及
+两次构建之间也可查询。关闭窗口会取消该窗口的焦点请求。
 
 一个句柄可以在多个窗口中绑定。查询时要用那个窗口的 Context；用 `Focus(c)`
-或 `CancelFocus(c)` 可以显式选择窗口。不带参数的焦点调用要求至多有一个打开
-的绑定。
+或 `CancelFocus(c)` 可以显式选择窗口。不带参数的焦点调用要求至多有一个
+仍有效的窗口绑定。
 
 ## 绑定到数据的焦点
 
@@ -313,7 +313,7 @@ ui.Row(c).Gap(4).FocusGroup(ui.Horizontal).Children(func() {
 `c.Shortcut(ui.Cmd, ui.KeyS)` 报告在窗口任意位置以恰好这些修饰键按下的键，
 `Element.Shortcut` 只在元素或它内部的某个元素有焦点时才报告，而且它优先。
 有焦点的按钮保留 Enter 和空格，链接保留 Enter，切换按钮保留空格，所以
-`c.Shortcut(0, ui.KeyEnter)` 无论焦点在哪里，都能按下对话框的默认按钮。
+`c.Shortcut(0, ui.KeyEnter)` 可在焦点位于其他位置时按下对话框的默认按钮。
 
 ```go
 if c.Shortcut(ui.Cmd, ui.KeyS) {
@@ -340,7 +340,7 @@ if c.Shortcut(0, ui.KeyT) && !c.ShortcutRepeated() {
 }
 ```
 
-动作即使放过了重复，这个重复也仍会被吃掉：它不会再轮到其他快捷键。GTK 不会
+动作即使忽略了重复按键，该事件仍会被消费，不会再传给其他快捷键。GTK 不会
 标记重复，所以在 Linux 上，一个已经按住的键再次按下（中间没有松开）就是一次
 重复，正如 X11（带可检测的自动重复，GDK 会打开它）和 Wayland 发送它们那样。
 
@@ -348,10 +348,10 @@ if c.Shortcut(0, ui.KeyT) && !c.ShortcutRepeated() {
 `ui.KeyForward` 是鼠标的后退和前进按钮，以及有此键的键盘上的键，
 [路由器](navigation.md)会接受它们。[菜单](../menus.md)的快捷键仍然有效，
 编辑菜单的角色（剪切、复制、粘贴、全选、撤销、重做）作用于有焦点的文本输入。
-如果焦点处不接受这类命令，比如列表中没有可编辑内容，这个角色就会落到该按键
-的快捷键上，所以 `c.Shortcut(ui.Cmd, ui.KeyV)` 在 macOS 上也能看到粘贴，尽管
-菜单会先于窗口接住 Command+V。编辑菜单只在焦点处或这样的快捷键会接受某个
-角色的菜单项时，才启用该项。
+如果当前焦点不处理这类命令，例如焦点在没有可编辑内容的列表中，命令会转交给对应按键
+的快捷键处理。因此，即使 macOS 的菜单先于窗口处理 Command+V，
+`c.Shortcut(ui.Cmd, ui.KeyV)` 也能收到粘贴命令。编辑菜单项只有在当前焦点
+或对应快捷键能够处理该角色的命令时才会启用。
 
 快捷键在不能输入拉丁字母的键盘布局上也能用：按住 Cmd、Ctrl、Alt 或 Super
 时，某个键输入的不是 US 键位上的字母——如俄语布局上的 ы——它就代表 US 键盘
@@ -376,8 +376,8 @@ ui.List(c.Key("files"), &app.list, len(app.files)).Bind(&app.filesView).
 Context 处理有焦点的控件和活动浮层剩下的键。对于元素焦点子树内的动作，使用
 `Element.OnShortcut`。`c.OnWindowShortcut` 无论 `c` 在哪里都声明窗口的动作，
 正如 `c.Shortcut` 报告它的那样：构建在视图深处的组件，比如一个显示按键并执行
-它的提示，无论焦点在别处还是不在任何地方，都能听到它。构建在对话框内部时，
-它在对话框显示时运行；构建在对话框之后时，它等待。
+该快捷键的提示组件，无论焦点在其他位置还是没有焦点，都能响应该快捷键。组件在对话框内部构建时，
+可在对话框显示期间执行动作；在对话框背后构建时，则暂停响应。
 
 ```go
 func shortcutHint(c *ui.Context, key ui.Key, label string, run func()) {
@@ -406,8 +406,8 @@ for _, s := range app.shortcuts {
 
 键的计法与快捷键接收它们时相同，所以俄语布局上的 Cmd+ы 按住的是 `ui.KeyS`；
 修饰键则来自 `c.Modifiers()`。按下后会执行菜单项快捷键的键会转到菜单，而不是
-窗口。窗口在把键盘交给另一个窗口或应用时松开所有键（它们的松开事件去往
-那里），对于系统不让它收到松开事件的键，也会松开：在 macOS 上和 Mac 的
+窗口。窗口失去键盘焦点时会清除所有按键的按住状态，因为松开事件会发送到
+新的窗口或应用；系统不向窗口发送松开事件时，也会清除相应按键状态：在 macOS 上和 Mac 的
 浏览器中，是在按住 Command 时松开的键；在 Windows 上，是菜单打开时按住的键，
 如 Alt 加字母或 Alt 加空格，它们的松开由菜单接收；以及输入法接收其松开的键，
 如它在键按住时开始合成。`Tester` 用 `KeyDown` 和 `KeyUp` 按住键，
@@ -532,7 +532,7 @@ if ui.Button(c, "Copy").Clicked() {
 区分左右修饰键（`ui.CodeShiftLeft`、`ui.CodeAltRight`、`ui.CodeSuperLeft`），
 并命名 `ui.Key` 没有名称的键，如 `ui.CodeNumpad5` 或
 `ui.CodeIntlBackslash`——左 Shift 旁的第 102 个键。它的值是 USB HID 键盘页的
-使用 ID，名称沿用 `KeyboardEvent.code`，Meta 用 Super 表示，因此一张表就能把
+用途 ID，名称沿用 `KeyboardEvent.code`，Meta 用 Super 表示，因此一张映射表就能把
 它们转换成客户机的扫描码。
 
 `HandleInput` 和 `ObserveInput` 能收到系统告知窗口的每个按键，如同网页的
@@ -563,7 +563,7 @@ if !app.screen.Focused(c) {
 菜单栏，所以对不用的键要返回 false；无论哪种方式，快捷键都仍然有效。
 `Tester.CodeDown` 和 `Tester.CodeUp` 在测试中按下和松开这类键。
 
-系统告诉的内容有限制：
+系统报告的按键事件有以下限制：
 
 - 桌面为自己保留的键永远不会到来，比如用来打开启动器的 Super，或窗口管理器
   绑定的组合键。
@@ -572,7 +572,7 @@ if !app.screen.Focused(c) {
 - 在 Windows 上，AltGr 作为 `ui.CodeControlLeft` 然后是
   `ui.CodeAltRight` 到来，因为 Windows 会合成一个左 Control，`Mods` 中含有
   Ctrl 和 Alt。Print Screen 只作为松开到来，因为 Windows 保留了它的按下。
-  同时按住两个 Shift 时，只有最后一个的松开到来。Windows 键的松开仍会打开
+  同时按住两个 Shift 时，只有最后松开的那个键会产生松开事件。Windows 键的松开仍会打开
   开始菜单。
 - 在浏览器中，页面得到浏览器留给它的内容：`Code` 是事件的 `code`。
 - `WebView` 在有焦点时接受这些键。
@@ -605,7 +605,7 @@ panel.Children(func() {
 文本输入、快捷键和 Tab，所以函数也能看到 `Shortcut` 接下的键。它看不到系统
 或菜单先于窗口接下的键（这时到来的是一条编辑命令），也看不到容器打开的
 浮层、菜单和对话框的输入，因为它们不在它内部。像 Tab 这样移动了焦点的键，
-会在焦点去到的位置出现。
+其松开事件会发送到移动后的焦点位置。
 
 ## 另见
 
