@@ -14,7 +14,7 @@ import (
 var Calm = &Skin{name: "Calm", light: calmLight, dark: calmDark}
 
 // calmAccent is Calm's dark accent, which its translucent fills are made of.
-var calmAccent = ui.Hex("#4a8bff")
+var calmAccent = ui.Hex("#9384f0")
 
 var calmLight = skinhook.Tokens{
 	Chrome:         ui.Hex("#f4f5f7"),
@@ -30,11 +30,11 @@ var calmLight = skinhook.Tokens{
 	ButtonLine:     ui.Hex("#d2d7de"),
 	FieldLine:      ui.Hex("#838a94"),
 	OnAccent:       ui.Hex("#ffffff"),
-	Selection:      ui.Hex("#cfe0fb"),
+	Selection:      ui.Hex("#dcd8ef"),
 	RowHover:       ui.Hex("#f5f7fa"),
-	RowSelected:    ui.Hex("#e8f0fd"),
-	Accent: skinhook.Family{Base: ui.Hex("#1a63db"), Hover: ui.Hex("#1555c2"), Pressed: ui.Hex("#1249a8"),
-		Subtle: ui.Hex("#eaf1fd"), Border: ui.Hex("#b9d0f7"), Text: ui.Hex("#1450b8"), On: ui.Hex("#ffffff")},
+	RowSelected:    ui.Hex("#edebf7"),
+	Accent: skinhook.Family{Base: ui.Hex("#4e3bb0"), Hover: ui.Hex("#45349b"), Pressed: ui.Hex("#3b2d86"),
+		Subtle: ui.Hex("#f1eff9"), Border: ui.Hex("#cac4e7"), Text: ui.Hex("#46359e"), On: ui.Hex("#ffffff")},
 	Success: skinhook.Family{Base: ui.Hex("#1e7b34"), Hover: ui.Hex("#196a2c"), Pressed: ui.Hex("#145a25"),
 		Subtle: ui.Hex("#e6f5ea"), Border: ui.Hex("#b7e1c2"), Text: ui.Hex("#1d6b31"), On: ui.Hex("#ffffff")},
 	Warning: skinhook.Family{Base: ui.Hex("#b45309"), Hover: ui.Hex("#9a4708"), Pressed: ui.Hex("#803b07"),
@@ -74,12 +74,12 @@ var calmDark = skinhook.Tokens{
 	ControlPressed: ui.Hex("#343a42"),
 	ButtonLine:     ui.Hex("#3a4048"),
 	FieldLine:      ui.Hex("#79818c"),
-	OnAccent:       ui.Hex("#0b1220"),
+	OnAccent:       ui.Hex("#0e0b2a"),
 	Selection:      calmAccent.Alpha(0.35),
 	RowHover:       ui.Hex("#1c1f23"),
 	RowSelected:    calmAccent.Alpha(0.16),
-	Accent: skinhook.Family{Base: calmAccent, Hover: ui.Hex("#6a9fff"), Pressed: ui.Hex("#3a78ea"),
-		Subtle: calmAccent.Alpha(0.14), Border: calmAccent.Alpha(0.35), Text: ui.Hex("#8fb6ff"), On: ui.Hex("#0b1220")},
+	Accent: skinhook.Family{Base: calmAccent, Hover: ui.Hex("#a79bf3"), Pressed: ui.Hex("#7f6eed"),
+		Subtle: calmAccent.Alpha(0.14), Border: calmAccent.Alpha(0.35), Text: ui.Hex("#bdb4f9"), On: ui.Hex("#0e0b2a")},
 	Success: skinhook.Family{Base: ui.Hex("#3fb860"), Hover: ui.Hex("#52c771"), Pressed: ui.Hex("#2f9d4e"),
 		Subtle: ui.Hex("#34c759").Alpha(0.14), Border: ui.Hex("#34c759").Alpha(0.35), Text: ui.Hex("#7fd99a"), On: ui.Hex("#0b1220")},
 	Warning: skinhook.Family{Base: ui.Hex("#e8a33a"), Hover: ui.Hex("#f0b45a"), Pressed: ui.Hex("#cf8f2c"),

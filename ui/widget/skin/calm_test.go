@@ -16,15 +16,15 @@ func TestCalmTheme(t *testing.T) {
 	}{
 		{"Background", l.Background, ui.Hex("#ffffff")},
 		{"ControlBorder", l.ControlBorder, ui.Hex("#838a94")},
-		{"Accent", l.Accent, ui.Hex("#1a63db")},
-		{"AccentHover", l.AccentHover, ui.Hex("#1555c2")},
+		{"Accent", l.Accent, ui.Hex("#4e3bb0")},
+		{"AccentHover", l.AccentHover, ui.Hex("#45349b")},
 		{"AccentText", l.AccentText, ui.Hex("#ffffff")},
 		{"Surface", l.Surface, ui.Hex("#ffffff")},
 		{"Border", l.Border, ui.Hex("#e4e7eb")},
 		{"TextMuted", l.TextMuted, ui.Hex("#565d68")},
 		{"Danger", l.Danger, ui.Hex("#c42b1c")},
-		{"Focus", l.Focus, ui.Hex("#1a63db")},
-		{"Selection", l.Selection, ui.Hex("#cfe0fb")},
+		{"Focus", l.Focus, ui.Hex("#4e3bb0")},
+		{"Selection", l.Selection, ui.Hex("#dcd8ef")},
 	} {
 		if c.got != c.want {
 			t.Errorf("light %s is %v, want %v", c.name, c.got, c.want)
@@ -38,12 +38,12 @@ func TestCalmTheme(t *testing.T) {
 	}
 
 	d := themeOf(&Calm.dark, true)
-	if d.Background != ui.Hex("#15171a") || d.ControlBorder != ui.Hex("#79818c") || d.Accent != ui.Hex("#4a8bff") || !d.Dark {
-		t.Errorf("dark Background %v, ControlBorder %v, Accent %v, Dark %v; want #15171a, #79818c, #4a8bff, true",
+	if d.Background != ui.Hex("#15171a") || d.ControlBorder != ui.Hex("#79818c") || d.Accent != ui.Hex("#9384f0") || !d.Dark {
+		t.Errorf("dark Background %v, ControlBorder %v, Accent %v, Dark %v; want #15171a, #79818c, #9384f0, true",
 			d.Background, d.ControlBorder, d.Accent, d.Dark)
 	}
-	if d.AccentText != ui.Hex("#0b1220") || d.Scrollbar != ui.DarkTheme().Scrollbar {
-		t.Errorf("dark AccentText %v and Scrollbar %v; want #0b1220 and DarkTheme's", d.AccentText, d.Scrollbar)
+	if d.AccentText != ui.Hex("#0e0b2a") || d.Scrollbar != ui.DarkTheme().Scrollbar {
+		t.Errorf("dark AccentText %v and Scrollbar %v; want #0e0b2a and DarkTheme's", d.AccentText, d.Scrollbar)
 	}
 }
 

@@ -37,8 +37,8 @@ func TestUseCalm(t *testing.T) {
 	}
 	Use(Calm)
 	tt.Frame()
-	if got.Accent != ui.Hex("#1a63db") || got.Background != ui.Hex("#ffffff") || got.ControlBorder != ui.Hex("#838a94") {
-		t.Errorf("light, Accent %v, Background %v, ControlBorder %v; want #1a63db, #ffffff, #838a94", got.Accent, got.Background, got.ControlBorder)
+	if got.Accent != ui.Hex("#4e3bb0") || got.Background != ui.Hex("#ffffff") || got.ControlBorder != ui.Hex("#838a94") {
+		t.Errorf("light, Accent %v, Background %v, ControlBorder %v; want #4e3bb0, #ffffff, #838a94", got.Accent, got.Background, got.ControlBorder)
 	}
 	if Active() != Calm {
 		t.Errorf("Active is %v, want Calm", activeName())
@@ -50,8 +50,8 @@ func TestUseCalm(t *testing.T) {
 		t.Errorf("the hook's dark tokens are %p, want Calm's dark", h)
 	}
 	tt.SetDark(true)
-	if got.Accent != ui.Hex("#4a8bff") || got.Background != ui.Hex("#15171a") {
-		t.Errorf("dark, Accent %v, Background %v; want #4a8bff, #15171a", got.Accent, got.Background)
+	if got.Accent != ui.Hex("#9384f0") || got.Background != ui.Hex("#15171a") {
+		t.Errorf("dark, Accent %v, Background %v; want #9384f0, #15171a", got.Accent, got.Background)
 	}
 }
 
@@ -90,8 +90,8 @@ func TestUseNilAndRepeat(t *testing.T) {
 	Use(Calm)
 	Use(Calm)
 	tt.Frame()
-	if got.Accent != ui.Hex("#1a63db") || Active() != Calm {
-		t.Errorf("Use(Calm) twice gives Accent %v and Active %v, want #1a63db and Calm", got.Accent, activeName())
+	if got.Accent != ui.Hex("#4e3bb0") || Active() != Calm {
+		t.Errorf("Use(Calm) twice gives Accent %v and Active %v, want #4e3bb0 and Calm", got.Accent, activeName())
 	}
 	Use(nil)
 	tt.Frame()
@@ -130,8 +130,8 @@ func TestUseFromAnotherGoroutine(t *testing.T) {
 	wg.Wait()
 	Use(Calm)
 	tt.Frame()
-	if got.Accent != ui.Hex("#1a63db") || Active() != Calm {
-		t.Errorf("after the goroutine and Use(Calm), Accent %v and Active %v, want #1a63db and Calm", got.Accent, activeName())
+	if got.Accent != ui.Hex("#4e3bb0") || Active() != Calm {
+		t.Errorf("after the goroutine and Use(Calm), Accent %v and Active %v, want #4e3bb0 and Calm", got.Accent, activeName())
 	}
 }
 
@@ -143,8 +143,8 @@ func TestUseKeepsTheSkinAccentOverTheDesktop(t *testing.T) {
 	tt.SetPreferences(ui.Preferences{Accent: ui.Hex("#e11d48"), TextScale: 1})
 	Use(Calm)
 	tt.Frame()
-	if got.Accent != ui.Hex("#1a63db") || got.Focus != ui.Hex("#1a63db") || got.Selection != ui.Hex("#cfe0fb") {
-		t.Errorf("with a desktop accent, Accent %v, Focus %v, Selection %v; want Calm's #1a63db, #1a63db, #cfe0fb", got.Accent, got.Focus, got.Selection)
+	if got.Accent != ui.Hex("#4e3bb0") || got.Focus != ui.Hex("#4e3bb0") || got.Selection != ui.Hex("#dcd8ef") {
+		t.Errorf("with a desktop accent, Accent %v, Focus %v, Selection %v; want Calm's #4e3bb0, #4e3bb0, #dcd8ef", got.Accent, got.Focus, got.Selection)
 	}
 	Use(nil)
 	tt.Frame()
