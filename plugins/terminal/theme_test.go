@@ -21,6 +21,10 @@ func TestTerminalFollowsViewTheme(t *testing.T) {
 	loadLib(t)
 	custom := *ui.LightTheme()
 	custom.Background, custom.Text = ui.Hex("#123456"), ui.Hex("#fedcba")
+	onlyBg := *ui.LightTheme()
+	onlyBg.Background = ui.Hex("#123456")
+	onlyText := *ui.LightTheme()
+	onlyText.Text = ui.Hex("#fedcba")
 	customDark := *ui.DarkTheme()
 	customDark.Background, customDark.Text = ui.Hex("#0a0b0c"), ui.Hex("#c0ffee")
 	for _, c := range []struct {
@@ -34,6 +38,8 @@ func TestTerminalFollowsViewTheme(t *testing.T) {
 		{"plain light", nil, false, Options{}, ui.LightTheme().Text, ui.LightTheme().Background, LightTheme().Palette[2]},
 		{"plain dark", nil, true, Options{}, ui.DarkTheme().Text, ui.DarkTheme().Background, DarkTheme().Palette[2]},
 		{"view's light theme", &custom, false, Options{}, custom.Text, custom.Background, LightTheme().Palette[2]},
+		{"view's background only", &onlyBg, false, Options{}, ui.LightTheme().Text, onlyBg.Background, LightTheme().Palette[2]},
+		{"view's text only", &onlyText, false, Options{}, onlyText.Text, ui.LightTheme().Background, LightTheme().Palette[2]},
 		{"view's dark theme", &customDark, true, Options{}, customDark.Text, customDark.Background, DarkTheme().Palette[2]},
 		{"app's Theme wins", &custom, false, Options{Theme: DarkTheme()}, DarkTheme().Foreground, DarkTheme().Background, DarkTheme().Palette[2]},
 		{"app's DarkTheme in a light view", &custom, false, Options{DarkTheme: DarkTheme()}, custom.Text, custom.Background, LightTheme().Palette[2]},
