@@ -123,7 +123,7 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 	}
 	if s&pHeight != 0 {
 		e.Height(p.height)
-		if s&pMinHeight == 0 {
+		if s&pMinHeight == 0 && t.Metrics != (ui.Metrics{}) {
 			e.MinHeight(0) // the app's height wins over the theme's Metrics, which are minimums
 		}
 	}

@@ -123,4 +123,32 @@ func TestWidgetSetSizeWinsOverMetrics(t *testing.T) {
 			t.Errorf("%s with Calm: the button is %v, want %v", c.name, h, c.want)
 		}
 	}
+	// Widgets of several parts: SetSize sizes their root, and the parts
+	// inside keep the metric (36), drawn past a root of 24. Logged for the
+	// review; held as they are.
+	for _, c := range []struct {
+		name string
+		w    widget.Control
+		part widget.Query
+	}{
+		{"DateTimePicker", widget.DateTimePicker().SetSize(0, 24), widget.ByRole(ui.RoleGroup)},
+		{"NumericUpDown", widget.NumericUpDown(0, 10, 1).SetSize(0, 24), widget.ByLabel("Increase")},
+		{"editable ComboBox", widget.ComboBox(widget.Option{Value: "a", Text: "A"}).Editable().SetSize(0, 24), widget.ByRole(ui.RoleComboBox)},
+	} {
+		tt := widget.NewTester(t, widget.VBox(0).Add(c.w, widget.Label("below")), 300, 200)
+		tt.Frame()
+		below := tt.Find(widget.ByLabel("below")).Bounds().Y
+		part := tt.Find(c.part).Bounds()
+		t.Logf("%s, SetSize(0, 24) with Calm: the next control starts at %v; a part inside is %v high", c.name, below, part.H)
+	}
+}
+
+// Without a skin, an app's height below a control's own least height keeps
+// that least height, as before Metrics: a MultilineTextBox's 80.
+func TestSetSizeWithoutSkinKeepsTheLeastHeight(t *testing.T) {
+	tt := widget.NewTester(t, widget.VBox(0).Add(widget.MultilineTextBox().SetSize(0, 40).SetAccessibleName("notes")), 300, 200)
+	tt.Frame()
+	if h := tt.Find(widget.ByLabel("notes")).Bounds().H; !same(h, 80) {
+		t.Errorf("a MultilineTextBox with SetSize(0, 40) is %v high, want its least, 80", h)
+	}
 }
