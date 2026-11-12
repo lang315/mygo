@@ -20,7 +20,7 @@ c.ToastAction("Note deleted", "Undo", func() { app.restore(note) })
 
 已在显示的消息会重新显示；其他消息堆叠在它上方，显示最新的三条，较旧的消息隐藏等待，但计时仍在继续。指针停在 toast 上或键盘焦点在其中时，toast 的计时暂停；窗口在后台时计时继续（见[下文](#在后台)）。Escape 关闭焦点所在的 toast。Toast 会淡入淡出。
 
-Toast 采用主题的 `Inverse` 和 `InverseText` 颜色，除非主题另行设置，否则它的文本和背景会互换（见[主题](styling.md#主题)）。
+Toast 采用主题的 `Inverse` 和 `InverseText` 颜色；主题未指定这两个值时，会将主题的文字色和背景色对调用于 toast（见[主题](styling.md#主题)）。
 
 ## 添加和关闭 toast
 
@@ -38,19 +38,19 @@ c.CloseToast(id)
 
 | 字段 | 作用 |
 |---|---|
-| `ID` | 为 toast 命名：用正在显示的 toast 的 ID 添加一个会改变那个 toast，它会重新显示；为空时会自动生成一个 |
+| `ID` | 标识 toast：用相同 ID 再次添加，会更新正在显示的 toast 并重新显示；为空时自动生成 ID |
 | `Title`、`Description` | 显示的内容，屏幕阅读器会在它显示时读出 |
-| `Type` | toast 的类型，如 `"error"`，供外观区分 |
+| `Type` | toast 的类型，如 `"error"`，用于区分显示样式 |
 | `Timeout` | 它显示多久：为零时 4 秒，为负时直到关闭 |
 | `Action`、`OnAction` | 一个按钮，运行 `OnAction` 并关闭 toast |
 | `OnClose` | 在它关闭时运行：计时结束，或者用户、它的操作或 `CloseToast` 关闭了它 |
-| `Data` | 外观需要的其他数据 |
+| `Data` | 自定义样式所需的其他数据 |
 
 `c.CloseToast("")` 关闭所有 toast。
 
 ## 在后台
 
-窗口在后台或隐藏时，toast 的计时继续，因为 toast 传达的是会过时的消息，例如托盘应用在主窗口保持隐藏时完成下载或重启。到窗口再次显示时计时已结束的 toast 会在那一帧关闭，运行它的 `OnClose`，但不会显示。指针停在 toast 上仍会暂停计时；窗口持有键盘焦点时，焦点在 toast 中也会如此。用户必须看到的消息会一直显示到关闭（`Timeout` 为负）。
+窗口在后台或隐藏时，toast 的计时继续，因为 toast 传达的是会过时的消息，例如托盘应用在主窗口保持隐藏时完成下载或重启。到窗口再次显示时计时已结束的 toast 会在那一帧关闭，运行它的 `OnClose`，但不会显示。指针停在 toast 上仍会暂停计时；窗口具有键盘焦点时，焦点在 toast 中也会如此。用户必须看到的消息会一直显示到关闭（`Timeout` 为负）。
 
 ## 无外观
 

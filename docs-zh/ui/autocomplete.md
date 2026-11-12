@@ -2,7 +2,7 @@
 
 <!-- preview autocomplete 260 -->
 
-`ui.Autocomplete` 创建一个编辑 `*string` 的文本输入框，在它下方从字符串列表中推荐包含所输入内容的字符串，以输入内容开头的排在前面：Up 和 Down 在建议之间移动，Enter 取用一项，单击也可以；没有选中任何建议时按 Enter，则为 `Submitted`。`Changed` 报告变化，无论是键入引起的还是取用建议引起的。
+`ui.Autocomplete` 创建一个编辑 `*string` 的文本输入框，下方显示字符串列表中包含输入内容的建议，以输入内容开头的排在前面。Up 和 Down 切换建议，Enter 或单击采用建议；未选中建议时按 Enter 会触发 `Submitted`。无论是输入文本还是采用建议，内容变化都会触发 `Changed`。
 
 ```go
 ui.Autocomplete(c, &app.city, cities).Label("City")
@@ -12,4 +12,4 @@ ui.Autocomplete(c, &app.city, cities).Label("City")
 
 ## 辅助功能
 
-辅助技术看到的是一个由 `Label` 命名的组合框，可以像文本框一样编辑，其建议补全所输入的内容（`aria-autocomplete="list"`）；对它而言，方向键停留的那条建议持有焦点。
+辅助技术将其识别为一个由 `Label` 命名、可像文本框一样编辑的组合框，建议列表用于补全输入内容（`aria-autocomplete="list"`）；方向键当前指向的建议会作为焦点项提供给辅助技术。

@@ -2,7 +2,7 @@
 
 <!-- preview rating 110 -->
 
-`ui.Rating` 创建一行星星，如同 AppKit 的评分等级指示器，其中填充的星星数由 `*int` 指定：单击某颗星会设置评分，单击已设为评分的那颗星会清除评分，评分持有键盘焦点时，方向键、Home 和 End 可以改变它。`Changed` 报告新值。
+`ui.Rating` 创建一行星星，类似 AppKit 的评分等级指示器，填充数量由 `*int` 指定：单击某颗星可设置评分，再次单击当前分值对应的星星可清除评分。控件获得键盘焦点后，可用方向键、Home 和 End 调整评分。`Changed` 报告新值。
 
 ```go
 ui.Rating(c, &app.stars, 5).Label("Rating")

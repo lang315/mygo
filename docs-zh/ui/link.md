@@ -32,7 +32,7 @@ ui.RichText(c).Children(func() {
 
 ## 其他操作
 
-要在应用中执行操作而不是打开 URL 的链接，其实就是一个可单击的文本：给 `Link` 一个空 URL 并查询 `Clicked`，或用[按钮](button.md)。
+如果只需单击文本来执行应用内操作，而不打开 URL，可以将 `Link` 的 URL 留空并查询 `Clicked`，也可以使用[按钮](button.md)。
 
 ```go
 if ui.Link(c, "Show details", "").Clicked() {

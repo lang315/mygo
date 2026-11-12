@@ -2,7 +2,7 @@
 
 <!-- preview collapsible 220 -->
 
-`ui.Collapsible` 创建一个展开控件，如同 SwiftUI 的 `DisclosureGroup`：标签旁有一个箭头，单击即可打开或关闭，按 Enter 和 Space 也一样，打开时在下方显示它的函数在 `*bool` 为 true 时构建的内容。打开时箭头旋转，内容展开进入视野。`Changed` 报告单击。
+`ui.Collapsible` 创建一个展开控件，类似 SwiftUI 的 `DisclosureGroup`：标签旁有一个箭头，单击或按 Enter、Space 可展开和折叠。`*bool` 为 true 时，传入的函数构建的内容显示在下方。展开时箭头旋转，内容逐渐展开显示。`Changed` 报告单击。
 
 ```go
 ui.Collapsible(c, "Advanced", &app.advanced, func() {
@@ -13,7 +13,7 @@ ui.Collapsible(c, "Advanced", &app.advanced, func() {
 
 系统设置了减少动效时，内容会立即显示。
 
-若要在盒子里放多个节，用[手风琴](accordion.md)。
+若要在一个容器中放置多个可折叠分区，用[手风琴](accordion.md)。
 
 ## 无外观
 
@@ -34,4 +34,4 @@ p.Panel(func() {
 
 ## 辅助功能
 
-辅助技术看到一个由标签命名的展开控件，处于展开或折叠状态，它像单击一样打开和关闭它。
+辅助技术识别为由标签命名的展开控件，可读取其展开或折叠状态，也可像单击一样展开和折叠内容。

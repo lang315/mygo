@@ -2,7 +2,7 @@
 
 <!-- preview select 230 -->
 
-`ui.Select` 创建一个下拉选择器，从字符串列表中选一个值写入 `*string`：单击它，或它持有键盘焦点时按 Enter、Space、Up 或 Down，会在它下方打开选项，方向键、Home 和 End 在选项之间移动，Enter、Space 或单击选中一项；Escape 关闭选项。`Changed` 报告新选择。
+`ui.Select` 创建一个下拉选择器，从字符串列表中选一个值写入 `*string`：单击它，或它具有键盘焦点时按 Enter、Space、Up 或 Down，会在它下方打开选项，方向键、Home 和 End 在选项之间移动，Enter、Space 或单击选中一项；Escape 关闭选项。`Changed` 报告新选择。
 
 ```go
 ui.Select(c, &app.plan, []string{"Free", "Pro", "Team"}).Label("Plan")
@@ -10,7 +10,7 @@ ui.Select(c, &app.plan, []string{"Free", "Pro", "Team"}).Label("Plan")
 
 下方没有空间时，弹出层显示在选择器上方，关闭时把焦点还给选择器。选项多到窗口容纳不下时，它的高度等于可用空间，选项可以滚动。
 
-若长列表需要靠输入来过滤，使用[组合框](combobox.md)；若一次只显示少量选项，使用[单选按钮](radio.md)。
+若列表较长，需要通过输入筛选，使用[组合框](combobox.md)；若选项较少且需要同时显示，使用[单选按钮](radio.md)。
 
 ## 无外观
 
@@ -46,7 +46,7 @@ if !sel.Trigger.Focused() {
 }
 ```
 
-`ui.SelectBaseOpen` 则改由你提供打开标志，如 [`PopoverBase`](popover.md) 那样：`*open` 为 true 时显示弹出层，选择器在打开和关闭时会设置它，你也可以设置它。由你掌控之后，就能在关闭时让弹出层多留一会儿，例如让列表从触发器中长出、再缩回其中，它在缩回期间不接受输入：
+`ui.SelectBaseOpen` 改由你提供打开状态，类似 [`PopoverBase`](popover.md)：`*open` 为 true 时显示弹出层，选择器打开和关闭时会更新该值，你也可以设置它。自行管理状态后，就能在关闭时暂时保留弹出层以播放动画，例如让列表从触发器处展开，再收回；收回期间不接受输入：
 
 ```go
 // The select closed the list since the last pass: it stays until it

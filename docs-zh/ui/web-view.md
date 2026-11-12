@@ -1,6 +1,6 @@
 # Web 视图
 
-`ui.WebView` 在原生 UI 的窗口中显示网页：Web 引擎在原生控件旁渲染的文稿、每个标签页一个页面，或应用生成的 HTML 预览。这个页面就是系统的 web 视图（WKWebView、WebView2、WebKitGTK），用 `Window.NewWebView` 创建，工作方式与窗口的页面相同：它加载应用的前端，用类型化的客户端调用绑定的 Go 方法并接收事件。视图在 web 视图之后绘制的内容会显示在页面之上：从上方按钮打开的菜单、下拉选择框的选项、对话框及其变暗的背景、工具提示、toast、角上的徽章。
+`ui.WebView` 在原生 UI 窗口中显示网页，例如原生控件旁由 Web 引擎渲染的文稿、各标签页中的页面，或应用生成的 HTML 预览。网页由 `Window.NewWebView` 创建的系统 webview（WKWebView、WebView2、WebKitGTK）显示，工作方式与窗口的页面相同：加载应用前端，通过类型安全的客户端调用绑定的 Go 方法并接收事件。在 web 视图之后绘制的内容会显示在页面之上，包括上方按钮打开的菜单、下拉选择框的选项、对话框及其遮暗背景、工具提示、短暂提示和角标。
 
 ```go
 type browser struct {
@@ -38,9 +38,9 @@ func main() {
 
 ## 创建 web 视图
 
-`Window.NewWebView` 为显示 `Content` 的窗口创建 web 视图，窗口关闭时它也随之关闭。它的选项包括页面选项（`Page`，与窗口的 `PageOptions` 相同）、要加载的 `URL`、在页面绘制之前用于填充的 `BackgroundColor`、`Transparent`（通过页面的透明部分显示 web 视图背后的内容：窗口的背景或材质，因为原生 UI 不会在 web 视图下方绘制任何内容），以及 `ScrollToContainer`（把页面上的滚轮交给周围的原生 UI，[见下文](#滚动周围的原生-ui)）。`WebView.Page` 返回其页面，其方法与窗口的页面相同：`LoadURL`、`LoadHTML`、`Eval`、`GoBack`、`OnDidNavigate`、`OnWillNavigate` 等。`Focus` 把键盘交给它，`SetBackgroundColor` 改变它用来填充的颜色，例如应用自身的主题改变时（以 `light-dark(<light>, <dark>)` 给出的颜色会自行跟随外观），`CapturePage` 截取它的页面，`Destroy` 关闭它。
+`Window.NewWebView` 为显示 `Content` 的窗口创建 web 视图，窗口关闭时它也随之关闭。选项包括页面选项（`Page`，与窗口的 `PageOptions` 相同）、要加载的 `URL`、页面绘制前使用的填充色 `BackgroundColor`、`Transparent`（通过页面的透明部分显示窗口背景或材质，因为原生 UI 不会在 web 视图下方绘制内容），以及 `ScrollToContainer`（将页面上的滚轮事件交给周围的原生 UI，[见下文](#滚动周围的原生-ui)）。`WebView.Page` 返回其页面，提供与窗口页面相同的方法：`LoadURL`、`LoadHTML`、`Eval`、`GoBack`、`OnDidNavigate`、`OnWillNavigate` 等。`Focus` 让页面获得键盘焦点；`SetBackgroundColor` 更改填充色，例如在应用主题变化时调用（使用 `light-dark(<light>, <dark>)` 指定的颜色会自动跟随外观）；`CapturePage` 截取页面；`Destroy` 关闭 web 视图。
 
-web 视图会像窗口一样信任应用自己的页面，包括使用自定义协议（scheme）的页面：把第三方或用户提供的 HTML 放在[不受信任的页面](../frontend.md#untrusted-pages)中（`PageOptions.Untrusted`），或让它来自不信任的来源，参见[信任](../frontend.md#trust)。
+web 视图会像窗口一样信任应用自己的页面，包括使用自定义协议（scheme）的页面：把第三方或用户提供的 HTML 放在[不受信任的页面](../frontend.md#不受信任的页面)中（`PageOptions.Untrusted`），或让它来自不信任的来源，参见[信任](../frontend.md#信任)。
 
 web 视图要像窗口一样只创建一次，不要在视图中创建：视图只负责显示它。视图没有构建的 web 视图会隐藏起来并保留页面，因此标签页视图只构建当前标签页的 web 视图，切回来时页面还在原处。
 
@@ -54,7 +54,7 @@ if app.tab == "docs" {
 
 ## 它的盒子
 
-web 视图没有自己的尺寸。元素会横跨容器（`AlignSelf(Stretch)`），并用 `Grow` 或一个尺寸占据沿该方向的空间。页面显示在元素的内容盒中：位于边框和内边距之内，边框和内边距用元素的背景绕它绘制，并按 `Radius` 让边框内边缘变圆。页面本身会被裁剪到这些圆角，因此即使 web 视图下方没有绘制任何内容（如在透明窗口中），页面也不会超出圆角，指针只有落在圆角内才会到达页面。它周围的滚动容器和裁剪会像裁剪任何元素一样裁剪它，滚出视野的 web 视图会隐藏。`Opacity` 让页面随元素一起淡出，如 `Router` 的页面淡入那样：页面混合在元素下方绘制的内容之上。当那里没有绘制任何内容时（如在透明窗口中），页面不会淡出：系统的 web 视图没有 MyGo 可以设置的不透明度。
+web 视图没有固有尺寸。元素在容器的交叉轴上拉伸（`AlignSelf(Stretch)`），主轴上的空间则由 `Grow` 或指定尺寸决定。页面显示在元素的内容盒内，即边框和内边距之内；周围照常绘制边框、内边距区域和元素背景，圆角取边框内缘由 `Radius` 决定的形状。页面也会裁剪到这些圆角，即使下方没有绘制内容（例如透明窗口），页面也不会超出圆角，只有圆角以内的指针事件才会传给页面。周围的滚动容器和裁剪区域会像处理其他元素一样裁剪页面，滚出视口的 web 视图会隐藏。`Opacity` 让页面随元素一起淡入淡出，例如 `Router` 的页面淡入：页面与元素下方绘制的内容混合。如果下方没有绘制内容（例如透明窗口），页面就无法淡入淡出，因为 MyGo 无法直接设置系统 webview 的不透明度。
 
 ```go
 ui.WebView(c, app.preview).Height(320).Radius(12).Border(1, t.Border)
@@ -79,11 +79,11 @@ func (app *browser) peek(c *ui.Context) {
 让 web 视图旋转、倾斜或处于透视中的变换，会把页面正立显示，并在变换后盒子的边界内排版。
 
 - **macOS** 和 **Windows** 由合成器缩放页面：页面作为图片显示，动画以完整大小结束时再次变清晰。
-- **Linux**：GTK 3 无法缩放控件。web 视图的高度与页面显示的大小一致，WebKitGTK 会缩放页面以适应，按相同的 CSS 像素宽度重新排版，因此每个尺寸下都清晰：`innerWidth` 保持不变，但页面在缩放改变时会收到 `resize` 事件，而且它只按宽度缩放。它的圆角按整像素裁剪，没有抗锯齿。
+- **Linux**：GTK 3 无法缩放控件。web 视图会调整为页面实际显示的尺寸，WebKitGTK 则通过页面缩放适配，以相同的 CSS 像素宽度重新排版，因此各种尺寸下都清晰：`innerWidth` 保持不变，但缩放变化时页面会收到 `resize` 事件，而且缩放比例仅由宽度决定。圆角按整像素裁剪，不做抗锯齿。
 
 ## 它上方显示什么
 
-web 视图位于窗口的原生 UI 之下：元素在窗口绘制的内容中切出一个洞，页面就在那里显示。在元素之后绘制的一切都会画在页面之上，如同在任何元素之上一样：它的子元素、绝对定位在其上的元素，以及浮层中的浮层、菜单、下拉选择框、组合框、对话框、工具提示和 toast。阴影和半透明背景会在页面之上混合。
+web 视图位于窗口的原生 UI 之下：元素在窗口绘制的内容中留出空洞，用于显示页面。在该元素之后绘制的内容都会覆盖在页面上，与覆盖其他元素一样，包括它的子元素、绝对定位在其上方的元素，以及浮层中的弹出面板、菜单、下拉选择框、组合框、对话框、工具提示和短暂提示。阴影和半透明背景也会与页面混合。
 
 ```go
 ui.WebView(c, app.page).Grow(1).Children(func() {
@@ -92,13 +92,13 @@ ui.WebView(c, app.page).Grow(1).Children(func() {
 })
 ```
 
-指针只会在页面显示的地方落到页面上，画在它上面的内容不会把指针夺走：对话框的背景或下拉选择框的背景在打开时会挡住指针，不让它到达页面；浮层只在自己的面板上保留指针；带有 `PassThrough` 的元素则让指针穿过。拖到那里的文件会放到页面上。在页面上按下会关闭它之外的浮层（`PressedOutside`），并把键盘交给页面：原生 UI 的焦点转到 web 视图的元素，用户点击原生 UI 时，键盘会回到它那里。页面会设置它上面的光标。
+只有在页面显示的区域内，且上方绘制的内容没有接收指针事件时，事件才会传给页面：对话框或下拉选择框打开后，其背景遮罩会阻止指针事件传给页面；弹出面板只拦截面板范围内的事件；带有 `PassThrough` 的元素则允许事件穿透。拖到页面上的文件会交给页面处理。在页面上按下会关闭按下位置之外的弹出面板（`PressedOutside`），并让页面获得键盘焦点：原生 UI 的焦点移到 web 视图元素，用户再点击原生 UI 时，键盘焦点就会移回原生 UI。页面负责设置其区域内的鼠标指针样式。
 
-在原生 UI 的控件之间，Tab 会停在 web 视图上：页面会在它的第一个元素处接住键盘，或用 Shift+Tab 在最后一个元素处接住；Tab 在其元素之间移动，越过最后一个元素后继续到 web 视图之后的控件。`Focus` 会把键盘交给页面，回到它之前拥有键盘的位置。
+Tab 在原生 UI 控件之间移动时也会进入 web 视图：焦点落在页面的第一个元素上，Shift+Tab 则落在最后一个元素上；之后 Tab 在页面元素之间移动，越过最后一个元素后移到 web 视图后面的原生控件。`Focus` 则让页面在上次获得焦点的位置重新获得键盘焦点。
 
 ## 页面留下的按键
 
-一个邮件应用在 web 视图中显示消息的 HTML，旁边是一个由键盘驱动的列表：J 和 K 在消息之间移动，Cmd+K（Windows 和 Linux 上为 Ctrl+K）打开命令面板。用户点击进入消息以选择文本或跟随链接，页面拥有键盘，但 J、K 和 Cmd+K 仍然有效：页面未处理的按键会像 web 视图的元素拥有焦点一样交给原生 UI。周围元素的快捷键（`Element.Shortcut`）和窗口的快捷键（`c.Shortcut`）能看到它们，用于滚动的按键会滚动周围的容器，Escape 会关闭原生 UI 的对话框或浮出层。键盘仍留在页面，页面仍然可以选择、复制、输入并跟随链接。
+例如，邮件应用在 web 视图中显示邮件的 HTML，旁边是支持键盘操作的列表：J 和 K 切换邮件，Cmd+K（Windows 和 Linux 上为 Ctrl+K）打开命令面板。用户点击邮件以选择文本或打开链接后，即使页面获得了键盘焦点，J、K 和 Cmd+K 仍然有效：页面未处理的按键会交给原生 UI，就像焦点位于 web 视图元素上一样。周围元素的快捷键（`Element.Shortcut`）和窗口快捷键（`c.Shortcut`）都能处理这些按键，滚动按键会滚动周围的容器，Escape 会关闭原生 UI 的对话框或浮出窗口。页面仍保持键盘焦点，用户仍可选择、复制、输入文本和打开链接。
 
 ```go
 func (app *mail) view(c *ui.Context) {
@@ -125,13 +125,13 @@ func (app *mail) view(c *ui.Context) {
 - 用它执行操作：链接或按钮上的 Enter 或空格、滑块上的方向键、Ctrl+C 复制选区，或方向键、空格和 Page Down 在它能向该方向滚动时滚动页面；
 - 或者它是 Tab（在页面中移动并移出页面），或单独的修饰键。
 
-不受信任页面的按键，以及页面中各帧的按键，也会到来；页面无法伪造按键：原生 UI 只会收到用户按下的键。
+不受信任页面以及页面中各子框架的未处理按键也会传来；页面无法伪造按键，原生 UI 只会收到用户实际按下的键。
 
 - **macOS** 和 **Linux**：WebKit 决定页面处理了哪些按键，并把其他的发送给 web 视图的父级（AppKit 的响应者链，或 WebKit 的 Web 进程应答后的 GTK `key-press-event`），MyGo 在那里接收它们。在 Linux 上，WebKitGTK 保留方向键，而带角色的菜单项的快捷键（如 Edit › Copy 的）会继续传给菜单。
-- **Windows**：WebView2 不告知这样的按键。每个文稿（页面及其各帧）的隔离世界中都有一个脚本，它在页面的处理器运行后看到页面的按键，并按上述规则把它留下的按键告知 MyGo。页面自己的脚本既接触不到这个脚本，也接触不到它通向 MyGo 的途径；而且这个脚本不需要桥接，所以不受信任的页面也会提供它们的按键。其他站点的帧由 WebView2 在其自己的进程中运行，会保留其按键。
+- **Windows**：WebView2 不提供未处理按键的通知。MyGo 在每个文档（页面及其各子框架）的隔离脚本环境中运行脚本，在页面按键处理器执行后，按上述规则将未处理的按键通知 MyGo。页面自身的脚本既无法访问该脚本，也无法访问其通知 MyGo 的通道；该脚本不依赖桥接，因此不受信任页面的按键也能传来。跨站子框架由 WebView2 在独立进程中运行，其按键不会传来。
 - **浏览器**（`GOOS=js`）没有 web 视图。
 
-辅助技术在 web 视图的元素内部找到页面，它就在原生 UI 之中：VoiceOver 和 Orca 像浏览其周围的控件一样浏览并穿过它。
+辅助技术可以在 web 视图元素内部找到页面，将其作为原生 UI 的一部分：VoiceOver 和 Orca 能像读取和浏览周围控件一样读取和浏览页面。
 
 ## 滚动周围的原生 UI
 
@@ -166,11 +166,11 @@ func (s *Notes) Save(ctx context.Context, text string) error {
 }
 ```
 
-页面的 `window.close()` 会让窗口保持打开。内容规则会拦截 web 视图页面的加载，如同对窗口的页面一样（[阻止内容](../windows.md#blocking-content)），规则来自 `WebViewOptions.Page.ContentRules` 或 `Page.SetContentRules`。
+页面的 `window.close()` 会让窗口保持打开。内容规则会拦截 web 视图页面的加载，如同对窗口的页面一样（[阻止内容](../windows.md#阻止内容)），规则来自 `WebViewOptions.Page.ContentRules` 或 `Page.SetContentRules`。
 
 ### 类型安全的客户端
 
-页面用 `mygo generate` 生成的客户端调用 Go，如同窗口的页面那样：客户端对 web 视图一无所知。原生 UI 项目没有前端，因此也没有客户端：可以给它配一个，比如 `frontend` 目录中的 Vite 应用，并在其 `mygo.json` 中填写[前端](../configuration.md#development-and-the-frontend)的字段：
+页面与窗口页面一样，通过 `mygo generate` 生成的客户端调用 Go，客户端无需区分 web 视图。原生 UI 项目默认没有前端，也就没有客户端；你可以添加前端，例如在 `frontend` 目录创建 Vite 应用，并在 `mygo.json` 中填写[前端](../configuration.md#开发与前端)相关字段：
 
 ```json
 {
@@ -182,7 +182,7 @@ func (s *Notes) Save(ctx context.Context, text string) error {
 }
 ```
 
-客户端随后就是 `frontend/src/mygo.ts`（`bindings` 会改变位置），`mygo dev` 会在 Go 代码改变时重写它，`mygo build` 则会在构建前端之前重写它；前端依赖客户端所导入的 `mygo-runtime`。加载 `/` 的 web 视图会显示前端：在 `mygo dev` 期间来自开发服务器，在构建中则嵌入其中（参见[页面如何加载](../frontend.md#how-pages-load)）。它的页面会调用用 `mygo.Bind` 绑定的服务，并接收用 `mygo.NewEvent` 声明的事件：
+客户端随后就是 `frontend/src/mygo.ts`（`bindings` 会改变位置），`mygo dev` 会在 Go 代码改变时重写它，`mygo build` 则会在构建前端之前重写它；前端依赖客户端所导入的 `mygo-runtime`。加载 `/` 的 web 视图会显示前端：在 `mygo dev` 期间来自开发服务器，在构建中则嵌入其中（参见[页面如何加载](../frontend.md#页面如何加载)）。它的页面会调用用 `mygo.Bind` 绑定的服务，并接收用 `mygo.NewEvent` 声明的事件：
 
 ```go
 // Notes is bound for the pages.
@@ -226,7 +226,7 @@ likeButton.onclick = async () => {
 events.liked.on((likes) => (count.textContent = String(likes)));
 ```
 
-带上下文的调用、错误、[通道](../bindings.md#channels)和事件都与窗口中的一样。没有前端构建的页面（例如应用用 `LoadHTML` 加载的 HTML），可以借助桥接注入每个页面的运行时按名称调用，`mygo.call("Notes.Like")` 和 `mygo.on("liked", …)`（参见[不使用生成的客户端](../bindings.md#without-the-generated-client)）。不是应用自己的页面（例如显示 `https://example.com` 的 web 视图）根本无法调用 Go：参见[谁可以调用](../bindings.md#who-may-call)。
+带上下文的调用、错误、[通道](../bindings.md#通道)和事件都与窗口中的一样。没有前端构建的页面（例如应用用 `LoadHTML` 加载的 HTML），可以借助桥接注入每个页面的运行时按名称调用，`mygo.call("Notes.Like")` 和 `mygo.on("liked", …)`（参见[不使用生成的客户端](../bindings.md#不用生成的客户端)）。不是应用自己的页面（例如显示 `https://example.com` 的 web 视图）根本无法调用 Go：参见[谁可以调用](../bindings.md#谁能调用)。
 
 ## 限制
 
@@ -239,4 +239,4 @@ events.liked.on((likes) => (count.textContent = String(likes)));
 
 ## 测试
 
-在 `Tester` 中，`WebViewAt` 返回在窗口某点接收指针的 web 视图，以最后一帧显示的状态为准：即该点下方的那个，除非画在它上面的内容在该处接收指针。在 web 视图上使用 `ClickAt` 和 `Press` 会按下页面，视图按平台告知的方式得知这一点。
+在 `Tester` 中，`WebViewAt` 按最后一帧的显示状态，返回窗口指定位置接收指针事件的 web 视图：即该点下方的 web 视图，但如果覆盖其上的内容在该处接收事件，则不会返回它。在 web 视图上使用 `ClickAt` 和 `Press` 会向页面发送按下事件，视图收到的通知与平台实际报告的一致。

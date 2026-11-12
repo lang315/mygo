@@ -33,11 +33,11 @@ func main() {
 }
 ```
 
-托盘图标给用户提供快捷键之外的进入方式，以及退出的方式；[`App.SetOpenAtLogin`](app.md#登录时启动) 让启动器随会话启动，`App.WasOpenedAtLogin` 则让它在登录时保持隐藏。
+托盘图标提供快捷键之外的打开方式，也方便用户退出；[`App.SetOpenAtLogin`](app.md#登录时启动) 让启动器随会话启动，可根据 `App.WasOpenedAtLogin` 判断是否应在登录时保持隐藏。
 
 ## 面板
 
-面板浮在每个应用之上，包括全屏应用，无论用户在哪个 Space 或虚拟桌面；在 macOS 上它取得键盘而不激活启动器：用户所在的应用保留其菜单栏，并在面板隐藏后重新获得键盘。以隐藏状态创建它，只创建一次；隐藏而不是关闭它，以便它再次显示时立即恢复原样：
+面板显示在用户当前的 Space 或虚拟桌面，浮在所有应用之上，包括全屏应用；在 macOS 上，面板获得键盘焦点，但不激活启动器：原来的应用保留菜单栏，面板隐藏后键盘焦点也会返回该应用。面板只需以隐藏状态创建一次；用完后隐藏而不关闭，再次显示时即可恢复原样：
 
 ```go
 panel := mygo.NewWindow(mygo.WindowOptions{
@@ -59,9 +59,9 @@ panel.OnClose(func(e *mygo.CloseEvent) { // Escape, Cmd-W, Alt-F4
 panel.OnBlur(panel.Hide) // the user went elsewhere
 ```
 
-页面或原生 UI 没有处理的 Escape 会关闭面板，`OnClose` 监听器把它变成隐藏。如果 Escape 先要做别的事，就自己处理它，如同示例中先清空查询那样。
+页面或原生 UI 未处理的 Escape 会关闭面板，`OnClose` 监听器将关闭改为隐藏。如果 Escape 需要先执行其他操作，就自行处理，如示例中先清空查询。
 
-在用户正在看的显示器上显示它（指针会告诉你），像 Spotlight 那样放在从上往下三分之一处，并让它的搜索框取得键盘：
+根据指针位置确定用户当前使用的显示器，像 Spotlight 那样将面板放在从上往下三分之一处，并让搜索框获得键盘焦点：
 
 ```go
 func show() {
@@ -86,7 +86,7 @@ err := mygo.GlobalShortcut.Register("Alt+Shift+Space", func() {
 })
 ```
 
-选择一个其他启动器留空的快捷键：Raycast 和 PowerToys Run 占用 Alt+Space，Spotlight 占用 Cmd+Space，而 macOS 会把快捷键给每个注册它的应用，因此两个应用都会打开。让用户在启动器的设置中选择另一个：`Unregister` 旧的，`Register` 新的，并在 `Register` 因已被占用而失败时告诉他们。在 Windows 上，按键让面板取得前台；在 Wayland 上，由桌面绑定快捷键，见[全局快捷键](native.md#全局快捷键)。
+选择未被其他启动器占用的快捷键：Raycast 和 PowerToys Run 占用 Alt+Space，Spotlight 占用 Cmd+Space，而 macOS 会将快捷键发送给所有注册它的应用，因此两个应用都会打开。允许用户在启动器设置中更换快捷键：用 `Unregister` 注销旧快捷键，用 `Register` 注册新快捷键，并在 `Register` 因快捷键已被占用而失败时提示用户。在 Windows 上，按键操作允许面板切换到前台；在 Wayland 上，由桌面绑定快捷键，见[全局快捷键](native.md#全局快捷键)。
 
 ## 查找应用
 
@@ -105,15 +105,15 @@ go func() {
 }()
 ```
 
-`Shell.FileIcon(app.Path, size)` 把应用的图标绘制为 PNG，单位为像素：DIP 大小乘以显示器的缩放因子。它要花几毫秒：只绘制显示出来的行的图标，并按路径保留它们。`Shell.LaunchApp(app)` 启动所选应用，或把它带到前面；先隐藏面板，以便用户所在的应用在启动的应用取得键盘之前保有键盘。
+`Shell.FileIcon(app.Path, size)` 把应用图标绘制为 PNG，尺寸以像素计：DIP 尺寸乘以显示器的缩放因子。调用耗时几毫秒，因此只绘制可见行的图标，并按路径缓存。`Shell.LaunchApp(app)` 启动所选应用，或将其切换到前台；先隐藏面板，让键盘焦点回到原来的应用，直到启动的应用获得焦点。
 
 ## 平台
 
 | | macOS | Windows | Linux |
 |---|---|---|---|
 | 没有 Dock 图标，没有任务栏按钮 | `LSUIElement`、`ActivationPolicyAccessory` | 面板没有 | 面板没有 |
-| 面板 | 一个不激活应用的 `NSPanel`，无论常规应用还是辅助应用的全屏应用，都浮在其上 | 一个置顶的工具窗口 | X11 上保持在上的工具窗口；Wayland 合成器支持时是一个绘制表面（需要 `libgtk-layer-shell.so.0`） |
+| 面板 | 不激活应用的 `NSPanel`，可浮在常规应用或辅助应用的全屏窗口之上 | 置顶的工具窗口 | X11 上置顶的实用工具窗口；在支持的 Wayland 合成器上使用层表面（layer surface，需要 `libgtk-layer-shell.so.0`） |
 | 快捷键 | Carbon 热键 | `RegisterHotKey` | X11 抓取，Wayland 下是 XDG desktop portal |
 | 应用 | 各 Applications 文件夹 | 开始菜单的“所有应用” | 桌面条目 |
 
-在 Wayland 上，作为绘制表面的面板在显示期间一直保有键盘，如同那里的启动器，因此只在隐藏时失焦：用 Escape 关闭它。
+在 Wayland 上，使用层表面的面板与其他启动器一样，在显示期间始终保持键盘焦点，只在隐藏时失焦，因此应使用 Escape 关闭。

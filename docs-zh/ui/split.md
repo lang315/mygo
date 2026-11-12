@@ -22,7 +22,7 @@ ui.SplitVerticalPercent(c, &app.editorPercent, func() { app.editor(c) }, func() 
 
 把尺寸保存在应用状态中并持久化，以便应用再次启动时恢复布局。指针在分隔条上会显示调整大小的光标。
 
-`SplitReset` 让双击分隔条把第一个窗格恢复为应用选择的尺寸，单位与分栏自身一致：`Split` 和 `SplitVertical` 用 DIP，百分比变体用百分比。没有它的分栏在双击时保持当前尺寸。即使窗口太小而无法显示该尺寸，尺寸仍会保留，因此空间足够时窗格会恢复它，与按下分隔条时一样。
+设置 `SplitReset` 后，双击分隔条会将第一个窗格恢复为应用指定的尺寸，单位与分栏类型一致：`Split` 和 `SplitVertical` 用 DIP，百分比变体用百分比。未设置时，双击不会改变尺寸。即使窗口太小，无法容纳指定尺寸，也仍会保留该值，待空间充足时恢复，这与按下分隔条调整尺寸时的行为相同。
 
 ```go
 ui.Split(c, &app.sidebarWidth, func() { app.files(c) }, func() { app.editor(c) }).SplitReset(220).Fill()
@@ -30,4 +30,4 @@ ui.Split(c, &app.sidebarWidth, func() { app.files(c) }, func() { app.editor(c) }
 
 ## 辅助功能
 
-辅助技术把分隔条看作名为 "Divider" 的分隔条，它可以取得焦点，并随方向键移动。
+辅助技术把分隔条看作名为 "Divider" 的分隔条，它可以获得焦点，并随方向键移动。

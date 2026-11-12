@@ -53,7 +53,7 @@ cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" .
 
 - **绘制。** 帧按设备像素比用 WebGL 2 绘制，浏览器每有一帧发生变化就绘制一次；效果（如 [Liquid Glass](../plugins/glass.md)）的绘制与桌面上相同。浏览器没有 WebGL 2 时，帧先在内存中绘制，再通过 2D 画布显示。WebGL 上下文丢失后，浏览器恢复它时会再次绘制。
 - **文本** 来自浏览器：浏览器负责查找字体、为字体缺少的字形回退并完成字形排布，就像处理它自己的页面一样：`system-ui` 是系统字体，与页面中的一样。换行与文字段的顺序（bidi）处处与 `text` 包一致。文本绘制不使用次像素抗锯齿。
-- **输入**：指针，包括单击次数；滚轮和触控板；按键；输入法，它在光标处一个不可见的文本区域中组合；以及剪贴板中的文本，通过浏览器的复制、剪切和粘贴。在 Mac 上，视图快捷键中的 Control 是 ⌘，因为浏览器被当作 macOS 以外的系统。Mac 上的浏览器不会报告在按住 ⌘ 期间松开的按键：它随 ⌘ 一起松开（[`c.KeyDown`](input.md#按住的键)）。
+- **输入**：指针及点击次数、滚轮和触摸板、按键、输入法，以及通过浏览器复制、剪切和粘贴的剪贴板文本。输入法在插入点处的不可见文本区域中组合文本。视图将浏览器视为非 macOS 平台；在 Mac 上，会将 ⌘ 映射为快捷键中的 Control。Mac 上的浏览器不报告按住 ⌘ 期间其他键的松开事件，因此这些键会在 ⌘ 松开时一并视为松开（[`c.KeyDown`](input.md#按住的键)）。
 - **路由器。** 窗口显示的第一个[路由器](navigation.md)跟随标签页的历史，记录在 URL 的片段中，如 `#/notes/42`：浏览器的后退和前进按钮会在它的页面之间切换，指向某个页面的链接或重新加载会在这里打开应用。
 - **拖到窗口上的文件**：`DroppedFiles`、`FileDragOver` 和 `OnFileDrop` 与桌面上一样工作。浏览器不提供路径，因此后端在文件放下时读取它们，并存放在自己的路径下，如 `/mygo-drop/3/photo.png`，`os.Open`、`os.ReadFile`、`os.Stat` 和 `os.ReadDir` 会读取这些路径；最近 16 次拖放的文件会保留下来。
 - **上下文菜单**显示为页面上的 HTML 菜单。
@@ -66,7 +66,7 @@ cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" .
 
 ## 体积
 
-counter 示例是 8.2 MB 的 WebAssembly，用 gzip 压缩后为 2.2 MB；这些文档的预览包含所有组件，为 9.8 MB（压缩后 2.6 MB）。为浏览器构建会去掉包 `mygo` 中供网页使用、浏览器用不到的部分：它的 IPC、自定义 scheme 及其 HTTP、TypeScript 生成器、更新器，以及它们引入的 JSON 和加密相关代码。它们的 API 仍在，但什么都不做：`Bind` 不绑定任何东西，事件不会到达任何页面，`Updater.Check` 报告 `ErrUpdatesDisabled`。只有接收 net/http 类型的 `Protocol.Handle`、`HandleFunc` 和 `FileServer` 缺失，因此使用它们的代码只用于桌面（`//go:build !js`）。`mygo build` 为生产构建设置的 `mygo_noinspector` 标签也会去掉原生 UI 的检查器，约 350 KB。为浏览器构建不会给桌面应用增加任何体积：浏览器的代码只出现在 `js/wasm` 构建中。
+counter 示例的 WebAssembly 为 8.2 MB，gzip 压缩后为 2.2 MB；文档预览包含所有组件，为 9.8 MB（压缩后 2.6 MB）。浏览器构建不显示网页窗口，因此会排除 `mygo` 包中相关的代码：IPC、自定义协议及其 HTTP 实现、TypeScript 生成器、更新器，以及这些功能引入的 JSON 和加密代码。相关 API 仍然保留，但不执行操作：`Bind` 不绑定任何内容，事件不发送给任何页面，`Updater.Check` 返回 `ErrUpdatesDisabled`。只有使用 net/http 类型的 `Protocol.Handle`、`HandleFunc` 和 `FileServer` 不提供，因此调用这些 API 的代码需限于桌面构建（`//go:build !js`）。`mygo build` 为生产构建设置的 `mygo_noinspector` 标签还会排除约 350 KB 的原生 UI 检查器代码。浏览器支持不会增加桌面应用的体积：相关代码只编入 `js/wasm` 构建。
 
 ## 内部实现
 

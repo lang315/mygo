@@ -17,20 +17,20 @@ func TestCounter(t *testing.T) {
 
 元素按文本查找，没有文本的则按 `Label` 查找，例如图标按钮：`tt.Click("Close")`、`tt.Find("Volume")`、`tt.Focused("Name")`。
 
-`Click`、`ClickWith` 和 `RightClick` 在发送输入之前检查第一个匹配的元素。如果它没有可见区域，或该区域中心会落到另一个控件上或落到空处，它们就返回错误。它们不会把它滚动到可见范围内，也不会另找一个未被遮挡的点。对于没有自己的上下文菜单的元素，例如列表的行，`RightClick` 会在该点打开元素在该处所含内容的菜单，如同在那里右键单击；其中若有接受单击或自身输入的控件，那就算另一个控件。`Find` 仍会返回匹配的裁剪后盒子，它可能宽度或高度为零；`ClickAt` 在给定坐标发送输入，没有命名目标。
+`Click`、`ClickWith` 和 `RightClick` 会先检查第一个匹配元素，再发送输入。如果元素没有可见区域，或可见区域的中心实际命中其他控件或空白处，就返回错误；不会自动滚动使其可见，也不会另找未被遮挡的位置。列表行等元素如果没有自己的上下文菜单，`RightClick` 会打开点击位置处子内容的菜单，与实际右键单击一致；但内部能独立接收点击或输入的控件仍视为其他控件。`Find` 仍会返回匹配元素裁剪后的边界框，宽度或高度可能为零；`ClickAt` 直接在指定坐标发送输入，不指定目标名称。
 
 同一父元素下两个元素被赋予相同的 `Key` 时会共享同一个状态，因此本应给其中一个的单击或焦点会去到另一个：测试器会在赋予第二个 key 的位置 panic，而应用只会记录它。
 
 ## 测试器做什么
 
 - **指针。** `tt.Click`、`tt.ClickAt`、`tt.ClickWith(ui.Shift, "Row 3")`、`tt.Press`、`tt.Move` 和 `tt.Release`、用 `tt.PressButton` 和 `tt.ReleaseButton` 操作另一个按钮（例如右键拖动用 `tt.PressButton(1, x, y)`）、`tt.CancelPress`（像系统取消按下那样结束它，不产生单击）、`tt.Scroll`（像触摸板那样立即滚动）和 `tt.Wheel`（鼠标滚轮的一格，会随着时钟前进而滑向目标，见 `tt.Advance`）。`tt.UsePointer(ui.PointerPen, 0.6)` 让之后的按下和移动来自以该压力按下的笔，或手指（`ui.PointerTouch`）。
-- **键盘。** `tt.Key(ui.Cmd, ui.KeyS)` 按下一个键，`tt.KeyRepeat` 在按住时像自动重复那样再次按下它，`tt.TypeKey` 输入一个键及它产生的文本，`tt.Type` 向持有焦点的元素输入文本。`tt.Compose` 显示输入法的组合状态，`tt.Command` 执行菜单的编辑命令，如 `"copy"`，`tt.TextCaret` 返回输入法将会组合的位置。
+- **键盘。** `tt.Key(ui.Cmd, ui.KeyS)` 按下一个键，`tt.KeyRepeat` 在按住时像自动重复那样再次按下它，`tt.TypeKey` 输入一个键及它产生的文本，`tt.Type` 向具有焦点的元素输入文本。`tt.Compose` 显示输入法的组合状态，`tt.Command` 执行菜单的编辑命令，如 `"copy"`，`tt.TextCaret` 返回输入法将会组合的位置。
 - **菜单。** `tt.RightClick` 打开上下文菜单，`tt.Menu` 列出菜单，`tt.ChooseMenuItem("Move to", "Archive")` 从中选择，`tt.CloseMenu` 关闭它：系统的菜单，或[在窗口中绘制](context-menu.md#在窗口中绘制)的菜单，因此测试在两种菜单下都能通过。
-- **窗口。** `tt.SetSize`、`tt.SetScale`、`tt.SetZoom`（内容的[缩放](windows.md#缩放)，如同 `Context.SetZoom`；测试器的坐标——`Find`、`ClickAt`、`Move` 和 `TextCaret` 的——仍是窗口的）、`tt.SetDark`、`tt.SetPreferences` 和 `tt.SetDirection`（按[从右到左](right-to-left.md)布局）改变窗口和桌面的设置；`ui.NewTesterWith(view, w, h, ui.TesterOptions{Preferences: p, Dark: true})` 从桌面的设置启动，第一帧便遵循它们，如同 Media Queries 5 让用户的偏好从样式首次解析时起生效：在减少动效下挂载的视图不会在最初几帧启动动画，而 `NewTester` 会在 `SetPreferences` 来得及生效之前就稳定下来；`tt.SetFocused` 从窗口取走键盘再交还，`tt.SetWindowActive` 把它先绘制为非活动再绘制为活动，如同另一个窗口取得用户的输入（[非活动窗口](windows.md#活动与非活动窗口)），`tt.SetWindowHidden` 把它完全隐藏再重新显示（[隐藏的窗口](windows.md#隐藏的窗口)）。
+- **窗口。** `tt.SetSize`、`tt.SetScale`、`tt.SetZoom`（与 `Context.SetZoom` 一样[缩放](windows.md#缩放)内容；`Find`、`ClickAt`、`Move` 和 `TextCaret` 仍使用窗口坐标）、`tt.SetDark`、`tt.SetPreferences` 和 `tt.SetDirection`（[从右到左](right-to-left.md)布局）可修改窗口和桌面设置。`ui.NewTesterWith(view, w, h, ui.TesterOptions{Preferences: p, Dark: true})` 可指定初始桌面设置，让第一帧就遵循这些设置，类似 Media Queries 5 从首次解析样式时就应用用户偏好：这样在减少动效模式下创建的视图不会在最初几帧启动动画；而使用 `NewTester` 时，还没来得及调用 `SetPreferences`，初始帧就已运行至稳定。`tt.SetFocused` 可移除或恢复窗口的键盘焦点；`tt.SetWindowActive` 可让窗口按非活动或活动状态绘制，模拟其他窗口接收用户输入的情况（[非活动窗口](windows.md#活动与非活动窗口)）；`tt.SetWindowHidden` 可完全隐藏或重新显示窗口（[隐藏的窗口](windows.md#隐藏的窗口)）。
 - **它显示的内容。** `tt.Texts`、`tt.HasText`、`tt.Find`（文本所在的盒子）、`tt.Focused`、`tt.Cursor`、`tt.Clipboard`、`tt.OpenedURLs` 和 `tt.Announcements`，即视图请求屏幕阅读器朗读的内容（[实时区域与播报](#实时区域与播报)）；`tt.FailOpenURL` 让它打开的链接失败，如同没有任何应用能打开它们，`tt.FailClipboard` 让它向剪贴板写入文本失败，如同浏览器拒绝该操作（`WriteClipboardThen`）。
-- **辅助技术看到什么。** `tt.Access` 和 `tt.AccessByRole` 读取元素的角色、名称、值和状态，`tt.AccessAll` 读取每个元素的（[见下文](#辅助技术看到什么)）。
+- **辅助技术看到什么。** `tt.Access` 和 `tt.AccessByRole` 读取元素的角色、名称、值和状态，`tt.AccessAll` 则读取所有元素的这些信息（[见下文](#辅助技术看到什么)）。
 - **帧。** `tt.Frame` 绘制一帧，用于视图之外发生变化时，`tt.Image()` 是最后一帧，用于快照；`ui.Render` 在给定缩放下绘制一次视图。输入和 `tt.Frame` 会运行视图请求的帧，直到它不再请求，或运行 20 帧：`tt.FramePending` 说明它是否仍在请求，例如一个动画不停或永远无法稳定的视图。
-- **时间。** 测试器有自己的时钟 `tt.Now()`，它静止不动，直到 `tt.Advance(d)` 把它向前移动 `d`，并按各自的时间运行期间到期的帧：有东西移动时每次刷新一帧，`c.After` 和 `Painter.After` 的帧在到期时运行。依赖时间的东西都跟随它：动画、`Context.After`、`Context.Now`、构成双击的单击、一步撤销的键入、插入符的闪烁、工具提示和 toast。因此测试在繁忙的机器上和快速的机器上会得到相同结果：绝不要靠睡眠等待某事发生，而要推进时钟。`Advance` 只运行视图请求的帧：从视图之外改变视图显示的内容后，先调用 `tt.Frame`。`editor.Buffer` 和 `richtext.Document` 的撤销步骤使用系统的时钟。
+- **时间。** 测试器使用独立时钟 `tt.Now()`，只有调用 `tt.Advance(d)` 才会前进 `d`，并按预定时间运行期间到期的帧：动画进行时每次刷新一帧，`c.After` 和 `Painter.After` 请求的帧到期时运行。所有依赖时间的行为都使用该时钟，包括动画、`Context.After`、`Context.Now`、双击判定、连续输入的撤销分组、插入符闪烁、工具提示和短暂提示。这样，无论机器繁忙还是运行很快，测试结果都一致：不要用睡眠等待，而应推进时钟。`Advance` 只运行视图请求的帧；从视图外部修改显示内容后，应先调用 `tt.Frame`。`editor.Buffer` 和 `richtext.Document` 的撤销分组使用系统时钟。
 
   ```go
   tt := ui.NewTester(app.view, 320, 240)
@@ -44,7 +44,7 @@ func TestCounter(t *testing.T) {
 
 ## 实时区域与播报
 
-`tt.Announcements()` 返回视图用 `c.Announce` 请求屏幕阅读器朗读的内容，然后清空记录。要测试实时区域朗读什么，用 `tt.UseScreenReader()` 打开屏幕阅读器：从那时起，每一帧的辅助功能树都会送到它那里；如同 ARIA，变化的 `RoleStatus` 文本和添加到 `RoleLog` 的内容会被礼貌地朗读一次，出现在 `tt.Announcements()` 中，与 `c.Announce` 的文本一起，而 `RoleAlert` 会立即朗读，出现在 `tt.Alerts()` 中。屏幕阅读器开启之前显示的内容不会被朗读，如同真实的屏幕阅读器附加时。
+`tt.Announcements()` 返回视图通过 `c.Announce` 请求朗读的内容，并清空记录。要测试实时区域的播报，可用 `tt.UseScreenReader()` 启用屏幕阅读器模拟：此后每帧的辅助功能树都会交给它处理。与 ARIA 一样，变化后的 `RoleStatus` 文本和新增的 `RoleLog` 内容会在不打断当前朗读的情况下播报一次，与 `c.Announce` 的文本一起出现在 `tt.Announcements()` 中；`RoleAlert` 则立即播报，记录在 `tt.Alerts()` 中。启用前已显示的内容不会补读，与真实屏幕阅读器开始读取窗口时一致。
 
 ```go
 tt := ui.NewTester(view, 400, 300)
@@ -70,7 +70,7 @@ if docs, _ := tt.AccessByRole(ui.RoleLink, "Docs"); docs.Current != ui.CurrentPa
 }
 ```
 
-`tt.AccessAll()` 返回最后一帧每个元素的相同信息，按屏幕阅读器读取它们的顺序，用于对整个视图的检查，例如没有控件缺少名称：
+`tt.AccessAll()` 按屏幕阅读器的读取顺序，返回最后一帧所有元素的上述信息，可用于检查整个视图，例如确保每个控件都有名称：
 
 ```go
 for _, a := range tt.AccessAll() {
@@ -84,4 +84,4 @@ for _, a := range tt.AccessAll() {
 
 ## 测试构建后的应用
 
-测试器在 `go test` 中运行视图。要测试构建后的应用，包括真实窗口，并从另一个进程进行，如同端到端测试运行器或 agent 所做，把[自动化插件](../plugins/automation.md)导入测试构建：它像测试器的 `Find` 那样，按标签或 `Key` 读取每个窗口的元素，对它们执行操作，发送输入，并像 `FramePending` 指示的那样等待帧。
+测试器在 `go test` 中运行视图。要像端到端测试运行器或智能体 一样，从另一个进程测试构建后的应用及其真实窗口，可在测试构建中导入[自动化插件](../plugins/automation.md)：它像测试器的 `Find` 一样，按标签或 `Key` 查找各窗口中的元素，执行操作、发送输入，并根据帧是否仍待处理来等待，类似 `FramePending`。

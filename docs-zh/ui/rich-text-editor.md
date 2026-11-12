@@ -9,9 +9,9 @@
 - **段落：** 标题、项目符号列表、编号列表和任务列表、引用、代码块和对齐。
 - **附件：** 行内的图像。
 - **编辑：** 文字处理器的快捷键和“格式”菜单，以及撤销时让格式随文本一起恢复的功能。
-- **交换：** 以富格式复制和粘贴、在输入属性中组合文字的输入法、Markdown 导出，以及能读出格式的屏幕阅读器。
+- **数据交换：** 保留格式的复制与粘贴、按当前输入样式组合文本的输入法、Markdown 导出，以及能读出格式的屏幕阅读器。
 
-它只布置和绘制视口中的段落，因此长文稿编辑起来像短文稿。
+它只对视口中的段落排版和绘制，因此编辑长文稿与短文稿的开销相近。
 
 ```go
 import "github.com/egoist/mygo/ui/richtext"
@@ -29,7 +29,7 @@ if richtext.Editor(c, app.doc).Fill().Changed() {
 
 ## 文本
 
-`Text` 是带属性的文本：段落，每个都有 `ParagraphStyle`，由文本段组成，每个文本段都有自己的 `Attributes`。它和字符串一样是值类型。它的方法返回新文本，原文本保持不变，新文本与它共享所有未改动的内容。保留一个版本（用于撤销、稍后保存或比较）只花一个指针；其他 goroutine 创建新版本时，仍可从任意 goroutine 读取某个版本。
+`Text` 是带属性的文本，由多个段落组成：每段有自己的 `ParagraphStyle`，段内的每个文本段有自己的 `Attributes`。它和字符串一样是值类型。它的方法返回新文本，原文本保持不变，新旧文本共享所有未改动的内容。保留一个版本（用于撤销、稍后保存或比较）只需一个指针；即使其他 goroutine 正在创建新版本，也可从任意 goroutine 读取已有版本。
 
 ```go
 note := richtext.TextOf(
@@ -55,7 +55,7 @@ note = note.ReplaceString(note.Len(), note.Len(), "\nBread", richtext.Attributes
 - `Format` 改变一个区段的属性；
 - `FormatParagraphs` 改变区段所触及段落的样式。
 
-留作零值的属性采用编辑器的样式：字体、字号和颜色。`Code`、`Link` 和 `Tag`（应用自己在文本段上的标记，例如提及或评论）只承载各自的内容：在它们边缘输入的文本不会并入其中。
+属性为零值时，采用编辑器的字体、字号和颜色。`Code`、`Link` 和 `Tag`（应用为文本段设置的标记，例如提及或评论）只作用于原有内容，在它们边缘输入的文本不会自动并入其中。
 
 段落的样式及其换行符的属性属于段落本身，文字处理器中也是如此：空段落会记住在那里输入会得到什么样式。段落合并或拆分时，每段都采用其第一个 rune 原来所在段落的样式，AppKit 修正段落样式时也是这样：
 
@@ -71,7 +71,7 @@ note = note.ReplaceString(note.Len(), note.Len(), "\nBread", richtext.Attributes
 - 合并两个段落时保留第一个的 ID，除非第一个是空的。
 - 粘贴或插入的段落没有 ID：`Replace` 从不采用它插入文本的 ID，因此不会有两个段落得到同一个 ID。
 
-撤销和重做会让 ID 随文本一起恢复，JSON 会保存它们。剪贴板、HTML、Markdown 和 RTF 会略去它们。可以在创建文本时给出 ID（`TextOf`、`UnmarshalJSON`），也可以让文稿在产生这些段落的那个撤销步骤里，为编辑新产生的段落命名：
+撤销和重做会随文本一起恢复 ID，JSON 也会保存 ID；剪贴板、HTML、Markdown 和 RTF 则不包含 ID。可以在创建文本时设置 ID（`TextOf`、`UnmarshalJSON`），也可以让文稿为编辑中新建的段落分配 ID，并将其计入创建该段落的同一撤销步骤：
 
 ```go
 app.doc = richtext.NewDocument(chapter)
@@ -87,9 +87,9 @@ for start, p := range app.doc.Text().Paragraphs() {
 
 ## 文稿
 
-`Document` 是编辑器所编辑的内容：文本、选区（以及在该处输入会得到的属性），还有撤销历史。应用逐帧保留它。它的方法可以从任何 goroutine 安全调用，所以编辑器显示文稿时，工具栏、菜单或定时器也能格式化、编辑它。编辑器会在下一帧跟上变化。从其他 goroutine 修改时用 `Window.Update` 安排，这样才会有新的一帧。
+`Document` 保存编辑器所编辑的文本、选区及当前输入属性，还有撤销历史，由应用跨帧保留。它的方法可以从任意 goroutine 安全调用，因此工具栏、菜单或定时器都能修改正在显示的文稿，编辑器会在下一帧反映变化。从其他 goroutine 修改时，用 `Window.Update` 安排更新，以确保窗口绘制新的一帧。
 
-命令像编辑器的快捷键那样作用于选区。作用于区段时，命令会修改其中的文本段或段落，作为一步撤销。作用于插入符时，字符格式只改变输入属性：接下来输入的文本会继承它，插入符一移动就会忘记，NSTextView 中的 ⌘B 也是如此。
+命令和编辑器快捷键一样作用于选区。有选中文本时，命令修改相应的文本段或段落，并计为一个撤销步骤。只有插入符时，字符格式命令只改变接下来输入文本的属性；移动插入符后，这些临时输入属性就会清除，NSTextView 中的 ⌘B 也是如此。
 
 ```go
 f := app.doc.Formatting() // the selection's formats, for a toolbar
@@ -118,7 +118,7 @@ if bold.KeepFocus().Clicked() {
 | `SetText` | 替换文本，如同打开另一条笔记，并清除历史 |
 | `IdentifyParagraphs(newID)` | 为没有 `ID` 的段落以及编辑新产生的段落命名 |
 
-`Edit` 在一个 `Edit` 上运行函数，其中的 `Replace`、`ReplaceString`、`Format`、`FormatParagraphs` 和 `Select` 会作为一步撤销修改文稿。选区会跟随变化，AttributedString 跟踪索引也是如此：在插入文本处，插入符移到文本之后；区段则不会在末端增长。
+`Edit` 将一个 `Edit` 对象传给函数，函数内的 `Replace`、`ReplaceString`、`Format`、`FormatParagraphs` 和 `Select` 操作会合并为一个撤销步骤。选区随编辑更新，规则与 AttributedString 跟踪索引相同：在插入符处插入文本，插入符会移到新文本之后；在选区末端插入文本，选区不会扩展。
 
 ```go
 app.doc.Edit(func(e *richtext.Edit) {
@@ -136,13 +136,13 @@ app.doc.Edit(func(e *richtext.Edit) {
 - `Label` 和 `Placeholder`；
 - `Font`，编辑器的字体和字号；
 - `ReadOnly`，用户可以选择、复制文本并单击其中链接；
-- `NoMarkdown`，关闭 Markdown 快捷键；
+- `NoMarkdown`，关闭 Markdown 输入快捷方式；
 - `OnLink`，改为自行打开链接，而不是由系统打开；
 - `OnLinkCommand`，按 ⌘K 时由它询问链接的 URL，例如在浮层中；
 - `TagStyle`，设置带 `Tag` 的文本段的样式；
 - `Menu`，用它代替编辑器自带的菜单构建上下文菜单，适合有自己菜单的应用；
-- `OnKey`，在编辑器处理按键之前被询问，例如文本上方的应用弹出层（补全列表，放在 `Document.CaretRect`）要接管方向键、Enter 和 Escape：返回 true 即取走该按键；
-- `Spans`，收到段落绘制成的 span，可以返回拆分、着色或间距不同的 span，文本保持不变，例如应用按语言给代码块着色，或给字母加间距；它的行为变化时修改 `SpansVersion`，让段落重新布置；
+- `OnKey`，在编辑器处理按键前调用，供应用先行处理，例如让位于 `Document.CaretRect` 的补全列表接管方向键、Enter 和 Escape；返回 true 表示已处理该按键；
+- `Spans`，接收绘制段落所用的 span，可以返回拆分、改色或调整间距后的 span，但不能改变文本，例如按语言高亮代码块，或调整字距；回调的处理逻辑变化时，修改 `SpansVersion` 以触发段落重新排版；
 - `Theme`，文本的外观（见[主题](#主题)）。
 
 按键与文字处理器相同，macOS 之外用 Control 代替 Command：
@@ -167,9 +167,9 @@ app.doc.Edit(func(e *richtext.Edit) {
 - 在列表项、标题、引用或代码块的开头按 Backspace 会先去掉样式，再把段落与上面一段合并。
 - 单击任务的复选框会勾选它，单击链接会打开它：仅限 `http`、`https` 或 `mailto` 地址（`ui.SafeToOpen`），和 Markdown 视图打开链接的方式一样，因为在 Windows 上其他协议和路径会启动程序。`OnLink` 则改为自行打开链接。
 
-Markdown 快捷键会格式化正在输入的内容：在段落开头，`# ` 到 `###### ` 生成标题，`- `、`* ` 和 `+ ` 生成项目符号列表，`1. ` 生成编号列表，`[ ] ` 和 `[x] ` 生成任务，`> ` 生成引用，```` ``` ```` 后再按 Enter 生成代码块。在单词两侧，输入结束标记时，`**bold**`、`*italic*`、`_italic_`、`` `code` `` 和 `~~strikethrough~~` 会格式化它们包住的内容；单词内的下划线，例如 `snake_case` 里的，仍只是普通下划线。撤销会把快捷键还原成实际输入的内容。
+Markdown 输入快捷方式会自动设置格式：在段落开头，`# ` 到 `###### ` 生成标题，`- `、`* ` 和 `+ ` 生成项目符号列表，`1. ` 生成编号列表，`[ ] ` 和 `[x] ` 生成任务，`> ` 生成引用，```` ``` ```` 后再按 Enter 生成代码块。在词语两侧输入 `**bold**`、`*italic*`、`_italic_`、`` `code` `` 或 `~~strikethrough~~` 时，结束标记会触发相应格式；词内的下划线（例如 `snake_case` 中的）保持原样。撤销会取消自动格式，恢复实际输入的文本。
 
-[“格式”菜单的角色](../menus.md#roles)（`RoleFormatMenu`，或 `RoleBold`、`RoleAlignCenter` 等）会作用于拥有键盘焦点的编辑器。“粘贴并匹配样式”会按输入属性粘贴纯文本。
+[“格式”菜单的角色](../menus.md#角色)（`RoleFormatMenu`，或 `RoleBold`、`RoleAlignCenter` 等）会作用于具有键盘焦点的编辑器。“粘贴并匹配样式”会按输入属性粘贴纯文本。
 
 ## 主题
 
@@ -184,11 +184,11 @@ richtext.Editor(c, doc, richtext.EditorOptions{Theme: &richtext.Theme{
 }})
 ```
 
-长度以 em 为单位、按编辑器字号换算，因此主题会随 `Font` 缩放；但内边距和引用竖条的宽度以 DIP 计。改变主题会重新布置文本。编辑器显示的颜色随其文本段一起传给屏幕阅读器。
+长度以 em 为单位，乘以编辑器字号后得到实际尺寸，因此主题会随 `Font` 缩放；内边距和引用竖条宽度除外，它们以 DIP 计。改变主题会使文本重新排版。编辑器显示的颜色也会作为文本段属性传给屏幕阅读器。
 
-正文段落（标题、列表项和代码除外）默认连排，和笔记中一样。如果是散文，可以用以下两种方式之一把它们区分开：
+正文段落（不包括标题、列表项和代码）默认不额外留出段间距或首行缩进，与笔记应用相同。排版文章时，可以用以下两种方式区分段落：
 
-- `FirstLineIndent` 缩进正文段落的第一行，和印刷小说一样（约 1.2 em）。标题、列表、代码块、空段落或采用其他对齐方式的段落（例如居中的场景分隔符 “* * *”）之后的第一段不缩进；引用的第一段同样不缩进，因为它们都不需要靠缩进来区分。只有开头对齐的段落会缩进。
+- `FirstLineIndent` 设置正文段落的首行缩进，类似印刷小说（约 1.2 em）。标题、列表、代码块、空段落或采用其他对齐方式的段落（例如居中的场景分隔符 “* * *”）之后的第一段不缩进；引用的第一段也不缩进，因为这些位置无需再靠缩进区分。只有按起始侧对齐的段落才会缩进。
 - `ParagraphSpacing` 在正文段落之间留出间距，屏幕上排版的散文常这样做。标题保留自己的上下间距。
 
 ```go
@@ -201,7 +201,7 @@ richtext.EditorBase(c, app.doc, richtext.EditorOptions{Theme: &richtext.Theme{
 
 ## 屏幕上的段落
 
-`Document.VisibleParagraphs` 返回显示该文稿的编辑器中视口内的段落：每个段落的索引、起始 rune，以及它各行相对于编辑器元素顶部的位置和高度（单位为 DIP，已计入滚动）。在构建视图时读取它，就能让装订线与段落对齐，例如做时间线、页边批注或段落编号。把装订线放在编辑器旁边，顶部对齐，绘制位置取装订线顶部加上每个段落的顶部：
+`Document.VisibleParagraphs` 返回编辑器视口内各段落的索引、起始 rune，以及文本行区域的顶部位置和高度。位置以编辑器元素顶部为基准，单位为 DIP，已计入滚动偏移。在构建视图时读取这些数据，可以让编辑器侧栏中的时间线、页边批注或段落编号与段落对齐。将侧栏与编辑器顶部对齐，再用侧栏顶部加上段落顶部偏移，作为绘制位置：
 
 ```go
 boxes := app.doc.VisibleParagraphs()
@@ -215,7 +215,7 @@ ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 })
 ```
 
-这些方框就是编辑器在这一帧绘制段落的位置，因为编辑器在读取段落的同时就完成了布置。如果某一帧中它们的位置与读取时不同——例如编辑器滚动了、宽度变了，或显示了插入符——编辑器会再构建一帧，因此装订线会自动跟随，应用无需监视滚动。段落上下的空间（标题的边距、段落之间的间距）不计入它的方框，因此其顶部的标记与第一行对齐。和绘制一样，`VisibleParagraphs` 只布置视口中的内容，因此长文稿中的开销和短文稿中一样小。在编辑器显示文稿之前，它返回 nil。
+读取段落数据时，编辑器会同步完成排版，因此返回的矩形就是这一帧中段落的绘制位置。如果之后位置发生变化，例如编辑器滚动、宽度改变或滚动以显示插入符，就会再构建一帧，让侧栏自动跟随，应用无需监听滚动。矩形不包含标题上下边距或段间距，因此在其顶部绘制标记即可对齐段落第一行。`VisibleParagraphs` 和绘制一样，只对视口内的内容排版，长文稿中的开销也与短文稿相近。在编辑器首次显示文稿前，它返回 nil。
 
 ## 屏幕上的插入符
 
@@ -237,6 +237,35 @@ ui.Box(c).Fill().Children(func() {
 
 和段落一样，插入符的位置就是编辑器在这一帧绘制它的位置：如果某一帧中位置与读取时不同——例如用户输入、编辑器滚动或宽度变化——编辑器会再构建一帧，因此弹出层会跟着插入符。在编辑器显示文稿之前，以及插入符滚出视口（此时弹出层隐藏）时，`ok` 为 false。
 
+## 滚动
+
+编辑器会自行处理滚动：滚轮、滚动条、将选区拖到边缘，以及让插入符保持可见。`Document.ScrollBy` 和 `Document.ScrollToParagraph` 可滚动上次显示该文稿的编辑器，范围限制在文本以内，并请求一帧来显示结果：
+
+| 方法 | 作用 |
+|---|---|
+| `ScrollBy(dy)` | 滚动 `dy` DIP，正值向下，并返回是否发生了移动 |
+| `ScrollToParagraph(i, align)` | 将段落 `i` 对齐编辑器的顶部、中央或底部（`ui.ScrollStart`、`ui.ScrollCenter`、`ui.ScrollEnd`），或以最小滚动量使其可见（`ui.ScrollNearest`），与元素的 `ScrollIntoView` 相同 |
+
+应用在文本上方拖动自定义内容时，例如通过旁边的拖动柄移动内容块，可以在指针接近编辑器顶部或底部时滚动编辑器，与编辑器处理拖动选区时的行为一致：
+
+```go
+// y is the pointer's height in the editor's element, h the element's.
+if app.dragging {
+	switch y, h := app.dragY, app.editorH; {
+	case y < 24:
+		app.doc.ScrollBy(y - 24)
+		c.After(16 * time.Millisecond)
+	case y > h-24:
+		app.doc.ScrollBy(y - (h - 24))
+		c.After(16 * time.Millisecond)
+	}
+}
+```
+
+这两个方法会在滚动时排版可见内容，因此随后读取 `VisibleParagraphs` 和 `CaretRect`，就能得到滚动后段落和插入符的位置。文稿尚未被任何编辑器显示时，两者均不执行操作。
+
+编辑器以视口中的第一段为基准保持滚动位置：上方内容增高时，例如某段首次排版后变高，屏幕上的内容保持不动；该段顶部以下的内容增高时，只推移其下方内容。编辑器具有键盘焦点、且已向下滚动时，如果插入符所在段落可见，就改以该段为基准，类似浏览器优先以获得焦点的可编辑元素作为滚动锚点（CSS Scroll Anchoring 的优先候选项）：视口顶部与插入符之间的内容增高时，例如调整 `EditorOptions.Space` 留出的间距或编辑文本，插入符上方的文本会向上移动，正在输入的行则保持原位。已滚动到顶部的编辑器仍保持在顶部。
+
 ## 在格式边缘输入
 
 输入的文本继承插入符前一个字符的属性。在段落开头，它继承后一个字符的属性；替换选区时，继承选区第一个字符的属性。这些是 NSTextView 的规则（在 macOS 27 上实测），ProseMirror、Lexical 和 Quill 也遵循：
@@ -248,7 +277,7 @@ ui.Box(c).Fill().Children(func() {
 
 ## 附件
 
-附件是一个对象替换字符（U+FFFC），其 `Attributes.Attachment` 持有 `Attachment`：图像，或应用自己绘制的内容；它按行内盒子的形式布置，坐在基线上。它像一个字符一样被选择、复制和删除，换行会绕开它。比编辑器还宽的盒子会缩放以适应。
+附件用对象替换字符（U+FFFC）表示，字符的 `Attributes.Attachment` 保存一个 `Attachment`，内容可以是图像或应用自行绘制的图形。附件作为底部对齐基线的行内盒子参与排版，像单个字符一样被选择、复制和删除，换行不会拆开附件。附件宽于编辑器时，会缩小到可用宽度。
 
 ```go
 photo, _ := ui.DecodeBitmap(data)
@@ -272,7 +301,7 @@ app.doc.InsertAttachment(&richtext.Attachment{Image: photo, Name: "Beach", Width
 
 ## 输入法
 
-输入法在插入符处按输入属性组合，组合过程中带下划线，AppKit 和 Qt 都是这样显示的。整个组合与它替换的内容一起构成一步撤销。
+输入法在插入符处按当前输入属性生成组合文本，组合过程中显示下划线，与 AppKit 和 Qt 一致。整次输入法组合及其替换的内容计为一个撤销步骤。
 
 ## 辅助功能
 
@@ -286,7 +315,7 @@ app.doc.InsertAttachment(&richtext.Attachment{Image: photo, Name: "Beach", Width
 
 ## 大型文稿
 
-文本是分块的 rope，旁边是持久化的段落序列，因此一次编辑只复制它触及的内容以及通往该处的路径，代价为 O(log n)。编辑器只布置视口中的段落，保留附近段落的布局，并估计其他段落的高度。在 100,000 个带格式段落的文稿中输入一个字符，并在 CPU 上绘制这一帧，所需时间和在 1,000 个段落的文稿中差不多（`ui/richtext` 中的 `BenchmarkTypeFrame`）。
+文本采用分块 rope 结构，段落则保存在可保留旧版本的持久化序列中，因此一次编辑只复制受影响的内容及树中通往该处的路径，开销为 O(log n)。编辑器只对视口中的段落排版，缓存附近段落的布局，并估算其他段落的高度。在包含 100,000 个带格式段落的文稿中输入一个字符，再用 CPU 绘制这一帧，所需时间与 1,000 个段落的文稿相近（`ui/richtext` 中的 `BenchmarkTypeFrame`）。
 
 ## Markdown
 
@@ -294,8 +323,8 @@ app.doc.InsertAttachment(&richtext.Attachment{Image: photo, Name: "Beach", Width
 
 - 标题、列表、任务列表、引用和围栏代码块；
 - `**bold**`、`*italic*`、`~~strikethrough~~`、`` `code` ``、链接和图像；
-- 下划线写成 `<u>`；Markdown 的分隔符无法在所在位置打开或关闭的标记，则写成 `<strong>`、`<em>` 和 `<del>`，例如紧挨着 “bar” 之前的粗体 “foo.”。
+- 下划线写成 `<u>`；某个位置无法用 Markdown 分隔符表示格式的开始或结束时，改用 `<strong>`、`<em>` 或 `<del>`，例如粗体 “foo.” 后紧接普通文本 “bar” 的情况。
 
 对齐、字体和颜色没有对应的 Markdown，会被略去。
 
-`ParseMarkdown` 把它读回来，也读取模型或其他应用写的内容：带 GitHub 扩展和脚注的 CommonMark，使用 [Markdown 视图](markdown.md)的解析器（`ui/markdown/parser`）。列表项第一个之后的段落缩进在它下面，表格的行是由制表符分隔其单元格的段落。数学公式保持原样，因为编辑器不显示它。`Markdown` 写出的内容读回来是一样的。
+`ParseMarkdown` 可以读回这些内容，也可以读取模型或其他应用生成的 Markdown。它使用 [Markdown 视图](markdown.md)的解析器（`ui/markdown/parser`），支持 CommonMark、GitHub 扩展和脚注。列表项中从第二段起的段落会缩进对齐到该列表项下方；表格每行转换为一个段落，单元格之间用制表符分隔。数学公式保留原始写法，不作渲染。`Markdown` 导出的内容再解析回来，结果保持一致。

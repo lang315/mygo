@@ -2,19 +2,19 @@
 
 <!-- preview calendar 340 -->
 
-`ui.Calendar` 创建一个按月的日历，用来为 `*time.Time` 选择日期，如同 SwiftUI 的图形日期选择器：单击选择一天，日历持有键盘焦点时方向键也可以；Page Up 和 Page Down 或它的按钮按月切换，Home 和 End 跳到该月的第一天和最后一天。`Changed` 报告新日期，新日期保留原值的时间与时区。
+`ui.Calendar` 创建按月显示的日历，用来选择 `*time.Time` 的日期，类似 SwiftUI 的图形日期选择器：单击可选择日期，日历有键盘焦点时也可用方向键选择；Page Up、Page Down 或日历上的按钮按月切换，Home 和 End 跳到当月的第一天和最后一天。`Changed` 报告新日期，保留原值的时分秒与时区。
 
 ```go
 ui.Calendar(c, &app.day).Label("Due date")
 ```
 
-它从用户区域格式（`Context.Region`：美国为周日，欧洲大部分地区为周一）的每周第一天起显示六周，前后月份的日子显示为灰色，并标记今天。它的标题（"January 2026"、"2026年1月"）、星期几的名称，以及供辅助技术使用的日期名称，都取自窗口语言对应的 CLDR 数据，日期使用该语言的数字；按钮的名称则是 [MyGo 自己的字符串](../i18n.md#mygos-own-strings)。
+它从用户区域格式（`Context.Region`：美国为周日，欧洲大部分地区为周一）的每周第一天起显示六周，前后月份的日子显示为灰色，并标记今天。它的标题（"January 2026"、"2026年1月"）、星期几的名称，以及供辅助技术使用的日期名称，都取自窗口语言对应的 CLDR 数据，日期使用该语言的数字；按钮的名称则是 [MyGo 自己的字符串](../i18n.md#mygo-自己的字符串)。
 
 若要在紧凑的文本框中选择日期，用[日期输入](date-input.md)，它会在下方打开这个日历。
 
 ## 浏览而不选择
 
-`Browse` 让用户浏览日历而不选中日期：它的按钮和 Page Up 与 Page Down 只切换到其他月份，方向键、Home 和 End 只会在日期之间移动，直到单击、Enter 或 Space 选中一天，与日期输入中的日历一样。此后 `Changed` 只报告用户选中的日期，正如[浮层](popover.md)中的日历在选中日期后需要关闭那样：
+`Browse` 让用户浏览日历而不改变选中的日期：日历按钮、Page Up 和 Page Down 只切换月份，方向键、Home 和 End 只移动焦点，单击或按 Enter、Space 才会选中日期，与日期输入中的日历一样。此时 `Changed` 只报告用户确认选择的日期，适合选中日期后就关闭的[浮层](popover.md)日历：
 
 ```go
 chip := ui.Button(c, task.Due.Format("Jan 2"))

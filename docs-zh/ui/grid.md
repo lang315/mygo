@@ -2,7 +2,7 @@
 
 <!-- preview grid 260 -->
 
-`ui.Grid` 像 CSS grid 一样把子元素排成列和行：子元素逐行填满单元格，网格在需要时添加行。`Columns(3)` 创建三列等宽；`ColumnTracks` 逐个设置它们，例如 `ui.Fixed(220)` DIP、`ui.Fr(1)`（其余轨道留下的空间的一份），或 `ui.FitContent()`（与内容一样宽）：
+`ui.Grid` 像 CSS grid 一样把子元素排成列和行：子元素逐行填入单元格，网格按需添加行。`Columns(3)` 创建三个等宽列；`ColumnTracks` 可以逐列设置尺寸，例如 `ui.Fixed(220)` 固定为 220 DIP，`ui.Fr(1)` 占剩余空间的一份，`ui.FitContent()` 则与内容一样宽：
 
 ```go
 ui.Grid(c).Columns(3).Gap(12).Children(func() {

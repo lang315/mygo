@@ -17,11 +17,11 @@ ui.Row(c).Gap(6).Children(func() {
 ui.Icon(c, save).FontSize(24).TextColor(c.Theme().Danger)
 ```
 
-`FontSize` 和 `TextColor` 像对文本那样设置它的大小和颜色；`Size` 则给它另一个尺寸。图标不会在一列中拉伸。
+`FontSize` 和 `TextColor` 与文本一样控制图标的大小和颜色；也可以用 `Size` 指定其他尺寸。图标不会为填满列宽而拉伸。
 
 ## 按钮中
 
-在按钮内部——按钮会把子元素排成一行，并把自身的文本颜色给它们——图标放在标签之前：
+按钮会将子元素横向排列，并让它们继承按钮的文本颜色；在按钮中，把图标放在标签之前：
 
 ```go
 ui.PrimaryButton(c, "").Children(func() {

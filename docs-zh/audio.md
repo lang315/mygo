@@ -33,7 +33,7 @@ hoe.NewPlayer().SetPan(-0.4).SetSpeed(0.95 + rand.Float64()*0.1).Play()
 
 ## 播放器
 
-`Player` 可以播放、暂停（`Pause`），并回到开头（`Stop`）；播完后再次 `Play` 会从开头重放。`Seek` 移动播放位置，`Position` 和 `Duration` 给出当前位置和时长，`Playing` 在结尾变为 false，游戏可以据此等待一个声音结束；`OnEnd` 会在此时用独立的 goroutine 调用一个函数，正如播放列表播完一首接着播下一首（循环的播放器永不结束）。
+`Player` 可以播放、暂停（`Pause`），并回到开头（`Stop`）；播完后再次 `Play` 会从开头重放。`Seek` 调整播放位置，`Position` 和 `Duration` 给出当前位置和时长，`Playing` 在播放结束时变为 false，游戏可以据此等待音效结束；`OnEnd` 会在此时通过独立的 goroutine 调用回调，例如让播放列表接着播放下一首（循环播放时不会触发结束）。
 
 `Position` 表示播放器实际被听到的位置。输出混音会提前于扬声器发声（见[输出](#输出)），`Position` 也就比已混音的内容滞后同样的时间，因此歌词、进度条或由它绘制的可视化能与声音保持同步：`Pause` 之后，输出还在播放已缓冲的内容，它也会继续前进；而 `Play` 之后，它会等到播放器真正发声。`Seek` 和 `Stop` 则会立刻移动它。
 
@@ -41,7 +41,7 @@ hoe.NewPlayer().SetPan(-0.4).SetSpeed(0.95 + rand.Float64()*0.1).Play()
 |---|---|
 | `SetVolume(v)` | 增益：1 为原始音量，0 为静音 |
 | `SetPan(p)` | 从左扬声器（-1）移到右扬声器（1）：单声道保持总功率，立体声则同时作用于两个声道，与 Web Audio 的 `StereoPannerNode` 相同 |
-| `SetSpeed(s)` | 速度和音高一起变，像唱片：2 是两倍快、高一个八度 |
+| `SetSpeed(s)` | 像改变唱片转速一样同时改变速度和音高：2 表示两倍速，音高提高一个八度 |
 | `SetPreservesPitch(true)` | 在任何速度下保持音高，如同 HTML 媒体的 `preservesPitch`：1.5× 的语音仍是录制时的嗓音 |
 | `SetLoop(true)` | 在结尾重新开始，没有间隙 |
 | `SetLoopRange(start, end)` | 从 `end` 循环回 `start`：一首曲子的前奏播放一次，然后是它的循环（`end` 为 0 表示结尾） |
@@ -55,7 +55,7 @@ podcast, err := audio.OpenStream(f)
 podcast.SetPreservesPitch(true).SetSpeed(1.5).Play()
 ```
 
-它适合语音和其他有音高的声音，适用范围约为 0.5× 到 4×，此时鼓声之类的尖锐起音会略显模糊；一个播放器在伸缩时约占用 1% 的单核，不保持音高的播放器则没有额外开销。速度变化、跳转、循环以及开启或关闭它都不会中断，`Position` 和 `OnEnd` 与重采样时一样，仍按源的时间计算。
+它适合语音和其他有音高的声音，适用速度约为 0.5× 到 4×，但鼓声这类突然起音的声音会略显模糊；每个播放器在伸缩时约占用 1% 的单核算力，不保持音高的播放器则没有额外开销。速度变化、跳转、循环以及开启或关闭它都不会中断，`Position` 和 `OnEnd` 与重采样时一样，仍按源的时间计算。
 
 ## 媒体键与“正在播放”
 
@@ -77,8 +77,8 @@ WAV（8 到 32 位整数 PCM，32 或 64 位浮点）开箱即支持。要启用
 | `audio` | WAV | 内置 |
 | `audio/vorbis` | Ogg Vorbis | [jfreymuth/oggvorbis](https://github.com/jfreymuth/oggvorbis) |
 | `audio/mp3` | MP3 | [hajimehoshi/go-mp3](https://github.com/hajimehoshi/go-mp3) |
-| `audio/flac` | FLAC，也在 MP4 中 | [mewkiz/flac](https://github.com/mewkiz/flac) |
-| `audio/aac` | AAC-LC：MP4（.m4a）中的，以及 ADTS（.aac） | [tphakala/go-aac](https://github.com/tphakala/go-aac)，采用 LGPL 许可 |
+| `audio/flac` | FLAC，也支持 MP4 容器中的 FLAC | [mewkiz/flac](https://github.com/mewkiz/flac) |
+| `audio/aac` | AAC-LC：支持 MP4（.m4a）和 ADTS（.aac） | [tphakala/go-aac](https://github.com/tphakala/go-aac)，采用 LGPL 许可 |
 | `audio/mp4` | MP4（.m4a、.mp4、.m4s），含 Apple Lossless（ALAC） | 内置 |
 
 以 ID3 标签开头的文件（MP3 如此，部分 FLAC 和 AAC 文件也如此），按标签之后的格式处理。
@@ -123,7 +123,7 @@ f, _ := os.Open("song.m4a")
 music, err := audio.OpenStream(f)
 ```
 
-它边播放边读取数据包，因此仍在传输中的文件（比如来自网络的流）在读取器等待所需字节时就能随到随播：分片的文件从第一个分片开始播放，长度取自片段索引（`sidx`）；没有索引的文件则在打开时通读一遍以确定长度。编码器的预填充（编辑列表指明要跳过）会被跳过，最后一个包的填充也一样，所以音轨的时长正好等于它编码时的原始长度。跳转会落在所请求的帧上；AAC 还会解码前一个包，因为它的声音与该帧重叠。
+它边播放边读取数据包，因此仍在传输中的文件（比如网络流）也能随到随播，前提是读取器会等待所需的字节到达：分片文件从第一个分片开始播放，时长取自片段索引（`sidx`）；没有索引的文件则在打开时通读一遍以确定时长。编辑列表指定跳过的编码器预填充和最后一个包的尾部填充都会被跳过，因此音轨时长与编码前一致。跳转会落在所请求的帧上；AAC 还会解码前一个包，因为它的声音与该帧重叠。
 
 `mp4.ReadTrack` 无需解码即可从全局媒体头读取音轨信息，适合音乐库扫描文件时使用：包括音轨的编解码器、配置、时长，以及已注册的编解码器是否支持解码（`Decodable`）。`mp4.RegisterCodec` 可按采样条目类型注册自定义编解码器：
 
@@ -133,18 +133,18 @@ mp4.RegisterCodec("Opus", func(config []byte) (mp4.Codec, error) {
 })
 ```
 
-HE-AAC（AAC+，带 SBR）无法解码：这类文件打开会失败，`Decodable` 也会这样表明。go-aac 采用 LGPL 2.1 或更高版本的许可，这一点与 MyGo 不同：导入 `audio/aac` 的应用会链接它，并接受 LGPL 对该库的条款；不导入的应用则不受影响。
+不支持解码 HE-AAC（AAC+，带 SBR）：这类文件打开会失败，`Decodable` 也会这样表明。go-aac 采用 LGPL 2.1 或更高版本的许可，这一点与 MyGo 不同：导入 `audio/aac` 的应用会链接它，并须遵守 LGPL 对该库的条款；不导入的应用则不受影响。
 
 ## 输出
 
-输出在第一次有声音播放时打开，在全部停止五秒后关闭，因此不播放任何内容的应用不会占用音频设备。它以 48 kHz 立体声播放，提前约 40 ms；其他采样率的播放器在播放时重采样。播放得比 48 kHz 快的播放器——88.2、96 或 192 kHz 的声音，或加速播放的声音——会先经过低通滤波：到 20 kHz 保持平坦，从 24 kHz 起衰减 80 dB，这样 24 kHz 以上的内容就不会折返成能听到的音调；每个这样的 96 kHz 播放器约占用 1% 的单核。
+音频输出在首次播放时打开，全部停止五秒后关闭，因此不播放声音的应用不会占用音频设备。输出采用 48 kHz 立体声，提前混音约 40 ms；其他采样率的播放器在播放时重采样。有效采样率高于 48 kHz 的音频——例如 88.2、96 或 192 kHz 的音频，或加速播放的音频——会先经过低通滤波：20 kHz 以内的频率响应保持平坦，24 kHz 及以上衰减 80 dB，避免这些高频成分混叠为可听音调；每个这样的 96 kHz 播放器约占用 1% 的单核算力。
 
 `audio.SetLatency` 设置混音提前多少，与 Web Audio 的 `latencyHint` 相同：
 
 | 延迟 | 提前 | 用于 |
 |---|---|---|
 | `LatencyInteractive`（默认） | 约 40 ms | 游戏和界面：声音收到指令就立即开始、停止和变化 |
-| `LatencyPlayback` | 约 250 ms | 音乐播放器：播放能挺过系统让应用等待的时刻，比如 macOS 在外观变化时最多会让应用等 0.2 s；这种情况下 40 ms 的缓冲会耗尽，能听出停顿 |
+| `LatencyPlayback` | 约 250 ms | 音乐播放器：在系统暂时阻塞应用时维持播放，例如 macOS 切换外观时可能阻塞应用长达 0.2 s；此时 40 ms 的缓冲会耗尽，导致可听的停顿 |
 
 使用 `LatencyPlayback` 时，播放、暂停、跳转和音量变化都会晚这么久才能听到；播放器的 `Position` 跟随实际听到的内容。要在播放前设置：已经打开的输出会重新打开，并丢弃其中缓冲的内容。
 

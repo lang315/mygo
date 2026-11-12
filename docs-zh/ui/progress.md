@@ -19,7 +19,7 @@ ui.Progress(c, app.synced/app.total).TextColor(brand).Background(brandTrack).Lab
 
 进度不确定时，进度条只在可见时播放动画，开销仅限于绘制：窗口按显示器刷新率重绘上一帧，无需重新运行视图。
 
-若要占用空间更少的旋转指示器，用[旋转指示器](spinner.md)；对于并非表示进度的水平读数，如磁盘的使用量，用[量度计](meter.md)。
+若要占用空间更少的旋转指示器，用[旋转指示器](spinner.md)；若要显示磁盘使用量等不表示进度的数值，用[量度计](meter.md)。
 
 ## 辅助功能
 

@@ -2,7 +2,7 @@
 
 <!-- preview checkbox 220 -->
 
-`ui.Checkbox` 创建一个切换 `*bool` 的复选框，带一个标签：单击框或它的标签会勾选或取消勾选，持有键盘焦点时按 Space 也一样，`Changed` 报告单击。
+`ui.Checkbox` 创建带标签的复选框，用于切换 `*bool` 的值：单击复选框或标签会勾选或取消勾选，获得键盘焦点后按 Space 也一样，`Changed` 报告这次操作。
 
 ```go
 ui.Checkbox(c, &app.settings.Sync, "Sync across devices")
@@ -11,11 +11,11 @@ if ui.Checkbox(c, &app.showHidden, "Show hidden files").Changed() {
 }
 ```
 
-复选框在用户单击的瞬间就改变值：直接读取它；之后要做的工作则问 `Changed`。
+用户单击时，复选框会立即修改值：直接读取即可；需要进一步处理时，用 `Changed` 判断是否发生了操作。
 
 ## 组
 
-`ui.CheckboxGroup` 在内部构建的复选框上方创建一个复选框，这些复选框缩进在它下方，如一组权限：全部勾选时它为勾选状态，部分勾选时为混合状态；单击它，或它在持有焦点时按 Space，会全部勾选，若已全部勾选则全部取消。`Changed` 报告单击。
+`ui.CheckboxGroup` 在一组复选框上方创建一个总复选框，内部的复选框缩进显示，例如权限列表：全部勾选时，总复选框显示为勾选状态；部分勾选时显示为混合状态。单击总复选框，或在它获得焦点后按 Space，会全部勾选；若已全部勾选，则全部取消。`Changed` 报告这次操作。
 
 ```go
 ui.CheckboxGroup(c, "Notifications", func() {
@@ -27,7 +27,7 @@ ui.CheckboxGroup(c, "Notifications", func() {
 
 ## 混合
 
-`ui.CheckboxState` 是可以混合的复选框，如表格标题中的“全选”框：每一行都勾选时它勾选，部分勾选时混合。它设置 `*ui.CheckState`，即 `ui.CheckOff`、`ui.CheckOn` 或 `ui.CheckMixed`，混合时显示一个短横线；单击它，或它在持有焦点时按 Space，会勾选它，已经勾选时则取消勾选，`Changed` 报告单击：
+`ui.CheckboxState` 是支持混合状态的复选框，如表头中的“全选”框：全部行都勾选时显示为勾选状态，部分行勾选时显示为混合状态。它设置 `*ui.CheckState`，取值为 `ui.CheckOff`、`ui.CheckOn` 或 `ui.CheckMixed`，混合状态下显示短横线；单击它，或在它获得焦点后按 Space，会勾选它，已勾选时则取消勾选，`Changed` 报告这次操作：
 
 ```go
 all := ui.CheckOff
@@ -50,4 +50,4 @@ if ui.CheckboxState(c, &all, "").Label("Select all").Changed() {
 
 ## 辅助功能
 
-辅助技术看到一个由标签命名的复选框，处于勾选或未勾选状态，它像单击一样切换它；还看到一个可混合的复选框，已勾选、未勾选或混合。复选框组是一个复选框（部分勾选时为混合状态），其余复选框则组成一个由该标签命名的组。
+辅助技术将其识别为由标签命名的复选框，能读取勾选状态，并像单击一样切换它；支持混合状态的复选框还会报告混合状态。复选框组包含一个总复选框（部分勾选时为混合状态），以及由其标签命名的一组子复选框。

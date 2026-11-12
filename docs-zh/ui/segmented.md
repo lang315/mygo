@@ -2,7 +2,7 @@
 
 <!-- preview segmented 200 -->
 
-`ui.Segmented` 创建一个显示标签的分段控件，`*int` 是选中分段的索引，如同视图之间的切换：单击选择一个分段，持有键盘焦点时方向键也可以，`Changed` 报告新选择。
+`ui.Segmented` 创建带文字标签的分段控件，通过 `*int` 保存选中分段的索引，可用于切换视图：单击选择分段，有键盘焦点时也可用方向键选择，`Changed` 报告选择变化。
 
 ```go
 ui.Segmented(c, &app.view, "List", "Grid").Label("View")
@@ -24,7 +24,7 @@ case 1:
 ui.Segmented(c, &app.appearance, "Light", "Dark", "System").FillEqually().Label("Appearance")
 ```
 
-选中的分段占据自己的一份，标签居中，比份额更长的标签以省略号结尾。分段会保持外观、键、辅助技术读取的内容以及禁用状态。在 `FillEqually` 之后设置的宽度（如 `Width(320)`）是控件的宽度，分段仍会平分它。[切换按钮组](toggle.md)也支持它。
+选中的分段占据均分后的宽度，标签居中，超宽时以省略号截断。各分段的外观、按键操作、辅助功能信息和禁用状态不变。在 `FillEqually` 之后设置宽度（如 `Width(320)`），会指定整个控件的宽度，各分段仍平分该宽度。[切换按钮组](toggle.md)也支持此方法。
 
 ## 图标和其他内容
 

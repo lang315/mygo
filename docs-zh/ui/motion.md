@@ -14,27 +14,27 @@ if app.open {
 card.Translate(card.AnimateTo("x", target, ui.Snappy), 0)
 ```
 
-键（`"x"`）用来区分同一个元素的多个值，这个元素需要逐帧保持相同的 ID：一个
-`Key`，或它在兄弟中的同一个位置。值从它的第一个目标开始。这个值可以以任何
-方式使用：变换（见[变换](transforms.md)）、尺寸、不透明度、颜色混合，或
+键（`"x"`）用来区分同一个元素的多个动画值。元素必须在各帧中保持相同的 ID：
+使用相同的 `Key`，或保持在同级元素中的相同位置。值的初始值就是第一个目标值，可用于
+变换（见[变换](transforms.md)）、尺寸、不透明度、颜色混合，或
 `Draw` 绘制的内容。
 
 ## 动画
 
-`Animation` 说明值如何前往新目标：
+`Animation` 指定值如何过渡到新目标：
 
 - **弹簧**，即零值 `Animation` 以及预设 `ui.Smooth`（不回弹）、
   `ui.Snappy`（轻微回弹）和 `ui.Bouncy`（明显回弹）。弹簧在途中目标改变时
-  保留其速度：在飞行途中再次点击，上面的卡片会平滑地掉头，而不是骤然停住。
+  保留当前速度：在移动途中再次点击，上面的卡片会平滑掉头，而不是骤然停住。
 - **曲线**：一个 `Duration` 和一个 `Ease`（为 nil 时用 `ui.EaseOut`），如
   `ui.Animation{Duration: 150 * time.Millisecond, Ease: ui.EaseInOut}`。
   `Animate(key, target, d)` 和 `AnimateWith(key, target, d, ease)` 是它们的
   简写。
 
-弹簧的 `SpringOptions` 按人的感知描述它，带有 `Duration`（为零时是 500 ms），
-大致是它到达所需的时间，以及 `Bounce`，从 0（到达且不越过）趋向 1；负值到达
-得更慢。这些是 SwiftUI 和 Motion 的参数。`Stiffness`、`Damping` 和 `Mass`
-则从物理上描述它：
+弹簧的 `SpringOptions` 用直观参数描述动效：`Duration` 是大致到达目标所需的时间
+（零值表示 500 ms）；`Bounce` 控制回弹程度，从 0（不越过目标）到接近 1，
+负值会让到达目标的过程更慢。SwiftUI 和 Motion 也采用这些参数。`Stiffness`、`Damping` 和 `Mass`
+则使用物理参数描述弹簧：
 
 ```go
 gentle := ui.Animation{Spring: ui.SpringOptions{Duration: 700 * time.Millisecond, Bounce: 0.1}}
@@ -42,9 +42,9 @@ stiff := ui.Animation{Spring: ui.SpringOptions{Stiffness: 400, Damping: 30}}
 x := card.AnimateTo("x", target, gentle)
 ```
 
-`Spring(key, target, options)` 是带弹簧的 `AnimateTo` 的简写。弹簧是精确
-求解的，而不是逐步推进，所以慢帧不会改变它们的路径。值可以在途中改变动画
-种类：弹簧接管曲线时会保留曲线的速度。
+`Spring(key, target, options)` 是使用弹簧的 `AnimateTo` 的简写。弹簧采用精确
+求解，而非逐步模拟，因此慢帧不会改变运动轨迹。动画类型也可在途中切换：
+从曲线切换到弹簧时，会保留曲线当前的速度。
 
 `Easing` 函数有 `ui.Linear`、`ui.EaseIn`、`ui.EaseOut`、`ui.EaseInOut`、
 `ui.Bounce(e)`、CSS 的 `ui.CubicBezier(x1, y1, x2, y2)`，或任何
@@ -59,7 +59,7 @@ row.Background(row.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Mill
 
 颜色在 sRGB 中混合，除非 `Animation` 有 `Oklab`：那就在 Oklab 中混合，如
 渐变的 `Oklab` 混合那样，它在两种饱和颜色之间的路径保持它们的明度和饱和度，
-而不是经过一个暗淡、更深的中间色（黄色到蓝色会经过一些蓝色，而不是灰色）。
+而不是经过一个暗淡、更深的中间色（黄色到蓝色会经过蓝色系的中间色，而不是灰色）。
 [过渡](transitions.md#移动的是什么)的颜色也用它来混合，`ContentTransition`
 变形中的颜色也是如此，`Color.MixOklab` 则这样混合两种颜色：
 
@@ -69,10 +69,10 @@ badge.Background(badge.AnimateColor("bg", level, ui.Animation{Spring: ui.SpringO
 
 ## 只绘制的姿态
 
-上面的值由视图读取，所以每个移动的帧都会运行视图。`AnimatePose` 则移动元素：
-在它自己的变换之后平移、缩放、旋转和淡出它，让它移动的帧只绘制，不运行视图，
-就像 Core Animation 和 Web Animations API 处理变换和不透明度那样。这是最便宜
-的动效，能让大型视图保持流畅：
+上面的值需要由视图读取，因此动画的每一帧都会运行视图。`AnimatePose` 则直接为元素
+添加平移、缩放、旋转和淡出，叠加在元素自身的变换之后。动画帧只重绘，不运行视图，
+类似 Core Animation 和 Web Animations API 对变换和不透明度的处理。这种动效
+开销最低，适合保持大型视图的流畅度：
 
 ```go
 lift := ui.Pose{}
@@ -88,10 +88,10 @@ card.AnimatePose(lift, ui.Snappy)
 `Fade` 淡出，从 0（不透明）到 1（消失）。元素移动时，指针、文本光标和浮层都
 会跟着它，`Transitioning()` 报告它的姿态是否在移动。
 
-姿态从元素第一次被赋予姿态时的位置开始：上一帧没有设置姿态的元素（如第一次
-构建的元素）会立刻显示在它的姿态位置，只有之后的帧把它摆到别处时才移动。要
-从一个姿态进入，如浮出面板出现时升起并淡入，就在一次构建中把元素摆在那里，
-用 `c.Invalidate()` 请求另一帧，然后在下一帧把它摆到它的位置：
+首次设置姿态时，元素会直接显示在该姿态，不播放动画。如果上一帧未设置姿态（例如元素
+首次构建），也遵循这一规则；只有后续帧设置了不同姿态，才会播放过渡。要实现入场动画，
+例如让浮出面板升起并淡入，先在一次构建中设置入场起始姿态，
+用 `c.Invalidate()` 请求下一帧，再在下一帧设置目标姿态：
 
 ```go
 panel := ui.Column(c)
@@ -130,8 +130,8 @@ for i, it := range app.items {
 
 ## 手势
 
-`Draggable` 让指针可以移动并抛出元素，如 motion.dev 的 `drag` 所做：元素
-跟随指针，一旦松开，指针的速度会带着它去往停下的位置，用弹簧：
+`Draggable` 让指针可以拖动并甩出元素，类似 motion.dev 的 `drag`：元素
+先跟随指针，松开后以指针释放时的速度开始弹簧动画，直到停稳：
 
 ```go
 card := ui.Box(c).Size(90, 60).Radius(10).Background(t.Accent)
@@ -142,10 +142,10 @@ card.Draggable(&app.card, ui.DraggableOptions{
 })
 ```
 
-`app.card` 是一个 `ui.Point`，即元素相对其在布局中位置的偏移。指针拖动元素
-时，它跟随指针；指针松开后，它就是元素停下的偏移；设置它就能把元素移到
-那里，就像按钮翻页那样。如果偏移指针为 nil，偏移就由元素自己保存。选项说明
-它如何移动：
+`app.card` 是一个 `ui.Point`，保存元素相对于布局位置的偏移。拖动期间，
+偏移跟随指针；松开后，它表示元素最终停下的位置；应用也可以设置偏移来移动元素，
+例如通过按钮翻页。偏移指针为 nil 时，由元素内部保存偏移。以下选项控制
+移动方式：
 
 - **`Axis`**，`ui.Horizontal` 或 `ui.Vertical`，是它移动的方向；为零值时两个
   方向都可以。
@@ -193,9 +193,9 @@ for i := range app.rows {
 }
 ```
 
-`DragOffset()` 返回元素在这一帧显示的位置，跟随指针或在停下的途中，供跟随
-它的东西使用，如随表单下滑而淡出的背景。读取它会在元素移动的每一帧中构建
-视图，就像 `AnimateTo` 那样；要在 `Draggable` 之后调用它：
+`DragOffset()` 返回元素在当前帧实际显示的偏移，包括拖动中和松开后尚未停稳时的偏移，
+用于联动效果，例如附着式对话框下滑时背景随之淡出。与 `AnimateTo` 一样，读取它会让元素
+移动的每一帧都重新构建视图；应在 `Draggable` 之后调用：
 
 ```go
 backdrop := ui.Box(c).Absolute().Fill().Background(ui.RGBA(0, 0, 0, 0.4))
@@ -211,9 +211,9 @@ backdrop.Opacity(1 - sheet.DragOffset().Y/400)
 
 ### 手动实现
 
-对于除跟随指针的偏移之外的值，如拨盘的角度，要用更小的部件构建手势。`Jump`
-立即设置值，跟随指针，并记录它移动得多快；指针松开后接管的弹簧从那个速度
-开始。`DragEnded` 报告指针松开时的速度，`SpringOptions.Velocity` 把它交给
+对于拨盘角度等并非位置偏移的值，可以用底层功能组合手势。`Jump`
+立即设置值以跟随指针，同时记录变化速度；松开后，弹簧以该速度
+继续动画。`DragEnded` 报告指针释放时的速度，通过 `SpringOptions.Velocity` 传给
 弹簧：
 
 ```go
@@ -266,16 +266,16 @@ if toast.Arrived("fade") {
 
 ## 不使用动画
 
-`c.DisableAnimations()` 让这一帧的值、过渡、姿态和路由页面立即到达目标，如
-SwiftUI 的 `disablesAnimations`：用于不应显示为动效的变化，如恢复窗口状态或
-跳到搜索结果。在构建会变化的内容之前调用它。`Keyframes` 和时间线自行播放，
-而不是朝向目标，并按原样继续；要跳转时间线，用 `Seek`。`c.Instant()` 报告这
-一帧是否如此，供自己移动值的视图使用，好让它在相同的帧中停下。
+`c.DisableAnimations()` 让当前帧中的动画值、过渡、姿态和路由页面立即到达目标，类似
+SwiftUI 的 `disablesAnimations`，适用于恢复窗口状态、跳转搜索结果等无需动效的变化。
+应在构建变化内容之前调用。`Keyframes` 和时间线按序列自行播放，
+不依赖目标值，因此不受影响；跳转时间线要用 `Seek`。`c.Instant()` 报告当前帧是否禁用了
+动画，自行实现动画的视图也可据此在同一帧中直接到达目标。
 
 ## 关键帧
 
-`Keyframes` 播放带时间的值，每个区段沿它到达的那一关键帧的 `Ease` 进行，并
-保持最后一个：
+`Keyframes` 按指定时间播放一系列值，每一段使用终点关键帧的 `Ease` 插值，
+播放完毕后保持最后一个值：
 
 ```go
 tile := ui.Box(c).Key("tile").Size(80, 50)
@@ -296,13 +296,13 @@ tile.Translate(x, 0)
 
 ## 时间线
 
-`Timeline` 沿一个播放头播放多个补间，所以属于同一组的动效可以一起安排、控制
-和测试：卡片到达时标题淡入、各行依次跟随、卡片落地后的小回弹。`AnimateTo`
-把一个元素的一个值移向目标，`Keyframes` 沿带时间的停靠点播放一个值；时间线
-围绕同一个时钟协调许多这样的值，每个补间各管各的。
+`Timeline` 用同一个播放头驱动多个补间动画，便于统一安排、控制和测试一组动效：
+卡片移入时标题淡入、各行依次出现、卡片到位后轻微回弹。`AnimateTo`
+将一个元素的一个值过渡到目标，`Keyframes` 按时间节点播放一个值；时间线
+则用同一个时钟协调多个值，每个值由独立的补间控制。
 
-元素会像保存 `Keyframes` 一样，在一个键下保存时间线：在视图中构建它，如其他
-一切，并给每个补间它这一帧要显示的值：
+元素像保存 `Keyframes` 一样，按键保存时间线。在视图中构建时间线，
+并为每个补间指定当前帧显示值的接收位置：
 
 ```go
 card := ui.Column(c)
@@ -314,14 +314,14 @@ card.Translate(x, 0).Opacity(fade)
 ```
 
 补间默认缓出（`EaseOut`），除非它的 `Ease` 另有说明，和 `Animation` 一样。
-没有指定放置方式的补间会紧接着前一个开始，所以这里第二个会在 400ms 开始；
+没有指定放置方式的补间会在前一个结束后立即开始，所以这里第二个会在 400 ms 开始；
 放置方式可以把它放到别处，就像 GSAP 的位置参数那样：
 
 | 放置方式 | 补间开始于 |
 | --- | --- |
-| `AfterPrevious(50*time.Millisecond)` | 前一个结束后的 50ms；负偏移与它重叠，如上面的 `-150ms` 让淡入在 250ms 开始 |
-| `WithPrevious(0)` | 前一个开始的地方，与它一起移动，或在那之后的一个偏移 |
-| `AtLabel("rows", 100*time.Millisecond)` | 某个标签之后的 100ms |
+| `AfterPrevious(50*time.Millisecond)` | 前一个结束后的 50 ms；负偏移与它重叠，如上面的 `-150ms` 让淡入在 250 ms 开始 |
+| `WithPrevious(0)` | 与前一个补间同时开始；也可指定相对于该时刻的偏移 |
+| `AtLabel("rows", 100*time.Millisecond)` | 某个标签之后的 100 ms |
 | `AtTime(500*time.Millisecond)` | 时间线的某个时间 |
 
 任何补间都不会早于时间线开始：早于开始的放置会落在开始处。
@@ -345,10 +345,10 @@ for i, shown := range app.rows {
 
 ### 播放
 
-`Duration` 是最后一个补间的结束，`Time` 是播放头所在的位置，`Progress` 是它
-的进度，从 0 到 1，供拖动进度条使用。`Paused` 把播放头保持在原处：时间线
-暂停期间花掉的时间，不算它播放过的时间，所以解除暂停后，它会从停下的地方
-继续播放，无论暂停了多久。`Reverse` 从播放头所在处反向播放到它的开始，如
+`Duration` 是最后一个补间的结束时间，`Time` 是播放头的当前时间，`Progress` 是
+0 到 1 的播放进度，可用于拖动进度条。`Paused` 将播放头固定在原处：
+暂停时间不计入播放时间，因此无论暂停多久，恢复后都会从暂停处
+继续播放。`Reverse` 从播放头当前位置反向播放到起点，例如
 一个按打开时相反方向关闭的面板（`Reverse: !app.open`）；在反向状态下被重新
 播放的时间线会从末尾开始。`Seek` 和 `Progress` 在给出期间把时间线保持在某个
 时间或某个进度，不给它们时则从那里继续；最多给出其中一个。选项的内容在设置
@@ -388,10 +388,10 @@ tl := card.Timeline("intro", o)
 
 ## 滚动
 
-`InView()` 报告元素是否有一部分在上一帧中显示在它周围的滚动容器内，以便在
-它滚动进入视野时把它带入。当它依据的状态变化时，比如滚动把元素带入视野，
-MyGo 会构建另一帧，这样视图无需等待下一次输入就能读到新答案；`InViewMargin`
-和 `InViewAmount` 也一样，不读取它们任何一个的元素不消耗帧。`ScrollState`
+`InView()` 报告上一帧中，元素是否至少有一部分在周围滚动容器的可见区域内，便于
+在元素滚入视口时播放入场动画。相关状态变化时，例如滚动使元素进入视口，
+MyGo 会再构建一帧，让视图无需等待下一次输入就能读取新结果。`InViewMargin`
+和 `InViewAmount` 也遵循这一规则；不读取这些方法的元素不会因此请求帧。`ScrollState`
 （见[滚动](scroll.md)）给出它的容器滚动了多远，用于跟随滚动的效果：
 
 ```go
@@ -440,8 +440,8 @@ if card.InViewAmount(0.5) {
 
 ## 变化的内容
 
-`ContentTransition` 为元素内容的变化做动画：`Text` 的文本、`Icon` 的图标、
-`Image` 的图片。默认情况下旧内容淡出、新内容淡入，图标缩走而新图标长入。
+`ContentTransition` 为元素内容的变化添加动画：`Text` 的文本、`Icon` 的图标、
+`Image` 的图片。默认旧内容淡出、新内容淡入；旧图标缩小消失，新图标放大出现。
 `Numeric` 让一行文本中变化的字符滚动，如计数器的数字，不变的字符则保持
 不动：向上，或带 `Down` 时向下，如 SwiftUI 的 numericText：
 
@@ -465,9 +465,9 @@ ui.Text(c, app.title).ContentTransition(ui.ContentTransition{Morph: true})
 
 ## 循环与自己的动效
 
-`Loop` 返回每个周期重新开始的动画的进度，用于加载指示器和脉冲（见
-[绘制与动画](drawing.md#动画)）。要以其他方式动画，从 `c.Now()` 计算，
-并在每个移动的帧中调用 `c.AnimationFrame()`。
+`Loop` 返回周期性循环动画的进度，可用于加载指示器和脉冲效果（见
+[绘制与动画](drawing.md#动画)）。要实现其他动画，可根据 `c.Now()` 计算状态，
+并在动画的每一帧调用 `c.AnimationFrame()`。
 
 ## 减少动效与帧
 
@@ -477,10 +477,10 @@ ui.Text(c, app.title).ContentTransition(ui.ContentTransition{Morph: true})
 [过渡](transitions.md)的颜色和淡入淡出。`Loop` 继续，如系统的加载指示器
 那样。
 
-一个值是否移动什么，由视图自己说明。不移动任何东西的值（如不透明度、模糊或
-视图自己驱动的交叉淡入淡出）在其 `Animation`、`KeyframeOptions` 或
-`TimelineOptions` 上用 `NonMotion` 说明，这样在减少动效时它仍然会有动画，如
-元素自己的淡入淡出那样：
+视图需要明确说明动画值是否会让内容移动。不涉及移动的值，例如不透明度、模糊或
+视图自行驱动的交叉淡入淡出，可在 `Animation`、`KeyframeOptions` 或
+`TimelineOptions` 中设置 `NonMotion`。这样启用减少动效后仍会播放动画，与
+元素自身的淡入淡出行为一致：
 
 ```go
 op := e.AnimateTo("fade", target, ui.Animation{Duration: 200 * time.Millisecond, NonMotion: true})
@@ -491,9 +491,9 @@ ui.Image(c, second).Opacity(op)
 对于位置、尺寸、缩放或滚动，不要设置它，并给会移动的部分单独配一条时间线，
 与淡入淡出的时间线并列，它会在减少动效时立即停到终点。
 
-只有在有东西移动时，动画才会绘制帧，按显示器的速率；窗口不在视线内时（见
-下文）则不绘制。移动视图读取的值的帧会运行视图；姿态、内容过渡以及从 `Draw` 动画的
-绘制只绘制。
+动画只在内容仍有变化时按显示器刷新率绘制帧；窗口不可见时（见
+下文）则不绘制。如果变化的值需要由视图读取，动画帧会运行视图；姿态、内容过渡，
+以及在 `Draw` 中计算的动画则只重绘。
 
 ## 不在视线内
 
@@ -548,6 +548,6 @@ if c.Now().Sub(app.count.changed) < ease {
 }
 ```
 
-- **让工作远离视图。** 从视图、从 `After` 或从 `Draw` 进行轮询、保存或启动
-  任务，会在窗口不在视线内时等待。要从应用（goroutine 或 `time.Ticker`）运行
-  这样的工作，并用 `Window.Update` 显示它所做的。
+- **不要在视图中执行后台工作。** 在视图、`After` 或 `Draw` 中轮询、保存或启动
+  任务，都会在窗口不可见时暂停。应在应用中通过 goroutine 或 `time.Ticker` 执行
+  这些工作，再用 `Window.Update` 更新界面。

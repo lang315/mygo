@@ -14,7 +14,7 @@ ui.Combobox(c, &app.font, fonts).Label("Font")
 
 ## 无外观
 
-`ui.ComboboxBase` 是无外观的组合框：`Input` 的文本过滤下方 `Popup` 中的 `Item`，方向键高亮它们，Enter 或单击选择（`Chosen`）：见[自定义控件](custom-widgets.md)。当选项就是与输入内容匹配的那些时（如下例），用 [`cb.Input.AutoComplete(ui.AutoCompleteList)`](accessibility.md#建议) 告诉辅助技术。
+`ui.ComboboxBase` 是无外观的组合框：`Input` 的文本用于筛选下方 `Popup` 中的 `Item`，方向键移动高亮，Enter 或单击确认选择（`Chosen`）：见[自定义控件](custom-widgets.md)。如果选项与输入内容匹配（如下例），用 [`cb.Input.AutoComplete(ui.AutoCompleteList)`](accessibility.md#建议) 向辅助技术声明这一点。
 
 没有选项的弹出层会隐藏，除非它含有其他可读内容，例如一行“没有匹配项”的提示，这时它会显示在选项的位置上：
 
@@ -33,4 +33,4 @@ cb.Popup(func(panel ui.Element) {
 
 ## 辅助功能
 
-辅助技术看到一个由 `Label` 命名的组合框，可以像文本框一样编辑，展开后其选项补全所输入的内容（`aria-autocomplete="list"`）；方向键所在的选项对它持有焦点，并读作“第几项，共几项”。没有选项时，焦点留在文本框中，显示一行替代内容的弹出层会在出现时被读出。
+辅助技术会将其识别为由 `Label` 命名、可展开的组合框，能像文本框一样编辑，选项用于补全输入内容（`aria-autocomplete="list"`）；方向键高亮的选项会被识别为焦点项，并朗读为“第几项，共几项”。没有选项时，焦点留在文本框中；弹出层中替代选项的提示行会在出现时被读出。

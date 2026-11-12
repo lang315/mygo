@@ -4,7 +4,7 @@ MyGo 封装了桌面应用最常用的操作系统功能，适用于窗口显示
 
 ## 对话框
 
-`mygo.Dialog` 显示系统的文件和消息对话框，调用会阻塞直到用户作出选择：绑定方法在独立的 goroutine 中运行，可以直接调用；事件监听器和菜单项回调需要尽快返回，应另起 goroutine 调用。`Parent` 指定对话框所属的窗口；在 macOS 上，对话框以附着在父窗口上的面板（sheet）形式显示。
+`mygo.Dialog` 显示系统的文件和消息对话框，调用会阻塞直到用户作出选择：绑定方法在独立的 goroutine 中运行，可以直接调用；事件监听器和菜单项回调需要尽快返回，应另起 goroutine 调用。`Parent` 指定对话框所属的窗口；在 macOS 上，对话框以附着式对话框（sheet）形式附着在父窗口上。
 
 ```go
 // Pick files.
@@ -144,7 +144,7 @@ mygo.Clipboard.Clear()
 
 页面也可以使用 Web 的 `navigator.clipboard`。
 
-`Clipboard.Write(transfer.Data)` 和 `Clipboard.Read(formats...)` 共享原生拖放模型：有序的项、备选表示、文件列表、自定义 MIME 格式和惰性提供者。`Formats` 无需请求字节就能发现可移植的名称；`ReadFormat`、`ReadFiles`、`WriteFiles` 和 `Flush` 提供显式协商、文件传输和持久化。关于提供者的生命周期和原生格式映射，见[剪贴板和拖放数据](data-transfer.md)。[剪贴板示例](../examples/clipboard)演示了这些操作。
+`Clipboard.Write(transfer.Data)` 和 `Clipboard.Read(formats...)` 使用与原生拖放相同的数据模型：有序的数据项、同一数据的多种表示、文件列表、自定义 MIME 格式，以及按需提供数据的提供者。`Formats` 无需读取数据就能列出跨平台的格式名称；`ReadFormat`、`ReadFiles`、`WriteFiles` 和 `Flush` 用于显式协商格式、传输文件和持久保存数据。关于提供者的生命周期和原生格式映射，见[剪贴板和拖放数据](data-transfer.md)。[剪贴板示例](../examples/clipboard)演示了这些操作。
 
 ## Shell
 
@@ -331,7 +331,7 @@ mygo.Network.OnChanged(func(s mygo.NetworkStatus) {
 })
 ```
 
-`Online` 表示系统有到计算机之外某个网络的连接，如同浏览器的 `navigator.onLine`，但这并不证明服务器会应答：位于强制门户之后的网络，或通往互联网的路径中断的网络，也算在线。macOS 和 Linux 计算是否有出去的路线（一条已连通的路径，GLib 的 `network-available`），Windows 则看连接级别是否为本地访问或更高。`Metered` 在 macOS 上是高费用路径（蜂窝网络、手机热点）或低数据模式，在 Linux 上是按流量计费的连接，在 Windows 上是费用固定或可变、或会漫游、已超出或接近数据上限的连接。在浏览器中 `Online` 就是 `navigator.onLine`，`Metered` 为 false。
+`Online` 表示系统有到计算机之外某个网络的连接，如同浏览器的 `navigator.onLine`，但这并不证明服务器会应答：位于强制门户之后的网络，或通往互联网的路径中断的网络，也算在线。macOS 和 Linux 检查是否有可用的网络路由（一条已连通的路径，GLib 的 `network-available`），Windows 则看连接级别是否为本地访问或更高。`Metered` 在 macOS 上是高费用路径（蜂窝网络、手机热点）或低数据模式，在 Linux 上是按流量计费的连接，在 Windows 上是费用固定或可变、或会漫游、已超出或接近数据上限的连接。在浏览器中 `Online` 就是 `navigator.onLine`，`Metered` 为 false。
 
 `Status` 可以从任何 goroutine 安全调用；在 macOS 上，第一次调用会等待系统的第一个回答，它会在几毫秒内到来。从第一次调用 `OnChanged` 起开始监视变化；它的监听器只在状态变化时运行，且运行在主线程上。`OnChanged` 返回一个用于移除监听器的函数。
 
@@ -351,7 +351,7 @@ func init() {
 
 网页通过 webview 访问网络，webview 遵循用户在系统设置中设置的代理，包括其绕过列表和设置脚本（PAC 文件）：WebView2 如同 Chromium，从 Windows 的代理设置读取；WKWebView 从 macOS 的代理设置读取；WebKitGTK 通过 GIO 的默认代理解析器读取 GNOME 的设置，在 KDE 上则通过 libproxy 读取其设置。
 
-Go 的 `http.DefaultClient` 只读取 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY`。包 `netproxy` 让 Go 的请求像页面一样遵循系统设置，MyGo 自己的请求也使用它：[更新器](updates.md)的请求，以及 [fetch](plugins/fetch.md) 和 [websocket](plugins/websocket.md) 插件的请求（除非它们的选项指定了客户端）。你自己的客户端可以用它的 transport 接入：
+Go 的 `http.DefaultClient` 只读取 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY`。包 `netproxy` 让 Go 的请求像页面一样遵循系统设置，MyGo 自己的请求也使用它：[更新器](updates.md)的请求，以及 [fetch](plugins/fetch.md) 和 [websocket](plugins/websocket.md) 插件的请求（除非它们的选项指定了客户端）。你自己的客户端可以用它的传输层接入：
 
 ```go
 import "github.com/egoist/mygo/netproxy"
@@ -359,13 +359,13 @@ import "github.com/egoist/mygo/netproxy"
 client := &http.Client{Transport: netproxy.Transport(), Timeout: time.Minute}
 ```
 
-或者，如果你想用自己的 transport，则设置 `t.Proxy = netproxy.Proxy`。对每个请求：
+或者，如果你想用自己的传输层，则设置 `t.Proxy = netproxy.Proxy`。对每个请求：
 
 1. 回环主机（`localhost`、`*.localhost`、`127.0.0.0/8`、`::1`）直接访问。
 2. 如果设置了 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 或 `NO_PROXY`（或其小写名称），则由环境变量决定，与 `http.ProxyFromEnvironment` 相同，因此只为应用某次运行设置的代理会优先。
 3. 否则由系统针对该 URL 的设置决定：在 Windows 上是由 WinHTTP 读取的用户设置，带自动检测（WPAD）和设置脚本；在 macOS 上是由 CFNetwork 读取的“系统设置 > 网络 > 代理”中的设置，带设置脚本；在 Linux 上是 GIO 的默认代理解析器，如同 WebKitGTK。系统没有答案时，请求直接连接。
 
-系统对某个 scheme 和主机的答复会保留 5 秒，因此开启、关闭或修改代理后，应用运行期间后续的请求会随之生效。进行中的请求，例如下载或流，会保持它们的连接。Go 的 transport 支持 HTTP、HTTPS 代理以及 SOCKS5，不支持 SOCKS4；只有系统的答复中包含代理密码时，它才会发送密码，GNOME 的设置就可能包含密码。在浏览器中，Go 的请求由浏览器通过自己的代理发出。
+系统针对特定 URL 协议 和主机返回的代理设置会缓存 5 秒，因此应用运行期间开启、关闭或修改代理后，后续请求会采用新设置。正在进行的下载或流等请求仍使用原连接。Go 的传输层 支持 HTTP、HTTPS 代理和 SOCKS5，不支持 SOCKS4；只有系统返回的设置中包含代理密码时，才会发送密码，GNOME 的设置就可能包含密码。在浏览器中，Go 的请求由浏览器通过自己的代理发出。
 
 ## 机密
 

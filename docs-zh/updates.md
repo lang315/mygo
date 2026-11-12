@@ -1,6 +1,6 @@
 # 自动更新
 
-用 MyGo 构建的应用会从已签名的发布版本更新自己，这些发布版本放在 GitHub 或任何 HTTPS 服务器上。`mygo build` 用你的密钥为每个平台的构建签名；应用中的 `mygo.Updater` 下载更新的版本，用编译进应用的公钥校验签名，然后用它替换应用。
+MyGo 应用可从 GitHub 或任意 HTTPS 服务器下载已签名的版本，完成自我更新。`mygo build` 使用你的密钥为各平台的构建产物签名；应用中的 `mygo.Updater` 下载新版本，用编译进应用的公钥验证签名，再替换应用。
 
 ## 设置
 
@@ -26,7 +26,7 @@ export default defineConfig({
 
 `github` 是一个公开仓库，更新放在它的发布版本里，标签为 `v1.2.0` 等。应用读取其最新发布版本的清单。
 
-一个仓库里也可以有其他发布版本，例如某个命令行工具的发布版本，而它一直是该仓库的最新发布版本。给应用的发布版本设置自己的 `tagPrefix`，例如用 `desktop-v` 对应 `desktop-v1.2.0` 这样的标签，应用、`install.sh` 和增量更新就会改为通过 GitHub API 查找带该前缀、既不是草稿也不是预发布的最新发布版本：每次检查一个请求，在 API 对每个地址每小时 60 个请求的限额之内。有 `GH_TOKEN` 或 `GITHUB_TOKEN` 时，`mygo build` 会用它们。
+同一仓库还可以发布其他产品，例如让命令行工具始终占据仓库的“最新发布版本”。为桌面应用设置独立的 `tagPrefix`，例如用 `desktop-v` 匹配 `desktop-v1.2.0`，应用、`install.sh` 和增量更新构建就会通过 GitHub API 查找带此前缀的最新正式版本，跳过草稿和预发布。每次检查只需一个请求，受 API 每个 IP 地址每小时 60 次请求的限额约束。`mygo build` 会优先使用环境中已有的 `GH_TOKEN` 或 `GITHUB_TOKEN`。
 
 对于你自己的服务器或 [S3 存储桶](#发布到-s3)，改为设置 `url`，即一个目录的 HTTPS URL：
 
@@ -48,9 +48,9 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat path/to/mygo-update.key)" bun run build        #
 MYGO_UPDATER_PRIVATE_KEY="$(cat path/to/mygo-update.key)" go tool mygo build   # native UI
 ```
 
-在每个平台的安装程序旁边，它还会写出：
+除了各平台的安装程序，还会生成：
 
-- `my-app-1.2.0-darwin-arm64.tar.gz`，安装后的应用，以应用的 [`slug`](configuration.md#应用) 命名，
+- `my-app-1.2.0-darwin-arm64.tar.gz`，包含与安装后相同的应用文件，以应用的 [`slug`](configuration.md#应用) 命名，
 - 从之前的版本生成的[增量更新](#增量更新)，例如 `my-app-1.1.0-to-1.2.0-darwin-arm64.delta`，以及
 - `update-darwin-arm64.json`，清单：版本、发布说明、日期，以及归档和每个增量更新的 URL、大小与签名。
 
@@ -60,7 +60,7 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat path/to/mygo-update.key)" go tool mygo build   #
 
 把文件发布到 `updates` 指向的位置：
 
-- **GitHub**：`mygo build -upload` 把它们连同安装程序上传到该版本的草稿发布版本。把它正式发布后，它就会成为应用所检查的最新发布版本：它们从 `https://github.com/you/my-app/releases/latest/download/` 读取清单。如果应用有自己的 `tagPrefix`，这个草稿不应当成为最新发布版本，最新发布版本仍应是其他发布版本：用 `gh release edit desktop-v1.2.0 --draft=false --latest=false` 发布它，或取消勾选“设为最新发布版”，应用会按标签找到它。
+- **GitHub**：`mygo build -upload` 将这些文件连同安装程序上传到对应版本的草稿发布中。正式发布后，它会成为应用检查的最新发布版本，应用从 `https://github.com/you/my-app/releases/latest/download/` 读取清单。如果应用设置了独立的 `tagPrefix`，就应保留其他产品的“最新发布版本”标记：用 `gh release edit desktop-v1.2.0 --draft=false --latest=false` 发布，或取消勾选“设为最新发布版”。应用会按标签找到自己的版本。
 - **S3**：`mygo build -upload` 把它们连同安装程序上传到 `updates.s3` 的存储桶；见[下文](#发布到-s3)。
 - **你自己的服务器**：把归档、增量更新和清单上传到 `url` 目录，连同 `install.sh`、`install.ps1` 和 `SHA256SUMS`（每个平台各有一行），并把较早版本的文件留在那里。最后上传清单，这样应用永远不会看到文件缺失的清单。
 
@@ -68,13 +68,13 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat path/to/mygo-update.key)" go tool mygo build   #
 
 ### 预发布
 
-GitHub 标记为预发布的发布版本，例如 `1.3.0-beta.1`，永远不会成为最新发布版本，所以已安装的应用会跳过它。带 beta 的应用通过 `mygo.Updater.SetPrereleases(true)` 让选择 beta 的用户看到预发布：它们的检查随后通过 GitHub API 读取版本最高、且不是草稿的发布版本，因此会得到下一个预发布，以及它之后的发布版本。版本按语义化版本规则比较，`1.3.0-beta.2` 在 `1.3.0-beta.10` 之前，`1.3.0-beta.10` 在 `1.3.0` 之前。关闭它不会安装更旧的版本：一旦某个发布版本比应用正在运行的预发布版本更新，应用就会再次更新。这个选择只在应用运行期间有效；应用要自己保存它，例如保存在设置中，并在启动时调用 `SetPrereleases`。
+GitHub 上标记为预发布的版本（如 `1.3.0-beta.1`）不会成为“最新发布版本”，因此已安装的应用默认会跳过。提供 beta 通道的应用可调用 `mygo.Updater.SetPrereleases(true)`，让选择该通道的用户接收预发布更新。此后会通过 GitHub API 查找非草稿中版本号最高的版本，既能接收后续预发布，也能接收之后的正式版本。版本号按语义化版本规则比较：`1.3.0-beta.2` 早于 `1.3.0-beta.10`，`1.3.0-beta.10` 早于 `1.3.0`。关闭预发布不会降级；等到有正式版本高于当前预发布版本时，应用才会再次更新。该选项只在本次运行期间有效，应用需自行保存，例如存入设置，并在启动时调用 `SetPrereleases` 恢复。
 
 ```go
 mygo.Updater.SetPrereleases(settings.Beta)
 ```
 
-发布预发布版本时把它标为预发布，这样它不会成为每个应用都会检查的最新发布版本：`gh release edit v1.3.0-beta.1 --draft=false --prerelease`，或勾选“设为预发布版”。检查会从最新的发布版本往下读，直到找到不是预发布的最新一个，通常只需一个请求，在 API 对每个地址每小时 60 个请求的限额之内，无论有没有 `tagPrefix`。增量更新以已发布的版本为起点，所以运行预发布版本的应用会完整下载下一个版本。从 `url` 更新的应用无论哪种方式都读取服务器上的清单。
+发布测试版本时，务必将其标为预发布，避免成为所有应用都会检查的“最新发布版本”：可运行 `gh release edit v1.3.0-beta.1 --draft=false --prerelease`，或勾选“设为预发布版”。检查会从最新发布版本向前查找，直到找到最近的正式版本；无论是否设置 `tagPrefix`，通常只需一个请求，受 API 每个 IP 地址每小时 60 次请求的限额约束。增量更新以已发布的正式版本为基础，因此运行预发布版本的应用会完整下载下一版本。从 `url` 更新的应用则不受此选项影响，始终读取服务器提供的清单。
 
 ### 发布到 S3
 
@@ -106,7 +106,7 @@ export default defineConfig({
 
 如果最新的 GitHub 发布版本没有正在构建的平台的清单，构建会按配置的标签前缀在更早的发布版本中查找该平台的清单，跳过草稿和预发布。这样，在各平台分别发布时，增量更新及其历史仍能保留。已安装的应用仍然检查配置的更新源。
 
-如果应用的版本有对应的增量更新，它会下载这个增量更新，校验签名，并在自己旁边以自身为基础生成新版本，同时检查每个文件的大小和 SHA-256 是否与增量更新给出的值相符，使结果与发布的版本完全一致，包括代码签名。任何一步失败时，例如应用自安装以来被更改，它就改为下载归档。
+如果当前版本有对应的增量更新，应用会下载并校验签名，再以已安装文件为基础，在应用所在目录旁生成新版本。生成时逐个校验文件大小和 SHA-256，确保结果与发布版本完全一致，包括代码签名。任何一步失败（例如安装后的应用文件曾被修改），都会改为下载完整归档。
 
 ## 更新窗口
 
@@ -118,11 +118,11 @@ import "github.com/egoist/mygo/plugins/updater"
 mygo.Use(updater.Plugin)
 ```
 
-它的页面会介绍“检查更新…”菜单项、它的选项、它保存的偏好设置、它支持的语言，以及 `native.Plugin`——为不显示网页的应用提供相同窗口的原生 UI 版本。
+插件文档介绍了“检查更新…”菜单项、配置选项、保存的偏好设置、支持的语言，以及 `native.Plugin`——为不显示网页的应用提供相同更新窗口的原生 UI 版本。
 
 ## 你自己的更新 UI
 
-插件正是构建在 `mygo.Updater` 之上。如果要做自己的界面，例如应用页面里的横幅，就用它：
+插件基于 `mygo.Updater` 实现。要构建自己的更新界面，例如应用页面中的横幅，可直接使用它：
 
 ```go
 // UpdateProgress tells pages how far the download got.
@@ -155,12 +155,12 @@ func checkForUpdates(ctx context.Context) {
 
 - `Check` 返回较新的版本，包含 `Version`、`Notes` 和 `Date`；应用已是最新时返回 nil。
 - `Install` 下载归档，或运行中版本的增量更新，校验签名，并替换应用。进度回调先收到增量更新的字节；增量更新失败时，则从头改用归档的字节。运行中的应用不受影响：新版本在 `App.Relaunch` 之后运行，或在下次启动时运行。在 macOS 上，新应用包会在应用退出后替换旧应用包，这样 Dock 会保留应用的图标。在 Linux 和 Windows 上，它替换应用文件夹中的文件，并移除运行中版本安装过、新版本不再有的文件，要移除哪些文件由文件夹中的 `.mygo-files` 列出。任何版本都未安装的文件会保留，例如便携副本在它旁边保存的数据；应用运行所用的可执行文件也保留。在 MyGo 写出该列表之前构建的应用没有这个列表，所以它的第一次更新不会移除任何东西。
-- `Enabled` 报告应用能否更新自己：它构建时是否带有更新，以及能否写入安装位置。开发构建不能，在开发构建中，`Check` 会返回 `mygo.ErrUpdatesDisabled`。
+- `Enabled` 报告应用能否自我更新：必须在构建时启用更新，且安装位置可写。开发构建不支持自我更新，调用 `Check` 会返回 `mygo.ErrUpdatesDisabled`。
 - `Check` 和 `Install` 会走系统设置中的代理；设置了 `HTTPS_PROXY` 时，则走环境变量指定的代理（见[代理](native.md#代理)）。
 
 ## 你自己的更新服务
 
-`mygo.Updater` 读取 mygo.config.ts 中 `updates` 的更新源。如果应用有自己的更新服务、需要用户凭据的端点，或用户在运行时选择的通道，就改用 `mygo.Updater.SetSource` 给更新器指定一个来源。来源返回平台的清单和清单所指的文件；更新器校验它们的方式，和校验更新源的文件一样，所以没有用 `updates.publicKey` 的密钥签名的归档或增量更新会被拒绝，应用保持原样。来源提供的就是 `mygo build` 写出的内容，所以应用仍然要用 `updates` 构建：公钥，以及文件发布到的 `github` 或 `url`。
+`mygo.Updater` 默认读取 mygo.config.ts 中 `updates` 配置的更新源。如果应用使用自己的更新服务、需要用户凭据的接口，或允许用户在运行时切换更新通道，可用 `mygo.Updater.SetSource` 指定自定义数据源。数据源提供当前平台的清单及对应文件，更新器仍会执行相同的校验：归档或增量更新的签名若无法通过 `updates.publicKey` 验证，就会被拒绝，应用保持不变。数据源提供的仍是 `mygo build` 生成的产物，因此构建时依然需要配置 `updates`，包括公钥和文件发布位置 `github` 或 `url`。
 
 例如，文件放在一台只向已登录用户提供这些文件的服务器上：把 `updates.url` 设为它的目录，让清单指向这些文件，并在每个请求中带上用户的令牌：
 
@@ -195,7 +195,7 @@ func (s accountUpdates) Open(ctx context.Context, url string) (io.ReadCloser, er
 mygo.Updater.SetSource(accountUpdates{token: session.Token})
 ```
 
-之后 `Check` 从来源读取清单，`Install` 通过它的 `Open` 下载归档或增量更新；`prereleases` 是 `SetPrereleases` 设置的值，用于带 beta 通道的来源。URL 来自清单，所以从 `mygo build` 的清单生成自己清单的服务，可以用自己的 ID 命名文件，只要大小和签名保持不变。`SetSource(nil)` 会回到原来的更新源。
+此后，`Check` 从自定义数据源读取清单，`Install` 通过数据源的 `Open` 下载归档或增量更新。`prereleases` 是 `SetPrereleases` 设置的值，供支持 beta 通道的数据源使用。下载 URL 来自清单，因此服务端可以基于 `mygo build` 的清单生成自己的清单，并用自定义 ID 命名文件，只要文件大小和签名不变。`SetSource(nil)` 可恢复默认更新源。
 
 ## 应用能在哪里更新
 

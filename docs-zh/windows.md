@@ -32,7 +32,7 @@ mygo.NewWindow(mygo.WindowOptions{Title: "Inspector", Content: ui.View(app.view)
 | 选项 | |
 |---|---|
 | `Title` | 窗口标题；默认为应用名，页面的 `<title>` 会替换它 |
-| `URL` | 窗口创建后加载；`/` 和其他不带 scheme 的 URL 是[前端](frontend.md#页面如何加载)的页面 |
+| `URL` | 窗口创建后加载；`/` 和其他不带协议前缀的 URL 指向[前端](frontend.md#页面如何加载)的页面 |
 | `Content` | 显示 MyGo 绘制的[原生 UI](ui/README.md)，而不是页面 |
 | `Width`, `Height` | 窗口的尺寸；使用 `UseContentSize` 时则是其所显示内容的尺寸 |
 | `X`, `Y` | 左上角；两者都为 0 时窗口居中 |
@@ -78,7 +78,7 @@ app.win = mygo.NewWindow(mygo.WindowOptions{Content: ui.View(func(c *ui.Context)
 })})
 ```
 
-在主线程上调用时（如在 `App.WhenReady` 或事件处理器中），`NewWindow` 会把显示窗口留给主循环的下一轮（届时窗口绘制第一帧），或留给第一个作用于它的方法，如 `IsVisible` 或 `Maximize`，这些方法会发现窗口已经显示。紧接 `NewWindow` 之后添加的 `OnShow` 会收到这次显示，而 `Hide` 会阻止它发生。从另一个 goroutine 调用时，`NewWindow` 会显示窗口并返回，同时主线程继续绘制它：要在那边保护该变量，或用 `Window.Update` 设置它。
+在主线程上调用时（如在 `App.WhenReady` 或事件处理器中），`NewWindow` 会延迟到主循环下一轮、窗口绘制第一帧时显示窗口；若之前调用了 `IsVisible` 或 `Maximize` 等窗口方法，则会先显示窗口再执行该方法。紧接 `NewWindow` 注册的 `OnShow` 能收到这次显示事件，调用 `Hide` 则可阻止显示。从其他 goroutine 调用时，`NewWindow` 显示窗口后返回，主线程同时继续绘制；此时需同步访问保存窗口的变量，或通过 `Window.Update` 为其赋值。
 
 ## 记住窗口的位置
 
@@ -86,7 +86,7 @@ app.win = mygo.NewWindow(mygo.WindowOptions{Content: ui.View(func(c *ui.Context)
 
 在 Windows 上，状态还会以屏幕像素保存窗口的边界（`PixelX`、`PixelY`、`PixelWidth`、`PixelHeight`）：各显示器的缩放不同时，窗口在 DIP 中的位置会随缩放变化，而早期版本的状态无法区分这些显示器。
 
-应用若把数据保存在别处（例如自己的数据库中），可以用 `WindowStateStore` 把这些状态存在那里：在第一个带 `StateKey` 的窗口之前设置它，就不会写入 `window-state.json`。它会像 JSON 一样保存 `WindowState` 的每个字段：在 Windows 上，如果窗口的状态丢失了像素，而各显示器的缩放又不同，窗口就会居中。
+应用若把数据保存在别处（例如自己的数据库中），可以通过 `WindowStateStore` 将窗口状态一并保存：在创建第一个带 `StateKey` 的窗口之前设置它，就不会写入 `window-state.json`。存储实现需要像 JSON 存储一样保留 `WindowState` 的全部字段：在 Windows 上，如果状态中缺少像素坐标和尺寸，而各显示器的缩放又不同，窗口就会居中显示。
 
 ```go
 type windowStates struct{ db *sql.DB }
@@ -194,7 +194,7 @@ win.Focus()             // Blur, IsFocused
 
 ## 活动与非活动窗口
 
-接收用户输入的窗口会以活动状态显示，也就是窗口自身或它的某个浮出窗口拥有键盘焦点时。原生应用通过不同的外观区分活动与非活动窗口，让用户一眼看出输入焦点在哪里，MyGo 应用也是如此：
+接收用户输入的窗口会以活动状态显示，也就是窗口自身或它的某个浮出窗口具有键盘焦点时。原生应用通过不同的外观区分活动与非活动窗口，让用户一眼看出输入焦点在哪里，MyGo 应用也是如此：
 
 - 在 macOS 上，窗口处于非活动状态时，其材质（`Vibrancy`）会淡化为不透明的灰色，如同 AppKit 的侧边栏；Windows 11 则将其 Mica 或 Acrylic 绘制为纯色填充。面板和浮出窗口则让自己的材质保持活动，浮在任何位于前面的应用之上；用 `SetActiveAppearance(true)` 保持活动的窗口也是如此。
 - 窗口非活动时，页面会在 `<html>` 上获得 `data-mygo-window-inactive` 属性（供 CSS 使用），`mygo-runtime` 的 `windowActive()` 也会反映这一点（见[非活动窗口](frontend.md#非活动窗口)）。
@@ -204,7 +204,7 @@ win.Focus()             // Blur, IsFocused
 
 ## 子窗口和模态窗口
 
-带 `Parent` 的窗口保持在它之上，并随它关闭。它可以去任何显示器，而父窗口移动时它留在原处，在每个平台上都是如此。在 macOS 上，父窗口每次来到前面，它都会被排在其上方；它保持在 `AlwaysOnTop` 的父窗口之上，随它进入全屏，并在父窗口最小化或隐藏时隐藏。使用 `Modal` 时，它还会像对话框一样阻塞其父窗口直到关闭：
+设置 `Parent` 后，子窗口保持在父窗口之上，并随父窗口关闭。在所有平台上，子窗口都可以移到任意显示器，父窗口移动时子窗口不会跟随。在 macOS 上，父窗口每次移到前台，子窗口都会排在其上方；父窗口设为 `AlwaysOnTop` 时也一样，子窗口还会随父窗口进入全屏，在父窗口最小化或隐藏时隐藏。设置 `Modal` 后，子窗口还会像对话框一样阻止用户操作父窗口，直到子窗口关闭：
 
 ```go
 prefs := mygo.NewWindow(mygo.WindowOptions{
@@ -216,7 +216,7 @@ prefs := mygo.NewWindow(mygo.WindowOptions{
 })
 ```
 
-在 macOS 上，模态窗口以附着在父窗口上的面板（sheet）形式显示。父窗口也可以是浮出窗口，见[叠在浮出窗口上的对话框](#叠在浮出窗口上的对话框)。
+在 macOS 上，模态窗口显示为附着式对话框（sheet）。父窗口也可以是浮出窗口，见[叠在浮出窗口上的对话框](#叠在浮出窗口上的对话框)。
 
 ## 浮出窗口
 
@@ -240,11 +240,11 @@ fl := mygo.NewFlyout(mygo.FlyoutOptions{
 
 未设置 `Focusable` 时，键盘焦点始终留在父窗口，浮出窗口会持续显示，直到被主动关闭，适合工具提示、悬停卡片或父窗口中文本框的输入建议。这类浮出窗口由父窗口的视图控制，应用自行决定何时关闭，例如文本框失去焦点时。（在 Wayland 上，只有获得键盘焦点的弹出窗口才能收到外部点击。）
 
-两者都会在内容没有接管的 Escape 上关闭，就像用户自己关闭一样：该 Escape 没有被原生 UI 的元素或快捷键接管，也没有被页面的处理器用 `preventDefault()` 取消，如同 Web 的浮层。
+两种浮出窗口都会在按下未被内容处理的 Escape 时关闭，效果与用户主动关闭相同：原生 UI 的元素或快捷键未处理该按键，页面处理器也未通过 `preventDefault()` 取消它，与 Web 浮层的行为一致。
 
 `Shadow` 在 macOS 上给它系统的窗口阴影：阴影跟随浮出窗口所绘制内容的形状，并用细线勾勒它（所以那里不要自己绘制边框）；在 Windows 上同样如此，Windows 11 会像给菜单加圆角那样给浮出窗口加圆角并勾勒它（所以那里既不要绘制边框，也不要绘制圆角）。
 
-在 macOS 上，`Popover` 转而给它系统浮层的外观：它显示在 `NSPopover` 中，由后者绘制其材质、圆角和指向锚点中央的箭头，并带动画。材质和箭头跟随应用的主题，包括打开期间的更改；托盘的菜单栏对比度外观不会覆盖它们。AppKit 会把它放在 `Placement` 指定的一侧，或相反的一侧；放置的其他部分以及 `Gap` 不适用。与 AppKit 的浮层一样，它在显示期间拥有键盘；带 `Focusable` 时，用户点到别处它就会关闭。其内容在材质之上不绘制背景：在原生 UI 中，`c.Vibrancy()` 会报告它，所以视图要在别处自己绘制面板：
+在 macOS 上，`Popover` 会改用系统浮层外观：浮出窗口显示在 `NSPopover` 中，由系统绘制材质、圆角、指向锚点中央的箭头及动画。材质和箭头随应用主题变化，打开期间也会更新；不受托盘菜单栏图标的对比度外观影响。AppKit 会选择 `Placement` 指定的一侧或相反一侧，其他对齐设置和 `Gap` 不生效。与 AppKit 浮层一样，它显示期间会获得键盘焦点；设置 `Focusable` 后，点击其他位置会关闭它。内容不应在材质上覆盖背景：原生 UI 的 `c.Vibrancy()` 会报告该材质，视图只需在未使用该材质的场合自行绘制面板背景：
 
 ```go
 func (app *App) about(c *ui.Context) {
@@ -283,7 +283,7 @@ Linux 的托盘图标既不报告点击，也不报告自己的位置：在那�
 
 ### 叠在浮出窗口上的对话框
 
-原生 UI 的[对话框](ui/dialog.md)绘制在自己的窗口中，所以浮出窗口的对话框会被裁切到浮出窗口，而托盘的浮出窗口可能没有其他可显示的窗口。改用对浮出窗口模态的窗口来显示它：把浮出窗口作为它的 `Parent`，并带上 `Modal`。没有 `X` 和 `Y` 时，它在浮出窗口上居中，被移入其显示器的工作区，并保持在浮出窗口之上；对于托盘的浮出窗口，它还会位于其他应用的窗口之上。浮出窗口在它显示期间不接受输入，并保持打开，无论键盘去哪里：窗口关闭时，可聚焦的浮出窗口会取回键盘，此后又会在失去键盘时关闭。关闭浮出窗口（如点击托盘图标可能做的那样）会关闭该窗口。
+原生 UI 的[对话框](ui/dialog.md)绘制在所属窗口内部，因此在浮出窗口中会受到其边界裁切，托盘浮出窗口也可能没有其他可用的窗口。此时应另建一个以浮出窗口为父窗口的模态窗口：将浮出窗口设为 `Parent`，并启用 `Modal`。未指定 `X` 和 `Y` 时，模态窗口在浮出窗口上方居中，并调整位置以落在显示器工作区内；它始终位于浮出窗口之上，父窗口属于托盘时，还会位于其他应用的窗口之上。模态窗口显示期间，浮出窗口不接受输入，也不会因焦点变化而关闭；模态窗口关闭后，可聚焦的浮出窗口重新获得键盘焦点，并恢复失焦关闭的行为。关闭浮出窗口（例如点击托盘图标）也会关闭该模态窗口。
 
 ```go
 if ui.Button(c, "Quit…").Clicked() {
@@ -300,7 +300,7 @@ if ui.Button(c, "Quit…").Clicked() {
 }
 ```
 
-在 macOS 上，该窗口不是从浮出窗口上展开的 sheet，而是与它关联、处于同一层级的独立窗口。在 Wayland 上，带 `Parent` 的浮出窗口属于弹出窗口，模态窗口获得键盘焦点后是否保留弹出窗口由合成器决定；托盘浮出窗口属于普通窗口，因此会保留。
+在 macOS 上，该窗口不是附着式对话框（sheet），而是与它关联、处于同一层级的独立窗口。在 Wayland 上，带 `Parent` 的浮出窗口属于弹出窗口，模态窗口获得键盘焦点后是否保留弹出窗口由合成器决定；托盘浮出窗口属于普通窗口，因此会保留。
 
 ### 让浮出窗口适应其内容
 
@@ -348,15 +348,15 @@ fl := mygo.NewFlyout(mygo.FlyoutOptions{
 
 | | macOS | Linux | Windows |
 |---|---|---|---|
-| 窗口 | 一个无边框、不激活的 `NSPanel`：显示期间是其父窗口的子窗口，对托盘而言则在菜单层级 | 一个 `GTK_WINDOW_POPUP`：X11 上是 override-redirect，Wayland 上是其父窗口的 `xdg_popup`；对托盘而言，是一个保持在上的无装饰工具窗口 | 一个拥有的 `WS_POPUP`、`WS_EX_TOOLWINDOW`，没有重定向位图；对托盘而言则是置顶且无主的 |
-| 放置 | 在屏幕的可见框架中 | X11 上在显示器的工作区；Wayland 上是合成器的定位器（`gdk_window_move_to_rect`） | 在显示器的工作区（`MonitorFromRect`） |
+| 窗口 | 一个无边框、不激活的 `NSPanel`：显示期间是其父窗口的子窗口，对托盘而言则在菜单层级 | 一个 `GTK_WINDOW_POPUP`：X11 上是 override-redirect，Wayland 上是其父窗口的 `xdg_popup`；对托盘而言，是一个置顶的无装饰工具窗口 | 一个有所属窗口的 `WS_POPUP`、`WS_EX_TOOLWINDOW`，没有重定向位图；对托盘而言则是置顶且无主的 |
+| 放置 | 在屏幕的可用区域内 | X11 上在显示器的工作区；Wayland 上是合成器的定位器（`gdk_window_move_to_rect`） | 在显示器的工作区（`MonitorFromRect`） |
 | 键盘 | 可聚焦时是键窗口；父窗口保持为主窗口 | 可聚焦时抓取 seat 和应用输入，如同 GTK 的菜单 | 可聚焦时激活，否则 `WS_EX_NOACTIVATE` |
 
-在 Wayland 上，弹出窗口只显示在最上面的那个之上：显示一个浮出窗口会关闭其他正在显示的窗口，但不会关闭它自己的祖先，就像用户自己关闭它们一样。`examples/flyout` 打开一个颜色列表、一个笔记编辑器和一个“关于”窗口，在 macOS 上是一个浮层。
+在 Wayland 上，新的弹出窗口只能叠在当前最上层弹出窗口之上：显示浮出窗口会关闭其他已显示的浮出窗口，但保留其祖先窗口，效果与用户主动关闭相同。`examples/flyout` 演示颜色列表、笔记编辑器和“关于”窗口，后者在 macOS 上显示为浮层。
 
 ## 面板
 
-面板是启动器、命令面板或快速输入的窗口，如 Spotlight 和 Raycast 的那样：通过[全局快捷键](native.md#全局快捷键)从任何地方唤出，它浮在每个应用的窗口之上，位于用户所在的任何 Space 或虚拟桌面上，也在全屏应用之上，并且不出现在任务栏、Dock 的窗口和应用切换器中。它不能最小化、最大化或进入全屏，在 Linux 和 Windows 上没有菜单栏。在 macOS 上，显示面板会让它获得键盘，却不激活应用：用户所在的应用仍是活动应用（如其菜单栏所示），并在面板隐藏时取回键盘。在面板中的点击也会让它保持活动。
+面板适合启动器、命令面板或快速输入窗口，例如 Spotlight 和 Raycast：通过[全局快捷键](native.md#全局快捷键)随时唤出，显示在用户当前的 Space 或虚拟桌面上，浮在所有应用窗口之上，包括全屏应用，且不出现在任务栏、Dock 的窗口列表和应用切换器中。面板不能最小化、最大化或进入全屏，在 Linux 和 Windows 上没有菜单栏。在 macOS 上，面板显示时获得键盘焦点，但不激活所属应用：用户之前使用的应用仍保持活动，其菜单栏也不变，面板隐藏后焦点会回到该应用。点击面板内部也不会改变该应用的活动状态。
 
 ```go
 mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory) // no Dock icon (macOS)
@@ -407,7 +407,7 @@ mygo.App.WhenReady(func() {
 | 工作区 | 每个 Space，作为全屏辅助窗口（`CanJoinAllSpaces`、`FullScreenAuxiliary`），不在 Mission Control 和窗口循环中 | 每个工作区（粘性） | 它显示所在的虚拟桌面 |
 | 键盘 | 键窗口，应用保持非活动 | 活动窗口；在层 shell 的绘制表面上，显示期间独占 | 前台窗口，全局快捷键的按键让它取得 |
 
-在 Wayland 下，应用既不能放置也不能提升自己的窗口；如果合成器支持该协议（Sway、Hyprland、KDE Plasma、COSMIC……）且安装了 `libgtk-layer-shell.so.0`，面板就是层 shell 的绘制表面，如同那里的启动器：它显示在覆盖层上，也在全屏窗口之上，不在任务栏中，居中于用户所在的输出，或位于 `X` 和 `Y` 或 `SetPosition` 放置它的地方。它显示期间一直保有键盘，如同那里的其他启动器，因此从一开始就能收到按键：它只在隐藏时失焦，所以要响应 Escape 关闭它，那是用户在那里会按的键。在其他地方，如没有层 shell 的 GNOME 上，它与其他窗口一样：合成器决定它显示在哪里，以及什么在它之上。
+在 Wayland 下，应用不能自行设置普通窗口的位置或将其移到最前。若合成器支持 layer shell 协议（Sway、Hyprland、KDE Plasma、COSMIC……），且已安装 `libgtk-layer-shell.so.0`，面板会像这些桌面的启动器一样，使用该协议的绘制表面：显示在覆盖层，位于全屏窗口之上，不出现在任务栏中，默认在用户当前显示器上居中，也可通过 `X`、`Y` 或 `SetPosition` 定位。它与这些桌面的其他启动器一样，显示期间始终保持键盘焦点，从一开始就能接收按键；只有隐藏时才失焦，因此应处理 Escape 来关闭它，这也是用户预期的操作。在不支持该协议的桌面（例如 GNOME）上，面板与普通窗口一样，位置和层级由合成器决定。
 
 ## 点击穿透窗口
 
@@ -442,7 +442,7 @@ pet.SetInputRegion([]mygo.Rectangle{character, {X: 10, Y: 10, Width: 220, Height
 
 ## 事件
 
-监听器在主线程上运行：保持简短，慢工作请启动 goroutine。每个 `On…` 方法返回一个移除监听器的函数。
+监听器在主线程上运行：保持简短，耗时工作另起 goroutine。每个 `On…` 方法返回一个移除监听器的函数。
 
 | 事件 | 何时 |
 |---|---|
@@ -482,7 +482,7 @@ win.OnClose(func(e *mygo.CloseEvent) {
 })
 ```
 
-`Close` 像用户那样关闭窗口，询问 `OnClose` 监听器；`Destroy` 立即关闭它。
+`Close` 与用户关闭窗口的行为一致，允许 `OnClose` 监听器阻止关闭；`Destroy` 则立即关闭窗口。
 
 ## 页面
 
@@ -523,7 +523,7 @@ mygo.NewWindow(mygo.WindowOptions{
 | `Autoplay` | `AutoplayUserGesture`（web view 自己的策略）或 `AutoplayAllow`，后者让页面在用户点击或输入之前播放可听媒体，在隐藏的窗口中也一样，见[自动播放](#自动播放) |
 | `Session` | 页面的 cookie、存储和缓存的存储区，与其他会话的分开，见[会话](app.md#会话)；nil 是默认会话 |
 
-`UserAgentSuffix` 适用于想看到这个应用的网站，也适用于那些因为裸 web view 的用户代理没有指明浏览器、而给它提供旧版页面的网站：`"Version/17.0 Safari/605.1.15"` 让页面看起来像 Safari。
+`UserAgentSuffix` 可让网站识别应用，也可用于那些因 web view 默认用户代理未标明浏览器而返回旧版页面的网站：添加 `"Version/17.0 Safari/605.1.15"` 可让网站将其识别为 Safari。
 
 页面事件，位于 `win.Page()` 上：
 
@@ -551,13 +551,13 @@ win.Page().OnWillNavigate(func(e *mygo.NavigateEvent) {
 })
 ```
 
-开发期间，应用的页面来自开发服务器，是一个 `http` URL：如果你的规则依赖 scheme，就检查主机，或使用 `mygo.IsDev()`。
+开发期间，应用页面来自开发服务器，使用 `http` URL：如果规则依赖 URL 协议，应改为检查主机，或使用 `mygo.IsDev()` 区分开发环境。
 
 打开新窗口的链接会经过窗口的打开处理器，见[链接和新窗口](frontend.md#链接与新窗口)。
 
 ### 滑动和捏合
 
-页面既不会因滑动而后退，也不会因捏合而缩放，桌面应用并不这样做：`SwipeNavigation` 和 `PinchZoom` 会为窗口的页面和 [web view](ui/web-view.md) 的页面打开它们。
+页面默认不会因滑动而后退，也不会因捏合而缩放，这与桌面应用的惯例一致。设置 `SwipeNavigation` 和 `PinchZoom` 可启用这些手势，窗口页面和 [web view](ui/web-view.md) 页面均适用。
 
 ```go
 mygo.NewWindow(mygo.WindowOptions{
@@ -590,7 +590,7 @@ page.OnThemeColorChanged(func(c color.NRGBA, ok bool) {
 })
 ```
 
-页面可以有一种用于浅色外观的颜色和另一种用于深色的颜色，通过 meta 的 `media`：
+页面可以通过 meta 的 `media` 为浅色和深色外观分别指定颜色：
 
 ```html
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
@@ -712,7 +712,7 @@ mute := &mygo.MenuItem{Label: "Mute or Unmute Microphone", Accelerator: "CmdOrCt
 
 ### 画中画
 
-`PageOptions.PictureInPicture` 让页面的视频浮出到画中画，即一个位于每个应用的窗口之上的小窗口，如同它们在 Safari 中那样：视频控件的按钮、其上下文菜单的项，以及页面脚本中的 `requestPictureInPicture()`。WKWebView 只把它留给 Safari，所以 macOS 上的页面需要该选项；WebView2 则不论它说什么都让视频浮出。`TogglePictureInPicture` 无需在页面中点击，就能把视频移出，或把已移出的视频移回页面；`IsPictureInPictureActive` 表示是否有视频已移出，无论谁把它放在那里：
+`PageOptions.PictureInPicture` 让页面的视频浮出到画中画，即一个位于每个应用的窗口之上的小窗口，如同它们在 Safari 中那样：视频控件的按钮、其上下文菜单的项，以及页面脚本中的 `requestPictureInPicture()`。WKWebView 只把它留给 Safari，所以 macOS 上的页面需要该选项；WebView2 则无论此选项如何设置，都允许视频进入画中画。`TogglePictureInPicture` 无需在页面中点击，就能把视频移出，或把已移出的视频移回页面；`IsPictureInPictureActive` 表示是否有视频已移出，无论谁把它放在那里：
 
 ```go
 win := mygo.NewWindow(mygo.WindowOptions{
@@ -787,7 +787,7 @@ win.Page().OnDownloadDone(func(d *mygo.Download) {
 
 ### 权限
 
-页面请求摄像头、麦克风、位置或通知。默认情况下，应用自己的页面（包括自定义 scheme 的页面，见[信任](frontend.md#信任)）得到它们请求的内容，其他页面什么也得不到。`Page.SetPermissionHandler` 改为决定；它在主线程上运行：
+页面可以请求摄像头、麦克风、位置或通知权限。默认情况下，应用自己的页面（包括使用自定义协议的页面，见[信任](frontend.md#信任)）会获准，其他页面则会被拒绝。设置 `Page.SetPermissionHandler` 后，由该处理器决定是否授权；它在主线程上运行：
 
 ```go
 win.Page().SetPermissionHandler(func(req mygo.PermissionRequest) bool {
@@ -824,7 +824,7 @@ win.Page().SetAuthHandler(func(req mygo.AuthRequest) mygo.AuthResponse {
 
 web view 会在本次会话余下的时间里保留服务器接受的凭据。没有处理器时，WebKitGTK 和 WebView2 显示自己的登录对话框，macOS 则不显示。要以应用自己的方式询问用户，先取消，再提示，然后在处理器拿到凭据后 `Reload`。
 
-证书无法验证的服务器（如使用自签名证书的开发服务器）会加载失败，如同在浏览器中。`Page.SetCertificateErrorHandler` 仍然可以加载它：只允许你预期的证书，它保存在 `CertificateError.Certificate` 中（DER 编码），绝不要放行任何主机，不管它的证书是什么：
+与浏览器一样，服务器证书无法验证时（例如开发服务器使用自签名证书），页面会加载失败。`Page.SetCertificateErrorHandler` 可以允许继续加载，但必须校验 `CertificateError.Certificate` 中的证书（DER 编码），只放行符合预期的证书，绝不要仅凭主机名就无条件接受其提供的任何证书：
 
 ```go
 win.Page().SetCertificateErrorHandler(func(e mygo.CertificateError) bool {
@@ -852,7 +852,7 @@ win.Page().SetClientCertificateHandler(func(req mygo.ClientCertificateRequest) m
 
 ### 阻止内容
 
-内容规则阻止页面加载的内容并隐藏其部分，如同广告和跟踪器拦截器。它们用 WebKit 的[内容拦截格式](https://developer.apple.com/documentation/safariservices/creating-a-content-blocker)编写：一个规则 JSON 数组，每条规则由一个触发器和动作组成，触发器按 URL 的正则表达式匹配加载。`mygo.CompileContentRules` 编译它们，页面通过 `PageOptions.ContentRules` 或 `Page.SetContentRules` 应用它们：
+内容规则阻止页面加载的内容并隐藏其部分，如同广告和跟踪器拦截器。它们用 WebKit 的[内容拦截格式](https://developer.apple.com/documentation/safariservices/creating-a-content-blocker)编写：一个规则 JSON 数组，每条规则由一个触发器和动作组成，触发器用正则表达式匹配要加载的 URL。`mygo.CompileContentRules` 编译它们，页面通过 `PageOptions.ContentRules` 或 `Page.SetContentRules` 应用它们：
 
 ```go
 rules, err := mygo.CompileContentRules("ads", `[
@@ -906,7 +906,7 @@ pid := win.Page().GPUProcessID()
 | 平台 | 进程 |
 |---|---|
 | macOS | WebKit 的 GPU 进程（`com.apple.WebKit.GPU`），它播放页面的音频和视频，来自 WebKit 私有的 `_gpuProcessIdentifier`；如果 WebKit 不回应它或尚未启动该进程则为 0，它会在页面首次需要时（播放媒体或用 GPU 绘制）启动该进程 |
-| Windows | WebView2 的 GPU 进程（`msedgewebview2.exe --type=gpu-process`），是 `ProcessID` 的浏览器进程的子进程，来自 `ICoreWebView2Environment8` 的 `GetProcessInfos`；没有它的 runtime 上为 0。WebView2 从其音频服务（一个实用进程）播放声音，而不是这个进程：为此捕获 `ProcessID` 进程的进程树（进程环回） |
+| Windows | WebView2 的 GPU 进程（`msedgewebview2.exe --type=gpu-process`），是 `ProcessID` 的浏览器进程的子进程，来自 `ICoreWebView2Environment8` 的 `GetProcessInfos`；没有它的 runtime 上为 0。WebView2 从其音频服务（一个工具进程）播放声音，而不是这个进程：为此捕获 `ProcessID` 进程的进程树（进程环回） |
 | Linux | 无：WebKitGTK 没有其 GPU 进程的 API，所以总是 0 |
 | 浏览器 | 无：总是 0 |
 
@@ -915,7 +915,7 @@ pid := win.Page().GPUProcessID()
 ## 查找窗口
 
 - `mygo.Windows()` 列出打开的窗口，`mygo.FocusedWindow()` 返回获得焦点的那个，`mygo.WindowByID(id)` 返回 `ID()` 为该值的窗口，页面通过 `runtime().windowId` 认识它。
-- `mygo.CallerWindow(ctx)` 返回其页面调用了绑定方法的窗口，`mygo.CallerPage(ctx)` 返回页面：窗口的页面，或原生 UI 窗口中的 web view 的页面（[Web view](ui/web-view.md)）。给定对自定义 scheme 的请求的 `r.Context()`，它们返回发起该请求的窗口和页面。
+- `mygo.CallerWindow(ctx)` 返回调用绑定方法的页面所属的窗口，`mygo.CallerPage(ctx)` 返回该页面：可能是窗口的页面，也可能是原生 UI 窗口中 web view 的页面（[Web view](ui/web-view.md)）。传入自定义协议请求的 `r.Context()` 时，它们返回发起该请求的窗口和页面。
 - 对每个新窗口调用 `mygo.App.OnWindowCreated`。
 
 ## Linux 上的 GTK 样式
@@ -940,7 +940,7 @@ if err := mygo.Theme.SetGTKCSS(gtk4Frame); err != nil {
 
 - GTK 以用户的优先级（`GTK_STYLE_PROVIDER_PRIORITY_USER`）采用该样式表：其规则胜过主题的、MyGo 自己的以及用户的 `~/.config/gtk-3.0/gtk.css` 的规则。
 - 另一次调用会替换该样式表，如同切换应用主题，`""` 会移除它。无法解析的样式表会返回 GTK 的错误，并指出位置，先前设置的样式表会保留。
-- 它可以从任何 goroutine 调用，也可以在 `App.Run` 之前调用：其他 goroutine 会等待 Run 加载样式表，而在 main 线程上设置的样式表会等待 Run，由 Run 记录其错误，因为没有调用可以返回它。
+- 可以从任何 goroutine 调用，也可以在 `App.Run` 之前调用：其他 goroutine 会等待 Run 加载样式表后再返回；主 goroutine 中设置的样式表则留待 Run 加载，由 Run 记录错误，因为届时原调用已经返回，无法再返回错误。
 - 页面和原生 UI 从不会看到它：MyGo 绘制它们，而页面有自己的 CSS。在 macOS、Windows 和浏览器中，它什么也不做并返回 nil。
 
 GTK 3 只给它所装饰窗口的上角加圆角，无论 `decoration` 的 `border-radius` 是多少：它把装饰裁切到该半径，而从不裁切窗口的内容，所以页面或原生 UI 会覆盖下角，下角保持方形。需要四个圆角的窗口自己绘制它们：一个 `Frameless`、`Transparent` 的窗口（GTK 不给它加装饰，也没有阴影），其页面或原生 UI 给自己的背景加圆角，在合成窗口管理器下或在 Wayland 上。

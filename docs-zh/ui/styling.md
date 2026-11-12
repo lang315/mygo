@@ -17,8 +17,8 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   	InsetShadow(0, 0, 1, 0, ui.RGBA(255, 255, 255, 0.2))
   ```
 
-  `NoShadow()` 会去掉目前添加的阴影，如 `box-shadow: none`，用于去掉某个辅助函数返回的卡片自带的阴影；在它之后添加的阴影从头开始。[过渡](transitions.md#移动的是什么)会在阴影变化时让它们淡出。
-- **渐变和条纹。** `Gradient(from, to, angle)` 用线性渐变填充盒子；`LinearGradient` 还会沿直线放置其颜色（`Start`、`End`），并在 Oklab 中混合它们（保持亮度），而不是在 sRGB 中混合，或者用 `Stops` 接受任意多个颜色，每个是位于 0 到 1 之间某处的 `GradientStop{Color, At}`。`ConicGradient` 则让色标绕一个点排布，如 CSS 的 `conic-gradient()`（SwiftUI 的 `AngularGradient`）：从 `Angle` 开始，以度为单位，从正上方顺时针，绕 `Center`（未设置时为中间）。`RadialGradient` 让它们从 `Center` 向外以圆形扩散，如 CSS 的 `radial-gradient()`（SwiftUI 和 Flutter 的 `RadialGradient`）：从那里的 0 到 `Radius` DIP 处的 1，未设置时到盒子最远的角，如 CSS 的 `farthest-corner`，其第一个颜色在中心之前，最后一个颜色在半径之外，用于辉光、聚光和暗角：
+  `NoShadow()` 会移除之前添加的所有阴影，如 `box-shadow: none`，可用于去掉辅助函数返回的卡片自带的阴影；之后仍可重新添加阴影。[过渡](transitions.md#移动的是什么)会在阴影变化时以淡入淡出衔接。
+- **渐变和条纹。** `Gradient(from, to, angle)` 用线性渐变填充盒子；`LinearGradient` 还可用 `Start`、`End` 指定颜色在线上的位置，选择在 Oklab 而非 sRGB 中混色以保持亮度，或通过 `Stops` 指定任意多个色标，每个色标为 `GradientStop{Color, At}`，位置范围为 0 到 1。`ConicGradient` 让色标围绕一个点分布，如 CSS 的 `conic-gradient()`（SwiftUI 的 `AngularGradient`）：以 `Center` 为中心（默认是盒子中心），从 `Angle` 开始，角度从正上方顺时针计算，以度为单位。`RadialGradient` 让色标从 `Center` 向外呈圆形扩散，如 CSS 的 `radial-gradient()`（SwiftUI 和 Flutter 的 `RadialGradient`）：中心处为 0，距中心 `Radius` DIP 处为 1，未指定半径时取到盒子最远角的距离，如 CSS 的 `farthest-corner`；中心之前使用首个颜色，半径之外使用末尾颜色，可用于辉光、聚光和暗角：
 
   ```go
   ui.Box(c).Size(240, 140).Radius(16).RadialGradient(ui.RadialGradient{
@@ -42,7 +42,7 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   ui.Row(c).Gap(8).Children(func() { /* … */ }).Opacity(0.5) // a toolbar, faded
   ```
 
-  不与其他内容重叠的子元素会各自单独淡化，看起来一样，也没有额外开销；在它们重叠的地方，会先渲染到 GPU 的位图中，和模糊一样，其中的文本以灰度平滑。Web 视图，以及显示其背后内容的材质，会自行淡化，因为没有位图能容纳它们；`Disabled` 让内容变暗时也是如此。
+  不与其他内容重叠的子元素会各自调整透明度，视觉效果相同，也没有额外开销；发生重叠时，则和模糊一样先渲染到 GPU 位图中，其中文本使用灰度抗锯齿。Web 视图和显示背后内容的材质无法合成到位图中，因此会单独调整透明度；`Disabled` 的变暗效果也是分别应用的。
 - **模糊。** `Blur(sigma)` 模糊元素及其子元素，如 CSS 的 `filter: blur()`：它们绘制的内容在 GPU 上向四周扩散约 3 sigma DIP，超出部分透明。它们会先渲染到位图中，如[效果](shaders.md#对元素的效果)那样，绘制的每一帧都如此；点击、焦点和辅助技术仍按元素所在的位置处理。辉光是模糊后的边框，一个清晰的边框和若干模糊的边框叠加：
 
   ```go
@@ -51,7 +51,7 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   		Radius(16).Border(l.width, ui.Color{}).BorderConicGradient(glow).Blur(l.blur)
   }
   ```
-- **裁剪到内缩区域。** `ClipInset(top, right, bottom, left, radius)` 将元素及其内部的一切（背景、阴影、边框、子元素）裁剪到按这些 DIP 内缩后的盒子，如 CSS 的 `clip-path: inset()`。`ClipInsetPercent` 则接受盒子的百分比。负的内缩量会向该侧延伸到盒子之外，因此 `ClipInset(0, -40, 0, -40, 0)` 会裁剪上下，而阴影仍能在左右显示。内缩区域会作为场景的裁剪来处理，而不是图层，因此可以每帧改变。对其中一个做动画，就能把元素逐渐擦入：
+- **裁剪到内缩区域。** `ClipInset(top, right, bottom, left, radius)` 按指定的 DIP 距离内缩盒子，并将元素及其全部内容（背景、阴影、边框、子元素）裁剪到该区域，如 CSS 的 `clip-path: inset()`。`ClipInsetPercent` 改用盒子尺寸的百分比。负的内缩量会向外扩展对应边，因此 `ClipInset(0, -40, 0, -40, 0)` 会裁剪上下两侧，同时保留左右两侧的阴影。内缩区域直接用场景裁剪实现，不生成图层，因此可以逐帧改变。为某一侧的内缩量添加动画，就能让元素以擦除式过渡逐渐显现：
 
   ```go
   hidden := float32(100)
@@ -94,28 +94,28 @@ ui.Column(c).Padding(18).Gap(12).Radius(10).
   ```
 
   `Masks` 会替换上面的渐变遮罩，上面的渐变遮罩也会替换它。只有一个横跨边框盒的图层时，遮罩效果和它们一样；图层更多时，会在 CPU 上按它们的 alpha 生成遮罩，元素每个显示尺寸生成一次，各渲染器再把它画成路径裁剪。与渐变遮罩一样，它分别作用于绘制的每个对象。
-- **缓存。** `Cache()` 把元素及其子元素绘制的内容保存在 GPU 的位图中，如 Flutter 的 `RepaintBoundary` 和 SwiftUI 的 `drawingGroup()`，只有它们绘制的内容发生变化时才重新绘制，例如换成其他内容、尺寸改变、窗口缩放比例或主题改变。一张静止的卡片，带有渐变、模糊图像和大阴影，中间有一个会移动的绘制内容；当某一帧在它上面重绘时，只需要一张图像，而用变换旋转或缩放该元素时，位图会随之移动，无需再次绘制。位图包含盒子、它的阴影，以及它不裁剪的盒子外子元素；如果文本下面没有子树自己的不透明背景，它就会像在模糊中那样以灰度平滑。使用 `Blur` 或效果时，保留的是它们的位图。
+- **缓存。** `Cache()` 把元素及其子元素绘制的内容保存在 GPU 位图中，如 Flutter 的 `RepaintBoundary` 和 SwiftUI 的 `drawingGroup()`，仅在内容、尺寸、窗口缩放比例或主题发生变化时重新绘制。例如，动态绘图周围的静态卡片即使包含渐变、模糊图像和大阴影，每帧重绘时也只需绘制一张图像；用变换旋转或缩放元素时，也只需变换位图，无需重绘其中的内容。位图包含盒子、阴影，以及超出盒子但未被裁剪的子元素；如果子树没有为文本提供不透明背景，文本就和模糊效果中的文本一样使用灰度抗锯齿。使用 `Blur` 或效果时，会直接缓存它们生成的位图。
 
   ```go
   ui.Box(c).Size(900, 212).Radius(16).Gradient(from, to, 30).
   	Shadow(0, 10, 40, 0, shade).Cache().Children(func() { /* … */ })
   ```
-- **材质。** `Material(m)` 用某个包绘制的材质填满盒子，代替背景，例如 [glass 插件](../plugins/glass.md) 的 Liquid Glass：它会透出下方的内容，并沿边缘、滚动边缘和背景模糊产生磨砂与弯折，背景模糊可以沿渐变淡出。
+- **材质。** `Material(m)` 用包提供的材质填充盒子，代替背景，例如 [glass 插件](../plugins/glass.md) 的 Liquid Glass（透出下方内容，带磨砂效果和边缘折射）、滚动边缘效果，以及可沿渐变淡出的背景模糊。
 - **指针。** `Cursor` 使用各平台的指针形状：`CursorPointer`、`CursorText`、`CursorMove`、`CursorGrab` 和 `CursorGrabbing`、调整大小的光标（双向的，以及朝一侧的 `CursorResizeE`，还有列和行的）、用于拖放的 `CursorCopy` 和 `CursorAlias`、`CursorContextMenu`、`CursorVerticalText`、`CursorNotAllowed`、`CursorCrosshair`、`CursorNone`（隐藏指针）、CSS 的 `progress` 和 `wait`（`CursorProgress` 用于忙碌但仍接受输入的控件，如带有 `aria-busy` 的控件；`CursorWait` 用于什么也做不了的时候）、`CursorHelp`、`CursorCell`、`CursorZoomIn` 和 `CursorZoomOut`、`CursorAllScroll` 和 `CursorNoDrop`。Windows 没有缩放和单元格光标，MyGo 会自行绘制，就像浏览器自带这些光标一样；macOS 的 `CursorWait`、`CursorHelp`、缩放光标和 `CursorAllScroll` 属于 AppKit 的私有光标，WebKit 就是这样使用的；某个版本没有它们时，会显示最接近的公开光标（`CursorCell` 用十字准线）。元素的指针也会在其子元素上显示，但接收点击的子元素（按钮，或任何带有 `Clicked` 或 `OnClick` 的元素）除外：它们显示自己的指针，除非设置了其他指针，否则是默认箭头，因此带有 `CursorText` 的文本框中的按钮不会显示 I 形光标。
 
 `ui.Oklch(l, c, h)` 是 CSS 的 `oklch()`；`.Alpha(a)` 是它的 `/ a`。它返回一个和别的颜色一样的 `ui.Color`，因此填充、边框、渐变、条纹、阴影、分隔线、文本、装饰、文本背景、玻璃的色调和主题（`t.Accent = ui.Oklch(0.6, 0.2, 240)`）都接受它。它可以表示 sRGB 之外的颜色，比大多数屏幕显示的更鲜艳。这样的颜色同时保留两者：它的真实值，在窗口位于能显示更宽色域的屏幕（近期 Mac 上的 Display P3）上时绘制；以及最接近的 sRGB 颜色，按 CSS 的方式选择（饱和度更低，亮度和色相相同）。该回退值就是它的 `R`、`G` 和 `B`，也是 sRGB 屏幕、Linux、Windows 和 SVG 图片绘制的内容；`SRGB()` 返回它而不含真实值。`Mix` 和过渡混合真实值：混合回 sRGB 内的结果是普通颜色。不要给这种颜色的 `R`、`G` 或 `B` 赋值，因为真实值将不再匹配：请创建一个新颜色。
 
-颜色来自 `ui.RGB`、`ui.RGBA` 和 `ui.Hex("#2563eb")`；`Mix` 混合两种颜色，`MixOklab` 在 Oklab 中混合它们，如渐变的 `Oklab`（黄色和蓝色相遇于蓝色，而不是 sRGB 的灰色），`Alpha` 让一个颜色变为半透明。
+可用 `ui.RGB`、`ui.RGBA` 和 `ui.Hex("#2563eb")` 创建颜色；`Mix` 混合两种颜色，`MixOklab` 则与渐变的 `Oklab` 选项一样在 Oklab 中混色（黄色与蓝色混合的中间色偏蓝，而不是 sRGB 中的灰色），`Alpha` 用于调整颜色的透明度。
 
 ## 状态，而非选择器
 
 没有样式表，也没有状态选择器：视图就是代码，因此元素的外观跟随视图自身的状态，如 `if row.Hovered() { row.Background(t.SurfaceHover) }`，一个元素的状态可以给另一个元素设置样式，就像 CSS 中一个组的悬停那样。
 
-控件会返回它的元素，因此在其后继续链式调用，就能单独给它设置不同的样式：`ui.Button(c, "Save").Padding(10, 20).Radius(999)`。想做出自己的外观，就基于各控件的基础类型来构建，它们本身没有外观：参见[自定义控件](custom-widgets.md)。
+控件会返回它的元素，因此在其后继续链式调用，就能单独给它设置不同的样式：`ui.Button(c, "Save").Padding(10, 20).Radius(999)`。想做出自己的外观，就基于各控件的基础类型来构建，它们本身无外观：参见[自定义控件](custom-widgets.md)。
 
 ## 主题
 
-控件从主题 `c.Theme()` 获取颜色和度量：浅色或深色主题，跟随系统外观的变化，以及系统自身控件所遵循的桌面设置。在你自己的元素中使用它的颜色，让它们也跟随。要更改它，请设置一个副本：
+控件从主题 `c.Theme()` 获取颜色和尺寸参数：默认采用浅色或深色主题，随系统外观变化，并遵循系统控件所用的桌面设置。自定义元素也使用主题颜色，就能随之变化。要修改主题，请设置一个副本：
 
 ```go
 // The default, which follows the system, in an accent of the app's,
@@ -132,7 +132,7 @@ c.SetTheme(&t)
 
 `Spacing` 是控件留出空间的单位：它们的内边距和间隙，以及复选框、开关、滑块和表格与树的行的大小，都是它的倍数。默认是 4；3 让所有控件紧凑，5 则更宽松。`FontSize` 决定它们文本的大小，`Radius` 让它们的角变圆，`Scrollbar` 和 `ScrollbarWidth` 设置滚动条滑块的颜色和大小，`ScrollbarStyle` 进一步设置样式：轨道、悬停和拖动颜色、宽度、圆角和滑块的最短长度。在 macOS 上，无论是控件的还是你自己元素的圆角，都像 AppKit 和 SwiftUI 那样连续弯曲，在其他地方则是四分之一圆，如 Windows 和 GTK 所绘制。用主题来设置你自己的元素尺寸，它们也会跟随：`t.Space(3)` 是三个间距单位，`t.Rem(2)` 是其字体大小的两倍，如 CSS 的 rem。
 
-工具提示和 toast 使用反转的主题，以便从它们覆盖的内容中凸显出来：用 `Inverse` 填充，上面是 `InverseText`；留零时它们是主题的 `Text` 和 `Background`。一个宁愿让它们保持深色的深色应用可以同时设置两者：
+工具提示和 toast 使用反色主题，以便与下方内容区分：背景用 `Inverse`，文字用 `InverseText`；两者为零值时，分别采用主题的 `Text` 和 `Background`。深色应用如果希望它们也保持深色，可以同时设置这两个值：
 
 ```go
 t.Inverse, t.InverseText = ui.Hex("#3f3f46"), ui.Hex("#fafafa")
@@ -164,7 +164,7 @@ header.FocusRingOffset(-4) // inside, its outer edge 2 DIPs in
 
 ## 窗口一部分的主题
 
-`SetTheme` 为整个窗口设置主题：根、它的背景和文本，以及调用之后构建的控件。`ui.Themed(c, t)` 则为窗口的一部分设置主题：一个列，其子元素用 `t` 构建，例如一个主题选择器在深色旁边预览浅色，或深色外框中有一个浅色预览窗格：
+`SetTheme` 为整个窗口设置主题，包括根元素、根元素的背景和文本，以及调用之后构建的控件。`ui.Themed(c, t)` 则创建一个列容器，让其中的子元素使用 `t` 构建，只改变窗口局部的主题，例如在主题选择器中并排预览浅色和深色，或在深色界面中嵌入浅色预览窗格：
 
 ```go
 ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
@@ -177,17 +177,17 @@ ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 })
 ```
 
-在其中，一切都如同 `t` 的窗口里一样：子元素构建时 `c.Theme()` 返回它，绘制时 `Painter.Theme()` 返回它，因此你自己的控件也会跟随；控件采用它的颜色和度量（`Spacing`、`Radius`、`FontSize`、`ScrollbarWidth`、`ScrollbarStyle`，也就是 `t.Space` 和 `t.Rem`）；从里面打开的浮层、菜单、工具提示和对话框也采用它，尽管它们显示在窗口之上。该列绘制 `t` 的 `Background`，其文本采用 `t` 的 `Text` 颜色、`FontSize` 和 `Font`，正如根采用窗口主题的这些；`.Background(ui.Transparent)` 则让背后的内容显示出来，如同根一样。根以及在列之后构建的内容保持窗口的主题；toast 属于窗口，也保持它。主题可以嵌套，nil 主题让它成为一个普通列。在里面调用 `SetTheme` 仍然会给窗口设置主题，从根直到列之后的内容，而列的子元素保持 `t`。
+该列内部的行为与整个窗口使用 `t` 时相同：构建子元素时 `c.Theme()` 返回该主题，绘制时 `Painter.Theme()` 也返回该主题，因此自定义控件也能采用它；控件使用其中的颜色和尺寸参数（`Spacing`、`Radius`、`FontSize`、`ScrollbarWidth`、`ScrollbarStyle`，以及 `t.Space` 和 `t.Rem`）；从内部打开的浮层、菜单、工具提示和对话框即使显示在窗口上层，也使用该主题。该列以 `t` 的 `Background` 绘制背景，文本使用 `t` 的 `Text` 颜色、`FontSize` 和 `Font`，与根元素使用窗口主题的方式相同；也可以像根元素一样，用 `.Background(ui.Transparent)` 透出背后内容。根元素和该列之后构建的内容仍使用窗口主题；toast 属于窗口，因此也不受局部主题影响。主题可以嵌套，传入 nil 主题则得到普通列。在内部调用 `SetTheme` 仍会改变整个窗口的主题，包括根元素和该列之后的内容，但该列的子元素仍使用 `t`。
 
 ## 桌面的偏好设置
 
 `c.Preferences()` 返回桌面的设置，默认主题遵循它，每一帧也会跟随它的变化：
 
-- **`Accent`。** 用户选择的强调色（macOS、Windows，以及由桌面门户提供强调色的桌面环境，如 GNOME 47 和 KDE），它决定主按钮、选择和焦点环的颜色，其上的文本很醒目。
+- **`Accent`。** 用户选择的强调色（macOS、Windows，以及通过桌面门户提供强调色的桌面环境，如 GNOME 47 和 KDE），用于主按钮、选中状态和焦点环，并配以对比鲜明的文字颜色。
 - **`HighContrast`。** macOS 的增强对比度、Windows 的对比度主题、桌面门户的更高对比度：边框和次要文本更深（深色模式下更浅），焦点环不透明。
 - **`TextScale`。** Windows 和 GNOME 的文本大小：`FontSize` 增大相应倍数。
 - **`ReduceMotion`。** macOS 的减弱动态效果、Windows 的动画效果和 GNOME 的动画被关闭：`Animate` 立即到达目标。
-- **`Pointer`、`AnyPointer`、`Hover()` 和 `AnyHover()`。** 各指向设备能做什么，如 Media Queries 4 的 `pointer`、`any-pointer`、`hover` 和 `any-hover`：`Pointer` 是主指向设备的精确程度，`ui.PointerFine` 表示鼠标、触摸板或笔，`ui.PointerCoarse` 表示触摸屏，`ui.PointerNone` 表示没有，`AnyPointer` 是所有设备中最精确的；`NoHover` 和 `NoAnyHover`（`Hover()` 和 `AnyHover()` 则相反）表示主设备或所有设备不能悬停。以触摸为先的布局会给粗指针更大的目标，并且只把能悬停的指针才够得到的内容放在悬停时显示：
+- **`Pointer`、`AnyPointer`、`Hover()` 和 `AnyHover()`。** 描述指向设备的能力，对应 Media Queries 4 的 `pointer`、`any-pointer`、`hover` 和 `any-hover`：`Pointer` 表示主指向设备的精度，`ui.PointerFine` 表示鼠标、触摸板或笔，`ui.PointerCoarse` 表示触摸屏，`ui.PointerNone` 表示无指向设备，`AnyPointer` 表示所有设备中的最高精度；`NoHover` 和 `NoAnyHover` 分别表示主设备不支持悬停、所有设备都不支持悬停（`Hover()` 和 `AnyHover()` 返回相反结果）。触摸优先的布局应为低精度指针提供更大的点击目标，并且仅在设备支持悬停时，才将某些内容设为悬停后显示：
 
   ```go
   p := c.Preferences()
@@ -203,7 +203,7 @@ ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 
   Linux 读取 seat（输入设备组）中的设备（来自 GDK），并跟随它们的出现和消失；Windows 读取是否有鼠标、笔或触摸屏，在平板模式下触摸屏是主设备；浏览器回答媒体查询。macOS 的以及未知的设备按鼠标处理：精细，且可悬停。
 
-你自己的主题（`SetTheme`）不遵循它们：它由你决定。要让它像默认主题那样遵循它们（例如一个让用户在系统外观之上选择浅色或深色的应用），用 `WithPreferences` 接收这些设置，它返回主题的一个副本，采用桌面的强调色、对比度和文本大小：
+自定义主题（`SetTheme`）不会自动遵循这些设置，而是由你控制。要让它像默认主题一样遵循桌面设置（例如允许用户手动选择浅色或深色、不随系统外观切换），可将设置传给 `WithPreferences`，得到采用桌面强调色、对比度和文本大小的主题副本：
 
 ```go
 t := ui.DarkTheme()

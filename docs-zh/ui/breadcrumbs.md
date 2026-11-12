@@ -2,7 +2,7 @@
 
 <!-- preview breadcrumbs 180 -->
 
-`ui.Breadcrumbs` 创建一条条目路径，如同 Finder 的路径栏和 AppKit 的路径控件，条目之间用尖角符号分隔：除最后一项外，其余条目都是链接，单击即可选中它，按 Enter 也一样，并把 `*int` 设为它的索引，`Changed` 会报告这一变化。空间不足时，长条目以省略号缩短。
+`ui.Breadcrumbs` 创建路径导航，如同 Finder 的路径栏和 AppKit 的路径控件，各项之间用尖角符号分隔：除最后一项外，其余都是链接，单击或按 Enter 选中后，会把索引写入 `*int`，并由 `Changed` 报告变化。空间不足时，较长的条目会以省略号截断。
 
 ```go
 path := []string{"Macintosh HD", "Users", "ada", "Documents"}
@@ -15,7 +15,7 @@ if ui.Breadcrumbs(c, path, &app.chosen).Label("Path").Changed() {
 
 ## 辅助功能
 
-辅助技术看到的是一个导航地标中的链接，`Label` 为这个地标命名，屏幕阅读器可以在窗口的各地标之间跳转到它；最后一项则被看作当前页（`ui.CurrentPage`），屏幕阅读器会这样朗读它。你自己的路径用 `Role(ui.RoleNavigation)` 和 [`Current`](accessibility.md#状态) 说明同样的事：
+辅助技术会将其识别为导航地标中的链接，`Label` 为地标命名，屏幕阅读器可在窗口的各地标之间跳转；最后一项则被识别并朗读为当前页（`ui.CurrentPage`）。自定义路径导航可用 `Role(ui.RoleNavigation)` 和 [`Current`](accessibility.md#状态) 表达相同语义：
 
 ```go
 ui.Row(c).Gap(6).Role(ui.RoleNavigation).Label("Breadcrumb").Children(func() {

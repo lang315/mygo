@@ -2,7 +2,7 @@
 
 <!-- preview radio 160 -->
 
-`ui.Radio` 创建一个单选按钮，把选中的值写入 `*T`，并带一个标签：单击会选中它，持有键盘焦点时按 Space 也一样，`Changed` 报告这次选择。值可以是任何可比较类型。
+`ui.Radio` 创建带标签的单选按钮，将选中的值写入 `*T`：单击即可选中，获得键盘焦点时按 Space 也一样，`Changed` 报告选择变化。值可以是任何可比较类型。
 
 `ui.RadioGroup` 把单选按钮组当作一个 Tab 焦点停留点：Tab 会跳到选中的那一个，方向键在它们之间选择，Home 和 End 也一样。
 
@@ -28,7 +28,7 @@ ui.RadioGroup(c, func() {
 
 ## 无外观
 
-`ui.RadioBase` 是无外观的单选按钮：单击时选中其值的一行：见[自定义控件](custom-widgets.md)，其中有一个在禁用时仍可读的卡片（`DimDisabled(false)`）。
+`ui.RadioBase` 是无外观的单选按钮，以行布局呈现，单击时选中其值：见[自定义控件](custom-widgets.md)，其中的示例卡片在禁用时仍保持清晰可读（`DimDisabled(false)`）。
 
 ## 辅助功能
 

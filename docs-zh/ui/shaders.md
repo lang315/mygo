@@ -1,6 +1,6 @@
 # 着色器
 
-着色器在 GPU 上计算矩形中每个像素的颜色，依据像素位置、应用每帧传入的值，以及它读取的图像：移动的噪声和渐变、逐像素照亮的纹理、横跨窗口的波纹。`ui/shader` 包编译用 Go 语法编写的着色器，并在绘制窗口的任一 GPU 渲染器（Metal、Direct3D 11、OpenGL 或 WebGL 2）上绘制，没有 GPU 渲染器时则在 CPU 上绘制，像素相同，仅有舍入差异。
+着色器根据像素位置、应用每帧传入的值和读取的图像，在 GPU 上计算矩形内每个像素的颜色，可用于绘制动态噪声和渐变、逐像素照亮的纹理，以及横跨窗口的波纹。`ui/shader` 包编译用 Go 语法编写的着色器，支持窗口所用的各种 GPU 渲染器（Metal、Direct3D 11、OpenGL 或 WebGL 2），没有 GPU 渲染器时则由 CPU 绘制。两种方式的渲染效果一致，像素值只会因数值计算的精度限制而略有不同。
 
 ```go
 import "github.com/egoist/mygo/ui/shader"
@@ -23,7 +23,7 @@ ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) {
 })
 ```
 
-`Draw` 填充绘制器中的一个矩形，和其他绘制内容一样会随绘制器被裁剪、变换、淡出；`Options.Radius` 让它的角变圆。
+`Draw` 填充绘制器中的一个矩形，和其他绘制内容一样受绘制器的裁剪、变换和透明度影响；`Options.Radius` 设置矩形的圆角。
 
 ## 文本、路径和图标
 
@@ -79,7 +79,7 @@ ui.Text(c, "Wavy").FontSize(24).Effect(wave.Effect(shader.Options{
 }))
 ```
 
-元素及其子元素，连同它们的阴影和 `Draw` 回调绘制的内容，在元素绘制的每一帧渲染到 GPU 位图中，效果则代替元素绘制在这个位图上。`pos` 从元素盒子的左上角算起，`rectSize()` 返回它的尺寸。`LayerEffect` 用 `layerAt(p)` 读取内容，即 `p` 处的像素，或用 `layerSample(p)` 读取周围像素的混合值；`p` 和 `pos` 一样以 DIP 计。`DistortionEffect` 用 `layerSample` 读取内容。内容在渲染范围之外读作透明：`Options.MaxSampleOffset` 会在盒子周围多渲染这么多像素的范围，供读取或移动像素这么远的效果使用，而效果会覆盖整个范围。元素在点击、焦点和辅助功能上的位置不变：只有显示的内容改变。效果的着色器读取自己的图像 0 到 2；图像 3 是内容。
+元素每次绘制时，会将自身及子元素、阴影和 `Draw` 回调绘制的内容渲染到 GPU 位图中，再由效果根据这张位图绘制，替代元素原本的绘制结果。`pos` 从元素盒子的左上角算起，`rectSize()` 返回盒子的尺寸。`LayerEffect` 用 `layerAt(p)` 读取 `p` 处的像素，或用 `layerSample(p)` 读取周围像素的混合值；`p` 和 `pos` 一样以 DIP 计。`DistortionEffect` 用 `layerSample` 读取内容。超出渲染范围的内容读取为透明：`Options.MaxSampleOffset` 指定在盒子四周额外渲染的距离，供效果读取或移动该范围内的像素，效果也会绘制整个扩展范围。元素用于点击、焦点和辅助功能的位置不变：改变的只有显示内容。效果着色器可读取自带的图像 0 到 2；图像 3 用于元素内容。
 
 ## 背景
 
@@ -117,7 +117,7 @@ func Fragment(dst vec4, pos vec2) vec4
 
 `dst` 是像素中心的坐标，单位是窗口或所绘制画布的像素；`pos` 是同一个点，单位是 DIP，从矩形的左上角算起。`Fragment` 可以只接受 `dst`，或什么都不接受。
 
-该语言是 [Ebitengine 的 Kage](https://ebitengine.org/en/documents/shader.html)，MyGo 的编译器由它分叉而来：使用 Go 的语法，支持这些类型：
+该语言是 [Ebitengine 的 Kage](https://ebitengine.org/en/documents/shader.html)，MyGo 的编译器基于 Kage 编译器派生而来：使用 Go 语法，支持以下类型：
 
 | 类型 | |
 | --- | --- |
@@ -156,7 +156,7 @@ for _, t := range ripples {
 fx.Draw(p, r, shader.Options{Uniforms: map[string]any{"Taps": taps, "Count": len(ripples)}})
 ```
 
-对于每帧都要设置的值，`Values` 通过只查找一次的变量来赋值，每次绘制都不需要 map、不需要转换，也不分配内存，Flutter 的 `FragmentShader` 和 Skia 的 `SkRuntimeShaderBuilder` 就是这样保存值的：
+对于每帧都要设置的值，`Values` 只需查找一次变量，之后每次绘制都无需使用 map、转换类型或分配内存，Flutter 的 `FragmentShader` 和 Skia 的 `SkRuntimeShaderBuilder` 也采用这种方式保存值：
 
 ```go
 var (

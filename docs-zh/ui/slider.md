@@ -2,7 +2,7 @@
 
 <!-- preview slider 180 -->
 
-`ui.Slider` 创建一个滑块，用于在低值和高值之间设置 `*float64`：拖动滑块柄，或在轨道上按下，即可设置数值；持有键盘焦点时，方向键、Page Up 和 Page Down（范围的十分之一）、Home 和 End 也可以。`Changed` 报告新值。
+`ui.Slider` 创建一个滑块，用于在低值和高值之间设置 `*float64`：拖动滑块柄，或在轨道上按下，即可设置数值；具有键盘焦点时，方向键、Page Up 和 Page Down（范围的十分之一）、Home 和 End 也可以。`Changed` 报告新值。
 
 ```go
 ui.Slider(c, &app.volume, 0, 100).Label("Volume")
@@ -20,7 +20,7 @@ ui.StepSlider(c, &app.quality, 0, 100, 25).Label("Quality")
 
 ## 无外观
 
-`ui.SliderBase` 是无外观的滑块：在它的内容盒内（内边距范围之内）拖动会设置值。把轨道和滑块柄绘制在 `(value-lo)/(hi-lo)` 所确定的位置，并留出滑块柄宽度一半的内边距，使滑块柄始终落在其内。在[从右到左](right-to-left.md)时，低值位于右边，如同 `Slider` 绘制的那样，方向键按它们指向的方向移动滑块柄：当 `c.Direction()` 为 `ui.RightToLeft` 时镜像绘制它：
+`ui.SliderBase` 是不预设外观的滑块：在扣除内边距后的内容区域内拖动即可设置数值。按 `(value-lo)/(hi-lo)` 计算位置，绘制轨道和滑块柄；内边距设为滑块柄宽度的一半，以免滑块柄越界。在[从右到左](right-to-left.md)的布局中，低值位于右侧，与 `Slider` 一致，方向键按箭头所指方向移动滑块柄：`c.Direction()` 为 `ui.RightToLeft` 时，应镜像绘制：
 
 ```go
 s := ui.SliderBase(c, &app.volume, 0, 100).Height(24).PaddingX(12)
@@ -35,7 +35,7 @@ s.Draw(func(p *ui.Painter, r ui.Rect) {
 })
 ```
 
-`Step` 把值吸附到低值以及步长的整数倍，方向键在这些值之间移动，而不是按范围的百分之一移动；`Vertical` 让它朝上，低值位于内容盒底部；此时要留出滑块柄高度一半的内边距：
+`Step` 将值吸附到从低值开始、以指定步长递增的各个位置，方向键在这些位置之间移动，而不再每次移动范围的百分之一；`Vertical` 将滑块改为垂直方向，数值从内容区域底部的低值向上递增；此时内边距应设为滑块柄高度的一半：
 
 ```go
 ui.SliderBase(c, &app.level, 0, 10).Step(1).Vertical().Size(24, 120).PaddingY(12).Draw(drawLevel)

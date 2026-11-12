@@ -2,7 +2,7 @@
 
 <!-- preview date-input 320 -->
 
-`ui.DateInput` 创建一个字段，按用户区域格式以数字显示 `*time.Time`，例如美国的 1/5/2026、英国的 05/01/2026 或中国的 2026/1/5，下方的[日历](calendar.md)会更改它。单击、Enter 或 Space 打开日历，在日历中单击选择一天，方向键和 Enter 也可以；Page Up 和 Page Down 或它的按钮按月切换，Escape 关闭日历。`Changed` 报告新日期，新日期保留原值的时间与时区。
+`ui.DateInput` 创建日期输入框，按用户所在地区的数字日期格式显示 `*time.Time`，例如美国的 1/5/2026、英国的 05/01/2026 或中国的 2026/1/5，通过下方的[日历](calendar.md)修改日期。单击或按 Enter、Space 打开日历；在日历中单击，或用方向键配合 Enter 选择日期；Page Up、Page Down 或日历上的按钮按月切换，Escape 关闭日历。`Changed` 报告新日期，保留原值的时分秒与时区。
 
 ```go
 ui.Field(c, "Birthday", func() {

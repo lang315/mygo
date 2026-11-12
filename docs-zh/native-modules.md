@@ -2,11 +2,11 @@
 
 **实验性。** 原生模块，以及用 `ffi` 绑定 C 库，可能在任意发布版本中变化，包括破坏性变化：Go 侧、生成的 Swift、Rust 和 Zig、`mygo native` 命令以及 `mygo-plugin.json`。发布说明会列出每项破坏性变化以及该怎么应对。
 
-原生模块是用 Swift、Rust 或 Zig 实现的 Go 接口。你在 Go 中声明接口，实现 MyGo 据此生成的声明，然后像任何其他 Go 值一样从 Go 调用它：可以有 `context.Context`、错误、迭代器和回调，Go 一侧由 Go 编译器检查，另一侧由 Swift、Rust 或 Zig 的编译器检查。没有 cgo，两者之间也没有什么需要手写。
+原生模块是用 Swift、Rust 或 Zig 实现的 Go 接口。你在 Go 中声明接口，再按照 MyGo 生成的声明编写实现，就能像调用普通 Go 值一样使用它：支持 `context.Context`、错误、迭代器和回调，Go 侧由 Go 编译器检查，实现侧由相应语言的编译器检查。不使用 cgo，也无需手写两种语言之间的胶水代码。
 
 适合用在 Go 缺少或做得慢的地方：
 
-- macOS 仅在 Swift 中提供的东西：它的框架（NaturalLanguage、Vision、AVFoundation、Speech……）、Swift 包，以及显示在原生 UI 中的视图；
+- macOS 仅向 Swift 提供的功能：系统框架（NaturalLanguage、Vision、AVFoundation、Speech……）、Swift 包，以及嵌入原生 UI 的视图；
 - 在所有平台上使用 Rust crate 或 Zig、C 库，例如解析器、编解码器、数据库或推理引擎。
 
 模块把每种实现放在以对应语言命名的目录里，用该语言的工具构建：
@@ -95,7 +95,7 @@ for tok, err := range a.Tokens(ctx, text, language.Sentence) {
 }
 ```
 
-只有接口需要声明。MyGo 生成其余部分，`mygo dev` 会在你编辑时让它保持最新：Go 中的 `NewAnalyzer`，以及每种语言中其实现必须满足的声明，这里是 Swift 协议 `Analyzer`、结构体 `Token`、枚举 `Unit` 和 `LanguageError`，以及它们之间的胶水代码；Rust 中是 trait `Analyzer`，Zig 中则是一个在编译时检查你的结构体是否实现了每个方法的 struct（见 [Rust 和 Zig](#rust-和-zig)）。改动接口后，所有实现都会编译失败，直到跟上接口；漏掉一个方法，该语言的编译器会指出它。
+你只需声明接口，其余声明和胶水代码由 MyGo 生成，并由 `mygo dev` 在编辑时保持同步：Go 侧生成 `NewAnalyzer`，实现侧生成各语言需要遵循的声明。这里包括 Swift 协议 `Analyzer`、结构体 `Token`、枚举 `Unit` 和 `LanguageError`；Rust 中生成 trait `Analyzer`，Zig 中则生成一个结构体，在编译时检查你的结构体是否实现了所有方法（见 [Rust 和 Zig](#rust-和-zig)）。改动接口后，所有实现都必须同步更新才能通过编译；漏掉方法时，相应语言的编译器会指出缺少哪个方法。
 
 ## 创建模块
 
@@ -138,9 +138,9 @@ modules/<module name>/
 mygo native add <language> [module dir]
 ```
 
-在模块中创建该语言的目录（模块目录默认为当前目录），包含每个入口点的工厂函数，以及每个方法都声明不受支持的实现，因此模块立刻可以构建，方法则逐个实现。如果模块用到了只有 Swift 才能实现的东西，Rust 和 Zig 会拒绝（见 [Rust 和 Zig](#rust-和-zig)）。
+该命令在模块中创建对应语言的目录（模块目录默认为当前目录），为每个入口点生成工厂函数，并生成所有方法均返回“不支持”的占位实现。模块因此可以立即构建，之后再逐个实现方法。如果模块用到了只有 Swift 支持的功能，就不能添加 Rust 或 Zig 实现（见 [Rust 和 Zig](#rust-和-zig)）。
 
-模块是普通的 Go 包。可以从应用或任何 Go 模块中导入它：`mygo dev` 和 `mygo build` 会通过 `go list -deps` 在依赖中找到应用中每个带实现的原生模块包，构建对应平台的实现并放入应用。不需要注册任何东西。
+模块就是普通的 Go 包，可以从应用或其他 Go 模块中导入。`mygo dev` 和 `mygo build` 通过 `go list -deps` 找出依赖中所有带实现的原生模块包，为目标平台构建实现并放入应用，无需额外注册。
 
 提交生成的文件。`<module name>_native.go` 让应用在任意机器上编译、vet 和测试，无论是否安装了这些语言的工具；`<Module>.mygo.swift`、`mygo.rs` 和 `mygo.zig` 保存 Go 侧的声明和 Go 调用的 C 函数，让编辑器补全并检查实现；永远不要编辑它们。它们会注明自己来自哪个接口，当某个文件比接口旧时，`mygo build` 会拒绝构建。
 
@@ -159,11 +159,11 @@ func makeAnalyzer() throws -> any Analyzer {
 }
 ```
 
-工厂可以抛出错误，构造函数返回该错误。`NativeError.unsupported` 会以 `errors.ErrUnsupported` 到达 Go，用来表示系统缺少的东西，比如需要更新系统版本才有的框架。Swift 实现能运行的 macOS 版本，就是它在 `Package.swift` 的 `platforms` 中列出的版本：在更旧的版本上，以及在没有实现的平台上，构造函数不询问就直接返回 `errors.ErrUnsupported`。
+工厂可以抛出错误，构造函数会返回该错误。`NativeError.unsupported` 在 Go 中对应 `errors.ErrUnsupported`，表示系统缺少所需功能，例如某个框架要求更新的系统版本。Swift 实现支持的 macOS 版本由 `Package.swift` 中的 `platforms` 声明；在更旧的版本或没有实现的平台上，构造函数不会调用工厂，直接返回 `errors.ErrUnsupported`。
 
 **其他接口。** 入口点的方法接收或返回的接口也是模块的一部分，会与模块一起生成，但没有构造函数。它们不需要指令。由谁实现取决于它出现的位置：模块的方法返回的接口，例如已加载的模型，由平台实现（见[对象](#对象)）；方法只接收的接口，例如委托，由 Go 实现（见 [Go 实现的接口](#go-实现的接口)）。如果某个接口既是返回的又是只接收的，MyGo 会报错停止。
 
-**能力。** 实现除了方法之外还有什么，用 Go 自己的方式表达：嵌入。
+**能力。** 方法以外的能力，通过 Go 的接口嵌入来声明：
 
 - `native.View`：实现是平台的视图，用 `ui.NativeView` 显示在原生 UI 中（见[视图](#视图)）。
 - `io.Closer`，或 `Close() error` 方法：对象在 Go 关闭它时被释放（见[对象](#对象)）。
@@ -199,11 +199,11 @@ func makeAnalyzer() throws -> any Analyzer {
 
 **上下文。** 第一个参数是 `context.Context` 的方法，在 Swift 中是 `async` 方法，并在 `Task` 中运行。取消上下文会取消该任务，因此 `Task.isCancelled` 和 `try Task.checkCancellation()` 能看到它；可取消的 await，例如 `Task.sleep`，会抛出 `CancellationError`，Go 会以 `ctx.Err()` 收到。上下文的截止时间一到，任务就会被取消。上下文不会作为参数传给实现：在实现里，它只用于传递取消。没有上下文的方法是同步的，在调用方 goroutine 的线程上运行，或在有 `//mygo:mainthread` 时在主线程上运行：让这些方法保持快速，因为视图和处理器会在主线程上调用它们。
 
-**流。** 返回迭代器的方法，产出的内容就是 Swift 流的产出。循环开始时流启动；循环中断、上下文被取消、流结束或抛出时，流停止。当 Go 先停止时，流的任务被取消，其 `onTermination` 运行：在那里停止流所启动的东西。
+**流。** 方法返回的迭代器会依次产出 Swift 流中的值。循环开始时启动流；循环中断、上下文取消、流结束或抛出错误时停止流。如果 Go 先停止迭代，就会取消流的任务并运行 `onTermination`：应在其中停止流启动的工作。
 
 ### 回调
 
-函数参数会变成一个 `@Sendable` 闭包，实现可以保存它，并从任意线程调用任意多次。它的有效期与接收它的东西一样长：如果方法返回订阅，就直到订阅关闭；否则就是方法所属对象的生命周期。
+函数参数会变成一个 `@Sendable` 闭包，实现可以保存它，并从任意线程调用任意多次。如果方法返回订阅，闭包在订阅关闭前有效；否则，其有效期与方法所属对象的生命周期相同。
 
 - 没有返回值的回调是通知：闭包立即返回，Go 之后在主线程上运行该函数，与所有处理器一样，顺序与实现调用的顺序相同。
 - 有返回值的回调是提问：闭包等待答案，Go 在调用它的线程上立即运行该函数。系统在主线程上提问时（大多数委托如此）要尽快回答，绝不要在那里等待需要主线程的工作。回调的 `error` 结果会在 Swift 中以抛出错误的形式返回。
@@ -233,7 +233,7 @@ func makeAnalyzer() throws -> any Analyzer {
 
 导出字段变成小驼峰属性；未导出的字段被省略。结构体和切片跨边界时会复制，因此双方都看不到对方之后的改动。`[]byte` 参数在调用期间借给 Swift，不复制；如果要保留，就用 `Data(data)` 复制一份。
 
-其他任何类型都会让 MyGo 在声明所在行报错停止：通道、`any`、键不是 string 的 map、泛型类型以及其他包的类型，上面列出的除外。给这样的值改用包内定义的结构体。
+除上表列出的类型外，MyGo 会在声明所在行报错：不支持通道、`any`、键不是 string 的 map、泛型类型，以及其他包的类型。这类数据应改用包内定义的结构体表示。
 
 Swift 自有的、Go 没有对应物的类型，例如带关联值的枚举、泛型类型和重载方法，留在实现内部：在那里把它们转换为结构体，或转换为一个每个 case 一个字段的结构体，并用一个 `type Kind string` 说明设置了哪一个。
 
@@ -370,9 +370,9 @@ const Words = struct {
 
 **错误。** 包的错误是一个枚举，Rust 中是 `LanguageError::Undetermined`（`?` 把它变成 `Error`），Zig 中是 `error.Undetermined`。`Error::Unsupported` 和 `error.Unsupported` 以 `errors.ErrUnsupported` 到达 Go；其他错误则作为带有 `domain`、`number` 和 `message` 的 `*native.Error` 到达，Rust 写作 `Error::Other { domain, number, message }`（或 `Error::other(message)`），Zig 写作 `mygo.fail(domain, number, message)`。
 
-**线程。** 没有上下文的方法在调用方 goroutine 的线程上运行，有上下文的方法在自己的线程上运行：Rust 的 `Context` 和 Zig 的 `mygo.Context` 说明 Go 何时取消了它（`is_canceled`、`isCanceled`），并可以休眠到那一刻（`sleep`）。流在自己的线程上运行，该线程为 Go 循环想要的每个值向迭代器索取。实现可能从任意线程被调用，因此 Rust 的 trait 是 `Send + Sync`，它们修改的状态需要 `Mutex` 或原子操作。
+**线程。** 没有上下文的方法在调用方 goroutine 所在线程上运行，有上下文的方法在独立线程上运行：Rust 的 `Context` 和 Zig 的 `mygo.Context` 可以查询 Go 是否已取消调用（`is_canceled`、`isCanceled`），也可以休眠直到取消（`sleep`）。流同样在独立线程上运行，按 Go 循环的需要向迭代器取值。实现可能从任意线程被调用，因此 Rust 的 trait 是 `Send + Sync`，修改共享状态需要 `Mutex` 或原子操作。
 
-**Zig 中的内存。** 每次调用得到一个 arena，它存放该次调用的参数，并在结果发送后释放：可以返回它的切片，或参数的切片，无需复制。流的 arena 和参数会持续到流结束，它产出的每个值得到自己的 arena。比调用活得更久的东西，例如用 `keep()` 保存的对象、迭代器和回调，用 `mygo.allocator` 分配，并在其 `deinit` 中释放，Go 在释放该值时调用它。方法若在调用结束后仍保留某个回调，就要对它调用 `keep()`，用完再 `release()`。
+**Zig 中的内存。** 每次调用都有一个 arena，用于存放参数，发送结果后释放；返回其中的切片或参数的切片时无需复制。流的 arena 和参数保留到流结束，每个产出的值另有独立的 arena。需要在调用结束后继续保留的对象、迭代器，以及用 `keep()` 保留的回调，应使用 `mygo.allocator` 分配，并在 Go 释放该值时调用的 `deinit` 中释放内存。方法若在调用结束后仍保留某个回调，就要对它调用 `keep()`，用完再调用 `release()`。
 
 **只有 Swift 能实现的东西。** 视图、纹理、窗口和其他模块的接口都是 Apple 的，因此使用它们的模块只能用 Swift 实现，`mygo native add rust` 会指出它的哪些方法造成了阻碍。返回 `*native.Buffer`（而不是接收它）也是如此。
 
@@ -503,7 +503,7 @@ Swift 可以保留这个对象；只要 Swift 还保留着，Go 就让该值保�
 
 ## 视图
 
-嵌入 `native.View` 的接口由平台的视图实现，并用接收 `native.View` 的 `ui.NativeView` 显示，就像 `ui.WebView` 显示 webview 一样：在视图之外创建一次，然后在视图里显示它。
+嵌入 `native.View` 的接口由平台原生视图实现。将它作为 `native.View` 传给 `ui.NativeView` 即可显示，类似于 `ui.WebView` 显示 webview：在构建视图的函数之外创建一次，再在该函数中显示。
 
 ```go
 // Player plays a video.
@@ -562,7 +562,7 @@ a.timeSub = a.player.OnTime(func(t time.Duration) { a.now = t; a.win.Invalidate(
 
 原生视图像 webview 一样，是原生 UI 中的一个盒子：它没有自己的尺寸，从布局取得尺寸，并被裁剪到元素的 `Radius`。视图之后绘制的内容会显示在它之上，因此字幕、控件、浮层和对话框都绘制在视频上方。MyGo 把 `NSView` 放在原生 UI 的帧之下，设置其尺寸并裁剪：不要自己移动、调整大小或移除它。它接收鼠标，在获得焦点时作为第一响应者接收键盘，并像任何 `NSView` 一样加入窗口的辅助功能树。如果窗口的视图没有构建某个原生视图，它就会隐藏，但保留自己的状态。
 
-视图在主线程上运行，符合 AppKit 的要求，无需 `//mygo:mainthread`。在应用运行后创建它，也就是在 `App.WhenReady` 中或之后；它也会在那里被关闭和释放。它的回调也在主线程上运行；从回调中调用窗口的 `Invalidate` 来显示变化。
+原生视图按 AppKit 的要求在主线程上运行，无需 `//mygo:mainthread`。应在应用启动后，即 `App.WhenReady` 中或之后创建；关闭和释放也在主线程上进行。它的回调同样在主线程上运行；在回调中调用窗口的 `Invalidate` 来显示变化。
 
 ### 窗口和锚点
 
@@ -595,7 +595,7 @@ if btn.Clicked() {
 }
 ```
 
-`native.View` 参数（例如另一个模块的视图）会以其 `NSView` 到达，以便改为锚定到它。
+`native.View` 参数（例如另一个模块的视图）在 Swift 中对应原来的 `NSView`，也可以用它作为锚点。
 
 ## 使用其他模块的模块
 
@@ -616,9 +616,9 @@ type Player interface {
 
 生成的 Swift 会导入另一个模块的 Swift 模块，实现收到的就是该模块返回的对象——它自己类中的 `AVAsset`，而不是副本。
 
-Go 的导入就是模块之间的依赖：不需要往 `Package.swift` 里添加任何东西。模块生成的声明是 `public` 的，其他模块可以看到；它的 Go 包会先加载自己使用的模块。`mygo dev`、`mygo build` 和 `mygo native check` 会先构建一个模块所使用的模块，每个都来自各自的 Swift 包，然后用它们的 Swift 模块和库构建该模块，并链接这些模块和库：无论多少模块使用它，应用里每个模块都只有一份，与其他模块一起放在 `Contents/Frameworks` 中。
+Go 的导入关系也决定了原生模块之间的依赖，无需再修改 `Package.swift`。生成的声明为 `public`，可供其他模块访问；Go 包加载时会先加载所依赖的模块。`mygo dev`、`mygo build` 和 `mygo native check` 先从各自的 Swift 包构建依赖模块，再用这些 Swift 模块和库编译、链接当前模块。无论被多少模块引用，每个模块在应用中都只有一份，统一放在 `Contents/Frameworks` 中。
 
-`mygo dev` 还会把应用的各个模块写成一个 Swift 包 `.mygo/native` 里的 target：每个模块依赖其 Go 包导入的模块，以及它自己的 `Package.swift` 中声明的包，其源代码是指向模块目录的链接。在 Xcode 中打开这个包，或让 SourceKit-LSP 指向它，就能在补全的帮助下编辑使用其他模块的模块；它的构建方式与应用一致，因此如果两个模块需要同一个 Swift 包的不兼容版本，SwiftPM 解析时就会让它停下来。
+`mygo dev` 还会在 `.mygo/native` 中生成统一的 Swift 包，将应用的每个模块作为一个 target；各 target 依赖其 Go 包导入的模块及自身 `Package.swift` 声明的包，源文件则链接到原模块目录。在 Xcode 中打开这个包，或让 SourceKit-LSP 指向它，就能获得跨模块的代码补全。它的构建方式与应用一致，因此两个模块若要求同一 Swift 包的不兼容版本，SwiftPM 会在解析依赖时报告冲突并停止。
 
 ## 大数据
 
@@ -646,7 +646,7 @@ func read(buf: NativeBuffer) throws -> Int {
 }
 ```
 
-流产出的缓冲区只在循环继续之前有效：要保留的内容请像 `bufio.Scanner.Bytes` 那样复制。Swift 从 `NativeBufferPool` 产出缓冲区，Go 的循环每前进一次，它就复用上一个缓冲区，因此缓冲区的流一旦跑起来就不再分配。
+流产出的缓冲区在循环开始下一次迭代前有效；需要保留的内容，应像使用 `bufio.Scanner.Bytes` 时一样复制。Swift 从 `NativeBufferPool` 取出缓冲区，Go 的循环继续后即可复用，因此流开始运行后不再分配新的缓冲区。
 
 ### 纹理
 
@@ -683,7 +683,7 @@ func (a *app) view(c *ui.Context) {
 }
 ```
 
-Swift 呈现的内容会在窗口的下一帧中显示，应用无需调用 `Invalidate`。原生 UI 会持有它显示的绘制表面，而 GPU 上那些帧可能仍会被读取，即仍在使用中（`IOSurfaceIncrementUseCount`）：像素缓冲区池只有在没有任何帧显示某个表面后，才会再次把该表面交给实现，因此每一帧都应绘制到池中的一个缓冲区里，而不是反复绘制到同一个缓冲区。`displayLink` 的回调会收到帧显示的主机时间，单位是秒，与 `CACurrentMediaTime` 的计数方式相同，`invalidate()` 会停止它。与[视图](#视图)不同，纹理由原生 UI 自己绘制：它可以像任何图像一样被覆盖、裁剪、缩放、旋转和淡出，并由[着色器](ui/shaders.md)绘制。
+Swift 提交的内容会在窗口的下一帧显示，应用无需调用 `Invalidate`。原生 UI 会保留当前显示的绘制表面，并将 GPU 尚可能读取的表面标记为使用中（`IOSurfaceIncrementUseCount`）。直到没有任何帧使用某个表面，像素缓冲区池才会再次将它交给实现；因此每一帧都应从池中取缓冲区绘制，不要反复写入同一个缓冲区。`displayLink` 的回调会收到该帧显示时的主机时间，单位为秒，与 `CACurrentMediaTime` 使用同一时间基准；`invalidate()` 会停止回调。与[视图](#视图)不同，纹理由原生 UI 自己绘制：它可以像其他图像一样被覆盖、裁剪、缩放、旋转和淡出，也可以由[着色器](ui/shaders.md)绘制。
 
 ## 依赖
 
@@ -732,16 +732,16 @@ let package = Package(
 
 构建模块需要其语言的工具：`swift/` 需要 Xcode 或其 Command Line Tools，以及 Swift 6；`rust/` 需要 cargo（[rustup](https://rustup.rs)）；`zig/` 需要 [Zig](https://ziglang.org) 0.16。`mygo doctor` 会告诉你装了哪些。
 
-`mygo dev` 会在接口变化后重新生成模块，在实现的某个文件变化后为这台机器重新构建实现，并重启应用，应用会在原处重新打开窗口。`mygo build` 会为构建目标平台，以发布模式构建每个模块的实现：Swift 构建为 arm64 和 x86_64 的通用二进制，连同它引入的框架一起签名，这一切都在给应用签名和公证之前完成（[分发](distribution.md)）；Rust 和 Zig 则为每种架构的库，放在应用的资源中。cargo 和 Zig 把文件放在 Go 模块的 `.mygo/native` 中，而不是模块的目录中：把 `.mygo/` 放进你的 `.gitignore`，`mygo init` 创建的项目就是这么做的。
+接口变化后，`mygo dev` 会重新生成模块；实现文件变化后，会重新构建当前机器的实现并重启应用，窗口会在原位置重新打开。`mygo build` 则以发布模式为目标平台构建每个模块：Swift 生成兼容 arm64 和 x86_64 的通用二进制，连同依赖框架一起签名，再进行应用的签名和公证（[分发](distribution.md)）；Rust 和 Zig 生成各架构的库，放入应用资源。cargo 和 Zig 的构建文件位于 Go 模块的 `.mygo/native`，而不是原生模块目录；应将 `.mygo/` 加入 `.gitignore`，`mygo init` 创建的项目已这样配置。
 
-`go test` 和 `go run` 在 `mygo dev` 或 `mygo native build -target host` 构建好实现之后，运行它们所在平台的实现；如果构建不存在或比源码旧，它们会提示先运行这条命令。用 `-lang` 可以改为构建模块的另一种语言，以便逐一测试：
+先用 `mygo dev` 或 `mygo native build -target host` 构建实现，之后 `go test` 和 `go run` 就能运行当前平台的实现；如果构建产物缺失或比源码旧，会提示先执行构建。用 `-lang` 可以改为构建模块的另一种语言实现，以便逐一测试：
 
 ```sh
 mygo native build -target host -lang rust ./modules/language && go test ./modules/language
 mygo native build -target host -lang zig ./modules/language && go test ./modules/language
 ```
 
-在 Linux 上，同样的命令会用 [Swift 工具链](https://www.swift.org/install/linux/) 构建只使用 Foundation 的模块中的 Swift 部分，GitHub 的 Ubuntu runner 镜像就自带该工具链，因此它的测试也能在 Linux 任务中运行；应用只在 macOS 上运行 Swift。接受接口（而不是构造函数返回的具体值）的代码，可以在任何平台上用一个假实现来测试：
+在 Linux 上，同样的命令可以用 [Swift 工具链](https://www.swift.org/install/linux/) 构建仅依赖 Foundation 的 Swift 模块。GitHub 的 Ubuntu runner 镜像自带该工具链，因此这些模块也能在 Linux 任务中测试；应用本身只在 macOS 上运行 Swift 实现。依赖接口而不是构造函数返回值的代码，可以在任何平台上用假实现测试：
 
 ```go
 type fakeAnalyzer struct{ lang string }
@@ -767,13 +767,13 @@ mygo native build -upload [module dir]
 
 为 macOS、Linux 和 Windows 的 amd64 与 arm64 构建实现（每个平台用对应的语言），把文件作为 GitHub 发布版本的资产上传，并把它们记录在模块旁边的 `mygo-plugin.json` 中：名称、URL、SHA-256，以及每个构建所依据源码的哈希。Swift 发布为单个通用文件 `darwin-universal`，即库及其带入的框架的 `.tar.gz`。提交 `mygo-plugin.json`：之后每台机器都会下载这些构建而不是编译它们，只要它们与源码匹配。
 
-它通过 [GitHub CLI](https://cli.github.com) 上传到模块的 git 检出所在仓库里这个模块自己的发布版本 `native-<name>`（`native-adder`）——该发布版本只创建一次，且不设为最新版本；或者上传到 `-release` 给出的 URL。模块的每次构建都放在那里。每个文件以其 SHA-256 命名，永不替换，因此更早的提交记录的构建仍然可下载。不带 `-upload` 时，它把文件写入 Go 模块的 `.mygo/native/release`，由你自行发布到 `-release` 指向的位置。
+命令通过 [GitHub CLI](https://cli.github.com)，将文件上传到当前模块所属 git 仓库中专用的 `native-<name>` 发布版本（例如 `native-adder`）；该发布版本只创建一次，不会设为最新版本。也可以用 `-release` 指定上传地址。模块的历次构建都存放在同一位置，文件以各自的 SHA-256 命名且不被替换，因此旧提交记录的构建仍可下载。不带 `-upload` 时，命令将文件写入 Go 模块的 `.mygo/native/release`，由你自行发布到 `-release` 指向的位置。
 
 源码哈希覆盖该语言目录中的文件，换行符按 LF 计算，使各平台的检出保持一致；对于 Swift，还覆盖该模块使用的原生模块的文件。如果某个平台记录的构建与源码匹配，就跳过该平台，因此每次推送都发布时只会上传发生变化的部分；`-force` 会强制重新构建这些平台。发布应用使用的每个模块：模块的 Swift 归档包含它自己的库，而不是它使用的模块的库。
 
 当已发布构建的哈希与源码一致时，`mygo build` 会采用它；缺少该语言工具时，`mygo dev` 也会采用。源码一旦变化，有工具的机器会构建它们并给出警告，没有工具的机器则停止并提示重新发布。
 
-构建失败会停止命令，什么也不会发布。有些平台只能在另一种系统上构建，例如不在 Mac 上时的 macOS Swift 和 Rust 库；这些平台会被跳过，在末尾列出，并在 `mygo-plugin.json` 中保持原样，因此每个平台都可以在最方便的地方构建：
+构建失败时，命令会停止，不发布任何文件。如果某个目标必须在其他系统上构建，例如在非 Mac 系统上构建 macOS 的 Swift 或 Rust 库，命令会跳过该目标，在末尾列出，并保留 `mygo-plugin.json` 中原有的记录。这样就能分别在合适的系统上完成各平台构建：
 
 - **Swift** 在 Mac 上构建。
 - **Zig** 交叉编译到每个平台，包括 macOS。
@@ -830,7 +830,7 @@ mygo.Bind(&Text{a}) // a service whose methods call a
 
 ## 工作原理
 
-生成的 Go 代码调用实现所在的库；包 `ffi` 通过 purego 找到并加载它，不使用 cgo，正如 MyGo 调用系统时一样：每个方法一个 C 入口点，生成的 Swift 用 `@_cdecl` 导出，Rust 用 `#[no_mangle] extern "C"`，Zig 用 `export`；所有模块共享一个 Go 回调，用于异步方法的结果、流的值、回调，以及调用 Go 实现的接口。三种语言共享这一个接口，因此 Go 不知道它调用的是哪一种。Go 在加载每个库时给它 C 运行时的 `malloc` 和 `free`，双方用它们分配和释放彼此交接的内容。
+生成的 Go 代码通过 `ffi` 查找、加载实现所在的库，并用 purego 调用，不使用 cgo，与 MyGo 调用系统 API 的方式相同。每个方法都有一个 C 入口点，Swift 用 `@_cdecl` 导出，Rust 用 `#[no_mangle] extern "C"`，Zig 用 `export`；所有模块共享一个 Go 回调，传递异步结果、流中的值、回调调用，以及对 Go 实现接口的调用。三种语言使用相同的调用接口，Go 无需区分实现语言。加载库时，Go 将所用 C 运行时的 `malloc` 和 `free` 传给库，双方用同一组函数分配和释放跨边界传递的数据。
 
 值以二进制编码跨越边界，双方的生成代码按声明的顺序写入和读取，不使用反射，也没有字段名：整数为 8 字节，浮点为 float64，字符串和 `[]byte` 为长度后跟字节，切片和 map 为长度后跟元素，指针为一个标志后跟值，结构体为其字段，枚举为其值，时间为 Unix 秒和纳秒。结果直接从实现返回它们的那块内存中就地读取。只使用数字和 bool、且不返回错误的方法连这一步都省了：Go 直接把它们作为寄存器参数调用对应的 C 函数。缓冲区是双方映射的内存，纹理是与 GPU 共享的 `IOSurface`。没有任何原生模块的应用不会链接这其中的任何东西。
 
@@ -905,7 +905,7 @@ func Add(a, b int32) (int32, error) {
 
 ### 绑定函数
 
-`Library.Bind` 接收指向函数结构体的指针，并在第一次绑定时绑定它；之后用同一个指针从任意 goroutine 调用都会返回第一次的结果，不会再次绑定，因此像上面那样在每次使用前调用它既安全又廉价。如果某个函数绑定不到任何东西——比如 `tag` 选项未知，或对应的函数不存在——`Bind` 就会返回错误。字段会调用其 `tag` 指定的库函数；没有 `tag` 时，则调用与字段同名、转为 snake case 的函数（`CountVowels` 调用 `count_vowels`）：
+`Library.Bind` 接收一个指向结构体的指针，首次调用时绑定其中的函数字段；之后用同一个指针从任意 goroutine 调用，都会直接返回首次绑定的结果。因此像上例那样在每次使用前调用，既安全也没有重复绑定的开销。未知的 `tag` 选项或缺少对应函数等问题会使 `Bind` 返回错误。各字段绑定到 `tag` 指定的库函数；没有 `tag` 时，则将字段名转为 snake case 作为函数名（`CountVowels` 调用 `count_vowels`）：
 
 ```go
 var fns struct {
@@ -965,7 +965,7 @@ func Greeting(name string) string {
 
 ### 库的查找位置
 
-`Library.Load` 以及模块的构造函数会按顺序加载以下各项中的第一个：
+`Library.Load` 和模块的构造函数按以下顺序查找库，加载第一个找到的文件：
 
 1. `$MYGO_NATIVE_<NAME>` 指定的文件（`MYGO_NATIVE_ADDER`）；
 2. 应用资源（或 `Frameworks`）中的那个，也就是 `mygo dev` 和 `mygo build` 放置它的位置，在 macOS 上会与应用一起签名；

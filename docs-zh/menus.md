@@ -29,10 +29,10 @@ menu := mygo.NewMenu([]*mygo.MenuItem{
 })
 ```
 
-一个 `MenuItem` 有：
+`MenuItem` 包含以下字段：
 
 - `Label`，以及 `Accelerator`，即它的快捷键（见[快捷键](#快捷键)）；
-- `Click`，在菜单项被选中时在主线程上调用，传入该菜单项，以及在 Linux 和 Windows 上传入其菜单栏或上下文菜单被选中的窗口。其他菜单使用焦点窗口，或 nil；
+- `Click`，选中菜单项时在主线程上调用，传入该菜单项和窗口：Linux 和 Windows 的菜单栏或上下文菜单传入所属窗口，其他菜单传入当前焦点窗口，没有则为 nil；
 - `Type`：`MenuItemNormal`、`MenuItemCheckbox`、`MenuItemRadio`、`MenuItemSeparator` 或 `MenuItemSubmenu`；带 `Submenu` 的菜单项是子菜单，其他项除非另行设置，都是普通项。相邻的单选按钮项组成一组，选中其中一个会取消选中其他的。复选框和单选按钮项在 `Click` 运行前切换 `Checked`；
 - `Disabled`、`Hidden` 和 `ToolTip`；
 - `Icon`，显示在标签旁边的图像（见[图标](#图标)）；
@@ -52,9 +52,9 @@ menu := mygo.NewMenu([]*mygo.MenuItem{
 - 应用：`RoleQuit`，以及在 macOS 上的 `RoleAbout`、`RoleHide`、`RoleHideOthers`、`RoleUnhide`、`RoleFront`、`RoleServices`、`RoleStartSpeaking`、`RoleStopSpeaking`；
 - 整个菜单：`RoleFileMenu`、`RoleEditMenu`、`RoleFormatMenu`（粗体、斜体、下划线、删除线和各种对齐）、`RoleViewMenu` 和 `RoleWindowMenu`，以及在 macOS 上的 `RoleAppMenu`（以应用命名的菜单）、`RoleWindow`（列出窗口的菜单）和 `RoleHelp`（带搜索框的菜单）。
 
-带 macOS 角色的菜单项在其他平台上会被略去，因此同一份模板就能服务所有平台。
+带 macOS 专用角色的菜单项在其他平台上会被略去，因此同一份模板可用于所有平台。
 
-编辑类角色的菜单项，无论在菜单栏还是弹出菜单中，都只在焦点能对其起作用时才启用，如同其他应用：在[原生 UI](ui/README.md) 中，选中文本时剪切和复制可用，有可撤销的内容时撤销可用，文本输入中粘贴可用；对于接受输入的元素（`HandleInput`），它们全部可用。在 macOS 上，如果焦点或窗口的某个[快捷键](ui/input.md)占用了某个角色的按键，该角色也会被启用。在 macOS 上，包含这些项的菜单会询问焦点：页面的 Web 视图会启用它们以及朗读项，正如 WebKit 所做的那样，而不支持朗读的原生 UI 则禁用朗读项。在 Linux 和 Windows 上，页面的菜单项保持应用给它们的状态。应用禁用的菜单项保持禁用。
+编辑类角色的菜单项，无论位于菜单栏还是弹出菜单，都与其他应用一样，只在当前焦点支持相应操作时启用：在[原生 UI](ui/README.md) 中，选中文本时可剪切、复制，有可撤销的内容时可撤销，文本输入中可粘贴；接受输入的元素（`HandleInput`）则启用全部编辑操作。在 macOS 上，如果焦点元素或窗口的某个[快捷键](ui/input.md)使用了该角色的按键，对应菜单项也会启用。macOS 会根据焦点验证菜单项：页面的 webview 按 WebKit 的行为启用编辑项和朗读项，不支持朗读的原生 UI 则禁用朗读项。在 Linux 和 Windows 上，页面的菜单项保持应用设置的状态。应用明确禁用的菜单项始终保持禁用。
 
 ### 修改菜单项
 
@@ -201,7 +201,7 @@ webview 的菜单项在每个支持它们的平台上都有相同的 ID：
 - **Linux** 就地修改 WebKitGTK 的菜单。WebKitGTK 会告知链接、图像、媒体以及元素是否可编辑，页面则会告知选区。应用的菜单项不显示快捷键或图标，单选按钮项显示为复选框，只有 WebKitGTK 标准操作的菜单项可以重命名。`FrameURL` 保持为空。
 - **Windows** 从 WebView2（1.0.1185 及更高版本；更旧的运行时不调用监听器）获得一切。应用修改过的菜单由 MyGo 绘制，与其他弹出菜单一样，其中 WebView2 的菜单项仍做它们原本做的事；保持原样的菜单则是 WebView2 自己的。WebView2 不给拼写建议提供词，因此 MyGo 绘制的菜单会略去它们；它也不提供 `data:` 图像的 URL，这个 URL 改由页面的 `contextmenu` 事件提供。
 
-应用修改过的菜单不会在开头、结尾或另一个分隔符之后显示分隔符，因为移除两个分隔符之间的菜单项就会造成这种情况。
+应用修改过的菜单会隐藏开头、结尾和连续重复的分隔符，避免移除菜单项后留下多余分隔符。
 
 ## Dock 菜单
 
@@ -254,11 +254,11 @@ func speed(mbps float64) string {
 tray.SetTitle(speed(rate))
 ```
 
-只有数字是等宽的：字母保持自己的宽度，因此切换单位的标题（`9 KB/s`，然后是 `1.2 MB/s`）会随单位改变宽度。让它保持稳定是应用的选择，例如像上面那样用一种单位显示值。
+只有数字等宽，字母仍有各自的宽度，因此切换单位的标题（先 `9 KB/s`，后 `1.2 MB/s`）仍会改变宽度。应用可自行保持宽度稳定，例如像上面那样始终使用同一单位。
 
 应用可以显示多个图标，例如菜单栏应用把它的各项指标分别放在自己的菜单项中。在 macOS 上，新图标出现在已有图标的左边，用户按住 ⌘ 拖动图标来移动它们：给每个图标一个在应用的图标中唯一的 `ID`，每当它再次被创建时（下次启动或 `Destroy` 之后），它都会回到用户放置的位置。在 Windows 上，用户选择哪些图标显示在任务栏上，而不是溢出区域中，带 `ID` 的图标会保持这一选择，无论应用以什么顺序创建它的图标。
 
-模板图标会自行跟随菜单栏。彩色图标，例如用各自颜色绘制每项指标的图标，会根据它所在的栏决定绘制的颜色：`Tray.Dark` 报告该栏是否为深色（macOS 菜单栏，因为它会被系统外观或其下方的壁纸染色，或 Windows 任务栏），`OnAppearanceChange` 会在它变化时通知，以便再次设置图标：
+模板图标会自动适应菜单栏颜色。彩色图标（例如用不同颜色绘制各项指标的图标）则需要根据所在栏的外观调整颜色：`Tray.Dark` 返回该栏是否为深色，可以是受系统外观或壁纸影响的 macOS 菜单栏，也可以是 Windows 任务栏；外观变化时会触发 `OnAppearanceChange`，可在回调中重新设置图标：
 
 ```go
 draw := func() { tray.SetIcon(meterIcon(tray.Dark()), false) }
