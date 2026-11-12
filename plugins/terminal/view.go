@@ -287,14 +287,15 @@ func (v *view) build(c *ui.Context, e ui.Element) {
 		}
 	}
 	v.lang = c.Locale()
-	dark := c.Theme().Dark
+	ut := c.Theme()
+	dark := ut.Dark
 	focused := e.Focused()
 	t.mu.Lock()
 	theme := t.opts.Theme
 	if dark && t.opts.DarkTheme != nil {
 		theme = t.opts.DarkTheme
 	} else if theme == nil {
-		theme = defaultTheme(dark)
+		theme = defaultTheme(ut)
 	}
 	v.theme = theme
 	if t.term == nil {
