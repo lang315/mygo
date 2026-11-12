@@ -99,6 +99,25 @@ func TestCheckFloorsAreExact(t *testing.T) {
 	}
 }
 
+// The accent line must stand out from the chrome it sits on, 3:1, in both
+// appearances.
+func TestCheckAccentOnChrome(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		tk     skinhook.Tokens
+		accent ui.Color
+	}{
+		{"light", Calm.light, ui.Hex("#c9d7ee")},
+		{"dark", Calm.dark, ui.Hex("#2a3550")},
+	} {
+		c.tk.Accent.Base = c.accent
+		err := check(&c.tk)
+		if err == nil || !strings.Contains(err.Error(), "Accent.Base on Chrome") || !strings.Contains(err.Error(), "want 3:1") {
+			t.Errorf("%s: Accent.Base %v gives %v, want an error naming Accent.Base on Chrome and 3:1", c.name, c.accent, err)
+		}
+	}
+}
+
 // Every failing pair is named, not only the first.
 func TestCheckNamesEveryFailingPair(t *testing.T) {
 	tk := Calm.light

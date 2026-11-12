@@ -47,6 +47,61 @@ func TestCalmTheme(t *testing.T) {
 	}
 }
 
+// themeOf maps every field it sets from its token, in both appearances: a
+// copy of Calm's tokens whose Control, radius and body size differ from
+// Content and from the base theme's, so a wrong mapping of any one fails.
+func TestThemeOfMapsEveryField(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		tk := Calm.light
+		if dark {
+			tk = Calm.dark
+		}
+		tk.Control = ui.Hex("#fdfcfb")
+		if dark {
+			tk.Control = ui.Hex("#262a30")
+		}
+		tk.RadiusControl, tk.Body.Size = 7, 17
+		th := themeOf(&tk, dark)
+		for _, c := range []struct {
+			name      string
+			got, want ui.Color
+		}{
+			{"Background", th.Background, tk.Content},
+			{"Surface", th.Surface, tk.Control},
+			{"SurfaceHover", th.SurfaceHover, tk.ControlHover},
+			{"SurfacePressed", th.SurfacePressed, tk.ControlPressed},
+			{"Field", th.Field, tk.Control},
+			{"Border", th.Border, tk.Line},
+			{"ControlBorder", th.ControlBorder, tk.FieldLine},
+			{"Text", th.Text, tk.Text},
+			{"TextMuted", th.TextMuted, tk.Text2},
+			{"Accent", th.Accent, tk.Accent.Base},
+			{"AccentHover", th.AccentHover, tk.Accent.Hover},
+			{"AccentPressed", th.AccentPressed, tk.Accent.Pressed},
+			{"AccentText", th.AccentText, tk.OnAccent},
+			{"Danger", th.Danger, tk.Danger.Base},
+			{"Warning", th.Warning, tk.Warning.Base},
+			{"Success", th.Success, tk.Success.Base},
+			{"Selection", th.Selection, tk.Selection},
+			{"Focus", th.Focus, tk.Accent.Base},
+		} {
+			if c.got != c.want {
+				t.Errorf("dark=%v: %s is %v, want %v", dark, c.name, c.got, c.want)
+			}
+		}
+		if th.Dark != dark || th.Radius != 7 || th.FontSize != 17 {
+			t.Errorf("dark=%v: Dark %v, Radius %v, FontSize %v; want %v, 7, 17", dark, th.Dark, th.Radius, th.FontSize, dark)
+		}
+	}
+	// Calm's own: Field is the control face, which in dark differs from Content.
+	if f := themeOf(&Calm.dark, true).Field; f != ui.Hex("#262a30") {
+		t.Errorf("Calm dark Field is %v, want #262a30", f)
+	}
+	if f := themeOf(&Calm.light, false).Field; f != ui.Hex("#ffffff") {
+		t.Errorf("Calm light Field is %v, want #ffffff", f)
+	}
+}
+
 // Calm's metrics are the spec's, the same in both appearances.
 func TestCalmMetrics(t *testing.T) {
 	l := Calm.light
