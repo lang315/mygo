@@ -10,20 +10,10 @@ import (
 // Calm is a calm light ground with the accent only on what acts or is
 // chosen: the primary action, the selection, the open tab and checked
 // controls; green, amber and red only in status. Controls are 36 DIPs
-// high and table rows 30.
-var Calm = &Skin{name: "Calm", light: calmLight, dark: calmDark}
+// high and table rows 30. Its palette is Chàm.
+var Calm = (&Skin{name: "Calm", light: calmLight, dark: calmDark}).WithPalette(Cham)
 
-// calmAccent is Calm's dark accent, which its translucent fills are made of.
-var calmAccent = ui.Hex("#9384f0")
-
-// Calm's accent families, which are its Info families too.
-var (
-	calmAccentLight = skinhook.Family{Base: ui.Hex("#4e3bb0"), Hover: ui.Hex("#45349b"), Pressed: ui.Hex("#3b2d86"),
-		Subtle: ui.Hex("#f1eff9"), Border: ui.Hex("#cac4e7"), Text: ui.Hex("#46359e"), On: ui.Hex("#ffffff")}
-	calmAccentDark = skinhook.Family{Base: calmAccent, Hover: ui.Hex("#a79bf3"), Pressed: ui.Hex("#7f6eed"),
-		Subtle: calmAccent.Alpha(0.14), Border: calmAccent.Alpha(0.35), Text: ui.Hex("#bdb4f9"), On: ui.Hex("#0e0b2a")}
-)
-
+// calmLight and calmDark are Calm's tokens but those its palette decides.
 var calmLight = skinhook.Tokens{
 	Chrome:         ui.Hex("#f4f5f7"),
 	Content:        ui.Hex("#ffffff"),
@@ -37,12 +27,7 @@ var calmLight = skinhook.Tokens{
 	ControlPressed: ui.Hex("#e9ecf1"),
 	ButtonLine:     ui.Hex("#d2d7de"),
 	FieldLine:      ui.Hex("#838a94"),
-	OnAccent:       ui.Hex("#ffffff"),
-	Selection:      ui.Hex("#dcd8ef"),
 	RowHover:       ui.Hex("#f5f7fa"),
-	RowSelected:    ui.Hex("#edebf7"),
-	Accent:         calmAccentLight,
-	Info:           calmAccentLight,
 	Success: skinhook.Family{Base: ui.Hex("#1e7b34"), Hover: ui.Hex("#196a2c"), Pressed: ui.Hex("#145a25"),
 		Subtle: ui.Hex("#e6f5ea"), Border: ui.Hex("#b7e1c2"), Text: ui.Hex("#1d6b31"), On: ui.Hex("#ffffff")},
 	Warning: skinhook.Family{Base: ui.Hex("#b45309"), Hover: ui.Hex("#9a4708"), Pressed: ui.Hex("#803b07"),
@@ -82,12 +67,7 @@ var calmDark = skinhook.Tokens{
 	ControlPressed: ui.Hex("#343a42"),
 	ButtonLine:     ui.Hex("#3a4048"),
 	FieldLine:      ui.Hex("#79818c"),
-	OnAccent:       ui.Hex("#0e0b2a"),
-	Selection:      calmAccent.Alpha(0.35),
 	RowHover:       ui.Hex("#1c1f23"),
-	RowSelected:    calmAccent.Alpha(0.16),
-	Accent:         calmAccentDark,
-	Info:           calmAccentDark,
 	Success: skinhook.Family{Base: ui.Hex("#3fb860"), Hover: ui.Hex("#52c771"), Pressed: ui.Hex("#2f9d4e"),
 		Subtle: ui.Hex("#34c759").Alpha(0.14), Border: ui.Hex("#34c759").Alpha(0.35), Text: ui.Hex("#7fd99a"), On: ui.Hex("#0b1220")},
 	Warning: skinhook.Family{Base: ui.Hex("#e8a33a"), Hover: ui.Hex("#f0b45a"), Pressed: ui.Hex("#cf8f2c"),
