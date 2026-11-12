@@ -42,8 +42,8 @@ func TestCalmTheme(t *testing.T) {
 		t.Errorf("dark Background %v, ControlBorder %v, Accent %v, Dark %v; want #15171a, #79818c, #9384f0, true",
 			d.Background, d.ControlBorder, d.Accent, d.Dark)
 	}
-	if d.AccentText != ui.Hex("#0e0b2a") || d.Scrollbar != ui.DarkTheme().Scrollbar {
-		t.Errorf("dark AccentText %v and Scrollbar %v; want #0e0b2a and DarkTheme's", d.AccentText, d.Scrollbar)
+	if d.AccentText != ui.Hex("#0e0b2a") || d.Scrollbar != ui.Hex("#e7e9ec").Alpha(0.35) {
+		t.Errorf("dark AccentText %v and Scrollbar %v; want #0e0b2a and Text at 35%%", d.AccentText, d.Scrollbar)
 	}
 }
 
@@ -61,7 +61,17 @@ func TestThemeOfMapsEveryField(t *testing.T) {
 			tk.Control = ui.Hex("#262a30")
 		}
 		tk.RadiusControl, tk.Body.Size = 7, 17
+		// Metrics apart from each other, so a field mapped from another fails.
+		tk.ControlHeight, tk.RowHeight, tk.HeaderHeight, tk.TabStripHeight = 37, 31, 29, 41
+		tk.CheckBox, tk.SwitchWidth, tk.SwitchHeight = 14, 43, 23
 		th := themeOf(&tk, dark)
+		if m := (ui.Metrics{ControlHeight: 37, RowHeight: 31, HeaderHeight: 29, TabHeight: 41, CheckSize: 14, SwitchWidth: 43, SwitchHeight: 23}); th.Metrics != m {
+			t.Errorf("dark=%v: Metrics %+v, want %+v", dark, th.Metrics, m)
+		}
+		scrollbar := tk.Text.Alpha(0.32)
+		if dark {
+			scrollbar = tk.Text.Alpha(0.35)
+		}
 		for _, c := range []struct {
 			name      string
 			got, want ui.Color
@@ -84,6 +94,13 @@ func TestThemeOfMapsEveryField(t *testing.T) {
 			{"Success", th.Success, tk.Success.Base},
 			{"Selection", th.Selection, tk.Selection},
 			{"Focus", th.Focus, tk.Accent.Base},
+			{"ButtonBorder", th.ButtonBorder, tk.ButtonLine},
+			{"RowHover", th.RowHover, tk.RowHover},
+			{"RowSelected", th.RowSelected, tk.RowSelected},
+			{"RowSelectedText", th.RowSelectedText, tk.Text},
+			{"Scrollbar", th.Scrollbar, scrollbar},
+			{"Inverse", th.Inverse, tk.Text},
+			{"InverseText", th.InverseText, tk.Content},
 		} {
 			if c.got != c.want {
 				t.Errorf("dark=%v: %s is %v, want %v", dark, c.name, c.got, c.want)

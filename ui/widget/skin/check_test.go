@@ -17,6 +17,32 @@ func TestCalmPassesContrast(t *testing.T) {
 	if err := check(&Calm.dark, true); err != nil {
 		t.Errorf("Calm dark: %v", err)
 	}
+	// The row pairs the theme draws (RowSelectedText is Text), measured
+	// here too, over Content as check measures them.
+	for _, tk := range []*skinhook.Tokens{&Calm.light, &Calm.dark} {
+		sel, hover := tk.RowSelected.Over(tk.Content), tk.RowHover.Over(tk.Content)
+		if r := contrastOf(tk.Text, sel); r < 4.5 {
+			t.Errorf("Text on RowSelected is %.2f:1", r)
+		}
+		if r := contrastOf(tk.Text2, hover); r < 4.5 {
+			t.Errorf("Text2 on RowHover is %.2f:1", r)
+		}
+	}
+}
+
+// check measures the rows' text: Text on RowSelected and Text2 on RowHover,
+// each named when it fails.
+func TestCheckRowPairs(t *testing.T) {
+	tk := Calm.light
+	tk.RowSelected = ui.Hex("#5a5f66")
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Text on RowSelected") {
+		t.Errorf("a dark RowSelected under Text gives %v, want an error naming Text on RowSelected", err)
+	}
+	tk = Calm.light
+	tk.RowHover = ui.Hex("#a0a4aa")
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Text2 on RowHover") {
+		t.Errorf("a gray RowHover under Text2 gives %v, want an error naming Text2 on RowHover", err)
+	}
 }
 
 // The error names the pair that fails, its ratio and the floor.
