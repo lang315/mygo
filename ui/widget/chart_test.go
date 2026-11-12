@@ -342,6 +342,63 @@ func TestChartUsesSkinColors(t *testing.T) {
 	skinhook.Set(nil, nil)
 }
 
+// The series take the skin's colors in order: with three series, colors 0
+// to 2 in the plot and no other; bars left to right, lines (values 1, 2, 3)
+// bottom to top, slices (values 1, 2, 3) smallest to largest.
+func TestChartDrawsSkinColorsInOrder(t *testing.T) {
+	light, _ := useTestSkin(t)
+	for _, k := range []ChartKind{BarChart, LineChart, PieChart} {
+		c := Chart(k).SetTitle("Three")
+		if k == PieChart {
+			c.SetLabels("a", "b", "c").SetSeries(ChartSeries{Values: []float64{1, 2, 3}})
+		} else {
+			c.SetLabels("x", "y").SetSeries(ChartSeries{Name: "s0", Values: []float64{1, 1}},
+				ChartSeries{Name: "s1", Values: []float64{2, 2}}, ChartSeries{Name: "s2", Values: []float64{3, 3}})
+		}
+		tt := NewTester(t, c, 600, 420)
+		plot := tt.Find(ByLabel("Three")).Bounds()
+		img := tt.Image()
+		var n [3]int
+		var mx, my [3]float64
+		for y := int(plot.Y); y < int(plot.Y+plot.H); y++ {
+			for x := int(plot.X); x < int(plot.X+plot.W); x++ {
+				for i := range 3 {
+					if nearTol(img.RGBAAt(x, y), light.Chart[i], 6) {
+						n[i]++
+						mx[i] += float64(x)
+						my[i] += float64(y)
+					}
+				}
+			}
+		}
+		for i := range 3 {
+			if n[i] < 20 {
+				t.Fatalf("kind %d: %d pixels of color %d in the plot, want 20 or more", k, n[i], i)
+			}
+			mx[i], my[i] = mx[i]/float64(n[i]), my[i]/float64(n[i])
+		}
+		for i := 3; i < 8; i++ {
+			if m := countNear(img, plot, false, light.Chart[i], 6); m > 0 {
+				t.Errorf("kind %d: %d pixels of color %d in a plot of three series", k, m, i)
+			}
+		}
+		switch k {
+		case BarChart:
+			if !(mx[0] < mx[1] && mx[1] < mx[2]) {
+				t.Errorf("bars: the mean x of colors 0, 1, 2 is %v, want rising", mx)
+			}
+		case LineChart:
+			if !(my[0] > my[1] && my[1] > my[2]) {
+				t.Errorf("lines: the mean y of colors 0, 1, 2 is %v, want falling (values 1, 2, 3)", my)
+			}
+		case PieChart:
+			if !(n[0] < n[1] && n[1] < n[2]) {
+				t.Errorf("pie: colors 0, 1, 2 cover %v pixels, want rising (values 1, 2, 3)", n)
+			}
+		}
+	}
+}
+
 func linePoints(n int) *ChartWidget {
 	labels := make([]string, n)
 	vals := make([]float64, n)
