@@ -192,16 +192,59 @@ func deepest(nodes []ui.TestNode, x, y int, skip func(n ui.TestNode) bool) (ui.T
 func bitmapNode(n ui.TestNode) bool { return n.Role == ui.RoleImage }
 
 // knobNode tells the nodes that draw a knob, white over its black shadow
-// (the neutral materials): sliders, track bars and switches. Only in them
-// may a pixel be a gray, a blend of white and black.
+// (the neutral materials): sliders, track bars and switches.
 func knobNode(n ui.TestNode) bool { return n.Role == ui.RoleSlider || n.Role == ui.RoleSwitch }
 
-// gray reports whether c lies within sentinelTolerance of the segment from
-// black to white.
-func gray(c ui.Color) bool {
-	r, g, b := float64(c.R), float64(c.G), float64(c.B)
-	k := (r + g + b) / 3 // the nearest point of the segment is (k, k, k), inside it
-	return math.Sqrt((r-k)*(r-k)+(g-k)*(g-k)+(b-k)*(b-k)) <= sentinelTolerance
+// inKnob reports whether a node holding the pixel (x, y), the deepest or one
+// around it, draws a knob.
+func inKnob(nodes []ui.TestNode, x, y int) bool {
+	fx, fy := float32(x)+0.5, float32(y)+0.5
+	for _, n := range nodes {
+		r := n.Bounds
+		if knobNode(n) && fx >= r.X && fy >= r.Y && fx < r.X+r.W && fy < r.Y+r.H {
+			return true
+		}
+	}
+	return false
+}
+
+// knobBlend reports whether c is what a knob's edge paints: within
+// sentinelTolerance of the segment from white or black to black, white or
+// a sentinel (a gray, or white or the shadow over a little of the track).
+// The segment's far end barely moves with the tokens, so the pixel does
+// not either.
+func (s *sentinelSkins) knobBlend(c ui.Color) bool {
+	for _, end := range append([]ui.Color{white, black}, s.sents...) {
+		for _, near := range []ui.Color{white, black} {
+			if toSegment(c, near, end) <= sentinelTolerance {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// toSegment is the distance, in 0-255 RGB, of c from the segment ab.
+func toSegment(c, a, b ui.Color) float64 {
+	f := func(x ui.Color) [3]float64 { return [3]float64{float64(x.R), float64(x.G), float64(x.B)} }
+	p, pa, pb := f(c), f(a), f(b)
+	var ab, ap [3]float64
+	var l, d float64
+	for i := range 3 {
+		ab[i], ap[i] = pb[i]-pa[i], p[i]-pa[i]
+		l += ab[i] * ab[i]
+		d += ab[i] * ap[i]
+	}
+	k := 0.0
+	if l > 0 {
+		k = min(max(d/l, 0), 1)
+	}
+	var e float64
+	for i := range 3 {
+		v := p[i] - (pa[i] + k*ab[i])
+		e += v * v
+	}
+	return math.Sqrt(e)
 }
 
 // still draws what tt shows under skin A and under skin B, and returns the
@@ -237,7 +280,7 @@ func (s *sentinelSkins) still(t *testing.T, tt *widget.Tester, area ui.Rect) []m
 				continue
 			}
 			n, skipped := deepest(nodes, x, y, bitmapNode)
-			if skipped || gray(a) && knobNode(n) {
+			if skipped || s.knobBlend(a) && inKnob(nodes, x, y) {
 				continue
 			}
 			if key := fmt.Sprint(a, n.ID); !seen[key] {
@@ -306,8 +349,17 @@ func TestSentinelRuleCatchesPlantedLiterals(t *testing.T) {
 		widget.Button("").SetAccessibleName("planted corner").Background(s.sents[0]).Border(1, ui.Hex("#71717a")).Radius(6).SetSize(40, 24),
 		// A gray, which only a knob may paint.
 		widget.Button("").SetAccessibleName("planted gray").Background(ui.Hex("#808080")).SetSize(40, 24),
+		// And a near white, what a knob's edge over its track is.
+		widget.Button("").SetAccessibleName("planted near white").Background(ui.RGB(255, 251, 251)).SetSize(40, 24),
 	)
-	want := []string{"planted panel", "planted border", "planted corner", "planted gray"}
+	want := []string{"planted panel", "planted border", "planted corner", "planted gray", "planted near white"}
+	// Both are what a knob may paint (the near white is a track bar's knob
+	// edge on Windows' CI), so only where they are tells them from literals.
+	for _, c := range []ui.Color{ui.Hex("#808080"), ui.RGB(255, 251, 251)} {
+		if !s.knobBlend(c) {
+			t.Errorf("%v is no knob blend", c)
+		}
+	}
 	rng := rand.New(rand.NewPCG(3, 4))
 	for i := 0; i < 20; {
 		c := ui.Color{R: uint8(rng.IntN(256)), G: uint8(rng.IntN(256)), B: uint8(rng.IntN(256)), A: 255}
