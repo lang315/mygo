@@ -123,15 +123,14 @@ func TestWidgetSetSizeWinsOverMetrics(t *testing.T) {
 			t.Errorf("%s with Calm: the button is %v, want %v", c.name, h, c.want)
 		}
 	}
-	// Widgets of several parts: SetSize sizes their root, and the parts
-	// inside keep the metric (36), drawn past a root of 24. Logged for the
-	// review; held as they are.
+	// Widgets of several parts: SetSize sizes their root; the parts inside,
+	// logged for the review, are within it (an editable combo's input keeps
+	// its padding, as before Metrics). DateTimePicker has its own test.
 	for _, c := range []struct {
 		name string
 		w    widget.Control
 		part widget.Query
 	}{
-		{"DateTimePicker", widget.DateTimePicker().SetSize(0, 24), widget.ByRole(ui.RoleGroup)},
 		{"NumericUpDown", widget.NumericUpDown(0, 10, 1).SetSize(0, 24), widget.ByLabel("Increase")},
 		{"editable ComboBox", widget.ComboBox(widget.Option{Value: "a", Text: "A"}).Editable().SetSize(0, 24), widget.ByRole(ui.RoleComboBox)},
 	} {
@@ -140,6 +139,41 @@ func TestWidgetSetSizeWinsOverMetrics(t *testing.T) {
 		below := tt.Find(widget.ByLabel("below")).Bounds().Y
 		part := tt.Find(c.part).Bounds()
 		t.Logf("%s, SetSize(0, 24) with Calm: the next control starts at %v; a part inside is %v high", c.name, below, part.H)
+	}
+}
+
+// A DateTimePicker's own height wins over the skin's metrics: its date and
+// time fields fill it, inside its bounds. Without a skin they keep their
+// size, as before Metrics.
+func TestDateTimePickerSetSizeWinsOverMetrics(t *testing.T) {
+	t.Cleanup(func() { Use(nil) })
+	// fields returns the heights of a picker's date and time fields, with the
+	// app's height h (none when 0), and where the control below it starts.
+	fields := func(h float32) (date, tm ui.Rect, below float32) {
+		p := widget.DateTimePicker()
+		if h > 0 {
+			p.SetSize(0, h)
+		}
+		tt := widget.NewTester(t, widget.VBox(0).Add(p, widget.Label("below")), 300, 200)
+		tt.Frame()
+		for _, n := range tt.Nodes() {
+			if n.Role == ui.RolePopUpButton {
+				date = n.Bounds
+			}
+		}
+		return date, tt.Find(widget.ByRole(ui.RoleGroup)).Bounds(), tt.Find(widget.ByLabel("below")).Bounds().Y
+	}
+	pd, pt, _ := fields(0)
+	d, tm, _ := fields(24)
+	if !same(d.H, pd.H) || !same(tm.H, pt.H) {
+		t.Errorf("without a skin, SetSize(0, 24): the fields are %v and %v high, want %v and %v as without SetSize", d.H, tm.H, pd.H, pt.H)
+	}
+	Use(Calm)
+	d, tm, below := fields(24)
+	for name, r := range map[string]ui.Rect{"date": d, "time": tm} {
+		if !same(r.H, 24) || r.Y < 0 || r.Y+r.H > below+0.01 {
+			t.Errorf("with Calm, SetSize(0, 24): the %s field is %v, want 24 high inside the picker (next control at %v)", name, r, below)
+		}
 	}
 }
 
