@@ -1,6 +1,7 @@
 package skin
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -10,10 +11,10 @@ import (
 
 // Every built-in skin passes the contrast floors in both appearances.
 func TestCalmPassesContrast(t *testing.T) {
-	if err := check(&Calm.light); err != nil {
+	if err := check(&Calm.light, false); err != nil {
 		t.Errorf("Calm light: %v", err)
 	}
-	if err := check(&Calm.dark); err != nil {
+	if err := check(&Calm.dark, true); err != nil {
 		t.Errorf("Calm dark: %v", err)
 	}
 }
@@ -22,7 +23,7 @@ func TestCalmPassesContrast(t *testing.T) {
 func TestCheckNamesTheFailingPair(t *testing.T) {
 	tk := Calm.light
 	tk.Text2 = ui.Hex("#9aa0a6")
-	err := check(&tk)
+	err := check(&tk, false)
 	if err == nil {
 		t.Fatal("Text2 #9aa0a6 passes the check, want an error")
 	}
@@ -36,18 +37,18 @@ func TestCheckNamesTheFailingPair(t *testing.T) {
 func TestCheckBlendsTranslucentFills(t *testing.T) {
 	tk := Calm.dark
 	tk.Success.Subtle = ui.Hex("#34c759")
-	err := check(&tk)
+	err := check(&tk, true)
 	if err == nil || !strings.Contains(err.Error(), "Success Text on Subtle") {
 		t.Errorf("an opaque #34c759 under #7fd99a gives %v, want an error naming Success Text on Subtle", err)
 	}
-	if err := check(&Calm.dark); err != nil {
+	if err := check(&Calm.dark, true); err != nil {
 		t.Errorf("Calm dark, with its translucent fills: %v", err)
 	}
 	// A translucent foreground blends over its layer too: the field outline
 	// at half its alpha is too faint.
 	tk = Calm.light
 	tk.FieldLine = tk.FieldLine.Alpha(0.5)
-	if err := check(&tk); err == nil || !strings.Contains(err.Error(), "FieldLine on Content") {
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "FieldLine on Content") {
 		t.Errorf("FieldLine at 50%% alpha gives %v, want an error naming FieldLine on Content", err)
 	}
 }
@@ -57,12 +58,12 @@ func TestCheckBlendsTranslucentFills(t *testing.T) {
 func TestCheckOutlineFloor(t *testing.T) {
 	tk := Calm.light
 	tk.FieldLine = ui.Hex("#9aa0a6") // about 2.6:1 on white
-	err := check(&tk)
+	err := check(&tk, false)
 	if err == nil || !strings.Contains(err.Error(), "FieldLine on Content") || !strings.Contains(err.Error(), "want 3:1") {
 		t.Errorf("FieldLine #9aa0a6 gives %v, want an error naming FieldLine on Content and 3:1", err)
 	}
 	tk.FieldLine = ui.Hex("#80868f") // about 3.6:1 on white and on the chrome, under 4.5:1
-	if err := check(&tk); err != nil {
+	if err := check(&tk, false); err != nil {
 		t.Errorf("FieldLine #80868f, over 3:1: %v", err)
 	}
 }
@@ -88,12 +89,12 @@ func TestCheckFloorsAreExact(t *testing.T) {
 		}
 		tk := Calm.light
 		c.set(&tk, c.under)
-		if err := check(&tk); err == nil || !strings.Contains(err.Error(), c.name) {
+		if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), c.name) {
 			t.Errorf("%s just under %g:1 gives %v, want an error naming it", c.name, c.floor, err)
 		}
 		tk = Calm.light
 		c.set(&tk, c.over)
-		if err := check(&tk); err != nil {
+		if err := check(&tk, false); err != nil {
 			t.Errorf("%s just over %g:1: %v", c.name, c.floor, err)
 		}
 	}
@@ -105,16 +106,135 @@ func TestCheckAccentOnChrome(t *testing.T) {
 	for _, c := range []struct {
 		name   string
 		tk     skinhook.Tokens
+		dark   bool
 		accent ui.Color
 	}{
-		{"light", Calm.light, ui.Hex("#c9d7ee")},
-		{"dark", Calm.dark, ui.Hex("#2a3550")},
+		{"light", Calm.light, false, ui.Hex("#c9d7ee")},
+		{"dark", Calm.dark, true, ui.Hex("#2a3550")},
 	} {
 		c.tk.Accent.Base = c.accent
-		err := check(&c.tk)
+		err := check(&c.tk, c.dark)
 		if err == nil || !strings.Contains(err.Error(), "Accent.Base on Chrome") || !strings.Contains(err.Error(), "want 3:1") {
 			t.Errorf("%s: Accent.Base %v gives %v, want an error naming Accent.Base on Chrome and 3:1", c.name, c.accent, err)
 		}
+	}
+}
+
+// Calm's Info, the running state, is its accent, in both appearances.
+func TestCalmInfoIsItsAccent(t *testing.T) {
+	if Calm.light.Info != Calm.light.Accent {
+		t.Errorf("light Info is %v, want the accent %v", Calm.light.Info, Calm.light.Accent)
+	}
+	if Calm.dark.Info != Calm.dark.Accent {
+		t.Errorf("dark Info is %v, want the accent %v", Calm.dark.Info, Calm.dark.Accent)
+	}
+}
+
+// The Info family is measured as the others are: its text on its subtle
+// fill.
+func TestCheckInfoFamily(t *testing.T) {
+	tk := Calm.light
+	tk.Info.Subtle = tk.Info.Text
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Info Text on Subtle") {
+		t.Errorf("Info text on itself gives %v, want an error naming Info Text on Subtle", err)
+	}
+}
+
+// The state-distance error names the pair, the eye it fails for and the
+// floor of the appearance.
+func TestCheckNamesStateDistance(t *testing.T) {
+	tk := Calm.light
+	tk.Info.Text = tk.Success.Text
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Info Text near Success Text (normal)") {
+		t.Errorf("Info Text = Success Text gives %v, want an error naming Info Text near Success Text (normal)", err)
+	}
+	tk = Calm.dark
+	tk.Info.Text = ui.Hex("#7fdccf") // teal's own dark text
+	err := check(&tk, true)
+	if err == nil || !strings.Contains(err.Error(), "Info Text near Success Text") || !strings.Contains(err.Error(), "want 35") {
+		t.Errorf("dark Info Text #7fdccf gives %v, want an error naming Info Text near Success Text and want 35", err)
+	}
+	// Teal's light text is nearest green for a deuteranope, 28 against 31
+	// for normal vision.
+	tk = Calm.light
+	tk.Info.Text = ui.Hex("#0b5d56")
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Info Text near Success Text (deuteranopia): ΔE 28, want 45") {
+		t.Errorf("light Info Text #0b5d56 gives %v, want Info Text near Success Text (deuteranopia): ΔE 28, want 45", err)
+	}
+	// Two colors that differ only in red are nearest for a protanope, who
+	// sees red least.
+	tk = Calm.light
+	tk.Info.Text = ui.Hex("#d8261b")
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Info Text near Danger Text (protanopia)") {
+		t.Errorf("light Info Text #d8261b gives %v, want an error naming Info Text near Danger Text (protanopia)", err)
+	}
+}
+
+// Calm passes the state-distance floors; plum, 40 from green, fails the
+// light one.
+func TestStateDistanceFloors(t *testing.T) {
+	if err := stateDistance(&Calm.light, false); err != nil {
+		t.Errorf("Calm light: %v", err)
+	}
+	if err := stateDistance(&Calm.dark, true); err != nil {
+		t.Errorf("Calm dark: %v", err)
+	}
+	tk := Calm.light
+	tk.Info.Text = ui.Hex("#7a2569")
+	if err := stateDistance(&tk, false); err == nil || !strings.Contains(err.Error(), "want 45") {
+		t.Errorf("plum #7a2569 gives %v, want an error with want 45", err)
+	}
+}
+
+// The floors are 45 light and 35 dark exactly: grays look almost the same to
+// every eye, so their ΔE is about their lightness apart, and a gray just under the floor
+// from black fails while one just over passes.
+func TestStateDistanceFloorsAreExact(t *testing.T) {
+	black := ui.Hex("#000000")
+	for _, c := range []struct {
+		dark        bool
+		floor       float64
+		under, over ui.Color
+	}{
+		{false, 45, ui.Hex("#6a6a6a"), ui.Hex("#6b6b6b")},
+		{true, 35, ui.Hex("#525252"), ui.Hex("#535353")},
+	} {
+		for _, v := range visions {
+			if d := deltaE(c.under, black, v.m); d >= c.floor || d < c.floor-1 {
+				t.Fatalf("dark=%v: the gray under is ΔE %.2f for %s, not just under %g", c.dark, d, v.name, c.floor)
+			}
+			if d := deltaE(c.over, black, v.m); d < c.floor || d > c.floor+1 {
+				t.Fatalf("dark=%v: the gray over is ΔE %.2f for %s, not just over %g", c.dark, d, v.name, c.floor)
+			}
+		}
+		tk := Calm.light
+		tk.Success.Text, tk.Warning.Text, tk.Danger.Text = black, black, black
+		tk.Info.Text = c.under
+		if err := stateDistance(&tk, c.dark); err == nil || !strings.Contains(err.Error(), "Info Text near Success Text") {
+			t.Errorf("dark=%v: a gray just under %g gives %v, want an error naming it", c.dark, c.floor, err)
+		}
+		tk.Info.Text = c.over
+		if err := stateDistance(&tk, c.dark); err != nil {
+			t.Errorf("dark=%v: a gray just over %g: %v", c.dark, c.floor, err)
+		}
+	}
+}
+
+// The ΔE of teal's text and green is the orchestrator's: 31 for normal
+// vision, 28 for a deuteranope.
+func TestDeltaEMatchesReference(t *testing.T) {
+	want := map[string]float64{"normal": 31, "deuteranopia": 28}
+	for _, v := range visions {
+		w, ok := want[v.name]
+		if !ok {
+			continue
+		}
+		if d := deltaE(ui.Hex("#1d6b31"), ui.Hex("#0b5d56"), v.m); math.Abs(d-w) > 1 {
+			t.Errorf("%s: ΔE %.2f, want %g ± 1", v.name, d, w)
+		}
+	}
+	if len(visions) != 3 {
+		t.Errorf("%d visions, want normal, deuteranopia and protanopia", len(visions))
 	}
 }
 
@@ -123,7 +243,7 @@ func TestCheckNamesEveryFailingPair(t *testing.T) {
 	tk := Calm.light
 	tk.Text2 = ui.Hex("#9aa0a6")
 	tk.Danger.On = tk.Danger.Base
-	err := check(&tk)
+	err := check(&tk, false)
 	for _, want := range []string{"Text2 on Content", "Text2 on Chrome", "Danger On on Base"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("the error is %v, want it to name %s", err, want)

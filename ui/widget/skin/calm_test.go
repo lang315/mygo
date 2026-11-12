@@ -129,6 +129,45 @@ func TestCalmMetrics(t *testing.T) {
 	}
 }
 
+// Calm's accent tokens keep their P0 values byte for byte, the dark
+// translucent fills included.
+func TestCalmAccentValues(t *testing.T) {
+	a := ui.Hex("#9384f0")
+	for _, c := range []struct {
+		name      string
+		got, want ui.Color
+	}{
+		{"light OnAccent", Calm.light.OnAccent, ui.Hex("#ffffff")},
+		{"light Selection", Calm.light.Selection, ui.Hex("#dcd8ef")},
+		{"light RowSelected", Calm.light.RowSelected, ui.Hex("#edebf7")},
+		{"light Accent.Base", Calm.light.Accent.Base, ui.Hex("#4e3bb0")},
+		{"light Accent.Hover", Calm.light.Accent.Hover, ui.Hex("#45349b")},
+		{"light Accent.Pressed", Calm.light.Accent.Pressed, ui.Hex("#3b2d86")},
+		{"light Accent.Subtle", Calm.light.Accent.Subtle, ui.Hex("#f1eff9")},
+		{"light Accent.Border", Calm.light.Accent.Border, ui.Hex("#cac4e7")},
+		{"light Accent.Text", Calm.light.Accent.Text, ui.Hex("#46359e")},
+		{"light Accent.On", Calm.light.Accent.On, ui.Hex("#ffffff")},
+		{"dark OnAccent", Calm.dark.OnAccent, ui.Hex("#0e0b2a")},
+		{"dark Selection", Calm.dark.Selection, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.35).A}},
+		{"dark RowSelected", Calm.dark.RowSelected, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.16).A}},
+		{"dark Accent.Base", Calm.dark.Accent.Base, a},
+		{"dark Accent.Hover", Calm.dark.Accent.Hover, ui.Hex("#a79bf3")},
+		{"dark Accent.Pressed", Calm.dark.Accent.Pressed, ui.Hex("#7f6eed")},
+		{"dark Accent.Subtle", Calm.dark.Accent.Subtle, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.14).A}},
+		{"dark Accent.Border", Calm.dark.Accent.Border, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.35).A}},
+		{"dark Accent.Text", Calm.dark.Accent.Text, ui.Hex("#bdb4f9")},
+		{"dark Accent.On", Calm.dark.Accent.On, ui.Hex("#0e0b2a")},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s is %v, want %v", c.name, c.got, c.want)
+		}
+	}
+	// The alpha bytes themselves: 14%, 16% and 35% of 255, rounded.
+	if b := [3]uint8{a.Alpha(0.14).A, a.Alpha(0.16).A, a.Alpha(0.35).A}; b != [3]uint8{36, 41, 89} {
+		t.Errorf("the alpha bytes are %v, want [36 41 89]", b)
+	}
+}
+
 // A skin has its name.
 func TestCalmName(t *testing.T) {
 	if Calm.Name() != "Calm" {

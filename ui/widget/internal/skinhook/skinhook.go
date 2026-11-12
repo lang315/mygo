@@ -52,6 +52,9 @@ type Tokens struct {
 	Selection, RowHover, RowSelected ui.Color
 
 	Accent, Success, Warning, Danger Family
+	// Info is the running and info state, kept apart from the status
+	// colors.
+	Info Family
 
 	ControlHeight, RowHeight, HeaderHeight, SettingsRowHeight    float32
 	TabStripHeight, MenuBarStripHeight, MenuBarItemHeight        float32
