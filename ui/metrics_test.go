@@ -299,11 +299,13 @@ func plainLookAt(t *testing.T, size float32, dark bool) {
 // items and options 30, tab headers 40, check boxes and radios 15, switches
 // 40 × 22. The outer box of a combo box, a number input, a segmented
 // control, a toggle group and a split button is 36, not 36 and an inner
-// part. The same at FontSize 17, a taller line as another platform's font
-// has: rows are the metric, not the metric and their padding.
+// part. At FontSize 17 and 20, taller lines as other platforms' fonts have,
+// rows stay the metric while their line fits it (their padding goes), and a
+// control is the metric or, where its padding and line pass it, as high as
+// those: Metrics are minimums.
 func TestMetricsSizeControls(t *testing.T) {
 	t.Cleanup(func() { SetDefaultThemes(nil, nil) })
-	for _, size := range []float32{0, 17} {
+	for _, size := range []float32{0, 17, 20} {
 		light, dark := LightTheme(), DarkTheme()
 		light.Metrics, dark.Metrics = calmMetrics, calmMetrics
 		if size > 0 {
@@ -311,12 +313,24 @@ func TestMetricsSizeControls(t *testing.T) {
 		}
 		SetDefaultThemes(light, dark)
 		tt := metricsTester(t, newMetricsParts())
+		line := lineOf(t, tt)
+		if line > calmMetrics.RowHeight {
+			t.Fatalf("FontSize %v: the line is %v, taller than the rows' %v", size, line, calmMetrics.RowHeight)
+		}
 		want := map[string]float32{
-			"button": 36, "primary": 36, "toolbar button": 36, "text input": 36, "combo box": 36, "select": 36,
-			"number": 36, "date": 36, "time": 36, "check": 15, "check width": 15, "radio": 15, "radio width": 15,
-			"switch": 22, "switch width": 40, "tab": 40, "segmented": 36, "split": 36, "toggle group": 36,
+			"check": 15, "check width": 15, "radio": 15, "radio width": 15, "switch": 22, "switch width": 40,
 			"popup item": 30, "select option": 30, "table row": 30, "table header": 30, "tree row": 30, "outline row": 30,
 		}
+		plain := plainSizes(line)
+		for _, name := range []string{"button", "primary", "toolbar button", "text input", "combo box", "select",
+			"number", "date", "time", "segmented", "split", "toggle group"} {
+			want[name] = max(calmMetrics.ControlHeight, plain[name])
+		}
+		want["tab"] = max(calmMetrics.TabHeight, plain["tab"])
+		if size == 0 && want["button"] != 36 {
+			t.Fatalf("at the platform's FontSize the button's want is %v, not 36", want["button"])
+		}
+		t.Logf("FontSize %v: line %v, a button wants %v", size, line, want["button"])
 		got := sizesOf(t, tt)
 		for name, h := range want {
 			if !sameSize(got[name], h) {
