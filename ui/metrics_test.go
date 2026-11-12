@@ -488,6 +488,28 @@ func findNode(t *testing.T, tt *Tester, what string, ok func(e *node) bool) *nod
 	return found
 }
 
+// With RowSelected set and RowSelectedText left zero, chosen rows and the
+// highlighted popup item show Text on the tint.
+func TestRowSelectedTextDefaultsToText(t *testing.T) {
+	light := LightTheme()
+	light.RowSelected = Hex("#e8f0fd")
+	SetDefaultThemes(light, nil)
+	t.Cleanup(func() { SetDefaultThemes(nil, nil) })
+	tt := metricsTester(t, newMetricsParts())
+	if e := nodeOf(t, tt, itemOf(t, tt, "Row A").ID); e.bg != light.RowSelected || e.ts.color != light.Text {
+		t.Errorf("a selected row fills %v with text %v, want %v and Text %v", e.bg, e.ts.color, light.RowSelected, light.Text)
+	}
+	if err := tt.Click("menu"); err != nil {
+		t.Fatal(err)
+	}
+	r := itemOf(t, tt, "Paste")
+	tt.Move(r.Bounds.X+r.Bounds.W/2, r.Bounds.Y+r.Bounds.H/2)
+	item := findNode(t, tt, "the highlighted popup item", func(e *node) bool { return e.label == "Paste" && e.bg == light.RowSelected })
+	if item.ts.color != light.Text {
+		t.Errorf("the highlighted popup item's text is %v, want Text %v", item.ts.color, light.Text)
+	}
+}
+
 // A selected row keeps RowSelected in a window not drawn as active; without
 // it the accent fades as before.
 func TestRowSelectedInInactiveWindow(t *testing.T) {
