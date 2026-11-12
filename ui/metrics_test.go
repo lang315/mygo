@@ -169,13 +169,14 @@ func lineOf(t *testing.T, tt *Tester) float32 {
 }
 
 // plainSizes are the heights, and widths where they are fixed, of the parts
-// at f9ec6f97, before Theme.Metrics: in DIPs, as the text's line height L
-// plus a constant, so that they hold for every platform's font. Measured on
-// macOS (L 15.31, FontSize 13): button 29.31, primary 27.31, toolbar button
-// 27.31, text input 29.31, combo box 29.31, select 29.31, number 29.31, date
-// 29.31, time 29.31, check box 16 × 16, radio 16 × 16, switch 36 × 20, tab
-// 31.31, segmented 29.31, split 29.31, toggle group 29.31, popup item 27.31,
-// select option 27.31, table row and header 32, tree row 28, outline row 24.
+// at f9ec6f97, before Theme.Metrics, in DIPs: of the text's line height L and
+// the theme's Spacing (4) alone, so that they hold for every platform's font
+// and size. Measured on macOS (L 15.31, FontSize 13): button 29.31, primary
+// 27.31, toolbar button 27.31, text input 29.31, combo box 29.31, select
+// 29.31, number 29.31, date 29.31, time 29.31, check box 16 × 16, radio
+// 16 × 16, switch 36 × 20, tab 31.31, segmented 29.31, split 29.31, toggle
+// group 29.31, popup item 27.31, select option 27.31, table row and header
+// 32, tree row 28, outline row 24 (its arrow's 16 and padding 8).
 func plainSizes(line float32) map[string]float32 {
 	return map[string]float32{
 		"button": line + 14, "primary": line + 12, "toolbar button": line + 12,
@@ -184,9 +185,8 @@ func plainSizes(line float32) map[string]float32 {
 		"check": 16, "check width": 16, "radio": 16, "radio width": 16, "switch": 20, "switch width": 36,
 		"tab": line + 16, "segmented": line + 14, "split": line + 14, "toggle group": line + 14,
 		"popup item": line + 12, "select option": line + 12,
-		"table row": 32, "table header": 32, "tree row": 28,
-		// A list's rows take whole DIPs.
-		"outline row": float32(math.Ceil(float64(line + 8))),
+		"table row": max(32, line+12), "table header": 32, "tree row": 28,
+		"outline row": max(line, 16) + 8,
 	}
 }
 
@@ -245,36 +245,52 @@ func withMetrics(t *testing.T, m Metrics) {
 }
 
 // Without Metrics every part is as large as at f9ec6f97 and rows and buttons
-// take today's colors, light and dark.
+// take today's colors, light and dark; and at FontSize 15 and 17, whose
+// taller lines stand for another platform's font.
 func TestPlainLookUnchanged(t *testing.T) {
-	for _, dark := range []bool{false, true} {
-		p := newMetricsParts()
-		tt := metricsTester(t, p)
-		tt.SetDark(dark)
-		th := LightTheme()
-		if dark {
-			th = DarkTheme()
+	t.Cleanup(func() { SetDefaultThemes(nil, nil) })
+	for _, size := range []float32{0, 15, 17} {
+		SetDefaultThemes(nil, nil)
+		if size > 0 {
+			light, dark := LightTheme(), DarkTheme()
+			light.FontSize, dark.FontSize = size, size
+			SetDefaultThemes(light, dark)
 		}
-		want := plainSizes(lineOf(t, tt))
-		for name, h := range sizesOf(t, tt) {
-			if !sameSize(h, want[name]) {
-				t.Errorf("dark=%v: %s is %v, want %v", dark, name, h, want[name])
-			}
+		for _, dark := range []bool{false, true} {
+			plainLookAt(t, size, dark)
 		}
-		row := partOf(t, tt, RoleRow, "Row A")
-		if e := nodeOf(t, tt, row.ID); e.bg != th.Accent || e.ts.color != th.AccentText {
-			t.Errorf("dark=%v: a selected table row fills %v with text %v, want the accent %v and %v", dark, e.bg, e.ts.color, th.Accent, th.AccentText)
+	}
+}
+
+// plainLookAt is TestPlainLookUnchanged at one font size (0 for the
+// platform's) and appearance.
+func plainLookAt(t *testing.T, size float32, dark bool) {
+	t.Helper()
+	tt := metricsTester(t, newMetricsParts())
+	tt.SetDark(dark)
+	th := LightTheme()
+	if dark {
+		th = DarkTheme()
+	}
+	want := plainSizes(lineOf(t, tt))
+	for name, h := range sizesOf(t, tt) {
+		if !sameSize(h, want[name]) {
+			t.Errorf("FontSize %v, dark=%v: %s is %v, want %v", size, dark, name, h, want[name])
 		}
-		b := partOf(t, tt, RoleButton, "button")
-		if e := nodeOf(t, tt, b.ID); e.borderC != th.Outline() {
-			t.Errorf("dark=%v: a plain button's border is %v, want Outline %v", dark, e.borderC, th.Outline())
-		}
-		for _, name := range []string{"Row C", "Free B"} {
-			hovered := partOf(t, tt, RoleRow, name)
-			tt.Move(hovered.Bounds.X+hovered.Bounds.W/2, hovered.Bounds.Y+hovered.Bounds.H/2)
-			if got := fillOf(tt, hovered); got != th.SurfaceHover {
-				t.Errorf("dark=%v: hovered %s fills %v, want SurfaceHover %v", dark, name, got, th.SurfaceHover)
-			}
+	}
+	row := partOf(t, tt, RoleRow, "Row A")
+	if e := nodeOf(t, tt, row.ID); e.bg != th.Accent || e.ts.color != th.AccentText {
+		t.Errorf("dark=%v: a selected table row fills %v with text %v, want the accent %v and %v", dark, e.bg, e.ts.color, th.Accent, th.AccentText)
+	}
+	b := partOf(t, tt, RoleButton, "button")
+	if e := nodeOf(t, tt, b.ID); e.borderC != th.Outline() {
+		t.Errorf("dark=%v: a plain button's border is %v, want Outline %v", dark, e.borderC, th.Outline())
+	}
+	for _, name := range []string{"Row C", "Free B"} {
+		hovered := partOf(t, tt, RoleRow, name)
+		tt.Move(hovered.Bounds.X+hovered.Bounds.W/2, hovered.Bounds.Y+hovered.Bounds.H/2)
+		if got := fillOf(tt, hovered); got != th.SurfaceHover {
+			t.Errorf("dark=%v: hovered %s fills %v, want SurfaceHover %v", dark, name, got, th.SurfaceHover)
 		}
 	}
 }
@@ -283,25 +299,34 @@ func TestPlainLookUnchanged(t *testing.T) {
 // items and options 30, tab headers 40, check boxes and radios 15, switches
 // 40 × 22. The outer box of a combo box, a number input, a segmented
 // control, a toggle group and a split button is 36, not 36 and an inner
-// part.
+// part. The same at FontSize 17, a taller line as another platform's font
+// has: rows are the metric, not the metric and their padding.
 func TestMetricsSizeControls(t *testing.T) {
-	withMetrics(t, calmMetrics)
-	tt := metricsTester(t, newMetricsParts())
-	want := map[string]float32{
-		"button": 36, "primary": 36, "toolbar button": 36, "text input": 36, "combo box": 36, "select": 36,
-		"number": 36, "date": 36, "time": 36, "check": 15, "check width": 15, "radio": 15, "radio width": 15,
-		"switch": 22, "switch width": 40, "tab": 40, "segmented": 36, "split": 36, "toggle group": 36,
-		"popup item": 30, "select option": 30, "table row": 30, "table header": 30, "tree row": 30, "outline row": 30,
-	}
-	got := sizesOf(t, tt)
-	for name, h := range want {
-		if !sameSize(got[name], h) {
-			t.Errorf("%s is %v, want %v", name, got[name], h)
+	t.Cleanup(func() { SetDefaultThemes(nil, nil) })
+	for _, size := range []float32{0, 17} {
+		light, dark := LightTheme(), DarkTheme()
+		light.Metrics, dark.Metrics = calmMetrics, calmMetrics
+		if size > 0 {
+			light.FontSize, dark.FontSize = size, size
 		}
-	}
-	// The toolbar holds its 36 buttons, and the segments their track.
-	if h := partOf(t, tt, RoleRadio, "Left").Bounds.H; h >= 36 {
-		t.Errorf("a segment is %v high, want less than its track's 36", h)
+		SetDefaultThemes(light, dark)
+		tt := metricsTester(t, newMetricsParts())
+		want := map[string]float32{
+			"button": 36, "primary": 36, "toolbar button": 36, "text input": 36, "combo box": 36, "select": 36,
+			"number": 36, "date": 36, "time": 36, "check": 15, "check width": 15, "radio": 15, "radio width": 15,
+			"switch": 22, "switch width": 40, "tab": 40, "segmented": 36, "split": 36, "toggle group": 36,
+			"popup item": 30, "select option": 30, "table row": 30, "table header": 30, "tree row": 30, "outline row": 30,
+		}
+		got := sizesOf(t, tt)
+		for name, h := range want {
+			if !sameSize(got[name], h) {
+				t.Errorf("FontSize %v: %s is %v, want %v (line %v)", size, name, got[name], h, lineOf(t, tt))
+			}
+		}
+		// The toolbar holds its 36 buttons, and the segments their track.
+		if h := partOf(t, tt, RoleRadio, "Left").Bounds.H; h >= 36 {
+			t.Errorf("FontSize %v: a segment is %v high, want less than its track's 36", size, h)
+		}
 	}
 }
 

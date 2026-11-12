@@ -257,6 +257,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			// is made, as a list's rows are.
 			c.nextKey, c.keySet, c.keyGlobal = colKeys[j], true, false
 			box := coreRow(c).Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Shrink(0).Clip().Role(role)
+			if role == RoleColumnHeader && t.Metrics.HeaderHeight > 0 || role == RoleCell && t.Metrics.RowHeight > 0 {
+				box.PaddingY(0) // the metric is the row's height, its text centered in it
+			}
 			if role == RoleCell && col.RowHeader {
 				box.Role(RoleRowHeader) // naming its row
 			}
@@ -422,6 +425,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			row.Role(RoleNone)
 			if s.Header != nil && s.Header(i) {
 				row.Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Background(t.Surface).FontWeight(600)
+				if t.Metrics.RowHeight > 0 {
+					row.PaddingY(0)
+				}
 				row.Children(func() { cell(i, 0) })
 				return
 			}

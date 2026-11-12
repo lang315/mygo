@@ -561,7 +561,7 @@ func comboPanel(t *ui.Theme, panel ui.Element) {
 func comboOption(t *ui.Theme, item ui.Element, chosen bool, fn func()) ui.Element {
 	item.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Gap(t.Space(1.5)).AlignItems(ui.Center)
 	if h := t.Metrics.RowHeight; h > 0 {
-		item.MinHeight(h)
+		item.MinHeight(h).PaddingY(0)
 	}
 	switch {
 	case item.Highlighted():
@@ -716,7 +716,7 @@ func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 				for _, o := range shown {
 					item := cb.Item(o.Value).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
 					if h := t.Metrics.RowHeight; h > 0 {
-						item.MinHeight(h).AlignItems(ui.Center)
+						item.MinHeight(h).PaddingY(0).AlignItems(ui.Center)
 					}
 					if item.Highlighted() {
 						bg, fg := highlightOf(t)

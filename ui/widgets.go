@@ -792,7 +792,7 @@ func coreSelect(c *context, selected *string, options []string) *node {
 		for _, opt := range options {
 			item := sel.Item(opt).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
 			if h := t.Metrics.RowHeight; h > 0 {
-				item.MinHeight(h).AlignItems(Center)
+				item.MinHeight(h).PaddingY(0).AlignItems(Center)
 			}
 			switch {
 			case item.Highlighted() && t.RowSelected.A != 0:

@@ -1275,7 +1275,7 @@ func (m *menuParts) drawnItem(it *platform.MenuItem, mi *MenuItem, marks, icons 
 	}
 	row.AlignItems(Center).Gap(t.Space(2)).Padding(t.Space(1.5), t.Space(2)).Radius(t.Radius).Shrink(0)
 	if h := t.Metrics.RowHeight; h > 0 {
-		row.MinHeight(h)
+		row.MinHeight(h).PaddingY(0)
 	}
 	row.Label(it.Label).Disabled(!it.Enabled)
 	// Assistive technology reads the subtitle, the trailing text and the
