@@ -14,7 +14,7 @@ type metricsParts struct {
 	date               time.Time
 	check, sw, toggled bool
 	radio, tab, seg    int
-	rows, cells        ListState
+	rows, cells, free  ListState
 	outline            OutlineState[string]
 	place              string
 	buttonHeight       float32 // the plain button's own Height, when not 0
@@ -87,6 +87,11 @@ func (p *metricsParts) view(c *context) {
 			coreTable(c, &p.cells, []TableColumn{{Title: "Cell"}}, 2, func(row, col int) {
 				coreText(c, []string{"Cell A", "Cell B"}[row])
 			}).Height(110).Label("cells")
+			// Without a choice, a table's rows show the pointer themselves
+			// (tableRowStyle).
+			coreTable(c, &p.free, []TableColumn{{Title: "Free"}}, 2, func(row, col int) {
+				coreText(c, []string{"Free A", "Free B"}[row])
+			}).Height(110).Label("free")
 		})
 	})
 }
@@ -264,10 +269,12 @@ func TestPlainLookUnchanged(t *testing.T) {
 		if e := nodeOf(t, tt, b.ID); e.borderC != th.Outline() {
 			t.Errorf("dark=%v: a plain button's border is %v, want Outline %v", dark, e.borderC, th.Outline())
 		}
-		hovered := partOf(t, tt, RoleRow, "Row C")
-		tt.Move(hovered.Bounds.X+hovered.Bounds.W/2, hovered.Bounds.Y+hovered.Bounds.H/2)
-		if got := fillOf(tt, hovered); got != th.SurfaceHover {
-			t.Errorf("dark=%v: a hovered row fills %v, want SurfaceHover %v", dark, got, th.SurfaceHover)
+		for _, name := range []string{"Row C", "Free B"} {
+			hovered := partOf(t, tt, RoleRow, name)
+			tt.Move(hovered.Bounds.X+hovered.Bounds.W/2, hovered.Bounds.Y+hovered.Bounds.H/2)
+			if got := fillOf(tt, hovered); got != th.SurfaceHover {
+				t.Errorf("dark=%v: hovered %s fills %v, want SurfaceHover %v", dark, name, got, th.SurfaceHover)
+			}
 		}
 	}
 }
@@ -402,7 +409,7 @@ func TestRowColors(t *testing.T) {
 	if e := nodeOf(t, tt, itemOf(t, tt, "Mail").ID); e.bg != sel || e.ts.color != text {
 		t.Errorf("the chosen sidebar item, not focused, fills %v with text %v, want %v and %v", e.bg, e.ts.color, sel, text)
 	}
-	for _, name := range []string{"Row C", "Other"} {
+	for _, name := range []string{"Row C", "Free B", "Other"} {
 		r := itemOf(t, tt, name)
 		tt.Move(r.Bounds.X+r.Bounds.W/2, r.Bounds.Y+r.Bounds.H/2)
 		if got := fillOf(tt, r); got != hover {
