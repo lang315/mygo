@@ -301,3 +301,36 @@ func SetControlBorder(light, dark Color) {
 	controlBorder.Store(&[2]Color{light, dark})
 	borderGen.Add(1)
 }
+
+// defaultThemes are the themes SetDefaultThemes set, light then dark; its
+// calls count in borderGen too.
+var defaultThemes atomic.Pointer[[2]*Theme]
+
+// SetDefaultThemes sets the theme every window takes in each appearance,
+// light and dark, unless a view sets its own (Context.SetTheme): for an app,
+// or a package of looks, that gives all of its windows one. A nil theme
+// leaves that appearance's default, LightTheme or DarkTheme. The call copies
+// both themes, and a window that is open takes them in its next frame. The
+// desktop's accent color does not replace their accent, selection or focus,
+// while High Contrast and the user's text size still apply; the colors of
+// SetControlBorder still win. Call it from any goroutine.
+//
+//	light, dark := ui.LightTheme(), ui.DarkTheme()
+//	light.Accent, dark.Accent = ui.Hex("#7c3aed"), ui.Hex("#a78bfa")
+//	ui.SetDefaultThemes(light, dark)
+func SetDefaultThemes(light, dark *Theme) {
+	if light == nil && dark == nil {
+		defaultThemes.Store(nil)
+	} else {
+		var ts [2]*Theme
+		for i, t := range []*Theme{light, dark} {
+			if t != nil {
+				u := *t
+				u.followed = nil // taken as the app wrote it, not as following put it back
+				ts[i] = &u
+			}
+		}
+		defaultThemes.Store(&ts)
+	}
+	borderGen.Add(1)
+}
