@@ -15,10 +15,11 @@ import (
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
-// Skin is a look: a name and its tokens in the light and the dark
-// appearance.
+// Skin is a look: a name, its palette and its tokens in the light and the
+// dark appearance.
 type Skin struct {
 	name        string
+	palette     *Palette
 	light, dark skinhook.Tokens
 }
 

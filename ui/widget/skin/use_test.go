@@ -135,6 +135,72 @@ func TestUseFromAnotherGoroutine(t *testing.T) {
 	}
 }
 
+// paletteName names the active skin's palette for a test's message.
+func paletteName() string {
+	if s := Active(); s != nil && s.Palette() != nil {
+		return s.Palette().Name()
+	}
+	return "<nil>"
+}
+
+// Use of Calm with another palette gives a window that palette's accent,
+// and the hook its Info; a second Use switches it, in both appearances.
+func TestUsePalette(t *testing.T) {
+	t.Cleanup(func() { Use(nil) })
+	var got ui.Theme
+	tt := themeTester(t, &got)
+	Use(Calm.WithPalette(Indigo))
+	tt.Frame()
+	if got.Accent != ui.Hex("#4f46e5") {
+		t.Errorf("with Indigo, Accent %v, want #4f46e5", got.Accent)
+	}
+	if h := skinhook.Get(false); h == nil || h.Info.Text != ui.Hex("#3f37c9") {
+		t.Errorf("with Indigo, the hook's light tokens are %p, want Info.Text #3f37c9", h)
+	}
+	if Active().Palette() != Indigo {
+		t.Errorf("Active's palette is %v, want Indigo", paletteName())
+	}
+	Use(Calm.WithPalette(Ink))
+	tt.Frame()
+	if got.Accent != ui.Hex("#2c4f8c") {
+		t.Errorf("with Ink, Accent %v, want #2c4f8c", got.Accent)
+	}
+	tt.SetDark(true)
+	if got.Accent != ui.Hex("#7b9fdc") {
+		t.Errorf("with Ink, dark, Accent %v, want #7b9fdc", got.Accent)
+	}
+	if h := skinhook.Get(true); h == nil || h.Info.Text != ui.Hex("#a9c1ea") {
+		t.Errorf("with Ink, the hook's dark tokens are %p, want Info.Text #a9c1ea", h)
+	}
+}
+
+// Switching palettes from another goroutine while the window draws does not
+// race (go test -race), and the last palette wins.
+func TestUsePaletteFromAnotherGoroutine(t *testing.T) {
+	t.Cleanup(func() { Use(nil) })
+	var got ui.Theme
+	tt := themeTester(t, &got)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range 100 {
+			Use(Calm.WithPalette(Indigo))
+			Use(Calm.WithPalette(Teal))
+		}
+		Use(Calm.WithPalette(Ink))
+	}()
+	for range 100 {
+		tt.Frame()
+		_ = skinhook.Get(got.Dark)
+	}
+	wg.Wait()
+	tt.Frame()
+	if got.Accent != ui.Hex("#2c4f8c") || Active().Palette() != Ink {
+		t.Errorf("after the goroutine, Accent %v and palette %v, want #2c4f8c and Ink", got.Accent, paletteName())
+	}
+}
+
 // The skin's accent wins over the desktop's accent color.
 func TestUseKeepsTheSkinAccentOverTheDesktop(t *testing.T) {
 	t.Cleanup(func() { Use(nil) })
