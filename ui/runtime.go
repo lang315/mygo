@@ -802,12 +802,17 @@ func (rt *engine) defaultTheme() *Theme {
 		if rt.dark {
 			t = DarkTheme()
 		}
+		p := rt.preferences()
+		if d := defaultThemes.Load(); d != nil && d[b2i(rt.dark)] != nil {
+			u := *d[b2i(rt.dark)] // a copy: the stored theme is every window's
+			t, p.Accent = &u, Color{}
+		}
 		if b := controlBorder.Load(); b != nil {
 			if c := b[b2i(rt.dark)]; c.A != 0 {
 				t.ControlBorder = c
 			}
 		}
-		rt.theme, rt.themeOK = *t.WithPreferences(rt.preferences()), true
+		rt.theme, rt.themeOK = *t.WithPreferences(p), true
 	}
 	rt.passTheme = rt.theme
 	return &rt.passTheme
