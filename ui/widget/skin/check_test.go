@@ -236,6 +236,24 @@ func TestDeltaEMatchesReference(t *testing.T) {
 	if len(visions) != 3 {
 		t.Errorf("%d visions, want normal, deuteranopia and protanopia", len(visions))
 	}
+	// CIELAB (D65) of sRGB's white, red and blue, the published values: the
+	// ΔE of one pair alone could match by chance.
+	for _, c := range []struct {
+		hex  string
+		want [3]float64
+	}{
+		{"#ffffff", [3]float64{100, 0, 0}},
+		{"#ff0000", [3]float64{53.24, 80.09, 67.20}},
+		{"#0000ff", [3]float64{32.30, 79.19, -107.86}},
+	} {
+		got := labOf(ui.Hex(c.hex), nil)
+		for i := range got {
+			if math.Abs(got[i]-c.want[i]) > 0.05 {
+				t.Errorf("%s is Lab %.2f, want %.2f", c.hex, got, c.want)
+				break
+			}
+		}
+	}
 }
 
 // Every failing pair is named, not only the first.
