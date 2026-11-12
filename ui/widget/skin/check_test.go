@@ -154,9 +154,14 @@ func TestCheckNamesStateDistance(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Info Text near Success Text") || !strings.Contains(err.Error(), "want 35") {
 		t.Errorf("dark Info Text #7fdccf gives %v, want an error naming Info Text near Success Text and want 35", err)
 	}
+}
+
+// The error names the eye that sees the pair nearest: so a vision left out
+// of the check changes the name.
+func TestStateDistanceNamesTheNearestEye(t *testing.T) {
 	// Teal's light text is nearest green for a deuteranope, 28 against 31
 	// for normal vision.
-	tk = Calm.light
+	tk := Calm.light
 	tk.Info.Text = ui.Hex("#0b5d56")
 	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Info Text near Success Text (deuteranopia): ΔE 28, want 45") {
 		t.Errorf("light Info Text #0b5d56 gives %v, want Info Text near Success Text (deuteranopia): ΔE 28, want 45", err)
@@ -167,6 +172,20 @@ func TestCheckNamesStateDistance(t *testing.T) {
 	tk.Info.Text = ui.Hex("#d8261b")
 	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Info Text near Danger Text (protanopia)") {
 		t.Errorf("light Info Text #d8261b gives %v, want an error naming Info Text near Danger Text (protanopia)", err)
+	}
+}
+
+// Translucent text is measured blended over the content, as contrast is:
+// green at 5% alpha is almost white, far from green, though its own RGB is
+// green's.
+func TestStateDistanceBlendsTranslucentText(t *testing.T) {
+	tk := Calm.light
+	tk.Info.Text = tk.Success.Text.Alpha(0.05)
+	if d := deltaE(tk.Info.Text.Over(tk.Content), tk.Success.Text, nil); d < 60 {
+		t.Fatalf("green at 5%% over white is ΔE %.1f from green, want a clear pass", d)
+	}
+	if err := stateDistance(&tk, false); err != nil {
+		t.Errorf("green at 5%% alpha: %v", err)
 	}
 }
 
