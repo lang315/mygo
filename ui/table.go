@@ -179,7 +179,8 @@ func coreTable(c *context, s *ListState, columns []TableColumn, n int, cell func
 func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row, col int), kind listKind) *node {
 	t := c.theme
 	// The height of the header, and the least of the rows.
-	tableRow := t.Space(8)
+	tableRow := metricOr(t.Metrics.RowHeight, t.Space(8))
+	headRow := metricOr(t.Metrics.HeaderHeight, tableRow)
 	table := coreColumn(c).Role(RoleTable).Focusable().Clip()
 	table.widget = "Table"
 	if kind == treeTableList {
@@ -297,7 +298,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 					box.checked = 1 + int8(b2f(on))
 				}
 				style := s.CellsStyle
-				bg, fg := c.accent(t), t.AccentText
+				bg, fg := c.rowSelected(t)
 				if style.Cell != Transparent {
 					bg = style.Cell
 				}
@@ -335,7 +336,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	var list *node
 	table.Children(func() {
 		// The header, which scrolls sideways with the rows.
-		head := coreRow(c).Height(tableRow).Shrink(0).AlignItems(Stretch).Role(RoleRow).Clip()
+		head := coreRow(c).Height(headRow).Shrink(0).AlignItems(Stretch).Role(RoleRow).Clip()
 		if menu := s.HeaderMenu; menu != nil {
 			// The part of the header past the columns, as AppKit's
 			// clickedColumn -1.
@@ -790,7 +791,7 @@ func copyInput(rt *engine, chosen func() []int, copy func([]int) string) func(In
 // tableRowStyle shows the pointer over a row.
 func tableRowStyle(row *node) {
 	if row.Hovered() {
-		row.bg = row.builtTheme().SurfaceHover
+		row.bg = row.builtTheme().rowHover()
 	}
 }
 
@@ -1042,6 +1043,7 @@ func (e *node) Selected(on bool) *node {
 	}
 	t := e.theme()
 	e.checked = 2
-	e.Background(e.c.accent(t)).TextColor(t.AccentText)
+	bg, fg := e.c.rowSelected(t)
+	e.Background(bg).TextColor(fg)
 	return e
 }

@@ -293,7 +293,7 @@ func coreTreeItem(c *context, label string, open *bool, children func()) *node {
 		open = nil
 	}
 	p := treeItem(c, b, open)
-	item := p.Row.Height(t.Space(7)).Gap(t.Space(0.5)).AlignItems(Center).Padding(0, t.Space(2)).PaddingStart(t.Space(1 + 4*float32(p.depth)))
+	item := p.Row.Height(metricOr(t.Metrics.RowHeight, t.Space(7))).Gap(t.Space(0.5)).AlignItems(Center).Padding(0, t.Space(2)).PaddingStart(t.Space(1 + 4*float32(p.depth)))
 	item.flags |= flagOwnRing
 	expanded := branch && *open
 	item.builtWith(t)

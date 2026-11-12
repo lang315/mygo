@@ -203,6 +203,9 @@ func coreOutline[K comparable](c *context, s *OutlineState[K], roots []K, childr
 	s.useRowVersion()
 	buildList(c, e, e, &s.List, len(s.rows), func(i int) {
 		r := coreRow(c).AlignItems(Center)
+		if h := c.theme.Metrics.RowHeight; h > 0 {
+			r.MinHeight(h)
+		}
 		if s.Prefix == nil {
 			r.Gap(c.theme.Space(1)).Padding(c.theme.Space(1), c.theme.Space(2))
 		}

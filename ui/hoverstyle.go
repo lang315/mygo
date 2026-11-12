@@ -17,7 +17,7 @@ func hoverSurface(e *node) {
 // one (checked is 2) keeps the color of its choice.
 func hoverRow(e *node) {
 	if e.checked != 2 && e.Hovered() {
-		e.bg = e.builtTheme().SurfaceHover
+		e.bg = e.builtTheme().rowHover()
 	}
 }
 

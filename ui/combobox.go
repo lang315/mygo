@@ -301,7 +301,14 @@ func styleOptions(c *context, p *comboboxParts, options []string) *node {
 		stylePanel(c, panel)
 		for _, opt := range options {
 			item := p.Item(opt).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
-			if item.Highlighted() {
+			if h := t.Metrics.RowHeight; h > 0 {
+				item.MinHeight(h).AlignItems(Center)
+			}
+			switch {
+			case item.Highlighted() && t.RowSelected.A != 0:
+				bg, fg := c.rowSelected(t)
+				item.Background(bg).TextColor(fg)
+			case item.Highlighted():
 				item.Background(t.Accent).TextColor(t.AccentText)
 			}
 			item.Children(func() { coreText(c, opt).SingleLine() })
@@ -324,6 +331,9 @@ func fieldOf(c *context, keep bool, fn func() *node) (*node, *node) {
 	f := coreRow(c).AlignItems(Center).Gap(t.Space(1.5)).Padding(t.Space(1.5), t.Space(2.5)).
 		Radius(t.Radius).Background(t.FieldFill()).Border(1, t.Outline()).Role(RoleNone).Cursor(CursorText)
 	f.flags |= flagClickable | flagHover
+	if h := t.Metrics.ControlHeight; h > 0 {
+		f.MinHeight(h)
+	}
 	var in *node
 	f.Children(func() { in = fn() })
 	in.nameFrom = f

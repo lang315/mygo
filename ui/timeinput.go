@@ -40,6 +40,9 @@ func coreTimeInput(c *context, tm *time.Time) *node {
 	am, pm := i18n.DayPeriods(locale, i18n.Abbreviated)
 	f := coreRow(c).Direction(LeftToRight).AlignItems(Center).Padding(t.Space(1.5), t.Space(2)).Radius(t.Radius).Background(t.FieldFill()).Border(1, t.Outline()).Shrink(0).Role(RoleGroup)
 	f.widget = "TimeInput"
+	if h := t.Metrics.ControlHeight; h > 0 {
+		f.MinHeight(h)
+	}
 	set := func(h, m int) {
 		y, mo, d := tm.Date()
 		next := time.Date(y, mo, d, h, m, tm.Second(), tm.Nanosecond(), tm.Location())

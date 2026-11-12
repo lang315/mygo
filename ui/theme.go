@@ -83,6 +83,20 @@ type Theme struct {
 	// and Background.
 	Inverse     Color
 	InverseText Color
+	// ButtonBorder outlines plain buttons, and primary ones in a window not
+	// drawn as active; inputs keep ControlBorder. Left zero, buttons take
+	// Outline.
+	ButtonBorder Color
+	// RowHover fills the row or item of a table, list or tree the pointer
+	// is over; left zero, SurfaceHover. RowSelected fills a chosen row, tree
+	// item, sidebar item, table cell, and the item of a popup menu or the
+	// option of a select or combo box the keys or pointer are on, with
+	// RowSelectedText on it (Text when zero); it stays in a window not drawn
+	// as active. Left zero, they take the accent and AccentText, faded in
+	// such a window (InactiveAccent).
+	RowHover        Color
+	RowSelected     Color
+	RowSelectedText Color
 	// Scrollbar colors scroll bar thumbs, ScrollbarWidth DIPs wide (6 by
 	// default; 0 is 6): the defaults of ScrollbarStyle, which overrides
 	// them where it sets a field. It styles their tracks, hover and drag
@@ -98,6 +112,9 @@ type Theme struct {
 	// switches, sliders and the rows of tables and trees, are multiples
 	// of it. 4 by default: 3 makes widgets compact, 5 roomy; 0 is 4.
 	Spacing float32
+	// Metrics sets the heights of controls and rows in place of those their
+	// paddings and Spacing give; zero fields keep those.
+	Metrics Metrics
 	// FontSize is the size of text, Font its family ("" is the system's).
 	FontSize float32
 	Font     string
@@ -110,6 +127,59 @@ type Theme struct {
 
 	// followed is what WithPreferences changed, nil where it has not.
 	followed *followedTheme
+}
+
+// Metrics sets the sizes of controls, in DIPs, in place of those their
+// paddings, Spacing and FontSize give; a zero field keeps that size. Sizes
+// are minimums: larger text grows a control, and an element's own
+// MinHeight takes the place of its metric. WithPreferences scales them with
+// the text size, as FontSize.
+type Metrics struct {
+	ControlHeight float32 // buttons (toolbar ones too), text inputs, combo boxes, selects, number, date and time inputs, segmented controls
+	RowHeight     float32 // rows of tables, lists, trees and outlines; popup menu items; options of selects and combo boxes
+	HeaderHeight  float32 // a table's column headers; zero is the rows'
+	TabHeight     float32 // tab headers
+	CheckSize     float32 // the box of a check box, the dot of a radio button
+	// SwitchWidth and SwitchHeight size a switch's track.
+	SwitchWidth, SwitchHeight float32
+}
+
+// metricOr returns m, a field of Metrics, or def where it is zero.
+func metricOr(m, def float32) float32 {
+	if m > 0 {
+		return m
+	}
+	return def
+}
+
+// buttonBorder returns the outline of plain buttons (ButtonBorder).
+func (t *Theme) buttonBorder() Color {
+	if t.ButtonBorder.A != 0 {
+		return t.ButtonBorder
+	}
+	return t.Outline()
+}
+
+// rowHover returns the fill of a row under the pointer (RowHover).
+func (t *Theme) rowHover() Color {
+	if t.RowHover.A != 0 {
+		return t.RowHover
+	}
+	return t.SurfaceHover
+}
+
+// rowSelected returns the fill of a chosen row and the color of its text
+// (RowSelected, RowSelectedText): t's accent, faded in a window not drawn as
+// active, where t sets none.
+func (c *context) rowSelected(t *Theme) (bg, fg Color) {
+	if t.RowSelected.A == 0 {
+		return c.accent(t), t.AccentText
+	}
+	fg = t.RowSelectedText
+	if fg.A == 0 {
+		fg = t.Text
+	}
+	return t.RowSelected, fg
 }
 
 // followedTheme is a theme before and after following the desktop's

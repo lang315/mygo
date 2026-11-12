@@ -73,6 +73,11 @@ func splitButton(c *context, label string, primary bool) splitButtonParts {
 		styleButton(c, p.Arrow, primary)
 	})
 	act, arrow := p.Button, p.Arrow
+	if h := t.Metrics.ControlHeight; h > 0 {
+		// The pair is as high as a button, its halves inside its border.
+		act.minH, arrow.minH = bound{}, bound{}
+		g.MinHeight(h)
+	}
 	// The segments are built as buttons; the group takes their face and
 	// border, so that it is as large as a button, and they only light up
 	// over it.

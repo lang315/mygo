@@ -169,6 +169,7 @@ func (t *Theme) unfollow(f *followedTheme) {
 	back(&t.Focus, f.from.Focus, f.to.Focus)
 	back(&t.Border, f.from.Border, f.to.Border)
 	back(&t.ControlBorder, f.from.ControlBorder, f.to.ControlBorder)
+	back(&t.ButtonBorder, f.from.ButtonBorder, f.to.ButtonBorder)
 	back(&t.TextMuted, f.from.TextMuted, f.to.TextMuted)
 	back(&t.Scrollbar, f.from.Scrollbar, f.to.Scrollbar)
 	if t.ScrollbarStyle == f.to.ScrollbarStyle {
@@ -176,6 +177,9 @@ func (t *Theme) unfollow(f *followedTheme) {
 	}
 	if t.FontSize == f.to.FontSize {
 		t.FontSize = f.from.FontSize
+	}
+	if t.Metrics == f.to.Metrics {
+		t.Metrics = f.from.Metrics
 	}
 }
 
@@ -187,6 +191,9 @@ func (t *Theme) follow(p Preferences) {
 	if p.HighContrast {
 		t.Border = t.Border.Mix(t.Text, 0.45)
 		t.ControlBorder = t.ControlBorder.Mix(t.Text, 0.45)
+		if t.ButtonBorder.A != 0 {
+			t.ButtonBorder = t.ButtonBorder.Mix(t.Text, 0.45)
+		}
 		t.TextMuted = t.TextMuted.Mix(t.Text, 0.4)
 		t.Focus.A = 255
 		t.Scrollbar = t.Scrollbar.Alpha(1.6)
@@ -204,5 +211,10 @@ func (t *Theme) follow(p Preferences) {
 	}
 	if s := p.TextScale; s > 0 && s != 1 {
 		t.FontSize *= s
+		// Zero fields stay zero, the sizes they keep scaling with FontSize.
+		m := &t.Metrics
+		for _, f := range []*float32{&m.ControlHeight, &m.RowHeight, &m.HeaderHeight, &m.TabHeight, &m.CheckSize, &m.SwitchWidth, &m.SwitchHeight} {
+			*f *= s
+		}
 	}
 }

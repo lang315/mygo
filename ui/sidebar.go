@@ -184,6 +184,11 @@ func coreSidebarItem(c *context, id string, icon *SVG, label string) *node {
 	}
 	iconColor := c.accent(t)
 	switch {
+	case chosen && t.RowSelected.A != 0:
+		// The theme's tint, focused or not.
+		item.checked = 2
+		bg, fg := c.rowSelected(t)
+		item.Background(bg).TextColor(fg)
 	case chosen && focused:
 		item.checked = 2
 		item.Background(t.Accent).TextColor(t.AccentText)
