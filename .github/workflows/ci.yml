@@ -46,7 +46,8 @@ jobs:
     strategy:
       fail-fast: false
       # The unit tests under -race took 10 to 20 minutes in one job: three jobs
-      # an OS take a shard of the packages each (.github/ci-shard.sh), and
+      # an OS take a shard of the packages each (.github/ci-shard.sh), ui's
+      # in two jobs (below), and
       # check, one more, the formatting and the builds and vets of every
       # platform, and noinspector the tests of production builds. rest has the
       # other steps, which need no -race. A pull request tests the packages
@@ -56,17 +57,12 @@ jobs:
       # runs every shard on main.
       matrix:
         os: ${{ github.event_name == 'pull_request' && fromJSON('["macos-latest","windows-latest"]') || fromJSON('["macos-latest","ubuntu-latest","windows-latest"]') }}
-        shard: [cmd, ui, rest]
-        # Windows, whose job was the longest, has the ui shard in two jobs
-        # (ci-test.sh, CI_PART); Check the shards looks at the halves.
-        exclude:
-          - { os: windows-latest, shard: ui }
-        include:
-          - { os: windows-latest, shard: ui, part: a }
-          - { os: windows-latest, shard: ui, part: b }
-          - { os: ubuntu-latest, shard: rest }
-          - { os: ubuntu-latest, shard: check }
-          - { os: ubuntu-latest, shard: noinspector }
+        shard: [cmd, rest]
+        # The ui shard runs in two jobs on every OS (ci-test.sh, CI_PART):
+        # in one, its five processes passed go test's 25 minutes together on
+        # macOS's 3 cores. Check the shards looks at the halves. Linux's are
+        # on main only, as its other shards.
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector"}]' || '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"ui","part":"a"},{"os":"ubuntu-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector"}]') }}
     steps:
       - uses: actions/checkout@v7
         with:

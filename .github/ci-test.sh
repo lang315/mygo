@@ -9,10 +9,11 @@
 # once. The skip is of every package given, so a name of the splits must be no
 # test's name in another of them (--check looks).
 #
-# CI_PART=a or b splits the ui shard between two jobs (Windows has the longest
-# job, and 4 cores): a runs ./ui itself, without the groups marked #b, b the
-# packages below ui and the groups marked #b; between them every test runs
-# once (--check looks too).
+# CI_PART=a or b splits the ui shard between two jobs, on every OS (in one,
+# its processes passed the 25 minutes of -timeout together on macOS's 3
+# cores): a runs ./ui itself, without the groups marked #b, b the packages
+# below ui and the groups marked #b; between them every test runs once
+# (--check looks too).
 #
 #   ci-test.sh -race -shuffle=on -- $(bash .github/ci-shard.sh ui)
 #   ci-test.sh --check     # the lists below against the packages and tests
@@ -26,10 +27,10 @@ set -euo pipefail
 # processes only slow one another down: cmd/mygo@4 splits from 4 cores).
 # #a and #b say which job of CI_PART has a group.
 splits=(
-  'ui#a:TestPaintCullMatches|TestRetainSliderRowsRandomWalk|TestRetainShiftPaintMixedScales|TestRetainComboboxRowsRandomWalk|TestPureDrawsReachNoNode'
+  'ui#a:TestReplayMatches|TestRetainSliderRowsRandomWalk|TestRetainShiftPaintMixedScales|TestRetainComboboxRowsRandomWalk|TestPureDrawsReachNoNode'
   'ui#b:TestLayoutCacheMatches|TestRetainScrollFuzz|TestRetainFocusableRowsRandomWalk|TestRetainLayoutInnerScrollModelSeed'
   'ui#a:TestRetainSwitchRowsRandomWalk|TestRetainRowsOfTextInputUsersRandomWalk|TestRetainSelectProgressRowsRandomWalk|TestRetainMatchesFresh'
-  'ui#b:TestRetainRandomWalkOfReaders|TestReplayMatches'
+  'ui#b:TestRetainRandomWalkOfReaders|TestPaintCullMatches'
   'cmd/mygo@4:TestUpdateEndToEnd|TestSkipInstaller'
   'cmd/mygo@4:TestBuildResources|TestBuildDMGSize|TestBuildDMG'
   'cmd/mygo@4:TestBuildLinuxSlug|TestRev338eScanCost|TestResourceErrors'
