@@ -109,6 +109,8 @@ func skinMenuBar() *MenuBarWidget {
 func TestSkinMenuBar(t *testing.T) {
 	tt := tester(t, skinMenuBar())
 	line := lineOf(t, 1)
+	var inkOff float32
+	inkSet := false
 	check := func(on bool, tk *skinhook.Tokens) {
 		t.Helper()
 		strip, item := nodeOf(t, tt, ui.RoleMenuBar, "").Bounds, nodeOf(t, tt, ui.RoleMenuItem, "File").Bounds
@@ -121,10 +123,15 @@ func TestSkinMenuBar(t *testing.T) {
 		if !sameSize(item.H, wantItem) || !sameSize(strip.H, wantStrip) {
 			t.Errorf("skin %v: item %v and strip %v high, want %v and %v (line %v)", on, item.H, strip.H, wantItem, wantStrip, line)
 		}
-		// The text's ink is in the item's middle.
+		// The text's ink is as far from the item's middle as without a skin,
+		// where padding centers it: the font puts it a little off.
 		first, last := darkRows(tt, item)
-		if d := float32(first+last+1)/2 - (item.Y + item.H/2); d > 1.5 || d < -1.5 {
-			t.Errorf("skin %v: the text's ink (rows %d to %d) is %v off the item's middle", on, first, last, d)
+		d := float32(first+last+1)/2 - (item.Y + item.H/2)
+		if !inkSet {
+			inkOff, inkSet = d, true
+		}
+		if d-inkOff > 1 || inkOff-d > 1 {
+			t.Errorf("skin %v: the text's ink (rows %d to %d) is %v off the item's middle, %v without a skin", on, first, last, d, inkOff)
 		}
 		if c := skinPx(tt, strip.X+strip.W-4, strip.Y+strip.H/2); !near(c, fill) {
 			t.Errorf("skin %v: the strip is %v past its items, want %v", on, c, fill)
@@ -169,11 +176,20 @@ func TestSkinMenuBarFollowsTextScale(t *testing.T) {
 var skinIcon = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="currentColor"/></svg>`))
 
 // skinToolForm is a form with a tool strip of three buttons, a separator
-// between the second and the third, and an icon button.
-func skinToolForm() *Form {
+// between the second and the third, an SVG icon button and a PNG one, red
+// and blue.
+func skinToolForm(t *testing.T) *Form {
 	return NewForm("Shell", 800, 600).SetContent(Label("content")).ToolStrip(ToolStrip(
 		ToolButton("Cut"), ToolButton("Copy"), Separator(), ToolButton("Paste"),
-		ToolButton("").SetIcon(skinIcon).SetTooltip("Icon")))
+		ToolButton("").SetIcon(skinIcon).SetTooltip("Icon"),
+		ToolButton("").SetIconPNG(twoColorPNG(t, 34)).SetTooltip("Picture")))
+}
+
+// iconHeights returns how high the SVG and the PNG icons of skinToolForm
+// are, by their ink: the text's color, and red.
+func iconHeights(t *testing.T, tt *ui.Tester, text ui.Color) (svg, png int) {
+	t.Helper()
+	return inkHeight(tt, nodeOf(t, tt, ui.RoleButton, "Icon").Bounds, text), inkHeight(tt, nodeOf(t, tt, ui.RoleButton, "Picture").Bounds, ui.RGB(255, 0, 0))
 }
 
 // inkHeight is how many pixel rows of box hold ink of color c.
@@ -194,7 +210,7 @@ func inkHeight(tt *ui.Tester, box ui.Rect, c ui.Color) int {
 // between controls and 22 across a separator with its line in the middle,
 // icons of 17 and a line of LineStrong under it; without, as before skins.
 func TestSkinToolStrip(t *testing.T) {
-	tt := formTester(t, skinToolForm())
+	tt := formTester(t, skinToolForm(t))
 	check := func(on bool, tk *skinhook.Tokens) {
 		t.Helper()
 		bar := nodeOf(t, tt, ui.RoleToolbar, "").Bounds
@@ -240,36 +256,42 @@ func TestSkinToolStrip(t *testing.T) {
 		if !on && near(under, ui.LightTheme().Border) {
 			t.Errorf("without a skin, the strip has a bottom line %v", under)
 		}
-		icon := nodeOf(t, tt, ui.RoleButton, "Icon").Bounds
 		if on {
-			if h := inkHeight(tt, icon, tk.Text); h != 17 {
-				t.Errorf("the icon is %v high, want 17", h)
+			if svg, png := iconHeights(t, tt, tk.Text); svg != 17 || png != 17 {
+				t.Errorf("the SVG and PNG icons are %v and %v high, want 17", svg, png)
 			}
 		}
 	}
 	check(false, nil)
-	plainIcon := inkHeight(tt, nodeOf(t, tt, ui.RoleButton, "Icon").Bounds, ui.LightTheme().Text)
+	plainSVG, plainPNG := iconHeights(t, tt, ui.LightTheme().Text)
 	tk := useSkin(t)
 	tt.Frame()
 	check(true, tk)
 	offSkin()
 	tt.Frame()
 	check(false, nil)
-	if h := inkHeight(tt, nodeOf(t, tt, ui.RoleButton, "Icon").Bounds, ui.LightTheme().Text); h != plainIcon {
-		t.Errorf("after the skin, the icon is %v high, want its plain %v", h, plainIcon)
+	if svg, png := iconHeights(t, tt, ui.LightTheme().Text); svg != plainSVG || png != plainPNG || plainSVG == 17 {
+		t.Errorf("after the skin, the icons are %v and %v high, want their plain %v and %v (not 17)", svg, png, plainSVG, plainPNG)
 	}
 }
 
 // The tool strip's sizes grow with the text size.
 func TestSkinToolStripFollowsTextScale(t *testing.T) {
-	useSkin(t)
-	tt := formTester(t, skinToolForm())
+	tk := useSkin(t)
+	tt := formTester(t, skinToolForm(t))
 	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
 	tt.Frame()
 	bar := nodeOf(t, tt, ui.RoleToolbar, "").Bounds
 	cut, cp, paste := nodeOf(t, tt, ui.RoleButton, "Cut").Bounds, nodeOf(t, tt, ui.RoleButton, "Copy").Bounds, nodeOf(t, tt, ui.RoleButton, "Paste").Bounds
 	if got := cut.Y - bar.Y; !sameSize(got, 15) {
 		t.Errorf("at 150 %%, %v above the controls, want 15", got)
+	}
+	if got := bar.Y + bar.H - (cut.Y + cut.H); !sameSize(got, 18+1) {
+		t.Errorf("at 150 %%, %v below the controls, want 18 and the line", got)
+	}
+	// 17 × 1.5 is 25.5: its ink is 25 or 26 rows.
+	if svg, png := iconHeights(t, tt, tk.Text); svg < 25 || svg > 26 || png < 25 || png > 26 {
+		t.Errorf("at 150 %%, the SVG and PNG icons are %v and %v high, want 25.5", svg, png)
 	}
 	if got := cp.X - (cut.X + cut.W); !sameSize(got, 15) {
 		t.Errorf("at 150 %%, %v between two controls, want 15", got)
@@ -599,6 +621,23 @@ func TestSkinListViewRows(t *testing.T) {
 	tt.Frame()
 	if after := heights(); after[ViewList] != plain[ViewList] || after[ViewDetails] != plain[ViewDetails] || after[ViewLargeIcon] != plain[ViewLargeIcon] {
 		t.Errorf("after the skin, the rows are %v, want their plain %v", after, plain)
+	}
+}
+
+// A list view's list mode with images of 48: its rows are image + 8, past
+// Metrics.RowHeight, with a skin and without.
+func TestSkinListViewRowsWithImages(t *testing.T) {
+	lv := ListView(skinRowKey, Column[skinRow]{Title: "Name", Text: skinRowName}).SetRows(skinRows).
+		SetView(ViewList).SetImageList(ImageList(48), skinRowKey).SetSize(180, 300)
+	tt := tester(t, lv)
+	if h := nodeOf(t, tt, ui.RoleListItem, "Grace").Bounds.H; !sameSize(h, 56) {
+		t.Errorf("without a skin, the row is %v, want 56", h)
+	}
+	useSkin(t)
+	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
+	tt.Frame()
+	if h := nodeOf(t, tt, ui.RoleListItem, "Grace").Bounds.H; !sameSize(h, 56) {
+		t.Errorf("with a skin at 150 %%, the row is %v, want 56, past 45", h)
 	}
 }
 

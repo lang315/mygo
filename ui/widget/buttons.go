@@ -54,10 +54,10 @@ func (b *ButtonWidget) SetIconPNG(data []byte) *ButtonWidget {
 
 // bitmapIcon draws a bitmap icon, set by SetIconPNG: an app that gives none
 // does not link the drawing of images. Under mu.
-var bitmapIcon func(c *ui.Context, bmp *ui.Bitmap)
+var bitmapIcon func(c *ui.Context, bmp *ui.Bitmap) ui.Element
 
 // drawBitmapIcon draws bmp as an icon, as high as the text, as an SVG icon.
-func drawBitmapIcon(c *ui.Context, bmp *ui.Bitmap) { ui.IconImage(c, bmp) }
+func drawBitmapIcon(c *ui.Context, bmp *ui.Bitmap) ui.Element { return ui.IconImage(c, bmp) }
 
 // Suggested draws the button as the main action, gota's suggested-action
 // and tw's: the accent for its background, with the accent's text, and the
@@ -171,7 +171,7 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 // it by its text, or by its tooltip when it has none, so that assistive
 // technology and a Tester find an icon-only button by name. center centers
 // the icon and the text across, as a tool button does. side, when above 0,
-// is the height of an SVG icon, as a skin's tool strip gives it.
+// is the height of the icon, as a skin's tool strip gives it.
 func iconFace(c *ui.Context, e ui.Element, svg *ui.SVG, bmp *ui.Bitmap, text, tooltip string, center bool, side float32) {
 	name := text
 	if name == "" {
@@ -183,13 +183,14 @@ func iconFace(c *ui.Context, e ui.Element, svg *ui.SVG, bmp *ui.Bitmap, text, to
 			row.AlignItems(ui.Center)
 		}
 		row.Children(func() {
+			var icon ui.Element
 			if svg != nil {
-				icon := ui.Icon(c, svg)
-				if side > 0 {
-					icon.FontSize(side) // an icon is as high as its font size, as wide as its aspect makes it
-				}
+				icon = ui.Icon(c, svg)
 			} else {
-				bitmapIcon(c, bmp)
+				icon = bitmapIcon(c, bmp)
+			}
+			if side > 0 {
+				icon.FontSize(side) // an icon is as high as its font size, as wide as its aspect makes it
 			}
 			if text != "" {
 				ui.Text(c, text)
