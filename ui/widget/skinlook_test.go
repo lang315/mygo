@@ -407,7 +407,11 @@ func TestSkinTabStrip(t *testing.T) {
 		if c := skinPx(tt, x, b.Y+b.H/2); !near(c, fill) {
 			t.Errorf("skin %v: the strip past the last tab is %v, want %v", on, c, fill)
 		}
-		if got := tk != nil && hasColor(tt, x, b.Y+b.H/2, p.Y-1, tk.Line); got != line {
+		border := ui.LightTheme().Border
+		if tk != nil {
+			border = tk.Line
+		}
+		if got := hasColor(tt, x, b.Y+b.H/2, p.Y-1, border); got != line {
 			t.Errorf("skin %v: a line under the strip is %v, want %v", on, got, line)
 		}
 	}
