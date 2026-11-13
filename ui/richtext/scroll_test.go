@@ -3,6 +3,7 @@ package richtext
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -162,6 +163,10 @@ func anchorTester(t *testing.T, doc *Document, focus bool) (tt *ui.Tester, boxes
 			return 0
 		}}).Fill()
 	}, 300, 400)
+	// The document holds its editor's view weakly (shownIn), and the Tester
+	// holds the view: a test that reads CaretRect or VisibleParagraphs after
+	// its last use of tt would find no view once the GC ran.
+	t.Cleanup(func() { runtime.KeepAlive(tt) })
 	if focus {
 		tt.ClickAt(150, 5)
 		if !tt.Focused("Rich text") {
