@@ -11,7 +11,8 @@ import (
 
 // check measures the tokens' contrast: text 4.5:1 or more, the outline of
 // fields and the accent line on the chrome, and each chart color on the
-// content, 3:1 or more. A translucent color
+// content, 3:1 or more; and the control states (hover and pressed) 3 or more
+// CIE76 ΔE from their ground and from each other. A translucent color
 // is measured blended over the layer it sits on, the one after "on", and a
 // translucent layer over Content. It also measures the state distance of the
 // dark or the light appearance (stateDistance). The error names every
@@ -45,6 +46,20 @@ func check(t *skinhook.Tokens, dark bool) error {
 	pair("Accent.Base on Chrome", t.Accent.Base, t.Chrome, 3)
 	for i, c := range t.Chart {
 		pair(fmt.Sprintf("Chart[%d] on Content", i), c, t.Content, 3)
+	}
+	// The states of a control must show: ΔE 3 or more from what they sit on
+	// (the chrome, the face) and from each other.
+	for _, s := range []struct {
+		name string
+		a, b ui.Color
+	}{
+		{"ControlHover vs Chrome", t.ControlHover, t.Chrome},
+		{"ControlHover vs Control", t.ControlHover, t.Control},
+		{"ControlPressed vs ControlHover", t.ControlPressed, t.ControlHover},
+	} {
+		if d := deltaE(s.a.Over(t.Content), s.b.Over(t.Content), nil); d < 3 {
+			errs = append(errs, fmt.Errorf("%s: ΔE %.1f, want 3", s.name, d))
+		}
 	}
 	errs = append(errs, stateDistance(t, dark))
 	return errors.Join(errs...)
