@@ -390,13 +390,6 @@ func TestSentinelRuleCatchesPlantedLiterals(t *testing.T) {
 	}
 }
 
-// knownMisses are the nodes, by label, whose misses only log: parts a later
-// task of the plan brings onto the skin, each named with it. PR 2 and PR 3
-// remove theirs; the list ends empty.
-var knownMisses = map[string]string{
-	"chart": "Task 5: the chart's series colors",
-}
-
 // Every pixel of every control of the gallery, light and dark, moves when
 // the tokens move, but white and black: no control paints a color the skin
 // does not give it.
@@ -407,14 +400,6 @@ func TestSentinelSkinReachesEveryPixel(t *testing.T) {
 		tt := widget.TestForm(t, gallery())
 		tt.SetDark(dark)
 		galleryStates(tt)
-		var ms []miss
-		for _, m := range s.still(t, tt, ui.Rect{}) {
-			if task, ok := knownMisses[m.node.Label]; ok {
-				t.Logf("dark=%v: known (%s): %v", dark, task, m)
-				continue
-			}
-			ms = append(ms, m)
-		}
-		report(t, dark, ms)
+		report(t, dark, s.still(t, tt, ui.Rect{}))
 	}
 }
