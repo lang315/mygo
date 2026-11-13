@@ -10,7 +10,8 @@ import (
 )
 
 // check measures the tokens' contrast: text 4.5:1 or more, the outline of
-// fields and the accent line on the chrome 3:1 or more. A translucent color
+// fields and the accent line on the chrome, and each chart color on the
+// content, 3:1 or more. A translucent color
 // is measured blended over the layer it sits on, the one after "on", and a
 // translucent layer over Content. It also measures the state distance of the
 // dark or the light appearance (stateDistance). The error names every
@@ -40,6 +41,9 @@ func check(t *skinhook.Tokens, dark bool) error {
 	pair("FieldLine on Content", t.FieldLine, t.Content, 3)
 	pair("FieldLine on Chrome", t.FieldLine, t.Chrome, 3)
 	pair("Accent.Base on Chrome", t.Accent.Base, t.Chrome, 3)
+	for i, c := range t.Chart {
+		pair(fmt.Sprintf("Chart[%d] on Content", i), c, t.Content, 3)
+	}
 	errs = append(errs, stateDistance(t, dark))
 	return errors.Join(errs...)
 }

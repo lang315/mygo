@@ -1,10 +1,13 @@
 package widget
 
 import (
+	"fmt"
 	"runtime"
+	"sync"
 
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // Kind is what a message dialog is about, shown by its icon.
@@ -17,13 +20,64 @@ const (
 	Error
 )
 
-// kindIcons are the message dialogs' icons: filled, in their own colors,
-// the same on every platform and theme, drawn in a 32 by 32 box.
-var kindIcons = [...]*ui.SVG{
-	Info:     filledIcon(`<circle cx="16" cy="16" r="15" fill="#1976d2"/><circle cx="16" cy="9.5" r="2.2" fill="#fff"/><path d="M16 14.5v9" stroke="#fff" stroke-width="3.4" stroke-linecap="round" fill="none"/>`),
-	Warning:  filledIcon(`<path d="M16 3 30 28H2z" fill="#fbc02d" stroke="#fbc02d" stroke-width="3" stroke-linejoin="round"/><path d="M16 11.5v8" stroke="#000" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24" r="1.9"/>`),
-	Question: filledIcon(`<circle cx="16" cy="16" r="15" fill="#1976d2"/><path d="M11.5 12.5a4.5 4.5 0 1 1 6.5 4c-1.6.9-2 1.9-2 3.3" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24.5" r="2" fill="#fff"/>`),
-	Error:    filledIcon(`<circle cx="16" cy="16" r="15" fill="#d32f2f"/><path d="m10.5 10.5 11 11m0-11-11 11" stroke="#fff" stroke-width="3.4" stroke-linecap="round" fill="none"/>`),
+// kindShapes are the message dialogs' icons, filled, drawn in a 32 by 32
+// box: %[1]s is the color of the shape, %[2]s that of the glyph on it.
+var kindShapes = [...]string{
+	Info:     `<circle cx="16" cy="16" r="15" fill="%[1]s"/><circle cx="16" cy="9.5" r="2.2" fill="%[2]s"/><path d="M16 14.5v9" stroke="%[2]s" stroke-width="3.4" stroke-linecap="round" fill="none"/>`,
+	Warning:  `<path d="M16 3 30 28H2z" fill="%[1]s" stroke="%[1]s" stroke-width="3" stroke-linejoin="round"/><path d="M16 11.5v8" stroke="%[2]s" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24" r="1.9" fill="%[2]s"/>`,
+	Question: `<circle cx="16" cy="16" r="15" fill="%[1]s"/><path d="M11.5 12.5a4.5 4.5 0 1 1 6.5 4c-1.6.9-2 1.9-2 3.3" stroke="%[2]s" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24.5" r="2" fill="%[2]s"/>`,
+	Error:    `<circle cx="16" cy="16" r="15" fill="%[1]s"/><path d="m10.5 10.5 11 11m0-11-11 11" stroke="%[2]s" stroke-width="3.4" stroke-linecap="round" fill="none"/>`,
+}
+
+// plainKindIcons are the icons without a skin: in their own colors, the
+// same on every platform and theme.
+var plainKindIcons = [...]*ui.SVG{
+	Info:     kindIconOf(Info, "#1976d2", "#fff"),
+	Warning:  kindIconOf(Warning, "#fbc02d", "#000"),
+	Question: kindIconOf(Question, "#1976d2", "#fff"),
+	Error:    kindIconOf(Error, "#d32f2f", "#fff"),
+}
+
+func kindIconOf(k Kind, base, glyph string) *ui.SVG {
+	return filledIcon(fmt.Sprintf(kindShapes[k], base, glyph))
+}
+
+// skinKindIcons are the icons in a skin's colors, a *ui.SVG for each
+// kindKey, parsed once.
+var skinKindIcons sync.Map
+
+type kindKey struct {
+	kind        Kind
+	base, glyph ui.Color
+}
+
+// kindSVG returns the icon of kind k in base, its glyph in glyph.
+func kindSVG(k Kind, base, glyph ui.Color) *ui.SVG {
+	key := kindKey{k, base, glyph}
+	if s, ok := skinKindIcons.Load(key); ok {
+		return s.(*ui.SVG)
+	}
+	css := func(c ui.Color) string { return fmt.Sprintf("#%02x%02x%02x%02x", c.R, c.G, c.B, c.A) }
+	s, _ := skinKindIcons.LoadOrStore(key, kindIconOf(k, css(base), css(glyph)))
+	return s.(*ui.SVG)
+}
+
+// kindIconSVG returns the icon of kind k: in the skin's colors of the
+// appearance, its kind's family (Question the accent's), or the plain icon
+// without a skin.
+func kindIconSVG(k Kind, dark bool) *ui.SVG {
+	t := skinhook.Get(dark)
+	switch {
+	case t == nil:
+		return plainKindIcons[k]
+	case k == Info:
+		return kindSVG(k, t.Info.Base, t.Info.On)
+	case k == Warning:
+		return kindSVG(k, t.Warning.Base, t.Warning.On)
+	case k == Error:
+		return kindSVG(k, t.Danger.Base, t.Danger.On)
+	}
+	return kindSVG(k, t.Accent.Base, t.OnAccent)
 }
 
 func filledIcon(shapes string) *ui.SVG {
@@ -71,7 +125,7 @@ func kindIcon(k Kind) *kindIconWidget {
 }
 
 func (i *kindIconWidget) build(c *ui.Context) ui.Element {
-	return ui.Image(c, kindIcons[i.kind]).Size(32, 32)
+	return ui.Image(c, kindIconSVG(i.kind, c.Theme().Dark)).Size(32, 32)
 }
 
 // message runs a dialog over parent showing text, input under it if any,

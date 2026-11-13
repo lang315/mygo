@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 func TestConfirmOK(t *testing.T) {
@@ -182,4 +183,86 @@ func TestEscapeKeepsAnUndeletableDialog(t *testing.T) {
 	}
 	press(t, fw, "Done")
 	received(t, ran)
+}
+
+// With a skin, a message icon is the family of its kind: its base and the
+// glyph on it, Question the accent and the text on it; without one, today's
+// icons. The same kind and colors are parsed once.
+func TestMessageIconsUseSkinColors(t *testing.T) {
+	light, dark := useTestSkin(t)
+	colors := func(tk *skinhook.Tokens, k Kind) (base, glyph ui.Color) {
+		switch k {
+		case Info:
+			return tk.Info.Base, tk.Info.On
+		case Warning:
+			return tk.Warning.Base, tk.Warning.On
+		case Error:
+			return tk.Danger.Base, tk.Danger.On
+		}
+		return tk.Accent.Base, tk.OnAccent
+	}
+	for _, k := range []Kind{Info, Warning, Question, Error} {
+		for _, d := range []bool{false, true} {
+			tk := light
+			if d {
+				tk = dark
+			}
+			base, glyph := colors(tk, k)
+			tt := NewTester(t, kindIcon(k), 120, 80)
+			tt.SetDark(d)
+			tt.Settle()
+			img := tt.Image()
+			if n := countNear(img, ui.Rect{}, true, base, 4); n < 200 {
+				t.Errorf("kind %d, dark %v: %d pixels of the base %v, want 200 or more", k, d, n, base)
+			}
+			if n := countNear(img, ui.Rect{}, true, glyph, 4); n < 15 {
+				t.Errorf("kind %d, dark %v: %d pixels of the glyph %v, want 15 or more", k, d, n, glyph)
+			}
+			if k == Warning {
+				// The dot under the bar is the glyph's color too: the bottom
+				// quarter of the triangle holds the dot alone.
+				b := iconBounds(img)
+				q := ui.Rect{X: float32(b.Min.X), Y: float32(b.Max.Y - b.Dy()/4), W: float32(b.Dx()), H: float32(b.Dy() / 4)}
+				if n := countNear(img, q, false, glyph, 4); n < 3 {
+					t.Errorf("dark %v: %d pixels of the glyph %v in the dot", d, n, glyph)
+				}
+			}
+		}
+	}
+
+	// Switching the tokens while the icon shows: its next frame takes them.
+	tt := NewTester(t, kindIcon(Error), 120, 80)
+	tt.Settle()
+	other := *light
+	other.Danger.Base, other.Danger.On = ui.Hex("#0d47a1"), ui.Hex("#ffd600")
+	skinhook.Set(&other, dark)
+	ui.SetDefaultThemes(nil, nil)
+	tt.Settle()
+	img := tt.Image()
+	if n := countNear(img, ui.Rect{}, true, other.Danger.Base, 4); n < 200 {
+		t.Errorf("after switching: %d pixels of the new base, want 200 or more", n)
+	}
+	if n := countNear(img, ui.Rect{}, true, light.Danger.Base, 4); n > 0 {
+		t.Errorf("after switching: %d pixels of the old base", n)
+	}
+
+	// Parsed once a kind and colors; another color or kind is another icon.
+	a := kindSVG(Info, light.Info.Base, light.Info.On)
+	if b := kindSVG(Info, light.Info.Base, light.Info.On); b != a {
+		t.Error("the same kind and colors gave a second icon")
+	}
+	if b := kindSVG(Info, light.Info.Base, dark.Info.On); b == a {
+		t.Error("another glyph color gave the same icon")
+	}
+	if b := kindSVG(Question, light.Info.Base, light.Info.On); b == a {
+		t.Error("another kind gave the same icon")
+	}
+
+	// Without a skin, today's icons.
+	skinhook.Set(nil, nil)
+	for _, k := range []Kind{Info, Warning, Question, Error} {
+		if got := kindIconSVG(k, false); got != plainKindIcons[k] {
+			t.Errorf("kind %d without a skin is not its plain icon", k)
+		}
+	}
 }
