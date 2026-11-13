@@ -246,7 +246,15 @@ func TestContentWindowWebViewEditMenu(t *testing.T) {
 		// The window's activation gives its own surface the keyboard, from
 		// the page too: let it come before the page takes the keyboard, or
 		// it comes after and the edit menu's commands go to the native UI.
-		eventually(t, "the window to be in front", w.IsFocused)
+		if !wait.Poll(func() bool {
+			if w.IsFocused() {
+				return true
+			}
+			keepFront()
+			return false
+		}) {
+			t.Fatalf("the window to be in front never happened (waited %v); %s", wait.Guard, foregroundState(w))
+		}
 	}
 	v.Focus()
 	if _, err := v.Page().Eval("document.getElementById('e').focus()"); err != nil {

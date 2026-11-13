@@ -527,13 +527,14 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		fg, _, _ := procGetForegroundWindow.Call()
 		raised = fmt.Sprintf("; before the click %s was there, and after bringing the window to the front %s, with %s in front",
 			describeWindow(under), describeWindow(rootAt(pt)), describeWindow(fg))
-	} else if enabled, _, _ := procIsWindowEnabled.Call(w.hwnd); !ownWindow(front) && under == w.hwnd && enabled != 0 && w.opts.Flyout == nil {
+	} else if enabled, _, _ := procIsWindowEnabled.Call(w.hwnd); !ownWindow(front) && under == w.hwnd && enabled != 0 && windowLong(w.hwnd, gwlExStyle)&wsExNoActivate == 0 {
 		// No window of the app is in front, as after the test before closed
 		// the one that was: a click on w then reached the app's move and
 		// lost its button (TestParentStaysBlockedWhileAModalChildIsOpen).
 		// Bring w to the front first, as for another app's window over it,
 		// with the right to take the front (TestGrantForeground). A disabled
-		// parent and a flyout, which must not activate, are left as they are.
+		// parent and a window that never activates (WS_EX_NOACTIVATE: a
+		// flyout, a window not Focusable) are left as they are.
 		TestGrantForeground()
 		ok, _, _ := procSetForegroundWindow.Call(w.hwnd)
 		fg, _, _ := procGetForegroundWindow.Call()
