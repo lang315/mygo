@@ -59,6 +59,14 @@ func heights(t *testing.T, tt *widget.Tester) map[string]float32 {
 	return got
 }
 
+// describe names a skin and its palette, "none" for nil.
+func describe(s *skin.Skin) string {
+	if s == nil {
+		return "none"
+	}
+	return s.Name() + " with " + s.Palette().Name()
+}
+
 // pick opens the combo box named combo and chooses item: the last element
 // of that name, which is the one in the popup.
 func pick(tt *widget.Tester, combo, item string) {
@@ -67,21 +75,29 @@ func pick(tt *widget.Tester, combo, item string) {
 	all[len(all)-1].Click()
 }
 
-// named are the roles whose label is the text they show: a text cut by one of
-// these is a clipped caption.
-var named = map[ui.Role]bool{
-	ui.RoleButton: true, ui.RoleLink: true, ui.RoleCheckBox: true, ui.RoleRadio: true, ui.RoleTab: true,
-	ui.RoleMenuButton: true, ui.RoleToggleButton: true, ui.RoleColumnHeader: true,
+// captions are the captions the studio draws in controls of their own (an
+// accessible name is not always the text drawn, as a month's days or a
+// stepper's arrows): buttons, tabs and toggles.
+var captions = map[string]bool{
+	"Header action": true, "Plain": true, "Suggested": true, "Destructive": true, "Disabled": true, "Drop down": true,
+	"Menu": true, "Link": true, "Đăng nhập lại tài khoản đã khoá": true, "Xuất danh sách ra Excel": true,
+	"Toggle on": true, "Toggle off": true, "Info": true, "Warning": true, "Error": true, "Question": true,
+	"Input text": true, "Input number": true, "Input choice": true, "Dialog": true,
+	"Chip 1": true, "Chip 2": true, "Chip 3": true, "Chip 4": true, "Chip 5": true, "Chip 6": true,
+	"Buttons and toggles": true, "Text and choices": true, "Numbers and dates": true, "Grid": true,
+	"Lists and trees": true, "Containers": true, "Chart and progress": true, "Dialogs and messages": true,
+	"First": true, "Second": true,
 }
 
-// clipped returns the captions of the last frame that stick out of the
-// control they name: buttons, tabs, check boxes and the like, whose label is
-// their text. A control scrolled off the window is left alone.
-func clipped(tt *widget.Tester, w, h float32) []string {
+// clipped returns the captions of the last frame that are cut by the control
+// they are in: sticking out of it, or narrower than the text takes. A control
+// scrolled off the window is left alone.
+func clipped(t *testing.T, tt *widget.Tester, w, h float32) []string {
+	t.Helper()
 	var out []string
 	for _, n := range tt.Nodes() {
 		b := n.Bounds
-		if !named[n.Role] || n.Label == "" || b.W <= 0 || b.H <= 0 || b.X+b.W > w || b.Y+b.H > h {
+		if !captions[n.Label] || b.W <= 0 || b.H <= 0 || b.X+b.W > w || b.Y+b.H > h {
 			continue
 		}
 		r, ok := tt.Tester.Find(n.Label) // the text's box; widget's Find takes a Query
@@ -91,9 +107,23 @@ func clipped(tt *widget.Tester, w, h float32) []string {
 		}
 		if r.X < b.X-0.5 || r.Y < b.Y-0.5 || r.X+r.W > b.X+b.W+0.5 || r.Y+r.H > b.Y+b.H+0.5 {
 			out = append(out, fmt.Sprintf("%q at %v is outside its %v at %v", n.Label, r, n.Role, b))
+		} else if nat := natural(t, n.Label); r.W < nat-0.5 {
+			out = append(out, fmt.Sprintf("%q is cut to %v wide of %v in its %v at %v", n.Label, r.W, nat, n.Role, b))
 		}
 	}
 	return out
+}
+
+// natural returns the width s takes in a label with room to spare: a caption
+// narrower than that is cut. Control text is as wide or wider, never narrower.
+func natural(t *testing.T, s string) float32 {
+	t.Helper()
+	tt := widget.NewTester(t, widget.HBox(0).Add(widget.Label(s)), 1500, 100)
+	r, ok := tt.Tester.Find(s)
+	if !ok {
+		t.Fatalf("a label %q shows no text", s)
+	}
+	return r.W
 }
 
 // With Calm, the grid page has rows and a header of 30 and the tool strip's
@@ -180,7 +210,7 @@ func TestStudioEveryPage(t *testing.T) {
 			for _, page := range pages {
 				tt.Find(widget.ByLabel(page)).Click()
 				tt.Frame()
-				for _, s := range clipped(tt, w, h) {
+				for _, s := range clipped(t, tt, w, h) {
 					t.Errorf("%s: %s", page, s)
 				}
 			}
@@ -197,7 +227,7 @@ func TestStudioLongLabels(t *testing.T) {
 		for _, label := range []string{"Đăng nhập lại tài khoản đã khoá", "Xuất danh sách ra Excel"} {
 			b := tt.Find(widget.ByLabel(label)).Bounds()
 			r, ok := tt.Tester.Find(label)
-			if !ok || r.X < b.X-0.5 || r.X+r.W > b.X+b.W+0.5 || r.Y < b.Y-0.5 || r.Y+r.H > b.Y+b.H+0.5 {
+			if !ok || r.W < natural(t, label)-0.5 || r.X < b.X-0.5 || r.X+r.W > b.X+b.W+0.5 || r.Y < b.Y-0.5 || r.Y+r.H > b.Y+b.H+0.5 {
 				t.Errorf("skin %v: %q is %v in its button %v", s != nil, label, r, b)
 			}
 		}
@@ -215,12 +245,12 @@ func TestStudioSwitches(t *testing.T) {
 
 	pick(tt, "Skin", "Calm")
 	if s := skin.Active(); s == nil || s.Name() != "Calm" || s.Palette() != skin.Cham {
-		t.Fatalf("after Skin > Calm the skin is %v, want Calm with Chàm", s)
+		t.Fatalf("after Skin > Calm the skin is %s, want Calm with Chàm", describe(s))
 	}
 	for _, p := range []*skin.Palette{skin.Indigo, skin.Ink, skin.Teal, skin.Cham} {
 		pick(tt, "Palette", p.Name())
 		if s := skin.Active(); s == nil || s.Palette() != p {
-			t.Errorf("after Palette > %s the skin's palette is %v", p.Name(), s)
+			t.Errorf("after Palette > %s the skin is %s", p.Name(), describe(s))
 		}
 	}
 	pick(tt, "Palette", "Teal")
@@ -230,7 +260,7 @@ func TestStudioSwitches(t *testing.T) {
 	}
 	pick(tt, "Skin", "Calm")
 	if s := skin.Active(); s == nil || s.Palette() != skin.Teal {
-		t.Errorf("Calm after the palette Teal has the palette %v, want Teal kept", s)
+		t.Errorf("Calm after the palette Teal is %s, want Teal kept", describe(s))
 	}
 
 	for _, c := range []struct {
