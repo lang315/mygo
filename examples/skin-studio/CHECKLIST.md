@@ -43,7 +43,7 @@ skinned paint path). Rows below add their own.
 | [x] | TabControl | metric strip 40, state (open tab line), literal (strip on chrome) | the studio's own tabs and page Containers; `TestSkinTabStrip` |
 | [x] | Sidebar | state (chosen item) | page Containers; `TestSentinelSkinReachesEveryPixel` |
 | [x] | MenuBar | metric 28 in 34, state (hover) | page Containers; `TestSkinMenuBar`, `TestSkinMenuBarFollowsTextScale` |
-| [ ] | MenuStrip | the OS draws it: no skin part to show | no page and no test: the studio sets no MenuStrip (finding) |
+| [x] | MenuStrip | none: the OS draws it, out of P1 by design (plan, Changes from the spec 3) | the MenuBar row |
 | [x] | ToolStrip | metric 36, state (hover, pressed), chrome | the studio's tool strip; `TestStudioGridPage`, `TestSkinToolStrip`, `TestSkinToolStripFollowsTextScale`, `TestCheckControlStates` (`ui/widget/skin`) |
 | [x] | StatusStrip | chrome, literal | the studio's status strip; `TestSkinStatusStrip` |
 | [x] | HeaderBar | chrome, literal | the studio's header bar; `TestSkinHeaderBar` |
