@@ -345,6 +345,9 @@ func frontIsAnotherApp() bool { return false }
 // foregroundState is for Windows.
 func foregroundState(*mygo.Window) string { return "" }
 
+// clipboardState is for Windows.
+func clipboardState() string { return "" }
+
 // The menu bar belongs to the application on macOS.
 func menuBarShown(*mygo.Window) (bool, bool)                { return false, false }
 func activateAccelerator(*mygo.Window, string) (bool, bool) { return false, false }

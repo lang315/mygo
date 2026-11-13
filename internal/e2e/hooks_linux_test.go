@@ -416,6 +416,9 @@ func frontIsAnotherApp() bool { return false }
 // foregroundState is for Windows.
 func foregroundState(*mygo.Window) string { return "" }
 
+// clipboardState is for Windows.
+func clipboardState() string { return "" }
+
 // throttlingOff reports whether the page of w, or of its first web view,
 // is set up to keep running while it can't be seen, and how many of the
 // settings that take the platform has.

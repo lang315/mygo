@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -238,8 +239,27 @@ func TestContentWindowWebViewEditMenu(t *testing.T) {
 	defer mygo.App.SetMenu(nil)
 	clipboard := mygo.Clipboard.ReadText()
 	defer mygo.Clipboard.WriteText(clipboard)
+	// Not "hello" before Copy. Written first, away from Copy: programs that
+	// read the clipboard after every change (Windows' clipboard history)
+	// hold it open while they read, asking this app to render its data, and
+	// the browser's write of a copy then fails without a word.
+	mygo.Clipboard.WriteText("before copy")
+	// The page counts the edit commands it runs and their results, and its
+	// copies, for a Copy that copies nothing: the menu sends them as
+	// execCommand on Windows.
 	v.Page().LoadHTML(`<body style="margin:0;height:100vh;background:#f00">
-<div id=e contenteditable style="height:100px">hello</div><script>window.ready = true</script></body>`, "")
+<div id=e contenteditable style="height:100px">hello</div><script>
+window.commands = [];
+const exec = document.execCommand.bind(document);
+document.execCommand = (command, ...args) => {
+	const done = exec(command, ...args);
+	window.commands.push(command + ": " + done);
+	return done;
+};
+window.copies = 0;
+document.addEventListener("copy", () => window.copies++);
+window.ready = true;
+</script></body>`, "")
 	waitForPage(t, v.Page(), "window.ready")
 	w.Focus()
 	if runtime.GOOS == "windows" {
@@ -272,20 +292,26 @@ func TestContentWindowWebViewEditMenu(t *testing.T) {
 	}
 	menu("Select All")
 	waitForPage(t, v.Page(), "getSelection().toString() === 'hello'")
-	mygo.Clipboard.WriteText("before copy")
-	// Who had the keyboard as Copy was sent says, if it copies nothing,
-	// whether it went to the native UI or the page did not copy.
-	sent := foregroundState(w)
+	// If Copy copies nothing, who had the keyboard as it was sent says
+	// whether it went to the native UI; the page's commands and copies
+	// whether the page copied; the clipboard's state whether another
+	// program held it.
+	sent := foregroundState(w) + "; " + clipboardState()
 	menu("Copy")
+	held := ""
 	if !wait.Poll(func() bool {
 		if mygo.Clipboard.ReadText() == "hello" {
 			return true
 		}
+		if s := clipboardState(); held == "" && strings.Contains(s, "open by 0x") {
+			held = s
+		}
 		keepFront()
 		return false
 	}) {
-		t.Fatalf("Copy to copy the page's selection never happened (waited %v); as Copy was sent, %s; now %s, and the clipboard has %q",
-			wait.Guard, sent, foregroundState(w), mygo.Clipboard.ReadText())
+		page, _ := mygo.EvalAs[string](v.Page(), "JSON.stringify({commands: window.commands, copies: window.copies})")
+		t.Fatalf("Copy to copy the page's selection never happened (waited %v); as Copy was sent, %s; now %s; %s; the clipboard was seen open: %q; the page: %s; the clipboard has %q",
+			wait.Guard, sent, foregroundState(w), clipboardState(), held, page, mygo.Clipboard.ReadText())
 	}
 	menu("Cut")
 	eventually(t, "Cut to take the text out of the page", func() bool { return text() == "" })

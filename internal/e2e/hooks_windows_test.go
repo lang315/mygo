@@ -3,10 +3,14 @@
 package e2e
 
 import (
+	"fmt"
+	"os"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/wait"
@@ -197,6 +201,21 @@ func frontIsAnotherApp() bool { return !win.TestForegroundIsThisProcess() }
 func foregroundState(w *mygo.Window) (state string) {
 	mygo.RunOnMain(func() { state = win.TestForegroundState(w.NativeHandle()) })
 	return state
+}
+
+// clipboardState says how many times the clipboard changed in the session
+// (GetClipboardSequenceNumber) and who has it open now, if anyone: a
+// program reading it holds it, and a write then fails or waits.
+func clipboardState() string {
+	user32 := syscall.NewLazyDLL("user32.dll")
+	seq, _, _ := user32.NewProc("GetClipboardSequenceNumber").Call()
+	open, _, _ := user32.NewProc("GetOpenClipboardWindow").Call()
+	if open == 0 {
+		return fmt.Sprintf("clipboard sequence %d, open by none", uint32(seq))
+	}
+	var pid uint32
+	user32.NewProc("GetWindowThreadProcessId").Call(open, uintptr(unsafe.Pointer(&pid)))
+	return fmt.Sprintf("clipboard sequence %d, open by %#x of process %d (this one %d)", uint32(seq), open, pid, os.Getpid())
 }
 
 // foregroundDiag says what keeps w from coming to the front, for a wait for it
