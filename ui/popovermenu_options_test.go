@@ -394,3 +394,57 @@ func TestPopoverMenuButtonItem(t *testing.T) {
 		t.Errorf("Item styled %q, not the submenu's row", items)
 	}
 }
+
+// Item styles the rows after the skin's Metrics and row colors, as an app's
+// own calls on any part (TestAppSizesWinOverMetrics): its size and colors
+// win, and Metrics.RowHeight stays the least height of a row whose Item
+// sets padding alone, until the Item takes that minimum away too.
+func TestPopoverMenuButtonItemOverMetrics(t *testing.T) {
+	withMetrics(t, calmMetrics)
+	tint := RGB(200, 30, 30)
+	open := func(item func(Element)) *Tester {
+		tt := coreNewTester(func(c *context) {
+			coreColumn(c).Padding(20).Children(func() {
+				corePopoverMenuButton(c, "Actions", func(m *Menu) {
+					m.Item("Open")
+					m.Item("Close")
+				}, PopoverMenuButtonOptions{Item: item})
+			})
+		}, 400, 400)
+		tt.SetPreferences(Preferences{ReduceMotion: true, TextScale: 1})
+		tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+		if err := tt.Click("Actions"); err != nil {
+			t.Fatal(err)
+		}
+		return tt
+	}
+	for _, c := range []struct {
+		name string
+		item func(Element)
+		ok   func(h float32) bool
+	}{
+		{"the theme's padding", nil, func(h float32) bool { return sameSize(h, calmMetrics.RowHeight) }},
+		{"padding alone", func(e Element) { e.Padding(1, 8) }, func(h float32) bool { return sameSize(h, calmMetrics.RowHeight) }},
+		{"no minimum", func(e Element) { e.Padding(1, 8).MinHeight(0) }, func(h float32) bool { return h < calmMetrics.RowHeight }},
+		{"taller", func(e Element) { e.Height(44) }, func(h float32) bool { return sameSize(h, 44) }},
+	} {
+		tt := open(c.item)
+		if h := itemOf(t, tt, "Open").Bounds.H; !c.ok(h) {
+			t.Errorf("%s: a row is %v high, RowHeight %v", c.name, h, calmMetrics.RowHeight)
+		}
+	}
+	// The highlighted row: the skin's tint, or the Item's color over it.
+	for _, styled := range []bool{false, true} {
+		var item func(Element)
+		if styled {
+			item = func(e Element) { e.Background(tint) }
+		}
+		tt := open(item)
+		tt.Key(0, KeyDown)
+		got := fillOf(tt, itemOf(t, tt, "Open"))
+		bg, _ := tt.rt.c.rowSelected(tt.rt.c.theme)
+		if want := map[bool]Color{false: bg.SRGB(), true: tint}[styled]; got != want {
+			t.Errorf("Item %v: the highlighted row fills %v, want %v", styled, got, want)
+		}
+	}
+}

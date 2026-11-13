@@ -56,6 +56,8 @@ var hoverReaders = map[string]string{
 	"popovermenu.go engine.openDrawnMenuBelow":    "the app opened a menu (PopoverMenuButtonOptions.Open): acting",
 	"dragdrop.go engine.dragScroll":               "a drag: acting",
 	"dragdrop.go engine.paintDrag":                "a drag, at paint",
+	"dragdrop.go engine.draggingFrom":             "a drag, in prune after the build: the source is acting",
+	"dragdrop.go engine.retarget":                 "a drag, as the frame ends: a new target is built in the frame it asks for",
 	"data_drag.go engine.dataDragOver":            "an event",
 	"menu.go engine.menuRelease":                  "an event; a menu is acting",
 	"popovermenu.go menuParts.Popup":              "an open menu, in its overlay: acting",
