@@ -54,7 +54,7 @@ func TestStopRecord(t *testing.T) {
 
 // A mask and a glyph run are recorded as the glyphs are.
 func TestRecordSeesMasksAndRuns(t *testing.T) {
-	s := Shared()
+	s := newSystem() // not Shared(): another run's frames make 0xfeed lasting there
 	var u Uses
 	s.Record(&u)
 	draw := func() (int, int, []byte) { return 2, 2, []byte{1, 2, 3, 4} }
