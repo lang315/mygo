@@ -396,8 +396,11 @@ type coreText struct {
 	shapeScratch
 	nativeFonts
 	styles [2]uintptr // paragraph styles: left-to-right, right-to-left
-	srgb   uintptr
-	smooth bool // the user leaves font smoothing on
+	// delegates are the metrics of the inline objects of the text laid out
+	// last.
+	delegates delegateMetrics
+	srgb      uintptr
+	smooth    bool // the user leaves font smoothing on
 	// bands caches where glyphs' outlines cross underlines (inkInBand),
 	// by Font: a CTFont's address may be another's once it is released.
 	bands map[bandKey][2]float32
@@ -800,7 +803,7 @@ func (e *coreText) styleSpans(attributed uintptr, style Style, spans []Span, tex
 			objects += max(min(sp.End, len(text))-start, 0)
 		}
 	}
-	runDelegates.reset(objects)
+	e.delegates.reset(objects)
 	objects = 0
 	from := 0
 	for _, sp := range spans {
@@ -815,7 +818,7 @@ func (e *coreText) styleSpans(attributed uintptr, style Style, spans []Span, tex
 			// Each rune is an object of its own: a run Core Text sizes by
 			// its delegate.
 			for k := start; k < to; k++ {
-				if d := runDelegates.delegate(objects, sp.ObjectWidth, sp.ObjectHeight, sp.ObjectDescent); d != 0 {
+				if d := e.delegates.delegate(objects, sp.ObjectWidth, sp.ObjectHeight, sp.ObjectDescent); d != 0 {
 					ct.attributedSet(styled, cfRange{at[k], at[k+1] - at[k]}, runDelegates.attribute, d)
 					ct.release(d)
 				}
@@ -998,6 +1001,10 @@ func (e *coreText) shapeText(text []rune, style Style, spans []Span, width float
 			kept = &keptTypesetter{typesetter: typesetter, font: ct.retain(font), used: e.frame, text: slices.Clone(text), latin: plainLatin(text)}
 			e.typesetters[key] = kept
 		} else {
+			// Its objects' metrics stay pinned while it lives, and no
+			// longer: an engine of a System gone pins nothing (#1730). A
+			// typesetter kept has no spans, so no objects.
+			defer e.delegates.reset(0)
 			defer ct.release(typesetter)
 		}
 	}
