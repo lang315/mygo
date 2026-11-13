@@ -18,6 +18,8 @@ func textInput(c *context, value *string, multiline bool) *node {
 	e.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Background(t.FieldFill()).Border(1, t.Outline())
 	if multiline {
 		e.MinHeight(t.Space(20))
+	} else if h := t.Metrics.ControlHeight; h > 0 {
+		e.MinHeight(h)
 	}
 	e.builtWith(t)
 	setStyle(e, inputStyle, staticInput)

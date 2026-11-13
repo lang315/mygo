@@ -1274,6 +1274,9 @@ func (m *menuParts) drawnItem(it *platform.MenuItem, mi *MenuItem, marks, icons 
 		row = m.Item()
 	}
 	row.AlignItems(Center).Gap(t.Space(2)).Padding(t.Space(1.5), t.Space(2)).Radius(t.Radius).Shrink(0)
+	if h := t.Metrics.RowHeight; h > 0 {
+		row.MinHeight(h).PaddingY(0)
+	}
 	row.Label(it.Label).Disabled(!it.Enabled)
 	// Assistive technology reads the subtitle, the trailing text and the
 	// tooltip, if any, as the item's description, and the shortcut as its
@@ -1297,11 +1300,12 @@ func (m *menuParts) drawnItem(it *platform.MenuItem, mi *MenuItem, marks, icons 
 		// The way to the item highlighted in the submenu.
 		row.Background(t.SurfaceHover).TextColor(color)
 	case row.highlighted:
-		color, muted = t.AccentText, t.AccentText
-		if danger && legibleOn(t.Danger, c.accent(t), t.AccentText) {
+		bg, fg := c.rowSelected(t)
+		color, muted = fg, fg
+		if danger && legibleOn(t.Danger, bg, fg) {
 			color = t.Danger
 		}
-		row.Background(c.accent(t)).TextColor(color)
+		row.Background(bg).TextColor(color)
 	case danger:
 		row.TextColor(color)
 	}

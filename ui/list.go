@@ -911,7 +911,7 @@ func (s *ListState) sync(e *node, n int) {
 		s.version, s.versionFrame = s.Version, rt.frame
 	}
 	reach := s.reach(rt.frame, n)
-	s.heights.def = float64(e.c.theme.Space(8))
+	s.heights.def = float64(metricOr(e.c.theme.Metrics.RowHeight, e.c.theme.Space(8)))
 	if s.Key != nil && n > 0 {
 		// Not in the frame Version changed: following the top row after a
 		// re-sort would scroll to wherever it went; the place stays by index.

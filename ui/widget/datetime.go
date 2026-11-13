@@ -69,12 +69,21 @@ func (p *DateTimePickerWidget) OnChange(fn func()) *DateTimePickerWidget {
 func (p *DateTimePickerWidget) build(c *ui.Context) ui.Element {
 	v, changed := p.value.bind()
 	var moved bool
+	// The app's height wins over the theme's Metrics, which the fields take
+	// as their least: they fill the picker instead (style.go's apply).
+	fill := p.style.set&pHeight != 0 && c.Theme().Metrics != (ui.Metrics{})
+	field := func(e ui.Element) ui.Element {
+		if fill {
+			e.MinHeight(0).HeightPercent(100)
+		}
+		return e
+	}
 	row := ui.Row(c).Gap(c.Theme().Space(2)).Children(func() {
 		if p.format != TimeOnly {
-			moved = ui.DateInput(c, v).Changed() || moved
+			moved = field(ui.DateInput(c, v)).Changed() || moved
 		}
 		if p.format != DateOnly {
-			moved = ui.TimeInput(c, v).Changed() || moved
+			moved = field(ui.TimeInput(c, v)).Changed() || moved
 		}
 	})
 	reportDate(&p.value, changed, moved, p.onChange)

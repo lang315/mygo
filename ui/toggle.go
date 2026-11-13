@@ -63,6 +63,9 @@ func segmentTrack(c *context) *node {
 	t := c.theme
 	g := coreRow(c).Shrink(0).AlignItems(Stretch).Padding(t.Space(0.5)).Gap(t.Space(0.5)).
 		Radius(t.Radius).Background(t.Surface).Border(1, t.Outline())
+	if h := t.Metrics.ControlHeight; h > 0 {
+		g.MinHeight(h)
+	}
 	g.FocusGroup(Horizontal | Vertical)
 	return g
 }
@@ -158,6 +161,9 @@ func coreSegmented(c *context, selected *int, labels ...string) *node {
 	parts := coreSegmentedBase(c, selected, len(labels))
 	g := parts.Track
 	g.AlignItems(Stretch).Padding(t.Space(0.5)).Gap(t.Space(0.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Outline())
+	if h := t.Metrics.ControlHeight; h > 0 {
+		g.MinHeight(h)
+	}
 	saved := c.buttons
 	c.buttons = segmentButtons
 	g.Children(func() {

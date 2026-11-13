@@ -45,6 +45,9 @@ func coreTabsKeyed(c *context, selected *int, keys []any, labels []string) *node
 	list.Children(func() {
 		for i, label := range labels {
 			tab := tabs.Tab(i).Padding(t.Space(2), t.Space(3)).FocusRing(false)
+			if h := t.Metrics.TabHeight; h > 0 {
+				tab.MinHeight(h).AlignItems(Center)
+			}
 			on := i == *selected
 			var line Color
 			if on {

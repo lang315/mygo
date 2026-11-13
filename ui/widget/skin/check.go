@@ -30,6 +30,8 @@ func check(t *skinhook.Tokens, dark bool) error {
 	pair("Text2 on Chrome", t.Text2, t.Chrome, 4.5)
 	pair("Text3 on Control", t.Text3, t.Control, 4.5)
 	pair("Text2 on RowSelected", t.Text2, t.RowSelected, 4.5)
+	pair("Text on RowSelected", t.Text, t.RowSelected, 4.5)
+	pair("Text2 on RowHover", t.Text2, t.RowHover, 4.5)
 	pair("OnAccent on Accent.Base", t.OnAccent, t.Accent.Base, 4.5)
 	for _, f := range []struct {
 		name string

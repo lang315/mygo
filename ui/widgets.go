@@ -156,7 +156,7 @@ func button(c *context, label string, primary bool) *node {
 func styleButton(c *context, b *node, primary bool) {
 	t := c.theme
 	b.Padding(t.Space(1.5), t.Space(3.5)).Gap(t.Space(1.5)).Radius(t.Radius)
-	base, fg, border := t.Surface, t.Text, t.Outline()
+	base, fg, border := t.Surface, t.Text, t.buttonBorder()
 	b.buttonLook = buttonPlain
 	switch {
 	case primary && c.emphasized(t):
@@ -176,6 +176,9 @@ func styleButton(c *context, b *node, primary bool) {
 		base, border = Color{}, Color{}
 		b.segment = true
 		b.buttonLook = buttonFlat
+	}
+	if h := t.Metrics.ControlHeight; h > 0 && !b.segment {
+		b.MinHeight(h) // a segment's track takes it
 	}
 	b.Background(base).TextColor(fg)
 	if border.A > 0 {
@@ -303,7 +306,8 @@ func coreCheckboxState(c *context, state *CheckState, label string) *node {
 func checkboxFace(c *context, row *node, state int8, label string) {
 	t := c.theme
 	row.Children(func() {
-		box := coreBox(c).Size(t.Space(4), t.Space(4)).Radius(t.Space(1)).Shrink(0)
+		s := metricOr(t.Metrics.CheckSize, t.Space(4))
+		box := coreBox(c).Size(s, s).Radius(t.Space(1)).Shrink(0)
 		paintCheckbox(c, box, state)
 		if label != "" {
 			coreText(c, label)
@@ -318,7 +322,8 @@ func coreRadio[T comparable](c *context, selected *T, value T, label string) *no
 	row := coreRadioBase(c, selected, value).Gap(t.Space(2)).FocusRing(false)
 	on := *selected == value
 	row.Children(func() {
-		dot := coreBox(c).Size(t.Space(4), t.Space(4)).Radius(t.Space(2)).Shrink(0)
+		s := metricOr(t.Metrics.CheckSize, t.Space(4))
+		dot := coreBox(c).Size(s, s).Radius(s / 2).Shrink(0)
 		paintRadio(c, dot, on)
 		if label != "" {
 			coreText(c, label)
@@ -332,7 +337,8 @@ func coreRadio[T comparable](c *context, selected *T, value T, label string) *no
 // rests.
 func coreSwitch(c *context, on *bool) *node {
 	t := c.theme
-	sw := coreSwitchBase(c, on).Size(t.Space(9), t.Space(5)).Radius(t.Space(2.5))
+	h := metricOr(t.Metrics.SwitchHeight, t.Space(5))
+	sw := coreSwitchBase(c, on).Size(metricOr(t.Metrics.SwitchWidth, t.Space(9)), h).Radius(h / 2)
 	pos := sw.animateRest("knob", b2f(*on), 140*time.Millisecond)
 	off := t.Outline() // the off track identifies the switch: 3:1 against the window
 	if pos > 0 {
@@ -785,7 +791,13 @@ func coreSelect(c *context, selected *string, options []string) *node {
 		panel.flags |= flagScrollY | flagHover
 		for _, opt := range options {
 			item := sel.Item(opt).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
+			if h := t.Metrics.RowHeight; h > 0 {
+				item.MinHeight(h).PaddingY(0).AlignItems(Center)
+			}
 			switch {
+			case item.Highlighted() && t.RowSelected.A != 0:
+				bg, fg := c.rowSelected(t)
+				item.Background(bg).TextColor(fg)
 			case item.Highlighted():
 				item.Background(t.Accent).TextColor(t.AccentText)
 			case opt == *selected:

@@ -301,6 +301,37 @@ and GTK draw them. Size your own
 elements with the theme too, and they follow it: `t.Space(3)` is three
 units of its spacing, and `t.Rem(2)` twice its font size, as CSS's rem.
 
+`Metrics` sets the heights of controls and rows outright, where
+`Spacing` would move every gap too. Each field left zero keeps the size
+the paddings give:
+
+```go
+t.Metrics = ui.Metrics{
+	ControlHeight: 36, // buttons, text inputs, combo boxes, selects, number, date and time inputs, segmented controls
+	RowHeight:     30, // rows of tables, lists, trees and outlines; popup menu items; options
+	HeaderHeight:  30, // a table's column headers (zero: RowHeight)
+	TabHeight:     40, // tab headers
+	CheckSize:     15, // the box of a check box, the dot of a radio button
+	SwitchWidth:   40, SwitchHeight: 22,
+}
+```
+
+They are minimums: larger text grows a control rather than clip it, and
+the user's text size scales them, as it scales `FontSize` (a 36 control
+is 54 at 150 %). An element's own `Height` larger than the metric wins;
+a smaller one needs the minimum taken away too, as
+`ui.Button(c, "OK").Height(24).MinHeight(0)`: `.Height(24)` alone stays
+36. A table's `ListState.RowHeight` wins in either direction.
+
+`ButtonBorder` outlines plain buttons, so that they can be lighter than
+the outline of inputs (`ControlBorder`), which the user must find to type
+in; left zero, buttons take `Outline()`. `RowHover` fills the row under
+the pointer (zero: `SurfaceHover`), and `RowSelected`, with
+`RowSelectedText` on it (zero: `Text`), fills chosen rows, tree and
+sidebar items, a table's block of cells, and the popup item or option the
+keys are on: a tint in place of the accent, which stays in an inactive
+window. Left zero, they are the accent and `AccentText`, as before.
+
 Tooltips and toasts are the theme turned over, so that they stand out from
 what they are over: filled with `Inverse`, with `InverseText` on it, which
 left zero are the theme's `Text` and `Background`. A dark app that would

@@ -539,6 +539,9 @@ func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 // coreSelect), from public API, showing text.
 func comboTrigger(ctx *ui.Context, e ui.Element, text string) ui.Element {
 	t := ctx.Theme()
+	if h := t.Metrics.ControlHeight; h > 0 {
+		e.MinHeight(h)
+	}
 	return e.Padding(t.Space(1.5), t.Space(3)).Radius(t.Radius).Border(1, t.Outline()).Background(t.Surface).
 		Justify(ui.SpaceBetween).AlignItems(ui.Center).Gap(t.Space(2)).MinWidth(t.Space(35)).
 		Children(func() {
@@ -557,13 +560,31 @@ func comboPanel(t *ui.Theme, panel ui.Element) {
 // or not, and the children fn builds.
 func comboOption(t *ui.Theme, item ui.Element, chosen bool, fn func()) ui.Element {
 	item.Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius).Gap(t.Space(1.5)).AlignItems(ui.Center)
+	if h := t.Metrics.RowHeight; h > 0 {
+		item.MinHeight(h).PaddingY(0)
+	}
 	switch {
 	case item.Highlighted():
-		item.Background(t.Accent).TextColor(t.AccentText)
+		bg, fg := highlightOf(t)
+		item.Background(bg).TextColor(fg)
 	case chosen:
 		item.Background(t.Surface)
 	}
 	return item.Children(fn)
+}
+
+// highlightOf returns the fill and the text of the option the keys or the
+// pointer are on: the theme's RowSelected and RowSelectedText (Text when
+// zero), or the accent where it sets none, as ui's options.
+func highlightOf(t *ui.Theme) (bg, fg ui.Color) {
+	if t.RowSelected.A == 0 {
+		return t.Accent, t.AccentText
+	}
+	fg = t.RowSelectedText
+	if fg.A == 0 {
+		fg = t.Text
+	}
+	return t.RowSelected, fg
 }
 
 // sectionTitle shows a section's icon and title: muted when it is a header
@@ -663,6 +684,9 @@ func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 	t, sections := ctx.Theme(), c.sections
 	frame := ui.Row(ctx).Radius(t.Radius).Border(1, t.Outline()).Background(t.FieldFill()).
 		AlignItems(ui.Center).MinWidth(t.Space(35))
+	if h := t.Metrics.ControlHeight; h > 0 {
+		frame.MinHeight(h)
+	}
 	frame.Children(func() {
 		cb := ui.ComboboxBase(ctx, p)
 		cb.Input.Grow(1).Padding(t.Space(1.5), t.Space(3)).OnChange(c.typed())
@@ -691,8 +715,12 @@ func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 				}
 				for _, o := range shown {
 					item := cb.Item(o.Value).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
+					if h := t.Metrics.RowHeight; h > 0 {
+						item.MinHeight(h).PaddingY(0).AlignItems(ui.Center)
+					}
 					if item.Highlighted() {
-						item.Background(t.Accent).TextColor(t.AccentText)
+						bg, fg := highlightOf(t)
+						item.Background(bg).TextColor(fg)
 					}
 					item.Children(func() { ui.Text(ctx, o.Text).SingleLine() })
 				}
