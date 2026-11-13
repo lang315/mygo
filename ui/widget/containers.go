@@ -329,6 +329,8 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 		if !n.strip.empty() {
 			st := n.strip.effective(c.Theme().Dark, strip.Hovered(), strip.Focused(), strip.Pressed(), n.disabled)
 			st.apply(c, strip, n) // n keys the strip's text color, apart from the control's
+		} else if tk, _ := skinOf(c); tk != nil {
+			strip.Background(tk.Chrome).BorderWidth(0, 0, 1, 0).BorderColor(c.Theme().Border)
 		}
 		// Tabs clamps *p while it builds, without OnChange: see it here.
 		if changed := *p != n.page.value; changed {
@@ -527,8 +529,15 @@ func (k *CardWidget) ShowBody(on bool) *CardWidget { k.change(func() { k.hideBod
 
 func (k *CardWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
-	return ui.Column(c).Gap(t.Space(2)).Padding(t.Space(3)).Border(1, t.Border).Radius(t.Radius).
-		Background(t.Surface).Children(func() {
+	col := ui.Column(c).Gap(t.Space(2)).Padding(t.Space(3)).Border(1, t.Border).Radius(t.Radius).
+		Background(t.Surface)
+	if tk, _ := skinOf(c); tk != nil {
+		col.Radius(tk.RadiusCard)
+		if sh := tk.Elevation[1]; sh.Color.A != 0 {
+			col.Shadow(0, sh.Y, sh.Blur, sh.Spread, sh.Color)
+		}
+	}
+	return col.Children(func() {
 		outer := axis
 		axis = vertical
 		defer func() { axis = outer }()

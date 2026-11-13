@@ -29,14 +29,30 @@ func (s *ToolStripWidget) Add(items ...Control) *ToolStripWidget {
 }
 
 func (s *ToolStripWidget) build(c *ui.Context) ui.Element {
-	return ui.Toolbar(c, func() {
+	tk, scale := skinOf(c)
+	bar := ui.Toolbar(c, func() {
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()
 		for _, it := range s.items {
-			render(c, it)
+			e := render(c, it)
+			if _, sep := it.(*SeparatorWidget); sep && tk != nil {
+				// Across a separator, ToolbarGap + ToolbarGroupGap from control to
+				// control, its line of 1 in the middle.
+				e.MarginX(((tk.ToolbarGroupGap-tk.ToolbarGap)*scale - 1) / 2)
+			}
 		}
 	})
+	if tk != nil {
+		t := c.Theme()
+		line := tk.LineStrong
+		if c.Preferences().HighContrast {
+			line = line.Mix(tk.Text, 0.45)
+		}
+		bar.Background(tk.Chrome).Padding(tk.ToolbarPadTop*scale, t.Space(1), tk.ToolbarPadBottom*scale, t.Space(1)).
+			Gap(tk.ToolbarGap*scale).BorderWidth(0, 0, 1, 0).BorderColor(line)
+	}
+	return bar
 }
 
 // ToolButtonWidget is a button of a tool strip: an icon, text, or both,
@@ -158,7 +174,11 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 	}
 	e.Destructive(b.destructive)
 	if b.icon != nil || b.png != nil {
-		iconFace(c, e, b.icon, b.png, b.text, b.tooltip, true)
+		side := float32(0)
+		if tk, scale := skinOf(c); tk != nil {
+			side = tk.ToolbarIcon * scale
+		}
+		iconFace(c, e, b.icon, b.png, b.text, b.tooltip, true, side)
 	} else if b.text == "" && b.tooltip != "" {
 		e.Label(b.tooltip) // a button with no text is named by its tooltip
 	}

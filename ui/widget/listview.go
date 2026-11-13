@@ -515,6 +515,9 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		minWidth, height = 180, max(30, cmp.Or(lv.imageSize, 16)+8)
 		if lv.mode == ViewList {
 			minWidth = 1e6 // one column
+			if h := c.Theme().Metrics.RowHeight; h > 0 {
+				height = max(h, cmp.Or(lv.imageSize, 16)+8) // rows, as Details' (an icon view keeps its size)
+			}
 		}
 	}
 	// The boxes of the large icons are the grid's, at the corner of the
