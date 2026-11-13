@@ -234,11 +234,12 @@ mygo.Shell.PreviewItem(path)                   // Quick Look, as the space bar d
 mygo.Shell.Beep()
 ```
 
-`TrashItem` never deletes for good: when the item cannot go to the trash
-it fails and leaves the item where it is. On Windows that is an item too
-big for the recycle bin, or on a drive without one, as network shares and
-many removable drives are, which Windows would otherwise delete without
-asking.
+`TrashItem` fails and leaves the item where it is when it cannot go to
+the trash. On Windows that is an item too big for the recycle bin, or on
+a drive without one, as network shares and many removable drives are,
+which Windows would otherwise delete without asking. In the rare case
+Windows deletes it for good all the same, `TrashItem` fails and says it
+was deleted.
 
 `PreviewItem` shows a file in the Quick Look panel, the preview Finder
 opens with the space bar: the panel stays open until the user closes it,
@@ -760,3 +761,24 @@ needs the app installed, since it identifies apps by their desktop entry.
 The shortcut works shortly after `Register` returns. Windows the function
 shows or focuses take the focus with the key press's activation token where
 the desktop provides one, as GNOME does.
+
+Such a desktop shows the app's shortcuts to the user, where it asks to
+confirm them and in its settings, and the user may decline one, which then
+does nothing, or give it other keys. `RegisterWith` tells the desktop what
+the shortcut does, and tells the app the keys the shortcut got:
+
+```go
+err := mygo.GlobalShortcut.RegisterWith("CmdOrCtrl+Alt+.", mygo.GlobalShortcutOptions{
+	Description: "Stop all",
+	OnKeys: func(keys string) {
+		// "Ctrl+Alt+.", other keys the user picked, or "" for none.
+		stopKeys = keys
+	},
+}, stopAll)
+```
+
+Without a description the desktop shows the accelerator in its place.
+`OnKeys` runs on the main thread once the desktop answered and again when
+the user changes the keys; it gets them as the desktop writes them, so show
+them as they are. Where the app takes the keys itself (macOS, Windows, X11)
+it is not called, and the shortcut has its accelerator's keys.

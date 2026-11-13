@@ -123,7 +123,7 @@ func (e *node) PopoverMenuButton(build func(m *Menu), options ...PopoverMenuButt
 		if o.At != 0 || o.Self != 0 {
 			d.menu.attach = attachment(1 + min(o.At, AnchorBottomEnd)*15 + min(o.Self, AnchorBottomEnd))
 		}
-		d.panel = o.Panel
+		d.panel, d.item = o.Panel, o.Item
 	}
 	rt.drawMenu(e, build)
 	if synced != nil {
@@ -173,6 +173,17 @@ type PopoverMenuButtonOptions struct {
 	// The menu keeps its place, its gap from the button and its items'
 	// look: Panel sets no margin and adds no children.
 	Panel func(panel Element)
+	// Item, when set, styles the row of each item of the menu and of its
+	// submenus, after the theme's look and with the same calls, as Panel
+	// does the panel: a slimmer row, say, or other corners.
+	//
+	//	ui.PopoverMenuButtonOptions{Item: func(item ui.Element) {
+	//		item.Padding(4, 8).Radius(6)
+	//	}}
+	//
+	// The row keeps its content and the theme's highlight; Item adds no
+	// children.
+	Item func(item Element)
 }
 
 type menuOpenKey struct{}
@@ -884,6 +895,9 @@ type drawnMenu struct {
 	// panel styles its panels after the theme's look, as the menu button
 	// asked in this build (PopoverMenuButtonOptions.Panel).
 	panel func(panel Element)
+	// item styles the rows of its items after the theme's look
+	// (PopoverMenuButtonOptions.Item).
+	item func(item Element)
 }
 
 // drawnIcon is an icon of a drawn menu in a color: the color of the text
@@ -1140,7 +1154,7 @@ func (m *menuParts) drawBuilt(run *menuRun, pm *platform.Menu, text uint64, d *d
 				continue
 			}
 			mi := run.items[it.ID-1]
-			row := m.drawnItem(it, mi, marks, icons)
+			row := m.drawnItem(d, it, mi, marks, icons)
 			refs[row.id] = menuRef{seq: it.ID, label: it.Label, key: mi.key}
 			if sub := it.Submenu; it.Type == platform.MenuItemSubmenu && sub != nil {
 				m.Submenu(row, func(panel *node) {
@@ -1250,11 +1264,12 @@ func menuItemByID(items []*platform.MenuItem, id int) *platform.MenuItem {
 // menu.
 type menuItemKey struct{ id string }
 
-// drawnItem builds item it of the menu being drawn, with what mi, the
-// item of the menu's function, adds to it, with room for the marks of
-// check box and radio items when marks is set, and for the icons of the
-// items around it when icons is, so that their labels line up.
-func (m *menuParts) drawnItem(it *platform.MenuItem, mi *MenuItem, marks, icons bool) *node {
+// drawnItem builds item it of the menu being drawn, d (nil for a menu of
+// menuParts), with what mi, the item of the menu's function, adds to it,
+// with room for the marks of check box and radio items when marks is set,
+// and for the icons of the items around it when icons is, so that their
+// labels line up.
+func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem, marks, icons bool) *node {
 	c := m.c
 	t := c.theme
 	sub := it.Type == platform.MenuItemSubmenu && it.Submenu != nil
@@ -1311,6 +1326,11 @@ func (m *menuParts) drawnItem(it *platform.MenuItem, mi *MenuItem, marks, icons 
 	}
 	if it.Destructive {
 		row.FontWeight(600) // semibold, as the menus the backends draw show it
+	}
+	// The app's look of rows comes after the skin's (Metrics.RowHeight,
+	// rowSelected): an app's size or color wins.
+	if d != nil && d.item != nil {
+		d.item(wrapElement(row))
 	}
 	rtl := row.rtl()
 	row.Children(func() {

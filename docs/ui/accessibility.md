@@ -248,9 +248,10 @@ say a field has them: `ui.AutoCompleteList` for a popup of the values
 matching what was typed, `AutoCompleteInline` for the rest of the value
 inserted after the caret, selected, and `AutoCompleteBoth` for both. A
 [combobox](combobox.md), an [autocomplete](autocomplete.md) and a
-[token field](token-field.md) with suggestions tell `AutoCompleteList`
-themselves; a combobox of your own, with `Expanded` for its popup and
-`ActiveDescendant` for the option the arrows are on, tells it too:
+[token field](token-field.md) with suggestions or a `Query` tell
+`AutoCompleteList` themselves; a combobox of your own, with `Expanded`
+for its popup and `ActiveDescendant` for the option the arrows are on,
+tells it too:
 
 ```go
 in := ui.TextInputBase(c, &app.query).Role(ui.RoleComboBox).Label("Search")

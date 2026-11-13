@@ -14,6 +14,7 @@ type node struct {
 	clip    *clipDef
 	mask    *maskDef
 	shape   *shape
+	text    *textNode
 	kids    []*node
 	// bbox is the box around its geometry in its user space, for what
 	// is in objectBoundingBox units.
@@ -114,13 +115,19 @@ type compiler struct {
 	current bool
 	// other is set once a paint is another color or a gradient.
 	other bool
+	// ctx is the shape whose markers are being compiled, which
+	// context-fill and context-stroke paint with.
+	ctx *shape
+	rep *report
+	// ext compiles text and markers, which are left out without it.
+	ext *extras
 }
 
-func newCompiler(root *elem) *compiler {
+func newCompiler(root *elem, rep *report, ext *extras) *compiler {
 	c := &compiler{
 		root: root, ids: map[string]*elem{}, styles: map[*elem]*style{},
 		grads: map[*elem]*gradient{}, clips: map[*elem]*clipDef{}, masks: map[*elem]*maskDef{},
-		budget: 1 << 17, base: initialStyle(),
+		budget: 1 << 17, base: initialStyle(), rep: rep, ext: ext,
 	}
 	walk(root, func(e *elem) {
 		if id := e.attrs["id"]; id != "" {
@@ -227,6 +234,8 @@ func (c *compiler) finish(n *node, st *style) {
 	if s := n.shape; s != nil {
 		n.bbox, n.hasBox = s.path.bounds()
 		n.single = s.fill.kind == paintNone || s.stroke.kind == paintNone
+	} else if n.text != nil {
+		n.bbox, n.hasBox = n.text.estimate(), true
 	} else {
 		for _, k := range n.kids {
 			if !k.hasBox {
@@ -246,7 +255,7 @@ func (c *compiler) finish(n *node, st *style) {
 // elem compiles a graphics element, or returns nil for others.
 func (c *compiler) elem(e *elem, parent *style) *node {
 	switch e.name {
-	case "g", "a", "switch", "svg", "use", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon":
+	case "g", "a", "switch", "svg", "use", "text", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon":
 	default:
 		return nil
 	}
@@ -285,6 +294,14 @@ func (c *compiler) elem(e *elem, parent *style) *node {
 		if !c.use(n, e, &st) {
 			return nil
 		}
+	case "text":
+		if c.ext == nil {
+			return nil
+		}
+		// Its runs may be visible where it is not.
+		if n.text = c.ext.text(c, e, &st); n.text == nil {
+			return nil
+		}
 	default:
 		if !st.visible {
 			return nil
@@ -299,8 +316,25 @@ func (c *compiler) elem(e *elem, parent *style) *node {
 			width: st.strokeWidth, miter: st.miterLimit, cap: st.cap, join: st.join,
 			dashes: st.dashes, dashOffset: st.dashOffset, strokeFirst: st.strokeFirst,
 		}
+		if c.ext == nil {
+			break
+		}
+		if ms := c.ext.markers(c, e, &pa, &st, n.shape); len(ms) > 0 {
+			// The shape, then its markers over it.
+			body := &node{m: identity, shape: n.shape}
+			c.finish(body, &c.base)
+			n.shape, n.kids = nil, append([]*node{body}, ms...)
+			if t, ok := e.attrs["transform"]; ok {
+				n.m = parseTransform(t)
+			}
+			c.finish(n, &st)
+			// What is in its objectBoundingBox units spans the shape
+			// alone.
+			n.bbox, n.hasBox = body.bbox, body.hasBox
+			return n
+		}
 	}
-	if n.shape == nil && len(n.kids) == 0 {
+	if n.shape == nil && n.text == nil && len(n.kids) == 0 {
 		return nil
 	}
 	if t, ok := e.attrs["transform"]; ok {
@@ -460,6 +494,14 @@ func (c *compiler) paint(ps paintSpec, st *style) paint {
 		}
 		c.current = true
 		return paint{kind: paintCurrent}
+	case specContextFill, specContextStroke:
+		if c.ctx == nil {
+			return paint{}
+		}
+		if ps.kind == specContextFill {
+			return c.ctx.fill
+		}
+		return c.ctx.stroke
 	case specURL:
 		if el := c.ids[ps.id]; el != nil && (el.name == "linearGradient" || el.name == "radialGradient") {
 			g := c.gradient(el)
@@ -468,6 +510,9 @@ func (c *compiler) paint(ps paintSpec, st *style) paint {
 			}
 			c.other = true
 			return paint{kind: paintGradient, grad: g}
+		}
+		if el := c.ids[ps.id]; el != nil {
+			c.rep.add("<" + el.name + ">") // a pattern, or a paint server MyGo does not know
 		}
 		// What the reference falls back to, or nothing.
 		return c.paint(paintSpec{kind: ps.fallback, color: ps.color}, st)
@@ -642,6 +687,9 @@ func (c *compiler) clipKid(k *elem, parent *style, depth int) *node {
 			return nil
 		}
 		n.shape = &shape{path: pa, evenOdd: st.clipEvenOdd}
+	case k.name == "text":
+		c.rep.add("<text> in <clipPath>")
+		return nil
 	default:
 		return nil
 	}

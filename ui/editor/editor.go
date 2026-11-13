@@ -80,6 +80,9 @@ type options struct {
 	// NoPointerHover.
 	hoverDelay     time.Duration
 	noPointerHover bool
+	// noDefinitionClick and noDefinitionLink are State's
+	// NoDefinitionClick and NoDefinitionLink.
+	noDefinitionClick, noDefinitionLink bool
 }
 
 // sharedScroll is the vertical scroll several editors share.
@@ -197,7 +200,11 @@ type editor struct {
 	hoverLine    int
 	// region is the part of the editor under the pointer, which its
 	// cursor and the scroll bars' highlight show.
-	region     region
+	region region
+	// link is the word under the pointer that Cmd+click would go to the
+	// definition of, which shows as a link while Cmd is held; none when
+	// its ends are equal.
+	link       [2]int
 	scrollbar  scrollbarDrag
 	frameNow   time.Time
 	needsBuild bool
@@ -426,6 +433,7 @@ func (ed *editor) resetForBuffer() {
 	ed.folds, ed.autoclosed, ed.marked, ed.diags = nil, nil, nil, nil
 	ed.view.inlays, ed.suggestion = nil, ""
 	ed.view.repls, ed.view.replCross = nil, nil
+	ed.view.lineStyles, ed.view.stylesDirty = nil, true
 	ed.view.replsChanged()
 	ed.complete.close()
 	ed.hover.close()
@@ -518,8 +526,8 @@ func (ed *editor) caretRect(off int) (ui.Rect, bool) {
 	ri := l.rowOf(d, false)
 	r := &l.rows[ri]
 	x := v.xOf(l, r, d)
-	y := ed.rowTop(line) + float64(ri)*float64(v.lineHeight)
-	return ui.Rect{X: x, Y: float32(y), W: 2, H: v.lineHeight}, true
+	y := ed.rowTop(line) + float64(ri)*float64(l.rowHeight)
+	return ui.Rect{X: x, Y: float32(y), W: 2, H: v.rowHeight(line)}, true
 }
 
 // offsetAt returns the offset nearest to x, y in the content.
@@ -544,7 +552,7 @@ func (ed *editor) offsetAt(x float32, y float64) int {
 	case y >= g.below:
 		ri = len(l.rows) - 1
 	default:
-		ri = min(int((y-g.rows)/float64(v.lineHeight)), len(l.rows)-1)
+		ri = min(int((y-g.rows)/float64(l.rowHeight)), len(l.rows)-1)
 	}
 	d := v.dispAt(l, &l.rows[ri], x)
 	return l.start + l.fromDisp(d)
@@ -575,8 +583,8 @@ func (ed *editor) overTrailingInlay(x float32, y float64) bool {
 			if from >= to {
 				continue
 			}
-			top := ed.rowTop(line) + float64(rowIndex)*float64(v.lineHeight)
-			if y < top || y >= top+float64(v.lineHeight) {
+			top := ed.rowTop(line) + float64(rowIndex)*float64(l.rowHeight)
+			if y < top || y >= top+float64(l.rowHeight) {
 				continue
 			}
 			left, right := v.xOf(l, row, from), v.xOf(l, row, to)
@@ -681,7 +689,7 @@ func (ed *editor) doReveal() {
 		return
 	}
 	lh := float64(v.lineHeight)
-	top, bottom := float64(cr.Y), float64(cr.Y)+lh
+	top, bottom := float64(cr.Y), float64(cr.Y+cr.H)
 	h := float64(ed.viewH)
 	margin := min(3*lh, max(0, (h-lh)/2))
 	switch mode {

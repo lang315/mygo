@@ -90,8 +90,8 @@ type renderer struct {
 
 // Render draws s into dst, which must be s.Width×s.Height.
 func Render(dst *Image, s *scene.Scene) {
-	drawCanvases(s)
 	var r Renderer
+	r.drawCanvases(s)
 	r.d.draw(dst, s, image.Rect(0, 0, dst.W, dst.H), r.opBounds(s))
 }
 
@@ -1538,6 +1538,9 @@ func (r *renderer) image(op *scene.Op) {
 	opacity := op.Opacity
 	if opacity == 0 {
 		opacity = 1
+	}
+	if r.imagePixels(op, opacity) {
+		return
 	}
 	radii := scene.Corners(op.Rect, op.Radii, op.Continuous)
 	box := newShape(op.Rect, radii)

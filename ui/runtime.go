@@ -67,6 +67,10 @@ type host interface {
 	// regional formats; they cost nothing.
 	locale() string
 	region() i18n.Region
+	// textSystem returns the text system the window's frames shape and
+	// paint in: a Tester's window has one of its own, so Testers run in
+	// parallel, and the other windows share the process's.
+	textSystem() *text.System
 	// rightToLeft reports whether the window is laid out right to left,
 	// as its language reads.
 	rightToLeft() bool
@@ -316,6 +320,9 @@ type engine struct {
 	// journal keeps the built values of the fields written after the
 	// build (journal.go).
 	journal journal
+	// builtSnap is what the view built, the checkBuilt of the tests: its
+	// own of the engine's, as Testers check their frames in parallel.
+	builtSnap *builtSnapshot
 	// videos are the videos of system engines the frame being built
 	// shows, shownVideos those the last one showed, and videoSweep the
 	// frame that last compared them (sweepVideos).
@@ -493,6 +500,10 @@ type engine struct {
 	// cellAccess is the part of tables with a current cell that assistive
 	// technology reaches, set as cellClick is.
 	cellAccess *cellAccessHooks
+	// listEnds are the lists whose EndReached the frame calls once laid
+	// out, through reachListEnds, set as the first is queued.
+	listEnds      []*ListState
+	reachListEnds func(rt *engine)
 	// pressDragger is the element around the one pressed that drags a
 	// value, which takes the press as it moves (dragMove), or 0.
 	pressDragger uint64
@@ -772,7 +783,7 @@ type keyEvent struct {
 }
 
 func newRuntime(view func(*context), h host) *engine {
-	rt := &engine{view: view, host: h, text: textSystem(), states: map[uint64]*state{}, kept: map[uint64]bool{}, windowFocused: true}
+	rt := &engine{view: view, host: h, text: h.textSystem(), states: map[uint64]*state{}, kept: map[uint64]bool{}, windowFocused: true}
 	rt.c.rt = rt
 	rt.owner = weak.Make(rt)
 	rt.owners = &owners{}
@@ -851,6 +862,8 @@ func (rt *engine) runFrame() {
 	rt.c.titleBar = rt.titleBar()
 	rt.c.vibrancy = rt.host.vibrancy()
 	rt.text.BeginFrame()
+	rt.paths.large = rt.paths.large[:0]
+	rt.paths.switching = false
 	rt.gen = rt.text.Generation()
 	rt.painted = [3]float32{w, h, scale}
 	rt.animating, rt.repainting, rt.repaintAt = false, false, time.Time{}
@@ -859,9 +872,14 @@ func (rt *engine) runFrame() {
 	rt.routeKeys()
 	rt.glideWheels(now)
 	rt.glideSnaps(now)
-	if rt.drag != nil {
+	if d := rt.drag; d != nil {
+		// A copy of the source as it first showed, for the frames that
+		// build it no more.
+		if d.elem != nil && d.ghost == nil && !d.native {
+			d.ghost = dragGhost(d.elem)
+		}
 		// The source's element is this frame's, if it builds one.
-		rt.drag.elem = nil
+		d.elem = nil
 	}
 	rt.dragScroll()
 	rt.scrollTextSelection()
@@ -1019,7 +1037,7 @@ func (rt *engine) runFrame() {
 	for try := 0; try < 2 && rt.text.Full(); try++ {
 		// The glyph atlas filled up and left some out: make room, keeping
 		// what the frame draws, and paint it again.
-		rt.text.MakeRoom()
+		rt.makeRoom(try == 1)
 		rt.paint(root, w, h, scale)
 	}
 	if checkBuilt != nil {
@@ -1058,6 +1076,11 @@ func (rt *engine) runFrame() {
 		h.announced = append(h.announced, rt.announcements...)
 	}
 	rt.announcements = rt.announcements[:0]
+	if len(rt.listEnds) > 0 {
+		// After the frame, as its layout found them: what they load shows
+		// in the frames after.
+		rt.reachListEnds(rt)
+	}
 	rt.next()
 	if rt.viewMoved {
 		// What a view read of whether an element is in view (watchView)
@@ -1076,6 +1099,7 @@ func (rt *engine) runFrame() {
 	// than what it was over as the press began, in the frame this asks
 	// for.
 	rt.rehover(true)
+	rt.retarget()
 	rt.armTimer()
 	rt.showMenu()
 	rt.c.finish()
@@ -1257,6 +1281,8 @@ func (rt *engine) repaintFrame(w, h, scale float32) {
 	start := time.Now()
 	rt.c.now = rt.frameTime()
 	rt.text.BeginFrame()
+	rt.paths.large = rt.paths.large[:0]
+	rt.paths.switching = false
 	rt.repainting, rt.repaintAt = false, time.Time{}
 	// What the last frame painted outside Draw callbacks that asked to be
 	// painted again, as a content transition, moves only painted whole.
@@ -1271,7 +1297,7 @@ func (rt *engine) repaintFrame(w, h, scale float32) {
 		rt.paint(root, w, h, scale)
 	}
 	for try := 0; try < 2 && rt.text.Full(); try++ {
-		rt.text.MakeRoom()
+		rt.makeRoom(try == 1)
 		rt.paint(root, w, h, scale)
 	}
 	if checkBuilt != nil {
@@ -1284,6 +1310,23 @@ func (rt *engine) repaintFrame(w, h, scale float32) {
 	rt.text.EndFrame()
 	rt.next()
 	rt.stats.end(rt)
+}
+
+// makeRoom prepares a recovery paint. On the last try, a still-full
+// coverage atlas needs the whole paths to draw as tiles: the allocation
+// that failed may be a tile, icon or glyph, not another whole path mask.
+func (rt *engine) makeRoom(last bool) {
+	ps := &rt.paths
+	switching := ps.switching || ps.crowded < rt.paints
+	if last && switching && len(ps.large) > 0 && rt.text.MaskFull() {
+		ps.switching = true
+		ps.crowded = rt.paints + pathCrowdedPaints
+		// Cached tiles can strand room in lasting shelves that new tiles
+		// cannot use. Release them when switching from whole masks, but
+		// keep their compacted layout once paths already draw as tiles.
+		rt.text.Unkeep(ps.large)
+	}
+	rt.text.MakeRoom()
 }
 
 // endPass forgets the input the pass handled.
@@ -1379,6 +1422,10 @@ func (rt *engine) prune() {
 		if rt.pressLost != nil {
 			input, gone, x, y = rt.pressLost, true, rt.pressLostX, rt.pressLostY
 		}
+		if gone && rt.pressLost == nil && rt.draggingFrom(p.id) {
+			// It drags a value on: see below.
+			gone = false
+		}
 		if gone {
 			rt.endPress(input, x, y)
 			// A frame built anew for the press ended and what the handler
@@ -1398,6 +1445,12 @@ func (rt *engine) prune() {
 			break
 		}
 		if s.seen != rt.frame || s.pass != rt.pass {
+			if rt.draggingFrom(id) {
+				// The source of a value dragged within the window, as one
+				// in a view that went away: the press goes on dragging
+				// it, until it is let go of, to drop it.
+				continue
+			}
 			if rt.scrollDrag.st == s {
 				rt.scrollDrag.st = nil
 			}
@@ -1532,6 +1585,16 @@ func (rt *engine) requestFrame() {
 func (rt *engine) askBuild() {
 	rt.buildNext()
 	rt.buildAsked = true
+	// The surface may have been told of a lower rate for drawings that
+	// move slowly (pace): what asked for this frame, as the pointer
+	// moving onto an item of a menu, would wait for its next refresh,
+	// a tenth of a second at 8 frames a second. The frame comes at the
+	// display's rate, and those drawings tell their rate again as they
+	// paint.
+	if rt.paceRate != 0 {
+		rt.paceRate = 0
+		rt.host.setFrameRate(0)
+	}
 	rt.host.requestFrame()
 }
 
@@ -1599,7 +1662,7 @@ func (rt *engine) close() {
 	rt.focusFields = nil
 	for _, r := range rt.refs {
 		r.closed = true
-		r.requested = false
+		r.requested, r.selectAll = false, false
 	}
 	clear(rt.refs)
 	rt.refs = nil

@@ -365,4 +365,84 @@ export const showcase: ShowcaseApp[] = [
     mode: "native",
     image: "/showcase/openbee.jpg",
   },
+  {
+    name: "Ferry Drive",
+    description:
+      "An open-source desktop client for Baidu Netdisk and Quark Drive on Apple Silicon Macs and Windows 10 or 11 (x64). Browse files, manage uploads and downloads, and open shared links.",
+    url: "https://github.com/yjcdon/ferry-drive",
+    author: "yjcdon",
+    mode: "native",
+    image: "/showcase/ferry-drive.png",
+  },
+  {
+    name: "Snapover",
+    description:
+      "An open-source clipboard manager for macOS and Windows. Sync text, images, files and folders between computers over a direct, encrypted connection.",
+    url: "https://github.com/2fa0/snapover",
+    author: "2fa0",
+    mode: "native",
+    image: "/showcase/snapover.jpg",
+  },
+  {
+    name: "Xylring",
+    description:
+      "An open-source native Git client for macOS and Windows. Browse commit graphs, review diffs, search history and stage individual hunks.",
+    url: "https://github.com/2fa0/xylring",
+    author: "2fa0",
+    mode: "native",
+    image: "/showcase/xylring.jpg",
+  },
+  {
+    name: "Mojian 墨间",
+    description:
+      "A quiet, native plain-text editor for ordinary folders on macOS, Linux and Windows. Tabs hold split editors, image and PDF viewers and persistent terminals, with built-in Git diffs and remote projects over SSH; MyGo's native UI is the whole app, in one Go binary.",
+    url: "https://mojian.ox0pine.cn",
+    author: "ox0pine",
+    mode: "native",
+    image: "/showcase/mojian.jpg",
+  },
+  {
+    name: "Paperly",
+    description:
+      "A native Markdown editor drawn with MyGo's native UI: the block under the caret shows its source while everything else stays rendered. File tree, full-text search, per-item list editing, and .md file associations on macOS and Windows, in one Go binary.",
+    url: "https://github.com/jiangwanying/paperly",
+    author: "jiangwanying",
+    mode: "native",
+    image: "/showcase/paperly.jpg",
+  },
+  {
+    name: "Glide",
+    description:
+      "A lightweight native desktop word translation tool that supports macOS and Windows.",
+    url: "https://github.com/anghunk/glide",
+    author: "anghunk",
+    mode: "native",
+    image: "/showcase/glide.png",
+  },
+  {
+    name: "Framely · 取景",
+    description:
+      "An open-source screenshot and image pinning tool for Windows, Linux and macOS, drawn with MyGo's native UI. Annotate captures, record a region, recognize text offline and translate it; Windows and Linux also support scrolling screenshots.",
+    url: "https://github.com/wildalley/framely",
+    author: "wildalley",
+    mode: "native",
+    image: "/showcase/framely.png",
+  },
+  {
+    name: "MyGO Wallhaven",
+    description:
+      "An open-source Wallhaven wallpaper client built with Go and MyGO's native UI. Browse recommendations, search and filter wallpapers by resolution, aspect ratio and color, preview full-size images, save local favorites, manage resumable downloads, and set your desktop wallpaper.",
+    url: "https://github.com/MaLuns/wallhaven",
+    author: "MaLuns",
+    mode: "native",
+  },
+  {
+    name: "goFinder",
+    description:
+      "A keyboard-and-mouse file manager for macOS that brings Yazi's three columns and single-key actions to a native window. Filter as you type, even by pinyin initials, preview with Quick Look, split the window into two panes, and open an AI agent in the current folder.",
+    url: "https://github.com/aoyamashou/goFinder",
+    author: "aoyamashou",
+    mode: "native",
+    image: "/showcase/gofinder.jpg",
+  },
 ]

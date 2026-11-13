@@ -163,8 +163,12 @@ type ParagraphStyle struct {
 	Align ui.Align `json:"align,omitempty"`
 	// Quote and CodeBlock show the paragraph as a quotation, or as code in
 	// the monospaced font, its spaces kept.
-	Quote     bool `json:"quote,omitempty"`
-	CodeBlock bool `json:"codeBlock,omitempty"`
+	Quote bool `json:"quote,omitempty"`
+	// QuoteDepth is the number of nested quotations when Quote is true.
+	// Zero and one both mean one quotation, for existing documents. It is
+	// independent of Indent, which remains the nesting level of a list item.
+	QuoteDepth int  `json:"quoteDepth,omitempty"`
+	CodeBlock  bool `json:"codeBlock,omitempty"`
 	// ID is the app's name for the paragraph, the key of what it keeps
 	// about it, which the editor does not show. It stays with the
 	// paragraph's text as it is edited (see Text.Replace): a paragraph
@@ -175,6 +179,14 @@ type ParagraphStyle struct {
 	// back with the text, JSON saves it, and the clipboard, Markdown,
 	// HTML and RTF leave it out.
 	ID string `json:"id,omitempty"`
+}
+
+// quoteDepth is the effective quotation nesting of a paragraph.
+func (s ParagraphStyle) quoteDepth() int {
+	if !s.Quote {
+		return 0
+	}
+	return max(1, s.QuoteDepth)
 }
 
 // Run is a run of text with its attributes.

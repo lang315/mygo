@@ -28,6 +28,7 @@ func View(c *ui.Context, st *State) ui.Element {
 
 // build builds the element of an editor for a frame.
 func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
+	ed.view.sys = c.TextSystem()
 	ed.texts = l10n.In(c.Locale())
 	ed.init(buf, o, c.Theme())
 	ed.services = c.Services()
@@ -79,8 +80,13 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 	}
 	e.HandleInput(ed.input)
-	switch ed.region {
-	case regionText:
+	// Cmd held or let go with the pointer still draws a frame, which
+	// shows the link or takes it away.
+	ed.link = ed.linkAt(c.Modifiers())
+	switch {
+	case ed.link[1] > ed.link[0]:
+		e.Cursor(ui.CursorPointer)
+	case ed.region == regionText:
 		e.Cursor(ui.CursorText)
 	default:
 		e.Cursor(ui.CursorDefault)
@@ -140,7 +146,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 		var caretAnchor, hoverAnchor ui.Element
 		var hasCaret, hasHover bool
-		if ed.complete.open() {
+		if ed.completing() {
 			caretAnchor, hasCaret = anchor("code caret", ed.complete.at)
 		}
 		if h.shown {
@@ -149,12 +155,9 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		ed.buildReplacements(c)
 		if ds, ok := ed.o.decor.(*diffSide); ok {
 			ds.buildBlocks(c, ed)
-		}
-		if ed.find.open {
-			ed.buildFindBar(c)
-		}
-		if ed.goTo.open {
-			ed.buildGoToLine(c)
+		} else {
+			// A diff's viewer builds a side's bars over its separators.
+			ed.buildBars(c)
 		}
 		if hasCaret {
 			ed.buildCompletions(c, caretAnchor)
@@ -184,6 +187,15 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	}
 	ed.needsBuild = false
 	return e
+}
+
+func (ed *editor) buildBars(c *ui.Context) {
+	if ed.find.open {
+		ed.buildFindBar(c)
+	}
+	if ed.goTo.open {
+		ed.buildGoToLine(c)
+	}
 }
 
 // accessibility describes the editor to assistive technology, while it

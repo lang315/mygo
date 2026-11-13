@@ -444,8 +444,8 @@ type System struct {
 	runs  map[runKey]*atlasEntry
 	masks map[uint64]*atlasEntry
 	// transient holds the masks drawn for the frame being painted alone,
-	// recent the frame each of them was last drawn in, and transientUses
-	// counts the times Mask returned one of them (TransientUses).
+	// recent a frame each was requested in (failed requests too), and
+	// transientUses counts the times Mask returned one of them (TransientUses).
 	transient     map[uint64]GlyphImage
 	recent        map[uint64]uint64
 	transientUses uint64
@@ -532,6 +532,13 @@ func newSystem() *System {
 
 // Shared returns the process-wide text system.
 func Shared() *System { return shared() }
+
+// New returns a text system apart from the shared one, as a Tester's
+// window uses: its shaping and its glyph atlases are its own, so windows
+// that draw at the same time, as Testers do in parallel tests, neither
+// race over nor invalidate each other's atlases. An app's windows share
+// Shared.
+func New() *System { return newSystem() }
 
 // engine starts the system's text engine on first use.
 func (s *System) engine() engine {
@@ -661,8 +668,8 @@ func (s *System) UseJustify() {
 }
 
 // UsePretty lets layouts keep the last line of a paragraph from holding
-// a single word (Params.Pretty), which package ui calls as the first
-// element or TextShape asks for it.
+// a single word (Params.Pretty), which package ui calls as an element
+// or a TextShape asks for it.
 func (s *System) UsePretty() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -670,7 +677,7 @@ func (s *System) UsePretty() {
 }
 
 // UseTabSize lets layouts set their tab stops (Style.TabSize), which
-// package ui calls as the first element sets a tab size.
+// package ui calls as an element sets a tab size.
 func (s *System) UseTabSize() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -678,8 +685,8 @@ func (s *System) UseTabSize() {
 }
 
 // UseTruncateMiddle lets layouts cut text in its middle
-// (Params.TruncateMiddle), which package ui calls as the first element
-// asks for it.
+// (Params.TruncateMiddle), which package ui calls as an element asks
+// for it.
 func (s *System) UseTruncateMiddle() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

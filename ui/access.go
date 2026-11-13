@@ -300,8 +300,8 @@ const (
 // so that the user knows to look there, AutoCompleteInline for the text
 // completed in place. It only tells it: the view shows the suggestions
 // itself, as in ComboboxBase's popup. Combobox, Autocomplete, and a
-// TokenField with suggestions, tell AutoCompleteList themselves;
-// AutoCompleteNone takes it back.
+// TokenField with suggestions or a Query, tell AutoCompleteList
+// themselves; AutoCompleteNone takes it back.
 func (e *node) AutoComplete(kind AutoComplete) *node {
 	e.autoComplete = kind
 	return e
@@ -1233,7 +1233,7 @@ func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 		for row := s; row != nil; row = rt.states[row.parent] {
 			if l := rt.states[row.parent]; l != nil && l.list != nil {
 				if r, ok := l.list.rows[row.id]; ok {
-					l.list.ScrollIntoView(r.row)
+					l.list.reveal(r.row)
 				}
 			}
 			if row.parent == 0 {

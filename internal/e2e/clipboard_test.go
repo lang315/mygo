@@ -318,10 +318,17 @@ func TestUnifiedClipboardForeignOwnershipAndShutdown(t *testing.T) {
 	if err := mygo.Clipboard.Write(transfer.TextData("old"), mygo.ClipboardOptions{OnRelease: func() { releases.Add(1) }}); err != nil {
 		t.Fatal(err)
 	}
+	var foreignChanges atomic.Int32
+	t.Cleanup(mygo.Clipboard.OnChanged(func() {
+		if slices.Contains(mygo.Clipboard.Formats(), clipboardCustom) {
+			foreignChanges.Add(1)
+		}
+	}))
 	// An app that read the clipboard may keep the data after another app
 	// replaced it, as UltraViewer does: its providers are released all the same.
 	defer holdClipboardData()()
 	stderr, stop := foreignClipboardOwner(t)
+	eventually(t, "foreign clipboard change notification", func() bool { return foreignChanges.Load() > 0 })
 	eventually(t, "foreign clipboard ownership", func() bool { return slices.Contains(mygo.Clipboard.Formats(), clipboardCustom) })
 	eventually(t, "old provider release", func() bool { return releases.Load() == 1 })
 	d, err := mygo.Clipboard.Read(clipboardCustom)

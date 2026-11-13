@@ -3130,7 +3130,8 @@ func ToggleGroup(c *Context, fn func()) Element {
 // it while empty takes out the last. The suggestions containing what was
 // typed show below it, those not already tokens: Up and Down move among
 // them, and Enter or a click adds one. Changed reports a change; name it
-// with Label.
+// with Label. Query binds what is being typed, for suggestions the app
+// looks up and matches itself as the user types.
 //
 //	ui.TokenField(c, &app.tags, allTags).Label("Tags")
 func TokenField(c *Context, tokens *[]string, suggestions []string) Element {
@@ -4020,8 +4021,8 @@ func (_handle Element) AttachedOrigin() Element {
 // so that the user knows to look there, AutoCompleteInline for the text
 // completed in place. It only tells it: the view shows the suggestions
 // itself, as in ComboboxBase's popup. Combobox, Autocomplete, and a
-// TokenField with suggestions, tell AutoCompleteList themselves;
-// AutoCompleteNone takes it back.
+// TokenField with suggestions or a Query, tell AutoCompleteList
+// themselves; AutoCompleteNone takes it back.
 func (_handle Element) AutoComplete(kind AutoComplete) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -7562,6 +7563,36 @@ func (_handle Element) Pretty() Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Pretty())
+}
+
+// Query binds *q to the text being typed in a TokenField's input, for an
+// app that looks up suggestions as the user types, as a mail's recipients
+// in an address book. The field writes the text to *q as Query is called,
+// after its constructor took what was typed; what an input method is
+// composing comes as it is committed, as in a text input's value. Adding
+// a token clears it. Changed, asked after Query, also reports a change of
+// the text, for the app to look up after a pause in typing, and the app
+// passes what it found as the suggestions of a later build. The app
+// matches them itself: the field shows them as given, in their order,
+// leaving out only those already tokens, rather than those containing
+// the text, so that a lookup folding accents finds Émile for "emile".
+// Writing *q sets the input's text, as setting a text input's value does,
+// without a change to report. With Query, assistive technology sees a
+// combo box whose suggestions complete what was typed, even while there
+// are none to show. Elements other than a TokenField ignore it.
+//
+//	to := ui.TokenField(c, &app.to, app.found).Label("To").Query(&app.query)
+//	if to.Changed() {
+//		app.typedAt = c.Now() // look up once typing pauses
+//	}
+func (_handle Element) Query(q *string) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Query(q))
 }
 
 // RadialGradient fills the element with a radial gradient, its colors

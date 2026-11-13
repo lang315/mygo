@@ -78,8 +78,9 @@ type Backend struct {
 	taskbarFailed        bool
 	taskbarButtonCreated uint32
 
-	watchingPower bool
-	notifications map[string]*notification
+	watchingPower    bool
+	clipboardChanged func()
+	notifications    map[string]*notification
 
 	themeSource string
 	badge       string
@@ -142,7 +143,7 @@ func New() *Backend {
 	}
 }
 
-func (b *Backend) Name() string { return "windows/webview2" }
+func (b *Backend) Name() string { return backendName }
 
 func (b *Backend) IsMainThread() bool { return currentThreadID() == mainThreadID }
 
@@ -388,6 +389,12 @@ func (b *Backend) appMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 	case wmAppCookieView:
 		b.closeCookieViewNow()
 		return 0, true
+	case wmClipboardUpdate:
+		currentWinClipboard() // ends the source if another app replaced it; the app's own write finds it current
+		if b.clipboardChanged != nil {
+			b.clipboardChanged()
+		}
+		return 0, true
 	case wmAppTray:
 		b.trayMessage(uint32(wp), uint32(loword(lp)))
 		return 0, true
@@ -396,9 +403,6 @@ func (b *Backend) appMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 		return 0, true
 	case wmHotkey:
 		b.h.HotkeyPressed(int(wp))
-		return 0, true
-	case wmClipboardUpdate:
-		currentWinClipboard() // ends the source if another app replaced it; the app's own write finds it current
 		return 0, true
 	case wmPowerBroadcast, wmWTSSessionChange:
 		b.powerMessage(m, wp)

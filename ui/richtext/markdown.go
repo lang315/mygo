@@ -37,7 +37,7 @@ func (t Text) Markdown() string {
 		}
 		quote := ""
 		if st.Quote {
-			quote = "> "
+			quote = strings.Repeat("> ", st.quoteDepth())
 		}
 		switch {
 		case st.CodeBlock:
