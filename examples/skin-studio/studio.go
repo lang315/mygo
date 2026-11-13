@@ -16,7 +16,7 @@ const (
 
 // palettes are the palettes of the palette combo box, by the value it holds.
 var palettes = map[string]*skin.Palette{
-	"cham": skin.Cham, "indigo": skin.Indigo, "ink": skin.Ink, "teal": skin.Teal,
+	"cham": skin.Cham, "indigo": skin.Indigo, "ink": skin.Ink, "teal": skin.Teal, "blue": skin.Blue,
 }
 
 // newStudio makes the window: a header bar, a tool strip with three combo
@@ -44,7 +44,7 @@ func newStudio() *widget.Form {
 // and appearance. A choice applies at once; the palette waits, kept, while no
 // skin is on.
 func switches() []widget.Control {
-	useSkin, usePalette := "none", "cham"
+	useSkin, usePalette := "none", "blue"
 	apply := func() {
 		if useSkin == "none" {
 			skin.Use(nil)
@@ -67,7 +67,8 @@ func switches() []widget.Control {
 		choose("Skin", &useSkin, widget.Option{Value: "none", Text: "None"}, widget.Option{Value: "calm", Text: "Calm"}),
 		choose("Palette", &usePalette,
 			widget.Option{Value: "cham", Text: skin.Cham.Name()}, widget.Option{Value: "indigo", Text: skin.Indigo.Name()},
-			widget.Option{Value: "ink", Text: skin.Ink.Name()}, widget.Option{Value: "teal", Text: skin.Teal.Name()}),
+			widget.Option{Value: "ink", Text: skin.Ink.Name()}, widget.Option{Value: "teal", Text: skin.Teal.Name()},
+			widget.Option{Value: "blue", Text: skin.Blue.Name()}),
 		mode,
 	}
 }

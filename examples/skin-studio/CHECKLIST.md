@@ -8,7 +8,7 @@ page that shows the control (`go run ./examples/skin-studio`, not run by tests)
 and the test that holds it. A row without a page or a test is not ticked.
 
 Tests of every row: `TestStudioEveryPage` (the page builds in None and in Calm
-× 4 palettes × light and dark, no caption clipped), `TestStudioGridPage` (rows
+× 5 palettes × light and dark, no caption clipped), `TestStudioGridPage` (rows
 30, header 30, tool strip controls 36), `TestSentinelSkinReachesEveryPixel`
 (`ui/widget/skin`: under a sentinel skin every painted pixel of the gallery,
 which holds each control below except the message boxes' dialogs, is a sentinel

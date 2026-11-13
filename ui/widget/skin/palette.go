@@ -26,15 +26,18 @@ type paletteTokens struct {
 // Name returns the palette's name, as "Teal".
 func (p *Palette) Name() string { return p.name }
 
-// The palettes: Chàm, Calm's own, a blue-violet indigo dye; Indigo, a
-// brighter violet-blue; Ink, a deep blue; Teal, whose Info is a blue of
-// its own, since its accent sits too near green.
+// The palettes: Chàm, a blue-violet indigo dye; Indigo, a brighter
+// violet-blue; Ink, a deep blue; Teal, whose Info is a blue of its own,
+// since its accent sits too near green; Blue, Calm's own, the accent of
+// GTK's Adwaita, GNOME's blue 4 in light, since white on Adwaita's own
+// #3584e4 is under 4.5:1.
 var (
 	Cham   = newPalette("Chàm", lightFamily("#4e3bb0", "#45349b", "#3b2d86", "#46359e"), darkFamily("#9384f0", "#a79bf3", "#7f6eed", "#bdb4f9", "#0e0b2a"))
 	Indigo = newPalette("Indigo", lightFamily("#4f46e5", "#4338ca", "#3730a3", "#3f37c9"), darkFamily("#8b8ff9", "#a3a6fb", "#7477ef", "#b9bcfc", "#0e0f2a"))
 	Ink    = newPalette("Ink", lightFamily("#2c4f8c", "#26457b", "#203b69", "#284778"), darkFamily("#7b9fdc", "#93b1e4", "#6a8dcf", "#a9c1ea", "#0b1220"))
 	Teal   = newPalette("Teal", lightFamily("#0f766e", "#0c665f", "#0a5650", "#0b5d56"), darkFamily("#2bb5a3", "#45c4b3", "#20a090", "#7fdccf", "#06201c")).
 		withInfo(lightFamily("#3d5f8f", "#36547e", "#2e486d", "#34507a"), darkFamily("#8c9fe0", "#9dade5", "#7e8fca", "#b6c2f2", "#0b1220"))
+	Blue = newPalette("Blue", lightFamily("#1c71d8", "#1a5fb4", "#174f96", "#1a5fb4"), darkFamily("#78aeed", "#92bdf1", "#5f9be6", "#a8cbf5", "#0b1220"))
 )
 
 var white = ui.Hex("#ffffff")
@@ -95,5 +98,5 @@ func (s *Skin) WithPalette(p *Palette) *Skin {
 	return &c
 }
 
-// Palette returns the skin's palette, as Cham for Calm.
+// Palette returns the skin's palette, as Blue for Calm.
 func (s *Skin) Palette() *Palette { return s.palette }

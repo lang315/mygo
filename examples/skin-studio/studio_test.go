@@ -72,6 +72,9 @@ func describe(s *skin.Skin) string {
 func pick(tt *widget.Tester, combo, item string) {
 	tt.Find(widget.ByLabel(combo)).Click()
 	all := tt.FindAll(widget.ByLabel(item))
+	if len(all) == 0 {
+		tt.Find(widget.ByLabel(item)) // fails the test, naming what the popup offers
+	}
 	all[len(all)-1].Click()
 }
 
@@ -194,7 +197,7 @@ func TestStudioEveryPage(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		mode := map[bool]string{false: "light", true: "dark"}[dark]
 		configs = append(configs, config{"None " + mode, nil, dark})
-		for _, p := range []*skin.Palette{skin.Cham, skin.Indigo, skin.Ink, skin.Teal} {
+		for _, p := range []*skin.Palette{skin.Cham, skin.Indigo, skin.Ink, skin.Teal, skin.Blue} {
 			configs = append(configs, config{"Calm " + p.Name() + " " + mode, skin.Calm.WithPalette(p), dark})
 		}
 	}
@@ -244,10 +247,10 @@ func TestStudioSwitches(t *testing.T) {
 	}
 
 	pick(tt, "Skin", "Calm")
-	if s := skin.Active(); s == nil || s.Name() != "Calm" || s.Palette() != skin.Cham {
-		t.Fatalf("after Skin > Calm the skin is %s, want Calm with Chàm", describe(s))
+	if s := skin.Active(); s == nil || s.Name() != "Calm" || s.Palette() != skin.Blue {
+		t.Fatalf("after Skin > Calm the skin is %s, want Calm with Blue", describe(s))
 	}
-	for _, p := range []*skin.Palette{skin.Indigo, skin.Ink, skin.Teal, skin.Cham} {
+	for _, p := range []*skin.Palette{skin.Cham, skin.Indigo, skin.Ink, skin.Teal, skin.Blue} {
 		pick(tt, "Palette", p.Name())
 		if s := skin.Active(); s == nil || s.Palette() != p {
 			t.Errorf("after Palette > %s the skin is %s", p.Name(), describe(s))
@@ -283,7 +286,7 @@ func TestStudioStartsPlain(t *testing.T) {
 			t.Errorf("no tab %q: %q", page, tt.Texts())
 		}
 	}
-	for _, v := range []string{"None", "Chàm", "System"} {
+	for _, v := range []string{"None", "Blue", "System"} {
 		if !tt.HasText(v) {
 			t.Errorf("the tool strip does not show %q: %q", v, tt.Texts())
 		}

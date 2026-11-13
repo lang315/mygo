@@ -16,15 +16,15 @@ func TestCalmTheme(t *testing.T) {
 	}{
 		{"Background", l.Background, ui.Hex("#ffffff")},
 		{"ControlBorder", l.ControlBorder, ui.Hex("#838a94")},
-		{"Accent", l.Accent, ui.Hex("#4e3bb0")},
-		{"AccentHover", l.AccentHover, ui.Hex("#45349b")},
+		{"Accent", l.Accent, ui.Hex("#1c71d8")},
+		{"AccentHover", l.AccentHover, ui.Hex("#1a5fb4")},
 		{"AccentText", l.AccentText, ui.Hex("#ffffff")},
 		{"Surface", l.Surface, ui.Hex("#ffffff")},
 		{"Border", l.Border, ui.Hex("#e4e7eb")},
 		{"TextMuted", l.TextMuted, ui.Hex("#565d68")},
 		{"Danger", l.Danger, ui.Hex("#c42b1c")},
-		{"Focus", l.Focus, ui.Hex("#4e3bb0")},
-		{"Selection", l.Selection, ui.Hex("#dcd8ef")},
+		{"Focus", l.Focus, ui.Hex("#1c71d8")},
+		{"Selection", l.Selection, ui.Hex("#d2e3f7")},
 		{"SurfaceHover", l.SurfaceHover, ui.Hex("#eaedf1")},
 		{"SurfacePressed", l.SurfacePressed, ui.Hex("#dfe3e9")},
 	} {
@@ -40,15 +40,15 @@ func TestCalmTheme(t *testing.T) {
 	}
 
 	d := themeOf(&Calm.dark, true)
-	if d.Background != ui.Hex("#15171a") || d.ControlBorder != ui.Hex("#79818c") || d.Accent != ui.Hex("#9384f0") || !d.Dark {
-		t.Errorf("dark Background %v, ControlBorder %v, Accent %v, Dark %v; want #15171a, #79818c, #9384f0, true",
+	if d.Background != ui.Hex("#15171a") || d.ControlBorder != ui.Hex("#79818c") || d.Accent != ui.Hex("#78aeed") || !d.Dark {
+		t.Errorf("dark Background %v, ControlBorder %v, Accent %v, Dark %v; want #15171a, #79818c, #78aeed, true",
 			d.Background, d.ControlBorder, d.Accent, d.Dark)
 	}
 	if d.SurfaceHover != ui.Hex("#2d3239") || d.SurfacePressed != ui.Hex("#343a42") {
 		t.Errorf("dark SurfaceHover %v and SurfacePressed %v; want #2d3239 and #343a42, unchanged", d.SurfaceHover, d.SurfacePressed)
 	}
-	if d.AccentText != ui.Hex("#0e0b2a") || d.Scrollbar != ui.Hex("#e7e9ec").Alpha(0.35) {
-		t.Errorf("dark AccentText %v and Scrollbar %v; want #0e0b2a and Text at 35%%", d.AccentText, d.Scrollbar)
+	if d.AccentText != ui.Hex("#0b1220") || d.Scrollbar != ui.Hex("#e7e9ec").Alpha(0.35) {
+		t.Errorf("dark AccentText %v and Scrollbar %v; want #0b1220 and Text at 35%%", d.AccentText, d.Scrollbar)
 	}
 }
 
@@ -151,34 +151,34 @@ func TestCalmMetrics(t *testing.T) {
 	}
 }
 
-// Calm's accent tokens keep their P0 values byte for byte, the dark
-// translucent fills included.
+// Calm's accent tokens are Blue's byte for byte, the dark translucent fills
+// included.
 func TestCalmAccentValues(t *testing.T) {
-	a := ui.Hex("#9384f0")
+	a := ui.Hex("#78aeed")
 	for _, c := range []struct {
 		name      string
 		got, want ui.Color
 	}{
 		{"light OnAccent", Calm.light.OnAccent, ui.Hex("#ffffff")},
-		{"light Selection", Calm.light.Selection, ui.Hex("#dcd8ef")},
-		{"light RowSelected", Calm.light.RowSelected, ui.Hex("#edebf7")},
-		{"light Accent.Base", Calm.light.Accent.Base, ui.Hex("#4e3bb0")},
-		{"light Accent.Hover", Calm.light.Accent.Hover, ui.Hex("#45349b")},
-		{"light Accent.Pressed", Calm.light.Accent.Pressed, ui.Hex("#3b2d86")},
-		{"light Accent.Subtle", Calm.light.Accent.Subtle, ui.Hex("#f1eff9")},
-		{"light Accent.Border", Calm.light.Accent.Border, ui.Hex("#cac4e7")},
-		{"light Accent.Text", Calm.light.Accent.Text, ui.Hex("#46359e")},
+		{"light Selection", Calm.light.Selection, ui.Hex("#d2e3f7")},
+		{"light RowSelected", Calm.light.RowSelected, ui.Hex("#e8f1fb")},
+		{"light Accent.Base", Calm.light.Accent.Base, ui.Hex("#1c71d8")},
+		{"light Accent.Hover", Calm.light.Accent.Hover, ui.Hex("#1a5fb4")},
+		{"light Accent.Pressed", Calm.light.Accent.Pressed, ui.Hex("#174f96")},
+		{"light Accent.Subtle", Calm.light.Accent.Subtle, ui.Hex("#edf4fc")},
+		{"light Accent.Border", Calm.light.Accent.Border, ui.Hex("#bbd4f3")},
+		{"light Accent.Text", Calm.light.Accent.Text, ui.Hex("#1a5fb4")},
 		{"light Accent.On", Calm.light.Accent.On, ui.Hex("#ffffff")},
-		{"dark OnAccent", Calm.dark.OnAccent, ui.Hex("#0e0b2a")},
-		{"dark Selection", Calm.dark.Selection, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.35).A}},
-		{"dark RowSelected", Calm.dark.RowSelected, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.16).A}},
+		{"dark OnAccent", Calm.dark.OnAccent, ui.Hex("#0b1220")},
+		{"dark Selection", Calm.dark.Selection, ui.Color{R: 0x78, G: 0xae, B: 0xed, A: a.Alpha(0.35).A}},
+		{"dark RowSelected", Calm.dark.RowSelected, ui.Color{R: 0x78, G: 0xae, B: 0xed, A: a.Alpha(0.16).A}},
 		{"dark Accent.Base", Calm.dark.Accent.Base, a},
-		{"dark Accent.Hover", Calm.dark.Accent.Hover, ui.Hex("#a79bf3")},
-		{"dark Accent.Pressed", Calm.dark.Accent.Pressed, ui.Hex("#7f6eed")},
-		{"dark Accent.Subtle", Calm.dark.Accent.Subtle, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.14).A}},
-		{"dark Accent.Border", Calm.dark.Accent.Border, ui.Color{R: 0x93, G: 0x84, B: 0xf0, A: a.Alpha(0.35).A}},
-		{"dark Accent.Text", Calm.dark.Accent.Text, ui.Hex("#bdb4f9")},
-		{"dark Accent.On", Calm.dark.Accent.On, ui.Hex("#0e0b2a")},
+		{"dark Accent.Hover", Calm.dark.Accent.Hover, ui.Hex("#92bdf1")},
+		{"dark Accent.Pressed", Calm.dark.Accent.Pressed, ui.Hex("#5f9be6")},
+		{"dark Accent.Subtle", Calm.dark.Accent.Subtle, ui.Color{R: 0x78, G: 0xae, B: 0xed, A: a.Alpha(0.14).A}},
+		{"dark Accent.Border", Calm.dark.Accent.Border, ui.Color{R: 0x78, G: 0xae, B: 0xed, A: a.Alpha(0.35).A}},
+		{"dark Accent.Text", Calm.dark.Accent.Text, ui.Hex("#a8cbf5")},
+		{"dark Accent.On", Calm.dark.Accent.On, ui.Hex("#0b1220")},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s is %v, want %v", c.name, c.got, c.want)
