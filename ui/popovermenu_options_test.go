@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -334,5 +335,116 @@ func TestPopoverMenuButtonPanel(t *testing.T) {
 	tt.Click("Actions")
 	if len(panels) != 0 {
 		t.Errorf("Panel ran %d times once taken away", len(panels))
+	}
+}
+
+func TestPopoverMenuButtonItem(t *testing.T) {
+	var styled bool
+	// items are the labels of the rows the build styled.
+	var items []string
+	o := PopoverMenuButtonOptions{Item: func(item Element) {
+		n := item.node()
+		items = append(items, n.label)
+		n.Padding(1, 8)
+	}}
+	tt := coreNewTester(func(c *context) {
+		var opts []PopoverMenuButtonOptions
+		if styled {
+			opts = append(opts, o)
+		}
+		coreColumn(c).Padding(20).Children(func() {
+			corePopoverMenuButton(c, "Actions", func(m *Menu) {
+				m.Item("Open")
+				m.Submenu("More", func(m *Menu) { m.Item("Elsewhere") })
+			}, opts...)
+		})
+	}, 400, 400)
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+
+	// Without Item, the rows keep the theme's look.
+	tt.Click("Actions")
+	if len(items) != 0 {
+		t.Fatalf("Item ran %d times with no Item set", len(items))
+	}
+	plain, ok := tt.Find("Open")
+	if !ok {
+		t.Fatal("no menu")
+	}
+	tt.Key(0, KeyEscape)
+
+	styled = true
+	tt.Click("Actions")
+	if !slices.Contains(items, "Open") || !slices.Contains(items, "More") {
+		t.Fatalf("Item styled %q, want every row of the menu", items)
+	}
+	slim, _ := tt.Find("Open")
+	if slim.H >= plain.H {
+		t.Errorf("row %v high with Item's padding, %v with the theme's", slim.H, plain.H)
+	}
+
+	// A submenu's rows are styled so too.
+	items = items[:0]
+	tt.Key(0, KeyDown)
+	tt.Key(0, KeyDown)
+	tt.Key(0, KeyRight)
+	if !tt.HasText("Elsewhere") {
+		t.Fatalf("the submenu did not open: texts %q", tt.Texts())
+	}
+	if !slices.Contains(items, "Elsewhere") {
+		t.Errorf("Item styled %q, not the submenu's row", items)
+	}
+}
+
+// Item styles the rows after the skin's Metrics and row colors, as an app's
+// own calls on any part (TestAppSizesWinOverMetrics): its size and colors
+// win, and Metrics.RowHeight stays the least height of a row whose Item
+// sets padding alone, until the Item takes that minimum away too.
+func TestPopoverMenuButtonItemOverMetrics(t *testing.T) {
+	withMetrics(t, calmMetrics)
+	tint := RGB(200, 30, 30)
+	open := func(item func(Element)) *Tester {
+		tt := coreNewTester(func(c *context) {
+			coreColumn(c).Padding(20).Children(func() {
+				corePopoverMenuButton(c, "Actions", func(m *Menu) {
+					m.Item("Open")
+					m.Item("Close")
+				}, PopoverMenuButtonOptions{Item: item})
+			})
+		}, 400, 400)
+		tt.SetPreferences(Preferences{ReduceMotion: true, TextScale: 1})
+		tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+		if err := tt.Click("Actions"); err != nil {
+			t.Fatal(err)
+		}
+		return tt
+	}
+	for _, c := range []struct {
+		name string
+		item func(Element)
+		ok   func(h float32) bool
+	}{
+		{"the theme's padding", nil, func(h float32) bool { return sameSize(h, calmMetrics.RowHeight) }},
+		{"padding alone", func(e Element) { e.Padding(1, 8) }, func(h float32) bool { return sameSize(h, calmMetrics.RowHeight) }},
+		{"no minimum", func(e Element) { e.Padding(1, 8).MinHeight(0) }, func(h float32) bool { return h < calmMetrics.RowHeight }},
+		{"taller", func(e Element) { e.Height(44) }, func(h float32) bool { return sameSize(h, 44) }},
+	} {
+		tt := open(c.item)
+		if h := itemOf(t, tt, "Open").Bounds.H; !c.ok(h) {
+			t.Errorf("%s: a row is %v high, RowHeight %v", c.name, h, calmMetrics.RowHeight)
+		}
+	}
+	// The highlighted row: the skin's tint, or the Item's color over it.
+	for _, styled := range []bool{false, true} {
+		var item func(Element)
+		if styled {
+			item = func(e Element) { e.Background(tint) }
+		}
+		tt := open(item)
+		tt.Key(0, KeyDown)
+		got := fillOf(tt, itemOf(t, tt, "Open"))
+		bg, _ := tt.rt.c.rowSelected(tt.rt.c.theme)
+		if want := map[bool]Color{false: bg.SRGB(), true: tint}[styled]; got != want {
+			t.Errorf("Item %v: the highlighted row fills %v, want %v", styled, got, want)
+		}
 	}
 }

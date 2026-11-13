@@ -1193,7 +1193,7 @@ func TestRetainLayoutCheckIgnoresEvictedTextLayouts(t *testing.T) {
 	old := held.tl
 	flood = true
 	tt.Frame()
-	if textSystem().Layout(old.Params) == old {
+	if tt.rt.text.Layout(old.Params) == old {
 		t.Fatal("the text cache still holds the layout: the test forced no eviction")
 	}
 	if tt.rt.rowsLaidKept == 0 {

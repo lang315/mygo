@@ -141,6 +141,7 @@ func (rt *engine) beginLayout(root *node) {
 	rt.layouts++
 	rt.paintSameRows = 0
 	rt.rowsLaidKept, rt.rowsCommitReplayed = 0, 0
+	rt.flex.dropHolds() // the last layout's elements are being built anew
 	// The text system let go of the layouts and fonts it had, or the
 	// cache is off: lay everything out anew.
 	changed := rt.noLayoutCache || !rt.layGenOK || rt.layGen != rt.gen
@@ -232,8 +233,8 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 	// keep nothing: the next layout finds their states not seen by this
 	// one.
 	self := e.kind == kindInput || e.attach != 0 || e.ghosts
-	tree := e.list != nil || e.form != nil || e.colFit != nil || e.overflow != nil ||
-		e.gridFit != nil || e.leaving != 0 || e.kind == kindText && e.first != nil
+	tree := e.special ||
+		e.leaving != 0 || e.kind == kindText && e.first != nil
 	paintSame := paintEqual && inh
 	if tree {
 		keepNoLayout(e)
@@ -545,7 +546,7 @@ func (e *node) textWidths() [2]float32 {
 	if t != nil && t.leafOK && t.leafSingle == e.single && sameParams(&t.leafKey, &p) {
 		return t.leaf
 	}
-	sys := textSystem()
+	sys := e.c.rt.text
 	l := sys.Layout(p)
 	w := [2]float32{l.Width, 0}
 	switch {
@@ -568,7 +569,7 @@ func (e *node) textLayout(width float32) *text.Layout {
 	p := e.textParams(width)
 	t := e.heldText()
 	if t == nil {
-		return textSystem().Layout(p)
+		return e.c.rt.text.Layout(p)
 	}
 	for _, l := range t.at {
 		if l != nil && sameParams(&l.Params, &p) {
@@ -576,7 +577,7 @@ func (e *node) textLayout(width float32) *text.Layout {
 		}
 	}
 	// From the last, of the same text at another width as its box resizes.
-	l := textSystem().LayoutFrom(t.at[t.next^1], p)
+	l := e.c.rt.text.LayoutFrom(t.at[t.next^1], p)
 	t.at[t.next] = l
 	t.next ^= 1
 	return l

@@ -139,7 +139,7 @@ func (w *window) toPage(x, y int32) (int32, int32) {
 
 func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler) (platform.WebView, error) {
 	b := s.w.b
-	if err := b.startEnvironment(o); err != nil {
+	if err := b.startEnvironment(o); !webViewBuilt || err != nil {
 		return nil, err
 	}
 	if s.layer == nil {

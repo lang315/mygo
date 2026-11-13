@@ -285,6 +285,9 @@ func TestCrowdedPathsDrawAsTilesForAWhile(t *testing.T) {
 		return r.Image.RGBA()
 	}
 	growAtlas(t, tt, func() bool { long, _ := masks(); return long == 1 })
+	if long, short := masks(); long != 1 || short != 1 {
+		t.Fatalf("before crowding, the long wire draws from %d masks, the short one from %d", long, short)
+	}
 	whole := pixels()
 	tt.rt.paths.crowded = tt.rt.paints + pathCrowdedPaints
 	tt.Frame()

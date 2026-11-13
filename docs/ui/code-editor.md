@@ -121,7 +121,12 @@ The editor edits as Zed does, with the commands bound to the same keys
   level.
 - **Finding.** Cmd+F opens the find bar, with case, whole words, regular
   expressions and finding in the selection; Cmd+Alt+F replaces. Cmd+G goes
-  to the next match, and Ctrl+G to a line.
+  to the next match, and Ctrl+G to a line. The bar is no wider than the
+  editor: in a narrow one it leaves out the count of matches, then the
+  options and the buttons that go through the matches or replace them,
+  keeping the fields, the button that shows or hides the replacement and
+  the close button. Its field turns red for a regular expression that is
+  not one.
 - **The pointer.** A double click selects a word, a triple click a line,
   and dragging extends by them; dragging near the edges scrolls; Cmd+click
   goes to a definition.
@@ -394,7 +399,11 @@ app.code.SetDiagnostics(buf.Version(), app.lsp.Diagnostics())
 - `SetInlays` shows inlay hints, text in the lines that is not theirs, as
   the types of variables; `SetSuggestion` shows text after the caret as a
   suggestion, which Tab accepts, as an AI's.
-- `OnDefinition` is called for Cmd+click and F12 on a word.
+- `OnDefinition` is called for Cmd+click and F12 on a word. With Cmd
+  held, the word under the pointer shows as a link.
+  `NoDefinitionClick` leaves Cmd+click to the editor's other clicks, link
+  and all, and F12 and the context menu still go to the definition;
+  `NoDefinitionLink` keeps Cmd+click but shows no link.
 
 ## Replacing ranges
 
@@ -455,6 +464,41 @@ as many as it needs.
 
 The [code editor example](../../examples/code-editor) has a live preview
 of its README.md.
+
+## Line styles
+
+`SetLineStyles` draws lines in other fonts, as a Markdown editor's headings
+in larger type. The text stays the buffer's; only how its lines look
+changes.
+
+```go
+var styles []editor.LineStyle
+for _, h := range headings(buf) { // the app's parser
+	styles = append(styles, editor.LineStyle{
+		Line: h.Line, Font: ui.Font{Size: 28 - 3*float32(h.Level), Weight: 700},
+	})
+}
+app.code.SetLineStyles(styles)
+```
+
+- **`Font`**'s zero fields take the editor's, so `Size` alone keeps its
+  family. **`LineHeight`** is a multiple of the font's size, as
+  `State.LineHeight`; 0 takes the editor's.
+- **Rows** of a styled line are as high as its font makes them, and it
+  wraps in its own font. Carets, selections, presses, find's matches and a
+  replacement's element follow; an element without a `Width` is as wide as
+  the line's rows are high.
+- **The gutter** numbers styled lines in the editor's font, on the baseline
+  of their first row.
+- **Only the lines in view** are laid out still: the height of a styled
+  line's rows comes from its font's metrics, without shaping it, and how
+  many rows a wrapped one takes is measured as for any line.
+
+Styles move with edits, a style going with its line's text, and set again,
+the same styles cost nothing and a change lays out only the lines whose
+style changed. `LineStyles` returns them as the edits moved them. A diff's
+sides take none. The [code editor example](../../examples/code-editor)'s
+live preview shows its README.md's headings this way.
 
 ## Code snippets
 
@@ -533,7 +577,9 @@ list below the caret, a card above the text hovered), which keeps the
 presses from the text under it and the keyboard where the part needs it
 (in the editor while the completions show, in the hover as its text is
 selected), and a handle to what the part shows and does. Style the element and build its
-content; its position can change too. The editor's own looks are
+content; its position can change too. The find bar comes with margins
+that keep it inside the editor, so `bar.Right(0)` leaves it the theme's
+`Space(4)` from the right edge; `bar.Margin(0)` takes them off. The editor's own looks are
 `DefaultFindBar`, `DefaultGoToLine`, `DefaultCompletions` and
 `DefaultHover`, which a render function can call and then restyle.
 
@@ -585,7 +631,8 @@ Assistive technology sees a multi-line text field, named by `Label`, with
 the text of the buffer, replaced ranges among it, and the newest selection,
 which it moves; the elements of replacements are named by their `Label`; the
 completions are a list, and the find bar a toolbar that tells the count
-of matches. The editor's menu, its find and go to line bars and their
+of matches, except in a narrow editor, where its query field still tells
+an invalid regular expression. The editor's menu, its find and go to line bars and their
 names are in the window's language
 ([MyGo's own strings](../i18n.md#mygos-own-strings)). Input methods compose in the editor as in other text fields,
 with their candidate window at the caret.

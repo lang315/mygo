@@ -16,7 +16,16 @@ import (
 
 var errNativeOnly = errors.New("mygo: this app was built with nativeOnly: it has no web view")
 
+// webViewBuilt is false: the callers of createWebView leave it out behind it.
+const webViewBuilt = false
+
+// backendName is the backend's Name.
+const backendName = "windows"
+
 func (b *Backend) startEnvironment(*platform.WindowOptions) error { return errNativeOnly }
+
+// WebViewAvailable reports false: the app was built without WebView2.
+func (b *Backend) WebViewAvailable() bool { return false }
 
 func (w *window) createWebView() { w.webViewFailed(errNativeOnly) }
 

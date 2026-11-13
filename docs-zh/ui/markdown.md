@@ -123,6 +123,24 @@ app.md.OnLink = func(url string) {
 }
 ```
 
+`AnchorBlock` 找到锚点所指的块，用于 `Anchor`，以及视图自己跟随的指向 `#an-anchor` 的链接：传入视图的文稿（参见[解析器](#解析器)）和不带 `#` 的锚点，它返回该块的索引，或返回 -1，按该 slug 查找标题，与没有它时一样。笔记应用可以按 ID 跳到一个块，比如 Obsidian 的 `[[note#^block-id]]` 跳到以 `^block-id` 结尾的段落：
+
+```go
+app.md.AnchorBlock = func(d *parser.Document, name string) int {
+	if !strings.HasPrefix(name, "^") {
+		return -1 // a heading's slug
+	}
+	for i := 1; i < d.Len(); i++ {
+		if d.Block(i).Kind == parser.Paragraph && strings.HasSuffix(strings.TrimSpace(d.Lines(i)), " "+name) {
+			return i
+		}
+	}
+	return -1
+}
+```
+
+列表项按它所在的行滚动到视野中，表格的行或单元格则滚动整个表格。文稿属于视图：只读取它，不要修改它。
+
 `LinkIcon` 在链接文本的开头放一个图标，由目标地址和周围文本的大小决定：一个像 `InlineMath` 那样生成的盒子，点击效果与该链接相同，并停留在它第一个词所在的行上。作为文本、HTML 和 Markdown 复制时，它都不产生内容。当它返回 false 时，链接没有图标；仍在流式传入的链接也暂时没有。链接从 `Theme.Link` 获取颜色：
 
 ```go
@@ -144,6 +162,27 @@ app.md.LinkIcon = func(dest string, size float32) (markdown.InlineObject, bool) 
 ```go
 app.md.LoadImage = markdown.FileImages(filepath.Dir(app.path))
 ```
+
+## 任务列表
+
+任务列表的项（`- [ ]` 和 `- [x]`）显示复选框，它们只表示任务是否已完成。`OnTask` 让它们成为应用的控件，比如笔记应用在笔记文件中勾掉一项任务：点击复选框，或在它拥有焦点时按 Space 或 Enter，会以该任务在视图源文本中的行号（从 1 起）和请求的状态调用它。复选框始终显示源文本所写的状态，因此由应用写入这一改动，并把新文本交给视图：
+
+```go
+app.md.OnTask = func(line int, checked bool) {
+	lines := strings.SplitAfter(app.note, "\n")
+	mark := "[ ]"
+	if checked {
+		mark = "[x]"
+	}
+	l := lines[line-1]
+	i := strings.Index(l, "[") // the item's check box, after its marker
+	lines[line-1] = l[:i] + mark + l[i+3:]
+	app.note = strings.Join(lines, "")
+	app.save()
+}
+```
+
+行号指交给该视图的 Markdown 中的行：在另一个视图的块中构建的视图，比如代码块中的 Markdown，要在行号上加上该块的行（[`SourceLine`](#代码)）。
 
 ## 代码
 
@@ -167,6 +206,18 @@ app.md.CodeBlock = func(c *ui.Context, b *markdown.CodeBlockView) {
 		b.Body(c)       // the highlighted, selectable code
 		b.CopyButton(c) // the copy button
 	})
+}
+```
+
+`SourceLine` 是块在视图源文本中开始的行，从 1 起：它的起始围栏，或缩进代码的第一行。围栏代码块代码的第 k 行是源文本的第 `SourceLine()+k` 行，因此把块构建为其中 Markdown 的视图时，可以把该视图的任务按它们在源文本中的行交给外层视图的 `OnTask`：
+
+```go
+app.md.Code = map[string]func(*ui.Context, *markdown.CodeBlockView){
+	"tasks": func(c *ui.Context, b *markdown.CodeBlockView) {
+		start := b.SourceLine()
+		app.inner.OnTask = func(line int, checked bool) { app.md.OnTask(start+line, checked) }
+		markdown.View(c, b.Code(), &app.inner)
+	},
 }
 ```
 
@@ -222,7 +273,7 @@ app.md.Block = func(c *ui.Context, d *parser.Document, i int) bool {
 
 ## 辅助功能
 
-标题是相应层级的标题，列表及其项是列表和列表项，链接是链接，表格是包含行、列标题和单元格的表格，任务项是复选框（无论是否勾选），图像是按描述命名的图像，代码块是按语言命名的组，并带有复制代码按钮。
+标题是相应层级的标题，列表及其项是列表和列表项，链接是链接，表格是包含行、列标题和单元格的表格，任务项是复选框（无论是否勾选），图像是按描述命名的图像，代码块是按语言命名的组，并带有复制代码按钮。任务的复选框是只读的；设置 `OnTask` 后，它以任务的文本命名，可获得焦点；辅助功能按下它时，会像点击一样请求另一种状态。
 
 ## 解析器
 

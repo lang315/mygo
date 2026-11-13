@@ -28,6 +28,22 @@ func TestProgramName() string {
 	return goStr(prgname())
 }
 
+// TestSetProgramName names the program (g_set_prgname) before Run, as an
+// app does that gives its windows the ID of its desktop entry. It loads
+// GLib itself, since Run has not loaded it yet.
+func TestSetProgramName(name string) error {
+	g, err := open("libglib-2.0.so.0")
+	if err != nil {
+		return err
+	}
+	var set func(name *byte)
+	if !bind(g, &set, "g_set_prgname") {
+		return fmt.Errorf("no g_set_prgname")
+	}
+	set(cs(name))
+	return nil
+}
+
 // TestActivateMenuItem activates an item of a window's menu bar, found by
 // the labels along its path. plugins/automation's menu request chooses
 // items with it too.

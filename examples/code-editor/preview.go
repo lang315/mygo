@@ -84,3 +84,21 @@ func taskBox(st *editor.State, start, end int) editor.Replacement {
 			})
 		}}
 }
+
+// headingStyles shows the headings in larger type, by their level, on the
+// lines with a caret too, as their marks show there.
+func headingStyles(b *editor.Buffer) []editor.LineStyle {
+	var out []editor.LineStyle
+	fenced := false
+	for i := range b.LineCount() {
+		line := b.Line(i)
+		if strings.HasPrefix(line, "```") {
+			fenced = !fenced
+		}
+		if m := markdownHeading.FindString(line); m != "" && !fenced {
+			level := len(m) - 1
+			out = append(out, editor.LineStyle{Line: i, Font: ui.Font{Size: float32(26 - 3*level), Weight: 700}})
+		}
+	}
+	return out
+}

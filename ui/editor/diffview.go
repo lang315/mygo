@@ -601,6 +601,7 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 		root.Draw(func(p *ui.Painter, r ui.Rect) {
 			ed := &d.eds[1]
 			ed.layout(r.W, r.H, p.Scale())
+			d.oldView.sys = ed.view.sys
 			d.oldView.setStyle(ed.view.font, ed.o.lineHeight, p.Scale(), ed.tabSize())
 			d.oldView.setWrap(ed.view.wrap, ed.view.wrapWidth)
 			d.prepare()
@@ -614,6 +615,7 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 				ed.FillWidth()
 			}
 			d.buildSeparators(c, ct)
+			d.buildBars(c, 1)
 		})
 		if d.FitContent {
 			d.fit()
@@ -691,12 +693,36 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 			sides[i].Grow(d.split.grow[i])
 		}
 		d.buildSeparators(c, ct)
+		d.buildBars(c, 0, 1)
 	})
 	if d.FitContent {
 		d.fit()
 		row.Height(float32(max(d.eds[0].view.heights.total(), d.eds[1].view.heights.total())))
 	}
 	return row
+}
+
+// buildBars builds the find and go to line bars of the sides, after the
+// separators, which would else cover them: each in a box over its side
+// that lets the pointer through to the text.
+func (d *DiffState) buildBars(c *ui.Context, sides ...int) {
+	w := d.split.widths(d.split.width)
+	for _, i := range sides {
+		ed := &d.eds[i]
+		if !ed.find.open && !ed.goTo.open {
+			continue
+		}
+		box := ui.Box(c).Key("diff bars " + strconv.Itoa(i)).Absolute().Top(0).Bottom(0).PassThrough()
+		switch {
+		case d.Layout == DiffUnified:
+			box.Left(0).Right(0)
+		case i == 0:
+			box.Left(0).Width(w[0])
+		default:
+			box.Right(0).Width(w[1])
+		}
+		box.Children(func() { ed.buildBars(c) })
+	}
 }
 
 // diffMinColumns is how many columns of text a side of a split view
@@ -834,6 +860,7 @@ func (d *DiffState) fit() {
 	if d.Layout == DiffUnified {
 		eds = d.eds[1:]
 		ed := &d.eds[1]
+		d.oldView.sys = ed.view.sys
 		d.oldView.setStyle(ed.view.font, ed.o.lineHeight, max(1, ed.view.scale), ed.tabSize())
 		d.oldView.setWrap(ed.view.wrap, ed.view.wrapWidth)
 	}

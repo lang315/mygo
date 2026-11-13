@@ -119,7 +119,10 @@ type editor struct {
 	undo, redo       []undoStep
 	lastEdit         time.Time
 	// now is the time, the engine's (engine.now), for what depends on it.
+	// sys is the text system of the window the editor draws in, the
+	// engine's: a Tester's window shapes apart from the others' (#1722).
 	now       func() time.Time
+	sys       *text.System
 	coalesce  bool
 	dragging  bool
 	dragUnit  int // 1 rune, 2 word, 3 line
@@ -128,9 +131,9 @@ type editor struct {
 	contentW  float32
 }
 
-func newEditor(now func() time.Time) *editor {
+func newEditor(now func() time.Time, sys *text.System) *editor {
 	linkEditor()
-	return &editor{now: now}
+	return &editor{now: now, sys: sys}
 }
 
 func (ed *editor) String() string { return ed.buf.string() }

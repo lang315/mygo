@@ -418,6 +418,8 @@ type dwrite struct {
 	textSeed  maphash.Seed
 	frame     uint64
 	thin      map[uintptr]bool // whether a font face is too thin for antialiasing
+	// objects are the inline objects of the layout typeset last.
+	objects layoutObjects
 
 	// The system's settings for text (settings): its rendering parameters,
 	// the correction renderers apply, whether it smooths fonts with
@@ -958,6 +960,9 @@ func (e *dwrite) shapeText(text []rune, style Style, spans []Span, width float32
 	if failed(hr) {
 		return nil
 	}
+	// The layout's inline objects stay pinned while it lives, and no longer:
+	// an engine of a System gone pins nothing (a Tester's own, #1730).
+	defer e.objects.drop()
 	defer release(layout)
 	wrapping := uintptr(wordWrappingWrap)
 	switch {
@@ -1036,7 +1041,7 @@ func (e *dwrite) shapeText(text []rune, style Style, spans []Span, width float32
 		}
 		lefts[li], lines[li].runs = ls, rs
 	}
-	if len(layoutObjects.objects) > 0 {
+	if len(e.objects.objects) > 0 {
 		units := make([]uint32, len(text)+1)
 		for i, r := range text {
 			units[i+1] = units[i] + 1
@@ -1285,7 +1290,7 @@ func (e *dwrite) typeset(layout uintptr, style Style, spans []Span, text []rune)
 			}
 		}
 	}
-	setObjects(layout, spans, units)
+	e.objects.set(layout, spans, units)
 }
 
 // spacing adds letter spacing to a range of a text layout, or, set, makes

@@ -3,7 +3,6 @@ package ui
 import (
 	"math"
 	"strings"
-	"sync"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/scene"
@@ -352,26 +351,54 @@ type layoutStyle struct {
 // Common input queries return false or zero for nil or cleared elements;
 // this does not make references to reused storage safe.
 type node struct {
+	// What the layout reads and writes of an element, in the lines it
+	// touches: a tree of a hundred thousand elements is walked again and
+	// again a frame, and each of them is read in as few lines as it can
+	// be.
+	c     *context
+	flags uint32
+	// special tells that the element lays out by more than what it is
+	// built with: a list, a toolbar, a form or a table's columns. The
+	// layout looks for those on every element it lays out, and this tells
+	// it that there are none to look for.
+	special bool
+	// lay says what the layout cache may do with the element
+	// (layOwner, layReuse), and laid when layoutBox last laid it out, in
+	// engine.laySeq.
+	lay uint8
+	// themeAt is the theme a static paint function paints with
+	// (builtWith); here, it fills the padding after lay.
+	themeAt uint16
+	laid    uint64
+	// hold is the element's entry in the engine's holds (0 for none):
+	// what a measuring pass resolved for its in-flow children, which a
+	// commit pass at the same size uses instead of building them again.
+	hold int32
+
+	parent *node
+	first  *node
+	last   *node
+	next   *node
+	st     *state
+
+	// layoutStyle holds what lays the element out.
+	layoutStyle
+
+	// Layout results, in DIPs relative to the window.
+	x, y, w, h float32
+	// measured is what was measured of the element: its max-content and
+	// min-content widths, and its heights at widths.
+	measured
+
 	epoch      uint64
 	key        any
 	valueInput func(*node)
-	c          *context
 	id         uint64
-	flags      uint32
-	themeAt    uint16 // the theme a static paint function paints with (builtWith)
-	parent     *node
-	first      *node
-	last       *node
-	next       *node
 	nchild     int
 	depth      int
-	st         *state
 	// track is the ScrollState of a scroll container (TrackScroll).
 	track *ScrollState
-
-	// layoutStyle holds what lays the element out, and cols and rows
-	// the tracks of a grid.
-	layoutStyle
+	// cols and rows are the tracks of a grid.
 	cols, rows []Track
 
 	// paintLook holds the scalar fields that paint, together, for the layout
@@ -514,8 +541,6 @@ type node struct {
 	accGrid [4]int32
 	accSet  [2]int32
 
-	// Layout results, in DIPs relative to the window.
-	x, y, w, h float32
 	// contentW and contentH are the size of a scroll container's content.
 	contentW, contentH float64
 	// scrollBase is the offset of a List's content that its rows were
@@ -620,12 +645,6 @@ type node struct {
 	hasPopup        Popup
 	popupSet        bool
 	tl              *text.Layout
-	measured
-	// lay says what the layout cache may do with the element
-	// (layOwner, layReuse), and laid when layoutBox last laid it out, in
-	// engine.laySeq.
-	lay  uint8
-	laid uint64
 	// attach is where Attach puts the element, 0 for nowhere, and placed
 	// where AttachTo put it as this frame laid it out, on whichever side
 	// of its target, flips the sides it went to (flipAcross, flipDown).
@@ -1824,16 +1843,12 @@ func (e *node) TextShadow(x, y, blur float32, c Color) *node {
 // sets them, which differs between systems.
 func (e *node) TabSize(n float32) *node {
 	if n > 0 {
-		linkTabs.Do(text.Shared().UseTabSize)
+		e.c.rt.text.UseTabSize()
 	}
 	e.ts.tabSize = max(n, 0)
 	e.ts.set |= setTabSize
 	return e
 }
-
-// linkTabs lets the text system set tab stops once an element sets a tab
-// size, so that apps that never do not link it.
-var linkTabs sync.Once
 
 // Strikethrough strikes text through.
 func (e *node) Strikethrough() *node { e.ts.strike = true; e.ts.set |= setStrike; return e }
@@ -1911,14 +1926,10 @@ func (e *node) Balance() *node { e.balance = true; return e }
 // paragraph of body text then ends on more than one word, at no cost to
 // the rest of its lines; Balance balances them all instead.
 func (e *node) Pretty() *node {
-	linkPretty.Do(text.Shared().UsePretty)
+	e.c.rt.text.UsePretty()
 	e.pretty = true
 	return e
 }
-
-// linkPretty lets the text system wrap text pretty once an element or a
-// TextShape asks for it, so that apps that never do not link it.
-var linkPretty sync.Once
 
 // PreserveSpaces keeps the spaces the element's text ends its lines with,
 // and a text of only spaces, with their advance, as CSS's white-space:
@@ -1945,14 +1956,10 @@ func (e *node) FillViewport() *node { e.fillViewport = true; return e }
 // layout gives it: a list of files shows "src/components/…/picker.go",
 // whose folder and file's name both show.
 func (e *node) TruncateMiddle() *node {
-	linkTruncateMiddle.Do(text.Shared().UseTruncateMiddle)
+	e.c.rt.text.UseTruncateMiddle()
 	e.middle = true
 	return e
 }
-
-// linkTruncateMiddle lets the text system cut text in its middle once an
-// element asks for it, so that apps that never do not link it.
-var linkTruncateMiddle sync.Once
 
 // Label names the element for assistive technology and for finding it in
 // tests, when its text does not.

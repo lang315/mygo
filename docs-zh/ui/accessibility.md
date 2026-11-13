@@ -233,9 +233,10 @@ if day, _ := tt.AccessByRole(ui.RoleCell, "November 2"); !day.Selected {
 `ui.AutoCompleteList` 表示弹出层中列出与已输入内容匹配的值，
 `AutoCompleteInline` 表示在插入点之后补上值的其余部分并选中，
 `AutoCompleteBoth` 表示两者都有。带建议的[组合框](combobox.md)、
-[自动补全](autocomplete.md)和[标记字段](token-field.md)会自己说明
-`AutoCompleteList`；你自己的组合框如果有弹出层和方向键所在的选项，用
-`Expanded` 和 `ActiveDescendant` 说明它们，也要说明这一点：
+[自动补全](autocomplete.md)，以及带建议或设置了 `Query` 的
+[标记字段](token-field.md)会自己说明 `AutoCompleteList`；
+你自己的组合框如果有弹出层和方向键所在的选项，用 `Expanded` 和
+`ActiveDescendant` 说明它们，也要说明这一点：
 
 ```go
 in := ui.TextInputBase(c, &app.query).Role(ui.RoleComboBox).Label("Search")

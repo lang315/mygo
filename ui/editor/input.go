@@ -262,7 +262,7 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		ed.gesture.colStart = ui.Point{X: cx, Y: float32(cy)}
 		ed.columnSelect(cx, cy)
 		return true
-	case mods == ui.Cmd && ed.o.onDefinition != nil && ev.Clicks == 1:
+	case ed.clickGoesToDefinition(mods) && ev.Clicks == 1:
 		ed.gesture.active = false
 		ed.setSels([]sel{ed.newSel(off, off)}, revealNone)
 		ed.o.onDefinition(off)
@@ -305,6 +305,45 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	}
 	ed.extendGesture(off)
 	return true
+}
+
+// textAt returns the offset of the text at a point of the element, or -1
+// past the end of a line, below the last, or off the text.
+func (ed *editor) textAt(x, y float32) int {
+	if ed.regionAt(x, y) != regionText {
+		return -1
+	}
+	cx, cy := ed.toContent(x, y)
+	off := ed.offsetAt(cx, cy)
+	if cr, ok := ed.caretRect(off); !ok || float64(cy) > float64(cr.Y+cr.H) ||
+		off == ed.view.text.LineEnd(ed.view.text.LineOf(off)) && cx > cr.X+ed.view.charWidth/2 {
+		return -1
+	}
+	return off
+}
+
+// clickGoesToDefinition reports whether a click with mods goes to the
+// definition of the word under it, which the press and the link both ask.
+func (ed *editor) clickGoesToDefinition(mods ui.Modifiers) bool {
+	return mods == ui.Cmd && ed.o.onDefinition != nil && !ed.o.noDefinitionClick
+}
+
+// linkAt returns the word under the pointer that a click with mods would
+// go to the definition of, as the editor's link holds it.
+func (ed *editor) linkAt(mods ui.Modifiers) [2]int {
+	if !ed.clickGoesToDefinition(mods) || ed.o.noDefinitionLink || !ed.pointerIn || ed.gesture.active || ed.scrollbar.active {
+		return [2]int{}
+	}
+	off := ed.textAt(ed.pointer.X, ed.pointer.Y)
+	if off < 0 {
+		return [2]int{}
+	}
+	extra := ed.wordChars()
+	a, z := wordAt(ed.view.text, off, extra)
+	if z <= a || classOf(firstRune(ed.view.text.Slice(a, z)), extra) != classWord {
+		return [2]int{}
+	}
+	return [2]int{a, z}
 }
 
 // extendGesture extends the selection being dragged to off.
@@ -408,18 +447,18 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		ed.hoverLine = line
 		changed = true
 	}
+	if l := ed.linkAt(ev.Mods); l != ed.link {
+		ed.link = l
+		changed = true
+	}
 	h := &ed.hover
-	off := -1
-	if ed.regionAt(ev.X, ev.Y) == regionText {
-		cx, cy := ed.toContent(ev.X, ev.Y)
-		off = ed.offsetAt(cx, cy)
-		// Past the end of a line, or below the last, is over no text.
-		// Trailing inlays are the exception: their caret deliberately stays
-		// before them, but their rendered text is still a hover target.
-		if cr, ok := ed.caretRect(off); (!ok || float64(cy) > float64(cr.Y+cr.H) ||
-			off == ed.view.text.LineEnd(ed.view.text.LineOf(off)) && cx > cr.X+ed.view.charWidth/2) &&
-			!ed.overTrailingInlay(cx, float64(cy)) {
-			off = -1
+	off := ed.textAt(ev.X, ev.Y)
+	// Trailing inlays are the exception: their caret deliberately stays
+	// before them, but their rendered text is still a hover target. Not a
+	// link's, which would underline the line's last word.
+	if off < 0 && ed.regionAt(ev.X, ev.Y) == regionText {
+		if cx, cy := ed.toContent(ev.X, ev.Y); ed.overTrailingInlay(cx, float64(cy)) {
+			off = ed.offsetAt(cx, cy)
 		}
 	}
 	if off < 0 {
@@ -648,7 +687,7 @@ func (ed *editor) foldPlaceholderAt(x float32, y float64) (int, bool) {
 	last := &l.rows[len(l.rows)-1]
 	end := last.indent + last.width
 	g := v.heights.geometry(line)
-	rowTop := g.rows + float64(len(l.rows)-1)*float64(v.lineHeight)
+	rowTop := g.rows + float64(len(l.rows)-1)*float64(l.rowHeight)
 	if y >= rowTop && x >= end+4 && x <= end+4+v.charWidth*3+8 {
 		return line, true
 	}
@@ -736,6 +775,7 @@ func (ed *editor) replaceText(r *ui.TextInputRange, s string) {
 	}
 	ts := ed.targets(r)
 	ed.markedActive, ed.marked = false, nil
+	s = lf(s)
 	ed.replaceRanges(ts, s, editCompose, -1, -1)
 	if b := ed.buf(); b != nil {
 		b.endGroup()

@@ -773,9 +773,10 @@ func TestLayoutCacheReusesListRows(t *testing.T) {
 func TestLayoutInputs(t *testing.T) {
 	// Fields of node that the layout reads besides layoutStyle, compared
 	// or made volatile by sameLayout, and those it writes.
-	read := "paintRare flags ts cols rows placeOn form colFit overflow gridFit attach popover " +
+	read := "paintRare flags ts cols rows placeOn form colFit overflow gridFit special attach popover " +
 		"first last next nchild parent st c measured tl lay laid x y w h contentW contentH runes frags paragraph ownText merged " +
-		"spansKey collapsed rowMinW field hidden fillViewport spans placed flips originAttached edgeMargin edgeMarginSet"
+		"spansKey collapsed rowMinW field hidden fillViewport spans placed flips originAttached edgeMargin edgeMarginSet " +
+		"hold"
 	// Fields the layout never reads.
 	other := "shadows styleFn epoch key valueInput id themeAt depth track originX originY originSet world content " +
 		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +

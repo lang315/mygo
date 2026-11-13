@@ -16,7 +16,7 @@ import (
 func TestPaintInputs(t *testing.T) {
 	fields := map[string]string{
 		// layout: compared by sameLayout, or made by the layout
-		"layout": "layoutStyle cols rows hidden measured tl lay laid",
+		"layout": "layoutStyle cols rows hidden measured tl lay laid special hold",
 		// compared by paintStyle, or by textPaint (ts)
 		"paint": "flags themeAt paintLook ts shadows styleFn spans",
 		// an element with one set is never paint-same

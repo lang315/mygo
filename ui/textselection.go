@@ -94,7 +94,7 @@ func linkSelectableText() {
 func prepareEditorText(e *node, scope uint64) {
 	ed := e.st.editor
 	if ed == nil {
-		ed = newEditor(e.c.rt.now)
+		ed = newEditor(e.c.rt.now, e.c.rt.text)
 		ed.readOnly, ed.multiline = true, true
 		e.st.editor = ed
 		e.st.touch()

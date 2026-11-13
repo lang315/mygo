@@ -7,6 +7,7 @@ import (
 	"image/png"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/text"
 )
 
 // MenuIconPNG draws s as a menu icon: a 32×32 PNG, shown at 16×16 points,
@@ -15,7 +16,7 @@ import (
 // MenuItem.Icon calls it with the color of the text of the theme.
 func MenuIconPNG(s *SVG, c Color) (b []byte, template bool) {
 	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
-	s.doc.Draw(img, color.NRGBA{c.R, c.G, c.B, c.A}, false)
+	s.doc.Draw(img, s.options(color.NRGBA{c.R, c.G, c.B, c.A}, s.darkIn(false), text.Shared()))
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return nil, false

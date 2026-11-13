@@ -74,7 +74,7 @@ func bufferInputBase(c *context, value *TextBuffer, multiline bool) *node {
 	}
 	st := e.st
 	if st.editor == nil || st.editor.document != value {
-		st.editor = newEditor(c.rt.now)
+		st.editor = newEditor(c.rt.now, c.rt.text)
 		st.touch()
 		st.editor.document = value
 		st.editor.loadBuffer(value.Snapshot())

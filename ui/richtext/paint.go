@@ -114,7 +114,9 @@ func (v *view) paintBlock(p *ui.Painter, i int, st ParagraphStyle, x, top, heigh
 			top, height = top+above, height-above
 		}
 		w := look.QuoteBarWidth
-		p.Fill(ui.Rect{X: x + indent, Y: top, W: w, H: height}, look.QuoteBar, w/2)
+		for level := range st.quoteDepth() {
+			p.Fill(ui.Rect{X: x + indent + float32(level)*look.indent*0.75, Y: top, W: w, H: height}, look.QuoteBar, w/2)
+		}
 	}
 }
 

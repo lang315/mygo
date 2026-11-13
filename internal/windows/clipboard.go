@@ -33,7 +33,10 @@ var (
 	winClipboard              *winClipboardSource
 
 	procAddClipboardFormatListener = user32.NewProc("AddClipboardFormatListener")
-	clipboardListening             bool
+	// clipboardListening tells that the hidden window is a clipboard format
+	// listener, and clipboardReplacing that listenForReplacement wants it to
+	// stay one (WatchChanges does too, until it stops).
+	clipboardListening, clipboardReplacing bool
 )
 
 // wmClipboardUpdate is sent to a window added with AddClipboardFormatListener
@@ -86,11 +89,23 @@ func currentWinClipboard() *winClipboardSource {
 // data asks for it. If the system refuses, the source ends on that access, as
 // it did before.
 func (c clipboard) listenForReplacement() {
-	if clipboardListening {
+	if clipboardReplacing {
 		return
 	}
+	clipboardReplacing = true
+	_ = c.listen()
+}
+
+// listen makes the app's hidden window a clipboard format listener, once.
+func (c clipboard) listen() error {
+	if clipboardListening {
+		return nil
+	}
+	if ok, _, err := procAddClipboardFormatListener.Call(c.b.appHwnd); ok == 0 {
+		return err
+	}
 	clipboardListening = true
-	procAddClipboardFormatListener.Call(c.b.appHwnd)
+	return nil
 }
 
 func (c clipboard) WriteData(data transfer.Data, concealed bool, released func()) error {

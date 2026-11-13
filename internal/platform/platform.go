@@ -118,7 +118,10 @@ type Backend interface {
 	ReplaceFile(target, replacement string) error
 
 	NewTray(h TrayHandler) (Tray, error)
-	RegisterHotkey(id int, accelerator string) error
+	// RegisterHotkey makes accelerator a global shortcut. description says
+	// what it does, for desktops that show the app's shortcuts to the
+	// user; such desktops tell the keys they bound with HotkeyBound.
+	RegisterHotkey(id int, accelerator, description string) error
 	UnregisterHotkey(id int)
 
 	NotificationsSupported() bool
@@ -229,6 +232,9 @@ type AppHandler interface {
 	// called, when it may have changed.
 	NetworkChanged(status NetworkStatus)
 	HotkeyPressed(id int)
+	// HotkeyBound reports the keys a desktop that binds global shortcuts
+	// for apps has for one, as it writes them, "" when it bound none.
+	HotkeyBound(id int, keys string)
 	NotificationClicked(id string)
 	// MediaCommand reports a media key or a remote command for what
 	// NowPlaying shows; position is where MediaSeek asks to go.
@@ -617,6 +623,7 @@ type Window interface {
 	SetHasShadow(v bool)
 	HasShadow() bool
 	SetIgnoreMouseEvents(v bool)
+	IgnoresMouseEvents() bool
 	SetContentProtection(v bool)
 	SetVibrancy(material string)
 	// SetVibrancyTint tints the window's material, where it takes one
@@ -1188,6 +1195,11 @@ type Dialogs interface {
 
 // Clipboard accesses the system clipboard.
 type Clipboard interface {
+	// WatchChanges observes clipboard changes without reading data. It does
+	// not report the initial contents. changed and the returned stop function
+	// run on the main thread; stop prevents later callbacks. Only one watch
+	// is active at a time. Unsupported backends return ErrUnsupported.
+	WatchChanges(changed func()) (stop func(), err error)
 	// Data reads copy accepted representations, so returned data outlives
 	// native ownership. Nil formats reads all; a missing explicit match is
 	// transfer.ErrFormat. WriteData takes an application-owned snapshot;
@@ -1226,6 +1238,10 @@ type Shell interface {
 	OpenPath(path string) error
 	ShowItemInFolder(path string)
 	TrashItem(path string) error
+	// TrashItemResult moves the item at path to the trash and returns the
+	// path where it landed inside the trash directory. It is supported on
+	// macOS only; all other platforms return ("", ErrUnsupported).
+	TrashItemResult(path string) (string, error)
 	// PreviewItem shows the item at path in the Quick Look panel, the
 	// preview Finder opens with the space bar. It is supported on macOS
 	// only; all other platforms return ErrUnsupported.
