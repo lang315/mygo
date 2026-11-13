@@ -185,6 +185,31 @@ func TestCalmAccentValues(t *testing.T) {
 	}
 }
 
+// Calm's chart colors are the plan's, in order, and every palette keeps
+// them.
+func TestCalmChartValues(t *testing.T) {
+	hex := func(s ...string) (c [8]ui.Color) {
+		for i, h := range s {
+			c[i] = ui.Hex(h)
+		}
+		return c
+	}
+	light := hex("#2563eb", "#16a34a", "#ea580c", "#9333ea", "#0891b2", "#db2777", "#a16207", "#4b5563")
+	dark := hex("#60a5fa", "#4ade80", "#fb923c", "#c084fc", "#22d3ee", "#f472b6", "#facc15", "#9ca3af")
+	if Calm.light.Chart != light {
+		t.Errorf("light Chart is %v, want %v", Calm.light.Chart, light)
+	}
+	if Calm.dark.Chart != dark {
+		t.Errorf("dark Chart is %v, want %v", Calm.dark.Chart, dark)
+	}
+	for _, p := range palettes {
+		s := Calm.WithPalette(p)
+		if s.light.Chart != light || s.dark.Chart != dark {
+			t.Errorf("%s: Chart is %v and %v, want Calm's", p.Name(), s.light.Chart, s.dark.Chart)
+		}
+	}
+}
+
 // A skin has its name.
 func TestCalmName(t *testing.T) {
 	if Calm.Name() != "Calm" {

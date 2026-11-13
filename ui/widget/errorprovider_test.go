@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // redPixels counts the pixels of a clearly red hue inside r of the frame.
@@ -320,4 +321,46 @@ func TestErrorMarkClipsTheTextOfAnUnfocusedTextBox(t *testing.T) {
 	if after := darkPixelsInEnd(tt, box); after >= before {
 		t.Errorf("text pixels before the mark: %d without the error, %d with it: the text is not clipped short of the mark", before, after)
 	}
+}
+
+// The exclamation mark on the red disc is the skin's Danger.On, light and
+// dark; white without a skin.
+func TestErrorGlyphUsesDangerOn(t *testing.T) {
+	light, dark := testTokens()
+	white := ui.Hex("#ffffff")
+	for _, c := range []struct {
+		name       string
+		skin, dark bool
+		glyph, not ui.Color
+	}{
+		{"plain", false, false, white, light.Danger.On},
+		{"light", true, false, light.Danger.On, white},
+		{"dark", true, true, dark.Danger.On, light.Danger.On},
+	} {
+		if c.skin {
+			useTestSkin(t)
+		} else {
+			skinhook.Set(nil, nil)
+		}
+		ep := ErrorProvider()
+		tb := TextBox()
+		tt := NewTester(t, VBox(8).Add(Label("Name"), tb), 400, 200)
+		tt.SetDark(c.dark)
+		ep.SetError(tb, "Name is required")
+		tt.Settle()
+		box := tt.Find(ByRole(ui.RoleTextField)).Bounds()
+		// The mark: errorMarkSize square, errorMarkInset from the end, and
+		// the glyph's bar down its middle.
+		x := box.X + box.W - errorMarkInset - errorMarkSize
+		y := box.Y + (box.H-errorMarkSize)/2
+		bar := ui.Rect{X: x + errorMarkSize/2 - 1, Y: y + 3, W: 2, H: errorMarkSize - 9}
+		img := tt.Image()
+		if n := countNear(img, bar, false, c.glyph, 24); n < 3 {
+			t.Errorf("%s: %d pixels of the glyph %v in the mark's bar %v, want 3 or more", c.name, n, c.glyph, bar)
+		}
+		if n := countNear(img, bar, false, c.not, 24); n > 0 {
+			t.Errorf("%s: %d pixels of %v in the mark's bar", c.name, n, c.not)
+		}
+	}
+	skinhook.Set(nil, nil)
 }

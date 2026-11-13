@@ -1,6 +1,7 @@
 package skin
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -297,6 +298,36 @@ func TestDeltaEMatchesReference(t *testing.T) {
 				t.Errorf("%s is Lab %.2f, want %.2f", c.hex, got, c.want)
 				break
 			}
+		}
+	}
+}
+
+// Each chart color must stand out from the content, 3:1: the old amber
+// #ca8a04 (2.94:1 on white) fails at any index and is named by it; Calm's
+// light and dark pass, each color measured on its own content.
+func TestCheckChartOnContent(t *testing.T) {
+	for _, i := range []int{0, 6, 7} {
+		tk := Calm.light
+		tk.Chart[i] = ui.Hex("#ca8a04")
+		err := check(&tk, false)
+		name := fmt.Sprintf("Chart[%d] on Content", i)
+		if err == nil || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), "want 3:1") {
+			t.Errorf("Chart[%d] #ca8a04 gives %v, want an error naming %s and 3:1", i, err, name)
+		}
+	}
+	// In dark, a color as dark as a line fails on the dark content.
+	tk := Calm.dark
+	tk.Chart[3] = ui.Hex("#2a2e34")
+	if err := check(&tk, true); err == nil || !strings.Contains(err.Error(), "Chart[3] on Content") {
+		t.Errorf("dark Chart[3] #2a2e34 gives %v, want an error naming Chart[3] on Content", err)
+	}
+	for _, p := range palettes {
+		s := Calm.WithPalette(p)
+		if err := check(&s.light, false); err != nil {
+			t.Errorf("%s light: %v", p.Name(), err)
+		}
+		if err := check(&s.dark, true); err != nil {
+			t.Errorf("%s dark: %v", p.Name(), err)
 		}
 	}
 }

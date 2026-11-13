@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/chart"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // ChartKind says how a Chart draws its data.
@@ -121,13 +122,14 @@ func (c *ChartWidget) OnSelect(fn func()) *ChartWidget {
 	return c
 }
 
-// chartColors are the series' and slices' colors, in order.
-var chartColors = []ui.Color{
+// plainChartColors are the series' and slices' colors, in order, without a
+// skin; a skin gives its Chart.
+var plainChartColors = []ui.Color{
 	ui.Hex("#2563eb"), ui.Hex("#16a34a"), ui.Hex("#ea580c"), ui.Hex("#9333ea"),
 	ui.Hex("#0891b2"), ui.Hex("#db2777"), ui.Hex("#ca8a04"), ui.Hex("#4b5563"),
 }
 
-func chartColor(i int) ui.Color { return chartColors[i%len(chartColors)] }
+func chartColor(colors []ui.Color, i int) ui.Color { return colors[i%len(colors)] }
 
 func fmtValue(v float64) string { return fmt.Sprintf("%.4g", v) }
 
@@ -142,15 +144,19 @@ func (c *ChartWidget) build(ctx *ui.Context) ui.Element {
 	// The drawing and the selection read these copies: the setters replace
 	// the slices, never change them.
 	labels, series, selected := c.labels, c.series, c.selected
+	colors := plainChartColors
+	if tk := skinhook.Get(t.Dark); tk != nil {
+		colors = tk.Chart[:]
+	}
 	pick := -1
 	root := ui.Column(ctx).Gap(t.Space(2))
 	root.Children(func() {
 		if c.kind == PieChart {
-			pick = c.buildPie(ctx, labels, series, selected)
+			pick = c.buildPie(ctx, labels, series, selected, colors)
 		} else {
-			pick = c.buildPlot(ctx, labels, series, selected)
+			pick = c.buildPlot(ctx, labels, series, selected, colors)
 		}
-		c.buildLegend(ctx, labels, series)
+		c.buildLegend(ctx, labels, series, colors)
 	})
 	if pick >= 0 {
 		c.selected = pick
@@ -161,7 +167,7 @@ func (c *ChartWidget) build(ctx *ui.Context) ui.Element {
 	return root
 }
 
-func (c *ChartWidget) buildLegend(ctx *ui.Context, labels []string, series []ChartSeries) {
+func (c *ChartWidget) buildLegend(ctx *ui.Context, labels []string, series []ChartSeries, colors []ui.Color) {
 	t := ctx.Theme()
 	items := len(series)
 	if c.kind == PieChart {
@@ -180,7 +186,7 @@ func (c *ChartWidget) buildLegend(ctx *ui.Context, labels []string, series []Cha
 				name = series[i].Name
 			}
 			ui.Row(ctx.Key(i)).Gap(t.Space(1)).AlignItems(ui.Center).Children(func() {
-				ui.Box(ctx).Size(10, 10).Radius(2).Background(chartColor(i))
+				ui.Box(ctx).Size(10, 10).Radius(2).Background(chartColor(colors, i))
 				ui.Text(ctx, name).NoWrap().FontSize(t.FontSize - 1)
 			})
 		}
@@ -220,7 +226,7 @@ func axisTicks(x chart.Band, labels []string) []chart.Tick {
 	return out
 }
 
-func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []ChartSeries, selected int) (picked int) {
+func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []ChartSeries, selected int, colors []ui.Color) (picked int) {
 	t := ctx.Theme()
 	picked = -1
 	lo, hi := extent(labels, series)
@@ -252,9 +258,9 @@ func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []Chart
 				p.Line(r.X, chart.Y(r, tk.At), r.X+r.W, chart.Y(r, tk.At), 1, t.Border)
 			}
 			if kind == LineChart {
-				c.drawLines(p, r, y, xs, labels, series)
+				c.drawLines(p, r, y, xs, labels, series, colors)
 			} else {
-				c.drawBars(p, r, x, y, labels, series)
+				c.drawBars(p, r, x, y, labels, series, colors)
 			}
 			if selected >= 0 && selected < len(xs) {
 				fx := chart.X(r, xs[selected])
@@ -291,7 +297,7 @@ func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []Chart
 
 // drawLines paints the lines. It runs outside mu, on the drawing thread, and
 // touches only its arguments and the scratch below.
-func (c *ChartWidget) drawLines(p *ui.Painter, r ui.Rect, y chart.Linear, xsAll []float32, labels []string, series []ChartSeries) {
+func (c *ChartWidget) drawLines(p *ui.Painter, r ui.Rect, y chart.Linear, xsAll []float32, labels []string, series []ChartSeries, colors []ui.Color) {
 	px := int(math.Ceil(float64(r.W * p.Scale())))
 	for si, s := range series {
 		n := min(len(s.Values), len(labels))
@@ -309,7 +315,7 @@ func (c *ChartWidget) drawLines(p *ui.Painter, r ui.Rect, y chart.Linear, xsAll 
 		for i, fx := range c.bx {
 			c.points = append(c.points, [2]float32{chart.X(r, fx), chart.Y(r, c.by[i])})
 		}
-		p.StrokePolyline(c.points, 2, chartColor(si))
+		p.StrokePolyline(c.points, 2, chartColor(colors, si))
 	}
 }
 
@@ -321,7 +327,7 @@ func (c *ChartWidget) ensureScratch(n int) (xs, ys []float32) {
 	return c.ysScratch[:n], c.ysScratch[n : 2*n]
 }
 
-func (c *ChartWidget) drawBars(p *ui.Painter, r ui.Rect, x chart.Band, y chart.Linear, labels []string, series []ChartSeries) {
+func (c *ChartWidget) drawBars(p *ui.Painter, r ui.Rect, x chart.Band, y chart.Linear, labels []string, series []ChartSeries, colors []ui.Color) {
 	n := max(len(series), 1)
 	for si, s := range series {
 		for i, v := range s.Values {
@@ -333,7 +339,7 @@ func (c *ChartWidget) drawBars(p *ui.Painter, r ui.Rect, x chart.Band, y chart.L
 			sp := y.Span(0, v)
 			x0, x1 := chart.X(r, b.Lo+w*float32(si)), chart.X(r, b.Lo+w*float32(si+1))
 			y0, y1 := chart.Y(r, sp.Hi), chart.Y(r, sp.Lo)
-			p.Fill(ui.Rect{X: x0, Y: min(y0, y1), W: x1 - x0, H: abs32(y1 - y0)}, chartColor(si), 2)
+			p.Fill(ui.Rect{X: x0, Y: min(y0, y1), W: x1 - x0, H: abs32(y1 - y0)}, chartColor(colors, si), 2)
 		}
 	}
 }
@@ -345,7 +351,7 @@ func abs32(v float32) float32 {
 	return v
 }
 
-func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartSeries, selected int) (picked int) {
+func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartSeries, selected int, colors []ui.Color) (picked int) {
 	picked = -1
 	var values []float64
 	if len(series) > 0 {
@@ -419,7 +425,7 @@ func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartS
 				if i == selected || i == on {
 					outer -= 4
 				}
-				p.FillPath(chart.Sector(cx, cy, size/2*0.55, outer, s), chartColor(i))
+				p.FillPath(chart.Sector(cx, cy, size/2*0.55, outer, s), chartColor(colors, i))
 			}
 		})
 		// The slice under the pointer, named as the value of the plot.

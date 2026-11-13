@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"sync"
+
 	"github.com/egoist/mygo/plugins/terminal/internal/vt"
 	"github.com/egoist/mygo/ui"
 )
@@ -61,11 +63,35 @@ func LightTheme() *Theme {
 
 var themes = [2]*Theme{LightTheme(), DarkTheme()}
 
-func defaultTheme(dark bool) *Theme {
-	if dark {
-		return themes[1]
+// followed are the default themes of views whose theme is not ui's own, a
+// *Theme for each followKey, made once so that a view applies it once.
+// shortcut: never emptied, one entry for each text and background a view
+// had; bound it if an app animates its theme's colors.
+var followed sync.Map
+
+type followKey struct {
+	fg, bg ui.Color
+	dark   bool
+}
+
+// defaultTheme returns the colors of a terminal whose app set none: the text
+// and background of the view's theme ut, with the light or dark palette.
+func defaultTheme(ut *ui.Theme) *Theme {
+	base := themes[0]
+	if ut.Dark {
+		base = themes[1]
 	}
-	return themes[0]
+	if ut.Text == base.Foreground && ut.Background == base.Background {
+		return base
+	}
+	key := followKey{ut.Text, ut.Background, ut.Dark}
+	if th, ok := followed.Load(key); ok {
+		return th.(*Theme)
+	}
+	th := *base
+	th.Foreground, th.Background = ut.Text, ut.Background
+	v, _ := followed.LoadOrStore(key, &th)
+	return v.(*Theme)
 }
 
 // dark reports whether the theme's background is dark.
