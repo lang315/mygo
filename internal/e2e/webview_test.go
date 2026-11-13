@@ -5,10 +5,12 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -240,6 +242,12 @@ func TestContentWindowWebViewEditMenu(t *testing.T) {
 <div id=e contenteditable style="height:100px">hello</div><script>window.ready = true</script></body>`, "")
 	waitForPage(t, v.Page(), "window.ready")
 	w.Focus()
+	if runtime.GOOS == "windows" {
+		// The window's activation gives its own surface the keyboard, from
+		// the page too: let it come before the page takes the keyboard, or
+		// it comes after and the edit menu's commands go to the native UI.
+		eventually(t, "the window to be in front", w.IsFocused)
+	}
 	v.Focus()
 	if _, err := v.Page().Eval("document.getElementById('e').focus()"); err != nil {
 		t.Fatal(err)
@@ -257,8 +265,20 @@ func TestContentWindowWebViewEditMenu(t *testing.T) {
 	menu("Select All")
 	waitForPage(t, v.Page(), "getSelection().toString() === 'hello'")
 	mygo.Clipboard.WriteText("before copy")
+	// Who had the keyboard as Copy was sent says, if it copies nothing,
+	// whether it went to the native UI or the page did not copy.
+	sent := foregroundState(w)
 	menu("Copy")
-	eventually(t, "Copy to copy the page's selection", func() bool { return mygo.Clipboard.ReadText() == "hello" })
+	if !wait.Poll(func() bool {
+		if mygo.Clipboard.ReadText() == "hello" {
+			return true
+		}
+		keepFront()
+		return false
+	}) {
+		t.Fatalf("Copy to copy the page's selection never happened (waited %v); as Copy was sent, %s; now %s, and the clipboard has %q",
+			wait.Guard, sent, foregroundState(w), mygo.Clipboard.ReadText())
+	}
 	menu("Cut")
 	eventually(t, "Cut to take the text out of the page", func() bool { return text() == "" })
 	menu("Paste")

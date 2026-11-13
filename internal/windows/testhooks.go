@@ -135,8 +135,19 @@ func TestForegroundState(hwnd uintptr) string {
 	fg, _, _ := procGetForegroundWindow.Call()
 	visible, _, _ := procIsWindowVisible.Call(hwnd)
 	iconic, _, _ := procIsIconic.Call(hwnd)
-	return fmt.Sprintf("in front: %s; last input %v ago; the window %#x is visible %v, minimized %v",
+	state := fmt.Sprintf("in front: %s; last input %v ago; the window %#x is visible %v, minimized %v",
 		describeWindow(fg), power{}.IdleTime(), hwnd, visible != 0, iconic != 0)
+	// The edit menu's commands go to a web view's page only while it has
+	// the keyboard (editRole); the window's own focus takes it back from
+	// the page (wmSetFocus).
+	if w := theBackend.windows[hwnd]; w != nil && len(w.webViews) > 0 {
+		focus, _, _ := user32.NewProc("GetFocus").Call()
+		state += fmt.Sprintf("; a web view in it has the keyboard: %v, this thread's keyboard is at %#x", w.focusedWebView() != nil, focus)
+		if w.sf != nil {
+			state += fmt.Sprintf(" (the surface %#x)", w.surf().hwnd)
+		}
+	}
+	return state
 }
 
 // TestForegroundDiag describes what a window that does not come to the front
@@ -510,11 +521,24 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 	// front first, as a user does. A window of the app there, such as a
 	// parent its modal child disables, is left as it is.
 	var raised string
+	front, _, _ := procGetForegroundWindow.Call()
 	if under := rootAt(pt); !ownWindow(under) {
 		procSetForegroundWindow.Call(w.hwnd)
 		fg, _, _ := procGetForegroundWindow.Call()
 		raised = fmt.Sprintf("; before the click %s was there, and after bringing the window to the front %s, with %s in front",
 			describeWindow(under), describeWindow(rootAt(pt)), describeWindow(fg))
+	} else if enabled, _, _ := procIsWindowEnabled.Call(w.hwnd); !ownWindow(front) && under == w.hwnd && enabled != 0 && w.opts.Flyout == nil {
+		// No window of the app is in front, as after the test before closed
+		// the one that was: a click on w then reached the app's move and
+		// lost its button (TestParentStaysBlockedWhileAModalChildIsOpen).
+		// Bring w to the front first, as for another app's window over it,
+		// with the right to take the front (TestGrantForeground). A disabled
+		// parent and a flyout, which must not activate, are left as they are.
+		TestGrantForeground()
+		ok, _, _ := procSetForegroundWindow.Call(w.hwnd)
+		fg, _, _ := procGetForegroundWindow.Call()
+		raised = fmt.Sprintf("; before the click %s was in front, and bringing the window to the front returned %v, with %s in front",
+			describeWindow(front), ok != 0, describeWindow(fg))
 	}
 	// The window under the point is read where it is reported: one that
 	// appeared after the click shows.
@@ -524,7 +548,8 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 	}
 	deadline := time.Now().Add(within)
 	var placed uintptr
-	downs := 0 // for the diagnosis of a click that did not come back
+	downs := 0        // for the diagnosis of a click that did not come back
+	var seen []string // the mouse messages the loop handled, for the same
 	for attempt := 0; time.Now().Before(deadline); attempt++ {
 		if attempt > 0 {
 			// The click went to another app's window that rose over the
@@ -583,6 +608,9 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 				if m.Message == wmLButtonDown {
 					downs++
 				}
+				if mouseMessage(m.Message) && len(seen) < 16 {
+					seen = append(seen, fmt.Sprintf("%#x to %#x", m.Message, m.HWnd))
+				}
 				procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 				procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 				if m.Message == wmLButtonUp {
@@ -599,8 +627,13 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			pumped = true
 		}
 	}
-	return true, describe() + diagnoseClick(pt, placed != 0, downs) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves), moves
+	return true, describe() + diagnoseClick(pt, placed != 0, downs, seen) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves), moves
 }
+
+// mouseMessage reports whether a message is one of the mouse's, in the
+// client area (WM_MOUSEMOVE to WM_MOUSEHWHEEL) or outside it
+// (WM_NCMOUSEMOVE to WM_NCXBUTTONDBLCLK).
+func mouseMessage(m uint32) bool { return m >= 0x0200 && m <= 0x020E || m >= 0x00A0 && m <= 0x00AD }
 
 // clickWentElsewhere reports whether a click that no window of the app has
 // received, with another app's window now over its point, went to that
@@ -679,8 +712,10 @@ func rootOf(h uintptr) uintptr {
 // message of one that did not: whether the button went down in the loop
 // (and since no release came, it never came up), whether the system took
 // the cursor to the point, whether the desktop that takes input is the
-// one of this thread, and who is in front. It runs only then.
-func diagnoseClick(pt point, placed bool, downs int) string {
+// one of this thread, and who is in front; the mouse messages the loop
+// handled, and what this thread's windows hold (GUITHREADINFO): a capture,
+// a move or a menu takes the button elsewhere. It runs only then.
+func diagnoseClick(pt point, placed bool, downs int, mouse []string) string {
 	var at point
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&at)))
 	desktop := func(h uintptr) string {
@@ -710,8 +745,21 @@ func diagnoseClick(pt point, placed bool, downs int) string {
 	fg, _, _ := procGetForegroundWindow.Call()
 	var pid uint32
 	fgThread, _, _ := user32.NewProc("GetWindowThreadProcessId").Call(fg, uintptr(unsafe.Pointer(&pid)))
-	return fmt.Sprintf("; the button went down %d times in the loop; the cursor was set to (%d, %d): %v, and is at (%d, %d); %s, this thread's is %s; the thread in front is %d (this one %d)",
-		downs, pt.X, pt.Y, placed, at.X, at.Y, inputDesktop, desktop(own), fgThread, tid)
+	held := "no thread info"
+	info := guiThreadInfo{size: uint32(unsafe.Sizeof(guiThreadInfo{}))}
+	if r, _, _ := user32.NewProc("GetGUIThreadInfo").Call(tid, uintptr(unsafe.Pointer(&info))); r != 0 {
+		held = fmt.Sprintf("this thread's flags %#x, active %#x, focus %#x, capture %#x, move or size %#x, menu owner %#x",
+			info.flags, info.active, info.focus, info.capture, info.moveSize, info.menuOwner)
+	}
+	return fmt.Sprintf("; the button went down %d times in the loop, which handled the mouse messages %v; the cursor was set to (%d, %d): %v, and is at (%d, %d); %s, this thread's is %s; the thread in front is %d (this one %d); %s",
+		downs, mouse, pt.X, pt.Y, placed, at.X, at.Y, inputDesktop, desktop(own), fgThread, tid, held)
+}
+
+// guiThreadInfo is GUITHREADINFO.
+type guiThreadInfo struct {
+	size, flags                                        uint32
+	active, focus, capture, menuOwner, moveSize, caret uintptr
+	caretLeft, caretTop, caretRight, caretBottom       int32
 }
 
 // rootAt returns the top-level window at a point of the screen, in
@@ -1217,11 +1265,6 @@ func TestPinchSurface(hwnd uintptr, x, y, scale float64) (float64, bool) {
 // bar item highlighted, the window menu's loop, or a menu open), as after an
 // Alt key the window did not take. The flags are GUITHREADINFO's.
 func TestInMenuMode() bool {
-	type guiThreadInfo struct {
-		size, flags                                        uint32
-		active, focus, capture, menuOwner, moveSize, caret uintptr
-		caretLeft, caretTop, caretRight, caretBottom       int32
-	}
 	info := guiThreadInfo{size: uint32(unsafe.Sizeof(guiThreadInfo{}))}
 	r, _, _ := user32.NewProc("GetGUIThreadInfo").Call(0, uintptr(unsafe.Pointer(&info)))
 	const (

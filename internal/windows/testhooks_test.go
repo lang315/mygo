@@ -10,9 +10,9 @@ import (
 // The diagnosis of a click that did not come back runs only then, in CI,
 // so its text is checked here.
 func TestDiagnoseClick(t *testing.T) {
-	got := diagnoseClick(point{X: 30, Y: 260}, true, 2)
+	got := diagnoseClick(point{X: 30, Y: 260}, true, 2, []string{"0x201 to 0x10"})
 	for _, want := range []string{
-		"the button went down 2 times in the loop",
+		"the button went down 2 times in the loop, which handled the mouse messages [0x201 to 0x10]",
 		"the cursor was set to (30, 260): true, and is at (",
 		"the input desktop ",
 		"this thread's is ",
