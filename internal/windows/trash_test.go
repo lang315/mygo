@@ -301,16 +301,75 @@ func TestTrashItemRecyclesAFileAsBigAsTheRecycleBin(t *testing.T) {
 	if err := os.WriteFile(path, make([]byte, 1<<20), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	before := recycled(t, path)
 	if result := trashItemInHelper(t, path); result != "<nil>" {
 		t.Errorf("TrashItem(%s) reported %q, want <nil> for an item that fits the recycle bin", path, result)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("TrashItem(%s) did not remove the item: %v", path, err)
 	}
-	if after := recycled(t, path); after != before+1 {
-		t.Errorf("TrashItem(%s): the recycle bin went from %d to %d items, want one more", path, before, after)
+	// The item is in the recycle bin, not deleted for good. Its count is
+	// not the measure: a bin past its size drops older items as this one
+	// goes in, which earlier tests may have left there.
+	if !inRecycleBin(t, path) {
+		t.Errorf("TrashItem(%s): the recycle bin holds no item from that path", path)
 	}
+}
+
+// inRecycleBin reports whether the recycle bin of path's volume holds an
+// item that was at path: each item has an $I file in the user's folder of
+// $Recycle.Bin that names its original path (version 1: 260 UTF-16 units
+// at offset 24; version 2: their count at 24, then the path). Folders of
+// other users cannot be read and are passed over.
+func inRecycleBin(t *testing.T, path string) bool {
+	t.Helper()
+	want := []string{path}
+	if p, err := syscall.UTF16PtrFromString(filepath.Dir(path)); err == nil {
+		buf := make([]uint16, 32768)
+		if n, err := syscall.GetLongPathName(p, &buf[0], uint32(len(buf))); err == nil && n > 0 && int(n) < len(buf) {
+			want = append(want, filepath.Join(syscall.UTF16ToString(buf[:n]), filepath.Base(path)))
+		}
+	}
+	root := filepath.Join(filepath.VolumeName(path)+`\`, "$Recycle.Bin")
+	users, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("read %s: %v", root, err)
+	}
+	for _, u := range users {
+		items, err := os.ReadDir(filepath.Join(root, u.Name()))
+		if err != nil {
+			continue
+		}
+		for _, it := range items {
+			if !strings.HasPrefix(it.Name(), "$I") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(root, u.Name(), it.Name()))
+			if err != nil || len(data) < 28 {
+				continue
+			}
+			var units []byte
+			switch binary.LittleEndian.Uint64(data) {
+			case 1:
+				units = data[24:min(len(data), 24+520)]
+			case 2:
+				n := int(binary.LittleEndian.Uint32(data[24:]))
+				units = data[28:min(len(data), 28+2*n)]
+			default:
+				continue
+			}
+			u16 := make([]uint16, len(units)/2)
+			for i := range u16 {
+				u16[i] = binary.LittleEndian.Uint16(units[2*i:])
+			}
+			original := syscall.UTF16ToString(u16)
+			for _, w := range want {
+				if strings.EqualFold(original, w) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func TestDefaultRecycleBinCapacity(t *testing.T) {
