@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/transfer"
 )
 
@@ -94,6 +95,9 @@ func TestClipboardChangesCanReadAndWriteWithoutReentry(t *testing.T) {
 		}
 	})
 	Clipboard.WriteText("first")
+	// The callback's nested drain can run this test's drain, so the change it
+	// writes is posted only after that drain returned.
+	wait.Until(t, "the change written in the callback", func() bool { return onMainValue(func() int { return calls }) >= 2 })
 	drainClipboardChanges()
 	onMain(func() {
 		if calls != 2 {
