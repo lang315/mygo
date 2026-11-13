@@ -25,8 +25,12 @@ func (s *StatusStripWidget) Add(items ...Control) *StatusStripWidget {
 
 func (s *StatusStripWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
-	return ui.Row(c).AlignItems(ui.Center).Gap(t.Space(3)).Padding(t.Space(1), t.Space(3)).
-		BorderWidth(1, 0, 0, 0).BorderColor(t.Border).Children(func() {
+	row := ui.Row(c).AlignItems(ui.Center).Gap(t.Space(3)).Padding(t.Space(1), t.Space(3)).
+		BorderWidth(1, 0, 0, 0).BorderColor(t.Border)
+	if tk, _ := skinOf(c); tk != nil {
+		row.Background(tk.Chrome)
+	}
+	return row.Children(func() {
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()

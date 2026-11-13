@@ -612,7 +612,11 @@ func (l *ListBoxWidget[T, K]) row(c *ui.Context, i int) {
 	it := &l.frame[i]
 	text := l.text(it)
 	t := c.Theme()
-	ui.Row(c).AlignItems(ui.Center).Gap(t.Space(1)).Padding(t.Space(1), t.Space(2)).Children(func() {
+	row := ui.Row(c).AlignItems(ui.Center).Gap(t.Space(1)).Padding(t.Space(1), t.Space(2))
+	if h := t.Metrics.RowHeight; h > 0 {
+		row.MinHeight(h).PaddingY(0) // exactly h while its content fits, on every platform
+	}
+	row.Children(func() {
 		if l.checks {
 			k := l.key(it)
 			on := l.checked.shown.Has(k)

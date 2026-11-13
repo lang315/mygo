@@ -170,6 +170,12 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 	rtl := c.Direction() == ui.RightToLeft
 	hot := -1
 	bar := ui.Row(c).Role(ui.RoleMenuBar).Padding(t.Space(0.5), t.Space(1))
+	hover := t.SurfaceHover
+	tk, scale := skinOf(c)
+	if tk != nil {
+		bar.Background(tk.Chrome).MinHeight(tk.MenuBarStripHeight * scale)
+		hover = tk.ControlHover
+	}
 	bar.Children(func() {
 		for i, it := range b.menus {
 			label, key, at := parseMnemonic(it.Text)
@@ -178,10 +184,14 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 			// and Tab passes the titles by, as the system's bar.
 			title := m.Trigger.Unfocusable().KeepFocus().Role(ui.RoleMenuItem).Label(label).
 				Padding(t.Space(1), t.Space(2.5)).Radius(t.Radius).Disabled(!b.opens(i))
+			if tk != nil {
+				// The item height while the line fits it, the text centered.
+				title.MinHeight(tk.MenuBarItemHeight * scale).PaddingY(0)
+			}
 			if !b.opens(i) {
 				title.TextColor(t.TextMuted)
 			} else if b.open[i] || title.Hovered() || b.mode == i {
-				title.Background(t.SurfaceHover)
+				title.Background(hover)
 			}
 			if b.release && b.mode < 0 && title.FocusWithin() {
 				// The mode ended with the focus still here, nothing having

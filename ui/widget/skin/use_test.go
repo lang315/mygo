@@ -2,6 +2,7 @@ package skin
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -199,6 +200,97 @@ func TestUsePaletteFromAnotherGoroutine(t *testing.T) {
 	if got.Accent != ui.Hex("#2c4f8c") || Active().Palette() != Ink {
 		t.Errorf("after the goroutine, Accent %v and palette %v, want #2c4f8c and Ink", got.Accent, paletteName())
 	}
+}
+
+// gridHeights returns the heights of the rows of the one grid tt shows, and
+// of its header Name.
+func gridHeights(t *testing.T, tt *widget.Tester) (rows []float32, header float32) {
+	t.Helper()
+	for _, n := range tt.Nodes() {
+		switch {
+		case n.Role == ui.RoleRow && (n.Label == "Ada" || n.Label == "Grace" || n.Label == "Edsger"): // not the header's row
+			rows = append(rows, n.Bounds.H)
+		case n.Role == ui.RoleColumnHeader && n.Label == "Name":
+			header = n.Bounds.H
+		}
+	}
+	if len(rows) != 3 || header == 0 {
+		t.Fatalf("%d rows and a header %v high, want 3 rows and a header", len(rows), header)
+	}
+	return rows, header
+}
+
+// wantRows fails the test unless every row is h high.
+func wantRows(t *testing.T, when string, rows []float32, h float32) {
+	t.Helper()
+	for i, r := range rows {
+		if !same(r, h) {
+			t.Errorf("%s, row %d is %v high, want %v", when, i, r, h)
+		}
+	}
+}
+
+// The grid's own row height wins over the skin's, which still sizes its
+// header.
+func TestSetRowHeightWinsOverSkin(t *testing.T) {
+	t.Cleanup(func() { Use(nil) })
+	grid := widget.DataGridView(func(r *sizeRow) string { return r.ID },
+		widget.Column[sizeRow]{Title: "Name", Text: func(r *sizeRow) string { return r.Name }},
+	).SetRows([]sizeRow{{"1", "Ada"}, {"2", "Grace"}, {"3", "Edsger"}}).SetRowHeight(24).SetSize(0, 180)
+	tt := widget.NewTester(t, widget.VBox(8).Add(grid), 600, 400)
+	tt.Frame()
+	rows, plainHeader := gridHeights(t, tt)
+	wantRows(t, "without a skin, with SetRowHeight(24)", rows, 24)
+	Use(Calm)
+	tt.Frame()
+	rows, header := gridHeights(t, tt)
+	wantRows(t, "with Calm and SetRowHeight(24)", rows, 24)
+	if !same(header, 30) {
+		t.Errorf("with Calm and SetRowHeight(24), the header is %v high, want 30", header)
+	}
+	Use(nil)
+	tt.Frame()
+	if _, h := gridHeights(t, tt); !same(h, plainHeader) {
+		t.Errorf("after Use(nil), the header is %v high, want its plain %v", h, plainHeader)
+	}
+}
+
+// The rows a grid keeps from frame to frame (RowVersion) take the skin's
+// row height in the frame after Use, and their plain one after Use(nil).
+func TestKeptRowsResizeOnUse(t *testing.T) {
+	t.Cleanup(func() { Use(nil) })
+	var builds atomic.Int32
+	grid := widget.DataGridView(func(r *sizeRow) string { return r.ID },
+		widget.Column[sizeRow]{Title: "Name", Text: func(r *sizeRow) string { builds.Add(1); return r.Name }},
+	).SetRows([]sizeRow{{"1", "Ada"}, {"2", "Grace"}, {"3", "Edsger"}}).SetSize(0, 180)
+	note := widget.Label("one")
+	tt := widget.NewTester(t, widget.VBox(8).Add(note, grid), 600, 400)
+	tt.Frame()
+	builds.Store(0)
+	note.SetText("two") // the window builds again, the rows need not
+	tt.Frame()
+	if !tt.HasText("two") {
+		t.Fatal("the label did not change: the window did not build again")
+	}
+	if n := builds.Load(); n != 0 {
+		t.Fatalf("a frame that changed only a label built %d cells: the grid keeps no rows, and the test sees nothing", n)
+	}
+	plain, _ := gridHeights(t, tt)
+	Use(Calm)
+	tt.Frame()
+	rows, _ := gridHeights(t, tt)
+	wantRows(t, "after Use(Calm)", rows, 30)
+	Use(nil)
+	tt.Frame()
+	rows, _ = gridHeights(t, tt)
+	wantRows(t, "one frame after Use(nil)", rows, plain[0])
+	if same(plain[0], 30) {
+		t.Errorf("the plain row is 30, as Calm's: the test does not see the skin")
+	}
+	Use(Calm.WithPalette(Teal))
+	tt.Frame()
+	rows, _ = gridHeights(t, tt)
+	wantRows(t, "after Use(Calm.WithPalette(Teal))", rows, 30)
 }
 
 // The skin's accent wins over the desktop's accent color.

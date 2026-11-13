@@ -332,6 +332,66 @@ func TestCheckChartOnContent(t *testing.T) {
 	}
 }
 
+// The control states must differ from what they sit on and from each other,
+// CIE76 ΔE 3 or more, in both appearances and for every palette: Calm's old
+// light hover (#f3f5f8, ΔE 0.6 from the chrome) is invisible on the chrome
+// and fails, naming the pair; each pair fails when its two colors are equal.
+func TestCheckControlStates(t *testing.T) {
+	tk := Calm.light
+	tk.ControlHover, tk.ControlPressed = ui.Hex("#f3f5f8"), ui.Hex("#e9ecf1")
+	if d := deltaE(tk.ControlHover, tk.Chrome, nil); d < 0.5 || d > 0.7 {
+		t.Fatalf("the old hover is ΔE %.2f from the chrome, want about 0.6", d)
+	}
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "ControlHover vs Chrome") || !strings.Contains(err.Error(), "want 3") {
+		t.Errorf("the old light ControlHover gives %v, want an error naming ControlHover vs Chrome and 3", err)
+	}
+	for _, c := range []struct {
+		name string
+		set  func(*skinhook.Tokens)
+	}{
+		{"ControlHover vs Chrome", func(t *skinhook.Tokens) { t.ControlHover = t.Chrome }},
+		{"ControlHover vs Control", func(t *skinhook.Tokens) { t.ControlHover = t.Control }},
+		{"ControlPressed vs ControlHover", func(t *skinhook.Tokens) { t.ControlPressed = t.ControlHover }},
+	} {
+		for _, dark := range []bool{false, true} {
+			tk := Calm.light
+			if dark {
+				tk = Calm.dark
+			}
+			c.set(&tk)
+			if err := check(&tk, dark); err == nil || !strings.Contains(err.Error(), c.name) {
+				t.Errorf("dark=%v: %s equal gives %v, want an error naming it", dark, c.name, err)
+			}
+		}
+	}
+	// Calm's own distances, in the order of the pairs.
+	for _, c := range []struct {
+		dark bool
+		want [3]float64
+	}{{false, [3]float64{3.1, 6.8, 3.7}}, {true, [3]float64{9.1, 3.7, 3.6}}} {
+		tk := Calm.light
+		if c.dark {
+			tk = Calm.dark
+		}
+		got := [3]float64{deltaE(tk.ControlHover, tk.Chrome, nil), deltaE(tk.ControlHover, tk.Control, nil), deltaE(tk.ControlPressed, tk.ControlHover, nil)}
+		for i := range got {
+			if math.Abs(got[i]-c.want[i]) > 0.1 {
+				t.Errorf("dark=%v: the distances are %.1f, want %.1f", c.dark, got, c.want)
+				break
+			}
+		}
+	}
+	for _, p := range palettes {
+		s := Calm.WithPalette(p)
+		if err := check(&s.light, false); err != nil {
+			t.Errorf("%s light: %v", p.Name(), err)
+		}
+		if err := check(&s.dark, true); err != nil {
+			t.Errorf("%s dark: %v", p.Name(), err)
+		}
+	}
+}
+
 // Every failing pair is named, not only the first.
 func TestCheckNamesEveryFailingPair(t *testing.T) {
 	tk := Calm.light

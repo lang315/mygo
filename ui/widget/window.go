@@ -521,8 +521,12 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 	}
 	// A minimum, not a fixed height: a subtitle or a child taller than the bar
 	// makes it grow. The row centers its items (Row's default).
-	return ui.Row(c).MinHeight(max(bar.Height, 32)).Padding(0, bar.Right+t.Space(2), 0, bar.Left+t.Space(2)).
-		Gap(t.Space(2)).DragWindow().Children(func() {
+	row := ui.Row(c).MinHeight(max(bar.Height, 32)).Padding(0, bar.Right+t.Space(2), 0, bar.Left+t.Space(2)).
+		Gap(t.Space(2)).DragWindow()
+	if tk, _ := skinOf(c); tk != nil {
+		row.Background(tk.Chrome)
+	}
+	return row.Children(func() {
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()

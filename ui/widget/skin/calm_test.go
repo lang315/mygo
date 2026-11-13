@@ -25,6 +25,8 @@ func TestCalmTheme(t *testing.T) {
 		{"Danger", l.Danger, ui.Hex("#c42b1c")},
 		{"Focus", l.Focus, ui.Hex("#4e3bb0")},
 		{"Selection", l.Selection, ui.Hex("#dcd8ef")},
+		{"SurfaceHover", l.SurfaceHover, ui.Hex("#eaedf1")},
+		{"SurfacePressed", l.SurfacePressed, ui.Hex("#dfe3e9")},
 	} {
 		if c.got != c.want {
 			t.Errorf("light %s is %v, want %v", c.name, c.got, c.want)
@@ -41,6 +43,9 @@ func TestCalmTheme(t *testing.T) {
 	if d.Background != ui.Hex("#15171a") || d.ControlBorder != ui.Hex("#79818c") || d.Accent != ui.Hex("#9384f0") || !d.Dark {
 		t.Errorf("dark Background %v, ControlBorder %v, Accent %v, Dark %v; want #15171a, #79818c, #9384f0, true",
 			d.Background, d.ControlBorder, d.Accent, d.Dark)
+	}
+	if d.SurfaceHover != ui.Hex("#2d3239") || d.SurfacePressed != ui.Hex("#343a42") {
+		t.Errorf("dark SurfaceHover %v and SurfacePressed %v; want #2d3239 and #343a42, unchanged", d.SurfaceHover, d.SurfacePressed)
 	}
 	if d.AccentText != ui.Hex("#0e0b2a") || d.Scrollbar != ui.Hex("#e7e9ec").Alpha(0.35) {
 		t.Errorf("dark AccentText %v and Scrollbar %v; want #0e0b2a and Text at 35%%", d.AccentText, d.Scrollbar)
