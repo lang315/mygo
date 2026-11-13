@@ -127,6 +127,7 @@ func TestHandleMethodsNoteTheRead(t *testing.T) {
 		"Focus":        "requests focus for the next build: an action, not a read",
 		"RequestFocus": "as Focus",
 		"CancelFocus":  "as Focus",
+		"SelectAll":    "as Focus; the selection is the focused element's, which is acting",
 	}
 	fset := token.NewFileSet()
 	af, err := parser.ParseFile(fset, "ref.go", nil, 0)

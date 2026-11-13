@@ -365,8 +365,11 @@ type node struct {
 	// lay says what the layout cache may do with the element
 	// (layOwner, layReuse), and laid when layoutBox last laid it out, in
 	// engine.laySeq.
-	lay  uint8
-	laid uint64
+	lay uint8
+	// themeAt is the theme a static paint function paints with
+	// (builtWith); here, it fills the padding after lay.
+	themeAt uint16
+	laid    uint64
 	// hold is the element's entry in the engine's holds (0 for none):
 	// what a measuring pass resolved for its in-flow children, which a
 	// commit pass at the same size uses instead of building them again.
@@ -391,7 +394,6 @@ type node struct {
 	key        any
 	valueInput func(*node)
 	id         uint64
-	themeAt    uint16 // the theme a static paint function paints with (builtWith)
 	nchild     int
 	depth      int
 	// track is the ScrollState of a scroll container (TrackScroll).
