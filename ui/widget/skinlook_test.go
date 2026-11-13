@@ -192,6 +192,21 @@ func iconHeights(t *testing.T, tt *ui.Tester, text ui.Color) (svg, png int) {
 	return inkHeight(tt, nodeOf(t, tt, ui.RoleButton, "Icon").Bounds, text), inkHeight(tt, nodeOf(t, tt, ui.RoleButton, "Picture").Bounds, ui.RGB(255, 0, 0))
 }
 
+// iconButtonWidths returns the widths of skinToolForm's icon-only buttons:
+// their padding, which Spacing sets and no skin or text size changes, and
+// their square icon's laid-out box, as wide as it is high.
+func iconButtonWidths(t *testing.T, tt *ui.Tester) (svg, png float32) {
+	t.Helper()
+	return nodeOf(t, tt, ui.RoleButton, "Icon").Bounds.W, nodeOf(t, tt, ui.RoleButton, "Picture").Bounds.W
+}
+
+// inkFits reports whether n rows of ink are what a box side high draws: a
+// row counts only when the box covers it all (near is within 8), so at a
+// sub-pixel offset the box fully covers floor(side)-1 to ceil(side) rows.
+func inkFits(n int, side float32) bool {
+	return float64(n) >= math.Floor(float64(side))-1 && float64(n) <= math.Ceil(float64(side))
+}
+
 // inkHeight is how many pixel rows of box hold ink of color c.
 func inkHeight(tt *ui.Tester, box ui.Rect, c ui.Color) int {
 	n := 0
@@ -211,6 +226,7 @@ func inkHeight(tt *ui.Tester, box ui.Rect, c ui.Color) int {
 // icons of 17 and a line of LineStrong under it; without, as before skins.
 func TestSkinToolStrip(t *testing.T) {
 	tt := formTester(t, skinToolForm(t))
+	var plainSVGW, plainPNGW float32
 	check := func(on bool, tk *skinhook.Tokens) {
 		t.Helper()
 		bar := nodeOf(t, tt, ui.RoleToolbar, "").Bounds
@@ -257,11 +273,18 @@ func TestSkinToolStrip(t *testing.T) {
 			t.Errorf("without a skin, the strip has a bottom line %v", under)
 		}
 		if on {
-			if svg, png := iconHeights(t, tt, tk.Text); svg != 17 || png != 17 {
-				t.Errorf("the SVG and PNG icons are %v and %v high, want 17", svg, png)
+			// The icons' boxes: a plain icon is FontSize, the rest of its
+			// button padding.
+			svgW, pngW := iconButtonWidths(t, tt)
+			if svg, png := svgW-(plainSVGW-ui.LightTheme().FontSize), pngW-(plainPNGW-ui.LightTheme().FontSize); !sameSize(svg, 17) || !sameSize(png, 17) {
+				t.Errorf("the SVG and PNG icons' boxes are %v and %v, want 17", svg, png)
+			}
+			if svg, png := iconHeights(t, tt, tk.Text); !inkFits(svg, 17) || !inkFits(png, 17) {
+				t.Errorf("the SVG and PNG icons' ink is %v and %v rows, want what a box of 17 draws", svg, png)
 			}
 		}
 	}
+	plainSVGW, plainPNGW = iconButtonWidths(t, tt)
 	check(false, nil)
 	plainSVG, plainPNG := iconHeights(t, tt, ui.LightTheme().Text)
 	tk := useSkin(t)
@@ -279,6 +302,7 @@ func TestSkinToolStrip(t *testing.T) {
 func TestSkinToolStripFollowsTextScale(t *testing.T) {
 	tk := useSkin(t)
 	tt := formTester(t, skinToolForm(t))
+	svg1, png1 := iconButtonWidths(t, tt) // icons of 17 (TestSkinToolStrip)
 	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
 	tt.Frame()
 	bar := nodeOf(t, tt, ui.RoleToolbar, "").Bounds
@@ -289,9 +313,14 @@ func TestSkinToolStripFollowsTextScale(t *testing.T) {
 	if got := bar.Y + bar.H - (cut.Y + cut.H); !sameSize(got, 18+1) {
 		t.Errorf("at 150 %%, %v below the controls, want 18 and the line", got)
 	}
-	// 17 × 1.5 is 25.5: its ink is 25 or 26 rows.
-	if svg, png := iconHeights(t, tt, tk.Text); svg < 25 || svg > 26 || png < 25 || png > 26 {
-		t.Errorf("at 150 %%, the SVG and PNG icons are %v and %v high, want 25.5", svg, png)
+	// The padding stays, so each button grows by what its icon grows: 17 to
+	// 25.5.
+	svgW, pngW := iconButtonWidths(t, tt)
+	if svg, png := svgW-svg1+17, pngW-png1+17; !sameSize(svg, 25.5) || !sameSize(png, 25.5) {
+		t.Errorf("at 150 %%, the SVG and PNG icons' boxes are %v and %v, want 25.5", svg, png)
+	}
+	if svg, png := iconHeights(t, tt, tk.Text); !inkFits(svg, 25.5) || !inkFits(png, 25.5) {
+		t.Errorf("at 150 %%, the SVG and PNG icons' ink is %v and %v rows, want what a box of 25.5 draws", svg, png)
 	}
 	if got := cp.X - (cut.X + cut.W); !sameSize(got, 15) {
 		t.Errorf("at 150 %%, %v between two controls, want 15", got)
