@@ -9,17 +9,17 @@ import (
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
-var palettes = []*Palette{Cham, Indigo, Ink, Teal}
+var palettes = []*Palette{Cham, Indigo, Ink, Teal, Blue}
 
-// Calm's palette is Chàm.
-func TestCalmPaletteIsCham(t *testing.T) {
-	if Calm.Palette() != Cham {
-		t.Errorf("Calm's palette is %v, want Chàm", Calm.Palette())
+// Calm's palette is Blue.
+func TestCalmPaletteIsBlue(t *testing.T) {
+	if Calm.Palette() != Blue {
+		t.Errorf("Calm's palette is %v, want Blue", Calm.Palette())
 	}
 	for _, c := range []struct {
 		p    *Palette
 		name string
-	}{{Cham, "Chàm"}, {Indigo, "Indigo"}, {Ink, "Ink"}, {Teal, "Teal"}} {
+	}{{Cham, "Chàm"}, {Indigo, "Indigo"}, {Ink, "Ink"}, {Teal, "Teal"}, {Blue, "Blue"}} {
 		if c.p.Name() != c.name {
 			t.Errorf("Name() is %q, want %q", c.p.Name(), c.name)
 		}
@@ -92,6 +92,7 @@ func TestPaletteValues(t *testing.T) {
 		{p: Ink, lb: "#2c4f8c", lh: "#26457b", lp: "#203b69", lt: "#284778", db: "#7b9fdc", dh: "#93b1e4", dp: "#6a8dcf", dt: "#a9c1ea", don: "#0b1220"},
 		{p: Teal, lb: "#0f766e", lh: "#0c665f", lp: "#0a5650", lt: "#0b5d56", db: "#2bb5a3", dh: "#45c4b3", dp: "#20a090", dt: "#7fdccf", don: "#06201c",
 			info: [10]string{"#3d5f8f", "#36547e", "#2e486d", "#34507a", "#8c9fe0", "#9dade5", "#7e8fca", "#b6c2f2", "#0b1220"}},
+		{p: Blue, lb: "#1c71d8", lh: "#1a5fb4", lp: "#174f96", lt: "#1a5fb4", db: "#78aeed", dh: "#92bdf1", dp: "#5f9be6", dt: "#a8cbf5", don: "#0b1220"},
 	} {
 		lightFamily := func(b, h, p, tx string) skinhook.Family {
 			base := ui.Hex(b)
@@ -126,7 +127,7 @@ func TestPaletteValues(t *testing.T) {
 	}
 }
 
-// WithPalette makes a new skin: Calm stays Chàm, in both appearances and
+// WithPalette makes a new skin: Calm stays Blue, in both appearances and
 // in the tokens Use(Calm) gives the hook afterwards; WithPalette(nil) is the
 // skin itself.
 func TestWithPaletteLeavesTheSkin(t *testing.T) {
@@ -134,19 +135,35 @@ func TestWithPaletteLeavesTheSkin(t *testing.T) {
 	if s := Calm.WithPalette(Teal); s == Calm {
 		t.Fatal("Calm.WithPalette(Teal) is Calm itself")
 	}
-	if Calm.light.Accent.Base != ui.Hex("#4e3bb0") || Calm.dark.Accent.Base != ui.Hex("#9384f0") || Calm.Palette() != Cham {
-		t.Errorf("after WithPalette(Teal), Calm's accent is %v and %v, palette %v; want #4e3bb0, #9384f0, Chàm",
+	if Calm.light.Accent.Base != ui.Hex("#1c71d8") || Calm.dark.Accent.Base != ui.Hex("#78aeed") || Calm.Palette() != Blue {
+		t.Errorf("after WithPalette(Teal), Calm's accent is %v and %v, palette %v; want #1c71d8, #78aeed, Blue",
 			Calm.light.Accent.Base, Calm.dark.Accent.Base, Calm.Palette())
 	}
-	if Calm.light.Info.Text != ui.Hex("#46359e") || Calm.dark.Selection != ui.Hex("#9384f0").Alpha(0.35) {
+	if Calm.light.Info.Text != ui.Hex("#1a5fb4") || Calm.dark.Selection != ui.Hex("#78aeed").Alpha(0.35) {
 		t.Errorf("after WithPalette(Teal), Calm's Info.Text %v and dark Selection %v", Calm.light.Info.Text, Calm.dark.Selection)
 	}
 	Use(Calm)
-	if l, d := skinhook.Get(false), skinhook.Get(true); l.Accent.Base != ui.Hex("#4e3bb0") || d.Accent.Base != ui.Hex("#9384f0") {
-		t.Errorf("Use(Calm) after WithPalette(Teal) gives the hook %v and %v, want Chàm's", l.Accent.Base, d.Accent.Base)
+	if l, d := skinhook.Get(false), skinhook.Get(true); l.Accent.Base != ui.Hex("#1c71d8") || d.Accent.Base != ui.Hex("#78aeed") {
+		t.Errorf("Use(Calm) after WithPalette(Teal) gives the hook %v and %v, want Blue's", l.Accent.Base, d.Accent.Base)
 	}
 	if Calm.WithPalette(nil) != Calm {
 		t.Error("Calm.WithPalette(nil) is not Calm")
+	}
+}
+
+// Calm with Blue draws with Adwaita's accent: GNOME's blue 4 in light, since
+// white on Adwaita's own #3584e4 is under 4.5:1, and libadwaita's dark accent.
+// Blue is far from the status colors, so its Info is its accent, as Chàm's.
+func TestBlueIsAdwaita(t *testing.T) {
+	s := Calm.WithPalette(Blue)
+	if s.light.Accent.Base != ui.Hex("#1c71d8") || s.dark.Accent.Base != ui.Hex("#78aeed") {
+		t.Errorf("Accent.Base is %v light and %v dark, want #1c71d8 and #78aeed", s.light.Accent.Base, s.dark.Accent.Base)
+	}
+	if s.light.Info != s.light.Accent || s.dark.Info != s.dark.Accent {
+		t.Errorf("Info is %v light and %v dark, want the accent %v and %v", s.light.Info, s.dark.Info, s.light.Accent, s.dark.Accent)
+	}
+	if s.Palette() != Blue {
+		t.Errorf("Palette() is %v, want Blue", s.Palette())
 	}
 }
 
