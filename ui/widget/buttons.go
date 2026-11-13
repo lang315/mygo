@@ -154,7 +154,7 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 		}
 	}
 	if hasIcon {
-		iconFace(c, e, b.icon, b.png, label, b.tooltip, false)
+		iconFace(c, e, b.icon, b.png, label, b.tooltip, false, 0)
 	} else if label == "" && b.tooltip != "" {
 		e.Label(b.tooltip) // a button with no text is named by its tooltip
 	}
@@ -170,8 +170,9 @@ func (b *ButtonWidget) build(c *ui.Context) ui.Element {
 // iconFace shows an icon, SVG or bitmap, and text on e, a button, and names
 // it by its text, or by its tooltip when it has none, so that assistive
 // technology and a Tester find an icon-only button by name. center centers
-// the icon and the text across, as a tool button does.
-func iconFace(c *ui.Context, e ui.Element, svg *ui.SVG, bmp *ui.Bitmap, text, tooltip string, center bool) {
+// the icon and the text across, as a tool button does. side, when above 0,
+// is the height of an SVG icon, as a skin's tool strip gives it.
+func iconFace(c *ui.Context, e ui.Element, svg *ui.SVG, bmp *ui.Bitmap, text, tooltip string, center bool, side float32) {
 	name := text
 	if name == "" {
 		name = tooltip
@@ -183,7 +184,10 @@ func iconFace(c *ui.Context, e ui.Element, svg *ui.SVG, bmp *ui.Bitmap, text, to
 		}
 		row.Children(func() {
 			if svg != nil {
-				ui.Icon(c, svg)
+				icon := ui.Icon(c, svg)
+				if side > 0 {
+					icon.FontSize(side) // an icon is as high as its font size, as wide as its aspect makes it
+				}
 			} else {
 				bitmapIcon(c, bmp)
 			}
