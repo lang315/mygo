@@ -348,6 +348,10 @@ func foregroundState(*mygo.Window) string { return "" }
 // clipboardState is for Windows.
 func clipboardState() string { return "" }
 
+// clipboardSequence is for Windows, whose readers lock the clipboard: a
+// read of the pasteboard takes no lock a write waits for.
+func clipboardSequence() (uint32, bool) { return 0, false }
+
 // The menu bar belongs to the application on macOS.
 func menuBarShown(*mygo.Window) (bool, bool)                { return false, false }
 func activateAccelerator(*mygo.Window, string) (bool, bool) { return false, false }

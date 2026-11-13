@@ -297,11 +297,17 @@ window.ready = true;
 	// whether the page copied; the clipboard's state whether another
 	// program held it.
 	sent := foregroundState(w) + "; " + clipboardState()
+	// The browser process writes the copy after Copy, and gives up if the
+	// clipboard stays open, as each read of ours opens it on Windows: read
+	// it only once it changed.
+	before, sequenced := clipboardSequence()
 	menu("Copy")
 	held := ""
 	if !wait.Poll(func() bool {
-		if mygo.Clipboard.ReadText() == "hello" {
-			return true
+		if s, _ := clipboardSequence(); !sequenced || s != before {
+			if mygo.Clipboard.ReadText() == "hello" {
+				return true
+			}
 		}
 		if s := clipboardState(); held == "" && strings.Contains(s, "open by 0x") {
 			held = s

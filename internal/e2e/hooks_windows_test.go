@@ -218,6 +218,15 @@ func clipboardState() string {
 	return fmt.Sprintf("clipboard sequence %d, open by %#x of process %d (this one %d)", uint32(seq), open, pid, os.Getpid())
 }
 
+// clipboardSequence returns the clipboard's sequence number, which every
+// change raises, without opening the clipboard: a wait for a write of
+// another process reads it, as opening the clipboard while that process
+// tries to can make its write fail.
+func clipboardSequence() (seq uint32, ok bool) {
+	r, _, _ := syscall.NewLazyDLL("user32.dll").NewProc("GetClipboardSequenceNumber").Call()
+	return uint32(r), true
+}
+
 // foregroundDiag says what keeps w from coming to the front, for a wait for it
 // that ran out.
 func foregroundDiag(w *mygo.Window) (diag string) {

@@ -419,6 +419,10 @@ func foregroundState(*mygo.Window) string { return "" }
 // clipboardState is for Windows.
 func clipboardState() string { return "" }
 
+// clipboardSequence is for Windows, whose readers lock the clipboard: a
+// read of the X or Wayland selection asks its owner and takes no lock.
+func clipboardSequence() (uint32, bool) { return 0, false }
+
 // throttlingOff reports whether the page of w, or of its first web view,
 // is set up to keep running while it can't be seen, and how many of the
 // settings that take the platform has.
