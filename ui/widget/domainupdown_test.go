@@ -256,7 +256,6 @@ func TestDomainUpDownStillSteps(t *testing.T) {
 // The arrows reach the stepper's top and bottom: hovering just inside either
 // edge lights an arrow.
 func TestDomainUpDownArrowsFillTheirColumn(t *testing.T) {
-	t.Skip("needs ui/indicators.go: Stepper's arrows are a fixed Space(3.5) high, 6 inner rows short of a 36 DIP stepper")
 	updownLooks(t, func(t *testing.T, dark bool) {
 		tt := NewTester(t, DomainUpDown("North", "South"), 400, 200)
 		tt.SetDark(dark)

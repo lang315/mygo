@@ -253,6 +253,50 @@ func TestStepper(t *testing.T) {
 	}
 }
 
+// A stepper nothing stretches keeps its arrows Space(3.5) high, as before
+// they could grow: alone, and beside a meter in a centered row (the
+// gallery's). The bounds are main's.
+func TestStepperUnstretchedUnchanged(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want [3]Rect // the stepper, its up arrow, its down arrow
+		ui   func(c *context, v *float64)
+	}{
+		{"alone", [3]Rect{{0, 0, 20, 30}, {1, 1, 18, 14}, {1, 15, 18, 14}}, func(c *context, v *float64) {
+			coreStepper(c, v, 0, 10, 1).Label("Step")
+		}},
+		{"centered row", [3]Rect{{280, 5, 20, 30}, {281, 6, 18, 14}, {281, 20, 18, 14}}, func(c *context, v *float64) {
+			coreRow(c).Gap(10).AlignItems(Center).Children(func() {
+				coreBox(c).Height(40).Grow(1)
+				coreStepper(c, v, 0, 10, 1).Label("Step")
+			})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := 5.0
+			tt := coreNewTester(func(c *context) { tc.ui(c, &v) }, 300, 200)
+			tt.Frame()
+			var got [3]Rect
+			var walk func(e *node)
+			walk = func(e *node) {
+				if e.widget == "Stepper" {
+					got[0] = Rect{e.x, e.y, e.w, e.h}
+					for i, ch := 1, e.first; ch != nil && i < 3; i, ch = i+1, ch.next {
+						got[i] = Rect{ch.x, ch.y, ch.w, ch.h}
+					}
+				}
+				for ch := e.first; ch != nil; ch = ch.next {
+					walk(ch)
+				}
+			}
+			walk(tt.rt.c.root)
+			if got != tc.want {
+				t.Errorf("stepper, up, down: %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestStepSlider(t *testing.T) {
 	v := 20.0
 	tt := coreNewTester(func(c *context) {
