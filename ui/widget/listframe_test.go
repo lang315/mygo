@@ -158,6 +158,26 @@ func TestListFrameYieldsToOwnStyle(t *testing.T) {
 	}
 }
 
+// A style that sets only a border color recolors every list control's frame,
+// keeping its width, though a table's style lands on the column around it.
+func TestListFrameTakesOwnBorderColor(t *testing.T) {
+	green := ui.RGB(0, 160, 0)
+	for _, look := range frameLooks {
+		for name, mk := range listControls(3, NewStyle().BorderColor(Fixed(green))) {
+			t.Run(look.name+"/"+name, func(t *testing.T) {
+				useLook(t, look.skin)
+				tt := tester(t, mk())
+				tt.SetDark(look.dark)
+				tt.Frame()
+				box := listBox(t, tt)
+				if got := devicePx(tt, box.X+box.W/2, int(box.Y), 1); !sameColor(got, green) {
+					t.Fatalf("top edge is %v, want the style's border color %v", got, green)
+				}
+			})
+		}
+	}
+}
+
 // Every list control's own style overrides the frame: a border of 0 leaves
 // no line at the top edge, and a background of its own shows under the rows,
 // though a table's style lands on the column around the framed table.

@@ -166,7 +166,9 @@ func TestStudioGridPage(t *testing.T) {
 			if n.Bounds.H > 0 {
 				rows++
 				// The row at the grid's bottom edge may be cut by it: its visible box is short.
-				if !same(n.Bounds.H, 30) && n.Bounds.Y+n.Bounds.H < lastEnd-0.01 {
+				// It is cut at the inner edge of the grid's frame, a border of 1 DIP inside its box.
+				const frame = 1
+				if !same(n.Bounds.H, 30) && n.Bounds.Y+n.Bounds.H < lastEnd-frame-0.01 {
 					t.Errorf("grid row %q is %v high, want 30 (at %v, the lowest row ends at %v)", n.Label, n.Bounds.H, n.Bounds, lastEnd)
 				}
 			}

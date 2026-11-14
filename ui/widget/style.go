@@ -230,10 +230,18 @@ func frameList(c *ui.Context, e ui.Element, own ...*Style) {
 		return false
 	}
 	t := c.Theme()
-	if !sets(func(p *props) bool { return p.borderSet != 0 || p.set&pBorderColor != 0 }) {
+	if !sets(func(p *props) bool { return p.borderSet != 0 }) {
 		line := t.Border
 		if tk, _ := skinOf(c); tk != nil {
 			line = tk.LineStrong
+		}
+		// A border color alone recolors the frame, as it does where the style
+		// lands on the framed element itself.
+		for _, s := range own {
+			p := s.effective(t.Dark, false, false, false, false)
+			if col, ok := p.borderColorFor(c, t); ok {
+				line = col
+			}
 		}
 		e.Border(1, line).Radius(t.Radius)
 	}
