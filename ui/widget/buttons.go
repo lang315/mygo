@@ -61,35 +61,44 @@ func drawBitmapIcon(c *ui.Context, bmp *ui.Bitmap) ui.Element { return ui.IconIm
 
 // Suggested draws the button as the main action, gota's suggested-action
 // and tw's: the accent for its background, with the accent's text, and the
-// accent's hover and pressed roles. It is the button's own style, which
-// wins over applied ones. It replaces a Destructive given before.
+// accent's hover and pressed roles. Its border is in the fill, in each state,
+// where the plain button's is gray (under High Contrast it keeps the strong
+// outline). It is the button's own style, which wins over applied ones, a
+// border color included; a Border given after it wins over its border in
+// every state. It replaces a Destructive given before.
 func (b *ButtonWidget) Suggested() *ButtonWidget {
 	return b.own(b.look.to(suggestedLook, suggestedStyle))
 }
 
 // suggestedStyle is the look of Suggested, of buttons and tool buttons.
 func suggestedStyle(s Style) Style {
-	s = s.Background(RoleAccent).TextColor(RoleAccentText)
-	s = withMerged(s, vHover, NewStyle().Background(RoleAccentHover))
-	return withMerged(s, vPressed, NewStyle().Background(RoleAccentPressed))
+	return filledStyle(s, RoleAccent, RoleAccentHover, RoleAccentPressed)
 }
 
 // Destructive draws the button as an action that destroys, as Delete,
 // gota's destructive-action and tw's: the danger color for its background
 // (darkened where the accent's text would be under 4.5:1 on it, as in the
 // dark theme), with the accent's text, darker by 8% when hovered and 16%
-// pressed. It is
-// the button's own style. It replaces a Suggested given
-// before.
+// pressed. Its border is in the fill, as Suggested's is. It is the button's
+// own style. It replaces a Suggested given before.
 func (b *ButtonWidget) Destructive() *ButtonWidget {
 	return b.own(b.look.to(destructiveLook, destructiveStyle))
 }
 
 // destructiveStyle is the look of Destructive, of buttons and tool buttons.
 func destructiveStyle(s Style) Style {
-	s = s.Background(Color{role: roleDestructive, ok: true}).TextColor(RoleAccentText)
-	s = withMerged(s, vHover, NewStyle().Background(Color{role: roleDestructiveHover, ok: true}))
-	return withMerged(s, vPressed, NewStyle().Background(Color{role: roleDestructivePressed, ok: true}))
+	return filledStyle(s, Color{role: roleDestructive, ok: true},
+		Color{role: roleDestructiveHover, ok: true}, Color{role: roleDestructivePressed, ok: true})
+}
+
+// filledStyle gives s a look filled with rest, hover and pressed, in the
+// accent's text, and a border in the fill. The border is set once, at rest:
+// it follows the background of each state, and a border an app sets later
+// replaces it in all of them.
+func filledStyle(s Style, rest, hover, pressed Color) Style {
+	s = s.Background(rest).BorderColor(fillBorder).TextColor(RoleAccentText)
+	s = withMerged(s, vHover, NewStyle().Background(hover))
+	return withMerged(s, vPressed, NewStyle().Background(pressed))
 }
 
 // lookKind is the last look a button was given: Suggested or Destructive.
@@ -102,7 +111,7 @@ const (
 )
 
 // lookHoverProps is what each look sets in its hover and pressed variants.
-var lookHoverProps = [...]prop{suggestedLook: pBackground, destructiveLook: pOpacity}
+var lookHoverProps = [...]prop{suggestedLook: pBackground, destructiveLook: pBackground}
 
 // to returns the own style function giving look l, which style draws, in
 // place of *k: it takes out the hover and pressed properties the look before

@@ -46,7 +46,14 @@ const (
 	roleFocus
 	roleInverse
 	roleInverseText
+	roleFill // a border color only: the style's background in the state drawn, see fillBorder
 )
+
+// fillBorder is the border color of a Suggested or Destructive button: its
+// background in each state, so that hover and pressed need no border color of
+// their own and a border the app sets later wins in every state. Under High
+// Contrast it sets nothing, and the button keeps its strong outline.
+var fillBorder = Color{role: roleFill, ok: true}
 
 // Fixed is the color c, whatever the theme.
 func Fixed(c ui.Color) Color { return Color{fixed: c, ok: true} }

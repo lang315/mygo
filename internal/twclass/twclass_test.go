@@ -226,12 +226,12 @@ func TestShadows(t *testing.T) {
 
 func TestButtons(t *testing.T) {
 	got, bad := Parse("suggested-action")
-	want, _ := Parse("bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-pressed")
+	want, _ := Parse("bg-accent border-accent text-on-accent hover:bg-accent-hover hover:border-accent-hover active:bg-accent-pressed active:border-accent-pressed")
 	if len(bad) != 0 || !reflect.DeepEqual(got, want) {
 		t.Fatalf("suggested-action = %+v %v", got, bad)
 	}
 	got, bad = Parse("destructive-action")
-	want, _ = Parse("bg-danger text-on-accent hover:opacity-90 active:opacity-80")
+	want, _ = Parse("bg-danger border-danger text-on-accent hover:opacity-90 active:opacity-80")
 	if len(bad) != 0 || !reflect.DeepEqual(got, want) {
 		t.Fatalf("destructive-action = %+v %v", got, bad)
 	}
