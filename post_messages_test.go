@@ -29,8 +29,9 @@ var (
 func (postService) Echo(s string) string { return s }
 func (postService) Fail() error          { return errors.New("it failed") }
 func (postService) Slow() string {
+	gate := postGate // read before the signal: the test restores postGate after it
 	postStarted <- struct{}{}
-	<-postGate
+	<-gate
 	return "secret of the first page"
 }
 func (postService) Count(n int, ch *Channel[int]) error {
