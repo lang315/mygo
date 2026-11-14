@@ -279,6 +279,65 @@ func TestStudioSwitches(t *testing.T) {
 	}
 }
 
+// The chart page: nothing a chart draws (its plot, tick labels or legend) goes
+// below the top of the first progress bar, at scale 1 and 2. A chart's box is
+// not a node: its drawn parts are the nodes whose top is above the bar.
+func TestStudioChartsClearProgress(t *testing.T) {
+	reset(t)
+	for _, scale := range []float32{1, 2} {
+		tt := widget.TestForm(t, newStudio())
+		tt.SetSize(1280, 800)
+		tt.SetScale(scale)
+		tt.Find(widget.ByLabel("Chart and progress")).Click()
+		tt.Frame()
+		bar := tt.Find(widget.ByRole(ui.RoleProgress).Nth(0)).Bounds()
+		line := tt.Find(widget.ByLabel("Line")).Bounds()
+		seen := 0
+		for _, n := range tt.Nodes() {
+			b := n.Bounds
+			if n.Label == "" || b.Y < line.Y-10 || b.Y >= bar.Y || n.Role == ui.RoleProgress || b.W <= 0 || b.H <= 0 {
+				continue
+			}
+			seen++
+			if b.Y+b.H > bar.Y {
+				t.Errorf("scale %v: %v %q at %v reaches below the top of the progress bar, %v", scale, n.Role, n.Label, b, bar.Y)
+			}
+		}
+		if seen < 20 {
+			t.Errorf("scale %v: only %d nodes above the progress bar, the charts' labels are missing: %q", scale, seen, tt.Texts())
+		}
+	}
+}
+
+// The containers page: the sidebar's page starts Space(2) = 8 DIPs right of
+// the sidebar's divider, and the nested tabs are not squeezed to the right.
+func TestStudioContainersSpacing(t *testing.T) {
+	reset(t)
+	tt := widget.TestForm(t, newStudio())
+	tt.SetSize(1280, 800)
+	tt.Find(widget.ByLabel("Containers")).Click()
+	tt.Frame()
+	edge := float32(-1)
+	for _, d := range tt.FindAll(widget.ByLabel("Divider")) {
+		if b := d.Bounds(); b.Y > 400 { // the sidebar's, below the menu bar
+			edge = b.X
+		}
+	}
+	if edge < 0 {
+		t.Fatalf("no sidebar divider: %q", tt.Texts())
+	}
+	page, ok := tt.Tester.Find("Mail page")
+	if !ok {
+		t.Fatalf("no text Mail page: %q", tt.Texts())
+	}
+	if page.X < edge+8 {
+		t.Errorf("the sidebar's page starts at %v, want 8 or more right of the sidebar's edge %v", page.X, edge)
+	}
+	if first := tt.Find(widget.ByLabel("First")).Bounds(); first.X > 900 {
+		t.Errorf("the nested tabs start at %v, pushed to the far right", first.X)
+	}
+}
+
 // Every tab is there, and the combo boxes show what is on.
 func TestStudioStartsPlain(t *testing.T) {
 	reset(t)
