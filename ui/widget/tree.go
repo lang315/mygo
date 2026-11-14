@@ -764,6 +764,7 @@ func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	s.List.Selected = &t.cursor
 	s.List.Label, s.List.Skip = t.labelAt, t.skip
 	e := ui.Outline(c, s, t.roots, t.kidsOf, func(it treeItem[K]) { t.row(c, it) }).Grow(1)
+	frameList(c, e)
 	if fn := t.onActivate; fn != nil {
 		e.OnActivate(func(row int) {
 			if it := s.Item(row); !it.wait {

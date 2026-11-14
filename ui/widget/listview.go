@@ -106,6 +106,7 @@ func ListViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]) *L
 	lv.init(lv)
 	mu.Lock()
 	lv.t.watch = lv.watched
+	lv.t.framer = &lv.core
 	mu.Unlock()
 	return lv
 }
@@ -535,6 +536,7 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		grid = ui.GridView(c, g, n, minWidth, height, func(i int) { lv.item(c, i) }).Grow(1).Padding(0, c.Theme().Space(2)).
 			OnChange(func() { t.commit(&t.chosen) }).
 			OnCheckedChange(func() { t.commit(&t.checked) })
+		frameList(c, grid, &lv.style)
 		if t.panel != nil {
 			t.counts()
 			render(c, t.panel)

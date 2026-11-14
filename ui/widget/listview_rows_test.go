@@ -3,6 +3,7 @@ package widget
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"image/color"
 	"strconv"
 	"sync/atomic"
@@ -50,6 +51,8 @@ func (r *rowsView) idleCalls(tt *ui.Tester) float64 {
 
 // same fails when the picture of tt is not the picture a list view built afresh
 // in the same state draws: what a kept row shows is what a built row does.
+// The scroll bar, which shows while the rows overflow, is left out: its thumb
+// follows the rows measured so far, which a kept view has seen more of.
 func sameAsFresh(t *testing.T, what string, tt *ui.Tester, n int, mode ViewMode, setup func(lv *ListViewWidget[vitem, string])) {
 	t.Helper()
 	f := newRowsView(n, mode)
@@ -57,8 +60,15 @@ func sameAsFresh(t *testing.T, what string, tt *ui.Tester, n int, mode ViewMode,
 	ft := f.tester()
 	tt.Frame()
 	tt.Frame()
-	if a, b := tt.Image(), ft.Image(); !bytes.Equal(a.Pix, b.Pix) {
-		t.Fatalf("%s: the list view kept does not draw what one built afresh does", what)
+	a, b := tt.Image(), ft.Image()
+	box := listBox(t, tt)
+	bar := image.Rect(int(box.X+box.W)-12, int(box.Y), int(box.X+box.W), int(box.Y+box.H))
+	for y := range a.Bounds().Dy() {
+		for x := range a.Bounds().Dx() {
+			if !image.Pt(x, y).In(bar) && a.RGBAAt(x, y) != b.RGBAAt(x, y) {
+				t.Fatalf("%s: the list view kept does not draw what one built afresh does, at %d,%d", what, x, y)
+			}
+		}
 	}
 }
 

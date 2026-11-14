@@ -72,9 +72,11 @@ func TestTreeViewShowsTheRootsAndOpensTheChildrenWithTheArrow(t *testing.T) {
 }
 
 // inkStart returns the first column from x0 where the row r has ink: a pixel
-// that is not the page's.
+// that is not the row's background, taken at its right end (the tree fills
+// the window, and its frame's corner is where page looks).
 func inkStart(tt *ui.Tester, r ui.Rect, x0 int) int {
-	img, bg := tt.Image(), page(tt)
+	img := tt.Image()
+	bg := img.RGBAAt(int(r.X+r.W)-8, int(r.Y+r.H/2))
 	for x := x0; x < img.Bounds().Dx(); x++ {
 		for y := int(r.Y) + 2; y < int(r.Y+r.H)-2; y++ {
 			if img.RGBAAt(x, y) != bg {
