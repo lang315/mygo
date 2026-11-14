@@ -98,7 +98,16 @@ func TestUncappedSwapChain(t *testing.T) {
 					r.Release()
 					t.Fatal(err)
 				}
-				if r.pending || r.refreshing || posted.Load() != 0 {
+				// The frame of a new size, which DXGI refused for a refresh,
+				// waits to present (holdFrame), the frame after awaiting the
+				// composition: the window is changing size, and frames present
+				// paced (TestUncappedResizePaced). Only it, and only then; the
+				// wait for the composition may post at any time.
+				held := r.unpresented
+				if held && i != 2 || c.refuse && i == 2 && !held {
+					t.Errorf("composed %v, uncapped, refused %v, frame %d: waiting to present %v", composed, c.refuse, i, held)
+				}
+				if r.pending || r.refreshing != held || !held && posted.Load() != 0 {
 					t.Errorf("composed %v, uncapped, refused %v, frame %d: pending %v, awaiting a refresh %v, %d posted", composed, c.refuse, i, r.pending, r.refreshing, posted.Load())
 				}
 			}
