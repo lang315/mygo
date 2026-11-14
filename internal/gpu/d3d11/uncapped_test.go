@@ -35,9 +35,17 @@ func TestUncappedSwapChain(t *testing.T) {
 		call(r.swapChain, scGetDesc1, uintptr(unsafe.Pointer(&d)))
 		return d
 	}
+	// Present refuses frames with DXGI_PRESENT_DO_NOT_WAIT where the case
+	// says, as real DXGI may, WARP on a busy runner: the frame of a new
+	// size presents paced, with the flag (presentFlags).
+	var p refusingPresent
+	defer func(f func(_, _, _ uintptr, _ *presentParameters) uintptr) { presentCall = f }(presentCall)
+	presentCall = p.call(presentCall)
 	for _, uncapped := range []bool{false, true} {
 		pacing.Uncapped = uncapped
-		for _, composed := range []bool{false, true} {
+		for _, c := range []struct{ composed, refuse bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+			composed := c.composed
+			p = refusingPresent{refuse: c.refuse}
 			newRenderer := New
 			if composed {
 				newRenderer = NewComposed
@@ -46,8 +54,10 @@ func TestUncappedSwapChain(t *testing.T) {
 			if err != nil {
 				t.Skip("no Direct3D 11:", err)
 			}
-			var posted []func()
-			r.SetPost(func(fn func()) { posted = append(posted, fn) })
+			// What the renderer posts runs never, and may be posted from
+			// another goroutine once the test read the count.
+			var posted atomic.Int32
+			r.SetPost(func(func()) { posted.Add(1) })
 			bg := scene.Color{R: 24, G: 24, B: 27, A: 255}
 			if err := r.Render(&scene.Scene{Width: 200, Height: 150, Background: bg}); err != nil {
 				r.Release()
@@ -88,8 +98,17 @@ func TestUncappedSwapChain(t *testing.T) {
 					r.Release()
 					t.Fatal(err)
 				}
-				if r.pending || r.refreshing || len(posted) != 0 {
-					t.Errorf("composed %v, uncapped, frame %d: pending %v, awaiting a refresh %v, %d posted", composed, i, r.pending, r.refreshing, len(posted))
+				// The frame of a new size, which DXGI refused for a refresh,
+				// waits to present (holdFrame), the frame after awaiting the
+				// composition: the window is changing size, and frames present
+				// paced (TestUncappedResizePaced). Only it, and only then; the
+				// wait for the composition may post at any time.
+				held := r.unpresented
+				if held && i != 2 || c.refuse && i == 2 && !held {
+					t.Errorf("composed %v, uncapped, refused %v, frame %d: waiting to present %v", composed, c.refuse, i, held)
+				}
+				if r.pending || r.refreshing != held || !held && posted.Load() != 0 {
+					t.Errorf("composed %v, uncapped, refused %v, frame %d: pending %v, awaiting a refresh %v, %d posted", composed, c.refuse, i, r.pending, r.refreshing, posted.Load())
 				}
 			}
 			if d := desc(r); d.Flags != uint32(r.swapChainFlags()) || d.BufferCount < uncappedBuffers {
