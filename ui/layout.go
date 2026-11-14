@@ -1302,6 +1302,12 @@ func boxBaseline(e *node) (float32, bool) {
 }
 
 func selfAlign(c *node, align Align) Align {
+	if c.self == alignNatural {
+		if align == Stretch {
+			return Start
+		}
+		return align
+	}
 	if c.self != alignAuto {
 		return c.self
 	}
