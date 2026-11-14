@@ -69,8 +69,8 @@ var fixed = map[string][]Decl{
 // buttons are gota's GTK button classes, as the classes they stand for
 // (Task 4 fills it).
 var buttons = map[string]string{
-	"suggested-action":   "bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-pressed",
-	"destructive-action": "bg-danger text-on-accent hover:opacity-90 active:opacity-80",
+	"suggested-action":   "bg-accent border-accent text-on-accent hover:bg-accent-hover hover:border-accent-hover active:bg-accent-pressed active:border-accent-pressed",
+	"destructive-action": "bg-danger border-danger text-on-accent hover:opacity-90 active:opacity-80",
 }
 
 // Roles are the theme roles a Color names.
