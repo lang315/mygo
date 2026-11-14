@@ -287,6 +287,10 @@ func TestIPCGolden(t *testing.T) {
 		rec.Note = fmt.Sprintf("title %q maximized %v fullscreen %v", w.Title(), w.IsMaximized(), w.IsFullScreen())
 		got["window/"+name] = rec
 	}
+	// dom-ready flushes the outbox itself, and leaves behind the flush its own
+	// events scheduled on the main thread. That one drains runGoldenCall's
+	// outbox if it runs after a reply is queued: let it run first.
+	onMain(func() {})
 	builtin("is maximized", "mygo:window.IsMaximized", `[]`)
 	builtin("maximize", "mygo:window.Maximize", `[]`)
 	builtin("is maximized after", "mygo:window.IsMaximized", `[]`)
