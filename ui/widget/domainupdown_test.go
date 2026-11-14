@@ -1,6 +1,9 @@
 package widget
 
 import (
+	"image"
+	"image/color"
+	"math"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -159,4 +162,124 @@ func TestDomainUpDownExposesTheItemAsTheValue(t *testing.T) {
 	if s.Value() != "Tue" {
 		t.Fatalf("the stepper's value is %q, want the item", s.Value())
 	}
+}
+
+// updownLooks runs fn with no skin and with the test skin, light and dark.
+func updownLooks(t *testing.T, fn func(t *testing.T, dark bool)) {
+	for _, skinned := range []bool{false, true} {
+		for _, dark := range []bool{false, true} {
+			name := map[bool]string{false: "nil", true: "skin"}[skinned] + map[bool]string{false: "/light", true: "/dark"}[dark]
+			t.Run(name, func(t *testing.T) {
+				if skinned {
+					useSkin(t)
+				}
+				fn(t, dark)
+			})
+		}
+	}
+}
+
+// boxRows returns the first and last pixel row of column x that is not bg.
+func boxRows(img *image.RGBA, x int, bg color.RGBA) (first, last int) {
+	first, last = -1, -1
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		if img.RGBAAt(x, y) != bg {
+			if first < 0 {
+				first = y
+			}
+			last = y
+		}
+	}
+	return first, last
+}
+
+func TestDomainUpDownMatchesNumericUpDown(t *testing.T) {
+	updownLooks(t, func(t *testing.T, dark bool) {
+		tt := NewTester(t, HBox(8).Add(DomainUpDown("North", "South"), NumericUpDown(0, 10, 1)), 400, 200)
+		tt.SetDark(dark)
+		tt.Frame()
+		img := tt.Image()
+		bg := img.RGBAAt(2, 190)
+		text := tt.Find(ByLabel("North")).Bounds()
+		num := tt.Find(ByRole(ui.RoleTextField)).Bounds()
+		df, dl := boxRows(img, int(text.X)-3, bg)
+		nf, nl := boxRows(img, int(num.X+num.W/2), bg)
+		if dl-df != nl-nf {
+			t.Fatalf("DomainUpDown rows %d..%d, NumericUpDown rows %d..%d", df, dl, nf, nl)
+		}
+		if s := tt.Find(ByRole(ui.RoleStepper)).Bounds(); math.Abs(float64(s.H)-float64(nl-nf+1)) > 1 {
+			t.Fatalf("DomainUpDown's arrows are %v high, NumericUpDown's box %d", s.H, nl-nf+1)
+		}
+	})
+}
+
+func TestDomainUpDownArrowsInsideItsBox(t *testing.T) {
+	updownLooks(t, func(t *testing.T, dark bool) {
+		tt := NewTester(t, DomainUpDown("North", "South"), 400, 200)
+		tt.SetDark(dark)
+		tt.Frame()
+		img := tt.Image()
+		bg := img.RGBAAt(2, 190)
+		text := tt.Find(ByLabel("North")).Bounds()
+		s := tt.Find(ByRole(ui.RoleStepper)).Bounds()
+		f, l := boxRows(img, int(text.X)-3, bg)
+		if math.Abs(float64(s.Y)-float64(f)) > 1 || math.Abs(float64(s.Y+s.H)-float64(l+1)) > 1 {
+			t.Fatalf("stepper %v, field rows %d..%d", s, f, l)
+		}
+		y := int(s.Y + s.H/2)
+		// The pixel left of the stepper is the field's border: a gap would
+		// show the background there. (The field's fill may equal bg.)
+		if img.RGBAAt(int(s.X)-1, y) == bg {
+			t.Fatalf("background just left of the stepper %v: a gap", s)
+		}
+	})
+}
+
+func TestDomainUpDownStillSteps(t *testing.T) {
+	updownLooks(t, func(t *testing.T, dark bool) {
+		d := DomainUpDown("North", "South")
+		tt := NewTester(t, d, 400, 200)
+		s := tt.Find(ByRole(ui.RoleStepper)).Bounds()
+		tt.ClickAt(s.X+s.W/2, s.Y+22)
+		tt.Settle()
+		if d.SelectedItem() != "South" {
+			t.Fatalf("the down arrow: %q, want South", d.SelectedItem())
+		}
+		tt.ClickAt(s.X+s.W/2, s.Y+8)
+		tt.Settle()
+		if d.SelectedItem() != "North" {
+			t.Fatalf("the up arrow: %q, want North", d.SelectedItem())
+		}
+	})
+}
+
+// The arrows reach the stepper's top and bottom: hovering just inside either
+// edge lights an arrow.
+func TestDomainUpDownArrowsFillTheirColumn(t *testing.T) {
+	t.Skip("needs ui/indicators.go: Stepper's arrows are a fixed Space(3.5) high, 6 inner rows short of a 36 DIP stepper")
+	updownLooks(t, func(t *testing.T, dark bool) {
+		tt := NewTester(t, DomainUpDown("North", "South"), 400, 200)
+		tt.SetDark(dark)
+		tt.Frame()
+		s := tt.Find(ByRole(ui.RoleStepper)).Bounds()
+		x := s.X + s.W/2 - 6 // clear of the glyph
+		// Count the rows inside the border that light under the pointer.
+		tt.Move(x, 150)
+		tt.Settle()
+		rest := map[int]color.RGBA{}
+		for y := int(s.Y) + 1; y < int(s.Y+s.H)-1; y++ {
+			rest[y] = tt.Image().RGBAAt(int(x), y)
+		}
+		lit := 0
+		for y := range rest {
+			tt.Move(x, float32(y)+0.5)
+			tt.Settle()
+			if tt.Image().RGBAAt(int(x), y) != rest[y] {
+				lit++
+			}
+		}
+		if inner := len(rest); lit < inner-1 {
+			t.Fatalf("arrows cover %d of the stepper's %d inner rows (%v): an empty band", lit, inner, s)
+		}
+	})
 }

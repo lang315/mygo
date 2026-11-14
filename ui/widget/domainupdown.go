@@ -145,7 +145,7 @@ func (d *DomainUpDownWidget) build(c *ui.Context) ui.Element {
 	// The least height is the whole control's, which the app's own height
 	// replaces (style.go), and the field stretches to it.
 	h := t.Metrics.ControlHeight
-	row := ui.Row(c).Gap(t.Space(1)).AlignItems(ui.Center)
+	row := ui.Row(c).AlignItems(ui.Center)
 	if h > 0 {
 		row.MinHeight(h)
 	}
@@ -157,7 +157,10 @@ func (d *DomainUpDownWidget) build(c *ui.Context) ui.Element {
 		field.Children(func() {
 			ui.Text(c, text)
 		})
-		ui.Stepper(c, p, lo, hi, 1).Disabled(n == 0).Value(text).OnChange(d.edited())
+		step := ui.Stepper(c, p, lo, hi, 1).Disabled(n == 0).Value(text).OnChange(d.edited())
+		if h > 0 {
+			step.AlignSelf(ui.Stretch) // as high as the field, which it touches
+		}
 	})
 }
 
