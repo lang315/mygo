@@ -214,10 +214,10 @@ func containers() widget.Control {
 		flow.Add(widget.Button(fmt.Sprintf("Chip %d", i+1)))
 	}
 	sidebar := widget.Sidebar()
-	sidebar.Add("mail", "Mail", widget.Label("Mail page"))
-	sidebar.Add("notes", "Notes", widget.Label("Notes page"))
+	sidebar.Add("mail", "Mail", widget.VBox(0).Padding(2).Add(widget.Label("Mail page")))
+	sidebar.Add("notes", "Notes", widget.VBox(0).Padding(2).Add(widget.Label("Notes page")))
 	sidebar.SetSize(0, 110)
-	nested := widget.TabControl().AddPage("First", widget.Label("First page")).AddPage("Second", widget.Label("Second page"))
+	nested := widget.TabControl().AddPage("First", widget.Label("First page")).AddPage("Second", widget.Label("Second page")).Expand()
 	return widget.VBox(8).Add(
 		widget.MenuBar(
 			widget.MenuItem{Text: "File", Children: []widget.MenuItem{{Text: "New"}, {Text: "Open"}}},
@@ -228,22 +228,22 @@ func containers() widget.Control {
 		widget.SplitContainer(widget.Label("Split left"), widget.Label("Split right")).SetSize(0, 70),
 		widget.ScrollPanel(widget.VBox(4).Add(widget.Label("Scroll panel one"), widget.Label("Scroll panel two"),
 			widget.Label("Scroll panel three"), widget.Label("Scroll panel four"))).SetSize(0, 70),
-		widget.HBox(8).Add(sidebar, nested),
+		widget.HBox(8).Pack(sidebar, true, true).Pack(nested, true, true),
 	)
 }
 
 func chart() widget.Control {
 	line := widget.Chart(widget.LineChart).SetTitle("Line").SetLabels("Mon", "Tue", "Wed").
 		SetSeries(widget.ChartSeries{Name: "A", Values: []float64{1, 3, 2}}, widget.ChartSeries{Name: "B", Values: []float64{2, 1, 3}})
-	line.SetSize(0, 200)
+	line.SetSize(0, 260)
 	bars := widget.Chart(widget.BarChart).SetTitle("Bars").SetLabels("Jan", "Feb", "Mar").
 		SetSeries(widget.ChartSeries{Name: "2026", Values: []float64{10, 20, 30}})
-	bars.SetSize(0, 200)
+	bars.SetSize(0, 260)
 	pie := widget.Chart(widget.PieChart).SetTitle("Pie").SetLabels("Win", "Mac", "Linux").
 		SetSeries(widget.ChartSeries{Values: []float64{60, 30, 10}})
-	pie.SetSize(0, 200)
+	pie.SetSize(0, 260)
 	return widget.VBox(12).Add(
-		widget.HBox(12).Add(line, bars, pie),
+		widget.HBox(12).Pack(line, true, true).Pack(bars, true, true).Pack(pie, true, true),
 		widget.ProgressBar().SetFraction(0.4).SetText("40%"),
 		widget.ProgressBar().SetFraction(1),
 		widget.Spinner().Start(),

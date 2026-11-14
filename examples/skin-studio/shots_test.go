@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -49,11 +50,39 @@ func TestShots(t *testing.T) {
 		{"calm-blue", skin.Calm},
 		{"calm-cham", skin.Calm.WithPalette(skin.Cham)},
 	}
-	// open builds the studio under a skin and an appearance, 1280 by 800 DIPs.
+	// MYGO_SKIN_SCALE is the scale of the shots, 1 when unset.
+	scale := float32(1)
+	if v := os.Getenv("MYGO_SKIN_SCALE"); v != "" {
+		f, err := strconv.ParseFloat(v, 32)
+		if err != nil || f <= 0 {
+			t.Fatalf("MYGO_SKIN_SCALE=%q is not a positive number", v)
+		}
+		scale = float32(f)
+	}
+	// open builds the studio under a skin and an appearance, 1280 by 800 DIPs,
+	// with the header pickers set to the skin and palette it shows.
 	open := func(s *skin.Skin, dark bool) *widget.Tester {
-		skin.Use(s)
+		skin.Use(nil)
 		tt := widget.TestForm(t, newStudio())
 		tt.SetSize(1280, 800)
+		tt.SetScale(scale)
+		wantSkin, wantPalette := "none", "blue"
+		if s != nil {
+			wantSkin = "calm"
+			for value, p := range palettes {
+				if p == s.Palette() {
+					wantPalette = value
+				}
+			}
+			pick(tt, "Skin", "Calm")
+			pick(tt, "Palette", s.Palette().Name())
+		}
+		if got := tt.Find(widget.ByLabel("Skin")).Value(); got != wantSkin {
+			t.Errorf("the Skin picker holds %q, want %q", got, wantSkin)
+		}
+		if got := tt.Find(widget.ByLabel("Palette")).Value(); got != wantPalette {
+			t.Errorf("the Palette picker holds %q, want %q", got, wantPalette)
+		}
 		tt.SetDark(dark)
 		tt.Frame()
 		return tt
@@ -107,9 +136,10 @@ func TestShots(t *testing.T) {
 	if selected != 1 {
 		t.Fatalf("the grid has %d selected rows, want 1", selected)
 	}
-	img := tt.Image() // scale 1: a DIP is a pixel; x = 800 is past the row's text
-	in := img.RGBAAt(800, int(picked.Y+picked.H/2))
-	out := img.RGBAAt(800, int(other.Y+other.H/2))
+	img := tt.Image() // a DIP is scale pixels; x = 800 DIPs is past the row's text
+	x := int(800 * scale)
+	in := img.RGBAAt(x, int((picked.Y+picked.H/2)*scale))
+	out := img.RGBAAt(x, int((other.Y+other.H/2)*scale))
 	t.Logf("pixel in the selected row %v, in an unselected row %v", in, out)
 	if in == out {
 		t.Errorf("the selected row is drawn as the unselected one: both %v", in)
