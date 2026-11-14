@@ -122,15 +122,15 @@ func TestListControlsHaveAFrame(t *testing.T) {
 					}
 					x := box.X + box.W/2
 					top := int(math.Round(float64(box.Y * scale)))
-					if got := devicePx(img,x, top, scale); !sameColor(got, want) {
+					if got := devicePx(img, x, top, scale); !sameColor(got, want) {
 						t.Fatalf("top edge at device row %d is %v, want the frame's %v (page %v)", top, got, want, page)
 					}
 					// One device pixel of one color: the page above it, and the
 					// row under it the inside's, not a blend of the two.
-					if got := devicePx(img,x, top-1, scale); !sameColor(got, page) {
+					if got := devicePx(img, x, top-1, scale); !sameColor(got, page) {
 						t.Fatalf("device row %d over the top edge is %v, want the page's %v", top-1, got, page)
 					}
-					if a, b := devicePx(img,x, top+1, scale), devicePx(img,x, top+2, scale); !sameColor(a, b) || sameColor(a, want) {
+					if a, b := devicePx(img, x, top+1, scale), devicePx(img, x, top+2, scale); !sameColor(a, b) || sameColor(a, want) {
 						t.Fatalf("device rows %d and %d under the top edge are %v and %v, want the inside's color twice, not the frame's %v", top+1, top+2, a, b, want)
 					}
 				})
@@ -152,7 +152,7 @@ func TestListFrameYieldsToOwnStyle(t *testing.T) {
 			tt.Frame()
 			img, box := tt.Image(), listBox(t, tt)
 			_, want := lookColors(look.dark)
-			if got := devicePx(img,box.X+box.W/2, int(math.Round(float64(box.Y))), 1); !sameColor(got, want) {
+			if got := devicePx(img, box.X+box.W/2, int(math.Round(float64(box.Y))), 1); !sameColor(got, want) {
 				t.Fatalf("top edge is %v, want the content background %v", got, want)
 			}
 		})
@@ -171,7 +171,7 @@ func TestListFrameTakesOwnBorderColor(t *testing.T) {
 				tt.SetDark(look.dark)
 				tt.Frame()
 				img, box := tt.Image(), listBox(t, tt)
-				if got := devicePx(img,box.X+box.W/2, int(box.Y), 1); !sameColor(got, green) {
+				if got := devicePx(img, box.X+box.W/2, int(box.Y), 1); !sameColor(got, green) {
 					t.Fatalf("top edge is %v, want the style's border color %v", got, green)
 				}
 			})
@@ -193,7 +193,7 @@ func TestListFrameYieldsToOwnStyleEveryControl(t *testing.T) {
 				tt.Frame()
 				img, box := tt.Image(), listBox(t, tt)
 				x, y := box.X+box.W/2, int(box.Y)
-				if edge, in := devicePx(img,x, y, 1), devicePx(img,x, y+3, 1); !sameColor(edge, in) {
+				if edge, in := devicePx(img, x, y, 1), devicePx(img, x, y+3, 1); !sameColor(edge, in) {
 					t.Fatalf("top edge is %v, the inside %v: a line is left with a border of 0", edge, in)
 				}
 			})
@@ -205,7 +205,7 @@ func TestListFrameYieldsToOwnStyleEveryControl(t *testing.T) {
 				tt.SetDark(look.dark)
 				tt.Frame()
 				img, box := tt.Image(), listBox(t, tt)
-				if got := devicePx(img,box.X+box.W/2, int(box.Y+box.H)-4, 1); !sameColor(got, red) {
+				if got := devicePx(img, box.X+box.W/2, int(box.Y+box.H)-4, 1); !sameColor(got, red) {
 					t.Fatalf("under the rows is %v, want the style's background %v", got, red)
 				}
 			})
@@ -226,10 +226,10 @@ func TestListControlsHaveTheContentBackground(t *testing.T) {
 				tt.Frame()
 				img, box := tt.Image(), listBox(t, tt)
 				_, bg := lookColors(look.dark)
-				if got := devicePx(img,box.X+box.W/2, int(box.Y+box.H)-4, 1); !sameColor(got, bg) {
+				if got := devicePx(img, box.X+box.W/2, int(box.Y+box.H)-4, 1); !sameColor(got, bg) {
 					t.Fatalf("under the rows is %v, want the content background %v", got, bg)
 				}
-				if got := devicePx(img,box.X-4, int(box.Y+box.H/2), 1); !sameColor(got, blue) {
+				if got := devicePx(img, box.X-4, int(box.Y+box.H/2), 1); !sameColor(got, blue) {
 					t.Fatalf("beside the list is %v, want the parent's %v", got, blue)
 				}
 			})
@@ -260,7 +260,7 @@ func TestListChosenRowKeepsTheFrame(t *testing.T) {
 				tt.Frame()
 				img, box, row := tt.Image(), listBox(t, tt), find(t, tt, "Row 0")
 				frame, _ := lookColors(look.dark)
-				if got := devicePx(img,box.X, int(row.Y+row.H/2), 1); !sameColor(got, frame) {
+				if got := devicePx(img, box.X, int(row.Y+row.H/2), 1); !sameColor(got, frame) {
 					t.Fatalf("the left edge beside the chosen row is %v, want the frame's %v", got, frame)
 				}
 			})
@@ -282,7 +282,7 @@ func scrollColumn(t *testing.T, w Control, dark bool, in float32) int {
 	_, bg := lookColors(dark)
 	x, n := box.X+box.W-in-1, 0
 	for y := int(box.Y) + 2; y < int(box.Y+box.H)-2; y++ {
-		if !sameColor(devicePx(img,x, y, 1), bg) {
+		if !sameColor(devicePx(img, x, y, 1), bg) {
 			n++
 		}
 	}
@@ -336,7 +336,7 @@ func TestListScrollBarShowsEveryControl(t *testing.T) {
 		img, box := tt.Image(), listBox(t, tt)
 		x, n := box.X+box.W-6, 0
 		for y := int(box.Y) + 2; y < int(box.Y+box.H)-2; y++ {
-			if !sameColor(devicePx(img,x, y, 1), devicePx(img,x-12, y, 1)) {
+			if !sameColor(devicePx(img, x, y, 1), devicePx(img, x-12, y, 1)) {
 				n++
 			}
 		}
