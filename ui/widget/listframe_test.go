@@ -63,7 +63,13 @@ func listControls(n int, st Style) map[string]func() Control {
 		"ListView":           func() Control { return boxed(view().SetSize(300, 120).Apply(st)) },
 		"ListView LargeIcon": func() Control { return boxed(view().SetView(ViewLargeIcon).SetSize(300, 120).Apply(st)) },
 		"ListView List":      func() Control { return boxed(view().SetView(ViewList).SetSize(300, 120).Apply(st)) },
-		"TreeView":           func() Control { return boxed(newTree().SetRoots(nodes).SetSize(300, 120).Apply(st)) },
+		// The style given to the table a ListView shows its details in.
+		"ListView Details()": func() Control {
+			lv := view().SetSize(300, 120)
+			lv.Details().Apply(st)
+			return boxed(lv)
+		},
+		"TreeView": func() Control { return boxed(newTree().SetRoots(nodes).SetSize(300, 120).Apply(st)) },
 		"DataGridView": func() Control {
 			return boxed(DataGridView(func(a *acct) int { return a.id },
 				Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200}).SetRows(accts).SetSize(300, 120).Apply(st))
@@ -180,6 +186,61 @@ func TestListFrameYieldsToOwnStyleEveryControl(t *testing.T) {
 				box := listBox(t, tt)
 				if got := devicePx(tt, box.X+box.W/2, int(box.Y+box.H)-4, 1); !sameColor(got, red) {
 					t.Fatalf("under the rows is %v, want the style's background %v", got, red)
+				}
+			})
+		}
+	}
+}
+
+// Every list control draws the content background under its rows, not its
+// parent's: here a blue box around it.
+func TestListControlsHaveTheContentBackground(t *testing.T) {
+	blue := ui.RGB(0, 0, 255)
+	for _, look := range frameLooks {
+		for name, mk := range listControls(1, Style{}) {
+			t.Run(look.name+"/"+name, func(t *testing.T) {
+				useLook(t, look.skin)
+				tt := tester(t, VBox(0).Add(mk()).Background(blue))
+				tt.SetDark(look.dark)
+				tt.Frame()
+				box := listBox(t, tt)
+				_, bg := lookColors(look.dark)
+				if got := devicePx(tt, box.X+box.W/2, int(box.Y+box.H)-4, 1); !sameColor(got, bg) {
+					t.Fatalf("under the rows is %v, want the content background %v", got, bg)
+				}
+				if got := devicePx(tt, box.X-4, int(box.Y+box.H/2), 1); !sameColor(got, blue) {
+					t.Fatalf("beside the list is %v, want the parent's %v", got, blue)
+				}
+			})
+		}
+	}
+}
+
+// A chosen row's fill stays inside the frame: the left edge at the middle of
+// the first row, chosen, is the frame's color.
+func TestListChosenRowKeepsTheFrame(t *testing.T) {
+	id := func(s *string) string { return *s }
+	controls := map[string]func() Control{
+		"ListBox": func() Control {
+			return VBox(0).Add(ListBox(id, id).SetItems([]string{"Row 0", "Row 1"}).SetSelected("Row 0").SetSize(300, 120)).Padding(2)
+		},
+		"DataGridView": func() Control {
+			return VBox(0).Add(DataGridView(func(a *acct) int { return a.id },
+				Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 200}).
+				SetRows([]acct{{id: 0, name: "Row 0"}, {id: 1, name: "Row 1"}}).SetSelected(0).SetSize(300, 120)).Padding(2)
+		},
+	}
+	for _, look := range frameLooks {
+		for name, mk := range controls {
+			t.Run(look.name+"/"+name, func(t *testing.T) {
+				useLook(t, look.skin)
+				tt := tester(t, mk())
+				tt.SetDark(look.dark)
+				tt.Frame()
+				box, row := listBox(t, tt), find(t, tt, "Row 0")
+				frame, _ := lookColors(look.dark)
+				if got := devicePx(tt, box.X, int(row.Y+row.H/2), 1); !sameColor(got, frame) {
+					t.Fatalf("the left edge beside the chosen row is %v, want the frame's %v", got, frame)
 				}
 			})
 		}

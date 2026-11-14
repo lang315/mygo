@@ -216,19 +216,28 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 // of the theme's strong line on the content background, as WinForms frames
 // its lists, and keeps its scroll bars showing while its rows overflow. The
 // control's style, applied after, overrides the frame; when e is inside the
-// element render styles (a table's, in a column with its panel), own is that
-// style, and a border or a background it sets stands instead of the frame's.
-func frameList(c *ui.Context, e ui.Element, own *Style) {
+// element render styles (a table's, in a column with its panel), own are the
+// styles that land there, and a border or a background one sets stands
+// instead of the frame's.
+func frameList(c *ui.Context, e ui.Element, own ...*Style) {
 	e.KeepScrollbars(true)
+	sets := func(f func(*props) bool) bool {
+		for _, s := range own {
+			if s.sets(f) {
+				return true
+			}
+		}
+		return false
+	}
 	t := c.Theme()
-	if own == nil || !own.sets(func(p *props) bool { return p.borderSet != 0 || p.set&pBorderColor != 0 }) {
+	if !sets(func(p *props) bool { return p.borderSet != 0 || p.set&pBorderColor != 0 }) {
 		line := t.Border
 		if tk, _ := skinOf(c); tk != nil {
 			line = tk.LineStrong
 		}
 		e.Border(1, line).Radius(t.Radius)
 	}
-	if own == nil || !own.sets(func(p *props) bool { return p.set&(pBackground|pGradient) != 0 }) {
+	if !sets(func(p *props) bool { return p.set&(pBackground|pGradient) != 0 }) {
 		e.Background(t.Background)
 	}
 }

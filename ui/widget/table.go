@@ -146,7 +146,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	startCell   func(row, col int, x, y float32, how ui.EditHow)
 
 	// framer, when set by a ListView, is the control whose style stands
-	// instead of the table's frame (frameList); the table's own when nil.
+	// instead of the table's frame (frameList), with the table's own.
 	framer *core
 
 	// watch, when set by a ListView, gets the keys the user added to and took
@@ -701,8 +701,11 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		OnSortChange(onChange(&t.sort, nil)).
 		OnSelectionChange(func() { t.commit(&t.chosen) }).
 		OnCheckedChange(func() { t.commit(&t.checked) })
-	framer := cmp.Or(t.framer, &t.core)
-	frameList(c, e, &framer.style)
+	if t.framer != nil {
+		frameList(c, e, &t.style, &t.framer.style)
+	} else {
+		frameList(c, e, &t.style)
+	}
 	if t.afterTable != nil {
 		t.afterTable(e, c)
 	}

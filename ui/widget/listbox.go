@@ -522,7 +522,7 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 	}
 	s.FollowEnd = l.follow
 	e := ui.List(c, s, len(l.frame), func(i int) { l.row(c, i) }).Grow(1)
-	frameList(c, e, nil)
+	frameList(c, e)
 	if l.toEnd && !c.Measuring() { // the request is for the real window
 		l.toEnd = false
 		s.ScrollToEnd()
