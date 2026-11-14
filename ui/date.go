@@ -166,7 +166,8 @@ func addMonths(t time.Time, n int) time.Time {
 // calendarBox creates the element of a month's grid, which calendarGrid
 // fills.
 func calendarBox(c *context) *node {
-	grid := coreColumn(c).Gap(c.theme.Space(0.5)).Focusable().Shrink(0).Role(RoleTable)
+	// AlignSelf Start: the month is as wide as its days, not as its container.
+	grid := coreColumn(c).Gap(c.theme.Space(0.5)).Focusable().Shrink(0).Role(RoleTable).AlignSelf(Start)
 	grid.flags |= flagOwnRing
 	return grid
 }
