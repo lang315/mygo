@@ -236,13 +236,17 @@ func TestDomainUpDownArrowsInsideItsBox(t *testing.T) {
 }
 
 // The field and the arrows are one box, as NumericUpDown's: one line
-// between them, and no notch where they meet.
+// between them, and no notch where they meet, whatever the text's height:
+// text scales make the box a fractional height high (1.1: 30.84 DIPs), as
+// Windows' font did, whose edges land on the nearest device rows.
 func TestDomainUpDownIsOneBox(t *testing.T) {
 	updownLooks(t, func(t *testing.T, dark bool) {
-		for _, scale := range []float32{1, 2} {
+		for _, sc := range [][2]float32{{1, 1}, {2, 1}, {1, 14.0 / 13}, {2, 14.0 / 13}, {1, 1.1}, {1.25, 1}} {
+			scale := sc[0]
 			tt := NewTester(t, DomainUpDown("North", "South"), 400, 200)
 			tt.SetDark(dark)
 			tt.SetScale(scale)
+			tt.SetPreferences(ui.Preferences{TextScale: sc[1]})
 			tt.Frame()
 			img := tt.Image()
 			bg := img.RGBAAt(2, int(190*scale))
@@ -270,17 +274,24 @@ func TestDomainUpDownIsOneBox(t *testing.T) {
 				in = on
 			}
 			if runs != 1 || width != int(scale) {
-				t.Fatalf("scale %v: %d runs of the border's color (%v), %d device pixels, between the field and the arrows %v: want one of %v", scale, runs, line, width, s, scale)
+				t.Fatalf("scale, text scale %v: %d runs of the border's color (%v), %d device pixels, between the field and the arrows %v: want one of %v", sc, runs, line, width, s, scale)
 			}
-			// The joint's top and bottom rows are the border, not a notch,
-			// on the line and on either side of it.
-			top, bottom := int(s.Y*scale), int((s.Y+s.H)*scale)-1
-			for _, x := range []int{at - 1, at, at + width} {
-				if c := img.RGBAAt(x, top); c != line {
-					t.Fatalf("scale %v: the joint's top row at x=%d (line at %d) is %v, want the border %v", scale, x, at, c, line)
-				}
-				if c := img.RGBAAt(x, bottom); c != line {
-					t.Fatalf("scale %v: the joint's bottom row at x=%d (line at %d) is %v, want the border %v", scale, x, at, c, line)
+			// No notch: the field just left of the line, the line and the
+			// arrows just right of it span the same device rows, which start
+			// and end with the border.
+			xs := []int{at - 1, at, at + width}
+			var rows [3][2]int
+			for i, x := range xs {
+				rows[i][0], rows[i][1] = boxRows(img, x, bg)
+			}
+			if rows[0] != rows[1] || rows[1] != rows[2] {
+				t.Fatalf("scale, text scale %v: rows at x=%v (line at %d): %v, want the same (stepper %v)", sc, xs, at, rows, s)
+			}
+			for _, x := range xs {
+				for _, y := range rows[0] {
+					if c := img.RGBAAt(x, y); c != line {
+						t.Fatalf("scale, text scale %v: the joint's row %d at x=%d (line at %d) is %v, want the border %v (rows %v)", sc, y, x, at, c, line, rows)
+					}
 				}
 			}
 		}
