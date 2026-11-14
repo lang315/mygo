@@ -212,6 +212,40 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 	}
 }
 
+// frameList outlines e, the scrolling element of a list control, in 1 DIP
+// of the theme's strong line on the content background, as WinForms frames
+// its lists, and keeps its scroll bars showing while its rows overflow. The
+// control's style, applied after, overrides the frame; when e is inside the
+// element render styles (a table's, in a column with its panel), own is that
+// style, and a border or a background it sets stands instead of the frame's.
+func frameList(c *ui.Context, e ui.Element, own *Style) {
+	e.KeepScrollbars(true)
+	t := c.Theme()
+	if own == nil || !own.sets(func(p *props) bool { return p.borderSet != 0 || p.set&pBorderColor != 0 }) {
+		line := t.Border
+		if tk, _ := skinOf(c); tk != nil {
+			line = tk.LineStrong
+		}
+		e.Border(1, line).Radius(t.Radius)
+	}
+	if own == nil || !own.sets(func(p *props) bool { return p.set&(pBackground|pGradient) != 0 }) {
+		e.Background(t.Background)
+	}
+}
+
+// sets reports whether f holds for s or one of its variants.
+func (s *Style) sets(f func(*props) bool) bool {
+	if f(&s.props) {
+		return true
+	}
+	for _, v := range s.v {
+		if v != nil && v.sets(f) {
+			return true
+		}
+	}
+	return false
+}
+
 // textKey keys a control's text color animation.
 type textKey int
 
