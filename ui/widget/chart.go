@@ -253,6 +253,7 @@ func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []Chart
 	label := func(side chart.Side, tk chart.Tick) {
 		ui.Text(ctx, tk.Label).NoWrap().FontSize(t.FontSize - 2).TextColor(t.TextMuted)
 	}
+	_, labelH := ctx.MeasureText(0, ui.Span{Text: "0", Size: t.FontSize - 2})
 	name := c.title
 	if name == "" {
 		name = "Chart"
@@ -300,7 +301,7 @@ func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []Chart
 		if area.Clicked() && c.hover >= 0 {
 			picked = c.hover
 		}
-	}).Basis(220).Grow(1).MinHeight(60).Padding(t.FontSize/2, 0, 0, 0).Gap(6)
+	}).Basis(220).Grow(1).MinHeight(60).Padding(labelH/2, 0, 0, 0).Gap(6)
 	return picked
 }
 

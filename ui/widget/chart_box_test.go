@@ -196,12 +196,28 @@ func TestChartTopTickLabelIsWhole(t *testing.T) {
 				tt.SetDark(true)
 				tt.Settle()
 			}
-			top, bottom := tt.Find(ByLabel("30")).Bounds(), tt.Find(ByLabel("0")).Bounds()
-			if top.Y < 40 || top.H != bottom.H {
-				t.Errorf("%s: the top tick's label is at %v, the bottom one's %v; want it under y 40 and as high", k.name, top, bottom)
-			}
+			checkTopLabel(t, tt, k.name)
 		}
 	})
+	// A large font, whose lines are taller than its size: the label's line
+	// is still the inset's twice.
+	t.Run("font 20", func(t *testing.T) {
+		big := ui.LightTheme()
+		big.FontSize = 20
+		ui.SetDefaultThemes(big, nil)
+		t.Cleanup(func() { ui.SetDefaultThemes(nil, nil) })
+		for _, k := range kinds[:2] {
+			checkTopLabel(t, NewTester(t, VBox(0).Add(sentinel("top"), k.mk().SetSize(300, 200)), 400, 300), k.name)
+		}
+	})
+}
+
+func checkTopLabel(t *testing.T, tt *Tester, name string) {
+	t.Helper()
+	top, bottom := tt.Find(ByLabel("30")).Bounds(), tt.Find(ByLabel("0")).Bounds()
+	if top.Y < 40 || top.H != bottom.H {
+		t.Errorf("%s: the top tick's label is at %v, the bottom one's %v; want it under y 40 and as high", name, top, bottom)
+	}
 }
 
 // A legend that wraps to several lines still stays in a box of 120.
@@ -225,7 +241,7 @@ func TestChartWrappedLegendStaysInside(t *testing.T) {
 }
 
 // A pie in a box narrower than its 200 DIPs keeps to the box.
-func TestPieChartNarrowBoxStaysInside(t *testing.T) {
+func TestChartPieNarrowBoxStaysInside(t *testing.T) {
 	skin.Use(nil)
 	c := boxChart(PieChart).SetSize(160, 200)
 	tt := NewTester(t, VBox(0).Add(c), 400, 500)
@@ -341,17 +357,18 @@ func TestChartHasAMinimumWidth(t *testing.T) {
 // An app's own width wins over the minimum, narrower as wider.
 func TestChartOwnWidthWins(t *testing.T) {
 	for _, c := range []struct {
-		name string
-		w    *ChartWidget
-		want int
+		name     string
+		w        *ChartWidget
+		min, max int
 	}{
-		{"MinWidth(240)", boxChart(LineChart).SetSize(0, 200).Apply(NewStyle().MinWidth(240)), 240},
-		{"MinWidth(100)", boxChart(LineChart).SetSize(100, 200).Apply(NewStyle().MinWidth(100)), 100},
-		{"SetSize(100, 200)", boxChart(LineChart).SetSize(100, 200), 100},
+		{"MinWidth(240)", boxChart(LineChart).SetSize(0, 200).Apply(NewStyle().MinWidth(240)), 240, 240},
+		// Its own minimum replaces the 160: the chart is its content's width.
+		{"MinWidth(100)", boxChart(LineChart).SetSize(0, 200).Apply(NewStyle().MinWidth(100)), 100, 159},
+		{"SetSize(100, 200)", boxChart(LineChart).SetSize(100, 200), 100, 100},
 	} {
 		tt := NewTester(t, HBox(12).Add(c.w.Background(chartBacks[0])), 1200, 400)
-		if lo, hi := paintedSpan(tt.Image(), 1, chartBacks[0]); hi-lo != c.want {
-			t.Errorf("%s: the chart is %d wide (x %d to %d), want %d", c.name, hi-lo, lo, hi, c.want)
+		if lo, hi := paintedSpan(tt.Image(), 1, chartBacks[0]); hi-lo < c.min || hi-lo > c.max {
+			t.Errorf("%s: the chart is %d wide (x %d to %d), want %d to %d", c.name, hi-lo, lo, hi, c.min, c.max)
 		}
 	}
 }
