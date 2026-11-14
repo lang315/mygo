@@ -123,6 +123,9 @@ type window struct {
 		style, exStyle uintptr
 		placement      windowPlacement
 	}
+	// refocus is the web view that had the keyboard as the window last
+	// went inactive, which WM_SETFOCUS gives it back to.
+	refocus     *window
 	state       int // last sizeRestored, sizeMinimized or sizeMaximized
 	opacity     float64
 	bgBrush     uintptr
@@ -595,6 +598,7 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 			w.caption.activate(loword(wp) != waInactive || w.keepsActive())
 		}
 		if loword(wp) == waInactive {
+			w.refocus = w.focusedWebView() // before WM_KILLFOCUS takes it
 			w.h.Blurred()
 		} else {
 			w.h.Focused()
@@ -602,7 +606,15 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		return 0, false
 	case wmSetFocus:
 		if w.sf != nil {
-			procSetFocus.Call(w.surf().hwnd)
+			// The web view that had the keyboard as the window went
+			// inactive gets it back, if still shown; else the surface.
+			v := w.refocus
+			w.refocus = nil
+			if v != nil && !v.closed && v.shown && v.controller != 0 {
+				v.focusWebView()
+			} else {
+				procSetFocus.Call(w.surf().hwnd)
+			}
 		} else {
 			w.focusWebView()
 		}
