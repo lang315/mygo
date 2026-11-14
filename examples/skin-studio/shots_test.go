@@ -83,11 +83,36 @@ func TestShots(t *testing.T) {
 	tt = open(skin.Calm, false)
 	tt.Find(widget.ByLabel("Grid")).Click()
 	tt.Frame()
-	for _, r := range tt.FindAll(widget.ByRole(ui.RoleRow)) {
-		if r.Bounds().H > 0 {
-			r.Click()
-			break
+	// The first row is the header: pick the data row 3, and check the grid
+	// holds exactly it, drawn unlike the row 4 under it.
+	tt.Find(widget.ByRole(ui.RoleRow).Label("3")).Click()
+	tt.Frame()
+	var picked, other ui.Rect
+	selected := 0
+	for _, n := range tt.Nodes() {
+		if n.Role != ui.RoleRow {
+			continue
 		}
+		if n.Checked { // a grid row reports its selection as checked
+			selected++
+			picked = n.Bounds
+			if n.Label != "3" {
+				t.Errorf("the selected row is %q, want 3", n.Label)
+			}
+		}
+		if n.Label == "4" {
+			other = n.Bounds
+		}
+	}
+	if selected != 1 {
+		t.Fatalf("the grid has %d selected rows, want 1", selected)
+	}
+	img := tt.Image() // scale 1: a DIP is a pixel; x = 800 is past the row's text
+	in := img.RGBAAt(800, int(picked.Y+picked.H/2))
+	out := img.RGBAAt(800, int(other.Y+other.H/2))
+	t.Logf("pixel in the selected row %v, in an unselected row %v", in, out)
+	if in == out {
+		t.Errorf("the selected row is drawn as the unselected one: both %v", in)
 	}
 	write(tt, "calm-blue-light-grid-row-selected")
 }
