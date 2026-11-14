@@ -218,6 +218,15 @@ how a control takes its place in the box that holds it.
 | `suggested-action` | `bg-accent border-accent text-on-accent hover:bg-accent-hover hover:border-accent-hover active:bg-accent-pressed active:border-accent-pressed` |
 <!-- /twclass:buttons -->
 
+Both classes set the border color too, so the button has no gray ring around
+its fill. `suggested-action` sets it for the hover and active states as well,
+so a border color you add (`suggested-action border-red-500`) holds at rest
+only: hovered and pressed, the border follows the fill again. Add
+`hover:border-red-500 active:border-red-500` to keep it. Unlike
+`Suggested()`, which is the button's own style, these are classes of an
+applied style: a `Suggested()` button ignores the border classes applied to
+it.
+
 ## Motion
 
 <!-- twclass:motion -->

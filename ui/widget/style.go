@@ -62,6 +62,21 @@ func (l *layout) apply(e ui.Element) {
 	}
 }
 
+// borderColorFor returns the border color p sets and whether it sets one:
+// fillBorder is the background p sets, and nothing under High Contrast.
+func (p *props) borderColorFor(c *ui.Context, t *ui.Theme) (ui.Color, bool) {
+	if p.set&pBorderColor == 0 {
+		return ui.Color{}, false
+	}
+	if p.borderColor.role != roleFill {
+		return p.borderColor.resolve(t), true
+	}
+	if p.set&pBackground == 0 || c.Preferences().HighContrast {
+		return ui.Color{}, false
+	}
+	return p.background.resolve(t), true
+}
+
 // apply sets on e what p sets: the four-sided properties ui sets all four
 // sides at once, so it overlays the sides p sets on what e's builder set,
 // and the sides p does not set keep the control's. key is the control's,
@@ -93,18 +108,19 @@ func (p *props) apply(c *ui.Context, e ui.Element, key any) {
 		v := over(e.Radii(), p.radius, p.radiusSet, true)
 		e.Radius(v[0], v[1], v[2], v[3])
 	}
+	bc, bcSet := p.borderColorFor(c, t)
 	if p.borderSet != 0 {
 		cur := e.BorderWidths()
 		v := over(cur, p.border, p.borderSet, false)
 		e.BorderWidth(v[0], v[1], v[2], v[3])
 		// A border the control had keeps its color unless the style sets one.
-		if p.set&pBorderColor != 0 {
-			e.BorderColor(p.borderColor.resolve(t))
+		if bcSet {
+			e.BorderColor(bc)
 		} else if cur == [4]float32{} {
 			e.BorderColor(t.Border)
 		}
-	} else if p.set&pBorderColor != 0 {
-		e.BorderColor(p.borderColor.resolve(t))
+	} else if bcSet {
+		e.BorderColor(bc)
 	}
 	s := p.set
 	if s&pBorderStyle != 0 {

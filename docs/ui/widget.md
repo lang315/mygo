@@ -1093,7 +1093,12 @@ Input and display:
   displays). `Button("")` is named by its tooltip for assistive technology
   and the Tester, or by `SetAccessibleName`. `Suggested()` and
   `Destructive()` are the button's own style (tw's `suggested-action` and
-  `destructive-action`); the last one given wins. `LinkLabel(text, url)`; `OnClick(fn)` runs `fn` on the event goroutine
+  `destructive-action`); the last one given wins. Their border is in
+  the fill, in each state, not the plain button's gray; under High Contrast
+  it stays the strong outline. As their background, it is the own style, so
+  an applied border color (`Apply`) loses to it; a `Border` given after
+  `Suggested()` or `Destructive()` wins in every state, hover and pressed
+  included, and one given before is replaced. `LinkLabel(text, url)`; `OnClick(fn)` runs `fn` on the event goroutine
   in place of opening `url` (click, Enter or Space, assistive technology; nothing
   when disabled), as WinForms' `LinkClicked`.
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.

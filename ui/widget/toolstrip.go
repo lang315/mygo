@@ -103,9 +103,10 @@ func (b *ToolButtonWidget) SetIconPNG(data []byte) *ToolButtonWidget {
 }
 
 // Suggested draws the button as the main action, as Button's Suggested
-// does: the accent for its background and its border, with the accent's
-// text, and the accent's hover and pressed roles. It is the button's own style, which
-// wins over applied ones. In the overflow menu it is a normal item: menus
+// does: the accent for its background, with the accent's text, and the
+// accent's hover and pressed roles. It is the button's own style, which
+// wins over applied ones. A tool button draws no border of its own, so
+// there is no ring to hide. In the overflow menu it is a normal item: menus
 // have no suggested role. It replaces a Destructive given before.
 func (b *ToolButtonWidget) Suggested() *ToolButtonWidget {
 	b.change(func() { b.destructive = false })
@@ -113,11 +114,11 @@ func (b *ToolButtonWidget) Suggested() *ToolButtonWidget {
 }
 
 // Destructive draws the button as an action that destroys, as Button's
-// Destructive does: the danger color for its background and its border, with the accent's
-// text, fading to 0.9 opacity when hovered and 0.8 pressed. It is the
-// button's own style. In the overflow menu it is a destructive item
-// (MenuItem.Destructive), which only Windows 11 and the web draw apart. It
-// replaces a Suggested given before.
+// Destructive does: the danger color for its background (darkened where the
+// accent's text would be under 4.5:1 on it), with the accent's text, darker
+// by 8% when hovered and 16% pressed. It is the button's own style. In the
+// overflow menu it is a destructive item (MenuItem.Destructive), which only
+// Windows 11 and the web draw apart. It replaces a Suggested given before.
 func (b *ToolButtonWidget) Destructive() *ToolButtonWidget {
 	b.change(func() { b.destructive = true })
 	return b.own(b.look.to(destructiveLook, destructiveStyle))

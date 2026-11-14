@@ -146,6 +146,51 @@ func TestCalmFilledBorderIsTheOwnStyle(t *testing.T) {
 	}
 }
 
+// A later own Border wins in every state under Calm, not only at rest.
+func TestCalmOwnBorderWinsInEveryState(t *testing.T) {
+	red := ui.RGB(255, 0, 0)
+	for name, b := range map[string]*widget.ButtonWidget{
+		"suggested":   widget.Button("Go").Suggested().Border(1, red),
+		"destructive": widget.Button("Go").Destructive().Border(1, red),
+	} {
+		var th ui.Theme
+		rest, hover, pressed := states(t, calmButton(t, b, &th), "Go")
+		for state, o := range map[string]outline{"rest": rest, "hover": hover, "pressed": pressed} {
+			if !isColor(o.border, red) {
+				t.Errorf("%s %s: border %v, want red", name, state, o.border)
+			}
+		}
+	}
+}
+
+// Under High Contrast Calm's filled buttons keep the plain button's strong
+// outline (ButtonBorder, mixed toward the text), not a border in the fill.
+func TestCalmFilledBorderKeepsTheOutlineUnderHighContrast(t *testing.T) {
+	read := func(b *widget.ButtonWidget) (outline, ui.Theme) {
+		var th ui.Theme
+		t.Cleanup(func() { Use(nil) })
+		probe := widget.Custom(func(c *ui.Context) ui.Element {
+			th = *c.Theme()
+			return ui.Text(c, "probe")
+		})
+		tt := widget.NewTester(t, widget.VBox(8).Add(b, probe), 400, 200)
+		Use(Calm)
+		tt.SetDark(false)
+		tt.SetPreferences(ui.Preferences{HighContrast: true, TextScale: 1})
+		tt.Frame()
+		return outlineOf(t, tt, "Go"), th
+	}
+	plain, th := read(widget.Button("Go"))
+	if !isColor(plain.border, th.ButtonBorder) {
+		t.Fatalf("plain outline %v, want ButtonBorder %v", plain.border, th.ButtonBorder)
+	}
+	for name, b := range map[string]*widget.ButtonWidget{"suggested": widget.Button("Go").Suggested(), "destructive": widget.Button("Go").Destructive()} {
+		if o, _ := read(b); o.border != plain.border || o.border == o.fill {
+			t.Errorf("%s: border %v, fill %v, want the plain outline %v", name, o.border, o.fill, plain.border)
+		}
+	}
+}
+
 // Case 8 under Calm: a tool strip's Suggested and Destructive tool buttons.
 func TestCalmToolButtonFilledBorder(t *testing.T) {
 	for name, b := range map[string]*widget.ToolButtonWidget{

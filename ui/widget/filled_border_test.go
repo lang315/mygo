@@ -29,6 +29,13 @@ func edgesInStates(t *testing.T, w Control, label string, dark bool) (rest, hove
 	tt := NewTester(t, w, 400, 200)
 	tt.SetDark(dark)
 	tt.Frame()
+	return statesOf(t, tt, label)
+}
+
+// statesOf reads the edges of the button label of tt at rest, hovered and
+// pressed.
+func statesOf(t *testing.T, tt *Tester, label string) (rest, hover, pressed edges) {
+	t.Helper()
 	rest = edgesOf(t, tt, label)
 	b := tt.Find(ByLabel(label)).Bounds()
 	x, y := b.X+b.W/2, b.Y+b.H/2
