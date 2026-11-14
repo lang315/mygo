@@ -14,14 +14,15 @@ import (
 // and hover are 1 apart, and its card shadow 4 % black.
 func skinTestTokens() *skinhook.Tokens {
 	return &skinhook.Tokens{
-		Chrome:       ui.Hex("#ffd54f"),
-		Content:      ui.Hex("#ffffff"),
-		Control:      ui.Hex("#ffffff"),
-		Line:         ui.Hex("#e91e63"),
-		LineStrong:   ui.Hex("#3f51b5"),
-		Text:         ui.Hex("#202020"),
-		ControlHover: ui.Hex("#4dd0e1"),
-		Elevation:    [4]skinhook.Shadow{{}, {Y: 6, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.6)}},
+		Chrome:         ui.Hex("#ffd54f"),
+		Content:        ui.Hex("#ffffff"),
+		Control:        ui.Hex("#ffffff"),
+		Line:           ui.Hex("#e91e63"),
+		LineStrong:     ui.Hex("#3f51b5"),
+		Text:           ui.Hex("#202020"),
+		ControlHover:   ui.Hex("#4dd0e1"),
+		ControlPressed: ui.Hex("#ff8a65"),
+		Elevation:      [4]skinhook.Shadow{{}, {Y: 6, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.6)}},
 
 		ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, TabStripHeight: 40,
 		MenuBarStripHeight: 34, MenuBarItemHeight: 28, RadiusControl: 6, RadiusCard: 10,
@@ -104,7 +105,8 @@ func skinMenuBar() *MenuBarWidget {
 }
 
 // The menu bar: with a skin, the strip at least 34 on Chrome, its items at
-// least 28 with their text centered, hovered in ControlHover; without, as
+// least 28 with their text centered, hovered in ControlPressed (ControlHover
+// is too near Calm's Chrome to show); without, as
 // before skins.
 func TestSkinMenuBar(t *testing.T) {
 	tt := tester(t, skinMenuBar())
@@ -138,7 +140,7 @@ func TestSkinMenuBar(t *testing.T) {
 		}
 		hover := ui.LightTheme().SurfaceHover
 		if on {
-			hover = tk.ControlHover
+			hover = tk.ControlPressed
 		}
 		tt.Move(item.X+item.W/2, item.Y+item.H/2)
 		tt.Frame()

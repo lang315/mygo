@@ -174,7 +174,7 @@ func (b *MenuBarWidget) build(c *ui.Context) ui.Element {
 	tk, scale := skinOf(c)
 	if tk != nil {
 		bar.Background(tk.Chrome).MinHeight(tk.MenuBarStripHeight * scale)
-		hover = tk.ControlHover
+		hover = tk.ControlPressed // ControlHover is too near the Chrome to show
 	}
 	bar.Children(func() {
 		for i, it := range b.menus {

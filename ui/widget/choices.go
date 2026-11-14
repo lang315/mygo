@@ -836,7 +836,7 @@ func (g *TagSelectWidget) build(c *ui.Context) ui.Element {
 	return ui.Row(c).Wrap().Gap(c.Theme().Space(1.5)).Children(func() {
 		for i, o := range g.opts {
 			p, changed := g.on[i].bind()
-			ui.Toggle(c.Key(i), p, o.Text).OnChange(onChange(&g.on[i], g.onChange))
+			skinChecked(c, ui.Toggle(c.Key(i), p, o.Text).OnChange(onChange(&g.on[i], g.onChange)), *p)
 			if changed && g.onChange != nil {
 				Post(g.onChange)
 			}

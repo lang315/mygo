@@ -60,12 +60,13 @@ func darkFamily(base, hover, pressed, text, on string) skinhook.Family {
 }
 
 // newPalette is a palette whose Info is its accent: the selected row and the
-// selection are the light base mixed with white at 90% and 80%, and the dark
-// base at 16% and 35%.
+// selection are the light base mixed with white at 82% and 68%, and the dark
+// base at 16% and 35%. The light selection stands 1.2:1 from the row, for
+// text selected in a cell edited in place.
 func newPalette(name string, light, dark skinhook.Family) *Palette {
 	return &Palette{name: name,
 		light: paletteTokens{accent: light, info: light, onAccent: white,
-			rowSelected: light.Base.Mix(white, 0.90), selection: light.Base.Mix(white, 0.80)},
+			rowSelected: light.Base.Mix(white, 0.82), selection: light.Base.Mix(white, 0.68)},
 		dark: paletteTokens{accent: dark, info: dark, onAccent: dark.On,
 			rowSelected: dark.Base.Alpha(0.16), selection: dark.Base.Alpha(0.35)},
 	}
