@@ -96,6 +96,12 @@ func frontIsAnotherApp() bool { return false }
 // foregroundState is for Windows.
 func foregroundState(*mygo.Window) string { return "" }
 
+// clipboardState is for Windows.
+func clipboardState() string { return "" }
+
+// clipboardSequence is for Windows, whose readers lock the clipboard.
+func clipboardSequence() (uint32, bool) { return 0, false }
+
 func menuBarShown(*mygo.Window) (bool, bool)                { return false, false }
 func activateAccelerator(*mygo.Window, string) (bool, bool) { return false, false }
 func enterMenuBar(*mygo.Window, string) (bool, bool, bool)  { return false, false, false }
