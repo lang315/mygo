@@ -174,14 +174,15 @@ func TestChartSmallBoxKeepsItsLegend(t *testing.T) {
 func TestChartPlotKeepsItsMinimumHeight(t *testing.T) {
 	for _, k := range kinds {
 		tt := NewTester(t, VBox(0).Add(k.mk().SetSize(300, 70)), 400, 300)
-		// The pie's plot is the 60 alone; the others' hold the bottom axis
-		// and the inset of the top label too.
-		want := float32(60)
+		// The pie's plot is its area. The others' runs from the chart's top
+		// (y 0) to the bottom of the x axis's labels, whatever the font.
+		h := tt.Find(ByLabel("Box")).Bounds().H
 		if k.name != "pie" {
-			want = 30
+			jan := tt.Find(ByLabel("Jan")).Bounds()
+			h = jan.Y + jan.H
 		}
-		if h := tt.Find(ByLabel("Box")).Bounds().H; h < want {
-			t.Errorf("%s: the plot is %v high, want %v or more", k.name, h, want)
+		if h < 60 {
+			t.Errorf("%s: the plot is %v high, want 60", k.name, h)
 		}
 	}
 }
