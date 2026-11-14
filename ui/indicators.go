@@ -247,7 +247,8 @@ func coreStepper(c *context, value *float64, lo, hi, step float64) *node {
 	e.hasRange, e.accRange, e.accStep = true, [3]float64{lo, hi, *value}, step
 	e.Children(func() {
 		for _, up := range []bool{true, false} {
-			arrow := coreBox(c).Height(t.Space(3.5)).Role(RoleNone)
+			// Space(3.5) high, or a half each of a stepper stretched taller.
+			arrow := coreBox(c).MinHeight(t.Space(3.5)).Grow(1).Role(RoleNone)
 			arrow.flags |= flagClickable | flagHover
 			can := up && *value < hi || !up && *value > lo
 			// A press steps at once, and again as it is held, faster
