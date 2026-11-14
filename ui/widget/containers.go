@@ -477,11 +477,14 @@ func (s *SidebarWidget) build(c *ui.Context) ui.Element {
 	}
 	width, _ := s.width.bind()
 	return ui.Split(c, width, func() {
-		ui.Sidebar(c, sel, func() {
+		sb := ui.Sidebar(c, sel, func() {
 			for i, name := range s.names {
 				ui.SidebarItem(c, name, nil, s.titles[i])
 			}
 		}).OnChange(onChange(&s.selected, nil)).Fill()
+		if tk, _ := skinOf(c); tk != nil && !c.Theme().Dark {
+			sb.Background(tk.Chrome) // the light Control is the content's ground
+		}
 	}, func() {
 		for i, name := range s.names {
 			if name == *sel {

@@ -79,7 +79,7 @@ func TestWithPalette(t *testing.T) {
 
 // Every token a palette decides follows the table and the mix rules: light
 // Subtle, Border, RowSelected and Selection are the base mixed with white at
-// 92%, 70%, 90% and 80%; dark ones the base at 14%, 35%, 16% and 35%.
+// 92%, 70%, 82% and 68%; dark ones the base at 14%, 35%, 16% and 35%.
 func TestPaletteValues(t *testing.T) {
 	white := ui.Hex("#ffffff")
 	for _, c := range []struct {
@@ -118,7 +118,7 @@ func TestPaletteValues(t *testing.T) {
 		if s.dark.Accent != da || s.dark.Info != di {
 			t.Errorf("%s dark Accent %v, Info %v; want %v, %v", n, s.dark.Accent, s.dark.Info, da, di)
 		}
-		if s.light.OnAccent != white || s.light.RowSelected != la.Base.Mix(white, 0.90) || s.light.Selection != la.Base.Mix(white, 0.80) {
+		if s.light.OnAccent != white || s.light.RowSelected != la.Base.Mix(white, 0.82) || s.light.Selection != la.Base.Mix(white, 0.68) {
 			t.Errorf("%s light OnAccent %v, RowSelected %v, Selection %v", n, s.light.OnAccent, s.light.RowSelected, s.light.Selection)
 		}
 		if s.dark.OnAccent != ui.Hex(c.don) || s.dark.RowSelected != da.Base.Alpha(0.16) || s.dark.Selection != da.Base.Alpha(0.35) {

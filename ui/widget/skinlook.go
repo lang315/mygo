@@ -20,3 +20,12 @@ func skinOf(c *ui.Context) (*skinhook.Tokens, float32) {
 	}
 	return tk, scale
 }
+
+// skinChecked gives a toggle that is on a skin's look: the accent's border
+// color as its fill, ringed in the accent, which stands out from one that is
+// off as the plain pressed face does not. The control's own style wins.
+func skinChecked(c *ui.Context, e ui.Element, on bool) {
+	if tk, _ := skinOf(c); tk != nil && on {
+		e.Background(tk.Accent.Border).Border(1, tk.Accent.Base)
+	}
+}

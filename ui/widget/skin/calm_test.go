@@ -24,7 +24,7 @@ func TestCalmTheme(t *testing.T) {
 		{"TextMuted", l.TextMuted, ui.Hex("#565d68")},
 		{"Danger", l.Danger, ui.Hex("#c42b1c")},
 		{"Focus", l.Focus, ui.Hex("#1c71d8")},
-		{"Selection", l.Selection, ui.Hex("#d2e3f7")},
+		{"Selection", l.Selection, ui.Hex("#b6d2f3")},
 		{"SurfaceHover", l.SurfaceHover, ui.Hex("#eaedf1")},
 		{"SurfacePressed", l.SurfacePressed, ui.Hex("#dfe3e9")},
 	} {
@@ -160,8 +160,8 @@ func TestCalmAccentValues(t *testing.T) {
 		got, want ui.Color
 	}{
 		{"light OnAccent", Calm.light.OnAccent, ui.Hex("#ffffff")},
-		{"light Selection", Calm.light.Selection, ui.Hex("#d2e3f7")},
-		{"light RowSelected", Calm.light.RowSelected, ui.Hex("#e8f1fb")},
+		{"light Selection", Calm.light.Selection, ui.Hex("#b6d2f3")},
+		{"light RowSelected", Calm.light.RowSelected, ui.Hex("#d6e5f8")},
 		{"light Accent.Base", Calm.light.Accent.Base, ui.Hex("#1c71d8")},
 		{"light Accent.Hover", Calm.light.Accent.Hover, ui.Hex("#1a5fb4")},
 		{"light Accent.Pressed", Calm.light.Accent.Pressed, ui.Hex("#174f96")},

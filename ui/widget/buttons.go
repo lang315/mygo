@@ -304,6 +304,7 @@ func (t *ToggleWidget) build(c *ui.Context) ui.Element {
 		t.toggled = t.onToggled
 	}
 	e := ui.Toggle(c, p, t.text).OnChange(t.toggled)
+	skinChecked(c, e, *p)
 	if changed && t.onChange != nil {
 		Post(t.onChange)
 	}

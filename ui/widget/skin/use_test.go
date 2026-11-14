@@ -301,8 +301,8 @@ func TestUseKeepsTheSkinAccentOverTheDesktop(t *testing.T) {
 	tt.SetPreferences(ui.Preferences{Accent: ui.Hex("#e11d48"), TextScale: 1})
 	Use(Calm)
 	tt.Frame()
-	if got.Accent != ui.Hex("#1c71d8") || got.Focus != ui.Hex("#1c71d8") || got.Selection != ui.Hex("#d2e3f7") {
-		t.Errorf("with a desktop accent, Accent %v, Focus %v, Selection %v; want Calm's #1c71d8, #1c71d8, #d2e3f7", got.Accent, got.Focus, got.Selection)
+	if got.Accent != ui.Hex("#1c71d8") || got.Focus != ui.Hex("#1c71d8") || got.Selection != ui.Hex("#b6d2f3") {
+		t.Errorf("with a desktop accent, Accent %v, Focus %v, Selection %v; want Calm's #1c71d8, #1c71d8, #b6d2f3", got.Accent, got.Focus, got.Selection)
 	}
 	Use(nil)
 	tt.Frame()
