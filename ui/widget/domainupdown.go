@@ -150,17 +150,14 @@ func (d *DomainUpDownWidget) build(c *ui.Context) ui.Element {
 		row.MinHeight(h)
 	}
 	return row.Children(func() {
-		field := ui.Row(c).Grow(1).MinWidth(t.Space(20)).Padding(t.Space(1.5), t.Space(2)).Background(t.FieldFill()).Border(1, t.Outline()).Radius(t.Radius)
-		if h > 0 {
-			field.AlignSelf(ui.Stretch).AlignItems(ui.Center)
-		}
+		field := ui.Row(c).Grow(1).MinWidth(t.Space(20)).Padding(t.Space(1.5), t.Space(2)).Background(t.FieldFill()).Border(1, t.Outline()).Radius(t.Radius, 0, 0, t.Radius)
+		field.AlignSelf(ui.Stretch).AlignItems(ui.Center)
 		field.Children(func() {
 			ui.Text(c, text)
 		})
-		step := ui.Stepper(c, p, lo, hi, 1).Disabled(n == 0).Value(text).OnChange(d.edited())
-		if h > 0 {
-			step.AlignSelf(ui.Stretch) // as high as the field, which it touches
-		}
+		// One box with the field, both as high as the taller: square where
+		// they meet, and the field's right side is the line between them.
+		ui.Stepper(c, p, lo, hi, 1).Radius(0, t.Radius, t.Radius, 0).BorderWidth(1, 1, 1, 0).AlignSelf(ui.Stretch).Disabled(n == 0).Value(text).OnChange(d.edited())
 	})
 }
 

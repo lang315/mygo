@@ -235,6 +235,58 @@ func TestDomainUpDownArrowsInsideItsBox(t *testing.T) {
 	})
 }
 
+// The field and the arrows are one box, as NumericUpDown's: one line
+// between them, and no notch where they meet.
+func TestDomainUpDownIsOneBox(t *testing.T) {
+	updownLooks(t, func(t *testing.T, dark bool) {
+		for _, scale := range []float32{1, 2} {
+			tt := NewTester(t, DomainUpDown("North", "South"), 400, 200)
+			tt.SetDark(dark)
+			tt.SetScale(scale)
+			tt.Frame()
+			img := tt.Image()
+			bg := img.RGBAAt(2, int(190*scale))
+			text := tt.Find(ByLabel("North")).Bounds()
+			s := tt.Find(ByRole(ui.RoleStepper)).Bounds()
+			y := int((s.Y + s.H/2) * scale)
+			// The field's left border, at mid-height, is the border's color.
+			var line color.RGBA
+			for x := 0; x < int(text.X*scale); x++ {
+				if c := img.RGBAAt(x, y); c != bg {
+					line = c
+					break
+				}
+			}
+			// Between the text and the arrows' glyph, one run of it.
+			var runs, width, at int
+			for x, in := int((text.X+text.W)*scale), false; x < int((s.X+4)*scale); x++ {
+				on := img.RGBAAt(x, y) == line
+				if on {
+					if !in {
+						runs, at = runs+1, x
+					}
+					width++
+				}
+				in = on
+			}
+			if runs != 1 || width != int(scale) {
+				t.Fatalf("scale %v: %d runs of the border's color (%v), %d device pixels, between the field and the arrows %v: want one of %v", scale, runs, line, width, s, scale)
+			}
+			// The joint's top and bottom rows are the border, not a notch,
+			// on the line and on either side of it.
+			top, bottom := int(s.Y*scale), int((s.Y+s.H)*scale)-1
+			for _, x := range []int{at - 1, at, at + width} {
+				if c := img.RGBAAt(x, top); c != line {
+					t.Fatalf("scale %v: the joint's top row at x=%d (line at %d) is %v, want the border %v", scale, x, at, c, line)
+				}
+				if c := img.RGBAAt(x, bottom); c != line {
+					t.Fatalf("scale %v: the joint's bottom row at x=%d (line at %d) is %v, want the border %v", scale, x, at, c, line)
+				}
+			}
+		}
+	})
+}
+
 func TestDomainUpDownStillSteps(t *testing.T) {
 	updownLooks(t, func(t *testing.T, dark bool) {
 		d := DomainUpDown("North", "South")
