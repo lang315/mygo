@@ -149,7 +149,13 @@ func (c *ChartWidget) build(ctx *ui.Context) ui.Element {
 		colors = tk.Chart[:]
 	}
 	pick := -1
-	root := ui.Column(ctx).Gap(t.Space(2))
+	// The chart draws in its box alone, whatever height it is given.
+	root := ui.Column(ctx).Gap(t.Space(2)).Clip()
+	if c.style.set&pWidth == 0 {
+		// The plot has no width of its own: 160 DIPs keep it readable in a
+		// row, unless the app gives the chart a width.
+		root.MinWidth(160)
+	}
 	root.Children(func() {
 		if c.kind == PieChart {
 			pick = c.buildPie(ctx, labels, series, selected, colors)
@@ -247,12 +253,16 @@ func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []Chart
 	label := func(side chart.Side, tk chart.Tick) {
 		ui.Text(ctx, tk.Label).NoWrap().FontSize(t.FontSize - 2).TextColor(t.TextMuted)
 	}
+	_, labelH := ctx.MeasureText(0, ui.Span{Text: "0", Size: t.FontSize - 2})
 	name := c.title
 	if name == "" {
 		name = "Chart"
 	}
+	// The plot fills the height the legend leaves, 220 in a chart of no size,
+	// 60 at least; the top inset holds the half of the top tick's label that
+	// is above the plot.
 	chart.Plot(ctx, chart.Axes{Left: ticks, Bottom: axisTicks(x, labels), Label: label}, func(area ui.Element) {
-		area.Label(name)
+		area.Label(name).FocusRingOffset(ringInside(t))
 		area.Draw(func(p *ui.Painter, r ui.Rect) {
 			for _, tk := range ticks {
 				p.Line(r.X, chart.Y(r, tk.At), r.X+r.W, chart.Y(r, tk.At), 1, t.Border)
@@ -291,7 +301,7 @@ func (c *ChartWidget) buildPlot(ctx *ui.Context, labels []string, series []Chart
 		if area.Clicked() && c.hover >= 0 {
 			picked = c.hover
 		}
-	}).Height(220).Gap(6)
+	}).Basis(220).Grow(1).MinHeight(60).Padding(labelH/2, 0, 0, 0).Gap(6)
 	return picked
 }
 
@@ -344,6 +354,15 @@ func (c *ChartWidget) drawBars(p *ui.Painter, r ui.Rect, x chart.Band, y chart.L
 	}
 }
 
+// ringInside is the focus ring offset that keeps a plot's ring inside it,
+// where the chart's clip leaves it whole.
+func ringInside(t *ui.Theme) float32 {
+	if t.FocusRingWidth > 0 {
+		return -t.FocusRingWidth
+	}
+	return -2 // the theme's default width
+}
+
 func abs32(v float32) float32 {
 	if v < 0 {
 		return -v
@@ -383,8 +402,9 @@ func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartS
 	if name == "" {
 		name = "Chart"
 	}
+	t := ctx.Theme()
 	chart.Plot(ctx, chart.Axes{}, func(area ui.Element) {
-		area.Label(name)
+		area.Label(name).FocusRingOffset(ringInside(t))
 		area.Focusable()
 		n := len(slices)
 		// The slice the keys or the pointer are on, as chart.Select does for
@@ -452,6 +472,6 @@ func (c *ChartWidget) buildPie(ctx *ui.Context, labels []string, series []ChartS
 			d := describe(c.hover)
 			area.Value(d).Tooltip(d)
 		}
-	}).Height(200).Width(200)
+	}).Height(200).MinHeight(60).Width(200).MaxWidthPercent(100)
 	return picked
 }
