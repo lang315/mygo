@@ -33,6 +33,9 @@ const (
 	// bottom. Across a column it is Start.
 	Baseline
 	alignAuto
+	// alignNatural, as an element's self alignment, keeps its natural size
+	// where its container stretches, and follows the container otherwise.
+	alignNatural
 )
 
 type unit uint8

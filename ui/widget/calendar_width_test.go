@@ -49,6 +49,21 @@ func TestCalendarHeaderInFixedWidth(t *testing.T) {
 	}
 }
 
+// The calendar keeps its natural width without overriding what its
+// container does with a child: Pack's room centers it, so it is as wide as
+// its days and centered.
+func TestCalendarFollowsItsContainersAlignment(t *testing.T) {
+	tt := NewTester(t, VBox(0).Pack(MonthCalendar().SetValue(meeting), true, false), 1200, 600)
+	cal := tt.Find(ByRole(ui.RoleTable)).Bounds()
+	left, right := calendarDays(tt)
+	if d := cal.W - (right - left); d < -1 || d > 1 {
+		t.Errorf("calendar %v DIPs wide, its days %v", cal.W, right-left)
+	}
+	if mid := cal.X + cal.W/2; mid < 599 || mid > 601 {
+		t.Errorf("calendar's center at %v, the container's at 600", mid)
+	}
+}
+
 // The date picker's popup keeps the width it had: its days' width.
 func TestDatePickerPopupUnchanged(t *testing.T) {
 	tt := NewTester(t, DateTimePicker().SetFormat(DateOnly).SetValue(meeting), 1200, 600)
