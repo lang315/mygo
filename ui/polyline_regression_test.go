@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 	"slices"
@@ -103,13 +104,15 @@ func TestStrokePolylineSpikeGapAndEdit(t *testing.T) {
 							draw()
 						}
 					}, accelerated, scale)
+					// The frame's image, taken once a frame: each Image copies it.
+					var img *image.RGBA
 					probe := func(x, y float32, want color.RGBA) {
 						t.Helper()
 						if transformed {
 							x, y = .8*x+10, .75*y+8
 						}
 						px, py := int(x*scale), int(y*scale)
-						if got := tt.Image().RGBAAt(px, py); got != want {
+						if got := img.RGBAAt(px, py); got != want {
 							t.Errorf("at (%d,%d): %v, want %v", px, py, got, want)
 						}
 					}
@@ -117,6 +120,7 @@ func TestStrokePolylineSpikeGapAndEdit(t *testing.T) {
 					for _, tip := range []float32{15, 35, 15} {
 						points[40][1] = tip
 						tt.Frame()
+						img = tt.Image()
 						probe(50, tip+2, blue)
 						probe(100, 70, white) // disconnected runs must not join
 						probe(100, 25, white) // an isolated point draws nothing
@@ -126,7 +130,7 @@ func TestStrokePolylineSpikeGapAndEdit(t *testing.T) {
 						s := &tt.rt.scene
 						whole := raster.NewImage(s.Width, s.Height)
 						raster.Render(whole, s)
-						if !bytes.Equal(tt.Image().Pix, whole.RGBA()) {
+						if !bytes.Equal(img.Pix, whole.RGBA()) {
 							t.Fatalf("tip at %g: partial redraw differs from a full render", tip)
 						}
 					}

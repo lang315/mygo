@@ -27,10 +27,12 @@ import (
 // textures (texture, an interface, in paintRare); ReadOnly, Multiline and
 // WindowDoubleClicked's bools went into paintRare's padding. It is 2136
 // since upstream's ScrollbarStyle (barStyle, a pointer, in paintRare);
-// TruncateMiddle's bool went into the padding of the text style.
+// TruncateMiddle's bool went into the padding of the text style. It is 2144
+// since upstream's AccessChildren (accChildren, a func, beside accFill);
+// TruncateStart's bool went into the padding of the text style too.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 2136 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2136", n)
+	if n := unsafe.Sizeof(node{}); n != 2144 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2144", n)
 	}
 }
 

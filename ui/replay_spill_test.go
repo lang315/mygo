@@ -6,22 +6,40 @@ import (
 )
 
 // A row whose path spills into a layer of paths drawn on the CPU must not
-// replay: the layer holds only what its frame painted. Each painting of an
-// element's paths starts a new run of layers (Painter.draw), so a row's
-// path opens a layer of its own, whose image operation keeps the row from
-// recording, rather than going into the layer of the row above.
+// replay: the layer holds only what its frame painted. A Draw's paths start
+// a new run of layers (Painter.draw), so they open a layer of their own,
+// whose image operation keeps the row from recording.
 func TestRowsWithSpilledPathsPaintAgain(t *testing.T) {
-	defer func(was bool) { spillEveryPath = was }(spillEveryPath)
-	spillEveryPath = true
 	var s OutlineState[int]
 	roots := make([]int, 40)
 	for i := range roots {
 		roots[i] = i
 	}
-	tt := coreNewTester(func(c *context) {
+	spilledRowsPaintAgain(t, func(c *context) {
 		// Rows of an arrow alone: each row's first paint is its path.
 		coreOutline(c, &s, roots, func(int) []int { return []int{} }, func(int) {}).Grow(1)
-	}, 200, 400)
+	})
+}
+
+// A wavy underline is a path that text paints itself, outside any Draw:
+// the text's glyphs come after it, so the row's layer is not the last
+// operation when the next row paints, and each row opens its own.
+func TestRowsWithSpilledUnderlinesPaintAgain(t *testing.T) {
+	var list ListState
+	spilledRowsPaintAgain(t, func(c *context) {
+		coreList(c, &list, 40, func(i int) {
+			coreText(c, "wavy").WavyUnderline()
+		}).Grow(1)
+	})
+}
+
+// spilledRowsPaintAgain checks that the rows of view, whose paths all
+// spill, paint the same with replay as without, and replay none.
+func spilledRowsPaintAgain(t *testing.T, view func(c *context)) {
+	t.Helper()
+	defer func(was bool) { spillEveryPath = was }(spillEveryPath)
+	spillEveryPath = true
+	tt := coreNewTester(view, 200, 400)
 	frame := func(replay bool) *image.RGBA {
 		tt.rt.noReplay = !replay
 		for range 3 {

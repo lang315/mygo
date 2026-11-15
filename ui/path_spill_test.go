@@ -53,8 +53,7 @@ func TestEveryPathDrawsWhenTheAtlasIsFull(t *testing.T) {
 			p.Fill(Rect{X: 1150, Y: 0, W: 20, H: 1000}, RGB(230, 40, 20), 0)
 		})
 	}, 2320, 980)
-	missing := func(frame int) int {
-		img := tt.Image()
+	missing := func(frame int, img *image.RGBA) int {
 		lost := 0
 		for i := range n {
 			_, at := spillWires(i, frame)
@@ -85,12 +84,12 @@ func TestEveryPathDrawsWhenTheAtlasIsFull(t *testing.T) {
 	}
 	for frame = 1; frame <= 4; frame++ {
 		tt.Frame()
-		if lost := missing(frame); lost > 0 {
+		img := tt.Image() // once a frame: each Image copies it
+		if lost := missing(frame, img); lost > 0 {
 			t.Errorf("frame %d: %d of %d points along the wires are missing", frame, lost, 6*n)
 		}
 		// The wires lie apart: none shows darker than one coat of its
 		// color, which a wire drawn twice would.
-		img := tt.Image()
 		for y := 0; y < img.Rect.Dy(); y++ {
 			for x := 0; x < img.Rect.Dx(); x++ {
 				if c := img.RGBAAt(x, y); c.R < 60 {
