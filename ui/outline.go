@@ -3,6 +3,7 @@ package ui
 import (
 	"math"
 	"runtime"
+	"slices"
 	"time"
 )
 
@@ -42,12 +43,26 @@ type OutlineState[K comparable] struct {
 	// it nil, or List.RowVersion set instead, nothing changes: List.RowVersion
 	// of an outline is overwritten while this is set.
 	RowVersion func(item K) uint64
-	rows       []outlineRow[K]
 	// rowv is rowVersion as a function, made once.
 	rowv func(i int) uint64
+	// Generation, when not zero, lets the outline keep its rows from one
+	// frame to the next, walking the open items again only when Open, the
+	// roots or Generation change: change it, as with Generation++,
+	// whenever children would return other items, or nil where it did not,
+	// or the other way round. Open is seen changing through its own
+	// methods, not through a copy of it sharing its items. When zero, the
+	// outline walks all the open items in every frame, which costs as
+	// much as they are many, and shows what children returns at once.
+	Generation uint64
+	rows       []outlineRow[K]
 	// children is the function giving the items' children in the last
 	// build, for the rows' arrows.
 	children func(K) []K
+	// The Generation, the stamp of Open and the roots the rows were made
+	// from, while Generation is not zero.
+	madeGen  uint64
+	madeOpen uint64
+	madeFrom []K
 }
 
 // useRowVersion points List.RowVersion at the item's, with the outline's own.
@@ -139,13 +154,22 @@ func (s *OutlineState[K]) Item(row int) K { return s.rows[row].item }
 func (s *OutlineState[K]) Depth(row int) int { return s.rows[row].depth }
 
 // flatten lists the rows the outline shows: roots, and the children of
-// the items open.
+// the items open, or keeps those of the last build while Generation is
+// not zero and neither it, Open nor roots changed.
 func (s *OutlineState[K]) flatten(roots []K, children func(K) []K) {
 	if !(s.Indent >= 0) {
 		panic("ui: an OutlineState's Indent must not be negative")
 	}
-	s.rows = s.rows[:0]
 	s.children = children
+	if s.Generation != 0 && s.madeGen == s.Generation && s.madeOpen == s.Open.gen && slices.Equal(s.madeFrom, roots) {
+		return
+	}
+	s.madeGen, s.madeOpen = s.Generation, s.Open.gen
+	s.madeFrom = s.madeFrom[:0]
+	if s.Generation != 0 {
+		s.madeFrom = append(s.madeFrom, roots...)
+	}
+	s.rows = s.rows[:0]
 	var walk func(items []K, depth, parent int)
 	walk = func(items []K, depth, parent int) {
 		for _, item := range items {
@@ -182,12 +206,13 @@ func (s *OutlineState[K]) setOpen(item K, open, all bool, children func(K) []K) 
 // children's children with Option (Alt). row builds the content of an
 // item's row, after its arrow; Gap, Padding and the rest are a List's.
 //
-// The outline builds only the rows in view, as a List does, so trees of
-// any size are as fast as small ones. With s.List.Selected or Selection,
-// rows are chosen as a List's, and while the outline has the focus, Right
-// opens the item chosen or goes to its first child, and Left closes it or
-// goes to its parent, with Option on macOS and Shift elsewhere, as in GTK,
-// opening and closing all inside.
+// The outline builds only the rows in view, as a List does. It walks the
+// open items in every frame, unless s.Generation tells it when children
+// changes, which keeps trees of any size as fast as small ones. With
+// s.List.Selected or Selection, rows are chosen as a List's, and while
+// the outline has the focus, Right opens the item chosen or goes to its
+// first child, and Left closes it or goes to its parent, with Option on
+// macOS and Shift elsewhere, as in GTK, opening and closing all inside.
 //
 //	app.files.List.Selected = &app.file
 //	ui.Outline(c, &app.files, []string{"/"}, func(dir string) []string {

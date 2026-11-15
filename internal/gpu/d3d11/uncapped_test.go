@@ -24,7 +24,13 @@ import (
 // the system shows frames torn and the swap chain is the window's; and
 // that frames following each other never wait for the display, whether
 // they present or change nothing. The default, paced, keeps the object and
-// no tearing.
+// no tearing. A frame of a new size begins a resize, whose frames present
+// paced (uncapped.go): it waits for DWM within Render, and the frame after
+// waits for nothing, unless Present, with DXGI_PRESENT_DO_NOT_WAIT, refused
+// it for a refresh, as WARP on a CI runner does in 1 run of 300 to 1 of 50
+// (DXGI_ERROR_WAS_STILL_DRAWING 2 to 13 times over 17 to 30 ms, the refresh
+// 15.6 ms): the frame then waits to present (holdFrame), and the frame
+// after waits for it.
 func TestUncappedSwapChain(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -1223,17 +1229,34 @@ func refusedThroughSettle(t *testing.T, r *Renderer, p *refusingPresent) {
 	// refuses, and every one after, until a call waited: the frame refused
 	// presents on another goroutine, which waits, the frames meanwhile put
 	// off, and the swap chain then settles, ResizeBuffers called on
-	// another goroutine too.
+	// another goroutine too. Every frame of the resize is of a new size, as
+	// the user drags the window's border, so that the swap chain does not
+	// settle before its last however long the runner takes between two;
+	// and Present refuses from the last on, so that it refused a frame
+	// before the swap chain settles. Refusing only from the frame after,
+	// the settle came first where the runner took settleDelay/2 from the
+	// resize's last change to that frame (Windows ARM64): with no frame
+	// refused, the swap chain settled as it does, ResizeBuffers called on
+	// the main thread, which then waited stall. The test, not the
+	// renderer, had DXGI start refusing at the settle, which nothing tells
+	// the renderer.
 	w, h := 200, 150
 	for range 6 {
 		w, h = w+23, h+11
 		frame(w, h)
+		w--
 		frame(w, h)
 	}
 	if !r.resizing || r.gaveUp {
 		t.Fatalf("%s: resizing %v, gave up %v; want resizing", kind, r.resizing, r.gaveUp)
 	}
-	recovers(w, h, refuse(1))
+	refusedAt := refuse(1)
+	w--
+	frame(w, h)
+	if !r.resizing || !r.unpresented {
+		t.Fatalf("%s: the resize's last frame, %dx%d, Present refused: resizing %v, unpresented %v; want resizing, waiting to present", kind, w, h, r.resizing, r.unpresented)
+	}
+	recovers(w, h, refusedAt)
 	if said["put off, Present"] == 0 || said["after Present"] == 0 || said["put off, ResizeBuffers"] == 0 || said["after ResizeBuffers"] == 0 {
 		t.Fatalf("%s: frames said %v; want frames put off while Present and ResizeBuffers waited on another thread, and frames after", kind, said)
 	}
@@ -1247,7 +1270,7 @@ func refusedThroughSettle(t *testing.T, r *Renderer, p *refusingPresent) {
 	w, h = w+5, h+3
 	frame(w, h)
 	waited := p.state().waited
-	refusedAt := refuse(2)
+	refusedAt = refuse(2)
 	// The window goes on changing size within the buffers, as the user
 	// drags its border, so that the swap chain does not settle.
 	for i := 0; p.state().waited == waited; i++ {

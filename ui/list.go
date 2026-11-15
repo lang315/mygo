@@ -248,9 +248,13 @@ type ListState struct {
 	// Windows) or the Edit menu's Copy while the Table has the keyboard
 	// focus. A text being edited in a row copies its own instead.
 	Copy func(rows []int) string
-	// RowHeight, when above 0, makes each row of a Table that many DIPs
-	// tall, whatever its cells hold, which clip; 0 keeps the theme's least
-	// height, which a taller cell grows.
+	// RowHeight, when above 0, is the height of every row of a Table, as
+	// AppKit's rowHeight, whatever its cells hold, which clip: the cells
+	// hold their content in the middle, without the padding above and
+	// below that keeps a row at least the theme's Space(8), so a dense
+	// table, as a source control client's or a log's, shows more rows. The
+	// header keeps the theme's height. 0 keeps the theme's least height,
+	// which a taller cell grows.
 	RowHeight float32
 	// GridLines draws a line under each row of a Table and at the end of
 	// each of its cells.
@@ -360,10 +364,11 @@ type ListState struct {
 	// drag) brought the rows in view within NearEnd rows of the end, with
 	// the last row in view: load more rows there, off the UI thread, and the
 	// frames after show them. It is called as the rows in view come near the
-	// end, not again while they stay there, and again once they left it or
-	// the rows changed in number, as when a page loaded. ScrollTo,
-	// ScrollIntoView and ScrollToEnd, the list showing first, being resized
-	// or rows coming and going do not call it, nor do rows sorted again.
+	// end, not again while they stay there. Once they left it, or the rows
+	// changed in number, as when a page loaded, the user's next scroll near
+	// the end calls it again: rows coming and going do not call it by
+	// themselves, nor do ScrollTo, ScrollIntoView and ScrollToEnd, the list
+	// showing first, being resized or rows sorted again.
 	EndReached func(last int)
 	// NearEnd is how many rows before the last count as near the end for
 	// EndReached: 0 for the last row alone.

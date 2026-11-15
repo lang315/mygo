@@ -617,7 +617,8 @@ func (w *window) cleanup() {
 	send(w.web, "stopLoading")
 	send(w.web, "setNavigationDelegate:", 0)
 	send(w.web, "setUIDelegate:", 0)
-	if w.popover != 0 {
+	popover := w.popover != 0
+	if popover {
 		w.cleanupPopover()
 	} else {
 		send(w.win, "setDelegate:", 0)
@@ -651,7 +652,7 @@ func (w *window) cleanup() {
 	release(w.view)
 	// AppKit is still closing the window; let the pool release it.
 	autorelease(w.delegate)
-	if w.popover == 0 {
+	if !popover {
 		autorelease(w.win)
 	}
 }

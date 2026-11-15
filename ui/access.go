@@ -833,6 +833,14 @@ func (rt *engine) accessElement(t *platform.AccessTree, e *node, parent int, scr
 			// Named by its texts: they are not read a second time.
 			return
 		}
+		if e.accChildren != nil {
+			// A copy, as adding moves the nodes.
+			p := t.Nodes[parent]
+			e.accChildren(&p, func(n platform.AccessNode) {
+				n.Parent = parent
+				t.Nodes = append(t.Nodes, n)
+			})
+		}
 		if e.kind == kindText {
 			rt.accessInline(t, e, parent)
 			return

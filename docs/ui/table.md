@@ -39,9 +39,8 @@ Ctrl+Shift with the arrows, Home and End (and Page Up and Page Down off macOS) e
 Chosen and hovered rows are square from edge to edge, as in Finder's list
 view; `RoundRows` rounds their corners at the theme's `Radius`, as a list's
 rows are, for an app whose other lists are rounded.
-`RowHeight` makes every row that many DIPs tall, its cells clipped (0 keeps
-the theme's least height, which a taller cell grows), and `GridLines` draws a
-line under each row and at the end of each cell, in the theme's `Border`.
+`GridLines` draws a line under each row and at the end of each cell, in the
+theme's `Border`.
 `FixedColumnOrder` keeps the columns in their order: the user still resizes
 them, but does not move them by their headers.
 
@@ -55,6 +54,12 @@ if !c.RowSelected() {
 	e.TextColor(statusColor(f))
 }
 ```
+
+Rows are at least the theme's `Space(8)` high, and as high as their tallest
+cell. `RowHeight` makes every row exactly that high instead, as AppKit's
+`rowHeight` does, with each cell's content in the middle and clipped: a denser table,
+showing more rows, for a log or a list of branches. The header keeps its
+height.
 
 ## Choosing cells
 

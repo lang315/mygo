@@ -49,6 +49,9 @@ type Painter struct {
 	// over the rest of its layer (matches.paint), which elsewhere paints
 	// nothing.
 	lifting *node
+	// owner is the state of the element painting, which keeps the scales
+	// its text rasterized at (glyphSpace).
+	owner *state
 }
 
 // opaqueBox is the box of an element painting an opaque background, and
@@ -69,6 +72,7 @@ func (rt *engine) paint(root *node, w, h, scale float32) {
 	rt.paints++
 	rt.recorded, rt.replayed, rt.replayWalks = 0, 0, 0
 	rt.drawn = rt.drawn[:0]
+	rt.paths.spill.beginPaint()
 	s := &rt.scene
 	// The root paints the theme's background: frames start transparent, so
 	// that a transparent root shows what is behind the content, such as a
@@ -94,8 +98,8 @@ func (rt *engine) paint(root *node, w, h, scale float32) {
 	}
 	rt.painter = Painter{rt: rt, s: s, scale: scale, opacity: 1, clip: Rect{0, 0, w, h}, opaque: opaque, under: under, holes: rt.holes[:0]}
 	p := &rt.painter
-	uses := rt.text.TransientUses()
-	rt.partTransient = 0
+	uses, opened := rt.text.TransientUses(), rt.paths.spill.opened
+	rt.partTransient, rt.paths.spill.inParts = 0, 0
 	p.cull = !rt.inkStale && !rt.noCull
 	p.element(root)
 	p.cull = false
@@ -103,10 +107,14 @@ func (rt *engine) paint(root *node, w, h, scale float32) {
 		rt.insp.paintHighlight(rt, p, h)
 	}
 	rt.paintDragLinked(p, w, h)
+	rt.finishSpills()
 	rt.under, rt.holes = p.under[:0], p.holes[:0] // kept for the next frame's
 	rt.partsBase = sceneData(s)
 	rt.atlases = atlasGenerations(s)
-	rt.transient = rt.text.TransientUses()-uses > rt.partTransient
+	// Layers of paths drawn on the CPU (pathSpill) outside the parts are
+	// reused as the parts are painted again, as masks of the transient
+	// room are.
+	rt.transient = rt.text.TransientUses()-uses > rt.partTransient || rt.paths.spill.opened-opened > rt.paths.spill.inParts
 }
 
 // atlasGenerations returns the generations of the atlases s draws glyphs
@@ -260,8 +268,8 @@ func (p *Painter) element(e *node) {
 	if e.hidden || e.lift && p.lifting != e {
 		return
 	}
-	savedTransform, savedInline, savedTheme := p.transform, p.inline, p.theme
-	p.transform, p.inline = e.world, nil
+	savedTransform, savedInline, savedTheme, savedOwner := p.transform, p.inline, p.theme, p.owner
+	p.transform, p.inline, p.owner = e.world, nil, e.st
 	if e.themed != nil {
 		p.theme = e.themed
 	}
@@ -274,7 +282,7 @@ func (p *Painter) element(e *node) {
 		built, shadows = e.look(), e.shadows // the styleFn and color transition below change the paint, not the node
 	}
 	defer func() {
-		p.transform, p.inline, p.theme = savedTransform, savedInline, savedTheme
+		p.transform, p.inline, p.theme, p.owner = savedTransform, savedInline, savedTheme, savedOwner
 		if restore {
 			e.setLook(built)
 			e.shadows = shadows
@@ -979,7 +987,6 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 		return
 	}
 	sys := p.rt.text
-	s := p.scale
 	deco := decoration{underline: ts.underline, wavy: ts.wavy, dotted: ts.dotted, strike: ts.strike, solid: ts.solid, color: ts.decoColor, thick: ts.decoThick,
 		offset: ts.decoOffset, hasOffset: ts.set&setDecoOffset != 0}
 	shade := text.ShadeOf(color.R, color.G, color.B)
@@ -1003,31 +1010,36 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 		}
 		paintStrokes(p, l, x, y, color, ts, spans, inline, clips)
 	}
+	// Rasterized at the size the transform shows them at, if it scales
+	// them; else at the painter's scale, clips then applying to pen.
+	gs := p.glyphSpace(l, x, y, inline)
+	s := gs.scale
 	start := int32(len(p.s.Glyphs))
 	same := p.inline == nil || p.inline.first == nil
 	var glyphTransform scene.Affine
 	if same {
-		glyphTransform = p.inlineTransform(0).Pixels(s)
+		glyphTransform = gs.inlineTransform(p, 0, inline)
 	}
 	var run *glyphRun
 	if sys.JoinsGlyphs() && !inline {
 		// The engine's, whose buffers each text reuses.
 		run = &p.rt.glyphRun
 		run.ids, run.pens, run.glyphs = run.ids[:0], run.pens[:0], run.glyphs[:0]
+		run.scale = s
 	}
 	for li := range l.Lines {
 		line := &l.Lines[li]
 		if !p.transform.Set && !inline && (y+line.Y > p.clip.Y+p.clip.H || y+line.Y+line.Height < p.clip.Y) {
 			continue
 		}
-		baseline := sys.Baseline((y + line.Baseline) * s)
+		baseline := sys.Baseline((y+line.Baseline)*s + gs.dy)
 		// The glyphs not culled, then their images in one call: the atlas
 		// moves nothing while a frame paints (MakeRoom runs between paints).
 		asks, reqs := p.rt.glyphAsks[:0], p.rt.glyphReqs[:0]
 		for gi := range line.Glyphs {
 			g := &line.Glyphs[gi]
-			pen := (x + g.X) * s
-			if g.Object || !p.transform.Set && !inline && (pen > (p.clip.X+p.clip.W)*s || pen+(g.Advance+g.Size)*s < p.clip.X*s) {
+			pen := (x+g.X)*s + gs.dx
+			if g.Object || clips && (pen > (p.clip.X+p.clip.W)*s || pen+(g.Advance+g.Size)*s < p.clip.X*s) {
 				continue
 			}
 			glyphColor, glyphShade := color, shade
@@ -1058,7 +1070,7 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 				Color:     glyphColor.scene(), Wide: p.glyphWide(glyphColor), Colored: gi.Colored, Subpixel: gi.Subpixel, Thin: gi.Thin,
 			}
 			if !same {
-				sg.Transform = p.inlineTransform(line.Glyphs[a.g].Cluster).Pixels(s)
+				sg.Transform = gs.inlineTransform(p, line.Glyphs[a.g].Cluster, inline)
 			}
 			if run != nil {
 				run.add(p, line.Glyphs[a.g], gi, a.pen, sg, reqs[i].Shade, baseline)
@@ -1077,7 +1089,7 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 		}
 	}
 	if end := int32(len(p.s.Glyphs)); end > start {
-		p.add(scene.Op{Kind: scene.OpGlyphs, Start: start, End: end})
+		gs.add(p, scene.Op{Kind: scene.OpGlyphs, Start: start, End: end})
 	}
 }
 
@@ -1106,7 +1118,8 @@ func (p *Painter) textStrokes(l *text.Layout, x, y float32, color Color, ts text
 		sp = &spans
 	}
 	sys := p.rt.text
-	s := p.scale
+	gs := p.glyphSpace(l, x, y, moves)
+	s := gs.scale
 	shade := text.ShadeOf(color.R, color.G, color.B)
 	start := int32(len(p.s.Glyphs))
 	for li := range l.Lines {
@@ -1114,9 +1127,9 @@ func (p *Painter) textStrokes(l *text.Layout, x, y float32, color Color, ts text
 		if clips && (y+line.Y > p.clip.Y+p.clip.H || y+line.Y+line.Height < p.clip.Y) {
 			continue
 		}
-		baseline := sys.Baseline((y + line.Baseline) * s)
+		baseline := sys.Baseline((y+line.Baseline)*s + gs.dy)
 		for _, g := range line.Glyphs {
-			pen := (x + g.X) * s
+			pen := (x+g.X)*s + gs.dx
 			width, stroke := ts.strokeWidth, ts.strokeColor
 			if g.Object || clips && (pen > (p.clip.X+p.clip.W+width)*s || pen+(g.Advance+g.Size+width)*s < p.clip.X*s) {
 				continue
@@ -1140,13 +1153,13 @@ func (p *Painter) textStrokes(l *text.Layout, x, y float32, color Color, ts text
 			p.s.Glyphs = append(p.s.Glyphs, scene.Glyph{
 				X: float32(math.Floor(float64(pen))) + gi.Left, Y: baseline + gi.Top, W: float32(gi.W), H: float32(gi.H),
 				U: gi.X, V: gi.Y, UW: gi.W, VH: gi.H,
-				Transform: p.inlineTransform(g.Cluster).Pixels(s),
+				Transform: gs.inlineTransform(p, g.Cluster, moves),
 				Color:     stroke.scene(), Wide: p.glyphWide(stroke),
 			})
 		}
 	}
 	if end := int32(len(p.s.Glyphs)); end > start {
-		p.add(scene.Op{Kind: scene.OpGlyphs, Start: start, End: end})
+		gs.add(p, scene.Op{Kind: scene.OpGlyphs, Start: start, End: end})
 	}
 }
 
@@ -1175,7 +1188,8 @@ func (p *Painter) textShadows(l *text.Layout, x, y float32, color Color, ts text
 		sp = &spans
 	}
 	sys := p.rt.text
-	s := p.scale
+	gs := p.glyphSpace(l, x, y, moves)
+	s := gs.scale
 	shade := text.ShadeOf(color.R, color.G, color.B)
 	start := int32(len(p.s.Glyphs))
 	for li := range l.Lines {
@@ -1207,22 +1221,22 @@ func (p *Painter) textShadows(l *text.Layout, x, y float32, color Color, ts text
 				gx-reach > p.clip.X+p.clip.W || gx+g.Advance+g.Size+reach < p.clip.X) {
 				continue
 			}
-			pen := gx * s
+			pen := gx*s + gs.dx
 			gi := shadowGlyph(sys, g.Font, g.ID, s, pen, glyphShade, p.opaque && !moves, sh.blur/2*s)
 			if !gi.OK {
 				continue
 			}
 			c := sh.color.Alpha(p.opacity)
 			p.s.Glyphs = append(p.s.Glyphs, scene.Glyph{
-				X: float32(math.Floor(float64(pen))) + gi.Left, Y: sys.Baseline((y+line.Baseline+sh.y)*s) + gi.Top, W: float32(gi.W), H: float32(gi.H),
+				X: float32(math.Floor(float64(pen))) + gi.Left, Y: sys.Baseline((y+line.Baseline+sh.y)*s+gs.dy) + gi.Top, W: float32(gi.W), H: float32(gi.H),
 				U: gi.X, V: gi.Y, UW: gi.W, VH: gi.H,
-				Transform: p.inlineTransform(g.Cluster).Pixels(s),
+				Transform: gs.inlineTransform(p, g.Cluster, moves),
 				Color:     c.scene(), Wide: p.glyphWide(c),
 			})
 		}
 	}
 	if end := int32(len(p.s.Glyphs)); end > start {
-		p.add(scene.Op{Kind: scene.OpGlyphs, Start: start, End: end})
+		gs.add(p, scene.Op{Kind: scene.OpGlyphs, Start: start, End: end})
 	}
 }
 
@@ -1230,7 +1244,9 @@ func (p *Painter) textShadows(l *text.Layout, x, y float32, color Color, ts text
 // antialiased edges share pixels, which the text system joins where the
 // system's text stack draws them joined (System.JoinsGlyphs).
 type glyphRun struct {
-	font   *text.Font
+	font *text.Font
+	// scale is the pixels a DIP its glyphs rasterize at (glyphSpace).
+	scale  float32
 	shade  text.Shade
 	ids    []uint32
 	pens   []float32
@@ -1259,7 +1275,7 @@ func (r *glyphRun) flush(p *Painter, baseline float32) {
 	case n == 1:
 		p.s.Glyphs = append(p.s.Glyphs, r.glyphs[0])
 	case n > 1:
-		gi := p.rt.text.GlyphRun(r.font, r.ids, r.pens, p.scale, r.shade, p.opaque)
+		gi := p.rt.text.GlyphRun(r.font, r.ids, r.pens, r.scale, r.shade, p.opaque)
 		if !gi.OK {
 			p.s.Glyphs = append(p.s.Glyphs, r.glyphs...)
 			break

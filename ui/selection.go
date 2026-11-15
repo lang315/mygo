@@ -26,7 +26,9 @@ type Selection[K comparable] struct {
 	keys map[K]struct{}
 	// gen changes with the keys, for those caching what they counted of
 	// it: drawn from selectionGen, it differs from every other
-	// Selection's, so assigning a new Selection changes it too.
+	// Selection's, so assigning a new Selection changes it too (an
+	// outline keeping its rows, OutlineState's Generation, sees Open
+	// change that way).
 	gen uint64
 	// log holds the keys added or removed since TakeChanges, for those who
 	// mirror the set; over says it gave up (Clear, CopyFrom, or past its
@@ -49,6 +51,9 @@ func (s *Selection[K]) Len() int { return len(s.keys) }
 
 // Add chooses the row of key k.
 func (s *Selection[K]) Add(k K) {
+	if s.Has(k) {
+		return
+	}
 	if s.keys == nil {
 		s.keys = map[K]struct{}{}
 	}

@@ -45,6 +45,7 @@ var statePlaced = map[string][]string{
 		"hitFn",                                                 // HitTest's, set at commit from the element, as input is
 		"accessDisabled", "activeDescendant", "focusHighlights", // set at commit from the element, as accessHidden is
 		"grouped", "ink", "lastInk", "inkFrame", // painting memory of a layer, as effectLayer is
+		"scales",            // the scales its text and layer rasterized at under a transform: painting memory, and a scale still changing asks for a frame (rasterScale)
 		"snap",              // the scroll snap of a scroll container, like its offsets
 		"observe", "closes", // set at commit from the element (a row with ObserveInput is never kept: retainable), and the Locals closers
 		"replay", // what the row painted (replay.go): painting memory, with its own key
