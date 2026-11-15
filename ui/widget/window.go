@@ -44,6 +44,7 @@ type Form struct {
 	fit           bool           // a dialog of height 0: Show measures its content
 	fitScroll     bool           // the content is higher than the screen: it scrolls
 	refit         int            // SetSize(width, 0) on a shown form: the width to fit the height at, on the next frame
+	sizes         uint64         // SetSize calls so far: a refit measured before a later one does not resize
 	tester        *Tester        // TestForm's: a refit resizes its viewport
 	mnemonics     []mnemonic     // the Alt keys the last build asked for
 	barKeys       []barKey       // the Alt keys of the menu bars the last build drew, before the controls'
@@ -116,6 +117,7 @@ func (w *Form) SetSize(width, height int) *Form {
 	var n *mygo.Window
 	w.change(func() {
 		w.width, w.height, w.fit = width, height, height == 0 && w.dialog
+		w.sizes++
 		refit = height == 0 && (w.win != nil || w.tester != nil)
 		w.refit = 0
 		if refit {
@@ -135,7 +137,7 @@ func (w *Form) SetSize(width, height int) *Form {
 // asked, once. A headless form's Tester does it on its next frame.
 func (w *Form) refitWindow(n *mygo.Window) {
 	mu.Lock()
-	width := w.refit
+	width, sizes := w.refit, w.sizes
 	w.refit = 0
 	live := w.win == n
 	mu.Unlock()
@@ -151,7 +153,16 @@ func (w *Form) refitWindow(n *mygo.Window) {
 	if wa := mygo.Screen.DisplayMatching(b).WorkArea; r.Y+h > wa.Y+wa.Height {
 		r.Y = max(wa.Y+wa.Height-h, wa.Y+cb.Y-b.Y)
 	}
-	n.SetContentBounds(r)
+	// A SetSize made while the content was measured wins: its resize runs
+	// on main, so checking there orders the two.
+	mygo.RunOnMain(func() {
+		mu.Lock()
+		later := w.sizes != sizes
+		mu.Unlock()
+		if !later {
+			n.SetContentBounds(r)
+		}
+	})
 }
 
 // SetIcon sets the window's icon from a PNG. macOS shows no window icons:
