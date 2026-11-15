@@ -5,6 +5,7 @@ import (
 	"image"
 	"runtime"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 	"weak"
@@ -365,13 +366,27 @@ func TestPacedFrameWaitsForTheDisplay(t *testing.T) {
 		return g, nil
 	})
 	s := &pacedSurface{h: h}
+	// Post is safe from any goroutine, as the platform's: the idle timer
+	// posts from its own.
+	var postMu sync.Mutex
 	var posted []func()
 	h.conn.Surface = s
-	h.conn.Post = func(fn func()) { posted = append(posted, fn) }
+	h.conn.Post = func(fn func()) {
+		postMu.Lock()
+		posted = append(posted, fn)
+		postMu.Unlock()
+	}
+	t.Cleanup(func() {
+		if h.idleTimer != nil {
+			h.idleTimer.Stop()
+		}
+	})
 	paced := func() { h.event(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: true}) }
 	runPosted := func() {
+		postMu.Lock()
 		fns := posted
 		posted = nil
+		postMu.Unlock()
 		for _, fn := range fns {
 			fn()
 		}
@@ -393,8 +408,11 @@ func TestPacedFrameWaitsForTheDisplay(t *testing.T) {
 	// the frame at once.
 	g.ready = true
 	g.wake()
-	if g.frames != 2 || len(posted) != 1 {
-		t.Fatalf("woken off the main thread: %d frames, %d posted", g.frames, len(posted))
+	postMu.Lock()
+	n := len(posted)
+	postMu.Unlock()
+	if g.frames != 2 || n != 1 {
+		t.Fatalf("woken off the main thread: %d frames, %d posted", g.frames, n)
 	}
 	runPosted()
 	if g.frames != 3 || s.now != 1 || h.waiting {

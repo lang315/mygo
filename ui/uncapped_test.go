@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,13 +38,13 @@ func TestUncappedFramesInMemoryWaitForNoRefresh(t *testing.T) {
 	h := &windowHost{conn: &surface.Conn{Surface: s}}
 	h.rt = newRuntime(func(c *context) { coreText(c, "Hello") }, h)
 	s.h = h
-	posted := 0
-	h.conn.Post = func(func()) { posted++ }
+	var posted atomic.Int32 // the idle timer posts from its own goroutine
+	h.conn.Post = func(func()) { posted.Add(1) }
 	h.event(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
 	for i := range 3 {
 		h.event(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: true})
-		if s.pixels != i+2 || h.waiting || h.refresh != nil || posted != 0 {
-			t.Fatalf("paced frame %d: %d frames, waiting %v, refresh awaited %v, %d posted", i, s.pixels, h.waiting, h.refresh != nil, posted)
+		if s.pixels != i+2 || h.waiting || h.refresh != nil || posted.Load() != 0 {
+			t.Fatalf("paced frame %d: %d frames, waiting %v, refresh awaited %v, %d posted", i, s.pixels, h.waiting, h.refresh != nil, posted.Load())
 		}
 	}
 }
