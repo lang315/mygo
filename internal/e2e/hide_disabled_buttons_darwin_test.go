@@ -155,6 +155,22 @@ func TestHideDisabledButtonsFollowsAppKit(t *testing.T) {
 				{name: "SetVisibleOnAllWorkspaces(true)", do: func(w *mygo.Window) { w.SetVisibleOnAllWorkspaces(true) }, mini: visible, zoom: byRule},
 				{name: "SetVisibleOnAllWorkspaces(false)", do: func(w *mygo.Window) { w.SetVisibleOnAllWorkspaces(false) }, mini: visible, zoom: byRule},
 			}},
+		// AppKit disables zoom on a window with no full screen when it
+		// stops being resizable: is isEnabled false at once?
+		{name: "on, resizable no full screen, then not resizable", on: true,
+			opts: mygo.WindowOptions{DisableFullScreen: true},
+			steps: []buttonStep{
+				{name: "created", mini: visible, zoom: visible},
+				{name: "SetResizable(false)", do: func(w *mygo.Window) { w.SetResizable(false) }, mini: visible, zoom: hidden},
+			}},
+		// setCollectionBehavior: enables zoom again on a window that is not
+		// resizable and can go full screen.
+		{name: "on, not resizable, not maximizable, on all workspaces", on: true,
+			opts: mygo.WindowOptions{DisableResize: true, DisableMaximize: true},
+			steps: []buttonStep{
+				{name: "created", mini: visible, zoom: hidden},
+				{name: "SetVisibleOnAllWorkspaces(true)", do: func(w *mygo.Window) { w.SetVisibleOnAllWorkspaces(true) }, mini: visible, zoom: byRule},
+			}},
 		{name: "on, hidden title bar, not resizable", on: true,
 			opts:  mygo.WindowOptions{TitleBarStyle: mygo.TitleBarHidden, DisableResize: true},
 			steps: created(visible, byRule)},

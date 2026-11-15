@@ -254,10 +254,6 @@ func (w *window) create() {
 		w.SetMaximumSize(o.MaxSize)
 	}
 	send(w.win, "setMovable:", boolArg(o.Movable))
-	if !o.Maximizable {
-		w.SetMaximizable(false)
-	}
-	w.hideDisabledButtons()
 	behavior := uint(collectionFullScreenPrimary)
 	if !o.Fullscreenable {
 		behavior = collectionFullScreenNone
@@ -273,6 +269,12 @@ func (w *window) create() {
 		behavior = collectionFullScreenAuxiliary | collectionTransient
 	}
 	send(w.win, "setCollectionBehavior:", uintptr(behavior))
+	// After the collection behavior, which sets the zoom button's isEnabled
+	// again: FullScreenPrimary enables it on a window that is not resizable.
+	if !o.Maximizable {
+		w.SetMaximizable(false)
+	}
+	w.hideDisabledButtons()
 	// A child window takes its parent's level when that is higher.
 	w.onTop = o.AlwaysOnTop
 	w.applyLevel()
@@ -751,15 +753,16 @@ func (w *window) SetMaximizable(v bool) {
 }
 
 // hideDisabledButtons hides the miniaturize and zoom buttons while they are
-// disabled, with HideDisabledButtons, and shows them again once enabled: a
-// window that is not resizable cannot zoom. The close button stays.
+// disabled, with HideDisabledButtons, and shows them again once enabled. The
+// zoom button's is AppKit's isEnabled: a window that is not resizable keeps
+// it enabled when it can go full screen. The close button stays.
 func (w *window) hideDisabledButtons() {
 	o := w.opts
 	if !o.HideDisabledButtons || o.Frameless || w.hiddenTitleBar() && o.HideWindowButtons {
 		return // no option, or every button hidden already
 	}
 	mini := !w.hasStyle(styleMiniaturizable)
-	zoom := !w.hasStyle(styleResizable) || !w.IsMaximizable()
+	zoom := !w.IsMaximizable()
 	send(send(w.win, "standardWindowButton:", 1), "setHidden:", boolArg(mini))
 	send(send(w.win, "standardWindowButton:", 2), "setHidden:", boolArg(zoom))
 }
@@ -1229,6 +1232,7 @@ func (w *window) SetVisibleOnAllWorkspaces(v bool) {
 		}
 	}
 	send(w.win, "setCollectionBehavior:", uintptr(behavior))
+	w.hideDisabledButtons() // the behavior sets the zoom button's isEnabled again
 }
 
 // SetIcon does nothing: macOS windows show no icon of their own.
