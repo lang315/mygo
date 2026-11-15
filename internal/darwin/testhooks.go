@@ -678,6 +678,14 @@ func TestTrafficLights(handle uintptr) (x, y float64) {
 	return math.Min(a.X, b.X), msgRect(win, sel("frame")).Size.Height - math.Max(a.Y, b.Y)
 }
 
+// TestStandardButtons reports whether a window's miniaturize and zoom
+// buttons are hidden, and whether AppKit has them enabled.
+func TestStandardButtons(handle uintptr) (miniHidden, miniEnabled, zoomHidden, zoomEnabled bool) {
+	mini := send(id(handle), "standardWindowButton:", 1)
+	zoom := send(id(handle), "standardWindowButton:", 2)
+	return sendBool(mini, "isHidden"), sendBool(mini, "isEnabled"), sendBool(zoom, "isHidden"), sendBool(zoom, "isEnabled")
+}
+
 // TestSetWindowAppearance gives a window its own dark or light appearance,
 // apart from the application's.
 func TestSetWindowAppearance(handle uintptr, dark bool) {
