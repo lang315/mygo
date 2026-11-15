@@ -621,7 +621,7 @@ func (s *System) takeAppFonts() {
 	}
 	for _, f := range fonts {
 		// Shared's engine read it already.
-		_ = s.engine().register(f.data, f.family)
+		_ = s.registerFont(f.data, f.family)
 	}
 	s.fontsChanged()
 }
@@ -794,11 +794,25 @@ func (s *System) UseTruncateStart() {
 func (s *System) RegisterFont(data []byte, family string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.engine().register(data, family); err != nil {
+	if err := s.registerFont(data, family); err != nil {
 		return err
 	}
 	s.fontsChanged()
 	return nil
+}
+
+// registerMu serializes the engines' registrations of fonts, which edit
+// what all the Systems share: on Linux, fontconfig's one configuration,
+// whose application fonts every pango engine adds to and edits (Systems
+// New makes register the app's fonts as they are made, from as many
+// goroutines as make them).
+var registerMu sync.Mutex
+
+// registerFont registers a font with the system's engine. s.mu is held.
+func (s *System) registerFont(data []byte, family string) error {
+	registerMu.Lock()
+	defer registerMu.Unlock()
+	return s.engine().register(data, family)
 }
 
 // fontsChanged forgets what the fonts registered so far made. s.mu is

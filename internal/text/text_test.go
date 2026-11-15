@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode"
@@ -1352,6 +1353,18 @@ func TestRegisterAppFontReachesSystemsNewMakes(t *testing.T) {
 			t.Errorf("%s: text does not use the app's font", name)
 		}
 	}
+	// Systems made at once from several goroutines, as parallel Testers'
+	// are, each register the app's fonts with an engine of their own, which
+	// on Linux edits fontconfig's one configuration.
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			if s := New(); !monospaced(s) {
+				t.Error("made in parallel: text does not use the app's font")
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // TestRegisterFontUnderGivenFamilies tells apart faces of one family
