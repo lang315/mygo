@@ -84,6 +84,40 @@ func TestHeaderBarClientDecorations(t *testing.T) {
 	}
 }
 
+func TestHideDisabledButtonsReachesTheWindow(t *testing.T) {
+	plain := NewForm("Plain", 300, 200).SetResizable(false)
+	plain.Show()
+	defer plain.Close()
+	if lastFake(t).Opts.HideDisabledButtons {
+		t.Fatal("HideDisabledButtons set by default")
+	}
+	w := NewForm("Key", 300, 200).SetResizable(false).SetHideDisabledButtons(true)
+	w.Show()
+	defer w.Close()
+	if !lastFake(t).Opts.HideDisabledButtons {
+		t.Fatal("SetHideDisabledButtons(true) did not reach the window")
+	}
+}
+
+// On a shown form the option applies at the next Show: the window keeps the
+// buttons it was made with.
+func TestHideDisabledButtonsOnAShownFormAppliesAtNextShow(t *testing.T) {
+	w := NewForm("Later", 300, 200).SetResizable(false)
+	w.Show()
+	shown := lastFake(t)
+	w.SetHideDisabledButtons(true)
+	if shown.Opts.HideDisabledButtons {
+		t.Fatal("the shown window changed its buttons")
+	}
+	w.Close()
+	waitClosed(t, w)
+	w.Show()
+	defer w.Close()
+	if !lastFake(t).Opts.HideDisabledButtons {
+		t.Fatal("the next Show did not hide the disabled buttons")
+	}
+}
+
 func TestOnCloseCanKeepTheWindow(t *testing.T) {
 	w := NewForm("Keep", 300, 200)
 	asked := make(chan struct{}, 1)

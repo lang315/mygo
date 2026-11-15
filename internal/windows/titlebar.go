@@ -132,14 +132,22 @@ func (c *captionBar) forget() {
 }
 
 // shownButtons returns the buttons of the window, left to right: close alone
-// when it can be neither minimized nor maximized, as Windows does, and none
-// when the page draws its own (HideWindowButtons).
+// when it can be neither minimized nor maximized, as Windows does, none
+// when the page draws its own (HideWindowButtons), and without the disabled
+// one with HideDisabledButtons.
 func (w *window) shownButtons() []captionButton {
 	if w.opts.HideWindowButtons {
 		return nil
 	}
-	if !w.hasStyle(wsMinimizeBox) && !w.hasStyle(wsMaximizeBox) {
+	minimize, maximize := w.hasStyle(wsMinimizeBox), w.hasStyle(wsMaximizeBox)
+	if !minimize && !maximize {
 		return []captionButton{buttonClose}
+	}
+	if w.opts.HideDisabledButtons && !maximize {
+		return []captionButton{buttonMinimize, buttonClose}
+	}
+	if w.opts.HideDisabledButtons && !minimize {
+		return []captionButton{buttonMaximize, buttonClose}
 	}
 	return []captionButton{buttonMinimize, buttonMaximize, buttonClose}
 }

@@ -434,7 +434,11 @@ type WindowOptions struct {
 	ClientDecorations bool
 	// HideWindowButtons hides the window controls of a hidden title bar,
 	// which the page draws itself: TitleBar is then zero.
-	HideWindowButtons    bool
+	HideWindowButtons bool
+	// HideDisabledButtons drops the minimize or maximize button while it is
+	// disabled, instead of drawing it greyed (macOS, and Windows' hidden
+	// title bar); close always stays.
+	HideDisabledButtons  bool
 	TrafficLightPosition *Point
 	Vibrancy             string
 	// VibrancyTint tints the material, where the platform's material takes

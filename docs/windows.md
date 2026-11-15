@@ -61,6 +61,7 @@ on the screen. Sizes and positions are in device-independent pixels.
 | `Opacity` | between 0 and 1 |
 | `IgnoreMouseEvents` | creates the window letting the mouse through to what is behind it, as `SetIgnoreMouseEvents(true)` does later (see [click-through windows](#click-through-windows)) |
 | `DisableResize`, `DisableMove`, `DisableMinimize`, `DisableMaximize`, `DisableClose`, `DisableFullScreen`, `DisableShadow` | take abilities away. On Linux under Wayland, `DisableShadow` keeps a frameless window or a hidden title bar without the shadow and border GTK draws around them |
+| `HideDisabledButtons` | drops the minimize or maximize button while it is disabled (by the options above or their setters, later too), instead of drawing it greyed, for a small fixed-size window such as a login or key screen; close always stays. On macOS, and on Windows for a hidden title bar, whose buttons MyGo draws: Windows' own title bar can only drop both together. On Linux the window manager decides |
 | `AlwaysOnTop` | keeps the window above others; under Wayland only a frameless one out of the taskbar, see [click-through windows](#click-through-windows) |
 | `SkipTaskbar` | leaves the window out of the taskbar (Linux, Windows) |
 | `AutoHideMenuBar` | shows the menu bar only while the keyboard is in it, from Alt or F10 (Linux, Windows), see [the menu bar](menus.md#the-menu-bar) |
