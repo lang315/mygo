@@ -1,6 +1,7 @@
 package text
 
 import (
+	"fmt"
 	"image"
 	"math"
 	"runtime"
@@ -1319,12 +1320,17 @@ func TestRegisterFont(t *testing.T) {
 	}
 }
 
+var appFontRuns int
+
 // An app's fonts (RegisterAppFont) reach Shared and every System New
 // makes, as a Tester's window has: one made before them takes them at its
 // next layout, one made after before its first. Go Mono is monospaced, so
 // "iiiiiiii" is as wide as "mmmmmmmm" only in it.
 func TestRegisterAppFontReachesSystemsNewMakes(t *testing.T) {
-	const family = "MyGo Test App Mono"
+	// A family of each run: the app's fonts stay registered for the process
+	// (go test -count).
+	appFontRuns++
+	family := fmt.Sprintf("MyGo Test App Mono %d", appFontRuns)
 	monospaced := func(s *System) bool {
 		width := func(text string) float32 {
 			return s.Layout(Params{Text: text, Style: Style{Size: 20, Family: family}}).Lines[0].Width
