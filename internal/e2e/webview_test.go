@@ -245,8 +245,8 @@ func TestContentWindowWebViewEditMenu(t *testing.T) {
 	// the browser's write of a copy then fails without a word.
 	mygo.Clipboard.WriteText("before copy")
 	// The page counts the edit commands it runs and their results, and its
-	// copies, for a Copy that copies nothing: the menu sends them as
-	// execCommand on Windows.
+	// copies with the selection each had, for a Copy that copies nothing:
+	// the menu sends them as execCommand on Windows.
 	v.Page().LoadHTML(`<body style="margin:0;height:100vh;background:#f00">
 <div id=e contenteditable style="height:100px">hello</div><script>
 window.commands = [];
@@ -257,7 +257,12 @@ document.execCommand = (command, ...args) => {
 	return done;
 };
 window.copies = 0;
-document.addEventListener("copy", () => window.copies++);
+// What a copy had to write: Chromium writes nothing for an empty selection.
+window.copied = [];
+document.addEventListener("copy", e => {
+	window.copies++;
+	window.copied.push({selection: getSelection().toString(), focused: document.hasFocus(), active: document.activeElement && document.activeElement.id, prevented: e.defaultPrevented});
+});
 window.ready = true;
 </script></body>`, "")
 	waitForPage(t, v.Page(), "window.ready")
@@ -315,7 +320,7 @@ window.ready = true;
 		keepFront()
 		return false
 	}) {
-		page, _ := mygo.EvalAs[string](v.Page(), "JSON.stringify({commands: window.commands, copies: window.copies})")
+		page, _ := mygo.EvalAs[string](v.Page(), "JSON.stringify({commands: window.commands, copies: window.copies, copied: window.copied})")
 		t.Fatalf("Copy to copy the page's selection never happened (waited %v); as Copy was sent, %s; now %s; %s; the clipboard was seen open: %q; the page: %s; the clipboard has %q",
 			wait.Guard, sent, foregroundState(w), clipboardState(), held, page, mygo.Clipboard.ReadText())
 	}
