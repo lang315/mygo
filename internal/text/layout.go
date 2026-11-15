@@ -571,6 +571,12 @@ func Shared() *System { return shared() }
 func New() *System {
 	s := newSystem()
 	s.apart = true
+	// The fonts registered so far, now: taken at the first layout, they
+	// would change the Generation within the first frame, and the layouts
+	// that frame kept would all be made anew in the next.
+	s.mu.Lock()
+	s.takeAppFonts()
+	s.mu.Unlock()
 	return s
 }
 

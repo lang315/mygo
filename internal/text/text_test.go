@@ -1339,6 +1339,14 @@ func TestRegisterAppFontReachesSystemsNewMakes(t *testing.T) {
 		t.Fatal(err)
 	}
 	after := New()
+	// One made after takes them as it is made, not at its first layout: a
+	// Generation changing within a window's first frame would have the next
+	// lay out all its text anew.
+	gen := after.Generation()
+	after.Layout(Params{Text: "x", Style: Style{Size: 20}})
+	if after.Generation() != gen {
+		t.Error("made after the app's fonts, a System's first layout changed its Generation")
+	}
 	for name, s := range map[string]*System{"Shared": Shared(), "made before": before, "made after": after} {
 		if !monospaced(s) {
 			t.Errorf("%s: text does not use the app's font", name)
