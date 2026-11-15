@@ -26,7 +26,7 @@ func TestPaintInputs(t *testing.T) {
 		// not read by paint
 		"neither": "originAttached observeFn busy current keepOpen keyShortcuts snap snapAlign placed flips epoch key valueInput ignoreInput accessHidden c id parent first last next nchild depth st cursor inputFn textClient caret " +
 			"takesText noIME copyData runes maximizeButton dismissed label widget role expanded tip accValue " +
-			"accRange hasRange accFill accStep popover rowsOf focusGroup groupSelects placeOn overflow segment " +
+			"accRange hasRange accFill accChildren accStep popover rowsOf focusGroup groupSelects placeOn overflow segment " +
 			"activeDescendant nameFrom nameJoin outOfName keepLinks focusTo setPos setSize choosesItems search description " +
 			"field form rowMinW followX sort colFit level expandable chooseMany gridFit attach serial fillViewport " +
 			"accessDisabled autoComplete orient focusHighlights accGrid accSet labelledBy describedBy errorMessage roleDescription controls hasPopup popupSet edgeMargin edgeMarginSet",

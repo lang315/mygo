@@ -1950,12 +1950,13 @@ func NumberInput(c *Context, value *float64, lo float64, hi float64, step float6
 // children's children with Option (Alt). row builds the content of an
 // item's row, after its arrow; Gap, Padding and the rest are a List's.
 //
-// The outline builds only the rows in view, as a List does, so trees of
-// any size are as fast as small ones. With s.List.Selected or Selection,
-// rows are chosen as a List's, and while the outline has the focus, Right
-// opens the item chosen or goes to its first child, and Left closes it or
-// goes to its parent, with Option on macOS and Shift elsewhere, as in GTK,
-// opening and closing all inside.
+// The outline builds only the rows in view, as a List does. It walks the
+// open items in every frame, unless s.Generation tells it when children
+// changes, which keeps trees of any size as fast as small ones. With
+// s.List.Selected or Selection, rows are chosen as a List's, and while
+// the outline has the focus, Right opens the item chosen or goes to its
+// first child, and Left closes it or goes to its parent, with Option on
+// macOS and Shift elsewhere, as in GTK, opening and closing all inside.
 //
 //	app.files.List.Selected = &app.file
 //	ui.Outline(c, &app.files, []string{"/"}, func(dir string) []string {
@@ -3616,6 +3617,24 @@ func (_handle Element) Access(fn func(n *platform.AccessNode)) Element {
 	return wrapElement(_node.Access(fn))
 }
 
+// AccessChildren has fn add nodes of its own inside the element's, after
+// Access's fn described it and before the elements inside it, only while
+// assistive technology reads the window: what stands for parts of the
+// element that are no elements, as the lines a diff viewer shows, each
+// read as added or deleted. fn reads the element's node, parent, and adds
+// each node with add, whose Parent it sets; their IDs must be no
+// element's, and the same for the same part from frame to frame. Actions
+// on them do nothing. As Access, it takes the module's internal type.
+func (_handle Element) AccessChildren(fn func(parent *platform.AccessNode, add func(arg0 platform.AccessNode))) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.AccessChildren(fn))
+}
+
 // AccessDisabled tells assistive technology that the element and those
 // inside it are unavailable when off is true, as HTML's aria-disabled
 // does, while they keep the keyboard focus, their place in the Tab order,
@@ -4329,26 +4348,35 @@ func (_handle Element) Busy(on bool) Element {
 // as a card of gradients, blurred images and large shadows, under or
 // around a drawing that moves. A frame redrawing where something above or
 // next to it changed then draws the bitmap there, not each of its layers,
-// and moving, scaling or rotating the element (Translate, Scale, Rotate,
-// AnimatePose) moves the bitmap, not what it holds.
+// and moving or rotating the element (Translate, Rotate, AnimatePose)
+// moves the bitmap, not what it holds.
 //
-// The bitmap is the size of the element's box at the window's scale, and
-// of what it and those inside it paint around it: shadows, focus rings,
-// and children beyond the box that it does not clip, as Draw callbacks
-// paint (within the box and the shadows' reach). It is drawn again when
-// what the subtree paints changes: built anew with other content, laid
-// out at another size, at another scale or in another theme, or as
-// something inside it moves on its own (Painter.AnimationFrame, a pose,
-// a transition), as then it is every frame. Painting the window still
-// paints the subtree, to tell; frames that only paint the drawings that
-// asked for them (Painter.AnimationFrame, Painter.After) do not.
+// The bitmap holds the element's box, and what it and those inside it
+// paint around it: shadows, focus rings, and children beyond the box that
+// it does not clip, as Draw callbacks paint (within the box and the
+// shadows' reach), in the pixels it shows on: at the window's scale times
+// the scale the element's transform draws it at (Scale, AnimatePose,
+// Transition's ScaleContent), so that scaled up it is as sharp as the
+// subtree laid out larger. At rest it is drawn at that scale itself, on
+// whole pixels where the transform only scales and moves it; while the
+// scale changes, as an animation grows it, at steps of about 9% (at or
+// above the scale), drawn again only as the scale crosses one, and once
+// more at the scale itself in the frame after it stops. It is drawn
+// again, too, when what the subtree paints changes: built anew with other
+// content, laid out at another size, at another window scale or in
+// another theme, or as something inside it moves on its own
+// (Painter.AnimationFrame, a pose, a transition), as then it is every
+// frame. Painting the window still paints the subtree, to tell; frames
+// that only paint the drawings that asked for them
+// (Painter.AnimationFrame, Painter.After) do not.
 //
 // As in an effect's bitmap (Effect), its text is smoothed in grayscale
 // where the subtree paints no opaque background under it, web views
 // inside it do not show, and a subtree larger than 8192 pixels across is
-// drawn as it is. The bitmap is drawn at the window's scale, so that
-// turned, or scaled up by a transform, it shows a little softer than the
-// shapes it holds would.
+// drawn as it is. A bitmap drawn larger than the window's scale is at
+// most 4096 pixels across, and 8 times the window's scale: beyond, it is
+// stretched as before. Turned, skewed or in perspective, the bitmap is
+// resampled, and shows a little softer than the shapes it holds would.
 func (_handle Element) Cache() Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -8952,7 +8980,8 @@ func (_handle Element) TranslateZ(z float32) Element {
 // cuts in the middle of its last line rather than at its end, so that it
 // keeps both its start and its end, about as wide each, in the room
 // layout gives it: a list of files shows "src/components/…/picker.go",
-// whose folder and file's name both show.
+// whose folder and file's name both show. TruncateStart, with it, cuts
+// the start instead.
 func (_handle Element) TruncateMiddle() Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -8961,6 +8990,22 @@ func (_handle Element) TruncateMiddle() Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.TruncateMiddle())
+}
+
+// TruncateStart puts the ellipsis of text that SingleLine or MaxLines
+// cuts at the start of its last line rather than at its end, so that it
+// keeps as much of its end as fits the room layout gives it: a list of
+// files shows "…/theme/picker.go", whose file's name and nearest folders
+// show where its start does not matter. With TruncateMiddle too, the
+// start is cut.
+func (_handle Element) TruncateStart() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.TruncateStart())
 }
 
 // Underline underlines text.

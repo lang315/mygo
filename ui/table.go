@@ -190,6 +190,13 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	if s == nil {
 		s = coreLocal(table, "rows", func() ListState { return ListState{} })
 	}
+	// With RowHeight the rows are as high as it says, every one, and
+	// their cells hold their content in the middle without the padding
+	// above and below that would keep a short row from shrinking.
+	cellPadY := t.Space(1.5)
+	if s.RowHeight > 0 {
+		cellPadY = 0
+	}
 	drag := coreLocal(table, "drag", func() tableDrag { return tableDrag{} })
 	if drag.fitted {
 		// The last frame fitted a column to its cells as it laid out.
@@ -256,7 +263,11 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			// move: a header being dragged keeps the press. Keyed as it
 			// is made, as a list's rows are.
 			c.nextKey, c.keySet, c.keyGlobal = colKeys[j], true, false
-			box := coreRow(c).Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Shrink(0).Clip().Role(role)
+			padY := t.Space(1.5)
+			if role != RoleColumnHeader {
+				padY = cellPadY
+			}
+			box := coreRow(c).Padding(padY, t.Space(2.5)).AlignItems(Center).Shrink(0).Clip().Role(role)
 			if role == RoleColumnHeader && t.Metrics.HeaderHeight > 0 || role == RoleCell && t.Metrics.RowHeight > 0 {
 				box.PaddingY(0) // the metric is the row's height, its text centered in it
 			}
@@ -424,7 +435,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			// The list's element holding the row is the row.
 			row.Role(RoleNone)
 			if s.Header != nil && s.Header(i) {
-				row.Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Background(t.Surface).FontWeight(600)
+				row.Padding(cellPadY, t.Space(2.5)).AlignItems(Center).Background(t.Surface).FontWeight(600)
 				if t.Metrics.RowHeight > 0 {
 					row.PaddingY(0)
 				}

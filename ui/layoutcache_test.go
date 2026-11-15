@@ -93,7 +93,8 @@ var lcStyles = [][]func(e *node){
 		func(e *node) { e.ClipInsetPercent(0, 30, 0, 0, 4) }, func(e *node) { e.MaskLinearGradient(LinearGradient{From: RGB(0, 0, 0), Angle: 90}) }},
 	{nil, func(e *node) { e.Direction(RightToLeft) }, func(e *node) { e.Direction(LeftToRight) }},
 	{nil, func(e *node) { e.MaxLines(1) }, func(e *node) { e.NoWrap() }, func(e *node) { e.SingleLine() }, func(e *node) { e.MaxLines(2).Ellipsis("~") },
-		func(e *node) { e.Balance() }, func(e *node) { e.SingleLine().TruncateMiddle() }},
+		func(e *node) { e.Balance() }, func(e *node) { e.SingleLine().TruncateMiddle() },
+		func(e *node) { e.SingleLine().TruncateStart() }},
 	{nil, func(e *node) { e.ColumnSpan(2) }, func(e *node) { e.ColumnStart(2) }, func(e *node) { e.RowStart(2).RowSpan(2) }},
 	{nil, func(e *node) { e.BorderWidth(3) }, func(e *node) { e.BorderWidth(1, 0, 6, 2) }},
 	{nil, func(e *node) { e.Top(5) }, func(e *node) { e.Left(-3) }, func(e *node) { e.End(4) },
@@ -782,7 +783,7 @@ func TestLayoutInputs(t *testing.T) {
 		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +
 		" blur opacity opacitySet cursor " +
 		"inputFn observeFn textClient caret takesText noIME copyData maximizeButton fit gray dismissed rotate label widget role " +
-		"paintLook expanded busy current vertical tip keepOpen accValue accRange hasRange accFill accStep barInset barStyle scrollBase keepScrollbars hiddenScrollbars barsFrom ignoreInput themed " +
+		"paintLook expanded busy current vertical tip keepOpen accValue accRange hasRange accFill accChildren accStep barInset barStyle scrollBase keepScrollbars hiddenScrollbars barsFrom ignoreInput themed " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin outOfName keepLinks middle focusTo snap snapAlign keyShortcuts " +
 		"setPos setSize choosesItems search description invalid readOnly multiline followX sort level expandable handleDoubleClick " +
 		"chooseMany serial ignoreInput accessHidden themed lift ringOffset ringColor ringSet clipping zIndex zOrder hitFn focusHighlights labelledBy describedBy errorMessage roleDescription controls hasPopup accessDisabled autoComplete orient accGrid accSet popupSet"

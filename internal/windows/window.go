@@ -149,6 +149,7 @@ type window struct {
 	// the keyboard is in the menu bar.
 	autoHideMenu, revealed bool
 	inMenu                 bool    // in a menu loop, of the bar or a popup
+	menusHaveKeyboard      bool    // the bar's menu loop took the keyboard from the page (takeKeyboardForMenus)
 	menuKey                menuKey // the letter that opened popupMenuBar
 
 	programmatic bool
@@ -605,6 +606,9 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		}
 		return 0, false
 	case wmSetFocus:
+		if w.menusHaveKeyboard {
+			return 0, true // the page gets it back once the menus close
+		}
 		if w.sf != nil {
 			// The web view that had the keyboard as the window went
 			// inactive gets it back, if still shown; else the surface.
@@ -677,8 +681,12 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 		if w.sf != nil {
 			w.sf.liftKeys()
 		}
+		if wp == 0 { // the bar's, or the window menu's, not TrackPopupMenu's
+			w.takeKeyboardForMenus()
+		}
 	case wmExitMenuLoop:
 		w.inMenu = false
+		w.giveKeyboardBack()
 	case wmMenuChar:
 		if r, ok := w.menuChar(wp, lp); ok {
 			return r, true

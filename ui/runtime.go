@@ -422,6 +422,10 @@ type engine struct {
 	// paints counts the frames painted, those painting the last frame's
 	// elements again included.
 	paints uint64
+	// paintFrames counts the frames that paint, built or painting the
+	// last frame's elements again, however many times each paints
+	// (scaleWatch).
+	paintFrames uint64
 	// posed are the elements of the last frame built with a pose
 	// (AnimatePose), parents first.
 	posed        []*node
@@ -862,8 +866,9 @@ func (rt *engine) runFrame() {
 	rt.c.titleBar = rt.titleBar()
 	rt.c.vibrancy = rt.host.vibrancy()
 	rt.text.BeginFrame()
+	rt.paintFrames++
 	rt.paths.large = rt.paths.large[:0]
-	rt.paths.switching = false
+	rt.paths.switching, rt.paths.spill.last = false, false
 	rt.gen = rt.text.Generation()
 	rt.painted = [3]float32{w, h, scale}
 	rt.animating, rt.repainting, rt.repaintAt = false, false, time.Time{}
@@ -968,11 +973,12 @@ func (rt *engine) runFrame() {
 			break
 		}
 	}
-	if rt.zoomChanged {
-		// Zoomed in the last pass: laid out at the new size, and built
-		// at it in the next frame.
+	if nw, nh, ns := rt.size(); rt.zoomChanged || nw != w || nh != h || ns != scale {
+		// Zoomed in the last pass, or the view resized its native host:
+		// lay out and paint at the current size. Rebuild next frame for
+		// views that read Context.Size while building.
 		rt.zoomChanged = false
-		w, h, scale = rt.size()
+		w, h, scale = nw, nh, ns
 		appW = rt.insp.contentWidth(w)
 		rt.c.titleBar = rt.titleBar()
 		rt.painted = [3]float32{w, h, scale}
@@ -1281,8 +1287,9 @@ func (rt *engine) repaintFrame(w, h, scale float32) {
 	start := time.Now()
 	rt.c.now = rt.frameTime()
 	rt.text.BeginFrame()
+	rt.paintFrames++
 	rt.paths.large = rt.paths.large[:0]
-	rt.paths.switching = false
+	rt.paths.switching, rt.paths.spill.last = false, false
 	rt.repainting, rt.repaintAt = false, time.Time{}
 	// What the last frame painted outside Draw callbacks that asked to be
 	// painted again, as a content transition, moves only painted whole.
@@ -1326,6 +1333,9 @@ func (rt *engine) makeRoom(last bool) {
 		// keep their compacted layout once paths already draw as tiles.
 		rt.text.Unkeep(ps.large)
 	}
+	// What of the paths still finds no room in the last paint draws on
+	// the CPU (pathSpill).
+	ps.spill.last = last
 	rt.text.MakeRoom()
 }
 
