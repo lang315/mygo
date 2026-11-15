@@ -529,24 +529,35 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 	// parent its modal child disables, is left as it is.
 	var raised string
 	front, _, _ := procGetForegroundWindow.Call()
+	// Who was in front along the way, for a click that did not come back:
+	// when the front went, and to whom.
+	fronts := "; in front at the start: " + describeWindow(front)
+	// No window of the app is in front, as after the test before closed
+	// the one that was: a click on w then reached the app's move and
+	// lost its button (TestParentStaysBlockedWhileAModalChildIsOpen).
+	// Bring w to the front first, as for another app's window over it,
+	// with the right to take the front (TestGrantForeground). A disabled
+	// parent and a window that never activates (WS_EX_NOACTIVATE: a
+	// flyout, a window not Focusable) are left as they are.
+	raise := func(when string) {
+		fg, _, _ := procGetForegroundWindow.Call()
+		enabled, _, _ := procIsWindowEnabled.Call(w.hwnd)
+		if ownWindow(fg) || rootAt(pt) != w.hwnd || enabled == 0 || windowLong(w.hwnd, gwlExStyle)&wsExNoActivate != 0 {
+			return
+		}
+		TestGrantForeground()
+		ok, _, _ := procSetForegroundWindow.Call(w.hwnd)
+		now, _, _ := procGetForegroundWindow.Call()
+		raised += fmt.Sprintf("; %s %s was in front, and bringing the window to the front returned %v, with %s in front",
+			when, describeWindow(fg), ok != 0, describeWindow(now))
+	}
 	if under := rootAt(pt); !ownWindow(under) {
 		procSetForegroundWindow.Call(w.hwnd)
 		fg, _, _ := procGetForegroundWindow.Call()
 		raised = fmt.Sprintf("; before the click %s was there, and after bringing the window to the front %s, with %s in front",
 			describeWindow(under), describeWindow(rootAt(pt)), describeWindow(fg))
-	} else if enabled, _, _ := procIsWindowEnabled.Call(w.hwnd); !ownWindow(front) && under == w.hwnd && enabled != 0 && windowLong(w.hwnd, gwlExStyle)&wsExNoActivate == 0 {
-		// No window of the app is in front, as after the test before closed
-		// the one that was: a click on w then reached the app's move and
-		// lost its button (TestParentStaysBlockedWhileAModalChildIsOpen).
-		// Bring w to the front first, as for another app's window over it,
-		// with the right to take the front (TestGrantForeground). A disabled
-		// parent and a window that never activates (WS_EX_NOACTIVATE: a
-		// flyout, a window not Focusable) are left as they are.
-		TestGrantForeground()
-		ok, _, _ := procSetForegroundWindow.Call(w.hwnd)
-		fg, _, _ := procGetForegroundWindow.Call()
-		raised = fmt.Sprintf("; before the click %s was in front, and bringing the window to the front returned %v, with %s in front",
-			describeWindow(front), ok != 0, describeWindow(fg))
+	} else {
+		raise("before the click")
 	}
 	// The window under the point is read where it is reported: one that
 	// appeared after the click shows.
@@ -593,6 +604,11 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			procMsgWaitForMultipleObjectsEx.Call(0, 0, 50, qsAllInput, mwmoInputAvailable)
 			continue
 		}
+		// The front can go while the cursor moves (unproven: the failure
+		// that lost its button said nothing of a raise before the click).
+		fg, _, _ := procGetForegroundWindow.Call()
+		fronts += "; after the move: " + describeWindow(fg)
+		raise("after the move")
 		placed, _, _ = user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
 		mouse := user32.NewProc("mouse_event")
 		const leftDown, leftUp = 0x0002, 0x0004
@@ -632,10 +648,27 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			if pumped && clickWentElsewhere(downs, ownWindow(rootAt(pt))) {
 				break
 			}
+			if !pumped {
+				fg, _, _ := procGetForegroundWindow.Call()
+				fronts += "; after the button: " + describeWindow(fg)
+			}
 			pumped = true
 		}
 	}
-	return true, describe() + diagnoseClick(pt, placed != 0, downs, seen) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves), moves
+	return true, describe() + diagnoseClick(pt, placed != 0, downs, seen) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves) + fronts + windowsAbove(w.hwnd), moves
+}
+
+// windowsAbove lists the visible top-level windows of other processes above
+// h, in z-order, for a click that did not come back: one may have taken it.
+// It walks the windows with GetWindow, as EnumWindows would make a callback.
+func windowsAbove(h uintptr) string {
+	var above []string
+	for c, _, _ := procGetTopWindow.Call(0); c != 0 && c != h && len(above) < 8; c, _, _ = procGetNextWindow.Call(c, gwHwndNext) {
+		if v, _, _ := procIsWindowVisible.Call(c); v != 0 && !ownWindow(c) {
+			above = append(above, describeWindow(c))
+		}
+	}
+	return fmt.Sprintf("; visible windows of other processes above it: %d %v", len(above), above)
 }
 
 // mouseMessage reports whether a message is one of the mouse's, in the
