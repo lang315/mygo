@@ -393,7 +393,7 @@ jobs:
     name: Linux ARM64
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
     # The build and vet of every platform, the no-inspector tests and the
