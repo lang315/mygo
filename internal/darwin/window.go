@@ -257,6 +257,7 @@ func (w *window) create() {
 	if !o.Maximizable {
 		w.SetMaximizable(false)
 	}
+	w.hideDisabledButtons()
 	behavior := uint(collectionFullScreenPrimary)
 	if !o.Fullscreenable {
 		behavior = collectionFullScreenNone
@@ -735,17 +736,32 @@ func (w *window) setStyle(bit uint, on bool) {
 
 func (w *window) hasStyle(bit uint) bool { return uint(send(w.win, "styleMask"))&bit != 0 }
 
-func (w *window) SetResizable(v bool)   { w.setStyle(styleResizable, v) }
+func (w *window) SetResizable(v bool)   { w.setStyle(styleResizable, v); w.hideDisabledButtons() }
 func (w *window) IsResizable() bool     { return w.hasStyle(styleResizable) }
 func (w *window) SetMovable(v bool)     { send(w.win, "setMovable:", boolArg(v)) }
 func (w *window) IsMovable() bool       { return sendBool(w.win, "isMovable") }
-func (w *window) SetMinimizable(v bool) { w.setStyle(styleMiniaturizable, v) }
+func (w *window) SetMinimizable(v bool) { w.setStyle(styleMiniaturizable, v); w.hideDisabledButtons() }
 func (w *window) IsMinimizable() bool   { return w.hasStyle(styleMiniaturizable) }
 func (w *window) SetClosable(v bool)    { w.setStyle(styleClosable, v) }
 func (w *window) IsClosable() bool      { return w.hasStyle(styleClosable) }
 
 func (w *window) SetMaximizable(v bool) {
 	send(send(w.win, "standardWindowButton:", 2), "setEnabled:", boolArg(v))
+	w.hideDisabledButtons()
+}
+
+// hideDisabledButtons hides the miniaturize and zoom buttons while they are
+// disabled, with HideDisabledButtons, and shows them again once enabled: a
+// window that is not resizable cannot zoom. The close button stays.
+func (w *window) hideDisabledButtons() {
+	o := w.opts
+	if !o.HideDisabledButtons || o.Frameless || w.hiddenTitleBar() && o.HideWindowButtons {
+		return // no option, or every button hidden already
+	}
+	mini := !w.hasStyle(styleMiniaturizable)
+	zoom := !w.hasStyle(styleResizable) || !w.IsMaximizable()
+	send(send(w.win, "standardWindowButton:", 1), "setHidden:", boolArg(mini))
+	send(send(w.win, "standardWindowButton:", 2), "setHidden:", boolArg(zoom))
 }
 
 func (w *window) IsMaximizable() bool {

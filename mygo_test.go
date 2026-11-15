@@ -1250,6 +1250,17 @@ func TestClientDecorationsReachTheBackend(t *testing.T) {
 	}
 }
 
+func TestHideDisabledButtonsReachesTheBackend(t *testing.T) {
+	_, fw := testWindow(t, WindowOptions{DisableMaximize: true, HideDisabledButtons: true})
+	if !fw.Opts.HideDisabledButtons {
+		t.Error("HideDisabledButtons did not reach the backend")
+	}
+	_, fw = testWindow(t, WindowOptions{DisableMaximize: true})
+	if fw.Opts.HideDisabledButtons {
+		t.Error("HideDisabledButtons set without the option")
+	}
+}
+
 func TestEval(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	var bodies []string

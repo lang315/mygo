@@ -17,7 +17,8 @@ type Form struct {
 	title         string
 	width, height int
 	resizable     bool
-	minW, minH    int // SetMinimumSize
+	hideDisabled  bool // SetHideDisabledButtons
+	minW, minH    int  // SetMinimumSize
 	maximized     bool
 	icon          []byte
 	root          Control
@@ -179,6 +180,16 @@ func (w *Form) SetResizable(on bool) *Form {
 	return w
 }
 
+// SetHideDisabledButtons drops the minimize or maximize button while it is
+// disabled (a form that is not resizable cannot be maximized), instead of
+// drawing it greyed: for a small fixed-size window such as a login or key
+// screen. The close button always stays. It applies at the next Show (see
+// mygo.WindowOptions.HideDisabledButtons for the platforms it reaches).
+func (w *Form) SetHideDisabledButtons(on bool) *Form {
+	w.change(func() { w.hideDisabled = on })
+	return w
+}
+
 // SetMinimumSize limits how small the user can resize the window, in DIPs; 0
 // means no limit on that side. It applies at Show, on a window that is shown,
 // and again at each later Show.
@@ -270,7 +281,8 @@ func (w *Form) show(cancel bool) bool {
 		Maximized: w.maximized, MinWidth: w.minW, MinHeight: w.minH,
 		Content: ui.View(w.view),
 		// A dialog asks to close on Escape, as its close button does.
-		CloseOnEscape: w.dialog,
+		CloseOnEscape:       w.dialog,
+		HideDisabledButtons: w.hideDisabled,
 	}
 	if w.header != nil {
 		opts.TitleBarStyle = mygo.TitleBarHidden

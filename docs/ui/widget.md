@@ -1168,6 +1168,10 @@ next `Show`. A `TestForm` or `TestDialog` tester's viewport follows
 on its next frame. Before `Show`, a height of 0 is the window default as ever.
 
 Windows: `SetTitle`, `SetSize`, `SetIcon`, `SetResizable`,
+`SetHideDisabledButtons(on)` (drops the maximize button of a form that is
+not resizable instead of greying it, for a small fixed-size window such as a
+login or key screen; close stays; it applies at the next `Show`, on macOS and
+on Windows with `UseHeaderBar`, see `mygo.WindowOptions.HideDisabledButtons`),
 `SetMinimumSize(w, h)` (the least the user can resize it to, in DIPs, 0 for
 no limit on a side; the window's outer size, the title bar included on macOS
 and Windows; before `Show` too, and kept for the next `Show`; a `Dialog` has

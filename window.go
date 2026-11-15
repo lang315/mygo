@@ -133,6 +133,15 @@ type WindowOptions struct {
 	// and Close; the --mygo-titlebar-* CSS variables and
 	// ui.Context.TitleBar are then zero.
 	HideWindowButtons bool
+	// HideDisabledButtons drops the minimize or maximize button while it
+	// cannot be used (DisableMinimize, DisableMaximize, DisableResize or
+	// their setters), instead of drawing it greyed: for a small fixed-size
+	// window such as a login or key screen. The close button always stays.
+	// It applies on macOS, and on Windows to a window with a hidden title
+	// bar (TitleBarStyle), whose buttons MyGo draws; Windows' own title bar
+	// can only drop both buttons together, and on Linux the window manager
+	// decides.
+	HideDisabledButtons bool
 
 	DisableResize     bool
 	DisableMove       bool
@@ -801,6 +810,7 @@ func (w *Window) platformOptions(o *WindowOptions) *platform.WindowOptions {
 		p.DevTools = IsDev()
 	}
 	p.ClientDecorations = o.ClientDecorations
+	p.HideDisabledButtons = o.HideDisabledButtons
 	if o.TrafficLightPosition != nil {
 		p.TrafficLightPosition = &platform.Point{X: o.TrafficLightPosition.X, Y: o.TrafficLightPosition.Y}
 	}
