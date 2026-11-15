@@ -99,6 +99,15 @@ func TestHideDisabledButtonsReachesTheWindow(t *testing.T) {
 	}
 }
 
+func TestHideDisabledButtonsCanBeTurnedOff(t *testing.T) {
+	w := NewForm("Off", 300, 200).SetResizable(false).SetHideDisabledButtons(true).SetHideDisabledButtons(false)
+	w.Show()
+	defer w.Close()
+	if lastFake(t).Opts.HideDisabledButtons {
+		t.Fatal("SetHideDisabledButtons(false) left the buttons hidden")
+	}
+}
+
 // On a shown form the option applies at the next Show: the window keeps the
 // buttons it was made with.
 func TestHideDisabledButtonsOnAShownFormAppliesAtNextShow(t *testing.T) {
