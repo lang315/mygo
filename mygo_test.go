@@ -3,6 +3,7 @@
 package mygo
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -46,16 +47,14 @@ func TestMain(m *testing.M) {
 		helper := fake.New()
 		backendOnce.Do(func() { theBackend = helper })
 		packageIdentifier = os.Getenv("MYGO_TEST_IDENTIFIER")
-		App.SetName("MyGoTest")
-		if App.RequestSingleInstanceLock() {
-			fmt.Println("locked")
-			releaseSingleInstanceLock()
-		} else {
-			fmt.Println("forwarded")
-		}
-		if helper.ForegroundAllowed > 0 {
-			fmt.Println("passed the foreground on")
-		}
+		App.SetName(cmp.Or(os.Getenv("MYGO_TEST_INSTANCE_NAME"), "MyGoTest"))
+		singleInstanceTestHelper(helper)
+		os.Exit(0)
+	}
+	if os.Getenv("MYGO_TEST_INSTANCE_CHILD") == "1" {
+		// A process that an instance started, which outlives it.
+		fmt.Println("child started")
+		_, _ = io.Copy(io.Discard, os.Stdin)
 		os.Exit(0)
 	}
 	fb = fake.New()
@@ -1873,6 +1872,35 @@ func TestMenuRolesAndState(t *testing.T) {
 	last := updates[len(updates)-1]
 	if last.ID != menu.ItemByID("new").uid || last.Enabled {
 		t.Errorf("SetEnabled not propagated: %+v", last)
+	}
+}
+
+func TestMenuBadge(t *testing.T) {
+	menu := NewMenu([]*MenuItem{{
+		ID: "node", Label: "Node", Badge: "120 ms", BadgeAlign: BadgeAlignLeft,
+	}})
+	snap := menu.snapshot()
+	if got := snap.Items[0].Badge; got != "120 ms" {
+		t.Fatalf("badge = %q", got)
+	}
+	if got := snap.Items[0].BadgeAlign; got != platform.BadgeAlignLeft {
+		t.Fatalf("badge align = %q", got)
+	}
+	item := menu.ItemByID("node")
+	item.SetBadge("1.2s")
+	item.SetBadgeAlign(BadgeAlignCenter)
+	onMain(func() {}) // the updates reach the backend on the main thread
+	updates := fb.MenuUpdates()
+	last := updates[len(updates)-1]
+	if last.ID != item.uid || last.Badge != "1.2s" || last.BadgeAlign != platform.BadgeAlignCenter {
+		t.Errorf("SetBadge and SetBadgeAlign not propagated: %+v", last)
+	}
+}
+
+func TestMenuKeepOpen(t *testing.T) {
+	menu := NewMenu([]*MenuItem{{ID: "node", Label: "Node", KeepOpen: true}})
+	if !menu.snapshot().Items[0].KeepOpen {
+		t.Error("KeepOpen lost in the snapshot")
 	}
 }
 
