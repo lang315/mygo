@@ -75,7 +75,7 @@ framework safely. Read it before changing anything under `internal/`.
 ├── document*.go        NewDocuments: documents, their saving, recovery copies, watches, menus
 ├── loop.go             main-thread queue: postMain / onMain / await
 ├── events.go           listener lists and the Preventable event types
-├── single_instance.go  RequestSingleInstanceLock over a Unix socket
+├── single_instance.go  RequestSingleInstanceLock: a lock file, command lines over a Unix socket
 ├── dev.go signal_*.go  IsDev, the `mygo dev` ready signal, quitting on SIGINT/SIGTERM
 ├── backend_*.go        picks the backend per GOOS
 ├── internal/
@@ -141,7 +141,9 @@ framework safely. Read it before changing anything under `internal/`.
 │                       command line client for agents
 │                       (automation/cmd/mygo-automation), and
 │                       permissionflow, the system's permissions and a
-│                       guide to System Settings, after PermissionFlow
+│                       guide to System Settings, after PermissionFlow,
+│                       and render, videos of native UI drawn on the GPU
+│                       and encoded with the system's encoders
 ├── ui/                 native UI: views, layout, widgets, text editing, Tester;
 │                       ui/chart: charts without a look, on ui's public API;
 │                       ui/editor: the code editor and the diff viewer;
@@ -178,6 +180,7 @@ framework safely. Read it before changing anything under `internal/`.
 │                       looping behind a window's content, a trailer
 │                       with controls over it); permissionflow
 │                       (the permissions, asked for and guided to);
+│                       render (a promo video of native UI, and its preview);
 │                       native-module (native modules in Swift, called from native UI);
 │                       rust-native (a Rust crate the CLI builds, called
 │                       through ffi)
@@ -532,7 +535,10 @@ by `mygo build` with `mygo_noinspector`) leave out its downloader and
   and in its settings, and the keys it answers with, in `BindShortcuts`'s
   response and in later `ShortcutsChanged` signals, go to the shortcut's
   `OnKeys` (`HotkeyBound`): none when the user declined it, which KDE
-  remembers without asking again. The activation token of an `Activated` signal
+  remembers without asking again. Under X11 (XWayland) `BindShortcuts`
+  names the app's focused window, else its first shown one, as the parent
+  of the desktop's dialog (`x11:XID`), which GNOME otherwise opens behind
+  the windows in front; a Wayland window would need exporting first. The activation token of an `Activated` signal
   becomes the display's startup notification id while the callback runs,
   so the window it shows or focuses may take the focus. Under XWayland
   there is no Wayland display to give it to, and GNOME does not take the
@@ -662,7 +668,14 @@ features GTK 4 lacks become X11-only code beside it.
 - **Custom schemes** load from `http://<scheme>.localhost/`, and their
   other hosts from `http://<host>.<scheme>.localhost/` (`internal/schemehost`:
   hosts of DNS labels, lower-cased, without a port), which WebView2
-  lets the app answer through `WebResourceRequested`. Chromium treats
+  lets the app answer through `WebResourceRequested`. Its filters are
+  added with `ICoreWebView2_22`'s
+  `AddWebResourceRequestedFilterWithRequestSourceKinds` for documents
+  (iframes of every origin, and their dedicated workers), or, on runtimes
+  without it, `AddWebResourceRequestedFilter`, which reaches only the
+  main frame and its same-origin iframes. Service and shared workers are
+  left out: their requests reach every web view of the profile that
+  filters them. Chromium treats
   `*.localhost` as a secure origin, and unlike `https`, `http` blocks no
   mixed content, so pages reach `ws://` and `http://` URLs as with the
   custom schemes of the other backends. The backend maps URLs both ways, so
@@ -2028,6 +2041,14 @@ as in Tauri:
   ignored, then `finish`; it skips them when a quit's sequence ran or is
   running (`quitting`, `stopping`). Linux has no such path: the session's
   end arrives as SIGTERM.
+  After `OnQuit`, and in `App.Exit`, the backend gets
+  `platform.ExitBackend.Exiting`, the last native call before the process
+  exits. Windows destroys there the windows of its own classes, the hidden
+  application window last, without handing their messages to the app: a
+  window left alive takes its Go window procedure into `ExitProcess`, where
+  a DLL that destroys a child of it while unloading (an input method's
+  helper window) has Windows call the procedure on the thread already in
+  the runtime's exit, and the runtime deadlocks (#1896).
 - Taskbar state on Windows (`taskbar.go`) lives on the window and is
   applied when Explorer sends `TaskbarButtonCreated` (first show, Explorer
   restarts), so progress and a hidden button set before showing stick.
@@ -2079,8 +2100,26 @@ as in Tauri:
   `--mygo-opened-at-login`, which the package removes from `os.Args` at
   init and `WasOpenedAtLogin` reports; macOS login items are recognized by
   `keyAELaunchedAsLogInItem` in the launch Apple Event instead.
-- `Relaunch` runs the quit sequence, then (after `OnQuit`, which releases
-  the single instance lock) starts the executable again with the same
+- `RequestSingleInstanceLock` (`single_instance.go`): the system decides
+  which instance runs, with a lock on a file next to the socket (`flock`
+  on Unix, `LockFileEx` on Windows, through `lockFile`), taken before the
+  socket is touched, so two launches at the same moment cannot both win.
+  The lock is held until the process exits and released by the system
+  then, also on a crash or a kill; the file is never removed, and its
+  handle is not inherited (`O_CLOEXEC`, a handle Windows does not
+  inherit), so a process the app started cannot keep it. The holder
+  removes a stale socket and listens; the socket only carries the
+  command lines of later instances (JSON), and closes on `OnQuit`. A
+  launch first hands its command line to whoever answers the socket (the
+  holder, or an instance of an older MyGo, which takes no lock), then
+  tries the lock; while the lock is held and nobody answers (the holder
+  is starting, or quit and is ending, as for `Relaunch` and updates) it
+  tries both again until the lock is free, logging after
+  `singleInstanceWait` (10 s): a relaunch must land however long the
+  shutdown takes.
+- `Relaunch` runs the quit sequence, then (after `OnQuit`, which closes
+  the single instance socket; the new instance waits for the lock, which
+  this one holds until it exits) starts the executable again with the same
   arguments, or those passed to `Relaunch` in their place
   (`relaunchArguments`), and the working directory it started in: on macOS
   through `open -n <bundle> --args …`, or, with an update staged, through
@@ -2129,8 +2168,9 @@ as in Tauri:
   (at its path, or elsewhere for moved files), else a patch of the file at
   its path or its own bytes, whichever is smaller. The stapled ticket
   (`Contents/CodeResources`) is never made from the old app: the archives'
-  bundles are stapled, but the bundle a user copies from the disk image is
-  not, as `buildDMG` staples the app after copying it into the image.
+  bundles are stapled, but the bundle a user copied from a disk image of
+  an older mygo is not, as `buildDMG` stapled the app after copying it
+  into the image.
   Patches are bsdiff's
   (`bsdiff.go`, with the qsufsort suffix array of `suffix.go`), their
   three streams compressed apart so that they are read from the delta
@@ -3965,7 +4005,22 @@ either.
   otherwise, as Pointer Events have it, a move that changes the
   pressure alone is a move, and the element pressed keeps the device and
   pressure of its press's last move for `PressedPointer`
-  (`state.pressPointer`). Its
+  (`state.pressPointer`). Fingers also come one by one, besides the
+  pointer events a backend makes of them (`platform.TouchDown`,
+  `TouchMove`, `TouchUp`, `TouchCancel`, by `SurfaceEvent.ID`): Windows
+  sends each finger's `WM_POINTER` messages by pointer ID, with
+  `WM_POINTERCAPTURECHANGED` canceling, Linux numbers GDK's touch
+  sequences (`touchPoints` in `internal/linux/touch.go`), browsers send
+  the Pointer Events of `pointerType` `touch` by `pointerId`, and macOS,
+  without touchscreens, sends none. The size of a finger's contact
+  (`SurfaceEvent.Width`, `Height`, in DIPs) comes from Windows's
+  `POINTER_TOUCH_INFO.rcContact` (with `TOUCH_MASK_CONTACTAREA`) and the
+  Pointer Events' `width` and `height` (1 by 1, unknown, is 0); GDK has
+  none. The engine drops them until a view
+  calls `Touches`, which sets `engine.touchIn` (`ui/touch.go`), so apps
+  that ask for none link none of it: the tracker gives each finger an ID
+  of its own, keeps the hit chain where it landed, asks for a frame as one
+  changes and forgets those that ended at `endPass`. Its
   `TextCaret` turns on the input method at that caret, with no text around
   it; `InputMethod(false)` (`TextInputState.NoInputMethod`) keeps text on
   but input methods off, as winit's `set_ime_allowed(false)`: macOS skips
@@ -5065,7 +5120,20 @@ either.
   (`ShaderSource`, `shader_ps`), which `ui/shader` builds, so that apps
   drawing none do not carry it. `ui` itself only has `Painter.ShaderEffect`
   and `Painter.ShaderFill`: the compiler, its package variables and
-  go/parser stay out of apps that draw no shader. A shader filling text,
+  go/parser stay out of apps that draw no shader. A shader drawing many
+  quads in one call (`DrawInstances`, through `Painter.ShaderInstances`)
+  makes one effect op whose `EffectOp.Instances` hold, in the frame's
+  words, each quad's rectangle in pixels, its size in DIPs and its data,
+  at most `scene.MaxInstanceData` floats: the builder makes an instance
+  of each in one batch (`addInstances`), one instanced draw on every
+  renderer, the data in the slots of an effect's parameters (`p0` to
+  `p3`) and the size, 2 and the index in `p4`; the CPU renderer splits
+  the op into one op a quad (`raster.instancer`), readying each alone,
+  as a `Draw` of it. The shader reads them from the bridge's
+  `__instance` uniform, which the backends read from a variable the
+  renderer's code sets (`Options.Instance` of `glsl`, a static global in
+  `hlsl`, a parameter of every function in `msl`) and the interpreter
+  from the words `ui/shader` writes for the quad readied. A shader filling text,
   paths and icons (`ShaderFill`) turns the glyph ops its function painted,
   with grayscale masks, into effect ops whose `EffectOp.Glyphs` point at
   their mask glyphs (glyphs of color stay an op of their own): the
@@ -6059,6 +6127,71 @@ gets a test with `Tester`. A new GPU renderer draws the instances of
 has a test that compares its drawing of `gputest.Scene` with the CPU
 renderer's (`gputest.Compare`).
 
+### Videos (`plugins/render`)
+
+The render plugin makes videos of native UI (see
+[the plugin's page](plugins/render.md)). Its frames come from
+`ui.Recorder` (`ui/recorder.go`), the engine of a Tester without input:
+its host keeps each scene for the caller rather than drawing it, never
+paces (`framesAtOnce`), and its clock (`engine.clock`) is the video's,
+set by each `Frame(at)`, which asks for a frame built anew
+(`engine.changed`), runs it, and runs it again at the same time while
+the view invalidated it, eight passes at most. What moves with time,
+`ui`'s animations and `After`, is where it would be on screen at that
+time. Timers are dropped: every frame is built. A Recorder's DIPs are
+the frame's pixels over the scale, nudged below by a float32 ulp where
+`engine.pixels`' ceiling would make one pixel more.
+
+A render (`run` in `render.go`) builds frame i, then reads back frame
+i−1, which the GPU drew meanwhile, and gives it to the sink, then
+submits i: one frame in flight. The drawers are the renderers' frame
+targets: `metal.Frames` (draws into its own texture, or into an
+IOSurface, and tracks its command buffers in the renderer's ring),
+`d3d11.Frames` (a hidden window's back buffer, copied into a staging
+texture kept from frame to frame) and `gl.Offscreen` (EGL's
+surfaceless platform), or `raster.Renderer`, which redraws only the
+damage. `Auto` takes the CPU renderer where the GPU's is a software
+rasterizer (llvmpipe, WARP), as it is faster there. On macOS the
+AVFoundation sink is a `sceneSink`: Metal draws each frame into a
+CVPixelBuffer of the pixel buffer adaptor's pool (retained: the adaptor
+returns it autoreleased), which is appended once the next frame's draw
+waited for it, without a copy.
+
+The system's writers take their tracks before the first frame and
+interleave the sound with the video, waiting for the sound to run ahead
+of it (AVAssetWriter holds the video until the sound input has data
+past it, or is finished). So `Video` builds every frame once before
+drawing any (`soundtrack`), mixing what `Frame.Audio` plays into one
+track, interleaved stereo 16-bit at 48 kHz, nil when nothing plays; the
+sinks feed it ahead of the frames: AVFoundation up to a second ahead and
+more while the video waits, marking the sound finished as soon as it
+is all given; Media Foundation half a second ahead; GStreamer from a
+goroutine of its own into a blocking appsrc. Sounds are decoded into
+memory and resampled with a Kaiser-windowed sinc, stateless, so that a
+frame mixes any part of any sound; a voice, a sound played from one
+start, ramps its volume across each frame.
+
+Colors: the frames are sRGB, tagged BT.709. VideoToolbox converts BGRA
+with the output's matrix and GStreamer's videoconvert with
+`colorimetry=bt709`; Media Foundation's sink writer converts RGB32 with
+BT.601's, so its frames are converted to NV12 of BT.709 in Go
+(`bgraToNV12`), on all cores. GStreamer's encoder is the first of the
+codec's list that encodes a test frame (`probe`): hardware encoders'
+elements exist without their hardware.
+
+Motion blur (`Composition.MotionBlur`) builds each frame `Samples` times
+at sub-frame times, before the frame's, earliest first, so the Recorder's
+clock still only goes forward (the earliest sample of a frame comes after
+the frame before, as the shutter is at most a frame), draws each, reads
+it back and sums it in 16 bits on all cores (`accumulator`); the
+zero-copy AVFoundation path is skipped then. `Frame.sub` carries the
+fraction to the view (`Exact`, `Seconds`, `Interpolate`, `Spring`);
+`soundtrack` builds whole frames.
+
+`NewPlayer` is a `ui.VideoSeeker`: a `ui.VideoPlayer` seeks it at once,
+and it builds the frames before the one it goes to without drawing
+them, from a new session when it goes back.
+
 ## Native modules (`native`, `internal/nativegen`)
 
 A native module ([the guide](native-modules.md)) is a Go package whose
@@ -6293,6 +6426,11 @@ make it work:
   bundle-only features (notifications, URL schemes) work and its data stays
   apart from the production app's. Builds are assembled in a staging
   directory and renamed into place, so the running build keeps its files.
+  Elsewhere the resources are synced beside the executable instead
+  (`placeBuild`, `syncResources`): only files whose permissions, size or
+  modification time changed are replaced, so a program the running app
+  started from them, which Windows keeps from being moved, does not stop
+  a rebuild unless it changed (#1905).
   - Builds run with `MYGO_DEV=1`, which the core takes out of its
     environment (`dev.go`): `App.Relaunch` then exits with code 75, which
     has `mygo dev` start the same build again, with the arguments
@@ -6568,7 +6706,10 @@ make it work:
   Finder flags, then `hdiutil convert` compresses it with LZMA.
   No AppleScript or Finder automation is involved, so it works headless and
   in CI. The image is signed with a real identity and, with `macos.notarize`,
-  notarized with `notarytool` and stapled.
+  notarized with `notarytool` and stapled. Before the image is made, the
+  app itself is notarized (as a zip made by `ditto`, since `notarytool`
+  takes no bundles) and stapled, so that the copy users install from the
+  image has its ticket.
 
 - `keygen` writes the update signing keys (see Updates above).
 

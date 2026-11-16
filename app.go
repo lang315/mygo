@@ -242,6 +242,7 @@ func (a *Application) Exit(code int) {
 			w.destroy()
 		}
 		saveAppFiles() // the states and the other files are written before the process ends
+		backendExiting()
 	})
 	os.Exit(code)
 }
@@ -315,8 +316,12 @@ func (a *Application) finish() {
 		clipboardStopped = true
 		backend().Clipboard().Close()
 		a.saveAndFireQuit()
+		backendExiting()
 		if a.relaunch {
-			relaunchNow() // after OnQuit, which releases the single instance lock
+			// After OnQuit, which stops taking the command lines of later
+			// instances: the new one waits for this process to exit, which
+			// holds the single instance lock until then.
+			relaunchNow()
 		}
 		loop.shutdown()
 	})
@@ -328,6 +333,15 @@ func (a *Application) saveAndFireQuit() {
 	saveAppFiles()
 	fire(&a.onQuit)
 	flushAppWrites()
+}
+
+// backendExiting tells the backend that the process is about to exit,
+// once the app has finished (or Exit was called): see
+// platform.ExitBackend. Main thread only.
+func backendExiting() {
+	if b, ok := backend().(platform.ExitBackend); ok {
+		b.Exiting()
+	}
 }
 
 // lastWindowClosed is called on the main thread when the last window has
