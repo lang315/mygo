@@ -58,13 +58,18 @@ A `MenuItem` has:
   where that follows it), and draws the badges in a monospaced-digit font,
   so a measure keeps its width as its digits change. The column moves when
   a label, a badge or the visibility of an item changes. Other platforms
-  show the badge after the label and subtitle;
+  show the badge after the label and subtitle. The column needs the
+  import of `github.com/egoist/mygo/macmenu` (see
+  [Keeping a menu open](#keeping-a-menu-open)): without it, macOS too shows
+  the badge after the label, as `Label  Badge`;
 - `KeepOpen`, which keeps the menu open when the item is chosen on macOS.
   MyGo draws the item itself, with its label, badge and check mark, in a
   view that handles the click: the item's menu and the menu above it stay
   up, so a click can show a state change or start work in place. The view
   answers the keyboard and VoiceOver as any item does. It does not apply
-  to items with a submenu, or on other platforms;
+  to items with a submenu, or on other platforms. It needs the import of
+  `github.com/egoist/mygo/macmenu`: without it, the item closes its menu
+  as any other;
 - `ID`, to find the item with `Menu.ItemByID`;
 - `Role`, a built-in behavior with its label and accelerator.
 
@@ -152,6 +157,18 @@ check mark, and its icon and subtitle where it has them; the view has one
 line, so a subtitle follows the label. `Click` still runs, and `SetLabel`,
 `SetBadge` and `SetChecked` update the view. The item keeps the menu open
 on macOS; other platforms close the menu as they always do.
+
+Apps that do not use them should not pay for them, so on macOS the views
+of `KeepOpen` items and the column of badges come with a package of their
+own, imported for its effect:
+
+```go
+import _ "github.com/egoist/mygo/macmenu"
+```
+
+Without it, a `KeepOpen` item closes its menu and runs `Click`, as other
+items do, and a badge follows its label (`Label  Badge`), as on the other
+platforms. The package does nothing elsewhere.
 
 ### Icons
 

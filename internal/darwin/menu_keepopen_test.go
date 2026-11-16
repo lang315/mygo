@@ -13,6 +13,7 @@ import (
 // its menu open: its label, badge, check mark and the update path.
 func TestMenuKeepOpenView(t *testing.T) {
 	load()
+	linkMenuExtras(t)
 	registerMenuTarget()
 	withPool(func() {
 		b := &Backend{}
@@ -157,6 +158,7 @@ func TestMenuKeepOpenView(t *testing.T) {
 // takes a column of its own in the views of the menu.
 func TestMenuKeepOpenSubtitleAndIcon(t *testing.T) {
 	load()
+	linkMenuExtras(t)
 	registerMenuTarget()
 	LinkMenuIcons()
 	defer func() { menuImage = nil }()

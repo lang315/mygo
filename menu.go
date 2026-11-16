@@ -119,7 +119,7 @@ type MenuItem struct {
 	// starting a test can show its state change without reopening the
 	// menus. macOS draws such an item itself, with its label, badge and
 	// check mark; items with a submenu, and menus elsewhere, are not
-	// affected.
+	// affected. macOS needs import _ "github.com/egoist/mygo/macmenu" for it.
 	KeepOpen bool
 	ToolTip  string
 	// Icon is an image shown beside the label (see NewMenuIcon), nil for
@@ -139,10 +139,12 @@ type MenuItem struct {
 	// latency. macOS puts the badges of a menu in a column after its longest
 	// label, aligned as BadgeAlign says, and draws them in a
 	// monospaced-digit font; other platforms show the badge after the label
-	// and subtitle.
+	// and subtitle. The column needs package macmenu; without it, macOS too
+	// shows the badge after the label.
 	Badge string
 	// BadgeAlign is where Badge sits in that column: BadgeAlignLeft,
-	// BadgeAlignCenter, or BadgeAlignRight (the default).
+	// BadgeAlignCenter, or BadgeAlignRight (the default). It needs package
+	// macmenu on macOS.
 	BadgeAlign BadgeAlignment
 	Submenu    []*MenuItem
 	// Click is called on the main thread when the item is chosen. On Linux

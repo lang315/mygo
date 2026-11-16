@@ -86,6 +86,7 @@ func TestMenuBadgeTitle(t *testing.T) {
 // in the same column as the items without one.
 func TestMenuBadgeIconColumn(t *testing.T) {
 	load()
+	linkMenuExtras(t)
 	LinkMenuIcons()
 	defer func() { menuImage = nil }()
 	png, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
@@ -114,6 +115,7 @@ func TestMenuBadgeIconColumn(t *testing.T) {
 // start at: the menu no longer keeps the column it was built with.
 func TestMenuBadgeRetab(t *testing.T) {
 	load()
+	linkMenuExtras(t)
 	registerMenuTarget()
 	withPool(func() {
 		b := &Backend{}

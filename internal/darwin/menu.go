@@ -87,6 +87,9 @@ func dropOwner(owner int) {
 }
 
 func registerMenuTarget() {
+	if registerMenuExtras != nil {
+		registerMenuExtras()
+	}
 	if hasClass("MyGoMenuTarget") {
 		return
 	}
@@ -99,6 +102,44 @@ func registerMenuTarget() {
 		// validates its items.
 		method("validateMenuItem:", func(self id, _ objc.SEL, item id) bool { return sendBool(item, "isEnabled") }),
 	})
+}
+
+// The fork keeps menu badges in a column and KeepOpen items opt-in on
+// macOS (owner 2026-11-16): the default menus reach them only through these
+// hooks, nil until LinkMenuExtras links them (package macmenu), so apps
+// that do not import macmenu do not link them. Later upstream syncs must
+// keep every call into that code behind these hooks.
+var (
+	registerMenuExtras func()
+	menuExtraMetrics   func(menu id, m *platform.Menu) menuMetrics
+	setMenuExtraTitle  func(item id, it *platform.MenuItem, metrics menuMetrics)
+	updateMenuExtras   func(item, view id, it *platform.MenuItem)
+)
+
+// LinkMenuExtras links the badge column and the KeepOpen items of menus.
+// It only sets the hooks: it runs from an init, before AppKit is loaded.
+func LinkMenuExtras() {
+	registerMenuExtras, menuExtraMetrics, setMenuExtraTitle, updateMenuExtras =
+		registerKeepOpenClasses, buildMenuMetrics, setBadgeTitle, updateBadgeTitle
+}
+
+// MenuExtrasLinked reports whether LinkMenuExtras linked the extras.
+func MenuExtrasLinked() bool { return menuExtraMetrics != nil }
+
+// plainItemTitle is the title of it without the extras: the badge follows
+// the label, as the other backends show it.
+func plainItemTitle(it *platform.MenuItem) string {
+	if subtitleOnLine() {
+		return strings.ReplaceAll(it.LabelWithBadge(), "\t", " ")
+	}
+	return strings.ReplaceAll(it.LabelWithSubtitleAndBadge(), "\t", " ")
+}
+
+// registerKeepOpenClasses defines the classes of KeepOpen items, once.
+func registerKeepOpenClasses() {
+	if hasClass("MyGoMenuKeepOpenView") {
+		return
+	}
 	// Items that keep their menu open show a view MyGo draws: the view
 	// handles the click itself, so NSMenu does not end its tracking and
 	// the item's menu and the one above it stay up. It answers the keyboard
@@ -288,20 +329,9 @@ type menuMetrics struct {
 func (b *Backend) buildMenu(m *platform.Menu, title string, owner int) id {
 	menu := autorelease(send(send(class("NSMenu"), "alloc"), "initWithTitle:", uintptr(nsString(title))))
 	send(menu, "setAutoenablesItems:", boolArg(slices.ContainsFunc(m.Items, validatesItem)))
-	badgeStart, badgeWidth := badgeColumn(m)
-	keepOpenStart, keepOpenWidth, keepOpenView, keepOpenLabelX := keepOpenMetrics(m)
-	metrics := menuMetrics{
-		badgeStart: badgeStart, badgeWidth: badgeWidth,
-		keepOpenStart: keepOpenStart, keepOpenWidth: keepOpenWidth,
-		keepOpenView: keepOpenView, keepOpenLabelX: keepOpenLabelX,
-	}
-	if keepOpenView > 0 {
-		// NSMenu sizes itself from its titles, which a view replaces: without
-		// this, it cuts the right of the views off.
-		msgSetFloat(menu, sel("setMinimumWidth:"), keepOpenView)
-		if menuHighlightDelegate != 0 {
-			send(menu, "setDelegate:", uintptr(menuHighlightDelegate))
-		}
+	var metrics menuMetrics
+	if menuExtraMetrics != nil {
+		metrics = menuExtraMetrics(menu, m)
 	}
 	for _, it := range m.Items {
 		if it.Type == platform.MenuItemSeparator {
@@ -326,6 +356,27 @@ func (b *Backend) buildMenu(m *platform.Menu, title string, owner int) id {
 	return menu
 }
 
+// buildMenuMetrics returns the columns of m's badges and KeepOpen views,
+// and readies menu for those views.
+func buildMenuMetrics(menu id, m *platform.Menu) menuMetrics {
+	badgeStart, badgeWidth := badgeColumn(m)
+	keepOpenStart, keepOpenWidth, keepOpenView, keepOpenLabelX := keepOpenMetrics(m)
+	metrics := menuMetrics{
+		badgeStart: badgeStart, badgeWidth: badgeWidth,
+		keepOpenStart: keepOpenStart, keepOpenWidth: keepOpenWidth,
+		keepOpenView: keepOpenView, keepOpenLabelX: keepOpenLabelX,
+	}
+	if keepOpenView > 0 {
+		// NSMenu sizes itself from its titles, which a view replaces: without
+		// this, it cuts the right of the views off.
+		msgSetFloat(menu, sel("setMinimumWidth:"), keepOpenView)
+		if menuHighlightDelegate != 0 {
+			send(menu, "setDelegate:", uintptr(menuHighlightDelegate))
+		}
+	}
+	return metrics
+}
+
 func (b *Backend) buildItem(it *platform.MenuItem, owner int, metrics menuMetrics) id {
 	action := sel("mygoMenuItemClicked:")
 	target := b.menuTarget
@@ -344,18 +395,10 @@ func (b *Backend) buildItem(it *platform.MenuItem, owner int, metrics menuMetric
 	send(item, "setTarget:", uintptr(target))
 	send(item, "setTag:", uintptr(it.ID))
 	applyItemState(item, it)
-	if it.KeepOpen && it.Submenu == nil {
-		tab := badgeTabFor(it.BadgeAlign, metrics.keepOpenStart, metrics.keepOpenWidth)
-		view := buildKeepOpenView(it, metrics, tab)
-		send(item, "setView:", uintptr(view))
-		// The view replaces the title, but NSMenu sizes the menu by it: it
-		// holds the same label, tab stop and badge, so the menu is wide
-		// enough for the view.
-		setItemTitle(item, keepOpenItemTitle(it), itemBadge(it), tab, it.BadgeAlign)
-		updateKeepOpenView(view, it, tab)
+	if setMenuExtraTitle != nil {
+		setMenuExtraTitle(item, it, metrics)
 	} else {
-		tab := badgeTabFor(it.BadgeAlign, metrics.badgeStart, metrics.badgeWidth)
-		setItemTitle(item, itemTitle(it), itemBadge(it), tab, it.BadgeAlign)
+		send(item, "setTitle:", uintptr(nsString(plainItemTitle(it))))
 	}
 	if it.Submenu != nil {
 		sub := b.buildMenu(it.Submenu, it.Label, owner)
@@ -371,6 +414,24 @@ func (b *Backend) buildItem(it *platform.MenuItem, owner int, metrics menuMetric
 	}
 	track(owner, it.ID, item)
 	return item
+}
+
+// setBadgeTitle gives item the title of it, with its badge at the tab stop
+// of metrics, or the view of a KeepOpen item.
+func setBadgeTitle(item id, it *platform.MenuItem, metrics menuMetrics) {
+	if it.KeepOpen && it.Submenu == nil {
+		tab := badgeTabFor(it.BadgeAlign, metrics.keepOpenStart, metrics.keepOpenWidth)
+		view := buildKeepOpenView(it, metrics, tab)
+		send(item, "setView:", uintptr(view))
+		// The view replaces the title, but NSMenu sizes the menu by it: it
+		// holds the same label, tab stop and badge, so the menu is wide
+		// enough for the view.
+		setItemTitle(item, keepOpenItemTitle(it), itemBadge(it), tab, it.BadgeAlign)
+		updateKeepOpenView(view, it, tab)
+	} else {
+		tab := badgeTabFor(it.BadgeAlign, metrics.badgeStart, metrics.badgeWidth)
+		setItemTitle(item, itemTitle(it), itemBadge(it), tab, it.BadgeAlign)
+	}
 }
 
 func applyItemState(item id, it *platform.MenuItem) {
@@ -1000,15 +1061,25 @@ func (b *Backend) UpdateMenuItem(it *platform.MenuItem) {
 			applyItemState(n.item, it)
 			switch {
 			case it.Type == platform.MenuItemSeparator:
-			case view != 0:
-				updateKeepOpenView(view, it, 0)
-				retabKeepOpenMenu(n.item, keepOpenItemTitle(it), itemBadge(it), it.BadgeAlign)
+			case updateMenuExtras != nil:
+				updateMenuExtras(n.item, view, it)
 			default:
-				// The menu's widest title and badge may be this item's now.
-				retabMenu(n.item, itemTitle(it), itemBadge(it), it.BadgeAlign)
+				send(n.item, "setTitle:", uintptr(nsString(plainItemTitle(it))))
 			}
 		}
 	})
+}
+
+// updateBadgeTitle follows the title and badge of it in item, or in view,
+// the view of a KeepOpen item.
+func updateBadgeTitle(item, view id, it *platform.MenuItem) {
+	if view != 0 {
+		updateKeepOpenView(view, it, 0)
+		retabKeepOpenMenu(item, keepOpenItemTitle(it), itemBadge(it), it.BadgeAlign)
+		return
+	}
+	// The menu's widest title and badge may be this item's now.
+	retabMenu(item, itemTitle(it), itemBadge(it), it.BadgeAlign)
 }
 
 func (b *Backend) PopupMenu(m *platform.Menu, pw platform.Window, pos *platform.Point) {
