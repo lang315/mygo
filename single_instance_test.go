@@ -4,7 +4,6 @@ package mygo
 
 import (
 	"bufio"
-	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net"
@@ -15,6 +14,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/wait"
@@ -258,17 +258,30 @@ func TestSingleInstanceWaitsForListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := io.ReadAll(conn)
+	// A guard, as wait's: a hang becomes a failure.
+	_ = conn.SetDeadline(time.Now().Add(wait.Guard))
+	msg, err := readSecondInstance(conn)
 	conn.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var msg secondInstanceMessage
-	if err := json.Unmarshal(data, &msg); err != nil || msg.WorkingDir == "" {
-		t.Fatalf("handed over %q: %v", data, err)
+	if err != nil || msg.WorkingDir == "" {
+		t.Fatalf("handed over %+v: %v", msg, err)
 	}
 	next.expect(t, "forwarded")
 	next.exit(t)
+}
+
+// TestReadSecondInstanceWithoutEOF checks that the message of a later
+// instance is read whole although its end never comes, as on Windows when
+// the sender's shutdown does not reach a pending read.
+func TestReadSecondInstanceWithoutEOF(t *testing.T) {
+	r, w := net.Pipe()
+	defer r.Close()
+	defer w.Close()
+	go w.Write([]byte(`{"args":["a"],"workingDir":"/w"}`))
+	_ = r.SetDeadline(time.Now().Add(wait.Guard))
+	msg, err := readSecondInstance(r)
+	if err != nil || !slices.Equal(msg.Args, []string{"a"}) || msg.WorkingDir != "/w" {
+		t.Fatalf("read %+v: %v", msg, err)
+	}
 }
 
 // TestSingleInstanceReleasedOnExit checks that the lock of an instance
