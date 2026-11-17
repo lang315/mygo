@@ -34,11 +34,23 @@ let rootStyle: HTMLStyleElement | null = null;
   const { post, stringify } = channel;
 
   const { runtime, internal } = createRuntime(__MYGO_CONFIG__, post, stringify);
+  // A page restored from the back/forward cache gets no reply to the calls
+  // it made before it left (Go dropped them): they fail. A capturing listener,
+  // ahead of the page's; an event a script made (isTrusted false) is not the
+  // engine's.
+  w.addEventListener(
+    "pageshow",
+    (e: PageTransitionEvent) => {
+      if (e.persisted && e.isTrusted) internal.restored();
+    },
+    true,
+  );
   // The messages a host posts reach the runtime as they do the script of a
   // flush: receive checks the secret of each reply and channel value.
   channel.listen?.((data) => internal.receive(data as any));
   Object.defineProperty(w, "mygo", { value: runtime, enumerable: true });
-  Object.defineProperty(w, "__mygo", { value: Object.freeze({ ...internal, find, stopFind }) });
+  // receive only: restored is the bridge's, not the page's to call.
+  Object.defineProperty(w, "__mygo", { value: Object.freeze({ receive: internal.receive, find, stopFind }) });
 
   // A window with a hidden title bar tells its pages the room its window
   // controls take, from document start on: CSS variables on :root.

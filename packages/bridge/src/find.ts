@@ -69,7 +69,10 @@ export function find(text: string, opts: FindOptions = {}): FindResult {
   const range = state.ranges[state.active]!;
   if (highlights()) {
     style();
-    CSS.highlights.set("mygo-find", new Highlight(...state.ranges));
+    // Added one by one: spread, a page's matches are more arguments than a call takes.
+    const all = new Highlight();
+    for (const r of state.ranges) all.add(r);
+    CSS.highlights.set("mygo-find", all);
     CSS.highlights.set("mygo-find-active", new Highlight(range));
   } else {
     const sel = getSelection();

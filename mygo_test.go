@@ -1160,7 +1160,8 @@ func TestMessagesAreBatched(t *testing.T) {
 
 func TestEventsWaitForDOMReady(t *testing.T) {
 	ev := newEventForTest[string](t, "test:early")
-	w, fw := testWindow(t, WindowOptions{})
+	// The page it navigates to is trusted: events go to trusted pages only.
+	w, fw := testWindow(t, WindowOptions{Page: PageOptions{TrustedOrigins: []string{"https://next.example"}}})
 	if err := ev.Emit(w, "first"); err != nil {
 		t.Fatal(err)
 	}

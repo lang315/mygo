@@ -28,6 +28,11 @@ interface ChannelState {
   end(): void;
 }
 
+// Taken as the bridge starts, before any script of the page, which may
+// replace them.
+const isArray = Array.isArray;
+const parse = JSON.parse;
+
 /** Reports an error thrown by page code without stopping the runtime. */
 const report = (err: unknown) =>
   setTimeout(() => {
@@ -36,8 +41,17 @@ const report = (err: unknown) =>
 
 /** Internal API called by the Go side through `window.__mygo`. */
 export interface Internal {
-  /** Delivers one or more messages from Go. */
-  receive(messages: Incoming | Incoming[]): void;
+  /**
+   * Delivers one or more messages from Go; a string is their JSON, which Go
+   * sends when a value has a "__proto__" member (a literal would make it the
+   * prototype).
+   */
+  receive(messages: Incoming | Incoming[] | string): void;
+  /**
+   * The page came back from the back/forward cache: Go dropped the replies of
+   * the calls it made before, and closed their channels.
+   */
+  restored(): void;
 }
 
 /** Error thrown by `call` when the Go method returns an error. */
@@ -257,7 +271,8 @@ export function createRuntime(
 
   const internal: Internal = {
     receive(messages) {
-      for (const msg of Array.isArray(messages) ? messages : [messages]) {
+      if (typeof messages === "string") messages = parse(messages) as Incoming[];
+      for (const msg of isArray(messages) ? messages : [messages]) {
         if (msg.t === "event") {
           // Before the listeners, which may read it.
           if (msg.n === "mygo:preferences") preferences = Object.freeze(msg.p as ThemePreferences);
@@ -304,6 +319,13 @@ export function createRuntime(
           if (msg.ok) p.resolve(msg.v);
           else p.reject(new CallError(p.method, msg.e ?? "unknown error"));
         }
+      }
+    },
+    restored() {
+      for (const [id, p] of pending) {
+        pending.delete(id);
+        p.channels?.forEach((c) => c.end());
+        p.reject(new CallError(p.method, "the page left before the call returned"));
       }
     },
   };

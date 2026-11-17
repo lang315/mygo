@@ -75,7 +75,9 @@ reported to the caller like an error.
 
 A method whose first parameter is a `context.Context` gets one that is
 canceled when the calling page navigates away or its window closes: pass it
-on to slow work. `mygo.CallerWindow(ctx)` returns the window that called,
+on to slow work. The reply of a call whose page left is dropped, not sent to
+the page that came; a page restored from the back/forward cache gets no
+reply to the calls it made before it left. `mygo.CallerWindow(ctx)` returns the window that called,
 for example to attach a dialog to it, and `mygo.CallerPage(ctx)` the page,
 which tells apart the pages of the web views of a window of native UI
 ([Web view](ui/web-view.md)):
@@ -241,7 +243,9 @@ Progress.Broadcast(ExportProgress{Done: 10, Total: 10})
 ```
 
 Events emitted before the page's DOM is ready are delivered once it is.
-`Emit` returns an error when the window was closed, which ends loops that
+`Emit` and `Broadcast` reach only pages that may call Go ([Who may
+call](#who-may-call)): a window that navigated to another site gets none.
+`EmitPage` sends to the page given, whatever it is. `Emit` returns an error when the window was closed, which ends loops that
 feed a window:
 
 ```go

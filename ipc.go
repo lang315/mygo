@@ -437,12 +437,14 @@ func stringBytes(s string) []byte { return unsafe.Slice(unsafe.StringData(s), le
 // rejected.
 func handleCall(w *Window, ctx context.Context, raw string, trusted bool) {
 	m, err := parseCall(stringBytes(raw)) // shares raw
+	var result any
 	if err != nil {
 		log.Printf("mygo: malformed call from window %d: %v", w.id, err)
-		return
-	}
-	var result any
-	if w.untrusted {
+		if m.token == "" {
+			return // nothing to address a reply to (the bridge sends id and k first)
+		}
+		err = fmt.Errorf("malformed call: %w", err)
+	} else if w.untrusted {
 		err = errors.New("this page is untrusted (PageOptions.Untrusted) and may not call Go methods")
 	} else if !trusted {
 		err = fmt.Errorf("this page is not allowed to call Go methods (see PageOptions.TrustedOrigins)")
@@ -478,8 +480,13 @@ func encodeReply(id int64, token string, doc context.Context, result any, err er
 }
 
 // encodeResult encodes the result of a call. Methods that return nothing, and the
-// windows' own, need no codec.
-func encodeResult(result any) ([]byte, error) {
+// windows' own, need no codec. A MarshalJSON that panics makes an error.
+func encodeResult(result any) (b []byte, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			b, err = nil, fmt.Errorf("panic: %v", p)
+		}
+	}()
 	switch v := result.(type) {
 	case nil:
 		return []byte("null"), nil
@@ -561,12 +568,14 @@ func (e *Event[T]) Name() string { return e.name }
 // views of a window showing native UI (WebView) but untrusted ones
 // (PageOptions.Untrusted) and ones without bindings
 // (WebViewOptions.NoBindings). Events sent before the page's DOM is ready are
-// delivered once it is.
+// delivered once it is. A page the app does not trust (one that may not call
+// Go methods, see PageOptions.TrustedOrigins) gets none.
 func (e *Event[T]) Emit(w *Window, payload T) error {
 	msg, err := encodeEvent(e.name, payload)
 	if err != nil {
 		return err
 	}
+	msg.app = true // for trusted pages only (Window.flush)
 	if w.IsDestroyed() {
 		return errDestroyed
 	}
@@ -586,7 +595,7 @@ func (e *Event[T]) Emit(w *Window, payload T) error {
 }
 
 // EmitPage sends the event to a page: of a window, or of a web view
-// (WebView.Page).
+// (WebView.Page), whether the app trusts it or not.
 func (e *Event[T]) EmitPage(p *Page, payload T) error {
 	msg, err := encodeEvent(e.name, payload)
 	if err != nil {
@@ -600,13 +609,14 @@ func (e *Event[T]) EmitPage(p *Page, payload T) error {
 }
 
 // Broadcast sends the event to every window, and the web views in them,
-// but to untrusted pages (PageOptions.Untrusted) and pages without bindings
-// (WebViewOptions.NoBindings).
+// but to untrusted pages (PageOptions.Untrusted), pages without bindings
+// (WebViewOptions.NoBindings) and pages the app does not trust, as Emit.
 func (e *Event[T]) Broadcast(payload T) error {
 	msg, err := encodeEvent(e.name, payload)
 	if err != nil {
 		return err
 	}
+	msg.app = true // for trusted pages only (Window.flush)
 	for _, w := range pageWindows() {
 		if !w.hostile() {
 			w.enqueue(msg, true)
