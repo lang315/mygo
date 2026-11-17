@@ -454,6 +454,10 @@ func (b *docBase) askPath(title, button, nameLabel string) (string, error) {
 	}
 	if filepath.Ext(target) == "" {
 		target += "." + ext // GTK's dialog adds none
+		// The dialog asked about the name typed, not about this one.
+		if err := b.confirmReplace(target); err != nil {
+			return "", err
+		}
 	}
 	return target, nil
 }
@@ -520,18 +524,28 @@ func (b *docBase) moveTo(dir string) error {
 	if target == path {
 		return nil
 	}
-	if _, err := os.Lstat(target); err == nil {
-		tx := menuMessages()
-		r, err := Dialog.Message(MessageOptions{
-			Parent: b.parent(), Type: MessageWarning, Buttons: []string{tx.ReplaceFile(), tx.Cancel()}, CancelButton: 1,
-			Message: tx.AlreadyExists(filepath.Base(target)),
-			Detail:  tx.AlreadyExistsDetail(),
-		})
-		if err != nil || r.Button != 0 {
-			return ErrCanceled
-		}
+	if err := b.confirmReplace(target); err != nil {
+		return err
 	}
 	return b.relocate(target)
+}
+
+// confirmReplace asks whether to replace the file at target, if there is
+// one that is not b's own, and returns ErrCanceled unless the user agrees.
+func (b *docBase) confirmReplace(target string) error {
+	if _, err := os.Lstat(target); err != nil || target == b.Path() {
+		return nil
+	}
+	tx := menuMessages()
+	r, err := Dialog.Message(MessageOptions{
+		Parent: b.parent(), Type: MessageWarning, Buttons: []string{tx.ReplaceFile(), tx.Cancel()}, CancelButton: 1,
+		Message: tx.AlreadyExists(filepath.Base(target)),
+		Detail:  tx.AlreadyExistsDetail(),
+	})
+	if err != nil || r.Button != 0 {
+		return ErrCanceled
+	}
+	return nil
 }
 
 // renameFile is os.Rename, which tests replace to fail across devices.
@@ -638,7 +652,8 @@ func documentsBeforeQuit(e *QuitEvent) {
 	}
 	if e.SessionEnding {
 		// The OS ends the session: no question, and nothing to wait for.
-		// Each document is saved in place or kept, right away.
+		// Each document is saved in place or kept, right away; a failed
+		// backup cannot be asked about, as the session is over.
 		for _, b := range edited {
 			b.mu.Lock()
 			autosaves, path := b.autosavesLocked(), b.path
@@ -692,7 +707,11 @@ func resolveQuit(docs []*docBase) bool {
 				mu.Unlock()
 				return
 			}
-			b.backup()
+			if !b.backup() {
+				mu.Lock()
+				ask = append(ask, b)
+				mu.Unlock()
+			}
 		})
 	}
 	wg.Wait()

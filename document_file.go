@@ -96,16 +96,20 @@ const (
 	writeSaveAs                   // to another file, which the document becomes
 )
 
+// writeMoved is called when a write moved the document, before it is added
+// to the recent documents; tests replace it.
+var writeMoved = func() {}
+
 // write writes the document to target. It reports whether it wrote
 // anything: a document whose file another app changed is not written
 // (ErrDocumentChanged), but marked in conflict.
 func (b *docBase) write(target string, op writeOp) (bool, error) {
 	snap := b.ops.capture()
 	b.io.Lock()
-	defer b.io.Unlock()
 	b.mu.Lock()
 	if b.closed && op == writeAutosave {
 		b.mu.Unlock()
+		b.io.Unlock()
 		return false, nil
 	}
 	known, deleted := b.stamp, b.deleted
@@ -113,6 +117,7 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 	if op == writeSave || op == writeAutosave {
 		now, exists, err := statStamp(target)
 		if err != nil {
+			b.io.Unlock()
 			return false, err
 		}
 		if exists && (!now.same(known) || deleted) {
@@ -123,11 +128,13 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 			if !was {
 				b.notify()
 			}
+			b.io.Unlock()
 			return false, ErrDocumentChanged
 		}
 	}
 	written, err := writeFileSafely(target, snap.write)
 	if err != nil {
+		b.io.Unlock()
 		return false, err
 	}
 	b.mu.Lock()
@@ -156,7 +163,10 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 	if drop {
 		b.kind.recovery.remove(b)
 	}
+	// Unlocked: addRecent waits for the main thread, which may wait for b.io.
+	b.io.Unlock()
 	if moved {
+		writeMoved()
 		addRecent(target)
 		b.watch()
 	}
