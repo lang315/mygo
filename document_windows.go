@@ -55,3 +55,5 @@ func lockFile(f *os.File) error {
 func lockBusy(err error) bool {
 	return errors.Is(err, syscall.Errno(33)) // ERROR_LOCK_VIOLATION
 }
+
+func fileOwnedByOther(os.FileInfo) bool { return false }
