@@ -17,7 +17,10 @@ func TestDocumentMoveKeepsTheMode(t *testing.T) {
 	}
 	dir := t.TempDir()
 	from, to := filepath.Join(dir, "a"), filepath.Join(dir, "b")
-	if err := os.WriteFile(from, []byte("x"), 0o600); err != nil {
+	if err := os.WriteFile(from, []byte("x"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(from, 0o640); err != nil { // the umask may have cleared bits
 		t.Fatal(err)
 	}
 	if err := copyFile(from, to); err != nil {
@@ -27,8 +30,8 @@ func TestDocumentMoveKeepsTheMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Errorf("mode = %v, want 0600", got)
+	if got := info.Mode().Perm(); got != 0o640 {
+		t.Errorf("mode = %v, want 0640", got)
 	}
 }
 
@@ -71,6 +74,7 @@ func TestWriteFileSafelyRoutesAnotherUsersFileInPlace(t *testing.T) {
 	}
 	for _, other := range []bool{true, false} {
 		old := ownedByOther
+		t.Cleanup(func() { ownedByOther = old })
 		ownedByOther = func(os.FileInfo) bool { return other }
 		path := filepath.Join(t.TempDir(), "f")
 		if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
@@ -81,7 +85,6 @@ func TestWriteFileSafelyRoutesAnotherUsersFileInPlace(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = writeFileSafely(path, func(w io.Writer) error { _, err := io.WriteString(w, "new"); return err })
-		ownedByOther = old
 		if err != nil {
 			t.Fatal(err)
 		}
