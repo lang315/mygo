@@ -140,7 +140,7 @@ func writeInstaller(c *Config, stage, work, exe, goarch string, installed []stri
 		}
 		ico, err := pngToICO(src)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("icon %s: %w", c.Icon, err)
 		}
 		path := filepath.Join(work, "installer.ico")
 		if err := os.WriteFile(path, ico, 0o644); err != nil {

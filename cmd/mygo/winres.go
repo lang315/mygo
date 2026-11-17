@@ -51,7 +51,7 @@ func winresSyso(c *Config, goarch string) ([]byte, error) {
 		}
 		images, err := iconImages(src)
 		if err != nil {
-			return nil, fmt.Errorf("icon: %w", err)
+			return nil, fmt.Errorf("icon %s: %w", c.Icon, err)
 		}
 		res[rtIcon] = map[uint16][]byte{}
 		var group bytes.Buffer

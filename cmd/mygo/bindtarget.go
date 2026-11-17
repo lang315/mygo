@@ -255,6 +255,22 @@ func targetBoundTypes(c *Config, goos, goarch, tags, mainPkg string, bound []bou
 		}
 		out = append(out, b)
 	}
+	// The scan ranged over a map: sort, so that builds of the same source have the same bytes.
+	slices.SortStableFunc(out, func(x, y boundType) int {
+		if d := strings.Compare(x.Pkg, y.Pkg); d != 0 {
+			return d
+		}
+		if d := strings.Compare(x.Type, y.Type); d != 0 {
+			return d
+		}
+		switch {
+		case x.Pointer == y.Pointer:
+			return 0
+		case !x.Pointer:
+			return -1
+		}
+		return 1
+	})
 	return out, "", nil
 }
 

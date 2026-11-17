@@ -200,6 +200,9 @@ func prepareNative(c *Config, goos, goarch string, mode nativeMode) (err error) 
 			}
 		}
 	}
+	if err := checkNativeNames(c, app.builds); err != nil {
+		return err
+	}
 	// The app's own keys come last and win.
 	if app.info != nil {
 		for k := range c.MacOS.InfoPlist {
@@ -208,6 +211,20 @@ func prepareNative(c *Config, goos, goarch string, mode nativeMode) (err error) 
 	}
 	if len(app.builds) > 0 || app.info != nil || app.entitlements != nil {
 		c.native = app
+	}
+	return nil
+}
+
+// checkNativeNames fails when two builds have a library of the same file
+// name: installNative would put the second over the first.
+func checkNativeNames(c *Config, builds []nativeBuild) error {
+	owner := map[string]string{}
+	for _, b := range builds {
+		name := filepath.Base(b.dylib)
+		if prev, ok := owner[name]; ok {
+			return fmt.Errorf("native modules %s and %s both build %s: give their Go packages different names", prev, relPathTo(c.root, b.dir), name)
+		}
+		owner[name] = relPathTo(c.root, b.dir)
 	}
 	return nil
 }
