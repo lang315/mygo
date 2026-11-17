@@ -60,11 +60,11 @@ func TestAPNGRefusesHugeHeader(t *testing.T) {
 		t.Errorf("refusing a 60000×60000 PNG allocated %d MB", n>>20)
 	}
 
-	// At the cap, and a pixel past it (3 × 11184811 = 1<<25 + 1).
-	if _, err := NewAPNGDecoder(pngOf(8192, 4096, []byte("x"))); err != nil {
+	// At the cap, and a pixel past it (5 × 13421773 = 1<<26 + 1).
+	if _, err := NewAPNGDecoder(pngOf(8192, 8192, []byte("x"))); err != nil {
 		t.Errorf("a PNG of MaxImagePixels: %v", err)
 	}
-	if _, err := NewAPNGDecoder(pngOf(3, 11184811, []byte("x"))); err == nil {
+	if _, err := NewAPNGDecoder(pngOf(5, 13421773, []byte("x"))); err == nil {
 		t.Error("a PNG of MaxImagePixels+1 decoded")
 	}
 
@@ -92,11 +92,17 @@ func TestDecodeBitmapRefusesHugeImage(t *testing.T) {
 		t.Errorf("refusing a 20000×20000 PNG allocated %d MB", n>>20)
 	}
 
-	if _, err := DecodeBitmap(grayPNG(t, 8192, 4096)); err != nil {
+	if _, err := DecodeBitmap(grayPNG(t, 8192, 8192)); err != nil {
 		t.Errorf("a PNG of MaxImagePixels: %v", err)
 	}
-	if _, err := DecodeBitmap(grayPNG(t, 3, 11184811)); err == nil {
+	if _, err := DecodeBitmap(grayPNG(t, 5, 13421773)); err == nil {
 		t.Error("a PNG of MaxImagePixels+1 decoded")
+	}
+	// A phone's 48-megapixel photo.
+	if bm, err := DecodeBitmap(grayPNG(t, 8064, 6048)); err != nil {
+		t.Errorf("an 8064×6048 PNG: %v", err)
+	} else if w, h := bm.Size(); w != 8064 || h != 6048 {
+		t.Errorf("an 8064×6048 PNG decoded to %d×%d", w, h)
 	}
 
 	bm, err := DecodeBitmap(grayPNG(t, 4096, 4096))

@@ -121,10 +121,10 @@ func weakOf[T any, P interface {
 }
 
 // MaxImagePixels is how many pixels (width × height) an image DecodeBitmap
-// or NewAPNGDecoder decodes may have, 32 megapixels (8192×4096): larger is
+// or NewAPNGDecoder decodes may have, 67 megapixels (8192×8192): larger is
 // an error, read from its header, so that a small file claiming a huge size
 // takes no gigabytes to decode.
-const MaxImagePixels = 1 << 25
+const MaxImagePixels = 1 << 26
 
 // DecodeBitmap decodes a PNG image, and a GIF (its first frame), JPEG, WebP or
 // BMP image once the program imports its decoder, which an app that has none

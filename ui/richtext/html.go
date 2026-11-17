@@ -143,7 +143,7 @@ func side(v float32) float32 {
 // pastedPixels is how many pixels the pictures of one paste may have in
 // all, so that many pictures, each under ui.MaxImagePixels, take no
 // gigabytes to decode: those past it keep their URL, as one too large.
-const pastedPixels = 4 * ui.MaxImagePixels
+const pastedPixels = 2 * ui.MaxImagePixels
 
 // imagePixels returns how many pixels the picture of data has, 0 for one
 // that cannot be decoded or is larger than ui.MaxImagePixels.

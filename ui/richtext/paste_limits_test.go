@@ -14,10 +14,10 @@ import (
 )
 
 func TestPastedHTMLImageBudget(t *testing.T) {
-	// 5792² pixels is just under ui.MaxImagePixels; four of them fill the
-	// budget.
-	const side = 5792
-	if side*side > ui.MaxImagePixels || (side+1)*(side+1) <= ui.MaxImagePixels {
+	// 8191² pixels is just under ui.MaxImagePixels (8192²); two of them fill
+	// the budget.
+	const side = 8191
+	if side*side >= ui.MaxImagePixels || (side+1)*(side+1) < ui.MaxImagePixels {
 		t.Fatalf("%d² is not just under the cap", side)
 	}
 	var buf bytes.Buffer
@@ -45,12 +45,13 @@ func TestPastedHTMLImageBudget(t *testing.T) {
 			}
 		}
 	}
-	if decoded != 4 || refused != 4 {
-		t.Errorf("%d images decoded, %d refused; want 4 and 4", decoded, refused)
+	if decoded != 2 || refused != 6 {
+		t.Errorf("%d images decoded, %d refused; want 2 and 6", decoded, refused)
 	}
 
 	// A picture cut short fails only once its pixels are allocated: it
-	// takes its share of the budget, so eight cost what four do.
+	// takes its share of the budget, so eight cost what four do (two
+	// each).
 	cut := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()[:buf.Len()/2])
 	parse := func(n int) uint64 {
 		var before, after runtime.MemStats
