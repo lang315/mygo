@@ -130,6 +130,9 @@ func (s *service) fetch(ctx context.Context, req request, send func(part) error)
 		} else if len(via) >= 20 { // as browsers
 			return errors.New("too many redirects")
 		}
+		if s.opts.Allow != nil && !s.opts.Allow(next) {
+			return fmt.Errorf("the app does not allow requests to %s", next.URL.Redacted())
+		}
 		redirected = true
 		return nil
 	}

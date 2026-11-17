@@ -390,9 +390,8 @@ func (c *conn) inTurn(seq int64, fn func() error) error {
 // close starts the closing handshake: the connection is dropped if the
 // server does not finish it in time.
 func (c *conn) close(code int, reason string, timeout time.Duration) error {
-	err := c.writeClose(code, reason)
-	time.AfterFunc(timeout, c.terminate)
-	return err
+	time.AfterFunc(timeout, c.terminate) // first: a stuck write holds writeClose
+	return c.writeClose(code, reason)
 }
 
 // terminate drops the connection.

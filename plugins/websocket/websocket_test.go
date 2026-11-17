@@ -216,3 +216,23 @@ func TestWebSocketCloseTimeout(t *testing.T) {
 		t.Errorf("close without an answer: %+v", e)
 	}
 }
+
+func TestCloseDropsAStalledConnection(t *testing.T) {
+	a, b := net.Pipe() // writes block until the other end reads
+	defer b.Close()
+	c := newConn(a, nil, false, 1<<20)
+	go c.writeFrame(opBinary, make([]byte, 1<<16)) // stuck: b never reads
+	wait.Until(t, "the write to block", func() bool {
+		if c.wmu.TryLock() {
+			c.wmu.Unlock()
+			return false
+		}
+		return true
+	})
+	go c.close(1000, "", 100*time.Millisecond)
+	wait.Until(t, "the connection to be dropped", func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.done
+	})
+}
