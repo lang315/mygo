@@ -184,3 +184,21 @@ func TestFetchStops(t *testing.T) {
 		t.Errorf("got %q, %v", got, err)
 	}
 }
+
+func TestAllowSeesRedirects(t *testing.T) {
+	hit := false
+	b := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit = true }))
+	defer b.Close()
+	a := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, b.URL, http.StatusFound)
+	}))
+	defer a.Close()
+	s := New(Options{Allow: func(r *http.Request) bool { return r.URL.Host == a.Listener.Addr().String() }}).Service.(*service)
+	_, err := run(t, s, request{URL: a.URL, Method: "GET"})
+	if err == nil || !strings.Contains(err.Error(), "does not allow") {
+		t.Errorf("err = %v; want the app does not allow", err)
+	}
+	if hit {
+		t.Error("the redirect's target got a request")
+	}
+}

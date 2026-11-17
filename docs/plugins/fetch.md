@@ -163,8 +163,8 @@ mygo.Use(fetch.New(fetch.Options{
   same proxies.
 - `Allow` sees each request before Go makes it, with its URL, method and
   headers, and decides whether pages may make it: a request it refuses
-  rejects with an error. It sees the first request only, not the
-  redirects that follow, which the client's `CheckRedirect` can refuse.
+  rejects with an error. It sees every request, the
+  redirects that follow included.
 
 Only the app's own pages may call the plugin, as with every bound method
 (see [who may call](../bindings.md#who-may-call)); `Allow` keeps a page
