@@ -6837,7 +6837,7 @@ runs them:
 ```sh
 bun scripts/bench.ts run                 # every package's Go benchmarks, and app sizes
 bun scripts/bench.ts run --e2e           # internal/e2e's too, in a desktop session
-bun scripts/bench.ts run ./ui --count 3  # one package, fewer runs
+bun scripts/bench.ts run ./ui --count 3  # one package, fewer runs, no apps
 ```
 
 It finds the packages with benchmarks and runs them one at a time

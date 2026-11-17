@@ -7,8 +7,9 @@
 //
 // run measures the checkout it runs in: the Go benchmarks of every package
 // that has some but those of --skip (or of the packages given), those of internal/e2e with
-// --e2e, which need a desktop session, the size of release builds of two
-// examples, and with --e2e their memory once idle (internal/idlemem).
+// --e2e, which need a desktop session, and, without packages given, the
+// size of release builds of the examples, and with --e2e their memory once
+// idle (internal/idlemem).
 // Packages run one at a time, each benchmark --count times, as each app,
 // and the median of each metric is kept.
 //
@@ -105,8 +106,15 @@ async function run(args: string[]): Promise<void> {
     else if (arg === "--skip") skip.add(args[++i]!);
     else pkgs.push(arg);
   }
-  // Windows names them with backslashes.
-  if (!pkgs.length) pkgs.push(...(await benchmarkPackages(e2e)).filter((p) => !skip.has(p.replaceAll("\\", "/"))));
+  // Packages given are a part, as a shard of bench.yml: the apps are measured
+  // with the rest.
+  const whole = !pkgs.length;
+  if (whole) {
+    // Windows names them with backslashes.
+    const found = (await benchmarkPackages(e2e)).map((p) => p.replaceAll("\\", "/"));
+    for (const p of skip) if (!found.includes(p)) throw new Error(`--skip ${p}: no package of that name has benchmarks`);
+    pkgs.push(...found.filter((p) => !skip.has(p)));
+  }
 
   const [goVersion, goos, goarch] = output(["go", "env", "GOVERSION", "GOOS", "GOARCH"]).split("\n");
   const [sha, date, message] = output(["git", "log", "-1", "--format=%H%n%cI%n%s"]).split("\n");
@@ -116,8 +124,8 @@ async function run(args: string[]): Promise<void> {
     e2e ? { MYGO_E2E: "1" } : {},
   );
   const { cpu, results } = parse(test.output);
-  const measured = await measureApps(goos!, e2e, count);
-  results.size = measured.size;
+  const measured: Partial<Awaited<ReturnType<typeof measureApps>>> = whole ? await measureApps(goos!, e2e, count) : {};
+  if (measured.size) results.size = measured.size;
   if (measured.memory) results.memory = measured.memory;
 
   const result: Run = {
@@ -355,6 +363,7 @@ export async function mergeRuns(dir: string, runs: Run[], keep = latestCommits):
     for (const [pkg, benchmarks] of Object.entries(r.results)) {
       run.results[pkg] = benchmarks;
       if (r.cpu !== run.cpu) (run.cpus ??= {})[pkg] = r.cpu;
+      else delete run.cpus?.[pkg];
     }
   }
   for (const [day, commits] of days) {
@@ -389,7 +398,10 @@ export function latest(commits: Commit[]): Latest {
   commits.forEach((c, i) => {
     for (const [os, r] of Object.entries(c.runs)) {
       (data.runners[os] ??= Array(n).fill(null))[i] = { arch: r.arch, cpu: r.cpu, go: r.go };
-      for (const [pkg, cpu] of Object.entries(r.cpus ?? {})) ((((data.cpus ??= {})[os] ??= {})[pkg] ??= Array(n).fill(null)) as (string | null)[])[i] = cpu;
+      for (const [pkg, cpu] of Object.entries(r.cpus ?? {})) {
+        const byPkg = ((data.cpus ??= {})[os] ??= {});
+        (byPkg[pkg] ??= Array<string | null>(n).fill(null))[i] = cpu;
+      }
       const byPkg = (data.series[os] ??= {});
       for (const [pkg, benchmarks] of Object.entries(r.results)) {
         for (const [name, metrics] of Object.entries(benchmarks)) {
