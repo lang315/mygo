@@ -383,6 +383,14 @@ func buildPlatform(c *Config, goos, goarch string, opts buildOptions) ([]string,
 		if err := t.end(codesign(c, app, opts.sign, true), "Signed "+filepath.Base(app)); err != nil {
 			return nil, err
 		}
+		// Notarized and stapled before the dmg, the update archive and
+		// the upload take it, so that the copy users get has its ticket,
+		// which Gatekeeper reads when it cannot ask Apple.
+		if c.MacOS.Notarize != nil && !opts.skipNotarize && runtime.GOOS == "darwin" {
+			if err := notarizeAppStep(c.MacOS.Notarize, app); err != nil {
+				return nil, err
+			}
+		}
 		artifacts = append(artifacts, app)
 		switch {
 		case opts.skipDMG:

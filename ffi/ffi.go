@@ -245,14 +245,17 @@ func localDirs() []string {
 
 // localDirsFrom returns where the CLI puts the libraries it builds in the
 // module of dir, and of the directories above it up to that module's
-// root.
+// root; none without a module.
 func localDirsFrom(dir string) []string {
 	var dirs []string
 	for {
 		dirs = append(dirs, nativelib.LocalDir(dir, runtime.GOOS, runtime.GOARCH))
-		parent := filepath.Dir(dir)
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil || parent == dir {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dirs
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return nil // no module: a library planted above the program is not its own
 		}
 		dir = parent
 	}

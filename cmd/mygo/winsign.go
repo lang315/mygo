@@ -230,5 +230,5 @@ func shellQuote(s string) string {
 	if runtime.GOOS == "windows" {
 		return `"` + s + `"`
 	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return shQuote(s)
 }

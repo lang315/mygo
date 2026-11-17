@@ -220,3 +220,16 @@ func TestGoString(t *testing.T) {
 		t.Error("GoString(nil)")
 	}
 }
+
+func TestLocalDirsStopWithoutAModule(t *testing.T) {
+	if dirs := localDirsFrom(t.TempDir()); dirs != nil {
+		t.Errorf("localDirsFrom without a go.mod = %q", dirs)
+	}
+	mod := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module m\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if dirs := localDirsFrom(filepath.Join(mod, "a")); len(dirs) != 2 {
+		t.Errorf("localDirsFrom in a module = %q", dirs)
+	}
+}

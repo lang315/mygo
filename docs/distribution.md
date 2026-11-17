@@ -579,8 +579,9 @@ installer, so they run none of the macros. Functions that
 The installer installs for the current user without administrator rights,
 so that the app can update itself: the hooks should keep to what the user
 can write, such as `$LOCALAPPDATA` and `HKCU`. The installer already lets
-the user choose the folder, and the uninstaller removes the app's folder
-only, keeping the app's data. Signing applies to the installer and its
+the user choose the folder: one that already holds files, and is not an
+install of the app, gets the app's folder name appended, since the
+uninstaller removes the app's folder whole, keeping the app's data. Signing applies to the installer and its
 uninstaller as it does without hooks.
 
 ### Code signing

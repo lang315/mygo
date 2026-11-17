@@ -370,29 +370,12 @@ func (t *task) set(detail string) {
 	t.c.mu.Unlock()
 }
 
-// rename changes the step's title, as when it moves on to its next part.
-func (t *task) rename(title string) {
-	if t == nil {
-		return
-	}
-	t.c.mu.Lock()
-	t.title, t.detail = title, ""
-	t.c.mu.Unlock()
-}
-
 func (t *task) elapsed() string { return formatDuration(time.Since(t.start)) }
 
 // done ends the step with msg, and how long the step took.
 func (t *task) done(msg string) {
 	if t != nil {
 		t.finish("  " + green(t.c.sym.ok) + " " + msg + "  " + dim(t.elapsed()) + "\n")
-	}
-}
-
-// doneAs ends the step with msg alone, which tells how long it took.
-func (t *task) doneAs(msg string) {
-	if t != nil {
-		t.finish("  " + green(t.c.sym.ok) + " " + msg + "\n")
 	}
 }
 

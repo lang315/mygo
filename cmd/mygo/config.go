@@ -311,6 +311,22 @@ func readConfig(root string) (data []byte, file string, err error) {
 }
 
 func (c *Config) validate() error {
+	for field, v := range map[string]string{"name": c.Name, "linux.comment": c.Linux.Comment} {
+		if hasControl(v) {
+			return fmt.Errorf("%s holds a control character, a new line for one", field)
+		}
+	}
+	for _, v := range c.Linux.Categories {
+		if hasControl(v) {
+			return errors.New("linux.categories holds a control character, a new line for one")
+		}
+	}
+	// An empty name is the project folder's, which applyDefaults fills in.
+	// The uninstaller removes the install folder, which must not resolve to
+	// Programs or above it, as "." or ".." do on Windows.
+	if c.Name != "" && c.Windows.InstallDirName == "" && c.installDirName() == "" {
+		return fmt.Errorf("name %q makes no folder for the app on Windows: give it some letters or set windows.installDirName", c.Name)
+	}
 	if n := c.MacOS.Notarize; n != nil && n.KeychainProfile == "" {
 		return errors.New("macos.notarize needs a keychainProfile (see xcrun notarytool store-credentials)")
 	}
@@ -574,12 +590,14 @@ func (c *Config) shortcutName() string {
 }
 
 // installDirName returns the name of the app's install folder on Windows:
-// windows.installDirName, or else Name made a file name.
+// windows.installDirName, or else Name made a file name, as Windows names
+// the folder: without trailing dots and spaces.
 func (c *Config) installDirName() string {
 	if n := strings.TrimSpace(c.Windows.InstallDirName); n != "" {
 		return n
 	}
-	return fsName(c.Name)
+	// Windows drops trailing dots and spaces from a folder's name.
+	return strings.TrimRight(fsName(c.Name), ". ")
 }
 
 // reservedFileName matches the names Windows keeps for devices, which no
@@ -611,6 +629,11 @@ func (c *Config) slug() string {
 		return c.Slug
 	}
 	return slugify(c.executableName())
+}
+
+// hasControl reports whether s holds a control character.
+func hasControl(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return r < ' ' || r == 0x7f })
 }
 
 // fsName makes s usable as a file name on every platform.

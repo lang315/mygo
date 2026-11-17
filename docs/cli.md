@@ -206,7 +206,7 @@ content so that it can be cached for good, and the icon. See
 | `-o` | the output directory (default: `out` of the configuration) |
 | `-sign` | the macOS signing identity (default: `macos.signingIdentity`) |
 | `-skip-build-command` | does not run `buildCommand` |
-| `-skip-dmg` | does not make macOS disk images |
+| `-skip-dmg` | does not make macOS disk images (the app is still notarized, unless `-skip-notarize`) |
 | `-skip-notarize` | does not notarize, even with `macos.notarize` set |
 | `-skip-installer` | does not make Windows installers, nor download NSIS or, with `windows.webview2` `embed`, the WebView2 bootstrapper for them (nor `install.ps1`, which runs the installer) |
 | `-upload` | uploads the installers and updates to a draft GitHub release of the version (`updates.github`), with `gh`, or to the bucket of `updates.s3` |

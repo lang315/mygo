@@ -144,8 +144,16 @@ func debVersion(v string) string {
 	if i := strings.IndexByte(v, '-'); i >= 0 {
 		v = v[:i] + "~" + strings.ReplaceAll(v[i+1:], "-", ".")
 	}
-	return strings.ReplaceAll(v, "+", "~")
+	v = debVersionRe.ReplaceAllString(strings.ReplaceAll(v, "+", "~"), ".")
+	if v == "" {
+		return "0"
+	}
+	return v
 }
+
+// debVersionRe matches what a version may not hold, here or in the file
+// name of the package (a "_" or "/" there would end its part or the folder).
+var debVersionRe = regexp.MustCompile(`[^A-Za-z0-9.+~]+`)
 
 // writeDeb packages the Linux app in stage, the executable name and the
 // files next to it, as a Debian package: the app in /opt/<name>, a link in
@@ -264,7 +272,7 @@ func writeDeb(c *Config, stage, name, goarch string, app []string) (string, erro
 			deb.WriteByte('\n')
 		}
 	}
-	out := filepath.Join(stage, fmt.Sprintf("%s_%s_%s.deb", name, debVersion(c.Version), arch))
+	out := filepath.Join(stage, fmt.Sprintf("%s_%s_%s.deb", fsName(name), debVersion(c.Version), arch))
 	return out, os.WriteFile(out, deb.Bytes(), 0o644)
 }
 

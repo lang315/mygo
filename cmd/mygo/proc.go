@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -34,12 +35,38 @@ func command(name string, args ...string) error {
 	return nil
 }
 
+// activeRun is the command run is running, which Ctrl+C stops with its
+// process group before mygo exits.
+var activeRun struct {
+	sync.Mutex
+	cmd *exec.Cmd
+}
+
+// stopRunning terminates the command run is running, if any.
+func stopRunning() {
+	activeRun.Lock()
+	defer activeRun.Unlock()
+	if activeRun.cmd != nil {
+		terminate(activeRun.cmd)
+	}
+}
+
 // run runs a command line as the step t, its output labeled with label.
 func run(t *task, label, dir, line string, env ...string) error {
 	t.set(line)
 	cmd := shellCommand(dir, line, env...)
 	out, errOut := labeledOutput(cmd, label)
-	err := waited(cmd.Run())
+	err := cmd.Start()
+	if err == nil {
+		activeRun.Lock()
+		activeRun.cmd = cmd // Ctrl+C can stop it now: it has a process
+		activeRun.Unlock()
+		err = cmd.Wait()
+	}
+	err = waited(err)
+	activeRun.Lock()
+	activeRun.cmd = nil
+	activeRun.Unlock()
 	out.flush()
 	errOut.flush()
 	if err != nil {
@@ -238,10 +265,14 @@ func writeClient(ctx context.Context, c *Config, asked bool) error {
 		return nil
 	}
 	t := con.start("Generating the TypeScript client")
-	bin := tempBinary(c.executableName())
-	defer os.Remove(bin)
+	bin, cleanup, err := tempBinary(c.executableName())
+	if err != nil {
+		t.fail()
+		return err
+	}
+	defer cleanup()
 	changed := false
-	err := goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
+	err = goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
 	if err == nil {
 		t.set("running the app in generate mode")
 		changed, err = generateBindings(c, bin)
@@ -292,14 +323,18 @@ func waitForURL(ctx context.Context, url string, exited <-chan error) error {
 	}
 }
 
-func tempBinary(name string) string {
-	dir := filepath.Join(os.TempDir(), "mygo-dev")
-	_ = os.MkdirAll(dir, 0o755)
+// tempBinary returns where to build a binary to run, in a private folder
+// (os.MkdirTemp, mode 0700) that cleanup removes.
+func tempBinary(name string) (path string, cleanup func(), err error) {
+	dir, err := os.MkdirTemp("", "mygo-gen-")
+	if err != nil {
+		return "", nil, err
+	}
 	name = strings.ReplaceAll(name, " ", "-")
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	return filepath.Join(dir, fmt.Sprintf("%s-%d", name, os.Getpid())+filepath.Ext(name))
+	return filepath.Join(dir, name), func() { os.RemoveAll(dir) }, nil
 }
 
 // waitDelay is how long Wait waits for the output of a command that exited

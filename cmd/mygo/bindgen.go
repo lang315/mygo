@@ -146,9 +146,13 @@ func listBoundTypes(ctx context.Context, c *Config) error {
 		return nil // writeClient listed them, or there is nothing to run for
 	}
 	t := con.start("Listing the services the app binds")
-	bin := tempBinary(c.executableName())
-	defer os.Remove(bin)
-	err := goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
+	bin, cleanup, err := tempBinary(c.executableName())
+	if err != nil {
+		t.fail()
+		return err
+	}
+	defer cleanup()
+	err = goBuild(ctx, c, t, bin, nil, generatorTags(c.root)...)
 	binds := false
 	if err == nil {
 		binds, err = bindsServices(bin)
