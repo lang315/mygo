@@ -49,7 +49,9 @@ func newFFmpegSink(ctx context.Context, spec videoSpec) (_ sink, err error) {
 		if s.sound, err = writeRaw(filepath.Dir(spec.path), spec.sound); err != nil {
 			return nil, err
 		}
-		args = append(args, "-f", "s16le", "-ar", strconv.Itoa(sampleRate), "-ac", "2", "-i", s.sound,
+		// file: keeps a path such as -d/x or concat:x/a from reading as an
+		// option or a protocol.
+		args = append(args, "-f", "s16le", "-ar", strconv.Itoa(sampleRate), "-ac", "2", "-i", "file:"+s.sound,
 			"-map", "0:v", "-map", "1:a")
 		if spec.container == webm {
 			args = append(args, "-c:a", "libopus")
@@ -59,7 +61,7 @@ func newFFmpegSink(ctx context.Context, spec videoSpec) (_ sink, err error) {
 		args = append(args, "-b:a", strconv.Itoa(spec.audioBitrate))
 	}
 	args = append(args, s.videoArgs()...)
-	args = append(args, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", spec.path)
+	args = append(args, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "file:"+spec.path)
 	// -nostdin keeps ffmpeg from reading keys; the frames come on its
 	// standard input all the same, as pipe:0.
 	s.cmd = exec.CommandContext(ctx, path, args...)

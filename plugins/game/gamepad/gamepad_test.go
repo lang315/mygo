@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+// TestEvdevEvent32Bit: an input_event is 16 bytes on 32-bit Linux (386,
+// arm), its time two 4-byte longs, and 24 on 64-bit.
+func TestEvdevEvent32Bit(t *testing.T) {
+	for _, word := range []int{4, 8} {
+		e := make([]byte, 2*word, 2*word+8)
+		for i := range e {
+			e[i] = 0xee // the time, which is not read
+		}
+		e = append(e, 0x01, 0x00, 0x30, 0x01, 0xff, 0xff, 0xff, 0xff) // EV_KEY, BTN_SOUTH, -1
+		if n := evdevSize(word); n != len(e) {
+			t.Errorf("word %d: size %d, want %d", word, n, len(e))
+		}
+		if typ, code, value := evdevEvent(e, word); typ != 0x01 || code != 0x130 || value != -1 {
+			t.Errorf("word %d: read %#x %#x %d, want EV_KEY BTN_SOUTH -1", word, typ, code, value)
+		}
+	}
+}
+
 // fakeDevice is a pad whose state a test sets.
 type fakeDevice struct {
 	id     string

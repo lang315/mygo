@@ -673,11 +673,15 @@ func (v *view) input(ev ui.InputEvent) bool {
 
 // systemOpens reports whether the system may open link, which OpenLink
 // left: one with a scheme other than file:, not a path the system would
-// run or open, as file:///x, \\host\share\x.exe, //host/x, C:\x or x.exe.
+// run or open, as file:///x, \\host\share\x.exe, //host/x, C:\x, x.exe or
+// x.exe:12, a file and its line.
 func systemOpens(link string) bool {
 	i := strings.IndexByte(link, ':')
 	if i < 2 {
 		return false // no scheme, or a drive letter
+	}
+	if strings.Contains(link[:i], ".") && strings.Trim(link[i+1:], "0123456789:") == "" {
+		return false
 	}
 	for j, c := range link[:i] {
 		letter := 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'

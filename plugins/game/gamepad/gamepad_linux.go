@@ -1,9 +1,8 @@
-//go:build linux && (amd64 || arm64)
+//go:build linux && (amd64 || arm64 || 386 || arm)
 
 package gamepad
 
 import (
-	"encoding/binary"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,6 +56,9 @@ const (
 	absMax   = 0x3f
 	keyMax   = 0x2ff
 )
+
+// word is the size of a long, 4 bytes on 386 and arm.
+const word = int(unsafe.Sizeof(uintptr(0)))
 
 // ioctl requests of evdev: _IOC(dir, 'E', nr, size).
 func ioc(dir, nr, size uintptr) uintptr { return dir<<30 | size<<16 | 'E'<<8 | nr }
@@ -121,7 +123,7 @@ func openEvdev(path string) *evdevPad {
 		syscall.Close(fd)
 		return nil
 	}
-	d := &evdevPad{path: path, fd: fd, buf: make([]byte, 24*64)}
+	d := &evdevPad{path: path, fd: fd, buf: make([]byte, evdevSize(word)*64)}
 	name := make([]byte, 256)
 	if ioctl(fd, eviocgname(uintptr(len(name))), unsafe.Pointer(&name[0])) {
 		d.title = strings.TrimRight(string(name), "\x00")
@@ -181,11 +183,9 @@ func (d *evdevPad) drain() bool {
 		if err != nil || n == 0 {
 			return false // ENODEV: unplugged
 		}
-		for i := 0; i+24 <= n; i += 24 {
-			e := d.buf[i:]
-			typ := binary.LittleEndian.Uint16(e[16:])
-			code := binary.LittleEndian.Uint16(e[18:])
-			value := int32(binary.LittleEndian.Uint32(e[20:]))
+		size := evdevSize(word)
+		for i := 0; i+size <= n; i += size {
+			typ, code, value := evdevEvent(d.buf[i:], word)
 			switch {
 			case typ == evSyn && code == synDropped:
 				// The kernel's buffer overflowed: the events up to the next
