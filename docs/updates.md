@@ -364,7 +364,8 @@ the archive or delta through its `Open`; `prereleases` is what
 `SetPrereleases` set, for a source with a beta channel. The URLs are the
 manifest's, so a service that writes its own manifests from those of
 `mygo build` may name the files by ids of its own, as long as the sizes
-and signatures stay. `SetSource(nil)` goes back to the feed.
+and signatures stay, and it carries `versionSignature` too, or every check
+fails. `SetSource(nil)` goes back to the feed.
 
 The feed itself is fetched by package `updatefeed`, which `mygo build`
 links into apps with `updates` and the update window of
