@@ -18,7 +18,7 @@ func TestNSISInstallsIntoTheAppFolderOfAFolderWithFiles(t *testing.T) {
 	_, section, _ := strings.Cut(script, "\nSection\n")
 	section, _, _ = strings.Cut(section, "SectionEnd")
 	want := []string{
-		`IfFileExists "$INSTDIR\Uninstall.exe" mygo_dir_ok`,
+		`IfFileExists "$INSTDIR\My App.exe" mygo_dir_ok`,
 		`FindFirst $0 $1 "$INSTDIR\*.*"`,
 		`StrCmp $1 "." mygo_scan_next`,
 		`StrCmp $1 ".." mygo_scan_next`,
@@ -42,6 +42,25 @@ func TestValidateRefusesABlankName(t *testing.T) {
 	}
 	if err := (&Config{Name: "   ", Windows: Windows{InstallDirName: "App"}}).validate(); err != nil {
 		t.Errorf("blank name with installDirName: %v", err)
+	}
+}
+
+func TestValidateRefusesDotNames(t *testing.T) {
+	for _, name := range []string{".", "..", "...", ". .", " . ", "con"} {
+		if err := (&Config{Name: name}).validate(); err == nil {
+			t.Errorf("name %q was accepted", name)
+		}
+	}
+	if err := (&Config{Name: ".", Windows: Windows{InstallDirName: "App"}}).validate(); err != nil {
+		t.Errorf("a dot name with installDirName: %v", err)
+	}
+	// A project folder called "..." gives the default name.
+	dir := filepath.Join(t.TempDir(), "...")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Skip(err)
+	}
+	if _, err := loadConfig(dir); err == nil {
+		t.Error("a default name from a folder called ... was accepted")
 	}
 }
 

@@ -321,9 +321,13 @@ func (c *Config) validate() error {
 			return errors.New("linux.categories holds a control character, a new line for one")
 		}
 	}
-	// An empty name is the project folder's, which loadConfig fills in later.
-	if c.Name != "" && c.Windows.InstallDirName == "" && fsName(c.Name) == "" {
-		return errors.New("name makes no folder name for the app on Windows: give it some letters or set windows.installDirName")
+	// An empty name is the project folder's, which applyDefaults fills in.
+	// The uninstaller removes the install folder, which must be a folder of
+	// its own, not Programs for ".".
+	if c.Name != "" && c.Windows.InstallDirName == "" {
+		if err := checkFolderName(fsName(c.Name)); err != nil {
+			return fmt.Errorf("name %q makes the name of the app's folder on Windows, which %w; set windows.installDirName", c.Name, err)
+		}
 	}
 	if n := c.MacOS.Notarize; n != nil && n.KeychainProfile == "" {
 		return errors.New("macos.notarize needs a keychainProfile (see xcrun notarytool store-credentials)")

@@ -56,10 +56,14 @@ func run(t *task, label, dir, line string, env ...string) error {
 	t.set(line)
 	cmd := shellCommand(dir, line, env...)
 	out, errOut := labeledOutput(cmd, label)
-	activeRun.Lock()
-	activeRun.cmd = cmd
-	activeRun.Unlock()
-	err := waited(cmd.Run())
+	err := cmd.Start()
+	if err == nil {
+		activeRun.Lock()
+		activeRun.cmd = cmd // Ctrl+C can stop it now: it has a process
+		activeRun.Unlock()
+		err = cmd.Wait()
+	}
+	err = waited(err)
 	activeRun.Lock()
 	activeRun.cmd = nil
 	activeRun.Unlock()
@@ -335,7 +339,7 @@ func tempBinary(name string) (path string, cleanup func(), err error) {
 
 // waitDelay is how long Wait waits for the output of a command that exited
 // when processes it started hold it, as a build command may leave a server
-// activeRun.
+// running.
 const waitDelay = time.Second
 
 // waited is the error of Wait, which WaitDelay stopping it from waiting

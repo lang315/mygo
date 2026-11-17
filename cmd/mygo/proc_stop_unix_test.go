@@ -25,7 +25,7 @@ func TestBuildStopKillsTheRunningCommand(t *testing.T) {
 	})
 	stopRunning() // what the signal handler calls
 	wait.For(t, "run to return", done)
-	wait.Until(t, "the child is gone", func() bool {
-		return errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)
+	wait.Until(t, "the process group is gone", func() bool {
+		return errors.Is(syscall.Kill(-pid, 0), syscall.ESRCH)
 	})
 }
