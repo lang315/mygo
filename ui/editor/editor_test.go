@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -734,6 +735,26 @@ func TestRegexEmptyMatchesDontUseTheLimit(t *testing.T) {
 	f.query, f.stale = ".", true
 	if n, _ := ct.st.FindMatches(); n != maxMatches {
 		t.Fatalf("%d matches of ., want %d", n, maxMatches)
+	}
+}
+
+// A pattern matching empty at every byte of a big text searches in
+// bounded memory: x* over 8 MB of ab allocates less than 256 MB.
+func TestRegexEmptyMatchesBoundedMemory(t *testing.T) {
+	ct := newEditorTest(t, "", "|a")
+	big := strings.Repeat("ab", 4<<20)
+	f := finder{regex: true, query: "x*"}
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	f.scan(&ct.st.ed, big, "", 0, func(diffRange, []int) bool { return true })
+	runtime.ReadMemStats(&after)
+	// The race detector drops sync.Pool's items, which regexp keeps its
+	// machines in: a machine a match.
+	if got := after.TotalAlloc - before.TotalAlloc; got >= 256<<20 && !raceEnabled {
+		t.Errorf("x* over 8 MB allocated %d MB", got>>20)
+	} else {
+		t.Logf("x* over 8 MB allocated %d MB", got>>20)
 	}
 }
 

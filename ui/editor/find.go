@@ -168,9 +168,10 @@ func (f *finder) scan(ed *editor, text, lower string, base int, found func(m dif
 			return
 		}
 		// Empty matches and those left out don't count toward the limit:
-		// look at twice as many while they fill it.
-		// shortcut: a pattern matching empty at every byte holds a slice a
-		// byte of the text; search in chunks if that shows in memory.
+		// look at twice as many while they fill it, up to four times it.
+		// shortcut: past 400k matches, empty ones included, the rest of
+		// the text is not searched; scan from a moving position if real
+		// matches after that many empty ones matter.
 		seen := 0
 		for n := maxMatches; ; n *= 2 {
 			ms := re.FindAllStringSubmatchIndex(text, n)
@@ -182,7 +183,7 @@ func (f *finder) scan(ed *editor, text, lower string, base int, found func(m dif
 					return
 				}
 			}
-			if len(ms) < n {
+			if len(ms) < n || n >= 4*maxMatches {
 				return
 			}
 			seen = len(ms)
