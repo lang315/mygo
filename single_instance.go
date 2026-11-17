@@ -5,6 +5,7 @@ package mygo
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"io"
@@ -217,12 +218,8 @@ func acceptSecondInstances(ln net.Listener) {
 		go func() {
 			defer conn.Close()
 			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-			data, err := io.ReadAll(io.LimitReader(conn, 1<<20))
+			msg, err := readSecondInstance(conn)
 			if err != nil {
-				return
-			}
-			var msg secondInstanceMessage
-			if json.Unmarshal(data, &msg) != nil {
 				return
 			}
 			postMain(func() {
@@ -235,6 +232,15 @@ func acceptSecondInstances(ln net.Listener) {
 			})
 		}()
 	}
+}
+
+// readSecondInstance reads the message of a later instance. It stops at the
+// end of the message instead of waiting for the sender to shut down or
+// close: Windows does not always end a read pending while the other end
+// does (go.dev/issue/49352).
+func readSecondInstance(r io.Reader) (msg secondInstanceMessage, err error) {
+	err = json.UnmarshalDecode(jsontext.NewDecoder(io.LimitReader(r, 1<<20)), &msg)
+	return msg, err
 }
 
 // stopSecondInstances stops taking the command lines of later instances,
