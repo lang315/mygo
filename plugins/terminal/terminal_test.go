@@ -1975,6 +1975,7 @@ func TestSystemOpensRefusesFileLines(t *testing.T) {
 		"x-custom+scheme:x":    true,
 		"web.app:open":         true,
 		"web.app:8080/x":       true,
+		"tel:5551234":          true,
 	} {
 		if got := systemOpens(link); got != want {
 			t.Errorf("systemOpens(%q) = %v, want %v", link, got, want)
