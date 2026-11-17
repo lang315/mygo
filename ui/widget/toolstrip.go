@@ -45,7 +45,7 @@ func (s *ToolStripWidget) build(c *ui.Context) ui.Element {
 	})
 	if tk != nil {
 		t := c.Theme()
-		line := tk.LineStrong
+		line := tk.BorderStrong
 		if c.Preferences().HighContrast {
 			line = line.Mix(tk.Text, 0.45)
 		}

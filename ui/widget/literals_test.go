@@ -167,14 +167,14 @@ func testTokens() (light, dark *skinhook.Tokens) {
 		return skinhook.Family{Base: ui.Hex(base), On: ui.Hex(on)}
 	}
 	light = &skinhook.Tokens{
-		Accent: fam("#7b1fa2", "#ffeb3b"), OnAccent: ui.Hex("#00e5ff"),
-		Info: fam("#00695c", "#ff80ab"), Warning: fam("#e65100", "#1a237e"), Danger: fam("#880e4f", "#76ff03"),
+		Accent: fam("#7b1fa2", "#ffeb3b"),
+		Info:   fam("#00695c", "#ff80ab"), Warning: fam("#e65100", "#1a237e"), Danger: fam("#880e4f", "#76ff03"),
 		Chart: [8]ui.Color{ui.Hex("#e6194b"), ui.Hex("#3cb44b"), ui.Hex("#ffe119"), ui.Hex("#4363d8"),
 			ui.Hex("#f58231"), ui.Hex("#911eb4"), ui.Hex("#42d4f4"), ui.Hex("#f032e6")},
 	}
 	dark = &skinhook.Tokens{
-		Accent: fam("#ce93d8", "#3e2723"), OnAccent: ui.Hex("#004d40"),
-		Info: fam("#80cbc4", "#4a148c"), Warning: fam("#ffb74d", "#b71c1c"), Danger: fam("#f48fb1", "#1b5e20"),
+		Accent: fam("#ce93d8", "#3e2723"),
+		Info:   fam("#80cbc4", "#4a148c"), Warning: fam("#ffb74d", "#b71c1c"), Danger: fam("#f48fb1", "#1b5e20"),
 		Chart: [8]ui.Color{ui.Hex("#bfef45"), ui.Hex("#fabed4"), ui.Hex("#469990"), ui.Hex("#dcbeff"),
 			ui.Hex("#9a6324"), ui.Hex("#800000"), ui.Hex("#aaffc3"), ui.Hex("#808000")},
 	}

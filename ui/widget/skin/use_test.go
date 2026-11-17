@@ -47,7 +47,7 @@ func TestUseCalm(t *testing.T) {
 	if h := skinhook.Get(false); h == nil || h.ControlHeight != 36 {
 		t.Errorf("the hook's light tokens are %p, want Calm's with ControlHeight 36", h)
 	}
-	if h := skinhook.Get(true); h == nil || h.Content != ui.Hex("#15171a") {
+	if h := skinhook.Get(true); h == nil || h.Background != ui.Hex("#15171a") {
 		t.Errorf("the hook's dark tokens are %p, want Calm's dark", h)
 	}
 	tt.SetDark(true)

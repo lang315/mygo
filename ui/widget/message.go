@@ -77,7 +77,7 @@ func kindIconSVG(k Kind, dark bool) *ui.SVG {
 	case k == Error:
 		return kindSVG(k, t.Danger.Base, t.Danger.On)
 	}
-	return kindSVG(k, t.Accent.Base, t.OnAccent)
+	return kindSVG(k, t.Accent.Base, t.Accent.On)
 }
 
 func filledIcon(shapes string) *ui.SVG {

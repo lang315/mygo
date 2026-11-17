@@ -36,18 +36,17 @@ type Shadow struct {
 // Tokens are every value a skin decides in one appearance.
 type Tokens struct {
 	// The layers: Chrome under the frame (header, menus, tool and status
-	// strips), Content under the work area.
-	Chrome, Content ui.Color
-	// Line divides; LineStrong ends headers and the window.
-	Line, LineStrong ui.Color
-	// Text, Text2 (secondary) and Text3 (placeholders).
-	Text, Text2, Text3 ui.Color
+	// strips), Background under the work area.
+	Chrome, Background ui.Color
+	// Border divides; BorderStrong ends headers and the window.
+	Border, BorderStrong ui.Color
+	// Text, TextMuted (secondary) and TextPlaceholder (placeholders).
+	Text, TextMuted, TextPlaceholder ui.Color
 	// The face of a control at rest, hovered and pressed.
-	Control, ControlHover, ControlPressed ui.Color
-	// ButtonLine outlines buttons; FieldLine inputs, check boxes and a
+	Surface, SurfaceHover, SurfacePressed ui.Color
+	// ButtonBorder outlines buttons; ControlBorder inputs, check boxes and a
 	// switch that is off.
-	ButtonLine, FieldLine ui.Color
-	OnAccent              ui.Color
+	ButtonBorder, ControlBorder ui.Color
 	// Selection is selected text; RowHover and RowSelected rows.
 	Selection, RowHover, RowSelected ui.Color
 
@@ -59,10 +58,10 @@ type Tokens struct {
 	Chart [8]ui.Color
 
 	ControlHeight, RowHeight, HeaderHeight, SettingsRowHeight    float32
-	TabStripHeight, MenuBarStripHeight, MenuBarItemHeight        float32
+	TabHeight, MenuBarStripHeight, MenuBarItemHeight             float32
 	RadiusControl, RadiusCard, RadiusDialog                      float32
 	ToolbarPadTop, ToolbarPadBottom, ToolbarGap, ToolbarGroupGap float32
-	Icon, ToolbarIcon, CheckBox, SwitchWidth, SwitchHeight       float32
+	Icon, ToolbarIcon, CheckSize, SwitchWidth, SwitchHeight      float32
 
 	Body, Caption, Label, Heading, Title Type
 

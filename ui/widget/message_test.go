@@ -199,7 +199,7 @@ func TestMessageIconsUseSkinColors(t *testing.T) {
 		case Error:
 			return tk.Danger.Base, tk.Danger.On
 		}
-		return tk.Accent.Base, tk.OnAccent
+		return tk.Accent.Base, tk.Accent.On
 	}
 	for _, k := range []Kind{Info, Warning, Question, Error} {
 		for _, d := range []bool{false, true} {

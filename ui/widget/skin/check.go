@@ -11,29 +11,28 @@ import (
 
 // check measures the tokens' contrast: text 4.5:1 or more, the outline of
 // fields and the accent line on the chrome, and each chart color on the
-// content, 3:1 or more; and the control states (hover and pressed) 3 or more
+// background, 3:1 or more; and the control states (hover and pressed) 3 or more
 // CIE76 ΔE from their ground and from each other. A translucent color
 // is measured blended over the layer it sits on, the one after "on", and a
-// translucent layer over Content. It also measures the state distance of the
+// translucent layer over Background. It also measures the state distance of the
 // dark or the light appearance (stateDistance). The error names every
 // failing pair.
 func check(t *skinhook.Tokens, dark bool) error {
 	var errs []error
 	pair := func(name string, fg, bg ui.Color, floor float64) {
-		bg = bg.Over(t.Content)
+		bg = bg.Over(t.Background)
 		if r := contrastOf(fg.Over(bg), bg); r < floor {
 			errs = append(errs, fmt.Errorf("%s: %.2f:1, want %g:1", name, r, floor))
 		}
 	}
-	pair("Text on Content", t.Text, t.Content, 4.5)
+	pair("Text on Background", t.Text, t.Background, 4.5)
 	pair("Text on Chrome", t.Text, t.Chrome, 4.5)
-	pair("Text2 on Content", t.Text2, t.Content, 4.5)
-	pair("Text2 on Chrome", t.Text2, t.Chrome, 4.5)
-	pair("Text3 on Control", t.Text3, t.Control, 4.5)
-	pair("Text2 on RowSelected", t.Text2, t.RowSelected, 4.5)
+	pair("TextMuted on Background", t.TextMuted, t.Background, 4.5)
+	pair("TextMuted on Chrome", t.TextMuted, t.Chrome, 4.5)
+	pair("TextPlaceholder on Surface", t.TextPlaceholder, t.Surface, 4.5)
+	pair("TextMuted on RowSelected", t.TextMuted, t.RowSelected, 4.5)
 	pair("Text on RowSelected", t.Text, t.RowSelected, 4.5)
-	pair("Text2 on RowHover", t.Text2, t.RowHover, 4.5)
-	pair("OnAccent on Accent.Base", t.OnAccent, t.Accent.Base, 4.5)
+	pair("TextMuted on RowHover", t.TextMuted, t.RowHover, 4.5)
 	for _, f := range []struct {
 		name string
 		f    skinhook.Family
@@ -41,11 +40,11 @@ func check(t *skinhook.Tokens, dark bool) error {
 		pair(f.name+" Text on Subtle", f.f.Text, f.f.Subtle, 4.5)
 		pair(f.name+" On on Base", f.f.On, f.f.Base, 4.5)
 	}
-	pair("FieldLine on Content", t.FieldLine, t.Content, 3)
-	pair("FieldLine on Chrome", t.FieldLine, t.Chrome, 3)
+	pair("ControlBorder on Background", t.ControlBorder, t.Background, 3)
+	pair("ControlBorder on Chrome", t.ControlBorder, t.Chrome, 3)
 	pair("Accent.Base on Chrome", t.Accent.Base, t.Chrome, 3)
 	for i, c := range t.Chart {
-		pair(fmt.Sprintf("Chart[%d] on Content", i), c, t.Content, 3)
+		pair(fmt.Sprintf("Chart[%d] on Background", i), c, t.Background, 3)
 	}
 	// The states of a control must show: ΔE 3 or more from what they sit on
 	// (the chrome, the face) and from each other.
@@ -53,11 +52,11 @@ func check(t *skinhook.Tokens, dark bool) error {
 		name string
 		a, b ui.Color
 	}{
-		{"ControlHover vs Chrome", t.ControlHover, t.Chrome},
-		{"ControlHover vs Control", t.ControlHover, t.Control},
-		{"ControlPressed vs ControlHover", t.ControlPressed, t.ControlHover},
+		{"SurfaceHover vs Chrome", t.SurfaceHover, t.Chrome},
+		{"SurfaceHover vs Surface", t.SurfaceHover, t.Surface},
+		{"SurfacePressed vs SurfaceHover", t.SurfacePressed, t.SurfaceHover},
 	} {
-		if d := deltaE(s.a.Over(t.Content), s.b.Over(t.Content), nil); d < 3 {
+		if d := deltaE(s.a.Over(t.Background), s.b.Over(t.Background), nil); d < 3 {
 			errs = append(errs, fmt.Errorf("%s: ΔE %.1f, want 3", s.name, d))
 		}
 	}
@@ -81,7 +80,7 @@ func stateDistance(t *skinhook.Tokens, dark bool) error {
 	}{{"Success", t.Success.Text}, {"Warning", t.Warning.Text}, {"Danger", t.Danger.Text}} {
 		least, by := math.Inf(1), ""
 		for _, v := range visions {
-			if d := deltaE(t.Info.Text.Over(t.Content), s.c.Over(t.Content), v.m); d < least {
+			if d := deltaE(t.Info.Text.Over(t.Background), s.c.Over(t.Background), v.m); d < least {
 				least, by = d, v.name
 			}
 		}

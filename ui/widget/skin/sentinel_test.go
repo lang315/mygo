@@ -321,10 +321,10 @@ func TestSentinelRule(t *testing.T) {
 		for _, q := range []widget.Query{widget.ByLabel("Plain"), widget.ByRole(ui.RoleRow).Label("Grace")} {
 			report(t, dark, s.still(t, tt, tt.Find(q).Bounds()))
 		}
-		// It is chosen: its end is B's RowSelected over B's Content.
+		// It is chosen: its end is B's RowSelected over B's Background.
 		tk, r := s.b[b2i(dark)], tt.Find(widget.ByRole(ui.RoleRow).Label("Grace")).Bounds()
-		if got, want := colorAt(tt.Image(), int(r.X+r.W-4), int(r.Y+r.H/2)), tk.RowSelected.Over(tk.Content); dist(got, want) > 2 {
-			t.Errorf("dark=%v: the clicked row fills %v, want RowSelected over Content %v", dark, got, want)
+		if got, want := colorAt(tt.Image(), int(r.X+r.W-4), int(r.Y+r.H/2)), tk.RowSelected.Over(tk.Background); dist(got, want) > 2 {
+			t.Errorf("dark=%v: the clicked row fills %v, want RowSelected over Background %v", dark, got, want)
 		}
 	}
 }

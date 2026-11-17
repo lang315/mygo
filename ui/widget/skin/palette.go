@@ -6,8 +6,7 @@ import (
 )
 
 // Palette is the accent of a skin: the accent family, the Info family of
-// the running state, the text on the accent, the selected row and the text
-// selection, in light and dark. Every palette passes the skin's contrast
+// the running state, the selected row and the text selection, in light and dark. Every palette passes the skin's contrast
 // floors and keeps its Info apart from the status colors, also for a
 // red-green color-blind eye. A skin takes one with WithPalette:
 //
@@ -19,8 +18,8 @@ type Palette struct {
 
 // paletteTokens are the tokens a palette decides in one appearance.
 type paletteTokens struct {
-	accent, info                     skinhook.Family
-	onAccent, rowSelected, selection ui.Color
+	accent, info           skinhook.Family
+	rowSelected, selection ui.Color
 }
 
 // Name returns the palette's name, as "Teal".
@@ -65,9 +64,9 @@ func darkFamily(base, hover, pressed, text, on string) skinhook.Family {
 // text selected in a cell edited in place.
 func newPalette(name string, light, dark skinhook.Family) *Palette {
 	return &Palette{name: name,
-		light: paletteTokens{accent: light, info: light, onAccent: white,
+		light: paletteTokens{accent: light, info: light,
 			rowSelected: light.Base.Mix(white, 0.82), selection: light.Base.Mix(white, 0.68)},
-		dark: paletteTokens{accent: dark, info: dark, onAccent: dark.On,
+		dark: paletteTokens{accent: dark, info: dark,
 			rowSelected: dark.Base.Alpha(0.16), selection: dark.Base.Alpha(0.35)},
 	}
 }
@@ -81,7 +80,7 @@ func (p *Palette) withInfo(light, dark skinhook.Family) *Palette {
 // apply writes the palette's tokens over t.
 func (pt *paletteTokens) apply(t *skinhook.Tokens) {
 	t.Accent, t.Info = pt.accent, pt.info
-	t.OnAccent, t.RowSelected, t.Selection = pt.onAccent, pt.rowSelected, pt.selection
+	t.RowSelected, t.Selection = pt.rowSelected, pt.selection
 }
 
 // WithPalette returns a new skin, s with the palette p: the same name and
