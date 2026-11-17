@@ -70,12 +70,22 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 			in = coreTextInput(c, text).Width(t.Space(20)).Shrink(1).MinWidth(0)
 		}
 		in.widget = "NumberInput"
+		focused := coreLocal(box, "focused", func() bool { return false })
 		in.afterInput(func() {
 			if in.Changed() {
 				if v, err := strconv.ParseFloat(strings.TrimSpace(*text), 64); err == nil && v >= lo && v <= hi {
 					set(v)
 				}
 			}
+			if in.Submitted() || *focused && !in.Focused() {
+				// What was typed beyond the range is the nearest end of it
+				// once the field is left or Enter confirms it.
+				if v, err := strconv.ParseFloat(strings.TrimSpace(*text), 64); err == nil && !math.IsNaN(v) {
+					set(v)
+					*text = format(*value)
+				}
+			}
+			*focused = in.Focused()
 			if in.Shortcut(0, KeyUp) {
 				set(*value + step)
 				*text = format(*value)

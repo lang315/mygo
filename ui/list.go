@@ -433,6 +433,9 @@ type ListState struct {
 	// tell the app choosing another from rows moving.
 	selRow int
 	selKey any
+	// ownCursor is set by a DataTableState, whose Selected is its own
+	// cursor, not one the app moves: it always follows its item.
+	ownCursor bool
 	// lead is the row last chosen in a list choosing several without
 	// Selected. Shift chooses the rows from pivot, whose key is pivotKey,
 	// and chose those from it to pivot+span last. pivotRow is the pivot
@@ -967,7 +970,7 @@ func (s *ListState) sync(e *node, n int) {
 		// as a pasted file sorted there, or an item renamed in its place.
 		// The list's own cursor, which only the user moves, always
 		// follows its item, chosen or not.
-		if sel := s.cursor(); sel != nil && *sel == s.selRow && s.selKey != nil && (s.Selected == nil || s.Selection == nil || s.Selection.has(s.selKey)) {
+		if sel := s.cursor(); sel != nil && *sel == s.selRow && s.selKey != nil && (s.ownCursor || s.Selected == nil || s.Selection == nil || s.Selection.has(s.selKey)) {
 			j, ok := s.find(s.selKey, *sel, n, reach)
 			if !ok {
 				j = -1
@@ -1506,6 +1509,12 @@ func (f *listFrame) chosenRows() []int {
 		if s.RowsOf != nil {
 			if rows, ok := s.RowsOf(); ok {
 				return rows
+			}
+		}
+		if s.Selection.size() == 1 {
+			// The one chosen is mostly the row last chosen: no scan of the rows.
+			if r := *s.cursor(); r >= 0 && r < f.n && !f.isHeader(r) && s.Selection.has(f.key(r)) {
+				return []int{r}
 			}
 		}
 		var rows []int

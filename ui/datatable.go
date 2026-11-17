@@ -139,6 +139,7 @@ func (s *DataTableState[T, K]) start() {
 	s.ncols, s.cursor = len(s.Columns), -1
 	s.view = NewTableView(compare)
 	s.list.Selected, s.list.Selection, s.list.Checked = &s.cursor, &s.Chosen, &s.Checked
+	s.list.ownCursor = true
 	s.multi = s.MultiSort
 	if s.multi {
 		s.list.SortBy = &s.SortBy
