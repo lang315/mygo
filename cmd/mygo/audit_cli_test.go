@@ -23,6 +23,9 @@ func TestNSISInstallsIntoTheAppFolderOfAFolderWithFiles(t *testing.T) {
 		`StrCmp $1 "." mygo_scan_next`,
 		`StrCmp $1 ".." mygo_scan_next`,
 		`StrCpy $INSTDIR "$INSTDIR\My App"`,
+		`ReadRegStr $2 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\com.example.app" "InstallLocation"`,
+		`StrCmp $2 "$INSTDIR" mygo_dir_ok`,
+		"  ClearErrors\n  mygo_dir_ok:",
 	}
 	last := strings.Index(section, "WriteUninstaller")
 	for _, s := range want {

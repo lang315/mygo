@@ -225,11 +225,15 @@ BrandingText " "
 ` + nsisCloseApp(c) + webView2 + `
 Section
   ; The uninstaller removes $INSTDIR whole, so a folder the user chose (or
-  ; /D=) that holds other files and not the app's own executable gets the
+  ; /D=) that holds other files, and neither the app's executable nor its own
+  ; uninstall entry's InstallLocation, gets the
   ; app's folder name appended before anything is written to it.
   Push $0
   Push $1
+  Push $2
   IfFileExists "$INSTDIR\` + nsisEscape(exe) + `" mygo_dir_ok
+  ReadRegStr $2 HKCU ` + nsisString(uninstallKey) + ` "InstallLocation"
+  StrCmp $2 "$INSTDIR" mygo_dir_ok
   FindFirst $0 $1 "$INSTDIR\*.*"
   mygo_scan:
     StrCmp $1 "" mygo_scan_end
@@ -243,7 +247,9 @@ Section
     Goto mygo_scan
   mygo_scan_end:
   FindClose $0
+  ClearErrors
   mygo_dir_ok:
+  Pop $2
   Pop $1
   Pop $0
   Push "$INSTDIR"
