@@ -153,6 +153,27 @@ func TestTextInputHugeValueKeystrokeCost(t *testing.T) {
 	}
 }
 
+// The fast path of one chosen row is the row chosen, not whatever the
+// cursor is on: Space checks the row chosen.
+func TestChosenRowsOneRowIsNotTheCursorRow(t *testing.T) {
+	var chosen, checked Selection[int]
+	s := ListState{Selection: &chosen, Checked: &checked, Key: func(i int) any { return i }}
+	tt := NewTester(func(c *Context) {
+		List(c, &s, 100, func(i int) { Textf(c, "Row %d", i) }).Grow(1)
+	}, 300, 300)
+	defer tt.rt.close()
+	tt.Frame()
+	if err := tt.Click("Row 3"); err != nil {
+		t.Fatal(err)
+	}
+	s.lead = 5 // the cursor moved to another row, which is not chosen
+	tt.Frame()
+	tt.Key(0, KeySpace)
+	if !checked.Has(3) || checked.Has(5) || checked.Len() != 1 {
+		t.Errorf("Space checked %d rows, has 3: %v, has 5: %v; want only row 3", checked.Len(), checked.Has(3), checked.Has(5))
+	}
+}
+
 // Up from 01:30 on the night the clocks go forward steps to 03:30, the hour
 // that follows, not back to the same hour (R3-20).
 func TestTimeInputStepsOverSpringForward(t *testing.T) {
