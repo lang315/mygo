@@ -23,8 +23,34 @@ func needSQLite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires the plugin's native module")
 	}
-	if err := Load(); err != nil && strings.Contains(err.Error(), "mygo native build") {
-		t.Skip(err)
+	if reason := skipReason(Load()); reason != "" {
+		t.Skip(reason)
+	}
+}
+
+// skipReason returns why tests skip after Load returned err: the native
+// module is not built, here or for this platform, "" when it loaded or
+// failed otherwise.
+func skipReason(err error) string {
+	if err != nil && (strings.Contains(err.Error(), "mygo native build") || strings.Contains(err.Error(), "has no build")) {
+		return err.Error()
+	}
+	return ""
+}
+
+func TestSkipReason(t *testing.T) {
+	for _, err := range []error{
+		errors.New("sqlite: run mygo native build -target host ./plugins/sqlite/internal/sqlitecore"),
+		errors.New("ffi: sqlitecore has no build for linux/riscv64"),
+	} {
+		if skipReason(err) == "" {
+			t.Errorf("skipReason(%q) does not skip", err)
+		}
+	}
+	for _, err := range []error{nil, errors.New("sqlite: a broken library")} {
+		if r := skipReason(err); r != "" {
+			t.Errorf("skipReason(%v) = %q, want no skip", err, r)
+		}
 	}
 }
 

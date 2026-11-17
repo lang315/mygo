@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -136,6 +137,39 @@ func TestNatives(t *testing.T) {
 	writeFiles(t, dir, map[string]string{"resources/libx.so": "mine"})
 	if _, err := c.appResources("linux", "amd64"); err == nil || !strings.Contains(err.Error(), "would both be installed as libx.so") {
 		t.Errorf("a resource named as the library: %v", err)
+	}
+}
+
+// TestPackageDirsWithSpaces finds the packages of a project whose path has
+// spaces, as go list prints their directories one a line.
+func TestPackageDirsWithSpaces(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go list")
+	}
+	dir := filepath.Join(t.TempDir(), "My Apps", "demo")
+	writeFiles(t, dir, map[string]string{
+		"go.mod":            "module example.com/app\n\ngo 1.27\n",
+		"main.go":           "package main\n\nimport _ \"example.com/app/lib\"\n\nfunc main() {}\n",
+		"lib/lib.go":        "package lib\n",
+		"lib/" + pluginFile: `{"libraries": [{"name": "libx", "files": {}}]}`,
+		"mygo.json":         `{"name": "App"}`,
+	})
+	c, err := loadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib := filepath.Join(dir, "lib")
+	found := func(list []nativePackage) bool {
+		return len(list) == 1 && sameDir(list[0].dir, lib)
+	}
+	if list, err := c.nativePackages("linux", "amd64"); err != nil || !found(list) {
+		t.Errorf("nativePackages = %+v, %v", list, err)
+	}
+	if list, err := nativePackagesIn(dir); err != nil || !found(list) {
+		t.Errorf("nativePackagesIn = %+v, %v", list, err)
+	}
+	if dirs := compiledDirs(c); !slices.ContainsFunc(dirs, func(d string) bool { return sameDir(d, lib) }) {
+		t.Errorf("compiledDirs = %q, without %s", dirs, lib)
 	}
 }
 

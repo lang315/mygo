@@ -170,13 +170,15 @@ func sortedKeys[V any](m map[uint16]V) []uint16 {
 	return keys
 }
 
-// windowsVersion turns a version such as "1.2.3" into four numbers.
+// windowsVersion turns a version such as "1.2.3" or "v1.2.3+5" into four
+// numbers, each at most 65535.
 func windowsVersion(v string) [4]uint16 {
 	var out [4]uint16
+	v, _, _ = strings.Cut(strings.TrimPrefix(v, "v"), "+")
 	v, _, _ = strings.Cut(v, "-")
 	for i, part := range strings.SplitN(v, ".", 4) {
 		n, _ := strconv.Atoi(part)
-		out[i] = uint16(n)
+		out[i] = uint16(min(max(n, 0), 65535))
 	}
 	return out
 }
