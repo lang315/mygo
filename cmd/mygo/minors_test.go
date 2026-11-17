@@ -87,7 +87,7 @@ func main() { _ = mygo.App.Run() }
 		if err := os.Mkdir(p, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		src := fmt.Sprintf("package p%d\n\nimport \"github.com/egoist/mygo\"\n\ntype S struct{}\n\nfunc (S) M() {}\n\nfunc init() { mygo.Bind(S{}) }\n", i)
+		src := fmt.Sprintf("package p%d\n\nimport \"github.com/egoist/mygo\"\n\ntype A struct{}\n\nfunc (A) M() {}\n\ntype B struct{}\n\nfunc (B) M() {}\n\n// bound in the reverse of the sorted order\nfunc init() { mygo.Bind(B{}, &A{}, A{}) }\n", i)
 		if err := os.WriteFile(filepath.Join(p, "p.go"), []byte(src), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -104,12 +104,14 @@ func main() { _ = mygo.App.Run() }
 	if err != nil || reason != "" {
 		t.Fatalf("targetBoundTypes: %v %s", err, reason)
 	}
-	if len(got) != 8 {
-		t.Fatalf("found %d types, want 8: %v", len(got), got)
+	// Each package gives A, *A, B: by package, then type, then the value before the pointer.
+	if len(got) != 24 {
+		t.Fatalf("found %d types, want 24: %v", len(got), got)
 	}
 	for i, b := range got {
-		if want := fmt.Sprintf("bindtest/p%d", i+1); b.Pkg != want {
-			t.Errorf("type %d is of %s, want %s (the order must not depend on the scan)", i, b.Pkg, want)
+		want := boundType{Pkg: fmt.Sprintf("bindtest/p%d", i/3+1), Type: []string{"A", "A", "B"}[i%3], Pointer: i%3 == 1}
+		if b.Pkg != want.Pkg || b.Type != want.Type || b.Pointer != want.Pointer {
+			t.Errorf("type %d is %s.%s (pointer %v), want %s.%s (pointer %v): the order must not depend on the scan", i, b.Pkg, b.Type, b.Pointer, want.Pkg, want.Type, want.Pointer)
 		}
 	}
 }
