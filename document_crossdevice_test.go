@@ -3,6 +3,7 @@
 package mygo
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -40,7 +41,7 @@ func TestCrossDevice(t *testing.T) {
 	}
 }
 
-func TestWriteFileSafelyWritesInPlaceForAnotherUsersFile(t *testing.T) {
+func TestFileOwnedByOther(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mine")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -61,5 +62,38 @@ func TestWriteFileSafelyWritesInPlaceForAnotherUsersFile(t *testing.T) {
 	}
 	if !fileOwnedByOther(root) {
 		t.Error("a file root owns is not reported as owned by another user")
+	}
+}
+
+func TestWriteFileSafelyRoutesAnotherUsersFileInPlace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.SameFile does not tell a rename from a write in place there")
+	}
+	for _, other := range []bool{true, false} {
+		old := ownedByOther
+		ownedByOther = func(os.FileInfo) bool { return other }
+		path := filepath.Join(t.TempDir(), "f")
+		if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		before, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = writeFileSafely(path, func(w io.Writer) error { _, err := io.WriteString(w, "new"); return err })
+		ownedByOther = old
+		if err != nil {
+			t.Fatal(err)
+		}
+		after, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := os.ReadFile(path); string(got) != "new" {
+			t.Errorf("other=%v: content = %q", other, got)
+		}
+		if same := os.SameFile(before, after); same != other {
+			t.Errorf("other=%v: same file = %v, want in place only for another user's file", other, same)
+		}
 	}
 }

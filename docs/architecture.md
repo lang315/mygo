@@ -2833,7 +2833,8 @@ Recent (about 290 KB).
   document's own write for another app's. `writeFileSafely` writes a
   sibling, flushes it and replaces the file through the backend
   (`NSFileManager`, `ReplaceFileW`, rename with mode and owner on Linux),
-  in place for hard links and folders the user can't create files in.
+  in place for hard links, files another user owns and folders the user
+  can't create files in.
   Save and autosave stat the file first: a stamp other than the one known
   is a conflict.
 - *Pacing.* One timer per document fires after the edits stop: the

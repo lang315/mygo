@@ -219,6 +219,9 @@ func (b *docBase) reloadIf(path string, unedited bool) error {
 	return nil
 }
 
+// ownedByOther is fileOwnedByOther, which tests replace.
+var ownedByOther = fileOwnedByOther
+
 // writeFileSafely writes a file as NSDocument and GIO do: into a new file
 // next to it, flushed to the disk, which then replaces it, keeping its
 // metadata (Backend.ReplaceFile), so that a crash or a full disk never
@@ -231,7 +234,7 @@ func writeFileSafely(path string, write func(io.Writer) error) (fileRead, error)
 	}
 	info, err := os.Stat(path)
 	exists := err == nil
-	if exists && (fileLinks(info) > 1 || fileOwnedByOther(info)) {
+	if exists && (fileLinks(info) > 1 || ownedByOther(info)) {
 		return writeFileInPlace(path, write)
 	}
 	tmp, err := createSibling(path)
