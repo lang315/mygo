@@ -358,11 +358,14 @@ Missing arguments arrive in Go as zero values.
 ## Who may call
 
 Only the app's own pages may call Go methods: pages of its frontend and of
-custom protocols (see [the frontend](frontend.md)), `file:` and `about:`
-pages, and in development builds pages served from localhost, such as the
-dev server. A window that shows other sites, `https://example.com` for
-example, keeps them from calling Go unless `PageOptions.TrustedOrigins` lists
-their origin:
+custom protocols (see [the frontend](frontend.md)), `file:` pages, `about:`
+pages that follow a trusted page, and in development builds pages served from
+localhost, such as the dev server. An `about:` page has the origin of the page
+that made it, so it is trusted in a window the app made, after `LoadHTML`, and
+in a popup of a trusted page, but not after another site, nor in a popup of
+one. A window that shows other sites, `https://example.com` for example,
+keeps them from calling Go unless `PageOptions.TrustedOrigins` lists their
+origin:
 
 ```go
 mygo.NewWindow(mygo.WindowOptions{

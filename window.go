@@ -422,7 +422,13 @@ type Window struct {
 
 	// trusted reports whether the current page may call bound methods.
 	// Main thread only.
-	trusted        bool
+	trusted bool
+	// aboutTrust is whether an about: page of this window may call bound
+	// methods: it inherits the page before it (an about: page carries its
+	// creator's origin), true for a window the app made, the opener's
+	// trusted for a popup (set before its native window exists). Main
+	// thread only.
+	aboutTrust     bool
 	noBindings     bool // a web view made with WebViewOptions.NoBindings: never trusted
 	trustedOrigins []string
 	// untrusted is PageOptions.Untrusted; origin is the origin of its
@@ -571,7 +577,7 @@ func createWindow(caller string, opts WindowOptions, bg, tint *background, flyou
 	}
 	var w *Window
 	onMain(func() {
-		w = newWindow(opts, bg, tint, 0, flyout)
+		w = newWindow(opts, bg, tint, 0, flyout, nil)
 		if !main {
 			// Called from another goroutine, NewWindow returns while the
 			// main thread goes on drawing: the window of native UI shows
@@ -638,13 +644,13 @@ func updateBackgrounds() {
 	}
 }
 
-func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout *flyoutOptions) *Window {
+func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout *flyoutOptions, opener *Window) *Window {
 	windows.Lock()
 	windows.nextID++
 	id := windows.nextID
 	windows.Unlock()
 
-	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content != nil, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true}
+	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content != nil, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true, aboutTrust: opener == nil || opener.trusted}
 	w.pg = &Page{w}
 	if flyout != nil {
 		w.fit = flyout.fit
@@ -1649,7 +1655,7 @@ func (w *Window) isTrusted(rawURL string) bool {
 	}
 	scheme := strings.ToLower(u.Scheme)
 	switch {
-	case scheme == "about" || scheme == "file" || scheme == frontendScheme:
+	case scheme == "file" || scheme == frontendScheme:
 		return true
 	case schemehook.Handled(scheme):
 		return true
@@ -2336,7 +2342,12 @@ func (h *windowHandler) NavigationCommitted(url string) {
 			doc.shown = true
 		}
 	}
-	h.w.trusted = !h.w.noBindings && h.w.isTrusted(url)
+	if strings.HasPrefix(strings.ToLower(url), "about:") {
+		h.w.trusted = !h.w.noBindings && !h.w.untrusted && (h.w.html != nil && h.w.html.shown || h.w.aboutTrust)
+	} else {
+		h.w.trusted = !h.w.noBindings && h.w.isTrusted(url)
+	}
+	h.w.aboutTrust = h.w.trusted
 	// A new document makes its own secret, and says it in a hello that comes
 	// after this commit (the script of the document starts after it).
 	h.w.secret, h.w.helloArmed = "", true
@@ -2409,7 +2420,7 @@ func (h *windowHandler) NewWindow(req platform.NewWindowRequest) platform.Window
 	if err != nil {
 		log.Printf("mygo: window open handler: %v", err)
 	}
-	child := newWindow(o, bg, tint, req.Native, nil)
+	child := newWindow(o, bg, tint, req.Native, nil, h.w)
 	return child.native
 }
 

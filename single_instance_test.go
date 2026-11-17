@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sync"
 	"testing"
@@ -295,4 +296,51 @@ func TestSingleInstanceReleasedOnExit(t *testing.T) {
 	// Windows releases the locks of a process that ended soon after.
 	wait.Until(t, "the lock to be released", func() bool { return !lockHeld(t, lock) })
 	first.in.Close()
+}
+
+func TestSocketOwnedByMe(t *testing.T) {
+	dir, err := os.MkdirTemp("", "mygo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "s.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	if !socketOwnedByMe(path) {
+		t.Error("a socket of this user is not owned by it")
+	}
+	regular := filepath.Join(dir, "f")
+	if err := os.WriteFile(regular, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := os.Open(regular); err != nil {
+		t.Fatal(err)
+	} else {
+		defer f.Close()
+		if !ownedByMe(f) || !fileOwnedByMe(regular) {
+			t.Error("a file of this user is not owned by it")
+		}
+	}
+	if runtime.GOOS != "windows" && os.Getuid() != 0 {
+		if f, err := os.Open("/etc/hosts"); err == nil {
+			defer f.Close()
+			if ownedByMe(f) || fileOwnedByMe("/etc/hosts") {
+				t.Error("a file of root counts as this user's")
+			}
+		}
+	}
+	if runtime.GOOS != "windows" && socketOwnedByMe(regular) {
+		t.Error("a regular file counts as a socket of this user")
+	}
+	if runtime.GOOS != "windows" && socketOwnedByMe(filepath.Join(dir, "none")) {
+		t.Error("a missing path counts as a socket of this user")
+	}
+	// A socket of another user is never dialed: nothing reaches it.
+	if os.Getuid() != 0 && runtime.GOOS != "windows" && socketOwnedByMe("/") {
+		t.Error("/ counts as a socket of this user")
+	}
 }
