@@ -117,7 +117,7 @@ func updateServer(t *testing.T, version, content, deltaFrom string) (srv *httpte
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(archive.Bytes())
-	m = update.Manifest{Version: version, Notes: "- Faster", Date: "2026-09-27T10:00:00Z", Size: int64(archive.Len()), Signature: update.Sign(priv, sum[:])}
+	m = update.Manifest{Version: version, Notes: "- Faster", Date: "2026-09-27T10:00:00Z", Size: int64(archive.Len()), Signature: update.Sign(priv, sum[:]), VersionSignature: update.Sign(priv, update.VersionDigest(version, sum[:]))}
 	var mu sync.Mutex
 	counts := map[string]int{}
 	mux := http.NewServeMux()
@@ -253,6 +253,39 @@ func TestUpdater(t *testing.T) {
 	short.Size++
 	if err := installUpdate(ctx, updatehttp.Get, short, key, up.current, target, nil); err == nil || !strings.Contains(err.Error(), "bytes") {
 		t.Errorf("wrong size: %v", err)
+	}
+	if b, _ := os.ReadFile(main); string(b) != "v1" {
+		t.Errorf("a refused update changed main to %q", b)
+	}
+}
+
+// TestUpdateRefusesARelabelledOlderArchive: a feed that serves the signed
+// archive of 1.0.0 as 9.9.9 installs nothing.
+func TestUpdateRefusesARelabelledOlderArchive(t *testing.T) {
+	_, key, m, _ := updateServer(t, "1.0.0", "old", "")
+	m.Version = "9.9.9"
+	target, main := installedApp(t)
+	err := installUpdate(context.Background(), updatehttp.Get, m, key, "2.0.0", target, nil)
+	if err == nil || !strings.Contains(err.Error(), "9.9.9") {
+		t.Errorf("a relabelled archive: %v", err)
+	}
+	if b, _ := os.ReadFile(main); string(b) != "v1" {
+		t.Errorf("a refused update changed main to %q", b)
+	}
+}
+
+func TestUpdateRefusesAManifestWithoutVersionSignature(t *testing.T) {
+	_, key, m, _ := updateServer(t, "1.2.0", "v2", "")
+	src := &testSource{m: m}
+	src.m.VersionSignature = ""
+	up, err := checkUpdate(context.Background(), src, key, "1.0.0", false)
+	if err == nil || !strings.Contains(err.Error(), "versionSignature") {
+		t.Errorf("a manifest without versionSignature: %+v, %v", up, err)
+	}
+	// What Install gets, were it handed such a manifest anyway.
+	target, main := installedApp(t)
+	if err := installUpdate(context.Background(), updatehttp.Get, src.m, key, "1.0.0", target, nil); err == nil {
+		t.Error("an archive with no versionSignature was installed")
 	}
 	if b, _ := os.ReadFile(main); string(b) != "v1" {
 		t.Errorf("a refused update changed main to %q", b)

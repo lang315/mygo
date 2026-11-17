@@ -220,8 +220,9 @@ func writeArchive(c *Config, stage, target string, entries []string) ([]string, 
 	}
 	name := c.slug() + "-" + c.Version + "-" + target + ".tar.gz"
 	archive := filepath.Join(stage, name)
+	digest := sha256.New()
 	size, sig, err := writeSigned(archive, key, func(w io.Writer) error {
-		return update.WriteArchive(w, stage, entries)
+		return update.WriteArchive(io.MultiWriter(w, digest), stage, entries)
 	})
 	if err != nil {
 		return nil, err
@@ -236,6 +237,8 @@ func writeArchive(c *Config, stage, target string, entries []string) ([]string, 
 		URL:       c.updateFile(name, false),
 		Size:      size,
 		Signature: sig,
+		// The archive's signature does not cover the version.
+		VersionSignature: update.Sign(key, update.VersionDigest(c.Version, digest.Sum(nil))),
 	}
 	files := []string{archive}
 	if n := c.Updates.deltas(); n > 0 {

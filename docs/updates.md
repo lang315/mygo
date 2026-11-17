@@ -106,6 +106,12 @@ Next to the installers of each platform it writes:
   notes, the date, and the URL, size and signature of the archive and of
   each delta.
 
+Two things are signed: the archive's SHA-256 digest, and the version
+together with that digest (`versionSignature`), so that a feed or mirror
+cannot serve an older archive under a newer version. The updater refuses
+a manifest without `versionSignature`, as one written by an older mygo
+is: publish the update again with `mygo build`.
+
 Without a key, `mygo build` builds the apps and skips the update files,
 but for the Linux archives, which [`install.sh`](distribution.md#the-install-script)
 installs. `mygo build -upload` needs the key: it stops before building,

@@ -494,6 +494,14 @@ func TestWriteDeltas(t *testing.T) {
 		if err := json.Unmarshal(data, &m); err != nil {
 			t.Fatal(err)
 		}
+		archive, err := os.ReadFile(filepath.Join(stage, filepath.Base(m.URL)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(archive)
+		if err := update.Verify(pub, update.VersionDigest(m.Version, sum[:]), m.VersionSignature); err != nil {
+			t.Errorf("the manifest's versionSignature: %v", err)
+		}
 		// Each delta makes the new version of the old.
 		for _, d := range m.Deltas {
 			old := filepath.Join(t.TempDir(), "old")

@@ -7,6 +7,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -32,6 +33,10 @@ type Manifest struct {
 	URL       string `json:"url"`
 	Size      int64  `json:"size"`
 	Signature string `json:"signature"`
+	// VersionSignature is the signature of Version together with the
+	// archive's digest (VersionDigest), which keeps a feed from serving an
+	// older archive under a newer version.
+	VersionSignature string `json:"versionSignature"`
 	// Deltas update earlier versions with smaller downloads (delta.go).
 	Deltas []Delta `json:"deltas,omitempty"`
 	// Previous are the archives of the versions before, newest first,
@@ -99,6 +104,15 @@ func ParsePrivateKey(s string) (ed25519.PrivateKey, error) {
 // Sign signs the SHA-256 digest of an archive.
 func Sign(key ed25519.PrivateKey, digest []byte) string {
 	return base64.StdEncoding.EncodeToString(ed25519.Sign(key, digest))
+}
+
+// VersionDigest returns what a manifest's VersionSignature signs: the
+// version, bound to the SHA-256 digest of its archive.
+func VersionDigest(version string, digest []byte) []byte {
+	h := sha256.New()
+	h.Write([]byte("mygo-update-version\x00" + version + "\x00"))
+	h.Write(digest)
+	return h.Sum(nil)
 }
 
 // Verify checks the signature of the SHA-256 digest of an archive.

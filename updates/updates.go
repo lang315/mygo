@@ -205,6 +205,9 @@ func checkUpdate(ctx context.Context, src Source, key, current string, pre bool)
 	if m.Version == "" || m.URL == "" || m.Signature == "" {
 		return nil, errors.New("mygo: checking for updates: incomplete manifest")
 	}
+	if m.VersionSignature == "" {
+		return nil, errors.New("mygo: checking for updates: incomplete manifest: no versionSignature (publish the update again with a newer mygo)")
+	}
 	if update.Compare(m.Version, current) <= 0 {
 		return nil, nil
 	}
@@ -334,8 +337,14 @@ func installUpdate(ctx context.Context, get update.Getter, m update.Manifest, ke
 		return fmt.Errorf("invalid size %d", m.Size)
 	}
 	archive := filepath.Join(work, "update.tar.gz")
-	if err := download(ctx, get, m.URL, m.Size, m.Signature, pub, archive, progress); err != nil {
+	digest, err := download(ctx, get, m.URL, m.Size, m.Signature, pub, archive, progress)
+	if err != nil {
 		return err
+	}
+	// The archive's own signature does not cover the version: an older
+	// archive could come under a newer label.
+	if err := update.Verify(pub, update.VersionDigest(m.Version, digest), m.VersionSignature); err != nil {
+		return fmt.Errorf("the archive is not signed as version %s: %w", m.Version, err)
 	}
 	f, err := os.Open(archive)
 	if err != nil {
@@ -369,7 +378,7 @@ func applyDelta(ctx context.Context, get update.Getter, d update.Delta, pub ed25
 		return fmt.Errorf("invalid size %d", d.Size)
 	}
 	path := filepath.Join(work, "update.delta")
-	if err := download(ctx, get, d.URL, d.Size, d.Signature, pub, path, progress); err != nil {
+	if _, err := download(ctx, get, d.URL, d.Size, d.Signature, pub, path, progress); err != nil {
 		return err
 	}
 	f, err := os.Open(path)
@@ -387,16 +396,16 @@ func applyDelta(ctx context.Context, get update.Getter, d update.Delta, pub ed25
 }
 
 // download fetches url with get into the file path and checks its size and
-// signature.
-func download(ctx context.Context, get update.Getter, url string, size int64, signature string, pub ed25519.PublicKey, path string, progress func(downloaded, total int64)) error {
+// signature, and returns its SHA-256 digest.
+func download(ctx context.Context, get update.Getter, url string, size int64, signature string, pub ed25519.PublicKey, path string, progress func(downloaded, total int64)) ([]byte, error) {
 	body, err := get(ctx, url)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer body.Close()
 	f, err := os.Create(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sum := sha256.New()
 	n, err := io.Copy(io.MultiWriter(f, sum), &progressReader{r: io.LimitReader(body, size+1), total: size, fn: progress})
@@ -404,12 +413,13 @@ func download(ctx context.Context, get update.Getter, url string, size int64, si
 		err = cerr
 	}
 	if err != nil {
-		return fmt.Errorf("downloading: %w", err)
+		return nil, fmt.Errorf("downloading: %w", err)
 	}
 	if n != size {
-		return fmt.Errorf("downloaded %d bytes, want %d", n, size)
+		return nil, fmt.Errorf("downloaded %d bytes, want %d", n, size)
 	}
-	return update.Verify(pub, sum.Sum(nil), signature)
+	digest := sum.Sum(nil)
+	return digest, update.Verify(pub, digest, signature)
 }
 
 // stagedUpdate is a new version of the app bundle target, at bundle in
