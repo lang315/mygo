@@ -302,6 +302,11 @@ type Document struct {
 	// and lines walked, as the loops that could take quadratic time do it.
 	// Tests check that it grows linearly with the source.
 	steps int
+	// padded counts the empty cells tables added to short rows (see
+	// maxPaddedCells), and paddingCut tells that a table ended at the
+	// cap, after which edits parse to the end rather than keep blocks.
+	padded     int
+	paddingCut bool
 	// marks is the buffer of the last sourceMap.
 	marks []int
 }

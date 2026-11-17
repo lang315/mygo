@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,19 +20,42 @@ type imageEntry struct {
 	done bool
 }
 
+// maxImageFile is the largest file FileImages reads.
+const maxImageFile = 64 << 20
+
 // FileImages returns a LoadImage for the files of directory dir, which
 // paths without a scheme are relative to: PNG, JPEG, GIF, WebP, BMP and
-// SVG. Other addresses do not load.
+// SVG, regular files of at most 64 MB. Paths stay under dir: an absolute
+// path, one that goes up out of dir (../) or a link out of it does not
+// load, nor do other addresses.
 func FileImages(dir string) func(url string) (ui.ImageSource, error) {
 	return func(url string) (ui.ImageSource, error) {
 		if strings.Contains(url, "://") || strings.HasPrefix(url, "data:") {
 			return nil, os.ErrNotExist
 		}
-		path := strings.TrimPrefix(url, "file:")
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(dir, filepath.FromSlash(path))
+		path := filepath.Clean(filepath.FromSlash(strings.TrimPrefix(url, "file:")))
+		if !filepath.IsLocal(path) {
+			return nil, os.ErrNotExist
 		}
-		data, err := os.ReadFile(path)
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			return nil, err
+		}
+		defer root.Close()
+		// Stat first: opening a device or a pipe could block.
+		fi, err := root.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		if !fi.Mode().IsRegular() || fi.Size() > maxImageFile {
+			return nil, os.ErrNotExist
+		}
+		f, err := root.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		data, err := io.ReadAll(io.LimitReader(f, maxImageFile)) // in case it grew since
 		if err != nil {
 			return nil, err
 		}

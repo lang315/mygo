@@ -23,7 +23,8 @@ type blockState struct {
 	lastChild int32
 	prev      int32
 	startLine int32
-	// A list's and an item's.
+	// A list's and an item's; padding is also a table row's empty cells
+	// added to make it as wide as its table.
 	markerOffset int32
 	padding      int32
 	// A fence's, and a table's columns.
@@ -65,6 +66,11 @@ const codeIndent = 4
 // maxDepth bounds how deep lists and quotes nest, as cmark does, so that
 // a hostile input cannot make the parser recurse without end.
 const maxDepth = 100
+
+// maxPaddedCells bounds the empty cells a document's tables add to rows
+// shorter than their header, so that a wide header over many short rows
+// cannot make millions of cells: the table ends at a row past it.
+const maxPaddedCells = 500_000
 
 type blockParser struct {
 	d   *Document
@@ -181,9 +187,17 @@ func (d *Document) edit(from, to int, text string) {
 	d.src = old[:from] + text + old[to:]
 	d.restart, d.restartAt = off, at
 	editEnd := from + len(text)
+	tailPadded := 0
+	for k := range tail {
+		if tail[k].Kind == TableRow {
+			tailPadded += int(tail[k].parse.padding)
+		}
+	}
 	j, met := 0, -1
 	resync := func(line int) bool {
-		if line < editEnd {
+		// Blocks kept could break the cap on empty cells, or be what a
+		// table cut by it went on as.
+		if line < editEnd || d.paddingCut || d.padded+tailPadded > maxPaddedCells {
 			return false
 		}
 		for j < len(tail) && (tail[j].Parent != 0 || int(tail[j].parse.firstLine)+delta < line) {
@@ -230,6 +244,9 @@ func (d *Document) edit(from, to int, text string) {
 				}
 			}
 			b.parse.lastChild, b.parse.prev = -1, -1
+			if b.Kind == TableRow {
+				d.padded += int(b.parse.padding)
+			}
 			i := len(d.blocks)
 			d.blocks = append(d.blocks, b)
 			if b.Parent == 0 {
@@ -271,6 +288,9 @@ func (d *Document) truncate(at, off int) map[string]linkRef {
 	d.oldInl = d.oldInl[:0]
 	for i := at; i < len(d.blocks); i++ {
 		b := &d.blocks[i]
+		if b.Kind == TableRow {
+			d.padded -= int(b.parse.padding)
+		}
 		if b.inlOK && b.segB > b.segA {
 			d.oldInl = append(d.oldInl, oldInline{int(d.segs[b.segA].start), b.rev, b.text, slices.Clone(d.segsOf(b)), b.inl, b.labels, b.healed})
 		}
@@ -1026,7 +1046,8 @@ func (p *blockParser) checkOpenBlocks(allMatched *bool) (int, bool) {
 		case Paragraph:
 			matched = !p.blank
 		case Table:
-			matched = !p.blank && rowHasCells(p.ln[p.firstNonspace:])
+			line := p.ln[p.firstNonspace:]
+			matched = !p.blank && rowHasCells(line) && p.rowFits(int(b.parse.columns), line)
 		}
 		if !matched {
 			return b.Parent, true
@@ -1416,9 +1437,24 @@ func (p *blockParser) tableRow(t int) {
 	p.advanceOffset(len(p.ln)-p.offset, false)
 }
 
+// rowFits reports whether the row of line, in a table of columns columns,
+// fits the empty cells the document may still add (maxPaddedCells).
+func (p *blockParser) rowFits(columns int, line string) bool {
+	d := p.d
+	if d.padded+columns <= maxPaddedCells || d.padded+columns-len(splitRow(line)) <= maxPaddedCells {
+		return true
+	}
+	d.paddingCut = true
+	return false
+}
+
 // addCells adds the cells of a row, as many as the table has columns,
 // those missing empty.
 func (p *blockParser) addCells(row, base int, line string, cells [][2]int, columns int) {
+	if pad := columns - len(cells); pad > 0 {
+		p.d.blocks[row].parse.padding = int32(pad)
+		p.d.padded += pad
+	}
 	for k := 0; k < columns; k++ {
 		at := base + len(line)
 		if k < len(cells) {

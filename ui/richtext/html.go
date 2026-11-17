@@ -140,14 +140,20 @@ func side(v float32) float32 {
 	return v
 }
 
-// maxImagePixels is how many pixels a pasted picture may have, so a small
-// file that claims a huge size takes no gigabytes to decode.
-const maxImagePixels = 1 << 25
+// pastedPixels is how many pixels the pictures of one paste may have in
+// all, so that many pictures, each under ui.MaxImagePixels, take no
+// gigabytes to decode: those past it keep their URL, as one too large.
+const pastedPixels = 4 * ui.MaxImagePixels
 
-// smallImage reports whether the picture of data is small enough to decode.
-func smallImage(data []byte) bool {
+// imagePixels returns how many pixels the picture of data has, 0 for one
+// that cannot be decoded or is larger than ui.MaxImagePixels.
+func imagePixels(data []byte) int64 {
 	c, err := ui.DecodeBitmapConfig(data) // names the import of a decoder the program lacks
-	return err == nil && c.Width > 0 && c.Height > 0 && int64(c.Width)*int64(c.Height) <= maxImagePixels
+	n := int64(c.Width) * int64(c.Height)
+	if err != nil || c.Width <= 0 || c.Height <= 0 || n > ui.MaxImagePixels {
+		return 0
+	}
+	return n
 }
 
 // safeLink returns a link's URL, or "" for one that runs a script where a
@@ -334,6 +340,9 @@ type htmlBuilder struct {
 	lists []ListKind
 	style ParagraphStyle
 	pre   int
+	// pixels are those of the pictures decoded or tried so far (see
+	// pastedPixels).
+	pixels int64
 }
 
 // ParseHTML returns the attributed text of an HTML document or fragment,
@@ -458,10 +467,15 @@ func (b *htmlBuilder) node(n *xhtml.Node, a Attributes) {
 		at.Width, at.Height = imageSide(attr(n, "width")), imageSide(attr(n, "height"))
 		if data, ok := strings.CutPrefix(src, "data:"); ok {
 			if _, enc, ok := strings.Cut(data, ";base64,"); ok {
-				if raw, err := base64.StdEncoding.DecodeString(enc); err == nil && smallImage(raw) {
-					if bm, err := ui.DecodeBitmap(raw); err == nil {
-						at.Image = bm
-						at.URL = ""
+				if raw, err := base64.StdEncoding.DecodeString(enc); err == nil {
+					// A picture that fails to decode takes its share too: it
+					// may fail only once its pixels are allocated.
+					if n := imagePixels(raw); n > 0 && b.pixels+n <= pastedPixels {
+						b.pixels += n
+						if bm, err := ui.DecodeBitmap(raw); err == nil {
+							at.Image = bm
+							at.URL = ""
+						}
 					}
 				}
 			}

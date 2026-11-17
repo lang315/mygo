@@ -246,7 +246,10 @@ Images show their description until `LoadImage` loads them, on a
 goroutine of their own; without it, they stay descriptions, as a view
 loads nothing from the network by itself. `FileImages(dir)` loads the
 files of a directory (PNG; a GIF, JPEG, WebP or BMP needs the decoder
-imported, see "Formats" in [Images](image.md)). A paragraph of images alone shows them as large
+imported, see "Formats" in [Images](image.md)). Paths stay under the
+directory: an absolute path, one that goes up out of it (`../`), a link
+out of it, and a file that is not a regular file of at most 64 MB do not
+load. A paragraph of images alone shows them as large
 as they are, at most as wide as the view.
 
 ```go
