@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"runtime"
 	"testing"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // grayPNG returns a black w×h PNG of one bit a pixel, a few kilobytes
@@ -78,6 +80,23 @@ func TestAPNGRefusesHugeHeader(t *testing.T) {
 	}
 	if b := f.Image.Bounds(); b.Dx() != 4096 || b.Dy() != 4096 {
 		t.Errorf("a 4096×4096 PNG decoded to %v", b)
+	}
+}
+
+// A template menu icon is tinted from its own decode, which has the cap of
+// DecodeBitmap too: one pixel past MaxImagePixels is refused from the header.
+func TestMenuIconRefusesHugeTemplate(t *testing.T) {
+	data := grayPNG(t, 8193, 8192)
+	var b *Bitmap
+	n := allocated(func() { b = menuIconBitmap(&platform.MenuIcon{PNG: data, Template: true}, Color{A: 255}) })
+	if b != nil {
+		t.Error("a template icon of MaxImagePixels+1 decoded")
+	}
+	if n > 64<<20 {
+		t.Errorf("refusing a template icon of MaxImagePixels+1 allocated %d MB", n>>20)
+	}
+	if menuIconBitmap(&platform.MenuIcon{PNG: grayPNG(t, 64, 64), Template: true}, Color{A: 255}) == nil {
+		t.Error("a 64×64 template icon did not decode")
 	}
 }
 

@@ -1700,3 +1700,35 @@ func TestListRowPressedWithoutChoosing(t *testing.T) {
 		t.Errorf("released: row %d reports the press", pressed)
 	}
 }
+
+// One Shift+arrow costs what the arrow moves, not what the Shift-extension
+// chose: after Shift+End over 10 000 rows and over 100 000, one Shift+Up asks
+// the same number of keys.
+func TestShiftArrowCostIndependentOfChosenRange(t *testing.T) {
+	keyCalls := func(n int) int {
+		var s ListState
+		var sel Selection[int]
+		calls := 0
+		s.Selection = &sel
+		s.Key = func(i int) any { calls++; return i }
+		tt := NewTester(func(c *Context) {
+			List(c, &s, n, func(i int) { Textf(c, "Row %d", i) }).Grow(1)
+		}, 300, 300)
+		tt.Frame()
+		tt.Click("Row 0")
+		tt.Key(Shift, KeyEnd)
+		if sel.Len() != n {
+			t.Fatalf("Shift+End over %d rows chose %d", n, sel.Len())
+		}
+		calls = 0
+		tt.Key(Shift, KeyUp)
+		if sel.Len() != n-1 {
+			t.Fatalf("Shift+Up after Shift+End over %d rows chose %d, want %d", n, sel.Len(), n-1)
+		}
+		return calls
+	}
+	small, large := keyCalls(10_000), keyCalls(100_000)
+	if large > 2*small+16 {
+		t.Fatalf("Shift+Up asked %d keys over 10 000 chosen rows and %d over 100 000", small, large)
+	}
+}

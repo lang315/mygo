@@ -6,6 +6,7 @@ package gifvideo
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/gif"
 	"io"
@@ -33,6 +34,15 @@ type gifDecoder struct {
 // byte each, and each frame is drawn as it plays. The player's SetLoop,
 // not the GIF's loop count, says whether it plays again.
 func NewDecoder(data []byte) (ui.VideoDecoder, error) {
+	// The header only: image/gif refuses a frame past the logical screen, so
+	// this bounds the frames' pixels too.
+	cfg, err := gif.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > ui.MaxImagePixels {
+		return nil, fmt.Errorf("gifvideo: a GIF of %d×%d pixels, more than ui.MaxImagePixels", cfg.Width, cfg.Height)
+	}
 	g, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
 		return nil, err

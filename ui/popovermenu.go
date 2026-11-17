@@ -963,6 +963,9 @@ func menuIconBitmap(ic *platform.MenuIcon, tint Color) *Bitmap {
 		}
 		return b
 	}
+	if cfg, err := DecodeBitmapConfig(ic.PNG); err != nil || int64(cfg.Width)*int64(cfg.Height) > MaxImagePixels {
+		return nil
+	}
 	img, _, err := image.Decode(bytes.NewReader(ic.PNG))
 	if err != nil {
 		return nil
