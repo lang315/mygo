@@ -120,6 +120,12 @@ func weakOf[T any, P interface {
 	}
 }
 
+// MaxImagePixels is how many pixels (width × height) an image DecodeBitmap
+// or NewAPNGDecoder decodes may have, 67 megapixels (8192×8192): larger is
+// an error, read from its header, so that a small file claiming a huge size
+// takes no gigabytes to decode.
+const MaxImagePixels = 1 << 26
+
 // DecodeBitmap decodes a PNG image, and a GIF (its first frame), JPEG, WebP or
 // BMP image once the program imports its decoder, which an app that has none
 // of them does not link: `import _ "image/gif"`, `import _ "image/jpeg"`,
@@ -127,8 +133,9 @@ func weakOf[T any, P interface {
 // (package gifvideo imports image/gif as well). An image
 // of such a format with no decoder is an error that names the import
 // (errors.Is(err, image.ErrFormat) holds). A JPEG photo shows upright, as its
-// camera's EXIF orientation says. The bitmap keeps data, without a copy, to
-// decode it again after ReleasePixels.
+// camera's EXIF orientation says. An image of more than MaxImagePixels is an
+// error. The bitmap keeps data, without a copy, to decode it again after
+// ReleasePixels.
 func DecodeBitmap(data []byte) (*Bitmap, error) {
 	s, err := decodeImage(data)
 	if err != nil {
@@ -152,6 +159,13 @@ func DecodeBitmapConfig(data []byte) (image.Config, error) {
 // decodeImage decodes the bytes to a premultiplied RGBA bitmap, upright
 // as a JPEG's EXIF orientation says.
 func decodeImage(data []byte) (*scene.Image, error) {
+	cfg, err := DecodeBitmapConfig(data)
+	if err != nil {
+		return nil, err
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > MaxImagePixels {
+		return nil, fmt.Errorf("ui: an image of %d×%d pixels, more than MaxImagePixels", cfg.Width, cfg.Height)
+	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, missingDecoder(data, err)

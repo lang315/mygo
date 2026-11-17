@@ -9,7 +9,6 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
-	"math"
 	"time"
 )
 
@@ -47,7 +46,8 @@ var pngSignature = []byte("\x89PNG\r\n\x1a\n")
 // NewVideoPlayer, as browsers show them: a frame of 10 ms or less shows
 // for 100 ms. A PNG that is not animated is a video of one frame. Each
 // frame is kept compressed, and decoded as it plays. The player's
-// SetLoop, not the PNG's count of plays, says whether it plays again.
+// SetLoop, not the PNG's count of plays, says whether it plays again. A PNG
+// of more than MaxImagePixels is an error.
 func NewAPNGDecoder(data []byte) (VideoDecoder, error) {
 	if !bytes.HasPrefix(data, pngSignature) {
 		return nil, errors.New("ui: not a PNG")
@@ -90,7 +90,7 @@ func NewAPNGDecoder(data []byte) (VideoDecoder, error) {
 			}
 			ihdr = chunk
 			w, h = int(binary.BigEndian.Uint32(chunk)), int(binary.BigEndian.Uint32(chunk[4:]))
-			if w <= 0 || h <= 0 || uint64(w)*uint64(h) > math.MaxInt/4 {
+			if w <= 0 || h <= 0 || uint64(w)*uint64(h) > MaxImagePixels {
 				return nil, errors.New("ui: a PNG of an invalid size")
 			}
 		case "PLTE", "tRNS":

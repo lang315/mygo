@@ -50,11 +50,18 @@ type rtfReader struct {
 	text  strings.Builder // the run being read
 	runA  Attributes
 	// inst is a field's instruction; marker is a paragraph's list text.
-	inst   string
+	inst   strings.Builder
 	marker strings.Builder
 	listed bool
 	level  int
+	// deeper counts the groups open past maxRTFDepth, which keep the
+	// state of the group they are in rather than stack one each.
+	deeper int
 }
+
+// maxRTFDepth is how deep groups stack, so that a document of braces alone
+// takes no memory for each.
+const maxRTFDepth = 256
 
 // flush ends the run being read.
 func (r *rtfReader) flush() {
@@ -72,7 +79,7 @@ func (r *rtfReader) emit(s string) {
 		r.marker.WriteString(s)
 		return
 	case st.field == "inst":
-		r.inst += s
+		r.inst.WriteString(s)
 		return
 	case st.skip, st.hide:
 		return
@@ -118,9 +125,18 @@ func (r *rtfReader) read() {
 		c := s[r.i]
 		switch c {
 		case '{':
-			r.stack = append(r.stack, r.state)
+			if len(r.stack) < maxRTFDepth {
+				r.stack = append(r.stack, r.state)
+			} else {
+				r.deeper++
+			}
 			r.i++
 		case '}':
+			r.i++
+			if r.deeper > 0 {
+				r.deeper--
+				continue
+			}
 			wasInst := r.state.field == "inst"
 			if n := len(r.stack); n > 0 {
 				r.state = r.stack[n-1]
@@ -129,10 +145,9 @@ func (r *rtfReader) read() {
 			if wasInst && r.state.field != "inst" {
 				// The field's group: its result links to the URL of its
 				// instruction.
-				r.state.link = safeLink(hyperlink(r.inst))
-				r.inst = ""
+				r.state.link = safeLink(hyperlink(r.inst.String()))
+				r.inst.Reset()
 			}
-			r.i++
 		case '\\':
 			r.i++
 			if r.i >= len(s) {

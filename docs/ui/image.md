@@ -25,6 +25,13 @@ much smaller than its pixels, as a photo in a thumbnail, is drawn from a
 copy halved as many times as that keeps it no smaller, made once, so that
 it shows every pixel's part rather than shimmering.
 
+`DecodeBitmap` and `NewAPNGDecoder` refuse an image of more than
+`ui.MaxImagePixels` (67 megapixels, as 8192×8192), read from its header
+before any pixel is decoded, so that a small file claiming a huge size
+takes no gigabytes. Phone and camera photos (48 to 61 megapixels) decode;
+a larger image, as a 100-megapixel camera's, is an error: decode it with
+package `image` and scale it down for `NewBitmap`.
+
 ### Formats
 
 An app pays only for the decoders it uses: package `ui` links PNG, and a

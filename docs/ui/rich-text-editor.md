@@ -456,7 +456,9 @@ selection pastes with its formatting.
 
 - HTML, as browsers, mail, Word and Google Docs copy it, keeps its
   headings, lists, task lists, quotations, blocks of code, alignment,
-  bold, italic, underline, strikethrough, code and links.
+  bold, italic, underline, strikethrough, code and links. Its `data:`
+  images decode up to twice `ui.MaxImagePixels` in all; those past
+  that keep their URL, as an image too large.
 - RTF, as TextEdit, Pages and WordPad copy it without HTML, keeps its
   paragraphs, alignment, lists, bold, italic, underline, strikethrough and
   links. Fonts, sizes and colors are left out, as
