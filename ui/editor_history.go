@@ -117,7 +117,7 @@ func (ed *editor) edited(s string) string {
 
 // singleLineMax is the runes a single-line input takes by typing, pasting or
 // ReplaceText: its line is shaped whole at every keystroke.
-const singleLineMax = 1 << 16
+const singleLineMax = 1 << 19
 
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.

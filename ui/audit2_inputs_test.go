@@ -145,11 +145,11 @@ func TestTextInputHugeValueKeystrokeCost(t *testing.T) {
 	tt.Key(Cmd, KeyV)
 	tt.Type("x")
 	ed := tt.rt.states[tt.rt.focused].editor
-	if n := utf8.RuneCountInString(ed.layout.Params.Text); n > 1<<16 {
-		t.Errorf("a keystroke shaped %d runes, more than %d", n, 1<<16)
+	if n := utf8.RuneCountInString(ed.layout.Params.Text); n > 1<<19 {
+		t.Errorf("a keystroke shaped %d runes, more than %d", n, 1<<19)
 	}
-	if n := utf8.RuneCountInString(s); n != 1<<16 || strings.Contains(s, "\n") || !strings.HasPrefix(s, "ab ab ") {
-		t.Errorf("value of %d runes, want the paste cut at %d with its breaks as spaces", n, 1<<16)
+	if n := utf8.RuneCountInString(s); n != 1<<19 || strings.Contains(s, "\n") || !strings.HasPrefix(s, "ab ab ") {
+		t.Errorf("value of %d runes, want the paste cut at %d with its breaks as spaces", n, 1<<19)
 	}
 }
 
