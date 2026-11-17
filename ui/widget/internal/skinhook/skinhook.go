@@ -40,7 +40,8 @@ type Tokens struct {
 	Chrome, Background ui.Color
 	// Border divides; BorderStrong ends headers and the window.
 	Border, BorderStrong ui.Color
-	// Text, TextMuted (secondary) and TextPlaceholder (placeholders).
+	// Text, TextMuted (secondary) and TextPlaceholder (placeholders), which
+	// takes no effect yet: no control reads it.
 	Text, TextMuted, TextPlaceholder ui.Color
 	// The face of a control at rest, hovered and pressed.
 	Surface, SurfaceHover, SurfacePressed ui.Color
@@ -57,18 +58,26 @@ type Tokens struct {
 	// Chart colors the series and slices of charts, in order.
 	Chart [8]ui.Color
 
+	// The sizes, in DIPs. SettingsRowHeight, RadiusDialog and Icon take no
+	// effect yet: no control reads them.
 	ControlHeight, RowHeight, HeaderHeight, SettingsRowHeight    float32
 	TabHeight, MenuBarStripHeight, MenuBarItemHeight             float32
 	RadiusControl, RadiusCard, RadiusDialog                      float32
 	ToolbarPadTop, ToolbarPadBottom, ToolbarGap, ToolbarGroupGap float32
 	Icon, ToolbarIcon, CheckSize, SwitchWidth, SwitchHeight      float32
 
+	// The roles of text. Only Body's size takes effect yet: Caption, Label,
+	// Heading and Title, and Body's line and weight, no control reads.
 	Body, Caption, Label, Heading, Title Type
+	// Font is the family of text, "" the system's; a font of the app's own
+	// comes in with ui.RegisterFont.
+	Font string
 
 	// Elevation is 0 flat, 1 a card, 2 a popover, 3 a dialog.
 	Elevation [4]Shadow
 
 	// Hover is how long a hover or press change takes, Toggle a switch's.
+	// Both take no effect yet: no control reads them.
 	Hover, Toggle time.Duration
 }
 

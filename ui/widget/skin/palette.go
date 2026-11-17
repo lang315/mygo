@@ -6,8 +6,8 @@ import (
 )
 
 // Palette is the accent of a skin: the accent family, the Info family of
-// the running state, the selected row and the text selection, in light and dark. Every palette passes the skin's contrast
-// floors and keeps its Info apart from the status colors, also for a
+// the running state, the selected row and the text selection, in light and
+// dark. Every palette MyGo ships passes the skin's contrast floors and keeps its Info apart from the status colors, also for a
 // red-green color-blind eye. A skin takes one with WithPalette:
 //
 //	skin.Use(skin.Calm.WithPalette(skin.Teal))
@@ -31,38 +31,51 @@ func (p *Palette) Name() string { return p.name }
 // GTK's Adwaita, GNOME's blue 4 in light, since white on Adwaita's own
 // #3584e4 is under 4.5:1.
 var (
-	Cham   = newPalette("Chàm", lightFamily("#4e3bb0", "#45349b", "#3b2d86", "#46359e"), darkFamily("#9384f0", "#a79bf3", "#7f6eed", "#bdb4f9", "#0e0b2a"))
-	Indigo = newPalette("Indigo", lightFamily("#4f46e5", "#4338ca", "#3730a3", "#3f37c9"), darkFamily("#8b8ff9", "#a3a6fb", "#7477ef", "#b9bcfc", "#0e0f2a"))
-	Ink    = newPalette("Ink", lightFamily("#2c4f8c", "#26457b", "#203b69", "#284778"), darkFamily("#7b9fdc", "#93b1e4", "#6a8dcf", "#a9c1ea", "#0b1220"))
-	Teal   = newPalette("Teal", lightFamily("#0f766e", "#0c665f", "#0a5650", "#0b5d56"), darkFamily("#2bb5a3", "#45c4b3", "#20a090", "#7fdccf", "#06201c")).
-		withInfo(lightFamily("#3d5f8f", "#36547e", "#2e486d", "#34507a"), darkFamily("#8c9fe0", "#9dade5", "#7e8fca", "#b6c2f2", "#0b1220"))
-	Blue = newPalette("Blue", lightFamily("#1c71d8", "#1a5fb4", "#174f96", "#1a5fb4"), darkFamily("#78aeed", "#92bdf1", "#5f9be6", "#a8cbf5", "#0b1220"))
+	Cham = NewPalette("Chàm",
+		LightFamily(ui.Hex("#4e3bb0"), ui.Hex("#45349b"), ui.Hex("#3b2d86"), ui.Hex("#46359e")),
+		DarkFamily(ui.Hex("#9384f0"), ui.Hex("#a79bf3"), ui.Hex("#7f6eed"), ui.Hex("#bdb4f9"), ui.Hex("#0e0b2a")))
+	Indigo = NewPalette("Indigo",
+		LightFamily(ui.Hex("#4f46e5"), ui.Hex("#4338ca"), ui.Hex("#3730a3"), ui.Hex("#3f37c9")),
+		DarkFamily(ui.Hex("#8b8ff9"), ui.Hex("#a3a6fb"), ui.Hex("#7477ef"), ui.Hex("#b9bcfc"), ui.Hex("#0e0f2a")))
+	Ink = NewPalette("Ink",
+		LightFamily(ui.Hex("#2c4f8c"), ui.Hex("#26457b"), ui.Hex("#203b69"), ui.Hex("#284778")),
+		DarkFamily(ui.Hex("#7b9fdc"), ui.Hex("#93b1e4"), ui.Hex("#6a8dcf"), ui.Hex("#a9c1ea"), ui.Hex("#0b1220")))
+	Teal = NewPalette("Teal",
+		LightFamily(ui.Hex("#0f766e"), ui.Hex("#0c665f"), ui.Hex("#0a5650"), ui.Hex("#0b5d56")),
+		DarkFamily(ui.Hex("#2bb5a3"), ui.Hex("#45c4b3"), ui.Hex("#20a090"), ui.Hex("#7fdccf"), ui.Hex("#06201c"))).
+		withInfo(LightFamily(ui.Hex("#3d5f8f"), ui.Hex("#36547e"), ui.Hex("#2e486d"), ui.Hex("#34507a")),
+			DarkFamily(ui.Hex("#8c9fe0"), ui.Hex("#9dade5"), ui.Hex("#7e8fca"), ui.Hex("#b6c2f2"), ui.Hex("#0b1220")))
+	Blue = NewPalette("Blue",
+		LightFamily(ui.Hex("#1c71d8"), ui.Hex("#1a5fb4"), ui.Hex("#174f96"), ui.Hex("#1a5fb4")),
+		DarkFamily(ui.Hex("#78aeed"), ui.Hex("#92bdf1"), ui.Hex("#5f9be6"), ui.Hex("#a8cbf5"), ui.Hex("#0b1220")))
 )
 
 var white = ui.Hex("#ffffff")
 
-// lightFamily is a light family from its base, hover, pressed and text:
-// white on the base, and the subtle fill and border the base mixed with
-// white at 92% and 70%.
-func lightFamily(base, hover, pressed, text string) skinhook.Family {
-	b := ui.Hex(base)
-	return skinhook.Family{Base: b, Hover: ui.Hex(hover), Pressed: ui.Hex(pressed),
-		Subtle: b.Mix(white, 0.92), Border: b.Mix(white, 0.70), Text: ui.Hex(text), On: white}
+// LightFamily is a family of the light appearance from its base, hover,
+// pressed and text colors: white on the base, and the subtle fill and border
+// the base mixed with white at 92% and 70%.
+func LightFamily(base, hover, pressed, text ui.Color) Family {
+	return Family{Base: base, Hover: hover, Pressed: pressed,
+		Subtle: base.Mix(white, 0.92), Border: base.Mix(white, 0.70), Text: text, On: white}
 }
 
-// darkFamily is a dark family from its base, hover, pressed, text and the
-// color on the base: the subtle fill and border the base at 14% and 35%.
-func darkFamily(base, hover, pressed, text, on string) skinhook.Family {
-	b := ui.Hex(base)
-	return skinhook.Family{Base: b, Hover: ui.Hex(hover), Pressed: ui.Hex(pressed),
-		Subtle: b.Alpha(0.14), Border: b.Alpha(0.35), Text: ui.Hex(text), On: ui.Hex(on)}
+// DarkFamily is a family of the dark appearance from its base, hover,
+// pressed and text colors and the color on the base: the subtle fill and
+// border the base at 14% and 35% alpha.
+func DarkFamily(base, hover, pressed, text, on ui.Color) Family {
+	return Family{Base: base, Hover: hover, Pressed: pressed,
+		Subtle: base.Alpha(0.14), Border: base.Alpha(0.35), Text: text, On: on}
 }
 
-// newPalette is a palette whose Info is its accent: the selected row and the
-// selection are the light base mixed with white at 82% and 68%, and the dark
-// base at 16% and 35%. The light selection stands 1.2:1 from the row, for
-// text selected in a cell edited in place.
-func newPalette(name string, light, dark skinhook.Family) *Palette {
+// NewPalette returns a palette of the accent families light and dark, whose
+// Info is its accent: the selected row and the text selection are the light
+// base mixed with white at 82% and 68%, and the dark base at 16% and 35%
+// alpha. The light selection stands 1.2:1 from the row, for text selected in
+// a cell edited in place. Skin.Check measures a skin with it.
+//
+//	skin.Use(skin.Calm.WithPalette(skin.NewPalette("Brand", light, dark)))
+func NewPalette(name string, light, dark Family) *Palette {
 	return &Palette{name: name,
 		light: paletteTokens{accent: light, info: light,
 			rowSelected: light.Base.Mix(white, 0.82), selection: light.Base.Mix(white, 0.68)},

@@ -6,14 +6,79 @@
 //
 // and every window takes it in its next frame. An app that does not import
 // the package keeps the plain look and links none of it.
+//
+// An app makes a skin of its own from another's tokens, changing those it
+// wants, and an accent of its own with a palette; a font of its own comes in
+// with ui.RegisterFont:
+//
+//	l, d := skin.Calm.Tokens(false), skin.Calm.Tokens(true)
+//	l.Background, l.RowHeight = ui.Hex("#fffaf0"), 28
+//	ui.RegisterFont(interTTF, "Inter")
+//	l.Font, d.Font = "Inter", "Inter"
+//	brand := skin.NewPalette("Brand",
+//		skin.LightFamily(ui.Hex("#7c3aed"), ui.Hex("#6d28d9"), ui.Hex("#5b21b6"), ui.Hex("#6d28d9")),
+//		skin.DarkFamily(ui.Hex("#a78bfa"), ui.Hex("#c4b5fd"), ui.Hex("#8b5cf6"), ui.Hex("#ddd6fe"), ui.Hex("#1e1033")))
+//	s := skin.New("Brand", l, d).WithPalette(brand)
+//	if err := s.Check(); err != nil {
+//		log.Print(err) // the pairs under the contrast floors; the skin still works
+//	}
+//	skin.Use(s)
 package skin
 
 import (
+	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
+
+// Tokens are every value a skin decides in one appearance: colors, sizes,
+// radii, type, elevation and motion, and the font.
+type Tokens = skinhook.Tokens
+
+// Family is a semantic role's colors: the accent, Info and the status colors.
+type Family = skinhook.Family
+
+// Type is a role of text: its size, line height and weight.
+type Type = skinhook.Type
+
+// Shadow is a drop shadow of the elevation.
+type Shadow = skinhook.Shadow
+
+// New returns a skin of the tokens light and dark, which it copies. It does
+// not check them: Check does.
+//
+//	skin.Use(skin.New("Brand", light, dark))
+func New(name string, light, dark Tokens) *Skin {
+	return &Skin{name: name, light: light, dark: dark}
+}
+
+// Tokens returns a copy of the skin's tokens in the dark or the light
+// appearance, to change and make a skin of with New.
+func (s *Skin) Tokens(dark bool) Tokens {
+	if dark {
+		return s.dark
+	}
+	return s.light
+}
+
+// Check measures the skin's contrast in both appearances, as the skins MyGo
+// ships pass it: text 4.5:1, outlines and chart colors 3:1, the control
+// states apart, and Info apart from the status colors. The error names the
+// appearance and every failing pair; nil means all pass. A skin that fails
+// still works: Use does not check.
+func (s *Skin) Check() error {
+	var errs []error
+	if err := check(&s.light, false); err != nil {
+		errs = append(errs, fmt.Errorf("light: %w", err))
+	}
+	if err := check(&s.dark, true); err != nil {
+		errs = append(errs, fmt.Errorf("dark: %w", err))
+	}
+	return errors.Join(errs...)
+}
 
 // Skin is a look: a name, its palette and its tokens in the light and the
 // dark appearance.
