@@ -229,6 +229,51 @@ describe("channels", () => {
   });
 });
 
+describe("receive", () => {
+  test("ignores a replaced Array.isArray", async () => {
+    const { sent, runtime, internal } = setup();
+    const p = runtime.call("Svc.Get");
+    const { id, k } = sent[0] as CallMsg;
+    const isArray = Array.isArray;
+    Array.isArray = ((_: unknown): _ is any[] => false) as typeof Array.isArray;
+    try {
+      internal.receive([{ t: "reply", id, k, ok: true, v: "batched" }]);
+    } finally {
+      Array.isArray = isArray;
+    }
+    expect(await Promise.race([p, Promise.resolve("pending")])).toBe("batched");
+  });
+
+  test("parses a batch sent as a string with the JSON.parse it started with", async () => {
+    const { sent, runtime, internal } = setup();
+    const p = runtime.call("Svc.Get");
+    const { id, k } = sent[0] as CallMsg;
+    const parse = JSON.parse;
+    JSON.parse = () => [];
+    try {
+      internal.receive(`[{"t":"reply","id":${id},"k":"${k}","ok":true,"v":{"__proto__":{"a":1}}}]`);
+    } finally {
+      JSON.parse = parse;
+    }
+    const v: any = await Promise.race([p, Promise.resolve("pending")]);
+    expect(v).not.toBe("pending");
+    expect(Object.keys(v)).toEqual(["__proto__"]);
+    expect(Object.getPrototypeOf(v)).toBe(Object.prototype);
+  });
+
+  test("a page restored from the back/forward cache fails the calls it made before", async () => {
+    const { runtime, internal } = setup();
+    const ch = runtime.channel();
+    const p = runtime.call("Svc.Stream", ch);
+    internal.restored();
+    // p itself, first: settled by now, its reaction is queued ahead of
+    // "pending"'s (a p.catch would settle a microtask later and lose).
+    const err = await Promise.race([p, Promise.resolve("pending")]).catch((e) => e);
+    expect(err).toBeInstanceOf(CallError);
+    expect(ch.closed).toBe(true);
+  });
+});
+
 test("runtime object is frozen", () => {
   const { runtime } = setup();
   expect(runtime.platform).toBe("darwin");

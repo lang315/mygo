@@ -1,6 +1,7 @@
 package mygo
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/egoist/mygo/internal/jsonlite"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehook"
 	"github.com/egoist/mygo/internal/surface"
@@ -1957,6 +1959,10 @@ type message struct {
 	// of a channel), canceled when the page navigates away; nil for an event,
 	// which any page of the window gets.
 	doc context.Context
+	// app marks an event the app sent to its windows (Event.Emit,
+	// Event.Broadcast), which only a trusted page gets; MyGo's own (mygo:),
+	// and one sent to a page (Event.EmitPage), go to the page as it is.
+	app bool
 }
 
 func (m message) len() int { return len(m.head) + len(m.value) + len(m.tail) }
@@ -1995,6 +2001,9 @@ func (w *Window) enqueue(msg message, event bool) {
 	}
 }
 
+// protoKey ends a "__proto__" member in an encoded value.
+var protoKey = []byte(`proto__"`)
+
 func (w *Window) flush() {
 	w.outMu.Lock()
 	msgs := w.outbox
@@ -2019,18 +2028,22 @@ func (w *Window) flush() {
 	}
 	js = append(js, '[')
 	n := 0
+	proto := false
 	for _, m := range msgs {
-		// A web message reaches every listener of the page, not only the
-		// bridge's receive: a reply, or the values of a channel, goes only
-		// while the page that asked is the window's (its context is not
-		// canceled). After a navigation the reply of a call of the last
-		// document is dropped, and with it what a page of another origin
-		// could read with a listener of its own. A navigation that the browser
-		// has committed and the window has yet to hear of (the commit
-		// callback) leaves a moment in which the browser delivers a posted
-		// message to the new document.
-		if posting && m.doc != nil && m.doc.Err() != nil {
+		// A reply, or the values of a channel, goes only while the page that
+		// asked is the window's (its context is not canceled): after a
+		// navigation the reply of a call of the last document is dropped, and
+		// with it what a page of another origin could read, with a listener
+		// of its own for a web message or a __mygo.receive of its own for a
+		// script. A navigation that the browser has committed and the window
+		// has yet to hear of (the commit callback) leaves a moment in which
+		// the browser delivers it to the new document. The app's events go
+		// only to a page it trusts, as the drop of files does.
+		if m.doc != nil && m.doc.Err() != nil || m.app && !w.trusted {
 			continue
+		}
+		if !proto && !posting {
+			proto = bytes.Contains(m.value, protoKey)
 		}
 		if n > 0 {
 			js = append(js, ',')
@@ -2045,6 +2058,12 @@ func (w *Window) flush() {
 	if posting {
 		poster.PostMessages(unsafe.String(unsafe.SliceData(js), len(js)))
 		return
+	}
+	if proto {
+		// In a JavaScript literal a "__proto__" member sets the object's
+		// prototype; JSON.parse, which receive runs on a string, keeps it a
+		// member.
+		js = jsonlite.AppendQuote([]byte("__mygo.receive("), string(js[len("__mygo.receive("):]))
 	}
 	js = append(js, ')')
 	// js is not used again, so the script can share its memory.

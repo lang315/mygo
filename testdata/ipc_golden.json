@@ -80,9 +80,15 @@
 		]
 	},
 	"call/envelope a object": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: value of another type\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope a string": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: value of another type\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope a whitespace": {
@@ -99,9 +105,15 @@
 		]
 	},
 	"call/envelope comma": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope control char": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope depth": {
@@ -113,6 +125,9 @@
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope duplicate m": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":3,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope id exponent": {
@@ -148,6 +163,9 @@
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope invalid utf8 arg": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope k escapes": {
@@ -167,6 +185,9 @@
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope lone surrogate m": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope m missing": {
@@ -175,6 +196,9 @@
 		]
 	},
 	"call/envelope m number": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: value of another type\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope nested arg": {
@@ -199,9 +223,15 @@
 		]
 	},
 	"call/envelope trailing garbage": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope trailing object": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope trailing space": {
@@ -210,6 +240,9 @@
 		]
 	},
 	"call/envelope truncated": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/envelope unknown field": {
@@ -313,6 +346,9 @@
 		]
 	},
 	"call/map duplicate key": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/method with html": {
@@ -382,6 +418,9 @@
 		]
 	},
 	"call/point duplicate field": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/point lowercase": {
@@ -430,6 +469,9 @@
 		]
 	},
 	"call/str lone surrogate": {
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
+		],
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"call/str missing": {
