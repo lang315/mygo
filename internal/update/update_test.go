@@ -5,9 +5,11 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 )
 
@@ -32,6 +34,18 @@ func TestCompare(t *testing.T) {
 		if got := Compare(c.b, c.a); got != -c.want {
 			t.Errorf("Compare(%q, %q) = %d, want %d", c.b, c.a, got, -c.want)
 		}
+	}
+}
+
+func TestVersionDigest(t *testing.T) {
+	zero := make([]byte, 32)
+	got := hex.EncodeToString(VersionDigest("1.2.3", zero))
+	if want := "ebf2f4eba9d2e3fb7efe85a9ed37a5cb3547bb342136dc6bd3c50784d1bb89f2"; got != want {
+		t.Errorf("VersionDigest = %s, want %s", got, want)
+	}
+	other := append(slices.Clone(zero[:31]), 1)
+	if bytes.Equal(VersionDigest("1.2.3", zero), VersionDigest("1.2.4", zero)) || bytes.Equal(VersionDigest("1.2.3", zero), VersionDigest("1.2.3", other)) {
+		t.Error("VersionDigest ignores its version or its digest")
 	}
 }
 
