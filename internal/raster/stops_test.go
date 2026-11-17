@@ -201,6 +201,22 @@ func TestImageBlur(t *testing.T) {
 	}
 }
 
+// An image and a backdrop blurred by an infinite, NaN or huge blur draw,
+// without a panic or a loop over a radius without end (BackdropOf caps it).
+func TestBadBlurDraws(t *testing.T) {
+	for _, blur := range []float32{float32(math.Inf(1)), float32(math.NaN()), 1e9} {
+		const n = 16
+		src := &scene.Image{W: n, H: n, Pix: make([]byte, 4*n*n)}
+		s := &scene.Scene{Width: n, Height: n}
+		s.Effects = []scene.EffectOp{{Effect: lensEffect, Blur: blur}}
+		s.Ops = []scene.Op{
+			{Kind: scene.OpImage, Rect: scene.Rect{W: n, H: n}, Image: src, Src: scene.Rect{W: n, H: n}, Blur: blur},
+			{Kind: scene.OpEffect, Rect: scene.Rect{X: 2, Y: 2, W: 8, H: 8}},
+		}
+		Render(NewImage(n, n), s)
+	}
+}
+
 // The sRGB table that Oklab mixes convert with is toSRGB within the
 // rounding of a channel, and nothing else.
 func TestSRGBTable(t *testing.T) {

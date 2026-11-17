@@ -51,6 +51,55 @@ func TestEvdev(t *testing.T) {
 	t.Run("Xbox", func(t *testing.T) { testEvdev(t, 0x045e, btnNorth) })
 }
 
+// After SYN_DROPPED, drain ignores the events up to the next SYN_REPORT,
+// then reads the device's state anew (resync), and applies the events
+// after it.
+func TestSynDroppedResyncs(t *testing.T) {
+	var fds [2]int
+	if err := syscall.Pipe2(fds[:], syscall.O_NONBLOCK|syscall.O_CLOEXEC); err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fds[0])
+	defer syscall.Close(fds[1])
+	resyncs := 0
+	defer func(f func(*evdevPad)) { resync = f }(resync)
+	resync = func(d *evdevPad) {
+		resyncs++
+		d.keys[btnWest] = true // as the device reports it now
+	}
+	var events []byte
+	emit := func(typ, code uint16, value int32) {
+		var e [24]byte
+		binary.LittleEndian.PutUint16(e[16:], typ)
+		binary.LittleEndian.PutUint16(e[18:], code)
+		binary.LittleEndian.PutUint32(e[20:], uint32(value))
+		events = append(events, e[:]...)
+	}
+	emit(evKey, btnSouth, 1)
+	emit(0, 0, 0) // SYN_REPORT
+	emit(0, 3, 0) // SYN_DROPPED
+	emit(evKey, btnEast, 1)
+	emit(0, 0, 0)
+	emit(evKey, btnNorth, 1)
+	emit(0, 0, 0)
+	if _, err := syscall.Write(fds[1], events); err != nil {
+		t.Fatal(err)
+	}
+	d := &evdevPad{fd: fds[0], buf: make([]byte, 24*64)}
+	if !d.drain() {
+		t.Fatal("drain reported the device gone")
+	}
+	if resyncs != 1 {
+		t.Errorf("%d resyncs, want 1", resyncs)
+	}
+	if !d.keys[btnSouth] || !d.keys[btnWest] || !d.keys[btnNorth] {
+		t.Errorf("South %v, West (resynced) %v, North (after) %v: want all pressed", d.keys[btnSouth], d.keys[btnWest], d.keys[btnNorth])
+	}
+	if d.keys[btnEast] {
+		t.Error("East pressed by an event of the dropped packet")
+	}
+}
+
 func testEvdev(t *testing.T, vendor uint16, west uint16) {
 	fd, err := syscall.Open("/dev/uinput", syscall.O_WRONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {

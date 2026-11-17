@@ -248,8 +248,9 @@ type Options struct {
 	// :line:col suffix included; a relative one is the program's, as of
 	// Dir. It runs on the main thread and reports whether it opened the
 	// link; a hyperlink or a URL it leaves, or every one when it is nil,
-	// opens with the system (Context.OpenURL), and a path it leaves does
-	// nothing.
+	// opens with the system (Context.OpenURL) when it has a scheme other
+	// than file:, and a path it leaves, a file: link, a UNC path or one with
+	// no scheme does nothing.
 	OpenLink func(link string) bool
 	// OnPaste sees a paste of the clipboard (ActionPaste's keys, a Paste
 	// menu item, a secondary click with RightClickPaste) before the

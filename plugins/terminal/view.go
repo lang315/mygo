@@ -638,7 +638,7 @@ func (v *view) input(ev ui.InputEvent) bool {
 		took := v.pointerEvent(ev)
 		if link := v.opening; link != "" {
 			v.opening = ""
-			if open := v.t.opts.OpenLink; (open == nil || !open(link)) && !v.openingPath {
+			if open := v.t.opts.OpenLink; (open == nil || !open(link)) && !v.openingPath && systemOpens(link) {
 				v.services.OpenURL(link)
 			}
 		}
@@ -669,6 +669,23 @@ func (v *view) input(ev ui.InputEvent) bool {
 		return v.scroll(ev)
 	}
 	return false
+}
+
+// systemOpens reports whether the system may open link, which OpenLink
+// left: one with a scheme other than file:, not a path the system would
+// run or open, as file:///x, \\host\share\x.exe, //host/x, C:\x or x.exe.
+func systemOpens(link string) bool {
+	i := strings.IndexByte(link, ':')
+	if i < 2 {
+		return false // no scheme, or a drive letter
+	}
+	for j, c := range link[:i] {
+		letter := 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
+		if !letter && (j == 0 || !('0' <= c && c <= '9' || c == '+' || c == '-' || c == '.')) {
+			return false
+		}
+	}
+	return !strings.EqualFold(link[:i], "file")
 }
 
 // goos is the system whose keys keyDown reads; tests read macOS's.
@@ -714,7 +731,11 @@ func (v *view) keyDown(ev ui.InputEvent) bool {
 	if altMeta && typesText(key) && mods&ui.Ctrl == 0 {
 		// Alt as Meta: the character, which the encoder prefixes with Esc.
 		text = string(unshifted)
-		if mods&ui.Shift != 0 {
+		// Linux's keys are the layout's, Shift's symbol already (Shift+7 is
+		// KeySlash on a German one): only letters go uppercase there.
+		// Elsewhere shifted gives the US keyboard's symbol, which on
+		// Windows with another layout may not be the layout's.
+		if mods&ui.Shift != 0 && (goos != "linux" || 'a' <= unshifted && unshifted <= 'z') {
 			text = shiftedText(key, unshifted)
 		}
 		if mac {
