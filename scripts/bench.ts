@@ -2,17 +2,18 @@
 // /measures page shows. .github/workflows/bench.yml runs them on every
 // push to main, on macOS, Linux and Windows:
 //
-//   bun scripts/bench.ts run [--e2e] [--count 6] [--benchtime 500ms] [--out file] [packages...]
+//   bun scripts/bench.ts run [--e2e] [--count 6] [--benchtime 500ms] [--out file] [--skip package]... [packages...]
 //   bun scripts/bench.ts merge <data dir> <result files...>
 //
 // run measures the checkout it runs in: the Go benchmarks of every package
-// that has some (or of the packages given), those of internal/e2e with
+// that has some but those of --skip (or of the packages given), those of internal/e2e with
 // --e2e, which need a desktop session, the size of release builds of two
 // examples, and with --e2e their memory once idle (internal/idlemem).
 // Packages run one at a time, each benchmark --count times, as each app,
 // and the median of each metric is kept.
 //
-// merge adds results to a checkout of the benchmarks branch:
+// merge adds results to a checkout of the benchmarks branch, those of a
+// commit's shards on an OS as one run:
 // history/<yyyy-mm-dd>.json keeps every commit of a day (UTC), small files
 // that each push rewrites one of, and latest.json the last commits, by
 // series, which the website fetches.
@@ -51,7 +52,8 @@ export interface Commit {
   sha: string;
   date: string;
   message: string;
-  runs: Record<string, Runner & { count: number; results: Results }>;
+  /** cpus: by package, the CPU of the shard that measured it, where another than cpu. */
+  runs: Record<string, Runner & { count: number; results: Results; cpus?: Record<string, string> }>;
 }
 
 /** latest.json: the last commits, oldest first, and their values by series. */
@@ -60,6 +62,8 @@ export interface Latest {
   commits: { sha: string; date: string; message: string }[];
   /** By OS: the runner of each commit, null where the OS has no run. */
   runners: Record<string, (Runner | null)[]>;
+  /** By OS and package: the CPU that measured the package at each commit, where another than the runner's. */
+  cpus?: Record<string, Record<string, (string | null)[]>>;
   /** By OS, package, benchmark and unit: the value at each commit, or null. */
   series: Record<string, Record<string, Record<string, Record<string, (number | null)[]>>>>;
 }
@@ -91,15 +95,18 @@ async function run(args: string[]): Promise<void> {
   let benchtime = "500ms";
   let out = "";
   const pkgs: string[] = [];
+  const skip = new Set<string>();
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "--e2e") e2e = true;
     else if (arg === "--count") count = Number(args[++i]);
     else if (arg === "--benchtime") benchtime = args[++i]!;
     else if (arg === "--out") out = args[++i]!;
+    else if (arg === "--skip") skip.add(args[++i]!);
     else pkgs.push(arg);
   }
-  if (!pkgs.length) pkgs.push(...(await benchmarkPackages(e2e)));
+  // Windows names them with backslashes.
+  if (!pkgs.length) pkgs.push(...(await benchmarkPackages(e2e)).filter((p) => !skip.has(p.replaceAll("\\", "/"))));
 
   const [goVersion, goos, goarch] = output(["go", "env", "GOVERSION", "GOOS", "GOARCH"]).split("\n");
   const [sha, date, message] = output(["git", "log", "-1", "--format=%H%n%cI%n%s"]).split("\n");
@@ -324,6 +331,7 @@ export async function mergeRuns(dir: string, runs: Run[], keep = latestCommits):
   const history = join(dir, "history");
   await mkdir(history, { recursive: true });
   const days = new Map<string, Commit[]>();
+  const merged = new Set<string>();
   for (const r of runs) {
     const day = new Date(r.date).toISOString().slice(0, 10);
     let commits = days.get(day);
@@ -336,8 +344,18 @@ export async function mergeRuns(dir: string, runs: Run[], keep = latestCommits):
       commit = { sha: r.sha, date: r.date, message: r.message, runs: {} };
       commits.push(commit);
     }
-    // A run measured again replaces the earlier one.
-    commit.runs[r.os] = { arch: r.arch, cpu: r.cpu, go: r.go, count: r.count, results: r.results };
+    // A run measured again replaces the earlier one. The runs given together
+    // are the shards of one, whose packages add up. Each shard has a machine
+    // of its own, and timings compare only on the same CPU: a package keeps
+    // its shard's.
+    const key = r.sha + " " + r.os;
+    if (!merged.has(key)) commit.runs[r.os] = { arch: r.arch, cpu: r.cpu, go: r.go, count: r.count, results: {} };
+    merged.add(key);
+    const run = commit.runs[r.os]!;
+    for (const [pkg, benchmarks] of Object.entries(r.results)) {
+      run.results[pkg] = benchmarks;
+      if (r.cpu !== run.cpu) (run.cpus ??= {})[pkg] = r.cpu;
+    }
   }
   for (const [day, commits] of days) {
     commits.sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
@@ -371,6 +389,7 @@ export function latest(commits: Commit[]): Latest {
   commits.forEach((c, i) => {
     for (const [os, r] of Object.entries(c.runs)) {
       (data.runners[os] ??= Array(n).fill(null))[i] = { arch: r.arch, cpu: r.cpu, go: r.go };
+      for (const [pkg, cpu] of Object.entries(r.cpus ?? {})) ((((data.cpus ??= {})[os] ??= {})[pkg] ??= Array(n).fill(null)) as (string | null)[])[i] = cpu;
       const byPkg = (data.series[os] ??= {});
       for (const [pkg, benchmarks] of Object.entries(r.results)) {
         for (const [name, metrics] of Object.entries(benchmarks)) {
@@ -401,7 +420,7 @@ if (import.meta.main) {
   if (command === "run") await run(args);
   else if (command === "merge" && args.length >= 2) await merge(args[0]!, args.slice(1));
   else {
-    console.error("usage: bun scripts/bench.ts run [--e2e] [--count n] [--benchtime d] [--out file] [packages...]");
+    console.error("usage: bun scripts/bench.ts run [--e2e] [--count n] [--benchtime d] [--out file] [--skip package]... [packages...]");
     console.error("       bun scripts/bench.ts merge <data dir> <result files...>");
     process.exit(2);
   }

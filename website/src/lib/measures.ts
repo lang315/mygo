@@ -14,6 +14,8 @@ export interface BenchmarkData {
   commits: Commit[]
   /** By OS: the runner of each commit, null where the OS has no run. */
   runners: Record<string, (Runner | null)[]>
+  /** By OS and package: the CPU that measured the package at each commit, where another than the runner's. */
+  cpus?: Record<string, Record<string, (string | null)[]>>
   /** By OS, package, benchmark and unit: the value at each commit, or null. */
   series: Record<string, Record<string, Record<string, Record<string, (number | null)[]>>>>
 }
@@ -209,6 +211,17 @@ export function findSteps(values: (number | null)[], unit: string, runners: (Run
   if (!isTiming(unit)) return stepsOf(values, unit)
   const cpus = new Set(runners.flatMap((r) => (r ? [r.cpu] : [])))
   return [...cpus].flatMap((cpu) => stepsOf(onCPU(values, runners, cpu), unit)).sort((a, b) => a.index - b.index)
+}
+
+/**
+ * The runners of a package's values on os: a run's shards have a machine
+ * each, and cpus names the CPU of a package another than the runner's
+ * measured.
+ */
+export function runnersOf(data: BenchmarkData, os: string, pkg: string): (Runner | null)[] {
+  const runners = data.runners[os] ?? []
+  const cpus = data.cpus?.[os]?.[pkg]
+  return cpus ? runners.map((r, i) => (r && cpus[i] ? { ...r, cpu: cpus[i] } : r)) : runners
 }
 
 /** The values measured on cpu, null elsewhere. */

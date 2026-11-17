@@ -6828,7 +6828,9 @@ after it are not affected. A test that changes them undoes it in a cleanup.
 ### Benchmarks
 
 `.github/workflows/bench.yml` measures every push to main on GitHub's
-macOS, Linux and Windows runners, and the website shows the results at
+macOS, Linux and Windows runners, in three shards per OS (`./ui`,
+`./ui/chart` with `./ui/widget`, and the rest with `--skip` of those),
+whose results `merge` adds up into one run, and the website shows the results at
 [/measures](https://mygo.egoist.dev/measures). `scripts/bench.ts`
 runs them:
 
