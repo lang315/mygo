@@ -1007,23 +1007,32 @@ func mapOffset(off int, changes []change, b bias) int {
 	return c.newEnd
 }
 
+// mapSteps counts the changes mapping looks at, for tests of its cost.
+var mapSteps int
+
 // mapLine moves a line of the text before changes to the text after
 // them; a line the changes replaced goes to where they start.
 func mapLine(line int, changes []change) int {
-	delta := 0
-	for _, c := range changes {
-		if line < c.oldLine {
-			break
+	// The first change ending at or after the line.
+	i, _ := slices.BinarySearchFunc(changes, line, func(c change, l int) int {
+		mapSteps++
+		if c.oldEndLine < l {
+			return -1
 		}
-		if line <= c.oldEndLine {
-			if line == c.oldLine {
-				return c.newLine
-			}
-			return min(c.newLine+(line-c.oldLine), c.newEndLine)
+		return 1
+	})
+	if i < len(changes) && changes[i].oldLine <= line {
+		c := changes[i]
+		if line == c.oldLine {
+			return c.newLine
 		}
-		delta = c.newEndLine - c.oldEndLine
+		return min(c.newLine+(line-c.oldLine), c.newEndLine)
 	}
-	return line + delta
+	if i == 0 {
+		return line
+	}
+	c := changes[i-1]
+	return line + c.newEndLine - c.oldEndLine
 }
 
 // posOf returns the line and column, in bytes, of byte off of t.

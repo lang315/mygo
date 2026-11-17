@@ -103,12 +103,10 @@ func (m *mdReader) block(i int, st ParagraphStyle, depth int) {
 			first := true
 			for cell := range m.d.Children(row) {
 				if !first {
-					p.Runs = addMDRun(p.Runs, Run{Text: "\t", Attributes: a})
+					p.Runs = append(p.Runs, Run{Text: "\t", Attributes: a})
 				}
 				first = false
-				for _, r := range m.runs(m.d.Inlines(cell), a) {
-					p.Runs = addMDRun(p.Runs, r)
-				}
+				p.Runs = append(p.Runs, m.runs(m.d.Inlines(cell), a)...)
 			}
 			m.paras = append(m.paras, p)
 		}
@@ -195,7 +193,9 @@ func (m *mdReader) inlines(out *[]Run, in []parser.Inline, from, to int, a Attri
 		if m.html[3] > 0 {
 			a.Italic = true
 		}
-		*out = addMDRun(*out, Run{Text: s, Attributes: a})
+		// Runs of the same attributes stay apart, TextOf joining them:
+		// joining here copies a long paragraph once a word.
+		*out = append(*out, Run{Text: s, Attributes: a})
 	}
 	for k := from; k < to; k = in[k].Next {
 		n := &in[k]
@@ -269,14 +269,4 @@ func (m *mdReader) tag(s string, out *[]Run, a Attributes) {
 	} else {
 		m.html[which]++
 	}
-}
-
-// addMDRun appends r to runs, joined to the last when their attributes
-// are the same.
-func addMDRun(runs []Run, r Run) []Run {
-	if n := len(runs); n > 0 && runs[n-1].Attributes == r.Attributes && r.Attributes.Attachment == nil {
-		runs[n-1].Text += r.Text
-		return runs
-	}
-	return append(runs, r)
 }
