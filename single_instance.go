@@ -140,6 +140,7 @@ func openSingleInstanceLock(path string) (*os.File, error) {
 		// Another user's file in a shared directory: its lock could keep
 		// this app from starting. Like a directory that cannot lock.
 		f.Close()
+		log.Printf("mygo: the single instance lock file %s belongs to another user: running without single instance locking (RequestSingleInstanceLock)", path)
 		return nil, errors.New("mygo: the single instance lock file belongs to another user")
 	}
 	if err := lockFile(f); err != nil {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/schemehook"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // rec is the responder of a request, which tells what the page got.
@@ -350,7 +351,7 @@ func TestDownloadRecoversAHandlerPanic(t *testing.T) {
 		Finished: func(_ string, err error) { finished <- err },
 	}
 	go schemehook.Linked.Load().Download(d)
-	if err := <-finished; err == nil {
+	if err := wait.For(t, "the download to finish", finished); err == nil {
 		t.Error("a panicking handler finished the download without an error")
 	}
 }
