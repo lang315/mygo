@@ -232,10 +232,9 @@ func TestBuildDMGOnAPFS(t *testing.T) {
 	}
 }
 
-// TestBuildDMGNotarized notarizes the app before copying it into the
-// image, so that the copy users install has the ticket stapled to it, then
-// the image, with an xcrun that accepts what is submitted and staples a
-// ticket where stapling writes it.
+// TestBuildDMGNotarized notarizes the image alone: the app is notarized by
+// the platform build, before it is copied into the image, with an xcrun that
+// accepts what is submitted.
 func TestBuildDMGNotarized(t *testing.T) {
 	c, app, _ := dmgTestApp(t)
 	c.MacOS.Notarize = &Notarize{KeychainProfile: "notary"}
@@ -262,13 +261,9 @@ esac
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(log)
-	want := "submit DMG Test.zip 1\nstaple DMG Test.app\nsubmit " + filepath.Base(dmg) + " 0\nstaple " + filepath.Base(dmg) + "\n"
+	want := "submit " + filepath.Base(dmg) + " 0\nstaple " + filepath.Base(dmg) + "\n"
 	if string(data) != want {
 		t.Errorf("xcrun ran\n%s\nwant\n%s", data, want)
-	}
-	mnt := attachDMG(t, dmg)
-	if got, err := os.ReadFile(filepath.Join(mnt, "DMG Test.app", "Contents", "CodeResources")); string(got) != "ticket\n" {
-		t.Errorf("the image's app has no ticket stapled: %q %v", got, err)
 	}
 }
 

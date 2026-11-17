@@ -105,10 +105,11 @@ func runInit(args []string) error {
 	if c, err := loadConfig(dir); err != nil {
 		warnf("%v; run mygo generate once it can be read", err)
 	} else {
-		bin := tempBinary(c.executableName())
-		defer os.Remove(bin)
-		if err := buildBinary(c, bin, nil, generatorTags(c.root)...); err == nil {
-			_, _ = generateBindings(c, bin)
+		if bin, cleanup, err := tempBinary(c.executableName()); err == nil {
+			defer cleanup()
+			if err := buildBinary(c, bin, nil, generatorTags(c.root)...); err == nil {
+				_, _ = generateBindings(c, bin)
+			}
 		}
 	}
 

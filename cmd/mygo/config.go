@@ -311,6 +311,20 @@ func readConfig(root string) (data []byte, file string, err error) {
 }
 
 func (c *Config) validate() error {
+	for field, v := range map[string]string{"name": c.Name, "linux.comment": c.Linux.Comment} {
+		if hasControl(v) {
+			return fmt.Errorf("%s holds a control character, a new line for one", field)
+		}
+	}
+	for _, v := range c.Linux.Categories {
+		if hasControl(v) {
+			return errors.New("linux.categories holds a control character, a new line for one")
+		}
+	}
+	// An empty name is the project folder's, which loadConfig fills in later.
+	if c.Name != "" && c.Windows.InstallDirName == "" && fsName(c.Name) == "" {
+		return errors.New("name makes no folder name for the app on Windows: give it some letters or set windows.installDirName")
+	}
 	if n := c.MacOS.Notarize; n != nil && n.KeychainProfile == "" {
 		return errors.New("macos.notarize needs a keychainProfile (see xcrun notarytool store-credentials)")
 	}
@@ -611,6 +625,11 @@ func (c *Config) slug() string {
 		return c.Slug
 	}
 	return slugify(c.executableName())
+}
+
+// hasControl reports whether s holds a control character.
+func hasControl(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return r < ' ' || r == 0x7f })
 }
 
 // fsName makes s usable as a file name on every platform.

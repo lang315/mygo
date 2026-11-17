@@ -35,15 +35,6 @@ func dmgFileName(c *Config, goarch string) string {
 // needed.
 func buildDMG(c *Config, app, dir, goarch string, opts buildOptions) (_ string, err error) {
 	notary := c.MacOS.Notarize != nil && !opts.skipNotarize
-	// The app is notarized and stapled before it is copied into the image,
-	// so that the copy users drag to /Applications has its ticket, which
-	// Gatekeeper reads when it cannot ask Apple. Updates install the same
-	// stapled app.
-	if notary {
-		if err := notarizeApp(c.MacOS.Notarize, app); err != nil {
-			return "", err
-		}
-	}
 	file := dmgFileName(c, goarch)
 	t := con.start("Creating " + file)
 	defer func() { t.end(err, "Created "+file) }()
@@ -266,6 +257,9 @@ func notarize(n *Notarize, dmg string) error {
 	}
 	return command("xcrun", "stapler", "staple", dmg)
 }
+
+// notarizeAppStep is notarizeApp, which tests replace.
+var notarizeAppStep = notarizeApp
 
 // notarizeApp notarizes an app bundle and staples the ticket to it. The
 // notary service takes no bundles, so a zip of it is submitted, made with
