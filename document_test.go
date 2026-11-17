@@ -1438,3 +1438,117 @@ func TestDocWorkWaitsForAPendingTimer(t *testing.T) {
 		t.Fatal("docWork.Wait returned before the timer fired and wrote the recovery copy")
 	}
 }
+
+// saveAsTarget makes the save dialog answer target.
+func saveAsTarget(target string) {
+	onMain(func() { fb.OnSaveDialog = func(*platform.SaveDialogOptions) string { return target } })
+}
+
+// TestDocumentSaveAsAddedExtensionAsksBeforeReplacing: the dialog asked
+// about "notes", not about the notes.txt mygo makes of it.
+func TestDocumentSaveAsAddedExtensionAsksBeforeReplacing(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	dir := t.TempDir()
+	theirs := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(theirs, []byte("theirs"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := ds.New()
+	d.Set("mine")
+	saveAsTarget(filepath.Join(dir, "notes"))
+	asked := answer("Cancel")
+	if err := d.SaveAs(""); !errors.Is(err, ErrCanceled) {
+		t.Fatalf("SaveAs = %v, want ErrCanceled", err)
+	}
+	if got := readString(t, theirs); got != "theirs" || len(asked.all()) != 1 {
+		t.Fatalf("file %q, asked %q", got, asked.all())
+	}
+	answer("Replace")
+	if err := d.SaveAs(""); err != nil {
+		t.Fatal(err)
+	}
+	if got := readString(t, theirs); got != "mine" {
+		t.Errorf("file %q after Replace", got)
+	}
+}
+
+// TestDocumentSaveAsTypedExtensionAsksNothingMore: the dialog itself asked
+// about a name the user typed in full.
+func TestDocumentSaveAsTypedExtensionAsksNothingMore(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	target := writeTemp(t, "notes.txt", "theirs")
+	d := ds.New()
+	d.Set("mine")
+	saveAsTarget(target)
+	asked := answer("Cancel")
+	if err := d.SaveAs(""); err != nil {
+		t.Fatal(err)
+	}
+	if got := readString(t, target); got != "mine" || len(asked.all()) != 0 {
+		t.Errorf("file %q, asked %q", got, asked.all())
+	}
+}
+
+// TestDocumentQuitAsksWhenTheBackupFails: an edit the recovery copy cannot
+// keep is asked about, not dropped by quitting.
+func TestDocumentQuitAsksWhenTheBackupFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a folder's mode does not stop writes on Windows")
+	}
+	quits := make(chan struct{}, 1)
+	quitAgain = func() {
+		docQuit.resolved = false
+		quits <- struct{}{}
+	}
+	t.Cleanup(func() { quitAgain = func() { App.Quit() } })
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	root, err := ds.kind.recovery.root()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil || os.Chmod(root, 0o500) != nil {
+		t.Fatal("cannot make the recovery folder read-only", err)
+	}
+	t.Cleanup(func() { os.Chmod(root, 0o700) })
+	if os.WriteFile(filepath.Join(root, "probe"), nil, 0o600) == nil {
+		t.Skip("the folder is writable anyway (running as root)")
+	}
+	d := ds.New()
+	d.Set("precious")
+	asked := answer("Cancel")
+	if onMainValue(fb.QuitRequested) {
+		t.Fatal("quit with an edit nothing kept")
+	}
+	waitFor(t, "the question", func() bool { return len(asked.all()) == 1 })
+	select {
+	case <-quits:
+		t.Fatal("quit after Cancel")
+	default:
+	}
+}
+
+// TestDocumentSaveAsWhileTheMainThreadSaves: the write that moves a document
+// waits for the main thread (the recent documents) and must not hold the
+// lock the main thread's Save waits for.
+func TestDocumentSaveAsWhileTheMainThreadSaves(t *testing.T) {
+	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
+	d := ds.New()
+	d.Set("mine")
+	saveAsTarget(filepath.Join(t.TempDir(), "moved.txt"))
+	// The main thread saves just when the Save As has moved the document.
+	writeMoved = func() { onMain(func() { d.Save() }) }
+	t.Cleanup(func() { writeMoved = func() {} })
+	done := make(chan error, 1)
+	go func() { done <- d.SaveAs("") }()
+	waitFor(t, "Save As to return", func() bool {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+			return true
+		default:
+			return false
+		}
+	})
+}

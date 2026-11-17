@@ -96,24 +96,27 @@ const (
 	writeSaveAs                   // to another file, which the document becomes
 )
 
-// write writes the document to target. It reports whether it wrote
-// anything: a document whose file another app changed is not written
-// (ErrDocumentChanged), but marked in conflict.
-func (b *docBase) write(target string, op writeOp) (bool, error) {
+// writeMoved is called when a write moved the document, before it is added
+// to the recent documents; tests replace it.
+var writeMoved = func() {}
+
+// writeLocked is write's part that holds b.io, released by defer so a panic in
+// the app's Write or Equal leaves it unlocked. moved says the path changed.
+func (b *docBase) writeLocked(target string, op writeOp) (moved, wrote bool, err error) {
 	snap := b.ops.capture()
 	b.io.Lock()
 	defer b.io.Unlock()
 	b.mu.Lock()
 	if b.closed && op == writeAutosave {
 		b.mu.Unlock()
-		return false, nil
+		return false, false, nil
 	}
 	known, deleted := b.stamp, b.deleted
 	b.mu.Unlock()
 	if op == writeSave || op == writeAutosave {
 		now, exists, err := statStamp(target)
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
 		if exists && (!now.same(known) || deleted) {
 			b.mu.Lock()
@@ -123,19 +126,19 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 			if !was {
 				b.notify()
 			}
-			return false, ErrDocumentChanged
+			return false, false, ErrDocumentChanged
 		}
 	}
 	written, err := writeFileSafely(target, snap.write)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	b.mu.Lock()
 	settle := b.ops.markSaved(snap)
 	b.savedAt = snap.at
 	b.stamp = written.stamp
 	b.conflict, b.deleted = false, false
-	moved := target != b.path
+	moved = target != b.path
 	if moved {
 		b.path = target
 		b.readOnly = false
@@ -156,7 +159,20 @@ func (b *docBase) write(target string, op writeOp) (bool, error) {
 	if drop {
 		b.kind.recovery.remove(b)
 	}
+	return moved, true, nil
+}
+
+// write writes the document to target. It reports whether it wrote
+// anything: a document whose file another app changed is not written
+// (ErrDocumentChanged), but marked in conflict.
+func (b *docBase) write(target string, op writeOp) (bool, error) {
+	moved, wrote, err := b.writeLocked(target, op)
+	if !wrote {
+		return false, err
+	}
+	// Unlocked: addRecent waits for the main thread, which may wait for b.io.
 	if moved {
+		writeMoved()
 		addRecent(target)
 		b.watch()
 	}

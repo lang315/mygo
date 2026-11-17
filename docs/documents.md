@@ -12,7 +12,7 @@ every platform:
   Revert, in the File menu;
 - autosave, and asking to save only where saving can't happen by itself;
 - a recovery copy of every unsaved change, so that a crash or a quit loses
-  nothing;
+  nothing (a quit asks when a copy cannot be written);
 - the documents opened from Finder, Explorer, the Dock and the jump list;
 - the files that other apps change while they are open.
 
@@ -148,7 +148,7 @@ Windows of any app can show the same, with `Window.SetRepresentedFile` and
 | | |
 |---|---|
 | `Save()` | writes the document to its file. An untitled document asks where, a read-only one asks for another file, and one whose file another app changed asks whether to overwrite it. `ErrCanceled` tells that the user canceled |
-| `SaveAs(path)` | writes it to another file, which the document then is; `""` asks where |
+| `SaveAs(path)` | writes it to another file, which the document then is; `""` asks where, and asks before replacing a file when mygo adds the extension to the name typed |
 | `SaveAnyway()` | writes it even when another app changed its file |
 | `Duplicate()` | opens an untitled copy, named "Notes copy" |
 | `Rename(name)` | renames its file, in its folder; `""` asks |
@@ -211,7 +211,7 @@ locked while it runs, so another instance never opens them.
 | closing a saved, edited document, with autosave | nothing: it is saved first |
 | closing an edited untitled document, with autosave | "Do you want to keep this new document “Untitled”?" Save…, Delete, Cancel |
 | closing an edited document without autosave, or one that can't be saved in place | "Do you want to save the changes made to the document “Notes.md”?" Save, Don't Save, Cancel |
-| quitting | nothing: the documents are saved in place or kept, and come back edited at the next launch |
+| quitting | nothing: the documents are saved in place or kept, and come back edited at the next launch; unless a document's recovery copy cannot be written, which is then asked about as with `AskOnQuit` |
 | quitting with `AskOnQuit`, several documents | macOS: "You have 3 documents with unsaved changes. Do you want to review these changes before quitting?" Review Changes…, Discard Changes, Cancel, then a sheet for each. Linux and Windows: one dialog naming them, Save All, Don't Save, Cancel |
 
 The questions, their buttons, and the names of untitled documents are
