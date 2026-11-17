@@ -114,6 +114,36 @@ func TestWebDev(t *testing.T) {
 	}
 }
 
+// TestDevWebRefusesForeignHost answers only requests for localhost, so a
+// page of another site cannot read the app through DNS rebinding.
+func TestDevWebRefusesForeignHost(t *testing.T) {
+	d := &webDev{c: &Config{Name: "Demo"}, loader: []byte("// wasm_exec.js"), wasm: []byte("\x00asm"), clients: map[chan [2]string]bool{}}
+	for host, want := range map[string]int{
+		"evil.example":      http.StatusForbidden,
+		"evil.example:5173": http.StatusForbidden,
+		"localhost.evil:80": http.StatusForbidden,
+		"localhost:5173":    http.StatusOK,
+		"localhost":         http.StatusOK,
+		"127.0.0.1:5173":    http.StatusOK,
+		"[::1]:5173":        http.StatusOK,
+		"[::1]":             http.StatusOK,
+		"LOCALHOST:5173":    http.StatusOK,
+	} {
+		for _, path := range []string{"/app.wasm", devEvents} {
+			// A page that left: the stream of events ends at once.
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			req := httptest.NewRequestWithContext(ctx, "GET", path, nil)
+			req.Host = host
+			rec := httptest.NewRecorder()
+			d.ServeHTTP(rec, req)
+			if rec.Code != want {
+				t.Errorf("GET %s with Host %s: %d, want %d", path, host, rec.Code, want)
+			}
+		}
+	}
+}
+
 func TestWebDevReloadsConfig(t *testing.T) {
 	if testing.Short() {
 		t.Skip("compiles programs")
@@ -153,7 +183,7 @@ func TestWebDevReloadsConfig(t *testing.T) {
 	get := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
 		w := httptest.NewRecorder()
-		d.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		d.ServeHTTP(w, httptest.NewRequest("GET", "http://localhost"+path, nil))
 		return w
 	}
 	page := get("/").Body.String()

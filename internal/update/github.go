@@ -81,7 +81,8 @@ func parseTaggedFeed(feed string) (repo, prefix string, err error) {
 }
 
 // latestTagged returns the tag of the newest release of repo tagged
-// prefix that is neither a draft nor a prerelease.
+// prefix and a version that is neither a draft nor a prerelease: a tag
+// such as myapp-cli-1.0.0 is another product's than myapp-'s.
 func latestTagged(ctx context.Context, get Getter, repo, prefix string) (string, error) {
 	for page := 1; page <= maxReleasePages; page++ {
 		u := GitHubAPI + "/repos/" + repo + "/releases?per_page=" + strconv.Itoa(releasesPerPage) + "&page=" + strconv.Itoa(page)
@@ -90,7 +91,8 @@ func latestTagged(ctx context.Context, get Getter, repo, prefix string) (string,
 			return "", err
 		}
 		for _, r := range releases {
-			if !r.Draft && !r.Prerelease && strings.HasPrefix(r.TagName, prefix) {
+			v, ok := strings.CutPrefix(r.TagName, prefix)
+			if !r.Draft && !r.Prerelease && ok && v != "" && v[0] >= '0' && v[0] <= '9' {
 				return r.TagName, nil
 			}
 		}

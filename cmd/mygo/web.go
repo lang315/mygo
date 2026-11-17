@@ -230,6 +230,18 @@ type webDev struct {
 }
 
 func (d *webDev) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Only pages of localhost: another site's, rebound to 127.0.0.1 by
+	// DNS, would read the app.
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	switch strings.ToLower(strings.Trim(host, "[]")) {
+	case "localhost", "127.0.0.1", "::1":
+	default:
+		http.Error(w, "mygo dev serves localhost only", http.StatusForbidden)
+		return
+	}
 	d.mu.Lock()
 	c, icon, wasm := d.c, d.icon, d.wasm
 	d.mu.Unlock()

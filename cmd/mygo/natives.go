@@ -178,12 +178,24 @@ func (c *Config) packageDirs(goos, goarch string) ([]string, error) {
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("go list: %v\n%s", err, strings.TrimSpace(stderr.String()))
 	}
-	dirs := strings.Fields(out.String())
+	dirs := goListLines(out.String())
 	if c.deps == nil {
 		c.deps = map[string][]string{}
 	}
 	c.deps[key] = dirs
 	return dirs, nil
+}
+
+// goListLines returns the lines go list printed, one a package: their
+// directories may have spaces.
+func goListLines(out string) []string {
+	var lines []string
+	for line := range strings.Lines(out) {
+		if line = strings.TrimRight(line, "\r\n"); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 // readNativePackages reads the manifests of the packages in dirs, and

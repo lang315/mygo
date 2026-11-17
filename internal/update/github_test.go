@@ -68,6 +68,21 @@ func TestResolveFeed(t *testing.T) {
 	}
 }
 
+// TestLatestTaggedSkipsOtherProducts finds the newest release of the
+// prefix and a version, not of another product whose tags share the
+// prefix.
+func TestLatestTaggedSkipsOtherProducts(t *testing.T) {
+	get := func(_ context.Context, u string) (io.ReadCloser, error) {
+		if u == "https://api.github.com/repos/me/app/releases?per_page=100&page=1" {
+			return io.NopCloser(strings.NewReader(`[{"tag_name": "myapp-cli-0.3.0"}, {"tag_name": "myapp-1.2.0"}]`)), nil
+		}
+		return nil, fmt.Errorf("GET %s", u)
+	}
+	if tag, err := latestTagged(context.Background(), get, "me/app", "myapp-"); err != nil || tag != "myapp-1.2.0" {
+		t.Errorf("latestTagged = %s, %v, want myapp-1.2.0", tag, err)
+	}
+}
+
 func TestResolvePrereleaseFeed(t *testing.T) {
 	var releases []string
 	get := func(_ context.Context, u string) (io.ReadCloser, error) {

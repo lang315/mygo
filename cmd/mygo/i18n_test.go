@@ -143,6 +143,48 @@ func TestWriteI18n(t *testing.T) {
 	}
 }
 
+// TestWriteI18nRefusesAHandWrittenFile keeps a module of the frontend that
+// mygo did not generate, where the generated one would go.
+func TestWriteI18nRefusesAHandWrittenFile(t *testing.T) {
+	dir := t.TempDir()
+	mine := "export const locales = ['en'];\n"
+	writeFiles(t, dir, map[string]string{
+		jsonConfig:        `{"i18n": {}}`,
+		"package.json":    `{"name": "app", "dependencies": {"mygo-runtime": "^1"}}`,
+		"locales/en.json": `{"hello": "Hello"}`,
+		"locales/doc.go":  "package locales\n",
+		"src/locales.ts":  mine,
+	})
+	c, err := loadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := filepath.Join(dir, "src", "locales.ts")
+	if _, err := writeI18n(c); err == nil || !strings.Contains(err.Error(), ts) {
+		t.Errorf("writeI18n over a hand-written module: %v, want an error naming %s", err, ts)
+	}
+	if b, _ := os.ReadFile(ts); string(b) != mine {
+		t.Errorf("the hand-written module is now:\n%s", b)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "locales", i18ngen.GoFile)); err == nil {
+		t.Error("the refusal wrote the Go accessors")
+	}
+	// A generated module is written again.
+	if err := os.Remove(ts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeI18n(c); err != nil {
+		t.Fatal(err)
+	}
+	writeFiles(t, dir, map[string]string{"locales/en.json": `{"hello": "Hello", "bye": "Bye"}`})
+	if out, err := writeI18n(c); err != nil || !slices.Contains(out.written, "src/locales.ts") {
+		t.Errorf("writeI18n over a generated module: %v, %v", out, err)
+	}
+	if b, _ := os.ReadFile(ts); !bytes.Contains(b, []byte("bye")) {
+		t.Errorf("the generated module was not rewritten:\n%s", b)
+	}
+}
+
 // TestI18nApp generates the accessors of an app's catalogs and builds the
 // app, which the package of the catalogs registers with.
 func TestI18nApp(t *testing.T) {

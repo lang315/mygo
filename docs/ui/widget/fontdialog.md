@@ -3,7 +3,7 @@
 `FontDialog()` asks the user for a font, as WinForms' `FontDialog`: a list of
 families, a list of styles (Regular, Bold, Italic, Bold Italic), a size and a
 sample in the chosen font, with OK and Cancel. It is a dialog drawn by ui, not
-the system's, and lists the families of [`ui.FontFamilies`](../window.md).
+the system's, and lists the families of [`ui.FontFamilies`](../text.md).
 
 ```go
 fd := widget.FontDialog().SetTitle("Editor font").SetFont(ui.Font{Family: "Menlo", Size: 13})
