@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -135,6 +136,12 @@ func openSingleInstanceLock(path string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !ownedByMe(f) {
+		// Another user's file in a shared directory: its lock could keep
+		// this app from starting. Like a directory that cannot lock.
+		f.Close()
+		return nil, errors.New("mygo: the single instance lock file belongs to another user")
+	}
 	if err := lockFile(f); err != nil {
 		f.Close()
 		if lockBusy(err) {
@@ -175,7 +182,7 @@ func forwardToFirstInstance(path string, msg []byte) bool {
 // by an instance that crashed. singleInstance is locked.
 func listenSecondInstances() {
 	path := singleInstance.path
-	if socketOwnedByMe(path) {
+	if fileOwnedByMe(path) {
 		_ = os.Remove(path)
 	}
 	ln, err := net.Listen("unix", path)

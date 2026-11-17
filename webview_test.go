@@ -710,3 +710,29 @@ func TestAboutBlankAfterAnotherSiteIsNotTrusted(t *testing.T) {
 		t.Errorf("about:blank after https://evil.example/: ok = %v", m["ok"])
 	}
 }
+
+// The camera of an about:blank page follows the page's trust: the app's
+// LoadHTML page gets it, the about:blank popup of a remote page does not.
+func TestAboutBlankPermissionFollowsTheTrust(t *testing.T) {
+	w, fw := testWindow(t, WindowOptions{})
+	w.Page().SetWindowOpenHandler(func(WindowOpenRequest) *WindowOptions { return &WindowOptions{} })
+	ask := func(fw *fake.Window, origin string) bool {
+		return onMainValue(func() bool { return fw.H.PermissionRequested([]string{"camera"}, origin) })
+	}
+	w.Page().LoadHTML("<p>x</p>", "")
+	onMain(func() { fw.H.NavigationCommitted("about:blank") })
+	for _, origin := range []string{"about:blank", "about://"} {
+		if !ask(fw, origin) {
+			t.Errorf("LoadHTML page at %q is refused the camera", origin)
+		}
+	}
+	onMain(func() { fw.H.NavigationCommitted("https://evil.example/") })
+	onMain(func() { fw.H.NewWindow(platform.NewWindowRequest{URL: "https://evil.example/x"}) })
+	wins := fb.Windows()
+	pf := wins[len(wins)-1]
+	t.Cleanup(func() { onMain(func() { pf.H.ClosedByPage() }) })
+	onMain(func() { pf.H.NavigationCommitted("about:blank") })
+	if ask(pf, "about://") {
+		t.Error("the about:blank popup of a remote page gets the camera")
+	}
+}

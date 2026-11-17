@@ -1351,7 +1351,9 @@ it, and an eval with the quit under way fails at once.
 
 Every page gets the runtime, but only trusted pages may call Go: the
 frontend (`mygo:` and the `mygo dev` server), custom-scheme pages
-(`protocol.Handle`), `file:` and `about:` pages, loopback `http(s)` dev
+(`protocol.Handle`), `file:` pages, `about:` pages that follow a trusted
+page (`Window.aboutTrust`: an `about:` page has its creator's origin; a popup
+inherits its opener's trust), loopback `http(s)` dev
 servers in development, and origins listed in `PageOptions.TrustedOrigins`
 (`"*"` trusts everything). The decision is
 recomputed on every committed navigation. Untrusted calls are rejected

@@ -426,7 +426,8 @@ type Window struct {
 	// aboutTrust is whether an about: page of this window may call bound
 	// methods: it inherits the page before it (an about: page carries its
 	// creator's origin), true for a window the app made, the opener's
-	// trusted for a popup. Main thread only.
+	// trusted for a popup (set before its native window exists). Main
+	// thread only.
 	aboutTrust     bool
 	noBindings     bool // a web view made with WebViewOptions.NoBindings: never trusted
 	trustedOrigins []string
@@ -576,7 +577,7 @@ func createWindow(caller string, opts WindowOptions, bg, tint *background, flyou
 	}
 	var w *Window
 	onMain(func() {
-		w = newWindow(opts, bg, tint, 0, flyout)
+		w = newWindow(opts, bg, tint, 0, flyout, nil)
 		if !main {
 			// Called from another goroutine, NewWindow returns while the
 			// main thread goes on drawing: the window of native UI shows
@@ -643,13 +644,13 @@ func updateBackgrounds() {
 	}
 }
 
-func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout *flyoutOptions) *Window {
+func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout *flyoutOptions, opener *Window) *Window {
 	windows.Lock()
 	windows.nextID++
 	id := windows.nextID
 	windows.Unlock()
 
-	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content != nil, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true, aboutTrust: true}
+	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content != nil, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true, aboutTrust: opener == nil || opener.trusted}
 	w.pg = &Page{w}
 	if flyout != nil {
 		w.fit = flyout.fit
@@ -2342,7 +2343,7 @@ func (h *windowHandler) NavigationCommitted(url string) {
 		}
 	}
 	if strings.HasPrefix(strings.ToLower(url), "about:") {
-		h.w.trusted = !h.w.noBindings && !h.w.untrusted && (h.w.html != nil || h.w.aboutTrust)
+		h.w.trusted = !h.w.noBindings && !h.w.untrusted && (h.w.html != nil && h.w.html.shown || h.w.aboutTrust)
 	} else {
 		h.w.trusted = !h.w.noBindings && h.w.isTrusted(url)
 	}
@@ -2419,8 +2420,7 @@ func (h *windowHandler) NewWindow(req platform.NewWindowRequest) platform.Window
 	if err != nil {
 		log.Printf("mygo: window open handler: %v", err)
 	}
-	child := newWindow(o, bg, tint, req.Native, nil)
-	child.aboutTrust = h.w.trusted
+	child := newWindow(o, bg, tint, req.Native, nil, h.w)
 	return child.native
 }
 

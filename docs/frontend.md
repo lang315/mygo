@@ -175,8 +175,9 @@ document alone.
 ### Trust
 
 A window trusts the app's own pages: its frontend, pages of custom schemes,
-`file:` and `about:` pages (`LoadHTML` without a base URL shows
-`about:blank`), origins in `PageOptions.TrustedOrigins`, and in development
+`file:` pages, `about:` pages (`LoadHTML` without a base URL shows
+`about:blank`) that follow a trusted page, never one after another site or in
+a popup of one, origins in `PageOptions.TrustedOrigins`, and in development
 builds pages served from localhost. Trust follows the page's URL, in a
 window or a [web view](ui/web-view.md), and changes as it navigates. A
 trusted page may:

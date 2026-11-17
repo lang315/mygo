@@ -314,7 +314,25 @@ func TestSocketOwnedByMe(t *testing.T) {
 		t.Error("a socket of this user is not owned by it")
 	}
 	regular := filepath.Join(dir, "f")
-	os.WriteFile(regular, nil, 0o600)
+	if err := os.WriteFile(regular, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := os.Open(regular); err != nil {
+		t.Fatal(err)
+	} else {
+		defer f.Close()
+		if !ownedByMe(f) || !fileOwnedByMe(regular) {
+			t.Error("a file of this user is not owned by it")
+		}
+	}
+	if runtime.GOOS != "windows" && os.Getuid() != 0 {
+		if f, err := os.Open("/etc/hosts"); err == nil {
+			defer f.Close()
+			if ownedByMe(f) || fileOwnedByMe("/etc/hosts") {
+				t.Error("a file of root counts as this user's")
+			}
+		}
+	}
 	if runtime.GOOS != "windows" && socketOwnedByMe(regular) {
 		t.Error("a regular file counts as a socket of this user")
 	}
