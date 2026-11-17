@@ -95,8 +95,8 @@ func TestFontDialogTakesNoTypedSizeOutsideMinAndMax(t *testing.T) {
 	dt.Find(ByRole(ui.RoleTextField).Nth(1)).Type("500").Key(0, ui.KeyEnter)
 	dt.Find(ByLabel("OK")).Click()
 	<-done
-	if got := fd.Font().Size; got != 12 {
-		t.Errorf("Size = %v, want 12: 500 is above MaxSize", got)
+	if got := fd.Font().Size; got != 40 {
+		t.Errorf("Size = %v, want 40: 500 is above MaxSize: the nearest bound", got)
 	}
 }
 

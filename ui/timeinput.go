@@ -153,7 +153,9 @@ func coreTimeInput(c *context, tm *time.Time) *node {
 			if k == 1 {
 				value, top = &m, 60
 			}
-			if step != 0 {
+			// An hour the clocks skip comes out as the one before it: step on
+			// to the next one that exists.
+			for try := 0; step != 0 && try < 3; try++ {
 				if k == 0 && twelve {
 					// Round the twelve hours of the same half of the day.
 					half := *value / 12 * 12
@@ -162,6 +164,9 @@ func coreTimeInput(c *context, tm *time.Time) *node {
 					*value = (*value + step + top) % top
 				}
 				set(h, m)
+				if k != 0 || tm.Hour() == h {
+					break
+				}
 			}
 			// Digits typed: the first sets the segment, a second makes two
 			// digits of them, or starts anew past the top; both typed, or one

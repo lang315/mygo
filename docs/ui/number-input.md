@@ -5,7 +5,9 @@
 `ui.NumberInput` creates a text input editing a `*float64` as a number
 between two bounds, which Up and Down, and the buttons beside it, change by
 a step. What is typed applies as soon as it is a number in range, and shows
-rounded to the decimals of the step once the input loses the focus.
+rounded to the decimals of the step once the input loses the focus. A number
+typed outside the bounds is kept as typed meanwhile; Enter, or leaving the
+field, makes it the nearest bound, and the field shows that.
 `Changed` reports a new value and `Submitted` an Enter in it; `Focus` and
 `AutoFocus` give its text field the keyboard. A `Width` sizes the whole input,
 its buttons included: the field narrows to keep them within it.

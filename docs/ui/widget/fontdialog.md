@@ -19,7 +19,8 @@ if fd.ShowDialog(form) {
   when the user changed between regular and bold, else to the weight it had.
   `Features`, `Lang` and the rest are what `SetFont` gave.
 - `SetMinSize(v)` and `SetMaxSize(v)` bound the size, in DIPs (1 and 999 by
-  default). A size typed outside them is not taken, and a size `SetFont` gave
+  default). A size typed outside them becomes the nearest of them, as in a
+  `NumberInput`, and a size `SetFont` gave
   is brought inside. As in WinForms, setting one past the other moves the
   other to match. The size is a number field: there is no list of preset
   sizes.

@@ -422,6 +422,9 @@ func (e *node) ReplaceText(start, end int, s string) *node {
 	e.c.rt.applyInputs()
 	ed := e.st.editor
 	ed.syncBuffer()
+	// A composition over the text gives it back first: s replaces the
+	// text the user had, and the commit adds to it.
+	ed.restoreBase()
 	n := ed.buf.n
 	start, end = min(max(start, 0), n), min(max(end, 0), n)
 	start, end = min(start, end), max(start, end)
