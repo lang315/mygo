@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -653,6 +654,107 @@ func TestCodeEditorFind(t *testing.T) {
 	ct.st.ed.find.replaceAll(&ct.st.ed)
 	if got := ct.st.Buffer.String(); got != "<ow> Cat <ow> dog" {
 		t.Fatalf("replaced with a regular expression %q", got)
+	}
+}
+
+// Replacing every match moves the matches, the folds and the lines left to
+// search through the changes in time linear in their number, not in its
+// square: ten times the matches take no more than twenty times the steps.
+func TestReplaceAllCostIsLinear(t *testing.T) {
+	steps := func(n int, folded bool) int {
+		ct := newEditorTest(t, "", "|"+strings.Repeat("cat\n\n", n))
+		ct.st.Find("cat")
+		ct.tt.Frame()
+		if got, _ := ct.st.FindMatches(); got != n {
+			t.Fatalf("%d matches, want %d", got, n)
+		}
+		if folded {
+			for i := 0; i < n; i++ {
+				ct.st.ed.folds = append(ct.st.ed.folds, fold{2 * i, 2*i + 1})
+			}
+		}
+		ct.st.ed.find.replace = "dog"
+		mapSteps = 0
+		ct.st.ed.find.replaceAll(&ct.st.ed)
+		ct.tt.Frame()
+		got := mapSteps
+		if s := ct.st.Buffer.String(); s != strings.Repeat("dog\n\n", n) {
+			t.Fatalf("replaced %q…", s[:min(len(s), 20)])
+		}
+		if folded && len(ct.st.ed.folds) != n {
+			t.Fatalf("%d folds after replacing, want %d", len(ct.st.ed.folds), n)
+		}
+		if m, _ := ct.st.FindMatches(); m != 0 {
+			t.Fatalf("%d matches of cat after replacing", m)
+		}
+		return got
+	}
+	// Matches an edit doesn't touch move with the text and stay.
+	ct := newEditorTest(t, "", "|cat\ncat\n\nx")
+	ct.st.Find("cat")
+	ct.tt.Frame()
+	ct.st.ed.apply([]Edit{{Start: 0, End: 0, Text: "a\n"}, {Start: 9, End: 9, Text: "y"}}, editOther, nil)
+	ct.tt.Frame()
+	if f := &ct.st.ed.find; len(f.matches) != 2 || f.matches[0].start != 2 || f.matches[1].start != 6 {
+		t.Fatalf("matches after an edit around them %v", f.matches)
+	}
+	// A fold ending in lines an edit takes out ends where they were.
+	ct = newEditorTest(t, "", "|a\nb\nc\nd\ne")
+	ct.st.ed.folds = []fold{{0, 2}}
+	ct.st.ed.apply([]Edit{{Start: 2, End: 6, Text: ""}}, editOther, nil)
+	ct.tt.Frame()
+	if got := ct.st.ed.folds; len(got) != 1 || got[0] != (fold{0, 1}) {
+		t.Fatalf("folds after deleting lines in one %v", got)
+	}
+	for _, folded := range []bool{false, true} {
+		small, big := steps(10000, folded), steps(100000, folded)
+		if big > 20*small {
+			t.Errorf("folded %v: %d steps for 100k matches, %d for 10k: not linear", folded, big, small)
+		}
+	}
+}
+
+// Empty matches of a regular expression don't count toward the limit of
+// matches: the real match after many empty ones is found and replaced,
+// and the one before them once.
+func TestRegexEmptyMatchesDontUseTheLimit(t *testing.T) {
+	text := "x" + strings.Repeat("ab", 60000) + "x"
+	ct := newEditorTest(t, "", "|"+text)
+	ct.st.Find("x*")
+	ct.tt.Frame()
+	f := &ct.st.ed.find
+	f.regex, f.replace, f.stale = true, "y", true
+	if n, _ := ct.st.FindMatches(); n != 2 {
+		t.Fatalf("%d matches, want 2", n)
+	}
+	f.replaceAll(&ct.st.ed)
+	if got := ct.st.Buffer.String(); got != "y"+strings.Repeat("ab", 60000)+"y" {
+		t.Fatalf("replaced %q…%q", got[:4], got[len(got)-4:])
+	}
+	// Real matches still stop at the limit.
+	f.query, f.stale = ".", true
+	if n, _ := ct.st.FindMatches(); n != maxMatches {
+		t.Fatalf("%d matches of ., want %d", n, maxMatches)
+	}
+}
+
+// A pattern matching empty at every byte of a big text searches in
+// bounded memory: x* over 8 MB of ab allocates less than 256 MB.
+func TestRegexEmptyMatchesBoundedMemory(t *testing.T) {
+	ct := newEditorTest(t, "", "|a")
+	big := strings.Repeat("ab", 4<<20)
+	f := finder{regex: true, query: "x*"}
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	f.scan(&ct.st.ed, big, "", 0, func(diffRange, []int) bool { return true })
+	runtime.ReadMemStats(&after)
+	// The race detector drops sync.Pool's items, which regexp keeps its
+	// machines in: a machine a match.
+	if got := after.TotalAlloc - before.TotalAlloc; got >= 256<<20 && !raceEnabled {
+		t.Errorf("x* over 8 MB allocated %d MB", got>>20)
+	} else {
+		t.Logf("x* over 8 MB allocated %d MB", got>>20)
 	}
 }
 

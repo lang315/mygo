@@ -57,7 +57,9 @@ func (t Text) Markdown() string {
 		case st.Heading > 0:
 			b.WriteString(quote + strings.Repeat("#", min(st.Heading, 6)) + " ")
 		case st.List != NoList:
-			level := st.Indent
+			// No deeper than an item under the one before, or Markdown
+			// reads code or the item's text.
+			level := min(st.Indent, len(numbers))
 			for len(numbers) <= level {
 				numbers = append(numbers, 0)
 			}
@@ -181,9 +183,22 @@ func (m mark) close(html bool) string {
 // HTML, which Markdown keeps: the runs written are read back to check,
 // and those still read otherwise are written in HTML whole. What would
 // start a block at the start of the paragraph is escaped, as the text
-// of an item or a heading too.
+// of an item or a heading too. URLs are written as they are, and
+// underscores inside words unescaped, unless the runs then read otherwise:
+// GitHub's Markdown links a URL as it is written, up to a space, escapes
+// and all.
 func writeMarkdownRuns(b *strings.Builder, runs []Run) {
-	s, delims := renderRuns(runs, nil)
+	s := markdownRuns(runs, true)
+	if escaped := markdownRuns(runs, false); escaped != s && !readsAs(s, runs) {
+		s = escaped
+	}
+	b.WriteString(s)
+}
+
+// markdownRuns returns runs as Markdown, their URLs and underscores in
+// words as they are when raw.
+func markdownRuns(runs []Run, raw bool) string {
+	s, delims := renderRuns(runs, nil, raw)
 	if len(delims) > 0 && !readsAs(s, runs) {
 		html := map[delimKey]bool{}
 		for _, d := range delims {
@@ -192,18 +207,17 @@ func writeMarkdownRuns(b *strings.Builder, runs []Run) {
 			}
 		}
 		if len(html) > 0 {
-			s2, _ := renderRuns(runs, html)
+			s2, _ := renderRuns(runs, html, raw)
 			if readsAs(s2, runs) {
-				b.WriteString(s2)
-				return
+				return s2
 			}
 		}
 		for _, d := range delims {
 			html[d.key] = true
 		}
-		s, _ = renderRuns(runs, html)
+		s, _ = renderRuns(runs, html, raw)
 	}
-	b.WriteString(s)
+	return s
 }
 
 // delimKey names a mark written in Markdown: the run it opens at and its
@@ -253,8 +267,8 @@ func canFlank(s string, at, n int, c byte, left bool) bool {
 func isMarkdownPunct(r rune) bool { return unicode.IsPunct(r) || unicode.IsSymbol(r) }
 
 // renderRuns writes runs, the marks of html in HTML, and returns where
-// the delimiters of the others are.
-func renderRuns(runs []Run, html map[delimKey]bool) (string, []delim) {
+// the delimiters of the others are; raw as escapeMarkdown's.
+func renderRuns(runs []Run, html map[delimKey]bool, raw bool) (string, []delim) {
 	var b strings.Builder
 	type opened struct {
 		mark
@@ -281,7 +295,9 @@ func renderRuns(runs []Run, html map[delimKey]bool) (string, []delim) {
 			closeTo(0)
 			b.WriteString(pending)
 			pending = ""
-			b.WriteString("![" + escapeMarkdown(at.Name) + "](" + markdownURL(at.URL) + ")")
+			// An alt's line breaks would end the paragraph.
+			alt := strings.NewReplacer("\r", " ", "\n", " ").Replace(at.Name)
+			b.WriteString("![" + escapeMarkdown(alt, false) + "](" + markdownURL(at.URL) + ")")
 			first = false
 			continue
 		}
@@ -312,7 +328,8 @@ func renderRuns(runs []Run, html map[delimKey]bool) (string, []delim) {
 		if r.Attributes.Code {
 			b.WriteString(codeSpan(core))
 		} else {
-			s := escapeMarkdown(core)
+			// No URL links in a link's text.
+			s := escapeMarkdown(core, raw && r.Attributes.Link == "")
 			if first {
 				s = escapeBlockStart(s)
 			}
@@ -331,7 +348,8 @@ func renderRuns(runs []Run, html map[delimKey]bool) (string, []delim) {
 }
 
 // readsAs reports whether s reads back as runs, as far as Markdown keeps
-// them: their text, and the marks of all but whitespace.
+// them: their text, and the marks of all but whitespace, but the links
+// GitHub's Markdown makes of URLs.
 func readsAs(s string, runs []Run) bool {
 	var got []Run
 	for _, p := range ParseMarkdown(s).Paragraphs() {
@@ -342,7 +360,15 @@ func readsAs(s string, runs []Run) bool {
 	}
 	gc, gm := markSeq(got)
 	rc, rm := markSeq(runs)
-	return slices.Equal(gc, rc) && slices.Equal(gm, rm)
+	if !slices.Equal(gc, rc) {
+		return false
+	}
+	for i := range gm {
+		if rm[i].link == "" {
+			gm[i].link = ""
+		}
+	}
+	return slices.Equal(gm, rm)
 }
 
 // runMarks are the marks of a character that Markdown keeps.
@@ -401,12 +427,30 @@ func codeSpan(s string) string {
 	return fence + s + fence
 }
 
-// escapeMarkdown escapes what Markdown would read as marks.
-func escapeMarkdown(s string) string {
+// escapeMarkdown escapes what Markdown would read as marks; when raw, not
+// the URLs starting words, up to a space or a <, nor an underscore inside
+// a word, which marks nothing.
+func escapeMarkdown(s string, raw bool) string {
 	var b strings.Builder
-	for i, r := range s {
+	for i := 0; i < len(s); {
+		if raw && (i == 0 || s[i-1] == ' ' || s[i-1] == '\t') && (strings.HasPrefix(s[i:], "http://") || strings.HasPrefix(s[i:], "https://") || strings.HasPrefix(s[i:], "www.")) {
+			n := strings.IndexFunc(s[i:], func(r rune) bool { return r == '<' || unicode.IsSpace(r) })
+			if n < 0 {
+				n = len(s) - i
+			}
+			b.WriteString(s[i : i+n])
+			i += n
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
 		switch r {
-		case '\\', '*', '_', '`', '[', ']', '<', '~':
+		case '_':
+			before, _ := utf8.DecodeLastRuneInString(s[:i])
+			after, _ := utf8.DecodeRuneInString(s[i+1:])
+			if !raw || !isAlnum(before) || !isAlnum(after) {
+				b.WriteByte('\\')
+			}
+		case '\\', '*', '`', '[', ']', '<', '~':
 			b.WriteByte('\\')
 		case '&':
 			// Not the start of an entity, as &amp; or &#38;.
@@ -414,10 +458,13 @@ func escapeMarkdown(s string) string {
 				b.WriteByte('\\')
 			}
 		}
-		b.WriteRune(r)
+		b.WriteString(s[i : i+size])
+		i += size
 	}
 	return b.String()
 }
+
+func isAlnum(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
 
 // escapeBlockStart escapes the start of a body paragraph that Markdown
 // would read as a heading, a list, a quotation or a rule.
@@ -438,6 +485,8 @@ func escapeBlockStart(s string) string {
 
 // markdownURL returns a URL as the destination of a link.
 func markdownURL(u string) string {
+	// No destination holds a line break, nor, but in <>, a tab.
+	u = strings.NewReplacer("\r", "%0D", "\n", "%0A", "\t", "%09").Replace(u)
 	if strings.ContainsAny(u, " ()<>") {
 		return "<" + strings.NewReplacer("<", "%3C", ">", "%3E").Replace(u) + ">"
 	}

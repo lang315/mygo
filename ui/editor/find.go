@@ -167,13 +167,26 @@ func (f *finder) scan(ed *editor, text, lower string, base int, found func(m dif
 			f.err = err
 			return
 		}
-		for _, m := range re.FindAllStringSubmatchIndex(text, maxMatches) {
-			if m[1] == m[0] || !keep(m[0], m[1]) {
-				continue
+		// Empty matches and those left out don't count toward the limit:
+		// look at twice as many while they fill it, up to four times it.
+		// shortcut: past 400k matches, empty ones included, the rest of
+		// the text is not searched; scan from a moving position if real
+		// matches after that many empty ones matter.
+		seen := 0
+		for n := maxMatches; ; n *= 2 {
+			ms := re.FindAllStringSubmatchIndex(text, n)
+			for _, m := range ms[seen:] {
+				if m[1] == m[0] || !keep(m[0], m[1]) {
+					continue
+				}
+				if !found(diffRange{base + m[0], base + m[1]}, m) {
+					return
+				}
 			}
-			if !found(diffRange{base + m[0], base + m[1]}, m) {
+			if len(ms) < n || n >= 4*maxMatches {
 				return
 			}
+			seen = len(ms)
 		}
 	case f.caseSens || isASCII(f.query):
 		q, in := f.query, text
@@ -215,14 +228,16 @@ func (f *finder) moved(cs []change) {
 	}
 	out := f.matches[:0]
 	for _, m := range f.matches {
-		touched := false
-		for _, c := range cs {
-			if m.start <= c.oldEnd && m.end >= c.oldStart {
-				touched = true
-				break
+		// The first change ending at or after the match, the changes being
+		// in order and apart.
+		i, _ := slices.BinarySearchFunc(cs, m.start, func(c change, off int) int {
+			mapSteps++
+			if c.oldEnd < off {
+				return -1
 			}
-		}
-		if !touched {
+			return 1
+		})
+		if i == len(cs) || cs[i].oldStart > m.end {
 			out = append(out, diffRange{mapOffset(m.start, cs, biasRight), mapOffset(m.end, cs, biasLeft)})
 		}
 	}
