@@ -1,6 +1,7 @@
 name: Benchmarks
 
-# Every push to main is measured on macOS, Linux and Windows, and the
+# Every push to main is measured on macOS, Linux and Windows, in three
+# shards of about twenty minutes on machines of their own, and the
 # results go to the benchmarks branch, which the website's /measures page
 # reads. Started by hand, the workflow measures the commit of its ref input
 # instead, as to fill in history, with this commit's scripts/bench.ts and
@@ -25,16 +26,23 @@ permissions:
 
 jobs:
   bench:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.runner.name }} (${{ matrix.shard.name }})
+    runs-on: ${{ matrix.runner.os }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        include:
+        runner:
           - { name: macOS, os: macos-latest }
           - { name: Linux, os: ubuntu-latest }
           - { name: Windows, os: windows-latest }
+        # ui, and ui/chart with ui/widget, take a third of the time each: one
+        # job of them all ran into its hour on Windows. The rest finds its
+        # packages, which differ by OS, and measures the apps' memory.
+        shard:
+          - { name: ui, args: ./ui }
+          - { name: widgets, args: ./ui/chart ./ui/widget }
+          - { name: rest, args: --e2e --skip ./ui --skip ./ui/chart --skip ./ui/widget }
     defaults:
       run:
         shell: bash
@@ -68,8 +76,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0
       - name: Run the benchmarks
+        env:
+          SHARD: ${{ matrix.shard.name }}
+          ARGS: ${{ matrix.shard.args }}
         run: |
-          bench=(bun scripts/bench.ts run --e2e --out "$RUNNER_TEMP/bench-$RUNNER_OS.json")
+          read -ra args <<< "$ARGS"
+          bench=(bun scripts/bench.ts run --out "$RUNNER_TEMP/bench-$RUNNER_OS-$SHARD.json" "${args[@]}")
           if [ "$RUNNER_OS" = Linux ]; then
             xvfb-run -a dbus-run-session -- "${bench[@]}"
           else
@@ -79,8 +91,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: bench-${{ runner.os }}
-          path: ${{ runner.temp }}/bench-${{ runner.os }}.json
+          name: bench-${{ runner.os }}-${{ matrix.shard.name }}
+          path: ${{ runner.temp }}/bench-${{ runner.os }}-${{ matrix.shard.name }}.json
           if-no-files-found: ignore
 
   publish:

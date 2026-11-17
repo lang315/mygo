@@ -28,6 +28,7 @@ import {
   platforms,
   ranges,
   findSteps,
+  runnersOf,
   lastValue,
   reading,
   trendOf,
@@ -312,18 +313,20 @@ function Results({
 
   const from = Math.max(0, data.commits.length - view.range)
   const commits = data.commits.slice(from)
-  const windowRunners = runners.slice(from)
 
   let last = runners.length - 1
   while (last >= 0 && !runners[last]) last--
   const latest = data.commits[last]
   const runner = runners[last]
+  // Every CPU of the run's shards.
+  const cpus = [...new Set([runner?.cpu, ...Object.values(data.cpus?.[view.os] ?? {}).map((c) => c[last])])].filter(Boolean).join(" / ")
 
   // The commits shown that moved results, newest first, with their steps,
   // the worse first, in every unit: a step stays listed however many
   // commits came after it.
   const byCommit = new Map<number, Moved[]>()
   for (const [pkg, benchmarks] of Object.entries(series)) {
+    const runners = runnersOf(data, view.os, pkg)
     for (const [name, units] of Object.entries(benchmarks)) {
       for (const [unit, values] of Object.entries(units)) {
         for (const step of findSteps(values, unit, runners)) {
@@ -357,7 +360,7 @@ function Results({
               <span className="font-medium group-hover:underline group-hover:underline-offset-4">{latest.message}</span>
             </a>
             <p className="mt-2 text-sm text-muted-foreground">
-              {formatDate(latest.date, true)} · {runner.cpu} · {runner.go}
+              {formatDate(latest.date, true)} · {cpus} · {runner.go}
             </p>
           </div>
           <div className="min-w-0 border-t px-4 py-8 sm:px-10 md:border-t-0">
@@ -410,11 +413,11 @@ function Results({
         <GroupSection key={group.pkg} group={group} unit={u}>
           {(table) =>
             table ? (
-              <ResultsTable pkg={group.pkg} rows={rows} unit={u} commits={data.commits} runners={runners} from={from} />
+              <ResultsTable pkg={group.pkg} rows={rows} unit={u} commits={data.commits} runners={runnersOf(data, view.os, group.pkg)} from={from} />
             ) : (
               <div className="-mr-px -mb-px grid border-t sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map(({ name, values }) => {
-                  const trend = trendOf(values, u, runners, from)
+                  const trend = trendOf(values, u, runnersOf(data, view.os, group.pkg), from)
                   const doc = docs[`${group.pkg}/${name.split("/")[0]}`] ?? appDocs[`${group.pkg}/${name}`]
                   const label = `${displayName(group.pkg, name)}: ${trend ? formatValue(trend.latest, u) : "no results"}`
                   return (
@@ -450,7 +453,7 @@ function Results({
                       <TrendChart
                         values={values.slice(from)}
                         commits={commits}
-                        runners={windowRunners}
+                        runners={runnersOf(data, view.os, group.pkg).slice(from)}
                         steps={trend?.steps.map((s) => ({ ...s, index: s.index - from })) ?? []}
                         unit={u}
                         label={label}

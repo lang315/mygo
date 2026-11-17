@@ -6831,14 +6831,16 @@ after it are not affected. A test that changes them undoes it in a cleanup.
 ### Benchmarks
 
 `.github/workflows/bench.yml` measures every push to main on GitHub's
-macOS, Linux and Windows runners, and the website shows the results at
+macOS, Linux and Windows runners, in three shards per OS (`./ui`,
+`./ui/chart` with `./ui/widget`, and the rest with `--skip` of those),
+whose results `merge` adds up into one run, and the website shows the results at
 [/measures](https://mygo.egoist.dev/measures). `scripts/bench.ts`
 runs them:
 
 ```sh
 bun scripts/bench.ts run                 # every package's Go benchmarks, and app sizes
 bun scripts/bench.ts run --e2e           # internal/e2e's too, in a desktop session
-bun scripts/bench.ts run ./ui --count 3  # one package, fewer runs
+bun scripts/bench.ts run ./ui --count 3  # one package, fewer runs, no apps
 ```
 
 It finds the packages with benchmarks and runs them one at a time

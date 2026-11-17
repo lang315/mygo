@@ -104,6 +104,28 @@ describe("merge", () => {
     expect(data.runners.linux).toEqual([null, { arch: "arm64", cpu: "Apple M5", go: "go1.27.1" }, null]);
   });
 
+  test("adds up the shards of a run, and replaces them when it is measured again", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bench-test-"));
+    const shard = (pkg: string, cpu: string, ns: number): Run => ({
+      ...run("a", "2026-10-02T00:00:00Z", "linux", 0),
+      cpu,
+      results: { [pkg]: { Frame: { "ns/op": ns } } },
+    });
+    await mergeRuns(dir, [shard("ui", "EPYC", 1), shard("ui/chart", "Xeon", 2), shard(".", "EPYC", 3)]);
+    let data = await readLatest(dir);
+    expect(data.series.linux?.ui?.Frame?.["ns/op"]).toEqual([1]);
+    expect(data.series.linux?.["ui/chart"]?.Frame?.["ns/op"]).toEqual([2]);
+    expect(data.series.linux?.["."]?.Frame?.["ns/op"]).toEqual([3]);
+    expect(data.runners.linux?.[0]?.cpu).toBe("EPYC");
+    expect(data.cpus).toEqual({ linux: { "ui/chart": ["Xeon"] } });
+    await mergeRuns(dir, [shard("ui", "M1", 4)]);
+    data = await readLatest(dir);
+    expect(data.series.linux?.ui?.Frame?.["ns/op"]).toEqual([4]);
+    expect(data.series.linux?.["ui/chart"]).toBeUndefined();
+    expect(data.runners.linux?.[0]?.cpu).toBe("M1");
+    expect(data.cpus).toBeUndefined();
+  });
+
   // Few runs and none of them in a file of its own: a file written and read
   // costs milliseconds on Windows, where this test took more than five seconds
   // with latestCommits + 5 runs of their own files.
