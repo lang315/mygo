@@ -21,8 +21,12 @@ import (
 
 // Event types and codes.
 const (
+	evSyn = 0x00
 	evKey = 0x01
 	evAbs = 0x03
+
+	synReport  = 0
+	synDropped = 3
 
 	btnSouth  = 0x130
 	btnEast   = 0x131
@@ -86,6 +90,7 @@ type evdevPad struct {
 	keys     [keyMax + 1]bool
 	axes     [absMax + 1]int32
 	buf      []byte
+	dropped  bool // after SYN_DROPPED, until SYN_REPORT
 }
 
 func scan(known map[string]device) []device {
@@ -129,17 +134,27 @@ func openEvdev(path string) *evdevPad {
 	for a := range absMax + 1 {
 		if bit(abs, a) && ioctl(fd, eviocgabs(uintptr(a)), unsafe.Pointer(&d.abs[a])) {
 			d.hasAbs[a] = true
-			d.axes[a] = d.abs[a].value
 		}
 	}
 	d.rightOnZ = !d.hasAbs[absRX] && d.hasAbs[absZ]
+	resync(d)
+	return d
+}
+
+// resync reads the device's keys and axes as they are now, at open and
+// once events were dropped (SYN_DROPPED); a variable for the tests.
+var resync = func(d *evdevPad) {
+	for a := range absMax + 1 {
+		if d.hasAbs[a] && ioctl(d.fd, eviocgabs(uintptr(a)), unsafe.Pointer(&d.abs[a])) {
+			d.axes[a] = d.abs[a].value
+		}
+	}
 	state := make([]byte, keyMax/8+1)
-	if ioctl(fd, eviocgkey(uintptr(len(state))), unsafe.Pointer(&state[0])) {
+	if ioctl(d.fd, eviocgkey(uintptr(len(state))), unsafe.Pointer(&state[0])) {
 		for k := range keyMax + 1 {
 			d.keys[k] = bit(state, k)
 		}
 	}
-	return d
 }
 
 // driver returns the name of the kernel driver of an evdev device.
@@ -172,6 +187,15 @@ func (d *evdevPad) drain() bool {
 			code := binary.LittleEndian.Uint16(e[18:])
 			value := int32(binary.LittleEndian.Uint32(e[20:]))
 			switch {
+			case typ == evSyn && code == synDropped:
+				// The kernel's buffer overflowed: the events up to the next
+				// SYN_REPORT are partial, and the state is read anew.
+				d.dropped = true
+			case d.dropped:
+				if typ == evSyn && code == synReport {
+					resync(d)
+					d.dropped = false
+				}
 			case typ == evKey && int(code) <= keyMax:
 				d.keys[code] = value != 0
 			case typ == evAbs && int(code) <= absMax:

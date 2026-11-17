@@ -7,6 +7,8 @@ import (
 	"sync"
 	"syscall"
 	"unsafe"
+
+	d3d "github.com/egoist/mygo/internal/gpu/d3d11/device"
 )
 
 // Windows reads pads through XInput, which has four slots, for Xbox
@@ -58,7 +60,9 @@ func loadXInput() {
 		kernel32 := syscall.NewLazyDLL("kernel32.dll")
 		getProc := kernel32.NewProc("GetProcAddress")
 		for _, name := range []string{"xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"} {
-			lib, err := syscall.LoadLibrary(name)
+			// From System32 only: the search order would take a planted
+			// DLL beside the app or in the working directory.
+			lib, err := syscall.LoadLibrary(d3d.SystemDir() + `\` + name)
 			if err != nil {
 				continue
 			}

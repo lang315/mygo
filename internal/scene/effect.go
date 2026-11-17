@@ -233,9 +233,13 @@ type Backdrop struct {
 // Large blurs are computed at a fraction of the size, as browsers do,
 // a power of two up to 8 that leaves the blur at least 2 texels: the
 // average of each square adds a variance of Down²/12 pixels², which the
-// blur leaves out.
+// blur leaves out. A blur that is not a number blurs nothing, and one
+// above 4096 pixels blurs 4096, which keeps the radius finite.
 func BackdropOf(r Rect, blur float32, w, h int) Backdrop {
-	blur = max(blur, 0)
+	if !(blur > 0) {
+		blur = 0
+	}
+	blur = min(blur, 4096)
 	down := 1
 	for down < 8 && blur/float32(2*down) >= 2 {
 		down *= 2

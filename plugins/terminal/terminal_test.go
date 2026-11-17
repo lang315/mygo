@@ -1697,6 +1697,42 @@ func TestAltGrTypesText(t *testing.T) {
 	}
 }
 
+// TestAltShiftSymbolUsesTheLayout: on Linux, whose keys are the layout's
+// (Shift and 7 is KeySlash on a German one), Alt+Shift and a symbol's key
+// send the key's own character after Esc, not the symbol Shift types on a
+// US keyboard; a letter still goes uppercase.
+func TestAltShiftSymbolUsesTheLayout(t *testing.T) {
+	loadLib(t)
+	defer func(was string) { goos = was }(goos)
+	goos = "linux"
+	conn := newPipe()
+	// OptionAsAlt has libghostty-vt, built for the system the tests run
+	// on, prefix Esc on macOS as on Linux.
+	term, err := New(Options{Conn: conn, OptionAsAlt: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill().AutoFocus() }, 400, 200)
+	tt.Frame()
+	v := term.v
+	for _, c := range []struct {
+		key  ui.Key
+		want string
+	}{
+		{ui.KeySlash, "\x1b/"},
+		{ui.Key1, "\x1b1"},
+		{ui.KeyA, "\x1bA"},
+	} {
+		mods := ui.Alt | ui.Shift
+		v.input(ui.InputEvent{Kind: ui.InputKeyDown, Mods: mods, Key: c.key})
+		v.input(ui.InputEvent{Kind: ui.InputKeyUp, Mods: mods, Key: c.key})
+		if got := conn.take(term); got != c.want {
+			t.Errorf("Alt+Shift+%v sent %q, want %q", c.key, got, c.want)
+		}
+	}
+}
+
 func TestCloseKillsWhatIgnoresHangups(t *testing.T) {
 	loadLib(t)
 	term := shell(t, Options{Command: []string{"/bin/sh", "-c", "trap '' HUP; echo ready; sleep 30"}})
@@ -1889,6 +1925,39 @@ func TestCommandClickLinkWithoutOpenLink(t *testing.T) {
 	got := conn.take(term) // two reports, 22 bytes with Control
 	if strings.Count(got, "\x1b[<") != 2 || strings.Count(got, ";9;1M") != 1 || strings.Count(got, ";9;1m") != 1 {
 		t.Errorf("sent %q, want the press and the release of the path's click", got)
+	}
+}
+
+// TestCommandClickRefusesFileAndUNCLinks: a hyperlink that OpenLink does
+// not take opens with the system only with a scheme other than file:, so
+// that a program's output cannot have a click run a file of this machine
+// or of a share. https: and other schemes still open.
+func TestCommandClickRefusesFileAndUNCLinks(t *testing.T) {
+	loadLib(t)
+	links := []string{"file:///etc/passwd", "FILE://host/x.exe", `\\host\share\x.exe`, "//host/share/x.exe", "x.exe", `C:\x.exe`,
+		"https://example.com", "vscode://file/a.go"}
+	for _, withOpenLink := range []bool{false, true} {
+		opts := Options{Conn: newPipe()}
+		if withOpenLink {
+			opts.OpenLink = func(string) bool { return false }
+		}
+		term, err := New(opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer term.Close()
+		for _, link := range links {
+			term.Feed([]byte("\x1b]8;;" + link + "\x1b\\link\x1b]8;;\x1b\\\r\n"))
+		}
+		tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill().AutoFocus() }, 400, 200)
+		tt.Frame()
+		for row := range links {
+			x, y := cellCenter(term, 1, row)
+			tt.ClickAtWith(ui.Cmd, x, y)
+		}
+		if u, want := tt.OpenedURLs(), []string{"https://example.com", "vscode://file/a.go"}; !slices.Equal(u, want) {
+			t.Errorf("OpenLink set %v: system opened %q, want %q", withOpenLink, u, want)
+		}
 	}
 }
 

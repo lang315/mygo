@@ -110,6 +110,11 @@ func failed(hr uintptr) bool { return int32(uint32(hr)) < 0 }
 
 func cptr(a uintptr) unsafe.Pointer { return *(*unsafe.Pointer)(unsafe.Pointer(&a)) }
 
+// call's arguments may be Go pointers converted to uintptr (out-pointers
+// of the COM methods): uintptrescapes moves them to the heap and keeps them
+// alive, so that the stack cannot move under the call.
+//
+//go:uintptrescapes
 func call(obj uintptr, i int, args ...uintptr) uintptr {
 	vtbl := *(*uintptr)(cptr(obj))
 	fn := *(*uintptr)(cptr(vtbl + uintptr(i)*unsafe.Sizeof(uintptr(0))))

@@ -315,7 +315,11 @@ term, err := terminal.New(terminal.Options{
   it was printed, and without the quotes: a relative path is the
   program's, as of `Dir`. It reports whether it opened the
   link; a hyperlink or a URL it leaves opens with the system, as every one
-  does without `OpenLink`. An app opens a remote shell's paths in a
+  does without `OpenLink`, when it has a scheme other than `file:`
+  (`https:`, `mailto:`, `vscode:`): a `file:` link, a UNC path
+  (`\\host\share\x.exe`, `//host/x`), a drive path or one with no scheme
+  opens only through `OpenLink`, so that a program's output cannot have a
+  click run a file. An app opens a remote shell's paths in a
   preview of its own this way, rather than the system opening them
   locally.
 - `OnPaste` sees a paste of the clipboard, by the keys, a Paste menu item
