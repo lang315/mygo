@@ -17,8 +17,14 @@ func TestBackdropOfBadBlur(t *testing.T) {
 			t.Errorf("blur %v: Sigma %v, want finite", blur, b.Sigma)
 		}
 	}
-	// Above the cap, a blur is the cap's.
+	// The cap itself is not lowered: 4096 blurs as the formula gives it,
+	// at an eighth of the size, the average's variance left out.
 	r := Rect{X: 10, Y: 10, W: 20, H: 20}
+	b := BackdropOf(r, 4096, 100000, 100000)
+	if want := float32(math.Sqrt(4096*4096-64.0/12)) / 8; b.Down != 8 || math.Abs(float64(b.Sigma-want)) > 1e-3 {
+		t.Errorf("blur 4096: Down %d, Sigma %v, want 8 and %v", b.Down, b.Sigma, want)
+	}
+	// Above the cap, a blur is the cap's.
 	for _, blur := range []float32{float32(math.Inf(1)), 1e9, 4097} {
 		if got, want := BackdropOf(r, blur, 100000, 100000), BackdropOf(r, 4096, 100000, 100000); got != want {
 			t.Errorf("blur %v: %+v, want the cap's %+v", blur, got, want)
