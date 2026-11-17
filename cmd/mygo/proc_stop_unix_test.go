@@ -12,7 +12,7 @@ import (
 
 func TestBuildStopKillsTheRunningCommand(t *testing.T) {
 	done := make(chan error, 1)
-	go func() { done <- run(nil, "test", t.TempDir(), "sleep 30") }()
+	go func() { done <- run(nil, "test", t.TempDir(), "sleep 30 & wait") }()
 	var pid int
 	wait.Until(t, "the command is registered", func() bool {
 		activeRun.Lock()

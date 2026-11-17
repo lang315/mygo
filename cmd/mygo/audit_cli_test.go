@@ -46,10 +46,18 @@ func TestValidateRefusesABlankName(t *testing.T) {
 }
 
 func TestValidateRefusesDotNames(t *testing.T) {
-	for _, name := range []string{".", "..", "...", ". .", " . ", "con"} {
+	for _, name := range []string{".", "..", "...", ". .", " . "} {
 		if err := (&Config{Name: name}).validate(); err == nil {
 			t.Errorf("name %q was accepted", name)
 		}
+	}
+	for _, name := range []string{"Acme Inc.", "Con"} {
+		if err := (&Config{Name: name}).validate(); err != nil {
+			t.Errorf("name %q: %v", name, err)
+		}
+	}
+	if got := (&Config{Name: "Acme Inc."}).installDirName(); got != "Acme Inc" {
+		t.Errorf("install folder of Acme Inc. = %q", got)
 	}
 	if err := (&Config{Name: ".", Windows: Windows{InstallDirName: "App"}}).validate(); err != nil {
 		t.Errorf("a dot name with installDirName: %v", err)

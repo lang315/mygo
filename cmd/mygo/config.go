@@ -322,12 +322,10 @@ func (c *Config) validate() error {
 		}
 	}
 	// An empty name is the project folder's, which applyDefaults fills in.
-	// The uninstaller removes the install folder, which must be a folder of
-	// its own, not Programs for ".".
-	if c.Name != "" && c.Windows.InstallDirName == "" {
-		if err := checkFolderName(fsName(c.Name)); err != nil {
-			return fmt.Errorf("name %q makes the name of the app's folder on Windows, which %w; set windows.installDirName", c.Name, err)
-		}
+	// The uninstaller removes the install folder, which must not resolve to
+	// Programs or above it, as "." or ".." do on Windows.
+	if c.Name != "" && c.Windows.InstallDirName == "" && c.installDirName() == "" {
+		return fmt.Errorf("name %q makes no folder for the app on Windows: give it some letters or set windows.installDirName", c.Name)
 	}
 	if n := c.MacOS.Notarize; n != nil && n.KeychainProfile == "" {
 		return errors.New("macos.notarize needs a keychainProfile (see xcrun notarytool store-credentials)")
@@ -592,12 +590,14 @@ func (c *Config) shortcutName() string {
 }
 
 // installDirName returns the name of the app's install folder on Windows:
-// windows.installDirName, or else Name made a file name.
+// windows.installDirName, or else Name made a file name, as Windows names
+// the folder: without trailing dots and spaces.
 func (c *Config) installDirName() string {
 	if n := strings.TrimSpace(c.Windows.InstallDirName); n != "" {
 		return n
 	}
-	return fsName(c.Name)
+	// Windows drops trailing dots and spaces from a folder's name.
+	return strings.TrimRight(fsName(c.Name), ". ")
 }
 
 // reservedFileName matches the names Windows keeps for devices, which no
