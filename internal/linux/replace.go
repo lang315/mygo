@@ -8,8 +8,8 @@ import (
 )
 
 // ReplaceFile renames replacement over target, after giving it the
-// target's permissions and, where the user may, its owner and group, as
-// GIO's g_file_replace does.
+// target's permissions and, where the user may, its owner and group
+// (writeFileSafely writes in place a file another user owns).
 func (*Backend) ReplaceFile(target, replacement string) error {
 	if info, err := os.Stat(target); err == nil {
 		if err := os.Chmod(replacement, info.Mode().Perm()|info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky)); err != nil {

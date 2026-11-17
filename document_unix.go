@@ -33,3 +33,10 @@ func lockFile(f *os.File) error {
 func lockBusy(err error) bool {
 	return errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EINTR)
 }
+
+// fileOwnedByOther reports whether another user owns the file and this
+// process can't keep that owner on a replacement (only root can).
+func fileOwnedByOther(info os.FileInfo) bool {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	return ok && os.Getuid() != 0 && int(st.Uid) != os.Getuid()
+}

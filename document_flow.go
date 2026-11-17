@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -556,7 +555,7 @@ func (b *docBase) relocate(target string) error {
 	b.io.Lock()
 	path := b.Path()
 	err := renameFile(path, target)
-	if errors.Is(err, syscall.EXDEV) {
+	if crossDevice(err) {
 		err = copyFile(path, target)
 		if err == nil {
 			err = os.Remove(path)
@@ -584,11 +583,17 @@ func copyFile(from, to string) error {
 		return err
 	}
 	defer src.Close()
-	_, err = writeFileSafely(to, func(w io.Writer) error {
+	info, err := src.Stat()
+	if err != nil {
+		return err
+	}
+	if _, err = writeFileSafely(to, func(w io.Writer) error {
 		_, err := io.Copy(w, src)
 		return err
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	return os.Chmod(to, info.Mode().Perm())
 }
 
 // revert asks whether to discard b's changes, then reads its file again.
