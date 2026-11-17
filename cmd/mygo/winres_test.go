@@ -12,6 +12,8 @@ func TestWindowsVersion(t *testing.T) {
 		"1.2.3.4":        {1, 2, 3, 4},
 		"99999999999.1":  {65535, 1, 0, 0},
 		"1.2.3-beta+exp": {1, 2, 3, 0},
+		// A prerelease is not newer than its release to Windows installers.
+		"1.2.3-beta.4": {1, 2, 3, 0},
 	} {
 		if got := windowsVersion(v); got != want {
 			t.Errorf("windowsVersion(%q) = %v, want %v", v, got, want)
