@@ -333,7 +333,7 @@ func TestIsTrustedNeedsNoServing(t *testing.T) {
 	win := &Window{}
 	for url, want := range map[string]bool{
 		"mygo://localhost/":      true,
-		"about:blank":            true,
+		"about:blank":            false, // trusted only after a trusted page, at commit
 		"trustapp://localhost/x": true,
 		"TRUSTAPP://localhost/x": true,
 		"other://localhost/":     false,

@@ -148,6 +148,9 @@ func openSingleInstanceLock(path string) (*os.File, error) {
 // forwardToFirstInstance hands msg to the instance listening at path,
 // reporting whether one took it.
 func forwardToFirstInstance(path string, msg []byte) bool {
+	if !socketOwnedByMe(path) {
+		return false // another user's socket would get the command line
+	}
 	conn, err := net.DialTimeout("unix", path, time.Second)
 	if err != nil {
 		return false
@@ -172,7 +175,9 @@ func forwardToFirstInstance(path string, msg []byte) bool {
 // by an instance that crashed. singleInstance is locked.
 func listenSecondInstances() {
 	path := singleInstance.path
-	_ = os.Remove(path)
+	if socketOwnedByMe(path) {
+		_ = os.Remove(path)
+	}
 	ln, err := net.Listen("unix", path)
 	if err != nil {
 		// Later instances wait for this one to exit.

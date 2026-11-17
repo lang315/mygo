@@ -335,3 +335,22 @@ func TestProtocolDoesNotImportMygo(t *testing.T) {
 		}
 	}
 }
+
+// A page can start a download of a custom scheme: a panic of the handler
+// ends the download with an error, not the app.
+func TestDownloadRecoversAHandlerPanic(t *testing.T) {
+	if err := HandleFunc("dlpanic", func(http.ResponseWriter, *http.Request) { panic("boom") }); err != nil {
+		t.Fatal(err)
+	}
+	defer Unhandle("dlpanic")
+	finished := make(chan error, 1)
+	d := schemehook.Download{
+		URL:      "dlpanic://localhost/x",
+		Started:  func(string) string { return filepath.Join(t.TempDir(), "x") },
+		Finished: func(_ string, err error) { finished <- err },
+	}
+	go schemehook.Linked.Load().Download(d)
+	if err := <-finished; err == nil {
+		t.Error("a panicking handler finished the download without an error")
+	}
+}

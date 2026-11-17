@@ -676,3 +676,37 @@ func TestWebViewUnhandledKeys(t *testing.T) {
 		t.Errorf("a key of a destroyed web view's page: %q", g)
 	}
 }
+
+// An about: page carries the origin of the page that made it, so a popup
+// of an untrusted page moved to about:blank must stay untrusted, and a
+// trusted window that went to another site loses the trust at about:blank.
+func TestPopupOfAnUntrustedPageAtAboutBlankIsNotTrusted(t *testing.T) {
+	bindForTest(t, "PopupTrust", &testService{})
+	for _, c := range []struct {
+		opener string
+		want   bool
+	}{{"https://evil.example/", false}, {"file:///tmp/app.html", true}} {
+		w, fw := testWindow(t, WindowOptions{})
+		w.Page().SetWindowOpenHandler(func(WindowOpenRequest) *WindowOptions { return &WindowOptions{} })
+		onMain(func() { fw.H.NavigationCommitted(c.opener) })
+		onMain(func() { fw.H.NewWindow(platform.NewWindowRequest{URL: "https://evil.example/x"}) })
+		wins := fb.Windows()
+		pf := wins[len(wins)-1]
+		t.Cleanup(func() { onMain(func() { pf.H.ClosedByPage() }) })
+		onMain(func() { pf.H.NavigationCommitted("about:blank") })
+		m := call(t, pf, 300, "PopupTrust.Hello", "x")
+		if m["ok"] != c.want {
+			t.Errorf("popup of %s at about:blank: ok = %v, want %v", c.opener, m["ok"], c.want)
+		}
+	}
+}
+
+func TestAboutBlankAfterAnotherSiteIsNotTrusted(t *testing.T) {
+	bindForTest(t, "AboutTrust", &testService{})
+	_, fw := testWindow(t, WindowOptions{})
+	onMain(func() { fw.H.NavigationCommitted("https://evil.example/") })
+	onMain(func() { fw.H.NavigationCommitted("about:blank") })
+	if m := call(t, fw, 310, "AboutTrust.Hello", "x"); m["ok"] != false {
+		t.Errorf("about:blank after https://evil.example/: ok = %v", m["ok"])
+	}
+}

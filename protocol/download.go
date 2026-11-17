@@ -4,6 +4,7 @@ package protocol
 
 import (
 	"fmt"
+	"log"
 	"mime"
 	"net/http"
 	"net/url"
@@ -32,7 +33,14 @@ func download(d schemehook.Download) {
 		return
 	}
 	rw := &downloadWriter{d: d, header: http.Header{}}
-	handler.ServeHTTP(rw, req)
+	if !serveDownload(handler, rw, req) {
+		if rw.file != nil {
+			rw.file.Close()
+			os.Remove(rw.path)
+		}
+		finish("", fmt.Errorf("mygo: downloading %s: the handler panicked", rawURL))
+		return
+	}
 	rw.WriteHeader(http.StatusOK) // nothing written
 	if rw.file == nil {
 		if rw.err != nil {
@@ -47,6 +55,19 @@ func download(d schemehook.Download) {
 		os.Remove(rw.path)
 	}
 	finish(rw.path, rw.err)
+}
+
+// serveDownload runs the handler, reporting false if it panicked: a page
+// can start a download, so a handler's panic must not end the app.
+func serveDownload(handler http.Handler, rw http.ResponseWriter, req *http.Request) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("mygo: scheme handler panic for %s: %v", req.URL, r)
+			ok = false
+		}
+	}()
+	handler.ServeHTTP(rw, req)
+	return true
 }
 
 // downloadWriter writes a response into the file OnWillDownload chose.

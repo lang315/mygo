@@ -422,7 +422,12 @@ type Window struct {
 
 	// trusted reports whether the current page may call bound methods.
 	// Main thread only.
-	trusted        bool
+	trusted bool
+	// aboutTrust is whether an about: page of this window may call bound
+	// methods: it inherits the page before it (an about: page carries its
+	// creator's origin), true for a window the app made, the opener's
+	// trusted for a popup. Main thread only.
+	aboutTrust     bool
 	noBindings     bool // a web view made with WebViewOptions.NoBindings: never trusted
 	trustedOrigins []string
 	// untrusted is PageOptions.Untrusted; origin is the origin of its
@@ -644,7 +649,7 @@ func newWindow(opts WindowOptions, bg, tint *background, native uintptr, flyout 
 	id := windows.nextID
 	windows.Unlock()
 
-	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content != nil, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true}
+	w := &Window{id: id, parent: opts.Parent, trustedOrigins: opts.Page.TrustedOrigins, untrusted: opts.Page.Untrusted, stateKey: opts.StateKey, background: bg, vibrancyTint: tint, content: opts.Content != nil, panel: opts.Panel && flyout == nil, closeOnEscape: opts.CloseOnEscape, active: true, aboutTrust: true}
 	w.pg = &Page{w}
 	if flyout != nil {
 		w.fit = flyout.fit
@@ -1649,7 +1654,7 @@ func (w *Window) isTrusted(rawURL string) bool {
 	}
 	scheme := strings.ToLower(u.Scheme)
 	switch {
-	case scheme == "about" || scheme == "file" || scheme == frontendScheme:
+	case scheme == "file" || scheme == frontendScheme:
 		return true
 	case schemehook.Handled(scheme):
 		return true
@@ -2336,7 +2341,12 @@ func (h *windowHandler) NavigationCommitted(url string) {
 			doc.shown = true
 		}
 	}
-	h.w.trusted = !h.w.noBindings && h.w.isTrusted(url)
+	if strings.HasPrefix(strings.ToLower(url), "about:") {
+		h.w.trusted = !h.w.noBindings && !h.w.untrusted && (h.w.html != nil || h.w.aboutTrust)
+	} else {
+		h.w.trusted = !h.w.noBindings && h.w.isTrusted(url)
+	}
+	h.w.aboutTrust = h.w.trusted
 	// A new document makes its own secret, and says it in a hello that comes
 	// after this commit (the script of the document starts after it).
 	h.w.secret, h.w.helloArmed = "", true
@@ -2410,6 +2420,7 @@ func (h *windowHandler) NewWindow(req platform.NewWindowRequest) platform.Window
 		log.Printf("mygo: window open handler: %v", err)
 	}
 	child := newWindow(o, bg, tint, req.Native, nil)
+	child.aboutTrust = h.w.trusted
 	return child.native
 }
 
