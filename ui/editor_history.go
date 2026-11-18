@@ -115,10 +115,6 @@ func (ed *editor) edited(s string) string {
 	return s
 }
 
-// singleLineMax is the runes a single-line input takes by typing, pasting or
-// ReplaceText: its line is shaped whole at every keystroke.
-const singleLineMax = 1 << 19
-
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
@@ -150,12 +146,7 @@ func (ed *editor) replace(start, end int, s string) {
 		s = cutToRoom(s, max(ed.maxLen-(ed.buf.n-(end-start)), 0))
 	}
 	if !ed.multiline {
-		// A line is shaped whole at every keystroke: what a paste would
-		// take it past singleLineMax is cut, as MaxLength cuts it.
 		s = lineBreaksAsSpaces(s)
-		if room := max(singleLineMax-(ed.buf.n-(end-start)), 0); len(s) > room {
-			s = cutToRoom(s, room)
-		}
 	}
 	if n := len(ed.undo); n > 0 {
 		step := &ed.undo[n-1]

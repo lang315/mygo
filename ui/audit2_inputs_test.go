@@ -133,23 +133,23 @@ func TestPlainInputCompositionOverASelectionIsUnchanged(t *testing.T) {
 	}
 }
 
-// A single-line input shapes its whole line at every keystroke: a paste of
-// 4 MB is cut, so that the line stays bounded (R3-5). A line break becomes a
-// space, as before.
+// A single-line input lays out a window of its line around the caret: after
+// a paste of 4 MB, a keystroke lays out the window, not the line, and the
+// value keeps all of the paste (R3-5). A line break becomes a space, as
+// before.
 func TestTextInputHugeValueKeystrokeCost(t *testing.T) {
 	s := ""
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
 	tt.Frame()
-	tt.SetClipboard(strings.Repeat("ab\n", 4<<20/3))
+	paste := 4 << 20 / 3 * 3
+	tt.SetClipboard(strings.Repeat("ab\n", paste/3))
 	tt.Key(Cmd, KeyV)
-	tt.Type("x")
-	ed := tt.rt.states[tt.rt.focused].editor
-	if n := utf8.RuneCountInString(ed.layout.Params.Text); n > 1<<19 {
-		t.Errorf("a keystroke shaped %d runes, more than %d", n, 1<<19)
+	if laid := laidBy(tt, func() { tt.Type("x") }); laid > windowBound {
+		t.Errorf("a keystroke laid out %d runes, more than %d", laid, windowBound)
 	}
-	if n := utf8.RuneCountInString(s); n != 1<<19 || strings.Contains(s, "\n") || !strings.HasPrefix(s, "ab ab ") {
-		t.Errorf("value of %d runes, want the paste cut at %d with its breaks as spaces", n, 1<<19)
+	if n := utf8.RuneCountInString(s); n != paste+1 || strings.Contains(s, "\n") || !strings.HasPrefix(s, "ab ab ") || !strings.HasSuffix(s, "ab x") {
+		t.Errorf("value of %d runes, want the paste's %d with its breaks as spaces, then the x", n, paste)
 	}
 }
 

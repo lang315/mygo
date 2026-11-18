@@ -93,31 +93,42 @@ func (ed *editor) lineEdges(i int) (int, int) {
 	if ed.layout == nil || len(ed.layout.Lines) == 0 {
 		return 0, ed.buf.n
 	}
+	if ed.winEnd > 0 {
+		// A single line, but for newlines an app's value holds: the window's
+		// lines may start before it or end after it.
+		p := ed.buf.para(i)
+		return ed.buf.start(p), ed.buf.end(p)
+	}
 	li := ed.layout.LineAt(ed.displayIndex(i))
 	line := ed.layout.Lines[li]
 	return ed.textIndex(line.Start), ed.textIndex(line.End)
 }
 
 // displayIndex maps a rune of the text to the layout, which holds the
-// composition at the caret.
+// composition at the caret, and of a long single-line text the window
+// (setWindow): a rune outside it maps to its edge.
 func (ed *editor) displayIndex(i int) int {
-	if ed.compose != "" && i > ed.caret {
-		return i + utf8.RuneCountInString(ed.compose)
+	j := i
+	if ed.winEnd > 0 {
+		j = min(max(i, ed.win), ed.winEnd) - ed.win
 	}
-	return i
+	if ed.compose != "" && i > ed.caret {
+		return j + utf8.RuneCountInString(ed.compose)
+	}
+	return j
 }
 
 func (ed *editor) textIndex(i int) int {
 	if ed.compose != "" {
-		n := utf8.RuneCountInString(ed.compose)
+		n, c := utf8.RuneCountInString(ed.compose), ed.caret-ed.win
 		switch {
-		case i > ed.caret+n:
-			return i - n
-		case i > ed.caret:
-			return ed.caret
+		case i > c+n:
+			i -= n
+		case i > c:
+			i = c
 		}
 	}
-	return min(i, ed.buf.n)
+	return min(i+ed.win, ed.buf.n)
 }
 
 // vertical moves the caret up or down lines, keeping its x.

@@ -60,7 +60,24 @@ func (ed *editor) visualRanges() []text.Range {
 		if ed.layout == nil {
 			return nil
 		}
-		return ed.layout.SelectionRanges(a, z)
+		if ed.winEnd == 0 {
+			return ed.layout.SelectionRanges(a, z)
+		}
+		// Of a window, the runes selected in it, as they read, and those
+		// before and after it, in order.
+		lo, hi := min(a.Index, z.Index), max(a.Index, z.Index)
+		a.Index, z.Index = ed.displayIndex(a.Index), ed.displayIndex(z.Index)
+		var out []text.Range
+		if lo < ed.win {
+			out = append(out, text.Range{Start: lo, End: ed.win})
+		}
+		for _, r := range ed.layout.SelectionRanges(a, z) {
+			out = append(out, text.Range{Start: ed.textIndex(r.Start), End: ed.textIndex(r.End)})
+		}
+		if hi > ed.winEnd {
+			out = append(out, text.Range{Start: ed.winEnd, End: hi})
+		}
+		return mergeRanges(out)
 	}
 	pa, pz := ed.buf.para(a.Index), ed.buf.para(z.Index)
 	if pa > pz {
@@ -85,6 +102,11 @@ func (ed *editor) visualRanges() []text.Range {
 			out = append(out, text.Range{Start: end, End: end + 1})
 		}
 	}
+	return mergeRanges(out)
+}
+
+// mergeRanges sorts ranges and merges those that touch.
+func mergeRanges(out []text.Range) []text.Range {
 	slices.SortFunc(out, func(a, b text.Range) int { return a.Start - b.Start })
 	merged := out[:0]
 	for _, r := range out {
@@ -121,8 +143,25 @@ func (ed *editor) visualNext(direction int) text.CaretPosition {
 		}
 		return text.CaretPosition{Index: ed.buf.end(para), Affinity: text.Upstream}
 	}
-	if ed.layout != nil {
+	if ed.layout != nil && ed.winEnd == 0 {
 		return ed.layout.MoveCaret(p, direction)
+	}
+	if ed.layout != nil {
+		// Inside a window: as it reads. Off an edge of it inside the text, a
+		// step in the text, and the next layout centers the window on the
+		// caret.
+		open := func(i int) bool {
+			return (i > ed.win || ed.win == 0) && (i < ed.winEnd || ed.winEnd == ed.buf.n)
+		}
+		if open(p.Index) {
+			local := p
+			local.Index -= ed.win
+			next := ed.layout.MoveCaret(local, direction)
+			next.Index += ed.win
+			if open(next.Index) {
+				return next
+			}
+		}
 	}
 	if direction < 0 {
 		p.Index = ed.graphemes.prev(&ed.buf, p.Index)
@@ -169,12 +208,15 @@ func (ed *editor) collapseVisual(direction int) text.CaretPosition {
 	if l == nil {
 		return z
 	}
-	start := 0
+	at := func(i int) int { return i } // a rune of the layout
 	if ed.area != nil {
-		start = ed.buf.start(ed.buf.para(ed.caret))
+		start := ed.buf.start(ed.buf.para(ed.caret))
+		at = func(i int) int { return i - start }
+	} else if ed.winEnd > 0 {
+		at = func(i int) int { return min(max(i, ed.win), ed.winEnd) - ed.win }
 	}
-	ax, _, _ := l.CaretAt(text.CaretPosition{Index: a.Index - start, Affinity: a.Affinity})
-	zx, _, _ := l.CaretAt(text.CaretPosition{Index: z.Index - start, Affinity: z.Affinity})
+	ax, _, _ := l.CaretAt(text.CaretPosition{Index: at(a.Index), Affinity: a.Affinity})
+	zx, _, _ := l.CaretAt(text.CaretPosition{Index: at(z.Index), Affinity: z.Affinity})
 	if (ax < zx) == (direction < 0) {
 		return a
 	}

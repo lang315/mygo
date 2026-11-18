@@ -345,13 +345,7 @@ func (w *widgetTextInput) UnmarkText() {
 func (w *widgetTextInput) layout() *text.Layout {
 	ed := w.ed
 	if ed.layout != nil && (ed.layoutVersion != ed.buf.version || ed.layoutCompose != ed.compose || ed.layoutPassword != ed.password || ed.layoutGeneration != ed.sys.Generation()) {
-		params := ed.layout.Params
-		params.Text = ed.displayText()
-		params.Spans = ""
-		if !ed.password {
-			params.Spans = ed.rangeKey(0, ed.buf.n)
-		}
-		ed.shapeInput(params)
+		ed.shapeInput(ed.windowParams(ed.layout.Params, ed.caret))
 	}
 	return ed.layout
 }
@@ -385,13 +379,20 @@ func (w *widgetTextInput) BoundsForRange(r TextInputRange) (Rect, TextInputRange
 		y = float32(a.hs.top(p) - a.scroll)
 	} else {
 		l = w.layout()
+		if !ed.password {
+			local = i - ed.win // the layout holds the window of a long text
+		}
 	}
 	if l == nil {
 		return Rect{}, TextInputRange{}, false
 	}
+	caret := i
+	if ed.area == nil {
+		caret = local
+	}
 	local = max(0, min(local, len(l.Runes)))
 	affinity := text.Downstream
-	if i == ed.displayIndex(ed.caret)+ed.composeCaret {
+	if caret == ed.displayIndex(ed.caret)+ed.composeCaret {
 		affinity = ed.caretAffinity
 	}
 	x, ly, h := l.CaretAt(text.CaretPosition{Index: local, Affinity: affinity})
@@ -426,6 +427,7 @@ func (w *widgetTextInput) IndexForPoint(p Point) (int, bool) {
 	} else {
 		l := w.layout()
 		position = l.PositionAt(p.X-w.ed.originX+w.ed.scrollX, p.Y-w.ed.originY)
+		position.Index += w.ed.win
 	}
 	return w.virtualUnits(position.Index), true
 }

@@ -434,6 +434,8 @@ type coreText struct {
 	numbers map[numberKey]*numberFont
 	// wrapFonts holds what wrapping keeps for fonts (wrapKept).
 	wrapFonts map[uintptr]*wrapFont
+	// wrapSteps counts the runes wrapKept walks, for tests.
+	wrapSteps uint64
 	frame     uint64
 	// seg and breaks find where lines may break (lineBreaks).
 	seg    segmenter.Segmenter

@@ -48,38 +48,32 @@ type area struct {
 }
 
 // wrappedHeight returns the height of the text, with an input method's
-// composition, wrapped at the content width cw.
+// composition, wrapped at the content width cw: of its paragraphs, as far
+// as its most lines, so that an edit of a long text lays out no more.
 func (a *area) wrappedHeight(e *node, ed *editor, cw float32) float32 {
 	params := e.textParams(max(cw, 1))
-	if ed.buf.indexed {
-		params.KeepSpaces, params.MaxLines = true, 0
-		if params != a.wrappedParams || a.wrappedVersion != ed.buf.version || a.wrappedCompose != ed.compose {
-			empty := params
-			empty.Text = ""
-			limit := float32(ed.lines[1]) * ed.sys.Layout(empty).Lines[0].Height
-			var height float32
-			for p := 0; p < len(ed.buf.paras) && height < limit; p++ {
-				part := params
-				part.Text = ed.buf.text(p)
-				if ed.compose != "" && p == ed.buf.para(ed.caret) {
-					at := runeOffset(part.Text, ed.caret-ed.buf.start(p))
-					part.Text = part.Text[:at] + ed.compose + part.Text[at:]
-				}
-				part.Spans = ed.rangeKey(ed.buf.start(p), ed.buf.end(p))
-				height += ed.sys.Shape(part).Height
-			}
-			a.wrapped, a.wrappedParams, a.wrappedVersion = height, params, ed.buf.version
-			a.wrappedCompose = ed.compose
-		}
-		return a.wrapped
-	}
-	params.Text = ed.displayText()
 	params.KeepSpaces, params.MaxLines = true, 0
-	// Bold runs take more room, so the text may wrap sooner.
+	// The weights of the TextRanges, which change the wrapping, are in the
+	// key: the paragraphs' layouts take theirs.
 	params.Spans = ed.rangeKey(0, ed.buf.n)
-	if params != a.wrappedParams {
-		a.wrappedParams = params
-		a.wrapped = ed.sys.Layout(params).Height
+	if params != a.wrappedParams || a.wrappedVersion != ed.buf.version || a.wrappedCompose != ed.compose {
+		empty := params
+		empty.Text = ""
+		limit := float32(ed.lines[1]) * ed.sys.Layout(empty).Lines[0].Height
+		var height float32
+		for p := 0; p < len(ed.buf.paras) && height < limit; p++ {
+			part := params
+			part.Text = ed.buf.text(p)
+			if ed.compose != "" && p == ed.buf.para(ed.caret) {
+				at := runeOffset(part.Text, ed.caret-ed.buf.start(p))
+				part.Text = part.Text[:at] + ed.compose + part.Text[at:]
+			}
+			// Bold runs take more room, so the text may wrap sooner.
+			part.Spans = ed.rangeKey(ed.buf.start(p), ed.buf.end(p))
+			height += ed.sys.Shape(part).Height
+		}
+		a.wrapped, a.wrappedParams, a.wrappedVersion = height, params, ed.buf.version
+		a.wrappedCompose = ed.compose
 	}
 	return a.wrapped
 }

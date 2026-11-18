@@ -461,9 +461,10 @@ type System struct {
 	oldest, newest *cached
 	layoutBytes    int
 	frame          uint64
-	// made counts the layouts made (LayoutsMade), and gen the times the
-	// system forgot its layouts (Generation).
-	made, gen uint64
+	// made counts the layouts made (LayoutsMade), runes the runes they hold
+	// (RunesLaid), and gen the times the system forgot its layouts
+	// (Generation).
+	made, runes, gen uint64
 	// glyphsCalls counts the calls of Glyphs (GlyphsCalls).
 	glyphsCalls uint64
 
@@ -1205,6 +1206,14 @@ func (s *System) LayoutsMade() uint64 {
 	return s.made
 }
 
+// RunesLaid returns how many runes the layouts the system has made hold, as
+// LayoutsMade counts them: what laying out text cost.
+func (s *System) RunesLaid() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.runes
+}
+
 // Generation returns a number that changes whenever the system forgets
 // its layouts, as it lets go of its fonts (EndFrame) or takes other ones:
 // the layouts it returned before are then to be made anew. Until then they
@@ -1272,6 +1281,7 @@ func (s *System) layout(p Params) *cached {
 	s.engine().resetScratch()
 	m := metricsOf(s.font(p.Style), p.Style)
 	runes := []rune(p.Text)
+	s.runes += uint64(len(runes))
 	spans := DecodeSpans(p.Spans)
 	c := &cached{layout: Layout{Params: p, Runes: runes}}
 	l := &c.layout
