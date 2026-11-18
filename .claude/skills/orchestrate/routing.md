@@ -40,11 +40,15 @@ Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
 - **Code workers:** `--permission-mode dontAsk` and `worker-settings.json`. A worker reports a refused command
   (task-brief.md).
   - Allowed: Read/Edit/Write/Grep/Glob, go, gotip, gofmt, `git add/commit/diff/status/log/show/mv/rm`,
-    `mkdir`/`rmdir`, `hc send`, heavy-lock, measure-size.
+    `mkdir`/`rmdir`, `hc send`, heavy-lock, measure-size, and five bun commands, each exact:
+    `bun install --frozen-lockfile`, `bun run build`, `bun run test`, `bun run typecheck`,
+    `bun run --cwd packages/bridge test`.
   - Denied: `git push`, `git stash`, `git commit --amend`, `git worktree remove`, `gh pr merge`, `rm -rf`.
   - `go *` runs any Go program, so this is not a sandbox.
   - Tested 2026-11-10 with `-p`: Edit, Write, `go version`, `git commit` and `git mv` ran; `rm`, `git push --dry-run`
     and `gh pr list` were refused with no dialog.
+  - Tested 2026-11-18 with `-p`: the five bun commands ran, both test commands with `2>&1 | tail -5` after
+    them too; `bun install`, `bun --version` and `bun test packages/bridge` were refused.
   - The pre-push hook refuses pushes run inside a `mygo-wt-*` worktree, `git -C . push` included. It does not stop
     `--no-verify`.
 - **Orchestrator:** `.claude/settings.json` has `ask` rules. They hold in every mode, bypass and `auto` included;
