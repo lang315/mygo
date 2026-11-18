@@ -209,14 +209,12 @@ func TestCoreTextLaidMixed(t *testing.T) {
 			before++
 		}
 	}
-	if s != laidMixedSuggests || s != before {
-		t.Errorf("Core Text found %d lines, want %d, the %d ending before 123-456", s, laidMixedSuggests, before)
+	// The path takes the text, and leaves to Core Text only the lines ending
+	// before 123-456: some, not all.
+	if s != before || before == 0 || before == len(got) {
+		t.Errorf("Core Text found %d of %d lines, want the %d ending before 123-456, and at least one", s, len(got), before)
 	}
 }
-
-// laidMixedSuggests is how many lines of TestCoreTextLaidMixed's text Core Text
-// finds: those ending before 123-456.
-const laidMixedSuggests = 2
 
 // 6: Core Text finds no line of a long Arabic paragraph, and the runes walked
 // grow as the paragraph.
@@ -225,7 +223,7 @@ func TestCoreTextLaidCalls(t *testing.T) {
 	const perRune = 4
 	for _, n := range []int{16384, 131072} {
 		text := arabSpaced(n)
-		_, _, suggests, steps := laidWrap(t, e, text, Style{Size: 13}, 559, true)
+		_, _, suggests, steps := laidWrap(t, e, text, Style{Size: 13}, runeWidth(e, text, true)*80, true)
 		t.Logf("%d runes: %d calls of suggestLineBreak, %d runes walked", n, suggests, steps)
 		if suggests != 0 || steps > perRune*uint64(n) {
 			t.Errorf("%d runes: %d calls of suggestLineBreak and %d runes walked; want 0 and at most %d", n, suggests, steps, perRune*n)
@@ -271,30 +269,32 @@ func TestCoreTextLaidLigatures(t *testing.T) {
 func TestCoreTextLaidPersianPunctuation(t *testing.T) {
 	e := coreTextEngine(t)
 	for _, word := range []string{"می‌خواهم", "کتاب‌ها", "نعم،", "لماذا؟", "قال؛"} {
-		var sb strings.Builder
-		for i := range 400 {
-			sb.WriteString(string(arabWords(2 + i%7)))
-			sb.WriteString(" " + word + " ")
-		}
-		text := []rune(sb.String())
-		rw := runeWidth(e, text, true)
-		all := 0
-		for _, runes := range []float32{30, 37, 80} {
-			s, got := laidSame(t, e, text, rw*runes, true)
-			before := 0
-			for _, l := range got {
-				if strings.HasPrefix(string(text[l.end:]), word) {
-					before++
+		t.Run(word, func(t *testing.T) {
+			var sb strings.Builder
+			for i := range 400 {
+				sb.WriteString(string(arabWords(2 + i%7)))
+				sb.WriteString(" " + word + " ")
+			}
+			text := []rune(sb.String())
+			rw := runeWidth(e, text, true)
+			all := 0
+			for _, runes := range []float32{30, 37, 80} {
+				s, got := laidSame(t, e, text, rw*runes, true)
+				before := 0
+				for _, l := range got {
+					if strings.HasPrefix(string(text[l.end:]), word) {
+						before++
+					}
 				}
+				if s != before+cuts(text, got) {
+					t.Errorf("at %v runes a line: Core Text found %d lines, want the %d ending before it and the %d inside words", runes, s, before, cuts(text, got))
+				}
+				all += before
 			}
-			if s != before+cuts(text, got) {
-				t.Errorf("%q at %v runes a line: Core Text found %d lines, want the %d ending before it and the %d inside words", word, runes, s, before, cuts(text, got))
+			if all == 0 {
+				t.Error("no line ends before it")
 			}
-			all += before
-		}
-		if all == 0 {
-			t.Errorf("%q: no line ends before it", word)
-		}
+		})
 	}
 }
 
@@ -311,12 +311,14 @@ func TestCoreTextLaidScripts(t *testing.T) {
 		{"arabic ltr", arabSpaced(8192), false},
 		{"latin rtl", []rune(strings.Repeat("hello world, wide words ", 400)), true},
 	} {
-		rw := runeWidth(e, c.text, c.rtl)
-		for _, runes := range []float32{40, 80} {
-			if s, got := laidSame(t, e, c.text, rw*runes, c.rtl); s != cuts(c.text, got) {
-				t.Errorf("%s at %v runes a line: Core Text found %d lines, want the %d inside words", c.name, runes, s, cuts(c.text, got))
+		t.Run(c.name, func(t *testing.T) {
+			rw := runeWidth(e, c.text, c.rtl)
+			for _, runes := range []float32{40, 80} {
+				if s, got := laidSame(t, e, c.text, rw*runes, c.rtl); s != cuts(c.text, got) {
+					t.Errorf("at %v runes a line: Core Text found %d lines, want the %d inside words", runes, s, cuts(c.text, got))
+				}
 			}
-		}
+		})
 	}
 }
 
@@ -353,8 +355,45 @@ func TestCoreTextLaidWidths(t *testing.T) {
 			}
 		}
 	}
+	t.Logf("%d of 20 lines give a tie", ties)
 	if ties == 0 {
 		t.Error("no width whose limit is a line's sum")
+	}
+}
+
+// laidText takes the runes at its bounds, and none beside them.
+func TestCoreTextLaidTextRunes(t *testing.T) {
+	in := []rune{0x20, 0x7E, 0xC0, 0xFF, 0x060C, 0x061B, 0x061F, 0x0621, 0x0669, 0x0670, 0x06D3, 0x05D0, 0x05EA, 0x200C}
+	out := []rune{0x1F, 0x7F, 0xBF, 0x100, 0x060B, 0x060D, 0x061A, 0x061C, 0x061E, 0x0620, 0x066A, 0x066F, 0x06D4, 0x05CF, 0x05EB, 0x200B, 0x200D}
+	for _, r := range in {
+		if !laidText([]rune{'a', r}) {
+			t.Errorf("U+%04X left out", r)
+		}
+	}
+	for _, r := range out {
+		if laidText([]rune{'a', r}) {
+			t.Errorf("U+%04X taken", r)
+		}
+	}
+}
+
+// Words of the runes at laidText's bounds wrap as Core Text wraps them.
+func TestCoreTextLaidEdgeRunes(t *testing.T) {
+	e := coreTextEngine(t)
+	// U+0670, a mark, is laidText's too, but a word holding it goes to Core
+	// Text as the next word, as TestCoreTextLaidMarks holds.
+	edges := []string{"ءبت", "بت٩", "ۓبت", "שלת", "ÀéÿÖ"}
+	var sb strings.Builder
+	for i := range 400 {
+		sb.WriteString(string(arabWords(2 + i%6)))
+		sb.WriteString(" " + edges[i%len(edges)] + " ")
+	}
+	text := []rune(sb.String())
+	rw := runeWidth(e, text, true)
+	for _, runes := range []float32{30, 37, 80} {
+		if s, got := laidSame(t, e, text, rw*runes, true); s != cuts(text, got) {
+			t.Errorf("at %v runes a line: Core Text found %d lines, want the %d inside words", runes, s, cuts(text, got))
+		}
 	}
 }
 
@@ -362,27 +401,33 @@ func TestCoreTextLaidWidths(t *testing.T) {
 func TestCoreTextLaidLeft(t *testing.T) {
 	e := coreTextEngine(t)
 	text := arabSpaced(4000)
-	got, _, s, _ := laidWrap(t, e, text, Style{Size: 13, LetterSpacing: 1}, 300, true)
-	if s != len(got) {
-		t.Errorf("letter spacing: Core Text found %d of %d lines", s, len(got))
-	}
-	han := []rune(strings.Repeat("中文字 ", 1000))
-	got, _, s, _ = laidWrap(t, e, han, Style{Size: 13}, 300, true)
-	if s != len(got) {
-		t.Errorf("Han: Core Text found %d of %d lines", s, len(got))
-	}
-	e.resetScratch()
-	suggest := ct.suggestLineBreak
-	defer func() { ct.suggestLineBreak = suggest }()
-	s = 0
-	ct.suggestLineBreak = func(typesetter uintptr, start int, width float64) int {
-		s++
-		return suggest(typesetter, start, width)
-	}
-	got = e.shapeText(text, Style{Size: 13}, []Span{{End: 10, Size: 15}}, 300, true, false)
-	if s != len(got) {
-		t.Errorf("spans: Core Text found %d of %d lines", s, len(got))
-	}
+	t.Run("letter spacing", func(t *testing.T) {
+		got, _, s, _ := laidWrap(t, e, text, Style{Size: 13, LetterSpacing: 1}, 300, true)
+		if s != len(got) {
+			t.Errorf("Core Text found %d of %d lines", s, len(got))
+		}
+	})
+	t.Run("han", func(t *testing.T) {
+		han := []rune(strings.Repeat("中文字 ", 1000))
+		got, _, s, _ := laidWrap(t, e, han, Style{Size: 13}, 300, true)
+		if s != len(got) {
+			t.Errorf("Core Text found %d of %d lines", s, len(got))
+		}
+	})
+	t.Run("spans", func(t *testing.T) {
+		e.resetScratch()
+		suggest := ct.suggestLineBreak
+		defer func() { ct.suggestLineBreak = suggest }()
+		s := 0
+		ct.suggestLineBreak = func(typesetter uintptr, start int, width float64) int {
+			s++
+			return suggest(typesetter, start, width)
+		}
+		got := e.shapeText(text, Style{Size: 13}, []Span{{End: 10, Size: 15}}, 300, true, false)
+		if s != len(got) {
+			t.Errorf("Core Text found %d of %d lines", s, len(got))
+		}
+	})
 }
 
 // The fonts' checks: a font where Core Text's lines differ from those found
