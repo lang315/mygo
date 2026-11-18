@@ -49,7 +49,7 @@ func TestNativeLibraryNameCollision(t *testing.T) {
 	if err == nil {
 		t.Fatal("two modules with libLanguage.dylib: no error")
 	}
-	for _, want := range []string{"libLanguage.dylib", filepath.Join("a", "language"), filepath.Join("b", "language")} {
+	for _, want := range []string{"libLanguage.dylib", "a/language", "b/language"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
