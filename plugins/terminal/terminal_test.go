@@ -1961,6 +1961,28 @@ func TestCommandClickRefusesFileAndUNCLinks(t *testing.T) {
 	}
 }
 
+// TestSystemOpensRefusesFileLines: a path with a line, as compilers print
+// it (notes.md:12, x.exe:1:5), has no scheme, while a scheme with a dot or
+// a plus still opens.
+func TestSystemOpensRefusesFileLines(t *testing.T) {
+	for link, want := range map[string]bool{
+		"notes.md:12":          false,
+		"x.exe:1":              false,
+		"main.go:12:5":         false,
+		"vscode://file/a.go":   true,
+		"https://example.com":  true,
+		"mailto:a@example.com": true,
+		"x-custom+scheme:x":    true,
+		"web.app:open":         true,
+		"web.app:8080/x":       true,
+		"tel:5551234":          true,
+	} {
+		if got := systemOpens(link); got != want {
+			t.Errorf("systemOpens(%q) = %v, want %v", link, got, want)
+		}
+	}
+}
+
 // TestOnPasteTakesAPaste: Options.OnPaste sees a paste and the clipboard's
 // text, and a true result pastes nothing.
 func TestOnPasteTakesAPaste(t *testing.T) {

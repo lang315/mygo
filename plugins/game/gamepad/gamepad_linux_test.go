@@ -1,4 +1,4 @@
-//go:build linux && (amd64 || arm64)
+//go:build linux && (amd64 || arm64 || 386 || arm)
 
 package gamepad
 
@@ -32,6 +32,15 @@ type uinputAbsSetup struct {
 	code uint16
 	_    uint16
 	info absInfo
+}
+
+// event returns an input_event of this architecture, its time zero.
+func event(typ, code uint16, value int32) []byte {
+	e := make([]byte, evdevSize(word))
+	binary.LittleEndian.PutUint16(e[2*word:], typ)
+	binary.LittleEndian.PutUint16(e[2*word+2:], code)
+	binary.LittleEndian.PutUint32(e[2*word+4:], uint32(value))
+	return e
 }
 
 func uiDevSetup() uintptr { return 1<<30 | unsafe.Sizeof(uinputSetup{})<<16 | 'U'<<8 | 3 }
@@ -69,11 +78,7 @@ func TestSynDroppedResyncs(t *testing.T) {
 	}
 	var events []byte
 	emit := func(typ, code uint16, value int32) {
-		var e [24]byte
-		binary.LittleEndian.PutUint16(e[16:], typ)
-		binary.LittleEndian.PutUint16(e[18:], code)
-		binary.LittleEndian.PutUint32(e[20:], uint32(value))
-		events = append(events, e[:]...)
+		events = append(events, event(typ, code, value)...)
 	}
 	emit(evKey, btnSouth, 1)
 	emit(0, 0, 0) // SYN_REPORT
@@ -85,7 +90,7 @@ func TestSynDroppedResyncs(t *testing.T) {
 	if _, err := syscall.Write(fds[1], events); err != nil {
 		t.Fatal(err)
 	}
-	d := &evdevPad{fd: fds[0], buf: make([]byte, 24*64)}
+	d := &evdevPad{fd: fds[0], buf: make([]byte, evdevSize(word)*64)}
 	if !d.drain() {
 		t.Fatal("drain reported the device gone")
 	}
@@ -149,11 +154,7 @@ func testEvdev(t *testing.T, vendor uint16, west uint16) {
 		return pad != nil
 	})
 	emit := func(typ, code uint16, value int32) {
-		var e [24]byte
-		binary.LittleEndian.PutUint16(e[16:], typ)
-		binary.LittleEndian.PutUint16(e[18:], code)
-		binary.LittleEndian.PutUint32(e[20:], uint32(value))
-		if _, err := syscall.Write(fd, e[:]); err != nil {
+		if _, err := syscall.Write(fd, event(typ, code, value)); err != nil {
 			t.Fatal(err)
 		}
 	}

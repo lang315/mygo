@@ -703,6 +703,32 @@ func TestFFmpeg(t *testing.T) {
 	}
 }
 
+// TestFFmpegRelativePaths: ffmpeg writes a video and reads its sound in a
+// relative folder named as an option (-d) or a protocol (concat:x).
+func TestFFmpegRelativePaths(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("no ffmpeg")
+	}
+	dirs := []string{"-d"}
+	if runtime.GOOS != "windows" {
+		dirs = append(dirs, "concat:x") // no colon in Windows' names
+	}
+	t.Chdir(t.TempDir())
+	for _, dir := range dirs {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dir, "beep.mp4")
+		if err := Video(context.Background(), beeping(160, 90, 40, tone(440, sampleRate)), path, Options{Encoder: FFmpeg, Renderer: CPU}); err != nil {
+			t.Errorf("%s: %v", path, err)
+			continue
+		}
+		if tracks := mp4Tracks(t, path); tracks["vide"] != 40 || tracks["soun"] == 0 {
+			t.Errorf("%s: %v", path, tracks)
+		}
+	}
+}
+
 // TestPlayer shows a composition's frames in a window, as the video has
 // them, and seeks without drawing the frames before.
 func TestPlayer(t *testing.T) {

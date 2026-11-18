@@ -317,8 +317,9 @@ term, err := terminal.New(terminal.Options{
   link; a hyperlink or a URL it leaves opens with the system, as every one
   does without `OpenLink`, when it has a scheme other than `file:`
   (`https:`, `mailto:`, `vscode:`): a `file:` link, a UNC path
-  (`\\host\share\x.exe`, `//host/x`), a drive path or one with no scheme
-  opens only through `OpenLink`, so that a program's output cannot have a
+  (`\\host\share\x.exe`, `//host/x`), a drive path, one with no scheme
+  or a file and its line (`notes.md:12`, `x.exe:1:5`, a name with a dot
+  before only digits) opens only through `OpenLink`, so that a program's output cannot have a
   click run a file. An app opens a remote shell's paths in a
   preview of its own this way, rather than the system opening them
   locally.
