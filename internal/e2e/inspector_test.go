@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -28,20 +29,37 @@ func TestContentWindowInspector(t *testing.T) {
 	}
 	w := newWindow(t, mygo.WindowOptions{Title: "Inspector", Width: 600, Height: 400, Content: ui.View(view),
 		Page: mygo.PageOptions{DevTools: mygo.DevToolsEnabled}})
-	eventually(t, "a frame", func() bool { return frames.Load() > 0 })
+	// A frame with a width: the content's full width is what the inspector
+	// takes from, and a 0 read before the first build stored one would
+	// leave nothing to take from.
+	eventually(t, "a frame", func() bool { return width.Load().(float32) > 0 })
 	full := width.Load().(float32)
-	menu := mygo.NewMenu([]*mygo.MenuItem{{Label: "Test", Submenu: []*mygo.MenuItem{{Role: mygo.RoleToggleDevTools}}}})
+	// The item's Click runs after its role (menuItemClicked): it counts
+	// the toggles the menu delivered.
+	var toggles atomic.Int32
+	menu := mygo.NewMenu([]*mygo.MenuItem{{Label: "Test", Submenu: []*mygo.MenuItem{{Role: mygo.RoleToggleDevTools,
+		Click: func(*mygo.MenuItem, *mygo.Window) { toggles.Add(1) }}}}})
 	mygo.App.SetMenu(menu)
 	defer mygo.App.SetMenu(nil)
 	w.Focus()
 	time.Sleep(100 * time.Millisecond)
+	built := frames.Load()
 	if err := activateMenu(w, "Test", "Toggle Developer Tools"); err != nil {
 		t.Skip("menu automation not available on this platform: ", err)
 	}
-	eventually(t, "the content beside the inspector", func() bool {
-		w := width.Load().(float32)
-		return w > 0 && w < full
-	})
+	// If it never comes: no toggle says the menu did not reach the window;
+	// a toggle and no frame since, that its frame was never built; frames
+	// at the full width, that the inspector did not open, or closed again.
+	if !wait.Poll(func() bool {
+		if w := width.Load().(float32); w > 0 && w < full {
+			return true
+		}
+		keepFront()
+		return false
+	}) {
+		t.Fatalf("the content beside the inspector never happened (waited %v); the content was %v wide before, %v now; the menu delivered %d toggles; %d frames built before the toggle, %d now; %s%s",
+			wait.Guard, full, width.Load(), toggles.Load(), built, frames.Load(), foregroundState(w), inputDiag())
+	}
 	beside := width.Load().(float32)
 	data, err := w.CapturePage()
 	if err != nil {
