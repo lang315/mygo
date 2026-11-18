@@ -171,6 +171,17 @@ func TestGraphemesBackspaceCostCJK(t *testing.T) {
 	}
 }
 
+// C11: a paragraph with no anchor, of emoji alone, costs a Backspace little
+// more than segmenting it whole, and equals the oracle.
+func TestGraphemesBackspaceCostNoAnchor(t *testing.T) {
+	got := backspaceSegments(t, strings.Repeat("\U0001F600", 131072))
+	t.Logf("Backspace in 131072 emoji segmented %d runes", got)
+	if got > 196608 {
+		t.Errorf("Backspace in 131072 emoji segmented %d runes, want at most 196608", got)
+	}
+	checkGraphemes(t, strings.Repeat("\U0001F600", 20000))
+}
+
 // C3: regional indicators pair from the start of their run.
 func TestGraphemesRegionalIndicators(t *testing.T) {
 	ri := strings.Repeat("\U0001F1E6", 20000)

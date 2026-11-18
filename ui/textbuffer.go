@@ -432,6 +432,11 @@ type graphemes struct {
 // each side of the rune asked, within its paragraph.
 const graphemeWindow = 256
 
+// graphemeWindowMax is the widest a window grows to looking for anchors,
+// which it probes again at each width; past it, the window is the whole
+// paragraph, with none, as a run of emoji has.
+const graphemeWindowMax = 2048
+
 // of prepares g for a window of paragraph p of b, with its newline, that
 // holds a rune before i unless i starts the paragraph, and the rune at i
 // unless i ends it, and returns where the window starts.
@@ -443,9 +448,12 @@ func (g *graphemes) of(b *buffer, p, i int) int {
 		return g.lo
 	}
 	// Where no anchor is near, as in a long run of regional indicators,
-	// the window grows to the paragraph.
+	// the window grows, then is the paragraph.
 	for h := graphemeWindow; ; h *= 2 {
 		from, to := max(ps, i-h), min(pe, i+h)
+		if h > graphemeWindowMax {
+			from, to = ps, pe
+		}
 		runes := []rune(b.slice(from, to))
 		lo, hi := from, to
 		if from > ps {
