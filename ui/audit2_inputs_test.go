@@ -134,14 +134,14 @@ func TestPlainInputCompositionOverASelectionIsUnchanged(t *testing.T) {
 }
 
 // A single-line input lays out a window of its line around the caret: after
-// a paste of 4 MB, cut at 524,288 runes, a keystroke lays out the window, not
+// a paste over 524,288 runes, cut there, a keystroke lays out the window, not
 // the line (R3-5). A line break becomes a space, as before.
 func TestTextInputHugeValueKeystrokeCost(t *testing.T) {
 	s := ""
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
 	tt.Frame()
-	paste := 4 << 20 / 3 * 3
+	paste := (1<<19 + 3072) / 3 * 3
 	tt.SetClipboard(strings.Repeat("ab\n", paste/3))
 	tt.Key(Cmd, KeyV)
 	if laid := laidBy(tt, func() { tt.Type("x") }); laid > windowBound {

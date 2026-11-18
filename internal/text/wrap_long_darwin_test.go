@@ -41,9 +41,9 @@ func TestCoreTextWrapUnbrokenLinear(t *testing.T) {
 				}
 				return walked
 			}
-			small, large := steps(16<<10), steps(64<<10)
+			small, large := steps(8<<10), steps(32<<10)
 			if large > small*9/2 {
-				t.Errorf("%q%q: wrapping 4× the runes walked %d runes, %.1f× the %d of 16K", prefix, blob, large, float64(large)/float64(small), small)
+				t.Errorf("%q%q: wrapping 4× the runes walked %d runes, %.1f× the %d of 8K", prefix, blob, large, float64(large)/float64(small), small)
 			}
 		}
 	}

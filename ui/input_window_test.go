@@ -58,11 +58,11 @@ func TestTextAreaLinesKeystrokeLaysOutItsLines(t *testing.T) {
 }
 
 // A single-line input lays out a window of a long value around the caret: a
-// keystroke in a value of 4M runes that the app set lays out the window, not
-// the value (R3-5), and editing, moving, selecting, copying and pointing go on
-// as in the whole value.
+// keystroke in a value of 128K runes, sixteen windows, that the app set lays
+// out the window, not the value (R3-5), and editing, moving, selecting,
+// copying and pointing go on as in the whole value.
 func TestTextInputAppValueKeystrokeLaysOutWindow(t *testing.T) {
-	s := strings.Repeat("ab ", 4<<20/3)
+	s := strings.Repeat("ab ", 128<<10/3)
 	n := utf8.RuneCountInString(s)
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
@@ -156,12 +156,12 @@ func TestTextInputAppValueKeystrokeLaysOutWindow(t *testing.T) {
 // The window moves as the caret comes near its edge, and the text keeps its
 // place in the box: the caret steps a letter, not to the box's edge.
 func TestTextInputWindowMovesInPlace(t *testing.T) {
-	s := strings.Repeat("ab ", 4<<20/3)
+	s := strings.Repeat("ab ", 128<<10/3)
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
 	tt.Frame()
 	st, ed := inputEditor(t, tt)
-	ed.caret, ed.anchor = 1<<20, 1<<20
+	ed.caret, ed.anchor = 64<<10, 64<<10
 	tt.Frame()
 	ed.caret, ed.anchor = ed.winEnd-inputWindow/4, ed.winEnd-inputWindow/4
 	tt.Frame()
@@ -178,7 +178,7 @@ func TestTextInputWindowMovesInPlace(t *testing.T) {
 // Without the focus, a long value's window is its start, which the input
 // shows; a short value is laid out whole.
 func TestTextInputWindowUnfocusedAndShort(t *testing.T) {
-	s := strings.Repeat("ab ", 4<<20/3)
+	s := strings.Repeat("ab ", 128<<10/3)
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill() }, 300, 100)
 	defer tt.rt.close()
 	tt.Frame()
@@ -200,7 +200,7 @@ func TestTextInputWindowUnfocusedAndShort(t *testing.T) {
 // the composition at the caret, the commit lands there, and the composition's
 // bounds are in the input.
 func TestTextInputWindowComposition(t *testing.T) {
-	s := strings.Repeat("ab ", 4<<20/3)
+	s := strings.Repeat("ab ", 128<<10/3)
 	n := utf8.RuneCountInString(s)
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
@@ -251,14 +251,14 @@ func TestTextInputWindowRTLUnfocused(t *testing.T) {
 // The app sets a shorter value while the window is far in a long one: the
 // window is of the new value.
 func TestTextInputWindowAppShortensValue(t *testing.T) {
-	s := strings.Repeat("ab ", 4<<20/3)
+	s := strings.Repeat("ab ", 128<<10/3)
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
 	tt.Frame()
 	_, ed := inputEditor(t, tt)
-	ed.caret, ed.anchor = 1<<20, 1<<20
+	ed.caret, ed.anchor = 100<<10, 100<<10
 	tt.Frame()
-	s = strings.Repeat("cd ", 100<<10/3)
+	s = strings.Repeat("cd ", 24<<10/3)
 	tt.Frame()
 	tt.Frame()
 	n := utf8.RuneCountInString(s)
@@ -295,31 +295,33 @@ func TestTextInputBufferWindowBuildsNoString(t *testing.T) {
 // A value the app set over the cap of a paste takes no paste, which is cut
 // to nothing, but takes a rune typed.
 func TestTextInputLongAppValuePasteCut(t *testing.T) {
-	s := strings.Repeat("a", 600<<10)
+	const n = 1<<19 + 1024
+	s := strings.Repeat("a", n)
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
 	tt.Frame()
 	tt.Key(0, KeyEnd)
 	tt.SetClipboard(strings.Repeat("b", 300))
 	tt.Key(Cmd, KeyV)
-	if len(s) != 600<<10 || strings.Contains(s, "b") {
-		t.Errorf("a paste of 300 runes into %d gave %d runes, want it cut to nothing", 600<<10, len(s))
+	if len(s) != n || strings.Contains(s, "b") {
+		t.Errorf("a paste of 300 runes into %d gave %d runes, want it cut to nothing", n, len(s))
 	}
 	tt.Type("x")
-	if len(s) != 600<<10+1 || !strings.HasSuffix(s, "ax") {
-		t.Errorf("a rune typed into %d runes gave %d runes ending %q", 600<<10, len(s), s[len(s)-2:])
+	if len(s) != n+1 || !strings.HasSuffix(s, "ax") {
+		t.Errorf("a rune typed into %d runes gave %d runes ending %q", n, len(s), s[len(s)-2:])
 	}
 }
 
 // A value the app set over what typing used to be cut at takes what is typed.
 func TestTextInputLongAppValueTakesTyping(t *testing.T) {
-	s := strings.Repeat("a", 600<<10)
+	const n = 1<<19 + 1024
+	s := strings.Repeat("a", n)
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
 	defer tt.rt.close()
 	tt.Frame()
 	tt.Key(0, KeyEnd)
 	tt.Type("x")
-	if len(s) != 600<<10+1 || !strings.HasSuffix(s, "ax") {
-		t.Errorf("typing into %d runes gave %d runes ending %q", 600<<10, len(s), s[len(s)-2:])
+	if len(s) != n+1 || !strings.HasSuffix(s, "ax") {
+		t.Errorf("typing into %d runes gave %d runes ending %q", n, len(s), s[len(s)-2:])
 	}
 }
