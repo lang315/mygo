@@ -58,6 +58,11 @@ func TestFindEditsInARowKeepTheMatchesRight(t *testing.T) {
 		{Start: 4, End: 5, Text: "cat"},                // the first line gets a second match
 		{Start: mid + 2, End: mid + 5, Text: "dog"},    // a middle line loses its match
 		{Start: last + 7, End: last + 7, Text: " cat"}, // the last line gets another
+		// Early lines gain matches while others follow them, searched
+		// again into the array the matches before left.
+		{Start: 13, End: 14, Text: "cat"},
+		{Start: 22, End: 23, Text: "cat"},
+		{Start: 31, End: 32, Text: "cat cat"}, // two at once
 	} {
 		ed.apply([]Edit{e}, editOther, nil)
 		ct.tt.Frame()
