@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# usage: wait-children [any|all] [seconds, default 570]
+# `hc wait --children any` (or all) that waits on through messages from terminals
+# that are not the caller's children (another session's buildpc broadcast). Such a
+# message ends every hc wait, and it is not a report.
+# Ends on a child's news or message, on a message without a sender (typed into the
+# pane) and at the deadline, and prints that wait's JSON (`reason: timeout` at the
+# deadline). The messages it waited through still arrive as input.
+set -u
+mode=any
+[[ ${1:-} == any || ${1:-} == all ]] && mode=$1 && shift
+end=$(($(date +%s) + ${1:-570}))
+while :; do
+	left=$((end - $(date +%s)))
+	if ((left < 1)); then
+		out='{"reason":"timeout"}'
+		break
+	fi
+	out="$(hc wait --children "$mode" --timeout "$left" --json)"
+	# Anything but a message with a sender ends the wait, hc's own errors included.
+	from="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("from") or "" if d.get("reason")=="message" else "")' "$out" 2>/dev/null)"
+	[[ -z $from ]] && break
+	hc ls --all | python3 -c 'import json,os,sys; sys.exit(not any(t.get("address")==sys.argv[1] and t.get("parent")==os.environ.get("HC_TERMINAL_ID") for t in json.load(sys.stdin)["terminals"]))' "$from" && break
+done
+printf '%s\n' "$out"

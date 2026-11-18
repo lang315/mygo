@@ -36,10 +36,16 @@ Steps:
    - <the package tests, e.g. go test -count=1 ./<pkg>>
    - <for a feature or API task: "break check: for each case, break the line of your code its test holds (negate
      the condition, move the bound by one, drop the error return), run that test alone with -run, see its
-     assertion fail, and restore the line. A test that stays green gets a stronger assertion.">
+     assertion fail, and restore the line. Break every guard you added too (a type or membership check, an
+     early return, a check that something else already refuses), not only the bounds. A test that compares
+     against a value the same code computes (f(4096) with f capped) cannot see the cap move: compare against
+     a constant. A test that stays green gets a stronger assertion.">
    - for ui or ui/widget: <S>/scripts/heavy-lock go test -race -count=<1, or 20 for a race> -run '<the tests the
      change touches>' ./<pkg>
    - gofmt -l <touched dirs> prints nothing
+   - <for a task that touches TypeScript in packages/ or plugins/, in this order, because test and typecheck
+     fail in a new worktree until build has run: bun install --frozen-lockfile, bun run build, bun run test,
+     bun run typecheck. Commit internal/bridge/bridge.js when build changed it.>
    - <S>/scripts/heavy-lock GOOS=<os> go vet ./<pkgs> for darwin, linux and windows
 
 Rules:

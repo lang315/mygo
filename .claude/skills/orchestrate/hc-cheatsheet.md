@@ -62,12 +62,16 @@ hc run --bg --name <name> --cwd "$R" claude --setting-sources user --settings "$
 ## Wait and talk
 
 ```sh
-hc wait --children all --timeout 570     # run with a Bash timeout of 600000
-hc wait --children any --timeout 570
+"$S/scripts/wait-children" all 570       # run with a Bash timeout of 600000
+"$S/scripts/wait-children" 570           # any: the next child's news
 ```
 
 - The wait returns `reason: message` when a report arrives. It returns `timeout` when the time runs out, which is
   a check-in, not a failure. Wait again until no child is working.
+- A message from a terminal that is not your child (another session's buildpc broadcast, `from` t6) ends every
+  `hc wait`, by name and `--children all` too, and it is not a report. `wait-children` waits on through those
+  until its deadline; they still arrive as input. A by-name wait they cut short prints `ended: false`, and `hc rm`
+  refuses the running terminal: run that line again. Tested 2026-11-18.
 - A child with `reason: status` and `status: done` ended its turn and no message came. Read
   `$R/.orch/reports/<name>.md`: a report there means its `hc send` was refused; none means it waits on a
   background command ("Slow commands"), so wait again. `status: blocked` is a dialog in the child: see "Blocked
