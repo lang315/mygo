@@ -455,6 +455,13 @@ type ListState struct {
 	except map[any]struct{}
 	endKey any
 	endGen uint64
+	// exact says Shift left the choice as the rows exactLo to exactHi
+	// alone, whose keys are exactKeys: if the generation is still endGen
+	// and those rows hold them, the next Shift moves only the rows its
+	// range adds or drops.
+	exact            bool
+	exactLo, exactHi int
+	exactKeys        [2]any
 
 	header listHeader
 	// rows are the last frame's rows by their elements' IDs, to find the
@@ -1606,6 +1613,12 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 	}
 	lo, hi := min(p, i), max(p, i)
 	changed := false
+	// skipLo to skipHi are the rows the choice holds already, which the
+	// default branch leaves alone.
+	exact := s.exact && sel.generation() == s.endGen && s.exactHi < f.n &&
+		f.key(s.exactLo) == s.exactKeys[0] && f.key(s.exactHi) == s.exactKeys[1]
+	skipLo, skipHi := 1, 0
+	s.exact = false
 	// track says the rows the extension reaches for the first time that were
 	// chosen already are kept in except, which going back leaves chosen;
 	// the rows from oldLo to oldHi were reached before.
@@ -1626,17 +1639,36 @@ func (f *listFrame) extendBy(i int, keep, span bool) {
 		s.except = exceptReset(s.except)
 	default:
 		s.except, track = exceptReset(s.except), false
-		in := 0
-		for j := lo; j <= hi; j++ {
-			if !f.isHeader(j) && sel.has(f.key(j)) {
-				in++
+		if exact {
+			for j := s.exactLo; j <= s.exactHi; j++ {
+				if j >= lo && j <= hi {
+					j = hi
+					continue
+				}
+				if !f.isHeader(j) {
+					changed = sel.set(f.key(j), false) || changed
+				}
+			}
+			skipLo, skipHi = s.exactLo, s.exactHi
+		} else {
+			in := 0
+			for j := lo; j <= hi; j++ {
+				if !f.isHeader(j) && sel.has(f.key(j)) {
+					in++
+				}
+			}
+			if sel.size() > in {
+				changed = sel.clear()
 			}
 		}
-		if sel.size() > in {
-			changed = sel.clear()
-		}
+		s.exact, s.exactLo, s.exactHi = true, lo, hi
+		s.exactKeys = [2]any{f.key(lo), f.key(hi)}
 	}
 	for j := lo; j <= hi; j++ {
+		if j >= skipLo && j <= skipHi {
+			j = skipHi
+			continue
+		}
 		if f.isHeader(j) {
 			continue
 		}

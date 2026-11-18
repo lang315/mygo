@@ -2,10 +2,12 @@ package gifvideo
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/color"
 	"image/gif"
 	"io"
+	"runtime"
 	"testing"
 	"time"
 
@@ -114,5 +116,52 @@ func TestDecoderFrames(t *testing.T) {
 
 	if _, err := NewDecoder([]byte("GIF89a, not quite")); err == nil {
 		t.Error("data that is no GIF decoded")
+	}
+}
+
+// gifOf returns a GIF of a logical screen of sw×sh and one frame of fw×fh,
+// whose data is lzw: a few bytes however large they are.
+func gifOf(sw, sh, fw, fh int, lzw []byte) []byte {
+	b := []byte("GIF89a")
+	b = binary.LittleEndian.AppendUint16(b, uint16(sw))
+	b = binary.LittleEndian.AppendUint16(b, uint16(sh))
+	b = append(b, 0x80, 0, 0, 0, 0, 0, 255, 255, 255) // a table of two colors
+	b = append(b, 0x2C, 0, 0, 0, 0)
+	b = binary.LittleEndian.AppendUint16(b, uint16(fw))
+	b = binary.LittleEndian.AppendUint16(b, uint16(fh))
+	b = append(b, 0)
+	b = append(b, lzw...)
+	return append(b, 0x3B)
+}
+
+// A GIF whose logical screen or whose frame has more than ui.MaxImagePixels
+// is refused from its headers, before the memory for it is allocated.
+func TestDecoderRefusesHugeGIF(t *testing.T) {
+	oneByOne := []byte{2, 2, 0x44, 0x01, 0}
+	allocated := func(data []byte) (err error, n uint64) {
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		_, err = NewDecoder(data)
+		runtime.ReadMemStats(&after)
+		return err, after.TotalAlloc - before.TotalAlloc
+	}
+	// image/gif refuses a frame that does not fit the logical screen, so the
+	// screen's size bounds the frames' too.
+	err, n := allocated(gifOf(8193, 8192, 1, 1, oneByOne))
+	if err == nil {
+		t.Error("a GIF with a screen past MaxImagePixels decoded")
+	}
+	if n > 16<<20 {
+		t.Errorf("refusing a GIF with a screen past MaxImagePixels allocated %d MB", n>>20)
+	}
+	if _, err := NewDecoder(gifOf(0, 0, 16384, 8192, []byte{2, 0})); err == nil {
+		t.Error("a GIF with a frame past MaxImagePixels decoded")
+	}
+	// At the cap, and a small one.
+	if _, err := NewDecoder(gifOf(8192, 8192, 1, 1, oneByOne)); err != nil {
+		t.Errorf("a GIF of MaxImagePixels: %v", err)
+	}
+	if _, err := NewDecoder(gifOf(2, 2, 1, 1, oneByOne)); err != nil {
+		t.Errorf("a small GIF: %v", err)
 	}
 }
