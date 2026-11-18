@@ -361,6 +361,33 @@ func TestCoreTextLaidWidths(t *testing.T) {
 	}
 }
 
+// What wrapping keeps of a font, in either path, goes with the fonts: its key
+// is the font's address, which another font may take.
+func TestCoreTextLaidForget(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		forget func(e *coreText)
+	}{
+		{"forgetFonts", (*coreText).forgetFonts},
+		{"forgetPrimary", (*coreText).forgetPrimary},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := coreTextEngine(t)
+			style := Style{Size: 13}
+			e.resetScratch()
+			e.shapeText(arabSpaced(400), style, nil, 300, true, false)
+			e.shapeText([]rune(strings.Repeat("plain words ", 40)), style, nil, 300, false, false)
+			if len(e.laidFonts) == 0 || len(e.wrapFonts) == 0 {
+				t.Fatalf("%d laid fonts and %d Latin ones kept, want both", len(e.laidFonts), len(e.wrapFonts))
+			}
+			c.forget(e)
+			if len(e.laidFonts) != 0 || len(e.wrapFonts) != 0 {
+				t.Errorf("%d laid fonts and %d Latin ones kept after %s, want none", len(e.laidFonts), len(e.wrapFonts), c.name)
+			}
+		})
+	}
+}
+
 // laidText takes the runes at its bounds, and none beside them.
 func TestCoreTextLaidTextRunes(t *testing.T) {
 	in := []rune{0x20, 0x7E, 0xC0, 0xFF, 0x060C, 0x061B, 0x061F, 0x0621, 0x0669, 0x0670, 0x06D3, 0x05D0, 0x05EA, 0x200C}

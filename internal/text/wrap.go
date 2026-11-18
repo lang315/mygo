@@ -17,8 +17,9 @@ import (
 //
 // Lines break where the system surely would: at the spaces before plain
 // words. What could tell them apart goes to the system: all but plain Latin
-// text, and a line ending where the next word does not fit and may break
-// inside itself, or is too long for a line. And the first texts of a font,
+// text (on macOS, all but plain Latin, Arabic and Hebrew text, whose lines
+// Core Text lays out from where they break), and a line ending where the next
+// word does not fit and may break inside itself, or is too long for a line. And the first texts of a font,
 // and one in every few hundred after them, are also wrapped by the system: a
 // font where the two differ is left to it from then on.
 
