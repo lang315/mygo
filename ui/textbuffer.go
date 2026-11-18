@@ -408,25 +408,97 @@ func (b *buffer) runeAt(i int) rune {
 	return r
 }
 
-// graphemes finds the grapheme boundaries of a buffer a paragraph at a
-// time: they never cross a newline, but for the carriage return before
-// one, which the paragraph holds with its newline.
+// graphemes finds the grapheme boundaries of a buffer in a window of a
+// paragraph around the rune asked: they never cross a newline, but for the
+// carriage return before one, which the paragraph holds with its newline.
+// Each edge of the window is an end of its paragraph or an anchor, a
+// boundary the runes before it cannot move, so the window's boundaries
+// are the paragraph's: a keystroke segments a window, not a long paragraph.
 type graphemes struct {
-	b       text.Boundaries
-	para    int
+	b text.Boundaries
+	// The window, in runes of the buffer: its bounds within a paragraph's
+	// tell the paragraph.
+	lo, hi int
+	// probe and pair test anchors.
+	probe   text.Boundaries
+	pair    [3]rune
 	version uint64
 	valid   bool
+	// segmented counts the runes handed to Reset, for tests.
+	segmented int
 }
 
-// of prepares g for paragraph p of b, with its newline, and returns where
-// the paragraph starts.
-func (g *graphemes) of(b *buffer, p int) int {
-	if !g.valid || g.para != p || g.version != b.version {
-		nr, _ := b.next(p)
-		g.b.Reset([]rune(b.slice(b.start(p), nr)))
-		g.para, g.version, g.valid = p, b.version, true
+// graphemeWindow is how many runes a window of graphemes holds at least on
+// each side of the rune asked, within its paragraph.
+const graphemeWindow = 256
+
+// of prepares g for a window of paragraph p of b, with its newline, that
+// holds a rune before i unless i starts the paragraph, and the rune at i
+// unless i ends it, and returns where the window starts.
+func (g *graphemes) of(b *buffer, p, i int) int {
+	ps := b.start(p)
+	pe, _ := b.next(p)
+	if g.valid && g.version == b.version &&
+		(g.lo < i || g.lo == ps) && (i < g.hi || g.hi == pe) {
+		return g.lo
 	}
-	return b.start(p)
+	// Where no anchor is near, as in a long run of regional indicators,
+	// the window grows to the paragraph.
+	for h := graphemeWindow; ; h *= 2 {
+		from, to := max(ps, i-h), min(pe, i+h)
+		runes := []rune(b.slice(from, to))
+		lo, hi := from, to
+		if from > ps {
+			lo = -1
+			for k := from + 1; k < i; k++ {
+				if g.anchor(runes[k-from-1], runes[k-from]) {
+					lo = k
+					break
+				}
+			}
+		}
+		if to < pe {
+			hi = -1
+			for k := to - 1; k > i; k-- {
+				if g.anchor(runes[k-from-1], runes[k-from]) {
+					hi = k
+					break
+				}
+			}
+		}
+		if lo < 0 || hi < 0 {
+			continue
+		}
+		w := runes[lo-from : hi-from]
+		g.segmented += len(w)
+		g.b.Reset(w)
+		g.lo, g.hi, g.version, g.valid = lo, hi, b.version, true
+		return lo
+	}
+}
+
+// anchor reports whether a grapheme boundary falls between runes a and c
+// whatever runes come before a, and the segmenter, started at c, goes on
+// as it does after a. Its rules are of two runes but for three sequences
+// it carries: an emoji one (GB11), an Indic conjunct (GB9c) and a run of
+// regional indicators, paired from its start (GB12, GB13). A boundary in
+// "a ZWJ a" before the second a tells a is no Extended_Pictographic,
+// Extend, ZWJ nor SpacingMark: no emoji sequence goes on after a, nor an
+// Indic one with a linker in it, as its linkers and extenders are Extend
+// or ZWJ. Then a boundary between a and c alone holds after any runes,
+// and c, which no rule joins to a, starts the sequences as a text's first
+// rune does. The segmenter itself tells, so its tables are the oracle's.
+func (g *graphemes) anchor(a, c rune) bool {
+	g.pair = [3]rune{a, c}
+	g.segmented += 2
+	g.probe.Reset(g.pair[:2])
+	if g.probe.NextGrapheme(0) != 1 {
+		return false
+	}
+	g.pair = [3]rune{a, 0x200D, a}
+	g.segmented += len(g.pair)
+	g.probe.Reset(g.pair[:])
+	return g.probe.PrevGrapheme(3) == 2
 }
 
 // next returns the end of the grapheme starting at or containing i.
@@ -434,7 +506,7 @@ func (g *graphemes) next(b *buffer, i int) int {
 	if i >= b.n {
 		return b.n
 	}
-	start := g.of(b, b.para(i))
+	start := g.of(b, b.para(i), i)
 	return start + g.b.NextGrapheme(i-start)
 }
 
@@ -447,7 +519,7 @@ func (g *graphemes) prev(b *buffer, i int) int {
 	if b.start(p) == i {
 		p-- // the newline ending the paragraph before
 	}
-	start := g.of(b, p)
+	start := g.of(b, p, i)
 	return start + g.b.PrevGrapheme(i-start)
 }
 
