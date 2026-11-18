@@ -250,24 +250,38 @@ func (f *finder) moved(cs []change) {
 	}
 }
 
+// searchSteps counts the matches searchLines looks at or adds, for tests
+// of its cost.
+var searchSteps int
+
 // searchLines searches the lines edits changed again, as moved left them.
 func (f *finder) searchLines(ed *editor) {
 	r := &ed.view.text
 	n := r.LineCount()
+	// Clamped before merging, the spans are apart and in order: one pass
+	// keeps the matches before each, drops those in it and adds its own.
+	for i, sp := range f.dirty {
+		f.dirty[i] = lineSpan{min(sp.from, n-1), min(sp.to, n-1)}
+	}
 	spans := mergeSpans(f.dirty)
 	f.dirty = nil
+	old, j := f.matches, 0
+	f.matches = make([]diffRange, 0, len(old))
 	for _, sp := range spans {
-		from, to := min(sp.from, n-1), min(sp.to, n-1)
-		a, z := r.LineStart(from), r.LineEnd(to)
-		f.matches = slices.DeleteFunc(f.matches, func(m diffRange) bool { return m.start >= a && m.start <= z })
-		i, _ := slices.BinarySearchFunc(f.matches, a, func(m diffRange, off int) int { return m.start - off })
-		var found []diffRange
+		a, z := r.LineStart(sp.from), r.LineEnd(sp.to)
+		for ; j < len(old) && old[j].start <= z; j++ {
+			searchSteps++
+			if old[j].start < a {
+				f.matches = append(f.matches, old[j])
+			}
+		}
 		f.scan(ed, r.Slice(a, z), "", a, func(m diffRange, _ []int) bool {
-			found = append(found, m)
+			searchSteps++
+			f.matches = append(f.matches, m)
 			return true
 		})
-		f.matches = slices.Insert(f.matches, i, found...)
 	}
+	f.matches = append(f.matches, old[j:]...)
 	if len(f.matches) > maxMatches {
 		f.matches = f.matches[:maxMatches]
 	}

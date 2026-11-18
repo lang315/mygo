@@ -27,6 +27,7 @@ var (
 	auditStarted = make(chan struct{}, 4)
 	auditOnce    sync.Once
 	auditEvent   = NewEvent[string]("audit-secret")
+	panickyEvent = NewEvent[panicky]("audit-panicky")
 )
 
 func (auditService) Echo(s string) string { return s }
@@ -93,6 +94,28 @@ func TestEncodeResultPanicBecomesAnError(t *testing.T) {
 	}
 	if e, _ := reply["e"].(string); !strings.Contains(e, "encoding failed") {
 		t.Errorf("the error is %q, want it to say the panic", e)
+	}
+}
+
+func TestEncodeEventPanicBecomesAnError(t *testing.T) {
+	w, _ := auditWindow(t)
+	for name, emit := range map[string]func() error{
+		"Emit":      func() error { return panickyEvent.Emit(w, panicky{}) },
+		"EmitPage":  func() error { return panickyEvent.EmitPage(w.Page(), panicky{}) },
+		"Broadcast": func() error { return panickyEvent.Broadcast(panicky{}) },
+	} {
+		var err error
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					t.Errorf("%s panicked: %v", name, p)
+				}
+			}()
+			err = emit()
+		}()
+		if err == nil || !strings.Contains(err.Error(), "encoding failed") {
+			t.Errorf("%s returned %v, want an error saying the panic", name, err)
+		}
 	}
 }
 
