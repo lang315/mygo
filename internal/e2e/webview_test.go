@@ -3,12 +3,14 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/wait"
@@ -243,7 +245,9 @@ func TestContentWindowWebViewEditMenu(t *testing.T) {
 	// read the clipboard after every change (Windows' clipboard history)
 	// hold it open while they read, asking this app to render its data, and
 	// the browser's write of a copy then fails without a word.
+	started, _ := clipboardSequence()
 	mygo.Clipboard.WriteText("before copy")
+	written, _ := clipboardSequence()
 	// The page counts the edit commands it runs and their results, and its
 	// copies with the selection each had, for a Copy that copies nothing:
 	// the menu sends them as execCommand on Windows.
@@ -261,7 +265,7 @@ window.copies = 0;
 window.copied = [];
 document.addEventListener("copy", e => {
 	window.copies++;
-	window.copied.push({selection: getSelection().toString(), focused: document.hasFocus(), active: document.activeElement && document.activeElement.id, prevented: e.defaultPrevented});
+	window.copied.push({selection: getSelection().toString(), focused: document.hasFocus(), active: document.activeElement && document.activeElement.id, prevented: e.defaultPrevented, at: Date.now()});
 });
 window.ready = true;
 </script></body>`, "")
@@ -306,10 +310,15 @@ window.ready = true;
 	// clipboard stays open, as each read of ours opens it on Windows: read
 	// it only once it changed.
 	before, sequenced := clipboardSequence()
+	sentAt := time.Now()
 	menu("Copy")
 	held := ""
+	var moved time.Duration // from Copy to the first change of the clipboard
 	if !wait.Poll(func() bool {
 		if s, _ := clipboardSequence(); !sequenced || s != before {
+			if moved == 0 {
+				moved = time.Since(sentAt)
+			}
 			if mygo.Clipboard.ReadText() == "hello" {
 				return true
 			}
@@ -320,9 +329,30 @@ window.ready = true;
 		keepFront()
 		return false
 	}) {
-		page, _ := mygo.EvalAs[string](v.Page(), "JSON.stringify({commands: window.commands, copies: window.copies, copied: window.copied})")
-		t.Fatalf("Copy to copy the page's selection never happened (waited %v); as Copy was sent, %s; now %s; %s; the clipboard was seen open: %q; the page: %s; the clipboard has %q",
-			wait.Guard, sent, foregroundState(w), clipboardState(), held, page, mygo.Clipboard.ReadText())
+		// The page's selection and focus now, against those of its copies,
+		// whose times (Date.now) go with the time Copy was sent.
+		page, _ := mygo.EvalAs[string](v.Page(), "JSON.stringify({commands: window.commands, copies: window.copies, copied: window.copied, selection: getSelection().toString(), focused: document.hasFocus()})")
+		state := fmt.Sprintf("as Copy was sent (at %d), %s; now %s; %s; the clipboard was seen open: %q; its sequence was %d as the test began, %d once it wrote \"before copy\", %d as Copy was sent; the page: %s; the clipboard has %q",
+			sentAt.UnixMilli(), sent, foregroundState(w), clipboardState(), held, started, written, before, page, mygo.Clipboard.ReadText())
+		// A second Copy tells a write lost once (another program had the
+		// clipboard as the browser tried) from one the web view never makes
+		// any more. The test fails either way.
+		again := ""
+		if sequenced {
+			again = "; a second Copy did not change the clipboard either"
+			seq, _ := clipboardSequence()
+			if activateMenu(w, "Edit", "Copy") != nil {
+				again = "; a second Copy could not be sent"
+			} else if resent := time.Now(); wait.Poll(func() bool { s, _ := clipboardSequence(); return s != seq }) {
+				again = fmt.Sprintf("; a second Copy changed the clipboard after %v, to %q", time.Since(resent).Round(time.Millisecond), mygo.Clipboard.ReadText())
+			}
+		}
+		t.Fatalf("Copy to copy the page's selection never happened (waited %v); %s%s", wait.Guard, state, again)
+	}
+	if sequenced {
+		// A passing run's numbers, for a failing one to be read against:
+		// go test hides the log of a package that passes.
+		ciNote(fmt.Sprintf("e2e: TestContentWindowWebViewEditMenu: clipboard sequence %d as the test began, %d after \"before copy\", %d at Copy; Copy changed it after %v", started, written, before, moved.Round(time.Millisecond)))
 	}
 	menu("Cut")
 	eventually(t, "Cut to take the text out of the page", func() bool { return text() == "" })
