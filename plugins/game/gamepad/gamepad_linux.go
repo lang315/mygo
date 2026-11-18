@@ -1,4 +1,4 @@
-//go:build linux && (amd64 || arm64 || 386 || arm)
+//go:build linux && !android && (amd64 || arm64 || 386 || arm)
 
 package gamepad
 
