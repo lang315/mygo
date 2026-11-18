@@ -118,6 +118,21 @@ func TestCoreTextCutWord(t *testing.T) {
 	}
 }
 
+// Latin-1 letters among ASCII ones, in one unbroken word.
+func TestCoreTextCutWordLatin1(t *testing.T) {
+	e := coreTextEngine(t)
+	text := []rune(strings.Repeat("aéxßyüz", 8192/7))
+	for _, width := range []float32{40, 400} {
+		got, want, suggests, _ := cutWrap(t, e, text, width)
+		if d := sameGlyphs(text, got, want); d != "" {
+			t.Fatalf("at %v: %s", width, d)
+		}
+		if suggests != 0 {
+			t.Errorf("at %v: Core Text found %d lines", width, suggests)
+		}
+	}
+}
+
 // P2: Core Text finds no line of an unbroken plain word, and shapes it once.
 func TestCoreTextCutWordCalls(t *testing.T) {
 	e := coreTextEngine(t)
@@ -171,6 +186,21 @@ func TestCoreTextCutWordNarrow(t *testing.T) {
 	}
 }
 
+// The last letter of a word, alone on a line too narrow for it, before one
+// space or several and more text.
+func TestCoreTextCutWordLastLetter(t *testing.T) {
+	e := coreTextEngine(t)
+	for _, spaces := range []string{" ", "    "} {
+		text := []rune("abcdefW" + spaces + "next words" + spaces + "andW" + spaces + "end")
+		for _, width := range []float32{0.5, 3} {
+			got, want, _, _ := cutWrap(t, e, text, width)
+			if d := sameGlyphs(text, got, want); d != "" {
+				t.Fatalf("%d spaces at %v: %s", len(spaces), width, d)
+			}
+		}
+	}
+}
+
 // P5: a width of exactly the first k advances, the tie Core Text decides.
 func TestCoreTextCutWordTie(t *testing.T) {
 	e := coreTextEngine(t)
@@ -203,8 +233,9 @@ func TestCoreTextCutWordTie(t *testing.T) {
 // P6: a word that may break inside itself goes to Core Text.
 func TestCoreTextCutWordNotPlain(t *testing.T) {
 	e := coreTextEngine(t)
-	for _, blob := range []string{"aB3+", "aB3/", "a+b/"} {
-		text := []rune(strings.Repeat(blob, 2048))
+	// Words that end in a letter or a digit, with the other mark inside.
+	for _, blob := range []string{"aB3+", "aB3/", "a+b/", "aB3+x", "ab/cd", "a-b"} {
+		text := []rune(strings.Repeat(blob, 8192/len(blob)))
 		for _, width := range []float32{40, 400} {
 			got, want, suggests, _ := cutWrap(t, e, text, width)
 			if d := sameGlyphs(text, got, want); d != "" {
