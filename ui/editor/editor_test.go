@@ -751,6 +751,35 @@ func TestReplaceAllKeepingMatchesCostIsLinear(t *testing.T) {
 	if small == 0 || big > 20*small {
 		t.Errorf("%d steps for 100k matches, %d for 10k: not linear", big, small)
 	}
+	// Matches an edit elsewhere on their lines keeps are walked once, not
+	// once a line searched again.
+	kept := func(n int) int {
+		ct := newEditorTest(t, "", "|"+strings.Repeat("cat x\n\n", n))
+		ct.st.Find("cat")
+		ct.tt.Frame()
+		edits := make([]Edit, n)
+		for i := range edits {
+			edits[i] = Edit{Start: 7*i + 4, End: 7*i + 5, Text: "y"}
+		}
+		searchSteps = 0
+		ct.st.ed.apply(edits, editOther, nil)
+		ct.tt.Frame()
+		f := &ct.st.ed.find
+		if len(f.matches) != n {
+			t.Fatalf("%d matches after editing beside them, want %d", len(f.matches), n)
+		}
+		for i, m := range f.matches {
+			if want := 7 * i; m.start != want || m.end != want+3 {
+				t.Fatalf("match %d is %v, want {%d %d}", i, m, want, want+3)
+			}
+		}
+		return searchSteps
+	}
+	// Each kept match is walked over once and found again once.
+	small, big = kept(10000), kept(100000)
+	if small < 2*10000 || big > 20*small {
+		t.Errorf("%d steps for 100k kept matches, %d for 10k: not linear", big, small)
+	}
 }
 
 // Empty matches of a regular expression don't count toward the limit of
