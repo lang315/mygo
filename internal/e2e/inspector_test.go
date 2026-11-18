@@ -34,16 +34,19 @@ func TestContentWindowInspector(t *testing.T) {
 	// leave nothing to take from.
 	eventually(t, "a frame", func() bool { return width.Load().(float32) > 0 })
 	full := width.Load().(float32)
-	// The item's Click runs after its role (menuItemClicked): it counts
-	// the toggles the menu delivered.
-	var toggles atomic.Int32
+	// The item's Click runs right after its role (menuItemClicked), on the
+	// main thread, before the frame the toggle asked for: it counts the
+	// toggles the menu delivered, and the frames built until then.
+	var toggles, built atomic.Int32
 	menu := mygo.NewMenu([]*mygo.MenuItem{{Label: "Test", Submenu: []*mygo.MenuItem{{Role: mygo.RoleToggleDevTools,
-		Click: func(*mygo.MenuItem, *mygo.Window) { toggles.Add(1) }}}}})
+		Click: func(*mygo.MenuItem, *mygo.Window) {
+			built.Store(frames.Load())
+			toggles.Add(1)
+		}}}}})
 	mygo.App.SetMenu(menu)
 	defer mygo.App.SetMenu(nil)
 	w.Focus()
 	time.Sleep(100 * time.Millisecond)
-	built := frames.Load()
 	if err := activateMenu(w, "Test", "Toggle Developer Tools"); err != nil {
 		t.Skip("menu automation not available on this platform: ", err)
 	}
@@ -58,7 +61,7 @@ func TestContentWindowInspector(t *testing.T) {
 		return false
 	}) {
 		t.Fatalf("the content beside the inspector never happened (waited %v); the content was %v wide before, %v now; the menu delivered %d toggles; %d frames built before the toggle, %d now; %s%s",
-			wait.Guard, full, width.Load(), toggles.Load(), built, frames.Load(), foregroundState(w), inputDiag())
+			wait.Guard, full, width.Load(), toggles.Load(), built.Load(), frames.Load(), foregroundState(w), inputDiag())
 	}
 	beside := width.Load().(float32)
 	data, err := w.CapturePage()
