@@ -92,17 +92,26 @@ func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, widt
 	limit := float64(width) + 1.0/1024
 	var lines []shapedLine
 	mark := len(e.shapeScratch.lines)
+	// The word walked last: the lines Core Text breaks a word too long for a
+	// line into start inside it, and take its end without walking it again,
+	// so that a paragraph without spaces wraps in time linear in its length.
+	wordFrom, wordTo := 0, 0
+	indexed := false
 	for start := 0; start < n; {
-		end, pen, plain := start, w.pens[start], true
+		end, pen := start, w.pens[start]
 		for i := start; i < n; {
 			// A word and the spaces after it, which take no room.
-			word := i
-			for i < n && text[i] != ' ' {
-				i++
+			if i >= wordFrom && i < wordTo {
+				i = wordTo
+			} else {
+				wordFrom = i
+				for i < n && text[i] != ' ' {
+					i++
+				}
+				wordTo = i
+				e.wrapSteps += uint64(wordTo - wordFrom)
 			}
-			fits := w.pens[i]-pen <= limit
-			plain = plainWord(text[word:i])
-			if !fits {
+			if w.pens[i]-pen > limit {
 				break
 			}
 			for i < n && text[i] == ' ' {
@@ -110,14 +119,24 @@ func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, widt
 			}
 			end = i
 		}
-		if end == start || end < n && !plain {
+		// A line ending before n ends where the next word, from end to
+		// wordTo, does not fit.
+		plain := end == n || end == start || plainWord(text[end:wordTo])
+		if end > start && end < n {
+			e.wrapSteps += uint64(wordTo - end)
+		}
+		if end == start || !plain {
 			// The first word does not fit, or the next may break inside.
 			count := max(ct.suggestLineBreak(kept.typesetter, start, limit), 1)
 			line := ct.typesetterCreateLine(kept.typesetter, cfRange{start, count})
 			if line == 0 {
 				return nil
 			}
-			e.index = runeIndex(e.index, n)
+			if !indexed {
+				e.index = runeIndex(e.index, n)
+				e.wrapSteps += uint64(n)
+				indexed = true
+			}
 			lines = e.addLine(mark, e.line(line, e.index, n, style.Italic))
 			ct.release(line)
 			start += count

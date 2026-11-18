@@ -112,6 +112,13 @@ type editor struct {
 	area             *area
 	// display maps runes of the text to runes of the layout, which shows
 	// bullets for passwords and holds the composition.
+	// win and winEnd are the runes of a long single-line text its layout
+	// holds, a window around the caret (setWindow); winEnd is 0 for all of
+	// it. moved tells that the window moved since the last layout, with the
+	// caret at movedX in the layout before.
+	win, winEnd      int
+	moved            bool
+	movedX           float32
 	scrollX          float32
 	originX, originY float32 // content box, relative to the element
 	desiredX         float32

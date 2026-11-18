@@ -34,12 +34,26 @@ func (ed *editor) caretRect(st *state) Rect {
 	return Rect{st.x + ed.originX + x - ed.scrollX, st.y + ed.originY + y, 1, h}
 }
 
+// A single-line text over inputWindowMin runes is laid out a window at a
+// time, inputWindow runes on each side of the caret: a keystroke lays out
+// what the input can show, not the whole value (setWindow).
+const (
+	inputWindowMin = 1 << 14
+	inputWindow    = 1 << 12
+)
+
 // displayText returns what the input shows: the text with the
 // composition at the caret, bullets for a password.
 func (ed *editor) displayText() string {
-	t := ed.buf.string()
-	if ed.compose != "" {
-		at := runeOffset(t, ed.caret)
+	from, to := ed.window()
+	var t string
+	if ed.winEnd > 0 {
+		t = ed.buf.slice(from, to)
+	} else {
+		t = ed.buf.string()
+	}
+	if ed.compose != "" && ed.caret >= from && ed.caret <= to {
+		at := runeOffset(t, ed.caret-from)
 		t = t[:at] + ed.compose + t[at:]
 	}
 	if ed.password {
@@ -48,13 +62,83 @@ func (ed *editor) displayText() string {
 	return t
 }
 
+// window returns the runes of the text the layout holds: all of them, or
+// the window of a long single-line text.
+func (ed *editor) window() (int, int) {
+	if ed.winEnd > 0 {
+		return ed.win, ed.winEnd
+	}
+	return 0, ed.buf.n
+}
+
+// setWindow picks the window of a long single-line text that its layout
+// holds, around rune at: the caret, or the end the input shows without the
+// focus. The window stays while at is well inside it, so that typing and
+// moving the caret lay out the same runes, and centers on at when at comes
+// near one of its edges, which are those of graphemes.
+func (ed *editor) setWindow(at int) {
+	n := ed.buf.n
+	if ed.multiline || n <= inputWindowMin {
+		ed.win, ed.winEnd = 0, 0
+		return
+	}
+	ed.winEnd = min(ed.winEnd, n)
+	margin := inputWindow / 4
+	if ed.winEnd > 0 && at >= ed.win && at <= ed.winEnd &&
+		(ed.win == 0 || at-ed.win >= margin) && (ed.winEnd == n || ed.winEnd-at >= margin) {
+		return
+	}
+	if ed.layout != nil && ed.winEnd > 0 && !ed.moved {
+		// The caret's x in the layout of the window that moves, which the
+		// next layout keeps (layoutInput).
+		ed.movedX, _, _ = ed.layout.Caret(ed.displayIndex(ed.caret) + ed.composeCaret)
+		ed.moved = true
+	}
+	ed.win, ed.winEnd = ed.graphemeEdge(at-inputWindow), ed.graphemeEdge(at+inputWindow)
+}
+
+// graphemeEdge returns the first grapheme boundary at or after rune i, found
+// in the runes around it.
+func (ed *editor) graphemeEdge(i int) int {
+	n := ed.buf.n
+	if i <= 0 || i >= n {
+		return max(0, min(i, n))
+	}
+	const around = 32
+	from := max(i-around, 0)
+	var b text.Boundaries
+	b.Reset([]rune(ed.buf.slice(from, min(i+around, n))))
+	j := 0
+	for j < i-from {
+		j = b.NextGrapheme(j)
+	}
+	return from + j
+}
+
+// windowParams sets the text and the spans of the layout of a single-line
+// input, of the window around rune at.
+func (ed *editor) windowParams(p text.Params, at int) text.Params {
+	ed.setWindow(at)
+	p.Text, p.Spans = ed.displayText(), ""
+	if !ed.password {
+		p.Spans = ed.rangeKey(ed.window())
+	}
+	return p
+}
+
 func (e *node) inputParams(width float32) text.Params {
 	p := e.textParams(width)
 	ed := e.st.editor
-	p.Text = ed.displayText()
-	if !ed.password {
-		p.Spans = ed.rangeKey(0, ed.buf.n)
+	// Without the focus, the input shows the start of its text: its end
+	// right to left (layoutInput).
+	at := ed.caret
+	if e.c.rt.focused != e.id {
+		at = 0
+		if e.rtl() {
+			at = ed.buf.n
+		}
 	}
+	p = ed.windowParams(p, at)
 	p.KeepSpaces = true
 	p.MaxLines = 0
 	if !e.st.editor.multiline {
@@ -104,6 +188,12 @@ func (e *node) layoutInput(cw, ch float32) {
 	}
 	l := ed.shapeInput(e.inputParams(cw))
 	ed.layout = l
+	if ed.moved {
+		// The window moved: the text keeps its place in the box.
+		x, _, _ := l.Caret(ed.displayIndex(ed.caret) + ed.composeCaret)
+		ed.scrollX += x - ed.movedX
+		ed.moved = false
+	}
 	ed.layoutVersion, ed.layoutCompose, ed.layoutPassword = ed.buf.version, ed.compose, ed.password
 	ed.contentW = cw
 	ed.originX, ed.originY = e.contentX(), e.contentY()
@@ -190,7 +280,7 @@ func (e *node) paintInput(p *Painter) {
 	}
 	var sp *spanPaint
 	if !ed.password {
-		_, sp = ed.rangeSpans(0, ed.buf.n)
+		_, sp = ed.rangeSpans(ed.window())
 	}
 	p.textBackgrounds(l, ox, oy, ts, sp)
 	if focused {
@@ -202,7 +292,7 @@ func (e *node) paintInput(p *Painter) {
 	}
 	p.textForeground(l, ox, oy, ts.color, ts, sp)
 	if ed.compose != "" {
-		start := ed.caret
+		start := ed.caret - ed.win
 		end := start + utf8.RuneCountInString(ed.compose)
 		for _, r := range l.Selection(start, end) {
 			p.Fill(Rect{ox + r.X, oy + r.Y + r.H - 2, r.W, 1}, ts.color, 0)
