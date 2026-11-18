@@ -625,7 +625,13 @@ func (e *Event[T]) Broadcast(payload T) error {
 	return nil
 }
 
-func encodeEvent(name string, payload any) (message, error) {
+// encodeEvent encodes an event. A MarshalJSON that panics makes an error.
+func encodeEvent(name string, payload any) (msg message, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			msg, err = message{}, fmt.Errorf("mygo: cannot encode event %q: panic: %v", name, p)
+		}
+	}()
 	c, err := loadCodec()
 	var p []byte
 	if err == nil {
