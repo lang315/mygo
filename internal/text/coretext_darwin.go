@@ -434,6 +434,9 @@ type coreText struct {
 	numbers map[numberKey]*numberFont
 	// wrapFonts holds what wrapping keeps for fonts (wrapKept).
 	wrapFonts map[uintptr]*wrapFont
+	// laidFonts holds it for texts whose lines Core Text lays out, apart:
+	// what one path finds of a font does not hold for the other.
+	laidFonts map[uintptr]*wrapFont
 	// wrapSteps counts the runes wrapKept walks, for tests.
 	wrapSteps uint64
 	frame     uint64
@@ -495,6 +498,7 @@ func newCoreText() (*coreText, error) {
 		textSeed:    maphash.MakeSeed(),
 		numbers:     map[numberKey]*numberFont{},
 		wrapFonts:   map[uintptr]*wrapFont{},
+		laidFonts:   map[uintptr]*wrapFont{},
 		tabStyles:   map[tabStyleKey]uintptr{},
 		registered:  map[string][]registeredFace{},
 		gaveFaces:   map[string][]registeredFace{},
@@ -1000,7 +1004,7 @@ func (e *coreText) shapeText(text []rune, style Style, spans []Span, width float
 		}
 		if keep {
 			// The font's address is in the key: held, no other font takes it.
-			kept = &keptTypesetter{typesetter: typesetter, font: ct.retain(font), used: e.frame, text: slices.Clone(text), latin: plainLatin(text)}
+			kept = &keptTypesetter{typesetter: typesetter, font: ct.retain(font), used: e.frame, text: slices.Clone(text), laid: rtl || !plainLatin(text)}
 			e.typesetters[key] = kept
 		} else {
 			// Its objects' metrics stay pinned while it lives, and no
@@ -1010,7 +1014,7 @@ func (e *coreText) shapeText(text []rune, style Style, spans []Span, width float
 			defer ct.release(typesetter)
 		}
 	}
-	if kept != nil && kept.latin && !wholeWords && !rtl && lang == "" && style.LetterSpacing == 0 && style.Features == "" {
+	if kept != nil && !wholeWords && lang == "" && style.LetterSpacing == 0 && style.Features == "" {
 		if lines := e.wrapKept(kept, text, style, width); lines != nil {
 			return lines
 		}
@@ -1148,10 +1152,11 @@ type typesetterKey struct {
 type keptTypesetter struct {
 	typesetter, font uintptr
 	used             uint64
-	// text is its text, whose key holds a hash, and latin tells that it is
-	// plain Latin text (plainLatin).
-	text  []rune
-	latin bool
+	// text is its text, whose key holds a hash, and laid tells that it is not
+	// plain Latin text (plainLatin), or is in a right-to-left paragraph: Core
+	// Text lays out each of its lines (wrapKept).
+	text []rune
+	laid bool
 	// whole is the text shaped into one line, once shaped tells that it was
 	// tried (wrapKept).
 	whole  *shapedWhole
@@ -1753,6 +1758,7 @@ func (e *coreText) forgetPrimary() {
 	e.releaseShaping()
 	clear(e.numbers)
 	clear(e.wrapFonts)
+	clear(e.laidFonts)
 }
 
 func (e *coreText) fontCount() int {
@@ -1773,6 +1779,7 @@ func (e *coreText) forgetFonts() {
 	clear(e.bands)
 	clear(e.numbers)
 	clear(e.wrapFonts)
+	clear(e.laidFonts)
 	e.dropScratch()
 }
 

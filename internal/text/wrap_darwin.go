@@ -16,6 +16,11 @@ import "unicode"
 // and digits. And the first texts of a font, and one in every few hundred
 // after them, are also wrapped by Core Text: a font where the two differ is
 // left to it from then on.
+//
+// Other text, as Arabic or Hebrew, and text in a right-to-left paragraph, is
+// laid out by Core Text a line at a time, in its order and with its runs. But
+// its lines break where they would by the advances of its one line, summed by
+// rune: Core Text finding a break costs more the further it is in the text.
 
 // shapeWhole shapes a kept text into one line, or returns nil if it does not
 // come out as one run with a glyph for each rune.
@@ -62,20 +67,84 @@ func (e *coreText) shapeWhole(typesetter uintptr, text []rune, italic bool) *sha
 	return w
 }
 
+// laidText reports whether text is of runes whose lines wrapKept may break
+// in Go when Core Text lays them out: plain Latin ones, and the letters,
+// marks and digits of Arabic, Persian and Hebrew, Arabic punctuation and the
+// zero-width non-joiner. A line breaks before a word of them only after
+// spaces.
+func laidText(text []rune) bool {
+	for _, r := range text {
+		switch {
+		case r >= 0x20 && r <= 0x7E, r >= 0xC0 && r <= 0xFF:
+		case r == 0x060C, r == 0x061B, r == 0x061F, r >= 0x0621 && r <= 0x0669, r >= 0x0670 && r <= 0x06D3:
+		case r >= 0x05D0 && r <= 0x05EA, r == 0x200C:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// measureWhole measures a kept text whose lines Core Text lays out from its
+// one line: shaped with only the pens before each rune and at its end, the
+// advances of the glyphs summed by rune in the text's order, whatever the
+// runs and their directions. It returns nil for a text not laidText.
+func (e *coreText) measureWhole(typesetter uintptr, text []rune) *shapedWhole {
+	if !laidText(text) {
+		return nil
+	}
+	n := len(text)
+	line := ct.typesetterCreateLine(typesetter, cfRange{0, n})
+	if line == 0 {
+		return nil
+	}
+	defer ct.release(line)
+	w := &shapedWhole{pens: make([]float64, n+1)}
+	runs := ct.lineGetGlyphRuns(line)
+	for i := range ct.arrayGetCount(runs) {
+		run := ct.arrayGetValueAtIndex(runs, i)
+		count := ct.runGetGlyphCount(run)
+		if count == 0 {
+			continue
+		}
+		e.runAdvances = growTo(e.runAdvances, count)
+		e.runIndices = growTo(e.runIndices, count)
+		ct.runGetAdvances(run, cfRange{}, &e.runAdvances[0])
+		ct.runGetStringIndices(run, cfRange{}, &e.runIndices[0])
+		// A text of BMP runes: its UTF-16 units are its runes.
+		for j := range count {
+			w.pens[e.runIndices[j]+1] += e.runAdvances[j].w
+		}
+	}
+	for i := range n {
+		w.pens[i+1] += w.pens[i]
+	}
+	return w
+}
+
 // wrapKept wraps a kept text from its one line, or returns nil for Core Text to
-// wrap it.
+// wrap it. The lines of a text kept.laid are laid out by Core Text, a line at a
+// time, from where they break.
 func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, width float32) []shapedLine {
-	f := e.wrapFonts[kept.font]
+	fonts := e.wrapFonts
+	if kept.laid {
+		fonts = e.laidFonts
+	}
+	f := fonts[kept.font]
 	if f == nil {
 		f = &wrapFont{}
-		e.wrapFonts[kept.font] = f
+		fonts[kept.font] = f
 	}
 	if f.disagreed {
 		return nil
 	}
 	if !kept.shaped {
 		kept.shaped = true
-		kept.whole = e.shapeWhole(kept.typesetter, text, style.Italic)
+		if kept.laid {
+			kept.whole = e.measureWhole(kept.typesetter, text)
+		} else {
+			kept.whole = e.shapeWhole(kept.typesetter, text, style.Italic)
+		}
 	}
 	w := kept.whole
 	if w == nil {
@@ -133,7 +202,7 @@ func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, widt
 		// A word of letters and digits too long for a line breaks after
 		// the last letter that fits, at least one, as Core Text breaks it.
 		cut := false
-		if end == start {
+		if end == start && !kept.laid {
 			if alnumFrom != wordFrom {
 				alnumFrom, alnum = wordFrom, true
 				for _, r := range text[wordFrom:wordTo] {
@@ -154,9 +223,12 @@ func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, widt
 				}
 			}
 		}
-		if end == start || !plain {
-			// The first word does not fit, or the next may break inside.
-			count := max(ct.suggestLineBreak(kept.typesetter, start, limit), 1)
+		if end == start || !plain || kept.laid {
+			count := end - start
+			if end == start || !plain {
+				// The first word does not fit, or the next may break inside.
+				count = max(ct.suggestLineBreak(kept.typesetter, start, limit), 1)
+			}
 			line := ct.typesetterCreateLine(kept.typesetter, cfRange{start, count})
 			if line == 0 {
 				return nil
