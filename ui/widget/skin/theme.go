@@ -14,17 +14,17 @@ func themeOf(t *skinhook.Tokens, dark bool) *ui.Theme {
 		th = ui.DarkTheme()
 	}
 	th.Dark = dark
-	th.Background = t.Content
-	th.Surface = t.Control
-	th.SurfaceHover = t.ControlHover
-	th.SurfacePressed = t.ControlPressed
-	th.Field = t.Control
-	th.Border = t.Line
-	th.ControlBorder = t.FieldLine
+	th.Background = t.Background
+	th.Surface = t.Surface
+	th.SurfaceHover = t.SurfaceHover
+	th.SurfacePressed = t.SurfacePressed
+	th.Field = t.Surface
+	th.Border = t.Border
+	th.ControlBorder = t.ControlBorder
 	th.Text = t.Text
-	th.TextMuted = t.Text2
+	th.TextMuted = t.TextMuted
 	th.Accent, th.AccentHover, th.AccentPressed = t.Accent.Base, t.Accent.Hover, t.Accent.Pressed
-	th.AccentText = t.OnAccent
+	th.AccentText = t.Accent.On
 	th.Danger = t.Danger.Base
 	th.Warning = t.Warning.Base
 	th.Success = t.Success.Base
@@ -32,14 +32,15 @@ func themeOf(t *skinhook.Tokens, dark bool) *ui.Theme {
 	th.Focus = t.Accent.Base
 	th.Radius = t.RadiusControl
 	th.FontSize = t.Body.Size
+	th.Font = t.Font
 	th.Metrics = ui.Metrics{ControlHeight: t.ControlHeight, RowHeight: t.RowHeight, HeaderHeight: t.HeaderHeight,
-		TabHeight: t.TabStripHeight, CheckSize: t.CheckBox, SwitchWidth: t.SwitchWidth, SwitchHeight: t.SwitchHeight}
-	th.ButtonBorder = t.ButtonLine
+		TabHeight: t.TabHeight, CheckSize: t.CheckSize, SwitchWidth: t.SwitchWidth, SwitchHeight: t.SwitchHeight}
+	th.ButtonBorder = t.ButtonBorder
 	th.RowHover, th.RowSelected, th.RowSelectedText = t.RowHover, t.RowSelected, t.Text
 	th.Scrollbar = t.Text.Alpha(0.32)
 	if dark {
 		th.Scrollbar = t.Text.Alpha(0.35)
 	}
-	th.Inverse, th.InverseText = t.Text, t.Content
+	th.Inverse, th.InverseText = t.Text, t.Background
 	return th
 }

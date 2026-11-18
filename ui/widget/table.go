@@ -714,13 +714,14 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 }
 
 // indexKey is what the width of the # column is measured for: the digits of
-// the largest number, the font size (the OS's text scale changes it live) and
-// the grid lines, which take 1 DIP of a cell. A live theme change of the
-// spacing or the font family alone is not in it: the width keeps until the key
-// changes (limit: main cuts these too).
+// the largest number, the font size (the OS's text scale changes it live), the
+// font family (a skin's Font changes it live) and the grid lines, which take 1
+// DIP of a cell. A live theme change of the spacing alone is not in it: the
+// width keeps until the key changes (limit: main cuts these too).
 type indexKey struct {
 	digits int
 	font   float32
+	family string
 	grid   bool
 }
 
@@ -738,7 +739,7 @@ func (t *DataGridViewWidget[T, K]) fitIndex(c *ui.Context) {
 		digits++
 	}
 	th := c.Theme()
-	key := indexKey{digits, th.FontSize, t.grid}
+	key := indexKey{digits, th.FontSize, th.Font, t.grid}
 	if key == t.indexKey {
 		return
 	}

@@ -15,19 +15,19 @@ import (
 func skinTestTokens() *skinhook.Tokens {
 	return &skinhook.Tokens{
 		Chrome:         ui.Hex("#ffd54f"),
-		Content:        ui.Hex("#ffffff"),
-		Control:        ui.Hex("#ffffff"),
-		Line:           ui.Hex("#e91e63"),
-		LineStrong:     ui.Hex("#3f51b5"),
+		Background:     ui.Hex("#ffffff"),
+		Surface:        ui.Hex("#ffffff"),
+		Border:         ui.Hex("#e91e63"),
+		BorderStrong:   ui.Hex("#3f51b5"),
 		Text:           ui.Hex("#202020"),
-		ControlHover:   ui.Hex("#4dd0e1"),
-		ControlPressed: ui.Hex("#ff8a65"),
+		SurfaceHover:   ui.Hex("#4dd0e1"),
+		SurfacePressed: ui.Hex("#ff8a65"),
 		Elevation:      [4]skinhook.Shadow{{}, {Y: 6, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.6)}},
 
-		ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, TabStripHeight: 40,
+		ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, TabHeight: 40,
 		MenuBarStripHeight: 34, MenuBarItemHeight: 28, RadiusControl: 6, RadiusCard: 10,
 		ToolbarPadTop: 10, ToolbarPadBottom: 12, ToolbarGap: 10, ToolbarGroupGap: 12,
-		Icon: 16, ToolbarIcon: 17, CheckBox: 15, SwitchWidth: 40, SwitchHeight: 22,
+		Icon: 16, ToolbarIcon: 17, CheckSize: 15, SwitchWidth: 40, SwitchHeight: 22,
 	}
 }
 
@@ -37,9 +37,9 @@ func useSkin(t *testing.T) *skinhook.Tokens {
 	t.Helper()
 	tk := skinTestTokens()
 	th := ui.LightTheme()
-	th.Background, th.Surface, th.Border, th.Text = tk.Content, tk.Control, tk.Line, tk.Text
+	th.Background, th.Surface, th.Border, th.Text = tk.Background, tk.Surface, tk.Border, tk.Text
 	th.Metrics = ui.Metrics{ControlHeight: tk.ControlHeight, RowHeight: tk.RowHeight, HeaderHeight: tk.HeaderHeight,
-		TabHeight: tk.TabStripHeight, CheckSize: tk.CheckBox, SwitchWidth: tk.SwitchWidth, SwitchHeight: tk.SwitchHeight}
+		TabHeight: tk.TabHeight, CheckSize: tk.CheckSize, SwitchWidth: tk.SwitchWidth, SwitchHeight: tk.SwitchHeight}
 	skinhook.Set(tk, tk)
 	ui.SetDefaultThemes(th, th)
 	t.Cleanup(offSkin)
@@ -105,7 +105,7 @@ func skinMenuBar() *MenuBarWidget {
 }
 
 // The menu bar: with a skin, the strip at least 34 on Chrome, its items at
-// least 28 with their text centered, hovered in ControlPressed (ControlHover
+// least 28 with their text centered, hovered in SurfacePressed (SurfaceHover
 // is too near Calm's Chrome to show); without, as
 // before skins.
 func TestSkinMenuBar(t *testing.T) {
@@ -140,7 +140,7 @@ func TestSkinMenuBar(t *testing.T) {
 		}
 		hover := ui.LightTheme().SurfaceHover
 		if on {
-			hover = tk.ControlPressed
+			hover = tk.SurfacePressed
 		}
 		tt.Move(item.X+item.W/2, item.Y+item.H/2)
 		tt.Frame()
@@ -225,7 +225,7 @@ func inkHeight(tt *ui.Tester, box ui.Rect, c ui.Color) int {
 
 // The tool strip: with a skin, Chrome, padded 10 above and 12 below, 10
 // between controls and 22 across a separator with its line in the middle,
-// icons of 17 and a line of LineStrong under it; without, as before skins.
+// icons of 17 and a line of BorderStrong under it; without, as before skins.
 func TestSkinToolStrip(t *testing.T) {
 	tt := formTester(t, skinToolForm(t))
 	var plainSVGW, plainPNGW float32
@@ -253,7 +253,7 @@ func TestSkinToolStrip(t *testing.T) {
 		// The separator's line, in the theme's Border, in the middle.
 		line, y := ui.LightTheme().Border, cut.Y+cut.H/2
 		if on {
-			line = tk.Line
+			line = tk.Border
 		}
 		lx := float32(-1)
 		for x := int(cp.X + cp.W); x < int(paste.X); x++ {
@@ -268,8 +268,8 @@ func TestSkinToolStrip(t *testing.T) {
 			t.Errorf("skin %v: the strip is %v, want %v", on, c, fill)
 		}
 		under := skinPx(tt, bar.X+bar.W-4, bar.Y+bar.H-0.5)
-		if on && !near(under, tk.LineStrong) {
-			t.Errorf("the strip's bottom line is %v, want LineStrong %v", under, tk.LineStrong)
+		if on && !near(under, tk.BorderStrong) {
+			t.Errorf("the strip's bottom line is %v, want BorderStrong %v", under, tk.BorderStrong)
 		}
 		if !on && near(under, ui.LightTheme().Border) {
 			t.Errorf("without a skin, the strip has a bottom line %v", under)
@@ -383,7 +383,7 @@ func TestSkinStatusStrip(t *testing.T) {
 }
 
 // Under High Contrast, the status strip's line is the theme's strengthened
-// Border, and the tool strip's bottom LineStrong mixed with Text.
+// Border, and the tool strip's bottom BorderStrong mixed with Text.
 func TestSkinLinesUnderHighContrast(t *testing.T) {
 	tk := useSkin(t)
 	var th ui.Theme
@@ -391,14 +391,14 @@ func TestSkinLinesUnderHighContrast(t *testing.T) {
 	tt := formTester(t, f)
 	tt.SetPreferences(ui.Preferences{HighContrast: true, TextScale: 1})
 	tt.Frame()
-	if want := tk.Line.Mix(tk.Text, 0.45); th.Border != want {
+	if want := tk.Border.Mix(tk.Text, 0.45); th.Border != want {
 		t.Fatalf("under High Contrast the theme's Border is %v, want %v", th.Border, want)
 	}
 	if c, ok := statusLine(t, tt, tk.Chrome); !ok || !near(c, th.Border) {
 		t.Errorf("the status strip's line is %v (found %v), want the strengthened Border %v", c, ok, th.Border)
 	}
 	bar := nodeOf(t, tt, ui.RoleToolbar, "").Bounds
-	if c, want := skinPx(tt, bar.X+bar.W-4, bar.Y+bar.H-0.5), tk.LineStrong.Mix(tk.Text, 0.45); !near(c, want) {
+	if c, want := skinPx(tt, bar.X+bar.W-4, bar.Y+bar.H-0.5), tk.BorderStrong.Mix(tk.Text, 0.45); !near(c, want) {
 		t.Errorf("the tool strip's bottom line is %v, want %v", c, want)
 	}
 }
@@ -462,7 +462,7 @@ func TestSkinTabStrip(t *testing.T) {
 		}
 		border := ui.LightTheme().Border
 		if tk != nil {
-			border = tk.Line
+			border = tk.Border
 		}
 		if got := hasColor(tt, x, b.Y+b.H/2, p.Y-1, border); got != line {
 			t.Errorf("skin %v: a line under the strip is %v, want %v", on, got, line)
@@ -494,7 +494,7 @@ func TestSkinCard(t *testing.T) {
 		r := nodeOf(t, tt, ui.RoleGroup, "card").Bounds
 		page, surface, border := ui.LightTheme().Background, ui.LightTheme().Surface, ui.LightTheme().Border
 		if on {
-			page, surface, border = tk.Content, tk.Control, tk.Line
+			page, surface, border = tk.Background, tk.Surface, tk.Border
 		}
 		// On the left edge, 3.5 down: outside a radius of 10, on the line of
 		// the plain radius.

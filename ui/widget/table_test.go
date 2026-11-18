@@ -119,6 +119,30 @@ func TestTableIndexColumnShowsShownPositions(t *testing.T) {
 	}
 }
 
+// The # column is measured again when the theme's font family changes at the
+// same size, as skin.Use does with a skin's Font.
+func TestTableIndexWidthFollowsTheFont(t *testing.T) {
+	tb := testTable(acct{1, "cat", 30}, acct{2, "ann", 40}).IndexColumn()
+	tt := tester(t, tb)
+	tt.Frame()
+	before := tb.indexKey
+	if before.family != "" {
+		t.Fatalf("the plain theme measures the # column for font %q, want the system's", before.family)
+	}
+	th := ui.LightTheme()
+	th.Font = "Inter"
+	ui.SetDefaultThemes(th, th)
+	t.Cleanup(func() { ui.SetDefaultThemes(nil, nil) })
+	tb.indexWidth = -1 // measured again sets it
+	tt.Frame()
+	if tb.indexKey.font != before.font {
+		t.Fatalf("the font size changed from %v to %v: the test does not change the family alone", before.font, tb.indexKey.font)
+	}
+	if tb.indexKey.family != "Inter" || tb.indexWidth <= 0 {
+		t.Errorf("after the font became Inter, the key is %+v and the width %v: the # column was not measured again", tb.indexKey, tb.indexWidth)
+	}
+}
+
 func TestTableCellsShowColorAndImage(t *testing.T) {
 	png := testPNG(t, color.White)
 	bmp := decodeImage(png)

@@ -53,22 +53,22 @@ func TestCalmTheme(t *testing.T) {
 }
 
 // themeOf maps every field it sets from its token, in both appearances: a
-// copy of Calm's tokens whose Control, radius and body size differ from
-// Content and from the base theme's, so a wrong mapping of any one fails.
+// copy of Calm's tokens whose Surface, radius and body size differ from
+// Background and from the base theme's, so a wrong mapping of any one fails.
 func TestThemeOfMapsEveryField(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		tk := Calm.light
 		if dark {
 			tk = Calm.dark
 		}
-		tk.Control = ui.Hex("#fdfcfb")
+		tk.Surface = ui.Hex("#fdfcfb")
 		if dark {
-			tk.Control = ui.Hex("#262a30")
+			tk.Surface = ui.Hex("#262a30")
 		}
 		tk.RadiusControl, tk.Body.Size = 7, 17
 		// Metrics apart from each other, so a field mapped from another fails.
-		tk.ControlHeight, tk.RowHeight, tk.HeaderHeight, tk.TabStripHeight = 37, 31, 29, 41
-		tk.CheckBox, tk.SwitchWidth, tk.SwitchHeight = 14, 43, 23
+		tk.ControlHeight, tk.RowHeight, tk.HeaderHeight, tk.TabHeight = 37, 31, 29, 41
+		tk.CheckSize, tk.SwitchWidth, tk.SwitchHeight = 14, 43, 23
 		th := themeOf(&tk, dark)
 		if m := (ui.Metrics{ControlHeight: 37, RowHeight: 31, HeaderHeight: 29, TabHeight: 41, CheckSize: 14, SwitchWidth: 43, SwitchHeight: 23}); th.Metrics != m {
 			t.Errorf("dark=%v: Metrics %+v, want %+v", dark, th.Metrics, m)
@@ -81,31 +81,31 @@ func TestThemeOfMapsEveryField(t *testing.T) {
 			name      string
 			got, want ui.Color
 		}{
-			{"Background", th.Background, tk.Content},
-			{"Surface", th.Surface, tk.Control},
-			{"SurfaceHover", th.SurfaceHover, tk.ControlHover},
-			{"SurfacePressed", th.SurfacePressed, tk.ControlPressed},
-			{"Field", th.Field, tk.Control},
-			{"Border", th.Border, tk.Line},
-			{"ControlBorder", th.ControlBorder, tk.FieldLine},
+			{"Background", th.Background, tk.Background},
+			{"Surface", th.Surface, tk.Surface},
+			{"SurfaceHover", th.SurfaceHover, tk.SurfaceHover},
+			{"SurfacePressed", th.SurfacePressed, tk.SurfacePressed},
+			{"Field", th.Field, tk.Surface},
+			{"Border", th.Border, tk.Border},
+			{"ControlBorder", th.ControlBorder, tk.ControlBorder},
 			{"Text", th.Text, tk.Text},
-			{"TextMuted", th.TextMuted, tk.Text2},
+			{"TextMuted", th.TextMuted, tk.TextMuted},
 			{"Accent", th.Accent, tk.Accent.Base},
 			{"AccentHover", th.AccentHover, tk.Accent.Hover},
 			{"AccentPressed", th.AccentPressed, tk.Accent.Pressed},
-			{"AccentText", th.AccentText, tk.OnAccent},
+			{"AccentText", th.AccentText, tk.Accent.On},
 			{"Danger", th.Danger, tk.Danger.Base},
 			{"Warning", th.Warning, tk.Warning.Base},
 			{"Success", th.Success, tk.Success.Base},
 			{"Selection", th.Selection, tk.Selection},
 			{"Focus", th.Focus, tk.Accent.Base},
-			{"ButtonBorder", th.ButtonBorder, tk.ButtonLine},
+			{"ButtonBorder", th.ButtonBorder, tk.ButtonBorder},
 			{"RowHover", th.RowHover, tk.RowHover},
 			{"RowSelected", th.RowSelected, tk.RowSelected},
 			{"RowSelectedText", th.RowSelectedText, tk.Text},
 			{"Scrollbar", th.Scrollbar, scrollbar},
 			{"Inverse", th.Inverse, tk.Text},
-			{"InverseText", th.InverseText, tk.Content},
+			{"InverseText", th.InverseText, tk.Background},
 		} {
 			if c.got != c.want {
 				t.Errorf("dark=%v: %s is %v, want %v", dark, c.name, c.got, c.want)
@@ -115,7 +115,7 @@ func TestThemeOfMapsEveryField(t *testing.T) {
 			t.Errorf("dark=%v: Dark %v, Radius %v, FontSize %v; want %v, 7, 17", dark, th.Dark, th.Radius, th.FontSize, dark)
 		}
 	}
-	// Calm's own: Field is the control face, which in dark differs from Content.
+	// Calm's own: Field is the control face, which in dark differs from Background.
 	if f := themeOf(&Calm.dark, true).Field; f != ui.Hex("#262a30") {
 		t.Errorf("Calm dark Field is %v, want #262a30", f)
 	}
@@ -136,9 +136,9 @@ func TestCalmMetrics(t *testing.T) {
 		a [19]float32
 	}
 	of := func(t *skinhook.Tokens) metrics {
-		return metrics{[19]float32{t.ControlHeight, t.RowHeight, t.HeaderHeight, t.SettingsRowHeight, t.TabStripHeight,
+		return metrics{[19]float32{t.ControlHeight, t.RowHeight, t.HeaderHeight, t.SettingsRowHeight, t.TabHeight,
 			t.MenuBarStripHeight, t.MenuBarItemHeight, t.RadiusControl, t.RadiusCard, t.RadiusDialog, t.ToolbarPadTop,
-			t.ToolbarPadBottom, t.ToolbarGap, t.ToolbarGroupGap, t.Icon, t.ToolbarIcon, t.CheckBox, t.SwitchWidth, t.SwitchHeight}}
+			t.ToolbarPadBottom, t.ToolbarGap, t.ToolbarGroupGap, t.Icon, t.ToolbarIcon, t.CheckSize, t.SwitchWidth, t.SwitchHeight}}
 	}
 	if of(&l) != of(&d) {
 		t.Errorf("dark metrics %v differ from light %v", of(&d), of(&l))
@@ -159,7 +159,6 @@ func TestCalmAccentValues(t *testing.T) {
 		name      string
 		got, want ui.Color
 	}{
-		{"light OnAccent", Calm.light.OnAccent, ui.Hex("#ffffff")},
 		{"light Selection", Calm.light.Selection, ui.Hex("#b6d2f3")},
 		{"light RowSelected", Calm.light.RowSelected, ui.Hex("#d6e5f8")},
 		{"light Accent.Base", Calm.light.Accent.Base, ui.Hex("#1c71d8")},
@@ -169,7 +168,6 @@ func TestCalmAccentValues(t *testing.T) {
 		{"light Accent.Border", Calm.light.Accent.Border, ui.Hex("#bbd4f3")},
 		{"light Accent.Text", Calm.light.Accent.Text, ui.Hex("#1a5fb4")},
 		{"light Accent.On", Calm.light.Accent.On, ui.Hex("#ffffff")},
-		{"dark OnAccent", Calm.dark.OnAccent, ui.Hex("#0b1220")},
 		{"dark Selection", Calm.dark.Selection, ui.Color{R: 0x78, G: 0xae, B: 0xed, A: a.Alpha(0.35).A}},
 		{"dark RowSelected", Calm.dark.RowSelected, ui.Color{R: 0x78, G: 0xae, B: 0xed, A: a.Alpha(0.16).A}},
 		{"dark Accent.Base", Calm.dark.Accent.Base, a},

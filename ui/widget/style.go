@@ -233,7 +233,7 @@ func frameList(c *ui.Context, e ui.Element, own ...*Style) {
 	if !sets(func(p *props) bool { return p.borderSet != 0 }) {
 		line := t.Border
 		if tk, _ := skinOf(c); tk != nil {
-			line = tk.LineStrong
+			line = tk.BorderStrong
 		}
 		// A border color alone recolors the frame, as it does where the style
 		// lands on the framed element itself.

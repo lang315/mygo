@@ -19,19 +19,19 @@ func TestCalmPassesContrast(t *testing.T) {
 		t.Errorf("Calm dark: %v", err)
 	}
 	// The row pairs the theme draws (RowSelectedText is Text), measured
-	// here too, over Content as check measures them.
+	// here too, over Background as check measures them.
 	for _, tk := range []*skinhook.Tokens{&Calm.light, &Calm.dark} {
-		sel, hover := tk.RowSelected.Over(tk.Content), tk.RowHover.Over(tk.Content)
+		sel, hover := tk.RowSelected.Over(tk.Background), tk.RowHover.Over(tk.Background)
 		if r := contrastOf(tk.Text, sel); r < 4.5 {
 			t.Errorf("Text on RowSelected is %.2f:1", r)
 		}
-		if r := contrastOf(tk.Text2, hover); r < 4.5 {
-			t.Errorf("Text2 on RowHover is %.2f:1", r)
+		if r := contrastOf(tk.TextMuted, hover); r < 4.5 {
+			t.Errorf("TextMuted on RowHover is %.2f:1", r)
 		}
 	}
 }
 
-// check measures the rows' text: Text on RowSelected and Text2 on RowHover,
+// check measures the rows' text: Text on RowSelected and TextMuted on RowHover,
 // each named when it fails.
 func TestCheckRowPairs(t *testing.T) {
 	tk := Calm.light
@@ -41,21 +41,21 @@ func TestCheckRowPairs(t *testing.T) {
 	}
 	tk = Calm.light
 	tk.RowHover = ui.Hex("#a0a4aa")
-	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Text2 on RowHover") {
-		t.Errorf("a gray RowHover under Text2 gives %v, want an error naming Text2 on RowHover", err)
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "TextMuted on RowHover") {
+		t.Errorf("a gray RowHover under TextMuted gives %v, want an error naming TextMuted on RowHover", err)
 	}
 }
 
 // The error names the pair that fails, its ratio and the floor.
 func TestCheckNamesTheFailingPair(t *testing.T) {
 	tk := Calm.light
-	tk.Text2 = ui.Hex("#9aa0a6")
+	tk.TextMuted = ui.Hex("#9aa0a6")
 	err := check(&tk, false)
 	if err == nil {
-		t.Fatal("Text2 #9aa0a6 passes the check, want an error")
+		t.Fatal("TextMuted #9aa0a6 passes the check, want an error")
 	}
-	if !strings.Contains(err.Error(), "Text2 on Content") || !strings.Contains(err.Error(), "want 4.5:1") {
-		t.Errorf("the error is %q, want it to name Text2 on Content and the 4.5:1 floor", err)
+	if !strings.Contains(err.Error(), "TextMuted on Background") || !strings.Contains(err.Error(), "want 4.5:1") {
+		t.Errorf("the error is %q, want it to name TextMuted on Background and the 4.5:1 floor", err)
 	}
 }
 
@@ -74,9 +74,9 @@ func TestCheckBlendsTranslucentFills(t *testing.T) {
 	// A translucent foreground blends over its layer too: the field outline
 	// at half its alpha is too faint.
 	tk = Calm.light
-	tk.FieldLine = tk.FieldLine.Alpha(0.5)
-	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "FieldLine on Content") {
-		t.Errorf("FieldLine at 50%% alpha gives %v, want an error naming FieldLine on Content", err)
+	tk.ControlBorder = tk.ControlBorder.Alpha(0.5)
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "ControlBorder on Background") {
+		t.Errorf("ControlBorder at 50%% alpha gives %v, want an error naming ControlBorder on Background", err)
 	}
 }
 
@@ -84,14 +84,14 @@ func TestCheckBlendsTranslucentFills(t *testing.T) {
 // text's: an outline under 3:1 fails, one over it passes.
 func TestCheckOutlineFloor(t *testing.T) {
 	tk := Calm.light
-	tk.FieldLine = ui.Hex("#9aa0a6") // about 2.6:1 on white
+	tk.ControlBorder = ui.Hex("#9aa0a6") // about 2.6:1 on white
 	err := check(&tk, false)
-	if err == nil || !strings.Contains(err.Error(), "FieldLine on Content") || !strings.Contains(err.Error(), "want 3:1") {
-		t.Errorf("FieldLine #9aa0a6 gives %v, want an error naming FieldLine on Content and 3:1", err)
+	if err == nil || !strings.Contains(err.Error(), "ControlBorder on Background") || !strings.Contains(err.Error(), "want 3:1") {
+		t.Errorf("ControlBorder #9aa0a6 gives %v, want an error naming ControlBorder on Background and 3:1", err)
 	}
-	tk.FieldLine = ui.Hex("#80868f") // about 3.6:1 on white and on the chrome, under 4.5:1
+	tk.ControlBorder = ui.Hex("#80868f") // about 3.6:1 on white and on the chrome, under 4.5:1
 	if err := check(&tk, false); err != nil {
-		t.Errorf("FieldLine #80868f, over 3:1: %v", err)
+		t.Errorf("ControlBorder #80868f, over 3:1: %v", err)
 	}
 }
 
@@ -105,8 +105,8 @@ func TestCheckFloorsAreExact(t *testing.T) {
 		floor       float64
 		set         func(*skinhook.Tokens, ui.Color)
 	}{
-		{"Text3 on Control", ui.Hex("#777777"), ui.Hex("#767676"), 4.5, func(t *skinhook.Tokens, c ui.Color) { t.Text3 = c }},
-		{"FieldLine on Content", ui.Hex("#959595"), ui.Hex("#939393"), 3, func(t *skinhook.Tokens, c ui.Color) { t.FieldLine, t.Chrome = c, white }},
+		{"TextPlaceholder on Surface", ui.Hex("#777777"), ui.Hex("#767676"), 4.5, func(t *skinhook.Tokens, c ui.Color) { t.TextPlaceholder = c }},
+		{"ControlBorder on Background", ui.Hex("#959595"), ui.Hex("#939393"), 3, func(t *skinhook.Tokens, c ui.Color) { t.ControlBorder, t.Chrome = c, white }},
 	} {
 		if r := contrastOf(c.under, white); r >= c.floor || r < c.floor-0.1 {
 			t.Fatalf("%s: the color under is %.3f:1, not just under %g:1", c.name, r, c.floor)
@@ -208,7 +208,7 @@ func TestStateDistanceNamesTheNearestEye(t *testing.T) {
 func TestStateDistanceBlendsTranslucentText(t *testing.T) {
 	tk := Calm.light
 	tk.Info.Text = tk.Success.Text.Alpha(0.05)
-	if d := deltaE(tk.Info.Text.Over(tk.Content), tk.Success.Text, nil); d < 60 {
+	if d := deltaE(tk.Info.Text.Over(tk.Background), tk.Success.Text, nil); d < 60 {
 		t.Fatalf("green at 5%% over white is ΔE %.1f from green, want a clear pass", d)
 	}
 	if err := stateDistance(&tk, false); err != nil {
@@ -310,7 +310,7 @@ func TestCheckChartOnContent(t *testing.T) {
 		tk := Calm.light
 		tk.Chart[i] = ui.Hex("#ca8a04")
 		err := check(&tk, false)
-		name := fmt.Sprintf("Chart[%d] on Content", i)
+		name := fmt.Sprintf("Chart[%d] on Background", i)
 		if err == nil || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), "want 3:1") {
 			t.Errorf("Chart[%d] #ca8a04 gives %v, want an error naming %s and 3:1", i, err, name)
 		}
@@ -318,8 +318,8 @@ func TestCheckChartOnContent(t *testing.T) {
 	// In dark, a color as dark as a line fails on the dark content.
 	tk := Calm.dark
 	tk.Chart[3] = ui.Hex("#2a2e34")
-	if err := check(&tk, true); err == nil || !strings.Contains(err.Error(), "Chart[3] on Content") {
-		t.Errorf("dark Chart[3] #2a2e34 gives %v, want an error naming Chart[3] on Content", err)
+	if err := check(&tk, true); err == nil || !strings.Contains(err.Error(), "Chart[3] on Background") {
+		t.Errorf("dark Chart[3] #2a2e34 gives %v, want an error naming Chart[3] on Background", err)
 	}
 	for _, p := range palettes {
 		s := Calm.WithPalette(p)
@@ -338,20 +338,20 @@ func TestCheckChartOnContent(t *testing.T) {
 // and fails, naming the pair; each pair fails when its two colors are equal.
 func TestCheckControlStates(t *testing.T) {
 	tk := Calm.light
-	tk.ControlHover, tk.ControlPressed = ui.Hex("#f3f5f8"), ui.Hex("#e9ecf1")
-	if d := deltaE(tk.ControlHover, tk.Chrome, nil); d < 0.5 || d > 0.7 {
+	tk.SurfaceHover, tk.SurfacePressed = ui.Hex("#f3f5f8"), ui.Hex("#e9ecf1")
+	if d := deltaE(tk.SurfaceHover, tk.Chrome, nil); d < 0.5 || d > 0.7 {
 		t.Fatalf("the old hover is ΔE %.2f from the chrome, want about 0.6", d)
 	}
-	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "ControlHover vs Chrome") || !strings.Contains(err.Error(), "want 3") {
-		t.Errorf("the old light ControlHover gives %v, want an error naming ControlHover vs Chrome and 3", err)
+	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "SurfaceHover vs Chrome") || !strings.Contains(err.Error(), "want 3") {
+		t.Errorf("the old light SurfaceHover gives %v, want an error naming SurfaceHover vs Chrome and 3", err)
 	}
 	for _, c := range []struct {
 		name string
 		set  func(*skinhook.Tokens)
 	}{
-		{"ControlHover vs Chrome", func(t *skinhook.Tokens) { t.ControlHover = t.Chrome }},
-		{"ControlHover vs Control", func(t *skinhook.Tokens) { t.ControlHover = t.Control }},
-		{"ControlPressed vs ControlHover", func(t *skinhook.Tokens) { t.ControlPressed = t.ControlHover }},
+		{"SurfaceHover vs Chrome", func(t *skinhook.Tokens) { t.SurfaceHover = t.Chrome }},
+		{"SurfaceHover vs Surface", func(t *skinhook.Tokens) { t.SurfaceHover = t.Surface }},
+		{"SurfacePressed vs SurfaceHover", func(t *skinhook.Tokens) { t.SurfacePressed = t.SurfaceHover }},
 	} {
 		for _, dark := range []bool{false, true} {
 			tk := Calm.light
@@ -373,7 +373,7 @@ func TestCheckControlStates(t *testing.T) {
 		if c.dark {
 			tk = Calm.dark
 		}
-		got := [3]float64{deltaE(tk.ControlHover, tk.Chrome, nil), deltaE(tk.ControlHover, tk.Control, nil), deltaE(tk.ControlPressed, tk.ControlHover, nil)}
+		got := [3]float64{deltaE(tk.SurfaceHover, tk.Chrome, nil), deltaE(tk.SurfaceHover, tk.Surface, nil), deltaE(tk.SurfacePressed, tk.SurfaceHover, nil)}
 		for i := range got {
 			if math.Abs(got[i]-c.want[i]) > 0.1 {
 				t.Errorf("dark=%v: the distances are %.1f, want %.1f", c.dark, got, c.want)
@@ -395,10 +395,10 @@ func TestCheckControlStates(t *testing.T) {
 // Every failing pair is named, not only the first.
 func TestCheckNamesEveryFailingPair(t *testing.T) {
 	tk := Calm.light
-	tk.Text2 = ui.Hex("#9aa0a6")
+	tk.TextMuted = ui.Hex("#9aa0a6")
 	tk.Danger.On = tk.Danger.Base
 	err := check(&tk, false)
-	for _, want := range []string{"Text2 on Content", "Text2 on Chrome", "Danger On on Base"} {
+	for _, want := range []string{"TextMuted on Background", "TextMuted on Chrome", "Danger On on Base"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("the error is %v, want it to name %s", err, want)
 		}

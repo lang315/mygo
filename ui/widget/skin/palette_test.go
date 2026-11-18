@@ -72,8 +72,8 @@ func TestWithPalette(t *testing.T) {
 		t.Errorf("Name() %q and Palette() %v, want Calm and Teal", s.Name(), s.Palette())
 	}
 	// What the palette does not decide stays Calm's.
-	if s.light.Content != Calm.light.Content || s.dark.Success != Calm.dark.Success || s.light.ControlHeight != 36 {
-		t.Errorf("Content %v, dark Success %v, ControlHeight %v; want Calm's", s.light.Content, s.dark.Success, s.light.ControlHeight)
+	if s.light.Background != Calm.light.Background || s.dark.Success != Calm.dark.Success || s.light.ControlHeight != 36 {
+		t.Errorf("Background %v, dark Success %v, ControlHeight %v; want Calm's", s.light.Background, s.dark.Success, s.light.ControlHeight)
 	}
 }
 
@@ -118,11 +118,11 @@ func TestPaletteValues(t *testing.T) {
 		if s.dark.Accent != da || s.dark.Info != di {
 			t.Errorf("%s dark Accent %v, Info %v; want %v, %v", n, s.dark.Accent, s.dark.Info, da, di)
 		}
-		if s.light.OnAccent != white || s.light.RowSelected != la.Base.Mix(white, 0.82) || s.light.Selection != la.Base.Mix(white, 0.68) {
-			t.Errorf("%s light OnAccent %v, RowSelected %v, Selection %v", n, s.light.OnAccent, s.light.RowSelected, s.light.Selection)
+		if s.light.Accent.On != white || s.light.RowSelected != la.Base.Mix(white, 0.82) || s.light.Selection != la.Base.Mix(white, 0.68) {
+			t.Errorf("%s light Accent.On %v, RowSelected %v, Selection %v", n, s.light.Accent.On, s.light.RowSelected, s.light.Selection)
 		}
-		if s.dark.OnAccent != ui.Hex(c.don) || s.dark.RowSelected != da.Base.Alpha(0.16) || s.dark.Selection != da.Base.Alpha(0.35) {
-			t.Errorf("%s dark OnAccent %v, RowSelected %v, Selection %v", n, s.dark.OnAccent, s.dark.RowSelected, s.dark.Selection)
+		if s.dark.Accent.On != ui.Hex(c.don) || s.dark.RowSelected != da.Base.Alpha(0.16) || s.dark.Selection != da.Base.Alpha(0.35) {
+			t.Errorf("%s dark Accent.On %v, RowSelected %v, Selection %v", n, s.dark.Accent.On, s.dark.RowSelected, s.dark.Selection)
 		}
 	}
 }

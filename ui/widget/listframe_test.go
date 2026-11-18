@@ -27,11 +27,11 @@ func useLook(t *testing.T, s *skin.Skin) {
 	t.Cleanup(func() { skin.Use(nil) })
 }
 
-// lookColors are the frame of a list in the look on, Calm's LineStrong or the
+// lookColors are the frame of a list in the look on, Calm's BorderStrong or the
 // plain theme's Border, and the content background.
 func lookColors(dark bool) (frame, bg ui.Color) {
 	if tk := skinhook.Get(dark); tk != nil {
-		return tk.LineStrong, tk.Content
+		return tk.BorderStrong, tk.Background
 	}
 	th := ui.LightTheme()
 	if dark {
