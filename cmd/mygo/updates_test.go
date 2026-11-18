@@ -608,24 +608,48 @@ func TestPublishGitHub(t *testing.T) {
 // file it has not cached, or loses its connection, but not one that fails
 // for good.
 func TestFetchSignedRetry(t *testing.T) {
-	stall, wait := fetchStall, updateRetryWait
-	t.Cleanup(func() { fetchStall, updateRetryWait = stall, wait })
-	fetchStall = 500 * time.Millisecond
-	waitPastStall, waits := false, 0
+	stall, wait, arm := fetchStall, updateRetryWait, newStall
+	t.Cleanup(func() { fetchStall, updateRetryWait, newStall = stall, wait, arm })
+	// No clock decides: a stall ends when the server says it stalls, and a
+	// long wait ends the stalls running through it, as its time would.
+	fetchStall = time.Hour
+	type timer struct {
+		t *time.Timer
+		f func()
+	}
+	var (
+		mu            sync.Mutex
+		responses     []string
+		requests      int
+		timers        []timer
+		waitPastStall bool
+		waits         int
+	)
+	armed := make(chan func(), 16)
+	newStall = func(d time.Duration, f func()) *time.Timer {
+		tm := time.AfterFunc(d, f)
+		mu.Lock()
+		timers = append(timers, timer{tm, f})
+		mu.Unlock()
+		armed <- f
+		return tm
+	}
 	updateRetryWait = func(time.Duration) {
+		mu.Lock()
 		waits++
-		if waitPastStall {
-			time.Sleep(2 * fetchStall) // as a long Retry-After does
+		running := slices.Clone(timers)
+		mu.Unlock()
+		if waitPastStall { // as a long Retry-After does
+			for _, tm := range running {
+				if tm.t.Stop() {
+					tm.f()
+				}
+			}
 		}
 	}
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	archive := bytes.Repeat([]byte("archive "), 10_000)
 	sum := sha256.Sum256(archive)
-	var (
-		mu        sync.Mutex
-		responses []string
-		requests  int
-	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		response := responses[min(requests, len(responses)-1)]
@@ -650,7 +674,8 @@ func TestFetchSignedRetry(t *testing.T) {
 		if response == "drop" {
 			panic(http.ErrAbortHandler)
 		}
-		<-r.Context().Done() // stall
+		(<-armed)() // the client waits for data: stall
+		<-r.Context().Done()
 	}))
 	defer srv.Close()
 	get := (&Config{Updates: &Updates{URL: srv.URL}}).archiveGetter()
@@ -670,8 +695,11 @@ func TestFetchSignedRetry(t *testing.T) {
 		{[]string{"short"}, 1, "has 1000 bytes", false},
 	} {
 		mu.Lock()
-		responses, requests, waitPastStall, waits = tc.responses, 0, tc.waitPastStall, 0
+		responses, requests, waitPastStall, waits, timers = tc.responses, 0, tc.waitPastStall, 0, nil
 		mu.Unlock()
+		for len(armed) > 0 {
+			<-armed
+		}
 		path := filepath.Join(t.TempDir(), "archive.tar.gz")
 		err := fetchSigned(get, srv.URL+"/app-1.0.0.tar.gz", int64(len(archive)), update.Sign(priv, sum[:]), pub, path)
 		if tc.err == "" && err != nil || tc.err != "" && (err == nil || !strings.Contains(err.Error(), tc.err)) {
