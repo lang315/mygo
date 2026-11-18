@@ -118,6 +118,18 @@ let rootStyle: HTMLStyleElement | null = null;
   } else {
     domReady();
   }
+  // A page the web view kept as it was left, and shows again on Back or
+  // Forward, runs no script again and fires no DOMContentLoaded, while Go
+  // took the navigation for a new page: it holds the page's events until
+  // its DOM is ready, and waits for its theme color and its size. So the
+  // page tells them again, whatever it told before. (The capturing
+  // listener above failed the calls it left unanswered.)
+  w.addEventListener("pageshow", (e: PageTransitionEvent) => {
+    if (!e.persisted || !e.isTrusted) return;
+    themeColorReady(true);
+    if (fit) fit.again();
+    notify("dom-ready");
+  });
 
   const nativeRegion = typeof CSS !== "undefined" && CSS.supports("-webkit-app-region", "drag");
   const appRegion = (el: Element): string => {

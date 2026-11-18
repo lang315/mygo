@@ -370,8 +370,15 @@ type node struct {
 	// (layOwner, layReuse), and laid when layoutBox last laid it out, in
 	// engine.laySeq.
 	lay uint8
+	// hidden takes it and the elements inside it out of the frame, as
+	// CSS's display: none does (Hidden): the layout gives it no room, and
+	// it paints, takes input and reads to assistive technology as an
+	// invisible element does, while what is inside it keeps its state.
+	// The layout reads it of every child it walks, next to the flags it
+	// reads there too, so that the walk reads one cache line.
+	hidden bool
 	// themeAt is the theme a static paint function paints with
-	// (builtWith); here, it fills the padding after lay.
+	// (builtWith); here, it fills the padding after lay and hidden.
 	themeAt uint16
 	laid    uint64
 	// hold is the element's entry in the engine's holds (0 for none):
@@ -435,11 +442,6 @@ type node struct {
 	// it paints is no more than that, so that painting skips it where ink
 	// is clipped out (paintable).
 	ink [4]float32
-	// hidden takes it and the elements inside it out of the frame, as
-	// CSS's display: none does (Hidden): the layout gives it no room, and
-	// it paints, takes input and reads to assistive technology as an
-	// invisible element does, while what is inside it keeps its state.
-	hidden bool
 	// ignoreInput lets the pointer and the keyboard pass it and the
 	// elements inside it by, which still show and read to assistive
 	// technology (IgnoreInput).

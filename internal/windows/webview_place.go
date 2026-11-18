@@ -71,6 +71,21 @@ func (w *window) placeEmbedded() {
 	fx, fy := px(f.X), px(f.Y)
 	clipVisual(w.clipVis, px(c.X+c.W)-cx, px(c.Y+c.H)-cy)
 	translate(w.clipVis, cx, cy)
+	// The placement's opacity fades the page itself, over what is behind
+	// the window too, as a flyout over a parent left live: an effect group
+	// composes the clip visual's sub-tree, the page, to a surface of its
+	// own, blended by its opacity with what is behind it.
+	if o := w.placement.Opacity; o < 1 {
+		if w.effect == 0 {
+			w.effect = s.layer.effectGroup()
+		}
+		if w.effect != 0 {
+			comCallFloat32(w.effect, dcompEffectGroupSetOpacity, float32(o))
+			comCall(w.clipVis, dcompVisualSetEffect, w.effect)
+		}
+	} else if w.effect != 0 {
+		comCall(w.clipVis, dcompVisualSetEffect, 0)
+	}
 	// The page lays out at its size, which its visual shows scaled to its
 	// frame, if a transform of the content scales it.
 	width, height := px(f.X+f.W)-fx, px(f.Y+f.H)-fy

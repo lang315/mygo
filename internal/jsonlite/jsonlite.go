@@ -45,6 +45,10 @@ var (
 type Reader struct {
 	// Strict makes the Reader refuse what encoding/json/v2 refuses.
 	Strict bool
+	// AllowInvalidUTF8 makes a Strict Reader read invalid UTF-8 and lone
+	// surrogates as U+FFFD, as encoding/json/v2 does with
+	// jsontext.AllowInvalidUTF8.
+	AllowInvalidUTF8 bool
 
 	b      []byte
 	i      int
@@ -244,7 +248,7 @@ func (r *Reader) String() (string, error) {
 				r.i++
 				return string(s), nil
 			}
-			if r.Strict {
+			if r.Strict && !r.AllowInvalidUTF8 {
 				return "", errSyntax
 			}
 			break
@@ -263,7 +267,7 @@ func (r *Reader) String() (string, error) {
 		switch {
 		case c == '"':
 			r.i++
-			if r.Strict && !utf8.Valid(buf) {
+			if r.Strict && !r.AllowInvalidUTF8 && !utf8.Valid(buf) {
 				return "", errSyntax
 			}
 			return string(coerceUTF8(buf)), nil
@@ -305,7 +309,7 @@ func (r *Reader) String() (string, error) {
 							}
 						}
 					}
-					if r.Strict {
+					if r.Strict && !r.AllowInvalidUTF8 {
 						return "", errSyntax
 					}
 					r.i = save

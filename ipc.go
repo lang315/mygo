@@ -378,27 +378,31 @@ func readStringArg(args []rawValue, i int) (string, error) {
 	return s, nil
 }
 
-// callMessage is a call from the page: {"id":1,"k":"token","m":"Service.Method","a":[...]}.
+// callMessage is a call from the page: {"id":1,"k":"token","m":"Service.Method","a":[...]},
+// with "cancel":true if the page may cancel it.
 type callMessage struct {
-	id    int64
-	token string
-	name  string
-	args  []rawValue // share the message
+	id     int64
+	token  string
+	name   string
+	args   []rawValue // share the message
+	cancel bool
 }
 
-// parseCall reads a call as encoding/json/v2 read it into a struct of these
-// members: names match exactly, a duplicate name or invalid UTF-8 is an error,
-// members of other names are skipped, and null leaves a member as it is.
+// parseCall reads a call as encoding/json/v2 read it with decodeOptions into a
+// struct of these members: names match exactly, a duplicate name is an error,
+// invalid UTF-8 and lone surrogates read as U+FFFD, members of other names are
+// skipped, and null leaves a member as it is.
 func parseCall(raw []byte) (m callMessage, err error) {
 	r := jsonlite.NewReader(raw)
 	r.Strict = true
+	r.AllowInvalidUTF8 = true
 	if null, err := r.Null(); err != nil {
 		return m, err
 	} else if null {
 		return m, r.End()
 	}
 	err = r.Object(func(key string) error {
-		if key != "id" && key != "k" && key != "m" && key != "a" {
+		if key != "id" && key != "k" && key != "m" && key != "a" && key != "cancel" {
 			return r.Skip()
 		}
 		if null, err := r.Null(); null || err != nil {
@@ -419,6 +423,8 @@ func parseCall(raw []byte) (m callMessage, err error) {
 				m.args = append(m.args, v)
 				return err
 			})
+		case "cancel":
+			m.cancel, err = r.Bool()
 		}
 		return err
 	})
@@ -438,6 +444,25 @@ func stringBytes(s string) []byte { return unsafe.Slice(unsafe.StringData(s), le
 func handleCall(w *Window, ctx context.Context, raw string, trusted bool) {
 	m, err := parseCall(stringBytes(raw)) // shares raw
 	var result any
+	if err == nil && m.cancel {
+		// The page may cancel the call with a signal: the method gets a
+		// context of its own, which the page cancels. The call is
+		// remembered before it is made, so that it is remembered as run
+		// when it ends, unless the page goes away while it runs: a cancel
+		// that comes after the reply left for the page finds the id of a
+		// call that ran, and is dropped.
+		var cancel context.CancelFunc
+		if ctx != nil {
+			ctx, cancel = context.WithCancel(ctx)
+			w.addCancel(m.id, m.token, cancel)
+		}
+		defer func() {
+			w.removeCancel(m.id, m.token)
+			if cancel != nil {
+				cancel()
+			}
+		}()
+	}
 	if err != nil {
 		log.Printf("mygo: malformed call from window %d: %v", w.id, err)
 		if m.token == "" {

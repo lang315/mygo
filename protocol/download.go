@@ -34,11 +34,15 @@ func download(d schemehook.Download) {
 	}
 	rw := &downloadWriter{d: d, header: http.Header{}}
 	if !serveDownload(handler, rw, req) {
+		// The part of the file written is removed; the download fails at
+		// the path it had, if it started.
+		path := ""
 		if rw.file != nil {
 			rw.file.Close()
 			os.Remove(rw.path)
+			path = rw.path
 		}
-		finish("", fmt.Errorf("mygo: downloading %s: the handler panicked", rawURL))
+		finish(path, fmt.Errorf("mygo: downloading %s: the handler panicked", rawURL))
 		return
 	}
 	rw.WriteHeader(http.StatusOK) // nothing written

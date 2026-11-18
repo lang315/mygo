@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -207,7 +206,7 @@ func (ed *editor) insert(s string) {
 	if ed.readOnly {
 		return
 	}
-	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = lineBreaks.Replace(s)
 	a, b := ed.selection()
 	ranges := ed.selectedRanges()
 	if ed.maxLen > 0 && a == b && len(ranges) == 0 && ed.compose == "" && ed.buf.n >= ed.maxLen {

@@ -123,8 +123,10 @@ func TestCallWithALoneSurrogateIsAnswered(t *testing.T) {
 	_, fw := auditWindow(t)
 	page(fw, `{"t":"call","id":7,"k":"tok","m":"AuditTest.Echo","a":["\ud83d"]}`)
 	reply := received(t, fw, func(m map[string]any) bool { return m["t"] == "reply" && m["id"] == float64(7) })
-	if reply["ok"] != false {
-		t.Fatalf("a call with a lone surrogate was answered %v, want an error", reply)
+	// The half of a pair reads as U+FFFD, as nothing else can stand for it
+	// in a Go string, and the call is made (upstream #1941).
+	if reply["ok"] != true || reply["v"] != "�" {
+		t.Fatalf("a call with a lone surrogate was answered %v, want U+FFFD back", reply)
 	}
 }
 

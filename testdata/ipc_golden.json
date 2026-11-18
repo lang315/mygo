@@ -164,9 +164,8 @@
 	},
 	"call/envelope invalid utf8 arg": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
-		],
-		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"a�b\"}"
+		]
 	},
 	"call/envelope k escapes": {
 		"replies": [
@@ -174,7 +173,9 @@
 		]
 	},
 	"call/envelope k invalid utf8": {
-		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+		"replies": [
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"t�k\",\"ok\":true,\"v\":\"x\"}"
+		]
 	},
 	"call/envelope k missing": {
 		"replies": [
@@ -186,9 +187,8 @@
 	},
 	"call/envelope lone surrogate m": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
-		],
-		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"method G.� is not bound\"}"
+		]
 	},
 	"call/envelope m missing": {
 		"replies": [
@@ -470,9 +470,8 @@
 	},
 	"call/str lone surrogate": {
 		"replies": [
-			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":false,\"e\":\"malformed call: jsonlite: invalid JSON\"}"
-		],
-		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
+			"{\"t\":\"reply\",\"id\":1,\"k\":\"tok\",\"ok\":true,\"v\":\"�x\"}"
+		]
 	},
 	"call/str missing": {
 		"replies": [
@@ -548,37 +547,37 @@
 		"log": "mygo: malformed call from window N: \u003cerror\u003e\n"
 	},
 	"message/chan-ack unknown": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/content-size": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/content-size strings": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/context menu": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/dom-ready": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/drag untrusted check": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/empty object": {
 		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/escape": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/field of another type": {
 		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/invalid utf8": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/lone surrogate": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/no type": {
 		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
@@ -623,7 +622,7 @@
 		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"message/wrong secret": {
-		"note": "domReady true themeColor true {7 8 9 255} title \"two\""
+		"note": "domReady true themeColor false {0 0 0 0} title \"two\""
 	},
 	"untrusted/call": {
 		"replies": [

@@ -387,6 +387,10 @@ func (w *Window) handleMessage(msg string) {
 		return
 	}
 	switch m.T {
+	case "cancel":
+		// The page gave up a call: the method's context is canceled, and
+		// the reply is of no use to it.
+		w.cancelCall(m.ID, m.K)
 	case "dom-ready":
 		w.outMu.Lock()
 		w.domReady = true
@@ -450,6 +454,7 @@ type pageMessage struct {
 	X, Y float64 // drop, context-menu
 	C    int64   // channels
 	K    string
+	ID   int64 // the call of a cancel
 	N    int64
 	V    string  // theme-color
 	W, H float64 // content-size
@@ -461,13 +466,15 @@ type pageMessage struct {
 	E              bool
 }
 
-// parsePageMessage reads a message as encoding/json/v2 read it into a struct of
-// these members (the names are those of the fields, in lower case): names match
-// exactly, a duplicate name, invalid UTF-8 or a value of another type is an
-// error, members of other names are skipped, and null leaves a member as it is.
+// parsePageMessage reads a message as encoding/json/v2 read it with
+// decodeOptions into a struct of these members (the names are those of the
+// fields, in lower case): names match exactly, a duplicate name or a value of
+// another type is an error, invalid UTF-8 and lone surrogates read as U+FFFD,
+// members of other names are skipped, and null leaves a member as it is.
 func parsePageMessage(raw []byte) (m pageMessage, err error) {
 	r := jsonlite.NewReader(raw)
 	r.Strict = true
+	r.AllowInvalidUTF8 = true
 	if null, err := r.Null(); err != nil {
 		return m, err
 	} else if null {
@@ -494,6 +501,8 @@ func parsePageMessage(raw []byte) (m pageMessage, err error) {
 			i = &m.C
 		case "n":
 			i = &m.N
+		case "id":
+			i = &m.ID
 		case "t":
 			s = &m.T
 		case "k":

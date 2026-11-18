@@ -95,20 +95,7 @@ func readsBackAs(md string, want Text) bool {
 	if len(got) == 0 {
 		return true
 	}
-	gc, gm := markSeq(got[0].Runs)
-	wc, wm := markSeq(ws[0].Runs)
-	if string(gc) != string(wc) {
-		return false
-	}
-	for i := range gm {
-		if wm[i].link == "" {
-			gm[i].link = ""
-		}
-		if gm[i] != wm[i] {
-			return false
-		}
-	}
-	return true
+	return sameMarkRuns(got[0].Runs, ws[0].Runs)
 }
 
 // What looks like a URL but isn't linked, a URL in a link's text or an
