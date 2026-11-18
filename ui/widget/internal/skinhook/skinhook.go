@@ -51,6 +51,9 @@ type Tokens struct {
 	// Selection is selected text; RowHover and RowSelected rows.
 	Selection, RowHover, RowSelected ui.Color
 
+	// The families. Of Accent, Subtle and Text take no effect yet; of Info,
+	// Warning and Danger only Base and On take effect, and of Success only
+	// Base: no control reads the others.
 	Accent, Success, Warning, Danger Family
 	// Info is the running and info state, kept apart from the status
 	// colors.
@@ -73,7 +76,8 @@ type Tokens struct {
 	// comes in with ui.RegisterFont.
 	Font string
 
-	// Elevation is 0 flat, 1 a card, 2 a popover, 3 a dialog.
+	// Elevation is 0 flat, 1 a card, 2 a popover, 3 a dialog. Only the
+	// card's takes effect yet: no control reads 0, 2 and 3.
 	Elevation [4]Shadow
 
 	// Hover is how long a hover or press change takes, Toggle a switch's.

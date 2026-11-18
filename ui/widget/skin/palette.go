@@ -7,8 +7,9 @@ import (
 
 // Palette is the accent of a skin: the accent family, the Info family of
 // the running state, the selected row and the text selection, in light and
-// dark. Every palette MyGo ships passes the skin's contrast floors and keeps its Info apart from the status colors, also for a
-// red-green color-blind eye. A skin takes one with WithPalette:
+// dark. Every palette MyGo ships passes the skin's contrast floors and keeps
+// its Info apart from the status colors, also for a red-green color-blind
+// eye. A skin takes one with WithPalette:
 //
 //	skin.Use(skin.Calm.WithPalette(skin.Teal))
 type Palette struct {
@@ -54,7 +55,9 @@ var white = ui.Hex("#ffffff")
 
 // LightFamily is a family of the light appearance from its base, hover,
 // pressed and text colors: white on the base, and the subtle fill and border
-// the base mixed with white at 92% and 70%.
+// the base mixed with white at 92% and 70%. On is always white: for a light
+// base, set the returned family's On to a dark color (Check reports white on
+// it as "Accent On on Base").
 func LightFamily(base, hover, pressed, text ui.Color) Family {
 	return Family{Base: base, Hover: hover, Pressed: pressed,
 		Subtle: base.Mix(white, 0.92), Border: base.Mix(white, 0.70), Text: text, On: white}
@@ -75,6 +78,15 @@ func DarkFamily(base, hover, pressed, text, on ui.Color) Family {
 // a cell edited in place. Skin.Check measures a skin with it.
 //
 //	skin.Use(skin.Calm.WithPalette(skin.NewPalette("Brand", light, dark)))
+//
+// An accent near the status colors makes an Info near them too, which
+// Check reports as "Info Text near … Text". Such a skin gives Info a family
+// of its own through its tokens:
+//
+//	s := skin.Calm.WithPalette(brand)
+//	l, d := s.Tokens(false), s.Tokens(true)
+//	l.Info, d.Info = lightInfo, darkInfo
+//	skin.Use(skin.New("Brand", l, d))
 func NewPalette(name string, light, dark Family) *Palette {
 	return &Palette{name: name,
 		light: paletteTokens{accent: light, info: light,
@@ -111,5 +123,6 @@ func (s *Skin) WithPalette(p *Palette) *Skin {
 	return &c
 }
 
-// Palette returns the skin's palette, as Blue for Calm.
+// Palette returns the skin's palette, as Blue for Calm. It is nil for a skin
+// made with New until WithPalette gives it one.
 func (s *Skin) Palette() *Palette { return s.palette }
