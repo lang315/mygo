@@ -17,6 +17,9 @@ import (
 // hold a PNG, and Finder, Spotlight and Get Info draw the small icon as
 // noise. macOS scales those sizes down from ic11 and ic12 instead.
 func pngToICNS(src []byte) ([]byte, error) {
+	if err := validateIcon(src); err != nil {
+		return nil, err
+	}
 	img, err := png.Decode(bytes.NewReader(src))
 	if err != nil {
 		return nil, err
@@ -63,6 +66,9 @@ func iconImages(src []byte) ([][]byte, error) {
 	defer renderedIcon.Unlock()
 	if renderedIcon.images != nil && renderedIcon.sum == sum {
 		return renderedIcon.images, nil
+	}
+	if err := validateIcon(src); err != nil {
+		return nil, err
 	}
 	img, err := png.Decode(bytes.NewReader(src))
 	if err != nil {
