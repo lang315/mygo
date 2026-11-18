@@ -40,7 +40,7 @@ jobs:
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
       CI_DIFF: ${{ github.event_name == 'pull_request' && 'HEAD^1 HEAD' || '' }} # the change of a pull request (its merge commit and the base)
-      CI_PART: ${{ matrix.part }} # which half of the ui shard (ci-test.sh), where it is split in two
+      CI_PART: ${{ matrix.part }} # which half of the ui or noinspector shard (ci-test.sh), where it is split in two
       # GStreamer's plugins play the videos of ui/video's tests.
       LINUX_PACKAGES: libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
     strategy:
@@ -61,8 +61,10 @@ jobs:
         # The ui shard runs in two jobs on every OS (ci-test.sh, CI_PART):
         # in one, its five processes passed go test's 25 minutes together on
         # macOS's 3 cores. Check the shards looks at the halves. Linux's are
-        # on main only, as its other shards.
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector"}]' || '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"ui","part":"a"},{"os":"ubuntu-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector"}]') }}
+        # on main only, as its other shards. noinspector runs ./ui and the
+        # root package in two jobs the same way: in one, under -race on
+        # Linux's 4 cores, it passed the 25 minutes on a slow runner.
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector","part":"a"},{"os":"ubuntu-latest","shard":"noinspector","part":"b"}]' || '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"ui","part":"a"},{"os":"ubuntu-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector","part":"a"},{"os":"ubuntu-latest","shard":"noinspector","part":"b"}]') }}
     steps:
       - uses: actions/checkout@v7
         with:
