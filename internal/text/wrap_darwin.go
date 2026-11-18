@@ -1,5 +1,7 @@
 package text
 
+import "unicode"
+
 // Core Text's wrapping from one line (wrap.go). Core Text finds line breaks
 // a line at a time, opening a line for each and shaping it into glyphs
 // through a call for each of its properties. But a line of Latin text is a run
@@ -10,9 +12,10 @@ package text
 // Lines break where Core Text surely would: at the spaces before plain words.
 // What could tell them apart goes to Core Text, line by line, or whole: all but
 // plain Latin text, and a line ending where the next word does not fit and may
-// break inside itself, or is too long for a line. And the first texts of a font,
-// and one in every few hundred after them, are also wrapped by Core Text: a font
-// where the two differ is left to it from then on.
+// break inside itself, or is too long for a line and holds more than letters
+// and digits. And the first texts of a font, and one in every few hundred
+// after them, are also wrapped by Core Text: a font where the two differ is
+// left to it from then on.
 
 // shapeWhole shapes a kept text into one line, or returns nil if it does not
 // come out as one run with a glyph for each rune.
@@ -96,6 +99,8 @@ func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, widt
 	// line into start inside it, and take its end without walking it again,
 	// so that a paragraph without spaces wraps in time linear in its length.
 	wordFrom, wordTo := 0, 0
+	// alnum tells that the word from alnumFrom holds only letters and digits.
+	alnumFrom, alnum := -1, false
 	indexed := false
 	for start := 0; start < n; {
 		end, pen := start, w.pens[start]
@@ -125,6 +130,30 @@ func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, widt
 		if end > start && end < n {
 			e.wrapSteps += uint64(wordTo - end)
 		}
+		// A word of letters and digits too long for a line breaks after
+		// the last letter that fits, at least one, as Core Text breaks it.
+		cut := false
+		if end == start {
+			if alnumFrom != wordFrom {
+				alnumFrom, alnum = wordFrom, true
+				for _, r := range text[wordFrom:wordTo] {
+					alnum = alnum && (unicode.IsLetter(r) || unicode.IsDigit(r))
+				}
+				e.wrapSteps += uint64(wordTo - wordFrom)
+			}
+			if alnum {
+				c := start + 1
+				for c < wordTo && w.pens[c+1]-pen <= limit {
+					c++
+				}
+				e.wrapSteps += uint64(c - start)
+				// A last letter too wide for a line before spaces goes to
+				// Core Text, which may hang the spaces on its line.
+				if c < wordTo || c == n {
+					end, cut = c, true
+				}
+			}
+		}
 		if end == start || !plain {
 			// The first word does not fit, or the next may break inside.
 			count := max(ct.suggestLineBreak(kept.typesetter, start, limit), 1)
@@ -146,7 +175,7 @@ func (e *coreText) wrapKept(kept *keptTypesetter, text []rune, style Style, widt
 		for i := start; i < end; i++ {
 			glyphs[i-start] = Glyph{Font: w.font, ID: w.ids[i], X: float32(w.pens[i] - pen), Advance: w.advances[i], Cluster: i}
 		}
-		if end < n {
+		if end < n && !cut {
 			glyphs[end-start-1].Advance = f.space
 		}
 		line := shapedLine{start: start, end: end, runs: e.addRun(len(e.shapeScratch.runs), shapedRun{font: w.font, start: start, end: end, glyphs: glyphs})}
