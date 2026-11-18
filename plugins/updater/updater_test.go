@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -351,6 +352,33 @@ func TestCheckWhileOffering(t *testing.T) {
 	if got := wait.For(t, "the install", installed); got != "2.1.0" {
 		t.Errorf("installed %s, want 2.1.0", got)
 	}
+	s.Respond(v.Prompt, actionLater, false)
+	waitDone(t, done)
+}
+
+// CheckForUpdates while the window offering an update opens checks again:
+// the window offers before it shows.
+func TestCheckWhileOfferOpens(t *testing.T) {
+	h := newHarness(t, Options{})
+	opening := make(chan *session, 1)
+	held := make(chan struct{})
+	open := sync.OnceFunc(func() { close(held) })
+	t.Cleanup(open)
+	h.u.open = func(s *session) {
+		opening <- s
+		<-held
+	}
+	h.result = func(context.Context) (*release, error) { return newRelease("2.0.0", nil), nil }
+	done := h.begin(false)
+	s := wait.For(t, "the window", opening)
+	h.result = func(context.Context) (*release, error) { return newRelease("2.1.0", nil), nil }
+	waitDone(t, h.begin(true)) // while the window opens
+	open()
+	v := waitView(t, s, "A new version of")
+	wait.Until(t, "the window offers 2.1.0", func() bool {
+		v, _ = s.Current()
+		return strings.Contains(v.Message, "2.1.0 is now available")
+	})
 	s.Respond(v.Prompt, actionLater, false)
 	waitDone(t, done)
 }
