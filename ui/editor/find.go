@@ -27,6 +27,7 @@ type finder struct {
 	// The matches of the last search, and the text and options it was of;
 	// subs are a regular expression's submatches, as found in the text.
 	matches  []diffRange
+	spare    []diffRange // the array of the matches before searchLines, for the next
 	subs     [][]int
 	dirty    []lineSpan // lines edits changed, to search again
 	current  int
@@ -266,7 +267,7 @@ func (f *finder) searchLines(ed *editor) {
 	spans := mergeSpans(f.dirty)
 	f.dirty = nil
 	old, j := f.matches, 0
-	f.matches = make([]diffRange, 0, len(old))
+	f.matches = f.spare[:0]
 	for _, sp := range spans {
 		a, z := r.LineStart(sp.from), r.LineEnd(sp.to)
 		for ; j < len(old) && old[j].start <= z; j++ {
@@ -282,6 +283,7 @@ func (f *finder) searchLines(ed *editor) {
 		})
 	}
 	f.matches = append(f.matches, old[j:]...)
+	f.spare = old
 	if len(f.matches) > maxMatches {
 		f.matches = f.matches[:maxMatches]
 	}
