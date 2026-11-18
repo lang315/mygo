@@ -105,10 +105,12 @@ func TestTextInputAppValueKeystrokeLaysOutWindow(t *testing.T) {
 	if ed.caret != n-3 {
 		t.Errorf("caret %d after End and three Lefts, want %d", ed.caret, n-3)
 	}
-	check("End, Shift+Left ×2, Left", func() {
+	check("End, Left ×2, Shift+Right ×2, Left", func() {
 		tt.Key(0, KeyEnd)
-		tt.Key(Shift, KeyLeft)
-		tt.Key(Shift, KeyLeft)
+		tt.Key(0, KeyLeft)
+		tt.Key(0, KeyLeft)
+		tt.Key(Shift, KeyRight)
+		tt.Key(Shift, KeyRight)
 		tt.Key(0, KeyLeft)
 	})
 	if ed.caret != n-2 || ed.anchor != n-2 {
@@ -128,6 +130,18 @@ func TestTextInputAppValueKeystrokeLaysOutWindow(t *testing.T) {
 	tt.Key(Cmd, KeyC)
 	if got := tt.Clipboard(); got != s[1:] {
 		t.Errorf("End, Shift+Home, Shift+Right copied %d bytes, want %d", len(got), len(s)-1)
+	}
+	if runtime.GOOS == "darwin" {
+		// Cmd+Left and Cmd+Right go to the line's edges, not the window's.
+		tt.Key(0, KeyEnd)
+		tt.Key(Super, KeyLeft)
+		if ed.caret != 0 {
+			t.Errorf("Cmd+Left from the end put the caret at %d, want 0", ed.caret)
+		}
+		tt.Key(Super, KeyRight)
+		if ed.caret != n {
+			t.Errorf("Cmd+Right from the start put the caret at %d, want %d", ed.caret, n)
+		}
 	}
 	check("End then a click", func() {
 		tt.Key(0, KeyEnd)

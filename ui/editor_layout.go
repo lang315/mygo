@@ -83,10 +83,6 @@ func (ed *editor) setWindow(at int) {
 		return
 	}
 	ed.winEnd = min(ed.winEnd, n)
-	if ed.win >= ed.winEnd {
-		// The app set a shorter text: the window was past its end.
-		ed.win, ed.winEnd = 0, 0
-	}
 	margin := inputWindow / 4
 	if ed.winEnd > 0 && at >= ed.win && at <= ed.winEnd &&
 		(ed.win == 0 || at-ed.win >= margin) && (ed.winEnd == n || ed.winEnd-at >= margin) {
