@@ -2,6 +2,7 @@ package text
 
 import (
 	"slices"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -236,24 +237,18 @@ func (b *Boundaries) GraphemeOffsets() []int { return slices.Clone(b.graphemes) 
 
 // NextGrapheme returns the end of the grapheme starting at or containing i.
 func (b *Boundaries) NextGrapheme(i int) int {
-	for _, g := range b.graphemes {
-		if g > i {
-			return g
-		}
+	if k := sort.SearchInts(b.graphemes, i+1); k < len(b.graphemes) {
+		return b.graphemes[k]
 	}
 	return len(b.runes)
 }
 
 // PrevGrapheme returns the start of the grapheme before i.
 func (b *Boundaries) PrevGrapheme(i int) int {
-	prev := 0
-	for _, g := range b.graphemes {
-		if g >= i {
-			return prev
-		}
-		prev = g
+	if k := sort.SearchInts(b.graphemes, i); k > 0 {
+		return b.graphemes[k-1]
 	}
-	return prev
+	return 0
 }
 
 // NextWord returns the end of the word after i, skipping what is between.
