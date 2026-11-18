@@ -511,6 +511,9 @@ var (
 
 var errStalled = errors.New("no data")
 
+// newStall is replaced by tests, which end a stall when they say so.
+var newStall = time.AfterFunc
+
 // fetchSigned downloads a file of an update to path with get, and checks
 // its size and signature. A download that stalls or loses its connection
 // is tried again; get retries its request itself.
@@ -542,7 +545,7 @@ func fetchOnce(get archiveGetter, u string, size int64, path string) ([]byte, bo
 	}
 	defer resp.Body.Close()
 	// Armed only now, so it does not run through the waits of get's retries.
-	stall := time.AfterFunc(fetchStall, func() { cancel(errStalled) })
+	stall := newStall(fetchStall, func() { cancel(errStalled) })
 	defer stall.Stop()
 	stalled := func() bool { return errors.Is(context.Cause(ctx), errStalled) }
 	f, err := os.Create(path)
