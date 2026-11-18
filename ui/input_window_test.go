@@ -268,25 +268,27 @@ func TestTextInputWindowAppShortensValue(t *testing.T) {
 }
 
 // An input editing a TextBuffer of 4M runes builds no string of it to lay
-// out its window.
+// out its window: a keystroke allocates about what it does in one of 32K
+// runes, whose window is as long, not the 4 MB of a string more.
 func TestTextInputBufferWindowBuildsNoString(t *testing.T) {
-	b := NewTextBuffer(strings.Repeat("ab ", 4<<20/3))
-	tt := NewTester(func(c *Context) { TextInputBuffer(c, b).Fill().AutoFocus() }, 300, 100)
-	defer tt.rt.close()
-	tt.Frame()
-	tt.Key(0, KeyEnd)
-	tt.Frame()
-	runtime.GC()
-	var before, after runtime.MemStats
-	runtime.ReadMemStats(&before)
-	laid := laidBy(tt, func() { tt.Type("x") })
-	runtime.ReadMemStats(&after)
+	keystroke := func(runes int) (laid, bytes uint64) {
+		b := NewTextBuffer(strings.Repeat("ab ", runes/3))
+		tt := NewTester(func(c *Context) { TextInputBuffer(c, b).Fill().AutoFocus() }, 300, 100)
+		defer tt.rt.close()
+		tt.Frame()
+		tt.Key(0, KeyEnd)
+		tt.Frame()
+		runtime.GC()
+		bytes = allocated(func() { laid = laidBy(tt, func() { tt.Type("x") }) })
+		return laid, bytes
+	}
+	_, small := keystroke(32 << 10)
+	laid, large := keystroke(4 << 20)
 	if laid > windowBound {
 		t.Errorf("a keystroke laid out %d runes, want at most %d", laid, windowBound)
 	}
-	// Laying out the window takes about 2 MB; a string of the buffer, 4 MB more.
-	if bytes := after.TotalAlloc - before.TotalAlloc; bytes > 3<<20 {
-		t.Errorf("a keystroke allocated %d bytes in a buffer of 4M runes, want under 3 MB", bytes)
+	if large > small+1<<20 {
+		t.Errorf("a keystroke allocated %d bytes in a buffer of 4M runes, %d in one of 32K: want at most 1 MB more", large, small)
 	}
 }
 
