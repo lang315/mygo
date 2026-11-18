@@ -115,6 +115,14 @@ func (ed *editor) edited(s string) string {
 	return s
 }
 
+// singleLineMax is the runes a paste or a ReplaceText of a block may take a
+// single-line input to; singleLineInsert the runes an insertion takes past
+// it, as typing and input methods' commits.
+const (
+	singleLineMax    = 1 << 19
+	singleLineInsert = 256
+)
+
 // replace replaces the runes from start to end with s, as the last step
 // of undo notes, and puts the caret after it.
 func (ed *editor) replace(start, end int, s string) {
@@ -147,6 +155,12 @@ func (ed *editor) replace(start, end int, s string) {
 	}
 	if !ed.multiline {
 		s = lineBreaksAsSpaces(s)
+		// A paste keeps the line within singleLineMax runes, as MaxLength
+		// cuts it: what a keystroke or an input method's commit inserts is
+		// never cut, so that a longer value the app set still takes typing.
+		if len(s) > singleLineInsert && utf8.RuneCountInString(s) > singleLineInsert {
+			s = cutToRoom(s, max(singleLineMax-(ed.buf.n-(end-start)), 0))
+		}
 	}
 	if n := len(ed.undo); n > 0 {
 		step := &ed.undo[n-1]

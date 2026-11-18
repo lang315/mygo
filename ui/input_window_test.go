@@ -292,6 +292,25 @@ func TestTextInputBufferWindowBuildsNoString(t *testing.T) {
 	}
 }
 
+// A value the app set over the cap of a paste takes no paste, which is cut
+// to nothing, but takes a rune typed.
+func TestTextInputLongAppValuePasteCut(t *testing.T) {
+	s := strings.Repeat("a", 600<<10)
+	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
+	defer tt.rt.close()
+	tt.Frame()
+	tt.Key(0, KeyEnd)
+	tt.SetClipboard(strings.Repeat("b", 300))
+	tt.Key(Cmd, KeyV)
+	if len(s) != 600<<10 || strings.Contains(s, "b") {
+		t.Errorf("a paste of 300 runes into %d gave %d runes, want it cut to nothing", 600<<10, len(s))
+	}
+	tt.Type("x")
+	if len(s) != 600<<10+1 || !strings.HasSuffix(s, "ax") {
+		t.Errorf("a rune typed into %d runes gave %d runes ending %q", 600<<10, len(s), s[len(s)-2:])
+	}
+}
+
 // A value the app set over what typing used to be cut at takes what is typed.
 func TestTextInputLongAppValueTakesTyping(t *testing.T) {
 	s := strings.Repeat("a", 600<<10)

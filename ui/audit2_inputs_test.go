@@ -134,9 +134,8 @@ func TestPlainInputCompositionOverASelectionIsUnchanged(t *testing.T) {
 }
 
 // A single-line input lays out a window of its line around the caret: after
-// a paste of 4 MB, a keystroke lays out the window, not the line, and the
-// value keeps all of the paste (R3-5). A line break becomes a space, as
-// before.
+// a paste of 4 MB, cut at 524,288 runes, a keystroke lays out the window, not
+// the line (R3-5). A line break becomes a space, as before.
 func TestTextInputHugeValueKeystrokeCost(t *testing.T) {
 	s := ""
 	tt := NewTester(func(c *Context) { TextInput(c, &s).Fill().AutoFocus() }, 300, 100)
@@ -148,8 +147,8 @@ func TestTextInputHugeValueKeystrokeCost(t *testing.T) {
 	if laid := laidBy(tt, func() { tt.Type("x") }); laid > windowBound {
 		t.Errorf("a keystroke laid out %d runes, more than %d", laid, windowBound)
 	}
-	if n := utf8.RuneCountInString(s); n != paste+1 || strings.Contains(s, "\n") || !strings.HasPrefix(s, "ab ab ") || !strings.HasSuffix(s, "ab x") {
-		t.Errorf("value of %d runes, want the paste's %d with its breaks as spaces, then the x", n, paste)
+	if n := utf8.RuneCountInString(s); n != 1<<19+1 || strings.Contains(s, "\n") || !strings.HasPrefix(s, "ab ab ") || !strings.HasSuffix(s, "x") {
+		t.Errorf("value of %d runes, want the paste of %d cut at %d with its breaks as spaces, then the x", n, paste, 1<<19)
 	}
 }
 
