@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # usage: wait-children [any|all] [seconds, default 570]
 # `hc wait --children any` (or all) that waits on through messages from terminals
-# that are not the caller's children (another session's buildpc broadcast). Such a
+# that are not the caller's children (another session's broadcast). Such a
 # message ends every hc wait, and it is not a report.
 # Ends on a child's news or message, on a message without a sender (typed into the
 # pane) and at the deadline, and prints that wait's JSON (`reason: timeout` at the

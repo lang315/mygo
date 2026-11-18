@@ -68,7 +68,7 @@ hc run --bg --name <name> --cwd "$R" claude --setting-sources user --settings "$
 
 - The wait returns `reason: message` when a report arrives. It returns `timeout` when the time runs out, which is
   a check-in, not a failure. Wait again until no child is working.
-- A message from a terminal that is not your child (another session's buildpc broadcast, `from` t6) ends every
+- A message from a terminal that is not your child (another session's broadcast, `from` t6) ends every
   `hc wait`, by name and `--children all` too, and it is not a report. `wait-children` waits on through those
   until its deadline; they still arrive as input. A by-name wait they cut short prints `ended: false`, and `hc rm`
   refuses the running terminal: run that line again. Tested 2026-11-18.

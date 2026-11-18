@@ -47,8 +47,8 @@ Bash commands (`ls`, `cat`, `grep`, `git status`) pass without a rule.
   - `go *` runs any Go program, so this is not a sandbox.
   - Tested 2026-11-10 with `-p`: Edit, Write, `go version`, `git commit` and `git mv` ran; `rm`, `git push --dry-run`
     and `gh pr list` were refused with no dialog.
-  - Tested 2026-11-18 with `-p`: the five bun commands ran, with `2>&1 | tail -5` after them too; `bun install`,
-    `bun --version` and `bun test packages/bridge` were refused.
+  - Tested 2026-11-18 with `-p`: the five bun commands ran, both test commands with `2>&1 | tail -5` after
+    them too; `bun install`, `bun --version` and `bun test packages/bridge` were refused.
   - The pre-push hook refuses pushes run inside a `mygo-wt-*` worktree, `git -C . push` included. It does not stop
     `--no-verify`.
 - **Orchestrator:** `.claude/settings.json` has `ask` rules. They hold in every mode, bypass and `auto` included;
