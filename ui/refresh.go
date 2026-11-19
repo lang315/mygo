@@ -36,6 +36,7 @@ type RefreshState struct {
 //		}()
 //	}
 func (e *node) PullToRefresh(s *RefreshState) bool {
+	e.neverKept() // it asks again in every build (fingersFrame), which a kept row would not
 	if !e.hasState() {
 		return false
 	}

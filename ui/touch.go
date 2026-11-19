@@ -521,6 +521,7 @@ func (rt *engine) draggableAlong(x, y float32, axis Orientation) *state {
 func (rt *engine) pressDraggable(d *state, x, y float32) {
 	rt.pressed, rt.pressButton, rt.pressClicks = d, 0, 1
 	d.pressed, d.pressMods, d.pressPending = true, rt.mods, true
+	d.touch() // a kept row with d builds again
 	d.pressX, d.pressY = d.local(x, y)
 	d.drag.reset(rt.now(), x, y)
 	rt.pointerX, rt.pointerY = x, y
@@ -605,6 +606,7 @@ func (rt *engine) pan(target uint64, axes Orientation, x, y, dx, dy float32, mom
 	}
 	if moved {
 		s.barsUntil = rt.now().Add(indicatorHold)
+		s.touch() // a kept row with s builds again while its indicator shows
 		rt.requestFrame()
 	}
 	return moved
@@ -614,6 +616,7 @@ func (rt *engine) pan(target uint64, axes Orientation, x, y, dx, dy float32, mom
 // takes back first, then its content, and the rest into its overscroll, as a
 // finger does. A fling's rest becomes a spring's speed instead (flingStep).
 func (rt *engine) panAxis(s *state, axis int, d float32, momentum bool) bool {
+	s.touch() // its overscroll may change
 	raw := &s.overRaw[axis]
 	if *raw != 0 {
 		if n := *raw + d; n*(*raw) > 0 {
@@ -678,6 +681,7 @@ func (s *state) setOver(axis int) {
 	if overscrollKind == overscrollStretch && s.refresh == nil {
 		dim *= 0.25
 	}
+	s.touch()
 	s.over[axis] = Rubberband(s.overRaw[axis], 0, 0, dim)
 }
 
@@ -721,6 +725,7 @@ func (s *state) rawFor(axis int, over float32) float32 {
 // startBounce has overscrolled content spring back to its ends from where it
 // shows, at a speed in DIPs a second.
 func (rt *engine) startBounce(s *state, vx, vy float32) {
+	s.touch() // a kept row with s builds again while it springs back
 	s.overRaw = [2]float32{}
 	// A throw at the end shows as far as UIKit's does at most, and less on
 	// Android's, whose content yields less.
@@ -749,6 +754,7 @@ func (rt *engine) startBounce(s *state, vx, vy float32) {
 func (rt *engine) catchBounces() {
 	for _, id := range rt.bouncing {
 		if s := rt.states[id]; s != nil {
+			s.touch()
 			for axis := range s.over {
 				s.overRaw[axis] = s.rawFor(axis, s.over[axis])
 			}
@@ -768,6 +774,7 @@ func (rt *engine) bounceStep(dt float32) {
 		if s == nil {
 			continue
 		}
+		s.touch() // it moves on: a kept row with s builds again
 		rest := s.refreshHold()
 		going := false
 		for axis := range s.over {
@@ -994,6 +1001,7 @@ func (rt *engine) lowMemory() {
 // second since the last frame, on a touch screen. The press then clicks
 // nothing as it lifts.
 func (e *node) LongPressed() bool {
+	e.neverKept() // it asks again in every build (fingersFrame), which a kept row would not
 	if !e.hasState() {
 		return false
 	}

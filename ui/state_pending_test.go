@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/transfer"
 )
@@ -24,6 +25,7 @@ var statePlaced = map[string][]string{
 		"dragValue", "dragFn", "accepts", "dataSource", "dataTarget", "dragRec",
 		"anims", "motions", "colorMotions", "sequences", "timelines", "crec", "pose", "trec",
 		"shortcuts", "delivered", "wheel",
+		"over", "overRaw", "overV", "barsUntil", // a finger's overscroll springing back, and its indicator fading (touch.go)
 	},
 	// kept: what lasts across frames, which a kept row keeps as it is: the
 	// last frame's geometry and flags, scroll offsets, the focus-related
@@ -37,6 +39,7 @@ var statePlaced = map[string][]string{
 		"scrollX", "scrollY", "contentW", "contentH", "barInset", "barStyle", "reposed", "hoverBuilt", "hoverLook", "barsShown", "barFlags", "ignoreInput", "accessHidden", "track",
 		"moveFrame", "startX", "startY", "list", "cx", "cy", "cw", "ch", "role",
 		"textScope", "spans", "valueBinding", "locals", "input", "textClient", "textAdapter",
+		"traits", // what a text input tells on-screen keyboards, set by its build, as takesText and noIME are
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
 		"placed", "asked", // where AttachTo put the element, from its layout (AttachedAnchors)
 		"handleDoubleClick", // set at commit from the element, as accessHidden is
@@ -65,6 +68,9 @@ var statePlaced = map[string][]string{
 		"quietClicks",                               // read with clicks (RowClicked)
 		"pressPointer", "pressPressure", "canceled", // read with pressed, released
 		"missX", "missY", // read with dragMissed
+		// Set by PullToRefresh and LongPressed, which call neverKept, and by the
+		// fingers on what asked: no kept row holds them.
+		"refresh", "refreshFired", "longPress", "longPressed", "fingersFrame",
 	},
 }
 
@@ -138,6 +144,10 @@ func TestStatePendingReportsEachPendingField(t *testing.T) {
 		"shortcuts":     func(s *state) { s.shortcuts = []shortcut{{}} },
 		"delivered":     func(s *state) { s.delivered = []shortcut{{}} },
 		"wheel":         func(s *state) { s.wheel = new(wheelGlide) },
+		"over":          func(s *state) { s.over[1] = -3 },
+		"overRaw":       func(s *state) { s.overRaw[1] = -5 },
+		"overV":         func(s *state) { s.overV[0] = 2 },
+		"barsUntil":     func(s *state) { s.barsUntil = time.Unix(1, 0) },
 	}
 	if !slices.Equal(sortedKeys(set), slices.Sorted(slices.Values(statePlaced["pending"]))) {
 		t.Fatalf("the cases name %v, statePlaced lists %v as pending", sortedKeys(set), statePlaced["pending"])
