@@ -9,22 +9,21 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
-	"github.com/egoist/mygo/ui/widget/skin"
 )
 
 // frameLooks are the looks every frame case runs under: no skin and Calm,
 // light and dark.
 var frameLooks = []struct {
 	name string
-	skin *skin.Skin
+	skin bool // Calm
 	dark bool
-}{{"nil light", nil, false}, {"nil dark", nil, true}, {"Calm light", skin.Calm, false}, {"Calm dark", skin.Calm, true}}
+}{{"nil light", false, false}, {"nil dark", false, true}, {"Calm light", true, false}, {"Calm dark", true, true}}
 
-// useLook turns s on until the test ends.
-func useLook(t *testing.T, s *skin.Skin) {
+// useLook turns Calm on, or every skin off, until the test ends.
+func useLook(t *testing.T, calm bool) {
 	t.Helper()
-	skin.Use(s)
-	t.Cleanup(func() { skin.Use(nil) })
+	useCalm(t, calm)
+	t.Cleanup(calmOff)
 }
 
 // lookColors are the frame of a list in the look on, Calm's BorderStrong or the
