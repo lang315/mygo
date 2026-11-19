@@ -2876,6 +2876,21 @@ func TabsKeyed(c *Context, selected *int, keys []any, labels []string) Element {
 	return wrapElement(_e)
 }
 
+// TabsKeyedBase is TabsBase whose tab i is told apart by keys[i], as
+// TabsKeyed's are: when tabs are added or removed, the tab that has the
+// keyboard focus keeps it, whatever its index becomes. It makes a tab for
+// each key; build them in List with Tab, as TabsBase's.
+func TabsKeyedBase(c *Context, selected *int, keys []any) TabsParts {
+	_ctx := c.build()
+	if _ctx == nil {
+		return TabsParts{}
+	}
+	_ctx.rt.beginBuild()
+	_p := coreTabsKeyedBase(_ctx, selected, keys)
+	_ctx.rt.endBuild()
+	return wrapTabsParts(_p)
+}
+
 // Text creates a text, which wraps at the width it gets.
 func Text(c *Context, s string) Element {
 	_ctx := c.build()

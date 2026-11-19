@@ -27,20 +27,10 @@ func coreTabs(c *context, selected *int, labels ...string) *node {
 // becomes. A nil keys is Tabs.
 func coreTabsKeyed(c *context, selected *int, keys []any, labels []string) *node {
 	t := c.theme
-	tabs := coreTabsBase(c, selected, len(labels))
-	if keys != nil {
-		if len(keys) != len(labels) {
-			panic(fmt.Sprintf("ui: TabsKeyed: %d keys for %d labels", len(keys), len(labels)))
-		}
-		tabs.keys = keys
-		tabs.focusKey = coreLocal(tabs.List, "focusKey", func() any { return nil })
-		// The tab that had the focus is gone (its page was removed): the
-		// tab chosen takes it, as the one at its index did.
-		if had := *tabs.focusKey; had != nil && !slices.Contains(keys, had) {
-			*tabs.follow = true
-		}
-		*tabs.focusKey = nil
+	if keys != nil && len(keys) != len(labels) {
+		panic(fmt.Sprintf("ui: TabsKeyed: %d keys for %d labels", len(keys), len(labels)))
 	}
+	tabs := tabsKeyed(c, selected, keys, len(labels))
 	list := tabs.List.Gap(t.Space(1))
 	list.Children(func() {
 		for i, label := range labels {
@@ -75,4 +65,28 @@ func coreTabsKeyed(c *context, selected *int, keys []any, labels []string) *node
 		}
 	})
 	return list
+}
+
+// TabsKeyedBase is TabsBase whose tab i is told apart by keys[i], as
+// TabsKeyed's are: when tabs are added or removed, the tab that has the
+// keyboard focus keeps it, whatever its index becomes. It makes a tab for
+// each key; build them in List with Tab, as TabsBase's.
+func coreTabsKeyedBase(c *context, selected *int, keys []any) tabsParts {
+	return tabsKeyed(c, selected, keys, len(keys))
+}
+
+// tabsKeyed is TabsBase of n tabs told apart by keys, nil for by position.
+func tabsKeyed(c *context, selected *int, keys []any, n int) tabsParts {
+	tabs := coreTabsBase(c, selected, n)
+	if keys != nil {
+		tabs.keys = keys
+		tabs.focusKey = coreLocal(tabs.List, "focusKey", func() any { return nil })
+		// The tab that had the focus is gone (its page was removed): the
+		// tab chosen takes it, as the one at its index did.
+		if had := *tabs.focusKey; had != nil && !slices.Contains(keys, had) {
+			*tabs.follow = true
+		}
+		*tabs.focusKey = nil
+	}
+	return tabs
 }
