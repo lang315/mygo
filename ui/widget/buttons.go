@@ -305,6 +305,7 @@ func (t *ToggleWidget) build(c *ui.Context) ui.Element {
 	}
 	e := ui.Toggle(c, p, t.text).OnChange(t.toggled)
 	skinChecked(c, e, *p)
+	t.selected = *p
 	if changed && t.onChange != nil {
 		Post(t.onChange)
 	}
@@ -340,6 +341,7 @@ func (b *CheckBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := b.on.bind()
 	label, key, _ := parseMnemonic(b.text)
 	e := ui.Checkbox(c, p, label).OnChange(editedOnce(&b.edit, &b.on, &b.bound, &b.onChange))
+	b.selected = *p
 	if changed && b.onChange != nil {
 		Post(b.onChange)
 	}
@@ -612,6 +614,7 @@ func (r *RadioButtonWidget) build(c *ui.Context) ui.Element {
 	p, _ := r.on.bind()
 	label, key, _ := parseMnemonic(r.text)
 	e := ui.Radio(c, p, radioOn, label).OnChange(r.edited)
+	r.selected = *p == radioOn
 	if key != 0 {
 		registerMnemonic(key, e, r, func() {
 			focusLater(r)

@@ -555,8 +555,12 @@ widget.VBox(8).Add(
   `ButtonBorder` (else as `RoleControlBorder`), `RowHover` (else
   `SurfaceHover`), `RowSelected` (else `Accent`), and `Accent`.
 - **Variants** apply on top while their state holds, in this order, a later
-  one winning: `Dark`, `Hover`, `Focused`, `Pressed`, `Disabled`. A
-  state's variant can have a `Dark` of its own, as Tailwind's `dark:hover:`.
+  one winning: `Dark`, `Hover`, `Selected`, `Focused`, `Pressed`,
+  `Disabled`. A state's variant can have a `Dark` of its own, as Tailwind's
+  `dark:hover:`. `Selected` holds while the control is checked or selected:
+  a `CheckBox` or `RadioButton` checked, a `Toggle` on, a toggle
+  `ToolButton` checked; other controls are never selected. A selected
+  control keeps its `Selected` look while hovered.
 - **What a style does not set keeps the control's own look**, its own hover
   colors included. A style that sets a background turns that hover off:
   give it a `Hover` too.

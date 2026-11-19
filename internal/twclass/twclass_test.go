@@ -234,6 +234,26 @@ func TestRoleClasses(t *testing.T) {
 	}
 }
 
+// selected: is a state, alone or after dark:, and does not stack on another.
+func TestSelectedClass(t *testing.T) {
+	bg := Decl{Kind: Background, Color: Color{Role: "accent"}}
+	for in, want := range map[string][]Rule{
+		"selected:bg-accent":      one(Key{Variant: Selected}, bg),
+		"dark:selected:bg-accent": one(Key{Variant: Selected, Dark: true}, bg),
+		"selected:dark:bg-accent": one(Key{Variant: Selected, Dark: true}, bg),
+	} {
+		got, bad := Parse(in)
+		if len(bad) != 0 || !reflect.DeepEqual(got, want) {
+			t.Errorf("Parse(%q) = %+v, bad %v; want %+v", in, got, bad, want)
+		}
+	}
+	for _, in := range []string{"selected:hover:bg-accent", "hover:selected:bg-accent", "selected:selected:bg-accent"} {
+		if _, bad := Parse(in); len(bad) != 1 || bad[0] != (Bad{in, Stack}) {
+			t.Errorf("Parse(%q) bad = %v, want a stack", in, bad)
+		}
+	}
+}
+
 func TestShadows(t *testing.T) {
 	got, _ := Parse("shadow-md")
 	want := one(Key{}, Decl{Kind: Shadows, Shadows: []Shadow{{0, 4, 6, -1, 0.1, false}, {0, 2, 4, -2, 0.1, false}}})

@@ -90,6 +90,21 @@ func TestTwRoleClasses(t *testing.T) {
 	}
 }
 
+// selected: makes the Selected variant, with its own dark:.
+func TestTwSelected(t *testing.T) {
+	n := widget.NewStyle
+	for in, want := range map[string]widget.Style{
+		"selected:bg-accent": n().Selected(n().Background(widget.RoleAccent)),
+		"selected:bg-accent dark:selected:bg-chrome": n().Selected(n().Background(widget.RoleAccent).
+			Dark(n().Background(widget.RoleChrome))),
+	} {
+		got := S(in)
+		if !reflect.DeepEqual(bare(got), want) {
+			t.Errorf("S(%q) = %+v, want %+v", in, got, want)
+		}
+	}
+}
+
 // Each role name draws the field of the theme it is named for: the corner
 // of the card's padding shows its background, which is the color of the role.
 func TestRolesDrawTheThemeField(t *testing.T) {

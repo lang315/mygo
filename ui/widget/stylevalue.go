@@ -329,6 +329,7 @@ type variant uint8
 const (
 	vDark variant = iota
 	vHover
+	vSelected // after Hover: a selected control keeps its look while hovered
 	vFocused
 	vPressed
 	vDisabled
@@ -580,6 +581,11 @@ func (s Style) Pressed(v Style) Style  { return s.with(vPressed, v) }
 func (s Style) Disabled(v Style) Style { return s.with(vDisabled, v) }
 func (s Style) Dark(v Style) Style     { return s.with(vDark, v) }
 
+// Selected applies v while the control is checked or selected: a CheckBox
+// or RadioButton checked, a Toggle on, a toggle ToolButton checked. Other
+// controls are never selected.
+func (s Style) Selected(v Style) Style { return s.with(vSelected, v) }
+
 func (s Style) with(k variant, v Style) Style { s.v[k] = &v; return s }
 
 // styleSource is the Tailwind classes a Style was made from, with the Style
@@ -720,9 +726,9 @@ func (p *props) over(o *props) {
 // effective returns the properties of s for a frame: its own with the
 // variants whose states hold on top, in Tailwind's order. It allocates
 // nothing.
-func (s *Style) effective(dark, hover, focused, pressed, disabled bool) props {
+func (s *Style) effective(dark, hover, selected, focused, pressed, disabled bool) props {
 	p := s.props
-	on := [nVariants]bool{vDark: dark, vHover: hover, vFocused: focused, vPressed: pressed, vDisabled: disabled}
+	on := [nVariants]bool{vDark: dark, vHover: hover, vSelected: selected, vFocused: focused, vPressed: pressed, vDisabled: disabled}
 	for k := range nVariants {
 		v := s.v[k]
 		if !on[k] || v == nil {

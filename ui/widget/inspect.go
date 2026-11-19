@@ -32,7 +32,7 @@ func (b *core) leaveNote(c *ui.Context, w Control, e ui.Element) {
 	var st frameState
 	if b.styled {
 		// The state the frame styled the control in, forced states included.
-		st = frameState{th.Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled}
+		st = frameState{th.Dark, e.Hovered(), b.selected, e.Focused(), e.Pressed(), b.disabled}
 	}
 	e.InspectNote(fmt.Sprintf("%T", w), func() []ui.InspectorField {
 		fs := b.inspect(w, th, e.IsDisabled())
@@ -92,7 +92,7 @@ func (b *core) inspect(w Control, th *ui.Theme, inert bool) []ui.InspectorField 
 // withoutSource returns s with no source, to compare it with its base.
 func (s Style) withoutSource() Style { s.src = nil; return s }
 
-var variantNames = [nVariants]string{vDark: "dark", vHover: "hover", vFocused: "focus", vPressed: "pressed", vDisabled: "disabled"}
+var variantNames = [nVariants]string{vDark: "dark", vHover: "hover", vSelected: "selected", vFocused: "focus", vPressed: "pressed", vDisabled: "disabled"}
 
 // describe lists what s sets, then its variants, in the order they apply:
 // each as it is set, not as it resolves.

@@ -439,8 +439,8 @@ func TestCheatSheetHandWrittenNames(t *testing.T) {
 		}
 	}
 	// The prefixes of the variants the page lists.
-	if got := sortedKeys(states); strings.Join(got, " ") != "active disabled focus hover" {
-		t.Errorf("the variants are %v: the page's Variants section lists active, disabled, focus, hover and dark", got)
+	if got := sortedKeys(states); strings.Join(got, " ") != "active disabled focus hover selected" {
+		t.Errorf("the variants are %v: the page's Variants section lists active, disabled, focus, hover, selected and dark", got)
 	}
 	if got := fmt.Sprint(defaults); got != "map[bg:background border:border text:text]" {
 		t.Errorf("default colors are %v: the page's Colors section says bg-default is the background, text-default the text and border-default the border", got)

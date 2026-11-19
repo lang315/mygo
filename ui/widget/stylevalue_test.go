@@ -69,19 +69,24 @@ func TestStyleEffectiveOrder(t *testing.T) {
 		Focused(NewStyle().Background(Fixed(ui.RGB(3, 3, 3)))).
 		Pressed(NewStyle().Background(Fixed(ui.RGB(4, 4, 4)))).
 		Disabled(NewStyle().Background(Fixed(ui.RGB(5, 5, 5)))).
-		Dark(NewStyle().Background(Fixed(ui.RGB(6, 6, 6))))
+		Dark(NewStyle().Background(Fixed(ui.RGB(6, 6, 6)))).
+		Selected(NewStyle().Background(Fixed(ui.RGB(7, 7, 7))))
 	for _, c := range []struct {
-		dark, hover, focused, pressed, disabled bool
-		want                                    uint8
+		dark, hover, selected, focused, pressed, disabled bool
+		want                                              uint8
 	}{
-		{false, false, false, false, false, 1},
-		{true, false, false, false, false, 6},
-		{true, true, false, false, false, 2},
-		{false, true, true, false, false, 3},
-		{false, true, true, true, false, 4},
-		{true, true, true, true, true, 5},
+		{false, false, false, false, false, false, 1},
+		{true, false, false, false, false, false, 6},
+		{true, true, false, false, false, false, 2},
+		{false, true, false, true, false, false, 3},
+		{false, true, false, true, true, false, 4},
+		{true, true, false, true, true, true, 5},
+		{false, true, true, false, false, false, 7},
+		{false, true, true, true, false, false, 3},
+		{false, true, true, false, true, false, 4},
+		{true, true, true, true, true, true, 5},
 	} {
-		p := s.effective(c.dark, c.hover, c.focused, c.pressed, c.disabled)
+		p := s.effective(c.dark, c.hover, c.selected, c.focused, c.pressed, c.disabled)
 		if got := p.background.fixed.R; got != c.want {
 			t.Errorf("%+v: background %d, want %d", c, got, c.want)
 		}
@@ -90,10 +95,10 @@ func TestStyleEffectiveOrder(t *testing.T) {
 
 func TestStyleDarkUnderAState(t *testing.T) {
 	s := NewStyle().Hover(NewStyle().Background(Fixed(red)).Dark(NewStyle().Background(Fixed(blue))))
-	if p := s.effective(true, true, false, false, false); p.background.fixed != blue {
+	if p := s.effective(true, true, false, false, false, false); p.background.fixed != blue {
 		t.Fatalf("dark hover %v, want blue", p.background.fixed)
 	}
-	if p := s.effective(false, true, false, false, false); p.background.fixed != red {
+	if p := s.effective(false, true, false, false, false, false); p.background.fixed != red {
 		t.Fatalf("light hover %v, want red", p.background.fixed)
 	}
 }
@@ -102,7 +107,7 @@ func TestStyleMergeVariants(t *testing.T) {
 	a := NewStyle().Hover(NewStyle().Background(Fixed(red)).Bold())
 	b := NewStyle().Hover(NewStyle().Background(Fixed(blue)))
 	m := a.Merge(b) // effective takes a pointer: it does not copy a Style each frame
-	p := m.effective(false, true, false, false, false)
+	p := m.effective(false, true, false, false, false, false)
 	if p.background.fixed != blue || p.set&pFontWeight == 0 || p.weight != 700 {
 		t.Fatalf("merged hover: background %v weight %d", p.background.fixed, p.weight)
 	}
