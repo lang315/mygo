@@ -187,6 +187,7 @@ func render(c *ui.Context, w Control) ui.Element {
 		return ui.Element{}
 	}
 	keeping.key(c, b)
+	b.selected = false // a build that can be selected sets it: a ToolButton only while a toggle
 	e := w.build(c)
 	b.el = e
 	if f := buildingForm; f != nil {

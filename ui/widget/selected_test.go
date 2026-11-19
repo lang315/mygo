@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -69,22 +70,41 @@ func TestSelectedVariantControls(t *testing.T) {
 	}
 }
 
-// A Button and a TextBox are never selected, so Selected never shows.
+// A Button, pressed, and a TextBox, focused, are never selected, so Selected
+// never shows.
 func TestSelectedNeverOnPlainControls(t *testing.T) {
-	for name, w := range map[string]Control{
-		"Button":  Button("button").Apply(selectedStyle()),
-		"TextBox": TextBox().SetText("text").Apply(selectedStyle()),
-	} {
-		tt := tester(t, w)
-		x, y := float32(10), float32(10)
-		if r, ok := tt.Find(name); ok {
-			x, y = r.X+r.W/2, r.Y+r.H/2
-		}
-		tt.Move(x, y)
-		tt.Frame()
-		if n := pixelsOf(tt, selGreen); n > 0 {
-			t.Errorf("%s paints %d pixels of the Selected green", name, n)
-		}
+	b := Button("button").Apply(selectedStyle())
+	tt := tester(t, b)
+	x, y := centerOf(t, tt, "button")
+	tt.Move(x, y)
+	tt.Press(x, y)
+	tt.Frame()
+	if n := pixelsOf(tt, selGreen); n > 0 {
+		t.Errorf("a pressed Button paints %d pixels of the Selected green", n)
+	}
+	tt.Release(x, y)
+
+	tb := TextBox().SetText("text").Apply(selectedStyle())
+	tt = tester(t, tb)
+	tb.Focus()
+	tt.Frame()
+	tt.Frame()
+	if n := pixelsOf(tt, selGreen); n > 0 {
+		t.Errorf("a focused TextBox paints %d pixels of the Selected green", n)
+	}
+}
+
+// A checked tool button made a plain one again is no longer selected.
+func TestSelectedLeavesAToolButtonNoLongerAToggle(t *testing.T) {
+	tb := ToolButton("tool").SetToggle(true).SetChecked(true).Apply(selectedStyle())
+	tt := tester(t, tb)
+	if !paints(tt, selGreen) {
+		t.Fatalf("a checked toggle paints %d green pixels, want the Selected background", pixelsOf(tt, selGreen))
+	}
+	tb.SetToggle(false)
+	tt.Frame()
+	if n := pixelsOf(tt, selGreen); n > 0 {
+		t.Errorf("no longer a toggle, it paints %d pixels of the Selected green", n)
 	}
 }
 
@@ -151,6 +171,32 @@ func TestInspectorNamesSelected(t *testing.T) {
 	fs := inEffect(ui.LightTheme(), layers, frameState{selected: true})
 	if len(fs) < 2 || fs[0].Name != "In effect (selected)" || fs[1].Value != "#00ff00   selected: Own methods" {
 		t.Fatalf("fields %+v", fs)
+	}
+}
+
+// The inspector shows a checked control's state as selected.
+func TestInspectorSeesSelected(t *testing.T) {
+	cb := CheckBox("seen").SetChecked(true).Apply(selectedStyle())
+	tt := NewTester(t, cb, 600, 400)
+	if err := tt.Inspect("seen"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Click("Widget")
+	if !slices.Contains(tt.Texts(), "In effect (selected)") {
+		t.Fatalf("the inspector shows %q, no \"In effect (selected)\"", tt.Texts())
+	}
+}
+
+// The inspector names the roles a skin decides.
+func TestInspectorNamesSkinRoles(t *testing.T) {
+	for c, want := range map[Color]string{
+		RoleChrome: "role chrome", RoleBorderStrong: "role border-strong", RoleControlBorder: "role control-border",
+		RoleButtonBorder: "role button-border", RoleRowHover: "role row-hover", RoleRowSelected: "role row-selected",
+		RoleInfo: "role info",
+	} {
+		if got := c.inspectText(); got != want {
+			t.Errorf("%+v reads %q, want %q", c, got, want)
+		}
 	}
 }
 
