@@ -203,7 +203,19 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 	if f.settings {
 		tracks = []ui.Track{ui.Fr(1).MinContent(), ui.FitContent()}
 	}
-	return ui.Grid(c).ColumnTracks(tracks...).GapX(colGap).GapY(rowGap).Children(func() {
+	// With a skin, a settings row is at least its SettingsRowHeight: the
+	// grid's rows, one track each, those of the fields at least that high.
+	var rows []ui.Track
+	least := float32(0)
+	if tk, scale := skinOf(c); tk != nil && f.settings {
+		least = tk.SettingsRowHeight * scale
+	}
+	row := func(min float32) {
+		if least > 0 {
+			rows = append(rows, ui.FitContent().Min(min))
+		}
+	}
+	g := ui.Grid(c).ColumnTracks(tracks...).GapX(colGap).GapY(rowGap).Children(func() {
 		// A cell's Align and VAlign are across and along the cell, not a
 		// box's axes: build the cells as for a row, whose cross axis is vertical.
 		outer := axis
@@ -220,12 +232,14 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 				}
 				titled = true
 				e := render(c, h).Role(ui.RoleHeading).ColumnSpan(2)
+				row(0)
 				if shown {
 					e.Margin(sectionGap, 0, 0, 0)
 				}
 			}
 			if brk && !titled && shown && breakGap > 0 {
 				ui.Box(c.Key(fieldBreak(i))).ColumnSpan(2).Height(breakGap)
+				row(0)
 			}
 			if r.w.base().hidden {
 				f.hold(r)
@@ -233,7 +247,9 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			}
 			if f.settings && !first {
 				ui.Divider(c.Key(fieldRule(r.label.id))).ColumnSpan(2)
+				row(0)
 			}
+			row(least)
 			first, shown = false, true
 			r.underline(c)
 			e := render(c, r.label) // holds a hidden label
@@ -261,6 +277,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			}
 		}
 	})
+	return g.RowTracks(rows...)
 }
 
 // hold keeps the widgets of a row the form does not build, so that showing

@@ -81,6 +81,6 @@ var calmDark = skinhook.Tokens{
 	Label:          skinhook.Type{Size: 12, Weight: 600},
 	Heading:        skinhook.Type{Size: 15, Weight: 600},
 	Title:          skinhook.Type{Size: 20, Weight: 600},
-	PopupShadow:    skinhook.Shadow{Y: 6, Blur: 20, Color: ui.RGBA(0, 0, 0, 0.5)},
+	PopupShadow:    skinhook.Shadow{Y: 6, Blur: 20, Color: ui.RGBA(0, 0, 0, 0.18)}, // the drop-downs' shadow before skins
 	FocusRingWidth: 2, FocusRingOffset: 1,
 }

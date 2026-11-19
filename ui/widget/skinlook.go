@@ -21,6 +21,15 @@ func skinOf(c *ui.Context) (*skinhook.Tokens, float32) {
 	return tk, scale
 }
 
+// iconSide is the side of a control's icon in DIPs: the skin's Icon at the
+// text scale, or 16 without a skin.
+func iconSide(c *ui.Context) float32 {
+	if tk, scale := skinOf(c); tk != nil {
+		return tk.Icon * scale
+	}
+	return 16
+}
+
 // skinChecked gives a toggle that is on a skin's look: the accent's border
 // color as its fill, ringed in the accent, which stands out from one that is
 // off as the plain pressed face does not. The control's own style wins.

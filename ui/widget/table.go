@@ -789,7 +789,8 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 		return
 	}
 	ui.Row(c).Gap(4).Children(func() {
-		ui.Image(c, cl.Image(r)).Size(16, 16)
+		side := iconSide(c)
+		ui.Image(c, cl.Image(r)).Size(side, side)
 		cellText(c, cl, r, colored)
 	})
 }

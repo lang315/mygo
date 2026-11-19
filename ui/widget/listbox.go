@@ -631,7 +631,7 @@ func (l *ListBoxWidget[T, K]) row(c *ui.Context, i int) {
 		}
 		if l.image != nil {
 			if bmp := l.image(it); bmp != nil {
-				side := cmp.Or(l.imageSize, 16)
+				side := cmp.Or(l.imageSize, iconSide(c))
 				ui.Image(c, bmp).Size(side, side)
 			}
 		}

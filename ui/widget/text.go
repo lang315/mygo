@@ -90,9 +90,6 @@ type TextBoxWidget struct {
 	selectAll   bool   // SelectAll asked, not yet carried out
 }
 
-// iconSize is the side of a TextBox's icon, in DIPs.
-const iconSize = 16
-
 // TextBox makes an empty one-line text input.
 func TextBox() *TextBoxWidget {
 	e := &TextBoxWidget{}
@@ -186,6 +183,9 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	el := ui.TextInput(c, p)
 	if e.placeholder != "" {
 		el.Placeholder(e.placeholder)
+		if tk, _ := skinOf(c); tk != nil {
+			el.PlaceholderColor(tk.TextPlaceholder)
+		}
 	}
 	if e.password {
 		el.Password()
@@ -205,7 +205,7 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 			if rtl {
 				side = 1
 			}
-			pad := el.Paddings()[side]
+			pad, iconSize := el.Paddings()[side], iconSide(c)
 			el.PaddingStart(pad + iconSize + t.Space(1.5))
 			e.over = append(e.over, func(p *ui.Painter, r ui.Rect) {
 				x := r.X + pad
@@ -296,6 +296,9 @@ func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 	el := ui.TextArea(c, p)
 	if v.placeholder != "" {
 		el.Placeholder(v.placeholder)
+		if tk, _ := skinOf(c); tk != nil {
+			el.PlaceholderColor(tk.TextPlaceholder)
+		}
 	}
 	el.ReadOnly(v.readOnly)
 	if v.selectAll && !c.Measuring() {

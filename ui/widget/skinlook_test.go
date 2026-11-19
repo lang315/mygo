@@ -642,7 +642,9 @@ func TestSkinListViewRows(t *testing.T) {
 	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
 	tt.Frame()
 	got = heights()
-	for m, want := range map[ViewMode]float32{ViewDetails: 45, ViewList: 45, ViewSmallIcon: plain15[ViewSmallIcon], ViewLargeIcon: plain15[ViewLargeIcon]} {
+	// A skin's icons grow with the text: a small icon's item is the icon, 16
+	// at 150 %, and its margin of 8.
+	for m, want := range map[ViewMode]float32{ViewDetails: 45, ViewList: 45, ViewSmallIcon: 16*1.5 + 8, ViewLargeIcon: plain15[ViewLargeIcon]} {
 		if !sameSize(got[m], want) {
 			t.Errorf("with a skin at 150 %%, the %v row is %v, want %v", m, got[m], want)
 		}
