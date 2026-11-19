@@ -3,7 +3,6 @@
 package mygo
 
 import (
-	"encoding/json"
 	"os"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -64,7 +63,7 @@ func (w *Window) restoreDevWindow(p *platform.WindowOptions, native uintptr) {
 	if !devWindows.loaded {
 		devWindows.loaded = true
 		if data, err := os.ReadFile(devWindowsFile); err == nil {
-			json.Unmarshal(data, &devWindows.list) // a damaged file is replaced
+			devWindows.list, _ = decodeDevWindows(data) // a damaged file is replaced
 		}
 	}
 	i := devWindows.created
@@ -99,10 +98,7 @@ func (w *Window) captureDevWindow() {
 		return
 	}
 	devWindows.list[i].State = st
-	data, err := json.Marshal(devWindows.list)
-	if err != nil {
-		return
-	}
+	data := encodeDevWindows(devWindows.list)
 	tmp := devWindowsFile + ".tmp"
 	if os.WriteFile(tmp, data, 0o644) == nil {
 		replaceAppFile(tmp, devWindowsFile)
