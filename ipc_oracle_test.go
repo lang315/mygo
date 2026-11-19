@@ -26,6 +26,7 @@ type callV2 struct {
 	K  string   `json:"k"`
 	M  string   `json:"m"`
 	A  []rawArg `json:"a"`
+	C  bool     `json:"cancel"`
 }
 
 var callDocs = []string{
@@ -33,6 +34,7 @@ var callDocs = []string{
 	`{"id":1,"id":2}`, `{"ID":1}`, `{"a":null}`, `{"a":[]}`, `null`, `{"k":"\ud800"}`,
 	`{"a":[{"x":1,"x":2}]}`, `{"m":1}`, `{"id":1.0}`, `{"id":1e2}`, `{"id":-0}`, "{\"k\":\"\xff\"}",
 	`{"a":[1,]}`, ` {"id":1} `, `{"id":1}x`, `{"id":5}`, `{"a":[1],"z":{"y":[{}]}}`,
+	`{"id":1,"cancel":true}`, `{"cancel":1}`, `{"a":["\ud83d"]}`,
 }
 
 func FuzzParseCallIsV2(f *testing.F) {
@@ -42,14 +44,14 @@ func FuzzParseCallIsV2(f *testing.F) {
 	f.Fuzz(func(t *testing.T, b []byte) {
 		got, gerr := parseCall(b)
 		var want callV2
-		werr := json.Unmarshal(b, &want)
+		werr := json.Unmarshal(b, &want, decodeOptions)
 		if (gerr == nil) != (werr == nil) {
 			t.Fatalf("%q: jsonlite err=%v, v2 err=%v", b, gerr, werr)
 		}
 		if gerr != nil {
 			return
 		}
-		if got.id != want.ID || got.token != want.K || got.name != want.M || len(got.args) != len(want.A) || (got.args == nil) != (want.A == nil) {
+		if got.id != want.ID || got.token != want.K || got.name != want.M || got.cancel != want.C || len(got.args) != len(want.A) || (got.args == nil) != (want.A == nil) {
 			t.Fatalf("%q: jsonlite %+v, v2 %+v", b, got, want)
 		}
 		for i := range got.args {
@@ -66,6 +68,7 @@ type pageMessageV2 struct {
 	Y  float64 `json:"y"`
 	C  int64   `json:"c"`
 	K  string  `json:"k"`
+	ID int64   `json:"id"`
 	N  int64   `json:"n"`
 	V  string  `json:"v"`
 	W  float64 `json:"w"`
@@ -83,6 +86,7 @@ type pageMessageV2 struct {
 var pageMessageDocs = []string{
 	`{"t":"drop","x":1.5,"y":-2e3}`, `{"t":"chan","c":1,"k":"a","n":3}`, `{"e":true,"lt":"x","sw":1}`,
 	`{"x":1e400}`, `{"c":1.0}`, `{"T":"x"}`, `{"t":"a","t":"b"}`, `{"e":1}`, `{"x":"1"}`, `{"w":-0}`,
+	`{"t":"cancel","id":7,"k":"a"}`, `{"s":"\ud83d"}`, "{\"s\":\"\xff\"}",
 }
 
 func FuzzParsePageMessageIsV2(f *testing.F) {
@@ -92,7 +96,7 @@ func FuzzParsePageMessageIsV2(f *testing.F) {
 	f.Fuzz(func(t *testing.T, b []byte) {
 		got, gerr := parsePageMessage(b)
 		var want pageMessageV2
-		werr := json.Unmarshal(b, &want)
+		werr := json.Unmarshal(b, &want, decodeOptions)
 		if (gerr == nil) != (werr == nil) {
 			t.Fatalf("%q: jsonlite err=%v, v2 err=%v", b, gerr, werr)
 		}

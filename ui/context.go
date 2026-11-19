@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/egoist/mygo/internal/platform"
 	"hash/maphash"
 	"reflect"
 	"time"
@@ -222,6 +223,7 @@ func (c *context) overlayRoot() *node {
 		o.flags = flagAbsolute | flagPassThrough
 		o.dir = c.root.dir
 		o.inset = [4]length{px(0), px(0), px(0), px(0)}
+		o.insetSet = true
 		o.depth = 1
 		o.st = c.rt.stateFor(o.id)
 		c.overlay = o
@@ -289,6 +291,9 @@ func (c *context) rekey(e *node, k any) {
 	}
 	id := keyedID(parent, k)
 	rt := c.rt
+	if e.stateRead {
+		rt.lateKey(id, k)
+	}
 	if id != e.id {
 		rt.unlook(e.st)
 	}
@@ -450,6 +455,24 @@ func (e *node) theme() *Theme {
 func (c *context) Size() (width, height float32) {
 	c.readsCtx(ctxSize)
 	return c.w, c.h
+}
+
+// SafeArea returns how far in from each edge of the window what the system
+// draws covers it, in DIPs: a phone's bars, its cutout and the keyboard. The
+// window's root keeps its content inside them; what draws in the Overlay, as
+// a sheet, or under them, reads them here.
+func (c *context) SafeArea() (top, right, bottom, left float32) {
+	c.neverKept() // the system's bars and keyboard, which no state of the row versions
+	h, ok := c.rt.host.(interface{ insets() platform.Insets })
+	if !ok {
+		return 0, 0, 0, 0
+	}
+	in := h.insets()
+	z := float32(1)
+	if c.rt.zoomed() {
+		z = c.rt.contentZoom
+	}
+	return float32(in.Top) / z, float32(in.Right) / z, float32(in.Bottom) / z, float32(in.Left) / z
 }
 
 // TitleBar is the room the window controls take at the top of a window
@@ -710,6 +733,7 @@ func (c *context) ShortcutRepeated() bool {
 // closed, and Close's error is ignored. Keep a value the element must not
 // close, as one the app shares, in the app's state.
 func coreLocal[T any](e *node, key any, init func() T) *T {
+	e.markStateRead()
 	v, made := keepLocal(e.st, key, init)
 	if made {
 		closeWithState(e.st, v)
@@ -731,6 +755,9 @@ func keepLocal[T any](st *state, key any, init func() T) (v *T, made bool) {
 	}
 	v = new(T)
 	*v = init()
+	if restoreLocal != nil {
+		restoreLocal(st, key, v)
+	}
 	st.locals[key] = v
 	return v, true
 }
@@ -908,8 +935,21 @@ type state struct {
 	// scrollX and scrollY are float64, as the content a List scrolls
 	// may be taller than float32 counts to a fraction of a DIP.
 	scrollX, scrollY float64
-	contentW         float64
-	contentH         float64
+	// A finger past the content's ends: how far the content shows past
+	// them across and down (the sign says which end), how far the finger
+	// went, how fast it springs back, and until when its indicator shows.
+	over, overRaw, overV [2]float32
+	barsUntil            time.Time
+	// refresh is the pull to refresh of the container (PullToRefresh).
+	refresh      *RefreshState
+	refreshFired bool
+	// longPress says the element asks for long presses (LongPressed), and
+	// longPressed that a finger held it since the last frame.
+	longPress, longPressed bool
+	// fingersFrame is the frame that last asked for longPress or refresh.
+	fingersFrame uint64
+	contentW     float64
+	contentH     float64
 	// barInset is the element's ScrollbarInsets, and barStyle how its
 	// scroll bars look, its ScrollbarStyle with the theme's zero fields
 	// filled in.
@@ -1009,6 +1049,9 @@ type state struct {
 	caret       Rect
 	takesText   bool
 	noIME       bool
+	// traits describe the element's text to on-screen keyboards, as this
+	// frame set them.
+	traits platform.TextTraits
 	// copyData is what a Selectable container's selection copies as
 	// (CopyData).
 	copyData func(parts []SelectedText) transfer.Data
@@ -1050,6 +1093,10 @@ func (rt *engine) lookState(id uint64) (s *state, built bool) {
 			s = &state{id: id, born: rt.frame}
 		}
 		rt.states[id] = s
+		if restoreElement != nil {
+			s.rt = rt
+			restoreElement(rt, s)
+		}
 	} else {
 		built = s.seen == rt.frame && s.pass == rt.pass
 	}

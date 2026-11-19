@@ -93,7 +93,9 @@ func rowKeyOf(p *Painter, c *node) rowKey {
 // its key.
 func recordable(p *Painter, c *node) bool {
 	rt := p.rt
-	if rt.noReplay || p.s != &rt.scene || p.drawing || !p.cull || p.transform.Set || c.noCull ||
+	// c.world too: p.transform is the list's, and a row may be transformed
+	// below it (Android's stretch of the list, contentStretch).
+	if rt.noReplay || p.s != &rt.scene || p.drawing || !p.cull || p.transform.Set || c.world.Set || c.noCull ||
 		rt.insp.open || rt.drag != nil || len(p.holes) > 0 || c.st == nil {
 		return false
 	}

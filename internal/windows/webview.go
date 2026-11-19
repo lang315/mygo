@@ -138,6 +138,15 @@ func (w *window) creationFailed(hr uintptr) {
 	procSetTimer.Call(hwnd, timerWebView, uintptr(backoff(w.webViewFails-1)/time.Millisecond), 0)
 }
 
+// asksAgain reports whether the timer of a surface, which asks again for
+// each of its web views, is to ask for w's: one without a controller that
+// has not failed for good, unless WebView2 has yet to answer about it, as
+// a web view made after another's creation failed. Asked for twice, it
+// got two controllers, the first never closed.
+func (w *window) asksAgain() bool {
+	return w.controller == 0 && w.webViewErr == nil && !w.creating
+}
+
 func (w *window) setUp(controller uintptr) {
 	w.controller = controller
 	comCall(controller, ctlGetCoreWebView2, uintptr(unsafe.Pointer(&w.webview)))

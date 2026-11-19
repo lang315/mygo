@@ -59,13 +59,14 @@ export function sizeReporter(post: (size: ContentSize) => void) {
 
 /** Fits the window to the document's content: the rule applies from now on;
  * start, once the DOM is ready, measures the content and watches it.
- * setLimits takes other limits, as the page's zoom changed. */
+ * setLimits takes other limits, as the page's zoom changed. again tells
+ * the size whatever was told before, for a page Go took for a new one. */
 export function fitContent(
   limits: FitLimits,
   setRule: (css: string) => void,
   post: (size: ContentSize) => void,
 ) {
-  const report = sizeReporter(post);
+  let report = sizeReporter(post);
   let scrollbar = 0; // the vertical scrollbar's width the rule leaves out
   let started = false;
   let pending = false;
@@ -124,6 +125,10 @@ export function fitContent(
     setLimits(l: FitLimits) {
       limits = l;
       apply();
+      if (started) measure(false);
+    },
+    again() {
+      report = sizeReporter(post);
       if (started) measure(false);
     },
   };

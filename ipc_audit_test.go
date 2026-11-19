@@ -123,8 +123,24 @@ func TestCallWithALoneSurrogateIsAnswered(t *testing.T) {
 	_, fw := auditWindow(t)
 	page(fw, `{"t":"call","id":7,"k":"tok","m":"AuditTest.Echo","a":["\ud83d"]}`)
 	reply := received(t, fw, func(m map[string]any) bool { return m["t"] == "reply" && m["id"] == float64(7) })
-	if reply["ok"] != false {
-		t.Fatalf("a call with a lone surrogate was answered %v, want an error", reply)
+	// The half of a pair reads as U+FFFD, as nothing else can stand for it
+	// in a Go string, and the call is made (upstream #1941).
+	if reply["ok"] != true || reply["v"] != "�" {
+		t.Fatalf("a call with a lone surrogate was answered %v, want U+FFFD back", reply)
+	}
+}
+
+// A window's own method reads a lone surrogate as U+FFFD too, as the
+// envelope and bound methods do (upstream #1941).
+func TestWindowMethodWithALoneSurrogate(t *testing.T) {
+	w, fw := auditWindow(t)
+	page(fw, `{"t":"call","id":8,"k":"tok","m":"mygo:window.SetTitle","a":["a\ud800b"]}`)
+	reply := received(t, fw, func(m map[string]any) bool { return m["t"] == "reply" && m["id"] == float64(8) })
+	if reply["ok"] != true {
+		t.Fatalf("SetTitle with a lone surrogate was answered %v", reply)
+	}
+	if got := w.Title(); got != "a�b" {
+		t.Errorf("title = %q, want %q", got, "a�b")
 	}
 }
 

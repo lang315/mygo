@@ -16,6 +16,18 @@ var jsonOptions = json.JoinOptions(
 	jsontext.EscapeForJS(true),
 )
 
+// decodeOptions are jsonOptions for what pages send. A JavaScript string
+// may hold half of a surrogate pair, which text cut in the middle of an
+// emoji does, and JSON.stringify writes it as an escape that is no
+// character. It decodes as U+FFFD, as nothing else can stand for it in a
+// Go string; refusing it would leave the page's call without a reply.
+// (The envelope and the page's messages are read with jsonlite's
+// AllowInvalidUTF8, which does the same.)
+var decodeOptions = json.JoinOptions(
+	jsonOptions,
+	jsontext.AllowInvalidUTF8(true),
+)
+
 // A codecFuncs reads and writes the values of the arguments, results and events
 // of the IPC with encoding/json/v2, which brings reflection-driven encoding,
 // the unicode tables and 500 KB of code. Only an app that binds a service or
@@ -43,7 +55,7 @@ func loadCodec() (*codecFuncs, error) {
 
 func linkCodec() {
 	codec.CompareAndSwap(nil, &codecFuncs{
-		unmarshal: func(raw []byte, v any) error { return json.Unmarshal(raw, v, jsonOptions) },
+		unmarshal: func(raw []byte, v any) error { return json.Unmarshal(raw, v, decodeOptions) },
 		marshal:   func(v any) ([]byte, error) { return json.Marshal(v, jsonOptions) },
 	})
 }

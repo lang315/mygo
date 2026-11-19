@@ -1,4 +1,4 @@
-//go:build linux && (amd64 || arm64)
+//go:build linux && !android && (amd64 || arm64)
 
 package linux
 
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -220,6 +221,11 @@ func dropOwner(owner int) {
 		}
 		if len(kept) == 0 {
 			delete(itemsByID, id)
+			// No menu shows the item any more: an app that builds a
+			// context menu of new items each time it shows one would
+			// otherwise leave a role here for each, for good, which
+			// enableEditItems walks.
+			delete(itemRoles, id)
 		} else {
 			itemsByID[id] = kept
 		}
@@ -624,10 +630,11 @@ func (b *Backend) NewTray(id string, h platform.TrayHandler) (platform.Tray, err
 // named after the program and the ID, which then stays across launches,
 // and is apart from other apps' icons of that ID; an ID another of the
 // app's icons has takes a number after it. An icon of no ID is named
-// after the process and its number.
+// after the program and its number among the app's icons, which stays
+// too as the app makes its icons in the same order.
 func (b *Backend) trayName(id, program string, n int) string {
 	if id == "" {
-		return fmt.Sprintf("mygo-%d-%d", os.Getpid(), n)
+		id = strconv.Itoa(n)
 	}
 	if program == "" {
 		program = "mygo"
@@ -646,6 +653,20 @@ func (b *Backend) trayName(id, program string, n int) string {
 		name = fmt.Sprintf("%s-%d", base, i)
 	}
 	return name
+}
+
+// indicatorPath is the D-Bus object path at which libayatana-appindicator
+// exports the item of an indicator of ID name: its "clean" ID, every byte
+// but an ASCII letter, digit or "-" made "-" (g_strcanon), then "-" made
+// "_" (g_strdelimit), under /org/ayatana/NotificationItem.
+func indicatorPath(name string) string {
+	b := []byte(name)
+	for i, c := range b {
+		if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9') {
+			b[i] = '_'
+		}
+	}
+	return "/org/ayatana/NotificationItem/" + string(b)
 }
 
 func (t *tray) SetImage(data []byte, template bool) error {

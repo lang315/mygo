@@ -834,8 +834,13 @@ func (rt *engine) accessElement(t *platform.AccessTree, e *node, parent int, scr
 			return
 		}
 		if e.accChildren != nil {
-			// A copy, as adding moves the nodes.
+			// A copy, as adding moves the nodes, with the element's whole
+			// box: the nodes it adds are placed in it, scrolled and clipped
+			// as it is, which its own node's visible part (accessBounds)
+			// would not say.
 			p := t.Nodes[parent]
+			r := e.visualRect(Rect{e.x, e.y, e.w, e.h})
+			p.Bounds = platform.RectF{X: float64(r.X), Y: float64(r.Y), W: float64(r.W), H: float64(r.H)}
 			e.accChildren(&p, func(n platform.AccessNode) {
 				n.Parent = parent
 				t.Nodes = append(t.Nodes, n)

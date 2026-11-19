@@ -24,10 +24,12 @@ func (s *state) pending() bool {
 		len(s.shortcuts) != 0 || len(s.delivered) != 0 {
 		return true
 	}
-	// Builds that run on: animations, transitions, a wheel gliding.
+	// Builds that run on: animations, transitions, a wheel gliding, content
+	// a finger pulled past its ends springing back, a scroll indicator fading.
 	return len(s.anims) != 0 || len(s.motions) != 0 && s.motionsBusy() || len(s.colorMotions) != 0 ||
 		len(s.sequences) != 0 || len(s.timelines) != 0 ||
-		s.crec != nil || s.pose != nil || s.trec != nil || s.wheel != nil
+		s.crec != nil || s.pose != nil || s.trec != nil || s.wheel != nil ||
+		s.over != [2]float32{} || s.overRaw != [2]float32{} || s.overV != [2]float32{} || !s.barsUntil.IsZero()
 }
 
 // motionsBusy reports whether an animated value (AnimateTo, Animate, Spring)

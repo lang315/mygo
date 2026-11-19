@@ -36,8 +36,12 @@ export function connect(w: any): Channel | null {
     webview?.addEventListener?.bind(webview);
   let rawPost: (message: string) => void;
   let rawFiles: ((message: string, files: FileList) => void) | undefined;
+  // Android's web view: the host's JavaScript interface.
+  const android = w.mygoAndroid;
   if (handler) {
     rawPost = handler.postMessage.bind(handler);
+  } else if (android) {
+    rawPost = android.postMessage.bind(android);
   } else if (webview) {
     rawPost = webview.postMessage.bind(webview);
     rawFiles = webview.postMessageWithAdditionalObjects?.bind(webview);

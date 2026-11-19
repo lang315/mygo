@@ -43,10 +43,11 @@ func zeroing(e ast.Expr) bool {
 // why. A write is not touched when no kept row can hold the state, or when it
 // is the build that reads the field again.
 var touchFree = map[string]string{
-	"engine.dropState": "the state is recycled: it holds no row",
-	"engine.lookState": "a state made new holds no row; the rest only zeroes what the build sets again",
-	"engine.unlook":    "the state the lookup made goes at once",
-	"state.pointer":    "reads releaseLater, through its address",
+	"engine.dropState":     "the state is recycled: it holds no row",
+	"engine.lookState":     "a state made new holds no row; the rest only zeroes what the build sets again",
+	"engine.unlook":        "the state the lookup made goes at once",
+	"state.pointer":        "reads releaseLater, through its address",
+	"state.touchIndicator": "only zeroes barsUntil (time.Time{}) once the indicator faded: a clean row has none set",
 }
 
 type touchSite struct {

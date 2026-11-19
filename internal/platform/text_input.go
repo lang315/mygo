@@ -44,6 +44,12 @@ type TextInputClient interface {
 // marked at End and hands the commit its range in one ReplaceText.
 type markKeeper interface{ KeepMarkedUntilCommit() bool }
 
+// TextSelectionSetter is a TextInputClient whose selection a native text
+// service may move, as phones' keyboards do with their space bar's cursor.
+type TextSelectionSetter interface {
+	SetTextSelection(TextRange)
+}
+
 // InputComposition preserves the native end-preedit/commit ordering without
 // owning text. Some input methods unmark before delivering their result.
 // For a client that keeps the mark (markKeeper), End waits for the commit; a

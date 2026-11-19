@@ -84,7 +84,9 @@ func (w *window) createWebView() {
 		return
 	}
 	fail := w.failsWebView()
+	w.creating = true
 	hr := withHandler(func(hr, controller uintptr) {
+		w.creating = false
 		// A web view in a window of native UI gets a composition
 		// controller, whose controller closes it.
 		closeController := func() {
@@ -120,6 +122,7 @@ func (w *window) createWebView() {
 		return w.b.createController(storeOf(w.opts.DataStore), w.hwnd, false, h)
 	})
 	if failed(hr) {
+		w.creating = false // no answer comes
 		w.creationFailed(hr)
 	}
 }

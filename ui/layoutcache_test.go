@@ -776,10 +776,10 @@ func TestLayoutInputs(t *testing.T) {
 	// or made volatile by sameLayout, and those it writes.
 	read := "paintRare flags ts cols rows placeOn form colFit overflow gridFit special attach popover " +
 		"first last next nchild parent st c measured tl lay laid x y w h contentW contentH runes frags paragraph ownText merged " +
-		"spansKey collapsed rowMinW field hidden fillViewport spans placed flips originAttached edgeMargin edgeMarginSet " +
+		"spansKey collapsed rowMinW field hidden insetSet fillViewport spans placed flips originAttached edgeMargin edgeMarginSet " +
 		"hold"
 	// Fields the layout never reads.
-	other := "shadows styleFn epoch key valueInput id themeAt depth track originX originY originSet world content " +
+	other := "shadows styleFn epoch key valueInput id themeAt depth track originX originY originSet world content stateRead " +
 		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +
 		" blur opacity opacitySet cursor " +
 		"inputFn observeFn textClient caret takesText noIME copyData maximizeButton fit gray dismissed rotate label widget role " +
@@ -794,7 +794,9 @@ func TestLayoutInputs(t *testing.T) {
 	ty := reflect.TypeFor[node]()
 	for i := range ty.NumField() {
 		f := ty.Field(i)
-		if f.Name == "layoutStyle" {
+		// The blank field is the padding that keeps the element a whole
+		// number of cache lines (element.go): layout reads no bytes of it.
+		if f.Name == "layoutStyle" || f.Name == "_" {
 			continue
 		}
 		if !known[f.Name] {

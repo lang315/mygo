@@ -339,6 +339,11 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	env := commitEnv{clip: clip, hidden: hidden || rt.commitHidden, scope: rt.commitScope, page: rt.commitPage}
 	if p := e.parent; p != nil {
 		env.parentDis, env.world = p.st.flags&flagDisabled != 0, p.world
+		if contentStretch != nil && p.scrolls() {
+			// As commitElement makes a child's world: Android's stretch of
+			// a scroll container moves its rows (contentStretch).
+			env.world = contentStretch(env.world, p)
+		}
 		env.parentIgnore, env.parentUnread = p.st.ignoreInput, p.st.accessHidden
 	}
 	// zero clears cok whenever layout ran on the row, so a record that is set

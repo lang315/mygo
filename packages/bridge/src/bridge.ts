@@ -118,6 +118,25 @@ let rootStyle: HTMLStyleElement | null = null;
   } else {
     domReady();
   }
+  // A page the web view kept as it was left, and shows again on Back or
+  // Forward, runs no script again and fires no DOMContentLoaded, while Go
+  // took the navigation for a new page: it holds the page's events until
+  // its DOM is ready, and waits for its theme color and its size. So the
+  // page tells them again, whatever it told before. (The capturing
+  // listener above failed the calls it left unanswered.)
+  w.addEventListener("pageshow", (e: PageTransitionEvent) => {
+    if (!e.persisted || !e.isTrusted) return;
+    themeColorReady(true);
+    if (fit) fit.again();
+    notify("dom-ready");
+  });
+  // WebKit runs the microtasks that scripts queued once a listener of an
+  // event returns. An eval (Page.Eval) that runs in the page just as a
+  // navigation away commits can leave its continuation queued: with no
+  // listener of pagehide, nothing runs it before WebKit freezes the page
+  // in its back/forward cache, and the eval answers only if Back shows the
+  // page again. Listening has it run as the page is left.
+  w.addEventListener("pagehide", () => {});
 
   const nativeRegion = typeof CSS !== "undefined" && CSS.supports("-webkit-app-region", "drag");
   const appRegion = (el: Element): string => {

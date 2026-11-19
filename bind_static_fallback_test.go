@@ -20,7 +20,24 @@ func listByReflection(t reflect.Type, v reflect.Value, service string) ([]*metho
 		if err != nil {
 			return nil, err
 		}
+		mi.pc = fallbackMethodPC(t, m.Name)
 		out = append(out, mi)
 	}
 	return out, nil
+}
+
+// fallbackMethodPC is bind_reflect.go's methodPC (not in a build with the
+// tag): the method's own code, whose source declares the parameters' names
+// the TypeScript client takes, not the wrapper of a value receiver called
+// through a pointer.
+func fallbackMethodPC(t reflect.Type, name string) uintptr {
+	if t.Kind() == reflect.Pointer {
+		if m, ok := t.Elem().MethodByName(name); ok {
+			return m.Func.Pointer()
+		}
+	}
+	if m, ok := t.MethodByName(name); ok {
+		return m.Func.Pointer()
+	}
+	return 0
 }
