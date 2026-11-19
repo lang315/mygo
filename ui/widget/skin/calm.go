@@ -8,8 +8,10 @@ import (
 // Calm is a calm light ground with the accent only on what acts or is
 // chosen: the primary action, the selection, the open tab and checked
 // controls; green, amber and red only in status. Controls are 36 DIPs
-// high and table rows 30. Its palette is Blue.
-var Calm = (&Skin{name: "Calm", light: calmLight, dark: calmDark}).WithPalette(Blue)
+// high and table rows 30. Its palette is Blue; Palettes lists the others
+// made for it.
+var Calm = (&Skin{name: "Calm", light: calmLight, dark: calmDark,
+	palettes: []*Palette{Blue, Cham, Indigo, Ink, Teal}}).WithPalette(Blue)
 
 // calmLight and calmDark are Calm's tokens but those its palette decides.
 var calmLight = skinhook.Tokens{

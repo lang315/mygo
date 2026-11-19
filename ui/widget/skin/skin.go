@@ -8,6 +8,12 @@
 // and every window takes it in its next frame. An app that does not import
 // the package keeps the plain look and links none of it.
 //
+// A brand color and a tighter density take a line too: WithAccent makes a
+// palette from one color, moving it only as much as the contrast floors
+// need, and WithDensity(Compact) sets controls lower, at Use:
+//
+//	skin.Use(skin.Calm.WithAccent(ui.Hex("#7c3aed")).WithDensity(skin.Compact))
+//
 // An app makes a skin of its own from another's tokens, changing those it
 // wants, and an accent of its own with a palette; a font of its own comes in
 // with ui.RegisterFont:
@@ -57,7 +63,9 @@ func New(name string, light, dark Tokens) *Skin {
 }
 
 // Tokens returns a copy of the skin's tokens in the dark or the light
-// appearance, to change and make a skin of with New.
+// appearance, to change and make a skin of with New. Its sizes are the
+// Standard ones, whatever the skin's Density: give the new skin
+// WithDensity again.
 func (s *Skin) Tokens(dark bool) Tokens {
 	if dark {
 		return s.dark
@@ -86,6 +94,8 @@ func (s *Skin) Check() error {
 type Skin struct {
 	name        string
 	palette     *Palette
+	palettes    []*Palette
+	density     Density
 	light, dark skinhook.Tokens
 }
 
@@ -110,8 +120,13 @@ func Use(s *Skin) {
 	}
 	// The hook first and the themes last: the generation the themes bump
 	// tells kept rows that the tokens changed too.
-	skinhook.Set(&s.light, &s.dark)
-	ui.SetDefaultThemes(themeOf(&s.light, false), themeOf(&s.dark, true))
+	l, d := &s.light, &s.dark
+	if s.density == Compact {
+		cl, cd := compact(s.light), compact(s.dark)
+		l, d = &cl, &cd
+	}
+	skinhook.Set(l, d)
+	ui.SetDefaultThemes(themeOf(l, false), themeOf(d, true))
 }
 
 // Active returns the skin Use set, or nil.
