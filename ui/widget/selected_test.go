@@ -144,6 +144,16 @@ func TestSelectedDark(t *testing.T) {
 	}
 }
 
+// The inspector names the Selected variant, in the state and in the layer a
+// value came from.
+func TestInspectorNamesSelected(t *testing.T) {
+	layers := []styleLayer{{"Own methods", NewStyle().Selected(NewStyle().Background(Fixed(selGreen)))}}
+	fs := inEffect(ui.LightTheme(), layers, frameState{selected: true})
+	if len(fs) < 2 || fs[0].Name != "In effect (selected)" || fs[1].Value != "#00ff00   selected: Own methods" {
+		t.Fatalf("fields %+v", fs)
+	}
+}
+
 // effective allocates nothing, every state on.
 func TestEffectiveAllocs(t *testing.T) {
 	v := NewStyle().Background(Fixed(selGreen)).Dark(NewStyle().Padding(1))

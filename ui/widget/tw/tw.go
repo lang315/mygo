@@ -282,8 +282,8 @@ var roles = map[string]widget.Color{
 	"accent-pressed": widget.RoleAccentPressed, "accent-text": widget.RoleAccentText,
 	"danger": widget.RoleDanger, "warning": widget.RoleWarning, "success": widget.RoleSuccess,
 	"selection": widget.RoleSelection, "focus": widget.RoleFocus, "inverse": widget.RoleInverse,
-	"inverse-text": widget.RoleInverseText,
-	"chrome": widget.RoleChrome, "border-strong": widget.RoleBorderStrong,
+	"inverse-text": widget.RoleInverseText, "chrome": widget.RoleChrome,
+	"border-strong":  widget.RoleBorderStrong,
 	"control-border": widget.RoleControlBorder, "button-border": widget.RoleButtonBorder,
 	"row-hover": widget.RoleRowHover, "row-selected": widget.RoleRowSelected, "info": widget.RoleInfo,
 }

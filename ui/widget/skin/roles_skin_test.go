@@ -19,11 +19,11 @@ type skinRole struct {
 }
 
 var skinRoles = []skinRole{
-	{"chrome", widget.RoleChrome, func(t *Tokens) ui.Color { return t.Chrome }, ui.Hex("#f4f4f5")},                 // Surface
+	{"chrome", widget.RoleChrome, func(t *Tokens) ui.Color { return t.Chrome }, ui.Hex("#f4f4f5")},                    // Surface
 	{"border-strong", widget.RoleBorderStrong, func(t *Tokens) ui.Color { return t.BorderStrong }, ui.Hex("#d9d9de")}, // Border
 	{"control-border", widget.RoleControlBorder, func(t *Tokens) ui.Color { return t.ControlBorder }, ui.Hex("#8a8a93")},
 	{"button-border", widget.RoleButtonBorder, func(t *Tokens) ui.Color { return t.ButtonBorder }, ui.Hex("#8a8a93")}, // ControlBorder
-	{"row-hover", widget.RoleRowHover, func(t *Tokens) ui.Color { return t.RowHover }, ui.Hex("#e9e9ec")},              // SurfaceHover
+	{"row-hover", widget.RoleRowHover, func(t *Tokens) ui.Color { return t.RowHover }, ui.Hex("#e9e9ec")},             // SurfaceHover
 	{"row-selected", widget.RoleRowSelected, func(t *Tokens) ui.Color { return t.RowSelected }, ui.Hex("#2563eb")},    // Accent
 	{"info", widget.RoleInfo, func(t *Tokens) ui.Color { return t.Info.Base }, ui.Hex("#2563eb")},                     // Accent
 }

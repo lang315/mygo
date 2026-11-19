@@ -187,7 +187,6 @@ func render(c *ui.Context, w Control) ui.Element {
 		return ui.Element{}
 	}
 	keeping.key(c, b)
-	b.selected = false // only a control that can be selected sets it, in its build
 	e := w.build(c)
 	b.el = e
 	if f := buildingForm; f != nil {
