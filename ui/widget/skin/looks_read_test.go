@@ -362,6 +362,31 @@ func TestTabHeaderLookRing(t *testing.T) {
 	}
 }
 
+// With a TabHeader look that sets neither, the tabs keep TabsKeyed's height,
+// Calm's TabHeight, and its text colors: Text on the open tab, TextMuted on
+// the others (big text, so that the ink is read from covered pixels).
+func TestTabHeaderLookKeepsTabsLook(t *testing.T) {
+	s := Calm.WithLooks(Looks{TabHeader: "text-4xl"})
+	for _, dark := range []bool{false, true} {
+		t.Run(appearance(dark), func(t *testing.T) {
+			text, muted := ui.Hex("#1a1d21"), ui.Hex("#565d68")
+			if dark {
+				text, muted = ui.Hex("#e7e9ec"), ui.Hex("#a6adb7")
+			}
+			tc := widget.TabControl().AddPage("HH", widget.Label("one")).AddPage("MM", widget.Label("two"))
+			tt := showSkin(t, tc, 600, 300, s, dark, 1)
+			open, other := nodeOf(t, tt, ui.RoleTab, "HH"), nodeOf(t, tt, ui.RoleTab, "MM")
+			inkIs(t, "the open tab's text", inkOf(t, tt, open), text)
+			inkIs(t, "the other tab's text", inkOf(t, tt, other), muted)
+			Use(Calm.WithLooks(Looks{TabHeader: "bg-sky-600"}))
+			tt.Frame()
+			if h := nodeOf(t, tt, ui.RoleTab, "HH").H; h < 39.5 || h > 40.5 {
+				t.Errorf("a tab with a look is %v high, want Calm's TabHeight 40", h)
+			}
+		})
+	}
+}
+
 // Under Calm, which has no looks, the button, the grid's header and the tab
 // strip paint what they painted before looks: Calm's Surface, Background and
 // Chrome.
