@@ -781,6 +781,12 @@ func TestReviewConcurrentTyping(t *testing.T) {
 // until its edit goes in, however many times another goroutine edits
 // first: the letter typed is kept, not left out.
 func TestReviewRetryUntilApplied(t *testing.T) {
+	// The budget is measured on a clock that stands still, so the six tries
+	// run inside it whatever the machine's speed.
+	was := retryClock
+	now := time.Now()
+	retryClock = func() time.Time { return now }
+	t.Cleanup(func() { retryClock = was })
 	ct := newEditorTest(t, "", "|")
 	ed, b := &ct.st.ed, ct.st.Buffer
 	runs := 0
