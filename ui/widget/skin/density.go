@@ -19,7 +19,9 @@ const (
 // controls and tab headers 6 DIPs lower, rows, headers and the menu bar 4, a
 // settings row 8, and the tool strip's room as much smaller as its
 // controls, never a height under the font's size and 8; icons, check boxes,
-// switches, corners and text keep their size. s does not change.
+// switches, corners and text keep their size. s does not change. The
+// heights are least ones: a control whose text and padding need more stays
+// taller, as Windows' Segoe UI does at Calm's 30.
 //
 // The sizes change at Use: Tokens stays Standard, so a skin made with New
 // from a compact skin's tokens is Standard until it is given Compact again.

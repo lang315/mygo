@@ -128,23 +128,41 @@ func TestTokensStayStandard(t *testing.T) {
 }
 
 // A compact Calm sizes the widgets: a button 30 and a row 26, by the text
-// scale too; Calm again brings back 36 and 30.
+// scale too; Calm again brings back 36 and 30. ControlHeight is a least
+// height: a button whose text and padding need more on this OS (Segoe UI
+// on Windows, 31.29 at scale 1) keeps that, measured under a skin whose
+// ControlHeight is 1.
 func TestCompactLayout(t *testing.T) {
 	t.Cleanup(func() { Use(nil) })
+	l, d := Calm.Tokens(false), Calm.Tokens(true)
+	l.ControlHeight, d.ControlHeight = 1, 1
+	tiny := New("tiny", l, d)
 	tt := widget.NewTester(t, sizeForm(), 600, 700)
-	check := func(when string, button, row float32) {
+	// content is the Button's own height at the text scale: its text and
+	// padding alone.
+	content := func(scale float32) float32 {
 		t.Helper()
+		tt.SetPreferences(ui.Preferences{TextScale: scale})
+		Use(tiny)
+		tt.Frame()
+		h := widgetSizes(t, tt)["Button"]
+		t.Logf("at text scale %v the Button's content is %v high", scale, h)
+		if h <= 1 {
+			t.Fatalf("at text scale %v a Button under ControlHeight 1 is %v high: the test measures no content", scale, h)
+		}
+		return h
+	}
+	check := func(when string, s *Skin, scale, button, row float32) {
+		t.Helper()
+		button = max(button, content(scale))
+		Use(s)
 		tt.Frame()
 		got := widgetSizes(t, tt)
 		if !same(got["Button"], button) || !same(got["DataGridView row"], row) {
 			t.Errorf("%s: a Button is %v and a row %v, want %v and %v", when, got["Button"], got["DataGridView row"], button, row)
 		}
 	}
-	Use(Calm.WithDensity(Compact))
-	check("Compact", 30, 26)
-	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
-	check("Compact at text scale 1.5", 45, 39)
-	tt.SetPreferences(ui.Preferences{TextScale: 1})
-	Use(Calm)
-	check("Calm after Compact", 36, 30)
+	check("Compact", Calm.WithDensity(Compact), 1, 30, 26)
+	check("Compact at text scale 1.5", Calm.WithDensity(Compact), 1.5, 45, 39)
+	check("Calm after Compact", Calm, 1, 36, 30)
 }
