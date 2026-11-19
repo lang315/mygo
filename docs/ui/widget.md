@@ -545,9 +545,22 @@ widget.VBox(8).Add(
 - **Colors** are `widget.Fixed(c)`, `widget.Hex("#2563eb")`, or a role of
   the theme, `widget.RoleSurface`, `RoleText`, `RoleAccent`…, which
   follows it, dark included.
+- **Skin roles** name the colors a skin decides (package `skin`), so an
+  app's own controls draw in the skin's colors: `RoleChrome` (the frame's
+  ground: strips, the header bar), `RoleBorderStrong` (headers' bottoms, the
+  window's edge), `RoleControlBorder` (inputs' outline), `RoleButtonBorder`
+  (buttons' outline), `RoleRowHover`, `RoleRowSelected` and `RoleInfo` (the
+  running and info state). Without a skin each is the plain theme's nearest
+  field: `Surface`, `Border`, `ControlBorder` (else `Border`),
+  `ButtonBorder` (else as `RoleControlBorder`), `RowHover` (else
+  `SurfaceHover`), `RowSelected` (else `Accent`), and `Accent`.
 - **Variants** apply on top while their state holds, in this order, a later
-  one winning: `Dark`, `Hover`, `Focused`, `Pressed`, `Disabled`. A
-  state's variant can have a `Dark` of its own, as Tailwind's `dark:hover:`.
+  one winning: `Dark`, `Hover`, `Selected`, `Focused`, `Pressed`,
+  `Disabled`. A state's variant can have a `Dark` of its own, as Tailwind's
+  `dark:hover:`. `Selected` holds while the control is checked or selected:
+  a `CheckBox` or `RadioButton` checked, a `Toggle` on, a toggle
+  `ToolButton` checked; other controls are never selected. A selected
+  control keeps its `Selected` look while hovered.
 - **What a style does not set keeps the control's own look**, its own hover
   colors included. A style that sets a background turns that hover off:
   give it a `Hover` too.

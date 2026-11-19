@@ -70,10 +70,13 @@ func (l *StatusLabelWidget) SetIcon(icon *ui.SVG) *StatusLabelWidget {
 
 func (l *StatusLabelWidget) build(c *ui.Context) ui.Element {
 	row := ui.Row(c).AlignItems(ui.Center).Gap(c.Theme().Space(1.5))
-	skinType(c, row, captionRole) // the text and the icon, which takes its size
+	skinType(c, row, captionRole) // the text's size
 	return row.Children(func() {
 		if l.icon != nil {
-			ui.Icon(c, l.icon)
+			icon := ui.Icon(c, l.icon)
+			if tk, scale := skinOf(c); tk != nil { // the skin's icon side, not the caption's size
+				icon.Size(tk.Icon*scale, tk.Icon*scale)
+			}
 		}
 		ui.Text(c, l.text)
 	})

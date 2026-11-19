@@ -154,6 +154,25 @@ func TestPlainHeadingTakesTheBoxSize(t *testing.T) {
 	}
 }
 
+// A status label's icon keeps the skin's Icon side, at the text scale, while
+// its text takes the Caption size: the icon does not shrink to the caption.
+func TestStatusLabelIconKeepsIconSide(t *testing.T) {
+	square := ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="currentColor"/></svg>`))
+	green := ui.Color{R: iconGreen.R, G: iconGreen.G, B: iconGreen.B, A: 255}
+	for _, scale := range []float32{1, 1.5} {
+		t.Run(fmt.Sprint(scale), func(t *testing.T) {
+			label := widget.StatusLabel("Ready").SetIcon(square).Apply(widget.NewStyle().TextColor(widget.Fixed(green)))
+			tt := showSkin(t, label, 600, 400, Calm, false, scale)
+			if got, want := iconRun(tt, ui.Rect{W: 600, H: 400}), 16*scale; !sideOf(got, want) {
+				t.Errorf("the icon is %v wide, want %v", got, want)
+			}
+			if size, _ := textStyle(t, tt, "Ready"); !near(size, 11*scale) {
+				t.Errorf("the text is %v, want the Caption's %v", size, 11*scale)
+			}
+		})
+	}
+}
+
 // The app's own text size on a StatusLabel wins over the skin's Caption.
 func TestOwnTextSizeWinsOverCaption(t *testing.T) {
 	tt := showSkin(t, widget.StatusLabel("Ready").TextSize(widget.XL), 600, 400, roleSentinel(), false, 1)

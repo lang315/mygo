@@ -164,6 +164,7 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 	if b.toggle {
 		p, changed := b.on.bind()
 		e = ui.Toggle(c, p, label).OnChange(onChange(&b.on, b.onChange))
+		b.selected = *p
 		if changed && b.onChange != nil {
 			Post(b.onChange)
 		}

@@ -15,11 +15,11 @@ import (
 // does not keep.
 
 // frameState is the state a frame styled a control in.
-type frameState struct{ dark, hover, focused, pressed, disabled bool }
+type frameState struct{ dark, hover, selected, focused, pressed, disabled bool }
 
 // on lists the variants that hold, in the order effective applies them.
 func stateOn(st frameState) [nVariants]bool {
-	return [nVariants]bool{vDark: st.dark, vHover: st.hover, vFocused: st.focused, vPressed: st.pressed, vDisabled: st.disabled}
+	return [nVariants]bool{vDark: st.dark, vHover: st.hover, vSelected: st.selected, vFocused: st.focused, vPressed: st.pressed, vDisabled: st.disabled}
 }
 
 func stateText(st frameState) string {

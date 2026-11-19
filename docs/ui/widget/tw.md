@@ -150,20 +150,27 @@ After `bg-`, `text-` or `border-`:
 | `bg-accent`, `text-accent`, `border-accent` | `accent` |
 | `bg-accent-hover`, `text-accent-hover`, `border-accent-hover` | `accent-hover` |
 | `bg-accent-pressed`, `text-accent-pressed`, `border-accent-pressed` | `accent-pressed` |
+| `bg-button`, `text-button`, `border-button` | `button-border` |
+| `bg-chrome`, `text-chrome`, `border-chrome` | `chrome` |
+| `bg-control`, `text-control`, `border-control` | `control-border` |
 | `bg-danger`, `text-danger`, `border-danger` | `danger` |
 | `bg-focus`, `text-focus`, `border-focus` | `focus` |
+| `bg-info`, `text-info`, `border-info` | `info` |
 | `bg-inverse`, `text-inverse`, `border-inverse` | `inverse` |
 | `bg-muted`, `text-muted`, `border-muted` | `text-muted` |
 | `bg-on-accent`, `text-on-accent`, `border-on-accent` | `accent-text` |
 | `bg-on-inverse`, `text-on-inverse`, `border-on-inverse` | `inverse-text` |
+| `bg-row-hover`, `text-row-hover`, `border-row-hover` | `row-hover` |
+| `bg-row-selected`, `text-row-selected`, `border-row-selected` | `row-selected` |
 | `bg-selection`, `text-selection`, `border-selection` | `selection` |
+| `bg-strong`, `text-strong`, `border-strong` | `border-strong` |
 | `bg-success`, `text-success`, `border-success` | `success` |
 | `bg-surface`, `text-surface`, `border-surface` | `surface` |
 | `bg-surface-hover`, `text-surface-hover`, `border-surface-hover` | `surface-hover` |
 | `bg-surface-pressed`, `text-surface-pressed`, `border-surface-pressed` | `surface-pressed` |
 | `bg-warning`, `text-warning`, `border-warning` | `warning` |
 
-The roles are `background` `surface` `surface-hover` `surface-pressed` `border` `text` `text-muted` `accent` `accent-hover` `accent-pressed` `accent-text` `danger` `warning` `success` `selection` `focus` `inverse` `inverse-text`. Theme colors follow the theme, light and dark.
+The roles are `background` `surface` `surface-hover` `surface-pressed` `border` `text` `text-muted` `accent` `accent-hover` `accent-pressed` `accent-text` `danger` `warning` `success` `selection` `focus` `inverse` `inverse-text` `chrome` `border-strong` `control-border` `button-border` `row-hover` `row-selected` `info`. Theme colors follow the theme, light and dark.
 <!-- /twclass:roles -->
 
 ## Effects
@@ -245,17 +252,24 @@ it.
 
 ## Variants
 
-`hover:`, `active:` (pressed), `focus:`, `disabled:` and `dark:`. `dark:` stacks
-on one other (`dark:hover:bg-slate-700`); two states do not stack. Theme colors
-follow the theme; palette colors are the same in both.
+`hover:`, `active:` (pressed), `focus:`, `disabled:`, `selected:` and `dark:`.
+`selected:` applies while the control is checked or selected: a `CheckBox` or
+`RadioButton` checked, a `Toggle` on, a toggle `ToolButton` checked; other
+controls are never selected. They apply in the order `dark:`, `hover:`,
+`selected:`, `focus:`, `active:`, `disabled:`, a later one winning: a selected
+control keeps its look while hovered. `dark:` stacks on one other
+(`dark:hover:bg-slate-700`); two states do not stack. Theme colors follow the
+theme; palette colors are the same in both.
 
 ```tw
 hover:bg-accent-hover
 active:bg-accent-pressed
 focus:border-accent
 disabled:opacity-50
+selected:bg-accent
 dark:bg-slate-800
 dark:hover:bg-slate-700
+dark:selected:bg-row-selected
 ```
 
 A variant sets a look. Layout (`halign-*`, `valign-*`, `hexpand`, `vexpand`),
@@ -269,6 +283,7 @@ hover:transition | transition in a variant
 hover:duration-300 | transition in a variant
 dark:not-italic | not-italic in a variant
 hover:focus:p-2 | unsupported variant stack
+selected:hover:bg-accent | unsupported variant stack
 dark:dark:p-2 | unsupported variant stack
 ```
 
@@ -370,7 +385,7 @@ free width. The other axis of each does nothing.
 | `backdrop-blur-*` | `Style.Blur` blurs the control itself; nothing blurs what is behind it | none |
 | `p-[13px]`, `w-[200px]`, `text-[#123456]` | no arbitrary values | the `Style` method in Go: `Padding(3.25)` (theme units), `Width(200)` (DIPs), `TextColor(widget.Fixed(ui.RGB(18, 52, 86)))` |
 | `ring`, `ring-N`, `outline-*` | the focus ring is the control's | drawn by the control in the theme's `focus` color |
-| `sm:`, `md:`, `lg:`, `group-hover:`, `first:` | no breakpoints or relations between elements | `hover:`, `active:`, `focus:`, `disabled:`, `dark:` only |
+| `sm:`, `md:`, `lg:`, `group-hover:`, `first:` | no breakpoints or relations between elements | `hover:`, `active:`, `focus:`, `disabled:`, `selected:`, `dark:` only |
 | `transition-all`, `ease-*`, `delay-*` | one transition, of the background, border and text colors | `transition` with `duration-N` |
 | `underline`, `line-through` | text decoration is not in `Style` | `Label.Rich(ui.Span{Text: s, Underline: true})`, `Strikethrough: true` |
 | `tracking-*` | | `ui.Span{LetterSpacing: …}`, or `Element.LetterSpacing` in `widget.Custom` |

@@ -32,6 +32,7 @@ type core struct {
 	hidden      bool
 	hides       int // views that did not build it, and shows of its form, for a popup of its own to close
 	disabled    bool
+	selected    bool // checked or on, set by build: the Style's Selected applies
 	wantFocus   bool // Focus asked for the keyboard focus
 	focusIn     int  // the view that last built it focused, noView for none
 	builtIn     int  // the view that last built it
@@ -186,6 +187,7 @@ func render(c *ui.Context, w Control) ui.Element {
 		return ui.Element{}
 	}
 	keeping.key(c, b)
+	b.selected = false // a build that can be selected sets it: a ToolButton only while a toggle
 	e := w.build(c)
 	b.el = e
 	if f := buildingForm; f != nil {
@@ -199,7 +201,7 @@ func render(c *ui.Context, w Control) ui.Element {
 		nameControl(w, e, b.accName)
 	}
 	if b.styled {
-		p := b.style.effective(c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled)
+		p := b.style.effective(c.Theme().Dark, e.Hovered(), b.selected, e.Focused(), e.Pressed(), b.disabled)
 		p.apply(c, e, b.textKey)
 	}
 	if b.post != nil {

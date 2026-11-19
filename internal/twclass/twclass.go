@@ -18,6 +18,7 @@ const (
 	Active
 	Focus
 	Disabled
+	Selected // checked or selected
 )
 
 // Key is where a declaration applies: a state, in the dark theme or not.
@@ -171,7 +172,7 @@ func expand(fields []string) []string {
 	return out
 }
 
-var states = map[string]Variant{"hover": Hover, "active": Active, "focus": Focus, "disabled": Disabled}
+var states = map[string]Variant{"hover": Hover, "active": Active, "focus": Focus, "disabled": Disabled, "selected": Selected}
 
 // variants splits class's prefixes off: dark with at most one state.
 func variants(class string) (key Key, utility, reason string) {

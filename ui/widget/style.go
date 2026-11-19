@@ -238,7 +238,7 @@ func frameList(c *ui.Context, e ui.Element, own ...*Style) {
 		// A border color alone recolors the frame, as it does where the style
 		// lands on the framed element itself.
 		for _, s := range own {
-			p := s.effective(t.Dark, false, false, false, false)
+			p := s.effective(t.Dark, false, false, false, false, false)
 			if col, ok := p.borderColorFor(c, t); ok {
 				line = col
 			}

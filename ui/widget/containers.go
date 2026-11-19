@@ -327,7 +327,7 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 		}
 		strip := ui.TabsKeyed(c, p, keys, n.labels).OnChange(onChange(&n.page, n.onSwitch))
 		if !n.strip.empty() {
-			st := n.strip.effective(c.Theme().Dark, strip.Hovered(), strip.Focused(), strip.Pressed(), n.disabled)
+			st := n.strip.effective(c.Theme().Dark, strip.Hovered(), false, strip.Focused(), strip.Pressed(), n.disabled)
 			st.apply(c, strip, n) // n keys the strip's text color, apart from the control's
 		} else if tk, _ := skinOf(c); tk != nil {
 			strip.Background(tk.Chrome).BorderWidth(0, 0, 1, 0).BorderColor(c.Theme().Border)

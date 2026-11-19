@@ -32,7 +32,7 @@ func (b *core) leaveNote(c *ui.Context, w Control, e ui.Element) {
 	var st frameState
 	if b.styled {
 		// The state the frame styled the control in, forced states included.
-		st = frameState{th.Dark, e.Hovered(), e.Focused(), e.Pressed(), b.disabled}
+		st = frameState{th.Dark, e.Hovered(), b.selected, e.Focused(), e.Pressed(), b.disabled}
 	}
 	e.InspectNote(fmt.Sprintf("%T", w), func() []ui.InspectorField {
 		fs := b.inspect(w, th, e.IsDisabled())
@@ -92,7 +92,7 @@ func (b *core) inspect(w Control, th *ui.Theme, inert bool) []ui.InspectorField 
 // withoutSource returns s with no source, to compare it with its base.
 func (s Style) withoutSource() Style { s.src = nil; return s }
 
-var variantNames = [nVariants]string{vDark: "dark", vHover: "hover", vFocused: "focus", vPressed: "pressed", vDisabled: "disabled"}
+var variantNames = [nVariants]string{vDark: "dark", vHover: "hover", vSelected: "selected", vFocused: "focus", vPressed: "pressed", vDisabled: "disabled"}
 
 // describe lists what s sets, then its variants, in the order they apply:
 // each as it is set, not as it resolves.
@@ -269,6 +269,8 @@ var colorRoleNames = [...]string{
 	roleBorder: "border", roleText: "text", roleTextMuted: "text-muted", roleAccent: "accent", roleAccentHover: "accent-hover",
 	roleAccentPressed: "accent-pressed", roleAccentText: "accent-text", roleDanger: "danger", roleDangerHover: "danger-hover", roleDangerPressed: "danger-pressed", roleDestructive: "destructive", roleDestructiveHover: "destructive-hover", roleDestructivePressed: "destructive-pressed", roleField: "field", roleWarning: "warning",
 	roleSuccess: "success", roleSelection: "selection", roleFocus: "focus", roleInverse: "inverse", roleInverseText: "inverse-text",
+	roleChrome: "chrome", roleBorderStrong: "border-strong", roleControlBorder: "control-border", roleButtonBorder: "button-border",
+	roleRowHover: "row-hover", roleRowSelected: "row-selected", roleInfo: "info",
 	roleFill: "fill",
 }
 

@@ -2,8 +2,9 @@
 //
 //	widget.Button("Save").Apply(tw.S("px-3 py-2 rounded-lg bg-accent text-on-accent hover:bg-accent-hover transition"))
 //
-// Values are Tailwind v3's; hover:, active:, focus:, disabled: and dark:
-// apply a class in a state, and dark: may stack on one of the others. On
+// Values are Tailwind v3's; hover:, active:, focus:, disabled:, selected:
+// (a checked or selected control) and dark: apply a class in a state, and
+// dark: may stack on one of the others. On
 // the same property the later class wins. gota's halign-*, valign-*,
 // hexpand, vexpand, suggested-action and destructive-action work too. A
 // class tw does not know is an error for Parse, and mygo vet reports it
@@ -139,12 +140,13 @@ var variantOf = [...]func(widget.Style, widget.Style) widget.Style{
 	twclass.Active:   widget.Style.Pressed,
 	twclass.Focus:    widget.Style.Focused,
 	twclass.Disabled: widget.Style.Disabled,
+	twclass.Selected: widget.Style.Selected,
 }
 
 // build makes the Style of rules: each variant's declarations in order,
 // a later one winning.
 func build(rules []twclass.Rule) widget.Style {
-	var d [twclass.Disabled + 1][2]draft
+	var d [twclass.Selected + 1][2]draft
 	for _, r := range rules {
 		dark := 0
 		if r.Key.Dark {
@@ -158,7 +160,7 @@ func build(rules []twclass.Rule) widget.Style {
 	if d[twclass.Base][1].used {
 		s = s.Dark(d[twclass.Base][1].style())
 	}
-	for v := twclass.Hover; v <= twclass.Disabled; v++ {
+	for v := twclass.Hover; v <= twclass.Selected; v++ {
 		light, dark := &d[v][0], &d[v][1]
 		if !light.used && !dark.used {
 			continue
@@ -280,7 +282,10 @@ var roles = map[string]widget.Color{
 	"accent-pressed": widget.RoleAccentPressed, "accent-text": widget.RoleAccentText,
 	"danger": widget.RoleDanger, "warning": widget.RoleWarning, "success": widget.RoleSuccess,
 	"selection": widget.RoleSelection, "focus": widget.RoleFocus, "inverse": widget.RoleInverse,
-	"inverse-text": widget.RoleInverseText,
+	"inverse-text": widget.RoleInverseText, "chrome": widget.RoleChrome,
+	"border-strong":  widget.RoleBorderStrong,
+	"control-border": widget.RoleControlBorder, "button-border": widget.RoleButtonBorder,
+	"row-hover": widget.RoleRowHover, "row-selected": widget.RoleRowSelected, "info": widget.RoleInfo,
 }
 
 var cursors = map[string]ui.Cursor{

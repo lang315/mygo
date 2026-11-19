@@ -210,6 +210,50 @@ func TestEveryRoleIsListed(t *testing.T) {
 	}
 }
 
+// The classes of the roles a skin decides parse to their role.
+func TestRoleClasses(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want Decl
+	}{
+		{"bg-chrome", Decl{Kind: Background, Color: Color{Role: "chrome"}}},
+		{"border-strong", Decl{Kind: BorderColor, Color: Color{Role: "border-strong"}}},
+		{"border-control", Decl{Kind: BorderColor, Color: Color{Role: "control-border"}}},
+		{"border-button", Decl{Kind: BorderColor, Color: Color{Role: "button-border"}}},
+		{"bg-row-hover", Decl{Kind: Background, Color: Color{Role: "row-hover"}}},
+		{"bg-row-selected", Decl{Kind: Background, Color: Color{Role: "row-selected"}}},
+		{"text-info", Decl{Kind: TextColor, Color: Color{Role: "info"}}},
+	} {
+		got, bad := Parse(c.in)
+		if len(bad) != 0 || !reflect.DeepEqual(got, one(Key{}, c.want)) {
+			t.Errorf("Parse(%q) = %+v, bad %v; want %+v", c.in, got, bad, c.want)
+		}
+	}
+	if _, bad := Parse("bg-chromez"); len(bad) != 1 || bad[0].Reason != Unknown {
+		t.Errorf("bg-chromez: bad %v, want unknown", bad)
+	}
+}
+
+// selected: is a state, alone or after dark:, and does not stack on another.
+func TestSelectedClass(t *testing.T) {
+	bg := Decl{Kind: Background, Color: Color{Role: "accent"}}
+	for in, want := range map[string][]Rule{
+		"selected:bg-accent":      one(Key{Variant: Selected}, bg),
+		"dark:selected:bg-accent": one(Key{Variant: Selected, Dark: true}, bg),
+		"selected:dark:bg-accent": one(Key{Variant: Selected, Dark: true}, bg),
+	} {
+		got, bad := Parse(in)
+		if len(bad) != 0 || !reflect.DeepEqual(got, want) {
+			t.Errorf("Parse(%q) = %+v, bad %v; want %+v", in, got, bad, want)
+		}
+	}
+	for _, in := range []string{"selected:hover:bg-accent", "hover:selected:bg-accent", "selected:selected:bg-accent"} {
+		if _, bad := Parse(in); len(bad) != 1 || bad[0] != (Bad{in, Stack}) {
+			t.Errorf("Parse(%q) bad = %v, want a stack", in, bad)
+		}
+	}
+}
+
 func TestShadows(t *testing.T) {
 	got, _ := Parse("shadow-md")
 	want := one(Key{}, Decl{Kind: Shadows, Shadows: []Shadow{{0, 4, 6, -1, 0.1, false}, {0, 2, 4, -2, 0.1, false}}})

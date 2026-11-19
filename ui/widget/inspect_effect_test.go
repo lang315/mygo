@@ -78,7 +78,7 @@ func expectedOf(th *ui.Theme, layers []styleLayer, st frameState) map[string]str
 	for _, l := range layers {
 		s = s.Merge(l.s)
 	}
-	p := s.effective(st.dark, st.hover, st.focused, st.pressed, st.disabled)
+	p := s.effective(st.dark, st.hover, st.selected, st.focused, st.pressed, st.disabled)
 	group := map[string][]string{}
 	for _, f := range p.describeSides(th, "", false) {
 		group[f.Name] = append(group[f.Name], f.Value)
@@ -102,8 +102,8 @@ func TestInEffectIsWhatEffectiveResolves(t *testing.T) {
 		for i := range 1 + r.Intn(3) {
 			layers = append(layers, styleLayer{string(rune('A' + i)), randomStyle(r, 2)})
 		}
-		for bits := range 32 {
-			st := frameState{bits&1 != 0, bits&2 != 0, bits&4 != 0, bits&8 != 0, bits&16 != 0}
+		for bits := range 64 {
+			st := frameState{bits&1 != 0, bits&2 != 0, bits&4 != 0, bits&8 != 0, bits&16 != 0, bits&32 != 0}
 			got, want := winnersOf(th, layers, st), expectedOf(th, layers, st)
 			for _, name := range []string{"align", "valign", "hexpand", "vexpand"} { // the base's alone place the control: left out here
 				delete(got, name)

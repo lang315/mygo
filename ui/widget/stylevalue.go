@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 	"github.com/egoist/mygo/ui/widget/internal/twsource"
 )
 
@@ -46,6 +47,13 @@ const (
 	roleFocus
 	roleInverse
 	roleInverseText
+	roleChrome
+	roleBorderStrong
+	roleControlBorder
+	roleButtonBorder
+	roleRowHover
+	roleRowSelected
+	roleInfo
 	roleFill // a border color only: the style's background in the state drawn, see fillBorder
 )
 
@@ -85,6 +93,63 @@ var (
 	RoleInverse        = Color{role: roleInverse, ok: true}
 	RoleInverseText    = Color{role: roleInverseText, ok: true}
 )
+
+// The colors a skin decides (package skin), read from the active skin's
+// tokens; without a skin, the plain theme's nearest field.
+var (
+	RoleChrome        = Color{role: roleChrome, ok: true}        // the frame's ground (strips, header bar); no skin: Surface
+	RoleBorderStrong  = Color{role: roleBorderStrong, ok: true}  // headers' bottoms, the window's edge; no skin: Border
+	RoleControlBorder = Color{role: roleControlBorder, ok: true} // inputs' outline; no skin: the theme's ControlBorder, else Border
+	RoleButtonBorder  = Color{role: roleButtonBorder, ok: true}  // buttons' outline; no skin: the theme's ButtonBorder, else as RoleControlBorder
+	RoleRowHover      = Color{role: roleRowHover, ok: true}      // a hovered row; no skin: the theme's RowHover, else SurfaceHover
+	RoleRowSelected   = Color{role: roleRowSelected, ok: true}   // a selected row; no skin: the theme's RowSelected, else Accent
+	RoleInfo          = Color{role: roleInfo, ok: true}          // the running and info state; no skin: Accent
+)
+
+// skinRole resolves a role a skin decides: the token of the active skin in
+// t's appearance, or the plain theme's nearest field.
+func skinRole(r role, t *ui.Theme) ui.Color {
+	if tk := skinhook.Get(t.Dark); tk != nil {
+		switch r {
+		case roleChrome:
+			return tk.Chrome
+		case roleBorderStrong:
+			return tk.BorderStrong
+		case roleControlBorder:
+			return tk.ControlBorder
+		case roleButtonBorder:
+			return tk.ButtonBorder
+		case roleRowHover:
+			return tk.RowHover
+		case roleRowSelected:
+			return tk.RowSelected
+		}
+		return tk.Info.Base
+	}
+	switch r {
+	case roleChrome:
+		return t.Surface
+	case roleBorderStrong:
+		return t.Border
+	case roleButtonBorder:
+		if t.ButtonBorder.A != 0 {
+			return t.ButtonBorder
+		}
+		return t.Outline()
+	case roleControlBorder:
+		return t.Outline()
+	case roleRowHover:
+		if t.RowHover.A != 0 {
+			return t.RowHover
+		}
+		return t.SurfaceHover
+	case roleRowSelected:
+		if t.RowSelected.A != 0 {
+			return t.RowSelected
+		}
+	}
+	return t.Accent
+}
 
 // destructiveFill is the fill of a Destructive button: the Danger color, or
 // where the theme's AccentText on it is under WCAG's 4.5:1, Danger mixed
@@ -179,6 +244,8 @@ func (c Color) resolve(t *ui.Theme) ui.Color {
 			return t.Background
 		}
 		return t.InverseText
+	case roleChrome, roleBorderStrong, roleControlBorder, roleButtonBorder, roleRowHover, roleRowSelected, roleInfo:
+		return skinRole(c.role, t)
 	}
 	return c.fixed
 }
@@ -262,6 +329,7 @@ type variant uint8
 const (
 	vDark variant = iota
 	vHover
+	vSelected // after Hover: a selected control keeps its look while hovered
 	vFocused
 	vPressed
 	vDisabled
@@ -513,6 +581,11 @@ func (s Style) Pressed(v Style) Style  { return s.with(vPressed, v) }
 func (s Style) Disabled(v Style) Style { return s.with(vDisabled, v) }
 func (s Style) Dark(v Style) Style     { return s.with(vDark, v) }
 
+// Selected applies v while the control is checked or selected: a CheckBox
+// or RadioButton checked, a Toggle on, a toggle ToolButton checked. Other
+// controls are never selected.
+func (s Style) Selected(v Style) Style { return s.with(vSelected, v) }
+
 func (s Style) with(k variant, v Style) Style { s.v[k] = &v; return s }
 
 // styleSource is the Tailwind classes a Style was made from, with the Style
@@ -653,9 +726,9 @@ func (p *props) over(o *props) {
 // effective returns the properties of s for a frame: its own with the
 // variants whose states hold on top, in Tailwind's order. It allocates
 // nothing.
-func (s *Style) effective(dark, hover, focused, pressed, disabled bool) props {
+func (s *Style) effective(dark, hover, selected, focused, pressed, disabled bool) props {
 	p := s.props
-	on := [nVariants]bool{vDark: dark, vHover: hover, vFocused: focused, vPressed: pressed, vDisabled: disabled}
+	on := [nVariants]bool{vDark: dark, vHover: hover, vSelected: selected, vFocused: focused, vPressed: pressed, vDisabled: disabled}
 	for k := range nVariants {
 		v := s.v[k]
 		if !on[k] || v == nil {
