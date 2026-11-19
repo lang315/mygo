@@ -462,6 +462,7 @@ func (c *context) Size() (width, height float32) {
 // window's root keeps its content inside them; what draws in the Overlay, as
 // a sheet, or under them, reads them here.
 func (c *context) SafeArea() (top, right, bottom, left float32) {
+	c.neverKept() // the system's bars and keyboard, which no state of the row versions
 	h, ok := c.rt.host.(interface{ insets() platform.Insets })
 	if !ok {
 		return 0, 0, 0, 0

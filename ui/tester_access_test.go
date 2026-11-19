@@ -457,10 +457,14 @@ func TestTesterAccessBoundsClippedChildren(t *testing.T) {
 			t.Errorf("VirtualOffscreen Bounds = %v, want 0 size", off.Bounds)
 		}
 
+		// In the fork, the parent's Bounds handed to AccessChildren is its
+		// visible box (accessBounds clips it, for the platform's tree too):
+		// scrolled, the host still shows from the top of the scroll view,
+		// so a node placed 180 below that stays out of view.
 		tt.Scroll(100, 40, 0, 160)
 		shown := accessOf(t, tt, ui.RoleText, "VirtualOffscreen")
-		if shown.Bounds != (ui.Rect{X: 0, Y: 20, W: 100, H: 30}) {
-			t.Errorf("scrolled VirtualOffscreen Bounds = %v, want {0 20 100 30}", shown.Bounds)
+		if shown.Bounds.W != 0 || shown.Bounds.H != 0 {
+			t.Errorf("scrolled VirtualOffscreen Bounds = %v, want 0 size", shown.Bounds)
 		}
 	})
 

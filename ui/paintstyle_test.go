@@ -16,7 +16,7 @@ import (
 func TestPaintInputs(t *testing.T) {
 	fields := map[string]string{
 		// layout: compared by sameLayout, or made by the layout
-		"layout": "layoutStyle cols rows hidden measured tl lay laid special hold",
+		"layout": "layoutStyle cols rows hidden insetSet measured tl lay laid special hold", // insetSet follows layoutStyle's inset
 		// compared by paintStyle, or by textPaint (ts)
 		"paint": "flags themeAt paintLook ts shadows styleFn spans",
 		// an element with one set is never paint-same
@@ -29,7 +29,8 @@ func TestPaintInputs(t *testing.T) {
 			"accRange hasRange accFill accChildren accStep popover rowsOf focusGroup groupSelects placeOn overflow segment " +
 			"activeDescendant nameFrom nameJoin outOfName keepLinks focusTo setPos setSize choosesItems search description " +
 			"field form rowMinW followX sort colFit level expandable chooseMany gridFit attach serial fillViewport " +
-			"accessDisabled autoComplete orient focusHighlights accGrid accSet labelledBy describedBy errorMessage roleDescription controls hasPopup popupSet edgeMargin edgeMarginSet",
+			"accessDisabled autoComplete orient focusHighlights accGrid accSet labelledBy describedBy errorMessage roleDescription controls hasPopup popupSet edgeMargin edgeMarginSet " +
+			"stateRead _", // stateRead is Key's report (aa1d3a106); _ pads the element to whole cache lines
 	}
 	where := map[string]string{}
 	for place, list := range fields {

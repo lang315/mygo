@@ -29,10 +29,19 @@ import (
 // since upstream's ScrollbarStyle (barStyle, a pointer, in paintRare);
 // TruncateMiddle's bool went into the padding of the text style. It is 2144
 // since upstream's AccessChildren (accChildren, a func, beside accFill);
-// TruncateStart's bool went into the padding of the text style too.
+// TruncateStart's bool went into the padding of the text style too. It is
+// 2176 since upstream's chunks of elements are strided by whole cache lines
+// (158f8dccd: a container's walk of its children reads four lines of each,
+// TestChildWalkFitsCacheLines, which holds only when every element of a
+// chunk begins on a line): the pad at its end takes it from 2144 to 34
+// lines; insetSet and stateRead went into padding.
 func TestNodeSizeIsKept(t *testing.T) {
-	if n := unsafe.Sizeof(node{}); n != 2144 {
-		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2144", n)
+	n := unsafe.Sizeof(node{})
+	if n != 2176 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, want 2176", n)
+	}
+	if n%64 != 0 {
+		t.Errorf("unsafe.Sizeof(node{}) = %d, not a whole number of cache lines", n)
 	}
 }
 

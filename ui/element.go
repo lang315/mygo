@@ -314,7 +314,6 @@ type layoutStyle struct {
 	// flags and the box that the first holds.
 	margin                 [4]float32 // Auto for auto margins
 	pad                    [4]float32 // top, right, bottom, left
-	insetEnd               float32    // room at the end of a single-line input that its text stays out of (TextInsetEnd)
 	border                 [4]float32 // top, right, bottom, left
 	width, height          length
 	minW, minH, maxW, maxH bound
@@ -334,6 +333,9 @@ type layoutStyle struct {
 	// inset is how far out of the flow the element sits (Absolute, Attach),
 	// from each edge of its container.
 	inset [4]length
+	// insetEnd is the room at the end of a single-line input that its text
+	// stays out of (TextInsetEnd), which only a text's own layout reads.
+	insetEnd float32
 	// logical says which of its horizontal edges were set by their start or
 	// end (direction.go): the view sets it, the layout reads none of it.
 	logical uint8
@@ -712,8 +714,9 @@ type node struct {
 	// each element of a chunk then begins on one, and a walk of a
 	// container's children reads a child's box and style in the same lines
 	// whichever child it is on, rather than in one more line of most of
-	// them.
-	_ [2]uint32
+	// them. (The fork's fields make the element 2144 bytes before the pad,
+	// 32 short of 34 lines; TestNodeSizeIsKept keeps it a multiple of 64.)
+	_ [8]uint32
 }
 
 // nodeLook is what an element's styleFn and color transition change as it
