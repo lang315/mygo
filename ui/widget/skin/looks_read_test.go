@@ -344,6 +344,24 @@ func TestTabHeaderLookKeepsFocus(t *testing.T) {
 	}
 }
 
+// With a TabHeader look, the tab the keyboard focuses shows the focus ring,
+// in the theme's Focus, as without.
+func TestTabHeaderLookRing(t *testing.T) {
+	tc := widget.TabControl().AddPage("One", widget.Label("one")).AddPage("Two", widget.Label("two"))
+	tt := showSkin(t, tc, 600, 300, looksSentinel(), false, 1)
+	focus := Calm.Tokens(false).Accent.Base
+	tab := nodeOf(t, tt, ui.RoleTab, "One")
+	around := ui.Rect{X: tab.X - 6, Y: tab.Y - 6, W: tab.W + 12, H: tab.H + 12}
+	if n := countColor(tt, around, focus); n != 0 {
+		t.Fatalf("%d pixels of the focus ring's %v before the focus", n, focus)
+	}
+	tt.Key(0, ui.KeyTab)
+	tt.Settle()
+	if n := countColor(tt, around, focus); n < 40 {
+		t.Errorf("%d pixels of the focus ring's %v around the focused tab, want at least 40", n, focus)
+	}
+}
+
 // Under Calm, which has no looks, the button, the grid's header and the tab
 // strip paint what they painted before looks: Calm's Surface, Background and
 // Chrome.

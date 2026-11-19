@@ -62,7 +62,7 @@ func (s *Skin) WithLooks(l Looks) *Skin {
 func (s *Skin) Looks() Looks { return s.looks }
 
 // parseLooks returns the Styles of l's classes by kind, each boxed once, as
-// skinhook.SetLooks takes them; nil when l sets none.
+// skinhook.SetLooks takes them.
 func parseLooks(l Looks) *[skinhook.NumKinds]any {
 	classes := [skinhook.NumKinds]string{
 		skinhook.KindButton: l.Button, skinhook.KindToolButton: l.ToolButton,
@@ -75,16 +75,12 @@ func parseLooks(l Looks) *[skinhook.NumKinds]any {
 		skinhook.KindHeaderBar: l.HeaderBar,
 	}
 	var out [skinhook.NumKinds]any
-	set := false
 	for k, cl := range classes {
 		if strings.TrimSpace(cl) == "" {
 			continue
 		}
 		st := tw.S(cl)
-		out[k], set = &st, true
-	}
-	if !set {
-		return nil
+		out[k] = &st
 	}
 	return &out
 }

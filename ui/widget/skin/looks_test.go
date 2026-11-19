@@ -61,6 +61,9 @@ func TestUseSetsLooks(t *testing.T) {
 			t.Errorf("kind %d: look %T after Use, want a *widget.Style", k, skinhook.Look(k))
 		}
 	}
+	if l := skinhook.Look(skinhook.NumKinds); l != nil {
+		t.Errorf("a kind past the last has look %v while looks are on", l)
+	}
 	Use(Calm)
 	for k := range skinhook.NumKinds {
 		if l := skinhook.Look(k); l != nil {

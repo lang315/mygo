@@ -114,6 +114,9 @@ func TestTabsKeyedBaseNoneAndOne(t *testing.T) {
 	if n := tabs(); n != 0 {
 		t.Fatalf("%d tabs of no keys, want 0", n)
 	}
+	if sel != 3 {
+		t.Errorf("no tabs clamped selected to %d, want it left at 3, as TabsBase of none", sel)
+	}
 	keys, labels = []any{"a"}, []string{"A"}
 	tt.Frame()
 	if n := tabs(); n != 1 {
