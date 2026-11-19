@@ -40,8 +40,8 @@ type Tokens struct {
 	Chrome, Background ui.Color
 	// Border divides; BorderStrong ends headers and the window.
 	Border, BorderStrong ui.Color
-	// Text, TextMuted (secondary) and TextPlaceholder (placeholders), which
-	// takes no effect yet: no control reads it.
+	// Text, TextMuted (secondary) and TextPlaceholder, the placeholder of a
+	// TextBox and a MultilineTextBox.
 	Text, TextMuted, TextPlaceholder ui.Color
 	// The face of a control at rest, hovered and pressed.
 	Surface, SurfaceHover, SurfacePressed ui.Color
@@ -53,7 +53,8 @@ type Tokens struct {
 
 	// The families. Of Accent, Subtle and Text take no effect yet; of Info,
 	// Warning and Danger only Base and On take effect, and of Success only
-	// Base: no control reads the others.
+	// Base: no control reads the others, which the components of a later
+	// phase (badges, info bars) are to read.
 	Accent, Success, Warning, Danger Family
 	// Info is the running and info state, kept apart from the status
 	// colors.
@@ -61,8 +62,15 @@ type Tokens struct {
 	// Chart colors the series and slices of charts, in order.
 	Chart [8]ui.Color
 
-	// The sizes, in DIPs. SettingsRowHeight and Icon take no effect yet: no
-	// control reads them.
+	// The sizes, in DIPs at text scale 1: the heights of controls, of table
+	// and list rows, of their headers, of the rows of a settings page
+	// (Fields.SettingsRows, the least), of tab headers, of the menu bar's
+	// strip and its items; the corners of controls and of cards; the room
+	// of a tool strip above and below its buttons, between them and between
+	// their groups; the side of the icons of controls and lists (a
+	// TextBox's, a DataGridView cell's, a ListBox's, a TreeView's, a
+	// ListView's small ones and a ComboBox section's) and of tool strip
+	// buttons; the check box's side and the switch's track.
 	ControlHeight, RowHeight, HeaderHeight, SettingsRowHeight    float32
 	TabHeight, MenuBarStripHeight, MenuBarItemHeight             float32
 	RadiusControl, RadiusCard                                    float32
@@ -71,14 +79,18 @@ type Tokens struct {
 
 	// FontSize is the size of text, in DIPs.
 	FontSize float32
-	// The roles of text. They take no effect yet: no control reads them.
+	// The roles of text: Caption a status label's, Label a group box's
+	// title and a DataGridView's column headers (their size: ui keeps their
+	// weight), Heading the section headings of Fields and Title a dialog's
+	// title. The app's own size or weight on the text wins.
 	Caption, Label, Heading, Title Type
 	// Font is the family of text, "" the system's; a font of the app's own
 	// comes in with ui.RegisterFont.
 	Font string
 
-	// CardShadow is under a card. PopupShadow takes no effect yet: no
-	// control reads it.
+	// CardShadow is under a card, PopupShadow under the drop-downs of
+	// ui/widget (a ComboBox's); ui's own popup menus keep theirs. A shadow of
+	// zero color draws none.
 	CardShadow, PopupShadow Shadow
 
 	// The focus ring is FocusRingWidth DIPs wide (0 is ui's default, 2) and
