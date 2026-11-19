@@ -49,6 +49,10 @@ tabs.List.Gap(4).Children(func() {
 })
 ```
 
+`ui.TabsKeyedBase(c, &app.tab, keys)` is `TabsBase` whose tabs are told
+apart by `keys[i]`, as `TabsKeyed`'s are: one tab for each key, and the tab
+that has the focus keeps it whatever its index becomes.
+
 See [custom widgets](custom-widgets.md).
 
 ## Accessibility
