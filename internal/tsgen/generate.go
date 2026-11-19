@@ -121,6 +121,7 @@ func Generate(m Model) ([]byte, error) {
 	}
 	for _, e := range m.Events {
 		g.src.learnPC(e.PC)
+		g.src.note(e.File)
 	}
 	g.src.resolvePackages(collectPackages(m))
 
