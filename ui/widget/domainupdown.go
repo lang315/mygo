@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // DomainUpDownWidget chooses one of a list of texts with a pair of arrows,
@@ -152,6 +153,12 @@ func (d *DomainUpDownWidget) build(c *ui.Context) ui.Element {
 	return row.Children(func() {
 		field := ui.Row(c).Grow(1).MinWidth(t.Space(20)).Padding(t.Space(1.5), t.Space(2)).Background(t.FieldFill()).Border(1, t.Outline()).Radius(t.Radius, 0, 0, t.Radius)
 		field.AlignSelf(ui.Stretch).AlignItems(ui.Center)
+		// The skin's Field look styles the box typed into, the field, which
+		// covers the row Apply styles.
+		if look := lookOf(skinhook.KindField); look != nil {
+			st := look.effective(t.Dark, field.Hovered(), false, false, field.Pressed(), d.disabled)
+			st.apply(c, field, d.textKey)
+		}
 		field.Children(func() {
 			ui.Text(c, text)
 		})

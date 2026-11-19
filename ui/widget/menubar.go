@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/internal/keyhold"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // MenuBarWidget is a row of menus that mygo draws in the window's content,
@@ -56,6 +57,7 @@ type barKey struct {
 func MenuBar(menus ...MenuItem) *MenuBarWidget {
 	b := &MenuBarWidget{menus: menus, first: -1, hot: -1, mode: -1}
 	b.init(b)
+	b.lookAs(skinhook.KindMenuBar)
 	keyhold.Enable() // the keys typed after Alt alone or F10 reach the bar
 	return b
 }

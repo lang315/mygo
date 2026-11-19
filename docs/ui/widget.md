@@ -578,6 +578,12 @@ widget.VBox(8).Add(
   the control in its box, and count in the base style only: a variant's are
   ignored. `FontWeight(100…900)` sets the weight, and `Bold` is
   `FontWeight(700)`: the later of the two wins.
+- **A skin's looks** (`skin.Looks`, `Skin.WithLooks`) style each kind of
+  control, and a `TabControl`'s tabs and a `DataGridView`'s column headers,
+  as Tailwind classes. What styles a control, strongest first: its own
+  methods, its `Apply`'d styles, a `TabControl`'s `StripStyle` (its strip),
+  the skin's look, the rest of the skin (its strips' `Chrome` and the like),
+  and the plain theme. A look's placing is ignored, as a variant's is.
 
 ## Tailwind classes
 

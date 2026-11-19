@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // Form is a top-level window showing a widget. Make it with NewForm,
@@ -234,6 +235,7 @@ func (w *Form) SetContent(root Control) *Form { w.change(func() { w.root = root 
 func (w *Form) UseHeaderBar(subtitle string) *HeaderBarWidget {
 	h := &HeaderBarWidget{subtitle: subtitle, win: w}
 	h.init(h)
+	h.lookAs(skinhook.KindHeaderBar)
 	w.change(func() { w.header = h })
 	return h
 }

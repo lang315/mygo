@@ -14,6 +14,16 @@
 //
 //	skin.Use(skin.Calm.WithAccent(ui.Hex("#7c3aed")).WithDensity(skin.Compact))
 //
+// Looks set the shape of each kind of control, and of tab headers and grid
+// headers, as Tailwind classes with their states; a control's own methods
+// and Apply'd styles still win over its look:
+//
+//	skin.Use(skin.Calm.WithLooks(skin.Looks{
+//		Button:     "rounded-sm border border-button",
+//		TabHeader:  "rounded-t border border-b-0 bg-chrome selected:bg-surface",
+//		GridHeader: "bg-chrome border-r border-strong",
+//	}))
+//
 // An app makes a skin of its own from another's tokens, changing those it
 // wants, and an accent of its own with a palette; a font of its own comes in
 // with ui.RegisterFont:
@@ -97,6 +107,8 @@ type Skin struct {
 	palettes    []*Palette
 	density     Density
 	light, dark skinhook.Tokens
+	looks       Looks
+	parsed      *[skinhook.NumKinds]any // looks' Styles, as Use hands them to widget
 }
 
 // Name returns the skin's name, as "Calm".
@@ -115,6 +127,7 @@ func Use(s *Skin) {
 	active.Store(s)
 	if s == nil {
 		skinhook.Set(nil, nil)
+		skinhook.SetLooks(nil)
 		ui.SetDefaultThemes(nil, nil)
 		return
 	}
@@ -126,6 +139,7 @@ func Use(s *Skin) {
 		l, d = &cl, &cd
 	}
 	skinhook.Set(l, d)
+	skinhook.SetLooks(s.parsed)
 	ui.SetDefaultThemes(themeOf(l, false), themeOf(d, true))
 }
 

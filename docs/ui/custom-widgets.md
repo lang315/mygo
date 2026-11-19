@@ -14,6 +14,7 @@ own on them, as headless component libraries do on the web.
 | `RadioBase` | a row that selects its value into a `*T` |
 | `SliderBase` | sets a `*float64` from where the pointer is across its content box, inside its padding, or up it (`Vertical`), and with the arrows, Page Up and Down, Home and End, by its `Step` |
 | `TabsBase` | the tab `List`, whose `Tab`s choose a `*int`, with the arrows moving the choice and the focus past those disabled |
+| `TabsKeyedBase` | `TabsBase` whose tabs are told apart by keys, as `TabsKeyed`'s: the focused tab keeps the focus as tabs come and go before it ([Tabs](tabs.md#without-a-look)) |
 | `SegmentedBase` | a `Track` of `Segment`s, a radio group choosing a `*int` |
 | `CollapsibleBase` | a `Trigger` that shows and hides what `Panel` builds, growing and shrinking it with `Progress`, which goes from 0 closed to 1 open |
 | `AccordionBase` | a `Root` of sections, each `Item` a `CollapsibleBase` whose triggers the arrows, Home and End move the focus between ([Accordion](accordion.md#without-a-look)) |

@@ -1,6 +1,7 @@
 // Package skinhook holds the tokens of the active skin, light and dark,
-// which package skin sets (skin.Use) and package widget reads: an
-// unexported variable of widget cannot be set from another package.
+// and its looks, which package skin sets (skin.Use) and package widget
+// reads: an unexported variable of widget cannot be set from another
+// package.
 //
 // A reader reads through Get while it builds or paints a frame, and never
 // keeps a value past that frame unless it keys it by the theme's
@@ -125,4 +126,42 @@ func Get(dark bool) *Tokens {
 		return p[1]
 	}
 	return p[0]
+}
+
+// Kind is a kind of control or part a skin gives a look, one for each field
+// of skin.Looks, in its order.
+type Kind uint8
+
+const (
+	KindButton Kind = iota
+	KindToolButton
+	KindField
+	KindComboBox
+	KindCheckBox
+	KindRadioButton
+	KindGroupBox
+	KindCard
+	KindTabStrip
+	KindTabHeader
+	KindGridHeader
+	KindToolStrip
+	KindStatusStrip
+	KindMenuBar
+	KindHeaderBar
+	NumKinds
+)
+
+var looks atomic.Pointer[[NumKinds]any]
+
+// SetLooks makes l the active looks, each a *widget.Style or nil for no
+// look of its kind; nil turns them all off. The skin boxes them once, so
+// that reading one allocates nothing. Call it from any goroutine.
+func SetLooks(l *[NumKinds]any) { looks.Store(l) }
+
+// Look returns the active look of kind k, nil for none.
+func Look(k Kind) any {
+	if l := looks.Load(); l != nil && k < NumKinds {
+		return l[k]
+	}
+	return nil
 }

@@ -1,6 +1,9 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
+)
 
 // ToolStripWidget is a row of tools, for the top of a form (Form.ToolStrip):
 // ToolButtons, Separators, Springs, ComboBoxes and DropDownButtons. It is
@@ -19,6 +22,7 @@ type ToolStripWidget struct {
 func ToolStrip(items ...Control) *ToolStripWidget {
 	s := &ToolStripWidget{items: items}
 	s.init(s)
+	s.lookAs(skinhook.KindToolStrip)
 	return s
 }
 
@@ -77,6 +81,7 @@ type ToolButtonWidget struct {
 func ToolButton(text string) *ToolButtonWidget {
 	b := &ToolButtonWidget{text: text}
 	b.init(b)
+	b.lookAs(skinhook.KindToolButton)
 	return b
 }
 

@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // GroupBoxWidget draws a border with a title around one widget.
@@ -19,6 +20,7 @@ type GroupBoxWidget struct {
 func GroupBox(title string) *GroupBoxWidget {
 	f := &GroupBoxWidget{title: title}
 	f.init(f)
+	f.lookAs(skinhook.KindGroupBox)
 	return f
 }
 
@@ -325,12 +327,29 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 		for i, k := range n.keys {
 			keys[i] = k // a tab keeps the focus of its page, whatever its index
 		}
-		strip := ui.TabsKeyed(c, p, keys, n.labels).OnChange(onChange(&n.page, n.onSwitch))
-		if !n.strip.empty() {
-			st := n.strip.effective(c.Theme().Dark, strip.Hovered(), false, strip.Focused(), strip.Pressed(), n.disabled)
-			st.apply(c, strip, n) // n keys the strip's text color, apart from the control's
-		} else if tk, _ := skinOf(c); tk != nil {
+		var strip ui.Element
+		if look := lookOf(skinhook.KindTabHeader); look != nil {
+			strip = n.headers(c, p, keys, look)
+		} else {
+			strip = ui.TabsKeyed(c, p, keys, n.labels)
+		}
+		strip.OnChange(onChange(&n.page, n.onSwitch))
+		look := lookOf(skinhook.KindTabStrip)
+		if tk, _ := skinOf(c); tk != nil && n.strip.empty() {
 			strip.Background(tk.Chrome).BorderWidth(0, 0, 1, 0).BorderColor(c.Theme().Border)
+		}
+		if look != nil || !n.strip.empty() {
+			// The skin's look under StripStyle's, property by property.
+			dark, hover, focused, pressed := c.Theme().Dark, strip.Hovered(), strip.Focused(), strip.Pressed()
+			var st props
+			if look != nil {
+				st = look.effective(dark, hover, false, focused, pressed, n.disabled)
+			}
+			if !n.strip.empty() {
+				own := n.strip.effective(dark, hover, false, focused, pressed, n.disabled)
+				st.over(&own)
+			}
+			st.apply(c, strip, n) // n keys the strip's text color, apart from the control's
 		}
 		// Tabs clamps *p while it builds, without OnChange: see it here.
 		if changed := *p != n.page.value; changed {
@@ -341,6 +360,37 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 		}
 		if i := *p; i >= 0 && i < len(n.pages) {
 			buildPage(c, n.pages[i])
+		}
+	})
+}
+
+// headers builds the strip of tabs as ui.TabsKeyed does, each tab with the
+// skin's look over it, selected while open, and without the line under the
+// open one: the look's border draws one if it wants one. Under mu.
+func (n *TabControlWidget) headers(c *ui.Context, p *int, keys []any, look *Style) ui.Element {
+	t := c.Theme()
+	tabs := ui.TabsKeyedBase(c, p, keys)
+	return tabs.List.Gap(t.Space(1)).Children(func() {
+		for i, label := range n.labels {
+			tab := tabs.Tab(i).Padding(t.Space(2), t.Space(3)).FocusRing(false)
+			if h := t.Metrics.TabHeight; h > 0 {
+				tab.MinHeight(h).AlignItems(ui.Center)
+			}
+			on, hover := i == *p, tab.Hovered()
+			tab.TextColor(t.TextMuted)
+			if on {
+				tab.TextColor(t.Text).FontWeight(600)
+			} else if hover {
+				tab.TextColor(t.Text)
+			}
+			st := look.effective(t.Dark, hover, on, tab.Focused(), tab.Pressed(), n.disabled)
+			st.apply(c, tab, keys[i])
+			tab.DrawOver(func(pt *ui.Painter, r ui.Rect) {
+				if tab.FocusVisible() {
+					pt.FocusRing(r, [4]float32{t.Radius, t.Radius, t.Radius, t.Radius})
+				}
+			})
+			tab.Children(func() { ui.Text(c, label).SingleLine() })
 		}
 	})
 }
@@ -504,6 +554,7 @@ type CardWidget struct {
 func Card() *CardWidget {
 	k := &CardWidget{}
 	k.init(k)
+	k.lookAs(skinhook.KindCard)
 	return k
 }
 

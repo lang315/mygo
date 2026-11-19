@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/widget/skin"
 )
 
 // sentinelColor is a color no chart draws, for the controls around one.
@@ -31,18 +30,18 @@ func sentinel(name string) *BoxWidget {
 
 // eachLook runs fn under no skin and Calm, light and dark.
 func eachLook(t *testing.T, fn func(t *testing.T, dark bool)) {
-	t.Cleanup(func() { skin.Use(nil) })
-	for _, s := range []*skin.Skin{nil, skin.Calm} {
+	t.Cleanup(calmOff)
+	for _, calm := range []bool{false, true} {
 		for _, dark := range []bool{false, true} {
 			name := "plain"
-			if s != nil {
-				name = s.Name()
+			if calm {
+				name = "Calm"
 			}
 			if dark {
 				name += " dark"
 			}
 			t.Run(name, func(t *testing.T) {
-				skin.Use(s)
+				useCalm(t, calm)
 				fn(t, dark)
 			})
 		}
@@ -155,7 +154,7 @@ func TestChartTinyBoxClips(t *testing.T) {
 // its 10 by 10 swatches show whole, out of the plot.
 // (Without a skin: the swatches are plainChartColors.)
 func TestChartSmallBoxKeepsItsLegend(t *testing.T) {
-	skin.Use(nil)
+	useCalm(t, false)
 	for _, k := range kinds[:2] {
 		tt := NewTester(t, k.mk().SetSize(300, 120), 400, 300)
 		plot := tt.Find(ByLabel("Box")).Bounds()
@@ -243,7 +242,7 @@ func TestChartWrappedLegendStaysInside(t *testing.T) {
 
 // A pie in a box narrower than its 200 DIPs keeps to the box.
 func TestChartPieNarrowBoxStaysInside(t *testing.T) {
-	skin.Use(nil)
+	useCalm(t, false)
 	c := boxChart(PieChart).SetSize(160, 200)
 	tt := NewTester(t, VBox(0).Add(c), 400, 500)
 	if b := tt.Find(ByLabel("Box")).Bounds(); b.X+b.W > 160 {
@@ -413,7 +412,7 @@ func checkRingInside(t *testing.T, dark bool) {
 }
 
 func TestBarChartDrawsBars(t *testing.T) {
-	skin.Use(nil)
+	useCalm(t, false)
 	c := barChart().SetSize(300, 200)
 	tt := NewTester(t, c, 400, 300)
 	plot := tt.Find(ByLabel("Sales")).Bounds()
