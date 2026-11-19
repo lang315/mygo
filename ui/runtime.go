@@ -250,8 +250,11 @@ type engine struct {
 	// afterInputs whose containers are still building.
 	waitingInputs, waitingActions []int
 
-	// measured are the last spans laid out outside elements (richParams).
-	measured     [8]measuredSpans
+	// measured are the last spans laid out outside elements, a ring made
+	// by the first (richSpans), and measuredAt the entries by their
+	// fingerprints.
+	measured     []measuredSpans
+	measuredAt   map[uint64]int32
 	nextMeasured int
 	paths        paths
 	// pathClips are the masks of the paths clips were cut to lately, by
@@ -446,6 +449,7 @@ type engine struct {
 	// it.
 	dirOverride uint8
 	dupKeys     map[uint64]bool
+	lateKeys    map[uint64]bool
 	warnings    []string
 	// strict makes mistakes found while building panic, as duplicate keys
 	// do in a Tester.
@@ -824,9 +828,11 @@ type keyEvent struct {
 
 func newRuntime(view func(*context), h host) *engine {
 	// A phone's host sets the environment after the package's variables
-	// took it.
-	if !frameStatsOn {
-		frameStatsThreshold, frameStatsOn = frameStatsSetting(os.Getenv("MYGO_FRAME_STATS"))
+	// took it. Read, not kept: Recorders and Testers are made on many
+	// goroutines at once.
+	statsThreshold, statsOn := frameStatsThreshold, frameStatsOn
+	if !statsOn {
+		statsThreshold, statsOn = frameStatsSetting(os.Getenv("MYGO_FRAME_STATS"))
 	}
 	rt := &engine{view: view, host: h, text: h.textSystem(), states: map[uint64]*state{}, kept: map[uint64]bool{}, windowFocused: true}
 	rt.c.rt = rt
@@ -835,8 +841,8 @@ func newRuntime(view func(*context), h host) *engine {
 	rt.arena = &elementOwner{rt: rt}
 	rt.public = &Context{rt: rt, services: Services{owner: rt.owner}}
 	rt.handleChecks = developmentHandles
-	if frameStatsOn {
-		rt.stats = newFrameStats(frameStatsThreshold)
+	if statsOn {
+		rt.stats = newFrameStats(statsThreshold)
 	}
 	return rt
 }
@@ -976,6 +982,8 @@ func (rt *engine) runFrame() {
 		}
 		rt.nextRegs = rt.nextRegs[:0]
 		clear(rt.kept)
+		clear(rt.tips.pending)
+		rt.tips.pending = rt.tips.pending[:0]
 		rt.stack.router = nil // the pass's Router tells
 		rt.c.reset(now, appW, rt.insp.contentHeight(w, h))
 		rt.view(&rt.c)
@@ -988,6 +996,7 @@ func (rt *engine) runFrame() {
 		if d := rt.menu.drawn; d != nil && d.edit && rt.drawsMenus() {
 			menusInWindow.drawEditMenu(rt)
 		}
+		rt.buildTooltips(&rt.c)
 		if rt.overlayExits {
 			// Copies of the elements gone from the layer leave in it
 			// (animateExits), empty as it is otherwise: it lets the
@@ -999,6 +1008,10 @@ func (rt *engine) runFrame() {
 		}
 		if rt.insp.open {
 			rt.buildInspector(&rt.c, appW, w, h)
+			rt.buildTooltips(&rt.c)
+			if ov := rt.c.overlay; ov != nil && ov.parent == nil {
+				rt.c.root.add(ov)
+			}
 		}
 		rt.applyAllInputs()
 		rt.runAfterBuild()
@@ -1794,6 +1807,7 @@ func (rt *engine) dropFrame() {
 	rt.rowPool, rt.rowNodes, rt.keepLists, rt.built = nil, nil, nil, nil
 	rt.rowWalk = nil
 	rt.painter.cur, rt.painter.inline = nil, nil
+	rt.tips.pending = nil
 	rt.journal = journal{}
 	if checkBuilt != nil {
 		checkBuilt(rt, builtDropped)

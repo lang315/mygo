@@ -83,25 +83,23 @@ func objectGetBreakConditions(this, before, after uintptr) uintptr {
 	return 0
 }
 
-// layoutObjects keeps the objects of the layout being made alive and in
-// place while it lives (shapeText). Each dwrite has its own, which its
-// System's lock guards: Systems shape at once (a Tester's own, #1730), and
-// DirectWrite reaches an object through its own pointer, never through
-// this.
+// layoutObjects keeps the objects of a layout alive and in place until
+// the layout is released (unpin). Each layout has its own: the engines of
+// Testers lay out text on goroutines of their own, at the same time, and
+// a layout whose words are kept whole lays its lines out again within it
+// (keepWords).
 type layoutObjects struct {
 	objects []dwObject
 	pinner  runtime.Pinner
 }
 
-// drop lets go of the objects, once their layout is released.
-func (lo *layoutObjects) drop() {
-	lo.pinner.Unpin()
-	lo.objects = nil
-}
+// unpin lets go of the objects once the layout that holds them is
+// released.
+func (lo *layoutObjects) unpin() { lo.pinner.Unpin() }
 
-// set makes each rune of the spans with an ObjectWidth an inline object of
-// the layout; units are the code units of the runes.
-func (lo *layoutObjects) set(layout uintptr, spans []Span, units []uint32) {
+// setObjects makes each rune of the spans with an ObjectWidth an inline
+// object of the layout, kept in lo; units are the code units of the runes.
+func setObjects(lo *layoutObjects, layout uintptr, spans []Span, units []uint32) {
 	n := 0
 	from := 0
 	for _, sp := range spans {
@@ -111,9 +109,7 @@ func (lo *layoutObjects) set(layout uintptr, spans []Span, units []uint32) {
 		}
 		from = to
 	}
-	lo.pinner.Unpin()
 	if n == 0 {
-		lo.objects = nil
 		return
 	}
 	lo.objects = make([]dwObject, n)

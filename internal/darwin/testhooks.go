@@ -187,6 +187,22 @@ func TestOrderedIn(handle uintptr) bool {
 	return sendBool(id(handle), "isVisible")
 }
 
+// TestMetalDrawableSize returns the size of the drawables of the
+// CAMetalLayer the GPU renderer draws a window's surface into, a pixel
+// while it gave them back, and whether it has one.
+func TestMetalDrawableSize(handle uintptr) (width, height float64, ok bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return 0, 0, false
+	}
+	l := w.surface.metalLayer()
+	if l == 0 {
+		return 0, 0, false
+	}
+	s := msgSize(l, sel("drawableSize"))
+	return s.Width, s.Height, true
+}
+
 // TestPerformClose closes a window as its close button does, which asks
 // the delegate first (performClose:).
 func TestPerformClose(handle uintptr) {
@@ -1423,6 +1439,13 @@ var (
 // the surface took the files over that point and whether it took the
 // drop.
 func TestDropFiles(handle uintptr, x, y float64, paths []string) (over, dropped bool) {
+	return TestDropFilesFrom(handle, x, y, x, y, paths)
+}
+
+// TestDropFilesFrom is TestDropFiles for a drag that came in over (overX,
+// overY) and was let go at (x, y), as a drag over a page and dropped
+// beside it, on the content.
+func TestDropFilesFrom(handle uintptr, overX, overY, x, y float64, paths []string) (over, dropped bool) {
 	w := theBackend.byNSWindow[id(handle)]
 	if w == nil || w.surface == nil {
 		return false, false
@@ -1432,6 +1455,24 @@ func TestDropFiles(handle uintptr, x, y float64, paths []string) (over, dropped 
 			method("draggingLocation", func(self id, _ objc.SEL) NSPoint { return testDragAt }),
 			method("draggingPasteboard", func(self id, _ objc.SEL) id { return testDragPB }),
 			method("draggingSourceOperationMask", func(self id, _ objc.SEL) uint { return testDragMask }),
+			// A drag to a page goes on to WebKit, which asks the rest of
+			// NSDraggingInfo (applicationFlagsForDrag): a drag of neither
+			// its pages nor its web views is another application's.
+			method("draggingSource", func(self id, _ objc.SEL) id { return 0 }),
+			method("draggingSequenceNumber", func(self id, _ objc.SEL) int { return 0 }),
+			method("draggingFormation", func(self id, _ objc.SEL) int { return 0 }),
+			method("setDraggingFormation:", func(self id, _ objc.SEL, n int) {}),
+			method("animatesToDestination", func(self id, _ objc.SEL) bool { return false }),
+			method("setAnimatesToDestination:", func(self id, _ objc.SEL, b bool) {}),
+			method("numberOfValidItemsForDrop", func(self id, _ objc.SEL) int { return 1 }),
+			method("setNumberOfValidItemsForDrop:", func(self id, _ objc.SEL, n int) {}),
+			method("springLoadingHighlight", func(self id, _ objc.SEL) int { return 0 }),
+			method("draggingImageComponents", func(self id, _ objc.SEL) id { return 0 }),
+			// WebKit asks this from draggingEntered:
+			// (_promisedFileMIMETypes:, on newer systems), and a
+			// dragging info without it aborts the test process.
+			method("enumerateDraggingItemsWithOptions:forView:classes:searchOptions:usingBlock:",
+				func(self id, _ objc.SEL, options uint, view, classes, search id, block uintptr) {}),
 		})
 		testDragInfo = send(send(class("MyGoTestDraggingInfo"), "alloc"), "init")
 		testDragPB = retain(send(class("NSPasteboard"), "pasteboardWithUniqueName"))
@@ -1451,7 +1492,9 @@ func TestDropFiles(handle uintptr, x, y float64, paths []string) (over, dropped 
 		}
 		send(testDragPB, "writeObjects:", uintptr(nsArray(urls...)))
 		v := w.surface.view
+		testDragAt = NSPoint{overX, content.Size.Height - overY}
 		over = send(v, "draggingEntered:", uintptr(testDragInfo)) != 0
+		testDragAt = NSPoint{x, content.Size.Height - y}
 		over = send(v, "draggingUpdated:", uintptr(testDragInfo)) != 0 && over
 		if !over {
 			send(v, "draggingExited:", uintptr(testDragInfo))

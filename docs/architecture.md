@@ -647,7 +647,11 @@ features GTK 4 lacks become X11-only code beside it.
   A creation that fails is tried again, three times in all, a second
   then two apart, as Microsoft advises unless it failed with
   `ERROR_INVALID_STATE`: under load, WebView2 fails some with `ERROR_BUSY`
-  or `CO_E_SERVER_EXEC_FAILURE`. When the webview never comes, the calls
+  or `CO_E_SERVER_EXEC_FAILURE`. The web views of a window of native UI
+  share one timer, their surface's. It asks again for those whose creation
+  failed, but not for one WebView2 has not answered about yet
+  (`window.creating`), such as a web view made after the failure, which
+  would get a second controller. When the webview never comes, the calls
   that report a result (Eval, CapturePage, PrintToPDF) get the reason, as
   later ones do: the window closed, or WebView2 could not create it.
   User data lives in `%LOCALAPPDATA%\<name>\WebView2`. The direct path applies
@@ -1113,7 +1117,10 @@ fake host. Desktop files of `darwin` and `linux` exclude `ios` and
   measures (`getTextRunAdvances`) and whose clusters it draws. These calls go
   straight to the host on the caller's thread (`callHere`, which joins the
   JVM), a screen of new text being hundreds of them. Frames come
-  at the display's refreshes (CADisplayLink, Choreographer) when asked.
+  at the display's refreshes (CADisplayLink, Choreographer) when asked,
+  paced (`platform.PacedSurface`): on iOS, one that comes while the Metal
+  renderer fetches a drawable draws once it has it (`FrameNow`), rather
+  than Go's main thread waiting for it, and the fingers with it.
 - **Input.** A finger is the pointer while it touches (`SurfaceEvent.Touch`,
   the first one; two pinch), and `ui` pans what scrolls under one that
   moves and flings it on (`ui/touch.go`, reached only where touches come:
@@ -1522,7 +1529,12 @@ if that fails to compile the code is not an expression, and it is run again as
 a function body. A compile error means nothing executed, so code never runs
 twice. The result travels as a JSON string and is decoded in Go. A page whose
 window closed never answers, so a window closing fails the evals waiting for
-it, and an eval with the quit under way fails at once.
+it, and an eval with the quit under way fails at once. WebKit runs the
+microtasks scripts queued once a listener of an event returns, and an eval
+that runs in a page just as a navigation away commits can leave its
+continuation, which answers, queued: the bridge listens to `pagehide`, so
+that it runs before WebKit freezes the page in its back/forward cache,
+where it would wait until Back shows the page again.
 
 ### Trust
 
@@ -2517,7 +2529,13 @@ as in Tauri:
   popover that has shown leaves its material's backdrop behind, a
   graphics surface a little larger than the popover. One still closing,
   as Hide's animation runs, waits until it tells it closed
-  (`popoverDidClose:`, to `spareDelegate`).
+  (`popoverDidClose:`, to `spareDelegate`). The flyout's delegate is the
+  popover's, not its window's: it hears that window's occlusion from the
+  notification center while it has it (`adoptPopoverWindow`), and tells
+  the surface shown or hidden as that changes, as the popover shows
+  (`popoverDidShow:`) and as it forgets the window
+  (`tellPopoverOcclusion`), so that the frames held while it was hidden
+  draw as it shows again (#2053).
   `Flyout.Tray` anchors one to a tray icon's `Bounds` instead, without a
   parent: the panel at `NSPopUpMenuWindowLevel` or an `NSPopover` shown
   from the status item's button (macOS), a topmost unowned popup
@@ -3204,13 +3222,27 @@ either.
   shows, and a drop a `FileDrop`; files the content does not take go to
   `OnFileDrop`. On Linux the area takes the touchscreen's touches
   (`GDK_TOUCH_MASK`, in its `event` signal, before GTK's `touch-event`
-  handler makes the first finger the mouse), which `touch.go` turns into
-  what the mouse and a touchpad do: a tap clicks where it landed, held
-  still half a second it right-clicks, as Windows's press and hold; a
-  finger moving past 8 DIPs scrolls (`Precise`) the content under it
-  along with it, and two fingers zoom (`PointerZoom`) between them and
-  scroll as their midpoint moves. Button and motion events from a
-  touchscreen are dropped once the area has had touches.
+  handler makes the first finger the mouse), and on Windows the surface
+  takes a finger's `WM_POINTER` messages (`GetPointerType` `PT_TOUCH`,
+  `fingerMessage` in `pointer.go`), of which `DefWindowProc` would make
+  the mouse. Both give them to `platform.TouchGesture`
+  (`internal/platform/touch.go`), which turns them into what the mouse
+  and a touchpad do: a tap clicks where it landed, held still half a
+  second it right-clicks, as Windows's press and hold; a finger moving
+  past 8 DIPs scrolls (`Precise`) the content under it along with it,
+  and two fingers zoom (`PointerZoom`) between them and scroll as their
+  midpoint moves. On Linux button and motion events from a touchscreen
+  are dropped once the area has had touches; on Windows the taken
+  messages make none. Windows leaves to `DefWindowProc` a finger landing
+  on an embedded web view, which gets the mouse it makes, and one
+  landing on a drag region of a title bar the content draws, whose press
+  moves the window (`StartDrag`), which a tap, pressing only as the
+  finger lifts, could not: the surface asks the content as the finger
+  lands (`platform.DragRegionAt`), which answers as `pointerDown` would
+  find a press there (`engine.dragRegionAt`), but no for a drag region
+  in or of a scroll container that can scroll, which the finger scrolls.
+  A Windows finger's `WM_POINTERCAPTURECHANGED` ends it as a cancel
+  does.
 - **Assistive technology.** Once it asks for a surface's content, the
   backend sends `AccessibilityOn`, and the engine describes every frame
   (`ui/access.go`) as a `platform.AccessTree`: nodes in pre-order with
@@ -3684,11 +3716,12 @@ either.
   anything else in the window asks for each: `Painter.AnimationFrame`, a
   pose moving, the view animating. The refreshes between draw nothing
   (`paceSkips`) unless something else asked for a frame since, and the
-  surface is told of the rate (`platform.FrameRateSurface`): macOS sets
-  its display link's `preferredFrameRateRange`, which has a ProMotion
-  display refresh as often while nothing else on it asks for more. A
-  surface whose frames asked for come at once rather than at the next
-  refresh (`platform.ImmediateFrameSurface`: Windows, where presenting
+  surface is told of the rate (`platform.FrameRateSurface`): macOS and
+  iOS (`SetFrameRate` of `internal/mobile`) set their display link's
+  `preferredFrameRateRange`, which has a ProMotion display refresh as
+  often while nothing else on it asks for more; Android's Choreographer
+  ticks at the display's rate whatever it is told. A surface whose frames asked for come at once rather than at the
+  next refresh (`platform.ImmediateFrameSurface`: Windows, where presenting
   paces frames) would ask again and again until the frame is due: the
   repaint timer asks for it then instead, and the frame it brings keeps
   the pace's times, as the timer fires a little late. With the display's
@@ -4192,7 +4225,8 @@ either.
   while nothing is pressed does nothing, so a backend sends it whenever
   it loses a press, but not as a data drag of its own takes the pointer
   (OLE's loop, `gtk_drag_begin`), whose end ends the press. The Linux
-  touchscreen's `GDK_TOUCH_CANCEL` taps nothing (`touch.go`), as its
+  touchscreen's `GDK_TOUCH_CANCEL` and a Windows finger's canceled
+  `WM_POINTERUP` tap nothing (`platform.TouchGesture`), as their
   taps press only once the finger lifts. The pointer's events carry their device and
   pressure (`SurfaceEvent.Pointer` and `Pressure`), which the engine
   keeps with the buttons they leave down (`engine.pointerDevice`): a
@@ -4203,7 +4237,8 @@ either.
   (`state.pressPointer`). Fingers also come one by one, besides the
   pointer events a backend makes of them (`platform.TouchDown`,
   `TouchMove`, `TouchUp`, `TouchCancel`, by `SurfaceEvent.ID`): Windows
-  sends each finger's `WM_POINTER` messages by pointer ID, with
+  sends each finger's `WM_POINTER` messages by pointer ID, those the
+  gesture takes and those it leaves to `DefWindowProc` alike, with
   `WM_POINTERCAPTURECHANGED` canceling, Linux numbers GDK's touch
   sequences (`touchPoints` in `internal/linux/touch.go`), browsers send
   the Pointer Events of `pointerType` `touch` by `pointerId`, and macOS,
@@ -4624,6 +4659,18 @@ either.
     may count a row too few until they show. Closing CJK punctuation
     starts no row, nor opening punctuation ends one (`canBreak`). A new
     generation of the text system measures and shapes everything anew.
+    Unwrapped lines scroll sideways as far as the widest line known
+    (`lineWidths`): the widths of the widest 64 lines laid out, by line,
+    which edits move as wraps, forgetting the lines they change, as
+    other inlays, replacements and line styles forget theirs and another
+    font, tab size or theme all; a line laid out again is as wide as it
+    was until forgotten, and a long line's last piece, shaped as it
+    shows, can make it wider. So an edit lays out only the lines in
+    view, a line out of view keeps its width while it is unchanged, and
+    following an edit costs the same in a long text. Each frame lays out
+    the lines in view first and brings the offset sideways into the
+    range, which input before it takes as the last frame's at least, the
+    lines an edit changed not laid out yet.
   - *Replacements* (`replace.go`). A range shown as something else is a
     segment of a line's displayed text, as a tab or an inlay is: its Text,
     nothing, or for an element an object replacement character the text
@@ -5009,9 +5056,10 @@ either.
   target the paragraph's layout (`laidOutBox`), so that a popover follows
   its anchor in the frame that moves it; then it goes to the other side, or
   the other way along the target, where that leaves the window less, and
-  moves along the target into the window (`alongTarget`); one that scrolls
-  vertically is first cut to the room the window has (`roomAlong`), as a
-  select's long list of options. Popovers have no
+  moves along the target into the window (`alongTarget`); its height is
+  first cut to the room the window has (`roomAlong`), so that a select's
+  long list of options scrolls, and a panel of `SelectBase`'s or
+  `PopoverBase`'s whose scroll container shrinks fits. Popovers have no
   backdrop: the engine notes what each press went down on (`downs`, for a
   pass), and `PressedOutside` walks from the last through parents, and from
   a popover to its anchor, which keeps presses in popovers of elements
@@ -5857,7 +5905,8 @@ either.
   `NewOffscreen`).
 - **Canvases** (`scene.NewCanvas`, `ui.Canvas`) are images drawn from a
   scene of their own. `Canvas.Draw` paints into its scene with a painter
-  of scale 1 sharing the window's atlases, and lists it in the frame's
+  of scale 1 sharing the window's atlases, which the scene leaves for its
+  own once painted (below), and lists it in the frame's
   `Scene.Canvases`, inner canvases first as they finish. Before a frame,
   each renderer draws the canvases it lists or shows whose version its
   texture does not hold (`Scene.EachCanvas`, those a canvas shows before
@@ -5874,6 +5923,24 @@ either.
   than wait for the canvas to be collected, which the little of Go's heap
   it takes may put off for minutes while its texture takes megabytes. The CPU renderer draws
   canvases into their `Pix` (`PixVersion`).
+  A renderer draws a canvas from its scene whenever it has not its
+  texture: one made anew, as after the GPU went away or a low-memory
+  warning, Metal's after it freed its textures while the window was idle,
+  another window's, or the CPU renderer for a capture. That may be long
+  after the frame that painted the scene, when the atlases every window
+  shares hold other bitmaps where its glyphs were (`System.MakeRoom`), and
+  other masks (a mask drawn for the first time lasts for its frame
+  alone). A canvas a view draws (`Canvas.Draw`), which it may do once,
+  therefore gives its scene atlases of its own (`Scene.Own`), holding the
+  bitmaps its glyphs show and no other, and renderers draw such a scene
+  with them, in textures made for that drawing. A canvas painted again
+  keeps the atlases it has while its bitmaps fit them and take a quarter
+  of their height or more, so that one drawn every frame makes none in
+  most. The glyphs and paths left out as the canvas was painted, the
+  shared atlas having no room for them, stay left out; the paths that
+  spilled stay in their layer, which the canvas's scene shows
+  (`pathSpill.shown`). The layers of effects and of `Cache` keep the
+  window's atlases: every frame painted whole paints their scenes again.
   Near square corners, coverage is exact, the area of a pixel
   inside the box, so lines thinner than a pixel cover as much as they
   should, as text decorations need. A fill's border widths travel in its
@@ -6081,10 +6148,28 @@ either.
     (#1566). Function constant
     indices 0 through 7 belong to the renderer; effects start their own at 8.
     Two seconds after the last frame, as the
-    driver frees its own memory of frames, a timer shrinks the drawables,
-    which frees all but the one shown, until the next frame makes them
-    again, and releases GPU instance buffers, atlas/image textures and
-    backdrop textures: an idle window keeps one frame of memory. Its
+    driver frees its own memory of frames, a timer shrinks the drawables
+    to a pixel, until the next frame makes them again, and releases GPU
+    instance buffers, atlas/image textures and backdrop textures: an idle
+    window keeps one frame of memory. Core Animation may keep the
+    drawables of the old size until it hands out one of the new, so the
+    presenter's goroutine then fetches one, a pixel big, which the next
+    frame lets go of unpresented. A window nothing of which shows
+    (`SurfaceHidden`, which `windowHost` passes on to the renderer,
+    `SetOccluded`: a background tab, minimized, on another Space or
+    covered) shrinks them half a second after its last frame instead,
+    the one it drew as it went out of sight, so that windows out of sight
+    cost a frame each, not two or three (#2040); a frame waiting for its
+    drawable, or a drawable being fetched, puts it off rather than be
+    dropped or waited for. The frame shown stays, as the layer's
+    contents: the Dock shows it for a minimized window, Mission Control,
+    a Space sliding in and captures for the others, and a window showing
+    again shows it until the window server tells that it shows, rather
+    than nothing. The next frame draws whole, at the window's size.
+    Lowering `maximumDrawableCount` to two out of sight would save a
+    frame only for that half second after a frame drawn out of sight, as
+    Core Animation makes drawables as frames need them, and the third
+    keeps animations from waiting for one once the window shows. Its
     drawables are not `framebufferOnly`, as effects sample the drawable
     for their backdrops.
     A frame draws only what changed since its drawable was drawn. Core
@@ -6679,7 +6764,22 @@ make it work, and phones a fourth:
     the app does not come to the front as it launches
     (`AppOptions.Background`, macOS), and its windows show as
     `ShowInactive` would (`backgroundShow`) until a window takes the
-    focus or the app becomes active.
+    focus or the app becomes active. With `AppOptions.Background`,
+    `ShowInactive` orders a window in behind the active app's windows
+    while another app is active, rather than over them: `orderFront:`
+    in place of `orderFrontRegardless` on macOS, and on Windows the
+    window goes right behind another process's foreground window
+    (`behindForeground`) before and after `SW_SHOWNOACTIVATE`.
+  - *Windows' frames.* Desktop builds get `MYGO_DEV_WINDOWS`, a file in
+    `.mygo/dev` that mygo dev removes as a session starts, taken out of
+    the environment as `MYGO_DEV` (`window_state_dev.go`). The app keeps
+    in it the state of each top-level window without a `StateKey`, by
+    the order it creates them in, with the frame its options asked for,
+    captured as `StateKey`'s are and written as it changes; the next
+    build's window of the same place, whose options ask for the same
+    frame, is restored there (`restoreWindowStateFrom`). A window whose
+    options changed gets them. Child windows, panels and flyouts take
+    no part. Production builds ignore it.
     A build counts as started once its process is: one that crashes on
     start is reported as it exits.
   - *Reload.* A change (polling every 250 ms, debounced) rebuilds;
@@ -7518,8 +7618,8 @@ which npm allows only for packages that exist: the first release uses an
 | web views' language | from the app's `AppleLanguages`, next launch | `webkit_web_context_set_preferred_languages`, live | the environment's `Language`, as it is created |
 | `Theme.SetSource` | `NSApp`'s appearance (Aqua, DarkAqua, or none) | `gtk-application-prefer-dark-theme`; light also puts a theme named for its dark variant (Yaru-dark) in place of its light one (Yaru), which GTK and WebKitGTK otherwise take for dark, and the other sources reset the theme. Without a source, or with system, the setting follows the settings portal's `color-scheme` (GNOME's and KDE's dark style, which GTK 3 does not read) from `Init` on: dark where the portal prefers dark, else the desktop's own GTK settings | the title bars, menus and native UI, and pages through the DevTools protocol's emulated `prefers-color-scheme` |
 | `Theme.SetGTKCSS` | nothing | a `GtkCssProvider` for the default screen at `GTK_STYLE_PROVIDER_PRIORITY_USER`, replaced by the next sheet that parses | nothing |
-| a press the system cancels in native UI (`InputEvent.Canceled`, `PressCanceled`) | a context menu shown while a button is down, whose loop takes the release | `GDK_GRAB_BROKEN` of the pointer, as a menu or another window takes the grab; a touch's `GDK_TOUCH_CANCEL` taps nothing | `WM_CAPTURECHANGED` (and so `WM_CANCELMODE`) while a button is down; `WM_POINTERUP` with `POINTER_MESSAGE_FLAG_CANCELED` |
-| pointer device and pressure of native UI (`InputEvent.Pointer`, `Pressure`) | a mouse event's `subtype`: a tablet's pen (`NSEventSubtypeTabletPoint`, with `pressure`, or `TabletProximity`) or a touch; `tabletPoint:` events, a pen pressing harder or softer between moves, are moves where the pointer is | the event's source device (`gdk_event_get_source_device`): a pen or eraser, or a touchscreen, its pressure axis (`gdk_event_get_axis`); the area's own touches are fingers | `WM_POINTER` messages, left to `DefWindowProc` to make mouse messages of, give the pressure (`GetPointerPenInfo`, `GetPointerTouchInfo`); the mouse messages' `GetMessageExtraInfo` (`MI_WP_SIGNATURE`) tells a pen's or a finger's |
+| a press the system cancels in native UI (`InputEvent.Canceled`, `PressCanceled`) | a context menu shown while a button is down, whose loop takes the release | `GDK_GRAB_BROKEN` of the pointer, as a menu or another window takes the grab; a touch's `GDK_TOUCH_CANCEL` taps nothing | a finger's canceled `WM_POINTERUP` or `WM_POINTERCAPTURECHANGED` taps nothing; `WM_CAPTURECHANGED` (and so `WM_CANCELMODE`) while a button is down; `WM_POINTERUP` with `POINTER_MESSAGE_FLAG_CANCELED` |
+| pointer device and pressure of native UI (`InputEvent.Pointer`, `Pressure`) | a mouse event's `subtype`: a tablet's pen (`NSEventSubtypeTabletPoint`, with `pressure`, or `TabletProximity`) or a touch; `tabletPoint:` events, a pen pressing harder or softer between moves, are moves where the pointer is | the event's source device (`gdk_event_get_source_device`): a pen or eraser, or a touchscreen, its pressure axis (`gdk_event_get_axis`); the area's own touches are fingers | a pen's `WM_POINTER` messages, left to `DefWindowProc` to make mouse messages of, give the pressure (`GetPointerPenInfo`), and the mouse messages' `GetMessageExtraInfo` (`MI_WP_SIGNATURE`) tells a pen's or a finger's; a finger's the surface takes, with its pressure (`GetPointerTouchInfo`), but for one landing on an embedded web view or a drag region, whose mouse messages tell a finger's |
 | cursors of native UI without a system cursor | `CursorWait`, `CursorHelp`, `CursorZoomIn`, `CursorZoomOut`, `CursorAllScroll` and `CursorCell` from AppKit's private class methods (`_waitCursor`, `_helpCursor`, …, looked up with `respondsToSelector:`), `CursorProgress` its `busyButClickableCursor`, else the nearest public cursor or the arrow | the CSS names from the cursor theme, then GDK's X cursors, then the nearest (`cursorFallbacks`) | `CursorZoomIn`, `CursorZoomOut` and `CursorCell` drawn (`CreateCursor`, `cursorMasks`), the others `IDC_APPSTARTING`, `IDC_WAIT`, `IDC_HELP`, `IDC_SIZEALL`, `IDC_NO` |
 | traffic lights, Dock | yes | ignored | ignored |
 | hidden title bar | AppKit's traffic lights over a full-size content view | GTK's title buttons in header bars over the page, per `gtk-decoration-layout`; none where the Wayland compositor decorates windows | caption buttons drawn in a layered child window, through DirectComposition over a material, light or dark per window (`SetWindowButtonsTheme`); snap layouts; a top edge that resizes |

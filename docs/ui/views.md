@@ -162,8 +162,10 @@ pointer keys the object it points to, whatever the object holds, so an
 item's pointer serves as its key as well as an ID does. A key Go cannot
 compare, as a slice, or not equal to itself, as a NaN, compares by its
 value printed. `Element.Key` can
-key a container before its children or local state are built. Use
-`Context.Key` for stateful controls and custom base widgets.
+key a container before its state is read or bound (`Local`, `Clicked`,
+`Hovered`, `Focused`, `OnUnmount`, `AnimateTo`, and the like); calling it
+afterward logs a warning in apps and panics in `Tester`. Use `Context.Key`
+before construction for stateful controls and custom widgets.
 
 `Context.GlobalKey` gives the next element an identity independent of its
 parent, so its state, and its children's, follow it when it moves to

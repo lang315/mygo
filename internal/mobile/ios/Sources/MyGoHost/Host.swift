@@ -213,7 +213,11 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
             case .success(let v):
                 Go.send(Event.asyncResult(req: c.req, result: (v as? String) ?? "", error: ""))
             case .failure(let e):
-                Go.send(Event.asyncResult(req: c.req, result: "", error: e.localizedDescription))
+                // The exception's own message, as "SyntaxError: …", which Eval
+                // looks for to run a script of statements as a function body;
+                // the description is WebKit's "A JavaScript exception occurred".
+                let msg = (e as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String
+                Go.send(Event.asyncResult(req: c.req, result: "", error: msg ?? e.localizedDescription))
             }
         }
     }
@@ -604,6 +608,7 @@ final class Host: NSObject, HostCalls, UNUserNotificationCenterDelegate, UIDocum
     func surface(_ id: Int) -> SurfaceWindow? { windows[id] as? SurfaceWindow }
 
     func requestFrame(_ c: RequestFrameCall) { surface(c.id)?.requestFrame() }
+    func setFrameRate(_ c: SetFrameRateCall) { surface(c.id)?.setFrameRate(c.fps) }
     func setTextInput(_ c: SetTextInputCall) { surface(c.id)?.setTextInput(c) }
     func setCursor(_ c: SetCursorCall) { surface(c.id)?.setCursor(c.cursor) }
     func accessibilityChanged(_ c: AccessibilityChangedCall) { surface(c.id)?.accessibilityChanged(focus: c.focus) }
