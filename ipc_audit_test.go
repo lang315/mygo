@@ -130,6 +130,20 @@ func TestCallWithALoneSurrogateIsAnswered(t *testing.T) {
 	}
 }
 
+// A window's own method reads a lone surrogate as U+FFFD too, as the
+// envelope and bound methods do (upstream #1941).
+func TestWindowMethodWithALoneSurrogate(t *testing.T) {
+	w, fw := auditWindow(t)
+	page(fw, `{"t":"call","id":8,"k":"tok","m":"mygo:window.SetTitle","a":["a\ud800b"]}`)
+	reply := received(t, fw, func(m map[string]any) bool { return m["t"] == "reply" && m["id"] == float64(8) })
+	if reply["ok"] != true {
+		t.Fatalf("SetTitle with a lone surrogate was answered %v", reply)
+	}
+	if got := w.Title(); got != "a�b" {
+		t.Errorf("title = %q, want %q", got, "a�b")
+	}
+}
+
 func TestAppEventsSkipAnUntrustedPage(t *testing.T) {
 	w, fw := auditWindow(t)
 	commit(fw, "https://evil.example/")

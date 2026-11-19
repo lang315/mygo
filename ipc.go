@@ -343,10 +343,12 @@ func decodeArg(raw rawValue, t reflect.Type, i int) (reflect.Value, error) {
 // message to their parameters without being copied.
 type rawValue []byte
 
-// readInt64 reads raw as encoding/json/v2 reads an int64; null reads as 0.
+// readInt64 reads raw as encoding/json/v2 reads an int64 with decodeOptions;
+// null reads as 0.
 func readInt64(raw rawValue) (int64, error) {
 	r := jsonlite.NewReader(raw)
 	r.Strict = true
+	r.AllowInvalidUTF8 = true
 	if null, err := r.Null(); null || err != nil {
 		return 0, err
 	}
@@ -358,13 +360,15 @@ func readInt64(raw rawValue) (int64, error) {
 }
 
 // readStringArg reads the argument i of a window's method as encoding/json/v2 reads
-// a string; a missing argument and null read as "".
+// a string with decodeOptions (invalid UTF-8 and lone surrogates read as
+// U+FFFD); a missing argument and null read as "".
 func readStringArg(args []rawValue, i int) (string, error) {
 	if i >= len(args) {
 		return "", nil
 	}
 	r := jsonlite.NewReader(args[i])
 	r.Strict = true
+	r.AllowInvalidUTF8 = true
 	if null, err := r.Null(); null || err != nil {
 		return "", err
 	}
