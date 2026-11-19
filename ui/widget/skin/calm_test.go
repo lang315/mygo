@@ -65,7 +65,7 @@ func TestThemeOfMapsEveryField(t *testing.T) {
 		if dark {
 			tk.Surface = ui.Hex("#262a30")
 		}
-		tk.RadiusControl, tk.Body.Size = 7, 17
+		tk.RadiusControl, tk.FontSize = 7, 17
 		// Metrics apart from each other, so a field mapped from another fails.
 		tk.ControlHeight, tk.RowHeight, tk.HeaderHeight, tk.TabHeight = 37, 31, 29, 41
 		tk.CheckSize, tk.SwitchWidth, tk.SwitchHeight = 14, 43, 23
@@ -127,27 +127,29 @@ func TestThemeOfMapsEveryField(t *testing.T) {
 // Calm's metrics are the spec's, the same in both appearances.
 func TestCalmMetrics(t *testing.T) {
 	l := Calm.light
-	if l.ControlHeight != 36 || l.RowHeight != 30 || l.RadiusCard != 10 || l.RadiusDialog != 12 {
-		t.Errorf("ControlHeight %v, RowHeight %v, RadiusCard %v, RadiusDialog %v; want 36, 30, 10, 12",
-			l.ControlHeight, l.RowHeight, l.RadiusCard, l.RadiusDialog)
+	if l.ControlHeight != 36 || l.RowHeight != 30 || l.RadiusCard != 10 {
+		t.Errorf("ControlHeight %v, RowHeight %v, RadiusCard %v; want 36, 30, 10",
+			l.ControlHeight, l.RowHeight, l.RadiusCard)
 	}
 	d := Calm.dark
 	type metrics struct {
-		a [19]float32
+		a [22]float32
 	}
 	of := func(t *skinhook.Tokens) metrics {
-		return metrics{[19]float32{t.ControlHeight, t.RowHeight, t.HeaderHeight, t.SettingsRowHeight, t.TabHeight,
-			t.MenuBarStripHeight, t.MenuBarItemHeight, t.RadiusControl, t.RadiusCard, t.RadiusDialog, t.ToolbarPadTop,
-			t.ToolbarPadBottom, t.ToolbarGap, t.ToolbarGroupGap, t.Icon, t.ToolbarIcon, t.CheckSize, t.SwitchWidth, t.SwitchHeight}}
+		return metrics{[22]float32{t.ControlHeight, t.RowHeight, t.HeaderHeight, t.SettingsRowHeight, t.TabHeight,
+			t.MenuBarStripHeight, t.MenuBarItemHeight, t.RadiusControl, t.RadiusCard, t.ToolbarPadTop,
+			t.ToolbarPadBottom, t.ToolbarGap, t.ToolbarGroupGap, t.Icon, t.ToolbarIcon, t.CheckSize, t.SwitchWidth, t.SwitchHeight,
+			t.FontSize, t.FocusRingWidth, t.FocusRingOffset, t.ScrollbarWidth}}
 	}
 	if of(&l) != of(&d) {
 		t.Errorf("dark metrics %v differ from light %v", of(&d), of(&l))
 	}
-	if l.Body != d.Body || l.Label != d.Label || l.Hover != d.Hover || l.Toggle != d.Toggle {
-		t.Errorf("dark type or motion differ from light")
+	if l.Caption != d.Caption || l.Label != d.Label || l.Heading != d.Heading || l.Title != d.Title {
+		t.Errorf("dark type differs from light")
 	}
-	if l.Body.Size != 13 || l.Body.Line != 20 || l.Hover.Milliseconds() != 90 || l.Toggle.Milliseconds() != 120 {
-		t.Errorf("Body %v, Hover %v, Toggle %v; want 13/20, 90ms, 120ms", l.Body, l.Hover, l.Toggle)
+	want := [4]skinhook.Type{{Size: 11, Weight: 400}, {Size: 12, Weight: 600}, {Size: 15, Weight: 600}, {Size: 20, Weight: 600}}
+	if got := [4]skinhook.Type{l.Caption, l.Label, l.Heading, l.Title}; l.FontSize != 13 || got != want {
+		t.Errorf("FontSize %v, Caption, Label, Heading, Title %v; want 13, %v", l.FontSize, got, want)
 	}
 }
 

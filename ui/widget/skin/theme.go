@@ -31,7 +31,7 @@ func themeOf(t *skinhook.Tokens, dark bool) *ui.Theme {
 	th.Selection = t.Selection
 	th.Focus = t.Accent.Base
 	th.Radius = t.RadiusControl
-	th.FontSize = t.Body.Size
+	th.FontSize = t.FontSize
 	th.Font = t.Font
 	th.Metrics = ui.Metrics{ControlHeight: t.ControlHeight, RowHeight: t.RowHeight, HeaderHeight: t.HeaderHeight,
 		TabHeight: t.TabHeight, CheckSize: t.CheckSize, SwitchWidth: t.SwitchWidth, SwitchHeight: t.SwitchHeight}
@@ -42,5 +42,7 @@ func themeOf(t *skinhook.Tokens, dark bool) *ui.Theme {
 		th.Scrollbar = t.Text.Alpha(0.35)
 	}
 	th.Inverse, th.InverseText = t.Text, t.Background
+	th.FocusRingWidth, th.FocusRingOffset = t.FocusRingWidth, t.FocusRingOffset
+	th.ScrollbarWidth, th.ScrollbarStyle = t.ScrollbarWidth, t.ScrollbarStyle
 	return th
 }

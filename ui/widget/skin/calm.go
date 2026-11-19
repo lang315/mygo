@@ -1,8 +1,6 @@
 package skin
 
 import (
-	"time"
-
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
@@ -38,22 +36,17 @@ var calmLight = skinhook.Tokens{
 		ui.Hex("#0891b2"), ui.Hex("#db2777"), ui.Hex("#a16207"), ui.Hex("#4b5563")},
 	ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, SettingsRowHeight: 56,
 	TabHeight: 40, MenuBarStripHeight: 34, MenuBarItemHeight: 28,
-	RadiusControl: 6, RadiusCard: 10, RadiusDialog: 12,
+	RadiusControl: 6, RadiusCard: 10,
 	ToolbarPadTop: 10, ToolbarPadBottom: 12, ToolbarGap: 10, ToolbarGroupGap: 12,
 	Icon: 16, ToolbarIcon: 17, CheckSize: 15, SwitchWidth: 40, SwitchHeight: 22,
-	Body:    skinhook.Type{Size: 13, Line: 20, Weight: 400},
-	Caption: skinhook.Type{Size: 11, Line: 16, Weight: 400},
-	Label:   skinhook.Type{Size: 12, Line: 16, Weight: 600},
-	Heading: skinhook.Type{Size: 15, Line: 20, Weight: 600},
-	Title:   skinhook.Type{Size: 20, Line: 28, Weight: 600},
-	Elevation: [4]skinhook.Shadow{
-		{},
-		{Y: 1, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.04)},
-		{Y: 6, Blur: 20, Color: ui.RGBA(0, 0, 0, 0.18)},
-		{Y: 12, Blur: 32, Spread: -8, Color: ui.RGBA(0, 0, 0, 0.18)},
-	},
-	Hover:  90 * time.Millisecond,
-	Toggle: 120 * time.Millisecond,
+	FontSize:       13,
+	Caption:        skinhook.Type{Size: 11, Weight: 400},
+	Label:          skinhook.Type{Size: 12, Weight: 600},
+	Heading:        skinhook.Type{Size: 15, Weight: 600},
+	Title:          skinhook.Type{Size: 20, Weight: 600},
+	CardShadow:     skinhook.Shadow{Y: 1, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.04)},
+	PopupShadow:    skinhook.Shadow{Y: 6, Blur: 20, Color: ui.RGBA(0, 0, 0, 0.18)},
+	FocusRingWidth: 2, FocusRingOffset: 1,
 }
 
 var calmDark = skinhook.Tokens{
@@ -80,20 +73,14 @@ var calmDark = skinhook.Tokens{
 		ui.Hex("#22d3ee"), ui.Hex("#f472b6"), ui.Hex("#facc15"), ui.Hex("#9ca3af")},
 	ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, SettingsRowHeight: 56,
 	TabHeight: 40, MenuBarStripHeight: 34, MenuBarItemHeight: 28,
-	RadiusControl: 6, RadiusCard: 10, RadiusDialog: 12,
+	RadiusControl: 6, RadiusCard: 10,
 	ToolbarPadTop: 10, ToolbarPadBottom: 12, ToolbarGap: 10, ToolbarGroupGap: 12,
 	Icon: 16, ToolbarIcon: 17, CheckSize: 15, SwitchWidth: 40, SwitchHeight: 22,
-	Body:    skinhook.Type{Size: 13, Line: 20, Weight: 400},
-	Caption: skinhook.Type{Size: 11, Line: 16, Weight: 400},
-	Label:   skinhook.Type{Size: 12, Line: 16, Weight: 600},
-	Heading: skinhook.Type{Size: 15, Line: 20, Weight: 600},
-	Title:   skinhook.Type{Size: 20, Line: 28, Weight: 600},
-	Elevation: [4]skinhook.Shadow{
-		{},
-		{},
-		{Y: 6, Blur: 20, Color: ui.RGBA(0, 0, 0, 0.5)},
-		{Y: 12, Blur: 32, Spread: -8, Color: ui.RGBA(0, 0, 0, 0.5)},
-	},
-	Hover:  90 * time.Millisecond,
-	Toggle: 120 * time.Millisecond,
+	FontSize:       13,
+	Caption:        skinhook.Type{Size: 11, Weight: 400},
+	Label:          skinhook.Type{Size: 12, Weight: 600},
+	Heading:        skinhook.Type{Size: 15, Weight: 600},
+	Title:          skinhook.Type{Size: 20, Weight: 600},
+	PopupShadow:    skinhook.Shadow{Y: 6, Blur: 20, Color: ui.RGBA(0, 0, 0, 0.5)},
+	FocusRingWidth: 2, FocusRingOffset: 1,
 }

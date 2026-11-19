@@ -11,7 +11,6 @@ package skinhook
 
 import (
 	"sync/atomic"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -21,10 +20,11 @@ import (
 // base.
 type Family struct{ Base, Hover, Pressed, Subtle, Border, Text, On ui.Color }
 
-// Type is a role of text: its size, line height and weight.
+// Type is a role of text: its size in DIPs and its weight (100 to 900).
+// The text keeps its own line height.
 type Type struct {
-	Size, Line float32
-	Weight     int
+	Size   float32
+	Weight int
 }
 
 // Shadow is a drop shadow: its offset down, blur, spread and color.
@@ -61,28 +61,33 @@ type Tokens struct {
 	// Chart colors the series and slices of charts, in order.
 	Chart [8]ui.Color
 
-	// The sizes, in DIPs. SettingsRowHeight, RadiusDialog and Icon take no
-	// effect yet: no control reads them.
+	// The sizes, in DIPs. SettingsRowHeight and Icon take no effect yet: no
+	// control reads them.
 	ControlHeight, RowHeight, HeaderHeight, SettingsRowHeight    float32
 	TabHeight, MenuBarStripHeight, MenuBarItemHeight             float32
-	RadiusControl, RadiusCard, RadiusDialog                      float32
+	RadiusControl, RadiusCard                                    float32
 	ToolbarPadTop, ToolbarPadBottom, ToolbarGap, ToolbarGroupGap float32
 	Icon, ToolbarIcon, CheckSize, SwitchWidth, SwitchHeight      float32
 
-	// The roles of text. Only Body's size takes effect yet: Caption, Label,
-	// Heading and Title, and Body's line and weight, no control reads.
-	Body, Caption, Label, Heading, Title Type
+	// FontSize is the size of text, in DIPs.
+	FontSize float32
+	// The roles of text. They take no effect yet: no control reads them.
+	Caption, Label, Heading, Title Type
 	// Font is the family of text, "" the system's; a font of the app's own
 	// comes in with ui.RegisterFont.
 	Font string
 
-	// Elevation is 0 flat, 1 a card, 2 a popover, 3 a dialog. Only the
-	// card's takes effect yet: no control reads 0, 2 and 3.
-	Elevation [4]Shadow
+	// CardShadow is under a card. PopupShadow takes no effect yet: no
+	// control reads it.
+	CardShadow, PopupShadow Shadow
 
-	// Hover is how long a hover or press change takes, Toggle a switch's.
-	// Both take no effect yet: no control reads them.
-	Hover, Toggle time.Duration
+	// The focus ring is FocusRingWidth DIPs wide (0 is ui's default, 2) and
+	// FocusRingOffset DIPs outside the control's edge (0 puts it on the
+	// edge). Scroll bar thumbs are ScrollbarWidth DIPs wide (0 is ui's
+	// default, 6), and ScrollbarStyle styles the bars where it sets a field
+	// (ui.ScrollbarStyle).
+	FocusRingWidth, FocusRingOffset, ScrollbarWidth float32
+	ScrollbarStyle                                  ui.ScrollbarStyle
 }
 
 var active atomic.Pointer[[2]*Tokens]

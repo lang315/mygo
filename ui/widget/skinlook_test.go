@@ -22,7 +22,7 @@ func skinTestTokens() *skinhook.Tokens {
 		Text:           ui.Hex("#202020"),
 		SurfaceHover:   ui.Hex("#4dd0e1"),
 		SurfacePressed: ui.Hex("#ff8a65"),
-		Elevation:      [4]skinhook.Shadow{{}, {Y: 6, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.6)}},
+		CardShadow:     skinhook.Shadow{Y: 6, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.6)},
 
 		ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, TabHeight: 40,
 		MenuBarStripHeight: 34, MenuBarItemHeight: 28, RadiusControl: 6, RadiusCard: 10,
@@ -483,7 +483,7 @@ func TestSkinTabStrip(t *testing.T) {
 	check(false, nil, plain, false)
 }
 
-// The card: with a skin, rounded by RadiusCard, Elevation[1]'s shadow under
+// The card: with a skin, rounded by RadiusCard, CardShadow under
 // it and a line of 1 around it; without, as before skins.
 func TestSkinCard(t *testing.T) {
 	card := Card().SetTitle(Label("title")).SetBody(Label("body"))

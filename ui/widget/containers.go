@@ -536,7 +536,7 @@ func (k *CardWidget) build(c *ui.Context) ui.Element {
 		Background(t.Surface)
 	if tk, _ := skinOf(c); tk != nil {
 		col.Radius(tk.RadiusCard)
-		if sh := tk.Elevation[1]; sh.Color.A != 0 {
+		if sh := tk.CardShadow; sh.Color.A != 0 {
 			col.Shadow(0, sh.Y, sh.Blur, sh.Spread, sh.Color)
 		}
 	}
