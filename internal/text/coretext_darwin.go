@@ -398,8 +398,8 @@ type coreText struct {
 	shapeScratch
 	nativeFonts
 	styles [2]uintptr // paragraph styles: left-to-right, right-to-left
-	srgb      uintptr
-	smooth    bool // the user leaves font smoothing on
+	srgb   uintptr
+	smooth bool // the user leaves font smoothing on
 	// bands caches where glyphs' outlines cross underlines (inkInBand),
 	// by Font: a CTFont's address may be another's once it is released.
 	bands map[bandKey][2]float32

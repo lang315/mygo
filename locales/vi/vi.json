@@ -196,6 +196,7 @@
   "ok": "OK",
   "open": "Mở",
   "selectFolder": "Chọn thư mục",
+  "notAFolder": "Không thể chọn vị trí này. Hãy chọn một thư mục.",
   "clearTerminal": "Xóa",
   "clipboardRead": "Một chương trình muốn đọc khay nhớ tạm",
   "clipboardReadAllow": "Cho phép",

@@ -313,7 +313,7 @@ type layoutStyle struct {
 	// third and fourth cache lines of the element, under the tree links, the
 	// flags and the box that the first holds.
 	margin                 [4]float32 // Auto for auto margins
-	pad                   [4]float32 // top, right, bottom, left
+	pad                    [4]float32 // top, right, bottom, left
 	insetEnd               float32    // room at the end of a single-line input that its text stays out of (TextInsetEnd)
 	border                 [4]float32 // top, right, bottom, left
 	width, height          length
@@ -353,8 +353,8 @@ type layoutStyle struct {
 	// the walk.
 	absoluteChild bool
 
-	single   bool
-	noWrap   bool
+	single bool
+	noWrap bool
 	// destructive marks a control that destroys (Destructive).
 	destructive bool
 	balance     bool
