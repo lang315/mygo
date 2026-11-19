@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -22,15 +23,40 @@ type sources struct {
 	files  map[string]*ast.File
 	dirs   map[string][]*ast.File
 	pkgDir map[string]string
+	// trimmed holds the import paths of the directories of files that
+	// -trimpath recorded as "<import path>/<file>", not as a path on disk.
+	trimmed map[string]bool
 }
 
 func newSources() *sources {
 	return &sources{
-		fset:   token.NewFileSet(),
-		files:  map[string]*ast.File{},
-		dirs:   map[string][]*ast.File{},
-		pkgDir: map[string]string{},
+		fset:    token.NewFileSet(),
+		files:   map[string]*ast.File{},
+		dirs:    map[string][]*ast.File{},
+		pkgDir:  map[string]string{},
+		trimmed: map[string]bool{},
 	}
+}
+
+// note remembers a recorded file that is not a path on disk, so that
+// resolvePackages finds the directory it was trimmed from.
+func (s *sources) note(file string) {
+	if file != "" && !filepath.IsAbs(file) {
+		s.trimmed[path.Dir(file)] = true
+	}
+}
+
+// onDisk returns the file on disk for a recorded one: itself, or, when
+// -trimpath recorded "<import path>/<file>", the file in that package's
+// directory. It returns "" when the package is unknown.
+func (s *sources) onDisk(file string) string {
+	if file == "" || filepath.IsAbs(file) {
+		return file
+	}
+	if dir, ok := s.pkgDir[path.Dir(file)]; ok {
+		return filepath.Join(dir, path.Base(file))
+	}
+	return ""
 }
 
 func (s *sources) file(path string) *ast.File {
@@ -83,6 +109,7 @@ func (s *sources) learnPC(pc uintptr) (file string, line int) {
 		return "", 0
 	}
 	file, line = fn.FileLine(fn.Entry())
+	s.note(file)
 	if pkg := funcPackage(fn.Name()); pkg != "" && filepath.IsAbs(file) {
 		if _, ok := s.pkgDir[pkg]; !ok {
 			s.pkgDir[pkg] = filepath.Dir(file)
@@ -95,6 +122,9 @@ func (s *sources) learnPC(pc uintptr) (file string, line int) {
 // were not discovered through program counters.
 func (s *sources) resolvePackages(pkgs []string) {
 	var missing []string
+	for p := range s.trimmed {
+		pkgs = append(pkgs, p)
+	}
 	for _, p := range pkgs {
 		if _, ok := s.pkgDir[p]; !ok && p != "main" && strings.Contains(strings.Split(p, "/")[0], ".") {
 			missing = append(missing, p)
@@ -122,7 +152,7 @@ func (s *sources) resolvePackages(pkgs []string) {
 // funcDecl finds the declaration of the method containing the given
 // source position.
 func (s *sources) funcDecl(file string, line int, name string) *ast.FuncDecl {
-	if file == "" {
+	if file = s.onDisk(file); file == "" {
 		return nil
 	}
 	f := s.file(file)
@@ -236,7 +266,7 @@ func (s *sources) fieldDoc(owner reflect.Type, goName string) string {
 // valueDoc returns the documentation of the variable declared at the
 // given position, used for events.
 func (s *sources) valueDoc(file string, line int) string {
-	if file == "" {
+	if file = s.onDisk(file); file == "" {
 		return ""
 	}
 	f := s.file(file)
