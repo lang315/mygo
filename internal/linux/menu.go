@@ -655,6 +655,20 @@ func (b *Backend) trayName(id, program string, n int) string {
 	return name
 }
 
+// indicatorPath is the D-Bus object path at which libayatana-appindicator
+// exports the item of an indicator of ID name: its "clean" ID, every byte
+// but an ASCII letter, digit or "-" made "-" (g_strcanon), then "-" made
+// "_" (g_strdelimit), under /org/ayatana/NotificationItem.
+func indicatorPath(name string) string {
+	b := []byte(name)
+	for i, c := range b {
+		if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9') {
+			b[i] = '_'
+		}
+	}
+	return "/org/ayatana/NotificationItem/" + string(b)
+}
+
 func (t *tray) SetImage(data []byte, template bool) error {
 	if t.held() {
 		t.image, t.template = data, template

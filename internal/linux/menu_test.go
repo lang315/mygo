@@ -167,6 +167,22 @@ func TestTrayName(t *testing.T) {
 	}
 }
 
+// TestIndicatorPath checks the object path libayatana-appindicator exports
+// an indicator's item at: its ID with every byte but an ASCII letter or digit
+// made "_" ("-", ".", and each byte of a rune past ASCII too).
+func TestIndicatorPath(t *testing.T) {
+	for name, want := range map[string]string{
+		"notes-4":        "/org/ayatana/NotificationItem/notes_4",
+		"e2e.test-1":     "/org/ayatana/NotificationItem/e2e_test_1",
+		"Mail_App-main2": "/org/ayatana/NotificationItem/Mail_App_main2",
+		"é-1":            "/org/ayatana/NotificationItem/___1",
+	} {
+		if got := indicatorPath(name); got != want {
+			t.Errorf("indicatorPath(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 // TestDropOwnerForgetsRoles checks that a menu that is gone leaves nothing
 // of its items behind: an app that builds a context menu of new items each
 // time it shows one would grow itemRoles for good, which enableEditItems

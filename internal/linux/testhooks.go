@@ -5,7 +5,6 @@ package linux
 import (
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -695,8 +694,12 @@ func TestTrayMenuAddress() (name, path string) {
 	if err != nil || theBackend.nextTray == 0 {
 		return "", ""
 	}
-	// AppIndicator exports the item at its id with "-" turned to "_".
-	return goStr(gDBusConnectionGetUniqueName(conn)), fmt.Sprintf("/org/ayatana/NotificationItem/mygo_%d_%d/Menu", os.Getpid(), theBackend.nextTray)
+	t := theBackend.trays[theBackend.nextTray]
+	if t == nil {
+		return "", ""
+	}
+	// The item's path, from the ID the icon was made with (trayName).
+	return goStr(gDBusConnectionGetUniqueName(conn)), indicatorPath(t.name) + "/Menu"
 }
 
 // TestReadTrayMenu reads the menu at a TestTrayMenuAddress as a tray host
