@@ -100,6 +100,7 @@ var uiResults = map[string]string{
 	"Tabs":                 "Element",
 	"TabsBase":             "TabsParts",
 	"TabsKeyed":            "Element",
+	"TabsKeyedBase":        "TabsParts",
 	"Text":                 "Element",
 	"TextArea":             "Element",
 	"TextAreaBase":         "Element",
