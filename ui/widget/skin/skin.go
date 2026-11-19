@@ -86,6 +86,7 @@ func (s *Skin) Check() error {
 type Skin struct {
 	name        string
 	palette     *Palette
+	density     Density
 	light, dark skinhook.Tokens
 }
 
@@ -110,8 +111,13 @@ func Use(s *Skin) {
 	}
 	// The hook first and the themes last: the generation the themes bump
 	// tells kept rows that the tokens changed too.
-	skinhook.Set(&s.light, &s.dark)
-	ui.SetDefaultThemes(themeOf(&s.light, false), themeOf(&s.dark, true))
+	l, d := &s.light, &s.dark
+	if s.density == Compact {
+		cl, cd := compact(s.light), compact(s.dark)
+		l, d = &cl, &cd
+	}
+	skinhook.Set(l, d)
+	ui.SetDefaultThemes(themeOf(l, false), themeOf(d, true))
 }
 
 // Active returns the skin Use set, or nil.
