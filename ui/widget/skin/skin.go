@@ -97,6 +97,8 @@ type Skin struct {
 	palettes    []*Palette
 	density     Density
 	light, dark skinhook.Tokens
+	looks       Looks
+	parsed      *[skinhook.NumKinds]any // looks' Styles, as Use hands them to widget
 }
 
 // Name returns the skin's name, as "Calm".
@@ -115,6 +117,7 @@ func Use(s *Skin) {
 	active.Store(s)
 	if s == nil {
 		skinhook.Set(nil, nil)
+		skinhook.SetLooks(nil)
 		ui.SetDefaultThemes(nil, nil)
 		return
 	}
@@ -126,6 +129,7 @@ func Use(s *Skin) {
 		l, d = &cl, &cd
 	}
 	skinhook.Set(l, d)
+	skinhook.SetLooks(s.parsed)
 	ui.SetDefaultThemes(themeOf(l, false), themeOf(d, true))
 }
 
