@@ -44,3 +44,7 @@ func (r *windowRenderer) Release() {
 	r.Renderer.Release()
 	r.w.Release()
 }
+
+// linkVideoRenderers links the renderer's code for frames of video, which an
+// app that plays none does not carry.
+func linkVideoRenderers() { gl.LinkVideo() }
