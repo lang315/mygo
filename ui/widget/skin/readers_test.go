@@ -53,19 +53,90 @@ func nodeOf(t *testing.T, tt *widget.Tester, r ui.Role, label string) ui.Rect {
 	return ui.Rect{}
 }
 
-// nearest is the pixel of r nearest to c, and how far it is.
-func nearest(tt *widget.Tester, r ui.Rect, c ui.Color) (ui.Color, float64) {
+// big is the text size the color tests draw at: an H's stems are several
+// pixels wide, so their inner pixels are the ink itself under any
+// anti-aliasing, grayscale or subpixel (ClearType), which only blends the
+// edge pixels of a stroke toward the ground.
+var big = widget.NewStyle().FontSize(40)
+
+// inkOf is the color of the text drawn in the field r: for each channel,
+// the value farthest from the field's fill (taken inside r's end, past the
+// text). Every pixel of text is a blend of the fill and the ink, a channel at
+// a time under subpixel anti-aliasing, so no channel goes past the ink's;
+// a pixel the text covers whole gives each channel the ink's.
+//
+// It fails the test unless at least 30 pixels are that ink in every channel
+// (within 2): the stems' inner pixels, which show the text was drawn big
+// and the estimate is a covered pixel, not a fringe.
+func inkOf(t *testing.T, tt *widget.Tester, r ui.Rect) ui.Color {
+	t.Helper()
 	img := tt.Image()
-	best, most := ui.Color{}, 1e9
-	for y := int(r.Y); y < int(r.Y+r.H); y++ {
-		for x := int(r.X); x < int(r.X+r.W); x++ {
+	fill := colorAt(img, int(r.X+r.W)-6, int(r.Y+r.H/2))
+	ink := fill
+	far := func(c, cur, ground uint8) uint8 {
+		if absInt(int(c)-int(ground)) > absInt(int(cur)-int(ground)) {
+			return c
+		}
+		return cur
+	}
+	// Inside the border and its focus ring, over the text's half.
+	x0, x1, y0, y1 := int(r.X)+4, int(r.X+r.W/2), int(r.Y)+4, int(r.Y+r.H)-4
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
 			p := colorAt(img, x, y)
-			if d := dist(p, c); d < most {
-				best, most = p, d
+			ink.R, ink.G, ink.B = far(p.R, ink.R, fill.R), far(p.G, ink.G, fill.G), far(p.B, ink.B, fill.B)
+		}
+	}
+	whole := 0
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			p := colorAt(img, x, y)
+			if absInt(int(p.R)-int(ink.R)) <= 2 && absInt(int(p.G)-int(ink.G)) <= 2 && absInt(int(p.B)-int(ink.B)) <= 2 {
+				whole++
 			}
 		}
 	}
-	return best, most
+	if whole < 30 {
+		t.Errorf("only %d pixels of %v are the text's ink %v in every channel, want 30: the text is not drawn big, or every pixel is a fringe", whole, r, ink)
+	}
+	return ink
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// inkIs fails the test unless ink is want, within a few levels: the inner
+// pixels of a big stem are the ink exactly, and the tolerance only covers a
+// renderer's rounding.
+func inkIs(t *testing.T, what string, ink, want ui.Color) {
+	t.Helper()
+	if d := dist(ink, want); d > 12 {
+		t.Errorf("%s is %v, want %v (%.0f away)", what, ink, want, d)
+	}
+}
+
+// The ink estimate holds under subpixel anti-aliasing: a stem whose edge
+// pixels carry red and blue fringes, as ClearType draws, still gives the ink.
+func TestInkOfSubpixelFringes(t *testing.T) {
+	fill, ink := ui.Hex("#ffffff"), ui.Hex("#ff00aa")
+	tt := widget.NewTester(t, widget.Custom(func(c *ui.Context) ui.Element {
+		return ui.Box(c).Size(100, 40).Background(fill).DrawOver(func(p *ui.Painter, r ui.Rect) {
+			// Per channel coverage across a stem 5 pixels wide, shifted by a
+			// third of a pixel per channel, as ClearType's subpixels.
+			cov := [][3]float32{{0.3, 0.6, 0.9}, {1, 1, 1}, {1, 1, 1}, {1, 1, 1}, {0.9, 0.6, 0.3}}
+			for i, k := range cov {
+				mix := func(a, b uint8, f float32) uint8 { return uint8(float32(a) + (float32(b)-float32(a))*f + 0.5) }
+				c := ui.Color{R: mix(fill.R, ink.R, k[0]), G: mix(fill.G, ink.G, k[1]), B: mix(fill.B, ink.B, k[2]), A: 255}
+				p.Fill(ui.Rect{X: r.X + 10 + float32(i), Y: r.Y + 8, W: 1, H: 24}, c, 0)
+			}
+		})
+	}), 100, 40)
+	tt.Frame()
+	inkIs(t, "the fringed stem's ink", inkOf(t, tt, ui.Rect{W: 100, H: 40}), ink)
 }
 
 func appearance(dark bool) string {
@@ -81,46 +152,38 @@ func TestPlaceholderTakesTheSkin(t *testing.T) {
 	pink := ui.Hex("#ff00aa")
 	for _, dark := range []bool{false, true} {
 		t.Run(appearance(dark), func(t *testing.T) {
-			tt := showSkin(t, widget.TextBox().SetPlaceholder("x"), 300, 120, readerSentinel(), dark, 1)
+			tt := showSkin(t, widget.TextBox().SetPlaceholder("HH").Apply(big), 300, 120, readerSentinel(), dark, 1)
 			box := nodeOf(t, tt, ui.RoleTextField, "")
-			if c, d := nearest(tt, box, pink); d > 8 {
-				t.Errorf("with the sentinel skin the placeholder's nearest pixel to %v is %v (%.0f away)", pink, c, d)
-			}
+			inkIs(t, "with the sentinel skin the placeholder", inkOf(t, tt, box), pink)
 			Use(nil)
 			tt.Frame()
-			if c, d := nearest(tt, box, pink); d < 100 {
-				t.Errorf("after Use(nil) the placeholder still paints %v (%.0f from %v)", c, d, pink)
+			if ink := inkOf(t, tt, box); dist(ink, pink) < 100 {
+				t.Errorf("after Use(nil) the placeholder is %v, %.0f from the skin's %v", ink, dist(ink, pink), pink)
 			}
 			// Calm's own, the dark one in the dark.
 			Use(Calm)
 			tt.Frame()
-			want, other := ui.Hex("#6b7280"), ui.Hex("#8e96a1")
+			want := ui.Hex("#6b7280")
 			if dark {
-				want, other = other, want
+				want = ui.Hex("#8e96a1")
 			}
-			// The ink of the placeholder: its pixel farthest from the field.
-			field := px(tt, box.X+box.W-6, box.Y+box.H/2)
-			ink, _ := strongest(tt, ui.Rect{X: box.X + 2, Y: box.Y + 2, W: box.W / 2, H: box.H - 4}, field)
-			if dist(ink, want) > 8 || dist(ink, want) >= dist(ink, other) {
-				t.Errorf("with Calm the placeholder's ink is %v, want %v (not %v)", ink, want, other)
-			}
+			inkIs(t, "with Calm the placeholder", inkOf(t, tt, box), want)
 		})
 	}
 }
 
 // A MultilineTextBox's placeholder takes the skin's TextPlaceholder too.
 func TestMultilinePlaceholderTakesTheSkin(t *testing.T) {
-	pink, whole := ui.Hex("#ff00aa"), ui.Rect{W: 300, H: 200}
+	pink := ui.Hex("#ff00aa")
 	for _, dark := range []bool{false, true} {
 		t.Run(appearance(dark), func(t *testing.T) {
-			tt := showSkin(t, widget.MultilineTextBox().SetPlaceholder("x"), 300, 200, readerSentinel(), dark, 1)
-			if c, d := nearest(tt, whole, pink); d > 8 {
-				t.Errorf("with the sentinel skin the placeholder's nearest pixel to %v is %v (%.0f away)", pink, c, d)
-			}
+			tt := showSkin(t, widget.MultilineTextBox().SetPlaceholder("HH").Apply(big), 300, 200, readerSentinel(), dark, 1)
+			box := nodeOf(t, tt, ui.RoleTextField, "")
+			inkIs(t, "with the sentinel skin the placeholder", inkOf(t, tt, box), pink)
 			Use(nil)
 			tt.Frame()
-			if c, d := nearest(tt, whole, pink); d < 100 {
-				t.Errorf("after Use(nil) the placeholder still paints %v (%.0f from %v)", c, d, pink)
+			if ink := inkOf(t, tt, box); dist(ink, pink) < 100 {
+				t.Errorf("after Use(nil) the placeholder is %v, %.0f from the skin's %v", ink, dist(ink, pink), pink)
 			}
 		})
 	}
@@ -132,8 +195,9 @@ func TestOwnStyleWinsOverPlaceholder(t *testing.T) {
 	own, pink := ui.Hex("#123456"), ui.Hex("#ff00aa")
 	for _, dark := range []bool{false, true} {
 		t.Run(appearance(dark), func(t *testing.T) {
-			typed := widget.TextBox().SetText("x").Apply(widget.NewStyle().TextColor(widget.Hex("#123456")))
-			empty := widget.TextBox().SetPlaceholder("x").Apply(widget.NewStyle().TextColor(widget.Hex("#123456")))
+			mine := big.TextColor(widget.Hex("#123456"))
+			typed := widget.TextBox().SetText("HH").Apply(mine)
+			empty := widget.TextBox().SetPlaceholder("HH").Apply(mine)
 			tt := showSkin(t, widget.VBox(8).Add(typed, empty), 300, 240, readerSentinel(), dark, 1)
 			var boxes []ui.Rect
 			for _, n := range tt.Nodes() {
@@ -144,12 +208,8 @@ func TestOwnStyleWinsOverPlaceholder(t *testing.T) {
 			if len(boxes) != 2 {
 				t.Fatalf("%d text fields, want 2", len(boxes))
 			}
-			if c, d := nearest(tt, boxes[0], own); d > 8 {
-				t.Errorf("the text's nearest pixel to its own %v is %v (%.0f away)", own, c, d)
-			}
-			if c, d := nearest(tt, boxes[1], pink); d > 8 {
-				t.Errorf("the placeholder's nearest pixel to the skin's %v is %v (%.0f away)", pink, c, d)
-			}
+			inkIs(t, "the text, of its own color,", inkOf(t, tt, boxes[0]), own)
+			inkIs(t, "the placeholder, of the skin's color,", inkOf(t, tt, boxes[1]), pink)
 		})
 	}
 }
