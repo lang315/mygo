@@ -58,7 +58,7 @@ func (f *GroupBoxWidget) build(c *ui.Context) ui.Element {
 		case f.titleW != nil:
 			render(c, f.titleW)
 		case f.title != "":
-			ui.Text(c, f.title).Bold()
+			skinType(c, ui.Text(c, f.title).Bold(), labelRole)
 		}
 		if f.child != nil {
 			e := render(c, f.child)

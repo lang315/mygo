@@ -12,7 +12,8 @@ type LabelWidget struct {
 	common[LabelWidget]
 	text        string
 	spans       []ui.Span
-	useMnemonic bool // SetUseMnemonic(true)
+	useMnemonic bool      // SetUseMnemonic(true)
+	role        *textRole // a role the widgets give their own labels, as a dialog's title
 }
 
 // Label makes a label showing s.
@@ -44,6 +45,15 @@ func (l *LabelWidget) Rich(spans ...ui.Span) *LabelWidget {
 func (l *LabelWidget) Text() string { mu.Lock(); defer mu.Unlock(); return l.text }
 
 func (l *LabelWidget) build(c *ui.Context) ui.Element {
+	e := l.textElement(c)
+	if l.role != nil {
+		l.role.apply(c, e) // under the label's own style, which render applies
+	}
+	return e
+}
+
+// textElement builds the label's text.
+func (l *LabelWidget) textElement(c *ui.Context) ui.Element {
 	if len(l.spans) > 0 {
 		return ui.RichText(c, l.spans...)
 	}

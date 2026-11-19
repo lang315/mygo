@@ -75,7 +75,8 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 // heading, so no node for assistive technology; there is none first, nor
 // where the section's rows are all hidden.
 func (f *FieldsWidget) Section(title string) *FieldsWidget {
-	l := Label(title).Bold()
+	l := Label(title)
+	l.role = &headingText
 	f.change(func() { f.heads = append(f.heads, fieldHead{l, len(f.rows)}) })
 	return f
 }

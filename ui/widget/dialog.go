@@ -29,9 +29,10 @@ type Dialog struct {
 func NewDialog(parent *Form, title, subtitle string, width, height int, content Control) *Dialog {
 	d := &Dialog{
 		Form:     NewForm(title, width, height),
-		title:    Label(title).Bold().TextSize(LG),
+		title:    Label(title),
 		subtitle: Label(subtitle).Muted().SetVisible(subtitle != ""),
 	}
+	d.title.role = &titleText
 	d.parent, d.dialog, d.fit = parent, true, height == 0
 	d.SetContent(VBox(8).Add(d.title, d.subtitle).Pack(content, true, true).Padding(4))
 	return d

@@ -3,6 +3,9 @@ package widget
 import (
 	"image/color"
 	"math"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -28,6 +31,51 @@ func skinTestTokens() *skinhook.Tokens {
 		MenuBarStripHeight: 34, MenuBarItemHeight: 28, RadiusControl: 6, RadiusCard: 10,
 		ToolbarPadTop: 10, ToolbarPadBottom: 12, ToolbarGap: 10, ToolbarGroupGap: 12,
 		Icon: 16, ToolbarIcon: 17, CheckSize: 15, SwitchWidth: 40, SwitchHeight: 22,
+		Caption: skinhook.Type{Size: 11, Weight: 400}, Label: skinhook.Type{Size: 12, Weight: 600},
+		Heading: skinhook.Type{Size: 15, Weight: 600}, Title: skinhook.Type{Size: 20, Weight: 600},
+	}
+}
+
+// inspected is the font size and weight the text label draws with, as the
+// inspector shows them (to one decimal): its own, else the nearest
+// ancestor's; 0 where none is set.
+func inspected(t *testing.T, tt *Tester, label string) (size float32, weight int) {
+	t.Helper()
+	if err := tt.Inspect(label); err != nil {
+		t.Fatal(err)
+	}
+	texts := tt.Texts()
+	i := slices.Index(texts, "Styles")
+	if i < 0 {
+		t.Fatalf("the inspector shows no styles: %q", texts)
+	}
+	for _, s := range texts[i:] {
+		if v, ok := strings.CutPrefix(s, "Value of font-size: "); ok && size == 0 {
+			f, err := strconv.ParseFloat(strings.TrimSuffix(v, "px"), 32)
+			if err != nil {
+				t.Fatalf("font-size %q: %v", v, err)
+			}
+			size = float32(f)
+		}
+		if v, ok := strings.CutPrefix(s, "Value of font-weight: "); ok && weight == 0 {
+			weight, _ = strconv.Atoi(v)
+		}
+	}
+	return size, weight
+}
+
+// A dialog's title whose own text size is XL keeps it under a skin's Title,
+// and takes the role's weight, which it does not set.
+func TestOwnTextSizeWinsOverRole(t *testing.T) {
+	tk := useSkin(t)
+	tk.Title = skinhook.Type{Size: 23.5, Weight: 700}
+	d := NewDialog(nil, "Dialog title", "", 500, 400, Label("body"))
+	d.title.TextSize(XL)
+	tt := TestForm(t, d.Form)
+	tt.Frame()
+	size, weight := inspected(t, tt, "Dialog title")
+	if want := ui.LightTheme().FontSize * sizeScale[XL]; math.Abs(float64(size-want)) > 0.06 || weight != 700 {
+		t.Errorf("the title is %v and %d, want the app's XL, %v, and the role's 700", size, weight, want)
 	}
 }
 
