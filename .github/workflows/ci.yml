@@ -192,9 +192,10 @@ jobs:
           # The canvas engine's line breaking, with a canvas of its test's.
           go test -exec "$(go env GOROOT)/lib/wasm/go_js_wasm_exec" -run 'TestCanvas|TestKeepWords' ./internal/text
       # Phones link with their own toolchains (cgo): Xcode's clang for iOS,
-      # the NDK's for Android, which the macOS runners have.
+      # the NDK's for Android, which the macOS runners have; once, in the
+      # rest shard.
       - name: Vet iOS and Android
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && matrix.shard == 'rest'
         run: |
           sdk=$(xcrun --sdk iphoneos --show-sdk-path)
           GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC="$(xcrun --sdk iphoneos --find clang) -isysroot $sdk -arch arm64 -miphoneos-version-min=16.0" go vet ./...
