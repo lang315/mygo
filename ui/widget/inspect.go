@@ -269,6 +269,8 @@ var colorRoleNames = [...]string{
 	roleBorder: "border", roleText: "text", roleTextMuted: "text-muted", roleAccent: "accent", roleAccentHover: "accent-hover",
 	roleAccentPressed: "accent-pressed", roleAccentText: "accent-text", roleDanger: "danger", roleDangerHover: "danger-hover", roleDangerPressed: "danger-pressed", roleDestructive: "destructive", roleDestructiveHover: "destructive-hover", roleDestructivePressed: "destructive-pressed", roleField: "field", roleWarning: "warning",
 	roleSuccess: "success", roleSelection: "selection", roleFocus: "focus", roleInverse: "inverse", roleInverseText: "inverse-text",
+	roleChrome: "chrome", roleBorderStrong: "border-strong", roleControlBorder: "control-border", roleButtonBorder: "button-border",
+	roleRowHover: "row-hover", roleRowSelected: "row-selected", roleInfo: "info",
 	roleFill: "fill",
 }
 

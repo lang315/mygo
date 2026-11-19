@@ -70,6 +70,26 @@ func TestEveryRoleMaps(t *testing.T) {
 	}
 }
 
+// The classes of the roles a skin decides make the typed roles.
+func TestTwRoleClasses(t *testing.T) {
+	n := widget.NewStyle
+	for _, c := range []struct {
+		in   string
+		want widget.Style
+	}{
+		{"bg-chrome border-strong", n().Background(widget.RoleChrome).BorderColor(widget.RoleBorderStrong)},
+		{"border-control", n().BorderColor(widget.RoleControlBorder)},
+		{"border-button", n().BorderColor(widget.RoleButtonBorder)},
+		{"bg-row-hover text-info", n().Background(widget.RoleRowHover).TextColor(widget.RoleInfo)},
+		{"bg-row-selected", n().Background(widget.RoleRowSelected)},
+	} {
+		got, err := Parse(c.in)
+		if err != nil || !reflect.DeepEqual(bare(got), c.want) {
+			t.Errorf("Parse(%q) = %+v, %v; want %+v", c.in, got, err, c.want)
+		}
+	}
+}
+
 // Each role name draws the field of the theme it is named for: the corner
 // of the card's padding shows its background, which is the color of the role.
 func TestRolesDrawTheThemeField(t *testing.T) {

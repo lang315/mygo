@@ -78,6 +78,7 @@ var Roles = []string{
 	"background", "surface", "surface-hover", "surface-pressed", "border", "text", "text-muted",
 	"accent", "accent-hover", "accent-pressed", "accent-text", "danger", "warning", "success",
 	"selection", "focus", "inverse", "inverse-text",
+	"chrome", "border-strong", "control-border", "button-border", "row-hover", "row-selected", "info",
 }
 
 // roles are the theme tokens after bg-, text- and border-, by role.
@@ -87,6 +88,9 @@ var roles = map[string]string{
 	"accent-pressed": "accent-pressed", "on-accent": "accent-text", "danger": "danger",
 	"warning": "warning", "success": "success", "selection": "selection", "focus": "focus",
 	"inverse": "inverse", "on-inverse": "inverse-text",
+	// The roles a skin decides.
+	"chrome": "chrome", "strong": "border-strong", "control": "control-border", "button": "button-border",
+	"row-hover": "row-hover", "row-selected": "row-selected", "info": "info",
 }
 
 // defaults are the role of the token default, by prefix.

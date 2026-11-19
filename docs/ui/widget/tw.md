@@ -150,20 +150,27 @@ After `bg-`, `text-` or `border-`:
 | `bg-accent`, `text-accent`, `border-accent` | `accent` |
 | `bg-accent-hover`, `text-accent-hover`, `border-accent-hover` | `accent-hover` |
 | `bg-accent-pressed`, `text-accent-pressed`, `border-accent-pressed` | `accent-pressed` |
+| `bg-button`, `text-button`, `border-button` | `button-border` |
+| `bg-chrome`, `text-chrome`, `border-chrome` | `chrome` |
+| `bg-control`, `text-control`, `border-control` | `control-border` |
 | `bg-danger`, `text-danger`, `border-danger` | `danger` |
 | `bg-focus`, `text-focus`, `border-focus` | `focus` |
+| `bg-info`, `text-info`, `border-info` | `info` |
 | `bg-inverse`, `text-inverse`, `border-inverse` | `inverse` |
 | `bg-muted`, `text-muted`, `border-muted` | `text-muted` |
 | `bg-on-accent`, `text-on-accent`, `border-on-accent` | `accent-text` |
 | `bg-on-inverse`, `text-on-inverse`, `border-on-inverse` | `inverse-text` |
+| `bg-row-hover`, `text-row-hover`, `border-row-hover` | `row-hover` |
+| `bg-row-selected`, `text-row-selected`, `border-row-selected` | `row-selected` |
 | `bg-selection`, `text-selection`, `border-selection` | `selection` |
+| `bg-strong`, `text-strong`, `border-strong` | `border-strong` |
 | `bg-success`, `text-success`, `border-success` | `success` |
 | `bg-surface`, `text-surface`, `border-surface` | `surface` |
 | `bg-surface-hover`, `text-surface-hover`, `border-surface-hover` | `surface-hover` |
 | `bg-surface-pressed`, `text-surface-pressed`, `border-surface-pressed` | `surface-pressed` |
 | `bg-warning`, `text-warning`, `border-warning` | `warning` |
 
-The roles are `background` `surface` `surface-hover` `surface-pressed` `border` `text` `text-muted` `accent` `accent-hover` `accent-pressed` `accent-text` `danger` `warning` `success` `selection` `focus` `inverse` `inverse-text`. Theme colors follow the theme, light and dark.
+The roles are `background` `surface` `surface-hover` `surface-pressed` `border` `text` `text-muted` `accent` `accent-hover` `accent-pressed` `accent-text` `danger` `warning` `success` `selection` `focus` `inverse` `inverse-text` `chrome` `border-strong` `control-border` `button-border` `row-hover` `row-selected` `info`. Theme colors follow the theme, light and dark.
 <!-- /twclass:roles -->
 
 ## Effects
