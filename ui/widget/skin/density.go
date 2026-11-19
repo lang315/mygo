@@ -37,10 +37,8 @@ func (s *Skin) Density() Density { return s.density }
 // compact returns the tokens t at the Compact density.
 func compact(t skinhook.Tokens) skinhook.Tokens {
 	h := func(v *float32, by float32) {
-		if *v > 0 {
-			// Never under FontSize + 8, nor taller than it was.
-			*v = max(*v-by, min(*v, t.FontSize+8))
-		}
+		// Never under FontSize + 8, nor taller than it was: 0 (unset) stays 0.
+		*v = max(*v-by, min(*v, t.FontSize+8))
 	}
 	ch := t.ControlHeight
 	h(&t.ControlHeight, 6)

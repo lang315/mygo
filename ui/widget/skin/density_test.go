@@ -26,7 +26,7 @@ func TestCompactCalmSizes(t *testing.T) {
 			{"MenuBarStripHeight", c.MenuBarStripHeight, 30},
 			{"MenuBarItemHeight", c.MenuBarItemHeight, 24},
 			{"SettingsRowHeight", c.SettingsRowHeight, 48},
-			{"ToolbarPadTop", c.ToolbarPadTop, 8},     // 10 × 30/36 = 8.33
+			{"ToolbarPadTop", c.ToolbarPadTop, 8},        // 10 × 30/36 = 8.33
 			{"ToolbarPadBottom", c.ToolbarPadBottom, 10}, // 12 × 30/36 = 10
 			{"ToolbarGap", c.ToolbarGap, 8},
 			{"ToolbarGroupGap", c.ToolbarGroupGap, 10},
