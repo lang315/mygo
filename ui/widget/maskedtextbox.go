@@ -2,6 +2,7 @@ package widget
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // MaskedTextBoxWidget is a one-line text input that takes only what a mask
@@ -29,6 +30,7 @@ func MaskedTextBox(spec string) *MaskedTextBoxWidget {
 	m.cells = make([]rune, len(m.mk.slots))
 	m.text.set(m.mk.display())
 	m.init(m)
+	m.lookAs(skinhook.KindField)
 	return m
 }
 

@@ -22,9 +22,9 @@ type Looks struct {
 	// Button is a Button's face, ToolButton a ToolStrip's buttons'.
 	Button, ToolButton string
 	// Field is the box of the controls typed into: TextBox,
-	// MultilineTextBox, MaskedTextBox, NumericUpDown, DomainUpDown,
-	// DateTimePicker and an editable ComboBox. ComboBox is a drop-down
-	// ComboBox's.
+	// MultilineTextBox, MaskedTextBox, NumericUpDown, DomainUpDown (its
+	// field, beside the arrows), DateTimePicker (each of its fields) and an
+	// editable ComboBox. ComboBox is a drop-down ComboBox's.
 	Field, ComboBox string
 	// CheckBox and RadioButton are the whole control, with its text.
 	CheckBox, RadioButton string
@@ -34,7 +34,8 @@ type Looks struct {
 	// TabHeader each tab, selected: the open one. With a TabHeader look the
 	// open tab has no line under it, unless the look's border draws one.
 	TabStrip, TabHeader string
-	// GridHeader is each column header cell of a DataGridView.
+	// GridHeader is each column header cell of a DataGridView, and of a
+	// ListView in its Details view.
 	GridHeader string
 	// ToolStrip, StatusStrip and MenuBar are the strips so named, HeaderBar
 	// a Form's header bar.
@@ -48,7 +49,7 @@ type Looks struct {
 //
 //	boxy := skin.Calm.WithLooks(skin.Looks{
 //		Button:    "rounded-none border border-control",
-//		TabHeader: "rounded-t border border-b-0 selected:bg-background",
+//		TabHeader: "rounded-t border border-b-0 selected:bg-surface",
 //	})
 //	skin.Use(boxy)
 func (s *Skin) WithLooks(l Looks) *Skin {

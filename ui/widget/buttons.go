@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // Option is a choice of a group or a combo: Value is what the program
@@ -25,6 +26,7 @@ type ButtonWidget struct {
 func Button(text string) *ButtonWidget {
 	b := &ButtonWidget{text: text}
 	b.init(b)
+	b.lookAs(skinhook.KindButton)
 	return b
 }
 
@@ -324,6 +326,7 @@ type CheckBoxWidget struct {
 func CheckBox(text string) *CheckBoxWidget {
 	b := &CheckBoxWidget{text: text}
 	b.init(b)
+	b.lookAs(skinhook.KindCheckBox)
 	return b
 }
 
@@ -541,6 +544,7 @@ type radioGroup struct{ members []*RadioButtonWidget }
 func RadioButton(text string) *RadioButtonWidget {
 	r := &RadioButtonWidget{text: text}
 	r.init(r)
+	r.lookAs(skinhook.KindRadioButton)
 	return r
 }
 

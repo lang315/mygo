@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // Column is a column of a table of rows of type T. Its functions get a
@@ -180,6 +181,10 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// headSize is the size of the header's text a skin gives (its Label's), 0
 	// without one.
 	headSize float32
+	// headLook is the skin's GridHeader look, nil without one, and headCtx
+	// the context of the build that set it, which headerCell styles with.
+	headLook *Style
+	headCtx  *ui.Context
 }
 
 // DataGridView makes a table of cols whose rows key tells apart. key runs under
@@ -667,10 +672,16 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 }
 
 // headerCell is ui's HeaderCell: a skin's Label sizes the header's title,
-// which keeps ui's weight. Under mu, while the table builds.
+// which keeps ui's weight, and its GridHeader look styles the cell. Under mu,
+// while the table builds.
 func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, _ int) {
 	if t.headSize > 0 {
 		cell.FontSize(t.headSize)
+	}
+	if look := t.headLook; look != nil {
+		c := t.headCtx
+		st := look.effective(c.Theme().Dark, cell.Hovered(), false, false, cell.Pressed(), t.disabled)
+		st.apply(c, cell, t.textKey)
 	}
 }
 
@@ -707,6 +718,7 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	if tk, scale := skinOf(c); tk != nil {
 		t.headSize = tk.Label.Size * scale
 	}
+	t.headLook, t.headCtx = lookOf(skinhook.KindGridHeader), c
 	if t.toEnd && !c.Measuring() { // the request is for the real window
 		t.toEnd = false
 		s.ScrollToEnd()

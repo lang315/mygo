@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // BenchmarkWidgetFrame builds a frame of n plain widgets in a scrolled
@@ -17,24 +18,35 @@ import (
 // The -styled cases give every widget one shared Style with a background
 // role, a radius, a shadow, and Hover and Pressed variants; -styled adds a
 // transition. In every case the pointer rests on the first widget, so the
-// styled ones show their hover.
+// styled ones show their hover. The -looks cases turn on a skin's looks of
+// buttons and text boxes, that Style without its transition, as skin.Use
+// does: -looks alone, -styled-looks under every widget's -styled Style.
 func BenchmarkWidgetFrame(b *testing.B) {
 	look := NewStyle().Padding(1).Radius(1).Background(RoleSurface).
 		Shadow(0, 1, 2, 0, Fixed(ui.RGBA(0, 0, 0, 0.1))).
 		Hover(NewStyle().Background(RoleSurfaceHover)).
 		Pressed(NewStyle().Background(RoleSurfacePressed))
 	fading := look.Transition(120 * time.Millisecond)
+	var looks [skinhook.NumKinds]any
+	looks[skinhook.KindButton], looks[skinhook.KindField] = &look, &look
 	for _, n := range []int{100, 1000} {
 		for _, c := range []struct {
 			suffix string
 			style  *Style
+			looks  bool
 		}{
-			{"", nil},
-			{"-styled-no-transition", &look},
-			{"-styled", &fading},
+			{"", nil, false},
+			{"-styled-no-transition", &look, false},
+			{"-styled", &fading, false},
+			{"-looks", nil, true},
+			{"-styled-looks", &fading, true},
 		} {
 			style := c.style
 			b.Run(strconv.Itoa(n)+c.suffix, func(b *testing.B) {
+				if c.looks {
+					skinhook.SetLooks(&looks)
+					defer skinhook.SetLooks(nil)
+				}
 				box := VBox(2)
 				for i := range n {
 					var w Control

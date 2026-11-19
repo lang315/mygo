@@ -16,7 +16,10 @@
 // main thread, so they may block, as on a dialog.
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
+)
 
 // Control is a part of a user interface: a label, a box of controls, a
 // table. The package's constructors make them, and Custom makes one of
@@ -42,6 +45,7 @@ type core struct {
 	applied     []Style // Apply's styles
 	style       Style   // applied merged, ownStyle last: what frames resolve
 	styled      bool    // style sets anything
+	skinKind    uint8   // 1 + the skinhook.Kind of the skin's look the control takes, 0 for none (lookAs)
 	textKey     any     // textKey(id), boxed once
 	idKey       any     // id, boxed once, for keeper.key
 	place       layout
@@ -118,6 +122,24 @@ func (c *common[W]) ContextMenu(items ...MenuItem) *W {
 func (c *common[W]) Focus() *W { c.change(func() { c.wantFocus = true }); return c.self }
 
 func (b *core) base() *core { return b }
+
+// lookAs makes the control take the skin's look of kind k.
+func (b *core) lookAs(k skinhook.Kind) { b.skinKind = uint8(k) + 1 }
+
+// lookStyle returns the skin's look of the control's kind, nil for none.
+func (b *core) lookStyle() *Style {
+	if b.skinKind == 0 {
+		return nil
+	}
+	return lookOf(skinhook.Kind(b.skinKind - 1))
+}
+
+// lookOf returns the skin's look of kind k, nil for none. It allocates
+// nothing: the skin boxed it once.
+func lookOf(k skinhook.Kind) *Style {
+	s, _ := skinhook.Look(k).(*Style)
+	return s
+}
 
 // common gives the widget type W the methods every widget has. They
 // return W, so calls chain.
@@ -200,8 +222,20 @@ func render(c *ui.Context, w Control) ui.Element {
 	if b.accName != "" {
 		nameControl(w, e, b.accName)
 	}
-	if b.styled {
-		p := b.style.effective(c.Theme().Dark, e.Hovered(), b.selected, e.Focused(), e.Pressed(), b.disabled)
+	if look := b.lookStyle(); b.styled || look != nil {
+		dark, hover, focused, pressed := c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed()
+		var p props
+		if look != nil {
+			// The skin's look under the control's own styles, property by
+			// property: merging the Styles would allocate their variants.
+			p = look.effective(dark, hover, b.selected, focused, pressed, b.disabled)
+			if b.styled {
+				own := b.style.effective(dark, hover, b.selected, focused, pressed, b.disabled)
+				p.over(&own)
+			}
+		} else {
+			p = b.style.effective(dark, hover, b.selected, focused, pressed, b.disabled)
+		}
 		p.apply(c, e, b.textKey)
 	}
 	if b.post != nil {

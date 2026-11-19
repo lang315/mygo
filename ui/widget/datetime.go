@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // DateTimeFormat says what a DateTimePicker edits.
@@ -72,9 +73,16 @@ func (p *DateTimePickerWidget) build(c *ui.Context) ui.Element {
 	// The app's height wins over the theme's Metrics, which the fields take
 	// as their least: they fill the picker instead (style.go's apply).
 	fill := p.style.set&pHeight != 0 && c.Theme().Metrics != (ui.Metrics{})
+	// The skin's Field look styles each field, the boxes typed into: Apply
+	// styles the row around them.
+	look := lookOf(skinhook.KindField)
 	field := func(e ui.Element) ui.Element {
 		if fill {
 			e.MinHeight(0).HeightPercent(100)
+		}
+		if look != nil {
+			st := look.effective(c.Theme().Dark, e.Hovered(), false, e.Focused(), e.Pressed(), p.disabled)
+			st.apply(c, e, p.textKey)
 		}
 		return e
 	}

@@ -1,6 +1,9 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
+)
 
 // StatusStripWidget is a bar of status items, for the bottom of a form
 // (Form.StatusStrip): StatusLabels, Springs, StatusProgress bars and
@@ -14,6 +17,7 @@ type StatusStripWidget struct {
 func StatusStrip(items ...Control) *StatusStripWidget {
 	s := &StatusStripWidget{items: items}
 	s.init(s)
+	s.lookAs(skinhook.KindStatusStrip)
 	return s
 }
 

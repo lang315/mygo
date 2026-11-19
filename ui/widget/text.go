@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // LabelWidget shows a line of text.
@@ -104,6 +105,7 @@ type TextBoxWidget struct {
 func TextBox() *TextBoxWidget {
 	e := &TextBoxWidget{}
 	e.init(e)
+	e.lookAs(skinhook.KindField)
 	return e
 }
 
@@ -266,6 +268,7 @@ type MultilineTextBoxWidget struct {
 func MultilineTextBox() *MultilineTextBoxWidget {
 	v := &MultilineTextBoxWidget{}
 	v.init(v)
+	v.lookAs(skinhook.KindField)
 	return v
 }
 

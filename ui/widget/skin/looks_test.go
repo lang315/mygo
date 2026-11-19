@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
+	"github.com/egoist/mygo/ui/widget/tw"
 )
 
 // allLooks sets every field, each to a class of its own.
@@ -95,6 +96,21 @@ func TestLooksSurviveTheOtherWiths(t *testing.T) {
 	s := Calm.WithLooks(allLooks).WithPalette(Teal).WithDensity(Compact).WithAccent(ui.Hex("#7c3aed"))
 	if s.Looks() != allLooks {
 		t.Errorf("Looks() = %+v after the other Withs, want %+v", s.Looks(), allLooks)
+	}
+}
+
+// The looks the docs show are classes tw knows.
+func TestDocLooksParse(t *testing.T) {
+	for _, cl := range []string{
+		"rounded-none border border-control",
+		"rounded-t border border-b-0 selected:bg-surface",
+		"rounded-sm border border-button",
+		"rounded-t border border-b-0 bg-chrome selected:bg-surface",
+		"bg-chrome border-r border-strong",
+	} {
+		if _, err := tw.Parse(cl); err != nil {
+			t.Errorf("%q: %v", cl, err)
+		}
 	}
 }
 

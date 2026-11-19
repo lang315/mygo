@@ -26,6 +26,7 @@ func NumericUpDown(min, max, step float64) *NumericUpDownWidget {
 	s := &NumericUpDownWidget{min: min, max: max, step: math.Abs(step)}
 	s.value.set(min)
 	s.init(s)
+	s.lookAs(skinhook.KindField)
 	return s
 }
 
@@ -194,6 +195,7 @@ var chevronDown = lucide(`<path d="m6 9 6 6 6-6"/>`)
 func ComboBox(opts ...Option) *ComboBoxWidget {
 	c := &ComboBoxWidget{sections: []comboSection{{opts: slices.Clone(opts)}}}
 	c.init(c)
+	c.lookAs(skinhook.KindComboBox)
 	return c
 }
 
@@ -241,6 +243,7 @@ func (c *ComboBoxWidget) Editable() *ComboBoxWidget {
 			return
 		}
 		c.editable, c.bindsText = true, c.bound.write == nil
+		c.lookAs(skinhook.KindField) // typed into, as a TextBox
 		if o, ok := c.find(c.value.value); ok {
 			c.text.set(o.Text)
 		}
