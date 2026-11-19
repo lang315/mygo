@@ -1,4 +1,4 @@
-//go:build linux && (amd64 || arm64) && mygo_nowebview
+//go:build linux && !android && (amd64 || arm64) && mygo_nowebview
 
 package linux
 

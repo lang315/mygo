@@ -1,4 +1,4 @@
-//go:build darwin && mygo_nowebview
+//go:build darwin && !ios && mygo_nowebview
 
 package darwin
 
