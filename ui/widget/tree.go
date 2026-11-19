@@ -824,7 +824,7 @@ func (t *TreeViewWidget[T, K]) row(c *ui.Context, it treeItem[K]) {
 	}
 	if t.image != nil {
 		if bmp := t.image(&n.data); bmp != nil {
-			side := cmp.Or(t.imageSize, 16)
+			side := cmp.Or(t.imageSize, iconSide(c))
 			ui.Image(c, bmp).Size(side, side)
 		}
 	}

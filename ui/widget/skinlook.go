@@ -21,6 +21,56 @@ func skinOf(c *ui.Context) (*skinhook.Tokens, float32) {
 	return tk, scale
 }
 
+// iconSide is the side of a control's icon in DIPs: the skin's Icon at the
+// text scale, or 16 without a skin.
+func iconSide(c *ui.Context) float32 {
+	if tk, scale := skinOf(c); tk != nil {
+		return tk.Icon * scale
+	}
+	return 16
+}
+
+// skinType gives e's text the size, at the text scale, and the weight of
+// the skin's role of text; without a skin it does nothing.
+func skinType(c *ui.Context, e ui.Element, role func(*skinhook.Tokens) skinhook.Type) {
+	if tk, scale := skinOf(c); tk != nil {
+		r := role(tk)
+		e.FontSize(r.Size * scale).FontWeight(r.Weight)
+	}
+}
+
+// textRole is the role of text of a label the widgets make, as a dialog's
+// title: the skin's role, or without a skin bold at size. The label's own
+// style wins over both.
+type textRole struct {
+	role func(*skinhook.Tokens) skinhook.Type
+	size Size
+}
+
+// apply gives e the role's look.
+func (r *textRole) apply(c *ui.Context, e ui.Element) {
+	if tk, _ := skinOf(c); tk != nil {
+		skinType(c, e, r.role)
+		return
+	}
+	e.FontWeight(700)
+	if r.size != Base {
+		e.FontSize(c.Theme().FontSize * sizeScale[r.size])
+	}
+}
+
+// The roles of a dialog's title, today LG and bold, and of a Fields
+// section's heading, bold.
+var (
+	titleText   = textRole{titleRole, LG}
+	headingText = textRole{headingRole, Base}
+)
+
+func labelRole(t *skinhook.Tokens) skinhook.Type   { return t.Label }
+func captionRole(t *skinhook.Tokens) skinhook.Type { return t.Caption }
+func headingRole(t *skinhook.Tokens) skinhook.Type { return t.Heading }
+func titleRole(t *skinhook.Tokens) skinhook.Type   { return t.Title }
+
 // skinChecked gives a toggle that is on a skin's look: the accent's border
 // color as its fill, ringed in the accent, which stands out from one that is
 // off as the plain pressed face does not. The control's own style wins.

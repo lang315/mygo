@@ -11,7 +11,6 @@ package skinhook
 
 import (
 	"sync/atomic"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -21,10 +20,11 @@ import (
 // base.
 type Family struct{ Base, Hover, Pressed, Subtle, Border, Text, On ui.Color }
 
-// Type is a role of text: its size, line height and weight.
+// Type is a role of text: its size in DIPs and its weight (100 to 900).
+// The text keeps its own line height.
 type Type struct {
-	Size, Line float32
-	Weight     int
+	Size   float32
+	Weight int
 }
 
 // Shadow is a drop shadow: its offset down, blur, spread and color.
@@ -40,8 +40,8 @@ type Tokens struct {
 	Chrome, Background ui.Color
 	// Border divides; BorderStrong ends headers and the window.
 	Border, BorderStrong ui.Color
-	// Text, TextMuted (secondary) and TextPlaceholder (placeholders), which
-	// takes no effect yet: no control reads it.
+	// Text, TextMuted (secondary) and TextPlaceholder, the placeholder of a
+	// TextBox and a MultilineTextBox.
 	Text, TextMuted, TextPlaceholder ui.Color
 	// The face of a control at rest, hovered and pressed.
 	Surface, SurfaceHover, SurfacePressed ui.Color
@@ -53,7 +53,8 @@ type Tokens struct {
 
 	// The families. Of Accent, Subtle and Text take no effect yet; of Info,
 	// Warning and Danger only Base and On take effect, and of Success only
-	// Base: no control reads the others.
+	// Base: no control reads the others, which the components of a later
+	// phase (badges, info bars) are to read.
 	Accent, Success, Warning, Danger Family
 	// Info is the running and info state, kept apart from the status
 	// colors.
@@ -61,28 +62,44 @@ type Tokens struct {
 	// Chart colors the series and slices of charts, in order.
 	Chart [8]ui.Color
 
-	// The sizes, in DIPs. SettingsRowHeight, RadiusDialog and Icon take no
-	// effect yet: no control reads them.
+	// The sizes, in DIPs at text scale 1: the heights of controls, of table
+	// and list rows, of their headers, of the rows of a settings page
+	// (Fields.SettingsRows, the least), of tab headers, of the menu bar's
+	// strip and its items; the corners of controls and of cards; the room
+	// of a tool strip above and below its buttons, between them and between
+	// their groups; the side of the icons of controls and lists (a
+	// TextBox's, a DataGridView cell's, a ListBox's, a TreeView's, a
+	// ListView's small ones and a ComboBox section's) and of tool strip
+	// buttons; the check box's side and the switch's track.
 	ControlHeight, RowHeight, HeaderHeight, SettingsRowHeight    float32
 	TabHeight, MenuBarStripHeight, MenuBarItemHeight             float32
-	RadiusControl, RadiusCard, RadiusDialog                      float32
+	RadiusControl, RadiusCard                                    float32
 	ToolbarPadTop, ToolbarPadBottom, ToolbarGap, ToolbarGroupGap float32
 	Icon, ToolbarIcon, CheckSize, SwitchWidth, SwitchHeight      float32
 
-	// The roles of text. Only Body's size takes effect yet: Caption, Label,
-	// Heading and Title, and Body's line and weight, no control reads.
-	Body, Caption, Label, Heading, Title Type
+	// FontSize is the size of text, in DIPs.
+	FontSize float32
+	// The roles of text: Caption a status label's, Label a group box's
+	// title and a DataGridView's column headers (their size: ui keeps their
+	// weight), Heading the section headings of Fields and Title a dialog's
+	// title. The app's own size or weight on the text wins.
+	Caption, Label, Heading, Title Type
 	// Font is the family of text, "" the system's; a font of the app's own
 	// comes in with ui.RegisterFont.
 	Font string
 
-	// Elevation is 0 flat, 1 a card, 2 a popover, 3 a dialog. Only the
-	// card's takes effect yet: no control reads 0, 2 and 3.
-	Elevation [4]Shadow
+	// CardShadow is under a card, PopupShadow under the drop-downs of
+	// ui/widget (a ComboBox's); ui's own popup menus keep theirs. A shadow of
+	// zero color draws none.
+	CardShadow, PopupShadow Shadow
 
-	// Hover is how long a hover or press change takes, Toggle a switch's.
-	// Both take no effect yet: no control reads them.
-	Hover, Toggle time.Duration
+	// The focus ring is FocusRingWidth DIPs wide (0 is ui's default, 2) and
+	// FocusRingOffset DIPs outside the control's edge (0 puts it on the
+	// edge). Scroll bar thumbs are ScrollbarWidth DIPs wide (0 is ui's
+	// default, 6), and ScrollbarStyle styles the bars where it sets a field
+	// (ui.ScrollbarStyle).
+	FocusRingWidth, FocusRingOffset, ScrollbarWidth float32
+	ScrollbarStyle                                  ui.ScrollbarStyle
 }
 
 var active atomic.Pointer[[2]*Tokens]

@@ -56,7 +56,7 @@ type ListViewWidget[T any, K comparable] struct {
 	// colImage is the Image the first column had when the list view was made.
 	colImage func(*T) *ui.Bitmap
 	// imageSize is the side an image list says its images are drawn at, 0 for
-	// the defaults: iconSize for large icons, 16 for the others.
+	// the defaults: iconSize for large icons, iconSide for the others.
 	imageSize float32
 
 	onSelect func([]K)
@@ -513,11 +513,12 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 	minWidth, height := side+56, side+44
 	small := lv.mode == ViewSmallIcon || lv.mode == ViewList
 	if small {
-		minWidth, height = 180, max(30, cmp.Or(lv.imageSize, 16)+8)
+		icon := cmp.Or(lv.imageSize, iconSide(c))
+		minWidth, height = 180, max(30, icon+8)
 		if lv.mode == ViewList {
 			minWidth = 1e6 // one column
 			if h := c.Theme().Metrics.RowHeight; h > 0 {
-				height = max(h, cmp.Or(lv.imageSize, 16)+8) // rows, as Details' (an icon view keeps its size)
+				height = max(h, icon+8) // rows, as Details' (an icon view keeps its size)
 			}
 		}
 	}
@@ -659,7 +660,7 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 	}
 	// One row that fills the item and centres what it holds, the box and the
 	// text on the same line, as a Details cell lays them out.
-	side := cmp.Or(lv.imageSize, 16)
+	side := cmp.Or(lv.imageSize, iconSide(c))
 	ui.Row(c).Grow(1).AlignItems(ui.Center).Gap(th.Space(2)).PaddingStart(th.Space(2)).Children(func() {
 		if t.checks {
 			k := t.key(r)

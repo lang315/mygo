@@ -177,6 +177,9 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
+	// headSize is the size of the header's text a skin gives (its Label's), 0
+	// without one.
+	headSize float32
 }
 
 // DataGridView makes a table of cols whose rows key tells apart. key runs under
@@ -209,6 +212,7 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t.list.Key, t.list.Label, t.list.Selected = t.keyAt, t.labelAt, &t.cursor
 	t.list.RowVersion = t.rowVersion
 	t.list.Copy = t.copyRows
+	t.list.HeaderCell = t.headerCell
 	t.init(t)
 	t.link.id, t.link.prune = t.id, t.prune
 	mu.Lock()
@@ -662,6 +666,14 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	})
 }
 
+// headerCell is ui's HeaderCell: a skin's Label sizes the header's title,
+// which keeps ui's weight. Under mu, while the table builds.
+func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, _ int) {
+	if t.headSize > 0 {
+		cell.FontSize(t.headSize)
+	}
+}
+
 // table builds the ui table. Under mu.
 func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	s := &t.list
@@ -691,6 +703,10 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	t.handOver()
 	s.FollowEnd = t.follow
 	s.RowHeight, s.GridLines, s.FixedColumnOrder = t.rowHeight, t.grid, t.fixedCols
+	t.headSize = 0
+	if tk, scale := skinOf(c); tk != nil {
+		t.headSize = tk.Label.Size * scale
+	}
 	if t.toEnd && !c.Measuring() { // the request is for the real window
 		t.toEnd = false
 		s.ScrollToEnd()
@@ -789,7 +805,8 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 		return
 	}
 	ui.Row(c).Gap(4).Children(func() {
-		ui.Image(c, cl.Image(r)).Size(16, 16)
+		side := iconSide(c)
+		ui.Image(c, cl.Image(r)).Size(side, side)
 		cellText(c, cl, r, colored)
 	})
 }

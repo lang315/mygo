@@ -1,5 +1,6 @@
 // Package skin gives the controls of package widget one look, set by tokens:
-// colors, metrics, radii, type, elevation and motion, in light and dark. An
+// colors, metrics, radii, type, shadows, the focus ring and the scroll bars,
+// in light and dark. An
 // app turns a skin on with one line at startup,
 //
 //	skin.Use(skin.Calm)
@@ -35,16 +36,16 @@ import (
 )
 
 // Tokens are every value a skin decides in one appearance: colors, sizes,
-// radii, type, elevation and motion, and the font.
+// radii, type, shadows, the focus ring and the scroll bars, and the font.
 type Tokens = skinhook.Tokens
 
 // Family is a semantic role's colors: the accent, Info and the status colors.
 type Family = skinhook.Family
 
-// Type is a role of text: its size, line height and weight.
+// Type is a role of text: its size and weight.
 type Type = skinhook.Type
 
-// Shadow is a drop shadow of the elevation.
+// Shadow is a drop shadow: a card's or a drop-down's.
 type Shadow = skinhook.Shadow
 
 // New returns a skin of the tokens light and dark, which it copies. It does

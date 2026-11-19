@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // NumericUpDownWidget edits a number between min and max.
@@ -519,7 +520,7 @@ func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 	sel := ui.SelectBase(ctx, p)
 	comboTrigger(ctx, sel.Trigger, text).OnChange(edited(&c.value, &c.bound, c.onChange))
 	sel.Popup(func(panel ui.Element) {
-		comboPanel(t, panel)
+		comboPanel(ctx, panel)
 		for i, s := range sections {
 			if s.value != "" {
 				comboOption(t, sel.Item(s.value), s.value == *p, func() { sectionTitle(ctx, s, false) })
@@ -551,9 +552,13 @@ func comboTrigger(ctx *ui.Context, e ui.Element, text string) ui.Element {
 }
 
 // comboPanel gives a combo's popup, or a submenu of it, its look.
-func comboPanel(t *ui.Theme, panel ui.Element) {
+func comboPanel(ctx *ui.Context, panel ui.Element) {
+	t, sh := ctx.Theme(), skinhook.Shadow{Y: 6, Blur: 20, Color: ui.RGBA(0, 0, 0, 0.18)}
+	if tk, _ := skinOf(ctx); tk != nil {
+		sh = tk.PopupShadow
+	}
 	panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).
-		Background(t.Background).Border(1, t.Border).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18))
+		Background(t.Background).Border(1, t.Border).Shadow(0, sh.Y, sh.Blur, sh.Spread, sh.Color)
 }
 
 // comboOption gives item, an option of a combo's popup, its look, chosen
@@ -591,7 +596,8 @@ func highlightOf(t *ui.Theme) (bg, fg ui.Color) {
 // only.
 func sectionTitle(ctx *ui.Context, s comboSection, header bool) {
 	if s.icon != nil {
-		ui.Image(ctx, s.icon).Width(16).Height(16)
+		side := iconSide(ctx)
+		ui.Image(ctx, s.icon).Width(side).Height(side)
 	}
 	e := ui.Text(ctx, s.title).Bold()
 	if header {
@@ -632,7 +638,7 @@ func (c *ComboBoxWidget) buildMenu(ctx *ui.Context, p *string, text string) ui.E
 		}
 	}
 	m.Popup(func(panel ui.Element) {
-		comboPanel(t, panel)
+		comboPanel(ctx, panel)
 		panel.MinWidth(m.Trigger.Bounds().W) // as wide as the combo, as its drop-down; not the submenus
 
 		for i, s := range sections {
@@ -644,7 +650,7 @@ func (c *ComboBoxWidget) buildMenu(ctx *ui.Context, p *string, text string) ui.E
 					ui.Icon(ctx, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Rotate(chevron)
 				})
 				m.Submenu(item, func(panel ui.Element) {
-					comboPanel(t, panel)
+					comboPanel(ctx, panel)
 					options(s)
 				})
 				continue
@@ -694,7 +700,7 @@ func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 			cb.Input.OnSubmit(h) // Enter clicks the form's accept button
 		}
 		cb.Popup(func(panel ui.Element) {
-			comboPanel(t, panel)
+			comboPanel(ctx, panel)
 			typed := strings.ToLower(strings.TrimSpace(*p))
 			for i, s := range sections {
 				shown := s.opts

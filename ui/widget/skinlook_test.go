@@ -3,6 +3,9 @@ package widget
 import (
 	"image/color"
 	"math"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -22,12 +25,57 @@ func skinTestTokens() *skinhook.Tokens {
 		Text:           ui.Hex("#202020"),
 		SurfaceHover:   ui.Hex("#4dd0e1"),
 		SurfacePressed: ui.Hex("#ff8a65"),
-		Elevation:      [4]skinhook.Shadow{{}, {Y: 6, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.6)}},
+		CardShadow:     skinhook.Shadow{Y: 6, Blur: 2, Color: ui.RGBA(0, 0, 0, 0.6)},
 
 		ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, TabHeight: 40,
 		MenuBarStripHeight: 34, MenuBarItemHeight: 28, RadiusControl: 6, RadiusCard: 10,
 		ToolbarPadTop: 10, ToolbarPadBottom: 12, ToolbarGap: 10, ToolbarGroupGap: 12,
 		Icon: 16, ToolbarIcon: 17, CheckSize: 15, SwitchWidth: 40, SwitchHeight: 22,
+		Caption: skinhook.Type{Size: 11, Weight: 400}, Label: skinhook.Type{Size: 12, Weight: 600},
+		Heading: skinhook.Type{Size: 15, Weight: 600}, Title: skinhook.Type{Size: 20, Weight: 600},
+	}
+}
+
+// inspected is the font size and weight the text label draws with, as the
+// inspector shows them (to one decimal): its own, else the nearest
+// ancestor's; 0 where none is set.
+func inspected(t *testing.T, tt *Tester, label string) (size float32, weight int) {
+	t.Helper()
+	if err := tt.Inspect(label); err != nil {
+		t.Fatal(err)
+	}
+	texts := tt.Texts()
+	i := slices.Index(texts, "Styles")
+	if i < 0 {
+		t.Fatalf("the inspector shows no styles: %q", texts)
+	}
+	for _, s := range texts[i:] {
+		if v, ok := strings.CutPrefix(s, "Value of font-size: "); ok && size == 0 {
+			f, err := strconv.ParseFloat(strings.TrimSuffix(v, "px"), 32)
+			if err != nil {
+				t.Fatalf("font-size %q: %v", v, err)
+			}
+			size = float32(f)
+		}
+		if v, ok := strings.CutPrefix(s, "Value of font-weight: "); ok && weight == 0 {
+			weight, _ = strconv.Atoi(v)
+		}
+	}
+	return size, weight
+}
+
+// A dialog's title whose own text size is XL keeps it under a skin's Title,
+// and takes the role's weight, which it does not set.
+func TestOwnTextSizeWinsOverRole(t *testing.T) {
+	tk := useSkin(t)
+	tk.Title = skinhook.Type{Size: 23.5, Weight: 700}
+	d := NewDialog(nil, "Dialog title", "", 500, 400, Label("body"))
+	d.title.TextSize(XL)
+	tt := TestForm(t, d.Form)
+	tt.Frame()
+	size, weight := inspected(t, tt, "Dialog title")
+	if want := ui.LightTheme().FontSize * sizeScale[XL]; math.Abs(float64(size-want)) > 0.06 || weight != 700 {
+		t.Errorf("the title is %v and %d, want the app's XL, %v, and the role's 700", size, weight, want)
 	}
 }
 
@@ -483,7 +531,7 @@ func TestSkinTabStrip(t *testing.T) {
 	check(false, nil, plain, false)
 }
 
-// The card: with a skin, rounded by RadiusCard, Elevation[1]'s shadow under
+// The card: with a skin, rounded by RadiusCard, CardShadow under
 // it and a line of 1 around it; without, as before skins.
 func TestSkinCard(t *testing.T) {
 	card := Card().SetTitle(Label("title")).SetBody(Label("body"))
@@ -642,7 +690,9 @@ func TestSkinListViewRows(t *testing.T) {
 	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
 	tt.Frame()
 	got = heights()
-	for m, want := range map[ViewMode]float32{ViewDetails: 45, ViewList: 45, ViewSmallIcon: plain15[ViewSmallIcon], ViewLargeIcon: plain15[ViewLargeIcon]} {
+	// A skin's icons grow with the text: a small icon's item is the icon, 16
+	// at 150 %, and its margin of 8.
+	for m, want := range map[ViewMode]float32{ViewDetails: 45, ViewList: 45, ViewSmallIcon: 16*1.5 + 8, ViewLargeIcon: plain15[ViewLargeIcon]} {
 		if !sameSize(got[m], want) {
 			t.Errorf("with a skin at 150 %%, the %v row is %v, want %v", m, got[m], want)
 		}

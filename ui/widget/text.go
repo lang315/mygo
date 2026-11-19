@@ -12,7 +12,8 @@ type LabelWidget struct {
 	common[LabelWidget]
 	text        string
 	spans       []ui.Span
-	useMnemonic bool // SetUseMnemonic(true)
+	useMnemonic bool      // SetUseMnemonic(true)
+	role        *textRole // a role the widgets give their own labels, as a dialog's title
 }
 
 // Label makes a label showing s.
@@ -44,6 +45,15 @@ func (l *LabelWidget) Rich(spans ...ui.Span) *LabelWidget {
 func (l *LabelWidget) Text() string { mu.Lock(); defer mu.Unlock(); return l.text }
 
 func (l *LabelWidget) build(c *ui.Context) ui.Element {
+	e := l.textElement(c)
+	if l.role != nil {
+		l.role.apply(c, e) // under the label's own style, which render applies
+	}
+	return e
+}
+
+// textElement builds the label's text.
+func (l *LabelWidget) textElement(c *ui.Context) ui.Element {
 	if len(l.spans) > 0 {
 		return ui.RichText(c, l.spans...)
 	}
@@ -89,9 +99,6 @@ type TextBoxWidget struct {
 	edit        func() // onEdited, made once
 	selectAll   bool   // SelectAll asked, not yet carried out
 }
-
-// iconSize is the side of a TextBox's icon, in DIPs.
-const iconSize = 16
 
 // TextBox makes an empty one-line text input.
 func TextBox() *TextBoxWidget {
@@ -186,6 +193,9 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	el := ui.TextInput(c, p)
 	if e.placeholder != "" {
 		el.Placeholder(e.placeholder)
+		if tk, _ := skinOf(c); tk != nil {
+			el.PlaceholderColor(tk.TextPlaceholder)
+		}
 	}
 	if e.password {
 		el.Password()
@@ -205,7 +215,7 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 			if rtl {
 				side = 1
 			}
-			pad := el.Paddings()[side]
+			pad, iconSize := el.Paddings()[side], iconSide(c)
 			el.PaddingStart(pad + iconSize + t.Space(1.5))
 			e.over = append(e.over, func(p *ui.Painter, r ui.Rect) {
 				x := r.X + pad
@@ -296,6 +306,9 @@ func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 	el := ui.TextArea(c, p)
 	if v.placeholder != "" {
 		el.Placeholder(v.placeholder)
+		if tk, _ := skinOf(c); tk != nil {
+			el.PlaceholderColor(tk.TextPlaceholder)
+		}
 	}
 	el.ReadOnly(v.readOnly)
 	if v.selectAll && !c.Measuring() {

@@ -69,7 +69,9 @@ func (l *StatusLabelWidget) SetIcon(icon *ui.SVG) *StatusLabelWidget {
 }
 
 func (l *StatusLabelWidget) build(c *ui.Context) ui.Element {
-	return ui.Row(c).AlignItems(ui.Center).Gap(c.Theme().Space(1.5)).Children(func() {
+	row := ui.Row(c).AlignItems(ui.Center).Gap(c.Theme().Space(1.5))
+	skinType(c, row, captionRole) // the text and the icon, which takes its size
+	return row.Children(func() {
 		if l.icon != nil {
 			ui.Icon(c, l.icon)
 		}
