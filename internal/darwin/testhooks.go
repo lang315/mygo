@@ -1472,7 +1472,7 @@ func TestDropFilesFrom(handle uintptr, overX, overY, x, y float64, paths []strin
 			// (_promisedFileMIMETypes:, on newer systems), and a
 			// dragging info without it aborts the test process.
 			method("enumerateDraggingItemsWithOptions:forView:classes:searchOptions:usingBlock:",
-				func(self id, _ objc.SEL, options uint, view, classes, search id, block uintptr) {}),
+				func(self id, _ objc.SEL, options uint, view, classes, search id, block objc.Block) {}),
 		})
 		testDragInfo = send(send(class("MyGoTestDraggingInfo"), "alloc"), "init")
 		testDragPB = retain(send(class("NSPasteboard"), "pasteboardWithUniqueName"))
