@@ -72,6 +72,19 @@ func New(name string, light, dark Tokens) *Skin {
 	return &Skin{name: name, light: light, dark: dark}
 }
 
+// Derive returns a new skin, s with the name and the tokens light and dark,
+// which it copies: s's contrast floor, palette, palette list, density and
+// looks stay, as New would lose them. s does not change.
+//
+//	l, d := skin.Calm.Tokens(false), skin.Calm.Tokens(true)
+//	l.Background = ui.Hex("#fffaf0")
+//	skin.Use(skin.Calm.WithDensity(skin.Compact).Derive("Brand", l, d))
+func (s *Skin) Derive(name string, light, dark Tokens) *Skin {
+	c := *s
+	c.name, c.light, c.dark = name, light, dark
+	return &c
+}
+
 // Tokens returns a copy of the skin's tokens in the dark or the light
 // appearance, to change and make a skin of with New. Its sizes are the
 // Standard ones, whatever the skin's Density: give the new skin
