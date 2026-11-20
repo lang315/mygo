@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 func TestNotificationShowContextCanceled(t *testing.T) {
@@ -41,19 +41,11 @@ func TestNotificationShowContextCancelsPendingAuthorization(t *testing.T) {
 	n := NewNotification(NotificationOptions{ID: "pending-authorization"})
 	result := make(chan error, 1)
 	go func() { result <- n.ShowContext(ctx) }()
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("notification did not request authorization")
-	}
+	wait.For(t, "the notification to request authorization", started)
 	cancel()
-	select {
-	case err := <-result:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("ShowContext = %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("cancellation left the notification worker waiting")
+	err := wait.For(t, "the cancellation to free the notification worker", result)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ShowContext = %v", err)
 	}
 	// A late positive authorization answer must not display a canceled note.
 	onMain(func() {

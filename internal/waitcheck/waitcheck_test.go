@@ -34,7 +34,21 @@ var instead = map[string]string{
 // allowed are the waits on the clock that are right, as "file function
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
-var allowed = map[string]string{}
+var allowed = map[string]string{
+	"document_test.go TestDocumentQuit time.After":                        "Cancel on the quit question must not quit: a slow machine can only miss a bug",
+	"document_test.go TestDocumentUntitledClose time.Sleep":               "Cancel must not close the window: a slow machine can only miss a bug",
+	"mygo_test.go TestChannels time.After":                                "Send must not return before the page acknowledges, and a stale acknowledgment must not count: a slow machine can only miss a bug",
+	"mygo_test.go TestEventsWaitForDOMReady time.Sleep":                   "no event reaches a page before its DOM is ready: a slow machine can only miss a bug",
+	"mygo_test.go TestHiddenTitleBar time.Sleep":                          "windows with a title bar hear nothing: a slow machine can only miss a bug",
+	"mygo_test.go TestMessagesNeedTheSecret time.Sleep":                   "forged messages run nothing: a slow machine can only miss a bug",
+	"mygo_test.go TestThemePreferencesDoNotReachNativeContent time.Sleep": "preferences queue nothing for native content: a slow machine can only miss a bug",
+	"window_state_test.go TestFileDrop time.After":                        "a drop without files is ignored: a slow machine can only miss a bug",
+	"watch_test.go TestFileWatchFile context.WithTimeout":                 "a quiet watcher: Next must time out with no batch, a slow machine can only miss a bug",
+	"watch_test.go TestFileWatchHintsOnlyFile context.WithTimeout":        "a hint for a sibling must report nothing: a slow machine can only miss a bug",
+	"watch_test.go TestFileWatchMetadata context.WithTimeout":             "a metadata change without a write reports nothing: a slow machine can only miss a bug",
+	"watch_test.go TestFileWatchParentSentinel context.WithTimeout":       "a hint for a sibling must report nothing: a slow machine can only miss a bug",
+	"watch_test.go TestFileWatchStaleFailureIgnored context.WithTimeout":  "a stale failure must not stop the watcher: a slow machine can only miss a bug",
+}
 
 type finding struct {
 	rel  string // the file, relative to the repository's root
