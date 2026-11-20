@@ -56,6 +56,8 @@ Take a skin's tokens, change what you want, and make a skin with `skin.Skin.Deri
 
 The `Badge`, `InfoBar` and `EmptyState` looks style those controls. In the `Badge` and `InfoBar` looks, `bg-status`, `text-status` and `border-status` (`widget.RoleStatus`, `widget.RoleStatusText`, `widget.RoleStatusBorder`) are the colors of the control's own status, so one look serves every status: `Badge: "rounded-sm border border-status"`.
 
+The `SettingsCard` look styles each section's card of `widget.FieldsWidget.SettingsRows`; left "", the cards take the `Card` look.
+
 ```go
 package app
 
