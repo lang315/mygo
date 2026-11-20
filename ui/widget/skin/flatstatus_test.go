@@ -15,12 +15,12 @@ func TestFlatStatus(t *testing.T) {
 	t.Cleanup(func() { Use(nil) })
 	hc := HighContrast
 	for name, s := range map[string]*Skin{
-		"HighContrast":             hc,
-		"WithAccent":               hc.WithAccent(ui.Hex("#7c3aed")),
-		"WithPalette":              hc.WithPalette(Cham),
-		"WithDensity":              hc.WithDensity(Compact),
-		"WithLooks":                hc.WithLooks(Looks{Button: "border-2"}),
-		"Derive":                   hc.Derive("Brand", hc.Tokens(false), hc.Tokens(true)),
+		"HighContrast":              hc,
+		"WithAccent":                hc.WithAccent(ui.Hex("#7c3aed")),
+		"WithPalette":               hc.WithPalette(Cham),
+		"WithDensity":               hc.WithDensity(Compact),
+		"WithLooks":                 hc.WithLooks(Looks{Button: "border-2"}),
+		"Derive":                    hc.Derive("Brand", hc.Tokens(false), hc.Tokens(true)),
 		"WithDensity of WithAccent": hc.WithAccent(ui.Hex("#0f766e")).WithDensity(Compact),
 	} {
 		Use(s)
