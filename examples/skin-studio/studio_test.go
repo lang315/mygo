@@ -93,6 +93,7 @@ var captions = map[string]bool{
 	"Buttons and toggles": true, "Text and choices": true, "Numbers and dates": true, "Grid": true,
 	"Lists and trees": true, "Containers": true, "Chart and progress": true, "Dialogs and messages": true,
 	"First": true, "Second": true,
+	"Xác minh": true, "Thêm tài khoản": true,
 }
 
 // clipped returns the captions of the last frame that are cut by the control

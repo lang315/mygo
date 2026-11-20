@@ -79,7 +79,12 @@ var Roles = []string{
 	"accent", "accent-hover", "accent-pressed", "accent-text", "danger", "warning", "success",
 	"selection", "focus", "inverse", "inverse-text",
 	"chrome", "border-strong", "control-border", "button-border", "row-hover", "row-selected", "info",
+	"status", "status-text", "status-border",
 }
+
+// statusRoles are the roles of bg-status, text-status and border-status, by
+// prefix: the fill, text and border of the control's status.
+var statusRoles = map[string]string{"bg": "status", "text": "status-text", "border": "status-border"}
 
 // roles are the theme tokens after bg-, text- and border-, by role.
 var roles = map[string]string{

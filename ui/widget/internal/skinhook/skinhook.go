@@ -52,10 +52,10 @@ type Tokens struct {
 	// Selection is selected text; RowHover and RowSelected rows.
 	Selection, RowHover, RowSelected ui.Color
 
-	// The families. Of Accent, Subtle and Text take no effect yet; of Info,
-	// Warning and Danger only Base and On take effect, and of Success only
-	// Base: no control reads the others, which the components of a later
-	// phase (badges, info bars) are to read.
+	// The families. Of Accent, Subtle and Text take no effect yet. Badges and
+	// info bars draw Info's, Success's, Warning's and Danger's Subtle (their
+	// fill), Text, Border and Base (a running dot, an info bar's icon), and
+	// buttons and the rest Base and On.
 	Accent, Success, Warning, Danger Family
 	// Info is the running and info state, kept apart from the status
 	// colors.
@@ -148,6 +148,9 @@ const (
 	KindStatusStrip
 	KindMenuBar
 	KindHeaderBar
+	KindBadge
+	KindInfoBar
+	KindEmptyState
 	NumKinds
 )
 

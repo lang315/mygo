@@ -76,6 +76,7 @@ func TestStudioTabsFit(t *testing.T) {
 				t.Fatalf("%d tabs, want 9", len(tabs))
 			}
 			b := tabs[8].Bounds()
+			t.Logf("%s: the Edit header ends at %v of %d", describe(s), b.X+b.W, formWidth-8)
 			if right := b.X + b.W; right > formWidth-8 {
 				t.Errorf("%s at text scale %v: the Edit header's right edge is at %v, past the window's %d", describe(s), scale, right, formWidth)
 			}

@@ -62,6 +62,12 @@ func roundTrips() map[string]*skin.Skin {
 			TabHeader:  "rounded-t border border-b-0 bg-chrome selected:bg-surface",
 			GridHeader: "bg-chrome border-r border-strong",
 		}),
+		// Case 11: the looks of the status components come back.
+		"status looks": skin.Calm.WithLooks(skin.Looks{
+			Badge:      "rounded-sm border border-status",
+			InfoBar:    "border-2 border-status",
+			EmptyState: "bg-chrome",
+		}),
 		"brand": brand(),
 	}
 }

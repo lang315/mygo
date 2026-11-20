@@ -46,6 +46,7 @@ type core struct {
 	style       Style   // applied merged, ownStyle last: what frames resolve
 	styled      bool    // style sets anything
 	skinKind    uint8   // 1 + the skinhook.Kind of the skin's look the control takes, 0 for none (lookAs)
+	status      Status  // the status a Badge or an InfoBar shows, which the status roles resolve to (styling)
 	textKey     any     // textKey(id), boxed once
 	idKey       any     // id, boxed once, for keeper.key
 	place       layout
@@ -210,6 +211,8 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	keeping.key(c, b)
 	b.selected = false // a build that can be selected sets it: a ToolButton only while a toggle
+	outer := styling
+	styling = b.status // the status roles resolve to the control's own, in its build and its styles
 	e := w.build(c)
 	b.el = e
 	if f := buildingForm; f != nil {
@@ -294,6 +297,7 @@ func render(c *ui.Context, w Control) ui.Element {
 			buildingForm.postFocusOut(b.onFocusOut)
 		}
 	}
+	styling = outer
 	return e
 }
 

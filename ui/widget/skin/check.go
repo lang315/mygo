@@ -11,7 +11,9 @@ import (
 
 // checkFloor measures the tokens' contrast: text tf:1 or more, the outline of
 // fields and the accent line on the chrome, and each chart color on the
-// background, 3:1 or more; and the control states (hover and pressed) 3 or more
+// background, 3:1 or more; the status families as badges draw them (Base on
+// Subtle 3:1, Text on Subtle over a selected and a hovered row, TextMuted on
+// SurfaceHover); and the control states (hover and pressed) 3 or more
 // CIE76 ΔE from their ground and from each other. A translucent color
 // is measured blended over the layer it sits on, the one after "on", and a
 // translucent layer over Background. It also measures the state distance of the
@@ -46,6 +48,24 @@ func checkFloor(t *skinhook.Tokens, dark bool, tf float64) error {
 		pair(f.name+" Text on Subtle", f.f.Text, f.f.Subtle, tf)
 		pair(f.name+" On on Base", f.f.On, f.f.Base, tf)
 	}
+	// The status families as badges and info bars draw them: the running dot
+	// and the info bar's icon (Base) on the fill, and a badge on a selected or
+	// hovered row, its fill laid over the row's.
+	over := func(name string, fg, bg, under ui.Color, floor float64) {
+		bg = bg.Over(under.Over(t.Background))
+		if r := contrastOf(fg.Over(bg), bg); r < floor {
+			errs = append(errs, fmt.Errorf("%s: %.2f:1, want %g:1", name, r, floor))
+		}
+	}
+	for _, f := range []struct {
+		name string
+		f    skinhook.Family
+	}{{"Info", t.Info}, {"Success", t.Success}, {"Warning", t.Warning}, {"Danger", t.Danger}} {
+		pair(f.name+" Base on Subtle", f.f.Base, f.f.Subtle, 3)
+		over(f.name+" Text on Subtle over RowSelected", f.f.Text, f.f.Subtle, t.RowSelected, tf)
+		over(f.name+" Text on Subtle over RowHover", f.f.Text, f.f.Subtle, t.RowHover, tf)
+	}
+	pair("TextMuted on SurfaceHover", t.TextMuted, t.SurfaceHover, tf) // a badge of StatusNone
 	pair("ControlBorder on Background", t.ControlBorder, t.Background, 3)
 	pair("ControlBorder on Chrome", t.ControlBorder, t.Chrome, 3)
 	pair("Accent.Base on Chrome", t.Accent.Base, t.Chrome, 3)

@@ -21,7 +21,8 @@ import (
 // one lightens just enough (#0a0a0a to about #131313). In dark, the accent
 // is c lightened, if it must be, until the dark color of its hue on it (at
 // c's chroma, 0.04 at most, so a gray keeps a gray) reads. Hover, pressed
-// and the text on the subtle fill follow from the base, in Oklab. Info is
+// and the text on the subtle fill (alone, and in dark over a selected or a
+// hovered row) follow from the base, in Oklab. Info is
 // the accent, unless the accent sits near the status colors (a red, a green
 // or an amber): then Info stays s's. c's alpha is ignored: the accent is
 // opaque.
@@ -63,7 +64,15 @@ func (s *Skin) WithAccent(c ui.Color) *Skin {
 	base = search(l, ch, h, 0.005, func(b ui.Color) bool { return ratio(dt, on, b) >= tf && ratio(dt, b, dt.Chrome) >= 3 })
 	bl, bc = lightChroma(base)
 	text = base
-	for tl := bl; tl <= 1 && ratio(dt, text, base.Alpha(0.14)) < tf; tl += 0.01 {
+	// The text reads on the subtle fill alone, and laid over the selected row
+	// NewPalette makes of the base and over the hovered row: a badge's.
+	subtle := base.Alpha(0.14)
+	reads := func(text ui.Color) bool {
+		return ratio(dt, text, subtle) >= tf &&
+			ratio(dt, text, subtle.Over(base.Alpha(0.16).Over(dt.Background))) >= tf &&
+			ratio(dt, text, subtle.Over(dt.RowHover.Over(dt.Background))) >= tf
+	}
+	for tl := bl; tl <= 1 && !reads(text); tl += 0.01 {
 		text = oklch(tl, bc, h)
 	}
 	dark := DarkFamily(base, oklch(bl+0.05, bc, h), oklch(bl-0.05, bc, h), text, on)

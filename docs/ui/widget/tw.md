@@ -169,8 +169,9 @@ After `bg-`, `text-` or `border-`:
 | `bg-surface-hover`, `text-surface-hover`, `border-surface-hover` | `surface-hover` |
 | `bg-surface-pressed`, `text-surface-pressed`, `border-surface-pressed` | `surface-pressed` |
 | `bg-warning`, `text-warning`, `border-warning` | `warning` |
+| `bg-status`, `text-status`, `border-status` | `status`, `status-text`, `status-border`: the fill, text and border of a Badge's or an InfoBar's status |
 
-The roles are `background` `surface` `surface-hover` `surface-pressed` `border` `text` `text-muted` `accent` `accent-hover` `accent-pressed` `accent-text` `danger` `warning` `success` `selection` `focus` `inverse` `inverse-text` `chrome` `border-strong` `control-border` `button-border` `row-hover` `row-selected` `info`. Theme colors follow the theme, light and dark.
+The roles are `background` `surface` `surface-hover` `surface-pressed` `border` `text` `text-muted` `accent` `accent-hover` `accent-pressed` `accent-text` `danger` `warning` `success` `selection` `focus` `inverse` `inverse-text` `chrome` `border-strong` `control-border` `button-border` `row-hover` `row-selected` `info` `status` `status-text` `status-border`. Theme colors follow the theme, light and dark.
 <!-- /twclass:roles -->
 
 ## Effects

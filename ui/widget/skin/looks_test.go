@@ -15,6 +15,7 @@ var allLooks = Looks{
 	CheckBox: "bg-lime-600", RadioButton: "bg-green-600", GroupBox: "bg-emerald-600", Card: "bg-teal-600",
 	TabStrip: "bg-cyan-600", TabHeader: "bg-sky-600", GridHeader: "bg-blue-600", ToolStrip: "bg-indigo-600",
 	StatusStrip: "bg-violet-600", MenuBar: "bg-purple-600", HeaderBar: "bg-fuchsia-600",
+	Badge: "bg-pink-600", InfoBar: "bg-rose-600", EmptyState: "bg-slate-600",
 }
 
 // WithLooks keeps the strings as given, Calm has none, and the receiver
@@ -110,6 +111,9 @@ func TestDocLooksParse(t *testing.T) {
 		"rounded-sm border border-button",
 		"rounded-t border border-b-0 bg-chrome selected:bg-surface",
 		"bg-chrome border-r border-strong",
+		"rounded-sm border border-status",
+		"bg-surface border-2 border-status",
+		"bg-status text-status border-status",
 	} {
 		if _, err := tw.Parse(cl); err != nil {
 			t.Errorf("%q: %v", cl, err)

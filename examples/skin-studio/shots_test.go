@@ -163,7 +163,8 @@ func TestShots(t *testing.T) {
 // the branch's (MYGO_SKIN_SHOTS): outside the rectangle the Edit tab's header
 // takes in the tab strip (from the right edge of the eighth tab to the
 // window's, the strip's height) every shot is the same, but the chart page's,
-// where the spinner turns, and but a box of 20 by 12 pixels of the numbers
+// where the spinner turns, the dialogs page's, which shows the status
+// controls under its message boxes, and but a box of 20 by 12 pixels of the numbers
 // page, where the date picker shows the time. It is skipped without both variables, and reads
 // shots taken at scale 1.
 func TestShotsMatchMain(t *testing.T) {
@@ -195,8 +196,10 @@ func TestShotsMatchMain(t *testing.T) {
 		return ui.Rect{X: last.X + last.W - 2, Y: edit.Y - 2, W: 1280, H: edit.H + 4}
 	}
 	files, err := filepath.Glob(filepath.Join(mainDir, "*.png"))
-	if err != nil || len(files) != 98 {
-		t.Fatalf("%d shots of main in %s (%v), want 98", len(files), mainDir, err)
+	// Main's eight pages in six skins, light and dark, and its four shots of
+	// states: 100.
+	if err != nil || len(files) != 100 {
+		t.Fatalf("%d shots of main in %s (%v), want 100", len(files), mainDir, err)
 	}
 	load := func(path string) image.Image {
 		f, err := os.Open(path)
@@ -216,6 +219,9 @@ func TestShotsMatchMain(t *testing.T) {
 		base := filepath.Base(file)
 		if strings.HasSuffix(base, "-chart-and-progress.png") {
 			continue // the spinner turns between two runs
+		}
+		if strings.HasSuffix(base, "-dialogs-and-messages.png") {
+			continue // the badges, info bars and empty state are new on this page
 		}
 		name := ""
 		for k := range studios {
@@ -262,8 +268,6 @@ func TestShotsMatchMain(t *testing.T) {
 			t.Errorf("%s: %d pixels differ outside the Edit header's rectangle %v, within %v", base, outside, r, box)
 		}
 	}
-	t.Logf("%d shots compared (the 12 of the chart page skipped); %d pixels differ inside the rectangles", compared, inside)
-	if inside == 0 {
-		t.Error("no pixel differs inside the rectangles: the Edit header is not in the shots, or the rectangle is wrong")
-	}
+	// The Edit header is on main now, so the rectangles may match too.
+	t.Logf("%d shots compared (the 12 of the chart page and the 12 of the dialogs page skipped); %d pixels differ inside the rectangles", compared, inside)
 }

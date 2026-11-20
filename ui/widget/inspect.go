@@ -271,7 +271,7 @@ var colorRoleNames = [...]string{
 	roleSuccess: "success", roleSelection: "selection", roleFocus: "focus", roleInverse: "inverse", roleInverseText: "inverse-text",
 	roleChrome: "chrome", roleBorderStrong: "border-strong", roleControlBorder: "control-border", roleButtonBorder: "button-border",
 	roleRowHover: "row-hover", roleRowSelected: "row-selected", roleInfo: "info",
-	roleFill: "fill",
+	roleFill: "fill", roleStatus: "status", roleStatusText: "status-text", roleStatusBorder: "status-border",
 }
 
 // inspectText names a theme role (as the theme's field), or writes a fixed
