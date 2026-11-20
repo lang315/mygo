@@ -28,10 +28,12 @@ const (
 // packages are the packages whose exported names the prose of a skill may
 // mention in backticks, as widget.Button or ui.NewTester, by the name it uses.
 var packages = map[string]string{
-	"widget": module + "/ui/widget",
-	"ui":     module + "/ui",
-	"tw":     module + "/ui/widget/tw",
-	"mygo":   module,
+	"widget":   module + "/ui/widget",
+	"ui":       module + "/ui",
+	"tw":       module + "/ui/widget/tw",
+	"skin":     module + "/ui/widget/skin",
+	"skinfile": module + "/ui/widget/skin/skinfile",
+	"mygo":     module,
 }
 
 // skill is one bundled skill.
@@ -210,7 +212,7 @@ var allowedNames = map[string]string{}
 // is not part of a longer name.
 var (
 	spanRE    = regexp.MustCompile("`[^`\n]+`")
-	mentionRE = regexp.MustCompile(`(^|[^A-Za-z0-9_./-])(widget|ui|tw|mygo)\.([A-Za-z_][A-Za-z0-9_]*)(?:\.([A-Za-z_][A-Za-z0-9_]*))?`)
+	mentionRE = regexp.MustCompile(`(^|[^A-Za-z0-9_./-])(widget|ui|tw|skinfile|skin|mygo)\.([A-Za-z_][A-Za-z0-9_]*)(?:\.([A-Za-z_][A-Za-z0-9_]*))?`)
 )
 
 func TestSkillNamesExist(t *testing.T) {
