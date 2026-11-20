@@ -180,6 +180,10 @@ func TestCalmTextSelectionInSelectedRow(t *testing.T) {
 			}
 			k := contrastOf(hl, ground)
 			t.Logf("%v: highlight %v on %v: %.2f:1", l, hl, ground, k)
+			// The commonest color is the highlight itself, not the text's ink.
+			if want := l.skin.Tokens(l.dark).Selection.Over(ground); dist(hl, want) > 3 {
+				t.Errorf("%v: the commonest color %v in the field is not Selection over the row, %v", l, hl, want)
+			}
 			if k < 1.2 {
 				t.Errorf("%v: the selected text's highlight %v stands %.2f:1 from the row %v, want 1.2", l, hl, k, ground)
 			}

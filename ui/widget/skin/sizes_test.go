@@ -104,11 +104,15 @@ func TestCalmSizesWidgets(t *testing.T) {
 // more (a least height, measured under the skin's tokens and looks with
 // ControlHeight 1), the check box its CheckSize, header and rows theirs.
 func TestSizesWidgets(t *testing.T) {
+	// Each skin's sizes, as constants: Classic is Compact.
+	sizes := map[string]struct{ control, row, header, check float32 }{
+		"Calm": {36, 30, 30, 15}, "Classic": {30, 26, 26, 14}, "HighContrast": {36, 30, 30, 15},
+	}
 	forEachBuiltin(t, func(t *testing.T, s *Skin) {
 		t.Cleanup(func() { Use(nil) })
-		tk := s.Tokens(false)
-		if s.Density() == Compact {
-			tk = compact(tk)
+		tk, ok := sizes[s.Name()]
+		if !ok {
+			t.Fatalf("no sizes for %s", s.Name())
 		}
 		l, d := s.Tokens(false), s.Tokens(true)
 		l.ControlHeight, d.ControlHeight = 1, 1
@@ -133,11 +137,11 @@ func TestSizesWidgets(t *testing.T) {
 		}
 		got["NumericUpDown"] = date.Y - 8 - (combo.Y + combo.H + 8)
 		want := map[string]float32{
-			"CheckBox box": tk.CheckSize, "DataGridView header": tk.HeaderHeight,
-			"DataGridView row": tk.RowHeight, "TreeView row": tk.RowHeight,
+			"CheckBox box": tk.check, "DataGridView header": tk.header,
+			"DataGridView row": tk.row, "TreeView row": tk.row,
 		}
 		for _, name := range []string{"Button", "TextBox", "ComboBox", "NumericUpDown", "DateTimePicker date", "DateTimePicker time"} {
-			want[name] = max(tk.ControlHeight, content[name])
+			want[name] = max(tk.control, content[name])
 		}
 		if len(want) != 10 {
 			t.Fatalf("%d sizes, want 10", len(want))

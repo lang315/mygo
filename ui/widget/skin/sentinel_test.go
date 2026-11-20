@@ -126,6 +126,7 @@ func forEachBuiltin(t *testing.T, f func(t *testing.T, s *Skin)) {
 
 func newSentinelSkins(t *testing.T, base *Skin) *sentinelSkins {
 	t.Helper()
+	base = base.get() // a built-in skin's fields, made at its first use
 	n := len(colorFields(reflect.ValueOf(&skinhook.Tokens{}).Elem()))
 	sents := sentinelColors(n)
 	for i, a := range sents {
@@ -160,7 +161,26 @@ func (s *sentinelSkins) use(t *testing.T, b bool) {
 	skinhook.Set(tk[0], tk[1])
 	skinhook.SetLooks(s.base.parsed)
 	ui.SetDefaultThemes(themeOf(tk[0], false), themeOf(tk[1], true))
+	// The base skin's looks are on: Classic's and HighContrast's buttons
+	// draw theirs under the sentinels.
+	if s.base.looks.Button != "" && skinhook.Look(skinhook.KindButton) == nil {
+		t.Fatalf("%s: its Button look %q is not on", s.base.name, s.base.looks.Button)
+	}
+	if n := countLooks(); (n > 0) != (s.base.looks != Looks{}) {
+		t.Fatalf("%s: %d looks on, for the looks %+v", s.base.name, n, s.base.looks)
+	}
 	t.Cleanup(func() { Use(nil) })
+}
+
+// countLooks is how many kinds have a look on.
+func countLooks() int {
+	n := 0
+	for k := range skinhook.NumKinds {
+		if skinhook.Look(k) != nil {
+			n++
+		}
+	}
+	return n
 }
 
 func colorAt(img *image.RGBA, x, y int) ui.Color {

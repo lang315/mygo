@@ -28,6 +28,7 @@ import (
 //
 //	skin.Use(skin.Calm.WithAccent(ui.Hex("#7c3aed")))
 func (s *Skin) WithAccent(c ui.Color) *Skin {
+	s = s.get()
 	c.A = 255
 	lab := oklabOf(c)
 	l, ch := float64(lab[0]), math.Hypot(float64(lab[1]), float64(lab[2]))
@@ -80,7 +81,7 @@ func (s *Skin) WithAccent(c ui.Color) *Skin {
 // Palettes returns the palettes made for the skin, its own first: Calm's
 // are Blue, Chàm, Indigo, Ink and Teal. It is nil for a skin made with New.
 func (s *Skin) Palettes() []*Palette {
-	return append([]*Palette(nil), s.palettes...)
+	return append([]*Palette(nil), s.get().palettes...)
 }
 
 // ratio is the contrast of fg on bg in the tokens t, as check measures it.

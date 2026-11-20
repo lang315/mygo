@@ -98,10 +98,17 @@ func TestClassicShape(t *testing.T) {
 					break
 				}
 			}
-			// Its fill is the page's ground under it, in its padding left of
-			// the text.
-			if fill, page := colorAt(img, int(one.X)+4, int(one.Y+one.H/2)), colorAt(img, int(one.X)+4, int(one.Y+one.H)+3); fill != page || !near(fill, tk.Background) {
-				t.Errorf("the open tab is %v, the page under it %v; want both Background %v", fill, page, tk.Background)
+			// Its fill runs into the page with no line: a column in its padding
+			// left of the text, from mid-tab to 6 rows into the page, is
+			// Background all the way.
+			for y := int(one.Y + one.H/2); y < int(one.Y+one.H)+6; y++ {
+				if c := colorAt(img, int(one.X)+4, y); !near(c, tk.Background) {
+					t.Errorf("at y=%d (the tab ends at %v) the column under the open tab is %v, want Background %v", y, one.Y+one.H, c, tk.Background)
+					break
+				}
+			}
+			if c := colorAt(img, int(two.X+two.W/2), int(two.Y+two.H)-1); !near(c, tk.BorderStrong) {
+				t.Errorf("the closed tab's bottom edge is %v, want BorderStrong %v", c, tk.BorderStrong)
 			}
 			if c := colorAt(img, int(two.X)+5, int(two.Y+two.H/2)); !near(c, tk.Chrome) {
 				t.Errorf("the closed tab is %v, want Chrome %v", c, tk.Chrome)

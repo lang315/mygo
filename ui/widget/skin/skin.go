@@ -51,6 +51,7 @@ package skin
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/egoist/mygo/ui"
@@ -83,6 +84,7 @@ func New(name string, light, dark Tokens) *Skin {
 // Standard ones, whatever the skin's Density: give the new skin
 // WithDensity again.
 func (s *Skin) Tokens(dark bool) Tokens {
+	s = s.get()
 	if dark {
 		return s.dark
 	}
@@ -96,6 +98,7 @@ func (s *Skin) Tokens(dark bool) Tokens {
 // appearance and every failing pair; nil means all pass. A skin that fails
 // still works: Use does not check.
 func (s *Skin) Check() error {
+	s = s.get()
 	var errs []error
 	if err := checkFloor(&s.light, false, s.textFloor()); err != nil {
 		errs = append(errs, fmt.Errorf("light: %w", err))
@@ -117,11 +120,33 @@ type Skin struct {
 	looks       Looks
 	parsed      *[skinhook.NumKinds]any // looks' Styles, as Use hands them to widget
 	floor       float64                 // the least contrast of text Check asks; 0 is 4.5
+	lazy        *lazySkin               // set on a built-in skin made at its first use
+}
+
+// lazySkin makes a skin MyGo ships at its first use, so that an app that
+// never names it links none of it: its tokens, palettes and looks, and tw's
+// parser for them. The skin's own var is then a static literal the linker
+// drops.
+type lazySkin struct {
+	once  sync.Once
+	build func() *Skin
+	s     *Skin
+}
+
+// get returns the skin whose fields hold s: s, or the skin its lazy part
+// builds once.
+func (s *Skin) get() *Skin {
+	if s.lazy == nil {
+		return s
+	}
+	s.lazy.once.Do(func() { s.lazy.s = s.lazy.build() })
+	return s.lazy.s
 }
 
 // textFloor is the least contrast of text the skin asks: its floor, 4.5
 // unless it sets one.
 func (s *Skin) textFloor() float64 {
+	s = s.get()
 	if s.floor == 0 {
 		return 4.5
 	}
@@ -129,7 +154,7 @@ func (s *Skin) textFloor() float64 {
 }
 
 // Name returns the skin's name, as "Calm".
-func (s *Skin) Name() string { return s.name }
+func (s *Skin) Name() string { return s.get().name }
 
 var active atomic.Pointer[Skin]
 
@@ -150,6 +175,7 @@ func Use(s *Skin) {
 	}
 	// The hook first and the themes last: the generation the themes bump
 	// tells kept rows that the tokens changed too.
+	s = s.get() // Active keeps the skin as given
 	l, d := &s.light, &s.dark
 	if s.density == Compact {
 		cl, cd := compact(s.light), compact(s.dark)
