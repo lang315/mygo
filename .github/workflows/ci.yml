@@ -148,6 +148,19 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build the JavaScript packages
         run: bun run build
+      # The build writes internal/bridge/bridge.js and internal/windows/keys.js,
+      # which are committed because Go embeds them. Checked in one Linux job:
+      # the bundles are the same on every OS, and Linux's checkout has no CRLF.
+      - name: Check the committed bundles
+        if: matrix.shard == 'check'
+        run: |
+          changed=$(git status --porcelain)
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            git diff --stat
+            echo "::error::bun run build changed the files above. A committed bundle must be the build's output, not edited by hand or left stale, because Go embeds it and apps would ship the old code. Run bun install && bun run build (packages/bridge/build.ts writes internal/bridge/bridge.js and internal/windows/keys.js) and commit them."
+            exit 1
+          fi
       - name: Check the shards
         if: matrix.shard == 'check'
         run: |
