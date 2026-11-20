@@ -7,10 +7,12 @@ One row per control of section 5 of the skins spec ("Controls": the widgets
 page that shows the control (`go run ./examples/skin-studio`, not run by tests)
 and the test that holds it. A row without a page or a test is not ticked.
 
-Tests of every row: `TestStudioEveryPage` (the page builds in None and in Calm
-× 5 palettes × light and dark, no caption clipped), `TestStudioGridPage` (rows
-30, header 30, tool strip controls 36), `TestSentinelSkinReachesEveryPixel`
-(`ui/widget/skin`: under a sentinel skin every painted pixel of the gallery,
+Tests of every row: `TestStudioEveryPage` (the page builds in None, in Calm
+× 5 palettes, Classic × 2 and HighContrast, × light and dark, and Classic at
+text scale 1.5, no caption clipped), `TestStudioGridPage` (rows 30, header 30,
+tool strip controls 36), `TestSentinelSkinReachesEveryPixel`
+(`ui/widget/skin`: under a sentinel skin of each built-in skin's metrics and
+looks every painted pixel of the gallery,
 which holds each control below except the message boxes' dialogs, is a sentinel
 color) and `TestNoNewLiteralColors` (`ui/widget`: no `ui.Hex`/`ui.RGB` in a
 skinned paint path). Rows below add their own.

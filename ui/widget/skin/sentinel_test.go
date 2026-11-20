@@ -81,13 +81,16 @@ func sentinelColors(n int) []ui.Color {
 	return picked[2:]
 }
 
-// sentinelTokens returns a copy of Calm's tokens in one appearance whose
-// i-th color is sents[(i+shift) % len], keeping its alpha (opaque where the
-// token is empty, as a shadow left out).
-func sentinelTokens(dark bool, sents []ui.Color, shift int) *skinhook.Tokens {
-	tk := Calm.light
+// sentinelTokens returns a copy of the skin base's tokens in one appearance,
+// at its density, whose i-th color is sents[(i+shift) % len], keeping its
+// alpha (opaque where the token is empty, as a shadow left out).
+func sentinelTokens(base *Skin, dark bool, sents []ui.Color, shift int) *skinhook.Tokens {
+	tk := base.light
 	if dark {
-		tk = Calm.dark
+		tk = base.dark
+	}
+	if base.density == Compact {
+		tk = compact(tk)
 	}
 	for i, c := range colorFields(reflect.ValueOf(&tk).Elem()) {
 		s := sents[(i+shift)%len(sents)]
@@ -100,14 +103,28 @@ func sentinelTokens(dark bool, sents []ui.Color, shift int) *skinhook.Tokens {
 	return &tk
 }
 
-// sentinelSkins are two skins of sentinels, A and B: the same metrics, and
-// each color of A another sentinel in B.
+// sentinelSkins are two skins of sentinels, A and B, made from one built-in
+// skin: its metrics and looks, and each color of A another sentinel in B.
 type sentinelSkins struct {
 	sents []ui.Color
 	a, b  [2]*skinhook.Tokens // light, dark
+	base  *Skin
 }
 
-func newSentinelSkins(t *testing.T) *sentinelSkins {
+// forEachBuiltin runs f in a subtest per built-in skin, and fails unless it
+// ran for each of the three.
+func forEachBuiltin(t *testing.T, f func(t *testing.T, s *Skin)) {
+	ran := 0
+	for _, s := range builtins {
+		t.Run(s.Name(), func(t *testing.T) { f(t, s) })
+		ran++
+	}
+	if ran != 3 {
+		t.Errorf("the case ran for %d skins, want 3: Calm, Classic and HighContrast", ran)
+	}
+}
+
+func newSentinelSkins(t *testing.T, base *Skin) *sentinelSkins {
 	t.Helper()
 	n := len(colorFields(reflect.ValueOf(&skinhook.Tokens{}).Elem()))
 	sents := sentinelColors(n)
@@ -118,9 +135,9 @@ func newSentinelSkins(t *testing.T) *sentinelSkins {
 			}
 		}
 	}
-	s := &sentinelSkins{sents: sents}
+	s := &sentinelSkins{sents: sents, base: base}
 	for i, dark := range []bool{false, true} {
-		s.a[i], s.b[i] = sentinelTokens(dark, sents, 0), sentinelTokens(dark, sents, 1)
+		s.a[i], s.b[i] = sentinelTokens(base, dark, sents, 0), sentinelTokens(base, dark, sents, 1)
 		ca, cb := colorFields(reflect.ValueOf(s.a[i]).Elem()), colorFields(reflect.ValueOf(s.b[i]).Elem())
 		for j := range ca {
 			if *ca[j] == (ui.Color{}) || *cb[j] == (ui.Color{}) {
@@ -141,6 +158,7 @@ func (s *sentinelSkins) use(t *testing.T, b bool) {
 		tk = s.b
 	}
 	skinhook.Set(tk[0], tk[1])
+	skinhook.SetLooks(s.base.parsed)
 	ui.SetDefaultThemes(themeOf(tk[0], false), themeOf(tk[1], true))
 	t.Cleanup(func() { Use(nil) })
 }
@@ -306,9 +324,12 @@ func report(t *testing.T, dark bool, ms []miss) {
 }
 
 // What the theme alone paints moves with the tokens: a bordered plain
-// button, and the selected row of a light and a dark DataGridView.
-func TestSentinelRule(t *testing.T) {
-	s := newSentinelSkins(t)
+// button, and the selected row of a light and a dark DataGridView, under
+// each built-in skin's metrics and looks.
+func TestSentinelRule(t *testing.T) { forEachBuiltin(t, sentinelRule) }
+
+func sentinelRule(t *testing.T, base *Skin) {
+	s := newSentinelSkins(t, base)
 	type row struct{ ID, Name string }
 	for _, dark := range []bool{false, true} {
 		grid := widget.DataGridView(func(r *row) string { return r.ID },
@@ -339,9 +360,12 @@ func b2i(b bool) int {
 // Literals planted in the gallery's form are each reported, naming their
 // node: a panel in the plain accent, a 1 px literal gray border around a box
 // of a sentinel, square and rounded, 20 seeded random fills, and a label in
-// a literal red (thin text: logged when it slips through, a known hole).
-func TestSentinelRuleCatchesPlantedLiterals(t *testing.T) {
-	s := newSentinelSkins(t)
+// a literal red (thin text: logged when it slips through, a known hole);
+// under each built-in skin's metrics and looks.
+func TestSentinelRuleCatchesPlantedLiterals(t *testing.T) { forEachBuiltin(t, sentinelPlanted) }
+
+func sentinelPlanted(t *testing.T, base *Skin) {
+	s := newSentinelSkins(t, base)
 	planted := widget.FlowPanel(8).Add(
 		widget.Button("").SetAccessibleName("planted panel").Background(ui.Hex("#2563eb")).SetSize(60, 24),
 		widget.Label("Planted text").TextColor(ui.Hex("#dc2626")),
@@ -392,9 +416,11 @@ func TestSentinelRuleCatchesPlantedLiterals(t *testing.T) {
 
 // Every pixel of every control of the gallery, light and dark, moves when
 // the tokens move, but white and black: no control paints a color the skin
-// does not give it.
-func TestSentinelSkinReachesEveryPixel(t *testing.T) {
-	s := newSentinelSkins(t)
+// does not give it; under each built-in skin's metrics and looks.
+func TestSentinelSkinReachesEveryPixel(t *testing.T) { forEachBuiltin(t, sentinelEveryPixel) }
+
+func sentinelEveryPixel(t *testing.T, base *Skin) {
+	s := newSentinelSkins(t, base)
 	for _, dark := range []bool{false, true} {
 		s.use(t, false)
 		tt := widget.TestForm(t, gallery())

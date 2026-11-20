@@ -9,17 +9,18 @@ import (
 	"github.com/egoist/mygo/ui/widget"
 )
 
-// look is one way a contrast case is drawn: Calm or no skin, light or
-// dark, at a text scale.
+// look is one way a contrast case is drawn: a built-in skin or none (nil),
+// light or dark, at a text scale.
 type look struct {
-	calm, dark bool
-	scale      float32
+	skin  *Skin
+	dark  bool
+	scale float32
 }
 
 func (l look) String() string {
 	s := "none"
-	if l.calm {
-		s = "calm"
+	if l.skin != nil {
+		s = l.skin.Name()
 	}
 	if l.dark {
 		return fmt.Sprintf("%s-dark-%g", s, l.scale)
@@ -27,16 +28,19 @@ func (l look) String() string {
 	return fmt.Sprintf("%s-light-%g", s, l.scale)
 }
 
-// looks are every look a case runs in: no skin and Calm, light and dark,
-// text at 1 and 1.1 (Windows' fonts are taller).
+// looks are every look a case runs in: no skin and each built-in skin, light
+// and dark, text at 1 and 1.1 (Windows' fonts are taller).
 func looks() []look {
 	var out []look
-	for _, calm := range []bool{false, true} {
+	for _, s := range append([]*Skin{nil}, builtins...) {
 		for _, dark := range []bool{false, true} {
 			for _, scale := range []float32{1, 1.1} {
-				out = append(out, look{calm, dark, scale})
+				out = append(out, look{s, dark, scale})
 			}
 		}
+	}
+	if len(out) != 16 {
+		panic(fmt.Sprintf("%d looks, want 16: no skin and 3 built-in, light and dark, at 2 scales", len(out)))
 	}
 	return out
 }
@@ -52,20 +56,19 @@ func showIn(t *testing.T, w widget.Control, width, height int, l look) (*widget.
 		return ui.Text(c, "probe")
 	})
 	tt := widget.NewTester(t, widget.VBox(8).Add(w, probe), width, height)
-	if l.calm {
-		Use(Calm)
-	} else {
-		Use(nil)
-	}
+	Use(l.skin)
 	tt.SetDark(l.dark)
 	tt.SetPreferences(ui.Preferences{TextScale: l.scale})
 	tt.Frame()
-	accent := ui.Hex("#1c71d8")
+	accent := ui.LightTheme().Accent
 	if l.dark {
-		accent = ui.Hex("#78aeed")
+		accent = ui.DarkTheme().Accent
 	}
-	if th.Dark != l.dark || (th.Accent == accent) != l.calm {
-		t.Fatalf("%v: the theme is dark %v with accent %v", l, th.Dark, th.Accent)
+	if l.skin != nil {
+		accent = l.skin.Tokens(l.dark).Accent.Base
+	}
+	if th.Dark != l.dark || th.Accent != accent {
+		t.Fatalf("%v: the theme is dark %v with accent %v, want %v", l, th.Dark, th.Accent, accent)
 	}
 	return tt, th
 }
@@ -121,7 +124,7 @@ func TestCalmSelectedRowShows(t *testing.T) {
 			_, text := strongest(tt, sel, fill)
 			k := contrastOf(fill, ground)
 			t.Logf("%v: selected %v, unselected %v: %.2f:1; text %.2f:1", l, fill, ground, k, text)
-			if !l.calm {
+			if l.skin == nil {
 				if !isColor(rgba(fill), th.Accent) {
 					t.Errorf("%v: the selected row is %v, want the plain accent %v", l, fill, th.Accent)
 				}
@@ -141,17 +144,14 @@ func rgba(c ui.Color) color.RGBA { return color.RGBA{c.R, c.G, c.B, 255} }
 
 // Selected text in an editor whose ground is the selected row's, as a cell
 // edited in place, stands 1.2:1 from that ground, light and dark. The case
-// is Calm's: with no skin the row is the accent, which no editor takes.
+// is the skins': with no skin the row is the accent, which no editor takes.
 func TestCalmTextSelectionInSelectedRow(t *testing.T) {
 	for _, l := range looks() {
-		if !l.calm {
+		if l.skin == nil {
 			continue
 		}
 		t.Run(l.String(), func(t *testing.T) {
-			row := Calm.light.RowSelected
-			if l.dark {
-				row = Calm.dark.RowSelected
-			}
+			row := l.skin.Tokens(l.dark).RowSelected
 			box := widget.TextBox().SetText("selected").Background(row)
 			tt, _ := showIn(t, box, 400, 200, l)
 			field := tt.Find(widget.ByRole(ui.RoleTextField))
@@ -205,11 +205,11 @@ func TestCalmMenuBarHoverShows(t *testing.T) {
 			k := contrastOf(hover, rest)
 			t.Logf("%v: hover %v on bar %v: %.2f:1", l, hover, rest, k)
 			switch {
-			case l.calm && k < 1.15:
+			case l.skin != nil && k < 1.15:
 				t.Errorf("%v: the hovered item %v stands %.2f:1 from the bar %v, want 1.15", l, hover, k, rest)
-			case !l.calm && !l.dark && (k < 1.19 || k > 1.23):
+			case l.skin == nil && !l.dark && (k < 1.19 || k > 1.23):
 				t.Errorf("%v: %.2f:1, want main's 1.21", l, k)
-			case !l.calm && l.dark && (k < 1.37 || k > 1.41):
+			case l.skin == nil && l.dark && (k < 1.37 || k > 1.41):
 				t.Errorf("%v: %.2f:1, want main's 1.39", l, k)
 			}
 		})
@@ -232,13 +232,22 @@ func TestCalmSidebarStandsOut(t *testing.T) {
 			k := contrastOf(side, page)
 			t.Logf("%v: sidebar %v, content %v: %.3f:1", l, side, page, k)
 			switch {
-			case !l.calm:
+			case l.skin == nil:
 				if !isColor(rgba(side), th.Surface) {
 					t.Errorf("%v: the sidebar is %v, want the plain Surface %v", l, side, th.Surface)
 				}
 			case l.dark:
-				if !isColor(rgba(side), ui.Hex("#262a30")) {
+				if l.skin == Calm && !isColor(rgba(side), ui.Hex("#262a30")) {
 					t.Errorf("%v: the sidebar is %v, want #262a30", l, side)
+				}
+				if s := l.skin.Tokens(true).Surface; !isColor(rgba(side), s) {
+					t.Errorf("%v: the sidebar is %v, want the skin's Surface %v", l, side, s)
+				}
+			case l.skin.Tokens(false).Chrome == l.skin.Tokens(false).Background:
+				// One ground (HighContrast's): nothing to stand out with but
+				// outlines; the sidebar is that ground.
+				if s := l.skin.Tokens(false).Surface; !isColor(rgba(side), s) {
+					t.Errorf("%v: the sidebar is %v, want the skin's one ground %v", l, side, s)
 				}
 			case k < 1.04:
 				t.Errorf("%v: the sidebar %v stands %.3f:1 from the content %v, want 1.04", l, side, k, page)
@@ -267,7 +276,7 @@ func TestCalmCheckedToggleShows(t *testing.T) {
 				edge := px(tt, on.X+0.5, on.Y+on.H/2)
 				k := contrastOf(fillOn, fillOff)
 				t.Logf("%v: on %v, off %v: %.2f:1; edge %v", l, fillOn, fillOff, k, edge)
-				if !l.calm {
+				if l.skin == nil {
 					if !isColor(rgba(fillOn), th.SurfacePressed) || !isColor(rgba(fillOff), th.Surface) {
 						t.Errorf("%v: on %v and off %v, want main's %v and %v", l, fillOn, fillOff, th.SurfacePressed, th.Surface)
 					}
@@ -284,14 +293,16 @@ func TestCalmCheckedToggleShows(t *testing.T) {
 	}
 }
 
-// An own Background on a checked Toggle wins over Calm's checked look.
+// An own Background on a checked Toggle wins over each skin's checked look.
 func TestCalmCheckedToggleKeepsOwnStyle(t *testing.T) {
 	red := ui.RGB(255, 0, 0)
-	for _, dark := range []bool{false, true} {
-		tt, _ := showIn(t, widget.Toggle("Mine").SetActive(true).Background(red), 400, 200, look{calm: true, dark: dark, scale: 1})
-		b := tt.Find(widget.ByLabel("Mine")).Bounds()
-		if c := px(tt, b.X+5, b.Y+b.H/2); !isColor(rgba(c), red) {
-			t.Errorf("dark %v: the checked toggle with its own background is %v, want red", dark, c)
+	forEachBuiltin(t, func(t *testing.T, s *Skin) {
+		for _, dark := range []bool{false, true} {
+			tt, _ := showIn(t, widget.Toggle("Mine").SetActive(true).Background(red), 400, 200, look{skin: s, dark: dark, scale: 1})
+			b := tt.Find(widget.ByLabel("Mine")).Bounds()
+			if c := px(tt, b.X+5, b.Y+b.H/2); !isColor(rgba(c), red) {
+				t.Errorf("dark %v: the checked toggle with its own background is %v, want red", dark, c)
+			}
 		}
-	}
+	})
 }

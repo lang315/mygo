@@ -99,6 +99,57 @@ func TestCalmSizesWidgets(t *testing.T) {
 	}
 }
 
+// After Use of each built-in skin the widgets take its metrics at its
+// density: the controls its ControlHeight, or their content where that is
+// more (a least height, measured under the skin's tokens and looks with
+// ControlHeight 1), the check box its CheckSize, header and rows theirs.
+func TestSizesWidgets(t *testing.T) {
+	forEachBuiltin(t, func(t *testing.T, s *Skin) {
+		t.Cleanup(func() { Use(nil) })
+		tk := s.Tokens(false)
+		if s.Density() == Compact {
+			tk = compact(tk)
+		}
+		l, d := s.Tokens(false), s.Tokens(true)
+		l.ControlHeight, d.ControlHeight = 1, 1
+		tt := widget.NewTester(t, sizeForm(), 600, 700)
+		Use(New("tiny", l, d).WithLooks(s.Looks()))
+		tt.Frame()
+		content := widgetSizes(t, tt)
+		Use(s)
+		tt.Frame()
+		got := widgetSizes(t, tt)
+		// widgetSizes measures a NumericUpDown by its arrows inside a border
+		// of 1; under a look's wider border, by the room between the
+		// ComboBox above it and the DateTimePicker below, gaps of 8.
+		var combo, date ui.Rect
+		for _, n := range tt.Nodes() {
+			switch {
+			case n.Role == ui.RolePopUpButton && n.Label == "":
+				combo = n.Bounds
+			case n.Role == ui.RolePopUpButton:
+				date = n.Bounds
+			}
+		}
+		got["NumericUpDown"] = date.Y - 8 - (combo.Y + combo.H + 8)
+		want := map[string]float32{
+			"CheckBox box": tk.CheckSize, "DataGridView header": tk.HeaderHeight,
+			"DataGridView row": tk.RowHeight, "TreeView row": tk.RowHeight,
+		}
+		for _, name := range []string{"Button", "TextBox", "ComboBox", "NumericUpDown", "DateTimePicker date", "DateTimePicker time"} {
+			want[name] = max(tk.ControlHeight, content[name])
+		}
+		if len(want) != 10 {
+			t.Fatalf("%d sizes, want 10", len(want))
+		}
+		for name, w := range want {
+			if !same(got[name], w) {
+				t.Errorf("with %s, %s is %v, want %v", s.Name(), name, got[name], w)
+			}
+		}
+	})
+}
+
 // same reports whether a and b are the same size, to rounding.
 func same(a, b float32) bool { return a-b < 0.01 && b-a < 0.01 }
 
