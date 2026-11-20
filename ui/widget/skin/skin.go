@@ -8,6 +8,12 @@
 // and every window takes it in its next frame. An app that does not import
 // the package keeps the plain look and links none of it.
 //
+// MyGo ships three skins, each made only of tokens, palettes and looks, as
+// an app's own can be: Calm, a calm ground with the accent only on what acts
+// or is chosen; Classic, the shapes WinForms users know (outlined controls,
+// boxed tabs, filled grid headers), Compact by default; and HighContrast,
+// text at 7:1 with 2 DIP outlines, for users who need it.
+//
 // A brand color and a tighter density take a line too: WithAccent makes a
 // palette from one color, moving it only as much as the contrast floors
 // need, and WithDensity(Compact) sets controls lower, at Use:
