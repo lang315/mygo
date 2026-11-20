@@ -252,13 +252,14 @@ type mfEngine struct {
 	shown int
 	w, h  int
 
-	mu        sync.Mutex
-	wake      func()
-	state     media.State
-	err       error
-	loop      bool
-	seekTo    time.Duration
-	seekSince time.Time // a seek not landed yet, until eventSeeked
+	mu      sync.Mutex
+	wake    func()
+	state   media.State
+	err     error
+	loop    bool
+	seekTo  time.Duration
+	seeking bool // a seek Position reports, until seeked and the engine seeks no longer
+	seeked  bool // an eventSeeked came since the seek, maybe an earlier seek's
 	// landed tells a seek landed (eventSeeked) with no picture since
 	// it, for Frame to step to the picture there if the engine has none.
 	landed bool
@@ -413,8 +414,7 @@ func (e *mfEngine) event(event uint32, param1 uintptr, param2 uint32) {
 			e.state = media.Ready
 		}
 	case eventSeeked:
-		e.seekSince = time.Time{}
-		e.landed = true
+		e.seeked, e.landed = true, true
 	case eventLoadedMetadata, eventLoadedData, eventDurationChange, eventFrameStepCompleted:
 	default:
 		e.mu.Unlock()
@@ -609,13 +609,18 @@ func (e *mfEngine) Duration() time.Duration {
 }
 
 func (e *mfEngine) Position() time.Duration {
-	e.mu.Lock()
-	if !e.seekSince.IsZero() {
-		d := e.seekTo
+	if e.seeking {
+		e.mu.Lock()
+		seeked := e.seeked
 		e.mu.Unlock()
-		return d
+		// The eventSeeked of the seek before may come after this one
+		// began, as its picture came first; the engine's time is not
+		// this seek's until it seeks no longer.
+		if !seeked || call(e.engine, engineIsSeeking) != 0 {
+			return e.seekTo
+		}
+		e.seeking = false
 	}
-	e.mu.Unlock()
 	d := callGetDouble(e.engine, engineGetCurrentTime)
 	if math.IsNaN(d) || d < 0 {
 		return 0
@@ -639,8 +644,9 @@ func (e *mfEngine) Seek(d time.Duration) {
 	if e.state == media.Ended {
 		e.state = media.Ready
 	}
-	e.seekTo, e.seekSince, e.landed = d, time.Now(), false
+	e.seeked, e.landed = false, false
 	e.mu.Unlock()
+	e.seekTo, e.seeking = d, true
 	callSetDouble(e.engine, engineSetCurrentTime, d.Seconds())
 }
 
