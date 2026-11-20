@@ -195,8 +195,10 @@ func TestShotsMatchMain(t *testing.T) {
 		return ui.Rect{X: last.X + last.W - 2, Y: edit.Y - 2, W: 1280, H: edit.H + 4}
 	}
 	files, err := filepath.Glob(filepath.Join(mainDir, "*.png"))
-	if err != nil || len(files) != 98 {
-		t.Fatalf("%d shots of main in %s (%v), want 98", len(files), mainDir, err)
+	// Main's eight pages in six skins, light and dark, and its four shots of
+	// states: 100.
+	if err != nil || len(files) != 100 {
+		t.Fatalf("%d shots of main in %s (%v), want 100", len(files), mainDir, err)
 	}
 	load := func(path string) image.Image {
 		f, err := os.Open(path)
