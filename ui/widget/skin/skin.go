@@ -46,6 +46,15 @@
 //		log.Print(err) // the pairs under the contrast floors; the skin still works
 //	}
 //	skin.Use(s)
+//
+// An app lets its user choose among its skins with Picker, a form of three
+// boxes, and keeps the choice as Active().ID() in its own settings; at
+// startup FromID gives the skin back, nil when the ID names none:
+//
+//	settings.Skin = skin.Active().ID() // when it saves its settings
+//	if s := skin.FromID(settings.Skin); s != nil {
+//		skin.Use(s)
+//	}
 package skin
 
 import (
