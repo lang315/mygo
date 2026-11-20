@@ -5,14 +5,18 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"maps"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 )
 
 // cgoAllowed are the directories, relative to the repository's root, whose
-// files may import "C", each with why.
+// files may import "C", each with why. A directory is allowed alone, not
+// its subdirectories: those of internal/mobile (android, ios, wire) are
+// pure Go, and new cgo there must be added here on purpose.
 var cgoAllowed = map[string]string{
 	"internal/mobile": "iOS and Android link the Go code with Xcode's and the NDK's clang, as Go needs for them",
 }
@@ -22,6 +26,7 @@ func TestNoCgo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dirs := slices.Sorted(maps.Keys(cgoAllowed))
 	fset := token.NewFileSet()
 	files := 0
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -61,8 +66,8 @@ func TestNoCgo(t *testing.T) {
 			if _, ok := cgoAllowed[filepath.ToSlash(filepath.Dir(rel))]; ok {
 				continue
 			}
-			t.Errorf(`%s:%d: import "C" is forbidden outside internal/mobile, because desktops and browsers build with CGO_ENABLED=0; call native code through purego (internal/darwin, internal/linux), syscall (internal/windows) or package ffi for a native library`,
-				rel, fset.Position(imp.Pos()).Line)
+			t.Errorf(`%s:%d: import "C" is forbidden outside the directories cgoAllowed lists (%s; not their subdirectories), because desktops and browsers build with CGO_ENABLED=0; call native code through purego (internal/darwin, internal/linux), syscall (internal/windows) or package ffi for a native library`,
+				rel, fset.Position(imp.Pos()).Line, strings.Join(dirs, ", "))
 		}
 		return nil
 	})
