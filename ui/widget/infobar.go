@@ -133,6 +133,12 @@ func glyphOn(c *ui.Context, s Status, base ui.Color) ui.Color {
 			return tk.Danger.On
 		}
 	}
+	return plainGlyphOn(base)
+}
+
+// plainGlyphOn is the glyph's color on base without a skin: white, or black
+// where white is under 3:1.
+func plainGlyphOn(base ui.Color) ui.Color {
 	if contrastOf(ui.RGB(255, 255, 255), base) < 3 {
 		return ui.RGB(0, 0, 0)
 	}
