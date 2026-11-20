@@ -184,8 +184,6 @@ var baseline = map[string]int{
 	"internal/gpu/metal/metal_test.go TestReleaseStopsQueuedPipelineCompiles time.NewTimer":                    1,
 	"internal/gpu/metal/metal_test.go holdPipelineBuilds time.NewTimer":                                        1,
 	"internal/inotify/inotify_test.go TestInotifyShared time.After":                                            1,
-	"internal/text/text_test.go TestFontFamilies time.Since":                                                   2,
-	"internal/text/text_test.go TestLayoutWraps time.Since":                                                    1,
 	"internal/text/wrap_unbroken_measure_darwin_test.go TestCoreTextWrapUnbrokenMeasure time.Since":            5,
 	"internal/updatehttp/updatehttp_test.go TestGetHeaderTimeout time.Since":                                   1,
 	"internal/updatehttp/updatehttp_test.go TestGetKeepsASlowBody time.Sleep":                                  1,
