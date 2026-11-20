@@ -35,9 +35,9 @@ func TestCalmPassesContrast(t *testing.T) {
 // each named when it fails.
 func TestCheckRowPairs(t *testing.T) {
 	tk := Calm.light
-	tk.RowSelected = ui.Hex("#5a5f66")
+	tk.RowSelected = ui.Hex("#787878") // a mid gray: neither Text nor white reads at 4.5:1
 	if err := check(&tk, false); err == nil || !strings.Contains(err.Error(), "Text on RowSelected") {
-		t.Errorf("a dark RowSelected under Text gives %v, want an error naming Text on RowSelected", err)
+		t.Errorf("a mid gray RowSelected under Text gives %v, want an error naming Text on RowSelected", err)
 	}
 	tk = Calm.light
 	tk.RowHover = ui.Hex("#a0a4aa")

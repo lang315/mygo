@@ -8,6 +8,12 @@
 // and every window takes it in its next frame. An app that does not import
 // the package keeps the plain look and links none of it.
 //
+// MyGo ships three skins, each made only of tokens, palettes and looks, as
+// an app's own can be: Calm, a calm ground with the accent only on what acts
+// or is chosen; Classic, the shapes WinForms users know (outlined controls,
+// boxed tabs, filled grid headers), Compact by default; and HighContrast,
+// text at 7:1 with 2 DIP outlines, for users who need it.
+//
 // A brand color and a tighter density take a line too: WithAccent makes a
 // palette from one color, moving it only as much as the contrast floors
 // need, and WithDensity(Compact) sets controls lower, at Use:
@@ -45,6 +51,7 @@ package skin
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/egoist/mygo/ui"
@@ -77,6 +84,7 @@ func New(name string, light, dark Tokens) *Skin {
 // Standard ones, whatever the skin's Density: give the new skin
 // WithDensity again.
 func (s *Skin) Tokens(dark bool) Tokens {
+	s = s.get()
 	if dark {
 		return s.dark
 	}
@@ -84,16 +92,18 @@ func (s *Skin) Tokens(dark bool) Tokens {
 }
 
 // Check measures the skin's contrast in both appearances, as the skins MyGo
-// ships pass it: text 4.5:1, outlines and chart colors 3:1, the control
+// ships pass it: text at the skin's floor (4.5:1, and 7:1 for a skin made
+// for low vision), outlines and chart colors 3:1, the control
 // states apart, and Info apart from the status colors. The error names the
 // appearance and every failing pair; nil means all pass. A skin that fails
 // still works: Use does not check.
 func (s *Skin) Check() error {
+	s = s.get()
 	var errs []error
-	if err := check(&s.light, false); err != nil {
+	if err := checkFloor(&s.light, false, s.textFloor()); err != nil {
 		errs = append(errs, fmt.Errorf("light: %w", err))
 	}
-	if err := check(&s.dark, true); err != nil {
+	if err := checkFloor(&s.dark, true, s.textFloor()); err != nil {
 		errs = append(errs, fmt.Errorf("dark: %w", err))
 	}
 	return errors.Join(errs...)
@@ -109,10 +119,42 @@ type Skin struct {
 	light, dark skinhook.Tokens
 	looks       Looks
 	parsed      *[skinhook.NumKinds]any // looks' Styles, as Use hands them to widget
+	floor       float64                 // the least contrast of text Check asks; 0 is 4.5
+	lazy        *lazySkin               // set on a built-in skin made at its first use
+}
+
+// lazySkin makes a skin MyGo ships at its first use, so that an app that
+// never names it links none of it: its tokens, palettes and looks, and tw's
+// parser for them. The skin's own var is then a static literal the linker
+// drops.
+type lazySkin struct {
+	once  sync.Once
+	build func() *Skin
+	s     *Skin
+}
+
+// get returns the skin whose fields hold s: s, or the skin its lazy part
+// builds once.
+func (s *Skin) get() *Skin {
+	if s.lazy == nil {
+		return s
+	}
+	s.lazy.once.Do(func() { s.lazy.s = s.lazy.build() })
+	return s.lazy.s
+}
+
+// textFloor is the least contrast of text the skin asks: its floor, 4.5
+// unless it sets one.
+func (s *Skin) textFloor() float64 {
+	s = s.get()
+	if s.floor == 0 {
+		return 4.5
+	}
+	return s.floor
 }
 
 // Name returns the skin's name, as "Calm".
-func (s *Skin) Name() string { return s.name }
+func (s *Skin) Name() string { return s.get().name }
 
 var active atomic.Pointer[Skin]
 
@@ -133,6 +175,7 @@ func Use(s *Skin) {
 	}
 	// The hook first and the themes last: the generation the themes bump
 	// tells kept rows that the tokens changed too.
+	s = s.get() // Active keeps the skin as given
 	l, d := &s.light, &s.dark
 	if s.density == Compact {
 		cl, cd := compact(s.light), compact(s.dark)
