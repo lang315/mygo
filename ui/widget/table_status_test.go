@@ -46,6 +46,11 @@ func textOf(t *testing.T, tt *ui.Tester, s string) ui.Rect {
 // cellOf is the box of the grid cell that shows the text s.
 func cellOf(t *testing.T, tt *ui.Tester, s string) ui.Rect {
 	t.Helper()
+	for _, n := range tt.Nodes() {
+		if n.Role == ui.RoleCell && n.Label == s { // a cell of a grid that edits is named by its text
+			return n.Bounds
+		}
+	}
 	r := textOf(t, tt, s)
 	x, y := r.X+r.W/2, r.Y+r.H/2
 	for _, n := range tt.Nodes() {
@@ -537,6 +542,26 @@ func TestGridFormatFixedAndMoved(t *testing.T) {
 	fills(t, tt, "1", tk.Warning.Subtle, "the index column")
 }
 
+// Ours: a format moves no text: a Start and an End column's texts are where
+// an unformatted grid's are, with a skin's row height and without, and an
+// image column keeps its image.
+func TestGridFormatKeepsPlaces(t *testing.T) {
+	for _, skin := range []bool{false, true} {
+		useCalm(t, skin)
+		t.Cleanup(calmOff)
+		fill := func(*acct) CellFormat { return CellFormat{Fill: ui.Hex("#c0ffee")} }
+		n, s := nameCol(), scoreCol()
+		n.Format, s.Format = fill, fill
+		tt := tester(t, statusGrid(n, s))
+		plain := tester(t, statusGrid(nameCol(), scoreCol()))
+		for _, text := range []string{"ann", "30", "cat", "20"} {
+			if a, p := textOf(t, tt, text), textOf(t, plain, text); a != p {
+				t.Errorf("skin %v: %q is at %v formatted, %v plain", skin, text, a, p)
+			}
+		}
+	}
+}
+
 // Review focus 2: with grid lines the fill stops at the cell's end line.
 func TestGridFormatGridLines(t *testing.T) {
 	calmOff()
@@ -557,8 +582,10 @@ func TestGridFormatGridLines(t *testing.T) {
 	}
 }
 
-// Review focus 3: an editor in a formatted cell draws over the fill, which
-// shows again once the edit ends.
+// Review focus 3: a formatted cell edits in place: the editor shows in it
+// (its row, selected by the edit, shows the selection, which wins over the
+// format), and the fill shows again once the edit ends and the row is no
+// longer selected.
 func TestGridFormatEditing(t *testing.T) {
 	calmOff()
 	x := ui.Hex("#c0ffee")
@@ -572,13 +599,38 @@ func TestGridFormatEditing(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Frame()
-	if c := px(tt, b.X, b.Y+b.H/2); !near(c, x) {
-		t.Errorf("while editing the cell's edge is %v, want the fill %v", c, x)
+	editor := false
+	for _, n := range tt.Nodes() {
+		if n.Focused && n.Value == "ann" && n.Bounds.X >= b.X && n.Bounds.X+n.Bounds.W <= b.X+b.W {
+			editor = true
+		}
 	}
-	if c := px(tt, b.X+b.W/2, b.Y+b.H/2); near(c, x) {
-		t.Errorf("the editor's middle is the fill %v: no editor over it", c)
+	if !editor {
+		t.Error("no editor of \"ann\" in the formatted cell")
+	}
+	// The editor is where a plain cell's is: the format's box pads back its
+	// negative margins.
+	plain := statusGrid(nameCol(), scoreCol()).EditColumn("Name", CellEditor[acct]{Set: func(a *acct, s string) { a.name = s }})
+	pt := tester(t, plain)
+	plain.BeginEdit(1, "Name")
+	pt.Frame()
+	pt.Frame()
+	focused := func(tt *ui.Tester) ui.Rect {
+		for _, n := range tt.Nodes() {
+			if n.Focused && n.Value == "ann" {
+				return n.Bounds
+			}
+		}
+		return ui.Rect{}
+	}
+	if a, p := focused(tt), focused(pt); a != p {
+		t.Errorf("the formatted cell's editor is at %v, a plain cell's at %v", a, p)
+	}
+	if c := px(tt, b.X, b.Y+b.H/2); near(c, x) {
+		t.Errorf("the edited row's cell is the format's fill %v, not the selection", c)
 	}
 	tb.CancelEdit()
+	click(t, tt, "cat")
 	tt.Frame()
 	fills(t, tt, "ann", x, "after the edit")
 }
