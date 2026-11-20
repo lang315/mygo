@@ -545,7 +545,8 @@ widget.VBox(8).Add(
 - **Colors** are `widget.Fixed(c)`, `widget.Hex("#2563eb")`, or a role of
   the theme, `widget.RoleSurface`, `RoleText`, `RoleAccent`…, which
   follows it, dark included.
-- **Skin roles** name the colors a skin decides (package `skin`), so an
+- **Skin roles** name the colors a skin decides (package `skin`, see
+  [Skins](skin.md)), so an
   app's own controls draw in the skin's colors: `RoleChrome` (the frame's
   ground: strips, the header bar), `RoleBorderStrong` (headers' bottoms, the
   window's edge), `RoleControlBorder` (inputs' outline), `RoleButtonBorder`
@@ -578,7 +579,8 @@ widget.VBox(8).Add(
   the control in its box, and count in the base style only: a variant's are
   ignored. `FontWeight(100…900)` sets the weight, and `Bold` is
   `FontWeight(700)`: the later of the two wins.
-- **A skin's looks** (`skin.Looks`, `Skin.WithLooks`) style each kind of
+- **A skin's looks** (`skin.Looks`, `Skin.WithLooks`, see [Skins](skin.md#looks))
+  style each kind of
   control, and a `TabControl`'s tabs and a `DataGridView`'s column headers,
   as Tailwind classes. What styles a control, strongest first: its own
   methods, its `Apply`'d styles, a `TabControl`'s `StripStyle` (its strip),
