@@ -160,10 +160,11 @@ func TestShots(t *testing.T) {
 }
 
 // TestShotsMatchMain compares the shots of main (MYGO_SKIN_SHOTS_MAIN) with
-// the branch's (MYGO_SKIN_SHOTS): outside the rectangle the tab headers after
-// Dialogs and messages take in the tab strip (from the right edge of the
-// eighth tab to the window's, the strip's height) every shot is the same, but the chart page's,
-// where the spinner turns, and but a box of 20 by 12 pixels of the numbers
+// the branch's (MYGO_SKIN_SHOTS): outside the rectangle the Edit tab's header
+// takes in the tab strip (from the right edge of the eighth tab to the
+// window's, the strip's height) every shot is the same, but the chart page's,
+// where the spinner turns, the dialogs page's, which shows the status
+// controls under its message boxes, and but a box of 20 by 12 pixels of the numbers
 // page, where the date picker shows the time. It is skipped without both variables, and reads
 // shots taken at scale 1.
 func TestShotsMatchMain(t *testing.T) {
@@ -219,6 +220,9 @@ func TestShotsMatchMain(t *testing.T) {
 		if strings.HasSuffix(base, "-chart-and-progress.png") {
 			continue // the spinner turns between two runs
 		}
+		if strings.HasSuffix(base, "-dialogs-and-messages.png") {
+			continue // the badges, info bars and empty state are new on this page
+		}
 		name := ""
 		for k := range studios {
 			if strings.HasPrefix(base, k+"-") && len(k) > len(name) {
@@ -264,8 +268,6 @@ func TestShotsMatchMain(t *testing.T) {
 			t.Errorf("%s: %d pixels differ outside the Edit header's rectangle %v, within %v", base, outside, r, box)
 		}
 	}
-	t.Logf("%d shots compared (the 12 of the chart page skipped); %d pixels differ inside the rectangles", compared, inside)
-	if inside == 0 {
-		t.Error("no pixel differs inside the rectangles: the Edit header is not in the shots, or the rectangle is wrong")
-	}
+	// The Edit header is on main now, so the rectangles may match too.
+	t.Logf("%d shots compared (the 12 of the chart page and the 12 of the dialogs page skipped); %d pixels differ inside the rectangles", compared, inside)
 }

@@ -57,7 +57,6 @@ func newStudioPanel() (*widget.Form, *editPanel) {
 		AddPage("Containers", containers()).
 		AddPage("Chart and progress", chart()).
 		AddPage("Dialogs and messages", dialogs(f)).
-		AddPage("Status", status()).
 		AddPage("Edit", p.build()).
 		Padding(4).Expand())
 	return f, p
@@ -335,13 +334,14 @@ func dialogs(w *widget.Form) widget.Control {
 			widget.Button("Dialog").OnClick(func() { customDialog(w); show("Dialog closed") }),
 		),
 		result,
+		status(result),
 	)
 }
 
 // status shows a badge of each status, an info bar of each (one with an
-// action, one closable) and an empty state with an action.
-func status() widget.Control {
-	result := widget.Label("Actions show here").Muted()
+// action, one closable) and an empty state with an action, below the message
+// boxes, whose result label the actions write to.
+func status(result *widget.LabelWidget) widget.Control {
 	badges := widget.FlowPanel(8).Add(
 		widget.Badge("Draft"),
 		widget.Badge("Đồng bộ").SetStatus(widget.StatusInfo),
@@ -368,7 +368,6 @@ func status() widget.Control {
 		title("Empty state"),
 		widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản để bắt đầu đồng bộ.").
 			SetAction("Thêm tài khoản", func() { result.SetText("Add clicked") }).SetSize(0, 180),
-		result,
 	)
 }
 

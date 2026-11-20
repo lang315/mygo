@@ -56,7 +56,7 @@ const (
 	calmLightText   = "#1a1d21"
 )
 
-// The tenth tab header, Edit, fits the studio's own window at text scale 1,
+// The ninth tab header, Edit, fits the studio's own window at text scale 1,
 // so it can be clicked on every OS, in every skin: its right edge is inside
 // formWidth. The test measures the font of the OS it runs on; Linux's is
 // wider than macOS's, so the Linux CI run is what guards Linux.
@@ -72,10 +72,10 @@ func TestStudioTabsFit(t *testing.T) {
 			tt.SetPreferences(ui.Preferences{TextScale: scale})
 			tt.Frame()
 			tabs := tt.FindAll(widget.ByRole(ui.RoleTab))
-			if len(tabs) != 10 {
-				t.Fatalf("%d tabs, want 10", len(tabs))
+			if len(tabs) != 9 {
+				t.Fatalf("%d tabs, want 9", len(tabs))
 			}
-			b := tabs[9].Bounds()
+			b := tabs[8].Bounds()
 			t.Logf("%s: the Edit header ends at %v of %d", describe(s), b.X+b.W, formWidth-8)
 			if right := b.X + b.W; right > formWidth-8 {
 				t.Errorf("%s at text scale %v: the Edit header's right edge is at %v, past the window's %d", describe(s), scale, right, formWidth)
