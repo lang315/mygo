@@ -161,37 +161,58 @@ func TestDescribeInTheOtherLayouts(t *testing.T) {
 	}
 }
 
-// Case 14: a tooltip and a description: the description, then the
-// tooltip, joined by ". ", for more than a text field; a tooltip set
+// Case 14 (as round 1 decided): a tooltip and a description: the
+// description, then the tooltip, joined by " " after a description that
+// ends a sentence, else by ". ", for more than a text field; a tooltip set
 // after Describe joins too. An error from an ErrorProvider comes first
 // while it shows.
 func TestDescribeWithATooltipAndAnError(t *testing.T) {
+	const joined = "Dùng khi đăng nhập lần sau. Họ và tên."
 	tb := TextBox().SetTooltip("Họ và tên.")
 	sw := Switch()
-	f := Fields().SettingsRows().Row("Tên", tb).Describe(nameDesc).Row("Bật", sw).Describe("Tắt khi rời.")
-	tt := NewTester(t, f, 400, 300)
-	if got, want := descriptionOf(t, tt, "Tên"), nameDesc+". Họ và tên."; got != want {
-		t.Errorf("description %q, want %q", got, want)
+	shown := TextBox().SetTooltip("Họ và tên.")
+	f := Fields().SettingsRows().Row("Tên", tb).Describe(nameDesc).Row("Bật", sw).Describe("Tắt khi rời.").
+		Row("Hiển thị", shown).Describe("Tên hiển thị")
+	tt := NewTester(t, f, 400, 400)
+	if got := descriptionOf(t, tt, "Tên"); got != joined {
+		t.Errorf("description %q, want %q", got, joined)
+	}
+	if got, want := descriptionOf(t, tt, "Hiển thị"), "Tên hiển thị. Họ và tên."; got != want {
+		t.Errorf("a description with no final punctuation: %q, want %q", got, want)
 	}
 	if a, ok := tt.AccessByRole(ui.RoleSwitch, "Bật"); !ok || a.Description != "Tắt khi rời." {
 		t.Errorf("the switch's description is %q (found %v), want its row's", a.Description, ok)
 	}
 	sw.SetTooltip("Mở hay tắt.")
 	tt.Frame()
-	if a, _ := tt.AccessByRole(ui.RoleSwitch, "Bật"); a.Description != "Tắt khi rời.. Mở hay tắt." {
+	if a, _ := tt.AccessByRole(ui.RoleSwitch, "Bật"); a.Description != "Tắt khi rời. Mở hay tắt." {
 		t.Errorf("a tooltip set after Describe: description %q", a.Description)
 	}
 	ep := ErrorProvider()
 	ep.SetError(tb, "Bắt buộc.")
 	tt.Frame()
 	got := descriptionOf(t, tt, "Tên")
-	if !strings.HasPrefix(got, "Bắt buộc.") || !strings.Contains(got, nameDesc+". Họ và tên.") || strings.Count(got, "Họ và tên.") != 1 {
+	if !strings.HasPrefix(got, "Bắt buộc.") || !strings.Contains(got, joined) || strings.Count(got, "Họ và tên.") != 1 {
 		t.Errorf("with an error the description is %q, want the error, then the row's description and the tooltip once", got)
 	}
 	ep.SetError(tb, "")
 	tt.Frame()
-	if got := descriptionOf(t, tt, "Tên"); got != nameDesc+". Họ và tên." {
+	if got := descriptionOf(t, tt, "Tên"); got != joined {
 		t.Errorf("the error gone, the description is %q", got)
+	}
+}
+
+// Each sentence ending (. ! ? … :) joins the tooltip with a space; a
+// description that ends otherwise, with ". ".
+func TestDescribeJoinsByItsLastRune(t *testing.T) {
+	for desc, want := range map[string]string{
+		"Xong.": "Xong. Gợi ý", "Xong!": "Xong! Gợi ý", "Xong?": "Xong? Gợi ý", "Xong…": "Xong… Gợi ý",
+		"Ghi chú:": "Ghi chú: Gợi ý", "Xong": "Xong. Gợi ý", "Xong,": "Xong,. Gợi ý",
+	} {
+		tt := NewTester(t, Fields().Row("Tên", TextBox().SetTooltip("Gợi ý")).Describe(desc), 400, 300)
+		if got := descriptionOf(t, tt, "Tên"); got != want {
+			t.Errorf("%q with a tooltip reads %q, want %q", desc, got, want)
+		}
 	}
 }
 

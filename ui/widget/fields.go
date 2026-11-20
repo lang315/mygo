@@ -1,6 +1,9 @@
 package widget
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
@@ -136,7 +139,12 @@ func (r *fieldRow) describe() {
 	if r.said == "" || r.saidTip != b.tooltip {
 		r.said, r.saidTip = r.desc, b.tooltip
 		if b.tooltip != "" {
-			r.said += ". " + b.tooltip
+			// A description that ends a sentence takes a space, others ". ".
+			sep := ". "
+			if last, _ := utf8.DecodeLastRuneInString(r.desc); strings.ContainsRune(".!?…:", last) {
+				sep = " "
+			}
+			r.said += sep + b.tooltip
 		}
 	}
 	b.desc = r.said

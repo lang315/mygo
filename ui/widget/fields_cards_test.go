@@ -131,6 +131,32 @@ func TestSettingsCardsOnePerSection(t *testing.T) {
 	}
 }
 
+// Case 1, the radius: with no skin a card's corner is drawn exactly as a
+// Card's, which is rounded by the theme's Radius, with the same line and
+// fill: their top left 12 by 12 pixels match.
+func TestSettingsCardsTakeTheThemesRadius(t *testing.T) {
+	f := NewTester(t, Fields().SettingsRows().Row("One", wbar("c1", 60, 24)), 400, 300)
+	card := Card().SetBody(wbar("c1", 60, 24))
+	card.SetAccessibleName("card")
+	k := tester(t, VBox(0).Add(card).SetSize(400, 0))
+	r := nodeOf(t, k, ui.RoleGroup, "card").Bounds
+	if r.X != 0 || r.Y != 0 {
+		t.Fatalf("the Card is at %v, want at the corner of its window", r)
+	}
+	ks := cardsOf(t, f.Tester, cardX, ui.LightTheme().Border)
+	if len(ks) != 1 || ks[0].top != 0 {
+		t.Fatalf("cards %+v, want one at the top", ks)
+	}
+	a, b := f.Image(), k.Image()
+	for y := range 12 {
+		for x := range 12 {
+			if pa, pb := a.RGBAAt(x, y), b.RGBAAt(x, y); pa != pb {
+				t.Fatalf("at (%d, %d) the settings card is %v, a Card %v: not rounded by the theme's Radius %v", x, y, pa, pb, ui.LightTheme().Radius)
+			}
+		}
+	}
+}
+
 // Case 2: under a skin, a card is rounded by RadiusCard (10, Calm's) and has
 // CardShadow under it, as Card has.
 func TestSettingsCardsTakeTheSkinsCard(t *testing.T) {
