@@ -126,9 +126,13 @@ func (f *FieldsWidget) Stacked() *FieldsWidget {
 // needs about 229 DIPs): give the window a SetMinimumSize wide enough. In a
 // ScrollPanel use Vertical, or the form gets no width to wrap at.
 func (f *FieldsWidget) SettingsRows() *FieldsWidget {
-	f.change(func() { f.settings, f.stacked = true, false })
+	f.change(func() { f.settings, f.stacked, buildCards = true, false, (*FieldsWidget).cards })
 	return f
 }
+
+// buildCards builds a form of SettingsRows (cards), set by SettingsRows: an
+// app that lays out no settings page does not link the cards. Under mu.
+var buildCards func(f *FieldsWidget, c *ui.Context, rowGap, colGap, sectionGap float32) ui.Element
 
 // Gap sets the space between rows, and between the label column and the
 // control column, in DIPs; stacked, between a label and its control. The
@@ -206,7 +210,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 		})
 	}
 	if f.settings {
-		return f.cards(c, rowGap, colGap, sectionGap)
+		return buildCards(f, c, rowGap, colGap, sectionGap)
 	}
 	return ui.Grid(c).ColumnTracks(ui.FitContent(), ui.Fr(1)).GapX(colGap).GapY(rowGap).Children(func() {
 		// A cell's Align and VAlign are across and along the cell, not a
