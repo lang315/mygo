@@ -76,8 +76,9 @@ func (r *Reader) space() {
 	}
 }
 
-// Offset returns the offset of the byte the reader is at: after an error, the
-// byte that broke the document or began the value of another type.
+// Offset returns the offset of the byte the reader is at: after a syntax
+// error, the byte that broke the document; after a value of another type,
+// the byte after that value, which the reader checked and skipped.
 func (r *Reader) Offset() int { return r.i }
 
 // Peek returns the first byte of the next value, 0 at the end of the document.
