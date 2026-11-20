@@ -47,7 +47,7 @@ func main() {
 - Alignment and growth work in one box only. In a `VBox`: `Align` places a control horizontally and `VExpand` gives it the free height. In an `HBox`: `VAlign` places it vertically and `HExpand` gives it the free width. The other axis does nothing. `widget.BoxWidget.Pack(w, expand, fill)` is the explicit form.
 - A table, list or text area needs room: `Expand` the boxes and the `TabControl` that hold it, or it gets none.
 - `SetVisible(false)` hides a control and frees its room (and its `Fields` label).
-- Show a state with a `widget.Status` (`widget.StatusNone`, `widget.StatusInfo`, `widget.StatusRunning`, `widget.StatusSuccess`, `widget.StatusWarning`, `widget.StatusDanger`), not a hand-made pill or card: `widget.Badge(text)` with `widget.BadgeWidget.SetStatus` (a running one's step goes in `widget.BadgeWidget.SetDetail`); `widget.InfoBar(status, title, message)` for a message in the page, with `widget.InfoBarWidget.SetAction`, `widget.InfoBarWidget.SetClosable` and `widget.InfoBarWidget.OnClose`; `widget.EmptyState(title, message)` where a list has no rows, with `widget.EmptyStateWidget.SetAction`. The skin colors them.
+- Show a state with a `widget.Status` (`widget.StatusNone`, `widget.StatusInfo`, `widget.StatusRunning`, `widget.StatusSuccess`, `widget.StatusWarning`, `widget.StatusDanger`), not a hand-made pill or card: `widget.Badge(text)` with `widget.BadgeWidget.SetStatus` (a running one's step goes in `widget.BadgeWidget.SetDetail`); `widget.InfoBar(status, title, message)` for a message in the page, with `widget.InfoBarWidget.SetAction`, `widget.InfoBarWidget.SetClosable` and `widget.InfoBarWidget.OnClose`; `widget.EmptyState(title, message)` where a list has no rows, with `widget.EmptyStateWidget.SetAction` (a grid shows it over its body with `widget.DataGridViewWidget.SetEmptyState`). The skin colors them.
 
 ## Binding
 
@@ -92,7 +92,7 @@ func settings(cfg *Config) widget.Control {
 - Handlers (`OnClick`, `OnChange`, `Bind`'s `set`) run one at a time on the event goroutine, never on the main thread. The queue is the app's: a handler that blocks holds back every other handler of every window, though the windows keep drawing.
 - Setters and getters are safe from any goroutine. Run work that must happen in step with handlers through `widget.BeginInvoke(fn)` (does not wait) or `widget.Invoke(fn)` (waits; safe inside a handler, panics on the main thread). Before the app runs and after it quit, `widget.Invoke` returns without running `fn`.
 - Keep slow I/O off handlers that must stay quick: start a goroutine, report with setters or `BeginInvoke`.
-- Call no widget method inside a callback that runs under the package's lock: the key function and every function of a `widget.Column` (`Text`, `Compare`, `Filter`, `Spans`, `Color`, `Image`), the function of `UpdateRow`, of `widget.ListBoxWidget.UpdateItem` and of `widget.TreeViewWidget.UpdateNode`, the functions of a `ListBox`, `TreeView` or `ListView` (its key and columns, `widget.ListViewWidget.SetGroupBy`, `widget.ListViewWidget.SetImage`), a `Custom` control's build function. They read their arguments only.
+- Call no widget method inside a callback that runs under the package's lock: the key function and every function of a `widget.Column` (`Text`, `Compare`, `Filter`, `Spans`, `Color`, `Image`, `Badge`, `BadgeDetail`, `Format`) and of `widget.DataGridViewWidget.SetRowFormat`, the function of `UpdateRow`, of `widget.ListBoxWidget.UpdateItem` and of `widget.TreeViewWidget.UpdateNode`, the functions of a `ListBox`, `TreeView` or `ListView` (its key and columns, `widget.ListViewWidget.SetGroupBy`, `widget.ListViewWidget.SetImage`), a `Custom` control's build function. They read their arguments only.
 
 ## Tables
 
@@ -114,8 +114,14 @@ type Account struct {
 func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 	table := widget.DataGridView(func(a *Account) uint { return a.ID },
 		widget.Column[Account]{Title: "Name", Text: func(a *Account) string { return a.Name }, Sortable: true, Filterable: true},
-		widget.Column[Account]{Title: "Status", Text: func(a *Account) string { return a.Status }, Width: 120},
-	).CheckboxColumn().BottomPanel().Expand()
+		widget.Column[Account]{Title: "Status", Text: func(a *Account) string { return a.Status }, Width: 120,
+			Badge: func(a *Account) widget.Status {
+				if a.Status == "done" {
+					return widget.StatusSuccess
+				}
+				return widget.StatusRunning
+			}},
+	).CheckboxColumn().BottomPanel().SetEmptyState(widget.EmptyState("No accounts", "Add one to start.")).Expand()
 	table.AddRows(rows)
 	go func() {
 		for _, row := range rows {
@@ -127,6 +133,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 }
 ```
 
+- Show a row's state in the grid with the column's `Badge` (the cell's `Text` as a badge of the `widget.Status` it returns; `BadgeDetail` for a running one's step) and color cells with a `widget.CellFormat` (`Status`, `Fill`, `Text`, `Bold`): the column's `Format`, or `widget.DataGridViewWidget.SetRowFormat` for every cell of the row, the column's winning field by field. Not `Spans` or `Color` for a status: the skin colors these, a selected row shows the selection, and they are built once per row change. `widget.DataGridViewWidget.SetEmptyState(widget.EmptyState(...))` shows while no row shows, the search's included.
 - Every row has a key; `widget.DataGridViewWidget.AddRows` replaces the row of an existing key; change a row in place with `widget.DataGridViewWidget.UpdateRow(key, fn)`, never by rebuilding the table. It scales to a million rows.
 - An icon your image function returns later (a thumbnail that loads) is not seen by a row already shown: call `UpdateRow(k, func(*T){})` for its row when it arrives, or keep the icons in a `widget.ImageList` (`SetImageList`), whose changes the list view, list box and tree show.
 - Each getter is a snapshot of its own: between `widget.DataGridViewWidget.Selected` and `widget.DataGridViewWidget.Row` a row may have been deleted, so check the `ok` of `Row`. `Row` returns a shallow copy of the row: if the row type holds a slice, a map or a pointer, reading it races with `UpdateRow`. Keep rows plain values, or copy deeply.
