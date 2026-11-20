@@ -1,6 +1,8 @@
 package skin
 
 import (
+	"sync"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
@@ -15,6 +17,24 @@ import (
 type Palette struct {
 	name        string
 	light, dark paletteTokens
+	lazy        *lazyPalette // set on a palette of a built-in skin made at its first use
+}
+
+// lazyPalette makes a palette at its first use, as lazySkin a skin.
+type lazyPalette struct {
+	once  sync.Once
+	build func() *Palette
+}
+
+// get returns p with its tokens, which its lazy part sets once.
+func (p *Palette) get() *Palette {
+	if p.lazy != nil {
+		p.lazy.once.Do(func() {
+			b := p.lazy.build()
+			p.light, p.dark = b.light, b.dark
+		})
+	}
+	return p
 }
 
 // paletteTokens are the tokens a palette decides in one appearance.
@@ -116,7 +136,8 @@ func (s *Skin) WithPalette(p *Palette) *Skin {
 	if p == nil {
 		return s
 	}
-	c := *s
+	p = p.get()
+	c := *s.get()
 	c.palette = p
 	p.light.apply(&c.light)
 	p.dark.apply(&c.dark)
@@ -125,4 +146,4 @@ func (s *Skin) WithPalette(p *Palette) *Skin {
 
 // Palette returns the skin's palette, as Blue for Calm. It is nil for a skin
 // made with New until WithPalette gives it one.
-func (s *Skin) Palette() *Palette { return s.palette }
+func (s *Skin) Palette() *Palette { return s.get().palette }

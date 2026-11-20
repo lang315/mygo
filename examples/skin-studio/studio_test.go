@@ -64,6 +64,9 @@ func describe(s *skin.Skin) string {
 	if s == nil {
 		return "none"
 	}
+	if s.Palette() == nil {
+		return s.Name()
+	}
 	return s.Name() + " with " + s.Palette().Name()
 }
 
@@ -187,21 +190,33 @@ func TestStudioGridPage(t *testing.T) {
 }
 
 // Every page builds and none has a text cut by its box, with no skin and with
-// Calm in each palette, light and dark.
+// each built-in skin in each of its palettes, light and dark, and Classic
+// (Compact) at text scale 1.5 too.
 func TestStudioEveryPage(t *testing.T) {
 	reset(t)
 	type config struct {
-		name string
-		s    *skin.Skin
-		dark bool
+		name  string
+		s     *skin.Skin
+		dark  bool
+		scale float32
 	}
 	var configs []config
 	for _, dark := range []bool{false, true} {
 		mode := map[bool]string{false: "light", true: "dark"}[dark]
-		configs = append(configs, config{"None " + mode, nil, dark})
-		for _, p := range []*skin.Palette{skin.Cham, skin.Indigo, skin.Ink, skin.Teal, skin.Blue} {
-			configs = append(configs, config{"Calm " + p.Name() + " " + mode, skin.Calm.WithPalette(p), dark})
+		configs = append(configs, config{"None " + mode, nil, dark, 1})
+		for _, s := range []*skin.Skin{skin.Calm, skin.Classic, skin.HighContrast} {
+			if len(s.Palettes()) == 0 {
+				configs = append(configs, config{s.Name() + " " + mode, s, dark, 1})
+			}
+			for _, p := range s.Palettes() {
+				configs = append(configs, config{s.Name() + " " + p.Name() + " " + mode, s.WithPalette(p), dark, 1})
+			}
 		}
+		configs = append(configs, config{"Classic at 1.5 " + mode, skin.Classic, dark, 1.5})
+	}
+	// None, Calm's 5, Classic's 2, HighContrast and Classic at 1.5, light and dark.
+	if len(configs) != 20 {
+		t.Fatalf("%d configurations, want 20", len(configs))
 	}
 	for _, c := range configs {
 		t.Run(c.name, func(t *testing.T) {
@@ -210,8 +225,12 @@ func TestStudioEveryPage(t *testing.T) {
 			f := newStudio()
 			tt := widget.TestForm(t, f)
 			tt.SetDark(c.dark)
+			tt.SetPreferences(ui.Preferences{TextScale: c.scale})
+			// The window grows with the text, as the tabs do: at 1.5 they
+			// pass the studio's 1100 DIPs.
+			w, h := float32(formWidth)*c.scale, float32(formHeight)*c.scale
+			tt.SetSize(int(w), int(h))
 			tt.Frame()
-			w, h := float32(formWidth), float32(formHeight)
 			for _, page := range pages {
 				tt.Find(widget.ByLabel(page)).Click()
 				tt.Frame()
@@ -235,6 +254,82 @@ func TestStudioLongLabels(t *testing.T) {
 			if !ok || r.W < natural(t, label)-0.5 || r.X < b.X-0.5 || r.X+r.W > b.X+b.W+0.5 || r.Y < b.Y-0.5 || r.Y+r.H > b.Y+b.H+0.5 {
 				t.Errorf("skin %v: %q is %v in its button %v", s != nil, label, r, b)
 			}
+		}
+	}
+}
+
+// Settings rows as the studio's, with Vietnamese labels, under Classic
+// (Compact) at text scale 1 and 1.5, and Calm: each label is whole, inside
+// its box and as wide as it takes.
+func TestStudioSettingsRowsVietnamese(t *testing.T) {
+	reset(t)
+	labels := []string{"Tên đăng nhập", "Mật khẩu đã lưu trên máy"}
+	runs := 0
+	for _, s := range []*skin.Skin{skin.Classic, skin.Calm} {
+		for _, scale := range []float32{1, 1.5} {
+			skin.Use(s)
+			// The width each label takes, alone, at this scale.
+			natural := map[string]float32{}
+			for _, l := range labels {
+				tt := widget.NewTester(t, widget.HBox(0).Add(widget.Label(l)), 1500, 100)
+				tt.SetPreferences(ui.Preferences{TextScale: scale})
+				tt.Frame()
+				r, ok := tt.Tester.Find(l)
+				if !ok {
+					t.Fatalf("a label %q shows no text", l)
+				}
+				natural[l] = r.W
+			}
+			fields := widget.Fields().SettingsRows()
+			fields.Section("Tài khoản")
+			fields.Row(labels[0], widget.TextBox().SetPlaceholder("Ada Lovelace"))
+			fields.Row(labels[1], widget.ComboBox(option("y", "Có", "n", "Không")...).SetValue("y"))
+			tt := widget.NewTester(t, fields, 700, 400)
+			tt.SetPreferences(ui.Preferences{TextScale: scale})
+			tt.Frame()
+			for _, l := range labels {
+				r, ok := tt.Tester.Find(l)
+				all := tt.FindAll(widget.ByLabel(l))
+				if !ok || len(all) == 0 {
+					t.Fatalf("%s at %v: no label %q: %q", s.Name(), scale, l, tt.Texts())
+				}
+				b := all[0].Bounds()
+				if r.W < natural[l]-0.5 || r.X < b.X-0.5 || r.X+r.W > b.X+b.W+0.5 || r.Y < b.Y-0.5 || r.Y+r.H > b.Y+b.H+0.5 {
+					t.Errorf("%s at %v: %q is %v (natural width %v) in its box %v", s.Name(), scale, l, r, natural[l], b)
+				}
+			}
+			runs++
+		}
+	}
+	if runs != 4 {
+		t.Errorf("%d runs, want 4", runs)
+	}
+}
+
+// Switching Calm, Classic and HighContrast in the studio repaints the grid's
+// kept rows: the column header is Classic's Chrome under Classic only, in the
+// frame after each pick.
+func TestStudioSwitchRepaintsGrid(t *testing.T) {
+	reset(t)
+	tt := widget.TestForm(t, newStudio())
+	pick(tt, "Mode", "Light")
+	tt.Find(widget.ByLabel("Grid")).Click()
+	tt.Frame()
+	chrome := skin.Classic.Tokens(false).Chrome
+	header := func() ui.Color {
+		t.Helper()
+		b := tt.Find(widget.ByRole(ui.RoleColumnHeader).Label("Status")).Bounds()
+		c := tt.Image().RGBAAt(int(b.X)+4, int(b.Y+b.H/2))
+		return ui.Color{R: c.R, G: c.G, B: c.B, A: 255}
+	}
+	for _, c := range []struct {
+		skin    string
+		classic bool
+	}{{"Calm", false}, {"Classic", true}, {"HighContrast", false}, {"Classic", true}, {"Calm", false}} {
+		pick(tt, "Skin", c.skin)
+		tt.Frame()
+		if got := header(); (got == chrome) != c.classic {
+			t.Errorf("under %s the column header is %v; Classic's Chrome %v there: %v", c.skin, got, chrome, c.classic)
 		}
 	}
 }
@@ -266,6 +361,31 @@ func TestStudioSwitches(t *testing.T) {
 	pick(tt, "Skin", "Calm")
 	if s := skin.Active(); s == nil || s.Palette() != skin.Teal {
 		t.Errorf("Calm after the palette Teal is %s, want Teal kept", describe(s))
+	}
+
+	// Classic offers its own palettes, taking its default for Teal, which it
+	// has not; HighContrast none.
+	pick(tt, "Skin", "Classic")
+	if s := skin.Active(); s == nil || s.Name() != "Classic" || s.Palette() != skin.ClassicIndigo || s.Density() != skin.Compact {
+		t.Errorf("after Skin > Classic the skin is %s, want Classic with Indigo, Compact", describe(s))
+	}
+	if v := tt.Find(widget.ByLabel("Palette")).Value(); v != "Indigo" {
+		t.Errorf("after Skin > Classic the palette box holds %q, want Indigo", v)
+	}
+	pick(tt, "Palette", "Slate")
+	if s := skin.Active(); s == nil || s.Palette() != skin.ClassicSlate {
+		t.Errorf("after Palette > Slate the skin is %s, want Classic with Slate", describe(s))
+	}
+	pick(tt, "Skin", "HighContrast")
+	if s := skin.Active(); s != skin.HighContrast {
+		t.Errorf("after Skin > HighContrast the skin is %v, want HighContrast", s)
+	}
+	if v := tt.Find(widget.ByLabel("Palette")).Value(); v != "" {
+		t.Errorf("under HighContrast the palette box holds %q, want none", v)
+	}
+	pick(tt, "Skin", "Calm")
+	if s := skin.Active(); s == nil || s.Name() != "Calm" || s.Palette() != skin.Blue {
+		t.Errorf("Calm after Slate is %s, want Calm's own Blue", describe(s))
 	}
 
 	for _, c := range []struct {

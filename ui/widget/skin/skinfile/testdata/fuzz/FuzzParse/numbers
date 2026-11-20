@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"version\":1,\"name\":\"N\",\"base\":\"Calm\",\"light\":{\"RowHeight\":-0,\"FontSize\":3.4028234e38,\"Icon\":1e-46,\"Title\":{\"Weight\":-9223372036854775808}},\"dark\":{\"RadiusCard\":1E+2}}")

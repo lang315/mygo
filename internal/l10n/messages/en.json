@@ -229,5 +229,10 @@
   "permissionBluetooth": "Bluetooth",
   "permissionMediaAppleMusic": "Media \u0026 Apple Music",
   "guideDrag": "Drag {app} to the list above to allow {permission}.",
-  "guideDragHint": "Drag"
+  "guideDragHint": "Drag",
+  "skinPickerSkin": "Skin",
+  "skinPickerPalette": "Palette",
+  "skinPickerDensity": "Density",
+  "standardDensity": "Standard",
+  "compactDensity": "Compact"
 }

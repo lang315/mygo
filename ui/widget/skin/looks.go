@@ -53,13 +53,13 @@ type Looks struct {
 //	})
 //	skin.Use(boxy)
 func (s *Skin) WithLooks(l Looks) *Skin {
-	c := *s
+	c := *s.get()
 	c.looks, c.parsed = l, parseLooks(l)
 	return &c
 }
 
 // Looks returns the skin's looks, as WithLooks set them.
-func (s *Skin) Looks() Looks { return s.looks }
+func (s *Skin) Looks() Looks { return s.get().looks }
 
 // parseLooks returns the Styles of l's classes by kind, each boxed once, as
 // skinhook.SetLooks takes them.
