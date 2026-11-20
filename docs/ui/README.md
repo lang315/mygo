@@ -105,6 +105,8 @@ UI as they read other apps (see [Accessibility](accessibility.md)).
 - [Widgets that live on](widget.md): package `ui/widget`, the layer for an
   app's forms, dialogs and tables: controls you make once, keep, and change
   from any goroutine, as in WinForms.
+- [Skins](skin.md): one look for every control, set by tokens: palettes, a
+  brand color, density, looks, skin files, and a picker for the user.
 - [Windows with native UI](windows.md): window options, title bars drawn by
   the view, zooming the content, and vibrancy.
 - [Testing](testing.md): running a view without a window, as fast as a unit
