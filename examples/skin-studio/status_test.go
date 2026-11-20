@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo/ui/widget/skin"
 )
 
-// The Status and messages page, with no skin and each built-in one, light
+// The Status page, with no skin and each built-in one, light
 // and dark: a badge of each status (Running with its step), six info bars
 // (Warning and Danger alerts, the rest statuses), the action and close, and
 // the empty state's action, all inside the window; the action and close
@@ -22,7 +22,7 @@ func TestStatusPage(t *testing.T) {
 			tt := widget.TestForm(t, newStudio())
 			tt.SetSize(formWidth, formHeight)
 			tt.SetDark(dark)
-			tt.Find(widget.ByLabel("Status and messages")).Click()
+			tt.Find(widget.ByRole(ui.RoleTab).Label("Status")).Click()
 			tt.Frame()
 			name := describe(s)
 			for _, b := range []string{"Draft", "Đồng bộ", "Đang chạy, Bước 2/5", "Live", "Cần xác minh", "Sai mật khẩu"} {
@@ -61,7 +61,7 @@ func TestStatusPage(t *testing.T) {
 	}
 	skin.Use(skin.Calm)
 	tt := widget.TestForm(t, newStudio())
-	tt.Find(widget.ByLabel("Status and messages")).Click()
+	tt.Find(widget.ByRole(ui.RoleTab).Label("Status")).Click()
 	tt.Find(widget.ByRole(ui.RoleButton).Label("Xác minh")).Click()
 	wait.Until(t, "the action to show", func() bool { tt.Frame(); return tt.Has(widget.ByLabel("Verify clicked")) })
 	tt.Find(widget.ByRole(ui.RoleButton).Label("Close")).Click()

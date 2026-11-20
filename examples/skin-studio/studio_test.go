@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 // pages are the studio's tabs, in order.
 var pages = []string{
 	"Buttons and toggles", "Text and choices", "Numbers and dates", "Grid",
-	"Lists and trees", "Containers", "Chart and progress", "Dialogs and messages", "Status and messages",
+	"Lists and trees", "Containers", "Chart and progress", "Dialogs and messages", "Status",
 }
 
 // reset puts the skin and the appearance back when the test ends: they are
@@ -93,7 +93,7 @@ var captions = map[string]bool{
 	"Buttons and toggles": true, "Text and choices": true, "Numbers and dates": true, "Grid": true,
 	"Lists and trees": true, "Containers": true, "Chart and progress": true, "Dialogs and messages": true,
 	"First": true, "Second": true,
-	"Status and messages": true, "Xác minh": true, "Thêm tài khoản": true,
+	"Status": true, "Xác minh": true, "Thêm tài khoản": true,
 }
 
 // clipped returns the captions of the last frame that are cut by the control

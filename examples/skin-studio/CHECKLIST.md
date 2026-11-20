@@ -59,6 +59,6 @@ header. Rows below add their own.
 | [x] | ProgressBar, Spinner | state, literal | page Chart and progress, the status strip; `TestSentinelSkinReachesEveryPixel` |
 | [x] | ErrorProvider | literal (error glyph) | page Text and choices; `TestErrorGlyphUsesDangerOn` |
 | [x] | Chart (line, bar, pie) | literal (series colors) | page Chart and progress; `TestChartUsesSkinColors` |
-| [x] | Badge | metric 20 (text scale), literal (status families' Subtle, Text, Base), look `Badge` | page Status and messages; `TestStatusPage`, `TestBadgeCalmSuccess`, `TestBadgeRunningDetail`, `TestBadgeLook`, `TestBadgeSkinSwitch` (`ui/widget`) |
-| [x] | InfoBar | literal (Subtle, Border, Base icon), look `InfoBar` | page Status and messages; `TestStatusPage`, `TestInfoBarWarning`, `TestInfoBarLook`, `TestInfoBarCloseOnlyByUser` (`ui/widget`) |
-| [x] | EmptyState | literal (TextMuted, Title role, Suggested action), look `EmptyState` | page Status and messages; `TestStatusPage`, `TestEmptyState`, `TestEmptyStateLook` (`ui/widget`) |
+| [x] | Badge | metric 20 (text scale), literal (status families' Subtle, Text, Base), look `Badge` | page Status; `TestStatusPage`, `TestBadgeCalmSuccess`, `TestBadgeRunningDetail`, `TestBadgeLook`, `TestBadgeSkinSwitch` (`ui/widget`) |
+| [x] | InfoBar | literal (Subtle, Border, Base icon), look `InfoBar` | page Status; `TestStatusPage`, `TestInfoBarWarning`, `TestInfoBarLook`, `TestInfoBarCloseOnlyByUser` (`ui/widget`) |
+| [x] | EmptyState | literal (TextMuted, Title role, Suggested action), look `EmptyState` | page Status; `TestStatusPage`, `TestEmptyState`, `TestEmptyStateLook` (`ui/widget`) |

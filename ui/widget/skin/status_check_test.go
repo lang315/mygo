@@ -76,6 +76,13 @@ func TestHighContrastStatusOnSurface(t *testing.T) {
 			t.Errorf("HighContrast's %s look is %q, want bg-surface and border-status", name, look)
 		}
 	}
+	// Dark frames each status in its Base, opaque, not a tint of it.
+	d := HighContrast.Tokens(true)
+	for name, f := range map[string]skinhook.Family{"Info": d.Info, "Success": d.Success, "Warning": d.Warning, "Danger": d.Danger} {
+		if f.Border != f.Base || f.Border.A != 255 {
+			t.Errorf("HighContrast dark %s Border is %v, want its Base %v, opaque", name, f.Border, f.Base)
+		}
+	}
 	for _, dark := range []bool{false, true} {
 		tk := HighContrast.Tokens(dark)
 		for name, f := range map[string]skinhook.Family{"Info": tk.Info, "Success": tk.Success, "Warning": tk.Warning, "Danger": tk.Danger} {

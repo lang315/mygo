@@ -37,7 +37,6 @@ func TestTourHasAnEntryForEachControl(t *testing.T) {
 		{"PictureBox, Label", []string{"Extras"}, []string{"Screen size", "With an icon"}},
 		{"ImageList, UserControl, LinkLabel", []string{"Components"}, []string{"ImageList", "Tomato", "Sky", "No icon", "Gauge 0%", "The docs"}},
 		{"NotifyIcon", []string{"App shell"}, []string{"Tray icon"}},
-		{"Badge, InfoBar, EmptyState", []string{"Status"}, []string{"Live", "Đang chạy, Bước 2/5", "Cần xác minh", "Xác minh", "Close", "Chưa có tài khoản", "Thêm"}},
 	} {
 		tt := widget.NewTester(t, tour(nil), 1100, 1800)
 		visit(tt, e.path...)

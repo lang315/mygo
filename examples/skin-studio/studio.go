@@ -57,7 +57,7 @@ func newStudioPanel() (*widget.Form, *editPanel) {
 		AddPage("Containers", containers()).
 		AddPage("Chart and progress", chart()).
 		AddPage("Dialogs and messages", dialogs(f)).
-		AddPage("Status and messages", status()).
+		AddPage("Status", status()).
 		AddPage("Edit", p.build()).
 		Padding(4).Expand())
 	return f, p
