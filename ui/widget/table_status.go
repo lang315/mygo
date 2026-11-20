@@ -105,6 +105,7 @@ func (t *DataGridViewWidget[T, K]) statusCell(c *ui.Context, row, ci int) bool {
 	if f == (CellFormat{}) && s == StatusNone {
 		return false
 	}
+	t.boxes++
 	detail := ""
 	if s == StatusRunning && cl.BadgeDetail != nil {
 		detail = cl.BadgeDetail(r)
@@ -113,7 +114,7 @@ func (t *DataGridViewWidget[T, K]) statusCell(c *ui.Context, row, ci int) bool {
 	if cl != nil {
 		align = cl.Align
 	}
-	formatBox(c, f, align, t.rowHeight > 0).Children(func() {
+	formatBox(c, f, align).Children(func() {
 		switch {
 		case cl == nil:
 			t.indexCell(c, row)
@@ -155,9 +156,11 @@ func (f CellFormat) over(under CellFormat) CellFormat {
 // formatBox makes the box of a cell's content, styled by f, which covers the
 // cell's whole box inside its border: negative margins as wide as the cell's
 // padding (ui's table pads a cell Space(2.5) at the sides and Space(1.5)
-// above and below, none with a row height), which it pads back. fixedRows is
-// SetRowHeight's. Under mu.
-func formatBox(c *ui.Context, f CellFormat, align Align, fixedRows bool) ui.Element {
+// above and below), which it pads back. A row height (the theme's or
+// SetRowHeight's) takes the cell's padding above and below away: the box then
+// overhangs the cell, which clips it, and its content stays centered. Under
+// mu.
+func formatBox(c *ui.Context, f CellFormat, align Align) ui.Element {
 	// The selection's fill and text win over every format, as over
 	// Column.Color. The box stays, so that the cell's content keeps its
 	// place among the elements: an editor in it keeps the focus as the edit
@@ -167,9 +170,6 @@ func formatBox(c *ui.Context, f CellFormat, align Align, fixedRows bool) ui.Elem
 	}
 	th := c.Theme()
 	padX, padY := th.Space(2.5), th.Space(1.5)
-	if fixedRows || th.Metrics.RowHeight > 0 {
-		padY = 0
-	}
 	box := ui.Row(c).AlignItems(ui.Center).Grow(1).AlignSelf(ui.Stretch).Margin(-padY, -padX).Padding(padY, padX)
 	switch align {
 	case Center:

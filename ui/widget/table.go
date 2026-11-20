@@ -162,6 +162,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// called, so a grid without them builds what it did.
 	statusHook func(c *ui.Context, row, col int) bool
 	rowFormat  func(*T) CellFormat // SetRowFormat's
+	boxes      int                 // test hook: how many cells statusHook built
 	// withEmpty, set by SetEmptyState, builds the table with the empty state
 	// over it; a func, so that a grid without one names no EmptyStateWidget.
 	withEmpty func(c *ui.Context)

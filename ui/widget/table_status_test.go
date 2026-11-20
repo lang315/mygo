@@ -136,12 +136,17 @@ func TestGridBadgeCompact(t *testing.T) {
 }
 
 // Case 3: a Badge returning StatusNone draws the plain Text, pixel for
-// pixel as a column without Badge.
+// pixel as a column without Badge, and builds the cell as one: no format's
+// box around it.
 func TestGridBadgeNoneIsPlain(t *testing.T) {
 	calmOff()
 	col := nameCol()
 	col.Badge = func(*acct) Status { return StatusNone }
-	tt := tester(t, statusGrid(col, scoreCol()))
+	tb := statusGrid(col, scoreCol())
+	tt := tester(t, tb)
+	if tb.boxes != 0 {
+		t.Errorf("%d cells of StatusNone and no format were built in a format's box", tb.boxes)
+	}
 	plain := tester(t, statusGrid(nameCol(), scoreCol()))
 	a, b := tt.Image(), plain.Image()
 	for i := range a.Pix {
@@ -342,6 +347,19 @@ func TestGridRowFormat(t *testing.T) {
 	}
 	if b := cellOf(t, tt, "bob"); near(px(tt, b.X, b.Y+b.H/2), tk.Danger.Subtle) {
 		t.Error("bob's row, of a zero format, is filled")
+	}
+	// A field both set: the column's Success wins over the row's Danger, and
+	// the row's Bold, which the column leaves unset, stays.
+	both := nameCol()
+	both.Format = func(*acct) CellFormat { return CellFormat{Status: StatusSuccess} }
+	tt = tester(t, statusGrid(both, scoreCol()).SetRowFormat(func(*acct) CellFormat {
+		return CellFormat{Status: StatusDanger, Bold: true}
+	}))
+	fills(t, tt, "ann", tk.Success.Subtle, "the column's status over the row's")
+	fills(t, tt, "30", tk.Danger.Subtle, "the row's status")
+	plain := tester(t, statusGrid(nameCol(), scoreCol()))
+	if b, p := textOf(t, tt, "ann").W, textOf(t, plain, "ann").W; b <= p {
+		t.Errorf("the Name cell's text is %v wide, plain %v: the row's Bold is lost", b, p)
 	}
 }
 
