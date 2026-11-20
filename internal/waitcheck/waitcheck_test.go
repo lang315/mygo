@@ -34,7 +34,11 @@ var instead = map[string]string{
 // allowed are the waits on the clock that are right, as "file function
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
-var allowed = map[string]string{}
+var allowed = map[string]string{
+	"plugins/sqlite/database_test.go TestCancellationAndRollback context.WithTimeout":    "the deadline interrupts a long query, and DeadlineExceeded is the outcome asserted: a slow machine only cancels it later",
+	"plugins/sqlite/database_test.go TestCloseAndQueuedCancellation context.WithTimeout": "a call queued behind a long query must give up with DeadlineExceeded, the outcome asserted",
+	"plugins/sqlite/database_test.go TestDiskReadOnlyAndBusy context.WithTimeout":        "a call blocked by a lock must give up with DeadlineExceeded, the outcome asserted",
+}
 
 type finding struct {
 	rel  string // the file, relative to the repository's root
