@@ -28,13 +28,13 @@ const (
 //
 //	skin.Use(skin.Calm.WithDensity(skin.Compact))
 func (s *Skin) WithDensity(d Density) *Skin {
-	c := *s
+	c := *s.get()
 	c.density = d
 	return &c
 }
 
 // Density returns the skin's density, Standard unless WithDensity set one.
-func (s *Skin) Density() Density { return s.density }
+func (s *Skin) Density() Density { return s.get().density }
 
 // compact returns the tokens t at the Compact density.
 func compact(t skinhook.Tokens) skinhook.Tokens {
