@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo/internal/gpu"
 	"github.com/egoist/mygo/internal/gpu/gputest"
 	"github.com/egoist/mygo/internal/scene"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // unavailable ends a test for which Metal cannot be used: it skips it, or, where
@@ -894,21 +895,33 @@ func holdPipelineBuilds(t *testing.T, r *Renderer) (waitStarted, resume func()) 
 	}
 	go func() {
 		defer close(done)
-		timer := time.NewTimer(30 * time.Second)
-		defer timer.Stop()
-		select {
-		case <-gate:
-			return
-		case <-started:
-			timer.Reset(30 * time.Second)
-		case <-timer.C:
+		gated := false
+		if !wait.Poll(func() bool {
+			select {
+			case <-gate:
+				gated = true
+				return true
+			case <-started:
+				return true
+			default:
+				return false
+			}
+		}) {
 			t.Error("the pipeline worker did not start a build")
 			unblock()
 			return
 		}
-		select {
-		case <-gate:
-		case <-timer.C:
+		if gated {
+			return
+		}
+		if !wait.Poll(func() bool {
+			select {
+			case <-gate:
+				return true
+			default:
+				return false
+			}
+		}) {
 			t.Error("the frame or Release waited for the blocked pipeline compile")
 			unblock()
 		}
@@ -961,20 +974,14 @@ func TestFramesNeverWaitForACompile(t *testing.T) {
 	// The frame finished while compilation was held. Let the worker make
 	// the pipelines, one after the other, and wait for the plain fill's.
 	resume()
-	plain := f.pipeline
-	for i := 0; i < 200 && plain == f.pipeline; i++ {
-		time.Sleep(50 * time.Millisecond)
+	var plain id
+	wait.Until(t, "the worker to make the specialized pipeline", func() bool {
 		plain = r.pipeFor(f, 1<<gpu.ClassPlain, false, blendOver)
 		if plain == 0 {
 			t.Fatal("no pipeline")
 		}
-		if plain != f.pipeline {
-			break
-		}
-	}
-	if plain == f.pipeline {
-		t.Fatal("the worker did not make the specialized pipeline")
-	}
+		return plain != f.pipeline
+	})
 	second := renderRaw(t, r, s, false)
 	if d := differing(first, second); d != 0 {
 		t.Errorf("%d bytes differ between the frame drawn with the general pipelines and with the specialized ones", d)
@@ -1309,26 +1316,14 @@ func TestReleaseStopsQueuedPipelineCompiles(t *testing.T) {
 	unblocked := make(chan struct{})
 	go func() {
 		defer close(unblocked)
-		timer := time.NewTimer(30 * time.Second)
-		defer timer.Stop()
-		tick := time.NewTicker(time.Millisecond)
-		defer tick.Stop()
-		for {
+		if !wait.Poll(func() bool {
 			r.pipes.mu.Lock()
-			closed := r.pipes.closed
-			r.pipes.mu.Unlock()
-			if closed {
-				resume()
-				return
-			}
-			select {
-			case <-tick.C:
-			case <-timer.C:
-				t.Error("Release did not close the pipeline queue")
-				resume()
-				return
-			}
+			defer r.pipes.mu.Unlock()
+			return r.pipes.closed
+		}) {
+			t.Error("Release did not close the pipeline queue")
 		}
+		resume()
 	}()
 	r.Release()
 	<-unblocked
