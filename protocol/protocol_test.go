@@ -62,11 +62,7 @@ func serveRequest(t *testing.T, method, url string, c schemehook.Call) *rec {
 	r := newRec()
 	req := &platform.SchemeRequest{Context: c.Context, Method: method, URL: url, Header: map[string][]string{}, Responder: r}
 	schemehook.Linked.Load().Serve(req, c)
-	select {
-	case <-r.finished:
-	case <-time.After(time.Minute):
-		t.Fatal("the request was not answered")
-	}
+	wait.For(t, "the request to be answered", r.finished)
 	return r
 }
 
@@ -200,7 +196,9 @@ func TestDownload(t *testing.T) {
 	}
 	defer Unhandle("dl")
 	dir := t.TempDir()
-	run := func(url string, started func(name string) string) (path string, err error, done bool) {
+	// run waits for the download to finish; with nothing set, it is the
+	// check that nothing is reported, which waits a while for a report.
+	run := func(url string, started func(name string) string, nothing bool) (path string, err error, done bool) {
 		finished := make(chan struct{})
 		var d schemehook.Download
 		d = schemehook.Download{
@@ -212,6 +210,10 @@ func TestDownload(t *testing.T) {
 			},
 		}
 		go schemehook.Linked.Load().Download(d)
+		if !nothing {
+			wait.For(t, "the download to finish", finished)
+			return
+		}
 		select {
 		case <-finished:
 		case <-time.After(2 * time.Second):
@@ -219,20 +221,20 @@ func TestDownload(t *testing.T) {
 		return
 	}
 	var name string
-	path, err, done := run("dl://localhost/export", func(n string) string { name = n; return filepath.Join(dir, n) })
+	path, err, done := run("dl://localhost/export", func(n string) string { name = n; return filepath.Join(dir, n) }, false)
 	if !done || err != nil || name != "data.json" || filepath.Base(path) != "data.json" {
 		t.Fatalf("download: %q %v %v, asked for %q", path, err, done, name)
 	}
 	if b, _ := os.ReadFile(path); string(b) != `{"ok":true}` {
 		t.Errorf("saved %q", b)
 	}
-	if _, err, done := run("dl://localhost/gone", func(string) string { return filepath.Join(dir, "x") }); !done || err == nil || !strings.Contains(err.Error(), "404") {
+	if _, err, done := run("dl://localhost/gone", func(string) string { return filepath.Join(dir, "x") }, false); !done || err == nil || !strings.Contains(err.Error(), "404") {
 		t.Errorf("a download that is a 404: %v %v", err, done)
 	}
-	if _, _, done := run("dl://localhost/export", func(string) string { return "" }); done {
+	if _, _, done := run("dl://localhost/export", func(string) string { return "" }, true); done {
 		t.Error("a download the window refused was reported")
 	}
-	if _, err, done := run("nohandler://localhost/f", func(string) string { return "x" }); !done || err == nil {
+	if _, err, done := run("nohandler://localhost/f", func(string) string { return "x" }, false); !done || err == nil {
 		t.Errorf("a scheme without handler: %v %v", err, done)
 	}
 }

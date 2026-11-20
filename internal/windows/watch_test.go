@@ -4,13 +4,14 @@ package windows
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 func TestWatchDirectoryParser(t *testing.T) {
@@ -80,18 +81,13 @@ func TestDirectoryWatch(t *testing.T) {
 	add(3, filepath.Join(dir, "single", "c"), false)
 	next := func(want platform.FileWatchNotice) {
 		t.Helper()
-		timeout := time.After(5 * time.Second)
 		for {
-			select {
-			case n := <-notices:
-				if n == want {
-					return
-				}
-				if n.Err != nil {
-					t.Fatalf("notice %+v", n)
-				}
-			case <-timeout:
-				t.Fatalf("no notice %+v", want)
+			n := wait.For(t, fmt.Sprintf("notice %+v", want), notices)
+			if n == want {
+				return
+			}
+			if n.Err != nil {
+				t.Fatalf("notice %+v", n)
 			}
 		}
 	}
@@ -114,14 +110,12 @@ func TestDirectoryWatch(t *testing.T) {
 	next(platform.FileWatchNotice{Target: 2, Kind: platform.FileWatchRemove, Name: "c"})
 	// Removing a target closes its handle, on the goroutine of the watch.
 	w.Remove(2)
-	for start := time.Now(); ; time.Sleep(10 * time.Millisecond) {
-		err := os.Rename(filepath.Join(dir, "single"), filepath.Join(dir, "renamed"))
-		if err == nil {
-			break
-		}
-		if time.Since(start) > 5*time.Second {
-			t.Fatal(err)
-		}
+	var renameErr error
+	if !wait.Poll(func() bool {
+		renameErr = os.Rename(filepath.Join(dir, "single"), filepath.Join(dir, "renamed"))
+		return renameErr == nil
+	}) {
+		t.Fatal(renameErr)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "renamed", "g"), nil, 0600); err != nil {
 		t.Fatal(err)

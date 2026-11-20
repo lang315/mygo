@@ -34,7 +34,10 @@ var instead = map[string]string{
 // allowed are the waits on the clock that are right, as "file function
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
-var allowed = map[string]string{}
+var allowed = map[string]string{
+	"protocol/protocol_test.go TestDownload time.After":                  "waits a while for a report of a download the window refused, which must never come",
+	"updates/updates_test.go TestUpdaterWaitsForTheAppToExit time.Sleep": "checks the bundle stays in place while the app runs, which only a late look can miss",
+}
 
 type finding struct {
 	rel  string // the file, relative to the repository's root

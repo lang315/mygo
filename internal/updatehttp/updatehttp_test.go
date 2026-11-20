@@ -73,12 +73,14 @@ func TestGetHeaderTimeout(t *testing.T) {
 	defer srv.Close()
 	defer close(block)
 
-	start := time.Now()
-	if _, err := Get(t.Context(), srv.URL+"/file"); err == nil {
+	// Get returns by itself: its own timeout, not a canceled context, gives up.
+	errs := make(chan error, 1)
+	go func() {
+		_, err := Get(t.Context(), srv.URL+"/file")
+		errs <- err
+	}()
+	if err := wait.For(t, "Get to give up on a server that never answers", errs); err == nil {
 		t.Fatal("a server that never answers returned no error")
-	}
-	if waited := time.Since(start); waited > 5*time.Second {
-		t.Fatalf("waited %v for the headers of a response", waited)
 	}
 }
 
