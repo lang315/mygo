@@ -183,7 +183,17 @@ func TestFormatLooksDiff(t *testing.T) {
 	same(t, got, s)
 }
 
-// TestFormatAccent:a palette WithAccent made is written as the accent.
+// TestFormatBaseNoPalette: against a base of New, with no palette and no
+// palette list, the skin's palette is carried by the tokens.
+func TestFormatBaseNoPalette(t *testing.T) {
+	base := skin.New("Plain", skin.Calm.Tokens(false), skin.Calm.Tokens(true))
+	got := string(Format(skin.Calm.WithPalette(skin.Teal), base))
+	if strings.Contains(got, `"palette"`) || !strings.Contains(got, "\"Base\": \"#0f766e\"") {
+		t.Errorf("want Teal's accent in the tokens and no palette:\n%s", got)
+	}
+}
+
+// TestFormatAccent: a palette WithAccent made is written as the accent.
 func TestFormatAccent(t *testing.T) {
 	got := string(Format(skin.Calm.WithAccent(ui.Hex("#7c3aed")), skin.Calm))
 	want := "{\n  \"version\": 1,\n  \"name\": \"Calm\",\n  \"base\": \"Calm\",\n  \"accent\": \"#7c3aed\"\n}\n"

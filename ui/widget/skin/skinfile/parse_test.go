@@ -186,6 +186,7 @@ func errorCases() []errorCase {
 		{"malformed in light", inLight(`"Background": "#ffffff",`), "light: invalid JSON (line 7)"},
 		{"not an object", "[]", "want an object, got [] (line 1)"},
 		{"empty", "", "invalid JSON (line 1)"},
+		{"cut at a rune", inLight(`"Background": "` + strings.Repeat("é", 30) + `"`), `light.Background: want a color #rrggbb or #rrggbbaa, got "` + strings.Repeat("é", 19) + `… (line 6)`},
 		{"long value capped", inLight(`"Background": "` + strings.Repeat("a", 100) + `"`), `light.Background: want a color #rrggbb or #rrggbbaa, got "` + strings.Repeat("a", 39) + `… (line 6)`},
 	}
 }

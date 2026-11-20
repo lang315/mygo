@@ -43,6 +43,7 @@ package skinfile
 import (
 	"reflect"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/internal/jsonlite"
 	"github.com/egoist/mygo/ui"
@@ -98,9 +99,6 @@ func Parse(data []byte) (*skin.Skin, error) {
 			*m = member{[]byte(s), voff, true}
 			return err
 		case o != nil:
-			if d.r.Peek() != '{' {
-				return d.want(path, "an object")
-			}
 			v, off, err := d.read(path)
 			*o = member{v, off, true}
 			return err
@@ -227,8 +225,12 @@ func quote(s string) string { return cut(string(jsonlite.AppendQuote(nil, s))) }
 
 // cut cuts s to 40 bytes, for an error.
 func cut(s string) string {
-	if len(s) > 40 {
-		return s[:40] + "…"
+	if len(s) <= 40 {
+		return s
 	}
-	return s
+	n := 40
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n] + "…"
 }

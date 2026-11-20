@@ -28,7 +28,7 @@ type decoder struct {
 
 // fail returns the error msg at path, at the reader's offset off.
 func (d *decoder) fail(path string, off int, msg string) error {
-	off = min(d.base+off, len(d.file))
+	off = d.base + off
 	line := 1 + bytes.Count(d.file[:off], []byte{'\n'})
 	if path != "" {
 		msg = path + ": " + msg
@@ -187,7 +187,7 @@ func (d *decoder) value(v reflect.Value, path string) error {
 		v.SetFloat(f)
 	case reflect.Int:
 		n, err := strconv.ParseInt(text, 10, 0)
-		if !isNumber(val) || err != nil {
+		if err != nil {
 			return d.got(path, off, "an integer", val)
 		}
 		v.SetInt(n)
