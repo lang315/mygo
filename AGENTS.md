@@ -16,7 +16,8 @@ wire protocol, TypeScript generation, and the checklist for adding features.
   purego (`internal/darwin`, `internal/linux`) or `syscall`
   (`internal/windows`), never `import "C"`. iOS and Android link with
   their own toolchains (`CGO_ENABLED=1`, Xcode's and the NDK's clang), as
-  Go needs for them: `import "C"` is only in `internal/mobile`'s glue, and
+  Go needs for them: `import "C"` is only in `internal/mobile`'s glue
+  (`internal/nocgo` checks it, and lists the directories allowed), and
   on iOS purego reaches Metal and Core Text alone, the hosts (Swift,
   Kotlin) everything else (see "Phones" in the architecture guide).
 - **Bun is dev tooling only.** The repository is a Bun workspace
