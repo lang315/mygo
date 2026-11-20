@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -149,4 +150,120 @@ func TestShots(t *testing.T) {
 		t.Errorf("the selected row is drawn as the unselected one: both %v", in)
 	}
 	write(tt, "calm-blue-light-grid-row-selected")
+
+	// The Edit tab, light and dark, under Calm Blue.
+	for _, dark := range []bool{false, true} {
+		tt := open(skin.Calm, dark)
+		tt.Find(widget.ByRole(ui.RoleTab).Label("Edit")).Click()
+		write(tt, "calm-blue-"+map[bool]string{false: "light", true: "dark"}[dark]+"-edit")
+	}
+}
+
+// TestShotsMatchMain compares the shots of main (MYGO_SKIN_SHOTS_MAIN) with
+// the branch's (MYGO_SKIN_SHOTS): outside the rectangle the Edit tab's header
+// takes in the tab strip (from the right edge of the eighth tab to the
+// window's, the strip's height) every shot is the same, but the chart page's,
+// where the spinner turns, and but a box of 20 by 12 pixels of the numbers
+// page, where the date picker shows the time. It is skipped without both variables, and reads
+// shots taken at scale 1.
+func TestShotsMatchMain(t *testing.T) {
+	mainDir, dir := os.Getenv("MYGO_SKIN_SHOTS_MAIN"), os.Getenv("MYGO_SKIN_SHOTS")
+	if mainDir == "" || dir == "" {
+		t.Skip("MYGO_SKIN_SHOTS_MAIN and MYGO_SKIN_SHOTS name the directories of main's shots and the branch's")
+	}
+	reset(t)
+	type choice struct{ skin, palette string }
+	studios := map[string]choice{
+		"none": {}, "calm-blue": {"Calm", ""}, "calm-cham": {"Calm", skin.Cham.Name()},
+		"classic-indigo": {"Classic", ""}, "classic-slate": {"Classic", skin.ClassicSlate.Name()}, "highcontrast": {"HighContrast", ""},
+	}
+	// strip returns the rectangle of the Edit tab's header and what follows
+	// it, in the studio under the skin named name.
+	strip := func(name string) ui.Rect {
+		skin.Use(nil)
+		tt := widget.TestForm(t, newStudio())
+		tt.SetSize(1280, 800)
+		if c := studios[name]; c.skin != "" {
+			pick(tt, "Skin", c.skin)
+			if c.palette != "" {
+				pick(tt, "Palette", c.palette)
+			}
+		}
+		tt.Frame()
+		last := tt.Find(widget.ByRole(ui.RoleTab).Label("Dialogs and messages")).Bounds()
+		edit := tt.Find(widget.ByRole(ui.RoleTab).Label("Edit")).Bounds()
+		return ui.Rect{X: last.X + last.W - 2, Y: edit.Y - 2, W: 1280, H: edit.H + 4}
+	}
+	files, err := filepath.Glob(filepath.Join(mainDir, "*.png"))
+	if err != nil || len(files) != 98 {
+		t.Fatalf("%d shots of main in %s (%v), want 98", len(files), mainDir, err)
+	}
+	load := func(path string) image.Image {
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		img, err := png.Decode(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return img
+	}
+	rects := map[string]ui.Rect{}
+	compared, inside := 0, 0
+	for _, file := range files {
+		base := filepath.Base(file)
+		if strings.HasSuffix(base, "-chart-and-progress.png") {
+			continue // the spinner turns between two runs
+		}
+		name := ""
+		for k := range studios {
+			if strings.HasPrefix(base, k+"-") && len(k) > len(name) {
+				name = k
+			}
+		}
+		if name == "" {
+			t.Fatalf("shot %s is of no skin the test knows", base)
+		}
+		r, ok := rects[name]
+		if !ok {
+			r = strip(name)
+			rects[name] = r
+			t.Logf("%s: the Edit header's rectangle is %v", name, r)
+		}
+		a, b := load(file), load(filepath.Join(dir, base))
+		if a.Bounds() != b.Bounds() {
+			t.Errorf("%s: sizes differ: %v and %v", base, a.Bounds(), b.Bounds())
+			continue
+		}
+		compared++
+		outside := 0
+		box := image.Rectangle{Min: a.Bounds().Max, Max: a.Bounds().Min} // of the pixels outside
+		for y := a.Bounds().Min.Y; y < a.Bounds().Max.Y; y++ {
+			for x := a.Bounds().Min.X; x < a.Bounds().Max.X; x++ {
+				if a.At(x, y) == b.At(x, y) {
+					continue
+				}
+				if float32(x) >= r.X && float32(y) >= r.Y && float32(y) < r.Y+r.H {
+					inside++
+				} else {
+					outside++
+					box = box.Union(image.Rect(x, y, x+1, y+1))
+				}
+			}
+		}
+		// The picker's clock: the numbers page shows the time of day in a
+		// box of a few digits, which differs between two runs a minute apart.
+		if strings.HasSuffix(base, "-numbers-and-dates.png") && box.Dx() <= 20 && box.Dy() <= 12 {
+			outside = 0
+		}
+		if outside != 0 {
+			t.Errorf("%s: %d pixels differ outside the Edit header's rectangle %v, within %v", base, outside, r, box)
+		}
+	}
+	t.Logf("%d shots compared (the 12 of the chart page skipped); %d pixels differ inside the rectangles", compared, inside)
+	if inside == 0 {
+		t.Error("no pixel differs inside the rectangles: the Edit header is not in the shots, or the rectangle is wrong")
+	}
 }
