@@ -1,12 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/egoist/mygo/internal/jsonlite"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/skin"
 	"github.com/egoist/mygo/ui/widget/skin/skinfile"
@@ -36,9 +37,13 @@ func newEditor(base string) *editor {
 }
 
 // reset puts the editor back to the base as it ships: its palette, density,
-// looks and name, with no token changed.
+// looks and name, with no token changed. A base that is no skin ("none")
+// has nothing to edit: the editor takes Calm.
 func (e *editor) reset(base string) {
 	s := skins[base]
+	if s == nil {
+		base, s = "calm", skin.Calm
+	}
 	e.base, e.palette, e.accent, e.density, e.name = base, "", "", s.Density(), s.Name()
 	if p := s.Palette(); p != nil {
 		e.palette = p.Name()
@@ -69,19 +74,19 @@ func (e *editor) build() *skin.Skin {
 	d := e.derived()
 	lt, dt := d.Tokens(false), d.Tokens(true)
 	for i, t := range []*skin.Tokens{&lt, &dt} {
-		for path, v := range e.changed[i] {
-			if err := setLeaf(t, path, v); err != nil {
-				panic("skin-studio: a changed token was not kept valid: " + err.Error())
-			}
+		for path, text := range e.changed[i] {
+			// set and open keep each value as the leaf reads it, and a
+			// file's values may lie outside the range the user types in.
+			v, _ := leafAt(reflect.ValueOf(t).Elem(), path)
+			_ = assign(v, path, text, false)
 		}
 	}
 	return d.Derive(e.name, lt, dt).WithLooks(e.looks)
 }
 
-// get returns the token at path in the skin built, as text: "#rrggbb", a
-// number, a name or true.
-func (e *editor) get(dark bool, path string) string {
-	t := e.build().Tokens(dark)
+// tokenText returns the token at path in t as text: "#rrggbb", a number, a
+// name or true; "" for a path that is no leaf.
+func tokenText(t skin.Tokens, path string) string {
 	v, err := leafAt(reflect.ValueOf(&t).Elem(), path)
 	if err != nil {
 		return ""
@@ -97,7 +102,7 @@ func (e *editor) set(dark bool, path, value string) error {
 	if err != nil {
 		return err
 	}
-	if err := setValue(v, path, value); err != nil {
+	if err := assign(v, path, value, true); err != nil {
 		return err
 	}
 	e.changed[b2i(dark)][path] = leafText(v)
@@ -150,14 +155,18 @@ func (e *editor) open(data []byte) error {
 	if err != nil {
 		return err
 	}
-	var head struct{ Base string }
-	if err := json.Unmarshal(data, &head); err != nil {
+	// Parse read the file, so it is an object with a "base" of one of the
+	// skins of skins.
+	var base string
+	r := jsonlite.NewReader(data)
+	_ = r.Object(func(key string) error {
+		if key != "base" {
+			return r.Skip()
+		}
+		s, err := r.String()
+		base = strings.ToLower(s)
 		return err
-	}
-	base := strings.ToLower(head.Base) // Parse knows it
-	if skins[base] == nil {
-		return fmt.Errorf("base: unknown skin %q", head.Base)
-	}
+	})
 	n := &editor{base: base, density: s.Density(), name: s.Name(), looks: s.Looks()}
 	if p := s.Palette(); p != nil {
 		if c, ok := parseColor(p.Name()); ok {
@@ -242,19 +251,12 @@ func leafAt(v reflect.Value, path string) (reflect.Value, error) {
 	return v, nil
 }
 
-// setLeaf sets the leaf of t at path to the text value.
-func setLeaf(t *skin.Tokens, path, value string) error {
-	v, err := leafAt(reflect.ValueOf(t).Elem(), path)
-	if err != nil {
-		return err
-	}
-	return setValue(v, path, value)
-}
-
-// setValue sets the settable leaf v, whose path is path, to the text value:
-// a color is #rrggbb or #rrggbbaa, a size 0 to 400, a weight a whole number
-// 100 to 900, a flag true or false.
-func setValue(v reflect.Value, path, value string) error {
+// assign sets the settable leaf v, whose path is path, to the text value: a
+// color is #rrggbb or #rrggbbaa, a size a number, a weight a whole number,
+// a flag true or false. A user's value (typed) must also be a size from 0 to
+// 400 and a weight from 100 to 900, the ranges of the edit panel's number
+// boxes; a file's may lie outside them.
+func assign(v reflect.Value, path, value string, typed bool) error {
 	switch {
 	case v.Type() == colorType:
 		c, ok := parseColor(value)
@@ -264,13 +266,13 @@ func setValue(v reflect.Value, path, value string) error {
 		v.Set(reflect.ValueOf(c))
 	case v.Kind() == reflect.Float32:
 		f, err := strconv.ParseFloat(value, 32)
-		if err != nil || !(f >= 0 && f <= 400) {
+		if err != nil || math.IsNaN(f) || typed && (f < 0 || f > 400) {
 			return fmt.Errorf("%s: want a size from 0 to 400, got %q", path, value)
 		}
 		v.SetFloat(f)
 	case v.Kind() == reflect.Int:
 		n, err := strconv.Atoi(value)
-		if err != nil || n < 100 || n > 900 {
+		if err != nil || typed && (n < 100 || n > 900) {
 			return fmt.Errorf("%s: want a weight from 100 to 900, got %q", path, value)
 		}
 		v.SetInt(int64(n))

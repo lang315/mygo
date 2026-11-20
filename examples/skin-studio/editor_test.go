@@ -344,6 +344,68 @@ func TestEditorReset(t *testing.T) {
 	}
 }
 
+// "none" is the tool strip's no skin: there is nothing to edit, so the
+// editor takes Calm.
+func TestEditorResetNone(t *testing.T) {
+	e := newEditor("none")
+	if e.base != "calm" {
+		t.Errorf("base = %q, want calm", e.base)
+	}
+	sameSkin(t, e.build(), skin.Calm)
+	e.reset("highcontrast")
+	e.reset("none")
+	sameSkin(t, e.build(), skin.Calm)
+}
+
+// A file may hold what the panel's boxes do not take (a size of 450, a
+// weight of 50, a fractional one): open keeps it, and a skin built is the
+// skin Parse gave.
+func TestEditorOpenKeepsAFilesValues(t *testing.T) {
+	data := `{"version": 1, "name": "Wide", "base": "HighContrast",
+	  "light": {"RowHeight": 450, "Caption": {"Weight": 50}, "Label": {"Weight": 450}, "FontSize": 12.25},
+	  "dark": {"Icon": 0}}`
+	want, err := skinfile.Parse([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := newEditor("calm")
+	if err := e.open([]byte(data)); err != nil {
+		t.Fatal(err)
+	}
+	sameSkin(t, e.build(), want)
+	if e.base != "highcontrast" {
+		t.Errorf("base = %q, want highcontrast", e.base)
+	}
+	for _, c := range []struct{ path, want string }{{"RowHeight", "450"}, {"Caption.Weight", "50"}, {"FontSize", "12.25"}} {
+		if got := tokenText(e.build().Tokens(false), c.path); got != c.want {
+			t.Errorf("%s = %q, want %q", c.path, got, c.want)
+		}
+	}
+}
+
+// Every base opens as itself.
+func TestEditorOpenEveryBase(t *testing.T) {
+	for key, s := range skins {
+		e := newEditor("none")
+		if err := e.open(skinfile.Format(s, s)); err != nil {
+			t.Fatalf("%s: %v", key, err)
+		}
+		if e.base != key {
+			t.Errorf("base = %q, want %q", e.base, key)
+		}
+		sameSkin(t, e.build(), s)
+	}
+}
+
+// assign refuses a field of a kind the editor has no text for, so a new kind
+// in Tokens fails TestEditorAllFields instead of being dropped.
+func TestEditorAssignUnknownKind(t *testing.T) {
+	var s struct{ M map[int]int }
+	if err := assign(reflect.ValueOf(&s).Elem().Field(0), "M", "x", true); err == nil || !strings.Contains(err.Error(), "M") {
+		t.Errorf("assign(map) = %v, want an error naming M", err)
+	}
+}
+
 // leaves lists the paths of the leaves of a Tokens by reflection, as the
 // test reads them, not as the editor does.
 func leaves(v reflect.Value, prefix string) []string {
@@ -383,10 +445,11 @@ func TestEditorAllFields(t *testing.T) {
 	for key := range skins {
 		for _, dark := range []bool{false, true} {
 			e := newEditor(key)
+			tk := e.build().Tokens(dark)
 			for _, p := range paths {
-				v := e.get(dark, p)
+				v := tokenText(tk, p)
 				if v == "" && !strings.HasSuffix(p, "Font") {
-					t.Fatalf("%s dark=%v: get(%q) is empty", key, dark, p)
+					t.Fatalf("%s dark=%v: tokenText(%q) is empty", key, dark, p)
 				}
 				if err := e.set(dark, p, v); err != nil {
 					t.Errorf("%s dark=%v: set(%q, %q): %v", key, dark, p, v, err)
