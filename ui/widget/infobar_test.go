@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"math"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -111,6 +112,32 @@ func TestInfoBarPlain(t *testing.T) {
 	r = barOf(t, tt, ui.RoleStatus)
 	if c := tt.Image().RGBAAt(int(r.X), int(r.Y+r.H/2)); !near(c, th.Border) {
 		t.Errorf("with the app's border width the left edge is %v, want the theme's Border %v", c, th.Border)
+	}
+}
+
+// A bar with no title starts its message at the top of the text column, and
+// one with no message is as high as its title and padding: neither keeps
+// room for the part it has not.
+func TestInfoBarNoTitleOrMessage(t *testing.T) {
+	calmOff()
+	tt := tester(t, VBox(8).Add(InfoBar(StatusInfo, "", "Chỉ có nội dung"), InfoBar(StatusSuccess, "Chỉ có tiêu đề", "")).SetSize(400, 0))
+	var bars []ui.Rect
+	for _, n := range tt.Nodes() {
+		if n.Role == ui.RoleStatus {
+			bars = append(bars, n.Bounds)
+		}
+	}
+	if len(bars) != 2 {
+		t.Fatalf("%d bars, want 2", len(bars))
+	}
+	pad := space(3)
+	if m := find(t, tt, "Chỉ có nội dung"); math.Abs(float64(m.Y-(bars[0].Y+pad))) > 0.5 {
+		t.Errorf("with no title the message starts at %v, want the padding's %v", m.Y, bars[0].Y+pad)
+	}
+	icon := float32(20) // the icon is taller than a line: it sets the bar's height
+	ti := find(t, tt, "Chỉ có tiêu đề")
+	if want := 2*pad + max(icon, ti.H); math.Abs(float64(bars[1].H-want)) > 0.5 {
+		t.Errorf("with no message the bar is %v high, want %v", bars[1].H, want)
 	}
 }
 

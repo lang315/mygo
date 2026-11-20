@@ -63,22 +63,10 @@ func (b *BadgeWidget) rename() {
 	}
 }
 
-// textScale is the user's text scale, 1 when unset.
-func textScale(c *ui.Context) float32 {
-	if s := c.Preferences().TextScale; s > 0 {
-		return s
-	}
-	return 1
-}
-
 func (b *BadgeWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
-	scale := textScale(c)
+	scale := c.Preferences().TextScale // ui makes an unset one 1
 	fill, text, _, base := statusColors(c, b.status)
-	muted := t.TextMuted
-	if tk, _ := skinOf(c); tk != nil {
-		muted = tk.TextMuted
-	}
 	h := 20 * scale
 	// The badge is read as one text, its name; its pill and detail are not
 	// read apart. It never grows: an HExpand widens the row, not the pill.
@@ -103,7 +91,7 @@ func (b *BadgeWidget) build(c *ui.Context) ui.Element {
 			ui.Text(c, b.text).SingleLine()
 		})
 		if b.showsDetail() {
-			ui.Text(c, b.detail).SingleLine().FontSize(12 * scale).TextColor(muted)
+			ui.Text(c, b.detail).SingleLine().FontSize(12 * scale).TextColor(t.TextMuted)
 		}
 	})
 }

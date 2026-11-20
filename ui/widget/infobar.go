@@ -140,18 +140,14 @@ func plainGlyphOn(base ui.Color) ui.Color {
 
 func (i *InfoBarWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
-	scale := textScale(c)
+	scale := c.Preferences().TextScale
 	fill, text, border, base := statusColors(c, i.status)
-	radius := t.Radius
-	if tk, _ := skinOf(c); tk != nil {
-		radius = tk.RadiusControl
-	}
 	role := ui.RoleStatus
 	if i.status == StatusWarning || i.status == StatusDanger {
 		role = ui.RoleAlert
 	}
 	bar := ui.Row(c).AlignItems(ui.Start).Gap(t.Space(3)).Padding(t.Space(3)).Background(fill).
-		TextColor(text).Radius(radius).Role(role)
+		TextColor(text).Radius(t.Radius).Role(role) // a skin's theme has its RadiusControl
 	if border.A != 0 {
 		bar.Border(1, border)
 	}

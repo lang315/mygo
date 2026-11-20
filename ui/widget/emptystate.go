@@ -58,11 +58,8 @@ func (e *EmptyStateWidget) SetAction(text string, do func()) *EmptyStateWidget {
 
 func (e *EmptyStateWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
-	scale := textScale(c)
+	scale := c.Preferences().TextScale
 	muted := t.TextMuted
-	if tk, _ := skinOf(c); tk != nil {
-		muted = tk.TextMuted
-	}
 	box := ui.Column(c).Grow(1).Center().Gap(t.Space(2)).Padding(t.Space(6))
 	return box.Children(func() {
 		if e.icon != nil {

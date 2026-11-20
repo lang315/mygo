@@ -75,6 +75,22 @@ func TestEmptyState(t *testing.T) {
 	}
 }
 
+// With no title, or no message, the one left is centered alone: no room is
+// kept for the other.
+func TestEmptyStateNoTitleOrMessage(t *testing.T) {
+	calmOff()
+	for _, c := range []struct{ title, message, shown string }{
+		{"", "Chỉ có nội dung", "Chỉ có nội dung"},
+		{"Chỉ có tiêu đề", "", "Chỉ có tiêu đề"},
+	} {
+		tt := tester(t, VBox(0).Add(EmptyState(c.title, c.message)).SetSize(600, 400))
+		r := find(t, tt, c.shown)
+		if mid := r.Y + r.H/2; math.Abs(float64(mid-200)) > 0.5 {
+			t.Errorf("%q alone has its middle at %v, want 200", c.shown, mid)
+		}
+	}
+}
+
 // Case 10, its empty state part: a look of bg-chrome fills the empty state
 // with Chrome.
 func TestEmptyStateLook(t *testing.T) {

@@ -37,6 +37,13 @@ func TestCheckStatusPairs(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Success Text on Subtle over RowHover") {
 		t.Errorf("a green RowHover under Success's text gives %v, want an error naming Success Text on Subtle over RowHover", err)
 	}
+	// And over a selected row of its green, which RowHover's pair does not see.
+	l, d = Calm.Tokens(false), Calm.Tokens(true)
+	d.RowSelected = d.Success.Text.Alpha(0.6)
+	err = Calm.Derive("Test", l, d).Check()
+	if err == nil || !strings.Contains(err.Error(), "Success Text on Subtle over RowSelected") {
+		t.Errorf("a green RowSelected under Success's text gives %v, want an error naming Success Text on Subtle over RowSelected", err)
+	}
 }
 
 // Case 13: every built-in skin, with each of its palettes, passes Check in
