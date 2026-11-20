@@ -15,7 +15,13 @@ tool strip controls 36), `TestSentinelSkinReachesEveryPixel`
 looks every painted pixel of the gallery,
 which holds each control below except the message boxes' dialogs, is a sentinel
 color) and `TestNoNewLiteralColors` (`ui/widget`: no `ui.Hex`/`ui.RGB` in a
-skinned paint path). Rows below add their own.
+skinned paint path). The studio's Edit tab (S6) has its own: `TestEditor*`
+(`editor_test.go`: the model, its file round trip, every `Tokens` leaf) and
+`TestEdit*` (`editpanel_test.go`: an edit reaches a control, Check's report
+in the status strip, a bad value refused at its field, the appearance shown
+apart from the app's, Open and Save, the tool strip's "Edited");
+`TestShotsMatchMain` compares the shots with main's outside the Edit tab's
+header. Rows below add their own.
 
 | | Control | Part | Shown by |
 |---|---|---|---|
