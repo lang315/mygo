@@ -30,8 +30,14 @@ func checkFloor(t *skinhook.Tokens, dark bool, tf float64) error {
 	pair("TextMuted on Background", t.TextMuted, t.Background, tf)
 	pair("TextMuted on Chrome", t.TextMuted, t.Chrome, tf)
 	pair("TextPlaceholder on Surface", t.TextPlaceholder, t.Surface, tf)
-	pair("TextMuted on RowSelected", t.TextMuted, t.RowSelected, tf)
-	pair("Text on RowSelected", t.Text, t.RowSelected, tf)
+	// A selected row's text is rowText's pick; muted text in it is measured
+	// as that pick too where the row is inverted.
+	rt, muted := rowText(t), t.TextMuted
+	if rt != t.Text {
+		muted = rt
+	}
+	pair("TextMuted on RowSelected", muted, t.RowSelected, tf)
+	pair("Text on RowSelected", rt, t.RowSelected, tf)
 	pair("TextMuted on RowHover", t.TextMuted, t.RowHover, tf)
 	for _, f := range []struct {
 		name string
