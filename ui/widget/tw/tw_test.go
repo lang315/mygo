@@ -82,6 +82,7 @@ func TestTwRoleClasses(t *testing.T) {
 		{"border-button", n().BorderColor(widget.RoleButtonBorder)},
 		{"bg-row-hover text-info", n().Background(widget.RoleRowHover).TextColor(widget.RoleInfo)},
 		{"bg-row-selected", n().Background(widget.RoleRowSelected)},
+		{"bg-status text-status border-status", n().Background(widget.RoleStatus).TextColor(widget.RoleStatusText).BorderColor(widget.RoleStatusBorder)},
 	} {
 		got, err := Parse(c.in)
 		if err != nil || !reflect.DeepEqual(bare(got), c.want) {

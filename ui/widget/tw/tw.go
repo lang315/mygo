@@ -286,6 +286,7 @@ var roles = map[string]widget.Color{
 	"border-strong":  widget.RoleBorderStrong,
 	"control-border": widget.RoleControlBorder, "button-border": widget.RoleButtonBorder,
 	"row-hover": widget.RoleRowHover, "row-selected": widget.RoleRowSelected, "info": widget.RoleInfo,
+	"status": widget.RoleStatus, "status-text": widget.RoleStatusText, "status-border": widget.RoleStatusBorder,
 }
 
 var cursors = map[string]ui.Cursor{

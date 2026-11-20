@@ -145,6 +145,8 @@ func color(v, prefix string) (Color, bool) {
 		return Color{}, true
 	case "default":
 		return Color{Role: defaults[prefix]}, true
+	case "status":
+		return Color{Role: statusRoles[prefix]}, true
 	}
 	if r, ok := roles[v]; ok {
 		return Color{Role: r}, true

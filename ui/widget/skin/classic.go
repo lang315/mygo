@@ -44,6 +44,8 @@ var classicLooks = Looks{
 	TabStrip:   "bg-chrome border-b-0",
 	TabHeader:  "border border-strong px-3 bg-chrome text-muted selected:border-b-0 selected:bg-default selected:text-default",
 	GridHeader: "bg-chrome border-r border-strong font-semibold",
+	Badge:      "rounded-sm border border-status",
+	InfoBar:    "border border-status rounded-sm",
 }
 
 // classicLight and classicDark are Classic's tokens but those its palette

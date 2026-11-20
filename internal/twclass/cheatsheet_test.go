@@ -220,6 +220,7 @@ func blocks(t *testing.T) map[string]string {
 	for _, k := range sortedKeys(roles) {
 		fmt.Fprintf(&b, "| `bg-%s`, `text-%s`, `border-%s` | `%s` |\n", k, k, k, roles[k])
 	}
+	b.WriteString("| `bg-status`, `text-status`, `border-status` | `" + statusRoles["bg"] + "`, `" + statusRoles["text"] + "`, `" + statusRoles["border"] + "`: the fill, text and border of a Badge's or an InfoBar's status |\n")
 	b.WriteString("\nThe roles are " + code(Roles...) + ". Theme colors follow the theme, light and dark.\n")
 	out["roles"] = b.String()
 

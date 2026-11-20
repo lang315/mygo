@@ -28,6 +28,9 @@ var highContrastLooks = Looks{
 	ComboBox:   "border-2 border-control",
 	GroupBox:   "border-2 border-strong",
 	Card:       "border-2 border-strong",
+	// Status text on Surface, framed in the family's border: no subtle fills.
+	Badge:   "bg-surface border-2 border-status",
+	InfoBar: "bg-surface border-2 border-status",
 }
 
 // highContrastDark and highContrastLight are HighContrast's tokens, made
@@ -50,10 +53,10 @@ func highContrastDark() skinhook.Tokens {
 		RowHover:        ui.Hex("#1a1a1a"),
 		RowSelected:     ui.Hex("#1aebff"),
 		Accent:          DarkFamily(ui.Hex("#ffff00"), ui.Hex("#ffff66"), ui.Hex("#e6e600"), ui.Hex("#ffff00"), ui.Hex("#000000")),
-		Info:            DarkFamily(ui.Hex("#1aebff"), ui.Hex("#66f2ff"), ui.Hex("#00d0e6"), ui.Hex("#1aebff"), ui.Hex("#000000")),
-		Success:         DarkFamily(ui.Hex("#3ff23f"), ui.Hex("#6ff56f"), ui.Hex("#2fd02f"), ui.Hex("#3ff23f"), ui.Hex("#000000")),
-		Warning:         DarkFamily(ui.Hex("#ffff00"), ui.Hex("#ffff66"), ui.Hex("#e6e600"), ui.Hex("#ffff00"), ui.Hex("#000000")),
-		Danger:          DarkFamily(ui.Hex("#ff6b6b"), ui.Hex("#ff8f8f"), ui.Hex("#ff4d4d"), ui.Hex("#ff8f8f"), ui.Hex("#000000")),
+		Info:            flatStatus(DarkFamily(ui.Hex("#1aebff"), ui.Hex("#66f2ff"), ui.Hex("#00d0e6"), ui.Hex("#1aebff"), ui.Hex("#000000"))),
+		Success:         flatStatus(DarkFamily(ui.Hex("#3ff23f"), ui.Hex("#6ff56f"), ui.Hex("#2fd02f"), ui.Hex("#3ff23f"), ui.Hex("#000000"))),
+		Warning:         flatStatus(DarkFamily(ui.Hex("#ffff00"), ui.Hex("#ffff66"), ui.Hex("#e6e600"), ui.Hex("#ffff00"), ui.Hex("#000000"))),
+		Danger:          flatStatus(DarkFamily(ui.Hex("#ff6b6b"), ui.Hex("#ff8f8f"), ui.Hex("#ff4d4d"), ui.Hex("#ff8f8f"), ui.Hex("#000000"))),
 		Chart: [8]ui.Color{ui.Hex("#60a5fa"), ui.Hex("#4ade80"), ui.Hex("#fb923c"), ui.Hex("#c084fc"),
 			ui.Hex("#22d3ee"), ui.Hex("#f472b6"), ui.Hex("#facc15"), ui.Hex("#9ca3af")},
 		ControlHeight: 36, RowHeight: 30, HeaderHeight: 30, SettingsRowHeight: 56,
@@ -68,6 +71,14 @@ func highContrastDark() skinhook.Tokens {
 		Title:          skinhook.Type{Size: 20, Weight: 600},
 		FocusRingWidth: 3, FocusRingOffset: 1,
 	}
+}
+
+// flatStatus is a dark status family as High Contrast draws it: on black, not
+// on a tint of the base (which a selected cyan row would show through), and
+// framed in the base itself.
+func flatStatus(f skinhook.Family) skinhook.Family {
+	f.Subtle, f.Border = ui.Hex("#000000"), f.Base
+	return f
 }
 
 func highContrastLight() skinhook.Tokens {

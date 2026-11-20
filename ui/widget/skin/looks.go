@@ -40,6 +40,15 @@ type Looks struct {
 	// ToolStrip, StatusStrip and MenuBar are the strips so named, HeaderBar
 	// a Form's header bar.
 	ToolStrip, StatusStrip, MenuBar, HeaderBar string
+	// Badge is a Badge's pill, without its detail; InfoBar an InfoBar's box.
+	// Their looks may name the colors of the control's status: bg-status,
+	// text-status and border-status (the family's Subtle, Text and Border;
+	// TextMuted on SurfaceHover for StatusNone), so that one look serves
+	// every status. Elsewhere those classes are StatusNone's colors.
+	Badge, InfoBar string
+	// EmptyState is the box of an EmptyState, around its icon, title,
+	// message and action.
+	EmptyState string
 }
 
 // WithLooks returns a copy of the skin whose looks are l: each kind of l
@@ -72,7 +81,8 @@ func parseLooks(l Looks) *[skinhook.NumKinds]any {
 		skinhook.KindTabStrip: l.TabStrip, skinhook.KindTabHeader: l.TabHeader,
 		skinhook.KindGridHeader: l.GridHeader, skinhook.KindToolStrip: l.ToolStrip,
 		skinhook.KindStatusStrip: l.StatusStrip, skinhook.KindMenuBar: l.MenuBar,
-		skinhook.KindHeaderBar: l.HeaderBar,
+		skinhook.KindHeaderBar: l.HeaderBar, skinhook.KindBadge: l.Badge,
+		skinhook.KindInfoBar: l.InfoBar, skinhook.KindEmptyState: l.EmptyState,
 	}
 	var out [skinhook.NumKinds]any
 	for k, cl := range classes {
