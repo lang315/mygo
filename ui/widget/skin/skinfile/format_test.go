@@ -163,7 +163,27 @@ func TestFormatDiff(t *testing.T) {
 	}
 }
 
-// TestFormatAccent: a palette WithAccent made is written as the accent.
+// TestFormatLooksDiff: against a base with looks, a kind the skin keeps is
+// not written, and one it drops is written "".
+func TestFormatLooksDiff(t *testing.T) {
+	l, d := skin.Calm.Tokens(false), skin.Calm.Tokens(true)
+	base := skin.Calm.WithLooks(skin.Looks{GridHeader: "bg-chrome", Button: "rounded"}).Derive("Looky", l, d)
+	bases["Looky"] = base
+	t.Cleanup(func() { delete(bases, "Looky") })
+	s := base.WithLooks(skin.Looks{Button: "rounded"})
+	want := "{\n  \"version\": 1,\n  \"name\": \"Looky\",\n  \"base\": \"Looky\",\n  \"looks\": {\n    \"GridHeader\": \"\"\n  }\n}\n"
+	data := Format(s, base)
+	if string(data) != want {
+		t.Errorf("got\n%s\nwant\n%s", data, want)
+	}
+	got, err := Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	same(t, got, s)
+}
+
+// TestFormatAccent:a palette WithAccent made is written as the accent.
 func TestFormatAccent(t *testing.T) {
 	got := string(Format(skin.Calm.WithAccent(ui.Hex("#7c3aed")), skin.Calm))
 	want := "{\n  \"version\": 1,\n  \"name\": \"Calm\",\n  \"base\": \"Calm\",\n  \"accent\": \"#7c3aed\"\n}\n"

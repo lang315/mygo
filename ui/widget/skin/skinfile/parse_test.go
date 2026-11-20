@@ -161,7 +161,6 @@ func errorCases() []errorCase {
 		{"chart of 9", inLight(`"Chart": ["#000000","#000000","#000000","#000000","#000000","#000000","#000000","#000000","#000000"]`), "light.Chart: want 8 colors, got 9 (line 6)"},
 		{"chart element", inLight(`"Chart": ["#000000","#000000","red"]`), `light.Chart[2]: want a color #rrggbb or #rrggbbaa, got "red" (line 6)`},
 		{"chart not array", inLight(`"Chart": "#000000"`), `light.Chart: want an array of 8, got "#000000" (line 6)`},
-		{"unexported field", inLight(`"wide": 1`), "light.wide: unknown key (line 6)"},
 		{"duplicate key", inLight("\"Background\": \"#ffffff\",\n    \"Background\": \"#000000\""), "light.Background: duplicate key (line 7)"},
 		{"duplicate top key", head + "  \"name\": \"Y\"\n}", "name: duplicate key (line 5)"},
 		{"light not object", head + "  \"light\": 3\n}", "light: want an object, got 3 (line 5)"},

@@ -110,11 +110,9 @@ func (d *decoder) color(path string) (ui.Color, error) {
 	if err != nil {
 		return ui.Color{}, err
 	}
-	if v[0] == '"' {
-		if s, err := jsonlite.NewReader(v).String(); err == nil {
-			if c, ok := parseColor(s); ok {
-				return c, nil
-			}
+	if s, err := jsonlite.NewReader(v).String(); err == nil {
+		if c, ok := parseColor(s); ok {
+			return c, nil
 		}
 	}
 	return ui.Color{}, d.got(path, off, wantColor, v)

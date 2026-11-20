@@ -41,7 +41,7 @@ func TestDeriveKeeps(t *testing.T) {
 		t.Error("the looks' Styles are gone")
 	}
 	if s.Palette() != Teal {
-		t.Errorf("Palette = %v, want Teal", s.Palette().Name())
+		t.Errorf("Palette = %p, want Teal", s.Palette())
 	}
 	got, want := s.Palettes(), Calm.Palettes()
 	if len(got) != len(want) || len(want) != 5 {
