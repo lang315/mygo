@@ -32,10 +32,20 @@ func palettesOf(v string) []*skin.Palette {
 // boxes that set the skin, its palette and the appearance at once, a status
 // strip, and one tab per family of controls.
 func newStudio() *widget.Form {
+	f, _ := newStudioPanel()
+	return f
+}
+
+// newStudioPanel makes the studio and returns its Edit tab's panel too.
+func newStudioPanel() (*widget.Form, *editPanel) {
 	f := widget.NewForm("Skin studio", formWidth, formHeight)
+	p := newEditPanel(f)
 	f.UseHeaderBar("Every control in every skin").PackEnd(widget.Button("Header action"))
-	f.ToolStrip(widget.ToolStrip(switches()...))
-	f.StatusStrip(widget.StatusStrip(widget.StatusLabel("Ready"), widget.Spring(), widget.StatusProgress().SetFraction(0.4)))
+	tools, markEdited := switches(p.pick)
+	p.markEdited = markEdited
+	p.status = widget.StatusLabel("Ready")
+	f.ToolStrip(widget.ToolStrip(tools...))
+	f.StatusStrip(widget.StatusStrip(p.status, widget.Spring(), widget.StatusProgress().SetFraction(0.4)))
 	f.SetContent(widget.TabControl().
 		AddPage("Buttons and toggles", buttons()).
 		AddPage("Text and choices", text()).
@@ -45,17 +55,25 @@ func newStudio() *widget.Form {
 		AddPage("Containers", containers()).
 		AddPage("Chart and progress", chart()).
 		AddPage("Dialogs and messages", dialogs(f)).
+		AddPage("Edit", p.build()).
 		Padding(4).Expand())
-	return f
+	return f, p
 }
 
 // switches returns the tool strip's combo boxes: skin (None, Calm, Classic,
 // HighContrast), palette, by name, of the skin's own, and appearance. A
 // choice applies at once; the palette waits, kept, while no skin is on, and
-// a skin that has no palette of its name takes its own.
-func switches() []widget.Control {
+// a skin that has no palette of its name takes its own. A choice also tells
+// pick, which resets the editor to it. The returned function shows or takes
+// away "Edited" in the skin box, while the skin in use is the editor's.
+func switches(pick func(key, palette string)) ([]widget.Control, func(bool)) {
 	useSkin, usePalette := "none", skin.Blue.Name()
+	var setEdited func(bool)
 	apply := func() {
+		defer func() {
+			setEdited(false)
+			pick(useSkin, usePalette)
+		}()
 		s := skins[useSkin]
 		if s == nil {
 			skin.Use(nil)
@@ -81,9 +99,16 @@ func switches() []widget.Control {
 		return opts
 	}
 	palette := choose("Palette", &usePalette, paletteOptions()...)
-	skinBox := widget.ComboBox(widget.Option{Value: "none", Text: "None"}, widget.Option{Value: "calm", Text: "Calm"},
-		widget.Option{Value: "classic", Text: "Classic"}, widget.Option{Value: "highcontrast", Text: "HighContrast"}).
-		SetValue(useSkin).SetAccessibleName("Skin")
+	skinOptions := []widget.Option{{Value: "none", Text: "None"}, {Value: "calm", Text: "Calm"},
+		{Value: "classic", Text: "Classic"}, {Value: "highcontrast", Text: "HighContrast"}}
+	skinBox := widget.ComboBox(skinOptions...).SetValue(useSkin).SetAccessibleName("Skin")
+	setEdited = func(on bool) {
+		if on {
+			skinBox.SetOptions(append(slices.Clone(skinOptions), widget.Option{Value: "edited", Text: "Edited"})...).SetValue("edited")
+		} else {
+			skinBox.SetOptions(skinOptions...).SetValue(useSkin)
+		}
+	}
 	skinBox.OnChange(func() {
 		useSkin = skinBox.Value()
 		opts := paletteOptions()
@@ -100,7 +125,7 @@ func switches() []widget.Control {
 		widget.Option{Value: string(widget.ThemeDark), Text: "Dark"},
 	).SetValue(string(widget.ThemeSystem)).SetAccessibleName("Mode")
 	mode.OnChange(func() { widget.SetTheme(widget.Theme(mode.Value())) })
-	return []widget.Control{skinBox, palette, mode}
+	return []widget.Control{skinBox, palette, mode}, setEdited
 }
 
 func option(pairs ...string) []widget.Option {
