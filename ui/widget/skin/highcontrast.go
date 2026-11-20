@@ -14,7 +14,7 @@ import (
 // text in an input is a tint of those colors the text reads on, not
 // inverted. It has no palettes: WithPalette and WithAccent still work, and
 // Check reports what falls under 7:1.
-var HighContrast = &Skin{lazy: &lazySkin{build: func() *Skin {
+var HighContrast = &Skin{name: "HighContrast", lazy: &lazySkin{build: func() *Skin {
 	return &Skin{name: "HighContrast", light: highContrastLight(), dark: highContrastDark(), floor: 7,
 		looks: highContrastLooks, parsed: parseLooks(highContrastLooks)}
 }}}
