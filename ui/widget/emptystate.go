@@ -56,8 +56,6 @@ func (e *EmptyStateWidget) SetAction(text string, do func()) *EmptyStateWidget {
 	return e
 }
 
-func (e *EmptyStateWidget) fillsAcross() bool { return true }
-
 func (e *EmptyStateWidget) build(c *ui.Context) ui.Element {
 	t := c.Theme()
 	scale := textScale(c)

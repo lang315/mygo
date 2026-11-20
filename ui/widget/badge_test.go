@@ -23,6 +23,21 @@ func inkNear(tt *ui.Tester, r ui.Rect, want ui.Color, tol int) bool {
 	return false
 }
 
+// darkest is the darkest pixel of r: the core of dark text on a light fill.
+func darkest(tt *ui.Tester, r ui.Rect) color.RGBA {
+	img := tt.Image()
+	best, lum := color.RGBA{}, 1<<30
+	for y := int(r.Y); y < int(r.Y+r.H); y++ {
+		for x := int(r.X); x < int(r.X+r.W); x++ {
+			c := img.RGBAAt(x, y)
+			if l := 2126*int(c.R) + 7152*int(c.G) + 722*int(c.B); l < lum {
+				best, lum = c, l
+			}
+		}
+	}
+	return best
+}
+
 // pillEdges are the first and last x, on the row y, from x0 to x1, whose
 // pixel differs from the page's: a pill's painted width.
 func pillEdges(tt *ui.Tester, y, x0, x1 float32) (first, last int) {
@@ -69,8 +84,8 @@ func TestBadgeCalmSuccess(t *testing.T) {
 	if c := fillOf(t, tt, "Live"); !near(c, tk.Success.Subtle) {
 		t.Errorf("the fill is %v, want Success.Subtle %v", c, tk.Success.Subtle)
 	}
-	if !inkNear(tt, badgeBox(t, tt, "Live"), tk.Success.Text, 24) {
-		t.Errorf("no ink of Success.Text %v in the text", tk.Success.Text)
+	if c := darkest(tt, badgeBox(t, tt, "Live")); !nearTol(c, tk.Success.Text, 12) {
+		t.Errorf("the text's core is %v, want Success.Text %v", c, tk.Success.Text)
 	}
 	if h := badgeBox(t, tt, "Live").H; !sameSize(h, 20) {
 		t.Errorf("the badge is %v high, want 20", h)
@@ -91,8 +106,8 @@ func TestBadgePlainSuccess(t *testing.T) {
 	if c, want := fillOf(t, tt, "Live"), th.Success.Alpha(0.14).Over(th.Background); !near(c, want) {
 		t.Errorf("the fill is %v, want Success at 0.14 over the page, %v", c, want)
 	}
-	if !inkNear(tt, badgeBox(t, tt, "Live"), th.Text, 24) {
-		t.Errorf("no ink of Text %v in the text", th.Text)
+	if c := darkest(tt, badgeBox(t, tt, "Live")); !nearTol(c, th.Text, 12) {
+		t.Errorf("the text's core is %v, want Text %v", c, th.Text)
 	}
 	if h := badgeBox(t, tt, "Live").H; !sameSize(h, 20) {
 		t.Errorf("the plain badge is %v high, want 20", h)
@@ -117,15 +132,16 @@ func TestBadgeRunningDetail(t *testing.T) {
 	text, detail := find(t, tt, "Live"), find(t, tt, "Bước 2/5")
 	box := badgeBox(t, tt, "Live, Bước 2/5")
 	dot := ui.Rect{X: box.X, Y: text.Y, W: text.X - box.X, H: text.H}
-	// 6 DIPs wide: the run of Info.Base on the dot's middle row.
+	// 6 DIPs wide: on the dot's middle row, the pixels before the text that
+	// are not the fill, its edges' blend included; its core in Info.Base.
 	run := 0
-	for x := int(dot.X); x < int(dot.X+dot.W); x++ {
-		if nearTol(tt.Image().RGBAAt(x, int(box.Y+box.H/2)), tk.Info.Base, 8) {
+	for x := int(dot.X); x < int(dot.X+dot.W)-1; x++ {
+		if !near(tt.Image().RGBAAt(x, int(box.Y+box.H/2)), tk.Info.Subtle) {
 			run++
 		}
 	}
-	if run < 4 || run > 6 {
-		t.Errorf("the dot is %d pixels of Info.Base %v across, want about 6", run, tk.Info.Base)
+	if run < 6 || run > 7 || !inkNear(tt, dot, tk.Info.Base, 8) {
+		t.Errorf("the dot is %d pixels across, want 6 to 7 with a core of Info.Base %v", run, tk.Info.Base)
 	}
 	// The pill ends where the page shows again, after the text.
 	pillRight := int(text.X + text.W)
@@ -134,8 +150,8 @@ func TestBadgeRunningDetail(t *testing.T) {
 	if detail.X <= float32(pillRight) || pillRight >= int(box.X+box.W) {
 		t.Errorf("the detail starts at %v, inside the pill ending at %d", detail.X, pillRight)
 	}
-	if !inkNear(tt, detail, tk.TextMuted, 24) {
-		t.Errorf("no ink of TextMuted %v in the detail", tk.TextMuted)
+	if c := darkest(tt, detail); !nearTol(c, tk.TextMuted, 12) {
+		t.Errorf("the detail's core is %v, want TextMuted %v", c, tk.TextMuted)
 	}
 	if b.Detail() != "Bước 2/5" || b.Text() != "Live" || b.Status() != StatusRunning {
 		t.Errorf("the getters give %q %q %v", b.Text(), b.Detail(), b.Status())
@@ -152,9 +168,10 @@ func TestBadgeRunningDetail(t *testing.T) {
 			t.Error("the detail is read for Success")
 		}
 	}
-	box = badgeBox(t, tt, "Live")
-	if inkNear(tt, box, tk.Info.Base, 8) {
-		t.Error("a dot is drawn for Success")
+	// No dot: the pill is as wide as a StatusNone pill of the same text.
+	plain := badgeBox(t, badgeTester(t, Badge("Live")), "Live")
+	if w := badgeBox(t, tt, "Live").W; !sameSize(w, plain.W) {
+		t.Errorf("the Success pill is %v wide, a StatusNone one %v: a dot is drawn for Success", w, plain.W)
 	}
 }
 
@@ -168,8 +185,8 @@ func TestBadgeNone(t *testing.T) {
 	if c := fillOf(t, tt, "Draft"); !near(c, tk.SurfaceHover) {
 		t.Errorf("the fill is %v, want SurfaceHover %v", c, tk.SurfaceHover)
 	}
-	if !inkNear(tt, badgeBox(t, tt, "Draft"), tk.TextMuted, 24) {
-		t.Errorf("no ink of TextMuted %v", tk.TextMuted)
+	if c := darkest(tt, badgeBox(t, tt, "Draft")); !nearTol(c, tk.TextMuted, 12) {
+		t.Errorf("the text's core is %v, want TextMuted %v", c, tk.TextMuted)
 	}
 	calmOff()
 	tt.Frame()
@@ -302,8 +319,12 @@ func TestBadgeFrameAllocs(t *testing.T) {
 			useCalm(t, true)
 			t.Cleanup(calmOff)
 		}
-		mk := func(i int) Control {
-			return HBox(0).Add(Badge("Live").SetStatus(Status(i % 6)).SetDetail("Bước 2/5"))
+		mk := func(i int) Control { // half running with their step, half of each status
+			s := StatusRunning
+			if i%2 == 1 {
+				s = Status(i / 2 % 6)
+			}
+			return HBox(0).Add(Badge("Live").SetStatus(s).SetDetail("Bước 2/5"))
 		}
 		if slope := (frameAllocs(mk, 200) - frameAllocs(mk, 100)) / 100; slope > 0.2 {
 			t.Errorf("skin %v: %.2f allocations per badge in a frame, want 0", skin, slope)

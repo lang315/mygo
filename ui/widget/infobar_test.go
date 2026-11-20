@@ -92,6 +92,9 @@ func TestInfoBarPlain(t *testing.T) {
 	th := ui.LightTheme()
 	tt := tester(t, VBox(0).Add(InfoBar(StatusSuccess, "Đã lưu", "")).SetSize(400, 0))
 	r := barOf(t, tt, ui.RoleStatus)
+	if !sameSize(r.W, 400) {
+		t.Errorf("a bar of a short title is %v wide, want its box's 400", r.W)
+	}
 	want := th.Success.Alpha(0.14).Over(th.Background)
 	if c := tt.Image().RGBAAt(int(r.X+4), int(r.Y+r.H/2)); !near(c, want) {
 		t.Errorf("the fill is %v, want Success at 0.14, %v", c, want)
@@ -101,6 +104,13 @@ func TestInfoBarPlain(t *testing.T) {
 	}
 	if !inkNear(tt, ui.Rect{X: r.X, Y: r.Y, W: 40, H: r.H}, th.Success, 6) {
 		t.Errorf("no check icon in Success %v", th.Success)
+	}
+	// With no border of its own, a border width the app sets takes the
+	// theme's Border, as on any control without one.
+	tt = tester(t, VBox(0).Add(InfoBar(StatusSuccess, "Đã lưu", "").Apply(NewStyle().BorderWidth(2))).SetSize(400, 0))
+	r = barOf(t, tt, ui.RoleStatus)
+	if c := tt.Image().RGBAAt(int(r.X), int(r.Y+r.H/2)); !near(c, th.Border) {
+		t.Errorf("with the app's border width the left edge is %v, want the theme's Border %v", c, th.Border)
 	}
 }
 
@@ -121,8 +131,8 @@ func TestInfoBarAction(t *testing.T) {
 	}
 	bar.SetAction("", nil)
 	tt.Frame()
-	if tt.Has(ByLabel("Xác minh")) {
-		t.Error("SetAction(\"\", nil) left the button")
+	if n := len(tt.FindAll(ByRole(ui.RoleButton))); n != 0 {
+		t.Errorf("SetAction(\"\", nil) left %d buttons", n)
 	}
 }
 
@@ -170,7 +180,9 @@ func TestInfoBarCloseOnlyByUser(t *testing.T) {
 func TestInfoBarLook(t *testing.T) {
 	useLooks(t, map[string]string{"InfoBar": "border-2 border-status"})
 	tk := skinhook.Get(false)
-	tt := tester(t, VBox(0).Add(InfoBar(StatusDanger, "Sai mật khẩu", "")).SetSize(400, 0))
+	// With an action: the bar's look applies after its button is built, and
+	// still takes the bar's status.
+	tt := tester(t, VBox(0).Add(InfoBar(StatusDanger, "Sai mật khẩu", "").SetAction("Thử lại", func() {})).SetSize(400, 0))
 	r := barOf(t, tt, ui.RoleAlert)
 	for _, dx := range []float32{0, 1} {
 		if c := tt.Image().RGBAAt(int(r.X+dx), int(r.Y+r.H/2)); !near(c, tk.Danger.Border) {

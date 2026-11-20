@@ -18,8 +18,6 @@ type InfoBarWidget struct {
 	close          *ButtonWidget // shown while closable
 	closable       bool
 	onClose        func()
-	icon           *ui.SVG // the icon of iconKey, kept so that a frame parses none
-	iconKey        kindKey
 }
 
 // InfoBar returns an info bar of status s, with a title and a message.
@@ -98,10 +96,8 @@ func (i *InfoBarWidget) closed() {
 	}
 }
 
-func (i *InfoBarWidget) fillsAcross() bool { return true }
-
-// iconOf returns the icon of the status in base, its glyph in glyph,
-// parsing it only when they change. Under mu.
+// iconOf returns the icon of the status in base, its glyph in glyph, parsed
+// once for each (kindSVG). Under mu.
 func (i *InfoBarWidget) iconOf(base, glyph ui.Color) *ui.SVG {
 	k := Info
 	switch i.status {
@@ -112,10 +108,7 @@ func (i *InfoBarWidget) iconOf(base, glyph ui.Color) *ui.SVG {
 	case StatusDanger:
 		k = Error
 	}
-	if key := (kindKey{k, base, glyph}); i.icon == nil || key != i.iconKey {
-		i.icon, i.iconKey = kindSVG(k, base, glyph), key
-	}
-	return i.icon
+	return kindSVG(k, base, glyph)
 }
 
 // glyphOn is the color of an icon's glyph on base: the family's On under a
@@ -166,7 +159,7 @@ func (i *InfoBarWidget) build(c *ui.Context) ui.Element {
 	return bar.Children(func() {
 		side := 20 * scale
 		ui.Image(c, icon).Size(side, side).Shrink(0)
-		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(t.Space(0.5)).Children(func() {
+		ui.Column(c).Grow(1).Gap(t.Space(0.5)).Children(func() {
 			if i.title != "" {
 				ui.Text(c, i.title).FontWeight(600)
 			}
@@ -177,11 +170,11 @@ func (i *InfoBarWidget) build(c *ui.Context) ui.Element {
 		outer := axis
 		axis = horizontal
 		if i.action != nil {
-			render(c, i.action).Shrink(0)
+			render(c, i.action)
 		}
 		if i.closable {
 			i.close.tooltip = l10n.Close() // names the icon-only button, in the language of the moment
-			render(c, i.close).Shrink(0)
+			render(c, i.close)
 		}
 		axis = outer
 	})

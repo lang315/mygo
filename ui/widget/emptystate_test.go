@@ -65,8 +65,8 @@ func TestEmptyState(t *testing.T) {
 	centered(false)
 	e.SetAction("", nil)
 	tt.Frame()
-	if tt.Has(ByLabel("Thêm")) {
-		t.Error("SetAction(\"\", nil) left the button")
+	if n := len(tt.FindAll(ByRole(ui.RoleButton))); n != 0 {
+		t.Errorf("SetAction(\"\", nil) left %d buttons", n)
 	}
 	e.SetTitle("Không có gì").SetMessage("Trống.")
 	tt.Frame()
