@@ -5,8 +5,10 @@
 // ui.Tester's clock. The test reads the source whatever its build
 // constraints, so it runs on any host.
 //
-// The files that waited on the clock when the check came are counted in
-// baseline: a file must have exactly as many as it says, so that a new
-// wait fails and a removed one lowers the count. A wait that is right
-// goes in allowed, with why.
+// The waits on the clock the tests had when the check came are counted in
+// baseline, by "file function call": each key must have exactly as many
+// as it says, so that a new wait, a wait of another kind or in another
+// function fails, and a removed one lowers the count. A wait that is right
+// goes in allowed, with why, and an entry there that matches no call
+// fails.
 package waitcheck
