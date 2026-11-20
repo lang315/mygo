@@ -436,8 +436,8 @@ func leaves(v reflect.Value, prefix string) []string {
 // of another kind fails here.
 func TestEditorAllFields(t *testing.T) {
 	paths := leaves(reflect.ValueOf(skin.Calm.Tokens(false)), "")
-	if len(paths) != 108 {
-		t.Errorf("Tokens has %d leaves, the editor was written for 108: check the new ones", len(paths))
+	if len(paths) != 107 {
+		t.Errorf("Tokens has %d leaves, the editor was written for 107: check the new ones", len(paths))
 	}
 	if got := tokenPaths(); !reflect.DeepEqual(got, paths) {
 		t.Errorf("tokenPaths = %v, want the leaves %v", got, paths)

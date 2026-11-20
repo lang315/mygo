@@ -101,12 +101,18 @@ type Tokens struct {
 	// (ui.ScrollbarStyle).
 	FocusRingWidth, FocusRingOffset, ScrollbarWidth float32
 	ScrollbarStyle                                  ui.ScrollbarStyle
-
-	// FlatStatus is set by a skin whose looks draw no subtle fills: a grid
-	// cell's format draws its status as the family's Text, bold, with no
-	// fill (an explicit Fill still draws).
-	FlatStatus bool
 }
+
+var flat atomic.Bool
+
+// SetFlatStatus says whether the active skin draws no subtle fills
+// (HighContrast): a grid cell's format then draws its status as the family's
+// Text, bold, with no fill (an explicit Fill still draws). It is the skin's,
+// not a token: no skin file sets it. Call it from any goroutine.
+func SetFlatStatus(on bool) { flat.Store(on) }
+
+// FlatStatus reports what SetFlatStatus set.
+func FlatStatus() bool { return flat.Load() }
 
 var active atomic.Pointer[[2]*Tokens]
 

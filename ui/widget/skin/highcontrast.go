@@ -16,7 +16,7 @@ import (
 // Check reports what falls under 7:1.
 var HighContrast = &Skin{name: "HighContrast", lazy: &lazySkin{build: func() *Skin {
 	return &Skin{name: "HighContrast", light: highContrastLight(), dark: highContrastDark(), floor: 7,
-		looks: highContrastLooks, parsed: parseLooks(highContrastLooks)}
+		looks: highContrastLooks, parsed: parseLooks(highContrastLooks), flatStatus: true}
 }}}
 
 // highContrastLooks outline every control 2 DIPs wide. A check box's and a
@@ -70,7 +70,6 @@ func highContrastDark() skinhook.Tokens {
 		Heading:        skinhook.Type{Size: 15, Weight: 600},
 		Title:          skinhook.Type{Size: 20, Weight: 600},
 		FocusRingWidth: 3, FocusRingOffset: 1,
-		FlatStatus: true, // a grid cell's format: its status's text, bold, with no fill
 	}
 }
 
@@ -117,6 +116,5 @@ func highContrastLight() skinhook.Tokens {
 		Heading:        skinhook.Type{Size: 15, Weight: 600},
 		Title:          skinhook.Type{Size: 20, Weight: 600},
 		FocusRingWidth: 3, FocusRingOffset: 1,
-		FlatStatus: true,
 	}
 }

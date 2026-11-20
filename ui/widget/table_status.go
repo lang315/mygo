@@ -181,7 +181,7 @@ func formatBox(c *ui.Context, f CellFormat, align Align, fixedRows bool) ui.Elem
 	bold := f.Bold
 	if f.Status != StatusNone {
 		fill, text, _, _ = statusColors(c, f.Status)
-		if tk := skinhook.Get(th.Dark); tk != nil && tk.FlatStatus {
+		if skinhook.Get(th.Dark) != nil && skinhook.FlatStatus() {
 			// A skin of no subtle fills: the family's text, bold, on the row.
 			fill, bold = ui.Color{}, true
 		}

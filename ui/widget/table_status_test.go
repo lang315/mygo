@@ -402,8 +402,8 @@ func TestGridFormatOverColor(t *testing.T) {
 func TestGridFormatFlatStatus(t *testing.T) {
 	useSkinNamed(t, "HighContrast", false)
 	tk := skinhook.Get(false)
-	if !tk.FlatStatus {
-		t.Fatal("HighContrast's light tokens have no FlatStatus")
+	if !skinhook.FlatStatus() {
+		t.Fatal("HighContrast in use does not set skinhook's FlatStatus")
 	}
 	col := nameCol()
 	col.Format = func(a *acct) CellFormat {
