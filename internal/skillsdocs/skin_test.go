@@ -87,6 +87,27 @@ func TestSkinDocsComplete(t *testing.T) {
 	}
 }
 
+// TestSkillSkinNamesChecked keeps the skill's skin names under TestSkillNamesExist:
+// mentionRE reads every package of packages whole, and the skill mentions skin.
+func TestSkillSkinNamesChecked(t *testing.T) {
+	for qual := range packages {
+		if m := mentionRE.FindStringSubmatch("`" + qual + ".Name`"); m == nil || m[2] != qual {
+			t.Errorf("mentionRE does not read %s.Name as a name of package %s", qual, qual)
+		}
+	}
+	seen := map[string]bool{}
+	for _, span := range spanRE.FindAllString(prose(read(t, filepath.Join(skillsDir, skinSkill, "SKILL.md"))), -1) {
+		for _, m := range mentionRE.FindAllStringSubmatch(span, -1) {
+			seen[m[2]] = true
+		}
+	}
+	for _, qual := range skinPackages {
+		if !seen[qual] {
+			t.Errorf("the %s skill mentions no %s.Name in backticks", skinSkill, qual)
+		}
+	}
+}
+
 var jsonFenceRE = regexp.MustCompile("(?s)```json\n(.*?)```")
 
 func TestSkinFileExample(t *testing.T) {
