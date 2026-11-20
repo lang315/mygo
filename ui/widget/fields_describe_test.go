@@ -73,7 +73,7 @@ func TestDescribeDrawsUnderTheLabel(t *testing.T) {
 	// In a narrow window it wraps, and stops before the control.
 	long := strings.TrimSpace(strings.Repeat(nameDesc+" ", 4))
 	n := NewTester(t, Fields().SettingsRows().Row("Tên", TextBox()).Describe(long), 300, 400)
-	d, c := find(t, n.Tester, long),n.Find(ByRole(ui.RoleTextField)).Bounds()
+	d, c := find(t, n.Tester, long), n.Find(ByRole(ui.RoleTextField)).Bounds()
 	if d.H < 2*find(t, n.Tester, "Tên").H {
 		t.Errorf("the long description %v is one line", d)
 	}
@@ -184,7 +184,7 @@ func TestDescribeNextToALongLabel(t *testing.T) {
 	alone := NewTester(t, Fields().SettingsRows().Row("Name", TextBox()), 400, 300).Find(ByRole(ui.RoleTextField)).Bounds()
 	long := strings.TrimSpace(strings.Repeat(nameDesc+" ", 3))
 	tt := NewTester(t, Fields().SettingsRows().Row(longLine, TextBox()).Describe(long), 400, 400)
-	l, d, c := find(t, tt.Tester, longLine), find(t, tt.Tester, long),tt.Find(ByRole(ui.RoleTextField)).Bounds()
+	l, d, c := find(t, tt.Tester, longLine), find(t, tt.Tester, long), tt.Find(ByRole(ui.RoleTextField)).Bounds()
 	one := find(t, tester(t, Label("Name")), "Name").H
 	if l.H < 2*one || d.H < 2*one {
 		t.Errorf("label %v and description %v: want both wrapped", l, d)
