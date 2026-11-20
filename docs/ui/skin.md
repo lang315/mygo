@@ -162,6 +162,10 @@ naming the appearance and every failing pair, nil when all pass:
 - text on its grounds, at the skin's floor: 4.5:1, and 7:1 for a skin made for
   low vision (`HighContrast`);
 - outlines, the accent line and each chart color, 3:1;
+- the status families as badges and info bars draw them: `Base` on `Subtle`
+  (the running dot, the icon) 3:1, and `Text` on `Subtle` laid over a selected
+  and a hovered row at the text floor, as "Info Text on Subtle over
+  RowSelected"; `TextMuted` on `SurfaceHover` (`StatusNone`);
 - the control states (hover, pressed) apart from their ground and from each
   other;
 - Info apart from the status colors.
@@ -192,6 +196,9 @@ kind's plain look.
 | `TabStrip`, `TabHeader` | a `TabControl`'s strip; each tab, `selected:` the open one |
 | `GridHeader` | each column header of a `DataGridView`, and of a `ListView` in Details view |
 | `ToolStrip`, `StatusStrip`, `MenuBar`, `HeaderBar` | the strips so named, and a `Form`'s header bar |
+| `Badge` | a `Badge`'s pill, without its detail |
+| `InfoBar` | an `InfoBar`'s box |
+| `EmptyState` | an `EmptyState`'s box, around its icon, text and action |
 
 ```go
 boxy := skin.Calm.WithLooks(skin.Looks{
@@ -223,6 +230,16 @@ An app's own controls draw in the skin's colors through the skin roles of
 `RoleButtonBorder`, `RoleRowHover`, `RoleRowSelected` and `RoleInfo`. Set a
 color through a role, not a fixed hex, and it follows the skin and the dark
 appearance.
+
+The status roles, `widget.RoleStatus`, `RoleStatusText` and
+`RoleStatusBorder` (`bg-status`, `text-status` and `border-status` in a look),
+are the fill, text and border of the status of the control they style: the
+status family's `Subtle`, `Text` and `Border` (`TextMuted` on `SurfaceHover`,
+in `Border`, for `StatusNone`). They are meant for the `Badge` and `InfoBar`
+looks, so that one look serves every status, as Classic's
+`rounded-sm border border-status` does; in any other control they are
+`StatusNone`'s colors. Without a skin the fill is the status's theme color at
+14 % alpha, the text the theme's `Text`, and the border none.
 
 ## Skin files
 

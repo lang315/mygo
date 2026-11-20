@@ -57,6 +57,7 @@ func newStudioPanel() (*widget.Form, *editPanel) {
 		AddPage("Containers", containers()).
 		AddPage("Chart and progress", chart()).
 		AddPage("Dialogs and messages", dialogs(f)).
+		AddPage("Status and messages", status()).
 		AddPage("Edit", p.build()).
 		Padding(4).Expand())
 	return f, p
@@ -333,6 +334,40 @@ func dialogs(w *widget.Form) widget.Control {
 			}),
 			widget.Button("Dialog").OnClick(func() { customDialog(w); show("Dialog closed") }),
 		),
+		result,
+	)
+}
+
+// status shows a badge of each status, an info bar of each (one with an
+// action, one closable) and an empty state with an action.
+func status() widget.Control {
+	result := widget.Label("Actions show here").Muted()
+	badges := widget.FlowPanel(8).Add(
+		widget.Badge("Draft"),
+		widget.Badge("Đồng bộ").SetStatus(widget.StatusInfo),
+		widget.Badge("Đang chạy").SetStatus(widget.StatusRunning).SetDetail("Bước 2/5"),
+		widget.Badge("Live").SetStatus(widget.StatusSuccess),
+		widget.Badge("Cần xác minh").SetStatus(widget.StatusWarning),
+		widget.Badge("Sai mật khẩu").SetStatus(widget.StatusDanger),
+	)
+	return widget.VBox(8).Add(
+		title("Badges"),
+		badges,
+		title("Info bars"),
+		widget.HBox(8).Pack(widget.VBox(8).Add(
+			widget.InfoBar(widget.StatusInfo, "Có bản cập nhật", "Phiên bản 2.4 đã sẵn sàng."),
+			widget.InfoBar(widget.StatusRunning, "Đang đồng bộ", "Bước 2/5: tải thư mới."),
+			widget.InfoBar(widget.StatusSuccess, "Đã lưu", "Mọi thay đổi đã được lưu.").SetClosable(true).
+				OnClose(func() { result.SetText("Info bar closed") }),
+		), true, true).Pack(widget.VBox(8).Add(
+			widget.InfoBar(widget.StatusWarning, "Cần xác minh", "Mở email đã gửi để xác minh tài khoản.").
+				SetAction("Xác minh", func() { result.SetText("Verify clicked") }),
+			widget.InfoBar(widget.StatusDanger, "Sai mật khẩu", "Đăng nhập lại để tiếp tục đồng bộ."),
+			widget.InfoBar(widget.StatusNone, "Ghi chú", "Một thông báo không có trạng thái."),
+		), true, true),
+		title("Empty state"),
+		widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản để bắt đầu đồng bộ.").
+			SetAction("Thêm tài khoản", func() { result.SetText("Add clicked") }).SetSize(0, 180),
 		result,
 	)
 }

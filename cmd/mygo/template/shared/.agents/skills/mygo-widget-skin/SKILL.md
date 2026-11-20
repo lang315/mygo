@@ -54,6 +54,8 @@ Take a skin's tokens, change what you want, and make a skin with `skin.Skin.Deri
 
 `skin.Looks` sets the shape of each kind of control as `tw` classes with states: `skin.Skin.WithLooks` replaces a kind whole and drops the kinds left empty. Start from `skin.Skin.Looks` to keep the rest.
 
+The `Badge`, `InfoBar` and `EmptyState` looks style those controls. In the `Badge` and `InfoBar` looks, `bg-status`, `text-status` and `border-status` (`widget.RoleStatus`, `widget.RoleStatusText`, `widget.RoleStatusBorder`) are the colors of the control's own status, so one look serves every status: `Badge: "rounded-sm border border-status"`.
+
 ```go
 package app
 

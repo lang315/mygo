@@ -160,9 +160,9 @@ func TestShots(t *testing.T) {
 }
 
 // TestShotsMatchMain compares the shots of main (MYGO_SKIN_SHOTS_MAIN) with
-// the branch's (MYGO_SKIN_SHOTS): outside the rectangle the Edit tab's header
-// takes in the tab strip (from the right edge of the eighth tab to the
-// window's, the strip's height) every shot is the same, but the chart page's,
+// the branch's (MYGO_SKIN_SHOTS): outside the rectangle the tab headers after
+// Dialogs and messages take in the tab strip (from the right edge of the
+// eighth tab to the window's, the strip's height) every shot is the same, but the chart page's,
 // where the spinner turns, and but a box of 20 by 12 pixels of the numbers
 // page, where the date picker shows the time. It is skipped without both variables, and reads
 // shots taken at scale 1.
