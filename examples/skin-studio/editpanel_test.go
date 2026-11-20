@@ -58,12 +58,14 @@ const (
 
 // The ninth tab header, Edit, fits the studio's own window at text scale 1,
 // so it can be clicked on every OS, in every skin: its right edge is inside
-// formWidth (Linux's font is wider than macOS's: its centre was at 1181.5).
+// formWidth. The test measures the font of the OS it runs on; Linux's is
+// wider than macOS's, so the Linux CI run is what guards Linux.
 func TestStudioTabsFit(t *testing.T) {
 	reset(t)
-	// 1.15 stands for Linux's font, which sets the headers about 14% wider
-	// than macOS's (1181.5 against about 1034 for the centre of the last).
-	for _, scale := range []float32{1, 1.15} {
+	// Text scale 1 only: each OS measures its own font, which is wider on
+	// Linux than on macOS, so the Linux CI run is the guard for Linux. A
+	// scale above 1 would count the font's width twice.
+	for _, scale := range []float32{1} {
 		for _, s := range []*skin.Skin{nil, skin.Calm, skin.Classic, skin.HighContrast} {
 			skin.Use(s)
 			tt := widget.TestForm(t, newStudio())

@@ -10,8 +10,8 @@ import (
 )
 
 // The studio's window, in DIPs. Nine tab headers (Edit the last) must fit
-// the width at text scale 1 on every OS: Linux's wider font puts the last
-// header's centre near 1180 (TestStudioTabsFit).
+// the width at text scale 1 on every OS, each with its own font, Linux's
+// the widest (TestStudioTabsFit).
 const (
 	formWidth  = 1280
 	formHeight = 900
