@@ -138,11 +138,13 @@ func TestParseValues(t *testing.T) {
 	}
 }
 
-// TestParseErrors: each error names its path and its line.
-func TestParseErrors(t *testing.T) {
+type errorCase struct{ name, in, want string }
+
+// errorCases are files Parse refuses, and its errors.
+func errorCases() []errorCase {
 	head := "{\n  \"version\": 1,\n  \"name\": \"X\",\n  \"base\": \"Calm\",\n"
 	inLight := func(member string) string { return head + "  \"light\": {\n    " + member + "\n  }\n}" }
-	for _, c := range []struct{ name, in, want string }{
+	return []errorCase{
 		{"unknown key", inLight(`"Bacground": "#ffffff"`), "light.Bacground: unknown key (line 6)"},
 		{"bad color", inLight(`"Background": "red"`), `light.Background: want a color #rrggbb or #rrggbbaa, got "red" (line 6)`},
 		{"short color", inLight(`"Background": "#fff"`), `light.Background: want a color #rrggbb or #rrggbbaa, got "#fff" (line 6)`},
@@ -186,7 +188,12 @@ func TestParseErrors(t *testing.T) {
 		{"not an object", "[]", "want an object, got [] (line 1)"},
 		{"empty", "", "invalid JSON (line 1)"},
 		{"long value capped", inLight(`"Background": "` + strings.Repeat("a", 100) + `"`), `light.Background: want a color #rrggbb or #rrggbbaa, got "` + strings.Repeat("a", 39) + `… (line 6)`},
-	} {
+	}
+}
+
+// TestParseErrors: each error names its path and its line.
+func TestParseErrors(t *testing.T) {
+	for _, c := range errorCases() {
 		t.Run(c.name, func(t *testing.T) {
 			s, err := Parse([]byte(c.in))
 			if err == nil {

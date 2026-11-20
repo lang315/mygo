@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"version\":1,\"name\":\"\\ud83d\\ude00 <&>\\u2028\\\"\",\"base\":\"Calm\",\"light\":{\"Font\":\"\xff\\ud800x\"},\"looks\":{\"Button\":\"rounded\\u002dnone\",\"Card\":\"\"}}")
