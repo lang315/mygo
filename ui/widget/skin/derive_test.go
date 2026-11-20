@@ -1,6 +1,7 @@
 package skin
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -57,7 +58,47 @@ func TestDeriveKeeps(t *testing.T) {
 	}
 }
 
-// TestDeriveReceiverUnchanged: Derive leaves its skin as it was.
+// TestDeriveLazy: a skin made at its first use derives from the skin it
+// makes, under the new name and tokens.
+func TestDeriveLazy(t *testing.T) {
+	lt, dt := Classic.Tokens(false), Classic.Tokens(true)
+	lt.Background, dt.Background = ui.Hex("#fffaf0"), ui.Hex("#121212")
+	s := Classic.Derive("X", lt, dt)
+	if s.Name() != "X" {
+		t.Errorf("Name = %q, want X", s.Name())
+	}
+	if s.Tokens(false) != lt || s.Tokens(true) != dt {
+		t.Error("tokens are not the tokens given")
+	}
+	if s.Density() != Compact {
+		t.Errorf("Density = %v, want Classic's Compact", s.Density())
+	}
+	if s.Looks() != classicLooks || s.Looks().TabHeader == "" {
+		t.Errorf("Looks = %+v, want Classic's", s.Looks())
+	}
+	if got := s.Palettes(); len(got) != 2 || got[0] != ClassicIndigo || got[1] != ClassicSlate {
+		t.Errorf("Palettes = %v, want ClassicIndigo, ClassicSlate", got)
+	}
+	if Classic.Name() != "Classic" || Classic.Tokens(false).Background == lt.Background {
+		t.Error("Derive changed Classic")
+	}
+}
+
+// TestDeriveKeepsFloor: a skin derived from HighContrast keeps its 7:1
+// floor: text at 5:1, which Calm's floor passes, is reported.
+func TestDeriveKeepsFloor(t *testing.T) {
+	lt, dt := HighContrast.Tokens(false), HighContrast.Tokens(true)
+	lt.Text = ui.Hex("#6b6b6b")
+	if r := contrastOf(lt.Text, lt.Background); r < 4.5 || r >= 7 {
+		t.Fatalf("the test's text is %.2f:1 on its background, want between 4.5 and 7", r)
+	}
+	err := HighContrast.Derive("X", lt, dt).Check()
+	if err == nil || !strings.Contains(err.Error(), "light: Text on Background") || !strings.Contains(err.Error(), "want 7:1") {
+		t.Errorf("Check = %v, want light Text on Background under 7:1", err)
+	}
+}
+
+// TestDeriveReceiverUnchanged:Derive leaves its skin as it was.
 func TestDeriveReceiverUnchanged(t *testing.T) {
 	l0, d0, name := Calm.Tokens(false), Calm.Tokens(true), Calm.Name()
 	lt, dt := l0, d0

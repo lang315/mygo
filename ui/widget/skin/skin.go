@@ -87,7 +87,7 @@ func New(name string, light, dark Tokens) *Skin {
 //	l.Background = ui.Hex("#fffaf0")
 //	skin.Use(skin.Calm.WithDensity(skin.Compact).Derive("Brand", l, d))
 func (s *Skin) Derive(name string, light, dark Tokens) *Skin {
-	c := *s
+	c := *s.get()
 	c.name, c.light, c.dark = name, light, dark
 	return &c
 }

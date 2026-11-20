@@ -27,9 +27,17 @@ func same(t *testing.T, got, want *skin.Skin) {
 	if got.Density() != want.Density() {
 		t.Errorf("Density = %v, want %v", got.Density(), want.Density())
 	}
-	if got.Palette().Name() != want.Palette().Name() {
-		t.Errorf("Palette = %q, want %q", got.Palette().Name(), want.Palette().Name())
+	if paletteName(got) != paletteName(want) {
+		t.Errorf("Palette = %q, want %q", paletteName(got), paletteName(want))
 	}
+}
+
+// paletteName is s's palette's name, "" for none.
+func paletteName(s *skin.Skin) string {
+	if p := s.Palette(); p != nil {
+		return p.Name()
+	}
+	return ""
 }
 
 // brand is a skin that changes a token of each kind, with an alpha.
@@ -75,7 +83,58 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-// TestRoundTripNoPalette: a skin of New has no palette, which the tokens
+// TestRoundTripOwnBase: the other skins MyGo ships, each against itself
+// and against nil.
+func TestRoundTripOwnBase(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		s, base *skin.Skin
+	}{
+		{"Classic", skin.Classic, skin.Classic},
+		{"Classic Slate", skin.Classic.WithPalette(skin.ClassicSlate), skin.Classic},
+		{"Classic Standard", skin.Classic.WithDensity(skin.Standard), skin.Classic},
+		{"HighContrast", skin.HighContrast, skin.HighContrast},
+		{"HighContrast accent", skin.HighContrast.WithAccent(ui.Hex("#7c3aed")), skin.HighContrast},
+	} {
+		for _, base := range []*skin.Skin{c.base, nil} {
+			t.Run(c.name, func(t *testing.T) {
+				data := Format(c.s, base)
+				if base == nil && !strings.Contains(string(data), "\"base\": \"Calm\",\n") {
+					t.Errorf("a nil base wrote no base Calm:\n%s", data)
+				}
+				got, err := Parse(data)
+				if err != nil {
+					t.Fatalf("%v\n%s", err, data)
+				}
+				if base == nil {
+					// Against Calm only what the file holds is kept: tokens, looks, density.
+					if got.Tokens(false) != c.s.Tokens(false) || got.Tokens(true) != c.s.Tokens(true) ||
+						got.Looks() != c.s.Looks() || got.Density() != c.s.Density() {
+						t.Errorf("lost through a nil base:\n%s", data)
+					}
+					return
+				}
+				same(t, got, c.s)
+			})
+		}
+	}
+	if got := string(Format(skin.Classic, skin.Classic)); got != "{\n  \"version\": 1,\n  \"name\": \"Classic\",\n  \"base\": \"Classic\"\n}\n" {
+		t.Errorf("Classic against itself:\n%s", got)
+	}
+}
+
+// TestParseFloorKept: a file based on HighContrast keeps its 7:1 floor.
+func TestParseFloorKept(t *testing.T) {
+	s, err := Parse([]byte(`{"version":1,"name":"X","base":"HighContrast","light":{"Text":"#6b6b6b"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Check(); err == nil || !strings.Contains(err.Error(), "want 7:1") {
+		t.Errorf("Check = %v, want text under 7:1 reported", err)
+	}
+}
+
+// TestRoundTripNoPalette:a skin of New has no palette, which the tokens
 // carry.
 func TestRoundTripNoPalette(t *testing.T) {
 	l, d := skin.Calm.Tokens(false), skin.Calm.Tokens(true)

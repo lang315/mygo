@@ -52,7 +52,7 @@ import (
 )
 
 // bases are the skins a file can start from, by name.
-var bases = map[string]*skin.Skin{"Calm": skin.Calm}
+var bases = map[string]*skin.Skin{"Calm": skin.Calm, "Classic": skin.Classic, "HighContrast": skin.HighContrast}
 
 // member is a key of the file's object: its value's text (a string's
 // content, an object's JSON) and offset.

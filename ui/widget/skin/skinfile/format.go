@@ -12,7 +12,7 @@ import (
 )
 
 // Format returns the file of the skin s, written as what s changes from
-// base: its palette or accent, its density, the tokens that differ from
+// base: its palette or accent, its density if not base's, the tokens that differ from
 // base's after that palette and density, and the kinds of looks that
 // differ. A nil base writes every token and every look s has, against
 // Calm. Keys come in the order of Tokens' fields, two spaces a level.
@@ -43,9 +43,9 @@ func Format(s, base *skin.Skin) []byte {
 			ref = ref.WithPalette(q)
 		}
 	}
-	if s.Density() == skin.Compact {
+	if d := s.Density(); d != base.Density() {
 		o.key("density")
-		o.b = append(o.b, `"compact"`...)
+		o.b = append(o.b, map[skin.Density]string{skin.Standard: `"standard"`, skin.Compact: `"compact"`}[d]...)
 	}
 	for i, key := range [...]string{"light", "dark"} {
 		dark := i == 1
