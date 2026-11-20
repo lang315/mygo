@@ -13,7 +13,7 @@ import (
 // little cooler than Calm's. It is Compact by default: controls 30 DIPs
 // high and rows 26. Its palette is ClassicIndigo; Palettes lists
 // ClassicSlate too.
-var Classic = &Skin{lazy: &lazySkin{build: func() *Skin {
+var Classic = &Skin{name: "Classic", lazy: &lazySkin{build: func() *Skin {
 	return (&Skin{name: "Classic", light: classicLight(), dark: classicDark(), density: Compact,
 		palettes: []*Palette{ClassicIndigo, ClassicSlate}}).WithPalette(ClassicIndigo).WithLooks(classicLooks)
 }}}

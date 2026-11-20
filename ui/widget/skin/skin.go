@@ -46,6 +46,15 @@
 //		log.Print(err) // the pairs under the contrast floors; the skin still works
 //	}
 //	skin.Use(s)
+//
+// An app lets its user choose among its skins with Picker, a form of three
+// boxes, and keeps the choice as Active().ID() in its own settings; at
+// startup FromID gives the skin back, nil when the ID names none:
+//
+//	settings.Skin = skin.Active().ID() // when it saves its settings
+//	if s := skin.FromID(settings.Skin); s != nil {
+//		skin.Use(s)
+//	}
 package skin
 
 import (
@@ -77,6 +86,19 @@ type Shadow = skinhook.Shadow
 //	skin.Use(skin.New("Brand", light, dark))
 func New(name string, light, dark Tokens) *Skin {
 	return &Skin{name: name, light: light, dark: dark}
+}
+
+// Derive returns a new skin, s with the name and the tokens light and dark,
+// which it copies: s's contrast floor, palette, palette list, density and
+// looks stay, as New would lose them. s does not change.
+//
+//	l, d := skin.Calm.Tokens(false), skin.Calm.Tokens(true)
+//	l.Background = ui.Hex("#fffaf0")
+//	skin.Use(skin.Calm.WithDensity(skin.Compact).Derive("Brand", l, d))
+func (s *Skin) Derive(name string, light, dark Tokens) *Skin {
+	c := *s.get()
+	c.name, c.light, c.dark = name, light, dark
+	return &c
 }
 
 // Tokens returns a copy of the skin's tokens in the dark or the light
