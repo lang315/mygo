@@ -230,5 +230,10 @@
   "permissionBluetooth": "Bluetooth",
   "permissionMediaAppleMusic": "Phương tiện & Apple Music",
   "guideDrag": "Kéo {app} vào danh sách ở trên để cho phép {permission}.",
-  "guideDragHint": "Kéo"
+  "guideDragHint": "Kéo",
+  "skinPickerSkin": "Giao diện",
+  "skinPickerPalette": "Bảng màu",
+  "skinPickerDensity": "Mật độ",
+  "standardDensity": "Tiêu chuẩn",
+  "compactDensity": "Thu gọn"
 }
