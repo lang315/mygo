@@ -56,6 +56,31 @@ const (
 	calmLightText   = "#1a1d21"
 )
 
+// The ninth tab header, Edit, fits the studio's own window at text scale 1,
+// so it can be clicked on every OS, in every skin: its right edge is inside
+// formWidth (Linux's font is wider than macOS's: its centre was at 1181.5).
+func TestStudioTabsFit(t *testing.T) {
+	reset(t)
+	// 1.15 stands for Linux's font, which sets the headers about 14% wider
+	// than macOS's (1181.5 against about 1034 for the centre of the last).
+	for _, scale := range []float32{1, 1.15} {
+		for _, s := range []*skin.Skin{nil, skin.Calm, skin.Classic, skin.HighContrast} {
+			skin.Use(s)
+			tt := widget.TestForm(t, newStudio())
+			tt.SetPreferences(ui.Preferences{TextScale: scale})
+			tt.Frame()
+			tabs := tt.FindAll(widget.ByRole(ui.RoleTab))
+			if len(tabs) != 9 {
+				t.Fatalf("%d tabs, want 9", len(tabs))
+			}
+			b := tabs[8].Bounds()
+			if right := b.X + b.W; right > formWidth-8 {
+				t.Errorf("%s at text scale %v: the Edit header's right edge is at %v, past the window's %d", describe(s), scale, right, formWidth)
+			}
+		}
+	}
+}
+
 // The light Accent.Base row exists with the base's value, and Chart has
 // eight rows.
 func TestEditTabRows(t *testing.T) {
