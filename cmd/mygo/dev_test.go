@@ -134,13 +134,9 @@ func TestDevLaunch(t *testing.T) {
 	if p, err = s.launch(os.Args[0]); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-p.done:
-		if p.err == nil || !strings.Contains(p.err.Error(), "exit status 3") {
-			t.Errorf("exit: %v", p.err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the exit of a build went unnoticed")
+	wait.For(t, "the exit of a build to be noticed", p.done)
+	if p.err == nil || !strings.Contains(p.err.Error(), "exit status 3") {
+		t.Errorf("exit: %v", p.err)
 	}
 
 	// One that ignores SIGTERM is killed.

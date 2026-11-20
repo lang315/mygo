@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/wait"
 )
@@ -93,13 +92,7 @@ func TestWebDev(t *testing.T) {
 			}
 			done <- b.String()
 		}()
-		select {
-		case e := <-done:
-			return e
-		case <-time.After(wait.Guard):
-			t.Fatal("no event")
-			return ""
-		}
+		return wait.For(t, "an event", done)
 	}
 	if e := next(); !strings.HasPrefix(e, "event: hello") {
 		t.Fatalf("first event %q", e)

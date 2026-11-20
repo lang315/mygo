@@ -5,7 +5,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Same rule as rev338d: A is bound always (so a table exists), the service S is
@@ -299,9 +298,8 @@ func main() {
 	}
 	mainPkg, _ := packageImportPath(c)
 	for i := range 2 {
-		start := time.Now()
 		out, reason, err := targetBoundTypes(c, runtime.GOOS, runtime.GOARCH, "", mainPkg, c.bound)
-		t.Logf("run %d: %v, %d types, reason=%q err=%v", i, time.Since(start), len(out), reason, err)
+		t.Logf("run %d: %d types, reason=%q err=%v", i, len(out), reason, err)
 	}
 }
 
