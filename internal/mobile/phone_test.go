@@ -184,6 +184,16 @@ func TestSecureDeletesByKeys(t *testing.T) {
 func TestNoFramesInBackground(t *testing.T) {
 	b, h := startBackend(t)
 	w, wh := surfaceWindow(t, b, h)
+	background := false
+	bg := func(on bool) {
+		background = on
+		h.onUI(func() {
+			deliver(encodeEvent(func(wr *wire.Writer) {
+				wr.Uvarint(wire.EventBackground)
+				wr.Bool(on)
+			}), true)
+		})
+	}
 	frame := func() {
 		h.onUI(func() {
 			deliver(encodeEvent(func(wr *wire.Writer) {
@@ -191,15 +201,9 @@ func TestNoFramesInBackground(t *testing.T) {
 				wr.Int(w.id)
 			}), true)
 		})
-		onMain(b, func() {})
-	}
-	bg := func(on bool) {
-		h.onUI(func() {
-			deliver(encodeEvent(func(wr *wire.Writer) {
-				wr.Uvarint(wire.EventBackground)
-				wr.Bool(on)
-			}), true)
-		})
+		// A frame waits in the loop's queue, which onMain's Dispatch can
+		// overtake; an event that waits, changing nothing, comes after it.
+		bg(background)
 	}
 	frame()
 	if n := wh.kinds(platform.SurfaceFrame); n != 1 {
