@@ -366,7 +366,8 @@ func TestSettingsCardsMnemonics(t *testing.T) {
 }
 
 // settingsAllocs returns the allocations of a frame of a form of n rows of
-// text boxes, in sections of 5: settings rows or a plain form.
+// text boxes with a tooltip, in sections of 5: settings rows with a
+// description each, or a plain form.
 func settingsAllocs(n int, settings bool) float64 {
 	f := Fields()
 	if settings {
@@ -376,7 +377,10 @@ func settingsAllocs(n int, settings bool) float64 {
 		if i%5 == 0 {
 			f.Section("Section")
 		}
-		f.Row("Name", TextBox())
+		f.Row("Name", TextBox().SetTooltip("Shown to others."))
+		if settings {
+			f.Describe("As the account shows it.")
+		}
 	}
 	tt := ui.NewTester(content(ScrollPanel(f)), 1280, 800)
 	for range 10 {
@@ -390,6 +394,7 @@ func settingsAllocs(n int, settings bool) float64 {
 func TestSettingsCardsAllocateNoMoreThanAPlainForm(t *testing.T) {
 	plain := (settingsAllocs(200, false) - settingsAllocs(100, false)) / 100
 	cards := (settingsAllocs(200, true) - settingsAllocs(100, true)) / 100
+	t.Logf("%.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
 	if cards > plain+0.2 {
 		t.Errorf("%.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
 	}

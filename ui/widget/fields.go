@@ -23,6 +23,10 @@ type fieldRow struct {
 	key   rune // the label's mnemonic: Alt+key focuses w
 	at    int  // its place in the label, in runes
 	rule  any  // fieldRule of the label's id, boxed once: the key of the divider above it
+	desc  string
+	// said is the control's description, desc then the tooltip saidTip,
+	// "" until describe joins them.
+	said, saidTip string
 }
 
 // fieldHead is a section's heading, shown before row at.
@@ -105,6 +109,36 @@ func (f *FieldsWidget) headings(i int) (ls []*LabelWidget) {
 		}
 	}
 	return ls
+}
+
+// Describe sets the description of the last row added: a line in TextMuted
+// under its label, which wraps, read as its control's description. "" removes
+// it. Before any row it does nothing.
+func (f *FieldsWidget) Describe(text string) *FieldsWidget {
+	f.change(func() {
+		if n := len(f.rows); n > 0 {
+			f.rows[n-1].desc, f.rows[n-1].said = text, ""
+		}
+	})
+	return f
+}
+
+// describe gives the control its row's description, its tooltip after it,
+// joined once each time either changes, so that a frame builds no string.
+// Under mu, before the control builds.
+func (r *fieldRow) describe() {
+	b := r.w.base()
+	if r.desc == "" {
+		b.desc = ""
+		return
+	}
+	if r.said == "" || r.saidTip != b.tooltip {
+		r.said, r.saidTip = r.desc, b.tooltip
+		if b.tooltip != "" {
+			r.said += ". " + b.tooltip
+		}
+	}
+	b.desc = r.said
 }
 
 // Stacked puts each label above its control, over the form's width, as a
@@ -195,6 +229,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					continue
 				}
 				shown = true
+				f.rows[i].describe()
 				ui.Column(c.Key(fieldRowKey(r.label.id))).Gap(colGap).Children(func() {
 					r.underline(c)
 					e := render(c, r.label) // holds a hidden label
@@ -203,6 +238,9 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					}
 					if !r.label.hidden && r.label.place.align == 0 {
 						e.AlignSelf(ui.Start)
+					}
+					if r.desc != "" && !r.label.hidden {
+						ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
 					}
 					render(c, r.w).NamedBy(e)
 				})
@@ -349,13 +387,25 @@ func (f *FieldsWidget) anyShown(i, end int) bool {
 	return false
 }
 
-// cells builds row i of a grid: its label, and its control, across its
-// column where it asks, else stretched or, in SettingsRows, at its end.
-// Under mu.
+// cells builds row i of a grid: its label, with its description under it,
+// and its control, across its column where it asks, else stretched or, in
+// SettingsRows, at its end. Under mu.
 func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	r := &f.rows[i]
 	r.underline(c)
-	e := render(c, r.label) // holds a hidden label
+	r.describe()
+	// e is the label, which names the control; cell the label's cell, the
+	// label or a column of it and the description.
+	var e, cell ui.Element
+	if r.desc != "" && !r.label.hidden {
+		cell = ui.Column(c).Children(func() {
+			e = render(c, r.label)
+			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+		})
+	} else {
+		e = render(c, r.label) // holds a hidden label
+		cell = e
+	}
 	if r.key != 0 {
 		w := r.w
 		registerMnemonic(r.key, e, w, func() { focusLater(w) })
@@ -363,9 +413,9 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	if r.label.hidden { // keep its cell, or ui flows the control into it
 		ui.Box(c.Key(fieldHole(r.label.id)))
 	} else {
-		place(e, r.label, ui.Start)
+		place(cell, r.label, ui.Start)
 		if r.label.place.valign == 0 {
-			e.AlignSelf(ui.Center)
+			cell.AlignSelf(ui.Center)
 		}
 	}
 	def := ui.Stretch
