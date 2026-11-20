@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
-// check measures the tokens' contrast: text 4.5:1 or more, the outline of
+// checkFloor measures the tokens' contrast: text tf:1 or more, the outline of
 // fields and the accent line on the chrome, and each chart color on the
 // background, 3:1 or more; and the control states (hover and pressed) 3 or more
 // CIE76 ΔE from their ground and from each other. A translucent color
@@ -17,7 +17,7 @@ import (
 // translucent layer over Background. It also measures the state distance of the
 // dark or the light appearance (stateDistance). The error names every
 // failing pair.
-func check(t *skinhook.Tokens, dark bool) error {
+func checkFloor(t *skinhook.Tokens, dark bool, tf float64) error {
 	var errs []error
 	pair := func(name string, fg, bg ui.Color, floor float64) {
 		bg = bg.Over(t.Background)
@@ -25,20 +25,20 @@ func check(t *skinhook.Tokens, dark bool) error {
 			errs = append(errs, fmt.Errorf("%s: %.2f:1, want %g:1", name, r, floor))
 		}
 	}
-	pair("Text on Background", t.Text, t.Background, 4.5)
-	pair("Text on Chrome", t.Text, t.Chrome, 4.5)
-	pair("TextMuted on Background", t.TextMuted, t.Background, 4.5)
-	pair("TextMuted on Chrome", t.TextMuted, t.Chrome, 4.5)
-	pair("TextPlaceholder on Surface", t.TextPlaceholder, t.Surface, 4.5)
-	pair("TextMuted on RowSelected", t.TextMuted, t.RowSelected, 4.5)
-	pair("Text on RowSelected", t.Text, t.RowSelected, 4.5)
-	pair("TextMuted on RowHover", t.TextMuted, t.RowHover, 4.5)
+	pair("Text on Background", t.Text, t.Background, tf)
+	pair("Text on Chrome", t.Text, t.Chrome, tf)
+	pair("TextMuted on Background", t.TextMuted, t.Background, tf)
+	pair("TextMuted on Chrome", t.TextMuted, t.Chrome, tf)
+	pair("TextPlaceholder on Surface", t.TextPlaceholder, t.Surface, tf)
+	pair("TextMuted on RowSelected", t.TextMuted, t.RowSelected, tf)
+	pair("Text on RowSelected", t.Text, t.RowSelected, tf)
+	pair("TextMuted on RowHover", t.TextMuted, t.RowHover, tf)
 	for _, f := range []struct {
 		name string
 		f    skinhook.Family
 	}{{"Accent", t.Accent}, {"Success", t.Success}, {"Warning", t.Warning}, {"Danger", t.Danger}, {"Info", t.Info}} {
-		pair(f.name+" Text on Subtle", f.f.Text, f.f.Subtle, 4.5)
-		pair(f.name+" On on Base", f.f.On, f.f.Base, 4.5)
+		pair(f.name+" Text on Subtle", f.f.Text, f.f.Subtle, tf)
+		pair(f.name+" On on Base", f.f.On, f.f.Base, tf)
 	}
 	pair("ControlBorder on Background", t.ControlBorder, t.Background, 3)
 	pair("ControlBorder on Chrome", t.ControlBorder, t.Chrome, 3)

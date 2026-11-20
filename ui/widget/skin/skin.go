@@ -84,16 +84,17 @@ func (s *Skin) Tokens(dark bool) Tokens {
 }
 
 // Check measures the skin's contrast in both appearances, as the skins MyGo
-// ships pass it: text 4.5:1, outlines and chart colors 3:1, the control
+// ships pass it: text at the skin's floor (4.5:1, and 7:1 for a skin made
+// for low vision), outlines and chart colors 3:1, the control
 // states apart, and Info apart from the status colors. The error names the
 // appearance and every failing pair; nil means all pass. A skin that fails
 // still works: Use does not check.
 func (s *Skin) Check() error {
 	var errs []error
-	if err := check(&s.light, false); err != nil {
+	if err := checkFloor(&s.light, false, s.textFloor()); err != nil {
 		errs = append(errs, fmt.Errorf("light: %w", err))
 	}
-	if err := check(&s.dark, true); err != nil {
+	if err := checkFloor(&s.dark, true, s.textFloor()); err != nil {
 		errs = append(errs, fmt.Errorf("dark: %w", err))
 	}
 	return errors.Join(errs...)
@@ -109,6 +110,16 @@ type Skin struct {
 	light, dark skinhook.Tokens
 	looks       Looks
 	parsed      *[skinhook.NumKinds]any // looks' Styles, as Use hands them to widget
+	floor       float64                 // the least contrast of text Check asks; 0 is 4.5
+}
+
+// textFloor is the least contrast of text the skin asks: its floor, 4.5
+// unless it sets one.
+func (s *Skin) textFloor() float64 {
+	if s.floor == 0 {
+		return 4.5
+	}
+	return s.floor
 }
 
 // Name returns the skin's name, as "Calm".

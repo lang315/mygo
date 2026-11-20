@@ -13,8 +13,9 @@ import (
 // c, named by c's hex ("#7c3aed"). s does not change.
 //
 // In light, c is the accent as it is when it passes the floors Check
-// measures: white text on it reads (4.5:1), it stands out on the chrome
-// (3:1), and text reads on the selected row mixed from it (4.5:1). A
+// measures: white text on it reads (at s's text floor, 4.5:1 or 7:1), it
+// stands out on the chrome (3:1), and text reads on the selected row mixed
+// from it (at the text floor). A
 // lighter color, as a yellow, darkens to the lightest of its hue that
 // passes, losing chroma only if no lightness of it is enough; a near-black
 // one lightens just enough (#0a0a0a to about #131313). In dark, the accent
@@ -32,35 +33,36 @@ func (s *Skin) WithAccent(c ui.Color) *Skin {
 	l, ch := float64(lab[0]), math.Hypot(float64(lab[1]), float64(lab[2]))
 	h := math.Atan2(float64(lab[2]), float64(lab[1]))
 	lt, dt := &s.light, &s.dark
+	tf := s.textFloor()
 
 	// Light: white on the base, the base on the chrome, and text on the
 	// selected row NewPalette mixes from the base.
 	base := c
 	ok := func(b ui.Color) bool {
 		row := b.Mix(white, 0.82)
-		return ratio(lt, white, b) >= 4.5 && ratio(lt, b, lt.Chrome) >= 3 &&
-			ratio(lt, lt.TextMuted, row) >= 4.5 && ratio(lt, lt.Text, row) >= 4.5
+		return ratio(lt, white, b) >= tf && ratio(lt, b, lt.Chrome) >= 3 &&
+			ratio(lt, lt.TextMuted, row) >= tf && ratio(lt, lt.Text, row) >= tf
 	}
 	if !ok(base) {
 		step := -0.005 // too light for white text: darker
-		if ratio(lt, white, base) >= 4.5 {
+		if ratio(lt, white, base) >= tf {
 			step = 0.005 // too dark for the selected row: lighter
 		}
 		base = search(l, ch, h, step, ok)
 	}
 	bl, bc := lightChroma(base)
 	text := base
-	for tl := bl; tl >= 0 && ratio(lt, text, base.Mix(white, 0.92)) < 4.5; tl -= 0.01 {
+	for tl := bl; tl >= 0 && ratio(lt, text, base.Mix(white, 0.92)) < tf; tl -= 0.01 {
 		text = oklch(tl, bc, h)
 	}
 	light := LightFamily(base, oklch(bl-0.05, bc, h), oklch(bl-0.10, bc, h), text)
 
 	// Dark: a dark color of the hue on the base, the base on the chrome.
 	on := oklch(0.18, min(0.04, ch), h) // a gray keeps a gray On
-	base = search(l, ch, h, 0.005, func(b ui.Color) bool { return ratio(dt, on, b) >= 4.5 && ratio(dt, b, dt.Chrome) >= 3 })
+	base = search(l, ch, h, 0.005, func(b ui.Color) bool { return ratio(dt, on, b) >= tf && ratio(dt, b, dt.Chrome) >= 3 })
 	bl, bc = lightChroma(base)
 	text = base
-	for tl := bl; tl <= 1 && ratio(dt, text, base.Alpha(0.14)) < 4.5; tl += 0.01 {
+	for tl := bl; tl <= 1 && ratio(dt, text, base.Alpha(0.14)) < tf; tl += 0.01 {
 		text = oklch(tl, bc, h)
 	}
 	dark := DarkFamily(base, oklch(bl+0.05, bc, h), oklch(bl-0.05, bc, h), text, on)
