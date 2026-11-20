@@ -7,7 +7,7 @@ import (
 
 // The graph: root imports a; b imports a; c imports b; d imports nothing and
 // has a test importing c (as an external test of its own); e imports nothing;
-// the command line tool, ui and the two tests that always run are apart.
+// the command line tool, ui and the three tests that always run are apart.
 // internal/web has no package here, as on any system but the browsers'.
 var graph = []Package{
 	{ImportPath: "m", Dir: "."},
@@ -22,10 +22,11 @@ var graph = []Package{
 	{ImportPath: "m/cmd/mygo", Dir: "cmd/mygo"},
 	{ImportPath: "m/internal/skillsdocs", Dir: "internal/skillsdocs"},
 	{ImportPath: "m/internal/twclass", Dir: "internal/twclass"},
+	{ImportPath: "m/internal/nocgo", Dir: "internal/nocgo"},
 }
 
 // tested are the packages that run whatever changed.
-var tested = []string{"m/internal/skillsdocs", "m/internal/twclass"}
+var tested = []string{"m/internal/skillsdocs", "m/internal/twclass", "m/internal/nocgo"}
 
 func TestAffected(t *testing.T) {
 	for _, tc := range []struct {
