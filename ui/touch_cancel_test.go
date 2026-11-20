@@ -98,6 +98,7 @@ func TestTouchCancelRefreshesNothing(t *testing.T) {
 
 // Going back as the system's gesture ends leaves the page where it belongs.
 func TestBackGestureCommits(t *testing.T) {
+	enableTouch() // no finger touches here, which would; the router takes gestures only with it
 	r := NewRouter("/a")
 	tt := coreNewTester(func(c *context) {
 		r.coreView(c, func(rt *Route) { coreBox(c).Fill() })

@@ -99,6 +99,61 @@ func TestCalmSizesWidgets(t *testing.T) {
 	}
 }
 
+// After Use of each built-in skin the widgets take its metrics at its
+// density: the controls its ControlHeight, or their content where that is
+// more (a least height, measured under the skin's tokens and looks with
+// ControlHeight 1), the check box its CheckSize, header and rows theirs.
+func TestSizesWidgets(t *testing.T) {
+	// Each skin's sizes, as constants: Classic is Compact.
+	sizes := map[string]struct{ control, row, header, check float32 }{
+		"Calm": {36, 30, 30, 15}, "Classic": {30, 26, 26, 14}, "HighContrast": {36, 30, 30, 15},
+	}
+	forEachBuiltin(t, func(t *testing.T, s *Skin) {
+		t.Cleanup(func() { Use(nil) })
+		tk, ok := sizes[s.Name()]
+		if !ok {
+			t.Fatalf("no sizes for %s", s.Name())
+		}
+		l, d := s.Tokens(false), s.Tokens(true)
+		l.ControlHeight, d.ControlHeight = 1, 1
+		tt := widget.NewTester(t, sizeForm(), 600, 700)
+		Use(New("tiny", l, d).WithLooks(s.Looks()))
+		tt.Frame()
+		content := widgetSizes(t, tt)
+		Use(s)
+		tt.Frame()
+		got := widgetSizes(t, tt)
+		// widgetSizes measures a NumericUpDown by its arrows inside a border
+		// of 1; under a look's wider border, by the room between the
+		// ComboBox above it and the DateTimePicker below, gaps of 8.
+		var combo, date ui.Rect
+		for _, n := range tt.Nodes() {
+			switch {
+			case n.Role == ui.RolePopUpButton && n.Label == "":
+				combo = n.Bounds
+			case n.Role == ui.RolePopUpButton:
+				date = n.Bounds
+			}
+		}
+		got["NumericUpDown"] = date.Y - 8 - (combo.Y + combo.H + 8)
+		want := map[string]float32{
+			"CheckBox box": tk.check, "DataGridView header": tk.header,
+			"DataGridView row": tk.row, "TreeView row": tk.row,
+		}
+		for _, name := range []string{"Button", "TextBox", "ComboBox", "NumericUpDown", "DateTimePicker date", "DateTimePicker time"} {
+			want[name] = max(tk.control, content[name])
+		}
+		if len(want) != 10 {
+			t.Fatalf("%d sizes, want 10", len(want))
+		}
+		for name, w := range want {
+			if !same(got[name], w) {
+				t.Errorf("with %s, %s is %v, want %v", s.Name(), name, got[name], w)
+			}
+		}
+	})
+}
+
 // same reports whether a and b are the same size, to rounding.
 func same(a, b float32) bool { return a-b < 0.01 && b-a < 0.01 }
 

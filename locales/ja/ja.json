@@ -230,5 +230,10 @@
   "permissionBluetooth": "Bluetooth",
   "permissionMediaAppleMusic": "メディアとApple Music",
   "guideDrag": "{app}を上のリストにドラッグして{permission}を許可してください。",
-  "guideDragHint": "ドラッグ"
+  "guideDragHint": "ドラッグ",
+  "skinPickerSkin": "外観",
+  "skinPickerPalette": "パレット",
+  "skinPickerDensity": "密度",
+  "standardDensity": "標準",
+  "compactDensity": "コンパクト"
 }

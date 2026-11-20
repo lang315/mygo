@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/ui/widget"
@@ -14,9 +15,17 @@ const (
 	formHeight = 900
 )
 
-// palettes are the palettes of the palette combo box, by the value it holds.
-var palettes = map[string]*skin.Palette{
-	"cham": skin.Cham, "indigo": skin.Indigo, "ink": skin.Ink, "teal": skin.Teal, "blue": skin.Blue,
+// skins are the skins of the skin combo box, by the value it holds; "none"
+// is no skin.
+var skins = map[string]*skin.Skin{"calm": skin.Calm, "classic": skin.Classic, "highcontrast": skin.HighContrast}
+
+// palettesOf returns the palettes the palette combo box offers under the
+// skin of the value v: the skin's own, Calm's while no skin is on.
+func palettesOf(v string) []*skin.Palette {
+	if s := skins[v]; s != nil {
+		return s.Palettes()
+	}
+	return skin.Calm.Palettes()
 }
 
 // newStudio makes the window: a header bar, a tool strip with three combo
@@ -40,37 +49,58 @@ func newStudio() *widget.Form {
 	return f
 }
 
-// switches returns the tool strip's combo boxes: skin (None, Calm), palette
-// and appearance. A choice applies at once; the palette waits, kept, while no
-// skin is on.
+// switches returns the tool strip's combo boxes: skin (None, Calm, Classic,
+// HighContrast), palette, by name, of the skin's own, and appearance. A
+// choice applies at once; the palette waits, kept, while no skin is on, and
+// a skin that has no palette of its name takes its own.
 func switches() []widget.Control {
-	useSkin, usePalette := "none", "blue"
+	useSkin, usePalette := "none", skin.Blue.Name()
 	apply := func() {
-		if useSkin == "none" {
+		s := skins[useSkin]
+		if s == nil {
 			skin.Use(nil)
 			return
 		}
-		skin.Use(skin.Calm.WithPalette(palettes[usePalette]))
+		for _, p := range s.Palettes() {
+			if p.Name() == usePalette {
+				s = s.WithPalette(p)
+			}
+		}
+		skin.Use(s)
 	}
 	choose := func(name string, set *string, opts ...widget.Option) *widget.ComboBoxWidget {
 		c := widget.ComboBox(opts...).SetValue(*set).SetAccessibleName(name)
 		c.OnChange(func() { *set = c.Value(); apply() })
 		return c
 	}
+	paletteOptions := func() []widget.Option {
+		var opts []widget.Option
+		for _, p := range palettesOf(useSkin) {
+			opts = append(opts, widget.Option{Value: p.Name(), Text: p.Name()})
+		}
+		return opts
+	}
+	palette := choose("Palette", &usePalette, paletteOptions()...)
+	skinBox := widget.ComboBox(widget.Option{Value: "none", Text: "None"}, widget.Option{Value: "calm", Text: "Calm"},
+		widget.Option{Value: "classic", Text: "Classic"}, widget.Option{Value: "highcontrast", Text: "HighContrast"}).
+		SetValue(useSkin).SetAccessibleName("Skin")
+	skinBox.OnChange(func() {
+		useSkin = skinBox.Value()
+		opts := paletteOptions()
+		palette.SetOptions(opts...)
+		if s := skins[useSkin]; s != nil && s.Palette() != nil && !slices.ContainsFunc(opts, func(o widget.Option) bool { return o.Value == usePalette }) {
+			usePalette = s.Palette().Name() // the old palette is not the skin's
+		}
+		palette.SetValue(usePalette) // none, under a skin without palettes
+		apply()
+	})
 	mode := widget.ComboBox(
 		widget.Option{Value: string(widget.ThemeSystem), Text: "System"},
 		widget.Option{Value: string(widget.ThemeLight), Text: "Light"},
 		widget.Option{Value: string(widget.ThemeDark), Text: "Dark"},
 	).SetValue(string(widget.ThemeSystem)).SetAccessibleName("Mode")
 	mode.OnChange(func() { widget.SetTheme(widget.Theme(mode.Value())) })
-	return []widget.Control{
-		choose("Skin", &useSkin, widget.Option{Value: "none", Text: "None"}, widget.Option{Value: "calm", Text: "Calm"}),
-		choose("Palette", &usePalette,
-			widget.Option{Value: "cham", Text: skin.Cham.Name()}, widget.Option{Value: "indigo", Text: skin.Indigo.Name()},
-			widget.Option{Value: "ink", Text: skin.Ink.Name()}, widget.Option{Value: "teal", Text: skin.Teal.Name()},
-			widget.Option{Value: "blue", Text: skin.Blue.Name()}),
-		mode,
-	}
+	return []widget.Control{skinBox, palette, mode}
 }
 
 func option(pairs ...string) []widget.Option {

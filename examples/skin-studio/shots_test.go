@@ -49,6 +49,9 @@ func TestShots(t *testing.T) {
 		{"none", nil},
 		{"calm-blue", skin.Calm},
 		{"calm-cham", skin.Calm.WithPalette(skin.Cham)},
+		{"classic-indigo", skin.Classic}, // Compact, Classic's own density
+		{"classic-slate", skin.Classic.WithPalette(skin.ClassicSlate)},
+		{"highcontrast", skin.HighContrast},
 	}
 	// MYGO_SKIN_SCALE is the scale of the shots, 1 when unset.
 	scale := float32(1)
@@ -66,16 +69,17 @@ func TestShots(t *testing.T) {
 		tt := widget.TestForm(t, newStudio())
 		tt.SetSize(1280, 800)
 		tt.SetScale(scale)
-		wantSkin, wantPalette := "none", "blue"
+		wantSkin, wantPalette := "none", skin.Blue.Name()
 		if s != nil {
-			wantSkin = "calm"
-			for value, p := range palettes {
-				if p == s.Palette() {
-					wantPalette = value
-				}
+			wantSkin, wantPalette = strings.ToLower(s.Name()), ""
+			pick(tt, "Skin", s.Name())
+			if s.Palette() != nil {
+				wantPalette = s.Palette().Name()
+				pick(tt, "Palette", wantPalette)
 			}
-			pick(tt, "Skin", "Calm")
-			pick(tt, "Palette", s.Palette().Name())
+			if a := skin.Active(); a == nil || a.Name() != s.Name() || a.Palette() != s.Palette() || a.Density() != s.Density() {
+				t.Fatalf("the studio's skin is not %s", s.Name())
+			}
 		}
 		if got := tt.Find(widget.ByLabel("Skin")).Value(); got != wantSkin {
 			t.Errorf("the Skin picker holds %q, want %q", got, wantSkin)

@@ -3395,3 +3395,81 @@ func GuideDragHint() string { return In(i18n.Locale()).GuideDragHint() }
 func (msgs Messages) GuideDragHint() string {
 	return Catalog.Format(msgs.locale, "guideDragHint", nil)
 }
+
+// SkinPickerSkin says "Skin"
+// in the language the app shows.
+//
+// Labels the box of the skin picker (skin.Picker) that chooses the app's
+// look, as Calm or Classic.
+func SkinPickerSkin() string { return In(i18n.Locale()).SkinPickerSkin() }
+
+// SkinPickerSkin says "Skin"
+// in the language of msgs.
+//
+// Labels the box of the skin picker (skin.Picker) that chooses the app's
+// look, as Calm or Classic.
+func (msgs Messages) SkinPickerSkin() string {
+	return Catalog.Format(msgs.locale, "skinPickerSkin", nil)
+}
+
+// SkinPickerPalette says "Palette"
+// in the language the app shows.
+//
+// Labels the box of the skin picker that chooses the skin's accent colors,
+// as Blue or Teal.
+func SkinPickerPalette() string { return In(i18n.Locale()).SkinPickerPalette() }
+
+// SkinPickerPalette says "Palette"
+// in the language of msgs.
+//
+// Labels the box of the skin picker that chooses the skin's accent colors,
+// as Blue or Teal.
+func (msgs Messages) SkinPickerPalette() string {
+	return Catalog.Format(msgs.locale, "skinPickerPalette", nil)
+}
+
+// SkinPickerDensity says "Density"
+// in the language the app shows.
+//
+// Labels the box of the skin picker that chooses how tight the controls are
+// set: standardDensity or compactDensity.
+func SkinPickerDensity() string { return In(i18n.Locale()).SkinPickerDensity() }
+
+// SkinPickerDensity says "Density"
+// in the language of msgs.
+//
+// Labels the box of the skin picker that chooses how tight the controls are
+// set: standardDensity or compactDensity.
+func (msgs Messages) SkinPickerDensity() string {
+	return Catalog.Format(msgs.locale, "skinPickerDensity", nil)
+}
+
+// StandardDensity says "Standard"
+// in the language the app shows.
+//
+// An option of the skin picker's Density box: the skin's own sizes.
+func StandardDensity() string { return In(i18n.Locale()).StandardDensity() }
+
+// StandardDensity says "Standard"
+// in the language of msgs.
+//
+// An option of the skin picker's Density box: the skin's own sizes.
+func (msgs Messages) StandardDensity() string {
+	return Catalog.Format(msgs.locale, "standardDensity", nil)
+}
+
+// CompactDensity says "Compact"
+// in the language the app shows.
+//
+// An option of the skin picker's Density box: controls and rows set lower,
+// for screens full of data.
+func CompactDensity() string { return In(i18n.Locale()).CompactDensity() }
+
+// CompactDensity says "Compact"
+// in the language of msgs.
+//
+// An option of the skin picker's Density box: controls and rows set lower,
+// for screens full of data.
+func (msgs Messages) CompactDensity() string {
+	return Catalog.Format(msgs.locale, "compactDensity", nil)
+}

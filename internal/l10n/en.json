@@ -1124,5 +1124,25 @@
   "guideDragHint": "Drag",
   "@guideDragHint": {
     "description": "The small hint label on the app card of the permissionflow Guide panel, next to the hand icon, telling the user to drag the app."
+  },
+  "skinPickerSkin": "Skin",
+  "@skinPickerSkin": {
+    "description": "Labels the box of the skin picker (skin.Picker) that chooses the app's look, as Calm or Classic."
+  },
+  "skinPickerPalette": "Palette",
+  "@skinPickerPalette": {
+    "description": "Labels the box of the skin picker that chooses the skin's accent colors, as Blue or Teal."
+  },
+  "skinPickerDensity": "Density",
+  "@skinPickerDensity": {
+    "description": "Labels the box of the skin picker that chooses how tight the controls are set: standardDensity or compactDensity."
+  },
+  "standardDensity": "Standard",
+  "@standardDensity": {
+    "description": "An option of the skin picker's Density box: the skin's own sizes."
+  },
+  "compactDensity": "Compact",
+  "@compactDensity": {
+    "description": "An option of the skin picker's Density box: controls and rows set lower, for screens full of data."
   }
 }
