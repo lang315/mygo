@@ -49,6 +49,15 @@ type Column[T any] struct {
 	// sorts the rows once they are sorted by it, and its Filterable
 	// search works; it is not drawn, read by assistive technology or copied.
 	Hidden bool
+	// Badge, when set, draws the cell's Text as a badge of the status it
+	// returns; StatusNone draws plain Text.
+	Badge func(*T) Status
+	// BadgeDetail, when set, is a StatusRunning badge's current step, drawn
+	// after the pill in TextMuted, as BadgeWidget.SetDetail.
+	BadgeDetail func(*T) string
+	// Format, when set, styles the cell of a row: its fill, text color and
+	// weight. A zero CellFormat keeps the cell's own look.
+	Format func(*T) CellFormat
 
 	// edit is the column's *CellEditor[T] (EditColumn), held as an any so that
 	// Column does not name the type.
@@ -146,6 +155,15 @@ type DataGridViewWidget[T any, K comparable] struct {
 	editCell    func(row, col int, how ui.EditHow) bool
 	startCell   func(row, col int, x, y float32, how ui.EditHow)
 
+	// Statuses and formats (table_status.go): statusHook builds the cell of
+	// the line row in column col (an index into cols, -1 for the index
+	// column) when it has a badge or a format, and reports whether it did.
+	// It is nil until a column has Badge or Format or SetRowFormat is
+	// called, so a grid without them builds what it did.
+	statusHook func(c *ui.Context, row, col int) bool
+	rowFormat  func(*T) CellFormat // SetRowFormat's
+	empty      *EmptyStateWidget   // SetEmptyState's
+
 	// framer, when set by a ListView, is the control whose style stands
 	// instead of the table's frame (frameList), with the table's own.
 	framer *core
@@ -220,6 +238,9 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t.list.HeaderCell = t.headerCell
 	t.init(t)
 	t.link.id, t.link.prune = t.id, t.prune
+	if slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Badge != nil || cl.Format != nil }) {
+		t.enableStatus()
+	}
 	mu.Lock()
 	src.attach(t.link)
 	mu.Unlock()
@@ -800,18 +821,36 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	if t.numbered {
 		if col == 0 {
-			ui.Text(c, strconv.Itoa(t.numberAt(t.posAt(row)))).SingleLine()
+			if t.statusHook == nil || !t.statusHook(c, row, -1) {
+				t.indexCell(c, row)
+			}
 			return
 		}
 		col--
 	}
-	cl, r := &t.cols[vis[col]], t.rowAt(row)
-	if t.cellHook != nil && t.cellHook(c, vis[col], r) {
+	ci := vis[col]
+	if t.statusHook != nil && t.statusHook(c, row, ci) {
 		return
 	}
+	t.cellContent(c, ci, t.rowAt(row), true)
+}
+
+// indexCell builds the text of the index column of the line row.
+func (t *DataGridViewWidget[T, K]) indexCell(c *ui.Context, row int) {
+	ui.Text(c, strconv.Itoa(t.numberAt(t.posAt(row)))).SingleLine()
+}
+
+// cellContent builds what the cell of r in column ci (an index into t.cols)
+// shows: the editor of the cell being edited, or its image and text, whose
+// color Column.Color sets when colored.
+func (t *DataGridViewWidget[T, K]) cellContent(c *ui.Context, ci int, r *T, colored bool) {
+	if t.cellHook != nil && t.cellHook(c, ci, r) {
+		return
+	}
+	cl := &t.cols[ci]
 	// A selected row's text keeps the selection's color, which reads on
 	// the accent; a column's own may not.
-	colored := cl.Color != nil && !c.RowSelected()
+	colored = colored && cl.Color != nil && !c.RowSelected()
 	if cl.Image == nil {
 		cellText(c, cl, r, colored)
 		return

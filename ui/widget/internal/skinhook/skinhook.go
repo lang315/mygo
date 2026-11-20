@@ -101,6 +101,11 @@ type Tokens struct {
 	// (ui.ScrollbarStyle).
 	FocusRingWidth, FocusRingOffset, ScrollbarWidth float32
 	ScrollbarStyle                                  ui.ScrollbarStyle
+
+	// FlatStatus is set by a skin whose looks draw no subtle fills: a grid
+	// cell's format draws its status as the family's Text, bold, with no
+	// fill (an explicit Fill still draws).
+	FlatStatus bool
 }
 
 var active atomic.Pointer[[2]*Tokens]
