@@ -7,5 +7,6 @@
 //
 // The files that waited on the clock when the check came are counted in
 // baseline: a file must have exactly as many as it says, so that a new
-// wait fails and a removed one lowers the count.
+// wait fails and a removed one lowers the count. A wait that is right
+// goes in allowed, with why.
 package waitcheck

@@ -1,6 +1,7 @@
 package waitcheck
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -22,17 +23,27 @@ var instead = map[string]string{
 	"time.NewTimer":        "wait.For (internal/wait) on the channel",
 	"time.NewTicker":       "wait.Until (internal/wait)",
 	"time.AfterFunc":       "wait.For (internal/wait), or ui.Tester.Advance",
-	"time.Now().Add":       "wait.Until or wait.Poll (internal/wait), whose guard is the only deadline",
+	"time.Now().After":     "wait.Until or wait.Poll (internal/wait), whose guard is the only deadline",
+	"time.Now().Before":    "wait.Until or wait.Poll (internal/wait), whose guard is the only deadline",
 	"time.Since":           "wait.Until (internal/wait) for a wait, counts (steps, allocations) for work",
 	"time.Until":           "wait.Until (internal/wait)",
 	"context.WithTimeout":  "wait.Context (internal/wait)",
 	"context.WithDeadline": "wait.Context (internal/wait)",
 }
 
+// allowed are the waits on the clock that are right, as "file function
+// call" (a short time.After in a check that nothing happens, which a slow
+// machine can only make miss a bug), each with why.
+var allowed = map[string]string{}
+
 type finding struct {
 	pos  token.Position
+	fn   string // the function the call is in
 	call string
 }
+
+// key is the finding's key in allowed.
+func (f finding) key(rel string) string { return rel + " " + f.fn + " " + f.call }
 
 func TestNoWallClockWaits(t *testing.T) {
 	root, err := filepath.Abs("../..")
@@ -42,6 +53,9 @@ func TestNoWallClockWaits(t *testing.T) {
 	found := map[string][]finding{}
 	files := 0
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // removed while walked, as by another package's test
+		}
 		if err != nil {
 			return err
 		}
@@ -64,11 +78,16 @@ func TestNoWallClockWaits(t *testing.T) {
 		}
 		rel = filepath.ToSlash(rel)
 		calls, err := scan(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
-		if len(calls) > 0 {
-			found[rel] = calls
+		for _, f := range calls {
+			if _, ok := allowed[f.key(rel)]; !ok {
+				found[rel] = append(found[rel], f)
+			}
 		}
 		return nil
 	})
@@ -84,8 +103,8 @@ func TestNoWallClockWaits(t *testing.T) {
 			continue
 		}
 		for _, f := range calls {
-			t.Errorf("%s:%d: %s waits on the wall clock, which fails right code on a slow runner (\"Waiting in tests\", docs/architecture.md); use %s",
-				rel, f.pos.Line, f.call, instead[f.call])
+			t.Errorf("%s:%d: %s waits on the wall clock, which fails right code on a slow runner (\"Waiting in tests\", docs/architecture.md); use %s. Only a short wait in a check that nothing happens is right: it goes in allowed in internal/waitcheck/waitcheck_test.go as %q, with why",
+				rel, f.pos.Line, f.call, instead[f.call], f.key(rel))
 		}
 		if n := baseline[rel]; n > 0 {
 			t.Errorf("%s: %d waits on the clock, the baseline allows %d: remove the new ones above", rel, len(calls), n)
@@ -138,12 +157,16 @@ func scan(path string) ([]finding, error) {
 		return names[x.Name] + "." + s.Sel.Name
 	}
 	var out []finding
-	add := func(n ast.Node, call string) {
-		out = append(out, finding{fset.Position(n.Pos()), call})
-	}
 	for _, decl := range f.Decls {
-		if fd, ok := decl.(*ast.FuncDecl); ok && strings.HasPrefix(fd.Name.Name, "Benchmark") {
-			continue
+		fn := ""
+		if fd, ok := decl.(*ast.FuncDecl); ok {
+			if strings.HasPrefix(fd.Name.Name, "Benchmark") {
+				continue
+			}
+			fn = fd.Name.Name
+		}
+		add := func(n ast.Node, call string) {
+			out = append(out, finding{fset.Position(n.Pos()), fn, call})
 		}
 		ast.Inspect(decl, func(n ast.Node) bool {
 			switch n := n.(type) {
@@ -164,9 +187,9 @@ func scan(path string) ([]finding, error) {
 					"context.WithTimeout", "context.WithDeadline":
 					add(n, c)
 				}
-				// time.Now().Add(d): a deadline.
-				if s, ok := n.Fun.(*ast.SelectorExpr); ok && s.Sel.Name == "Add" && pkgCall(s.X) == "time.Now" {
-					add(n, "time.Now().Add")
+				// time.Now().After(deadline): a deadline checked.
+				if s, ok := n.Fun.(*ast.SelectorExpr); ok && (s.Sel.Name == "After" || s.Sel.Name == "Before") && pkgCall(s.X) == "time.Now" {
+					add(n, "time.Now()."+s.Sel.Name)
 				}
 			}
 			return true
