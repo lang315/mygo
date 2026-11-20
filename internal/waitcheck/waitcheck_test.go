@@ -34,7 +34,10 @@ var instead = map[string]string{
 // allowed are the waits on the clock that are right, as "file function
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
-var allowed = map[string]string{}
+var allowed = map[string]string{
+	"plugins/terminal/terminal_test.go TestResizeByConn time.After": "Conn is not told the size a second time: a late call can only miss a bug",
+	"plugins/terminal/terminal_test.go TestUseTheme time.After":     "Conn is not told the same theme again: a late call can only miss a bug",
+}
 
 type finding struct {
 	rel  string // the file, relative to the repository's root
