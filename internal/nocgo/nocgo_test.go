@@ -1,6 +1,7 @@
 package nocgo
 
 import (
+	"errors"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -24,6 +25,9 @@ func TestNoCgo(t *testing.T) {
 	fset := token.NewFileSet()
 	files := 0
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // removed while walked, as by another package's test
+		}
 		if err != nil {
 			return err
 		}
@@ -39,6 +43,9 @@ func TestNoCgo(t *testing.T) {
 		}
 		files++
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
