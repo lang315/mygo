@@ -13,10 +13,10 @@ const nameDesc = "Dùng khi đăng nhập lần sau."
 // mutedIn reports whether the rectangle r draws a pixel of the plain theme's
 // TextMuted, the token's value, #71717a.
 func mutedIn(tt *ui.Tester, r ui.Rect) bool {
-	muted := ui.Hex("#71717a")
+	muted, img := ui.Hex("#71717a"), tt.Image()
 	for y := int(r.Y); y < int(r.Y+r.H); y++ {
 		for x := int(r.X); x < int(r.X+r.W); x++ {
-			if near(tt.Image().RGBAAt(x, y), muted) {
+			if near(img.RGBAAt(x, y), muted) {
 				return true
 			}
 		}
@@ -26,15 +26,28 @@ func mutedIn(tt *ui.Tester, r ui.Rect) bool {
 
 // textIn reports whether r draws a pixel of the plain theme's Text, #18181b.
 func textIn(tt *ui.Tester, r ui.Rect) bool {
-	text := ui.Hex("#18181b")
+	text, img := ui.Hex("#18181b"), tt.Image()
 	for y := int(r.Y); y < int(r.Y+r.H); y++ {
 		for x := int(r.X); x < int(r.X+r.W); x++ {
-			if near(tt.Image().RGBAAt(x, y), text) {
+			if near(img.RGBAAt(x, y), text) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// descColors reports whether the description nameDesc of form draws
+// TextMuted, and whether it draws Text, at text scale 3: its stems are then
+// several pixels wide, the ink itself under any anti-aliasing, grayscale or
+// subpixel (ClearType).
+func descColors(t *testing.T, f *FieldsWidget) (muted, text bool) {
+	t.Helper()
+	tt := NewTester(t, f, 1200, 700)
+	tt.SetPreferences(ui.Preferences{TextScale: 3})
+	tt.Frame()
+	d := find(t, tt.Tester, nameDesc)
+	return mutedIn(tt.Tester, d), textIn(tt.Tester, d)
 }
 
 // descriptionOf returns the accessible description of the text field.
@@ -58,8 +71,8 @@ func TestDescribeDrawsUnderTheLabel(t *testing.T) {
 	if d.Y < l.Y+l.H-0.5 || !approx(d.X, l.X) {
 		t.Errorf("the description %v is not under the label %v", d, l)
 	}
-	if !mutedIn(tt.Tester, d) || textIn(tt.Tester, d) {
-		t.Errorf("the description is not drawn in TextMuted alone")
+	if muted, text := descColors(t, Fields().SettingsRows().Row("Tên", TextBox()).Describe(nameDesc)); !muted || text {
+		t.Errorf("the description draws TextMuted %v and Text %v, want TextMuted alone", muted, text)
 	}
 	if got := descriptionOf(t, tt, "Tên"); got != nameDesc {
 		t.Errorf("the control's description is %q, want %q", got, nameDesc)
@@ -135,8 +148,12 @@ func TestDescribeInTheOtherLayouts(t *testing.T) {
 		if !stacked && c.X < l.X+l.W {
 			t.Errorf("grid: the control %v is not beside the label %v", c, l)
 		}
-		if !mutedIn(tt.Tester, d) || textIn(tt.Tester, d) {
-			t.Errorf("stacked %v: the description is not in TextMuted alone", stacked)
+		g := Fields().Row("Tên", TextBox()).Describe(nameDesc)
+		if stacked {
+			g.Stacked()
+		}
+		if muted, text := descColors(t, g); !muted || text {
+			t.Errorf("stacked %v: the description draws TextMuted %v and Text %v, want TextMuted alone", stacked, muted, text)
 		}
 		if got := descriptionOf(t, tt, "Tên"); got != nameDesc {
 			t.Errorf("stacked %v: the control's description is %q", stacked, got)
@@ -218,6 +235,42 @@ func TestDescribeAtTextScale(t *testing.T) {
 	}
 	if d := find(t, tt.Tester, nameDesc); !after.inside(d) {
 		t.Errorf("the description %v leaves the card %+v", d, after)
+	}
+}
+
+// A row whose label is hidden draws no description either, in every layout,
+// and its control keeps its column; screen readers still read it.
+func TestDescribeWithAHiddenLabel(t *testing.T) {
+	for _, mode := range []string{"default", "stacked", "settings"} {
+		f := Fields().Row("Tên", TextBox()).Describe(nameDesc)
+		switch mode {
+		case "stacked":
+			f.Stacked()
+		case "settings":
+			f.SettingsRows()
+		}
+		f.Label(0).SetVisible(false)
+		tt := NewTester(t, f, 400, 300)
+		if tt.HasText(nameDesc) {
+			t.Errorf("%s: the description of a hidden label shows: %q", mode, tt.Texts())
+		}
+		if got := descriptionOf(t, tt, ""); got != nameDesc {
+			t.Errorf("%s: the control's description is %q, want %q", mode, got, nameDesc)
+		}
+	}
+}
+
+// In the plain grid, whose label column fits its content, a long description
+// widens that column as a label as long does: the control is placed as it is
+// beside such a label (squeezed in a narrow form; SettingsRows or Stacked
+// wrap instead).
+func TestDescribeLongInThePlainGrid(t *testing.T) {
+	long := strings.TrimSpace(strings.Repeat(nameDesc+" ", 6))
+	tt := NewTester(t, Fields().Row("Tên", TextBox()).Describe(long), 400, 400)
+	c := tt.Find(ByRole(ui.RoleTextField)).Bounds()
+	tl := NewTester(t, Fields().Row(long, TextBox()), 400, 400)
+	if l := tl.Find(ByRole(ui.RoleTextField)).Bounds(); !approx(c.X, l.X) || !approx(c.W, l.W) {
+		t.Errorf("beside a long description the control is %v, beside a label as long %v", c, l)
 	}
 }
 

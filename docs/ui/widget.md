@@ -462,7 +462,8 @@ widget.Fields().
   group, whose label columns each fit their own labels. A section after the
   first has more room above it than a row has, the first none. A section whose
   rows are all hidden hides its heading and that room. The sections share the
-  control column too, and the labels stay left-aligned, as before. The heading
+  control column too (in `SettingsRows` each card has its own), and the
+  labels stay left-aligned, as before. The heading
   is a heading to screen readers and takes no focus. In `SettingsRows` each
   section is a card, its heading above it. There is no divider option.
   `Section("")` is a group break: the room a section has above it, with no
@@ -522,9 +523,8 @@ a table a narrow one: give them `SetSize`, or use `Stacked` for multi-line boxes
 and tables. The label column is no narrower than its longest word, so in a
 narrow window the controls are pushed toward or past the right edge, by a long
 word and by ordinary ones alike (a `ComboBox` beside "Notifications" needs about
-229 DIPs): give the window a `SetMinimumSize` wide enough. Only as a form's
-direct content does free height go to the rows (in a `VBox`, `Card` or
-`GroupBox` the rows keep their height). In a `ScrollPanel` use `.Vertical()`:
+229 DIPs): give the window a `SetMinimumSize` wide enough. The cards keep
+their height: free height stays below the last. In a `ScrollPanel` use `.Vertical()`:
 the both-ways panel gives the form no width to wrap at.
 
 ```go

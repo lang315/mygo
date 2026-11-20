@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // The settings cards (P2b): each section of SettingsRows is a card, its title
@@ -81,6 +82,10 @@ func TestSettingsCardsOnePerSection(t *testing.T) {
 	if len(ks) != 2 {
 		t.Fatalf("%d cards, want 2", len(ks))
 	}
+	// The cards keep their height in the window's: the free height is below.
+	if ks[1].bottom > 300 {
+		t.Errorf("the last card ends at %d in a window 400 high: it took the free height", ks[1].bottom)
+	}
 	for i, k := range ks {
 		if k.line != 1 {
 			t.Errorf("card %d: its top line is %d high, want 1", i, k.line)
@@ -111,6 +116,9 @@ func TestSettingsCardsOnePerSection(t *testing.T) {
 		}
 		if h.X > 2 {
 			t.Errorf("title %q at x %v, want at the cards' left edge", title, h.X)
+		}
+		if gap := float32(ks[i].top) - (h.Y + h.H); !approx(gap, space(1.5)) {
+			t.Errorf("title %q is %v above its card, want %v", title, gap, space(1.5))
 		}
 		if _, ok := tt.AccessByRole(ui.RoleHeading, title); !ok {
 			t.Errorf("no heading %q", title)
@@ -363,18 +371,28 @@ func TestSettingsCardsMnemonics(t *testing.T) {
 	if !tt.Find(ByRole(ui.RoleTextField).Nth(1)).Focused() {
 		t.Error("Alt+M did not focus the text box of the second card")
 	}
+	// The first card's, in a form of its own.
+	g := NewForm("n", 400, 300)
+	g.SetContent(Fields().SettingsRows().Section("A").Row("&Name", TextBox()).Section("B").Row("E&mail", TextBox()))
+	tn := TestForm(t, g)
+	tn.Settle()
+	tn.Key(ui.Alt, ui.KeyN)
+	tn.Settle()
+	if !tn.Find(ByRole(ui.RoleTextField).Nth(0)).Focused() {
+		t.Error("Alt+N did not focus the text box of the first card")
+	}
 }
 
 // settingsAllocs returns the allocations of a frame of a form of n rows of
-// text boxes with a tooltip, in sections of 5: settings rows with a
+// text boxes with a tooltip, in sections of per rows: settings rows with a
 // description each, or a plain form.
-func settingsAllocs(n int, settings bool) float64 {
+func settingsAllocs(n, per int, settings bool) float64 {
 	f := Fields()
 	if settings {
 		f.SettingsRows()
 	}
 	for i := range n {
-		if i%5 == 0 {
+		if i%per == 0 {
 			f.Section("Section")
 		}
 		f.Row("Name", TextBox().SetTooltip("Shown to others."))
@@ -391,11 +409,32 @@ func settingsAllocs(n int, settings bool) float64 {
 
 // A settings form, once built, allocates per row no more in a frame than a
 // plain form of the same controls: the slope, 200 rows less 100, per row.
+// With no skin, in sections of 5; under a skin with a SettingsRowHeight and
+// a SettingsCard look of hover and shadow, in sections of one row, so that a
+// card's own allocation would show.
 func TestSettingsCardsAllocateNoMoreThanAPlainForm(t *testing.T) {
-	plain := (settingsAllocs(200, false) - settingsAllocs(100, false)) / 100
-	cards := (settingsAllocs(200, true) - settingsAllocs(100, true)) / 100
-	t.Logf("%.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
+	slopes := func(per int) (plain, cards float64) {
+		plain = (settingsAllocs(200, per, false) - settingsAllocs(100, per, false)) / 100
+		cards = (settingsAllocs(200, per, true) - settingsAllocs(100, per, true)) / 100
+		return
+	}
+	plain, cards := slopes(5)
+	t.Logf("no skin: %.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
 	if cards > plain+0.2 {
-		t.Errorf("%.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
+		t.Errorf("no skin: %.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
+	}
+
+	tk := useSkin(t)
+	tk.SettingsRowHeight = 56
+	look := NewStyle().Radius(2).BorderWidth(2).BorderColor(RoleBorderStrong).
+		Shadow(0, 1, 2, 0, Fixed(ui.RGBA(0, 0, 0, 0.1))).Hover(NewStyle().Background(RoleSurfaceHover))
+	var looks [skinhook.NumKinds]any
+	looks[skinhook.KindSettingsCard] = &look
+	skinhook.SetLooks(&looks)
+	t.Cleanup(func() { skinhook.SetLooks(nil) })
+	plain, cards = slopes(1)
+	t.Logf("skin and look, a card a row: %.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
+	if cards > plain+0.2 {
+		t.Errorf("skin and look, a card a row: %.2f allocations per settings row in a frame, %.2f per plain row", cards, plain)
 	}
 }

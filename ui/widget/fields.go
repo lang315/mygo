@@ -79,10 +79,11 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 // that follow it, up to the next Section. The rows of all sections share one
 // label column, and a section after the first has more room above it than a
 // row has. A section whose rows are all hidden hides its heading and its room.
-// In SettingsRows the heading takes the place of the divider before its rows.
-// An empty title makes a group break: the room a section has above it and no
-// heading, so no node for assistive technology; there is none first, nor
-// where the section's rows are all hidden.
+// In SettingsRows each section is a card, the heading above it, and each card
+// has its own columns. An empty title makes a group break: the room a section
+// has above it and no heading, so no node for assistive technology; there is
+// none first, nor where the section's rows are all hidden. In SettingsRows it
+// starts a card.
 func (f *FieldsWidget) Section(title string) *FieldsWidget {
 	l := Label(title)
 	l.role = &headingText
@@ -148,10 +149,13 @@ func (f *FieldsWidget) Stacked() *FieldsWidget {
 	return f
 }
 
-// SettingsRows lays the form out as a page of settings: each label takes the
-// width the control leaves and wraps, the control sits at the right edge in
-// its own size (a control's Align overrides), and a divider separates one row
-// from the next. A hidden control takes its label and its divider away. Of
+// SettingsRows lays the form out as a page of settings: each section is a
+// card (the skin's SettingsCard look, else its Card look), its heading above
+// it, and rows before the first Section make a card with no heading. In a
+// card each label takes the width the control leaves and wraps, the control
+// sits at the right edge in its own size (a control's Align overrides), and a
+// divider separates one row from the next. A hidden control takes its label
+// and its divider away, and a section whose rows are all hidden its card. Of
 // Stacked and SettingsRows, the last call wins. A ProgressBar and an empty
 // ListBox have no width in the fit column, and a ListBox with items or a
 // table a narrow one: give them SetSize, or use Stacked. The label column is
@@ -336,7 +340,7 @@ func (f *FieldsWidget) cards(c *ui.Context, rowGap, colGap, sectionGap float32) 
 				}
 			}
 			if look := lookOf(skinhook.KindSettingsCard); look != nil {
-				st := look.effective(t.Dark, false, false, false, false, f.disabled)
+				st := look.effective(t.Dark, g.Hovered(), false, false, g.Pressed(), f.disabled)
 				st.apply(c, g, f.textKey)
 			}
 			f.tracks = f.tracks[:0]
