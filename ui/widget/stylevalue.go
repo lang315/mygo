@@ -55,6 +55,9 @@ const (
 	roleRowSelected
 	roleInfo
 	roleFill // a border color only: the style's background in the state drawn, see fillBorder
+	roleStatus
+	roleStatusText
+	roleStatusBorder
 )
 
 // fillBorder is the border color of a Suggested or Destructive button: its
@@ -104,6 +107,17 @@ var (
 	RoleRowHover      = Color{role: roleRowHover, ok: true}      // a hovered row; no skin: the theme's RowHover, else SurfaceHover
 	RoleRowSelected   = Color{role: roleRowSelected, ok: true}   // a selected row; no skin: the theme's RowSelected, else Accent
 	RoleInfo          = Color{role: roleInfo, ok: true}          // the running and info state; no skin: Accent
+)
+
+// The colors of the status of the control they style (a Badge's, an
+// InfoBar's): its fill, its text and its border, as the skin's family of the
+// status gives them (Subtle, Text, Border); in a control with no status,
+// StatusNone's. Without a skin the fill is the status's color at 14 % alpha,
+// the text the theme's Text, and the border none.
+var (
+	RoleStatus       = Color{role: roleStatus, ok: true}
+	RoleStatusText   = Color{role: roleStatusText, ok: true}
+	RoleStatusBorder = Color{role: roleStatusBorder, ok: true}
 )
 
 // skinRole resolves a role a skin decides: the token of the active skin in
@@ -246,6 +260,15 @@ func (c Color) resolve(t *ui.Theme) ui.Color {
 		return t.InverseText
 	case roleChrome, roleBorderStrong, roleControlBorder, roleButtonBorder, roleRowHover, roleRowSelected, roleInfo:
 		return skinRole(c.role, t)
+	case roleStatus, roleStatusText, roleStatusBorder:
+		fill, text, border, _ := statusColorsOf(t, styling)
+		switch c.role {
+		case roleStatus:
+			return fill
+		case roleStatusText:
+			return text
+		}
+		return border
 	}
 	return c.fixed
 }

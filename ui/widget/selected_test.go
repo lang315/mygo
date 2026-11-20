@@ -192,7 +192,7 @@ func TestInspectorNamesSkinRoles(t *testing.T) {
 	for c, want := range map[Color]string{
 		RoleChrome: "role chrome", RoleBorderStrong: "role border-strong", RoleControlBorder: "role control-border",
 		RoleButtonBorder: "role button-border", RoleRowHover: "role row-hover", RoleRowSelected: "role row-selected",
-		RoleInfo: "role info",
+		RoleInfo: "role info", RoleStatus: "role status", RoleStatusText: "role status-text", RoleStatusBorder: "role status-border",
 	} {
 		if got := c.inspectText(); got != want {
 			t.Errorf("%+v reads %q, want %q", c, got, want)
