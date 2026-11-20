@@ -21,7 +21,7 @@ type Package struct {
 // and docs, docs/ui/widget/tw.md, the whole repository's Go source, every
 // test file) and type-check the exports of packages they do not import, and
 // are fast.
-var alwaysTested = []string{"internal/skillsdocs", "internal/twclass", "internal/nocgo", "internal/waitcheck"}
+var alwaysTested = []string{"internal/skillsdocs", "internal/twclass", "internal/nocgo", "internal/noloader", "internal/waitcheck"}
 
 // cmdDir is the command line tool, whose tests build the apps of its
 // templates, and the programs of its other platforms, against the checkout:
