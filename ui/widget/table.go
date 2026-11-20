@@ -162,7 +162,9 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// called, so a grid without them builds what it did.
 	statusHook func(c *ui.Context, row, col int) bool
 	rowFormat  func(*T) CellFormat // SetRowFormat's
-	empty      *EmptyStateWidget   // SetEmptyState's
+	// withEmpty, set by SetEmptyState, builds the table with the empty state
+	// over it; a func, so that a grid without one names no EmptyStateWidget.
+	withEmpty func(c *ui.Context)
 
 	// framer, when set by a ListView, is the control whose style stands
 	// instead of the table's frame (frameList), with the table's own.
@@ -684,7 +686,11 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	// It fills the room it is given, as ScrollPanel does: as tall as its
 	// rows, it would not fit where nothing grows it, as in View.
 	return ui.Column(c).Gap(8).Grow(1).Children(func() {
-		t.table(c).Grow(1)
+		if t.withEmpty != nil {
+			t.withEmpty(c)
+		} else {
+			t.table(c).Grow(1)
+		}
 		if t.panel != nil {
 			t.counts()
 			render(c, t.panel)

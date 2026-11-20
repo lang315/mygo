@@ -29,8 +29,44 @@ func (t *DataGridViewWidget[T, K]) SetRowFormat(f func(*T) CellFormat) *DataGrid
 // SetEmptyState draws e over the body while the grid shows no row (none, or
 // none its search keeps); the headers stay. nil removes it.
 func (t *DataGridViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *DataGridViewWidget[T, K] {
-	t.change(func() { t.empty = e })
+	t.change(func() {
+		t.withEmpty = nil
+		if e != nil {
+			// The table goes into a box of its own, which holds the empty state
+			// over it, rows or not: a box that came and went with the rows
+			// would move the table among the elements and lose its state.
+			t.withEmpty = func(c *ui.Context) {
+				ui.Column(c).Grow(1).Children(func() {
+					emptyOver(c, t.table(c).Grow(1), e, t.view.Len() == 0)
+				})
+			}
+		}
+	})
 	return t
+}
+
+// emptyOver builds e over the body of the table tb, below its header, when
+// shows; else it keeps e as render keeps a hidden control. Under mu, after
+// tb is built.
+func emptyOver(c *ui.Context, tb ui.Element, e *EmptyStateWidget, shows bool) {
+	if !shows {
+		keeping.hold(e.base())
+		return
+	}
+	th := c.Theme()
+	head := th.Metrics.HeaderHeight // ui's table: the header's height, then a line of 1
+	if head <= 0 {
+		head = th.Metrics.RowHeight
+	}
+	if head <= 0 {
+		head = th.Space(8)
+	}
+	outer := axis
+	axis = vertical
+	if el := render(c, e); !e.hidden {
+		el.Absolute().Top(tb.BorderWidths()[0] + head + 1).Left(0).Right(0).Bottom(0)
+	}
+	axis = outer
 }
 
 // enableStatus hands the table the builder of cells with a badge or a format
@@ -69,13 +105,6 @@ func (t *DataGridViewWidget[T, K]) statusCell(c *ui.Context, row, ci int) bool {
 	if f == (CellFormat{}) && s == StatusNone {
 		return false
 	}
-	// The selection's fill and text win over every format, as over
-	// Column.Color. The box stays, so that the cell's content keeps its
-	// place among the elements: an editor in it keeps the focus as the edit
-	// selects its row.
-	if c.RowSelected() {
-		f = CellFormat{}
-	}
 	detail := ""
 	if s == StatusRunning && cl.BadgeDetail != nil {
 		detail = cl.BadgeDetail(r)
@@ -90,17 +119,21 @@ func (t *DataGridViewWidget[T, K]) statusCell(c *ui.Context, row, ci int) bool {
 			t.indexCell(c, row)
 		case s == StatusNone:
 			t.cellContent(c, ci, r, f.Text == (ui.Color{})) // Format.Text wins over Column.Color
-		case t.cellHook != nil && t.cellHook(c, ci, r): // the cell being edited shows its editor
-		default:
-			text := cl.Text(r)
-			name := text
-			if detail != "" {
-				name = text + ", " + detail // built with the row, which a frame at rest keeps
-			}
-			badgePill(c, s, text, detail, name, t.disabled, t.textKey)
+		case t.cellHook == nil || !t.cellHook(c, ci, r): // the cell being edited shows its editor
+			badgeCell(c, s, cl.Text(r), detail, t.disabled, t.textKey)
 		}
 	})
 	return true
+}
+
+// badgeCell builds a cell's badge of status s, read as its text, then its
+// detail. Under mu.
+func badgeCell(c *ui.Context, s Status, text, detail string, disabled bool, key any) {
+	name := text
+	if detail != "" {
+		name = text + ", " + detail // built with the row, which a frame at rest keeps
+	}
+	badgePill(c, s, text, detail, name, disabled, key)
 }
 
 // over returns f with the fields it leaves zero taken from under: a column's
@@ -125,6 +158,13 @@ func (f CellFormat) over(under CellFormat) CellFormat {
 // above and below, none with a row height), which it pads back. fixedRows is
 // SetRowHeight's. Under mu.
 func formatBox(c *ui.Context, f CellFormat, align Align, fixedRows bool) ui.Element {
+	// The selection's fill and text win over every format, as over
+	// Column.Color. The box stays, so that the cell's content keeps its
+	// place among the elements: an editor in it keeps the focus as the edit
+	// selects its row.
+	if c.RowSelected() {
+		f = CellFormat{}
+	}
 	th := c.Theme()
 	padX, padY := th.Space(2.5), th.Space(1.5)
 	if fixedRows || th.Metrics.RowHeight > 0 {
