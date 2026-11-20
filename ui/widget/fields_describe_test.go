@@ -135,8 +135,8 @@ func TestDescribeInTheOtherLayouts(t *testing.T) {
 		if !stacked && c.X < l.X+l.W {
 			t.Errorf("grid: the control %v is not beside the label %v", c, l)
 		}
-		if !mutedIn(tt.Tester, d) {
-			t.Errorf("stacked %v: the description is not in TextMuted", stacked)
+		if !mutedIn(tt.Tester, d) || textIn(tt.Tester, d) {
+			t.Errorf("stacked %v: the description is not in TextMuted alone", stacked)
 		}
 		if got := descriptionOf(t, tt, "Tên"); got != nameDesc {
 			t.Errorf("stacked %v: the control's description is %q", stacked, got)
@@ -194,6 +194,13 @@ func TestDescribeNextToALongLabel(t *testing.T) {
 	}
 	if mid, cm := (l.Y+d.Y+d.H)/2, c.Y+c.H/2; !approx(mid, cm) {
 		t.Errorf("the label and description's middle at %v, the control's at %v", mid, cm)
+	}
+	// Beside a control taller than both, the label and its description sit
+	// at the control's middle together.
+	tall := NewTester(t, Fields().SettingsRows().Row("Tên", wbar("c1", 60, 120)).Describe(nameDesc), 400, 400)
+	l, d, c = find(t, tall.Tester, "Tên"), find(t, tall.Tester, nameDesc), find(t, tall.Tester, "c1")
+	if mid, cm := (l.Y+d.Y+d.H)/2, c.Y+60; !approx(mid, cm) {
+		t.Errorf("beside a tall control: the label and description's middle at %v, the control's at %v", mid, cm)
 	}
 }
 
