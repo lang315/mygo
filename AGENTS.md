@@ -195,7 +195,9 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   Docker.
 - The `dist/` of npm packages is not committed: run `bun run build` after
   `bun install` (CI and releases do). Commit `internal/bridge/bridge.js`
-  whenever its sources change. Generated TypeScript clients (`mygo.ts`)
+  and `internal/windows/keys.js` whenever their sources change: CI's
+  check job fails when either differs from `bun run build`'s output.
+  Generated TypeScript clients (`mygo.ts`)
   are not committed (`.gitignore`): `mygo dev`, `mygo build` and `mygo
   generate` write them. Built frontends are not committed: `mygo build`
   embeds them.
