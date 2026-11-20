@@ -501,13 +501,23 @@ func TestGridEmptyState(t *testing.T) {
 	if title.Y <= head.Y+head.H || title.X+title.W/2 < 380 || title.X+title.W/2 > 420 || title.Y < body.Y+body.H/2-80 || title.Y > body.Y+body.H/2+40 {
 		t.Errorf("the title %v is not centered in the body %v", title, body)
 	}
-	click(t, tt, "Name") // the header still sorts under the empty state
-	tb.AddRows([]acct{{2, "bob", 1}, {1, "ann", 2}})
+	click(t, tt, "Name")         // the header still sorts under the empty state
+	tb.AddRow(acct{2, "bob", 1}) // one row is enough to take it away
+	tt.Frame()
+	if tt.HasText("Chưa có tài khoản") {
+		t.Error("the empty state shows over one row")
+	}
+	tb.AddRow(acct{1, "ann", 2})
 	tt.Frame()
 	if tt.HasText("Chưa có tài khoản") {
 		t.Error("the empty state shows over rows")
 	}
 	inOrder(t, tt, "ann", "bob")
+	tb.Search("Name", "bo") // keeps exactly one row
+	tt.Frame()
+	if tt.HasText("Chưa có tài khoản") || !tt.HasText("bob") || tt.HasText("ann") {
+		t.Errorf("a search that keeps one row shows %q, want bob alone and no empty state", tt.Texts())
+	}
 	tb.Search("Name", "zzz")
 	tt.Frame()
 	if !tt.HasText("Chưa có tài khoản") {
