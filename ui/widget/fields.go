@@ -1,6 +1,9 @@
 package widget
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
+)
 
 // FieldsWidget lays out a form: rows of a label and the control it names.
 type FieldsWidget struct {
@@ -11,6 +14,7 @@ type FieldsWidget struct {
 	settings       bool
 	rowGap, colGap float32
 	gapSet         bool
+	tracks         []ui.Track // a card's row tracks, kept between frames: RowTracks copies them
 }
 
 type fieldRow struct {
@@ -18,6 +22,7 @@ type fieldRow struct {
 	w     Control
 	key   rune // the label's mnemonic: Alt+key focuses w
 	at    int  // its place in the label, in runes
+	rule  any  // fieldRule of the label's id, boxed once: the key of the divider above it
 }
 
 // fieldHead is a section's heading, shown before row at.
@@ -60,7 +65,7 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 				return
 			}
 		}
-		f.rows = append(f.rows, fieldRow{l, c, key, at})
+		f.rows = append(f.rows, fieldRow{label: l, w: c, key: key, at: at, rule: fieldRule(l.id)})
 		adopt(&f.core, c)
 	})
 	return f
@@ -200,85 +205,176 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			}
 		})
 	}
-	tracks := []ui.Track{ui.FitContent(), ui.Fr(1)}
 	if f.settings {
-		tracks = []ui.Track{ui.Fr(1).MinContent(), ui.FitContent()}
+		return f.cards(c, rowGap, colGap, sectionGap)
 	}
-	// With a skin, a settings row is at least its SettingsRowHeight: the
-	// grid's rows, one track each, those of the fields at least that high.
-	var rows []ui.Track
-	least := float32(0)
-	if tk, scale := skinOf(c); tk != nil && f.settings {
-		least = tk.SettingsRowHeight * scale
-	}
-	row := func(min float32) {
-		if least > 0 {
-			rows = append(rows, ui.FitContent().Min(min))
-		}
-	}
-	g := ui.Grid(c).ColumnTracks(tracks...).GapX(colGap).GapY(rowGap).Children(func() {
+	return ui.Grid(c).ColumnTracks(ui.FitContent(), ui.Fr(1)).GapX(colGap).GapY(rowGap).Children(func() {
 		// A cell's Align and VAlign are across and along the cell, not a
 		// box's axes: build the cells as for a row, whose cross axis is vertical.
 		outer := axis
 		axis = horizontal
 		defer func() { axis = outer }()
-		first, shown := true, false // no divider is due; a row is up
+		shown := false // a row is up
 		for i, r := range f.rows {
 			titled, brk := false, false
 			for _, h := range f.headings(i) {
-				first = true
 				if h.text == "" {
 					brk = true
 					continue
 				}
 				titled = true
 				e := render(c, h).Role(ui.RoleHeading).ColumnSpan(2)
-				row(0)
 				if shown {
 					e.Margin(sectionGap, 0, 0, 0)
 				}
 			}
 			if brk && !titled && shown && breakGap > 0 {
 				ui.Box(c.Key(fieldBreak(i))).ColumnSpan(2).Height(breakGap)
-				row(0)
 			}
 			if r.w.base().hidden {
 				f.hold(r)
 				continue
 			}
-			if f.settings && !first {
-				ui.Divider(c.Key(fieldRule(r.label.id))).ColumnSpan(2)
-				row(0)
-			}
-			row(least)
-			first, shown = false, true
-			r.underline(c)
-			e := render(c, r.label) // holds a hidden label
-			if r.key != 0 {
-				registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
-			}
-			if r.label.hidden { // keep its cell, or ui flows the control into it
-				ui.Box(c.Key(fieldHole(r.label.id)))
-			} else {
-				place(e, r.label, ui.Start)
-				if r.label.place.valign == 0 {
-					e.AlignSelf(ui.Center)
-				}
-			}
-			def := ui.Stretch
-			if f.settings {
-				def = ui.End
-			}
-			ce := render(c, r.w).NamedBy(e)
-			place(ce, r.w, def)
-			// A control keeps its own height next to a wrapped label, and sits
-			// at its middle, as the label does.
-			if f.settings && r.w.base().place.valign == 0 && !fillsAcross(r.w) {
-				ce.AlignSelf(ui.Center)
-			}
+			shown = true
+			f.cells(c, i)
 		}
 	})
-	return g.RowTracks(rows...)
+}
+
+// cards builds SettingsRows: the rows of each section in a card, its title
+// above it, outside the card. A section whose rows are all hidden has
+// neither. Under mu.
+func (f *FieldsWidget) cards(c *ui.Context, rowGap, colGap, sectionGap float32) ui.Element {
+	t := c.Theme()
+	// With a skin, a row is at least its SettingsRowHeight: the grid's rows,
+	// one track each, those of the fields at least that high.
+	least := float32(0)
+	tk, scale := skinOf(c)
+	if tk != nil {
+		least = tk.SettingsRowHeight * scale
+	}
+	row := func(min float32) {
+		if least > 0 {
+			f.tracks = append(f.tracks, ui.FitContent().Min(min))
+		}
+	}
+	return ui.Column(c).Children(func() {
+		outer := axis
+		axis = vertical
+		defer func() { axis = outer }()
+		shown := false // a card is up
+		for i := 0; i < len(f.rows); {
+			start, end := i, f.sectionEnd(i)
+			i = end
+			if !f.anyShown(start, end) {
+				for _, r := range f.rows[start:end] {
+					f.hold(r)
+				}
+				continue
+			}
+			gap := float32(0) // above the title, or the card when it has none
+			if shown {
+				gap = sectionGap
+			}
+			for _, h := range f.headings(start) {
+				if h.text != "" {
+					render(c, h).Role(ui.RoleHeading).Margin(gap, 0, t.Space(1.5), 0)
+					gap = 0
+				}
+			}
+			shown = true
+			// The card, as Card draws one, is the grid of its rows.
+			g := ui.Grid(c).ColumnTracks(ui.Fr(1).MinContent(), ui.FitContent()).GapX(colGap).GapY(rowGap).
+				Margin(gap, 0, 0, 0).Padding(t.Space(1), t.Space(3)).Border(1, t.Border).Radius(t.Radius).
+				Background(t.Surface)
+			if tk != nil {
+				g.Radius(tk.RadiusCard)
+				if sh := tk.CardShadow; sh.Color.A != 0 {
+					g.Shadow(0, sh.Y, sh.Blur, sh.Spread, sh.Color)
+				}
+			}
+			if look := lookOf(skinhook.KindSettingsCard); look != nil {
+				st := look.effective(t.Dark, false, false, false, false, f.disabled)
+				st.apply(c, g, f.textKey)
+			}
+			f.tracks = f.tracks[:0]
+			g.Children(func() {
+				// The cells are built as for a row, as in the plain grid.
+				axis = horizontal
+				defer func() { axis = vertical }()
+				first := true // no divider is due
+				for j := start; j < end; j++ {
+					r := &f.rows[j]
+					if r.w.base().hidden {
+						f.hold(*r)
+						continue
+					}
+					if !first {
+						ui.Divider(c.Key(r.rule)).ColumnSpan(2)
+						row(0)
+					}
+					row(least)
+					first = false
+					f.cells(c, j)
+				}
+			})
+			g.RowTracks(f.tracks...)
+		}
+	})
+}
+
+// sectionEnd returns the end of the rows of the section row i is in: the
+// next row a section starts at, or the last. Under mu.
+func (f *FieldsWidget) sectionEnd(i int) int {
+	end := len(f.rows)
+	for _, h := range f.heads {
+		if h.at > i && h.at < end {
+			end = h.at
+		}
+	}
+	return end
+}
+
+// anyShown reports whether a row of rows [i, end) shows. Under mu.
+func (f *FieldsWidget) anyShown(i, end int) bool {
+	for _, r := range f.rows[i:end] {
+		if !r.w.base().hidden {
+			return true
+		}
+	}
+	return false
+}
+
+// cells builds row i of a grid: its label, and its control, across its
+// column where it asks, else stretched or, in SettingsRows, at its end.
+// Under mu.
+func (f *FieldsWidget) cells(c *ui.Context, i int) {
+	r := &f.rows[i]
+	r.underline(c)
+	e := render(c, r.label) // holds a hidden label
+	if r.key != 0 {
+		w := r.w
+		registerMnemonic(r.key, e, w, func() { focusLater(w) })
+	}
+	if r.label.hidden { // keep its cell, or ui flows the control into it
+		ui.Box(c.Key(fieldHole(r.label.id)))
+	} else {
+		place(e, r.label, ui.Start)
+		if r.label.place.valign == 0 {
+			e.AlignSelf(ui.Center)
+		}
+	}
+	def := ui.Stretch
+	if f.settings {
+		def = ui.End
+	}
+	ce := render(c, r.w).NamedBy(e)
+	place(ce, r.w, def)
+	// A control keeps its own height next to a wrapped label, and sits
+	// at its middle, as the label does.
+	if f.settings && r.w.base().place.valign == 0 && !fillsAcross(r.w) {
+		ce.AlignSelf(ui.Center)
+	}
 }
 
 // hold keeps the widgets of a row the form does not build, so that showing
