@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
@@ -63,6 +64,18 @@ func TestBuiltinsPassStatusPairs(t *testing.T) {
 					t.Errorf("%s with %s, compact: %v", s.Name(), p.Name(), err)
 				}
 			}
+		}
+	}
+}
+
+// A dark blue accent on HighContrast: its dark Info is the accent, whose text
+// must read on its Subtle over a hovered row (#1a1a1a) too, not only over
+// the selected row the accent makes. Without that row in WithAccent's search
+// these fail "Info Text on Subtle over RowHover" at 6.95 to 6.99:1.
+func TestHighContrastDarkBlueAccentOverRowHover(t *testing.T) {
+	for _, h := range []string{"#002d51", "#003e60", "#004168", "#004a7b", "#005796"} {
+		if err := HighContrast.WithAccent(ui.Hex(h)).Check(); err != nil {
+			t.Errorf("HighContrast.WithAccent(%s): %v", h, err)
 		}
 	}
 }

@@ -175,6 +175,27 @@ func TestBadgeRunningDetail(t *testing.T) {
 	}
 }
 
+// A running badge with no detail is read as its text alone, draws no detail
+// and ends where its pill ends.
+func TestBadgeRunningNoDetail(t *testing.T) {
+	calmOff()
+	tt := badgeTester(t, Badge("Đang chạy").SetStatus(StatusRunning))
+	box := badgeBox(t, tt, "Đang chạy")
+	for _, n := range tt.Nodes() {
+		if n.Label == "Đang chạy, " {
+			t.Error("the badge is read as \"Đang chạy, \"")
+		}
+	}
+	if texts := tt.Texts(); len(texts) != 2 || texts[0] != "Đang chạy" || texts[1] != "Đang chạy" {
+		t.Errorf("the frame shows %q, want the badge's name and its text alone", texts)
+	}
+	// The pill's right end is the badge's: no gap, no detail after it.
+	y := int(box.Y + box.H/2)
+	if c := tt.Image().RGBAAt(int(box.X+box.W)-3, y); c == page(tt) {
+		t.Errorf("3 DIPs inside the badge's right edge is the page %v: something after the pill", c)
+	}
+}
+
 // Case 4: StatusNone is TextMuted on SurfaceHover with a skin, and as
 // ui.Badge without one, Text at 0.1.
 func TestBadgeNone(t *testing.T) {

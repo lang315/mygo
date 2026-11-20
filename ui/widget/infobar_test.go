@@ -115,6 +115,75 @@ func TestInfoBarPlain(t *testing.T) {
 	}
 }
 
+// iconBox is the 20 DIP icon at the left of the bar r, inside its padding.
+func iconBox(r ui.Rect) ui.Rect {
+	pad := space(3)
+	return ui.Rect{X: r.X + pad, Y: r.Y + pad, W: 20, H: 20}
+}
+
+// pixelsNear is how many pixels of r are within tol of c.
+func pixelsNear(tt *ui.Tester, r ui.Rect, c ui.Color, tol int) int {
+	n := 0
+	for y := int(r.Y); y < int(r.Y+r.H); y++ {
+		for x := int(r.X); x < int(r.X+r.W); x++ {
+			if nearTol(tt.Image().RGBAAt(x, y), c, tol) {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// The icon's glyph: under Calm, Info's On (white) inside Info's Base; with no
+// skin, black on the amber warning sign, where white is under 3:1, and white
+// on the red error circle.
+func TestInfoBarIconGlyph(t *testing.T) {
+	white, black := ui.RGB(255, 255, 255), ui.RGB(0, 0, 0)
+	useCalm(t, true)
+	t.Cleanup(calmOff)
+	tk := skinhook.Get(false)
+	if tk.Info.On != white {
+		t.Fatalf("Calm light's Info.On is %v: the test wants white", tk.Info.On)
+	}
+	tt := tester(t, VBox(0).Add(InfoBar(StatusInfo, "Có bản cập nhật", "")).SetSize(400, 0))
+	icon := iconBox(barOf(t, tt, ui.RoleStatus))
+	if n := pixelsNear(tt, icon, tk.Info.Base, 6); n < 100 {
+		t.Errorf("Calm's Info icon has %d pixels of Info.Base %v, want its circle", n, tk.Info.Base)
+	}
+	if n := pixelsNear(tt, icon, white, 6); n < 10 {
+		t.Errorf("Calm's Info icon has %d white pixels, want its glyph in Info.On", n)
+	}
+
+	calmOff()
+	// The dark theme's amber, #f59e0b, is 2.1:1 under white; its red, #ef4444,
+	// 3.8:1.
+	if w, d := ui.DarkTheme().Warning, ui.DarkTheme().Danger; w != ui.Hex("#f59e0b") || d != ui.Hex("#ef4444") {
+		t.Fatalf("the dark theme's Warning and Danger are %v and %v: the test wants #f59e0b and #ef4444", w, d)
+	}
+	for _, c := range []struct {
+		s                  Status
+		glyph, other, base ui.Color
+	}{
+		{StatusWarning, black, white, ui.Hex("#f59e0b")},
+		{StatusDanger, white, black, ui.Hex("#ef4444")},
+	} {
+		tt := tester(t, VBox(0).Add(InfoBar(c.s, "Tiêu đề", "")).SetSize(400, 0))
+		tt.SetDark(true)
+		tt.Frame()
+		icon := iconBox(barOf(t, tt, ui.RoleAlert))
+		if n := pixelsNear(tt, icon, c.base, 6); n < 60 {
+			t.Errorf("%v: %d pixels of the base %v, want its shape", c.s, n, c.base)
+		}
+		// The thin mark is anti-aliased: its core within 30 of the glyph color.
+		if n := pixelsNear(tt, icon, c.glyph, 30); n < 8 {
+			t.Errorf("%v: %d pixels of the glyph %v, want its mark", c.s, n, c.glyph)
+		}
+		if n := pixelsNear(tt, icon, c.other, 30); n != 0 {
+			t.Errorf("%v: %d pixels of %v, a glyph in the wrong color", c.s, n, c.other)
+		}
+	}
+}
+
 // A bar with no title starts its message at the top of the text column, and
 // one with no message is as high as its title and padding: neither keeps
 // room for the part it has not.
