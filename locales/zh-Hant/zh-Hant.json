@@ -230,5 +230,10 @@
   "permissionBluetooth": "藍牙",
   "permissionMediaAppleMusic": "媒體與 Apple Music",
   "guideDrag": "將{app}拖入上方列表以允許{permission}。",
-  "guideDragHint": "拖入"
+  "guideDragHint": "拖入",
+  "skinPickerSkin": "外觀",
+  "skinPickerPalette": "調色盤",
+  "skinPickerDensity": "密度",
+  "standardDensity": "標準",
+  "compactDensity": "緊湊"
 }
