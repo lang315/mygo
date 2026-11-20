@@ -20,6 +20,10 @@ const (
 	Error
 )
 
+// kindSuccess is an info bar's success icon, a check in a circle: no
+// message dialog has it.
+const kindSuccess = Error + 1
+
 // kindShapes are the message dialogs' icons, filled, drawn in a 32 by 32
 // box: %[1]s is the color of the shape, %[2]s that of the glyph on it.
 var kindShapes = [...]string{
@@ -27,6 +31,9 @@ var kindShapes = [...]string{
 	Warning:  `<path d="M16 3 30 28H2z" fill="%[1]s" stroke="%[1]s" stroke-width="3" stroke-linejoin="round"/><path d="M16 11.5v8" stroke="%[2]s" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24" r="1.9" fill="%[2]s"/>`,
 	Question: `<circle cx="16" cy="16" r="15" fill="%[1]s"/><path d="M11.5 12.5a4.5 4.5 0 1 1 6.5 4c-1.6.9-2 1.9-2 3.3" stroke="%[2]s" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="16" cy="24.5" r="2" fill="%[2]s"/>`,
 	Error:    `<circle cx="16" cy="16" r="15" fill="%[1]s"/><path d="m10.5 10.5 11 11m0-11-11 11" stroke="%[2]s" stroke-width="3.4" stroke-linecap="round" fill="none"/>`,
+
+	// An info bar's alone.
+	kindSuccess: `<circle cx="16" cy="16" r="15" fill="%[1]s"/><path d="m9.5 16.5 4.5 4.5 8.5-9" stroke="%[2]s" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`,
 }
 
 // plainKindIcons are the icons without a skin: in their own colors, the
