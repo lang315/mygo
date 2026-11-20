@@ -223,7 +223,9 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   architecture guide): wait for the condition or event with
   `internal/wait`, whose one-minute guard only turns a hang into a
   failure and is never tuned; advance a `ui.Tester`'s clock instead of
-  sleeping; measure work by counts, not durations. A test that can time
+  sleeping; measure work by counts, not durations (`internal/waitcheck`
+  fails a test file with more sleeps, timers or deadlines than its
+  baseline). A test that can time
   out while the code is right has a race to fix, in the test or the
   product, not a timeout to raise or a rerun to hide behind.
   GUI tests share a process and, on Linux, an X server: what one leaves

@@ -18,9 +18,9 @@ type Package struct {
 }
 
 // alwaysTested are tested whatever changed: they read files (the skills
-// and docs, docs/ui/widget/tw.md) and type-check the exports of packages
-// they do not import, and are fast.
-var alwaysTested = []string{"internal/skillsdocs", "internal/twclass"}
+// and docs, docs/ui/widget/tw.md, every test file) and type-check the
+// exports of packages they do not import, and are fast.
+var alwaysTested = []string{"internal/skillsdocs", "internal/twclass", "internal/waitcheck"}
 
 // cmdDir is the command line tool, whose tests build the apps of its
 // templates, and the programs of its other platforms, against the checkout:
