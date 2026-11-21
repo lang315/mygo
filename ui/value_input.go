@@ -451,6 +451,16 @@ func (n *node) afterInputNode(fn func(*node)) {
 	n.c.rt.afterInputs = append(n.c.rt.afterInputs, inputAction{node: n, fnNode: fn, building: n.c.rt.building})
 }
 
+// afterInputLink runs fn on n with url and router, which no closure holds.
+// It is a function and not a method of node: a method's name and entry stay
+// in the program of every app, a function that no app without a link
+// reaches does not.
+func afterInputLink(n *node, fn func(*node, string, *Router), url string, router *Router) {
+	ic := n.c.rt.itemChecks.next()
+	ic.box, ic.link, ic.url, ic.router = n, fn, url, router
+	n.afterInputCheck(ic)
+}
+
 // onBuilt runs fn once the view is built, after the input of every
 // control, while typing (state.typing) still shows: for what needs all of
 // a widget's parts, which the app builds, as the items of a tree.
