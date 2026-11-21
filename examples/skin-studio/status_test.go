@@ -11,9 +11,9 @@ import (
 
 // The status controls under the message boxes of the Dialogs and messages
 // page, with no skin and each built-in one, light and dark: a badge of each status (Running with its step), six info bars
-// (Warning and Danger alerts, the rest statuses), the action and close, and
-// the empty state's action, all inside the window; the action and close
-// work.
+// (Warning and Danger alerts, the rest statuses), the action and close, a
+// grid of badge cells, and an empty grid's empty state with its action, all
+// inside the window; the action and close work.
 func TestStatusPage(t *testing.T) {
 	reset(t)
 	for _, s := range []*skin.Skin{nil, skin.Calm, skin.Classic, skin.HighContrast} {
@@ -25,7 +25,9 @@ func TestStatusPage(t *testing.T) {
 			tt.Find(widget.ByRole(ui.RoleTab).Label("Dialogs and messages")).Click()
 			tt.Frame()
 			name := describe(s)
-			for _, b := range []string{"Draft", "Đồng bộ", "Đang chạy, Bước 2/5", "Live", "Cần xác minh", "Sai mật khẩu"} {
+			// The badges, then the grid's badge cells.
+			for _, b := range []string{"Draft", "Đồng bộ", "Đang chạy, Bước 2/5", "Live", "Cần xác minh", "Sai mật khẩu",
+				"Running, Bước 2/5", "Done", "Failed", "Waiting"} {
 				if !tt.Has(widget.ByRole(ui.RoleText).Label(b)) {
 					t.Errorf("%s, dark %v: no badge %q", name, dark, b)
 				}
@@ -48,6 +50,9 @@ func TestStatusPage(t *testing.T) {
 			}
 			if bottom > formHeight {
 				t.Errorf("%s, dark %v: the page ends at %v, below the window's %d", name, dark, bottom, formHeight)
+			}
+			if !tt.Has(widget.ByLabel("Chưa có tài khoản")) {
+				t.Errorf("%s, dark %v: the empty grid shows no empty state", name, dark)
 			}
 			for _, b := range []string{"Xác minh", "Close", "Thêm tài khoản"} {
 				if !tt.Has(widget.ByRole(ui.RoleButton).Label(b)) {

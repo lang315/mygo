@@ -369,10 +369,52 @@ func status(result *widget.LabelWidget) widget.Control {
 			widget.InfoBar(widget.StatusDanger, "Sai mật khẩu", "Đăng nhập lại để tiếp tục đồng bộ."),
 			widget.InfoBar(widget.StatusNone, "Ghi chú", "Một thông báo không có trạng thái."),
 		), true, true),
-		title("Empty state"),
-		widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản để bắt đầu đồng bộ.").
-			SetAction("Thêm tài khoản", func() { result.SetText("Add clicked") }).SetSize(0, 180),
+		title("Grids: statuses and an empty state"),
+		widget.HBox(8).Pack(statusGrid(), true, true).Pack(emptyGrid(result), true, true),
 	)
+}
+
+// statusOf is the badge status of an account's Status.
+func statusOf(a *account) widget.Status {
+	switch a.Status {
+	case "Running":
+		return widget.StatusRunning
+	case "Done":
+		return widget.StatusSuccess
+	case "Failed":
+		return widget.StatusDanger
+	}
+	return widget.StatusWarning
+}
+
+// statusGrid is a grid of accounts whose Status cells are badges, a running
+// one with its step, whose failed rows are formatted Danger and whose ID
+// column is Info, a column's format over the row's.
+func statusGrid() widget.Control {
+	cols := columns()
+	cols[0].Format = func(*account) widget.CellFormat { return widget.CellFormat{Status: widget.StatusInfo} }
+	cols[1].Width, cols[2].Width = 180, 200 // the running badge's step fits
+	cols[2].Badge = statusOf
+	cols[2].BadgeDetail = func(*account) string { return "Bước 2/5" }
+	grid := widget.DataGridView(func(a *account) int { return a.ID }, cols...).SetRows(accounts()[:4]).
+		SetRowFormat(func(a *account) widget.CellFormat {
+			if a.Status == "Failed" {
+				return widget.CellFormat{Status: widget.StatusDanger, Bold: true}
+			}
+			return widget.CellFormat{}
+		})
+	grid.SetSize(0, 180)
+	return grid
+}
+
+// emptyGrid is a grid with no rows, which shows its empty state, whose action
+// writes to result.
+func emptyGrid(result *widget.LabelWidget) widget.Control {
+	grid := widget.DataGridView(func(a *account) int { return a.ID }, columns()...).
+		SetEmptyState(widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản để bắt đầu đồng bộ.").
+			SetAction("Thêm tài khoản", func() { result.SetText("Add clicked") }))
+	grid.SetSize(0, 180)
+	return grid
 }
 
 // customDialog runs a dialog of its own.

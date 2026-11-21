@@ -747,6 +747,52 @@ of each cell drawn, so keep them with the rows if you can), `Color`
 `Image`. The column functions and the key run under the package's
 lock: they read the row and call no widget method.
 
+Statuses and formats, as an account list shows them:
+
+```go
+state := widget.Column[Account]{Title: "Trạng thái", Text: func(a *Account) string { return a.State },
+	Badge:       func(a *Account) widget.Status { return a.Status },  // the Text as a badge; StatusNone: plain Text
+	BadgeDetail: func(a *Account) string { return a.Step },           // after a StatusRunning pill, in TextMuted
+	Format: func(a *Account) widget.CellFormat {                       // this column's cells
+		if a.Expired {
+			return widget.CellFormat{Status: widget.StatusWarning}
+		}
+		return widget.CellFormat{}
+	}}
+t := widget.DataGridView(key, uid, state).
+	SetRowFormat(func(a *Account) widget.CellFormat { // every cell of the row
+		if a.Banned {
+			return widget.CellFormat{Status: widget.StatusDanger, Bold: true}
+		}
+		return widget.CellFormat{}
+	}).
+	SetEmptyState(widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản để bắt đầu."))
+```
+
+- `Badge` draws the cell's `Text` as a [badge](widget/badge.md) of the status
+  it returns, 20 DIPs high, which fits a Compact row; `BadgeDetail` is a
+  running badge's step, called only for `StatusRunning`. The cell is read as
+  the text, then the step; it sorts, searches and copies as `Text` alone. On a
+  selected row the pill keeps its colors.
+- A `CellFormat` styles a cell: `Status` gives its family's `Subtle` fill and
+  `Text` color, `Fill` and `Text` override them, and `Bold` makes the text
+  bold. The fill covers the cell's whole box, to its end line with
+  `SetGridLines`. A column's `Format` wins over `SetRowFormat` field by field,
+  and `Format.Text` over `Column.Color`. A selected row shows the selection,
+  not the format. Under HighContrast a status draws no fill: its family's
+  text, bold. The `#` column of `IndexColumn` takes the row's format; the
+  check box column does not.
+- The functions run as a row is built: a row kept from frame to frame does
+  not call them again until it changes (`UpdateRow`), and a frame at rest
+  allocates nothing for them. `SetRowFormat(nil)` removes the row's format.
+- `SetEmptyState(e)` draws an [empty state](widget/emptystate.md) over the
+  body, under the headers, which still sort, while no row shows (none, or
+  none the search keeps); `nil` removes it.
+- A grid without them builds what it did, but every app with a grid links
+  the code of badge cells and formats (about 20 KB on darwin): the table
+  must look at its columns' fields, so no call of the app's own tells it
+  apart. `SetEmptyState` costs nothing until it is called.
+
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
   place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.
