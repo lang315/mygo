@@ -34,7 +34,11 @@ var instead = map[string]string{
 // allowed are the waits on the clock that are right, as "file function
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
-var allowed = map[string]string{}
+var allowed = map[string]string{
+	"plugins/updater/updater_test.go TestOnChange time.After":      "no change is told when none was made: a late call can only miss a bug",
+	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep": "no second check starts at once: a slow machine can only miss a bug",
+	"plugins/updater/native/window_test.go TestFit time.After":     "the window asks for no size once it has its own: a slow machine can only miss a bug",
+}
 
 type finding struct {
 	rel  string // the file, relative to the repository's root

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/wait"
 )
 
 func activateAvailabilityHarness(t *testing.T) *harness {
@@ -28,13 +30,8 @@ func TestAvailableVersionChangesNotify(t *testing.T) {
 	defer off()
 	wantChange := func(want string) {
 		t.Helper()
-		select {
-		case got := <-changes:
-			if got != want {
-				t.Fatalf("available version = %q, want %q", got, want)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("availability change was not reported")
+		if got := wait.For(t, "the availability change to be reported", changes); got != want {
+			t.Fatalf("available version = %q, want %q", got, want)
 		}
 	}
 	h.u.checked(nil, "2.0.0", false)

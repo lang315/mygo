@@ -82,11 +82,7 @@ func (s *session) answers() []response {
 func (s *session) fit(t *testing.T) [2]int {
 	t.Helper()
 	var size [2]int
-	select {
-	case size = <-s.fits:
-	case <-time.After(wait.Guard):
-		t.Fatal("the window did not ask for a size")
-	}
+	size = wait.For(t, "the window to ask for a size", s.fits)
 	for {
 		select {
 		case size = <-s.fits:
