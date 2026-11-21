@@ -49,6 +49,9 @@ type Looks struct {
 	// EmptyState is the box of an EmptyState, around its icon, title,
 	// message and action.
 	EmptyState string
+	// SettingsCard is each section of a Fields' SettingsRows, the card around
+	// its rows; "" takes the Card look.
+	SettingsCard string
 }
 
 // WithLooks returns a copy of the skin whose looks are l: each kind of l
@@ -83,6 +86,10 @@ func parseLooks(l Looks) *[skinhook.NumKinds]any {
 		skinhook.KindStatusStrip: l.StatusStrip, skinhook.KindMenuBar: l.MenuBar,
 		skinhook.KindHeaderBar: l.HeaderBar, skinhook.KindBadge: l.Badge,
 		skinhook.KindInfoBar: l.InfoBar, skinhook.KindEmptyState: l.EmptyState,
+		skinhook.KindSettingsCard: l.SettingsCard,
+	}
+	if strings.TrimSpace(l.SettingsCard) == "" {
+		classes[skinhook.KindSettingsCard] = l.Card
 	}
 	var out [skinhook.NumKinds]any
 	for k, cl := range classes {

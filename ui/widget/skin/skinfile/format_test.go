@@ -68,7 +68,14 @@ func roundTrips() map[string]*skin.Skin {
 			InfoBar:    "border-2 border-status",
 			EmptyState: "bg-chrome",
 		}),
-		"brand": brand(),
+		// P2b case 11: the settings cards' look comes back, and so does none
+		// beside a Card look, which the file does not fill in from Card.
+		"settings card": skin.Calm.WithLooks(skin.Looks{
+			Card:         "border-2 border-strong",
+			SettingsCard: "rounded-none border border-strong",
+		}),
+		"card only": skin.Calm.WithLooks(skin.Looks{Card: "border-2 border-strong"}),
+		"brand":     brand(),
 	}
 }
 
