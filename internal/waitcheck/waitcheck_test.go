@@ -38,6 +38,8 @@ var allowed = map[string]string{
 	"plugins/updater/updater_test.go TestOnChange time.After":            "no change is told when none was made: a late call can only miss a bug",
 	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep":       "no second check starts at once: a slow machine can only miss a bug",
 	"plugins/updater/native/window_test.go TestFit time.After":           "the window asks for no size once it has its own: a slow machine can only miss a bug",
+	"plugins/terminal/terminal_test.go TestResizeByConn time.After":      "Conn is not told the size a second time: a late call can only miss a bug",
+	"plugins/terminal/terminal_test.go TestUseTheme time.After":          "Conn is not told the same theme again: a late call can only miss a bug",
 	"protocol/protocol_test.go TestDownload time.After":                  "waits a while for a report of a download the window refused, which must never come",
 	"updates/updates_test.go TestUpdaterWaitsForTheAppToExit time.Sleep": "checks the bundle stays in place while the app runs, which only a late look can miss",
 }

@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/wait"
 )
@@ -22,14 +21,14 @@ func readAll(t *testing.T, p *PTY) string {
 		io.Copy(&out, p)
 		close(done)
 	}()
-	select {
-	case <-p.Exited():
-	case <-time.After(wait.Guard):
-		t.Fatal("the process did not exit")
+	wait.For(t, "the process to exit", p.Exited())
+	// What the process wrote before it exited is still to read: a unix
+	// master ends by itself, and a console's Close writes what it had.
+	if runtime.GOOS == "windows" {
+		p.Close()
 	}
-	// What the process wrote before it exited is still to read.
-	time.AfterFunc(200*time.Millisecond, func() { p.Close() })
-	<-done
+	wait.For(t, "the output to end", done)
+	p.Close()
 	return out.String()
 }
 
@@ -84,12 +83,8 @@ func TestClose(t *testing.T) {
 	}
 	// Closing the terminal hangs up the process.
 	p.Close()
-	select {
-	case <-p.Exited():
-	case <-time.After(5 * time.Second):
-		p.Kill()
-		t.Fatal("the process outlived its terminal")
-	}
+	defer p.Kill()
+	wait.For(t, "the process to exit: it outlived its terminal", p.Exited())
 }
 
 func TestConPTY(t *testing.T) {
