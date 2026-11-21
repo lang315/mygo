@@ -55,6 +55,11 @@ func TestActionEndsAWideRowsLabelLine(t *testing.T) {
 	if b.Y < linkBox(tt).Y+linkBox(tt).H-0.5 || !approx(b.X, 0) || !approx(b.W, 400) {
 		t.Errorf("the box %v is not under the link, across the form", b)
 	}
+	// A button, taller than the label, is centred on it too.
+	tb := NewTester(t, Fields().Row("Content", MultilineTextBox()).Wide().Action(Button("+")), 400, 400)
+	if l, k := find(t, tb.Tester, "Content"), tb.Find(ByLabel("+")).Bounds(); k.H <= l.H || !approx(midY(k), midY(l)) || !approx(k.X+k.W, 400) {
+		t.Errorf("the button %v, the label %v: want the button at the right edge, centred on the label", k, l)
+	}
 	// Alone in the form, every edge.
 	wantLabelLine(t, NewTester(t, Fields().Row("Content", MultilineTextBox()).Wide().Action(help()), 400, 400), 0, 400)
 }
@@ -109,6 +114,18 @@ func TestActionInASettingsRow(t *testing.T) {
 	if !approx(c.X, cardRight-30-space(3)-60) {
 		t.Errorf("the control at x %v, want %v", c.X, cardRight-30-space(3)-60)
 	}
+	// In a narrow card the text box gives the action its room: the two and
+	// the gap take the width the box takes alone, and the action keeps its
+	// own and ends at the card's inner edge (220 less its line and padding).
+	alone := fieldBox(NewTester(t, Fields().SettingsRows().Row("Notifications for every message", TextBox()), 220, 300), 0)
+	tn := NewTester(t, Fields().SettingsRows().Row("Notifications for every message", TextBox()).Action(Button("+")), 220, 300)
+	tb, b := fieldBox(tn, 0), tn.Find(ByLabel("+")).Bounds()
+	if !approx(b.X+b.W, 220-1-space(3)) || !approx(tb.X, alone.X) || !approx(b.X, tb.X+tb.W+space(3)) {
+		t.Errorf("in a narrow card: the text box %v and the button %v, the box alone %v", tb, b, alone)
+	}
+	if wide := NewTester(t, Fields().SettingsRows().Row("A", Button("+")), 400, 300).Find(ByLabel("+")).Bounds(); !approx(b.W, wide.W) {
+		t.Errorf("in a narrow card the button is %v wide, %v in a wide one", b.W, wide.W)
+	}
 }
 
 // Case 5: before any row Action does nothing; a second replaces the first;
@@ -138,6 +155,16 @@ func TestActionEdges(t *testing.T) {
 	wide := NewTester(t, Fields().Row("Content", TextBox()).Wide().Action(help()).Action(nil), 400, 300)
 	if !sameDrawing(wide, NewTester(t, Fields().Row("Content", TextBox()).Wide(), 400, 300)) {
 		t.Error("Action(nil) on a wide row left the form changed")
+	}
+	// No row is built around a grid row's control: beside a label made tall
+	// by its description, it keeps the top of its row, where the grid puts it.
+	tall := NewTester(t, Fields().Row("Kind", wbar("c", 60, 10)).Describe(nameDesc+" "+nameDesc).Action(help()).Action(nil), 200, 300)
+	if c := find(t, tall.Tester, "c"); !approx(c.Y, 0) {
+		t.Errorf("after Action(nil) the control is at y %v, want the row's top, 0", c.Y)
+	}
+	// No row is built around the label: it is as wide as its text, not the form.
+	if l := find(t, wide.Tester, "Content"); l.W > 100 {
+		t.Errorf("after Action(nil) the wide label is %v, wider than its text", l)
 	}
 }
 
@@ -259,6 +286,11 @@ func TestActionHiddenItself(t *testing.T) {
 			t.Errorf("wide %v: a hidden action changed the row", wide)
 		}
 	}
+	// No row is built around a grid row's control: it keeps its row's top.
+	tall := NewTester(t, Fields().Row("Kind", wbar("c", 60, 10)).Describe(nameDesc+" "+nameDesc).Action(help().SetVisible(false)), 200, 300)
+	if c := find(t, tall.Tester, "c"); !approx(c.Y, 0) {
+		t.Errorf("beside a hidden action the control is at y %v, want the row's top, 0", c.Y)
+	}
 }
 
 // A wide row with no label text: the link alone, at the right end.
@@ -290,17 +322,53 @@ func TestActionAtTextScaleInANarrowForm(t *testing.T) {
 		tt.Frame()
 		return tt
 	}
-	natural := linkBox(scaled(400, "C")).W
+	natural := linkBox(scaled(400, "C"))
 	tt := scaled(240, longLine)
 	l, k := find(t, tt.Tester, longLine), linkBox(tt)
 	if l.X+l.W > k.X+0.5 {
 		t.Errorf("the label %v reaches the link %v", l, k)
 	}
-	if !approx(k.W, natural) || !approx(k.X+k.W, 240) {
-		t.Errorf("the link %v, want %v wide at the right edge 240", k, natural)
+	if !approx(k.W, natural.W) || !approx(k.H, natural.H) || !approx(k.X+k.W, 240) {
+		t.Errorf("the link %v, want %vx%v at the right edge 240", k, natural.W, natural.H)
 	}
 	if one := find(t, scaled(240, "C").Tester, "C").H; l.H < 2*one {
 		t.Errorf("the label %v did not wrap", l)
+	}
+	// A label of one word too long to fit clips, and the link keeps its width.
+	word := scaled(240, "Kiểmtrađộdàicủamộttừkhôngthểngắtdòngđược")
+	k = linkBox(word)
+	if !approx(k.W, natural.W) || !approx(k.X+k.W, 240) {
+		t.Errorf("beside a long word the link is %v, want %v wide at the right edge 240", k, natural.W)
+	}
+	// The gap before the link is empty: the word is clipped there.
+	img := word.Image()
+	bg := img.RGBAAt(1, img.Bounds().Max.Y-1)
+	inked := false // the word draws left of the gap: the image is in DIPs
+	for x := 0; x < int(k.X-space(3)) && !inked; x++ {
+		for y := int(k.Y); y < int(k.Y+k.H); y++ {
+			inked = inked || img.RGBAAt(x, y) != bg
+		}
+	}
+	if !inked {
+		t.Fatal("the long word draws nothing left of the link")
+	}
+	for x := int(k.X - space(3) + 1); x < int(k.X)-1; x++ {
+		for y := int(k.Y); y < int(k.Y+k.H); y++ {
+			if img.RGBAAt(x, y) != bg {
+				t.Fatalf("the long word draws at (%d, %d), in the gap before the link %v", x, y, k)
+			}
+		}
+	}
+	// A button beside the wrapped label keeps its own height, centred on it.
+	tb := NewTester(t, Fields().Row(longLine, MultilineTextBox()).Wide().Action(Button("+")), 240, 400)
+	tb.SetPreferences(ui.Preferences{TextScale: 1.5})
+	tb.Frame()
+	one := NewTester(t, Button("+"), 240, 400)
+	one.SetPreferences(ui.Preferences{TextScale: 1.5})
+	one.Frame()
+	b, bl, own := tb.Find(ByLabel("+")).Bounds(), find(t, tb.Tester, longLine), one.Find(ByLabel("+")).Bounds()
+	if !approx(b.H, own.H) || !approx(midY(b), midY(bl)) {
+		t.Errorf("the button %v beside the wrapped label %v, want %v high, centred on it", b, bl, own.H)
 	}
 }
 
@@ -369,6 +437,11 @@ func actionForm(lay func(*FieldsWidget) *FieldsWidget, act func() Control) *Fiel
 // each layout. A link allocates once a frame wherever it is (ui.Link's own,
 // before P2h): in a form, the same as in a box.
 func TestActionAllocatesNothingInAFrame(t *testing.T) {
+	// Widget ids past 255, as in an app: Go boxes a smaller integer with no
+	// allocation, a larger one with one.
+	for range 300 {
+		Label("")
+	}
 	button := func() Control { return Button("+") }
 	for name, lay := range map[string]func(*FieldsWidget) *FieldsWidget{
 		"grid":     func(f *FieldsWidget) *FieldsWidget { return f },

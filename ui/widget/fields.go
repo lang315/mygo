@@ -152,9 +152,6 @@ func (f *FieldsWidget) Wide() *FieldsWidget {
 func (f *FieldsWidget) Action(c Control) *FieldsWidget {
 	f.change(func() {
 		if n := len(f.rows); n > 0 {
-			if old := f.rows[n-1].action; old != nil {
-				orphan(old)
-			}
 			f.rows[n-1].action = c
 			if c != nil {
 				adopt(&f.core, c)
@@ -257,8 +254,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 			axis = vertical
 			defer func() { axis = outer }()
 			shown := false
-			for i := range f.rows {
-				r := &f.rows[i] // not a copy, which its closures would move to the heap
+			for i, r := range f.rows {
 				titled, brk := false, false
 				for _, h := range f.headings(i) {
 					if h.text == "" {
@@ -275,14 +271,14 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					ui.Box(c.Key(fieldBreak(i))).Height(breakGap)
 				}
 				if r.w.base().hidden { // the row goes, its label with it
-					f.hold(*r)
+					f.hold(r)
 					continue
 				}
 				shown = true
-				r.describe()
+				f.rows[i].describe()
 				ui.Column(c.Key(r.box)).Gap(colGap).Children(func() {
 					r.underline(c)
-					e := f.labelLine(c, r, func() ui.Element {
+					e := f.labelLine(c, &r, func() ui.Element {
 						e := render(c, r.label) // holds a hidden label
 						if !r.label.hidden && r.label.place.align == 0 {
 							e.AlignSelf(ui.Start)
@@ -290,7 +286,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 						return e
 					})
 					if r.key != 0 {
-						w := r.w
+						w := r.w // not r, which the closure would move to the heap
 						registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 					}
 					if r.desc != "" && !r.label.hidden {
@@ -482,12 +478,12 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	}
 	var ce ui.Element // the control's cell: the control, or a row of it and the action
 	if r.acts() {
-		ce = ui.Row(c).Gap(f.colSpace(c)).AlignItems(ui.Center).Children(func() {
+		ce = ui.Row(c).Gap(f.colSpace(c)).Children(func() {
 			w := render(c, r.w).NamedBy(e)
-			if !f.settings && r.w.base().place.align == 0 {
+			if r.w.base().place.align == 0 {
 				w.Grow(1) // fills the cell, as the control alone does
 			}
-			render(c, r.action).Shrink(0)
+			render(c, r.action)
 		})
 	} else {
 		ce = render(c, r.w).NamedBy(e)
@@ -544,11 +540,11 @@ func (f *FieldsWidget) labelLine(c *ui.Context, r *fieldRow, label func() ui.Ele
 		return label()
 	}
 	var e ui.Element
-	ui.Row(c).Gap(f.colSpace(c)).AlignItems(ui.Center).Justify(ui.End).Children(func() {
+	ui.Row(c).Gap(f.colSpace(c)).Justify(ui.End).Children(func() {
 		axis = horizontal
 		defer func() { axis = vertical }()
-		e = label().Grow(1).AlignSelf(ui.Center)
-		render(c, r.action).Shrink(0)
+		e = label().Grow(1).MinWidth(0).AlignSelf(ui.Center) // a long word clips, not push the action out
+		render(c, r.action)
 	})
 	return e
 }
