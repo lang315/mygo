@@ -27,6 +27,7 @@ type fieldRow struct {
 	at    int  // its place in the label, in runes
 	rule  any  // fieldRule of the label's id, boxed once: the key of the divider above it
 	desc  string
+	wide  bool // the control under the label, across the form (Wide)
 	// said is the control's description, desc then the tooltip saidTip,
 	// "" until describe joins them.
 	said, saidTip string
@@ -122,6 +123,20 @@ func (f *FieldsWidget) Describe(text string) *FieldsWidget {
 	f.change(func() {
 		if n := len(f.rows); n > 0 {
 			f.rows[n-1].desc, f.rows[n-1].said = text, ""
+		}
+	})
+	return f
+}
+
+// Wide makes the last row added a wide one: its label, and its description,
+// across the form's width, and its control under them, as wide as the form
+// (in SettingsRows, as the card's inside) unless its Align says otherwise.
+// A wide row with an empty label has no label. Stacked rows are all wide.
+// Before any row it does nothing.
+func (f *FieldsWidget) Wide() *FieldsWidget {
+	f.change(func() {
+		if n := len(f.rows); n > 0 {
+			f.rows[n-1].wide = true
 		}
 	})
 	return f
@@ -406,6 +421,10 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	r := &f.rows[i]
 	r.underline(c)
 	r.describe()
+	if r.wide {
+		f.wideCell(c, r)
+		return
+	}
 	// e is the label, which names the control; cell the label's cell, the
 	// label or a column of it and the description.
 	var e, cell ui.Element
@@ -441,6 +460,39 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	if f.settings && r.w.base().place.valign == 0 && !fillsAcross(r.w) {
 		ce.AlignSelf(ui.Center)
 	}
+}
+
+// wideCell builds the wide row r of a grid as one cell across both columns,
+// a column of its label, its description and its control, stretched unless
+// its Align says otherwise, as a stacked row is. A label with no text has no
+// node. Under mu.
+func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
+	gap := c.Theme().Space(1)
+	if f.gapSet {
+		gap = f.colGap
+	}
+	ui.Column(c).Gap(gap).ColumnSpan(2).Children(func() {
+		// The cell's children are a column's: Align is across it.
+		axis = vertical
+		defer func() { axis = horizontal }()
+		var e ui.Element // the label, which names the control
+		if r.label.text == "" {
+			keeping.hold(r.label.base())
+		} else {
+			e = render(c, r.label) // holds a hidden label
+			if !r.label.hidden && r.label.place.align == 0 {
+				e.AlignSelf(ui.Start)
+			}
+		}
+		if r.key != 0 {
+			w := r.w
+			registerMnemonic(r.key, e, w, func() { focusLater(w) })
+		}
+		if r.desc != "" && !r.label.hidden {
+			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+		}
+		render(c, r.w).NamedBy(e)
+	})
 }
 
 // hold keeps the widgets of a row the form does not build, so that showing
