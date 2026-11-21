@@ -334,6 +334,7 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 			strip = ui.TabsKeyed(c, p, keys, n.labels)
 		}
 		strip.OnChange(onChange(&n.page, n.onSwitch))
+		n.inner = strip // Focus (an access key) goes to the tabs, not to the column around them
 		look := lookOf(skinhook.KindTabStrip)
 		if tk, _ := skinOf(c); tk != nil && n.strip.empty() {
 			strip.Background(tk.Chrome).BorderWidth(0, 0, 1, 0).BorderColor(c.Theme().Border)

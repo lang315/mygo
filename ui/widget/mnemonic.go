@@ -350,8 +350,9 @@ func isContainer(c Control) bool {
 
 // focusTarget returns the control a key aimed at c focuses: c itself, unless c
 // is a container, where it is the first control in it, in Tab order, that can
-// take the focus, as WinForms; nil for none. What lies inside a control that
-// takes the focus itself belongs to it. Under mu, at the end of a build.
+// take the focus, as WinForms; else c when c's own element can (a TabControl's
+// headers), else nil. What lies inside a control that takes the focus itself
+// belongs to it. Under mu, at the end of a build.
 func (w *Form) focusTarget(c Control) Control {
 	if !isContainer(c) {
 		return c
@@ -371,9 +372,12 @@ func (w *Form) focusTarget(c Control) Control {
 			return false
 		}
 		for j := b.from; j < i; j++ {
-			if in := w.built[j]; !isContainer(in.ctrl) && in.el.CanFocus() && !inside(j) {
-				return in.ctrl
+			if in := w.built[j]; in.el.CanFocus() && !inside(j) {
+				return in.ctrl // a container here takes the focus through a part of its own
 			}
+		}
+		if b.el.CanFocus() {
+			return c // as a TabControl's headers do, with no leaf in it that can
 		}
 		return nil
 	}

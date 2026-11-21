@@ -201,17 +201,54 @@ func TestRowKeyOfAContainerAddsNoAllocationsToAFrame(t *testing.T) {
 	}
 }
 
-// Round 2: a TabControl's tab headers take the focus, so a TabControl whose
-// pages hold only labels can focus but is no target (it is no leaf): the same
-// key of a later row is the only target. A ScrollPanel's element does not take
-// the focus here, so it cannot show this.
-func TestRowKeyOfABoxWithATabControlOfOnlyLabelsIsNoTarget(t *testing.T) {
+// tabFocused reports whether the tab headers (their list, or a tab) have the
+// focus.
+func tabFocused(tt *Tester) bool {
+	for _, n := range tt.Tester.Nodes() {
+		if n.Focused && (n.Role == ui.RoleTabList || n.Role == ui.RoleTab) {
+			return true
+		}
+	}
+	return false
+}
+
+// Rounds 2 and 3: a TabControl is selectable, as in WinForms: its tab headers
+// take the focus, so a key aimed at a box with a TabControl of only labels
+// focuses the header, and not the later row of the same key.
+func TestRowKeyOfABoxWithATabControlOfOnlyLabelsFocusesItsTab(t *testing.T) {
 	withMac(t, false)
 	panel := HBox(0).Add(TabControl().AddPage("p", Label("a")))
 	tt := formOf(t, Fields().Row("&Kind", panel).Row("&Key", TextBox()))
 	altKey(tt, ui.KeyK)
+	if !tabFocused(tt) {
+		t.Error("Alt+K did not focus the tab header")
+	}
+	if tt.Find(ByRole(ui.RoleTextField)).Focused() {
+		t.Error("Alt+K focused the text box of the second row")
+	}
+}
+
+// Round 3: the same TabControl as the row's control, in no box.
+func TestRowKeyOfATabControlOfOnlyLabelsFocusesItsTab(t *testing.T) {
+	withMac(t, false)
+	tt := formOf(t, Fields().Row("&K", TabControl().AddPage("p", Label("a"))))
+	altKey(tt, ui.KeyK)
+	if !tabFocused(tt) {
+		t.Error("Alt+K did not focus the tab header")
+	}
+}
+
+// Round 3: a leaf in the TabControl's page comes first, as in a box. (WinForms
+// would focus the TabControl itself; the leaf-first rule is the box's.)
+func TestRowKeyOfATabControlWithATextBoxFocusesTheTextBox(t *testing.T) {
+	withMac(t, false)
+	tt := formOf(t, Fields().Row("&K", TabControl().AddPage("p", TextBox())))
+	altKey(tt, ui.KeyK)
 	if !tt.Find(ByRole(ui.RoleTextField)).Focused() {
-		t.Error("Alt+K did not focus the text box of the second row")
+		t.Error("Alt+K did not focus the text box in the page")
+	}
+	if tabFocused(tt) {
+		t.Error("Alt+K focused the tab header")
 	}
 }
 
