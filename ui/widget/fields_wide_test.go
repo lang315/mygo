@@ -351,6 +351,78 @@ func TestWideRowAlign(t *testing.T) {
 	}
 }
 
+// A wide label's own Align places it across the cell, as an ordinary
+// label's does.
+func TestWideLabelAlign(t *testing.T) {
+	for _, settings := range []bool{false, true} {
+		left, right := float32(0), float32(400)
+		if settings {
+			left, right = cardLeft, cardRight
+		}
+		for _, a := range []Align{Start, Center, End} {
+			f := Fields().Row(wideKeys, MultilineTextBox()).Wide()
+			if settings {
+				f.SettingsRows()
+			}
+			f.Label(0).Align(a)
+			l := find(t, NewTester(t, f, 400, 400).Tester, wideKeys)
+			var ok bool
+			switch a {
+			case Start:
+				ok = approx(l.X, left)
+			case Center:
+				ok = approx(l.X+l.W/2, (left+right)/2)
+			case End:
+				ok = approx(l.X+l.W, right)
+			}
+			if !ok || l.W > 100 {
+				t.Errorf("settings %v: a wide label with Align %v is at %v, across [%v, %v]", settings, a, l, left, right)
+			}
+		}
+	}
+}
+
+// A row after a wide one places its control as it does with no wide row
+// before it: its Align across its column, its VAlign along the row.
+func TestWideRowLeavesTheNextRow(t *testing.T) {
+	for _, settings := range []bool{false, true} {
+		for _, name := range []string{"Align(Start)", "Align(Center)", "VAlign(End)", "VAlign(Center)"} {
+			// at returns where the control of row B is, from its label's
+			// top left, with a wide row before B or an ordinary one.
+			at := func(wide bool) (dx, dy float32) {
+				c := wbar("cb", 60, 10)
+				switch name {
+				case "Align(Start)":
+					c.Align(Start)
+				case "Align(Center)":
+					c.Align(Center)
+				case "VAlign(End)":
+					c.VAlign(End)
+				case "VAlign(Center)":
+					c.VAlign(Center)
+				}
+				f := Fields().Row("A", wbar("ca", 60, 24))
+				if wide {
+					f.Wide()
+				}
+				// The description makes B's label taller than its control.
+				f.Row("B", c).Describe(nameDesc + " " + nameDesc)
+				if settings {
+					f.SettingsRows()
+				}
+				tt := NewTester(t, f, 400, 400)
+				b, cb := find(t, tt.Tester, "B"), find(t, tt.Tester, "cb")
+				return cb.X - b.X, cb.Y - b.Y
+			}
+			wx, wy := at(true)
+			px, py := at(false)
+			if !approx(wx, px) || !approx(wy, py) {
+				t.Errorf("settings %v, %s: after a wide row B's control is at (%v, %v) from its label, else (%v, %v)", settings, name, wx, wy, px, py)
+			}
+		}
+	}
+}
+
 // Case 11: Wide before any row changes nothing; twice is once.
 func TestWideEdges(t *testing.T) {
 	a := NewTester(t, Fields().Wide().Row("Tên", TextBox()), 400, 300)
