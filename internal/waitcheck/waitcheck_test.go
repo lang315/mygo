@@ -64,6 +64,8 @@ var allowed = map[string]string{
 	"plugins/sqlite/database_test.go TestCancellationAndRollback context.WithTimeout":    "the deadline interrupts a long query, and DeadlineExceeded is the outcome asserted: a slow machine only cancels it later",
 	"plugins/sqlite/database_test.go TestCloseAndQueuedCancellation context.WithTimeout": "a call queued behind a long query must give up with DeadlineExceeded, the outcome asserted",
 	"plugins/sqlite/database_test.go TestDiskReadOnlyAndBusy context.WithTimeout":        "a call blocked by a lock must give up with DeadlineExceeded, the outcome asserted",
+	"protocol/protocol_test.go TestDownload time.After":                                  "waits a while for a report of a download the window refused, which must never come",
+	"updates/updates_test.go TestUpdaterWaitsForTheAppToExit time.Sleep":                 "checks the bundle stays in place while the app runs, which only a late look can miss",
 	"cmd/mygo/console_test.go TestBannerSettles time.Sleep":                              "checks that no banner frame is drawn after the line; only a late frame can fail it",
 	"cmd/mygo/dev_test.go TestDevLaunch time.After":                                      "checks that a running build does not exit in 200 ms; only a late exit can fail it",
 	"cmd/mygo/dev_test.go TestWatcher time.After":                                        "checks that the watcher reports no change in 300 ms; only a late report can fail it",
