@@ -891,9 +891,19 @@ type itemCheck struct {
 	checked    Selector
 	k          any
 	on         bool
+	// link is a Link's action instead (afterInputLink): it runs on box with
+	// url and router. A Link's data lives here, in the slab, so that its
+	// action is no bigger and finalizeInputs names no link code.
+	link   func(*node, string, *Router)
+	url    string
+	router *Router
 }
 
 func (ic *itemCheck) run() {
+	if ic.link != nil {
+		ic.link(ic.box, ic.url, ic.router)
+		return
+	}
 	if ic.box.Changed() && ic.checked.set(ic.k, ic.on) {
 		ic.owner.st.markEvent(eventChecked)
 	}

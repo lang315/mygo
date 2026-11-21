@@ -106,6 +106,7 @@ func TestLinkPathGoesToItsRouterOnly(t *testing.T) {
 			r.coreView(c, func(rt *Route) {
 				if rt.Match("/") {
 					coreLink(c, "Inside", "/notes/42")
+					coreLink(c, "Site", "https://example.com")
 				} else {
 					coreText(c, "Note")
 				}
@@ -117,6 +118,16 @@ func TestLinkPathGoesToItsRouterOnly(t *testing.T) {
 	tt.Click("Outside")
 	if r.Location() != "/" {
 		t.Errorf("a link outside the router went to %q", r.Location())
+	}
+	if got := tt.OpenedURLs(); !slices.Equal(got, []string{"/notes/7"}) {
+		t.Errorf("a path outside a router opened %q, want it handed to the host", got)
+	}
+	tt.Click("Site")
+	if r.Location() != "/" {
+		t.Errorf("a URL with a scheme went to %q in the router", r.Location())
+	}
+	if got := tt.OpenedURLs(); !slices.Equal(got, []string{"/notes/7", "https://example.com"}) {
+		t.Errorf("opened %q, want the URL after the path", got)
 	}
 	tt.Click("Inside")
 	if r.Location() != "/notes/42" {

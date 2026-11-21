@@ -233,7 +233,7 @@ func coreLink(c *context, label, url string) *node {
 	t := c.theme
 	e := coreText(c, label).TextColor(t.Accent).Cursor(CursorPointer).Focusable()
 	e.widget, e.role = "Link", RoleLink
-	e.afterInputLink(url, c.router)
+	afterInputLink(e, linkAfter, url, c.router)
 	return e
 }
 
