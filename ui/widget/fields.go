@@ -26,8 +26,11 @@ type fieldRow struct {
 	key   rune // the label's mnemonic: Alt+key focuses w
 	at    int  // its place in the label, in runes
 	rule  any  // fieldRule of the label's id, boxed once: the key of the divider above it
+	box   any  // fieldRowKey of the label's id, boxed once: the key of a stacked row
 	desc  string
 	wide  bool // the control under the label, across the form (Wide)
+	// action ends the label's line of a wide row, or follows the control (Action).
+	action Control
 	// said is the control's description, desc then the tooltip saidTip,
 	// "" until describe joins them.
 	said, saidTip string
@@ -73,7 +76,7 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 				return
 			}
 		}
-		f.rows = append(f.rows, fieldRow{label: l, w: c, key: key, at: at, rule: fieldRule(l.id)})
+		f.rows = append(f.rows, fieldRow{label: l, w: c, key: key, at: at, rule: fieldRule(l.id), box: fieldRowKey(l.id)})
 		adopt(&f.core, c)
 	})
 	return f
@@ -137,6 +140,19 @@ func (f *FieldsWidget) Wide() *FieldsWidget {
 	f.change(func() {
 		if n := len(f.rows); n > 0 {
 			f.rows[n-1].wide = true
+		}
+	})
+	return f
+}
+
+// Action gives the last row added an action control, such as a LinkLabel:
+// at the right end of its label's line when the row is wide (Wide, Stacked),
+// after its control otherwise. A second call replaces it; nil removes it.
+// Before any row it does nothing.
+func (f *FieldsWidget) Action(c Control) *FieldsWidget {
+	f.change(func() {
+		if n := len(f.rows); n > 0 {
+			f.rows[n-1].action = c
 		}
 	})
 	return f
@@ -257,14 +273,18 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 				}
 				shown = true
 				f.rows[i].describe()
-				ui.Column(c.Key(fieldRowKey(r.label.id))).Gap(colGap).Children(func() {
+				ui.Column(c.Key(r.box)).Gap(colGap).Children(func() {
 					r.underline(c)
-					e := render(c, r.label) // holds a hidden label
+					e := f.labelLine(c, &r, func() ui.Element {
+						e := render(c, r.label) // holds a hidden label
+						if !r.label.hidden && r.label.place.align == 0 {
+							e.AlignSelf(ui.Start)
+						}
+						return e
+					})
 					if r.key != 0 {
-						registerMnemonic(r.key, e, r.w, func() { buildingForm.focusRow(r.w) })
-					}
-					if !r.label.hidden && r.label.place.align == 0 {
-						e.AlignSelf(ui.Start)
+						w := r.w // not r, which the closure would move to the heap
+						registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 					}
 					if r.desc != "" && !r.label.hidden {
 						ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
@@ -453,7 +473,21 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	if f.settings {
 		def = ui.End
 	}
-	ce := render(c, r.w).NamedBy(e)
+	var ce ui.Element // the control's cell: the control, or a row of it and the action
+	if r.acts() {
+		ce = ui.Row(c).Gap(f.colSpace(c)).Children(func() {
+			w := render(c, r.w).NamedBy(e)
+			if r.w.base().place.align == 0 {
+				w.Grow(1) // fills the cell, as the control alone does
+			}
+			if !f.settings && r.w.base().place.valign == 0 {
+				w.AlignSelf(ui.Stretch) // down the cell too, as the control alone does
+			}
+			render(c, r.action)
+		})
+	} else {
+		ce = render(c, r.w).NamedBy(e)
+	}
 	place(ce, r.w, def)
 	// A control keeps its own height next to a wrapped label, and sits
 	// at its middle, as the label does.
@@ -475,15 +509,18 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 		// The cell's children are a column's: Align is across it.
 		axis = vertical
 		defer func() { axis = horizontal }()
-		var e ui.Element // the label, which names the control
-		if r.label.text == "" {
-			keeping.hold(r.label.base())
-		} else {
+		// e is the label, which names the control.
+		e := f.labelLine(c, r, func() (e ui.Element) {
+			if r.label.text == "" {
+				keeping.hold(r.label.base())
+				return e
+			}
 			e = render(c, r.label) // holds a hidden label
 			if !r.label.hidden && r.label.place.align == 0 {
 				e.AlignSelf(ui.Start)
 			}
-		}
+			return e
+		})
 		if r.key != 0 {
 			w := r.w
 			registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
@@ -495,11 +532,53 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 	})
 }
 
+// labelLine builds a wide row's label with label, and its action at the end
+// of the label's line: a row of the two, the label growing, both at its
+// middle. It returns the label. Under mu, in a column.
+func (f *FieldsWidget) labelLine(c *ui.Context, r *fieldRow, label func() ui.Element) ui.Element {
+	if !r.acts() {
+		return label()
+	}
+	var e ui.Element
+	ui.Row(c).Gap(f.colSpace(c)).Justify(ui.End).Children(func() {
+		axis = horizontal
+		defer func() { axis = vertical }()
+		e = label().Grow(1).MinWidth(0).AlignSelf(ui.Center) // a long word clips, not push the action out
+		render(c, r.action)
+	})
+	return e
+}
+
+// acts reports whether r has an action that shows; it holds a hidden one.
+// Under mu.
+func (r *fieldRow) acts() bool {
+	if r.action == nil {
+		return false
+	}
+	if r.action.base().hidden {
+		keeping.hold(r.action.base())
+		return false
+	}
+	return true
+}
+
+// colSpace is the space between the label column and the control column,
+// and before an action.
+func (f *FieldsWidget) colSpace(c *ui.Context) float32 {
+	if f.gapSet {
+		return f.colGap
+	}
+	return c.Theme().Space(3)
+}
+
 // hold keeps the widgets of a row the form does not build, so that showing
 // one tells the windows that show the form. Under mu.
 func (f *FieldsWidget) hold(r fieldRow) {
 	keeping.hold(r.w.base())
 	keeping.hold(r.label.base())
+	if r.action != nil {
+		keeping.hold(r.action.base())
+	}
 }
 
 // place puts e, the cell of w, across its column: where w asks, else def.
@@ -518,6 +597,9 @@ func (f *FieldsWidget) children() []Control {
 			cs = append(cs, r.label)
 		}
 		cs = append(cs, r.w)
+		if r.action != nil {
+			cs = append(cs, r.action)
+		}
 	}
 	return cs
 }

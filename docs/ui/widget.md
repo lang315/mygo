@@ -482,6 +482,24 @@ widget.Fields().
   label column of the other rows, and a wide row with an empty label has no
   label at all. Stacked rows are all wide, so there it changes nothing;
   before any row it does nothing.
+- `Action(c)` gives the last row added one small action control, such as a
+  `LinkLabel` or a flat button. In a wide or stacked row it sits at the right
+  end of the label's line, in its own width, centred on the label, which
+  takes the rest and wraps before it reaches the action; in an ordinary row
+  (and a settings row) it follows the control, `Gap`'s column value after it.
+  The label still names the control alone, its access key focuses the control
+  (or a container's first control), never the action, and the action comes
+  in Tab order where it is drawn: before a wide row's control, after an
+  ordinary row's. Hiding the row's control hides the action too; disabling
+  the form disables it. A second call replaces it, `Action(nil)` removes it,
+  and before any row it does nothing.
+
+```go
+widget.Fields().
+	Row("&Content", widget.MultilineTextBox()).Wide().
+	Action(widget.LinkLabel("How to write it", "").OnClick(showHelp)).
+	Row("Kind", kindBox).Action(widget.Button("+"))
+```
 
 ```go
 widget.Fields().
