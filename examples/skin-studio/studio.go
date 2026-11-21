@@ -180,6 +180,8 @@ func text() widget.Control {
 	fields.Section("Settings rows")
 	fields.Row("Name", widget.TextBox().SetPlaceholder("Ada Lovelace")).Describe("Shown beside your messages.")
 	fields.Row("Country", widget.ComboBox(option("vn", "Vietnam", "us", "United States")...).SetValue("vn"))
+	// A wide row: the box under its label, across the card.
+	fields.Row("Blocked words", widget.MultilineTextBox().SetText("spam\nscam").SetSize(0, 64)).Wide().Describe("One a line.")
 	fields.Section("Notifications")
 	fields.Row("Sounds", widget.Switch())
 	settings := widget.VBox(0).Add(fields).Apply(widget.NewStyle().Background(widget.RoleChrome).Padding(3))

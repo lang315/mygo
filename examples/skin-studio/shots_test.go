@@ -223,6 +223,9 @@ func TestShotsMatchMain(t *testing.T) {
 		if strings.HasSuffix(base, "-dialogs-and-messages.png") {
 			continue // the badges, info bars and empty state are new on this page
 		}
+		if strings.HasSuffix(base, "-text-and-choices.png") {
+			continue // P2d: the settings card gains a wide row on this page
+		}
 		name := ""
 		for k := range studios {
 			if strings.HasPrefix(base, k+"-") && len(k) > len(name) {
