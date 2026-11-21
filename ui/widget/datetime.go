@@ -89,12 +89,11 @@ func (p *DateTimePickerWidget) build(c *ui.Context) ui.Element {
 	row := ui.Row(c).Gap(c.Theme().Space(2)).Children(func() {
 		if p.format != TimeOnly {
 			in := field(ui.DateInput(c, v))
-			p.inner = in // Focus (an access key) goes to the first field, not to the row around them
+			p.inner = in
 			moved = in.Changed() || moved
 		}
 		if p.format != DateOnly {
-			in := field(ui.TimeInput(c, v))
-			moved = in.Changed() || moved
+			moved = field(ui.TimeInput(c, v)).Changed() || moved
 		}
 	})
 	reportDate(&p.value, changed, moved, p.onChange)

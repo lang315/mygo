@@ -391,7 +391,7 @@ func (lv *ListViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	switched := lv.built && lv.last != lv.mode
 	lv.takeKeys()
 	wantFocus := switched && lv.focused
-	if lv.wantFocus && !c.Measuring() { // Focus: the list, not the column around it (render would focus that)
+	if lv.wantFocus && !c.Measuring() {
 		wantFocus, lv.wantFocus = true, false
 	}
 	var e ui.Element

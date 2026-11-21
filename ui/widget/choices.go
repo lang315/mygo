@@ -699,7 +699,7 @@ func (c *ComboBoxWidget) buildEditable(ctx *ui.Context) ui.Element {
 	frame.Children(func() {
 		cb := ui.ComboboxBase(ctx, p)
 		cb.Input.Grow(1).Padding(t.Space(1.5), t.Space(3)).OnChange(c.typed())
-		c.inner = cb.Input // Focus (an access key) goes to the input, not to the frame around it
+		c.inner = cb.Input
 		if h := formAccept; h != nil {
 			cb.Input.OnSubmit(h) // Enter clicks the form's accept button
 		}
