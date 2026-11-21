@@ -84,6 +84,11 @@ type ListViewWidget[T any, K comparable] struct {
 	headed      bool
 	headVersion uint64
 
+	// overlay, set by SetEmptyState, builds the empty state over the icon
+	// grid, which then builds in a box of its own; Details shows the table's.
+	// Under mu.
+	overlay func(c *ui.Context)
+
 	// ui's, on the main thread:
 	grid   ui.GridState
 	cursor int
@@ -534,10 +539,16 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 	g.PlainChecks = lv.image == nil && (len(t.cols) == 0 || t.cols[0].Image == nil)
 	var grid ui.Element
 	col := ui.Column(c).Gap(8).Grow(1).Children(func() {
-		grid = ui.GridView(c, g, n, minWidth, height, func(i int) { lv.item(c, i) }).Grow(1).Padding(0, c.Theme().Space(2)).
-			OnChange(func() { t.commit(&t.chosen) }).
-			OnCheckedChange(func() { t.commit(&t.checked) })
-		frameList(c, grid, &lv.style)
+		if lv.overlay == nil {
+			grid = lv.iconGrid(c, g, n, minWidth, height)
+		} else {
+			// The grid builds in a box of its own, rows or not, as a table
+			// with an empty state does.
+			ui.Column(c).Grow(1).Children(func() {
+				grid = lv.iconGrid(c, g, n, minWidth, height)
+				lv.overlay(c)
+			})
+		}
 		if t.panel != nil {
 			t.counts()
 			render(c, t.panel)
@@ -560,6 +571,17 @@ func (lv *ListViewWidget[T, K]) buildIcons(c *ui.Context, focus bool) ui.Element
 		}
 	}
 	return col
+}
+
+// iconGrid builds the grid of the n items of the icon views, framed. Under mu,
+// while buildIcons builds.
+func (lv *ListViewWidget[T, K]) iconGrid(c *ui.Context, g *ui.GridState, n int, minWidth, height float32) ui.Element {
+	t := lv.t
+	grid := ui.GridView(c, g, n, minWidth, height, func(i int) { lv.item(c, i) }).Grow(1).Padding(0, c.Theme().Space(2)).
+		OnChange(func() { t.commit(&t.chosen) }).
+		OnCheckedChange(func() { t.commit(&t.checked) })
+	frameList(c, grid, &lv.style)
+	return grid
 }
 
 // itemVersion is ui's GridState.RowVersion: what the build of the item at i
