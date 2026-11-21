@@ -175,11 +175,16 @@ func text() widget.Control {
 	invalid := widget.TextBox().SetAccessibleName("Required field")
 	errors := widget.ErrorProvider()
 	errors.SetError(invalid, "Required")
+	// Settings rows: a card per section, on the skin's Chrome.
 	fields := widget.Fields().SettingsRows()
 	fields.Section("Settings rows")
-	fields.Row("Name", widget.TextBox().SetPlaceholder("Ada Lovelace"))
+	fields.Row("Name", widget.TextBox().SetPlaceholder("Ada Lovelace")).Describe("Shown beside your messages.")
 	fields.Row("Country", widget.ComboBox(option("vn", "Vietnam", "us", "United States")...).SetValue("vn"))
-	return widget.VBox(8).Add(
+	fields.Section("Notifications")
+	fields.Row("Sounds", widget.Switch())
+	settings := widget.VBox(0).Add(fields).Apply(widget.NewStyle().Background(widget.RoleChrome).Padding(3))
+	// The settings beside the rest, so that the shots show their cards.
+	return widget.HBox(16).Add(widget.VBox(8).HExpand().Add(
 		title("Text"),
 		widget.TextBox().SetPlaceholder("A text box"),
 		widget.TextBox().SetPlaceholder("Password").Password(),
@@ -191,8 +196,7 @@ func text() widget.Control {
 		widget.ComboBox(option("a", "Alpha", "b", "Beta")...).SetValue("a"),
 		widget.ComboBox(option("a", "Alpha", "b", "Beta")...).Editable().SetText("Editable"),
 		widget.TagSelect(option("go", "Go", "ui", "UI", "gtk", "GTK")...).SetValues("go"),
-		fields,
-	)
+	), settings.HExpand().VAlign(widget.Start))
 }
 
 func numbers() widget.Control {

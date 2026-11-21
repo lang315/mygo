@@ -40,6 +40,7 @@ type core struct {
 	focusIn     int  // the view that last built it focused, noView for none
 	builtIn     int  // the view that last built it
 	tooltip     string
+	desc        string  // the description of its Fields row, the tooltip after it (Describe), set by the form as it builds
 	accName     string  // SetAccessibleName's
 	ownStyle    Style   // what the control's own methods set
 	applied     []Style // Apply's styles
@@ -252,6 +253,11 @@ func render(c *ui.Context, w Control) ui.Element {
 	if b.disabled {
 		e.Disabled(true)
 	}
+	if b.desc != "" {
+		// Before the tooltip, which describes the control only where nothing
+		// else does: desc holds it already.
+		e.Description(b.desc)
+	}
 	if b.tooltip != "" && b.errMsg == "" {
 		e.Tooltip(b.tooltip)
 	}
@@ -261,7 +267,9 @@ func render(c *ui.Context, w Control) ui.Element {
 		tip := b.errMsg
 		if b.tooltip != "" {
 			tip += "\n" + b.tooltip
-			e.Description(b.tooltip) // the error comes first in the description
+			if b.desc == "" {
+				e.Description(b.tooltip) // the error comes first in the description
+			}
 		}
 		e.Error(b.errMsg)
 		e.Tooltip(tip)

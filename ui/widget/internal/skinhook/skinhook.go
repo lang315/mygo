@@ -162,6 +162,7 @@ const (
 	KindBadge
 	KindInfoBar
 	KindEmptyState
+	KindSettingsCard
 	NumKinds
 )
 

@@ -38,7 +38,7 @@ header. Rows below add their own.
 | [x] | NumericUpDown, DomainUpDown, RangeSpin | metric 36, state | page Numbers and dates; `TestCalmSizesWidgets`, `TestSkinDomainUpDown` |
 | [x] | DateTimePicker, MonthCalendar | metric 36, state (chosen day keeps the accent) | page Numbers and dates; `TestCalmSizesWidgets`, `TestDateTimePickerSetSizeWinsOverMetrics` |
 | [x] | TrackBar | state (thumb, track) | page Numbers and dates; `TestSentinelSkinReachesEveryPixel` |
-| [x] | Fields, SettingsRows | metric (rows), literal (lines) | page Text and choices; `TestSentinelSkinReachesEveryPixel` |
+| [x] | Fields, SettingsRows | metric (rows), literal (lines), look (SettingsCard: a card per section, else Card's), description (`Describe`) | page Text and choices, on Chrome; `TestSentinelSkinReachesEveryPixel`, `TestSettingsCardsFramedByTheCardLook`, `TestSettingsCardsUnderCalm` |
 | [x] | HBox, VBox, ButtonBox | none: layout only, the skin never moves controls | every page; `TestStudioEveryPage` |
 | [x] | Grid (layout), FlowPanel | none: layout only | page Containers; `TestStudioEveryPage` |
 | [x] | GroupBox | literal (outline, title) | page Containers; `TestSentinelSkinReachesEveryPixel` |

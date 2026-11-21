@@ -462,13 +462,17 @@ widget.Fields().
   group, whose label columns each fit their own labels. A section after the
   first has more room above it than a row has, the first none. A section whose
   rows are all hidden hides its heading and that room. The sections share the
-  control column too, and the labels stay left-aligned, as before. The heading
-  is a heading to screen readers and takes no focus. In `SettingsRows` the
-  heading takes the place of the divider before its rows. There is no divider
-  option. `Section("")` is a group break: the room a section has above it,
-  with no heading and no node for screen readers. It adds none first, nor when
-  its rows are all hidden, and in `SettingsRows` it too takes the place of the
-  divider.
+  control column too (in `SettingsRows` each card has its own), and the
+  labels stay left-aligned, as before. The heading
+  is a heading to screen readers and takes no focus. In `SettingsRows` each
+  section is a card, its heading above it. There is no divider option.
+  `Section("")` is a group break: the room a section has above it, with no
+  heading and no node for screen readers. It adds none first, nor when its
+  rows are all hidden, and in `SettingsRows` it starts a card with no heading.
+- `Describe(text)` gives the last row added a description: a line in
+  `TextMuted` under its label (stacked, between the label and the control),
+  which wraps. Screen readers read it as the control's description, before
+  its tooltip. `Describe("")` takes it away; before any row it does nothing.
 
 ```go
 widget.Fields().
@@ -492,13 +496,26 @@ widget.VBox(4).Add(widget.Label("Name").Align(widget.Start), nameBox)
 widget.Fields().Stacked().Row("Name", nameBox)
 ```
 
-`SettingsRows()` lays the form out as a page of settings: the label takes the
-width the control leaves and wraps, the control keeps its own size at the right
-edge (its `Align` overrides), and a divider separates each row from the next.
-Dividers are always on. A hidden control takes its label and its divider with
-it, so there is never a double or a trailing one. The row gap applies on
-each side of a divider. Of `Stacked` and `SettingsRows`, the last call wins.
-Description lines under a label and full-width rows are not part of it.
+`SettingsRows()` lays the form out as a page of settings, as Windows 11's
+Settings does: each section is a card (the skin's `SettingsCard` look, else
+its `Card` look: `Surface`, a line of `Border`, the card radius and shadow),
+its heading above it, outside the card. Rows before the first `Section` make a
+card with no heading, and so does each `Section("")`. In a card the label
+takes the width the control leaves and wraps, the control keeps its own size
+at the right edge (its `Align` overrides), and a divider separates each row
+from the next. Dividers are always on. A hidden control takes its label and
+its divider with it, so there is never a double or a trailing one, and a
+section whose rows are all hidden takes its card and heading away. The row
+gap applies on each side of a divider. Each card measures its own columns, so
+a control that asks for `Start` lines up with the widest control of its card.
+Of `Stacked` and `SettingsRows`, the last call wins. `Describe` adds a line
+under a label; full-width rows are not part of it. With a skin each row is at
+least the skin's `SettingsRowHeight`; the page behind the cards reads best in
+the skin's `RoleChrome`, which is the app's choice.
+
+**Changed:** `SettingsRows` drew one list of rows with headings between them;
+it now draws a card per section, inside the form's width, so an existing
+settings page looks different (its controls move in by the card's padding).
 
 A control keeps its own size, centered on a wrapped label. A `ProgressBar` and
 an empty `ListBox` get no width in the fit column, and a `ListBox` with items or
@@ -506,15 +523,18 @@ a table a narrow one: give them `SetSize`, or use `Stacked` for multi-line boxes
 and tables. The label column is no narrower than its longest word, so in a
 narrow window the controls are pushed toward or past the right edge, by a long
 word and by ordinary ones alike (a `ComboBox` beside "Notifications" needs about
-229 DIPs): give the window a `SetMinimumSize` wide enough. Only as a form's
-direct content does free height go to the rows (in a `VBox`, `Card` or
-`GroupBox` the rows keep their height). In a `ScrollPanel` use `.Vertical()`:
+229 DIPs): give the window a `SetMinimumSize` wide enough. The cards keep
+their height: free height stays below the last. In a `ScrollPanel` use `.Vertical()`:
 the both-ways panel gives the form no width to wrap at.
 
 ```go
-widget.Fields().SettingsRows().
-	Row("Notifications", widget.Switch()).
-	Row("Name shown to others", widget.TextBox())
+settings := widget.Fields().SettingsRows().
+	Section("Account").
+	Row("Name shown to others", widget.TextBox()).
+	Describe("Others see it beside your messages.").
+	Section("Notifications").
+	Row("Sounds", widget.Switch())
+page := widget.VBox(0).Add(settings).Apply(widget.NewStyle().Background(widget.RoleChrome).Padding(4))
 ```
 
 ## Styles
