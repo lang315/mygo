@@ -88,7 +88,9 @@ func (p *DateTimePickerWidget) build(c *ui.Context) ui.Element {
 	}
 	row := ui.Row(c).Gap(c.Theme().Space(2)).Children(func() {
 		if p.format != TimeOnly {
-			moved = field(ui.DateInput(c, v)).Changed() || moved
+			in := field(ui.DateInput(c, v))
+			p.inner = in
+			moved = in.Changed() || moved
 		}
 		if p.format != DateOnly {
 			moved = field(ui.TimeInput(c, v)).Changed() || moved
