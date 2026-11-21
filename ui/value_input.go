@@ -135,6 +135,8 @@ func (rt *engine) finalizeInputs(all bool) {
 				a.fn()
 			case a.check != nil:
 				a.check.run()
+			case a.link:
+				linkAfter(a.node, a.url, a.router)
 			default:
 				a.fnNode(a.node)
 			}
@@ -439,6 +441,11 @@ type inputAction struct {
 	fnNode   func(*node)
 	check    *itemCheck
 	building int32
+	// link is a Link's, with the url and router it was built with (linkAfter):
+	// they are here, in an action that lives one frame, and not in the node.
+	link   bool
+	url    string
+	router *Router
 }
 
 func (n *node) afterInput(fn func()) {
@@ -449,6 +456,12 @@ func (n *node) afterInput(fn func()) {
 // a static one allocates nothing.
 func (n *node) afterInputNode(fn func(*node)) {
 	n.c.rt.afterInputs = append(n.c.rt.afterInputs, inputAction{node: n, fnNode: fn, building: n.c.rt.building})
+}
+
+// afterInputLink runs linkAfter on the element with url and router, which
+// no closure holds.
+func (n *node) afterInputLink(url string, router *Router) {
+	n.c.rt.afterInputs = append(n.c.rt.afterInputs, inputAction{node: n, link: true, url: url, router: router, building: n.c.rt.building})
 }
 
 // onBuilt runs fn once the view is built, after the input of every

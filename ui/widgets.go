@@ -233,23 +233,26 @@ func coreLink(c *context, label, url string) *node {
 	t := c.theme
 	e := coreText(c, label).TextColor(t.Accent).Cursor(CursorPointer).Focusable()
 	e.widget, e.role = "Link", RoleLink
-	router := c.router
-	e.afterInput(func() {
-		if e.Clicked() && url != "" {
-			if r := router; r != nil && isPath(url) {
-				r.Push(url)
-			} else {
-				c.rt.host.openURL(url, nil)
-			}
-		}
-		if e.Hovered() {
-			// Whole, through descenders: a link's URL is mostly slashes
-			// and letters below the baseline, which skipping ink cuts up.
-			e.Underline()
-			e.ts.solid = true
-		}
-	})
+	e.afterInputLink(url, c.router)
 	return e
+}
+
+// linkAfter is what a Link does after the input of a frame: a function, so
+// that no closure is made for each link in each frame.
+func linkAfter(e *node, url string, router *Router) {
+	if e.Clicked() && url != "" {
+		if router != nil && isPath(url) {
+			router.Push(url)
+		} else {
+			e.c.rt.host.openURL(url, nil)
+		}
+	}
+	if e.Hovered() {
+		// Whole, through descenders: a link's URL is mostly slashes
+		// and letters below the baseline, which skipping ink cuts up.
+		e.Underline()
+		e.ts.solid = true
+	}
 }
 
 // checkPath makes the check mark in r in p, which it empties first.
