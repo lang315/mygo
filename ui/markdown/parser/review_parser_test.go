@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 	"unicode/utf8"
 )
 
@@ -231,15 +230,6 @@ func TestParserReviewStreamMatchesFreshStream(t *testing.T) {
 			t.Fatalf("iter %d: streaming %q differs from a fresh streaming parse", iter, chunks)
 		}
 	}
-}
-
-func zzTimeAppend(src string, chunk int) time.Duration {
-	d := New(Default)
-	t0 := time.Now()
-	for i := 0; i < len(src); i += chunk {
-		d.Append(src[i:min(i+chunk, len(src))])
-	}
-	return time.Since(t0)
 }
 
 func TestParserReviewLineEndings(t *testing.T) {

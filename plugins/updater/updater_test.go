@@ -73,13 +73,7 @@ func (h *harness) begin(user bool) chan struct{} {
 // shown returns the session that shows a window.
 func (h *harness) shown() *session {
 	h.t.Helper()
-	select {
-	case s := <-h.presented:
-		return s
-	case <-time.After(wait.Guard):
-		h.t.Fatal("no window was shown")
-		return nil
-	}
+	return wait.For(h.t, "a window to be shown", h.presented)
 }
 
 func (h *harness) noWindow() {
@@ -95,7 +89,7 @@ func (h *harness) noWindow() {
 // waitView waits for s to show a view whose title starts with title.
 func waitView(t *testing.T, s *session, title string) view {
 	t.Helper()
-	deadline := time.After(wait.Guard)
+	ctx := wait.Context(t)
 	for {
 		v, changed := s.Current()
 		if strings.HasPrefix(v.Title, title) {
@@ -103,7 +97,7 @@ func waitView(t *testing.T, s *session, title string) view {
 		}
 		select {
 		case <-changed:
-		case <-deadline:
+		case <-ctx.Done():
 			t.Fatalf("view %q, want %q", v.Title, title)
 		}
 	}
@@ -115,7 +109,7 @@ func waitView(t *testing.T, s *session, title string) view {
 // (waiting for a change that is not coming hung the test for 25 minutes).
 func waitProgress(t *testing.T, s *session, p float64) view {
 	t.Helper()
-	deadline := time.After(wait.Guard)
+	ctx := wait.Context(t)
 	for {
 		v, changed := s.Current()
 		if v.Progress == p {
@@ -123,7 +117,7 @@ func waitProgress(t *testing.T, s *session, p float64) view {
 		}
 		select {
 		case <-changed:
-		case <-deadline:
+		case <-ctx.Done():
 			t.Fatalf("progress %v, want %v", v.Progress, p)
 		}
 	}
@@ -142,11 +136,7 @@ func TestWaitProgressSeesAProgressMadeBefore(t *testing.T) {
 
 func waitDone(t *testing.T, done chan struct{}) {
 	t.Helper()
-	select {
-	case <-done:
-	case <-time.After(wait.Guard):
-		t.Fatal("the check did not end")
-	}
+	wait.For(t, "the check to end", done)
 }
 
 func (h *harness) saved() state {
@@ -578,9 +568,7 @@ func TestPromote(t *testing.T) {
 		return nil, nil
 	}
 	done := h.begin(false)
-	for h.checks.Load() == 0 {
-		time.Sleep(time.Millisecond)
-	}
+	wait.Until(t, "the first check to start", func() bool { return h.checks.Load() != 0 })
 	h.noWindow()
 	waitDone(t, h.begin(true)) // returns at once
 	s := h.shown()
@@ -641,19 +629,14 @@ func TestOnChange(t *testing.T) {
 	off := OnChange(func() { changes <- struct{}{} })
 	told := func(want bool, what string) {
 		t.Helper()
-		wait := 50 * time.Millisecond
 		if want {
-			wait = 5 * time.Second
+			wait.For(t, what+": the call", changes)
+			return
 		}
 		select {
 		case <-changes:
-			if !want {
-				t.Errorf("%s: told of a change", what)
-			}
-		case <-time.After(wait):
-			if want {
-				t.Errorf("%s: not told", what)
-			}
+			t.Errorf("%s: told of a change", what)
+		case <-time.After(50 * time.Millisecond):
 		}
 	}
 
@@ -691,11 +674,7 @@ func TestOnInstalled(t *testing.T) {
 	told := func(want int, what string) {
 		t.Helper()
 		for range want {
-			select {
-			case <-installs:
-			case <-time.After(wait.Guard):
-				t.Fatalf("%s: not told", what)
-			}
+			wait.For(t, what+": the call", installs)
 		}
 		// The calls run in a goroutine of their own: a call that should
 		// not happen may come later, and then the next count sees it.

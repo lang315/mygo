@@ -39,7 +39,9 @@ func TestFieldsSectionsShareOneLabelColumn(t *testing.T) {
 	}
 }
 
-// A heading starts at the label column and spans both columns.
+// A heading starts at the label column and spans both columns; in
+// SettingsRows it is above its card, at the card's edge, and the labels are
+// inside the card's line and padding.
 func TestFieldsSectionHeadingSpansTheForm(t *testing.T) {
 	for _, settings := range []bool{false, true} {
 		f, _ := sectionForm()
@@ -48,7 +50,11 @@ func TestFieldsSectionHeadingSpansTheForm(t *testing.T) {
 		}
 		tt := sectionTester(t, f)
 		h, l := find(t, tt.Tester, "Beta"), find(t, tt.Tester, "Id")
-		if h.X != l.X {
+		if settings {
+			if h.X > 1 || !approx(l.X, 1+space(3)) {
+				t.Errorf("settings: heading at x %v, the labels at %v: want the card's edge and its padding", h.X, l.X)
+			}
+		} else if h.X != l.X {
 			t.Errorf("settings %v: heading at x %v, the labels at %v", settings, h.X, l.X)
 		}
 		if h.X+h.W < 790 {

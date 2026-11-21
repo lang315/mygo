@@ -199,6 +199,7 @@ kind's plain look.
 | `Badge` | a `Badge`'s pill, without its detail |
 | `InfoBar` | an `InfoBar`'s box |
 | `EmptyState` | an `EmptyState`'s box, around its icon, text and action |
+| `SettingsCard` | each section of a `Fields`' `SettingsRows`, the card around its rows; "" takes the `Card` look |
 
 ```go
 boxy := skin.Calm.WithLooks(skin.Looks{

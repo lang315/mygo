@@ -3,8 +3,8 @@ package widget
 import (
 	"strings"
 	"testing"
-	"time"
 
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -39,26 +39,16 @@ func TestListViewGroupsCopyMenuAndActivateActOnTheRows(t *testing.T) {
 			click(t, tt, "Cherry")
 			tt.Key(0, ui.KeyEnter)
 			tt.Frame()
-			select {
-			case k := <-activated:
-				if k != "c" {
-					t.Fatalf("Enter on Cherry activated %q", k)
-				}
-			case <-time.After(time.Minute):
-				t.Fatal("Enter did not activate")
+			if k := wait.For(t, "Enter to activate", activated); k != "c" {
+				t.Fatalf("Enter on Cherry activated %q", k)
 			}
 			if err := tt.RightClick("Apple"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Frame()
 			<-posted()
-			select {
-			case ks := <-menuFor:
-				if strings.Join(ks, ",") != "a" {
-					t.Fatalf("the context menu of Apple was built for %v, want [a]", ks)
-				}
-			case <-time.After(time.Minute):
-				t.Fatal("the context menu was not built")
+			if ks := wait.For(t, "the context menu to be built", menuFor); strings.Join(ks, ",") != "a" {
+				t.Fatalf("the context menu of Apple was built for %v, want [a]", ks)
 			}
 		})
 	}
