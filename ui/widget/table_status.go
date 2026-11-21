@@ -37,7 +37,8 @@ func (t *DataGridViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *DataGridV
 			// would move the table among the elements and lose its state.
 			t.withEmpty = func(c *ui.Context) {
 				ui.Column(c).Grow(1).Children(func() {
-					emptyOver(c, t.table(c).Grow(1), e, t.view.Len() == 0)
+					tb := t.table(c).Grow(1)
+					emptyOver(c, e, t.view.Len() == 0, bodyTop(c, tb))
 				})
 			}
 		}
@@ -45,14 +46,62 @@ func (t *DataGridViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *DataGridV
 	return t
 }
 
-// emptyOver builds e over the body of the table tb, below its header, when
-// shows; else it keeps e as render keeps a hidden control. Under mu, after
-// tb is built.
-func emptyOver(c *ui.Context, tb ui.Element, e *EmptyStateWidget, shows bool) {
+// SetEmptyState draws e over the list while it shows no item. nil removes it.
+func (l *ListBoxWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *ListBoxWidget[T, K] {
+	l.change(func() {
+		// The list builds in a box of its own from now on, items or not, and
+		// after nil too: a box that came and went would move the list among
+		// the elements and lose its state.
+		l.overlay = func(*ui.Context) {}
+		if e != nil {
+			l.overlay = func(c *ui.Context) {
+				if el := emptyOver(c, e, len(l.frame) == 0, 0); el.Valid() {
+					el.Clip() // a state taller than the list stays in its box
+				}
+			}
+		}
+	})
+	return l
+}
+
+// SetEmptyState draws e over the list while it shows no row; in the details
+// view the headers stay. nil removes it.
+func (lv *ListViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *ListViewWidget[T, K] {
+	lv.t.SetEmptyState(e) // Details shows the table's, under its headers
+	lv.change(func() {
+		lv.overlay = nil
+		if e != nil {
+			lv.overlay = func(c *ui.Context) {
+				if el := emptyOver(c, e, lv.t.view.Len() == 0, 0); el.Valid() {
+					el.Clip()
+				}
+			}
+		}
+	})
+	return lv
+}
+
+// emptyOver builds e over what the box being built holds, top DIPs from its
+// top, when shows, and returns its element; else it keeps e as render keeps a
+// hidden control, and returns none. Under mu, after what it covers is built.
+func emptyOver(c *ui.Context, e *EmptyStateWidget, shows bool, top float32) ui.Element {
 	if !shows {
 		keeping.hold(e.base())
-		return
+		return ui.Element{}
 	}
+	outer := axis
+	axis = vertical
+	el := render(c, e)
+	if !e.hidden {
+		el.Absolute().Top(top).Left(0).Right(0).Bottom(0)
+	}
+	axis = outer
+	return el
+}
+
+// bodyTop is the top of the body of the table tb in its box: under its
+// border, its header and the line under the header.
+func bodyTop(c *ui.Context, tb ui.Element) float32 {
 	th := c.Theme()
 	head := th.Metrics.HeaderHeight // ui's table: the header's height, then a line of 1
 	if head <= 0 {
@@ -61,12 +110,7 @@ func emptyOver(c *ui.Context, tb ui.Element, e *EmptyStateWidget, shows bool) {
 	if head <= 0 {
 		head = th.Space(8)
 	}
-	outer := axis
-	axis = vertical
-	if el := render(c, e); !e.hidden {
-		el.Absolute().Top(tb.BorderWidths()[0] + head + 1).Left(0).Right(0).Bottom(0)
-	}
-	axis = outer
+	return tb.BorderWidths()[0] + head + 1
 }
 
 // enableStatus hands the table the builder of cells with a badge or a format
