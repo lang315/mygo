@@ -3,6 +3,7 @@ package widget
 import (
 	"math"
 	"slices"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -257,8 +258,50 @@ func TestToastRolesAndIcons(t *testing.T) {
 			if toast < 40 || math.Abs(float64(toast-bar)) > max(4, float64(bar)/10) {
 				t.Errorf("skin %v, %v: the icon has %d pixels of its base %v, the info bar's %d", skinned, s, toast, base, bar)
 			}
+			// The same shape: where one icon is its base, so is the other.
+			if n := iconMismatch(tt.Tester, iconBox(c.Bounds), bt, iconBox(barOf(t, bt, want)), base); n > bar/10 {
+				t.Errorf("skin %v, %v: %d pixels of the icon differ from the info bar's (of %d of its base)", skinned, s, n, bar)
+			}
 		}
 	}
+}
+
+// iconMismatch counts the pixels where one of the icons in a (of ta) and b
+// (of tb) is within 6 of base and the other is not, each shape moved to the
+// top left corner of the pixels of base it has: the two boxes may sit at
+// different fractions of a pixel.
+func iconMismatch(ta *ui.Tester, a ui.Rect, tb *ui.Tester, b ui.Rect, base ui.Color) int {
+	shape := func(tt *ui.Tester, r ui.Rect) map[[2]int]bool {
+		r = ui.Rect{X: r.X - 2, Y: r.Y - 2, W: r.W + 4, H: r.H + 4}
+		pts := map[[2]int]bool{}
+		minX, minY := math.MaxInt, math.MaxInt
+		for y := int(r.Y); y < int(r.Y+r.H); y++ {
+			for x := int(r.X); x < int(r.X+r.W); x++ {
+				if nearTol(tt.Image().RGBAAt(x, y), base, 6) {
+					pts[[2]int{x, y}] = true
+					minX, minY = min(minX, x), min(minY, y)
+				}
+			}
+		}
+		out := map[[2]int]bool{}
+		for p := range pts {
+			out[[2]int{p[0] - minX, p[1] - minY}] = true
+		}
+		return out
+	}
+	sa, sb := shape(ta, a), shape(tb, b)
+	n := 0
+	for p := range sa {
+		if !sb[p] {
+			n++
+		}
+	}
+	for p := range sb {
+		if !sa[p] {
+			n++
+		}
+	}
+	return n
 }
 
 // themeOf returns the theme a window draws with, dark or light, under the
@@ -332,11 +375,22 @@ func nearColor(a, b ui.Color, tol int) bool {
 }
 
 // Case 9: ShowToast from another goroutine while frames run shows on a
-// following frame (run under -race).
+// following frame (run under -race). The worker shows a toast 2000 times,
+// so that its calls and the frames overlap.
 func TestToastFromAGoroutine(t *testing.T) {
 	f, tt := toastForm(t, 600, 400, nil)
 	done := make(chan string)
-	go func() { done <- f.ShowToast(Toast{Title: "From a worker"}) }()
+	go func() {
+		var id string
+		for i := range 2000 {
+			title := "From a worker"
+			if i < 1999 {
+				title += " " + strconv.Itoa(i)
+			}
+			id = f.ShowToast(Toast{ID: "worker", Title: title})
+		}
+		done <- id
+	}()
 	for running := true; running; {
 		select {
 		case <-done:
