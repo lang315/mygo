@@ -247,7 +247,7 @@ func TestListViewEmptyStateAcrossViews(t *testing.T) {
 }
 
 // Case 8: rows take the state away in every view; deleting them all brings it
-// back.
+// back, and nil removes it.
 func TestListViewEmptyStateGoesWithRows(t *testing.T) {
 	calmOff()
 	for _, m := range allModes {
@@ -261,6 +261,11 @@ func TestListViewEmptyStateGoesWithRows(t *testing.T) {
 			tt.Frame()
 			if !tt.HasText(listEmptyTitle) {
 				t.Fatalf("a list view whose rows were all deleted shows %q, want its empty state", tt.Texts())
+			}
+			lv.SetEmptyState(nil)
+			tt.Frame()
+			if tt.HasText(listEmptyTitle) {
+				t.Fatal("SetEmptyState(nil) still draws it")
 			}
 		})
 	}
@@ -343,18 +348,42 @@ func TestListsWithoutEmptyStateBuildAsBefore(t *testing.T) {
 // clipped by the list's box: nothing is drawn above it or under it.
 func TestListBoxEmptyStateClippedAtTextScale(t *testing.T) {
 	calmOff()
-	e := EmptyState(listEmptyTitle, "Thêm một mục để bắt đầu, rồi chọn nó trong danh sách.").SetAction("Thêm", func() {})
-	lb := newListBox().SetSize(300, 100).SetEmptyState(e)
-	tt := tester(t, VBox(0).Add(lb).Padding(100))
-	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
-	tt.Frame()
-	box, img, bg := listNode(t, tt).Bounds, tt.Image(), page(tt)
-	for _, y := range []int{int(box.Y) - 40, int(box.Y) - 2, int(box.Y+box.H) + 2, int(box.Y+box.H) + 40} {
-		for x := int(box.X); x < int(box.X+box.W); x++ {
-			if img.RGBAAt(x, y) != bg {
-				t.Fatalf("at (%d, %d), outside the list %v, a pixel %v is drawn: the state is not clipped", x, y, box, img.RGBAAt(x, y))
+	state := func() *EmptyStateWidget {
+		return EmptyState(listEmptyTitle, "Thêm một mục để bắt đầu, rồi chọn nó trong danh sách.").SetAction("Thêm", func() {})
+	}
+	lists := map[string]Control{
+		"ListBox":            newListBox().SetSize(300, 100).SetEmptyState(state()),
+		"ListView LargeIcon": emptyView().SetView(ViewLargeIcon).SetSize(300, 100).SetEmptyState(state()),
+	}
+	for name, l := range lists {
+		t.Run(name, func(t *testing.T) {
+			tt := tester(t, VBox(0).Add(l).Padding(12)) // 48 DIPs of page around it
+			tt.SetPreferences(ui.Preferences{TextScale: 1.5})
+			tt.Frame()
+			box, img, bg := listBox(t, tt), tt.Image(), page(tt)
+			for _, y := range []int{int(box.Y) - 40, int(box.Y) - 2, int(box.Y+box.H) + 2, int(box.Y+box.H) + 40} {
+				for x := int(box.X); x < int(box.X+box.W); x++ {
+					if img.RGBAAt(x, y) != bg {
+						t.Fatalf("at (%d, %d), outside the list %v, a pixel %v is drawn: the state is not clipped", x, y, box, img.RGBAAt(x, y))
+					}
+				}
 			}
-		}
+		})
+	}
+}
+
+// Ours: with an empty state the list's own style still overrides its frame,
+// though it lands on the box around the list: a border of 0 leaves no line.
+func TestListBoxEmptyStateFrameYieldsToOwnStyle(t *testing.T) {
+	calmOff()
+	id := func(s *string) string { return *s }
+	lb := ListBox(id, id).SetItems([]string{"A", "B", "C"}).SetSize(300, 120).
+		SetEmptyState(redState()).Apply(NewStyle().BorderWidth(0))
+	tt := tester(t, VBox(0).Add(lb).Padding(20))
+	img, box := tt.Image(), listBox(t, tt)
+	x, y := box.X+box.W/2, int(box.Y)
+	if edge, in := devicePx(img, x, y, 1), devicePx(img, x, y+3, 1); !sameColor(edge, in) {
+		t.Fatalf("top edge is %v, the inside %v: a line is left with a border of 0", edge, in)
 	}
 }
 

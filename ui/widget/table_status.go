@@ -55,9 +55,8 @@ func (l *ListBoxWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *ListBoxWidget[
 		l.overlay = func(*ui.Context) {}
 		if e != nil {
 			l.overlay = func(c *ui.Context) {
-				if el := emptyOver(c, e, len(l.frame) == 0, 0); el.Valid() {
-					el.Clip() // a state taller than the list stays in its box
-				}
+				// Clipped: a state taller than the list stays in its box.
+				emptyOver(c, e, len(l.frame) == 0, 0).Clip()
 			}
 		}
 	})
@@ -72,9 +71,7 @@ func (lv *ListViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *ListViewWidg
 		lv.overlay = nil
 		if e != nil {
 			lv.overlay = func(c *ui.Context) {
-				if el := emptyOver(c, e, lv.t.view.Len() == 0, 0); el.Valid() {
-					el.Clip()
-				}
+				emptyOver(c, e, lv.t.view.Len() == 0, 0).Clip()
 			}
 		}
 	})
@@ -83,7 +80,8 @@ func (lv *ListViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *ListViewWidg
 
 // emptyOver builds e over what the box being built holds, top DIPs from its
 // top, when shows, and returns its element; else it keeps e as render keeps a
-// hidden control, and returns none. Under mu, after what it covers is built.
+// hidden control, and returns none, whose methods do nothing. Under mu, after
+// what it covers is built.
 func emptyOver(c *ui.Context, e *EmptyStateWidget, shows bool, top float32) ui.Element {
 	if !shows {
 		keeping.hold(e.base())
