@@ -56,6 +56,11 @@ func TestFieldsEmptySectionGap(t *testing.T) {
 		}
 		_, group, row := build("")
 		_, titled, _ := build("Heading")
+		if mode == "settings" {
+			// The break's gap is between cards: past it, the next card's line
+			// and padding are above C.
+			group -= 1 + space(1)
+		}
 		if group <= row+1 {
 			t.Errorf("%s: gap between groups %v, between rows %v: want larger", mode, group, row)
 		}

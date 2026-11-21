@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // sine returns secs of sines of amplitude 0.5 at rate, one frequency for
@@ -159,11 +161,7 @@ func TestPreservesPitchDuration(t *testing.T) {
 			if p.Position() != p.Duration() {
 				t.Errorf("%d channels at %v×: Position = %v at the end, want %v", ch, speed, p.Position(), p.Duration())
 			}
-			select {
-			case <-ended:
-			case <-time.After(time.Minute):
-				t.Fatalf("%d channels at %v×: no OnEnd", ch, speed)
-			}
+			wait.For(t, "OnEnd", ended)
 		}
 	}
 }
@@ -293,15 +291,11 @@ func TestStreamStretches(t *testing.T) {
 	for p.Playing() {
 		// The decoder keeps a second ahead: wait for it, as the device
 		// would not.
-		for {
+		wait.Until(t, "the decoder to get ahead", func() bool {
 			s.mu.Lock()
-			ok := s.n >= 8192 || s.atEOF
-			s.mu.Unlock()
-			if ok {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
+			defer s.mu.Unlock()
+			return s.n >= 8192 || s.atEOF
+		})
 		out = append(out, render(256)...)
 		if len(out) > 10*sampleRate*channels {
 			t.Fatal("10 s and not at its end")
