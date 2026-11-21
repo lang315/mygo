@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/wait"
@@ -51,11 +50,7 @@ func TestPageOwnershipAndCleanup(t *testing.T) {
 	if _, err := s.database(1, id); err == nil {
 		t.Fatal("a canceled page retained access before asynchronous cleanup")
 	}
-	select {
-	case <-db.life.Done():
-	case <-time.After(wait.Guard):
-		t.Fatal("page navigation did not close connection")
-	}
+	wait.For(t, "page navigation to close the connection", db.life.Done())
 	if _, err := db.Query(context.Background(), "SELECT 1"); !errors.Is(err, ErrClosed) {
 		t.Fatal(err)
 	}

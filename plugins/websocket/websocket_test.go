@@ -98,13 +98,7 @@ func open(t *testing.T, s *service, opts connectOptions) (<-chan event, context.
 
 func next(t *testing.T, events <-chan event) event {
 	t.Helper()
-	select {
-	case e := <-events:
-		return e
-	case <-time.After(wait.Guard):
-		t.Fatal("no event")
-		return event{}
-	}
+	return wait.For(t, "an event", events)
 }
 
 func TestWebSocket(t *testing.T) {
@@ -187,13 +181,8 @@ func TestWebSocketPageGoesAway(t *testing.T) {
 	events, cancel := open(t, s, connectOptions{ID: "a", URL: "ws" + strings.TrimPrefix(srv.URL, "http")})
 	next(t, events)
 	cancel()
-	select {
-	case code := <-closed:
-		if code != closeGoingAway {
-			t.Errorf("closed with %d", code)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the connection was not closed")
+	if code := wait.For(t, "the connection to be closed", closed); code != closeGoingAway {
+		t.Errorf("closed with %d", code)
 	}
 	for range events {
 	}
@@ -205,9 +194,11 @@ func TestWebSocketPageGoesAway(t *testing.T) {
 }
 
 func TestWebSocketCloseTimeout(t *testing.T) {
+	stop := make(chan struct{})
 	srv := testServer(t, func(r *http.Request, c *conn) {
-		time.Sleep(2 * time.Second) // never answers the close
+		<-stop // never answers the close
 	})
+	t.Cleanup(func() { close(stop) })
 	s := New(Options{CloseTimeout: 100 * time.Millisecond}).Service.(*service)
 	events, _ := open(t, s, connectOptions{ID: "a", URL: "ws" + strings.TrimPrefix(srv.URL, "http")})
 	next(t, events)
