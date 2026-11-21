@@ -63,6 +63,51 @@ func TestListBoxEmptyStateMnemonic(t *testing.T) {
 	}
 }
 
+// Review round 2: two rows share the access key F. Alt+F focuses the list box,
+// and Alt+F again moves on to the next: the cycle asks the list, not the box
+// around it, whether it has the focus. With two list boxes a third press comes
+// back to the first. (After a TextBox it does not, with or without an empty
+// state: the TextBox's element is not the one focused, which is older than
+// P2e.)
+func TestListBoxEmptyStateSharedMnemonic(t *testing.T) {
+	calmOff()
+	withMac(t, false)
+	t.Run("then a text box", func(t *testing.T) {
+		f := NewForm("m", 400, 300)
+		f.SetContent(Fields().Row("&Files", stateBox(false).SetSize(300, 150)).Row("&Find", TextBox()))
+		tt := TestForm(t, f)
+		tt.Settle()
+		for i, want := range []string{"list", "text box"} {
+			tt.Key(ui.Alt, ui.KeyF)
+			tt.Settle()
+			inList, inText := focusInList(tt.Tester), tt.Find(ByRole(ui.RoleTextField)).Focused()
+			if (want == "list") != inList || (want == "text box") != inText {
+				t.Fatalf("Alt+F #%d: the list focused %v, the text box %v; want the %s", i+1, inList, inText, want)
+			}
+		}
+	})
+	t.Run("two list boxes", func(t *testing.T) {
+		f := NewForm("m", 400, 400)
+		f.SetContent(Fields().Row("&Files", stateBox(false).SetSize(300, 100)).
+			Row("&Find", newListBox().SetItems(followItems(10, 3)).SetEmptyState(redState()).SetSize(300, 100)))
+		tt := TestForm(t, f)
+		tt.Settle()
+		for i, want := range []string{"Files", "Find", "Files"} {
+			tt.Key(ui.Alt, ui.KeyF)
+			tt.Settle()
+			var got []string
+			for _, n := range tt.Tester.Nodes() {
+				if n.Focused {
+					got = append(got, n.Label)
+				}
+			}
+			if len(got) != 1 || got[0] != want {
+				t.Fatalf("Alt+F #%d focused %q, want the list %q", i+1, got, want)
+			}
+		}
+	})
+}
+
 func TestListBoxEmptyStateOnFocusOut(t *testing.T) {
 	calmOff()
 	left := make(chan struct{}, 4)
