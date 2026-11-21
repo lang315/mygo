@@ -251,6 +251,12 @@ theme. Their buttons are in the app's language:
   `InputSelect`, whose combo takes Enter to open its list, OK stays
   disabled until a choice.
 
+A message box waits for the user. To tell only an outcome ("12 accounts
+exported"), show a toast instead: `Form.ShowToast(widget.Toast{...})` shows it
+near the bottom of the window for a few seconds, with a status, and an action
+such as Undo; see [Toasts](widget/toast.md). Keep message boxes for a question
+or an error the user must read.
+
 The file dialogs are the system's: `OpenFile(parent, title, filters...)`,
 `OpenFiles`, `SaveFile(parent, title, name, filters...)` and
 `SelectFolder(parent, title, dir)` return the path, or `""` (`nil`) when the
@@ -1157,6 +1163,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `Badge(text)`: a short text in a pill colored by its `Status` (`StatusNone`, `StatusInfo`, `StatusRunning`, `StatusSuccess`, `StatusWarning`, `StatusDanger`); see [Badge](widget/badge.md).
 - `InfoBar(status, title, message)`: a message inline in a page, with an optional action and close button; see [InfoBar](widget/infobar.md).
+- `Form.ShowToast(Toast{...})`, `Form.CloseToast(id)`: a message near the bottom of the window for a few seconds, the outcome of an action, with a status and an optional action; see [Toasts](widget/toast.md).
 - `EmptyState(title, message)`: what a view shows when it has nothing in it, with an optional icon and action; a `DataGridView`, a `ListView` and a `ListBox` draw one over themselves while they show no row (`SetEmptyState`); see [EmptyState](widget/emptystate.md).
 - A `Sidebar` or `TabControl` page taller than the room scrolls, as WinForms'
   `AutoScroll` does (a wheel over it, or Tab to a control below the fold), in a
