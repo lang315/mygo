@@ -20,10 +20,14 @@ empty := widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản �
 
 A `DataGridView` shows it over its body while it shows no row, under its
 headers: `grid.SetEmptyState(empty)` (see
-[DataGridView](../widget.md#datagridview)). Elsewhere, show it in place of the
-list while that has no rows, for instance in a box whose content you swap, or
-with `SetVisible`. It fills the width of its box and grows along it, so give
-the box the height the view had.
+[DataGridView](../widget.md#datagridview)). A `ListView` does the same,
+`view.SetEmptyState(empty)`: in Details under its headers, as the grid it is,
+and over the whole grid of items in the other views. A `ListBox` shows it over
+the whole list: `list.SetEmptyState(empty)`. In each, `nil` removes it, and it
+is clipped to the list's box. Elsewhere, show it in place of the list while
+that has no rows, for instance in a box whose content you swap, or with
+`SetVisible`. It fills the width of its box and grows along it, so give the box
+the height the view had.
 
 A skin's [`Looks.EmptyState`](../skin.md#looks) styles its box, as `bg-chrome`
 does.

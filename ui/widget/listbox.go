@@ -62,6 +62,10 @@ type ListBoxWidget[T any, K comparable] struct {
 	// version of each row.
 	images *ImageListWidget
 
+	// overlay, set by SetEmptyState, builds the empty state over the list,
+	// which then builds in a box of its own. Under mu.
+	overlay func(c *ui.Context)
+
 	// ui's, on the main thread:
 	list   ui.ListState
 	cursor int
@@ -521,8 +525,23 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 		l.checked.bind()
 	}
 	s.FollowEnd = l.follow
+	if l.overlay == nil {
+		return l.listOf(c)
+	}
+	// render places and styles the box (the frame yields to its style), and
+	// focuses, names and describes the list, as it does a list without one.
+	return ui.Column(c).Grow(1).Children(func() {
+		l.inner = l.listOf(c, &l.style)
+		l.overlay(c)
+	})
+}
+
+// listOf builds the list of the items of the frame, framed as frameList says
+// with own. Under mu, while the list builds.
+func (l *ListBoxWidget[T, K]) listOf(c *ui.Context, own ...*Style) ui.Element {
+	s := &l.list
 	e := ui.List(c, s, len(l.frame), func(i int) { l.row(c, i) }).Grow(1)
-	frameList(c, e)
+	frameList(c, e, own...)
 	if l.toEnd && !c.Measuring() { // the request is for the real window
 		l.toEnd = false
 		s.ScrollToEnd()

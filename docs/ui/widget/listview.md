@@ -97,6 +97,9 @@ view shows it.
   go on from the row that was chosen, and Shift-click extends from it.
 - `ContextMenu`, `ContextMenuFunc` and `CopyFunc` work in every view, as the
   `DataGridView`'s do.
+- `SetEmptyState(e)` draws an [empty state](emptystate.md) while no row shows:
+  in Details over the body, under the headers, as the `DataGridView`'s; in the
+  other views over the whole grid of items. `nil` removes it.
 
 ## Size
 
