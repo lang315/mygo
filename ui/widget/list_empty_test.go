@@ -72,27 +72,37 @@ func listNode(t *testing.T, tt *ui.Tester) ui.TestNode {
 	return ui.TestNode{}
 }
 
-// focusInList reports whether the keyboard focus is on the list or one of its
-// items.
+// focusInList reports whether the keyboard focus is on the list, table or
+// grid, or one of its items, rows or cells.
 func focusInList(tt *ui.Tester) bool {
 	for _, n := range tt.Nodes() {
-		if n.Focused && (n.Role == ui.RoleList || n.Role == ui.RoleListItem) {
+		if !n.Focused {
+			continue
+		}
+		switch n.Role {
+		case ui.RoleList, ui.RoleListItem, ui.RoleTable, ui.RoleRow, ui.RoleCell, ui.RoleGrid:
 			return true
 		}
 	}
 	return false
 }
 
-// Case 1: a ListBox with no items draws its empty state over its whole box.
+// Case 1: a ListBox with no items draws its empty state over its whole box,
+// with a skin and without.
 func TestListBoxEmptyStateFillsTheList(t *testing.T) {
-	calmOff()
-	lb := newListBox().SetSize(300, 200).SetEmptyState(redState())
-	tt := tester(t, VBox(0).Add(lb).Padding(20))
-	if !tt.HasText(listEmptyTitle) {
-		t.Fatalf("an empty list box shows %q, want its empty state", tt.Texts())
-	}
-	if red, list := redBox(t, tt), listNode(t, tt).Bounds; !sameBox(red, list) {
-		t.Errorf("the empty state's box is %v, the list's %v: want the same within 1 DIP", red, list)
+	t.Cleanup(calmOff)
+	for _, skin := range []bool{false, true} {
+		t.Run(fmt.Sprint("skin=", skin), func(t *testing.T) {
+			useCalm(t, skin)
+			lb := newListBox().SetSize(300, 200).SetEmptyState(redState())
+			tt := tester(t, VBox(0).Add(lb).Padding(20))
+			if !tt.HasText(listEmptyTitle) {
+				t.Fatalf("an empty list box shows %q, want its empty state", tt.Texts())
+			}
+			if red, list := redBox(t, tt), listNode(t, tt).Bounds; !sameBox(red, list) {
+				t.Errorf("the empty state's box is %v, the list's %v: want the same within 1 DIP", red, list)
+			}
+		})
 	}
 }
 
@@ -199,6 +209,16 @@ func TestListBoxEmptyStateNil(t *testing.T) {
 			t.Errorf("node %d is %v %q %v, want %v %q %v", i, g.Role, g.Label, g.Bounds, w.Role, w.Label, w.Bounds)
 		}
 	}
+
+	// The box stays after nil: the list does not move, and keeps the focus.
+	lb2 := newListBox().SetItems(followItems(1, 3)).SetEmptyState(redState()).Expand()
+	tt2 := tester(t, lb2)
+	click(t, tt2, "r0002")
+	lb2.SetEmptyState(nil)
+	tt2.Frame()
+	if !focusInList(tt2) {
+		t.Fatal("the list lost the focus at SetEmptyState(nil): it moved out of its box")
+	}
 }
 
 // Case 5: in Details the state sits under the header row, as the grid's: its
@@ -257,11 +277,24 @@ func TestListViewEmptyStateGoesWithRows(t *testing.T) {
 			if tt.HasText(listEmptyTitle) {
 				t.Fatal("the empty state shows over rows")
 			}
+			click(t, tt, "Banana")
 			lv.DeleteRows("a", "b", "c", "d")
 			tt.Frame()
 			if !tt.HasText(listEmptyTitle) {
 				t.Fatalf("a list view whose rows were all deleted shows %q, want its empty state", tt.Texts())
 			}
+			// The view's element stays where it is, rows or not: it keeps the
+			// focus as the state comes and goes.
+			if !focusInList(tt) {
+				t.Error("the view lost the focus as its empty state came")
+			}
+			lv.SetRows(fruits)
+			tt.Frame()
+			if !focusInList(tt) {
+				t.Error("the view lost the focus as its empty state went")
+			}
+			lv.Clear()
+			tt.Frame()
 			lv.SetEmptyState(nil)
 			tt.Frame()
 			if tt.HasText(listEmptyTitle) {
@@ -286,18 +319,24 @@ func TestListEmptyStateAction(t *testing.T) {
 	for name, l := range lists {
 		t.Run(name, func(t *testing.T) {
 			tt := tester(t, l)
+			if nodeOf(t, tt, ui.RoleButton, "Thêm").Focused {
+				t.Fatal("the action has the focus before any key")
+			}
+			reached := false
+			for range 6 {
+				tt.Key(0, ui.KeyTab)
+				tt.Frame()
+				if reached = nodeOf(t, tt, ui.RoleButton, "Thêm").Focused; reached {
+					break
+				}
+			}
+			if !reached {
+				t.Fatal("Tab does not reach the action")
+			}
 			click(t, tt, "Thêm")
 			if got := received(t, ran); got != name {
 				t.Fatalf("clicking the action ran %q's", got)
 			}
-			for range 6 {
-				if nodeOf(t, tt, ui.RoleButton, "Thêm").Focused {
-					return
-				}
-				tt.Key(0, ui.KeyTab)
-				tt.Frame()
-			}
-			t.Fatal("Tab does not reach the action")
 		})
 	}
 }
@@ -399,12 +438,12 @@ func TestListEmptyStateFromGoroutines(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range 40 {
-			var e *EmptyStateWidget
+			var a, b *EmptyStateWidget // one state a list: a widget shows in one place
 			if i%2 == 0 {
-				e = redState()
+				a, b = redState(), redState()
 			}
-			lb.SetEmptyState(e)
-			lv.SetEmptyState(e)
+			lb.SetEmptyState(a)
+			lv.SetEmptyState(b)
 		}
 	}()
 	go func() {
