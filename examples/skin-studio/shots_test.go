@@ -164,8 +164,7 @@ func TestShots(t *testing.T) {
 // takes in the tab strip (from the right edge of the eighth tab to the
 // window's, the strip's height) every shot is the same, but the chart page's,
 // where the spinner turns, the dialogs page's, which shows the status
-// controls under its message boxes, the text page's, whose settings rows
-// are cards, and but a box of 20 by 12 pixels of the numbers
+// controls under its message boxes, and but a box of 20 by 12 pixels of the numbers
 // page, where the date picker shows the time. It is skipped without both variables, and reads
 // shots taken at scale 1.
 func TestShotsMatchMain(t *testing.T) {
@@ -224,9 +223,6 @@ func TestShotsMatchMain(t *testing.T) {
 		if strings.HasSuffix(base, "-dialogs-and-messages.png") {
 			continue // the badges, info bars and empty state are new on this page
 		}
-		if strings.HasSuffix(base, "-text-and-choices.png") {
-			continue // its settings rows are cards now, with a description
-		}
 		name := ""
 		for k := range studios {
 			if strings.HasPrefix(base, k+"-") && len(k) > len(name) {
@@ -273,5 +269,5 @@ func TestShotsMatchMain(t *testing.T) {
 		}
 	}
 	// The Edit header is on main now, so the rectangles may match too.
-	t.Logf("%d shots compared (the 12 each of the chart, dialogs and text pages skipped); %d pixels differ inside the rectangles", compared, inside)
+	t.Logf("%d shots compared (the 12 each of the chart and dialogs pages skipped); %d pixels differ inside the rectangles", compared, inside)
 }
