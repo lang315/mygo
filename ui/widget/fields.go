@@ -261,7 +261,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 					r.underline(c)
 					e := render(c, r.label) // holds a hidden label
 					if r.key != 0 {
-						registerMnemonic(r.key, e, r.w, func() { focusLater(r.w) })
+						registerMnemonic(r.key, e, r.w, func() { buildingForm.focusRow(r.w) })
 					}
 					if !r.label.hidden && r.label.place.align == 0 {
 						e.AlignSelf(ui.Start)
@@ -439,7 +439,7 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	}
 	if r.key != 0 {
 		w := r.w
-		registerMnemonic(r.key, e, w, func() { focusLater(w) })
+		registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 	}
 	if r.label.hidden { // keep its cell, or ui flows the control into it
 		ui.Box(c.Key(fieldHole(r.label.id)))
@@ -486,7 +486,7 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 		}
 		if r.key != 0 {
 			w := r.w
-			registerMnemonic(r.key, e, w, func() { focusLater(w) })
+			registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 		}
 		if r.desc != "" && !r.label.hidden {
 			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)

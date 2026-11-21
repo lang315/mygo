@@ -165,15 +165,16 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 			if o.key != m.key || o.el.IsDisabled() {
 				continue
 			}
-			tc := o.ctrl
+			tc := w.focusTarget(o.ctrl)
 			if o.next {
-				if tc = w.nextAfter(o.ctrl); tc == nil {
-					continue
-				}
+				tc = w.nextAfter(o.ctrl)
+			}
+			if tc == nil {
+				continue
 			}
 			tb := w.builtOf(tc)
 			if tb.ctrl == nil {
-				tb = builtEl{tc, o.el}
+				tb = builtEl{ctrl: tc, el: o.el}
 			}
 			if !slices.ContainsFunc(targets, func(b builtEl) bool { return b.ctrl == tc }) {
 				hit, targets = append(hit, o), append(targets, tb)
@@ -310,6 +311,7 @@ func (w *Form) focusedControl() Control {
 type builtEl struct {
 	ctrl Control
 	el   ui.Element
+	from int // where in Form.built its build began: the controls inside it are [from, its own index)
 }
 
 // builtOf returns what the form built for c, or the zero builtEl.
@@ -336,6 +338,36 @@ func (w *Form) nextAfter(c Control) Control {
 		}
 	}
 	return nil
+}
+
+// focusTarget returns the control a key aimed at c focuses: c itself, unless c
+// is a container (its build made other controls), where it is the first of
+// those, in Tab order, that can take the focus, as WinForms; nil for none.
+// Under mu, at the end of a build.
+func (w *Form) focusTarget(c Control) Control {
+	for i, b := range w.built {
+		if b.ctrl != c {
+			continue
+		}
+		if b.from >= i {
+			return c
+		}
+		for j := b.from; j < i; j++ {
+			if in := w.built[j]; in.from >= j && in.el.CanFocus() { // a control that holds none
+				return in.ctrl
+			}
+		}
+		return nil
+	}
+	return c
+}
+
+// focusRow focuses what the access key of a Fields row aims at, the row's
+// control c or, when it is a container, the first control in it.
+func (w *Form) focusRow(c Control) {
+	if t := w.focusTarget(c); t != nil {
+		focusLater(t)
+	}
 }
 
 // focusNextAfter focuses the control nextAfter finds.
