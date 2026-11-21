@@ -1,6 +1,7 @@
 package skin
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -15,7 +16,43 @@ var allLooks = Looks{
 	CheckBox: "bg-lime-600", RadioButton: "bg-green-600", GroupBox: "bg-emerald-600", Card: "bg-teal-600",
 	TabStrip: "bg-cyan-600", TabHeader: "bg-sky-600", GridHeader: "bg-blue-600", ToolStrip: "bg-indigo-600",
 	StatusStrip: "bg-violet-600", MenuBar: "bg-purple-600", HeaderBar: "bg-fuchsia-600",
-	Badge: "bg-pink-600", InfoBar: "bg-rose-600", EmptyState: "bg-slate-600",
+	Badge: "bg-pink-600", InfoBar: "bg-rose-600", EmptyState: "bg-slate-600", SettingsCard: "bg-stone-600",
+}
+
+// lookIs reports whether the active look of kind k is the Style of the
+// classes cl.
+func lookIs(k skinhook.Kind, cl string) bool {
+	got, ok := skinhook.Look(k).(*widget.Style)
+	return ok && reflect.DeepEqual(*got, tw.S(cl))
+}
+
+// P2b case 11: a skin with no SettingsCard look gives the settings cards its
+// Card look (HighContrast's), while Looks() keeps "" as written; one set wins
+// over Card; Use hands it on, and Use(nil) takes it off.
+func TestSettingsCardLookDefaultsToCard(t *testing.T) {
+	t.Cleanup(func() { Use(nil) })
+	Use(HighContrast)
+	if HighContrast.Looks().SettingsCard != "" {
+		t.Errorf("HighContrast's SettingsCard is %q, want \"\" (the default is Use's, not the field's)", HighContrast.Looks().SettingsCard)
+	}
+	if !lookIs(skinhook.KindSettingsCard, "border-2 border-strong") {
+		t.Errorf("under HighContrast the SettingsCard look is %v, want its Card look border-2 border-strong", skinhook.Look(skinhook.KindSettingsCard))
+	}
+	Use(Calm.WithLooks(Looks{Card: "border-2 border-strong", SettingsCard: "rounded-none border border-control"}))
+	if !lookIs(skinhook.KindSettingsCard, "rounded-none border border-control") {
+		t.Errorf("SettingsCard set: its look is %v, want its own", skinhook.Look(skinhook.KindSettingsCard))
+	}
+	if !lookIs(skinhook.KindCard, "border-2 border-strong") {
+		t.Error("a SettingsCard look changed the Card look")
+	}
+	Use(Calm.WithLooks(Looks{Button: "rounded-none"}))
+	if l := skinhook.Look(skinhook.KindSettingsCard); l != nil {
+		t.Errorf("no Card and no SettingsCard: the SettingsCard look is %v, want none", l)
+	}
+	Use(nil)
+	if l := skinhook.Look(skinhook.KindSettingsCard); l != nil {
+		t.Errorf("after Use(nil) the SettingsCard look is %v", l)
+	}
 }
 
 // WithLooks keeps the strings as given, Calm has none, and the receiver

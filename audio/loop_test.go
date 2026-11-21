@@ -3,6 +3,8 @@ package audio
 import (
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // A tune's intro plays once, then its loop again and again, without a gap.
@@ -54,15 +56,11 @@ func TestStreamLoopRange(t *testing.T) {
 	for len(out) < 9000*channels {
 		chunk := make([]float32, 64*channels)
 		s := p.v.src.(*stream)
-		for {
+		wait.Until(t, "the decoder to get ahead", func() bool {
 			s.mu.Lock()
-			n := s.n
-			s.mu.Unlock()
-			if n >= 64 {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
+			defer s.mu.Unlock()
+			return s.n >= 64
+		})
 		mix(chunk)
 		out = append(out, chunk...)
 	}

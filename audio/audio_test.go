@@ -349,16 +349,11 @@ func (d *genDecoder) SetPosition(f int64) error {
 func waitDecoded(t *testing.T, p *Player) {
 	t.Helper()
 	s := p.v.src.(*stream)
-	for range 1000 {
+	wait.Until(t, "the stream to decode something", func() bool {
 		s.mu.Lock()
-		n := s.n
-		s.mu.Unlock()
-		if n > 0 {
-			return
-		}
-		time.Sleep(time.Millisecond)
-	}
-	t.Fatal("the stream decoded nothing")
+		defer s.mu.Unlock()
+		return s.n > 0
+	})
 }
 
 func TestStream(t *testing.T) {
@@ -377,13 +372,7 @@ func TestStream(t *testing.T) {
 		}
 	}
 	p.Close()
-	for range 1000 {
-		if d.closed.Load() {
-			return
-		}
-		time.Sleep(time.Millisecond)
-	}
-	t.Error("Close did not close the decoder")
+	wait.Until(t, "Close to close the decoder", d.closed.Load)
 }
 
 func TestStreamLoopsWithoutGap(t *testing.T) {
@@ -397,16 +386,12 @@ func TestStreamLoopsWithoutGap(t *testing.T) {
 		chunk := make([]float32, 64*channels)
 		// The decoder keeps a second ahead: wait for it, as the device
 		// would not.
-		for {
-			s := p.v.src.(*stream)
+		s := p.v.src.(*stream)
+		wait.Until(t, "the decoder to get ahead", func() bool {
 			s.mu.Lock()
-			n := s.n
-			s.mu.Unlock()
-			if n >= 64 {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
+			defer s.mu.Unlock()
+			return s.n >= 64
+		})
 		mix(chunk)
 		out = append(out, chunk...)
 	}
@@ -436,16 +421,12 @@ func TestOrphanedStreamPlaysToItsEnd(t *testing.T) {
 	setup(t)
 	d := &genDecoder{ch: 1, length: 500}
 	v := NewPlayer(d).v
-	for range 1000 {
-		s := v.src.(*stream)
+	s := v.src.(*stream)
+	wait.Until(t, "the stream to decode something", func() bool {
 		s.mu.Lock()
-		n := s.n
-		s.mu.Unlock()
-		if n > 0 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
+		defer s.mu.Unlock()
+		return s.n > 0
+	})
 	mu.Lock()
 	v.playing, v.active, v.snap = true, true, true
 	voices = append(voices, v)
@@ -595,11 +576,7 @@ func TestNullOutput(t *testing.T) {
 	p := NewSound(sampleRate, 1, make([]float32, sampleRate/10)).Play()
 	// How long it takes is TestNullDeviceKeepsTime's: a minute only
 	// guards against a hang.
-	for start := time.Now(); p.Playing(); time.Sleep(5 * time.Millisecond) {
-		if time.Since(start) > time.Minute {
-			t.Fatal("100 ms still playing after a minute")
-		}
-	}
+	wait.Until(t, "the sound to end", func() bool { return !p.Playing() })
 	if Err() != failure {
 		t.Errorf("Err = %v", Err())
 	}

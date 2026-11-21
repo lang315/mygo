@@ -35,6 +35,9 @@ var instead = map[string]string{
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
 var allowed = map[string]string{
+	"plugins/updater/updater_test.go TestOnChange time.After":             "no change is told when none was made: a late call can only miss a bug",
+	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep":        "no second check starts at once: a slow machine can only miss a bug",
+	"plugins/updater/native/window_test.go TestFit time.After":            "the window asks for no size once it has its own: a slow machine can only miss a bug",
 	"document_test.go TestDocumentQuit time.After":                        "Cancel on the quit question must not quit: a slow machine can only miss a bug",
 	"document_test.go TestDocumentUntitledClose time.Sleep":               "Cancel must not close the window: a slow machine can only miss a bug",
 	"mygo_test.go TestChannels time.After":                                "Send must not return before the page acknowledges, and a stale acknowledgment must not count: a slow machine can only miss a bug",
