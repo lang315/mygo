@@ -181,7 +181,7 @@ func (f *FieldsWidget) Stacked() *FieldsWidget {
 // and its divider away, and a section whose rows are all hidden its card. Of
 // Stacked and SettingsRows, the last call wins. A ProgressBar and an empty
 // ListBox have no width in the fit column, and a ListBox with items or a
-// table a narrow one: give them SetSize, or use Stacked. The label column is
+// table a narrow one: give them SetSize, or make their row Wide. The label column is
 // no narrower than its longest word, so in a narrow window the controls are
 // pushed toward or past the right edge (a ComboBox beside "Notifications"
 // needs about 229 DIPs): give the window a SetMinimumSize wide enough. In a

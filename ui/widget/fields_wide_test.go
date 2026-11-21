@@ -379,31 +379,36 @@ func TestWideTheLastRow(t *testing.T) {
 
 // Case 12: a form with no wide row lays out as before Wide: its controls at
 // the places main puts them.
+// The controls are bars of a fixed size, so that the places do not hang on
+// the font: in the plain grid each starts the control column, Space(3) after
+// the widest of the labels and the description, a row under the one before;
+// in cards each ends at the card's inner edge.
 func TestWideNoneKeepsTheLayout(t *testing.T) {
-	plain := NewTester(t, Fields().Row("Tên", TextBox()).Row(wideKeys, TextBox()).Describe(nameDesc).Row("Mã", TextBox()), 400, 400)
-	cards := NewTester(t, Fields().SettingsRows().Row("Tên", TextBox()).Row(wideKeys, TextBox()).Describe(nameDesc).Row("Mã", TextBox()), 400, 400)
-	for _, c := range []struct {
-		name string
-		tt   *Tester
-		want [3]ui.Rect
-	}{
-		{"plain", plain, wantPlain},
-		{"cards", cards, wantCards},
-	} {
-		for i := range 3 {
-			if got, w := fieldBox(c.tt, i), c.want[i]; !approx(got.X, w.X) || !approx(got.Y, w.Y) || !approx(got.W, w.W) || !approx(got.H, w.H) {
-				t.Errorf("%s: text box %d at %v, want %v", c.name, i, got, c.want[i])
-			}
+	plain := NewTester(t, Fields().Row("Tên", wbar("c1", 60, 24)).Row(wideKeys, wbar("c2", 60, 24)).Describe(nameDesc).
+		Row("Mã", wbar("c3", 60, 24)), 400, 400)
+	col := max(find(t, plain.Tester, "Tên").W, find(t, plain.Tester, wideKeys).W, find(t, plain.Tester, nameDesc).W) + space(3)
+	prev := float32(-100) // above the first row
+	for _, s := range []string{"c1", "c2", "c3"} {
+		c := find(t, plain.Tester, s)
+		if !approx(c.X, col) {
+			t.Errorf("plain: %s at x %v, want the control column's %v", s, c.X, col)
+		}
+		if c.Y < prev+24+space(2)-0.5 {
+			t.Errorf("plain: %s at y %v, want a row under the one before, at %v", s, c.Y, prev)
+		}
+		prev = c.Y
+	}
+	cards := NewTester(t, Fields().SettingsRows().Row("Tên", wbar("c1", 60, 24)).Row(wideKeys, wbar("c2", 60, 24)).Describe(nameDesc).
+		Row("Mã", wbar("c3", 60, 24)), 400, 400)
+	for _, s := range []string{"c1", "c2", "c3"} {
+		if c := find(t, cards.Tester, s); !approx(c.X, cardRight-60) {
+			t.Errorf("cards: %s at x %v, want %v", s, c.X, cardRight-60)
 		}
 	}
+	if ys := rules(cards.Tester, int(cardRight-60)-4); len(ys) != 2 {
+		t.Errorf("cards: dividers at %v, want 2", ys)
+	}
 }
-
-// wantPlain and wantCards are the text boxes of TestWideNoneKeepsTheLayout
-// as main lays them out (bb6600a93).
-var (
-	wantPlain = [3]ui.Rect{{X: 183.52, Y: 0, W: 216.48, H: 29.31}, {X: 183.52, Y: 37.31, W: 216.48, H: 30.62}, {X: 183.52, Y: 75.93, W: 216.48, H: 29.31}}
-	wantCards = [3]ui.Rect{{X: 165, Y: 5, W: 222, H: 29.31}, {X: 165, Y: 59.62, W: 222, H: 29.31}, {X: 165, Y: 114.24, W: 222, H: 29.31}}
-)
 
 // Review Focus 1: a long wide label wraps at the form's width, not at the
 // label column's.
@@ -416,6 +421,9 @@ func TestWideLabelWrapsAtTheForm(t *testing.T) {
 	}
 	if l.W < 200 || l.W <= tb.X {
 		t.Errorf("the long label %v wraps at the label column (the text box at %v)", l, tb.X)
+	}
+	if m := fieldBox(tt, 1); m.Y < l.Y+l.H-0.5 || !approx(m.X, 0) || !approx(m.W, 300) {
+		t.Errorf("the wide control %v is not under the wrapped label %v, across the form", m, l)
 	}
 }
 
