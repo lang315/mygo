@@ -340,20 +340,38 @@ func (w *Form) nextAfter(c Control) Control {
 	return nil
 }
 
+// isContainer reports whether c holds other controls, as a box does. A control
+// that takes the focus itself (a ListBox, whose empty state may hold a button)
+// is not one, whatever its build rendered.
+func isContainer(c Control) bool {
+	_, ok := c.(interface{ children() []Control })
+	return ok
+}
+
 // focusTarget returns the control a key aimed at c focuses: c itself, unless c
-// is a container (its build made other controls), where it is the first of
-// those, in Tab order, that can take the focus, as WinForms; nil for none.
-// Under mu, at the end of a build.
+// is a container, where it is the first control in it, in Tab order, that can
+// take the focus, as WinForms; nil for none. What lies inside a control that
+// takes the focus itself belongs to it. Under mu, at the end of a build.
 func (w *Form) focusTarget(c Control) Control {
+	if !isContainer(c) {
+		return c
+	}
 	for i, b := range w.built {
 		if b.ctrl != c {
 			continue
 		}
-		if b.from >= i {
-			return c
+		// A control comes after what it built: j is inside a later k that takes
+		// the focus itself when k's build began at or before j.
+		inside := func(j int) bool {
+			for k := j + 1; k < i; k++ {
+				if o := w.built[k]; o.from <= j && !isContainer(o.ctrl) && o.el.CanFocus() {
+					return true
+				}
+			}
+			return false
 		}
 		for j := b.from; j < i; j++ {
-			if in := w.built[j]; in.el.CanFocus() { // a container comes after what it holds
+			if in := w.built[j]; !isContainer(in.ctrl) && in.el.CanFocus() && !inside(j) {
 				return in.ctrl
 			}
 		}

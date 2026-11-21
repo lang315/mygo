@@ -200,3 +200,37 @@ func TestRowKeyOfAContainerAddsNoAllocationsToAFrame(t *testing.T) {
 		t.Errorf("a key costs %.1f allocations a frame on a container and %.1f on a control, want 2", box, leaf)
 	}
 }
+
+// actionList is an empty ListBox whose empty state has a button.
+func actionList() *ListBoxWidget[litem, string] {
+	return newListBox().SetEmptyState(EmptyState("Trống", "Thêm một mục.").SetAction("Thêm", func() {})).SetSize(300, 150)
+}
+
+// Round 1, A: the empty state's button is inside the list, not a target of
+// the box around it.
+func TestRowKeyOfABoxWithAListWithAnEmptyStateActionFocusesTheList(t *testing.T) {
+	calmOff()
+	withMac(t, false)
+	tt := formOf(t, Fields().Row("&K", HBox(0).Add(actionList())))
+	altKey(tt, ui.KeyK)
+	if !focusInList(tt.Tester) {
+		t.Error("Alt+K did not focus the list")
+	}
+	if tt.Find(ByLabel("Thêm")).Focused() {
+		t.Error("Alt+K focused the empty state's button")
+	}
+}
+
+// Round 1, B: the same list as the row's control, in no box.
+func TestRowKeyOfAListWithAnEmptyStateActionFocusesTheList(t *testing.T) {
+	calmOff()
+	withMac(t, false)
+	tt := formOf(t, Fields().Row("&K", actionList()))
+	altKey(tt, ui.KeyK)
+	if !focusInList(tt.Tester) {
+		t.Error("Alt+K did not focus the list")
+	}
+	if tt.Find(ByLabel("Thêm")).Focused() {
+		t.Error("Alt+K focused the empty state's button")
+	}
+}
