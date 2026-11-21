@@ -471,6 +471,24 @@ func TestToastHookUnsetUntilShown(t *testing.T) {
 	}
 }
 
+// CloseToast before any ShowToast queues nothing: an app that closes toasts
+// it never showed does not grow the form's queue without a frame to drain it.
+func TestToastCloseWithoutShowQueuesNothing(t *testing.T) {
+	mu.Lock()
+	toastHook = nil
+	mu.Unlock()
+	f := NewForm("Plain", 600, 400)
+	for range 3 {
+		f.CloseToast("")
+	}
+	mu.Lock()
+	n := len(f.toasts)
+	mu.Unlock()
+	if n != 0 {
+		t.Errorf("%d closes queued with no toast shown", n)
+	}
+}
+
 // A toast queued before a refit (SetSize(w, 0)) shows after it: the measure
 // leaves the queue to the frame.
 func TestToastSurvivesAMeasure(t *testing.T) {
