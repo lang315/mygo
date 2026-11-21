@@ -5,9 +5,9 @@ package e2e
 import (
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -34,13 +34,11 @@ func TestAccessDisabled(t *testing.T) {
 	for _, label := range []string{"Delete project", "Close"} {
 		var v string
 		var named, ok bool
-		for end := time.Now().Add(30 * time.Second); ; time.Sleep(50 * time.Millisecond) {
-			if v, _, named, ok = axAttribute(w, label, "AXEnabled"); ok && v == "0" {
-				break
-			}
-			if time.Now().After(end) {
-				t.Fatalf("%s: AXEnabled %q (listed %v, found %v), want 0", label, v, named, ok)
-			}
+		if !wait.Poll(func() bool {
+			v, _, named, ok = axAttribute(w, label, "AXEnabled")
+			return ok && v == "0"
+		}) {
+			t.Fatalf("%s: AXEnabled %q (listed %v, found %v), want 0", label, v, named, ok)
 		}
 	}
 	if accessPerform(w, "Close", "focus", "") {

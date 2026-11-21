@@ -61,8 +61,7 @@ func TestFileWatchPluginPages(t *testing.T) {
 
 func TestFileWatch(t *testing.T) {
 	dir := t.TempDir()
-	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
+	ctx := wait.Context(t)
 	w, err := mygo.WatchFiles(ctx, dir, mygo.FileWatchOptions{Recursive: true, Debounce: 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
@@ -160,8 +159,7 @@ func TestFileWatchFile(t *testing.T) {
 	if err := os.WriteFile(file, []byte("a"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
+	ctx := wait.Context(t)
 	w, err := mygo.WatchFiles(ctx, file, mygo.FileWatchOptions{Debounce: 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
@@ -212,8 +210,7 @@ func TestFileWatchAtomicSave(t *testing.T) {
 	if err := os.WriteFile(file, []byte("a"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
+	ctx := wait.Context(t)
 	w, err := mygo.WatchFiles(ctx, dir, mygo.FileWatchOptions{
 		Recursive: true,
 		Debounce:  10 * time.Millisecond,
@@ -276,8 +273,7 @@ func TestFileWatchManyFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
+	ctx := wait.Context(t)
 	w, err := mygo.WatchFiles(ctx, dir, mygo.FileWatchOptions{})
 	if err != nil {
 		t.Fatal(err)

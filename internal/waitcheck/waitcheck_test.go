@@ -35,17 +35,26 @@ var instead = map[string]string{
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
 var allowed = map[string]string{
-	"plugins/updater/updater_test.go TestOnChange time.After":                         "no change is told when none was made: a late call can only miss a bug",
-	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep":                    "no second check starts at once: a slow machine can only miss a bug",
-	"plugins/updater/native/window_test.go TestFit time.After":                        "the window asks for no size once it has its own: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestIframeCannotCall time.Sleep":                        "a call forged by an iframe never runs: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestMenuLetters time.Sleep":                             "a letter that names no menu opens none: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestNewWindowBounds time.Now().Before":                  "a new window's bounds stay what it was given: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestNewWindowBounds time.Sleep":                         "a new window's bounds stay what it was given: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestSmallFixedWindow time.Sleep":                        "the page keeps its size once it has it: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestFileDrop time.After":                                "a refused drop is not told: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestVisibleOnAllWorkspacesWithoutFullScreen time.Sleep": "the window does not go full screen: a slow machine can only miss a bug",
-	"internal/e2e/e2e_test.go TestMenuActivation time.After":                          "setting an item's state from code clicks nothing: a slow machine can only miss a bug",
+	"plugins/updater/updater_test.go TestOnChange time.After":                                     "no change is told when none was made: a late call can only miss a bug",
+	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep":                                "no second check starts at once: a slow machine can only miss a bug",
+	"plugins/updater/native/window_test.go TestFit time.After":                                    "the window asks for no size once it has its own: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestIframeCannotCall time.Sleep":                                    "a call forged by an iframe never runs: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestMenuLetters time.Sleep":                                         "a letter that names no menu opens none: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestNewWindowBounds time.Now().Before":                              "a new window's bounds stay what it was given: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestNewWindowBounds time.Sleep":                                     "a new window's bounds stay what it was given: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestSmallFixedWindow time.Sleep":                                    "the page keeps its size once it has it: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestFileDrop time.After":                                            "a refused drop is not told: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestVisibleOnAllWorkspacesWithoutFullScreen time.Sleep":             "the window does not go full screen: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestMenuActivation time.After":                                      "setting an item's state from code clicks nothing: a slow machine can only miss a bug",
+	"internal/e2e/audio_test.go TestPageAudioMuted time.Sleep":                                    "the mute stays what the burst ended in once a late put could have landed: a slow machine can only miss a bug",
+	"internal/e2e/context_menu_test.go TestPageContextMenu time.Sleep":                            "a page whose listener prevents the menu shows none: a slow machine can only miss a bug",
+	"internal/e2e/context_menu_test.go TestPageContextMenuCancelled time.After":                   "a menu the page cancelled is not told: a slow machine can only miss a bug",
+	"internal/e2e/first_frame_windows_test.go TestShownFlyoutCloakedUntilComposed time.Sleep":     "the flyout stays cloaked while DWM has not composed its frame: a slow machine can only miss a bug",
+	"internal/e2e/locale_test.go TestLocaleAtDocumentStart time.Sleep":                            "a loading page is not told the language it has: a slow machine can only miss a bug",
+	"internal/e2e/panel_test.go TestPanel time.Sleep":                                             "showing a panel does not activate the app, and an Escape the page handled does not close it: a slow machine can only miss a bug",
+	"internal/e2e/plugins_test.go TestPlugins time.After":                                         "a fetch aborted at once never runs in Go: a slow machine can only miss a bug",
+	"internal/e2e/watch_test.go TestFileWatch context.WithTimeout":                                "a chmod is not reported: a slow machine can only miss a bug",
+	"internal/e2e/window_startup_resize_test.go TestContentWindowResizeFromFirstFrame time.Sleep": "a resize is not undone by a late configure, nor a later one overridden: a slow machine can only miss a bug",
 }
 
 type finding struct {

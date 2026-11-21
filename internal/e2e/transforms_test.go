@@ -61,8 +61,8 @@ func TestContentWindowTransforms(t *testing.T) {
 		t.Fatal("bounding-box corner outside rotated element took a click")
 	}
 	scale := deviceScale(w)
-	deadline := time.Now().Add(wait.Guard)
-	for {
+	var red, green uint32
+	if !wait.Poll(func() bool {
 		data, ok := surfaceOnScreen(w)
 		if !ok {
 			t.Skip("surface capture unavailable")
@@ -71,14 +71,13 @@ func TestContentWindowTransforms(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		red, green, _, _ := img.At(int(float64(p[0])*scale), int(float64(p[1])*scale)).RGBA()
+		red, green, _, _ = img.At(int(float64(p[0])*scale), int(float64(p[1])*scale)).RGBA()
 		if red>>8 > 180 && green>>8 < 70 {
-			break
+			return true
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("transformed interior was not presented: red=%d green=%d", red>>8, green>>8)
-		}
-		time.Sleep(20 * time.Millisecond)
+		return false
+	}) {
+		t.Fatalf("transformed interior was not presented: red=%d green=%d", red>>8, green>>8)
 	}
 }
 
@@ -109,8 +108,8 @@ func TestContentWindowPerspective(t *testing.T) {
 	}
 	eventually(t, "a click through perspective", func() bool { return clicks.Load() == 1 })
 	scale := deviceScale(w)
-	deadline := time.Now().Add(wait.Guard)
-	for {
+	var red, green uint32
+	if !wait.Poll(func() bool {
 		data, ok := surfaceOnScreen(w)
 		if !ok {
 			t.Skip("surface capture unavailable")
@@ -119,14 +118,13 @@ func TestContentWindowPerspective(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		red, green, _, _ := img.At(int(float64(p[0])*scale), int(float64(p[1])*scale)).RGBA()
+		red, green, _, _ = img.At(int(float64(p[0])*scale), int(float64(p[1])*scale)).RGBA()
 		if red>>8 > 180 && green>>8 < 70 {
-			break
+			return true
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the turned element was not presented: red=%d green=%d", red>>8, green>>8)
-		}
-		time.Sleep(20 * time.Millisecond)
+		return false
+	}) {
+		t.Fatalf("the turned element was not presented: red=%d green=%d", red>>8, green>>8)
 	}
 }
 
@@ -151,8 +149,8 @@ func TestContentWindowTransitionBlur(t *testing.T) {
 	}
 	w := newWindow(t, mygo.WindowOptions{Title: "Transition blur", Width: 340, Height: 240, Content: ui.View(view)})
 	scale := deviceScale(w)
-	deadline := time.Now().Add(wait.Guard)
-	for {
+	var r, g, or, og uint32
+	if !wait.Poll(func() bool {
 		data, ok := surfaceOnScreen(w)
 		if !ok {
 			t.Skip("surface capture unavailable")
@@ -167,15 +165,14 @@ func TestContentWindowTransitionBlur(t *testing.T) {
 		}
 		// Its middle where TranslatePercent centers it, and red spread
 		// 4 DIPs beyond its right edge, at 210.
-		r, g := at(170, 120)
-		or, og := at(214, 120)
+		r, g = at(170, 120)
+		or, og = at(214, 120)
 		if r > 180 && g < 70 && or > og+20 && og < 240 {
-			break
+			return true
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the blurred element was not presented: middle %d %d, beyond its edge %d %d", r, g, or, og)
-		}
-		time.Sleep(20 * time.Millisecond)
+		return false
+	}) {
+		t.Fatalf("the blurred element was not presented: middle %d %d, beyond its edge %d %d", r, g, or, og)
 	}
 }
 
@@ -195,8 +192,8 @@ func TestContentWindowGroupOpacity(t *testing.T) {
 	}
 	w := newWindow(t, mygo.WindowOptions{Title: "Group opacity", Width: 340, Height: 240, Content: ui.View(view)})
 	scale := deviceScale(w)
-	deadline := time.Now().Add(wait.Guard)
-	for {
+	var r, g, or, og uint32
+	if !wait.Poll(func() bool {
 		data, ok := surfaceOnScreen(w)
 		if !ok {
 			t.Skip("surface capture unavailable")
@@ -210,15 +207,14 @@ func TestContentWindowGroupOpacity(t *testing.T) {
 			return r >> 8, g >> 8
 		}
 		// Where they overlap, at 100, and where one is alone, at 60.
-		r, g := at(100, 80)
-		or, og := at(60, 80)
+		r, g = at(100, 80)
+		or, og = at(60, 80)
 		near := func(a, b uint32) bool { return a+6 >= b && b+6 >= a }
 		if r > 240 && near(g, 127) && or > 240 && near(og, 127) {
-			break
+			return true
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the group was not presented at its opacity: overlapping %d %d, alone %d %d", r, g, or, og)
-		}
-		time.Sleep(20 * time.Millisecond)
+		return false
+	}) {
+		t.Fatalf("the group was not presented at its opacity: overlapping %d %d, alone %d %d", r, g, or, og)
 	}
 }

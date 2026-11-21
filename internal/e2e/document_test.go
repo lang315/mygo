@@ -13,9 +13,9 @@ import (
 	"sync"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // notes are the documents of the tests: plain text, asking to save when
@@ -201,14 +201,12 @@ func TestDocumentOtherApps(t *testing.T) {
 // virus scanner reading a file just written, or the shell a recent
 // document. The guard only stops a rename that never succeeds.
 func renameAsApps(from, to string) error {
-	deadline := time.Now().Add(time.Minute)
-	for {
-		err := os.Rename(from, to)
-		if err == nil || runtime.GOOS != "windows" || time.Now().After(deadline) ||
+	var err error
+	wait.Poll(func() bool {
+		err = os.Rename(from, to)
+		return err == nil || runtime.GOOS != "windows" ||
 			// ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION
-			!errors.Is(err, syscall.Errno(5)) && !errors.Is(err, syscall.Errno(32)) {
-			return err
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+			!errors.Is(err, syscall.Errno(5)) && !errors.Is(err, syscall.Errno(32))
+	})
+	return err
 }

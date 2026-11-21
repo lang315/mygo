@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -236,9 +235,7 @@ func TestEphemeralSession(t *testing.T) {
 // the main thread made the session (#1383). The calls run in a helper
 // process, which has loaded no web view before.
 func TestWebViewAvailableOffMain(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), wait.Guard)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+	cmd := exec.CommandContext(wait.Context(t), os.Args[0], "-test.run=^$")
 	cmd.Env = append(os.Environ(), "MYGO_E2E_WEBVIEW_OFF_MAIN=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "webview off main: the page loaded\n") {
@@ -263,12 +260,11 @@ func webViewOffMain() {
 			w := mygo.NewWindow(mygo.WindowOptions{Title: "WebView off main", Width: 200, Height: 100, URL: server.URL, Page: mygo.PageOptions{Session: private}})
 			defer w.Destroy()
 			// Until the page loads: the test's guard ends a hang.
-			for {
-				if loaded, err := mygo.EvalAs[bool](w.Page(), "document.title === 'opened'"); err == nil && loaded {
-					fmt.Println("webview off main: the page loaded")
-					return
-				}
-				time.Sleep(50 * time.Millisecond)
+			if wait.Poll(func() bool {
+				loaded, err := mygo.EvalAs[bool](w.Page(), "document.title === 'opened'")
+				return err == nil && loaded
+			}) {
+				fmt.Println("webview off main: the page loaded")
 			}
 		}()
 	})

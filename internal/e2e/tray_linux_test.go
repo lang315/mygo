@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/linux"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // TestTrayActivation checks that a panel's activation, the double click on
@@ -42,11 +42,7 @@ func TestTrayActivation(t *testing.T) {
 	if !activated {
 		t.Fatal("an icon with a click listener answered no activation")
 	}
-	select {
-	case <-clicked:
-	case <-time.After(5 * time.Second):
-		t.Fatal("OnClick did not run when the icon was activated")
-	}
+	wait.For(t, "OnClick to run when the icon was activated", clicked)
 
 	off()
 	mygo.RunOnMain(func() { activated = linux.TestActivateTray() })

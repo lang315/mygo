@@ -8,7 +8,6 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/linux"
@@ -34,13 +33,7 @@ func gtkPressSource(t *testing.T, w *mygo.Window) {
 }
 func gtkDragResult(t *testing.T, result <-chan transfer.Result) transfer.Result {
 	t.Helper()
-	select {
-	case r := <-result:
-		return r
-	case <-time.After(wait.Guard):
-		t.Fatal("GTK drag did not complete")
-	}
-	return transfer.Result{}
+	return wait.For(t, "the GTK drag to complete", result)
 }
 
 // TestNativeGTKDataDrag uses GTK's tracker and XTEST input, including the

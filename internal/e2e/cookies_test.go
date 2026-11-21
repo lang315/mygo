@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // getCookie returns the cookie of name, domain and path.
@@ -222,9 +222,7 @@ func TestCookiesBeforePages(t *testing.T) {
 // process has windows showing pages from TestMain, so the calls run in a
 // helper process with none.
 func TestCookieCallsWhileWindowOpens(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+	cmd := exec.CommandContext(wait.Context(t), os.Args[0], "-test.run=^$")
 	cmd.Env = append(os.Environ(), "MYGO_E2E_COOKIES_WHILE_OPENING=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "cookies: the page loaded\n") {
@@ -250,11 +248,12 @@ func cookiesWhileOpening() {
 				}
 				time.Sleep(50 * time.Millisecond)
 			}
-			for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
-				if loaded, err := mygo.EvalAs[bool](w.Page(), "document.title === 'opened'"); err == nil && loaded {
-					fmt.Println("cookies: the page loaded")
-					return
-				}
+			if wait.Poll(func() bool {
+				loaded, err := mygo.EvalAs[bool](w.Page(), "document.title === 'opened'")
+				return err == nil && loaded
+			}) {
+				fmt.Println("cookies: the page loaded")
+				return
 			}
 			fmt.Println("cookies: the page did not load")
 		}()

@@ -30,11 +30,7 @@ func TestWebMessageReplyDoesNotReachANewDocument(t *testing.T) {
 	if _, err := p.Eval("window.held = mygo.call('Bench.Hold').catch(() => 'rejected'); 0"); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-benchHeld:
-	case <-time.After(wait.Guard):
-		t.Fatal("the call did not reach Go")
-	}
+	wait.For(t, "the call to reach Go", benchHeld)
 	if err := p.LoadURL("assets://localhost/spy"); err != nil {
 		t.Fatal(err)
 	}
@@ -43,11 +39,7 @@ func TestWebMessageReplyDoesNotReachANewDocument(t *testing.T) {
 	// The reply is encoded just before it is queued: a tick emitted after
 	// that is queued after the reply, and events wait for the new document's
 	// dom-ready, so when the tick is in the spy the reply was posted, or dropped.
-	select {
-	case <-benchReplying:
-	case <-time.After(wait.Guard):
-		t.Fatal("the held call was not answered")
-	}
+	wait.For(t, "the held call to be answered", benchReplying)
 	if err := benchTick.Emit(w, Tick{N: 4242}); err != nil {
 		t.Fatal(err)
 	}

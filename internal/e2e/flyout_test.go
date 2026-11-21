@@ -84,12 +84,8 @@ func TestFlyout(t *testing.T) {
 // eventuallyAt waits for a flyout to be at the bounds want returns.
 func eventuallyAt(t *testing.T, what string, fl *mygo.Window, want func() mygo.Rectangle) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for fl.Bounds() != want() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s: at %+v, not %+v", what, fl.Bounds(), want())
-		}
-		time.Sleep(20 * time.Millisecond)
+	if !wait.Poll(func() bool { return fl.Bounds() == want() }) {
+		t.Fatalf("timed out waiting for %s: at %+v, not %+v", what, fl.Bounds(), want())
 	}
 }
 

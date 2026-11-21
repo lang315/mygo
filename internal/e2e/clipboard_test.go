@@ -101,8 +101,7 @@ func clipboardPeer(mode string) {
 
 func readClipboardPeer(t *testing.T, formats ...transfer.Format) clipboardPeerResult {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
+	ctx := wait.Context(t)
 	b, _ := json.Marshal(formats)
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
 	cmd.Env = append(os.Environ(), "MYGO_E2E_CLIPBOARD_PEER=read", "MYGO_CLIPBOARD_FORMATS="+string(b))
@@ -256,12 +255,10 @@ func TestUnifiedClipboardNativeFilesAndFailures(t *testing.T) {
 	// External readers receive a failed native representation, while the
 	// source retains its cached error and usable plain-text alternative.
 	for range 2 {
-		ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+		cmd := exec.CommandContext(wait.Context(t), os.Args[0], "-test.run=^$")
 		formats, _ := json.Marshal([]transfer.Format{clipboardCustom})
 		cmd.Env = append(os.Environ(), "MYGO_E2E_CLIPBOARD_PEER=read", "MYGO_CLIPBOARD_FORMATS="+string(formats))
 		out, err := cmd.CombinedOutput()
-		cancel()
 		if err == nil || !bytes.Contains(out, []byte("clipboard peer read:")) {
 			t.Fatalf("failed native provider was acknowledged: %v, %s", err, out)
 		}
@@ -380,9 +377,7 @@ func TestUnifiedClipboardNativePersistence(t *testing.T) {
 	} else if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), wait.Guard)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+	cmd := exec.CommandContext(wait.Context(t), os.Args[0], "-test.run=^$")
 	cmd.Env = append(os.Environ(), "MYGO_E2E_CLIPBOARD_PEER=persist-text")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("clipboard writer shutdown: %v; %s", err, out)
