@@ -11,7 +11,6 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/wait"
@@ -21,13 +20,9 @@ import (
 
 func clipboardRelease(t *testing.T, ch <-chan bool) {
 	t.Helper()
-	select {
-	case main := <-ch:
-		if !main {
-			t.Fatal("release hook ran off the main thread")
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("clipboard providers were not released")
+	main := wait.For(t, "the clipboard providers to be released", ch)
+	if !main {
+		t.Fatal("release hook ran off the main thread")
 	}
 }
 

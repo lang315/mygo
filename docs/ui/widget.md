@@ -473,6 +473,15 @@ widget.Fields().
   `TextMuted` under its label (stacked, between the label and the control),
   which wraps. Screen readers read it as the control's description, before
   its tooltip. `Describe("")` takes it away; before any row it does nothing.
+- `Wide()` makes the last row added a wide one: its label (and description)
+  across the form, and its control under them, as wide as the form, or as
+  the inside of its card in `SettingsRows`, unless its `Align` says
+  otherwise. Use it for a list box, a multiline text box, a table, or a link
+  or a button among ordinary rows. The gap under the label is a stacked
+  row's (`Gap`'s column value when set). A wide label does not widen the
+  label column of the other rows, and a wide row with an empty label has no
+  label at all. Stacked rows are all wide, so there it changes nothing;
+  before any row it does nothing.
 
 ```go
 widget.Fields().
@@ -509,18 +518,22 @@ section whose rows are all hidden takes its card and heading away. The row
 gap applies on each side of a divider. Each card measures its own columns, so
 a control that asks for `Start` lines up with the widest control of its card.
 Of `Stacked` and `SettingsRows`, the last call wins. `Describe` adds a line
-under a label; full-width rows are not part of it. With a skin each row is at
+under a label, and `Wide` puts a row's control under its label, across the
+card, with dividers as for any row. With a skin each row is at
 least the skin's `SettingsRowHeight`; the page behind the cards reads best in
 the skin's `RoleChrome`, which is the app's choice.
 
 **Changed:** `SettingsRows` drew one list of rows with headings between them;
 it now draws a card per section, inside the form's width, so an existing
 settings page looks different (its controls move in by the card's padding).
+An app that draws its own card around `SettingsRows` now draws a card inside
+a card: drop it, and use `Section` for each card, with `Wide` rows for the
+lists, multiline boxes, links and buttons that made it draw its own.
 
 A control keeps its own size, centered on a wrapped label. A `ProgressBar` and
 an empty `ListBox` get no width in the fit column, and a `ListBox` with items or
-a table a narrow one: give them `SetSize`, or use `Stacked` for multi-line boxes
-and tables. The label column is no narrower than its longest word, so in a
+a table a narrow one: give them `SetSize`, or make their row `Wide` for
+multi-line boxes and tables. The label column is no narrower than its longest word, so in a
 narrow window the controls are pushed toward or past the right edge, by a long
 word and by ordinary ones alike (a `ComboBox` beside "Notifications" needs about
 229 DIPs): give the window a `SetMinimumSize` wide enough. The cards keep
@@ -532,6 +545,8 @@ settings := widget.Fields().SettingsRows().
 	Section("Account").
 	Row("Name shown to others", widget.TextBox()).
 	Describe("Others see it beside your messages.").
+	Row("Blocked words", widget.MultilineTextBox()).Wide().
+	Describe("One a line.").
 	Section("Notifications").
 	Row("Sounds", widget.Switch())
 page := widget.VBox(0).Add(settings).Apply(widget.NewStyle().Background(widget.RoleChrome).Padding(4))
@@ -746,6 +761,52 @@ of each cell drawn, so keep them with the rows if you can), `Color`
 (not on a selected row, whose text takes the selection's color) and
 `Image`. The column functions and the key run under the package's
 lock: they read the row and call no widget method.
+
+Statuses and formats, as an account list shows them:
+
+```go
+state := widget.Column[Account]{Title: "Trạng thái", Text: func(a *Account) string { return a.State },
+	Badge:       func(a *Account) widget.Status { return a.Status },  // the Text as a badge; StatusNone: plain Text
+	BadgeDetail: func(a *Account) string { return a.Step },           // after a StatusRunning pill, in TextMuted
+	Format: func(a *Account) widget.CellFormat {                       // this column's cells
+		if a.Expired {
+			return widget.CellFormat{Status: widget.StatusWarning}
+		}
+		return widget.CellFormat{}
+	}}
+t := widget.DataGridView(key, uid, state).
+	SetRowFormat(func(a *Account) widget.CellFormat { // every cell of the row
+		if a.Banned {
+			return widget.CellFormat{Status: widget.StatusDanger, Bold: true}
+		}
+		return widget.CellFormat{}
+	}).
+	SetEmptyState(widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản để bắt đầu."))
+```
+
+- `Badge` draws the cell's `Text` as a [badge](widget/badge.md) of the status
+  it returns, 20 DIPs high, which fits a Compact row; `BadgeDetail` is a
+  running badge's step, called only for `StatusRunning`. The cell is read as
+  the text, then the step; it sorts, searches and copies as `Text` alone. On a
+  selected row the pill keeps its colors.
+- A `CellFormat` styles a cell: `Status` gives its family's `Subtle` fill and
+  `Text` color, `Fill` and `Text` override them, and `Bold` makes the text
+  bold. The fill covers the cell's whole box, to its end line with
+  `SetGridLines`. A column's `Format` wins over `SetRowFormat` field by field,
+  and `Format.Text` over `Column.Color`. A selected row shows the selection,
+  not the format. Under HighContrast a status draws no fill: its family's
+  text, bold. The `#` column of `IndexColumn` takes the row's format; the
+  check box column does not.
+- The functions run as a row is built: a row kept from frame to frame does
+  not call them again until it changes (`UpdateRow`), and a frame at rest
+  allocates nothing for them. `SetRowFormat(nil)` removes the row's format.
+- `SetEmptyState(e)` draws an [empty state](widget/emptystate.md) over the
+  body, under the headers, which still sort, while no row shows (none, or
+  none the search keeps); `nil` removes it.
+- A grid without them builds what it did, but every app with a grid links
+  the code of badge cells and formats (about 20 KB on darwin): the table
+  must look at its columns' fields, so no call of the app's own tells it
+  apart. `SetEmptyState` costs nothing until it is called.
 
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in

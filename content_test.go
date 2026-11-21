@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 	"weak"
 
 	"github.com/egoist/mygo/internal/fake"
@@ -53,11 +52,7 @@ func TestContentReadyToShow(t *testing.T) {
 		t.Fatal("ready before its first frame")
 	}
 	onMain(func() { s.Frame() })
-	select {
-	case <-ready:
-	case <-time.After(wait.Guard):
-		t.Fatal("not ready after its first frame")
-	}
+	wait.For(t, "the window to be ready after its first frame", ready)
 	w.Invalidate()
 	onMain(func() {})
 	onMain(func() { s.Frame() })

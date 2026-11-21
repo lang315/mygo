@@ -475,13 +475,9 @@ func TestFileDrop(t *testing.T) {
 
 	fw.Dropped = []string{"/tmp/a.txt", "/tmp/b"}
 	page(fw, `{"t":"drop","x":10.4,"y":20}`)
-	select {
-	case e := <-drops:
-		if len(e.Paths) != 2 || e.Paths[0] != "/tmp/a.txt" || e.X != 10 || e.Y != 20 {
-			t.Errorf("drop = %+v", e)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("OnFileDrop was not called")
+	e := wait.For(t, "OnFileDrop to be called", drops)
+	if len(e.Paths) != 2 || e.Paths[0] != "/tmp/a.txt" || e.X != 10 || e.Y != 20 {
+		t.Errorf("drop = %+v", e)
 	}
 	// about:blank is the app's own page: it gets the paths too.
 	m := received(t, fw, func(m map[string]any) bool { return m["t"] == "event" && m["n"] == "mygo:file-drop" })
