@@ -41,17 +41,16 @@ func loadLib(t *testing.T) {
 }
 
 // waitFor runs frames until cond holds: what a program writes arrives
-// when it does, on the terminal's reader. The deadline is a hang guard.
+// when it does, on the terminal's reader.
 func waitFor(t *testing.T, tt *ui.Tester, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(time.Minute)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
+	wait.Until(t, what, func() bool {
+		if cond() {
+			return true
 		}
-		time.Sleep(10 * time.Millisecond)
 		tt.Frame()
-	}
+		return false
+	})
 }
 
 func shell(t *testing.T, opts Options) *Terminal {
@@ -151,9 +150,14 @@ func written(term *Terminal) {
 	q.queue = append(q.queue, queued{done: func() { close(done) }})
 	q.cond.Signal()
 	q.mu.Unlock()
-	select {
-	case <-done:
-	case <-time.After(time.Minute): // a hang guard
+	if !wait.Poll(func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}) {
 		panic("the terminal's input queue wrote nothing for a minute")
 	}
 }
@@ -794,13 +798,8 @@ func TestExit(t *testing.T) {
 		OnExit:  func(code int) { exited <- code },
 		OnTitle: func(s string) { mu.Lock(); titles = append(titles, s); mu.Unlock() },
 	})
-	select {
-	case code := <-exited:
-		if code != 3 {
-			t.Errorf("exit code = %d", code)
-		}
-	case <-time.After(time.Minute): // a hang guard
-		t.Fatal("no exit")
+	if code := wait.For(t, "the exit", exited); code != 3 {
+		t.Errorf("exit code = %d", code)
 	}
 	<-term.Done()
 	if term.ExitCode() != 3 || !strings.Contains(term.Text(), "bye\n[Process exited with code 3]") {
@@ -1512,11 +1511,7 @@ func TestWindowsShell(t *testing.T) {
 	}
 	defer term.Close()
 	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill() }, 640, 300)
-	select {
-	case <-term.Done():
-	case <-time.After(time.Minute): // a hang guard
-		t.Fatal("cmd did not exit")
-	}
+	wait.For(t, "cmd to exit", term.Done())
 	tt.Frame()
 	if !strings.Contains(term.Text(), "hello from cmd") {
 		t.Errorf("text = %q", term.Text())
@@ -1739,11 +1734,7 @@ func TestCloseKillsWhatIgnoresHangups(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill() }, 300, 200)
 	waitFor(t, tt, "the program", func() bool { return strings.Contains(term.Text(), "ready") })
 	term.Close()
-	select {
-	case <-term.Done():
-	case <-time.After(time.Minute): // a hang guard: Close kills it after 2 s
-		t.Fatal("Done was not closed: the program outlived Close")
-	}
+	wait.For(t, "Done to be closed: the program outlived Close", term.Done())
 }
 
 // TestCommandClickLinks: Command+click hands URLs and printed paths to
@@ -2611,11 +2602,7 @@ func TestPasteData(t *testing.T) {
 	if string(listing) != "text/uri-list image/jpeg text/plain\n" {
 		t.Errorf("offered %q", listing)
 	}
-	select {
-	case <-notTaken:
-	case <-time.After(time.Minute):
-		t.Fatal("no PasteNotTaken")
-	}
+	wait.For(t, "PasteNotTaken", notTaken)
 	if read != 0 {
 		t.Error("the lazy format was read before the program asked")
 	}
@@ -2978,12 +2965,7 @@ func TestResizeByConn(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill() }, 400, 200)
 	tt.Frame()
 	tt.Frame()
-	var asked [2]int
-	select {
-	case asked = <-conn.sizes:
-	case <-time.After(2 * time.Second):
-		t.Fatal("the view did not ask Conn for its size")
-	}
+	asked := wait.For(t, "the view to ask Conn for its size", conn.sizes)
 	if asked == [2]int{30, 10} {
 		t.Fatalf("asked %v, the screen's own size: the test's view should fit another", asked)
 	}
@@ -3044,16 +3026,12 @@ func TestResizePixels(t *testing.T) {
 	defer term.Close()
 	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill().AutoFocus() }, 400, 200)
 	tt.Frame()
-	select {
-	case s := <-client.sizes:
-		term.mu.Lock()
-		want := [4]int{term.asked.cols, term.asked.rows, term.size.cellW, term.size.cellH}
-		term.mu.Unlock()
-		if s != want {
-			t.Errorf("Conn told %v, not the view's %v", s, want)
-		}
-	case <-time.After(10 * time.Second): // a hang guard
-		t.Fatal("Conn not told the size")
+	s := wait.For(t, "Conn to be told the size", client.sizes)
+	term.mu.Lock()
+	want := [4]int{term.asked.cols, term.asked.rows, term.size.cellW, term.size.cellH}
+	term.mu.Unlock()
+	if s != want {
+		t.Errorf("Conn told %v, not the view's %v", s, want)
 	}
 }
 
@@ -3097,13 +3075,8 @@ func TestUseTheme(t *testing.T) {
 	defer term.Close()
 	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill() }, 400, 200)
 	tt.Frame()
-	select {
-	case th := <-client.themes:
-		if th != light {
-			t.Errorf("Conn told %+v, not the view's theme", th)
-		}
-	case <-time.After(10 * time.Second): // a hang guard
-		t.Fatal("Conn not told the theme")
+	if th := wait.For(t, "Conn to be told the theme", client.themes); th != light {
+		t.Errorf("Conn told %+v, not the view's theme", th)
 	}
 	tt.Frame()
 	select {
