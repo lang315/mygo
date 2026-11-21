@@ -199,11 +199,7 @@ func TestPlugins(t *testing.T) {
 	if want := "first:AbortError"; err != nil || got != want {
 		t.Errorf("aborted fetch: %q, %v; want %q", got, err, want)
 	}
-	select {
-	case <-aborted:
-	case <-time.After(wait.Guard):
-		t.Error("the server's request was not canceled")
-	}
+	wait.For(t, "the server's request to be canceled", aborted)
 
 	// Aborted right away, before Go even started the request.
 	got, err = mygo.EvalAs[string](w.Page(), fmt.Sprintf(`(async () => {

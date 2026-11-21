@@ -62,12 +62,7 @@ func TestPageContextMenu(t *testing.T) {
 		if !rightClickPage(w, x, y) {
 			t.Fatalf("%s: right-clicking the page failed", what)
 		}
-		var got contextMenuSeen
-		select {
-		case got = <-seen:
-		case <-time.After(wait.Guard):
-			t.Fatalf("%s: the listener never heard of the menu", what)
-		}
+		got := wait.For(t, what+": the listener to hear of the menu", seen)
 		var labels []string
 		wait.Until(t, what+": the menu shown", func() bool {
 			var shown bool
@@ -91,13 +86,8 @@ func TestPageContextMenu(t *testing.T) {
 	if !choosePageMenuItem("Open in Browser") {
 		t.Fatalf("the link: no item Open in Browser in %q", labels)
 	}
-	select {
-	case cw := <-clicked:
-		if cw != w {
-			t.Errorf("Click got window %v, want the page's", cw)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the app's item was chosen, and its Click never ran")
+	if cw := wait.For(t, "the app's item's Click, after it was chosen", clicked); cw != w {
+		t.Errorf("Click got window %v, want the page's", cw)
 	}
 	wait.Until(t, "the menu closed", func() bool { _, shown := pageMenu(); return !shown })
 
@@ -142,11 +132,7 @@ func TestPageContextMenu(t *testing.T) {
 	if !rightClickPage(w, 20, 20) {
 		t.Fatal("right-clicking the page failed")
 	}
-	select {
-	case <-seen:
-	case <-time.After(wait.Guard):
-		t.Fatal("the listener that prevents the menu never heard of it")
-	}
+	wait.For(t, "the listener that prevents the menu to hear of it", seen)
 	// A menu would show at once, as the listener returns.
 	for range 10 {
 		if labels, shown := pageMenu(); shown {

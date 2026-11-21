@@ -5,7 +5,6 @@ package e2e
 import (
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/wait"
@@ -44,7 +43,7 @@ func TestHideOnScreenInFrame(t *testing.T) {
 	}()
 	select {
 	case <-ran:
-	case <-time.After(wait.Guard):
+	case <-wait.Context(t).Done():
 		// Without frames to draw, the main thread runs the cleanups.
 		still.Store(true)
 		t.Fatalf("the main thread never ran what was posted to it after the window hid itself (waited %v)", wait.Guard)

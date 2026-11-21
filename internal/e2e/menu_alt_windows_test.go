@@ -4,7 +4,6 @@ package e2e
 
 import (
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/wait"
@@ -63,7 +62,7 @@ func TestPageMenuKeepsOpenOnAlt(t *testing.T) {
 		mygo.RunOnMain(func() { win.TestPressKeys(0x28, 0x0D) }) // VK_DOWN, VK_RETURN
 		select {
 		case <-chosen:
-		case <-time.After(wait.Guard):
+		case <-wait.Context(t).Done():
 			if _, shown := pageMenu(); shown {
 				t.Fatalf("%s: the menu stayed, and every key missed it", c.name)
 			}

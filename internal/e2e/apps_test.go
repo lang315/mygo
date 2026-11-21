@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // TestInstalledApps lists the installed apps, sorted, with names, IDs and
@@ -105,7 +105,10 @@ func TestInstalledApps(t *testing.T) {
 			return strings.Contains(strings.ToLower(string(out)), "notepad.exe")
 		})
 		exec.Command("taskkill", "/IM", "notepad.exe", "/F").Run()
-		time.Sleep(100 * time.Millisecond)
+		eventually(t, "Notepad gone", func() bool {
+			out, _ := exec.Command("tasklist", "/FI", "IMAGENAME eq notepad.exe").Output()
+			return !strings.Contains(strings.ToLower(string(out)), "notepad.exe")
+		})
 	}
 }
 
@@ -155,10 +158,7 @@ func TestDefaultAppOfFiles(t *testing.T) {
 			return err == nil && app.ID == c.id
 		}
 		// GLib finds the entries a moment after they are written.
-		for deadline := time.Now().Add(10 * time.Second); !ok() && time.Now().Before(deadline); {
-			time.Sleep(50 * time.Millisecond)
-		}
-		if !ok() {
+		if !wait.Poll(ok) {
 			t.Errorf("DefaultApp(%q) = %q, %v; want %q", c.url, app.ID, err, c.id)
 		}
 	}
