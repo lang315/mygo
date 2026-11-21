@@ -60,6 +60,7 @@ type core struct {
 	dnd         dragDrop                          // drag sources and drop targets
 	inertParent bool                              // el was disabled by a container, at the end of the last build
 	el          ui.Element                        // the element of the last build, valid until it ends
+	inner       ui.Element                        // set by a build that returns a box around its control: the control, which render focuses, names and describes
 	errMsg      string                            // ErrorProvider's
 	errBy       *ErrorProviderWidget
 	validating  func() bool                      // OnValidating's
@@ -215,19 +216,25 @@ func render(c *ui.Context, w Control) ui.Element {
 	outer := styling
 	styling = b.status // the status roles resolve to the control's own, in its build and its styles
 	e := w.build(c)
-	b.el = e
+	// ctl is the control in e, which takes the focus and is named and
+	// described: e itself, but where the build put a box around it.
+	ctl := e
+	if in := b.inner; in != (ui.Element{}) {
+		ctl, b.inner = in, ui.Element{}
+	}
+	b.el = ctl
 	if f := buildingForm; f != nil {
-		f.built = append(f.built, builtEl{w, e})
+		f.built = append(f.built, builtEl{w, ctl})
 	}
 	if fillsAcross(w) {
 		e.AlignSelf(ui.Stretch) // before the widget's own alignment, which wins
 	}
 	b.place.apply(e)
 	if b.accName != "" {
-		nameControl(w, e, b.accName)
+		nameControl(w, ctl, b.accName)
 	}
 	if look := b.lookStyle(); b.styled || look != nil {
-		dark, hover, focused, pressed := c.Theme().Dark, e.Hovered(), e.Focused(), e.Pressed()
+		dark, hover, focused, pressed := c.Theme().Dark, e.Hovered(), ctl.Focused(), e.Pressed()
 		var p props
 		if look != nil {
 			// The skin's look under the control's own styles, property by
@@ -256,10 +263,10 @@ func render(c *ui.Context, w Control) ui.Element {
 	if b.desc != "" {
 		// Before the tooltip, which describes the control only where nothing
 		// else does: desc holds it already.
-		e.Description(b.desc)
+		ctl.Description(b.desc)
 	}
 	if b.tooltip != "" && b.errMsg == "" {
-		e.Tooltip(b.tooltip)
+		ctl.Tooltip(b.tooltip)
 	}
 	if b.errMsg != "" {
 		// The value is invalid for assistive technology, and the message is
@@ -268,11 +275,11 @@ func render(c *ui.Context, w Control) ui.Element {
 		if b.tooltip != "" {
 			tip += "\n" + b.tooltip
 			if b.desc == "" {
-				e.Description(b.tooltip) // the error comes first in the description
+				ctl.Description(b.tooltip) // the error comes first in the description
 			}
 		}
-		e.Error(b.errMsg)
-		e.Tooltip(tip)
+		ctl.Error(b.errMsg)
+		ctl.Tooltip(tip)
 		rtl := c.Direction() == ui.RightToLeft
 		danger := c.Theme().Danger
 		b.over = append(b.over, func(p *ui.Painter, r ui.Rect) { paintErrorMark(p, r, rtl, danger) })
@@ -293,11 +300,11 @@ func render(c *ui.Context, w Control) ui.Element {
 		e.ContextMenu(func(m *ui.Menu) { buildMenu(m, menu) })
 	}
 	if b.wantFocus && !c.Measuring() { // the request is for the real window
-		e.Focus()
+		ctl.Focus()
 		b.wantFocus = false
 	}
 	if b.onFocusOut != nil {
-		switch f := e.Focused(); {
+		switch f := ctl.Focused(); {
 		case f:
 			b.focusIn = building
 		case b.focusIn == building:

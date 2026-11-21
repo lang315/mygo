@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 type fakeWatcher struct {
@@ -151,15 +152,11 @@ func TestPermissionsAndQuota(t *testing.T) {
 			return nil
 		}, func() {})
 	}()
-	for {
+	wait.Until(t, "the watch to be active", func() bool {
 		s.mu.Lock()
-		n := len(s.active)
-		s.mu.Unlock()
-		if n == 1 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
+		defer s.mu.Unlock()
+		return len(s.active) == 1
+	})
 	if parts := collect(s, context.Background(), page, request{Root: "project"}); parts[0].Code != "limit" {
 		t.Fatalf("parts %+v", parts)
 	}

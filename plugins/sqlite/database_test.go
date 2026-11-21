@@ -251,13 +251,8 @@ func TestCloseAndQueuedCancellation(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case err := <-done:
-		if !errors.Is(err, ErrClosed) {
-			t.Fatal(err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("close did not interrupt query")
+	if err := wait.For(t, "close to interrupt the query", done); !errors.Is(err, ErrClosed) {
+		t.Fatal(err)
 	}
 	if _, err := db.Query(context.Background(), "SELECT 1"); !errors.Is(err, ErrClosed) {
 		t.Fatal(err)

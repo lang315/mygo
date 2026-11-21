@@ -51,6 +51,8 @@ picked := list.Checked() // the keys of the items checked, in the order of the l
   removes items; `Clear()` removes all of them.
 - `Item(k)` and `Len()` read the list. `SetImage(fn)` shows a 16 DIPs image
   before each item's text.
+- `SetEmptyState(e)` draws an [empty state](emptystate.md) over the whole list
+  while it has no item; `nil` removes it.
 
 A call for a key that is not an item (`UpdateItem`, `RemoveItems`, `SetSelected`,
 `SetChecked`) does nothing.

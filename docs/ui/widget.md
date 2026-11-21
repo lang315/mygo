@@ -1139,7 +1139,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `Badge(text)`: a short text in a pill colored by its `Status` (`StatusNone`, `StatusInfo`, `StatusRunning`, `StatusSuccess`, `StatusWarning`, `StatusDanger`); see [Badge](widget/badge.md).
 - `InfoBar(status, title, message)`: a message inline in a page, with an optional action and close button; see [InfoBar](widget/infobar.md).
-- `EmptyState(title, message)`: what a view shows when it has nothing in it, with an optional icon and action; see [EmptyState](widget/emptystate.md).
+- `EmptyState(title, message)`: what a view shows when it has nothing in it, with an optional icon and action; a `DataGridView`, a `ListView` and a `ListBox` draw one over themselves while they show no row (`SetEmptyState`); see [EmptyState](widget/emptystate.md).
 - A `Sidebar` or `TabControl` page taller than the room scrolls, as WinForms'
   `AutoScroll` does (a wheel over it, or Tab to a control below the fold), in a
   scroller that lays the page out at least as high as the room: a page that
