@@ -187,6 +187,56 @@ func TestSharedKeyFromATextBoxToAListWraps(t *testing.T) {
 	}
 }
 
+// Round 2, on every OS: the press from the list to the control (the first
+// Alt+F focuses the list, the second the control) puts the focus on it.
+func TestSharedKeyFromAListFocusesTheInputKind(t *testing.T) {
+	calmOff()
+	withMac(t, false)
+	kinds := map[string]func() Control{
+		"NumericUpDown":    func() Control { return NumericUpDown(0, 10, 1) },
+		"ComboBox":         func() Control { return ComboBox(Option{"a", "Apple"}) },
+		"EditableComboBox": func() Control { return ComboBox(Option{"a", "Apple"}).Editable() },
+		"DateTimePicker":   func() Control { return DateTimePicker() },
+		"DateOnly":         func() Control { return DateTimePicker().SetFormat(DateOnly) },
+		"TimeOnly":         func() Control { return DateTimePicker().SetFormat(TimeOnly) },
+	}
+	for name, mk := range kinds {
+		t.Run(name, func(t *testing.T) {
+			tt := formOf(t, Fields().Row("&Files", newListBox()).Row("&Find", mk()))
+			if got, want := cycleF(tt, 2), []string{"list", "other"}; !slices.Equal(got, want) {
+				t.Errorf("Alt+F focused %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// Round 2: Focus of an editable combo or a date picker focuses its input, with
+// the focus in a list first.
+func TestFocusOfAnInputKindTakesTheFocusFromAList(t *testing.T) {
+	calmOff()
+	withMac(t, false)
+	kinds := map[string]func() Control{
+		"EditableComboBox": func() Control { return ComboBox(Option{"a", "Apple"}).Editable() },
+		"DateTimePicker":   func() Control { return DateTimePicker() },
+	}
+	for name, mk := range kinds {
+		t.Run(name, func(t *testing.T) {
+			lb, c := newListBox(), mk()
+			tt := formOf(t, Fields().Row("&Files", lb).Row("&Find", c))
+			lb.Focus()
+			tt.Settle()
+			if focusKind(tt) != "list" {
+				t.Fatal("the list did not take the focus")
+			}
+			c.base().change(func() { c.base().wantFocus = true })
+			tt.Settle()
+			if got := focusKind(tt); got != "other" {
+				t.Errorf("focus is %q after Focus, want it on the control's input", got)
+			}
+		})
+	}
+}
+
 // Case 7: every kind that wraps an input in a field, in a pair with a list.
 // The kinds: TextBox (above), NumericUpDown, an editable ComboBox,
 // DateTimePicker. There is no SearchBox in the package.
