@@ -1,13 +1,15 @@
 package widget
 
 import (
+	"bytes"
 	"math"
+	"runtime"
 	"slices"
-	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
@@ -273,11 +275,12 @@ func TestToastRolesAndIcons(t *testing.T) {
 func iconMismatch(ta *ui.Tester, a ui.Rect, tb *ui.Tester, b ui.Rect, base ui.Color) int {
 	shape := func(tt *ui.Tester, r ui.Rect) map[[2]int]bool {
 		r = ui.Rect{X: r.X - 2, Y: r.Y - 2, W: r.W + 4, H: r.H + 4}
+		img := tt.Image() // a copy of the window's pixels: once, not per pixel
 		pts := map[[2]int]bool{}
 		minX, minY := math.MaxInt, math.MaxInt
 		for y := int(r.Y); y < int(r.Y+r.H); y++ {
 			for x := int(r.X); x < int(r.X+r.W); x++ {
-				if nearTol(tt.Image().RGBAAt(x, y), base, 6) {
+				if nearTol(img.RGBAAt(x, y), base, 6) {
 					pts[[2]int{x, y}] = true
 					minX, minY = min(minX, x), min(minY, y)
 				}
@@ -374,35 +377,45 @@ func nearColor(a, b ui.Color, tol int) bool {
 	return d(a.R, b.R) && d(a.G, b.G) && d(a.B, b.B) && d(a.A, b.A)
 }
 
-// Case 9: ShowToast from another goroutine while frames run shows on a
-// following frame (run under -race). The worker shows a toast 2000 times,
-// so that its calls and the frames overlap.
+// Case 9: ShowToast from another goroutine while a frame builds shows on a
+// following frame (run under -race). The worker starts in the frame, which
+// holds mu until the worker waits for it, then reads the queue: a ShowToast
+// that queued before it took mu wrote the queue with nothing ordering that
+// before the frame's read, which -race reports on every run.
 func TestToastFromAGoroutine(t *testing.T) {
-	f, tt := toastForm(t, 600, 400, nil)
-	done := make(chan string)
-	go func() {
-		var id string
-		for i := range 2000 {
-			title := "From a worker"
-			if i < 1999 {
-				title += " " + strconv.Itoa(i)
-			}
-			id = f.ShowToast(Toast{ID: "worker", Title: title})
+	start := false
+	done := make(chan string, 1)
+	var f *Form
+	f, tt := toastForm(t, 600, 400, Custom(func(c *ui.Context) ui.Element {
+		if start {
+			start = false
+			go func() { done <- f.ShowToast(Toast{Title: "From a worker"}) }()
+			wait.Until(t, "the worker to wait for mu", func() bool { return waitsForMu("ShowToast") })
 		}
-		done <- id
-	}()
-	for running := true; running; {
-		select {
-		case <-done:
-			running = false
-		default:
-			tt.Frame()
-		}
-	}
+		return ui.Text(c, "Nội dung")
+	}))
+	f.ShowToast(Toast{Title: "First", Timeout: -1}) // sets the hook, which reads the queue
+	tt.Frame()
+	start = true
+	tt.Frame()
+	wait.For(t, "the worker's ShowToast", done)
 	tt.Frame()
 	if !tt.Has(ByLabel("From a worker")) {
 		t.Errorf("texts %q: the worker's toast does not show", tt.Texts())
 	}
+}
+
+// waitsForMu reports whether a goroutine in fn waits for a mutex, read from
+// the goroutines' stacks: unlike a channel, that orders nothing for -race.
+func waitsForMu(fn string) bool {
+	buf := make([]byte, 1<<20)
+	buf = buf[:runtime.Stack(buf, true)]
+	for _, g := range bytes.Split(buf, []byte("\n\n")) {
+		if bytes.Contains(g, []byte(fn)) && bytes.Contains(g, []byte("sync.(*Mutex).Lock")) {
+			return true
+		}
+	}
+	return false
 }
 
 // Case 10: a toast shown before the form shows on its first frame, its time
@@ -725,5 +738,52 @@ func TestToastActionShowsAToast(t *testing.T) {
 	tt.Settle()
 	if !tt.Has(ByLabel("Restored")) || tt.Has(ByLabel("Deleted")) {
 		t.Errorf("texts %q: want Restored alone", tt.Texts())
+	}
+}
+
+// An OnClose that shows a toast shows it, however the toast closes: OnClose
+// runs on the event goroutine. ui calls it while the view builds, under mu,
+// where the ShowToast would wait for mu forever; the OnClose here sees that
+// and fails the test instead.
+func TestToastOnCloseShowsAToast(t *testing.T) {
+	undo := ByRole(ui.RoleButton).Label("Undo")
+	for _, way := range []struct {
+		name  string
+		toast Toast
+		close func(f *Form, tt *Tester, id string)
+	}{
+		{"time over", Toast{}, func(f *Form, tt *Tester, id string) { tt.Advance(4 * time.Second) }},
+		{"CloseToast", Toast{Timeout: -1}, func(f *Form, tt *Tester, id string) { f.CloseToast(id); tt.Frame() }},
+		{"close button", Toast{Timeout: -1}, func(f *Form, tt *Tester, id string) {
+			tt.Find(ByRole(ui.RoleButton).Label("Close")).Click()
+		}},
+		{"action", Toast{Timeout: -1, Action: "Undo"}, func(f *Form, tt *Tester, id string) { tt.Find(undo).Click() }},
+		{"Escape", Toast{Timeout: -1, Action: "Undo"}, func(f *Form, tt *Tester, id string) {
+			tt.Find(undo).Focus().Key(0, ui.KeyEscape)
+			tt.Frame()
+		}},
+	} {
+		f, tt := toastForm(t, 600, 400, nil)
+		var inFrame atomic.Bool
+		closing := way.toast
+		closing.Title = "Closing"
+		closing.OnClose = func() {
+			if !onEvents() { // in the frame, under mu
+				inFrame.Store(true)
+				return
+			}
+			f.ShowToast(Toast{Title: "After " + way.name})
+		}
+		id := f.ShowToast(closing)
+		tt.Frame()
+		way.close(f, tt, id)
+		drained(t)
+		tt.Frame()
+		if inFrame.Load() {
+			t.Errorf("%s: OnClose ran in the frame, under mu, not on the event goroutine", way.name)
+		}
+		if !tt.Has(ByLabel("After "+way.name)) || tt.Has(ByLabel("Closing")) {
+			t.Errorf("%s: texts %q, want the toast OnClose showed alone", way.name, tt.Texts())
+		}
 	}
 }
