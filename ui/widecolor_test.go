@@ -54,13 +54,8 @@ func TestOklchOddInput(t *testing.T) {
 	// An infinite chroma is the most vivid color of the hue, at once.
 	done := make(chan Color, 1)
 	go func() { done <- Oklch(0.5, inf, 30) }()
-	select {
-	case c := <-done:
-		if !c.wide.ok() {
-			t.Errorf("infinite chroma = %+v, want a wide color", c)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("Oklch with an infinite chroma does not return")
+	if c := wait.For(t, "Oklch with an infinite chroma to return", done); !c.wide.ok() {
+		t.Errorf("infinite chroma = %+v, want a wide color", c)
 	}
 	if c := Oklch(0.5, 0.2, inf); c.A != 255 {
 		t.Errorf("infinite hue = %+v", c)

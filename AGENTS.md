@@ -214,7 +214,9 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   and loaded and bound with package `ffi`, never with a loader of their
   own: the CLI builds those with `build` from their sources in `mygo dev`
   and `mygo build`, and `mygo native build` publishes them for the apps of
-  others.
+  others. The terminal plugin's libghostty-vt, older than `ffi`, is the one
+  exception. `internal/noloader` lists the directories that may load a
+  library (the system's, by name), each with why.
 - The configuration types of `packages/cli/index.d.ts` (for `mygo.config.ts`)
   mirror `Config` in `cmd/mygo/config.go`; `TestConfigTypes` checks them.
 - Tests: unit tests through `internal/fake`; GUI behavior in `internal/e2e`.

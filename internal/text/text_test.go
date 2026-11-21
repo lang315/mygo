@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 	"unicode"
 	"unicode/utf16"
 
@@ -25,9 +24,7 @@ import (
 
 func TestLayoutWraps(t *testing.T) {
 	s := Shared()
-	start := time.Now()
 	s.Preload()
-	t.Logf("system fonts loaded in %v", time.Since(start))
 
 	one := s.Layout(Params{Text: "Hello, world", Style: Style{Size: 16}})
 	if len(one.Lines) != 1 || one.Width <= 50 || one.Height <= 16 {
@@ -1456,9 +1453,7 @@ func TestFontFamilies(t *testing.T) {
 	if err := s.RegisterFont(gomono.TTF, ""); err != nil {
 		t.Fatal(err)
 	}
-	start := time.Now()
 	all := s.FontFamilies()
-	t.Logf("%d families in %v", len(all), time.Since(start))
 	app := []FontFamily{{Name: "Go Mono", Monospaced: true, Registered: true}, {Name: "MyGo Test Families", Registered: true}}
 	if len(all) < len(app) || !slices.Equal(all[:len(app)], app) {
 		t.Fatalf("the registered families are not first: %+v", all[:min(4, len(all))])
@@ -1479,11 +1474,9 @@ func TestFontFamilies(t *testing.T) {
 		!slices.IsSortedFunc(system, func(a, b FontFamily) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) }) {
 		t.Errorf("the system's families are not sorted without regard to case: %q", names(system)[:min(8, len(system))])
 	}
-	start = time.Now()
 	if again := s.FontFamilies(); !slices.Equal(again, all) {
 		t.Error("listing again changed the families")
 	}
-	t.Logf("again in %v", time.Since(start))
 	if err := s.RegisterFont(gobold.TTF, ""); err != nil {
 		t.Fatal(err)
 	}

@@ -16,16 +16,18 @@ func wbar(text string, w, h float32) *CustomWidget {
 	})
 }
 
-// rules returns the y of each divider drawn across [1, x1): a line of one
-// color, not the page's and not red, as wide as that, 1 high.
+// rules returns the y of each divider drawn across [14, x1), inside a card
+// 400 wide (its line and padding are 13 across): a line of one color, not
+// the card's at x 11, in its padding, and not red, as wide as that, 1 high.
+// A card's own edge is its color at x 11 too, so it is no divider.
 func rules(tt *ui.Tester, x1 int) (ys []int) {
-	img, bg := tt.Image(), page(tt)
+	img := tt.Image()
 	b := img.Bounds()
 	prev := false
 	for y := b.Min.Y; y < b.Max.Y; y++ {
-		first := img.RGBAAt(1, y)
-		line := first != bg && !(first.R > 200 && first.G < 60)
-		for x := 2; line && x < x1; x++ {
+		first := img.RGBAAt(14, y)
+		line := first != img.RGBAAt(11, y) && !(first.R > 200 && first.G < 60)
+		for x := 15; line && x < x1; x++ {
 			line = img.RGBAAt(x, y) == first
 		}
 		if line && !prev {
@@ -51,11 +53,12 @@ func TestSettingsRowsControlsShareARightEdge(t *testing.T) {
 			t.Errorf("%s ends at %v, c1 at %v", text, got, edge)
 		}
 	}
-	if edge < 390 || edge > 401 {
-		t.Errorf("right edge at %v in a 400 wide window", edge)
+	// The edge and the labels are inside the card: its line and padding, 13.
+	if edge < 386 || edge > 388 {
+		t.Errorf("right edge at %v in a 400 wide window, want the card's inner edge, 387", edge)
 	}
 	// The labels stay at the left, in one column.
-	if n, e := find(t, tt.Tester, "Name"), find(t, tt.Tester, "Email address"); n.X != e.X || n.X > 2 {
+	if n, e := find(t, tt.Tester, "Name"), find(t, tt.Tester, "Email address"); n.X != e.X || n.X < 12 || n.X > 14 {
 		t.Errorf("labels at x %v and %v", n.X, e.X)
 	}
 }
