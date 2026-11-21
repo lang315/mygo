@@ -528,9 +528,10 @@ func (l *ListBoxWidget[T, K]) build(c *ui.Context) ui.Element {
 	if l.overlay == nil {
 		return l.listOf(c)
 	}
-	// render styles the box, not the list: the frame yields to its style.
+	// render places and styles the box (the frame yields to its style), and
+	// focuses, names and describes the list, as it does a list without one.
 	return ui.Column(c).Grow(1).Children(func() {
-		l.listOf(c, &l.style)
+		l.inner = l.listOf(c, &l.style)
 		l.overlay(c)
 	})
 }

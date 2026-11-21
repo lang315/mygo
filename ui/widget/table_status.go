@@ -68,7 +68,9 @@ func (l *ListBoxWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *ListBoxWidget[
 func (lv *ListViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *ListViewWidget[T, K] {
 	lv.t.SetEmptyState(e) // Details shows the table's, under its headers
 	lv.change(func() {
-		lv.overlay = nil
+		// The icon grid's box stays after nil, as a ListBox's; Details' is the
+		// table's, which goes.
+		lv.overlay = func(*ui.Context) {}
 		if e != nil {
 			lv.overlay = func(c *ui.Context) {
 				emptyOver(c, e, lv.t.view.Len() == 0, 0).Clip()
