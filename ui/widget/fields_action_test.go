@@ -93,6 +93,53 @@ func TestActionFollowsAGridRowsControl(t *testing.T) {
 	}
 }
 
+// Beside a label made tall by its description, a grid row's control keeps
+// the place it has with no action: the row's top, or where its VAlign puts
+// it; in a card, the label's middle.
+func TestActionKeepsTheControlsPlaceDown(t *testing.T) {
+	desc := nameDesc + " " + nameDesc
+	// at returns the control and the label's cell, from the label's top to
+	// its description's bottom.
+	at := func(settings bool, v Align, act bool) (c, cell ui.Rect) {
+		w := wbar("c", 60, 10)
+		if v != 0 {
+			w.VAlign(v)
+		}
+		f := Fields().Row("Kind", w).Describe(desc)
+		if act {
+			f.Action(Button("+"))
+		}
+		if settings {
+			f.SettingsRows()
+		}
+		tt := NewTester(t, f, 240, 300)
+		l, d := find(t, tt.Tester, "Kind"), find(t, tt.Tester, desc)
+		return find(t, tt.Tester, "c"), ui.Rect{X: l.X, Y: l.Y, W: l.W, H: d.Y + d.H - l.Y}
+	}
+	if c, _ := at(false, 0, true); !approx(c.Y, 0) {
+		t.Errorf("the control is at y %v beside an action, want the row's top, 0", c.Y)
+	}
+	for _, v := range []Align{0, Center, End} {
+		with, _ := at(false, v, true)
+		if alone, _ := at(false, v, false); !approx(with.Y, alone.Y) {
+			t.Errorf("VAlign %v: the control at y %v beside an action, %v alone", v, with.Y, alone.Y)
+		}
+	}
+	// In a card the label column narrows by the action's width, so the
+	// label wraps further: the control is at the middle of the label's cell,
+	// or at its bottom with VAlign(End), as alone.
+	for _, v := range []Align{0, Center, End} {
+		c, cell := at(true, v, true) // c is the bar's text, at its top: the bar is 10 high
+		ok := approx(c.Y+5, midY(cell))
+		if v == End {
+			ok = approx(c.Y+10, cell.Y+cell.H)
+		}
+		if !ok {
+			t.Errorf("settings, VAlign %v: the control %v beside the label's cell %v", v, c, cell)
+		}
+	}
+}
+
 // Gap's column value is the gap before a grid row's action.
 func TestActionGapFollowsGap(t *testing.T) {
 	tt := NewTester(t, Fields().Gap(4, 20).Row("Kind", combo()).Action(Button("+")), 400, 300)
@@ -125,8 +172,7 @@ func TestActionInASettingsRow(t *testing.T) {
 	}
 	if wide := NewTester(t, Fields().SettingsRows().Row("A", Button("+")), 400, 300).Find(ByLabel("+")).Bounds(); !approx(b.W, wide.W) {
 		t.Errorf("in a narrow card the button is %v wide, %v in a wide one", b.W, wide.W)
-	}
-}
+	}}
 
 // Case 5: before any row Action does nothing; a second replaces the first;
 // nil removes it.
@@ -270,6 +316,15 @@ func TestActionOfAHiddenRowRedraws(t *testing.T) {
 	_, w := showFrame(t, f)
 	redrawn := recordInvalidations(t)
 	l.SetVisible(false)
+	wantRedrawn(t, redrawn(), w)
+}
+
+// A hidden action is held: showing it redraws the window that shows the form.
+func TestActionHiddenRedrawsWhenShown(t *testing.T) {
+	l := help().SetVisible(false)
+	_, w := showFrame(t, Fields().Row("Content", TextBox()).Wide().Action(l))
+	redrawn := recordInvalidations(t)
+	l.SetVisible(true)
 	wantRedrawn(t, redrawn(), w)
 }
 

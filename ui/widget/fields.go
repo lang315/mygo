@@ -153,9 +153,6 @@ func (f *FieldsWidget) Action(c Control) *FieldsWidget {
 	f.change(func() {
 		if n := len(f.rows); n > 0 {
 			f.rows[n-1].action = c
-			if c != nil {
-				adopt(&f.core, c)
-			}
 		}
 	})
 	return f
@@ -482,6 +479,9 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 			w := render(c, r.w).NamedBy(e)
 			if r.w.base().place.align == 0 {
 				w.Grow(1) // fills the cell, as the control alone does
+			}
+			if !f.settings && r.w.base().place.valign == 0 {
+				w.AlignSelf(ui.Stretch) // down the cell too, as the control alone does
 			}
 			render(c, r.action)
 		})
