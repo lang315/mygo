@@ -64,34 +64,53 @@ func (b *BadgeWidget) rename() {
 }
 
 func (b *BadgeWidget) build(c *ui.Context) ui.Element {
+	detail := ""
+	if b.showsDetail() {
+		detail = b.detail
+	}
+	return badgePill(c, b.status, b.text, detail, b.name, b.disabled, b.textKey)
+}
+
+// badgePill builds a badge of status s: a pill of text, with a dot before it
+// when s is StatusRunning, and detail after it unless it is "", the whole
+// read as name. A grid's badge cells build it too. The status roles of the
+// skin's Badge look resolve to s. key keys the text color's animation.
+// Under mu.
+func badgePill(c *ui.Context, s Status, text, detail, name string, disabled bool, key any) ui.Element {
 	t := c.Theme()
 	scale := c.Preferences().TextScale // ui makes an unset one 1
-	fill, text, _, base := statusColors(c, b.status)
+	fill, fg, _, base := statusColors(c, s)
 	h := 20 * scale
 	// The badge is read as one text, its name; its pill and detail are not
 	// read apart. It never grows: an HExpand widens the row, not the pill.
-	row := ui.Row(c).AlignItems(ui.Center).Gap(t.Space(1.5)).Shrink(0).Role(ui.RoleText).Label(b.name)
+	row := ui.Row(c).AlignItems(ui.Center).Gap(t.Space(1.5)).Shrink(0).Role(ui.RoleText).Label(name)
 	return row.Children(func() {
 		pill := ui.Row(c).AlignItems(ui.Center).Height(h).Padding(0, t.Space(2)).Radius(h / 2).
-			Background(fill).TextColor(text).FontSize(12 * scale).FontWeight(600).Shrink(0)
-		running := b.status == StatusRunning
+			Background(fill).TextColor(fg).FontSize(12 * scale).FontWeight(600).Shrink(0)
+		running := s == StatusRunning
 		if running {
 			pill.Gap(t.Space(1.5))
 		}
 		// The skin's Badge look styles the pill, not the row with the detail.
 		if look := lookOf(skinhook.KindBadge); look != nil {
-			st := look.effective(t.Dark, pill.Hovered(), false, false, pill.Pressed(), b.disabled)
-			st.apply(c, pill, b.textKey)
+			outer := styling
+			styling = s // a grid's cell has no control whose build set it
+			st := look.effective(t.Dark, pill.Hovered(), false, false, pill.Pressed(), disabled)
+			st.apply(c, pill, key)
+			styling = outer
 		}
 		pill.Children(func() {
 			if running {
 				d := 6 * scale
 				ui.Box(c).Width(d).Height(d).Radius(d / 2).Background(base).Shrink(0)
 			}
-			ui.Text(c, b.text).SingleLine()
+			ui.Text(c, text).SingleLine()
 		})
-		if b.showsDetail() {
-			ui.Text(c, b.detail).SingleLine().FontSize(12 * scale).TextColor(t.TextMuted)
+		if detail != "" {
+			d := ui.Text(c, detail).SingleLine().FontSize(12 * scale)
+			if !c.RowSelected() { // on a selected row, the selection's text reads where TextMuted may not
+				d.TextColor(t.TextMuted)
+			}
 		}
 	})
 }

@@ -16,7 +16,7 @@ import (
 // Check reports what falls under 7:1.
 var HighContrast = &Skin{name: "HighContrast", lazy: &lazySkin{build: func() *Skin {
 	return &Skin{name: "HighContrast", light: highContrastLight(), dark: highContrastDark(), floor: 7,
-		looks: highContrastLooks, parsed: parseLooks(highContrastLooks)}
+		looks: highContrastLooks, parsed: parseLooks(highContrastLooks), flatStatus: true}
 }}}
 
 // highContrastLooks outline every control 2 DIPs wide. A check box's and a
