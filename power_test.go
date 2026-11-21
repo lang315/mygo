@@ -100,11 +100,7 @@ func TestDockMenuAndRelaunch(t *testing.T) {
 	})
 	defer off()
 	App.Relaunch("--after-restart")
-	select {
-	case <-canceled:
-	case <-time.After(wait.Guard):
-		t.Fatal("Relaunch did not start quitting")
-	}
+	wait.For(t, "Relaunch to start quitting", canceled)
 	if onMainValue(func() bool { return App.relaunch || App.relaunchArgs != nil }) {
 		t.Error("a canceled relaunch is still pending, or its arguments")
 	}

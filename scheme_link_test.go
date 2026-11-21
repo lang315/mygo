@@ -13,7 +13,6 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/platform"
@@ -184,11 +183,7 @@ func (r bodyRec) WriteBody(p []byte) error {
 
 func awaitScheme(t *testing.T, r *schemeRec) {
 	t.Helper()
-	select {
-	case <-r.finished:
-	case <-time.After(wait.Guard):
-		t.Fatal("the request was not answered")
-	}
+	wait.For(t, "the request to be answered", r.finished)
 }
 
 // TestUnlinkedSchemeAnswersAsServing: an app that does not import package
@@ -298,16 +293,11 @@ func TestUnlinkedSchemeDownloadsFailAsServing(t *testing.T) {
 	done := make(chan *Download, 1)
 	defer w.Page().OnDownloadDone(func(d *Download) { done <- d })()
 	finished := func() string {
-		select {
-		case d := <-done:
-			if d.Err == nil {
-				t.Fatalf("the download of %s worked: %+v", d.URL, d)
-			}
-			return d.Err.Error()
-		case <-time.After(wait.Guard):
-			t.Fatal("the download did not finish")
-			return ""
+		d := wait.For(t, "the download to finish", done)
+		if d.Err == nil {
+			t.Fatalf("the download of %s worked: %+v", d.URL, d)
 		}
+		return d.Err.Error()
 	}
 	for _, url := range []string{"mygo://localhost/f.zip", "nohandler://localhost/f.zip", "mygo://localhost/%zz"} {
 		schemehook.Linked.Store(linked)
@@ -388,9 +378,15 @@ func TestSchemeLinkingRaces(t *testing.T) {
 				rec := newSchemeRec()
 				req := &platform.SchemeRequest{Context: context.Background(), Method: "GET", URL: "mygo://localhost/", Responder: rec}
 				onMain(func() { wins[i].H.SchemeRequest(req) })
-				select {
-				case <-rec.finished:
-				case <-time.After(wait.Guard):
+				// Not wait.For: a Fatal off the test's goroutine does not stop the test.
+				if !wait.Poll(func() bool {
+					select {
+					case <-rec.finished:
+						return true
+					default:
+						return false
+					}
+				}) {
 					t.Error("the request was not answered")
 					return
 				}

@@ -143,6 +143,10 @@ type Skin struct {
 	parsed      *[skinhook.NumKinds]any // looks' Styles, as Use hands them to widget
 	floor       float64                 // the least contrast of text Check asks; 0 is 4.5
 	lazy        *lazySkin               // set on a built-in skin made at its first use
+	// flatStatus is HighContrast's: its looks draw no subtle fills, so a grid
+	// cell's format draws a status as the family's text, bold (Use hands it to
+	// widget through skinhook). Every copy of the skin keeps it.
+	flatStatus bool
 }
 
 // lazySkin makes a skin MyGo ships at its first use, so that an app that
@@ -192,6 +196,7 @@ func Use(s *Skin) {
 	if s == nil {
 		skinhook.Set(nil, nil)
 		skinhook.SetLooks(nil)
+		skinhook.SetFlatStatus(false)
 		ui.SetDefaultThemes(nil, nil)
 		return
 	}
@@ -205,6 +210,7 @@ func Use(s *Skin) {
 	}
 	skinhook.Set(l, d)
 	skinhook.SetLooks(s.parsed)
+	skinhook.SetFlatStatus(s.flatStatus)
 	ui.SetDefaultThemes(themeOf(l, false), themeOf(d, true))
 }
 

@@ -931,11 +931,7 @@ func TestCallContextCanceledOnNavigation(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	pc := w.pageContext()
 	onMain(func() { fw.H.NavigationCommitted("https://next.example/") })
-	select {
-	case <-pc.Done():
-	case <-time.After(wait.Guard):
-		t.Fatal("page context not canceled after navigation")
-	}
+	wait.For(t, "the page context to be canceled after navigation", pc.Done())
 	if w.pageContext().Err() != nil {
 		t.Error("new page context should be live")
 	}
@@ -1120,13 +1116,9 @@ func TestChannels(t *testing.T) {
 	// as soon as it starts.
 	page(fw, `{"t":"chan-close","c":11,"k":"tok"}`)
 	page(fw, `{"t":"call","id":6,"k":"tok","m":"Stream.Wait","a":[11]}`)
-	select {
-	case err := <-s.stopped:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("call context of a channel closed early: %v", err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("a channel the page closed before its call started did not cancel the call")
+	err := wait.For(t, "the call of a channel closed before it started to be canceled", s.stopped)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("call context of a channel closed early: %v", err)
 	}
 	if err := <-s.sent; !errors.Is(err, ErrChannelClosed) {
 		t.Errorf("Send on a channel closed early = %v", err)
@@ -1151,11 +1143,7 @@ func TestChannelsClosedAtOnce(t *testing.T) {
 		page(fw, fmt.Sprintf(`{"t":"chan-close","c":%d,"k":"tok"}`, id))
 	}
 	for range n {
-		select {
-		case <-s.stopped:
-		case <-time.After(wait.Guard):
-			t.Fatal("a call whose channel the page closed was not canceled")
-		}
+		wait.For(t, "the call of a channel the page closed to be canceled", s.stopped)
 	}
 	// A channel ends before the reply of its call.
 	for id := 1; id <= n; id++ {
@@ -1377,9 +1365,15 @@ func TestEvalLateReply(t *testing.T) {
 			cancel()
 			// The main thread, which EvalContext waits on, is busy here: the
 			// cancellation is delivered...
-			select {
-			case <-delivered:
-			case <-time.After(time.Minute):
+			// Not wait.For: a Fatal off the test's goroutine would end the main thread.
+			if !wait.Poll(func() bool {
+				select {
+				case <-delivered:
+					return true
+				default:
+					return false
+				}
+			}) {
 				t.Error("the cancellation was not delivered")
 			}
 			reply(`{"ok":true,"v":1}`, nil) // ...then the page answers
@@ -1390,13 +1384,9 @@ func TestEvalLateReply(t *testing.T) {
 		_, err := w.Page().EvalContext(ctx, "1")
 		done <- err
 	})
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("EvalContext = %v", err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the late reply blocked the main thread")
+	err := wait.For(t, "EvalContext to return after the cancellation", done)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("EvalContext = %v", err)
 	}
 }
 
@@ -1416,13 +1406,9 @@ func TestEvalWindowCloses(t *testing.T) {
 	}()
 	<-asked
 	w.Destroy()
-	select {
-	case err := <-done:
-		if !errors.Is(err, errDestroyed) {
-			t.Errorf("Eval = %v", err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("Eval still waits for the page of a closed window")
+	err := wait.For(t, "Eval to return after the window closed", done)
+	if !errors.Is(err, errDestroyed) {
+		t.Errorf("Eval = %v", err)
 	}
 }
 
@@ -1447,13 +1433,9 @@ func TestEvalAnsweredByNextPage(t *testing.T) {
 	reply := <-replies
 	onMain(func() { fw.H.NavigationCommitted("app://localhost/") })
 	onMain(func() { reply(`{"ok":true,"v":"Agent"}`, nil) })
-	select {
-	case r := <-done:
-		if r.v != "Agent" || r.err != nil {
-			t.Errorf("Eval = %v, %v", r.v, r.err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("Eval did not return the answer of the page that came next")
+	r := wait.For(t, "Eval to return the answer of the page that came next", done)
+	if r.v != "Agent" || r.err != nil {
+		t.Errorf("Eval = %v, %v", r.v, r.err)
 	}
 }
 
@@ -1473,13 +1455,9 @@ func TestEvalWebViewDestroyed(t *testing.T) {
 	}()
 	<-asked
 	v.Destroy()
-	select {
-	case err := <-done:
-		if !errors.Is(err, errDestroyed) {
-			t.Errorf("Eval = %v", err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("Eval still waits for the page of a destroyed web view")
+	err := wait.For(t, "Eval to return after the web view was destroyed", done)
+	if !errors.Is(err, errDestroyed) {
+		t.Errorf("Eval = %v", err)
 	}
 }
 
@@ -1560,11 +1538,7 @@ func request(t *testing.T, fw *fake.Window, method, url string, body io.Reader) 
 		req.Body = io.NopCloser(body)
 	}
 	onMain(func() { fw.H.SchemeRequest(req) })
-	select {
-	case <-rec.finished:
-	case <-time.After(wait.Guard):
-		t.Fatal("request did not finish")
-	}
+	wait.For(t, "the request to finish", rec.finished)
 	return rec
 }
 
@@ -1661,11 +1635,7 @@ func TestProtocolCORS(t *testing.T) {
 		}
 		req := &platform.SchemeRequest{Context: context.Background(), Method: method, URL: "assets://localhost" + path, Header: h, Responder: rec}
 		onMain(func() { fw.H.SchemeRequest(req) })
-		select {
-		case <-rec.finished:
-		case <-time.After(wait.Guard):
-			t.Fatal("request did not finish")
-		}
+		wait.For(t, "the request to finish", rec.finished)
 		return rec
 	}
 
@@ -1767,11 +1737,7 @@ func TestProtocolBodyWriter(t *testing.T) {
 		rec.finished = make(chan struct{})
 		req := &platform.SchemeRequest{Context: context.Background(), Method: "GET", URL: "body://localhost/", Header: http.Header{}, Responder: rec}
 		onMain(func() { fw.H.SchemeRequest(req) })
-		select {
-		case <-rec.finished:
-		case <-time.After(wait.Guard):
-			t.Fatal("request did not finish")
-		}
+		wait.For(t, "the request to finish", rec.finished)
 	}
 
 	rec := &bodyRecorder{}
@@ -2250,13 +2216,9 @@ func TestThemePreferences(t *testing.T) {
 	// Safe from any goroutine.
 	done := make(chan ThemePreferences, 1)
 	go func() { done <- Theme.Preferences() }()
-	select {
-	case p := <-done:
-		if p != want {
-			t.Errorf("Preferences from another goroutine = %+v, want %+v", p, want)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("Preferences from another goroutine hung")
+	p := wait.For(t, "Preferences from another goroutine", done)
+	if p != want {
+		t.Errorf("Preferences from another goroutine = %+v, want %+v", p, want)
 	}
 }
 
@@ -2707,9 +2669,7 @@ func beforeRun() {
 func TestBeforeRun(t *testing.T) {
 	run := func(env ...string) (string, error) {
 		t.Helper()
-		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+		cmd := exec.CommandContext(wait.Context(t), os.Args[0], "-test.run=^$")
 		cmd.Env = append(append(os.Environ(), "MYGO_TEST_BEFORE_RUN=1"), env...)
 		out, err := cmd.CombinedOutput()
 		return string(out), err
@@ -2757,11 +2717,7 @@ func TestGlobalShortcut(t *testing.T) {
 		t.Error("IsRegistered")
 	}
 	onMain(func() { fb.PressHotkey("CmdOrCtrl+Shift+K") })
-	select {
-	case <-pressed:
-	case <-time.After(wait.Guard):
-		t.Error("shortcut callback not called")
-	}
+	wait.For(t, "the shortcut callback to be called", pressed)
 	GlobalShortcut.Unregister("CmdOrCtrl+Shift+K")
 	if GlobalShortcut.IsRegistered("CmdOrCtrl+Shift+K") {
 		t.Error("Unregister")
@@ -3033,21 +2989,13 @@ func TestSingleInstance(t *testing.T) {
 	if strings.TrimSpace(string(out)) != "forwarded\npassed the foreground on" {
 		t.Fatalf("second instance printed %q", out)
 	}
-	select {
-	case args := <-got:
-		if !slices.Contains(args, "--from-second") || !slices.Contains(args, "instance") {
-			t.Errorf("forwarded args = %q", args)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("OnSecondInstance not called")
+	args := wait.For(t, "OnSecondInstance to be called", got)
+	if !slices.Contains(args, "--from-second") || !slices.Contains(args, "instance") {
+		t.Errorf("forwarded args = %q", args)
 	}
 	// Deep links started a second instance: the first one opens them.
-	select {
-	case u := <-urls:
-		if u != "mygo-test://open?x=1" {
-			t.Errorf("OnOpenURL got %q", u)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("OnOpenURL not called for the forwarded URL")
+	u := wait.For(t, "OnOpenURL to be called for the forwarded URL", urls)
+	if u != "mygo-test://open?x=1" {
+		t.Errorf("OnOpenURL got %q", u)
 	}
 }
