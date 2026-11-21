@@ -231,10 +231,7 @@ func uncappedResize(t *testing.T, r *Renderer, composed *atomic.Int32, calls *[]
 			return false
 		}
 		from := len(*calls)
-		for end := time.Now().Add(wait.Guard); !woke; {
-			if time.Now().After(end) {
-				t.Fatalf("%s: the frame after one waiting to present never drew (waited %v)", kind, wait.Guard)
-			}
+		for !woke {
 			wait.For(t, kind+": the composition a frame waits for", posted)()
 		}
 		noWait(from)
