@@ -64,6 +64,8 @@ var allowed = map[string]string{
 	"plugins/sqlite/database_test.go TestCancellationAndRollback context.WithTimeout":    "the deadline interrupts a long query, and DeadlineExceeded is the outcome asserted: a slow machine only cancels it later",
 	"plugins/sqlite/database_test.go TestCloseAndQueuedCancellation context.WithTimeout": "a call queued behind a long query must give up with DeadlineExceeded, the outcome asserted",
 	"plugins/sqlite/database_test.go TestDiskReadOnlyAndBusy context.WithTimeout":        "a call blocked by a lock must give up with DeadlineExceeded, the outcome asserted",
+	"protocol/protocol_test.go TestDownload time.After":                                  "waits a while for a report of a download the window refused, which must never come",
+	"updates/updates_test.go TestUpdaterWaitsForTheAppToExit time.Sleep":                 "checks the bundle stays in place while the app runs, which only a late look can miss",
 }
 
 type finding struct {
