@@ -249,15 +249,12 @@ if (window.chrome && chrome.webview) chrome.webview.addEventListener("message", 
 // browser, GPU and renderer processes with the first page, which took a
 // slow runner over ten seconds.
 func warmUp() {
-	start := time.Now()
 	w := mygo.NewWindow(mygo.WindowOptions{Hidden: true, Title: "warm-up", Page: firstPages()})
 	defer w.Destroy()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	if _, err := w.Page().EvalContext(ctx, "1"); err != nil {
-		fmt.Printf("e2e: the webview did not start in %v: %v\n", time.Since(start).Round(time.Millisecond), err)
-	} else if d := time.Since(start); d > 3*time.Second {
-		fmt.Printf("e2e: the webview took %v to start\n", d.Round(time.Millisecond))
+		fmt.Printf("e2e: the webview did not start: %v\n", err)
 	}
 }
 
@@ -316,7 +313,7 @@ func TestQuitDuringDialog(t *testing.T) {
 		if strings.Contains(out.String(), "dialog:") && !strings.Contains(out.String(), "dialog: 1 <nil>") {
 			t.Errorf("dialog result: %q", out.String())
 		}
-	case <-time.After(wait.Guard): // a slow runner starts the process late; only a hang fails
+	case <-wait.Context(t).Done(): // a slow runner starts the process late; only a hang fails
 		cmd.Process.Kill()
 		t.Fatalf("the app did not quit while a dialog was open; output %q", out.String())
 	}
@@ -386,11 +383,9 @@ func beforeRun(source mygo.ThemeSource) {
 // tried, so one differs from the system's.
 func TestBeforeRun(t *testing.T) {
 	for _, source := range []mygo.ThemeSource{mygo.ThemeDark, mygo.ThemeLight} {
-		ctx, cancel := context.WithTimeout(t.Context(), wait.Guard)
-		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^$")
+		cmd := exec.CommandContext(wait.Context(t), os.Args[0], "-test.run=^$")
 		cmd.Env = append(os.Environ(), "MYGO_E2E_BEFORE_RUN="+string(source))
 		b, err := cmd.CombinedOutput()
-		cancel()
 		out := string(b)
 		if err != nil {
 			t.Errorf("%s: %v:\n%s", source, err, out)
@@ -457,11 +452,7 @@ func TestPopupMenu(t *testing.T) {
 		go func() { show(); close(done) }()
 		time.Sleep(300 * time.Millisecond)
 		shown, _ = dismissPopups()
-		select {
-		case <-done:
-		case <-time.After(wait.Guard):
-			t.Fatal("the popup did not return")
-		}
+		wait.For(t, "the popup to return", done)
 		return shown
 	}
 	// Without a window GTK cannot place the menu: it must not block.
@@ -487,19 +478,10 @@ func TestPopupMenu(t *testing.T) {
 	if !choosePopupItem("One") {
 		t.Fatal("the context menu has no item One")
 	}
-	select {
-	case got := <-clicks:
-		if got != w {
-			t.Errorf("context menu window = %v, want window %d", got, w.ID())
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the context menu click was not delivered")
+	if got := wait.For(t, "the context menu click to be delivered", clicks); got != w {
+		t.Errorf("context menu window = %v, want window %d", got, w.ID())
 	}
-	select {
-	case <-done:
-	case <-time.After(wait.Guard):
-		t.Fatal("the context menu did not return after choosing an item")
-	}
+	wait.For(t, "the context menu to return after choosing an item", done)
 }
 
 var (
@@ -512,14 +494,10 @@ func TestEarlyWindow(t *testing.T) {
 	if earlyChecked.Swap(true) {
 		t.Skip("the window requested before Run was checked in the first run")
 	}
-	select {
-	case w := <-earlyWindow:
-		defer w.Destroy()
-		if w.Title() != "early" {
-			t.Errorf("title = %q", w.Title())
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the window requested before Run was not created")
+	w := wait.For(t, "the window requested before Run to be created", earlyWindow)
+	defer w.Destroy()
+	if w.Title() != "early" {
+		t.Errorf("title = %q", w.Title())
 	}
 }
 
@@ -538,28 +516,22 @@ func waitFor(t testing.TB, w *mygo.Window, expr string) {
 func waitForPage(t testing.TB, p *mygo.Page, expr string) {
 	t.Helper()
 	check := "!!(" + expr + ")"
-	start := time.Now()
-	first, cancel := context.WithTimeout(t.Context(), wait.Guard)
+	first := wait.Context(t)
 	v, err := p.EvalContext(first, check)
-	late := err != nil && first.Err() != nil
-	cancel()
-	answered := time.Since(start)
-	if late {
-		t.Fatalf("waiting for %s: the page did not answer in %v: %v; %s", expr, answered.Round(time.Millisecond), err, pageState(p))
+	if err != nil && first.Err() != nil {
+		t.Fatalf("waiting for %s: the page did not answer in %v: %v; %s", expr, wait.Guard, err, pageState(p))
 	}
 	ctx := wait.Context(t)
-	for v != true {
-		select {
-		case <-ctx.Done():
-			msg := fmt.Sprintf("%s never became true, %v after the page first answered (in %v)", expr, wait.Guard, answered.Round(time.Millisecond))
-			if err != nil {
-				msg += "; the last check failed: " + err.Error()
-			}
-			t.Fatalf("%s; %s%s", msg, pageState(p), inputDiag())
-		case <-time.After(20 * time.Millisecond):
-		}
+	if v != true && !wait.Poll(func() bool {
 		keepFront()
 		v, err = p.EvalContext(ctx, check)
+		return v == true
+	}) {
+		msg := fmt.Sprintf("%s never became true, %v after the page first answered", expr, wait.Guard)
+		if err != nil {
+			msg += "; the last check failed: " + err.Error()
+		}
+		t.Fatalf("%s; %s%s", msg, pageState(p), inputDiag())
 	}
 }
 
@@ -720,7 +692,6 @@ func TestChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, w, "window.run")
-	start := time.Now()
 	got, err := mygo.EvalAs[string](w.Page(), `(async () => {
 		const ch = mygo.channel();
 		const done = mygo.call("Streams.Count", 100000, ch);
@@ -735,7 +706,6 @@ func TestChannels(t *testing.T) {
 	if err != nil || got != "100000:4999950000" {
 		t.Fatalf("streamed %q, %v", got, err)
 	}
-	t.Logf("100000 values in %v", time.Since(start))
 
 	// Leaving the loop stops the method: Send fails, the context is canceled.
 	got, err = mygo.EvalAs[string](w.Page(), `(async () => {
@@ -747,13 +717,8 @@ func TestChannels(t *testing.T) {
 	if err != nil || got != mygo.ErrChannelClosed.Error() {
 		t.Errorf("stopped stream: %q, %v", got, err)
 	}
-	select {
-	case err := <-streams.stopped:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("context of the stopped call: %v", err)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the method did not stop")
+	if err := wait.For(t, "the method to stop", streams.stopped); !errors.Is(err, context.Canceled) {
+		t.Errorf("context of the stopped call: %v", err)
 	}
 }
 
@@ -2095,16 +2060,14 @@ window.drag = (target, type, x, y) => {
 	waitFor(t, w, "window.drag")
 	expectDrop := func(want bool, what string) *mygo.FileDropEvent {
 		t.Helper()
+		if want {
+			return wait.For(t, what+": OnFileDrop to be called", drops)
+		}
 		select {
 		case e := <-drops:
-			if !want {
-				t.Errorf("%s: unexpected OnFileDrop %+v", what, e)
-			}
+			t.Errorf("%s: unexpected OnFileDrop %+v", what, e)
 			return e
 		case <-time.After(time.Second):
-			if want {
-				t.Fatalf("%s: OnFileDrop was not called", what)
-			}
 		}
 		return nil
 	}
@@ -2396,11 +2359,7 @@ func TestDockMenu(t *testing.T) {
 	if len(titles) != 3 || titles[0] != "New Window" || titles[2] != "Settings" {
 		t.Errorf("Dock menu = %q", titles)
 	}
-	select {
-	case <-clicked:
-	case <-time.After(wait.Guard):
-		t.Error("clicking the Dock menu item did not reach its handler")
-	}
+	wait.For(t, "the click on the Dock menu item to reach its handler", clicked)
 	mygo.App.Dock.SetMenu(nil)
 	if titles, _ := dockMenu(-1); titles != nil {
 		t.Errorf("Dock menu after SetMenu(nil) = %q", titles)
@@ -2604,24 +2563,15 @@ func TestDownloads(t *testing.T) {
 	w.Page().OnDownloadDone(func(d *mygo.Download) { done <- d })
 	check := func(what, name, content string) {
 		t.Helper()
-		select {
-		case e := <-started:
-			if e.SuggestedName != name {
-				t.Errorf("%s: suggested name %q, want %q", what, e.SuggestedName, name)
-			}
-		case <-time.After(wait.Guard):
-			t.Fatalf("%s: OnWillDownload was not called", what)
+		if e := wait.For(t, what+": OnWillDownload to be called", started); e.SuggestedName != name {
+			t.Errorf("%s: suggested name %q, want %q", what, e.SuggestedName, name)
 		}
-		select {
-		case d := <-done:
-			if d.Err != nil {
-				t.Fatalf("%s: %v", what, d.Err)
-			}
-			if b, err := os.ReadFile(d.Path); err != nil || string(b) != content {
-				t.Errorf("%s: saved %q, %v", what, b, err)
-			}
-		case <-time.After(wait.Guard):
-			t.Fatalf("%s: OnDownloadDone was not called", what)
+		d := wait.For(t, what+": OnDownloadDone to be called", done)
+		if d.Err != nil {
+			t.Fatalf("%s: %v", what, d.Err)
+		}
+		if b, err := os.ReadFile(d.Path); err != nil || string(b) != content {
+			t.Errorf("%s: saved %q, %v", what, b, err)
 		}
 	}
 	// A link with the download attribute.
@@ -2722,11 +2672,7 @@ func TestGlobalShortcut(t *testing.T) {
 	if !pressCtrlShiftK() {
 		t.Skip("no keyboard automation on this platform")
 	}
-	select {
-	case <-pressed:
-	case <-time.After(wait.Guard):
-		t.Fatal("the global shortcut was not reported")
-	}
+	wait.For(t, "the global shortcut to be reported", pressed)
 }
 
 // TestGlobalShortcutPortal has the desktop bind global shortcuts through
@@ -2771,15 +2717,11 @@ func TestGlobalShortcutPortal(t *testing.T) {
 	}
 	defer mygo.GlobalShortcut.UnregisterAll()
 	expect("Ctrl+Shift+K", "Control_L", "Shift_L", "k")
-	select {
-	case k := <-keys:
-		if k == "" {
-			t.Error("the desktop bound Ctrl+Shift+K and told no keys for it")
-		}
-		t.Logf("the desktop bound Ctrl+Shift+K to %q", k)
-	case <-time.After(wait.Guard):
-		t.Error("the keys the desktop bound were not told")
+	k := wait.For(t, "the keys the desktop bound to be told", keys)
+	if k == "" {
+		t.Error("the desktop bound Ctrl+Shift+K and told no keys for it")
 	}
+	t.Logf("the desktop bound Ctrl+Shift+K to %q", k)
 	register("Alt+Shift+J")
 	expect("Alt+Shift+J", "Alt_L", "Shift_L", "j")
 	expect("Ctrl+Shift+K", "Control_L", "Shift_L", "k")
@@ -2811,11 +2753,7 @@ func TestCloseEvents(t *testing.T) {
 	}
 	prevent.Store(false)
 	w.Close()
-	select {
-	case <-closed:
-	case <-time.After(wait.Guard):
-		t.Fatal("OnClosed not called")
-	}
+	wait.For(t, "OnClosed to be called", closed)
 }
 
 func TestCapturePage(t *testing.T) {
@@ -2860,11 +2798,12 @@ func pageCalls(w *mygo.Window) <-chan callEnd {
 func waitCalls(t *testing.T, ended <-chan callEnd, what string) map[string]error {
 	t.Helper()
 	got := map[string]error{}
+	ctx := wait.Context(t)
 	for range 3 {
 		select {
 		case e := <-ended:
 			got[e.name] = e.err
-		case <-time.After(time.Minute):
+		case <-ctx.Done():
 			t.Fatalf("%s: only these calls ended: %v", what, got)
 		}
 	}
@@ -2975,13 +2914,8 @@ func TestWindowOpenHandler(t *testing.T) {
 	if _, err := w.Page().Eval("window.open('https://example.com/popup')"); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case u := <-opened:
-		if u != "https://example.com/popup" {
-			t.Errorf("opened %q", u)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("window open handler not called")
+	if u := wait.For(t, "the window open handler to be called", opened); u != "https://example.com/popup" {
+		t.Errorf("opened %q", u)
 	}
 }
 
@@ -3018,24 +2952,16 @@ func TestUserInitiated(t *testing.T) {
 	})
 	opened := func(url string, user bool) {
 		t.Helper()
-		select {
-		case req := <-opens:
-			if req.URL != url || req.UserInitiated != user {
-				t.Errorf("window open request %q, UserInitiated %v; want %q, %v", req.URL, req.UserInitiated, url, user)
-			}
-		case <-time.After(wait.Guard):
-			t.Fatalf("the window open handler was not asked about %s", url)
+		req := wait.For(t, "the window open handler to be asked about "+url, opens)
+		if req.URL != url || req.UserInitiated != user {
+			t.Errorf("window open request %q, UserInitiated %v; want %q, %v", req.URL, req.UserInitiated, url, user)
 		}
 	}
 	navigated := func(url string, user bool) {
 		t.Helper()
-		select {
-		case n := <-navs:
-			if n.url != url || n.user != user {
-				t.Errorf("navigation to %q, UserInitiated %v; want %q, %v", n.url, n.user, url, user)
-			}
-		case <-time.After(wait.Guard):
-			t.Fatalf("OnWillNavigate was not told about %s", url)
+		n := wait.For(t, "OnWillNavigate to be told about "+url, navs)
+		if n.url != url || n.user != user {
+			t.Errorf("navigation to %q, UserInitiated %v; want %q, %v", n.url, n.user, url, user)
 		}
 	}
 	w.Page().LoadHTML(userInitiatedPage, "https://example.com/")
@@ -3177,13 +3103,8 @@ func TestMenuActivationWindow(t *testing.T) {
 				if err := activateMenu(w, "Demo", "Sizes", "Large"); err != nil {
 					t.Fatal(err)
 				}
-				select {
-				case got := <-clicks:
-					if got != w {
-						t.Fatalf("click window = %v, want window %d", got, w.ID())
-					}
-				case <-time.After(wait.Guard):
-					t.Fatal("menu click was not delivered")
+				if got := wait.For(t, "the menu click to be delivered", clicks); got != w {
+					t.Fatalf("click window = %v, want window %d", got, w.ID())
 				}
 				if width, height := w.Size(); width != 1000 || height != 720 {
 					t.Errorf("size after click = %dx%d, want 1000x720", width, height)
@@ -3321,11 +3242,7 @@ func TestHiddenTitleBar(t *testing.T) {
 			eventually(t, "the restore button to restore the window", func() bool { return !w.IsMaximized() })
 		}
 		if slices.Contains(names, "close") && pressTitleButton(w, "close") {
-			select {
-			case <-closing:
-			case <-time.After(wait.Guard):
-				t.Error("the close button did not ask to close the window")
-			}
+			wait.For(t, "the close button to ask to close the window", closing)
 		}
 	}
 
@@ -3364,13 +3281,8 @@ func TestHiddenWindowButtons(t *testing.T) {
 
 func expectClick(t *testing.T, clicks chan string, want string) {
 	t.Helper()
-	select {
-	case got := <-clicks:
-		if got != want {
-			t.Errorf("clicked %q, want %q", got, want)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatalf("menu item %q was not clicked", want)
+	if got := wait.For(t, fmt.Sprintf("menu item %q to be clicked", want), clicks); got != want {
+		t.Errorf("clicked %q, want %q", got, want)
 	}
 }
 
@@ -3417,12 +3329,7 @@ func TestWindowOpenAllowed(t *testing.T) {
 	if _, err := w.Page().Eval("void window.open('app://localhost/?child=1')"); err != nil {
 		t.Fatal(err)
 	}
-	var child *mygo.Window
-	select {
-	case child = <-created:
-	case <-time.After(wait.Guard):
-		t.Fatal("child window not created")
-	}
+	child := wait.For(t, "the child window to be created", created)
 	defer child.Destroy()
 	waitFor(t, child, "window.run && location.search === '?child=1'")
 	// The child has its own bridge: calls identify the child window.
