@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/wait"
@@ -140,13 +139,9 @@ func TestInotifyShared(t *testing.T) {
 	}
 	next := func(notices chan platform.FileWatchNotice, name string) {
 		t.Helper()
-		select {
-		case n := <-notices:
-			if n.Target != 7 || n.Name != name || n.Kind != platform.FileWatchCreate {
-				t.Fatalf("notice %+v", n)
-			}
-		case <-time.After(wait.Guard):
-			t.Fatal("no notice")
+		n := wait.For(t, "a notice", notices)
+		if n.Target != 7 || n.Name != name || n.Kind != platform.FileWatchCreate {
+			t.Fatalf("notice %+v", n)
 		}
 	}
 	if err := os.Mkdir(filepath.Join(dir, "x"), 0700); err != nil {

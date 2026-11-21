@@ -165,15 +165,16 @@ func (w *Form) answerMnemonics(c *ui.Context) {
 			if o.key != m.key || o.el.IsDisabled() {
 				continue
 			}
-			tc := o.ctrl
+			tc := w.focusTarget(o.ctrl)
 			if o.next {
-				if tc = w.nextAfter(o.ctrl); tc == nil {
-					continue
-				}
+				tc = w.nextAfter(o.ctrl)
+			}
+			if tc == nil {
+				continue
 			}
 			tb := w.builtOf(tc)
 			if tb.ctrl == nil {
-				tb = builtEl{tc, o.el}
+				tb = builtEl{ctrl: tc, el: o.el}
 			}
 			if !slices.ContainsFunc(targets, func(b builtEl) bool { return b.ctrl == tc }) {
 				hit, targets = append(hit, o), append(targets, tb)
@@ -310,6 +311,7 @@ func (w *Form) focusedControl() Control {
 type builtEl struct {
 	ctrl Control
 	el   ui.Element
+	from int // where in Form.built its build began: the controls inside it are [from, its own index)
 }
 
 // builtOf returns what the form built for c, or the zero builtEl.
@@ -337,6 +339,55 @@ func (w *Form) nextAfter(c Control) Control {
 	}
 	return nil
 }
+
+// isContainer reports whether c holds other controls, as a box does. A control
+// that takes the focus itself (a ListBox, whose empty state may hold a button)
+// is not one, whatever its build rendered.
+func isContainer(c Control) bool {
+	_, ok := c.(interface{ children() []Control })
+	return ok
+}
+
+// focusTarget returns the control a key aimed at c focuses: c itself, unless c
+// is a container, where it is the first control in it, in Tab order, that can
+// take the focus, as WinForms; else c when c's own element can (a TabControl's
+// headers), else nil. What lies inside a control that takes the focus itself
+// belongs to it. Under mu, at the end of a build.
+func (w *Form) focusTarget(c Control) Control {
+	if !isContainer(c) {
+		return c
+	}
+	for i, b := range w.built {
+		if b.ctrl != c {
+			continue
+		}
+		// A control comes after what it built: j is inside a later k that takes
+		// the focus itself when k's build began at or before j.
+		inside := func(j int) bool {
+			for k := j + 1; k < i; k++ {
+				if o := w.built[k]; o.from <= j && !isContainer(o.ctrl) && o.el.CanFocus() {
+					return true
+				}
+			}
+			return false
+		}
+		for j := b.from; j < i; j++ {
+			if in := w.built[j]; in.el.CanFocus() && !inside(j) {
+				return in.ctrl // a container here takes the focus through a part of its own
+			}
+		}
+		if b.el.CanFocus() {
+			return c // as a TabControl's headers do, with no leaf in it that can
+		}
+		return nil
+	}
+	return c
+}
+
+// focusRow focuses what the access key of a Fields row aims at, the row's
+// control c or, when it is a container, the first control in it. Its act runs
+// only for a row whose target answerMnemonics found.
+func (w *Form) focusRow(c Control) { focusLater(w.focusTarget(c)) }
 
 // focusNextAfter focuses the control nextAfter finds.
 func (w *Form) focusNextAfter(c Control) {

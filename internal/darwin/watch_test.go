@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/wait"
@@ -103,17 +102,12 @@ func watchTestNext(t *testing.T, notices chan platform.FileWatchNotice, target u
 // the mapping calls dirty.
 func watchTestNextKinds(t *testing.T, notices chan platform.FileWatchNotice, target uint64, kinds []platform.FileWatchKind, names ...string) {
 	t.Helper()
-	deadline := time.Now().Add(wait.Guard)
-	for time.Now().Before(deadline) {
-		select {
-		case n := <-notices:
-			if n.Target == target && slices.Contains(kinds, n.Kind) && slices.Contains(names, n.Name) {
-				return
-			}
-		case <-time.After(time.Until(deadline)):
+	for {
+		n := wait.For(t, fmt.Sprintf("a notice of %v for %q on target %d", kinds, names, target), notices)
+		if n.Target == target && slices.Contains(kinds, n.Kind) && slices.Contains(names, n.Name) {
+			return
 		}
 	}
-	t.Fatalf("no notice of %v for %q on target %d", kinds, names, target)
 }
 
 func watchTestAdd(t *testing.T, w platform.FileWatch, id uint64, path string, subtree bool) {
@@ -173,13 +167,8 @@ func TestFSEventsWatch(t *testing.T) {
 	watchTestAdd(t, w, 3, child, false)
 	watchTestWrite(t, filepath.Join(child, "inside"), "one")
 	watchTestWrite(t, otherFile, "after inside")
-	for timeout := time.After(10 * time.Second); ; {
-		var n platform.FileWatchNotice
-		select {
-		case n = <-notices:
-		case <-timeout:
-			t.Fatal("no notice for file")
-		}
+	for {
+		n := wait.For(t, "a notice for file", notices)
 		if n.Target == 2 && n.Name == "child" {
 			t.Fatalf("change inside a child reported: %+v", n)
 		}
@@ -265,14 +254,10 @@ func TestFSEventsWatchManyFiles(t *testing.T) {
 		t.Skip("creates 10001 files")
 	}
 	dir := watchTestDir(t)
-	start := time.Now()
 	for i := range 10001 {
 		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file-%05d", i)), []byte("x"), 0600); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if d := time.Since(start); d > 2*time.Second {
-		t.Logf("created 10001 files in %v", d)
 	}
 	w, notices := watchTest(t)
 	watchTestAdd(t, w, 1, dir, true)

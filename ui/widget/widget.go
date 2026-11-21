@@ -215,6 +215,10 @@ func render(c *ui.Context, w Control) ui.Element {
 	b.selected = false // a build that can be selected sets it: a ToolButton only while a toggle
 	outer := styling
 	styling = b.status // the status roles resolve to the control's own, in its build and its styles
+	from := 0
+	if f := buildingForm; f != nil {
+		from = len(f.built)
+	}
 	e := w.build(c)
 	// ctl is the control in e, which takes the focus and is named and
 	// described: e itself, but where the build put a box around it.
@@ -224,7 +228,7 @@ func render(c *ui.Context, w Control) ui.Element {
 	}
 	b.el = ctl
 	if f := buildingForm; f != nil {
-		f.built = append(f.built, builtEl{w, ctl})
+		f.built = append(f.built, builtEl{w, ctl, from})
 	}
 	if fillsAcross(w) {
 		e.AlignSelf(ui.Stretch) // before the widget's own alignment, which wins
