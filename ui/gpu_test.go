@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/scene"
 	"github.com/egoist/mygo/internal/surface"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/transfer"
 )
 
@@ -558,12 +559,7 @@ func TestFramesInMemoryWaitForTheRefresh(t *testing.T) {
 	h.conn.Post = func(fn func()) { posted <- fn }
 	runPosted := func() {
 		t.Helper()
-		select {
-		case fn := <-posted:
-			fn()
-		case <-time.After(5 * time.Second):
-			t.Fatal("nothing posted to the main thread")
-		}
+		wait.For(t, "a call posted to the main thread", posted)()
 	}
 	frame := func() { h.event(platform.SurfaceEvent{Kind: platform.SurfaceFrame}) }
 	paced := func() { h.event(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: true}) }
