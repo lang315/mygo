@@ -172,7 +172,8 @@ func TestActionInASettingsRow(t *testing.T) {
 	}
 	if wide := NewTester(t, Fields().SettingsRows().Row("A", Button("+")), 400, 300).Find(ByLabel("+")).Bounds(); !approx(b.W, wide.W) {
 		t.Errorf("in a narrow card the button is %v wide, %v in a wide one", b.W, wide.W)
-	}}
+	}
+}
 
 // Case 5: before any row Action does nothing; a second replaces the first;
 // nil removes it.
