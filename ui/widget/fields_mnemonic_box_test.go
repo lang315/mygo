@@ -116,6 +116,12 @@ func TestRowKeyOfAContainerWithNothingToFocusDoesNothing(t *testing.T) {
 	if !tt.Find(ByRole(ui.RoleTextField)).Focused() {
 		t.Error("the focus left where it was")
 	}
+	// The box is no target: a row of the same key after it is the only one.
+	tt = formOf(t, Fields().Row("&Kind", box).Row("&Key", TextBox()))
+	altKey(tt, ui.KeyK)
+	if !tt.Find(ByRole(ui.RoleTextField)).Focused() {
+		t.Error("Alt+K, with a box with nothing to focus before the text box, did not focus it")
+	}
 }
 
 // Case 6: a row whose control takes the focus itself.
@@ -188,7 +194,9 @@ func TestRowKeyOfAContainerAddsNoAllocationsToAFrame(t *testing.T) {
 	}
 	leaf := frame("&K", TextBox()) - frame("K", TextBox())
 	box := frame("&K", comboPlus()) - frame("K", comboPlus())
-	if box > leaf {
-		t.Errorf("a key on a container costs %.1f allocations a frame, on a control %.1f", box, leaf)
+	// What a key costs a row is its closure and its entry, as before the
+	// fix: 2, on a control and on a container alike.
+	if box > 2 || leaf > 2 {
+		t.Errorf("a key costs %.1f allocations a frame on a container and %.1f on a control, want 2", box, leaf)
 	}
 }

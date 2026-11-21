@@ -353,7 +353,7 @@ func (w *Form) focusTarget(c Control) Control {
 			return c
 		}
 		for j := b.from; j < i; j++ {
-			if in := w.built[j]; in.from >= j && in.el.CanFocus() { // a control that holds none
+			if in := w.built[j]; in.el.CanFocus() { // a container comes after what it holds
 				return in.ctrl
 			}
 		}
@@ -363,12 +363,9 @@ func (w *Form) focusTarget(c Control) Control {
 }
 
 // focusRow focuses what the access key of a Fields row aims at, the row's
-// control c or, when it is a container, the first control in it.
-func (w *Form) focusRow(c Control) {
-	if t := w.focusTarget(c); t != nil {
-		focusLater(t)
-	}
-}
+// control c or, when it is a container, the first control in it. Its act runs
+// only for a row whose target answerMnemonics found.
+func (w *Form) focusRow(c Control) { focusLater(w.focusTarget(c)) }
 
 // focusNextAfter focuses the control nextAfter finds.
 func (w *Form) focusNextAfter(c Control) {
