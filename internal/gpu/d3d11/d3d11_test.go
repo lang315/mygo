@@ -223,17 +223,15 @@ func resizeSettles(t *testing.T, r *Renderer) {
 	user32 := syscall.NewLazyDLL("user32.dll")
 	peek, dispatch := user32.NewProc("PeekMessageW"), user32.NewProc("DispatchMessageW")
 	var msg [64]byte
-	for deadline := time.Now().Add(wait.Guard); settling[r.hwnd]; time.Sleep(time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatalf("%s: the settle timer did not fire", kind)
-		}
+	wait.Until(t, kind+": the settle timer to fire", func() bool {
 		for {
 			if ok, _, _ := peek.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 1); ok == 0 {
 				break
 			}
 			dispatch.Call(uintptr(unsafe.Pointer(&msg)))
 		}
-	}
+		return !settling[r.hwnd]
+	})
 	frame(230, 155)
 	if r.bw != 230 || r.bh != 155 || r.resizing {
 		t.Fatalf("%s: settled: buffers %dx%d, resizing %v; want 230x155 and not resizing", kind, r.bw, r.bh, r.resizing)

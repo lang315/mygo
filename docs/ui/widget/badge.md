@@ -31,6 +31,8 @@ may name the status's colors with `bg-status`, `text-status` and
 `border-status`, so one look serves every status.
 
 Assistive technology reads the badge as one text: its text, then the detail
-when it shows ("Đang chạy, Bước 2/5"). In a test,
+when it shows ("Đang chạy, Bước 2/5"). A `DataGridView` column draws its
+cells as badges with `Column.Badge` and `BadgeDetail` (see
+[DataGridView](../widget.md#datagridview)). In a test,
 `tt.Find(widget.ByRole(ui.RoleText).Label("Live"))` finds it (see
 [`widget.Tester`](tester.md)).
