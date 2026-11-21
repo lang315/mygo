@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/update"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 type updateRoundTripper func(*http.Request) (*http.Response, error)
@@ -404,14 +405,10 @@ func main() {
 	mu.Unlock()
 	if goos == "darwin" {
 		// The new bundle replaces the app's once the app has exited.
-		for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-			if staged, _ := filepath.Glob(filepath.Join(install, ".*.update-*")); len(staged) == 0 {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatal("the update was not installed once the app exited")
-			}
-		}
+		wait.Until(t, "the update to be installed once the app exited", func() bool {
+			staged, _ := filepath.Glob(filepath.Join(install, ".*.update-*"))
+			return len(staged) == 0
+		})
 	}
 	if out := run(); !strings.Contains(out, "version 1.1.0") {
 		t.Errorf("after the update the app printed:\n%s", out)
