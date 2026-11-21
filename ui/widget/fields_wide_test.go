@@ -72,6 +72,10 @@ func TestWideRowSpansTheGrid(t *testing.T) {
 	if !approx(keys.X, name.X) {
 		t.Errorf("the wide label at x %v, %q at %v", keys.X, "Tên", name.X)
 	}
+	// The label is as wide as its text, as a stacked label, not the row.
+	if keys.W > 100 {
+		t.Errorf("the wide label %v is wider than its text", keys)
+	}
 	if !approx(list.X, 0) || !approx(list.X+list.W, 400) || !approx(list.X+list.W, tb.X+tb.W) {
 		t.Errorf("the list %v, want from 0 to the text box's right edge %v (400)", list, tb.X+tb.W)
 	}
@@ -124,6 +128,16 @@ func TestWideRowWithNoLabel(t *testing.T) {
 	}
 }
 
+// The label of a wide row that has no text is held all the same: giving it
+// text redraws the window that shows the form.
+func TestWideEmptyLabelRedraws(t *testing.T) {
+	f := Fields().Row("Tên", TextBox()).Row("", Button("Thêm")).Wide()
+	_, w := showFrame(t, f)
+	redrawn := recordInvalidations(t)
+	f.Label(1).SetText("Hàng")
+	wantRedrawn(t, redrawn(), w)
+}
+
 // Case 4: a wide row's label, its description in TextMuted, then its
 // control, top to bottom, Space(1) apart; the control's description is the
 // text.
@@ -154,6 +168,13 @@ func TestWideRowDescribed(t *testing.T) {
 		if muted, text := descColors(t, g); !muted || text {
 			t.Errorf("settings %v: the description draws TextMuted %v and Text %v", settings, muted, text)
 		}
+	}
+	// A hidden label takes its description with it; the control keeps it.
+	h := Fields().Row(wideKeys, MultilineTextBox()).Wide().Describe(nameDesc)
+	h.Label(0).SetVisible(false)
+	th := NewTester(t, h, 400, 400)
+	if th.HasText(nameDesc) || descriptionOf(t, th, "") != nameDesc {
+		t.Errorf("a hidden wide label: texts %q, description %q", th.Texts(), descriptionOf(t, th, ""))
 	}
 	// Gap's column value replaces Space(1), as stacked.
 	tt := NewTester(t, Fields().Gap(4, 20).Row(wideKeys, MultilineTextBox()).Wide(), 400, 400)
@@ -217,8 +238,13 @@ func TestWideRowHeightUnderCalm(t *testing.T) {
 	}
 	f := Fields().SettingsRows().Row("", wbar("w", 60, 10)).Wide().Row("B", wbar("b", 60, 10))
 	tt := NewTester(t, f, 400, 400)
-	if w, b := find(t, tt.Tester, "w"), find(t, tt.Tester, "b"); b.Y-w.Y < least {
+	w, b := find(t, tt.Tester, "w"), find(t, tt.Tester, "b")
+	if b.Y-w.Y < least {
 		t.Errorf("the wide row is %v high, want at least SettingsRowHeight %v", b.Y-w.Y, least)
+	}
+	// The wide row's control starts the card's inside, the other ends it.
+	if w.X > b.X-100 {
+		t.Errorf("the wide control at x %v, the other at %v: want the wide one at the card's left", w.X, b.X)
 	}
 }
 
@@ -241,10 +267,16 @@ func TestWideRowHidden(t *testing.T) {
 	if ys := dividersOutside(tt.Tester, m); !tt.HasText("Keys") || len(ys) != 2 {
 		t.Errorf("shown again: texts %q, dividers %v, want Keys and 2", tt.Texts(), ys)
 	}
+	if !approx(m.X, cardLeft) || !approx(m.X+m.W, cardRight) {
+		t.Errorf("shown again, the text box %v is not across the card", m)
+	}
 
 	only := NewTester(t, Fields().SettingsRows().Row("Keys", MultilineTextBox()).Wide().Row("B", Switch().SetVisible(false)), 400, 400)
 	if n := len(cardsOf(t, only.Tester, cardX, ui.LightTheme().Border)); n != 1 {
 		t.Errorf("a card of only a wide row: %d cards, want 1", n)
+	}
+	if m := fieldBox(only, 0); !approx(m.X, cardLeft) || !approx(m.X+m.W, cardRight) {
+		t.Errorf("a card of only a wide row: the text box %v is not across it", m)
 	}
 }
 
@@ -395,10 +427,14 @@ func TestWideRowAtTextScale(t *testing.T) {
 	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
 	tt.Frame()
 	k := cardsOf(t, tt.Tester, cardX, ui.LightTheme().Border)[0]
-	for _, r := range []ui.Rect{find(t, tt.Tester, wideKeys), find(t, tt.Tester, nameDesc), fieldBox(tt, 0)} {
+	l, d, m := find(t, tt.Tester, wideKeys), find(t, tt.Tester, nameDesc), fieldBox(tt, 0)
+	for _, r := range []ui.Rect{l, d, m} {
 		if !k.inside(r) {
 			t.Errorf("%v leaves the card %+v at text scale 1.5", r, k)
 		}
+	}
+	if m.Y < d.Y+d.H || !approx(m.X, cardLeft) || !approx(m.X+m.W, cardRight) {
+		t.Errorf("at text scale 1.5 the text box %v is not under the description %v, across the card", m, d)
 	}
 }
 
@@ -407,7 +443,7 @@ func TestWideRowAtTextScale(t *testing.T) {
 func TestWideListFillsTheCard(t *testing.T) {
 	f := Fields().SettingsRows().Row("A", Switch()).Row("Members", ListBox(skinRowKey, skinRowName).SetItems(skinRows)).Wide()
 	tt := NewTester(t, f, 400, 400)
-	if b := wideList(tt);!approx(b.X, cardLeft) || !approx(b.X+b.W, cardRight) {
+	if b := wideList(tt); !approx(b.X, cardLeft) || !approx(b.X+b.W, cardRight) {
 		t.Errorf("the list %v, want from %v to %v", b, cardLeft, cardRight)
 	}
 	lv := ListView(skinRowKey, Column[skinRow]{Title: "Name", Text: skinRowName}).SetRows(skinRows)
