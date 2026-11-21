@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/protocol"
@@ -47,16 +46,12 @@ func TestDownloadEvents(t *testing.T) {
 	done := make(chan *Download, 1)
 	defer w.Page().OnDownloadDone(func(d *Download) { done <- d })()
 	onMain(func() { fw.H.SchemeDownload("dltest://localhost/export") })
-	select {
-	case d := <-done:
-		if d.Err != nil || filepath.Base(d.Path) != "data.json" {
-			t.Fatalf("download = %+v", d)
-		}
-		if b, _ := os.ReadFile(d.Path); string(b) != `{"ok":true}` {
-			t.Errorf("saved %q", b)
-		}
-	case <-time.After(wait.Guard):
-		t.Fatal("the scheme download did not finish")
+	d := wait.For(t, "the scheme download to finish", done)
+	if d.Err != nil || filepath.Base(d.Path) != "data.json" {
+		t.Fatalf("download = %+v", d)
+	}
+	if b, _ := os.ReadFile(d.Path); string(b) != `{"ok":true}` {
+		t.Errorf("saved %q", b)
 	}
 }
 
@@ -85,13 +80,9 @@ func TestDownloadSchemePanic(t *testing.T) {
 		{"dlpanic://localhost/part", filepath.Join(dir, "part.bin")},
 	} {
 		onMain(func() { fw.H.SchemeDownload(tt.url) })
-		select {
-		case d := <-done:
-			if d.Err == nil || d.Path != tt.path {
-				t.Errorf("%s: download = %+v, want an error and the path %q", tt.url, d, tt.path)
-			}
-		case <-time.After(wait.Guard):
-			t.Fatalf("%s: the download did not finish", tt.url)
+		d := wait.For(t, tt.url+": the download to finish", done)
+		if d.Err == nil || d.Path != tt.path {
+			t.Errorf("%s: download = %+v, want an error and the path %q", tt.url, d, tt.path)
 		}
 		if tt.path != "" {
 			if _, err := os.Stat(tt.path); !os.IsNotExist(err) {

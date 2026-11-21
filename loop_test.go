@@ -4,7 +4,6 @@ package mygo
 
 import (
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/wait"
 )
@@ -19,16 +18,15 @@ func TestLoopInsideQueuedFunction(t *testing.T) {
 	loop.mu.Lock()
 	first := len(loop.queue) == 0
 	loop.queue = append(loop.queue, func() {
-		for deadline := time.Now().Add(wait.Guard); time.Now().Before(deadline); {
+		waited <- wait.Poll(func() bool {
 			select {
 			case <-done:
-				waited <- true
-				return
+				return true
 			default:
 			}
 			backend().Step()
-		}
-		waited <- false
+			return false
+		})
 	}, func() { close(done) })
 	loop.mu.Unlock()
 	if first {
