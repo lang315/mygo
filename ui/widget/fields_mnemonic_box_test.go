@@ -201,6 +201,20 @@ func TestRowKeyOfAContainerAddsNoAllocationsToAFrame(t *testing.T) {
 	}
 }
 
+// Round 2: a TabControl's tab headers take the focus, so a TabControl whose
+// pages hold only labels can focus but is no target (it is no leaf): the same
+// key of a later row is the only target. A ScrollPanel's element does not take
+// the focus here, so it cannot show this.
+func TestRowKeyOfABoxWithATabControlOfOnlyLabelsIsNoTarget(t *testing.T) {
+	withMac(t, false)
+	panel := HBox(0).Add(TabControl().AddPage("p", Label("a")))
+	tt := formOf(t, Fields().Row("&Kind", panel).Row("&Key", TextBox()))
+	altKey(tt, ui.KeyK)
+	if !tt.Find(ByRole(ui.RoleTextField)).Focused() {
+		t.Error("Alt+K did not focus the text box of the second row")
+	}
+}
+
 // actionList is an empty ListBox whose empty state has a button.
 func actionList() *ListBoxWidget[litem, string] {
 	return newListBox().SetEmptyState(EmptyState("Trống", "Thêm một mục.").SetAction("Thêm", func() {})).SetSize(300, 150)
