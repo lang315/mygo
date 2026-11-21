@@ -18,9 +18,12 @@ empty := widget.EmptyState("Chưa có tài khoản", "Thêm một tài khoản �
 - `SetAction(text, do)` shows a `Suggested` button under the message, which
   runs `do` on the event goroutine; `SetAction("", nil)` removes it.
 
-Show it in place of the list or grid while that has no rows, for instance in a
-box whose content you swap, or with `SetVisible`. It fills the width of its
-box and grows along it, so give the box the height the view had.
+A `DataGridView` shows it over its body while it shows no row, under its
+headers: `grid.SetEmptyState(empty)` (see
+[DataGridView](../widget.md#datagridview)). Elsewhere, show it in place of the
+list while that has no rows, for instance in a box whose content you swap, or
+with `SetVisible`. It fills the width of its box and grows along it, so give
+the box the height the view had.
 
 A skin's [`Looks.EmptyState`](../skin.md#looks) styles its box, as `bg-chrome`
 does.

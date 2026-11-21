@@ -38,7 +38,7 @@ header. Rows below add their own.
 | [x] | NumericUpDown, DomainUpDown, RangeSpin | metric 36, state | page Numbers and dates; `TestCalmSizesWidgets`, `TestSkinDomainUpDown` |
 | [x] | DateTimePicker, MonthCalendar | metric 36, state (chosen day keeps the accent) | page Numbers and dates; `TestCalmSizesWidgets`, `TestDateTimePickerSetSizeWinsOverMetrics` |
 | [x] | TrackBar | state (thumb, track) | page Numbers and dates; `TestSentinelSkinReachesEveryPixel` |
-| [x] | Fields, SettingsRows | metric (rows), literal (lines), look (SettingsCard: a card per section, else Card's), description (`Describe`) | page Text and choices, on Chrome; `TestSentinelSkinReachesEveryPixel`, `TestSettingsCardsFramedByTheCardLook`, `TestSettingsCardsUnderCalm` |
+| [x] | Fields, SettingsRows | metric (rows), literal (lines), look (SettingsCard: a card per section, else Card's), description (`Describe`), wide row (`Wide`: a multiline box under its label, across the card) | page Text and choices, on Chrome; `TestSentinelSkinReachesEveryPixel`, `TestSettingsCardsFramedByTheCardLook`, `TestSettingsCardsUnderCalm`, `TestWideRowInACard` |
 | [x] | HBox, VBox, ButtonBox | none: layout only, the skin never moves controls | every page; `TestStudioEveryPage` |
 | [x] | Grid (layout), FlowPanel | none: layout only | page Containers; `TestStudioEveryPage` |
 | [x] | GroupBox | literal (outline, title) | page Containers; `TestSentinelSkinReachesEveryPixel` |
@@ -61,4 +61,5 @@ header. Rows below add their own.
 | [x] | Chart (line, bar, pie) | literal (series colors) | page Chart and progress; `TestChartUsesSkinColors` |
 | [x] | Badge | metric 20 (text scale), literal (status families' Subtle, Text, Base), look `Badge` | page Dialogs and messages; `TestStatusPage`, `TestBadgeCalmSuccess`, `TestBadgeRunningDetail`, `TestBadgeLook`, `TestBadgeSkinSwitch` (`ui/widget`) |
 | [x] | InfoBar | literal (Subtle, Border, Base icon), look `InfoBar` | page Dialogs and messages; `TestStatusPage`, `TestInfoBarWarning`, `TestInfoBarLook`, `TestInfoBarCloseOnlyByUser` (`ui/widget`) |
-| [x] | EmptyState | literal (TextMuted, Title role, Suggested action), look `EmptyState` | page Dialogs and messages; `TestStatusPage`, `TestEmptyState`, `TestEmptyStateLook` (`ui/widget`) |
+| [x] | EmptyState | literal (TextMuted, Title role, Suggested action), look `EmptyState` | page Dialogs and messages (over an empty grid, `SetEmptyState`); `TestStatusPage`, `TestEmptyState`, `TestEmptyStateLook`, `TestGridEmptyState` (`ui/widget`) |
+| [x] | DataGridView badge cells and formats (`Column.Badge`, `BadgeDetail`, `Format`, `SetRowFormat`) | literal (status families' Subtle and Text; HighContrast's flat statuses: Text, bold, no fill), look `Badge` | page Dialogs and messages; `TestStatusPage`, `TestGridBadgeCalm`, `TestGridFormatFillsTheBox`, `TestGridFormatFlatStatus`, `TestGridBadgeLookAndSelectedDetail` (`ui/widget`), `TestFlatStatus` (`ui/widget/skin`) |
