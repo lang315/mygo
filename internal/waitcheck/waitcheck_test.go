@@ -35,9 +35,12 @@ var instead = map[string]string{
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
 var allowed = map[string]string{
-	"cmd/mygo/console_test.go TestBannerSettles time.Sleep": "checks that no banner frame is drawn after the line; only a late frame can fail it",
-	"cmd/mygo/dev_test.go TestDevLaunch time.After":         "checks that a running build does not exit in 200 ms; only a late exit can fail it",
-	"cmd/mygo/dev_test.go TestWatcher time.After":           "checks that the watcher reports no change in 300 ms; only a late report can fail it",
+	"plugins/updater/updater_test.go TestOnChange time.After":      "no change is told when none was made: a late call can only miss a bug",
+	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep": "no second check starts at once: a slow machine can only miss a bug",
+	"plugins/updater/native/window_test.go TestFit time.After":     "the window asks for no size once it has its own: a slow machine can only miss a bug",
+	"cmd/mygo/console_test.go TestBannerSettles time.Sleep":        "checks that no banner frame is drawn after the line; only a late frame can fail it",
+	"cmd/mygo/dev_test.go TestDevLaunch time.After":                "checks that a running build does not exit in 200 ms; only a late exit can fail it",
+	"cmd/mygo/dev_test.go TestWatcher time.After":                  "checks that the watcher reports no change in 300 ms; only a late report can fail it",
 }
 
 type finding struct {
