@@ -35,9 +35,17 @@ var instead = map[string]string{
 // call" (a short time.After in a check that nothing happens, which a slow
 // machine can only make miss a bug), each with why.
 var allowed = map[string]string{
-	"plugins/updater/updater_test.go TestOnChange time.After":      "no change is told when none was made: a late call can only miss a bug",
-	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep": "no second check starts at once: a slow machine can only miss a bug",
-	"plugins/updater/native/window_test.go TestFit time.After":     "the window asks for no size once it has its own: a slow machine can only miss a bug",
+	"plugins/updater/updater_test.go TestOnChange time.After":                         "no change is told when none was made: a late call can only miss a bug",
+	"plugins/updater/updater_test.go TestCheckAtLaunch time.Sleep":                    "no second check starts at once: a slow machine can only miss a bug",
+	"plugins/updater/native/window_test.go TestFit time.After":                        "the window asks for no size once it has its own: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestIframeCannotCall time.Sleep":                        "a call forged by an iframe never runs: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestMenuLetters time.Sleep":                             "a letter that names no menu opens none: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestNewWindowBounds time.Now().Before":                  "a new window's bounds stay what it was given: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestNewWindowBounds time.Sleep":                         "a new window's bounds stay what it was given: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestSmallFixedWindow time.Sleep":                        "the page keeps its size once it has it: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestFileDrop time.After":                                "a refused drop is not told: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestVisibleOnAllWorkspacesWithoutFullScreen time.Sleep": "the window does not go full screen: a slow machine can only miss a bug",
+	"internal/e2e/e2e_test.go TestMenuActivation time.After":                          "setting an item's state from code clicks nothing: a slow machine can only miss a bug",
 }
 
 type finding struct {
