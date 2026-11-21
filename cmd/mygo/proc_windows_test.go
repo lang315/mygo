@@ -60,12 +60,7 @@ func TestKillSparesWebView2(t *testing.T) {
 	build := uint32(cmd.Process.Pid)
 	var helper, browser, renderer syscall.Handle
 	var browserPID uint32
-	for deadline := time.Now().Add(wait.Guard); helper == 0 || renderer == 0; time.Sleep(50 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			kill(cmd)
-			_ = cmd.Wait()
-			t.Fatal("the fake build's processes did not start")
-		}
+	if !wait.Poll(func() bool {
 		if helper == 0 {
 			_, helper = find(build, filepath.Base(os.Args[0]))
 		}
@@ -75,6 +70,11 @@ func TestKillSparesWebView2(t *testing.T) {
 		if browser != 0 && renderer == 0 {
 			_, renderer = find(browserPID, webviewProcess)
 		}
+		return helper != 0 && renderer != 0
+	}) {
+		kill(cmd)
+		_ = cmd.Wait()
+		t.Fatal("the fake build's processes did not start")
 	}
 
 	kill(cmd)
