@@ -225,9 +225,13 @@ func render(c *ui.Context, w Control) ui.Element {
 	ctl := e
 	if in := b.inner; in != (ui.Element{}) {
 		ctl, b.inner = in, ui.Element{}
+		from = -1 // it takes the focus itself: what it built around it is not what a key aims at
 	}
 	b.el = ctl
 	if f := buildingForm; f != nil {
+		if from < 0 {
+			from = len(f.built)
+		}
 		f.built = append(f.built, builtEl{w, ctl, from})
 	}
 	if fillsAcross(w) {
