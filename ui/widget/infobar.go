@@ -96,11 +96,11 @@ func (i *InfoBarWidget) closed() {
 	}
 }
 
-// iconOf returns the icon of the status in base, its glyph in glyph, parsed
-// once for each (kindSVG). Under mu.
-func (i *InfoBarWidget) iconOf(base, glyph ui.Color) *ui.SVG {
+// statusIcon returns the icon of status s in base, its glyph in glyph,
+// parsed once for each (kindSVG): an info bar's and a toast's.
+func statusIcon(s Status, base, glyph ui.Color) *ui.SVG {
 	k := Info
-	switch i.status {
+	switch s {
 	case StatusSuccess:
 		k = kindSuccess
 	case StatusWarning:
@@ -151,7 +151,7 @@ func (i *InfoBarWidget) build(c *ui.Context) ui.Element {
 	if border.A != 0 {
 		bar.Border(1, border)
 	}
-	icon := i.iconOf(base, glyphOn(c, i.status, base))
+	icon := statusIcon(i.status, base, glyphOn(c, i.status, base))
 	return bar.Children(func() {
 		side := 20 * scale
 		ui.Image(c, icon).Size(side, side).Shrink(0)
