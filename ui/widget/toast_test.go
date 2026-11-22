@@ -245,6 +245,7 @@ func TestToastRolesAndIcons(t *testing.T) {
 			}
 			f.ShowToast(Toast{Status: s, Title: "Exported", Message: "12 accounts", Timeout: -1})
 			tt.Frame()
+			tt.Advance(time.Second) // past the fade-in: opaque
 			c := toastCard(t, tt)
 			want := ui.RoleStatus
 			if s == StatusWarning || s == StatusDanger {
@@ -342,6 +343,7 @@ func TestToastColors(t *testing.T) {
 			tt.SetDark(look.dark)
 			f.ShowToast(Toast{Status: s, Title: "Exported", Message: "12 accounts", Timeout: -1})
 			tt.Frame()
+			tt.Advance(time.Second) // past the fade-in: opaque
 			c := toastCard(t, tt)
 			th := themeOf(look.dark)
 			fill, text, _, _ := statusColorsOf(th, s)
@@ -612,6 +614,7 @@ func TestToastOfUICode(t *testing.T) {
 	})))
 	NewForm("Other", 400, 300).ShowToast(Toast{Title: "Elsewhere"})
 	tt.Frame()
+	tt.Advance(time.Second) // past the fade-in: opaque
 	c := toastCard(t, tt)
 	th := themeOf(false)
 	fill, _, _, _ := statusColorsOf(th, StatusNone)
@@ -656,6 +659,7 @@ func TestToastContrast(t *testing.T) {
 			tt.SetDark(true)
 			f.ShowToast(Toast{Status: s, Title: "Exported", Message: "12 accounts", Timeout: -1})
 			tt.Frame()
+			tt.Advance(time.Second) // past the fade-in: opaque
 			_, text, _, _ := statusColorsOf(themeOf(true), s)
 			if r := contrastOf(text, toastFill(tt, toastCard(t, tt))); r < 4.5 {
 				t.Errorf("%q dark, %v: the text %v is %.2f:1 on the fill", name, s, text, r)
@@ -704,6 +708,8 @@ func TestToastFrameAllocs(t *testing.T) {
 		t.Errorf("with the hook set and no toast a frame allocates %v, want %v", hooked, plain)
 	}
 	f.ShowToast(Toast{Status: StatusSuccess, Title: "Exported", Message: "12 accounts", Action: "Undo", Timeout: -1})
+	tt.Frame()
+	tt.Advance(time.Second) // past the fade-in: at rest, as ui's below
 	toasted := toastFrameAllocs(tt.Tester)
 	if len(cards(tt)) != 1 {
 		t.Fatal("no toast")

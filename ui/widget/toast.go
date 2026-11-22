@@ -134,7 +134,7 @@ func buildToast(c *ui.Context, t ui.Toast, width float32) {
 	fill, text, border, base := statusColors(c, s)
 	p := ui.ToastBase(c, t)
 	card := p.Root.Row().AlignItems(ui.Start).Gap(th.Space(3)).Padding(th.Space(3)).MaxWidth(width).Radius(th.Radius).
-		Background(fill.Over(th.Surface)).TextColor(text).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.25))
+		Background(fill.Over(th.Surface)).TextColor(text).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.25)).Opacity(p.Fade())
 	if s == StatusWarning || s == StatusDanger {
 		card.Role(ui.RoleAlert)
 	}
