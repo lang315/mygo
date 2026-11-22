@@ -25,12 +25,10 @@ type LookUpEditWidget[T any, K comparable] struct {
 	input    mirror[string]
 	onSelect func(k K, ok bool)
 	// What only the drawing thread touches, under mu while building: the
-	// context and the combobox of the build, whether the input had the
-	// focus in the last one, the records the popup shows, and the
-	// functions handed to ui, made once.
+	// context and the combobox of the build, the records the popup shows,
+	// and the functions handed to ui, made once.
 	c        *ui.Context
 	cb       ui.ComboboxParts
-	focused  bool
 	shown    []int
 	children func()
 	popup    func(panel ui.Element)
@@ -185,14 +183,12 @@ func (l *LookUpEditWidget[T, K]) buildField() {
 	l.inner = in
 	l.cb.Popup(l.popup)
 	if v, ok := l.cb.Chosen(); ok {
-		if i, err := strconv.Atoi(v); err == nil && i < len(l.items) {
-			l.pick(i)
-		}
+		i, _ := strconv.Atoi(v) // one of l.ids: this build's Items
+		l.pick(i)
 	}
 	// Leaving the field puts the chosen record's text back: a free text is
 	// never a value. Leaving it emptied chooses none.
-	focused := in.Focused()
-	if l.focused && !focused {
+	if in.FocusLeft() {
 		switch {
 		case strings.TrimSpace(*p) == "":
 			l.pick(-1)
@@ -202,7 +198,6 @@ func (l *LookUpEditWidget[T, K]) buildField() {
 			l.show("")
 		}
 	}
-	l.focused = focused
 	ui.Icon(c, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Margin(0, t.Space(3), 0, 0)
 }
 
@@ -213,11 +208,9 @@ func (l *LookUpEditWidget[T, K]) buildPopup(panel ui.Element) {
 	c, t := l.c, l.c.Theme()
 	comboPanel(c, panel)
 	scale := c.Preferences().TextScale
-	if scale <= 0 {
-		scale = 1
-	}
 	pad, gap, flexMin := t.Space(2.5), t.Space(2), t.Space(15) // flexMin: the grid's least width of a shared column
-	// As wide as its columns need, and at least as the field (ui's MinWidth).
+	// As wide as its columns need, and at least as the field (ui's MinWidth,
+	// which wins over Width).
 	need := 2*(t.Space(1)+pad) + 2
 	for i, col := range l.cols {
 		if i > 0 {
@@ -228,9 +221,6 @@ func (l *LookUpEditWidget[T, K]) buildPopup(panel ui.Element) {
 		} else {
 			need += max(col.MinWidth*scale, flexMin)
 		}
-	}
-	if b := l.cb.Input.Bounds(); b.W > need {
-		need = b.W
 	}
 	if len(l.cols) > 0 {
 		panel.Width(need) // a long text clips in its cell, rather than widening every row

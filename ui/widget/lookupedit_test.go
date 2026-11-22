@@ -125,7 +125,7 @@ func wantSelected(t *testing.T, l *LookUpEditWidget[cust, int], k int, ok bool) 
 // Case 1.
 func TestLookUpEditOpensColumns(t *testing.T) {
 	l := custLookUp()
-	tt, th := lookTester(t, l)
+	tt, _ := lookTester(t, l)
 	lookField(tt).Click()
 	if !lookOpen(tt) {
 		t.Fatal("a click on the field did not open the drop-down")
@@ -178,7 +178,96 @@ func TestLookUpEditOpensColumns(t *testing.T) {
 	if !within(code.W, semi, 0.5) {
 		t.Errorf("the title Code is %v wide, semibold is %v, regular %v", code.W, semi, regular)
 	}
-	_ = th
+}
+
+// Case 1, a field wider than its columns need: the drop-down is as wide.
+func TestLookUpEditAsWideAsTheField(t *testing.T) {
+	tt, _ := lookTester(t, custLookUp().SetSize(380, 0))
+	in := lookField(tt).Click().Bounds()
+	if in.W < 300 {
+		t.Fatalf("the input is %v wide: the case wants a field wider than the columns' %v", in.W, 60+80+space(15))
+	}
+	if list := tt.Find(ByRole(ui.RoleList)).Bounds(); list.W < in.W {
+		t.Fatalf("the drop-down is %v wide, narrower than the field's %v", list.W, in.W)
+	}
+}
+
+// Align and MinWidth: a column of Align End ends its text at its cell's
+// end, and a shared column is at least its MinWidth wide.
+func TestLookUpEditAlignAndMinWidth(t *testing.T) {
+	cols := custCols()
+	cols[1].MinWidth = 200
+	cols[2].Align = End
+	tt, _ := lookTester(t, LookUpEdit(custKey, custName, cols...).SetItems(custs()))
+	lookField(tt).Click()
+	name, city, hue := textAt(t, tt, "Name"), textAt(t, tt, "City"), textAt(t, tt, "Hue")
+	first := lookRows(tt)[1].Bounds()
+	end := first.X + first.W - space(2.5)
+	if !within(hue.X+hue.W, end, 1) || !within(city.X+city.W, end, 1) {
+		t.Errorf("Hue ends at %v and City at %v, want both at the row's end %v", hue.X+hue.W, city.X+city.W, end)
+	}
+	if w := end - 80 - space(2) - name.X; w < 200-0.5 {
+		t.Errorf("Name is %v wide, less than its MinWidth 200", w)
+	}
+}
+
+// With no column the drop-down is as wide as its texts, not the field.
+func TestLookUpEditNoColumnsFitsTheText(t *testing.T) {
+	long := "A customer name longer than the field"
+	items := custs()
+	items[1].Name = long
+	tt, _ := lookTester(t, LookUpEdit(custKey, custName).SetItems(items).SetSize(160, 0))
+	lookField(tt).Click()
+	list, r := tt.Find(ByRole(ui.RoleList)).Bounds(), textAt(t, tt, long)
+	if r.X+r.W > list.X+list.W {
+		t.Fatalf("the text ends at %v, past the drop-down's end %v", r.X+r.W, list.X+list.W)
+	}
+}
+
+// Leaving the field is the focus leaving it: a form fitting itself to its
+// content (SetSize(w, 0)) measures it again, which keeps what is typed.
+func TestLookUpEditRefitKeepsTyping(t *testing.T) {
+	calmOff()
+	var p picks
+	l := custLookUp().SetSelected(1).OnSelect(p.add)
+	f := NewForm("m", 400, 300)
+	f.SetContent(VBox(0).Add(l, Button("Other")))
+	tt := TestForm(t, f)
+	tt.Settle()
+	in := lookField(tt).Click()
+	lookKeys(tt, ui.KeyEnd)
+	lookType(tt, "xy")
+	f.SetSize(420, 0)
+	tt.Frame()
+	tt.Settle()
+	if v := in.Value(); v != "Acmexy" {
+		t.Fatalf("after the refit the field holds %q, want Acmexy", v)
+	}
+	lookKeys(tt, ui.KeyBackspace, ui.KeyBackspace, ui.KeyBackspace, ui.KeyBackspace, ui.KeyBackspace, ui.KeyBackspace)
+	f.SetSize(400, 0)
+	tt.Frame()
+	tt.Settle()
+	wantSelected(t, l, 1, true)
+	if got := p.all(t); len(got) != 0 {
+		t.Fatalf("the refits ran OnSelect: %v", got)
+	}
+}
+
+// SetItems renaming the chosen record while the user types keeps what is
+// typed.
+func TestLookUpEditSetItemsKeepsTyping(t *testing.T) {
+	l := custLookUp().SetSelected(1)
+	tt, _ := lookTester(t, l)
+	f := lookField(tt).Click()
+	lookKeys(tt, ui.KeyEnd)
+	lookType(tt, "xy")
+	items := custs()
+	items[0].Name = "Acme Ltd"
+	l.SetItems(items)
+	tt.Settle()
+	if v := f.Value(); v != "Acmexy" {
+		t.Fatalf("SetItems replaced the typed text with %q", v)
+	}
 }
 
 // Case 2.
@@ -621,6 +710,26 @@ func TestLookUpEditTextScale(t *testing.T) {
 		if c := img.RGBAAt(x, y); !near(c, bg) {
 			t.Fatalf("the long name draws %v at (%d, %d), in the gap before City", c, x, y)
 		}
+	}
+}
+
+// Review Focus 1, the field at the window's right edge: the drop-down,
+// wider than it, stays inside the window.
+func TestLookUpEditAtTheRightEdge(t *testing.T) {
+	l := custLookUp().SetSize(160, 0)
+	tt, _ := lookTester(t, HBox(0).Pack(Label(""), true, true).Add(l))
+	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
+	tt.Settle()
+	in := lookField(tt).Click().Bounds()
+	if in.X+in.W < 360 { // the chevron follows it
+		t.Fatalf("the input ends at %v: the case wants it at the window's right edge", in.X+in.W)
+	}
+	list := tt.Find(ByRole(ui.RoleList)).Bounds()
+	if list.W < (60+80)*1.5+space(15) {
+		t.Fatalf("the drop-down is %v wide, less than its columns", list.W)
+	}
+	if list.X < 0 || list.X+list.W > 400 {
+		t.Fatalf("the drop-down spans %v to %v, outside the window's 0 to 400", list.X, list.X+list.W)
 	}
 }
 
