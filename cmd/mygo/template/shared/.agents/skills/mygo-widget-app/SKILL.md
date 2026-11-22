@@ -75,6 +75,28 @@ func pane(show func(key string)) widget.Control {
 - `widget.NavBarWidget.OnSelect(fn)` runs on the event goroutine with the key the user selected, once per change; `widget.NavBarWidget.SetSelected(key)` does not run it. `widget.NavBarWidget.Selected` reads the key, "" for none.
 - `widget.NavBarWidget.SetGroupOpen(i, open)` and `widget.NavBarWidget.GroupOpen(i)` take a group's index in the order added. The selected item takes the skin's `RowSelected` colors. Read `docs/ui/widget/navbar.md`.
 
+## Document tabs
+
+For documents the user opens and closes in tabs (editors, invoices, customer records), use `widget.TabControl()` with `widget.TabControlWidget.SetClosable(true)`: an x on each tab, a middle click and Ctrl+F4 close a page, and Ctrl+Tab and Ctrl+Shift+Tab switch. Do not build tabs with close buttons from an `HBox` of buttons.
+
+```go
+package app
+
+import "github.com/egoist/mygo/ui/widget"
+
+func documents(form *widget.Form) *widget.TabControlWidget {
+	tabs := widget.TabControl().SetClosable(true).
+		OnPageClosing(func(page widget.Control) bool {
+			return widget.Confirm(form, widget.Question, "Close", "Discard the changes?")
+		})
+	tabs.AddPage("Invoice 1042", widget.MultilineTextBox())
+	return tabs
+}
+```
+
+- `widget.TabControlWidget.OnPageClosing(fn)` runs on the event goroutine with the page before it closes; `false` keeps it. `widget.Confirm` may block there.
+- A closed page goes as `widget.TabControlWidget.RemovePage` takes it out; `widget.TabControlWidget.OnSwitch` runs when the page shown closes, and on Ctrl+Tab. Read `docs/ui/widget.md` (TabControl).
+
 ## Binding
 
 Bind a control to a value kept elsewhere instead of pairing `SetText` with `OnChange`:

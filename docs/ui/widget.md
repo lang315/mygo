@@ -1191,6 +1191,30 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   first, if it was the first). The tab with the keyboard focus keeps it; if its
   page goes, the tab now shown takes it. As
   `SetPage` does, none of them runs `OnSwitch`: the app made the change.
+  `SetClosable(true)` makes the tabs documents' tabs, as DevExpress's tabbed
+  document manager: an x on each tab, a middle click on a tab, and Ctrl+F4
+  anywhere in the control close a page (Ctrl+F4 the page shown);
+  Ctrl+Tab and Ctrl+Shift+Tab show the next and the previous page, wrapping,
+  and run `OnSwitch`. The x takes no focus and a tab reads as its label alone,
+  so Ctrl+F4 is the way to close for the keyboard and screen readers.
+  `OnPageClosing(fn)` runs `fn` on the event goroutine with the page before it
+  closes; `false` keeps it, so `fn` may ask with `Confirm`:
+
+  ```go
+  tabs := widget.TabControl().SetClosable(true).
+  	OnPageClosing(func(page widget.Control) bool {
+  		return widget.Confirm(form, widget.Question, "Close", "Discard the changes?")
+  	})
+  ```
+
+  A page the user closes goes as `RemovePage` takes it out, found by its tab,
+  not its index, whatever was added or removed meanwhile; when it is the page
+  shown, `OnSwitch` runs. Without a skin's `TabHeader` look the tabs look like
+  documents' (the one shown filled as the page, with a line on its top and
+  sides, and no accent); with one they take it, with the x. `SetClosable(false)`
+  takes the x and the keys away. Not done: reordering tabs by drag, a menu of
+  the tabs past the strip's width (the strip clips them), Ctrl+W and Cmd+W
+  (the default menu's Close Window), and tabs floated out to windows.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
   `Remove`, `Selected`, `Select`, `SetMenuWidth`.
 - `NavBar()`: a side panel of groups that open and close, each holding items
