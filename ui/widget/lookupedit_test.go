@@ -223,9 +223,13 @@ func TestLookUpEditNoColumnsFitsTheText(t *testing.T) {
 	items[1].Name = long
 	tt, _ := lookTester(t, LookUpEdit(custKey, custName).SetItems(items).SetSize(160, 0))
 	lookField(tt).Click()
-	list, r := tt.Find(ByRole(ui.RoleList)).Bounds(), textAt(t, tt, long)
-	if r.X+r.W > list.X+list.W {
-		t.Fatalf("the text ends at %v, past the drop-down's end %v", r.X+r.W, list.X+list.W)
+	// The text's own width, measured apart: the box Find gives is laid out
+	// at its parent's width.
+	ref := ui.NewTester(func(c *ui.Context) { ui.Row(c).Children(func() { ui.Text(c, long) }) }, 600, 100)
+	natural, _ := ref.Find(long)
+	list := tt.Find(ByRole(ui.RoleList)).Bounds()
+	if need := natural.W + 2*space(2.5) + 2*space(1); list.W < need-0.5 {
+		t.Fatalf("the drop-down is %v wide, less than its text's %v and padding (%v)", list.W, natural.W, need)
 	}
 }
 
@@ -747,9 +751,11 @@ func TestLookUpEditSettersFromAnotherGoroutine(t *testing.T) {
 
 // Review Focus 1.
 func TestLookUpEditTextScale(t *testing.T) {
-	long := "A customer name far too long for its column"
+	// No spaces, so that no gap between words lands where the test looks.
+	long := "Acustomernamefartoolongforitscolumn"
 	items := custs()
 	items[0].Name = long
+	items[0].Code = "C0123456789ABCDEFGHIJ"
 	l := LookUpEdit(custKey, custName, custCols()...).SetItems(items).SetSize(160, 0)
 	tt, th := lookTester(t, l)
 	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
@@ -763,7 +769,7 @@ func TestLookUpEditTextScale(t *testing.T) {
 	if list.X < 0 || list.X+list.W > 400 || list.Y < 0 || list.Y+list.H > 300 {
 		t.Errorf("the drop-down at %v leaves the window of 400 by 300", list)
 	}
-	code, city, first := textAt(t, tt, "C01"), textAt(t, tt, "Hanoi"), lookRows(tt)[0].Bounds()
+	code, city, first := textAt(t, tt, "Code"), textAt(t, tt, "Hanoi"), lookRows(tt)[0].Bounds()
 	name := textAt(t, tt, "Name")
 	if got := name.X - code.X; !within(got, 60*1.5+space(2), 1) {
 		t.Errorf("Name starts %v after Code, want 90 and the gap", got)
@@ -771,17 +777,30 @@ func TestLookUpEditTextScale(t *testing.T) {
 	if end := first.X + first.W - space(2.5); !within(city.X, end-80*1.5, 1) {
 		t.Errorf("City starts at %v, want 120 before the row's end %v", city.X, end)
 	}
-	// The long name, wider than its cell, is laid out at the cell's width
-	// (ui's single-line text clips there), and draws nothing in the gap
-	// before City.
+	// The long code and name, wider than their cells (one fixed, one
+	// shared), are laid out at their cells' widths and draw nothing in the
+	// gaps after them.
 	if r := textAt(t, tt, long); !within(r.X+r.W, city.X-space(2), 1) {
 		t.Fatalf("the long name's box ends at %v, want its cell's end %v", r.X+r.W, city.X-space(2))
 	}
 	img, bg := tt.Image(), th.Background
-	for x := int(city.X - space(2) + 1); x < int(city.X-1); x++ {
+	inked := false
+	// ui cuts a single-line text at a glyph's edge: its ink ends within a
+	// glyph of its cell's end.
+	for x := int(name.X - space(2) - 20); x < int(name.X-space(2)); x++ {
 		for y := int(first.Y + 2); y < int(first.Y+first.H-2); y++ {
-			if c := img.RGBAAt(x, y); !near(c, bg) {
-				t.Fatalf("the long name draws %v at (%d, %d), in the gap before City", c, x, y)
+			inked = inked || !near(img.RGBAAt(x, y), bg)
+		}
+	}
+	if !inked {
+		t.Fatal("the long code draws nothing at its cell's end: the case cannot see it clip")
+	}
+	for _, gapEnd := range []float32{name.X, city.X} {
+		for x := int(gapEnd - space(2) + 1); x < int(gapEnd-1); x++ {
+			for y := int(first.Y + 2); y < int(first.Y+first.H-2); y++ {
+				if c := img.RGBAAt(x, y); !near(c, bg) {
+					t.Fatalf("a long text draws %v at (%d, %d), in the gap before %v", c, x, y, gapEnd)
+				}
 			}
 		}
 	}
@@ -947,6 +966,34 @@ func TestLookUpEditEmpty(t *testing.T) {
 	wantSelected(t, l, 1, true)
 	if got := p.all(t); !slices.Equal(got, []pick{{1, true}}) {
 		t.Fatalf("OnSelect ran %v", got)
+	}
+}
+
+// SetItems reordering or shrinking the records while the arrows are on a
+// later one, with no frame between: Enter chooses no other record, and
+// nothing panics.
+func TestLookUpEditEnterAfterSetItemsShrinks(t *testing.T) {
+	c := custs()
+	reversed := []cust{c[2], c[1], c[0]}
+	// The arrows are on Acorn (ID 3): Enter may choose it, if it is still a
+	// record, or nothing; never another record.
+	for _, keep := range [][]cust{reversed, c[:1], nil} {
+		var p picks
+		l := custLookUp().OnSelect(p.add)
+		tt, _ := lookTester(t, l)
+		lookField(tt).Click()
+		lookKeys(tt, ui.KeyDown, ui.KeyDown, ui.KeyDown)
+		l.SetItems(keep)
+		tt.Tester.Key(0, ui.KeyEnter)
+		tt.Settle()
+		if k, ok := l.Selected(); ok && k != 3 {
+			t.Fatalf("with %d records set, Enter chose %v", len(keep), k)
+		}
+		for _, g := range p.all(t) {
+			if g.ok && g.k != 3 {
+				t.Fatalf("with %d records set, OnSelect ran with %v", len(keep), g)
+			}
+		}
 	}
 }
 

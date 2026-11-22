@@ -20,7 +20,8 @@ type LookUpEditWidget[T any, K comparable] struct {
 	cols     []Column[T] // the columns shown: those not Hidden
 	heads    bool        // a column has a title: the header shows
 	items    []T
-	ids      []string // each record's value in ui's combobox: its index, made when the items are set
+	ids      []string // each record's value in ui's combobox: gen, a dot and its index, made when the items are set
+	gen      int      // how many times the items were set: a choice of ids made before is stale
 	sel      int      // the index of the chosen record, -1 for none
 	input    mirror[string]
 	onSelect func(k K, ok bool)
@@ -64,8 +65,11 @@ func (l *LookUpEditWidget[T, K]) SetItems(items []T) *LookUpEditWidget[T, K] {
 			k, was = l.key(&l.items[l.sel]), l.text(&l.items[l.sel])
 		}
 		l.items, l.sel = items, -1
-		for len(l.ids) < len(items) {
-			l.ids = append(l.ids, strconv.Itoa(len(l.ids)))
+		l.gen++
+		g := strconv.Itoa(l.gen) + "."
+		l.ids = make([]string, len(items)) // new strings: ui may still hold the old ones
+		for i := range l.ids {
+			l.ids[i] = g + strconv.Itoa(i)
 		}
 		if had {
 			l.sel = l.index(k)
@@ -183,8 +187,13 @@ func (l *LookUpEditWidget[T, K]) buildField() {
 	l.inner = in
 	l.cb.Popup(l.popup)
 	if v, ok := l.cb.Chosen(); ok {
-		i, _ := strconv.Atoi(v) // one of l.ids: this build's Items
-		l.pick(i)
+		// ui may choose among the options of the last frame: one of items
+		// set since names a record that moved or went, and chooses nothing.
+		g, idx, _ := strings.Cut(v, ".")
+		if gen, _ := strconv.Atoi(g); gen == l.gen {
+			i, _ := strconv.Atoi(idx)
+			l.pick(i)
+		}
 	}
 	// Leaving the field puts the chosen record's text back: a free text is
 	// never a value. Leaving it emptied chooses none.
@@ -222,7 +231,9 @@ func (l *LookUpEditWidget[T, K]) buildPopup(panel ui.Element) {
 			need += max(col.MinWidth*scale, flexMin)
 		}
 	}
-	panel.Width(need) // a long text clips in its cell, rather than widening every row; a row of text alone keeps its own width
+	if len(l.cols) > 0 {
+		panel.Width(need) // a long text clips in its cell, rather than widening every row
+	}
 
 	l.shown = l.matching(strings.ToLower(strings.TrimSpace(l.input.shown))) // the input's text, as ui edits it
 	if len(l.shown) == 0 {
