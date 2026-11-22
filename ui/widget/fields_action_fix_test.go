@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -181,6 +182,23 @@ func TestLabelAlignEmptyOrHiddenBesideAnAction(t *testing.T) {
 		tt := NewTester(t, f, 400, 400)
 		if k := linkBox(tt); !approx(k.X+k.W, 400) {
 			t.Errorf("%s: the link %v, want it at the right edge", name, k)
+		}
+	}
+}
+
+// B: a frame of rows whose labels have an Align beside an action allocates
+// nothing.
+func TestLabelAlignBesideAnActionAllocatesNothing(t *testing.T) {
+	for range 300 {
+		Label("")
+	}
+	for name, lay := range fieldsKinds {
+		f := actionForm(lay, func() Control { return Button("+") })
+		for i := range 20 {
+			f.Label(i).Align(Center)
+		}
+		if n := allocrun.Least(30, builtFrame(f)); n != 0 {
+			t.Errorf("%s: %v allocations in a frame, want 0", name, n)
 		}
 	}
 }
