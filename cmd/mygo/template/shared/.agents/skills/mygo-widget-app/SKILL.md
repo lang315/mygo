@@ -49,6 +49,32 @@ func main() {
 - `SetVisible(false)` hides a control and frees its room (and its `Fields` label).
 - Show a state with a `widget.Status` (`widget.StatusNone`, `widget.StatusInfo`, `widget.StatusRunning`, `widget.StatusSuccess`, `widget.StatusWarning`, `widget.StatusDanger`), not a hand-made pill or card: `widget.Badge(text)` with `widget.BadgeWidget.SetStatus` (a running one's step goes in `widget.BadgeWidget.SetDetail`); `widget.InfoBar(status, title, message)` for a message in the page, with `widget.InfoBarWidget.SetAction`, `widget.InfoBarWidget.SetClosable` and `widget.InfoBarWidget.OnClose`; `widget.EmptyState(title, message)` where a list has no rows, with `widget.EmptyStateWidget.SetAction` (a grid shows it over its body with `widget.DataGridViewWidget.SetEmptyState`, a list with `widget.ListViewWidget.SetEmptyState` and `widget.ListBoxWidget.SetEmptyState`). The skin colors them.
 
+## Navigation pane
+
+For the left pane of an app ("Mail / Contacts", "Settings / Reports"), use `widget.NavBar()`: groups that open and close, each holding items of an icon and a text, one selected. Do not build one from buttons in a `VBox`, or from a `TreeView`.
+
+```go
+package app
+
+import "github.com/egoist/mygo/ui/widget"
+
+func pane(show func(key string)) widget.Control {
+	nav := widget.NavBar().
+		AddGroup("Mail").
+		AddItem("inbox", "Inbox", nil).
+		AddItem("sent", "Sent", nil).
+		AddGroup("Contacts").
+		AddItem("people", "People", nil).
+		SetSelected("inbox").
+		OnSelect(show)
+	return widget.HBox(0).Add(nav.SetSize(220, 0), widget.Label("Page"))
+}
+```
+
+- `widget.NavBarWidget.AddItem(key, text, icon)` adds to the last group (`icon` is a `*ui.SVG`, or nil); before any group it goes into a group with no header. A key given twice panics.
+- `widget.NavBarWidget.OnSelect(fn)` runs on the event goroutine with the key the user selected, once per change; `widget.NavBarWidget.SetSelected(key)` does not run it. `widget.NavBarWidget.Selected` reads the key, "" for none.
+- `widget.NavBarWidget.SetGroupOpen(i, open)` and `widget.NavBarWidget.GroupOpen(i)` take a group's index in the order added. The selected item takes the skin's `RowSelected` colors. Read `docs/ui/widget/navbar.md`.
+
 ## Binding
 
 Bind a control to a value kept elsewhere instead of pairing `SetText` with `OnChange`:
