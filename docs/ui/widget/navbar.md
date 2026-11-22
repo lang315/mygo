@@ -40,12 +40,14 @@ nav := widget.NavBar().
   an item, Up and Down move the focus to the item before or after it in its
   group, stopping at its ends. `Focus()`, and the access key of a `Fields` row
   holding the NavBar (`Row("&Go", nav)`), focus the first header.
-- A selected item fills with the theme's `RowSelected` and its text takes
+- A selected item is ui's selected row (`Element.Selected`), as a list's: it
+  fills with the theme's `RowSelected` and its text and icon take
   `RowSelectedText` (`Text` when zero); a theme that sets no `RowSelected`
-  gives the accent and `AccentText`, as ui's lists do. A hovered item fills
-  with `RowHover`, or `SurfaceHover` where that is zero. Skins reach the
-  NavBar through these tokens: HighContrast inverts the selected text. The
-  selected item is the current page for screen readers (`ui.CurrentPage`).
+  gives the accent and `AccentText`, the accent faded in a window not drawn
+  as active. A hovered item fills with `RowHover`, or `SurfaceHover` where
+  that is zero. Skins reach the NavBar through these tokens: HighContrast
+  inverts the selected text. Screen readers get the selected item as the
+  current page (`ui.CurrentPage`) and as checked, a pressed button.
 - The headers show their title in semibold, on the theme's `Surface` with a
   line under it, and a chevron at the end that turns as the group opens. A
   long title or text wraps inside the bar.

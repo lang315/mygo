@@ -203,6 +203,15 @@ func TestNavBarOneCurrent(t *testing.T) {
 	if c := currents(tt); !slices.Equal(c, []string{"People"}) {
 		t.Fatalf("current %q, want People alone", c)
 	}
+	// ui's Selected on a button, which an item is, reaches screen readers as
+	// Checked (pressed), beside Current; not as Selected, which ui gives only
+	// to tabs, tree items and the rows of lists, tables and grids.
+	if p, _ := tt.AccessByRole(ui.RoleButton, "People"); !p.Checked || p.Selected {
+		t.Errorf("People for screen readers: Checked %v Selected %v, want Checked alone", p.Checked, p.Selected)
+	}
+	if p, _ := tt.AccessByRole(ui.RoleButton, "Inbox"); p.Checked {
+		t.Errorf("Inbox is still checked for screen readers")
+	}
 	bg, _ := navSelected(th)
 	if got := rowFill(tt, "People"); !near(got, bg) {
 		t.Errorf("People fills with %v, want the selected fill %v", got, bg)
@@ -301,6 +310,79 @@ func TestNavBarSelectedAndHoverColors(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Round 1: the selected item is ui's selected row, as a ui list's, which
+// fades to InactiveAccent in a window not drawn as active where the theme
+// sets no RowSelected, and stays where a skin sets one. Its icon takes the
+// row's text color.
+func TestNavBarSelectedFadesInAnInactiveWindow(t *testing.T) {
+	for _, skin := range []string{"", "Calm"} {
+		name := skin
+		if name == "" {
+			name = "none"
+		}
+		t.Run(name, func(t *testing.T) {
+			if skin != "" {
+				useSkinNamed(t, skin, false)
+			} else {
+				calmOff()
+			}
+			th := new(ui.Theme)
+			keep := Custom(func(c *ui.Context) ui.Element { *th = *c.Theme(); return ui.Box(c) })
+			// A row ui shows selected, as its lists' rows.
+			ref := Custom(func(c *ui.Context) ui.Element {
+				return ui.Row(c).Selected(true).Padding(8).Children(func() { ui.Text(c, "Ref") })
+			})
+			tt := NewTester(t, VBox(0).Add(keep, ref, mailBar().SetSelected("inbox")), 240, 400)
+			tt.Settle()
+			refFill := func() color.RGBA {
+				r, ok := tt.Tester.Find("Ref")
+				if !ok {
+					t.Fatal("no Ref row")
+				}
+				return tt.Image().RGBAAt(int(r.X-4), int(r.Y+r.H/2))
+			}
+			active := rowFill(tt, "Inbox")
+			if want := refFill(); !near(active, ui.Color{R: want.R, G: want.G, B: want.B, A: 255}) {
+				t.Fatalf("active: the selected item fills with %v, ui's selected row with %v", active, want)
+			}
+			tt.SetWindowActive(false)
+			tt.Settle()
+			got, want := rowFill(tt, "Inbox"), refFill()
+			if !near(got, ui.Color{R: want.R, G: want.G, B: want.B, A: 255}) {
+				t.Errorf("inactive: the selected item fills with %v, ui's selected row with %v", got, want)
+			}
+			if skin == "" && near(got, th.Accent) {
+				t.Errorf("inactive with no skin: the selected item keeps the full accent %v", got)
+			}
+			if skin != "" && got != active {
+				t.Errorf("inactive under %s: the fill moved from %v to %v; its RowSelected stays", skin, active, got)
+			}
+			// The icon's ink is the selected text color, not Text.
+			tt.SetWindowActive(true)
+			tt.Settle()
+			bg, fg := navSelected(th)
+			alt := th.Text
+			if fg == th.Text {
+				alt = th.Background
+			}
+			b := item(tt, "Inbox").Bounds()
+			x0, side := int(b.X+space(5)), 16
+			var ink color.RGBA
+			far := -1
+			for y := int(b.Y + b.H/2 - 8); y < int(b.Y+b.H/2+8); y++ {
+				for x := x0; x < x0+side; x++ {
+					if c := tt.Image().RGBAAt(x, y); dist(c, bg) > far {
+						ink, far = c, dist(c, bg)
+					}
+				}
+			}
+			if dist(ink, fg) >= dist(ink, alt) {
+				t.Errorf("the selected item's icon inks %v, nearer %v than %v", ink, alt, fg)
+			}
+		})
 	}
 }
 

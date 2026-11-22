@@ -170,20 +170,18 @@ func (n *NavBarWidget) items(c *ui.Context, g *navGroup) ui.Element {
 	for _, it := range g.items {
 		e := ui.ButtonBase(c).Justify(ui.Start).AlignItems(ui.Center).Gap(t.Space(2)).
 			Padding(t.Space(1.5), t.Space(3)).PaddingStart(t.Space(5))
-		fg := t.Text
 		switch {
 		case it.key == n.selected && n.selected != "": // "" is none, even for an item of key ""
-			var bg ui.Color
-			bg, fg = rowSelected(t)
-			e.Background(bg).Current(ui.CurrentPage)
+			// ui's selected row: RowSelected, else the accent, faded in a window not drawn as active.
+			e.Selected(true).Current(ui.CurrentPage)
 		case e.Hovered():
 			e.Background(rowHover(t))
 		}
-		e.TextColor(fg).OnClick(it.click)
+		e.OnClick(it.click)
 		e.Children(func() {
 			// Every item keeps the icon's room, so that the texts line up.
 			if it.icon != nil {
-				ui.Icon(c, it.icon).FontSize(side).Size(side, side).TextColor(fg)
+				ui.Icon(c, it.icon).FontSize(side).Size(side, side)
 			} else {
 				ui.Box(c).Size(side, side)
 			}
@@ -208,20 +206,6 @@ func (n *NavBarWidget) items(c *ui.Context, g *navGroup) ui.Element {
 		return ui.Element{}
 	}
 	return n.rows[0]
-}
-
-// rowSelected is the fill of a selected row and its text: the theme's
-// RowSelected and RowSelectedText (Text when zero), or where it sets no
-// RowSelected the accent and AccentText, as ui's lists and sidebars take.
-func rowSelected(t *ui.Theme) (bg, fg ui.Color) {
-	if t.RowSelected.A == 0 {
-		return t.Accent, t.AccentText
-	}
-	fg = t.RowSelectedText
-	if fg.A == 0 {
-		fg = t.Text
-	}
-	return t.RowSelected, fg
 }
 
 // rowHover is the fill of a row under the pointer: RowHover, else
