@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // cust is the record of the cases.
@@ -196,12 +197,16 @@ func TestLookUpEditAsWideAsTheField(t *testing.T) {
 // end, and a shared column is at least its MinWidth wide.
 func TestLookUpEditAlignAndMinWidth(t *testing.T) {
 	cols := custCols()
+	cols[0].Align = Center
 	cols[1].MinWidth = 200
 	cols[2].Align = End
 	tt, _ := lookTester(t, LookUpEdit(custKey, custName, cols...).SetItems(custs()))
 	lookField(tt).Click()
 	name, city, hue := textAt(t, tt, "Name"), textAt(t, tt, "City"), textAt(t, tt, "Hue")
 	first := lookRows(tt)[1].Bounds()
+	if c02, mid := textAt(t, tt, "C02"), first.X+space(2.5)+30; !within(c02.X+c02.W/2, mid, 1) {
+		t.Errorf("C02 is centered at %v, want the middle of its cell %v", c02.X+c02.W/2, mid)
+	}
 	end := first.X + first.W - space(2.5)
 	if !within(hue.X+hue.W, end, 1) || !within(city.X+city.W, end, 1) {
 		t.Errorf("Hue ends at %v and City at %v, want both at the row's end %v", hue.X+hue.W, city.X+city.W, end)
@@ -250,6 +255,69 @@ func TestLookUpEditRefitKeepsTyping(t *testing.T) {
 	wantSelected(t, l, 1, true)
 	if got := p.all(t); len(got) != 0 {
 		t.Fatalf("the refits ran OnSelect: %v", got)
+	}
+}
+
+// The field takes the skin's Field look: a look of bg-chrome fills it with
+// Chrome.
+func TestLookUpEditFieldLook(t *testing.T) {
+	useLooks(t, map[string]string{"Field": "bg-chrome"})
+	tk := skinhook.Get(false)
+	tt := NewTester(t, VBox(0).Add(custLookUp()), 400, 300)
+	tt.Settle()
+	in := lookField(tt).Bounds()
+	if c := tt.Image().RGBAAt(int(in.X+in.W-4), int(in.Y+in.H/2)); !near(c, tk.Chrome) || tk.Chrome == tk.Background {
+		t.Fatalf("the field fills with %v, want Chrome %v", c, tk.Chrome)
+	}
+}
+
+// The record the arrows are on fills with ui's highlighted option.
+func TestLookUpEditHighlightFill(t *testing.T) {
+	tt, th := lookTester(t, custLookUp())
+	lookField(tt).Click()
+	lookKeys(tt, ui.KeyDown)
+	bg, _ := highlightOf(th)
+	b := lookRows(tt)[0].Bounds()
+	if c := tt.Image().RGBAAt(int(b.X+b.W-3), int(b.Y+b.H/2)); !near(c, bg.Over(th.Background)) {
+		t.Fatalf("the highlighted row fills with %v, want %v", c, bg)
+	}
+	b = lookRows(tt)[1].Bounds()
+	if c := tt.Image().RGBAAt(int(b.X+b.W-3), int(b.Y+b.H/2)); near(c, bg.Over(th.Background)) {
+		t.Fatalf("the second row fills with the highlight %v too", c)
+	}
+	// The drop-down is the theme's popup: Background, edged with Border.
+	list := tt.Find(ByRole(ui.RoleList)).Bounds()
+	if c := tt.Image().RGBAAt(int(list.X+list.W-3), int(b.Y+b.H/2)); !near(c, th.Background) {
+		t.Errorf("the drop-down fills with %v, want Background %v", c, th.Background)
+	}
+	if c := tt.Image().RGBAAt(int(list.X+list.W-0.5), int(b.Y+b.H/2)); !near(c, th.Border.Over(th.Background)) {
+		t.Errorf("the drop-down's edge is %v, want Border %v", c, th.Border)
+	}
+}
+
+// A free text with no record chosen empties as the focus leaves.
+func TestLookUpEditFreeTextWithNoneEmpties(t *testing.T) {
+	var p picks
+	l := custLookUp().OnSelect(p.add)
+	tt, _ := lookTester(t, l)
+	f := lookField(tt).Type("zz")
+	lookKeys(tt, ui.KeyTab)
+	if v := f.Value(); v != "" {
+		t.Fatalf("after Tab the field holds %q, want it empty", v)
+	}
+	wantSelected(t, l, 0, false)
+	if got := p.all(t); len(got) != 0 {
+		t.Fatalf("OnSelect ran %v", got)
+	}
+}
+
+// A click opening the drop-down shows every record, not those matching the
+// chosen record's text.
+func TestLookUpEditClickShowsAll(t *testing.T) {
+	tt, _ := lookTester(t, custLookUp().SetSelected(2))
+	lookField(tt).Click()
+	if n := len(lookRows(tt)); n != 3 {
+		t.Fatalf("%d rows with Beta chosen, want all 3", n)
 	}
 }
 
@@ -498,10 +566,10 @@ func TestLookUpEditSetItemsCopies(t *testing.T) {
 	items := custs()
 	l := LookUpEdit(custKey, custName, custCols()...).SetItems(items).SetSelected(1)
 	tt, _ := lookTester(t, l)
-	items[0].Name = "Changed"
-	tt.Settle()
-	if v := lookField(tt).Value(); v != "Acme" {
-		t.Fatalf("the field shows %q after the caller changed its slice", v)
+	items[1].Name = "Changed"
+	lookField(tt).Click()
+	if tt.HasText("Changed") || !tt.HasText("Beta") {
+		t.Fatalf("the drop-down shows the caller's change to its slice: %q", tt.Texts())
 	}
 }
 
@@ -703,12 +771,18 @@ func TestLookUpEditTextScale(t *testing.T) {
 	if end := first.X + first.W - space(2.5); !within(city.X, end-80*1.5, 1) {
 		t.Errorf("City starts at %v, want 120 before the row's end %v", city.X, end)
 	}
-	// The long name draws nothing in the gap before City.
+	// The long name, wider than its cell, is laid out at the cell's width
+	// (ui's single-line text clips there), and draws nothing in the gap
+	// before City.
+	if r := textAt(t, tt, long); !within(r.X+r.W, city.X-space(2), 1) {
+		t.Fatalf("the long name's box ends at %v, want its cell's end %v", r.X+r.W, city.X-space(2))
+	}
 	img, bg := tt.Image(), th.Background
-	x := int(city.X - space(2)/2)
-	for y := int(first.Y + 2); y < int(first.Y+first.H-2); y++ {
-		if c := img.RGBAAt(x, y); !near(c, bg) {
-			t.Fatalf("the long name draws %v at (%d, %d), in the gap before City", c, x, y)
+	for x := int(city.X - space(2) + 1); x < int(city.X-1); x++ {
+		for y := int(first.Y + 2); y < int(first.Y+first.H-2); y++ {
+			if c := img.RGBAAt(x, y); !near(c, bg) {
+				t.Fatalf("the long name draws %v at (%d, %d), in the gap before City", c, x, y)
+			}
 		}
 	}
 }

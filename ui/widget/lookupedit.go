@@ -222,9 +222,7 @@ func (l *LookUpEditWidget[T, K]) buildPopup(panel ui.Element) {
 			need += max(col.MinWidth*scale, flexMin)
 		}
 	}
-	if len(l.cols) > 0 {
-		panel.Width(need) // a long text clips in its cell, rather than widening every row
-	}
+	panel.Width(need) // a long text clips in its cell, rather than widening every row; a row of text alone keeps its own width
 
 	l.shown = l.matching(strings.ToLower(strings.TrimSpace(l.input.shown))) // the input's text, as ui edits it
 	if len(l.shown) == 0 {
@@ -263,12 +261,11 @@ func (l *LookUpEditWidget[T, K]) buildPopup(panel ui.Element) {
 // cell builds a cell of col, of its width, holding what fn builds: the
 // header's and every row's alike, so that they line up.
 func (l *LookUpEditWidget[T, K]) cell(col Column[T], scale float32, fn func()) {
-	t := l.c.Theme()
-	box := ui.Row(l.c).AlignItems(ui.Center).Clip()
+	box := ui.Row(l.c).AlignItems(ui.Center)
 	if col.Width > 0 {
 		box.Width(col.Width * scale).Shrink(0)
 	} else {
-		box.Grow(1).Shrink(1).MinWidth(max(col.MinWidth*scale, t.Space(15)))
+		box.Grow(1) // the panel's width holds its MinWidth
 	}
 	switch col.Align {
 	case Center:
