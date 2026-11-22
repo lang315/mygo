@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -150,6 +151,46 @@ func TestLabelStartBesideAnAction(t *testing.T) {
 		if l := find(t, tt.Tester, "Content"); !approx(l.X, left) || l.W > 100 {
 			t.Errorf("%s: the label %v starts at %v, want %v, as wide as its text", name, l, l.X, left)
 		}
+	}
+}
+
+// B: a label too long for the line, with an Align, clips; the action stays
+// at the end.
+func TestLabelAlignLongBesideAnAction(t *testing.T) {
+	long := strings.Repeat("W", 120)
+	f := Fields().Row(long, MultilineTextBox()).Wide().Action(help())
+	f.Label(0).Align(End)
+	tt := NewTester(t, f, 400, 400)
+	if k := linkBox(tt); !approx(k.X+k.W, 400) {
+		t.Errorf("the link %v, want it at the right edge", k)
+	}
+}
+
+// B: a label with an Align but no text, or hidden, leaves the action at the
+// end of the line.
+func TestLabelAlignEmptyOrHiddenBesideAnAction(t *testing.T) {
+	for name, build := range map[string]func() *FieldsWidget{
+		"empty":  func() *FieldsWidget { return Fields().Row("", MultilineTextBox()).Wide().Action(help()) },
+		"hidden": func() *FieldsWidget { return Fields().Row("Content", MultilineTextBox()).Wide().Action(help()) },
+	} {
+		f := build()
+		f.Label(0).Align(End)
+		if name == "hidden" {
+			f.Label(0).SetVisible(false)
+		}
+		tt := NewTester(t, f, 400, 400)
+		if k := linkBox(tt); !approx(k.X+k.W, 400) {
+			t.Errorf("%s: the link %v, want it at the right edge", name, k)
+		}
+	}
+}
+
+// A6: Action(nil) removes the action of a row, whatever the other rows have.
+func TestActionNilRemovesWhateverTheOthersHave(t *testing.T) {
+	f := Fields().Row("A", TextBox()).Row("B", TextBox()).Action(help()).Action(nil)
+	tt := NewTester(t, f, 400, 300)
+	if n := inTree(tt, ui.RoleLink); n != 0 {
+		t.Errorf("the tree has %d links after Action(nil), want 0", n)
 	}
 }
 
