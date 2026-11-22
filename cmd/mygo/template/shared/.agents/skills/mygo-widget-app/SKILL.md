@@ -75,6 +75,35 @@ func pane(show func(key string)) widget.Control {
 - `widget.NavBarWidget.OnSelect(fn)` runs on the event goroutine with the key the user selected, once per change; `widget.NavBarWidget.SetSelected(key)` does not run it. `widget.NavBarWidget.Selected` reads the key, "" for none.
 - `widget.NavBarWidget.SetGroupOpen(i, open)` and `widget.NavBarWidget.GroupOpen(i)` take a group's index in the order added. The selected item takes the skin's `RowSelected` colors. Read `docs/ui/widget/navbar.md`.
 
+## Picking a record
+
+For a form field that picks one record by key (a customer, a product, an account) while the user reads several of its fields, use `widget.LookUpEdit(key, text, cols...)`: a drop-down of `widget.Column` columns with a header, filtered as the user types. Not a `ComboBox` of joined texts, nor a `DataGridView` in a dialog of its own.
+
+```go
+package app
+
+import "github.com/egoist/mygo/ui/widget"
+
+type Customer struct {
+	ID               int
+	Code, Name, City string
+}
+
+func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
+	field := widget.LookUpEdit(
+		func(c *Customer) int { return c.ID },
+		func(c *Customer) string { return c.Name },
+		widget.Column[Customer]{Title: "Code", Text: func(c *Customer) string { return c.Code }, Width: 60},
+		widget.Column[Customer]{Title: "Name", Text: func(c *Customer) string { return c.Name }},
+		widget.Column[Customer]{Title: "City", Text: func(c *Customer) string { return c.City }, Width: 80},
+	).SetItems(all).OnSelect(pick)
+	return widget.Fields().Row("&Customer", field)
+}
+```
+
+- `widget.LookUpEditWidget.OnSelect(fn)` runs on the event goroutine when the user chooses a record (`ok` true) or empties the field (`ok` false), once per change; `widget.LookUpEditWidget.SetSelected(k)`, `widget.LookUpEditWidget.Unselect` and `widget.LookUpEditWidget.SetItems` do not run it. `widget.LookUpEditWidget.Selected` reads the key and whether one is chosen.
+- A typed text that is no record's goes back to the chosen record's text when the focus leaves the field. Of a `widget.Column` it reads `Title`, `Text`, `Width`, `MinWidth`, `Align` and `Hidden`. Read `docs/ui/widget/lookupedit.md`.
+
 ## Binding
 
 Bind a control to a value kept elsewhere instead of pairing `SetText` with `OnChange`:
