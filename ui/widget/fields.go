@@ -71,10 +71,8 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 	display, key, at := parseMnemonic(label)
 	l := Label(display)
 	f.change(func() {
-		for _, r := range f.rows {
-			if r.w == c {
-				return
-			}
+		if f.has(c, -1) {
+			return
 		}
 		f.rows = append(f.rows, fieldRow{label: l, w: c, key: key, at: at, rule: fieldRule(l.id), box: fieldRowKey(l.id)})
 		adopt(&f.core, c)
@@ -148,14 +146,26 @@ func (f *FieldsWidget) Wide() *FieldsWidget {
 // Action gives the last row added an action control, such as a LinkLabel:
 // at the right end of its label's line when the row is wide (Wide, Stacked),
 // after its control otherwise. A second call replaces it; nil removes it.
+// A control already in the form, but this row's own action, is not taken.
 // Before any row it does nothing.
 func (f *FieldsWidget) Action(c Control) *FieldsWidget {
 	f.change(func() {
-		if n := len(f.rows); n > 0 {
+		if n := len(f.rows); n > 0 && (c == nil || !f.has(c, n-1)) {
 			f.rows[n-1].action = c
 		}
 	})
 	return f
+}
+
+// has reports whether c is a control or an action of a row, but the action
+// of row skip. Under mu.
+func (f *FieldsWidget) has(c Control, skip int) bool {
+	for i, r := range f.rows {
+		if r.w == c || i != skip && r.action == c {
+			return true
+		}
+	}
+	return false
 }
 
 // describe gives the control its row's description, its tooltip after it,

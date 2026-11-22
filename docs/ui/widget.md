@@ -498,6 +498,7 @@ widget.Fields().
   in Tab order where it is drawn: before a wide row's control, after an
   ordinary row's. Hiding the row's control hides the action too; disabling
   the form disables it. A second call replaces it, `Action(nil)` removes it,
+  a control already in the form (but this row's own action) is not taken,
   and before any row it does nothing.
 
 ```go
