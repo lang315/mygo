@@ -335,7 +335,7 @@ func (n *TabControlWidget) build(c *ui.Context) ui.Element {
 		p, _ := n.page.bind()
 		var strip ui.Element
 		if n.closable != nil {
-			strip = n.closable(c, col, p) // with its OnChange, made once
+			strip = n.closable(c, col, p)
 		} else {
 			keys := make([]any, len(n.keys))
 			for i, k := range n.keys {

@@ -75,20 +75,10 @@ func closableTabs(n *TabControlWidget) func(c *ui.Context, col ui.Element, p *in
 		held *pageKey
 		keys []any
 	)
-	changed := func() {
-		if n.page.commit() {
-			mu.Lock()
-			fn := n.onSwitch
-			mu.Unlock()
-			if fn != nil {
-				Post(fn)
-			}
-		}
-	}
 	closeShown := func() {
 		mu.Lock()
 		var k *pageKey
-		if len(n.keys) > 0 {
+		if len(n.keys) > 0 { // no tab has the focus then, but a panic here would hold mu
 			k = n.keys[n.shownIndex()]
 		}
 		mu.Unlock()
@@ -159,7 +149,7 @@ func closableTabs(n *TabControlWidget) func(c *ui.Context, col ui.Element, p *in
 			}
 		})
 		held = pressing
-		return tabs.List.OnChange(changed)
+		return tabs.List // a click's choice: build sees it, as it sees Tabs clamp
 	}
 }
 

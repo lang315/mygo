@@ -720,8 +720,11 @@ func TestClosableTabsDisabled(t *testing.T) {
 func TestClosableTabsTwoClosesOfOnePage(t *testing.T) {
 	d := newDocs(t, true)
 	gate := make(chan struct{})
-	var calls atomic.Int32
-	d.nb.OnPageClosing(func(Control) bool {
+	var calls, gone atomic.Int32
+	d.nb.OnPageClosing(func(p Control) bool {
+		if p == nil {
+			gone.Add(1)
+		}
 		if calls.Add(1) == 1 {
 			<-gate
 		}
@@ -735,6 +738,9 @@ func TestClosableTabsTwoClosesOfOnePage(t *testing.T) {
 	d.state(t, []string{"Beta", "Gamma"}, 0)
 	if n := calls.Load(); n < 1 || n > 2 {
 		t.Fatalf("OnPageClosing ran %d times", n)
+	}
+	if n := gone.Load(); n != 0 {
+		t.Fatalf("OnPageClosing was asked %d times about a page already closed", n)
 	}
 }
 
