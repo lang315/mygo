@@ -185,6 +185,9 @@ func (l *LookUpEditWidget[T, K]) buildField() {
 	in := l.cb.Input
 	in.Grow(1).Padding(t.Space(1.5), t.Space(3)).AutoComplete(ui.AutoCompleteList)
 	l.inner = in
+	if h := formAccept; h != nil {
+		in.OnSubmit(h) // Enter clicks the form's accept button
+	}
 	l.cb.Popup(l.popup)
 	if v, ok := l.cb.Chosen(); ok {
 		// ui may choose among the options of the last frame: one of items

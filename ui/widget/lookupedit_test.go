@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo/internal/allocrun"
@@ -994,6 +995,34 @@ func TestLookUpEditEnterAfterSetItemsShrinks(t *testing.T) {
 				t.Fatalf("with %d records set, OnSelect ran with %v", len(keep), g)
 			}
 		}
+	}
+}
+
+// Round 1: Enter with the drop-down closed clicks the form's accept button
+// once, as in the Editable ComboBox; with it open, Enter chooses the
+// highlighted record and clicks nothing.
+func TestLookUpEditEnterClicksTheAcceptButton(t *testing.T) {
+	calmOff()
+	var oks atomic.Int32
+	okBtn := Button("OK").OnClick(func() { oks.Add(1) })
+	l := custLookUp().SetSelected(1)
+	tt := TestForm(t, keysForm(VBox(4).Add(l, okBtn)).SetAcceptButton(okBtn))
+	tt.Settle()
+	f := lookField(tt).Focus()
+	if lookOpen(tt) {
+		t.Fatal("the drop-down is open after Focus")
+	}
+	lookKeys(tt, ui.KeyEnter)
+	flushEvents(t)
+	if n := oks.Load(); n != 1 {
+		t.Fatalf("Enter with the drop-down closed clicked OK %d times, want once", n)
+	}
+	f.Click()
+	lookKeys(tt, ui.KeyDown, ui.KeyDown, ui.KeyEnter)
+	flushEvents(t)
+	wantSelected(t, l, 2, true)
+	if n := oks.Load(); n != 1 {
+		t.Fatalf("Enter choosing a record clicked OK: %d clicks in all, want the first alone", n)
 	}
 }
 

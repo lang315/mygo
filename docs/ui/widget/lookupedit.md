@@ -46,7 +46,8 @@ form := widget.Fields().Row("&Customer", customer)
   Escape closes the drop-down. Choosing a record puts its `text` in the
   field and runs `OnSelect(fn)` with its key and `true`, on the event
   goroutine, once per change: choosing the chosen record again runs
-  nothing.
+  nothing. Enter with the drop-down closed clicks the form's accept button
+  (`SetAcceptButton`), as in a `TextBox`.
 - A free text is never a value: leaving the field with a text that is not
   the chosen record's puts that record's text back (none: empty). Leaving it
   emptied chooses none, and runs `OnSelect` with the zero key and `false` if
