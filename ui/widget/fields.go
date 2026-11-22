@@ -544,7 +544,8 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 
 // labelLine builds a wide row's label with label, and its action at the end
 // of the label's line: a row of the two, the label growing, both at its
-// middle. It returns the label. Under mu, in a column.
+// middle. A label with an Align of its own sits by it in the room left of
+// the action. It returns the label. Under mu, in a column.
 func (f *FieldsWidget) labelLine(c *ui.Context, r *fieldRow, label func() ui.Element) ui.Element {
 	if !r.acts() {
 		return label()
@@ -553,7 +554,14 @@ func (f *FieldsWidget) labelLine(c *ui.Context, r *fieldRow, label func() ui.Ele
 	ui.Row(c).Gap(f.colSpace(c)).Justify(ui.End).Children(func() {
 		axis = horizontal
 		defer func() { axis = vertical }()
-		e = label().Grow(1).MinWidth(0).AlignSelf(ui.Center) // a long word clips, not push the action out
+		if a := r.label.place.align; a != 0 && r.label.text != "" && !r.label.hidden {
+			// The label fills the line, so a box of that room places it.
+			ui.Row(c).Grow(1).MinWidth(0).Justify(a.ui()).Children(func() {
+				e = label().MinWidth(0).AlignSelf(ui.Center)
+			})
+		} else {
+			e = label().Grow(1).MinWidth(0).AlignSelf(ui.Center) // a long word clips, not push the action out
+		}
 		render(c, r.action)
 	})
 	return e

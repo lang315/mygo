@@ -88,6 +88,71 @@ func TestActionTwiceTheSameKeepsIt(t *testing.T) {
 	}
 }
 
+// labelAlignForms are the forms with a label line: wide, stacked, a card's,
+// each with the left and right edge of its inside.
+var labelAlignForms = map[string]func() (f *FieldsWidget, left, right float32){
+	"wide": func() (*FieldsWidget, float32, float32) {
+		return Fields().Row("Content", MultilineTextBox()).Wide().Action(help()), 0, 400
+	},
+	"stacked": func() (*FieldsWidget, float32, float32) {
+		return Fields().Stacked().Row("Content", MultilineTextBox()).Action(help()), 0, 400
+	},
+	"card": func() (*FieldsWidget, float32, float32) {
+		return Fields().SettingsRows().Row("Content", MultilineTextBox()).Wide().Action(help()), cardLeft, cardRight
+	},
+}
+
+// B6 and B7: the label's Align places its text in the room left of the
+// action, which ends one column gap before it.
+func TestLabelAlignBesideAnAction(t *testing.T) {
+	for name, form := range labelAlignForms {
+		for _, a := range []Align{End, Center} {
+			f, left, _ := form()
+			f.Label(0).Align(a)
+			tt := NewTester(t, f, 400, 400)
+			l, k := find(t, tt.Tester, "Content"), linkBox(tt)
+			room := k.X - space(3) // where the label's room ends
+			switch a {
+			case End:
+				if !approx(l.X+l.W, room) {
+					t.Errorf("%s, End: the label %v ends at %v, want %v, a column gap left of the link %v", name, l, l.X+l.W, room, k)
+				}
+			case Center:
+				if !approx(l.X+l.W/2, (left+room)/2) {
+					t.Errorf("%s, Center: the label %v is centred at %v, want %v, in [%v, %v]", name, l, l.X+l.W/2, (left+room)/2, left, room)
+				}
+			}
+			if l.W > 100 {
+				t.Errorf("%s: the label %v fills the line, want its text's width", name, l)
+			}
+		}
+	}
+}
+
+// B: with no Align the label keeps its place, from the left, growing.
+func TestLabelNoAlignBesideAnAction(t *testing.T) {
+	for name, form := range labelAlignForms {
+		f, left, _ := form()
+		tt := NewTester(t, f, 400, 400)
+		l, k := find(t, tt.Tester, "Content"), linkBox(tt)
+		if !approx(l.X, left) || !approx(l.X+l.W, k.X-space(3)) {
+			t.Errorf("%s: the label %v spans [%v, %v], want [%v, %v]", name, l, l.X, l.X+l.W, left, k.X-space(3))
+		}
+	}
+}
+
+// B: Align(Start) is from the left, as wide as its text.
+func TestLabelStartBesideAnAction(t *testing.T) {
+	for name, form := range labelAlignForms {
+		f, left, _ := form()
+		f.Label(0).Align(Start)
+		tt := NewTester(t, f, 400, 400)
+		if l := find(t, tt.Tester, "Content"); !approx(l.X, left) || l.W > 100 {
+			t.Errorf("%s: the label %v starts at %v, want %v, as wide as its text", name, l, l.X, left)
+		}
+	}
+}
+
 // A5: after Action(nil) the old action is free to be taken again.
 func TestActionNilThenTheOldOne(t *testing.T) {
 	link := help()
