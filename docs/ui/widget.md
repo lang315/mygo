@@ -1193,6 +1193,10 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   `SetPage` does, none of them runs `OnSwitch`: the app made the change.
 - `Sidebar()`: pages chosen in a list at the side; `Add(name, title, w)`,
   `Remove`, `Selected`, `Select`, `SetMenuWidth`.
+- `NavBar()`: a side panel of groups that open and close, each holding items
+  of an icon and a text, one of them selected, as DevExpress's NavBarControl;
+  `AddGroup`, `AddItem`, `Selected`, `SetSelected`, `OnSelect`,
+  `SetGroupOpen`, `GroupOpen`; see [NavBar](widget/navbar.md).
 
 Input and display:
 
