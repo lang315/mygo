@@ -382,6 +382,27 @@ func TestTreeColumnsKeyboard(t *testing.T) {
 	}
 }
 
+// In columns too, typing finds a row by its text and the keys skip the
+// Loading row (ui's ListState Label and Skip).
+func TestTreeColumnsTypingAndTheLoadingRow(t *testing.T) {
+	tv := plainFiles().SetColumns("Name", sizeCol()).SetHasChildren("README", true).Expand("README")
+	tt := filesTester(tv)
+	src := tcCell(t, tt, "src")
+	tt.ClickAt(src.X+src.W-8, src.Y+src.H/2)
+	tt.Frame()
+	tt.Key(0, ui.KeyR)
+	tt.Key(0, ui.KeyE)
+	tt.Frame()
+	if k, _ := tv.Selected(); k != "README" {
+		t.Fatalf("typing re selected %q, want README", k)
+	}
+	tt.Key(0, ui.KeyEnd)
+	tt.Frame()
+	if k, ok := tv.Selected(); !ok || k != "README" {
+		t.Fatalf("End selected %q, %v: want README, the Loading row below it skipped", k, ok)
+	}
+}
+
 // Case 11: a frame at rest of the tree in columns allocates no more than one
 // of a bare ui.OutlineTable of the same rows and columns.
 func TestTreeColumnsFrameAllocatesAsABareOutlineTable(t *testing.T) {
@@ -755,6 +776,57 @@ func TestTreeColumnsTreeColumnAloneAndUntitled(t *testing.T) {
 		t.Fatalf("shows %q: want the Size cells", tt.Texts())
 	}
 }
+
+// ui builds the rows a taller window shows late, while it lays the frame
+// out, without the build's lock: a cell takes it, so Text still runs under
+// it and a goroutine changing nodes meanwhile does not race the cells.
+func TestTreeColumnsCellsBuiltWhileLayingOutHoldTheLock(t *testing.T) {
+	var unlocked atomicBool
+	tv := TreeView(func(f *file) string { return f.Path }, func(f *file) string { return f.Name }).
+		SetColumns("Name", Column[file]{Title: "Size", Text: func(f *file) string {
+			if !lockHeld() {
+				unlocked.set()
+			}
+			return f.Size
+		}})
+	nodes := make([]file, 2000)
+	for i := range nodes {
+		n := strconv.Itoa(i)
+		nodes[i] = file{n, "Node " + n, n + " B", ""}
+	}
+	tv.SetRoots(nodes)
+	tt := filesTester(tv)
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			tv.UpdateNode(strconv.Itoa(i%2000), func(f *file) { f.Size = strconv.Itoa(i) })
+		}
+	}()
+	for i := range 40 {
+		tt.SetSize(500, 300+i%2*2000)
+		tt.Frame()
+	}
+	close(stop)
+	<-done
+	if unlocked.get() {
+		t.Fatal("a cell built while laying out ran Text without the package's lock")
+	}
+}
+
+// atomicBool is a flag set from the main thread and read by the test.
+type atomicBool struct {
+	mu sync.Mutex
+	v  bool
+}
+
+func (b *atomicBool) set()      { b.mu.Lock(); b.v = true; b.mu.Unlock() }
+func (b *atomicBool) get() bool { b.mu.Lock(); defer b.mu.Unlock(); return b.v }
 
 // A column's Text runs under the package's lock, as the docs say.
 func TestTreeColumnsTextRunsUnderTheLock(t *testing.T) {
