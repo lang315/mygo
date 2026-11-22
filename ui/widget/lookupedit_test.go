@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"image"
 	"math"
 	"slices"
 	"strings"
@@ -165,21 +166,48 @@ func TestLookUpEditOpensColumns(t *testing.T) {
 	if list.W < in.W {
 		t.Errorf("the drop-down is %v wide, narrower than the field's %v", list.W, in.W)
 	}
-	// Semibold: as wide as ui's text of weight 600, not as its regular one.
-	width := func(weight int) float32 {
-		ref := ui.NewTester(func(c *ui.Context) {
-			ui.Row(c).Children(func() { ui.Text(c, "Code").FontWeight(weight) })
-		}, 200, 100)
-		r, _ := ref.Find("Code")
-		return r.W
+	// Semibold: the title inks as much as ui's text of weight 600 on the same
+	// page, not as its regular one. Ink, not width: a test font may give
+	// semibold the advance widths of regular (Windows' does).
+	semi, regular := refInk(t, 600), refInk(t, 400)
+	if math.Abs(semi-regular) < 0.03*regular {
+		t.Logf("semibold and regular Code ink %.0f and %.0f: this system's font draws them alike, so the weight is not checked here", semi, regular)
+		return
 	}
-	semi, regular := width(600), width(400)
-	if within(semi, regular, 0.5) {
-		t.Fatalf("semibold and regular Code are both %v wide: the case cannot tell them apart", semi)
+	got := textInk(tt.Image(), code)
+	if math.Abs(got-semi) > math.Abs(got-regular) {
+		t.Errorf("the title Code inks %.0f, nearer regular's %.0f than semibold's %.0f", got, regular, semi)
 	}
-	if !within(code.W, semi, 0.5) {
-		t.Errorf("the title Code is %v wide, semibold is %v, regular %v", code.W, semi, regular)
+}
+
+// textInk sums how much darker than white the pixels of r are: the ink of
+// dark text on a light page.
+func textInk(img *image.RGBA, r ui.Rect) float64 {
+	var sum float64
+	for y := int(r.Y); y < int(math.Ceil(float64(r.Y+r.H))); y++ {
+		for x := int(r.X); x < int(math.Ceil(float64(r.X+r.W))); x++ {
+			c := img.RGBAAt(x, y)
+			sum += 255 - float64(min(c.R, c.G, c.B))
+		}
 	}
+	return sum
+}
+
+// refInk is the ink of "Code" drawn by ui alone in weight w, on the light
+// theme's page as the drop-down's.
+func refInk(t *testing.T, w int) float64 {
+	t.Helper()
+	ref := ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Fill().Background(c.Theme().Background).Children(func() {
+			ui.Text(c, "Code").FontWeight(w).SingleLine()
+		})
+	}, 200, 100)
+	ref.Frame()
+	r, ok := ref.Find("Code")
+	if !ok {
+		t.Fatal("no reference text")
+	}
+	return textInk(ref.Image(), r)
 }
 
 // Case 1, a field wider than its columns need: the drop-down is as wide.
