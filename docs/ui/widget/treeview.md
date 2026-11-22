@@ -170,6 +170,8 @@ tree := widget.TreeView(
   read: the tree does not sort by a column.
 - The Loading row shows its text in the first column, and nothing in the
   others.
+- Titles tell the columns apart, `treeTitle` among them, so they must
+  differ.
 - The user resizes and moves the columns, as a table's. The header takes a
   skin's `GridHeader` look, as `DataGridView`'s does.
 - `UpdateNode` shows the new cells on the next frame. `SetColumns` again

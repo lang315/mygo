@@ -304,6 +304,24 @@ func TestTreeColumnsSetAgainShowsTheNewColumns(t *testing.T) {
 	}
 }
 
+// A tree shown without columns takes them after its first frame.
+func TestTreeColumnsSetAfterAPlainFrame(t *testing.T) {
+	tv := plainFiles()
+	tt := filesTester(tv)
+	if hs := tcHeaders(tt); len(hs) != 0 {
+		t.Fatalf("a plain tree shows the headers %q", hs)
+	}
+	tv.SetColumns("Name", sizeCol(), kindCol())
+	tt.Frame()
+	if got := fmt.Sprint(tcHeaders(tt)); got != "[Name Size Kind]" {
+		t.Fatalf("headers %s, want [Name Size Kind]", got)
+	}
+	h := tcFind(t, tt, ui.RoleColumnHeader, "Size").Bounds
+	if c := tcCell(t, tt, "3 KB"); !within(c.X, h.X, 1) {
+		t.Errorf("3 KB's cell at %v, Size's header at %v", c, h)
+	}
+}
+
 // Case 9, with the same headers: a column of the same title, width and
 // alignment whose Text differs builds every row again (ui sees no change in
 // its columns), so the cells show the new Text on the next frame.
@@ -519,6 +537,10 @@ func TestTreeColumnsLongNameClipsInTheNameColumn(t *testing.T) {
 	name := tcFind(t, tt, ui.RoleColumnHeader, "Name").Bounds
 	if name.W < 120 {
 		t.Errorf("the Name column is %v wide, want its MinWidth of 120", name.W)
+	}
+	// The scale applies: a line is 15.3 DIPs tall at 1.
+	if h := tcFind(t, tt, ui.RoleText, "README").Bounds.H; h < 15.3*1.4 {
+		t.Fatalf("README is %v tall: the text scale of 1.5 did not apply", h)
 	}
 	cells := tcRowCells(t, tt, "a-very-long-folder-name-that-overflows")
 	if len(cells) < 2 {
