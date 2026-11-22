@@ -1160,7 +1160,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `&` mnemonics in a `Button` and the labels of `Fields` (Alt+key; off on macOS); see [Mnemonics](widget/mnemonics.md).
 - `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
-- `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes; see [TreeView](widget/treeview.md).
+- `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes, in columns under a header with `SetColumns`; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `Badge(text)`: a short text in a pill colored by its `Status` (`StatusNone`, `StatusInfo`, `StatusRunning`, `StatusSuccess`, `StatusWarning`, `StatusDanger`); see [Badge](widget/badge.md).
 - `InfoBar(status, title, message)`: a message inline in a page, with an optional action and close button; see [InfoBar](widget/infobar.md).

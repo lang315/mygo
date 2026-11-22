@@ -36,6 +36,20 @@ func ExampleTreeView() {
 	})
 }
 
+// The tree in columns of docs/ui/widget/treeview.md, "Columns".
+func ExampleTreeViewWidget_SetColumns() {
+	type file struct{ path, name, size, kind string }
+
+	tree := widget.TreeView(
+		func(f *file) string { return f.path },
+		func(f *file) string { return f.name },
+	).SetColumns("Name",
+		widget.Column[file]{Title: "Size", Text: func(f *file) string { return f.size }, Width: 80, Align: widget.End},
+		widget.Column[file]{Title: "Kind", Text: func(f *file) string { return f.kind }, Width: 100},
+	).SetRoots([]file{{"/src", "src", "", "Folder"}, {"/README", "README", "3 KB", "Text"}})
+	_ = tree
+}
+
 type entry struct {
 	path, name string
 	dir        bool

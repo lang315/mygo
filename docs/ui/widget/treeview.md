@@ -140,6 +140,42 @@ tree.OnCheck(func(k string, on bool) {
 - `SetChecked(ks, on)` checks or unchecks nodes, firing nothing.
 - `OnCheck(fn)` runs `fn(k, on)` for each node the user checked or unchecked.
 
+## Columns
+
+`SetColumns(treeTitle, cols...)` shows the tree in columns under a header,
+as DevExpress's TreeList does: a file tree with sizes, an account tree with
+balances. It is [`ui.OutlineTable`](../outline.md) underneath, on the same
+nodes, so all of the above holds: lazy children, the selection, check boxes,
+images, the keys and the events.
+
+```go
+type file struct{ path, name, size, kind string }
+
+tree := widget.TreeView(
+	func(f *file) string { return f.path },
+	func(f *file) string { return f.name },
+).SetColumns("Name",
+	widget.Column[file]{Title: "Size", Text: func(f *file) string { return f.size }, Width: 80, Align: widget.End},
+	widget.Column[file]{Title: "Kind", Text: func(f *file) string { return f.kind }, Width: 100},
+).SetRoots([]file{{"/src", "src", "", "Folder"}, {"/README", "README", "3 KB", "Text"}})
+```
+
+- The first column, headed `treeTitle`, holds what a row holds without
+  columns: the arrow, indented as the node is deep, the check box, the image
+  and the text. It shares the room the others leave, and is at least 120 DIPs
+  wide.
+- Then comes one column for each of `cols`, showing its `Text` (which runs
+  under the package's lock). Of a `Column` the tree reads `Title`, `Text`,
+  `Width`, `MinWidth`, `Align` and `Hidden`. The grid's other fields are not
+  read: the tree does not sort by a column.
+- The Loading row shows its text in the first column, and nothing in the
+  others.
+- The user resizes and moves the columns, as a table's. The header takes a
+  skin's `GridHeader` look, as `DataGridView`'s does.
+- `UpdateNode` shows the new cells on the next frame. `SetColumns` again
+  replaces the columns. `SetColumns("")`, with no columns, shows the tree
+  without columns again.
+
 ## Keyboard
 
 While the tree has the focus: Up and Down move the choice, Home and End go to
