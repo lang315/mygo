@@ -7,11 +7,11 @@ pane of an app, as DevExpress's NavBarControl in its Explorer Bar style
 
 ```go
 nav := widget.NavBar().
-	AddGroup("Thư").
-	AddItem("inbox", "Hộp thư đến", inboxIcon).
-	AddItem("sent", "Đã gửi", nil).
-	AddGroup("Danh bạ").
-	AddItem("people", "Mọi người", peopleIcon).
+	AddGroup("Mail").
+	AddItem("inbox", "Inbox", inboxIcon).
+	AddItem("sent", "Sent", nil).
+	AddGroup("Contacts").
+	AddItem("people", "People", peopleIcon).
 	SetSelected("inbox").
 	OnSelect(func(key string) { pages.Show(key) })
 ```
