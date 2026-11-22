@@ -474,6 +474,17 @@ func TestNavBarAccessKeyFocusesTheFirstHeader(t *testing.T) {
 	}
 }
 
+// A NavBar with no header: Focus goes to its first item.
+func TestNavBarFocusWithNoHeader(t *testing.T) {
+	n := NavBar().AddItem("home", "Home", nil).AddItem("help", "Help", nil)
+	tt, _ := navTester(t, n)
+	n.Focus()
+	tt.Settle()
+	if !item(tt, "Home").Focused() {
+		t.Fatal("Focus did not focus Home, the first item")
+	}
+}
+
 // Review Focus 5.
 func TestNavBarAccessKeyFromATextBox(t *testing.T) {
 	skipWhereOptionTypes(t)
@@ -596,7 +607,8 @@ func TestNavBarSettersFromAnotherGoroutine(t *testing.T) {
 func TestNavBarLongTextsAtTextScale(t *testing.T) {
 	title := "A group title far too long for the bar"
 	text := "An item text far too long for the bar too"
-	n := NavBar().AddGroup(title).AddItem("a", text, navIcon).AddItem("b", "Short", navIcon)
+	// The long text on the item with no icon: its empty room keeps its size too.
+	n := NavBar().AddGroup(title).AddItem("a", text, nil).AddItem("b", "Short", navIcon)
 	tt := NewTester(t, n, 160, 600)
 	tt.SetPreferences(ui.Preferences{TextScale: 1.5})
 	tt.Settle()
@@ -638,6 +650,14 @@ func TestNavBarTextsLineUpWithAndWithoutIcons(t *testing.T) {
 	}
 	if ib := item(tt, "Inbox").Bounds(); in.X-ib.X < 16 {
 		t.Fatalf("Inbox starts %v into its row, less than its icon", in.X-ib.X)
+	}
+	// An icon twice as wide as high keeps the room of the others.
+	wide := ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 24"><rect width="48" height="24"/></svg>`))
+	tt, _ = navTester(t, NavBar().AddGroup("G").AddItem("w", "Wide", wide).AddItem("n", "None", nil))
+	w, _ := tt.Tester.Find("Wide")
+	none, _ := tt.Tester.Find("None")
+	if !sameSize(w.X, none.X) {
+		t.Fatalf("Wide, with a wide icon, starts at %v, None at %v", w.X, none.X)
 	}
 }
 

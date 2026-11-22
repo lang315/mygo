@@ -81,7 +81,7 @@ func (n *NavBarWidget) AddItem(key, text string, icon *ui.SVG) *NavBarWidget {
 func (n *NavBarWidget) pick(key string) {
 	var fn func(string)
 	n.change(func() {
-		if n.disabled || n.selected == key {
+		if n.selected == key {
 			return
 		}
 		n.selected, fn = key, n.onSelect
@@ -129,8 +129,7 @@ func (n *NavBarWidget) GroupOpen(i int) bool {
 	if i < 0 || i >= len(n.groups) {
 		return false
 	}
-	g := n.groups[i]
-	return g.title == "" || g.open.value
+	return n.groups[i].open.value // true for a group with no title, which SetGroupOpen leaves
 }
 
 func (n *NavBarWidget) build(c *ui.Context) ui.Element {
@@ -153,8 +152,8 @@ func (n *NavBarWidget) build(c *ui.Context) ui.Element {
 				first = h
 			}
 			h.Children(func() {
-				ui.Text(c, g.title).Grow(1).Shrink(1).MinWidth(0).FontWeight(600)
-				ui.Icon(c, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Rotate(180 * sec.Progress()).Shrink(0)
+				ui.Text(c, g.title).Grow(1).FontWeight(600)
+				ui.Icon(c, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted).Rotate(180 * sec.Progress())
 			})
 			sec.Panel(func() { n.items(c, g) })
 		}
@@ -184,11 +183,11 @@ func (n *NavBarWidget) items(c *ui.Context, g *navGroup) ui.Element {
 		e.Children(func() {
 			// Every item keeps the icon's room, so that the texts line up.
 			if it.icon != nil {
-				ui.Icon(c, it.icon).FontSize(side).Size(side, side).Shrink(0).TextColor(fg)
+				ui.Icon(c, it.icon).FontSize(side).Size(side, side).TextColor(fg)
 			} else {
-				ui.Box(c).Size(side, side).Shrink(0)
+				ui.Box(c).Size(side, side)
 			}
-			ui.Text(c, it.text).Shrink(1).MinWidth(0)
+			ui.Text(c, it.text)
 		})
 		n.rows = append(n.rows, e)
 	}
