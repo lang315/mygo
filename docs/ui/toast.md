@@ -105,7 +105,11 @@ ui.ToastViewportBase(c, func(viewport ui.Element, toasts []ui.Toast) {
 
 `toasts` are those showing, the newest three, oldest first. `toast.Left()`
 is how long one shows still, to count down, 0 for one showing until closed.
-The time and the pausing are the same as with the theme's look. The
+`toast.Fade()` is its opacity as the theme's look fades it, in over its
+first 200 ms and out over its last 200 ms, 1 while the time of the toasts
+stops; it asks for the frames the fade needs, so a look that fades calls it
+in each frame: `toast.Root.Opacity(toast.Fade())`. A toast shown anew with
+its ID fades in again. The time and the pausing are the same as with the theme's look. The
 viewport stays while no toast shows, for the last one to go with its exit
 transition.
 

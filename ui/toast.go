@@ -317,6 +317,25 @@ func coreToastBase(c *context, t Toast) toastParts {
 // moving.
 func (p toastParts) Left() time.Duration { return p.left }
 
+// Fade returns the toast's opacity as the theme's look fades it: from 0
+// to 1 over its first 200 ms, and back to 0 over its last 200 ms, 1 while
+// the time of the toasts stops. It asks for the frames the fade needs.
+func (p toastParts) Fade() float32 {
+	const fade = 200 * time.Millisecond
+	switch {
+	case p.stopped:
+	case p.age < fade:
+		p.c.AnimationFrame()
+		return float32(p.age) / float32(fade)
+	case p.left > 0 && p.left < fade:
+		p.c.AnimationFrame()
+		return float32(p.left) / float32(fade)
+	case p.left > 0:
+		p.c.After(p.left - fade)
+	}
+	return 1
+}
+
 // ActionButton creates a button without a look, as ButtonBase does, that
 // runs the toast's OnAction and closes it. Give it children, as the
 // toast's Action.
@@ -356,20 +375,7 @@ func (rt *engine) buildToasts(c *context) {
 				Background(fill).TextColor(text)
 			box.Shadow(0, 6, 20, 0, RGBA(0, 0, 0, 0.25))
 			// It fades in, and out at the end.
-			const fade = 200 * time.Millisecond
-			opacity := float32(1)
-			switch {
-			case p.stopped:
-			case p.age < fade:
-				opacity = float32(p.age) / float32(fade)
-				c.AnimationFrame()
-			case p.left > 0 && p.left < fade:
-				opacity = float32(p.left) / float32(fade)
-				c.AnimationFrame()
-			case p.left > 0:
-				c.After(p.left - fade)
-			}
-			box.Opacity(opacity)
+			box.Opacity(p.Fade())
 			box.Children(func() {
 				if ts.Description == "" {
 					coreText(c, ts.Title)
