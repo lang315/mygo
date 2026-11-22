@@ -9671,6 +9671,19 @@ func (_handle ToastParts) CloseButton() Element {
 	return wrapElement(_e)
 }
 
+// Fade returns the toast's opacity as the theme's look fades it: from 0
+// to 1 over its first 200 ms, and back to 0 over its last 200 ms, 1 while
+// the time of the toasts stops. It asks for the frames the fade needs.
+func (_handle ToastParts) Fade() float32 {
+	_parts := _handle.resolve()
+	if _parts == nil {
+		return 0
+	}
+	_ctx := _parts.c
+	_ = _ctx
+	return _parts.Fade()
+}
+
 // Left returns how long the toast shows still, to count down, or 0 for one
 // that shows until it is closed. It does not move while the time of the
 // toasts stops; ask for frames with Context.AnimationFrame to draw it
