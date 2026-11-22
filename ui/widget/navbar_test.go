@@ -698,6 +698,25 @@ func TestNavBarGroupWithNoItems(t *testing.T) {
 	}
 }
 
+// An item of key "", which is no selection: it is not drawn selected while
+// none is.
+func TestNavBarEmptyKeyIsNotSelected(t *testing.T) {
+	n := NavBar().AddGroup("G").AddItem("", "Blank", nil).AddItem("a", "A", nil)
+	tt, _ := navTester(t, n)
+	if c := currents(tt); len(c) != 0 {
+		t.Fatalf("current %q with nothing selected", c)
+	}
+}
+
+// The skill's pane: a NavBar beside a page in an HBox starts at the top.
+func TestNavBarBesideAPage(t *testing.T) {
+	tt := NewTester(t, HBox(0).Add(mailBar().SetSize(220, 0), Label("Page")), 600, 400)
+	tt.Settle()
+	if h := header(tt, "Mail").Bounds(); h.Y > 1 {
+		t.Fatalf("the Mail header is at y %v, not at the top", h.Y)
+	}
+}
+
 // No input: a NavBar with no group draws, and its methods answer.
 func TestNavBarEmpty(t *testing.T) {
 	n := NavBar()

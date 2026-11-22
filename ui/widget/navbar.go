@@ -172,7 +172,7 @@ func (n *NavBarWidget) items(c *ui.Context, g *navGroup) ui.Element {
 			Padding(t.Space(1.5), t.Space(3)).PaddingStart(t.Space(5))
 		fg := t.Text
 		switch {
-		case it.key == n.selected:
+		case it.key == n.selected && n.selected != "": // "" is none, even for an item of key ""
 			var bg ui.Color
 			bg, fg = rowSelected(t)
 			e.Background(bg).Current(ui.CurrentPage)
