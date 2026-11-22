@@ -101,7 +101,7 @@ func tcRowCells(t *testing.T, tt *ui.Tester, s string) []ui.Rect {
 	return cells
 }
 
-func within(a, b, tol float32) bool { return a-b <= tol && b-a <= tol }
+func withinDIP(a, b, tol float32) bool { return a-b <= tol && b-a <= tol }
 
 // Case 1.
 func TestTreeColumnsHeaderAndCells(t *testing.T) {
@@ -115,7 +115,7 @@ func TestTreeColumnsHeaderAndCells(t *testing.T) {
 				continue
 			}
 			h := tcFind(t, tt, ui.RoleColumnHeader, []string{"Name", "Size", "Kind"}[i]).Bounds
-			if c := tcCell(t, tt, s); !within(c.X, h.X, 1) {
+			if c := tcCell(t, tt, s); !withinDIP(c.X, h.X, 1) {
 				t.Errorf("the cell of %q starts at x %v, its header %v: want within 1 DIP", s, c.X, h.X)
 			}
 		}
@@ -143,7 +143,7 @@ func TestTreeColumnsExpandIndentsInTheNameColumn(t *testing.T) {
 			h := tcFind(t, tt, ui.RoleColumnHeader, []string{"Size", "Kind"}[i]).Bounds
 			c := cells[i+1]
 			b, ok := tcTextIn(tt, s, c)
-			if !within(c.X, h.X, 1) || !ok {
+			if !withinDIP(c.X, h.X, 1) || !ok {
 				t.Errorf("the cell %v of %q's row, its header at %v: want it under the header, showing %q (%v)", c, kid[0], h, s, b)
 			}
 		}
@@ -157,11 +157,11 @@ func TestTreeColumnsSizeIsEndAligned(t *testing.T) {
 	pad := ui.LightTheme().Space(2.5)
 	b := tcFind(t, tt, ui.RoleText, "3 KB").Bounds
 	c := tcCell(t, tt, "3 KB")
-	if !within(b.X+b.W, c.X+c.W-pad, 1) {
+	if !withinDIP(b.X+b.W, c.X+c.W-pad, 1) {
 		t.Errorf("3 KB ends at x %v, its cell at %v: want %v, the cell's end less %v", b.X+b.W, c.X+c.W, c.X+c.W-pad, pad)
 	}
 	k := tcFind(t, tt, ui.RoleText, "Text").Bounds
-	if kc := tcCell(t, tt, "Text"); !within(k.X, kc.X+pad, 1) {
+	if kc := tcCell(t, tt, "Text"); !withinDIP(k.X, kc.X+pad, 1) {
 		t.Errorf("Kind's Text starts at x %v, its cell at %v: want it start-aligned", k.X, kc.X)
 	}
 }
@@ -205,7 +205,7 @@ func TestTreeColumnsUpdateNodeShowsTheCell(t *testing.T) {
 		t.Fatalf("after UpdateNode: %q", tt.Texts())
 	}
 	h := tcFind(t, tt, ui.RoleColumnHeader, "Size").Bounds
-	if c := tcCell(t, tt, "4 KB"); !within(c.X, h.X, 1) {
+	if c := tcCell(t, tt, "4 KB"); !withinDIP(c.X, h.X, 1) {
 		t.Errorf("4 KB's cell at %v, Size's header at %v", c, h)
 	}
 }
@@ -299,7 +299,7 @@ func TestTreeColumnsSetAgainShowsTheNewColumns(t *testing.T) {
 		t.Fatalf("shows %q: want the Type cells, no Size", tt.Texts())
 	}
 	h := tcFind(t, tt, ui.RoleColumnHeader, "Type").Bounds
-	if c := tcCell(t, tt, "type Text"); !within(c.X, h.X, 1) || !within(c.W, h.W, 1) {
+	if c := tcCell(t, tt, "type Text"); !withinDIP(c.X, h.X, 1) || !withinDIP(c.W, h.W, 1) {
 		t.Errorf("type Text's cell at %v, Type's header at %v", c, h)
 	}
 }
@@ -317,7 +317,7 @@ func TestTreeColumnsSetAfterAPlainFrame(t *testing.T) {
 		t.Fatalf("headers %s, want [Name Size Kind]", got)
 	}
 	h := tcFind(t, tt, ui.RoleColumnHeader, "Size").Bounds
-	if c := tcCell(t, tt, "3 KB"); !within(c.X, h.X, 1) {
+	if c := tcCell(t, tt, "3 KB"); !withinDIP(c.X, h.X, 1) {
 		t.Errorf("3 KB's cell at %v, Size's header at %v", c, h)
 	}
 }
@@ -364,14 +364,14 @@ func TestTreeColumnsNameCellSpacedAsWithoutColumns(t *testing.T) {
 	pb, pt := tcFind(t, plain, ui.RoleCheckBox, "README").Bounds, tcFind(t, plain, ui.RoleText, "README").Bounds
 	tt := filesTester(filesTree().CheckBoxes().SetImageList(il, icon))
 	b, x := tcFind(t, tt, ui.RoleCheckBox, "README").Bounds, tcFind(t, tt, ui.RoleText, "README").Bounds
-	if want := 32 + 2*gap; !within(x.X-b.X, want, 0.5) || !within(pt.X-pb.X, want, 0.5) {
+	if want := 32 + 2*gap; !withinDIP(x.X-b.X, want, 0.5) || !withinDIP(pt.X-pb.X, want, 0.5) {
 		t.Errorf("the text starts %v after the box in columns, %v without: want %v", x.X-b.X, pt.X-pb.X, want)
 	}
 	// After the arrow, which starts at the cell's padding (Space(2.5)) and is
 	// Space(4) wide, the gap.
 	c := tcCell(t, tt, "README")
 	th := ui.LightTheme()
-	if want := c.X + th.Space(2.5) + th.Space(4) + gap; !within(b.X, want, 0.5) {
+	if want := c.X + th.Space(2.5) + th.Space(4) + gap; !withinDIP(b.X, want, 0.5) {
 		t.Errorf("the check box starts at x %v, want %v: the arrow, then a gap of %v", b.X, want, gap)
 	}
 }
@@ -571,15 +571,15 @@ func TestTreeColumnsResizeByDragging(t *testing.T) {
 	tt.Release(x+40, y)
 	tt.Frame()
 	h2 := tcFind(t, tt, ui.RoleColumnHeader, "Size").Bounds
-	if within(h2.W, h.W, 10) {
+	if withinDIP(h2.W, h.W, 10) {
 		t.Fatalf("Size's header is %v wide after the drag, %v before: want it wider", h2.W, h.W)
 	}
 	c := tcCell(t, tt, "3 KB")
-	if !within(c.X, h2.X, 1) || !within(c.W, h2.W, 1) {
+	if !withinDIP(c.X, h2.X, 1) || !withinDIP(c.W, h2.W, 1) {
 		t.Errorf("3 KB's cell at %v, Size's header at %v: want the cell under it", c, h2)
 	}
 	k := tcFind(t, tt, ui.RoleColumnHeader, "Kind").Bounds
-	if kc := tcCell(t, tt, "Text"); !within(kc.X, k.X, 1) {
+	if kc := tcCell(t, tt, "Text"); !withinDIP(kc.X, k.X, 1) {
 		t.Errorf("Text's cell at %v, Kind's header at %v", kc, k)
 	}
 }
@@ -627,7 +627,7 @@ func TestTreeColumnsManyOpenNodesBuildTheRowsInView(t *testing.T) {
 	for _, a := range tt.AccessAll() {
 		if a.Role == ui.RoleText && a.Name == "Data" && a.Bounds.H > 0 {
 			seen++
-			if c := tcCellAt(tt, a.Bounds); !within(c.X, h.X, 1) {
+			if c := tcCellAt(tt, a.Bounds); !withinDIP(c.X, h.X, 1) {
 				t.Errorf("a Kind cell at %v after the scroll, its header at %v", c, h)
 			}
 		}
