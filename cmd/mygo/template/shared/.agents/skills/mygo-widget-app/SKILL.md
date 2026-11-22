@@ -146,6 +146,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 - In a handler, `Run` keeps running the other handlers while it waits, so state can change between the call and its return: read it again afterwards.
 - `widget.Alert`, `widget.Confirm`, `widget.InputString`, `widget.InputInt`, `widget.InputSelect` and the file dialogs `widget.OpenFile`, `widget.SaveFile`, `widget.SelectFolder` block the same way and panic on the main thread too.
 - Enter and Escape: `widget.Form.SetAcceptButton(b)` and `widget.Form.SetCancelButton(b)`.
+- Tell the outcome of an action ("12 accounts exported") with a toast, not `widget.Alert`: `widget.Form.ShowToast(widget.Toast{Status: widget.StatusSuccess, Title: ..., Message: ...})` shows it near the bottom of the window for 4 seconds without blocking, from any goroutine; an `Action` with `OnAction` adds a button such as Undo (8 seconds then), and `widget.Form.CloseToast(id)` closes one. Keep message boxes for a question or an error the user must read.
 
 ## Style
 

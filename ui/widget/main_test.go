@@ -15,6 +15,7 @@ import (
 var fb *fake.Backend
 
 func TestMain(m *testing.M) {
+	toastHookAtStart = toastHook != nil
 	fb = fake.New()
 	platform.TestBackend = fb
 	mygo.App.SetName("WidgetTest")

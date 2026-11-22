@@ -123,10 +123,10 @@ func iconBox(r ui.Rect) ui.Rect {
 
 // pixelsNear is how many pixels of r are within tol of c.
 func pixelsNear(tt *ui.Tester, r ui.Rect, c ui.Color, tol int) int {
-	n := 0
+	n, img := 0, tt.Image() // a copy of the window's pixels: once, not per pixel
 	for y := int(r.Y); y < int(r.Y+r.H); y++ {
 		for x := int(r.X); x < int(r.X+r.W); x++ {
-			if nearTol(tt.Image().RGBAAt(x, y), c, tol) {
+			if nearTol(img.RGBAAt(x, y), c, tol) {
 				n++
 			}
 		}
