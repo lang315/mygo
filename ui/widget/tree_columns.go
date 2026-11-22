@@ -29,7 +29,7 @@ func (t *TreeViewWidget[T, K]) SetColumns(treeTitle string, cols ...Column[T]) *
 		}
 		tc := &treeColumns[T, K]{t: t, columns: columns, cols: shown}
 		tc.header, tc.cellFn, tc.kids, tc.label, tc.skip = tc.headerCell, tc.cell, t.kidsOf, t.labelAt, t.skip
-		t.inColumns = tc.build
+		t.inColumns = tc.outline
 	})
 	return t
 }
@@ -53,9 +53,10 @@ type treeColumns[T any, K comparable] struct {
 	look *Style
 }
 
-// build is the TreeView's inColumns: ui's outline in columns, on the
-// TreeView's state. Under mu, while the tree builds.
-func (tc *treeColumns[T, K]) build(c *ui.Context) ui.Element {
+// outline is the TreeView's inColumns: ui's outline in columns, on the
+// TreeView's state. Under mu, while the tree builds. Not named build: the
+// linker keeps a method of Control's name and type wherever the type is.
+func (tc *treeColumns[T, K]) outline(c *ui.Context) ui.Element {
 	tc.c, tc.size = c, 0
 	if tk, scale := skinOf(c); tk != nil {
 		tc.size = tk.Label.Size * scale

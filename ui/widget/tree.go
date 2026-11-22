@@ -768,11 +768,12 @@ func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	s.List.Selected = &t.cursor
 	var e ui.Element
 	if t.inColumns != nil {
-		e = t.inColumns(c).Grow(1) // it sets Label and Skip from functions made once
+		e = t.inColumns(c) // it sets Label and Skip from functions made once
 	} else {
 		s.List.Label, s.List.Skip = t.labelAt, t.skip
-		e = ui.Outline(c, s, t.roots, t.kidsOf, func(it treeItem[K]) { t.row(c, it) }).Grow(1)
+		e = ui.Outline(c, s, t.roots, t.kidsOf, func(it treeItem[K]) { t.row(c, it) })
 	}
+	e.Grow(1)
 	frameList(c, e)
 	if fn := t.onActivate; fn != nil {
 		e.OnActivate(func(row int) {
