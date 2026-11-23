@@ -151,7 +151,7 @@ func commands(form *widget.Form, editor widget.Control, paste func()) {
 ```
 
 - `widget.RibbonWidget.AddGroup` adds to the last tab, `widget.RibbonWidget.AddLarge` and `widget.RibbonWidget.AddSmall` to the last group; before any, they add one with no title. A control the ribbon holds already is not added again.
-- `widget.RibbonWidget.SetCollapsed` shows the tabs alone; a double click on a tab and Ctrl+F1 toggle it, and a click on a tab of a collapsed ribbon expands it. `widget.RibbonWidget.Tab` and `widget.RibbonWidget.SetTab` read and set the tab shown. A narrow window clips the groups; they do not shrink. There are no key tips, quick access toolbar, application menu or galleries. Read `docs/ui/widget/ribbon.md`.
+- `widget.RibbonWidget.SetCollapsed` shows the tabs alone; a double click on a tab and Ctrl+F1 toggle it, and a click on a tab of a collapsed ribbon expands it. `widget.RibbonWidget.Tab` and `widget.RibbonWidget.SetTab` read and set the tab shown. A narrow window clips the groups; they do not shrink. Key tips come with it, letters it gives itself: F10 (and Alt alone on Windows) shows a letter on each tab, then on each command of the tab typed, in a form with no menu bar, off on macOS. There is no quick access toolbar, application menu or gallery. Read `docs/ui/widget/ribbon.md`.
 
 ## Binding
 
