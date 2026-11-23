@@ -65,6 +65,16 @@ func Fields() *FieldsWidget {
 // without a control, or with one already in the form, is not added. The
 // label is a Label of its own: Label(i) returns it to style it.
 func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
+	return f.addRow(label, c, false)
+}
+
+// Add adds a wide row with no label: c across the form (in SettingsRows,
+// across the card's inside), as Row("", c).Wide() does. Describe and Action
+// then apply to it as to any row.
+func (f *FieldsWidget) Add(c Control) *FieldsWidget { return f.addRow("", c, true) }
+
+// addRow is Row, the row made wide (Wide) when wide is true, in one change.
+func (f *FieldsWidget) addRow(label string, c Control, wide bool) *FieldsWidget {
 	if c == nil {
 		return f
 	}
@@ -74,26 +84,9 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 		if f.has(c, -1) {
 			return
 		}
-		f.rows = append(f.rows, fieldRow{label: l, w: c, key: key, at: at, rule: fieldRule(l.id), box: fieldRowKey(l.id)})
+		f.rows = append(f.rows, fieldRow{label: l, w: c, key: key, at: at, rule: fieldRule(l.id), box: fieldRowKey(l.id), wide: wide})
 		adopt(&f.core, c)
 	})
-	return f
-}
-
-// Add adds a wide row with no label: c across the form (in SettingsRows,
-// across the card's inside), as Row("", c).Wide() does. Describe and Action
-// then apply to it as to any row.
-func (f *FieldsWidget) Add(c Control) *FieldsWidget {
-	mu.Lock()
-	n := len(f.rows)
-	mu.Unlock()
-	f.Row("", c)
-	mu.Lock()
-	added := len(f.rows) > n // when Row adds none, the last row stays as it was
-	mu.Unlock()
-	if added {
-		f.Wide()
-	}
 	return f
 }
 

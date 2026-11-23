@@ -94,6 +94,44 @@ func TestFieldsAddCountsInLabel(t *testing.T) {
 	}
 }
 
+// Case 8: Add and Row from two goroutines on one form: every Add row is
+// wide, every Row row is not (run with -race).
+func TestFieldsAddAndRowConcurrently(t *testing.T) {
+	const n = 200
+	f := Fields()
+	added := map[Control]bool{}
+	adds, rows := make([]Control, n), make([]Control, n)
+	for i := range n {
+		adds[i], rows[i] = TextBox(), TextBox()
+		added[adds[i]] = true
+	}
+	done := make(chan bool)
+	go func() {
+		for _, c := range adds {
+			f.Add(c)
+		}
+		done <- true
+	}()
+	go func() {
+		for _, c := range rows {
+			f.Row("R", c)
+		}
+		done <- true
+	}()
+	<-done
+	<-done
+	mu.Lock()
+	defer mu.Unlock()
+	if len(f.rows) != 2*n {
+		t.Fatalf("%d rows, want %d", len(f.rows), 2*n)
+	}
+	for i, r := range f.rows {
+		if r.wide != added[r.w] {
+			t.Errorf("row %d: wide %v, want %v (an Add row: %v)", i, r.wide, added[r.w], added[r.w])
+		}
+	}
+}
+
 // labelText returns l's text, "<nil>" for none.
 func labelText(l *LabelWidget) string {
 	if l == nil {
