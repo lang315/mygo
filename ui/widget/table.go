@@ -260,10 +260,15 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t.list.HeaderCell = t.headerCell
 	t.init(t)
 	t.link.id, t.link.prune = t.id, t.prune
-	if slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Badge != nil || cl.Format != nil }) {
+	status, sums := false, false
+	for i := range cols {
+		status = status || cols[i].Badge != nil || cols[i].Format != nil
+		sums = sums || cols[i].Summary != nil
+	}
+	if status {
 		t.enableStatus()
 	}
-	if slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Summary != nil }) {
+	if sums {
 		t.enableSummaries()
 	}
 	mu.Lock()
@@ -625,31 +630,28 @@ func (t *DataGridViewWidget[T, K]) headAt(row int) (ui.TableGroup, bool) {
 // groupLabel is what ui is given of a group's header: its key, boxed once,
 // and its text (groupText) for count rows.
 type groupLabel struct {
-	key   any
-	count int
-	text  string
+	key         any
+	title, text string
+	count       int
 }
 
-// groupLabels are the headers' labels by title.
-type groupLabels map[string]groupLabel
+// groupLabels are the headers' labels, by the place of their group.
+type groupLabels []groupLabel
 
-// of returns the key and the text of g's header, made when its title or its
-// count are new: ui asks for them in every frame, and a key boxed or a text
-// made there would allocate each time. Not generic, so that it links once.
-// Under mu.
-func (ls *groupLabels) of(g ui.TableGroup) groupLabel {
-	l, ok := (*ls)[g.Title]
-	if !ok || l.count != g.Len {
-		// shortcut: past 1024 titles the cache starts over, dropping titles
-		// gone too; a view showing more headers than that would allocate.
-		if *ls == nil || !ok && len(*ls) >= 1024 {
-			*ls = groupLabels{}
-		}
-		if !ok {
+// of returns the key and the text of g's header, the k-th group, made when
+// that group's title or count are new: ui asks for them in every frame, and
+// a key boxed or a text made there would allocate each time. Not generic,
+// so that it links once. Under mu.
+func (ls *groupLabels) of(k int, g ui.TableGroup) *groupLabel {
+	for len(*ls) <= k {
+		*ls = append(*ls, groupLabel{count: -1})
+	}
+	l := &(*ls)[k]
+	if l.title != g.Title || l.count != g.Len {
+		if l.title != g.Title || l.key == nil {
 			l.key = groupKey{g.Title}
 		}
-		l.count, l.text = g.Len, groupText(ListViewGroup{g.Title, g.Len})
-		(*ls)[g.Title] = l
+		l.title, l.count, l.text = g.Title, g.Len, groupText(ListViewGroup{g.Title, g.Len})
 	}
 	return l
 }
@@ -685,7 +687,7 @@ func (t *DataGridViewWidget[T, K]) keyAt(row int) any {
 		defer mu.Unlock()
 	}
 	if g, ok := t.headAt(row); ok {
-		return t.labels.of(g).key
+		return t.labels.of(t.near, g).key // headAt left its group's place in near
 	}
 	return t.keyOfPos(t.posAt(row))
 }
@@ -741,7 +743,7 @@ func (t *DataGridViewWidget[T, K]) labelAt(row int) string {
 		defer mu.Unlock()
 	}
 	if g, ok := t.headAt(row); ok {
-		return t.labels.of(g).text
+		return t.labels.of(t.near, g).text
 	}
 	return t.labelOfPos(t.posAt(row))
 }
@@ -786,7 +788,8 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 // while the table builds.
 func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, col int) {
 	if f := t.footer; f != nil {
-		f.heads = append(f.heads, headCell{col, cell})
+		cl := &t.columns[col]
+		f.heads = append(f.heads, headCell{cell, cl.Title, cl.Align, cl.Fixed})
 	}
 	if t.headSize > 0 {
 		cell.FontSize(t.headSize)
@@ -913,7 +916,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	if g, ok := t.headAt(row); ok {
 		if col == 0 { // a header spans the columns, built as column 0
-			groupHeader(c, t.labels.of(g).text)
+			groupHeader(c, t.labels.of(t.near, g).text)
 		}
 		return
 	}

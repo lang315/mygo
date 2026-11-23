@@ -654,7 +654,7 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 	}
 	t := lv.t
 	if gr, ok := t.headAt(i); ok {
-		groupHeader(c, t.labels.of(gr).text)
+		groupHeader(c, t.labels.of(t.near, gr).text)
 		return
 	}
 	r := t.rowAt(i)

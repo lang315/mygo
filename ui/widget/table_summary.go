@@ -2,16 +2,19 @@ package widget
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // enableSummaries gives the grid its row of summaries: a column has a
 // Summary. Every grid of an app links this, as Summary is a field, once for
 // each shape of its rows: so it is only the adapter that runs a column's
-// Summary over the rows shown; the row's state and work are gridFooter's,
-// which reads the grid's through pointers. Before the table is shared.
+// Summary over the rows shown; the row's state and work are gridFooter's.
+// Before the table is shared.
 func (t *DataGridViewWidget[T, K]) enableSummaries() {
-	f := &gridFooter{n: len(t.cols), version: &t.list.Version, seq: &t.src.seq, columns: &t.columns,
-		vis: &t.visCols, numbered: &t.numbered, size: &t.headSize, look: &t.headLook, disabled: &t.disabled, key: &t.textKey}
+	f := &gridFooter{version: &t.list.Version, seq: &t.src.seq, disabled: &t.disabled}
+	for i := range t.cols {
+		f.titles = append(f.titles, t.cols[i].Title)
+	}
 	f.summary = func(i int) string {
 		s := t.cols[i].Summary
 		if s == nil {
@@ -28,11 +31,13 @@ func (t *DataGridViewWidget[T, K]) enableSummaries() {
 	t.footer, t.summarize = f, f.frame
 }
 
-// headCell is a cell of the header as the table built it: col is its column,
-// an index into the columns ui is given.
+// headCell is a cell of the header as the table built it, with its column's
+// title, alignment, and whether it is the index column (Fixed).
 type headCell struct {
-	col  int
-	cell ui.Element
+	cell  ui.Element
+	title string
+	align ui.Align
+	fixed bool
 }
 
 // gridFooter is the state of a DataGridView's row of summaries. Its cells
@@ -41,21 +46,14 @@ type headCell struct {
 // move or a scroll settles at once.
 type gridFooter struct {
 	heads []headCell // the header's cells of this build, in order (headerCell)
-	// summary runs the Summary of the grid's column i of n, "" for none.
+	// summary runs the Summary of the grid's column i, "" for none; titles
+	// are the columns' titles, which tell them apart.
 	summary func(i int) string
-	n       int
+	titles  []string
 	// The grid's: the view's version as given to ui (ListState.Version), the
-	// source's change, the columns ui is given, the indexes of those shown,
-	// whether the index column shows, the header's text size, the skin's
-	// GridHeader look, disabled, and the text key.
+	// source's change, and whether it is disabled.
 	version, seq *uint64
-	columns      *[]ui.TableColumn
-	vis          *[]int
-	numbered     *bool
-	size         *float32
-	look         **Style
 	disabled     *bool
-	key          *any
 	// texts are the columns' Summary texts, as of known's version and seq.
 	texts        []string
 	known        bool
@@ -76,7 +74,7 @@ func (f *gridFooter) frame(c *ui.Context) {
 	if v, s := *f.version, *f.seq; !f.known || v != f.atVer || s != f.atSeq {
 		f.known, f.atVer, f.atSeq = true, v, s
 		f.texts = f.texts[:0]
-		for i := range f.n {
+		for i := range f.titles {
 			text := ""
 			if v, stack, panicked := runColumnFn(func() { text = f.summary(i) }); panicked {
 				Post(func() { report(v, stack) })
@@ -115,8 +113,8 @@ func (f *gridFooter) build(c *ui.Context) {
 	f.placed = f.placed[:0]
 	row.Children(func() {
 		x := float32(0) // where the next cell goes, from inside the row's border
-		for _, hc := range f.heads {
-			b := hc.cell.Bounds()
+		for i := range f.heads {
+			b := f.heads[i].cell.Bounds()
 			f.placed = append(f.placed, b)
 			left := b.X - f.at.X - 1
 			from := max(left, x)
@@ -126,32 +124,31 @@ func (f *gridFooter) build(c *ui.Context) {
 			if from > x {
 				ui.Row(c).Width(from - x).Shrink(0)
 			}
-			f.cell(c, hc.col, left+b.W-from, h)
+			f.cell(c, &f.heads[i], left+b.W-from, h)
 			x = left + b.W
 		}
 	})
 }
 
-// cell builds the cell under the header's column col, w wide and h high.
-func (f *gridFooter) cell(c *ui.Context, col int, w, h float32) {
+// cell builds the cell under the header's cell hc, w wide and h high, with
+// the text of its column's Summary, the header's text size, and the skin's
+// GridHeader look.
+func (f *gridFooter) cell(c *ui.Context, hc *headCell, w, h float32) {
 	text := ""
-	if i := col; !*f.numbered || i > 0 {
-		if *f.numbered {
-			i--
-		}
-		if vis := *f.vis; i < len(vis) && vis[i] < len(f.texts) {
-			text = f.texts[vis[i]]
+	for i, title := range f.titles {
+		if !hc.fixed && title == hc.title && i < len(f.texts) {
+			text = f.texts[i]
 		}
 	}
 	th := c.Theme()
 	cell := ui.Row(c).Width(w).Height(h).Shrink(0).Padding(0, th.Space(2.5)).AlignItems(ui.Center).
-		Justify((*f.columns)[col].Align).Clip().Role(ui.RoleCell)
-	if *f.size > 0 {
-		cell.FontSize(*f.size)
+		Justify(hc.align).Clip().Role(ui.RoleCell)
+	if tk, scale := skinOf(c); tk != nil {
+		cell.FontSize(tk.Label.Size * scale)
 	}
-	if look := *f.look; look != nil {
+	if look := lookOf(skinhook.KindGridHeader); look != nil {
 		st := look.effective(th.Dark, false, false, false, false, *f.disabled)
-		st.apply(c, cell, *f.key)
+		st.apply(c, cell, f) // f keys the text color's animation, as a control's textKey
 	}
 	if text != "" {
 		cell.Children(func() { ui.Text(c, text).SingleLine().FontWeight(600) })
