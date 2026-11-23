@@ -34,6 +34,7 @@ type fieldRow struct {
 	// said is the control's description, desc then the tooltip saidTip,
 	// "" until describe joins them.
 	said, saidTip string
+	dimmed        bool // describe disabled the label, with the control
 }
 
 // fieldHead is a section's heading, shown before row at.
@@ -173,6 +174,13 @@ func (f *FieldsWidget) has(c Control, skip int) bool {
 // Under mu, before the control builds.
 func (r *fieldRow) describe() {
 	b := r.w.base()
+	// The label dims with its control, and comes back with it, unless
+	// it was disabled by hand.
+	if b.disabled && !r.label.disabled {
+		r.label.disabled, r.dimmed = true, true
+	} else if !b.disabled && r.dimmed {
+		r.label.disabled, r.dimmed = false, false
+	}
 	if r.desc == "" {
 		b.desc = ""
 		return
@@ -297,7 +305,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 						registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 					}
 					if r.desc != "" && !r.label.hidden {
-						ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+						ui.Text(c, r.desc).TextColor(c.Theme().TextMuted).Disabled(r.w.base().disabled)
 					}
 					render(c, r.w).NamedBy(e)
 				})
@@ -461,7 +469,7 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	if r.desc != "" && !r.label.hidden {
 		cell = ui.Column(c).Children(func() {
 			e = render(c, r.label)
-			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted).Disabled(r.w.base().disabled)
 		})
 	} else {
 		e = render(c, r.label) // holds a hidden label
@@ -540,7 +548,7 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 			registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 		}
 		if r.desc != "" && !r.label.hidden {
-			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted).Disabled(r.w.base().disabled)
 		}
 		render(c, r.w).NamedBy(e)
 	})

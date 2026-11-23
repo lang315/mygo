@@ -394,8 +394,13 @@ func (w *Form) focusTarget(c Control) Control {
 
 // focusRow focuses what the access key of a Fields row aims at, the row's
 // control c or, when it is a container, the first control in it. Its act runs
-// only for a row whose target answerMnemonics found.
-func (w *Form) focusRow(c Control) { focusLater(w.focusTarget(c)) }
+// only for a row whose target answerMnemonics found. A disabled c is not
+// focused.
+func (w *Form) focusRow(c Control) {
+	if !c.base().disabled {
+		focusLater(w.focusTarget(c))
+	}
+}
 
 // focusNextAfter focuses the control nextAfter finds.
 func (w *Form) focusNextAfter(c Control) {
