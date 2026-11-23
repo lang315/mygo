@@ -158,10 +158,6 @@ func (r *RibbonWidget) build(c *ui.Context) ui.Element {
 		strip := r.strip(c, p)
 		r.inner = strip // Focus (an access key) goes to the tabs, as a TabControl's
 		c.OnWindowShortcut(ui.Ctrl, ui.KeyF1, r.toggle)
-		// Tabs clamps *p while it builds, without OnChange: see it here.
-		if *p != r.tab.value {
-			r.tab.value = *p
-		}
 		if i := *p; !r.collapsed && i >= 0 && i < len(r.tabs) {
 			r.groups(c, r.tabs[i])
 		}

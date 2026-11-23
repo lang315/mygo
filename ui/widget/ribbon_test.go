@@ -123,6 +123,14 @@ func TestRibbonShowsTabsAndTheShownTabsGroups(t *testing.T) {
 	if tab != row || !near(row, ui.LightTheme().Background) {
 		t.Fatalf("the shown tab is filled %v, the groups row %v: want both Background", tab, row)
 	}
+	// It is a document tab: lined on its side, as the tab not shown is not.
+	insert, border := nodeOf(t, tt, ui.RoleTab, "Insert").Bounds, ui.LightTheme().Border
+	if c := tt.Image().RGBAAt(int(home.X), int(home.Y+home.H/2)); !near(c, border) {
+		t.Fatalf("the shown tab's left side is %v, want the line %v", c, border)
+	}
+	if c := tt.Image().RGBAAt(int(insert.X), int(insert.Y+insert.H/2)); near(c, border) {
+		t.Fatalf("the tab not shown has a line on its side: %v", c)
+	}
 }
 
 // 2. Paste is large, its 32 DIP icon above its text and centred; Cut, Copy
@@ -543,10 +551,31 @@ func TestRibbonFrameAllocatesNoMoreThanBoxes(t *testing.T) {
 		boxes.Frame()
 	}
 	got, want := allocrun.Least(30, ribbon.Frame), allocrun.Least(30, boxes.Frame)
+	t.Logf("allocations in a frame: the ribbon %v, the boxes %v", got, want)
 	if got > want {
 		t.Fatalf("a ribbon's frame allocates %v, the same controls in boxes %v", got, want)
 	}
 }
+
+// Own case: what a ribbon allocates in a frame, per ribbon (the slope of 200
+// ribbons over 100, as TestWidgetFrameAllocatesNoClosuresPerWidget measures:
+// a frame's fixed cost, which differs between platforms, is not in it). A
+// collapsed ribbon of two tabs allocates 3 (closures of its build that
+// escape, and ui's own); its OnChange and Ctrl+F1 callbacks are made once,
+// not in each frame, and add none.
+func TestRibbonAllocatesItsCallbacksOnce(t *testing.T) {
+	make := func(i int) Control {
+		return Ribbon().AddTab("Home").AddGroup("G").AddTab("Insert").SetCollapsed(true)
+	}
+	slope := (frameAllocs(make, 200) - frameAllocs(make, 100)) / 100
+	t.Logf("%.2f allocations per ribbon in a frame", slope)
+	if slope > ribbonOwnAllocs+0.2 {
+		t.Fatalf("%.2f allocations per ribbon in a frame, want %d", slope, ribbonOwnAllocs)
+	}
+}
+
+// ribbonOwnAllocs is what TestRibbonAllocatesItsCallbacksOnce measured.
+const ribbonOwnAllocs = 3
 
 // 14. Changes from another goroutine while frames run show on a following
 // frame (run it under -race).
@@ -671,6 +700,41 @@ func TestRibbonRefusesAControlItHolds(t *testing.T) {
 	}
 	if n := countNodes(tt, ui.RoleButton, "Table"); n != 1 {
 		t.Fatalf("%d buttons Table, want 1", n)
+	}
+}
+
+// Own case: a tool button of the ribbon has no face at rest, as in a tool
+// strip: left of Cut's icon is the groups row's fill, not a button's
+// Surface or border.
+func TestRibbonToolButtonsAreFlatAtRest(t *testing.T) {
+	tt := newRibbonKit(t).tester(800)
+	cut, row := rnode(t, tt, "Cut"), ui.LightTheme().Background
+	for _, x := range []int{int(cut.X), int(cut.X + 2)} {
+		if c := tt.Image().RGBAAt(x, int(cut.Y+cut.H/2)); !near(c, row) {
+			t.Fatalf("Cut at x %d is %v, want the groups row's %v: it has a face at rest", x, c, row)
+		}
+	}
+}
+
+// Own case: the press of a double click released off the tab clicks
+// nothing, and the next click on a tab of the collapsed ribbon still
+// expands it.
+func TestRibbonDoubleClickReleasedOffTheTab(t *testing.T) {
+	k := newRibbonKit(t)
+	tt := k.tester(800)
+	home := nodeOf(t, tt, ui.RoleTab, "Home").Bounds
+	x, y := home.X+home.W/2, home.Y+home.H/2
+	tt.ClickAt(x, y)
+	tt.Press(x, y) // the double click: it collapses
+	tt.Release(700, 300)
+	tt.Frame()
+	if !k.r.Collapsed() {
+		t.Fatal("the double click did not collapse the ribbon")
+	}
+	tt.Advance(time.Second)
+	click(t, tt, "Insert")
+	if k.r.Collapsed() {
+		t.Fatal("the click after it did not expand the collapsed ribbon")
 	}
 }
 
