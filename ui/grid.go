@@ -591,6 +591,11 @@ func gridColumns(e *node, s *gridScratch, items []gridItem, nc int, avail float3
 		} else if contributes(e.cols, it.col, it.colSpan, avail, minContent) || e.c.rt.noLayoutCache {
 			cs[i].min = intrinsic(c, false) + c.marginX()
 			cs[i].max = intrinsic(c, true) + c.marginX()
+			if c.maxW.set&boundPct != 0 {
+				// As above: the cell clamps it, so the columns need not make
+				// room for its content.
+				cs[i].min = c.marginX() + c.padX()
+			}
 		}
 	}
 	sizeTracks(e.cols, nc, avail, e.gapX, cs, minContent, e.justify == alignAuto, sizes, limits)

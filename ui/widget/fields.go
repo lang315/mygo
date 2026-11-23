@@ -34,6 +34,7 @@ type fieldRow struct {
 	// said is the control's description, desc then the tooltip saidTip,
 	// "" until describe joins them.
 	said, saidTip string
+	dimmed        bool // describe disabled the label, with the control
 }
 
 // fieldHead is a section's heading, shown before row at.
@@ -173,6 +174,13 @@ func (f *FieldsWidget) has(c Control, skip int) bool {
 // Under mu, before the control builds.
 func (r *fieldRow) describe() {
 	b := r.w.base()
+	// The label dims with its control, and comes back with it, unless
+	// it was disabled by hand.
+	if b.disabled && !r.label.disabled {
+		r.label.disabled, r.dimmed = true, true
+	} else if !b.disabled && r.dimmed {
+		r.label.disabled, r.dimmed = false, false
+	}
 	if r.desc == "" {
 		b.desc = ""
 		return
@@ -297,7 +305,7 @@ func (f *FieldsWidget) build(c *ui.Context) ui.Element {
 						registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 					}
 					if r.desc != "" && !r.label.hidden {
-						ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+						ui.Text(c, r.desc).TextColor(c.Theme().TextMuted).Disabled(r.w.base().disabled)
 					}
 					render(c, r.w).NamedBy(e)
 				})
@@ -461,7 +469,7 @@ func (f *FieldsWidget) cells(c *ui.Context, i int) {
 	if r.desc != "" && !r.label.hidden {
 		cell = ui.Column(c).Children(func() {
 			e = render(c, r.label)
-			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted).Disabled(r.w.base().disabled)
 		})
 	} else {
 		e = render(c, r.label) // holds a hidden label
@@ -515,7 +523,16 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 	if f.gapSet {
 		gap = f.colGap
 	}
-	ui.Column(c).Gap(gap).ColumnSpan(2).Children(func() {
+	col := ui.Column(c).Gap(gap).ColumnSpan(2)
+	if f.settings {
+		// A control wider than the card is the card's to clip: the columns
+		// do not make room for it, which would shrink the other rows' controls.
+		col.MaxWidthPercent(100)
+	}
+	if f.settings && r.label.text == "" {
+		col.AlignSelf(ui.Center) // no label line: the control in the middle of its band, as a row's is
+	}
+	col.Children(func() {
 		// The cell's children are a column's: Align is across it.
 		axis = vertical
 		defer func() { axis = horizontal }()
@@ -536,7 +553,7 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 			registerMnemonic(r.key, e, w, func() { buildingForm.focusRow(w) })
 		}
 		if r.desc != "" && !r.label.hidden {
-			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted)
+			ui.Text(c, r.desc).TextColor(c.Theme().TextMuted).Disabled(r.w.base().disabled)
 		}
 		render(c, r.w).NamedBy(e)
 	})
