@@ -199,6 +199,15 @@ in a type of your own whose `Run` returns it. A dialog opened from a
 dialog takes the outer one's `Form` as its parent; closing a window
 closes the dialogs over it, the innermost first. `SetDeletable(false)` keeps the user from closing it (its
 `Close` and its parent still can), and `OnBeforeRun` runs before it shows.
+`Parent()` returns the form the dialog was made over (nil for none), also
+after it closes, so the code that ran it can tell the outcome there:
+
+```go
+d.Run()
+if p := d.Parent(); p != nil {
+	p.ShowToast(widget.Toast{Status: widget.StatusSuccess, Title: "Account added"})
+}
+```
 
 A form takes shortcuts of its own, and `AcceptButton`/`CancelButton` for Enter
 and Escape; see [Form shortcuts](widget/form-keys.md).
@@ -489,6 +498,12 @@ widget.Fields().
   label column of the other rows, and a wide row with an empty label has no
   label at all. Stacked rows are all wide, so there it changes nothing;
   before any row it does nothing.
+- `Add(c)` adds such a row, wide with no label, as `Row("", c).Wide()` does:
+  `c` across the form (in `SettingsRows`, across the card's inside), for a
+  note, a check box or a button among the rows. `Describe` and `Action` then
+  apply to it as to any row, and it counts in `Label(i)` (its label is
+  empty). As `Row`, it adds nothing for a nil control or one already in the
+  form, and then leaves the last row as it was.
 - `Action(c)` gives the last row added one small action control, such as a
   `LinkLabel` or a flat button. In a wide or stacked row it sits at the right
   end of the label's line, in its own width, centred on the label, which
