@@ -38,6 +38,11 @@ func NewDialog(parent *Form, title, subtitle string, width, height int, content 
 	return d
 }
 
+// Parent returns the form the dialog was made over (NewDialog's parent),
+// nil for none. It stays the same after the dialog closes, so a handler
+// can show a toast on that form once Run returns.
+func (d *Dialog) Parent() *Form { return d.parent } // set by NewDialog alone: no lock
+
 // SetTitle changes the title, in the window's title bar and in the dialog.
 func (d *Dialog) SetTitle(s string) *Dialog {
 	d.title.SetText(s)

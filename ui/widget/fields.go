@@ -80,6 +80,23 @@ func (f *FieldsWidget) Row(label string, c Control) *FieldsWidget {
 	return f
 }
 
+// Add adds a wide row with no label: c across the form (in SettingsRows,
+// across the card's inside), as Row("", c).Wide() does. Describe and Action
+// then apply to it as to any row.
+func (f *FieldsWidget) Add(c Control) *FieldsWidget {
+	mu.Lock()
+	n := len(f.rows)
+	mu.Unlock()
+	f.Row("", c)
+	mu.Lock()
+	added := len(f.rows) > n // when Row adds none, the last row stays as it was
+	mu.Unlock()
+	if added {
+		f.Wide()
+	}
+	return f
+}
+
 // Section adds a heading, in bold, across the form's width before the rows
 // that follow it, up to the next Section. The rows of all sections share one
 // label column, and a section after the first has more room above it than a
