@@ -139,6 +139,25 @@ func TestFieldsLabelDimsWithItsDisabledBox(t *testing.T) {
 	}
 }
 
+// Case 4, the guard of focusRow: a label that is hidden builds no element, so
+// the key finds nothing disabled in it, and only focusRow keeps the focus
+// from a disabled control.
+func TestFieldsHiddenLabelKeyDoesNotFocusADisabledControl(t *testing.T) {
+	withMac(t, false)
+	for name, lay := range dlLayouts {
+		t.Run(name, func(t *testing.T) {
+			tb := TextBox().SetDisabled(true)
+			f := lay(func(f *FieldsWidget) *FieldsWidget { return f.Row("&Kịch bản", tb) })
+			f.Label(0).SetVisible(false)
+			tt := formOf(t, f)
+			altKey(tt, ui.KeyK)
+			if tt.Find(ByRole(ui.RoleTextField)).Focused() {
+				t.Error("Alt+K focused the disabled control")
+			}
+		})
+	}
+}
+
 // Case 4: the label's access key does not focus a disabled control.
 func TestFieldsKeyDoesNotFocusADisabledControl(t *testing.T) {
 	withMac(t, false)
