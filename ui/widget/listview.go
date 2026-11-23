@@ -654,7 +654,7 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 	}
 	t := lv.t
 	if gr, ok := t.headAt(i); ok {
-		groupHeader(c, ListViewGroup{gr.Title, gr.Len})
+		groupHeader(c, t.groupLabelOf(gr).text)
 		return
 	}
 	r := t.rowAt(i)
@@ -706,12 +706,12 @@ func (lv *ListViewWidget[T, K]) item(c *ui.Context, i int) {
 	})
 }
 
-// groupHeader builds the header of group gr: its title and its count, over a
-// background that tells it from the rows.
-func groupHeader(c *ui.Context, gr ListViewGroup) {
+// groupHeader builds the header of a group, whose text (groupText) is its
+// title and its count, over a background that tells it from the rows.
+func groupHeader(c *ui.Context, text string) {
 	th := c.Theme()
 	ui.Row(c).Grow(1).AlignItems(ui.Center).PaddingStart(th.Space(2)).Background(th.SurfaceHover).Radius(th.Radius).Children(func() {
-		ui.Text(c, groupText(gr)).Bold().TextColor(th.TextMuted).SingleLine()
+		ui.Text(c, text).Bold().TextColor(th.TextMuted).SingleLine()
 	})
 }
 
