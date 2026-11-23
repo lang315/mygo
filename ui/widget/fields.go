@@ -515,7 +515,11 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 	if f.gapSet {
 		gap = f.colGap
 	}
-	ui.Column(c).Gap(gap).ColumnSpan(2).Children(func() {
+	col := ui.Column(c).Gap(gap).ColumnSpan(2)
+	if f.settings && r.label.text == "" {
+		col.AlignSelf(ui.Center) // no label line: the control in the middle of its band, as a row's is
+	}
+	col.Children(func() {
 		// The cell's children are a column's: Align is across it.
 		axis = vertical
 		defer func() { axis = horizontal }()
