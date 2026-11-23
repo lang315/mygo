@@ -190,8 +190,9 @@ func TestRibbonTipsComboLetterFocuses(t *testing.T) {
 	_, tt := tipKit(t)
 	typeTip(tt, ui.KeyF10)
 	typeTip(tt, ui.KeyH)
+	holdEvents(t)
 	typeTip(tt, ui.KeyS)
-	tt.Frame()
+	settleTips(t, tt) // the focus comes through the event goroutine
 	if !tt.Focused("Size") {
 		t.Fatal("S did not focus the Size combo")
 	}
@@ -528,8 +529,9 @@ func TestRibbonTipsDropDownTakesTheFocus(t *testing.T) {
 	typeTip(tt, ui.KeyF10)
 	typeTip(tt, ui.KeyH)
 	wantTips(t, tt, map[string]string{"Fonts": "F"})
+	holdEvents(t)
 	typeTip(tt, ui.KeyF)
-	tt.Frame()
+	settleTips(t, tt)
 	if !tt.Focused("Fonts") {
 		t.Fatal("F did not focus Fonts")
 	}
@@ -538,6 +540,46 @@ func TestRibbonTipsDropDownTakesTheFocus(t *testing.T) {
 	if m := tt.Menu(); len(m) != 2 || m[0] != "Arial" {
 		t.Fatalf("Down on Fonts shows the menu %q", m)
 	}
+}
+
+// eventGate holds the event goroutine while set (holdEvents).
+var eventGate chan struct{}
+
+// holdEvents keeps the event goroutine busy until settleTips, as a loaded
+// machine may (CI's Windows ARM64 did): what the tips post, as focusLater's
+// focus, waits, and a test must wait for it, not for a frame.
+func holdEvents(t *testing.T) {
+	gate, held := make(chan struct{}), make(chan struct{})
+	Post(func() { close(held); <-gate })
+	<-held
+	eventGate = gate
+	t.Cleanup(releaseEvents)
+}
+
+func releaseEvents() {
+	if eventGate != nil {
+		close(eventGate)
+		eventGate = nil
+	}
+}
+
+// settleTips lets the event goroutine go and runs what was posted and a
+// frame, until a round posts nothing, as widget.Tester.Settle does for a
+// ui.Tester.
+func settleTips(t *testing.T, tt *ui.Tester) {
+	t.Helper()
+	releaseEvents()
+	for range 100 {
+		before := postCount()
+		done := make(chan struct{})
+		Post(func() { close(done) })
+		<-done
+		tt.Frame()
+		if postCount() == before+1 {
+			return
+		}
+	}
+	t.Fatal("still posting after 100 rounds")
 }
 
 // typeLate types the letter of k as a keyboard does, the key going down, its
@@ -564,7 +606,7 @@ func TestRibbonTipsTakeTheFocusFromATextBox(t *testing.T) {
 	typeLate(tt, ui.KeyP, "p")
 	received(t, k.pasted)
 	nothingRan(t, k)
-	tt.Frame()
+	settleTips(t, tt)
 	if s := k.body.Text(); s != "" {
 		t.Fatalf("the text box took %q", s)
 	}
@@ -573,8 +615,9 @@ func TestRibbonTipsTakeTheFocusFromATextBox(t *testing.T) {
 	}
 	// Escape gives it back too.
 	typeTip(tt, ui.KeyF10)
+	holdEvents(t)
 	typeTip(tt, ui.KeyEscape)
-	tt.Frame()
+	settleTips(t, tt)
 	if !tt.Focused("Body") {
 		t.Fatal("Escape did not give the focus back to the text box")
 	}
