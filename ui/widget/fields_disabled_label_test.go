@@ -61,13 +61,33 @@ func dlCheck(t *testing.T, tt *Tester, off bool) {
 	}
 }
 
+// dlInk returns the darkest ink, the least red, in the bounds of the text s.
+func dlInk(t *testing.T, tt *Tester, s string) uint8 {
+	t.Helper()
+	r, img := find(t, tt.Tester, s), tt.Image()
+	ink := uint8(255)
+	for y := int(r.Y); y < int(r.Y+r.H); y++ {
+		for x := int(r.X); x < int(r.X+r.W); x++ {
+			ink = min(ink, img.RGBAAt(x, y).R)
+		}
+	}
+	return ink
+}
+
 // Cases 1 and 5: the label and the description of a row with a disabled
-// control are disabled, those of an enabled one are not.
+// control are disabled, those of an enabled one are not, and they are
+// drawn lighter (ui dims a disabled element).
 func TestFieldsLabelDimsWithItsDisabledControl(t *testing.T) {
 	for lay := range dlLayouts {
 		t.Run(lay, func(t *testing.T) {
-			dlCheck(t, dlForm(t, lay, TextBox().SetDisabled(true)), true)
-			dlCheck(t, dlForm(t, lay, TextBox()), false)
+			off, on := dlForm(t, lay, TextBox().SetDisabled(true)), dlForm(t, lay, TextBox())
+			for _, s := range []string{"Alpha", "Note"} {
+				if a, b := dlInk(t, off, s), dlInk(t, on, s); a <= b {
+					t.Errorf("%s: the darkest ink is %d next to a disabled control, %d next to an enabled one: not lighter", s, a, b)
+				}
+			}
+			dlCheck(t, off, true)
+			dlCheck(t, on, false)
 		})
 	}
 }
