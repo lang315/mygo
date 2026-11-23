@@ -834,6 +834,50 @@ t := widget.DataGridView(key, uid, state).
   must look at its columns' fields, so no call of the app's own tells it
   apart. `SetEmptyState` costs nothing until it is called.
 
+Groups and a row of totals, as a manager of many profiles shows them:
+
+```go
+status := widget.Column[Profile]{Title: "Status", Text: func(p *Profile) string { return p.Status },
+	Summary: func(rows iter.Seq[*Profile]) string { // the rows shown, after the search
+		running, failed := 0, 0
+		for p := range rows {
+			switch p.Status {
+			case "running":
+				running++
+			case "failed":
+				failed++
+			}
+		}
+		return fmt.Sprintf("%d running · %d failed", running, failed)
+	}}
+t := widget.DataGridView(key, name, status).
+	SetGroupBy(func(p *Profile) string { return p.Status }). // a header "running (312)" over each group
+	SetGroupOrder("failed", "running")                       // these first, the others by title
+```
+
+- `SetGroupBy(fn)` puts the rows under a header "Title (n)" for each title
+  `fn` returns, as `ListView.SetGroupBy`: the groups by title, or first those
+  `SetGroupOrder` names, in its order. Within a group the rows keep the sort
+  and the search, and a group the search empties shows no header. A click on
+  a header selects nothing; `Selected` and `Checked` return the keys in the
+  order shown. `SetGroupBy(nil)` shows no groups. `fn` runs once for each
+  row when the rows or the groups change, and for each row changed in place.
+  A `ListView` groups with its own `SetGroupBy`, not its `Details()`'.
+- A column's `Summary` gives it a cell in a row of totals under the table.
+  It gets the rows shown (after the search, in the order shown) and returns
+  the cell's text; the cells of columns without one, and of the `#` column,
+  stay empty. It runs when the rows shown change (a row added, changed in
+  place or deleted, a search, a sort), not in a frame at rest, once per
+  change for all the frames that follow, under the package's lock: it calls
+  no widget method. A `Summary` that panics leaves its cell empty and goes to
+  `OnPanic`. Each cell sits under its column's header and is as wide, and
+  follows it when the user resizes, moves or scrolls the columns, or a
+  column is hidden. The row takes the header's text size and the skin's
+  `GridHeader` look.
+- A grid without a `Summary` builds what it did, but every app with a grid
+  links the row's code, as it does that of badges: the table must look at
+  its columns' fields.
+
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
   place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.
