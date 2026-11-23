@@ -117,7 +117,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// headerFn is headerAt, made once; labels are the headers' keys and
 	// texts by title (groupLabelOf).
 	headerFn func(int) bool
-	labels   map[string]*groupLabel
+	labels   groupLabels
 	// posOf is each row's place in the view, -1 if hidden, as of
 	// posVersion: Selected and Checked build it on first use.
 	posOf                                   []int32
@@ -630,23 +630,32 @@ type groupLabel struct {
 	text  string
 }
 
-// groupLabelOf returns the key and the text of g's header, made when its
-// title or its count are new: ui asks for them in every frame, and a key
-// boxed or a text made there would allocate each time. Titles no group has
-// any more are dropped once they outnumber those shown. Under mu.
-func (t *DataGridViewWidget[T, K]) groupLabelOf(g ui.TableGroup) *groupLabel {
-	l := t.labels[g.Title]
+// groupLabels are the headers' labels by title.
+type groupLabels map[string]*groupLabel
+
+// of returns the key and the text of g's header, made when its title or its
+// count are new: ui asks for them in every frame, and a key boxed or a text
+// made there would allocate each time. Titles no group has any more are
+// dropped once they outnumber the shown groups, n. Not generic, so that it
+// links once. Under mu.
+func (ls *groupLabels) of(g ui.TableGroup, n int) *groupLabel {
+	l := (*ls)[g.Title]
 	if l == nil {
-		if t.labels == nil || len(t.labels) > 2*len(t.groupsOf())+16 {
-			t.labels = map[string]*groupLabel{}
+		if *ls == nil || len(*ls) > 2*n+16 {
+			*ls = groupLabels{}
 		}
 		l = &groupLabel{key: groupKey{g.Title}, count: -1}
-		t.labels[g.Title] = l
+		(*ls)[g.Title] = l
 	}
 	if l.count != g.Len {
 		l.count, l.text = g.Len, groupText(ListViewGroup{g.Title, g.Len})
 	}
 	return l
+}
+
+// groupLabelOf is labels.of for the groups of the frame ui shows. Under mu.
+func (t *DataGridViewWidget[T, K]) groupLabelOf(g ui.TableGroup) *groupLabel {
+	return t.labels.of(g, len(t.groupsOf()))
 }
 
 // rowAt returns the row at row, a line ui shows, in the frame it shows;

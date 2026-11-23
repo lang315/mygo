@@ -13,59 +13,67 @@ import (
 func (t *DataGridViewWidget[T, K]) enableSummaries() {
 	f := &gridFooter{}
 	t.footer = f
-	var (
-		known        bool
-		version, seq uint64
-		texts        []string // each column's of t.cols
-	)
-	// The rows the view shows, in its order: made once.
-	rows := func(yield func(*T) bool) {
+	for i := range t.cols {
+		f.aligns = append(f.aligns, t.cols[i].Align.ui())
+	}
+	// The rows the view shows, in its order: made once. The generic part is
+	// kept to these closures, as every grid of an app links it.
+	var rows iter.Seq[*T] = func(yield func(*T) bool) {
 		for i := range t.view.Len() {
 			if !yield(&t.src.rows[t.view.Row(i)]) {
 				return
 			}
 		}
 	}
+	f.summary = func(i int) string {
+		if s := t.cols[i].Summary; s != nil {
+			return s(rows)
+		}
+		return ""
+	}
 	// Under mu, after the table built.
 	t.summarize = func(c *ui.Context) {
-		if v, s := t.view.Version(), t.src.seq; !known || v != version || s != seq {
-			known, version, seq = true, v, s
-			texts = texts[:0]
-			for i := range t.cols {
-				texts = append(texts, summaryOf(t.cols[i].Summary, rows))
-			}
-		}
-		// The header's cells are those of t.columns: the index column first
-		// when numbered, then the columns shown.
-		f.cells = f.cells[:0]
-		for _, h := range f.heads {
-			fc := footCell{head: h.cell}
-			if ci := h.col; !t.numbered || ci > 0 {
-				if t.numbered {
-					ci--
-				}
-				if ci < len(t.visCols) {
-					cl := &t.cols[t.visCols[ci]]
-					fc.text, fc.align = texts[t.visCols[ci]], cl.Align.ui()
-				}
-			}
-			f.cells = append(f.cells, fc)
-		}
+		f.update(t.view.Version(), t.src.seq, len(t.cols))
+		f.place(t.numbered, t.visCols)
 		f.build(c, t.headSize, t.headLook, t.disabled, t.textKey)
 	}
 }
 
-// summaryOf runs a column's Summary over rows; a panic is reported as a
-// handler's, on the event goroutine, and leaves the text empty. Under mu.
-func summaryOf[T any](f func(iter.Seq[*T]) string, rows iter.Seq[*T]) (text string) {
-	if f == nil {
-		return ""
+// update works the n columns' texts out again when the view's version or the
+// source's change moved. A Summary's panic is reported as a handler's, on the
+// event goroutine, and leaves its text empty. Under mu.
+func (f *gridFooter) update(version, seq uint64, n int) {
+	if f.known && version == f.version && seq == f.seq {
+		return
 	}
-	if v, stack, panicked := runColumnFn(func() { text = f(rows) }); panicked {
-		Post(func() { report(v, stack) })
-		return ""
+	f.known, f.version, f.seq = true, version, seq
+	f.texts = f.texts[:0]
+	for i := range n {
+		text := ""
+		if v, stack, panicked := runColumnFn(func() { text = f.summary(i) }); panicked {
+			Post(func() { report(v, stack) })
+		}
+		f.texts = append(f.texts, text)
 	}
-	return text
+}
+
+// place makes the cells of the row, one under each cell of the header. The
+// header's are those of the columns ui is given: the index column first when
+// numbered, then those of the columns vis, indexes of texts and aligns.
+func (f *gridFooter) place(numbered bool, vis []int) {
+	f.cells = f.cells[:0]
+	for _, h := range f.heads {
+		fc := footCell{head: h.cell}
+		if ci := h.col; !numbered || ci > 0 {
+			if numbered {
+				ci--
+			}
+			if ci < len(vis) {
+				fc.text, fc.align = f.texts[vis[ci]], f.aligns[vis[ci]]
+			}
+		}
+		f.cells = append(f.cells, fc)
+	}
 }
 
 // headCell is a cell of the header as the table built it: col is its column,
@@ -88,14 +96,22 @@ type footCell struct {
 // that finds them laid out elsewhere asks for one more frame, so a resize, a
 // move or a scroll settles at once.
 type gridFooter struct {
-	heads  []headCell // the header's cells of this build, in order (headerCell)
-	cells  []footCell
-	placed []ui.Rect // the bounds of the header's cells the cells were placed by
-	at     ui.Rect   // the row's bounds, which they were placed in
-	row    ui.Element
-	c      *ui.Context
-	check  func(*ui.Painter, ui.Rect) // checkPlaces, made once
-	builds int                        // test hook: how many builds built the row
+	heads []headCell // the header's cells of this build, in order (headerCell)
+	// summary runs the Summary of the grid's column i, "" for none; texts are
+	// their texts, by that index, as of the view's version and the source's
+	// change seq.
+	summary      func(i int) string
+	texts        []string
+	known        bool
+	version, seq uint64
+	aligns       []ui.Align // each column's alignment, by the same index
+	cells        []footCell
+	placed       []ui.Rect // the bounds of the header's cells the cells were placed by
+	at           ui.Rect   // the row's bounds, which they were placed in
+	row          ui.Element
+	c            *ui.Context
+	check        func(*ui.Painter, ui.Rect) // checkPlaces, made once
+	builds       int                        // test hook: how many builds built the row
 }
 
 // build builds the row under the table: the header's height, its fill (the
