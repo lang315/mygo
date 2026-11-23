@@ -524,6 +524,11 @@ func (f *FieldsWidget) wideCell(c *ui.Context, r *fieldRow) {
 		gap = f.colGap
 	}
 	col := ui.Column(c).Gap(gap).ColumnSpan(2)
+	if f.settings {
+		// A control wider than the card is the card's to clip: the columns
+		// do not make room for it, which would shrink the other rows' controls.
+		col.MaxWidthPercent(100)
+	}
 	if f.settings && r.label.text == "" {
 		col.AlignSelf(ui.Center) // no label line: the control in the middle of its band, as a row's is
 	}
