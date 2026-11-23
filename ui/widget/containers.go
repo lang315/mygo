@@ -215,6 +215,12 @@ type TabControlWidget struct {
 	page     mirror[int]
 	onSwitch func()
 	strip    Style // StripStyle's, merged
+
+	// closable, set by SetClosable, builds the strip of closable tabs, with
+	// the keys on col (tabs_closable.go); nil while the tabs do not close,
+	// so that a control never made closable links none of it.
+	closable  func(c *ui.Context, col ui.Element, p *int) ui.Element
+	onClosing func(page Control) bool // OnPageClosing's
 }
 
 // pageKey tells the tab of a page apart from the others'. It is not empty:
@@ -269,22 +275,25 @@ func (n *TabControlWidget) InsertPage(i int, label string, w Control) *TabContro
 // the first if it was the first; otherwise the page shown stays the page
 // shown, whatever its index becomes. Like SetPage, it does not run OnSwitch.
 func (n *TabControlWidget) RemovePage(i int) *TabControlWidget {
-	n.change(func() {
-		if i < 0 || i >= len(n.pages) {
-			return
-		}
-		cur := n.shownIndex()
-		w := n.pages[i]
-		n.labels, n.pages, n.keys = slices.Delete(n.labels, i, i+1), slices.Delete(n.pages, i, i+1), slices.Delete(n.keys, i, i+1)
-		switch {
-		case i < cur:
-			n.page.set(cur - 1)
-		case i == cur:
-			n.page.set(max(cur-1, 0))
-		}
-		orphan(w)
-	})
+	n.change(func() { n.removePage(i) })
 	return n
+}
+
+// removePage is RemovePage's, under mu.
+func (n *TabControlWidget) removePage(i int) {
+	if i < 0 || i >= len(n.pages) {
+		return
+	}
+	cur := n.shownIndex()
+	w := n.pages[i]
+	n.labels, n.pages, n.keys = slices.Delete(n.labels, i, i+1), slices.Delete(n.pages, i, i+1), slices.Delete(n.keys, i, i+1)
+	switch {
+	case i < cur:
+		n.page.set(cur - 1)
+	case i == cur:
+		n.page.set(max(cur-1, 0))
+	}
+	orphan(w)
 }
 
 // shownIndex is the index of the page shown, as build clamps it. Under mu.
@@ -321,19 +330,24 @@ func (n *TabControlWidget) OnSwitch(fn func()) *TabControlWidget {
 }
 
 func (n *TabControlWidget) build(c *ui.Context) ui.Element {
-	return ui.Column(c).Gap(c.Theme().Space(2)).Children(func() {
+	col := ui.Column(c).Gap(c.Theme().Space(2))
+	return col.Children(func() {
 		p, _ := n.page.bind()
-		keys := make([]any, len(n.keys))
-		for i, k := range n.keys {
-			keys[i] = k // a tab keeps the focus of its page, whatever its index
-		}
 		var strip ui.Element
-		if look := lookOf(skinhook.KindTabHeader); look != nil {
-			strip = n.headers(c, p, keys, look)
+		if n.closable != nil {
+			strip = n.closable(c, col, p)
 		} else {
-			strip = ui.TabsKeyed(c, p, keys, n.labels)
+			keys := make([]any, len(n.keys))
+			for i, k := range n.keys {
+				keys[i] = k // a tab keeps the focus of its page, whatever its index
+			}
+			if look := lookOf(skinhook.KindTabHeader); look != nil {
+				strip = n.headers(c, p, keys, look)
+			} else {
+				strip = ui.TabsKeyed(c, p, keys, n.labels)
+			}
+			strip.OnChange(onChange(&n.page, n.onSwitch))
 		}
-		strip.OnChange(onChange(&n.page, n.onSwitch))
 		n.inner = strip // Focus (an access key) goes to the tabs, not to the column around them
 		look := lookOf(skinhook.KindTabStrip)
 		if tk, _ := skinOf(c); tk != nil && n.strip.empty() {
@@ -373,27 +387,34 @@ func (n *TabControlWidget) headers(c *ui.Context, p *int, keys []any, look *Styl
 	tabs := ui.TabsKeyedBase(c, p, keys)
 	return tabs.List.Gap(t.Space(1)).Children(func() {
 		for i, label := range n.labels {
-			tab := tabs.Tab(i).Padding(t.Space(2), t.Space(3)).FocusRing(false)
-			if h := t.Metrics.TabHeight; h > 0 {
-				tab.MinHeight(h).AlignItems(ui.Center)
-			}
-			on, hover := i == *p, tab.Hovered()
-			tab.TextColor(t.TextMuted)
-			if on {
-				tab.TextColor(t.Text).FontWeight(600)
-			} else if hover {
-				tab.TextColor(t.Text)
-			}
-			st := look.effective(t.Dark, hover, on, tab.Focused(), tab.Pressed(), n.disabled)
-			st.apply(c, tab, keys[i])
-			tab.DrawOver(func(pt *ui.Painter, r ui.Rect) {
-				if tab.FocusVisible() {
-					pt.FocusRing(r, [4]float32{t.Radius, t.Radius, t.Radius, t.Radius})
-				}
-			})
-			tab.Children(func() { ui.Text(c, label).SingleLine() })
+			n.headerTab(c, tabs, i, i == *p, keys, look).Children(func() { ui.Text(c, label).SingleLine() })
 		}
 	})
+}
+
+// headerTab makes tab i of tabs with the skin's look over it, as headers
+// builds it, on while open; the caller gives it its children. Under mu.
+func (n *TabControlWidget) headerTab(c *ui.Context, tabs ui.TabsParts, i int, on bool, keys []any, look *Style) ui.Element {
+	t := c.Theme()
+	tab := tabs.Tab(i).Padding(t.Space(2), t.Space(3)).FocusRing(false)
+	if h := t.Metrics.TabHeight; h > 0 {
+		tab.MinHeight(h).AlignItems(ui.Center)
+	}
+	hover := tab.Hovered()
+	tab.TextColor(t.TextMuted)
+	if on {
+		tab.TextColor(t.Text).FontWeight(600)
+	} else if hover {
+		tab.TextColor(t.Text)
+	}
+	st := look.effective(t.Dark, hover, on, tab.Focused(), tab.Pressed(), n.disabled)
+	st.apply(c, tab, keys[i])
+	tab.DrawOver(func(pt *ui.Painter, r ui.Rect) {
+		if tab.FocusVisible() {
+			pt.FocusRing(r, [4]float32{t.Radius, t.Radius, t.Radius, t.Radius})
+		}
+	})
+	return tab
 }
 
 // buildPage builds the page of a sidebar or a tab control. A page taller than
