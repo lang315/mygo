@@ -104,6 +104,28 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 - `widget.LookUpEditWidget.OnSelect(fn)` runs on the event goroutine when the user chooses a record (`ok` true) or empties the field (`ok` false), once per change; `widget.LookUpEditWidget.SetSelected(k)`, `widget.LookUpEditWidget.Unselect` and `widget.LookUpEditWidget.SetItems` do not run it. `widget.LookUpEditWidget.Selected` reads the key and whether one is chosen.
 - A typed text that is no record's goes back to the chosen record's text when the focus leaves the field. Of a `widget.Column` it reads `Title`, `Text`, `Width`, `MinWidth`, `Align` and `Hidden`. Read `docs/ui/widget/lookupedit.md`.
 
+## Document tabs
+
+For documents the user opens and closes in tabs (editors, invoices, customer records), use `widget.TabControl()` with `widget.TabControlWidget.SetClosable(true)`: an x on each tab, a middle click and Ctrl+F4 close a page, and Ctrl+Tab and Ctrl+Shift+Tab switch. Do not build tabs with close buttons from an `HBox` of buttons.
+
+```go
+package app
+
+import "github.com/egoist/mygo/ui/widget"
+
+func documents(form *widget.Form) *widget.TabControlWidget {
+	tabs := widget.TabControl().SetClosable(true).
+		OnPageClosing(func(page widget.Control) bool {
+			return widget.Confirm(form, widget.Question, "Close", "Discard the changes?")
+		})
+	tabs.AddPage("Invoice 1042", widget.MultilineTextBox())
+	return tabs
+}
+```
+
+- `widget.TabControlWidget.OnPageClosing(fn)` runs on the event goroutine with the page before it closes; `false` keeps it. `widget.Confirm` may block there.
+- A closed page goes as `widget.TabControlWidget.RemovePage` takes it out; `widget.TabControlWidget.OnSwitch` runs when the page shown closes, and on Ctrl+Tab. Read `docs/ui/widget.md` (TabControl).
+
 ## Binding
 
 Bind a control to a value kept elsewhere instead of pairing `SetText` with `OnChange`:
