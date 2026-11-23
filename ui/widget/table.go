@@ -115,7 +115,7 @@ type DataGridViewWidget[T any, K comparable] struct {
 	groupBy    func(*T) string
 	groupOrder []string
 	// headerFn is headerAt, made once; labels are the headers' keys and
-	// texts by title (groupLabelOf).
+	// texts by title (groupLabels.of).
 	headerFn func(int) bool
 	labels   groupLabels
 	// posOf is each row's place in the view, -1 if hidden, as of
@@ -631,31 +631,27 @@ type groupLabel struct {
 }
 
 // groupLabels are the headers' labels by title.
-type groupLabels map[string]*groupLabel
+type groupLabels map[string]groupLabel
 
 // of returns the key and the text of g's header, made when its title or its
 // count are new: ui asks for them in every frame, and a key boxed or a text
-// made there would allocate each time. Titles no group has any more are
-// dropped once they outnumber the shown groups, n. Not generic, so that it
-// links once. Under mu.
-func (ls *groupLabels) of(g ui.TableGroup, n int) *groupLabel {
-	l := (*ls)[g.Title]
-	if l == nil {
-		if *ls == nil || len(*ls) > 2*n+16 {
+// made there would allocate each time. Not generic, so that it links once.
+// Under mu.
+func (ls *groupLabels) of(g ui.TableGroup) groupLabel {
+	l, ok := (*ls)[g.Title]
+	if !ok || l.count != g.Len {
+		// shortcut: past 1024 titles the cache starts over, dropping titles
+		// gone too; a view showing more headers than that would allocate.
+		if *ls == nil || !ok && len(*ls) >= 1024 {
 			*ls = groupLabels{}
 		}
-		l = &groupLabel{key: groupKey{g.Title}, count: -1}
+		if !ok {
+			l.key = groupKey{g.Title}
+		}
+		l.count, l.text = g.Len, groupText(ListViewGroup{g.Title, g.Len})
 		(*ls)[g.Title] = l
 	}
-	if l.count != g.Len {
-		l.count, l.text = g.Len, groupText(ListViewGroup{g.Title, g.Len})
-	}
 	return l
-}
-
-// groupLabelOf is labels.of for the groups of the frame ui shows. Under mu.
-func (t *DataGridViewWidget[T, K]) groupLabelOf(g ui.TableGroup) *groupLabel {
-	return t.labels.of(g, len(t.groupsOf()))
 }
 
 // rowAt returns the row at row, a line ui shows, in the frame it shows;
@@ -689,7 +685,7 @@ func (t *DataGridViewWidget[T, K]) keyAt(row int) any {
 		defer mu.Unlock()
 	}
 	if g, ok := t.headAt(row); ok {
-		return t.groupLabelOf(g).key
+		return t.labels.of(g).key
 	}
 	return t.keyOfPos(t.posAt(row))
 }
@@ -745,7 +741,7 @@ func (t *DataGridViewWidget[T, K]) labelAt(row int) string {
 		defer mu.Unlock()
 	}
 	if g, ok := t.headAt(row); ok {
-		return t.groupLabelOf(g).text
+		return t.labels.of(g).text
 	}
 	return t.labelOfPos(t.posAt(row))
 }
@@ -917,7 +913,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	if g, ok := t.headAt(row); ok {
 		if col == 0 { // a header spans the columns, built as column 0
-			groupHeader(c, t.groupLabelOf(g).text)
+			groupHeader(c, t.labels.of(g).text)
 		}
 		return
 	}
