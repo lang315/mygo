@@ -540,16 +540,28 @@ func TestRibbonTipsDropDownTakesTheFocus(t *testing.T) {
 	}
 }
 
+// typeLate types the letter of k as a keyboard does, the key going down, its
+// text coming, the key going up, with what the press posted run before the
+// text comes: the latest a text can come.
+func typeLate(tt *ui.Tester, k ui.Key, text string) {
+	tt.KeyDown(k)
+	Update(func() {})
+	tt.Frame()
+	tt.Type(text)
+	tt.KeyUp(k)
+	tt.Frame()
+}
+
 // Own case: the tips take the focus from a text box, so the letters typed
-// reach them and not the box, and give it back as they end.
+// reach them and not the box, and give it back as they end, once the
+// letter that ended them is up: its text, coming after the press, does not
+// reach the box.
 func TestRibbonTipsTakeTheFocusFromATextBox(t *testing.T) {
 	k, tt := tipKit(t)
 	click(t, tt, "Body")
 	typeTip(tt, ui.KeyF10)
-	tt.TypeKey(0, ui.KeyH, "h")
-	tt.Frame()
-	tt.TypeKey(0, ui.KeyP, "p")
-	tt.Frame()
+	typeLate(tt, ui.KeyH, "h")
+	typeLate(tt, ui.KeyP, "p")
 	received(t, k.pasted)
 	nothingRan(t, k)
 	tt.Frame()

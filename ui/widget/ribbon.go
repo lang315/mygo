@@ -29,11 +29,16 @@ type RibbonWidget struct {
 	changed, toggle func()
 	// tips is the level of the key tips: tipsOff, tipsTabs or tipsCommands.
 	// tipBack is the control that had the focus before they showed, to give
-	// it back. tipKeys answers F10 and Alt alone at the end of the form's
-	// build (keyTipsHook), and tipPaint paints the badges over the ribbon:
-	// both made once.
+	// it back; giveBack is it once they ended, until held, the letter that
+	// ended them (0 for another key), is let go: the text the letter types
+	// comes before, and must not reach a text box getting the focus back.
+	// tipKeys answers F10 and Alt alone at the end of the form's build
+	// (keyTipsHook), and tipPaint paints the badges over the ribbon: both
+	// made once.
 	tips     int8
 	tipBack  Control
+	giveBack Control
+	held     ui.Key
 	tipKeys  func(c *ui.Context)
 	tipPaint func(p *ui.Painter, r ui.Rect)
 	// shown are the badges of the last build, a slice reused from build to
@@ -219,6 +224,10 @@ func (r *RibbonWidget) Collapsed() bool { mu.Lock(); defer mu.Unlock(); return r
 func (r *RibbonWidget) build(c *ui.Context) ui.Element {
 	col := ui.Column(c).AlignSelf(ui.Stretch)
 	r.shown = r.shown[:0]
+	if r.giveBack != nil && (r.held == 0 || !c.KeyDown(r.held)) {
+		focusLater(r.giveBack)
+		r.giveBack, r.held = nil, 0
+	}
 	if len(r.tabs) == 0 {
 		r.tips = tipsOff
 		return col
@@ -252,10 +261,10 @@ func (r *RibbonWidget) enterTips() {
 }
 
 // leaveTips ends the tips, giving the focus back to the control that had it
-// when restore is set. Under mu.
+// when restore is set, in a following build (giveBack). Under mu.
 func (r *RibbonWidget) leaveTips(restore bool) {
 	if restore && r.tipBack != nil {
-		focusLater(r.tipBack)
+		r.giveBack = r.tipBack
 	}
 	r.tips, r.tipBack = tipsOff, nil
 }
@@ -298,6 +307,7 @@ func (r *RibbonWidget) tipMode(c *ui.Context, col ui.Element) {
 	case escape:
 		r.leaveTips(true)
 	case pressed >= 0:
+		r.held = tipKey(pressed)
 		i := slices.IndexFunc(r.shown, func(tp ribbonTip) bool { return int(tp.slot) == pressed })
 		switch {
 		case i < 0:
