@@ -335,6 +335,33 @@ func TestOfficeSaveIsOfTheOrderShown(t *testing.T) {
 	}
 }
 
+// An order closed leaves the others to their own tabs: after Order 1 goes,
+// Save and the close question are of Order 2.
+func TestOfficeClosedOrderLeavesTheOthers(t *testing.T) {
+	_, tt := open(t)
+	tt.Find(widget.ByLabel("New")).Click()
+	tt.Find(widget.ByRole(ui.RoleTab).Label("Order 1")).Click()
+	closeShown(tt) // Order 1, unchanged: no question
+	if openWindow("Discard Order 1?") {
+		t.Fatalf("an unchanged order asked to be discarded")
+	}
+	if got := tabs(tt); !slices.Equal(got, []string{"Order 2"}) {
+		t.Fatalf("order tabs %q, want [Order 2]", got)
+	}
+	chooseCustomer(tt, "birch")
+	tt.Find(widget.ByLabel("Save")).Click()
+	if !tt.Has(widget.ByLabel("Order 2 saved for Birch")) {
+		t.Fatalf("no toast of Order 2: texts %q", tt.Texts())
+	}
+	closeShown(tt) // saved: no question
+	if openWindow("Discard Order 2?") {
+		t.Errorf("a saved order asked to be discarded")
+	}
+	if got := tabs(tt); len(got) != 0 {
+		t.Errorf("order tabs %q after the close, want none", got)
+	}
+}
+
 // Case 6: "Customers" shows a tree with the header Customer, City and
 // Orders; a region opens on its customers and their city.
 func TestOfficeCustomersTree(t *testing.T) {
