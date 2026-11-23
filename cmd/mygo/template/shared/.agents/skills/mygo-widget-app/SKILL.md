@@ -126,6 +126,33 @@ func documents(form *widget.Form) *widget.TabControlWidget {
 - `widget.TabControlWidget.OnPageClosing(fn)` runs on the event goroutine with the page before it closes; `false` keeps it. `widget.Confirm` may block there.
 - A closed page goes as `widget.TabControlWidget.RemovePage` takes it out; `widget.TabControlWidget.OnSwitch` runs when the page shown closes, and on Ctrl+Tab. Read `docs/ui/widget.md` (TabControl).
 
+## Command ribbon
+
+For an app with many commands in tabs ("Home / Insert"), as Office and DevExpress apps have, use `widget.Ribbon()` first in the form's content: tabs of titled groups, each of large `widget.ToolButton`s (icon above text) and small controls stacked three high. For a single row of tools use `widget.ToolStrip` instead. Do not build a ribbon from a `TabControl` of `HBox`es.
+
+```go
+package app
+
+import "github.com/egoist/mygo/ui/widget"
+
+func commands(form *widget.Form, editor widget.Control, paste func()) {
+	ribbon := widget.Ribbon().
+		AddTab("Home").
+		AddGroup("Clipboard").
+		AddLarge(widget.ToolButton("Paste").OnClick(paste)).
+		AddSmall(widget.ToolButton("Cut"), widget.ToolButton("Copy")).
+		AddGroup("Font").
+		AddSmall(widget.ToolButton("Bold").SetToggle(true), widget.ComboBox(widget.Option{Value: "11", Text: "11"})).
+		AddTab("Insert").
+		AddGroup("Tables").
+		AddLarge(widget.ToolButton("Table"))
+	form.SetContent(widget.VBox(0).Add(ribbon, editor))
+}
+```
+
+- `widget.RibbonWidget.AddGroup` adds to the last tab, `widget.RibbonWidget.AddLarge` and `widget.RibbonWidget.AddSmall` to the last group; before any, they add one with no title. A control the ribbon holds already is not added again.
+- `widget.RibbonWidget.SetCollapsed` shows the tabs alone; a double click on a tab and Ctrl+F1 toggle it, and a click on a tab of a collapsed ribbon expands it. `widget.RibbonWidget.Tab` and `widget.RibbonWidget.SetTab` read and set the tab shown. A narrow window clips the groups; they do not shrink. There are no key tips, quick access toolbar, application menu or galleries. Read `docs/ui/widget/ribbon.md`.
+
 ## Binding
 
 Bind a control to a value kept elsewhere instead of pairing `SetText` with `OnChange`:

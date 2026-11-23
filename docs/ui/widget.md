@@ -77,6 +77,7 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
 | `MenuStrip` (`Form.MenuStrip`) | MenuStrip | `MenuBar` |
 | `MenuBar` (in the content) | MenuStrip docked in the form | — |
 | `ToolStrip` | ToolStrip | `Toolbar` |
+| `Ribbon` | DevExpress RibbonControl | — |
 | `StatusStrip` | StatusStrip | — |
 | `NotifyIcon` | NotifyIcon | — |
 | `Invoke` | Control.Invoke | `IdleAddSync` |
@@ -1126,6 +1127,10 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `NewMenuStrip(items...)`, `StatusStrip(items...)`, `ToolStrip(items...)`,
   `NewNotifyIcon()`: the window's main menu, status bar and tool bar, and
   an icon in the notification area; see [App shell](#app-shell).
+- `Ribbon()`: tabs of groups of large and small commands, which collapses to
+  its tabs, first in a form's content; `AddTab`, `AddGroup`, `AddLarge`,
+  `AddSmall`, `Tab`, `SetTab`, `SetCollapsed`, `Collapsed`; see
+  [Ribbon](widget/ribbon.md).
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps. `.Justify()` fills every line,
