@@ -196,7 +196,7 @@ func settings(cfg *Config) widget.Control {
 - Handlers (`OnClick`, `OnChange`, `Bind`'s `set`) run one at a time on the event goroutine, never on the main thread. The queue is the app's: a handler that blocks holds back every other handler of every window, though the windows keep drawing.
 - Setters and getters are safe from any goroutine. Run work that must happen in step with handlers through `widget.BeginInvoke(fn)` (does not wait) or `widget.Invoke(fn)` (waits; safe inside a handler, panics on the main thread). Before the app runs and after it quit, `widget.Invoke` returns without running `fn`.
 - Keep slow I/O off handlers that must stay quick: start a goroutine, report with setters or `BeginInvoke`.
-- Call no widget method inside a callback that runs under the package's lock: the key function and every function of a `widget.Column` (`Text`, `Compare`, `Filter`, `Spans`, `Color`, `Image`, `Badge`, `BadgeDetail`, `Format`) and of `widget.DataGridViewWidget.SetRowFormat`, the function of `UpdateRow`, of `widget.ListBoxWidget.UpdateItem` and of `widget.TreeViewWidget.UpdateNode`, the functions of a `ListBox`, `TreeView` or `ListView` (its key and columns, `widget.ListViewWidget.SetGroupBy`, `widget.ListViewWidget.SetImage`), a `Custom` control's build function. They read their arguments only.
+- Call no widget method inside a callback that runs under the package's lock: the key function and every function of a `widget.Column` (`Text`, `Compare`, `Filter`, `Spans`, `Color`, `Image`, `Badge`, `BadgeDetail`, `Format`, `Summary`) and of `widget.DataGridViewWidget.SetRowFormat` and `widget.DataGridViewWidget.SetGroupBy`, the function of `UpdateRow`, of `widget.ListBoxWidget.UpdateItem` and of `widget.TreeViewWidget.UpdateNode`, the functions of a `ListBox`, `TreeView` or `ListView` (its key and columns, `widget.ListViewWidget.SetGroupBy`, `widget.ListViewWidget.SetImage`), a `Custom` control's build function. They read their arguments only.
 
 ## Tables
 
@@ -204,6 +204,8 @@ func settings(cfg *Config) widget.Control {
 package app
 
 import (
+	"iter"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo/ui/widget"
@@ -224,8 +226,18 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 					return widget.StatusSuccess
 				}
 				return widget.StatusRunning
+			},
+			Summary: func(rows iter.Seq[*Account]) string { // a cell in the row of totals under the table
+				done := 0
+				for a := range rows {
+					if a.Status == "done" {
+						done++
+					}
+				}
+				return strconv.Itoa(done) + " done"
 			}},
-	).CheckboxColumn().BottomPanel().SetEmptyState(widget.EmptyState("No accounts", "Add one to start.")).Expand()
+	).CheckboxColumn().BottomPanel().SetEmptyState(widget.EmptyState("No accounts", "Add one to start.")).
+		SetGroupBy(func(a *Account) string { return a.Status }).Expand()
 	table.AddRows(rows)
 	go func() {
 		for _, row := range rows {
@@ -238,6 +250,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 ```
 
 - Show a row's state in the grid with the column's `Badge` (the cell's `Text` as a badge of the `widget.Status` it returns; `BadgeDetail` for a running one's step) and color cells with a `widget.CellFormat` (`Status`, `Fill`, `Text`, `Bold`): the column's `Format`, or `widget.DataGridViewWidget.SetRowFormat` for every cell of the row, the column's winning field by field. Not `Spans` or `Color` for a status: the skin colors these, a selected row shows the selection, and they are built once per row change. `widget.DataGridViewWidget.SetEmptyState(widget.EmptyState(...))` shows while no row shows, the search's included.
+- Totals go in a column's `Summary`: it gets the rows shown (after the search) and returns the text of the column's cell in a row under the table; it runs when the rows change, not in every frame, so count there instead of in a label you update. `widget.DataGridViewWidget.SetGroupBy(fn)` puts the rows under a header "Title (n)" per title, by title or in the order `widget.DataGridViewWidget.SetGroupOrder` gives.
 - Every row has a key; `widget.DataGridViewWidget.AddRows` replaces the row of an existing key; change a row in place with `widget.DataGridViewWidget.UpdateRow(key, fn)`, never by rebuilding the table. It scales to a million rows.
 - An icon your image function returns later (a thumbnail that loads) is not seen by a row already shown: call `UpdateRow(k, func(*T){})` for its row when it arrives, or keep the icons in a `widget.ImageList` (`SetImageList`), whose changes the list view, list box and tree show.
 - Each getter is a snapshot of its own: between `widget.DataGridViewWidget.Selected` and `widget.DataGridViewWidget.Row` a row may have been deleted, so check the `ok` of `Row`. `Row` returns a shallow copy of the row: if the row type holds a slice, a map or a pointer, reading it races with `UpdateRow`. Keep rows plain values, or copy deeply.

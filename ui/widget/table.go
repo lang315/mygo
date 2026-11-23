@@ -2,6 +2,7 @@ package widget
 
 import (
 	"cmp"
+	"iter"
 	"slices"
 	"strconv"
 	"strings"
@@ -58,6 +59,12 @@ type Column[T any] struct {
 	// Format, when set, styles the cell of a row: its fill, text color and
 	// weight. A zero CellFormat keeps the cell's own look.
 	Format func(*T) CellFormat
+	// Summary, when set, gives the column a total in a row under the
+	// table: it gets the rows the table shows (after its search), and
+	// returns the text of the column's cell there. It runs when the rows
+	// change, not in every frame, under the package's lock: it calls no
+	// widget method.
+	Summary func(rows iter.Seq[*T]) string
 
 	// edit is the column's *CellEditor[T] (EditColumn), held as an any so that
 	// Column does not name the type.
@@ -104,6 +111,13 @@ type DataGridViewWidget[T any, K comparable] struct {
 	resets int // test hook: how often catchUp had the view start over
 	asks   int // test hook: how often ui asked whether a line is a header
 	near   int // the group of the line asked last: see locate
+	// groupBy and groupOrder are SetGroupBy's and SetGroupOrder's.
+	groupBy    func(*T) string
+	groupOrder []string
+	// headerFn is headerAt, made once; labels are the headers' keys and
+	// texts by title (groupLabels.of).
+	headerFn func(int) bool
+	labels   groupLabels
 	// posOf is each row's place in the view, -1 if hidden, as of
 	// posVersion: Selected and Checked build it on first use.
 	posOf                                   []int32
@@ -166,6 +180,11 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// withEmpty, set by SetEmptyState, builds the table with the empty state
 	// over it; a func, so that a grid without one names no EmptyStateWidget.
 	withEmpty func(c *ui.Context)
+	// Summaries (table_summary.go): summarize builds the row of the columns'
+	// Summary under the table, on footer's state. Both are nil until a
+	// column has a Summary, so a grid without one builds what it did.
+	summarize func(c *ui.Context)
+	footer    *gridFooter
 
 	// framer, when set by a ListView, is the control whose style stands
 	// instead of the table's frame (frameList), with the table's own.
@@ -241,8 +260,16 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t.list.HeaderCell = t.headerCell
 	t.init(t)
 	t.link.id, t.link.prune = t.id, t.prune
-	if slices.ContainsFunc(cols, func(cl Column[T]) bool { return cl.Badge != nil || cl.Format != nil }) {
+	status, sums := false, false
+	for i := range cols {
+		status = status || cols[i].Badge != nil || cols[i].Format != nil
+		sums = sums || cols[i].Summary != nil
+	}
+	if status {
 		t.enableStatus()
+	}
+	if sums {
+		t.enableSummaries()
 	}
 	mu.Lock()
 	src.attach(t.link)
@@ -330,6 +357,31 @@ func (t *DataGridViewWidget[T, K]) SetGridLines(on bool) *DataGridViewWidget[T, 
 // user resizes them either way.
 func (t *DataGridViewWidget[T, K]) SetColumnsMovable(on bool) *DataGridViewWidget[T, K] {
 	t.change(func() { t.fixedCols = !on })
+	return t
+}
+
+// SetGroupBy groups the rows: fn returns the title of a row's group, under
+// a header "Title (n)", as ListView.SetGroupBy. nil shows no groups.
+// Within a group the rows keep the table's sort and search; a click on a
+// header selects nothing, and Selected and Checked return the keys in the
+// order shown. fn runs under the package's lock and calls no widget method.
+// A ListView groups its rows with its own SetGroupBy, not its Details'.
+func (t *DataGridViewWidget[T, K]) SetGroupBy(fn func(*T) string) *DataGridViewWidget[T, K] {
+	t.change(func() {
+		t.groupBy = fn
+		t.view.SetGroupBy(fn, t.groupOrder...)
+	})
+	return t
+}
+
+// SetGroupOrder says the order of the groups by title, as
+// ListView.SetGroupOrder: a group it does not name comes after those it
+// does, by title.
+func (t *DataGridViewWidget[T, K]) SetGroupOrder(titles ...string) *DataGridViewWidget[T, K] {
+	t.change(func() {
+		t.groupOrder = slices.Clone(titles)
+		t.view.SetGroupBy(t.groupBy, t.groupOrder...)
+	})
 	return t
 }
 
@@ -575,6 +627,35 @@ func (t *DataGridViewWidget[T, K]) headAt(row int) (ui.TableGroup, bool) {
 	return ui.TableGroup{}, false
 }
 
+// groupLabel is what ui is given of a group's header: its key, boxed once,
+// and its text (groupText) for count rows.
+type groupLabel struct {
+	key         any
+	title, text string
+	count       int
+}
+
+// groupLabels are the headers' labels, by the place of their group.
+type groupLabels []groupLabel
+
+// of returns the key and the text of g's header, the k-th group, made when
+// that group's title or count are new: ui asks for them in every frame, and
+// a key boxed or a text made there would allocate each time. Not generic,
+// so that it links once. Under mu.
+func (ls *groupLabels) of(k int, g ui.TableGroup) *groupLabel {
+	for len(*ls) <= k {
+		*ls = append(*ls, groupLabel{count: -1})
+	}
+	l := &(*ls)[k]
+	if l.title != g.Title || l.count != g.Len {
+		if l.title != g.Title || l.key == nil {
+			l.key = groupKey{g.Title}
+		}
+		l.title, l.count, l.text = g.Title, g.Len, groupText(ListViewGroup{g.Title, g.Len})
+	}
+	return l
+}
+
 // rowAt returns the row at row, a line ui shows, in the frame it shows;
 // nil for a header. Under mu.
 func (t *DataGridViewWidget[T, K]) rowAt(row int) *T { return t.rowAtPos(t.posAt(row)) }
@@ -606,7 +687,7 @@ func (t *DataGridViewWidget[T, K]) keyAt(row int) any {
 		defer mu.Unlock()
 	}
 	if g, ok := t.headAt(row); ok {
-		return groupKey{g.Title}
+		return t.labels.of(t.near, g).key // headAt left its group's place in near
 	}
 	return t.keyOfPos(t.posAt(row))
 }
@@ -662,7 +743,7 @@ func (t *DataGridViewWidget[T, K]) labelAt(row int) string {
 		defer mu.Unlock()
 	}
 	if g, ok := t.headAt(row); ok {
-		return groupText(ListViewGroup{g.Title, g.Len})
+		return t.labels.of(t.near, g).text
 	}
 	return t.labelOfPos(t.posAt(row))
 }
@@ -692,6 +773,9 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 		} else {
 			t.table(c).Grow(1)
 		}
+		if t.summarize != nil {
+			t.summarize(c)
+		}
 		if t.panel != nil {
 			t.counts()
 			render(c, t.panel)
@@ -702,7 +786,11 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 // headerCell is ui's HeaderCell: a skin's Label sizes the header's title,
 // which keeps ui's weight, and its GridHeader look styles the cell. Under mu,
 // while the table builds.
-func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, _ int) {
+func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, col int) {
+	if f := t.footer; f != nil {
+		cl := &t.columns[col]
+		f.heads = append(f.heads, headCell{cell, cl.Title, cl.Align, cl.Fixed})
+	}
 	if t.headSize > 0 {
 		cell.FontSize(t.headSize)
 	}
@@ -716,6 +804,9 @@ func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, _ int) {
 // table builds the ui table. Under mu.
 func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	s := &t.list
+	if t.footer != nil {
+		t.footer.heads = t.footer.heads[:0]
+	}
 	s.Sort, _ = t.sort.bind()
 	s.Selection, s.Checked, s.RowsOf = t.chosen.bind(), nil, t.chosenRows
 	if t.checks {
@@ -737,7 +828,10 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	s.Version = t.view.Version()
 	s.Header = nil
 	if t.view.Groups() != nil {
-		s.Header = t.headerAt
+		if t.headerFn == nil {
+			t.headerFn = t.headerAt // a method value made in every frame allocates
+		}
+		s.Header = t.headerFn
 	}
 	t.handOver()
 	s.FollowEnd = t.follow
@@ -822,7 +916,7 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	if g, ok := t.headAt(row); ok {
 		if col == 0 { // a header spans the columns, built as column 0
-			groupHeader(c, ListViewGroup{g.Title, g.Len})
+			groupHeader(c, t.labels.of(t.near, g).text)
 		}
 		return
 	}
