@@ -121,8 +121,11 @@ func registerLabelMnemonic(key rune, el ui.Element, l Control) bool {
 // Under mu, at the end of a build.
 func (w *Form) answerMnemonics(c *ui.Context) {
 	ms := w.mnemonics
-	w.mnemonics = nil
-	defer func() { w.built = w.built[:0] }()
+	defer func() {
+		w.built = w.built[:0]
+		clear(ms)
+		w.mnemonics = ms[:0] // kept for the next build, which appends again
+	}()
 	done := map[rune]bool{}
 	menuKeys := w.menuBarKeys() // the menu bar's access keys beat the controls'
 	w.menuBarMode(c)
@@ -216,8 +219,13 @@ func (w *Form) menuBarMode(c *ui.Context) {
 			b.leaveMode(false) // a click or Tab took the focus elsewhere: it stays there
 		}
 	}
+	tips := keyTipsHook
+	keyTipsHook = nil
 	b := w.menuBar
 	if b == nil || w.menu != nil || w.strip != nil {
+		if tips != nil && b == nil && w.menu == nil && w.strip == nil {
+			tips(c) // a ribbon's key tips have the keys no bar takes
+		}
 		return
 	}
 	pressed := c.Shortcut(0, ui.KeyF10)
