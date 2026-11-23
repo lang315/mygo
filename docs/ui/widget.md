@@ -874,9 +874,11 @@ t := widget.DataGridView(key, name, status).
   follows it when the user resizes, moves or scrolls the columns, or a
   column is hidden. The row takes the header's text size and the skin's
   `GridHeader` look.
-- A grid without a `Summary` builds what it did, but every app with a grid
-  links the row's code, as it does that of badges: the table must look at
-  its columns' fields.
+- A grid without a `Summary` builds what it did, but every app with a
+  `DataGridView` links the row's code (about 17 KB of a release file on
+  darwin, 11 KB of it code), as it does that of badges and formats: the
+  table must look at its columns' fields, so no call of the app's own tells
+  it apart.
 
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
