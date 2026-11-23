@@ -75,6 +75,10 @@ type TreeViewWidget[T any, K comparable] struct {
 	gens rowGens[K]
 	look uint64
 
+	// inColumns, set by SetColumns, builds the tree in columns (tree_columns.go);
+	// nil without columns, so that a tree never given any links none of it.
+	inColumns func(c *ui.Context) ui.Element
+
 	// ui's, on the main thread:
 	state  ui.OutlineState[treeItem[K]]
 	cursor int
@@ -762,8 +766,14 @@ func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	t.open.bindInto(&s.Open)
 	t.cursor = t.cursorRow()
 	s.List.Selected = &t.cursor
-	s.List.Label, s.List.Skip = t.labelAt, t.skip
-	e := ui.Outline(c, s, t.roots, t.kidsOf, func(it treeItem[K]) { t.row(c, it) }).Grow(1)
+	var e ui.Element
+	if t.inColumns != nil {
+		e = t.inColumns(c) // it sets Label and Skip from functions made once
+	} else {
+		s.List.Label, s.List.Skip = t.labelAt, t.skip
+		e = ui.Outline(c, s, t.roots, t.kidsOf, func(it treeItem[K]) { t.row(c, it) })
+	}
+	e.Grow(1)
 	frameList(c, e)
 	if fn := t.onActivate; fn != nil {
 		e.OnActivate(func(row int) {
