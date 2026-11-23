@@ -180,7 +180,9 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 		}
 	}
 	e.Destructive(b.destructive)
-	if b.icon != nil || b.png != nil {
+	if f := toolLarge; f != nil && (b.icon != nil || b.png != nil) {
+		f(c, e, b)
+	} else if b.icon != nil || b.png != nil {
 		side := float32(0)
 		if tk, scale := skinOf(c); tk != nil {
 			side = tk.ToolbarIcon * scale
@@ -191,6 +193,11 @@ func (b *ToolButtonWidget) build(c *ui.Context) ui.Element {
 	}
 	return e
 }
+
+// toolLarge, while a ribbon builds its large items, draws a tool button's
+// face large: its icon above its text. nil draws it as a tool strip does.
+// Only views touch it, under mu, as axis.
+var toolLarge func(c *ui.Context, e ui.Element, b *ToolButtonWidget)
 
 // DropDownButton makes a tool strip button showing text and an arrow, which
 // opens a menu of items.

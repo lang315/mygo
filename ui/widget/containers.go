@@ -395,6 +395,13 @@ func (n *TabControlWidget) headers(c *ui.Context, p *int, keys []any, look *Styl
 // headerTab makes tab i of tabs with the skin's look over it, as headers
 // builds it, on while open; the caller gives it its children. Under mu.
 func (n *TabControlWidget) headerTab(c *ui.Context, tabs ui.TabsParts, i int, on bool, keys []any, look *Style) ui.Element {
+	return headerTab(c, tabs, i, on, keys, look, n.disabled)
+}
+
+// headerTab makes tab i of tabs with the skin's look over it, on while open,
+// in the look's disabled variant while disabled: the tabs of a TabControl
+// and of a Ribbon. The caller gives it its children. Under mu.
+func headerTab(c *ui.Context, tabs ui.TabsParts, i int, on bool, keys []any, look *Style, disabled bool) ui.Element {
 	t := c.Theme()
 	tab := tabs.Tab(i).Padding(t.Space(2), t.Space(3)).FocusRing(false)
 	if h := t.Metrics.TabHeight; h > 0 {
@@ -407,7 +414,7 @@ func (n *TabControlWidget) headerTab(c *ui.Context, tabs ui.TabsParts, i int, on
 	} else if hover {
 		tab.TextColor(t.Text)
 	}
-	st := look.effective(t.Dark, hover, on, tab.Focused(), tab.Pressed(), n.disabled)
+	st := look.effective(t.Dark, hover, on, tab.Focused(), tab.Pressed(), disabled)
 	st.apply(c, tab, keys[i])
 	tab.DrawOver(func(pt *ui.Painter, r ui.Rect) {
 		if tab.FocusVisible() {
