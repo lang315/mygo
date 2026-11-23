@@ -104,6 +104,9 @@ type DataGridViewWidget[T any, K comparable] struct {
 	resets int // test hook: how often catchUp had the view start over
 	asks   int // test hook: how often ui asked whether a line is a header
 	near   int // the group of the line asked last: see locate
+	// groupBy and groupOrder are SetGroupBy's and SetGroupOrder's.
+	groupBy    func(*T) string
+	groupOrder []string
 	// posOf is each row's place in the view, -1 if hidden, as of
 	// posVersion: Selected and Checked build it on first use.
 	posOf                                   []int32
@@ -330,6 +333,31 @@ func (t *DataGridViewWidget[T, K]) SetGridLines(on bool) *DataGridViewWidget[T, 
 // user resizes them either way.
 func (t *DataGridViewWidget[T, K]) SetColumnsMovable(on bool) *DataGridViewWidget[T, K] {
 	t.change(func() { t.fixedCols = !on })
+	return t
+}
+
+// SetGroupBy groups the rows: fn returns the title of a row's group, under
+// a header "Title (n)", as ListView.SetGroupBy. nil shows no groups.
+// Within a group the rows keep the table's sort and search; a click on a
+// header selects nothing, and Selected and Checked return the keys in the
+// order shown. fn runs under the package's lock and calls no widget method.
+// A ListView groups its rows with its own SetGroupBy, not its Details'.
+func (t *DataGridViewWidget[T, K]) SetGroupBy(fn func(*T) string) *DataGridViewWidget[T, K] {
+	t.change(func() {
+		t.groupBy = fn
+		t.view.SetGroupBy(fn, t.groupOrder...)
+	})
+	return t
+}
+
+// SetGroupOrder says the order of the groups by title, as
+// ListView.SetGroupOrder: a group it does not name comes after those it
+// does, by title.
+func (t *DataGridViewWidget[T, K]) SetGroupOrder(titles ...string) *DataGridViewWidget[T, K] {
+	t.change(func() {
+		t.groupOrder = slices.Clone(titles)
+		t.view.SetGroupBy(t.groupBy, t.groupOrder...)
+	})
 	return t
 }
 
