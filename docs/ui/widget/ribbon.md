@@ -56,6 +56,43 @@ When the window is narrower than the groups, the groups row clips at its end:
 the groups do not shrink. The ribbon is opt-in: an app that makes no ribbon
 does not link it.
 
-Not in the ribbon: key tips, the quick access toolbar, the application menu
+## Keyboard
+
+Key tips reach every command from the keyboard, as in Office on Windows.
+The ribbon gives them their letters; there is no API to set them.
+
+- F10, and on Windows Alt pressed and let go alone, show a letter on each
+  tab. The shown tab takes the keyboard focus from the control that has it,
+  which gets it back as the tips end.
+- Typing a tab's letter shows that tab, expanding a collapsed ribbon, with a
+  letter on each of its commands. Alt and a tab's letter go straight there,
+  as an access key does.
+- Typing a command's letter acts on it and ends the tips: a tool button
+  clicks, a toggle checks or unchecks and runs `OnChange`, and any other
+  control takes the focus. A drop-down button takes the focus too: Down or
+  Enter then opens its menu. A disabled command's letter does nothing but
+  end the tips.
+- Escape on the commands goes back to the tabs' letters; on the tabs it ends
+  the tips. F10 or Alt alone again, any other letter or digit, a press in the
+  window and the window going inactive end them too.
+- Letters: a tab takes the first letter of its title that no tab before it
+  took ("Home", then "Help" gets E), else the first free letter, A to Z, then
+  1 to 9. A command takes its letter the same way among the commands of its
+  tab, in the order of its groups and items, from a tool button's text (its
+  tooltip with none), else the control's accessible name or text. Accents
+  are dropped: "Định dạng" gets D. A tab or a command past the 35th has no
+  letter.
+- Each letter shows in a badge centred on its element's bottom edge: a
+  rounded box of the theme's `Text`, the letter in its `Background`, at
+  0.75 rem, so it grows with the text size the user chose. The badges move
+  nothing. While a badge shows, assistive technology reads its letter as the
+  element's key shortcut.
+- The tips are off where access keys are: on macOS, whose menu bar has the
+  keys. In a form with a `MenuBar`, or the system's menu bar (`SetMenuBar`,
+  `MenuStrip`), F10 and Alt alone stay the bar's; Alt and a tab's letter
+  still work, unless a menu's access key has that letter. A ribbon outside a
+  form (`widget.View`) has no tips.
+
+Not in the ribbon: the quick access toolbar, the application menu
 (the File tab), contextual tabs, galleries, a group's dialog launcher, and
 groups that shrink to fewer or smaller items in a narrow window.
