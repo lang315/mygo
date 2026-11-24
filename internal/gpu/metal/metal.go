@@ -2203,10 +2203,11 @@ func trimWait(since time.Duration, occluded, busy bool) time.Duration {
 // showing again, as a Space slides in, would show nothing until its next
 // frame, which comes once the window server told that it shows.
 //
-// Drawables of the old size still in use then, as the window server holds
-// those of a window ordered out, stay in the layer once given back, until
-// its size changes again: trimAfter later, the timer shrinks them again,
-// to another size.
+// Drawables of the old size still in use then stay in the layer once given
+// back, until its size changes again: trimAfter later, the timer shrinks
+// them again, to another size. Those the window server holds for a window
+// off the screen it never gives back, which is why its frames present with
+// the transaction (render).
 func (r *Renderer) trim() {
 	if r.layer == 0 || r.trimmed {
 		return
