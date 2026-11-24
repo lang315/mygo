@@ -15,6 +15,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/ebitengine/purego"
+
 	"github.com/egoist/mygo/internal/gpu"
 	"github.com/egoist/mygo/internal/gpu/gputest"
 	"github.com/egoist/mygo/internal/scene"
@@ -345,16 +347,97 @@ func TestOccludedTrim(t *testing.T) {
 	if !r.trimmed {
 		t.Fatal("a window out of sight kept its drawables")
 	}
-	// Trimmed, it has nothing to give back until it draws again.
+	// Trimmed, it has nothing to give back until it draws again, but what
+	// the second shrink (TestLateDrawablesTrimmed) gives.
+	at := r.trimAt
 	r.SetOccluded(false)
 	r.SetOccluded(true)
-	if r.trimArmed {
+	if r.trimAt != at {
 		t.Error("a window trimmed armed its trim again as it went out of sight")
 	}
 	r.pre.drain()
 	pool(func() { r.fit(800, 600, 1) })
 	if r.trimmed {
 		t.Error("the next frame did not make the drawables again")
+	}
+}
+
+// TestLateDrawablesTrimmed checks that a drawable of the window's size that
+// the layer gets back only after the trim, as the window server gives back
+// those of a window ordered out, goes too: the timer, armed by the trim,
+// shrinks the drawables again, which frees it.
+func TestLateDrawablesTrimmed(t *testing.T) {
+	if err := load(); err != nil {
+		t.Skip("no Metal:", err)
+	}
+	var layer id
+	pool(func() { layer = send(class("CALayer"), "new") })
+	if layer == 0 {
+		t.Skip("no Core Animation")
+	}
+	defer pool(func() { release(&layer) })
+	r, err := New(uintptr(layer))
+	if err != nil {
+		unavailable(t, err)
+	}
+	defer r.Release()
+	const w, h = 2000, 1500 // a drawable of 12 MB
+	for i := range 4 {
+		s := &scene.Scene{}
+		s.Reset(w, h, scene.Color{A: 255})
+		s.Ops = append(s.Ops, scene.Op{Kind: scene.OpFill, Rect: scene.Rect{X: float32(i * 10), W: 80, H: 80}, Color: scene.Color{R: 255, A: 255}})
+		if err := r.Render(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One held through the trim, as the window server holds them.
+	var held id
+	pool(func() { held = send(send(r.layer, "nextDrawable"), "retain") })
+	if held == 0 {
+		t.Fatal("no drawable")
+	}
+	r.SetOccluded(true)
+	r.lastRender = time.Now().Add(-time.Hour)
+	r.pre.wait()
+	r.trimIfIdle()
+	if !r.trimmed || !r.retrim || !r.trimArmed {
+		t.Fatalf("trimmed %v, shrinking again %v, timer armed %v", r.trimmed, r.retrim, r.trimArmed)
+	}
+	r.pre.wait()
+	// A weak reference to its texture, which the layer keeps in its pool.
+	var initWeak func(loc *uintptr, obj id) id
+	var loadWeak func(loc *uintptr) id
+	var destroyWeak func(loc *uintptr)
+	lib, err := purego.Dlopen("/usr/lib/libobjc.A.dylib", purego.RTLD_NOW|purego.RTLD_GLOBAL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	purego.RegisterLibFunc(&initWeak, lib, "objc_initWeak")
+	purego.RegisterLibFunc(&loadWeak, lib, "objc_loadWeakRetained")
+	purego.RegisterLibFunc(&destroyWeak, lib, "objc_destroyWeak")
+	weak := new(uintptr)
+	defer destroyWeak(weak)
+	alive := func() bool {
+		var d id
+		pool(func() {
+			if d = loadWeak(weak); d != 0 {
+				send(d, "release")
+			}
+		})
+		return d != 0
+	}
+	pool(func() {
+		initWeak(weak, send(held, "texture"))
+		send(held, "release")
+	})
+	if !alive() {
+		t.Fatal("the drawable given back after the trim was freed before the timer fired: the test shows nothing")
+	}
+	r.trimIfIdle() // the timer, trimAfter later
+	r.pre.wait()
+	wait.Until(t, "the drawable given back late freed", func() bool { return !alive() })
+	if r.retrim {
+		t.Error("the timer shrinks the drawables again after it did")
 	}
 }
 

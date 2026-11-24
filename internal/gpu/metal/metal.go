@@ -499,12 +499,14 @@ type Renderer struct {
 	// drawables once none has for a while, armed until it fires (at
 	// trimAt), and trimmed is whether it did. occluded tells that nothing
 	// of the window shows (SetOccluded): the while is shorter then.
-	lastRender         time.Time
-	trimTimer          uintptr
-	trimHandle         uintptr
-	trimAt             time.Time
-	trimArmed, trimmed bool
-	occluded           bool
+	// retrim tells that the timer, armed once trimmed, shrinks the
+	// drawables again (see trim).
+	lastRender                 time.Time
+	trimTimer                  uintptr
+	trimHandle                 uintptr
+	trimAt                     time.Time
+	trimArmed, trimmed, retrim bool
+	occluded                   bool
 
 	// diff finds what changed since the last frame drawn, and ages what
 	// changed since each drawable was (see gpu.Ages); redrew is how much
@@ -2135,6 +2137,13 @@ func (r *Renderer) trimIfIdle() {
 		return
 	}
 	cfRunLoopTimerSetNextFireDate(r.trimTimer, cfAbsoluteTimeGetCurrent()+1e9)
+	if r.trimmed {
+		if r.retrim {
+			r.retrim = false
+			r.shrink(2)
+		}
+		return
+	}
 	r.trim()
 }
 
@@ -2172,6 +2181,11 @@ func trimWait(since time.Duration, occluded, busy bool) time.Duration {
 // Dock, nor one covered in Mission Control or a capture, and a window
 // showing again, as a Space slides in, would show nothing until its next
 // frame, which comes once the window server told that it shows.
+//
+// Drawables of the old size still in use then, as the window server holds
+// those of a window ordered out, stay in the layer once given back, until
+// its size changes again: trimAfter later, the timer shrinks them again,
+// to another size.
 func (r *Renderer) trim() {
 	if r.layer == 0 || r.trimmed {
 		return
@@ -2183,14 +2197,27 @@ func (r *Renderer) trim() {
 		r.releaseTextures()
 		r.ages.Reset()
 		r.diff.Release()
+	})
+	r.shrink(1)
+	r.trimmed = true
+	if r.trimTimer != 0 {
+		r.retrim = true
+		r.setTrimTimer(time.Now().Add(trimAfter))
+	}
+}
+
+// shrink makes the layer's drawables n pixels square, which frees those of
+// other sizes the layer does not use, and has the presenter fetch one,
+// unless it holds one.
+func (r *Renderer) shrink(n float64) {
+	pool(func() {
 		tx := class("CATransaction")
 		send(tx, "begin")
 		send(tx, "setDisableActions:", 1)
-		msgSetSize(r.layer, sel("setDrawableSize:"), cgSize{1, 1})
+		msgSetSize(r.layer, sel("setDrawableSize:"), cgSize{n, n})
 		send(tx, "commit")
 	})
 	r.pre.start(r.layer)
-	r.trimmed = true
 }
 
 // renderOffscreen draws s into a texture of its own and returns its
