@@ -99,7 +99,8 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
   `MultilineTextBox`, `MaskedTextBox`, `CheckBox`, `Switch`, `Toggle`, `RadioButton`,
   `RadioGroup`, `CheckBoxGroup`, `ComboBox`, `NumericUpDown`, `RangeSpin`,
   `TrackBar`, `DomainUpDown`, `DateTimePicker`, `MonthCalendar`, `TagSelect`
-  and a toggle `ToolButton` (`TestSettersDoNotRunOnChange` pins it), and
+  and a toggle `ToolButton` (`TestSettersDoNotRunOnChange` pins it), for
+  `TokenEdit`'s `SetTokens` (its own tests pin it), and
   for `TabControl`'s `OnSwitch` after `SetPage`, `InsertPage` and `RemovePage`
   (but a page index the control had to clamp is reported). WinForms and GTK
   differ, as their `TextChanged` and `changed` also run for code: a handler
@@ -1330,6 +1331,21 @@ Input and display:
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
 - `CheckBoxGroup(row, options...)`, `TagSelect(options...)`: several of
   the options; `Values`, `SetValues`.
+- `TokenEdit(suggestions...)`: free tags shown as chips, as DevExpress'
+  TokenEdit, editing a `[]string`. Enter or a comma adds what was typed
+  (trimmed; a blank or a repeat adds nothing), a chip's button ("Remove
+  x") or Backspace in the empty input takes one out, and the suggestions
+  containing the text show below it, those not already tokens. A paste
+  of several lines adds a token a line, as a list of IDs; a paste of one
+  line is text. `Tokens` returns a copy, in order; `SetTokens` trims and
+  drops blanks and repeats, without `OnChange`; `SetSuggestions`;
+  `SetPlaceholder` shows while there is no token and no text; `OnChange`
+  runs after each change by the user. A Fields row's access key focuses
+  its input.
+
+  ```go
+  te := widget.TokenEdit(allTags...).SetTokens(acc.Tags...).OnChange(save)
+  ```
 - `RadioButton(text)`: `Checked`, `SetChecked`, `OnChange`. As in WinForms, the
   radio buttons added to one container (a box, a group box, fields, a flow
   panel) are one group: checking one, by the user or `SetChecked`, unchecks

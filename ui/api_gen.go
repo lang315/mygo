@@ -7217,6 +7217,9 @@ func (_handle Element) OnEdit(fn func(e TextEdit) (string, int, bool)) Element {
 //		in.ReplaceText(start, end, app.insert) // a step of undo
 //		app.insert = ""
 //	}
+//
+// On a field around an input, as SearchField and TokenField, fn sees the
+// pastes into the input, as Placeholder.
 func (_handle Element) OnPaste(fn func(text string) bool) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -7479,7 +7482,8 @@ func (_handle Element) Placeholder(s string) Element {
 
 // PlaceholderColor sets the color of this input's placeholder for this build.
 // When unset it uses the theme's TextMuted. It does not change entered text,
-// other inputs or the theme. A transparent color hides the placeholder.
+// other inputs or the theme. A transparent color hides the placeholder. On
+// a field around an input, it colors the input's, as Placeholder.
 func (_handle Element) PlaceholderColor(color Color) Element {
 	_node := _handle.node()
 	if _node == nil {

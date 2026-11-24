@@ -99,9 +99,14 @@ func (e *node) Placeholder(s string) *node {
 
 // PlaceholderColor sets the color of this input's placeholder for this build.
 // When unset it uses the theme's TextMuted. It does not change entered text,
-// other inputs or the theme. A transparent color hides the placeholder.
+// other inputs or the theme. A transparent color hides the placeholder. On
+// a field around an input, it colors the input's, as Placeholder.
 func (e *node) PlaceholderColor(color Color) *node {
-	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+	in := e
+	if in.st.editor == nil && in.focusTo != nil {
+		in = in.focusTo
+	}
+	if ed := in.st.editor; ed != nil && in.flags&flagEditable != 0 {
 		ed.placeholderColor, ed.placeholderColorSet = color, true
 	}
 	return e
@@ -211,8 +216,15 @@ func (e *node) TextInsetEnd(v float32) *node {
 //		in.ReplaceText(start, end, app.insert) // a step of undo
 //		app.insert = ""
 //	}
+//
+// On a field around an input, as SearchField and TokenField, fn sees the
+// pastes into the input, as Placeholder.
 func (e *node) OnPaste(fn func(text string) bool) *node {
-	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+	in := e
+	if in.st.editor == nil && in.focusTo != nil {
+		in = in.focusTo
+	}
+	if ed := in.st.editor; ed != nil && in.flags&flagEditable != 0 {
 		ed.onPaste = fn
 	}
 	return e
