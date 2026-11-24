@@ -13,11 +13,17 @@ import (
 	"github.com/egoist/mygo/internal/wait"
 )
 
-// waitFake waits for the open fake window titled title.
+// waitFake waits for the open fake window titled title, once the form that
+// made it is shown: the fake lists a window as soon as NewWindow makes it,
+// before show registers OnClose on it, and an Escape or a close request in
+// that gap closes a window that should ask or stay open.
 func waitFake(t *testing.T, title string) *fake.Window {
 	t.Helper()
 	var open *fake.Window
 	wait.Until(t, "an open window titled "+title, func() bool {
+		if !formShown(title) {
+			return false
+		}
 		for _, fw := range fb.Windows() {
 			if fw.Title() == title && !fw.IsClosed() {
 				open = fw
@@ -27,6 +33,19 @@ func waitFake(t *testing.T, title string) *fake.Window {
 		return false
 	})
 	return open
+}
+
+// formShown reports whether a shown form is titled title: show records it
+// after it registered the window's handlers.
+func formShown(title string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	for _, f := range shown {
+		if f.title == title {
+			return true
+		}
+	}
+	return false
 }
 
 // press presses the element labeled label in fw's view, as a screen
