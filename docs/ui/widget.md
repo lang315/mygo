@@ -1375,6 +1375,21 @@ Input and display:
   is then the `Value` of the option with that text, or ""; `OnChange` runs
   on typing and on choosing. `Bind` takes the text of a combo made
   `Editable` before it is bound, and the `Value` of one bound before.
+  `Shows(value, controls...)` shows controls while the option of `value`
+  is chosen and hides them while none of the values they are shown for
+  is, in place of `SetVisible` calls in `OnChange`:
+
+  ```go
+  mode := widget.ComboBox(widget.Option{Value: "none", Text: "None"}, widget.Option{Value: "http", Text: "HTTP"}).Shows("http", hostBox, authBox)
+  ```
+
+  It applies at once, to the choice the combo has, and on every change of
+  it, before `OnChange` runs: the user's pick or typing, `SetValue`,
+  `SetText`, `Unselect`, a binding, the chosen option removed. The first
+  frame after shows the right controls, those before the combo in the
+  form too. A control hides as with `SetVisible(false)`, losing the
+  keyboard focus (its `OnFocusOut` runs); a `SetVisible` of the program
+  lasts until the choice next changes.
 - `MenuButton(text)`: see [Menus](#menus).
 - `MenuBar(menus...)`: a menu bar in the content; see [MenuBar](widget/menubar.md).
 - `NumericUpDown(min, max, step)`: a number; `Value`, `Int`, `SetValue`;

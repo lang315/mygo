@@ -98,16 +98,20 @@ func (b *core) restyle() {
 // caret, selection and scroll position; an open popup closes, and hiding
 // it takes its keyboard focus.
 func (c *common[W]) SetVisible(v bool) *W {
-	c.change(func() {
-		c.hidden = !v
-		if !v && c.focusIn != noView {
-			c.focusIn = noView
-			if c.onFocusOut != nil {
-				Post(c.onFocusOut)
-			}
-		}
-	})
+	c.change(func() { c.setVisible(v) })
 	return c.self
+}
+
+// setVisible is SetVisible, and how Shows of a ComboBox shows and hides.
+// Under mu.
+func (b *core) setVisible(v bool) {
+	b.hidden = !v
+	if !v && b.focusIn != noView {
+		b.focusIn = noView
+		if b.onFocusOut != nil {
+			Post(b.onFocusOut)
+		}
+	}
 }
 
 // OnClick runs fn when the widget is clicked: gota's EventBox, on any

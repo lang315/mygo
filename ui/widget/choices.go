@@ -172,6 +172,24 @@ type ComboBoxWidget struct {
 	// popup of a select kept hidden.
 	menuOpen  bool
 	menuHides int
+	// shows is Shows' *comboShows, nil until it is called: as an any, an
+	// app that never calls it links none of its types.
+	shows any
+}
+
+// comboShows is what Shows keeps of a combo: the controls, each with a
+// value it shows for; the value chosen when they were last shown or
+// hidden; and the trigger's OnChange, which applies them with the pick.
+type comboShows struct {
+	list     []comboShow
+	shownFor string
+	pick     func()
+}
+
+// comboShow is a control Shows shows while the option of value is chosen.
+type comboShow struct {
+	value string
+	ctl   Control
 }
 
 // comboSection is a titled group of options. value makes its title an
@@ -221,12 +239,10 @@ func (c *ComboBoxWidget) find(v string) (Option, bool) {
 // gone. Under mu.
 func (c *ComboBoxWidget) edit(fn func(s []comboSection) []comboSection) {
 	c.sections = fn(c.sections)
-	if c.editable {
-		return
-	}
-	if _, ok := c.find(c.value.value); !ok && c.value.value != "" {
+	if _, ok := c.find(c.value.value); !c.editable && !ok && c.value.value != "" {
 		c.value.set("")
 	}
+	c.applyShows() // an Editable combo's text too may have become an option's, or stopped being one
 }
 
 // Editable lets the user type a text that is not one of the options, in
@@ -247,6 +263,7 @@ func (c *ComboBoxWidget) Editable() *ComboBoxWidget {
 		if o, ok := c.find(c.value.value); ok {
 			c.text.set(o.Text)
 		}
+		c.applyShows()
 	})
 	return c
 }
@@ -308,10 +325,11 @@ func (c *ComboBoxWidget) SetText(s string) *ComboBoxWidget {
 	c.change(func() {
 		if c.editable {
 			c.text.set(s)
-			return
+		} else {
+			o, _ := c.byText(s)
+			c.value.set(o.Value)
 		}
-		o, _ := c.byText(s)
-		c.value.set(o.Value)
+		c.applyShows()
 	})
 	return c
 }
@@ -332,9 +350,10 @@ func (c *ComboBoxWidget) SetValue(v string) *ComboBoxWidget {
 		}
 		if c.editable {
 			c.text.set(o.Text)
-			return
+		} else {
+			c.value.set(v)
 		}
-		c.value.set(v)
+		c.applyShows()
 	})
 	return c
 }
@@ -343,9 +362,10 @@ func (c *ComboBoxWidget) Unselect() *ComboBoxWidget {
 	c.change(func() {
 		if c.editable {
 			c.text.set("")
-			return
+		} else {
+			c.value.set("")
 		}
-		c.value.set("")
+		c.applyShows()
 	})
 	return c
 }
@@ -504,6 +524,78 @@ func (c *ComboBoxWidget) OnChange(fn func()) *ComboBoxWidget {
 	return c
 }
 
+// Shows shows controls while the option of value v is chosen, and hides
+// them while none of the values they are shown for is.
+//
+// Every change of the choice applies at once: the user's, a setter's, a
+// binding's, an option removed. A SetVisible of one of the controls lasts
+// until the choice next changes. A nil control is left out.
+//
+//	mode := widget.ComboBox(widget.Option{Value: "none", Text: "None"}, widget.Option{Value: "http", Text: "HTTP"}).
+//		Shows("http", hostBox, authBox)
+func (c *ComboBoxWidget) Shows(value string, controls ...Control) *ComboBoxWidget {
+	c.change(func() {
+		showChosen = applyShows
+		showsPick = func(c *ComboBoxWidget) func() { return c.shows.(*comboShows).pick }
+		s, _ := c.shows.(*comboShows)
+		if s == nil {
+			// The pick, as edited takes it, with the shows applied under the
+			// same lock, before OnChange runs.
+			s = &comboShows{pick: func() {
+				mu.Lock()
+				c.pick(c.value.shown)
+				mu.Unlock()
+			}}
+			c.shows = s
+		}
+		for _, w := range controls {
+			if w != nil {
+				s.list = append(s.list, comboShow{value, w})
+			}
+		}
+		applyShows(c, true)
+	})
+	return c
+}
+
+// showChosen is applyShows, and showsPick returns the pick of a combo's
+// shows, set by Shows: an app that calls none links none of it. Under mu.
+var (
+	showChosen func(c *ComboBoxWidget, always bool)
+	showsPick  func(c *ComboBoxWidget) func()
+)
+
+// applyShows shows and hides the controls of c's Shows, if any, when the
+// choice changed since they were last. Each change of the choice calls it.
+// Under mu.
+func (c *ComboBoxWidget) applyShows() {
+	if c.shows != nil {
+		showChosen(c, false)
+	}
+}
+
+// applyShows shows the controls of c's Shows for the option chosen, and
+// hides the others, as SetVisible does: when the choice changed since they
+// were last, or always. Under mu.
+func applyShows(c *ComboBoxWidget, always bool) {
+	cs := c.shows.(*comboShows)
+	o, ok := c.chosen()
+	if !always && o.Value == cs.shownFor {
+		return
+	}
+	cs.shownFor = o.Value
+	for i, s := range cs.list {
+		if slices.ContainsFunc(cs.list[:i], func(p comboShow) bool { return p.ctl == s.ctl }) {
+			continue // applied with its first
+		}
+		on := false
+		for _, p := range cs.list[i:] {
+			on = on || ok && p.ctl == s.ctl && p.value == o.Value
+		}
+		s.ctl.base().setVisible(on)
+	}
+}
+
 func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 	if c.editable {
 		return c.buildEditable(ctx)
@@ -521,7 +613,11 @@ func (c *ComboBoxWidget) build(ctx *ui.Context) ui.Element {
 		return c.buildMenu(ctx, p, text)
 	}
 	sel := ui.SelectBase(ctx, p)
-	comboTrigger(ctx, sel.Trigger, text).OnChange(edited(&c.value, &c.bound, c.onChange))
+	picked := edited(&c.value, &c.bound, c.onChange)
+	if c.shows != nil {
+		picked = showsPick(c)
+	}
+	comboTrigger(ctx, sel.Trigger, text).OnChange(picked)
 	sel.Popup(func(panel ui.Element) {
 		comboPanel(ctx, panel)
 		for i, s := range sections {
@@ -674,6 +770,7 @@ func (c *ComboBoxWidget) pick(v string) {
 		return
 	}
 	c.value.value, c.value.shown, c.value.dirty = v, v, false
+	c.applyShows()
 	h, write := c.onChange, c.bound.write
 	Post(func() {
 		if h != nil {
@@ -785,6 +882,7 @@ func (c *ComboBoxWidget) report(changed bool) {
 	if !changed {
 		return
 	}
+	c.applyShows()
 	h, write := c.onChange, c.bound.write
 	v := c.text.value
 	if !c.bindsText {
