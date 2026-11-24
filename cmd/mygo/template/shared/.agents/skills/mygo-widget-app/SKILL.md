@@ -104,6 +104,29 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 - `widget.LookUpEditWidget.OnSelect(fn)` runs on the event goroutine when the user chooses a record (`ok` true) or empties the field (`ok` false), once per change; `widget.LookUpEditWidget.SetSelected(k)`, `widget.LookUpEditWidget.Unselect` and `widget.LookUpEditWidget.SetItems` do not run it. `widget.LookUpEditWidget.Selected` reads the key and whether one is chosen.
 - A typed text that is no record's goes back to the chosen record's text when the focus leaves the field. Of a `widget.Column` it reads `Title`, `Text`, `Width`, `MinWidth`, `Align` and `Hidden`. Read `docs/ui/widget/lookupedit.md`.
 
+## Tags
+
+For free tags or a list of IDs the user types (labels, recipients, codes), use `widget.TokenEdit(suggestions...)`: chips with a remove button, Enter or a comma adds what was typed, and a paste of several lines adds one token a line. Use `widget.TagSelect` only to pick among fixed options.
+
+```go
+package app
+
+import "github.com/egoist/mygo/ui/widget"
+
+type Account struct{ Tags []string }
+
+func tagsField(acc *Account, allTags []string, save func()) widget.Control {
+	var te *widget.TokenEditWidget
+	te = widget.TokenEdit(allTags...).SetTokens(acc.Tags...).OnChange(func() {
+		acc.Tags = te.Tokens()
+		save()
+	})
+	return widget.Fields().Row("&Tags", te)
+}
+```
+
+- `widget.TokenEditWidget.Tokens` returns a copy, in order. `widget.TokenEditWidget.SetTokens` trims and drops blanks and repeats, and does not run `widget.TokenEditWidget.OnChange`, which runs on the event goroutine after each change by the user. `widget.TokenEditWidget.SetSuggestions` and `widget.TokenEditWidget.SetPlaceholder` (shown while there is no token and no text). Read `docs/ui/widget.md`.
+
 ## Document tabs
 
 For documents the user opens and closes in tabs (editors, invoices, customer records), use `widget.TabControl()` with `widget.TabControlWidget.SetClosable(true)`: an x on each tab, a middle click and Ctrl+F4 close a page, and Ctrl+Tab and Ctrl+Shift+Tab switch. Do not build tabs with close buttons from an `HBox` of buttons.
