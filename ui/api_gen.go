@@ -3181,9 +3181,10 @@ func ToggleGroup(c *Context, fn func()) Element {
 // an input where Enter or a comma adds what was typed, and Backspace in
 // it while empty takes out the last. The suggestions containing what was
 // typed show below it, those not already tokens: Up and Down move among
-// them, and Enter or a click adds one. Changed reports a change; name it
-// with Label. Query binds what is being typed, for suggestions the app
-// looks up and matches itself as the user types.
+// them, and Enter or a click adds one. Down in the empty input shows every
+// suggestion not already a token, in their order. Changed reports a
+// change; name it with Label. Query binds what is being typed, for
+// suggestions the app looks up and matches itself as the user types.
 //
 //	ui.TokenField(c, &app.tags, allTags).Label("Tags")
 func TokenField(c *Context, tokens *[]string, suggestions []string) Element {

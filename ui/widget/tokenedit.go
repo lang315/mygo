@@ -15,14 +15,17 @@ type TokenEditWidget struct {
 	common[TokenEditWidget]
 	// tokens is the widget's, under mu; shown is the copy ui edits, which only
 	// the drawing thread touches. They never share an array: ui appends to
-	// shown and deletes from it in place.
-	tokens, shown []string
-	dirty         bool // a setter changed tokens since the last build
-	suggestions   []string
-	placeholder   string
-	onChange      func()
-	edit          func()            // commit, made once
-	paste         func(string) bool // pasted, made once
+	// shown and deletes from it in place. given is what shown held as ui got
+	// it, which tells what the user added: it shares tokens' array, which is
+	// replaced, never written.
+	tokens, shown, given []string
+	dirty                bool // a setter changed tokens since the last build
+	only                 bool // SetSuggestionsOnly
+	suggestions          []string
+	placeholder          string
+	onChange             func()
+	edit                 func()            // commit, made once
+	paste                func(string) bool // pasted, made once
 }
 
 // TokenEdit makes an empty token field; the suggestions containing what is
@@ -60,6 +63,12 @@ func (t *TokenEditWidget) SetSuggestions(s ...string) *TokenEditWidget {
 	return t
 }
 
+// SetSuggestionsOnly makes the field take only tokens that are suggestions.
+func (t *TokenEditWidget) SetSuggestionsOnly(on bool) *TokenEditWidget {
+	t.change(func() { t.only = on })
+	return t
+}
+
 // SetPlaceholder sets the text shown while there is no token and no text.
 func (t *TokenEditWidget) SetPlaceholder(s string) *TokenEditWidget {
 	t.change(func() { t.placeholder = s })
@@ -78,15 +87,41 @@ func (t *TokenEditWidget) OnChange(fn func()) *TokenEditWidget {
 // the setter copies them back.
 func (t *TokenEditWidget) commit() {
 	mu.Lock()
+	if t.only {
+		t.keepSuggestions()
+	}
 	changed := !slices.Equal(t.tokens, t.shown)
 	if changed {
 		t.tokens = slices.Clone(t.shown)
 	}
+	t.given = t.tokens
 	h := t.onChange
 	mu.Unlock()
 	if changed && h != nil {
 		Post(h)
 	}
+}
+
+// keepSuggestions turns what the user added to shown (what given has not)
+// into the suggestion it equals, in its spelling, the very spelling first,
+// then ignoring case, and drops what is none or then a repeat. In place, on
+// the drawing thread, under mu.
+func (t *TokenEditWidget) keepSuggestions() {
+	out := t.shown[:0]
+	for _, s := range t.shown {
+		if !slices.Contains(t.given, s) {
+			i := slices.Index(t.suggestions, s)
+			if i < 0 {
+				i = slices.IndexFunc(t.suggestions, func(g string) bool { return strings.EqualFold(g, s) })
+			}
+			if i < 0 || slices.Contains(out, t.suggestions[i]) {
+				continue
+			}
+			s = t.suggestions[i]
+		}
+		out = append(out, s)
+	}
+	t.shown = out
 }
 
 // pasted takes a paste of several lines, as a list of IDs, as a token a line,
@@ -108,7 +143,7 @@ func (t *TokenEditWidget) pasted(s string) bool {
 
 func (t *TokenEditWidget) build(c *ui.Context) ui.Element {
 	if t.dirty {
-		t.shown, t.dirty = slices.Clone(t.tokens), false
+		t.shown, t.given, t.dirty = slices.Clone(t.tokens), t.tokens, false
 	}
 	el := ui.TokenField(c, &t.shown, t.suggestions)
 	// ui shows a placeholder whenever the input is empty, tokens or not.

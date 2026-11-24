@@ -126,6 +126,7 @@ func tagsField(acc *Account, allTags []string, save func()) widget.Control {
 ```
 
 - `widget.TokenEditWidget.Tokens` returns a copy, in order. `widget.TokenEditWidget.SetTokens` trims and drops blanks and repeats, and does not run `widget.TokenEditWidget.OnChange`, which runs on the event goroutine after each change by the user. `widget.TokenEditWidget.SetSuggestions` and `widget.TokenEditWidget.SetPlaceholder` (shown while there is no token and no text). Read `docs/ui/widget.md`.
+- For chips picked from a fixed set, kept in pick order, call `widget.TokenEditWidget.SetSuggestionsOnly(true)`: the user adds only suggestions (Down in the empty input lists them), other text adds nothing.
 
 ## Document tabs
 

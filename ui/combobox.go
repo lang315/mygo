@@ -37,6 +37,9 @@ type comboboxParts struct {
 	empty     *bool
 	chosen    string
 	isChosen  bool
+	// all is a TokenField's, nil elsewhere: set as Down in its empty input
+	// opens the list of every suggestion.
+	all *bool
 }
 
 // ComboboxBase creates a combobox without a look: a text input editing
@@ -112,7 +115,13 @@ func comboboxBase(c *context, text *string, first bool) *comboboxParts {
 		}
 		switch {
 		case in.Shortcut(0, KeyDown):
-			if !*p.open {
+			if p.all != nil && *p.text == "" && n == 0 {
+				// An empty TokenField showing no option, closed or not
+				// (a click opens it on nothing): every suggestion, none
+				// highlighted, as typing opens it.
+				*p.all = true
+				open(true, false, -1)
+			} else if !*p.open {
 				open(true, *p.typed, 0)
 			} else if n > 0 {
 				*p.highlight = min(*p.highlight+1, n-1)
@@ -551,9 +560,10 @@ func magnifier(c *context) *node {
 // an input where Enter or a comma adds what was typed, and Backspace in
 // it while empty takes out the last. The suggestions containing what was
 // typed show below it, those not already tokens: Up and Down move among
-// them, and Enter or a click adds one. Changed reports a change; name it
-// with Label. Query binds what is being typed, for suggestions the app
-// looks up and matches itself as the user types.
+// them, and Enter or a click adds one. Down in the empty input shows every
+// suggestion not already a token, in their order. Changed reports a
+// change; name it with Label. Query binds what is being typed, for
+// suggestions the app looks up and matches itself as the user types.
 //
 //	ui.TokenField(c, &app.tags, allTags).Label("Tags")
 func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
@@ -603,6 +613,7 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 		coreBox(c).Key("input").Grow(1).MinWidth(t.Space(20)).Children(func() {
 			query = coreLocal(c.parent, "query", func() string { return "" })
 			p = comboboxBase(c, query, false)
+			p.all = coreLocal(c.parent, "all", func() bool { return false })
 			in = p.Input
 			if len(suggestions) == 0 {
 				in.role = RoleAuto // a text field
@@ -627,7 +638,9 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 	tq.text, tq.bound, tq.binding = query, tq.binding, false
 
 	var shown []string
-	if q := strings.TrimSpace(*query); q != "" && p.Filtering() {
+	q := strings.TrimSpace(*query)
+	filter := q != "" && p.Filtering()
+	if filter || *p.all && p.Open() {
 		options := suggestions
 		if !tq.bound {
 			options = matching(suggestions, q)
@@ -637,6 +650,10 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 				shown = append(shown, s)
 			}
 		}
+	}
+	// Every suggestion until the list closes, the user types, or none is left.
+	if filter || len(shown) == 0 {
+		*p.all = false
 	}
 	styleOptions(c, p, shown)
 	f.afterInput(func() {
