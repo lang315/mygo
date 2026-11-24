@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
 
 // tokenInput returns the input of the TokenEdit tt shows: a combo box when it
@@ -304,6 +305,21 @@ func TestTokenEditPlaceholderTakesTheSkin(t *testing.T) {
 	}
 }
 
+// The skin's look of fields (KindField) styles a TokenEdit, as a TextBox.
+func TestTokenEditTakesTheFieldLook(t *testing.T) {
+	pink := ui.Hex("#ff00aa")
+	look := NewStyle().Background(Fixed(pink))
+	var looks [skinhook.NumKinds]any
+	looks[skinhook.KindField] = &look
+	skinhook.SetLooks(&looks)
+	t.Cleanup(func() { skinhook.SetLooks(nil) })
+	tt := NewTester(t, TokenEdit(), 400, 120)
+	tt.Settle()
+	if n := countNear(tt.Image(), ui.Rect{}, true, pink, 4); n < 500 {
+		t.Fatalf("%d pixels of the field look's background, want 500 or more", n)
+	}
+}
+
 // Case 13. withMac(false): on a Mac menus have the access keys, as the
 // other row key tests.
 func TestTokenEditRowKeyFocusesTheInput(t *testing.T) {
@@ -442,6 +458,33 @@ func TestTokenEditRace(t *testing.T) {
 	in.Key(0, ui.KeyEnter)
 	tt.Find(ByLabel("Remove x")).Click()
 	in.Key(0, ui.KeyBackspace)
+	close(stop)
+	wg.Wait()
+
+	// SetTokens on another goroutine while the user pastes lines and types.
+	stop = make(chan struct{})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if i%20 == 0 {
+				te.SetTokens("p", "q")
+			}
+			_ = te.Tokens()
+		}
+	}()
+	for i := range 5 {
+		tt.Tester.SetClipboard("l" + strconv.Itoa(i) + "\nm" + strconv.Itoa(i))
+		tt.Tester.Command("paste")
+		tt.Settle()
+		tt.Tester.Type("t" + strconv.Itoa(i) + ",")
+		tt.Settle()
+	}
 	close(stop)
 	wg.Wait()
 	te.SetTokens("a")
