@@ -5,6 +5,8 @@ package metal
 import (
 	"testing"
 
+	"github.com/ebitengine/purego/objc"
+
 	"github.com/egoist/mygo/internal/scene"
 	"github.com/egoist/mygo/internal/wait"
 )
@@ -128,11 +130,15 @@ func TestPrefetchedFrames(t *testing.T) {
 	}
 }
 
+// testInWindow and testOffScreen are what TestHiddenWindowFrames's view
+// answers: whether it is in a window, and whether that is off the screen.
+var testInWindow, testOffScreen bool
+
 // TestHiddenWindowFrames renders frames into the layer of a window off the
 // screen: they present with the transaction, rather than on their own,
 // which the window server would hold until the window shows again, and
 // leave no drawable fetched; once it shows, frames present on their own
-// again.
+// again, as do those of a view in no window.
 func TestHiddenWindowFrames(t *testing.T) {
 	if err := load(); err != nil {
 		t.Skip("no Metal:", err)
@@ -143,13 +149,6 @@ func TestHiddenWindowFrames(t *testing.T) {
 		t.Skip("no Core Animation")
 	}
 	defer pool(func() { release(&layer) })
-	if windowHidden(layer) {
-		t.Fatal("a layer of no view is hidden")
-	}
-	hidden := windowHidden
-	defer func() { windowHidden = hidden }()
-	off := false
-	windowHidden = func(l id) bool { return l == layer && off }
 	r, err := New(uintptr(layer))
 	if err != nil {
 		unavailable(t, err)
@@ -169,17 +168,54 @@ func TestHiddenWindowFrames(t *testing.T) {
 	frame(0)
 	frame(1)
 	if r.synced || r.pre.drawable == 0 {
+		t.Fatalf("a frame of a layer of no view: synced %v, drawable fetched %#x", r.synced, r.pre.drawable)
+	}
+	// The layer's delegate stands for its view, whose window is itself.
+	cls := objc.GetClass("MyGoTestWindowView")
+	if cls == 0 {
+		var err error
+		cls, err = objc.RegisterClass("MyGoTestWindowView", objc.GetClass("NSObject"), nil, nil, []objc.MethodDef{
+			{Cmd: sel("window"), Fn: func(self objc.ID, _ objc.SEL) objc.ID {
+				if !testInWindow {
+					return 0
+				}
+				return self
+			}},
+			{Cmd: sel("isVisible"), Fn: func(objc.ID, objc.SEL) bool { return !testOffScreen }},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var view id
+	pool(func() {
+		view = send(id(cls), "new")
+		send(layer, "setDelegate:", view)
+	})
+	defer pool(func() {
+		send(layer, "setDelegate:", 0)
+		release(&view)
+	})
+	testInWindow, testOffScreen = false, true
+	defer func() { testInWindow, testOffScreen = false, false }()
+	frame(2)
+	if r.synced || r.pre.drawable == 0 {
+		t.Fatalf("a frame of a view in no window: synced %v, drawable fetched %#x", r.synced, r.pre.drawable)
+	}
+	testInWindow, testOffScreen = true, false
+	frame(3)
+	if r.synced || r.pre.drawable == 0 {
 		t.Fatalf("a frame of a window shown: synced %v, drawable fetched %#x", r.synced, r.pre.drawable)
 	}
-	off = true
-	for i := 2; i <= 3; i++ {
+	testOffScreen = true
+	for i := 4; i <= 5; i++ {
 		frame(i)
 		if !r.synced || r.pre.drawable != 0 {
 			t.Fatalf("frame %d of a window off the screen: synced %v, drawable fetched %#x", i, r.synced, r.pre.drawable)
 		}
 	}
-	off = false
-	frame(4)
+	testOffScreen = false
+	frame(6)
 	if r.synced || r.pre.drawable == 0 {
 		t.Errorf("a frame once the window shows: synced %v, drawable fetched %#x", r.synced, r.pre.drawable)
 	}

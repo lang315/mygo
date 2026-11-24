@@ -2033,8 +2033,8 @@ func (r *Renderer) fit(w, h int, scale float64) (changed bool) {
 
 // windowHidden reports whether the window of the view whose layer is
 // superlayer is off the screen (isVisible NO), as a window ordered out or
-// not yet shown; tests replace it. A layer of no view or window is not.
-var windowHidden = func(superlayer id) bool {
+// not yet shown. A layer of no view or window is not.
+func windowHidden(superlayer id) bool {
 	if runtime.GOOS == "ios" {
 		return false
 	}
