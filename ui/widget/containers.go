@@ -434,8 +434,11 @@ func buildPage(c *ui.Context, w Control) {
 	build := func() {
 		outer := axis
 		axis = vertical
-		render(c, w)
+		e := render(c, w)
 		axis = outer
+		if isViewport(w) {
+			e.Grow(1) // the scroller below grows; a viewport takes the room itself
+		}
 	}
 	if isViewport(w) {
 		build()

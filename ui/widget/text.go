@@ -306,7 +306,7 @@ func (v *MultilineTextBoxWidget) onEdited() {
 
 func (v *MultilineTextBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := v.text.bind()
-	el := ui.TextArea(c, p)
+	el := ui.TextArea(c, p).Grow(1) // as a table or a list does: it takes the room a box or a page gives
 	if v.placeholder != "" {
 		el.Placeholder(v.placeholder)
 		if tk, _ := skinOf(c); tk != nil {
