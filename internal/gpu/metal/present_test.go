@@ -128,6 +128,63 @@ func TestPrefetchedFrames(t *testing.T) {
 	}
 }
 
+// TestHiddenWindowFrames renders frames into the layer of a window off the
+// screen: they present with the transaction, rather than on their own,
+// which the window server would hold until the window shows again, and
+// leave no drawable fetched; once it shows, frames present on their own
+// again.
+func TestHiddenWindowFrames(t *testing.T) {
+	if err := load(); err != nil {
+		t.Skip("no Metal:", err)
+	}
+	var layer id
+	pool(func() { layer = send(class("CALayer"), "new") })
+	if layer == 0 {
+		t.Skip("no Core Animation")
+	}
+	defer pool(func() { release(&layer) })
+	if windowHidden(layer) {
+		t.Fatal("a layer of no view is hidden")
+	}
+	hidden := windowHidden
+	defer func() { windowHidden = hidden }()
+	off := false
+	windowHidden = func(l id) bool { return l == layer && off }
+	r, err := New(uintptr(layer))
+	if err != nil {
+		unavailable(t, err)
+	}
+	defer r.Release()
+	frame := func(i int) {
+		t.Helper()
+		s := &scene.Scene{}
+		s.Reset(64, 32, scene.Color{A: 255})
+		s.Ops = append(s.Ops, scene.Op{Kind: scene.OpFill, Rect: scene.Rect{X: float32(i), W: 8, H: 8}, Color: scene.Color{R: 255, A: 255}})
+		r.pre.wait()
+		if err := r.Render(s); err != nil {
+			t.Fatal(err)
+		}
+		r.pre.wait()
+	}
+	frame(0)
+	frame(1)
+	if r.synced || r.pre.drawable == 0 {
+		t.Fatalf("a frame of a window shown: synced %v, drawable fetched %#x", r.synced, r.pre.drawable)
+	}
+	off = true
+	for i := 2; i <= 3; i++ {
+		frame(i)
+		if !r.synced || r.pre.drawable != 0 {
+			t.Fatalf("frame %d of a window off the screen: synced %v, drawable fetched %#x", i, r.synced, r.pre.drawable)
+		}
+	}
+	off = false
+	frame(4)
+	if r.synced || r.pre.drawable == 0 {
+		t.Errorf("a frame once the window shows: synced %v, drawable fetched %#x", r.synced, r.pre.drawable)
+	}
+}
+
 // TestPendingFrames renders a frame while its drawable is being fetched:
 // it is built at once and waits, frames paced by the display are not
 // ready meanwhile, and the presenter has it drawn on the main thread

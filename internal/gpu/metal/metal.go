@@ -1835,7 +1835,13 @@ func (r *Renderer) render(s *scene.Scene) error {
 	// Others present as soon as the GPU has them, sparing a commit of the
 	// transaction for each.
 	holes := hasHoles(s)
-	sync := changed || holes || r.holes
+	// So does a frame for a window off the screen (windowHidden), as one
+	// drawn after input as Window.Hide orders it out: the window server
+	// holds a drawable presented on its own to such a window until it
+	// shows again, as large as the window, which no trim frees, besides
+	// the contents; one presented with the transaction it keeps only as
+	// the contents.
+	sync := changed || holes || r.holes || windowHidden(r.superlayer)
 	if runtime.GOOS == "ios" {
 		// The frames draw on Go's thread, apart from UIKit's, which has
 		// no run loop to commit a transaction they would present with.
@@ -2023,6 +2029,21 @@ func (r *Renderer) fit(w, h int, scale float64) (changed bool) {
 	flushTransactions()
 	r.w, r.h, r.scale, r.bounds, r.trimmed = w, h, scale, bounds, false
 	return true
+}
+
+// windowHidden reports whether the window of the view whose layer is
+// superlayer is off the screen (isVisible NO), as a window ordered out or
+// not yet shown; tests replace it. A layer of no view or window is not.
+var windowHidden = func(superlayer id) bool {
+	if runtime.GOOS == "ios" {
+		return false
+	}
+	view := send(superlayer, "delegate")
+	if view == 0 || !respondsTo(view, "window") {
+		return false
+	}
+	win := send(view, "window")
+	return win != 0 && byte(send(win, "isVisible")) == 0
 }
 
 // releaseTextures frees what the GPU's frames use, once the window is
