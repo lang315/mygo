@@ -560,6 +560,7 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 	t := c.theme
 	var p *comboboxParts
 	var query *string
+	var chips *tokenChips
 	changed := false
 	add := func(s string) {
 		s = strings.TrimSpace(s)
@@ -569,34 +570,27 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 		}
 	}
 	f, in := field(c, func() *node {
+		chips = coreLocal(c.parent, tokenChipsKey{}, func() tokenChips { return tokenChips{} })
+		chips.begin(c.rt.lang, len(*tokens))
 		for i := 0; i < len(*tokens); i++ {
 			tok := (*tokens)[i]
-			chip := coreRow(c).Key(tok).AlignItems(Center).Gap(t.Space(1)).Padding(t.Space(0.25), 0).PaddingStart(t.Space(2)).PaddingEnd(t.Space(1)).
+			info := chips.of(c, tok)
+			chip := coreRow(c).Key(info.key).AlignItems(Center).Gap(t.Space(1)).Padding(t.Space(0.25), 0).PaddingStart(t.Space(2)).PaddingEnd(t.Space(1)).
 				Radius(t.Radius).Background(t.SurfacePressed).Shrink(0)
-			chip.Children(func() {
-				coreText(c, tok).SingleLine()
-				x := coreButtonBase(c).Size(t.Space(3.5), t.Space(3.5)).Radius(t.Space(1)).Label(c.texts().RemoveToken(tok))
-				x.flags &^= flagFocusable
-				x.flags |= flagKeepFocus
-				x.role = RoleButton
-				x.builtWith(t)
-				setStyle(x, hoverSurface, staticHoverSurface)
-				x.Draw(func(pt *Painter, r Rect) {
-					k := r.W * 0.3
-					var path Path
-					path.MoveTo(r.X+k, r.Y+k).LineTo(r.X+r.W-k, r.Y+r.H-k).MoveTo(r.X+r.W-k, r.Y+k).LineTo(r.X+k, r.Y+r.H-k)
-					pt.StrokePath(&path, 1.25, t.TextMuted)
-				})
-				x.afterInput(func() {
-					if x.Clicked() {
-						if at := slices.Index(*tokens, tok); at >= 0 {
-							*tokens = slices.Delete(*tokens, at, at+1)
-							changed = true
-							c.rt.consumed = true
-						}
-					}
-				})
-			})
+			// Children, without the closure it takes: no theme scope here.
+			saved := c.parent
+			c.parent = chip
+			coreText(c, tok).SingleLine()
+			x := coreButtonBase(c).Size(t.Space(3.5), t.Space(3.5)).Radius(t.Space(1)).Label(info.label)
+			x.flags &^= flagFocusable
+			x.flags |= flagKeepFocus
+			x.role = RoleButton
+			x.builtWith(t)
+			setStyle(x, hoverSurface, staticHoverSurface)
+			x.Draw(drawRemoveCross)
+			c.parent = saved
+			chips.buttons = append(chips.buttons, x)
+			chips.tokens = append(chips.tokens, tok)
 		}
 		// The input keeps its identity, whatever tokens come before it.
 		var in *node
@@ -640,6 +634,15 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 	}
 	styleOptions(c, p, shown)
 	f.afterInput(func() {
+		for i, x := range chips.buttons {
+			if x.Clicked() {
+				if at := slices.Index(*tokens, chips.tokens[i]); at >= 0 {
+					*tokens = slices.Delete(*tokens, at, at+1)
+					changed = true
+					c.rt.consumed = true
+				}
+			}
+		}
 		if strings.Contains(*query, ",") {
 			parts := strings.Split(*query, ",")
 			for _, s := range parts[:len(parts)-1] {
@@ -660,6 +663,59 @@ func coreTokenField(c *context, tokens *[]string, suggestions []string) *node {
 		}
 	})
 	return f
+}
+
+// tokenChipsKey is the local of a TokenField that keeps what its chips need
+// each frame.
+type tokenChipsKey struct{}
+
+// tokenChips is what a TokenField's chips share: the remove button of each
+// chip of this build, with its token, which one handler of the field
+// answers; and, by token, the key and the button's label, made once
+// for the language they are in (a label is a formatted string).
+type tokenChips struct {
+	buttons []*node
+	tokens  []string
+	by      map[string]tokenChip
+	lang    string
+}
+
+type tokenChip struct {
+	key   any
+	label string
+}
+
+// begin starts a build of n chips in lang.
+func (s *tokenChips) begin(lang string, n int) {
+	clear(s.buttons) // no node outlives its build here
+	s.buttons, s.tokens = s.buttons[:0], s.tokens[:0]
+	// shortcut: tokens taken out stay until the map outgrows the field twice, when it starts over.
+	if s.lang != lang || len(s.by) > 2*n+16 {
+		clear(s.by)
+		s.lang = lang
+	}
+}
+
+// of returns the key and the label of the chip of tok.
+func (s *tokenChips) of(c *context, tok string) tokenChip {
+	ch, ok := s.by[tok]
+	if !ok {
+		if s.by == nil {
+			s.by = map[string]tokenChip{}
+		}
+		ch = tokenChip{tok, c.texts().RemoveToken(tok)}
+		s.by[tok] = ch
+	}
+	return ch
+}
+
+// drawRemoveCross draws the cross of a chip's remove button.
+func drawRemoveCross(pt *Painter, r Rect) {
+	k := r.W * 0.3
+	var buf [4]pathCmd
+	path := Path{cmds: buf[:0]}
+	path.MoveTo(r.X+k, r.Y+k).LineTo(r.X+r.W-k, r.Y+r.H-k).MoveTo(r.X+r.W-k, r.Y+k).LineTo(r.X+k, r.Y+r.H-k)
+	pt.StrokePath(&path, 1.25, pt.cur.builtTheme().TextMuted)
 }
 
 // tokenQueryKey is the local of a TokenField that Query finds it by.
