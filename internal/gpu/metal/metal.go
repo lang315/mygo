@@ -1835,7 +1835,13 @@ func (r *Renderer) render(s *scene.Scene) error {
 	// Others present as soon as the GPU has them, sparing a commit of the
 	// transaction for each.
 	holes := hasHoles(s)
-	sync := changed || holes || r.holes
+	// So does a frame for a window off the screen (windowHidden), as one
+	// drawn after input as Window.Hide orders it out: the window server
+	// holds a drawable presented on its own to such a window until it
+	// shows again, as large as the window, which no trim frees, besides
+	// the contents; one presented with the transaction it keeps only as
+	// the contents.
+	sync := changed || holes || r.holes || windowHidden(r.superlayer)
 	if runtime.GOOS == "ios" {
 		// The frames draw on Go's thread, apart from UIKit's, which has
 		// no run loop to commit a transaction they would present with.
@@ -2025,6 +2031,21 @@ func (r *Renderer) fit(w, h int, scale float64) (changed bool) {
 	return true
 }
 
+// windowHidden reports whether the window of the view whose layer is
+// superlayer is off the screen (isVisible NO), as a window ordered out or
+// not yet shown. A layer of no view or window is not.
+func windowHidden(superlayer id) bool {
+	if runtime.GOOS == "ios" {
+		return false
+	}
+	view := send(superlayer, "delegate")
+	if view == 0 || !respondsTo(view, "window") {
+		return false
+	}
+	win := send(view, "window")
+	return win != 0 && byte(send(win, "isVisible")) == 0
+}
+
 // releaseTextures frees what the GPU's frames use, once the window is
 // idle. The next frame makes them again, uploading the atlases whole.
 func (r *Renderer) releaseTextures() {
@@ -2182,10 +2203,11 @@ func trimWait(since time.Duration, occluded, busy bool) time.Duration {
 // showing again, as a Space slides in, would show nothing until its next
 // frame, which comes once the window server told that it shows.
 //
-// Drawables of the old size still in use then, as the window server holds
-// those of a window ordered out, stay in the layer once given back, until
-// its size changes again: trimAfter later, the timer shrinks them again,
-// to another size.
+// Drawables of the old size still in use then stay in the layer once given
+// back, until its size changes again: trimAfter later, the timer shrinks
+// them again, to another size. Those the window server holds for a window
+// off the screen it never gives back, which is why its frames present with
+// the transaction (render).
 func (r *Renderer) trim() {
 	if r.layer == 0 || r.trimmed {
 		return
