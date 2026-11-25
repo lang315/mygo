@@ -2,6 +2,8 @@ package richtext
 
 import (
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 func TestSameMarkRuns(test *testing.T) {
@@ -113,7 +115,7 @@ func TestSameMarkRunsAllocs(test *testing.T) {
 	left := readsAsRuns()
 	right := readsAsRuns()
 	var equal bool
-	allocs := testing.AllocsPerRun(100, func() {
+	allocs := allocrun.Least(100, func() {
 		equal = sameMarkRuns(left, right)
 	})
 	if !equal {

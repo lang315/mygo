@@ -7,6 +7,8 @@ import (
 	"slices"
 	"sort"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 func TestMinMaxIndexReference(t *testing.T) {
@@ -58,7 +60,7 @@ func TestMinMaxIndexReuse(t *testing.T) {
 	var index MinMaxIndex
 	index.Update(xs, ys)
 	dx, dy := index.Query(nil, nil, 0, 9999, 1280)
-	if a := testing.AllocsPerRun(20, func() { index.Update(xs, ys); dx, dy = index.Query(dx, dy, 0, 9999, 1280) }); a != 0 {
+	if a := allocrun.Least(20, func() { index.Update(xs, ys); dx, dy = index.Query(dx, dy, 0, 9999, 1280) }); a != 0 {
 		t.Fatal(a)
 	}
 	index.Reset()

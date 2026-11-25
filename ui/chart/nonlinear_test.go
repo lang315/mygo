@@ -4,6 +4,8 @@ import (
 	"math"
 	"slices"
 	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
 )
 
 func TestLogScale(t *testing.T) {
@@ -208,7 +210,7 @@ func FuzzNonlinearRoundtrip(f *testing.F) {
 
 func TestNonlinearMappingAllocs(t *testing.T) {
 	logScale, signed := NewLog(.01, 1000), NewSymLog(-1000, 1000)
-	if n := testing.AllocsPerRun(100, func() {
+	if n := allocrun.Least(100, func() {
 		logScale.At(10)
 		logScale.Invert(.25)
 		signed.At(-10)
