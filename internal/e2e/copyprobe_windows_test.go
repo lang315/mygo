@@ -144,12 +144,11 @@ func (p *copyProbe) sample(ready chan struct{}) {
 	p.end = time.Now()
 }
 
-// busy reports whether the sampler found the clipboard held by another
-// thread, or the write came late.
+// busy reports whether the write never came: then the stop's report names
+// the processes around it. A pass's busy try is the browser's own write.
 func (p *copyProbe) busy() bool {
 	<-p.done
-	sent := time.Unix(0, p.sentAt.Load())
-	return len(p.stretches) > 0 || p.moved.IsZero() || p.moved.Sub(sent) > 5*time.Millisecond
+	return p.moved.IsZero()
 }
 
 // stop ends the sampler and describes what it saw, times relative to Copy.
