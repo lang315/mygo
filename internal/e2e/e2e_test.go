@@ -1907,8 +1907,7 @@ var windowStateRuns atomic.Int32
 
 func TestWindowState(t *testing.T) {
 	run := strconv.Itoa(int(windowStateRuns.Add(1)))
-	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
-	defer mygo.App.SetPath(mygo.PathUserData, "")
+	tempUserData(t)
 	closeWindow := func(w *mygo.Window) {
 		closed := make(chan struct{})
 		w.OnClosed(func() { close(closed) })
@@ -1944,8 +1943,7 @@ func TestWindowState(t *testing.T) {
 // frame, as a close button does, twice, and its state is still saved.
 func TestCloseInFrame(t *testing.T) {
 	run := strconv.Itoa(int(windowStateRuns.Add(1)))
-	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
-	defer mygo.App.SetPath(mygo.PathUserData, "")
+	tempUserData(t)
 	var self atomic.Pointer[mygo.Window]
 	var frames, closes, closeFrame atomic.Int32
 	w := newWindow(t, mygo.WindowOptions{StateKey: "e2e-close-" + run, Width: 320, Height: 240, Content: ui.View(func(c *ui.Context) {

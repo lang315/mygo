@@ -45,8 +45,7 @@ var notes = sync.OnceValue(func() *mygo.Documents[string] {
 // Saving from the File menu writes it, and closing it edited asks first
 // (macOS, whose sheet the test answers).
 func TestDocumentWindow(t *testing.T) {
-	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
-	defer mygo.App.SetPath(mygo.PathUserData, "")
+	tempUserData(t)
 	docs := notes()
 	old := mygo.App.Menu()
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleAppMenu}, {Role: mygo.RoleFileMenu}}))
@@ -157,8 +156,7 @@ func TestDocumentWindow(t *testing.T) {
 // to its file, through the watch of the file: a save as editors do it, a
 // rename and a removal.
 func TestDocumentOtherApps(t *testing.T) {
-	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
-	defer mygo.App.SetPath(mygo.PathUserData, "")
+	tempUserData(t)
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	path := filepath.Join(dir, "other.e2enote")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
