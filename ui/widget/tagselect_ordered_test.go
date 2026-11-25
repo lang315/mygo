@@ -133,6 +133,7 @@ func TestTagSelectOrderedToggleOff(t *testing.T) {
 func TestTagSelectOrderedSetValues(t *testing.T) {
 	tc := newTagsCase(t, true)
 	tc.g.SetValues("b", "zzz", "a", "b")
+	tc.wantValues(t, "b", "a")
 	tc.tt.Settle()
 	tc.wantValues(t, "b", "a")
 	tc.wantChanges(t, 0)
@@ -186,6 +187,35 @@ func TestTagSelectSetOrderedAfterPlainPicks(t *testing.T) {
 	tc.wantValues(t, "a", "c")
 	tc.toggle("B").Click()
 	tc.wantValues(t, "a", "c", "b")
+}
+
+// A SetOrdered(true) after a plain build, before ui commits the user's edit
+// of a toggle of that build: the pick counts, at once and after the frame.
+func TestTagSelectSetOrderedBeforePlainCommit(t *testing.T) {
+	tc := newTagsCase(t, false)
+	tc.g.SetOrdered(true)
+	tc.g.on[1].shown = true // the user turns B on, as ui writes it
+	onChange(&tc.g.on[1], tc.g.onChange)()
+	tc.wantValues(t, "b") // as an OnChange posted then reads it
+	tc.tt.Settle()
+	tc.wantValues(t, "b")
+	tc.wantChanges(t, 1)
+}
+
+// The same, with no Values before the next frame: its chip shows.
+func TestTagSelectSetOrderedBeforePlainCommitShowsTheChip(t *testing.T) {
+	tc := newTagsCase(t, false)
+	tc.g.SetOrdered(true)
+	tc.g.on[1].shown = true
+	onChange(&tc.g.on[1], nil)()
+	tc.tt.Settle()
+	if !tc.toggle("B").Checked() {
+		t.Fatal("B's toggle is off")
+	}
+	if ls := tc.removeLabels(); !slices.Equal(ls, []string{"Remove B"}) {
+		t.Fatalf("remove buttons %q, want Remove B", ls)
+	}
+	tc.wantValues(t, "b")
 }
 
 // Case 8, the first order: a SetValues after the user's edit, before the

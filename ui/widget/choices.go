@@ -925,6 +925,7 @@ func (g *TagSelectWidget) Values() []string {
 	defer mu.Unlock()
 	var vs []string
 	if g.ordered != nil {
+		g.reorder()
 		for _, i := range g.picks {
 			vs = append(vs, g.opts[i].Value)
 		}
@@ -966,13 +967,17 @@ func (g *TagSelectWidget) SetOrdered(on bool) *TagSelectWidget {
 			return
 		}
 		g.ordered = g.buildOrdered
-		// Toggled without SetOrdered: those still on keep their order, the
-		// others follow in option order.
-		for i := range g.opts {
-			g.repick(i)
-		}
 	})
 	return g
+}
+
+// reorder brings picks in step with the toggles, which a toggle's commit
+// in a build without SetOrdered leaves behind: the picks still on keep
+// their order, the other options on follow in option order. Under mu.
+func (g *TagSelectWidget) reorder() {
+	for i := range g.opts {
+		g.repick(i)
+	}
 }
 
 // repick keeps option i's place in picks in step with its toggle: turned
@@ -1010,6 +1015,7 @@ func (g *TagSelectWidget) picked(i int) func() {
 // toggles; no row of chips while none is chosen. Under mu.
 func (g *TagSelectWidget) buildOrdered(c *ui.Context) ui.Element {
 	t := c.Theme()
+	g.reorder()
 	return ui.Column(c).Gap(t.Space(1.5)).Children(func() {
 		removed := -1
 		if len(g.picks) > 0 {
