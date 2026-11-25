@@ -243,7 +243,7 @@ func compiledDirs(c *Config) []string {
 	if cmd.Run() != nil {
 		return nil
 	}
-	return goListLines(out.String())
+	return outputLines(out.String())
 }
 
 // devLocale returns the locale of mygo dev -lang, as a canonical tag:

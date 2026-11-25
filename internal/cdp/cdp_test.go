@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -126,6 +127,23 @@ func oldTitle(result string) (string, error) {
 	return title, err
 }
 
+// oldError is upstream's devtoolsFailure's reading of a failed method's reply.
+func oldError(answer string) (string, error) {
+	var a any
+	_ = json.Unmarshal([]byte(answer), &a)
+	top, _ := a.(map[string]any)
+	e, _ := top["error"].(map[string]any)
+	code, _ := e["code"].(float64)
+	message, _ := e["message"].(string)
+	return strconv.FormatFloat(code, 'g', -1, 64) + " " + message, nil
+}
+
+// errorText is Error, written as oldError writes it.
+func errorText(answer string) (string, error) {
+	code, message := Error(answer)
+	return strconv.FormatFloat(code, 'g', -1, 64) + " " + message, nil
+}
+
 type reader struct {
 	name     string
 	old, new func(string) (string, error)
@@ -135,6 +153,7 @@ var readers = []reader{
 	{"Value", oldValue, Value},
 	{"Data", oldData, Data},
 	{"Title", oldTitle, Title},
+	{"Error", oldError, errorText},
 }
 
 // same fails if the old code and the new one differ in the value, in whether there
@@ -195,6 +214,11 @@ var replies = []string{
 	`{"data":"QUJD"}`, `{"data":""}`, `{"data":null}`, `{"data":1}`, `{"data":"a","data":"b"}`, `{"data":"A"}`,
 	`""`, `"a title"`, `"é😀"`, `"a\"b\\c\/d"`, `"unterminated`, `"bad\q"`, `"\ud800"`, `"x" y`,
 	`"` + "\xff" + `"`, `"` + "\n" + `"`,
+	`{"error":{"code":-32000,"message":"Inspected target navigated or closed"},"id":4}`,
+	`{"error":{"code":-32602,"message":"m"},"id":6}`, `{"error":"s"}`, `[{"error":{}}]`, `{"error":null}`,
+	`{"error":{"code":"x","message":1}}`, `{"error":{"code":1e400,"message":"big"}}`, `{"error":{"code":1,"code":"x"}}`,
+	`{"error":{"message":"a"},"error":{"code":2}}`, `{"Error":{"code":1}}`, `{"error":{"Code":1,"Message":"m"}}`,
+	`{"error":{"message":"` + "\xff" + `\ud800"}}`, `{"error":{"code":-0.5e2}} x`,
 }
 
 func TestReadersMatchEncodingJSON(t *testing.T) {

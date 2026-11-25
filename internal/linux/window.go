@@ -313,13 +313,14 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 	if w.web != 0 {
 		b.byWebView[w.web] = w
 	}
-	if (o.Frameless || (w.hiddenTitleBar() && o.ClientDecorations)) && !w.csd && o.Flyout == nil && !w.layer && b.announceCSD != nil {
+	if (o.Frameless || w.hiddenTitleBar() && (o.ClientDecorations || !b.compositorDecorates)) && !w.csd && o.Flyout == nil && !w.layer && b.announceCSD != nil {
 		// GTK asks a Wayland compositor that speaks
 		// org_kde_kwin_server_decoration (KWin, COSMIC, Sway…) to decorate
 		// every window it does not decorate itself, an undecorated one
 		// too: say the window decorates itself, before it is mapped, so
-		// that the compositor draws no title bar. A window with a hidden
-		// title bar and ClientDecorations says so too, and keeps its own
+		// that the compositor draws no title bar. A hidden title bar keeps
+		// a tiling compositor's decorations (titlebar.go), unless the window
+		// has ClientDecorations: then it says so too, and keeps its own
 		// buttons (layoutControls).
 		gtkWidgetRealize(w.win)
 		b.announceCSD(gtkWidgetGetWindow(w.win))
@@ -1095,8 +1096,8 @@ func (w *window) undecorated() bool { return w.opts.Frameless || w.hiddenTitleBa
 //   - Overlays on a layer surface (initOverlay), which the compositor puts
 //     without them too, and resizes through no edges of GTK's: the page's
 //     edges resize them (moveLayer).
-//   - A hidden title bar where the compositor decorates windows itself
-//     (KWin): it keeps the compositor's title bar, with the buttons.
+//   - A hidden title bar where a tiling compositor decorates windows
+//     itself (Hyprland, Sway): it keeps what the compositor draws.
 //   - X11, where Mutter puts its shadow around opaque undecorated windows
 //     as it composites, and where a window that decorates itself has its
 //     shadow inside its X window, which Bounds, SetBounds and the frame

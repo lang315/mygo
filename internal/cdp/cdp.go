@@ -152,6 +152,55 @@ func Title(reply string) (string, error) {
 	return title, nil
 }
 
+// Error reads the code and the message of the protocol's error in a failed
+// method's reply, {"error":{"code":…,"message":…},"id":…}, as encoding/json
+// reads them into an any: zero where the reply is not JSON, or they are of
+// another type. The names match exactly, as a map's keys do.
+func Error(reply string) (code float64, message string) {
+	r := jsonlite.NewReader([]byte(reply))
+	if r.Peek() != '{' {
+		return 0, ""
+	}
+	err := r.Object(func(key string) error {
+		if key != "error" {
+			return r.Skip()
+		}
+		code, message = 0, "" // a later "error" replaces an earlier one
+		if r.Peek() != '{' {
+			return r.Skip()
+		}
+		return r.Object(func(key string) error {
+			switch key {
+			case "code":
+				code = 0
+				if c := r.Peek(); c == '-' || c >= '0' && c <= '9' {
+					v, err := r.Value()
+					if err != nil {
+						return err
+					}
+					// One beyond a float64's range is no number to encoding/json.
+					if f, perr := strconv.ParseFloat(string(v), 64); perr == nil {
+						code = f
+					}
+					return nil
+				}
+			case "message":
+				message = ""
+				if r.Peek() == '"' {
+					var err error
+					message, err = r.String()
+					return err
+				}
+			}
+			return r.Skip()
+		})
+	})
+	if err != nil || r.End() != nil {
+		return 0, ""
+	}
+	return code, message
+}
+
 // fold reports whether key names field: encoding/json matches names without regard
 // to case when there is no exact match.
 func fold(key, field string) bool { return strings.EqualFold(key, field) }

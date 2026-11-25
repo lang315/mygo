@@ -106,7 +106,10 @@ type paintLook struct {
 	// (WindowDoubleClicked) rather than the window: here, in the padding,
 	// for the size of node.
 	readOnly, multiline, handleDoubleClick bool
-	_                                      [3]byte // the padding, written out
+	// unavailable marks a drawn menu's item that cannot be chosen, dimmed as
+	// if Disabled but still under the pointer (menuParts.item).
+	unavailable bool
+	_           [2]byte // the padding, written out
 }
 
 // equal reports whether a and b are the same, byte by byte.

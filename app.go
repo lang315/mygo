@@ -129,6 +129,7 @@ func (a *Application) Run() error {
 	}
 	a.running = true
 	a.mu.Unlock()
+	logCrashes()
 	go cleanUpdateLeftovers()
 
 	b := backend()
@@ -765,7 +766,8 @@ func (d *Dock) CancelBounce(id int) {
 	onMain(func() { backend().App().CancelBounce(id) })
 }
 
-// SetIcon replaces the Dock icon with a PNG image.
+// SetIcon replaces the Dock icon with a PNG image, which it keeps while
+// the activation policy changes; nil restores the app's own icon.
 func (d *Dock) SetIcon(png []byte) error {
 	needsApp("App.Dock.SetIcon")
 	return onMainValue(func() error { return backend().App().SetDockIcon(png) })

@@ -54,7 +54,35 @@ func (rt *engine) arrangeFocus() {
 	if slices.ContainsFunc(scopes, func(sc focusScope) bool { return sc.anchor != 0 }) {
 		rt.placePopovers(order, scopes)
 	}
+	// The focus in an overlay that went goes back to the element that had
+	// it as the overlay opened, rather than to the first element of the
+	// dialog on top, which may be the one the overlay opened from. prune
+	// forgets the overlay after (restoreFocus). The focus may be nowhere,
+	// as a dialog with nothing to focus took it.
+	built := func(id uint64) bool {
+		s := rt.states[id]
+		return s != nil && s.seen == rt.frame && s.pass == rt.pass
+	}
+	if !built(rt.focused) {
+		for id, opener := range rt.openers {
+			if built(id) {
+				continue
+			}
+			if !built(opener) {
+				opener = rt.befores[id] // the fork's: opened from an overlay gone first
+			}
+			// A disabled or inert opener takes no focus, as restoreFocus
+			// gives it none (the fork's).
+			if built(opener) && !rt.blocked(opener) {
+				rt.focused = opener
+				break
+			}
+		}
+	}
 	if m := rt.modal; m != 0 && rt.scopeOf(rt.focused) != m {
+		// Nothing behind the dialog keeps it, even when the dialog has
+		// nothing to take it: the opener has it back as the dialog closes.
+		rt.focused = 0
 		for i, sc := range rt.focusScopes {
 			if sc.modal == m {
 				rt.focused = rt.focusOrder[i]
@@ -128,12 +156,13 @@ func (rt *engine) overlayShortcut(e *node, mods Modifiers, key Key) bool {
 	return false
 }
 
-// openOverlay notes, as overlay id opens, the element that had the focus,
-// to give it back as the overlay closes (restoreFocus). When that element
-// is in another overlay, it notes too the one outside every overlay that
-// had the focus before (befores), which takes it back if the other overlay
-// is gone first, as for a menu bar's menu opened from the menu before it.
-func (rt *engine) openOverlay(back *node) {
+// openOverlay notes, as overlay id opens, opener, the element that had
+// the focus before it was built, to give it back as the overlay closes
+// (restoreFocus). When that element is in another overlay, it notes too the
+// one outside every overlay that had the focus before (befores), which
+// takes it back if the other overlay is gone first, as for a menu bar's
+// menu opened from the menu before it.
+func (rt *engine) openOverlay(back *node, opener uint64) {
 	if back.st.born != rt.frame {
 		return
 	}
@@ -143,8 +172,8 @@ func (rt *engine) openOverlay(back *node) {
 	if _, ok := rt.openers[back.id]; ok {
 		return
 	}
-	rt.openers[back.id] = rt.focused
-	for id, n := rt.focused, 0; id != 0 && n < 1024; n++ {
+	rt.openers[back.id] = opener
+	for id, n := opener, 0; id != 0 && n < 1024; n++ {
 		s := rt.states[id]
 		if s == nil {
 			break

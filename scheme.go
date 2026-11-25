@@ -111,6 +111,8 @@ func (h *windowHandler) SchemeDownload(rawURL string) {
 	if l := schemehook.Linked.Load(); l != nil {
 		go l.Download(schemehook.Download{
 			URL: rawURL,
+			// As schemeCall: handlers tell the page with CallerPage(r.Context()).
+			Context: context.WithValue(context.WithValue(context.Background(), callerKey{}, h.w.top()), pageKey{}, h.w.pg),
 			Started: func(name string) string {
 				return onMainValue(func() string { return h.DownloadStarted(rawURL, name) })
 			},

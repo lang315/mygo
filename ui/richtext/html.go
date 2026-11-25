@@ -336,6 +336,9 @@ type htmlBuilder struct {
 	started bool
 	// space is set after whitespace, which collapses into one space.
 	space bool
+	// br is set after a <br>, until the next flush: a <br> that is the
+	// last of a block starts no line, as browsers show it.
+	br bool
 	// lists are the lists open: their kinds.
 	lists []ListKind
 	style ParagraphStyle
@@ -372,6 +375,7 @@ func ParseHTML(s string) Text {
 
 // flush ends the paragraph being built.
 func (b *htmlBuilder) flush() {
+	b.br = false
 	if !b.started {
 		return
 	}
@@ -460,6 +464,7 @@ func (b *htmlBuilder) node(n *xhtml.Node, a Attributes) {
 	case atom.Br:
 		b.begin()
 		b.flush()
+		b.br = true
 		return
 	case atom.Img:
 		src, alt := attr(n, "src"), attr(n, "alt")
@@ -570,8 +575,8 @@ func (b *htmlBuilder) node(n *xhtml.Node, a Attributes) {
 		b.node(c, a)
 	}
 	if block {
-		if n.DataAtom == atom.P && !b.started && b.pre == 0 {
-			// An empty paragraph shows as one.
+		if n.DataAtom == atom.P && !b.started && !b.br && b.pre == 0 {
+			// An empty paragraph shows as one; <p><br></p> as one too.
 			b.begin()
 		}
 		b.flush()

@@ -3,6 +3,7 @@
 package protocol
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"mime"
@@ -27,7 +28,11 @@ func download(d schemehook.Download) {
 		handler = frontendHandler()
 	}
 	finish := d.Finished
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	ctx := d.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil || handler == nil {
 		finish("", fmt.Errorf("mygo: cannot download %s", rawURL))
 		return

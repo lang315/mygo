@@ -151,15 +151,12 @@ export function createRuntime(
       if (signal) {
         onAbort = () => {
           pending.delete(id);
-          chans?.forEach((c) => {
-            channels.delete(c.id);
-            c.id = 0;
-          });
           try {
             send({ t: "cancel", id, k: token });
           } catch {
             // The page is being torn down.
           }
+          chans?.forEach((c) => c.end());
           reject(abortReason(signal));
         };
         signal.addEventListener("abort", onAbort, { once: true });

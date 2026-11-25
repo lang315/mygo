@@ -11,16 +11,17 @@ import (
 
 // evalResultV2 is how the result of an eval was read with encoding/json/v2.
 type evalResultV2 struct {
-	OK bool           `json:"ok"`
-	V  jsontext.Value `json:"v"`
-	E  string         `json:"e"`
+	OK   bool           `json:"ok"`
+	V    jsontext.Value `json:"v"`
+	E    string         `json:"e"`
+	Left bool           `json:"left"`
 }
 
 var evalResultDocs = []string{
 	`{"ok":true,"v":1}`, `{"ok":true,"v":{"a":[1,"x",null]},"e":""}`, `{"ok":false,"e":"boom"}`,
 	`null`, `{}`, `[]`, `1`, `{"ok":null,"e":null,"v":null}`, `{"v":null}`,
 	`{"ok":true,"ok":false}`, `{"e":"a","e":"b"}`, `{"v":1,"v":2}`, `{"x":1,"x":2}`,
-	`{"ok":true,"v":{"a":1,"a":2}}`,
+	`{"ok":true,"v":{"a":1,"a":2}}`, `{"left":true}`, `{"left":null}`, `{"left":1}`, `{"left":true,"left":false}`,
 	"{\"e\":\"\xff\"}", "{\"e\":\"a\xff\\n\"}", `{"e":"\ud800"}`, `{"e":"\ud800A"}`, "{\"v\":\"\xff\"}", `{"v":"\ud800"}`,
 	`{"OK":true}`, `{"ok":1}`, `{"e":1}`, `{"ok":true,}`, `{"ok":true} x`, ` {"ok":true} `, ``, `{`,
 }
@@ -42,7 +43,7 @@ func FuzzParseEvalResultIsV2(f *testing.F) {
 
 func checkEvalResult(t *testing.T, doc []byte) {
 	t.Helper()
-	ok, v, msg, err := parseEvalResult(doc)
+	ok, left, v, msg, err := parseEvalResult(doc)
 	var want evalResultV2
 	werr := json.Unmarshal(doc, &want)
 	if (err == nil) != (werr == nil) {
@@ -52,7 +53,7 @@ func checkEvalResult(t *testing.T, doc []byte) {
 		return
 	}
 	// v2 keeps v as written, and a null v as null.
-	if ok != want.OK || msg != want.E || !bytes.Equal(v, want.V) {
-		t.Fatalf("%q: read %v %q %q; encoding/json/v2 reads %v %q %q", doc, ok, v, msg, want.OK, want.V, want.E)
+	if ok != want.OK || left != want.Left || msg != want.E || !bytes.Equal(v, want.V) {
+		t.Fatalf("%q: read %v %v %q %q; encoding/json/v2 reads %v %v %q %q", doc, ok, left, v, msg, want.OK, want.Left, want.V, want.E)
 	}
 }
