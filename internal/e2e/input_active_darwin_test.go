@@ -201,8 +201,7 @@ func TestActivateMenuSurvivesAnotherWindowTakingTheKeyJustBeforeIt(t *testing.T)
 // the menu's activation (beforeSend); the sheet asking to revert must show.
 func revertJustAfter(t *testing.T, before func()) {
 	t.Helper()
-	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
-	defer mygo.App.SetPath(mygo.PathUserData, "")
+	tempUserData(t)
 	docs := notes()
 	old := mygo.App.Menu()
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleAppMenu}, {Role: mygo.RoleFileMenu}}))
