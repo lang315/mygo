@@ -85,7 +85,19 @@ func (ed *editor) move(to int, extend bool) {
 	}
 }
 
-// lineEdges returns the edges of the visual line holding rune i.
+// moveToLineEnd moves the caret to e, the end of its visual line, drawn
+// there rather than at the start of the next line when the paragraph wraps
+// at e.
+func (ed *editor) moveToLineEnd(e int, extend bool) {
+	ed.move(e, extend)
+	ed.caretAffinity = text.Upstream
+	if !extend {
+		ed.anchorAffinity = text.Upstream
+	}
+}
+
+// lineEdges returns the edges of the visual line holding rune i, the one
+// the caret is drawn on when i is the caret.
 func (ed *editor) lineEdges(i int) (int, int) {
 	if ed.area != nil {
 		return ed.area.lineEdges(ed, i)
@@ -99,7 +111,11 @@ func (ed *editor) lineEdges(i int) (int, int) {
 		p := ed.buf.para(i)
 		return ed.buf.start(p), ed.buf.end(p)
 	}
-	li := ed.layout.LineAt(ed.displayIndex(i))
+	affinity := text.Downstream
+	if i == ed.caret {
+		affinity = ed.caretAffinity
+	}
+	li := ed.layout.CaretLine(text.CaretPosition{Index: ed.displayIndex(i), Affinity: affinity})
 	line := ed.layout.Lines[li]
 	return ed.textIndex(line.Start), ed.textIndex(line.End)
 }
@@ -204,7 +220,7 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 			if !forward {
 				ed.move(s, shift)
 			} else {
-				ed.move(e, shift)
+				ed.moveToLineEnd(e, shift)
 			}
 		case word && !forward:
 			ed.move(b.prevWord(ed.caret), shift)
@@ -256,7 +272,7 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 		if k.key == KeyHome {
 			ed.move(s, shift)
 		} else {
-			ed.move(e, shift)
+			ed.moveToLineEnd(e, shift)
 		}
 		return
 	case KeyBackspace:
@@ -377,7 +393,7 @@ func (ed *editor) command(c *context, name string) {
 			}
 		}
 		if s != "" {
-			ed.insert(s)
+			ed.paste(s)
 		}
 	case "selectAll":
 		ed.selectAll()

@@ -454,8 +454,10 @@ func (b *docBase) askPath(title, button, nameLabel string) (string, error) {
 	if filepath.Ext(target) == "" {
 		target += "." + ext // GTK's dialog adds none
 		// The dialog asked about the name typed, not about this one.
-		if err := b.confirmReplace(target); err != nil {
-			return "", err
+		if target != path {
+			if err := b.confirmReplace(target); err != nil {
+				return "", err
+			}
 		}
 	}
 	return target, nil
@@ -516,7 +518,11 @@ func (b *docBase) moveTo(dir string) error {
 		dir = dirs[0]
 	}
 	if path == "" {
-		_, err := b.write(filepath.Join(dir, b.Name()+"."+b.kind.types[0].Extensions[0]), writeSaveAs)
+		target := filepath.Join(dir, b.Name()+"."+b.kind.types[0].Extensions[0])
+		if err := b.confirmReplace(target); err != nil {
+			return err
+		}
+		_, err := b.write(target, writeSaveAs)
 		return err
 	}
 	target := filepath.Join(dir, filepath.Base(path))
@@ -554,6 +560,7 @@ var renameFile = os.Rename
 func (b *docBase) relocate(target string) error {
 	b.io.Lock()
 	path := b.Path()
+	before, _, _ := statStamp(path)
 	err := renameFile(path, target)
 	if crossDevice(err) {
 		err = copyFile(path, target)
@@ -567,10 +574,18 @@ func (b *docBase) relocate(target string) error {
 	}
 	stamp, _, _ := statStamp(target)
 	b.mu.Lock()
-	b.path, b.stamp = target, stamp
+	// The file moved as it was: what another app changed in it since the
+	// document read it is still not what the document knows.
+	if before.same(b.stamp) {
+		b.stamp = stamp
+	} else {
+		b.stamp.file = stamp.file
+	}
+	b.path = target
 	b.readOnly = !fileWritable(target)
 	b.mu.Unlock()
 	b.io.Unlock()
+	b.backupMoved()
 	addRecent(target)
 	b.watch()
 	b.notify()

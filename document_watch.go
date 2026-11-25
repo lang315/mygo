@@ -303,6 +303,7 @@ func (b *docBase) moved(path string) {
 	// one found it where it went.
 	b.deleted = false
 	b.mu.Unlock()
+	b.backupMoved()
 	addRecent(path)
 	b.watch()
 	b.notify()

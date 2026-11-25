@@ -48,7 +48,7 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         Go.send(Event.frame(wid))
     }
 
-    /** Whether Go presented a frame on the surface since it was made (FirstFrame). */
+    /** Whether Go presented a frame on the surface since it was made or resized (FirstFrame). */
     private var drawnOnSurface = false
     /**
      * What the SurfaceView waits for to show the window's draw with the
@@ -96,7 +96,33 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         val rate = surface.display?.refreshRate?.toDouble()?.takeIf { it > 0 } ?: 60.0
         if (!created && rate == hz) return
         hz = rate
-        Go.send(Event.surfaceChanged(wid, native, surface.width / density, surface.height / density, density, rate))
+        if (created) {
+            toldWidth = surface.width
+            toldHeight = surface.height
+        }
+        Go.send(Event.surfaceChanged(wid, native, toldWidth / density, toldHeight / density, density, rate))
+    }
+
+    /** The surface's size in pixels, as Go was last told of it. */
+    private var toldWidth = 0
+    private var toldHeight = 0
+
+    /**
+     * The surface's buffers changed size, as the screen rotated: Go makes
+     * its EGL surface anew on them, as GLSurfaceView and Flutter do. The
+     * driver takes the buffers' size and rotation (the transform hint) as
+     * an EGL surface is made, and an old one draws the next frame at the
+     * old size or rotation, which the system drops: an idle window shows a
+     * black screen or the frame before the rotation until something drew
+     * again (#2219). The window's draw waits for that frame
+     * (surfaceRedrawNeededAsync), as it does for the first.
+     */
+    private fun tellResized(w: Int, h: Int) {
+        if (native == 0L || (w == toldWidth && h == toldHeight)) return
+        toldWidth = w
+        toldHeight = h
+        drawnOnSurface = false
+        Go.send(Event.surfaceChanged(wid, native, w / density, h / density, density, hz))
     }
 
     private fun listenToDisplay(on: Boolean) {
@@ -361,6 +387,9 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         }, ActionMode.TYPE_FLOATING)
     }
 
+    /** Finishes the menu of showMenu, as what it was for went. */
+    fun hideMenu() { actionMode?.finish() }
+
     private var magnifier: Magnifier? = null // API 28
 
     /** The system's magnifier of what is at a point. */
@@ -405,10 +434,12 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
 
         /**
          * The window shows its draw with the surface once drawingFinished
-         * runs: for a surface just made, after Go's first frame on it (drawn),
-         * rather than with the surface empty, black, for a frame or more.
-         * Android's splash stays meanwhile. A surface Go drew on already, as
-         * one resized, is done at once, as by default; and should Go draw
+         * runs: for a surface just made or resized, after Go's first frame
+         * on it (drawn), rather than with the surface empty, black, or with
+         * the frame before the rotation, for a frame or more, as
+         * GLSurfaceView waits for its frame. Android's splash stays
+         * meanwhile, or the rotation's animation. A surface Go drew on
+         * already is done at once, as by default; and should Go draw
          * nothing, the window shows after a while all the same.
          */
         override fun surfaceRedrawNeededAsync(h: SurfaceHolder, drawingFinished: Runnable) {
@@ -423,6 +454,7 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
 
         override fun surfaceChanged(h: SurfaceHolder, format: Int, w: Int, ht: Int) {
             preferFastest(h)
+            tellResized(w, ht)
             reportSize()
             requestFrame()
         }
@@ -507,14 +539,21 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
             if (e.isAltPressed) mods = mods or 4
             if (e.isMetaPressed) mods = mods or 8
             val text = if (e.unicodeChar > 0) String(Character.toChars(e.unicodeChar)) else ""
-            val r = Go.ask(Event.key(wid, down, name, text, mods, e.repeatCount > 0)) ?: return false
-            val handled = KeyReply(r).handled
             // Keys typing text type it, which the content takes as text,
             // whatever Go answered: its text inputs take a printable key
             // as handled, as the text comes after it, as on macOS. Space
             // types too; keys with Control or Meta are shortcuts.
-            if (down && editing && text.isNotEmpty() && (keyNames[code] == null || code == KeyEvent.KEYCODE_SPACE) &&
-                !e.isCtrlPressed && !e.isMetaPressed) {
+            val types = down && editing && text.isNotEmpty() && (keyNames[code] == null || code == KeyEvent.KEYCODE_SPACE) &&
+                !e.isCtrlPressed && !e.isMetaPressed
+            // The word an input method marks around the cursor, as LatinIME
+            // does once the cursor moved, stays where it is, and so does the
+            // cursor, as in TextView: the content commits its marked text
+            // at a key with the cursor after it, so the key, typed in the
+            // middle of the word, came at its end.
+            if (types && input.markStart >= 0) edit(Event.textSelect(wid, input.selStart, input.selEnd))
+            val r = Go.ask(Event.key(wid, down, name, text, mods, e.repeatCount > 0)) ?: return false
+            val handled = KeyReply(r).handled
+            if (types) {
                 edit(Event.textReplace(wid, false, 0, 0, text))
                 return true
             }
@@ -685,9 +724,22 @@ class SurfaceWindow(context: Context, id: Long) : HostWindow(context, id) {
         override fun setComposingRegion(start: Int, end: Int): Boolean {
             val a = minOf(start, end).coerceAtLeast(0)
             val b = maxOf(start, end).coerceAtMost(input.length.toInt())
+            // No region is no composing text, as in BaseInputConnection.
+            if (a >= b) return finishComposingText()
+            // Marking text leaves the selection where it is, as TextView
+            // does. The content's marked text holds the selection, though,
+            // and an input method may name a region the selection has left:
+            // LatinIME marks the word before the cursor some time after it
+            // hears of it, and keys of a hardware keyboard typed meanwhile
+            // went past it. Marked, the cursor went back into the word and
+            // the keys after came before the ones typed since. That region
+            // stays unmarked: the input method heard where the cursor went,
+            // and marks the word again from there.
+            val lo = minOf(input.selStart, input.selEnd).toInt()
+            val hi = maxOf(input.selStart, input.selEnd).toInt()
+            if (lo < a || hi > b) return true
             val text = document(a, b).toString()
-            val n = text.length.toLong()
-            edit(Event.textMark(wid, true, a.toLong(), b.toLong(), text, n, n))
+            edit(Event.textMark(wid, true, a.toLong(), b.toLong(), text, (lo - a).toLong(), (hi - a).toLong()))
             return true
         }
 

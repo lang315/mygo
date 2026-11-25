@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/internal/platform"
-	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/transfer"
 )
 
@@ -94,12 +93,10 @@ func TestClipboardChangesCanReadAndWriteWithoutReentry(t *testing.T) {
 			loop.drain() // a nested native modal loop must not reenter fn
 		}
 	})
-	Clipboard.WriteText("first")
-	// The callback's nested drain can run this test's drain, so the change it
-	// writes is posted only after that drain returned.
-	wait.Until(t, "the change written in the callback", func() bool { return onMainValue(func() int { return calls }) >= 2 })
-	drainClipboardChanges()
+	// In one call: the callback's nested loop runs what is posted meanwhile.
 	onMain(func() {
+		Clipboard.WriteText("first")
+		loop.drain()
 		if calls != 2 {
 			t.Errorf("want two settled changes, got %d", calls)
 		}

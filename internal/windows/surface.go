@@ -346,10 +346,12 @@ func (s *surface) uncloak(byTimer bool) {
 	} else {
 		uncloaks.frame++
 	}
-	s.cloaked = false
-	procKillTimer.Call(s.hwnd, timerUncloak)
 	off := int32(0)
-	procDwmSetWindowAttribute.Call(s.w.hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&off)), unsafe.Sizeof(off))
+	hr, _, _ := procDwmSetWindowAttribute.Call(s.w.hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&off)), unsafe.Sizeof(off))
+	if !failed(hr) {
+		s.cloaked = false
+		procKillTimer.Call(s.hwnd, timerUncloak)
+	}
 }
 
 // showing tells that Windows is about to show the window: while it is
@@ -835,6 +837,9 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		}
 	case wmTimer:
 		if wp == timerUncloak {
+			// Once: an uncloak the window refuses stays cloaked rather than
+			// asked again at every tick.
+			procKillTimer.Call(hwnd, timerUncloak)
 			s.uncloak(true)
 			return 0, true
 		}

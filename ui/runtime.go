@@ -528,6 +528,9 @@ type engine struct {
 	// lostFocus is the element that had the focus as it was kept out of
 	// sight, to give it back as it comes back (prune), or 0.
 	lostFocus uint64
+	// spacePressed is the focused button that Space holds down, which
+	// it clicks as it goes up (keySpacePress), or 0.
+	spacePressed uint64
 	// texts are selectable paragraphs in build order; selection spans those
 	// of one Selectable container (textselection.go).
 	texts        []*state

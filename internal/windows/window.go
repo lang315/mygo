@@ -772,6 +772,16 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
 			procFillRect.Call(wp, uintptr(unsafe.Pointer(&r)), brush)
 		}
 		return 1, true
+	case wmStyleChanging:
+		if int32(wp) == gwlStyle && w.sf != nil {
+			styles := (*styleStruct)(native(lp))
+			if styles.Old&wsChild == 0 && styles.New&wsChild != 0 {
+				// DWM can refuse to uncloak a child HWND. Clear the
+				// first-frame cloak while this window is still top-level
+				// (uncloak does nothing to a surface not cloaked).
+				w.sf.uncloak(false)
+			}
+		}
 	case wmWindowPosChanging:
 		pos := (*windowPos)(native(lp))
 		if pos.Flags&swpShowWindow != 0 && w.sf != nil {
@@ -1117,6 +1127,8 @@ func (w *window) cleanup() {
 	if w.closed {
 		return
 	}
+	// Also while Windows destroys it with its owner.
+	w.destroying = true
 	w.closeWebViews()
 	w.closed = true
 	if w.opts.Modal && w.parent != nil && !w.parent.closed && w.modalSibling() == nil {

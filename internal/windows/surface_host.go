@@ -26,6 +26,7 @@ type surfaceHost interface {
 	menuKey() bool
 	liftKeys()
 	eatActivationRelease(down uint16)
+	uncloak(byTimer bool)
 }
 
 // makeSurfaceFunc makes the surface of a window. It is nil until UseSurface.

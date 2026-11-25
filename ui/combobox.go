@@ -382,10 +382,12 @@ func chevronDown(c *context) *node {
 func coreCombobox(c *context, selected *string, options []string) *node {
 	t := c.theme
 	var p *comboboxParts
-	var text *string
+	var text, seen *string
 	c.readsString(selected, *selected) // the text follows it once the input has lost the focus
 	f, in := fieldOf(c, true, func() *node {
 		text = coreLocal(c.parent, "combobox", func() string { return *selected })
+		// seen is the choice the text was last made from.
+		seen = coreLocal(c.parent, "comboboxSeen", func() string { return *selected })
 		p = comboboxBase(c, text, true)
 		p.Input.Grow(1).MinWidth(t.Space(25))
 		p.Input.autoComplete = AutoCompleteList // typing filters the options
@@ -436,7 +438,13 @@ func coreCombobox(c *context, selected *string, options []string) *node {
 			// What was typed matched no choice.
 			*text = *selected
 			in.st.editor.setText(*selected)
+		} else if *selected != *seen && !p.Filtering() {
+			// A choice the app set while the field has the focus, unless
+			// the user is typing to filter.
+			*text = *selected
+			in.st.editor.setText(*selected)
 		}
+		*seen = *selected
 	})
 	return f
 }

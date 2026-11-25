@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/egoist/mygo/internal/fake"
 	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/protocol"
 )
@@ -89,5 +90,47 @@ func TestDownloadSchemePanic(t *testing.T) {
 				t.Errorf("%s: the partial file was left behind (%v)", tt.url, err)
 			}
 		}
+	}
+}
+
+// A handler tells the page whose download it serves, as it does for the
+// page's other requests: that of a window, or of a web view in one.
+func TestDownloadSchemeCaller(t *testing.T) {
+	dir := t.TempDir()
+	App.SetPath(PathDownloads, dir)
+	defer App.SetPath(PathDownloads, "")
+	w, fw := testWindow(t, WindowOptions{})
+	show := true
+	host, v, _, fv := webViewWindow(t, &show)
+	type caller struct {
+		win  *Window
+		page *Page
+	}
+	asked := make(chan caller, 1)
+	if err := protocol.HandleFunc("dlcaller", func(w http.ResponseWriter, r *http.Request) {
+		asked <- caller{CallerWindow(r.Context()), CallerPage(r.Context())}
+		w.Write([]byte("ok"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	defer protocol.Unhandle("dlcaller")
+	for _, tt := range []struct {
+		name string
+		fw   *fake.Window
+		want caller
+	}{
+		{"window", fw, caller{w, w.Page()}},
+		{"web view", fv.Window, caller{host, v.Page()}},
+	} {
+		done := make(chan *Download, 1)
+		off := tt.want.page.OnDownloadDone(func(d *Download) { done <- d })
+		onMain(func() { tt.fw.H.SchemeDownload("dlcaller://localhost/a.txt") })
+		if d := wait.For(t, tt.name+": the download", done); d.Err != nil {
+			t.Errorf("%s: %v", tt.name, d.Err)
+		}
+		if got := <-asked; got != tt.want {
+			t.Errorf("%s: the handler was asked by %v, want %v", tt.name, got, tt.want)
+		}
+		off()
 	}
 }

@@ -202,7 +202,15 @@ func (ed *editor) withShown(fn func()) {
 	ed.readOnly, ed.password, ed.maxLen, ed.onPaste, ed.onTextKey, ed.onEdit, ed.caretLimit = now.readOnly, now.password, now.maxLen, now.onPaste, now.onTextKey, now.onEdit, now.caretLimit
 }
 
-func (ed *editor) insert(s string) {
+func (ed *editor) insert(s string) { ed.insertText(s, true) }
+
+// paste inserts s as a step of undo of its own, even one character, as
+// NSTextView's paste.
+func (ed *editor) paste(s string) { ed.insertText(s, false) }
+
+// insertText replaces the selection with s; one character typed joins the
+// typing before it in a step of undo.
+func (ed *editor) insertText(s string, typing bool) {
 	if ed.readOnly {
 		return
 	}
@@ -212,7 +220,7 @@ func (ed *editor) insert(s string) {
 	if ed.maxLen > 0 && a == b && len(ranges) == 0 && ed.compose == "" && ed.buf.n >= ed.maxLen {
 		return // no room: nothing is inserted, nor an undo step for it
 	}
-	ed.record(a == b && utf8.RuneCountInString(s) == 1)
+	ed.record(typing && a == b && utf8.RuneCountInString(s) == 1)
 	if len(ranges) == 0 {
 		ed.replace(ed.caret, ed.caret, s)
 	} else {

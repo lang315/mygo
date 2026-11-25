@@ -15,27 +15,26 @@ func TestNSISInstallsIntoTheAppFolderOfAFolderWithFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, section, _ := strings.Cut(script, "\nSection\n")
-	section, _, _ = strings.Cut(section, "SectionEnd")
+	// Upstream's OwnFolder (#2312), with the fork's check of the app's
+	// executable: a folder holding it is the app's.
+	_, fn, _ := strings.Cut(script, "Function OwnFolder\n")
+	fn, _, _ = strings.Cut(fn, "FunctionEnd")
 	want := []string{
-		`IfFileExists "$INSTDIR\My App.exe" mygo_dir_ok`,
-		`FindFirst $0 $1 "$INSTDIR\*.*"`,
-		`StrCmp $1 "." mygo_scan_next`,
-		`StrCmp $1 ".." mygo_scan_next`,
+		`IfFileExists "$INSTDIR\My App.exe" done`,
+		`ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\com.example.app" "InstallLocation"`,
+		`StrCmp $0 $INSTDIR done`,
+		`${DirState} $INSTDIR $0`,
 		`StrCpy $INSTDIR "$INSTDIR\My App"`,
-		`ReadRegStr $2 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\com.example.app" "InstallLocation"`,
-		`StrCmp $2 "$INSTDIR" mygo_dir_ok`,
-		"  ClearErrors\n  mygo_dir_ok:",
 	}
-	last := strings.Index(section, "WriteUninstaller")
 	for _, s := range want {
-		i := strings.Index(section, s)
-		if i < 0 || i > last {
-			t.Errorf("no %q before WriteUninstaller in:\n%s", s, section)
+		if !strings.Contains(fn, s) {
+			t.Errorf("no %q in OwnFolder:\n%s", s, fn)
 		}
 	}
-	if strings.Index(section, "StrCpy $INSTDIR") > strings.Index(section, "SetOutPath") {
-		t.Error("the folder is chosen after files are written")
+	_, section, _ := strings.Cut(script, "\nSection\n")
+	section, _, _ = strings.Cut(section, "SectionEnd")
+	if i := strings.Index(section, "Call OwnFolder"); i < 0 || i > strings.Index(section, "SetOutPath") {
+		t.Error("the folder is not chosen before files are written")
 	}
 }
 

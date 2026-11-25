@@ -497,7 +497,8 @@ type WindowOptions struct {
 	VibrancyTint *Color
 	// CornerRadius rounds a frameless window's corners, in DIPs: its
 	// content and material are cut to them (macOS), or the system rounds
-	// it with its own corners (Windows 11).
+	// it with its own corners (Windows 11). On macOS a titled window's
+	// corners are drawn by the system at it.
 	CornerRadius int
 	Opacity      float64
 	Parent       Window
@@ -1082,7 +1083,9 @@ type WindowHandler interface {
 	// the key itself, which the system then leaves alone (Windows opens no
 	// menu for Alt and the key), for TextComposition whether it took the
 	// composition, which the input method gives up otherwise (macOS), for
-	// PointerScroll whether the content scrolled or a handler took it, and
+	// PointerScroll whether the content scrolled or a handler took it
+	// (with Swipe, whether a handler took it or the content scrolled
+	// sideways), and
 	// for SurfaceCommandEnabled whether the command would act; it returns
 	// false for other events.
 	SurfaceEvent(ev SurfaceEvent) bool
@@ -1757,6 +1760,7 @@ type Tab struct {
 type TabBar interface {
 	Select(i int)
 	SetBadge(i int, badge string)
+	SetTitle(i int, title string)
 	Close()
 }
 

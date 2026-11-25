@@ -37,6 +37,9 @@ type Call struct {
 // Download is the download of a URL of a custom scheme.
 type Download struct {
 	URL string
+	// Context is that of the request, with the page whose download it is
+	// (mygo.CallerPage, mygo.CallerWindow), as Call's; nil is Background.
+	Context context.Context
 	// Started asks the window where to save the file called name, on the
 	// main thread: "" cancels it.
 	Started func(name string) string
