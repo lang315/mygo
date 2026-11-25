@@ -3,23 +3,20 @@ package widget
 import (
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
 // comboIdleAllocs returns the allocations of an idle frame of a form holding
-// two labels and a combo made by combo: the fewest of three measures, as
-// another goroutine's (the race detector's, a handler's) only add to them.
+// two labels and a combo made by combo: the least count of allocrun,
+// as another goroutine's (the race detector's, a handler's) only add to them.
 func comboIdleAllocs(combo func(a, b *LabelWidget) *ComboBoxWidget) float64 {
 	a, b := Label("A"), Label("B")
 	tt := ui.NewTester(content(VBox(0).Add(a, b, combo(a, b))), 800, 600)
 	for range 10 {
 		tt.Frame()
 	}
-	n := testing.AllocsPerRun(20, tt.Frame)
-	for range 2 {
-		n = min(n, testing.AllocsPerRun(20, tt.Frame))
-	}
-	return n
+	return allocrun.Least(20, tt.Frame)
 }
 
 func proxyCombo() *ComboBoxWidget {

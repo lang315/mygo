@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
@@ -695,7 +696,7 @@ func TestToastPausesWhileHovered(t *testing.T) {
 // toastFrameAllocs returns the allocations of a frame of tt at rest.
 func toastFrameAllocs(tt *ui.Tester) float64 {
 	tt.Frame()
-	return testing.AllocsPerRun(20, tt.Frame)
+	return allocrun.Least(20, tt.Frame)
 }
 
 // Review focus 4: a form with the hook set and no toast allocates nothing

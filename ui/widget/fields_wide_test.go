@@ -595,7 +595,7 @@ func TestWideAllocatesNoMore(t *testing.T) {
 		}
 		return tt.Frame
 	}
-	p, w := testing.AllocsPerRun(20, build(false)), testing.AllocsPerRun(20, build(true))
+	p, w := allocrun.Least(20, build(false)), allocrun.Least(20, build(true))
 	t.Logf("AllocsPerRun: %.1f with 20 wide rows, %.1f without", w, p)
 	if w > p+1 {
 		t.Errorf("AllocsPerRun: %.1f with 20 wide rows, %.1f without", w, p)
