@@ -263,12 +263,25 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	// (Frozen); known only when the columns have widths.
 	starts, frozenN, frozenW := tableGeometry(layout, columns, order)
 	if s.Checked != nil {
-		// The checkbox's cell comes first in each row.
+		// The checkbox's cell comes first in each row, and pins with the
+		// columns pinned after it (pinCheck).
 		for i := range starts {
 			starts[i] += checkW
 		}
+		if frozenN > 0 {
+			frozenW += checkW
+		}
 	}
 	s.frozenN, s.frozenW = frozenN, frozenW
+	// pinCheck pins the checkbox's cell of a row or of the header at the
+	// start, before the pinned columns, which would leave a strip the
+	// columns scroll under where it was.
+	pinCheck := func(box *node) {
+		if frozenN > 0 {
+			box.Sticky().Start(0)
+			box.styleFn = frozenStyle(t, true)
+		}
+	}
 	s.focusCol, s.focusColOn = s.focusColNext, s.focusColNextOn
 	s.focusColNext, s.focusColNextOn = "", false
 	// fitting are the cells of the column fitting its cells.
@@ -392,7 +405,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				// scrolling under it, which it hides with the color its row
 				// shows.
 				box.Sticky().Start(starts[k])
-				box.styleFn = frozenStyle(t, k == 0)
+				// The first takes the row's start corners, unless the
+				// checkbox's cell, pinned too, is before it.
+				box.styleFn = frozenStyle(t, k == 0 && s.Checked == nil)
 			}
 			switch col.Align {
 			case Center:
@@ -477,7 +492,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		head.Children(func() {
 			if s.Checked != nil {
 				// Not a column header, a leaf role whose checkbox would not show.
-				checkCell(c, checkW, func() {
+				pinCheck(checkCell(c, checkW, func() {
 					count, total := checks.counted(s, n)
 					all := total > 0 && count == total
 					box := checkboxOf(c, &all, "", count > 0, false).Label("Check all")
@@ -502,7 +517,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 							}
 						}
 					})
-				})
+				}))
 			}
 			heads := cells(RoleColumnHeader, func(j int) {
 				col := &columns[j]
@@ -587,6 +602,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 						}
 						itemCheckbox(c, table, s.Checked, s.keyIn(i), label)
 					})
+					pinCheck(box)
 					if s.GridLines {
 						// Ends in a line as the cells after it do.
 						box.BorderEndWidth(1).BorderColor(t.Border)
