@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -427,7 +428,10 @@ func TestOutlineRowAllocs(t *testing.T) {
 		t.Skip("measures")
 	}
 	kids := []int{1000}
-	frame := func(rows int, prefix func(r OutlineRow)) float64 {
+	// frame counts with allocsPerRun, over limit only if every count is: a
+	// malloc of another goroutine during the count of many rows would
+	// otherwise read as a row's.
+	frame := func(rows int, limit float64, prefix func(r OutlineRow)) float64 {
 		var s OutlineState[int]
 		s.Prefix = prefix
 		roots := make([]int, rows)
@@ -441,7 +445,7 @@ func TestOutlineRowAllocs(t *testing.T) {
 		}, 300, 800)
 		defer tt.rt.close()
 		tt.Frame()
-		return testing.AllocsPerRun(50, tt.Frame)
+		return allocsPerRun(t, 50, limit, tt.Frame)
 	}
 	for _, tc := range []struct {
 		name   string
@@ -451,7 +455,9 @@ func TestOutlineRowAllocs(t *testing.T) {
 		{"nothing", func(OutlineRow) {}, 0},
 		{"its arrow", func(r OutlineRow) { r.Arrow().Size(16, 16) }, 1},
 	} {
-		few, many := frame(10, tc.prefix), frame(30, tc.prefix)
+		// Strays only raise few, which lowers the difference: one count.
+		few := frame(10, math.Inf(1), tc.prefix)
+		many := frame(30, few+20*tc.perRow, tc.prefix)
 		if perRow := (many - few) / 20; perRow > tc.perRow {
 			t.Errorf("a Prefix building %s: a row allocates %.1f times a frame, want at most %.0f", tc.name, perRow, tc.perRow)
 		}
