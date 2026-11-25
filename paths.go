@@ -69,14 +69,20 @@ func (a *Application) Path(name PathName) (string, error) {
 	return p, nil
 }
 
-// SetPath overrides a directory returned by Path.
+// SetPath overrides a directory returned by Path. It waits for the app's
+// files being written in the background (window states, recent documents,
+// the language): those asked for before land in the directory they were
+// asked in, and none is still being written there once SetPath returns,
+// as an app that removes the directory next needs.
 func (a *Application) SetPath(name PathName, path string) {
+	flushAppWrites()
 	a.mu.Lock()
 	if a.paths == nil {
 		a.paths = map[PathName]string{}
 	}
 	a.paths[name] = path
 	a.mu.Unlock()
+	flushAppWrites() // one asked for by another goroutine meanwhile may have read the old path
 }
 
 func defaultPath(name PathName) (path string, create bool, err error) {
