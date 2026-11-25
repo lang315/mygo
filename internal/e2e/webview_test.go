@@ -334,7 +334,10 @@ window.ready = true;
 	// clipboard stays open, as each read of ours opens it on Windows: read
 	// it only once it changed.
 	before, sequenced := clipboardSequence()
+	probe := startCopyProbe() // PROBE (win-copy-flake)
+	defer probe.stop()
 	sentAt := time.Now()
+	probe.sent(sentAt)
 	menu("Copy")
 	held := ""
 	var moved time.Duration // from Copy to the first change of the clipboard
@@ -353,6 +356,7 @@ window.ready = true;
 		keepFront()
 		return false
 	}) {
+		probed := probe.stop() // PROBE (win-copy-flake)
 		// The page's selection and focus now, against those of its copies,
 		// whose times (Date.now) go with the time Copy was sent.
 		page, _ := mygo.EvalAs[string](v.Page(), "JSON.stringify({commands: window.commands, copies: window.copies, copied: window.copied, selection: getSelection().toString(), focused: document.hasFocus()})")
@@ -371,12 +375,12 @@ window.ready = true;
 				again = fmt.Sprintf("; a second Copy changed the clipboard after %v, to %q", time.Since(resent).Round(time.Millisecond), mygo.Clipboard.ReadText())
 			}
 		}
-		t.Fatalf("Copy to copy the page's selection never happened (waited %v); %s%s", wait.Guard, state, again)
+		t.Fatalf("Copy to copy the page's selection never happened (waited %v); %s%s; %s", wait.Guard, state, again, probed)
 	}
 	if sequenced {
 		// A passing run's numbers, for a failing one to be read against:
 		// go test hides the log of a package that passes.
-		ciNote(fmt.Sprintf("e2e: TestContentWindowWebViewEditMenu: clipboard sequence %d as the test began, %d after \"before copy\", %d at Copy; Copy changed it after %v", started, written, before, moved.Round(time.Millisecond)))
+		ciNote(fmt.Sprintf("e2e: TestContentWindowWebViewEditMenu: clipboard sequence %d as the test began, %d after \"before copy\", %d at Copy; Copy changed it after %v; %s", started, written, before, moved.Round(time.Millisecond), probe.stop()))
 	}
 	menu("Cut")
 	eventually(t, "Cut to take the text out of the page", func() bool { return text() == "" })

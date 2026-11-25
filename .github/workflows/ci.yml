@@ -36,7 +36,7 @@ jobs:
   test:
     name: ${{ matrix.os == 'macos-latest' && 'macOS' || matrix.os == 'windows-latest' && 'Windows' || 'Linux' }} (${{ matrix.shard }}${{ matrix.part && format(' {0}', matrix.part) || '' }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45 # -race: Linux took 24 minutes, macOS 18
+    timeout-minutes: 80 # DEBUG (win-copy-flake)
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
       CI_DIFF: ${{ github.event_name == 'pull_request' && 'HEAD^1 HEAD' || '' }} # the change of a pull request (its merge commit and the base)
@@ -56,15 +56,15 @@ jobs:
       # as Linux does; Linux keeps rest, the GUI tests of its backend, and
       # runs every shard on main.
       matrix:
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["macos-latest","windows-latest"]') || fromJSON('["macos-latest","ubuntu-latest","windows-latest"]') }}
-        shard: [cmd, rest]
+        os: [windows-latest] # DEBUG (win-copy-flake)
+        shard: [rest]
         # The ui shard runs in two jobs on every OS (ci-test.sh, CI_PART):
         # in one, its five processes passed go test's 25 minutes together on
         # macOS's 3 cores. Check the shards looks at the halves. Linux's are
         # on main only, as its other shards. noinspector runs ./ui and the
         # root package in two jobs the same way: in one, under -race on
         # Linux's 4 cores, it passed the 25 minutes on a slow runner.
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector","part":"a"},{"os":"ubuntu-latest","shard":"noinspector","part":"b"}]' || '[{"os":"macos-latest","shard":"ui","part":"a"},{"os":"macos-latest","shard":"ui","part":"b"},{"os":"windows-latest","shard":"ui","part":"a"},{"os":"windows-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"ui","part":"a"},{"os":"ubuntu-latest","shard":"ui","part":"b"},{"os":"ubuntu-latest","shard":"rest"},{"os":"ubuntu-latest","shard":"check"},{"os":"ubuntu-latest","shard":"noinspector","part":"a"},{"os":"ubuntu-latest","shard":"noinspector","part":"b"}]') }}
+        # DEBUG (win-copy-flake): the Windows rest job only.
     steps:
       - uses: actions/checkout@v7
         with:
@@ -295,6 +295,10 @@ jobs:
       # Its
       # production build, without the inspector, is the noinspector job's:
       # in the ui job too, it left the four cores short.
+      - name: DEBUG copy probe (win-copy-flake)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./.github/copyprobe.ps1
       - name: Unit tests
         if: matrix.shard != 'check' && matrix.shard != 'noinspector'
         shell: bash
@@ -416,7 +420,7 @@ jobs:
   # the longest job, so it runs on main, not on pull requests.
   linux-arm64:
     name: Linux ARM64
-    if: github.event_name != 'pull_request'
+    if: false # DEBUG (win-copy-flake)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     env:
@@ -485,7 +489,7 @@ jobs:
   windows-arm64:
     name: Windows ARM64
     runs-on: windows-11-arm
-    timeout-minutes: 30
+    timeout-minutes: 80 # DEBUG (win-copy-flake)
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
     steps:
@@ -581,6 +585,7 @@ jobs:
       # takes eight or nine minutes here, near go test's default of 10 per
       # package; 15 leaves it room and the GUI tests theirs in the job's 30.
       - run: go test -shuffle=on -timeout 15m ./...
+        if: false # DEBUG (win-copy-flake)
       # The runner's provisioning daemon (provjobd, under hosted-compute-agent)
       # runs wsl.exe every 30 seconds. This image has no WSL, and some of those
       # runs start `wsl.exe --update --confirm --prompt-before-exit`, whose new
@@ -658,10 +663,9 @@ jobs:
             Start-Sleep -Seconds 2
             "Escape; in front: " + [Front]::Now()
           }
-      - name: GUI tests of native UI
-        env:
-          MYGO_E2E: 1
-        run: go test ./internal/e2e
+      - name: DEBUG copy probe (win-copy-flake)
+        shell: pwsh
+        run: ./.github/copyprobe.ps1
       - name: Callbacks the GUI tests made
         if: always()
         shell: bash
@@ -674,6 +678,7 @@ jobs:
   # on main, and on a pull request that changes what those paths go through.
   installer:
     name: Windows installer
+    if: false # DEBUG (win-copy-flake)
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
