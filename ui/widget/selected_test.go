@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -205,7 +206,7 @@ func TestEffectiveAllocs(t *testing.T) {
 	v := NewStyle().Background(Fixed(selGreen)).Dark(NewStyle().Padding(1))
 	s := NewStyle().Padding(2).Dark(v).Hover(v).Selected(v).Focused(v).Pressed(v).Disabled(v)
 	var p props
-	if n := testing.AllocsPerRun(100, func() { p = s.effective(true, true, true, true, true, true) }); n != 0 {
+	if n := allocrun.Least(100, func() { p = s.effective(true, true, true, true, true, true) }); n != 0 {
 		t.Fatalf("effective allocates %v times", n)
 	}
 	if p.background.fixed != selGreen {

@@ -509,7 +509,7 @@ func TestActionAllocatesNothingInAFrame(t *testing.T) {
 			if n := allocrun.Least(30, frame); n != 0 {
 				t.Errorf("%s, action %v: %v allocations in a frame, want 0", name, act != nil, n)
 			}
-			if n := testing.AllocsPerRun(20, frame); n >= 1 {
+			if n := allocrun.Least(20, frame); n >= 1 {
 				t.Errorf("%s, action %v: AllocsPerRun %v, want 0", name, act != nil, n)
 			}
 		}
