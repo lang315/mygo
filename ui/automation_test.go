@@ -125,7 +125,7 @@ func TestAutomationDrawsMenusInTheWindow(t *testing.T) {
 func TestAutomationSettlesOutOfSight(t *testing.T) {
 	t.Setenv("MYGO_GPU", "0")
 	s := &occludedSurface{}
-	h := &windowHost{conn: &surface.Conn{Surface: s, Post: func(f func()) { f() }}}
+	h := &windowHost{conn: &surface.Conn{Surface: s, Post: func(func()) {}}} // drops posts: run at once, the idle timer's would race the test's frames
 	count, builds := 0, 0
 	h.rt = newRuntime(func(c *context) {
 		builds++
