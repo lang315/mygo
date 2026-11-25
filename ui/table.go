@@ -965,7 +965,7 @@ func tableRowStyle(row *node) {
 // rowSignature hashes what a Table's rows are built with besides their own
 // data, which a list that keeps rows compares (ListState.RowVersion versions
 // the data): the columns in the order shown, how wide each is, how its text
-// aligns, the block of cells chosen, whether the rows have check boxes, their
+// aligns, which are pinned (Frozen), the block of cells chosen, whether the rows have check boxes, their
 // height and grid lines.
 func rowSignature(columns []TableColumn, order []int, layout *TableLayout, lo, hi, cur int, checkW float32, s *ListState) uint64 {
 	h := uint64(14695981039346656037)
@@ -983,6 +983,11 @@ func rowSignature(columns []TableColumn, order []int, layout *TableLayout, lo, h
 		}
 		if col.RowHeader {
 			mix(2)
+		}
+		if col.Frozen {
+			// Which columns are pinned, and where they stick: frozenN,
+			// starts and frozenStyle, which the rows' cells read.
+			mix(6)
 		}
 	}
 	mix(uint64(lo))
