@@ -3,6 +3,7 @@ package widget
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"maps"
 	"sync"
 	"testing"
@@ -40,21 +41,24 @@ func tipsRead(tt *ui.Tester) map[string]string {
 }
 
 // tipBadges returns the boxes of the badges in img: the parts filled with
-// fill at least minH high and half as wide, of which half or more is fill
-// (a glyph or a line of the text's color is thin; a badge is a box with its
-// letter in it).
+// fill at least minH high and half as wide, of which half or more is fill,
+// that enclose something else, their letter (a glyph or a line of the text's
+// color is thin, or open, as a tab title's "H" in a heavy font; a badge is a
+// box with its letter in it).
 func tipBadges(img *image.RGBA, fill ui.Color, minH int) []ui.Rect {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
-	seen := make([]bool, w*h)
+	part := make([]int32, w*h) // 1 + the part's index, 0 if not fill
 	var out []ui.Rect
 	var stack []int
-	for start := range seen {
-		if seen[start] || !near(img.RGBAAt(start%w, start/w), fill) {
+	parts := int32(0)
+	for start := range part {
+		if part[start] != 0 || !near(img.RGBAAt(start%w, start/w), fill) {
 			continue
 		}
+		parts++
 		x0, y0, x1, y1, n := w, h, -1, -1, 0
-		seen[start] = true
+		part[start] = parts
 		stack = append(stack[:0], start)
 		for len(stack) > 0 {
 			i := stack[len(stack)-1]
@@ -67,18 +71,55 @@ func tipBadges(img *image.RGBA, fill ui.Color, minH int) []ui.Rect {
 					continue
 				}
 				j := ny*w + nx
-				if !seen[j] && near(img.RGBAAt(nx, ny), fill) {
-					seen[j] = true
+				if part[j] == 0 && near(img.RGBAAt(nx, ny), fill) {
+					part[j] = parts
 					stack = append(stack, j)
 				}
 			}
 		}
 		bw, bh := x1-x0+1, y1-y0+1
-		if bh >= minH && 2*bw >= minH && 2*n >= bw*bh {
+		r := image.Rect(x0, y0, x1+1, y1+1)
+		if bh >= minH && 2*bw >= minH && 2*n >= bw*bh && encloses(part, w, r, parts) {
 			out = append(out, ui.Rect{X: float32(x0), Y: float32(y0), W: float32(bw), H: float32(bh)})
 		}
 	}
 	return out
+}
+
+// encloses reports whether part p, whose box is r, closes around a pixel
+// not its own: one that r's edges do not reach without crossing p.
+func encloses(part []int32, w int, r image.Rectangle, p int32) bool {
+	out := make([]bool, r.Dx()*r.Dy()) // reached from r's edges
+	at := func(x, y int) int { return (y-r.Min.Y)*r.Dx() + x - r.Min.X }
+	var stack []image.Point
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		for x := r.Min.X; x < r.Max.X; x++ {
+			edge := x == r.Min.X || y == r.Min.Y || x == r.Max.X-1 || y == r.Max.Y-1
+			if edge && part[y*w+x] != p && !out[at(x, y)] {
+				out[at(x, y)] = true
+				stack = append(stack, image.Pt(x, y))
+			}
+		}
+	}
+	for len(stack) > 0 {
+		q := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for _, d := range []image.Point{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			n := q.Add(d)
+			if n.In(r) && part[n.Y*w+n.X] != p && !out[at(n.X, n.Y)] {
+				out[at(n.X, n.Y)] = true
+				stack = append(stack, n)
+			}
+		}
+	}
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		for x := r.Min.X; x < r.Max.X; x++ {
+			if part[y*w+x] != p && !out[at(x, y)] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // badgeMinH is the least height of a badge at text scale 1: the letter's
@@ -505,6 +546,34 @@ func TestRibbonTipsGrowWithTheTextScale(t *testing.T) {
 	large := wantTipsIn(t, big, tabTips, ui.LightTheme().Text, badgeMinH)
 	if len(small) == 0 || large[0].H < 1.4*small[0].H {
 		t.Fatalf("badges %v at text scale 1.5, %v at 1: they did not grow", large, small)
+	}
+}
+
+// tipBadges takes a box around its letter and not a glyph of the same color
+// as heavy as Linux's font draws a tab title's "H" at text scale 1.5, which
+// fills more than half its box but encloses nothing.
+func TestRibbonTipBadgesSkipGlyphs(t *testing.T) {
+	fill := ui.LightTheme().Text
+	img := image.NewRGBA(image.Rect(0, 0, 60, 30))
+	for i := range img.Pix {
+		img.Pix[i] = 255
+	}
+	paint := func(x0, y0, x1, y1 int, c color.RGBA) {
+		for y := y0; y < y1; y++ {
+			for x := x0; x < x1; x++ {
+				img.SetRGBA(x, y, c)
+			}
+		}
+	}
+	ink := color.RGBA{fill.R, fill.G, fill.B, 255}
+	paint(2, 2, 6, 17, ink) // "H", 13 × 15: its stems and bar
+	paint(11, 2, 15, 17, ink)
+	paint(6, 8, 11, 11, ink)
+	paint(30, 2, 50, 22, ink) // a badge, 20 × 20, and its letter "I"
+	paint(39, 7, 41, 17, color.RGBA{255, 255, 255, 255})
+	got := tipBadges(img, fill, badgeMinH)
+	if want := (ui.Rect{X: 30, Y: 2, W: 20, H: 20}); len(got) != 1 || got[0] != want {
+		t.Fatalf("badges %v, want [%v]", got, want)
 	}
 }
 
