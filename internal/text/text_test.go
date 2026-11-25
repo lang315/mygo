@@ -1450,6 +1450,9 @@ func TestRegisterAppFontReachesSystemsNewMakes(t *testing.T) {
 	if monospaced(before) {
 		t.Fatal("text uses the app's font before it is registered")
 	}
+	// One a Tester left before them, which the next Tester readies (Reuse).
+	idle := New()
+	idle.Layout(Params{Text: "x", Style: Style{Size: 20}})
 	if err := RegisterAppFont(gomono.TTF, family); err != nil {
 		t.Fatal(err)
 	}
@@ -1462,7 +1465,14 @@ func TestRegisterAppFontReachesSystemsNewMakes(t *testing.T) {
 	if after.Generation() != gen {
 		t.Error("made after the app's fonts, a System's first layout changed its Generation")
 	}
-	for name, s := range map[string]*System{"Shared": Shared(), "made before": before, "made after": after} {
+	// So does one readied for a Tester after them, as Reuse returns.
+	idle.Reuse()
+	gen = idle.Generation()
+	idle.Layout(Params{Text: "x", Style: Style{Size: 20}})
+	if idle.Generation() != gen {
+		t.Error("readied after the app's fonts (Reuse), a System's first layout changed its Generation")
+	}
+	for name, s := range map[string]*System{"Shared": Shared(), "made before": before, "made after": after, "reused": idle} {
 		if !monospaced(s) {
 			t.Errorf("%s: text does not use the app's font", name)
 		}

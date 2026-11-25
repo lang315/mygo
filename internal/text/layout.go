@@ -626,6 +626,10 @@ func (s *System) Reuse() {
 	clear(s.recent)
 	s.forgetLeftOut()
 	s.rooms = 0
+	// The app's fonts registered since, now, as New takes them: at the next
+	// window's first layout they would change the Generation within its first
+	// frame.
+	s.takeAppFonts()
 }
 
 // appFonts are the fonts the app registered for all its text
