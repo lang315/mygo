@@ -144,6 +144,21 @@ func (p *copyProbe) sample(ready chan struct{}) {
 	p.end = time.Now()
 }
 
+// facts stops the sampler and returns how long after Copy it tried the
+// clipboard, the longest gap between its tries, and whether one found the
+// clipboard held, for copydrop.Skip.
+func (p *copyProbe) facts() (sampled, maxGap time.Duration, busy bool) {
+	p.stop()
+	sent := p.sentAt.Load()
+	if sent == 0 {
+		return 0, p.maxGap, len(p.stretches) > 0
+	}
+	return p.end.Sub(time.Unix(0, sent)), p.maxGap, len(p.stretches) > 0
+}
+
+// webView2 is the path of the WebView2 runtime, which names its version.
+func (*copyProbe) webView2() string { return probeWebView2Path() }
+
 // busy reports whether the write never came: then the stop's report names
 // the processes around it. A pass's busy try is the browser's own write.
 func (p *copyProbe) busy() bool {

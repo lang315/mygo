@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/e2e/copydrop"
 	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
@@ -243,6 +244,10 @@ window.ready = true;
 	}
 }
 
+// copyDrops counts the Copies TestContentWindowWebViewEditMenu skipped as
+// writes WebView2 dropped: copydrop.Skip allows one a process.
+var copyDrops atomic.Int32
+
 // TestContentWindowWebViewEditMenu makes a web view before its window drew
 // a frame, and edits its page through the Edit menu once the page has the
 // keyboard: the menu's actions go to the page, as in a window of its own.
@@ -334,7 +339,8 @@ window.ready = true;
 	// clipboard stays open, as each read of ours opens it on Windows: read
 	// it only once it changed.
 	before, sequenced := clipboardSequence()
-	probe := startCopyProbe() // PROBE (win-copy-flake)
+	// Who holds the clipboard as the browser should write, if anyone.
+	probe := startCopyProbe()
 	defer probe.stop()
 	sentAt := time.Now()
 	probe.sent(sentAt)
@@ -356,12 +362,34 @@ window.ready = true;
 		keepFront()
 		return false
 	}) {
-		probed := probe.stop() // PROBE (win-copy-flake)
+		probed := probe.stop()
 		// The page's selection and focus now, against those of its copies,
 		// whose times (Date.now) go with the time Copy was sent.
 		page, _ := mygo.EvalAs[string](v.Page(), "JSON.stringify({commands: window.commands, copies: window.copies, copied: window.copied, selection: getSelection().toString(), focused: document.hasFocus()})")
 		state := fmt.Sprintf("as Copy was sent (at %d), %s; now %s; %s; the clipboard was seen open: %q; its sequence was %d as the test began, %d once it wrote \"before copy\", %d as Copy was sent; the page: %s; the clipboard has %q",
 			sentAt.UnixMilli(), sent, foregroundState(w), clipboardState(), held, started, written, before, page, mygo.Clipboard.ReadText())
+		// WebView2 now and then loses the browser's write of a copy the page
+		// made, with no program holding the clipboard and no try to open it
+		// (internal/e2e/copydrop): that shape, and only it, is skipped, once
+		// a process, with no second Copy.
+		sampled, gap, busy := probe.facts()
+		now, _ := clipboardSequence()
+		drop := copydrop.Facts{
+			PageCopied:  copydrop.PageCopied(page, "hello"),
+			Moved:       !sequenced || now != before,
+			Sampled:     sampled,
+			MaxGap:      gap,
+			Busy:        busy || held != "",
+			DropsBefore: int(copyDrops.Load()),
+		}
+		if copydrop.Skip(drop) {
+			copyDrops.Add(1)
+			ciNote("e2e: TestContentWindowWebViewEditMenu skipped a write WebView2 dropped: " + probed)
+			t.Skipf("WebView2 dropped the copy's write without opening the clipboard (WebView2 %s); %s; %s", probe.webView2(), state, probed)
+		}
+		if drop.DropsBefore > 0 {
+			state += fmt.Sprintf("; %d dropped write(s) already skipped in this process", drop.DropsBefore)
+		}
 		// A second Copy tells a write lost once (another program had the
 		// clipboard as the browser tried) from one the web view never makes
 		// any more. The test fails either way.
