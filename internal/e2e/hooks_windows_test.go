@@ -75,13 +75,16 @@ func appClick(t testing.TB, w *mygo.Window, x, y float64) (ok bool) {
 	}) {
 		t.Fatalf("the window never came out of the cloak (waited %v)%s", wait.Guard, inputDiag())
 	}
-	var missed string
+	var missed, resent string
 	var moves int
-	mygo.RunOnMain(func() { ok, missed, moves = win.TestInputClick(w.NativeHandle(), x, y, wait.Guard) })
+	mygo.RunOnMain(func() { ok, missed, moves, resent = win.TestInputClick(w.NativeHandle(), x, y, wait.Guard) })
 	if moves > 1 {
 		// The system's idea of the window under the cursor was behind: what
 		// this wait is for.
 		t.Logf("the click at (%v, %v) reached the app after the cursor moved %d times", x, y, moves)
+	}
+	if resent != "" {
+		t.Logf("the click at (%v, %v) was sent again%s", x, y, resent)
 	}
 	if missed != "" {
 		t.Fatalf("the click at (%v, %v) did not reach the app; the window there: %s", x, y, missed)

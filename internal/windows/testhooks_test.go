@@ -25,7 +25,8 @@ func TestDiagnoseClick(t *testing.T) {
 }
 
 // A click is sent again only when another app's window took it: not while a
-// window of the app is under the point, where a slow app would take two.
+// window of the app is under the point, where a slow app would take two
+// (unless a move sent after the button came first: see TestInputClick).
 func TestClickWentElsewhere(t *testing.T) {
 	for _, c := range []struct {
 		downs int
