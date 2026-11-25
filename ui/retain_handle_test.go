@@ -125,6 +125,7 @@ func TestRetainRowsOfAnInnerListShowingTheOuterFocus(t *testing.T) {
 func TestHandleMethodsNoteTheRead(t *testing.T) {
 	notNoted := map[string]string{
 		"Focus":        "requests focus for the next build: an action, not a read",
+		"FocusWith":    "as Focus, with its options",
 		"RequestFocus": "as Focus",
 		"CancelFocus":  "as Focus",
 		"SelectAll":    "as Focus; the selection is the focused element's, which is acting",

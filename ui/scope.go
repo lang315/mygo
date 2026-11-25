@@ -65,7 +65,15 @@ func (rt *engine) arrangeFocus() {
 	}
 	if !built(rt.focused) {
 		for id, opener := range rt.openers {
-			if !built(id) && built(opener) {
+			if built(id) {
+				continue
+			}
+			if !built(opener) {
+				opener = rt.befores[id] // the fork's: opened from an overlay gone first
+			}
+			// A disabled or inert opener takes no focus, as restoreFocus
+			// gives it none (the fork's).
+			if built(opener) && !rt.blocked(opener) {
 				rt.focused = opener
 				break
 			}

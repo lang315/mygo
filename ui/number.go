@@ -44,41 +44,34 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 	}
 	format := func(v float64) string { return strconv.FormatFloat(v, 'f', decimals, 64) }
 	var row *node
-	// shown is the value the text was last made from, or that typing set.
-	var shown *float64
-	// The lowest and highest values shown with step's decimals: a bound
-	// with more, as 2.5 with a step of 1, rounds to inside it. Rounding
-	// first keeps a bound on them, as 0.29 (0.29*100 is 28.999…).
+	// The lowest and highest values shown with step's decimals (stepBounds),
+	// assigned once, so that the closures below capture them by value: a
+	// reassigned variable would be on the heap every frame.
 	p := math.Pow(10, float64(decimals))
-	bottom, top := math.Round(lo*p)/p, math.Round(hi*p)/p
-	if bottom < lo {
-		bottom = math.Ceil(lo*p) / p
-	}
-	if top > hi {
-		top = math.Floor(hi*p) / p
-	}
-	set := func(v float64) {
-		v = math.Round(math.Max(lo, math.Min(hi, v))*p) / p
-		if v > hi {
-			v = top
-		} else if v < lo {
-			v = bottom
-		}
-		if v != *value {
-			*value, *shown = v, v
-			row.st.markChanged()
-			c.rt.consumed = true
-		}
-	}
+	bottom, top := stepBounds(lo, hi, p)
 	// content builds the text field and the buttons in row, and returns the field.
 	content := func() *node {
 		box := c.parent // row, which field makes before it builds content
 		text := coreLocal(box, "text", func() string { return format(*value) })
-		shown = coreLocal(box, "shown", func() float64 { return *value })
+		// shown is the value the text was last made from, or that typing set.
+		shown := coreLocal(box, "shown", func() float64 { return *value })
 		if *value != *shown {
 			// A value the app set replaces what was typed, before the input
 			// below takes the text.
 			*text, *shown = format(*value), *value
+		}
+		set := func(v float64) {
+			v = math.Round(math.Max(lo, math.Min(hi, v))*p) / p
+			if v > hi {
+				v = top
+			} else if v < lo {
+				v = bottom
+			}
+			if v != *value {
+				*value, *shown = v, v
+				row.st.markChanged()
+				c.rt.consumed = true
+			}
 		}
 		var in *node
 		arrowW := t.Space(5)
@@ -215,4 +208,19 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 	row.focusTo = in
 	in.nameFrom = row // named by the Label of the number, which is set after this build
 	return row
+}
+
+// stepBounds returns the lowest and highest values shown with p, ten to
+// the step's decimals: a bound with more, as 2.5 with a step of 1, rounds
+// to inside it. Rounding first keeps a bound on them, as 0.29 (0.29*100 is
+// 28.999…).
+func stepBounds(lo, hi, p float64) (bottom, top float64) {
+	bottom, top = math.Round(lo*p)/p, math.Round(hi*p)/p
+	if bottom < lo {
+		bottom = math.Ceil(lo*p) / p
+	}
+	if top > hi {
+		top = math.Floor(hi*p) / p
+	}
+	return bottom, top
 }

@@ -235,11 +235,17 @@ func (ed *editor) buildReveal(c *ui.Context) {
 	if at < 0 {
 		return
 	}
-	ed.revealAt = -1
 	if !ed.o.fitContent {
 		// The editor scrolls itself.
+		ed.revealAt = -1
 		return
 	}
+	// Built in every pass of the frame, not its first alone: a pass built
+	// again in the frame (as one that moved the focus, the query of a find
+	// bar opening) builds the box again, which the reveal asked for in the
+	// first looks for once the frame is laid out. The frame's painting,
+	// after that, takes the ask away (paint).
+	ed.revealBuilt = true
 	if box, ok := ed.boxAt(c, "code reveal", at); ok {
 		box.ScrollIntoView()
 	}

@@ -185,6 +185,9 @@ type editor struct {
 	// for last, so that the same one is not asked again: the user may
 	// scroll away from it.
 	revealAt, revealed int
+	// revealBuilt tells that a pass built the box of revealAt, which the
+	// frame's painting then takes away (buildReveal).
+	revealBuilt bool
 	r                  ui.Rect // the element's box of the last frame, in the window
 	// laidW is the width the editor was laid out at last, which an editor
 	// as high as its content lays out at again as it builds: the element's,

@@ -94,6 +94,11 @@ func mergeSpans(spans []lineSpan) []lineSpan {
 func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 	v := &ed.view
 	ed.frameNow = p.Now()
+	if ed.revealBuilt {
+		// The frame that built the reveal's box laid it out and scrolled to
+		// it: the ask is done (buildReveal).
+		ed.revealAt, ed.revealBuilt = -1, false
+	}
 	ed.r = r
 	ed.measureBlocks()
 	ed.layout(r.W, r.H, p.Scale())
