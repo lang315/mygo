@@ -343,7 +343,7 @@ func (s *surface) uncloak(byTimer bool) {
 	}
 	off := int32(0)
 	hr, _, _ := procDwmSetWindowAttribute.Call(s.w.hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&off)), unsafe.Sizeof(off))
-	if !failed(hr) {
+	if !failed(hr) || !appCloaked(s.w.hwnd) {
 		s.cloaked = false
 		procKillTimer.Call(s.hwnd, timerUncloak)
 		// Counted once it shows: a refused attempt leaves it cloaked.
@@ -353,6 +353,16 @@ func (s *surface) uncloak(byTimer bool) {
 			uncloaks.frame++
 		}
 	}
+}
+
+// appCloaked reports whether the window still holds the cloak an app put on
+// it (DWM_CLOAKED_APP): DWM may answer an uncloak with a failure and still
+// take the cloak off, as CI's runners showed (TestWindowsUncloakWithTheirFrame).
+func appCloaked(hwnd uintptr) bool {
+	const dwmwaCloaked, cloakedApp = 14, 1
+	var v uint32
+	hr, _, _ := procDwmGetWindowAttribute.Call(hwnd, dwmwaCloaked, uintptr(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	return failed(hr) || v&cloakedApp != 0
 }
 
 // showing tells that Windows is about to show the window: while it is
