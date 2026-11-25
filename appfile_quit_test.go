@@ -81,6 +81,73 @@ func TestQuitWritesAgainTheStatesOfAWriteStillRunning(t *testing.T) {
 	}
 }
 
+// heldStates is the state file, whose save waits for the test once started.
+type heldStates struct {
+	stateFile
+	started, proceed chan struct{}
+}
+
+func (s *heldStates) SaveWindowStates(states map[string]WindowState) error {
+	close(s.started)
+	<-s.proceed
+	return s.stateFile.SaveWindowStates(states)
+}
+
+// TestSetPathWaitsForTheWrites: a window closed, and its states are still
+// being written when the app changes its user data directory, as a test
+// does at its end before its directory is removed. The write must land in
+// the directory it was asked in, and be done when SetPath returns: Windows
+// cannot remove a directory a file is being written in (TestCloseInFrame).
+func TestSetPathWaitsForTheWrites(t *testing.T) {
+	old, next := t.TempDir(), t.TempDir()
+	App.SetPath(PathUserData, old)
+	store := &heldStates{started: make(chan struct{}), proceed: make(chan struct{})}
+	App.SetWindowStateStore(store)
+	forget := func() { windowStates.loaded, windowStates.byKey, windowStates.dirty = false, nil, false }
+	t.Cleanup(func() {
+		select {
+		case <-store.proceed:
+		default:
+			close(store.proceed)
+		}
+		flushAppWrites()
+		App.SetWindowStateStore(nil)
+		onMain(forget)
+		App.SetPath(PathUserData, "")
+	})
+	onMain(func() {
+		windowStates.loaded = true
+		windowStates.byKey = map[string]WindowState{"main": {X: 1, Y: 2, Width: 300, Height: 200}}
+		windowStates.dirty = true
+		saveWindowStates() // the window closed
+	})
+	wait.For(t, "the write to start", store.started)
+	set := make(chan struct{})
+	go func() { App.SetPath(PathUserData, next); close(set) }()
+	wait.Until(t, "SetPath to return or wait for the write", func() bool {
+		select {
+		case <-set:
+			return true
+		default:
+		}
+		buf := make([]byte, 1<<20)
+		return strings.Contains(string(buf[:runtime.Stack(buf, true)]), "mygo.flushAppWrites")
+	})
+	select {
+	case <-set:
+		t.Error("SetPath returned while a write of the old directory was still running")
+	default:
+	}
+	close(store.proceed)
+	wait.For(t, "SetPath to return", set)
+	if _, err := os.Stat(filepath.Join(old, windowStateFile)); err != nil {
+		t.Errorf("the states were not written in the directory they were asked in: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(next, windowStateFile)); err == nil {
+		t.Error("the states asked for in the old directory were written in the new one")
+	}
+}
+
 // TestQuitWritesAgainTheStatesAWriteFailedToSave: the write of the states
 // that fails after the last window closed, while the app is quitting, is
 // tried again by the quit: the main thread is not free for a message of the

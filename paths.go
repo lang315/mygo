@@ -69,8 +69,13 @@ func (a *Application) Path(name PathName) (string, error) {
 	return p, nil
 }
 
-// SetPath overrides a directory returned by Path.
+// SetPath overrides a directory returned by Path. It first waits for the
+// app's files being written in the background (window states, recent
+// documents, the language): those asked for before SetPath is called land
+// in the directory they were asked in, and are done when it returns, as an
+// app that removes the directory next needs.
 func (a *Application) SetPath(name PathName, path string) {
+	flushAppWrites()
 	a.mu.Lock()
 	if a.paths == nil {
 		a.paths = map[PathName]string{}
