@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
@@ -905,6 +906,10 @@ type TagSelectWidget struct {
 	opts     []Option
 	on       []mirror[bool]
 	onChange func()
+	// ordered is SetOrdered's build, nil without it: reached from
+	// SetOrdered alone, so an app that keeps option order does not link it.
+	ordered func(*ui.Context) ui.Element
+	picks   []int // the chosen options' indexes, in pick order, while ordered
 }
 
 func TagSelect(opts ...Option) *TagSelectWidget {
@@ -913,11 +918,18 @@ func TagSelect(opts ...Option) *TagSelectWidget {
 	return g
 }
 
-// Values returns the values of the chosen options, in option order.
+// Values returns the values of the chosen options, in option order, or in
+// the order they were picked with SetOrdered.
 func (g *TagSelectWidget) Values() []string {
 	mu.Lock()
 	defer mu.Unlock()
 	var vs []string
+	if g.ordered != nil {
+		for _, i := range g.picks {
+			vs = append(vs, g.opts[i].Value)
+		}
+		return vs
+	}
 	for i, o := range g.opts {
 		if g.on[i].value {
 			vs = append(vs, o.Value)
@@ -926,13 +938,119 @@ func (g *TagSelectWidget) Values() []string {
 	return vs
 }
 
+// SetValues chooses the options of vs, in the order of vs with SetOrdered,
+// dropping values that are no option's and repeats.
 func (g *TagSelectWidget) SetValues(vs ...string) *TagSelectWidget {
 	g.change(func() {
 		for i, o := range g.opts {
 			g.on[i].set(slices.Contains(vs, o.Value))
 		}
+		g.picks = g.picks[:0]
+		for _, v := range vs {
+			for i, o := range g.opts {
+				if o.Value == v && !slices.Contains(g.picks, i) {
+					g.picks = append(g.picks, i)
+				}
+			}
+		}
 	})
 	return g
+}
+
+// SetOrdered makes Values return the chosen options in the order the user
+// picked them, shown as chips in that order above the toggles.
+func (g *TagSelectWidget) SetOrdered(on bool) *TagSelectWidget {
+	g.change(func() {
+		if !on {
+			g.ordered = nil
+			return
+		}
+		g.ordered = g.buildOrdered
+		// Toggled without SetOrdered: those still on keep their order, the
+		// others follow in option order.
+		for i := range g.opts {
+			g.repick(i)
+		}
+	})
+	return g
+}
+
+// repick keeps option i's place in picks in step with its toggle: turned
+// on, it goes last; turned off, it goes. Under mu.
+func (g *TagSelectWidget) repick(i int) {
+	at := slices.Index(g.picks, i)
+	switch on := g.on[i].value; {
+	case on && at < 0:
+		g.picks = append(g.picks, i)
+	case !on && at >= 0:
+		g.picks = slices.Delete(g.picks, at, at+1)
+	}
+}
+
+// picked is ui's OnChange of toggle i while ordered: mirror.commit, with
+// the pick under the same lock, so that a getter never sees one without
+// the other. The user wins over a setter since the last build.
+func (g *TagSelectWidget) picked(i int) func() {
+	return func() {
+		mu.Lock()
+		m := &g.on[i]
+		changed := m.value != m.shown
+		m.value, m.dirty = m.shown, false
+		g.repick(i)
+		h := g.onChange
+		mu.Unlock()
+		if changed && h != nil {
+			Post(h)
+		}
+	}
+}
+
+// buildOrdered is build while ordered: the chosen options as chips, in
+// pick order, each with a remove button as ui's TokenField's, above the
+// toggles; no row of chips while none is chosen. Under mu.
+func (g *TagSelectWidget) buildOrdered(c *ui.Context) ui.Element {
+	t := c.Theme()
+	return ui.Column(c).Gap(t.Space(1.5)).Children(func() {
+		removed := -1
+		if len(g.picks) > 0 {
+			ui.Row(c.Key("chips")).Wrap().Gap(t.Space(1)).Children(func() {
+				for _, i := range g.picks {
+					text := g.opts[i].Text
+					ui.Row(c.Key(i)).AlignItems(ui.Center).Gap(t.Space(1)).Padding(t.Space(0.25), 0).PaddingStart(t.Space(2)).PaddingEnd(t.Space(1)).
+						Radius(t.Radius).Background(t.SurfacePressed).Children(func() {
+						ui.Text(c, text).SingleLine()
+						x := ui.ButtonBase(c).Unfocusable().Role(ui.RoleButton).Size(t.Space(3.5), t.Space(3.5)).Radius(t.Space(1)).Label(l10n.RemoveToken(text))
+						if x.Hovered() {
+							x.Background(t.Text.Alpha(0.12))
+						}
+						x.Children(func() { ui.Icon(c, closeIcon).FontSize(t.Space(2.5)) })
+						if x.Clicked() {
+							removed = i
+						}
+					})
+				}
+			})
+		}
+		if removed >= 0 { // a user's edit, as a toggle's: before the toggles bind
+			g.on[removed].set(false)
+			g.repick(removed)
+			if g.onChange != nil {
+				Post(g.onChange)
+			}
+		}
+		ui.Row(c.Key("toggles")).Wrap().Gap(t.Space(1.5)).Children(func() {
+			for i, o := range g.opts {
+				p, changed := g.on[i].bind()
+				skinChecked(c, ui.Toggle(c.Key(i), p, o.Text).OnChange(g.picked(i)), *p)
+				if changed {
+					g.repick(i)
+					if g.onChange != nil {
+						Post(g.onChange)
+					}
+				}
+			}
+		})
+	})
 }
 
 func (g *TagSelectWidget) OnChange(fn func()) *TagSelectWidget {
@@ -941,6 +1059,9 @@ func (g *TagSelectWidget) OnChange(fn func()) *TagSelectWidget {
 }
 
 func (g *TagSelectWidget) build(c *ui.Context) ui.Element {
+	if g.ordered != nil {
+		return g.ordered(c)
+	}
 	return ui.Row(c).Wrap().Gap(c.Theme().Space(1.5)).Children(func() {
 		for i, o := range g.opts {
 			p, changed := g.on[i].bind()

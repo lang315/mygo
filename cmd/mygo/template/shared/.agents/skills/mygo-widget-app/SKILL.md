@@ -107,7 +107,7 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 
 ## Tags
 
-For free tags or a list of IDs the user types (labels, recipients, codes), use `widget.TokenEdit(suggestions...)`: chips with a remove button, Enter or a comma adds what was typed, and a paste of several lines adds one token a line. Use `widget.TagSelect` only to pick among fixed options.
+For free tags or a list of IDs the user types (labels, recipients, codes), use `widget.TokenEdit(suggestions...)`: chips with a remove button, Enter or a comma adds what was typed, and a paste of several lines adds one token a line. Use `widget.TagSelect` only to pick among fixed options. Where the order of the picks matters, as the fields of an export, `widget.TagSelectWidget.SetOrdered(true)` shows them as chips in pick order above the toggles, each with a remove button, and `widget.TagSelectWidget.Values` returns them in that order, as `Option` values, not their texts: `sel := widget.TagSelect(widget.Option{Value: "TwoFactorSecret", Text: "2FA"}, widget.Option{Value: "Birthday", Text: "Birthday"}).SetOrdered(true).SetValues(cfg.Fields...).OnChange(save)`. `SetValues` drops values that are no option's, as stale config keys, and runs no `OnChange`.
 
 ```go
 package app

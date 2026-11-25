@@ -1330,7 +1330,24 @@ Input and display:
   when disabled), as WinForms' `LinkClicked`.
 - `CheckBox(text)`, `Toggle(text)`, `Switch()`: on or off, with `OnChange`.
 - `CheckBoxGroup(row, options...)`, `TagSelect(options...)`: several of
-  the options; `Values`, `SetValues`.
+  the options; `Values`, `SetValues`. `TagSelect`'s `SetOrdered(true)`
+  keeps the order the user picks in: turning an option on puts it last,
+  turning it off takes it out, and `Values` returns that order. The chosen
+  options show as chips in that order above the toggles, each with its
+  `Text` and a remove button ("Remove x", as `TokenEdit`'s, which Tab
+  passes by); no row of chips while none is chosen. `SetValues` keeps the
+  order it is given, dropping values that are no option's and repeats.
+  `OnChange` runs after each change by the user, not after `SetValues`.
+  Without it, `Values` is in option order.
+
+  ```go
+  fields := widget.TagSelect(
+  	widget.Option{Value: "TwoFactorSecret", Text: "2FA"},
+  	widget.Option{Value: "Birthday", Text: "Birthday"},
+  	widget.Option{Value: "Phone", Text: "Phone"},
+  ).SetOrdered(true).SetValues("Phone", "TwoFactorSecret")
+  // fields.Values() == []string{"Phone", "TwoFactorSecret"}
+  ```
 - `TokenEdit(suggestions...)`: free tags shown as chips, as DevExpress'
   TokenEdit, editing a `[]string`. Enter or a comma adds what was typed
   (trimmed; a blank or a repeat adds nothing), a chip's button ("Remove
