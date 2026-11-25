@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/wait"
@@ -50,11 +49,7 @@ func TestProtocolContentLength(t *testing.T) {
 		}
 		req := &platform.SchemeRequest{Context: context.Background(), Method: "POST", URL: "bodylen://localhost" + path, Header: header, Body: body, Responder: rec}
 		onMain(func() { fw.H.SchemeRequest(req) })
-		select {
-		case <-rec.finished:
-		case <-time.After(wait.Guard):
-			t.Fatal("request did not finish")
-		}
+		wait.For(t, "the request to finish", rec.finished)
 		return rec
 	}
 

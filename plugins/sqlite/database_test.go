@@ -257,15 +257,19 @@ func TestInterruptedBeforeStatement(t *testing.T) {
 					return err
 				})
 			}()
-			select {
-			case err := <-done:
-				if !errors.Is(err, test.want) {
-					t.Fatal(err)
+			// The connection's Close waits for the query: a query that went
+			// on is interrupted as the test ends, before testDB's cleanup
+			// closes the database (cleanups run last first).
+			ended := false
+			t.Cleanup(func() {
+				if !ended {
+					conn.Interrupt()
 				}
-			case <-time.After(wait.Guard):
-				conn.Interrupt() // the connection's Close waits for the query
-				t.Fatal("the query went on")
+			})
+			if err := wait.For(t, "the query to end", done); !errors.Is(err, test.want) {
+				t.Fatal(err)
 			}
+			ended = true
 			if err := <-closed; err != nil {
 				t.Fatal(err)
 			}

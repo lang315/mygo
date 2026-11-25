@@ -75,7 +75,6 @@ var baseline = map[string]int{
 	"internal/gpu/d3d11/uncapped_test.go refusedThroughSettle time.Since":                                      4,
 	"internal/gpu/d3d11/uncapped_test.go refusingPresent.wait time.Sleep":                                      1,
 	"internal/gpu/d3d11/uncapped_test.go resizeWhileDWMStalls time.Now().Before":                               1,
-	"internal/gpu/d3d11/uncapped_test.go uncappedResize time.Sleep":                                            1,
 	"internal/text/wrap_unbroken_measure_darwin_test.go TestCoreTextWrapUnbrokenMeasure time.Since":            5,
 	"internal/updatehttp/updatehttp_test.go TestGetKeepsASlowBody time.Sleep":                                  1,
 	"plugins/updater/native/window_test.go session.fit time.After":                                             1,
