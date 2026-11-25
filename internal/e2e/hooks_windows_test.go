@@ -55,8 +55,10 @@ func click(w *mygo.Window, x, y float64) (ok bool) {
 	return ok
 }
 
-// Clicks reach windows showing native UI only: a web view's page is
-// not clicked.
+// clickPage posts no click to a web view's page: WebView2 takes the mouse in
+// windows of its own process, which posted messages do not reach. A page is
+// clicked with the system's input through appClick (TestInputClick), which
+// returns once the click is sent, without waiting for the page.
 func clickPage(*mygo.Window, float64, float64) bool { return false }
 
 // appClick clicks with the system's input, which activates windows, and
