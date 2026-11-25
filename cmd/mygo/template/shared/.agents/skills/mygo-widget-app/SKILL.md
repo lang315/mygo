@@ -107,7 +107,7 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 
 ## Tags
 
-For free tags or a list of IDs the user types (labels, recipients, codes), use `widget.TokenEdit(suggestions...)`: chips with a remove button, Enter or a comma adds what was typed, and a paste of several lines adds one token a line. Use `widget.TagSelect` only to pick among fixed options.
+For free tags or a list of IDs the user types (labels, recipients, codes), use `widget.TokenEdit(suggestions...)`: chips with a remove button, Enter or a comma adds what was typed, and a paste of several lines adds one token a line. Use `widget.TagSelect` only to pick among fixed options. Where the order of the picks matters, as the fields of an export, `widget.TagSelectWidget.SetOrdered(true)` shows them as chips in pick order above the toggles, each with a remove button, and `widget.TagSelectWidget.Values` returns them in that order, as `Option` values, not their texts: `sel := widget.TagSelect(widget.Option{Value: "TwoFactorSecret", Text: "2FA"}, widget.Option{Value: "Birthday", Text: "Birthday"}).SetOrdered(true).SetValues(cfg.Fields...).OnChange(save)`. `SetValues` drops values that are no option's, as stale config keys, and runs no `OnChange`.
 
 ```go
 package app
@@ -117,15 +117,14 @@ import "github.com/egoist/mygo/ui/widget"
 type Account struct{ Tags []string }
 
 func tagsField(acc *Account, allTags []string, save func()) widget.Control {
-	var te *widget.TokenEditWidget
-	te = widget.TokenEdit(allTags...).SetTokens(acc.Tags...).OnChange(func() {
-		acc.Tags = te.Tokens()
-		save()
-	})
+	te := widget.BindTokens(widget.TokenEdit(allTags...),
+		func() []string { return acc.Tags },
+		func(v []string) { acc.Tags = v; save() })
 	return widget.Fields().Row("&Tags", te)
 }
 ```
 
+- Keep the tokens with `widget.BindTokens`, not `SetTokens` plus an `OnChange` that saves `Tokens()`: `set` gets the tokens, in a slice of its own, after each change by the user (after `OnChange`), and `widget.Reload` refreshes the field from the source. `SetTokens` and `Reload` do not call `set`.
 - `widget.TokenEditWidget.Tokens` returns a copy, in order. `widget.TokenEditWidget.SetTokens` trims and drops blanks and repeats, and does not run `widget.TokenEditWidget.OnChange`, which runs on the event goroutine after each change by the user. `widget.TokenEditWidget.SetSuggestions` and `widget.TokenEditWidget.SetPlaceholder` (shown while there is no token and no text). Read `docs/ui/widget.md`.
 - For chips picked from a fixed set, kept in pick order, call `widget.TokenEditWidget.SetSuggestionsOnly(true)`: the user adds only suggestions (Down in the empty input lists them), other text adds nothing.
 
@@ -213,7 +212,7 @@ func settings(cfg *Config) widget.Control {
 ```
 
 - `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
-- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both) and a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`).
+- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
 ## Threads
