@@ -104,7 +104,7 @@ func canvasHost(t *testing.T, draw func(cp *Painter), over func(p *Painter, r Re
 	cv := NewCanvas(200, 100)
 	drawn := false
 	o := &occludedHost{s: &occludedSurface{}}
-	o.windowHost = &windowHost{conn: &surface.Conn{Surface: o.s, Post: func(f func()) { f() }}}
+	o.windowHost = &windowHost{conn: &surface.Conn{Surface: o.s, Post: o.post}}
 	o.rt = newRuntime(func(c *context) {
 		o.builds++
 		coreBox(c).Size(200, 100).Background(RGB(255, 255, 255)).Draw(func(p *Painter, r Rect) {

@@ -155,7 +155,7 @@ func TestCaptureBuildsFrameAskedOutOfSight(t *testing.T) {
 func newDrawingHost(t *testing.T, draw func(p *Painter, r Rect)) *occludedHost {
 	t.Setenv("MYGO_GPU", "0")
 	o := &occludedHost{s: &occludedSurface{}}
-	o.windowHost = &windowHost{conn: &surface.Conn{Surface: o.s, Post: func(f func()) { f() }}}
+	o.windowHost = &windowHost{conn: &surface.Conn{Surface: o.s, Post: o.post}}
 	o.rt = newRuntime(func(c *context) {
 		o.builds++
 		coreBox(c).Size(200, 100).Background(RGB(255, 255, 255)).Draw(draw)
