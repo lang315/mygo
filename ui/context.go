@@ -71,6 +71,7 @@ type context struct {
 	// and dividers those drawing lines between their children.
 	transitions []transitionUse
 	dividers    []dividers
+	splits      []splitBuild
 	// childExits are the Exits that elements gave their children going
 	// in this frame (ChildExit).
 	childExits []childExit
@@ -141,6 +142,8 @@ func (c *context) reset(now time.Time, w, h float32) {
 	c.sortedUses = c.sortedUses[:0]
 	clear(c.dividers)
 	c.dividers = c.dividers[:0]
+	clear(c.splits)
+	c.splits = c.splits[:0]
 	clear(c.childExits)
 	c.childExits = c.childExits[:0]
 	c.router, c.routers, c.inert = nil, 0, false
@@ -584,6 +587,7 @@ func (c *context) Invalidate() { c.rt.host.invalidate() }
 func (c *context) AnimationFrame() {
 	c.rt.animating = true
 	c.rt.bound++ // a list does not keep a row that asks for frames
+	c.rt.frameAhead()
 }
 
 // DisableAnimations makes the values that animate in this frame

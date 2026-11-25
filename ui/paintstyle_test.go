@@ -20,9 +20,9 @@ func TestPaintInputs(t *testing.T) {
 		// compared by paintStyle, or by textPaint (ts)
 		"paint": "flags themeAt paintLook ts shadows styleFn spans",
 		// an element with one set is never paint-same
-		"volatile": "paintRare ownText paragraph merged frags spansKey grad stripes originX originY originSet content pose poseAnim themed hiddenScrollbars keepScrollbars barsFrom", // only scroll containers read the scroll bars' fields, and they are volatile; a Themed is volatile (paintVolatile); the origin counts with a transform, in paintRare
+		"volatile": "paintRare ownText paragraph merged frags spansKey grad stripes originX originY originSet content pose poseAnim themed hiddenScrollbars keepScrollbars barsFrom pinned", // only scroll containers read the scroll bars' fields, and they are volatile; a Themed is volatile (paintVolatile); the origin counts with a transform, in paintRare; pinned is set only with a transform, in paintRare
 		// geometry and what the frame decides: the key of a replay
-		"key": "x y w h contentW contentH world poseM ink scrollBase track",
+		"key": "x y w h contentW contentH world pinWorld poseM ink scrollBase track", // pinWorld is made with world, and only a set world reads it, which recordable refuses
 		// not read by paint
 		"neither": "originAttached observeFn busy current keepOpen keyShortcuts snap snapAlign placed flips epoch key valueInput ignoreInput accessHidden c id parent first last next nchild depth st cursor inputFn textClient caret " +
 			"takesText noIME copyData runes maximizeButton dismissed label widget role expanded tip accValue " +

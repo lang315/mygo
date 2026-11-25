@@ -44,6 +44,8 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 	}
 	format := func(v float64) string { return strconv.FormatFloat(v, 'f', decimals, 64) }
 	var row *node
+	// shown is the value the text was last made from, or that typing set.
+	var shown *float64
 	set := func(v float64) {
 		v = math.Max(lo, math.Min(hi, v))
 		if decimals >= 0 {
@@ -51,7 +53,7 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 			v = math.Round(v*p) / p
 		}
 		if v != *value {
-			*value = v
+			*value, *shown = v, v
 			row.st.markChanged()
 			c.rt.consumed = true
 		}
@@ -60,6 +62,12 @@ func numberInput(c *context, value *float64, lo, hi, step float64, joined bool) 
 	content := func() *node {
 		box := c.parent // row, which field makes before it builds content
 		text := coreLocal(box, "text", func() string { return format(*value) })
+		shown = coreLocal(box, "shown", func() float64 { return *value })
+		if *value != *shown {
+			// A value the app set replaces what was typed, before the input
+			// below takes the text.
+			*text, *shown = format(*value), *value
+		}
 		var in *node
 		arrowW := t.Space(5)
 		if joined {

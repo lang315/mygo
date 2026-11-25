@@ -864,7 +864,7 @@ func (s *GridState) keys(grid *node, n int) {
 	if s.Checked != nil && grid.Shortcut(0, KeySpace) && toggleChecked(s.Checked, s.chosenItems(n), s.key) {
 		grid.st.markEvent(eventChecked)
 	}
-	if grid.Shortcut(0, KeyEnter) && in {
+	if grid.yieldingShortcut(0, KeyEnter) && in { // a button in an item clicks on it
 		grid.st.markSubmitted()
 	}
 	if st := grid.st; st.typing && st.typed != "" && s.Label != nil {

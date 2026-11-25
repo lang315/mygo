@@ -702,6 +702,12 @@ type node struct {
 	placed        attachment
 	flips         uint8
 	edgeMarginSet bool
+	// pinned tells that the element's own transform is only the remainder
+	// a transition moving it carries to its resting pixels (snapTo), and
+	// pinWorld that its world is then only such remainders: a translation
+	// its text paints under as at rest (Painter.element). Beside
+	// edgeMarginSet, they keep to the bytes before edgeMargin.
+	pinned, pinWorld bool
 	// edgeMargin, when edgeMarginSet, is how far AttachTo keeps the
 	// element from the window's edges (AttachEdgeMargin), in place of
 	// windowMargin.

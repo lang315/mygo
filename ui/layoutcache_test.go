@@ -779,7 +779,7 @@ func TestLayoutInputs(t *testing.T) {
 		"spansKey collapsed rowMinW field hidden insetSet fillViewport spans placed flips originAttached edgeMargin edgeMarginSet " +
 		"hold"
 	// Fields the layout never reads.
-	other := "shadows styleFn epoch key valueInput id themeAt depth track originX originY originSet world content stateRead " +
+	other := "shadows styleFn epoch key valueInput id themeAt depth track originX originY originSet world pinned pinWorld content stateRead " +
 		"pose poseAnim poseM ink noCull backface bg grad stripes borderC borderStyle radius " +
 		" blur opacity opacitySet cursor " +
 		"inputFn observeFn textClient caret takesText noIME copyData maximizeButton fit gray dismissed rotate label widget role " +

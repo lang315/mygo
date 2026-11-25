@@ -259,7 +259,8 @@ func (e *node) paintInput(p *Painter) {
 		}
 	}
 	saved := p.clip
-	p.pushClip(clip, [4]float32{})
+	// The text clips inside the border, to its rounded corners.
+	p.pushClip(clip, e.innerRadii())
 	ox, oy := e.x+ed.originX-ed.scrollX, e.y+ed.originY
 	focused := e.Focused()
 	ts := e.resolvedText()

@@ -162,10 +162,21 @@ func (w *Window) sendPreferences(prefs ThemePreferences, script string) {
 func decodeResult(raw []byte, v any) error { return json.Unmarshal(raw, v) }
 
 const (
+	// evalStart and evalEnd run code as an async arrow function, out of
+	// reach of the wrapper's own names, and answer with its result as JSON.
+	// A document that goes away never settles what it was waiting for, and
+	// WebKit answers for its promise only once the garbage collector takes
+	// it, which never happens while the page keeps it, as the back-forward
+	// cache keeps pages whole. So until the code answers, the page's
+	// pagehide answers that it was left. Listening is best effort: a page
+	// that replaced addEventListener or removeEventListener still gets its
+	// answers, as before.
+	evalStart = "return(async p=>{let h;try{return JSON.stringify({ok:true,v:await new Promise((ok,no)=>{try{addEventListener('pagehide',h=()=>no(h),true)}catch{}p.then(ok,no)})})}catch(e){return JSON.stringify(e===h?{left:true}:{ok:false,e:String(e&&e.message||e)})}finally{try{removeEventListener('pagehide',h,true)}catch{}}})((async()=>"
+	evalEnd   = ")())"
 	// The expression form: compile errors mean code is not an expression.
-	evalExpr = "try{return JSON.stringify({ok:true,v:await(\n%s\n)})}catch(e){return JSON.stringify({ok:false,e:String(e&&e.message||e)})}"
+	evalExpr = evalStart + "(\n%s\n)" + evalEnd
 	// The statement form runs code as a function body.
-	evalBody = "try{return JSON.stringify({ok:true,v:await(async()=>{\n%s\n})()})}catch(e){return JSON.stringify({ok:false,e:String(e&&e.message||e)})}"
+	evalBody = evalStart + "{\n%s\n}" + evalEnd
 )
 
 // evalCanceled, a hook of tests, runs after eval delivered the
@@ -241,9 +252,12 @@ func (w *Window) eval(ctx context.Context, code string) (jsontext.Value, error) 
 	if r.err != nil {
 		return nil, r.err
 	}
-	ok, v, msg, err := parseEvalResult(stringBytes(r.raw))
+	ok, left, v, msg, err := parseEvalResult(stringBytes(r.raw))
 	if err != nil {
 		return nil, fmt.Errorf("mygo: unexpected eval result %q: %w", r.raw, err)
+	}
+	if left {
+		return nil, platform.ErrNavigated
 	}
 	if !ok {
 		return nil, &EvalError{Message: msg}
@@ -251,26 +265,29 @@ func (w *Window) eval(ctx context.Context, code string) (jsontext.Value, error) 
 	return jsontext.Value(v), nil
 }
 
-// parseEvalResult reads {"ok":bool,"v":value,"e":string}, as encoding/json/v2
-// reads it into a struct; v shares raw.
-func parseEvalResult(raw []byte) (ok bool, v []byte, msg string, err error) {
+// parseEvalResult reads {"ok":bool,"v":value,"e":string,"left":bool}, as
+// encoding/json/v2 reads it into a struct; v shares raw.
+func parseEvalResult(raw []byte) (ok, left bool, v []byte, msg string, err error) {
 	r := jsonlite.NewReader(raw)
 	r.Strict = true
 	if null, err := r.Null(); err != nil {
-		return false, nil, "", err
+		return false, false, nil, "", err
 	} else if null {
-		return false, nil, "", r.End()
+		return false, false, nil, "", r.End()
 	}
 	err = r.Object(func(key string) error {
 		switch key {
-		case "ok", "e":
+		case "ok", "e", "left":
 			if null, err := r.Null(); null || err != nil {
 				return err
 			}
 			var err error
-			if key == "ok" {
+			switch key {
+			case "ok":
 				ok, err = r.Bool()
-			} else {
+			case "left":
+				left, err = r.Bool()
+			default:
 				msg, err = r.String()
 			}
 			return err
@@ -284,7 +301,7 @@ func parseEvalResult(raw []byte) (ok bool, v []byte, msg string, err error) {
 	if err == nil {
 		err = r.End()
 	}
-	return ok, v, msg, err
+	return ok, left, v, msg, err
 }
 
 // sendTitleBar tells the page of a window with a hidden title bar the room

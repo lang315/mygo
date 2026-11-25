@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -116,8 +117,8 @@ func (h *headless) framesAtOnce() bool                { return h.atOnce }
 func (h *headless) occluded() bool                    { return h.hidden }
 
 // textSystem returns the window's text system, making its own the first
-// time, as a Tester's window shapes and paints apart from the others'
-// shared one (#1722).
+// time, as a Recorder's window shapes and paints apart from the others'
+// shared one (#1722); a Tester's takes one before (testerTexts).
 func (h *headless) textSystem() *text.System {
 	if h.text == nil {
 		h.text = text.New()
@@ -274,7 +275,9 @@ func (h *headless) image() *image.RGBA {
 func coreRender(view func(c *context), width, height int, scale float32) *image.RGBA {
 	t := coreNewTester(view, width, height)
 	t.SetScale(scale)
-	return t.Image()
+	img := t.Image()
+	t.end()
+	return img
 }
 
 // Tester runs a view without a window, as a test drives it: it renders
@@ -304,6 +307,11 @@ type Tester struct {
 	// how hard it presses (UsePointer).
 	pointer  PointerType
 	pressure float32
+	// mods are the modifier keys held by HoldModifiers.
+	mods platform.Modifiers
+	// textLeft gives the window's text system back to the Testers after
+	// this one as it ends (keepText).
+	textLeft runtime.Cleanup
 }
 
 // NewTester starts testing view in a window of width×height DIPs. Two
@@ -331,8 +339,11 @@ type TesterOptions struct {
 //
 //	tt := ui.NewTesterWith(view, 400, 300, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 func coreNewTesterWith(view func(c *context), width, height int, o TesterOptions) *Tester {
-	h := &headless{w: float32(width), h: float32(height), scale: 1, prefs: platformPreferences(o.Preferences), dark: o.Dark}
+	// The window's text system is one an earlier Tester left, or its own
+	// (testerTexts).
+	h := &headless{w: float32(width), h: float32(height), scale: 1, prefs: platformPreferences(o.Preferences), dark: o.Dark, text: takeTesterText()}
 	t := &Tester{rt: newRuntime(view, h), h: h, now: time.Now()}
+	t.keepText()
 	t.rt.clock = t.Now
 	h.clock = t.Now
 	t.rt.collect = true
@@ -475,6 +486,11 @@ func (t *Tester) send(ev platform.SurfaceEvent) {
 		if ev.Touch {
 			ev.Pointer = platform.PointerTouch // TouchDown
 		}
+		ev.Mods |= t.mods
+	case platform.PointerScroll, platform.PointerZoom, platform.PointerLeave, platform.WebViewPress:
+		ev.Mods |= t.mods
+	case platform.SurfaceBlur:
+		t.mods = 0
 	}
 	if ev.Kind == platform.PointerDown && ev.Clicks == 0 {
 		// Counted as a backend counts.
@@ -896,8 +912,9 @@ func (t *Tester) ClickWith(mods Modifiers, s string) error {
 	return nil
 }
 
-// ClickAtWith clicks at (x, y), in DIPs, holding the modifier keys mods:
-// a web view that takes the pointer there (WebViewAt) takes the click.
+// ClickAtWith clicks at (x, y), in DIPs, holding the modifier keys mods
+// (combined with any held by HoldModifiers): a web view that takes the
+// pointer there (WebViewAt) takes the click.
 func (t *Tester) ClickAtWith(mods Modifiers, x, y float32) {
 	m := platform.Modifiers(mods)
 	if t.webViewPress(x, y, 0, m) {
@@ -1182,9 +1199,11 @@ func (t *Tester) TouchCancel(id uint64) {
 }
 
 // HoldModifiers presses or lets go of modifier keys on their own, as holding
-// Cmd does, leaving mods held.
+// Cmd does, leaving mods held across subsequent pointer, scroll and zoom
+// events until HoldModifiers(0) or losing focus.
 func (t *Tester) HoldModifiers(mods Modifiers) {
-	t.send(platform.SurfaceEvent{Kind: platform.ModifiersChanged, Mods: platform.Modifiers(mods)})
+	t.mods = platform.Modifiers(mods)
+	t.send(platform.SurfaceEvent{Kind: platform.ModifiersChanged, Mods: t.mods})
 }
 
 // Key presses a key with modifiers.
