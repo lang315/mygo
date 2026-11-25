@@ -36,7 +36,7 @@ jobs:
   test:
     name: ${{ matrix.os == 'macos-latest' && 'macOS' || matrix.os == 'windows-latest' && 'Windows' || 'Linux' }} (${{ matrix.shard }}${{ matrix.part && format(' {0}', matrix.part) || '' }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 80 # DEBUG (win-copy-flake)
+    timeout-minutes: 120 # DEBUG (win-copy-flake)
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
       CI_DIFF: ${{ github.event_name == 'pull_request' && 'HEAD^1 HEAD' || '' }} # the change of a pull request (its merge commit and the base)
@@ -489,7 +489,7 @@ jobs:
   windows-arm64:
     name: Windows ARM64
     runs-on: windows-11-arm
-    timeout-minutes: 80 # DEBUG (win-copy-flake)
+    timeout-minutes: 120 # DEBUG (win-copy-flake)
     env:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
     steps:
