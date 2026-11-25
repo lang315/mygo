@@ -740,6 +740,7 @@ name := widget.Bind(widget.TextBox(),
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `RangeSpin` | its two numbers, `float64` | `BindRange(c, get, set)`, with `get func() (lo, hi float64)` and `set func(lo, hi float64)`: `set` gets both numbers after an edit of either; each is clamped to its range, as `NumericUpDown` |
 | `CheckBoxGroup` | the `Value`s of the checked options, a `[]string` | `BindValues(c, get, set)`: `set` gets them in option order; a value of `get()` that is no option's is ignored, and absent from the next `set` |
+| `TokenEdit` | its tokens, a `[]string` | `BindTokens(c, get, set)`: takes `get()`'s tokens as `SetTokens` does (trimmed, blanks and repeats dropped); `set` gets the tokens in order after each change by the user, in a slice of its own; with `SetSuggestionsOnly`, a refused entry calls no `set` |
 | `ComboBox` of a yes and a no | `bool` | `BindBool(c, yes, no, get, set)`: gives the combo the two options and makes it a plain choice, not `Editable`; `set` is called for yes and no only |
 
 - The control takes `get()`'s value at once. After each edit of the user,
@@ -747,7 +748,7 @@ name := widget.Bind(widget.TextBox(),
   control's own `OnChange` (`Bind` does not replace it), and off the
   package's lock, so `set` may call the control's getters.
 - **A program setter does not call `set`.** `SetText`, `SetChecked`,
-  `SetValue` and `SetValues` change what the control shows, not the source: the program
+  `SetValue`, `SetValues` and `SetTokens` change what the control shows, not the source: the program
   already knows the value it gave. This keeps a binding from looping.
 - `widget.Reload(c)` takes the source's value again, for a source that
   changed elsewhere; it does not call `set`, and does nothing for a control
@@ -1311,9 +1312,10 @@ Input and display:
   pasting past it is cut at it, and so is `SetText`; 0 for no limit) and
   `Icon(bitmap)` (16 DIPs, inside the box before the text; nil removes it).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
-  `Reload(control)`: tie a `TextBox`, `MultilineTextBox`, `DomainUpDown`,
-  `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`, `RangeSpin` or
-  `CheckBoxGroup` to a value kept elsewhere; see [Binding](#binding).
+  `BindTokens`, `Reload(control)`: tie a `TextBox`, `MultilineTextBox`,
+  `DomainUpDown`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`,
+  `RangeSpin`, `CheckBoxGroup` or `TokenEdit` to a value kept elsewhere;
+  see [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
   color) or `SetIconPNG` (a PNG in its own colors, as high as the
   text, as an SVG icon: give it 32 by 32 pixels to stay sharp on 2×
@@ -1346,10 +1348,13 @@ Input and display:
   not filtered), for chips picked in order from a fixed set;
   `SetPlaceholder` shows while there is no token and no text; `OnChange`
   runs after each change by the user. A Fields row's access key focuses
-  its input.
+  its input. `BindTokens` ties the tokens to a source, as `Bind` other
+  controls, so `Reload` refreshes them; see [Binding](#binding).
 
   ```go
-  te := widget.TokenEdit(allTags...).SetTokens(acc.Tags...).OnChange(save)
+  te := widget.BindTokens(widget.TokenEdit(allTags...),
+  	func() []string { return cfg.Tags },
+  	func(v []string) { cfg.Tags = v; cfg.Save() })
   ```
 - `RadioButton(text)`: `Checked`, `SetChecked`, `OnChange`. As in WinForms, the
   radio buttons added to one container (a box, a group box, fields, a flow
