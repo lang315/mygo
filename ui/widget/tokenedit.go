@@ -82,9 +82,9 @@ func (t *TokenEditWidget) OnChange(fn func()) *TokenEditWidget {
 }
 
 // commit takes the tokens the user changed, in ui's OnChange callback, and
-// posts OnChange. The user wins over a setter that ran since the last build,
-// as mirror.commit: tokens become what ui shows, and a build still to apply
-// the setter copies them back.
+// posts OnChange, then the binding's write. The user wins over a setter that
+// ran since the last build, as mirror.commit: tokens become what ui shows,
+// and a build still to apply the setter copies them back.
 func (t *TokenEditWidget) commit() {
 	mu.Lock()
 	if t.only {
@@ -95,11 +95,23 @@ func (t *TokenEditWidget) commit() {
 		t.tokens = slices.Clone(t.shown)
 	}
 	t.given = t.tokens
-	h := t.onChange
-	mu.Unlock()
-	if changed && h != nil {
-		Post(h)
+	h, write := t.onChange, t.bound.write
+	var v []string
+	if changed && write != nil {
+		v = slices.Clone(t.tokens) // set's own: tokens' array is given's too
 	}
+	mu.Unlock()
+	if !changed || (h == nil && write == nil) {
+		return
+	}
+	Post(func() {
+		if h != nil {
+			h()
+		}
+		if write != nil {
+			write(v)
+		}
+	})
 }
 
 // keepSuggestions turns what the user added to shown (what given has not)

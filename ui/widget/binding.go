@@ -4,7 +4,7 @@ import "math"
 
 // Bindable is a control that edits one value. Only these are bindable; the
 // interface cannot be implemented outside the package (BindRange binds a
-// RangeSpin, and BindValues a CheckBoxGroup):
+// RangeSpin, BindValues a CheckBoxGroup, and BindTokens a TokenEdit):
 //
 //   - TextBox (string)
 //   - MultilineTextBox (string)
@@ -153,6 +153,26 @@ func BindValues(c *CheckBoxGroupWidget, get func() []string, set func([]string))
 	reload := func() { c.SetValues(get()...) }
 	c.change(func() {
 		c.bound = binding{write: func(v any) { set(v.([]string)) }, reload: reload, value: func() any { return c.values() }}
+	})
+	reload()
+	return c
+}
+
+// BindTokens is Bind for a TokenEdit, whose tokens the source keeps.
+//
+// The field takes get()'s tokens at once, as SetTokens does: trimmed, blanks
+// and repeats left out. After each change of the user (Enter, a comma, a
+// pick, Backspace, a remove button, a paste of lines), set gets the tokens in
+// order, as they are after that change, in a slice of its own. Bind's rules
+// hold: set runs after OnChange, off the lock; a program setter and Reload do
+// not call set; binding again replaces the binding. With SetSuggestionsOnly,
+// an entry the field refuses changes nothing and calls no set.
+//
+//	widget.BindTokens(te, func() []string { return cfg.Tags }, func(v []string) { cfg.Tags = v; cfg.Save() })
+func BindTokens(c *TokenEditWidget, get func() []string, set func([]string)) *TokenEditWidget {
+	reload := func() { c.SetTokens(get()...) }
+	c.change(func() {
+		c.bound = binding{write: func(v any) { set(v.([]string)) }, reload: reload}
 	})
 	reload()
 	return c
