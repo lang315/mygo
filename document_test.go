@@ -1189,17 +1189,23 @@ func TestDocumentWatchStartFollowsRename(t *testing.T) {
 func TestDocumentReloadKeepsTyping(t *testing.T) {
 	ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff})
 	path := writeTemp(t, "doc.txt", "one")
-	d, _ := ds.Open(path)
 	reading, release := make(chan struct{}), make(chan struct{})
 	var first sync.Once
+	var armed atomic.Bool
 	read := ds.kind.read
+	// Set before Open: the watch Open starts looks at the file, and reads
+	// it, in a goroutine of its own. Armed after, so that Open reads.
 	ds.kind.read = func(r io.Reader) (any, error) {
-		first.Do(func() {
-			close(reading)
-			<-release
-		})
+		if armed.Load() {
+			first.Do(func() {
+				close(reading)
+				<-release
+			})
+		}
 		return read(r)
 	}
+	d, _ := ds.Open(path)
+	armed.Store(true)
 	if err := os.WriteFile(path, []byte("theirs, longer"), 0o644); err != nil {
 		t.Fatal(err)
 	}
