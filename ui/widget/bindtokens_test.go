@@ -225,6 +225,39 @@ func TestBindTokensRepeatCallsSetOnce(t *testing.T) {
 	typeEnter(t, tt, "x")
 	typeEnter(t, tt, "x")
 	wantSets(t, s, []string{"x"})
+	// ui drops the repeat before it commits; a commit of the same tokens, as
+	// ui's OnChange with nothing changed, calls no set either.
+	te.commit()
+	tt.Settle()
+	wantSets(t, s, []string{"x"})
+}
+
+// A comma and a pick from the suggestions call set too.
+func TestBindTokensCommaAndPick(t *testing.T) {
+	s := &tokenSource{src: []string{"a"}}
+	te := BindTokens(TokenEdit("apple", "banana"), s.get, s.set)
+	tt := NewTester(t, te, 400, 300)
+	tokenInput(t, tt).Type("c,")
+	tt.Settle()
+	wantSets(t, s, []string{"a", "c"})
+	tokenInput(t, tt).Focus()
+	pickAt(tt, 1) // banana
+	wantSets(t, s, []string{"a", "c"}, []string{"a", "c", "banana"})
+}
+
+// set runs off the lock: it may call the field's getters, which see the
+// tokens it got.
+func TestBindTokensSetMayCallGetters(t *testing.T) {
+	te := TokenEdit().SetTokens("a")
+	var got, seen []string
+	BindTokens(te, func() []string { return []string{"a"} }, func(v []string) {
+		got, seen = v, te.Tokens()
+	})
+	tt := NewTester(t, te, 400, 300)
+	typeEnter(t, tt, "b")
+	if !slices.Equal(got, []string{"a", "b"}) || !slices.Equal(seen, got) {
+		t.Fatalf("set got %q and Tokens() in it gave %q, want [a b] both", got, seen)
+	}
 }
 
 // set gets the tokens as the edit committed them, not a SetTokens that ran
