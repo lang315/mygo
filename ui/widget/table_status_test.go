@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 )
@@ -776,8 +777,8 @@ func TestGridStatusFrameAllocs(t *testing.T) {
 		return tt
 	}
 	plain, formatted := mk(false), mk(true)
-	p := testing.AllocsPerRun(30, plain.Frame)
-	f := testing.AllocsPerRun(30, formatted.Frame)
+	p := allocrun.Least(30, plain.Frame)
+	f := allocrun.Least(30, formatted.Frame)
 	if f > p {
 		t.Errorf("a frame at rest of a formatted grid allocates %v, a plain one %v", f, p)
 	}

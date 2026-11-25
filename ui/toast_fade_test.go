@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -273,16 +274,20 @@ func TestToastFadeAllocs(t *testing.T) {
 		t.Skip("the race detector allocates")
 	}
 	animates := func(c *Context, _ ToastParts) float32 { c.AnimationFrame(); return 1 }
-	frame := func(look func(*Context, ToastParts) float32, d time.Duration) float64 {
+	frame := func(look func(*Context, ToastParts) float32, d time.Duration, limit float64) float64 {
 		r := newFadeRig(look)
 		start := r.show(Toast{Title: "Saved"})
 		r.at(start, d)
-		return testing.AllocsPerRun(20, func() { r.tt.Frame() })
+		return allocsPerRun(t, 20, limit, func() { r.tt.Frame() })
 	}
-	if with, without := frame(callFade, 100*time.Millisecond), frame(animates, 100*time.Millisecond); with > without {
+	// A stray malloc only raises without, which cannot fail the test: one
+	// count. with is over its limit only if every count is.
+	without := frame(animates, 100*time.Millisecond, math.Inf(1))
+	if with := frame(callFade, 100*time.Millisecond, without); with > without {
 		t.Errorf("fading: a frame calling Fade allocates %v, one animating itself %v", with, without)
 	}
-	if with, without := frame(callFade, time.Second), frame(nil, time.Second); with > without {
+	without = frame(nil, time.Second, math.Inf(1))
+	if with := frame(callFade, time.Second, without); with > without {
 		t.Errorf("at rest: a frame calling Fade allocates %v, without %v", with, without)
 	}
 }

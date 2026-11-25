@@ -285,7 +285,7 @@ func TestPainterRichTextKeepsSpans(t *testing.T) {
 	check("first frame")
 	tt.Frame()
 	check("steady frame")
-	if n := testing.AllocsPerRun(20, tt.Frame); n > 2 {
+	if n := allocsPerRun(t, 20, 2, tt.Frame); n > 2 {
 		t.Errorf("a steady frame of %d rich texts allocates %.0f times", lines, n)
 	}
 	rl.swap = true

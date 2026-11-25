@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/png"
 	"maps"
+	"math"
 	"runtime"
 	"slices"
 	"strconv"
@@ -826,8 +827,6 @@ func TestMenuAllocs(t *testing.T) {
 	}
 	const none, contextMenu, menuButton = 0, 1, 2
 	for _, p := range []MenuPresentation{SystemMenus, PopoverMenus} {
-		// limit: the least of several counts over it (allocsPerRun), as
-		// another goroutine's mallocs add one now and then to a count.
 		frame := func(kind int, limit float64) float64 {
 			chosen := -1
 			tt := coreNewTester(func(c *context) {
@@ -859,7 +858,9 @@ func TestMenuAllocs(t *testing.T) {
 			}
 			return allocsPerRun(t, 50, limit, tt.Frame)
 		}
-		without := frame(none, -1) // the least of its counts too
+		// A stray malloc only raises without, which cannot fail the test: one
+		// count. with is over its limit only if every count is.
+		without := frame(none, math.Inf(1))
 		for kind, name := range map[int]string{contextMenu: "ContextMenu", menuButton: "Menu"} {
 			if with := frame(kind, without); with > without {
 				t.Errorf("presentation %d: 30 elements with a %s allocate %.0f times a frame, %.0f without", p, name, with, without)

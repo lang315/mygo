@@ -170,7 +170,7 @@ func TestLateKeyLogsOnceOutsideTester(t *testing.T) {
 	for id := range rt.lateKeys {
 		seenID = id
 	}
-	if allocs := testing.AllocsPerRun(100, func() {
+	if allocs := allocsPerRun(t, 100, 0, func() {
 		rt.lateKey(seenID, "late")
 	}); allocs != 0 {
 		t.Errorf("deduplicated lateKey allocs = %v, want 0", allocs)

@@ -586,10 +586,15 @@ func pumpInputMessages(stopMsg uint32) (stopped, gotQuit bool) {
 // such a window over its point, went to it: the window is brought to the
 // front and clicked again (clickWentElsewhere). A click that may have reached
 // the app is never sent twice.
-func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string, moves int) {
+//
+// The system can also drop the button with the window in front and under the
+// point, which leaves no window in front: a move sent after the button then
+// reaches the app with no button before it, and the window is brought to the
+// front and clicked again. resent says when that happened.
+func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string, moves int, resent string) {
 	w := theBackend.windows[hwnd]
 	if w == nil {
-		return false, "", 0
+		return false, "", 0, ""
 	}
 	if w.sf == nil {
 		pt := screenPointForInput(w, x, y)
@@ -599,7 +604,7 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		mouse.Call(leftDown, 0, 0, 0, 0)
 		mouse.Call(leftUp, 0, 0, 0, 0)
 		pumpInputMessages(0)
-		return true, "", 0
+		return true, "", 0, ""
 	}
 	pt := screenPoint(w, x, y)
 	// A window shown while another app is in front can stay behind it,
@@ -652,14 +657,14 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		if attempt > 0 {
 			// The click went to another app's window that rose over the
 			// point after the check: the runner's terminal, which Windows
-			// raises when a window of the app closes. Bring the window back
-			// to the front, as a user does, and click again.
+			// raises when a window of the app closes; or to no window. Bring
+			// the window back to the front, as a user does, and click again.
 			procSetForegroundWindow.Call(w.hwnd)
 		}
 		under := rootAt(pt)
 		if !ownWindow(under) {
 			if attempt == 0 {
-				return true, describe(), 0
+				return true, describe(), 0, ""
 			}
 			procMsgWaitForMultipleObjectsEx.Call(0, 0, 50, qsAllInput, mwmoInputAvailable)
 			continue
@@ -671,10 +676,10 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			m, reached, quit := moveCursorTo(pt, deadline)
 			moves += m
 			if quit {
-				return true, "", moves
+				return true, "", moves, resent
 			}
 			if !reached {
-				return true, describe() + fmt.Sprintf("; the cursor moved %d times to (%d, %d) and no move reached a window of the app", moves, pt.X, pt.Y), moves
+				return true, describe() + fmt.Sprintf("; the cursor moved %d times to (%d, %d) and no move reached a window of the app", moves, pt.X, pt.Y) + resent, moves, resent
 			}
 		}
 		// The window can have gone under another's since the check, or the
@@ -694,19 +699,21 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		mouse.Call(leftDown, 0, 0, 0, 0)
 		mouse.Call(leftUp, 0, 0, 0, 0)
 		if enabled == 0 {
-			return true, "", moves
+			return true, "", moves, resent
 		}
 		pumped := false
+		var mark point // where the move after a button that may have gone nowhere goes
+		marked, lost := false, false
 		for time.Now().Before(deadline) {
 			procMsgWaitForMultipleObjectsEx.Call(0, 0, 100, qsAllInput, mwmoInputAvailable)
 			var m msg
-			for {
+			for !lost {
 				if r, _, _ := procPeekMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0, pmRemove); r == 0 {
 					break
 				}
 				if m.Message == wmQuit {
 					procPostQuitMessage.Call(m.WParam) // for the loop running outside
-					return true, "", moves
+					return true, "", moves, resent
 				}
 				if m.Message == wmLButtonDown {
 					downs++
@@ -717,8 +724,17 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 				procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 				procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 				if m.Message == wmLButtonUp {
-					return true, "", moves
+					return true, "", moves, resent
 				}
+				// The system routes the mouse's input in order: the move sent
+				// after the button reached the app with no button before it, so
+				// the button went to no window of the app.
+				lost = marked && downs == 0 && m.Message == wmMouseMove && abs32(m.Pt.X-mark.X) <= 1 && abs32(m.Pt.Y-mark.Y) <= 1 && ownWindow(rootOf(m.HWnd))
+			}
+			if lost {
+				fg, _, _ := procGetForegroundWindow.Call()
+				resent += fmt.Sprintf("; the button of click %d went to no window of the app, with %s in front, and it was clicked again", attempt+1, describeWindow(fg))
+				break
 			}
 			// Messages of the click wait in the queue a moment: once they have
 			// been handled and none of the app's windows is under the point,
@@ -730,11 +746,25 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 			if !pumped {
 				fg, _, _ := procGetForegroundWindow.Call()
 				fronts += "; after the button: " + describeWindow(fg)
+				// The front went at the button, to no window of the app, and
+				// the button has not come (TestParentStaysBlockedWhileAModalChildIsOpen:
+				// it never did, with the window still under the point). A move
+				// sent now comes after the button, if it came: when it reaches
+				// the app first, the button is clicked again, as it went nowhere.
+				if downs == 0 && !ownWindow(fg) {
+					for _, dx := range []int32{4, -4} {
+						if p := (point{pt.X + dx, pt.Y}); rootAt(p) == w.hwnd {
+							mark, marked = p, true
+							absoluteMove(mark)
+							break
+						}
+					}
+				}
 			}
 			pumped = true
 		}
 	}
-	return true, describe() + diagnoseClick(pt, placed != 0, downs, seen) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves) + fronts + windowsAbove(w.hwnd), moves
+	return true, describe() + diagnoseClick(pt, placed != 0, downs, seen) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves) + fronts + resent + windowsAbove(w.hwnd), moves, resent
 }
 
 // windowsAbove lists the visible top-level windows of other processes above
