@@ -1335,10 +1335,15 @@ Input and display:
   TokenEdit, editing a `[]string`. Enter or a comma adds what was typed
   (trimmed; a blank or a repeat adds nothing), a chip's button ("Remove
   x") or Backspace in the empty input takes one out, and the suggestions
-  containing the text show below it, those not already tokens. A paste
+  containing the text show below it, those not already tokens; Down in
+  the empty input shows all of them, in their order. A paste
   of several lines adds a token a line, as a list of IDs; a paste of one
-  line is text. `Tokens` returns a copy, in order; `SetTokens` trims and
-  drops blanks and repeats, without `OnChange`; `SetSuggestions`;
+  line is text. `Tokens` returns a copy, in the order they were added;
+  `SetTokens` trims and drops blanks and repeats, without `OnChange`;
+  `SetSuggestions`; `SetSuggestionsOnly(true)` takes only what equals a
+  suggestion, ignoring case, in the suggestion's spelling (typed, picked or
+  pasted; other text adds nothing and runs no `OnChange`; `SetTokens` is
+  not filtered), for chips picked in order from a fixed set;
   `SetPlaceholder` shows while there is no token and no text; `OnChange`
   runs after each change by the user. A Fields row's access key focuses
   its input.
