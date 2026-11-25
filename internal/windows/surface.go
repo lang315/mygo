@@ -341,16 +341,17 @@ func (s *surface) uncloak(byTimer bool) {
 	if !s.cloaked {
 		return
 	}
-	if byTimer {
-		uncloaks.timer++
-	} else {
-		uncloaks.frame++
-	}
 	off := int32(0)
 	hr, _, _ := procDwmSetWindowAttribute.Call(s.w.hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&off)), unsafe.Sizeof(off))
 	if !failed(hr) {
 		s.cloaked = false
 		procKillTimer.Call(s.hwnd, timerUncloak)
+		// Counted once it shows: a refused attempt leaves it cloaked.
+		if byTimer {
+			uncloaks.timer++
+		} else {
+			uncloaks.frame++
+		}
 	}
 }
 
