@@ -2237,6 +2237,9 @@ func TestModules(t *testing.T) {
 	}
 	Theme.SetSource(ThemeSystem)
 
+	// The answers go with the test: a Cancel left answers the next tests'
+	// dialogs (TestDocumentSaveDuringSaveAs's conflict, under -shuffle).
+	defer func() { fb.OpenResult, fb.MessageResult = nil, platform.MessageBoxResult{} }()
 	fb.OpenResult = []string{"/a.txt"}
 	if paths, err := Dialog.Open(OpenDialogOptions{}); err != nil || len(paths) != 1 {
 		t.Errorf("Dialog.Open = %v, %v", paths, err)
