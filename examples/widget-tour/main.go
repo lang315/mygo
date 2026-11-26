@@ -73,6 +73,7 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("Layout", layout()).
 		AddPage("Inputs", inputs(w)).
 		AddPage("Choices", choices()).
+		AddPage("Values", values()).
 		AddPage("Containers", containers()).
 		AddPage("Dialogs", dialogs(w)).
 		AddPage("Extras", extras()).
@@ -392,6 +393,31 @@ func choices() widget.Control {
 		widget.DateTimePicker(),
 		widget.MonthCalendar(),
 	)
+}
+
+// values shows the controls that pick a value: a range, stars, a button that
+// stays pressed, one choice among segments, and a split button. Each reports
+// to the label under it.
+func values() widget.Control {
+	said := widget.Label("Pick something")
+	var price *widget.RangeTrackBarWidget
+	price = widget.RangeTrackBar(0, 500).SetStep(10).SetValues(50, 200).OnChange(func() {
+		lo, hi := price.Values()
+		said.SetText(fmt.Sprintf("Price %.0f to %.0f", lo, hi))
+	})
+	var stars *widget.RatingWidget
+	stars = widget.Rating(5).SetValue(3).OnChange(func() { said.SetText(fmt.Sprintf("Rated %d", stars.Value())) })
+	var bold *widget.CheckButtonWidget
+	bold = widget.CheckButton("Bold").OnChange(func() { said.SetText(fmt.Sprintf("Bold %v", bold.Checked())) })
+	var view *widget.SegmentedWidget
+	view = widget.Segmented("List", "Grid", "Table").OnChange(func() {
+		said.SetText("View " + []string{"List", "Grid", "Table"}[view.Selected()])
+	})
+	save := widget.SplitButton("Save",
+		widget.MenuItem{Text: "Save As…", OnClick: func() { said.SetText("Saved as") }},
+		widget.MenuItem{Text: "Save All", OnClick: func() { said.SetText("Saved all") }},
+	).Suggested().OnClick(func() { said.SetText("Saved") })
+	return widget.VBox(8).Add(price, stars, bold, view, save, said)
 }
 
 // dragRow is a drag source and a drop zone: drag the chip onto the zone, or
