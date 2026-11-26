@@ -110,6 +110,16 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 
 While the app loads or saves and the user must wait, call `widget.Form.ShowWait(caption, description)` and `widget.Form.CloseWait()` (safe from any goroutine): a `widget.ProgressPanel` centred over the dimmed form, which takes no click or key until it closes. A second `ShowWait` changes its text. Not a modal `Dialog` of your own, nor disabling every control. Show a `widget.ProgressPanel(caption)` inline where only part of a page is busy. Read `docs/ui/widget/progresspanel.md`.
 
+## Search, paths, sections, colors
+
+Use these, not a hand-made equivalent:
+
+- `widget.SearchBox()` filters a list: `widget.SearchBoxWidget.OnChange` on each edit, `widget.SearchBoxWidget.OnSubmit` on Enter, `widget.SearchBoxWidget.Text`. Not a `TextBox` with a search `Icon`. Read `docs/ui/widget/searchbox.md`.
+- `widget.BreadCrumb(items...)` shows where the user is in a path; `widget.BreadCrumbWidget.OnSelect(fn)` gets the index clicked, and the app trims its path to `[:i+1]` and calls `widget.BreadCrumbWidget.SetItems`. Read `docs/ui/widget/breadcrumb.md`.
+- `widget.Accordion()` with `widget.AccordionWidget.AddSection(title, controls...)` is sections of a form, one open at a time; `widget.AccordionWidget.Open` is -1 for none. For a navigation pane use `widget.NavBar()`. Read `docs/ui/widget/accordion.md`.
+- `widget.ColorEdit()` picks a color inline in a form (`widget.ColorEditWidget.Color`, `widget.ColorEditWidget.SetColor`); `widget.ColorDialog` is the picker in a dialog. Read `docs/ui/widget/coloredit.md`.
+- `widget.TextBoxWidget.SetSuggestions(items...)` suggests as the user types; `widget.TextBoxWidget.SetMRU(max)` remembers the last entries after Enter. A `Password` box ignores both. Read `docs/ui/widget/textbox-suggestions.md`.
+
 ## Tags
 
 For free tags or a list of IDs the user types (labels, recipients, codes), use `widget.TokenEdit(suggestions...)`: chips with a remove button, Enter or a comma adds what was typed, and a paste of several lines adds one token a line. Use `widget.TagSelect` only to pick among fixed options. Where the order of the picks matters, as the fields of an export, `widget.TagSelectWidget.SetOrdered(true)` shows them as chips in pick order above the toggles, each with a remove button, and `widget.TagSelectWidget.Values` returns them in that order, as `Option` values, not their texts: `sel := widget.TagSelect(widget.Option{Value: "TwoFactorSecret", Text: "2FA"}, widget.Option{Value: "Birthday", Text: "Birthday"}).SetOrdered(true).SetValues(cfg.Fields...).OnChange(save)`. `SetValues` drops values that are no option's, as stale config keys, and runs no `OnChange`.
@@ -217,7 +227,7 @@ func settings(cfg *Config) widget.Control {
 ```
 
 - `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
-- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
+- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
 ## Threads
