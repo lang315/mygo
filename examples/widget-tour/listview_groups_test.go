@@ -9,7 +9,7 @@ import (
 
 func TestTourListViewGroupsByKind(t *testing.T) {
 	tt := widget.NewTester(t, tour(nil), 1000, 900)
-	tt.Find(widget.ByLabel("ListView")).Click()
+	visit(tt, "Lists", "ListView")
 	tt.Find(widget.ByLabel("Group by kind")).Click()
 	tt.Find(widget.ByLabel("Large icons")).Click()
 	for _, header := range []string{"Document (3)", "Sheet (3)", "Image (3)"} {

@@ -15,7 +15,7 @@ func TestTourTreeViewEntry(t *testing.T) {
 	folderLoad = func() { <-gate }
 	t.Cleanup(func() { folderLoad = was })
 	tt := widget.NewTester(t, tour(nil), 1000, 700)
-	tt.Find(widget.ByLabel("TreeView")).Click()
+	visit(tt, "Lists", "TreeView")
 	for _, s := range []string{"Documents", "Pictures", "Music"} {
 		if !tt.Has(widget.ByLabel(s)) {
 			t.Fatalf("no %q in %q", s, tt.Texts())

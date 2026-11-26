@@ -9,7 +9,7 @@ import (
 
 func TestTourListViewEntry(t *testing.T) {
 	tt := widget.NewTester(t, tour(nil), 1000, 900)
-	tt.Find(widget.ByLabel("ListView")).Click()
+	visit(tt, "Lists", "ListView")
 	if !tt.Has(widget.ByLabel("Kind")) {
 		t.Fatalf("Details shows no Kind column: %q", tt.Texts())
 	}

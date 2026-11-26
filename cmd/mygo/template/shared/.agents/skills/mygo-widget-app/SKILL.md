@@ -49,6 +49,7 @@ func main() {
 - `SetVisible(false)` hides a control and frees its room (and its `Fields` label).
 - Show the parts of a form that belong to one choice of a combo with `widget.ComboBoxWidget.Shows`, not with `SetVisible` calls in its `OnChange`: `mode := widget.ComboBox(widget.Option{Value: "none", Text: "None"}, widget.Option{Value: "http", Text: "HTTP"}).Shows("http", hostBox, authBox)`. A control shows while any value it is named for is chosen, from every change of the choice: the user's, a setter's, a binding's.
 - Show a state with a `widget.Status` (`widget.StatusNone`, `widget.StatusInfo`, `widget.StatusRunning`, `widget.StatusSuccess`, `widget.StatusWarning`, `widget.StatusDanger`), not a hand-made pill or card: `widget.Badge(text)` with `widget.BadgeWidget.SetStatus` (a running one's step goes in `widget.BadgeWidget.SetDetail`); `widget.InfoBar(status, title, message)` for a message in the page, with `widget.InfoBarWidget.SetAction`, `widget.InfoBarWidget.SetClosable` and `widget.InfoBarWidget.OnClose`; `widget.EmptyState(title, message)` where a list has no rows, with `widget.EmptyStateWidget.SetAction` (a grid shows it over its body with `widget.DataGridViewWidget.SetEmptyState`, a list with `widget.ListViewWidget.SetEmptyState` and `widget.ListBoxWidget.SetEmptyState`). The skin colors them.
+- Pick values with the control made for them, not a hand-made row of buttons: `widget.RangeTrackBar(min, max)` for a range (`widget.RangeTrackBarWidget.Values`, `widget.RangeTrackBarWidget.SetValues`), `widget.Rating(max)` for stars, `widget.CheckButton(text)` for a button that stays pressed (`widget.CheckButtonWidget.SetIcon`), `widget.Segmented(labels...)` for one choice among joined buttons (`widget.SegmentedWidget.Selected`, `widget.SegmentedWidget.SetFillWidth`), and `widget.SplitButton(text, items...)` for an action with related ones in a menu (`widget.SplitButtonWidget.OnClick`, `widget.SplitButtonWidget.Suggested`). Their setters do not run `OnChange`.
 
 ## Navigation pane
 
@@ -227,7 +228,7 @@ func settings(cfg *Config) widget.Control {
 ```
 
 - `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
-- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
+- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
 ## Threads
