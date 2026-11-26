@@ -98,7 +98,9 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
   driving the control as the user does, does. This holds for `TextBox`,
   `MultilineTextBox`, `MaskedTextBox`, `CheckBox`, `Switch`, `Toggle`, `RadioButton`,
   `RadioGroup`, `CheckBoxGroup`, `ComboBox`, `NumericUpDown`, `RangeSpin`,
-  `TrackBar`, `DomainUpDown`, `DateTimePicker`, `MonthCalendar`, `TagSelect`
+  `TrackBar`, `DomainUpDown`, `DateTimePicker`, `MonthCalendar`, `TagSelect`,
+  `RangeTrackBar`, `Rating`, `CheckButton`, `Segmented` (each pinned by its
+  own `...SetterDoesNotFireOnChange` test)
   and a toggle `ToolButton` (`TestSettersDoNotRunOnChange` pins it), for
   `TokenEdit`'s `SetTokens` (its own tests pin it), for `SearchBox`'s
   `SetText`, `Accordion`'s `SetOpen` and `ColorEdit`'s `SetColor` (theirs
@@ -737,7 +739,8 @@ name := widget.Bind(widget.TextBox(),
 | `TextBox`, `MultilineTextBox` | `string` | `Bind` |
 | `SearchBox` | `string` | `Bind` |
 | `DomainUpDown` | the selected item's text, a `string` | `Bind` |
-| `CheckBox` | `bool` | `Bind` |
+| `CheckBox`, `CheckButton` | `bool` | `Bind` |
+| `Rating` | the stars filled, an `int` | `Bind` (clamps to 0 through its stars) |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
@@ -1241,6 +1244,11 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   `DataGridView` of 20000 rows inside one stops at row 4097).
 - `SplitContainer(first, second)`: two panes with a divider; see [SplitContainer](widget/split-container.md).
 - `TrackBar(min, max)`: a slider; see [TrackBar](widget/trackbar.md).
+- `RangeTrackBar(min, max)`: a slider of two knobs choosing a range; see [RangeTrackBar](widget/rangetrackbar.md).
+- `Rating(max)`: a row of stars; see [Rating](widget/rating.md).
+- `CheckButton(text)`: a button that stays pressed while checked, with an icon; see [CheckButton](widget/checkbutton.md).
+- `Segmented(labels...)`: one choice among joined buttons; see [Segmented](widget/segmented.md).
+- `SplitButton(text, items...)`: a button joined to an arrow opening a menu; see [SplitButton](widget/splitbutton.md).
 - `DomainUpDown(items...)`: arrows over a list of texts; see [DomainUpDown](widget/domainupdown.md).
 - `DragSource`, `OnDrop[T]`, `OnDragOver[T]`, `DragData`, `OnDropData`, `OnDropFiles`: drag and drop; see [Drag and drop](widget/drag-and-drop.md).
 - `Chart(kind)`: a line, bar or pie chart; see [Chart](widget/chart.md).

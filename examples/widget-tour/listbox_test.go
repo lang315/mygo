@@ -9,7 +9,7 @@ import (
 
 func TestTourListBoxEntry(t *testing.T) {
 	tt := widget.NewTester(t, tour(nil), 1000, 900)
-	tt.Find(widget.ByLabel("ListBox")).Click()
+	visit(tt, "Lists", "ListBox")
 	item := func(s string) widget.Query { return widget.ByRole(ui.RoleListItem).Label(s) }
 	for _, s := range []string{"Vietnam", "Japan", "Cheese", "Basil"} {
 		if !tt.Has(item(s)) {
