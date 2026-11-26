@@ -1,11 +1,13 @@
 package widget
 
 import (
+	"iter"
 	"slices"
 	"strconv"
 	"sync"
 	"testing"
 
+	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -176,13 +178,17 @@ func TestMultiSortAfterUpdateRow(t *testing.T) {
 
 // wideTable is a table wider than the tester's 800 DIPs: Name, frozen
 // when frozen, then eight columns of 200. Name's cell draws "n" and the
-// name, which no row's label (its Text) is.
-func wideTable(frozen bool) *DataGridViewWidget[person, string] {
+// name, which no row's label (its Text) is. edit, if any, changes the
+// columns first.
+func wideTable(frozen bool, edit ...func([]Column[person])) *DataGridViewWidget[person, string] {
 	cols := []Column[person]{{Title: "Name", Text: func(p *person) string { return p.name }, Width: 150, Frozen: frozen,
 		Spans: func(p *person) []ui.Span { return []ui.Span{{Text: "n" + p.name}} }}}
 	for i := range 8 {
 		n := strconv.Itoa(i)
 		cols = append(cols, Column[person]{Title: "C" + n, Text: func(p *person) string { return "c" + n + p.name }, Width: 200})
+	}
+	for _, fn := range edit {
+		fn(cols)
 	}
 	return DataGridView(func(p *person) string { return p.name }, cols...).SetRows(bac()).Expand()
 }
@@ -230,9 +236,62 @@ func TestFrozenColumnReachesTable(t *testing.T) {
 	if !tb.columns[0].Frozen || !tb.columns[1].Frozen {
 		t.Fatalf("ui's columns # %+v and Name %+v, want both Frozen", tb.columns[0], tb.columns[1])
 	}
-	before, after = scrollAcross(t, tt, "#", "1", "nb")
+	before, after = scrollAcross(t, tt, "#", "1", "nb", "c1b")
 	if after[0].X != before[0].X || after[1].X != before[1].X || after[2].X != before[2].X {
 		t.Errorf("# moved from %v to %v, 1 from %v to %v, nb from %v to %v", before[0], after[0], before[1], after[1], before[2], after[2])
+	}
+	if after[3].X >= before[3].X {
+		t.Fatalf("the table with # did not scroll: c1b at %v, then %v", before[3], after[3])
+	}
+}
+
+// The row of totals follows a frozen column: its cell stays, and a scrolled
+// column's cell starts after it.
+func TestFrozenColumnSummaryStays(t *testing.T) {
+	tt := tester(t, wideTable(true, func(cols []Column[person]) {
+		cols[0].Summary = func(iter.Seq[*person]) string { return "total" }
+		cols[2].Summary = func(iter.Seq[*person]) string { return "sum1" }
+	}))
+	tt.Frame()
+	name := find(t, tt, "Name")
+	before, after := scrollAcross(t, tt, "total", "sum1")
+	if after[0].X != before[0].X {
+		t.Errorf("the frozen column's total moved from %v to %v", before[0], after[0])
+	}
+	if after[1].X >= before[1].X {
+		t.Errorf("C1's total did not scroll: %v, then %v", before[1], after[1])
+	}
+	if after[1].X < name.X+100 {
+		t.Errorf("C1's total at %v, under the frozen Name at %v", after[1], name)
+	}
+}
+
+// A frame at rest of a grid sorted by several columns, or with multi-sort
+// on, allocates no more than ui's headers do: multi-sort binds nothing that
+// allocates, sorting by two columns costs no more than by one, and a second
+// arrow (ui's, drawn with multi-sort on) costs what the first does.
+func TestMultiSortFrameAllocatesNothingMore(t *testing.T) {
+	grid := func(multi bool, orders ...ui.SortOrder) *ui.Tester {
+		tb := peopleTable(bac()...).SetMultiSort(multi)
+		tb.SortBy(orders...)
+		tt := tester(t, tb)
+		for range 10 {
+			tt.Frame()
+		}
+		return tt
+	}
+	age, name := ui.SortOrder{Column: "Age"}, ui.SortOrder{Column: "Name", Descending: true}
+	least := func(tt *ui.Tester) float64 { return allocrun.Least(30, tt.Frame) }
+	none, one := least(grid(false)), least(grid(false, age))
+	oneMulti, twoSingle, twoMulti := least(grid(true, age)), least(grid(false, age, name)), least(grid(true, age, name))
+	if oneMulti != one {
+		t.Errorf("by one column, a frame allocates %v times with multi-sort, %v without", oneMulti, one)
+	}
+	if twoSingle != one {
+		t.Errorf("without multi-sort, a frame allocates %v times by two columns, %v by one", twoSingle, one)
+	}
+	if arrow := one - none; twoMulti-oneMulti > arrow {
+		t.Errorf("with multi-sort, a second column's header costs %v allocations, the first's %v", twoMulti-oneMulti, arrow)
 	}
 }
 
