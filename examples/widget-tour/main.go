@@ -82,6 +82,7 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("TreeView", treeView()).
 		AddPage("ListBox", listBoxes()).
 		AddPage("Components", components()).
+		AddPage("Navigation", navigation()).
 		Padding(4).Expand()
 }
 

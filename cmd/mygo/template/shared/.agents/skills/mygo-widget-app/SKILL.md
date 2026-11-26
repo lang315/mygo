@@ -106,6 +106,16 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 - `widget.LookUpEditWidget.OnSelect(fn)` runs on the event goroutine when the user chooses a record (`ok` true) or empties the field (`ok` false), once per change; `widget.LookUpEditWidget.SetSelected(k)`, `widget.LookUpEditWidget.Unselect` and `widget.LookUpEditWidget.SetItems` do not run it. `widget.LookUpEditWidget.Selected` reads the key and whether one is chosen.
 - A typed text that is no record's goes back to the chosen record's text when the focus leaves the field. Of a `widget.Column` it reads `Title`, `Text`, `Width`, `MinWidth`, `Align` and `Hidden`. Read `docs/ui/widget/lookupedit.md`.
 
+## Search, paths, sections, colors
+
+Use these, not a hand-made equivalent:
+
+- `widget.SearchBox()` filters a list: `widget.SearchBoxWidget.OnChange` on each edit, `widget.SearchBoxWidget.OnSubmit` on Enter, `widget.SearchBoxWidget.Text`. Not a `TextBox` with a search `Icon`. Read `docs/ui/widget/searchbox.md`.
+- `widget.BreadCrumb(items...)` shows where the user is in a path; `widget.BreadCrumbWidget.OnSelect(fn)` gets the index clicked, and the app trims its path to `[:i+1]` and calls `widget.BreadCrumbWidget.SetItems`. Read `docs/ui/widget/breadcrumb.md`.
+- `widget.Accordion()` with `widget.AccordionWidget.AddSection(title, controls...)` is sections of a form, one open at a time; `widget.AccordionWidget.Open` is -1 for none. For a navigation pane use `widget.NavBar()`. Read `docs/ui/widget/accordion.md`.
+- `widget.ColorEdit()` picks a color inline in a form (`widget.ColorEditWidget.Color`, `widget.ColorEditWidget.SetColor`); `widget.ColorDialog` is the picker in a dialog. Read `docs/ui/widget/coloredit.md`.
+- `widget.TextBoxWidget.SetSuggestions(items...)` suggests as the user types; `widget.TextBoxWidget.SetMRU(max)` remembers the last entries after Enter. A `Password` box ignores both. Read `docs/ui/widget/textbox-suggestions.md`.
+
 ## Tags
 
 For free tags or a list of IDs the user types (labels, recipients, codes), use `widget.TokenEdit(suggestions...)`: chips with a remove button, Enter or a comma adds what was typed, and a paste of several lines adds one token a line. Use `widget.TagSelect` only to pick among fixed options. Where the order of the picks matters, as the fields of an export, `widget.TagSelectWidget.SetOrdered(true)` shows them as chips in pick order above the toggles, each with a remove button, and `widget.TagSelectWidget.Values` returns them in that order, as `Option` values, not their texts: `sel := widget.TagSelect(widget.Option{Value: "TwoFactorSecret", Text: "2FA"}, widget.Option{Value: "Birthday", Text: "Birthday"}).SetOrdered(true).SetValues(cfg.Fields...).OnChange(save)`. `SetValues` drops values that are no option's, as stale config keys, and runs no `OnChange`.
@@ -213,7 +223,7 @@ func settings(cfg *Config) widget.Control {
 ```
 
 - `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
-- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
+- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
 ## Threads
@@ -280,6 +290,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 - An icon your image function returns later (a thumbnail that loads) is not seen by a row already shown: call `UpdateRow(k, func(*T){})` for its row when it arrives, or keep the icons in a `widget.ImageList` (`SetImageList`), whose changes the list view, list box and tree show.
 - Each getter is a snapshot of its own: between `widget.DataGridViewWidget.Selected` and `widget.DataGridViewWidget.Row` a row may have been deleted, so check the `ok` of `Row`. `Row` returns a shallow copy of the row: if the row type holds a slice, a map or a pointer, reading it races with `UpdateRow`. Keep rows plain values, or copy deeply.
 - `widget.DataGridViewWidget.Selected`, `widget.DataGridViewWidget.Checked` and `widget.DataGridViewWidget.CountSelected` read the user's choice, and `widget.DataGridViewWidget.OnSelectionChanged(fn)` tells when it changes; `widget.DataGridViewWidget.OnCheck(fn)` tells which row the user ticked or unticked; `widget.DataGridViewWidget.SetSelected(ks...)` chooses rows from code and fires no event; `widget.DataGridViewWidget.OnActivate(fn)` is a double click or Enter; `widget.DataGridViewWidget.ContextMenuFunc` builds a menu on the click.
+- Sort by several columns with `widget.DataGridViewWidget.SortBy(orders...)` (`ui.SortOrder`s, the first first; `widget.DataGridViewWidget.SortOrders` reads them), and let the user add columns with a Shift-click on a header after `widget.DataGridViewWidget.SetMultiSort(true)`; not by sorting the rows yourself before `SetRows`. Pin the leading columns that name a row (a code, a name) with the column's `Frozen` and a `Width`, so they stay while a wide grid scrolls sideways.
 - Save column widths with `widget.DataGridViewWidget.SetColumnsLayout` and `widget.DataGridViewWidget.OnColumnsChange`, debounced: it fires many times during one drag.
 - For rows in a hierarchy with columns (files with sizes, accounts with balances), use `widget.TreeView` with `widget.TreeViewWidget.SetColumns(treeTitle, cols...)`, not a `DataGridView`: the first column holds the node's arrow, check box, image and text, then one column per `widget.Column` showing its `Text` (it reads `Title`, `Text`, `Width`, `MinWidth`, `Align`, `Hidden`; it does not sort). Read `docs/ui/widget/treeview.md`.
 
