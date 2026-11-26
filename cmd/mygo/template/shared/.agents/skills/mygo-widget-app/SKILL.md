@@ -105,6 +105,11 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 
 - `widget.LookUpEditWidget.OnSelect(fn)` runs on the event goroutine when the user chooses a record (`ok` true) or empties the field (`ok` false), once per change; `widget.LookUpEditWidget.SetSelected(k)`, `widget.LookUpEditWidget.Unselect` and `widget.LookUpEditWidget.SetItems` do not run it. `widget.LookUpEditWidget.Selected` reads the key and whether one is chosen.
 - A typed text that is no record's goes back to the chosen record's text when the focus leaves the field. Of a `widget.Column` it reads `Title`, `Text`, `Width`, `MinWidth`, `Align` and `Hidden`. Read `docs/ui/widget/lookupedit.md`.
+- For a field whose drop-down holds controls of its own (check boxes of columns, a date range, a small form), use `widget.PopupEdit(controls...)`: read the controls in `widget.PopupEditWidget.OnClosed(fn)` and show the outcome with `widget.PopupEditWidget.SetText`. Not a `Button` that opens a `Dialog`. `widget.PopupEditWidget.ShowPopup` and `widget.PopupEditWidget.ClosePopup` do not run `OnClosed`. Read `docs/ui/widget/popupedit.md`.
+
+## Waiting
+
+While the app loads or saves and the user must wait, call `widget.Form.ShowWait(caption, description)` and `widget.Form.CloseWait()` (safe from any goroutine): a `widget.ProgressPanel` centred over the dimmed form, which takes no click or key until it closes. A second `ShowWait` changes its text. Not a modal `Dialog` of your own, nor disabling every control. Show a `widget.ProgressPanel(caption)` inline where only part of a page is busy. Read `docs/ui/widget/progresspanel.md`.
 
 ## Search, paths, sections, colors
 

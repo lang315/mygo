@@ -197,6 +197,8 @@ func dialogs(w *widget.Form) widget.Control {
 				widget.MenuItem{Text: "Delete…", Icon: lucide(lucideIcons[2]), OnClick: func() { show("Delete: %v", widget.Confirm(w, widget.Warning, "Delete?", "")) }},
 			),
 		),
+		widget.Separator(),
+		popupWait(w),
 	)
 }
 
