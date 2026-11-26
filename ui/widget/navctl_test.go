@@ -117,6 +117,11 @@ func TestNavControlsDisabled(t *testing.T) {
 // A frame of the controls at rest allocates no more than a frame of the
 // bare ui elements they wrap.
 func TestNavControlsAllocNothingAtRest(t *testing.T) {
+	if raceEnabled {
+		// As ui's alloc tests: ui.ColorWell alone counts 4 or 5 a frame
+		// under the race detector, bare or wrapped.
+		t.Skip("the race detector allocates")
+	}
 	query, chosen, color, city := "", -1, ui.Hex("#3b82f6"), ""
 	open := [3]bool{true, false, false}
 	path, cities := []string{"C:", "Users", "ada"}, []string{"Hanoi", "Hue"}

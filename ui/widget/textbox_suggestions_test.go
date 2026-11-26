@@ -81,6 +81,19 @@ func TestTextBoxPasswordIgnoresSuggestions(t *testing.T) {
 	}
 }
 
+// Added: with room to spare, an entry submitted again moves to the front
+// and is not kept twice (TestTextBoxMRU's max of 2 cuts a duplicate off).
+func TestTextBoxMRUNoDuplicates(t *testing.T) {
+	e := TextBox().SetMRU(3)
+	tt := focusedBox(t, e)
+	for _, s := range []string{"a", "b", "a"} {
+		submit(tt, e, s)
+	}
+	if got := suggestionsOf(e); !slices.Equal(got, []string{"a", "b"}) {
+		t.Fatalf("after a, b, a the suggestions are %q, want [a b]", got)
+	}
+}
+
 // Added: the first Enter of an MRU box turns its input into an
 // Autocomplete; the box keeps the keyboard focus, so the next entry types
 // into it.
