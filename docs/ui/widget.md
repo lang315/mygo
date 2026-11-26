@@ -100,7 +100,9 @@ done, pending or dropped is in the [WinForms catalogue](winforms.md).
   `RadioGroup`, `CheckBoxGroup`, `ComboBox`, `NumericUpDown`, `RangeSpin`,
   `TrackBar`, `DomainUpDown`, `DateTimePicker`, `MonthCalendar`, `TagSelect`
   and a toggle `ToolButton` (`TestSettersDoNotRunOnChange` pins it), for
-  `TokenEdit`'s `SetTokens` (its own tests pin it), and
+  `TokenEdit`'s `SetTokens` (its own tests pin it), for `SearchBox`'s
+  `SetText`, `Accordion`'s `SetOpen` and `ColorEdit`'s `SetColor` (theirs
+  do), and
   for `TabControl`'s `OnSwitch` after `SetPage`, `InsertPage` and `RemovePage`
   (but a page index the control had to clamp is reported). WinForms and GTK
   differ, as their `TextChanged` and `changed` also run for code: a handler
@@ -733,6 +735,7 @@ name := widget.Bind(widget.TextBox(),
 | Control | Value | |
 |---|---|---|
 | `TextBox`, `MultilineTextBox` | `string` | `Bind` |
+| `SearchBox` | `string` | `Bind` |
 | `DomainUpDown` | the selected item's text, a `string` | `Bind` |
 | `CheckBox` | `bool` | `Bind` |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
@@ -1310,10 +1313,21 @@ Input and display:
   `SetText`, `SetPlaceholder`, `SetEditable`, `OnChange`; `TextBox` also has
   `Password`, `OnEnter`, `MaxLength(n)` (runes, as in WinForms: typing or
   pasting past it is cut at it, and so is `SetText`; 0 for no limit) and
-  `Icon(bitmap)` (16 DIPs, inside the box before the text; nil removes it).
+  `Icon(bitmap)` (16 DIPs, inside the box before the text; nil removes it),
+  `SetSuggestions(items...)` and `SetMRU(max)` (suggestions as the user
+  types, and the last entries remembered; see
+  [TextBox suggestions](widget/textbox-suggestions.md)).
+- `SearchBox()`: a field for searching, with a clear button; `OnChange`,
+  `OnSubmit`; see [SearchBox](widget/searchbox.md).
+- `BreadCrumb(items...)`: a path of links, the last the current page;
+  `SetItems`, `OnSelect(func(i int))`; see [BreadCrumb](widget/breadcrumb.md).
+- `Accordion()`: sections, one open at a time; `AddSection(title,
+  controls...)`, `Open`, `SetOpen`, `OnChange`; see [Accordion](widget/accordion.md).
+- `ColorEdit()`: a swatch that opens a color picker inline; `Color`,
+  `SetColor`, `OnChange`; see [ColorEdit](widget/coloredit.md).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
   `BindTokens`, `Reload(control)`: tie a `TextBox`, `MultilineTextBox`,
-  `DomainUpDown`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`,
+  `SearchBox`, `DomainUpDown`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`,
   `RangeSpin`, `CheckBoxGroup` or `TokenEdit` to a value kept elsewhere;
   see [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
