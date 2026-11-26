@@ -55,6 +55,7 @@ type Form struct {
 	built         []builtEl      // the controls the build made, in order (a Label's mnemonic finds the next)
 	announce      string         // a validation message for the next build to announce
 	toasts        []toastOp      // ShowToast and CloseToast since the last frame, for it to hand to ui
+	wait          *waitText      // ShowWait's, nil when not waiting
 }
 
 // quit quits the app; tests replace it.
@@ -495,6 +496,9 @@ func (w *Form) view(c *ui.Context) {
 	})
 	if toastHook != nil { // before formKeys: Escape in a toast closes it
 		toastHook(c, w)
+	}
+	if waitHook != nil { // after the toasts: the wait is above them
+		waitHook(c, w)
 	}
 	w.formKeys(c)
 	if w.announce != "" && !c.Measuring() { // a measure leaves it to the real frame
