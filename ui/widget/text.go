@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -99,6 +100,66 @@ type TextBoxWidget struct {
 	onEnter     func()
 	edit        func() // onEdited, made once
 	selectAll   bool   // SelectAll asked, not yet carried out
+
+	suggestions []string // SetSuggestions's, then what Enter remembered
+	mru         int      // SetMRU's
+	remember    func()   // rememberText, set by SetMRU
+	accept      func()   // formAccept at the last build, for rememberText
+}
+
+// autocomplete is ui.Autocomplete, set by SetSuggestions and SetMRU: an app
+// that calls neither does not link it. Under mu.
+var autocomplete func(c *ui.Context, value *string, suggestions []string) ui.Element
+
+// SetSuggestions suggests items below the box, those containing what was
+// typed, those starting with it first, as ui.Autocomplete does: Up and Down
+// move among them and Enter takes one, as does a click. While there are
+// none, the box is a plain one. A Password box ignores them.
+func (e *TextBoxWidget) SetSuggestions(items ...string) *TextBoxWidget {
+	items = slices.Clone(items) // ui reads the slice while it draws
+	e.change(func() { e.suggestions, autocomplete = items, ui.Autocomplete })
+	return e
+}
+
+// SetMRU makes the box remember what the user entered, as DevExpress's
+// MRUEdit: after Enter, the text moves to the front of the suggestions,
+// without duplicates, keeping at most max of them. 0 turns it off. A
+// Password box ignores it.
+func (e *TextBoxWidget) SetMRU(n int) *TextBoxWidget {
+	e.change(func() {
+		e.mru = max(n, 0)
+		if e.mru > 0 && e.remember == nil {
+			e.remember, autocomplete = e.rememberText, ui.Autocomplete
+		}
+	})
+	return e
+}
+
+// rememberText is ui's OnSubmit callback of an MRU box: it puts the text in
+// front of the suggestions, then runs OnEnter, or the form's accept button.
+func (e *TextBoxWidget) rememberText() {
+	s := e.text.shown // ui's, on the drawing thread as this callback
+	mu.Lock()
+	if s != "" && e.mru > 0 && !e.password {
+		next := make([]string, 0, min(len(e.suggestions)+1, e.mru))
+		next = append(next, s)
+		for _, x := range e.suggestions {
+			if len(next) == e.mru {
+				break
+			}
+			if x != s {
+				next = append(next, x)
+			}
+		}
+		e.suggestions = next // a new slice: ui may still read the old one
+	}
+	h, accept := e.onEnter, e.accept
+	mu.Unlock()
+	if h != nil {
+		Post(h)
+	} else if accept != nil {
+		accept()
+	}
 }
 
 // TextBox makes an empty one-line text input.
@@ -192,7 +253,12 @@ func (e *TextBoxWidget) onEdited() {
 
 func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	p, changed := e.text.bind()
-	el := ui.TextInput(c, p)
+	var el ui.Element
+	if len(e.suggestions) > 0 && !e.password {
+		el = autocomplete(c, p, e.suggestions)
+	} else {
+		el = ui.TextInput(c, p)
+	}
 	if e.placeholder != "" {
 		el.Placeholder(e.placeholder)
 		if tk, _ := skinOf(c); tk != nil {
@@ -245,7 +311,10 @@ func (e *TextBoxWidget) build(c *ui.Context) ui.Element {
 	if changed && e.onChange != nil {
 		Post(e.onChange)
 	}
-	if h := e.onEnter; h != nil {
+	if e.mru > 0 && !e.password {
+		e.accept = formAccept
+		el.OnSubmit(e.remember)
+	} else if h := e.onEnter; h != nil {
 		el.OnSubmit(func() { Post(h) })
 	} else if h := formAccept; h != nil {
 		el.OnSubmit(h) // Enter in the line clicks the form's accept button
