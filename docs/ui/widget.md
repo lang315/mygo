@@ -938,6 +938,26 @@ t := widget.DataGridView(key, name, status).
   default order other than the source's), with the header's arrow, and
   ignores a title of no `Sortable` column; `ClearSort` shows the rows in the
   order added.
+- Several columns: `SortBy(orders...)` sorts by `ui.SortOrder`s, the first
+  first: rows equal by one compare by the next (its `Compare`, or else its
+  `Text`), and rows equal by all keep the source's order. It drops an order
+  whose title is no `Sortable` column's, or a column's already named, and
+  with no orders it is `ClearSort`; `Sort(column, descending)` is `SortBy`
+  with one order. `SortOrders()` returns a copy of the orders shown. With
+  groups, the rows sort inside each group; a row `UpdateRow` changes moves
+  to its sorted place. `SetMultiSort(true)` lets the user add a column: a
+  Shift-click or a Cmd-click (Ctrl-click on Linux and Windows) on a
+  `Sortable` header adds it after the others, another makes it descending,
+  a third takes it out; a plain click sorts by the column alone. Without
+  it, the headers show the first column's direction alone.
+
+  ```go
+  grid.SetMultiSort(true).SortBy(ui.SortOrder{Column: "Age"}, ui.SortOrder{Column: "Name", Descending: true})
+  ```
+- `Column.Frozen` pins a column at the table's start while the others
+  scroll sideways, as Excel's frozen panes: only a run of `Frozen` columns
+  with a `Width`, from the first shown, pins, and the `#` column pins with
+  a `Frozen` first column.
 - `BottomPanel()`: the counts of rows, and of the rows shown that are
   selected and checked (what `Selected`, `CountSelected` and `Checked`
   return: a search hides the rows it leaves out, selected or not), and a

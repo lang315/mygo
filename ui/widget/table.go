@@ -45,6 +45,11 @@ type Column[T any] struct {
 	Color func(*T) ui.Color
 	// Image shows before the text, 16 DIPs square; nil for none.
 	Image func(*T) *ui.Bitmap
+	// Frozen pins the column at the table's start while the others scroll
+	// sideways, as ui.TableColumn.Frozen: only a run of Frozen columns
+	// with a Width, from the first shown, pins. The index column pins with
+	// a Frozen first column.
+	Frozen bool
 	// Hidden leaves the column out of the table at first, as WinForms'
 	// Visible = false: SetColumnVisible shows it. A hidden column still
 	// sorts the rows once they are sorted by it, and its Filterable
@@ -122,7 +127,8 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// posVersion: Selected and Checked build it on first use.
 	posOf                                   []int32
 	posVersion                              uint64
-	sort                                    mirror[ui.SortOrder]
+	sort                                    sortOrders
+	multiSort                               bool // SetMultiSort's
 	chosen, checked                         keys[K]
 	checks                                  bool // the check box column shows
 	panel                                   *BoxWidget
@@ -291,7 +297,10 @@ func (t *DataGridViewWidget[T, K]) uiColumns() []ui.TableColumn {
 		}
 		vis = append(vis, i)
 		cs = append(cs, ui.TableColumn{Title: cl.Title, Width: cl.Width, MinWidth: cl.MinWidth,
-			Align: cl.Align.ui(), Sortable: cl.Sortable})
+			Align: cl.Align.ui(), Sortable: cl.Sortable, Frozen: cl.Frozen})
+	}
+	if t.numbered && len(vis) > 0 && t.cols[vis[0]].Frozen {
+		cs[0].Frozen = true
 	}
 	t.visCols = vis
 	return cs
@@ -482,20 +491,111 @@ func (t *DataGridViewWidget[T, K]) Len() int { return t.src.Len() }
 // ClearSort shows the rows in the source's order (as added, and inserted),
 // as before a header click.
 func (t *DataGridViewWidget[T, K]) ClearSort() *DataGridViewWidget[T, K] {
-	t.change(func() { t.sort.set(ui.SortOrder{}) })
+	t.change(func() { t.sort.set(nil) })
 	return t
 }
 
-// Sort sorts the rows by the column titled column, as a click on its header
-// does, and the header shows the direction. A title of no Sortable column
-// is ignored.
+// Sort sorts the rows by the column titled column alone, as a click on its
+// header does, and the header shows the direction: SortBy with one order. A
+// title of no Sortable column is ignored.
 func (t *DataGridViewWidget[T, K]) Sort(column string, descending bool) *DataGridViewWidget[T, K] {
 	t.change(func() {
-		if column == "#" && t.bySource || slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.Sortable && cl.Title == column }) {
-			t.sort.set(ui.SortOrder{Column: column, Descending: descending})
+		if t.sortable(column) {
+			t.sort.set([]ui.SortOrder{{Column: column, Descending: descending}})
 		}
 	})
 	return t
+}
+
+// SortBy sorts the rows by several columns, the first first: rows equal by
+// one compare by the next, by Compare or else Text, and rows equal by all
+// keep the source's order. With groups (SetGroupBy), the rows sort inside
+// each group. An order whose title is no Sortable column's, or a column's
+// already named, is dropped; with no orders, it is ClearSort. Without
+// SetMultiSort, the headers show the first column's direction alone.
+func (t *DataGridViewWidget[T, K]) SortBy(orders ...ui.SortOrder) *DataGridViewWidget[T, K] {
+	t.change(func() {
+		var by []ui.SortOrder
+		for _, o := range orders {
+			if t.sortable(o.Column) && !slices.ContainsFunc(by, func(p ui.SortOrder) bool { return p.Column == o.Column }) {
+				by = append(by, o)
+			}
+		}
+		t.sort.set(by)
+	})
+	return t
+}
+
+// SortOrders returns a copy of the columns the rows are sorted by, the first
+// first; none when unsorted.
+func (t *DataGridViewWidget[T, K]) SortOrders() []ui.SortOrder {
+	mu.Lock()
+	defer mu.Unlock()
+	return slices.Clone(t.sort.value)
+}
+
+// SetMultiSort lets the user sort by several columns, or not, as by
+// default: on, a Shift-click or a Cmd-click (Ctrl-click on Linux and
+// Windows) on a Sortable header adds its column after the others, another
+// makes it descending and a third takes it out, as ui's ListState.SortBy;
+// a plain click sorts by the column alone either way.
+func (t *DataGridViewWidget[T, K]) SetMultiSort(on bool) *DataGridViewWidget[T, K] {
+	t.change(func() { t.multiSort = on })
+	return t
+}
+
+// sortable reports whether the rows sort by the column titled column. Under mu.
+func (t *DataGridViewWidget[T, K]) sortable(column string) bool {
+	return column == "#" && t.bySource || slices.ContainsFunc(t.cols, func(cl Column[T]) bool { return cl.Sortable && cl.Title == column })
+}
+
+// sortOrders is a table's sort, as a mirror is a value, for a slice, which
+// a mirror cannot hold: value is the widget's, under mu; ui gets first, its
+// ListState.Sort, and by, its SortBy, when multi-sort is on, and writes
+// them after the view returns, outside mu. The slices are replaced, never
+// changed.
+type sortOrders struct {
+	value, by []ui.SortOrder
+	first     ui.SortOrder
+	multi     bool // by was handed to ui
+	dirty     bool // a setter changed value since the last build
+}
+
+// set changes the value. Under mu.
+func (m *sortOrders) set(v []ui.SortOrder) { m.value, m.dirty = v, true }
+
+// bind returns ui's Sort, and its SortBy when multi, nil else, so that ui
+// adds no column on a Shift-click. Under mu while building.
+func (m *sortOrders) bind(multi bool) (*ui.SortOrder, *[]ui.SortOrder) {
+	m.multi = multi
+	if m.dirty {
+		m.by, m.dirty = m.value, false
+		m.first = ui.SortOrder{}
+		if len(m.value) > 0 {
+			m.first = m.value[0]
+		}
+	}
+	if !multi {
+		return &m.first, nil
+	}
+	return &m.first, &m.by
+}
+
+// commit takes the user's click, in ui's OnSortChange, and reports whether
+// it changed the value. The user wins over a setter that ran since the last
+// build.
+func (m *sortOrders) commit() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	if !m.multi {
+		m.by = nil
+		if m.first.Column != "" {
+			m.by = []ui.SortOrder{m.first}
+		}
+	}
+	changed := !slices.Equal(m.value, m.by)
+	m.value, m.dirty = m.by, false
+	return changed
 }
 
 // sync brings the view up to date with the rows, keeping first, outside
@@ -510,7 +610,7 @@ func (t *DataGridViewWidget[T, K]) sync() {
 		t.heads = append(t.heads[:0], t.view.Groups()...)
 		t.kept = true
 	}
-	t.view.Sync(t.src.rows, t.sort.value)
+	t.view.Sync(t.src.rows, t.sort.value...)
 	if t.onSelChanged != nil && t.filter != nil {
 		t.watchSearch()
 	} else {
@@ -807,7 +907,7 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	if t.footer != nil {
 		t.footer.heads = t.footer.heads[:0]
 	}
-	s.Sort, _ = t.sort.bind()
+	s.Sort, s.SortBy = t.sort.bind(t.multiSort)
 	s.Selection, s.Checked, s.RowsOf = t.chosen.bind(), nil, t.chosenRows
 	if t.checks {
 		s.Checked, s.CheckedCount, s.CheckRows = t.checked.bind(), t.checkedCount, t.checkRows
