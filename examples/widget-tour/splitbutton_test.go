@@ -7,8 +7,8 @@ import (
 )
 
 func TestTourSplitButtonRunsTheButtonAndTheMenu(t *testing.T) {
-	tt := widget.NewTester(t, tour(nil), 1000, 1400)
-	tt.Find(widget.ByLabel("Values")).Click()
+	tt := widget.NewTester(t, tour(nil), 1100, 1800)
+	visit(tt, "Choices")
 	tt.Find(widget.ByLabel("Save")).Click()
 	if !tt.Has(widget.ByLabel("Saved")) {
 		t.Fatalf("the button did not run: %q", tt.Texts())

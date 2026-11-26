@@ -48,6 +48,17 @@ func TestTourHasAnEntryForEachControl(t *testing.T) {
 	}
 }
 
+// Every tab of the tour fits in the 1100-wide window the tour tests use, so a
+// test can click it. Linux's fonts are wider than the Mac's: leave room.
+func TestTourTabsFitTheWindow(t *testing.T) {
+	tt := widget.NewTester(t, tour(nil), 1100, 1800)
+	for _, tab := range tt.FindAll(widget.ByRole(ui.RoleTab)) {
+		if r := tab.Bounds(); r.X+r.W > 1100 {
+			t.Errorf("tab %q ends at %v, outside the 1100-wide window", tab.Label(), r.X+r.W)
+		}
+	}
+}
+
 func TestTourShellHasItsMenuToolAndStatusStrips(t *testing.T) {
 	f := widget.NewForm("tour", 1100, 800)
 	appShell(f)

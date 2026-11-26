@@ -73,7 +73,6 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("Layout", layout()).
 		AddPage("Inputs", inputs(w)).
 		AddPage("Choices", choices()).
-		AddPage("Values", values()).
 		AddPage("Containers", containers()).
 		AddPage("Dialogs", dialogs(w)).
 		AddPage("Extras", extras()).
@@ -392,12 +391,13 @@ func choices() widget.Control {
 		widget.Spinner().Start(),
 		widget.DateTimePicker(),
 		widget.MonthCalendar(),
+		values(),
 	)
 }
 
-// values shows the controls that pick a value: a range, stars, a button that
-// stays pressed, one choice among segments, and a split button. Each reports
-// to the label under it.
+// values is the Choices tab's group of the controls that pick a value: a
+// range, stars, a button that stays pressed, one choice among segments, and a
+// split button. Each reports to the label under it.
 func values() widget.Control {
 	said := widget.Label("Pick something")
 	var price *widget.RangeTrackBarWidget
@@ -417,7 +417,7 @@ func values() widget.Control {
 		widget.MenuItem{Text: "Save As…", OnClick: func() { said.SetText("Saved as") }},
 		widget.MenuItem{Text: "Save All", OnClick: func() { said.SetText("Saved all") }},
 	).Suggested().OnClick(func() { said.SetText("Saved") })
-	return widget.VBox(8).Add(price, stars, bold, view, save, said)
+	return widget.GroupBox("Values").Add(widget.VBox(8).Add(price, stars, bold, view, save, said))
 }
 
 // dragRow is a drag source and a drop zone: drag the chip onto the zone, or
