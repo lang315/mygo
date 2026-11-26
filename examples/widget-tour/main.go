@@ -78,9 +78,10 @@ func tour(w *widget.Form) widget.Control {
 		AddPage("Extras", extras()).
 		AddPage("App shell", shell()).
 		AddPage("DataGridView", table()).
-		AddPage("ListView", listViewTour()).
-		AddPage("TreeView", treeView()).
-		AddPage("ListBox", listBoxes()).
+		AddPage("Lists", widget.Sidebar().
+			Add("listview", "ListView", listViewTour()).
+			Add("treeview", "TreeView", treeView()).
+			Add("listbox", "ListBox", listBoxes())).
 		AddPage("Components", components()).
 		AddPage("Navigation", navigation()).
 		Padding(4).Expand()
