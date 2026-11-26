@@ -84,6 +84,40 @@ func TestShowWaitBlocksKeys(t *testing.T) {
 	}
 }
 
+// What Modal adds to the box that covers the window: with the focus in a
+// TextBox, a form shortcut, Enter on the accept button and typing all wait
+// until CloseWait, then work again.
+func TestShowWaitHoldsShortcutsAcceptAndTyping(t *testing.T) {
+	saves, accepts := 0, 0
+	box := TextBox()
+	ok := Button("OK").OnClick(func() { accepts++ })
+	f := NewForm("Wait", 500, 400)
+	f.SetContent(VBox(8).Add(box, ok))
+	f.Shortcut(ui.Ctrl, ui.KeyS, func() { saves++ })
+	f.SetAcceptButton(ok)
+	tt := TestForm(t, f)
+	field := tt.Find(ByRole(ui.RoleTextField)).Focus()
+	f.ShowWait("Saving", "")
+	tt.Settle()
+	tt.Key(ui.Ctrl, ui.KeyS)
+	tt.Key(0, ui.KeyEnter)
+	tt.Type("x")
+	tt.Settle()
+	if saves != 0 || accepts != 0 || box.Text() != "" {
+		t.Fatalf("while waiting: Ctrl+S ran %d times, Enter clicked OK %d times, the box has %q", saves, accepts, box.Text())
+	}
+	f.CloseWait()
+	tt.Settle()
+	field.Focus()
+	tt.Key(ui.Ctrl, ui.KeyS)
+	tt.Type("x")
+	tt.Key(0, ui.KeyEnter)
+	tt.Settle()
+	if saves != 1 || accepts != 1 || box.Text() != "x" {
+		t.Fatalf("after CloseWait: Ctrl+S ran %d times, Enter clicked OK %d times, the box has %q", saves, accepts, box.Text())
+	}
+}
+
 func TestShowWaitReplacesCaption(t *testing.T) {
 	clicks := 0
 	f, tt, _ := waitForm(t, &clicks)
