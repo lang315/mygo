@@ -22,14 +22,15 @@ func Segmented(labels ...string) *SegmentedWidget {
 	return s
 }
 
-// Selected returns the index of the segment chosen, -1 for none.
+// Selected returns the index of the segment chosen. A Segmented always has
+// one choice, as ui.Segmented does.
 func (s *SegmentedWidget) Selected() int { mu.Lock(); defer mu.Unlock(); return s.value.value }
 
-// SetSelected chooses segment i, or none for -1, without running OnChange.
-// An index out of range is ignored.
+// SetSelected chooses segment i, without running OnChange. An index out of
+// range, -1 included, is ignored.
 func (s *SegmentedWidget) SetSelected(i int) *SegmentedWidget {
 	s.change(func() {
-		if i >= -1 && i < len(s.labels) {
+		if i >= 0 && i < len(s.labels) {
 			s.value.set(i)
 		}
 	})

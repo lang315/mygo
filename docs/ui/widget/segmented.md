@@ -12,9 +12,10 @@ view = widget.Segmented("List", "Grid").OnChange(func() { fmt.Println("view", vi
 period := widget.Segmented("Day", "Week", "Month").SetSelected(1).SetFillWidth(true)
 ```
 
-- It starts at the first segment. `Selected()` is the index chosen.
+- It starts at the first segment. `Selected()` is the index chosen. A
+  Segmented always has one choice, as `ui.Segmented` does: there is no "none".
 - `SetSelected(i)` chooses segment `i` and does not run `OnChange`. An index
-  out of range is ignored.
+  out of range, -1 included, is ignored.
 - `SetFillWidth(true)` makes it as wide as the box that holds it, its segments
   sharing the width equally (`ui`'s `FillEqually`).
 - `OnChange(fn)` runs on the event goroutine after the user chose a segment.

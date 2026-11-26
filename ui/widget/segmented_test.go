@@ -34,13 +34,8 @@ func TestSegmentedSetSelectedOutOfRangeIgnored(t *testing.T) {
 	}
 	s.SetSelected(-1)
 	tt.Settle()
-	if s.Selected() != -1 {
-		t.Fatalf("Selected %d after SetSelected(-1), want -1", s.Selected())
-	}
-	for _, n := range tt.FindAll(ByRole(ui.RoleRadio)) {
-		if n.Checked() {
-			t.Fatalf("%v shows chosen after SetSelected(-1)", n)
-		}
+	if s.Selected() != 1 || !tt.Find(ByLabel("Grid")).Checked() {
+		t.Fatalf("Selected %d after SetSelected(-1), want 1 kept: a Segmented always has one choice", s.Selected())
 	}
 	select {
 	case <-changed:
