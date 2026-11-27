@@ -225,6 +225,17 @@ type DataGridViewWidget[T any, K comparable] struct {
 	headW     []float32
 	tipAt     uint64
 
+	// Row dragging (table_drag.go): reorder is SetRowReorder's, dragRows
+	// DragRows's, onReordered OnRowsReordered's; reorderFn and dragOutFn are
+	// ui's Reorder and DragRows, made once. ownRows is set for a table made by
+	// DataGridView, whose rows it may move.
+	reorder     bool
+	ownRows     bool
+	dragRows    func(rows []*T) any
+	onReordered func()
+	reorderFn   func(lines []int, to int)
+	dragOutFn   func(lines []int) any
+
 	// framer, when set by a ListView, is the control whose style stands
 	// instead of the table's frame (frameList), with the table's own.
 	framer *core
@@ -269,7 +280,9 @@ type DataGridViewWidget[T any, K comparable] struct {
 // DataGridView makes a table of cols whose rows key tells apart. key runs under
 // the package's lock, as the columns' functions do.
 func DataGridView[T any, K comparable](key func(*T) K, cols ...Column[T]) *DataGridViewWidget[T, K] {
-	return DataGridViewOf(NewRowSource(key), cols...)
+	t := DataGridViewOf(NewRowSource(key), cols...)
+	t.ownRows = true // not shared yet
+	return t
 }
 
 // DataGridViewOf makes a table of cols that shows the rows of src, which
@@ -980,6 +993,7 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Header = t.headerFn
 	}
 	t.handOver()
+	t.handDrag(s)
 	t.handColumnsOver(c)
 	s.FollowEnd = t.follow
 	s.RowHeight, s.GridLines, s.FixedColumnOrder = t.rowHeight, t.grid, t.fixedCols
