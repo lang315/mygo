@@ -361,9 +361,10 @@ func (s *calcState) operand() float64 {
 	return v
 }
 
-// result sets acc to r, or the error where r is no number.
-func (s *calcState) result(r float64, ok bool) {
-	if !ok || math.IsInf(r, 0) || math.IsNaN(r) {
+// result sets acc to r, or the error where r is no number: a division by
+// zero (±Inf, or NaN for 0/0), or an overflow.
+func (s *calcState) result(r float64) {
+	if math.IsInf(r, 0) || math.IsNaN(r) {
 		s.err = true
 		return
 	}
@@ -374,22 +375,20 @@ func (s *calcState) result(r float64, ok bool) {
 func (s *calcState) apply(b float64) {
 	switch s.op {
 	case '+':
-		s.result(s.acc+b, true)
+		s.result(s.acc + b)
 	case '-':
-		s.result(s.acc-b, true)
+		s.result(s.acc - b)
 	case '*':
-		s.result(s.acc*b, true)
+		s.result(s.acc * b)
 	case '/':
-		s.result(s.acc/b, b != 0)
+		s.result(s.acc / b)
 	}
 }
 
 // key presses key k: a digit, '.', an operator, '%', '=', 'n' (±), 'b'
-// (Backspace), 'C' or 'E' (CE). Only C leaves the error.
+// (Backspace), 'C' or 'E' (CE). Only C leaves the error: until then the
+// display shows E and = puts nothing in the field.
 func (s *calcState) key(k byte) {
-	if s.err && k != 'C' {
-		return
-	}
 	switch {
 	case k >= '0' && k <= '9':
 		switch {
@@ -421,15 +420,15 @@ func (s *calcState) key(k byte) {
 		b := s.operand()
 		switch s.op {
 		case 0:
-			s.result(b/100, true)
+			s.result(b / 100)
 		case '+':
-			s.result(s.acc+s.acc*b/100, true)
+			s.result(s.acc + s.acc*b/100)
 		case '-':
-			s.result(s.acc-s.acc*b/100, true)
+			s.result(s.acc - s.acc*b/100)
 		case '*':
-			s.result(s.acc*b/100, true)
+			s.result(s.acc * b / 100)
 		case '/':
-			s.result(s.acc/b*100, b != 0)
+			s.result(s.acc / b * 100)
 		}
 		s.op, s.entry = 0, ""
 	case k == '=':

@@ -139,6 +139,18 @@ func TestCalcArithmetic(t *testing.T) {
 		if v := ce.Value(); v != 5 {
 			t.Fatalf("5 after the Backspaces gave %v", v)
 		}
+		// The second number emptied is 0, not the first again.
+		openCalc(t, tt)
+		calcType(tt, "12+34")
+		calcPress(tt, ui.KeyBackspace)
+		calcPress(tt, ui.KeyBackspace)
+		if s := calcShows(ce); s != "0" {
+			t.Fatalf("12+34, Backspace twice shows %q, want 0", s)
+		}
+		calcType(tt, "=")
+		if v := ce.Value(); v != 12 {
+			t.Fatalf("12+34, Backspace twice, = gave %v, want 12", v)
+		}
 	})
 
 	t.Run("C clears all", func(t *testing.T) {
@@ -190,8 +202,44 @@ func TestCalcArithmetic(t *testing.T) {
 	})
 }
 
+func TestCalcBounds(t *testing.T) {
+	t.Run("sixteen digits at most", func(t *testing.T) {
+		ce := CalcEdit()
+		tt, _ := calcTester(t, ce)
+		openCalc(t, tt)
+		calcType(tt, "12345678901234567890")
+		if s := calcShows(ce); s != "1234567890123456" {
+			t.Fatalf("twenty digits show %q, want the first sixteen", s)
+		}
+	})
+	t.Run("keys typed after = go nowhere", func(t *testing.T) {
+		ce := CalcEdit()
+		tt, in := calcTester(t, ce)
+		openCalc(t, tt)
+		calcType(tt, "12=34=")
+		if v := ce.Value(); v != 12 {
+			t.Fatalf("12=34= gave %v, want 12", v)
+		}
+		if v := in.Value(); v != "12.00" {
+			t.Fatalf("12=34= left the field at %q, want 12.00", v)
+		}
+	})
+	t.Run("hiding closes it", func(t *testing.T) {
+		ce := CalcEdit()
+		tt, _ := calcTester(t, ce)
+		openCalc(t, tt)
+		ce.SetVisible(false)
+		tt.Settle()
+		ce.SetVisible(true)
+		tt.Settle()
+		if calcOpen(tt) {
+			t.Fatal("the calculator shows again after the field was hidden")
+		}
+	})
+}
+
 func TestCalcDivideByZero(t *testing.T) {
-	for _, keys := range []string{"5/0=", "0/0=", "5/0%", "5/0+"} {
+	for _, keys := range []string{"5/0=", "0/0=", "5/0%", "0/0%", "5/0+"} {
 		t.Run(keys, func(t *testing.T) {
 			var log editLog
 			ce := CalcEdit().SetValue(7).OnChange(log.add("change"))
@@ -368,6 +416,10 @@ func TestCalcDecimals(t *testing.T) {
 	tt.Settle()
 	if v := in.Value(); v != "0.00" {
 		t.Fatalf("-0.001 with 2 decimals shows %q, want 0.00", v)
+	}
+	openCalc(t, tt)
+	if s := calcShows(ce); s != "0" {
+		t.Fatalf("-0.001 with 2 decimals shows %q in the calculator, want 0", s)
 	}
 }
 
