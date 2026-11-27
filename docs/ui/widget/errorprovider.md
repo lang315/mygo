@@ -55,7 +55,53 @@ save := widget.Button("Save").OnClick(func() {
   ```
 - **Nothing validates by itself:** not a focus change, not a typed character.
   Call `ValidateChildren` (or your own checks, with `SetError`) when you want
-  errors.
+  errors, or turn on `SetValidateOnLeave` for rules.
+
+## Rules
+
+A rule checks a control's value for a provider, as DevExpress's
+`DXValidationProvider` does, with no handler to write:
+
+```go
+errs := widget.ErrorProvider().SetValidateOnLeave(true)
+name := widget.Rule(errs, widget.TextBox(), widget.Required("Enter your name"))
+email := widget.Rule(errs, widget.TextBox(), widget.Required("Enter an email address"))
+widget.Rule(errs, email, widget.MatchRegexp(regexp.MustCompile(`^\S+@\S+\.\S+$`), "Not an email address"))
+age := widget.Rule(errs, widget.NumericUpDown(0, 150, 1), widget.InRange(18, 120, "18 or over"))
+
+form.SetContent(widget.Fields().Row("Name", name).Row("Email", email).Row("Age", age).Row("",
+	widget.Button("Sign up").OnClick(func() {
+		if !form.ValidateChildren() {
+			errs.FocusFirst(form)
+			return
+		}
+		saveSignUp(name.Text(), email.Text(), age.Value())
+	})))
+```
+
+- `Rule(p, c, check)` gives `c` a check for `p` and returns `c`. It is a
+  package function, as `Bind` is, so `check` takes the control's value: a
+  `string` for a `TextBox`, a `float64` for a `NumericUpDown` (any `Bindable`
+  control). `check` returns the error text, or `""` when the value is valid.
+  A control may have several rules: the first failing one's text shows. Rules
+  of two providers on one control each run, and the last to mark it wins, as
+  with `SetError`.
+- Ready rules: `Required(msg)` fails on text that is empty once spaces are
+  trimmed; `MatchRegexp(re, msg)` on text `re` does not match; `InRange(min,
+  max, msg)` on a number below `min` or above `max` (both bounds are in).
+- `p.Validate()` runs every rule of `p`, sets or clears each ruled control's
+  mark, and returns true when none fails. It does not move the focus:
+  `FocusFirst` does. A control with no rule keeps any mark `SetError` gave it.
+- `p.SetValidateOnLeave(true)` also runs a control's rules when the focus
+  leaves it, after its `OnFocusOut`. Off by default, as DevExpress's Manual
+  mode: only `Validate` and `ValidateChildren` run rules then.
+- `Form.ValidateChildren()` runs the rules of the controls it validates (those
+  in the form and not hidden), after every `OnValidating` handler, and
+  returns false when any fails. With no failing handler, the first failing
+  rule's text is what it announces.
+- Checks run on the goroutine that validates, with no lock held, so they may
+  call the control's getters. An app that never calls `Rule` links no rule
+  code.
 
 WinForms' icon alignment and padding, `BlinkStyle`, `DataSource` and the
 `Validating` event's `Cancel` that keeps the focus in the control are not here.

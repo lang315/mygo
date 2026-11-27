@@ -232,6 +232,38 @@ func settings(cfg *Config) widget.Control {
 - `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `ButtonEdit`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
+## Validation
+
+Check a form's values with rules on a `widget.ErrorProvider`, not an `OnValidating` handler per field that calls `SetError` by hand:
+
+```go
+package app
+
+import (
+	"regexp"
+
+	"github.com/egoist/mygo/ui/widget"
+)
+
+func signUp(form *widget.Form, save func(name, email string)) widget.Control {
+	errs := widget.ErrorProvider().SetValidateOnLeave(true)
+	name := widget.Rule(errs, widget.TextBox(), widget.Required("Enter your name"))
+	email := widget.Rule(errs, widget.TextBox(), widget.Required("Enter an email address"))
+	widget.Rule(errs, email, widget.MatchRegexp(regexp.MustCompile(`^\S+@\S+\.\S+$`), "Not an email address"))
+	return widget.Fields().Row("&Name", name).Row("&Email", email).Add(
+		widget.Button("Sign up").OnClick(func() {
+			if !form.ValidateChildren() {
+				errs.FocusFirst(form)
+				return
+			}
+			save(name.Text(), email.Text())
+		}))
+}
+```
+
+- `widget.Rule(p, control, check)` takes any control `widget.Bind` takes; `check` gets its value (a `string`, a `float64` for a `NumericUpDown`) and returns the error text, "" when valid. Several rules on one control: the first failing one's text shows. Ready rules: `widget.Required`, `widget.MatchRegexp`, `widget.InRange`.
+- `widget.Form.ValidateChildren` runs the rules of the form's controls after their `OnValidating` handlers; `widget.ErrorProviderWidget.Validate` runs every rule of one provider. Neither moves the focus: `widget.ErrorProviderWidget.FocusFirst` does. `widget.ErrorProviderWidget.SetValidateOnLeave(true)` also checks a field when the focus leaves it. Read `docs/ui/widget/errorprovider.md`.
+
 ## Threads
 
 - Handlers (`OnClick`, `OnChange`, `Bind`'s `set`) run one at a time on the event goroutine, never on the main thread. The queue is the app's: a handler that blocks holds back every other handler of every window, though the windows keep drawing.

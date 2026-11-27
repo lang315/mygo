@@ -1430,7 +1430,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `richtextbox.New()`: styled text, in package `ui/widget/richtextbox`; see [RichTextBox](widget/richtextbox.md).
 - `WebBrowser()`: a web page; see [WebBrowser](widget/webbrowser.md).
 - `MaskedTextBox(mask)`: an input that takes what a mask allows; see [MaskedTextBox](widget/maskedtextbox.md).
-- `ErrorProvider()`, `OnValidating`, `Form.ValidateChildren`: an error mark on a control and an explicit validation; see [ErrorProvider](widget/errorprovider.md).
+- `ErrorProvider()`, `OnValidating`, `Form.ValidateChildren`: an error mark on a control and an explicit validation; `Rule` with `Required`, `MatchRegexp` and `InRange`, `Validate` and `SetValidateOnLeave` check values with no handler; see [ErrorProvider](widget/errorprovider.md).
 - `&` mnemonics in a `Button` and the labels of `Fields` (Alt+key; off on macOS); see [Mnemonics](widget/mnemonics.md).
 - `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
