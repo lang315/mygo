@@ -29,3 +29,32 @@ func TestTourTableGroupTotals(t *testing.T) {
 		t.Fatalf("the total at %v is not under Score's header at %v", total, score)
 	}
 }
+
+// The group toggle and the row dragging toggles live side by side: with
+// Reorder rows and then Drag rows out on, the grouped table keeps its
+// header and its total, and grouping off brings the rows back.
+func TestTourTableGroupTotalsWithDragging(t *testing.T) {
+	tt := tourTableTab(t)
+	for _, toggle := range []string{"Group by status", "Reorder rows", "Drag rows out"} {
+		if err := tt.Click(toggle); err != nil {
+			t.Fatal(err)
+		}
+		settle(tt)
+		settle(tt)
+	}
+	want := 0
+	for i := range 100_000 {
+		want += i % 997
+	}
+	if !tt.HasText("ok (100000)") || !tt.HasText(strconv.Itoa(want)) {
+		t.Fatalf("with the drag toggles on, the group or its total is gone; texts %q", tt.Texts())
+	}
+	if err := tt.Click("Group by status"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	settle(tt)
+	if tt.HasText("ok (100000)") || !tt.HasText("acct000000") {
+		t.Fatalf("grouping off with the drag toggles on; texts %q", tt.Texts())
+	}
+}
