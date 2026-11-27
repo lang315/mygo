@@ -70,6 +70,11 @@ type Column[T any] struct {
 	// change, not in every frame, under the package's lock: it calls no
 	// widget method.
 	Summary func(rows iter.Seq[*T]) string
+	// Hint, when set, is the tooltip of the column's cells: the pointer
+	// resting on a cell shows what it returns for the row. Empty means no
+	// tooltip. It wins over SetCellHints' full text. It runs under the
+	// package's lock as the cell is built: it calls no widget method.
+	Hint func(r *T) string
 
 	// edit is the column's *CellEditor[T] (EditColumn), held as an any so that
 	// Column does not name the type.
@@ -207,6 +212,18 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// column has a Summary, so a grid without one builds what it did.
 	summarize func(c *ui.Context)
 	footer    *gridFooter
+	// Columns (table_columns_menu.go): fits are BestFit's titles, for the
+	// next build to hand ui; chooser is SetColumnChooser's, and chooserFn
+	// ui's HeaderMenu for it, made once; hints is SetCellHints', and headW
+	// the widths of the headers in the last frame, by index in cols, which
+	// a column sharing the room left takes for its width; tipAt is the
+	// element of the cell under the pointer that has a tip, 0 for none.
+	fits      []string
+	chooser   bool
+	chooserFn func(m *ui.Menu, col int)
+	hints     bool
+	headW     []float32
+	tipAt     uint64
 
 	// framer, when set by a ListView, is the control whose style stands
 	// instead of the table's frame (frameList), with the table's own.
@@ -910,6 +927,9 @@ func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, col int) {
 		cl := &t.columns[col]
 		f.heads = append(f.heads, headCell{cell, cl.Title, cl.Align, cl.Fixed})
 	}
+	if t.hints {
+		t.noteHeader(cell, col)
+	}
 	if t.headSize > 0 {
 		cell.FontSize(t.headSize)
 	}
@@ -960,6 +980,7 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		s.Header = t.headerFn
 	}
 	t.handOver()
+	t.handColumnsOver(c)
 	s.FollowEnd = t.follow
 	s.RowHeight, s.GridLines, s.FixedColumnOrder = t.rowHeight, t.grid, t.fixedCols
 	t.headSize = 0
@@ -1057,6 +1078,10 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	ci := vis[col]
 	if t.statusHook != nil && t.statusHook(c, row, ci) {
+		return
+	}
+	if t.cols[ci].Hint != nil || t.hints {
+		t.hintedCell(c, ci, t.rowAt(row))
 		return
 	}
 	t.cellContent(c, ci, t.rowAt(row), true)
