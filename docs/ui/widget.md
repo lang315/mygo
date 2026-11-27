@@ -924,8 +924,10 @@ t := widget.DataGridView(key, name, status, runs).
   returns the text; an empty text shows nothing. Each total sits under its
   column's header and is as wide, aligned as the column, and follows it when
   the user resizes, moves or scrolls the columns; a hidden column's totals and
-  the `#` column show none. A total under the first column covers the group's
-  title: give `GroupSummary` to the columns after it.
+  the `#` column show none. The group's title starts the line and runs on
+  under the columns its text reaches, where a total would cover it: give
+  `GroupSummary` to columns past it (not the first). A line pinned at the
+  top while the rows scroll keeps its totals under their columns too.
 - It runs when the rows shown change (a row added, changed in place or
   deleted, a search, a filter, a sort, a new grouping), once for each group,
   never in a frame at rest, under the package's lock: it calls no widget
