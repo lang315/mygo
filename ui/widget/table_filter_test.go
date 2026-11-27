@@ -199,6 +199,50 @@ func TestFilterDropDownLists(t *testing.T) {
 	if n := fired.Load(); n != 5 {
 		t.Fatalf("OnFilterChange ran %d times for five changes", n)
 	}
+	// Select all again changes nothing, and runs nothing.
+	tt.Find(ByRole(ui.RoleButton).Label("Select all")).Click()
+	if n := fired.Load(); n != 5 {
+		t.Fatalf("a Select all that changed nothing ran OnFilterChange: %d", n)
+	}
+	// Unchecking a value, then checking it again, leaves every value checked:
+	// Values nil, so rows loaded later show.
+	tt.Find(ByRole(ui.RoleCheckBox).Label("Image")).Click()
+	tt.Find(ByRole(ui.RoleCheckBox).Label("Image")).Click()
+	if f := g.ColumnFilter("Kind"); f.Values != nil {
+		t.Fatalf("ColumnFilter(Kind) = %+v with every value checked again", f)
+	}
+}
+
+// With the # column first, each funnel is in its own column's header.
+func TestFilterDropDownsWithIndexColumn(t *testing.T) {
+	g := fdocGrid().IndexColumn().SetFilterDropDowns(true)
+	tt := NewTester(t, g, 800, 600)
+	for _, title := range []string{"Name", "Kind"} {
+		f := tt.Find(ByRole(ui.RoleButton).Label("Filter " + title)).Bounds()
+		h := tt.Find(ByRole(ui.RoleColumnHeader).Label(title)).Bounds()
+		if f.X < h.X || f.X+f.W > h.X+h.W {
+			t.Fatalf("the funnel of %s at %+v, not in its header at %+v", title, f, h)
+		}
+	}
+}
+
+// The panel's toggle and Clear run OnFilterChange only when they change
+// what is filtered.
+func TestFilterPanelNoChangeNoEvent(t *testing.T) {
+	var fired atomic.Int32
+	g := fdocGrid().SetFilterPanel(true).OnFilterChange(func() { fired.Add(1) })
+	g.userFilters(true, true) // Clear with no filter
+	g.SetColumnFilter("Kind", ColumnFilter{Values: []string{"Doc"}})
+	g.userFilters(true, false) // on while on
+	Update(func() {})
+	if n := fired.Load(); n != 0 {
+		t.Fatalf("panel actions that changed nothing ran OnFilterChange %d times", n)
+	}
+	g.userFilters(false, false)
+	g.userFilters(true, true)
+	if n := fired.Load(); n != 2 {
+		t.Fatalf("an off and a Clear ran OnFilterChange %d times", n)
+	}
 }
 
 func TestFilterDropDownCapsAt1000(t *testing.T) {
@@ -410,6 +454,31 @@ func TestFilterPanelHiddenWithoutFilters(t *testing.T) {
 	}
 }
 
+// The filter panel coming and going keeps the bottom panel's keyword, being
+// typed in, its focus and its text.
+func TestFilterPanelKeepsTheKeywordsFocus(t *testing.T) {
+	g := fdocGrid().BottomPanel().SetFilterPanel(true)
+	tt := NewTester(t, g, 800, 600)
+	b := tt.Find(ByRole(ui.RoleButton).Label("Search")).Bounds()
+	tt.ClickAt(b.X-12-120, b.Y+b.H/2) // the keyword, 240 wide, left of the button
+	tt.Type("a")
+	tt.Settle()
+	g.SetColumnFilter("Kind", ColumnFilter{Values: []string{"Doc"}})
+	tt.Settle()
+	if !tt.Has(ByRole(ui.RoleButton).Label("Clear filters")) {
+		t.Fatal("the filter panel does not show")
+	}
+	tt.Type("b")
+	tt.Settle()
+	g.ClearFilters()
+	tt.Settle()
+	tt.Type("c")
+	tt.Settle()
+	if v := g.keyword.Text(); v != "abc" {
+		t.Fatalf("the keyword holds %q after the filter panel came and went", v)
+	}
+}
+
 func TestFilterUpdateRowMovesInAndOut(t *testing.T) {
 	g := fdocGrid().SetColumnFilter("Kind", ColumnFilter{Values: []string{"Doc"}}).Sort("Name", false)
 	tt := tester(t, g)
@@ -467,6 +536,9 @@ func TestFilterSelectionAsSearch(t *testing.T) {
 		func(g *DataGridViewWidget[fdoc, int]) { g.Search("Name", "") })
 	fh, fs, fe := run(func(g *DataGridViewWidget[fdoc, int]) { g.SetColumnFilter("Name", ColumnFilter{Contains: "ann"}) },
 		func(g *DataGridViewWidget[fdoc, int]) { g.ClearFilters() })
+	if fe != 2 {
+		t.Fatalf("hiding then showing a selected row by a column filter ran OnSelectionChanged %d times, want 2", fe)
+	}
 	if !slices.Equal(sh.sel, []int{1}) || sh.count != 1 || !slices.Equal(ss.sel, []int{1, 3}) {
 		t.Fatalf("the search: hidden %+v, shown %+v", sh, ss)
 	}
@@ -552,7 +624,9 @@ func TestFilterFromGoroutine(t *testing.T) {
 // tree a grid without them does, and has no hook.
 func TestFilterOffIsUnchanged(t *testing.T) {
 	plain := fdocGrid().BottomPanel()
-	off := fdocGrid().BottomPanel().SetFilterDropDowns(false).SetAutoFilterRow(false).SetFilterPanel(false).
+	off := fdocGrid().BottomPanel().SetFilterDropDowns(true).SetAutoFilterRow(true).SetFilterPanel(true).
+		SetColumnFilter("Kind", ColumnFilter{Values: []string{"Doc"}}).
+		SetFilterDropDowns(false).SetAutoFilterRow(false).SetFilterPanel(false).
 		OnFilterChange(func() {}).ClearFilters().SetColumnFilter("Kind", ColumnFilter{})
 	a, b := NewTester(t, plain, 800, 600), NewTester(t, off, 800, 600)
 	na, nb := a.Nodes(), b.Nodes()
@@ -601,5 +675,13 @@ func TestFilterAutoRowEmptyStateUnderFields(t *testing.T) {
 	e := tt.Find(ByLabel("Nothing here")).Bounds()
 	if e.Y < f.Y+f.H {
 		t.Fatalf("the empty state at %+v covers the field at %+v", e, f)
+	}
+	// It is centered in the body, which starts a row lower than without the
+	// auto filter row: the state moves down by half that row.
+	plain := fdocGrid().SetEmptyState(EmptyState("Nothing here", "")).
+		SetColumnFilter("Name", ColumnFilter{Contains: "zzz"})
+	pe := NewTester(t, plain, 800, 600).Find(ByLabel("Nothing here")).Bounds()
+	if d := e.Y - pe.Y; d < f.H/2-2 {
+		t.Fatalf("the empty state is %v lower with the auto filter row than without, want about half the row (%v)", d, f.H/2)
 	}
 }
