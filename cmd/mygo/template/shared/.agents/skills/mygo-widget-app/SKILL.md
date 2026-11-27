@@ -106,6 +106,7 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 - `widget.LookUpEditWidget.OnSelect(fn)` runs on the event goroutine when the user chooses a record (`ok` true) or empties the field (`ok` false), once per change; `widget.LookUpEditWidget.SetSelected(k)`, `widget.LookUpEditWidget.Unselect` and `widget.LookUpEditWidget.SetItems` do not run it. `widget.LookUpEditWidget.Selected` reads the key and whether one is chosen.
 - A typed text that is no record's goes back to the chosen record's text when the focus leaves the field. Of a `widget.Column` it reads `Title`, `Text`, `Width`, `MinWidth`, `Align` and `Hidden`. Read `docs/ui/widget/lookupedit.md`.
 - For a field whose drop-down holds controls of its own (check boxes of columns, a date range, a small form), use `widget.PopupEdit(controls...)`: read the controls in `widget.PopupEditWidget.OnClosed(fn)` and show the outcome with `widget.PopupEditWidget.SetText`. Not a `Button` that opens a `Dialog`. `widget.PopupEditWidget.ShowPopup` and `widget.PopupEditWidget.ClosePopup` do not run `OnClosed`. Read `docs/ui/widget/popupedit.md`.
+- For a text field with buttons in its frame (browse with …, clear, search, + and −, an icon of your own), use `widget.ButtonEdit(buttons...)` with a `widget.EditButton` each (`Kind` such as `widget.EditEllipsis` or `widget.EditClear`, `Tooltip`, `OnClick`). Not an `HBox` of a `TextBox` and `Button`s. `widget.EditClear` empties the text, runs `widget.ButtonEditWidget.OnChange` once, then its own `OnClick`; `widget.ButtonEditWidget.SetText` runs neither. `widget.ButtonEditWidget.SetReadOnly(true)` stops typing, not the buttons. Read `docs/ui/widget/buttonedit.md`.
 
 ## Waiting
 
@@ -228,7 +229,7 @@ func settings(cfg *Config) widget.Control {
 ```
 
 - `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
-- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
+- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `ButtonEdit`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
 ## Threads
