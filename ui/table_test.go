@@ -177,8 +177,8 @@ func TestTableFitColumns(t *testing.T) {
 	}
 }
 
-// A double click on an edge of a table without rows fits nothing it has no
-// cell of, and does not fail.
+// A double click on an edge of a table without rows fits the column to its
+// header.
 func TestTableFitWithoutRows(t *testing.T) {
 	s := ListState{}
 	cols := []TableColumn{{Title: "Name", Width: 100}, {Title: "Kind", Width: 100}}
@@ -188,7 +188,13 @@ func TestTableFitWithoutRows(t *testing.T) {
 	tt.ClickAt(edge, float32(name.Y+name.H/2))
 	tt.ClickAt(edge, float32(name.Y+name.H/2))
 	tt.Frame()
-	header(t, tt, "Kind") // the table still builds
+	title, _ := tt.Find("Name")
+	if w := s.Columns.Widths["Name"]; w < title.W+19.9 || w > title.W+21 || w > 90 {
+		t.Fatalf("Name fitted to %v for a header of %v", w, title.W)
+	}
+	if _, ok := s.Columns.Widths["Kind"]; ok {
+		t.Fatalf("Kind fitted too: %v", s.Columns.Widths)
+	}
 }
 
 // FixedColumnOrder: a header dragged past its neighbor stays where it is;

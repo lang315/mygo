@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -150,15 +151,19 @@ func TestBestFitWidensToContent(t *testing.T) {
 // A measure of the view (a window sized to its content) leaves BestFit to
 // the window.
 func TestBestFitNotTakenByAMeasure(t *testing.T) {
-	tb := colsTable()
+	got := make(chan ui.TableLayout, 16)
+	tb := colsTable().OnColumnsChange(func(l ui.TableLayout) { got <- l })
 	view := content(tb)
 	tb.BestFit("Name")
 	ui.View(view).MeasureHeight(800, 1)
+	if w := widths(tb)["Name"]; w != 0 {
+		t.Fatalf("the measure fitted Name to %v", w)
+	}
 	tt := ui.NewTester(view, 800, 600)
 	tt.Frame()
 	tt.Frame()
-	if w := widths(tb)["Name"]; w < 320 {
-		t.Fatalf("Name at %v: the measure took the fit", w)
+	if l := received(t, got); l.Widths["Name"] < 320 {
+		t.Fatalf("the window's OnColumnsChange gave Name %v", l.Widths["Name"])
 	}
 }
 
@@ -386,6 +391,9 @@ func TestColumnChooserOffNoMenu(t *testing.T) {
 	}
 }
 
+// hintCalls counts the runs of hintTable's Hint.
+var hintCalls atomic.Int32
+
 // hintTable is a table of Name, 80 DIPs, holding "ann" whole and a long name
 // cut off, and Note, whose Hint is "note of" the name, 300 wide.
 func hintTable() *DataGridViewWidget[acct, int] {
@@ -393,6 +401,7 @@ func hintTable() *DataGridViewWidget[acct, int] {
 		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 80},
 		Column[acct]{Title: "Note", Text: func(a *acct) string { return "n " + a.name }, Width: 300,
 			Hint: func(a *acct) string {
+				hintCalls.Add(1)
 				if a.id == 3 {
 					return ""
 				}
@@ -402,12 +411,16 @@ func hintTable() *DataGridViewWidget[acct, int] {
 }
 
 func TestCellHint(t *testing.T) {
-	tt := tester(t, hintTable())
+	tb := hintTable()
+	tt := tester(t, tb)
 	if !tipShows(t, tt, "n ann", "note of ann") {
 		t.Fatalf("no tooltip of the Hint: %q", tt.Texts())
 	}
-	if tt.FramePending() {
-		t.Fatal("frames go on while the tooltip shows")
+	// Shown, the tooltip asks for no more frames: the cell is not built again.
+	n := hintCalls.Load()
+	tt.Advance(time.Second)
+	if got := hintCalls.Load() - n; got != 0 {
+		t.Fatalf("the cell was built %d times more while its tooltip showed", got)
 	}
 	leave(tt)
 	if tt.HasText("note of ann") {
@@ -426,6 +439,12 @@ func TestCellHint(t *testing.T) {
 	long := "a name much too long for its column"
 	if tipShows(t, tt, long, long) {
 		t.Fatal("the cut-off name has a tooltip without SetCellHints")
+	}
+	// Nor one of a column with a Hint, which is empty for it.
+	tb.SetRows([]acct{{3, long, 0}}).SetColumnsLayout(ui.TableLayout{Widths: map[string]float32{"Note": 60}})
+	tt.Frame()
+	if tipShows(t, tt, "n "+long, "n "+long) {
+		t.Fatal("a cut-off note whose Hint is empty has a tooltip without SetCellHints")
 	}
 }
 
@@ -457,6 +476,23 @@ func TestCellHintsTruncatedOnly(t *testing.T) {
 	tt.Frame()
 	if tipShows(t, tt, long, long) {
 		t.Fatal("a tooltip after SetCellHints(false)")
+	}
+}
+
+// Turned on once the rows are built and kept, the hints reach them.
+func TestCellHintsTurnedOnLate(t *testing.T) {
+	long := "a name much too long for its column"
+	tb := DataGridView(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 80},
+	).SetRows([]acct{{1, long, 0}}).Expand()
+	tt := tester(t, tb)
+	if tipShows(t, tt, long, long) {
+		t.Fatal("a tooltip before SetCellHints")
+	}
+	tb.SetCellHints(true)
+	tt.Frame()
+	if !tipShows(t, tt, long, long) {
+		t.Fatal("no tooltip on a row built before SetCellHints(true)")
 	}
 }
 
@@ -620,6 +656,18 @@ func TestColumnsOffIsUnchanged(t *testing.T) {
 	a, b := plain.Image(), to.Image()
 	if !slices.Equal(a.Pix, b.Pix) {
 		t.Fatal("the frames differ with the features off")
+	}
+	// Off, a cell does not read the pointer: moving over the rows builds none.
+	var texts atomic.Int32
+	counted := DataGridView(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { texts.Add(1); return a.name }, Width: 80},
+	).SetRows([]acct{{1, "ann", 0}, {2, "bob", 0}}).Expand()
+	tc := tester(t, counted)
+	n := texts.Load()
+	rest(t, tc, "ann")
+	rest(t, tc, "bob")
+	if got := texts.Load() - n; got != 0 {
+		t.Errorf("the pointer moving over the rows built cells %d times with the features off", got)
 	}
 	na, nb := plain.Nodes(), to.Nodes()
 	if len(na) != len(nb) {

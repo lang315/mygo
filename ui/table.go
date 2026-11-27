@@ -900,11 +900,7 @@ func (tf *tableFit) apply() {
 		if slices.Index(tf.ids, id) != i {
 			continue
 		}
-		var cells []*node
-		if i < len(tf.cells) {
-			cells = tf.cells[i]
-		}
-		tf.fit(id, cells)
+		tf.fit(id, tf.cells[i]) // its header's cell at least
 	}
 }
 

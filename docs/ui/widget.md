@@ -915,8 +915,8 @@ t.BestFit("Name") // at the next frame; BestFit() fits every column shown
 ```
 
 - `BestFit(titles...)` fits each column named to its header and the cells
-  in view, as a double click on the edge of its header does (that one fits
-  to the cells alone); with no titles, every column shown. It applies at the
+  in view, as a double click on the edge of its header does; with no
+  titles, every column shown. It applies at the
   next frame, and `OnColumnsChange` gets the new widths. Titles of no
   column, or of a hidden one, are ignored, as is the `#` column.
 - `SetColumnChooser(true)` gives the header a context menu: every column, as

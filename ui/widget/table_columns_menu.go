@@ -34,11 +34,9 @@ func (t *DataGridViewWidget[T, K]) SetColumnChooser(on bool) *DataGridViewWidget
 // column as a tooltip, or not, as by default. A column's Hint wins over it.
 func (t *DataGridViewWidget[T, K]) SetCellHints(on bool) *DataGridViewWidget[T, K] {
 	t.change(func() {
-		if t.hints != on {
-			t.hints = on
-			t.look++ // the rows kept are built again, with their tips
-		}
-		if on && t.headW == nil {
+		t.hints = on
+		t.look++ // the rows kept are built again, with their tips
+		if t.headW == nil {
 			t.headW = make([]float32, len(t.cols)) // the columns never change in number
 		}
 	})
@@ -90,7 +88,7 @@ func (t *DataGridViewWidget[T, K]) columnsMenu(m *ui.Menu, col int) {
 	if t.numbered {
 		col--
 	}
-	if col >= 0 && col < len(t.visCols) {
+	if col >= 0 { // -1: past the columns, or the index column
 		fit = t.cols[t.visCols[col]].Title
 	}
 	if m.Item("Best fit").ID("best fit").Disabled(fit == "").Chosen() {
@@ -109,18 +107,14 @@ func (t *DataGridViewWidget[T, K]) columnsMenu(m *ui.Menu, col int) {
 
 // noteHeader keeps the width of the header of column col, an index in
 // t.columns, as the last frame laid it out, for the hints of a column sharing
-// the room left; a change builds the rows kept again. Under mu.
+// the room left: the cell under the pointer, which reads it, is built in each
+// frame. Under mu.
 func (t *DataGridViewWidget[T, K]) noteHeader(cell ui.Element, col int) {
 	if t.numbered {
 		col--
 	}
-	if col < 0 { // the index column
-		return
-	}
-	ci := t.visCols[col]
-	if w := cell.Bounds().W; w != t.headW[ci] {
-		t.headW[ci] = w
-		t.look++
+	if col >= 0 { // not the index column
+		t.headW[t.visCols[col]] = cell.Bounds().W
 	}
 }
 
