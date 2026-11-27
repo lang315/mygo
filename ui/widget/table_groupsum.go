@@ -97,8 +97,8 @@ func (g *gridGroupSums) header(c *ui.Context, k int, text string) {
 		for i := range g.heads {
 			hc, b := &g.heads[i], g.placed[i]
 			total := g.textOf(hc, texts)
-			// Under a header cell not laid out yet the cell is 0 wide: the
-			// paint asks for the frame that places it.
+			// An empty total builds no cell. Under a header cell not laid out
+			// yet a cell is 0 wide: the paint asks for the frame that places it.
 			if total == "" {
 				continue
 			}
