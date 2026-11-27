@@ -64,6 +64,7 @@ type core struct {
 	errMsg      string                            // ErrorProvider's
 	errBy       *ErrorProviderWidget
 	validating  func() bool                      // OnValidating's
+	rules       *ruleList                        // Rule's
 	over        []func(p *ui.Painter, r ui.Rect) // drawn over the element, set by build
 }
 
@@ -311,13 +312,18 @@ func render(c *ui.Context, w Control) ui.Element {
 		ctl.Focus()
 		b.wantFocus = false
 	}
-	if b.onFocusOut != nil {
+	if b.onFocusOut != nil || b.rules != nil {
 		switch f := ctl.Focused(); {
 		case f:
 			b.focusIn = building
 		case b.focusIn == building:
 			b.focusIn = noView
-			buildingForm.postFocusOut(b.onFocusOut)
+			if b.onFocusOut != nil {
+				buildingForm.postFocusOut(b.onFocusOut)
+			}
+			if b.rules != nil {
+				Post(b.rules.leave) // after OnFocusOut: SetValidateOnLeave's providers check
+			}
 		}
 	}
 	styling = outer
