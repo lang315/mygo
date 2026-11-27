@@ -144,8 +144,8 @@ func (s *TimeSpanEditWidget) put(d time.Duration, part int) {
 func (s *TimeSpanEditWidget) step(text string, up bool) {
 	part := spanPart(text, s.caret)
 	d, ok := parseSpan(text)
-	if !ok {
-		d = s.value
+	if !ok || text == s.formatted {
+		d = s.value // nothing typed: keep what the field hides, seconds and fractions
 	}
 	if up {
 		d += spanUnits[part]
@@ -201,6 +201,7 @@ func (s *TimeSpanEditWidget) buildChildren() {
 		submitted := in.Submitted()
 		if in.FocusLeft() || submitted {
 			s.commit(*p)
+			s.text.shown = s.text.value // shown in this build, as LookUpEdit's show
 		}
 		if submitted {
 			if h := formAccept; h != nil {

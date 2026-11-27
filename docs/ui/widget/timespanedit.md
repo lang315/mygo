@@ -6,7 +6,8 @@ DevExpress's `TimeSpanEdit`. It shows the duration as `[-][d.]hh:mm[:ss]`:
 the days shown.
 
 ```go
-timeout := widget.TimeSpanEdit().
+var timeout *widget.TimeSpanEditWidget
+timeout = widget.TimeSpanEdit().
 	SetRange(time.Second, 2*time.Hour).
 	SetValue(90 * time.Second).
 	OnChange(func() { save(timeout.Value()) })
@@ -19,11 +20,11 @@ timeout := widget.TimeSpanEdit().
   `min` greater than `max` swaps them. A negative `min` lets the value go
   below zero, shown with a leading `-`.
 - `SetShowSeconds(false)` hides the seconds (shown at first). Hidden seconds
-  stay in the value until the user changes it.
+  stay in the value, through steps too, until the user types a new value.
 - `SetShowDays(true)` shows the days before the hours, so the hours stop at
   23. Without it (the default) the hours run past 23.
 - Only whole seconds show. A value with a fraction of a second keeps it
-  until the user changes the value.
+  through steps, until the user types a new value.
 - `OnChange(fn)` runs on the event goroutine once after each change by the
   user: a step, or a typed value read on leaving the field. Not for a setter,
   and not for a step that the range stops.
