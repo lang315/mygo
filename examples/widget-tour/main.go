@@ -545,6 +545,7 @@ func table() widget.Control {
 			}}).
 		ContextMenu(widget.MenuItem{Text: "Delete", OnClick: func() { t.DeleteRows(t.Selected()...) }}).
 		OnKey(ui.KeySpace, ui.Shift, func() { t.AutoCheck() }).
+		SetFilterDropDowns(true).SetAutoFilterRow(true).SetFilterPanel(true).
 		SetColumnChooser(true). // right-click a header: the columns, Best fit, Clear sorting
 		SetCellHints(true).     // a name cut off shows whole as a tooltip
 		Expand()

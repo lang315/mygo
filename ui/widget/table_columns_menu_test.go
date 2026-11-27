@@ -391,6 +391,58 @@ func TestColumnChooserOffNoMenu(t *testing.T) {
 	}
 }
 
+// A Filterable column's header with both the filter drop-downs and the
+// column chooser: a right-click opens the chooser, Best fit makes room for
+// the title and its funnel, and a click on the funnel opens the drop-down.
+func TestColumnChooserWithFilterDropDowns(t *testing.T) {
+	cols := fdocCols()
+	cols[0].Width = 30 // Name: narrower than its title and funnel
+	g := DataGridView(func(d *fdoc) int { return d.id }, cols...).SetRows(fdocs()).Expand().
+		SetFilterDropDowns(true).SetColumnChooser(true)
+	tt := menuTester(t, g)
+	head := find(t, tt, "Name")
+	tt.RightClickAt(head.X+3, head.Y+head.H/2) // the funnel covers the title's middle, 30 DIPs wide
+	tt.Frame()
+	if got, want := tt.Menu(), []string{"Name", "Kind", "Size", "-", "Best fit", "Best fit (all columns)"}; !slices.Equal(got, want) {
+		t.Fatalf("the menu %q, want %q", got, want)
+	}
+	if tt.HasText("Select all") {
+		t.Fatal("a right-click on the header opened the filter's drop-down")
+	}
+	if err := tt.ChooseMenuItem("Best fit"); err != nil {
+		t.Fatal(err)
+	}
+	drained(t)
+	tt.Frame()
+	tt.Frame()
+	var funnel ui.Rect
+	for _, n := range tt.Nodes() {
+		if n.Role == ui.RoleButton && n.Label == "Filter Name" {
+			funnel = n.Bounds
+		}
+	}
+	if funnel.W <= 0 {
+		t.Fatal("no funnel on Name")
+	}
+	mu.Lock()
+	w := g.list.Columns.Widths["Name"]
+	mu.Unlock()
+	if title := textWidth(t, "Name"); w < title+funnel.W+20-0.01 {
+		t.Fatalf("Best fit gave Name %v: a title of %v, a funnel of %v and 20 DIPs of padding", w, title, funnel.W)
+	}
+	if funnel.X+funnel.W > w+0.5 { // Name is the first column, at the tester's left
+		t.Fatalf("the funnel ends at %v, past Name's %v", funnel.X+funnel.W, w)
+	}
+	tt.ClickAt(funnel.X+funnel.W/2, funnel.Y+funnel.H/2)
+	tt.Frame()
+	if !tt.HasText("Select all") {
+		t.Fatalf("a click on the funnel opened no drop-down: %q", tt.Texts())
+	}
+	if m := tt.Menu(); m != nil {
+		t.Fatalf("a click on the funnel opened the chooser: %q", m)
+	}
+}
+
 // hintCalls counts the runs of hintTable's Hint.
 var hintCalls atomic.Int32
 
