@@ -75,10 +75,7 @@ func (t *DataGridViewWidget[T, K]) columnsMenu(m *ui.Menu, col int) {
 	}
 	for _, cl := range t.cols {
 		title, on := cl.Title, !cl.Hidden
-		it := m.Item(title).ID("column:" + title)
-		if on {
-			it.Checked(true)
-		}
+		it := m.Item(title).ID("column:" + title).Checked(on)
 		if it.Disabled(on && shown == 1).Chosen() {
 			Post(func() { t.SetColumnVisible(title, !on) })
 		}
@@ -118,41 +115,53 @@ func (t *DataGridViewWidget[T, K]) noteHeader(cell ui.Element, col int) {
 	}
 }
 
-// hint gives e, what the cell of r in column ci (an index in t.cols) shows,
-// its tooltip: the column's Hint, or with SetCellHints its full Text when it
-// is wider than the column leaves it. lead is the room an image takes before
-// the text. Only the cell under the pointer gets it: ui never keeps a row
-// holding a tooltip, while it keeps one that reads the pointer as long as the
-// pointer is elsewhere, so a frame at rest builds no row for a tip.
-func (t *DataGridViewWidget[T, K]) hint(c *ui.Context, e ui.Element, ci int, r *T, lead float32) {
-	if !e.Hovered() {
-		if t.tipAt == e.ID() {
+// hintedCell builds the cell of r in column ci (an index in t.cols) of a
+// column with a Hint, or of a grid with SetCellHints, in a box covering the
+// whole cell, as a format's does, which takes its tooltip. Under mu.
+func (t *DataGridViewWidget[T, K]) hintedCell(c *ui.Context, ci int, r *T) {
+	box := formatBox(c, CellFormat{}, t.cols[ci].Align).Children(func() { t.cellContent(c, ci, r, true) })
+	t.hint(c, box, ci, r, true)
+}
+
+// hint gives box, the box covering the cell of r in column ci (an index in
+// t.cols), its tooltip: the column's Hint, or with full and SetCellHints its
+// full Text when it is wider than the column leaves it. Only the cell under
+// the pointer gets it: ui never keeps a row holding a tooltip, while it keeps
+// one that reads the pointer as long as the pointer is elsewhere, so a frame
+// at rest builds no row for a tip.
+func (t *DataGridViewWidget[T, K]) hint(c *ui.Context, box ui.Element, ci int, r *T, full bool) {
+	if !box.Hovered() {
+		if t.tipAt == box.ID() {
 			t.tipAt = 0
 		}
 		return
 	}
-	if s := t.hintText(c, ci, r, lead); s != "" {
-		e.Tooltip(s)
-		if t.tipAt != e.ID() {
+	if s := t.hintText(c, ci, r, full); s != "" {
+		box.Tooltip(s)
+		if t.tipAt != box.ID() {
 			// ui times the rest of the pointer from the frame that sees the
 			// tip: ask for it, as the pointer may not move again.
-			t.tipAt = e.ID()
+			t.tipAt = box.ID()
 			c.After(0)
 		}
 	}
 }
 
 // hintText returns the tooltip of the cell of r in column ci: its Hint, or
-// with SetCellHints its full Text when cut off; "" for none.
-func (t *DataGridViewWidget[T, K]) hintText(c *ui.Context, ci int, r *T, lead float32) string {
+// with full and SetCellHints its full Text when cut off; "" for none.
+func (t *DataGridViewWidget[T, K]) hintText(c *ui.Context, ci int, r *T, full bool) string {
 	cl := &t.cols[ci]
 	if cl.Hint != nil {
 		if s := cl.Hint(r); s != "" {
 			return s
 		}
 	}
-	if !t.hints {
+	if !full || !t.hints {
 		return ""
+	}
+	var lead float32 // an image before the text, and its gap
+	if cl.Image != nil {
+		lead = iconSide(c) + 4
 	}
 	w, ok := t.list.Columns.Widths[cl.Title]
 	if !ok {

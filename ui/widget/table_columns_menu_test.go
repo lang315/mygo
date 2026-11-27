@@ -231,8 +231,8 @@ func TestColumnChooserLists(t *testing.T) {
 	if err := tt.RightClick("Name"); err != nil {
 		t.Fatal(err)
 	}
-	if n := menuItem(t, tt, "Score"); n.Checked {
-		t.Errorf("the hidden Score's item is checked: %+v", n)
+	if n := menuItem(t, tt, "Score"); n.Role != ui.RoleMenuItemCheckBox || n.Checked {
+		t.Errorf("the hidden Score's item: %+v, want a check box not checked", n)
 	}
 	if err := tt.ChooseMenuItem("Score"); err != nil {
 		t.Fatal(err)
@@ -476,6 +476,75 @@ func TestCellHintsTruncatedOnly(t *testing.T) {
 	tt.Frame()
 	if tipShows(t, tt, long, long) {
 		t.Fatal("a tooltip after SetCellHints(false)")
+	}
+}
+
+// The tip is the cell's: the pointer on the blank part of a wide cell, past
+// its short text, shows it.
+func TestCellHintOnTheWholeCell(t *testing.T) {
+	tt := tester(t, hintTable())
+	var r ui.Rect // the text "n ann", at the start of its 300-wide cell
+	for _, n := range tt.Nodes() {
+		if n.Label == "n ann" && (r.W == 0 || n.Bounds.W < r.W) {
+			r = n.Bounds
+		}
+	}
+	if r.W <= 0 || r.W > 100 {
+		t.Fatalf("the text n ann at %v", r)
+	}
+	leave(tt)
+	tt.Move(r.X+r.W+150, r.Y+r.H/2)
+	tt.Advance(time.Second)
+	tt.Frame()
+	if !tt.HasText("note of ann") {
+		t.Fatalf("no tooltip on the blank part of the cell: %q", tt.Texts())
+	}
+}
+
+// A badge's cell and a formatted row's cell show their column's Hint.
+func TestCellHintOnBadgeAndFormat(t *testing.T) {
+	tb := DataGridView(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 120,
+			Hint: func(a *acct) string { return "name of " + a.name }},
+		Column[acct]{Title: "State", Text: func(a *acct) string { return "ok" }, Width: 120,
+			Badge: func(*acct) Status { return StatusSuccess },
+			Hint:  func(a *acct) string { return "state of " + a.name }},
+	).SetRows([]acct{{1, "ann", 0}}).Expand().
+		SetRowFormat(func(*acct) CellFormat { return CellFormat{Bold: true} })
+	tt := tester(t, tb)
+	if !tipShows(t, tt, "ok", "state of ann") {
+		t.Errorf("no Hint on a badge's cell: %q", tt.Texts())
+	}
+	if !tipShows(t, tt, "ann", "name of ann") {
+		t.Errorf("no Hint on a formatted row's cell: %q", tt.Texts())
+	}
+	// A badge, which its pill draws, takes no full text from SetCellHints;
+	// a formatted cell does, and the # cell, which takes the row's format,
+	// has none.
+	long := "a state much too long for its column"
+	cut := DataGridView(func(a *acct) int { return a.id },
+		Column[acct]{Title: "Name", Text: func(a *acct) string { return a.name }, Width: 60},
+		Column[acct]{Title: "State", Text: func(a *acct) string { return long }, Width: 60,
+			Badge: func(*acct) Status { return StatusSuccess }},
+	).SetRows([]acct{{1, long, 0}}).Expand().SetCellHints(true).IndexColumn().
+		SetRowFormat(func(*acct) CellFormat { return CellFormat{Bold: true} })
+	tc := tester(t, cut)
+	if !tipShows(t, tc, long, long) {
+		t.Error("no full text of a formatted cell cut off")
+	}
+	leave(tc)
+	before := textCount(tc, long)
+	var r ui.Rect // the badge, the last element named long
+	for _, n := range tc.Nodes() {
+		if n.Label == long {
+			r = n.Bounds
+		}
+	}
+	tc.Move(r.X+10, r.Y+r.H/2)
+	tc.Advance(time.Second)
+	tc.Frame()
+	if textCount(tc, long) > before {
+		t.Error("a badge cut off shows its full text as a tooltip")
 	}
 }
 

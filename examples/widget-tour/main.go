@@ -526,11 +526,11 @@ func table() widget.Control {
 			Width: 180, Sortable: true, Filterable: true},
 		widget.Column[account]{Title: "Status", Text: func(a *account) string { return a.status },
 			Color: status, Width: 100, Sortable: true, Filterable: true,
-			Hint: func(a *account) string {
+			Hint: func(a *account) string { // the tooltip of the cell under the pointer
 				if a.status == "failed" {
 					return "The last check of " + a.name + " failed"
 				}
-				return ""
+				return "The last check of " + a.name + " passed"
 			}},
 		widget.Column[account]{Title: "Score", Text: func(a *account) string { return strconv.Itoa(a.score) },
 			Compare: func(a, b *account) int { return cmp.Compare(a.score, b.score) }, Align: widget.End, Sortable: true},

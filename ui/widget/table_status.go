@@ -158,7 +158,7 @@ func (t *DataGridViewWidget[T, K]) statusCell(c *ui.Context, row, ci int) bool {
 	if cl != nil {
 		align = cl.Align
 	}
-	formatBox(c, f, align).Children(func() {
+	box := formatBox(c, f, align).Children(func() {
 		switch {
 		case cl == nil:
 			t.indexCell(c, row)
@@ -168,6 +168,9 @@ func (t *DataGridViewWidget[T, K]) statusCell(c *ui.Context, row, ci int) bool {
 			badgeCell(c, s, cl.Text(r), detail, t.disabled, t.textKey)
 		}
 	})
+	if cl != nil && (cl.Hint != nil || t.hints) {
+		t.hint(c, box, ci, r, s == StatusNone) // a badge's text is not cut off: it has its Hint alone
+	}
 	return true
 }
 

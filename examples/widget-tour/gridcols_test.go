@@ -3,6 +3,9 @@ package main
 import (
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // A right-click on the tour's table's header lists its columns, and
@@ -24,6 +27,27 @@ func TestTourTableColumnChooser(t *testing.T) {
 	settle(tt)
 	if tt.HasText("Score") {
 		t.Fatalf("Score still shows after unchecking it: %q", tt.Texts())
+	}
+}
+
+// The pointer resting on a Status cell shows the column's Hint.
+func TestTourTableStatusHint(t *testing.T) {
+	tt := tourTableTab(t)
+	var cell ui.Rect // the first row's Status, "ok"
+	for _, n := range tt.Nodes() {
+		if n.Label == "ok" && n.Bounds.W > 0 {
+			cell = n.Bounds
+			break
+		}
+	}
+	if cell.W == 0 {
+		t.Fatal("no Status cell")
+	}
+	tt.Move(cell.X+cell.W/2, cell.Y+cell.H/2)
+	tt.Advance(time.Second)
+	tt.Frame()
+	if !tt.HasText("The last check of acct000000 passed") {
+		t.Fatalf("no Status hint; texts %q", tt.Texts())
 	}
 }
 

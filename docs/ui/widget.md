@@ -932,11 +932,14 @@ t.BestFit("Name") // at the next frame; BestFit() fits every column shown
   cuts off (the text measured wider than the column, less its padding, an
   image and a grid line) as a tooltip; a `Hint` that returns text wins. A
   column sharing the room left is measured by its header as the last frame
-  laid it out.
-- Only the cell under the pointer gets its tooltip, so the rows stay kept
-  from frame to frame, a frame at rest allocates nothing more, and a
-  `Hint` runs only for that cell; assistive technology does not read the
-  tips. With all three off the grid builds what it did.
+  laid it out. A `Badge` cell shows its `Hint` alone: its pill is not cut
+  off as text is.
+- The tooltip covers the whole cell, and only the cell under the pointer
+  gets it: the rows stay kept from frame to frame, a frame at rest
+  allocates nothing more, and a `Hint` runs only for that cell. The row
+  under the pointer is built again as the pointer comes onto a cell and
+  leaves it. Assistive technology does not read the tips. With all three
+  off the grid builds what it did.
 
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in

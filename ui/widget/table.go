@@ -1054,6 +1054,10 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	if t.statusHook != nil && t.statusHook(c, row, ci) {
 		return
 	}
+	if t.cols[ci].Hint != nil || t.hints {
+		t.hintedCell(c, ci, t.rowAt(row))
+		return
+	}
 	t.cellContent(c, ci, t.rowAt(row), true)
 }
 
@@ -1073,25 +1077,18 @@ func (t *DataGridViewWidget[T, K]) cellContent(c *ui.Context, ci int, r *T, colo
 	// A selected row's text keeps the selection's color, which reads on
 	// the accent; a column's own may not.
 	colored = colored && cl.Color != nil && !c.RowSelected()
-	hinted := cl.Hint != nil || t.hints
 	if cl.Image == nil {
-		e := cellText(c, cl, r, colored)
-		if hinted {
-			t.hint(c, e, ci, r, 0)
-		}
+		cellText(c, cl, r, colored)
 		return
 	}
-	side := iconSide(c)
-	e := ui.Row(c).Gap(4).Children(func() {
+	ui.Row(c).Gap(4).Children(func() {
+		side := iconSide(c)
 		ui.Image(c, cl.Image(r)).Size(side, side)
 		cellText(c, cl, r, colored)
 	})
-	if hinted {
-		t.hint(c, e, ci, r, side+4)
-	}
 }
 
-func cellText[T any](c *ui.Context, cl *Column[T], r *T, colored bool) ui.Element {
+func cellText[T any](c *ui.Context, cl *Column[T], r *T, colored bool) {
 	var e ui.Element
 	if spans := spansOf(c, cl, r); spans != nil {
 		e = ui.RichText(c, spans...).SingleLine()
@@ -1103,7 +1100,6 @@ func cellText[T any](c *ui.Context, cl *Column[T], r *T, colored bool) ui.Elemen
 			e.TextColor(col)
 		}
 	}
-	return e
 }
 
 // spansOf returns the spans a cell draws, nil for its Text. A selected
