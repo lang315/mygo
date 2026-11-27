@@ -35,6 +35,10 @@ zone.OnDropFiles(func(paths []string) { open(paths) })
   drop on a highlighted child falls to the nearest control around it with an
   `OnDrop` of the type, as in a drop zone with highlighted children.
 - A source hidden in the middle of a drag cancels the drag silently.
+- Rows of a `DataGridView`: `DragRows(fn)` drags the rows chosen, as the value
+  `fn` makes of them, onto an `OnDrop` of its type; `SetRowReorder(true)` lets
+  the user move them within the table instead (the later call wins). See
+  [DataGridView](../widget.md#datagridview).
 
 ## Between applications and from the OS
 
