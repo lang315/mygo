@@ -58,6 +58,15 @@ func TestTimeSpanFormat(t *testing.T) {
 		{"-5s", func() *TimeSpanEditWidget {
 			return TimeSpanEdit().SetRange(-time.Hour, time.Hour).SetValue(-5 * time.Second)
 		}, "-00:00:05"},
+		{"-1s", func() *TimeSpanEditWidget {
+			return TimeSpanEdit().SetRange(-time.Hour, time.Hour).SetValue(-time.Second)
+		}, "-00:00:01"},
+		{"9h9m9s", func() *TimeSpanEditWidget {
+			return TimeSpanEdit().SetValue(9*time.Hour + 9*time.Minute + 9*time.Second)
+		}, "09:09:09"},
+		{"10h10m10s", func() *TimeSpanEditWidget {
+			return TimeSpanEdit().SetValue(10*time.Hour + 10*time.Minute + 10*time.Second)
+		}, "10:10:10"},
 		{"90m no seconds", func() *TimeSpanEditWidget { return TimeSpanEdit().SetShowSeconds(false).SetValue(90 * time.Minute) }, "01:30"},
 		{"max", func() *TimeSpanEditWidget { return TimeSpanEdit().SetValue(spanMax) }, "9999:59:59"},
 		{"days no seconds", func() *TimeSpanEditWidget {
@@ -120,6 +129,11 @@ func TestTimeSpanStepUnderCaret(t *testing.T) {
 	in.Key(0, ui.KeyDown)
 	if v := s.Value(); v != 59*time.Minute {
 		t.Fatalf("Down twice made %v, want 59m: the hour borrows back", v)
+	}
+	// Up with a modifier is the input's, not a step.
+	in.Key(ui.Shift, ui.KeyUp)
+	if v := s.Value(); v != 59*time.Minute {
+		t.Fatalf("Shift+Up made %v, want 59m: no step", v)
 	}
 
 	// Hours, seconds, and the caret at the end of the text: seconds.
@@ -190,6 +204,11 @@ func TestTimeSpanStepDays(t *testing.T) {
 	if got := in.Value(); got != "2.02:00:00" {
 		t.Fatalf("after Up on the days the field shows %q", got)
 	}
+	in.Key(0, ui.KeyUp) // the caret stayed in the days
+	if v := s.Value(); v != 74*time.Hour {
+		t.Fatalf("a second Up on the days made %v, want 74h", v)
+	}
+	in.Key(0, ui.KeyDown)
 	caretAt(in, 3) // "2.0|2:00:00": the hours
 	in.Key(0, ui.KeyUp)
 	if v := s.Value(); v != 51*time.Hour {
@@ -202,6 +221,40 @@ func TestTimeSpanStepDays(t *testing.T) {
 	in.Key(0, ui.KeyUp)
 	if got := in.Value(); got != "1.00:00:00" {
 		t.Fatalf("Up on hours 23 shows %q, want 1.00:00:00", got)
+	}
+}
+
+// Keys faster than the frames (KeysAtOnce: no frame between them) each
+// step: the second sees the text the first left.
+func TestTimeSpanStepKeysAtOnce(t *testing.T) {
+	s := TimeSpanEdit().SetValue(58 * time.Minute)
+	tt, in := spanTester(t, s)
+	caretAt(in, 4)
+	tt.KeysAtOnce(ui.KeyUp, ui.KeyUp, ui.KeyUp)
+	if v := s.Value(); v != time.Hour+time.Minute {
+		t.Fatalf("three Ups at once on 58m made %v, want 1h1m", v)
+	}
+}
+
+// A step that narrows the hours keeps the caret in its part: the offset
+// it had would be in the next part.
+func TestTimeSpanStepKeepsThePartAsTheTextNarrows(t *testing.T) {
+	s := TimeSpanEdit().SetValue(1000 * time.Hour)
+	_, in := spanTester(t, s)
+	caretAt(in, 7) // "1000:00|:00": the end of the minutes
+	in.Key(0, ui.KeyDown)
+	in.Key(0, ui.KeyDown) // "999:59:00", then the minutes again
+	if v := s.Value(); v != 999*time.Hour+58*time.Minute {
+		t.Fatalf("Down twice from 1000h on the minutes made %v, want 999h58m", v)
+	}
+	// The hours widen: "99:00:00" to "100:00:00", the caret after them.
+	s.SetValue(99 * time.Hour)
+	in.t.Settle()
+	caretAt(in, 2) // "99|:00:00"
+	in.Key(0, ui.KeyUp)
+	in.Key(0, ui.KeyUp)
+	if v := s.Value(); v != 101*time.Hour {
+		t.Fatalf("Up twice from 99h on the hours made %v, want 101h", v)
 	}
 }
 
@@ -278,6 +331,18 @@ func TestTimeSpanStepTypedText(t *testing.T) {
 	if got := in.Value(); got != "04:00:00" {
 		t.Fatalf("Up on typed zz shows %q", got)
 	}
+	// Days typed while they are hidden: a day steps, and the caret, with
+	// no days to stay in, goes to the end, the seconds.
+	retype(in, "1.02:00:00")
+	in.Key(0, ui.KeyHome)
+	in.Key(0, ui.KeyUp)
+	if v := s.Value(); v != 50*time.Hour {
+		t.Fatalf("Up on typed days 1.02:00:00 made %v, want 50h", v)
+	}
+	in.Key(0, ui.KeyUp)
+	if v := s.Value(); v != 50*time.Hour+time.Second {
+		t.Fatalf("the next Up made %v, want 50h0m1s: the caret at the end", v)
+	}
 }
 
 func TestTimeSpanParse(t *testing.T) {
@@ -340,6 +405,11 @@ func TestTimeSpanParse(t *testing.T) {
 		{"+1:00", 0},                   // a sign inside a part
 		{"1:00.5", 0},                  // a fraction
 		{"1.5", 29 * time.Hour},        // a day and five hours
+		{"104166.00:00", spanMax},      // 2499984 hours: read, then clamped
+		{"104167.00:00", 0},            // 2500008 hours: too many
+		{"2500000:00", spanMax},        // the most hours read
+		{"2500001:00", 0},              // one more
+		{"18446744073709551617:00", 0}, // digits that would wrap an int64 to 1
 	} {
 		s.SetValue(0)
 		tt.Settle()
@@ -348,6 +418,35 @@ func TestTimeSpanParse(t *testing.T) {
 		if v := s.Value(); v != c.want {
 			t.Fatalf("%q made %v, want %v", c.text, v, c.want)
 		}
+	}
+}
+
+// The frame in which the focus leaves shows the value read, or the last
+// one: a window draws no frame after it unless something asks.
+func TestTimeSpanLeaveShowsInTheSameFrame(t *testing.T) {
+	s := TimeSpanEdit().SetValue(time.Hour)
+	tt, in := spanTester(t, s)
+	retype(in, "abc")
+	next := tt.Find(ByRole(ui.RoleButton).Label("Next"))
+	next.Focus()
+	if got := in.Value(); got != "01:00:00" {
+		t.Fatalf("the frame the focus left in shows %q, want 01:00:00", got)
+	}
+}
+
+// Passing through a field with its seconds hidden keeps them, and runs
+// nothing.
+func TestTimeSpanHiddenSecondsKeptOnLeave(t *testing.T) {
+	var log editLog
+	s := TimeSpanEdit().SetShowSeconds(false).SetValue(90*time.Minute + 45*time.Second).OnChange(log.add("change"))
+	tt, in := spanTester(t, s)
+	in.Focus()
+	spanLeave(tt)
+	if v := s.Value(); v != 90*time.Minute+45*time.Second {
+		t.Fatalf("passing through made %v, want 1h30m45s", v)
+	}
+	if got := log.all(t); len(got) != 0 {
+		t.Fatalf("passing through ran %q", got)
 	}
 }
 
@@ -365,6 +464,9 @@ func TestTimeSpanEnterInAForm(t *testing.T) {
 	in := tt.Find(ByRole(ui.RoleTextField))
 	retype(in, "1:30")
 	in.Key(0, ui.KeyEnter)
+	if got := in.Value(); got != "01:30:00" {
+		t.Fatalf("after Enter the field shows %q, want 01:30:00", got)
+	}
 	flushEvents(t)
 	mu.Lock()
 	defer mu.Unlock()
@@ -398,6 +500,24 @@ func TestTimeSpanInAFittedForm(t *testing.T) {
 	}
 	if got := log.all(t); !slices.Equal(got, []string{"change", "change"}) {
 		t.Fatalf("in a fitted form ran %q, want two changes", got)
+	}
+}
+
+// A measuring pass (a fitted form's refit) leaves the caret's request of a
+// step to the window: it is a one-shot request.
+func TestTimeSpanMeasureKeepsTheCaretRequest(t *testing.T) {
+	s := TimeSpanEdit()
+	spanTester(t, s)
+	mu.Lock()
+	s.putCaret = spanMinutes
+	mu.Unlock()
+	// What a fitted form's refit does (Form.measureFit).
+	ui.View(View(s)).MeasureHeight(400, 1)
+	mu.Lock()
+	got := s.putCaret
+	mu.Unlock()
+	if got != spanMinutes {
+		t.Fatalf("after a measure the caret's request is %d, want %d (minutes)", got, spanMinutes)
 	}
 }
 

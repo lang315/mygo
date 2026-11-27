@@ -142,9 +142,6 @@ func (s *TimeSpanEditWidget) put(d time.Duration, part int) {
 // from text's value if it reads as one, else from the last value. Under
 // mu.
 func (s *TimeSpanEditWidget) step(text string, up bool) {
-	if s.disabled {
-		return
-	}
 	part := spanPart(text, s.caret)
 	d, ok := parseSpan(text)
 	if !ok {
@@ -204,7 +201,6 @@ func (s *TimeSpanEditWidget) buildChildren() {
 		submitted := in.Submitted()
 		if in.FocusLeft() || submitted {
 			s.commit(*p)
-			s.text.shown = s.text.value // shown now, in this build
 		}
 		if submitted {
 			if h := formAccept; h != nil {
@@ -281,10 +277,7 @@ func parseSpan(s string) (time.Duration, bool) {
 	}
 	var days int64
 	if dot := strings.IndexByte(s, '.'); dot >= 0 {
-		if colon := strings.IndexByte(s, ':'); colon >= 0 && colon < dot {
-			return 0, false // a fraction of the minutes or seconds
-		}
-		n, ok := spanNumber(s[:dot], spanMaxHours/24)
+		n, ok := spanNumber(s[:dot]) // digits alone: 1:00.5 is no days
 		if !ok {
 			return 0, false
 		}
@@ -293,12 +286,8 @@ func parseSpan(s string) (time.Duration, bool) {
 	var n [3]int64 // hours, minutes, seconds
 	for i := range n {
 		part, rest, more := strings.Cut(s, ":")
-		limit := int64(59)
-		if i == 0 {
-			limit = spanMaxHours
-		}
-		v, ok := spanNumber(part, limit)
-		if !ok {
+		v, ok := spanNumber(part)
+		if !ok || i > 0 && v > 59 {
 			return 0, false
 		}
 		n[i], s = v, rest
@@ -319,8 +308,9 @@ func parseSpan(s string) (time.Duration, bool) {
 	return d, true
 }
 
-// spanNumber reads s, digits alone, as a number up to limit.
-func spanNumber(s string, limit int64) (int64, bool) {
+// spanNumber reads s, one to nine digits, as a number: no more, so that
+// it cannot wrap an int64, nor days*24 either.
+func spanNumber(s string) (int64, bool) {
 	if s == "" || len(s) > 9 {
 		return 0, false
 	}
@@ -331,7 +321,7 @@ func spanNumber(s string, limit int64) (int64, bool) {
 		}
 		n = n*10 + int64(s[i]-'0')
 	}
-	return n, n <= limit
+	return n, true
 }
 
 // spanPart is the part of text under caret, an offset in runes: after
@@ -346,8 +336,8 @@ func spanPart(text string, caret int) int {
 		switch {
 		case r == ':':
 			colons++
-		case r == '.' && colons == 0:
-			dot = true
+		case r == '.':
+			dot = true // the days' (after a colon, a colon's case wins)
 		}
 		i++
 	}
