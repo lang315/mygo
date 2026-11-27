@@ -903,6 +903,38 @@ t := widget.DataGridView(key, name, status).
   table must look at its columns' fields, so no call of the app's own tells
   it apart.
 
+Totals for each group, in the groups' header lines:
+
+```go
+runs := widget.IntColumn("Runs", 80, func(p *Profile) int { return p.Runs })
+runs.GroupSummary = func(rows iter.Seq[*Profile]) string { // one group's rows shown
+	total := 0
+	for p := range rows {
+		total += p.Runs
+	}
+	return strconv.Itoa(total)
+}
+t := widget.DataGridView(key, name, status, runs).
+	SetGroupBy(func(p *Profile) string { return p.Status }) // "running (312)" … "4210" under Runs
+```
+
+- A column's `GroupSummary` gives each group's header line a total under the
+  column, as `Summary` gives the table one under it. It gets the group's rows
+  shown (after the search and the column filters, in the order shown) and
+  returns the text; an empty text shows nothing. Each total sits under its
+  column's header and is as wide, aligned as the column, and follows it when
+  the user resizes, moves or scrolls the columns; a hidden column's totals and
+  the `#` column show none. A total under the first column covers the group's
+  title: give `GroupSummary` to the columns after it.
+- It runs when the rows shown change (a row added, changed in place or
+  deleted, a search, a filter, a sort, a new grouping), once for each group,
+  never in a frame at rest, under the package's lock: it calls no widget
+  method. Without `SetGroupBy` it does not run. A `GroupSummary` that panics
+  leaves its texts empty and goes to `OnPanic`.
+- A grid without a `GroupSummary` builds what it did, but every app with a
+  `DataGridView` links the totals' code (SIZE_NOTE), as it does that of
+  `Summary`.
+
 Filters on the columns, as a spreadsheet's header filters:
 
 ```go

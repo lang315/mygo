@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"iter"
 	"log"
 	"math"
 	"strconv"
@@ -527,7 +528,8 @@ func table() widget.Control {
 		widget.Column[account]{Title: "Status", Text: func(a *account) string { return a.status },
 			Color: status, Width: 100, Sortable: true, Filterable: true},
 		widget.Column[account]{Title: "Score", Text: func(a *account) string { return strconv.Itoa(a.score) },
-			Compare: func(a, b *account) int { return cmp.Compare(a.score, b.score) }, Align: widget.End, Sortable: true},
+			Compare: func(a, b *account) int { return cmp.Compare(a.score, b.score) }, Align: widget.End, Sortable: true,
+			GroupSummary: scoreTotal},
 	).SetRows(rows).CheckboxColumn().IndexColumn().BottomPanel().
 		EditColumn("Name", widget.CellEditor[account]{
 			Set: func(a *account, s string) { a.name = s },
@@ -553,8 +555,26 @@ func table() widget.Control {
 		stop = make(chan struct{})
 		go liveUpdates(t, stop)
 	})
+	// Grouped by status, each group's line shows its Score total.
+	var groups *widget.ToggleWidget
+	groups = widget.Toggle("Group by status").OnChange(func() {
+		if groups.Active() {
+			t.SetGroupBy(func(a *account) string { return a.status })
+		} else {
+			t.SetGroupBy(nil)
+		}
+	})
 	hint := widget.Label("F2 edits a Name: try Vietnamese Telex typing here").Muted()
-	return widget.VBox(8).Add(widget.HBox(8).Add(live, activated, hint)).Pack(t, true, true).Expand()
+	return widget.VBox(8).Add(widget.HBox(8).Add(live, groups, activated, hint)).Pack(t, true, true).Expand()
+}
+
+// scoreTotal is the Score column's GroupSummary: the sum of a group's scores.
+func scoreTotal(rows iter.Seq[*account]) string {
+	total := 0
+	for a := range rows {
+		total += a.score
+	}
+	return strconv.Itoa(total)
 }
 
 // liveUpdates fails or fixes a hundred accounts every 100 ms until stop

@@ -70,6 +70,13 @@ type Column[T any] struct {
 	// change, not in every frame, under the package's lock: it calls no
 	// widget method.
 	Summary func(rows iter.Seq[*T]) string
+	// GroupSummary, when set, gives the column a total for each group
+	// (SetGroupBy), shown in the group's header line under the column: it
+	// gets the group's rows the table shows, and returns the text there. As
+	// Summary, it runs when the rows change, not in every frame, under the
+	// package's lock, and calls no widget method; without groups it does not
+	// run.
+	GroupSummary func(rows iter.Seq[*T]) string
 
 	// edit is the column's *CellEditor[T] (EditColumn), held as an any so that
 	// Column does not name the type.
@@ -207,6 +214,10 @@ type DataGridViewWidget[T any, K comparable] struct {
 	// column has a Summary, so a grid without one builds what it did.
 	summarize func(c *ui.Context)
 	footer    *gridFooter
+	// groupSums (table_groupsum.go) is the state of the columns'
+	// GroupSummary in the groups' header lines, nil until a column has one,
+	// so a grid without one builds what it did.
+	groupSums *gridGroupSums
 
 	// framer, when set by a ListView, is the control whose style stands
 	// instead of the table's frame (frameList), with the table's own.
@@ -282,16 +293,20 @@ func DataGridViewOf[T any, K comparable](src *RowSource[T, K], cols ...Column[T]
 	t.list.HeaderCell = t.headerCell
 	t.init(t)
 	t.link.id, t.link.prune = t.id, t.prune
-	status, sums := false, false
+	status, sums, groupSums := false, false, false
 	for i := range cols {
 		status = status || cols[i].Badge != nil || cols[i].Format != nil
 		sums = sums || cols[i].Summary != nil
+		groupSums = groupSums || cols[i].GroupSummary != nil
 	}
 	if status {
 		t.enableStatus()
 	}
 	if sums {
 		t.enableSummaries()
+	}
+	if groupSums {
+		t.enableGroupSummaries()
 	}
 	mu.Lock()
 	src.attach(t.link)
@@ -910,6 +925,10 @@ func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, col int) {
 		cl := &t.columns[col]
 		f.heads = append(f.heads, headCell{cell, cl.Title, cl.Align, cl.Fixed})
 	}
+	if g := t.groupSums; g != nil {
+		cl := &t.columns[col]
+		g.heads = append(g.heads, headCell{cell, cl.Title, cl.Align, cl.Fixed})
+	}
 	if t.headSize > 0 {
 		cell.FontSize(t.headSize)
 	}
@@ -933,6 +952,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 	if t.footer != nil {
 		t.footer.heads = t.footer.heads[:0]
 	}
+	if t.groupSums != nil {
+		t.groupSums.heads = t.groupSums.heads[:0]
+	}
 	s.Sort, s.SortBy = t.sort.bind(t.multiSort)
 	s.Selection, s.Checked, s.RowsOf = t.chosen.bind(), nil, t.chosenRows
 	if t.checks {
@@ -952,6 +974,9 @@ func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
 		t.prepareEdit()
 	}
 	s.Version = t.view.Version()
+	if t.groupSums != nil {
+		t.groupSums.update(t.view.Groups(), s.Version, t.src.seq)
+	}
 	s.Header = nil
 	if t.view.Groups() != nil {
 		if t.headerFn == nil {
@@ -1042,7 +1067,11 @@ func (t *DataGridViewWidget[T, K]) cell(c *ui.Context, vis []int, row, col int) 
 	}
 	if g, ok := t.headAt(row); ok {
 		if col == 0 { // a header spans the columns, built as column 0
-			groupHeader(c, t.labels.of(t.near, g).text)
+			if t.groupSums != nil {
+				t.groupSums.header(c, t.near, t.labels.of(t.near, g).text)
+			} else {
+				groupHeader(c, t.labels.of(t.near, g).text)
+			}
 		}
 		return
 	}
