@@ -19,7 +19,8 @@ amount = widget.CalcEdit().SetDecimals(0).SetValue(1200).
   a typed number, or the calculator's result. A result equal to the value
   runs nothing.
 - `ShowPopup()` opens the calculator and `ClosePopup()` closes it, keeping
-  the value. Neither runs `OnChange`.
+  the value. Neither runs `OnChange`. A disabled CalcEdit opens none, and
+  disabling it closes it.
 - It can be bound to a `float64`: `widget.Bind(amount, get, set)`. See
   [Binding](../widget.md#binding).
 

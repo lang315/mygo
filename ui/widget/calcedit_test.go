@@ -64,6 +64,7 @@ func TestCalcArithmetic(t *testing.T) {
 		{"a second point is ignored", "1..2=", false, "", 1.2},
 		{"an operator replaces the last", "6+*2=", false, "", 12},
 		{"the signs of other keyboards", "6×2÷3−1=", false, "", 3},
+		{"a comma is the point, x times", "1,5x2=", false, "", 3},
 		{"Enter computes", "7-2", true, "2", 5},
 		{"equals with no operator", "42=", false, "", 42},
 	}
@@ -117,6 +118,31 @@ func TestCalcArithmetic(t *testing.T) {
 		calcPress(tt, ui.KeyEnter)
 		if v := ce.Value(); v != 10 {
 			t.Fatalf("± on -10 gave %v, want 10", v)
+		}
+		// ± with an operator pending negates the number shown, as the
+		// second operand.
+		openCalc(t, tt)
+		calcType(tt, "12+")
+		calcKey(tt, "±").Click()
+		if s := calcShows(ce); s != "-12" {
+			t.Fatalf("12+± shows %q, want -12", s)
+		}
+		calcType(tt, "=")
+		if v := ce.Value(); v != 0 {
+			t.Fatalf("12+±= gave %v, want 0", v)
+		}
+		// CE then ± is -0, and a digit after it is negative.
+		openCalc(t, tt)
+		calcType(tt, "9+")
+		calcPress(tt, ui.KeyDelete)
+		calcKey(tt, "±").Click()
+		calcType(tt, "4")
+		if s := calcShows(ce); s != "-4" {
+			t.Fatalf("CE, ±, 4 shows %q, want -4", s)
+		}
+		calcType(tt, "=")
+		if v := ce.Value(); v != 5 {
+			t.Fatalf("9+, CE, ±, 4= gave %v, want 5", v)
 		}
 	})
 
@@ -442,9 +468,8 @@ func TestCalcTypedNumber(t *testing.T) {
 	if v := in.Value(); v != "12.50" {
 		t.Fatalf("left, the field shows %q, want 12.50", v)
 	}
-	n := len(log.all(t))
-	if n == 0 {
-		t.Fatal("typing ran no change")
+	if got := log.all(t); len(got) != 1 {
+		t.Fatalf("typing 12.5 and leaving ran %q, want one change", got)
 	}
 	for _, bad := range []string{"abc", "nan", "inf", "1e999"} {
 		log.reset()
@@ -633,6 +658,140 @@ func TestCalcBind(t *testing.T) {
 	if s := in.Value(); s != "3.00" {
 		t.Fatalf("after Reload the field shows %q", s)
 	}
+}
+
+// In a form fitted to its content (a measuring pass each refit), the
+// calculator's keys act once, Enter gives the keyboard back to the field,
+// and leaving the field shows the value with its decimals.
+func TestCalcInAFittedForm(t *testing.T) {
+	calmOff()
+	var log editLog
+	f := NewForm("T", 400, 0)
+	ce := CalcEdit().OnChange(log.add("change"))
+	f.SetContent(VBox(0).Add(ce, Button("Next")))
+	tt := TestForm(t, f)
+	f.SetSize(400, 0)
+	tt.Settle()
+	in := tt.Find(ByRole(ui.RoleTextField))
+	in.Key(ui.Alt, ui.KeyDown)
+	f.SetSize(400, 0)
+	calcType(tt, "123")
+	calcPress(tt, ui.KeyBackspace)
+	if s := calcShows(ce); s != "12" {
+		t.Fatalf("123, Backspace in a fitted form shows %q, want 12", s)
+	}
+	f.SetSize(400, 0)
+	calcPress(tt, ui.KeyEnter)
+	if v := ce.Value(); v != 12 {
+		t.Fatalf("Enter in a fitted form gave %v, want 12", v)
+	}
+	if got := log.all(t); !slices.Equal(got, []string{"change"}) {
+		t.Fatalf("Enter in a fitted form ran %q, want one change", got)
+	}
+	if !in.Focused() {
+		t.Fatal("after Enter in a fitted form the keyboard is not back in the field")
+	}
+	// = typed, with a refit coming before the next frame.
+	in.Key(ui.Alt, ui.KeyDown)
+	calcType(tt, "3")
+	f.SetSize(400, 0)
+	tt.Tester.Type("=")
+	tt.Settle()
+	if v := ce.Value(); v != 3 || calcOpen(tt) {
+		t.Fatalf("= typed in a fitted form: value %v, open %v; want 3, closed", ce.Value(), calcOpen(tt))
+	}
+	if !in.Focused() {
+		t.Fatal("after = typed in a fitted form the keyboard is not back in the field")
+	}
+	in.Key(ui.Cmd, ui.KeyA)
+	in.Type("7.")
+	f.SetSize(400, 0)
+	tt.Settle()
+	if v := in.Value(); v != "7." {
+		t.Fatalf("a refit while typing made the field %q, want 7. as typed", v)
+	}
+	in.Type("5")
+	f.SetSize(400, 0)
+	in.Key(0, ui.KeyTab)
+	if v := in.Value(); v != "7.50" {
+		t.Fatalf("left in a fitted form, the field shows %q, want 7.50", v)
+	}
+}
+
+// An ErrorProvider's mark sits at the frame's end: the button stops before
+// it.
+func TestCalcErrorMarkClearsTheButton(t *testing.T) {
+	ce := CalcEdit()
+	tt, _ := calcTester(t, ce)
+	ErrorProvider().SetError(ce, "Wrong")
+	tt.Settle()
+	r := calcKey(tt, l10n.Open()).Bounds()
+	if r.X+r.W > 300-errorMarkSize-errorMarkInset {
+		t.Fatalf("the button ends at %v, under the error mark at the frame's end (300)", r.X+r.W)
+	}
+}
+
+// Enter in the field clicks the form's accept button, as in a TextBox.
+func TestCalcEnterInTheFieldAccepts(t *testing.T) {
+	calmOff()
+	var log editLog
+	f := NewForm("T", 400, 300)
+	ok := Button("OK").OnClick(log.add("ok"))
+	f.SetContent(VBox(0).Add(CalcEdit(), ok)).SetAcceptButton(ok)
+	tt := TestForm(t, f)
+	tt.Settle()
+	tt.Find(ByRole(ui.RoleTextField)).Key(0, ui.KeyEnter)
+	if got := log.all(t); !slices.Equal(got, []string{"ok"}) {
+		t.Fatalf("Enter in the field ran %q, want the accept button's ok", got)
+	}
+}
+
+// A Rule checks the value as a float64, the calculator's result included.
+func TestCalcRule(t *testing.T) {
+	p := ErrorProvider()
+	ce := Rule(p, CalcEdit(), InRange(0, 100, "0 to 100"))
+	tt, _ := calcTester(t, ce)
+	if !p.Validate() {
+		t.Fatal("0 is out of 0 to 100")
+	}
+	openCalc(t, tt)
+	calcType(tt, "60*2=")
+	if p.Validate() {
+		t.Fatalf("%v passed InRange(0, 100)", ce.Value())
+	}
+}
+
+// A disabled CalcEdit opens no calculator: neither ShowPopup nor its keys
+// nor its button.
+func TestCalcDisabled(t *testing.T) {
+	var log editLog
+	ce := CalcEdit().SetValue(5).OnChange(log.add("change"))
+	tt, in := calcTester(t, ce)
+	ce.SetDisabled(true).ShowPopup()
+	tt.Settle()
+	if calcOpen(tt) {
+		t.Fatal("ShowPopup opened the calculator of a disabled CalcEdit")
+	}
+	r := calcKey(tt, l10n.Open()).Bounds()
+	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	tt.Settle()
+	f := in.Bounds()
+	tt.ClickAt(f.X+f.W/2, f.Y+f.H/2)
+	tt.Key(ui.Alt, ui.KeyDown)
+	tt.Type("9")
+	tt.Settle()
+	if calcOpen(tt) {
+		t.Fatal("a disabled CalcEdit opened its calculator")
+	}
+	if v := ce.Value(); v != 5 {
+		t.Fatalf("a disabled CalcEdit changed to %v", v)
+	}
+	if got := log.all(t); len(got) != 0 {
+		t.Fatalf("a disabled CalcEdit ran %q", got)
+	}
+	ce.SetDisabled(false)
+	tt.Settle()
+	openCalc(t, tt)
 }
 
 // In RTL the button sits at the field's start, the left.

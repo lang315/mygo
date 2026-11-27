@@ -157,15 +157,17 @@ func (e *CalcEditWidget) build(c *ui.Context) ui.Element {
 	if e.seenHides != e.hides { // out of sight since the last build: it closes
 		e.open, e.seenHides = false, e.hides
 	}
+	if e.disabled { // the drop-down is an overlay, out of the disabled frame
+		e.open = false
+	}
 	e.c = c
 	frame := editFrame(c, e.children, &e.in)
 	if e.errMsg != "" {
 		e.post = padForErrorMark
 	}
-	measuring := c.Measuring()
-	if e.typed && !e.in.Focused() && !measuring {
+	if e.typed && !e.in.Focused() && !c.Measuring() {
 		// Left: the value, with its decimals, or the last one where the
-		// text did not parse.
+		// text did not parse. (A measuring pass has no focus.)
 		e.setText()
 		c.After(0)
 	}
@@ -175,7 +177,7 @@ func (e *CalcEditWidget) build(c *ui.Context) ui.Element {
 	if e.open {
 		ui.PopoverBase(c, frame, &e.open, e.panel)
 	}
-	if e.refocus && !measuring {
+	if e.refocus && !c.Measuring() { // for the real window, as render's wantFocus
 		e.in.Focus()
 		e.refocus = false
 	}
@@ -203,9 +205,7 @@ func (e *CalcEditWidget) buildChildren() {
 // calculator.
 func (e *CalcEditWidget) opensBy(k ui.TextKey) bool {
 	if k.Mods == ui.Alt && k.Key == ui.KeyDown || k.Mods == ui.Ctrl && k.Key == ui.KeyEnter {
-		mu.Lock()
-		e.open = true
-		mu.Unlock()
+		e.change(func() { e.open = true }) // redraws: OnTextKey promises no frame
 		return true
 	}
 	return false
