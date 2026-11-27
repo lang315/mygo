@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -241,6 +242,32 @@ func TestRowReorderOffWhenColumnFiltered(t *testing.T) {
 	tt.Settle()
 	if tb.list.Reorder == nil {
 		t.Fatal("filters cleared, ui was given no Reorder")
+	}
+}
+
+// With the column chooser on too, a right-click on the header still opens its
+// menu, and a row dragged still reorders.
+func TestRowReorderWithColumnChooser(t *testing.T) {
+	var fired fires
+	tb := dragGrid().SetColumnChooser(true).SetRowReorder(true).OnRowsReordered(fired.inc)
+	tt := NewTester(t, tb, 800, 600)
+	if err := tt.RightClick("Name"); err != nil {
+		t.Fatal(err)
+	}
+	if m := tt.Menu(); !slices.Contains(m, "Best fit") {
+		t.Fatalf("the header's menu %q, want the column chooser's", m)
+	}
+	tt.CloseMenu()
+	tt.Settle()
+	if tt.Menu() != nil {
+		t.Fatalf("the menu %q still open", tt.Menu())
+	}
+	dragRow(t, tt, "ann", "cat", true)
+	if got := names(tb.Rows()); got != "[bob cat ann dan]" {
+		t.Fatalf("Rows %s, want [bob cat ann dan]", got)
+	}
+	if n := fired.get(); n != 1 {
+		t.Fatalf("OnRowsReordered ran %d times, want 1", n)
 	}
 }
 
