@@ -1059,6 +1059,24 @@ t = widget.DataGridView(key, name, kind).
 - A grid that never calls them builds and allocates what it did; a frame at
   rest with them on allocates nothing more.
 
+Exporting what the grid shows, as CSV or an Excel workbook:
+
+```go
+header, rows := t.ShownCells() // the columns and the rows as shown
+err := export.XLSX(f, header, rows) // or export.CSV; package ui/widget/export
+```
+
+- `ShownCells()` returns the titles of the columns shown, in the order the
+  header shows them (the user's moves, `SetColumnsLayout`), and the rows as
+  shown: filtered by the search and the column filters, sorted, and grouped
+  (each group's rows, without its header line). A cell is its column's
+  `Text`. Hidden columns, the `#` column and the check box column are left
+  out; a `RowSource`'s grid gives the rows loaded so far. It reads the rows
+  as they are, also those changed since the last frame, from any goroutine.
+- `export.CSV(w, header, rows)` and `export.XLSX(w, header, rows)` write
+  them; see [Export](widget/export.md). They live in their own package, so
+  an app that does not import it links neither writer.
+
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
   place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.
