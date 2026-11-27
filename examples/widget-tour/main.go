@@ -539,6 +539,7 @@ func table() widget.Control {
 			}}).
 		ContextMenu(widget.MenuItem{Text: "Delete", OnClick: func() { t.DeleteRows(t.Selected()...) }}).
 		OnKey(ui.KeySpace, ui.Shift, func() { t.AutoCheck() }).
+		SetFilterDropDowns(true).SetAutoFilterRow(true).SetFilterPanel(true).
 		Expand()
 	activated := widget.Label("Double-click a row").Muted()
 	t.OnActivate(func(id int) { activated.SetText(fmt.Sprintf("Activated %d", id)) })
