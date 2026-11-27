@@ -238,6 +238,70 @@ func TestButtonEditCtrlEnterInAForm(t *testing.T) {
 	}
 }
 
+// In a form fitted to its content (a measuring pass each refit), Ctrl+Enter
+// clicks once.
+func TestButtonEditCtrlEnterInAFittedForm(t *testing.T) {
+	calmOff()
+	var log editLog
+	f := NewForm("T", 400, 0)
+	b := ButtonEdit(EditButton{Kind: EditEllipsis, Tooltip: "Browse", OnClick: log.add("browse")})
+	f.SetContent(VBox(0).Add(b, Label("below")))
+	tt := TestForm(t, f)
+	f.SetSize(400, 0)
+	tt.Settle()
+	tt.Find(ByRole(ui.RoleTextField)).Key(ui.Ctrl, ui.KeyEnter)
+	if got := log.all(t); !slices.Equal(got, []string{"browse"}) {
+		t.Fatalf("Ctrl+Enter in a fitted form ran %q, want browse once", got)
+	}
+}
+
+// A disabled ButtonEdit takes no typing and its buttons no click.
+func TestButtonEditDisabled(t *testing.T) {
+	var log editLog
+	b := ButtonEdit(EditButton{Kind: EditEllipsis, Tooltip: "Browse", OnClick: log.add("browse")},
+		EditButton{Kind: EditClear, Tooltip: "Clear it", OnClick: log.add("clear")}).
+		OnChange(log.add("change")).SetText("abc").SetDisabled(true)
+	tt, in := editTester(t, b)
+	for _, name := range []string{"Browse", "Clear it"} {
+		r := editButton(tt, name).Bounds()
+		tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+		tt.Settle()
+	}
+	r := in.Bounds()
+	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	tt.Type("x")
+	tt.Key(ui.Ctrl, ui.KeyEnter)
+	tt.Settle()
+	if s := b.Text(); s != "abc" {
+		t.Fatalf("a disabled ButtonEdit changed to %q", s)
+	}
+	if got := log.all(t); len(got) != 0 {
+		t.Fatalf("a disabled ButtonEdit ran %q", got)
+	}
+}
+
+// Under a skin's Field look of a wider border, as High Contrast's, the
+// frame is as high as a TextBox under it. (A look with padding pads the
+// frame around the text's own padding, as it does a LookUpEdit's: see the
+// report.)
+func TestButtonEditBorderLookAsHighAsATextBox(t *testing.T) {
+	useLooks(t, map[string]string{"Field": "border-2"})
+	box := TextBox().SetText("hello").SetSize(300, 0)
+	b := ButtonEdit(EditButton{Kind: EditEllipsis, Tooltip: "Browse"}).SetText("hello").SetSize(300, 0)
+	look := LookUpEdit(custKey, custName, custCols()...).SetItems(custs()).SetSize(300, 0)
+	tt := NewTester(t, VBox(0).Add(box, b, Label("after edit"), look, Label("after look")), 400, 300)
+	tt.Settle()
+	r := tt.FindAll(ByRole(ui.RoleTextField))[0].Bounds()
+	boxH, boxEnd := r.H, r.Y+r.H
+	editEnd := textAt(t, tt, "after edit").Y
+	lookH := textAt(t, tt, "after look").Y - (editEnd + textAt(t, tt, "after edit").H)
+	editH := editEnd - boxEnd
+	t.Logf("TextBox %v, ButtonEdit %v, LookUpEdit %v", boxH, editH, lookH)
+	if editH > boxH+0.5 || editH < boxH-0.5 {
+		t.Fatalf("under a padded look the ButtonEdit is %v high, a TextBox %v", editH, boxH)
+	}
+}
+
 // Without a skin the frame looks as a TextBox: as high, edged with the
 // outline, and with the accent while the text has the focus.
 func TestButtonEditLooksAsATextBox(t *testing.T) {

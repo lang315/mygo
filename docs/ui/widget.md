@@ -738,6 +738,7 @@ name := widget.Bind(widget.TextBox(),
 |---|---|---|
 | `TextBox`, `MultilineTextBox` | `string` | `Bind` |
 | `SearchBox` | `string` | `Bind` |
+| `ButtonEdit` | `string` | `Bind` (a click on its Clear button is an edit: `set("")`) |
 | `DomainUpDown` | the selected item's text, a `string` | `Bind` |
 | `CheckBox`, `CheckButton` | `bool` | `Bind` |
 | `Rating` | the stars filled, an `int` | `Bind` (clamps to 0 through its stars) |
