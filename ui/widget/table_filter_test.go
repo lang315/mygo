@@ -245,6 +245,22 @@ func TestFilterPanelNoChangeNoEvent(t *testing.T) {
 	}
 }
 
+// SetFilterDropDowns, off then on, closes an open drop-down, at the next
+// frame: ui owns its open state.
+func TestFilterDropDownClosedBySetter(t *testing.T) {
+	g := fdocGrid().SetFilterDropDowns(true)
+	tt := NewTester(t, g, 800, 600)
+	tt.Find(ByRole(ui.RoleButton).Label("Filter Kind")).Click()
+	if !tt.Has(ByRole(ui.RoleTextField).Label("Contains")) {
+		t.Fatal("the drop-down did not open")
+	}
+	g.SetFilterDropDowns(false).SetFilterDropDowns(true)
+	tt.Settle()
+	if tt.Has(ByRole(ui.RoleTextField).Label("Contains")) {
+		t.Fatal("the drop-down stays open after SetFilterDropDowns(false)")
+	}
+}
+
 func TestFilterDropDownCapsAt1000(t *testing.T) {
 	var rows []fdoc
 	for i := range 1001 {
@@ -341,6 +357,68 @@ func TestAutoFilterRowTypes(t *testing.T) {
 	}
 	if n := fired.Load(); n != 2 {
 		t.Fatalf("the program's filters ran OnFilterChange: %d", n)
+	}
+}
+
+// Keys typed in a filter field edit the field: the grid's own keys (its
+// OnKey handlers, OnActivate's Enter, Space's check, select all, copy) do not
+// run while a field of its header or of a drop-down has the focus.
+func TestFilterFieldsKeepTheGridsKeys(t *testing.T) {
+	var keys, activated atomic.Int32
+	g := fdocGrid().CheckboxColumn().SetAutoFilterRow(true).SetFilterDropDowns(true).
+		OnActivate(func(int) { activated.Add(1) }).
+		OnKey(ui.KeyDelete, 0, func() { keys.Add(1) }).
+		OnKey(ui.KeyBackspace, 0, func() { keys.Add(1) }).
+		OnKey(ui.KeySpace, ui.Shift, func() { keys.Add(1) }).
+		OnKey(ui.KeySpace, 0, func() { keys.Add(1) })
+	tt := NewTester(t, g, 800, 600)
+	tt.Find(ByRole(ui.RoleText).Label("bob")).Click() // the grid's selection, and its keys, for a start
+	sel := g.Selected()
+	if !slices.Equal(sel, []int{3}) {
+		t.Fatalf("Selected %v after a click on bob", sel)
+	}
+	type field struct {
+		name, keep string // keep: a letter bob's row holds in the field's column
+		open       func() *Node
+	}
+	for _, f := range []field{
+		{"the auto filter row", "b", func() *Node { return tt.Find(ByRole(ui.RoleTextField).Label("Filter Name")) }},
+		{"the drop-down", "o", func() *Node {
+			tt.Find(ByRole(ui.RoleButton).Label("Filter Kind")).Click()
+			return tt.Find(ByRole(ui.RoleTextField).Label("Contains"))
+		}},
+	} {
+		n := f.open()
+		fclickNode(tt, n)
+		tt.SetClipboard("before")
+		tt.Type(f.keep + " z")
+		tt.Key(0, ui.KeyBackspace) // keep + " "
+		tt.Key(0, ui.KeyLeft)
+		tt.Key(0, ui.KeyDelete) // keep
+		tt.Key(0, ui.KeyEnter)
+		tt.Key(ui.Cmd, ui.KeyA)
+		tt.Key(ui.Cmd, ui.KeyC)
+		tt.Settle()
+		if v := n.Value(); v != f.keep {
+			t.Errorf("%s: the field holds %q, want %q", f.name, v, f.keep)
+		}
+		if c := tt.Clipboard(); c != f.keep {
+			t.Errorf("%s: Cmd+C put %q on the clipboard, want the field's %q", f.name, c, f.keep)
+		}
+		tt.Key(ui.Shift, ui.KeySpace)
+		tt.Key(0, ui.KeySpace)
+		tt.Settle()
+		if k, a := keys.Load(), activated.Load(); k != 0 || a != 0 {
+			t.Errorf("%s: the grid's OnKey ran %d times and OnActivate %d", f.name, k, a)
+		}
+		if got := g.Checked(); len(got) != 0 {
+			t.Errorf("%s: rows checked %v", f.name, got)
+		}
+		if got := g.Selected(); !slices.Equal(got, sel) {
+			t.Errorf("%s: Selected %v, was %v", f.name, got, sel)
+		}
+		tt.Key(0, ui.KeyEscape)
+		tt.Settle()
 	}
 }
 
@@ -592,6 +670,7 @@ func TestFilterRowSourceLoadedRowsOnly(t *testing.T) {
 func TestFilterFromGoroutine(t *testing.T) {
 	g := fdocGrid().SetFilterDropDowns(true).SetAutoFilterRow(true).SetFilterPanel(true)
 	tt := NewTester(t, g, 800, 600)
+	tt.Find(ByRole(ui.RoleButton).Label("Filter Kind")).Click() // a drop-down open
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -604,7 +683,10 @@ func TestFilterFromGoroutine(t *testing.T) {
 				g.ClearFilters()
 			}
 			g.SetFilterPanel(i%3 != 0)
+			g.SetFilterDropDowns(i%4 != 0)
+			g.SetAutoFilterRow(i%5 != 0)
 		}
+		g.SetFilterDropDowns(true).SetAutoFilterRow(true)
 		g.SetFilterPanel(true)
 		g.ClearFilters()
 		g.SetColumnFilter("Name", ColumnFilter{Contains: "bo"})
@@ -662,6 +744,18 @@ func TestFilterAllocNothingAtRest(t *testing.T) {
 	t.Logf("a frame at rest allocates %v times with the filters, %v without", b, a)
 	if b > a {
 		t.Errorf("a frame at rest allocates %v times with the filters, %v without", b, a)
+	}
+	// In the dark appearance, whose theme the auto filter row copies once too.
+	plain.SetDark(true)
+	with.SetDark(true)
+	for range 10 {
+		plain.Frame()
+		with.Frame()
+	}
+	a, b = allocrun.Least(30, plain.Frame), allocrun.Least(30, with.Frame)
+	t.Logf("dark: %v with the filters, %v without", b, a)
+	if b > a {
+		t.Errorf("dark: a frame at rest allocates %v times with the filters, %v without", b, a)
 	}
 }
 

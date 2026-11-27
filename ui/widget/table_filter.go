@@ -64,13 +64,16 @@ type gridFilters struct {
 	// The drop-down, ui's alone, on the drawing thread: whether it is open
 	// and on which column (an index in the grid's columns), its values, which
 	// are checked, its Contains, and whether the values were cut at
-	// filterListCap.
-	open     bool
-	at       int
-	vals     []string
-	checks   []bool
-	contains string
-	capped   bool
+	// filterListCap. ddGen counts SetFilterDropDowns' calls, under mu, and
+	// ddSeen is the count the build last closed the drop-down for: ui writes
+	// open outside mu, so a setter does not.
+	ddGen, ddSeen uint64
+	open          bool
+	at            int
+	vals          []string
+	checks        []bool
+	contains      string
+	capped        bool
 
 	// The panel's text, as of textGen.
 	text    string
@@ -149,9 +152,7 @@ func (t *DataGridViewWidget[T, K]) SetFilterDropDowns(on bool) *DataGridViewWidg
 	t.change(func() {
 		fl := t.filters()
 		fl.dropDowns = on
-		if !on {
-			fl.open = false
-		}
+		fl.ddGen++ // the next build closes an open drop-down
 		t.hookFilterHeader()
 	})
 	return t
@@ -303,6 +304,9 @@ func (t *DataGridViewWidget[T, K]) keepFilter(i int, f ColumnFilter) func(*T) bo
 func (t *DataGridViewWidget[T, K]) filterHeader(cell ui.Element, col int) {
 	fl, c := t.fl, t.headCtx
 	th := c.Theme()
+	if fl.ddSeen != fl.ddGen {
+		fl.open, fl.ddSeen = false, fl.ddGen
+	}
 	if fl.autoRow {
 		// The title keeps the top of the cell, the field the room below.
 		sp := th.Space(2.5)
