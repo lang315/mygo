@@ -526,7 +526,13 @@ func table() widget.Control {
 		widget.Column[account]{Title: "Name", Text: func(a *account) string { return a.name },
 			Width: 180, Sortable: true, Filterable: true},
 		widget.Column[account]{Title: "Status", Text: func(a *account) string { return a.status },
-			Color: status, Width: 100, Sortable: true, Filterable: true},
+			Color: status, Width: 100, Sortable: true, Filterable: true,
+			Hint: func(a *account) string { // the tooltip of the cell under the pointer
+				if a.status == "failed" {
+					return "The last check of " + a.name + " failed"
+				}
+				return "The last check of " + a.name + " passed"
+			}},
 		widget.Column[account]{Title: "Score", Text: func(a *account) string { return strconv.Itoa(a.score) },
 			Compare: func(a, b *account) int { return cmp.Compare(a.score, b.score) }, Align: widget.End, Sortable: true,
 			GroupSummary: scoreTotal},
@@ -542,6 +548,8 @@ func table() widget.Control {
 		ContextMenu(widget.MenuItem{Text: "Delete", OnClick: func() { t.DeleteRows(t.Selected()...) }}).
 		OnKey(ui.KeySpace, ui.Shift, func() { t.AutoCheck() }).
 		SetFilterDropDowns(true).SetAutoFilterRow(true).SetFilterPanel(true).
+		SetColumnChooser(true). // right-click a header: the columns, Best fit, Clear sorting
+		SetCellHints(true).     // a name cut off shows whole as a tooltip
 		Expand()
 	activated := widget.Label("Double-click a row").Muted()
 	t.OnActivate(func(id int) { activated.SetText(fmt.Sprintf("Activated %d", id)) })
@@ -564,8 +572,9 @@ func table() widget.Control {
 			t.SetGroupBy(nil)
 		}
 	})
+	fit := widget.Button("Best fit").OnClick(func() { t.BestFit() })
 	hint := widget.Label("F2 edits a Name: try Vietnamese Telex typing here").Muted()
-	return widget.VBox(8).Add(widget.HBox(8).Add(live, groups, activated, hint)).Pack(t, true, true).Expand()
+	return widget.VBox(8).Add(widget.HBox(8).Add(live, groups, fit, activated, hint)).Pack(t, true, true).Expand()
 }
 
 // scoreTotal is the Score column's GroupSummary: the sum of a group's scores.

@@ -180,7 +180,9 @@ The user arranges the columns, as in Finder:
 - **Resizing.** Dragging the right edge of a column's header resizes the
   column, between its `MinWidth` and `MaxWidth`, and a double click there
   fits it to its cells. The columns before it that share the room left keep
-  their widths, for the edge to follow the pointer.
+  their widths, for the edge to follow the pointer. `ListState.FitColumns(ids...)`
+  fits columns from the view, in the table's next frame, each to its header
+  and its cells in view; it ignores IDs of no column and of `Fixed` ones.
 - **Moving.** Dragging a header moves its column among the others.
 - **Scrolling sideways.** Columns wider than the table scroll sideways, the
   header with them.
