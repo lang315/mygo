@@ -361,6 +361,7 @@ func inputs(w *widget.Form) widget.Control {
 		widget.TextBox().SetPlaceholder("At most 8 characters").MaxLength(8),
 		widget.TextBox().SetPlaceholder("Search").Icon(searchIcon()),
 		maskedRow(),
+		buttonEditRow(),
 		validationRow(w),
 		widget.MultilineTextBox().SetPlaceholder("Notes").SetSize(0, 100),
 		widget.CheckBox("Remember me"),

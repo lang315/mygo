@@ -107,6 +107,7 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 - A typed text that is no record's goes back to the chosen record's text when the focus leaves the field. Of a `widget.Column` it reads `Title`, `Text`, `Width`, `MinWidth`, `Align` and `Hidden`. Read `docs/ui/widget/lookupedit.md`.
 - For a long list (hundreds to tens of thousands of records), add `widget.LookUpEditWidget.SetSearchPanel(true)`: the drop-down gets a search box matching any shown column, case ignored, and builds only the rows in view; the field then takes no typing. Up and Down in the search box move the highlight, Enter chooses, Escape closes. Not a separate SearchLookUpEdit type, nor a `DataGridView` in a dialog.
 - For a field whose drop-down holds controls of its own (check boxes of columns, a date range, a small form), use `widget.PopupEdit(controls...)`: read the controls in `widget.PopupEditWidget.OnClosed(fn)` and show the outcome with `widget.PopupEditWidget.SetText`. Not a `Button` that opens a `Dialog`. `widget.PopupEditWidget.ShowPopup` and `widget.PopupEditWidget.ClosePopup` do not run `OnClosed`. Read `docs/ui/widget/popupedit.md`.
+- For a text field with buttons in its frame (browse with …, clear, search, + and −, an icon of your own), use `widget.ButtonEdit(buttons...)` with a `widget.EditButton` each (`Kind` such as `widget.EditEllipsis` or `widget.EditClear`, `Tooltip`, `OnClick`). Not an `HBox` of a `TextBox` and `Button`s. `widget.EditClear` empties the text, runs `widget.ButtonEditWidget.OnChange` once, then its own `OnClick`; `widget.ButtonEditWidget.SetText` runs neither. `widget.ButtonEditWidget.SetReadOnly(true)` stops typing, not the buttons. Read `docs/ui/widget/buttonedit.md`.
 
 ## Waiting
 
@@ -229,8 +230,40 @@ func settings(cfg *Config) widget.Control {
 ```
 
 - `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
-- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
+- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `ButtonEdit`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
+
+## Validation
+
+Check a form's values with rules on a `widget.ErrorProvider`, not an `OnValidating` handler per field that calls `SetError` by hand:
+
+```go
+package app
+
+import (
+	"regexp"
+
+	"github.com/egoist/mygo/ui/widget"
+)
+
+func signUp(form *widget.Form, save func(name, email string)) widget.Control {
+	errs := widget.ErrorProvider().SetValidateOnLeave(true)
+	name := widget.Rule(errs, widget.TextBox(), widget.Required("Enter your name"))
+	email := widget.Rule(errs, widget.TextBox(), widget.Required("Enter an email address"))
+	widget.Rule(errs, email, widget.MatchRegexp(regexp.MustCompile(`^\S+@\S+\.\S+$`), "Not an email address"))
+	return widget.Fields().Row("&Name", name).Row("&Email", email).Add(
+		widget.Button("Sign up").OnClick(func() {
+			if !form.ValidateChildren() {
+				errs.FocusFirst(form)
+				return
+			}
+			save(name.Text(), email.Text())
+		}))
+}
+```
+
+- `widget.Rule(p, control, check)` takes any control `widget.Bind` takes; `check` gets its value (a `string`, a `float64` for a `NumericUpDown`) and returns the error text, "" when valid. Several rules on one control: the first failing one's text shows. Ready rules: `widget.Required`, `widget.MatchRegexp`, `widget.InRange`.
+- `widget.Form.ValidateChildren` runs the rules of the form's controls after their `OnValidating` handlers; `widget.ErrorProviderWidget.Validate` runs every rule of one provider. Neither moves the focus: `widget.ErrorProviderWidget.FocusFirst` does. `widget.ErrorProviderWidget.SetValidateOnLeave(true)` also checks a field when the focus leaves it. Read `docs/ui/widget/errorprovider.md`.
 
 ## Threads
 
