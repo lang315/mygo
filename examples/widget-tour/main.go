@@ -400,6 +400,7 @@ func choices() widget.Control {
 		widget.TagSelect(widget.Option{Value: "go", Text: "Go"}, widget.Option{Value: "ui", Text: "UI"}, widget.Option{Value: "gtk", Text: "GTK"}),
 		widget.Spinner().Start(),
 		widget.DateTimePicker(),
+		timeSpanRow(),
 		widget.MonthCalendar(),
 		values(),
 	)

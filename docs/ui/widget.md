@@ -745,6 +745,7 @@ name := widget.Bind(widget.TextBox(),
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
+| `TimeSpanEdit` | `time.Duration` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `RangeSpin` | its two numbers, `float64` | `BindRange(c, get, set)`, with `get func() (lo, hi float64)` and `set func(lo, hi float64)`: `set` gets both numbers after an edit of either; each is clamped to its range, as `NumericUpDown` |
 | `CheckBoxGroup` | the `Value`s of the checked options, a `[]string` | `BindValues(c, get, set)`: `set` gets them in option order; a value of `get()` that is no option's is ignored, and absent from the next `set` |
 | `TokenEdit` | its tokens, a `[]string` | `BindTokens(c, get, set)`: takes `get()`'s tokens as `SetTokens` does (trimmed, blanks and repeats dropped); `set` gets the tokens in order after each change by the user, in a slice of its own; with `SetSuggestionsOnly`, a refused entry calls no `set` |
@@ -1503,6 +1504,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 Input and display:
 
 - `DateTimePicker()`, `MonthCalendar()`: a `time.Time` in a date and time field, or a calendar; see [DateTimePicker](widget/date-time-picker.md).
+- `TimeSpanEdit()`: a `time.Duration` in a field shown as `[-][d.]hh:mm[:ss]`, whose Up, Down and − + buttons step the part under the caret, as DevExpress's TimeSpanEdit; `Value`, `SetValue`, `SetRange`, `SetShowSeconds`, `SetShowDays`, `OnChange`; see [TimeSpanEdit](widget/timespanedit.md).
 - `Label(text)`: text, which wraps at its container's width (a long one in
   a dialog of fixed width takes more lines, none cut); `Rich(spans...)` shows styled `ui.Span`s
   instead, where gota used Pango markup. `ParseMarkup(s)` makes the spans of a
