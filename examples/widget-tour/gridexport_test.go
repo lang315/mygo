@@ -74,6 +74,22 @@ func TestTourTableExportXLSX(t *testing.T) {
 	}
 }
 
+// A file that cannot be made says so.
+func TestTourTableExportFails(t *testing.T) {
+	tt := tourTableTab(t)
+	exportTo(t, filepath.Join(t.TempDir(), "no such folder", "accounts.csv"))
+	if err := tt.Click("Export CSV"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	for _, s := range tt.Texts() {
+		if strings.HasPrefix(s, "Export failed: open ") { // the OS words the rest
+			return
+		}
+	}
+	t.Fatalf("no word of the failure: %q", tt.Texts())
+}
+
 // A canceled save dialog writes nothing.
 func TestTourTableExportCanceled(t *testing.T) {
 	tt := tourTableTab(t)

@@ -485,9 +485,6 @@ func (c *countWriter) Write(p []byte) (int, error) { *c += countWriter(len(p)); 
 // of the check: every grid app links it already, through internal/darwin
 // and internal/svg.
 func TestExportNotLinkedWhenUnused(t *testing.T) {
-	if testing.Short() {
-		t.Skip("builds two apps")
-	}
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("no go command: ", err)
 	}

@@ -23,16 +23,8 @@ import (
 func CSV(w io.Writer, header []string, rows [][]string) error {
 	c := csv.NewWriter(w)
 	c.UseCRLF = true
-	if err := c.Write(header); err != nil {
-		return err
-	}
-	for _, r := range rows {
-		if err := c.Write(r); err != nil {
-			return err
-		}
-	}
-	c.Flush()
-	return c.Error()
+	c.Write(header) // buffered: an error of w comes back from WriteAll
+	return c.WriteAll(rows)
 }
 
 // Excel's bounds: the columns and the rows of a sheet, and the UTF-16
@@ -53,30 +45,33 @@ func XLSX(w io.Writer, header []string, rows [][]string) error {
 	if err := fits(header, rows); err != nil {
 		return err
 	}
+	// The zip writer buffers, and keeps the first error of w: Create returns
+	// it once the part before is written out, and Close at the end, so the
+	// writes into a part need no check of their own.
 	z := zip.NewWriter(w)
-	for _, p := range [...]struct{ name, body string }{
-		{"[Content_Types].xml", contentTypes},
-		{"_rels/.rels", rootRels},
-		{"xl/workbook.xml", workbook},
-		{"xl/_rels/workbook.xml.rels", workbookRels},
-		{"xl/styles.xml", styles},
+	for _, p := range [...]struct {
+		name  string
+		write func(io.Writer)
+	}{
+		{"[Content_Types].xml", text(contentTypes)},
+		{"xl/worksheets/sheet1.xml", func(f io.Writer) { writeSheet(f, header, rows) }},
+		{"_rels/.rels", text(rootRels)},
+		{"xl/workbook.xml", text(workbook)},
+		{"xl/_rels/workbook.xml.rels", text(workbookRels)},
+		{"xl/styles.xml", text(styles)},
 	} {
 		f, err := z.Create(p.name)
 		if err != nil {
 			return err
 		}
-		if _, err := io.WriteString(f, xml.Header+p.body); err != nil {
-			return err
-		}
-	}
-	f, err := z.Create("xl/worksheets/sheet1.xml")
-	if err != nil {
-		return err
-	}
-	if err := writeSheet(f, header, rows); err != nil {
-		return err
+		p.write(f)
 	}
 	return z.Close()
+}
+
+// text writes the XML document body.
+func text(body string) func(io.Writer) {
+	return func(f io.Writer) { io.WriteString(f, xml.Header+body) }
 }
 
 // fits returns an error when the cells are past Excel's bounds.
@@ -113,29 +108,25 @@ func fits(header []string, rows [][]string) error {
 
 // writeSheet writes the worksheet part: the header in row 1, in style 1
 // (bold), then the rows.
-func writeSheet(w io.Writer, header []string, rows [][]string) error {
-	e := &errWriter{w: w}
-	e.str(xml.Header + `<worksheet xmlns="` + nsMain + `"><sheetData>`)
-	writeRow(e, 1, header, ` s="1"`)
+func writeSheet(w io.Writer, header []string, rows [][]string) {
+	io.WriteString(w, xml.Header+`<worksheet xmlns="`+nsMain+`"><sheetData>`)
+	writeRow(w, 1, header, ` s="1"`)
 	for i, r := range rows {
-		writeRow(e, i+2, r, "")
+		writeRow(w, i+2, r, "")
 	}
-	e.str(`</sheetData></worksheet>`)
-	return e.err
+	io.WriteString(w, `</sheetData></worksheet>`)
 }
 
 // writeRow writes row n (from 1) of cells in style.
-func writeRow(e *errWriter, n int, cells []string, style string) {
+func writeRow(w io.Writer, n int, cells []string, style string) {
 	num := strconv.Itoa(n)
-	e.str(`<row r="` + num + `">`)
+	io.WriteString(w, `<row r="`+num+`">`)
 	for j, s := range cells {
-		e.str(`<c r="` + column(j) + num + `" t="inlineStr"` + style + `><is><t xml:space="preserve">`)
-		if e.err == nil {
-			e.err = xml.EscapeText(e.w, []byte(s))
-		}
-		e.str(`</t></is></c>`)
+		io.WriteString(w, `<c r="`+column(j)+num+`" t="inlineStr"`+style+`><is><t xml:space="preserve">`)
+		xml.EscapeText(w, []byte(s))
+		io.WriteString(w, `</t></is></c>`)
 	}
-	e.str(`</row>`)
+	io.WriteString(w, `</row>`)
 }
 
 // column returns the letters of column i, from 0: A to Z, then AA.
@@ -147,18 +138,6 @@ func column(i int) string {
 		b[k] = byte('A' + (i-1)%26)
 	}
 	return string(b[k:])
-}
-
-// errWriter keeps the first error of its writes and skips the others.
-type errWriter struct {
-	w   io.Writer
-	err error
-}
-
-func (e *errWriter) str(s string) {
-	if e.err == nil {
-		_, e.err = io.WriteString(e.w, s)
-	}
 }
 
 const (

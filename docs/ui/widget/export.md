@@ -47,8 +47,8 @@ widget.Button("Export").OnClick(func() {
 - Both return the first error of the writer, which they do not close; a
   file cut short by an error is not a workbook.
 - The package is its own so that an app that does not import it links
-  neither `encoding/csv` nor `archive/zip` (`encoding/xml` every app links
-  already). `ShownCells` costs a `DataGridView` app nothing more.
+  neither `encoding/csv` nor `archive/zip`; `ShownCells` imports nothing
+  new into `ui/widget`.
 - Both run on the caller's goroutine. `ShownCells` holds the package's lock
   while it reads every row shown, and runs the columns' `Text` under it: call
   it from an event handler, never from inside a column func.
