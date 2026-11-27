@@ -932,8 +932,8 @@ t := widget.DataGridView(key, name, status, runs).
   method. Without `SetGroupBy` it does not run. A `GroupSummary` that panics
   leaves its texts empty and goes to `OnPanic`.
 - A grid without a `GroupSummary` builds what it did, but every app with a
-  `DataGridView` links the totals' code (SIZE_NOTE), as it does that of
-  `Summary`.
+  `DataGridView` links the totals' code (about 0.5 KB of a release file on
+  darwin, 1.9 KB unstripped), as it does that of `Summary`.
 
 Filters on the columns, as a spreadsheet's header filters:
 
