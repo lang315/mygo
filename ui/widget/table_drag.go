@@ -7,8 +7,8 @@ import "github.com/egoist/mygo/ui"
 // before the row they drop on, in the table's own rows (Rows returns them in
 // the new order), and OnRowsReordered's fn runs. It does nothing in a table
 // over a RowSource (DataGridViewOf), whose rows are the app's, and a drag does
-// not start while the rows are sorted, grouped or searched, as their order
-// shown is then not theirs. A table cannot both reorder and drag rows out
+// not start while the rows are sorted, grouped, searched or filtered by a
+// column, as their order shown is then not theirs. A table cannot both reorder and drag rows out
 // (DragRows): the later call wins.
 func (t *DataGridViewWidget[T, K]) SetRowReorder(on bool) *DataGridViewWidget[T, K] {
 	t.change(func() {
@@ -65,7 +65,8 @@ func (t *DataGridViewWidget[T, K]) handDrag(s *ui.ListState) {
 }
 
 // reorderable reports whether the user may move the rows: the table's own,
-// shown in their order. Under mu.
+// shown in their order (t.filter holds the search and the column filters).
+// Under mu.
 func (t *DataGridViewWidget[T, K]) reorderable() bool {
 	return t.ownRows && len(t.sort.value) == 0 && t.groupBy == nil && t.filter == nil
 }

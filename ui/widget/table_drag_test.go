@@ -229,6 +229,21 @@ func TestRowReorderOffWhenFiltered(t *testing.T) {
 	noReorder(t, tb, tt, &fired, "[ann bob cat dan]")
 }
 
+// Case 5b: with a column filter, the rows do not drag; cleared, they do.
+func TestRowReorderOffWhenColumnFiltered(t *testing.T) {
+	var fired fires
+	tb := dragGrid().SetRowReorder(true).OnRowsReordered(fired.inc)
+	tt := NewTester(t, tb, 800, 600)
+	tb.SetColumnFilter("Name", ColumnFilter{Contains: "a"}) // ann, cat, dan
+	tt.Settle()
+	noReorder(t, tb, tt, &fired, "[ann bob cat dan]")
+	tb.ClearFilters()
+	tt.Settle()
+	if tb.list.Reorder == nil {
+		t.Fatal("filters cleared, ui was given no Reorder")
+	}
+}
+
 // Case 6: a table over a RowSource never reorders.
 func TestRowReorderRowSourceNoOp(t *testing.T) {
 	src := NewRowSource(func(a *acct) int { return a.id })
