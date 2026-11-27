@@ -272,9 +272,19 @@ func TestFilterDropDownCapsAt1000(t *testing.T) {
 		t.Fatal("the cap's note shows before the drop-down opens")
 	}
 	tt.Find(ByRole(ui.RoleButton).Label("Filter Name")).Click()
-	got := boxesY(tt)
+	// The list is virtual: the rows in view are built, the values are the
+	// drop-down's.
+	listed := func(g *DataGridViewWidget[fdoc, int]) []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(g.fl().vals)
+	}
+	got := listed(g)
 	if len(got) != 1000 || got[0] != "n0000" || got[999] != "n0999" || slices.Contains(got, "n1000") {
 		t.Fatalf("%d values listed, from %q", len(got), got[:3])
+	}
+	if shown := boxesY(tt); len(shown) == 0 || shown[0] != "n0000" || len(shown) >= 1000 {
+		t.Fatalf("the list shows %d boxes, from %q: want the first rows in view alone", len(shown), shown[:min(3, len(shown))])
 	}
 	if !tt.Has(ByLabel("Only the first 1000 values are listed")) {
 		t.Fatal("the drop-down does not say it cut the list")
@@ -283,7 +293,7 @@ func TestFilterDropDownCapsAt1000(t *testing.T) {
 	g2 := fdocGrid(rows[:1000]...).SetFilterDropDowns(true)
 	tt2 := NewTester(t, g2, 800, 600)
 	tt2.Find(ByRole(ui.RoleButton).Label("Filter Name")).Click()
-	if got := boxesY(tt2); len(got) != 1000 || tt2.Has(ByLabel("Only the first 1000 values are listed")) {
+	if got := listed(g2); len(got) != 1000 || tt2.Has(ByLabel("Only the first 1000 values are listed")) {
 		t.Fatalf("1000 values: %d listed, note %v", len(got), tt2.Has(ByLabel("Only the first 1000 values are listed")))
 	}
 }
@@ -727,7 +737,7 @@ func TestFilterOffIsUnchanged(t *testing.T) {
 	if off.filterHead != nil || off.filterWrap != nil || off.filterStrip != nil || off.filter != nil {
 		t.Fatal("a grid with its filters off keeps a hook or a filter")
 	}
-	if plain.fl != nil {
+	if plain.flAny != nil || plain.withFilters != nil {
 		t.Fatal("a grid never filtered made its filters")
 	}
 }
@@ -756,6 +766,62 @@ func TestFilterAllocNothingAtRest(t *testing.T) {
 	t.Logf("dark: %v with the filters, %v without", b, a)
 	if b > a {
 		t.Errorf("dark: a frame at rest allocates %v times with the filters, %v without", b, a)
+	}
+}
+
+// dropDown1000 returns a Tester of a grid whose Name drop-down is open on
+// 1000 distinct values, settled.
+func dropDown1000(tb TB) *Tester { return dropDownOf(tb, 1000) }
+
+// dropDownOf is dropDown1000 with n values.
+func dropDownOf(tb TB, n int) *Tester {
+	var rows []fdoc
+	for i := range n {
+		rows = append(rows, fdoc{id: i, name: fmt.Sprintf("n%04d", i), kind: "Doc"})
+	}
+	g := fdocGrid(rows...).SetFilterDropDowns(true)
+	tt := NewTester(tb, g, 800, 600)
+	tt.Find(ByRole(ui.RoleButton).Label("Filter Name")).Click()
+	for range 10 {
+		tt.Frame()
+	}
+	return tt
+}
+
+// dropDownAllocs is how many allocations more than a plain grid's a frame at
+// rest makes with a drop-down open, whatever its number of values: the
+// popover and its controls (measured 2026-11-27: 52 and 53 against 29 for 10
+// and 1000 values).
+const dropDownAllocs = 24
+
+// A frame at rest with a drop-down open allocates as much for 1000 values as
+// for 10, and no more than dropDownAllocs over a plain grid.
+func TestFilterDropDownOpenAllocs(t *testing.T) {
+	tt := dropDown1000(t)
+	if !tt.Has(ByRole(ui.RoleTextField).Label("Contains")) {
+		t.Fatal("the drop-down is not open")
+	}
+	plain := tester(t, fdocGrid())
+	small := dropDownOf(t, 10)
+	for range 10 {
+		plain.Frame()
+	}
+	a, b, s := allocrun.Least(30, plain.Frame), allocrun.Least(30, tt.Frame), allocrun.Least(30, small.Frame)
+	t.Logf("a frame at rest allocates %v times with a drop-down of 1000 values open, %v of 10, %v for a plain grid", b, s, a)
+	if b > s+1 {
+		t.Errorf("a frame at rest allocates %v times with 1000 values open, %v with 10: it grows with the values", b, s)
+	}
+	if b > a+dropDownAllocs {
+		t.Errorf("a frame at rest allocates %v times with a drop-down open, over %v+%d", b, a, dropDownAllocs)
+	}
+}
+
+func BenchmarkFilterDropDownOpen1000(b *testing.B) {
+	tt := dropDown1000(b)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		tt.Frame()
 	}
 }
 

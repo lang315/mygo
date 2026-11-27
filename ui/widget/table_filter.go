@@ -3,7 +3,6 @@ package widget
 import (
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -74,6 +73,8 @@ type gridFilters struct {
 	checks        []bool
 	contains      string
 	capped        bool
+	list          ui.ListState // the check list's, a virtual list
+	rowFn         func(int)    // its row, made at opening
 
 	// The panel's text, as of textGen.
 	text    string
@@ -86,17 +87,26 @@ type gridFilters struct {
 	extra       float32
 }
 
+// fl returns the grid's filters, nil before the first filter call. The grid
+// holds them as an any, so that a grid without filters does not link their
+// type. Under mu.
+func (t *DataGridViewWidget[T, K]) fl() *gridFilters {
+	fl, _ := t.flAny.(*gridFilters)
+	return fl
+}
+
 // filters returns the grid's filters, made at the first call. Under mu.
 func (t *DataGridViewWidget[T, K]) filters() *gridFilters {
-	if t.fl == nil {
+	if t.fl() == nil {
 		fl := &gridFilters{cols: make([]ColumnFilter, len(t.cols)), row: make([]mirror[string], len(t.cols)), at: -1}
 		for i := range t.cols {
 			fl.labels = append(fl.labels, "Filter "+t.cols[i].Title)
 		}
 		fl.on.set(true)
-		t.fl = fl
+		t.flAny = fl
+		t.withFilters = t.withColumns // the search's path reaches the columns' filters only from here
 	}
-	return t.fl
+	return t.fl()
 }
 
 // SetColumnFilter filters the rows by the column titled title, which needs
@@ -120,10 +130,10 @@ func (t *DataGridViewWidget[T, K]) ColumnFilter(title string) ColumnFilter {
 	mu.Lock()
 	defer mu.Unlock()
 	i := slices.IndexFunc(t.cols, func(cl Column[T]) bool { return cl.Title == title })
-	if i < 0 || t.fl == nil {
+	if i < 0 || t.fl() == nil {
 		return ColumnFilter{}
 	}
-	return t.fl.cols[i].clone()
+	return t.fl().cols[i].clone()
 }
 
 // ClearFilters takes away every column's filter. The bottom panel's search
@@ -166,7 +176,7 @@ func (t *DataGridViewWidget[T, K]) SetAutoFilterRow(on bool) *DataGridViewWidget
 	t.change(func() {
 		t.filters().autoRow = on
 		t.hookFilterHeader()
-		t.filterWrap = nil
+		t.filterWrap, t.headExtra = nil, 0
 		if on {
 			t.filterWrap = t.wrapAutoRow
 		}
@@ -193,7 +203,7 @@ func (t *DataGridViewWidget[T, K]) SetFilterPanel(on bool) *DataGridViewWidget[T
 // drop-down or the auto filter row is on. Under mu.
 func (t *DataGridViewWidget[T, K]) hookFilterHeader() {
 	t.filterHead = nil
-	if fl := t.fl; fl != nil && (fl.dropDowns || fl.autoRow) {
+	if fl := t.fl(); fl != nil && (fl.dropDowns || fl.autoRow) {
 		t.filterHead = t.filterHeader
 	}
 }
@@ -218,7 +228,7 @@ func (t *DataGridViewWidget[T, K]) setFilter(i int, f ColumnFilter, sync bool) {
 // clearFilters takes every column's filter away, and reports whether one
 // was set. Under mu.
 func (t *DataGridViewWidget[T, K]) clearFilters() bool {
-	fl := t.fl
+	fl := t.fl()
 	if fl == nil {
 		return false
 	}
@@ -244,8 +254,8 @@ func (t *DataGridViewWidget[T, K]) refilter() {
 		before = t.shown(&t.chosen.value)
 	}
 	t.filter = t.search
-	if fl := t.fl; fl != nil && !fl.off {
-		t.filter = t.withColumns(t.search)
+	if t.withFilters != nil {
+		t.filter = t.withFilters(t.search)
 	}
 	t.view.SetFilter(t.filter)
 	if watch && !sameKeys(before, t.shown(&t.chosen.value)) {
@@ -254,10 +264,14 @@ func (t *DataGridViewWidget[T, K]) refilter() {
 }
 
 // withColumns returns search, nil for none, with the columns' filters:
-// search alone when no column has one. Under mu.
+// search alone when no column has one, or while the filter panel turned
+// them off. It is withFilters once the grid has filters. Under mu.
 func (t *DataGridViewWidget[T, K]) withColumns(search func(*T) bool) func(*T) bool {
+	if t.fl().off {
+		return search
+	}
 	var keeps []func(*T) bool
-	for i, f := range t.fl.cols {
+	for i, f := range t.fl().cols {
 		if k := t.keepFilter(i, f); k != nil {
 			keeps = append(keeps, k)
 		}
@@ -302,7 +316,7 @@ func (t *DataGridViewWidget[T, K]) keepFilter(i int, f ColumnFilter) func(*T) bo
 // a Filterable column's funnel and its drop-down, and the auto filter row's
 // field under the title. Under mu, while the table builds.
 func (t *DataGridViewWidget[T, K]) filterHeader(cell ui.Element, col int) {
-	fl, c := t.fl, t.headCtx
+	fl, c := t.fl(), t.headCtx
 	th := c.Theme()
 	if fl.ddSeen != fl.ddGen {
 		fl.open, fl.ddSeen = false, fl.ddGen
@@ -336,16 +350,24 @@ func (t *DataGridViewWidget[T, K]) filterHeader(cell ui.Element, col int) {
 	}
 }
 
-// funnelIcons are the funnel, empty and filled, parsed at their first use.
-var funnelIcons = sync.OnceValue(func() [2]*ui.SVG {
-	const d = `d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"`
-	return [2]*ui.SVG{lucide(`<path ` + d + `/>`), lucide(`<path fill="currentColor" ` + d + `/>`)}
-})
+// funnelSVG are the funnel, empty and filled, parsed at their first use by
+// funnelIcons: a var with no initializer, so that the package's init does
+// nothing for them. Under mu.
+var funnelSVG [2]*ui.SVG
+
+// funnelIcons returns funnelSVG, parsing them at the first call. Under mu.
+func funnelIcons() *[2]*ui.SVG {
+	if funnelSVG[0] == nil {
+		const d = `d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"`
+		funnelSVG = [2]*ui.SVG{lucide(`<path ` + d + `/>`), lucide(`<path fill="currentColor" ` + d + `/>`)}
+	}
+	return &funnelSVG
+}
 
 // funnel builds the funnel of column ci (an index in t.cols), and its
 // drop-down while open. Under mu, while the table builds.
 func (t *DataGridViewWidget[T, K]) funnel(c *ui.Context, ci int) {
-	fl := t.fl
+	fl := t.fl()
 	th := c.Theme()
 	filtered := !fl.cols[ci].isZero()
 	icon := funnelIcons()[0]
@@ -369,7 +391,7 @@ func (t *DataGridViewWidget[T, K]) funnel(c *ui.Context, ci int) {
 // openDropDown opens the drop-down of column ci with the distinct Texts of
 // the rows the grid has, sorted, at most filterListCap. Under mu.
 func (t *DataGridViewWidget[T, K]) openDropDown(ci int) {
-	fl := t.fl
+	fl := t.fl()
 	text := t.cols[ci].Text
 	seen := make(map[string]struct{})
 	var vals []string
@@ -391,12 +413,28 @@ func (t *DataGridViewWidget[T, K]) openDropDown(ci int) {
 		fl.checks[i] = f.Values == nil || slices.Contains(f.Values, v)
 	}
 	fl.vals, fl.contains, fl.at, fl.open = vals, f.Contains, ci, true
+	// The list's row and the check boxes' callback, made once per opening:
+	// made in each frame, they would allocate in each.
+	c := t.headCtx
+	onCheck := func() { // ui's, outside mu
+		mu.Lock()
+		f := fl.cols[ci].clone()
+		f.Values = fl.checkedValues()
+		mu.Unlock()
+		Post(func() { t.userFilter(ci, f, true) })
+	}
+	fl.list = ui.ListState{}
+	fl.rowFn = func(i int) {
+		if i < len(fl.vals) {
+			ui.Checkbox(c, &fl.checks[i], fl.vals[i]).OnChange(onCheck)
+		}
+	}
 }
 
 // dropDown builds the drop-down of column ci. A change applies on the event
 // goroutine, as the user's. Under mu, while the table builds.
 func (t *DataGridViewWidget[T, K]) dropDown(c *ui.Context, ci int) {
-	fl := t.fl
+	fl := t.fl()
 	th := c.Theme()
 	ui.Column(c).Gap(th.Space(1.5)).Padding(th.Space(2)).Children(func() {
 		if ui.TextInput(c, &fl.contains).Label("Contains").Placeholder("Contains").Width(220).Changed() {
@@ -421,19 +459,10 @@ func (t *DataGridViewWidget[T, K]) dropDown(c *ui.Context, ci int) {
 				Post(func() { t.userFilter(ci, ColumnFilter{}, true) })
 			}
 		})
-		ui.Scroll(c).MaxHeight(240).Children(func() {
-			ui.Column(c).Gap(th.Space(1)).Children(func() {
-				changed := false
-				for i, v := range fl.vals {
-					changed = ui.Checkbox(c, &fl.checks[i], v).Changed() || changed
-				}
-				if changed {
-					f := fl.cols[ci].clone()
-					f.Values = fl.checkedValues()
-					Post(func() { t.userFilter(ci, f, true) })
-				}
-			})
-		})
+		// A virtual list: it builds the rows in view alone, whatever the
+		// number of values.
+		row := th.Space(8)
+		ui.List(c, &fl.list, len(fl.vals), fl.rowFn).Width(220).Height(min(float32(len(fl.vals))*row, 240))
 		if fl.capped {
 			ui.Text(c, "Only the first 1000 values are listed").TextColor(th.TextMuted)
 		}
@@ -503,7 +532,7 @@ func (t *DataGridViewWidget[T, K]) userFilters(on, clear bool) {
 // the auto filter row, made again only when the window's theme changes.
 // Under mu, while building.
 func (t *DataGridViewWidget[T, K]) wrapAutoRow(c *ui.Context) ui.Element {
-	fl := t.fl
+	fl := t.fl()
 	if base := c.Theme(); fl.base != base {
 		th := *base
 		row := th.Metrics.RowHeight
@@ -518,24 +547,18 @@ func (t *DataGridViewWidget[T, K]) wrapAutoRow(c *ui.Context) ui.Element {
 		th.Metrics.HeaderHeight = head + row
 		fl.base, fl.theme = base, &th
 	}
+	t.headExtra = fl.extra
 	var e ui.Element
-	ui.Themed(c, fl.theme).Background(ui.Transparent).Grow(1).Children(func() { e = t.uiTable(c) })
+	t.wrapping = true
+	defer func() { t.wrapping = false }() // a column's function may panic
+	ui.Themed(c, fl.theme).Background(ui.Transparent).Grow(1).Children(func() { e = t.table(c) })
 	return e
-}
-
-// headExtra is how much taller than the theme's the header is: the auto
-// filter row's height, 0 without it. Under mu, while building.
-func (t *DataGridViewWidget[T, K]) headExtra() float32 {
-	if t.filterWrap == nil {
-		return 0
-	}
-	return t.fl.extra
 }
 
 // buildFilterPanel builds the strip of the filters under the table while a
 // column has one. Under mu, while building.
 func (t *DataGridViewWidget[T, K]) buildFilterPanel(c *ui.Context) {
-	fl := t.fl
+	fl := t.fl()
 	if !slices.ContainsFunc(fl.cols, func(f ColumnFilter) bool { return !f.isZero() }) {
 		return
 	}
@@ -560,7 +583,7 @@ func (t *DataGridViewWidget[T, K]) buildFilterPanel(c *ui.Context) {
 // "an" and Kind is Doc, Sheet. Under mu.
 func (t *DataGridViewWidget[T, K]) filterText() string {
 	var parts []string
-	for i, f := range t.fl.cols {
+	for i, f := range t.fl().cols {
 		title := t.cols[i].Title
 		if f.Contains != "" {
 			parts = append(parts, title+` contains "`+f.Contains+`"`)

@@ -104,10 +104,18 @@ type DataGridViewWidget[T any, K comparable] struct {
 	view    *ui.TableView[T]
 	filter  func(*T) bool // the view's, nil for none: the search's and the columns' filters (refilter)
 	search  func(*T) bool // the bottom panel's search, nil for none
-	// Column filters (table_filter.go): fl is nil until a filter call; the
-	// three funcs are nil until a drop-down, the auto filter row or the
-	// filter panel is on, so that a grid without them builds what it did.
-	fl          *gridFilters
+	// Column filters (table_filter.go): flAny, a *gridFilters held as an any
+	// so that a grid without filters does not link its type, is nil until a
+	// filter call, which sets withFilters (search's filter with the
+	// columns'); the three funcs are nil until a drop-down, the auto filter
+	// row or the filter panel is on, so that a grid without them builds and
+	// links what it did. headExtra is how much taller the auto filter row
+	// makes the header, 0 without it; wrapping is set while filterWrap
+	// builds the table.
+	flAny       any
+	withFilters func(search func(*T) bool) func(*T) bool
+	headExtra   float32
+	wrapping    bool
 	filterHead  func(cell ui.Element, col int)
 	filterWrap  func(c *ui.Context) ui.Element
 	filterStrip func(c *ui.Context)
@@ -915,17 +923,12 @@ func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, col int) {
 	}
 }
 
-// table builds the ui table, in the auto filter row's theme while it is on.
-// Under mu.
+// table builds the ui table, in the auto filter row's theme while it is on
+// (filterWrap builds it again, wrapping). Under mu.
 func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
-	if t.filterWrap != nil {
+	if t.filterWrap != nil && !t.wrapping {
 		return t.filterWrap(c)
 	}
-	return t.uiTable(c)
-}
-
-// uiTable builds the ui table. Under mu.
-func (t *DataGridViewWidget[T, K]) uiTable(c *ui.Context) ui.Element {
 	s := &t.list
 	if t.footer != nil {
 		t.footer.heads = t.footer.heads[:0]

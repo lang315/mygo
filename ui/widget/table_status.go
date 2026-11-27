@@ -38,7 +38,7 @@ func (t *DataGridViewWidget[T, K]) SetEmptyState(e *EmptyStateWidget) *DataGridV
 			t.withEmpty = func(c *ui.Context) {
 				ui.Column(c).Grow(1).Children(func() {
 					tb := t.table(c).Grow(1)
-					emptyOver(c, e, t.view.Len() == 0, bodyTop(c, tb)+t.headExtra())
+					emptyOver(c, e, t.view.Len() == 0, bodyTop(c, tb)+t.headExtra)
 				})
 			}
 		}
