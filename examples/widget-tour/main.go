@@ -574,7 +574,7 @@ func table() widget.Control {
 	})
 	fit := widget.Button("Best fit").OnClick(func() { t.BestFit() })
 	hint := widget.Label("F2 edits a Name: try Vietnamese Telex typing here").Muted()
-	return widget.VBox(8).Add(widget.HBox(8).Add(live, groups, fit, activated, hint)).Pack(t, true, true).Expand()
+	return widget.VBox(8).Add(widget.HBox(8).Add(live, groups, fit, activated, hint), rowDragging(t)).Pack(t, true, true).Expand()
 }
 
 // scoreTotal is the Score column's GroupSummary: the sum of a group's scores.
@@ -584,6 +584,33 @@ func scoreTotal(rows iter.Seq[*account]) string {
 		total += a.score
 	}
 	return strconv.Itoa(total)
+}
+
+// rowDragging is the table's row dragging: Reorder rows moves them in the
+// table (unsorted, ungrouped and unsearched), Drag rows out drops the chosen
+// rows on the bin. The grid does one at a time: the later wins.
+func rowDragging(t *widget.DataGridViewWidget[account, int]) widget.Control {
+	moved := widget.Label("").Muted()
+	t.OnRowsReordered(func() { moved.SetText("Rows moved") })
+	bin := widget.Label("Drop rows here").Padding(8)
+	widget.OnDrop(bin, func(rows []*account) { bin.SetText(fmt.Sprintf("Dropped %d rows", len(rows))) })
+	var reorder, dragOut *widget.ToggleWidget
+	reorder = widget.Toggle("Reorder rows").OnChange(func() {
+		on := reorder.Active()
+		t.SetRowReorder(on)
+		if on {
+			dragOut.SetActive(false)
+		}
+	})
+	dragOut = widget.Toggle("Drag rows out").OnChange(func() {
+		if !dragOut.Active() {
+			t.DragRows(nil)
+			return
+		}
+		t.DragRows(func(rows []*account) any { return rows })
+		reorder.SetActive(false)
+	})
+	return widget.HBox(8).Add(reorder, dragOut, bin, moved)
 }
 
 // liveUpdates fails or fixes a hundred accounts every 100 ms until stop
