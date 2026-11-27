@@ -903,6 +903,42 @@ t := widget.DataGridView(key, name, status).
   table must look at its columns' fields, so no call of the app's own tells
   it apart.
 
+Dragging rows, to put them in order or onto another control:
+
+```go
+queue := widget.DataGridView(key, name, status).SetRowReorder(true) // drag rows to another place
+queue.OnRowsReordered(func() { save(queue.Rows()) })                // after the user moved them
+done := widget.DataGridView(key, name, status).
+	DragRows(func(rows []*Job) any { return rows }) // drag the chosen rows out
+bin := widget.Label("Drop jobs here").Padding(24)
+widget.OnDrop(bin, func(rows []*Job) { archive(rows) })
+```
+
+- `SetRowReorder(true)` lets the user drag rows to another place: the rows
+  chosen, when the row dragged is one, else that row, go before the row they
+  drop on, keeping their order, in the table's own rows (`Rows()` returns the
+  new order, the selection stays). `OnRowsReordered(fn)` runs on the event
+  goroutine after each drop that changed the order, never for a setter.
+- It does nothing in a table over a `RowSource` (`DataGridViewOf`), whose
+  rows are the app's, and a drag does not start while the rows are sorted,
+  grouped, searched or have a column filter: the order shown is then not
+  theirs. `ClearSort` (or `ClearFilters`) lets them drag again.
+- `DragRows(fn)` lets the user drag rows out: the rows chosen, when the row
+  dragged is one, else that row, in the order shown, drag the value `fn`
+  returns, for an `OnDrop` or `OnDragOver` of its type elsewhere
+  ([Drag and drop](widget/drag-and-drop.md)). `fn` gets copies of the rows and
+  runs on the main thread, off the package's lock, as the drag starts: keep it
+  quick. A nil result means those rows do not drag; `DragRows(nil)` stops
+  dragging out. It works over a `RowSource` too, and sorted, grouped or
+  searched.
+- A table cannot both reorder and drag rows out (ui's rule): of
+  `SetRowReorder(true)` and `DragRows(fn)`, the later call wins.
+- Cost: with either on, ui keeps no rows from frame to frame, as in any ui list
+  that drags rows, so the rows shown are built again in every frame and their
+  column functions (`Text`, `Spans`, `Format`, ...) run for them each frame,
+  with about one allocation more a row shown. A table with both off builds and
+  allocates what it did.
+
 Fitting and choosing columns, and the full text of a cell:
 
 ```go
