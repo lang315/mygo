@@ -13,6 +13,7 @@ import "math"
 //   - CheckBox (bool)
 //   - ComboBox (the Value of its option, a string)
 //   - NumericUpDown (float64)
+//   - CalcEdit (float64)
 //   - TrackBar (float64)
 type Bindable[T comparable] interface {
 	Control

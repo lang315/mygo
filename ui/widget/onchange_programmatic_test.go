@@ -45,6 +45,8 @@ func TestSettersDoNotRunOnChange(t *testing.T) {
 	add("ComboBox.SetValue (submenu, section title)", cs, func() { cs.SetValue("a").SetValue("t") })
 	nu := NumericUpDown(0, 10, 1).OnChange(count)
 	add("NumericUpDown.SetValue", nu, func() { nu.SetValue(4) })
+	ce := CalcEdit().OnChange(count)
+	add("CalcEdit.SetValue", ce, func() { ce.SetValue(4).SetDecimals(0).ShowPopup().ClosePopup() })
 	rs := RangeSpin(0, 10, 0, 10, 1, "to", "").OnChange(count)
 	add("RangeSpin.SetValues", rs, func() { rs.SetValues(2, 5) })
 	tr := TrackBar(0, 10).OnChange(count)

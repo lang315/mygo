@@ -198,7 +198,6 @@ func (b *ButtonEditWidget) dropButton() int {
 }
 
 func (b *ButtonEditWidget) build(c *ui.Context) ui.Element {
-	t := c.Theme()
 	if b.icons == nil {
 		b.icons = make([]*ui.SVG, len(b.buttons))
 		for i, k := range b.buttons {
@@ -206,31 +205,60 @@ func (b *ButtonEditWidget) build(c *ui.Context) ui.Element {
 		}
 	}
 	b.c = c
+	frame := editFrame(c, b.children, &b.inner)
+	b.c = nil
+	if b.errMsg != "" {
+		b.post = padForErrorMark
+	}
+	return frame
+}
+
+// editFrame builds the frame of a field with buttons at its end, as a
+// TextBox's: its edge and fill, and the accent edge while *in, the text
+// that children builds, has the focus.
+func editFrame(c *ui.Context, children func(), in *ui.Element) ui.Element {
+	t := c.Theme()
 	frame := ui.Row(c).Radius(t.Radius).Border(1, t.Outline()).Background(t.FieldFill()).
 		AlignItems(ui.Stretch).MinWidth(t.Space(35))
 	if h := t.Metrics.ControlHeight; h > 0 {
 		frame.MinHeight(h)
 	}
-	frame.Children(b.children)
-	b.c = nil
+	frame.Children(children)
 	// The edge of a text input's: the accent while it has the focus.
 	switch {
-	case b.inner.Focused():
+	case in.Focused():
 		frame.Border(1, t.Accent)
 	case frame.Hovered():
 		frame.Border(1, t.Outline().Mix(t.Text, 0.25))
 	}
-	if b.errMsg != "" {
-		// The error mark sits at the end: the buttons stop before it.
-		b.post = func(c *ui.Context, el ui.Element) {
-			side := 1
-			if c.Direction() == ui.RightToLeft {
-				side = 3
-			}
-			el.PaddingEnd(el.Paddings()[side] + errorMarkSize + errorMarkInset + 2)
-		}
-	}
 	return frame
+}
+
+// padForErrorMark leaves room for an ErrorProvider's mark at the end of a
+// field's frame: the buttons stop before it. A core's post.
+func padForErrorMark(c *ui.Context, el ui.Element) {
+	side := 1
+	if c.Direction() == ui.RightToLeft {
+		side = 3
+	}
+	el.PaddingEnd(el.Paddings()[side] + errorMarkSize + errorMarkInset + 2)
+}
+
+// editButtonBase makes a button inside a field's frame, keyed by key: no
+// stop of Tab, leaving the keyboard where it is, with the field's hover and
+// press.
+func editButtonBase(c *ui.Context, key any) ui.Element {
+	t := c.Theme()
+	e := ui.ButtonBase(c.Key(key)).Unfocusable().KeepFocus().Role(ui.RoleButton).
+		Width(t.Space(6)).Shrink(0).Margin(t.Space(0.5)).Radius(t.Radius).
+		AlignItems(ui.Center).Justify(ui.Center)
+	switch {
+	case e.Pressed():
+		e.Background(t.SurfacePressed)
+	case e.Hovered():
+		e.Background(t.SurfaceHover)
+	}
+	return e
 }
 
 // buildChildren builds the text and the buttons. Under mu, building.
@@ -260,15 +288,7 @@ func (b *ButtonEditWidget) buildChildren() {
 		if b.hidden[i] || b.buttons[i].Kind == EditClear && *p == "" {
 			continue
 		}
-		e := ui.ButtonBase(c.Key(editKey(i))).Unfocusable().KeepFocus().Role(ui.RoleButton).
-			Width(t.Space(6)).Shrink(0).Margin(t.Space(0.5)).Radius(t.Radius).
-			AlignItems(ui.Center).Justify(ui.Center)
-		switch {
-		case e.Pressed():
-			e.Background(t.SurfacePressed)
-		case e.Hovered():
-			e.Background(t.SurfaceHover)
-		}
+		e := editButtonBase(c, editKey(i))
 		e.Label(b.name(i))
 		if tip := b.buttons[i].Tooltip; tip != "" {
 			e.Tooltip(tip)
