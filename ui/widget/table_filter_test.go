@@ -213,6 +213,36 @@ func TestFilterDropDownLists(t *testing.T) {
 	}
 }
 
+// A drop-down opens with the column's Values checked and the others not:
+// set by the program, and set by the user in the drop-down opened before.
+func TestFilterDropDownOpensWithTheValuesChecked(t *testing.T) {
+	g := fdocGrid().SetFilterDropDowns(true).SetColumnFilter("Kind", ColumnFilter{Values: []string{"Doc", "Image"}})
+	tt := NewTester(t, g, 800, 600)
+	checked := func() map[string]bool {
+		out := map[string]bool{}
+		for _, n := range tt.Nodes() {
+			if n.Role == ui.RoleCheckBox {
+				out[n.Label] = n.Checked
+			}
+		}
+		return out
+	}
+	tt.Find(ByRole(ui.RoleButton).Label("Filter Kind")).Click()
+	if got := checked(); len(got) != 3 || !got["Doc"] || !got["Image"] || got["Sheet"] {
+		t.Fatalf("opened on Values Doc, Image: checks %v", got)
+	}
+	tt.Find(ByRole(ui.RoleCheckBox).Label("Image")).Click()
+	tt.Key(0, ui.KeyEscape)
+	tt.Settle()
+	if tt.Has(ByRole(ui.RoleTextField).Label("Contains")) {
+		t.Fatal("Escape left the drop-down open")
+	}
+	tt.Find(ByRole(ui.RoleButton).Label("Filter Kind")).Click()
+	if got := checked(); len(got) != 3 || !got["Doc"] || got["Image"] || got["Sheet"] {
+		t.Fatalf("reopened after unchecking Image: checks %v", got)
+	}
+}
+
 // With the # column first, each funnel is in its own column's header.
 func TestFilterDropDownsWithIndexColumn(t *testing.T) {
 	g := fdocGrid().IndexColumn().SetFilterDropDowns(true)
