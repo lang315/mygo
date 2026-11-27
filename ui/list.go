@@ -558,6 +558,9 @@ type ListState struct {
 	// view.
 	focusCol, focusColNext     string
 	focusColOn, focusColNextOn bool
+	// fits are the IDs of the columns FitColumns asked to fit, which the
+	// Table's next build takes.
+	fits []string
 }
 
 // listRequest is where the app or the user asked the list to go: to row
@@ -615,6 +618,13 @@ func (s *ListState) ScrollToEnd() {
 	s.req = listRequest{set: true, end: true}
 	s.scrolled = true
 }
+
+// FitColumns fits the Table's columns whose IDs are ids to their cells in
+// its next frame, as a double click on the edge of a header does: each
+// becomes as wide as the widest of its header and its cells in view, and
+// Changed reports the new layout. An ID of no column, or of a Fixed one,
+// is ignored. Call it from the view.
+func (s *ListState) FitColumns(ids ...string) { s.fits = append(s.fits, ids...) }
 
 // reveal scrolls as little as shows row, as ScrollIntoView does, for the
 // user: the keys moving the choice, or assistive technology moving there.

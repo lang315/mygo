@@ -939,6 +939,44 @@ widget.OnDrop(bin, func(rows []*Job) { archive(rows) })
   with about one allocation more a row shown. A table with both off builds and
   allocates what it did.
 
+Fitting and choosing columns, and the full text of a cell:
+
+```go
+note := widget.Column[Profile]{Title: "Note", Text: func(p *Profile) string { return p.Note }, Width: 160,
+	Hint: func(p *Profile) string { return p.LastError }} // the cell's tooltip; "" for none
+t := widget.DataGridView(key, name, note).
+	SetColumnChooser(true). // a right-click on the header: the columns, Best fit, Clear sorting
+	SetCellHints(true)      // a Text cut off shows whole as a tooltip
+t.BestFit("Name") // at the next frame; BestFit() fits every column shown
+```
+
+- `BestFit(titles...)` fits each column named to its header and the cells
+  in view, as a double click on the edge of its header does; with no
+  titles, every column shown. It applies at the
+  next frame, and `OnColumnsChange` gets the new widths. Titles of no
+  column, or of a hidden one, are ignored, as is the `#` column.
+- `SetColumnChooser(true)` gives the header a context menu: every column, as
+  an item checked while it shows, which choosing hides or shows as
+  `SetColumnVisible` does; the only column still shown is checked and
+  disabled, so one always shows. "Best fit" fits the column right-clicked
+  (disabled past the columns and on `#`), "Best fit (all columns)" every
+  one, and "Clear sorting", there while the rows are sorted, is
+  `ClearSort`. The choices run as the setters do, on the event goroutine.
+- `Column.Hint(row)` is the tooltip of the column's cells, "" for none; it
+  runs under the package's lock as the cell is built, and calls no widget
+  method. `SetCellHints(true)` shows the full `Text` of a cell its column
+  cuts off (the text measured wider than the column, less its padding, an
+  image and a grid line) as a tooltip; a `Hint` that returns text wins. A
+  column sharing the room left is measured by its header as the last frame
+  laid it out. A `Badge` cell shows its `Hint` alone: its pill is not cut
+  off as text is.
+- The tooltip covers the whole cell, and only the cell under the pointer
+  gets it: the rows stay kept from frame to frame, a frame at rest
+  allocates nothing more, and a `Hint` runs only for that cell. The row
+  under the pointer is built again as the pointer comes onto a cell and
+  leaves it. Assistive technology does not read the tips. With all three
+  off the grid builds what it did.
+
 Filters on the columns, as a spreadsheet's header filters:
 
 ```go
