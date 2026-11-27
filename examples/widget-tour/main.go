@@ -9,8 +9,11 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"log"
 	"math"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -20,6 +23,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
 	"github.com/egoist/mygo/ui/widget"
+	"github.com/egoist/mygo/ui/widget/export"
 	"github.com/egoist/mygo/ui/widget/richtextbox"
 )
 
@@ -562,8 +566,38 @@ func table() widget.Control {
 		go liveUpdates(t, stop)
 	})
 	fit := widget.Button("Best fit").OnClick(func() { t.BestFit() })
+	csv := exportButton(t, activated, "csv", export.CSV)
+	xlsx := exportButton(t, activated, "xlsx", export.XLSX)
 	hint := widget.Label("F2 edits a Name: try Vietnamese Telex typing here").Muted()
-	return widget.VBox(8).Add(widget.HBox(8).Add(live, fit, activated, hint)).Pack(t, true, true).Expand()
+	return widget.VBox(8).Add(widget.HBox(8).Add(live, fit, csv, xlsx, activated, hint)).Pack(t, true, true).Expand()
+}
+
+// saveFile asks where to save a file; the tests answer instead.
+var saveFile = widget.SaveFile
+
+// exportButton saves the rows t shows, as filtered, sorted and grouped, in a
+// file of type ext that write writes, and says so in status.
+func exportButton(t *widget.DataGridViewWidget[account, int], status *widget.LabelWidget, ext string,
+	write func(w io.Writer, header []string, rows [][]string) error) *widget.ButtonWidget {
+	return widget.Button("Export " + strings.ToUpper(ext)).OnClick(func() {
+		path := saveFile(nil, "Export", "accounts."+ext)
+		if path == "" {
+			return // canceled
+		}
+		header, rows := t.ShownCells()
+		f, err := os.Create(path)
+		if err == nil {
+			err = write(f, header, rows)
+			if cerr := f.Close(); err == nil {
+				err = cerr
+			}
+		}
+		if err != nil {
+			status.SetText("Export failed: " + err.Error())
+			return
+		}
+		status.SetText(fmt.Sprintf("Exported %d rows to %s", len(rows), filepath.Base(path)))
+	})
 }
 
 // liveUpdates fails or fixes a hundred accounts every 100 ms until stop
