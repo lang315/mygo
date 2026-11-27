@@ -102,7 +102,15 @@ type DataGridViewWidget[T any, K comparable] struct {
 	visCols []int            // the indexes in cols of the columns shown: never changed, replaced
 	full    []string         // the last order of all the columns' titles, hidden ones too
 	view    *ui.TableView[T]
-	filter  func(*T) bool // the view's, nil for none
+	filter  func(*T) bool // the view's, nil for none: the search's and the columns' filters (refilter)
+	search  func(*T) bool // the bottom panel's search, nil for none
+	// Column filters (table_filter.go): fl is nil until a filter call; the
+	// three funcs are nil until a drop-down, the auto filter row or the
+	// filter panel is on, so that a grid without them builds what it did.
+	fl          *gridFilters
+	filterHead  func(cell ui.Element, col int)
+	filterWrap  func(c *ui.Context) ui.Element
+	filterStrip func(c *ui.Context)
 	// frame holds the rows of the frame ui shows, and order their order
 	// once kept, when a sync outside a build changed the view: ui may
 	// still lay that frame out, or apply input to it. Setters never move
@@ -876,6 +884,9 @@ func (t *DataGridViewWidget[T, K]) build(c *ui.Context) ui.Element {
 		if t.summarize != nil {
 			t.summarize(c)
 		}
+		if t.filterStrip != nil {
+			t.filterStrip(c)
+		}
 		if t.panel != nil {
 			t.counts()
 			render(c, t.panel)
@@ -899,10 +910,22 @@ func (t *DataGridViewWidget[T, K]) headerCell(cell ui.Element, col int) {
 		st := look.effective(c.Theme().Dark, cell.Hovered(), false, false, cell.Pressed(), t.disabled)
 		st.apply(c, cell, t.textKey)
 	}
+	if t.filterHead != nil {
+		t.filterHead(cell, col)
+	}
 }
 
-// table builds the ui table. Under mu.
+// table builds the ui table, in the auto filter row's theme while it is on.
+// Under mu.
 func (t *DataGridViewWidget[T, K]) table(c *ui.Context) ui.Element {
+	if t.filterWrap != nil {
+		return t.filterWrap(c)
+	}
+	return t.uiTable(c)
+}
+
+// uiTable builds the ui table. Under mu.
+func (t *DataGridViewWidget[T, K]) uiTable(c *ui.Context) ui.Element {
 	s := &t.list
 	if t.footer != nil {
 		t.footer.heads = t.footer.heads[:0]

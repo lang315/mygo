@@ -156,17 +156,8 @@ func (t *DataGridViewWidget[T, K]) Search(column, keyword string) *DataGridViewW
 		entry.SetText(keyword)
 	}
 	t.change(func() {
-		var before []K
-		t.selSeen = nil // the shown selection is taken anew under the new search
-		watch := t.onSelChanged != nil && t.chosen.value.Len() > 0
-		if watch {
-			before = t.shown(&t.chosen.value)
-		}
-		t.filter = t.keep(column, keyword)
-		t.view.SetFilter(t.filter)
-		if watch && !sameKeys(before, t.shown(&t.chosen.value)) {
-			t.selectionChanged()
-		}
+		t.search = t.keep(column, keyword)
+		t.refilter()
 	})
 	return t
 }
@@ -191,7 +182,17 @@ func sameKeys[K comparable](a, b []K) bool {
 // keep returns the filter of a search, nil for none. Under mu.
 func (t *DataGridViewWidget[T, K]) keep(column, keyword string) func(*T) bool {
 	i := slices.IndexFunc(t.cols, func(cl Column[T]) bool { return cl.Filterable && cl.Title == column })
-	if keyword == "" || i < 0 {
+	if i < 0 {
+		return nil
+	}
+	return t.keepColumn(i, keyword)
+}
+
+// keepColumn returns the filter keeping the rows whose cell in column i
+// holds keyword, as the column's Filter decides, nil for an empty keyword:
+// the search's, and a ColumnFilter's Contains. Under mu.
+func (t *DataGridViewWidget[T, K]) keepColumn(i int, keyword string) func(*T) bool {
+	if keyword == "" {
 		return nil
 	}
 	if f := t.cols[i].Filter; f != nil {
