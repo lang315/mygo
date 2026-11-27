@@ -90,7 +90,9 @@ product := widget.LookUpEdit(
 - Up and Down in the search box move the highlighted record, from none when
   the drop-down opens or the search changes; Enter or a click chooses it and
   closes the drop-down, running `OnSelect` as above. Escape or a click
-  outside closes it, the choice as it was.
+  outside closes it, the choice as it was. The highlighted record is the
+  search box's active descendant, so assistive technology reads it as the
+  arrows move, with the focus staying in the search box.
 - The list builds only the records in view (ten rows high), with ui's
   `List`: 10,000 records open and search as fast as ten.
 

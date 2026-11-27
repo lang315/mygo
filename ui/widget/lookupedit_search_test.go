@@ -362,6 +362,61 @@ func TestLookUpSearchSetItemsWhileOpen(t *testing.T) {
 	}
 }
 
+// focusedRows are the names of the rows assistive technology has the focus
+// on: the search box's active descendant.
+func focusedRows(tt *Tester) []string {
+	var out []string
+	for _, a := range tt.AccessAll() {
+		if a.Role == ui.RoleListItem && a.Focused {
+			out = append(out, a.Name)
+		}
+	}
+	return out
+}
+
+// Case L10: the highlighted row is the search box's active descendant, so
+// assistive technology reads it; none while no row is highlighted.
+func TestLookUpSearchActiveDescendant(t *testing.T) {
+	tt, _ := lookTester(t, searchLookUp())
+	lookField(tt).Click()
+	if got := focusedRows(tt); len(got) != 0 {
+		t.Fatalf("on opening, the focus is on rows %q, want none", got)
+	}
+	searchBox(tt).Type("c0")
+	lookKeys(tt, ui.KeyDown, ui.KeyDown)
+	if got := focusedRows(tt); !slices.Equal(got, []string{"C02 Beta Hue"}) {
+		t.Fatalf("after Down, Down the focus is on rows %q, want the second match", got)
+	}
+	lookType(tt, "2") // c02: Beta alone, highlighted by none
+	if got := focusedRows(tt); len(got) != 0 {
+		t.Fatalf("after the query changed, the focus is on rows %q, want none", got)
+	}
+	if !searchBox(tt).Focused() {
+		t.Fatal("the search box lost the focus")
+	}
+}
+
+// Case L11: right to left, the drop-down mirrors: the first column's
+// header and cells are at the right, the last's at the left.
+func TestLookUpSearchRightToLeft(t *testing.T) {
+	for _, rtl := range []bool{false, true} {
+		tt, _ := lookTester(t, searchLookUp())
+		if rtl {
+			tt.SetDirection(ui.RightToLeft)
+			tt.Frame()
+		}
+		lookField(tt).Click()
+		code, city := textAt(t, tt, "Code"), textAt(t, tt, "City")
+		c01, hanoi := textAt(t, tt, "C01"), textAt(t, tt, "Hanoi")
+		if first := code.X < city.X && c01.X < hanoi.X; first == rtl {
+			t.Fatalf("right to left %v: Code at %v, City at %v, C01 at %v, Hanoi at %v", rtl, code.X, city.X, c01.X, hanoi.X)
+		}
+		if rtl && !within(code.X+code.W, c01.X+c01.W, 1) {
+			t.Fatalf("right to left: the header's Code ends at %v, the row's C01 at %v: not lined up at the right", code.X+code.W, c01.X+c01.W)
+		}
+	}
+}
+
 // Case L9: the drop-down closes when its LookUpEdit is hidden, as a tab
 // switched away hides it, and stays closed when it shows again.
 func TestLookUpSearchHideCloses(t *testing.T) {

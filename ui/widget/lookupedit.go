@@ -48,6 +48,7 @@ type lookSearch struct {
 	hl        int // the index in shown of the row highlighted, -1 for none
 	list      ui.ListState
 	c         *ui.Context // the context of the last build, for the rows ui lays out after it
+	in        ui.Element  // the search box of the last build, whose active descendant the highlighted row is
 	text      string      // what the field shows
 	// The functions handed to ui, made once.
 	field func()
@@ -438,6 +439,7 @@ func (l *LookUpEditWidget[T, K]) buildSearchPopup(panel ui.Element) {
 	scale := c.Preferences().TextScale
 	panel.Gap(t.Space(1)).Width(max(l.panelWidth(t, scale), t.Space(60)))
 	in := ui.TextInput(c, &s.query).AutoFocus().Label(l10n.Search()).Placeholder(l10n.Search())
+	s.in = in
 	if !s.matched || s.query != s.seenQuery || s.seenGen != l.gen {
 		l.shown = l.searchMatching(strings.ToLower(s.query))
 		s.matched, s.seenQuery, s.seenGen, s.hl = true, s.query, l.gen, -1
@@ -486,6 +488,9 @@ func (l *LookUpEditWidget[T, K]) buildSearchRow(s *lookSearch, i int) {
 	row := ui.Row(c).Gap(t.Space(2)).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
 	if h := t.Metrics.RowHeight; h > 0 {
 		row.MinHeight(h).PaddingY(0).AlignItems(ui.Center)
+	}
+	if i == s.hl {
+		s.in.ActiveDescendant(row) // assistive technology reads the row the arrows are on
 	}
 	if i == s.hl || row.Hovered() {
 		bg, fg := highlightOf(t)

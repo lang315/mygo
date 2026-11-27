@@ -780,9 +780,18 @@ func (rt *engine) accessTree() *platform.AccessTree {
 				}
 			}
 		}
-		// A combobox has the focus for the option its arrows are on.
+		// A combobox has the focus for the option its arrows are on. An
+		// active descendant assistive technology does not see, as the
+		// content of a List's row, gives it to its nearest ancestor it sees,
+		// as that row, below the focused element or the popup's panel: never
+		// to them or past them.
 		if focused != nil && focused.activeDescendant != nil {
-			focus = focused.activeDescendant.id
+			for d := focused.activeDescendant; d != nil && d != focused && d.popover == nil; d = d.parent {
+				if slices.ContainsFunc(t.Nodes, func(n platform.AccessNode) bool { return n.ID == d.id }) {
+					focus = d.id
+					break
+				}
+			}
 		}
 		for _, id := range []uint64{focus, rt.focused} {
 			if t.Focus == 0 && slices.ContainsFunc(t.Nodes, func(n platform.AccessNode) bool { return n.ID == id }) {
