@@ -903,6 +903,54 @@ t := widget.DataGridView(key, name, status).
   table must look at its columns' fields, so no call of the app's own tells
   it apart.
 
+Filters on the columns, as a spreadsheet's header filters:
+
+```go
+var t *widget.DataGridViewWidget[Doc, int]
+t = widget.DataGridView(key, name, kind).
+	SetFilterDropDowns(true). // a funnel in each Filterable header
+	SetAutoFilterRow(true).   // a field under each Filterable title
+	SetFilterPanel(true).     // the filters as text under the table, while any is set
+	SetColumnFilter("Kind", widget.ColumnFilter{Values: []string{"Doc", "Sheet"}}).
+	OnFilterChange(func() { save(t.ColumnFilter("Kind")) }) // the user's changes only
+```
+
+- A `ColumnFilter` keeps the rows whose cell passes it: `Contains` the rows
+  whose text holds it, whatever its case (or, for a column with its own
+  `Filter`, those `Filter` keeps for it, as the search), and `Values`, when
+  not nil, the rows whose `Text` is one of them (an empty, non-nil `Values`
+  keeps none). The zero value filters nothing.
+- `SetColumnFilter(title, f)` sets a column's filter (a title no column has is
+  ignored; the column need not be `Filterable`), `ColumnFilter(title)` returns
+  a copy, and `ClearFilters()` takes them all away and leaves the bottom
+  panel's search. A row shows when it passes every column's filter and the
+  search. Filters apply to rows set, added and changed in place, as the search
+  does; sorting and grouping order the rows that pass; `Summary` gets them.
+  Selected rows a filter hides stay selected, and `Selected`, `CountSelected`
+  and `Checked` leave them out while hidden, as with the search.
+- `OnFilterChange(fn)` runs `fn` on the event goroutine after the user changed
+  a filter (a drop-down, the auto filter row, the filter panel), once for each
+  change; the setters do not run it.
+- `SetFilterDropDowns(true)` gives each `Filterable` column's header a funnel,
+  filled while the column has a filter (assistive technology reads it as a
+  button, "Filter Name", checked then). A click opens a drop-down: a Contains
+  field, the column's distinct `Text`s as a check list, sorted, "Select all",
+  which checks them all (`Values` nil), and "Clear", which takes the
+  column's filter away. Each change applies at once. The list holds the
+  values of the rows the grid has, those loaded so far from a `RowSource`
+  still loading, at most 1000 of them, and says so when there are more.
+- `SetAutoFilterRow(true)` puts a text field under each `Filterable` column's
+  title, the header growing a row taller, bound to the column's `Contains`:
+  typing filters at once, and `SetColumnFilter` shows in it. The fields
+  scroll sideways with their columns, and a `Frozen` column's stays pinned.
+- `SetFilterPanel(true)` shows a strip under the table while a column has a
+  filter: the filters as text (`Name contains "an" and Kind is Doc, Sheet`)
+  on a check box that turns them all off and on again, keeping them, and
+  "Clear", which runs `ClearFilters`. A new filter turns them on again. Its
+  words, and the drop-down's, are English.
+- A grid that never calls them builds and allocates what it did; a frame at
+  rest with them on allocates nothing more.
+
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
   place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.

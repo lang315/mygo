@@ -277,7 +277,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 				return strconv.Itoa(done) + " done"
 			}},
 	).CheckboxColumn().BottomPanel().SetEmptyState(widget.EmptyState("No accounts", "Add one to start.")).
-		SetGroupBy(func(a *Account) string { return a.Status }).Expand()
+		SetGroupBy(func(a *Account) string { return a.Status }).SetFilterDropDowns(true).Expand()
 	table.AddRows(rows)
 	go func() {
 		for _, row := range rows {
@@ -291,6 +291,7 @@ func accounts(rows []Account) *widget.DataGridViewWidget[Account, uint] {
 
 - Show a row's state in the grid with the column's `Badge` (the cell's `Text` as a badge of the `widget.Status` it returns; `BadgeDetail` for a running one's step) and color cells with a `widget.CellFormat` (`Status`, `Fill`, `Text`, `Bold`): the column's `Format`, or `widget.DataGridViewWidget.SetRowFormat` for every cell of the row, the column's winning field by field. Not `Spans` or `Color` for a status: the skin colors these, a selected row shows the selection, and they are built once per row change. `widget.DataGridViewWidget.SetEmptyState(widget.EmptyState(...))` shows while no row shows, the search's included.
 - Totals go in a column's `Summary`: it gets the rows shown (after the search) and returns the text of the column's cell in a row under the table; it runs when the rows change, not in every frame, so count there instead of in a label you update. `widget.DataGridViewWidget.SetGroupBy(fn)` puts the rows under a header "Title (n)" per title, by title or in the order `widget.DataGridViewWidget.SetGroupOrder` gives.
+- Filter by columns with `widget.DataGridViewWidget.SetColumnFilter(title, widget.ColumnFilter{Contains: ..., Values: ...})` (read back with `widget.DataGridViewWidget.ColumnFilter`, all off with `widget.DataGridViewWidget.ClearFilters`, which keeps the bottom panel's search), not by filtering the rows yourself before `SetRows`: rows changed later move in and out by themselves. Let the user filter from the header with `widget.DataGridViewWidget.SetFilterDropDowns(true)` (a funnel and a check list of values on each `Filterable` column) and `widget.DataGridViewWidget.SetAutoFilterRow(true)` (a field under each title), and show what is filtered with `widget.DataGridViewWidget.SetFilterPanel(true)`. `widget.DataGridViewWidget.OnFilterChange(fn)` runs on the user's changes only, as a place to save them.
 - Every row has a key; `widget.DataGridViewWidget.AddRows` replaces the row of an existing key; change a row in place with `widget.DataGridViewWidget.UpdateRow(key, fn)`, never by rebuilding the table. It scales to a million rows.
 - An icon your image function returns later (a thumbnail that loads) is not seen by a row already shown: call `UpdateRow(k, func(*T){})` for its row when it arrives, or keep the icons in a `widget.ImageList` (`SetImageList`), whose changes the list view, list box and tree show.
 - Each getter is a snapshot of its own: between `widget.DataGridViewWidget.Selected` and `widget.DataGridViewWidget.Row` a row may have been deleted, so check the `ok` of `Row`. `Row` returns a shallow copy of the row: if the row type holds a slice, a map or a pointer, reading it races with `UpdateRow`. Keep rows plain values, or copy deeply.
