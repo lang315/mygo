@@ -903,6 +903,41 @@ t := widget.DataGridView(key, name, status).
   table must look at its columns' fields, so no call of the app's own tells
   it apart.
 
+Fitting and choosing columns, and the full text of a cell:
+
+```go
+note := widget.Column[Profile]{Title: "Note", Text: func(p *Profile) string { return p.Note }, Width: 160,
+	Hint: func(p *Profile) string { return p.LastError }} // the cell's tooltip; "" for none
+t := widget.DataGridView(key, name, note).
+	SetColumnChooser(true). // a right-click on the header: the columns, Best fit, Clear sorting
+	SetCellHints(true)      // a Text cut off shows whole as a tooltip
+t.BestFit("Name") // at the next frame; BestFit() fits every column shown
+```
+
+- `BestFit(titles...)` fits each column named to its header and the cells
+  in view, as a double click on the edge of its header does (that one fits
+  to the cells alone); with no titles, every column shown. It applies at the
+  next frame, and `OnColumnsChange` gets the new widths. Titles of no
+  column, or of a hidden one, are ignored, as is the `#` column.
+- `SetColumnChooser(true)` gives the header a context menu: every column, as
+  an item checked while it shows, which choosing hides or shows as
+  `SetColumnVisible` does; the only column still shown is checked and
+  disabled, so one always shows. "Best fit" fits the column right-clicked
+  (disabled past the columns and on `#`), "Best fit (all columns)" every
+  one, and "Clear sorting", there while the rows are sorted, is
+  `ClearSort`. The choices run as the setters do, on the event goroutine.
+- `Column.Hint(row)` is the tooltip of the column's cells, "" for none; it
+  runs under the package's lock as the cell is built, and calls no widget
+  method. `SetCellHints(true)` shows the full `Text` of a cell its column
+  cuts off (the text measured wider than the column, less its padding, an
+  image and a grid line) as a tooltip; a `Hint` that returns text wins. A
+  column sharing the room left is measured by its header as the last frame
+  laid it out.
+- Only the cell under the pointer gets its tooltip, so the rows stay kept
+  from frame to frame, a frame at rest allocates nothing more, and a
+  `Hint` runs only for that cell; assistive technology does not read the
+  tips. With all three off the grid builds what it did.
+
 - Rows: `SetRows`, `AddRow` and `AddRows` (after the others, or in place
   of the row of the same key), `UpdateRow(k, fn)` (fn changes the row in
   place, not its key), `DeleteRows(ks...)`, `Clear`, `Row(k)`, `Len`.

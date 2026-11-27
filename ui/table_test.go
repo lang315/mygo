@@ -114,6 +114,83 @@ func TestTableResize(t *testing.T) {
 	}
 }
 
+// FitColumns fits several columns in the next frame, each to its header and
+// its cells, as a double click on an edge does, and ignores IDs of no
+// column and of Fixed columns; Changed reports the new layout.
+func TestTableFitColumns(t *testing.T) {
+	s := ListState{}
+	cols := []TableColumn{{Title: "Name", Width: 40}, {Title: "Kind", Width: 300}, {Title: "Size", Width: 80, Fixed: true}, {Title: "A long title, wider than its cells", Width: 30}}
+	changed := 0
+	names := []string{"a.txt", "a much longer name.txt"}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			if coreTable(c, &s, cols, len(names), func(row, col int) {
+				switch col {
+				case 0:
+					coreText(c, names[row]).SingleLine()
+				case 1:
+					coreText(c, "Document")
+				case 2:
+					coreTextf(c, "%d KB", row+1)
+				case 3:
+					coreText(c, "x")
+				}
+			}).Grow(1).Changed() {
+				changed++
+			}
+		})
+	}, 900, 300)
+	s.FitColumns("Name", "Kind", "Size", "Nope", "A long title, wider than its cells", "Kind")
+	tt.Frame()
+	tt.Frame()
+	// Measured once whole, the columns fitted.
+	long, _ := tt.Find("a much longer name.txt")
+	doc, _ := tt.Find("Document")
+	title, _ := tt.Find("A long title, wider than its cells")
+	if long.W < 100 || title.W < 100 {
+		t.Fatalf("the texts measured %v and %v: still cut off", long.W, title.W)
+	}
+	if w := s.Columns.Widths["Name"]; w < long.W+20 || w > long.W+21 {
+		t.Errorf("Name fitted to %v for a text of %v", w, long.W)
+	}
+	if w := s.Columns.Widths["Kind"]; w < doc.W+20 || w > doc.W+21 {
+		t.Errorf("Kind fitted to %v for a text of %v", w, doc.W)
+	}
+	if w := s.Columns.Widths["A long title, wider than its cells"]; w < title.W+19.9 {
+		t.Errorf("the column of a long title fitted to %v, not to its header of %v", w, title.W)
+	}
+	if _, ok := s.Columns.Widths["Size"]; ok {
+		t.Errorf("a Fixed column fitted: %v", s.Columns.Widths)
+	}
+	if _, ok := s.Columns.Widths["Nope"]; ok {
+		t.Errorf("an ID of no column fitted: %v", s.Columns.Widths)
+	}
+	if changed != 1 {
+		t.Errorf("Changed reported %d times, want once", changed)
+	}
+	// Nothing more asked: the next frames fit nothing.
+	s.Columns.Widths = map[string]float32{"Name": 40}
+	tt.Frame()
+	tt.Frame()
+	if w := s.Columns.Widths["Name"]; w != 40 {
+		t.Errorf("Name fitted again to %v without FitColumns", w)
+	}
+}
+
+// A double click on an edge of a table without rows fits nothing it has no
+// cell of, and does not fail.
+func TestTableFitWithoutRows(t *testing.T) {
+	s := ListState{}
+	cols := []TableColumn{{Title: "Name", Width: 100}, {Title: "Kind", Width: 100}}
+	tt := coreNewTester(tableView(&s, cols, nil), 500, 300)
+	name := header(t, tt, "Name")
+	edge := float32(name.X+name.W) - 2
+	tt.ClickAt(edge, float32(name.Y+name.H/2))
+	tt.ClickAt(edge, float32(name.Y+name.H/2))
+	tt.Frame()
+	header(t, tt, "Kind") // the table still builds
+}
+
 // FixedColumnOrder: a header dragged past its neighbor stays where it is;
 // one released on itself is a click, which sorts, as a Fixed column's is;
 // the edge still resizes.

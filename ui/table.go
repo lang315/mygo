@@ -146,10 +146,10 @@ type tableDrag struct {
 	// tell whether it changed it. The table gives the layout a new slice
 	// or map as it changes, so these are the ones it had then.
 	from TableLayout
-	// fit is the column to fit to its cells in this frame, by ID, and
-	// fitted reports that a fit changed its width, for the next build to
-	// report.
-	fit    string
+	// fit are the columns to fit to their cells in this frame, by ID: the
+	// one whose edge was double-clicked, or those of FitColumns. fitted
+	// reports that a fit changed a width, for the next build to report.
+	fit    []string
 	fitted bool
 }
 
@@ -225,6 +225,13 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	s.syncSort()
 	layout := &s.Columns
 	order := layout.arrange(columns)
+	// The columns FitColumns asked for: those given that the user can fit.
+	for _, id := range s.fits {
+		if j := slices.IndexFunc(columns, func(col TableColumn) bool { return col.id() == id }); j >= 0 && !columns[j].Fixed {
+			drag.fit = append(drag.fit, id)
+		}
+	}
+	s.fits = s.fits[:0]
 	// The block of cells chosen (CellSelect): its columns' places, from lo
 	// to hi, and the Cursor's.
 	cellSel := s.tracksCells()
@@ -284,8 +291,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	}
 	s.focusCol, s.focusColOn = s.focusColNext, s.focusColNextOn
 	s.focusColNext, s.focusColNextOn = "", false
-	// fitting are the cells of the column fitting its cells.
-	var fitting []*node
+	// fitting are the cells of the columns fitting their cells, by their
+	// places in drag.fit.
+	var fitting [][]*node
 	// The columns' keys, boxed once: a cell is keyed by its column, and a
 	// key boxed in each cell of each row allocates for every one of them.
 	colKeys := make([]any, len(columns))
@@ -471,8 +479,13 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			if s.VirtualColumns && role == RoleCell && box.FocusWithin() {
 				s.focusColNext, s.focusColNextOn = col.id(), true
 			}
-			if drag.fit != "" && drag.fit == col.id() {
-				fitting = append(fitting, box)
+			if len(drag.fit) > 0 {
+				if f := slices.Index(drag.fit, col.id()); f >= 0 {
+					for len(fitting) <= f {
+						fitting = append(fitting, nil)
+					}
+					fitting[f] = append(fitting[f], box)
+				}
 			}
 			if boxes != nil {
 				boxes = append(boxes, box)
@@ -559,7 +572,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		// Rows of VirtualColumns build the columns the list's scroll and
 		// width show (window), and the one holding the focus: none of which
 		// keep compares, so they are not kept.
-		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, slo, shi, scur, checkW, s), drag.fit != "" || s.VirtualColumns
+		s.rowSig, s.rowNoKeep = rowSignature(columns, order, layout, slo, shi, scur, checkW, s), len(drag.fit) > 0 || s.VirtualColumns
 		buildList(c, list, table, s, n, func(i int) {
 			row := coreRow(c).MinHeight(tableRow).AlignItems(Stretch)
 			if s.RowHeight > 0 {
@@ -624,8 +637,8 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	if s.Copy != nil {
 		table.HandleInput(copyInput(c.rt, func() []int { return s.frame.chosenRows() }, s.Copy))
 	}
-	if id := drag.fit; id != "" {
-		table.colFit = &tableFit{id: id, cells: fitting, layout: layout, drag: drag, rt: c.rt}
+	if len(drag.fit) > 0 {
+		table.colFit = &tableFit{ids: drag.fit, cells: fitting, layout: layout, drag: drag, rt: c.rt}
 		table.special = true // it fits its columns as it lays out
 	}
 	table.DrawOver(func(p *Painter, r Rect) {
@@ -756,7 +769,7 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 		rtl := edge.rtl()
 		edge.flags |= flagHover
 		if edge.DoubleClicked() {
-			drag.fit = id
+			drag.fit = append(drag.fit, id)
 			c.rt.consumed = true
 		}
 		dx, _, held := edge.Dragged()
@@ -863,26 +876,43 @@ func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order 
 	return true
 }
 
-// tableFit fits a column of a table to its cells as the table lays out,
-// the cells built in the frame and the header.
+// tableFit fits columns of a table to their cells as the table lays out,
+// the cells built in the frame and the header: those of ids[i] are
+// cells[i].
 type tableFit struct {
-	id     string
-	cells  []*node
+	ids    []string
+	cells  [][]*node
 	layout *TableLayout
 	drag   *tableDrag
 	rt     *engine
 	done   bool
 }
 
-// apply sets the column's width to the widest of its cells, once, before
-// the table is measured or laid out.
+// apply sets each column's width to the widest of its cells, once, before
+// the table is measured or laid out. An ID named twice is fitted once: its
+// cells are with the first.
 func (tf *tableFit) apply() {
 	if tf.done {
 		return
 	}
-	tf.done, tf.drag.fit = true, ""
+	tf.done, tf.drag.fit = true, nil
+	for i, id := range tf.ids {
+		if slices.Index(tf.ids, id) != i {
+			continue
+		}
+		var cells []*node
+		if i < len(tf.cells) {
+			cells = tf.cells[i]
+		}
+		tf.fit(id, cells)
+	}
+}
+
+// fit sets the width of the column whose ID is id to the widest of its
+// cells.
+func (tf *tableFit) fit(id string, cells []*node) {
 	var w float32
-	for _, cell := range tf.cells {
+	for _, cell := range cells {
 		rt := cell.c.rt
 		journalKeep(rt, &cell.width)
 		journalKeep(rt, &cell.grow)
@@ -890,11 +920,11 @@ func (tf *tableFit) apply() {
 		cell.width = length{}
 		w = max(w, intrinsic(cell, true))
 	}
-	for _, cell := range tf.cells {
+	for _, cell := range cells {
 		cell.width, cell.grow, cell.shrink = px(w), 0, 0
 		cell.parent.forgetIntrinsic()
 	}
-	if old, ok := tf.layout.Widths[tf.id]; ok && old == w {
+	if old, ok := tf.layout.Widths[id]; ok && old == w {
 		return
 	}
 	if tf.layout.Widths == nil {
@@ -902,9 +932,9 @@ func (tf *tableFit) apply() {
 	} else {
 		tf.layout.Widths = maps.Clone(tf.layout.Widths)
 	}
-	tf.layout.Widths[tf.id] = w
+	tf.layout.Widths[id] = w
 	tf.drag.fitted = true
-	if tf.drag.resizing == tf.id {
+	if tf.drag.resizing == id {
 		tf.drag.from = *tf.layout
 	}
 	// Layout runs inside a frame, where requestFrame does nothing: ask for the
