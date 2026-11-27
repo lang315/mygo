@@ -171,13 +171,13 @@ func TestGroupSummaryLineMovedAsksAFrame(t *testing.T) {
 	tt := profTester(g)
 	gs := groupSumsOf(t, g)
 	mu.Lock()
-	asked, x := gs.asked, gs.lineX
+	asked, x := gs.asked, gs.xs[0]
 	// Out of a frame, where the header's cells cannot be read: a moved line
 	// answers before they are (a line in place, which reads them, is
 	// TestGroupSummaryNotInFrameAtRest's).
-	gs.checkPlaces(nil, ui.Rect{X: x + 5, W: 100})
-	moved, at := gs.asked, gs.lineX
-	gs.lineX = x // as the frame's paint will find it
+	gs.checkPlaces(0, ui.Rect{X: x + 5, W: 100})
+	moved, at := gs.asked, gs.xs[0]
+	gs.xs[0] = x // as the frame's paint will find it
 	mu.Unlock()
 	if moved != asked+1 || at != x+5 {
 		t.Errorf("a line painted 5 DIPs on asked for %d frames and keeps start %v, want 1 and %v", moved-asked, at, x+5)
@@ -189,11 +189,12 @@ func TestGroupSummaryLineMovedAsksAFrame(t *testing.T) {
 	wantAligned(t, tt, "60", "10", true)
 }
 
-// gsTextAt returns the bounds of the first text label shown.
+// gsTextAt returns the bounds of the first text label shown whole (a row
+// half under the pinned header shows a sliver of its texts).
 func gsTextAt(t *testing.T, tt *ui.Tester, label string) ui.Rect {
 	t.Helper()
 	for _, n := range tt.Nodes() {
-		if n.Role == ui.RoleText && n.Label == label && n.Bounds.W > 0 {
+		if n.Role == ui.RoleText && n.Label == label && n.Bounds.W > 0 && n.Bounds.H > 10 {
 			return n.Bounds
 		}
 	}
@@ -555,6 +556,186 @@ func TestGroupSummaryStopsEarly(t *testing.T) {
 	if got := reports.Load(); got != 0 {
 		t.Fatalf("%d panics reported", got)
 	}
+}
+
+// runsTotal is a GroupSummary of the profiles' runs: their sum.
+func runsTotal(rows iter.Seq[*prof]) string {
+	total := 0
+	for p := range rows {
+		total += p.Runs
+	}
+	return strconv.Itoa(total)
+}
+
+// pinnedGrid is the 10,000 profiles grouped by status, Runs totalled per
+// group, with cols' widths w (0 keeps sumCols').
+func pinnedGrid(w float32) *DataGridViewWidget[prof, int] {
+	cols := sumCols(nil)
+	cols[2].GroupSummary = runsTotal
+	if w > 0 {
+		for i := range cols {
+			cols[i].Width = w
+		}
+	}
+	return profGrid(cols...).SetGroupBy(func(p *prof) string { return p.Status })
+}
+
+// wantSettled fails unless frames at rest ask for no more frames.
+func wantSettled(t *testing.T, tt *ui.Tester, g *DataGridViewWidget[prof, int], what string) {
+	t.Helper()
+	mu.Lock()
+	gs := g.groupSums
+	asked := gs.asked
+	mu.Unlock()
+	for range 5 {
+		tt.Frame()
+	}
+	mu.Lock()
+	after := gs.asked
+	mu.Unlock()
+	if after != asked || tt.FramePending() {
+		t.Errorf("%s: 5 frames at rest asked for %d more frames (pending %v)", what, after-asked, tt.FramePending())
+	}
+}
+
+// Scrolled down, the "failed" header pinned at the top and "idle"'s in the
+// rows: both lines' totals sit under Runs, at the end of a cell's text,
+// and frames at rest ask for nothing; so too further down, and scrolled
+// sideways with wide columns.
+func TestGroupSummaryPinnedHeader(t *testing.T) {
+	g := pinnedGrid(0)
+	tt := profTester(g)
+	tt.Wheel(450, 300, 0, 150)
+	tt.Advance(time.Second)
+	tt.Frame()
+	for _, total := range []string{"7", "9681"} {
+		wantUnder(t, tt, total, "Runs")
+		wantAligned(t, tt, total, "1", true)
+	}
+	wantSettled(t, tt, g, "failed pinned, idle in the rows")
+	tt.Wheel(450, 300, 0, 5000)
+	tt.Advance(time.Second)
+	tt.Frame()
+	wantUnder(t, tt, "9681", "Runs")
+	wantAligned(t, tt, "9681", "1", true)
+	wantSettled(t, tt, g, "idle pinned")
+
+	g = pinnedGrid(400)
+	tt = profTester(g)
+	tt.Wheel(450, 300, 0, 150)
+	tt.Advance(time.Second)
+	tt.Frame()
+	tt.Wheel(450, 300, 300, 0)
+	tt.Advance(time.Second)
+	tt.Frame()
+	for _, total := range []string{"7", "9681"} {
+		wantUnder(t, tt, total, "Runs")
+		wantAligned(t, tt, total, "1", true)
+	}
+	wantSettled(t, tt, g, "wide columns scrolled sideways, failed pinned")
+}
+
+// Group lines scrolled into view for the first time are placed where the
+// lines painted before start: no frame is asked for to move them.
+func TestGroupSummaryNewLineInPlace(t *testing.T) {
+	cols := sumCols(nil)
+	cols[2].GroupSummary = runsTotal
+	g := profGrid(cols...).SetGroupBy(func(p *prof) string { return fmt.Sprintf("g%03d", p.ID/20) }) // 500 groups of 20
+	tt := profTester(g)
+	wantSettled(t, tt, g, "at first")
+	mu.Lock()
+	asked, lines := g.groupSums.asked, len(g.groupSums.checks)
+	mu.Unlock()
+	tt.Wheel(450, 300, 0, 3000)
+	tt.Advance(time.Second)
+	tt.Frame()
+	mu.Lock()
+	asked2, lines2 := g.groupSums.asked, len(g.groupSums.checks)
+	mu.Unlock()
+	if lines2 <= lines {
+		t.Fatalf("the scroll built no new group line: %d lines, %d before", lines2, lines)
+	}
+	if asked2 != asked {
+		t.Errorf("new group lines asked for %d frames to move", asked2-asked)
+	}
+	wantAligned(t, tt, "20", "1", true)
+}
+
+// While frames scroll, a goroutine moves the failed rows to idle and back:
+// the failed group goes and comes back, and its totals follow (go test
+// -race).
+func TestGroupSummaryPinnedFromGoroutine(t *testing.T) {
+	g := pinnedGrid(0)
+	tt := profTester(g)
+	tick := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := range 40 {
+			<-tick
+			status := "idle"
+			if i%2 == 1 {
+				status = "failed"
+			}
+			for r := 7; r < 7000; r += 1000 {
+				g.UpdateRow(r, func(p *prof) { p.Status = status })
+			}
+		}
+	}()
+	for i := range 40 {
+		tick <- struct{}{}
+		tt.Wheel(450, 300, 0, float32(10+i%3*40))
+		tt.Advance(time.Second)
+		tt.Frame()
+	}
+	wg.Wait()
+	tt.Wheel(450, 300, 0, -100000)
+	tt.Advance(time.Second)
+	tt.Frame()
+	tt.Frame()
+	wantTotal(t, tt, "failed (7)", "Runs", "7")
+	wantTotal(t, tt, "idle (9681)", "Runs", "9681")
+	wantAligned(t, tt, "7", "1", true)
+}
+
+// Two grids on one RowSource: a row changed through one moves the other's
+// totals too.
+func TestGroupSummarySharedRowSource(t *testing.T) {
+	src := NewRowSource(func(r *gsRow) int { return r.ID })
+	src.SetRows(gsRows())
+	var n gsCalls
+	by := func(r *gsRow) string { return r.Kind }
+	a := DataGridViewOf(src, gsSumCols(&n)...).SetGroupBy(by).Expand()
+	b := DataGridViewOf(src, gsSumCols(&n)...).SetGroupBy(by).Expand()
+	ta, tb := profTester(a), profTester(b)
+	a.UpdateRow(4, func(r *gsRow) { r.Size = 1 })
+	ta.Frame()
+	tb.Frame()
+	wantTotal(t, ta, "Image (1)", "Size", "1")
+	wantTotal(t, tb, "Image (1)", "Size", "1")
+}
+
+// Under a column filter, a row changed in place moves out of its group and
+// into another, both totals following; one the filter then hides leaves.
+func TestGroupSummaryUpdateRowUnderFilter(t *testing.T) {
+	var n gsCalls
+	g := gsGrid(gsSumCols(&n)...)
+	tt := profTester(g)
+	g.SetColumnFilter("Name", ColumnFilter{Values: []string{"a.txt", "b.xls", "c.txt", "e.xls"}})
+	tt.Frame()
+	wantTotal(t, tt, "Doc (2)", "Size", "30")
+	wantTotal(t, tt, "Sheet (2)", "Size", "12")
+	g.UpdateRow(1, func(r *gsRow) { r.Kind = "Sheet" }) // a.txt, 10
+	tt.Frame()
+	wantTotal(t, tt, "Doc (1)", "Size", "20")
+	wantTotal(t, tt, "Sheet (3)", "Size", "22")
+	g.UpdateRow(3, func(r *gsRow) { r.Name = "c.doc" }) // the filter hides it: Doc empties
+	tt.Frame()
+	if shows(tt, "Doc (1)") || shows(tt, "Doc (0)") {
+		t.Fatalf("the emptied Doc group still shows: %q", tt.Texts())
+	}
+	wantTotal(t, tt, "Sheet (3)", "Size", "22")
 }
 
 // An empty text shows nothing on the line, and builds no cell; nor do the

@@ -43,11 +43,16 @@ type gridGroupSums struct {
 	known        bool
 	atVer, atSeq uint64
 	placed       []ui.Rect // the bounds of the header's cells the lines were placed by
-	lineX        float32   // the start of the header lines, as last painted
-	c            *ui.Context
-	check        func(*ui.Painter, ui.Rect) // checkPlaces, made once
-	asked        int                        // test hook: how many frames the paint asked for
-	cells        int                        // test hook: how many totals' cells were built
+	// xs are where each group's line started, by the group's place, as last
+	// painted: a line pinned at the list's top does not scroll sideways with
+	// the others. lineX is the start last painted of any; checks are the
+	// lines' paints (checkPlaces), by place, each made once.
+	xs     []float32
+	lineX  float32
+	checks []func(*ui.Painter, ui.Rect)
+	c      *ui.Context
+	asked  int // test hook: how many frames the paint asked for
+	cells  int // test hook: how many totals' cells were built
 }
 
 // update works the totals out again when the rows shown changed, for the
@@ -77,16 +82,19 @@ func (g *gridGroupSums) update(gs ui.TableGroups, ver, seq uint64) {
 func (g *gridGroupSums) header(c *ui.Context, k int, text string) {
 	th := c.Theme()
 	line := ui.Row(c).Grow(1).AlignItems(ui.Center).PaddingStart(th.Space(2)).Background(th.SurfaceHover).Radius(th.Radius)
-	if g.check == nil {
-		g.check = g.checkPlaces
+	for len(g.checks) <= k { // each made once: a func made in every frame allocates
+		j := len(g.checks)
+		g.checks = append(g.checks, func(_ *ui.Painter, r ui.Rect) { g.checkPlaces(j, r) })
+		g.xs = append(g.xs, g.lineX)
 	}
 	g.c = c
 	if !c.Measuring() {
-		line.Draw(g.check)
+		line.Draw(g.checks[k])
 	}
-	// Where the lines start, as last painted: all start at one place. Not
-	// line.Bounds, which allocates for an element new in every frame.
-	x := g.lineX
+	// Where the line starts, as last painted (a line new in view, as the
+	// lines last painted). Not line.Bounds, which allocates for an element
+	// new in every frame.
+	x := g.xs[k]
 	g.placed = g.placed[:0]
 	for i := range g.heads {
 		g.placed = append(g.placed, g.heads[i].cell.Bounds())
@@ -122,18 +130,19 @@ func (g *gridGroupSums) textOf(hc *headCell, texts []string) string {
 	return ""
 }
 
-// checkPlaces is a header line's paint, r its box: it asks for one more
-// frame when the header's cells, or the lines, are laid out elsewhere than
-// the totals were placed by, as after a column was resized, moved or
-// scrolled.
-func (g *gridGroupSums) checkPlaces(_ *ui.Painter, r ui.Rect) {
-	moved := r.X != g.lineX // placed holds a bound for each of heads: header made both
+// checkPlaces is the paint of the k-th group's header line, r its box: it
+// asks for one more frame when the header's cells, or the line, are laid out
+// elsewhere than the totals were placed by, as after a column was resized,
+// moved or scrolled, or the line was pinned at the list's top, which does not
+// scroll sideways.
+func (g *gridGroupSums) checkPlaces(k int, r ui.Rect) {
+	moved := r.X != g.xs[k] // placed holds a bound for each of heads: header made both
 	for i := 0; !moved && i < len(g.heads); i++ {
 		b, p := g.heads[i].cell.Bounds(), g.placed[i]
 		moved = b.X != p.X || b.W != p.W
 	}
 	if moved {
-		g.lineX = r.X
+		g.xs[k], g.lineX = r.X, r.X
 		g.asked++
 		g.c.Invalidate()
 	}
