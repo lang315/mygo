@@ -738,6 +738,105 @@ func TestGroupSummaryUpdateRowUnderFilter(t *testing.T) {
 	wantTotal(t, tt, "Sheet (3)", "Size", "22")
 }
 
+// A column the chooser hides takes its totals away; the others stay under
+// their headers in the next frame.
+func TestGroupSummaryColumnChooserHides(t *testing.T) {
+	var n gsCalls
+	tt := menuTester(t, gsGrid(gsSumCols(&n)...).SetColumnChooser(true))
+	if err := tt.RightClick("Name"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Kind"); err != nil {
+		t.Fatal(err)
+	}
+	drained(t)
+	tt.Frame()
+	if shows(tt, "Kind") || shows(tt, "3 files") {
+		t.Fatalf("Kind or its total still shows: %q", tt.Texts())
+	}
+	wantTotal(t, tt, "Doc (3)", "Size", "60")
+	wantAligned(t, tt, "60", "10", true)
+}
+
+// BestFit narrows Kind: Size moves left, its total with it, in one frame.
+func TestGroupSummaryBestFit(t *testing.T) {
+	var n gsCalls
+	g := gsGrid(gsSumCols(&n)...)
+	tt := profTester(g)
+	before := colHead(t, tt, "Kind")
+	g.BestFit("Kind")
+	tt.Frame()
+	if after := colHead(t, tt, "Kind"); after.W == before.W {
+		t.Fatalf("BestFit left Kind %v wide", after.W)
+	}
+	wantTotal(t, tt, "Doc (3)", "Size", "60")
+	wantTotal(t, tt, "Doc (3)", "Kind", "3 files")
+	wantAligned(t, tt, "60", "10", true)
+	wantAligned(t, tt, "3 files", "Doc", false)
+	wantSettledG(t, tt, g.groupSums, "after BestFit")
+}
+
+// Frozen Name and Status, Status totalled per group, and a wide Runs:
+// scrolled down (failed pinned, idle in the rows) and sideways, Status'
+// totals stay under its pinned header and Runs' under its scrolled one, on
+// both lines, settled.
+func TestGroupSummaryFrozenPinnedSideways(t *testing.T) {
+	cols := sumCols(nil)
+	cols[0].Width, cols[0].Frozen = 200, true
+	cols[1].Width, cols[1].Frozen = 200, true
+	cols[1].Summary = nil
+	cols[1].GroupSummary = func(rows iter.Seq[*prof]) string {
+		c := 0
+		for range rows {
+			c++
+		}
+		return strconv.Itoa(c) + " profiles"
+	}
+	cols[2].Width, cols[2].GroupSummary = 500, runsTotal
+	cols = append(cols, Column[prof]{Title: "Note", Text: func(p *prof) string { return p.Name }, Width: 600}) // room to scroll
+	g := profGrid(cols...).SetGroupBy(func(p *prof) string { return p.Status })
+	tt := profTester(g)
+	status := colHead(t, tt, "Status")
+	tt.Wheel(450, 300, 0, 150)
+	tt.Advance(time.Second)
+	tt.Frame()
+	tt.Wheel(450, 300, 300, 0)
+	tt.Advance(time.Second)
+	tt.Frame()
+	if h := colHead(t, tt, "Status"); h.X != status.X {
+		t.Fatalf("the frozen Status moved from %v to %v", status.X, h.X)
+	}
+	if h := colHead(t, tt, "Runs"); h.X >= 401 {
+		t.Fatalf("the wheel did not scroll Runs: at %v", h.X)
+	}
+	for _, c := range []struct{ total, cell string }{{"7 profiles", "failed"}, {"9681 profiles", "idle"}} {
+		wantUnder(t, tt, c.total, "Status")
+		wantAligned(t, tt, c.total, c.cell, false)
+	}
+	for _, total := range []string{"7", "9681"} {
+		wantUnder(t, tt, total, "Runs")
+		wantAligned(t, tt, total, "1", true)
+	}
+	wantSettledG(t, tt, g.groupSums, "frozen, pinned, sideways")
+}
+
+// wantSettledG fails unless frames at rest ask for no more frames.
+func wantSettledG(t *testing.T, tt *ui.Tester, gs *gridGroupSums, what string) {
+	t.Helper()
+	mu.Lock()
+	asked := gs.asked
+	mu.Unlock()
+	for range 5 {
+		tt.Frame()
+	}
+	mu.Lock()
+	after := gs.asked
+	mu.Unlock()
+	if after != asked || tt.FramePending() {
+		t.Errorf("%s: 5 frames at rest asked for %d more frames (pending %v)", what, after-asked, tt.FramePending())
+	}
+}
+
 // An empty text shows nothing on the line, and builds no cell; nor do the
 // columns without a GroupSummary.
 func TestGroupSummaryEmptyText(t *testing.T) {
