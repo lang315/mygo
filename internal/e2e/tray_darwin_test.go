@@ -3,11 +3,13 @@
 package e2e
 
 import (
+	"fmt"
 	"sync/atomic"
 	"testing"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/internal/darwin"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -30,7 +32,9 @@ func TestTrayPopoverToggle(t *testing.T) {
 
 	var panel *mygo.Window // main thread only
 	var shown atomic.Pointer[mygo.Window]
-	var clicks, opened, closed atomic.Int32
+	// asked counts the popover's asks to close (OnClose), as AppKit's
+	// popoverShouldClose: asks for a click elsewhere or on the icon.
+	var clicks, opened, asked, closed atomic.Int32
 	toggle := func() {
 		if panel != nil {
 			panel.Close()
@@ -41,6 +45,7 @@ func TestTrayPopoverToggle(t *testing.T) {
 		panel = win
 		shown.Store(win)
 		opened.Add(1)
+		win.OnClose(func(*mygo.CloseEvent) { asked.Add(1) })
 		win.OnClosed(func() {
 			if panel == win {
 				panel = nil
@@ -96,13 +101,30 @@ func TestTrayPopoverToggle(t *testing.T) {
 		clickIcon()
 		eventually(t, "the icon's click opened the popover", func() bool { return opened.Load() > n && shown.Load().IsVisible() })
 	}
+	// state says what the app took of the button's events and the
+	// popover's since the counts given, for a close that never came: once
+	// in a week of CI a click on the icon neither clicked it nor had AppKit
+	// close the popover (#2459).
+	state := func(d, u int, k, a int32) string {
+		downs, ups := buttons()
+		var visible bool
+		if w := shown.Load(); w != nil {
+			visible = w.IsVisible()
+		}
+		return fmt.Sprintf("presses %d, releases %d, icon clicks %d, asks to close %d; the popover shows: %v",
+			downs-d, ups-u, clicks.Load()-k, asked.Load()-a, visible)
+	}
 	// closes closes the open popover with close, and checks that it stays
 	// closed once the app handled what close did.
 	closes := func(what string, close func()) {
 		t.Helper()
 		n, c := opened.Load(), closed.Load()
+		d, u := buttons()
+		k, a := clicks.Load(), asked.Load()
 		close()
-		eventually(t, "the popover closed by "+what, func() bool { return closed.Load() > c })
+		if !wait.Poll(func() bool { return closed.Load() > c }) {
+			t.Fatalf("the popover closed by %s never happened (waited %v): %s", what, wait.Guard, state(d, u, k, a))
+		}
 		mygo.RunOnMain(func() {}) // after what the close posted
 		if opened.Load() != n || shown.Load().IsVisible() {
 			t.Fatalf("%s opened the popover again", what)
@@ -163,5 +185,30 @@ func TestTrayMonospacedTitle(t *testing.T) {
 	// What the test rests on: the system's font draws these at two widths.
 	if a, b := width(false, busy), width(false, idle); a == b {
 		t.Errorf("in the system's font the item is %d wide with both titles: they tell nothing", a)
+	}
+}
+
+// TestTrayKeepsPosition destroys a tray icon with an ID and checks that the
+// place the user dragged it to with ⌘ stays in the app's defaults: AppKit
+// deletes it as it removes the status item and again as it frees it, so an
+// app that destroys its icon as it quits found it back at the left (#2348).
+func TestTrayKeepsPosition(t *testing.T) {
+	const name = "e2e.position"
+	mygo.RunOnMain(func() { darwin.TestSetStatusItemPosition(name, 321) })
+	defer mygo.RunOnMain(func() { darwin.TestSetStatusItemPosition(name, -1) })
+	tray, err := mygo.NewTray(mygo.TrayOptions{ID: name, Icon: squarePNG()})
+	if err != nil {
+		t.Skip("no tray: ", err)
+	}
+	waitTrayLaidOut(t, tray)
+	tray.Destroy()
+	var pos int
+	var ok bool
+	mygo.RunOnMain(func() { pos, ok = darwin.TestStatusItemPosition(name) })
+	if !ok {
+		t.Fatal("destroying the tray deleted its saved position")
+	}
+	if pos != 321 {
+		t.Errorf("saved position = %d after Destroy, want 321", pos)
 	}
 }

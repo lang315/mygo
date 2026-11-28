@@ -110,6 +110,19 @@ func (s *sharedScroll) set(y float64) {
 	}
 }
 
+// scroll scrolls to y as the user asks, dropping every side's pending
+// reveal when it moves, as setScroll does. The frame calls set alone,
+// between the reveals it does.
+func (s *sharedScroll) scroll(y float64) {
+	before := s.y
+	s.set(y)
+	if s.y != before {
+		for _, side := range s.eds {
+			side.reveal = revealNone
+		}
+	}
+}
+
 // decor shows a diff in an editor: the colors of lines and their
 // gutters, the words changed, the numbers of lines, and blocks.
 type decor interface {
@@ -224,6 +237,10 @@ type editor struct {
 	pointer      ui.Point
 	pointerIn    bool
 	hoverLine    int
+	// blinkAgain starts the caret's blink at the next frame, shown first,
+	// after the carets moved: the app may move them between frames, long
+	// after the last frame's time.
+	blinkAgain bool
 	// region is the part of the editor under the pointer, which its
 	// cursor and the scroll bars' highlight show.
 	region region
@@ -302,6 +319,9 @@ type gesture struct {
 	add      bool // added to the selections, which keep the others
 	others   []sel
 	colStart ui.Point
+	// drag, set by startDrag, takes the drag's points in place of the
+	// text's selection.
+	drag func(cx float32, cy float64)
 }
 
 // init sets up the editor for a frame.
@@ -330,7 +350,7 @@ func (ed *editor) init(buf *Buffer, o options, t *ui.Theme) {
 		ed.sels = []sel{{goal: -1, id: 0}}
 		ed.nextID = 1
 		ed.blinkStart = ed.frameNow
-		ed.hover.asked = -1
+		ed.hover.asked, ed.hover.restOff = -1, -1
 		ed.hoverLine = -1
 		// No text has come into view yet: -1, not the text's start.
 		ed.revealAt, ed.revealed = -1, -1
@@ -505,7 +525,7 @@ func (ed *editor) setSels(sels []sel, reveal reveal) {
 	if reveal != revealNone {
 		ed.reveal = max(ed.reveal, reveal)
 	}
-	ed.blinkStart = ed.frameNow
+	ed.blinkAgain = true
 	ed.autoclosed = ed.autoclosed[:0]
 	// What select next, add cursor and select larger go on from.
 	ed.wholeWord = false
@@ -738,9 +758,14 @@ func (ed *editor) scrollMax() float64 {
 	return max(0, total-float64(ed.viewH))
 }
 
-// setScroll scrolls to y, keeping the place by its line.
+// setScroll scrolls to y, keeping the place by its line. A scroll that
+// moves drops a pending reveal: the newer scroll stands. One that does
+// not, as the wheel's at either end, leaves it.
 func (ed *editor) setScroll(y float64) {
 	y = max(0, min(y, ed.scrollMax()))
+	if y != ed.scrollY {
+		ed.reveal = revealNone
+	}
 	ed.scrollY = y
 	h := &ed.view.heights
 	ed.anchorLine, ed.anchorRows = h.lineAt(y), false

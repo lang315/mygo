@@ -63,6 +63,9 @@ func init() {
 	// package mygo relaunches the app into an update staged on macOS.
 	f := relaunchUpdated
 	updatehook.RelaunchStaged.Store(&f)
+	if buildFeed != "" && buildKey != "" {
+		updatehook.Updates.Store(true)
+	}
 }
 
 // prereleases is set while Check offers prereleases (SetPrereleases).

@@ -43,7 +43,9 @@ func writeBlocks(b *strings.Builder, paras []Paragraph) {
 		p := paras[i]
 		st := p.Style
 		if st.List == NoList || st.Quote {
-			closeLists(0)
+			// What is under an item goes in it, a quotation too, the lists
+			// to its depth open.
+			closeLists(min(st.Indent, len(open)))
 		}
 		align := ""
 		switch st.Align {
@@ -56,8 +58,10 @@ func writeBlocks(b *strings.Builder, paras []Paragraph) {
 		case st.Quote:
 			j := i
 			var quoted []Paragraph
-			for ; j < len(paras) && paras[j].Style.Quote; j++ {
+			under := len(open)
+			for ; j < len(paras) && paras[j].Style.Quote && paras[j].Style.Indent >= under; j++ {
 				q := paras[j]
+				q.Style.Indent -= under
 				q.Style.QuoteDepth = q.Style.quoteDepth() - 1
 				q.Style.Quote = q.Style.QuoteDepth > 0
 				quoted = append(quoted, q)
@@ -96,18 +100,31 @@ func writeBlocks(b *strings.Builder, paras []Paragraph) {
 					b.WriteString(`<input type="checkbox" disabled> `)
 				}
 			}
+			if len(p.Runs) == 0 {
+				// An empty item has a line of its own, before a list or
+				// a block under it too.
+				b.WriteString("<br>")
+			}
 			writeRuns(b, p.Runs)
 		case st.CodeBlock:
 			b.WriteString("<pre><code>")
+			empty := false
 			for ; i < len(paras) && paras[i].Style.CodeBlock; i++ {
+				empty = true
 				for _, r := range paras[i].Runs {
 					b.WriteString(html.EscapeString(r.Text))
+					empty = empty && r.Text == ""
 				}
 				if i+1 < len(paras) && paras[i+1].Style.CodeBlock {
 					b.WriteByte('\n')
 				}
 			}
 			i--
+			// A last line that is empty shows only with a line break
+			// after it.
+			if empty {
+				b.WriteByte('\n')
+			}
 			b.WriteString("</code></pre>")
 		default:
 			tag := blockTag(st)
@@ -341,11 +358,20 @@ type htmlBuilder struct {
 	br bool
 	// lists are the lists open: their kinds.
 	lists []ListKind
+	// items are the list items open, innermost last: their depth in the
+	// lists, and whether their first paragraph has ended, after which
+	// what they hold is under them.
+	items []openItem
 	style ParagraphStyle
 	pre   int
 	// pixels are those of the pictures decoded or tried so far (see
 	// pastedPixels).
 	pixels int64
+}
+
+type openItem struct {
+	depth int
+	done  bool
 }
 
 // ParseHTML returns the attributed text of an HTML document or fragment,
@@ -365,9 +391,15 @@ func ParseHTML(s string) Text {
 	if len(b.paras) == 0 {
 		return Text{}
 	}
-	// Leading and trailing empty paragraphs are the document's margins.
+	// Leading and trailing empty paragraphs are the document's margins,
+	// but for the lines of a block of code and the items of a list, as
+	// Markdown keeps them.
 	paras := b.paras
-	for len(paras) > 1 && len(paras[len(paras)-1].Runs) == 0 {
+	for len(paras) > 1 {
+		last := paras[len(paras)-1]
+		if len(last.Runs) > 0 || last.Style.CodeBlock || last.Style.List != NoList {
+			break
+		}
 		paras = paras[:len(paras)-1]
 	}
 	return TextOf(paras...)
@@ -389,12 +421,27 @@ func (b *htmlBuilder) flush() {
 	}
 	b.paras = append(b.paras, p)
 	b.cur, b.started, b.space = Paragraph{}, false, true
+	b.firstDone()
+}
+
+// firstDone ends the first paragraph of the innermost item, if it is in
+// the innermost list: what the item holds after it is under it.
+func (b *htmlBuilder) firstDone() {
+	if n := len(b.items); n > 0 && b.items[n-1].depth == len(b.lists) {
+		b.items[n-1].done = true
+	}
 }
 
 // begin starts a paragraph of style, unless one is being built.
 func (b *htmlBuilder) begin() {
 	if !b.started {
-		b.cur = Paragraph{Style: b.style}
+		st := b.style
+		if n := len(b.items); n > 0 && b.items[n-1].done && b.items[n-1].depth == len(b.lists) {
+			// After an item's first paragraph, what it holds is under it,
+			// as Markdown reads it.
+			st.List, st.Checked, st.Indent = NoList, false, len(b.lists)
+		}
+		b.cur = Paragraph{Style: st}
 		b.started = true
 	}
 }
@@ -516,6 +563,9 @@ func (b *htmlBuilder) node(n *xhtml.Node, a Attributes) {
 		a.Link = safeLink(attr(n, "href"))
 	case atom.Ul, atom.Ol:
 		b.flush()
+		// A list first in an item, which has no line of its own, ends its
+		// first paragraph too.
+		b.firstDone()
 		kind := Bullets
 		if n.DataAtom == atom.Ol {
 			kind = Numbers
@@ -536,6 +586,8 @@ func (b *htmlBuilder) node(n *xhtml.Node, a Attributes) {
 		}
 		b.style = ParagraphStyle{List: kind, Indent: max(len(b.lists)-1, 0), Align: saved.Align, Quote: saved.Quote, QuoteDepth: saved.QuoteDepth}
 		block = true
+		b.items = append(b.items, openItem{depth: len(b.lists)})
+		defer func() { b.items = b.items[:len(b.items)-1] }()
 	case atom.P, atom.Div, atom.Section, atom.Article, atom.Header, atom.Footer, atom.Main, atom.Aside, atom.Nav,
 		atom.Figure, atom.Figcaption, atom.Tr, atom.Dt, atom.Dd, atom.Address, atom.Center:
 		b.flush()
@@ -571,12 +623,17 @@ func (b *htmlBuilder) node(n *xhtml.Node, a Attributes) {
 			b.style.Align = ui.End
 		}
 	}
+	paras := len(b.paras)
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		b.node(c, a)
 	}
 	if block {
 		if n.DataAtom == atom.P && !b.started && !b.br && b.pre == 0 {
 			// An empty paragraph shows as one; <p><br></p> as one too.
+			b.begin()
+		}
+		if n.DataAtom == atom.Li && !b.started && len(b.paras) == paras {
+			// An empty item too, but not one holding only a list.
 			b.begin()
 		}
 		b.flush()

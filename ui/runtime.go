@@ -579,6 +579,9 @@ type engine struct {
 	toastPass    int
 	// mods are the modifiers of the last pointer event.
 	mods Modifiers
+	// keyHandled tells that the last key down went to a handler, which
+	// acted on it, rather than to the text input keeping it to type.
+	keyHandled bool
 
 	consumed bool
 	// animating is set as a frame builds when something moves, for another
@@ -942,8 +945,8 @@ func (rt *engine) runFrame() {
 	rt.repaintRate, rt.repaintFull, rt.untracked = 0, false, false
 	rt.routeKeys()
 	rt.glideWheels(now)
-	if touchFrame != nil {
-		touchFrame(rt, now)
+	if touch := touchFuncs.Load(); touch != nil {
+		touch.frame(rt, now)
 	}
 	rt.glideSnaps(now)
 	if d := rt.drag; d != nil {
@@ -1083,13 +1086,13 @@ func (rt *engine) runFrame() {
 	}
 	rt.stats.lap(phaseBuild)
 	rt.insp.lap(0)
-	if insetRoot != nil {
-		insetRoot(rt, root)
+	if touch := touchFuncs.Load(); touch != nil {
+		touch.insetRoot(rt, root)
 	}
 	layoutTree(root, appW, rt.insp.contentHeight(w, h))
 	rt.measureFit(root)
-	if extendScrolls != nil {
-		extendScrolls(rt, root, h)
+	if touch := touchFuncs.Load(); touch != nil {
+		touch.extendScrolls(rt, root, h)
 	}
 	if checkBuilt != nil {
 		checkBuilt(rt, builtLaidOut)
@@ -1958,8 +1961,8 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	var base scene.Affine
 	if e.parent != nil && e != e.c.overlay {
 		base = e.parent.world
-		if contentStretch != nil && e.parent.scrolls() {
-			base = contentStretch(base, e.parent)
+		if touch := touchFuncs.Load(); touch != nil && e.parent.scrolls() {
+			base = touch.contentStretch(base, e.parent)
 		}
 		// An identity parent leaves the element's own transform as it is.
 		if base.Set {
@@ -1986,6 +1989,9 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		clip = rt.lift()
 	}
 	s.x, s.y, s.w, s.h = e.x, e.y, e.w, e.h
+	// Its own text cut, unless hidden; text inside it adds to it as it
+	// commits below.
+	s.truncated = e.kind == kindText && e.tl != nil && e.tl.Truncated && !rt.commitHidden
 	if e.parent != nil {
 		s.parent = e.parent.id
 	} else {
@@ -2157,8 +2163,12 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	// Sticky ones are in the flow for the focus, and paint among the
 	// absolute ones, where their hits go.
 	// A child with a z-index moves its hits to where it paints.
-	if e.zOrder && e != e.c.overlay && zCommit != nil {
-		zCommit(rt, e, clip, invisible)
+	var zo *zOrdering
+	if e.zOrder && e != e.c.overlay {
+		zo = zByZ.Load()
+	}
+	if zo != nil {
+		zo.commit(rt, e, clip, invisible)
 	} else {
 		var stuckBuf [4][2]int
 		stuck := stuckBuf[:0]
@@ -2184,6 +2194,12 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	}
 	if lifting {
 		rt.lift()
+	}
+	if s.truncated && e.parent != nil && e != e.c.overlay {
+		// Text cut inside the element, as a button's label, cuts its own
+		// (Truncated); an overlay's popups are no part of what they are
+		// attached to.
+		e.parent.st.truncated = true
 	}
 	e.setInk(vis)
 	if e.hidden {
