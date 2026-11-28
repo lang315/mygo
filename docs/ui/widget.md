@@ -1547,6 +1547,10 @@ Input and display:
   `OnValidate(func(step int) bool)`, `OnStepChange`, `OnFinish`, `OnCancel`.
   `StepProgressBar(steps...)`: numbered circles joined by lines; `Step`,
   `SetStep`, `SetSteps`, `SetVertical`. See [Wizard and StepProgressBar](widget/wizard.md).
+- `FlyoutPanel(owner, content)`: draws `owner` and slides `content` in over
+  it from an edge; `ShowPopup`, `HidePopup`, `SetEdge(FlyoutRight)` (or
+  `FlyoutLeft`, `FlyoutTop`, `FlyoutBottom`), `SetCloseOnOutsideClick`,
+  `IsOpen`, `OnClosed`. See [FlyoutPanel](widget/flyoutpanel.md).
 - `ColorEdit()`: a swatch that opens a color picker inline; `Color`,
   `SetColor`, `OnChange`; see [ColorEdit](widget/coloredit.md).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
