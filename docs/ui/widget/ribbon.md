@@ -93,6 +93,76 @@ The ribbon gives them their letters; there is no API to set them.
   still work, unless a menu's access key has that letter. A ribbon outside a
   form (`widget.View`) has no tips.
 
-Not in the ribbon: the quick access toolbar, the application menu
-(the File tab), contextual tabs, galleries, a group's dialog launcher, and
-groups that shrink to fewer or smaller items in a narrow window.
+## Quick Access Toolbar
+
+The Quick Access Toolbar is a row of small icon buttons, Office's Save and
+Undo, that stays in view whatever tab shows:
+
+```go
+save := widget.ToolButton("Save").SetIcon(saveIcon).OnClick(doSave)
+undo := widget.ToolButton("Undo").SetIcon(undoIcon).OnClick(doUndo)
+ribbon.AddQuickAccess(save, undo).OnQuickAccessChange(func() {
+	settings.Set("qat", ribbon.QuickAccess()) // save what the user chose
+})
+ribbon.SetQuickAccess(settings.Strings("qat")...) // and restore it
+```
+
+- `AddQuickAccess(buttons...)` adds `ToolButton`s after those the toolbar
+  holds: the ribbon's own commands, or buttons only in the toolbar. nil,
+  and a button it holds, are skipped. The buttons are the same widgets
+  wherever they show: a click runs `OnClick` once, and a toggle checks in
+  both places.
+- Where it shows: in a row above the tabs; in the title bar's start area,
+  after `PackStart`'s items, when the form has a `HeaderBar`, where a press
+  on the empty bar still drags the window; or below the ribbon after
+  `SetQuickAccessBelow(true)`. Each button shows its icon alone (its text
+  with none), named by its text, or its tooltip with none.
+- The user changes it: a right-click on a large or small tool button of the
+  ribbon offers "Add to Quick Access Toolbar", disabled while the toolbar
+  holds it; a right-click on a toolbar button offers "Remove from Quick
+  Access Toolbar" and "Show below the ribbon", checked while it is. The
+  menus come with the first call of a toolbar method (`AddQuickAccess()`
+  with no buttons too): a ribbon that calls none offers none. A command
+  with a `ContextMenu` of its own keeps it; controls other than tool
+  buttons offer no menu.
+- `QuickAccess()` returns the buttons' names in order (their text, or their
+  tooltip with none), and `SetQuickAccess(names...)` sets the toolbar from
+  them, finding the ribbon's commands and the buttons `AddQuickAccess`
+  gave. A name it has no button for is skipped, and so is a name twice.
+- `OnQuickAccessChange(fn)` runs `fn` on the event goroutine after the user
+  adds or removes a button; not after the setters, nor when the toolbar
+  moves below the ribbon (there is no getter for where it is).
+- Key tips: F10 or Alt alone shows 1 to 9 on the toolbar's first nine
+  buttons, beside the tabs' letters, which never take those digits; typing
+  one acts on its button as a command's letter does. A tenth button and
+  after have no tip.
+
+## Contextual tabs
+
+A contextual tab shows only while what it acts on is selected, as Office's
+Picture Tools Format tab:
+
+```go
+ribbon.AddContextualTab("Picture Tools", "Format").
+	AddGroup("Arrange").AddSmall(rotate, crop)
+// as the app's selection changes:
+ribbon.SetCategoryVisible("Picture Tools", selection.IsPicture())
+```
+
+- `AddContextualTab(category, title)` adds a tab to `category`, after the
+  others; the `AddGroup` calls that follow fill it, as `AddTab`'s. Its
+  index counts for `Tab` and `SetTab` whether it shows or not.
+- `SetCategoryVisible(category, visible)` shows or hides the category's
+  tabs. They start hidden. A hidden tab takes no room, no key tip, no
+  access key, and the arrows pass it. Hiding the category of the tab shown
+  shows the first tab.
+- The tabs of a category that follow one another sit under one band of the
+  category's name, while the other tabs keep to the band's bottom line. The
+  band takes the skin's series of colors (its `Chart`, as charts draw; the
+  charts' own colors without a skin) by the order the categories came in,
+  its text the theme's `Text` or `Background`, whichever reads better on it.
+- A visible contextual tab has a key tip and an access key as any tab.
+
+Not in the ribbon: the application menu (the File tab), galleries, a
+group's dialog launcher, a dialog to customize the toolbar, and groups
+that shrink to fewer or smaller items in a narrow window.

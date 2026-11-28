@@ -1144,5 +1144,17 @@
   "compactDensity": "Compact",
   "@compactDensity": {
     "description": "An option of the skin picker's Density box: controls and rows set lower, for screens full of data."
+  },
+  "addToQuickAccess": "Add to Quick Access Toolbar",
+  "@addToQuickAccess": {
+    "description": "The item of a ribbon command's context menu that puts the command in the Quick Access Toolbar, the row of small buttons above the ribbon's tabs."
+  },
+  "removeFromQuickAccess": "Remove from Quick Access Toolbar",
+  "@removeFromQuickAccess": {
+    "description": "The item of a Quick Access Toolbar button's context menu that takes it out of the toolbar."
+  },
+  "showBelowRibbon": "Show below the ribbon",
+  "@showBelowRibbon": {
+    "description": "A checkable item of a Quick Access Toolbar button's context menu: checked, the toolbar shows below the ribbon instead of above its tabs."
   }
 }

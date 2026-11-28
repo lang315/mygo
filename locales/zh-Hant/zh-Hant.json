@@ -235,5 +235,8 @@
   "skinPickerPalette": "調色盤",
   "skinPickerDensity": "密度",
   "standardDensity": "標準",
-  "compactDensity": "緊湊"
+  "compactDensity": "緊湊",
+  "addToQuickAccess": "新增至快速存取工具列",
+  "removeFromQuickAccess": "從快速存取工具列移除",
+  "showBelowRibbon": "在功能區下方顯示"
 }
