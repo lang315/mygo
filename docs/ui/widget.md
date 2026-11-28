@@ -1399,10 +1399,12 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   its tabs, first in a form's content; `AddTab`, `AddGroup`, `AddLarge`,
   `AddSmall`, `Tab`, `SetTab`, `SetCollapsed`, `Collapsed`; a Quick Access
   Toolbar (`AddQuickAccess`, `SetQuickAccessBelow`, `QuickAccess`,
-  `SetQuickAccess`, `OnQuickAccessChange`) and contextual tabs
-  (`AddContextualTab`, `SetCategoryVisible`); see
-  [Ribbon](widget/ribbon.md), [Quick Access Toolbar](widget/ribbon.md#quick-access-toolbar)
-  and [contextual tabs](widget/ribbon.md#contextual-tabs).
+  `SetQuickAccess`, `OnQuickAccessChange`), contextual tabs
+  (`AddContextualTab`, `SetCategoryVisible`) and galleries (`AddGallery`,
+  `GalleryItem`, `RibbonGalleryWidget`); see
+  [Ribbon](widget/ribbon.md), [Quick Access Toolbar](widget/ribbon.md#quick-access-toolbar),
+  [contextual tabs](widget/ribbon.md#contextual-tabs) and
+  [galleries](widget/ribbon.md#galleries).
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps. `.Justify()` fills every line,
