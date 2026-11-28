@@ -1537,6 +1537,11 @@ Input and display:
   `SetItems`, `OnSelect(func(i int))`; see [BreadCrumb](widget/breadcrumb.md).
 - `Accordion()`: sections, one open at a time; `AddSection(title,
   controls...)`, `Open`, `SetOpen`, `OnChange`; see [Accordion](widget/accordion.md).
+- `Wizard()`: steps one page at a time, with a step bar and Previous, Next
+  (Done) and Cancel; `AddStep(title, content)`, `Step`, `SetStep`,
+  `OnValidate(func(step int) bool)`, `OnStepChange`, `OnFinish`, `OnCancel`.
+  `StepProgressBar(steps...)`: numbered circles joined by lines; `Step`,
+  `SetStep`, `SetSteps`, `SetVertical`. See [Wizard and StepProgressBar](widget/wizard.md).
 - `ColorEdit()`: a swatch that opens a color picker inline; `Color`,
   `SetColor`, `OnChange`; see [ColorEdit](widget/coloredit.md).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
