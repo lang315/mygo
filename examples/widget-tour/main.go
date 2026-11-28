@@ -502,7 +502,21 @@ func containers() widget.Control {
 			widget.VBox(4).Add(widget.Label("Files"), widget.Button("Open")),
 			widget.SplitContainer(widget.Label("Editor"), widget.Label("Console")).Stacked(),
 		).SetSplitterDistance(180)).
-		Add("wizard", "Wizard", wizard())
+		Add("wizard", "Wizard", wizard()).
+		Add("flyout", "FlyoutPanel", flyout())
+}
+
+// flyout slides a panel in over a box from its end; Escape or a click
+// outside closes it.
+func flyout() widget.Control {
+	status := widget.Label("Closed").Muted()
+	owner := widget.GroupBox("Owner").Add(widget.Label("The owner, under the panel")).SetSize(420, 220)
+	fly := widget.FlyoutPanel(owner, widget.VBox(8).Add(widget.Label("Options").Bold(), widget.CheckBox("Show hidden files"))).
+		OnClosed(func() { status.SetText("Closed by the user") })
+	return widget.VBox(8).Add(widget.Button("Show the flyout").OnClick(func() {
+		fly.ShowPopup()
+		status.SetText("Open")
+	}), fly, status)
 }
 
 // wizard is a setup flow of three steps; the first needs a name. It marks
