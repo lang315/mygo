@@ -388,7 +388,7 @@ func choices() widget.Control {
 	volumeText := widget.Label("Volume 60")
 	volume.OnChange(func() { volumeText.SetText(fmt.Sprintf("Volume %d", volume.Int())) })
 	return widget.VBox(8).Add(
-		spin, progress, volume, volumeText,
+		spin, progress, calcEditRow(), volume, volumeText,
 		widget.TrackBar(0, 100).SetStep(25),
 		widget.RangeSpin(0, 60, 0, 600, 1, "to", "seconds").SetValues(5, 30),
 		widget.DomainUpDown("Mon", "Tue", "Wed", "Thu", "Fri").SetWrap(true),

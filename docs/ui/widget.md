@@ -744,6 +744,7 @@ name := widget.Bind(widget.TextBox(),
 | `Rating` | the stars filled, an `int` | `Bind` (clamps to 0 through its stars) |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
+| `CalcEdit` | `float64` | `Bind` (a typed number and the calculator's Enter or = are edits) |
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `TimeSpanEdit` | `time.Duration` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `RangeSpin` | its two numbers, `float64` | `BindRange(c, get, set)`, with `get func() (lo, hi float64)` and `set func(lo, hi float64)`: `set` gets both numbers after an edit of either; each is clamped to its range, as `NumericUpDown` |
@@ -1439,6 +1440,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`, and `SetSearchPanel(true)` for a search box over the records in the drop-down (DevExpress's SearchLookUpEdit); see [LookUpEdit](widget/lookupedit.md).
 - `ButtonEdit(buttons...)`: a text field with buttons at its end, inside its frame (`EditEllipsis`, `EditClear`, `EditSearch`, `EditPlus`, `EditMinus`, `EditDropDown`, `EditGlyph`), as DevExpress's ButtonEdit; `Text`, `SetText`, `SetPlaceholder`, `SetReadOnly`, `OnChange`, `SetButtonVisible`; see [ButtonEdit](widget/buttonedit.md).
+- `CalcEdit()`: a number field with a calculator in its drop-down, as DevExpress's CalcEdit; `Value`, `SetValue`, `SetDecimals`, `OnChange`, `ShowPopup`, `ClosePopup`; see [CalcEdit](widget/calcedit.md).
 - `PopupEdit(controls...)`: a field showing a text whose drop-down holds any controls, as DevExpress's PopupContainerEdit; `SetText`, `Text`, `ShowPopup`, `ClosePopup`, `IsOpen`, `OnClosed`; see [PopupEdit](widget/popupedit.md).
 - `ProgressPanel(caption)`: a spinner with a caption and a description, as DevExpress's ProgressPanel; `Form.ShowWait(caption, description)` and `Form.CloseWait()` show one over a dimmed form that takes no input; see [ProgressPanel and the wait form](widget/progresspanel.md).
 - `Badge(text)`: a short text in a pill colored by its `Status` (`StatusNone`, `StatusInfo`, `StatusRunning`, `StatusSuccess`, `StatusWarning`, `StatusDanger`); see [Badge](widget/badge.md).
@@ -1535,7 +1537,7 @@ Input and display:
   `SetColor`, `OnChange`; see [ColorEdit](widget/coloredit.md).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
   `BindTokens`, `Reload(control)`: tie a `TextBox`, `MultilineTextBox`,
-  `SearchBox`, `DomainUpDown`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`,
+  `SearchBox`, `DomainUpDown`, `CheckBox`, `ComboBox`, `NumericUpDown`, `CalcEdit`, `TrackBar`,
   `RangeSpin`, `CheckBoxGroup` or `TokenEdit` to a value kept elsewhere;
   see [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's
