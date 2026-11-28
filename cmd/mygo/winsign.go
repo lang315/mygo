@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
 )
 
 // Windows configures Windows packaging.
@@ -48,7 +47,9 @@ type Windows struct {
 	// installer includes, e.g. "build/installer.nsh". The macros it
 	// defines among customInit, customInstall and customUnInstall run when
 	// the installer starts, at the end of the install, and in the
-	// uninstall before the app's folder is removed (see nsisHooks).
+	// uninstall before the app's folder is removed; customUnPage,
+	// customUnPageLeave, customUnConfirmShow and customUnConfirmLeave make
+	// and handle the uninstaller's pages (see nsisHooks).
 	InstallerInclude string `json:"installerInclude"`
 	// WebView2 says what the installer does about the WebView2 Runtime,
 	// which an app of web views needs: "download" has it fetch Microsoft's
@@ -69,16 +70,7 @@ func signWindows(c *Config, file string) error {
 func signWindowsFile(c *Config, file string) error {
 	w := c.Windows
 	if w.SignCommand != "" {
-		// Not shown: the command may hold credentials.
-		cmd := shellCommand(c.root, strings.ReplaceAll(w.SignCommand, "%1", shellQuote(file)))
-		out, errOut := labeledOutput(cmd, "sign")
-		err := waited(cmd.Run())
-		out.flush()
-		errOut.flush()
-		if err != nil {
-			return fmt.Errorf("windows.signCommand: %w", err)
-		}
-		return nil
+		return runSignCommand(c, "windows.signCommand", w.SignCommand, file)
 	}
 	password := os.Getenv("MYGO_WINDOWS_CERTIFICATE_PASSWORD")
 	cert := c.path(w.Certificate)

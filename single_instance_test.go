@@ -269,21 +269,6 @@ func TestSingleInstanceWaitsForListener(t *testing.T) {
 	next.exit(t)
 }
 
-// TestReadSecondInstanceWithoutEOF checks that the message of a later
-// instance is read whole although its end never comes, as on Windows when
-// the sender's shutdown does not reach a pending read.
-func TestReadSecondInstanceWithoutEOF(t *testing.T) {
-	r, w := net.Pipe()
-	defer r.Close()
-	defer w.Close()
-	go w.Write([]byte(`{"args":["a"],"workingDir":"/w"}`))
-	_ = r.SetDeadline(time.Now().Add(wait.Guard))
-	msg, err := readSecondInstance(r)
-	if err != nil || !slices.Equal(msg.Args, []string{"a"}) || msg.WorkingDir != "/w" {
-		t.Fatalf("read %+v: %v", msg, err)
-	}
-}
-
 // TestSingleInstanceReleasedOnExit checks that the lock of an instance
 // that is killed is released, although a process it started still runs.
 func TestSingleInstanceReleasedOnExit(t *testing.T) {
@@ -355,5 +340,34 @@ func TestSocketOwnedByMe(t *testing.T) {
 	// A socket of another user is never dialed: nothing reaches it.
 	if os.Getuid() != 0 && runtime.GOOS != "windows" && socketOwnedByMe("/") {
 		t.Error("/ counts as a socket of this user")
+	}
+}
+
+// TestReadSecondInstanceWithoutEOF checks that the first instance takes a
+// later one's message, and answers it, without waiting for the end of the
+// connection, which Windows sometimes never reports.
+func TestReadSecondInstanceWithoutEOF(t *testing.T) {
+	first, next := net.Pipe()
+	defer first.Close()
+	defer next.Close()
+	read := make(chan secondInstanceMessage, 1)
+	go func() {
+		msg, err := readSecondInstance(first)
+		if err != nil {
+			t.Error(err)
+		}
+		read <- msg
+	}()
+	// The connection stays open, as when its end is never reported.
+	if _, err := next.Write([]byte(`{"args":["--open","a.txt"],"workingDir":"/work"}`)); err != nil {
+		t.Fatal(err)
+	}
+	var ack [1]byte
+	if _, err := next.Read(ack[:]); err != nil {
+		t.Fatalf("no answer: %v", err)
+	}
+	msg := wait.For(t, "the message to be read", read)
+	if !slices.Equal(msg.Args, []string{"--open", "a.txt"}) || msg.WorkingDir != "/work" {
+		t.Errorf("read %+v", msg)
 	}
 }

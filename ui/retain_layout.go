@@ -339,10 +339,10 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 	env := commitEnv{clip: clip, hidden: hidden || rt.commitHidden, scope: rt.commitScope, page: rt.commitPage}
 	if p := e.parent; p != nil {
 		env.parentDis, env.world = p.st.flags&flagDisabled != 0, p.world
-		if contentStretch != nil && p.scrolls() {
+		if touch := touchFuncs.Load(); touch != nil && p.scrolls() {
 			// As commitElement makes a child's world: Android's stretch of
 			// a scroll container moves its rows (contentStretch).
-			env.world = contentStretch(env.world, p)
+			env.world = touch.contentStretch(env.world, p)
 		}
 		env.parentIgnore, env.parentUnread = p.st.ignoreInput, p.st.accessHidden
 	}
@@ -355,6 +355,11 @@ func (rt *engine) commitRow(e *node, clip Rect, hidden bool) {
 		} else {
 			rt.hits = append(rt.hits, k.hits...)
 			rt.labels = append(rt.labels, k.labels...)
+		}
+		if p := e.parent; p != nil && e.st.truncated && e != e.c.overlay {
+			// As commitElement passes text cut inside the row to its parent
+			// (Truncated): the row's state keeps what its last walk found.
+			p.st.truncated = true
 		}
 		k.at = rt.layouts
 		e.lay &^= both

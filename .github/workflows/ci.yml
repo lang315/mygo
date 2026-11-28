@@ -41,8 +41,10 @@ jobs:
       MYGO_E2E_CALLBACKS_FILE: ${{ github.workspace }}/callbacks.txt # what the GUI tests print, which go test hides
       CI_DIFF: ${{ github.event_name == 'pull_request' && 'HEAD^1 HEAD' || '' }} # the change of a pull request (its merge commit and the base)
       CI_PART: ${{ matrix.part }} # which half of the ui or noinspector shard (ci-test.sh), where it is split in two
-      # GStreamer's plugins play the videos of ui/video's tests.
-      LINUX_PACKAGES: libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      # GStreamer's plugins play the videos of ui/video's tests: -bad has
+      # the demuxers of MPEG-TS, MPEG-PS and HLS, and an AV1 decoder, which
+      # TestFormatMatrix plays.
+      LINUX_PACKAGES: libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb xauth dbus-x11 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
     strategy:
       fail-fast: false
       # The unit tests under -race took 10 to 20 minutes in one job: three jobs
@@ -517,31 +519,39 @@ jobs:
       # build, which Windows runs emulated and which cross-compiles the
       # arm64 library just the same. Its download from ziglang.org took 11
       # to 18 minutes some days, past the job's limit with the tests, so the
-      # extracted Zig is kept in the Actions cache, under its version. The
-      # tests run zig on a hit of the module's cache too (internal/nativegen
-      # builds a Zig package when zig is on the PATH), so Zig is always put
-      # there, not only when the module is built.
+      # extracted Zig is kept in the Actions cache, under its version, and
+      # a miss downloads it with curl and unpacks it with Windows' tar
+      # (libarchive's, which reads zips), minutes faster than
+      # Invoke-WebRequest and Expand-Archive. The tests run zig on a hit of
+      # the module's cache too (internal/nativegen builds a Zig package
+      # when zig is on the PATH), so Zig is always put there, not only when
+      # the module is built.
       - name: Restore Zig (x86_64)
         id: zig
         uses: actions/cache/restore@v6
         with:
-          path: ${{ runner.temp }}/zig-x86_64-windows-${{ env.ZIG_VERSION }}
-          key: zig-${{ runner.os }}-${{ runner.arch }}-x86_64-${{ env.ZIG_VERSION }}
+          path: ${{ runner.temp }}\zig-x86_64-windows-${{ env.ZIG_VERSION }}
+          key: zig-x86_64-windows-${{ env.ZIG_VERSION }}
       - name: Download Zig (x86_64)
         if: steps.zig.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          Invoke-WebRequest "https://ziglang.org/download/$env:ZIG_VERSION/zig-x86_64-windows-$env:ZIG_VERSION.zip" -OutFile "$env:RUNNER_TEMP\zig.zip"
-          Expand-Archive "$env:RUNNER_TEMP\zig.zip" -DestinationPath "$env:RUNNER_TEMP"
+          curl.exe -fsSL --retry 3 -o "$env:RUNNER_TEMP\zig.zip" "https://ziglang.org/download/$env:ZIG_VERSION/zig-x86_64-windows-$env:ZIG_VERSION.zip"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$env:SystemRoot\System32\tar.exe" -xf "$env:RUNNER_TEMP\zig.zip" -C "$env:RUNNER_TEMP"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Remove-Item "$env:RUNNER_TEMP\zig.zip"
       - name: Save Zig (x86_64)
         if: steps.zig.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/zig-x86_64-windows-${{ env.ZIG_VERSION }}
+          path: ${{ runner.temp }}\zig-x86_64-windows-${{ env.ZIG_VERSION }}
           key: ${{ steps.zig.outputs.cache-primary-key }}
       - name: Put Zig on the PATH
         shell: pwsh
         run: |
+          & "$env:RUNNER_TEMP\zig-x86_64-windows-$env:ZIG_VERSION\zig.exe" version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           "$env:RUNNER_TEMP\zig-x86_64-windows-$env:ZIG_VERSION" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
       # As in the job above. The emulated build takes five or six minutes,
       # and twice it ran past 25, until the job's limit canceled it: one
@@ -578,9 +588,11 @@ jobs:
         shell: bash
         run: touch "${{ steps.sqlitecore.outputs.path }}"
       # The race detector does not run on Windows ARM64. internal/nativegen
-      # takes eight or nine minutes here, near go test's default of 10 per
-      # package; 15 leaves it room and the GUI tests theirs in the job's 30.
-      - run: go test -shuffle=on -timeout 15m ./...
+      # builds Rust crates and Zig packages, with Zig emulated here, which
+      # takes it seven to nine minutes and, on a slow runner, past go test's
+      # ten per package: 20 leaves it room and the GUI tests theirs in the
+      # job's 30.
+      - run: go test -shuffle=on -timeout 20m ./...
       # The runner's provisioning daemon (provjobd, under hosted-compute-agent)
       # runs wsl.exe every 30 seconds. This image has no WSL, and some of those
       # runs start `wsl.exe --update --confirm --prompt-before-exit`, whose new
@@ -749,6 +761,22 @@ jobs:
           packages: platform-tools platforms;android-36 ndk;27.1.12297006 cmake;3.22.1
       - name: Build the app
         run: go run ./cmd/mygo build -platform ${{ matrix.platform }} examples/counter-native
+      # What Android added after the host's minSdk, called with no check of
+      # the version, throws NoSuchMethodError on older phones (#2336): lint's
+      # NewApi check, over a copy of the host with every plugin's Kotlin in
+      # it, as mygo build puts them there.
+      - name: Lint the host and the plugins for newer Android APIs
+        if: matrix.platform == 'android/arm64' && runner.os == 'Linux'
+        run: |
+          dir="$RUNNER_TEMP/android-lint"
+          cp -R internal/mobile/android "$dir"
+          for j in plugins/*/mygo-plugin.json; do
+            for s in $(jq -r '.mobile.android.sources[]? // empty' "$j"); do
+              cp "$(dirname "$j")"/$s "$dir/mygo/src/main/java/dev/mygo/"
+            done
+          done
+          deps=$(jq -r '.mobile.android.dependencies[]? // empty' plugins/*/mygo-plugin.json | sort -u | paste -sd, -)
+          cd "$dir" && ./gradlew --no-daemon :mygo:lintDebug -PmygoPluginDependencies="$deps"
 
   # Native modules on phones, which go test does not reach: the round trip
   # of every kind of value through a module's Swift on the iOS simulator
@@ -797,6 +825,18 @@ jobs:
           done
           grep 'roundtrip:' log.txt || true
           grep -q 'roundtrip: PASS$' log.txt
+          echo "SIMULATOR=$udid" >> "$GITHUB_ENV"
+      # ui/video's tests, TestFormatMatrix's iOS column among them, on the
+      # simulator booted above, without an app: the test binary, linked
+      # with Xcode's clang, runs in it as a process of its own.
+      - name: ui/video's tests on the iOS simulator
+        if: runner.os == 'macOS'
+        run: |
+          sdk=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          min="-isysroot $sdk -mios-simulator-version-min=16.0"
+          GOOS=ios GOARCH=arm64 CGO_ENABLED=1 CC="$(xcrun --sdk iphonesimulator --find clang) -arch arm64 $min" \
+            CGO_CFLAGS="$min" CGO_LDFLAGS="$min" go test -c -o "$RUNNER_TEMP/video.test" ./ui/video
+          xcrun simctl spawn "$SIMULATOR" "$RUNNER_TEMP/video.test" -test.v -test.timeout 15m
       - name: Enable KVM
         if: runner.os == 'Linux'
         run: |

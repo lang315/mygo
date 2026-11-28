@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/internal/fsretry"
@@ -106,6 +107,28 @@ func cleanUpdateLeftovers() {
 	}
 	olds, _ := filepath.Glob(filepath.Join(filepath.Dir(startExe), ".*.old-*"))
 	for _, p := range olds {
-		_ = fsretry.RetryInUse(func() error { return os.RemoveAll(p) })
+		if isUpdateLeftover(filepath.Base(p), os.Getpid()) {
+			_ = fsretry.RetryInUse(func() error { return os.RemoveAll(p) })
+		}
 	}
+}
+
+// isUpdateLeftover reports whether name is one that swapFiles gives an
+// entry it moves aside, .<name>.old-<pid>, of a process other than pid:
+// other entries beside the executable belong to whoever made them.
+func isUpdateLeftover(name string, pid int) bool {
+	i := strings.LastIndex(name, ".old-")
+	if i < 2 || name[0] != '.' {
+		return false
+	}
+	digits := name[i+len(".old-"):]
+	if digits == "" || len(digits) > 10 {
+		return false
+	}
+	for _, c := range digits {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return digits != strconv.Itoa(pid)
 }

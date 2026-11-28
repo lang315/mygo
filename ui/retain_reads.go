@@ -1,7 +1,7 @@
 package ui
 
 // The queries that read where an element is, or whether it shows (Bounds,
-// LayoutBounds, LocalToWindow, WindowToLocal, InView), read the layout of the
+// LayoutBounds, LocalToWindow, WindowToLocal, InView, Truncated), read the layout of the
 // frame before. A row that asks of an element inside it is kept only while each
 // answer is the one a build would get now: the list records (element, query,
 // answer) while the row is built, and keep asks again of the states. An element
@@ -17,6 +17,7 @@ const (
 	lkToWindow
 	lkToLocal
 	lkInView
+	lkTruncated
 )
 
 // maxLayoutReads is how many different answers a row records; a row that
@@ -61,6 +62,8 @@ func layoutOf(rt *engine, s *state, kind layoutKind, x, y float32) (v layoutVal)
 		}
 	case lkInView:
 		v.ok = s.seen+1 >= rt.frame && s.vw > 0 && s.vh > 0
+	case lkTruncated:
+		v.ok = s.truncated
 	}
 	return v
 }

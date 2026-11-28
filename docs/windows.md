@@ -43,6 +43,7 @@ on the screen. Sizes and positions are in device-independent pixels.
 | `Content` | shows [native UI](ui/README.md) that MyGo draws, instead of a page |
 | `Width`, `Height` | the size of the window, or of what it shows with `UseContentSize` |
 | `X`, `Y` | the top-left corner; the window is centered when both are 0 |
+| `Position` | the top-left corner, taken as given even at 0, 0: the window is never centered, and `X`, `Y` are ignored |
 | `MinWidth`, `MinHeight`, `MaxWidth`, `MaxHeight` | limits of resizing; 0 means none |
 | `FitContent` | sizes the page area to its page's content, and follows it, within the limits above, as a [flyout's](#size-a-flyout-to-its-content) |
 | `StateKey` | remembers the window's bounds and state under this key, see [below](#remember-where-windows-were) |
@@ -117,7 +118,8 @@ With a `StateKey`, a window remembers its position, size, and maximized and
 full screen state in `window-state.json` in the user data directory, which
 is written when the window closes and when the app quits. The next window
 created with the same key, at the next launch for example, gets them back,
-as long as it would show on a connected display. They override `X`, `Y`,
+as long as it would show on a connected display, no larger than that
+display's work area and with its title bar inside it. They override `X`, `Y`,
 `Width`, `Height`, `UseContentSize`, `Maximized` and `FullScreen`, which
 stay the defaults of the first launch. Give each kind of window its own key:
 `"main"`, `"preferences"`.
@@ -937,6 +939,17 @@ size, as it is.
 
 WebKitGTK and WebView2 have pinches, and WebView2 swipes, on by default:
 MyGo turns them off unless the page asks for them.
+
+### Form autofill
+
+WebView2 saves what is typed into a page's fields and offers those values
+when a field is focused. MyGo turns that off
+(`ICoreWebView2Settings4`'s `IsGeneralAutofillEnabled`), as WKWebView and
+WebKitGTK keep no form history. The setting belongs to the profile, so
+every page of a session has it off, a window's and a
+[web view's](ui/web-view.md) alike. A WebView2 Runtime without Settings4
+(before 1.0.902.49) keeps its own behavior, which is on. Saving passwords
+stays off, which is already WebView2's default.
 
 ### The user's zoom
 

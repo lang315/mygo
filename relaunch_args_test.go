@@ -28,3 +28,23 @@ func TestRelaunchArgumentsReplaceTheApps(t *testing.T) {
 		t.Errorf("for mygo dev: %q", dev)
 	}
 }
+
+func TestIsUpdateLeftover(t *testing.T) {
+	for name, want := range map[string]bool{
+		".app.exe.old-1234":  true,
+		".lib.so.old-7":      true,
+		".app.exe.old-42":    false, // the running process's
+		".notes.old-backup":  false,
+		".notes.old-12a":     false,
+		".notes.old-":        false,
+		".notes.old":         false,
+		"notes.old-1234":     false,
+		"..old-1234":         false,
+		".old-1234":          false,
+		".x.old-12345678901": false,
+	} {
+		if got := isUpdateLeftover(name, 42); got != want {
+			t.Errorf("isUpdateLeftover(%q) = %v, want %v", name, got, want)
+		}
+	}
+}

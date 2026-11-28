@@ -171,12 +171,32 @@ func forwardToFirstInstance(path string, msg []byte) bool {
 	backend().App().AllowForeground()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 	_, _ = conn.Write(msg)
+	// The end of the message, for an instance of an older MyGo, which
+	// reads until it.
 	if uc, ok := conn.(*net.UnixConn); ok {
 		_ = uc.CloseWrite()
 	}
-	_, _ = io.Copy(io.Discard, conn) // wait until it was read
+	// Wait until it was read: the first instance answers a byte once it
+	// has the message, and an older one closes the connection. Windows
+	// sometimes never tells a reader of a Unix socket that the other end
+	// was shut down or closed, so the answer is what ends the wait.
+	var ack [1]byte
+	_, _ = conn.Read(ack[:])
 	conn.Close()
 	return true
+}
+
+// readSecondInstance reads the message of a later instance from conn and
+// answers it (see forwardToFirstInstance). It reads the one JSON value
+// the message is, not until the end of the connection, which Windows may
+// never report.
+func readSecondInstance(conn net.Conn) (secondInstanceMessage, error) {
+	var msg secondInstanceMessage
+	if err := json.UnmarshalDecode(jsontext.NewDecoder(io.LimitReader(conn, 1<<20)), &msg); err != nil {
+		return msg, err
+	}
+	_, _ = conn.Write([]byte{1})
+	return msg, nil
 }
 
 // listenSecondInstances takes the command lines of later instances on the
@@ -232,15 +252,6 @@ func acceptSecondInstances(ln net.Listener) {
 			})
 		}()
 	}
-}
-
-// readSecondInstance reads the message of a later instance. It stops at the
-// end of the message instead of waiting for the sender to shut down or
-// close: Windows does not always end a read pending while the other end
-// does (go.dev/issue/49352).
-func readSecondInstance(r io.Reader) (msg secondInstanceMessage, err error) {
-	err = json.UnmarshalDecode(jsontext.NewDecoder(io.LimitReader(r, 1<<20)), &msg)
-	return msg, err
 }
 
 // stopSecondInstances stops taking the command lines of later instances,

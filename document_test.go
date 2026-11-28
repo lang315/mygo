@@ -43,7 +43,12 @@ func testDocs(t *testing.T, opts DocumentsOptions[string]) *Documents[string] {
 	opts.Window = func(doc *Document[string]) *Window { return NewWindow(WindowOptions{}) }
 	ds := NewDocuments(opts)
 	t.Cleanup(func() {
-		for _, d := range ds.Documents() {
+		// Every open document, not only those of ds: the File menu's Open
+		// takes the first kind that handles the file, an earlier test's
+		// (TestDocumentMenuOpen), and the watch of a document left open
+		// would hold docWork.Wait below.
+		for _, b := range allDocuments() {
+			d := b.ops.(*Document[string])
 			d.SetEdited(false)
 			if w := d.Window(); w != nil {
 				w.Destroy()
