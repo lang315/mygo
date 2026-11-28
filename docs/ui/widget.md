@@ -1351,7 +1351,8 @@ style hover, focus, pressed, disabled and dark states, see
 | `Suggested()`, `Destructive()` on buttons and tool buttons | `suggested-action`, `destructive-action` |
 
 Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
-`SetAccessibleName` (the name of the control itself for assistive technology
+`SetSuperTip` (a rich tooltip: title, body, image and footer; see
+[SuperTip](widget/supertip.md)), `SetAccessibleName` (the name of the control itself for assistive technology
 and `ByLabel`, over the one its text, tooltip or `Fields` row gives; a
 container's, or a group's, names the group), `OnFocusOut` (also when the
 form closes with the focus in the widget, before a dialog's `Run`
@@ -1436,6 +1437,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `&` mnemonics in a `Button` and the labels of `Fields` (Alt+key; off on macOS); see [Mnemonics](widget/mnemonics.md).
 - `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
+- `SetSuperTip(SuperTip{Title, Body, Image, Footer})`, on every control: a rich tooltip in place of `SetTooltip`'s text, as DevExpress's SuperToolTip; see [SuperTip](widget/supertip.md).
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes, in columns under a header with `SetColumns`; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`, and `SetSearchPanel(true)` for a search box over the records in the drop-down (DevExpress's SearchLookUpEdit); see [LookUpEdit](widget/lookupedit.md).

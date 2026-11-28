@@ -78,7 +78,9 @@ ui.TooltipBase(c, b, func(tip ui.Element) {
 ```
 
 It returns the tip, or nil while it does not show. The pointer goes
-through the tip.
+through the tip. Package `ui/widget`'s `SetSuperTip` builds its rich
+tooltips (a title, a body with an image, a footer) with it (see
+[SuperTip](widget/supertip.md)).
 
 ## Accessibility
 

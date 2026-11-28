@@ -31,41 +31,43 @@ type Control interface {
 
 // core is the state every widget has.
 type core struct {
-	id          int
-	hidden      bool
-	hides       int // views that did not build it, and shows of its form, for a popup of its own to close
-	disabled    bool
-	selected    bool // checked or on, set by build: the Style's Selected applies
-	wantFocus   bool // Focus asked for the keyboard focus
-	focusIn     int  // the view that last built it focused, noView for none
-	builtIn     int  // the view that last built it
-	tooltip     string
-	desc        string  // the description of its Fields row, the tooltip after it (Describe), set by the form as it builds
-	accName     string  // SetAccessibleName's
-	ownStyle    Style   // what the control's own methods set
-	applied     []Style // Apply's styles
-	style       Style   // applied merged, ownStyle last: what frames resolve
-	styled      bool    // style sets anything
-	skinKind    uint8   // 1 + the skinhook.Kind of the skin's look the control takes, 0 for none (lookAs)
-	status      Status  // the status a Badge or an InfoBar shows, which the status roles resolve to (styling)
-	textKey     any     // textKey(id), boxed once
-	idKey       any     // id, boxed once, for keeper.key
-	place       layout
-	bound       binding // Bind's, for the controls that can be bound
-	onFocusOut  func()
-	click       func()
-	menu        []MenuItem
-	post        func(c *ui.Context, e ui.Element) // after the styles apply, set by build
-	group       *radioGroup                       // the radio buttons added to the widget, a container
-	dnd         dragDrop                          // drag sources and drop targets
-	inertParent bool                              // el was disabled by a container, at the end of the last build
-	el          ui.Element                        // the element of the last build, valid until it ends
-	inner       ui.Element                        // set by a build that returns a box around its control: the control, which render focuses, names and describes
-	errMsg      string                            // ErrorProvider's
-	errBy       *ErrorProviderWidget
-	validating  func() bool                      // OnValidating's
-	rules       *ruleList                        // Rule's
-	over        []func(p *ui.Painter, r ui.Rect) // drawn over the element, set by build
+	id           int
+	hidden       bool
+	hides        int // views that did not build it, and shows of its form, for a popup of its own to close
+	disabled     bool
+	selected     bool // checked or on, set by build: the Style's Selected applies
+	wantFocus    bool // Focus asked for the keyboard focus
+	focusIn      int  // the view that last built it focused, noView for none
+	builtIn      int  // the view that last built it
+	tooltip      string
+	superTip     *superTipState                               // SetSuperTip's, nil for none
+	withSuperTip func(c *ui.Context, ctl ui.Element, b *core) // builds superTip's tip, set with it: apps without one do not link it
+	desc         string                                       // the description of its Fields row, the tooltip after it (Describe), set by the form as it builds
+	accName      string                                       // SetAccessibleName's
+	ownStyle     Style                                        // what the control's own methods set
+	applied      []Style                                      // Apply's styles
+	style        Style                                        // applied merged, ownStyle last: what frames resolve
+	styled       bool                                         // style sets anything
+	skinKind     uint8                                        // 1 + the skinhook.Kind of the skin's look the control takes, 0 for none (lookAs)
+	status       Status                                       // the status a Badge or an InfoBar shows, which the status roles resolve to (styling)
+	textKey      any                                          // textKey(id), boxed once
+	idKey        any                                          // id, boxed once, for keeper.key
+	place        layout
+	bound        binding // Bind's, for the controls that can be bound
+	onFocusOut   func()
+	click        func()
+	menu         []MenuItem
+	post         func(c *ui.Context, e ui.Element) // after the styles apply, set by build
+	group        *radioGroup                       // the radio buttons added to the widget, a container
+	dnd          dragDrop                          // drag sources and drop targets
+	inertParent  bool                              // el was disabled by a container, at the end of the last build
+	el           ui.Element                        // the element of the last build, valid until it ends
+	inner        ui.Element                        // set by a build that returns a box around its control: the control, which render focuses, names and describes
+	errMsg       string                            // ErrorProvider's
+	errBy        *ErrorProviderWidget
+	validating   func() bool                      // OnValidating's
+	rules        *ruleList                        // Rule's
+	over         []func(p *ui.Painter, r ui.Rect) // drawn over the element, set by build
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
@@ -274,17 +276,22 @@ func render(c *ui.Context, w Control) ui.Element {
 		// else does: desc holds it already.
 		ctl.Description(b.desc)
 	}
-	if b.tooltip != "" && b.errMsg == "" {
-		ctl.Tooltip(b.tooltip)
+	tooltip := b.tooltip
+	if b.withSuperTip != nil {
+		tooltip = "" // the SuperTip takes its place
+		b.withSuperTip(c, ctl, b)
+	}
+	if tooltip != "" && b.errMsg == "" {
+		ctl.Tooltip(tooltip)
 	}
 	if b.errMsg != "" {
 		// The value is invalid for assistive technology, and the message is
 		// the tooltip too, ahead of the control's own.
 		tip := b.errMsg
-		if b.tooltip != "" {
-			tip += "\n" + b.tooltip
+		if tooltip != "" {
+			tip += "\n" + tooltip
 			if b.desc == "" {
-				ctl.Description(b.tooltip) // the error comes first in the description
+				ctl.Description(tooltip) // the error comes first in the description
 			}
 		}
 		ctl.Error(b.errMsg)
