@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { docsAssets } from "../website/llms"
-import { rewriteHref } from "../website/src/lib/markdown-source"
+import { isPublished, rewriteHref } from "../website/src/lib/markdown-source"
 
 const temporary: string[] = []
 afterEach(async () => {
@@ -93,4 +93,9 @@ test("shared link rules keep HTML docs URLs and repository links intact", () => 
   for (const href of ["#input", "/docs/ui", "https://example.com", "//example.com", "mailto:hello@example.com"]) {
     expect(rewriteHref(href, file, links)).toBe(href)
   }
+})
+
+test("leaves local and agents' notes out of the published docs", () => {
+  for (const file of ["README.md", "ui/README.md", "plugins/agents.md", "agentsguide.md"]) expect(isPublished(file)).toBe(true)
+  for (const file of ["superpowers/plan.md", "agents/domain.md", "adr/0001-x.md", "agents"]) expect(isPublished(file)).toBe(false)
 })

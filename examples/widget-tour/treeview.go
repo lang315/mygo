@@ -19,9 +19,11 @@ type entry struct {
 var folderLoad = func() { time.Sleep(400 * time.Millisecond) }
 
 // treeView shows a TreeView of folders whose children load, a moment late,
-// when the user opens them; its check boxes count in the label below it.
+// when the user opens them; its check boxes count in the label below it. It
+// shows folders first, by name, the search box above it filters the nodes
+// loaded, and F2 renames the node chosen.
 func treeView() widget.Control {
-	status := widget.Label("Open a folder, choose a node, check some")
+	status := widget.Label("Open a folder, choose a node, check some, press F2 to rename")
 	var tree *widget.TreeViewWidget[entry, string]
 	tree = widget.TreeView(
 		func(e *entry) string { return e.path },
@@ -53,5 +55,31 @@ func treeView() widget.Control {
 	}).OnCheck(func(path string, on bool) {
 		status.SetText(fmt.Sprintf("%d checked", len(tree.Checked())))
 	})
-	return widget.VBox(8).Add(tree, status)
+	tree.SetSort(func(a, b *entry) int {
+		if a.dir != b.dir {
+			if a.dir {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.name, b.name)
+	}).SetLabelEdit(true).OnAfterLabelEdit(func(path, name string) bool {
+		if strings.TrimSpace(name) == "" || strings.Contains(name, "/") {
+			status.SetText("A name is not empty and holds no /")
+			return false
+		}
+		tree.UpdateNode(path, func(e *entry) { e.name = name })
+		status.SetText("Renamed to " + name)
+		return true
+	})
+	search := widget.SearchBox().SetPlaceholder("Filter the folders opened")
+	search.OnChange(func() {
+		q := strings.ToLower(search.Text())
+		if q == "" {
+			tree.SetFilter(nil)
+			return
+		}
+		tree.SetFilter(func(e *entry) bool { return strings.Contains(strings.ToLower(e.name), q) })
+	})
+	return widget.VBox(8).Add(search, tree, status)
 }

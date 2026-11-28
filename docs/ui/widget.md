@@ -1443,7 +1443,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
 - `SetSuperTip(SuperTip{Title, Body, Image, Footer})`, on every control: a rich tooltip in place of `SetTooltip`'s text, as DevExpress's SuperToolTip; see [SuperTip](widget/supertip.md).
-- `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes, in columns under a header with `SetColumns`; see [TreeView](widget/treeview.md).
+- `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes, in columns under a header with `SetColumns`, sorted (`SetSort`), filtered (`SetFilter`) and renamed in place (`SetLabelEdit`, `OnAfterLabelEdit`); see [TreeView](widget/treeview.md) and its [sorting, filtering and renaming](widget/treeview.md#sorting-filtering-and-renaming).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`, and `SetSearchPanel(true)` for a search box over the records in the drop-down (DevExpress's SearchLookUpEdit); see [LookUpEdit](widget/lookupedit.md).
 - `ButtonEdit(buttons...)`: a text field with buttons at its end, inside its frame (`EditEllipsis`, `EditClear`, `EditSearch`, `EditPlus`, `EditMinus`, `EditDropDown`, `EditGlyph`), as DevExpress's ButtonEdit; `Text`, `SetText`, `SetPlaceholder`, `SetReadOnly`, `OnChange`, `SetButtonVisible`; see [ButtonEdit](widget/buttonedit.md).
@@ -1541,6 +1541,11 @@ Input and display:
   `SetItems`, `OnSelect(func(i int))`; see [BreadCrumb](widget/breadcrumb.md).
 - `Accordion()`: sections, one open at a time; `AddSection(title,
   controls...)`, `Open`, `SetOpen`, `OnChange`; see [Accordion](widget/accordion.md).
+- `Wizard()`: steps one page at a time, with a step bar and Previous, Next
+  (Done) and Cancel; `AddStep(title, content)`, `Step`, `SetStep`,
+  `OnValidate(func(step int) bool)`, `OnStepChange`, `OnFinish`, `OnCancel`.
+  `StepProgressBar(steps...)`: numbered circles joined by lines; `Step`,
+  `SetStep`, `SetSteps`, `SetVertical`. See [Wizard and StepProgressBar](widget/wizard.md).
 - `ColorEdit()`: a swatch that opens a color picker inline; `Color`,
   `SetColor`, `OnChange`; see [ColorEdit](widget/coloredit.md).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
