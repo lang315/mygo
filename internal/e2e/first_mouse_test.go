@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/internal/wait"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -71,6 +72,15 @@ func TestConsumeActivationClick(t *testing.T) {
 						onkeydown="window.keys++">
 						<script>window.presses=0; window.ups=0; window.clicks=0; window.keys=0</script>`, "")
 					waitForPage(t, page, "window.presses === 0")
+					// What the page saw, for a failure: none of the second
+					// click, half of it, or all of it at the wrong place.
+					// Deferred, as the test's context ends before its cleanups.
+					defer func() {
+						if t.Failed() {
+							v, err := page.EvalContext(wait.Context(t), `JSON.stringify([window.presses, window.ups, window.clicks, window.pressesAtSecondClick, window.upsAtSecondClick, window.clicksAtSecondClick, document.hasFocus()])`)
+							t.Logf("the page's presses, ups, clicks, the same at the second click, and whether it has the keyboard: %v (%v)", v, err)
+						}
+					}()
 				}
 				other := newWindow(t, mygo.WindowOptions{Width: 200, Height: 150, X: 400, Y: 40, Content: ui.View(func(c *ui.Context) { ui.Text(c, "Other") })})
 				other.Focus()
