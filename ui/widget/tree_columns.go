@@ -84,6 +84,6 @@ func treeInColumns[T any, K comparable](t *TreeViewWidget[T, K], columns []ui.Ta
 		look = lookOf(skinhook.KindGridHeader)
 		s := &t.state
 		s.List.HeaderCell, s.List.Label, s.List.Skip = header, label, skip
-		return ui.OutlineTable(c, s, columns, t.roots, kids, cell)
+		return ui.OutlineTable(c, s, columns, t.shownRoots(), kids, cell)
 	}
 }

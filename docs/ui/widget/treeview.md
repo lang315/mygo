@@ -140,6 +140,70 @@ tree.OnCheck(func(k string, on bool) {
 - `SetChecked(ks, on)` checks or unchecks nodes, firing nothing.
 - `OnCheck(fn)` runs `fn(k, on)` for each node the user checked or unchecked.
 
+## Sorting, filtering and renaming
+
+A tree sorts its nodes, shows only those a search finds, and lets the user
+rename a node in place, as WinForms' `TreeView` does with `TreeViewNodeSorter`
+and `LabelEdit`:
+
+```go
+tree.SetSort(func(a, b *entry) int {
+	return strings.Compare(a.name, b.name)
+}).SetLabelEdit(true).OnAfterLabelEdit(func(path, name string) bool {
+	if err := rename(path, name); err != nil {
+		return false // the old name shows again
+	}
+	tree.UpdateNode(path, func(e *entry) { e.name = name })
+	return true
+})
+
+search := widget.SearchBox()
+search.OnChange(func() {
+	q := strings.ToLower(search.Text())
+	if q == "" {
+		tree.SetFilter(nil)
+		return
+	}
+	tree.SetFilter(func(e *entry) bool { return strings.Contains(strings.ToLower(e.name), q) })
+})
+```
+
+- `SetSort(cmp)` shows the children of every node, and the roots, in `cmp`'s
+  order (negative when `a` comes first, as `cmp.Compare`). Nodes `cmp` finds
+  equal keep the order given. The order holds through `SetRoots`,
+  `SetChildren` and `UpdateNode`. It is the order shown only: `Children`,
+  `Expanded` and `Checked` keep the order given. `SetSort(nil)` shows the
+  order given again. One sort holds for all siblings: the tree does not sort
+  by a column.
+- `SetFilter(keep)` shows a loaded node when it, or a loaded descendant,
+  passes `keep`. The ancestors of a node that passes open while the filter is
+  set, so it shows; a node that passes itself shows without its children that
+  do not. Nodes set while the filter is set are filtered too. `SetFilter(nil)`
+  shows every node again, open and closed as the user had them before the
+  first filter; a filter changed for another starts from that expansion too.
+- The filter never loads children: a node whose children are not loaded
+  (`SetHasChildren`) shows when it passes itself, and `OnExpand` does not
+  fire. Neither setter fires an event.
+- The choice and the checks belong to keys, so sorting and filtering keep
+  them, a node hidden by the filter too: `Selected` and `Checked` still
+  return it.
+- `SetLabelEdit(true)` lets the user rename the node chosen: F2 (and Enter on
+  macOS, as in Finder, where Enter then renames rather than activates), or a
+  click on its text once a second click would no longer make a double click,
+  shows an input of its text, all selected. Enter commits, as moving the
+  focus away does, and Escape cancels. It is ui's
+  [`EditableText`](../editable-text.md) in the row.
+- `OnAfterLabelEdit(fn)` runs `fn(k, text)` on the event goroutine with the
+  new text. Change the node with `UpdateNode` and return true to keep the
+  edit; return false to refuse it, and the node's text shows again. Until
+  `fn` returns, the node shows the new text, so the old one does not flash
+  before `UpdateNode`. An edit that leaves the text as it was calls nothing.
+  Without `OnAfterLabelEdit`, edits are refused: the input does not open.
+- `cmp` and `keep` run under the package's lock, as `key` and `text` do.
+
+A tree given none of the three builds as one that never was, and links none
+of their code.
+
 ## Columns
 
 `SetColumns(treeTitle, cols...)` shows the tree in columns under a header,
@@ -167,7 +231,8 @@ tree := widget.TreeView(
 - Then comes one column for each of `cols`, showing its `Text` (which runs
   under the package's lock). Of a `Column` the tree reads `Title`, `Text`,
   `Width`, `MinWidth`, `Align` and `Hidden`. The grid's other fields are not
-  read: the tree does not sort by a column.
+  read: the tree does not sort by a column (`SetSort` sorts all siblings by
+  one order).
 - The Loading row shows its text in the first column, and nothing in the
   others.
 - Titles tell the columns apart, `treeTitle` among them, so they must
@@ -184,7 +249,8 @@ While the tree has the focus: Up and Down move the choice, Home and End go to
 the first and the last row, Right opens the node chosen or goes to its first
 child, and Left closes it or goes to its parent. With Option on macOS and Shift
 elsewhere, Right and Left open and close all inside. Enter activates the node.
-Typing the first letters of a node's text chooses the node.
+Typing the first letters of a node's text chooses the node. With
+`SetLabelEdit(true)`, F2 renames the node chosen, and so does Enter on macOS.
 
 The Loading row is skipped by all of them: Down and Up move past it, End goes to
 the last row that can be chosen, Right on an open node whose children are
