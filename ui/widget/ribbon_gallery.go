@@ -32,11 +32,16 @@ type RibbonGalleryWidget struct {
 	hl        int  // the item the drop-down's arrows are on, -1 for none
 	moved     bool // the arrows or the pointer moved hl since the drop-down opened
 	popHov    int  // the item of the drop-down under the pointer in the last build
-	stripHov  int  // the item of the strip under the pointer in this build
-	hover     int  // what OnHover was last given
-	cur       int  // the item face builds
-	c         *ui.Context
-	panelEl   ui.Element // the drop-down's panel, whose active descendant hl is
+	stripHov  int  // the item of the strip under the pointer, kept in a gap between items
+	// area is the box of the items being built, the strip's row or the
+	// drop-down's grid; back is the control that had the focus before the
+	// key tips that opened the drop-down, which gets it back as it closes.
+	area    ui.Element
+	back    Control
+	hover   int // what OnHover was last given
+	cur     int // the item face builds
+	c       *ui.Context
+	panelEl ui.Element // the drop-down's panel, whose active descendant hl is
 	// The functions handed to ui, made once.
 	strip, arrows, face, grid, cells, upFace, downFace, moreFace func()
 	panel                                                        func(panel ui.Element)
@@ -48,7 +53,7 @@ type RibbonGalleryWidget struct {
 // tip, opens all the items in a grid under it, which the arrow keys move in,
 // Enter picks from and Escape closes. Nothing is selected at first.
 func (r *RibbonWidget) AddGallery(items []GalleryItem, columns int) *RibbonGalleryWidget {
-	g := &RibbonGalleryWidget{items: slices.Clone(items), columns: max(columns, 1), sel: -1, hl: -1, popHov: -1, hover: -1}
+	g := &RibbonGalleryWidget{items: slices.Clone(items), columns: max(columns, 1), sel: -1, hl: -1, popHov: -1, stripHov: -1, hover: -1}
 	g.init(g)
 	g.strip, g.arrows, g.face = g.buildStrip, g.buildArrows, g.buildFace
 	g.grid, g.cells, g.panel = g.buildGrid, g.buildCells, g.buildPanel
@@ -115,14 +120,15 @@ func (g *RibbonGalleryWidget) selectItem(i int) {
 func (g *RibbonGalleryWidget) rows() int { return (len(g.items) + g.columns - 1) / g.columns }
 
 // galleryTip opens the drop-down of tp's command when it is an enabled
-// gallery, and reports whether it did: a disabled one ends the tips as any
-// disabled command does. Under mu (galleryTip).
-func galleryTip(tp ribbonTip) bool {
+// gallery, which gives the focus back to back as it closes, and reports
+// whether it did: a disabled one ends the tips as any disabled command
+// does. Under mu (galleryTip).
+func galleryTip(tp ribbonTip, back Control) bool {
 	g, ok := tp.w.(*RibbonGalleryWidget)
 	if !ok || tp.el.IsDisabled() {
 		return false
 	}
-	g.open = true
+	g.open, g.back = true, back
 	return true
 }
 
@@ -136,7 +142,6 @@ func (g *RibbonGalleryWidget) build(c *ui.Context) ui.Element {
 	g.c = c
 	t := c.Theme()
 	box := ui.Row(c).Role(ui.RoleGroup).Border(1, t.Border).Radius(t.Radius).AlignItems(ui.Stretch).Clip()
-	g.stripHov = -1
 	box.Children(g.strip)
 	if g.open && !g.wasOpen {
 		g.hl, g.moved, g.popHov = g.sel, false, -1
@@ -146,6 +151,10 @@ func (g *RibbonGalleryWidget) build(c *ui.Context) ui.Element {
 	}
 	if !c.Measuring() {
 		g.hovered()
+		if !g.open && g.back != nil { // closed: the focus goes back to where the key tips took it from
+			focusLater(g.back)
+			g.back = nil
+		}
 		g.wasOpen = g.open
 	}
 	return box
@@ -177,8 +186,9 @@ func itemWidth(t *ui.Theme) float32 { return t.Rem(4.5) }
 // building.
 func (g *RibbonGalleryWidget) buildStrip() {
 	c, t := g.c, g.c.Theme()
-	ui.Row(c).Gap(t.Space(0.5)).Padding(t.Space(0.5)).Width(float32(g.columns)*(itemWidth(t)+t.Space(0.5)) + t.Space(0.5)).
-		AlignItems(ui.Stretch).Children(g.cells)
+	g.area = ui.Row(c).Gap(t.Space(0.5)).Padding(t.Space(0.5)).Width(float32(g.columns)*(itemWidth(t)+t.Space(0.5)) + t.Space(0.5)).
+		AlignItems(ui.Stretch)
+	g.area.Children(g.cells)
 	ui.Column(c).BorderStartWidth(1).BorderColor(t.Border).Children(g.arrows)
 }
 
@@ -201,9 +211,20 @@ func (g *RibbonGalleryWidget) buildCells() {
 			g.pick(i)
 		}
 	}
+	if g.c.Measuring() { // the pointer is the window's: the last build for it decides
+		return
+	}
+	// In a gap between items the pointer keeps the last one, so that a live
+	// preview does not flash back; only leaving the items' area ends it.
+	if hov < 0 && g.area.Hovered() {
+		hov = g.stripHov
+		if inPanel {
+			hov = g.popHov
+		}
+	}
 	if !inPanel {
 		g.stripHov = hov
-	} else if !g.c.Measuring() && hov != g.popHov {
+	} else if hov != g.popHov {
 		g.popHov = hov
 		g.moved = hov >= 0 // off the items: OnHover(-1), the arrows going on from hl
 		if hov >= 0 {
@@ -265,7 +286,7 @@ func (g *RibbonGalleryWidget) buildArrows() {
 	if down.Clicked() {
 		g.row++
 	}
-	more := g.arrow(c).Label(l10n.More()).Expanded(g.open)
+	more := g.arrow(c).Label(l10n.More()).HasPopup(ui.PopupGrid).Expanded(g.open)
 	more.Children(g.moreFace)
 	if more.Clicked() {
 		g.open = !g.open // a press on the gallery is not outside the drop-down: it toggles
@@ -344,7 +365,8 @@ func (g *RibbonGalleryWidget) buildPanel(panel ui.Element) {
 
 // buildGrid builds the drop-down's grid. Under mu, building.
 func (g *RibbonGalleryWidget) buildGrid() {
-	ui.Grid(g.c).Columns(g.columns).Gap(g.c.Theme().Space(0.5)).Children(g.cells)
+	g.area = ui.Grid(g.c).Columns(g.columns).Gap(g.c.Theme().Space(0.5))
+	g.area.Children(g.cells)
 }
 
 // pick selects item i as the user did, closes the drop-down, and posts

@@ -188,8 +188,8 @@ func TestRibbonGalleryDropDown(t *testing.T) {
 		t.Fatal("More reads expanded with the drop-down closed")
 	}
 	k.openDropDown(t)
-	if !k.button(t, "More").Expanded {
-		t.Fatal("More does not read expanded with the drop-down open")
+	if more := k.button(t, "More"); !more.Expanded || more.HasPopup != ui.PopupGrid {
+		t.Fatalf("More with the drop-down open: Expanded %v, HasPopup %v, want true and PopupGrid", more.Expanded, more.HasPopup)
 	}
 	grid := k.items(t, true)
 	if len(grid) != 10 {
@@ -281,6 +281,107 @@ func TestRibbonGalleryHover(t *testing.T) {
 	}
 	if got := gotPosted(k.picks); len(got) != 0 {
 		t.Fatalf("hovering ran OnSelect %v", got)
+	}
+}
+
+// gap returns a point in the gap between a and b, which are side by side,
+// level with their centres.
+func gap(a, b ui.Rect) (float32, float32) {
+	return (a.X + a.W + b.X) / 2, a.Y + a.H/2
+}
+
+// Review round 1: in a gap between items the pointer keeps the last one:
+// 2, gap, 3 posts exactly 2, 3, in the strip and in the drop-down; -1 comes
+// only when the pointer leaves the items' area.
+func TestRibbonGalleryHoverGaps(t *testing.T) {
+	k := newGalleryKit(t, 10)
+	strip := k.items(t, false)
+	s2, s3 := strip["Style 2"].Bounds, strip["Style 3"].Bounds
+	if s3.X-(s2.X+s2.W) < 1 {
+		t.Fatalf("no gap between Style 2 %v and Style 3 %v", s2, s3)
+	}
+	for _, at := range [][2]float32{{s2.X + s2.W/2, s2.Y + s2.H/2}, {0, 0}, {s3.X + s3.W/2, s3.Y + s3.H/2}} {
+		if at == [2]float32{} {
+			at[0], at[1] = gap(s2, s3)
+		}
+		k.tt.Move(at[0], at[1])
+		k.tt.Frame()
+	}
+	if got := gotPosted(k.hovers); !slices.Equal(got, []int{2, 3}) {
+		t.Fatalf("the pointer over Style 2, the gap, Style 3 in the strip: OnHover %v, want [2 3]", got)
+	}
+	k.tt.Move(790, 395)
+	k.tt.Frame()
+	if got := gotPosted(k.hovers); !slices.Equal(got, []int{-1}) {
+		t.Fatalf("the pointer off the strip: OnHover %v, want [-1]", got)
+	}
+	k.openDropDown(t)
+	grid := k.items(t, true)
+	g5, g6 := grid["Style 5"].Bounds, grid["Style 6"].Bounds
+	if g6.X-(g5.X+g5.W) < 1 {
+		t.Fatalf("no gap between Style 5 %v and Style 6 %v", g5, g6)
+	}
+	k.tt.Move(centre(g5))
+	k.tt.Frame()
+	k.tt.Move(gap(g5, g6))
+	k.tt.Frame()
+	k.tt.Move(centre(g6))
+	k.tt.Frame()
+	if got := gotPosted(k.hovers); !slices.Equal(got, []int{5, 6}) {
+		t.Fatalf("the pointer over Style 5, the gap, Style 6 in the drop-down: OnHover %v, want [5 6]", got)
+	}
+	k.tt.Move(790, 395)
+	k.tt.Frame()
+	if got := gotPosted(k.hovers); !slices.Equal(got, []int{-1}) {
+		t.Fatalf("the pointer off the drop-down: OnHover %v, want [-1]", got)
+	}
+}
+
+// Review round 1: after its KeyTip opened the drop-down, closing it by
+// Escape, a pick or a press outside gives the focus back to the control
+// that had it before F10, which the drop-down holds while open.
+func TestRibbonGalleryKeyTipGivesFocusBack(t *testing.T) {
+	k := newGalleryKit(t, 10)
+	body, _ := k.tt.Access("Body")
+	g, _ := k.tt.AccessByRole(ui.RoleGroup, "Gallery")
+	closes := []struct {
+		name string
+		do   func()
+	}{
+		{"Escape", func() { typeTip(k.tt, ui.KeyEscape) }},
+		{"Enter", func() { typeTip(k.tt, ui.KeyDown); typeTip(k.tt, ui.KeyEnter) }},
+		{"a press outside", func() { k.tt.ClickAt(g.Bounds.X+g.Bounds.W+100, g.Bounds.Y+g.Bounds.H/2); k.tt.Frame() }},
+	}
+	for _, cl := range closes {
+		k.click(t, body)
+		if !k.tt.Focused("Body") {
+			t.Fatal("the text box did not take the focus")
+		}
+		typeTip(k.tt, ui.KeyF10)
+		typeTip(k.tt, ui.KeyH)
+		holdEvents(t)
+		typeTip(k.tt, ui.KeyG)
+		settleTips(t, k.tt)
+		if n := len(k.items(t, true)); n != 10 || k.tt.Focused("Body") {
+			t.Fatalf("%s: the KeyTip opened %d items, the text box focused %v: want 10 and the drop-down focused", cl.name, n, k.tt.Focused("Body"))
+		}
+		holdEvents(t)
+		cl.do()
+		settleTips(t, k.tt)
+		if n := len(k.items(t, true)); n != 0 {
+			t.Fatalf("%s left the drop-down open (%d items)", cl.name, n)
+		}
+		if !k.tt.Focused("Body") {
+			t.Fatalf("%s closed the drop-down a KeyTip opened, and the focus did not go back to the text box", cl.name)
+		}
+	}
+	// A drop-down that More opened gives no focus back.
+	k.click(t, body)
+	k.openDropDown(t)
+	typeTip(k.tt, ui.KeyEscape)
+	settleTips(t, k.tt)
+	if k.tt.Focused("Body") {
+		t.Fatal("closing a drop-down More opened moved the focus to the text box")
 	}
 }
 

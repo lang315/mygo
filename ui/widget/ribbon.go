@@ -71,9 +71,10 @@ type RibbonWidget struct {
 	qatTaken uint64
 
 	// galleryTip opens the drop-down of a command's tip when the command is
-	// an enabled gallery (ribbon_gallery.go), and reports whether it did:
-	// nil until AddGallery installs it.
-	galleryTip func(tp ribbonTip) bool
+	// an enabled gallery (ribbon_gallery.go), which gives the focus back to
+	// back as it closes, and reports whether it did: nil until AddGallery
+	// installs it.
+	galleryTip func(tp ribbonTip, back Control) bool
 }
 
 // ribbonStrip is the strip being built: ui's tabs, the tab shown, the
@@ -370,8 +371,8 @@ func (r *RibbonWidget) tipMode(c *ui.Context, col ui.Element) {
 // a drop-down button too, takes the focus; a gallery opens its drop-down
 // (galleryTip). A disabled one does nothing. Under mu.
 func (r *RibbonWidget) runTip(tp ribbonTip) {
-	if r.galleryTip != nil && r.galleryTip(tp) {
-		r.leaveTips(false) // the drop-down takes the focus
+	if r.galleryTip != nil && r.galleryTip(tp, r.tipBack) {
+		r.leaveTips(false) // the drop-down takes the focus, and gives it back
 		return
 	}
 	b, tool := tp.w.(*ToolButtonWidget)

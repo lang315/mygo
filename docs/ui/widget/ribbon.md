@@ -203,16 +203,20 @@ styles.OnSelect(func(i int) { apply(i) })
 - `OnHover(fn)` is for a live preview: it runs `fn` on the event goroutine
   as the pointer moves onto an item, in the row or the drop-down, or the
   drop-down's arrow keys move to one, and with -1 when the pointer leaves
-  the items, or the drop-down closes.
+  the items' row or grid, or the drop-down closes. In a gap between two
+  items the pointer keeps the last one, so a preview does not flash back.
 - Keyboard: the drop-down takes the focus as it opens. The arrows move in
   its grid, the item they are on outlined in the theme's `Accent`, stopping
   at its edges; with nothing selected the first arrow goes to the first
   item. Enter picks, and Escape, or a press outside it, closes it with no
   pick. More takes the focus from Tab and opens on Enter or Space.
 - Key tips: the gallery takes its letter as any command, from its
-  accessible name (`SetAccessibleName`); typing it opens the drop-down. A
-  disabled gallery's letter ends the tips. Without a name, it takes the
-  first free letter.
+  accessible name (`SetAccessibleName`); typing it opens the drop-down,
+  and when it closes (a pick, Escape, a press outside) the focus goes back
+  to the control that had it before F10 or Alt. A disabled gallery's letter
+  ends the tips. Without a name, it takes the first free letter.
+- Assistive technology reads More as a button that opens a grid
+  (`ui.PopupGrid`), expanded while the drop-down shows.
 - In RTL the items run from the right, the buttons at the left end, and
   Right and Left mirror in the grid.
 - The look: the gallery is lined with the theme's `Border`; the item
