@@ -18,7 +18,7 @@ func TestConsumeActivationClick(t *testing.T) {
 	for _, kind := range []string{"page", "native", "embedded"} {
 		for _, enabled := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/%v", kind, enabled), func(t *testing.T) {
-				var clicks, pressesAtSecondClick, frames, nativeDowns, nativeUps atomic.Int32
+				var clicks, pressesAtSecondClick, frames, viewFrames, nativeDowns, nativeUps atomic.Int32
 				var view *mygo.WebView
 				opts := mygo.WindowOptions{
 					Width: 300, Height: 200, X: 40, Y: 40,
@@ -44,6 +44,7 @@ func TestConsumeActivationClick(t *testing.T) {
 								}
 							})
 						} else if view != nil {
+							viewFrames.Add(1)
 							ui.WebView(c, view).Fill()
 						}
 					})
@@ -64,6 +65,14 @@ func TestConsumeActivationClick(t *testing.T) {
 				if kind != "page" {
 					eventually(t, "the native frame built", func() bool { return frames.Load() > 0 })
 				}
+				if kind == "embedded" {
+					// Update posts its function: frames can count a build from
+					// before it, without the web view.
+					eventually(t, "a frame built with the web view", func() bool { return viewFrames.Load() > 0 })
+				}
+				// The frames built with the web view as each click went, for a
+				// failure.
+				var viewFramesAt [2]int32
 				if page != nil {
 					page.LoadHTML(`<body style="margin:0;height:100vh"
 						onmousedown="window.presses++; if (event.clientX >= 150) window.pressesAtSecondClick = window.presses"
@@ -78,7 +87,7 @@ func TestConsumeActivationClick(t *testing.T) {
 					defer func() {
 						if t.Failed() {
 							v, err := page.EvalContext(wait.Context(t), `JSON.stringify([window.presses, window.ups, window.clicks, window.pressesAtSecondClick, window.upsAtSecondClick, window.clicksAtSecondClick, document.hasFocus()])`)
-							t.Logf("the page's presses, ups, clicks, the same at the second click, and whether it has the keyboard: %v (%v)", v, err)
+							t.Logf("the page's presses, ups, clicks, the same at the second click, and whether it has the keyboard: %v (%v); frames built with the web view at the clicks %v, at the failure %d", v, err, viewFramesAt, viewFrames.Load())
 						}
 					}()
 				}
@@ -87,6 +96,7 @@ func TestConsumeActivationClick(t *testing.T) {
 				requireForeground(t, other)
 				eventually(t, "the other window focused", other.IsFocused)
 				checkActivationHit(t, w, kind, enabled)
+				viewFramesAt[0] = viewFrames.Load()
 				if !appClick(t, w, 100, 100) {
 					t.Skip("click automation not available on this platform")
 				}
@@ -101,6 +111,7 @@ func TestConsumeActivationClick(t *testing.T) {
 				// Use a different target for the second click. Its handler
 				// records the count after both presses have been handled,
 				// so a transient count of one cannot satisfy the assertion.
+				viewFramesAt[1] = viewFrames.Load()
 				appClick(t, w, 200, 100)
 				want := int32(2)
 				if enabled {

@@ -807,8 +807,22 @@ func clickState(w *window, x, y float64) string {
 	if s == nil {
 		return st
 	}
-	return st + fmt.Sprintf(", ateUp %#x, buttons %d, a web view took a press %v, a web view under the point %v, a web view has the keyboard %v",
+	st += fmt.Sprintf(", ateUp %#x, buttons %d, a web view took a press %v, a web view under the point %v, a web view has the keyboard %v",
 		s.ateUp, s.buttons, s.webCapture != nil, s.webViewAt(x, y) != nil, w.focusedWebView() != nil)
+	// What webViewAt read: none placed means no frame with the view reached
+	// the surface; a placement that excludes the point is what the content
+	// sent; one with no composition controller is a view not made yet.
+	st += fmt.Sprintf(", %d placed", len(s.placed))
+	for _, p := range s.placed {
+		st += fmt.Sprintf(" [frame %v, clip %v, covers %v, at the point %v", p.Frame, p.Clip, p.Covers, p.At(x, y))
+		if v, ok := p.WebView.(*window); ok {
+			st += fmt.Sprintf(", closed %v, comp %v, controller %v, shown %v", v.closed, v.comp != 0, v.controller != 0, v.shown)
+		} else {
+			st += fmt.Sprintf(", a %T", p.WebView)
+		}
+		st += "]"
+	}
+	return st
 }
 
 // windowsAbove lists the visible top-level windows of other processes above
