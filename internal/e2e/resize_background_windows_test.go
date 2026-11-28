@@ -34,6 +34,9 @@ func TestNativeUIWindowPixelsUnderSurface(t *testing.T) {
 	t.Cleanup(func() {
 		if t.Failed() && last != "" {
 			t.Logf("under the surface, %s", last)
+			var diag string
+			mygo.RunOnMain(func() { diag = win.TestPixelsUnderSurfaceDiag(w.NativeHandle()) })
+			t.Logf("under the surface at the failure: %s", diag)
 		}
 	})
 	if !under() {

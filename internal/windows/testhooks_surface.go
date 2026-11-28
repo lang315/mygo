@@ -444,37 +444,79 @@ func TestUIAClientEdits(hwnd uintptr) (rects [][4]int32, ok bool) {
 // it cannot tell: the content has no opaque background yet, the window
 // has no pixels of its own, or the frames are drawn into them (GDI).
 func TestWindowPixelsUnderSurface(hwnd uintptr) (off string, ok bool) {
+	offs, _, _, ok := pixelsUnderSurface(hwnd, 1)
+	if len(offs) > 0 {
+		off = offs[0]
+	}
+	return off, ok
+}
+
+// TestPixelsUnderSurfaceDiag describes the window's own pixels under its
+// surface for a test that found one that is not the content's background:
+// the client area and the surface's rectangle, how many of the samples are
+// off and the first of them, then the same once fillUnder painted them
+// again. Off samples that the fill clears say no fill ran after the last
+// change of size; ones it does not clear say something paints over the
+// fill, or the pixels read are not the ones painted.
+func TestPixelsUnderSurfaceDiag(hwnd uintptr) string {
+	s := surfaceByHandle(hwnd)
+	if s == nil {
+		return "no surface"
+	}
+	var c, sr rect
+	procGetClientRect.Call(s.w.hwnd, uintptr(unsafe.Pointer(&c)))
+	procGetWindowRect.Call(s.hwnd, uintptr(unsafe.Pointer(&sr)))
+	var origin point
+	procClientToScreen.Call(s.w.hwnd, uintptr(unsafe.Pointer(&origin)))
+	d := fmt.Sprintf("the client area is %dx%d at (%d, %d) on the screen, the surface (%d, %d)-(%d, %d), cloaked %v, drawn %v",
+		c.Right, c.Bottom, origin.X, origin.Y, sr.Left, sr.Top, sr.Right, sr.Bottom, s.cloaked, s.drawn)
+	offs, off, n, ok := pixelsUnderSurface(hwnd, 8)
+	d += fmt.Sprintf("; %d of %d samples off (readable %v), the first %v", off, n, ok, offs)
+	s.fillUnder()
+	offs, off, n, ok = pixelsUnderSurface(hwnd, 8)
+	return d + fmt.Sprintf("; after fillUnder again, %d of %d off (readable %v), the first %v", off, n, ok, offs)
+}
+
+// pixelsUnderSurface samples the window's own pixels as
+// TestWindowPixelsUnderSurface does, and returns the first keep of the
+// samples that are not the content's background, how many are not (off),
+// and how many it read (n).
+func pixelsUnderSurface(hwnd uintptr, keep int) (offs []string, off, n int, ok bool) {
 	s := surfaceByHandle(hwnd)
 	if s == nil || s.bgBrush == 0 || s.pixels || s.viaComposition() {
-		return "", false
+		return nil, 0, 0, false
 	}
 	var c rect
 	procGetClientRect.Call(s.w.hwnd, uintptr(unsafe.Pointer(&c)))
 	if c.Right <= 0 || c.Bottom <= 0 {
-		return "", false
+		return nil, 0, 0, false
 	}
 	const dcxCache = 0x2
 	dc, _, _ := procGetDCEx.Call(s.w.hwnd, 0, dcxCache)
 	if dc == 0 {
-		return "", false
+		return nil, 0, 0, false
 	}
 	defer procReleaseDC.Call(s.w.hwnd, dc)
 	want := uint32(s.bg.R) | uint32(s.bg.G)<<8 | uint32(s.bg.B)<<16
 	// A grid of 17 by 17 pixels, the edges of the client area among them.
-	const n = 16
-	for i := range n + 1 {
-		for j := range n + 1 {
-			x, y := (c.Right-1)*int32(j)/n, (c.Bottom-1)*int32(i)/n
+	const grid = 16
+	for i := range grid + 1 {
+		for j := range grid + 1 {
+			x, y := (c.Right-1)*int32(j)/grid, (c.Bottom-1)*int32(i)/grid
 			px, _, _ := procGetPixel.Call(dc, uintptr(x), uintptr(y))
 			if px == 0xFFFFFFFF { // CLR_INVALID
-				return "", false
+				return nil, off, n, false
 			}
+			n++
 			if uint32(px) != want {
-				return fmt.Sprintf("(%d, %d) is #%02x%02x%02x", x, y, byte(px), byte(px>>8), byte(px>>16)), true
+				off++
+				if len(offs) < keep {
+					offs = append(offs, fmt.Sprintf("(%d, %d) is #%02x%02x%02x", x, y, byte(px), byte(px>>8), byte(px>>16)))
+				}
 			}
 		}
 	}
-	return "", true
+	return offs, off, n, true
 }
 
 // TestCloaked reports whether DWM keeps the window hwnd out of sight

@@ -593,6 +593,7 @@ func pumpInputMessages(stopMsg uint32) (stopped, gotQuit bool) {
 // front and clicked again. resent says when that happened.
 func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, missed string, moves int, resent string) {
 	w := theBackend.windows[hwnd]
+	lastClick = ""
 	if w == nil {
 		return false, "", 0, ""
 	}
@@ -694,6 +695,7 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		fronts += "; after the move: " + describeWindow(fg)
 		raise("after the move")
 		placed, _, _ = user32.NewProc("SetCursorPos").Call(uintptr(pt.X), uintptr(pt.Y))
+		lastClick += fmt.Sprintf("click %d, before the button: %s", attempt+1, clickState(w, x, y))
 		mouse := user32.NewProc("mouse_event")
 		const leftDown, leftUp = 0x0002, 0x0004
 		mouse.Call(leftDown, 0, 0, 0, 0)
@@ -723,6 +725,9 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 				}
 				procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 				procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
+				if m.Message == wmLButtonDown || m.Message == wmLButtonUp {
+					lastClick += fmt.Sprintf("; %#x to %#x, then %s", m.Message, m.HWnd, clickState(w, x, y))
+				}
 				if m.Message == wmLButtonUp {
 					return true, "", moves, resent
 				}
@@ -765,6 +770,45 @@ func TestInputClick(hwnd uintptr, x, y float64, within time.Duration) (ok bool, 
 		}
 	}
 	return true, describe() + diagnoseClick(pt, placed != 0, downs, seen) + fmt.Sprintf("; the cursor moved %d times to reach the window", moves) + fronts + resent + windowsAbove(w.hwnd), moves, resent
+}
+
+// lastClick describes what the last click TestInputClick sent to a window
+// showing native UI did (TestLastClick). Main thread only.
+var lastClick string
+
+// TestLastClick describes the last click TestInputClick sent to a window
+// showing native UI, for a test that fails after it: the window's state
+// (clickState) as the button was sent, and after each button message the
+// loop handled, with the message and the window it went to. A press that
+// WM_MOUSEACTIVATE ate (ConsumeActivationClick) never reaches the queue:
+// only its release shows, which ateUp eats.
+func TestLastClick() string { return lastClick }
+
+// TestClickState is clickState for a point of a window, in DIPs from the
+// top-left corner of its surface, as a test that failed finds it.
+func TestClickState(hwnd uintptr, x, y float64) string {
+	w := theBackend.windows[hwnd]
+	if w == nil {
+		return "the window is gone"
+	}
+	return clickState(w, x, y)
+}
+
+// clickState says what decides where a button over a window showing native
+// UI goes: whether the window is active (an inactive one with
+// ConsumeActivationClick eats the press, and ateUp its release), a press the
+// content holds (buttons), whether a web view took a press (webCapture) and
+// whether one is under the point, which a press is sent on to, and whether a
+// web view has the keyboard (its GotFocus came).
+func clickState(w *window, x, y float64) string {
+	fg, _, _ := procGetForegroundWindow.Call()
+	st := fmt.Sprintf("active %v, in front %v", w.active, fg == w.hwnd)
+	s := w.surf()
+	if s == nil {
+		return st
+	}
+	return st + fmt.Sprintf(", ateUp %#x, buttons %d, a web view took a press %v, a web view under the point %v, a web view has the keyboard %v",
+		s.ateUp, s.buttons, s.webCapture != nil, s.webViewAt(x, y) != nil, w.focusedWebView() != nil)
 }
 
 // windowsAbove lists the visible top-level windows of other processes above
