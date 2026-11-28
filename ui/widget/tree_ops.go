@@ -138,7 +138,6 @@ func (t *TreeViewWidget[T, K]) wireLabel() {
 	} else {
 		t.labelRow, o.valOK = nil, false
 	}
-	t.look++ // every row builds again, with an editable text or without
 }
 
 // dropViews forgets the children shown, for ui's next ask. Under mu.

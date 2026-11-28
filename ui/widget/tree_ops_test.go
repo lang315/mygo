@@ -156,6 +156,18 @@ func TestTreeFilter(t *testing.T) {
 	rowsInOrder(t, tt, "Alpha", "Beta", "Beta one")
 	hidden(t, tt, "Alpha one", "Needle")
 	quiet(t, events, "SetFilter")
+
+	t.Run("a node open before the filter, removed under it", func(t *testing.T) {
+		tv := filterTree()
+		tt := tester(t, tv)
+		tv.SetFilter(named("Needle"))
+		tv.RemoveNodes("B")
+		tv.SetFilter(nil)
+		tt.Frame()
+		if got := tv.Expanded(); len(got) != 0 {
+			t.Fatalf("expanded %v: want none, B having gone", got)
+		}
+	})
 }
 
 // Filtering never asks for children: OnExpand does not fire, and a node not
@@ -328,6 +340,59 @@ func TestTreeLabelEdit(t *testing.T) {
 	tt.Frame()
 	quietEdits(t, edits, "Enter on the text unchanged")
 
+	t.Run("focus away commits to the node edited", func(t *testing.T) {
+		edits := make(chan string, 8)
+		keep := true
+		tv := editTree(edits, &keep)
+		tt := tester(t, tv)
+		click(t, tt, "Beta")
+		tt.Key(0, ui.KeyF2)
+		tt.Frame()
+		tt.Type("Xi")
+		click(t, tt, "Alpha")
+		tt.Frame()
+		if got := soon(t, edits); got != "B Xi" {
+			t.Fatalf("a click on Alpha while editing Beta: OnAfterLabelEdit got %q, want B Xi", got)
+		}
+		quietEdits(t, edits, "the click away")
+		tt.Frame()
+		if a, _ := tv.Node("A"); a.name != "Alpha" || !shows(tt, "Xi") {
+			t.Fatalf("Alpha %q, shows %q: want Alpha unchanged and Xi", a.name, tt.Texts())
+		}
+		if k, _ := tv.Selected(); k != "A" {
+			t.Fatalf("Selected %q, want A", k)
+		}
+		// Tab away commits too.
+		tt.Key(0, ui.KeyF2)
+		tt.Frame()
+		tt.Type("Omega")
+		tt.Key(0, ui.KeyTab)
+		tt.Frame()
+		if got := soon(t, edits); got != "A Omega" {
+			t.Fatalf("Tab away: OnAfterLabelEdit got %q, want A Omega", got)
+		}
+	})
+	// Turned on with a node already chosen, F2 edits it at once.
+	t.Run("on after the choice", func(t *testing.T) {
+		edits := make(chan string, 8)
+		tv := fileTree()
+		tt := tester(t, tv)
+		click(t, tt, "Beta")
+		tt.Move(700, 500) // the pointer off the rows, which are kept as built
+		for range 3 {
+			tt.Frame()
+		}
+		tv.SetLabelEdit(true).OnAfterLabelEdit(func(k, text string) bool { edits <- k + " " + text; return true })
+		tt.Frame()
+		tt.Key(0, ui.KeyF2)
+		tt.Frame()
+		tt.Type("Nu")
+		tt.Key(0, ui.KeyEnter)
+		tt.Frame()
+		if got := soon(t, edits); got != "B Nu" {
+			t.Fatalf("OnAfterLabelEdit got %q", got)
+		}
+	})
 	t.Run("refused without the func", func(t *testing.T) {
 		tv := fileTree().SetLabelEdit(true)
 		tt := tester(t, tv)
@@ -488,15 +553,15 @@ func TestTreeOpsFromGoroutine(t *testing.T) {
 func TestTreeOpsAllocNothingAtRest(t *testing.T) {
 	big := func() *TreeViewWidget[tnode, string] {
 		tv := newTree()
-		roots := make([]tnode, 40)
+		roots := make([]tnode, 8) // all of it in the window, sorted or not
 		for i := range roots {
-			roots[i] = tnode{fmt.Sprint("r", i), fmt.Sprint("Root ", 40-i)}
+			roots[i] = tnode{fmt.Sprint("r", i), fmt.Sprint("Root ", 8-i)}
 		}
 		tv.SetRoots(roots)
 		for i := range roots {
 			tv.SetChildren(roots[i].id, []tnode{{fmt.Sprint("r", i, "a"), "Leaf b"}, {fmt.Sprint("r", i, "b"), "Leaf a"}})
 		}
-		return tv.ExpandAll().SetSelected("r25") // Root 15
+		return tv.ExpandAll().SetSelected("r3") // Root 5
 	}
 	plain := tester(t, big())
 	notRoot2 := func(n *tnode) bool { return !strings.HasPrefix(n.name, "Root 2") }
@@ -506,7 +571,14 @@ func TestTreeOpsAllocNothingAtRest(t *testing.T) {
 		plain.Frame()
 		with.Frame()
 	}
+	// The node chosen shows in both, so the measure holds its editable text.
+	for _, tt := range []*ui.Tester{plain, with} {
+		if !slices.Contains(treeRows(tt), "Root 5") {
+			t.Fatalf("the node chosen is not in view: %q", treeRows(tt))
+		}
+	}
 	a, b := allocrun.Least(30, plain.Frame), allocrun.Least(30, with.Frame)
+	t.Logf("a frame at rest: %v allocations with the three on, %v without", b, a)
 	if b > a {
 		t.Errorf("a frame at rest allocates %v times with the three on, %v without", b, a)
 	}

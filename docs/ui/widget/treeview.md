@@ -190,7 +190,8 @@ search.OnChange(func() {
 - `SetLabelEdit(true)` lets the user rename the node chosen: F2 (and Enter on
   macOS, as in Finder, where Enter then renames rather than activates), or a
   click on its text once a second click would no longer make a double click,
-  shows an input of its text, all selected. Enter commits, as moving the
+  shows an input of its text, selected up to its extension (the part before
+  the last dot, as Finder selects). Enter commits, as moving the
   focus away does, and Escape cancels. It is ui's
   [`EditableText`](../editable-text.md) in the row.
 - `OnAfterLabelEdit(fn)` runs `fn(k, text)` on the event goroutine with the
