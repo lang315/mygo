@@ -149,28 +149,38 @@ func TestDocumentOnStateChange(t *testing.T) {
 	d, _ := ds.Open(path)
 	states := make(chan DocumentState, 8)
 	off := d.OnStateChange(func(s DocumentState) { states <- s })
+	// notify posts each state to the main thread, so one may come after
+	// what changed it returned, and a state from before (the open's, the
+	// edit's) may come after the next change: wait for the one wanted.
+	next := func(what string, edited bool) DocumentState {
+		for {
+			if s := wait.For(t, what, states); s.Edited == edited {
+				return s
+			}
+		}
+	}
+	// flush runs what notify posted (it posts twice).
+	flush := func() {
+		onMainValue(func() bool { return true })
+		onMainValue(func() bool { return true })
+	}
 
 	d.Set("x")
-	s := wait.For(t, "a state", states)
-	for !s.Edited {
-		// The open's own state, which notify posts to the main thread, may
-		// come after Open returned.
-		s = wait.For(t, "the edited state", states)
-	}
-	if s.Name != "a.txt" {
+	if s := next("the edited state", true); s.Name != "a.txt" {
 		t.Fatalf("state %v", s)
 	}
 	if err := d.Save(); err != nil {
 		t.Fatal(err)
 	}
-	s = wait.For(t, "the state after the save", states)
-	if s.Edited {
-		t.Fatalf("state after the save: %v", s)
-	}
+	next("the state after the save", false)
 
 	off()
+	flush()
+	for len(states) > 0 {
+		<-states // sent before off
+	}
 	d.Set("y")
-	onMainValue(func() bool { return true })
+	flush()
 	if n := len(states); n != 0 {
 		t.Fatalf("%d states after off", n)
 	}
