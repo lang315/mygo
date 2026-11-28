@@ -237,14 +237,7 @@ func (b *core) edgeEditFrame(t *ui.Theme, frame ui.Element) {
 		frame.Border(1, t.Outline().Mix(t.Text, 0.25))
 	}
 	if b.errMsg != "" {
-		// The error mark sits at the end: the buttons stop before it.
-		b.post = func(c *ui.Context, el ui.Element) {
-			side := 1
-			if c.Direction() == ui.RightToLeft {
-				side = 3
-			}
-			el.PaddingEnd(el.Paddings()[side] + errorMarkSize + errorMarkInset + 2)
-		}
+		b.post = errorMarkRoom // the buttons stop before the mark
 	}
 }
 
@@ -262,6 +255,17 @@ func editButtonBase(c *ui.Context) ui.Element {
 		e.Background(t.SurfaceHover)
 	}
 	return e
+}
+
+// errorMarkRoom pads a field's frame at its end for an ErrorProvider's
+// mark, which sits there, so that what the field shows at its end stops
+// before it.
+func errorMarkRoom(c *ui.Context, el ui.Element) {
+	side := 1
+	if c.Direction() == ui.RightToLeft {
+		side = 3
+	}
+	el.PaddingEnd(el.Paddings()[side] + errorMarkSize + errorMarkInset + 2)
 }
 
 // buildChildren builds the text and the buttons. Under mu, building.
