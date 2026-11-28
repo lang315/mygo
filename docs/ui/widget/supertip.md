@@ -44,9 +44,10 @@ color faded into the fill.
 Assistive technology reads the title, the body and the footer as the
 control's description. Each part is followed by ". ", or by a space when it
 already ends a sentence: "Paste (Ctrl+V). Puts the text of the clipboard
-where the caret is. Press F1 for more help." A `Fields` row's `Describe`
-text stays the description, as it does over a text tooltip. The tip itself
-is a tooltip, which assistive technology does not read.
+where the caret is. Press F1 for more help." In a `Fields` row with
+`Describe` text, that text comes first and the SuperTip's follows, as a
+text tooltip's does. The tip itself is a tooltip, which assistive technology
+does not read.
 
 ## Cost
 

@@ -37,15 +37,18 @@ type superTipState struct {
 // SetTooltip's text; a zero SuperTip removes it, and the text comes back.
 // Assistive technology reads its title, body and footer as the widget's
 // description.
-func (c *common[W]) SetSuperTip(t SuperTip) *W {
-	c.change(func() {
-		if t == (SuperTip{}) {
-			c.superTip, c.withSuperTip = nil, nil
-			return
-		}
-		c.superTip, c.withSuperTip = &superTipState{SuperTip: t}, buildSuperTip
-	})
-	return c.self
+func (c *common[W]) SetSuperTip(t SuperTip) *W { c.change(func() { c.setSuperTip(t) }); return c.self }
+
+// setSuperTip is SetSuperTip, out of the generic methods so that each
+// widget type does not carry it. Under mu.
+func (b *core) setSuperTip(t SuperTip) {
+	if t == (SuperTip{}) {
+		b.superTip, b.buildTip = nil, nil
+		return
+	}
+	s := &superTipState{SuperTip: t, said: joinSaid(t.Title, t.Body, t.Footer)}
+	s.draw = s.drawTip
+	b.superTip, b.buildTip = s, buildSuperTip
 }
 
 // buildSuperTip describes ctl, the control of b, by its SuperTip, and shows
@@ -53,9 +56,6 @@ func (c *common[W]) SetSuperTip(t SuperTip) *W {
 // tooltip shows instead. Under mu, building.
 func buildSuperTip(c *ui.Context, ctl ui.Element, b *core) {
 	s := b.superTip
-	if s.draw == nil {
-		s.said, s.draw = joinSaid(s.Title, s.Body, s.Footer), s.drawTip
-	}
 	if b.desc == "" {
 		ctl.Description(s.said)
 	}

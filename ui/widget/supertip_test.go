@@ -198,6 +198,13 @@ func TestSuperTipLayout(t *testing.T) {
 	if bold.W <= regular.W {
 		t.Errorf("the title is %v wide, the same text in the body %v: not bold", bold.W, regular.W)
 	}
+	// An image alone shows, in the padding: 20 DIPs and 16.
+	only := superTipShown(t, SuperTip{Image: tipGreen})
+	if img, ok := tipGreenBox(only); !ok || img.W != 20 {
+		t.Errorf("an image alone: drawn %v at %v, want it 20 wide", ok, img)
+	} else if box, _ := colorBox(only, tipLightFill); !tipNear(box.H, 20+16, 1) {
+		t.Errorf("an image alone: the tip is %v high, want 36", box.H)
+	}
 	// One part alone: the tip is its line and the padding, 8 DIPs a side.
 	for _, s := range []SuperTip{{Title: "Xy"}, {Body: "Xy"}, {Footer: "Xy"}} {
 		tt := superTipShown(t, s)
@@ -271,12 +278,45 @@ func TestSuperTipAccessible(t *testing.T) {
 			t.Errorf("%+v: description %q, want %q", c.tip, a.Description, c.want)
 		}
 	}
-	// A Fields row's description stays the control's, as it does over a
-	// text tooltip.
-	tb := TextBox().SetSuperTip(SuperTip{Title: "Rich"})
+	// In a described Fields row, the SuperTip's text follows the row's, as a
+	// text tooltip's does, and the tooltip it replaces is not read.
+	tb := TextBox().SetTooltip("Plain").SetSuperTip(SuperTip{Title: "Rich", Footer: "More"})
 	tt := NewTester(t, Fields().SettingsRows().Row("Name", tb).Describe("Your name."), 400, 300)
-	if d := descriptionOf(t, tt, "Name"); d != "Your name." {
-		t.Errorf("in a described row: description %q, want the row's", d)
+	if d := descriptionOf(t, tt, "Name"); d != "Your name. Rich. More" {
+		t.Errorf("in a described row: description %q, want the row's, then the SuperTip's", d)
+	}
+	tb.SetSuperTip(SuperTip{})
+	tt.Frame()
+	if d := descriptionOf(t, tt, "Name"); d != "Your name. Plain" {
+		t.Errorf("in a described row, SuperTip removed: description %q, want the row's, then the tooltip", d)
+	}
+}
+
+// Tool strip, status strip and ribbon items show their SuperTip, not their
+// text tooltip.
+func TestSuperTipOnStripItems(t *testing.T) {
+	tipThemes(t)
+	for _, c := range []struct {
+		name string
+		make func(Control) Control
+	}{
+		{"ToolStrip", func(w Control) Control { return ToolStrip(w) }},
+		{"StatusStrip", func(w Control) Control { return StatusStrip(w) }},
+		{"Ribbon", func(w Control) Control { return Ribbon().AddLarge(w.(*ToolButtonWidget)) }},
+	} {
+		var w Control = ToolButton("Cut").SetIcon(chevronDown).SetTooltip("Plain").SetSuperTip(SuperTip{Title: "Rich cut"})
+		if c.name == "StatusStrip" {
+			w = Label("Cut").SetTooltip("Plain").SetSuperTip(SuperTip{Title: "Rich cut"})
+		}
+		tt := tipWindow(t, c.make(w))
+		r, ok := tt.Tester.Find("Cut")
+		if !ok {
+			t.Fatalf("%s: no Cut; texts %q", c.name, tt.Texts())
+		}
+		hoverTip(tt, r, time.Second)
+		if !tt.HasText("Rich cut") || tt.HasText("Plain") {
+			t.Errorf("%s: texts %q, want the SuperTip alone", c.name, tt.Texts())
+		}
 	}
 }
 
@@ -326,7 +366,7 @@ func TestSuperTipOffIsUnchanged(t *testing.T) {
 	never := Button("A").SetTooltip("tip")
 	removed := Button("A").SetTooltip("tip").SetSuperTip(SuperTip{Title: "x"}).SetSuperTip(SuperTip{})
 	mu.Lock()
-	installed := never.withSuperTip != nil || never.superTip != nil || removed.withSuperTip != nil || removed.superTip != nil
+	installed := never.buildTip != nil || never.superTip != nil || removed.buildTip != nil || removed.superTip != nil
 	mu.Unlock()
 	if installed {
 		t.Error("a control with no SuperTip carries one")
@@ -351,8 +391,10 @@ func TestSuperTipOffIsUnchanged(t *testing.T) {
 		plain.Frame()
 		off.Frame()
 	}
-	if want, got := allocrun.Least(30, plain.Frame), allocrun.Least(30, off.Frame); got != want {
-		t.Errorf("a frame with a removed SuperTip allocates %v, one with none %v", got, want)
+	// What a frame of the two allocates on main.
+	const onMain = 0
+	if want, got := allocrun.Least(30, plain.Frame), allocrun.Least(30, off.Frame); got != onMain || want != onMain {
+		t.Errorf("a frame with a removed SuperTip allocates %v, one with none %v, want %v as on main", got, want, onMain)
 	}
 }
 
