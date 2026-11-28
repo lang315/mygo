@@ -139,7 +139,7 @@ func (f *FontEditWidget) buildText() {
 func (f *FontEditWidget) buildPopup(panel ui.Element) {
 	c, t := f.c, f.c.Theme()
 	comboPanel(c, panel)
-	panel.Gap(t.Space(1)).Width(t.Space(60)).MinWidth(f.inner.Bounds().W) // at least as wide as the field, as ui's combo box at least as wide as the field, as ui's combo box
+	panel.Gap(t.Space(1)).Width(t.Space(60)).MinWidth(f.inner.Bounds().W) // at least as wide as the field, as ui's combo box
 	if f.all == nil {
 		f.all = sortFamilies(f.families())
 	}
@@ -153,7 +153,7 @@ func (f *FontEditWidget) buildPopup(panel ui.Element) {
 			f.hl = 0 // Enter picks the first match
 		case f.query == "":
 			for i, k := range f.shown {
-				if strings.EqualFold(f.all[k].Name, f.family) { // without regard to case, as the text system does // without regard to case, as the text system does
+				if strings.EqualFold(f.all[k].Name, f.family) { // without regard to case, as the text system does
 					f.hl = i
 				}
 			}
