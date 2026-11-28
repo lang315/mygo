@@ -158,6 +158,19 @@ func TestWizardValidate(t *testing.T) {
 	}
 }
 
+// Case 7b: an OnValidate that moves the step itself (SetStep) wins over
+// Next, which then neither moves nor fires OnStepChange.
+func TestWizardValidateMovesStep(t *testing.T) {
+	var n wizardCounts
+	var w *WizardWidget
+	w = threeSteps(&n).OnValidate(func(int) bool { w.SetStep(2); return true })
+	tt := wizardTester(t, w)
+	wizButton(tt, l10n.Next()).Click()
+	if got := w.Step(); got != 2 || n.changes != 0 {
+		t.Fatalf("OnValidate moved to 2: step %d, %d changes; want 2, 0", got, n.changes)
+	}
+}
+
 // Case 8: OnValidate runs on the event goroutine, without the package's
 // lock, so it can call ErrorProvider.Validate on the step's fields.
 func TestWizardValidateWithErrorProvider(t *testing.T) {
@@ -226,6 +239,24 @@ func TestWizardEnterInTextBox(t *testing.T) {
 	}
 }
 
+// Case 10b: a wizard with no callbacks set works, and posts nothing that
+// panics, on Next, Previous, Done and Cancel.
+func TestWizardNoCallbacks(t *testing.T) {
+	panics := 0
+	OnPanic(func(any, []byte) { panics++ })
+	t.Cleanup(func() { OnPanic(nil) })
+	w := Wizard().AddStep("Account", Label("Step one")).AddStep("Plan", Label("Step two"))
+	tt := wizardTester(t, w)
+	wizButton(tt, l10n.Next()).Click()
+	wizButton(tt, l10n.Previous()).Click()
+	wizButton(tt, l10n.Next()).Click()
+	wizButton(tt, l10n.Done()).Click()
+	wizButton(tt, l10n.Cancel()).Click()
+	if panics != 0 || w.Step() != 1 {
+		t.Fatalf("no callbacks: %d panics, step %d; want none, 1", panics, w.Step())
+	}
+}
+
 // Case 11: a disabled wizard takes no Enter or Escape.
 func TestWizardDisabledTakesNoKeys(t *testing.T) {
 	var n wizardCounts
@@ -253,6 +284,13 @@ func TestWizardSetStepDoesNotFire(t *testing.T) {
 	tt.Settle()
 	if n.changes != 0 || n.finishes != 0 || n.cancels != 0 || len(n.validated) != 0 {
 		t.Errorf("SetStep fired: %+v", n)
+	}
+	// A Previous whose handler runs after the app moved to step 0 (SetStep
+	// between the click and the handler) does nothing.
+	Post(w.goBack)
+	tt.Settle()
+	if n.changes != 0 || w.Step() != 0 {
+		t.Errorf("Previous on step 0: %d changes, step %d", n.changes, w.Step())
 	}
 	if got := w.SetStep(7).Step(); got != 2 {
 		t.Errorf("SetStep(7) of 3: Step() = %d, want 2", got)

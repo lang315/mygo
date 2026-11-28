@@ -149,7 +149,7 @@ func (w *WizardWidget) build(c *ui.Context) ui.Element {
 	}
 	w.prev.disabled, w.next.disabled = i == 0, n == 0
 	if !w.disabled {
-		if c.Shortcut(0, ui.KeyEnter) && n > 0 {
+		if c.Shortcut(0, ui.KeyEnter) {
 			Post(w.forward)
 		}
 		if c.Shortcut(0, ui.KeyEscape) {

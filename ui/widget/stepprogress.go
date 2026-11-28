@@ -156,10 +156,7 @@ func (s *StepProgressBarWidget) buildStep(c *ui.Context, i int, title string) {
 // they lead to is done or current.
 func (s *StepProgressBarWidget) drawEdges(p *ui.Painter, r ui.Rect, i int) {
 	d := s.drawn
-	n := d.n
-	if i >= n {
-		return
-	}
+	n := d.n // the steps the frame built: a cell i is one of them
 	before, after := s.ahead, s.ahead
 	if i <= d.step {
 		before = s.done
