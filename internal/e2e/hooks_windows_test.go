@@ -77,9 +77,24 @@ func appClick(t testing.TB, w *mygo.Window, x, y float64) (ok bool) {
 	}) {
 		t.Fatalf("the window never came out of the cloak (waited %v)%s", wait.Guard, inputDiag())
 	}
-	var missed, resent string
+	var missed, resent, trace string
 	var moves int
-	mygo.RunOnMain(func() { ok, missed, moves, resent = win.TestInputClick(w.NativeHandle(), x, y, wait.Guard) })
+	mygo.RunOnMain(func() {
+		ok, missed, moves, resent = win.TestInputClick(w.NativeHandle(), x, y, wait.Guard)
+		trace = win.TestLastClick()
+	})
+	if trace != "" {
+		// Where the click's button went, for a test that fails after it: a
+		// page that never saw a click it waits for (TestConsumeActivationClick).
+		hwnd := w.NativeHandle()
+		t.Cleanup(func() {
+			if t.Failed() {
+				var now string
+				mygo.RunOnMain(func() { now = win.TestClickState(hwnd, x, y) })
+				t.Logf("the click at (%v, %v): %s; at the failure: %s", x, y, trace, now)
+			}
+		})
+	}
 	if moves > 1 {
 		// The system's idea of the window under the cursor was behind: what
 		// this wait is for.

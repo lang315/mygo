@@ -501,7 +501,32 @@ func containers() widget.Control {
 		Add("split", "SplitContainer", widget.SplitContainer(
 			widget.VBox(4).Add(widget.Label("Files"), widget.Button("Open")),
 			widget.SplitContainer(widget.Label("Editor"), widget.Label("Console")).Stacked(),
-		).SetSplitterDistance(180))
+		).SetSplitterDistance(180)).
+		Add("wizard", "Wizard", wizard())
+}
+
+// wizard is a setup flow of three steps; the first needs a name. It marks
+// the name itself, not with a Rule, which the Inputs tab's
+// Form.ValidateChildren would check too.
+func wizard() widget.Control {
+	errs := widget.ErrorProvider()
+	name := widget.TextBox().SetPlaceholder("Ada")
+	status := widget.Label("Not finished").Muted()
+	return widget.VBox(8).Pack(widget.Wizard().
+		AddStep("Account", widget.Fields().Row("Name", name)).
+		AddStep("Plan", widget.Label("The free plan")).
+		AddStep("Confirm", widget.Label("Ready to create the account.")).
+		OnValidate(func(step int) bool {
+			if step == 0 && strings.TrimSpace(name.Text()) == "" {
+				errs.SetError(name, "Enter your name")
+				return false
+			}
+			errs.SetError(name, "")
+			return true
+		}).
+		OnFinish(func() { status.SetText("Finished") }).
+		OnCancel(func() { status.SetText("Cancelled") }), true, true).
+		Add(status)
 }
 
 func longList() widget.Control {
