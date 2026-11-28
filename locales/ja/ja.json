@@ -235,5 +235,8 @@
   "skinPickerPalette": "パレット",
   "skinPickerDensity": "密度",
   "standardDensity": "標準",
-  "compactDensity": "コンパクト"
+  "compactDensity": "コンパクト",
+  "addToQuickAccess": "クイック アクセス ツール バーに追加",
+  "removeFromQuickAccess": "クイック アクセス ツール バーから削除",
+  "showBelowRibbon": "リボンの下に表示"
 }

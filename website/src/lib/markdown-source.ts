@@ -16,9 +16,9 @@ export function slugOf(file: string) {
   return name === "README" ? "" : name.replace(/\/README$/, "")
 }
 
-/** Whether a file of the docs, relative to them, is a page: local notes (docs/superpowers, git-ignored) are not. */
+/** Whether a file of the docs, relative to them, is a page: local notes (docs/superpowers, git-ignored) are not, nor are the agents' notes (docs/agents, docs/adr). */
 export function isPublished(file: string) {
-  return !/^superpowers([\\/]|$)/.test(file)
+  return !/^(superpowers|agents|adr)([\\/]|$)/.test(file)
 }
 
 /** Repository-only blocks stay on GitHub, outside all published formats. */
