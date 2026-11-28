@@ -165,6 +165,91 @@ func TestRibbonQATAddRemoveByMenu(t *testing.T) {
 		t.Fatalf("Cut's menu %q, want %q", m, addQAT)
 	}
 	tt.CloseMenu()
+	// A control that is no tool button, the Size combo, offers none.
+	tt.RightClickAt(centre(rnode(t, tt, "Size")))
+	tt.Frame()
+	if m := tt.Menu(); slices.Contains(m, addQAT) {
+		t.Fatalf("the Size combo's menu %q offers %q", m, addQAT)
+	}
+	tt.CloseMenu()
+}
+
+// Own case: a ribbon with no OnQuickAccessChange adds from the menu all the
+// same.
+func TestRibbonQATAddWithNoCallback(t *testing.T) {
+	k := newRibbonKit(t)
+	k.r.AddQuickAccess()
+	tt := k.tester(800)
+	if err := tt.RightClick("Paste"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.ChooseMenuItem(addQAT); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	Update(func() {})
+	if got := k.r.QuickAccess(); !slices.Equal(got, []string{"Paste"}) {
+		t.Fatalf("QuickAccess() = %q", got)
+	}
+}
+
+// Own case: in a shown window, the QAT button's "Show below the ribbon" is a
+// check item, checked while the QAT is below.
+func TestRibbonQATShowBelowIsChecked(t *testing.T) {
+	for _, below := range []bool{false, true} {
+		save := ToolButton("Save").SetIcon(chevronDown)
+		r := Ribbon().AddTab("Home").AddGroup("G").AddSmall(ToolButton("A")).AddQuickAccess(save).SetQuickAccessBelow(below)
+		_, _ = showFrame(t, VBox(0).Add(r, Label("body")))
+		fw := lastFake(t)
+		settleFake(fw)
+		var at ui.Rect
+		for _, n := range accessNodes(fw) {
+			if n.Label == "Save" {
+				at = ui.Rect{X: float32(n.Bounds.X), Y: float32(n.Bounds.Y), W: float32(n.Bounds.W), H: float32(n.Bounds.H)}
+			}
+		}
+		before := len(fb.Popups())
+		x, y := centre(at)
+		mygo.RunOnMain(func() {
+			s := fw.FakeSurface()
+			s.Send(platform.SurfaceEvent{Kind: platform.PointerDown, X: float64(x), Y: float64(y), Button: 1})
+			s.Send(platform.SurfaceEvent{Kind: platform.PointerUp, X: float64(x), Y: float64(y), Button: 1})
+			s.Frame()
+		})
+		mygo.RunOnMain(func() {}) // the menu, posted
+		popups := fb.Popups()
+		if len(popups) != before+1 {
+			t.Fatalf("below %v: %d menus shown, want one more than %d", below, len(popups), before)
+		}
+		items := popups[len(popups)-1].Menu.Items
+		if len(items) != 2 || items[1].Label != belowQAT || items[1].Type != platform.MenuItemCheckbox || items[1].Checked != below {
+			t.Fatalf("below %v: items %+v, want %q checked %v", below, items, belowQAT, below)
+		}
+	}
+}
+
+// Own case: a hidden QAT button takes no room and no tip; the next keeps its
+// digit.
+func TestRibbonQATHiddenButton(t *testing.T) {
+	withMac(t, false)
+	k := newQATKit(t)
+	k.r.AddQuickAccess(k.undo, k.redo)
+	k.undo.SetVisible(false)
+	tt := k.tester(800)
+	if n := countNodes(tt, ui.RoleButton, "Undo"); n != 0 {
+		t.Fatalf("%d buttons Undo, hidden", n)
+	}
+	typeTip(tt, ui.KeyF10)
+	want := maps.Clone(tabTips)
+	want["Redo"] = "2"
+	wantTips(t, tt, want)
+	typeTip(tt, ui.Key1) // no tip: it ends the tips, and the hidden Undo does not run
+	Update(func() {})
+	if len(k.undone) != 0 {
+		t.Fatal("1 ran the hidden Undo")
+	}
+	wantTips(t, tt, map[string]string{})
 }
 
 // Own case: "Add…" on a command already in the QAT is disabled; "Show below"
@@ -364,6 +449,99 @@ func TestRibbonContextualTabs(t *testing.T) {
 	}
 }
 
+// Own case: two tabs of one category sit under one band spanning both; a
+// contextual tab of no category shows always, with no band.
+func TestRibbonContextualOneBandForACategorysTabs(t *testing.T) {
+	k := contextKit(t)
+	k.r.AddContextualTab("Picture Tools", "Crop").AddGroup("Size").AddSmall(ToolButton("Trim"))
+	k.r.AddContextualTab("", "Plain").AddGroup("P").AddSmall(ToolButton("Pp"))
+	tt := k.tester(800)
+	if countNodes(tt, ui.RoleTab, "Plain") != 1 {
+		t.Fatalf("the tab of no category does not show: %q", tt.Texts())
+	}
+	k.r.SetCategoryVisible("Picture Tools", true)
+	tt.Frame()
+	bands := allBounds(tt, ui.RoleText, "Picture Tools")
+	format, crop := nodeOf(t, tt, ui.RoleTab, "Format").Bounds, nodeOf(t, tt, ui.RoleTab, "Crop").Bounds
+	if len(bands) != 1 {
+		t.Fatalf("%d bands Picture Tools, want 1", len(bands))
+	}
+	if b := bands[0]; b.X > format.X+0.5 || b.X+b.W < crop.X+crop.W-0.5 {
+		t.Fatalf("the band %v does not span Format %v and Crop %v", b, format, crop)
+	}
+}
+
+// Own case: under each built-in skin, light and dark, the band's name reads
+// 4.5:1 on each series color.
+func TestRibbonContextualBandReads(t *testing.T) {
+	check := func(t *testing.T, colors []ui.Color, th ui.Theme) {
+		t.Helper()
+		for i, fill := range colors {
+			ink := th.Text
+			if contrastOf(th.Background, fill) > contrastOf(ink, fill) {
+				ink = th.Background
+			}
+			if r := ratio(ink, fill); r < 4.5 {
+				t.Errorf("Chart[%d] %v: the name reads %.2f:1", i, fill, r)
+			}
+		}
+	}
+	t.Run("none", func(t *testing.T) { check(t, plainChartColors, *ui.LightTheme()) })
+	for _, name := range []string{"Calm", "Classic", "HighContrast"} {
+		for _, dark := range []bool{false, true} {
+			t.Run(name+map[bool]string{false: "-light", true: "-dark"}[dark], func(t *testing.T) {
+				useSkinNamed(t, name, false)
+				k := contextKit(t)
+				k.r.SetCategoryVisible("Picture Tools", true)
+				tt := ui.NewTester(k.form.view, 800, 400)
+				tt.SetDark(dark)
+				tt.Frame()
+				tk := skinhook.Get(dark)
+				band := nodeOf(t, tt, ui.RoleText, "Picture Tools").Bounds
+				if c := tt.Image().RGBAAt(int(band.X+1), int(band.Y+1)); !near(c, tk.Chart[0]) {
+					t.Fatalf("the band is %v, want Chart[0] %v", c, tk.Chart[0])
+				}
+				check(t, tk.Chart[:], ui.Theme{Text: tk.Text, Background: tk.Background}) // the skin's theme's
+				// The name is drawn in the ink that reads best.
+				ink := tk.Text
+				if contrastOf(tk.Background, tk.Chart[0]) > contrastOf(ink, tk.Chart[0]) {
+					ink = tk.Background
+				}
+				found := false
+				for y := int(band.Y) + 2; y < int(band.Y+band.H)-2 && !found; y++ { // inside the fill
+					for x := int(band.X) + 2; x < int(band.X+band.W)-2; x++ {
+						if nearTol(tt.Image().RGBAAt(x, y), ink, 24) {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Fatalf("no pixel of the ink %v in the band %v", ink, band)
+				}
+			})
+		}
+	}
+}
+
+// Own case: the arrows go onto a visible contextual tab, in its band, and
+// back.
+func TestRibbonContextualTabTakesTheArrows(t *testing.T) {
+	k := contextKit(t)
+	k.r.SetCategoryVisible("Picture Tools", true).SetTab(1).Focus()
+	tt := k.tester(800)
+	tt.Key(0, ui.KeyRight)
+	tt.Frame()
+	if k.r.Tab() != 2 || !tt.Focused("Format") {
+		t.Fatalf("Right from Insert: Tab %d, Format focused %v", k.r.Tab(), tt.Focused("Format"))
+	}
+	tt.Key(0, ui.KeyLeft)
+	tt.Frame()
+	if k.r.Tab() != 1 {
+		t.Fatalf("Left from Format: Tab %d, want 1", k.r.Tab())
+	}
+}
+
 // Own case: under a skin, the bands take its Chart colors by category order.
 func TestRibbonContextualBandsTakeTheSkinsSeries(t *testing.T) {
 	useSkinNamed(t, "Calm", false)
@@ -438,6 +616,9 @@ func TestRibbonQATInHeaderBar(t *testing.T) {
 	if len(undos) != 1 {
 		t.Fatalf("%d buttons Undo, want 1, in the title bar", len(undos))
 	}
+	if tt.FramePending() {
+		t.Fatal("the form still asks for frames at rest")
+	}
 	undo, redo := undos[0], rnode(t, tt, "Redo")
 	if cy := undo.Y + undo.H/2; cy < title.Y || cy > title.Y+title.H || undo.X+undo.W > title.X || redo.X < undo.X {
 		t.Fatalf("Undo %v, Redo %v: not in the title bar's start area, before the title %v", undo, redo, title)
@@ -503,6 +684,30 @@ func pressFake(fw *fake.Window, x, y float32) {
 	})
 }
 
+// Own case: of two ribbons with a QAT in a form with a header bar, the first
+// takes the title bar and the second draws its QAT above its own tabs; the
+// form rests.
+func TestRibbonQATTwoRibbonsShareNoHeader(t *testing.T) {
+	r1 := Ribbon().AddTab("One").AddGroup("G").AddSmall(ToolButton("A")).AddQuickAccess(ToolButton("Save").SetIcon(chevronDown))
+	r2 := Ribbon().AddTab("Two").AddGroup("G").AddSmall(ToolButton("B")).AddQuickAccess(ToolButton("Print").SetIcon(chevronDown))
+	f := NewForm("Two", 800, 500).SetContent(VBox(0).Add(r1, r2))
+	f.UseHeaderBar("")
+	tt := ui.NewTester(f.view, 800, 500)
+	tt.SetTitleBar(windowsBar)
+	tt.Frame()
+	if tt.FramePending() {
+		t.Fatal("the form still asks for frames at rest")
+	}
+	title, save, prt := nodeOf(t, tt, ui.RoleText, "Two").Bounds, rnode(t, tt, "Save"), rnode(t, tt, "Print")
+	if cy := save.Y + save.H/2; cy < title.Y || cy > title.Y+title.H {
+		t.Fatalf("Save %v is not in the title bar (the title %v)", save, title)
+	}
+	two := nodeOf(t, tt, ui.RoleTab, "Two").Bounds
+	if one := nodeOf(t, tt, ui.RoleTab, "One").Bounds; prt.Y < one.Y+one.H || prt.Y+prt.H > two.Y+0.5 {
+		t.Fatalf("Print %v is not above its ribbon's tab %v, under the first ribbon's %v", prt, two, one)
+	}
+}
+
 // Own case: the QAT leaves the title bar with the ribbon, in the frames that
 // follow the change, when the ribbon's page is no longer shown.
 func TestRibbonQATLeavesTheHeaderWithTheRibbon(t *testing.T) {
@@ -551,6 +756,9 @@ func TestRibbonQATRTL(t *testing.T) {
 // its commands, and a hidden category and an empty QAT move nothing.
 func TestRibbonQATOffIsUnchanged(t *testing.T) {
 	plain := newRibbonKit(t)
+	if got := plain.r.QuickAccess(); got != nil {
+		t.Fatalf("QuickAccess() = %q on a ribbon with no QAT, want nil", got)
+	}
 	tt := plain.tester(800)
 	if err := tt.RightClick("Paste"); err != nil {
 		t.Fatal(err)

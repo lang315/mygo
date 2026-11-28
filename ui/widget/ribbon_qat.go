@@ -20,29 +20,19 @@ type ribbonQAT struct {
 	// of the toolbar's buttons, made once for each button.
 	addMenus, menus map[*ToolButtonWidget]func(m *ui.Menu)
 	// drawn are the tips of the buttons the toolbar showed in this frame,
-	// the first nine, given their badges while the tabs' tips show. fill
-	// builds the buttons, made once, in ctx.
+	// the first nine, given their badges while the tabs' tips show.
 	drawn []ribbonTip
-	fill  func()
-	ctx   *ui.Context
-	// form is the form that built the ribbon last. seen is set as the ribbon
-	// builds with the toolbar in the form's header bar, which draws it in
-	// the next frame from it, as it builds before the ribbon; inHeader is
-	// set by the header bar that drew it in this frame.
-	form           *Form
+	// seen is set as the ribbon builds with the toolbar in its form's header
+	// bar (Form.qatRibbon), which draws it in the next frame from it, as it
+	// builds before the ribbon; inHeader is set by the header bar that drew
+	// it in this frame.
 	seen, inHeader bool
 }
 
-// qatRibbons are the ribbons with a toolbar, among which a header bar finds
-// its form's. Under mu.
-//
-// shortcut: it never shrinks, as a ribbon lives as long as its form; drop
-// the closed forms' ribbons if an app makes many.
-var qatRibbons []*RibbonWidget
-
-// headerQAT draws a ribbon's toolbar in a header bar's start area, and
-// formQATEnd ends a form's build: both installed by the first ribbon with a
-// toolbar, so that an app with none does not link them. Under mu.
+// headerQAT draws the toolbar of a form's ribbon (Form.qatRibbon) in its
+// header bar's start area, and formQATEnd ends a form's build: both
+// installed by the first ribbon with a toolbar, so that an app with none
+// does not link them. Under mu.
 var (
 	headerQAT  func(c *ui.Context, h *HeaderBarWidget)
 	formQATEnd func(c *ui.Context, w *Form)
@@ -64,9 +54,6 @@ func (r *RibbonWidget) AddQuickAccess(buttons ...*ToolButtonWidget) *RibbonWidge
 			q.buttons = append(slices.Clip(q.buttons), b) // a new array: a build may be ranging over the old
 			if !slices.Contains(q.known, b) {
 				q.known = append(q.known, b)
-				if !slices.Contains(r.children(), Control(b)) {
-					r.qatOnly = append(r.qatOnly, b)
-				}
 			}
 		}
 		r.retake()
@@ -126,11 +113,8 @@ func (r *RibbonWidget) OnQuickAccessChange(fn func()) *RibbonWidget {
 // qatOn installs the toolbar. Under mu.
 func (r *RibbonWidget) qatOn() *ribbonQAT {
 	if r.qat == nil {
-		q := &ribbonQAT{}
-		q.fill = func() { r.fillQAT(q.ctx) }
-		r.qat, r.qatHook, r.cmdMenu = q, r.buildQAT, r.commandMenu
+		r.qat, r.qatHook, r.cmdMenu = &ribbonQAT{}, r.buildQAT, r.commandMenu
 		headerQAT, formQATEnd = headerBarQAT, endQAT
-		qatRibbons = append(qatRibbons, r)
 	}
 	return r.qat
 }
@@ -188,9 +172,16 @@ func (r *RibbonWidget) buildQAT(c *ui.Context, below bool) {
 		}
 		return
 	}
+	// The first ribbon of the form to build with its toolbar above takes the
+	// header bar; another draws its toolbar above its own tabs.
 	f := buildingForm
-	header := !q.below && f != nil && f.header != nil && !f.header.hidden
-	q.form = f
+	header := !q.below && f != nil && f.header != nil && !f.header.hidden && (f.qatRibbon == nil || f.qatRibbon == r)
+	switch {
+	case header:
+		f.qatRibbon = r
+	case f != nil && f.qatRibbon == r:
+		f.qatRibbon = nil // below now, or the header bar hidden
+	}
 	switch {
 	case header && q.inHeader: // the header bar drew it in this frame
 	case header:
@@ -212,26 +203,22 @@ func (r *RibbonWidget) buildQAT(c *ui.Context, below bool) {
 // form built in the last frame with the toolbar there. Under mu, as h
 // builds (headerQAT).
 func headerBarQAT(c *ui.Context, h *HeaderBarWidget) {
-	for _, r := range qatRibbons {
-		if q := r.qat; q.form == h.win && q.seen {
-			r.qatBar(c)
-			q.inHeader = true
-			return
-		}
+	if r := h.win.qatRibbon; r != nil && r.qat.seen {
+		r.qatBar(c)
+		r.qat.inHeader = true
 	}
 }
 
 // endQAT ends w's build: the toolbar its header bar drew is of a ribbon that
 // did not build in this frame, as its page is no longer shown, and goes in
-// the next. Under mu (formQATEnd).
+// the next, the header bar free for another. Under mu (formQATEnd).
 func endQAT(c *ui.Context, w *Form) {
-	for _, r := range qatRibbons {
-		if q := r.qat; q.form == w && q.inHeader {
-			q.seen, q.inHeader = false, false
-			q.drawn = q.drawn[:0]
-			if !c.Measuring() {
-				c.AnimationFrame()
-			}
+	if r := w.qatRibbon; r != nil && r.qat.inHeader {
+		r.qat.seen, r.qat.inHeader = false, false
+		r.qat.drawn = r.qat.drawn[:0]
+		w.qatRibbon = nil
+		if !c.Measuring() {
+			c.AnimationFrame()
 		}
 	}
 }
@@ -241,13 +228,9 @@ func endQAT(c *ui.Context, w *Form) {
 func (r *RibbonWidget) qatBar(c *ui.Context) {
 	q := r.qat
 	q.drawn = q.drawn[:0]
-	if len(q.buttons) == 0 {
-		return
-	}
-	q.ctx = c
 	outer, outerAxis := toolLarge, axis
 	toolLarge, axis = qatFace, horizontal
-	ui.Row(c).Gap(c.Theme().Space(0.5)).AlignItems(ui.Center).Children(q.fill)
+	ui.Row(c).Gap(c.Theme().Space(0.5)).AlignItems(ui.Center).Children(func() { r.fillQAT(c) })
 	toolLarge, axis = outer, outerAxis
 }
 
@@ -311,7 +294,7 @@ func (r *RibbonWidget) menuOf(menus *map[*ToolButtonWidget]func(m *ui.Menu), b *
 func (r *RibbonWidget) addMenu(m *ui.Menu, b *ToolButtonWidget) {
 	q := r.qat
 	in := slices.Contains(q.buttons, b)
-	if m.Item(l10n.AddToQuickAccess()).Disabled(in).Chosen() && !in {
+	if m.Item(l10n.AddToQuickAccess()).Disabled(in).Chosen() {
 		q.buttons = append(slices.Clip(q.buttons), b)
 		r.retake()
 		r.qatChanged()
@@ -336,16 +319,10 @@ func (r *RibbonWidget) qatMenu(m *ui.Menu, b *ToolButtonWidget) {
 }
 
 // ribbonCats are a ribbon's categories of contextual tabs, in the order
-// of their first tab, and whether each shows. cat, fill, ink and run are
-// the band being built, which band and tabs build, made once, in ctx.
+// of their first tab, and whether each shows.
 type ribbonCats struct {
-	names      []string
-	shown      map[string]bool
-	cat        string
-	fill, ink  ui.Color
-	run        [2]int
-	band, tabs func()
-	ctx        *ui.Context
+	names []string
+	shown map[string]bool
 }
 
 // AddContextualTab adds a tab titled title to category, after the other
@@ -382,14 +359,7 @@ func (r *RibbonWidget) SetCategoryVisible(category string, visible bool) *Ribbon
 // catsOn installs the categories. Under mu.
 func (r *RibbonWidget) catsOn() *ribbonCats {
 	if r.cats == nil {
-		k := &ribbonCats{shown: map[string]bool{}}
-		k.band = func() { r.band(k.ctx) }
-		k.tabs = func() {
-			for i := k.run[0]; i < k.run[1]; i++ {
-				r.stripTab(k.ctx, i)
-			}
-		}
-		r.cats, r.bands = k, r.bandTabs
+		r.cats, r.bands = &ribbonCats{shown: map[string]bool{}}, r.bandTabs
 	}
 	return r.cats
 }
@@ -399,7 +369,6 @@ func (r *RibbonWidget) catsOn() *ribbonCats {
 // category is; the others as the strip does. Under mu, in the strip (bands).
 func (r *RibbonWidget) bandTabs(c *ui.Context) {
 	k, s, t := r.cats, &r.sb, c.Theme()
-	k.ctx = c
 	colors := plainChartColors
 	if tk := skinhook.Get(t.Dark); tk != nil {
 		colors = tk.Chart[:]
@@ -422,21 +391,21 @@ func (r *RibbonWidget) bandTabs(c *ui.Context) {
 			continue
 		}
 		s.tabs.List.AlignItems(ui.End) // the other tabs on the line of the band's
-		k.cat, k.run = cat, [2]int{i, j}
-		k.fill = chartColor(colors, slices.Index(k.names, cat))
-		k.ink = t.Text
-		if contrastOf(t.Background, k.fill) > contrastOf(k.ink, k.fill) {
-			k.ink = t.Background
+		fill := chartColor(colors, slices.Index(k.names, cat))
+		ink := t.Text
+		if contrastOf(t.Background, fill) > contrastOf(ink, fill) {
+			ink = t.Background
 		}
-		ui.Column(c).Shrink(0).Children(k.band)
+		from := i
+		ui.Column(c).Shrink(0).Children(func() {
+			ui.Text(c, cat).SingleLine().FontSize(t.Rem(0.8)).TextColor(ink).Background(fill).
+				Padding(t.Space(0.5), t.Space(2))
+			ui.Row(c).Gap(t.Space(1)).Children(func() {
+				for i := from; i < j; i++ {
+					r.stripTab(c, i)
+				}
+			})
+		})
 		i = j
 	}
-}
-
-// band builds the band being built over its tabs. Under mu (ribbonCats.band).
-func (r *RibbonWidget) band(c *ui.Context) {
-	k, t := r.cats, c.Theme()
-	ui.Text(c, k.cat).SingleLine().FontSize(t.Rem(0.8)).TextColor(k.ink).Background(k.fill).
-		Padding(t.Space(0.5), t.Space(2))
-	ui.Row(c).Gap(t.Space(1)).Children(k.tabs)
 }

@@ -17,7 +17,9 @@ func ExampleRibbonWidget_AddQuickAccess() {
 		OnQuickAccessChange(func() {
 			println(len(ribbon.QuickAccess())) // save ribbon.QuickAccess() in the app's settings
 		})
-	ribbon.SetQuickAccess("Save", "Paste") // restored from the settings
+	if saved := []string{"Save", "Paste"}; len(saved) > 0 { // restored from the settings, when the user changed them
+		ribbon.SetQuickAccess(saved...)
+	}
 	picture := widget.CheckBox("Picture selected")
 	picture.OnChange(func() { ribbon.SetCategoryVisible("Picture Tools", picture.Checked()) })
 }

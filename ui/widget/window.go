@@ -24,6 +24,7 @@ type Form struct {
 	icon          []byte
 	root          Control
 	header        *HeaderBarWidget
+	qatRibbon     *RibbonWidget // the ribbon whose Quick Access Toolbar the header bar draws (ribbon_qat.go)
 	onClose       func() bool
 	menu          []MenuItem
 	strip         *MenuStrip

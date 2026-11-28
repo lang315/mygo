@@ -62,14 +62,13 @@ type RibbonWidget struct {
 	// gives a command that showed the toolbar's context menu; bands builds
 	// the tabs with their categories' bands, in place of the plain loop.
 	// qatTaken are the tip slots of the toolbar's digits, which the tabs do
-	// not take, and qatOnly the buttons the toolbar alone holds.
+	// not take.
 	qat      *ribbonQAT
 	cats     *ribbonCats
 	qatHook  func(c *ui.Context, below bool)
 	cmdMenu  func(w Control)
 	bands    func(c *ui.Context)
 	qatTaken uint64
-	qatOnly  []Control
 }
 
 // ribbonStrip is the strip being built: ui's tabs, the tab shown, the
@@ -679,5 +678,5 @@ func (r *RibbonWidget) children() []Control {
 			}
 		}
 	}
-	return append(cs, r.qatOnly...)
+	return cs
 }

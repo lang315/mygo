@@ -104,7 +104,9 @@ undo := widget.ToolButton("Undo").SetIcon(undoIcon).OnClick(doUndo)
 ribbon.AddQuickAccess(save, undo).OnQuickAccessChange(func() {
 	settings.Set("qat", ribbon.QuickAccess()) // save what the user chose
 })
-ribbon.SetQuickAccess(settings.Strings("qat")...) // and restore it
+if saved, ok := settings.Strings("qat"); ok { // and restore it, if the user changed it
+	ribbon.SetQuickAccess(saved...)
+}
 ```
 
 - `AddQuickAccess(buttons...)` adds `ToolButton`s after those the toolbar
@@ -129,6 +131,9 @@ ribbon.SetQuickAccess(settings.Strings("qat")...) // and restore it
   tooltip with none), and `SetQuickAccess(names...)` sets the toolbar from
   them, finding the ribbon's commands and the buttons `AddQuickAccess`
   gave. A name it has no button for is skipped, and so is a name twice.
+  `SetQuickAccess()` with no names empties the toolbar: restore only what
+  was saved. A button only in the toolbar (Save, Undo) that the user
+  removed has no command to add it back from: only the app brings it back.
 - `OnQuickAccessChange(fn)` runs `fn` on the event goroutine after the user
   adds or removes a button; not after the setters, nor when the toolbar
   moves below the ribbon (there is no getter for where it is).
