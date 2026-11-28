@@ -90,9 +90,9 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 	if rt.insp.pointer(rt, ev, x, y) {
 		return true
 	}
-	if ev.Touch && touchInput != nil {
+	if touch := touchFuncs.Load(); ev.Touch && touch != nil {
 		x, y = rt.aimTouch(ev.Kind, x, y)
-		if touchInput(rt, ev, x, y) {
+		if touch.input(rt, ev, x, y) {
 			return false
 		}
 	}
@@ -160,6 +160,9 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		rt.modsChanged(Modifiers(ev.Mods))
 		rt.holdKey(Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey))
 		taken = rt.keyDownPhysical(Modifiers(ev.Mods), Key(ev.Key), Key(ev.PhysicalKey), KeyCode(ev.Code), ev.Repeat)
+		if ev.Handled != nil {
+			*ev.Handled = rt.keyHandled
+		}
 	case platform.ModifiersChanged:
 		rt.modsChanged(Modifiers(ev.Mods))
 	case platform.RawKeyPressed, platform.RawKeyReleased:
@@ -1236,7 +1239,9 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, code KeyCod
 	} else if !repeat {
 		delete(rt.byPosition, physical)
 	}
+	rt.keyHandled = false
 	if rt.inspectKey(mods, key) {
+		rt.keyHandled = true
 		return true
 	}
 	rt.observeFocus(InputEvent{Kind: InputKeyDown, Key: key, PhysicalKey: physical, Code: code, Mods: mods, Repeat: repeat})
@@ -1254,10 +1259,12 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, code KeyCod
 		goto queue
 	}
 	if key == KeyEscape && mods == 0 && rt.dragCancelLinked() {
+		rt.keyHandled = true
 		return true
 	}
 	if h := rt.focusHandler(); h != nil && !rt.claimed(k) && rt.deliver(h, InputEvent{Kind: InputKeyDown, Key: key, PhysicalKey: physical, Code: code, Mods: mods, Repeat: repeat}) {
 		rt.blinkStart = rt.now()
+		rt.keyHandled = true
 		return true
 	}
 	if s := rt.states[rt.focused]; s != nil && s.editor != nil && s.editor.onTextKey != nil && s.flags&flagEditable != 0 &&
@@ -1266,12 +1273,14 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, code KeyCod
 		// keys and text before it, which it reads.
 		rt.blinkStart = rt.now()
 		rt.requestFrame()
+		rt.keyHandled = true
 		return true
 	}
 	if (key == KeyContextMenu && mods == 0 || key == KeyF10 && mods == Shift) && !rt.claimed(k) && rt.menuKey() {
 		return false
 	}
-	if s := rt.states[rt.focused]; s != nil && s.editor != nil && s.flags&(flagEditable|flagSelectable) != 0 && wantsFn(s.editor, k) &&
+	if s := rt.states[rt.focused]; s != nil && s.editor != nil && s.flags&(flagEditable|flagSelectable) != 0 &&
+		(wantsFn(s.editor, k) || takesUnclaimedFn(s.editor, k) && !rt.claimed(k)) &&
 		!(k.mods == Cmd && k.key == KeyC && rt.copiesNothing(s)) {
 		if textSelectionKeyFn(rt, s, k) {
 			rt.requestFrame()
@@ -1491,6 +1500,7 @@ func (rt *engine) routeKeys() {
 		return
 	}
 	chain := rt.focusChain()
+	wentBack := false
 	route := func(k keyEvent, retried bool) bool {
 		r := shortcutReg{mods: k.mods, key: k.key, retried: retried, repeat: k.repeat}
 		if target, found := routeKey(rt.regs, chain, k); found {
@@ -1499,6 +1509,7 @@ func (rt *engine) routeKeys() {
 			}
 			r.id = target
 			rt.delivered = append(rt.delivered, r)
+			wentBack = wentBack || goesBack(r)
 		} else {
 			rt.unrouted = append(rt.unrouted, r)
 		}
@@ -1520,6 +1531,17 @@ func (rt *engine) routeKeys() {
 	}
 	rt.retried = rt.retried[:0]
 	rt.keys = append(rt.keys[:0], later...)
+	if wentBack {
+		// A press that goes back goes back once: Android's back comes as
+		// Escape and the Back key at once, and what the one taken shows,
+		// as the page a Router went back to, takes neither.
+		rt.unrouted = slices.DeleteFunc(rt.unrouted, goesBack)
+	}
+}
+
+// goesBack reports whether r is of a key that goes back, Escape or Back.
+func goesBack(r shortcutReg) bool {
+	return r.mods == 0 && (r.key == KeyEscape || r.key == KeyBack)
 }
 
 // routeKey returns the element that takes key k by shortcuts regs, the

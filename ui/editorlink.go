@@ -14,6 +14,7 @@ var (
 	pressFn            func(ed *editor, x, y float32, clicks, button int)
 	dragFn             func(ed *editor, x, y float32)
 	wantsFn            func(ed *editor, k keyEvent) bool
+	takesUnclaimedFn   func(ed *editor, k keyEvent) bool
 	textKeyFn          func(ed *editor, k keyEvent) bool
 	caretRectFn        func(ed *editor, st *state) Rect
 	textSelectionKeyFn func(rt *engine, s *state, k keyEvent) bool
@@ -39,6 +40,7 @@ func linkEditor() {
 		pressFn = (*editor).press
 		dragFn = (*editor).drag
 		wantsFn = (*editor).wants
+		takesUnclaimedFn = (*editor).takesUnclaimed
 		textKeyFn = (*editor).textKey
 		caretRectFn = (*editor).caretRect
 		textSelectionKeyFn = (*engine).textSelectionKey

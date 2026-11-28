@@ -376,3 +376,151 @@ func TestParseMarkdownInvalidUTF8(t *testing.T) {
 		}
 	}
 }
+
+// A code span keeps its spaces, one of spaces alone too, and does not turn
+// the marks beside it into HTML.
+func TestMarkdownBlankCodeSpan(t *testing.T) {
+	for _, c := range []struct {
+		runs []Run
+		md   string
+	}{
+		{[]Run{{Text: " ", Attributes: Attributes{Code: true}}, {Text: "0", Attributes: Attributes{Italic: true}}}, "` `*0*"},
+		{[]Run{{Text: "a "}, {Text: "  ", Attributes: Attributes{Code: true}}, {Text: " b"}}, "a `  ` b"},
+		{[]Run{{Text: " ", Attributes: Attributes{Code: true}}}, "` `"},
+		// and its spaces at its ends stay in it
+		{[]Run{{Text: "0", Attributes: Attributes{Strikethrough: true}}, {Text: " 0", Attributes: Attributes{Code: true}}}, "~~0~~` 0`"},
+		{[]Run{{Text: "a"}, {Text: " b ", Attributes: Attributes{Code: true}}}, "a`  b  `"},
+	} {
+		want := TextOf(Paragraph{Runs: c.runs})
+		md := want.Markdown()
+		if md != c.md {
+			t.Errorf("%s as Markdown is %q, want %q", dump(want), md, c.md)
+		}
+		if got := ParseMarkdown(md); dump(got) != dump(want) {
+			t.Errorf("%q reads\n%s want\n%s", md, dump(got), dump(want))
+		}
+	}
+}
+
+// TestMarkdownHeadingInItem reads a heading that starts a list item as a
+// heading, as SetHeading and ParseHTML make one, not as a paragraph both
+// heading and item, which Markdown wrote as a heading and HTML as an item.
+func TestMarkdownHeadingInItem(t *testing.T) {
+	para := func(st ParagraphStyle, s string) Paragraph {
+		return Paragraph{Style: st, Runs: []Run{{Text: s}}}
+	}
+	for _, c := range []struct {
+		md   string
+		want Text
+	}{
+		{"- # a", TextOf(para(ParagraphStyle{Heading: 1}, "a"))},
+		{"1. ## a\n2. b", TextOf(para(ParagraphStyle{Heading: 2}, "a"), para(ParagraphStyle{List: Numbers}, "b"))},
+		{"- [ ] # a", TextOf(para(ParagraphStyle{Heading: 1}, "a"))},
+		{"> - # a", TextOf(para(ParagraphStyle{Heading: 1, Quote: true}, "a"))},
+	} {
+		got := ParseMarkdown(c.md)
+		if dump(got) != dump(c.want) {
+			t.Errorf("%q reads\n%s want\n%s", c.md, dump(got), dump(c.want))
+		}
+		if html := ParseHTML(got.HTML()); dump(html) != dump(got) {
+			t.Errorf("%q through HTML reads\n%s want\n%s", c.md, dump(html), dump(got))
+		}
+		if md := got.Markdown(); dump(ParseMarkdown(md)) != dump(got) {
+			t.Errorf("%q written as %q reads\n%s want\n%s", c.md, md, dump(ParseMarkdown(md)), dump(got))
+		}
+	}
+}
+
+// A heading of #s alone keeps them all: the first one, escaped so that it
+// does not open a heading, is not escaped again as a closing #.
+func TestMarkdownHeadingOfHashes(t *testing.T) {
+	for _, c := range []struct{ text, md string }{
+		{"#", `## \#`},
+		{"##", `## \##`},
+		{"C#", `## C\#`},
+		{`a \#`, `## a \\\#`},
+	} {
+		want := TextOf(Paragraph{Style: ParagraphStyle{Heading: 2}, Runs: []Run{{Text: c.text}}})
+		md := want.Markdown()
+		if md != c.md {
+			t.Errorf("heading %q as Markdown is %q, want %q", c.text, md, c.md)
+		}
+		if got := ParseMarkdown(md); dump(got) != dump(want) {
+			t.Errorf("%q reads\n%s want\n%s", md, dump(got), dump(want))
+		}
+	}
+}
+
+// TestMarkdownEmptyTask reads back the empty items of a checklist that
+// Markdown writes: GitHub asks for text after [ ], but an item just added
+// has none.
+func TestMarkdownEmptyTask(t *testing.T) {
+	task := func(checked bool, indent int, text string) Paragraph {
+		p := Paragraph{Style: ParagraphStyle{List: Tasks, Checked: checked, Indent: indent}}
+		if text != "" {
+			p.Runs = []Run{{Text: text}}
+		}
+		return p
+	}
+	for _, want := range []Text{
+		TextOf(task(false, 0, "")),
+		TextOf(task(true, 0, "")),
+		TextOf(task(false, 0, "milk"), task(false, 0, "")),
+		TextOf(task(false, 0, ""), task(true, 0, "eggs")),
+		TextOf(task(false, 0, "milk"), task(false, 1, ""), task(false, 0, "eggs")),
+		TextOf(Paragraph{Style: ParagraphStyle{List: Tasks, Quote: true}}),
+		// and a bullet whose text is [ ] stays one
+		TextOf(Paragraph{Style: ParagraphStyle{List: Bullets}, Runs: []Run{{Text: "[ ]"}}}),
+	} {
+		md := want.Markdown()
+		if got := ParseMarkdown(md); dump(got) != dump(want) {
+			t.Errorf("%q reads\n%s want\n%s", md, dump(got), dump(want))
+		}
+	}
+}
+
+// What is indented under a list item, a paragraph after its first or a
+// block of code, is written indented under it, and stays in the item and
+// the list.
+func TestMarkdownUnderItem(t *testing.T) {
+	p := func(st ParagraphStyle, s string) Paragraph {
+		para := Paragraph{Style: st}
+		if s != "" {
+			para.Runs = []Run{{Text: s}}
+		}
+		return para
+	}
+	item := ParagraphStyle{List: Bullets}
+	num := ParagraphStyle{List: Numbers}
+	under := ParagraphStyle{Indent: 1}
+	for _, c := range []struct {
+		in   Text
+		want string
+		kept bool // reads back as it was
+	}{
+		{TextOf(p(item, "a"), p(under, "b"), p(item, "c")), "- a\n\n  b\n\n- c", true},
+		{TextOf(p(num, "a"), p(under, "b"), p(num, "c")), "1. a\n\n   b\n\n2. c", true},
+		{TextOf(p(ParagraphStyle{List: Tasks}, "a"), p(under, "b")), "- [ ] a\n\n  b", true},
+		{TextOf(p(item, "a"), p(ParagraphStyle{List: Numbers, Indent: 1}, "x"), p(ParagraphStyle{Indent: 2}, "y"), p(under, "b")),
+			"- a\n    1. x\n\n       y\n\n  b", true},
+		{TextOf(p(item, "a"), p(ParagraphStyle{Indent: 1, CodeBlock: true}, "x := 1"), p(ParagraphStyle{Indent: 1, CodeBlock: true}, "y")),
+			"- a\n\n  ```\n  x := 1\n  y\n  ```", true},
+		{TextOf(p(item, "a"), p(ParagraphStyle{Indent: 1, Heading: 2}, "h")), "- a\n\n  ## h", true},
+		{TextOf(p(num, ""), p(ParagraphStyle{Indent: 1, CodeBlock: true}, "x")), "1. \n   ```\n   x\n   ```", true},
+		{TextOf(p(item, ""), p(ParagraphStyle{Indent: 1, Quote: true}, "q")), "- \n  > q", true},
+		{TextOf(p(ParagraphStyle{List: Bullets, Quote: true}, "a"), p(ParagraphStyle{Indent: 1, Quote: true}, "b")), "> - a\n>\n>   b", true},
+		{TextOf(p(num, "a"), p(ParagraphStyle{Indent: 1, Quote: true}, "q")), "1. a\n\n   > q", true},
+		// Not under an item: indented no further, which would be code.
+		{TextOf(p(under, "a")), "a", false},
+		{TextOf(p(item, "a"), p(ParagraphStyle{}, "x"), p(under, "b")), "- a\n\nx\n\nb", false},
+		{TextOf(p(item, "a"), p(ParagraphStyle{Indent: 3}, "b")), "- a\n\n  b", false},
+	} {
+		md := c.in.Markdown()
+		if md != c.want {
+			t.Errorf("%s written as %q, want %q", dump(c.in), md, c.want)
+		}
+		if got := ParseMarkdown(md); c.kept && dump(got) != dump(c.in) {
+			t.Errorf("%q reads\n%s want\n%s", md, dump(got), dump(c.in))
+		}
+	}
+}

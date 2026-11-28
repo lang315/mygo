@@ -99,6 +99,9 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 		// it: the ask is done (buildReveal).
 		ed.revealAt, ed.revealBuilt = -1, false
 	}
+	if ed.blinkAgain {
+		ed.blinkStart, ed.blinkAgain = ed.frameNow, false
+	}
 	ed.r = r
 	ed.measureBlocks()
 	ed.layout(r.W, r.H, p.Scale())

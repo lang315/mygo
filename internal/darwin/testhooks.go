@@ -1342,6 +1342,17 @@ func TestKeyCmd(handle uintptr, code uint16, chars string) bool {
 	return true
 }
 
+// TestKeyFlags presses a key with the modifier flags held (NSEventModifierFlags)
+// in a window showing native UI, through its input method, as TestKey does.
+func TestKeyFlags(handle uintptr, code uint16, chars string, flags uint) bool {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	sendKeyFlags(w, code, chars, flags)
+	return true
+}
+
 // sendKeyToWindow sends a key down and up to a window, as the keyboard does.
 func sendKeyToWindow(w *window, code uint16, chars string, shift bool) {
 	var flags uint
@@ -2110,4 +2121,31 @@ func TestDrawablesTrimmed(handle uintptr) (trimmed, ok bool) {
 	}
 	size := msgSize(l, sel("drawableSize"))
 	return size.Width <= 1 && size.Height <= 1, true
+}
+
+// TestStatusItemPosition reports the place in the menu bar that macOS keeps
+// in the app's defaults for the tray icon named name, where the user last
+// dragged it with ⌘.
+func TestStatusItemPosition(name string) (pos int, ok bool) {
+	withPool(func() {
+		v := send(send(class("NSUserDefaults"), "standardUserDefaults"), "objectForKey:", uintptr(nsString("NSStatusItem Preferred Position "+name)))
+		if v != 0 {
+			pos, ok = sendInt(v, "integerValue"), true
+		}
+	})
+	return pos, ok
+}
+
+// TestSetStatusItemPosition sets the place TestStatusItemPosition reports,
+// as a drag with ⌘ does, or removes it when pos is negative.
+func TestSetStatusItemPosition(name string, pos int) {
+	withPool(func() {
+		defaults := send(class("NSUserDefaults"), "standardUserDefaults")
+		key := nsString("NSStatusItem Preferred Position " + name)
+		if pos < 0 {
+			send(defaults, "removeObjectForKey:", uintptr(key))
+			return
+		}
+		send(defaults, "setObject:forKey:", uintptr(nsNumberInt(pos)), uintptr(key))
+	})
 }

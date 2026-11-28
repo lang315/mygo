@@ -43,6 +43,7 @@ var statePlaced = map[string][]string{
 		"caret", "takesText", "noIME", "copyData", "scope", "anchor", "page", "activated", "typed",
 		"placed", "asked", // where AttachTo put the element, from its layout (AttachedAnchors)
 		"handleDoubleClick", // set at commit from the element, as accessHidden is
+		"truncated",         // set at commit from the layout of the frame before; a replayed row passes it to its parent (commitRow)
 		"laidX", "laidY",    // the offset the last frame laid the content out at: set at commit, like the offsets
 		"popped",                                                // the last frame a popup attached to the element showed: a row with an open popup is built (acting)
 		"hitFn",                                                 // HitTest's, set at commit from the element, as input is
