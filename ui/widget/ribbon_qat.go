@@ -325,6 +325,12 @@ type ribbonCats struct {
 	shown map[string]bool
 }
 
+// hides reports whether tab i of tabs is a contextual tab whose category is
+// hidden. Under mu.
+func (k *ribbonCats) hides(tabs []*ribbonTab, i int) bool {
+	return i >= 0 && i < len(tabs) && tabs[i].category != "" && !k.shown[tabs[i].category]
+}
+
 // AddContextualTab adds a tab titled title to category, after the other
 // tabs; the AddGroup calls that follow fill it, as they fill AddTab's. A
 // category's tabs show only while SetCategoryVisible(category, true), under
@@ -384,7 +390,7 @@ func (r *RibbonWidget) bandTabs(c *ui.Context) {
 		for j < len(r.tabs) && r.tabs[j].category == cat {
 			j++
 		}
-		if !k.shown[cat] {
+		if k.hides(r.tabs, i) {
 			for ; i < j; i++ {
 				s.tabs.Tab(i).Hidden(true).Disabled(true)
 			}

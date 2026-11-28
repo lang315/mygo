@@ -449,6 +449,26 @@ func TestRibbonContextualTabs(t *testing.T) {
 	}
 }
 
+// Round 2: SetTab to a contextual tab whose category is hidden is ignored:
+// the tab shown stays, and none of the hidden tab's groups show; once the
+// category shows, SetTab shows it.
+func TestRibbonContextualSetTabHidden(t *testing.T) {
+	k := contextKit(t)
+	tt := k.tester(800)
+	k.r.SetTab(1)
+	tt.Frame()
+	k.r.SetTab(2)
+	tt.Frame()
+	if k.r.Tab() != 1 || tt.HasText("Arrange") || tt.HasText("Rotate") || !tt.HasText("Tables") {
+		t.Fatalf("SetTab(2), Format hidden: Tab %d, texts %q", k.r.Tab(), tt.Texts())
+	}
+	k.r.SetCategoryVisible("Picture Tools", true).SetTab(2)
+	tt.Frame()
+	if k.r.Tab() != 2 || !tt.HasText("Rotate") {
+		t.Fatalf("SetTab(2), Format shown: Tab %d, texts %q", k.r.Tab(), tt.Texts())
+	}
+}
+
 // Own case: two tabs of one category sit under one band spanning both; a
 // contextual tab of no category shows always, with no band.
 func TestRibbonContextualOneBandForACategorysTabs(t *testing.T) {

@@ -238,7 +238,11 @@ func (r *RibbonWidget) add(w Control, large bool) {
 func (r *RibbonWidget) Tab() int { mu.Lock(); defer mu.Unlock(); return r.tab.value }
 
 func (r *RibbonWidget) SetTab(i int) *RibbonWidget {
-	r.change(func() { r.tab.set(i) })
+	r.change(func() {
+		if r.cats == nil || !r.cats.hides(r.tabs, i) { // a hidden contextual tab is not shown
+			r.tab.set(i)
+		}
+	})
 	return r
 }
 

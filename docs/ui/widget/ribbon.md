@@ -156,7 +156,8 @@ ribbon.SetCategoryVisible("Picture Tools", selection.IsPicture())
 
 - `AddContextualTab(category, title)` adds a tab to `category`, after the
   others; the `AddGroup` calls that follow fill it, as `AddTab`'s. Its
-  index counts for `Tab` and `SetTab` whether it shows or not.
+  index counts for `Tab` and `SetTab` whether it shows or not; `SetTab` on
+  a tab whose category is hidden is ignored, the tab shown stays.
 - `SetCategoryVisible(category, visible)` shows or hides the category's
   tabs. They start hidden. A hidden tab takes no room, no key tip, no
   access key, and the arrows pass it. Hiding the category of the tab shown
