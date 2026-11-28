@@ -151,7 +151,12 @@ func TestDocumentOnStateChange(t *testing.T) {
 
 	d.Set("x")
 	s := <-states
-	if !s.Edited || s.Name != "a.txt" {
+	for !s.Edited {
+		// The open's own state, which notify posts to the main thread, may
+		// come after Open returned.
+		s = <-states
+	}
+	if s.Name != "a.txt" {
 		t.Fatalf("state %v", s)
 	}
 	if err := d.Save(); err != nil {
