@@ -33,6 +33,27 @@ type LookUpEditWidget[T any, K comparable] struct {
 	shown    []int
 	children func()
 	popup    func(panel ui.Element)
+	search   *lookSearch // the search panel's, nil while it is off
+}
+
+// lookSearch is the state of a LookUpEdit's search panel that does not name
+// T or K. Under mu.
+type lookSearch struct {
+	open      bool // ui's Popover writes it while the view builds
+	seenHides int  // the hides the last build saw: a hide closes the drop-down
+	query     string
+	matched   bool   // shown holds the matches of seenQuery among the records of seenGen
+	seenQuery string // the query shown matches
+	seenGen   int
+	hl        int // the index in shown of the row highlighted, -1 for none
+	list      ui.ListState
+	c         *ui.Context // the context of the last build, for the rows ui lays out after it
+	in        ui.Element  // the search box of the last build, whose active descendant the highlighted row is
+	text      string      // what the field shows
+	// The functions handed to ui, made once.
+	field func()
+	panel func(panel ui.Element)
+	row   func(i int)
 }
 
 // LookUpEdit creates a LookUpEdit: key names a record, text is what the
@@ -135,6 +156,32 @@ func (l *LookUpEditWidget[T, K]) OnSelect(fn func(k K, ok bool)) *LookUpEditWidg
 	return l
 }
 
+// SetSearchPanel turns the search panel on or off (off by default). On, the
+// field takes no typing and shows the chosen record's text; its drop-down
+// has a search box over the records, which shows those of which a column
+// shown (the text, with no column) holds what is typed, case ignored, as
+// the DataGridView's search does. Up and Down in the search box move the
+// highlighted record, Enter chooses it, Escape closes the drop-down. Only
+// the records in view are built, however many there are (DevExpress's
+// SearchLookUpEdit).
+func (l *LookUpEditWidget[T, K]) SetSearchPanel(on bool) *LookUpEditWidget[T, K] {
+	l.change(func() {
+		switch {
+		case !on:
+			l.search, l.children = nil, l.buildField
+		case l.search == nil:
+			// The search's path is reached only from here: a LookUpEdit
+			// without it builds as it did.
+			s := &lookSearch{hl: -1, seenHides: l.hides}
+			s.field = l.buildSearchText
+			s.panel = l.buildSearchPopup
+			s.row = func(i int) { l.buildSearchRow(s, i) } // s, as l.search may be nil by the time ui lays the rows out
+			l.search, l.children = s, l.buildSearchField
+		}
+	})
+	return l
+}
+
 // show puts s in the field, as the user's own text. Under mu, building.
 func (l *LookUpEditWidget[T, K]) show(s string) {
 	l.input.value, l.input.shown, l.input.dirty = s, s, false
@@ -220,22 +267,9 @@ func (l *LookUpEditWidget[T, K]) buildPopup(panel ui.Element) {
 	c, t := l.c, l.c.Theme()
 	comboPanel(c, panel)
 	scale := c.Preferences().TextScale
-	pad, gap, flexMin := t.Space(2.5), t.Space(2), t.Space(15) // flexMin: the grid's least width of a shared column
-	// As wide as its columns need, and at least as the field (ui's MinWidth,
-	// which wins over Width).
-	need := 2*(t.Space(1)+pad) + 2
-	for i, col := range l.cols {
-		if i > 0 {
-			need += gap
-		}
-		if col.Width > 0 {
-			need += col.Width * scale
-		} else {
-			need += max(col.MinWidth*scale, flexMin)
-		}
-	}
+	pad, gap := t.Space(2.5), t.Space(2)
 	if len(l.cols) > 0 {
-		panel.Width(need) // a long text clips in its cell, rather than widening every row
+		panel.Width(l.panelWidth(t, scale)) // a long text clips in its cell, rather than widening every row
 	}
 
 	l.shown = l.matching(strings.ToLower(strings.TrimSpace(l.input.shown))) // the input's text, as ui edits it
@@ -243,13 +277,7 @@ func (l *LookUpEditWidget[T, K]) buildPopup(panel ui.Element) {
 		ui.Text(c, l10n.NoResults()).TextColor(t.TextMuted).Padding(t.Space(1.5), pad)
 		return
 	}
-	if l.heads {
-		ui.Row(c).Gap(gap).Padding(t.Space(1.5), pad).Children(func() {
-			for _, col := range l.cols {
-				l.cell(col, scale, func() { ui.Text(c, col.Title).SingleLine().FontWeight(600) })
-			}
-		})
-	}
+	l.header(scale)
 	for _, i := range l.shown {
 		r := &l.items[i]
 		item := l.cb.Item(l.ids[i]).Gap(gap).Padding(t.Space(1.5), pad).Radius(t.Radius)
@@ -314,6 +342,189 @@ func (l *LookUpEditWidget[T, K]) matching(q string) []int {
 			continue
 		}
 		ok := holds(l.text(r))
+		for _, col := range l.cols {
+			ok = ok || holds(col.Text(r))
+		}
+		if ok {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// panelWidth is how wide the drop-down's columns need it. Under mu.
+func (l *LookUpEditWidget[T, K]) panelWidth(t *ui.Theme, scale float32) float32 {
+	pad, gap, flexMin := t.Space(2.5), t.Space(2), t.Space(15) // flexMin: the grid's least width of a shared column
+	// As wide as its columns need, and at least as the field (ui's MinWidth,
+	// which wins over Width).
+	need := 2*(t.Space(1)+pad) + 2
+	for i, col := range l.cols {
+		if i > 0 {
+			need += gap
+		}
+		if col.Width > 0 {
+			need += col.Width * scale
+		} else {
+			need += max(col.MinWidth*scale, flexMin)
+		}
+	}
+	return need
+}
+
+// header builds the drop-down's header, when a column has a title. Under
+// mu, building.
+func (l *LookUpEditWidget[T, K]) header(scale float32) {
+	if !l.heads {
+		return
+	}
+	c, t := l.c, l.c.Theme()
+	ui.Row(c).Gap(t.Space(2)).Padding(t.Space(1.5), t.Space(2.5)).Children(func() {
+		for _, col := range l.cols {
+			l.cell(col, scale, func() { ui.Text(c, col.Title).SingleLine().FontWeight(600) })
+		}
+	})
+}
+
+// lookSearchRows is how many rows the search panel's list shows at most.
+const lookSearchRows = 10
+
+// buildSearchField builds the field of the search panel: the chosen
+// record's text, which a click, Enter, Space, Down or Alt+Down opens the
+// drop-down from. Under mu, building.
+func (l *LookUpEditWidget[T, K]) buildSearchField() {
+	c, t, s := l.c, l.c.Theme(), l.search
+	s.c = c
+	if s.seenHides != l.hides { // out of sight since the last build: it closes
+		s.open, s.seenHides = false, l.hides
+	}
+	s.text = ""
+	if l.sel >= 0 {
+		s.text = l.text(&l.items[l.sel])
+	}
+	field := ui.ButtonBase(c).Role(ui.RoleComboBox).Value(s.text).Grow(1).
+		Padding(t.Space(1.5), t.Space(3)).Gap(t.Space(2)).AlignItems(ui.Center).Justify(ui.SpaceBetween)
+	l.inner = field
+	field.Children(s.field)
+	opened := false
+	if field.Clicked() {
+		s.open = !s.open // a press on the field is not outside the drop-down: it toggles
+		opened = s.open
+	} else if !s.open && (field.Shortcut(ui.Alt, ui.KeyDown) || field.Shortcut(0, ui.KeyDown)) {
+		s.open, opened = true, true
+	}
+	if opened {
+		s.query, s.hl, s.matched, s.list = "", -1, false, ui.ListState{}
+	}
+	field.Expanded(s.open)
+	if s.open {
+		ui.PopoverBase(c, field, &s.open, s.panel)
+	}
+}
+
+// buildSearchText builds what the search panel's field holds. Under mu,
+// building.
+func (l *LookUpEditWidget[T, K]) buildSearchText() {
+	c := l.search.c
+	t := c.Theme()
+	ui.Text(c, l.search.text).SingleLine().AccessHidden(true) // the field's value, as the text field's is without the panel
+	ui.Icon(c, chevronDown).FontSize(t.Space(3)).TextColor(t.TextMuted)
+}
+
+// buildSearchPopup builds the search panel's drop-down: the search box,
+// the header, and a list of the matching records, which builds only those
+// in view. Under mu, building.
+func (l *LookUpEditWidget[T, K]) buildSearchPopup(panel ui.Element) {
+	c, t, s := l.c, l.c.Theme(), l.search
+	comboPanel(c, panel)
+	scale := c.Preferences().TextScale
+	panel.Gap(t.Space(1)).Width(max(l.panelWidth(t, scale), t.Space(60)))
+	in := ui.TextInput(c, &s.query).AutoFocus().Label(l10n.Search()).Placeholder(l10n.Search())
+	s.in = in
+	if !s.matched || s.query != s.seenQuery || s.seenGen != l.gen {
+		l.shown = l.searchMatching(strings.ToLower(s.query))
+		s.matched, s.seenQuery, s.seenGen, s.hl = true, s.query, l.gen, -1
+		s.list.ScrollTo(0, ui.Start)
+	}
+	n := len(l.shown)
+	if in.Shortcut(0, ui.KeyDown) && s.hl < n-1 {
+		s.hl++
+		s.list.ScrollIntoView(s.hl)
+	}
+	if in.Shortcut(0, ui.KeyUp) && s.hl > 0 {
+		s.hl--
+		s.list.ScrollIntoView(s.hl)
+	}
+	if in.Submitted() && s.hl >= 0 { // hl < n: the matches reset it
+		l.pick(l.shown[s.hl])
+		s.open = false
+		return
+	}
+	if n == 0 {
+		ui.Text(c, l10n.NoResults()).TextColor(t.TextMuted).Padding(t.Space(1.5), t.Space(2.5))
+		return
+	}
+	l.header(scale)
+	rh := t.Metrics.RowHeight
+	if rh <= 0 {
+		rh = t.Space(7)
+	}
+	ui.List(c, &s.list, n, s.row).Height(float32(min(n, lookSearchRows)) * rh)
+}
+
+// buildSearchRow builds the row of the search panel's list at i: while the
+// list builds, or when ui lays out rows it did not build then.
+func (l *LookUpEditWidget[T, K]) buildSearchRow(s *lookSearch, i int) {
+	if lockOutsideView() {
+		defer mu.Unlock()
+	}
+	c, t := s.c, s.c.Theme()
+	if i >= len(l.shown) || l.shown[i] >= len(l.items) { // the records changed under the list
+		ui.Text(c, "")
+		return
+	}
+	was := l.c
+	l.c = c // cell's
+	r := &l.items[l.shown[i]]
+	row := ui.Row(c).Gap(t.Space(2)).Padding(t.Space(1.5), t.Space(2.5)).Radius(t.Radius)
+	if h := t.Metrics.RowHeight; h > 0 {
+		row.MinHeight(h).PaddingY(0).AlignItems(ui.Center)
+	}
+	if i == s.hl {
+		s.in.ActiveDescendant(row) // assistive technology reads the row the arrows are on
+	}
+	if i == s.hl || row.Hovered() {
+		bg, fg := highlightOf(t)
+		row.Background(bg).TextColor(fg)
+	}
+	if row.Clicked() {
+		l.pick(l.shown[i])
+		s.open = false
+	}
+	scale := c.Preferences().TextScale
+	row.Children(func() {
+		if len(l.cols) == 0 {
+			ui.Text(c, l.text(r)).SingleLine()
+			return
+		}
+		for _, col := range l.cols {
+			l.cell(col, scale, func() { ui.Text(c, col.Text(r)).SingleLine() })
+		}
+	})
+	l.c = was
+}
+
+// searchMatching returns the indexes of the records of which a column shown
+// (the text, with no column) holds q (lower case), in their order; all of
+// them for an empty q. Under mu.
+func (l *LookUpEditWidget[T, K]) searchMatching(q string) []int {
+	out := l.shown[:0]
+	holds := func(s string) bool { return strings.Contains(strings.ToLower(s), q) }
+	for i := range l.items {
+		r := &l.items[i]
+		ok := q == ""
+		if !ok && len(l.cols) == 0 {
+			ok = holds(l.text(r))
+		}
 		for _, col := range l.cols {
 			ok = ok || holds(col.Text(r))
 		}

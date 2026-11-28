@@ -65,8 +65,40 @@ form := widget.Fields().Row("&Customer", customer)
   (`Row("&Customer", customer)`), reach the field's input, which assistive
   technology sees as a combo box whose options match what was typed.
 
+## Search panel
+
+`SetSearchPanel(true)` gives the drop-down a search box over the records, as
+DevExpress's SearchLookUpEdit, for lists too long to scan by eye. It is off
+by default, and a LookUpEdit without it behaves as described above.
+
+```go
+product := widget.LookUpEdit(
+	func(p *Product) int { return p.ID },
+	func(p *Product) string { return p.Name },
+	widget.Column[Product]{Title: "Code", Text: func(p *Product) string { return p.Code }, Width: 70},
+	widget.Column[Product]{Title: "Name", Text: func(p *Product) string { return p.Name }},
+).SetItems(products).SetSearchPanel(true)
+```
+
+- The field takes no typing: it shows the chosen record's `text`, as a
+  `ComboBox` does. A click, Enter, Space, Down or Alt+Down opens the
+  drop-down with the focus in its search box; a click on the field closes it.
+- A record shows when a shown column's `Text` (`text`, with no column) holds
+  what is typed in the search box, whatever its case, as the
+  `DataGridView`'s search does, in the records' order. A `Hidden` column
+  does not match. When none does, it says "No results".
+- Up and Down in the search box move the highlighted record, from none when
+  the drop-down opens or the search changes; Enter or a click chooses it and
+  closes the drop-down, running `OnSelect` as above. Escape or a click
+  outside closes it, the choice as it was. The highlighted record is the
+  search box's active descendant, so assistive technology reads it as the
+  arrows move, with the focus staying in the search box.
+- The list builds only the records in view (ten rows high), with ui's
+  `List`: 10,000 records open and search as fast as ten.
+
 `text` and the columns' functions run under the package's lock, as a
 `DataGridView`'s: they read the record and call no widget method. The
-LookUpEdit is opt-in: an app that makes none does not link it. A grid in the
-drop-down, with sorting and a search panel (DevExpress's GridLookUpEdit), is
-not part of it: use a `DataGridView` in a dialog for that.
+LookUpEdit is opt-in: an app that makes none does not link it, and the
+search panel's code runs only once `SetSearchPanel(true)` is called. A grid
+in the drop-down, with sorting (DevExpress's GridLookUpEdit), is not part of
+it: use a `DataGridView` in a dialog for that.
