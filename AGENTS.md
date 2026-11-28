@@ -237,3 +237,17 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   behind ("What tests leave behind" in the architecture guide) fails it, not
   the tests after it. Before calling a failure older than a pull request,
   reproduce it on a new X server, without running the branch's binary on it.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown files under `.scratch/<feature>/`, which git ignores (GitHub Issues are off for this repo). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles, each label equal to its name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), written as a `Status:` line. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

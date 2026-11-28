@@ -9,6 +9,8 @@ packages/cli/npm/*/bin/
 .DS_Store
 mygo.ts
 docs/superpowers/
+# issues and specs of the agent skills (docs/agents/issue-tracker.md)
+.scratch/
 # go build ./examples/<name> in the root leaves the program there (an entry
 # also matches a directory of that name at the root; none has one)
 /*.exe
