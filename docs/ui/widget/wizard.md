@@ -7,14 +7,17 @@ the last step. The buttons' text is MyGo's own strings, in the user's
 language.
 
 ```go
-errs := widget.ErrorProvider()
-name := widget.Rule(errs, widget.TextBox(), widget.Required("Enter your name"))
+// One ErrorProvider for each step that checks its fields.
+account, plan := widget.ErrorProvider(), widget.ErrorProvider()
+name := widget.Rule(account, widget.TextBox(), widget.Required("Enter your name"))
+code := widget.Rule(plan, widget.TextBox(), widget.Required("Enter a plan code"))
+steps := []*widget.ErrorProviderWidget{account, plan}
 var dlg *widget.Dialog
 wiz := widget.Wizard().
 	AddStep("Account", widget.Fields().Row("Name", name)).
-	AddStep("Plan", widget.Label("The free plan")).
+	AddStep("Plan", widget.Fields().Row("Code", code)).
 	AddStep("Confirm", widget.Label("Ready to create the account.")).
-	OnValidate(func(step int) bool { return step != 0 || errs.Validate() }).
+	OnValidate(func(step int) bool { return step >= len(steps) || steps[step].Validate() }).
 	OnFinish(func() { dlg.Close() }).
 	OnCancel(func() { dlg.Close() })
 dlg = widget.NewDialog(nil, "New account", "", 560, 420, wiz)
@@ -30,8 +33,13 @@ dlg = widget.NewDialog(nil, "New account", "", 560, 420, wiz)
   current step. The wizard stays where it returns false. It runs on the
   event goroutine without the package's lock, so it may call
   `ErrorProvider.Validate` (see [ErrorProvider](errorprovider.md)).
-  Previous does not ask it. Every step's controls are the wizard's, so a
-  `Rule` on a later step's field fails `Form.ValidateChildren` too.
+  Previous does not ask it.
+  - `ErrorProvider.Validate` runs every rule given for its provider, on
+    every step. Give each step its own provider and validate the one of
+    `step`, as above: one provider for all steps holds the first step until
+    the last step's fields are filled.
+  - Every step's controls are the wizard's, so a `Rule` on a later step's
+    field fails `Form.ValidateChildren` too.
 - `OnStepChange(fn)` runs after the user moves to another step, with Next
   or Previous.
 - `OnFinish(fn)` runs when Done is clicked on the last step and

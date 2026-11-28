@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -209,6 +210,42 @@ func TestStepProgressBarRightToLeft(t *testing.T) {
 		t.Errorf("RTL vertical: the circle after One is %v, want the accent", tt.Image().RGBAAt(int(at.X), int(at.Y)))
 	}
 	checkLines(t, tt, th, true, true)
+}
+
+// Case 3b: the setters from another goroutine while frames run, the steps
+// growing and shrinking, show on a following frame without a race.
+func TestStepProgressBarFromGoroutine(t *testing.T) {
+	bar := StepProgressBar(fourSteps...)
+	tt, _ := stepTester(t, bar)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 40 {
+			steps := fourSteps[:1+i%4]
+			if i%3 == 0 {
+				steps = append(slices.Clone(fourSteps), "Five", "Six")
+			}
+			bar.SetSteps(steps...).SetStep(i % 6).SetVertical(i%2 == 0)
+			_ = bar.Step()
+		}
+		bar.SetSteps("a", "b", "c").SetStep(1).SetVertical(true)
+	}()
+	for running := true; running; {
+		select {
+		case <-done:
+			running = false
+		default:
+			tt.Frame()
+		}
+	}
+	tt.Settle()
+	a, c := stepText(t, tt, "a"), stepText(t, tt, "c")
+	if bar.Step() != 1 || c.Y <= a.Y {
+		t.Fatalf("after the goroutine: step %d, a at %v, c at %v; want 1, c below a", bar.Step(), a, c)
+	}
+	if _, ok := tt.Tester.Find("Six"); ok {
+		t.Errorf("an old step shows: %q", tt.Texts())
+	}
 }
 
 // Case 4: the bounds. SetStep clamps to the steps; SetSteps that drops the

@@ -190,6 +190,36 @@ func TestWizardValidateWithErrorProvider(t *testing.T) {
 	}
 }
 
+// Case 8b: Validate runs every rule of its provider, on every step: a
+// provider for each step, validated by step, checks only that step's fields.
+func TestWizardProviderPerStep(t *testing.T) {
+	one, both := ErrorProvider(), ErrorProvider()
+	name := Rule(one, TextBox().SetAccessibleName("Name"), Required("Enter your name"))
+	Rule(both, name, Required("Enter your name"))
+	mail := Rule(both, TextBox().SetAccessibleName("Mail"), Required("Enter a mail"))
+	steps := []*ErrorProviderWidget{one, ErrorProvider()}
+	Rule(steps[1], mail, Required("Enter a mail"))
+	shared := Wizard().AddStep("Who", name).AddStep("Where", mail).AddStep("End", Label("Thanks")).
+		OnValidate(func(int) bool { return both.Validate() })
+	tt := wizardTester(t, shared)
+	tt.Find(ByLabel("Name")).Type("Ada")
+	wizButton(tt, l10n.Next()).Click()
+	if got := shared.Step(); got != 0 {
+		t.Fatalf("one provider for both steps: the empty mail of step 1 did not hold step 0 (step %d); docs/ui/widget/wizard.md says so", got)
+	}
+	perStep := Wizard().AddStep("Who", name).AddStep("Where", mail).AddStep("End", Label("Thanks")).
+		OnValidate(func(step int) bool { return step >= len(steps) || steps[step].Validate() })
+	tt = wizardTester(t, perStep)
+	wizButton(tt, l10n.Next()).Click() // the same name, which keeps "Ada"
+	if got := perStep.Step(); got != 1 {
+		t.Fatalf("a provider per step: a filled name stayed at step %d", got)
+	}
+	wizButton(tt, l10n.Next()).Click()
+	if got := perStep.Step(); got != 1 {
+		t.Fatalf("a provider per step: the empty mail moved to step %d", got)
+	}
+}
+
 // Case 9: Done fires OnFinish once; Cancel and Escape fire OnCancel once
 // each; Enter is Next, and Done on the last step.
 func TestWizardFinishCancel(t *testing.T) {
@@ -258,7 +288,8 @@ func TestWizardNoCallbacks(t *testing.T) {
 }
 
 // Case 10c: in a form with its own accept and cancel buttons, the wizard
-// takes Enter and Escape first.
+// takes Enter and Escape first. Enter in a text box outside the wizard is
+// still the form's.
 func TestWizardBeforeFormButtons(t *testing.T) {
 	var n wizardCounts
 	oks, quits := 0, 0
@@ -266,14 +297,56 @@ func TestWizardBeforeFormButtons(t *testing.T) {
 	quit := Button("Quit").OnClick(func() { quits++ })
 	w := threeSteps(&n)
 	f := NewForm("setup", 600, 400)
-	f.SetContent(VBox(8).Pack(w, true, true).Add(ok, quit)).SetAcceptButton(ok).SetCancelButton(quit)
+	f.SetContent(VBox(8).Pack(w, true, true).Add(TextBox().SetAccessibleName("Outside"), ok, quit)).
+		SetAcceptButton(ok).SetCancelButton(quit)
 	tt := TestForm(t, f)
 	tt.Settle()
 	tt.Key(0, ui.KeyEnter)
+	tt.Settle()
+	if w.Step() != 1 || oks != 0 {
+		t.Fatalf("Enter: step %d, the form's OK %d; want 1, 0", w.Step(), oks)
+	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Settle()
-	if w.Step() != 1 || n.cancels != 1 || oks != 0 || quits != 0 {
-		t.Fatalf("step %d, %d cancels; the form's OK %d, Quit %d: want 1, 1, 0, 0", w.Step(), n.cancels, oks, quits)
+	if n.cancels != 1 || quits != 0 {
+		t.Fatalf("Escape: %d cancels, the form's Quit %d; want 1, 0", n.cancels, quits)
+	}
+	tt.Find(ByLabel("Outside")).Type("x").Key(0, ui.KeyEnter)
+	tt.Settle()
+	if oks != 1 || w.Step() != 1 {
+		t.Fatalf("Enter in a text box after the wizard: the form's OK %d, step %d; want 1, 1", oks, w.Step())
+	}
+}
+
+// Case 10d: the buttons sit at the end edge in order Previous, Next,
+// Cancel, which right to left mirrors: Cancel at the left.
+func TestWizardButtonsRightToLeft(t *testing.T) {
+	var n wizardCounts
+	tt := wizardTester(t, threeSteps(&n))
+	x := func(s string) float32 { return wizButton(tt, s).Bounds().X }
+	if !(x(l10n.Previous()) < x(l10n.Next()) && x(l10n.Next()) < x(l10n.Cancel())) || x(l10n.Cancel()) < 300 {
+		t.Errorf("LTR buttons at %v, %v, %v: want Previous, Next, Cancel at the right", x(l10n.Previous()), x(l10n.Next()), x(l10n.Cancel()))
+	}
+	tt.SetDirection(ui.RightToLeft)
+	tt.Settle()
+	if !(x(l10n.Previous()) > x(l10n.Next()) && x(l10n.Next()) > x(l10n.Cancel())) || x(l10n.Previous()) > 300 {
+		t.Errorf("RTL buttons at %v, %v, %v: want Cancel, Next, Previous at the left", x(l10n.Previous()), x(l10n.Next()), x(l10n.Cancel()))
+	}
+}
+
+// Case 10e: the wizard's children are its bar, its buttons and every page,
+// shown or not, as a TabControl's are, for Form.ValidateChildren and the
+// form's other walks.
+func TestWizardChildren(t *testing.T) {
+	one, two := Label("Step one"), Label("Step two")
+	w := Wizard().AddStep("Account", one).AddStep("Plan", two)
+	mu.Lock()
+	cs := w.children()
+	mu.Unlock()
+	for _, c := range []Control{one, two, w.bar, w.prev, w.next, w.cancel} {
+		if !slices.Contains(cs, c) {
+			t.Errorf("children lack %T", c)
+		}
 	}
 }
 
