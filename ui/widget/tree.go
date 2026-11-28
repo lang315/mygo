@@ -79,6 +79,18 @@ type TreeViewWidget[T any, K comparable] struct {
 	// nil without columns, so that a tree never given any links none of it.
 	inColumns func(c *ui.Context) ui.Element
 
+	// Set by SetSort, SetFilter and SetLabelEdit (tree_ops.go), nil until one
+	// is called, so that a tree never given any links none of it: shown gives
+	// the children shown of a node (the roots when root), sorted and filtered;
+	// reshape says the nodes changed; prepare runs at the start of a build,
+	// after the user's changes are taken; labelRow builds the text of a row,
+	// reporting false to leave it to row. opsAny holds their state. Under mu.
+	shown    func(parent K, root bool, kids []treeItem[K]) []treeItem[K]
+	reshape  func()
+	prepare  func()
+	labelRow func(c *ui.Context, it treeItem[K], text string) bool
+	opsAny   any
+
 	// ui's, on the main thread:
 	state  ui.OutlineState[treeItem[K]]
 	cursor int
@@ -190,8 +202,25 @@ func (t *TreeViewWidget[T, K]) SetRoots(roots []T) *TreeViewWidget[T, K] {
 			t.put(keys[i], roots[i], zero, false)
 		}
 		t.roots = t.replace(t.roots, keys)
+		t.reshaped()
 	})
 	return t
+}
+
+// reshaped tells the sort and the filter that the nodes changed. Under mu.
+func (t *TreeViewWidget[T, K]) reshaped() {
+	if h := t.reshape; h != nil {
+		h()
+	}
+}
+
+// shownRoots returns the roots as they show, sorted and filtered. Under mu.
+func (t *TreeViewWidget[T, K]) shownRoots() []treeItem[K] {
+	if h := t.shown; h != nil {
+		var zero K
+		return h(zero, true, t.roots)
+	}
+	return t.roots
 }
 
 // SetChildren sets the children of the node of key parent, and marks them
@@ -217,6 +246,7 @@ func (t *TreeViewWidget[T, K]) SetChildren(parent K, kids []T) *TreeViewWidget[T
 		}
 		p.kids = t.replace(p.kids, keys)
 		p.loaded = true
+		t.reshaped()
 	})
 	return t
 }
@@ -283,6 +313,7 @@ func (t *TreeViewWidget[T, K]) UpdateNode(k K, fn func(*T)) *TreeViewWidget[T, K
 		if n := t.nodes[k]; n != nil {
 			fn(&n.data)
 			t.gens.bump(k)
+			t.reshaped()
 		}
 	})
 	return t
@@ -308,6 +339,7 @@ func (t *TreeViewWidget[T, K]) RemoveNodes(ks ...K) *TreeViewWidget[T, K] {
 			}
 			t.drop(treeItem[K]{k: k})
 		}
+		t.reshaped()
 	})
 	return t
 }
@@ -708,10 +740,14 @@ func (t *TreeViewWidget[T, K]) kidsOf(it treeItem[K]) []treeItem[K] {
 	case it.wait || n == nil:
 		return nil
 	case n.loaded:
-		if len(n.kids) == 0 {
+		kids := n.kids
+		if h := t.shown; h != nil {
+			kids = h(it.k, false, kids)
+		}
+		if len(kids) == 0 {
 			return nil
 		}
-		return n.kids
+		return kids
 	case n.has:
 		if n.wait == nil {
 			n.wait = []treeItem[K]{{k: it.k, wait: true}}
@@ -761,6 +797,9 @@ func (t *TreeViewWidget[T, K]) cursorRow() int {
 
 func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 	t.takeUser()
+	if h := t.prepare; h != nil {
+		h()
+	}
 	s := &t.state
 	s.List.Selection = t.chosen.bind()
 	t.open.bindInto(&s.Open)
@@ -771,7 +810,7 @@ func (t *TreeViewWidget[T, K]) build(c *ui.Context) ui.Element {
 		e = t.inColumns(c) // it sets Label and Skip from functions made once
 	} else {
 		s.List.Label, s.List.Skip = t.labelAt, t.skip
-		e = ui.Outline(c, s, t.roots, t.kidsOf, func(it treeItem[K]) { t.row(c, it) })
+		e = ui.Outline(c, s, t.shownRoots(), t.kidsOf, func(it treeItem[K]) { t.row(c, it) })
 	}
 	e.Grow(1)
 	frameList(c, e)
@@ -837,6 +876,9 @@ func (t *TreeViewWidget[T, K]) row(c *ui.Context, it treeItem[K]) {
 			side := cmp.Or(t.imageSize, iconSide(c))
 			ui.Image(c, bmp).Size(side, side)
 		}
+	}
+	if h := t.labelRow; h != nil && h(c, it, text) {
+		return
 	}
 	ui.Text(c, text).SingleLine()
 }
