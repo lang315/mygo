@@ -206,14 +206,30 @@ func (b *ButtonEditWidget) build(c *ui.Context) ui.Element {
 		}
 	}
 	b.c = c
+	frame := editFrame(c, b.children)
+	b.c = nil
+	b.edgeEditFrame(t, frame)
+	return frame
+}
+
+// editFrame is the frame of a field with buttons inside it, ButtonEdit's
+// and TimeSpanEdit's, as high as a TextBox; children builds the text and
+// the buttons.
+func editFrame(c *ui.Context, children func()) ui.Element {
+	t := c.Theme()
 	frame := ui.Row(c).Radius(t.Radius).Border(1, t.Outline()).Background(t.FieldFill()).
 		AlignItems(ui.Stretch).MinWidth(t.Space(35))
 	if h := t.Metrics.ControlHeight; h > 0 {
 		frame.MinHeight(h)
 	}
-	frame.Children(b.children)
-	b.c = nil
-	// The edge of a text input's: the accent while it has the focus.
+	frame.Children(children)
+	return frame
+}
+
+// edgeEditFrame gives an editFrame the edge of a text input's, the accent
+// while the text (inner) has the focus, and keeps the buttons off the error
+// mark. Under mu, building.
+func (b *core) edgeEditFrame(t *ui.Theme, frame ui.Element) {
 	switch {
 	case b.inner.Focused():
 		frame.Border(1, t.Accent)
@@ -230,7 +246,22 @@ func (b *ButtonEditWidget) build(c *ui.Context) ui.Element {
 			el.PaddingEnd(el.Paddings()[side] + errorMarkSize + errorMarkInset + 2)
 		}
 	}
-	return frame
+}
+
+// editButtonBase is a button inside an editFrame: no stop of Tab, and a
+// click leaves the focus in the text.
+func editButtonBase(c *ui.Context) ui.Element {
+	t := c.Theme()
+	e := ui.ButtonBase(c).Unfocusable().KeepFocus().Role(ui.RoleButton).
+		Width(t.Space(6)).Shrink(0).Margin(t.Space(0.5)).Radius(t.Radius).
+		AlignItems(ui.Center).Justify(ui.Center)
+	switch {
+	case e.Pressed():
+		e.Background(t.SurfacePressed)
+	case e.Hovered():
+		e.Background(t.SurfaceHover)
+	}
+	return e
 }
 
 // buildChildren builds the text and the buttons. Under mu, building.
@@ -260,15 +291,7 @@ func (b *ButtonEditWidget) buildChildren() {
 		if b.hidden[i] || b.buttons[i].Kind == EditClear && *p == "" {
 			continue
 		}
-		e := ui.ButtonBase(c.Key(editKey(i))).Unfocusable().KeepFocus().Role(ui.RoleButton).
-			Width(t.Space(6)).Shrink(0).Margin(t.Space(0.5)).Radius(t.Radius).
-			AlignItems(ui.Center).Justify(ui.Center)
-		switch {
-		case e.Pressed():
-			e.Background(t.SurfacePressed)
-		case e.Hovered():
-			e.Background(t.SurfaceHover)
-		}
+		e := editButtonBase(c.Key(editKey(i)))
 		e.Label(b.name(i))
 		if tip := b.buttons[i].Tooltip; tip != "" {
 			e.Tooltip(tip)

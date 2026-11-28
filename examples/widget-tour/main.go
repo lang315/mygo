@@ -401,6 +401,7 @@ func choices() widget.Control {
 		widget.Spinner().Start(),
 		productLookUp(),
 		widget.DateTimePicker(),
+		timeSpanRow(),
 		widget.MonthCalendar(),
 		values(),
 	)
