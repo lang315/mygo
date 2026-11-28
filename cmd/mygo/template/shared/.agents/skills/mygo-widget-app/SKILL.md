@@ -117,6 +117,8 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 
 While the app loads or saves and the user must wait, call `widget.Form.ShowWait(caption, description)` and `widget.Form.CloseWait()` (safe from any goroutine): a `widget.ProgressPanel` centred over the dimmed form, which takes no click or key until it closes. A second `ShowWait` changes its text. Not a modal `Dialog` of your own, nor disabling every control. Show a `widget.ProgressPanel(caption)` inline where only part of a page is busy. Read `docs/ui/widget/progresspanel.md`.
 
+While the app starts, before its form shows, call `widget.ShowSplash(widget.Splash{Image, Title, Status})` in `main` before `widget.Run` (it does not wait), `widget.SplashScreen.SetStatus(text)` as it loads, and `widget.SplashScreen.CloseWhenShown(w)` in `Run`'s func, so the form shows before the splash goes. Not `widget.SplashScreen.Close()` before the form shows: the app quits when its last window closes. Read `docs/ui/widget/splash.md`.
+
 ## Search, paths, sections, colors
 
 Use these, not a hand-made equivalent:

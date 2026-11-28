@@ -56,6 +56,7 @@ type Form struct {
 	announce      string         // a validation message for the next build to announce
 	toasts        []toastOp      // ShowToast and CloseToast since the last frame, for it to hand to ui
 	wait          *waitText      // ShowWait's, nil when not waiting
+	onShown       func()         // SplashScreen.CloseWhenShown's: run once, when the window next shows
 }
 
 // quit quits the app; tests replace it.
@@ -339,6 +340,7 @@ func (w *Form) show(cancel bool) bool {
 		}
 	})
 	closeNow := false
+	var onShown func()
 	w.change(func() {
 		select {
 		case <-done: // it closed already
@@ -346,12 +348,18 @@ func (w *Form) show(cancel bool) bool {
 			w.win = n
 			shown[n] = w
 			closeNow = w.closing // Close ran while the window was being made
+			if !closeNow {
+				onShown, w.onShown = w.onShown, nil
+			}
 		}
 	})
 	if closeNow {
 		n.Close()
 	} else if macMenus {
 		claimAppMenuIfFree(w)
+	}
+	if onShown != nil {
+		onShown()
 	}
 	return true
 }
