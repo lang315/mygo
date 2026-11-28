@@ -48,7 +48,10 @@ func testDocs(t *testing.T, opts DocumentsOptions[string]) *Documents[string] {
 		// (TestDocumentMenuOpen), and the watch of a document left open
 		// would hold docWork.Wait below.
 		for _, b := range allDocuments() {
-			d := b.ops.(*Document[string])
+			d, ok := b.ops.(*Document[string])
+			if !ok {
+				continue
+			}
 			d.SetEdited(false)
 			if w := d.Window(); w != nil {
 				w.Destroy()

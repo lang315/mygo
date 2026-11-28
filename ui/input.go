@@ -1280,7 +1280,7 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, code KeyCod
 		return false
 	}
 	if s := rt.states[rt.focused]; s != nil && s.editor != nil && s.flags&(flagEditable|flagSelectable) != 0 &&
-		(wantsFn(s.editor, k) || s.editor.takesUnclaimed(k) && !rt.claimed(k)) &&
+		(wantsFn(s.editor, k) || takesUnclaimedFn(s.editor, k) && !rt.claimed(k)) &&
 		!(k.mods == Cmd && k.key == KeyC && rt.copiesNothing(s)) {
 		if textSelectionKeyFn(rt, s, k) {
 			rt.requestFrame()

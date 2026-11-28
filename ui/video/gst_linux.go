@@ -609,6 +609,9 @@ func (e *gstEngine) handle(msg uintptr, kind uint32) {
 		if first && e.noDecoder != "" && e.videoStreams() == 0 {
 			// The sound plays, and no picture comes.
 			e.state, e.err = media.Failed, errors.New("video: GStreamer has no decoder for "+e.noDecoder)
+			if e.missing != "" {
+				e.err = missingError(e.missing) // names the plugin, as an error does
+			}
 			gstElementSetState(e.pipe, gstStatePaused)
 			break
 		}

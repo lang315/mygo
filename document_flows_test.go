@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/platform"
+	"github.com/egoist/mygo/internal/wait"
 )
 
 // SaveAs writes the document where the dialog says, and the document
@@ -150,11 +151,11 @@ func TestDocumentOnStateChange(t *testing.T) {
 	off := d.OnStateChange(func(s DocumentState) { states <- s })
 
 	d.Set("x")
-	s := <-states
+	s := wait.For(t, "a state", states)
 	for !s.Edited {
 		// The open's own state, which notify posts to the main thread, may
 		// come after Open returned.
-		s = <-states
+		s = wait.For(t, "the edited state", states)
 	}
 	if s.Name != "a.txt" {
 		t.Fatalf("state %v", s)
@@ -162,7 +163,7 @@ func TestDocumentOnStateChange(t *testing.T) {
 	if err := d.Save(); err != nil {
 		t.Fatal(err)
 	}
-	s = <-states
+	s = wait.For(t, "the state after the save", states)
 	if s.Edited {
 		t.Fatalf("state after the save: %v", s)
 	}
