@@ -739,11 +739,13 @@ name := widget.Bind(widget.TextBox(),
 | `TextBox`, `MultilineTextBox` | `string` | `Bind` |
 | `SearchBox` | `string` | `Bind` |
 | `ButtonEdit` | `string` | `Bind` (a click on its Clear button is an edit: `set("")`) |
+| `FontEdit` | the family, a `string` | `Bind` (a pick of the user is an edit) |
 | `DomainUpDown` | the selected item's text, a `string` | `Bind` |
 | `CheckBox`, `CheckButton` | `bool` | `Bind` |
 | `Rating` | the stars filled, an `int` | `Bind` (clamps to 0 through its stars) |
 | `ComboBox` | the `Value` of its option, a `string` (the text, if `Editable` first) | `Bind` |
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
+| `CalcEdit` | `float64` | `Bind` (a typed number and the calculator's Enter or = are edits) |
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `TimeSpanEdit` | `time.Duration` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `RangeSpin` | its two numbers, `float64` | `BindRange(c, get, set)`, with `get func() (lo, hi float64)` and `set func(lo, hi float64)`: `set` gets both numbers after an edit of either; each is clamped to its range, as `NumericUpDown` |
@@ -1350,7 +1352,8 @@ style hover, focus, pressed, disabled and dark states, see
 | `Suggested()`, `Destructive()` on buttons and tool buttons | `suggested-action`, `destructive-action` |
 
 Every widget also has `SetVisible`, `Visible`, `SetDisabled`, `SetTooltip`,
-`SetAccessibleName` (the name of the control itself for assistive technology
+`SetSuperTip` (a rich tooltip: title, body, image and footer; see
+[SuperTip](widget/supertip.md)), `SetAccessibleName` (the name of the control itself for assistive technology
 and `ByLabel`, over the one its text, tooltip or `Fields` row gives; a
 container's, or a group's, names the group), `OnFocusOut` (also when the
 form closes with the focus in the widget, before a dialog's `Run`
@@ -1435,10 +1438,13 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `&` mnemonics in a `Button` and the labels of `Fields` (Alt+key; off on macOS); see [Mnemonics](widget/mnemonics.md).
 - `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
+- `SetSuperTip(SuperTip{Title, Body, Image, Footer})`, on every control: a rich tooltip in place of `SetTooltip`'s text, as DevExpress's SuperToolTip; see [SuperTip](widget/supertip.md).
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes, in columns under a header with `SetColumns`; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`, and `SetSearchPanel(true)` for a search box over the records in the drop-down (DevExpress's SearchLookUpEdit); see [LookUpEdit](widget/lookupedit.md).
 - `ButtonEdit(buttons...)`: a text field with buttons at its end, inside its frame (`EditEllipsis`, `EditClear`, `EditSearch`, `EditPlus`, `EditMinus`, `EditDropDown`, `EditGlyph`), as DevExpress's ButtonEdit; `Text`, `SetText`, `SetPlaceholder`, `SetReadOnly`, `OnChange`, `SetButtonVisible`; see [ButtonEdit](widget/buttonedit.md).
+- `FontEdit()`: a field that picks a font family from a drop-down of `ui.FontFamilies`, each name in its own face, which a search box filters, as DevExpress's FontEdit; `Family`, `SetFamily`, `SetFixedPitchOnly`, `OnChange`; see [FontEdit](widget/fontedit.md).
+- `CalcEdit()`: a number field with a calculator in its drop-down, as DevExpress's CalcEdit; `Value`, `SetValue`, `SetDecimals`, `OnChange`, `ShowPopup`, `ClosePopup`; see [CalcEdit](widget/calcedit.md).
 - `PopupEdit(controls...)`: a field showing a text whose drop-down holds any controls, as DevExpress's PopupContainerEdit; `SetText`, `Text`, `ShowPopup`, `ClosePopup`, `IsOpen`, `OnClosed`; see [PopupEdit](widget/popupedit.md).
 - `ProgressPanel(caption)`: a spinner with a caption and a description, as DevExpress's ProgressPanel; `Form.ShowWait(caption, description)` and `Form.CloseWait()` show one over a dimmed form that takes no input; see [ProgressPanel and the wait form](widget/progresspanel.md).
 - `Badge(text)`: a short text in a pill colored by its `Status` (`StatusNone`, `StatusInfo`, `StatusRunning`, `StatusSuccess`, `StatusWarning`, `StatusDanger`); see [Badge](widget/badge.md).
@@ -1535,7 +1541,7 @@ Input and display:
   `SetColor`, `OnChange`; see [ColorEdit](widget/coloredit.md).
 - `Bind(control, get, set)`, `BindInt`, `BindRange`, `BindValues`,
   `BindTokens`, `Reload(control)`: tie a `TextBox`, `MultilineTextBox`,
-  `SearchBox`, `DomainUpDown`, `CheckBox`, `ComboBox`, `NumericUpDown`, `TrackBar`,
+  `SearchBox`, `FontEdit`, `DomainUpDown`, `CheckBox`, `ComboBox`, `NumericUpDown`, `CalcEdit`, `TrackBar`,
   `RangeSpin`, `CheckBoxGroup` or `TokenEdit` to a value kept elsewhere;
   see [Binding](#binding).
 - `Button(text)`: `OnClick`, `SetText`, `SetIcon` (an SVG in the text's

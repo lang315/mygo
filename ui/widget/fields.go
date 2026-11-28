@@ -195,15 +195,19 @@ func (r *fieldRow) describe() {
 		b.desc = ""
 		return
 	}
-	if r.said == "" || r.saidTip != b.tooltip {
-		r.said, r.saidTip = r.desc, b.tooltip
-		if b.tooltip != "" {
+	tip := b.tooltip
+	if b.superTip != nil {
+		tip = b.superTip.said // the SuperTip takes the tooltip's place
+	}
+	if r.said == "" || r.saidTip != tip {
+		r.said, r.saidTip = r.desc, tip
+		if tip != "" {
 			// A description that ends a sentence takes a space, others ". ".
 			sep := ". "
 			if last, _ := utf8.DecodeLastRuneInString(r.desc); strings.ContainsRune(".!?…:", last) {
 				sep = " "
 			}
-			r.said += sep + b.tooltip
+			r.said += sep + tip
 		}
 	}
 	b.desc = r.said

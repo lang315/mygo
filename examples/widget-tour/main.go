@@ -183,6 +183,7 @@ func dialogs(w *widget.Form) widget.Control {
 				ok := fd.ShowDialog(w)
 				show("FontDialog: %+v %v", fd.Font(), ok)
 			}),
+			fontEditField(show),
 			widget.Button("Open file").OnClick(func() { show("OpenFile: %q", widget.OpenFile(w, "Open a file")) }),
 			widget.Button("Save file").OnClick(func() { show("SaveFile: %q", widget.SaveFile(w, "Save", "notes.txt")) }),
 			widget.Button("Select folder").OnClick(func() { show("SelectFolder: %q", widget.SelectFolder(w, "Choose a folder", "")) }),
@@ -367,7 +368,12 @@ func inputs(w *widget.Form) widget.Control {
 		widget.CheckBox("Remember me"),
 		widget.HBox(8).Add(widget.Switch(), widget.Label("Notifications")),
 		widget.Toggle("Bold"),
-		widget.Button("Count in the background").OnClick(func() {
+		widget.Button("Count in the background").SetSuperTip(widget.SuperTip{
+			Title:  "Count in the background",
+			Body:   "Counts to five on a goroutine, setting the greeting's text from there: the window redraws.",
+			Image:  searchIcon(),
+			Footer: "Setters are safe from any goroutine.",
+		}).OnClick(func() {
 			go func() {
 				for i := 1; i <= 5; i++ {
 					greeting.SetText(fmt.Sprintf("Counted %d", i))
@@ -388,7 +394,7 @@ func choices() widget.Control {
 	volumeText := widget.Label("Volume 60")
 	volume.OnChange(func() { volumeText.SetText(fmt.Sprintf("Volume %d", volume.Int())) })
 	return widget.VBox(8).Add(
-		spin, progress, volume, volumeText,
+		spin, progress, calcEditRow(), volume, volumeText,
 		widget.TrackBar(0, 100).SetStep(25),
 		widget.RangeSpin(0, 60, 0, 600, 1, "to", "seconds").SetValues(5, 30),
 		widget.DomainUpDown("Mon", "Tue", "Wed", "Thu", "Fri").SetWrap(true),
