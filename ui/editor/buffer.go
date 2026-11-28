@@ -87,6 +87,11 @@ type change struct {
 	oldStart, oldEnd, newStart, newEnd int
 	oldLine, oldEndLine                int
 	newLine, newEndLine                int
+	// loaded: Reset filled an empty buffer, so offsets stay at its start.
+	loaded bool
+	// keepsEndLine: line oldEndLine is left unchanged, as newEndLine
+	// (Reset's change of whole lines); an edit ending in a line changes it.
+	keepsEndLine bool
 }
 
 type logEntry struct {
@@ -117,6 +122,18 @@ type transaction struct {
 	selBefore any
 	selAfter  any
 	kind      editKind
+	// before and beforeEnds are the text and line ending codes a
+	// composition's step found, which a cancelled one leaves as it
+	// found them (dropCompose), kept while it composes: the step lets
+	// go of them once the composition ends (settle), as each version
+	// keeps the chunks edits since copied alive.
+	before, beforeEnds rope.Text
+	composing          bool
+}
+
+// settle ends what the step keeps of its composition.
+func (tx *transaction) settle() {
+	tx.before, tx.beforeEnds, tx.composing = rope.Text{}, rope.Text{}, false
 }
 
 // editKind groups edits into undo steps: typing in a row is one step,
@@ -153,6 +170,18 @@ func (b *Buffer) LineEnding() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.ends.dominant()
+}
+
+// MixedLineEndings reports whether the text's line breaks don't all have
+// the same ending, some \r\n and some \n, say; a text with one line, or
+// with every break alike, is not mixed. It reads counts the buffer keeps,
+// as quick for a large text as for a small one. With LineEnding, it tells
+// an editor's status bar what to show, "Mixed" or the ending all lines
+// have, and SetLineEnding converts a mixed text to one ending.
+func (b *Buffer) MixedLineEndings() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.ends.mixed()
 }
 
 // SetLineEnding converts the ending of every line to ending, \r\n, \r
@@ -290,7 +319,11 @@ func (b *Buffer) MarkSaved() {
 }
 
 // Reset replaces the text and forgets the undo history, as for a file
-// loaded anew, and makes it the saved text.
+// loaded anew, and makes it the saved text. Its change is the lines
+// between those the texts start and end with alike, as VS Code reloads
+// a file: the editors showing it keep their selections, scroll, folds
+// and diagnostics with the text before and after those lines, and in an
+// empty buffer at the start.
 func (b *Buffer) Reset(text string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -299,7 +332,12 @@ func (b *Buffer) Reset(text string) {
 	b.text, b.ends = rope.New(t), ends
 	b.saved, b.savedEnds = b.text, b.ends
 	b.undo, b.redo, b.openTx = nil, nil, nil
-	b.record([]change{wholeChange(old, b.text)})
+	var cs []change
+	if c, ok := reloadChange(old, t); ok {
+		c.loaded = old.Len() == 0
+		cs = append(cs, c)
+	}
+	b.record(cs)
 }
 
 // Set replaces the whole text as one edit, which Undo takes back.
@@ -512,7 +550,14 @@ func (b *Buffer) editEnds(edits []Edit, codes []string, kind editKind, owner, se
 		tx.edits = append(tx.edits, back)
 		tx.ends = append(tx.ends, backEnds)
 	default:
-		b.undo = append(b.undo, transaction{edits: [][]Edit{back}, ends: [][]string{backEnds}, owner: owner, selBefore: selBefore, kind: kind})
+		if n := len(b.undo); n > 0 {
+			b.undo[n-1].settle()
+		}
+		tx := transaction{edits: [][]Edit{back}, ends: [][]string{backEnds}, owner: owner, selBefore: selBefore, kind: kind}
+		if kind == editCompose {
+			tx.before, tx.beforeEnds, tx.composing = before, beforeEnds.codes, true
+		}
+		b.undo = append(b.undo, tx)
 		if len(b.undo) > undoMax {
 			b.undo = slices.Delete(b.undo, 0, len(b.undo)-undoMax)
 		}
@@ -641,6 +686,31 @@ func (b *Buffer) endGroup() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.lastEdit = time.Time{}
+	if n := len(b.undo); n > 0 {
+		b.undo[n-1].settle()
+	}
+}
+
+// dropCompose drops the last step when it is owner's composition and
+// the text is as the step found it, as an input method's composition
+// cancelled leaves it: Undo has nothing of it to take back.
+func (b *Buffer) dropCompose(owner any) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := len(b.undo)
+	if n == 0 || b.open > 0 {
+		return
+	}
+	tx := &b.undo[n-1]
+	if tx.owner != owner || tx.kind != editCompose {
+		return
+	}
+	if !tx.composing || !sameText(b.text, tx.before) || !sameText(b.ends.codes, tx.beforeEnds) {
+		tx.settle()
+		return
+	}
+	b.undo = b.undo[:n-1]
+	b.lastEdit = time.Time{}
 }
 
 // setSelectionsAfter notes where the owner of the last transaction has
@@ -693,6 +763,66 @@ func (b *Buffer) changesTo(since uint64) (changes [][]change, version uint64, te
 		changes[i] = e.changes
 	}
 	return changes, version, b.text, ok
+}
+
+// reloadChange returns the change from old to s of the lines between
+// those they start and end with alike, and false when they are alike.
+func reloadChange(old rope.Text, s string) (change, bool) {
+	// Bytes alike at the start, then at the end within what follows
+	// the start's lines.
+	pre := 0
+	old.Chunks(0, old.Len(), func(c string) bool {
+		n := min(len(c), len(s)-pre)
+		if c[:n] == s[pre:pre+n] {
+			pre += n
+			return n == len(c)
+		}
+		for c[0] == s[pre] {
+			c = c[1:]
+			pre++
+		}
+		return false
+	})
+	if pre == old.Len() && pre == len(s) {
+		return change{}, false
+	}
+	start := old.LineStart(old.LineOf(pre))
+	var chunks []string
+	old.Chunks(start, old.Len(), func(c string) bool {
+		chunks = append(chunks, c)
+		return true
+	})
+	suf, room := 0, min(old.Len(), len(s))-start
+	for i := len(chunks) - 1; i >= 0 && suf < room; i-- {
+		c := chunks[i]
+		n := min(len(c), room-suf)
+		if c[len(c)-n:] == s[len(s)-suf-n:len(s)-suf] {
+			suf += n
+			continue
+		}
+		for c[len(c)-1] == s[len(s)-1-suf] {
+			c = c[:len(c)-1]
+			suf++
+		}
+		break
+	}
+	// The lines alike at the end start where both texts start a line,
+	// else after a line break among the bytes alike.
+	oldEnd, newEnd := old.Len()-suf, len(s)-suf
+	startsLine := func() bool {
+		return (oldEnd == 0 || old.ByteAt(oldEnd-1) == '\n') && (newEnd == 0 || s[newEnd-1] == '\n')
+	}
+	if !startsLine() {
+		oldEnd = old.LineStart(old.LineOf(oldEnd) + 1)
+		newEnd = len(s) - (old.Len() - oldEnd)
+	}
+	line := old.LineOf(start)
+	return change{
+		oldStart: start, oldEnd: oldEnd, newStart: start, newEnd: newEnd,
+		oldLine: line, oldEndLine: old.LineOf(oldEnd),
+		newLine: line, newEndLine: line + strings.Count(s[start:newEnd], "\n"),
+		keepsEndLine: old.Len() > 0 && startsLine(),
+	}, true
 }
 
 // changesBetween returns the changes from old to new by their lines, for
@@ -803,11 +933,6 @@ func (b *Buffer) invalidate() {
 	for _, s := range wake {
 		s.Invalidate()
 	}
-}
-
-// wholeChange is the change replacing all of old with new.
-func wholeChange(old, new rope.Text) change {
-	return change{oldEnd: old.Len(), newEnd: new.Len(), oldEndLine: old.LineCount() - 1, newEndLine: new.LineCount() - 1}
 }
 
 // span is a range of a text an edit outside the history replaced, bytes
@@ -975,7 +1100,8 @@ const (
 
 // mapOffset moves an offset of the text before changes to the text after
 // them. An offset inside a replaced range goes to its start (left) or end
-// (right).
+// (right), but for a text Reset loaded into an empty buffer, which
+// leaves it at the start.
 func mapOffset(off int, changes []change, b bias) int {
 	// The last change starting at or before off.
 	i, _ := slices.BinarySearchFunc(changes, off, func(c change, o int) int {
@@ -994,6 +1120,9 @@ func mapOffset(off int, changes []change, b bias) int {
 		}
 	}
 	c := changes[i-1]
+	if c.loaded {
+		return c.newStart
+	}
 	switch {
 	case off > c.oldEnd || off == c.oldEnd && c.oldEnd > c.oldStart:
 		return off + c.newEnd - c.oldEnd
@@ -1011,7 +1140,8 @@ func mapOffset(off int, changes []change, b bias) int {
 var mapSteps int
 
 // mapLine moves a line of the text before changes to the text after
-// them; a line the changes replaced goes to where they start.
+// them; a line the changes replaced goes to where they start, but a
+// change's end line it keeps (keepsEndLine) goes to its newEndLine.
 func mapLine(line int, changes []change) int {
 	// The first change ending at or after the line.
 	i, _ := slices.BinarySearchFunc(changes, line, func(c change, l int) int {
@@ -1023,6 +1153,9 @@ func mapLine(line int, changes []change) int {
 	})
 	if i < len(changes) && changes[i].oldLine <= line {
 		c := changes[i]
+		if line == c.oldEndLine && c.keepsEndLine {
+			return c.newEndLine
+		}
 		if line == c.oldLine {
 			return c.newLine
 		}

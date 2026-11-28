@@ -234,5 +234,8 @@
   "skinPickerPalette": "Palette",
   "skinPickerDensity": "Density",
   "standardDensity": "Standard",
-  "compactDensity": "Compact"
+  "compactDensity": "Compact",
+  "addToQuickAccess": "Add to Quick Access Toolbar",
+  "removeFromQuickAccess": "Remove from Quick Access Toolbar",
+  "showBelowRibbon": "Show below the ribbon"
 }

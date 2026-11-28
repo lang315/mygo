@@ -22,9 +22,10 @@ import (
 // each element with what its state kept of it in the frame before finds
 // it instead (sameLayout), before laying out. An element is the same when
 // what lays it out is (its layoutStyle, the flags and the text styles the
-// layout reads, its grid's tracks, its spans, its image's size), its
-// children are the same elements in the same order, each the same in
-// turn, and its ancestors' text styles, which it inherits, are the same.
+// layout reads, whether it gives its row its baseline, its grid's
+// tracks, its spans, its image's size), its children are the same
+// elements in the same order, each the same in turn, and its ancestors'
+// text styles, which it inherits, are the same.
 // That is Blink's NeedsLayout and ChildNeedsLayout, found by comparison.
 //
 // layoutBox then reuses what an element that is the same laid out in the
@@ -99,6 +100,7 @@ type layoutRecord struct {
 	flags      uint32
 	hidden     bool
 	fill       bool // fillViewport
+	baseline   bool
 	ts         textLayout
 	cols, rows []Track
 	spans      string
@@ -193,13 +195,13 @@ func sameLayout(e *node, parent uint64, index int, changed, inh bool) bool {
 	if !sameText {
 		r.ts = layoutOfText(&e.ts)
 	}
-	equal := fresh && r.style == e.layoutStyle && r.flags == e.flags&layoutFlags && r.hidden == e.hidden && r.fill == e.fillViewport &&
+	equal := fresh && r.style == e.layoutStyle && r.flags == e.flags&layoutFlags && r.hidden == e.hidden && r.fill == e.fillViewport && r.baseline == e.baseline &&
 		r.spans == spans && r.media == media && r.placeOn == placeOn &&
 		r.parent == parent && r.index == int32(index) && r.nchild == int32(e.nchild) &&
 		slices.Equal(r.cols, e.cols) && slices.Equal(r.rows, e.rows)
 	if !equal {
 		r.ok = true
-		r.style, r.flags, r.hidden, r.fill = e.layoutStyle, e.flags&layoutFlags, e.hidden, e.fillViewport
+		r.style, r.flags, r.hidden, r.fill, r.baseline = e.layoutStyle, e.flags&layoutFlags, e.hidden, e.fillViewport, e.baseline
 		if !slices.Equal(r.cols, e.cols) || !slices.Equal(r.rows, e.rows) {
 			r.cols, r.rows = append(r.cols[:0], e.cols...), append(r.rows[:0], e.rows...)
 		}

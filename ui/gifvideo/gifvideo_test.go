@@ -2,6 +2,7 @@ package gifvideo
 
 import (
 	"bytes"
+	"compress/lzw"
 	"encoding/binary"
 	"image"
 	"image/color"
@@ -163,5 +164,110 @@ func TestDecoderRefusesHugeGIF(t *testing.T) {
 	}
 	if _, err := NewDecoder(gifOf(2, 2, 1, 1, oneByOne)); err != nil {
 		t.Errorf("a small GIF: %v", err)
+	}
+}
+
+// solidGIF returns a GIF of 4×4 frames of solid colors, each showing for
+// delay hundredths of a second.
+func solidGIF(t *testing.T, delay int, colors ...color.RGBA) []byte {
+	t.Helper()
+	g := &gif.GIF{Config: image.Config{Width: 4, Height: 4}}
+	for _, c := range colors {
+		f := image.NewPaletted(image.Rect(0, 0, 4, 4), color.Palette{c})
+		g.Image = append(g.Image, f)
+		g.Delay = append(g.Delay, delay)
+		g.Disposal = append(g.Disposal, gif.DisposalNone)
+	}
+	var b bytes.Buffer
+	if err := gif.EncodeAll(&b, g); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+// TestGIFDecoderEndsEarly checks that a GIF that ends early, with no
+// trailer or cut off in a frame, plays the frames it has whole, as
+// browsers do, and that one with no whole frame is an error.
+func TestGIFDecoderEndsEarly(t *testing.T) {
+	data := solidGIF(t, 10, videoRed, videoGreen, videoBlue)
+	for _, tc := range []struct {
+		name string
+		data []byte
+		want []color.RGBA
+	}{
+		{"no trailer", data[:len(data)-1], []color.RGBA{videoRed, videoGreen, videoBlue}},
+		// Without the last frame's block terminator and a byte of its
+		// pixels.
+		{"cut off in the last frame", data[:len(data)-3], []color.RGBA{videoRed, videoGreen}},
+	} {
+		d, err := NewDecoder(tc.data)
+		if err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+			continue
+		}
+		for i, want := range tc.want {
+			f, err := d.Next()
+			if err != nil {
+				t.Fatalf("%s, frame %d: %v", tc.name, i, err)
+			}
+			if got := f.Image.(*image.RGBA).RGBAAt(1, 1); got != want {
+				t.Errorf("%s, frame %d: %v, want %v", tc.name, i, got, want)
+			}
+		}
+		if _, err := d.Next(); err != io.EOF {
+			t.Errorf("%s: after %d frames, %v", tc.name, len(tc.want), err)
+		}
+	}
+	if _, err := NewDecoder(data[:40]); err == nil {
+		t.Error("a GIF cut off in its first frame decoded")
+	}
+}
+
+// TestGIFDecoderPixelsPastColors checks that a GIF whose pixels point past
+// its color table plays, those pixels black, as Chrome draws them, where
+// image/gif decodes none of it.
+func TestGIFDecoderPixelsPastColors(t *testing.T) {
+	// A 2×2 frame of pixels 0 to 3, its color table red and green.
+	var px bytes.Buffer
+	w := lzw.NewWriter(&px, lzw.LSB, 2)
+	w.Write([]byte{0, 1, 2, 3})
+	w.Close()
+	frame := func(table []byte) []byte {
+		b := []byte{0x2c, 0, 0, 0, 0, 2, 0, 2, 0, 0}
+		if table != nil {
+			b[9] = 0x80
+			b = append(b, table...)
+		}
+		b = append(b, 2, byte(px.Len()))
+		b = append(b, px.Bytes()...)
+		return append(b, 0)
+	}
+	colors := []byte{255, 0, 0, 0, 255, 0}
+	screen := []byte("GIF89a\x02\x00\x02\x00\x00\x00\x00")
+	global := append(append([]byte{}, screen...), colors...)
+	global[10] = 0x80
+	black := color.RGBA{0, 0, 0, 255}
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{"global color table", append(append(global, frame(nil)...), 0x3b)},
+		{"local color table", append(append(append([]byte{}, screen...), frame(colors)...), 0x3b)},
+	} {
+		d, err := NewDecoder(tc.data)
+		if err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+			continue
+		}
+		f, err := d.Next()
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		pic := f.Image.(*image.RGBA)
+		for i, want := range []color.RGBA{videoRed, videoGreen, black, black} {
+			if got := pic.RGBAAt(i%2, i/2); got != want {
+				t.Errorf("%s: pixel %d is %v, want %v", tc.name, i, got, want)
+			}
+		}
 	}
 }

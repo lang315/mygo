@@ -108,6 +108,7 @@ const (
 	enginePause               = 33
 	engineSetMuted            = 35
 	engineSetVolume           = 37
+	engineHasVideo            = 38
 	engineGetNativeVideoSize  = 40
 	engineShutdown            = 42
 	engineTransferVideoFrame  = 43
@@ -251,6 +252,11 @@ type mfEngine struct {
 	ring  [ringSize]sharedFrame
 	shown int
 	w, h  int
+	// pictured tells a new picture came since the last seek; reseek
+	// that Frame seeks again, to what Seek asked for, once the step it
+	// took is done, and resought how often it did since Seek.
+	pictured, reseek bool
+	resought         int
 
 	mu      sync.Mutex
 	wake    func()
@@ -263,7 +269,13 @@ type mfEngine struct {
 	// landed tells a seek landed (eventSeeked) with no picture since
 	// it, for Frame to step to the picture there if the engine has none.
 	landed bool
-	closed bool
+	// stepped tells a frame step completed since Frame took one.
+	stepped bool
+	// loaded tells the engine has the data of the first picture
+	// (eventLoadedData), and polling that a wake for the window to look
+	// for it again is due (pollFirst).
+	loaded, polling bool
+	closed          bool
 }
 
 // sharedFrame is a texture of the ring, and its surface.
@@ -415,7 +427,11 @@ func (e *mfEngine) event(event uint32, param1 uintptr, param2 uint32) {
 		}
 	case eventSeeked:
 		e.seeked, e.landed = true, true
-	case eventLoadedMetadata, eventLoadedData, eventDurationChange, eventFrameStepCompleted:
+	case eventFrameStepCompleted:
+		e.stepped = true
+	case eventLoadedData:
+		e.loaded = true
+	case eventLoadedMetadata, eventDurationChange:
 	default:
 		e.mu.Unlock()
 		return
@@ -438,21 +454,38 @@ func (e *mfEngine) Frame(time.Time) (media.Picture, bool, bool) {
 	var pts int64
 	fresh := call(e.engine, engineOnVideoStreamTick, uintptr(unsafe.Pointer(&pts))) == 0 // S_OK: a new picture
 	e.mu.Lock()
-	landed := e.landed
+	landed, to, stepped := e.landed, e.seekTo, e.stepped
 	e.mu.Unlock()
 	if landed && (fresh || call(e.engine, engineIsSeeking) == 0) {
 		e.mu.Lock()
 		e.landed = false
 		e.mu.Unlock()
-		if !fresh && pts == math.MinInt64 && e.ex != 0 && call(e.engine, engineIsPaused) != 0 {
+		if !fresh && !e.pictured && e.ex != 0 && call(e.engine, engineIsPaused) != 0 {
 			// A seek of a paused video landed with no picture, which then
 			// never comes (Media Foundation on Windows on Arm, about one
 			// seek in three): a step forward shows the one there, and
-			// keeps the position.
+			// keeps the position. A seek just after a pause, as the video
+			// starts playing, may also land where the video was (about one
+			// in ten), and seeking again at once lands there too: once the
+			// step is done, Frame seeks again, up to three times, and
+			// shows none of the pictures from where the video was.
+			if at := callGetDouble(e.engine, engineGetCurrentTime); e.resought < 3 && math.Abs(at-to.Seconds()) > 0.001 {
+				e.reseek = true
+				e.resought++
+			}
+			e.mu.Lock()
+			e.stepped, stepped = false, false
+			e.mu.Unlock()
 			call(e.ex, engineExFrameStep, 1)
 		}
 	}
-	if fresh {
+	if e.reseek {
+		if stepped {
+			e.reseek = false
+			e.seek(to)
+		}
+	} else if fresh {
+		e.pictured = true
 		var w, h uint32
 		call(e.engine, engineGetNativeVideoSize, uintptr(unsafe.Pointer(&w)), uintptr(unsafe.Pointer(&h)))
 		if w > 0 && h > 0 {
@@ -469,11 +502,46 @@ func (e *mfEngine) Frame(time.Time) (media.Picture, bool, bool) {
 		}
 	}
 	if e.shown < 0 {
+		e.pollFirst()
 		return media.Picture{}, false, false
 	}
 	f := &e.ring[e.shown]
 	i := e.shown
 	return media.Picture{Surface: f.surface, W: f.w, H: f.h, RGBA: func(dst []byte) []byte { return e.readBack(i, dst) }}, changed, true
+}
+
+// pollFirst wakes the window again soon while the first picture is
+// loaded but not there yet. No event tells a picture came, and the last
+// one may come before it does: where decoding is slow (Windows 11 on Arm
+// in a VM without a GPU, even for H.264), Playing comes, the frame it
+// wakes for finds no picture (OnVideoStreamTick is S_FALSE), and no
+// event that wakes comes again until the end, so a window that builds
+// frames only when woken shows nothing (#1830). Until the first picture,
+// Frame asks for another look at the engine's interval, as Media
+// Foundation's samples look at every vsync.
+func (e *mfEngine) pollFirst() {
+	e.mu.Lock()
+	due := !e.polling && e.loaded && e.state == media.Loading && e.wake != nil
+	e.mu.Unlock()
+	// A video of sound alone has no picture to wait for.
+	if !due || call(e.engine, engineHasVideo) == 0 {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.polling {
+		return
+	}
+	e.polling = true
+	time.AfterFunc(e.Interval(), func() {
+		e.mu.Lock()
+		e.polling = false
+		wake := e.wake
+		e.mu.Unlock()
+		if wake != nil {
+			wake()
+		}
+	})
 }
 
 // transfer converts the picture due into texture i of the ring, which it
@@ -640,6 +708,11 @@ func (e *mfEngine) Play() {
 func (e *mfEngine) Pause() { call(e.engine, enginePause) }
 
 func (e *mfEngine) Seek(d time.Duration) {
+	e.reseek, e.resought = false, 0
+	e.seek(d)
+}
+
+func (e *mfEngine) seek(d time.Duration) {
 	e.mu.Lock()
 	if e.state == media.Ended {
 		e.state = media.Ready
@@ -647,6 +720,7 @@ func (e *mfEngine) Seek(d time.Duration) {
 	e.seeked, e.landed = false, false
 	e.mu.Unlock()
 	e.seekTo, e.seeking = d, true
+	e.pictured = false
 	callSetDouble(e.engine, engineSetCurrentTime, d.Seconds())
 }
 

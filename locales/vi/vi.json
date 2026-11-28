@@ -235,5 +235,8 @@
   "skinPickerPalette": "Bảng màu",
   "skinPickerDensity": "Mật độ",
   "standardDensity": "Tiêu chuẩn",
-  "compactDensity": "Thu gọn"
+  "compactDensity": "Thu gọn",
+  "addToQuickAccess": "Thêm vào Thanh công cụ Truy nhập Nhanh",
+  "removeFromQuickAccess": "Loại bỏ khỏi Thanh công cụ Truy nhập Nhanh",
+  "showBelowRibbon": "Hiện bên dưới Dải băng"
 }

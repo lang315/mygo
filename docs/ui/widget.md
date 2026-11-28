@@ -1397,8 +1397,12 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   an icon in the notification area; see [App shell](#app-shell).
 - `Ribbon()`: tabs of groups of large and small commands, which collapses to
   its tabs, first in a form's content; `AddTab`, `AddGroup`, `AddLarge`,
-  `AddSmall`, `Tab`, `SetTab`, `SetCollapsed`, `Collapsed`; see
-  [Ribbon](widget/ribbon.md).
+  `AddSmall`, `Tab`, `SetTab`, `SetCollapsed`, `Collapsed`; a Quick Access
+  Toolbar (`AddQuickAccess`, `SetQuickAccessBelow`, `QuickAccess`,
+  `SetQuickAccess`, `OnQuickAccessChange`) and contextual tabs
+  (`AddContextualTab`, `SetCategoryVisible`); see
+  [Ribbon](widget/ribbon.md), [Quick Access Toolbar](widget/ribbon.md#quick-access-toolbar)
+  and [contextual tabs](widget/ribbon.md#contextual-tabs).
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps. `.Justify()` fills every line,
@@ -1447,6 +1451,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `CalcEdit()`: a number field with a calculator in its drop-down, as DevExpress's CalcEdit; `Value`, `SetValue`, `SetDecimals`, `OnChange`, `ShowPopup`, `ClosePopup`; see [CalcEdit](widget/calcedit.md).
 - `PopupEdit(controls...)`: a field showing a text whose drop-down holds any controls, as DevExpress's PopupContainerEdit; `SetText`, `Text`, `ShowPopup`, `ClosePopup`, `IsOpen`, `OnClosed`; see [PopupEdit](widget/popupedit.md).
 - `ProgressPanel(caption)`: a spinner with a caption and a description, as DevExpress's ProgressPanel; `Form.ShowWait(caption, description)` and `Form.CloseWait()` show one over a dimmed form that takes no input; see [ProgressPanel and the wait form](widget/progresspanel.md).
+- `ShowSplash(Splash{Image, Title, Status, Width, Height})`: a frameless, centered, always-on-top window with no taskbar button while the app starts, holding an image, a title, a status line and a progress bar, as DevExpress's SplashScreenManager; it may be called before `Run`, from any goroutine. `SetStatus`, `Close`, `CloseWhenShown(form)`; see [Splash screen](widget/splash.md).
 - `Badge(text)`: a short text in a pill colored by its `Status` (`StatusNone`, `StatusInfo`, `StatusRunning`, `StatusSuccess`, `StatusWarning`, `StatusDanger`); see [Badge](widget/badge.md).
 - `InfoBar(status, title, message)`: a message inline in a page, with an optional action and close button; see [InfoBar](widget/infobar.md).
 - `Form.ShowToast(Toast{...})`, `Form.CloseToast(id)`: a message near the bottom of the window for a few seconds, the outcome of an action, with a status and an optional action; see [Toasts](widget/toast.md).

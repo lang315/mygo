@@ -348,9 +348,12 @@ func (st *State) GoTo(p Pos) {
 	st.ed.askRevealNow(off)
 }
 
-// ScrollTo scrolls a line to the top of the editor.
+// ScrollTo scrolls a line to the top of the editor. The position asked
+// for stands, as SetScrollY's does, though the editor is there already:
+// it drops a pending reveal of the selections.
 func (st *State) ScrollTo(line int) {
 	st.ensure()
+	st.ed.reveal = revealNone
 	st.ed.setScroll(st.ed.view.heights.top(line))
 }
 
@@ -361,6 +364,7 @@ func (st *State) ScrollY() float64 { return st.ed.scrollY }
 
 func (st *State) SetScrollY(y float64) {
 	st.ensure()
+	st.ed.reveal = revealNone
 	st.ed.setScroll(y)
 }
 
@@ -381,6 +385,13 @@ func (st *State) LineTop(line int) float64 {
 	st.ensure()
 	return st.ed.view.heights.top(line)
 }
+
+// TextX returns where the text starts in the editor's box, right of the
+// gutter, in DIPs, as the last frame laid it out. Unlike a Rect, it stays
+// as the text scrolls sideways: what belongs to a line rather than to a
+// place in it, as a mark beside its number, is drawn left of TextX at the
+// Y of the line's Rect.
+func (st *State) TextX() float32 { return st.ed.textX }
 
 // Rect returns where the caret at byte offset off shows, in DIPs from the
 // top left of the editor's box, as the last frame laid it out, and whether

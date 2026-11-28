@@ -24,6 +24,7 @@ type Form struct {
 	icon          []byte
 	root          Control
 	header        *HeaderBarWidget
+	qatRibbon     *RibbonWidget // the ribbon whose Quick Access Toolbar the header bar draws (ribbon_qat.go)
 	onClose       func() bool
 	menu          []MenuItem
 	strip         *MenuStrip
@@ -56,6 +57,7 @@ type Form struct {
 	announce      string         // a validation message for the next build to announce
 	toasts        []toastOp      // ShowToast and CloseToast since the last frame, for it to hand to ui
 	wait          *waitText      // ShowWait's, nil when not waiting
+	onShown       func()         // SplashScreen.CloseWhenShown's: run once, when the window next shows
 }
 
 // quit quits the app; tests replace it.
@@ -339,6 +341,7 @@ func (w *Form) show(cancel bool) bool {
 		}
 	})
 	closeNow := false
+	var onShown func()
 	w.change(func() {
 		select {
 		case <-done: // it closed already
@@ -346,12 +349,18 @@ func (w *Form) show(cancel bool) bool {
 			w.win = n
 			shown[n] = w
 			closeNow = w.closing // Close ran while the window was being made
+			if !closeNow {
+				onShown, w.onShown = w.onShown, nil
+			}
 		}
 	})
 	if closeNow {
 		n.Close()
 	} else if macMenus {
 		claimAppMenuIfFree(w)
+	}
+	if onShown != nil {
+		onShown()
 	}
 	return true
 }
@@ -494,6 +503,9 @@ func (w *Form) view(c *ui.Context) {
 			render(c, w.status)
 		}
 	})
+	if formQATEnd != nil { // the header bar's Quick Access Toolbar, of a ribbon gone (ribbon_qat.go)
+		formQATEnd(c, w)
+	}
 	if toastHook != nil { // before formKeys: Escape in a toast closes it
 		toastHook(c, w)
 	}
@@ -566,6 +578,9 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 		ui.Row(c).Grow(1).Basis(lead).Gap(t.Space(2)).Children(func() {
 			for _, w := range h.start {
 				render(c, w)
+			}
+			if headerQAT != nil { // a ribbon's Quick Access Toolbar (ribbon_qat.go)
+				headerQAT(c, h)
 			}
 		})
 		// Padding here, not on the row: only the title and subtitle grow the

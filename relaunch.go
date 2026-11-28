@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/internal/fsretry"
@@ -99,13 +100,37 @@ func openBundle(args []string) bool {
 // previous version ran (Windows keeps running executables). A version that
 // an update relaunched starts while the one that installed it still quits, and
 // its executable stays in use until then: fsretry waits for it for a few
-// seconds, and what is left is removed the next time the app starts.
+// seconds, and what is left is removed the next time the app starts. An
+// app built without updates installed none: what looks like a leftover
+// beside it is someone else's.
 func cleanUpdateLeftovers() {
-	if runtime.GOOS == "darwin" || startExe == "" {
+	if runtime.GOOS == "darwin" || startExe == "" || !updatehook.Updates.Load() {
 		return
 	}
 	olds, _ := filepath.Glob(filepath.Join(filepath.Dir(startExe), ".*.old-*"))
 	for _, p := range olds {
-		_ = fsretry.RetryInUse(func() error { return os.RemoveAll(p) })
+		if isUpdateLeftover(filepath.Base(p), os.Getpid()) {
+			_ = fsretry.RetryInUse(func() error { return os.RemoveAll(p) })
+		}
 	}
+}
+
+// isUpdateLeftover reports whether name is one that swapFiles gives an
+// entry it moves aside, .<name>.old-<pid>, of a process other than pid:
+// other entries beside the executable belong to whoever made them.
+func isUpdateLeftover(name string, pid int) bool {
+	i := strings.LastIndex(name, ".old-")
+	if i < 2 || name[0] != '.' {
+		return false
+	}
+	digits := name[i+len(".old-"):]
+	if digits == "" || len(digits) > 10 {
+		return false
+	}
+	for _, c := range digits {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return digits != strconv.Itoa(pid)
 }

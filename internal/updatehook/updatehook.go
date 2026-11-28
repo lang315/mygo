@@ -26,3 +26,8 @@ var Feed atomic.Pointer[func(feed string) Source]
 // one. Package mygo, which relaunches the app, calls it if the app links
 // package updates.
 var RelaunchStaged atomic.Pointer[func(args []string) bool]
+
+// Updates is set by package updates in a build that `mygo build` gave an
+// update feed and key: only such an app installs updates, and so leaves
+// the files package mygo cleans up as it starts (cleanUpdateLeftovers).
+var Updates atomic.Bool

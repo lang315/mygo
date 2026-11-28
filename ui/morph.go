@@ -3,29 +3,34 @@ package ui
 import (
 	"math"
 	"slices"
+	"sync"
+	"sync/atomic"
 
 	"github.com/egoist/mygo/internal/scene"
 	"github.com/egoist/mygo/internal/text"
 )
 
-// morphText paints a text changing as ContentTransition's Morph moves it,
-// and reports whether it does, noting how one at rest paints otherwise;
-// snapMorph has a text morph from another as it shows morphing (as
-// matches.start takes it over). ContentTransition links them, so that
-// apps without a Morph link none of it.
+// morphFunctions links the painter and snapshot operation for text morphs.
+type morphFunctions struct {
+	paint func(p *Painter, e *node, r *contentRec, x, y float32, ts textStyle, sp spanPaint, k float32, changing bool) bool
+	snap  func(src *contentRec, bx, by, x, y float32, color Color, dst *contentRec)
+}
+
 var (
-	morphText func(p *Painter, e *node, r *contentRec, x, y float32, ts textStyle, sp spanPaint, k float32, changing bool) bool
-	snapMorph func(src *contentRec, bx, by, x, y float32, color Color, dst *contentRec)
+	morphOnce  sync.Once
+	morphFuncs atomic.Pointer[morphFunctions]
 )
 
 func linkMorph() {
-	if morphText == nil {
-		morphText = (*Painter).morphContent
-		snapMorph = snapMorphFrom
-	}
+	morphOnce.Do(func() {
+		morphFuncs.Store(&morphFunctions{
+			paint: (*Painter).morphContent,
+			snap:  snapMorphFrom,
+		})
+	})
 }
 
-// morphContent morphs the text of e, as morphText does.
+// morphContent morphs the text of e, as the morph's paint does.
 func (p *Painter) morphContent(e *node, r *contentRec, x, y float32, ts textStyle, sp spanPaint, k float32, changing bool) bool {
 	if !changing || r.oldTL == nil || e.tl == nil {
 		restMorph(r, sp.spans)
@@ -373,6 +378,14 @@ func (p *Painter) morph(e *node, r *contentRec, x, y float32, ts textStyle, span
 	defer decor(func(l *text.Layout, x, y float32, color Color, sp *spanPaint) { p.textLines(l, x, y, color, ts, sp) })
 	sys := p.rt.text
 	s := p.scale
+	var shadowGlyph func(s *text.System, f *text.Font, id uint32, scale, x float32, shade text.Shade, opaque bool, sigma float32) text.GlyphImage
+	if links := textShadowFuncs.Load(); links != nil {
+		shadowGlyph = links.glyph
+	}
+	var strokeGlyph func(s *text.System, f *text.Font, id uint32, scale, x float32, shade text.Shade, opaque bool, width float32) text.GlyphImage
+	if links := textStrokeFuncs.Load(); links != nil {
+		strokeGlyph = links.glyph
+	}
 	var tx, ty float32
 	if pr.toFrame == p.rt.frame {
 		tx, ty = pr.toX, pr.toY

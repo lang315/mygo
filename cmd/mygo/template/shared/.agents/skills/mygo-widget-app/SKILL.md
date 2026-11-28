@@ -117,6 +117,8 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 
 While the app loads or saves and the user must wait, call `widget.Form.ShowWait(caption, description)` and `widget.Form.CloseWait()` (safe from any goroutine): a `widget.ProgressPanel` centred over the dimmed form, which takes no click or key until it closes. A second `ShowWait` changes its text. Not a modal `Dialog` of your own, nor disabling every control. Show a `widget.ProgressPanel(caption)` inline where only part of a page is busy. Read `docs/ui/widget/progresspanel.md`.
 
+While the app starts, before its form shows, call `widget.ShowSplash(widget.Splash{Image, Title, Status})` in `main` before `widget.Run` (it does not wait), `widget.SplashScreen.SetStatus(text)` as it loads, and `widget.SplashScreen.CloseWhenShown(w)` in `Run`'s func, so the form shows before the splash goes. Not `widget.SplashScreen.Close()` before the form shows: the app quits when its last window closes. Read `docs/ui/widget/splash.md`.
+
 ## Search, paths, sections, colors
 
 Use these, not a hand-made equivalent:
@@ -199,7 +201,9 @@ func commands(form *widget.Form, editor widget.Control, paste func()) {
 ```
 
 - `widget.RibbonWidget.AddGroup` adds to the last tab, `widget.RibbonWidget.AddLarge` and `widget.RibbonWidget.AddSmall` to the last group; before any, they add one with no title. A control the ribbon holds already is not added again.
-- `widget.RibbonWidget.SetCollapsed` shows the tabs alone; a double click on a tab and Ctrl+F1 toggle it, and a click on a tab of a collapsed ribbon expands it. `widget.RibbonWidget.Tab` and `widget.RibbonWidget.SetTab` read and set the tab shown. A narrow window clips the groups; they do not shrink. Key tips come with it, letters it gives itself: F10 (and Alt alone on Windows) shows a letter on each tab, then on each command of the tab typed, in a form with no menu bar, off on macOS. There is no quick access toolbar, application menu or gallery. Read `docs/ui/widget/ribbon.md`.
+- `widget.RibbonWidget.SetCollapsed` shows the tabs alone; a double click on a tab and Ctrl+F1 toggle it, and a click on a tab of a collapsed ribbon expands it. `widget.RibbonWidget.Tab` and `widget.RibbonWidget.SetTab` read and set the tab shown. A narrow window clips the groups; they do not shrink. Key tips come with it, letters it gives itself: F10 (and Alt alone on Windows) shows a letter on each tab, then on each command of the tab typed, in a form with no menu bar, off on macOS. There is no application menu or gallery. Read `docs/ui/widget/ribbon.md`.
+- `widget.RibbonWidget.AddQuickAccess` puts tool buttons (Save, Undo) in the Quick Access Toolbar: small icons above the tabs, in the title bar with a `HeaderBar`, or below the ribbon after `widget.RibbonWidget.SetQuickAccessBelow`. The user adds and removes commands from their right-click menus; save `widget.RibbonWidget.QuickAccess` in `widget.RibbonWidget.OnQuickAccessChange` and restore it with `widget.RibbonWidget.SetQuickAccess` only when a saved value exists (no names empties the toolbar). Do not build it from a `ToolStrip` above the ribbon.
+- `widget.RibbonWidget.AddContextualTab` adds a tab to a category ("Picture Tools") that shows only while `widget.RibbonWidget.SetCategoryVisible` says so, under a colored band; call it from the selection's handler instead of adding and removing tabs.
 
 ## Binding
 

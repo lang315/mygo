@@ -8,8 +8,8 @@ import (
 	"github.com/egoist/mygo/ui/widget"
 )
 
-// navigation shows a search box filtering a list, a breadcrumb path, an
-// accordion, a color edit, and text boxes with suggestions and a history.
+// navigation shows a ribbon with a Quick Access Toolbar and a contextual
+// tab, a search box filtering a list, a breadcrumb path, an accordion, a color edit, and text boxes with suggestions and a history.
 func navigation() widget.Control {
 	cities := []string{"Hanoi", "Hue", "Da Nang", "Ho Chi Minh City", "Can Tho"}
 	found := widget.Label(strings.Join(cities, ", "))
@@ -50,6 +50,7 @@ func navigation() widget.Control {
 	})
 
 	return widget.VBox(8).Add(
+		ribbonQAT(),
 		search, found,
 		crumb, where,
 		acc, opened,

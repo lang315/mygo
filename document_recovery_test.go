@@ -8,7 +8,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"testing"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // recoveryDocs keeps the automatic restore from racing the explicit restores
@@ -83,6 +87,81 @@ func TestDocumentRecoveryKeepsCopyWhenBackupFails(t *testing.T) {
 	if got := readString(t, filepath.Join(dir, "unsaved")); got != "unsaved changes" {
 		t.Fatalf("recovery copy = %q, want unsaved changes", got)
 	}
+}
+
+// TestDocumentRecoveryCanceledQuit cancels a quit after the user chose not
+// to save: the documents stay open, and their changes in recovery copies,
+// also when their windows close without asking, as when the OS ends the
+// session.
+func TestDocumentRecoveryCanceledQuit(t *testing.T) {
+	copied := func(d *Document[string]) bool {
+		r := d.kind.recovery
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		_, ok := r.entries[d.id]
+		return ok
+	}
+	check := func(t *testing.T, docs ...*Document[string]) {
+		t.Helper()
+		for _, d := range docs {
+			waitFor(t, "the recovery copy", func() bool { return copied(d) })
+		}
+		for _, d := range docs {
+			onMain(d.Window().destroy)
+		}
+		docWork.Wait()
+		for _, d := range docs {
+			if !copied(d) {
+				t.Errorf("%s lost its recovery copy with its window", d.Name())
+			}
+		}
+	}
+
+	t.Run("by a listener", func(t *testing.T) {
+		ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, AskOnQuit: true})
+		d := ds.New()
+		d.Set("unsaved")
+		if !d.backup() {
+			t.Fatal("no recovery copy")
+		}
+		// Runs after the documents' listener, so it cancels the second quit,
+		// once the changes were discarded.
+		t.Cleanup(App.OnBeforeQuit(func(e *QuitEvent) { e.PreventDefault() }))
+		quits := make(chan bool, 1)
+		quitAgain = func() { quits <- App.prepareQuit() }
+		t.Cleanup(func() { quitAgain = func() { App.Quit() } })
+		answer("Don’t Save")
+		onMainValue(fb.QuitRequested)
+		if <-quits {
+			t.Fatal("the app quits")
+		}
+		check(t, d)
+	})
+
+	t.Run("by the next document", func(t *testing.T) {
+		if runtime.GOOS != "darwin" {
+			t.Skip("only macOS asks about each document")
+		}
+		ds := testDocs(t, DocumentsOptions[string]{Autosave: AutosaveOff, AskOnQuit: true})
+		a, b := ds.New(), ds.New()
+		for _, d := range []*Document[string]{a, b} {
+			d.Set("unsaved")
+			if !d.backup() {
+				t.Fatal("no recovery copy")
+			}
+		}
+		answers := []string{"Review Changes…", "Don’t Save", "Cancel"}
+		onMain(func() {
+			fb.OnMessageBox = func(o *platform.MessageBoxOptions) platform.MessageBoxResult {
+				label := answers[0]
+				answers = answers[1:]
+				return platform.MessageBoxResult{Response: slices.Index(o.Buttons, label)}
+			}
+		})
+		onMainValue(fb.QuitRequested)
+		waitFor(t, "the quit to be canceled", func() bool { return onMainValue(func() bool { return len(answers) == 0 && !docQuit.running }) })
+		check(t, a, b)
+	})
 }
 
 func TestDocumentRecoveryCleansOnlyRestoredEntries(t *testing.T) {
@@ -216,4 +295,81 @@ func TestDocumentRecoveryFollowsRename(t *testing.T) {
 			}
 		})
 	}
+}
+
+// An index that cannot be read or parsed is not one that holds nothing:
+// the copies it names are the user's unsaved work, and removing the
+// session would drop it. They stay for a later launch.
+func TestDocumentRecoveryKeepsSessionWhoseIndexCannotBeRead(t *testing.T) {
+	cases := []struct {
+		name   string
+		damage func(dir string)
+		skip   string
+	}{
+		{"unreadable", func(dir string) {
+			if err := os.Chmod(filepath.Join(dir, "index.json"), 0o000); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.Chmod(filepath.Join(dir, "index.json"), 0o600) })
+		}, "root reads every file; a mode is no bar on Windows"},
+		{"unparseable", func(dir string) {
+			if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte("{"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.skip != "" && (runtime.GOOS == "windows" || os.Geteuid() == 0) {
+				t.Skip(c.skip)
+			}
+			ds := recoveryDocs(t)
+			dir := writeRecoveryOrphan(t, ds, c.name, []recoveryEntry{{ID: "unsaved", Name: "Untitled"}}, map[string]string{"unsaved": "unsaved changes"})
+			c.damage(dir)
+
+			if n := ds.kind.restore(); n != 0 {
+				t.Fatalf("restored %d documents, want none", n)
+			}
+			if got := readString(t, filepath.Join(dir, "unsaved")); got != "unsaved changes" {
+				t.Fatalf("recovery copy = %q, want unsaved changes", got)
+			}
+		})
+	}
+}
+
+// A restored document whose file cannot be looked at is not a deleted
+// one: the look failed, it did not answer that the file is gone. The
+// document says neither deleted nor in conflict, and the next look of
+// the disk (a focus, a save) tells what it really is, as checkDisk
+// does.
+func TestDocumentRecoveryDoesNotSayDeletedWhenItCannotLook(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("a directory with no permission needs a user who is not root")
+	}
+	ds := recoveryDocs(t)
+	outer := t.TempDir()
+	if err := os.Chmod(outer, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(outer, 0o700) })
+	path := filepath.Join(outer, "doc.txt")
+	writeRecoveryOrphan(t, ds, "cannot-look",
+		[]recoveryEntry{{ID: "unsaved", Path: path, Stamp: fileStamp{ModTime: 1, Size: 4}}},
+		map[string]string{"unsaved": "saved work"})
+
+	if n := ds.kind.restore(); n != 1 {
+		t.Fatalf("restored %d documents, want one", n)
+	}
+	for _, b := range allDocuments() {
+		if b.path != path {
+			continue
+		}
+		if st := b.State(); st.Deleted {
+			t.Errorf("the document whose file cannot be looked at says deleted")
+		} else if st.Conflict {
+			t.Errorf("the document whose file cannot be looked at says in conflict")
+		}
+		return
+	}
+	t.Fatalf("the document of %s was not restored", path)
 }

@@ -12,20 +12,20 @@ import (
 func editorLinked() bool {
 	return layoutInputFn != nil || inputHeightFn != nil || paintInputFn != nil || pressFn != nil || wantsFn != nil || textKeyFn != nil ||
 		caretRectFn != nil || textSelectionKeyFn != nil || textUnitFn != nil || placeMenuCaretFn != nil ||
-		textHitFn != nil || commitComposeFn != nil
+		textHitFn != nil || commitComposeFn != nil || takesUnclaimedFn != nil
 }
 
 // editorFnsSet reports whether newEditor set all the functions.
 func editorFnsSet() bool {
 	return layoutInputFn != nil && inputHeightFn != nil && paintInputFn != nil && pressFn != nil && wantsFn != nil && textKeyFn != nil &&
 		caretRectFn != nil && textSelectionKeyFn != nil && textUnitFn != nil && placeMenuCaretFn != nil &&
-		textHitFn != nil && commitComposeFn != nil
+		textHitFn != nil && commitComposeFn != nil && takesUnclaimedFn != nil
 }
 
 func clearEditorFns() {
 	layoutInputFn, inputHeightFn, paintInputFn, pressFn, wantsFn, textKeyFn = nil, nil, nil, nil, nil, nil
 	caretRectFn, textSelectionKeyFn, textUnitFn, placeMenuCaretFn = nil, nil, nil, nil
-	textHitFn, commitComposeFn = nil, nil
+	textHitFn, commitComposeFn, takesUnclaimedFn = nil, nil, nil
 	editorOnce = sync.Once{} // linked again by the test
 }
 

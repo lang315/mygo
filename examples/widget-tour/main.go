@@ -29,13 +29,21 @@ import (
 )
 
 func main() {
+	splash := widget.ShowSplash(tourSplash())
 	err := widget.Run("Widget Tour", func(w *widget.Form) {
+		splash.SetStatus("Building the tabs")
 		appShell(w)
 		w.SetContent(tour(w))
+		splash.CloseWhenShown(w) // the tour's window shows, then the splash goes
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// tourSplash is the splash shown while the tour starts.
+func tourSplash() widget.Splash {
+	return widget.Splash{Image: searchIcon(), Title: "Widget Tour", Status: "Starting"}
 }
 
 // appShell gives the window its header bar, main menu, tool strip and status
