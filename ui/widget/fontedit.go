@@ -79,23 +79,9 @@ func (f *FontEditWidget) OnChange(fn func()) *FontEditWidget {
 const fontEditRows = 10
 
 func (f *FontEditWidget) build(c *ui.Context) ui.Element {
-	t := c.Theme()
-	f.c = c
-	frame := ui.Row(c).Radius(t.Radius).Border(1, t.Outline()).Background(t.FieldFill()).
-		AlignItems(ui.Stretch).MinWidth(t.Space(35))
-	if h := t.Metrics.ControlHeight; h > 0 {
-		frame.MinHeight(h)
-	}
-	frame.Children(f.children)
-	switch {
-	case f.inner.Focused():
-		frame.Border(1, t.Accent)
-	case frame.Hovered():
-		frame.Border(1, t.Outline().Mix(t.Text, 0.25))
-	}
-	if f.errMsg != "" {
-		f.post = errorMarkRoom // the chevron stops before the mark
-	}
+	f.c = c // kept: the rows ui lays out after the build read it
+	frame := editFrame(c, f.children)
+	f.edgeEditFrame(c.Theme(), frame) // the chevron stops before the error mark
 	return frame
 }
 
