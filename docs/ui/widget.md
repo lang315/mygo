@@ -739,6 +739,7 @@ name := widget.Bind(widget.TextBox(),
 | `TextBox`, `MultilineTextBox` | `string` | `Bind` |
 | `SearchBox` | `string` | `Bind` |
 | `ButtonEdit` | `string` | `Bind` (a click on its Clear button is an edit: `set("")`) |
+| `FontEdit` | the family, a `string` | `Bind` (a pick of the user is an edit) |
 | `DomainUpDown` | the selected item's text, a `string` | `Bind` |
 | `CheckBox`, `CheckButton` | `bool` | `Bind` |
 | `Rating` | the stars filled, an `int` | `Bind` (clamps to 0 through its stars) |
@@ -1438,6 +1439,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
 - `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`, and `SetSearchPanel(true)` for a search box over the records in the drop-down (DevExpress's SearchLookUpEdit); see [LookUpEdit](widget/lookupedit.md).
 - `ButtonEdit(buttons...)`: a text field with buttons at its end, inside its frame (`EditEllipsis`, `EditClear`, `EditSearch`, `EditPlus`, `EditMinus`, `EditDropDown`, `EditGlyph`), as DevExpress's ButtonEdit; `Text`, `SetText`, `SetPlaceholder`, `SetReadOnly`, `OnChange`, `SetButtonVisible`; see [ButtonEdit](widget/buttonedit.md).
+- `FontEdit()`: a field that picks a font family from a drop-down of `ui.FontFamilies`, each name in its own face, which a search box filters, as DevExpress's FontEdit; `Family`, `SetFamily`, `SetFixedPitchOnly`, `OnChange`; see [FontEdit](widget/fontedit.md).
 - `PopupEdit(controls...)`: a field showing a text whose drop-down holds any controls, as DevExpress's PopupContainerEdit; `SetText`, `Text`, `ShowPopup`, `ClosePopup`, `IsOpen`, `OnClosed`; see [PopupEdit](widget/popupedit.md).
 - `ProgressPanel(caption)`: a spinner with a caption and a description, as DevExpress's ProgressPanel; `Form.ShowWait(caption, description)` and `Form.CloseWait()` show one over a dimmed form that takes no input; see [ProgressPanel and the wait form](widget/progresspanel.md).
 - `Badge(text)`: a short text in a pill colored by its `Status` (`StatusNone`, `StatusInfo`, `StatusRunning`, `StatusSuccess`, `StatusWarning`, `StatusDanger`); see [Badge](widget/badge.md).

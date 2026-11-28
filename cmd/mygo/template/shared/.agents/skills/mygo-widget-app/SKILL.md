@@ -108,6 +108,7 @@ func customerField(all []Customer, pick func(id int, ok bool)) widget.Control {
 - For a long list (hundreds to tens of thousands of records), add `widget.LookUpEditWidget.SetSearchPanel(true)`: the drop-down gets a search box matching any shown column, case ignored, and builds only the rows in view; the field then takes no typing. Up and Down in the search box move the highlight, Enter chooses, Escape closes. Not a separate SearchLookUpEdit type, nor a `DataGridView` in a dialog.
 - For a field whose drop-down holds controls of its own (check boxes of columns, a date range, a small form), use `widget.PopupEdit(controls...)`: read the controls in `widget.PopupEditWidget.OnClosed(fn)` and show the outcome with `widget.PopupEditWidget.SetText`. Not a `Button` that opens a `Dialog`. `widget.PopupEditWidget.ShowPopup` and `widget.PopupEditWidget.ClosePopup` do not run `OnClosed`. Read `docs/ui/widget/popupedit.md`.
 - For a text field with buttons in its frame (browse with …, clear, search, + and −, an icon of your own), use `widget.ButtonEdit(buttons...)` with a `widget.EditButton` each (`Kind` such as `widget.EditEllipsis` or `widget.EditClear`, `Tooltip`, `OnClick`). Not an `HBox` of a `TextBox` and `Button`s. `widget.EditClear` empties the text, runs `widget.ButtonEditWidget.OnChange` once, then its own `OnClick`; `widget.ButtonEditWidget.SetText` runs neither. `widget.ButtonEditWidget.SetReadOnly(true)` stops typing, not the buttons. Read `docs/ui/widget/buttonedit.md`.
+- For a font family setting, use `widget.FontEdit()`: a drop-down of the system's families, each in its own face, with a search box. Not a `ComboBox` filled from `ui.FontFamilies`. `widget.FontEditWidget.OnChange(fn)` runs once per family the user picks; `widget.FontEditWidget.SetFamily` does not run it, and keeps a family the system lacks. `widget.FontEditWidget.SetFixedPitchOnly(true)` lists monospaced families alone. Read `docs/ui/widget/fontedit.md`.
 
 ## Waiting
 
@@ -230,7 +231,7 @@ func settings(cfg *Config) widget.Control {
 ```
 
 - `get` runs when you call `widget.Bind` and on each `widget.Reload`, on the goroutine that calls them. `set` runs on the event goroutine after the user's edit. Lock the state `set` writes whenever another goroutine reads it, as the example does.
-- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `ButtonEdit`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
+- `widget.Bind` takes a `TextBox`, `MultilineTextBox`, `SearchBox`, `ButtonEdit`, `FontEdit`, `CheckBox`, `CheckButton`, `ComboBox`, `NumericUpDown`, `TrackBar`, `Rating` or `DomainUpDown`. Bind a `RangeSpin` with `widget.BindRange` (`get` returns both numbers, `set` takes both), a `CheckBoxGroup` with `widget.BindValues` (the checked values, a `[]string`), and a `TokenEdit` with `widget.BindTokens` (its tokens, a `[]string`).
 - A program setter (`widget.TextBoxWidget.SetText`, `widget.CheckBoxWidget.SetChecked`) does not call `set`. Call `widget.Reload(control)` when the source changed elsewhere.
 
 ## Validation
