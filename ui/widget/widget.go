@@ -66,6 +66,11 @@ type core struct {
 	validating  func() bool                      // OnValidating's
 	rules       *ruleList                        // Rule's
 	over        []func(p *ui.Painter, r ui.Rect) // drawn over the element, set by build
+
+	// superTip is SetSuperTip's, nil for none, and buildTip builds it, set
+	// with it: an app that sets none does not link the builder.
+	superTip *superTipState
+	buildTip func(c *ui.Context, ctl ui.Element, b *core)
 }
 
 // noView is core.focusIn for a widget no view has seen focused.
@@ -274,17 +279,22 @@ func render(c *ui.Context, w Control) ui.Element {
 		// else does: desc holds it already.
 		ctl.Description(b.desc)
 	}
-	if b.tooltip != "" && b.errMsg == "" {
-		ctl.Tooltip(b.tooltip)
+	tooltip := b.tooltip
+	if b.buildTip != nil {
+		tooltip = "" // the SuperTip takes its place
+		b.buildTip(c, ctl, b)
+	}
+	if tooltip != "" && b.errMsg == "" {
+		ctl.Tooltip(tooltip)
 	}
 	if b.errMsg != "" {
 		// The value is invalid for assistive technology, and the message is
 		// the tooltip too, ahead of the control's own.
 		tip := b.errMsg
-		if b.tooltip != "" {
-			tip += "\n" + b.tooltip
+		if tooltip != "" {
+			tip += "\n" + tooltip
 			if b.desc == "" {
-				ctl.Description(b.tooltip) // the error comes first in the description
+				ctl.Description(tooltip) // the error comes first in the description
 			}
 		}
 		ctl.Error(b.errMsg)

@@ -368,7 +368,12 @@ func inputs(w *widget.Form) widget.Control {
 		widget.CheckBox("Remember me"),
 		widget.HBox(8).Add(widget.Switch(), widget.Label("Notifications")),
 		widget.Toggle("Bold"),
-		widget.Button("Count in the background").OnClick(func() {
+		widget.Button("Count in the background").SetSuperTip(widget.SuperTip{
+			Title:  "Count in the background",
+			Body:   "Counts to five on a goroutine, setting the greeting's text from there: the window redraws.",
+			Image:  searchIcon(),
+			Footer: "Setters are safe from any goroutine.",
+		}).OnClick(func() {
 			go func() {
 				for i := 1; i <= 5; i++ {
 					greeting.SetText(fmt.Sprintf("Counted %d", i))
