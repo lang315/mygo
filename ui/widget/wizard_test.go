@@ -257,6 +257,26 @@ func TestWizardNoCallbacks(t *testing.T) {
 	}
 }
 
+// Case 10c: in a form with its own accept and cancel buttons, the wizard
+// takes Enter and Escape first.
+func TestWizardBeforeFormButtons(t *testing.T) {
+	var n wizardCounts
+	oks, quits := 0, 0
+	ok := Button("OK").OnClick(func() { oks++ })
+	quit := Button("Quit").OnClick(func() { quits++ })
+	w := threeSteps(&n)
+	f := NewForm("setup", 600, 400)
+	f.SetContent(VBox(8).Pack(w, true, true).Add(ok, quit)).SetAcceptButton(ok).SetCancelButton(quit)
+	tt := TestForm(t, f)
+	tt.Settle()
+	tt.Key(0, ui.KeyEnter)
+	tt.Key(0, ui.KeyEscape)
+	tt.Settle()
+	if w.Step() != 1 || n.cancels != 1 || oks != 0 || quits != 0 {
+		t.Fatalf("step %d, %d cancels; the form's OK %d, Quit %d: want 1, 1, 0, 0", w.Step(), n.cancels, oks, quits)
+	}
+}
+
 // Case 11: a disabled wizard takes no Enter or Escape.
 func TestWizardDisabledTakesNoKeys(t *testing.T) {
 	var n wizardCounts
