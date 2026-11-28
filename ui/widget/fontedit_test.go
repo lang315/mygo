@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"image/color"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -10,6 +11,7 @@ import (
 	"github.com/egoist/mygo/internal/allocrun"
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/widget/internal/skinhook"
 	"golang.org/x/image/font/gofont/gomono"
 )
 
@@ -136,7 +138,10 @@ func TestFontEditTypeFilter(t *testing.T) {
 	f := newFontEdit(fontFamilies).OnChange(log.add("change"))
 	tt := fontTester(t, f)
 	fontField(tt).Click()
-	searchBox(tt).Type("aR")
+	searchBox(tt).Type("ar")
+	wantRows(t, tt, "ar", "Arcade Mono", "Arial", "Arial Black", "Barlow", "Candara", "Charter")
+	lookKeys(tt, ui.KeyBackspace, ui.KeyBackspace)
+	lookType(tt, "aR") // case ignored
 	wantRows(t, tt, "aR", "Arcade Mono", "Arial", "Arial Black", "Barlow", "Candara", "Charter")
 	lookType(tt, "ia")
 	wantRows(t, tt, "aRia", "Arial", "Arial Black")
@@ -297,6 +302,115 @@ func TestFontEditKeys(t *testing.T) {
 	}
 }
 
+// Case N7b: after Enter and after Escape the field has the keyboard, and
+// Down opens the drop-down again.
+func TestFontEditKeysKeepTheFocus(t *testing.T) {
+	f := newFontEdit(fontFamilies)
+	tt := fontTester(t, f)
+	fontField(tt).Focus()
+	lookKeys(tt, ui.KeyDown, ui.KeyDown, ui.KeyEnter) // Arcade Mono
+	if !fontField(tt).Focused() {
+		t.Fatal("after Enter the field has not the focus")
+	}
+	lookKeys(tt, ui.KeyDown)
+	if !lookOpen(tt) {
+		t.Fatal("Down after Enter did not open the drop-down")
+	}
+	lookKeys(tt, ui.KeyEscape)
+	if lookOpen(tt) || !fontField(tt).Focused() {
+		t.Fatalf("after Escape: open %v, the field focused %v", lookOpen(tt), fontField(tt).Focused())
+	}
+	lookKeys(tt, ui.KeyDown)
+	if !lookOpen(tt) {
+		t.Fatal("Down after Escape did not open the drop-down")
+	}
+	if got := f.Family(); got != "Arcade Mono" {
+		t.Fatalf("Family is %q, want Arcade Mono", got)
+	}
+}
+
+// Case N7c: the drop-down opens on the family whatever the case SetFamily
+// gave it in, as the text system finds it; SetFamily's spelling stays.
+func TestFontEditOpensOnTheFamilyWhateverTheCase(t *testing.T) {
+	f := newFontEdit(fontFamilies).SetFamily("arial")
+	tt := fontTester(t, f)
+	fontField(tt).Click()
+	if got := focusedRows(tt); !slices.Equal(got, []string{"Arial"}) {
+		t.Fatalf("on opening the highlight is on %q, want Arial", got)
+	}
+	if got := f.Family(); got != "arial" {
+		t.Fatalf("Family is %q, want arial as set", got)
+	}
+}
+
+// Case N7d: a disabled FontEdit opens on neither a click nor Down.
+func TestFontEditDisabled(t *testing.T) {
+	var reads atomic.Int32
+	f := newFontEdit(func() []ui.FontFamily { reads.Add(1); return fontFamilies() }).SetDisabled(true)
+	tt := fontTester(t, f)
+	r := fontField(tt).Bounds()
+	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	tt.Settle()
+	tt.Key(0, ui.KeyDown)
+	tt.Key(ui.Alt, ui.KeyDown)
+	tt.Settle()
+	if lookOpen(tt) || reads.Load() != 0 {
+		t.Fatalf("a disabled FontEdit opened (%v) or read the families (%d)", lookOpen(tt), reads.Load())
+	}
+}
+
+// Without a skin the frame looks as a TextBox: as high, edged with the
+// outline, and with the accent while the field has the focus.
+func TestFontEditLooksAsATextBox(t *testing.T) {
+	calmOff()
+	th := new(ui.Theme)
+	keep := Custom(func(c *ui.Context) ui.Element { *th = *c.Theme(); return ui.Box(c) })
+	box := TextBox().SetText("Arial").SetSize(300, 0)
+	f := newFontEdit(fontFamilies).SetFamily("Arial").SetSize(300, 0)
+	tt := NewTester(t, VBox(0).Add(keep, box, f), 400, 200)
+	tt.Settle()
+	boxH := tt.Find(ByRole(ui.RoleTextField)).Bounds().H
+	in := fontField(tt)
+	r := in.Bounds()
+	if r.H+2 < boxH-0.5 || r.H+2 > boxH+0.5 {
+		t.Fatalf("the FontEdit's frame is %v high (field %v and its edge), a TextBox %v", r.H+2, r.H, boxH)
+	}
+	edge := func() color.RGBA { return tt.Image().RGBAAt(0, int(r.Y+r.H/2)) }
+	if c := edge(); !near(c, th.Outline().Over(th.FieldFill())) && !near(c, th.Outline().Over(th.Background)) {
+		t.Fatalf("the frame's edge is %v, want the outline %v", c, th.Outline())
+	}
+	in.Focus()
+	if c := edge(); !near(c, th.Accent) {
+		t.Fatalf("focused, the frame's edge is %v, want the accent %v", c, th.Accent)
+	}
+}
+
+// The frame takes the skin's Field look: a look of bg-chrome fills it with
+// Chrome.
+func TestFontEditFieldLook(t *testing.T) {
+	useLooks(t, map[string]string{"Field": "bg-chrome"})
+	tk := skinhook.Get(false)
+	tt := NewTester(t, VBox(0).Add(newFontEdit(fontFamilies)), 400, 120)
+	tt.Settle()
+	r := fontField(tt).Bounds()
+	if c := tt.Image().RGBAAt(int(r.X+4), int(r.Y+r.H/2)); !near(c, tk.Chrome) || tk.Chrome == tk.Background {
+		t.Fatalf("the field fills with %v, want Chrome %v", c, tk.Chrome)
+	}
+}
+
+// An ErrorProvider's mark sits at the frame's end: the field, its chevron
+// included, stops before it.
+func TestFontEditErrorMarkClearsTheChevron(t *testing.T) {
+	f := newFontEdit(fontFamilies).SetFamily("Arial")
+	tt := fontTester(t, f)
+	ErrorProvider().SetError(f, "Wrong")
+	tt.Settle()
+	r := fontField(tt).Bounds()
+	if r.X+r.W > 300-errorMarkSize-errorMarkInset {
+		t.Fatalf("the field ends at %v, under the error mark at the frame's end (300)", r.X+r.W)
+	}
+}
+
 // Case N8: Alt+Down, Enter and Space open the drop-down too.
 func TestFontEditOpenKeys(t *testing.T) {
 	keys := []struct {
@@ -388,6 +502,32 @@ func TestFontEditRightToLeft(t *testing.T) {
 	list := tt.Find(ByRole(ui.RoleList)).Bounds()
 	if !within(list.X+list.W, field.X+field.W, 12) {
 		t.Fatalf("right to left the drop-down %v does not end at the field's right %v", list, field)
+	}
+}
+
+// Case N12b: a field narrower than the drop-down: the drop-down starts at
+// the field's start, its left, or its right right to left.
+func TestFontEditNarrowRightToLeft(t *testing.T) {
+	for _, rtl := range []bool{false, true} {
+		calmOff()
+		f := newFontEdit(fontFamilies)
+		// 300 DIPs from the window's start: the drop-down has room on both
+		// sides of the field.
+		tt := NewTester(t, HBox(0).Add(Label("start").SetSize(300, 0), f.SetSize(160, 0)), 800, 500)
+		tt.Settle() // in LTR first, as an app that switches its language
+		if rtl {
+			tt.SetDirection(ui.RightToLeft)
+		}
+		tt.Settle()
+		field := fontField(tt).Bounds()
+		fontField(tt).Click()
+		panel := tt.Find(ByRole(ui.RolePopup)).Bounds()
+		if panel.W <= field.W+1 {
+			t.Fatalf("the drop-down %v is not wider than the field %v: the case does not hold", panel, field)
+		}
+		if !rtl && !within(panel.X, field.X, 3) || rtl && !within(panel.X+panel.W, field.X+field.W, 3) {
+			t.Fatalf("right to left %v: the drop-down %v does not start at the field's start %v", rtl, panel, field)
+		}
 	}
 }
 

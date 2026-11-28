@@ -7,7 +7,8 @@ families that start with what is typed first, then those that hold it, case
 ignored, as `FontDialog`'s list matches.
 
 ```go
-font := widget.FontEdit().SetFamily("Menlo").SetFixedPitchOnly(true).OnChange(func() {
+var font *widget.FontEditWidget
+font = widget.FontEdit().SetFamily("Menlo").SetFixedPitchOnly(true).OnChange(func() {
 	editor.SetFont(font.Family()) // the app's own
 })
 ```
