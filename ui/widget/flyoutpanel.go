@@ -49,7 +49,7 @@ func (f *FlyoutPanelWidget) ShowPopup() *FlyoutPanelWidget {
 }
 
 func (f *FlyoutPanelWidget) HidePopup() *FlyoutPanelWidget {
-	f.change(func() { f.open, f.focus = false, false })
+	f.change(func() { f.open = false })
 	return f
 }
 
@@ -87,9 +87,11 @@ func (f *FlyoutPanelWidget) build(c *ui.Context) ui.Element {
 		to = 1
 	}
 	// Built every frame, closed too, so that the value starts at 0: 1 in,
-	// 0 out of the owner's box. Reduced motion jumps.
+	// 0 out of the owner's box. Reduced motion jumps. Closing, the panel goes
+	// at 1% out: the spring's last quarter second would hold the owner's
+	// pointer and focus for a pixel.
 	p := e.AnimateTo(flyoutKey{}, to, ui.Smooth)
-	if p == 0 && !f.open || c.Measuring() || !e.Valid() {
+	if p < 0.01 && !f.open || c.Measuring() || !e.Valid() {
 		return e
 	}
 	r := e.Bounds() // the last frame's: where the owner is in the window
@@ -123,7 +125,7 @@ func (f *FlyoutPanelWidget) build(c *ui.Context) ui.Element {
 			}
 			panel.TranslatePercent(x, y)
 			// The panel holds the focus it is given, Tab going on into the content.
-			panel.Focusable().FocusRing(false)
+			panel.Focusable()
 			if f.focus {
 				panel.Focus()
 				f.focus = false

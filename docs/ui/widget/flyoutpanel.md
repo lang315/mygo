@@ -10,7 +10,7 @@ doc := widget.MultilineTextBox().Expand()
 wrap := widget.CheckBox("Wrap lines")
 fly := widget.FlyoutPanel(doc, widget.VBox(8).Add(widget.Label("View").Bold(), wrap))
 fly.SetEdge(widget.FlyoutRight)
-fly.OnClosed(func() { doc.SetText(fmt.Sprint("wrap: ", wrap.Checked())) })
+fly.OnClosed(func() { _ = wrap.Checked() })
 widget.VBox(8).Add(widget.Button("View…").OnClick(func() { fly.ShowPopup() }), fly)
 ```
 
@@ -40,3 +40,6 @@ widget.VBox(8).Add(widget.Button("View…").OnClick(func() { fly.ShowPopup() }),
   `SetCloseOnOutsideClick` on or off.
 - The panel's background, border and shadow are the theme's and the skin's,
   as a drop-down's.
+- The panel is drawn over the window, on the owner's box. In a
+  `ScrollPanel` or another box that clips the owner, it is not clipped
+  with it: it covers what is past the clip too.

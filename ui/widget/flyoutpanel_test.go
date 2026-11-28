@@ -272,6 +272,58 @@ func TestFlyoutPanelNoOnClosed(t *testing.T) {
 	}
 }
 
+// Case 12: without SetEdge the panel is at the right; shown before the first
+// frame, it shows; as the owner moves, it follows.
+func TestFlyoutPanelDefaultsAndMoves(t *testing.T) {
+	f := FlyoutPanel(Button("Owner").SetSize(400, 300), VBox(4).Add(Label("Panel text"), Button("Inside")))
+	f.ShowPopup()
+	tt := NewTester(t, f, 600, 400)
+	tt.SetDirection(ui.RightToLeft)
+	tt.Settle()
+	tt.Advance(time.Second)
+	tt.Settle()
+	o, l := tt.Find(ByLabel("Owner")).Bounds(), tt.Find(ByLabel("Panel text")).Bounds()
+	if l.X > o.X+o.W/2 {
+		t.Fatalf("right to left without SetEdge, the content %+v is not at the left (the end) of %+v", l, o)
+	}
+	tt.SetDirection(ui.LeftToRight)
+	tt.Settle()
+	o, l = tt.Find(ByLabel("Owner")).Bounds(), tt.Find(ByLabel("Panel text")).Bounds()
+	if l.X < o.X+o.W/2 || l.X+l.W > o.X+o.W+0.5 {
+		t.Fatalf("after the owner moved, without SetEdge the content %+v is not at the right of %+v", l, o)
+	}
+}
+
+// Case 13: closed, the owner takes clicks and has the focus back within
+// 600 ms of HidePopup, the spring's half second and a frame or so.
+func TestFlyoutPanelCloseTail(t *testing.T) {
+	r := newFlyoutRig(t, FlyoutRight, false)
+	r.f.SetCloseOnOutsideClick(false).ShowPopup()
+	r.settled()
+	r.f.HidePopup()
+	r.tt.Settle()
+	r.tt.Advance(600 * time.Millisecond)
+	r.tt.Settle()
+	r.clickOwnerAway()
+	if r.ownerClicks != 1 || r.tt.Has(ByLabel("Panel text")) {
+		t.Fatalf("600 ms after HidePopup: the owner took %d clicks, the panel shows %v", r.ownerClicks, r.tt.Has(ByLabel("Panel text")))
+	}
+}
+
+// Case 14: the panel is a column whatever box holds the flyout: content that
+// expands down grows to the panel's height, in a row too.
+func TestFlyoutPanelContentInAColumn(t *testing.T) {
+	f := FlyoutPanel(Button("Owner").SetSize(400, 300), Button("Tall").VExpand()).SetEdge(FlyoutLeft)
+	tt := NewTester(t, HBox(8).Add(f), 600, 400)
+	f.ShowPopup()
+	tt.Settle()
+	tt.Advance(time.Second)
+	tt.Settle()
+	if h := tt.Find(ByLabel("Tall")).Bounds().H; h < 200 {
+		t.Fatalf("the content expanding down is %v high in a 300-high panel from the left", h)
+	}
+}
+
 // Case 8: an owner that is hidden shows no panel, open or not.
 func TestFlyoutPanelHiddenOwner(t *testing.T) {
 	r := newFlyoutRig(t, FlyoutRight, false)
