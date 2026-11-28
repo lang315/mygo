@@ -1,0 +1,319 @@
+package widget
+
+import (
+	"fmt"
+	"slices"
+	"testing"
+
+	"github.com/egoist/mygo/internal/allocrun"
+	"github.com/egoist/mygo/internal/l10n"
+	"github.com/egoist/mygo/ui"
+)
+
+// wizardCounts counts a wizard's callbacks. The handlers run on the event
+// goroutine, which Settle waits for.
+type wizardCounts struct {
+	changes, finishes, cancels int
+	validated                  []int
+	valid                      bool
+}
+
+// threeSteps is a wizard of three steps whose callbacks count into n.
+func threeSteps(n *wizardCounts) *WizardWidget {
+	return Wizard().
+		AddStep("Account", Label("Step one")).
+		AddStep("Plan", Label("Step two")).
+		AddStep("Confirm", Label("Step three")).
+		OnStepChange(func() { n.changes++ }).
+		OnFinish(func() { n.finishes++ }).
+		OnCancel(func() { n.cancels++ })
+}
+
+func wizardTester(t *testing.T, w *WizardWidget) *Tester {
+	t.Helper()
+	tt := NewTester(t, w, 600, 400)
+	tt.Settle()
+	return tt
+}
+
+func wizButton(tt *Tester, label string) *Node {
+	return tt.Find(ByRole(ui.RoleButton).Label(label))
+}
+
+func hasButton(tt *Tester, label string) bool {
+	return tt.Has(ByRole(ui.RoleButton).Label(label))
+}
+
+// Case 5: Next moves 0→1 and fires OnStepChange once; Previous goes back;
+// Previous is disabled on step 0; the last step's button says Done.
+func TestWizardNavigation(t *testing.T) {
+	var n wizardCounts
+	w := threeSteps(&n)
+	tt := wizardTester(t, w)
+	if !tt.Has(ByLabel("Step one")) {
+		t.Fatalf("step 0 shows %q", tt.Texts())
+	}
+	for _, s := range []string{"Account", "Plan", "Confirm"} {
+		if !tt.Has(ByLabel(s)) {
+			t.Errorf("the step bar lacks %q: %q", s, tt.Texts())
+		}
+	}
+	if !wizButton(tt, l10n.Previous()).Disabled() {
+		t.Errorf("Previous is enabled on step 0")
+	}
+	if !hasButton(tt, l10n.Cancel()) {
+		t.Errorf("no Cancel button")
+	}
+	wizButton(tt, l10n.Next()).Click()
+	if got := w.Step(); got != 1 || n.changes != 1 {
+		t.Fatalf("after Next: step %d, %d changes; want 1 and 1", got, n.changes)
+	}
+	if !tt.Has(ByLabel("Step two")) || tt.Has(ByLabel("Step one")) {
+		t.Errorf("step 1 shows %q", tt.Texts())
+	}
+	if wizButton(tt, l10n.Previous()).Disabled() {
+		t.Errorf("Previous is disabled on step 1")
+	}
+	wizButton(tt, l10n.Previous()).Click()
+	if got := w.Step(); got != 0 || n.changes != 2 {
+		t.Fatalf("after Previous: step %d, %d changes; want 0 and 2", got, n.changes)
+	}
+	wizButton(tt, l10n.Next()).Click()
+	if hasButton(tt, l10n.Done()) {
+		t.Errorf("step 1 of 3 shows Done")
+	}
+	wizButton(tt, l10n.Next()).Click()
+	if got := w.Step(); got != 2 {
+		t.Fatalf("step %d, want 2", got)
+	}
+	if !hasButton(tt, l10n.Done()) || hasButton(tt, l10n.Next()) {
+		t.Errorf("the last step's buttons: Done %v, Next %v; want Done alone", hasButton(tt, l10n.Done()), hasButton(tt, l10n.Next()))
+	}
+	if n.finishes != 0 {
+		t.Errorf("reaching the last step finished")
+	}
+}
+
+// Case 6: one step is the first and the last: Previous disabled, Done. No
+// steps: nothing to finish, Next disabled, Enter does nothing.
+func TestWizardOneAndNoSteps(t *testing.T) {
+	var n wizardCounts
+	one := Wizard().AddStep("Only", Label("The only step")).OnFinish(func() { n.finishes++ })
+	tt := wizardTester(t, one)
+	if !wizButton(tt, l10n.Previous()).Disabled() || !hasButton(tt, l10n.Done()) {
+		t.Errorf("one step: Previous disabled %v, Done %v; want both", wizButton(tt, l10n.Previous()).Disabled(), hasButton(tt, l10n.Done()))
+	}
+	wizButton(tt, l10n.Done()).Click()
+	if n.finishes != 1 {
+		t.Errorf("Done of one step finished %d times, want 1", n.finishes)
+	}
+	none := Wizard().OnFinish(func() { n.finishes += 10 }).OnStepChange(func() { n.changes++ })
+	tt = wizardTester(t, none)
+	if !wizButton(tt, l10n.Done()).Disabled() {
+		t.Errorf("no steps: Done is enabled")
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Settle()
+	if n.finishes != 1 || n.changes != 0 || none.Step() != 0 {
+		t.Errorf("Enter with no steps: %d finishes, %d changes, step %d", n.finishes, n.changes, none.Step())
+	}
+}
+
+// Case 7: OnValidate returning false keeps the step, true moves on. It runs
+// on Next and on Done, with the step, and not on Previous.
+func TestWizardValidate(t *testing.T) {
+	var n wizardCounts
+	w := threeSteps(&n).OnValidate(func(step int) bool {
+		n.validated = append(n.validated, step)
+		return n.valid
+	})
+	tt := wizardTester(t, w)
+	wizButton(tt, l10n.Next()).Click()
+	if got := w.Step(); got != 0 || n.changes != 0 {
+		t.Fatalf("invalid Next: step %d, %d changes; want 0, 0", got, n.changes)
+	}
+	n.valid = true
+	wizButton(tt, l10n.Next()).Click()
+	if got := w.Step(); got != 1 || n.changes != 1 {
+		t.Fatalf("valid Next: step %d, %d changes; want 1, 1", got, n.changes)
+	}
+	wizButton(tt, l10n.Previous()).Click()
+	if want := []int{0, 0}; !slices.Equal(n.validated, want) {
+		t.Errorf("validated %v after Previous, want %v: Previous does not validate", n.validated, want)
+	}
+	w.SetStep(2)
+	tt.Settle()
+	n.valid = false
+	wizButton(tt, l10n.Done()).Click()
+	if n.finishes != 0 {
+		t.Errorf("an invalid Done finished")
+	}
+	n.valid = true
+	wizButton(tt, l10n.Done()).Click()
+	if n.finishes != 1 {
+		t.Errorf("a valid Done finished %d times, want 1", n.finishes)
+	}
+	if want := []int{0, 0, 2, 2}; !slices.Equal(n.validated, want) {
+		t.Errorf("validated %v, want %v", n.validated, want)
+	}
+}
+
+// Case 8: OnValidate runs on the event goroutine, without the package's
+// lock, so it can call ErrorProvider.Validate on the step's fields.
+func TestWizardValidateWithErrorProvider(t *testing.T) {
+	errs := ErrorProvider()
+	name := Rule(errs, TextBox().SetAccessibleName("Name"), Required("Enter your name"))
+	w := Wizard().AddStep("Who", name).AddStep("End", Label("Thanks")).
+		OnValidate(func(int) bool { return errs.Validate() })
+	tt := wizardTester(t, w)
+	wizButton(tt, l10n.Next()).Click()
+	if got := w.Step(); got != 0 {
+		t.Fatalf("an empty required name moved to step %d", got)
+	}
+	tt.Find(ByLabel("Name")).Type("Ada")
+	wizButton(tt, l10n.Next()).Click()
+	if got := w.Step(); got != 1 {
+		t.Fatalf("a valid name stayed at step %d", got)
+	}
+}
+
+// Case 9: Done fires OnFinish once; Cancel and Escape fire OnCancel once
+// each; Enter is Next, and Done on the last step.
+func TestWizardFinishCancel(t *testing.T) {
+	var n wizardCounts
+	w := threeSteps(&n)
+	tt := wizardTester(t, w)
+	tt.Key(0, ui.KeyEnter)
+	tt.Settle()
+	if got := w.Step(); got != 1 || n.changes != 1 {
+		t.Fatalf("Enter: step %d, %d changes; want 1, 1", got, n.changes)
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Settle()
+	wizButton(tt, l10n.Done()).Click()
+	if n.finishes != 1 || w.Step() != 2 {
+		t.Fatalf("Done: %d finishes at step %d; want 1 at 2", n.finishes, w.Step())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Settle()
+	if n.finishes != 2 {
+		t.Errorf("Enter on the last step: %d finishes, want 2", n.finishes)
+	}
+	wizButton(tt, l10n.Cancel()).Click()
+	if n.cancels != 1 {
+		t.Fatalf("Cancel: %d cancels, want 1", n.cancels)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Settle()
+	if n.cancels != 2 {
+		t.Fatalf("Escape: %d cancels, want 2", n.cancels)
+	}
+	if e := tt.Escapes(); e != 0 {
+		t.Errorf("the window got %d Escapes too; the wizard takes it", e)
+	}
+}
+
+// Case 10: Enter in a text box of a step is Next, once.
+func TestWizardEnterInTextBox(t *testing.T) {
+	var n wizardCounts
+	w := Wizard().AddStep("Who", TextBox().SetAccessibleName("Name")).AddStep("End", Label("Thanks")).
+		OnStepChange(func() { n.changes++ })
+	tt := wizardTester(t, w)
+	tt.Find(ByLabel("Name")).Type("Ada").Key(0, ui.KeyEnter)
+	tt.Settle()
+	if got := w.Step(); got != 1 || n.changes != 1 {
+		t.Fatalf("Enter in the step's text box: step %d, %d changes; want 1, 1", got, n.changes)
+	}
+}
+
+// Case 11: a disabled wizard takes no Enter or Escape.
+func TestWizardDisabledTakesNoKeys(t *testing.T) {
+	var n wizardCounts
+	w := threeSteps(&n).SetDisabled(true)
+	tt := wizardTester(t, w)
+	tt.Key(0, ui.KeyEnter)
+	tt.Key(0, ui.KeyEscape)
+	tt.Settle()
+	if w.Step() != 0 || n.changes != 0 || n.cancels != 0 {
+		t.Errorf("disabled: step %d, %d changes, %d cancels; want none", w.Step(), n.changes, n.cancels)
+	}
+}
+
+// Case 12: SetStep moves the step, clamped to the steps, and fires nothing.
+func TestWizardSetStepDoesNotFire(t *testing.T) {
+	var n wizardCounts
+	w := threeSteps(&n).OnValidate(func(step int) bool { n.validated = append(n.validated, step); return true })
+	tt := wizardTester(t, w)
+	w.SetStep(2)
+	tt.Settle()
+	if w.Step() != 2 || !tt.Has(ByLabel("Step three")) {
+		t.Fatalf("SetStep(2): step %d, shows %q", w.Step(), tt.Texts())
+	}
+	w.SetStep(0)
+	tt.Settle()
+	if n.changes != 0 || n.finishes != 0 || n.cancels != 0 || len(n.validated) != 0 {
+		t.Errorf("SetStep fired: %+v", n)
+	}
+	if got := w.SetStep(7).Step(); got != 2 {
+		t.Errorf("SetStep(7) of 3: Step() = %d, want 2", got)
+	}
+	if got := w.SetStep(-3).Step(); got != 0 {
+		t.Errorf("SetStep(-3): Step() = %d, want 0", got)
+	}
+}
+
+// Case 13: the setters from another goroutine while frames run show on a
+// following frame, without a race.
+func TestWizardFromGoroutine(t *testing.T) {
+	var n wizardCounts
+	w := threeSteps(&n)
+	tt := wizardTester(t, w)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 40 {
+			w.AddStep(fmt.Sprint("Extra ", i), Label(fmt.Sprint("Page ", i))).SetStep(i % 5).OnStepChange(func() {}).OnValidate(func(int) bool { return true })
+			_ = w.Step()
+		}
+		w.SetStep(42)
+	}()
+	for running := true; running; {
+		select {
+		case <-done:
+			running = false
+		default:
+			tt.Frame()
+		}
+	}
+	tt.Settle()
+	if w.Step() != 42 || !tt.Has(ByLabel("Page 39")) || !hasButton(tt, l10n.Done()) {
+		t.Fatalf("after the goroutine: step %d, shows %q", w.Step(), tt.Texts())
+	}
+}
+
+// Case 14: a frame at rest of a wizard allocates no more than the same
+// controls in boxes: its bar, its page in a scroll panel and its buttons.
+func TestWizardAllocNothingAtRest(t *testing.T) {
+	frames := func(c Control) float64 {
+		tt := ui.NewTester(content(c), 600, 400)
+		for range 10 {
+			tt.Frame()
+		}
+		return allocrun.Least(30, tt.Frame)
+	}
+	ref := frames(VBox(8).Add(
+		StepProgressBar("Account", "Plan", "Confirm").SetStep(1),
+		ScrollPanel(Label("Step two")),
+		HBox(8).Add(Button(l10n.Previous()), Button(l10n.Next()), Button(l10n.Cancel())),
+	))
+	var n wizardCounts
+	got := frames(threeSteps(&n).SetStep(1))
+	if got > ref {
+		t.Fatalf("a wizard's frame at rest allocates %v times; the same controls in boxes, %v", got, ref)
+	}
+	bar, label := frames(StepProgressBar(fourSteps...).SetStep(2)), frames(Label("One"))
+	if bar > label {
+		t.Fatalf("a step bar's frame at rest allocates %v times; a label's, %v", bar, label)
+	}
+	t.Logf("wizard %v, boxes %v; step bar %v, label %v", got, ref, bar, label)
+}
