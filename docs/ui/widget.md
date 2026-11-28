@@ -1431,13 +1431,13 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `richtextbox.New()`: styled text, in package `ui/widget/richtextbox`; see [RichTextBox](widget/richtextbox.md).
 - `WebBrowser()`: a web page; see [WebBrowser](widget/webbrowser.md).
 - `MaskedTextBox(mask)`: an input that takes what a mask allows; see [MaskedTextBox](widget/maskedtextbox.md).
-- `ErrorProvider()`, `OnValidating`, `Form.ValidateChildren`: an error mark on a control and an explicit validation; see [ErrorProvider](widget/errorprovider.md).
+- `ErrorProvider()`, `OnValidating`, `Form.ValidateChildren`: an error mark on a control and an explicit validation; `Rule` with `Required`, `MatchRegexp` and `InRange`, `Validate` and `SetValidateOnLeave` check values with no handler; see [ErrorProvider](widget/errorprovider.md).
 - `&` mnemonics in a `Button` and the labels of `Fields` (Alt+key; off on macOS); see [Mnemonics](widget/mnemonics.md).
 - `ImageList(size)`: images by key, shared by `ListBox`, `TreeView` and menus (`ImagesBy`, `PNG`); see [ImageList](widget/imagelist.md).
 - `Separator()`: a line.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes, in columns under a header with `SetColumns`; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
-- `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`; see [LookUpEdit](widget/lookupedit.md).
+- `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`, and `SetSearchPanel(true)` for a search box over the records in the drop-down (DevExpress's SearchLookUpEdit); see [LookUpEdit](widget/lookupedit.md).
 - `ButtonEdit(buttons...)`: a text field with buttons at its end, inside its frame (`EditEllipsis`, `EditClear`, `EditSearch`, `EditPlus`, `EditMinus`, `EditDropDown`, `EditGlyph`), as DevExpress's ButtonEdit; `Text`, `SetText`, `SetPlaceholder`, `SetReadOnly`, `OnChange`, `SetButtonVisible`; see [ButtonEdit](widget/buttonedit.md).
 - `PopupEdit(controls...)`: a field showing a text whose drop-down holds any controls, as DevExpress's PopupContainerEdit; `SetText`, `Text`, `ShowPopup`, `ClosePopup`, `IsOpen`, `OnClosed`; see [PopupEdit](widget/popupedit.md).
 - `ProgressPanel(caption)`: a spinner with a caption and a description, as DevExpress's ProgressPanel; `Form.ShowWait(caption, description)` and `Form.CloseWait()` show one over a dimmed form that takes no input; see [ProgressPanel and the wait form](widget/progresspanel.md).

@@ -17,9 +17,13 @@ import (
 // provider's.
 //
 // Nothing validates by itself: a handler set with OnValidating runs when the
-// app calls Form.ValidateChildren, and sets or clears the errors.
+// app calls Form.ValidateChildren, and sets or clears the errors. Rules given
+// with Rule run then too, and on Validate, and with SetValidateOnLeave when
+// the focus leaves their control.
 type ErrorProviderWidget struct {
-	marked map[weak.Pointer[core]]struct{} // under mu; weak, so a control the app dropped goes
+	marked  map[weak.Pointer[core]]struct{} // under mu; weak, so a control the app dropped goes
+	ruled   []weak.Pointer[core]            // the controls Rule gave rules for p, in that order; under mu
+	onLeave bool                            // SetValidateOnLeave's; under mu
 }
 
 // ErrorProvider makes a provider with no errors.
@@ -29,7 +33,12 @@ func ErrorProvider() *ErrorProviderWidget {
 
 // SetError marks w with the message msg, or takes its mark off for "".
 func (p *ErrorProviderWidget) SetError(w Control, msg string) *ErrorProviderWidget {
-	b := w.base()
+	p.setError(w.base(), msg)
+	return p
+}
+
+// setError is SetError, on the control's core.
+func (p *ErrorProviderWidget) setError(b *core, msg string) {
 	b.change(func() {
 		if msg == "" {
 			if b.errBy == p {
@@ -44,7 +53,6 @@ func (p *ErrorProviderWidget) SetError(w Control, msg string) *ErrorProviderWidg
 		b.errMsg, b.errBy = msg, p
 		p.marked[weak.Make(b)] = struct{}{}
 	})
-	return p
 }
 
 // Error returns the message w is marked with by this provider, "" for none.
@@ -184,13 +192,16 @@ func (c *common[W]) OnValidating(fn func() bool) *W {
 // invisible (SetVisible(false)), and what is inside it, is skipped. A disabled
 // control is validated, as in WinForms. A handler that panics ends the
 // validation: the panic propagates and the handlers after it do not run.
+// After the handlers, the rules given with Rule to those controls run, as
+// Validate runs them, and a failing one makes it return false too.
 //
 // When it returns false, the first failing control's error message is
-// announced to assistive technology, once. Call it from the event goroutine
-// (a button's handler), not from a view.
+// announced to assistive technology, once: the first failing handler's
+// control's, or with none the first failing rule's. Call it from the event
+// goroutine (a button's handler), not from a view.
 func (w *Form) ValidateChildren() bool {
 	mu.Lock()
-	var cs []*core
+	var cs, ruled []*core
 	seen := map[*core]bool{}
 	var walk func(Control)
 	walk = func(c Control) {
@@ -204,6 +215,9 @@ func (w *Form) ValidateChildren() bool {
 		seen[b] = true
 		if b.validating != nil {
 			cs = append(cs, b)
+		}
+		if b.rules != nil {
+			ruled = append(ruled, b)
 		}
 		if h, ok := c.(interface{ children() []Control }); ok {
 			for _, k := range h.children() {
@@ -225,6 +239,7 @@ func (w *Form) ValidateChildren() bool {
 	for i, b := range cs {
 		fns[i] = b.validating
 	}
+	rules := formRules
 	mu.Unlock()
 	ok, first := true, -1
 	for i, fn := range fns {
@@ -235,9 +250,21 @@ func (w *Form) ValidateChildren() bool {
 			ok = false
 		}
 	}
-	if !ok && first >= 0 {
+	failed := "" // the first failing rule's text, when no handler failed
+	if len(ruled) > 0 {
+		if msg := rules(ruled); msg != "" {
+			if ok {
+				failed = msg
+			}
+			ok = false
+		}
+	}
+	if !ok {
 		mu.Lock()
-		msg := cs[first].errMsg
+		msg := failed
+		if first >= 0 {
+			msg = cs[first].errMsg
+		}
 		if msg != "" {
 			w.announce = msg
 		}
