@@ -3473,3 +3473,51 @@ func CompactDensity() string { return In(i18n.Locale()).CompactDensity() }
 func (msgs Messages) CompactDensity() string {
 	return Catalog.Format(msgs.locale, "compactDensity", nil)
 }
+
+// AddToQuickAccess says "Add to Quick Access Toolbar"
+// in the language the app shows.
+//
+// The item of a ribbon command's context menu that puts the command in the
+// Quick Access Toolbar, the row of small buttons above the ribbon's tabs.
+func AddToQuickAccess() string { return In(i18n.Locale()).AddToQuickAccess() }
+
+// AddToQuickAccess says "Add to Quick Access Toolbar"
+// in the language of msgs.
+//
+// The item of a ribbon command's context menu that puts the command in the
+// Quick Access Toolbar, the row of small buttons above the ribbon's tabs.
+func (msgs Messages) AddToQuickAccess() string {
+	return Catalog.Format(msgs.locale, "addToQuickAccess", nil)
+}
+
+// RemoveFromQuickAccess says "Remove from Quick Access Toolbar"
+// in the language the app shows.
+//
+// The item of a Quick Access Toolbar button's context menu that takes it
+// out of the toolbar.
+func RemoveFromQuickAccess() string { return In(i18n.Locale()).RemoveFromQuickAccess() }
+
+// RemoveFromQuickAccess says "Remove from Quick Access Toolbar"
+// in the language of msgs.
+//
+// The item of a Quick Access Toolbar button's context menu that takes it
+// out of the toolbar.
+func (msgs Messages) RemoveFromQuickAccess() string {
+	return Catalog.Format(msgs.locale, "removeFromQuickAccess", nil)
+}
+
+// ShowBelowRibbon says "Show below the ribbon"
+// in the language the app shows.
+//
+// A checkable item of a Quick Access Toolbar button's context menu:
+// checked, the toolbar shows below the ribbon instead of above its tabs.
+func ShowBelowRibbon() string { return In(i18n.Locale()).ShowBelowRibbon() }
+
+// ShowBelowRibbon says "Show below the ribbon"
+// in the language of msgs.
+//
+// A checkable item of a Quick Access Toolbar button's context menu:
+// checked, the toolbar shows below the ribbon instead of above its tabs.
+func (msgs Messages) ShowBelowRibbon() string {
+	return Catalog.Format(msgs.locale, "showBelowRibbon", nil)
+}

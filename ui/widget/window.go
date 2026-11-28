@@ -24,6 +24,7 @@ type Form struct {
 	icon          []byte
 	root          Control
 	header        *HeaderBarWidget
+	qatRibbon     *RibbonWidget // the ribbon whose Quick Access Toolbar the header bar draws (ribbon_qat.go)
 	onClose       func() bool
 	menu          []MenuItem
 	strip         *MenuStrip
@@ -494,6 +495,9 @@ func (w *Form) view(c *ui.Context) {
 			render(c, w.status)
 		}
 	})
+	if formQATEnd != nil { // the header bar's Quick Access Toolbar, of a ribbon gone (ribbon_qat.go)
+		formQATEnd(c, w)
+	}
 	if toastHook != nil { // before formKeys: Escape in a toast closes it
 		toastHook(c, w)
 	}
@@ -566,6 +570,9 @@ func (h *HeaderBarWidget) build(c *ui.Context) ui.Element {
 		ui.Row(c).Grow(1).Basis(lead).Gap(t.Space(2)).Children(func() {
 			for _, w := range h.start {
 				render(c, w)
+			}
+			if headerQAT != nil { // a ribbon's Quick Access Toolbar (ribbon_qat.go)
+				headerQAT(c, h)
 			}
 		})
 		// Padding here, not on the row: only the title and subtitle grow the

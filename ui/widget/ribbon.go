@@ -51,6 +51,34 @@ type RibbonWidget struct {
 	tipW            [len(tipLetters)]float32
 	tipH, tipSize   float32
 	tipFill, tipInk ui.Color
+	// sb is the strip being built, which stripTab reads: here, not in a
+	// closure, so that the tab loop allocates nothing.
+	sb ribbonStrip
+
+	// The Quick Access Toolbar and the contextual tabs (ribbon_qat.go), nil
+	// until a method of theirs installs them, so that an app that calls none
+	// does not link them. qatHook builds the toolbar where it goes, before
+	// the tabs (below false) and after the groups (below true); cmdMenu
+	// gives a command that showed the toolbar's context menu; bands builds
+	// the tabs with their categories' bands, in place of the plain loop.
+	// qatTaken are the tip slots of the toolbar's digits, which the tabs do
+	// not take.
+	qat      *ribbonQAT
+	cats     *ribbonCats
+	qatHook  func(c *ui.Context, below bool)
+	cmdMenu  func(w Control)
+	bands    func(c *ui.Context)
+	qatTaken uint64
+}
+
+// ribbonStrip is the strip being built: ui's tabs, the tab shown, the
+// skin's TabHeader look, the tips taken, and what the pointer did to a tab.
+type ribbonStrip struct {
+	tabs                     ui.TabsParts
+	p                        *int
+	look                     *Style
+	taken                    uint64
+	clicked, double, pressed bool
 }
 
 // The levels of the key tips: none, a letter on each tab, a letter on each
@@ -80,11 +108,13 @@ var keyTipsHook func(c *ui.Context)
 
 // ribbonTab is a tab of a ribbon, and ribbonGroup a group of a tab. A tab
 // is its own key in ui's tabs: a pointer to a value that is not empty. act
-// shows its commands' tips, for its access key, made once.
+// shows its commands' tips, for its access key, made once. category is a
+// contextual tab's (AddContextualTab), "" for a tab always shown.
 type ribbonTab struct {
-	title  string
-	groups []*ribbonGroup
-	act    func()
+	title    string
+	groups   []*ribbonGroup
+	act      func()
+	category string
 }
 
 type ribbonGroup struct {
@@ -208,7 +238,11 @@ func (r *RibbonWidget) add(w Control, large bool) {
 func (r *RibbonWidget) Tab() int { mu.Lock(); defer mu.Unlock(); return r.tab.value }
 
 func (r *RibbonWidget) SetTab(i int) *RibbonWidget {
-	r.change(func() { r.tab.set(i) })
+	r.change(func() {
+		if r.cats == nil || !r.cats.hides(r.tabs, i) { // a hidden contextual tab is not shown
+			r.tab.set(i)
+		}
+	})
 	return r
 }
 
@@ -236,12 +270,18 @@ func (r *RibbonWidget) build(c *ui.Context) ui.Element {
 		keyTipsHook = r.tipKeys
 	}
 	col.Children(func() {
+		if r.qatHook != nil {
+			r.qatHook(c, false)
+		}
 		p, _ := r.tab.bind()
 		strip := r.strip(c, p)
 		r.inner = strip // Focus (an access key) goes to the tabs, as a TabControl's
 		c.OnWindowShortcut(ui.Ctrl, ui.KeyF1, r.toggle)
 		if i := *p; !r.collapsed && i >= 0 && i < len(r.tabs) {
 			r.groups(c, r.tabs[i])
+		}
+		if r.qatHook != nil {
+			r.qatHook(c, true)
 		}
 	})
 	if r.tips != tipsOff {
@@ -312,7 +352,7 @@ func (r *RibbonWidget) tipMode(c *ui.Context, col ui.Element) {
 		switch {
 		case i < 0:
 			r.leaveTips(true)
-		case r.tips == tipsTabs:
+		case r.shown[i].w == nil: // a tab's; a command's, or the Quick Access Toolbar's beside the tabs', acts
 			r.showTab(r.shown[i].tab)
 		default:
 			r.runTip(r.shown[i])
@@ -439,51 +479,60 @@ func (r *RibbonWidget) paintTips(p *ui.Painter, box ui.Rect) {
 // ribbon, and a double click collapses it. Under mu.
 func (r *RibbonWidget) strip(c *ui.Context, p *int) ui.Element {
 	t := c.Theme()
-	look := lookOf(skinhook.KindTabHeader)
-	tabs := ui.TabsKeyedBase(c, p, r.keys)
-	var clicked, double, pressed bool
-	var taken uint64
-	tabs.List.Gap(t.Space(1)).OnChange(r.changed).Children(func() {
-		for i, tb := range r.tabs {
-			var tab ui.Element
-			if look != nil {
-				tab = headerTab(c, tabs, i, i == *p, r.keys, look, r.disabled)
-			} else {
-				tab = documentTab(c, tabs, i, i == *p) // the shown one joins the groups row, Background as it
-			}
-			tab.Children(func() { ui.Text(c, tb.title).SingleLine() })
-			// Alt and a tab's tip show its commands' tips.
-			if s := keyTip(tb.title, &taken); s >= 0 {
-				registerMnemonic(rune(tipLetters[s])|0x20, tab, r, tb.act) // lower case, as foldKey gives
-				if r.tips == tipsTabs {
-					r.badge(tab, s, nil, i)
-				}
-			}
-			if i == *p && r.wantFocus && !c.Measuring() {
-				// Focus goes to the tab shown, not to the strip around it, which
-				// render would focus.
-				tab.Focus()
-				r.wantFocus = false
-			}
-			double = tab.DoubleClicked() || double
-			clicked = tab.Clicked() || clicked
-			pressed = tab.Pressed() || pressed
+	s := &r.sb
+	*s = ribbonStrip{tabs: ui.TabsKeyedBase(c, p, r.keys), p: p, look: lookOf(skinhook.KindTabHeader), taken: r.qatTaken}
+	s.tabs.List.Gap(t.Space(1)).OnChange(r.changed).Children(func() {
+		if r.bands != nil {
+			r.bands(c)
+			return
+		}
+		for i := range r.tabs {
+			r.stripTab(c, i)
 		}
 	})
 	switch {
-	case double:
+	case s.double:
 		// The first click of it expanded a collapsed ribbon: it stays so.
 		r.collapsed = r.collapsed || !r.expanded
 		r.swallow = true
-	case clicked && r.swallow:
+	case s.clicked && r.swallow:
 		r.swallow = false // the release of the double click
-	case clicked:
+	case s.clicked:
 		r.expanded = r.collapsed
 		r.collapsed = false
-	case !pressed:
+	case !s.pressed:
 		r.swallow = false // the double click's press ended with no click
 	}
-	return tabs.List
+	return s.tabs.List
+}
+
+// stripTab builds tab i in the strip being built (sb), with its access key
+// and its tip. Under mu.
+func (r *RibbonWidget) stripTab(c *ui.Context, i int) {
+	s, tb := &r.sb, r.tabs[i]
+	var tab ui.Element
+	if s.look != nil {
+		tab = headerTab(c, s.tabs, i, i == *s.p, r.keys, s.look, r.disabled)
+	} else {
+		tab = documentTab(c, s.tabs, i, i == *s.p) // the shown one joins the groups row, Background as it
+	}
+	tab.Children(func() { ui.Text(c, tb.title).SingleLine() })
+	// Alt and a tab's tip show its commands' tips.
+	if sl := keyTip(tb.title, &s.taken); sl >= 0 {
+		registerMnemonic(rune(tipLetters[sl])|0x20, tab, r, tb.act) // lower case, as foldKey gives
+		if r.tips == tipsTabs {
+			r.badge(tab, sl, nil, i)
+		}
+	}
+	if i == *s.p && r.wantFocus && !c.Measuring() {
+		// Focus goes to the tab shown, not to the strip around it, which
+		// render would focus.
+		tab.Focus()
+		r.wantFocus = false
+	}
+	s.double = tab.DoubleClicked() || s.double
+	s.clicked = tab.Clicked() || s.clicked
+	s.pressed = tab.Pressed() || s.pressed
 }
 
 // groups builds the groups of tab tb in a row filled with the skin's Chrome
@@ -572,8 +621,12 @@ func (r *RibbonWidget) large(c *ui.Context, w Control, high float32) bool {
 }
 
 // commandTip gives w, a command that showed, its tip among those taken
-// while the commands' tips show. Under mu, after w builds.
+// while the commands' tips show, and the Quick Access Toolbar's context
+// menu once a method of the toolbar installed it. Under mu, after w builds.
 func (r *RibbonWidget) commandTip(w Control, taken *uint64) {
+	if r.cmdMenu != nil {
+		r.cmdMenu(w)
+	}
 	if r.tips != tipsCommands {
 		return
 	}

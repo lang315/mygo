@@ -1397,8 +1397,12 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
   an icon in the notification area; see [App shell](#app-shell).
 - `Ribbon()`: tabs of groups of large and small commands, which collapses to
   its tabs, first in a form's content; `AddTab`, `AddGroup`, `AddLarge`,
-  `AddSmall`, `Tab`, `SetTab`, `SetCollapsed`, `Collapsed`; see
-  [Ribbon](widget/ribbon.md).
+  `AddSmall`, `Tab`, `SetTab`, `SetCollapsed`, `Collapsed`; a Quick Access
+  Toolbar (`AddQuickAccess`, `SetQuickAccessBelow`, `QuickAccess`,
+  `SetQuickAccess`, `OnQuickAccessChange`) and contextual tabs
+  (`AddContextualTab`, `SetCategoryVisible`); see
+  [Ribbon](widget/ribbon.md), [Quick Access Toolbar](widget/ribbon.md#quick-access-toolbar)
+  and [contextual tabs](widget/ribbon.md#contextual-tabs).
 - `GroupBox(title)`: a border and a title around one widget.
 - `Card()`: a titled box whose body `ShowBody(false)` hides.
 - `FlowPanel(spacing)`: a row that wraps. `.Justify()` fills every line,
