@@ -130,12 +130,71 @@ func TestSplashStatus(t *testing.T) {
 func TestSplashClose(t *testing.T) {
 	s := ShowSplash(Splash{Title: "SplashClose"})
 	fw := waitSplash(t, s, "SplashClose")
+	mu.Lock()
+	n := s.win
+	mu.Unlock()
 	s.Close()
 	wait.Until(t, "the splash to close", fw.IsClosed)
 	s.Close() // does nothing
+	// The closed window is let go: a later SetStatus redraws nothing.
+	redrawn := false
+	old := invalidate
+	invalidate = func(w *mygo.Window) {
+		redrawn = redrawn || w == n
+		old(w)
+	}
 	s.SetStatus("after")
+	invalidate = old
+	if redrawn {
+		t.Error("SetStatus after Close redrew the closed window")
+	}
 	if n := splashFakes("SplashClose"); n != 1 {
 		t.Fatalf("%d windows made, want 1", n)
+	}
+}
+
+// A zero Splash: no image, title or status, the default size, and the bar.
+func TestSplashZero(t *testing.T) {
+	before := len(fb.Windows())
+	s := ShowSplash(Splash{})
+	defer s.Close()
+	wait.Until(t, "the splash window", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return s.win != nil
+	})
+	ws := fb.Windows()
+	if len(ws) != before+1 {
+		t.Fatalf("%d windows made, want 1", len(ws)-before)
+	}
+	fw := ws[len(ws)-1]
+	if fw.Opts.Width != 480 || fw.Opts.Height != 300 {
+		t.Errorf("size %vx%v, want 480x300", fw.Opts.Width, fw.Opts.Height)
+	}
+	var roles []platform.AccessRole
+	for _, n := range accessNodes(fw) {
+		roles = append(roles, n.Role)
+	}
+	if !slices.Contains(roles, platform.RoleProgress) {
+		t.Errorf("no progress bar among roles %v", roles)
+	}
+}
+
+// Off means unchanged: a form no splash waits on shows one window and has no
+// hook, and a hook that ran is cleared.
+func TestSplashOffIsUnchanged(t *testing.T) {
+	before := len(fb.Windows())
+	f := NewForm("SplashOff", 300, 200)
+	f.Show()
+	defer f.Close()
+	if n := len(fb.Windows()) - before; n != 1 {
+		t.Fatalf("%d windows made, want 1", n)
+	}
+	mu.Lock()
+	hooked := f.onShown != nil
+	mu.Unlock()
+	if hooked {
+		t.Fatal("a form no splash waits on has a hook")
 	}
 }
 
@@ -209,6 +268,12 @@ func TestSplashCloseWhenShown(t *testing.T) {
 	wait.Until(t, "the splash to close once the form showed", fw.IsClosed)
 	if f.Native() == nil {
 		t.Fatal("the form is not shown")
+	}
+	mu.Lock()
+	hooked := f.onShown != nil
+	mu.Unlock()
+	if hooked {
+		t.Fatal("the hook stays on the form after it ran")
 	}
 }
 
