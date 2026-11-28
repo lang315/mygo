@@ -399,7 +399,9 @@ func choices() widget.Control {
 		widget.ComboBox(widget.Option{Value: "vn", Text: "Vietnam"}, widget.Option{Value: "us", Text: "United States"}).Editable().SetText("Any country"),
 		widget.TagSelect(widget.Option{Value: "go", Text: "Go"}, widget.Option{Value: "ui", Text: "UI"}, widget.Option{Value: "gtk", Text: "GTK"}),
 		widget.Spinner().Start(),
+		productLookUp(),
 		widget.DateTimePicker(),
+		timeSpanRow(),
 		widget.MonthCalendar(),
 		values(),
 	)

@@ -15,6 +15,7 @@ import "math"
 //   - NumericUpDown (float64)
 //   - CalcEdit (float64)
 //   - TrackBar (float64)
+//   - TimeSpanEdit (time.Duration)
 type Bindable[T comparable] interface {
 	Control
 	bindValue() T  // the control's value, as its getter

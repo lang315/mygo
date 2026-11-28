@@ -161,10 +161,8 @@ func (e *CalcEditWidget) build(c *ui.Context) ui.Element {
 		e.open = false
 	}
 	e.c = c
-	frame := editFrame(c, e.children, &e.in)
-	if e.errMsg != "" {
-		e.post = padForErrorMark
-	}
+	frame := editFrame(c, e.children)
+	e.edgeEditFrame(c.Theme(), frame)
 	if e.typed && !e.in.Focused() && !c.Measuring() {
 		// Left: the value, with its decimals, or the last one where the
 		// text did not parse. (A measuring pass has no focus.)
@@ -197,7 +195,7 @@ func (e *CalcEditWidget) buildChildren() {
 		in.OnSubmit(h) // Enter in the line clicks the form's accept button
 	}
 	in.OnTextKey(e.openKey)
-	b := editButtonBase(c, editKey(0)).Label(l10n.Open())
+	b := editButtonBase(c.Key(editKey(0))).Label(l10n.Open())
 	b.Expanded(e.open).OnClick(e.toggle).Children(e.face)
 }
 

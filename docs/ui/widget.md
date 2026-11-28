@@ -746,6 +746,7 @@ name := widget.Bind(widget.TextBox(),
 | `NumericUpDown` | `float64` | `Bind`; `BindInt` for an `int` |
 | `CalcEdit` | `float64` | `Bind` (a typed number and the calculator's Enter or = are edits) |
 | `TrackBar` | `float64` | `Bind` (clamps to its range, as `NumericUpDown`) |
+| `TimeSpanEdit` | `time.Duration` | `Bind` (clamps to its range, as `NumericUpDown`) |
 | `RangeSpin` | its two numbers, `float64` | `BindRange(c, get, set)`, with `get func() (lo, hi float64)` and `set func(lo, hi float64)`: `set` gets both numbers after an edit of either; each is clamped to its range, as `NumericUpDown` |
 | `CheckBoxGroup` | the `Value`s of the checked options, a `[]string` | `BindValues(c, get, set)`: `set` gets them in option order; a value of `get()` that is no option's is ignored, and absent from the next `set` |
 | `TokenEdit` | its tokens, a `[]string` | `BindTokens(c, get, set)`: takes `get()`'s tokens as `SetTokens` does (trimmed, blanks and repeats dropped); `set` gets the tokens in order after each change by the user, in a slice of its own; with `SetSuggestionsOnly`, a refused entry calls no `set` |
@@ -1437,7 +1438,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 - `Separator()`: a line.
 - `TreeView(key, text)`: nodes in a tree, with lazy children and check boxes, in columns under a header with `SetColumns`; see [TreeView](widget/treeview.md).
 - `ListBox(key, text)`, `CheckedListBox(key, text)`: items in a list, chosen by key, with check boxes on the second; see [ListBox](widget/listbox.md).
-- `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`; see [LookUpEdit](widget/lookupedit.md).
+- `LookUpEdit(key, text, cols...)`: a field that picks one record by key from a drop-down of columns, which typing filters, as DevExpress's LookUpEdit; `SetItems`, `Selected`, `SetSelected`, `Unselect`, `OnSelect`, and `SetSearchPanel(true)` for a search box over the records in the drop-down (DevExpress's SearchLookUpEdit); see [LookUpEdit](widget/lookupedit.md).
 - `ButtonEdit(buttons...)`: a text field with buttons at its end, inside its frame (`EditEllipsis`, `EditClear`, `EditSearch`, `EditPlus`, `EditMinus`, `EditDropDown`, `EditGlyph`), as DevExpress's ButtonEdit; `Text`, `SetText`, `SetPlaceholder`, `SetReadOnly`, `OnChange`, `SetButtonVisible`; see [ButtonEdit](widget/buttonedit.md).
 - `CalcEdit()`: a number field with a calculator in its drop-down, as DevExpress's CalcEdit; `Value`, `SetValue`, `SetDecimals`, `OnChange`, `ShowPopup`, `ClosePopup`; see [CalcEdit](widget/calcedit.md).
 - `PopupEdit(controls...)`: a field showing a text whose drop-down holds any controls, as DevExpress's PopupContainerEdit; `SetText`, `Text`, `ShowPopup`, `ClosePopup`, `IsOpen`, `OnClosed`; see [PopupEdit](widget/popupedit.md).
@@ -1505,6 +1506,7 @@ placed as before. The widget's own `Align`/`VAlign` still wins.
 Input and display:
 
 - `DateTimePicker()`, `MonthCalendar()`: a `time.Time` in a date and time field, or a calendar; see [DateTimePicker](widget/date-time-picker.md).
+- `TimeSpanEdit()`: a `time.Duration` in a field shown as `[-][d.]hh:mm[:ss]`, whose Up, Down and − + buttons step the part under the caret, as DevExpress's TimeSpanEdit; `Value`, `SetValue`, `SetRange`, `SetShowSeconds`, `SetShowDays`, `OnChange`; see [TimeSpanEdit](widget/timespanedit.md).
 - `Label(text)`: text, which wraps at its container's width (a long one in
   a dialog of fixed width takes more lines, none cut); `Rich(spans...)` shows styled `ui.Span`s
   instead, where gota used Pango markup. `ParseMarkup(s)` makes the spans of a
